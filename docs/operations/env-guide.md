@@ -103,7 +103,6 @@
 |---|---|
 | `OS_ENDPOINT`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | 읽기 전용 — 사내 CA면 `OS_VERIFY_TLS=<CA 파일>` |
 | `RDB_HOST`·`RDB_DATABASE`·`RDB_USER`·`RDB_PASSWORD` | EDW 원천 읽기(접속만 — 어느 표·열은 `SOURCES_FILE`) |
-| `EDW_SERVER`·`EDW_PORT`·`EDW_DATABASE`·`EDW_USER`·`EDW_PASSWORD`·`EDW_SCHEMA`·`EDW_DRIVER` | EDW 벡터 적재(`EDW_LOAD=1`일 때만) — 기본 `pymssql`, `pyodbc`는 **지원 안 함**(이미지에 없음) |
 | `PM_PATH_MAP` | 결과 키 앞부분 바꾸기 `이전 앞부분=새 앞부분`(쉼표 목록, 짝 없으면 `source_system/원본 폴더`) — 문서 폴더 = `<PM_PREFIX>/<새 앞부분>/<나머지 폴더>/<원본파일명>/`(EDW rep_key) · 대표 결과 `<파일명>_<YYYY-MM-DD_HHMMSS>.md`·엔진별 원본 `engine/` · 예 `SFDC=Parsing-Result/SFDC`면 `.../SFDC/<UUID>/a.pdf` → `.../Parsing-Result/SFDC/<UUID>/a.pdf/` |
 | `PM_BUCKET`·`PM_PREFIX`·`PM_DB_HOST`·`PM_DB_DATABASE`·`PM_DB_USER`·`PM_DB_PASSWORD` | 결과 게시(쓰기, 마지막 단계) — 읽기 계정과 분리. 폴더 저장소로 먼저 시험: `PM_BUCKET=file://…` · **첫 게시 전 EDW 표를 DBA가 1회 생성**: [`docs/operations/parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(S1부터 저장소 문서 자리 — 코드 폴더·덧씌우기 묶음에는 없음 · PM2, 10-15 — DBA가 아직 한 번도 실행 안 함, 이 최신 판을 그대로 1회·코드는 표를 만들지 않음, 없으면 첫 INSERT에서 실패) · 필수 열은 `doc_key`(원본 sha256) 하나뿐, `source_system`·`source_key`·`parse_date`는 비어도 됨(비면 각각 'unknown'·NULL·처리 시각) · `parse_date`는 글자 `YYYY-MM-DD_HHMMSS`, `rep_key`는 문서 폴더(끝 `/`) · `engines_used`(JSON 배열)·`engines_summary`(한 줄) — 이 문서에 쓰인 엔진 전부(VLM·OCR 포함, `pipeline/load/parsing_meta.py`의 `engines_used()`) |
 

@@ -31,9 +31,6 @@ PREFIXES = ("LLM", "VLM", "OCRVLM", "EMBED")
 
 # 규칙(아래 정규식)으로 못 잡는 읽기 — 이름 목록·동적 이름(9-4 "이름 목록") · S7a에 다시 모으며 찾음
 NAME_LIST = {
-    "EDW_SERVER": "common/store/edwdb.py",
-    "EDW_DATABASE": "common/store/edwdb.py",
-    "EDW_PASSWORD": "common/store/edwdb.py",
     "TRIGGER_SHUTDOWN_TIMEOUT_SEC": "pipeline/trigger_server.py(_serve 인자 기본값)",
     "E2E_QA_SET": "pipeline/check_env.py(경로 점검 표)",
     "E2E_QUESTIONS": "pipeline/check_env.py(경로 점검 표)",

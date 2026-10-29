@@ -6,7 +6,7 @@ Alembic 없음(DDL은 EDW 담당 — docs/operations/parsing_meta_mssql.sql).
   fn_listextendedproperty)를 한 번만 낸다. 권한이 없어 격리 수준 질의가 실패해도 방언이 넘어간다(서버 계정 확인 — refactor.md C-49).
 · 질의: rows(conn, sql, params) — SQL 글자·%s 자리 그대로(exec_driver_sql). DBAPI 커서를 그대로 쓰는 곳(여러 결과 집합 · SQLite 대역과 같은
   코드 · executemany)은 raw()로 SQLAlchemy가 연 DBAPI 연결을 받는다.
-· 경계: 이 파일은 common/store/db(pgvector 판 관리)를 import하지 않는다 — edwdb.py(r 층 의존)가 import해서."""
+· 경계: 이 파일은 common/store/db(pgvector 판 관리)를 import하지 않는다 — 여러 층이 import해서(공용 의존)."""
 
 import hashlib
 

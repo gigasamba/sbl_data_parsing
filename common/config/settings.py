@@ -1235,20 +1235,6 @@ class Cache:
 # (S7a-MODELS) — 아래는 부록 D 분류표로 만든 칸 목록. 칸을 더하거나 옮기면 refactor_plan 부록 D·settings.sample.yaml을 함께 고친다.
 
 
-class CommonConnectionsEdw(Section):
-    conn_file: str | None = F(None, "EDW_CONN_FILE", "EDW 접속 정보를 KEY=VALUE로 담은 파일 경로(환경변수가 이 값을 덮음)")
-    database: str | None = F(None, "EDW_DATABASE", "EDW(SQL Server) 연결 DB 이름")
-    driver: str | None = F("pymssql", "EDW_DRIVER", "EDW 드라이버 선택(pymssql 기본, pyodbc 가능)")
-    encrypt: str | None = F("yes", "EDW_ENCRYPT", "pyodbc 연결 Encrypt 옵션(yes|no)")
-    odbc_driver: str | None = F("ODBC Driver 18 for SQL Server", "EDW_ODBC_DRIVER", "pyodbc가 쓸 ODBC 드라이버 이름")
-    password: SecretStr | None = F(None, "EDW_PASSWORD", "EDW 접속 비밀번호")
-    port: Port | None = F(1433, "EDW_PORT", "EDW 포트")
-    db_schema: str | None = F("AI", "EDW_SCHEMA", "EDW 표 스키마 이름(영문·숫자·_)")
-    server: str | None = F(None, "EDW_SERVER", "EDW 서버 주소(호스트)")
-    trust_cert: str | None = F("yes", "EDW_TRUST_CERT", "pyodbc 연결 TrustServerCertificate 옵션(yes|no)")
-    user: str | None = F(None, "EDW_USER", "EDW 접속 계정")
-
-
 class CommonConnectionsObjectStorage(Section):
     access_key: SecretStr | None = F(None, "OS_ACCESS_KEY", "Object Storage(S3) 액세스 키")
     endpoint: str | None = F(None, "OS_ENDPOINT", "Object Storage(S3 호환) 엔드포인트 URL — 비면 boto3 기본")
@@ -1597,8 +1583,9 @@ class CommonText(Section):
 
 
 class CommonConnections(Section):
-    REMOVED = frozenset({"openviking"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    edw: CommonConnectionsEdw = Field(default_factory=CommonConnectionsEdw)
+    REMOVED = frozenset(
+        {"openviking", "edw"}
+    )  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안) · edw = EDW 벡터 경로(ops.md#op-02)
     object_storage: CommonConnectionsObjectStorage = Field(default_factory=CommonConnectionsObjectStorage)
     parsing_meta: CommonConnectionsParsingMeta = Field(default_factory=CommonConnectionsParsingMeta)
     pg: CommonConnectionsPg = Field(default_factory=CommonConnectionsPg)

@@ -31,9 +31,9 @@ def evidence_gate_on():
 
 class Retriever:
     """같은 질의 → 본문·출처 저장소(pgvector 또는 로컬 묶음)에서 하이브리드(벡터 + BM25 + 드문 ID → RRF).
-    EDW(--edw · --edw-client)는 **벡터 순위만** 준다(EDW에는 벡터만 있음) — 키(sha:seq)를 저장소 청크로 바꿔 나머지는 개발 서버에서."""
+    벡터는 pgvector에만 둔다(사용자 10-29 — EDW 벡터 경로 삭제, docs/prd/ops.md#op-02)."""
 
-    def __init__(self, bundle, use_edw=False, client=False, retrieve="cosine", pg=False, hidden_db=None, pg_schema=None):
+    def __init__(self, bundle, retrieve="cosine", pg=False, hidden_db=None, pg_schema=None):
         """hidden_db(OP1, 기본 None — 안 주면 전과 바이트 동일) = 문서 대장 연결(common.store.registry.try_open_db()) —
         주어지면 지금 숨김 상태인 doc_key 집합을 한 번 읽어 self.hidden에 캐시하고 바로 닫는다(연결을 오래 들고
         있지 않음 — pg=False인 로컬 검색도 이 연결은 pg 인자와 무관하게 독립적으로 받는다, 문서 대장은 다른 스키마)."""
@@ -55,7 +55,7 @@ class Retriever:
                 "family": d.get("family"),
             }
             for d in self.local.docs
-        }  # L3-1: pgvector·EDW 저장소도 이 로컬 묶음 문서 메타로 최신성 순위(항상 로드됨)
+        }  # L3-1: pgvector 저장소도 이 로컬 묶음 문서 메타로 최신성 순위(항상 로드됨)
         self.pg = None
         if pg:  # 개발 서버 PostgreSQL + pgvector(기본 저장소)
             from mcp_server.services.search import pg_mcp_connect as PGM
@@ -65,21 +65,6 @@ class Retriever:
             # 없으면 스탠드인(sqlite, common/pg_standin.py) — 서버는 pipeline.env만 채우면 코드 변경 없이 실 PG로.
             # pg_schema(AD41) — 이름 있는 색인은 자기 스키마(<PG_SCHEMA>_<index_id>, common.index_cfg가 검증), 없으면 PG_SCHEMA 그대로.
             self.pgmod, self.pg = pgsearch, PGM.connect_pool(pg_schema=pg_schema)
-            s = self.pg.schema
-            # 2026-10-20 축소 스키마 — doc에 file_sha256이 없어 file_path(doc_key)로 청크 키를 만든다
-            self.key_pg = {
-                f"{r['file_path']}:{r['seq']}": r["chunk_id"]
-                for r in self.pg.q(f"SELECT c.chunk_id, c.seq, d.file_path FROM {s}.chunk c JOIN {s}.doc d ON d.doc_id = c.doc_id")
-            }
-        self.db = self.client = None
-        if use_edw or client:  # EDW 벡터(선택)
-            from common.store.edwdb import DB
-            from common.store.edwdb import conf as edw_conf
-            from mcp_server.services.search import edw_search
-
-            self.edw = edw_search
-            self.db = DB(edw_conf())
-            self.client = edw_search.EdwClient(self.db) if client else None
         self._g = None
         self._cc = None  # 개념→청크 역색인(X4, concept_chunk.jsonl) — 처음 쓸 때 한 번 읽음
         self.hidden = set()
@@ -226,19 +211,13 @@ class Retriever:
             want = set(methods) if methods else ({"vector"} if self.retrieve == "cosine" else {"vector", "bm25", "id"})
             methods = sorted(want - {"vector"}) or ["bm25", "id"]
         t0 = time.perf_counter()
-        keys = None
-        if self.db and qv is not None:  # EDW: 벡터 상위 n개의 키만
-            n = k if self.retrieve == "cosine" else 50
-            keys = [key for key, _ in (self.client.topk(qv, n) if self.client else self.edw.edw_topk(self.db, qv, n))]
         if self.pg:
-            vr = None if keys is None else [self.key_pg[x] for x in keys if x in self.key_pg]
             rows = self.pgmod.search(
                 self.pg,
                 qv,
                 terms,
                 k,
                 retrieve=self.retrieve,
-                vr=vr,
                 methods=methods,
                 client=client,
                 client_strict=client_strict,
@@ -271,13 +250,11 @@ class Retriever:
             ]
         else:
             L = self.local
-            vr = None if keys is None else [self.key_local[x] for x in keys if x in self.key_local]
             order, via, score = L.search(
                 qv,
                 terms,
                 k,
                 retrieve=self.retrieve,
-                vr=vr,
                 methods=methods,
                 client=client,
                 client_strict=client_strict,

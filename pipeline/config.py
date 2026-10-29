@@ -529,10 +529,11 @@ class PipelineHost(Section):
 
 
 class PipelineLoad(Section):
-    REMOVED = frozenset({"structure_target"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset(
+        {"structure_target", "edw_load"}
+    )  # 사용자 10-29(edw_load — EDW 벡터 경로 삭제, ops.md#op-02) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     bm25_stat_rebuild: bool | None = F(False, "BM25_STAT_REBUILD", "적재 때 키워드 문서 빈도를 전체 다시 셈 — 1이면 켬", on=("1",))
     bm25_threads: int | None = F(4, "BM25_THREADS", "BM25 항목(term,tf) 계산 병렬 스레드 수(개)")
-    edw_load: bool | None = F(False, "EDW_LOAD", "EDW 벡터 적재(deploy·load) 허용 — 1이어야 진행, 아니면 거부 종료", on=("1",))
     edw_path_prefix: str | None = F(None, "EDW_PATH_PREFIX", "저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치)")
     index_lock_stale_sec: float | None = F(21600.0, "INDEX_LOCK_STALE_SEC", "색인 빌드 잠금 파일을 죽은 빌드로 보고 회수하는 경과 시간(초)")
     pg_create_extension: bool | None = F(
