@@ -85,6 +85,7 @@ PC Docker smoke stops at the retriever. Why: depends on [mcp.md#mc-10](mcp.md#mc
 
 ## e2-14
 Release tests live only inside the image. Why: an overlay patch cannot update them (C-53).
+- Decided (user 10-30 grill): a change that alters tests needs a new image version (draft rule adopted).
 - Files: `deploy/docker/Dockerfile`, `tests/server/`.
 - Status: todo
 

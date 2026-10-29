@@ -24,6 +24,7 @@ Row = one open feature. ID prefix = `prd/<area>.md` (mc = search MCP · pl = dat
 | pl-27 | 프로세스 종료 정리 — 임시 설정 파일·PID 기록 지움, 자식 회수 | dev | [→](prd/pipeline.md#pl-27) |
 | pl-28 | Per-source gold tables · source required in search (later) | todo | [→](prd/pipeline.md#pl-28) |
 | pl-29 | EDW 고객 매핑을 파이프라인이 직접 만든다 | todo | [→](prd/pipeline.md#pl-29) |
+| pl-30 | 아무도 안 읽는 env 이름 4개 삭제(C-51) | todo | [→](prd/pipeline.md#pl-30) |
 | e2-10 | Minimize PC eval tools (old set names) and settings | todo | [→](prd/e2e.md#e2-10) |
 | e2-11 | PC general test known failures | todo | [→](prd/e2e.md#e2-11) |
 | e2-13 | PC Docker smoke stops at retriever | todo | [→](prd/e2e.md#e2-13) |

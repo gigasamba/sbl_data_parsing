@@ -22,7 +22,7 @@ Sync `refactor.md` with the 10-29 merges (PR #4). Why: a cross-check found stale
 - Reviewer roles (user 10-29 grill): "engine-qa / be-qa" were role names with no person. Grade A review = the user, through a grill-me session where Claude walks through the change; replace the role names in refactor.md (line 8 and the C rows) and CLAUDE.md §5-3 says so.
 - `valid_env/eval_sets/` deleted ([pipeline.md#pl-21](pipeline.md#pl-21)) — fix references in CLAUDE.md §6-5 (`list-smoke10.txt`), `valid_env/README.md`, `docs/prd/e2e.md`.
 - Also: re-measure the CLAUDE.md §6-3 baseline (selftest 89/88, pytest 142/8 — test files were deleted 10-29).
-- Status: todo — before do-01 moves the file.
+- Status: dev — `feature/refactor-sync`: refactor.md 동기화(do-04의 refactor.md 몫 포함 — 옛 항목은 `docs/history/refactor_c_items.md`로). CLAUDE.md 몫(§5-3 검토자 줄·§6-3 기준선·§4 지문 줄·§6-5 `list-smoke10.txt`)은 사용자 확인 뒤 따로(다른 세션 요청만으로 CLAUDE.md를 고치지 않음).
 
 ## do-04
 Docs restructure (user 10-29/10-30). Why: too many overlapping docs; requirements are spread outside the PRD.
