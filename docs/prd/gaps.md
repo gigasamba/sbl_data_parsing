@@ -27,6 +27,7 @@ Rows with an ID are open defects; the rest are behaviors to know.
 | Search page shows real counts | fixed text "10 documents (20 chunks)" | `validation/search_ui/index.html` | e2-16 |
 | Load skips only unchanged documents | skips by `file_path` (no sha column) — changed content at the same path is skipped too unless `--replace` | `pgvector_load.py` | pl-07 |
 | `query_edw` table allowlist | off by default on mssql (`EDW_QUERY_TABLES_STRICT=0` → every schema except system catalogs) | `edw_query.py` | mc-06 |
+| Scan-page number correction (AD47 — hidden text over an image, e.g. 430.000 vs 430,000) | page VLM has no word boxes, so 'hidden_overlap' pages keep the original text — no OCR fallback (user 10-29: accept for now) | `represent.py` `fill_scan_pages` | pl-22 |
 | Hard filters on every store | PG store only; local bundle: filters-only returns an error, question + filters searches unfiltered | `search_svc.py` | mc-01 |
 | Knowledge graph searchable | built into the bundle, not loaded to PG, no search method reads it now | `build_bundle.py` | pl-06 |
 | DRM/password files decrypted in the flow | decryption is a manual CLI (`python -m pipeline.extract.secure_docs decrypt`) | `secure_docs.py` | pl-02 |
@@ -72,7 +73,7 @@ Full switch list with defaults: `settings.sample.yaml` part 2, groups "[기능 �
 | LLM router for borderline aggregation | `SEARCH_AGG_LLM=0` | LLM | mcp |
 | `query_edw` | `EDW_QUERY=1` | `EDW_QUERY_SERVER/USER/PASSWORD` or `EDW_QUERY_SQLITE` | mcp |
 | `edw_meta` | — | dataset at `EDW_META_DIR` (default `/app/config/edw_meta`) | mcp |
-| `parse_document` | `PARSE_MCP_OCR=0` (no OCR/VLM engines) | `mcp_parse_service` running + `PARSE_SERVICE_TOKEN` | mcp |
+| `parse_document` | `PARSE_OCR_ENGINE=0` (no OCR/VLM engines — `PARSE_MCP_OCR` merged 10-29) · limits 1 s/page text, 60 s/page VLM | `mcp_parse_service` running + `PARSE_SERVICE_TOKEN` | mcp |
 | VLM engine, figures, page VLM | on (OCR engines off — `PARSE_OCR_ENGINE=0`, pl-22) | VLM endpoint; soffice (`SOFFICE_BIN`) for slides/shapes | pipeline |
 | Streaming parse · per-doc parallel pipeline | `PARSE_STREAM=0` · `PARSE_PARALLEL_PIPELINE=0` | — | pipeline |
 | Scan OCR/VLM de-dup · render-OCR signals · auto re-parse changed | `PARSE_DEDUP_SCAN=0` · `PARSE_SIGNAL_OCR=0` · `AUTO_REPARSE_CHANGED=0` | — | pipeline |
