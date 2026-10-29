@@ -74,29 +74,31 @@ for _k in ("DOC_DIR", "DOC_DIR_PREPARED", "PIPE_EMBED", "SOFFICE_BIN"):
 
 # 사용자 10-29 — 입력이 필수인 칸은 맨 위에 settings.yaml 꼴로, 기본값이 있는 칸은 영역별 선택 목록으로(YAML은 같은 절을 두 번 못 써서 선택 칸은 주석 목록).
 # 필수 = 비우면 시작을 거부하거나 그 기능이 꺼지는 접속·비밀·모델 주소·원천·게시 위치, 그리고 서버에서 꼭 적어야 동작이 지켜지는 칸(run_mode·mcp store — C-43·C-54).
+# 칸 → 어디서 필수인가: 공통(PC·서버) · 서버(dev·stage·prd) · PC(RUN_ENV=local). 사용자 10-29 — settings.yaml에 쓰는 칸 중 필수를 구분.
 REQUIRED = {
-    "common.run_env",
-    *(f"common.connections.pg.{k}" for k in ("host", "port", "db", "user", "password", "db_schema")),
-    *(f"common.connections.edw.{k}" for k in ("server", "database", "user", "password")),
-    *(f"common.connections.object_storage.{k}" for k in ("endpoint", "access_key", "secret_key")),
-    *(f"common.connections.parsing_meta.{k}" for k in ("host", "database", "user", "password")),
-    *(f"common.models.{r}.{k}" for r in ("llm", "vlm", "embed") for k in ("base_url", "model", "api_key")),
-    "common.models.guard.no_paid_calls",
-    "common.paths.config_dir",
-    "common.paths.doc_dir",
-    "common.text.source_uri_prefix",
-    "common.store.run_mode",
-    *(f"pipeline.connections.rdb.{k}" for k in ("host", "database", "user", "password")),
-    "pipeline.extract.input_source",
-    "pipeline.load.publish.bucket",
-    "pipeline.load.publish.prefix",
-    "pipeline.service.trigger.token",
-    "pipeline.service.parse_mcp.token",
-    "pipeline.host.image",
-    *(f"mcp.server.{k}" for k in ("host", "store", "token")),
-    *(f"mcp.edw_query.{k}" for k in ("server", "database", "user", "password")),
-    "mcp.parse_proxy.token",
-    "mcp.host.image",
+    "common.run_env": "공통",
+    **{f"common.connections.pg.{k}": "공통" for k in ("host", "port", "db", "user", "password", "db_schema")},
+    "common.store.run_mode": "공통",
+    **{f"common.models.embed.{k}": "공통" for k in ("base_url", "model", "api_key")},
+    "common.models.guard.no_paid_calls": "PC",
+    **{f"common.connections.edw.{k}": "서버" for k in ("server", "database", "user", "password")},
+    **{f"common.connections.object_storage.{k}": "서버" for k in ("endpoint", "access_key", "secret_key")},
+    **{f"common.connections.parsing_meta.{k}": "서버" for k in ("host", "database", "user", "password")},
+    **{f"common.models.{r}.{k}": "서버" for r in ("llm", "vlm") for k in ("base_url", "model", "api_key")},
+    "common.paths.config_dir": "서버",
+    "common.paths.doc_dir": "서버",
+    "common.text.source_uri_prefix": "서버",
+    **{f"pipeline.connections.rdb.{k}": "서버" for k in ("host", "database", "user", "password")},
+    "pipeline.extract.input_source": "서버",
+    "pipeline.load.publish.bucket": "서버",
+    "pipeline.load.publish.prefix": "서버",
+    "pipeline.service.trigger.token": "서버",
+    "pipeline.service.parse_mcp.token": "서버",
+    "pipeline.host.image": "서버",
+    **{f"mcp.server.{k}": "서버" for k in ("host", "store", "token")},
+    **{f"mcp.edw_query.{k}": "서버" for k in ("server", "database", "user", "password")},
+    "mcp.parse_proxy.token": "서버",
+    "mcp.host.image": "서버",
 }
 # 선택 칸 묶음 — 앞에서부터 처음 맞는 접두어. 어느 묶음에도 안 드는 칸이 있으면 build가 멈춘다(새 절을 더하면 여기도).
 GROUPS = [
@@ -168,17 +170,24 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
 REQ_HEAD = """\
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
-# 1. 필수 입력 — 이 블록을 settings.yaml로 복사해 값을 채운다(비우면 시작 거부·그 기능 꺼짐·서버 동작이 바뀜).
-#    PC에서 쓰지 않는 접속(EDW·Object Storage·RDB 등)은 비워 둔다 — 그 기능만 꺼진다.
+# 1. 필수 입력 — 이 블록을 settings.yaml로 복사해 값을 채운다. 칸마다 [필수: 공통](PC·서버) · [필수: 서버] · [필수: PC].
+#    서버 필수 칸을 PC에서 비우면 그 기능(EDW·Object Storage·RDB·게시 등)만 꺼진다. 비밀 칸은 settings.yaml에만.
 # ══════════════════════════════════════════════════════════════════════════════════════════════"""
 OPT_HEAD = """\
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
-# 2. 선택 — 기본값이 있어 비워 두면 된다. 바꿀 칸만 위 1의 같은 절(common·pipeline·mcp) 아래 같은 자리에 넣는다
+# 2. 옵션(설정) — 기능 켬/끔 · 선택값 · 경로 · 접속 · 운영값(동시성·시간·용량). 기본값이 있어 비워 두면 된다.
+# 3. 파라미터 — 결과(파싱·청크·검색 순위)를 바꾸는 값. 바꾸면 같은 문서에서도 결과가 달라진다(평가로 확인 뒤 바꿈).
+#    줄 모양: 칸 경로:  # 설명 · 기본 <값> · 값: <입력 가능한 값> · env=<옛 이름> [표시].
+#    값: = 형식(코드가 검증 — true·false·정수·포트 등)과 설명에서 뽑은 범위·선택지. 숫자 범위는 안내이고 코드가 막지는 않는다.
+#    바꿀 칸만 위 1의 같은 절(common·pipeline·mcp) 아래 같은 자리에 넣는다
 #    (예: pipeline.transform.structure.chunk_size → pipeline: / transform: / structure: / chunk_size: 900).
-#    같은 최상위 절(common·pipeline·mcp)을 두 번 쓰지 않는다 — YAML은 뒤의 절이 앞의 절을 통째로 덮는다.
-#    모델·extract·transform·load·mcp 묶음은 [결과를 바꾸는 값]·[기능 켬/끔]·[운영값]으로 한 번 더 나눴다
-#    — [결과를 바꾸는 값]·[기능 켬/끔]을 바꾸면 같은 문서에서도 파싱·청크·검색 결과가 달라진다(평가로 확인 뒤 바꿈).
+#    같은 최상위 절을 두 번 쓰지 않는다 — YAML은 뒤의 절이 앞의 절을 통째로 덮는다.
+# ══════════════════════════════════════════════════════════════════════════════════════════════"""
+PARAM_HEAD = """\
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# 3. 파라미터 — 결과를 바꾸는 값(영역별). 줄 모양·넣는 법은 2와 같다.
 # ══════════════════════════════════════════════════════════════════════════════════════════════"""
 
 
@@ -190,8 +199,10 @@ def blank_matters(field):
 
 def _fmt_default(f):
     d = f.default
-    if S.is_secret(f) or d is None:
+    if S.is_secret(f):
         return ""
+    if d is None:
+        return " · 기본 없음"
     if isinstance(d, bool):
         d = "true" if d else "false"
     elif isinstance(d, list):
@@ -209,32 +220,49 @@ def build(classes=None):
     tops = {t: m for t, m in tops.items() if m is not None}
     rows = [(p, f) for top, model in tops.items() for p, f in _leaves(model, top)]
     known = {p for p, _ in rows}
-    if REQUIRED - known and set(tops) == {"common", "pipeline", "mcp"}:  # 시험이 절 일부로 부를 때는 대조 안 함
-        raise SystemExit(f"sample: REQUIRED에 모델에 없는 칸 {sorted(REQUIRED - known)}")
+    req = set(REQUIRED)
+    if req - known and set(tops) == {"common", "pipeline", "mcp"}:  # 시험이 절 일부로 부를 때는 대조 안 함
+        raise SystemExit(f"sample: REQUIRED에 모델에 없는 칸 {sorted(req - known)}")
+    if set(VALUES) - known and set(tops) == {"common", "pipeline", "mcp"}:
+        raise SystemExit(f"sample: VALUES에 모델에 없는 칸 {sorted(set(VALUES) - known)}")
     lines = [HEAD, REQ_HEAD]
     for top, model in tops.items():
-        if any(p.startswith(top + ".") for p in REQUIRED & known):
+        if any(p.startswith(top + ".") for p in req & known):
             lines.append(f"\n{top}:")
             _emit(model, 1, top, lines)
-    lines.append(OPT_HEAD)
     groups = {name: [] for name, _ in GROUPS}
     for p, f in rows:
-        if p in REQUIRED:
+        if p in req:
             continue
         g = next((name for name, pre in GROUPS if any(p == x or p.startswith(x + ".") for x in pre)), None)
         if g is None:
             raise SystemExit(f"sample: 선택 묶음(GROUPS)에 안 드는 칸 {p} — GROUPS에 접두어를 더함")
         groups[g].append((p, f))
-    for i, (name, items) in enumerate(((n, v) for n, v in groups.items() if v), 1):
-        lines.append(f"\n# ─── 2-{i}. {name} ({len(items)}칸) ───")
-        if name not in SPLIT:
-            lines += [f"#   {p}:  # {_note(p, f)}" for p, f in items]
+    is_param = lambda name, p, f: name in SPLIT and _kind(p, f) == 0  # 파라미터 = 결과를 바꾸는 값(묶음 안)
+    lines.append(OPT_HEAD)
+    i = 0
+    for name, items in groups.items():
+        opts = [(p, f) for p, f in items if not is_param(name, p, f)]
+        if not opts:
             continue
-        for k, label in enumerate(KINDS):
-            part = [(p, f) for p, f in items if _kind(p, f) == k]
+        i += 1
+        lines.append(f"\n# ─── 2-{i}. {name} ({len(opts)}칸) ───")
+        if name not in SPLIT:
+            lines += [f"#   {p}:  # {_note(p, f)}" for p, f in opts]
+            continue
+        for k, label in ((1, KINDS[1]), (2, KINDS[2])):
+            part = [(p, f) for p, f in opts if _kind(p, f) == k]
             if part:
                 lines.append(f"#  [{label}]")
                 lines += [f"#   {p}:  # {_note(p, f)}" for p, f in part]
+    lines.append(PARAM_HEAD)
+    i = 0
+    for name, items in groups.items():
+        params = [(p, f) for p, f in items if is_param(name, p, f)]
+        if params:
+            i += 1
+            lines.append(f"\n# ─── 3-{i}. {name} ({len(params)}칸) ───")
+            lines += [f"#   {p}:  # {_note(p, f)}" for p, f in params]
     return "\n".join(lines) + "\n"
 
 
@@ -267,7 +295,7 @@ def _emit(model, depth, path, lines):
         sub = S._section_type(f.annotation)
         if sub is None:
             if p in REQUIRED:
-                lines.append(f"{pad}{name}:  # {_note(p, f)}")
+                lines.append(f"{pad}{name}:  # [필수: {REQUIRED[p]}] {_note(p, f)}")
         elif any(r.startswith(p + ".") for r in REQUIRED):
             lines.append(f"{pad}{name}:")
             _emit(sub, depth + 1, p, lines)
@@ -297,8 +325,91 @@ def _note(p, f):
     if env in CATALOG_VALUES and (CATALOG_VALUES[env] or blank_matters(f)):
         v = CATALOG_VALUES[env]
         tags.append(f"[서버 옛 값: {v if v else repr('')}]")
-    note = f"{' '.join((f.description or '').split())} · env={env} · {S.type_label(f.annotation)}{_fmt_default(f)}"
+    note = f"{' '.join((f.description or '').split())}{_fmt_default(f)} · 값: {_values(p, f)} · env={env}"
     return f"{note}{(' ' + ' '.join(tags)) if tags else ''}"
+
+
+_CHOICES = re.compile(r"(?<![\w/.<])([a-z][a-z0-9_]*(?: ?\| ?[a-z][a-z0-9_:]*)+)(?![\w/])")
+_PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|roster|catalog|images|conf|font|warm|jobs_dir|sqlite|db)$")
+
+
+# 설명 글자로는 선택지를 못 뽑는 칸 — 코드가 받는 값(읽는 코드·설명 기준).
+VALUES = {
+    "common.run_env": "local·dev·stage·prd 중 하나",
+    "common.store.run_mode": "prod·test 중 하나",
+    "common.store.struct_backend": "pg·sqlite·tsql 중 하나",
+    "common.text.search_recency": "0(끔)·1(최신을 묻는 질문만)·2(항상) 중 하나",
+    "common.connections.edw.driver": "pymssql·pyodbc 중 하나",
+    "common.connections.edw.encrypt": "yes·no 중 하나",
+    "common.connections.edw.trust_cert": "yes·no 중 하나",
+    "common.connections.object_storage.verify_tls": "1(검증)·0(끔)·CA 파일 경로",
+    "common.models.guard.external_scope": "func·e2e 중 하나",
+    "common.models.transport.transport": "adk·http 중 하나",
+    "common.runtime.pipe_procs": "1 이상 정수 · auto 또는 비우면 자동 계산",
+    "pipeline.connections.rdb.engine": "mssql·pg 중 하나",
+    "pipeline.extract.engine_scope": "stack·all 중 하나",
+    "pipeline.extract.prepare.ocr": "auto·v1·v3 중 하나",
+    "pipeline.transform.represent.post": "all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments)",
+    "pipeline.transform.represent.rep_select": "first·acc·best 중 하나(그 밖 값 = best)",
+    "pipeline.transform.structure.embed": "api·bge-m3·e5-small·e5-base·none 중 하나",
+    "pipeline.transform.structure.edw_embed": "api·bge-m3·e5-small·e5-base 중 하나",
+    "pipeline.transform.structure.chunk_table": "rows 또는 비움(표 통째로)",
+    "mcp.server.host": "127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부",
+    "mcp.server.store": "pg·local 중 하나 또는 비움(자동 탐지)",
+    "mcp.search.pg.vector_search": "exact 또는 비움(HNSW 근사)",
+}
+
+
+def _values(p, f):
+    """입력 가능한 값 — 형식(코드가 검증)과 설명에서 뽑은 선택지·범위(안내 — 숫자 범위는 코드가 막지 않음). 사용자 10-29."""
+    # ponytail: 설명 글자에서 뽑는 규칙 — 틀린 칸은 VALUES에 적거나 설명을 고친다
+    if p in VALUES:
+        return VALUES[p]
+    lab = S.type_label(f.annotation)
+    desc = " ".join((f.description or "").split())
+    leaf = p.rsplit(".", 1)[1]
+    if S.is_secret(f):
+        return "비밀 글자"
+    if lab == "bool":
+        return "true·false"
+    if "포트" in lab:
+        return "1~65535"
+    if lab.startswith(("목록", "글자(쉼표")):
+        return "쉼표 목록 또는 YAML 목록"
+    if lab.startswith("JSON"):
+        return "JSON 객체"
+    if lab.startswith("사전"):
+        return "사전(이름: 글자)"
+    m = _CHOICES.search(desc)
+    if m and lab.split(" | ")[0] in ("str", "float", "int"):
+        return "·".join(x.strip() for x in m.group(1).split("|")) + " 중 하나"
+    if lab == "str":
+        if "HH:MM" in desc:
+            return "HH:MM"
+        if "YYYY-MM-DD" in desc:
+            return "YYYY-MM-DD"
+        if leaf.endswith("url") or "URL" in desc or "주소(" in desc and "호스트" not in desc:
+            return "URL"
+        if leaf in ("host", "server", "endpoint") or "호스트" in desc:
+            return "호스트 이름·IP"
+        if _PATHY.search(leaf) or "경로" in desc or "폴더" in desc:
+            return "경로"
+        return "글자"
+    is_int = lab.startswith("int")
+    if "%" in desc or leaf.endswith("_pct"):
+        rng = "0~100"
+    elif re.search(r"0~1|확신도|비율", desc):
+        rng = "0~1"
+    elif re.search(r"\(초\)|시간\(초\)|제한 시간|상한\(초\)|_sec$|timeout", desc + " " + leaf):
+        rng = "0 이상 초" if not is_int else "0 이상 정수(초)"
+    else:
+        rng = "0 이상 정수" if is_int else "0 이상"
+    z = re.search(r"0(?:이면| ?= ?| 이하면)\s*([^,·)—(]+)", desc)
+    if z:
+        rng += f" (0 = {z.group(1).strip()})"
+    if "auto" in lab or (f.json_schema_extra or {}).get("unset") == ["auto"]:
+        rng += " · auto 또는 비우면 자동 계산"
+    return rng
 
 
 def main(argv):

@@ -15,585 +15,595 @@
 
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
-# 1. 필수 입력 — 이 블록을 settings.yaml로 복사해 값을 채운다(비우면 시작 거부·그 기능 꺼짐·서버 동작이 바뀜).
-#    PC에서 쓰지 않는 접속(EDW·Object Storage·RDB 등)은 비워 둔다 — 그 기능만 꺼진다.
+# 1. 필수 입력 — 이 블록을 settings.yaml로 복사해 값을 채운다. 칸마다 [필수: 공통](PC·서버) · [필수: 서버] · [필수: PC].
+#    서버 필수 칸을 PC에서 비우면 그 기능(EDW·Object Storage·RDB·게시 등)만 꺼진다. 비밀 칸은 settings.yaml에만.
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 
 common:
-  run_env:  # 실행 환경 — local(PC·valid_env 기준)·dev·stage·prd(서버, 외부 모델 거부). env RUN_ENV가 이 값을 이김 · env=RUN_ENV · local|dev|stage|prd
+  run_env:  # [필수: 공통] 실행 환경 — local(PC·valid_env 기준)·dev·stage·prd(서버, 외부 모델 거부). env RUN_ENV가 이 값을 이김 · 기본 없음 · 값: local·dev·stage·prd 중 하나 · env=RUN_ENV
   connections:
     edw:
-      database:  # EDW(SQL Server) 연결 DB 이름 · env=EDW_DATABASE · str
-      password:  # EDW 접속 비밀번호 · env=EDW_PASSWORD · SecretStr [비밀]
-      server:  # EDW 서버 주소(호스트) · env=EDW_SERVER · str
-      user:  # EDW 접속 계정 · env=EDW_USER · str
+      database:  # [필수: 서버] EDW(SQL Server) 연결 DB 이름 · 기본 없음 · 값: 글자 · env=EDW_DATABASE
+      password:  # [필수: 서버] EDW 접속 비밀번호 · 값: 비밀 글자 · env=EDW_PASSWORD [비밀]
+      server:  # [필수: 서버] EDW 서버 주소(호스트) · 기본 없음 · 값: 호스트 이름·IP · env=EDW_SERVER
+      user:  # [필수: 서버] EDW 접속 계정 · 기본 없음 · 값: 글자 · env=EDW_USER
     object_storage:
-      access_key:  # Object Storage(S3) 액세스 키 · env=OS_ACCESS_KEY · SecretStr [비밀]
-      endpoint:  # Object Storage(S3 호환) 엔드포인트 URL — 비면 boto3 기본 · env=OS_ENDPOINT · str
-      secret_key:  # Object Storage(S3) 시크릿 키 · env=OS_SECRET_KEY · SecretStr [비밀]
+      access_key:  # [필수: 서버] Object Storage(S3) 액세스 키 · 값: 비밀 글자 · env=OS_ACCESS_KEY [비밀]
+      endpoint:  # [필수: 서버] Object Storage(S3 호환) 엔드포인트 URL — 비면 boto3 기본 · 기본 없음 · 값: URL · env=OS_ENDPOINT
+      secret_key:  # [필수: 서버] Object Storage(S3) 시크릿 키 · 값: 비밀 글자 · env=OS_SECRET_KEY [비밀]
     parsing_meta:
-      database:  # parsing-meta EDW 연결 DB 이름 · env=PM_DB_DATABASE · str
-      host:  # parsing-meta EDW 서버 주소(호스트) · env=PM_DB_HOST · str
-      password:  # parsing-meta EDW 쓰기 계정 비밀번호 · env=PM_DB_PASSWORD · SecretStr [비밀]
-      user:  # parsing-meta EDW 쓰기 계정 이름 · env=PM_DB_USER · str
+      database:  # [필수: 서버] parsing-meta EDW 연결 DB 이름 · 기본 없음 · 값: 글자 · env=PM_DB_DATABASE
+      host:  # [필수: 서버] parsing-meta EDW 서버 주소(호스트) · 기본 없음 · 값: 호스트 이름·IP · env=PM_DB_HOST
+      password:  # [필수: 서버] parsing-meta EDW 쓰기 계정 비밀번호 · 값: 비밀 글자 · env=PM_DB_PASSWORD [비밀]
+      user:  # [필수: 서버] parsing-meta EDW 쓰기 계정 이름 · 기본 없음 · 값: 글자 · env=PM_DB_USER
     pg:
-      db:  # PostgreSQL 데이터베이스 이름 · env=PG_DB · str · 기본 rag
-      host:  # PostgreSQL 서버 주소 — PG_HOST·PG_PORT·PG_CONN_FILE이 모두 비면 docker ps로 pgvector를 자동 탐지, 그래도 없으면 127.0.0.1(common/store/pg.py) · env=PG_HOST · str
-      password:  # PostgreSQL 비밀번호 · env=PG_PASSWORD · SecretStr [비밀]
-      port:  # PostgreSQL 포트 — 비면 자동 탐지(PG_HOST 설명), 그래도 없으면 5432 · env=PG_PORT · int(포트 — 정수만)
-      db_schema:  # pgvector 기본 스키마 이름(소문자·숫자·_) · env=PG_SCHEMA · str
-      user:  # PostgreSQL 접속 계정 이름 · env=PG_USER · str · 기본 rag
+      db:  # [필수: 공통] PostgreSQL 데이터베이스 이름 · 기본 rag · 값: 경로 · env=PG_DB
+      host:  # [필수: 공통] PostgreSQL 서버 주소 — PG_HOST·PG_PORT·PG_CONN_FILE이 모두 비면 docker ps로 pgvector를 자동 탐지, 그래도 없으면 127.0.0.1(common/store/pg.py) · 기본 없음 · 값: 호스트 이름·IP · env=PG_HOST
+      password:  # [필수: 공통] PostgreSQL 비밀번호 · 값: 비밀 글자 · env=PG_PASSWORD [비밀]
+      port:  # [필수: 공통] PostgreSQL 포트 — 비면 자동 탐지(PG_HOST 설명), 그래도 없으면 5432 · 기본 없음 · 값: 1~65535 · env=PG_PORT
+      db_schema:  # [필수: 공통] pgvector 기본 스키마 이름(소문자·숫자·_) · 기본 없음 · 값: 글자 · env=PG_SCHEMA
+      user:  # [필수: 공통] PostgreSQL 접속 계정 이름 · 기본 rag · 값: 글자 · env=PG_USER
   models:
     embed:
-      api_key:  # 임베딩 엔드포인트 API 키(있을 때만 Authorization 헤더로 보냄) · env=EMBED_API_KEY · SecretStr [비밀]
-      base_url:  # 임베딩 엔드포인트 주소(OpenAI 호환 …/v1) · env=EMBED_BASE_URL · str
-      model:  # 임베딩 모델 이름(색인과 같아야 함 — 질의 임베딩·캐시 열쇠에도 씀) · env=EMBED_MODEL · str
+      api_key:  # [필수: 공통] 임베딩 엔드포인트 API 키(있을 때만 Authorization 헤더로 보냄) · 값: 비밀 글자 · env=EMBED_API_KEY [비밀]
+      base_url:  # [필수: 공통] 임베딩 엔드포인트 주소(OpenAI 호환 …/v1) · 기본 없음 · 값: URL · env=EMBED_BASE_URL
+      model:  # [필수: 공통] 임베딩 모델 이름(색인과 같아야 함 — 질의 임베딩·캐시 열쇠에도 씀) · 기본 없음 · 값: 글자 · env=EMBED_MODEL
     guard:
-      no_paid_calls:  # =1이면 외부(유료) 주소 호출 자체를 거부 · env=NO_PAID_CALLS · bool · 기본 false [켬: 1만]
+      no_paid_calls:  # [필수: PC] =1이면 외부(유료) 주소 호출 자체를 거부 · 기본 false · 값: true·false · env=NO_PAID_CALLS [켬: 1만]
     llm:
-      api_key:  # LLM 엔드포인트 API 키(있을 때만 사용) · env=LLM_API_KEY · SecretStr [비밀]
-      base_url:  # LLM 엔드포인트 주소(OpenAI 호환 …/v1) · env=LLM_BASE_URL · str
-      model:  # LLM 모델 이름 · env=LLM_MODEL · str
+      api_key:  # [필수: 서버] LLM 엔드포인트 API 키(있을 때만 사용) · 값: 비밀 글자 · env=LLM_API_KEY [비밀]
+      base_url:  # [필수: 서버] LLM 엔드포인트 주소(OpenAI 호환 …/v1) · 기본 없음 · 값: URL · env=LLM_BASE_URL
+      model:  # [필수: 서버] LLM 모델 이름 · 기본 없음 · 값: 글자 · env=LLM_MODEL
     vlm:
-      api_key:  # VLM 엔드포인트 API 키(있을 때만) · env=VLM_API_KEY · SecretStr [엔진 지문] [비밀]
-      base_url:  # VLM 엔드포인트 주소(OpenAI 호환 …/v1) · env=VLM_BASE_URL · str [엔진 지문]
-      model:  # VLM 모델 이름 · env=VLM_MODEL · str [엔진 지문]
+      api_key:  # [필수: 서버] VLM 엔드포인트 API 키(있을 때만) · 값: 비밀 글자 · env=VLM_API_KEY [엔진 지문] [비밀]
+      base_url:  # [필수: 서버] VLM 엔드포인트 주소(OpenAI 호환 …/v1) · 기본 없음 · 값: URL · env=VLM_BASE_URL [엔진 지문]
+      model:  # [필수: 서버] VLM 모델 이름 · 기본 없음 · 값: 글자 · env=VLM_MODEL [엔진 지문]
   paths:
-    config_dir:  # 서버 설정 폴더(코드 폴더 밖) — 호스트 스크립트가 settings.yaml을 여기서 찾음(원천 목록 sources.json 덮어쓰기는 S8b에 없앰 — 서버는 판 표) · env=SERVER_ENV_DIR · str
-    doc_dir:  # 원본 문서 폴더 — 원본 위치 주소·파싱 입력의 기준(pipeline 이미지 안 기본 /data/docs — 옛 Dockerfile ENV, B-2) · env=DOC_DIR · str [인계 지문]
+    config_dir:  # [필수: 서버] 서버 설정 폴더(코드 폴더 밖) — 호스트 스크립트가 settings.yaml을 여기서 찾음(원천 목록 sources.json 덮어쓰기는 S8b에 없앰 — 서버는 판 표) · 기본 없음 · 값: 호스트 이름·IP · env=SERVER_ENV_DIR
+    doc_dir:  # [필수: 서버] 원본 문서 폴더 — 원본 위치 주소·파싱 입력의 기준(pipeline 이미지 안 기본 /data/docs — 옛 Dockerfile ENV, B-2) · 기본 없음 · 값: 경로 · env=DOC_DIR [인계 지문]
   store:
-    run_mode:  # 실행 모드 prod|test — pipeline --mode 기본, prod이면 PG 실패 시 SQLite 대체 금지·VLM 시간 완화 · env=RUN_MODE · str [서버 옛 값: prod]
+    run_mode:  # [필수: 공통] 실행 모드 prod|test — pipeline --mode 기본, prod이면 PG 실패 시 SQLite 대체 금지·VLM 시간 완화 · 기본 없음 · 값: prod·test 중 하나 · env=RUN_MODE [서버 옛 값: prod]
   text:
-    source_uri_prefix:  # 원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///srv/rag/docs) · env=SOURCE_URI_PREFIX · str [인계 지문]
+    source_uri_prefix:  # [필수: 서버] 원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///srv/rag/docs) · 기본 없음 · 값: 글자 · env=SOURCE_URI_PREFIX [인계 지문]
 
 pipeline:
   connections:
     rdb:
-      database:  # RDB(mssql) 데이터베이스 이름 · env=RDB_DATABASE · str
-      host:  # RDB(mssql) 서버 주소 · env=RDB_HOST · str
-      password:  # RDB(mssql) 접속 비밀번호 · env=RDB_PASSWORD · SecretStr [비밀]
-      user:  # RDB(mssql) 접속 사용자 이름 · env=RDB_USER · str
+      database:  # [필수: 서버] RDB(mssql) 데이터베이스 이름 · 기본 없음 · 값: 글자 · env=RDB_DATABASE
+      host:  # [필수: 서버] RDB(mssql) 서버 주소 · 기본 없음 · 값: 호스트 이름·IP · env=RDB_HOST
+      password:  # [필수: 서버] RDB(mssql) 접속 비밀번호 · 값: 비밀 글자 · env=RDB_PASSWORD [비밀]
+      user:  # [필수: 서버] RDB(mssql) 접속 사용자 이름 · 기본 없음 · 값: 글자 · env=RDB_USER
   extract:
-    input_source:  # 파싱 원본 위치: 폴더·s3://버킷/접두·rdb:csv:경로·rdb:표 · env=PARSE_SOURCE · str
+    input_source:  # [필수: 서버] 파싱 원본 위치: 폴더·s3://버킷/접두·rdb:csv:경로·rdb:표 · 기본 없음 · 값: 경로 · env=PARSE_SOURCE
   host:
-    image:  # data-pipeline 이미지 이름:태그(compose 필수 변수) · env=DATA_PIPELINE_IMAGE · str [호스트]
+    image:  # [필수: 서버] data-pipeline 이미지 이름:태그(compose 필수 변수) · 기본 없음 · 값: 글자 · env=DATA_PIPELINE_IMAGE [호스트]
   load:
     publish:
-      bucket:  # publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소) · env=PM_BUCKET · str
-      prefix:  # 버킷 안 업로드 경로 접두 · env=PM_PREFIX · str
+      bucket:  # [필수: 서버] publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소) · 기본 없음 · 값: 경로 · env=PM_BUCKET
+      prefix:  # [필수: 서버] 버킷 안 업로드 경로 접두 · 기본 없음 · 값: 경로 · env=PM_PREFIX
   service:
     parse_mcp:
-      token:  # parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값) · env=PARSE_MCP_TOKEN · SecretStr [비밀]
+      token:  # [필수: 서버] parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값) · 값: 비밀 글자 · env=PARSE_MCP_TOKEN [비밀]
     trigger:
-      token:  # 트리거 서버 Bearer 토큰 — 필수(없으면 시작 거부) · env=TRIGGER_TOKEN · SecretStr [비밀]
+      token:  # [필수: 서버] 트리거 서버 Bearer 토큰 — 필수(없으면 시작 거부) · 값: 비밀 글자 · env=TRIGGER_TOKEN [비밀]
 
 mcp:
   edw_query:
-    database:  # EDW 읽기 전용 접속 데이터베이스 이름 · env=EDW_QUERY_DATABASE · str
-    password:  # EDW 읽기 전용 접속 비밀번호 · env=EDW_QUERY_PASSWORD · SecretStr [비밀]
-    server:  # EDW 읽기 전용 접속 서버 주소 · env=EDW_QUERY_SERVER · str
-    user:  # EDW 읽기 전용 접속 계정 이름 · env=EDW_QUERY_USER · str
+    database:  # [필수: 서버] EDW 읽기 전용 접속 데이터베이스 이름 · 기본 없음 · 값: 글자 · env=EDW_QUERY_DATABASE
+    password:  # [필수: 서버] EDW 읽기 전용 접속 비밀번호 · 값: 비밀 글자 · env=EDW_QUERY_PASSWORD [비밀]
+    server:  # [필수: 서버] EDW 읽기 전용 접속 서버 주소 · 기본 없음 · 값: 호스트 이름·IP · env=EDW_QUERY_SERVER
+    user:  # [필수: 서버] EDW 읽기 전용 접속 계정 이름 · 기본 없음 · 값: 글자 · env=EDW_QUERY_USER
   host:
-    image:  # mcp-server 컨테이너 이미지 이름:태그 · env=MCP_SERVER_IMAGE · str [호스트]
+    image:  # [필수: 서버] mcp-server 컨테이너 이미지 이름:태그 · 기본 없음 · 값: 글자 · env=MCP_SERVER_IMAGE [호스트]
   parse_proxy:
-    token:  # parse_document가 작업 서비스(mcp_parse_service)를 부를 때 쓰는 토큰 · env=PARSE_SERVICE_TOKEN · SecretStr [비밀]
+    token:  # [필수: 서버] parse_document가 작업 서비스(mcp_parse_service)를 부를 때 쓰는 토큰 · 값: 비밀 글자 · env=PARSE_SERVICE_TOKEN [비밀]
   server:
-    host:  # MCP 서버 바인드 주소 — auto면 컨테이너 자기 사설 IP · env=MCP_HOST · str · 기본 127.0.0.1
-    store:  # 검색 저장소 종류 — pg 또는 local, 비우면 자동 탐지(Docker pgvector → 없으면 로컬 묶음) · env=MCP_STORE · str [서버 옛 값: pg]
-    token:  # MCP 서버 Bearer 토큰(비루프백 바인드면 필수) · env=MCP_TOKEN · SecretStr [비밀]
+    host:  # [필수: 서버] MCP 서버 바인드 주소 — auto면 컨테이너 자기 사설 IP · 기본 127.0.0.1 · 값: 127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부 · env=MCP_HOST
+    store:  # [필수: 서버] 검색 저장소 종류 — pg 또는 local, 비우면 자동 탐지(Docker pgvector → 없으면 로컬 묶음) · 기본 없음 · 값: pg·local 중 하나 또는 비움(자동 탐지) · env=MCP_STORE [서버 옛 값: pg]
+    token:  # [필수: 서버] MCP 서버 Bearer 토큰(비루프백 바인드면 필수) · 값: 비밀 글자 · env=MCP_TOKEN [비밀]
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
-# 2. 선택 — 기본값이 있어 비워 두면 된다. 바꿀 칸만 위 1의 같은 절(common·pipeline·mcp) 아래 같은 자리에 넣는다
+# 2. 옵션(설정) — 기능 켬/끔 · 선택값 · 경로 · 접속 · 운영값(동시성·시간·용량). 기본값이 있어 비워 두면 된다.
+# 3. 파라미터 — 결과(파싱·청크·검색 순위)를 바꾸는 값. 바꾸면 같은 문서에서도 결과가 달라진다(평가로 확인 뒤 바꿈).
+#    줄 모양: 칸 경로:  # 설명 · 기본 <값> · 값: <입력 가능한 값> · env=<옛 이름> [표시].
+#    값: = 형식(코드가 검증 — true·false·정수·포트 등)과 설명에서 뽑은 범위·선택지. 숫자 범위는 안내이고 코드가 막지는 않는다.
+#    바꿀 칸만 위 1의 같은 절(common·pipeline·mcp) 아래 같은 자리에 넣는다
 #    (예: pipeline.transform.structure.chunk_size → pipeline: / transform: / structure: / chunk_size: 900).
-#    같은 최상위 절(common·pipeline·mcp)을 두 번 쓰지 않는다 — YAML은 뒤의 절이 앞의 절을 통째로 덮는다.
-#    모델·extract·transform·load·mcp 묶음은 [결과를 바꾸는 값]·[기능 켬/끔]·[운영값]으로 한 번 더 나눴다
-#    — [결과를 바꾸는 값]·[기능 켬/끔]을 바꾸면 같은 문서에서도 파싱·청크·검색 결과가 달라진다(평가로 확인 뒤 바꿈).
+#    같은 최상위 절을 두 번 쓰지 않는다 — YAML은 뒤의 절이 앞의 절을 통째로 덮는다.
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 
 # ─── 2-1. 공통 — 접속·저장소·글자 처리 (28칸) ───
-#   common.connections.edw.conn_file:  # EDW 접속 정보를 KEY=VALUE로 담은 파일 경로(환경변수가 이 값을 덮음) · env=EDW_CONN_FILE · str
-#   common.connections.edw.driver:  # EDW 드라이버 선택(pymssql 기본, pyodbc 가능) · env=EDW_DRIVER · str · 기본 pymssql
-#   common.connections.edw.encrypt:  # pyodbc 연결 Encrypt 옵션(yes|no) · env=EDW_ENCRYPT · str · 기본 yes
-#   common.connections.edw.odbc_driver:  # pyodbc가 쓸 ODBC 드라이버 이름 · env=EDW_ODBC_DRIVER · str · 기본 ODBC Driver 18 for SQL Server
-#   common.connections.edw.port:  # EDW 포트 · env=EDW_PORT · int(포트 — 정수만) · 기본 1433
-#   common.connections.edw.db_schema:  # EDW 표 스키마 이름(영문·숫자·_) · env=EDW_SCHEMA · str · 기본 AI
-#   common.connections.edw.trust_cert:  # pyodbc 연결 TrustServerCertificate 옵션(yes|no) · env=EDW_TRUST_CERT · str · 기본 yes
-#   common.connections.object_storage.region:  # Object Storage 리전 이름 · env=OS_REGION · str · 기본 us-east-1
-#   common.connections.object_storage.verify_tls:  # TLS 인증서 검증(1=검증, 0=끔, 그 밖 문자열=CA 파일 경로) · env=OS_VERIFY_TLS · str · 기본 1 [빈 글자 유지]
-#   common.connections.parsing_meta.connect_kwargs:  # parsing-meta EDW pymssql 연결에 더할 추가 인자(JSON 객체) · env=PM_DB_CONNECT_KWARGS · SecretStr [비밀]
-#   common.connections.parsing_meta.port:  # parsing-meta EDW 포트 · env=PM_DB_PORT · int(포트 — 정수만) · 기본 1433
-#   common.connections.parsing_meta.sqlite:  # 시험용 가짜 EDW(SQLite) 파일 경로 — 있으면 실제 EDW 대신 씀 · env=PM_DB_SQLITE · str
-#   common.connections.parsing_meta.table:  # parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_) · env=PM_TABLE · str · 기본 AI.ParsingMeta [빈 글자 유지]
-#   common.connections.pg.conn_file:  # PostgreSQL 접속 정보를 KEY=VALUE로 담은 파일 경로(환경변수가 덮음) · env=PG_CONN_FILE · str
-#   common.connections.pg.connect_timeout:  # PostgreSQL 연결 시도 제한 시간 · env=PG_CONNECT_TIMEOUT · int · 기본 10
-#   common.connections.pg.pool_max:  # 검색 MCP PostgreSQL 연결 풀 최대 연결 수 · env=PG_POOL_MAX · int · 기본 8
-#   common.connections.pg.standin_dir:  # PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더 · env=PG_STANDIN_DIR · str
-#   common.store.doc_registry:  # 문서 대장(doc_registry) 사용 — =0이면 끄고 필터 없이 동작 · env=DOC_REGISTRY · bool · 기본 true [끔: ''·0·none·false]
-#   common.store.registry_editions:  # 대장 '판 비교'(지문 기록·판 연결·내용 그룹) — =0이면 끄고 이전 동작 · env=REGISTRY_EDITIONS · bool · 기본 true [끔: ''·0·none·false]
-#   common.store.registry_etag_md5:  # ETag가 MD5 형식이면 그것만으로 '날짜만 바뀜'으로 확정 — =0이면 항상 원본 바이트 대조 · env=REGISTRY_ETAG_MD5 · bool · 기본 true [끔: ''·0·none·false]
-#   common.store.registry_retry_max:  # 실패 문서 재시도 허용 기간(일) — 0이면 무제한 · env=REGISTRY_RETRY_MAX · int · 기본 7
-#   common.store.struct_backend:  # 정형 저장소 종류 pg|sqlite|tsql · env=STRUCT_BACKEND · str · 기본 pg [빈 글자 유지]
-#   common.store.struct_db:  # 정형 저장소 SQLite 파일 경로(STRUCT_BACKEND=sqlite일 때·PG 대체 시) · env=STRUCT_DB · str
-#   common.text.draft_terms_max:  # 용어 자동 초안 파일 행 수 상한(개) — 넘으면 가장 빈번한 것만 유지 · env=DRAFT_TERMS_MAX · int · 기본 500 [인계 지문]
-#   common.text.parse_token_norm:  # 파싱 결과 비교의 숫자 표기 정규화(AD25) — =0이면 끄고 이전 동작 · env=PARSE_TOKEN_NORM · bool · 기본 true [끔: ''·0·none·false]
-#   common.text.search_recency:  # 같은 문서군의 최신 판 우선 모드 — 0 끔·1 최신을 묻는 질문에서만·2 항상(common/core/docmeta.py — S7b에 mcp.search에서 옮김) · env=SEARCH_RECENCY · str · 기본 1 [빈 글자 유지]
-#   common.text.search_en_stem:  # 검색 토큰의 영어 복수→단수 정규화(G16, 가산만) — =0이면 끔 · env=SEARCH_EN_STEM · bool · 기본 true [인계 지문] [끔: 0만]
-#   common.text.token_num_norm:  # 검색 토큰의 숫자·단위 정규화(T1) — =0이면 끄고 이전 동작 · env=TOKEN_NUM_NORM · bool · 기본 true [인계 지문] [끔: ''·0·none·false]
+#   common.connections.edw.conn_file:  # EDW 접속 정보를 KEY=VALUE로 담은 파일 경로(환경변수가 이 값을 덮음) · 기본 없음 · 값: 경로 · env=EDW_CONN_FILE
+#   common.connections.edw.driver:  # EDW 드라이버 선택(pymssql 기본, pyodbc 가능) · 기본 pymssql · 값: pymssql·pyodbc 중 하나 · env=EDW_DRIVER
+#   common.connections.edw.encrypt:  # pyodbc 연결 Encrypt 옵션(yes|no) · 기본 yes · 값: yes·no 중 하나 · env=EDW_ENCRYPT
+#   common.connections.edw.odbc_driver:  # pyodbc가 쓸 ODBC 드라이버 이름 · 기본 ODBC Driver 18 for SQL Server · 값: 글자 · env=EDW_ODBC_DRIVER
+#   common.connections.edw.port:  # EDW 포트 · 기본 1433 · 값: 1~65535 · env=EDW_PORT
+#   common.connections.edw.db_schema:  # EDW 표 스키마 이름(영문·숫자·_) · 기본 AI · 값: 글자 · env=EDW_SCHEMA
+#   common.connections.edw.trust_cert:  # pyodbc 연결 TrustServerCertificate 옵션(yes|no) · 기본 yes · 값: yes·no 중 하나 · env=EDW_TRUST_CERT
+#   common.connections.object_storage.region:  # Object Storage 리전 이름 · 기본 us-east-1 · 값: 글자 · env=OS_REGION
+#   common.connections.object_storage.verify_tls:  # TLS 인증서 검증(1=검증, 0=끔, 그 밖 문자열=CA 파일 경로) · 기본 1 · 값: 1(검증)·0(끔)·CA 파일 경로 · env=OS_VERIFY_TLS [빈 글자 유지]
+#   common.connections.parsing_meta.connect_kwargs:  # parsing-meta EDW pymssql 연결에 더할 추가 인자(JSON 객체) · 값: 비밀 글자 · env=PM_DB_CONNECT_KWARGS [비밀]
+#   common.connections.parsing_meta.port:  # parsing-meta EDW 포트 · 기본 1433 · 값: 1~65535 · env=PM_DB_PORT
+#   common.connections.parsing_meta.sqlite:  # 시험용 가짜 EDW(SQLite) 파일 경로 — 있으면 실제 EDW 대신 씀 · 기본 없음 · 값: 경로 · env=PM_DB_SQLITE
+#   common.connections.parsing_meta.table:  # parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_) · 기본 AI.ParsingMeta · 값: 글자 · env=PM_TABLE [빈 글자 유지]
+#   common.connections.pg.conn_file:  # PostgreSQL 접속 정보를 KEY=VALUE로 담은 파일 경로(환경변수가 덮음) · 기본 없음 · 값: 경로 · env=PG_CONN_FILE
+#   common.connections.pg.connect_timeout:  # PostgreSQL 연결 시도 제한 시간 · 기본 10 · 값: 0 이상 정수(초) · env=PG_CONNECT_TIMEOUT
+#   common.connections.pg.pool_max:  # 검색 MCP PostgreSQL 연결 풀 최대 연결 수 · 기본 8 · 값: 0 이상 정수 · env=PG_POOL_MAX
+#   common.connections.pg.standin_dir:  # PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더 · 기본 없음 · 값: 경로 · env=PG_STANDIN_DIR
+#   common.store.doc_registry:  # 문서 대장(doc_registry) 사용 — =0이면 끄고 필터 없이 동작 · 기본 true · 값: true·false · env=DOC_REGISTRY [끔: ''·0·none·false]
+#   common.store.registry_editions:  # 대장 '판 비교'(지문 기록·판 연결·내용 그룹) — =0이면 끄고 이전 동작 · 기본 true · 값: true·false · env=REGISTRY_EDITIONS [끔: ''·0·none·false]
+#   common.store.registry_etag_md5:  # ETag가 MD5 형식이면 그것만으로 '날짜만 바뀜'으로 확정 — =0이면 항상 원본 바이트 대조 · 기본 true · 값: true·false · env=REGISTRY_ETAG_MD5 [끔: ''·0·none·false]
+#   common.store.registry_retry_max:  # 실패 문서 재시도 허용 기간(일) — 0이면 무제한 · 기본 7 · 값: 0 이상 정수 (0 = 무제한) · env=REGISTRY_RETRY_MAX
+#   common.store.struct_backend:  # 정형 저장소 종류 pg|sqlite|tsql · 기본 pg · 값: pg·sqlite·tsql 중 하나 · env=STRUCT_BACKEND [빈 글자 유지]
+#   common.store.struct_db:  # 정형 저장소 SQLite 파일 경로(STRUCT_BACKEND=sqlite일 때·PG 대체 시) · 기본 없음 · 값: 경로 · env=STRUCT_DB
+#   common.text.draft_terms_max:  # 용어 자동 초안 파일 행 수 상한(개) — 넘으면 가장 빈번한 것만 유지 · 기본 500 · 값: 0 이상 정수 · env=DRAFT_TERMS_MAX [인계 지문]
+#   common.text.parse_token_norm:  # 파싱 결과 비교의 숫자 표기 정규화(AD25) — =0이면 끄고 이전 동작 · 기본 true · 값: true·false · env=PARSE_TOKEN_NORM [끔: ''·0·none·false]
+#   common.text.search_recency:  # 같은 문서군의 최신 판 우선 모드 — 0 끔·1 최신을 묻는 질문에서만·2 항상(common/core/docmeta.py — S7b에 mcp.search에서 옮김) · 기본 1 · 값: 0(끔)·1(최신을 묻는 질문만)·2(항상) 중 하나 · env=SEARCH_RECENCY [빈 글자 유지]
+#   common.text.search_en_stem:  # 검색 토큰의 영어 복수→단수 정규화(G16, 가산만) — =0이면 끔 · 기본 true · 값: true·false · env=SEARCH_EN_STEM [인계 지문] [끔: 0만]
+#   common.text.token_num_norm:  # 검색 토큰의 숫자·단위 정규화(T1) — =0이면 끄고 이전 동작 · 기본 true · 값: true·false · env=TOKEN_NUM_NORM [인계 지문] [끔: ''·0·none·false]
 
-# ─── 2-2. 모델 — LLM·VLM·임베딩·재순위·비용 가드 (45칸) ───
-#  [결과를 바꾸는 값(하이퍼파라미터)]
-#   common.models.embed.query_prefix:  # 질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …/nQuery: ') · env=EMBED_QUERY_PREFIX · str
-#   common.models.llm.extra_body:  # LLM 요청 본문에 합칠 JSON 객체(예: 생각 끄기 {'reasoning':{'enabled':false}}) · env=LLM_EXTRA_BODY · JSON(사전·목록)
-#   common.models.ocrvlm.model:  # OCR 전용 VLM 모델 이름(0.9B급 GLM-OCR·PaddleOCR-VL 등) · env=OCRVLM_MODEL · str [엔진 지문]
-#   common.models.vlm.extra_body:  # VLM(·OCRVLM) 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기) · env=VLM_EXTRA_BODY · JSON(사전·목록)
-#   common.models.vlm.model_alt:  # 그림 검토 판정용 VLM 모델 이름(없으면 VLM_MODEL과 같음) · env=VLM_MODEL_ALT · str
+# ─── 2-2. 모델 — LLM·VLM·임베딩·재순위·비용 가드 (40칸) ───
 #  [기능 켬/끔]
-#   common.models.embed.allow_external:  # 임베딩 외부 주소 허용 첫째 잠금(=1이면 열림, LLM_SYNTHETIC_TRUTH도 있어야 실제 허용) · env=EMBED_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
-#   common.models.llm.allow_external:  # LLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · env=LLM_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
-#   common.models.llm.empty_retry:  # 빈 응답(생각이 토큰 소진) 안전망 — =0이면 끔, 그 밖이면 max_tokens×4로 1회 재요청 · env=LLM_EMPTY_RETRY · bool · 기본 true [끔: 0만]
-#   common.models.ocrvlm.allow_external:  # OCR 전용 VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · env=OCRVLM_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
-#   common.models.vlm.allow_external:  # VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · env=VLM_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
+#   common.models.embed.allow_external:  # 임베딩 외부 주소 허용 첫째 잠금(=1이면 열림, LLM_SYNTHETIC_TRUTH도 있어야 실제 허용) · 기본 false · 값: true·false · env=EMBED_ALLOW_EXTERNAL [켬: 1만]
+#   common.models.llm.allow_external:  # LLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · 기본 false · 값: true·false · env=LLM_ALLOW_EXTERNAL [켬: 1만]
+#   common.models.llm.empty_retry:  # 빈 응답(생각이 토큰 소진) 안전망 — =0이면 끔, 그 밖이면 max_tokens×4로 1회 재요청 · 기본 true · 값: true·false · env=LLM_EMPTY_RETRY [끔: 0만]
+#   common.models.ocrvlm.allow_external:  # OCR 전용 VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · 기본 false · 값: true·false · env=OCRVLM_ALLOW_EXTERNAL [켬: 1만]
+#   common.models.vlm.allow_external:  # VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · 기본 false · 값: true·false · env=VLM_ALLOW_EXTERNAL [켬: 1만]
 #  [운영값(동시성·시간·용량·경로·접속)]
-#   common.models.embed.dim:  # ping_models 점검에서 기대하는 임베딩 차원 수 · env=EMBED_DIM · int · 기본 4096
-#   common.models.embed.est_usd:  # 임베딩 호출 1건당 예상 비용($) — 예산 선차감용 · env=EMBED_EST_USD · float · 기본 0.001
-#   common.models.embed.query_cache:  # 질의 임베딩 캐시 sqlite 경로(0이면 캐시 끔) · env=EMBED_QUERY_CACHE · str
-#   common.models.embed.query_cache_max:  # 질의 임베딩 캐시 최대 행 수(넘으면 오래된 것부터 삭제, 0이면 무제한) · env=EMBED_QUERY_CACHE_MAX · int · 기본 20000
-#   common.models.embed.timeout:  # 임베딩 API 호출 제한 시간(초) · env=EMBED_TIMEOUT · int · 기본 60
-#   common.models.guard.budget_usd:  # 유료(외부) 모델 호출 누적 비용 상한($) — 넘으면 호출 안 함, 비우면 상한 없음(nan·inf는 형식 오류) · env=LLM_BUDGET_USD · float
-#   common.models.guard.external_max_docs:  # 외부 모델 사용 시(scope=func) 허용 문서 수 상한(개) · env=EXTERNAL_MAX_DOCS · int · 기본 10
-#   common.models.guard.external_max_questions:  # 외부 모델 사용 시(scope=func) 허용 질문 수 상한(개) · env=EXTERNAL_MAX_QUESTIONS · int · 기본 20
-#   common.models.guard.external_scope:  # 외부 모델 사용 범위 — 'e2e'가 아니면 전부 func(기능 시험, 문서·질문 수 상한 적용) · env=EXTERNAL_SCOPE · str · 기본 func [빈 글자 유지]
-#   common.models.guard.internal_host_suffixes:  # 내부망으로 인정할 호스트 이름 접미사 목록(쉼표 구분, 실제 주소가 사설일 때만) · env=INTERNAL_HOST_SUFFIXES · 목록(쉼표 또는 YAML 목록) · 기본 (빈 목록)
-#   common.models.guard.internal_ip_ranges:  # 사설(RFC1918) 밖의 사내 IP 대역 CIDR 목록(쉼표 구분) · env=INTERNAL_IP_RANGES · 목록(쉼표 또는 YAML 목록) · 기본 (빈 목록)
-#   common.models.guard.max_calls:  # LLM 호출 수 상한(개) — 0이면 무제한 · env=LLM_MAX_CALLS · int · 기본 0
-#   common.models.guard.spend_file:  # 지출 장부 파일 경로(호출마다 금액 한 줄 — 프로세스·실행 전체가 공유) · env=LLM_SPEND_FILE · str
-#   common.models.guard.synthetic_truth:  # 합성 시험 문서 선언 파일(_meta 포함 JSON) 경로 — 외부 허용의 둘째 잠금 · env=LLM_SYNTHETIC_TRUTH · str
-#   common.models.llm.cache_dir:  # LLM 응답 캐시 폴더(요청 해시별 json) · env=LLM_CACHE_DIR · str
-#   common.models.llm.empty_retry_max:  # 빈 응답 재요청 때 max_tokens 상한(토큰) · env=LLM_EMPTY_RETRY_MAX · int · 기본 8000
-#   common.models.llm.est_usd:  # LLM 한 턴(run_agent)당 예상 비용($) — 예산 선차감용 · env=LLM_EST_USD · float · 기본 0.01
-#   common.models.llm.max_concurrency:  # LLM 동시 요청 총량(실험 도구 answer의 workers×inner_workers 상한) · env=LLM_MAX_CONCURRENCY · float · 기본 8 [auto = 비움]
-#   common.models.llm.price_in:  # LLM 입력 단가($/백만 토큰) — 내장 가격표보다 우선 · env=LLM_PRICE_IN · float
-#   common.models.llm.price_out:  # LLM 출력 단가($/백만 토큰) — 내장 가격표보다 우선 · env=LLM_PRICE_OUT · float
-#   common.models.llm.rpm:  # LLM 분당 호출 상한(건) — 0이면 무제한 · env=LLM_RPM · int · 기본 0
-#   common.models.llm.timeout:  # LLM 호출 제한 시간(초) — 호출자가 timeout을 주면 그 값이 우선 · env=LLM_TIMEOUT · float · 기본 120.0
-#   common.models.ocrvlm.api_key:  # OCR 전용 VLM 엔드포인트 API 키(있을 때만) · env=OCRVLM_API_KEY · SecretStr [비밀]
-#   common.models.ocrvlm.base_url:  # OCR 전용 VLM 엔드포인트 주소(OpenAI 호환 …/v1) · env=OCRVLM_BASE_URL · str
-#   common.models.ocrvlm.est_usd:  # OCR 전용 VLM 호출 1건당 예상 비용($) — 예산 선차감용 · env=OCRVLM_EST_USD · float · 기본 0.01
-#   common.models.transport.connect_timeout:  # 모델 서버 연결(connect) 전용 제한 시간(초) — 0 이하면 끔 · env=MODEL_CONNECT_TIMEOUT · float · 기본 10.0
-#   common.models.transport.down_after:  # 연속 연결 실패 몇 번이면 그 주소를 '다운'으로 보는가(회) · env=MODEL_DOWN_AFTER · int · 기본 3
-#   common.models.transport.down_cooldown:  # '다운' 판정 뒤 네트워크를 보내지 않고 즉시 거부하는 시간(초) · env=MODEL_DOWN_COOLDOWN · float · 기본 300.0
-#   common.models.transport.ping_timeout:  # ping_models 점검의 호출 제한 시간(초) · env=PING_TIMEOUT · int · 기본 60
-#   common.models.transport.transport:  # 모델 호출 전송 방식 — adk(기본) 또는 http(urllib 롤백 경로) · env=MODEL_TRANSPORT · str · 기본 adk
-#   common.models.vlm.concurrency:  # 한 문서의 쪽(그림) VLM 동시 요청 수(개) · env=VLM_CONCURRENCY · int · 기본 4 [엔진 지문]
-#   common.models.vlm.est_usd:  # VLM 호출 1건당 예상 비용($) — 예산 선차감용 · env=VLM_EST_USD · float · 기본 0.02
-#   common.models.vlm.max_concurrency:  # 공유 VLM 서버 동시 요청 총량 상한(문서 동시 수 × 쪽 동시 수가 이 값을 못 넘게 줄임) · env=VLM_MAX_CONCURRENCY · float · 기본 8 [auto = 비움]
-#   common.models.vlm.retry:  # VLM 쪽 호출 시간 초과·연결 오류 때 재시도 횟수(회) · env=VLM_RETRY · int · 기본 1 [엔진 지문]
-#   common.models.vlm.timeout:  # VLM 쪽당 호출 제한 시간(초) · env=VLM_TIMEOUT · int · 기본 180 [엔진 지문]
+#   common.models.embed.dim:  # ping_models 점검에서 기대하는 임베딩 차원 수 · 기본 4096 · 값: 0 이상 정수 · env=EMBED_DIM
+#   common.models.embed.est_usd:  # 임베딩 호출 1건당 예상 비용($) — 예산 선차감용 · 기본 0.001 · 값: 0 이상 · env=EMBED_EST_USD
+#   common.models.embed.query_cache:  # 질의 임베딩 캐시 sqlite 경로(0이면 캐시 끔) · 기본 없음 · 값: 경로 · env=EMBED_QUERY_CACHE
+#   common.models.embed.query_cache_max:  # 질의 임베딩 캐시 최대 행 수(넘으면 오래된 것부터 삭제, 0이면 무제한) · 기본 20000 · 값: 0 이상 정수 (0 = 무제한) · env=EMBED_QUERY_CACHE_MAX
+#   common.models.embed.timeout:  # 임베딩 API 호출 제한 시간(초) · 기본 60 · 값: 0 이상 정수(초) · env=EMBED_TIMEOUT
+#   common.models.guard.budget_usd:  # 유료(외부) 모델 호출 누적 비용 상한($) — 넘으면 호출 안 함, 비우면 상한 없음(nan·inf는 형식 오류) · 기본 없음 · 값: 0 이상 · env=LLM_BUDGET_USD
+#   common.models.guard.external_max_docs:  # 외부 모델 사용 시(scope=func) 허용 문서 수 상한(개) · 기본 10 · 값: 0 이상 정수 · env=EXTERNAL_MAX_DOCS
+#   common.models.guard.external_max_questions:  # 외부 모델 사용 시(scope=func) 허용 질문 수 상한(개) · 기본 20 · 값: 0 이상 정수 · env=EXTERNAL_MAX_QUESTIONS
+#   common.models.guard.external_scope:  # 외부 모델 사용 범위 — 'e2e'가 아니면 전부 func(기능 시험, 문서·질문 수 상한 적용) · 기본 func · 값: func·e2e 중 하나 · env=EXTERNAL_SCOPE [빈 글자 유지]
+#   common.models.guard.internal_host_suffixes:  # 내부망으로 인정할 호스트 이름 접미사 목록(쉼표 구분, 실제 주소가 사설일 때만) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=INTERNAL_HOST_SUFFIXES
+#   common.models.guard.internal_ip_ranges:  # 사설(RFC1918) 밖의 사내 IP 대역 CIDR 목록(쉼표 구분) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=INTERNAL_IP_RANGES
+#   common.models.guard.max_calls:  # LLM 호출 수 상한(개) — 0이면 무제한 · 기본 0 · 값: 0 이상 정수 (0 = 무제한) · env=LLM_MAX_CALLS
+#   common.models.guard.spend_file:  # 지출 장부 파일 경로(호출마다 금액 한 줄 — 프로세스·실행 전체가 공유) · 기본 없음 · 값: 경로 · env=LLM_SPEND_FILE
+#   common.models.guard.synthetic_truth:  # 합성 시험 문서 선언 파일(_meta 포함 JSON) 경로 — 외부 허용의 둘째 잠금 · 기본 없음 · 값: 경로 · env=LLM_SYNTHETIC_TRUTH
+#   common.models.llm.cache_dir:  # LLM 응답 캐시 폴더(요청 해시별 json) · 기본 없음 · 값: 경로 · env=LLM_CACHE_DIR
+#   common.models.llm.empty_retry_max:  # 빈 응답 재요청 때 max_tokens 상한(토큰) · 기본 8000 · 값: 0 이상 정수 · env=LLM_EMPTY_RETRY_MAX
+#   common.models.llm.est_usd:  # LLM 한 턴(run_agent)당 예상 비용($) — 예산 선차감용 · 기본 0.01 · 값: 0 이상 · env=LLM_EST_USD
+#   common.models.llm.max_concurrency:  # LLM 동시 요청 총량(실험 도구 answer의 workers×inner_workers 상한) · 기본 8 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=LLM_MAX_CONCURRENCY [auto = 비움]
+#   common.models.llm.price_in:  # LLM 입력 단가($/백만 토큰) — 내장 가격표보다 우선 · 기본 없음 · 값: 0 이상 · env=LLM_PRICE_IN
+#   common.models.llm.price_out:  # LLM 출력 단가($/백만 토큰) — 내장 가격표보다 우선 · 기본 없음 · 값: 0 이상 · env=LLM_PRICE_OUT
+#   common.models.llm.rpm:  # LLM 분당 호출 상한(건) — 0이면 무제한 · 기본 0 · 값: 0 이상 정수 (0 = 무제한) · env=LLM_RPM
+#   common.models.llm.timeout:  # LLM 호출 제한 시간(초) — 호출자가 timeout을 주면 그 값이 우선 · 기본 120.0 · 값: 0 이상 초 · env=LLM_TIMEOUT
+#   common.models.ocrvlm.api_key:  # OCR 전용 VLM 엔드포인트 API 키(있을 때만) · 값: 비밀 글자 · env=OCRVLM_API_KEY [비밀]
+#   common.models.ocrvlm.base_url:  # OCR 전용 VLM 엔드포인트 주소(OpenAI 호환 …/v1) · 기본 없음 · 값: URL · env=OCRVLM_BASE_URL
+#   common.models.ocrvlm.est_usd:  # OCR 전용 VLM 호출 1건당 예상 비용($) — 예산 선차감용 · 기본 0.01 · 값: 0 이상 · env=OCRVLM_EST_USD
+#   common.models.transport.connect_timeout:  # 모델 서버 연결(connect) 전용 제한 시간(초) — 0 이하면 끔 · 기본 10.0 · 값: 0 이상 초 (0 = 끔) · env=MODEL_CONNECT_TIMEOUT
+#   common.models.transport.down_after:  # 연속 연결 실패 몇 번이면 그 주소를 '다운'으로 보는가(회) · 기본 3 · 값: 0 이상 정수 · env=MODEL_DOWN_AFTER
+#   common.models.transport.down_cooldown:  # '다운' 판정 뒤 네트워크를 보내지 않고 즉시 거부하는 시간(초) · 기본 300.0 · 값: 0 이상 초 · env=MODEL_DOWN_COOLDOWN
+#   common.models.transport.ping_timeout:  # ping_models 점검의 호출 제한 시간(초) · 기본 60 · 값: 0 이상 정수(초) · env=PING_TIMEOUT
+#   common.models.transport.transport:  # 모델 호출 전송 방식 — adk(기본) 또는 http(urllib 롤백 경로) · 기본 adk · 값: adk·http 중 하나 · env=MODEL_TRANSPORT
+#   common.models.vlm.concurrency:  # 한 문서의 쪽(그림) VLM 동시 요청 수(개) · 기본 4 · 값: 0 이상 정수 · env=VLM_CONCURRENCY [엔진 지문]
+#   common.models.vlm.est_usd:  # VLM 호출 1건당 예상 비용($) — 예산 선차감용 · 기본 0.02 · 값: 0 이상 · env=VLM_EST_USD
+#   common.models.vlm.max_concurrency:  # 공유 VLM 서버 동시 요청 총량 상한(문서 동시 수 × 쪽 동시 수가 이 값을 못 넘게 줄임) · 기본 8 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=VLM_MAX_CONCURRENCY [auto = 비움]
+#   common.models.vlm.retry:  # VLM 쪽 호출 시간 초과·연결 오류 때 재시도 횟수(회) · 기본 1 · 값: 0 이상 정수 · env=VLM_RETRY [엔진 지문]
+#   common.models.vlm.timeout:  # VLM 쪽당 호출 제한 시간(초) · 기본 180 · 값: 0 이상 정수(초) · env=VLM_TIMEOUT [엔진 지문]
 
 # ─── 2-3. 경로 (25칸) ───
-#   common.paths.client_roster:  # 고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) — 용어·별칭에 합침 · env=CLIENT_ROSTER · str [인계 지문]
-#   common.paths.criteria_file:  # 판정 문턱값 파일 경로(criteria.json) · env=CRITERIA_FILE · str
-#   common.paths.doc_dir_prepared:  # 준비(dedup·회전) 끝난 문서 폴더 — 파싱의 --src 기본값(pipeline 이미지 안 기본 /app/output/prepared — 옛 Dockerfile ENV, B-2) · env=DOC_DIR_PREPARED · str
-#   common.paths.draft_terms_out:  # 용어 자동 초안 CSV 경로 · env=DRAFT_TERMS_OUT · str [인계 지문]
-#   common.paths.eval_sets_dir:  # 평가 세트(합성 E2E·정답률 측정) 저장소 폴더 · env=EVAL_SETS_DIR · str
-#   common.paths.glossary_dir:  # 용어 사전 폴더(domain_terms.csv·id_patterns.csv 등) · env=GLOSSARY_DIR · str [인계 지문]
-#   common.paths.index_root:  # 이름 있는 색인 폴더 루트(<index_id>/bundle) · env=INDEX_ROOT · str
-#   common.paths.korean_font:  # 한글 글꼴 파일 경로(그림 렌더·점검용) · env=KOREAN_FONT · str
-#   common.paths.mcp_bundle:  # 검색할 로컬 묶음(bundle) 폴더 경로 — 검색 MCP 로컬 저장소·평가(server_checks)가 읽음(S7e1 — 두 앱이 읽어 common, 옛 mcp.server.bundle) · env=MCP_BUNDLE · str
-#   common.paths.output_root:  # 결과(output) 폴더 — 코드가 이 아래를 읽고 씀(컨테이너 안 경로 — 서버는 /app/output, 비우면 코드 기본. 마운트 원본은 common.host.output_root — T-21) · env=RAG_OUT · str
-#   common.paths.runlog_dir:  # 실행 기록(output/logs) 루트 폴더 · env=RUNLOG_DIR · str
-#   common.paths.source_manifest:  # 원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응) · env=SOURCE_MANIFEST · str [인계 지문]
-#   common.paths.sources_file:  # PC(RUN_ENV=local) 원천 목록 파일 경로(비우면 resources/mappings/sources.json) — 서버는 판 표 struct.source_version 활성 판(S8b) · env=SOURCES_FILE · str
-#   common.paths.stack_file:  # PC(RUN_ENV=local) 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json) — 서버는 판 표 struct.stack_version 활성 판(S8b) · env=PIPELINE_STACK_FILE · str
-#   pipeline.paths.file_meta_path:  # EDW 파일 메타 JSONL 경로(s3_key → 메타) · env=FILE_META_PATH · str
-#   pipeline.paths.gold_dir:  # 사람 정답(gold) 폴더 — score_gold·점검 도구의 기본 입력(코드가 읽는 경로 — 컨테이너 안은 run_tool.sh가 /data/gold로 줌, 원본은 pipeline.host.gold_dir — T-21) · env=GOLD_DIR · str
-#   pipeline.paths.images_root:  # 그림 PNG·index.jsonl 저장 루트 · env=PARSE_IMAGES_ROOT · str
-#   pipeline.paths.index_conf:  # 색인 설정 JSON 경로(있으면 색인 모듈로 구조화) · env=INDEX_CONF · str
-#   pipeline.paths.out_root:  # 파이프라인 출력 루트(output) · env=PIPE_OUT_ROOT · str
-#   pipeline.paths.paddle_python:  # paddle 계열 엔진을 돌릴 별도 venv의 python 경로 · env=PADDLE_PYTHON · str
-#   pipeline.paths.parse_tmp:  # 스트리밍·병렬 파싱 임시 폴더 — output 아래 2단 이상 하위만 허용 · env=PARSE_TMP · str
-#   pipeline.paths.raw_root:  # P0 원본 층(raw/VLM) 캐시 저장소 루트 · env=PARSE_RAW_ROOT · str
-#   pipeline.paths.report_digest_dir:  # run_board 날짜·판 요약 폴더 루트(비우면 요약 안 만듦) · env=REPORT_DIGEST_DIR · str
-#   pipeline.paths.soffice_bin:  # LibreOffice soffice 실행 파일 경로 — PATH·흔한 경로보다 먼저 봄(pipeline 이미지 안 기본 /usr/bin/soffice — 옛 Dockerfile ENV, B-2) · env=SOFFICE_BIN · str
-#   pipeline.paths.stack_snapshot:  # 엔진 구성 사본 파일(내부 신호 — 진입점이 활성 판에서 만들어 자식에 넘김, 사람이 쓰지 않음 · S8b) · env=STACK_SNAPSHOT · str
+#   common.paths.client_roster:  # 고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) — 용어·별칭에 합침 · 기본 없음 · 값: 경로 · env=CLIENT_ROSTER [인계 지문]
+#   common.paths.criteria_file:  # 판정 문턱값 파일 경로(criteria.json) · 기본 없음 · 값: 경로 · env=CRITERIA_FILE
+#   common.paths.doc_dir_prepared:  # 준비(dedup·회전) 끝난 문서 폴더 — 파싱의 --src 기본값(pipeline 이미지 안 기본 /app/output/prepared — 옛 Dockerfile ENV, B-2) · 기본 없음 · 값: 경로 · env=DOC_DIR_PREPARED
+#   common.paths.draft_terms_out:  # 용어 자동 초안 CSV 경로 · 기본 없음 · 값: 경로 · env=DRAFT_TERMS_OUT [인계 지문]
+#   common.paths.eval_sets_dir:  # 평가 세트(합성 E2E·정답률 측정) 저장소 폴더 · 기본 없음 · 값: 경로 · env=EVAL_SETS_DIR
+#   common.paths.glossary_dir:  # 용어 사전 폴더(domain_terms.csv·id_patterns.csv 등) · 기본 없음 · 값: 경로 · env=GLOSSARY_DIR [인계 지문]
+#   common.paths.index_root:  # 이름 있는 색인 폴더 루트(<index_id>/bundle) · 기본 없음 · 값: 경로 · env=INDEX_ROOT
+#   common.paths.korean_font:  # 한글 글꼴 파일 경로(그림 렌더·점검용) · 기본 없음 · 값: 경로 · env=KOREAN_FONT
+#   common.paths.mcp_bundle:  # 검색할 로컬 묶음(bundle) 폴더 경로 — 검색 MCP 로컬 저장소·평가(server_checks)가 읽음(S7e1 — 두 앱이 읽어 common, 옛 mcp.server.bundle) · 기본 없음 · 값: 경로 · env=MCP_BUNDLE
+#   common.paths.output_root:  # 결과(output) 폴더 — 코드가 이 아래를 읽고 씀(컨테이너 안 경로 — 서버는 /app/output, 비우면 코드 기본. 마운트 원본은 common.host.output_root — T-21) · 기본 없음 · 값: 경로 · env=RAG_OUT
+#   common.paths.runlog_dir:  # 실행 기록(output/logs) 루트 폴더 · 기본 없음 · 값: 경로 · env=RUNLOG_DIR
+#   common.paths.source_manifest:  # 원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응) · 기본 없음 · 값: 경로 · env=SOURCE_MANIFEST [인계 지문]
+#   common.paths.sources_file:  # PC(RUN_ENV=local) 원천 목록 파일 경로(비우면 resources/mappings/sources.json) — 서버는 판 표 struct.source_version 활성 판(S8b) · 기본 없음 · 값: 경로 · env=SOURCES_FILE
+#   common.paths.stack_file:  # PC(RUN_ENV=local) 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json) — 서버는 판 표 struct.stack_version 활성 판(S8b) · 기본 없음 · 값: 경로 · env=PIPELINE_STACK_FILE
+#   pipeline.paths.file_meta_path:  # EDW 파일 메타 JSONL 경로(s3_key → 메타) · 기본 없음 · 값: 경로 · env=FILE_META_PATH
+#   pipeline.paths.gold_dir:  # 사람 정답(gold) 폴더 — score_gold·점검 도구의 기본 입력(코드가 읽는 경로 — 컨테이너 안은 run_tool.sh가 /data/gold로 줌, 원본은 pipeline.host.gold_dir — T-21) · 기본 없음 · 값: 경로 · env=GOLD_DIR
+#   pipeline.paths.images_root:  # 그림 PNG·index.jsonl 저장 루트 · 기본 없음 · 값: 경로 · env=PARSE_IMAGES_ROOT
+#   pipeline.paths.index_conf:  # 색인 설정 JSON 경로(있으면 색인 모듈로 구조화) · 기본 없음 · 값: 경로 · env=INDEX_CONF
+#   pipeline.paths.out_root:  # 파이프라인 출력 루트(output) · 기본 없음 · 값: 경로 · env=PIPE_OUT_ROOT
+#   pipeline.paths.paddle_python:  # paddle 계열 엔진을 돌릴 별도 venv의 python 경로 · 기본 없음 · 값: 경로 · env=PADDLE_PYTHON
+#   pipeline.paths.parse_tmp:  # 스트리밍·병렬 파싱 임시 폴더 — output 아래 2단 이상 하위만 허용 · 기본 없음 · 값: 경로 · env=PARSE_TMP
+#   pipeline.paths.raw_root:  # P0 원본 층(raw/VLM) 캐시 저장소 루트 · 기본 없음 · 값: 경로 · env=PARSE_RAW_ROOT
+#   pipeline.paths.report_digest_dir:  # run_board 날짜·판 요약 폴더 루트(비우면 요약 안 만듦) · 기본 없음 · 값: 경로 · env=REPORT_DIGEST_DIR
+#   pipeline.paths.soffice_bin:  # LibreOffice soffice 실행 파일 경로 — PATH·흔한 경로보다 먼저 봄(pipeline 이미지 안 기본 /usr/bin/soffice — 옛 Dockerfile ENV, B-2) · 기본 없음 · 값: 경로 · env=SOFFICE_BIN
+#   pipeline.paths.stack_snapshot:  # 엔진 구성 사본 파일(내부 신호 — 진입점이 활성 판에서 만들어 자식에 넘김, 사람이 쓰지 않음 · S8b) · 기본 없음 · 값: 경로 · env=STACK_SNAPSHOT
 
-# ─── 2-4. extract — 원천·준비·파싱 (82칸) ───
-#  [결과를 바꾸는 값(하이퍼파라미터)]
-#   pipeline.extract.engine_scope:  # 문서마다 돌릴 엔진 범위(stack = 형식별 stack.json 목록만 / all = 등록 엔진 전부) · env=PARSE_ENGINE_SCOPE · str [서버 옛 값: all]
-#   pipeline.extract.hidden_overlap_max:  # '숨은 글자-그림 겹침' 신호로 쪽 VLM 후보에 올릴 쪽 수 상한(쪽, 0=끔) · env=PARSE_HIDDEN_OVERLAP_MAX · int · 기본 20
-#   pipeline.extract.ocr_gt_max:  # 'OCR 글자 수가 글자층의 3배 이상'인 쪽을 쪽 VLM 후보로 올릴 상한(쪽, 0=끔) · env=PARSE_OCR_GT_MAX · int · 기본 20
-#   pipeline.extract.phases:  # 돌릴 phase 목록(쉼표, 3r = 성공 엔진이 없는 문서만 phase 3) · env=PARSE_PHASES · 목록(쉼표 또는 YAML 목록) · 기본 1,2,3r
-#   pipeline.extract.rotated_max:  # 쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) — 0이면 rotation.csv를 안 읽음 · env=PARSE_ROTATED_MAX · int · 기본 20
-#   pipeline.extract.table_grid_max_rows:  # 표 grid JSON에 담는 최대 행 수(개) — 넘으면 앞부분만 자르고 truncated 표시 · env=TABLE_GRID_MAX_ROWS · int · 기본 2000 [엔진 지문]
-#   pipeline.extract.attach.max_depth:  # 메일 등 첨부 안의 첨부를 따라갈 최대 깊이(단계) · env=ATTACH_MAX_DEPTH · int · 기본 1
-#   pipeline.extract.attach.max_n:  # 문서 하나에서 처리할 첨부 개수 상한(개) · env=ATTACH_MAX_N · int · 기본 10
-#   pipeline.extract.dedup.common_max:  # 중복 검사에서 '흔한 조각'으로 보고 열쇠에서 뺄 공통 문서 수 기준(개) · env=DEDUP_COMMON_MAX · int
-#   pipeline.extract.ocr.dpi:  # 쪽 이미지 렌더링 해상도(DPI) — OCR·근거 이미지 좌표 환산에 씀 · env=OCR_DPI · int · 기본 200 [엔진 지문]
-#   pipeline.extract.ocr.max_pages:  # 문서당 OCR·VLM 쪽 수 상한(쪽, 0=제한 없음) · env=OCR_MAX_PAGES · int · 기본 0 [엔진 지문]
-#   pipeline.extract.prepare.ocr:  # 회전 검토용 OCR 엔진 선택: auto|v1|v3(v3=rapidocr 3.x 강제) · env=PREPARE_OCR · str · 기본 auto [빈 글자 유지]
-#   pipeline.extract.prepare.rotate_lead:  # 빠른 회전 검토에서 기대 각도를 정하는 문서 맨 앞 쪽 수(개) · env=PREPARE_ROTATE_LEAD · int · 기본 3
-#   pipeline.extract.prepare.rotate_probe_fast:  # 빠른 회전 검토의 축소 점검 이미지 크기(px) · env=PREPARE_ROTATE_PROBE_FAST · int · 기본 480
-#   pipeline.extract.prepare.rotate_s0_min:  # 빠른 회전 검토에서 힌트 각도를 믿는 최소 OCR 점수 · env=PREPARE_ROTATE_S0_MIN · float · 기본 150.0
+# ─── 2-4. extract — 원천·준비·파싱 (67칸) ───
 #  [기능 켬/끔]
-#   pipeline.extract.auto_reparse_changed:  # 야간 계획에서 바뀐 문서(changed) 전체를 다시 파싱할지(=1 재파싱) · env=AUTO_REPARSE_CHANGED · bool · 기본 false [켬: 1만]
-#   pipeline.extract.dedup_scan:  # 스캔 쪽의 OCR 본문과 쪽 VLM 전사 중복을 쪽마다 하나로 정리할지 · env=PARSE_DEDUP_SCAN · bool · 기본 false [끔: ''·0·none·false]
-#   pipeline.extract.fill_merged:  # 표에서 병합 셀이 덮은 빈 칸을 원본 칸 값으로 채울지 · env=PARSE_FILL_MERGED · bool · 기본 true [엔진 지문]
-#   pipeline.extract.kreuzberg_prose_filter:  # kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔) · env=KREUZBERG_PROSE_FILTER · bool · 기본 true [엔진 지문]
-#   pipeline.extract.merge_pages:  # 엔진 간 쪽·문단 단위 보정(쪽 합치기)을 켤지(=0이면 끔) · env=PARSE_MERGE_PAGES · bool · 기본 true [끔: 0만]
-#   pipeline.extract.page_scan:  # 글자 PDF 안의 스캔 쪽을 신호로 찾아 쪽 VLM에 보낼지(=0이면 끔) · env=PARSE_PAGE_SCAN · bool · 기본 true [끔: 0만]
-#   pipeline.extract.scan_fill:  # 스캔 쪽을 OCR로 채우는 대표 결과 보정 켬/끔 — 0이면 이전 동작과 바이트 동일 · env=PARSE_SCAN_FILL · bool · 기본 true [끔: ''·0·none·false]
-#   pipeline.extract.signal_ocr:  # 쪽 신호 계산에 렌더 OCR 글자 수를 채울지 — 1이면 켬(비용 큼) · env=PARSE_SIGNAL_OCR · bool · 기본 false [켬: 1만]
-#   pipeline.extract.cache.keep_engine_cache:  # 엔진별 중간 결과(output/parse/<엔진>/<문서>.json)를 지우지 않고 남길지(=1 보관) · env=KEEP_ENGINE_CACHE · bool · 기본 false [켬: 1만]
-#   pipeline.extract.cache.keep_local_originals:  # 내려받은 원본을 파싱 뒤에도 지우지 않고 남길지(=1 보관, 디버그·샘플용) · env=KEEP_LOCAL_ORIGINALS · bool · 기본 false [켬: 1만]
-#   pipeline.extract.cache.keep_raw_layer:  # P0 원본 층 캐시(output/parse/raw/**)를 유지할지(1 유지 / 그 외 이번 묶음 것 삭제) · env=KEEP_RAW_LAYER · bool · 기본 true [켬: 1만]
-#   pipeline.extract.ocr.table_grid:  # OCR 박스 좌표로 표 격자를 추정할지(=0이면 끔) · env=OCR_TABLE_GRID · bool · 기본 true [엔진 지문]
-#   pipeline.extract.parallel.pipeline:  # --source 파싱을 문서 단위 병렬 파이프라인(받기→파싱→게시→삭제)으로 돌릴지(=1) · env=PARSE_PARALLEL_PIPELINE · bool · 기본 false [켬: 1만]
-#   pipeline.extract.prepare.rotate:  # 스캔 PDF 회전 검토(OCR 점수) 켬/끔 — 0이면 생략하고 그대로 복사 · env=PREPARE_ROTATE · bool · 기본 true [끔: 0만]
-#   pipeline.extract.prepare.rotate_fast:  # 회전 검토 빠른 경로(앞쪽 공통 각도 힌트+축소 점검) 켬/끔 — 0이면 매 쪽 4방향 전체 · env=PREPARE_ROTATE_FAST · bool · 기본 true [끔: 0만]
-#   pipeline.extract.stream.fingerprint:  # 받은 파일 삭제 전 최소 지문을 dedup manifest에 남길지 — 0이면 끔 · env=PARSE_STREAM_FINGERPRINT · bool · 기본 true [끔: 0만]
-#   pipeline.extract.stream.stream:  # 스트리밍 파싱(묶음씩 받아 처리 후 즉시 삭제) 사용 — 1이면 켬 · env=PARSE_STREAM · bool · 기본 false [켬: 1만]
+#   pipeline.extract.auto_reparse_changed:  # 야간 계획에서 바뀐 문서(changed) 전체를 다시 파싱할지(=1 재파싱) · 기본 false · 값: true·false · env=AUTO_REPARSE_CHANGED [켬: 1만]
+#   pipeline.extract.dedup_scan:  # 스캔 쪽의 OCR 본문과 쪽 VLM 전사 중복을 쪽마다 하나로 정리할지 · 기본 false · 값: true·false · env=PARSE_DEDUP_SCAN [끔: ''·0·none·false]
+#   pipeline.extract.fill_merged:  # 표에서 병합 셀이 덮은 빈 칸을 원본 칸 값으로 채울지 · 기본 true · 값: true·false · env=PARSE_FILL_MERGED [엔진 지문]
+#   pipeline.extract.kreuzberg_prose_filter:  # kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔) · 기본 true · 값: true·false · env=KREUZBERG_PROSE_FILTER [엔진 지문]
+#   pipeline.extract.merge_pages:  # 엔진 간 쪽·문단 단위 보정(쪽 합치기)을 켤지(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_MERGE_PAGES [끔: 0만]
+#   pipeline.extract.page_scan:  # 글자 PDF 안의 스캔 쪽을 신호로 찾아 쪽 VLM에 보낼지(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_PAGE_SCAN [끔: 0만]
+#   pipeline.extract.scan_fill:  # 스캔 쪽을 OCR로 채우는 대표 결과 보정 켬/끔 — 0이면 이전 동작과 바이트 동일 · 기본 true · 값: true·false · env=PARSE_SCAN_FILL [끔: ''·0·none·false]
+#   pipeline.extract.signal_ocr:  # 쪽 신호 계산에 렌더 OCR 글자 수를 채울지 — 1이면 켬(비용 큼) · 기본 false · 값: true·false · env=PARSE_SIGNAL_OCR [켬: 1만]
+#   pipeline.extract.cache.keep_engine_cache:  # 엔진별 중간 결과(output/parse/<엔진>/<문서>.json)를 지우지 않고 남길지(=1 보관) · 기본 false · 값: true·false · env=KEEP_ENGINE_CACHE [켬: 1만]
+#   pipeline.extract.cache.keep_local_originals:  # 내려받은 원본을 파싱 뒤에도 지우지 않고 남길지(=1 보관, 디버그·샘플용) · 기본 false · 값: true·false · env=KEEP_LOCAL_ORIGINALS [켬: 1만]
+#   pipeline.extract.cache.keep_raw_layer:  # P0 원본 층 캐시(output/parse/raw/**)를 유지할지(1 유지 / 그 외 이번 묶음 것 삭제) · 기본 true · 값: true·false · env=KEEP_RAW_LAYER [켬: 1만]
+#   pipeline.extract.ocr.table_grid:  # OCR 박스 좌표로 표 격자를 추정할지(=0이면 끔) · 기본 true · 값: true·false · env=OCR_TABLE_GRID [엔진 지문]
+#   pipeline.extract.parallel.pipeline:  # --source 파싱을 문서 단위 병렬 파이프라인(받기→파싱→게시→삭제)으로 돌릴지(=1) · 기본 false · 값: true·false · env=PARSE_PARALLEL_PIPELINE [켬: 1만]
+#   pipeline.extract.prepare.rotate:  # 스캔 PDF 회전 검토(OCR 점수) 켬/끔 — 0이면 생략하고 그대로 복사 · 기본 true · 값: true·false · env=PREPARE_ROTATE [끔: 0만]
+#   pipeline.extract.prepare.rotate_fast:  # 회전 검토 빠른 경로(앞쪽 공통 각도 힌트+축소 점검) 켬/끔 — 0이면 매 쪽 4방향 전체 · 기본 true · 값: true·false · env=PREPARE_ROTATE_FAST [끔: 0만]
+#   pipeline.extract.stream.fingerprint:  # 받은 파일 삭제 전 최소 지문을 dedup manifest에 남길지 — 0이면 끔 · 기본 true · 값: true·false · env=PARSE_STREAM_FINGERPRINT [끔: 0만]
+#   pipeline.extract.stream.stream:  # 스트리밍 파싱(묶음씩 받아 처리 후 즉시 삭제) 사용 — 1이면 켬 · 기본 false · 값: true·false · env=PARSE_STREAM [켬: 1만]
 #  [운영값(동시성·시간·용량·경로·접속)]
-#   pipeline.connections.rdb.bucket:  # RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값) · env=RDB_BUCKET · str
-#   pipeline.connections.rdb.company:  # RDB에서 가져올 회사 ID 필터(쉼표 목록, 비우면 필터 없음) · env=RDB_COMPANY · 목록(쉼표 또는 YAML 목록) · 기본 (빈 목록)
-#   pipeline.connections.rdb.connect_kwargs:  # RDB(mssql) 접속 시 pymssql.connect에 추가로 넘길 인자(JSON 객체) · env=RDB_CONNECT_KWARGS · SecretStr [비밀]
-#   pipeline.connections.rdb.doc_type:  # RDB에서 가져올 문서 유형 필터(쉼표 목록, 비우면 필터 없음) · env=RDB_DOC_TYPE · 목록(쉼표 또는 YAML 목록) · 기본 (빈 목록)
-#   pipeline.connections.rdb.engine:  # RDB 종류(mssql | pg) · env=RDB_ENGINE · str · 기본 mssql [빈 글자 유지]
-#   pipeline.connections.rdb.increment_col:  # 증분(since) 판정에 쓸 열 이름(updated 열이 없을 때 대체) · env=RDB_INCREMENT_COL · str
-#   pipeline.connections.rdb.port:  # RDB(mssql) 서버 포트 · env=RDB_PORT · int(포트 — 정수만) · 기본 1433
-#   pipeline.connections.rdb.columns.bucket:  # RDB 문서 위치 표에서 버킷 열의 이름(비우면 열 없음) · env=RDB_COL_BUCKET · str
-#   pipeline.connections.rdb.columns.company:  # RDB 문서 위치 표에서 회사 ID(필터용) 열의 이름(비우면 열 없음) · env=RDB_COL_COMPANY · str
-#   pipeline.connections.rdb.columns.content_type:  # RDB 문서 위치 표에서 콘텐츠 타입 열의 이름(비우면 열 없음) · env=RDB_COL_CONTENT_TYPE · str
-#   pipeline.connections.rdb.columns.content_version:  # RDB 문서 위치 표에서 문서 판(content version) ID 열의 이름 · env=RDB_COL_CONTENT_VERSION · str · 기본 content_version_id [빈 글자 유지]
-#   pipeline.connections.rdb.columns.contract:  # RDB 문서 위치 표에서 계약 ID 열의 이름(비우면 열 없음) · env=RDB_COL_CONTRACT · str
-#   pipeline.connections.rdb.columns.doc_id:  # RDB 문서 위치 표에서 문서 ID 열의 이름 · env=RDB_COL_DOC_ID · str · 기본 id [빈 글자 유지]
-#   pipeline.connections.rdb.columns.doc_type:  # RDB 문서 위치 표에서 문서 유형(필터용) 열의 이름(비우면 열 없음) · env=RDB_COL_DOC_TYPE · str
-#   pipeline.connections.rdb.columns.etag:  # RDB 문서 위치 표에서 ETag 열의 이름(비우면 열 없음) · env=RDB_COL_ETAG · str
-#   pipeline.connections.rdb.columns.filename:  # RDB 문서 위치 표에서 원본 파일 이름 열의 이름 · env=RDB_COL_FILENAME · str · 기본 original_filename [빈 글자 유지]
-#   pipeline.connections.rdb.columns.is_deleted:  # RDB 문서 위치 표에서 삭제 표시 열의 이름(비우면 열 없음) · env=RDB_COL_IS_DELETED · str
-#   pipeline.connections.rdb.columns.key:  # RDB 문서 위치 표에서 Object Storage 키(s3_key) 열의 이름 · env=RDB_COL_KEY · str · 기본 s3_key [빈 글자 유지]
-#   pipeline.connections.rdb.columns.size:  # RDB 문서 위치 표에서 파일 크기 열의 이름 · env=RDB_COL_SIZE · str · 기본 file_size [빈 글자 유지]
-#   pipeline.connections.rdb.columns.supersedes:  # RDB 문서 위치 표에서 대체 대상 문서 ID 열의 이름(비우면 열 없음) · env=RDB_COL_SUPERSEDES · str
-#   pipeline.connections.rdb.columns.updated:  # RDB 문서 위치 표에서 갱신 시각(증분 기준) 열의 이름(비우면 열 없음) · env=RDB_COL_UPDATED · str
-#   pipeline.connections.rdb.columns.version:  # RDB 문서 위치 표에서 문서 버전 열의 이름(비우면 열 없음) · env=RDB_COL_VERSION · str
-#   pipeline.connections.secure_doc.password:  # 암호 걸린 문서를 여는 암호 1개(secure_docs decrypt에서 시도) · env=SECURE_DOC_PASSWORD · SecretStr [비밀]
-#   pipeline.connections.secure_doc.passwords_file:  # 암호 걸린 문서용 암호 목록 파일 경로(한 줄에 암호 하나) · env=SECURE_DOC_PASSWORDS_FILE · str
-#   pipeline.extract.disk_free_warn_gb:  # 디스크 남은 용량이 이 값(GB)보다 작으면 보관 용량 경고 출력 · env=DISK_FREE_WARN_GB · float · 기본 10.0
-#   pipeline.extract.doc_parallel:  # 대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개) · env=PARSE_DOC_PARALLEL · int · 기본 1
-#   pipeline.extract.engine_cache_warn_gb:  # 엔진별 중간 결과 합계가 이 값(GB)을 넘으면 보관 용량 경고 출력 · env=ENGINE_CACHE_WARN_GB · float · 기본 20.0
-#   pipeline.extract.engine_retry:  # 엔진 별도 프로세스가 비정상 종료했을 때 바로 다시 시도할 횟수(회) · env=PARSE_ENGINE_RETRY · int · 기본 1
-#   pipeline.extract.isolate_overhead:  # 별도 프로세스 실행 시 쪽당 제한 시간에 더해 줄 시작 여유(초) · env=PARSE_ISOLATE_OVERHEAD · float · 기본 10.0
-#   pipeline.extract.max_file_mb:  # 이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음) · env=MAX_FILE_MB · float · 기본 0.0
-#   pipeline.extract.max_new:  # 이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음) · env=PARSE_MAX_NEW · int · 기본 0
-#   pipeline.extract.phase_sec:  # phase 1·2·3의 쪽당 제한 시간(초, 쉼표 3개) · env=PARSE_PHASE_SEC · 목록(쉼표 또는 YAML 목록) · 기본 0.1,1,1
-#   pipeline.extract.prefetch_workers:  # 미리받기(warm) 명령의 동시 다운로드 스레드 수(개) · env=PREFETCH_WORKERS · int · 기본 2
-#   pipeline.extract.rapidocr_page_workers:  # rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개) · env=RAPIDOCR_PAGE_WORKERS · int · 기본 1 [엔진 지문]
-#   pipeline.extract.skipped_log:  # 건너뛴 문서(암호 PDF 등) 기록 jsonl 경로 · env=PARSE_SKIPPED_LOG · str
-#   pipeline.extract.source_limit:  # 원본에서 처리할 문서 건수 상한(0=제한 없음) · env=PARSE_SOURCE_LIMIT · int · 기본 0
-#   pipeline.extract.warmup_sec:  # 엔진 첫 문서의 쪽당 제한 시간 하한(초) — import·모델 적재 여유 · env=PARSE_WARMUP_SEC · float · 기본 60.0
-#   pipeline.extract.attach.max_mb:  # 첨부 1개당 크기 상한(MB, 넘으면 건너뜀) · env=ATTACH_MAX_MB · float · 기본 20.0
-#   pipeline.extract.attach.timeout:  # 첨부 1개를 별도 프로세스로 파싱할 때 제한 시간(초) · env=ATTACH_TIMEOUT · float · 기본 120.0
-#   pipeline.extract.cache.parse_cache_max_gb:  # 재판독 중간 캐시 3종 합계 용량 상한(GB, 넘으면 오래된 것부터 삭제, 0=끔) · env=PARSE_CACHE_MAX_GB · float · 기본 5.0
-#   pipeline.extract.cache.parse_keep_max_gb:  # 보존 폴더(KEEP_LOCAL_ORIGINALS=1) 용량 상한(GB, 넘으면 보존 포기·즉시 삭제) · env=PARSE_KEEP_MAX_GB · float
-#   pipeline.extract.cache.parse_tmp_max_gb:  # PARSE_TMP 사용량 상한(GB, 넘으면 다음 묶음 받기 전 대기, 0=제한 없음) · env=PARSE_TMP_MAX_GB · float · 기본 0.0
-#   pipeline.extract.dedup.fuzzy_max:  # 문서가 이 수보다 많으면 이름 유사도 비교를 생략(개) · env=DEDUP_FUZZY_MAX · int · 기본 50000
-#   pipeline.extract.ocr.threads:  # rapidocr onnxruntime 스레드 수(0=onnxruntime 자동, 비우거나 숫자(0~9만) 아니면(auto 등) OMP_NUM_THREADS·CPU 몫) · env=OCR_THREADS · int [엔진 지문] [숫자 아니면 비움]
-#   pipeline.extract.parallel.io_workers:  # 문서 단위 병렬 파이프라인에서 받기·게시 포함 전체 동시 진행 수(개, workers 이상) · env=PARSE_PARALLEL_IO_WORKERS · int
-#   pipeline.extract.parallel.workers:  # 문서 단위 병렬 파싱의 CPU 동시 문서 수(개) · env=PARSE_PARALLEL_WORKERS · int
-#   pipeline.extract.prepare.link:  # 회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy · env=PREPARE_LINK · str · 기본 auto
-#   pipeline.extract.source.fetch_workers:  # 원본 문서 병렬 다운로드 스레드 수(개) · env=SOURCE_FETCH_WORKERS · int · 기본 1
-#   pipeline.extract.source.warm:  # 미리받기(warm) 저장 폴더 — 비면 warm 기능 꺼짐 · env=SOURCE_WARM · str
-#   pipeline.extract.stream.batch:  # 스트리밍 파싱에서 한 바퀴에 받아 처리할 문서 수(건) · env=PARSE_STREAM_BATCH · int · 기본 1
+#   pipeline.connections.rdb.bucket:  # RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값) · 기본 없음 · 값: 글자 · env=RDB_BUCKET
+#   pipeline.connections.rdb.company:  # RDB에서 가져올 회사 ID 필터(쉼표 목록, 비우면 필터 없음) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=RDB_COMPANY
+#   pipeline.connections.rdb.connect_kwargs:  # RDB(mssql) 접속 시 pymssql.connect에 추가로 넘길 인자(JSON 객체) · 값: 비밀 글자 · env=RDB_CONNECT_KWARGS [비밀]
+#   pipeline.connections.rdb.doc_type:  # RDB에서 가져올 문서 유형 필터(쉼표 목록, 비우면 필터 없음) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=RDB_DOC_TYPE
+#   pipeline.connections.rdb.engine:  # RDB 종류(mssql | pg) · 기본 mssql · 값: mssql·pg 중 하나 · env=RDB_ENGINE [빈 글자 유지]
+#   pipeline.connections.rdb.increment_col:  # 증분(since) 판정에 쓸 열 이름(updated 열이 없을 때 대체) · 기본 없음 · 값: 글자 · env=RDB_INCREMENT_COL
+#   pipeline.connections.rdb.port:  # RDB(mssql) 서버 포트 · 기본 1433 · 값: 1~65535 · env=RDB_PORT
+#   pipeline.connections.rdb.columns.bucket:  # RDB 문서 위치 표에서 버킷 열의 이름(비우면 열 없음) · 기본 없음 · 값: 글자 · env=RDB_COL_BUCKET
+#   pipeline.connections.rdb.columns.company:  # RDB 문서 위치 표에서 회사 ID(필터용) 열의 이름(비우면 열 없음) · 기본 없음 · 값: 글자 · env=RDB_COL_COMPANY
+#   pipeline.connections.rdb.columns.content_type:  # RDB 문서 위치 표에서 콘텐츠 타입 열의 이름(비우면 열 없음) · 기본 없음 · 값: 글자 · env=RDB_COL_CONTENT_TYPE
+#   pipeline.connections.rdb.columns.content_version:  # RDB 문서 위치 표에서 문서 판(content version) ID 열의 이름 · 기본 content_version_id · 값: 글자 · env=RDB_COL_CONTENT_VERSION [빈 글자 유지]
+#   pipeline.connections.rdb.columns.contract:  # RDB 문서 위치 표에서 계약 ID 열의 이름(비우면 열 없음) · 기본 없음 · 값: 글자 · env=RDB_COL_CONTRACT
+#   pipeline.connections.rdb.columns.doc_id:  # RDB 문서 위치 표에서 문서 ID 열의 이름 · 기본 id · 값: 글자 · env=RDB_COL_DOC_ID [빈 글자 유지]
+#   pipeline.connections.rdb.columns.doc_type:  # RDB 문서 위치 표에서 문서 유형(필터용) 열의 이름(비우면 열 없음) · 기본 없음 · 값: 글자 · env=RDB_COL_DOC_TYPE
+#   pipeline.connections.rdb.columns.etag:  # RDB 문서 위치 표에서 ETag 열의 이름(비우면 열 없음) · 기본 없음 · 값: 글자 · env=RDB_COL_ETAG
+#   pipeline.connections.rdb.columns.filename:  # RDB 문서 위치 표에서 원본 파일 이름 열의 이름 · 기본 original_filename · 값: 글자 · env=RDB_COL_FILENAME [빈 글자 유지]
+#   pipeline.connections.rdb.columns.is_deleted:  # RDB 문서 위치 표에서 삭제 표시 열의 이름(비우면 열 없음) · 기본 없음 · 값: 글자 · env=RDB_COL_IS_DELETED
+#   pipeline.connections.rdb.columns.key:  # RDB 문서 위치 표에서 Object Storage 키(s3_key) 열의 이름 · 기본 s3_key · 값: 글자 · env=RDB_COL_KEY [빈 글자 유지]
+#   pipeline.connections.rdb.columns.size:  # RDB 문서 위치 표에서 파일 크기 열의 이름 · 기본 file_size · 값: 글자 · env=RDB_COL_SIZE [빈 글자 유지]
+#   pipeline.connections.rdb.columns.supersedes:  # RDB 문서 위치 표에서 대체 대상 문서 ID 열의 이름(비우면 열 없음) · 기본 없음 · 값: 글자 · env=RDB_COL_SUPERSEDES
+#   pipeline.connections.rdb.columns.updated:  # RDB 문서 위치 표에서 갱신 시각(증분 기준) 열의 이름(비우면 열 없음) · 기본 없음 · 값: 글자 · env=RDB_COL_UPDATED
+#   pipeline.connections.rdb.columns.version:  # RDB 문서 위치 표에서 문서 버전 열의 이름(비우면 열 없음) · 기본 없음 · 값: 글자 · env=RDB_COL_VERSION
+#   pipeline.connections.secure_doc.password:  # 암호 걸린 문서를 여는 암호 1개(secure_docs decrypt에서 시도) · 값: 비밀 글자 · env=SECURE_DOC_PASSWORD [비밀]
+#   pipeline.connections.secure_doc.passwords_file:  # 암호 걸린 문서용 암호 목록 파일 경로(한 줄에 암호 하나) · 기본 없음 · 값: 경로 · env=SECURE_DOC_PASSWORDS_FILE
+#   pipeline.extract.disk_free_warn_gb:  # 디스크 남은 용량이 이 값(GB)보다 작으면 보관 용량 경고 출력 · 기본 10.0 · 값: 0 이상 · env=DISK_FREE_WARN_GB
+#   pipeline.extract.doc_parallel:  # 대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개) · 기본 1 · 값: 0 이상 정수 · env=PARSE_DOC_PARALLEL
+#   pipeline.extract.engine_cache_warn_gb:  # 엔진별 중간 결과 합계가 이 값(GB)을 넘으면 보관 용량 경고 출력 · 기본 20.0 · 값: 0 이상 · env=ENGINE_CACHE_WARN_GB
+#   pipeline.extract.engine_retry:  # 엔진 별도 프로세스가 비정상 종료했을 때 바로 다시 시도할 횟수(회) · 기본 1 · 값: 0 이상 정수 · env=PARSE_ENGINE_RETRY
+#   pipeline.extract.isolate_overhead:  # 별도 프로세스 실행 시 쪽당 제한 시간에 더해 줄 시작 여유(초) · 기본 10.0 · 값: 0 이상 초 · env=PARSE_ISOLATE_OVERHEAD
+#   pipeline.extract.max_file_mb:  # 이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음) · 기본 0.0 · 값: 0 이상 (0 = 제한 없음) · env=MAX_FILE_MB
+#   pipeline.extract.max_new:  # 이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음) · env=PARSE_MAX_NEW
+#   pipeline.extract.phase_sec:  # phase 1·2·3의 쪽당 제한 시간(초, 쉼표 3개) · 기본 0.1,1,1 · 값: 쉼표 목록 또는 YAML 목록 · env=PARSE_PHASE_SEC
+#   pipeline.extract.prefetch_workers:  # 미리받기(warm) 명령의 동시 다운로드 스레드 수(개) · 기본 2 · 값: 0 이상 정수 · env=PREFETCH_WORKERS
+#   pipeline.extract.rapidocr_page_workers:  # rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개) · 기본 1 · 값: 0 이상 정수 · env=RAPIDOCR_PAGE_WORKERS [엔진 지문]
+#   pipeline.extract.skipped_log:  # 건너뛴 문서(암호 PDF 등) 기록 jsonl 경로 · 기본 없음 · 값: 경로 · env=PARSE_SKIPPED_LOG
+#   pipeline.extract.source_limit:  # 원본에서 처리할 문서 건수 상한(0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음) · env=PARSE_SOURCE_LIMIT
+#   pipeline.extract.warmup_sec:  # 엔진 첫 문서의 쪽당 제한 시간 하한(초) — import·모델 적재 여유 · 기본 60.0 · 값: 0 이상 초 · env=PARSE_WARMUP_SEC
+#   pipeline.extract.attach.max_mb:  # 첨부 1개당 크기 상한(MB, 넘으면 건너뜀) · 기본 20.0 · 값: 0 이상 · env=ATTACH_MAX_MB
+#   pipeline.extract.attach.timeout:  # 첨부 1개를 별도 프로세스로 파싱할 때 제한 시간(초) · 기본 120.0 · 값: 0 이상 초 · env=ATTACH_TIMEOUT
+#   pipeline.extract.cache.parse_cache_max_gb:  # 재판독 중간 캐시 3종 합계 용량 상한(GB, 넘으면 오래된 것부터 삭제, 0=끔) · 기본 5.0 · 값: 0 이상 (0 = 끔) · env=PARSE_CACHE_MAX_GB
+#   pipeline.extract.cache.parse_keep_max_gb:  # 보존 폴더(KEEP_LOCAL_ORIGINALS=1) 용량 상한(GB, 넘으면 보존 포기·즉시 삭제) · 기본 없음 · 값: 0 이상 · env=PARSE_KEEP_MAX_GB
+#   pipeline.extract.cache.parse_tmp_max_gb:  # PARSE_TMP 사용량 상한(GB, 넘으면 다음 묶음 받기 전 대기, 0=제한 없음) · 기본 0.0 · 값: 0 이상 (0 = 제한 없음) · env=PARSE_TMP_MAX_GB
+#   pipeline.extract.dedup.fuzzy_max:  # 문서가 이 수보다 많으면 이름 유사도 비교를 생략(개) · 기본 50000 · 값: 0 이상 정수 · env=DEDUP_FUZZY_MAX
+#   pipeline.extract.ocr.threads:  # rapidocr onnxruntime 스레드 수(0=onnxruntime 자동, 비우거나 숫자(0~9만) 아니면(auto 등) OMP_NUM_THREADS·CPU 몫) · 기본 없음 · 값: 0 이상 정수 (0 = onnxruntime 자동) · env=OCR_THREADS [엔진 지문] [숫자 아니면 비움]
+#   pipeline.extract.parallel.io_workers:  # 문서 단위 병렬 파이프라인에서 받기·게시 포함 전체 동시 진행 수(개, workers 이상) · 기본 없음 · 값: 0 이상 정수 · env=PARSE_PARALLEL_IO_WORKERS
+#   pipeline.extract.parallel.workers:  # 문서 단위 병렬 파싱의 CPU 동시 문서 수(개) · 기본 없음 · 값: 0 이상 정수 · env=PARSE_PARALLEL_WORKERS
+#   pipeline.extract.prepare.link:  # 회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy · 기본 auto · 값: auto·hardlink·symlink·copy 중 하나 · env=PREPARE_LINK
+#   pipeline.extract.source.fetch_workers:  # 원본 문서 병렬 다운로드 스레드 수(개) · 기본 1 · 값: 0 이상 정수 · env=SOURCE_FETCH_WORKERS
+#   pipeline.extract.source.warm:  # 미리받기(warm) 저장 폴더 — 비면 warm 기능 꺼짐 · 기본 없음 · 값: 경로 · env=SOURCE_WARM
+#   pipeline.extract.stream.batch:  # 스트리밍 파싱에서 한 바퀴에 받아 처리할 문서 수(건) · 기본 1 · 값: 0 이상 정수 · env=PARSE_STREAM_BATCH
 
-# ─── 2-5. transform — 대표 결과·그림·구조화(청킹·임베딩) (76칸) ───
-#  [결과를 바꾸는 값(하이퍼파라미터)]
-#   pipeline.transform.figures.ocr_fallback_min_chars:  # OCR 대체 사용 최소 의미 글자 수(미만이면 로고·워터마크로 보고 버림) · env=FIG_OCR_FALLBACK_MIN_CHARS · int · 기본 10
-#   pipeline.transform.figures.ocrvlm_prompt:  # OCR 전용 소형 VLM 엔진(ocr_vlm)에 보낼 지시문(모델 카드 권장값) · env=OCRVLM_PROMPT · str [엔진 지문]
-#   pipeline.transform.figures.pptx_render_max:  # 문서당 렌더·VLM 호출할 슬라이드·도형 쪽 수 상한 · env=PARSE_PPTX_RENDER_MAX · int · 기본 10
-#   pipeline.transform.figures.pptx_shapes_max:  # 연결선 없는 도형 배치 슬라이드 후보 수 상한(0이면 이 사유는 안 봄) · env=PARSE_PPTX_SHAPES_MAX · int · 기본 20
-#   pipeline.transform.figures.pptx_smartart_max:  # SmartArt 슬라이드 후보 수 상한(0이면 이 사유는 안 봄) · env=PARSE_PPTX_SMARTART_MAX · int · 기본 20
-#   pipeline.transform.figures.vectors_max:  # 쪽 VLM 후보로 볼 벡터 도형 많은 쪽 수 상한(0이면 이 사유는 안 봄) · env=PARSE_VECTORS_MAX · int · 기본 20
-#   pipeline.transform.represent.post:  # 후보정 기능 선택: all(전부)|none(끔)|콤마 목록(vlm_page,supsub,charts,figures,context,attachments) — 없으면 자리마다 다름(파이프라인 all · parse MCP 서비스 supsub), 빈 값은 끔(옛 get(X, 'all')의 '' — blank keep) · 쓴 글자 그대로 rep.post.config에 남음(YAML 목록은 쉼표로 이음 — S7c2) · env=PARSE_POST · 글자(쉼표 목록 — 원문 그대로, YAML 목록은 쉼표로 이음) [빈 글자 유지] [서버 옛 값: all]
-#   pipeline.transform.represent.rep_select:  # 대표 엔진 선택 방식: first(첫 성공 엔진)|acc(정확도만)|그 외 best(정확도+풍부도) · env=PARSE_REP_SELECT · str
-#   pipeline.transform.represent.reread.dpi:  # 융합 재판독(P2)용 크롭 재렌더 해상도(dpi) · env=FUSE_REREAD_DPI · int · 기본 400
-#   pipeline.transform.represent.reread.margin:  # 승자와 최선 패자 점수차가 이 값 이하면 '근소'로 보고 재판독 · env=FUSE_REREAD_MARGIN · float · 기본 1.5
-#   pipeline.transform.represent.reread.max:  # 문서당 융합 재판독(P2) 횟수 상한(0이면 재판독 안 함) · env=FUSE_REREAD_MAX · int · 기본 20
-#   pipeline.transform.represent.reread.p3_img_max:  # 재판독 3단계에서 조각 하나당 다시 볼 그림 상한(가까운 순) · env=FUSE_REREAD_P3_IMG_MAX · int · 기본 2
-#   pipeline.transform.represent.reread.pad_pt:  # 재판독 때 bbox 둘레에 더할 여백(pt) · env=FUSE_REREAD_PAD_PT · float · 기본 40.0
-#   pipeline.transform.represent.reread.vlm_max:  # 문서당 재판독 3단계 VLM 호출 상한(비용 가드) · env=FUSE_VLM_MAX · int · 기본 5
-#   pipeline.transform.represent.reread.vlm_max_tokens:  # 재판독·맥락 판독 VLM 응답 최대 토큰 수 · env=FUSE_VLM_MAX_TOKENS · int · 기본 400
-#   pipeline.transform.structure.chunk_overlap:  # 고정 길이 청커(chunk_fixed512)의 청크 간 겹침 글자 수 · env=CHUNK_OVERLAP · int · 기본 64
-#   pipeline.transform.structure.chunk_size:  # 청크 목표 길이(글자) — 청커별 기본이 다름 · env=CHUNK_SIZE · int
-#   pipeline.transform.structure.chunk_table:  # 'rows'이면 큰 표를 행 묶음 단위로 쪼갬(그 외 값·미설정은 표를 통째로 둠) · env=CHUNK_TABLE · str
-#   pipeline.transform.structure.chunk_table_rows:  # 표를 쪼갤 때 청크당 행 수(CHUNK_TABLE=rows일 때만) · env=CHUNK_TABLE_ROWS · int · 기본 25
-#   pipeline.transform.structure.edw_embed:  # build_bundle 임베딩 방식(--embed 기본값) — api 또는 bge-m3 등 · env=EDW_EMBED · str
-#   pipeline.transform.structure.embed:  # 구조화·적재에 쓸 임베딩 방식(api 등, none이면 임베딩 없음 — 이미지 안 기본 api: 옛 Dockerfile ENV, B-2) · env=PIPE_EMBED · str
-#   pipeline.transform.structure.page_chunk_max:  # 쪽 청크 최대 글자 수(임베딩 입력 한도 초과 방지) · env=PAGE_CHUNK_MAX · int
-#   pipeline.transform.structure.wiki_domain_phrase:  # 위키 초안 지시문의 도메인 예시 문구(기본 '바이오 CDMO')를 바꿈 · env=WIKI_DOMAIN_PHRASE · str · 기본 바이오 CDMO
-#   pipeline.transform.vlm.fig_min_px:  # 이 값보다 짧은 변의 그림은 VLM 대상에서 제외(픽셀) · env=VLM_FIG_MIN_PX · int · 기본 64
-#   pipeline.transform.vlm.fig_ocr_max:  # 문서당 그림 crop OCR 횟수 상한(비용 가드) · env=VLM_FIG_OCR_MAX · int · 기본 8
-#   pipeline.transform.vlm.fig_photo_area_min:  # 사진류(photo)로 볼 그림의 최소 면적 비율(쪽 대비) · env=VLM_FIG_PHOTO_AREA_MIN · float · 기본 0.03
-#   pipeline.transform.vlm.fig_photo_max_tokens:  # 사진류 그림 VLM 응답 최대 토큰 수(한 줄 요약 유도) · env=VLM_FIG_PHOTO_MAX_TOKENS · int · 기본 300
-#   pipeline.transform.vlm.fig_photo_ocr_max:  # crop OCR 글자 수가 이 값 이하(+면적 충분)이면 사진류로 분류 · env=VLM_FIG_PHOTO_OCR_MAX · int · 기본 5
-#   pipeline.transform.vlm.fig_text_ocr_min:  # crop OCR 글자 수(공백 제외)가 이 값 이상이면 글자 이미지(text_image)로 분류 · env=VLM_FIG_TEXT_OCR_MIN · int · 기본 200
-#   pipeline.transform.vlm.figures_max:  # 문서당 VLM에 보낼 그림 수 상한(0이면 VLM 안 부름) · env=VLM_FIGURES_MAX · int · 기본 20
-#   pipeline.transform.vlm.page_max:  # 문서당 쪽 VLM으로 읽을 쪽 수 상한(빈 값=전부, 0=쪽 VLM 끔) · env=VLM_PAGE_MAX · int
+# ─── 2-5. transform — 대표 결과·그림·구조화(청킹·임베딩) (45칸) ───
 #  [기능 켬/끔]
-#   pipeline.transform.figures.chart_values_det:  # 차트 값을 결정적(규칙) 추출로 보정(=0이면 VLM 눈대중 값만 사용) · env=CHART_VALUES_DET · bool · 기본 true [끔: 0만]
-#   pipeline.transform.figures.diagram_edges_det:  # 도식 연결선을 결정적 추출로 보강(=0이면 pptx_xml·vlm 경로만) · env=DIAGRAM_EDGES_DET · bool · 기본 true [끔: 0만]
-#   pipeline.transform.figures.doc_shape_figure:  # docx·xlsx 도형 도식을 soffice로 렌더해 그림 기록(=0이면 끔) · env=PARSE_DOC_SHAPE_FIGURE · bool · 기본 true [끔: 0만]
-#   pipeline.transform.figures.nested_figure:  # 그림 안 자식 그림 찾기·VLM 기록(=0이면 VLM 설정과 무관하게 안 함) · env=PARSE_NESTED_FIGURE · bool · 기본 true [끔: 0만]
-#   pipeline.transform.figures.ocr_fallback:  # VLM 결과가 빈 그림에 같은 crop OCR 글자를 대신 채움(=0이면 끔) · env=FIG_OCR_FALLBACK · bool · 기본 true [끔: 0만]
-#   pipeline.transform.figures.overlay_cluster:  # 겹친 개체(그림+글상자·도형)를 한 묶음으로 찾아 기록(=0이면 그림마다 따로) · env=FIG_OVERLAY_CLUSTER · bool · 기본 true [끔: 0만]
-#   pipeline.transform.figures.page_child_dedup:  # 쪽 VLM이 이미 옮긴 쪽의 하위 그림은 검색 청크를 안 만듦(=0이면 옛 동작) · env=FIG_PAGE_CHILD_DEDUP · bool · 기본 true [끔: 0만]
-#   pipeline.transform.figures.pptx_slide_vlm:  # pptx 슬라이드 쪽 VLM 전사 기능(=0이면 끔) · env=PARSE_PPTX_SLIDE_VLM · bool · 기본 true [끔: 0만]
-#   pipeline.transform.figures.vector_box_diagram:  # 상자+직선만 있는 벡터 영역도 도식으로 인정(=0이면 표 격자로 버리는 옛 동작) · env=VECTOR_BOX_DIAGRAM · bool · 기본 true [끔: 0만]
-#   pipeline.transform.represent.context:  # 문서·쪽 신호 맥락(rep.context·decisions) 기록(=0이면 안 남김) · env=PARSE_CONTEXT · bool · 기본 true [끔: ''·0·none·false]
-#   pipeline.transform.represent.fuse:  # 엔진별 결과 조각 투표(융합 P1) 사용(=0이면 끔) · env=PARSE_FUSE · bool · 기본 true [끔: ''·0·none·false]
-#   pipeline.transform.represent.fuse_reread:  # 융합 뒤 근소·미확인 자리를 다시 읽는 재판독(P2) 사용(=0이면 끔) · env=PARSE_FUSE_REREAD · bool · 기본 true [끔: ''·0·none·false]
-#   pipeline.transform.represent.fuse_reread_p3:  # 재판독 3단계(그림 경계 OCR·VLM 선택형) 사용(=0이면 끔) · env=PARSE_FUSE_REREAD_P3 · bool · 기본 true [끔: ''·0·none·false]
-#   pipeline.transform.represent.fuse_signals:  # 융합 점수에 사전·명부·교차 언급 신호를 반영(=0이면 기본 점수만) · env=PARSE_FUSE_SIGNALS · bool · 기본 true [끔: ''·0·none·false]
-#   pipeline.transform.represent.qa_carry_forward:  # parse_qa가 지워진 문서 결과를 이전 qa.json에서 가져옴(=0이면 안 가져옴) · env=PARSE_QA_CARRY_FORWARD · bool · 기본 true [끔: 0만]
-#   pipeline.transform.represent.qa_light:  # =1이면 native 대비 풀문서 CER·순서 비교를 생략(경량화) · env=PARSE_QA_LIGHT · bool · 기본 false [켬: 1만]
-#   pipeline.transform.represent.reread_fallback_best:  # P2도 못 가리면 산출 정확도 최고 엔진 후보로 대체(=0이면 안 함) · env=REREAD_FALLBACK_BEST · bool · 기본 true [끔: 0만]
-#   pipeline.transform.represent.shadow:  # 그림자 모드(파싱 판단 규칙 vs LLM 제안 비교)를 켬(=1이면 켬) · env=PARSE_SHADOW · bool · 기본 false [끔: ''·0·none·false]
-#   pipeline.transform.represent.standardize:  # 엔진 묶음 직후 기호 맵·첨자 표기 표준화(=0이면 끔) · env=PARSE_STANDARDIZE · bool · 기본 true [끔: ''·0·none·false]
-#   pipeline.transform.represent.table_db:  # 구조화 뒤 _rep의 표를 정형 저장소 doc_table·doc_cell로 적재(=0이면 끔) · env=PARSE_TABLE_DB · bool · 기본 true [끔: 0만]
-#   pipeline.transform.represent.table_inline:  # 엔진별 표 그리드를 모아 본문 제자리에 GFM 표로 넣음(=0이면 대표 엔진 표만) · env=PARSE_TABLE_INLINE · bool · 기본 true [끔: ''·0·none·false]
-#   pipeline.transform.represent.table_std:  # 표를 표준 형식(tables_std 칸)으로 변환(=0이면 칸 자체가 안 생김) · env=PARSE_TABLE_STD · bool · 기본 true [끔: ''·0·none·false]
-#   pipeline.transform.represent.table_stitch:  # 쪽 경계에서 쪼개진 표를 이어 붙임(=0이면 쪽마다 쪼개진 채 둠) · env=PARSE_TABLE_STITCH · bool · 기본 true [끔: ''·0·none·false]
-#   pipeline.transform.structure.bundle_keep_empty_fig:  # =1이면 내용이 빈 VLM 그림도 청크로 색인(되돌리기), 기본 0은 빈 그림 청크 안 만듦 · env=BUNDLE_KEEP_EMPTY_FIG · bool · 기본 false [켬: 1만]
-#   pipeline.transform.structure.chunk_head:  # 청크 앞에 [문서명·고객·절 제목] 머리말을 붙임(=0이면 안 붙임) · env=CHUNK_HEAD · bool · 기본 true [끔: 0만]
-#   pipeline.transform.structure.client_roster_seed:  # 고객 추론에 주요 바이오·제약사 공개 이름 seed 명부를 더함(=0이면 안 더함) · env=CLIENT_ROSTER_SEED · bool · 기본 true [끔: 0만]
-#   pipeline.transform.structure.draft_terms:  # 새 회사 이름 후보를 용어집 draft로 자동 추가(=0이면 안 함) · env=DRAFT_TERMS · bool · 기본 true [끔: 0만]
-#   pipeline.transform.structure.edw_summary_llm:  # =1이면 묶음 요약을 LLM으로 생성(--summary auto일 때만, 기본은 앞부분 발췌) · env=EDW_SUMMARY_LLM · bool · 기본 false [켬: 1만]
-#   pipeline.transform.vlm.fig_kind:  # 그림 종류(차트·사진·글자 이미지) 분류를 기록(=0이면 분류 끔) · env=VLM_FIG_KIND · bool · 기본 true [끔: 0만]
-#   pipeline.transform.vlm.fig_select:  # VLM 보낼 그림을 크기·반복 기준으로 선별(=0이면 문서 순서로 상한만) · env=VLM_FIG_SELECT · bool · 기본 true [끔: 0만]
-#   pipeline.transform.vlm.fig_text_skip:  # =1이면 글자 이미지(text_image)로 분류된 그림은 VLM 호출 생략 · env=VLM_FIG_TEXT_SKIP · bool · 기본 false [끔: 0만]
+#   pipeline.transform.figures.chart_values_det:  # 차트 값을 결정적(규칙) 추출로 보정(=0이면 VLM 눈대중 값만 사용) · 기본 true · 값: true·false · env=CHART_VALUES_DET [끔: 0만]
+#   pipeline.transform.figures.diagram_edges_det:  # 도식 연결선을 결정적 추출로 보강(=0이면 pptx_xml·vlm 경로만) · 기본 true · 값: true·false · env=DIAGRAM_EDGES_DET [끔: 0만]
+#   pipeline.transform.figures.doc_shape_figure:  # docx·xlsx 도형 도식을 soffice로 렌더해 그림 기록(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_DOC_SHAPE_FIGURE [끔: 0만]
+#   pipeline.transform.figures.nested_figure:  # 그림 안 자식 그림 찾기·VLM 기록(=0이면 VLM 설정과 무관하게 안 함) · 기본 true · 값: true·false · env=PARSE_NESTED_FIGURE [끔: 0만]
+#   pipeline.transform.figures.ocr_fallback:  # VLM 결과가 빈 그림에 같은 crop OCR 글자를 대신 채움(=0이면 끔) · 기본 true · 값: true·false · env=FIG_OCR_FALLBACK [끔: 0만]
+#   pipeline.transform.figures.overlay_cluster:  # 겹친 개체(그림+글상자·도형)를 한 묶음으로 찾아 기록(=0이면 그림마다 따로) · 기본 true · 값: true·false · env=FIG_OVERLAY_CLUSTER [끔: 0만]
+#   pipeline.transform.figures.page_child_dedup:  # 쪽 VLM이 이미 옮긴 쪽의 하위 그림은 검색 청크를 안 만듦(=0이면 옛 동작) · 기본 true · 값: true·false · env=FIG_PAGE_CHILD_DEDUP [끔: 0만]
+#   pipeline.transform.figures.pptx_slide_vlm:  # pptx 슬라이드 쪽 VLM 전사 기능(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_PPTX_SLIDE_VLM [끔: 0만]
+#   pipeline.transform.figures.vector_box_diagram:  # 상자+직선만 있는 벡터 영역도 도식으로 인정(=0이면 표 격자로 버리는 옛 동작) · 기본 true · 값: true·false · env=VECTOR_BOX_DIAGRAM [끔: 0만]
+#   pipeline.transform.represent.context:  # 문서·쪽 신호 맥락(rep.context·decisions) 기록(=0이면 안 남김) · 기본 true · 값: true·false · env=PARSE_CONTEXT [끔: ''·0·none·false]
+#   pipeline.transform.represent.fuse:  # 엔진별 결과 조각 투표(융합 P1) 사용(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_FUSE [끔: ''·0·none·false]
+#   pipeline.transform.represent.fuse_reread:  # 융합 뒤 근소·미확인 자리를 다시 읽는 재판독(P2) 사용(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_FUSE_REREAD [끔: ''·0·none·false]
+#   pipeline.transform.represent.fuse_reread_p3:  # 재판독 3단계(그림 경계 OCR·VLM 선택형) 사용(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_FUSE_REREAD_P3 [끔: ''·0·none·false]
+#   pipeline.transform.represent.fuse_signals:  # 융합 점수에 사전·명부·교차 언급 신호를 반영(=0이면 기본 점수만) · 기본 true · 값: true·false · env=PARSE_FUSE_SIGNALS [끔: ''·0·none·false]
+#   pipeline.transform.represent.qa_carry_forward:  # parse_qa가 지워진 문서 결과를 이전 qa.json에서 가져옴(=0이면 안 가져옴) · 기본 true · 값: true·false · env=PARSE_QA_CARRY_FORWARD [끔: 0만]
+#   pipeline.transform.represent.qa_light:  # =1이면 native 대비 풀문서 CER·순서 비교를 생략(경량화) · 기본 false · 값: true·false · env=PARSE_QA_LIGHT [켬: 1만]
+#   pipeline.transform.represent.reread_fallback_best:  # P2도 못 가리면 산출 정확도 최고 엔진 후보로 대체(=0이면 안 함) · 기본 true · 값: true·false · env=REREAD_FALLBACK_BEST [끔: 0만]
+#   pipeline.transform.represent.shadow:  # 그림자 모드(파싱 판단 규칙 vs LLM 제안 비교)를 켬(=1이면 켬) · 기본 false · 값: true·false · env=PARSE_SHADOW [끔: ''·0·none·false]
+#   pipeline.transform.represent.standardize:  # 엔진 묶음 직후 기호 맵·첨자 표기 표준화(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_STANDARDIZE [끔: ''·0·none·false]
+#   pipeline.transform.represent.table_db:  # 구조화 뒤 _rep의 표를 정형 저장소 doc_table·doc_cell로 적재(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_TABLE_DB [끔: 0만]
+#   pipeline.transform.represent.table_inline:  # 엔진별 표 그리드를 모아 본문 제자리에 GFM 표로 넣음(=0이면 대표 엔진 표만) · 기본 true · 값: true·false · env=PARSE_TABLE_INLINE [끔: ''·0·none·false]
+#   pipeline.transform.represent.table_std:  # 표를 표준 형식(tables_std 칸)으로 변환(=0이면 칸 자체가 안 생김) · 기본 true · 값: true·false · env=PARSE_TABLE_STD [끔: ''·0·none·false]
+#   pipeline.transform.represent.table_stitch:  # 쪽 경계에서 쪼개진 표를 이어 붙임(=0이면 쪽마다 쪼개진 채 둠) · 기본 true · 값: true·false · env=PARSE_TABLE_STITCH [끔: ''·0·none·false]
+#   pipeline.transform.structure.bundle_keep_empty_fig:  # =1이면 내용이 빈 VLM 그림도 청크로 색인(되돌리기), 기본 0은 빈 그림 청크 안 만듦 · 기본 false · 값: true·false · env=BUNDLE_KEEP_EMPTY_FIG [켬: 1만]
+#   pipeline.transform.structure.chunk_head:  # 청크 앞에 [문서명·고객·절 제목] 머리말을 붙임(=0이면 안 붙임) · 기본 true · 값: true·false · env=CHUNK_HEAD [끔: 0만]
+#   pipeline.transform.structure.client_roster_seed:  # 고객 추론에 주요 바이오·제약사 공개 이름 seed 명부를 더함(=0이면 안 더함) · 기본 true · 값: true·false · env=CLIENT_ROSTER_SEED [끔: 0만]
+#   pipeline.transform.structure.draft_terms:  # 새 회사 이름 후보를 용어집 draft로 자동 추가(=0이면 안 함) · 기본 true · 값: true·false · env=DRAFT_TERMS [끔: 0만]
+#   pipeline.transform.structure.edw_summary_llm:  # =1이면 묶음 요약을 LLM으로 생성(--summary auto일 때만, 기본은 앞부분 발췌) · 기본 false · 값: true·false · env=EDW_SUMMARY_LLM [켬: 1만]
+#   pipeline.transform.vlm.fig_kind:  # 그림 종류(차트·사진·글자 이미지) 분류를 기록(=0이면 분류 끔) · 기본 true · 값: true·false · env=VLM_FIG_KIND [끔: 0만]
+#   pipeline.transform.vlm.fig_select:  # VLM 보낼 그림을 크기·반복 기준으로 선별(=0이면 문서 순서로 상한만) · 기본 true · 값: true·false · env=VLM_FIG_SELECT [끔: 0만]
+#   pipeline.transform.vlm.fig_text_skip:  # =1이면 글자 이미지(text_image)로 분류된 그림은 VLM 호출 생략 · 기본 false · 값: true·false · env=VLM_FIG_TEXT_SKIP [끔: 0만]
 #  [운영값(동시성·시간·용량·경로·접속)]
-#   pipeline.transform.figures.ocr_parallel:  # 그림 crop OCR 병렬 워커 수(OCR 대상 수가 상한) · env=FIGURES_OCR_PARALLEL · int · 기본 3
-#   pipeline.transform.figures.pptx_convert_sec:  # soffice 문서→PDF 변환 시간 상한(초, 넘으면 해당 프로세스 종료) · env=PARSE_PPTX_CONVERT_SEC · int · 기본 60
-#   pipeline.transform.figures.vlm_parallel:  # 그림 VLM 호출 병렬 워커 수 · env=FIGURES_VLM_PARALLEL · int
-#   pipeline.transform.represent.shadow_max:  # 그림자 모드 한 번에 훑는 문서 수 상한 · env=PARSE_SHADOW_MAX · int · 기본 50
-#   pipeline.transform.structure.embed_batch:  # 임베딩 API 한 번에 보내는 청크 수 · env=EMBED_BATCH · int · 기본 32
-#   pipeline.transform.structure.embed_cache:  # 임베딩 캐시 sqlite 경로(0 또는 빈 값이면 캐시 끔) · env=EMBED_CACHE · str
-#   pipeline.transform.structure.embed_concurrency:  # 임베딩 호출 병렬 수(EMBED_BATCH 묶음을 동시에 전송) · env=EMBED_CONCURRENCY · int · 기본 4
-#   pipeline.transform.structure.embed_max_chars:  # 임베딩 입력 청크 최대 글자 수(넘으면 자름, 400 오류 방지 안전망) · env=EMBED_MAX_CHARS · int · 기본 8000
-#   pipeline.transform.structure.embed_retry:  # 임베딩 API 실패 시 재시도 횟수 · env=EMBED_RETRY · int · 기본 2
-#   pipeline.transform.vlm.deadline:  # VLM 호출 1건 제한 시간(초) · env=VLM_DEADLINE · float · 기본 360.0
-#   pipeline.transform.vlm.global_concurrency:  # 모든 VLM 호출의 전역 동시 실행 수 합 상한 · env=VLM_GLOBAL_CONCURRENCY · int · 기본 12
-#   pipeline.transform.vlm.page_concurrency:  # 쪽 VLM 병렬 워커 수 최대값 · env=VLM_PAGE_CONCURRENCY · int
-#   pipeline.transform.vlm.page_min_concurrency:  # 쪽 VLM 적응형 병렬에서 느릴 때 줄일 수 있는 최소 워커 수 · env=VLM_PAGE_MIN_CONCURRENCY · int · 기본 2
-#   pipeline.transform.vlm.page_slow:  # 쪽 VLM 호출이 이 시간(초) 넘으면 다음 배치 병렬 수를 줄임 · env=VLM_PAGE_SLOW · float · 기본 60.0
+#   pipeline.transform.figures.ocr_parallel:  # 그림 crop OCR 병렬 워커 수(OCR 대상 수가 상한) · 기본 3 · 값: 0 이상 정수 · env=FIGURES_OCR_PARALLEL
+#   pipeline.transform.figures.pptx_convert_sec:  # soffice 문서→PDF 변환 시간 상한(초, 넘으면 해당 프로세스 종료) · 기본 60 · 값: 0 이상 정수(초) · env=PARSE_PPTX_CONVERT_SEC
+#   pipeline.transform.figures.vlm_parallel:  # 그림 VLM 호출 병렬 워커 수 · 기본 없음 · 값: 0 이상 정수 · env=FIGURES_VLM_PARALLEL
+#   pipeline.transform.represent.shadow_max:  # 그림자 모드 한 번에 훑는 문서 수 상한 · 기본 50 · 값: 0 이상 정수 · env=PARSE_SHADOW_MAX
+#   pipeline.transform.structure.embed_batch:  # 임베딩 API 한 번에 보내는 청크 수 · 기본 32 · 값: 0 이상 정수 · env=EMBED_BATCH
+#   pipeline.transform.structure.embed_cache:  # 임베딩 캐시 sqlite 경로(0 또는 빈 값이면 캐시 끔) · 기본 없음 · 값: 경로 · env=EMBED_CACHE
+#   pipeline.transform.structure.embed_concurrency:  # 임베딩 호출 병렬 수(EMBED_BATCH 묶음을 동시에 전송) · 기본 4 · 값: 0 이상 정수 · env=EMBED_CONCURRENCY
+#   pipeline.transform.structure.embed_max_chars:  # 임베딩 입력 청크 최대 글자 수(넘으면 자름, 400 오류 방지 안전망) · 기본 8000 · 값: 0 이상 정수 · env=EMBED_MAX_CHARS
+#   pipeline.transform.structure.embed_retry:  # 임베딩 API 실패 시 재시도 횟수 · 기본 2 · 값: 0 이상 정수 · env=EMBED_RETRY
+#   pipeline.transform.vlm.deadline:  # VLM 호출 1건 제한 시간(초) · 기본 360.0 · 값: 0 이상 초 · env=VLM_DEADLINE
+#   pipeline.transform.vlm.global_concurrency:  # 모든 VLM 호출의 전역 동시 실행 수 합 상한 · 기본 12 · 값: 0 이상 정수 · env=VLM_GLOBAL_CONCURRENCY
+#   pipeline.transform.vlm.page_concurrency:  # 쪽 VLM 병렬 워커 수 최대값 · 기본 없음 · 값: 0 이상 정수 · env=VLM_PAGE_CONCURRENCY
+#   pipeline.transform.vlm.page_min_concurrency:  # 쪽 VLM 적응형 병렬에서 느릴 때 줄일 수 있는 최소 워커 수 · 기본 2 · 값: 0 이상 정수 · env=VLM_PAGE_MIN_CONCURRENCY
+#   pipeline.transform.vlm.page_slow:  # 쪽 VLM 호출이 이 시간(초) 넘으면 다음 배치 병렬 수를 줄임 · 기본 60.0 · 값: 0 이상 초 · env=VLM_PAGE_SLOW
 
 # ─── 2-6. load — 적재·게시 (14칸) ───
 #  [기능 켬/끔]
-#   pipeline.load.bm25_stat_rebuild:  # 적재 때 키워드 문서 빈도를 전체 다시 셈 — 1이면 켬 · env=BM25_STAT_REBUILD · bool · 기본 false [켬: 1만]
-#   pipeline.load.edw_load:  # EDW 벡터 적재(deploy·load) 허용 — 1이어야 진행, 아니면 거부 종료 · env=EDW_LOAD · bool · 기본 false [켬: 1만]
-#   pipeline.load.pg_create_extension:  # deploy 때 vector 확장 직접 생성 시도 — 1이면 켬(공유 PG에서는 금지) · env=PG_CREATE_EXTENSION · bool · 기본 false [켬: 1만]
-#   pipeline.load.prune_force:  # 옛 기록 정리 안전장치(묶음 문서 수 비율 미달 거부) 무시 — 1이면 진행 · env=PRUNE_FORCE · bool · 기본 false [켬: 1만]
-#   pipeline.load.publish.bucket_skip_overlap_check:  # PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 — 1이면 생략 · env=PM_BUCKET_SKIP_OVERLAP_CHECK · bool · 기본 false [켬: 1만]
-#   pipeline.load.publish.upload_raw:  # rep.md 옆에 rep.json·엔진 원본·figures·meta도 올릴지 — 0이면 rep.md 등 옛 동작 · env=PM_UPLOAD_RAW · bool · 기본 true [끔: 0만]
+#   pipeline.load.bm25_stat_rebuild:  # 적재 때 키워드 문서 빈도를 전체 다시 셈 — 1이면 켬 · 기본 false · 값: true·false · env=BM25_STAT_REBUILD [켬: 1만]
+#   pipeline.load.edw_load:  # EDW 벡터 적재(deploy·load) 허용 — 1이어야 진행, 아니면 거부 종료 · 기본 false · 값: true·false · env=EDW_LOAD [켬: 1만]
+#   pipeline.load.pg_create_extension:  # deploy 때 vector 확장 직접 생성 시도 — 1이면 켬(공유 PG에서는 금지) · 기본 false · 값: true·false · env=PG_CREATE_EXTENSION [켬: 1만]
+#   pipeline.load.prune_force:  # 옛 기록 정리 안전장치(묶음 문서 수 비율 미달 거부) 무시 — 1이면 진행 · 기본 false · 값: true·false · env=PRUNE_FORCE [켬: 1만]
+#   pipeline.load.publish.bucket_skip_overlap_check:  # PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 — 1이면 생략 · 기본 false · 값: true·false · env=PM_BUCKET_SKIP_OVERLAP_CHECK [켬: 1만]
+#   pipeline.load.publish.upload_raw:  # rep.md 옆에 rep.json·엔진 원본·figures·meta도 올릴지 — 0이면 rep.md 등 옛 동작 · 기본 true · 값: true·false · env=PM_UPLOAD_RAW [끔: 0만]
 #  [운영값(동시성·시간·용량·경로·접속)]
-#   pipeline.load.bm25_threads:  # BM25 항목(term,tf) 계산 병렬 스레드 수(개) · env=BM25_THREADS · int · 기본 4
-#   pipeline.load.edw_path_prefix:  # 저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치) · env=EDW_PATH_PREFIX · str
-#   pipeline.load.index_lock_stale_sec:  # 색인 빌드 잠금 파일을 죽은 빌드로 보고 회수하는 경과 시간(초) · env=INDEX_LOCK_STALE_SEC · float · 기본 21600.0
-#   pipeline.load.prune_min_ratio:  # 옛 기록 정리 허용 최소 비율(묶음 문서 수 / 저장 문서 수) · env=PRUNE_MIN_RATIO · float · 기본 0.5
-#   pipeline.load.publish.parse_date:  # 업로드 키의 날짜 폴더(YYYY-MM-DD) — 비면 오늘 · env=PM_PARSE_DATE · str
-#   pipeline.load.publish.path_map:  # 원본 키 앞부분 치환표 '이전=새' 쉼표 목록(결과 키 경로 구성용) · env=PM_PATH_MAP · 목록(쉼표 또는 YAML 목록) · 기본 (빈 목록)
-#   pipeline.load.publish.source_system:  # 병렬 파싱 경로에서 게시 행에 기록하는 source_system 이름 · env=PM_SOURCE_SYSTEM · str · 기본 FileStorageMap [빈 글자 유지]
-#   pipeline.load.publish.upload_statuses:  # 원본을 업로드할 파싱 상태 목록(콤마 — 비면 parsing_meta.DEFAULT_UPLOAD_STATUSES) · env=PM_UPLOAD_STATUSES · 목록(쉼표 또는 YAML 목록) · 기본 ok,partial
+#   pipeline.load.bm25_threads:  # BM25 항목(term,tf) 계산 병렬 스레드 수(개) · 기본 4 · 값: 0 이상 정수 · env=BM25_THREADS
+#   pipeline.load.edw_path_prefix:  # 저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치) · 기본 없음 · 값: 경로 · env=EDW_PATH_PREFIX
+#   pipeline.load.index_lock_stale_sec:  # 색인 빌드 잠금 파일을 죽은 빌드로 보고 회수하는 경과 시간(초) · 기본 21600.0 · 값: 0 이상 초 · env=INDEX_LOCK_STALE_SEC
+#   pipeline.load.prune_min_ratio:  # 옛 기록 정리 허용 최소 비율(묶음 문서 수 / 저장 문서 수) · 기본 0.5 · 값: 0~1 · env=PRUNE_MIN_RATIO
+#   pipeline.load.publish.parse_date:  # 업로드 키의 날짜 폴더(YYYY-MM-DD) — 비면 오늘 · 기본 없음 · 값: YYYY-MM-DD · env=PM_PARSE_DATE
+#   pipeline.load.publish.path_map:  # 원본 키 앞부분 치환표 '이전=새' 쉼표 목록(결과 키 경로 구성용) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=PM_PATH_MAP
+#   pipeline.load.publish.source_system:  # 병렬 파싱 경로에서 게시 행에 기록하는 source_system 이름 · 기본 FileStorageMap · 값: 경로 · env=PM_SOURCE_SYSTEM [빈 글자 유지]
+#   pipeline.load.publish.upload_statuses:  # 원본을 업로드할 파싱 상태 목록(콤마 — 비면 parsing_meta.DEFAULT_UPLOAD_STATUSES) · 기본 ok,partial · 값: 쉼표 목록 또는 YAML 목록 · env=PM_UPLOAD_STATUSES
 
-# ─── 2-7. mcp — 검색 서버·검색 동작 (65칸) ───
-#  [결과를 바꾸는 값(하이퍼파라미터)]
-#   mcp.search.methods:  # search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서) · env=MCP_METHODS · 목록(쉼표 또는 YAML 목록) · 기본 vector,bm25,id
-#   mcp.search.min_score:  # 근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak · env=SEARCH_MIN_SCORE · float
-#   mcp.search.ocr_dpi:  # 쪽 이미지 렌더링 해상도(DPI) — OCR·근거 이미지 좌표 환산에 씀 · env=OCR_DPI · int · 기본 200 [엔진 지문]
-#   mcp.search.struct_context_max:  # 집계 질문에서 계약 마스터 전체를 표로 넘길 때 계약 수 상한(개) · env=STRUCT_CONTEXT_MAX · int · 기본 200
-#   mcp.search.agg.llm_min:  # 집계 LLM 분류 확신도 하한(0~1) — 미달이면 검색으로 폴백 · env=SEARCH_AGG_LLM_MIN · float · 기본 0.6
-#   mcp.search.weights.bm25:  # RRF 융합에서 BM25 가중치 · env=SEARCH_W_BM25 · float · 기본 1.0
-#   mcp.search.weights.bm25_table:  # 집계 질문일 때 BM25 가중치(SEARCH_TYPE_WEIGHTS 켠 경우) · env=SEARCH_W_BM25_TABLE · float · 기본 0.2
-#   mcp.search.weights.id:  # RRF 융합에서 ID(드문 식별자) 가중치 · env=SEARCH_W_ID · float · 기본 2.0
-#   mcp.search.weights.vector:  # RRF 융합에서 벡터 가중치 · env=SEARCH_W_VECTOR · float · 기본 1.0
+# ─── 2-7. mcp — 검색 서버·검색 동작 (56칸) ───
 #  [기능 켬/끔]
-#   mcp.edw_query.enabled:  # query_edw 도구 스위치 — 0이면 끔 · env=EDW_QUERY · bool · 기본 true [끔: 0만]
-#   mcp.edw_query.tables_strict:  # 1이면 허용 표 목록(EDW_QUERY_TABLES) 검사를 켬 — 기본은 전 스키마 허용 · env=EDW_QUERY_TABLES_STRICT · bool · 기본 false [켬: 1만]
-#   mcp.output.cap_ranked:  # 검색 응답 크기 상한(cap)을 순위 인지 방식으로 줄임 — 0이면 옛 방식(긴 본문부터 반씩 자름) · env=CAP_RANKED · bool · 기본 true [끔: 0만]
-#   mcp.output.evidence_paths:  # 근거의 '파싱 결과 경로' 조회(AI.ParsingMeta) 스위치 — 0이면 시도 안 함 · env=MCP_EVIDENCE_PATHS · bool · 기본 true [끔: 0만]
-#   mcp.query_log.enabled:  # 질의 기록(qa_log.jsonl) 스위치 — 0이면 기록 안 함 · env=MCP_QUERY_LOG · bool · 기본 true [끔: 0만]
-#   mcp.search.copy_group:  # 같은 사건의 사본(형식·재명명) 근거를 묶어 대표만 남김 — 0이면 끔 · env=SEARCH_COPY_GROUP · bool · 기본 true [끔: 0만]
-#   mcp.search.entity_split:  # 비교 질문(고객 2명 이상)을 고객별로 나눠 검색 — 0이면 끔 · env=SEARCH_ENTITY_SPLIT · bool · 기본 true [끔: 0만]
-#   mcp.search.evidence_gate:  # 근거 점수·evidence_status 표시 — 0이면 끔(점수 칸도 안 실림) · env=SEARCH_EVIDENCE_GATE · bool · 기본 true [끔: 0만]
-#   mcp.search.tie_break:  # 동점 근거를 질문의 엔티티(고객·계약번호)로 깨기 — 0이면 끔 · env=SEARCH_TIE_BREAK · bool · 기본 true [끔: 0만]
-#   mcp.search.type_weights:  # 집계 질문이면 BM25 가중을 SEARCH_W_BM25_TABLE로 교체 — 끄는 값 0·none·false·빈 값 · env=SEARCH_TYPE_WEIGHTS · bool · 기본 true [끔: ''·0·none·false]
-#   mcp.search.vector_alias_expand:  # 벡터 질의에 교차 문자 체계 별칭을 덧붙임 — 0이면 끔 · env=SEARCH_VECTOR_ALIAS_EXPAND · bool · 기본 true [끔: 0만]
-#   mcp.search.agg.fx:  # 통화가 2개 이상 섞인 집계에 환율 근거 추가 — 0이면 끔 · env=SEARCH_AGG_FX · bool · 기본 true [끔: 0만]
-#   mcp.search.agg.llm:  # 집계 질문 분류에 LLM 경계 분류 사용 — 1이면 켬(기본 끔) · env=SEARCH_AGG_LLM · bool · 기본 false [켬: 1만]
-#   mcp.search.agg.route:  # 집계 질문이면 집계 결과를 근거 맨 앞에 — 0이면 끔 · env=SEARCH_AGG_ROUTE · bool · 기본 true [끔: 0만]
-#   mcp.search.client.filter:  # 질문에 나온 고객명으로 검색 범위 거르기 — 0이면 끔 · env=SEARCH_CLIENT_FILTER · bool · 기본 true [끔: 0만]
-#   mcp.search.client.hard:  # 고객 범위를 하드 격리(다른 고객 문서 제외) — 1이면 켬 · env=SEARCH_CLIENT_HARD · bool · 기본 false [켬: 1만]
-#   mcp.search.client.strict:  # 하드 격리에서 고객 미상 문서도 제외 — 1이면 켬 · env=SEARCH_CLIENT_STRICT · bool · 기본 false [켬: 1만]
-#   mcp.search.query_expand.draft:  # 질문 용어 확장에서 draft 용어 사전 사용 — 0이면 끔 · env=QUERY_EXPAND_DRAFT · bool · 기본 true [끔: 0만]
-#   mcp.search.query_expand.enabled:  # 질문 용어 확장(BM25, 용어 사전) 스위치 — 0이면 끔 · env=QUERY_EXPAND · bool · 기본 true [끔: 0만]
-#   mcp.search.query_expand.shorttok:  # 용어 확장에서 한 글자 비숫자 토큰 제거 — 0이면 제거 안 함 · env=QUERY_EXPAND_SHORTTOK · bool · 기본 true [끔: 0만]
-#   mcp.server.warmup:  # 기동 때 검색 1회로 예열 — 0이면 끔 · env=MCP_WARMUP · bool · 기본 true [끔: 0만]
+#   mcp.edw_query.enabled:  # query_edw 도구 스위치 — 0이면 끔 · 기본 true · 값: true·false · env=EDW_QUERY [끔: 0만]
+#   mcp.edw_query.tables_strict:  # 1이면 허용 표 목록(EDW_QUERY_TABLES) 검사를 켬 — 기본은 전 스키마 허용 · 기본 false · 값: true·false · env=EDW_QUERY_TABLES_STRICT [켬: 1만]
+#   mcp.output.cap_ranked:  # 검색 응답 크기 상한(cap)을 순위 인지 방식으로 줄임 — 0이면 옛 방식(긴 본문부터 반씩 자름) · 기본 true · 값: true·false · env=CAP_RANKED [끔: 0만]
+#   mcp.output.evidence_paths:  # 근거의 '파싱 결과 경로' 조회(AI.ParsingMeta) 스위치 — 0이면 시도 안 함 · 기본 true · 값: true·false · env=MCP_EVIDENCE_PATHS [끔: 0만]
+#   mcp.query_log.enabled:  # 질의 기록(qa_log.jsonl) 스위치 — 0이면 기록 안 함 · 기본 true · 값: true·false · env=MCP_QUERY_LOG [끔: 0만]
+#   mcp.search.copy_group:  # 같은 사건의 사본(형식·재명명) 근거를 묶어 대표만 남김 — 0이면 끔 · 기본 true · 값: true·false · env=SEARCH_COPY_GROUP [끔: 0만]
+#   mcp.search.entity_split:  # 비교 질문(고객 2명 이상)을 고객별로 나눠 검색 — 0이면 끔 · 기본 true · 값: true·false · env=SEARCH_ENTITY_SPLIT [끔: 0만]
+#   mcp.search.evidence_gate:  # 근거 점수·evidence_status 표시 — 0이면 끔(점수 칸도 안 실림) · 기본 true · 값: true·false · env=SEARCH_EVIDENCE_GATE [끔: 0만]
+#   mcp.search.tie_break:  # 동점 근거를 질문의 엔티티(고객·계약번호)로 깨기 — 0이면 끔 · 기본 true · 값: true·false · env=SEARCH_TIE_BREAK [끔: 0만]
+#   mcp.search.type_weights:  # 집계 질문이면 BM25 가중을 SEARCH_W_BM25_TABLE로 교체 — 끄는 값 0·none·false·빈 값 · 기본 true · 값: true·false · env=SEARCH_TYPE_WEIGHTS [끔: ''·0·none·false]
+#   mcp.search.vector_alias_expand:  # 벡터 질의에 교차 문자 체계 별칭을 덧붙임 — 0이면 끔 · 기본 true · 값: true·false · env=SEARCH_VECTOR_ALIAS_EXPAND [끔: 0만]
+#   mcp.search.agg.fx:  # 통화가 2개 이상 섞인 집계에 환율 근거 추가 — 0이면 끔 · 기본 true · 값: true·false · env=SEARCH_AGG_FX [끔: 0만]
+#   mcp.search.agg.llm:  # 집계 질문 분류에 LLM 경계 분류 사용 — 1이면 켬(기본 끔) · 기본 false · 값: true·false · env=SEARCH_AGG_LLM [켬: 1만]
+#   mcp.search.agg.route:  # 집계 질문이면 집계 결과를 근거 맨 앞에 — 0이면 끔 · 기본 true · 값: true·false · env=SEARCH_AGG_ROUTE [끔: 0만]
+#   mcp.search.client.filter:  # 질문에 나온 고객명으로 검색 범위 거르기 — 0이면 끔 · 기본 true · 값: true·false · env=SEARCH_CLIENT_FILTER [끔: 0만]
+#   mcp.search.client.hard:  # 고객 범위를 하드 격리(다른 고객 문서 제외) — 1이면 켬 · 기본 false · 값: true·false · env=SEARCH_CLIENT_HARD [켬: 1만]
+#   mcp.search.client.strict:  # 하드 격리에서 고객 미상 문서도 제외 — 1이면 켬 · 기본 false · 값: true·false · env=SEARCH_CLIENT_STRICT [켬: 1만]
+#   mcp.search.query_expand.draft:  # 질문 용어 확장에서 draft 용어 사전 사용 — 0이면 끔 · 기본 true · 값: true·false · env=QUERY_EXPAND_DRAFT [끔: 0만]
+#   mcp.search.query_expand.enabled:  # 질문 용어 확장(BM25, 용어 사전) 스위치 — 0이면 끔 · 기본 true · 값: true·false · env=QUERY_EXPAND [끔: 0만]
+#   mcp.search.query_expand.shorttok:  # 용어 확장에서 한 글자 비숫자 토큰 제거 — 0이면 제거 안 함 · 기본 true · 값: true·false · env=QUERY_EXPAND_SHORTTOK [끔: 0만]
+#   mcp.server.warmup:  # 기동 때 검색 1회로 예열 — 0이면 끔 · 기본 true · 값: true·false · env=MCP_WARMUP [끔: 0만]
 #  [운영값(동시성·시간·용량·경로·접속)]
-#   mcp.edw_meta.dir:  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · env=EDW_META_DIR · str
-#   mcp.edw_meta.max_bytes:  # edw_meta 응답 크기 상한(바이트) — 넘으면 목록 꼬리를 자름 · env=EDW_META_MAX_BYTES · int · 기본 200000
-#   mcp.edw_query.conn_file:  # EDW 읽기 전용 접속 정보 파일(KEY=VALUE 줄) 경로 · env=EDW_QUERY_CONN_FILE · str
-#   mcp.edw_query.max_bytes:  # query_edw 응답 크기 상한(바이트) · env=EDW_QUERY_MAX_BYTES · int · 기본 2000000
-#   mcp.edw_query.max_rows:  # query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽) · env=EDW_QUERY_MAX_ROWS · int · 기본 2000 [서버 옛 값: 1000]
-#   mcp.edw_query.port:  # EDW 읽기 전용 접속 포트 · env=EDW_QUERY_PORT · int(포트 — 정수만) · 기본 1433
-#   mcp.edw_query.sqlite:  # query_edw를 EDW 대신 sqlite 파일로 연결(시험용 대역) · env=EDW_QUERY_SQLITE · str
-#   mcp.edw_query.tables:  # query_edw 허용 표 목록(쉼표) — TABLES_STRICT=1일 때만 적용, 안 주면 코드가 정함(sqlite 기본 표 · mssql 없음), 빈 값은 전부 거부 · env=EDW_QUERY_TABLES · 목록(쉼표 또는 YAML 목록) [빈 글자 유지] [서버 옛 값: '']
-#   mcp.edw_query.timeout_sec:  # query_edw 질의 시간 상한(초) · env=EDW_QUERY_TIMEOUT_SEC · float · 기본 20.0
-#   mcp.output.evid_local_roots:  # 근거 이미지를 file:// 원본에서 바로 자를 때 허용할 루트 폴더(쉼표 목록) · env=MCP_EVID_LOCAL_ROOTS · 목록(쉼표 또는 YAML 목록) · 기본 (빈 목록)
-#   mcp.output.evid_max_concurrency:  # 근거 이미지 원천 재접근(Object Storage 다운로드) 동시 요청 상한(개) · env=MCP_EVID_MAX_CONCURRENCY · int · 기본 4
-#   mcp.output.evid_max_mb:  # 근거 이미지 원천 파일 크기 상한(MB) · env=MCP_EVID_MAX_MB · float · 기본 50.0
-#   mcp.output.evid_timeout_sec:  # 근거 이미지 원천 받기 시간 상한(초) · env=MCP_EVID_TIMEOUT_SEC · float · 기본 20.0
-#   mcp.output.images:  # 그림 색인(index.jsonl) 경로 · env=MCP_IMAGES · str
-#   mcp.output.max_chars:  # search 응답 크기 상한(JSON UTF-8 바이트) — 넘으면 근거 본문을 줄임 · env=MCP_MAX_CHARS · int · 기본 20000
-#   mcp.output.max_image_px:  # 근거 이미지 한 변 최대 픽셀(썸네일 크기) · env=MCP_MAX_IMAGE_PX · int · 기본 1600
-#   mcp.parse_proxy.url:  # parse_document가 부르는 작업 서비스 주소 · env=PARSE_SERVICE_URL · str · 기본 http://127.0.0.1:8766
-#   mcp.query_log.dir:  # 질의 기록 폴더 · env=MCP_QUERY_LOG_DIR · str
-#   mcp.search.agg_today:  # 집계 질문의 '오늘' 기준일(YYYY-MM-DD) 고정 — 비우면 실제 오늘 · env=AGG_TODAY · str
-#   mcp.search.agg_vocab_file:  # 집계 지표 단서어 사전(agg_vocab.json)을 다른 경로로 지정 · env=AGG_VOCAB_FILE · str
-#   mcp.search.data_catalog:  # 데이터 카탈로그(표·열 설명) JSON 경로 — 없으면 카탈로그 없이 동작 · env=DATA_CATALOG · str
-#   mcp.search.agg.llm_timeout:  # 집계 LLM 분류 호출 시간 상한(초) · env=SEARCH_AGG_LLM_TIMEOUT · float · 기본 8.0
-#   mcp.search.agg.text_max_rows:  # 집계 근거 text에 붙이는 표 행 상한(개) · env=SEARCH_AGG_TEXT_MAX_ROWS · int · 기본 30
-#   mcp.search.agg.text_max_src_rows:  # 계약별 근거 행 상한(개) · env=SEARCH_AGG_TEXT_MAX_SRC_ROWS · int · 기본 40
-#   mcp.search.pg.filter_exact_max:  # 고객 필터 허용 집합이 이 크기 이하면 벡터 정확 검색으로 전환(청크 수) · env=PG_FILTER_EXACT_MAX · int · 기본 20000
-#   mcp.search.pg.vector_search:  # 벡터 검색 방식 — exact면 색인 없이 정확 검색, 비우면 근사(HNSW) · env=PG_VECTOR_SEARCH · str
-#   mcp.server.allowed_hosts:  # 비루프백 바인드 때 추가로 허용할 Host(쉼표 목록, 리버스 프록시 이름 등) · env=MCP_ALLOWED_HOSTS · 목록(쉼표 또는 YAML 목록) · 기본 (빈 목록)
-#   mcp.server.instructions:  # MCP 서버 instructions 글자(도구 안내문) 교체 · env=MCP_INSTRUCTIONS · str
-#   mcp.server.manifest:  # 수집 manifest.jsonl 경로(문서 유형·버전·삭제 여부 출처) · env=MCP_MANIFEST · str
-#   mcp.server.max_concurrency:  # 도구 동시 실행 상한(개) · env=MCP_MAX_CONCURRENCY · int · 기본 8
-#   mcp.server.max_queue:  # 도구 대기열 상한(개) — 넘으면 즉시 busy 응답, 0이면 무제한 · env=MCP_MAX_QUEUE · int
-#   mcp.server.port:  # MCP 서버 포트 · env=MCP_PORT · int(포트 — 정수만) · 기본 8765
-#   mcp.server.query_cache:  # 검색 MCP의 질의 임베딩 캐시 sqlite 경로 — 있으면 시작 때 common.models.embed.query_cache를 이 값으로(mcp 이미지 안 기본 /tmp/mcp_query_cache.sqlite — 결과 폴더는 읽기 전용, 옛 compose EMBED_QUERY_CACHE 자리 — S7e2) · env=MCP_QUERY_CACHE · str
-#   mcp.server.reload_check_sec:  # 적재 버전 변경 확인 간격(초) — 바뀌면 검색기·edw_meta 다시 읽음 · env=MCP_RELOAD_CHECK_SEC · float · 기본 30.0
-#   mcp.server.tool_timeout_sec:  # 도구 1회 실행 시간 상한(초) — 넘으면 timeout 응답, 0이면 무제한 · env=MCP_TOOL_TIMEOUT_SEC · float · 기본 30.0
+#   mcp.edw_meta.dir:  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · 기본 없음 · 값: 경로 · env=EDW_META_DIR
+#   mcp.edw_meta.max_bytes:  # edw_meta 응답 크기 상한(바이트) — 넘으면 목록 꼬리를 자름 · 기본 200000 · 값: 0 이상 정수 · env=EDW_META_MAX_BYTES
+#   mcp.edw_query.conn_file:  # EDW 읽기 전용 접속 정보 파일(KEY=VALUE 줄) 경로 · 기본 없음 · 값: 경로 · env=EDW_QUERY_CONN_FILE
+#   mcp.edw_query.max_bytes:  # query_edw 응답 크기 상한(바이트) · 기본 2000000 · 값: 0 이상 정수 · env=EDW_QUERY_MAX_BYTES
+#   mcp.edw_query.max_rows:  # query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽) · 기본 2000 · 값: 0 이상 정수 · env=EDW_QUERY_MAX_ROWS [서버 옛 값: 1000]
+#   mcp.edw_query.port:  # EDW 읽기 전용 접속 포트 · 기본 1433 · 값: 1~65535 · env=EDW_QUERY_PORT
+#   mcp.edw_query.sqlite:  # query_edw를 EDW 대신 sqlite 파일로 연결(시험용 대역) · 기본 없음 · 값: 경로 · env=EDW_QUERY_SQLITE
+#   mcp.edw_query.tables:  # query_edw 허용 표 목록(쉼표) — TABLES_STRICT=1일 때만 적용, 안 주면 코드가 정함(sqlite 기본 표 · mssql 없음), 빈 값은 전부 거부 · 기본 없음 · 값: 쉼표 목록 또는 YAML 목록 · env=EDW_QUERY_TABLES [빈 글자 유지] [서버 옛 값: '']
+#   mcp.edw_query.timeout_sec:  # query_edw 질의 시간 상한(초) · 기본 20.0 · 값: 0 이상 초 · env=EDW_QUERY_TIMEOUT_SEC
+#   mcp.output.evid_local_roots:  # 근거 이미지를 file:// 원본에서 바로 자를 때 허용할 루트 폴더(쉼표 목록) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=MCP_EVID_LOCAL_ROOTS
+#   mcp.output.evid_max_concurrency:  # 근거 이미지 원천 재접근(Object Storage 다운로드) 동시 요청 상한(개) · 기본 4 · 값: 0 이상 정수 · env=MCP_EVID_MAX_CONCURRENCY
+#   mcp.output.evid_max_mb:  # 근거 이미지 원천 파일 크기 상한(MB) · 기본 50.0 · 값: 0 이상 · env=MCP_EVID_MAX_MB
+#   mcp.output.evid_timeout_sec:  # 근거 이미지 원천 받기 시간 상한(초) · 기본 20.0 · 값: 0 이상 초 · env=MCP_EVID_TIMEOUT_SEC
+#   mcp.output.images:  # 그림 색인(index.jsonl) 경로 · 기본 없음 · 값: 경로 · env=MCP_IMAGES
+#   mcp.output.max_chars:  # search 응답 크기 상한(JSON UTF-8 바이트) — 넘으면 근거 본문을 줄임 · 기본 20000 · 값: 0 이상 정수 · env=MCP_MAX_CHARS
+#   mcp.output.max_image_px:  # 근거 이미지 한 변 최대 픽셀(썸네일 크기) · 기본 1600 · 값: 0 이상 정수 · env=MCP_MAX_IMAGE_PX
+#   mcp.parse_proxy.url:  # parse_document가 부르는 작업 서비스 주소 · 기본 http://127.0.0.1:8766 · 값: URL · env=PARSE_SERVICE_URL
+#   mcp.query_log.dir:  # 질의 기록 폴더 · 기본 없음 · 값: 경로 · env=MCP_QUERY_LOG_DIR
+#   mcp.search.agg_today:  # 집계 질문의 '오늘' 기준일(YYYY-MM-DD) 고정 — 비우면 실제 오늘 · 기본 없음 · 값: YYYY-MM-DD · env=AGG_TODAY
+#   mcp.search.agg_vocab_file:  # 집계 지표 단서어 사전(agg_vocab.json)을 다른 경로로 지정 · 기본 없음 · 값: 경로 · env=AGG_VOCAB_FILE
+#   mcp.search.data_catalog:  # 데이터 카탈로그(표·열 설명) JSON 경로 — 없으면 카탈로그 없이 동작 · 기본 없음 · 값: 경로 · env=DATA_CATALOG
+#   mcp.search.agg.llm_timeout:  # 집계 LLM 분류 호출 시간 상한(초) · 기본 8.0 · 값: 0 이상 초 · env=SEARCH_AGG_LLM_TIMEOUT
+#   mcp.search.agg.text_max_rows:  # 집계 근거 text에 붙이는 표 행 상한(개) · 기본 30 · 값: 0 이상 정수 · env=SEARCH_AGG_TEXT_MAX_ROWS
+#   mcp.search.agg.text_max_src_rows:  # 계약별 근거 행 상한(개) · 기본 40 · 값: 0 이상 정수 · env=SEARCH_AGG_TEXT_MAX_SRC_ROWS
+#   mcp.search.pg.filter_exact_max:  # 고객 필터 허용 집합이 이 크기 이하면 벡터 정확 검색으로 전환(청크 수) · 기본 20000 · 값: 0 이상 정수 · env=PG_FILTER_EXACT_MAX
+#   mcp.search.pg.vector_search:  # 벡터 검색 방식 — exact면 색인 없이 정확 검색, 비우면 근사(HNSW) · 기본 없음 · 값: exact 또는 비움(HNSW 근사) · env=PG_VECTOR_SEARCH
+#   mcp.server.allowed_hosts:  # 비루프백 바인드 때 추가로 허용할 Host(쉼표 목록, 리버스 프록시 이름 등) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=MCP_ALLOWED_HOSTS
+#   mcp.server.instructions:  # MCP 서버 instructions 글자(도구 안내문) 교체 · 기본 없음 · 값: 글자 · env=MCP_INSTRUCTIONS
+#   mcp.server.manifest:  # 수집 manifest.jsonl 경로(문서 유형·버전·삭제 여부 출처) · 기본 없음 · 값: 경로 · env=MCP_MANIFEST
+#   mcp.server.max_concurrency:  # 도구 동시 실행 상한(개) · 기본 8 · 값: 0 이상 정수 · env=MCP_MAX_CONCURRENCY
+#   mcp.server.max_queue:  # 도구 대기열 상한(개) — 넘으면 즉시 busy 응답, 0이면 무제한 · 기본 없음 · 값: 0 이상 정수 (0 = 무제한) · env=MCP_MAX_QUEUE
+#   mcp.server.port:  # MCP 서버 포트 · 기본 8765 · 값: 1~65535 · env=MCP_PORT
+#   mcp.server.query_cache:  # 검색 MCP의 질의 임베딩 캐시 sqlite 경로 — 있으면 시작 때 common.models.embed.query_cache를 이 값으로(mcp 이미지 안 기본 /tmp/mcp_query_cache.sqlite — 결과 폴더는 읽기 전용, 옛 compose EMBED_QUERY_CACHE 자리 — S7e2) · 기본 없음 · 값: 경로 · env=MCP_QUERY_CACHE
+#   mcp.server.reload_check_sec:  # 적재 버전 변경 확인 간격(초) — 바뀌면 검색기·edw_meta 다시 읽음 · 기본 30.0 · 값: 0 이상 초 · env=MCP_RELOAD_CHECK_SEC
+#   mcp.server.tool_timeout_sec:  # 도구 1회 실행 시간 상한(초) — 넘으면 timeout 응답, 0이면 무제한 · 기본 30.0 · 값: 0 이상 초 (0 = 무제한) · env=MCP_TOOL_TIMEOUT_SEC
 
 # ─── 2-8. 실행 자원·상주 서비스·새벽 배치 (43칸) ───
-#   common.runtime.cpu_max_load:  # 새 하위 프로세스를 띄우는 CPU 부하 상한(1분 부하 평균 ÷ 코어 수) · env=CPU_MAX_LOAD · float · 기본 0.9 [auto = 비움]
-#   common.runtime.draft_terms_lock_timeout:  # 용어 초안 CSV 쓰기 잠금 대기 시간(초) — 못 얻으면 이번엔 포기 · env=DRAFT_TERMS_LOCK_TIMEOUT · float · 기본 5.0 [인계 지문]
-#   common.runtime.exp_max_workers:  # 실험 도구(stack_matrix) 병렬 작업 수 상한(개) · env=EXP_MAX_WORKERS · float · 기본 8 [auto = 비움]
-#   common.runtime.exp_proc_gb_answer:  # 실험 answer 작업 1개당 메모리 가정(GB)(S7b — resources.plan_experiment가 cmd로 이름을 지어 읽음) · env=EXP_PROC_GB_ANSWER · float · 기본 0.5 [auto = 비움]
-#   common.runtime.exp_proc_gb_build:  # 실험 build 작업 1개당 메모리 가정(GB) · env=EXP_PROC_GB_BUILD · float · 기본 1.5 [auto = 비움]
-#   common.runtime.exp_proc_gb_run:  # 실험 run(·answer) 작업 1개당 메모리 가정(GB) · env=EXP_PROC_GB_RUN · float · 기본 0.5 [auto = 비움]
-#   common.runtime.exp_reserve_gb:  # 실험 병렬 수를 정할 때 남겨 둘 메모리(GB) · env=EXP_RESERVE_GB · float · 기본 4.0 [auto = 비움]
-#   common.runtime.lib_env:  # 라이브러리 env(이름: 글자 — TZ·OMP_NUM_THREADS·HF_HUB_OFFLINE 등 허용 목록만, 비밀 아님) — 컨테이너 시작 때 entrypoint가 env로 냄(사용자 env는 안 덮고 이미지 ENV는 덮음 — C-45 ⑤, S7e2) · env=LIB_ENV · 사전(라이브러리 env 이름: 글자) · 기본 {}
-#   common.runtime.log_retention_days:  # output/logs/*.log 보존 일수 — 지난 로그 삭제, 0 이하면 삭제 안 함 · env=LOG_RETENTION_DAYS · int · 기본 30
-#   common.runtime.mem_max_pct:  # 생산 파싱이 새 프로세스를 띄우는 메모리 사용률 상한(%) · env=MEM_MAX_PCT · float · 기본 90.0 [auto = 비움]
-#   common.runtime.mem_settle_margin:  # 상한(MEM_MAX_PCT) 이만큼(%p) 아래부터 프로세스 띄운 뒤 잠깐 쉼 · env=MEM_SETTLE_MARGIN · float · 기본 5.0 [auto = 비움]
-#   common.runtime.mem_settle_sec:  # 메모리가 상한 근처일 때 프로세스 띄운 뒤 쉬는 시간(초) · env=MEM_SETTLE_SEC · float · 기본 2.0 [auto = 비움]
-#   common.runtime.mem_start_pct:  # wait_mem 기본 상한 — 실험 도구가 새 프로세스를 띄우는 메모리 사용률(%) · env=MEM_START_PCT · float · 기본 90.0 [auto = 비움]
-#   common.runtime.pipe_max_procs:  # 파싱 엔진 프로세스 수 자동 결정의 상한(개) · env=PIPE_MAX_PROCS · float · 기본 8 [auto = 비움]
-#   common.runtime.pipe_proc_gb:  # 엔진 프로세스 1개당 메모리 가정(GB) — 자동 프로세스 수 계산용 · env=PIPE_PROC_GB · float · 기본 3.0 [auto = 비움]
-#   common.runtime.pipe_procs:  # CPU 엔진 프로세스 수 — 비우거나 auto면 CPU·메모리로 계산(소수는 버림) · auto는 글자로 기억(run_all --procs 기본: auto → auto, 비움 → 1 — S7c1) · auto는 대소문자·앞뒤 공백 무시 · pipeline 이미지 안 기본 auto(옛 Dockerfile ENV, B-2) · env=PIPE_PROCS · float | auto
-#   common.runtime.pipe_reserve_cpus:  # 자동 프로세스 수 계산 때 남겨 둘 CPU 코어 수(개) · env=PIPE_RESERVE_CPUS · float · 기본 1 [auto = 비움]
-#   common.runtime.pipe_reserve_gb:  # 자동 프로세스 수 계산 때 남겨 둘 메모리(GB) · env=PIPE_RESERVE_GB · float · 기본 4.0 [auto = 비움]
-#   common.runtime.pipe_threads:  # 프로세스 1개당 수치 라이브러리 스레드 수(OMP·MKL·onnx) — 비우거나 auto면 CPU ÷ 프로세스 수(소수는 버림) · env=PIPE_THREADS · float [auto = 비움]
-#   common.runtime.pipe_workers:  # VLM API 동시 처리 문서 수(개) — GPU 서버 한도 기준 · env=PIPE_WORKERS · float · 기본 4 [auto = 비움]
-#   pipeline.night.deadline:  # 새벽 파싱 배치 마감 시각(HH:MM, 컨테이너 TZ 기준) · env=NIGHT_DEADLINE · str · 기본 06:30 [빈 글자 유지]
-#   pipeline.night.parse_deadline:  # 새벽 배치 parse 단계 마감 시각(HH:MM) — 비우면 무제한 · env=PARSE_DEADLINE · str
-#   pipeline.night.vlm_concurrency:  # 새벽 배치: 문서 하나의 쪽 VLM 동시 요청 수(개) · env=NIGHT_VLM_CONCURRENCY · int · 기본 8
-#   pipeline.night.workers:  # 새벽 배치: phase 3 VLM 동시 처리 문서 수(개) · env=NIGHT_WORKERS · int · 기본 4
-#   pipeline.service.parse_mcp.job_timeout_sec:  # parse MCP 서비스 작업 1건 제한 시간(초) · env=PARSE_MCP_JOB_TIMEOUT_SEC · float · 기본 600.0
-#   pipeline.service.parse_mcp.jobs_dir:  # parse MCP 서비스 작업 기록 폴더 · env=PARSE_MCP_JOBS_DIR · str
-#   pipeline.service.parse_mcp.max_mb:  # parse MCP 서비스가 받는 파일 크기 상한(MB) · env=PARSE_MCP_MAX_MB · float · 기본 64.0
-#   pipeline.service.parse_mcp.ocr:  # parse MCP 서비스에서 OCR 엔진 포함 여부 — 1이면 포함(느림) · env=PARSE_MCP_OCR · bool · 기본 false [켬: 1만]
-#   pipeline.service.parse_mcp.port:  # parse MCP 서비스 포트 · env=PARSE_MCP_PORT · int(포트 — 정수만) · 기본 8766
-#   pipeline.service.parse_mcp.procs:  # parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개) · env=PARSE_MCP_PROCS · int
-#   pipeline.service.parse_mcp.queue_max:  # parse MCP 서비스 대기 작업 상한(건) · env=PARSE_MCP_QUEUE_MAX · int · 기본 8
-#   pipeline.service.parse_mcp.roots:  # parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) — 비면 코드가 정함(<서비스 폴더>/inbox) · env=PARSE_MCP_ROOTS · 목록(쉼표 또는 YAML 목록)
-#   pipeline.service.trigger.allow_no_token:  # TRIGGER_TOKEN 없이 무인증 시작 허용 — 1이면 허용(PC 전용, 경고) · env=TRIGGER_ALLOW_NO_TOKEN · bool · 기본 false [켬: 1만]
-#   pipeline.service.trigger.chain_structure_url:  # parse 성공 뒤 structure 작업을 올릴 트리거 서버 URL(쉼표로 여러 개) — 비면 이어 올리지 않음(서버 compose는 http://127.0.0.1:8771을 줌) · env=CHAIN_STRUCTURE_URL · 목록(쉼표 또는 YAML 목록) · 기본 (빈 목록) [서버 옛 값: http://127.0.0.1:8771]
-#   pipeline.service.trigger.client_timeout:  # 트리거 서버 CLI 클라이언트 HTTP 제한 시간(초) · env=TRIGGER_CLIENT_TIMEOUT · float · 기본 10.0
-#   pipeline.service.trigger.host:  # 트리거 서버 바인딩 주소 — 비우면 127.0.0.1(모든 인터페이스는 0.0.0.0을 명시 — C-37, 사용자 10-27) · env=TRIGGER_HOST · str · 기본 127.0.0.1
-#   pipeline.service.trigger.parse_port:  # parse 상주 트리거 서버 포트(--module parse — port 칸이 비었을 때, S7e2: 옛 compose가 TRIGGER_PORT로 넘기던 호스트 칸을 앱 칸으로) · env=TRIGGER_PARSE_PORT · int(포트 — 정수만) · 기본 8770
-#   pipeline.service.trigger.port:  # 트리거 서버 포트 — 모듈 칸(parse_port·structure_port)을 따로 주지 않았을 때 두 모듈 모두 이 포트(PC 직접 실행만 — 이미지 안 상주 서버는 이 칸을 쓰지 않고 모듈 칸, VS7e2 R-1) · env=TRIGGER_PORT · int(포트 — 정수만)
-#   pipeline.service.trigger.structure_port:  # structure 상주 트리거 서버 포트(--module structure — port 칸이 비었을 때, S7e2) · env=TRIGGER_STRUCTURE_PORT · int(포트 — 정수만) · 기본 8771
-#   pipeline.service.trigger.queue_max:  # 트리거 서버 대기 작업 상한(건) — 넘으면 429 · env=TRIGGER_QUEUE_MAX · int · 기본 100
-#   pipeline.service.trigger.shutdown_timeout_sec:  # SIGTERM 뒤 실행 중 작업을 기다리는 한도(초) · env=TRIGGER_SHUTDOWN_TIMEOUT_SEC · float · 기본 300.0
-#   pipeline.service.trigger.socket_timeout_sec:  # 연결당 소켓 read 제한(초) — 느린 클라이언트 차단 · env=TRIGGER_SOCKET_TIMEOUT_SEC · int · 기본 30
-#   pipeline.service.trigger.upload_max_mb:  # 트리거 서버 /upload 본문 크기 상한(MB) · env=TRIGGER_UPLOAD_MAX_MB · int · 기본 50
+#   common.runtime.cpu_max_load:  # 새 하위 프로세스를 띄우는 CPU 부하 상한(1분 부하 평균 ÷ 코어 수) · 기본 0.9 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=CPU_MAX_LOAD [auto = 비움]
+#   common.runtime.draft_terms_lock_timeout:  # 용어 초안 CSV 쓰기 잠금 대기 시간(초) — 못 얻으면 이번엔 포기 · 기본 5.0 · 값: 0 이상 초 · env=DRAFT_TERMS_LOCK_TIMEOUT [인계 지문]
+#   common.runtime.exp_max_workers:  # 실험 도구(stack_matrix) 병렬 작업 수 상한(개) · 기본 8 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=EXP_MAX_WORKERS [auto = 비움]
+#   common.runtime.exp_proc_gb_answer:  # 실험 answer 작업 1개당 메모리 가정(GB)(S7b — resources.plan_experiment가 cmd로 이름을 지어 읽음) · 기본 0.5 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=EXP_PROC_GB_ANSWER [auto = 비움]
+#   common.runtime.exp_proc_gb_build:  # 실험 build 작업 1개당 메모리 가정(GB) · 기본 1.5 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=EXP_PROC_GB_BUILD [auto = 비움]
+#   common.runtime.exp_proc_gb_run:  # 실험 run(·answer) 작업 1개당 메모리 가정(GB) · 기본 0.5 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=EXP_PROC_GB_RUN [auto = 비움]
+#   common.runtime.exp_reserve_gb:  # 실험 병렬 수를 정할 때 남겨 둘 메모리(GB) · 기본 4.0 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=EXP_RESERVE_GB [auto = 비움]
+#   common.runtime.lib_env:  # 라이브러리 env(이름: 글자 — TZ·OMP_NUM_THREADS·HF_HUB_OFFLINE 등 허용 목록만, 비밀 아님) — 컨테이너 시작 때 entrypoint가 env로 냄(사용자 env는 안 덮고 이미지 ENV는 덮음 — C-45 ⑤, S7e2) · 기본 {} · 값: 사전(이름: 글자) · env=LIB_ENV
+#   common.runtime.log_retention_days:  # output/logs/*.log 보존 일수 — 지난 로그 삭제, 0 이하면 삭제 안 함 · 기본 30 · 값: 0 이상 정수 (0 = 삭제 안 함) · env=LOG_RETENTION_DAYS
+#   common.runtime.mem_max_pct:  # 생산 파싱이 새 프로세스를 띄우는 메모리 사용률 상한(%) · 기본 90.0 · 값: 0~100 · auto 또는 비우면 자동 계산 · env=MEM_MAX_PCT [auto = 비움]
+#   common.runtime.mem_settle_margin:  # 상한(MEM_MAX_PCT) 이만큼(%p) 아래부터 프로세스 띄운 뒤 잠깐 쉼 · 기본 5.0 · 값: 0~100 · auto 또는 비우면 자동 계산 · env=MEM_SETTLE_MARGIN [auto = 비움]
+#   common.runtime.mem_settle_sec:  # 메모리가 상한 근처일 때 프로세스 띄운 뒤 쉬는 시간(초) · 기본 2.0 · 값: 0 이상 초 · auto 또는 비우면 자동 계산 · env=MEM_SETTLE_SEC [auto = 비움]
+#   common.runtime.mem_start_pct:  # wait_mem 기본 상한 — 실험 도구가 새 프로세스를 띄우는 메모리 사용률(%) · 기본 90.0 · 값: 0~100 · auto 또는 비우면 자동 계산 · env=MEM_START_PCT [auto = 비움]
+#   common.runtime.pipe_max_procs:  # 파싱 엔진 프로세스 수 자동 결정의 상한(개) · 기본 8 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=PIPE_MAX_PROCS [auto = 비움]
+#   common.runtime.pipe_proc_gb:  # 엔진 프로세스 1개당 메모리 가정(GB) — 자동 프로세스 수 계산용 · 기본 3.0 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=PIPE_PROC_GB [auto = 비움]
+#   common.runtime.pipe_procs:  # CPU 엔진 프로세스 수 — 비우거나 auto면 CPU·메모리로 계산(소수는 버림) · auto는 글자로 기억(run_all --procs 기본: auto → auto, 비움 → 1 — S7c1) · auto는 대소문자·앞뒤 공백 무시 · pipeline 이미지 안 기본 auto(옛 Dockerfile ENV, B-2) · 기본 없음 · 값: 1 이상 정수 · auto 또는 비우면 자동 계산 · env=PIPE_PROCS
+#   common.runtime.pipe_reserve_cpus:  # 자동 프로세스 수 계산 때 남겨 둘 CPU 코어 수(개) · 기본 1 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=PIPE_RESERVE_CPUS [auto = 비움]
+#   common.runtime.pipe_reserve_gb:  # 자동 프로세스 수 계산 때 남겨 둘 메모리(GB) · 기본 4.0 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=PIPE_RESERVE_GB [auto = 비움]
+#   common.runtime.pipe_threads:  # 프로세스 1개당 수치 라이브러리 스레드 수(OMP·MKL·onnx) — 비우거나 auto면 CPU ÷ 프로세스 수(소수는 버림) · 기본 없음 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=PIPE_THREADS [auto = 비움]
+#   common.runtime.pipe_workers:  # VLM API 동시 처리 문서 수(개) — GPU 서버 한도 기준 · 기본 4 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=PIPE_WORKERS [auto = 비움]
+#   pipeline.night.deadline:  # 새벽 파싱 배치 마감 시각(HH:MM, 컨테이너 TZ 기준) · 기본 06:30 · 값: HH:MM · env=NIGHT_DEADLINE [빈 글자 유지]
+#   pipeline.night.parse_deadline:  # 새벽 배치 parse 단계 마감 시각(HH:MM) — 비우면 무제한 · 기본 없음 · 값: HH:MM · env=PARSE_DEADLINE
+#   pipeline.night.vlm_concurrency:  # 새벽 배치: 문서 하나의 쪽 VLM 동시 요청 수(개) · 기본 8 · 값: 0 이상 정수 · env=NIGHT_VLM_CONCURRENCY
+#   pipeline.night.workers:  # 새벽 배치: phase 3 VLM 동시 처리 문서 수(개) · 기본 4 · 값: 0 이상 정수 · env=NIGHT_WORKERS
+#   pipeline.service.parse_mcp.job_timeout_sec:  # parse MCP 서비스 작업 1건 제한 시간(초) · 기본 600.0 · 값: 0 이상 초 · env=PARSE_MCP_JOB_TIMEOUT_SEC
+#   pipeline.service.parse_mcp.jobs_dir:  # parse MCP 서비스 작업 기록 폴더 · 기본 없음 · 값: 경로 · env=PARSE_MCP_JOBS_DIR
+#   pipeline.service.parse_mcp.max_mb:  # parse MCP 서비스가 받는 파일 크기 상한(MB) · 기본 64.0 · 값: 0 이상 · env=PARSE_MCP_MAX_MB
+#   pipeline.service.parse_mcp.ocr:  # parse MCP 서비스에서 OCR 엔진 포함 여부 — 1이면 포함(느림) · 기본 false · 값: true·false · env=PARSE_MCP_OCR [켬: 1만]
+#   pipeline.service.parse_mcp.port:  # parse MCP 서비스 포트 · 기본 8766 · 값: 1~65535 · env=PARSE_MCP_PORT
+#   pipeline.service.parse_mcp.procs:  # parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개) · 기본 없음 · 값: 0 이상 정수 · env=PARSE_MCP_PROCS
+#   pipeline.service.parse_mcp.queue_max:  # parse MCP 서비스 대기 작업 상한(건) · 기본 8 · 값: 0 이상 정수 · env=PARSE_MCP_QUEUE_MAX
+#   pipeline.service.parse_mcp.roots:  # parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) — 비면 코드가 정함(<서비스 폴더>/inbox) · 기본 없음 · 값: 쉼표 목록 또는 YAML 목록 · env=PARSE_MCP_ROOTS
+#   pipeline.service.trigger.allow_no_token:  # TRIGGER_TOKEN 없이 무인증 시작 허용 — 1이면 허용(PC 전용, 경고) · 기본 false · 값: true·false · env=TRIGGER_ALLOW_NO_TOKEN [켬: 1만]
+#   pipeline.service.trigger.chain_structure_url:  # parse 성공 뒤 structure 작업을 올릴 트리거 서버 URL(쉼표로 여러 개) — 비면 이어 올리지 않음(서버 compose는 http://127.0.0.1:8771을 줌) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=CHAIN_STRUCTURE_URL [서버 옛 값: http://127.0.0.1:8771]
+#   pipeline.service.trigger.client_timeout:  # 트리거 서버 CLI 클라이언트 HTTP 제한 시간(초) · 기본 10.0 · 값: 0 이상 초 · env=TRIGGER_CLIENT_TIMEOUT
+#   pipeline.service.trigger.host:  # 트리거 서버 바인딩 주소 — 비우면 127.0.0.1(모든 인터페이스는 0.0.0.0을 명시 — C-37, 사용자 10-27) · 기본 127.0.0.1 · 값: 호스트 이름·IP · env=TRIGGER_HOST
+#   pipeline.service.trigger.parse_port:  # parse 상주 트리거 서버 포트(--module parse — port 칸이 비었을 때, S7e2: 옛 compose가 TRIGGER_PORT로 넘기던 호스트 칸을 앱 칸으로) · 기본 8770 · 값: 1~65535 · env=TRIGGER_PARSE_PORT
+#   pipeline.service.trigger.port:  # 트리거 서버 포트 — 모듈 칸(parse_port·structure_port)을 따로 주지 않았을 때 두 모듈 모두 이 포트(PC 직접 실행만 — 이미지 안 상주 서버는 이 칸을 쓰지 않고 모듈 칸, VS7e2 R-1) · 기본 없음 · 값: 1~65535 · env=TRIGGER_PORT
+#   pipeline.service.trigger.structure_port:  # structure 상주 트리거 서버 포트(--module structure — port 칸이 비었을 때, S7e2) · 기본 8771 · 값: 1~65535 · env=TRIGGER_STRUCTURE_PORT
+#   pipeline.service.trigger.queue_max:  # 트리거 서버 대기 작업 상한(건) — 넘으면 429 · 기본 100 · 값: 0 이상 정수 · env=TRIGGER_QUEUE_MAX
+#   pipeline.service.trigger.shutdown_timeout_sec:  # SIGTERM 뒤 실행 중 작업을 기다리는 한도(초) · 기본 300.0 · 값: 0 이상 초 · env=TRIGGER_SHUTDOWN_TIMEOUT_SEC
+#   pipeline.service.trigger.socket_timeout_sec:  # 연결당 소켓 read 제한(초) — 느린 클라이언트 차단 · 기본 30 · 값: 0 이상 정수(초) · env=TRIGGER_SOCKET_TIMEOUT_SEC
+#   pipeline.service.trigger.upload_max_mb:  # 트리거 서버 /upload 본문 크기 상한(MB) · 기본 50 · 값: 0 이상 정수 · env=TRIGGER_UPLOAD_MAX_MB
 
 # ─── 2-9. 호스트(compose·systemd·셸이 읽음) (27칸) ───
-#   common.host.doc_src:  # 원본 문서 폴더(DOC_DIR의 옛 별칭) — compose에선 /data/docs로 마운트할 호스트 폴더 · env=DOC_SRC · str [호스트]
-#   common.host.docker:  # 호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등) · env=DOCKER · str · 기본 docker [호스트]
-#   common.host.image_stage_dir:  # prune_old.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값) · env=IMAGE_STAGE_DIR · str [호스트]
-#   common.host.output_root:  # 호스트의 결과(output) 폴더(서버 경로) — compose가 컨테이너 /app/output으로 마운트하는 원본(T-21 — 코드가 읽는 칸은 common.paths.output_root) · env=RAG_OUT · str [호스트]
-#   common.host.patch_code:  # 덧씌우기 코드 폴더(호스트) — compose.patch*.yml이 컨테이너 /app/deploy/*로 마운트 · env=PATCH_CODE · str · 기본 /srv/rag/code/live [호스트]
-#   common.host.pg_container:  # 호스트에서 psql을 docker exec할 PostgreSQL(pgvector) 컨테이너 이름 — run_docs.py 문서 수 세기(S7e1 — 옛 코드 고정값) · env=PG_CONTAINER · str [호스트]
-#   common.host.prune_keep:  # prune_old.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값) · env=PRUNE_KEEP · int · 기본 2 [호스트]
-#   pipeline.host.gold_dir:  # 호스트의 사람 정답(gold) 폴더(서버 경로) — run_tool.sh가 컨테이너 /data/gold로 읽기 전용 마운트하는 원본(T-21 — 코드가 읽는 칸은 pipeline.paths.gold_dir) · env=GOLD_DIR · str [호스트]
-#   pipeline.host.index_conf_dir:  # 색인 설정 json 폴더(호스트 경로) — 컨테이너 /app/output/index-conf에 읽기 전용 연결 · env=INDEX_CONF_DIR · str [호스트]
-#   pipeline.host.load_cpus:  # load 컨테이너 CPU 개수 상한(개) · env=LOAD_CPUS · float · 기본 1.0 [호스트]
-#   pipeline.host.load_mem_limit:  # load 컨테이너 메모리·스왑 상한(docker 형식, 예 4g) · env=LOAD_MEM_LIMIT · str · 기본 4g [호스트]
-#   pipeline.host.parse_cpus:  # parse 컨테이너(1회 job·상주 트리거) CPU 개수 상한(개) · env=PARSE_CPUS · float · 기본 3.0 [호스트]
-#   pipeline.host.parse_mem_limit:  # parse 컨테이너 메모리·스왑 상한(docker 형식) · env=PARSE_MEM_LIMIT · str · 기본 16g [호스트]
-#   pipeline.host.publish_cpus:  # publish 컨테이너 CPU 개수 상한(개) · env=PUBLISH_CPUS · float · 기본 1.0 [호스트]
-#   pipeline.host.publish_mem_limit:  # publish 컨테이너 메모리·스왑 상한(docker 형식) · env=PUBLISH_MEM_LIMIT · str · 기본 2g [호스트]
-#   pipeline.host.run_docs_dir:  # 문서별 flow 러너(deploy/host/scripts/run_docs.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) — 비우면 스크립트 옆 test_space/(C-29 ⑨, S7e1) · env=RUN_DOCS_DIR · str [호스트]
-#   pipeline.host.structure_cpus:  # structure 컨테이너(job·상주 트리거·색인) CPU 개수 상한(개) · env=STRUCTURE_CPUS · float · 기본 2.0 [호스트]
-#   pipeline.host.structure_mem_limit:  # structure 컨테이너 메모리·스왑 상한(docker 형식) · env=STRUCTURE_MEM_LIMIT · str · 기본 8g [호스트]
-#   pipeline.host.nightly.enabled:  # 새벽 배치 타이머 켬/끔 — 1이면 실행, 그 외엔 로그 1줄 남기고 종료 · env=NIGHTLY_ENABLED · bool · 기본 false [호스트]
-#   pipeline.host.nightly.max_new:  # 새벽 배치 parse가 밤당 처음 파싱할 문서 수 상한(건) · env=NIGHTLY_MAX_NEW · int · 기본 2000 [호스트]
-#   pipeline.host.nightly.modules:  # 새벽 배치가 차례로 돌릴 모듈(공백 구분 목록 — trigger.sh 기본) · env=NIGHTLY_MODULES · 목록(공백 또는 YAML 목록) · 기본 parse publish structure load [호스트]
-#   pipeline.host.nightly.publish:  # 새벽 배치에서 publish 단계 실행 여부 — 1이면 실행 · env=NIGHTLY_PUBLISH · bool · 기본 true [호스트]
-#   mcp.host.cpus:  # mcp-server 컨테이너 CPU 한도(compose cpus) · env=MCP_CPUS · float · 기본 1.0 [호스트]
-#   mcp.host.jobs_dir:  # MCP parse_document 업로드 작업 폴더(공유 볼륨) — medium 레인 양보 감지용 · env=MCP_JOBS_DIR · str [호스트]
-#   mcp.host.mem_limit:  # mcp-server 컨테이너 메모리 한도(compose mem_limit) · env=MCP_MEM_LIMIT · str · 기본 4g [호스트]
-#   mcp.host.tool_cpus:  # 검색 도구 실행 컨테이너(run_tool) CPU 한도 · env=RETRIEVAL_TOOL_CPUS · float · 기본 1.0 [호스트]
-#   mcp.host.tool_mem_limit:  # 검색 도구 실행 컨테이너(run_tool) 메모리 한도 · env=RETRIEVAL_TOOL_MEM_LIMIT · str · 기본 2g [호스트]
+#   common.host.doc_src:  # 원본 문서 폴더(DOC_DIR의 옛 별칭) — compose에선 /data/docs로 마운트할 호스트 폴더 · 기본 없음 · 값: 호스트 이름·IP · env=DOC_SRC [호스트]
+#   common.host.docker:  # 호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등) · 기본 docker · 값: docker·podman 중 하나 · env=DOCKER [호스트]
+#   common.host.image_stage_dir:  # prune_old.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값) · 기본 없음 · 값: 경로 · env=IMAGE_STAGE_DIR [호스트]
+#   common.host.output_root:  # 호스트의 결과(output) 폴더(서버 경로) — compose가 컨테이너 /app/output으로 마운트하는 원본(T-21 — 코드가 읽는 칸은 common.paths.output_root) · 기본 없음 · 값: 호스트 이름·IP · env=RAG_OUT [호스트]
+#   common.host.patch_code:  # 덧씌우기 코드 폴더(호스트) — compose.patch*.yml이 컨테이너 /app/deploy/*로 마운트 · 기본 /srv/rag/code/live · 값: 호스트 이름·IP · env=PATCH_CODE [호스트]
+#   common.host.pg_container:  # 호스트에서 psql을 docker exec할 PostgreSQL(pgvector) 컨테이너 이름 — run_docs.py 문서 수 세기(S7e1 — 옛 코드 고정값) · 기본 없음 · 값: 호스트 이름·IP · env=PG_CONTAINER [호스트]
+#   common.host.prune_keep:  # prune_old.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값) · 기본 2 · 값: 0 이상 정수 · env=PRUNE_KEEP [호스트]
+#   pipeline.host.gold_dir:  # 호스트의 사람 정답(gold) 폴더(서버 경로) — run_tool.sh가 컨테이너 /data/gold로 읽기 전용 마운트하는 원본(T-21 — 코드가 읽는 칸은 pipeline.paths.gold_dir) · 기본 없음 · 값: 호스트 이름·IP · env=GOLD_DIR [호스트]
+#   pipeline.host.index_conf_dir:  # 색인 설정 json 폴더(호스트 경로) — 컨테이너 /app/output/index-conf에 읽기 전용 연결 · 기본 없음 · 값: 호스트 이름·IP · env=INDEX_CONF_DIR [호스트]
+#   pipeline.host.load_cpus:  # load 컨테이너 CPU 개수 상한(개) · 기본 1.0 · 값: 0 이상 · env=LOAD_CPUS [호스트]
+#   pipeline.host.load_mem_limit:  # load 컨테이너 메모리·스왑 상한(docker 형식, 예 4g) · 기본 4g · 값: 글자 · env=LOAD_MEM_LIMIT [호스트]
+#   pipeline.host.parse_cpus:  # parse 컨테이너(1회 job·상주 트리거) CPU 개수 상한(개) · 기본 3.0 · 값: 0 이상 · env=PARSE_CPUS [호스트]
+#   pipeline.host.parse_mem_limit:  # parse 컨테이너 메모리·스왑 상한(docker 형식) · 기본 16g · 값: 글자 · env=PARSE_MEM_LIMIT [호스트]
+#   pipeline.host.publish_cpus:  # publish 컨테이너 CPU 개수 상한(개) · 기본 1.0 · 값: 0 이상 · env=PUBLISH_CPUS [호스트]
+#   pipeline.host.publish_mem_limit:  # publish 컨테이너 메모리·스왑 상한(docker 형식) · 기본 2g · 값: 글자 · env=PUBLISH_MEM_LIMIT [호스트]
+#   pipeline.host.run_docs_dir:  # 문서별 flow 러너(deploy/host/scripts/run_docs.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) — 비우면 스크립트 옆 test_space/(C-29 ⑨, S7e1) · 기본 없음 · 값: 호스트 이름·IP · env=RUN_DOCS_DIR [호스트]
+#   pipeline.host.structure_cpus:  # structure 컨테이너(job·상주 트리거·색인) CPU 개수 상한(개) · 기본 2.0 · 값: 0 이상 · env=STRUCTURE_CPUS [호스트]
+#   pipeline.host.structure_mem_limit:  # structure 컨테이너 메모리·스왑 상한(docker 형식) · 기본 8g · 값: 글자 · env=STRUCTURE_MEM_LIMIT [호스트]
+#   pipeline.host.nightly.enabled:  # 새벽 배치 타이머 켬/끔 — 1이면 실행, 그 외엔 로그 1줄 남기고 종료 · 기본 false · 값: true·false · env=NIGHTLY_ENABLED [호스트]
+#   pipeline.host.nightly.max_new:  # 새벽 배치 parse가 밤당 처음 파싱할 문서 수 상한(건) · 기본 2000 · 값: 0 이상 정수 · env=NIGHTLY_MAX_NEW [호스트]
+#   pipeline.host.nightly.modules:  # 새벽 배치가 차례로 돌릴 모듈(공백 구분 목록 — trigger.sh 기본) · 기본 parse publish structure load · 값: 쉼표 목록 또는 YAML 목록 · env=NIGHTLY_MODULES [호스트]
+#   pipeline.host.nightly.publish:  # 새벽 배치에서 publish 단계 실행 여부 — 1이면 실행 · 기본 true · 값: true·false · env=NIGHTLY_PUBLISH [호스트]
+#   mcp.host.cpus:  # mcp-server 컨테이너 CPU 한도(compose cpus) · 기본 1.0 · 값: 0 이상 · env=MCP_CPUS [호스트]
+#   mcp.host.jobs_dir:  # MCP parse_document 업로드 작업 폴더(공유 볼륨) — medium 레인 양보 감지용 · 기본 없음 · 값: 경로 · env=MCP_JOBS_DIR [호스트]
+#   mcp.host.mem_limit:  # mcp-server 컨테이너 메모리 한도(compose mem_limit) · 기본 4g · 값: 글자 · env=MCP_MEM_LIMIT [호스트]
+#   mcp.host.tool_cpus:  # 검색 도구 실행 컨테이너(run_tool) CPU 한도 · 기본 1.0 · 값: 0 이상 · env=RETRIEVAL_TOOL_CPUS [호스트]
+#   mcp.host.tool_mem_limit:  # 검색 도구 실행 컨테이너(run_tool) 메모리 한도 · 기본 2g · 값: 글자 · env=RETRIEVAL_TOOL_MEM_LIMIT [호스트]
 
 # ─── 2-10. e2e·시험·평가(PC 전용) (49칸) ───
-#   common.dev.exp_store:  # PC 평가(stack_matrix) 결과 저장소 폴더 · env=EXP_STORE · str
-#   common.dev.llm_est_in_tokens:  # stack_matrix 비용 추정에서 질문당 입력 토큰 가정 · env=LLM_EST_IN_TOKENS · int · 기본 1500
-#   common.dev.llm_est_out_tokens:  # stack_matrix 비용 추정에서 질문당 출력 토큰 가정 · env=LLM_EST_OUT_TOKENS · int [서버 옛 값: 1200]
-#   common.dev.llm_fake:  # 1이면 LLM 호출을 네트워크·캐시 없는 모의 응답으로 대체(시험·비용 추정용) · env=LLM_FAKE · bool · 기본 false [켬: 1만]
-#   common.dev.min_gold_coverage:  # stack_matrix에서 정답 문서 포함률이 이 값 이상이어야 valid · env=MIN_GOLD_COVERAGE · float · 기본 0.95
-#   common.dev.docker.mcp_publish_port:  # 시험 compose에서 MCP를 호스트에 게시할 포트 · env=MCP_PUBLISH_PORT · int(포트 — 정수만) · 기본 18765
-#   common.dev.docker.minio_image:  # 시험용 minio 이미지 · env=MINIO_IMAGE · str · 기본 bitnamilegacy/minio:latest
-#   common.dev.docker.minio_publish_port:  # 시험 minio를 호스트에 게시할 포트 · env=MINIO_PUBLISH_PORT · int(포트 — 정수만) · 기본 19000
-#   common.dev.docker.pg_bind:  # 시험 PostgreSQL 컨테이너를 호스트에 게시할 바인드 주소 · env=PG_BIND · str · 기본 127.0.0.1
-#   common.dev.docker.pg_effective_cache:  # 시험 PG effective_cache_size · env=PG_EFFECTIVE_CACHE · str · 기본 12GB
-#   common.dev.docker.pg_image:  # 시험 PostgreSQL(pgvector) 이미지 · env=PG_IMAGE · str · 기본 pgvector/pgvector:pg16
-#   common.dev.docker.pg_maint_mem:  # 시험 PG maintenance_work_mem(HNSW 생성) · env=PG_MAINT_MEM · str · 기본 2GB
-#   common.dev.docker.pg_max_conn:  # 시험 PG max_connections · env=PG_MAX_CONN · int · 기본 50
-#   common.dev.docker.pg_mem_limit:  # 시험 PG 컨테이너 메모리 상한 · env=PG_MEM_LIMIT · str
-#   common.dev.docker.pg_parallel:  # 시험 PG 병렬 작업자 수(maintenance·gather 둘 다) · env=PG_PARALLEL · int · 기본 2
-#   common.dev.docker.pg_shared_buffers:  # 시험 PG shared_buffers · env=PG_SHARED_BUFFERS · str · 기본 4GB
-#   common.dev.docker.pg_shm:  # 시험 PG 컨테이너 공유 메모리(shm_size) · env=PG_SHM · str · 기본 3g
-#   common.dev.docker.pg_work_mem:  # 시험 PG work_mem · env=PG_WORK_MEM · str · 기본 64MB
-#   common.dev.docker.postgres_db:  # PG 컨테이너 안에서 healthcheck가 쓰는 DB 이름(compose가 PG_DB로 채움) · env=POSTGRES_DB · str · 기본 rag
-#   common.dev.docker.postgres_user:  # PG 컨테이너 안에서 healthcheck가 쓰는 계정(compose가 PG_USER로 채움) · env=POSTGRES_USER · str · 기본 rag
-#   common.dev.docker.smoke_settings:  # 스모크 시험 컨테이너가 붙여 읽는 설정 파일(settings.yaml) 경로 — MCP 토큰·임베딩·Object Storage 키 등(S7e1 — 옛 SMOKE_ENV env 파일) · env=SMOKE_SETTINGS · str
-#   common.dev.docker.smoke_keep:  # 1이면 시험 끝나도 pg·minio 컨테이너를 남김 · env=SMOKE_KEEP · bool · 기본 false
-#   common.dev.docker.smoke_limit:  # 시험에서 파싱할 문서 수 상한(0이면 제한 없음) · env=SMOKE_LIMIT · int · 기본 0
-#   common.dev.docker.smoke_mode:  # 시험 파싱 모드(prod|test — test는 형식별 표본) · env=SMOKE_MODE · str · 기본 prod
-#   common.dev.docker.smoke_nightly:  # 1이면 자정 배치 모양(parse·publish만, pg·구조화·적재·MCP 생략) · env=SMOKE_NIGHTLY · bool · 기본 false
-#   common.dev.docker.smoke_pg_password:  # 시험 PostgreSQL 비밀번호(compose.test.yml이 컨테이너 PG_PASSWORD로 넘김 — S7e1) · env=SMOKE_PG_PASSWORD · SecretStr [비밀]
-#   common.dev.docker.smoke_pm_bucket:  # 시험 결과 게시용 minio 버킷 이름 · env=SMOKE_PM_BUCKET · str · 기본 rag-publish
-#   common.dev.docker.smoke_source:  # 시험 원천 위치(/data/docs 또는 s3://버킷/접두) · env=SMOKE_SOURCE · str · 기본 /data/docs
-#   pipeline.connections.graphiti.neo4j_password:  # Graphiti용 Neo4j 접속 비밀번호 · env=GRAPHITI_NEO4J_PASSWORD · SecretStr [비밀]
-#   pipeline.connections.graphiti.neo4j_user:  # Graphiti용 Neo4j 접속 사용자 이름 · env=GRAPHITI_NEO4J_USER · str · 기본 neo4j [빈 글자 유지]
-#   pipeline.dev.allow_common_mismatch:  # 앞 모듈 결과의 공통 코드 지문이 달라도 계속 진행할지(=1 계속 / 그 외 중단) · env=ALLOW_COMMON_MISMATCH · bool · 기본 false [켬: 1만]
-#   pipeline.dev.check_env_any_py:  # check_env가 시스템 python에서도 멈추지 않고 계속할지(=1 계속 / 그 외 중단) · env=CHECK_ENV_ANY_PY · bool · 기본 false [켬: 1만]
-#   pipeline.dev.parallel_test_crash:  # 시험용 — =1이면 문서 병렬 파싱의 첫 문서에서 강제 종료(os._exit 17) · env=PARSE_PARALLEL_TEST_CRASH · bool · 기본 false [켬: 1만]
-#   pipeline.dev.stream_test_crash:  # 시험용 — =1이면 스트리밍 파싱의 첫 묶음에서 강제 종료(os._exit 17) · env=PARSE_STREAM_TEST_CRASH · bool · 기본 false [켬: 1만]
-#   pipeline.dev.test_min_docs:  # 시험 모드(--mode test)에서 표본 추출을 시작하는 최소 문서 수(개) · env=TEST_MIN_DOCS · int · 기본 50
-#   pipeline.dev.test_per_type:  # 시험 모드 표본에서 확장자별로 고르는 문서 수(개) · env=TEST_PER_TYPE · int · 기본 5
-#   pipeline.eval.diagram_raster_vlm:  # 도식 간선 채점에서 raster 케이스에 실제 VLM을 부를지(=1 실호출 / 그 외 가짜) · env=DIAGRAM_RASTER_VLM · bool · 기본 false [켬: 1만]
-#   pipeline.eval.e2e_qa_set:  # e2e 시험 질문 묶음 이름(valid_env/unstructured/<이름>/qa.json) · env=E2E_QA_SET · str
-#   pipeline.eval.e2e_questions:  # e2e 질문 파일 경로(또는 auto = 그 자리에서 생성) · env=E2E_QUESTIONS · str
-#   pipeline.eval.gold_draft_max_pages:  # 정답 초안 생성(gold_draft)에서 문서당 처리할 쪽 수 상한(쪽) · env=GOLD_DRAFT_MAX_PAGES · int · 기본 30
-#   pipeline.eval.gold_draft_mermaid_check:  # 정답 초안의 Mermaid 블록 2차 점검을 켤지(0/false/no면 끔) · env=GOLD_DRAFT_MERMAID_CHECK · bool · 기본 true [끔: 0·false·no]
-#   pipeline.eval.phase_report_legacy:  # 옛 PHASE_REPORT.md·phase 보고서 자동 생성을 되살릴지(=1 생성 / 0 끔) · env=PHASE_REPORT_LEGACY · bool · 기본 false [켬: 1만]
-#   pipeline.eval.qa_draft_max_pages:  # 질문 초안 생성(qa_draft)에서 문서당 처리할 쪽 수 상한(쪽) · env=QA_DRAFT_MAX_PAGES · int · 기본 20
-#   pipeline.eval.qa_draft_per_page:  # 질문 초안 생성에서 쪽당 질문 수 상한(개) · env=QA_DRAFT_PER_PAGE · int · 기본 5
-#   pipeline.eval.review_max_rounds:  # 도식 검토 루프의 최대 재추출 횟수(회) · env=REVIEW_MAX_ROUNDS · int · 기본 2
-#   pipeline.eval.score_table_judge:  # 표 구조 채점의 경계 표 판정자(0 없음 | llm 경계 표만 LLM 판정) · env=SCORE_TABLE_JUDGE · str · 기본 0
-#   mcp.dev.eval_s_parts:  # 검색 평가가 고를 S 묶음 설정(JSON, 예 {'chunk_size':256}) · env=EVAL_S_PARTS · JSON(사전·목록)
-#   mcp.dev.mcp_url:  # 검증 페이지가 붙을 MCP 서버 URL · env=MCP_URL · str · 기본 http://127.0.0.1:18765/mcp [빈 글자 유지]
-#   mcp.dev.ui_port:  # 검증 페이지(validation/search_ui) 서버 포트 · env=UI_PORT · int(포트 — 정수만) · 기본 8790
+#   common.dev.exp_store:  # PC 평가(stack_matrix) 결과 저장소 폴더 · 기본 없음 · 값: 경로 · env=EXP_STORE
+#   common.dev.llm_est_in_tokens:  # stack_matrix 비용 추정에서 질문당 입력 토큰 가정 · 기본 1500 · 값: 0 이상 정수 · env=LLM_EST_IN_TOKENS
+#   common.dev.llm_est_out_tokens:  # stack_matrix 비용 추정에서 질문당 출력 토큰 가정 · 기본 없음 · 값: 0 이상 정수 · env=LLM_EST_OUT_TOKENS [서버 옛 값: 1200]
+#   common.dev.llm_fake:  # 1이면 LLM 호출을 네트워크·캐시 없는 모의 응답으로 대체(시험·비용 추정용) · 기본 false · 값: true·false · env=LLM_FAKE [켬: 1만]
+#   common.dev.min_gold_coverage:  # stack_matrix에서 정답 문서 포함률이 이 값 이상이어야 valid · 기본 0.95 · 값: 0 이상 · env=MIN_GOLD_COVERAGE
+#   common.dev.docker.mcp_publish_port:  # 시험 compose에서 MCP를 호스트에 게시할 포트 · 기본 18765 · 값: 1~65535 · env=MCP_PUBLISH_PORT
+#   common.dev.docker.minio_image:  # 시험용 minio 이미지 · 기본 bitnamilegacy/minio:latest · 값: 글자 · env=MINIO_IMAGE
+#   common.dev.docker.minio_publish_port:  # 시험 minio를 호스트에 게시할 포트 · 기본 19000 · 값: 1~65535 · env=MINIO_PUBLISH_PORT
+#   common.dev.docker.pg_bind:  # 시험 PostgreSQL 컨테이너를 호스트에 게시할 바인드 주소 · 기본 127.0.0.1 · 값: 호스트 이름·IP · env=PG_BIND
+#   common.dev.docker.pg_effective_cache:  # 시험 PG effective_cache_size · 기본 12GB · 값: 경로 · env=PG_EFFECTIVE_CACHE
+#   common.dev.docker.pg_image:  # 시험 PostgreSQL(pgvector) 이미지 · 기본 pgvector/pgvector:pg16 · 값: 글자 · env=PG_IMAGE
+#   common.dev.docker.pg_maint_mem:  # 시험 PG maintenance_work_mem(HNSW 생성) · 기본 2GB · 값: 글자 · env=PG_MAINT_MEM
+#   common.dev.docker.pg_max_conn:  # 시험 PG max_connections · 기본 50 · 값: 0 이상 정수 · env=PG_MAX_CONN
+#   common.dev.docker.pg_mem_limit:  # 시험 PG 컨테이너 메모리 상한 · 기본 없음 · 값: 글자 · env=PG_MEM_LIMIT
+#   common.dev.docker.pg_parallel:  # 시험 PG 병렬 작업자 수(maintenance·gather 둘 다) · 기본 2 · 값: 0 이상 정수 · env=PG_PARALLEL
+#   common.dev.docker.pg_shared_buffers:  # 시험 PG shared_buffers · 기본 4GB · 값: 글자 · env=PG_SHARED_BUFFERS
+#   common.dev.docker.pg_shm:  # 시험 PG 컨테이너 공유 메모리(shm_size) · 기본 3g · 값: 글자 · env=PG_SHM
+#   common.dev.docker.pg_work_mem:  # 시험 PG work_mem · 기본 64MB · 값: 글자 · env=PG_WORK_MEM
+#   common.dev.docker.postgres_db:  # PG 컨테이너 안에서 healthcheck가 쓰는 DB 이름(compose가 PG_DB로 채움) · 기본 rag · 값: 경로 · env=POSTGRES_DB
+#   common.dev.docker.postgres_user:  # PG 컨테이너 안에서 healthcheck가 쓰는 계정(compose가 PG_USER로 채움) · 기본 rag · 값: 글자 · env=POSTGRES_USER
+#   common.dev.docker.smoke_settings:  # 스모크 시험 컨테이너가 붙여 읽는 설정 파일(settings.yaml) 경로 — MCP 토큰·임베딩·Object Storage 키 등(S7e1 — 옛 SMOKE_ENV env 파일) · 기본 없음 · 값: 경로 · env=SMOKE_SETTINGS
+#   common.dev.docker.smoke_keep:  # 1이면 시험 끝나도 pg·minio 컨테이너를 남김 · 기본 false · 값: true·false · env=SMOKE_KEEP
+#   common.dev.docker.smoke_limit:  # 시험에서 파싱할 문서 수 상한(0이면 제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음) · env=SMOKE_LIMIT
+#   common.dev.docker.smoke_mode:  # 시험 파싱 모드(prod|test — test는 형식별 표본) · 기본 prod · 값: prod·test 중 하나 · env=SMOKE_MODE
+#   common.dev.docker.smoke_nightly:  # 1이면 자정 배치 모양(parse·publish만, pg·구조화·적재·MCP 생략) · 기본 false · 값: true·false · env=SMOKE_NIGHTLY
+#   common.dev.docker.smoke_pg_password:  # 시험 PostgreSQL 비밀번호(compose.test.yml이 컨테이너 PG_PASSWORD로 넘김 — S7e1) · 값: 비밀 글자 · env=SMOKE_PG_PASSWORD [비밀]
+#   common.dev.docker.smoke_pm_bucket:  # 시험 결과 게시용 minio 버킷 이름 · 기본 rag-publish · 값: 글자 · env=SMOKE_PM_BUCKET
+#   common.dev.docker.smoke_source:  # 시험 원천 위치(/data/docs 또는 s3://버킷/접두) · 기본 /data/docs · 값: 글자 · env=SMOKE_SOURCE
+#   pipeline.connections.graphiti.neo4j_password:  # Graphiti용 Neo4j 접속 비밀번호 · 값: 비밀 글자 · env=GRAPHITI_NEO4J_PASSWORD [비밀]
+#   pipeline.connections.graphiti.neo4j_user:  # Graphiti용 Neo4j 접속 사용자 이름 · 기본 neo4j · 값: 글자 · env=GRAPHITI_NEO4J_USER [빈 글자 유지]
+#   pipeline.dev.allow_common_mismatch:  # 앞 모듈 결과의 공통 코드 지문이 달라도 계속 진행할지(=1 계속 / 그 외 중단) · 기본 false · 값: true·false · env=ALLOW_COMMON_MISMATCH [켬: 1만]
+#   pipeline.dev.check_env_any_py:  # check_env가 시스템 python에서도 멈추지 않고 계속할지(=1 계속 / 그 외 중단) · 기본 false · 값: true·false · env=CHECK_ENV_ANY_PY [켬: 1만]
+#   pipeline.dev.parallel_test_crash:  # 시험용 — =1이면 문서 병렬 파싱의 첫 문서에서 강제 종료(os._exit 17) · 기본 false · 값: true·false · env=PARSE_PARALLEL_TEST_CRASH [켬: 1만]
+#   pipeline.dev.stream_test_crash:  # 시험용 — =1이면 스트리밍 파싱의 첫 묶음에서 강제 종료(os._exit 17) · 기본 false · 값: true·false · env=PARSE_STREAM_TEST_CRASH [켬: 1만]
+#   pipeline.dev.test_min_docs:  # 시험 모드(--mode test)에서 표본 추출을 시작하는 최소 문서 수(개) · 기본 50 · 값: 0 이상 정수 · env=TEST_MIN_DOCS
+#   pipeline.dev.test_per_type:  # 시험 모드 표본에서 확장자별로 고르는 문서 수(개) · 기본 5 · 값: 0 이상 정수 · env=TEST_PER_TYPE
+#   pipeline.eval.diagram_raster_vlm:  # 도식 간선 채점에서 raster 케이스에 실제 VLM을 부를지(=1 실호출 / 그 외 가짜) · 기본 false · 값: true·false · env=DIAGRAM_RASTER_VLM [켬: 1만]
+#   pipeline.eval.e2e_qa_set:  # e2e 시험 질문 묶음 이름(valid_env/unstructured/<이름>/qa.json) · 기본 없음 · 값: 글자 · env=E2E_QA_SET
+#   pipeline.eval.e2e_questions:  # e2e 질문 파일 경로(또는 auto = 그 자리에서 생성) · 기본 없음 · 값: 경로 · env=E2E_QUESTIONS
+#   pipeline.eval.gold_draft_max_pages:  # 정답 초안 생성(gold_draft)에서 문서당 처리할 쪽 수 상한(쪽) · 기본 30 · 값: 0 이상 정수 · env=GOLD_DRAFT_MAX_PAGES
+#   pipeline.eval.gold_draft_mermaid_check:  # 정답 초안의 Mermaid 블록 2차 점검을 켤지(0/false/no면 끔) · 기본 true · 값: true·false · env=GOLD_DRAFT_MERMAID_CHECK [끔: 0·false·no]
+#   pipeline.eval.phase_report_legacy:  # 옛 PHASE_REPORT.md·phase 보고서 자동 생성을 되살릴지(=1 생성 / 0 끔) · 기본 false · 값: true·false · env=PHASE_REPORT_LEGACY [켬: 1만]
+#   pipeline.eval.qa_draft_max_pages:  # 질문 초안 생성(qa_draft)에서 문서당 처리할 쪽 수 상한(쪽) · 기본 20 · 값: 0 이상 정수 · env=QA_DRAFT_MAX_PAGES
+#   pipeline.eval.qa_draft_per_page:  # 질문 초안 생성에서 쪽당 질문 수 상한(개) · 기본 5 · 값: 0 이상 정수 · env=QA_DRAFT_PER_PAGE
+#   pipeline.eval.review_max_rounds:  # 도식 검토 루프의 최대 재추출 횟수(회) · 기본 2 · 값: 0 이상 정수 · env=REVIEW_MAX_ROUNDS
+#   pipeline.eval.score_table_judge:  # 표 구조 채점의 경계 표 판정자(0 없음 | llm 경계 표만 LLM 판정) · 기본 0 · 값: 글자 · env=SCORE_TABLE_JUDGE
+#   mcp.dev.eval_s_parts:  # 검색 평가가 고를 S 묶음 설정(JSON, 예 {'chunk_size':256}) · 기본 없음 · 값: JSON 객체 · env=EVAL_S_PARTS
+#   mcp.dev.mcp_url:  # 검증 페이지가 붙을 MCP 서버 URL · 기본 http://127.0.0.1:18765/mcp · 값: URL · env=MCP_URL [빈 글자 유지]
+#   mcp.dev.ui_port:  # 검증 페이지(validation/search_ui) 서버 포트 · 기본 8790 · 값: 1~65535 · env=UI_PORT
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# 3. 파라미터 — 결과를 바꾸는 값(영역별). 줄 모양·넣는 법은 2와 같다.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+
+# ─── 3-1. 모델 — LLM·VLM·임베딩·재순위·비용 가드 (5칸) ───
+#   common.models.embed.query_prefix:  # 질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …/nQuery: ') · 기본 없음 · 값: 글자 · env=EMBED_QUERY_PREFIX
+#   common.models.llm.extra_body:  # LLM 요청 본문에 합칠 JSON 객체(예: 생각 끄기 {'reasoning':{'enabled':false}}) · 기본 없음 · 값: JSON 객체 · env=LLM_EXTRA_BODY
+#   common.models.ocrvlm.model:  # OCR 전용 VLM 모델 이름(0.9B급 GLM-OCR·PaddleOCR-VL 등) · 기본 없음 · 값: 글자 · env=OCRVLM_MODEL [엔진 지문]
+#   common.models.vlm.extra_body:  # VLM(·OCRVLM) 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기) · 기본 없음 · 값: JSON 객체 · env=VLM_EXTRA_BODY
+#   common.models.vlm.model_alt:  # 그림 검토 판정용 VLM 모델 이름(없으면 VLM_MODEL과 같음) · 기본 없음 · 값: 글자 · env=VLM_MODEL_ALT
+
+# ─── 3-2. extract — 원천·준비·파싱 (15칸) ───
+#   pipeline.extract.engine_scope:  # 문서마다 돌릴 엔진 범위(stack = 형식별 stack.json 목록만 / all = 등록 엔진 전부) · 기본 없음 · 값: stack·all 중 하나 · env=PARSE_ENGINE_SCOPE [서버 옛 값: all]
+#   pipeline.extract.hidden_overlap_max:  # '숨은 글자-그림 겹침' 신호로 쪽 VLM 후보에 올릴 쪽 수 상한(쪽, 0=끔) · 기본 20 · 값: 0 이상 정수 (0 = 끔) · env=PARSE_HIDDEN_OVERLAP_MAX
+#   pipeline.extract.ocr_gt_max:  # 'OCR 글자 수가 글자층의 3배 이상'인 쪽을 쪽 VLM 후보로 올릴 상한(쪽, 0=끔) · 기본 20 · 값: 0 이상 정수 (0 = 끔) · env=PARSE_OCR_GT_MAX
+#   pipeline.extract.phases:  # 돌릴 phase 목록(쉼표, 3r = 성공 엔진이 없는 문서만 phase 3) · 기본 1,2,3r · 값: 쉼표 목록 또는 YAML 목록 · env=PARSE_PHASES
+#   pipeline.extract.rotated_max:  # 쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) — 0이면 rotation.csv를 안 읽음 · 기본 20 · 값: 0 이상 정수 (0 = rotation.csv를 안 읽음) · env=PARSE_ROTATED_MAX
+#   pipeline.extract.table_grid_max_rows:  # 표 grid JSON에 담는 최대 행 수(개) — 넘으면 앞부분만 자르고 truncated 표시 · 기본 2000 · 값: 0 이상 정수 · env=TABLE_GRID_MAX_ROWS [엔진 지문]
+#   pipeline.extract.attach.max_depth:  # 메일 등 첨부 안의 첨부를 따라갈 최대 깊이(단계) · 기본 1 · 값: 0 이상 정수 · env=ATTACH_MAX_DEPTH
+#   pipeline.extract.attach.max_n:  # 문서 하나에서 처리할 첨부 개수 상한(개) · 기본 10 · 값: 0 이상 정수 · env=ATTACH_MAX_N
+#   pipeline.extract.dedup.common_max:  # 중복 검사에서 '흔한 조각'으로 보고 열쇠에서 뺄 공통 문서 수 기준(개) · 기본 없음 · 값: 0 이상 정수 · env=DEDUP_COMMON_MAX
+#   pipeline.extract.ocr.dpi:  # 쪽 이미지 렌더링 해상도(DPI) — OCR·근거 이미지 좌표 환산에 씀 · 기본 200 · 값: 0 이상 정수 · env=OCR_DPI [엔진 지문]
+#   pipeline.extract.ocr.max_pages:  # 문서당 OCR·VLM 쪽 수 상한(쪽, 0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음) · env=OCR_MAX_PAGES [엔진 지문]
+#   pipeline.extract.prepare.ocr:  # 회전 검토용 OCR 엔진 선택: auto|v1|v3(v3=rapidocr 3.x 강제) · 기본 auto · 값: auto·v1·v3 중 하나 · env=PREPARE_OCR [빈 글자 유지]
+#   pipeline.extract.prepare.rotate_lead:  # 빠른 회전 검토에서 기대 각도를 정하는 문서 맨 앞 쪽 수(개) · 기본 3 · 값: 0 이상 정수 · env=PREPARE_ROTATE_LEAD
+#   pipeline.extract.prepare.rotate_probe_fast:  # 빠른 회전 검토의 축소 점검 이미지 크기(px) · 기본 480 · 값: 0 이상 정수 · env=PREPARE_ROTATE_PROBE_FAST
+#   pipeline.extract.prepare.rotate_s0_min:  # 빠른 회전 검토에서 힌트 각도를 믿는 최소 OCR 점수 · 기본 150.0 · 값: 0 이상 · env=PREPARE_ROTATE_S0_MIN
+
+# ─── 3-3. transform — 대표 결과·그림·구조화(청킹·임베딩) (31칸) ───
+#   pipeline.transform.figures.ocr_fallback_min_chars:  # OCR 대체 사용 최소 의미 글자 수(미만이면 로고·워터마크로 보고 버림) · 기본 10 · 값: 0 이상 정수 · env=FIG_OCR_FALLBACK_MIN_CHARS
+#   pipeline.transform.figures.ocrvlm_prompt:  # OCR 전용 소형 VLM 엔진(ocr_vlm)에 보낼 지시문(모델 카드 권장값) · 기본 없음 · 값: 글자 · env=OCRVLM_PROMPT [엔진 지문]
+#   pipeline.transform.figures.pptx_render_max:  # 문서당 렌더·VLM 호출할 슬라이드·도형 쪽 수 상한 · 기본 10 · 값: 0 이상 정수 · env=PARSE_PPTX_RENDER_MAX
+#   pipeline.transform.figures.pptx_shapes_max:  # 연결선 없는 도형 배치 슬라이드 후보 수 상한(0이면 이 사유는 안 봄) · 기본 20 · 값: 0 이상 정수 (0 = 이 사유는 안 봄) · env=PARSE_PPTX_SHAPES_MAX
+#   pipeline.transform.figures.pptx_smartart_max:  # SmartArt 슬라이드 후보 수 상한(0이면 이 사유는 안 봄) · 기본 20 · 값: 0 이상 정수 (0 = 이 사유는 안 봄) · env=PARSE_PPTX_SMARTART_MAX
+#   pipeline.transform.figures.vectors_max:  # 쪽 VLM 후보로 볼 벡터 도형 많은 쪽 수 상한(0이면 이 사유는 안 봄) · 기본 20 · 값: 0 이상 정수 (0 = 이 사유는 안 봄) · env=PARSE_VECTORS_MAX
+#   pipeline.transform.represent.post:  # 후보정 기능 선택: all(전부)|none(끔)|콤마 목록(vlm_page,supsub,charts,figures,context,attachments) — 없으면 자리마다 다름(파이프라인 all · parse MCP 서비스 supsub), 빈 값은 끔(옛 get(X, 'all')의 '' — blank keep) · 쓴 글자 그대로 rep.post.config에 남음(YAML 목록은 쉼표로 이음 — S7c2) · 기본 없음 · 값: all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments) · env=PARSE_POST [빈 글자 유지] [서버 옛 값: all]
+#   pipeline.transform.represent.rep_select:  # 대표 엔진 선택 방식: first(첫 성공 엔진)|acc(정확도만)|그 외 best(정확도+풍부도) · 기본 없음 · 값: first·acc·best 중 하나(그 밖 값 = best) · env=PARSE_REP_SELECT
+#   pipeline.transform.represent.reread.dpi:  # 융합 재판독(P2)용 크롭 재렌더 해상도(dpi) · 기본 400 · 값: 0 이상 정수 · env=FUSE_REREAD_DPI
+#   pipeline.transform.represent.reread.margin:  # 승자와 최선 패자 점수차가 이 값 이하면 '근소'로 보고 재판독 · 기본 1.5 · 값: 0 이상 · env=FUSE_REREAD_MARGIN
+#   pipeline.transform.represent.reread.max:  # 문서당 융합 재판독(P2) 횟수 상한(0이면 재판독 안 함) · 기본 20 · 값: 0 이상 정수 (0 = 재판독 안 함) · env=FUSE_REREAD_MAX
+#   pipeline.transform.represent.reread.p3_img_max:  # 재판독 3단계에서 조각 하나당 다시 볼 그림 상한(가까운 순) · 기본 2 · 값: 0 이상 정수 · env=FUSE_REREAD_P3_IMG_MAX
+#   pipeline.transform.represent.reread.pad_pt:  # 재판독 때 bbox 둘레에 더할 여백(pt) · 기본 40.0 · 값: 0 이상 · env=FUSE_REREAD_PAD_PT
+#   pipeline.transform.represent.reread.vlm_max:  # 문서당 재판독 3단계 VLM 호출 상한(비용 가드) · 기본 5 · 값: 0 이상 정수 · env=FUSE_VLM_MAX
+#   pipeline.transform.represent.reread.vlm_max_tokens:  # 재판독·맥락 판독 VLM 응답 최대 토큰 수 · 기본 400 · 값: 0 이상 정수 · env=FUSE_VLM_MAX_TOKENS
+#   pipeline.transform.structure.chunk_overlap:  # 고정 길이 청커(chunk_fixed512)의 청크 간 겹침 글자 수 · 기본 64 · 값: 0 이상 정수 · env=CHUNK_OVERLAP
+#   pipeline.transform.structure.chunk_size:  # 청크 목표 길이(글자) — 청커별 기본이 다름 · 기본 없음 · 값: 0 이상 정수 · env=CHUNK_SIZE
+#   pipeline.transform.structure.chunk_table:  # 'rows'이면 큰 표를 행 묶음 단위로 쪼갬(그 외 값·미설정은 표를 통째로 둠) · 기본 없음 · 값: rows 또는 비움(표 통째로) · env=CHUNK_TABLE
+#   pipeline.transform.structure.chunk_table_rows:  # 표를 쪼갤 때 청크당 행 수(CHUNK_TABLE=rows일 때만) · 기본 25 · 값: 0 이상 정수 · env=CHUNK_TABLE_ROWS
+#   pipeline.transform.structure.edw_embed:  # build_bundle 임베딩 방식(--embed 기본값) — api 또는 bge-m3 등 · 기본 없음 · 값: api·bge-m3·e5-small·e5-base 중 하나 · env=EDW_EMBED
+#   pipeline.transform.structure.embed:  # 구조화·적재에 쓸 임베딩 방식(api 등, none이면 임베딩 없음 — 이미지 안 기본 api: 옛 Dockerfile ENV, B-2) · 기본 없음 · 값: api·bge-m3·e5-small·e5-base·none 중 하나 · env=PIPE_EMBED
+#   pipeline.transform.structure.page_chunk_max:  # 쪽 청크 최대 글자 수(임베딩 입력 한도 초과 방지) · 기본 없음 · 값: 0 이상 정수 · env=PAGE_CHUNK_MAX
+#   pipeline.transform.structure.wiki_domain_phrase:  # 위키 초안 지시문의 도메인 예시 문구(기본 '바이오 CDMO')를 바꿈 · 기본 바이오 CDMO · 값: 글자 · env=WIKI_DOMAIN_PHRASE
+#   pipeline.transform.vlm.fig_min_px:  # 이 값보다 짧은 변의 그림은 VLM 대상에서 제외(픽셀) · 기본 64 · 값: 0 이상 정수 · env=VLM_FIG_MIN_PX
+#   pipeline.transform.vlm.fig_ocr_max:  # 문서당 그림 crop OCR 횟수 상한(비용 가드) · 기본 8 · 값: 0 이상 정수 · env=VLM_FIG_OCR_MAX
+#   pipeline.transform.vlm.fig_photo_area_min:  # 사진류(photo)로 볼 그림의 최소 면적 비율(쪽 대비) · 기본 0.03 · 값: 0~1 · env=VLM_FIG_PHOTO_AREA_MIN
+#   pipeline.transform.vlm.fig_photo_max_tokens:  # 사진류 그림 VLM 응답 최대 토큰 수(한 줄 요약 유도) · 기본 300 · 값: 0 이상 정수 · env=VLM_FIG_PHOTO_MAX_TOKENS
+#   pipeline.transform.vlm.fig_photo_ocr_max:  # crop OCR 글자 수가 이 값 이하(+면적 충분)이면 사진류로 분류 · 기본 5 · 값: 0 이상 정수 · env=VLM_FIG_PHOTO_OCR_MAX
+#   pipeline.transform.vlm.fig_text_ocr_min:  # crop OCR 글자 수(공백 제외)가 이 값 이상이면 글자 이미지(text_image)로 분류 · 기본 200 · 값: 0 이상 정수 · env=VLM_FIG_TEXT_OCR_MIN
+#   pipeline.transform.vlm.figures_max:  # 문서당 VLM에 보낼 그림 수 상한(0이면 VLM 안 부름) · 기본 20 · 값: 0 이상 정수 (0 = VLM 안 부름) · env=VLM_FIGURES_MAX
+#   pipeline.transform.vlm.page_max:  # 문서당 쪽 VLM으로 읽을 쪽 수 상한(빈 값=전부, 0=쪽 VLM 끔) · 기본 없음 · 값: 0 이상 정수 (0 = 쪽 VLM 끔) · env=VLM_PAGE_MAX
+
+# ─── 3-4. mcp — 검색 서버·검색 동작 (9칸) ───
+#   mcp.search.methods:  # search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서) · 기본 vector,bm25,id · 값: 쉼표 목록 또는 YAML 목록 · env=MCP_METHODS
+#   mcp.search.min_score:  # 근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak · 기본 없음 · 값: 0 이상 · env=SEARCH_MIN_SCORE
+#   mcp.search.ocr_dpi:  # 쪽 이미지 렌더링 해상도(DPI) — OCR·근거 이미지 좌표 환산에 씀 · 기본 200 · 값: 0 이상 정수 · env=OCR_DPI [엔진 지문]
+#   mcp.search.struct_context_max:  # 집계 질문에서 계약 마스터 전체를 표로 넘길 때 계약 수 상한(개) · 기본 200 · 값: 0 이상 정수 · env=STRUCT_CONTEXT_MAX
+#   mcp.search.agg.llm_min:  # 집계 LLM 분류 확신도 하한(0~1) — 미달이면 검색으로 폴백 · 기본 0.6 · 값: 0~1 · env=SEARCH_AGG_LLM_MIN
+#   mcp.search.weights.bm25:  # RRF 융합에서 BM25 가중치 · 기본 1.0 · 값: 0 이상 · env=SEARCH_W_BM25
+#   mcp.search.weights.bm25_table:  # 집계 질문일 때 BM25 가중치(SEARCH_TYPE_WEIGHTS 켠 경우) · 기본 0.2 · 값: 0 이상 · env=SEARCH_W_BM25_TABLE
+#   mcp.search.weights.id:  # RRF 융합에서 ID(드문 식별자) 가중치 · 기본 2.0 · 값: 0 이상 · env=SEARCH_W_ID
+#   mcp.search.weights.vector:  # RRF 융합에서 벡터 가중치 · 기본 1.0 · 값: 0 이상 · env=SEARCH_W_VECTOR
