@@ -137,7 +137,13 @@ def _selftest_evidence_image_fetch():
         # ⑤ 동시 요청 상한(MCP_EVID_MAX_CONCURRENCY=1) — 겹치면 하나만 통과
         _env.enter_context(mc.senv(MCP_EVID_MAX_CONCURRENCY="1"))  # 아래 finally의 _env.close()가 되돌림
         M._EVID_SEM = None
-        OS.client = lambda timeout=None: _FakeOSClient(objs, delay=0.15)
+        holding = threading.Event()  # 첫 요청이 상한 자리를 잡고 원본을 읽는 중(클라이언트는 자리를 잡은 뒤에 만듦) — sleep 경쟁 대신
+
+        def slow_client(timeout=None):
+            holding.set()
+            return _FakeOSClient(objs, delay=0.15)
+
+        OS.client = slow_client
         results = []
 
         def call():
@@ -145,7 +151,7 @@ def _selftest_evidence_image_fetch():
 
         t1, t2 = threading.Thread(target=call), threading.Thread(target=call)
         t1.start()
-        time.sleep(0.03)
+        assert holding.wait(10), "첫 요청이 원본을 읽기 시작하지 않음"
         t2.start()
         t1.join()
         t2.join()

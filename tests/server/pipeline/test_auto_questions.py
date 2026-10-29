@@ -180,3 +180,18 @@ def selftest():
 
 def test_main():  # 옛 `if a.selftest:` 갈래(main() 안)
     selftest()
+
+
+def test_check_truth():  # 10-29 — check_truth의 make_questions import가 맨 이름이라 못 찾던 것(합계·값 유형 대조가 끝까지 도는지)
+    import json
+    import tempfile
+    from pathlib import Path
+
+    from pipeline.eval.auto_questions import check_truth
+
+    truth = {"d1": {"values": [{"value": "100"}], "tables": [[["item", "qty"], ["A", "3"], ["B", "4"]]]}}
+    f = Path(tempfile.mkdtemp()) / "truth.json"
+    f.write_text(json.dumps(truth), encoding="utf-8")
+    qs = {"value": [{"doc": "d1", "answer": "100"}], "sum": [{"doc": "d1", "contract": "C1", "answer": "7"}]}
+    res = check_truth(qs, f)
+    assert res == {"value": (1, 1), "sum": (1, 1)}, res

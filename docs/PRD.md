@@ -27,12 +27,10 @@ Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · p
 | e2-15 | Agent test package path points upstream | todo | [→](prd/e2e.md#e2-15) |
 | e2-16 | Search page fixed document count text | todo | [→](prd/e2e.md#e2-16) |
 | e2-17 | Remaining unused functions (10-29 audit) | todo | [→](prd/e2e.md#e2-17) |
-| rn-01 | Lanes: owner first, per-lane steal list | todo | [→](prd/runner.md#rn-01) |
-| rn-02 | Mid-queue cap + queue depth log | todo | [→](prd/runner.md#rn-02) |
 | do-01 | Move `refactor.md` to `docs/refactoring/` | todo | [→](prd/doc.md#do-01) |
 | do-02 | Glossary in `docs/index.md` | todo | [→](prd/doc.md#do-02) |
 | op-01 | JSON Lines event log | todo | [→](prd/ops.md#op-01) |
 | op-02 | RUN_ENV `local`·`dev`·`prd` (drop `stage`) · LLM_FAKE only in `local` | design done | [→](prd/ops.md#op-02) |
 
-Done: mcp 8 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 9 → [prd/e2e.md](prd/e2e.md)
+Done: mcp 8 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 9 → [prd/e2e.md](prd/e2e.md) · runner 2 → [prd/runner.md](prd/runner.md)
 Code vs requirements — mismatches, code with no requirement, off-by-default features, removed 10-29: [prd/gaps.md](prd/gaps.md)
