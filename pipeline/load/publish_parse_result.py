@@ -26,14 +26,14 @@ unhide`로 되돌릴 수 있음) · changed는 보고만(`output/registry/report
 
 env(전부 PM1 결정 대기 — 사람, docs/operations/server-guide.md 단계 6):
   PM_TABLE(기본 AI.ParsingMeta) · PM_BUCKET(업로드 버킷 — "file://<폴더>"면 로컬 폴더를 가짜 Object Storage로) ·
-  PM_PREFIX(버킷 안 경로 접두, 선택) · PM_DB_HOST·PM_DB_PORT(1433)·PM_DB_DATABASE·PM_DB_USER·PM_DB_PASSWORD
-  (EDW 쓰기 전용 계정 — RDB_* 읽기 계정과 분리) · PM_DB_SQLITE(설정하면 SQLite를 가짜 EDW로, PM_DB_* 안 봄) ·
+  PM_PREFIX(버킷 안 경로 접두, 선택) · common.connections.rdb 쓰기 계정(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_WRITE_USER·RDB_WRITE_PASSWORD
+  — 사용자 10-29 ops.md#op-02) · RDB_SQLITE(설정하면 SQLite를 가짜 EDW로, 접속 칸 안 봄) ·
   OS_ENDPOINT·OS_ACCESS_KEY·OS_SECRET_KEY·OS_REGION·OS_VERIFY_TLS(업로드 접속 — source.py·os_put.py와 같음) ·
   PM_UPLOAD_STATUSES(콤마 목록, 기본 "ok,partial"만 올림) · PM_PARSE_DATE(--parse-date 대신 env로, 선택).
 원본 로컬 보존·즉시 삭제는 이제 modules/parse/source.py(SI39⑧ — 파싱이 끝나면 바로 지움, KEEP_LOCAL_ORIGINALS=1만
 디버그 보존)가 맡는다 — 이 CLI는 원본 삭제를 하지 않는다(올리지도 않으므로, SI37 때와 달리 X2 책임이 없음).
 DDL은 이 코드가 실행하지 않는다(설계 §2 초안 — 사람이 만듦). SQL은 식별자 화이트리스트·값 바인딩(AD44 관례),
-비밀값(PM_DB_PASSWORD 등)은 어떤 모드에서도 출력하지 않는다.
+비밀값(RDB_WRITE_PASSWORD 등)은 어떤 모드에서도 출력하지 않는다.
 """
 
 import argparse

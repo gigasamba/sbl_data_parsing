@@ -5,8 +5,8 @@ post-process — no summarization or calculation happens here.
 
 Security boundary (independent review follows the urgent overlay that adds this file):
  - read-only by construction: exactly one SELECT/WITH statement, no DML/DDL/exec keywords anywhere
-   (see `validate()`), run through a separate low-privilege connection (EDW_QUERY_* env, never the
-   write/load account in common/store/edwdb.py).
+   (see `validate()`), run through the EDW **read** account (common.connections.rdb.read — the search
+   MCP never gets the write account; user 10-29, docs/prd/ops.md#op-02).
  - table allowlist: only `schema.table` names in EDW_QUERY_TABLES (or DEFAULT_TABLES) may appear in a
    FROM/JOIN; system catalogs are always rejected even if somehow listed.
  - limits: row count (EDW_QUERY_MAX_ROWS), wall-clock timeout (EDW_QUERY_TIMEOUT_SEC), response size
@@ -49,7 +49,7 @@ from datetime import time as dt_time
 from decimal import Decimal
 from pathlib import Path
 
-from common.config import settings as C  # 비밀 칸(EDW_QUERY_PASSWORD) 꺼내기(S7d — 설정 객체)
+from common.config import settings as C  # common 칸(connections.rdb — 접속·sqlite 대역)
 from mcp_server import config as mc  # 설정 객체(S7d — 호출마다 cfg())
 from mcp_server.schemas.edw_result import ColumnMeta, QueryResult  # noqa: F401 — S5: 출력 모양은 schemas/로(내용 그대로)
 
@@ -144,41 +144,32 @@ def allowed_tables(kind=None):
 
 
 def _mssql_conf():
-    """EDW_QUERY_* connection settings (mirrors common/store/edwdb.py.conf()'s file+env merge,
-    but under its own prefix so this read-only tool can never pick up the write/load account).
+    """EDW read-account connection args (common.connections.rdb + .read — never the write account).
     Returns None (not SystemExit) when required keys are missing — the caller turns that into a
     clean `not_configured` response instead of crashing the server."""
-    c = {}
-    f = mc.cfg().edw_query.conn_file
-    if f and Path(f).exists():
-        for ln in Path(f).read_text(encoding="utf-8").splitlines():
-            if "=" in ln and not ln.strip().startswith("#"):
-                k, v = ln.split("=", 1)
-                c[k.strip()] = v.strip()
-    for k in ("EDW_QUERY_SERVER", "EDW_QUERY_PORT", "EDW_QUERY_DATABASE", "EDW_QUERY_USER", "EDW_QUERY_PASSWORD"):
-        v = mc.given(k)  # 준 값만 접속 파일 값을 덮음(S7d — 비밀·포트는 글자로)
-        if v is not None:
-            c[k] = str(C.reveal(v))
-    c.setdefault("EDW_QUERY_PORT", "1433")
-    if not (c.get("EDW_QUERY_SERVER") and c.get("EDW_QUERY_DATABASE") and c.get("EDW_QUERY_PASSWORD")):
+    from common.store import mssql
+
+    if not C.cfg().connections.rdb.host:
         return None
-    return c
+    try:
+        kw, miss = mssql.login("read")
+    except ValueError:  # malformed port — same clean not_configured instead of a crash
+        return None
+    return None if miss else kw
 
 
 def backend():
-    """Backend selection order (spec): EDW_QUERY=0 disables outright; then EDW_QUERY_SQLITE; then
-    EDW_QUERY_SERVER/EDW_QUERY_CONN_FILE (pymssql); otherwise not configured.
+    """Backend selection order (spec): EDW_QUERY=0 disables outright; then RDB_SQLITE (the one PC stand-in);
+    then the EDW read account (common.connections.rdb, pymssql); otherwise not configured.
     Returns ("sqlite", path) | ("mssql", conf_dict) | (None, None)."""
     if not enabled():
         return None, None
-    q = mc.cfg().edw_query
-    sqlite_path = q.sqlite
+    sqlite_path = C.cfg().connections.rdb.sqlite
     if sqlite_path:
         return "sqlite", sqlite_path
-    if q.server or q.conn_file:
-        conf = _mssql_conf()
-        if conf is not None:
-            return "mssql", conf
+    conf = _mssql_conf()
+    if conf is not None:
+        return "mssql", conf
     return None, None
 
 
@@ -554,17 +545,8 @@ def _connect_mssql(conf, timeout):
     """S8b(5-4) — SQLAlchemy가 연 DBAPI 연결(접속 인자 그대로). 질의 코드는 SQLite 대역과 같은 DBAPI 커서 꼴이라 그대로(도구 출력 같음)."""
     from common.store import mssql
 
-    mc.checked("EDW_QUERY_PORT")  # 접속 포트 — 형식 틀린 값은 옛 int("…")처럼 여기서 실패(connect_failed로 처리, S7d)
-    return mssql.raw(
-        server=conf["EDW_QUERY_SERVER"],
-        port=int(conf["EDW_QUERY_PORT"]),
-        user=conf.get("EDW_QUERY_USER"),
-        password=conf["EDW_QUERY_PASSWORD"],
-        database=conf["EDW_QUERY_DATABASE"],
-        timeout=timeout,
-        login_timeout=min(timeout, 10),
-        charset="UTF-8",
-    )
+    # conf = mssql.login("read") — 포트 형식은 거기서 이미 검사(_mssql_conf) · 시간 상한·문자셋은 이 도구 값이 이김
+    return mssql.raw(**{**conf, "port": int(conf["port"]), "timeout": timeout, "login_timeout": min(timeout, 10), "charset": "UTF-8"})
 
 
 def _connect(kind, conf, timeout):

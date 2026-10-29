@@ -1244,14 +1244,34 @@ class CommonConnectionsObjectStorage(Section):
 
 
 class CommonConnectionsParsingMeta(Section):
-    connect_kwargs: SecretStr | None = F(None, "PM_DB_CONNECT_KWARGS", "parsing-meta EDW pymssql 연결에 더할 추가 인자(JSON 객체)")
-    database: str | None = F(None, "PM_DB_DATABASE", "parsing-meta EDW 연결 DB 이름")
-    host: str | None = F(None, "PM_DB_HOST", "parsing-meta EDW 서버 주소(호스트)")
-    password: SecretStr | None = F(None, "PM_DB_PASSWORD", "parsing-meta EDW 쓰기 계정 비밀번호")
-    port: Port | None = F(1433, "PM_DB_PORT", "parsing-meta EDW 포트")
-    sqlite: str | None = F(None, "PM_DB_SQLITE", "시험용 가짜 EDW(SQLite) 파일 경로 — 있으면 실제 EDW 대신 씀")
+    REMOVED = frozenset(
+        {"connect_kwargs", "database", "host", "password", "port", "sqlite", "user"}
+    )  # 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-02)
     table: str | None = F("AI.ParsingMeta", "PM_TABLE", "parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_)", blank="keep")
-    user: str | None = F(None, "PM_DB_USER", "parsing-meta EDW 쓰기 계정 이름")
+
+
+class CommonConnectionsRdbRead(Section):
+    password: SecretStr | None = F(None, "RDB_READ_PASSWORD", "EDW 읽기 계정 비밀번호")
+    user: str | None = F(
+        None, "RDB_READ_USER", "EDW 읽기 계정 이름 — 원천 목록·FileStorageMap·ParsingMeta 조회·query_edw(검색 MCP는 이 계정만)"
+    )
+
+
+class CommonConnectionsRdbWrite(Section):
+    password: SecretStr | None = F(None, "RDB_WRITE_PASSWORD", "EDW 쓰기 계정 비밀번호")
+    user: str | None = F(None, "RDB_WRITE_USER", "EDW 쓰기 계정 이름 — ParsingMeta 게시(INSERT·UPDATE)만")
+
+
+class CommonConnectionsRdb(Section):
+    """EDW(SQL Server) 접속 하나 — 서버·DB는 하나, 계정은 읽기·쓰기 둘(사용자 10-29, docs/prd/ops.md#op-02)."""
+
+    connect_kwargs: SecretStr | None = F(None, "RDB_CONNECT_KWARGS", "EDW pymssql 연결에 더할 추가 인자(JSON 객체 — TLS·로그인 시간 등)")
+    database: str | None = F(None, "RDB_DATABASE", "EDW 데이터베이스 이름")
+    host: str | None = F(None, "RDB_HOST", "EDW 서버 주소(호스트)")
+    port: Port | None = F(1433, "RDB_PORT", "EDW 포트")
+    sqlite: str | None = F(None, "RDB_SQLITE", "시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) — 있으면 실제 EDW 대신 씀(PC)")
+    read: CommonConnectionsRdbRead = Field(default_factory=CommonConnectionsRdbRead)
+    write: CommonConnectionsRdbWrite = Field(default_factory=CommonConnectionsRdbWrite)
 
 
 class CommonConnectionsPg(Section):
@@ -1589,6 +1609,7 @@ class CommonConnections(Section):
     object_storage: CommonConnectionsObjectStorage = Field(default_factory=CommonConnectionsObjectStorage)
     parsing_meta: CommonConnectionsParsingMeta = Field(default_factory=CommonConnectionsParsingMeta)
     pg: CommonConnectionsPg = Field(default_factory=CommonConnectionsPg)
+    rdb: CommonConnectionsRdb = Field(default_factory=CommonConnectionsRdb)
 
 
 class CommonModels(Section):

@@ -38,7 +38,7 @@ from pathlib import Path
 d, e = Path(sys.argv[1]), os.environ
 job = {"PG_HOST": "pg", "PG_PORT": "5432", "PG_PASSWORD": e["SMOKE_PG_PASSWORD"], "PARSE_SOURCE": e.get("SMOKE_SOURCE") or "/data/docs",
        "RUN_MODE": e.get("SMOKE_MODE") or "prod", "PARSE_SOURCE_LIMIT": e.get("SMOKE_LIMIT") or "0", "OS_ENDPOINT": "http://minio:9000",
-       "PM_BUCKET": e.get("SMOKE_PM_BUCKET") or "rag-publish", "PM_PREFIX": "smoke", "PM_DB_SQLITE": "/app/output/pm_test/edw.sqlite"}
+       "PM_BUCKET": e.get("SMOKE_PM_BUCKET") or "rag-publish", "PM_PREFIX": "smoke", "RDB_SQLITE": "/app/output/pm_test/edw.sqlite"}
 files = {"job": {"base": "/etc/rag/base.yaml", "overrides": job},
          "load": {"base": "/etc/rag/smoke/job.yaml", "overrides": {"PG_CREATE_EXTENSION": "1"}},
          "mcp": {"base": "/etc/rag/smoke/job.yaml", "overrides": {"MCP_STORE": "pg", "MCP_HOST": "auto", "MCP_PORT": "8765",

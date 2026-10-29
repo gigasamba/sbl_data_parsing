@@ -41,10 +41,10 @@ WARM_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # warm 파일 �
 SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거부
     ("common.run_env", "실행 환경(dev·stage·prd)"),
     ("common.host.output_root", "결과 공유 폴더(RAG_OUT — 컨테이너 /app/output 원본)"),
-    ("common.connections.parsing_meta.host", "EDW(parsing-meta) 서버 — 호스트 조회·publish"),
-    ("common.connections.parsing_meta.database", "EDW(parsing-meta) DB"),
-    ("common.connections.parsing_meta.user", "EDW(parsing-meta) 계정"),
-    ("common.connections.parsing_meta.password", "EDW(parsing-meta) 비밀번호"),
+    ("common.connections.rdb.host", "EDW 서버 — 호스트 조회(읽기 계정, 사용자 10-29 ops.md#op-02)"),
+    ("common.connections.rdb.database", "EDW DB"),
+    ("common.connections.rdb.read.user", "EDW 읽기 계정"),
+    ("common.connections.rdb.read.password", "EDW 읽기 계정 비밀번호"),
     ("common.connections.object_storage.endpoint", "Object Storage 주소 — publish·warm(컨테이너)"),
     ("common.connections.object_storage.region", "Object Storage 리전(컨테이너)"),
     ("common.connections.object_storage.access_key", "Object Storage 키(컨테이너)"),
@@ -113,12 +113,12 @@ def configure(settings_file=None):
     PATCH_CODE = Path(_yget(doc, "common.host.patch_code") or "/srv/rag/code/live")
     jobs = _yget(doc, "mcp.host.jobs_dir")
     MCP_JOBS_DIR = Path(jobs) if jobs else DOCSPACE / "mcp_parse" / "jobs"
-    pm = _yget(doc, "common.connections.parsing_meta")
+    rdb = _yget(doc, "common.connections.rdb")  # 조회만 — 읽기 계정(사용자 10-29 ops.md#op-02)
     try:
-        port = int(pm.get("port") or 1433)
+        port = int(rdb.get("port") or 1433)
     except ValueError:
-        return ["common.connections.parsing_meta.port 형식 오류 — 정수만(값은 안 찍음)"]
-    _EDW.update(host=pm["host"], port=port, database=pm["database"], user=pm["user"], password=pm["password"])
+        return ["common.connections.rdb.port 형식 오류 — 정수만(값은 안 찍음)"]
+    _EDW.update(host=rdb["host"], port=port, database=rdb["database"], user=rdb["read"]["user"], password=rdb["read"]["password"])
     WARM_BUCKET = _yget(doc, "pipeline.connections.rdb.bucket")
     PG_CONTAINER = _yget(doc, "common.host.pg_container")
     PG_USER, PG_DB = _yget(doc, "common.connections.pg.user"), _yget(doc, "common.connections.pg.db")

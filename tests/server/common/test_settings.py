@@ -140,7 +140,7 @@ def selftest():
         y.write_text(
             "common:\n  run_env: local\n  connections:\n"
             "    object_storage:\n      verify_tls: 1\n      region: yes\n    pg:\n      password: 1234\n      db: True\n      host: no\n"
-            "    parsing_meta:\n      sqlite: 2026-10-27\n"
+            "    rdb:\n      sqlite: 2026-10-27\n"
             "  models:\n    embed:\n      allow_external: true\n    vlm:\n      allow_external: '1'\n"
             "    guard:\n      internal_host_suffixes: [corp, 10]\n"
             "      internal_ip_ranges: 10\n"
@@ -156,7 +156,7 @@ def selftest():
         )
         check(
             "YAML 스칼라(R-3): 비밀 칸 숫자 1234 → 글자 '1234' · 날짜 2026-10-27 → 글자 그대로",
-            c.pg.password.get_secret_value() == "1234" and c.parsing_meta.sqlite == "2026-10-27",
+            c.pg.password.get_secret_value() == "1234" and c.rdb.sqlite == "2026-10-27",
         )
         check(
             "목록 칸에 스칼라 하나(internal_ip_ranges: 10) → ['10'](옛 env 한 값과 같게)",
@@ -628,7 +628,7 @@ def selftest():
         # U-a(사용자 10-27) — 영구 다리는 이미지마다 common + 자기 앱 절의 엔진·인계 칸만(RAG_MODULE), 관계없는 앱 절은 내지도 검증하지도 않음
         ua = d / "ua.yaml"
         ua.write_text(
-            "common:\n  paths:\n    glossary_dir: /g\npipeline:\n  extract:\n    ocr:\n      dpi: 150\n  connections:\n    rdb:\n      password: dummy-ua\n"
+            "common:\n  paths:\n    glossary_dir: /g\npipeline:\n  extract:\n    ocr:\n      dpi: 150\n  connections:\n    secure_doc:\n      password: dummy-ua\n"
             "mcp:\n  search:\n    weights:\n      id: 7\n",
             encoding="utf-8",
         )
@@ -640,7 +640,11 @@ def selftest():
             env_e = {"SETTINGS_FILE": str(f), "RAG_MODULE": mod, "RUN_ENV": "dev"}
             try:
                 pin_env(env_e)
-                seen[(mod, f.name)] = (env_e.get("GLOSSARY_DIR"), env_e.get("OCR_DPI"), "RDB_PASSWORD" in env_e or "SEARCH_W_ID" in env_e)
+                seen[(mod, f.name)] = (
+                    env_e.get("GLOSSARY_DIR"),
+                    env_e.get("OCR_DPI"),
+                    "SECURE_DOC_PASSWORD" in env_e or "SEARCH_W_ID" in env_e,
+                )
             except SettingsError:
                 seen[(mod, f.name)] = "거부"
         ocr = "150" if has_p else None

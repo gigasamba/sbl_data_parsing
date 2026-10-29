@@ -15,7 +15,7 @@ from mcp_server.services.search.server_state import _STATE
 def _pm_db():
     """OP21(S78) — EDW `AI.ParsingMeta` 읽기 연결(common/parsing_meta_db.make_db() — modules/load/parsing_meta.py와
     공용, cli/check_modules.py 경계① 때문에 modules/search는 modules/load를 직접 import 못 해 common/에서 가져옴).
-    연결 정보 없음(PM_DB_* 미설정·PM_DB_SQLITE 없음)이거나 접속 실패면 None — 그 뒤로 이 프로세스에서 다시
+    연결 정보 없음(common.connections.rdb 읽기 계정·sqlite 둘 다 없음)이거나 접속 실패면 None — 그 뒤로 이 프로세스에서 다시
     시도하지 않음(근거의 '파싱 결과 경로' 칸이 조용히 빠짐, MCP는 계속 동작). MCP_EVIDENCE_PATHS=0이면 시도
     자체를 안 함(기본 켬)."""
     if not mc.cfg().output.evidence_paths:
@@ -26,7 +26,7 @@ def _pm_db():
     try:
         from common.store import parsing_meta_db as PM
 
-        _STATE["_pm_db"] = PM.make_db()
+        _STATE["_pm_db"] = PM.make_db("read")  # 검색 MCP는 읽기 계정만(사용자 10-29 — ops.md#op-02)
     except (Exception, SystemExit) as e:  # make_db()는 접속 정보 없으면 SystemExit — 기능 꺼짐으로만 처리
         print(f"[mcp] AI.ParsingMeta 연결 없음(근거의 '파싱 결과 경로' 칸은 빠짐) — {e}", flush=True)
         _STATE["_pm_db"] = None

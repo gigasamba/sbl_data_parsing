@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pipeline.extract.source as M
+from common.config.settings import COMMON
 from common.core.contract import jl
 from pipeline import config as pc
 from pipeline.extract.source import (
@@ -428,8 +429,8 @@ def _selftest_mssql():
     mssql.clear()
     env = contextlib.ExitStack()
     env.enter_context(
-        pc.PIPE.env(RDB_HOST="h", RDB_USER="u", RDB_PASSWORD="p", RDB_DATABASE="d")
-    )  # S7c — 설정 객체 덮어쓰기(os.environ은 안 바뀜)
+        COMMON.env(RDB_HOST="h", RDB_READ_USER="u", RDB_READ_PASSWORD="p", RDB_DATABASE="d")
+    )  # 설정 객체 덮어쓰기(os.environ은 안 바뀜) — 원천 읽기는 읽기 계정(ops.md#op-02)
     try:
         cols = _rdb_cols()
         rows = _mssql_rows("AI.FileStorageMap", cols, None, None, "id", None)

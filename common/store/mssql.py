@@ -56,3 +56,33 @@ def rows(conn, sql, params=()):
 def clear():
     """엔진 캐시 비움(시험)."""
     _ENGINES.clear()
+
+
+def login(role, extra=True):
+    """EDW 접속 인자(pymssql.connect 그대로)와 빠진 칸 이름 목록 — common.connections.rdb의 서버·DB + role 계정
+    ("read" | "write" — 사용자 10-29, docs/prd/ops.md#op-02). extra=False면 connect_kwargs를 안 넘김(gen_roster 옛 동작).
+    형식 틀린 포트는 연결 전에 실패(checked — 1433으로 조용히 붙지 않게). 값은 출력하지 않는다."""
+    import json
+
+    from common.config.settings import cfg, checked, reveal
+
+    c = cfg().connections.rdb
+    acct = c.read if role == "read" else c.write
+    checked("RDB_PORT")
+    kw = {
+        "server": c.host,
+        "port": str(c.port),  # 포트는 옛처럼 글자로(pymssql)
+        "user": acct.user,
+        "password": reveal(acct.password),
+        "database": c.database,
+    }
+    names = {
+        "server": "RDB_HOST",
+        "database": "RDB_DATABASE",
+        "user": f"RDB_{role.upper()}_USER",
+        "password": f"RDB_{role.upper()}_PASSWORD",
+    }
+    miss = [names[k] for k in names if not kw[k]]
+    if extra:
+        kw.update(json.loads(reveal(c.connect_kwargs) or "{}"))
+    return kw, miss

@@ -66,17 +66,16 @@ class PipelineConnectionsGraphiti(Section):
 
 
 class PipelineConnectionsRdb(Section):
+    REMOVED = frozenset(
+        {"connect_kwargs", "database", "host", "password", "port", "user"}
+    )  # 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-02)
     bucket: str | None = F(None, "RDB_BUCKET", "RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값)")
     company: CsvList | None = F([], "RDB_COMPANY", "RDB에서 가져올 회사 ID 필터(쉼표 목록, 비우면 필터 없음)")
-    connect_kwargs: SecretStr | None = F(None, "RDB_CONNECT_KWARGS", "RDB(mssql) 접속 시 pymssql.connect에 추가로 넘길 인자(JSON 객체)")
-    database: str | None = F(None, "RDB_DATABASE", "RDB(mssql) 데이터베이스 이름")
     doc_type: CsvList | None = F([], "RDB_DOC_TYPE", "RDB에서 가져올 문서 유형 필터(쉼표 목록, 비우면 필터 없음)")
-    engine: str | None = F("mssql", "RDB_ENGINE", "RDB 종류(mssql | pg)", blank="keep")
-    host: str | None = F(None, "RDB_HOST", "RDB(mssql) 서버 주소")
+    engine: str | None = F(
+        "mssql", "RDB_ENGINE", "RDB 종류(mssql | pg) — mssql 접속은 common.connections.rdb(읽기 계정 · PC 시험은 그 sqlite)", blank="keep"
+    )
     increment_col: str | None = F(None, "RDB_INCREMENT_COL", "증분(since) 판정에 쓸 열 이름(updated 열이 없을 때 대체)")
-    password: SecretStr | None = F(None, "RDB_PASSWORD", "RDB(mssql) 접속 비밀번호")
-    port: Port | None = F(1433, "RDB_PORT", "RDB(mssql) 서버 포트")
-    user: str | None = F(None, "RDB_USER", "RDB(mssql) 접속 사용자 이름")
     columns: PipelineConnectionsRdbColumns = Field(default_factory=PipelineConnectionsRdbColumns)
 
 

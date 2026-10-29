@@ -67,7 +67,7 @@ Full switch list with defaults: `settings.sample.yaml` part 2, groups "[기능 �
 | Hard client isolation | `SEARCH_CLIENT_HARD=0`, `SEARCH_CLIENT_STRICT=0` | — | mcp |
 | Newest version first always | `SEARCH_RECENCY=1` (only "latest" questions; `2` = always) | — | mcp |
 | LLM router for borderline aggregation | `SEARCH_AGG_LLM=0` | LLM | mcp |
-| `query_edw` | `EDW_QUERY=1` | `EDW_QUERY_SERVER/USER/PASSWORD` or `EDW_QUERY_SQLITE` | mcp |
+| `query_edw` | `EDW_QUERY=1` | `common.connections.rdb` + read account, or `RDB_SQLITE` | mcp |
 | `edw_meta` | — | dataset at `EDW_META_DIR` (default `/app/config/edw_meta`) | mcp |
 | `parse_document` | `PARSE_MCP_OCR=0` (no OCR), no VLM phase | `mcp_parse_service` running + `PARSE_SERVICE_TOKEN` | mcp |
 | VLM phase 3, figures, page VLM | on | VLM endpoint; soffice (`SOFFICE_BIN`) for slides/shapes | pipeline |
@@ -77,14 +77,14 @@ Full switch list with defaults: `settings.sample.yaml` part 2, groups "[기능 �
 | Split big tables by rows | `CHUNK_TABLE` unset (tables whole) | — | pipeline |
 | LLM summaries | `EDW_SUMMARY_LLM=0` (lead text) | LLM | pipeline |
 | Embeddings | image default `PIPE_EMBED=api` | `EMBED_BASE_URL`, `EMBED_MODEL` | pipeline |
-| Publish to Object Storage + `AI.ParsingMeta` | runs by default in `night`, run_docs and the image `publish` step (all pass `--apply`; `NIGHTLY_PUBLISH=1`) | `PM_BUCKET`, `PM_DB_*` (exits without `PM_BUCKET`) | pipeline |
+| Publish to Object Storage + `AI.ParsingMeta` | runs by default in `night`, run_docs and the image `publish` step (all pass `--apply`; `NIGHTLY_PUBLISH=1`) | `PM_BUCKET`, `common.connections.rdb` write account (exits without `PM_BUCKET`) | pipeline |
 | Nightly schedule | `NIGHTLY_ENABLED=0` | — | pipeline |
 | `--prune`, create `vector` extension | opt-in · `PG_CREATE_EXTENSION=0` | — | pipeline |
 | Trigger server | — | `TRIGGER_TOKEN` (refuses to start without) | pipeline |
 | External (paid) models | `*_ALLOW_EXTERNAL=0`, PC only (`RUN_ENV=local`) | budget caps (`LLM_BUDGET_USD`, `LLM_MAX_CALLS`) | shared |
 | Answer check, stack/model matrices | — | LLM; paid runs need approval | e2e |
 
-Requested 10-29 "EDW and Object Storage load on by default": publish (Object Storage + `AI.ParsingMeta`) already runs by default once `PM_BUCKET`/`PM_DB_*` are set; what is off is the nightly schedule (`NIGHTLY_ENABLED=0`) — not changed yet, needs the user's choice. The EDW vector load was deleted 10-29 (vectors only in pgvector — [ops.md#op-02](ops.md#op-02)).
+Requested 10-29 "EDW and Object Storage load on by default": publish (Object Storage + `AI.ParsingMeta`) already runs by default once `PM_BUCKET` and the EDW write account are set; what is off is the nightly schedule (`NIGHTLY_ENABLED=0`) — not changed yet, needs the user's choice. The EDW vector load was deleted 10-29 (vectors only in pgvector — [ops.md#op-02](ops.md#op-02)).
 
 ## 4. Removed 10-29 (user decision)
 
