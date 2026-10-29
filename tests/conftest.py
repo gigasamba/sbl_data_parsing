@@ -16,12 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 #   판정은 파일 단위(자식 프로세스 하나) — 알려진 FAIL 파일 안의 새 실패도 xfail로 가려진다(옛 모듈 단위 판정·이미지 selftest_gate와 같음, VS9 R-4).
 #   서버 반입 시험은 반입 판정 목록 deploy/release/known_fail.txt를 그대로 읽는다. 일반 시험은 여기(이유와 함께 — 새 줄은 리팩토링 전부터 있던 것만).
 GENERAL_KNOWN_FAIL = {
-    "tests.general.pipeline.test_structured": "find_table_cells(db4, '95%') 단언(S9 옮기기 전부터)",
     "tests.general.pipeline.test_kg_external": "import mock_llm — 저장소에 없는 모듈(S9 옮기기 전부터)",
     "tests.general.pipeline.test_run_combo": "sentence_transformers가 PC venv에 없음(S9 옮기기 전부터)",
-    "tests.general.common.test_structdb": "전용 PG struct의 client_master에 CL-1이 이미 있어 첫 INSERT가 유일 위반 — 시험이 멱등 아님(S9 옮기기 전부터)",
     "tests.general.pipeline.test_pub_registry": "PG에서 문서 대장 upsert(여러 줄 INSERT OR REPLACE)가 번역되지 않음(pre-refactor 서버 코드부터 — refactor.md C-54 ①, 사용자 10-28: 이번 판에서 안 고침)",
-    "tests.general.mcp.test_aggregate": "doc_link_list 단언이 로컬 설정(전용 PG struct)을 봄(S9 옮기기 전부터)",
 }
 
 

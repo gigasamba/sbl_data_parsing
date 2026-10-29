@@ -984,6 +984,8 @@ def connect(a):
 TESTS_ROOT = Path(__file__).resolve().parents[1] / "tests"  # 저장소 루트 tests/ · 이미지 /app/deploy/tests(PYTHONPATH와 같은 뿌리)
 IMAGE_DIRS = {"common": None, "pipeline": "pipeline", "mcp": "mcp"}  # tests/server/<폴더> → 도는 이미지(None = 둘 다)
 _FAKE_LLM_CASES = frozenset({"tests.server.mcp.test_mcp_main"})  # LLM_FAKE를 켜는 사례(질문 분해 — 옛 mcp_server.main 사례)
+# PC에서 개발자 루트 settings.yaml(실 PG)을 그대로 읽어야 판정되는 사례(실 PG에서만 C-54 ① 재현) — 그 밖 PC 사례는 시험 전용 바탕 설정(case_env, 10-29)
+_PC_SETTINGS_CASES = frozenset({"tests.general.pipeline.test_pub_registry"})
 
 
 def server_cases():
@@ -1003,10 +1005,26 @@ def case_env(mod):
     from common.core.paths import child_env
 
     fake = mod in _FAKE_LLM_CASES
-    if fake not in _CASE_ENVS:
+    own = not C.IN_IMAGE and mod not in _PC_SETTINGS_CASES  # PC 시험은 시험 전용 바탕 설정(아래 _case_settings)
+    if (fake, own) not in _CASE_ENVS:
         blank = dict.fromkeys(("LLM_BASE_URL", "VLM_BASE_URL", "OCRVLM_BASE_URL", "EMBED_BASE_URL", "LLM_BUDGET_USD"))
-        _CASE_ENVS[fake] = C.child_env(child_env({"PYTHONUTF8": "1"}), NO_PAID_CALLS="1", LLM_FAKE="1" if fake else None, **blank)
-    return dict(_CASE_ENVS[fake])
+        base = child_env({"PYTHONUTF8": "1"})
+        if own:  # PC — 개발자 루트 settings.yaml(실 PG·모델 키) 대신 시험 전용 최소 설정 위에 덮음(10-29 — 시험 격리)
+            base["SETTINGS_FILE"] = _case_settings()
+        _CASE_ENVS[(fake, own)] = C.child_env(base, NO_PAID_CALLS="1", LLM_FAKE="1" if fake else None, **blank)
+    return dict(_CASE_ENVS[(fake, own)])
+
+
+def _case_settings():
+    """PC 시험 사례의 바탕 설정 파일 — run_env: local만(접속·키 없음 → 정형 저장소는 SQLite, 모델 호출 없음). 한 번 만든다."""
+    if "file" not in _CASE_ENVS:
+        import tempfile
+
+        fd, path = tempfile.mkstemp(prefix="case_settings_", suffix=".yaml")
+        os.write(fd, b"common:\n  run_env: local\n")
+        os.close(fd)
+        _CASE_ENVS["file"] = path
+    return _CASE_ENVS["file"]
 
 
 # 단계 4 도구 16개(S4 — 옛 공용 cli/·evaluation/에서 pipeline/로 옮김). S9 전에는 "공용" 사례였고 mcp 이미지에서는 모듈이 없어 SKIP이었다 —

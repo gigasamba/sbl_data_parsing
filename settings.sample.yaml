@@ -429,7 +429,7 @@ mcp:
 #   pipeline.service.trigger.socket_timeout_sec:  # 연결당 소켓 read 제한(초) — 느린 클라이언트 차단 · 기본 30 · 값: 0 이상 정수(초) · env=TRIGGER_SOCKET_TIMEOUT_SEC
 #   pipeline.service.trigger.upload_max_mb:  # 트리거 서버 /upload 본문 크기 상한(MB) · 기본 50 · 값: 0 이상 정수 · env=TRIGGER_UPLOAD_MAX_MB
 
-# ─── 2-9. 호스트(compose·systemd·셸이 읽음) (27칸) ───
+# ─── 2-9. 호스트(compose·systemd·셸이 읽음) (37칸) ───
 #   common.host.doc_src:  # 원본 문서 폴더(DOC_DIR의 옛 별칭) — compose에선 /data/docs로 마운트할 호스트 폴더 · 기본 없음 · 값: 호스트 이름·IP · env=DOC_SRC [호스트]
 #   common.host.docker:  # 호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등) · 기본 docker · 값: docker·podman 중 하나 · env=DOCKER [호스트]
 #   common.host.image_stage_dir:  # prune_old.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값) · 기본 없음 · 값: 경로 · env=IMAGE_STAGE_DIR [호스트]
@@ -452,6 +452,16 @@ mcp:
 #   pipeline.host.nightly.max_new:  # 새벽 배치 parse가 밤당 처음 파싱할 문서 수 상한(건) · 기본 2000 · 값: 0 이상 정수 · env=NIGHTLY_MAX_NEW [호스트]
 #   pipeline.host.nightly.modules:  # 새벽 배치가 차례로 돌릴 모듈(공백 구분 목록 — trigger.sh 기본) · 기본 parse publish structure load · 값: 쉼표 목록 또는 YAML 목록 · env=NIGHTLY_MODULES [호스트]
 #   pipeline.host.nightly.publish:  # 새벽 배치에서 publish 단계 실행 여부 — 1이면 실행 · 기본 true · 값: true·false · env=NIGHTLY_PUBLISH [호스트]
+#   pipeline.host.run_docs.warm:  # 진입 대기열 — 미리 받아 둘 문서 수(진행 중 제외, 명령 인자 --warm이 덮음) · 기본 20 · 값: 0 이상 정수 · env=RUN_DOCS_WARM [호스트]
+#   pipeline.host.run_docs.struct_workers:  # 구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음) · 기본 2 · 값: 0 이상 정수 · env=RUN_DOCS_STRUCT_WORKERS [호스트]
+#   pipeline.host.run_docs.struct_backlog:  # 중간 대기열 상한(파싱 끝·구조화 대기 문서 수) — 비우면 구조화 스레드 × 2, 0이면 상한 없음 · 기본 없음 · 값: 0 이상 정수 (0 = 상한 없음) · env=RUN_DOCS_STRUCT_BACKLOG [호스트]
+#   pipeline.host.run_docs.vlm_cap:  # vlm 레인 문서 동시 파싱 상한(gpu 예산) · 기본 2 · 값: 0 이상 정수 · env=RUN_DOCS_VLM_CAP [호스트]
+#   pipeline.host.run_docs.light_dedicated:  # light 레인 전담 워커 수(light 문서만) · 기본 1 · 값: 0 이상 정수 · env=RUN_DOCS_LIGHT_DEDICATED [호스트]
+#   pipeline.host.run_docs.light_shared:  # light 레인 공유 워커 수(light 먼저, 비면 가장 긴 다른 레인에서 가져옴) · 기본 1 · 값: 0 이상 정수 · env=RUN_DOCS_LIGHT_SHARED [호스트]
+#   pipeline.host.run_docs.medium_dedicated:  # medium 레인 전담 워커 수(MCP 업로드 처리 중에는 쉼) · 기본 1 · 값: 0 이상 정수 · env=RUN_DOCS_MEDIUM_DEDICATED [호스트]
+#   pipeline.host.run_docs.medium_shared:  # medium 레인 공유 워커 수(medium 먼저, 비면 다른 레인) · 기본 1 · 값: 0 이상 정수 · env=RUN_DOCS_MEDIUM_SHARED [호스트]
+#   pipeline.host.run_docs.vlm_dedicated:  # vlm 레인 전담 워커 수(vlm 문서만) · 기본 1 · 값: 0 이상 정수 · env=RUN_DOCS_VLM_DEDICATED [호스트]
+#   pipeline.host.run_docs.vlm_shared:  # vlm 레인 공유 워커 수(vlm 먼저, 비면 다른 레인) · 기본 1 · 값: 0 이상 정수 · env=RUN_DOCS_VLM_SHARED [호스트]
 #   mcp.host.cpus:  # mcp-server 컨테이너 CPU 한도(compose cpus) · 기본 1.0 · 값: 0 이상 · env=MCP_CPUS [호스트]
 #   mcp.host.jobs_dir:  # MCP parse_document 업로드 작업 폴더(공유 볼륨) — medium 레인 양보 감지용 · 기본 없음 · 값: 경로 · env=MCP_JOBS_DIR [호스트]
 #   mcp.host.mem_limit:  # mcp-server 컨테이너 메모리 한도(compose mem_limit) · 기본 4g · 값: 글자 · env=MCP_MEM_LIMIT [호스트]

@@ -66,7 +66,8 @@ Minimize PC evaluation tools, then keep or delete their settings. Why: about 50 
 ## e2-11
 PC general test known failures. Why: 7 general tests fail since before the refactor (C-54 ①, C-58): 3 read the shared dev PG (use temp SQLite/schemas), 2 need missing packages/modules (mark skip or fix), 1 needs EDW, 1 is a `find_table_cells` assertion in `test_structured`.
 - Files: `tests/conftest.py` (`GENERAL_KNOWN_FAIL`), `tests/general/`.
-- Status: todo
+- Progress 10-29 (`feature/test-cleanup`): the 3 shared-dev-PG failures are fixed — PC test subprocesses no longer read the dev root `settings.yaml` (`pipeline/cli.py` `case_env` gives a test-only base `run_env: local`); `test_structured`, `test_structdb`, `test_aggregate` removed from the list. Left: `test_kg_external`, `test_run_combo`, `test_edwdb`, and `test_pub_registry` (real PG on purpose, C-54 ①).
+- Status: partly done
 
 ## e2-12
 EDW value answers fail citation verification. Why: answers citing `query_edw` values are recorded as verify failures (C-56 M-1).
