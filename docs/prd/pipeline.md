@@ -11,7 +11,7 @@ Sources and fetch. Why: documents come from folders, Object Storage or the compa
 
 ## pl-02
 Prepare. Why: skip junk before the expensive parse.
-- What: sha256 dedup + similar name/content candidates, scanned-page rotation by RapidOCR score, DRM/password detection and decryption (msoffcrypto, pikepdf), archives marked unsupported.
+- What: sha256 dedup + similar name/content candidates, scanned-page rotation by RapidOCR score, DRM/password detection (decryption with msoffcrypto/pikepdf is a manual CLI — `python -m pipeline.extract.secure_docs decrypt`, not part of prepare or stream), archives marked unsupported.
 - Files: `pipeline/extract/prepare.py`, `pipeline/extract/dedup.py`, `pipeline/extract/secure_docs.py`.
 - Status: done
 
@@ -35,13 +35,13 @@ Figures. Why: charts, diagrams and images carry values that text extraction miss
 
 ## pl-06
 Structure — chunks, metadata, embeddings. Why: search needs cited chunks with metadata.
-- What: chunking structure (default, 800 chars, headings, tables whole) / fixed 512+64 / sentence / page, big tables by 25 rows; summaries (OpenViking → LLM → lead text); facts (product, modality, date, price, amount, currency, batch); client/contract kept only when cross-checked; rule-based knowledge graph; embeddings local (e5, bge-m3) or internal `api`.
+- What: chunking structure (default, 800 chars, headings, tables whole) / fixed 512+64 / sentence / page, big tables by 25 rows; summaries (OpenViking → LLM → lead text); facts (product, modality, date, price, amount, currency, batch); client/contract kept only when cross-checked; rule-based knowledge graph (built into the bundle, no longer loaded to PG — [mcp.md#mc-12](mcp.md#mc-12)); embeddings local (e5, bge-m3) or internal `api`.
 - Files: `pipeline/transform/structure/build_bundle.py`, `chunking.py`, `facts.py`, `draft_terms.py`, `common/ai/embed.py`.
 - Status: done
 
 ## pl-07
 Load to pgvector. Why: the search server reads PG.
-- What: tables `load_run`·`doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + view `v_chunk_source` (Alembic only); same sha skipped; `--prune` removes stale rows; named indexes (`index_id`); optional EDW vector insert.
+- What: tables `load_run`·`doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + view `v_chunk_source` (Alembic only); docs already loaded are skipped by `file_path` (no sha column — changed content at the same path is skipped too unless `--replace`); `--prune` removes stale rows; named indexes (`index_id`); optional EDW vector insert.
 - Files: `pipeline/load/pgvector_load.py`, `pipeline/load/index.py`, `pipeline/load/edw_insert.py`, `common/store/db/migrations/`.
 - Status: done
 
@@ -59,7 +59,7 @@ Publish parse results. Why: other teams read results from Object Storage + `AI.P
 
 ## pl-10
 Orchestration. Why: the server runs thousands of documents unattended.
-- What: CLI `parse`·`structure`·`load`·`night` (deadline, resumes next night)·`run-stack`·`set-stack`·`smoke`·`selftest`; server flow runner (EDW listing, 12 ahead, light/medium/vlm lanes, per-doc container, yields to `parse_document` jobs); trigger server (`/jobs`, `/upload`, Bearer); per-doc parallel parse.
+- What: CLI `parse`·`structure`·`load`·`night` (deadline, resumes next night)·`run-stack`·`compare-parse`·`compare-all`·`set-stack`·`show-stack`·`set-sources`·`show-sources`·`smoke`·`selftest`; image entrypoint adds `dedup`·`prepare`·`publish`·`full`·`serve-trigger`·`migrate`·`check` (`deploy/docker/entrypoint.sh`); server flow runner (EDW listing, 12 ahead, light/medium/vlm lanes, per-doc container, yields to `parse_document` jobs); trigger server (`/jobs`, `/upload`, Bearer); per-doc parallel parse.
 - Files: `pipeline/cli.py`, `deploy/host/scripts/run_docs.py` (server only — never run on PC), `pipeline/trigger_server.py`, `pipeline/parse_parallel.py`, `docs/requirements/run_docs_req.md`, `docs/architecture/run_docs_design.md`.
 - Status: done
 
@@ -100,7 +100,7 @@ Parse step location — `extract` or `transform`. Why: moving it changes code_fp
 
 ## pl-18
 `night`/`full` exit 0 after a midway stop. Why: schedulers cannot see the failure (C-33).
-- Files: `pipeline/cli.py`.
+- Files: `pipeline/cli.py` (`night`), `deploy/docker/entrypoint.sh` (`full`).
 - Status: todo
 
 ## pl-19

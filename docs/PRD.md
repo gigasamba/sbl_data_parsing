@@ -1,13 +1,14 @@
 # sbl_data_parsing — PRD
 
 Goal: cited evidence search over company documents on the closed network — parse → structure → load (pgvector) → search MCP — same results on the server as on the PC.
-Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · pl = data pipeline · e2 = e2e runs, tests, evaluation). Status: todo | dev | done. Done features leave this table; their anchors keep `Status: done`.
+Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · pl = data pipeline · e2 = e2e runs, tests, evaluation). Status: todo | dev | done.
 
 | ID | Bundle | Status | Detail |
 |---|---|---|---|
 | mc-10 | Retriever reads removed `file_sha256` | todo | [prd/mcp.md#mc-10](prd/mcp.md#mc-10) |
 | mc-11 | Aggregation path queries removed `file_sha256` | todo | [prd/mcp.md#mc-11](prd/mcp.md#mc-11) |
 | mc-12 | `graph`/`concept` search query dropped tables | todo | [prd/mcp.md#mc-12](prd/mcp.md#mc-12) |
+| mc-13 | PG `qa_log` table never created | todo | [prd/mcp.md#mc-13](prd/mcp.md#mc-13) |
 | pl-12 | Registry upsert PG error · publish guard off (C-54) | todo | [prd/pipeline.md#pl-12](prd/pipeline.md#pl-12) |
 | pl-13 | `load --prune` deletes skipped docs (C-60) | todo | [prd/pipeline.md#pl-13](prd/pipeline.md#pl-13) |
 | pl-14 | Deploy backfill reads removed `doc.client` | todo | [prd/pipeline.md#pl-14](prd/pipeline.md#pl-14) |

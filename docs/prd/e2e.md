@@ -6,7 +6,7 @@ One anchor per feature: what, why, code files. Open items carry a `Status:` line
 ## e2-01
 PC smoke run — parse → embed → migrate → load → search. Why: proves the whole chain on 2–3 documents before a release.
 - What: README §4-4 steps; per-run values with `--set`; embedding cache `output/edw/embed_cache.sqlite`.
-- Files: `pipeline/cli.py` (`smoke`), `mcp_server/cli/ask.py`, `valid_env/unstructured/list-smoke10.txt`.
+- Files: `pipeline/cli.py` (`smoke`), `mcp_server/cli/ask.py`, `valid_env/eval_sets/list-smoke10.txt`.
 - Status: done
 
 ## e2-02
@@ -41,7 +41,7 @@ Stack and model comparison. Why: choose engines and models by measured results a
 
 ## e2-07
 Search check page. Why: humans inspect evidence in a browser.
-- What: local page proxying to the MCP server and pgvector (http://127.0.0.1:8791).
+- What: local page proxying to the MCP server and pgvector (default port 8790 — `mcp.dev.ui_port`; README's example settings use 8791).
 - Files: `validation/search_ui/serve.py`, `validation/search_ui/start_mcp.sh`, `start_ui.sh`.
 - Status: done
 
@@ -64,7 +64,7 @@ Minimize PC evaluation tools, then keep or delete their settings. Why: about 50 
 - Status: todo — next step after e2-09.
 
 ## e2-11
-PC general test known failures. Why: 7 general tests fail since before the refactor (C-54 ①, C-58): 3 read the shared dev PG (use temp SQLite/schemas), 2 need missing packages/modules (mark skip or fix), 1 needs EDW.
+PC general test known failures. Why: 7 general tests fail since before the refactor (C-54 ①, C-58): 3 read the shared dev PG (use temp SQLite/schemas), 2 need missing packages/modules (mark skip or fix), 1 needs EDW, 1 is a `find_table_cells` assertion in `test_structured`.
 - Files: `tests/conftest.py` (`GENERAL_KNOWN_FAIL`), `tests/general/`.
 - Status: todo
 
