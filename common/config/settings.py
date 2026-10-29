@@ -1047,7 +1047,8 @@ def _env_text(v):
 def overlay_file(names, base=None, environ=None):
     """덮기 파일을 만든다 — base(설정 파일 — 없으면 지금 SETTINGS_FILE·로컬 파일)를 가리키고 names({옛 env 이름: 값|None})를 overrides로 든
     yaml을 임시 파일(mktemp — 권한 600)로 쓴다. 원본 내용(비밀)은 복사하지 않는다(base로 가리킴 — refactor.md C-46). base가 덮기 파일이면
-    그 base·overrides를 이어받아 한 단으로. 임시 파일은 지우지 않는다(자식이 끝까지 읽음 — OS 임시 폴더 정리). 반환: 경로."""
+    그 base·overrides를 이어받아 한 단으로. 임시 파일은 만든 프로세스가 끝날 때 지운다(pl-27 — 정상·오류·SIGTERM, 그 프로세스의 자식을
+    먼저 끝낸 뒤라 자식은 끝까지 읽음 — common.core.exitclean). 반환: 경로."""
     import tempfile
 
     import yaml
@@ -1082,7 +1083,9 @@ def overlay_file(names, base=None, environ=None):
         fh.write("# 덮기 파일(common.config.settings.overlay_file — S7e2) — base 위에 overrides를 겹쳐 읽음\n")
         fh.write(yaml.dump(doc, Dumper=_raw_dumper(), allow_unicode=True, sort_keys=False))
     os.chmod(p, 0o600)
-    return Path(p)
+    from common.core import exitclean
+
+    return Path(exitclean.remove_at_exit(p))
 
 
 class _Raw(str):

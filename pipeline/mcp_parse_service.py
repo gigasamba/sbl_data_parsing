@@ -26,6 +26,7 @@ from pathlib import Path
 
 from common.config.settings import child_env as settings_env
 from common.config.settings import reveal
+from common.core import exitclean
 from common.core.paths import APP_ROOT  # I4 — 컨테이너 경로(/app/…) 대신 런타임 루트 기준(이미지 안 값 같음)
 from pipeline import config as pc
 
@@ -131,8 +132,10 @@ def _run_group(cmd, timeout, env):
     cli._run_until과 같은 규칙 — pipeline.extract.resources). 시간 초과는 subprocess.TimeoutExpired로 올림(옛 subprocess.run과 같음)."""
     from pipeline.extract import resources as PR
 
-    p = subprocess.Popen(
-        ["python", "-m", *cmd], cwd=APP_ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, **PR.group_kw()
+    p = exitclean.track(  # pl-27 — 서비스가 끝날 때 아직 돌면 끝내고 회수
+        subprocess.Popen(
+            ["python", "-m", *cmd], cwd=APP_ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, **PR.group_kw()
+        )
     )
     try:
         out, err = p.communicate(timeout=timeout)
@@ -489,7 +492,9 @@ if __name__ == "__main__":
     for r in ROOTS:
         Path(r).mkdir(parents=True, exist_ok=True)
     # 2026-10-22 패치: docker exec -d 기동이라 표준출력이 안 남는다 → PID·환경을 파일로 남긴다(지연 원인 추적용 — txt 3분 대기 이슈)
-    with open(SERVICE_DIR / "service.json", "w", encoding="utf-8") as f:
+    with open(
+        exitclean.remove_at_exit(SERVICE_DIR / "service.json"), "w", encoding="utf-8"
+    ) as f:  # pl-27 — PID 기록은 서비스가 끝나면 지움
         json.dump(
             {
                 "pid": os.getpid(),
