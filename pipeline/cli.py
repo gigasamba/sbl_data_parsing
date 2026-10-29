@@ -26,6 +26,7 @@ import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from common.config import settings as C  # common 칸(S7c — 설정 객체 · cfg()·given()·render())
@@ -1164,13 +1165,13 @@ def selftest(a):
     rows = []
     if not cases:
         rows.append((str(TESTS_ROOT / "server"), "FAIL", "서버 반입 시험이 없음(tests/server — 이미지 COPY·--only 확인)"))
-    for mod, img in cases:
+
+    def run_case(case):
+        mod, img = case
         if img == "?":
-            rows.append((mod, "FAIL", "모르는 시험 폴더(tests/server/{common,pipeline,mcp}만)"))
-            continue
+            return (mod, "FAIL", "모르는 시험 폴더(tests/server/{common,pipeline,mcp}만)")
         if image and img not in (None, image):
-            rows.append((mod, "SKIP", f"다른 이미지 사례({img})"))
-            continue
+            return (mod, "SKIP", f"다른 이미지 사례({img})")
         r = subprocess.run(
             [PY, "-m", "tests.runner", mod],
             cwd=ROOT,
@@ -1185,9 +1186,14 @@ def selftest(a):
         # 공용 사례가 이 이미지에 없는 앱 모듈 때문에만 실패했으면 SKIP(mcp 이미지에는 pipeline/ 중 cli.py·config.py만 — _image_lacks)
         miss = re.findall(r"ModuleNotFoundError: No module named '(pipeline|mcp_server)['.]", out)
         if r.returncode != 0 and miss and all(_image_lacks(m) for m in set(miss)):
-            rows.append((mod, "SKIP", f"다른 이미지 모듈 필요({', '.join(sorted(set(miss)))})"))
-            continue
-        rows.append((mod, "PASS" if r.returncode == 0 else "FAIL", "" if r.returncode == 0 else out[-1500:]))
+            return (mod, "SKIP", f"다른 이미지 모듈 필요({', '.join(sorted(set(miss)))})")
+        return (mod, "PASS" if r.returncode == 0 else "FAIL", "" if r.returncode == 0 else out[-1500:])
+
+    # 사례는 서로 다른 자식 프로세스라 함께 돌림(8개씩) — map은 순서를 지켜 표는 그대로
+    for mod, _ in cases:  # 덮기 파일 캐시(_CASE_ENVS)를 먼저 채움 — 스레드가 같은 파일을 두 번 만들지 않게
+        case_env(mod)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        rows += pool.map(run_case, cases)
     fails = [name for name, status, _ in rows if status == "FAIL"]
     skips = sum(1 for _, status, _ in rows if status == "SKIP")
     for name, status, detail in rows:
