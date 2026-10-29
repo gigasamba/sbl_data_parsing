@@ -61,11 +61,14 @@ def clear():
 def login(role, extra=True):
     """EDW 접속 인자(pymssql.connect 그대로)와 빠진 칸 이름 목록 — common.connections.rdb의 서버·DB + role 계정
     ("read" | "write" — 사용자 10-29, docs/prd/ops.md#op-02). extra=False면 connect_kwargs를 안 넘김(gen_roster 옛 동작).
-    형식 틀린 포트는 연결 전에 실패(checked — 1433으로 조용히 붙지 않게). 값은 출력하지 않는다."""
+    형식 틀린 포트는 연결 전에 실패(checked — 1433으로 조용히 붙지 않게). 값은 출력하지 않는다.
+    role은 둘 중 하나만(오타가 쓰기 계정으로 새지 않게) · connect_kwargs는 계정·서버 칸을 덮지 못함(독립 검토 10-29)."""
     import json
 
     from common.config.settings import cfg, checked, reveal
 
+    if role not in ("read", "write"):
+        raise ValueError(f"EDW 계정 역할은 read·write만 — {role!r}")
     c = cfg().connections.rdb
     acct = c.read if role == "read" else c.write
     checked("RDB_PORT")
@@ -84,8 +87,19 @@ def login(role, extra=True):
     }
     miss = [names[k] for k in names if not kw[k]]
     if extra:
-        kw.update(json.loads(reveal(c.connect_kwargs) or "{}"))
+        kw = {**json.loads(reveal(c.connect_kwargs) or "{}"), **kw}  # 추가 인자가 계정·서버를 덮지 못함
     return kw, miss
+
+
+def standin_path():
+    """PC 가짜 EDW 경로(common.connections.rdb.sqlite) — RUN_ENV=local 전용. 서버 설정에 남아 있으면 실패한다
+    (원천 조회·게시·query_edw가 한꺼번에 가짜 파일로 가지 않게 — 독립 검토 10-29). 없으면 None."""
+    from common.config.settings import cfg, guard_run_env
+
+    p = cfg().connections.rdb.sqlite
+    if p and guard_run_env() != "local":
+        raise ValueError("common.connections.rdb.sqlite(RDB_SQLITE)는 PC(RUN_ENV=local) 전용 — 서버 설정에서 지울 것")
+    return p
 
 
 STANDIN_SCHEMAS = ("AI", "CRMS", "LAS", "SFDC")  # PC 가짜 EDW sqlite 하나에 든 스키마(valid_env/edw/*.sql — validation/e2e/edw_standin.py)

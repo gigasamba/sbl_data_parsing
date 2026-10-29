@@ -1269,7 +1269,11 @@ class CommonConnectionsRdb(Section):
     database: str | None = F(None, "RDB_DATABASE", "EDW 데이터베이스 이름")
     host: str | None = F(None, "RDB_HOST", "EDW 서버 주소(호스트)")
     port: Port | None = F(1433, "RDB_PORT", "EDW 포트")
-    sqlite: str | None = F(None, "RDB_SQLITE", "시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) — 있으면 실제 EDW 대신 씀(PC)")
+    sqlite: str | None = F(
+        None,
+        "RDB_SQLITE",
+        "시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) — 있으면 실제 EDW 대신 씀 · PC(RUN_ENV=local) 전용, 서버에서는 시작 거부",
+    )
     read: CommonConnectionsRdbRead = Field(default_factory=CommonConnectionsRdbRead)
     write: CommonConnectionsRdbWrite = Field(default_factory=CommonConnectionsRdbWrite)
 

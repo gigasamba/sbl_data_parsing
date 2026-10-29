@@ -44,7 +44,7 @@ def test_source_query_and_publish_share_one_file():
             assert edw_query.backend() == ("sqlite", str(p))
             res = edw_query.query("SELECT COUNT(*) AS n FROM AI.FileStorageMap")
             assert res["ok"] and res["rows"][0][0] == len(rows), res
-            db = PM.make_db()
+            db = PM.make_db("write")
             try:
                 assert isinstance(db, PM.SqliteStore)
                 before = db.count()
@@ -52,3 +52,19 @@ def test_source_query_and_publish_share_one_file():
                 assert db.count() == before + 1
             finally:
                 db.close()
+
+
+def test_read_role_never_changes_the_file():
+    """검색 MCP 조회(role "read")는 대역 파일을 ?mode=ro로 열고 표·색인을 만들지 않음 — 파일 바이트 그대로."""
+    import hashlib
+
+    with tempfile.TemporaryDirectory() as d:
+        p = _standin(d)
+        h = hashlib.sha256(p.read_bytes()).hexdigest()
+        with COMMON.env(RDB_SQLITE=str(p)):
+            db = PM.make_db("read")
+            try:
+                assert db.find_by_doc_key("none") in (None, [], ())
+            finally:
+                db.close()
+        assert hashlib.sha256(p.read_bytes()).hexdigest() == h

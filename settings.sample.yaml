@@ -110,7 +110,7 @@ mcp:
 #   common.connections.pg.standin_dir:  # PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더 · 기본 없음 · 값: 경로 · env=PG_STANDIN_DIR
 #   common.connections.rdb.connect_kwargs:  # EDW pymssql 연결에 더할 추가 인자(JSON 객체 — TLS·로그인 시간 등) · 값: 비밀 글자 · env=RDB_CONNECT_KWARGS [비밀]
 #   common.connections.rdb.port:  # EDW 포트 · 기본 1433 · 값: 1~65535 · env=RDB_PORT
-#   common.connections.rdb.sqlite:  # 시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) — 있으면 실제 EDW 대신 씀(PC) · 기본 없음 · 값: 경로 · env=RDB_SQLITE
+#   common.connections.rdb.sqlite:  # 시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) — 있으면 실제 EDW 대신 씀 · PC(RUN_ENV=local) 전용, 서버에서는 시작 거부 · 기본 없음 · 값: 경로 · env=RDB_SQLITE
 #   common.store.doc_registry:  # 문서 대장(doc_registry) 사용 — =0이면 끄고 필터 없이 동작 · 기본 true · 값: true·false · env=DOC_REGISTRY [끔: ''·0·none·false]
 #   common.store.registry_editions:  # 대장 '판 비교'(지문 기록·판 연결·내용 그룹) — =0이면 끄고 이전 동작 · 기본 true · 값: true·false · env=REGISTRY_EDITIONS [끔: ''·0·none·false]
 #   common.store.registry_etag_md5:  # ETag가 MD5 형식이면 그것만으로 '날짜만 바뀜'으로 확정 — =0이면 항상 원본 바이트 대조 · 기본 true · 값: true·false · env=REGISTRY_ETAG_MD5 [끔: ''·0·none·false]

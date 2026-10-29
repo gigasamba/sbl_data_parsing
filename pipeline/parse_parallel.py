@@ -374,7 +374,7 @@ def _run_all_docs(a, engines, tmp, PM):
     publish_exec = ThreadPoolExecutor(max_workers=1)  # SQLite 스레드 제약 + EDW·Object Storage 쓰기 직렬화(모듈 docstring)
     # SQLite 연결은 만든 스레드에서만 써야 하므로(기본 check_same_thread) make_storage()·make_db()도 publish_exec의
     # 그 유일한 스레드 안에서(이후 모든 _publish_one도 같은 스레드에서 돈다 — ThreadPoolExecutor(max_workers=1)은 수명 내내 같은 스레드 하나)
-    pm_ctx["storage"], pm_ctx["db"] = publish_exec.submit(lambda: (PM.make_storage(), PM.make_db())).result()
+    pm_ctx["storage"], pm_ctx["db"] = publish_exec.submit(lambda: (PM.make_storage(), PM.make_db("write"))).result()
     ok = fail = 0
     errors = []
     try:

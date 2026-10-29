@@ -34,9 +34,49 @@ def test_login_picks_account_by_role():
 
 
 def test_connect_kwargs_only_when_extra():
-    with COMMON.env(**FULL, RDB_CONNECT_KWARGS='{"login_timeout": 5}'):
-        assert mssql.login("read")[0]["login_timeout"] == 5
+    with COMMON.env(**FULL, RDB_CONNECT_KWARGS='{"login_timeout": 5, "user": "wu", "password": "wp"}'):
+        kw = mssql.login("read")[0]
+        assert kw["login_timeout"] == 5 and (kw["user"], kw["password"]) == ("ru", "rp")  # 추가 인자가 계정을 못 바꿈
         assert "login_timeout" not in mssql.login("read", extra=False)[0]
+
+
+def test_standin_refused_off_pc():
+    with COMMON.env(RDB_SQLITE="x.sqlite", RUN_ENV="dev"):
+        try:
+            mssql.standin_path()
+            raise AssertionError("stand-in accepted on a server RUN_ENV")
+        except ValueError:
+            pass
+    with COMMON.env(RDB_SQLITE="x.sqlite", RUN_ENV="local"):
+        assert mssql.standin_path() == "x.sqlite"
+
+
+def test_unknown_role_refused():
+    for bad in ("Read", "ro", "", None):
+        try:
+            mssql.login(bad)
+            raise AssertionError(f"role {bad!r} accepted")
+        except ValueError:
+            pass
+
+
+def test_old_connection_fields_only_warn():
+    """옛 서버 설정 파일(접속 칸이 옛 자리)도 시작은 됨 — REMOVED(경고만, 한 판 동안)."""
+    import tempfile
+    from pathlib import Path
+
+    from common.config.settings import CommonAppSettings, load
+
+    with tempfile.TemporaryDirectory() as d:
+        y = Path(d) / "old.yaml"
+        y.write_text(
+            "common:\n  run_env: dev\n  connections:\n"
+            "    edw: {server: s, user: u, password: p, conn_file: f}\n"
+            "    parsing_meta: {host: h, user: u, password: p, database: d, port: 1433, sqlite: x, connect_kwargs: '{}', table: AI.ParsingMeta}\n",
+            encoding="utf-8",
+        )
+        st = load(CommonAppSettings, file=y, environ={})
+        assert st.common.connections.parsing_meta.table == "AI.ParsingMeta" and st.common.connections.rdb.host is None
 
 
 def test_mcp_paths_use_read_account_only():
@@ -63,8 +103,8 @@ def test_mcp_paths_use_read_account_only():
 
 def test_publish_uses_write_and_sqlite_wins():
     with COMMON.env(**FULL), mock.patch.object(PM, "MssqlStore", lambda table, role: ("store", table, role)):
-        assert PM.make_db() == ("store", "AI.ParsingMeta", "write")
+        assert PM.make_db("write") == ("store", "AI.ParsingMeta", "write")
     with COMMON.env(RDB_SQLITE=":memory:"):
-        db = PM.make_db()
+        db = PM.make_db("write")
         assert isinstance(db, PM.SqliteStore)
         db.close()

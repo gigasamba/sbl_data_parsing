@@ -413,7 +413,7 @@ def _mssql_rows(table, cols, company, doc_type, inc_col, since):
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += f" ORDER BY [{inc_col}]"
-    standin = C.cfg().connections.rdb.sqlite
+    standin = mssql.standin_path()
     if standin:  # PC 가짜 EDW(sqlite 하나 — 사용자 10-29 ops.md#op-02): 대괄호 식별자는 SQLite도 받음, %s → ?
         cn = mssql.standin(standin)
         try:

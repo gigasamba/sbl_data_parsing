@@ -173,7 +173,7 @@ class MssqlStore:
     독립 검토 CONCERN(10-15) — 필터 유일 색인이 있는 표라 연결 직후(그 밖 어떤 INSERT·SELECT보다 먼저) SET_OPTIONS_SQL을
     이 세션에 실행한다(parsing_meta_mssql.sql 맨 앞과 같은 7개 옵션) — 안 하면 SQL Server가 그 뒤 모든 쓰기를 거부한다."""
 
-    def __init__(self, table=DEFAULT_TABLE, role="write"):
+    def __init__(self, table, role):
         if not TABLE_ID_RE.match(table):
             raise ValueError(f"[parsing_meta] PM_TABLE 값이 올바르지 않음(영문·숫자·_, 스키마.표만) — {table!r}")
         self.ident = ".".join(f"[{p}]" for p in table.split("."))
@@ -255,8 +255,13 @@ class SqliteStore:
     그 행은 건너뜀(INSERT만). PM2 — doc_key만 필수(NOT NULL), 그 밖은 전부 NULL 허용 · 고유 키는 MSSQL DDL과
     같은 두 필터 색인(source_key 있으면 (source_system, source_key, parse_date), 없으면 (doc_key, parse_date))."""
 
-    def __init__(self, path, table="ParsingMeta"):
+    def __init__(self, path, table="ParsingMeta", readonly=False):
         self.table = table
+        if readonly:  # 검색 MCP 조회(role "read") — ?mode=ro로 열고 표·색인을 만들지 않음(대역 파일을 바꾸지 않게 — 독립 검토 10-29)
+            from common.store import mssql
+
+            self.cn = mssql.standin(path)
+            return
         from pathlib import Path
 
         Path(path).parent.mkdir(parents=True, exist_ok=True)  # RDB_SQLITE=/app/output/pm_test/edw.sqlite처럼 새 폴더여도(샘플 세션 10-08)
@@ -302,13 +307,13 @@ class SqliteStore:
         self.cn.close()
 
 
-def make_db(role="write"):
+def make_db(role):
     """ParsingMeta 저장소 — role: 게시(파이프라인)는 "write", 조회(검색 MCP)는 "read"(사용자 10-29 — ops.md#op-02)."""
     from common.store import mssql
 
-    sqlite_path = cfg().connections.rdb.sqlite
+    sqlite_path = mssql.standin_path()
     if sqlite_path:
-        return SqliteStore(sqlite_path)
+        return SqliteStore(sqlite_path, readonly=role == "read")
     table = cfg().connections.parsing_meta.table  # 기본 'AI.ParsingMeta'(DEFAULT_TABLE과 같음) · 빈 값 그대로(blank=keep)
     _, miss = mssql.login(role, extra=False)
     if miss:

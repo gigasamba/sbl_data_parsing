@@ -19,7 +19,7 @@ CREATE TABLE FileStorageMap (
 ) STRICT;
 
 -- AI.ParsingMeta — same columns and keys as deploy/data_etl/tools/parsing_meta_mssql.sql
--- (common_tools/handoff_contract.py PARSING_META_COLUMNS). Written by data_etl/publish_results.py (PM_DB_SQLITE).
+-- (common_tools/handoff_contract.py PARSING_META_COLUMNS). Written by pipeline/load/publish_parse_result.py (RDB_SQLITE).
 CREATE TABLE ParsingMeta (
     parse_meta_id     INTEGER PRIMARY KEY AUTOINCREMENT,                                          -- BIGINT IDENTITY
     source_system     TEXT    CHECK (source_system IS NULL OR length(source_system) <= 64),

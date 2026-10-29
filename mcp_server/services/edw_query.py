@@ -163,7 +163,9 @@ def backend():
     Returns ("sqlite", path) | ("mssql", conf_dict) | (None, None)."""
     if not enabled():
         return None, None
-    sqlite_path = C.cfg().connections.rdb.sqlite
+    from common.store import mssql
+
+    sqlite_path = mssql.standin_path()
     if sqlite_path:
         return "sqlite", sqlite_path
     conf = _mssql_conf()

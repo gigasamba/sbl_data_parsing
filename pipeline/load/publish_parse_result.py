@@ -144,7 +144,7 @@ def run(a):
         print(json.dumps(out, ensure_ascii=False))
         print("[dry-run] 쓰기 0 — 실제 업로드·EDW 쓰기는 --apply 명시")
         return out
-    storage, db = PM.make_storage(), PM.make_db()
+    storage, db = PM.make_storage(), PM.make_db("write")
     md_dir = Path(a.out) / "publish" / "_md_tmp"
     try:
         result = PM.apply(rows, storage, db, md_dir, prefix)
