@@ -11,7 +11,7 @@
 
 | 규칙 | 내용 |
 |---|---|
-| 문서 키 | `s3_key`(Object Storage 원본 전체 키)만 문서 키로 쓴다. sha256 `doc_key`는 없앤다. 문서 대장(`doc_registry`·`doc_registry_seen`)과 숨김(`doc_hidden`)은 `s3_key`로 다시 키를 잡는다. 검색 `doc`·`chunk`도 `s3_key`를 든다. |
+| 문서 키 | `s3_key`(Object Storage 원본 전체 키)만 문서 키로 쓴다. sha256 `doc_key`는 없앤다. 문서 대장(`doc_registry`·`doc_registry_seen`)과 숨김(`doc_hidden`)은 `s3_key`로 다시 키를 잡는다. 검색 `doc`·`chunk`도 `s3_key`를 든다. 같은 내용이 여러 `s3_key`로 들어온 경우(지금 `build_bundle`은 첫 키만 `doc` 행으로 두고 나머지는 `aliases`로 합침)는 확인 U-7. |
 | 출처 표시 이름 | EDW에서도, 문서 파싱에서도 나올 수 있는 값은 칸을 둘로 나누고 이름 끝에 출처를 붙인다 — EDW `_edw`, 문서 본문 `_doc`. 지금 해당하는 값: 고객(`client_edw`·`clients_doc`). |
 | 고객 거르기 | MCP의 고객 거르기는 EDW 고객(`client_edw`, 문서당 하나)만 쓴다. EDW 고객이 없는 문서는 고객 거르기를 걸면 빠진다. 본문에서 찾은 고객(`clients_doc`)으로 거르는 것은 나중([pl-28](../prd/pipeline.md#pl-28)). |
 | 원천 | `source_system` = `AI.FileStorageMap.source_system`. 비었거나 SFDC·CRMS·LAS가 아니면 `Other`. `s3_key` 접두와 다르면 경고만 남김. |
@@ -102,11 +102,11 @@
 | avg_len | DOUBLE PRECISION | 평균 길이 | pgvector_load | pgsearch BM25 | 유지 |
 | dim | INT | 임베딩 차원 | pgvector_load | 없음(차원은 `pg_attribute`에서 읽음) | 유지 |
 
-뷰 `v_chunk_source`는 `chunk`↔`doc`을 이은 읽기 전용 뷰다(파일 이름은 `file_path`에서 계산). 새 칸(`s3_key`·`client_edw`·`clients_doc`)은 뷰 끝에만 붙인다(`CREATE OR REPLACE VIEW` 제약).
+뷰 `v_chunk_source`는 `chunk`↔`doc`을 이은 읽기 전용 뷰다(파일 이름은 `file_path`에서 계산). 지금 `d.clients`를 고르므로 `doc.clients`를 지우는 판은 뷰를 먼저 `DROP VIEW` 하고 다시 만들어야 한다(`CREATE OR REPLACE VIEW`로는 칸을 뺄 수 없음) — 모델의 `VIEWS_EXPECTED`도 같이 고친다. 새 칸(`s3_key`·`client_edw`·`clients_doc`)도 그때 넣는다.
 
 ## 3. struct — 정형 저장소 (PostgreSQL `struct`, PC는 SQLite 대체)
 
-판: `0001_struct_base.py`·`0002_struct_config.py` · 모델: `common/store/db/models/struct_tables.py` · SQLite 대체: `common/store/structdb.py`. 문서에서 뽑은 내용을 담던 표(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`)는 지운다 — 그 내용은 청크 본문에만 둔다. 지우면 함께 가는 코드: `pipeline/load/structured.py`(`link`·`tables` 명령, `load_tables_docs`), `pipeline/cli.py` `load_tables_db`, `common/store/structdb.py` `find_table_cells`, `mcp_server/services/search/structdb.py` `find_table_row`, `aggregate.py`(`struct`, `doc_link_list`, `doc_location_list`, `table_cell_list`)와 호출부(`internal_docs.py`, `cli/ask.py`). 마스터(`contract_master`·`client_master`)는 별도 PostgreSQL로 옮긴다(§5).
+판: `0001_struct_base.py`·`0002_struct_config.py` · 모델: `common/store/db/models/struct_tables.py` · SQLite 대체: `common/store/structdb.py`. 문서에서 뽑은 내용을 담던 표(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`)는 지운다 — 그 내용은 청크 본문에만 둔다. 지우면 함께 가는 코드: `pipeline/load/structured.py`(`link`·`tables` 명령, `load_tables_docs`), `pipeline/cli.py` `load_tables_db`, `common/store/structdb.py` `find_table_cells`, `mcp_server/services/search/structdb.py` `find_table_row`, `aggregate.py`(`struct`, `struct_context`, `doc_link_list`, `doc_location_list`, `table_cell_list`, `_table_cell_scope_docs`)와 호출부(`internal_docs.py`, `cli/ask.py`). 마스터(`contract_master`·`client_master`)는 별도 PostgreSQL로 옮긴다(§5).
 
 ### struct.contract_master
 
@@ -213,7 +213,7 @@
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
-| doc_key | TEXT PK | 문서(sha256) | registry `apply` | search/registry `history`·`report` | 삭제 |
+| doc_key | TEXT PK | 문서(sha256) | registry `apply` | search/registry `history`·`report_by_date` | 삭제 |
 | s3_key | TEXT PK | 문서 키 | (registry `apply`) | (search/registry) | 새로 |
 | build_id | TEXT PK | build 한 번 | registry `apply` | search/registry | 유지 |
 | names | TEXT | 파일 이름 목록 | 〃 | 〃 | 유지 |
@@ -301,7 +301,7 @@
 
 ### edw.FileStorageMap
 
-`AI.FileStorageMap` — 원본 파일 목록(EDW 쪽 표, 이 프로젝트가 만들지 않음). 저장소에 정의가 없고 PC 대역만 있다(`valid_env/edw/ai.sql` — `id, content_id, content_version_id, s3_key, source_system, original_filename, file_size, sha256, sf_op_id, contract_id, created_at`). 시험 비교 대상이 아니다.
+`AI.FileStorageMap` — 원본 파일 목록(EDW 쪽 표, 이 프로젝트가 만들지 않음 — 칸을 더하거나 지우지 않는다). 저장소에 정의가 없고 PC 대역만 있다(`valid_env/edw/ai.sql` — `id, content_id, content_version_id, s3_key, source_system, original_filename, file_size, sha256, sf_op_id, contract_id, created_at`). 아래는 이 프로젝트가 읽는(읽을) 칸만이고, 결정 칸은 모두 `유지`(EDW 표는 그대로). 시험 비교 대상이 아니다.
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
@@ -310,8 +310,8 @@
 | original_filename | (EDW) | 원본 파일 이름 | EDW | source, run_docs | 유지 |
 | file_size | (EDW) | 크기 | EDW | source, run_docs | 유지 |
 | content_version_id | (EDW) | 판 id | EDW | source `_rdb_rows` | 유지 |
-| source_system | (EDW) | 원천(SFDC·CRMS·LAS — 아니면 Other) | EDW | 지금은 외부 추출 file_meta JSONL로만(코드가 직접 안 고름) | 새로 |
-| last_modified_time | (EDW, 가정) | 원본 고친 때(10-29 가정 — 실제 칸 이름 확인 필요) | EDW | (변경 감지) | 새로 |
+| source_system | (EDW) | 원천(SFDC·CRMS·LAS — 아니면 Other) — 이미 있는 칸, 코드가 아직 직접 안 읽음(지금은 외부 추출 file_meta JSONL로만) → 읽기 시작 | EDW | (source `_rdb_rows`) | 유지 |
+| last_modified_time | (EDW, 가정) | 원본 고친 때(10-29 가정 — 있는 칸으로 보고 실제 이름 확인 필요, D-1) → 읽기 시작 | EDW | (변경 감지) | 유지 |
 
 ### edw.ParsingMeta
 
@@ -388,7 +388,7 @@
 | D-3 | `AI.ParsingMeta` 칸 15개 삭제·`gold_status`·`gold_reason` 추가(ALTER) — 권한, 기존 행, 다른 사용처 | 이 프로젝트 밖에서 그 칸을 읽는 곳이 있는지 모름 |
 | D-4 | `ParsingMeta.doc_key` 삭제 때 `UQ_ParsingMeta_dockey`·`IX_ParsingMeta_doc_key` 색인 처리 · `source_key`를 필수(NOT NULL)로 | 지금 `source_key`가 비면 `doc_key`가 겹침 키 |
 | D-5 | 마스터 PostgreSQL 자리·계정·백업 | 새 DB(검색 PG와 분리) |
-| D-6 | gold 스키마 변경(`s3_key`·`client_edw`·`clients_doc` 추가, `clients` 삭제)은 Alembic 새 판 — 기존 서버 데이터는 다시 적재 | 첫 적재가 전체 e2e([pl-23](../prd/pipeline.md#pl-23))와 함께 |
+| D-6 | gold 스키마 변경(`s3_key`·`client_edw`·`clients_doc` 추가, `clients` 삭제)은 Alembic 새 판 — 뷰 `v_chunk_source`를 지우고 다시 만듦(`doc.clients`에 걸려 있음), 기존 서버 데이터는 다시 적재 | 첫 적재가 전체 e2e([pl-23](../prd/pipeline.md#pl-23))와 함께 |
 | D-7 | struct 표 지우기(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`·`prod_master`, 마스터 2개 이동) 전 백업 | 되돌릴 수 없는 삭제 |
 
 ## 7. 사용자 확인 필요
@@ -398,6 +398,7 @@
 | U-1 | `chunk.clients[]`(지금 고객 거르기 키, GIN) — 10-30 결정 "청크는 `clients[]` 유지"와 "거르기는 EDW 고객만"이 겹침 | `chunk.clients` 삭제 → `chunk.client_edw` 새로(거르기 키) |
 | U-2 | `struct.prod_master` — 쓰기만 하고 읽는 코드가 없음 | 삭제 |
 | U-3 | `doc_contract_link` — pl-25에 "s3_key로 다시 키"와 "문서 파생 표 삭제"가 함께 있음 | 삭제(10-30 중앙 세션 지시대로) |
-| U-4 | 마스터 읽는 곳 — pl-25는 `gen_roster`·`terms.py`라 했지만 실제로 DB를 읽는 곳은 `aggregate`·`structured`의 고객 별칭뿐(`gen_roster`는 CSV·EDW 표, `terms.py`는 안 읽음) | 고객 별칭만 마스터 PG에서 읽음 |
+| U-4 | 마스터 읽는 곳 — pl-25는 `gen_roster`·`terms.py`라 했지만 실제로 DB를 읽는 곳은 `aggregate`(`_struct_client_aliases`, 지울 `struct_context`·`_table_cell_scope_docs`·`doc_location_list`)와 `structured._client_aliases`(`gen_roster`는 CSV·EDW 표, `terms.py`는 안 읽음) | 남는 읽는 곳은 고객 별칭뿐 — 마스터 PG에서 읽음 |
 | U-5 | 출처 표시 이름을 붙일 값 — 지금은 고객만. 계약 id(`contract_id`)·제품 이름은 EDW에서만 옴 | 고객만 `_edw`·`_doc`로 나눔, 나머지는 그대로 |
 | U-6 | `ParsingMeta.status_at`은 SELECT하는 코드가 없음(운영자가 봄) · `parse_meta_id`·`source_key_hash`는 DB 키 | 셋 다 유지 |
+| U-7 | 같은 내용이 여러 `s3_key`로 들어온 문서 — 지금은 첫 키만 `doc` 행, 나머지는 `aliases`(묶음 안). 키가 하나뿐인 설계라 둘째 키는 숨김·ParsingMeta 조회가 안 맞음 | `doc_alias`(s3_key → doc) 표를 더하거나 키마다 `doc` 행 — 결정 필요 |
