@@ -5,7 +5,7 @@
 #   night(OP13) = 자정 배치 순서(NIGHTLY_MODULES, 기본 "parse publish structure load") — ENABLED와 무관하게 요청하면 바로 돎
 #     (스케줄 ON/OFF 게이트는 이 스크립트가 아니라 deploy/host/systemd/data-pipeline-nightly.service의 NIGHTLY_ENABLED 확인 몫 — §env-guide 1-3)
 #     NIGHTLY_PUBLISH=1(기본)이면 publish 실행 · parse 단계는 PARSE_DEADLINE 있으면 전달, 새 문서 상한은 NIGHTLY_MAX_NEW(기본 2000)
-#     이 night(컨테이너별 모듈 트리거, OP13 정본)과 cli/pipeline.py의 night()(한 프로세스 안 phase 단위 마감 예산)은
+#     이 night(컨테이너별 모듈 트리거, OP13 정본)과 cli/pipeline.py의 night()(한 프로세스 안 단계별 마감 예산)은
 #     서로 다른 배포 모양(compose 여러 컨테이너 ↔ 단일 컨테이너·Docker 밖 직접 실행, AGENTS.md 45행)을 각자 맡음 —
 #     RV5(10-09) 점검: pipeline.py night은 호출처 있음(AGENTS.md 지시표·entrypoint.sh night/full·requirements.md S8
 #     cron 예시) → 강제 병합 대신, 건너뜀 사유는 이 스크립트의 echo(아래 publish·75) → cron 리다이렉션으로

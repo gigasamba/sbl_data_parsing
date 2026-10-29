@@ -1,6 +1,6 @@
 """pipeline 앱 설정 — settings.yaml의 common + pipeline 절만 읽는다(S7a, refactor_plan 5-2 · D-015). 다른 앱(mcp) 절은 무시.
 pipeline 코드가 읽는 객체는 설정 파일 기반 캐시 PIPE다(S7e2 — 전환 다리 없앰: env의 옛 이름은 읽지 않음, 신호 SETTINGS_FILE·RUN_ENV만):
-  `from pipeline import config as pc` → `pc.cfg().extract.phases`(pipeline 절) · `pc.given("PM_BUCKET")`(준 값만) · `pc.checked(X)` ·
+  `from pipeline import config as pc` → `pc.cfg().extract.max_new`(pipeline 절) · `pc.given("PM_BUCKET")`(준 값만) · `pc.checked(X)` ·
   `pc.by_env(f"{p}_X")` · 시험 `with pc.PIPE.env(PARSE_TMP=…, KEEP_RAW_LAYER=None):`(설정 위에 옛 env 이름으로 덮음 — os.environ 안 건드림).
   common 칸은 `common.config.settings.cfg()`로(COMMON). 값을 바꿔 자식에 넘길 때는 `settings.put()`·`settings.child_env()`(덮기 파일).
 SETTINGS(common + pipeline 절)는 확인 명령(python -m pipeline.config)·시험용. 칸 표는 refactor_plan 부록 D.
@@ -440,6 +440,7 @@ class PipelineEval(Section):
 
 
 class PipelineExtract(Section):
+    REMOVED = frozenset({"phases", "phase_sec"})  # 사용자 10-29 — phase 없앰(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     auto_reparse_changed: bool | None = F(
         False, "AUTO_REPARSE_CHANGED", "야간 계획에서 바뀐 문서(changed) 전체를 다시 파싱할지(=1 재파싱)", on=("1",)
     )
@@ -469,10 +470,14 @@ class PipelineExtract(Section):
     max_file_mb: float | None = F(0.0, "MAX_FILE_MB", "이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음)")
     max_new: int | None = F(0, "PARSE_MAX_NEW", "이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음)")
     merge_pages: bool | None = F(True, "PARSE_MERGE_PAGES", "엔진 간 쪽·문단 단위 보정(쪽 합치기)을 켤지(=0이면 끔)", off=("0",))
+    ocr_engine: bool | None = F(
+        False,
+        "PARSE_OCR_ENGINE",
+        "OCR 엔진(rapidocr·rapidocr_ko)을 파싱 엔진으로 돌릴지(=1 켬) — 끄면 이미지·스캔 문서는 VLM 엔진만",
+        on=("1",),
+    )
     ocr_gt_max: int | None = F(20, "PARSE_OCR_GT_MAX", "'OCR 글자 수가 글자층의 3배 이상'인 쪽을 쪽 VLM 후보로 올릴 상한(쪽, 0=끔)")
     page_scan: bool | None = F(True, "PARSE_PAGE_SCAN", "글자 PDF 안의 스캔 쪽을 신호로 찾아 쪽 VLM에 보낼지(=0이면 끔)", off=("0",))
-    phase_sec: CsvList | None = F(["0.1", "1", "1"], "PARSE_PHASE_SEC", "phase 1·2·3의 쪽당 제한 시간(초, 쉼표 3개)")
-    phases: CsvList | None = F(["1", "2", "3r"], "PARSE_PHASES", "돌릴 phase 목록(쉼표, 3r = 성공 엔진이 없는 문서만 phase 3)")
     prefetch_workers: int | None = F(2, "PREFETCH_WORKERS", "미리받기(warm) 명령의 동시 다운로드 스레드 수(개)")
     rapidocr_page_workers: int | None = F(
         1, "RAPIDOCR_PAGE_WORKERS", "rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개)", pinned="engine"
@@ -488,10 +493,14 @@ class PipelineExtract(Section):
     signal_ocr: bool | None = F(False, "PARSE_SIGNAL_OCR", "쪽 신호 계산에 렌더 OCR 글자 수를 채울지 — 1이면 켬(비용 큼)", on=("1",))
     skipped_log: str | None = F(None, "PARSE_SKIPPED_LOG", "건너뛴 문서(암호 PDF 등) 기록 jsonl 경로")
     source_limit: int | None = F(0, "PARSE_SOURCE_LIMIT", "원본에서 처리할 문서 건수 상한(0=제한 없음)")
+    text_page_sec: float | None = F(
+        10.0, "PARSE_TEXT_PAGE_SEC", "글자 엔진(VLM 아님) 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
+    )
     table_grid_max_rows: int | None = F(
         2000, "TABLE_GRID_MAX_ROWS", "표 grid JSON에 담는 최대 행 수(개) — 넘으면 앞부분만 자르고 truncated 표시", pinned="engine"
     )
-    warmup_sec: float | None = F(60.0, "PARSE_WARMUP_SEC", "엔진 첫 문서의 쪽당 제한 시간 하한(초) — import·모델 적재 여유")
+    vlm_page_sec: float | None = F(120.0, "PARSE_VLM_PAGE_SEC", "VLM 엔진 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더")
+    warmup_sec: float | None = F(60.0, "PARSE_WARMUP_SEC", "엔진 첫 문서의 제한 시간 하한(초) — import·모델 적재 여유")
     attach: PipelineExtractAttach = Field(default_factory=PipelineExtractAttach)
     cache: PipelineExtractCache = Field(default_factory=PipelineExtractCache)
     dedup: PipelineExtractDedup = Field(default_factory=PipelineExtractDedup)
@@ -547,7 +556,7 @@ class PipelineNight(Section):
     deadline: str | None = F("06:30", "NIGHT_DEADLINE", "새벽 파싱 배치 마감 시각(HH:MM, 컨테이너 TZ 기준)", blank="keep")
     parse_deadline: str | None = F(None, "PARSE_DEADLINE", "새벽 배치 parse 단계 마감 시각(HH:MM) — 비우면 무제한")
     vlm_concurrency: int | None = F(8, "NIGHT_VLM_CONCURRENCY", "새벽 배치: 문서 하나의 쪽 VLM 동시 요청 수(개)")
-    workers: int | None = F(4, "NIGHT_WORKERS", "새벽 배치: phase 3 VLM 동시 처리 문서 수(개)")
+    workers: int | None = F(4, "NIGHT_WORKERS", "새벽 배치: 동시 처리 문서 수(개)")
 
 
 class PipelinePaths(Section):

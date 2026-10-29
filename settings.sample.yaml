@@ -211,7 +211,7 @@ mcp:
 #   pipeline.paths.soffice_bin:  # LibreOffice soffice 실행 파일 경로 — PATH·흔한 경로보다 먼저 봄(pipeline 이미지 안 기본 /usr/bin/soffice — 옛 Dockerfile ENV, B-2) · 기본 없음 · 값: 경로 · env=SOFFICE_BIN
 #   pipeline.paths.stack_snapshot:  # 엔진 구성 사본 파일(내부 신호 — 진입점이 활성 판에서 만들어 자식에 넘김, 사람이 쓰지 않음 · S8b) · 기본 없음 · 값: 경로 · env=STACK_SNAPSHOT
 
-# ─── 2-4. extract — 원천·준비·파싱 (67칸) ───
+# ─── 2-4. extract — 원천·준비·파싱 (68칸) ───
 #  [기능 켬/끔]
 #   pipeline.extract.auto_reparse_changed:  # 야간 계획에서 바뀐 문서(changed) 전체를 다시 파싱할지(=1 재파싱) · 기본 false · 값: true·false · env=AUTO_REPARSE_CHANGED [켬: 1만]
 #   pipeline.extract.dedup_scan:  # 스캔 쪽의 OCR 본문과 쪽 VLM 전사 중복을 쪽마다 하나로 정리할지 · 기본 false · 값: true·false · env=PARSE_DEDUP_SCAN [끔: ''·0·none·false]
@@ -262,12 +262,13 @@ mcp:
 #   pipeline.extract.isolate_overhead:  # 별도 프로세스 실행 시 쪽당 제한 시간에 더해 줄 시작 여유(초) · 기본 10.0 · 값: 0 이상 초 · env=PARSE_ISOLATE_OVERHEAD
 #   pipeline.extract.max_file_mb:  # 이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음) · 기본 0.0 · 값: 0 이상 (0 = 제한 없음) · env=MAX_FILE_MB
 #   pipeline.extract.max_new:  # 이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음) · env=PARSE_MAX_NEW
-#   pipeline.extract.phase_sec:  # phase 1·2·3의 쪽당 제한 시간(초, 쉼표 3개) · 기본 0.1,1,1 · 값: 쉼표 목록 또는 YAML 목록 · env=PARSE_PHASE_SEC
 #   pipeline.extract.prefetch_workers:  # 미리받기(warm) 명령의 동시 다운로드 스레드 수(개) · 기본 2 · 값: 0 이상 정수 · env=PREFETCH_WORKERS
 #   pipeline.extract.rapidocr_page_workers:  # rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개) · 기본 1 · 값: 0 이상 정수 · env=RAPIDOCR_PAGE_WORKERS [엔진 지문]
 #   pipeline.extract.skipped_log:  # 건너뛴 문서(암호 PDF 등) 기록 jsonl 경로 · 기본 없음 · 값: 경로 · env=PARSE_SKIPPED_LOG
 #   pipeline.extract.source_limit:  # 원본에서 처리할 문서 건수 상한(0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음) · env=PARSE_SOURCE_LIMIT
-#   pipeline.extract.warmup_sec:  # 엔진 첫 문서의 쪽당 제한 시간 하한(초) — import·모델 적재 여유 · 기본 60.0 · 값: 0 이상 초 · env=PARSE_WARMUP_SEC
+#   pipeline.extract.text_page_sec:  # 글자 엔진(VLM 아님) 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더 · 기본 10.0 · 값: 0 이상 초 · env=PARSE_TEXT_PAGE_SEC
+#   pipeline.extract.vlm_page_sec:  # VLM 엔진 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더 · 기본 120.0 · 값: 0 이상 초 · env=PARSE_VLM_PAGE_SEC
+#   pipeline.extract.warmup_sec:  # 엔진 첫 문서의 제한 시간 하한(초) — import·모델 적재 여유 · 기본 60.0 · 값: 0 이상 초 · env=PARSE_WARMUP_SEC
 #   pipeline.extract.attach.max_mb:  # 첨부 1개당 크기 상한(MB, 넘으면 건너뜀) · 기본 20.0 · 값: 0 이상 · env=ATTACH_MAX_MB
 #   pipeline.extract.attach.timeout:  # 첨부 1개를 별도 프로세스로 파싱할 때 제한 시간(초) · 기본 120.0 · 값: 0 이상 초 · env=ATTACH_TIMEOUT
 #   pipeline.extract.cache.parse_cache_max_gb:  # 재판독 중간 캐시 3종 합계 용량 상한(GB, 넘으면 오래된 것부터 삭제, 0=끔) · 기본 5.0 · 값: 0 이상 (0 = 끔) · env=PARSE_CACHE_MAX_GB
@@ -433,7 +434,7 @@ mcp:
 #   pipeline.night.deadline:  # 새벽 파싱 배치 마감 시각(HH:MM, 컨테이너 TZ 기준) · 기본 06:30 · 값: HH:MM · env=NIGHT_DEADLINE [빈 글자 유지]
 #   pipeline.night.parse_deadline:  # 새벽 배치 parse 단계 마감 시각(HH:MM) — 비우면 무제한 · 기본 없음 · 값: HH:MM · env=PARSE_DEADLINE
 #   pipeline.night.vlm_concurrency:  # 새벽 배치: 문서 하나의 쪽 VLM 동시 요청 수(개) · 기본 8 · 값: 0 이상 정수 · env=NIGHT_VLM_CONCURRENCY
-#   pipeline.night.workers:  # 새벽 배치: phase 3 VLM 동시 처리 문서 수(개) · 기본 4 · 값: 0 이상 정수 · env=NIGHT_WORKERS
+#   pipeline.night.workers:  # 새벽 배치: 동시 처리 문서 수(개) · 기본 4 · 값: 0 이상 정수 · env=NIGHT_WORKERS
 #   pipeline.service.parse_mcp.job_timeout_sec:  # parse MCP 서비스 작업 1건 제한 시간(초) · 기본 600.0 · 값: 0 이상 초 · env=PARSE_MCP_JOB_TIMEOUT_SEC
 #   pipeline.service.parse_mcp.jobs_dir:  # parse MCP 서비스 작업 기록 폴더 · 기본 없음 · 값: 경로 · env=PARSE_MCP_JOBS_DIR
 #   pipeline.service.parse_mcp.max_mb:  # parse MCP 서비스가 받는 파일 크기 상한(MB) · 기본 64.0 · 값: 0 이상 · env=PARSE_MCP_MAX_MB
@@ -547,8 +548,8 @@ mcp:
 # ─── 3-2. extract — 원천·준비·파싱 (15칸) ───
 #   pipeline.extract.engine_scope:  # 문서마다 돌릴 엔진 범위(stack = 형식별 stack.json 목록만 / all = 등록 엔진 전부) · 기본 없음 · 값: stack·all 중 하나 · env=PARSE_ENGINE_SCOPE [서버 옛 값: all]
 #   pipeline.extract.hidden_overlap_max:  # '숨은 글자-그림 겹침' 신호로 쪽 VLM 후보에 올릴 쪽 수 상한(쪽, 0=끔) · 기본 20 · 값: 0 이상 정수 (0 = 끔) · env=PARSE_HIDDEN_OVERLAP_MAX
+#   pipeline.extract.ocr_engine:  # OCR 엔진(rapidocr·rapidocr_ko)을 파싱 엔진으로 돌릴지(=1 켬) — 끄면 이미지·스캔 문서는 VLM 엔진만 · 기본 false · 값: true·false · env=PARSE_OCR_ENGINE [켬: 1만]
 #   pipeline.extract.ocr_gt_max:  # 'OCR 글자 수가 글자층의 3배 이상'인 쪽을 쪽 VLM 후보로 올릴 상한(쪽, 0=끔) · 기본 20 · 값: 0 이상 정수 (0 = 끔) · env=PARSE_OCR_GT_MAX
-#   pipeline.extract.phases:  # 돌릴 phase 목록(쉼표, 3r = 성공 엔진이 없는 문서만 phase 3) · 기본 1,2,3r · 값: 쉼표 목록 또는 YAML 목록 · env=PARSE_PHASES
 #   pipeline.extract.rotated_max:  # 쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) — 0이면 rotation.csv를 안 읽음 · 기본 20 · 값: 0 이상 정수 (0 = rotation.csv를 안 읽음) · env=PARSE_ROTATED_MAX
 #   pipeline.extract.table_grid_max_rows:  # 표 grid JSON에 담는 최대 행 수(개) — 넘으면 앞부분만 자르고 truncated 표시 · 기본 2000 · 값: 0 이상 정수 · env=TABLE_GRID_MAX_ROWS [엔진 지문]
 #   pipeline.extract.attach.max_depth:  # 메일 등 첨부 안의 첨부를 따라갈 최대 깊이(단계) · 기본 1 · 값: 0 이상 정수 · env=ATTACH_MAX_DEPTH

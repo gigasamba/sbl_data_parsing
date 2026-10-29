@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """텍스트 파싱 작업 서비스 — data-pipeline-parse 컨테이너(S6b — 옛 data-parsing) 안에서 상주하며 검색 MCP(mcp-server — 옛 data-retrieval)의 parse_document
 도구가 localhost HTTP로 호출한다(비정형 파일[base64] → text 파싱 대표 결과 반환).
-범위 — prepare → run_all(phase 1·2, --procs 3 병렬 · VLM/OCR 엔진 제외) → parse_qa → represent까지.
+범위 — prepare → run_all(문서의 엔진들 동시에 · VLM/OCR 엔진 제외) → parse_qa → represent까지.
 구조화·임베딩·적재 없음 · 표 인식 유지 · 이미지/스캔 문서는 빈 결과(OCR·VLM 미실행).
 [패치 2026-10-22] ① 기본 time_out_threshold 300초 ② 큐 대기 순번을 제출 응답과 시작 시점에 표시(지연 원인 파악)
   ③ 서비스 PID 로그 파일 남김(docker exec -d 로그 없음 문제) ④ _purge_old에서 방금 만든 작업 보호(버그 수정)
@@ -276,7 +276,7 @@ def _worker():
                     env=job_env,  # noqa: B023
                 )
 
-                # ① prepare → run_all phase 1·2
+                # ① prepare → run_all
                 for cmd in (
                     ["pipeline.extract.prepare", "--src", str(ws / "in"), "--out", str(ws / "prep"), "--only", str(only)],
                     [
@@ -287,22 +287,6 @@ def _worker():
                         str(ws / "parse"),
                         "--limit",
                         "1",
-                        "--phase",
-                        "1",
-                        "--procs",
-                        PROCS,
-                        *engines,
-                    ],
-                    [
-                        "pipeline.extract.run_all",
-                        "--src",
-                        str(ws / "prep"),
-                        "--out",
-                        str(ws / "parse"),
-                        "--limit",
-                        "1",
-                        "--phase",
-                        "2",
                         "--procs",
                         PROCS,
                         *engines,

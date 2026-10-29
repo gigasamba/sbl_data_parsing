@@ -2,7 +2,7 @@
 """파이프라인 진입점 — 두 단계를 나눠 부른다(요청 문장 → 명령 대응표는 AGENTS.md "요청 → 명령").
 
 단계 1 · 비교(기술 스택 고르기)
-  compare-parse   여러 파싱 엔진 비교: run_all(phase 1→2, 3은 --phases 3) → parse_qa → 보고서(엔진 × 형식·선정 후보)
+  compare-parse   여러 파싱 엔진 비교: run_all → parse_qa → 보고서(엔진 × 형식·선정 후보)
   compare-all     파싱 + 데이터 구조화(청킹·임베딩·그래프) + 검색까지 전체 조합 비교 → 보고서·문항 탐색기(답변 비교 단계는
                   10-13 답변 경로 통일 4단계로 archive — 답변 품질은 dev_tools/perform_test/answer_stage/run.py, rag_qa만)
 단계 2 · 고정 스택(정해진 기술로 실제 파이프라인 + 기본 테스트)
@@ -74,23 +74,8 @@ def _set_engine_scope_default(explicit_engines):
         C.put(PARSE_ENGINE_SCOPE="all" if explicit_engines else "stack")
 
 
-def phases_of(a):
-    """돌릴 phase — 기본 1,2,3r(PARSE_PHASES). 3r = 성공한 엔진이 하나도 없는 문서만 phase 3(스캔 계약서가 빠져 집계가 틀리던 것 —
-    처음부터 시험 10-02). 전체 phase 3(VLM 포함, 쪽당 1초 넘으면 넘김)는 시간 날 때 `parse --phases 3`·`night --phases 3`."""
-    ph = getattr(a, "phases", None)
-    if ph:
-        return [x.strip() for x in str(ph).split(",") if x.strip()]
-    return list(pc.cfg().extract.phases)  # S7c — 설정 객체(PARSE_PHASES, 기본 1,2,3r · 빈 값 = 기본값)
-
-
-def _phase_args(ph):
-    """'3r' → ['--phase', '3', '--rescue'] · '2' → ['--phase', '2']."""
-    return ["--phase", str(ph).rstrip("r")] + (["--rescue"] if str(ph).endswith("r") else [])
-
-
-def parse_phases(src, engines, procs, phases=(1, 2)):
-    for ph in phases:
-        sh("pipeline.extract.run_all", "--src", src, "--procs", procs, *_phase_args(ph), *(["--engines", engines] if engines else []))
+def parse_docs(src, engines, procs):
+    sh("pipeline.extract.run_all", "--src", src, "--procs", procs, *(["--engines", engines] if engines else []))
 
 
 # ── 야간 배치(새벽 파싱 — GPU가 비는 시간, LLM 호출 없음) ─────────
@@ -129,7 +114,7 @@ def _run_until(args, env, sec):
 
 
 def night(a):
-    """새벽 배치: 파싱(phase 1→2) → 대표 파싱 → publish(OS+EDW) → 구조화·임베딩 → PG 적재.
+    """새벽 배치: 파싱 → 대표 파싱 → publish(OS+EDW) → 구조화·임베딩 → PG 적재.
     --no-structure면 파싱+publish만. --no-publish로 OS+EDW publish 건너뜀.
     GPU 모델은 API로만(VLM_*·EMBED_*), LLM(LLM_*)은 부르지 않는다 — 요약은 발췌만. 마감(--deadline)을 넘으면 멈추고 다음 밤에 이어 감.
     RV5(10-09): deploy/host/scripts/trigger.sh night(OP13 정본, compose 여러 컨테이너용)와는 배포 모양이 달라 따로 둠 — 이 함수는
@@ -165,21 +150,17 @@ def night(a):
         a.docs_from = only
     else:
         a.docs_from = None
-    for ph in phases_of(a):
-        left = _until(a.deadline)
-        if left < 300:
-            stopped = f"phase {ph} 시작 전 마감 {a.deadline} 도달"
-            break
-        args = ["pipeline.extract.run_all", "--src", a.src, "--procs", a.procs, *_phase_args(ph), "--engines", engines]
+    left = _until(a.deadline)
+    if left < 300:
+        stopped = f"파싱 시작 전 마감 {a.deadline} 도달"
+    else:
+        args = ["pipeline.extract.run_all", "--src", a.src, "--procs", a.procs, "--workers", a.workers, "--engines", engines]
         if a.docs_from:
             args += ["--docs-from", str(a.docs_from)]
-        if str(ph).startswith("3"):
-            args += ["--vlm-all", "--workers", a.workers]
         rc = _run_until(args, env, left - 120)
-        log.append(f"phase {ph}: " + ("완료" if rc == 0 else "마감으로 중단" if rc is None else f"종료 코드 {rc}"))
+        log.append("파싱: " + ("완료" if rc == 0 else "마감으로 중단" if rc is None else f"종료 코드 {rc}"))
         if rc is None:
-            stopped = f"phase {ph} 도중 마감 {a.deadline}"
-            break
+            stopped = f"파싱 도중 마감 {a.deadline}"
     if not a.no_structure and not stopped:
         for args in (
             ["pipeline.transform.represent.parse_qa", "--src", a.src],
@@ -192,7 +173,7 @@ def night(a):
                 stopped = stopped or f"{args[0]}에서 멈춤"
                 break
             if args[0] == "pipeline.transform.represent.represent":
-                write_mark("parse", src=str(a.src), phases=phases_of(a), engines=engines.split(","), by="night")
+                write_mark("parse", src=str(a.src), engines=engines.split(","), by="night")
         if source and not stopped:
             from pipeline.extract import source as SRC
 
@@ -240,7 +221,7 @@ def night(a):
     md += [f"- {x}" for x in log] + (
         [f"- **멈춤: {stopped}** — 다음 밤에 같은 명령이면 끝난 문서×엔진은 건너뛰고 이어 감"] if stopped else ["- 전부 끝남"]
     )
-    md += ["", "진행·결과: output/parse/PROGRESS.md · PHASE_REPORT.md · output/report/phase<N>-report.html · output/RUNLOG.md"]
+    md += ["", "진행·결과: output/parse/PROGRESS.md · output/RUNLOG.md"]
     Path("output").mkdir(exist_ok=True)
     Path("output/NIGHT.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     print("\n".join(md))
@@ -257,7 +238,7 @@ def compare_parse(a):
         engines = ",".join(_engines_of(st))
         print(f"비교 엔진: {engines}")
     if not a.skip_parse:
-        parse_phases(a.src, engines, a.procs, phases_of(a))
+        parse_docs(a.src, engines, a.procs)
     sh("pipeline.transform.represent.parse_qa", "--src", a.src)
     sh("pipeline.eval.report")
     print("→ output/report/report.html(파싱 결과 탭: 엔진 × 형식 · 최종 엔진 조합 후보) · output/parse/selection.json")
@@ -635,7 +616,7 @@ def _tdone():
 
 
 def parse_module(a):
-    """파싱 모듈: (--source면) 가져오기·시험 표본 → 중복 확인 → 방향 보정 → phase(기본 1,2,3r) → 채점 → 대표 결과 → 끝 표시 → (s3) 원본 정리.
+    """파싱 모듈: (--source면) 가져오기·시험 표본 → 중복 확인 → 방향 보정 → 파싱 → 채점 → 대표 결과 → 끝 표시 → (s3) 원본 정리.
     임베딩·DB 연결 없음 — 수집 서버에 이것만 보낼 수 있음. --source 없으면 --src(이미 준비된 폴더)를 그대로."""
     from common.core.paths import child_env
 
@@ -713,25 +694,23 @@ def parse_module(a):
             f.write_text("\n".join(pick) + "\n", encoding="utf-8")
             lim = ["--docs-from", f]
             print(f"[parse] 새 문서 {min(len(new), a.max_new)}/{len(new)}개(PARSE_MAX_NEW {a.max_new}) — 나머지는 다음 실행", flush=True)
-        for ph in phases_of(a):
-            args = [
-                "pipeline.extract.run_all",
-                "--src",
-                a.src,
-                "--out",
-                OUT / "parse",
-                "--procs",
-                a.procs,
-                *_phase_args(ph),
-                "--engines",
-                engines,
-                *lim,
-            ]
-            if str(ph).startswith("3"):
-                args += ["--vlm-all", "--workers", a.workers]
-            if _run_until(args, env, _left(a) - 120) is None:
-                raise SystemExit(75)  # 마감 — 끝 표시 안 바꿈, 다음 실행이 이어 감
-            _tstep(f"t_phase{ph}")
+        args = [
+            "pipeline.extract.run_all",
+            "--src",
+            a.src,
+            "--out",
+            OUT / "parse",
+            "--procs",
+            a.procs,
+            "--workers",
+            a.workers,
+            "--engines",
+            engines,
+            *lim,
+        ]
+        if _run_until(args, env, _left(a) - 120) is None:
+            raise SystemExit(75)  # 마감 — 끝 표시 안 바꿈, 다음 실행이 이어 감
+        _tstep("t_parse")
         for args in (
             ["pipeline.transform.represent.parse_qa", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
             ["pipeline.transform.represent.represent", "--stack", _stack()[0], "--src", a.src, "--parse-dir", OUT / "parse"],
@@ -769,12 +748,10 @@ def parse_module(a):
         src=str(a.src),
         source=str(a.source or a.src),
         mode=a.mode,
-        phases=phases_of(a),
         engines=engines.split(","),
         docs=len(idx),
         digest=digest,
         rep_ok=sum(1 for r in idx if r.get("engine")),
-        failed="output/parse/PHASE2_FAILED.md",
         run_id=run_id,
     )
     if not streaming and not parallel and src_info:  # 스트리밍·병렬은 문서/묶음마다 이미 지웠음(SRC.mark_done)
@@ -937,7 +914,7 @@ def run_stack(a):
     st = _stack()[1]
     engines = ",".join(sorted({e for es in st["parse"].values() for e in es}))
     if not a.skip_parse:
-        parse_phases(a.src, engines, a.procs, phases_of(a))  # 이미 파싱된 문서×엔진은 다시 안 함(sha)
+        parse_docs(a.src, engines, a.procs)  # 이미 파싱된 문서×엔진은 다시 안 함(sha)
     sh("pipeline.transform.represent.parse_qa", "--src", a.src)  # 대표 고르기용 정확도(교차 재현율)
     sh("pipeline.transform.represent.represent", "--stack", _stack()[0], "--src", a.src)
     sh(
@@ -1309,7 +1286,6 @@ def main(argv=None):
         p.add_argument("--src", default=src)
         p.add_argument("--procs", default=_default_procs(), help="CPU 엔진 프로세스 수 · auto = CPU·메모리(cgroup) 기준")
         p.add_argument("--skip-parse", action="store_true", help="파싱은 이미 했으면 건너뜀")
-        p.add_argument("--phases", default=None, help="돌릴 phase(기본 PARSE_PHASES 또는 1,2 — phase 3는 시간 날 때 --phases 3)")
         if name != "run-stack":
             p.add_argument("--engines", default="", help="비우면 핵심 엔진(registry.CORE) · all = 전부 · candidates = stack.json 선정+후보")
             p.add_argument("--top", default="4")
@@ -1320,7 +1296,6 @@ def main(argv=None):
             p.add_argument("--no-prune", action="store_true", help="삭제·바뀐 원본의 옛 기록을 PostgreSQL에서 지우지 않음")
             p.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
     p = sub.add_parser("night", help="새벽 파싱 배치(GPU 모델 API만, LLM 없음, 마감 시각에 멈추고 다음 밤에 이어 감)")
-    p.add_argument("--phases", default=None, help="돌릴 phase(기본 PARSE_PHASES 또는 1,2 — phase 3는 시간 날 때 --phases 3)")
     p.add_argument("--src", default=src)
     p.add_argument(
         "--source",
@@ -1332,7 +1307,7 @@ def main(argv=None):
     p.add_argument("--engines", default="", help="비우면 stack.json 선정 엔진 + 후보(candidates)")
     p.add_argument("--deadline", default=pc.cfg().night.deadline)
     p.add_argument("--procs", default=_default_procs(), help="CPU 엔진 프로세스 수 · auto = CPU·메모리(cgroup) 기준(common/resources.py)")
-    p.add_argument("--workers", default=_default_workers(), help="phase 3 VLM 동시 문서 수")
+    p.add_argument("--workers", default=_default_workers(), help="동시 처리 문서 수(문서 안 엔진들은 늘 동시에)")
     p.add_argument("--vlm-concurrency", type=int, default=pc.cfg().night.vlm_concurrency, help="문서 하나의 쪽 동시 요청 수")
     p.add_argument(
         "--no-structure",
@@ -1344,7 +1319,7 @@ def main(argv=None):
     p.add_argument("--local", action="store_true", help="pgvector가 떠 있어도 로컬 묶음까지만")
     p.add_argument("--no-prune", action="store_true", help="삭제·바뀐 원본의 옛 기록을 PostgreSQL에서 지우지 않음")
     for name, hlp in (
-        ("parse", "파싱 모듈 1회(트리거): phase → 채점 → 대표 결과 → 끝 표시 · 임베딩·DB 없음"),
+        ("parse", "파싱 모듈 1회(트리거): 파싱 → 채점 → 대표 결과 → 끝 표시 · 임베딩·DB 없음"),
         ("structure", "구조화 모듈 1회(트리거): 대표 결과 → 청킹·임베딩·그래프 묶음 · 새 파싱 결과 없으면 건너뜀"),
         ("load", "적재 모듈 1회(트리거): 묶음 → PostgreSQL(pgvector) · 새 묶음 없으면 건너뜀"),
     ):
@@ -1368,7 +1343,6 @@ def main(argv=None):
                 help="test = 대상이 50건 이상이면 파일 형식별 5건씩만(TEST_MIN_DOCS·TEST_PER_TYPE) · prod = 전부",
             )
             p.add_argument("--engines", default="")
-            p.add_argument("--phases", default=None, help="기본 PARSE_PHASES 또는 1,2")
             p.add_argument("--procs", default=_default_procs())
             p.add_argument("--workers", default=_default_workers())
             p.add_argument("--vlm-concurrency", type=int, default=pc.cfg().night.vlm_concurrency)
