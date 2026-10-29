@@ -32,6 +32,7 @@ Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · p
 | do-01 | Move `refactor.md` to `docs/refactoring/` | todo | [→](prd/doc.md#do-01) |
 | do-02 | Glossary in `docs/index.md` | todo | [→](prd/doc.md#do-02) |
 | op-01 | JSON Lines event log | todo | [→](prd/ops.md#op-01) |
+| op-02 | RUN_ENV `local`·`dev`·`prd` (drop `stage`) · LLM_FAKE only in `local` | design done | [→](prd/ops.md#op-02) |
 
 Done: mcp 8 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 9 → [prd/e2e.md](prd/e2e.md)
 Code vs requirements — mismatches, code with no requirement, off-by-default features, removed 10-29: [prd/gaps.md](prd/gaps.md)
