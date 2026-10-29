@@ -279,7 +279,7 @@ def _docx_overlay_records(name, doc_path, doc, pic_objs, text_boxes):
 
 
 # ── 그림 찾기(형식별) ────────────────────────────────────────────────────
-def figures(p):
+def figures(p, page_covered=False):
     """[{image_id, loc, bbox, bytes, before[], after[], near[], text_layer?}] — 근처 글자는 캡션·본문 언급 후보(W11가 씀)."""
     p = Path(p)
     ext, name, out = p.suffix.lower(), p.name, []
@@ -289,7 +289,10 @@ def figures(p):
         d = fitz.open(p)
         from pipeline.transform.figures.vlm_page import page_targets  # 독립 검토 반영(10-11, AD31/AD20 BLOCK) — scan_pages()만 보던
 
-        skip_pages = page_targets(p)  # 자리를 page_targets()로: VLM_PAGE_MAX==0·cap 절단·PARSE_POST에
+        # 10-29 C — page_covered(이미지·스캔 문서를 VLM 엔진이 이미 쪽마다 옮김)면 모든 쪽을 '옮긴 쪽'으로(쪽 전체 그림 VLM 생략)
+        skip_pages = (
+            set(range(1, len(d) + 1)) if page_covered else page_targets(p)
+        )  # 자리를 page_targets()로: VLM_PAGE_MAX==0·cap 절단·PARSE_POST에
         # vlm_page 없음까지 접은 "실제로 쪽 VLM이 불릴 쪽"을 안다 — BR56: 그 쪽도 그림 기록 자체는 남긴다(get_image가
         # 찾을 수 있게), loc["page_vlm"]=True만 남겨 build_records가 그 그림의 VLM만 생략(쪽 VLM과 중복 호출 방지,
         # 기록을 통째로 지우던 옛 동작이 버그 — AD31/AD20은 "VLM 재호출 금지"였지 "기록 금지"가 아니었다).
@@ -489,7 +492,7 @@ def figures(p):
         )  # 문서 전체가 쪽 VLM(page_text) 대상이면(기본 — is_scan) 그림 VLM은 생략(중복 방지)
 
         page_bytes = p.read_bytes()
-        page_vlm = 1 in page_targets(p)
+        page_vlm = page_covered or 1 in page_targets(p)
         parent_id = f"{name}#p1#page"  # F7 — 단독 이미지 전체 = page_render 부모(설계 §3 "#p<쪽>#page")
         out.append(
             {
@@ -968,7 +971,7 @@ def _pick_edges_det(ext, page, px_edges, rec_edges, pdf_doc, f):
     return (merged, "+".join(used)) if merged else (edges, edges_source)  # F13 리뷰④ — edges_source는 항상 str|None
 
 
-def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images=None, ocr_fn=None, figures_max=None):
+def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images=None, ocr_fn=None, figures_max=None, page_covered=False):
     """문서 1건의 그림 기록 목록(설계 git 이력 docs/plans/image-parsing-2026-10-01.md(c4874dd0^) §3·§3-0 계약 — modules/search/mcp_server.py가 이 모양으로 읽음)
     + 렌더된 본문 블록(단순·보정) 목록 → (records, plain_blocks, enriched_blocks).
     AD9·AD21 — 작은 그림·반복 이미지는 VLM 후보에서 빼고(skipped: small/duplicate), 남는 그림은 캡션·본문 언급·면적 순으로
@@ -987,7 +990,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
     ext = Path(doc_path).suffix.lower()
     is_pdf = ext == ".pdf"
     px_edges = pptx_edges(doc_path) if ext == ".pptx" else {}  # 슬라이드 XML 연결선 — VLM edges보다 우선(있으면)
-    figs = figures(doc_path)
+    figs = figures(doc_path, page_covered)
     pdf_doc = None  # F13 — PDF 벡터 도식 결정적 edges 추출용 fitz 문서(비PDF·벡터 그림 없는 문서는 안 엶, 비용 0)
     if _diagram_edges_det_on() and is_pdf and any((f.get("loc") or {}).get("origin") == "vector" for f in figs):
         import fitz as _fitz

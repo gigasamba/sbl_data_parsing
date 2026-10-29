@@ -1,6 +1,6 @@
 """pipeline 앱 설정 — settings.yaml의 common + pipeline 절만 읽는다(S7a, refactor_plan 5-2 · D-015). 다른 앱(mcp) 절은 무시.
 pipeline 코드가 읽는 객체는 설정 파일 기반 캐시 PIPE다(S7e2 — 전환 다리 없앰: env의 옛 이름은 읽지 않음, 신호 SETTINGS_FILE·RUN_ENV만):
-  `from pipeline import config as pc` → `pc.cfg().extract.phases`(pipeline 절) · `pc.given("PM_BUCKET")`(준 값만) · `pc.checked(X)` ·
+  `from pipeline import config as pc` → `pc.cfg().extract.max_new`(pipeline 절) · `pc.given("PM_BUCKET")`(준 값만) · `pc.checked(X)` ·
   `pc.by_env(f"{p}_X")` · 시험 `with pc.PIPE.env(PARSE_TMP=…, KEEP_RAW_LAYER=None):`(설정 위에 옛 env 이름으로 덮음 — os.environ 안 건드림).
   common 칸은 `common.config.settings.cfg()`로(COMMON). 값을 바꿔 자식에 넘길 때는 `settings.put()`·`settings.child_env()`(덮기 파일).
 SETTINGS(common + pipeline 절)는 확인 명령(python -m pipeline.config)·시험용. 칸 표는 refactor_plan 부록 D.
@@ -193,17 +193,28 @@ class PipelineLoadPublish(Section):
 
 
 class PipelineServiceParseMcp(Section):
+    REMOVED = frozenset({"ocr"})  # 사용자 10-29 — PARSE_MCP_OCR를 pipeline.extract.ocr_engine으로 합침(남아 있어도 경고만 — 한 판 동안)
     job_timeout_sec: float | None = F(600.0, "PARSE_MCP_JOB_TIMEOUT_SEC", "parse MCP 서비스 작업 1건 제한 시간(초)")
     jobs_dir: str | None = F(None, "PARSE_MCP_JOBS_DIR", "parse MCP 서비스 작업 기록 폴더")
     max_mb: float | None = F(64.0, "PARSE_MCP_MAX_MB", "parse MCP 서비스가 받는 파일 크기 상한(MB)")
-    ocr: bool | None = F(False, "PARSE_MCP_OCR", "parse MCP 서비스에서 OCR 엔진 포함 여부 — 1이면 포함(느림)", on=("1",))
     port: Port | None = F(8766, "PARSE_MCP_PORT", "parse MCP 서비스 포트")
     procs: int | None = F(None, "PARSE_MCP_PROCS", "parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개)")
     queue_max: int | None = F(8, "PARSE_MCP_QUEUE_MAX", "parse MCP 서비스 대기 작업 상한(건)")
     roots: CsvList | None = F(
         None, "PARSE_MCP_ROOTS", "parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) — 비면 코드가 정함(<서비스 폴더>/inbox)"
     )
+    text_page_sec: float | None = F(
+        1.0, "PARSE_MCP_TEXT_PAGE_SEC", "parse MCP 서비스 작업의 글자 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
+    )
     token: SecretStr | None = F(None, "PARSE_MCP_TOKEN", "parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값)")
+    warmup_sec: float | None = F(
+        20.0,
+        "PARSE_MCP_WARMUP_SEC",
+        "parse MCP 서비스 작업의 첫 시도 제한 하한(초) — 새 프로세스에서 엔진을 처음 띄울 때(import·모델 적재) 여유",
+    )
+    vlm_page_sec: float | None = F(
+        60.0, "PARSE_MCP_VLM_PAGE_SEC", "parse MCP 서비스 작업의 VLM 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
+    )
 
 
 class PipelineServiceTrigger(Section):
@@ -440,6 +451,7 @@ class PipelineEval(Section):
 
 
 class PipelineExtract(Section):
+    REMOVED = frozenset({"phases", "phase_sec"})  # 사용자 10-29 — phase 없앰(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     auto_reparse_changed: bool | None = F(
         False, "AUTO_REPARSE_CHANGED", "야간 계획에서 바뀐 문서(changed) 전체를 다시 파싱할지(=1 재파싱)", on=("1",)
     )
@@ -466,13 +478,23 @@ class PipelineExtract(Section):
     kreuzberg_prose_filter: bool | None = F(
         True, "KREUZBERG_PROSE_FILTER", "kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔)", pinned="engine"
     )
+    low_priority: bool | None = F(
+        True,
+        "PARSE_LOW_PRIORITY",
+        "엔진 자식 프로세스를 낮은 우선순위로(POSIX nice +10 · Windows BELOW_NORMAL) — parse MCP 서비스 작업은 끔(=0)",
+        off=("0",),
+    )
     max_file_mb: float | None = F(0.0, "MAX_FILE_MB", "이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음)")
     max_new: int | None = F(0, "PARSE_MAX_NEW", "이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음)")
     merge_pages: bool | None = F(True, "PARSE_MERGE_PAGES", "엔진 간 쪽·문단 단위 보정(쪽 합치기)을 켤지(=0이면 끔)", off=("0",))
+    ocr_engine: bool | None = F(
+        False,
+        "PARSE_OCR_ENGINE",
+        "OCR 엔진(rapidocr·rapidocr_ko)을 파싱 엔진으로 돌릴지(=1 켬) — 끄면 이미지·스캔 문서는 VLM 엔진만",
+        on=("1",),
+    )
     ocr_gt_max: int | None = F(20, "PARSE_OCR_GT_MAX", "'OCR 글자 수가 글자층의 3배 이상'인 쪽을 쪽 VLM 후보로 올릴 상한(쪽, 0=끔)")
     page_scan: bool | None = F(True, "PARSE_PAGE_SCAN", "글자 PDF 안의 스캔 쪽을 신호로 찾아 쪽 VLM에 보낼지(=0이면 끔)", off=("0",))
-    phase_sec: CsvList | None = F(["0.1", "1", "1"], "PARSE_PHASE_SEC", "phase 1·2·3의 쪽당 제한 시간(초, 쉼표 3개)")
-    phases: CsvList | None = F(["1", "2", "3r"], "PARSE_PHASES", "돌릴 phase 목록(쉼표, 3r = 성공 엔진이 없는 문서만 phase 3)")
     prefetch_workers: int | None = F(2, "PREFETCH_WORKERS", "미리받기(warm) 명령의 동시 다운로드 스레드 수(개)")
     rapidocr_page_workers: int | None = F(
         1, "RAPIDOCR_PAGE_WORKERS", "rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개)", pinned="engine"
@@ -488,10 +510,14 @@ class PipelineExtract(Section):
     signal_ocr: bool | None = F(False, "PARSE_SIGNAL_OCR", "쪽 신호 계산에 렌더 OCR 글자 수를 채울지 — 1이면 켬(비용 큼)", on=("1",))
     skipped_log: str | None = F(None, "PARSE_SKIPPED_LOG", "건너뛴 문서(암호 PDF 등) 기록 jsonl 경로")
     source_limit: int | None = F(0, "PARSE_SOURCE_LIMIT", "원본에서 처리할 문서 건수 상한(0=제한 없음)")
+    text_page_sec: float | None = F(
+        10.0, "PARSE_TEXT_PAGE_SEC", "글자 엔진(VLM 아님) 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
+    )
     table_grid_max_rows: int | None = F(
         2000, "TABLE_GRID_MAX_ROWS", "표 grid JSON에 담는 최대 행 수(개) — 넘으면 앞부분만 자르고 truncated 표시", pinned="engine"
     )
-    warmup_sec: float | None = F(60.0, "PARSE_WARMUP_SEC", "엔진 첫 문서의 쪽당 제한 시간 하한(초) — import·모델 적재 여유")
+    vlm_page_sec: float | None = F(120.0, "PARSE_VLM_PAGE_SEC", "VLM 엔진 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더")
+    warmup_sec: float | None = F(60.0, "PARSE_WARMUP_SEC", "엔진 첫 문서의 제한 시간 하한(초) — import·모델 적재 여유")
     attach: PipelineExtractAttach = Field(default_factory=PipelineExtractAttach)
     cache: PipelineExtractCache = Field(default_factory=PipelineExtractCache)
     dedup: PipelineExtractDedup = Field(default_factory=PipelineExtractDedup)
@@ -500,6 +526,24 @@ class PipelineExtract(Section):
     prepare: PipelineExtractPrepare = Field(default_factory=PipelineExtractPrepare)
     source: PipelineExtractSource = Field(default_factory=PipelineExtractSource)
     stream: PipelineExtractStream = Field(default_factory=PipelineExtractStream)
+
+
+class PipelineHostRunDocs(Section):
+    """문서별 flow 러너(deploy/host/scripts/run_docs.py — 호스트에서 글자 그대로 읽음) 레인·대기열(사용자 10-29, docs/prd/runner.md rn-01·rn-02).
+    기본값은 run_docs.py RUN_DOCS_DEFAULTS와 같다(tests/general/deploy/test_run_docs.py가 대조)."""
+
+    warm: int | None = F(20, "RUN_DOCS_WARM", "진입 대기열 — 미리 받아 둘 문서 수(진행 중 제외, 명령 인자 --warm이 덮음)")
+    struct_workers: int | None = F(2, "RUN_DOCS_STRUCT_WORKERS", "구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음)")
+    struct_backlog: int | None = F(
+        None, "RUN_DOCS_STRUCT_BACKLOG", "중간 대기열 상한(파싱 끝·구조화 대기 문서 수) — 비우면 구조화 스레드 × 2, 0이면 상한 없음"
+    )
+    vlm_cap: int | None = F(2, "RUN_DOCS_VLM_CAP", "vlm 레인 문서 동시 파싱 상한(gpu 예산)")
+    light_dedicated: int | None = F(1, "RUN_DOCS_LIGHT_DEDICATED", "light 레인 전담 워커 수(light 문서만)")
+    light_shared: int | None = F(1, "RUN_DOCS_LIGHT_SHARED", "light 레인 공유 워커 수(light 먼저, 비면 가장 긴 다른 레인에서 가져옴)")
+    medium_dedicated: int | None = F(1, "RUN_DOCS_MEDIUM_DEDICATED", "medium 레인 전담 워커 수(MCP 업로드 처리 중에는 쉼)")
+    medium_shared: int | None = F(1, "RUN_DOCS_MEDIUM_SHARED", "medium 레인 공유 워커 수(medium 먼저, 비면 다른 레인)")
+    vlm_dedicated: int | None = F(1, "RUN_DOCS_VLM_DEDICATED", "vlm 레인 전담 워커 수(vlm 문서만)")
+    vlm_shared: int | None = F(1, "RUN_DOCS_VLM_SHARED", "vlm 레인 공유 워커 수(vlm 먼저, 비면 다른 레인)")
 
 
 class PipelineHost(Section):
@@ -526,6 +570,7 @@ class PipelineHost(Section):
     structure_cpus: float | None = F(2.0, "STRUCTURE_CPUS", "structure 컨테이너(job·상주 트리거·색인) CPU 개수 상한(개)")
     structure_mem_limit: str | None = F("8g", "STRUCTURE_MEM_LIMIT", "structure 컨테이너 메모리·스왑 상한(docker 형식)")
     nightly: PipelineHostNightly = Field(default_factory=PipelineHostNightly)
+    run_docs: PipelineHostRunDocs = Field(default_factory=PipelineHostRunDocs)
 
 
 class PipelineLoad(Section):
@@ -547,7 +592,7 @@ class PipelineNight(Section):
     deadline: str | None = F("06:30", "NIGHT_DEADLINE", "새벽 파싱 배치 마감 시각(HH:MM, 컨테이너 TZ 기준)", blank="keep")
     parse_deadline: str | None = F(None, "PARSE_DEADLINE", "새벽 배치 parse 단계 마감 시각(HH:MM) — 비우면 무제한")
     vlm_concurrency: int | None = F(8, "NIGHT_VLM_CONCURRENCY", "새벽 배치: 문서 하나의 쪽 VLM 동시 요청 수(개)")
-    workers: int | None = F(4, "NIGHT_WORKERS", "새벽 배치: phase 3 VLM 동시 처리 문서 수(개)")
+    workers: int | None = F(4, "NIGHT_WORKERS", "새벽 배치: 동시 처리 문서 수(개)")
 
 
 class PipelinePaths(Section):

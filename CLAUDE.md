@@ -59,7 +59,7 @@
 - **새 설정 항목을 추가할 때:** 해당 섹션의 모델(`common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`)에 항목·설명·기본값·옛 env 이름(alias)을 넣는다 → `python -m common.config.sample`로 sample을 다시 만든다 → `python -m common.config.keyscan --check`를 실행한다 → 운영에 영향이 있으면 [docs/operations/env-guide.md](docs/operations/env-guide.md)와 `refactor.md`에 적는다.
 - 기본값은 코드에, 환경마다 다른 값은 settings.yaml에 둔다. 비워 둔 항목은 코드 기본값을 쓴다.
 - 자식 프로세스에 값을 넘길 때는 env dict가 아니라 `settings.child_env(base, X=…)`(그 자식에게만) 또는 `settings.put(X=…)`(현재 프로세스와 이후 자식 모두)를 쓴다. 한 번만 다른 값으로 실행할 때는 명령 인자 `--set 이름=값`을 쓴다(진입 모듈에서 `setarg.apply()`). PC에서는 오버레이 설정 파일 `python -m common.config.overrides`도 쓸 수 있다.
-- `RUN_ENV`(`common.run_env`)는 `local`, `dev`, `stage`, `prd` 중 하나다. 서버(dev, stage, prd)는 외부 모델 호출을 거부하고, 설정 파일을 읽지 못하면 시작하지 않는다. PC 전용 분기는 `paths.LOCAL_RUN` 하나로만 가른다.
+- `RUN_ENV`(`common.run_env`)는 `local`, `dev`, `prd` 중 하나다(`stage`는 10-29에 없앰 — 입력하면 시작 거부). 서버(dev, prd)는 외부 모델 호출을 거부하고, `common.dev.llm_fake`(가짜 LLM 응답)가 켜져 있으면 시작하지 않으며, 설정 파일을 읽지 못하면 시작하지 않는다. 외부 모델·가짜 LLM은 `local`에서만 쓴다. PC 전용 분기는 `paths.LOCAL_RUN` 하나로만 가른다.
 - 비밀값은 문서, 로그, 커밋, 채팅, 오류 메시지에 쓰지 않는다. 화면에 키를 출력하지 않는다.
 
 ---
@@ -145,8 +145,9 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 ```
 
 ### 6-3. 테스트 기준선(10-29)과 알려진 실패
-- `selftest`는 **89개 중 88개 통과**다. 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
-- `pytest tests/`는 **142 passed · 8 xfailed**다(S12에 run_docs 흐름 테스트를 추가 — 10-29 `feature/settings-cleanup`이 테스트 파일 5개를 지워 기준 PC에서 다시 잴 것). 위 1개와 일반 테스트 7개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — C-54 ①, C-58)이며, 모두 리팩토링 전부터 있던 실패다.
+- `selftest`는 **85개 중 84개 통과**다(10-29 `feature/test-cleanup` — 중복 `test_common_init` 삭제 뒤). 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
+- `pytest tests/`는 **138 passed · 5 xfailed**다(10-29 `feature/test-cleanup` — 루트 `settings.yaml`이 있든 없든 같다). 위 1개와 일반 테스트 4개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — C-54 ①, C-58)이며, 모두 리팩토링 전부터 있던 실패다.
+- PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕 설정(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`에 넣는다(지금 `test_pub_registry`).
 - 알려진 실패가 통과하면 "XPASS — 목록에서 지울 수 있음" 경고가 나온다. 그때는 목록에서 지운다. **새 실패를 알려진 실패 목록에 추가하는 것은 고장을 숨기는 일이다** — 원인과 결정을 refactor.md에 적고 사람의 승인을 받은 뒤에만 추가한다.
 - Mac의 부하가 높으면 `test_trigger_server`가 시간 초과로 실패할 수 있다(환경 문제).
 

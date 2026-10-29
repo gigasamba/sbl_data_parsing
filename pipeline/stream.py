@@ -3,7 +3,7 @@
 cli/pipeline.py의 parse 모듈이 PARSE_STREAM=1 · --source일 때 이 모듈의 run()을 쓴다.
 
 왜: 수집 서버(1차는 개발 서버)가 실원본을 받는다 — 처리가 끝나면 디스크에 원본·사본·본문이 남으면 안 된다(데이터 보호).
-어떻게: 한 바퀴(묶음 1건) = 받기(PARSE_TMP) → 회전 보정(prepare) → phase 파싱(run_all) → 채점(parse_qa) → 대표 결과(represent)
+어떻게: 한 바퀴(묶음 1건) = 받기(PARSE_TMP) → 회전 보정(prepare) → 파싱(run_all) → 채점(parse_qa) → 대표 결과(represent)
 → (try/finally) 원본·회전 사본·그 문서들의 엔진별 중간 결과를 지움. 대표 결과(_rep)·그림 기록/PNG(output/parse/_images)는 항상 남긴다.
 묶음 단위로만 받아 PARSE_TMP가 동시에 작은 양만 들고 있게 한다(컨테이너가 죽어도 디스크에 남는 게 적음).
 PARSE_TMP/.stream.lock(pid 기록, O_EXCL)으로 같은 PARSE_TMP에 스트리밍 두 개가 동시에 돌지 못하게 막는다
@@ -401,8 +401,6 @@ def _run_batches(a, engines, tmp, SRC):
     if not names:
         print("[stream] 새로 처리할 문서 없음", flush=True)
         return
-    ph = getattr(a, "phases", None)
-    phases = [x.strip() for x in str(ph).split(",") if x.strip()] if ph else list(pc.cfg().extract.phases)  # S7c — PARSE_PHASES(설정 객체)
     from common.config import settings as C
     from common.core import resources as RS
     from common.core.paths import child_env
@@ -431,26 +429,8 @@ def _run_batches(a, engines, tmp, SRC):
             if pc.cfg().dev.stream_test_crash and i == 0:
                 os._exit(17)  # 시험용 강제 종료 흉내(try/finally도 못 도는 진짜 kill) — 재시작 뒤 cleanup_startup이 치움
             _run("pipeline.extract.prepare", ["--src", raw_dir, "--out", prep_dir, "--only", only], env)
-            for ph in phases:
-                args = [
-                    "--src",
-                    prep_dir,
-                    "--out",
-                    out_parse,
-                    "--procs",
-                    a.procs,
-                    "--phase",
-                    str(ph).rstrip("r"),
-                    "--engines",
-                    engines,
-                    "--docs-from",
-                    only,
-                ]
-                if str(ph).endswith("r"):
-                    args.append("--rescue")
-                if str(ph).startswith("3"):
-                    args += ["--vlm-all", "--workers", a.workers]
-                _run("pipeline.extract.run_all", args, env)
+            args = ["--src", prep_dir, "--out", out_parse, "--procs", a.procs, "--workers", a.workers, "--engines", engines]
+            _run("pipeline.extract.run_all", args + ["--docs-from", only], env)
             _run("pipeline.transform.represent.parse_qa", ["--parse", out_parse, "--src", prep_dir], env)
             from pipeline import stackcfg
 

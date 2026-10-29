@@ -33,7 +33,7 @@ def _pin():
         settings.pin_env()
     except (
         settings.SettingsError
-    ) as e:  # 서버(dev·stage·prd)에서 설정 파일을 못 읽거나 엔진·인계 칸이 틀림 — 시작하지 않음(STRICT, 값 없이 이유만)
+    ) as e:  # 서버(dev·prd)에서 설정 파일을 못 읽거나 엔진·인계 칸이 틀림 — 시작하지 않음(STRICT, 값 없이 이유만)
         import sys
 
         print(

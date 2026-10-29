@@ -9,6 +9,7 @@ from common.ai.guard import (
     ScopeExceeded,
     check_scope,
     external_allowed,
+    fake_llm,
     is_internal,
     require_internal,
     spend_reserve,
@@ -112,8 +113,18 @@ def _selftest_body(COMMON):
                 assert ("RUN_ENV 없음" if env is None else f"RUN_ENV={env}") in str(e), str(e)
             assert not external_allowed("EMBED")
             require_internal("http://10.0.0.5:8000/v1", "EMBED")
+    # op-02(사용자 10-29) — 가짜 LLM 응답은 local 전용: 서버·모르는 값에서 켜져 있으면 거부, RUN_ENV 없음(selftest)·local은 허용, 꺼져 있으면 늘 False
+    for env, want in (("local", True), (None, True), ("dev", "거부"), ("prd", "거부"), ("prod", "거부")):
+        with COMMON.env(RUN_ENV=env, LLM_FAKE="1"):
+            try:
+                got = fake_llm()
+            except RuntimeError as e:
+                got = "거부" if "local 전용" in str(e) else str(e)
+        assert got == want, (env, got)
+    with COMMON.env(RUN_ENV="dev", LLM_FAKE=None):
+        assert fake_llm() is False
     print(
-        "[selftest] 내부망 가드 — 외부 허용 잠금·점 없는 이름 주소 확인·리다이렉트 가드·RUN_ENV(없음·dev·stage·prd·모르는 글자 거부, local만 허용) 통과"
+        "[selftest] 내부망 가드 — 외부 허용 잠금·점 없는 이름 주소 확인·리다이렉트 가드·RUN_ENV(없음·dev·prd·모르는 글자 거부, local만 허용) 통과"
     )
     # 비용 관문(10-05 독립 검토) — NO_PAID_CALLS 차단 · 공유 장부 선차감이 동시 호출에도 상한을 넘지 않음
     import threading

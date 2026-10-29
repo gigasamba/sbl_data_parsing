@@ -54,6 +54,7 @@ def selftest_l8():
     class H(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
             seen["host"] = self.headers.get("Host")
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))  # 본문을 읽고 닫음 — 안 읽으면 Windows가 RST(WinError 10053)
             self.send_response(200)
             self.end_headers()
 

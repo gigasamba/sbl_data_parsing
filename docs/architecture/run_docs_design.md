@@ -19,22 +19,22 @@
         │
    skip-done(EDW ok/pass) → 완료 문서 자동 제외
         │
-   warm 다운로더 1스레드 ── 12개 선반(진행중 제외) ── probe 분류
+   warm 다운로더 1스레드 ── 20개 선반(진행중 제외) ── probe 분류
         │                       ├ light (68% — 텍스트 형식·소형 문서)
         │                       ├ medium (3% — CPU 집중: 대형 텍스트)
         │                       └ vlm (29% — GPU 집중: 스캔/이미지 다수/pptx)
         ▼
   ┌─────────────────────────────────────────────────────┐
-  │  3클래스 레인 워커 (light 1 / medium 2 / vlm 1)      │
-  │  ├─ steal: 자기 큐 비면 가장 긴 다른 큐에서 가져옴     │
-  │  ├─ light는 medium steal 금지 (전담 가용성 유지)      │
-  │  ├─ vlm은 medium steal 금지 (긴급 vlm 대기 가능)      │
-  │  ├─ VLM_CAP=2 (gpu02 동시 상한)                     │
-  │  ├─ MCP 우선: mcp_parse/jobs 활동 감지 시 medium pause │
+  │  3클래스 레인 워커 (레인마다 전담 1 + 공유 1 = 6)     │
+  │  ├─ 전담: 자기 레인 문서만                            │
+  │  ├─ 공유: 자기 레인 먼저, 비면 가장 긴 다른 레인       │
+  │  ├─ VLM_CAP=2 (vlm 문서 동시 상한 — 전담도)          │
+  │  ├─ 구조화 대기 ≥ STRUCT_BACKLOG(구조화×2)면 새 파싱 대기 │
+  │  ├─ MCP 우선: mcp_parse/jobs 활동 감지 시 medium 전담 쉼 │
   │  └─ 단일 컨테이너(data-pipeline-parse) + 격리      │
   └─────────────────────────────────────────────────────┘
         │
-  구조화+적재 1스레드 (EMBED_BATCH=32 · EMBED_CONCURRENCY=6 · BM25_THREADS=3)
+  구조화+적재 2스레드 (EMBED_BATCH=32 · EMBED_CONCURRENCY=6 · BM25_THREADS=3)
         │
   publish (OS 업로드 + EDW INSERT) → docflow/warm 임시 즉시 삭제
 ```
@@ -45,9 +45,13 @@
 
 | 영역 | 파라미터 | 값 | 근거 |
 |---|---|---|---|
-| **워커 배분** | LANE_N | light 1 / medium 2 / vlm 1 (총 4) | 코어 4 정합 |
-| | VLM_CAP | 2 | gpu02 예산 (6/doc × 2 = 12동시) |
-| | steal 규칙 | light≠medium, vlm≠medium | 전담 가용성 |
+| **워커 배분**(10-29 — settings.yaml `pipeline.host.run_docs`) | 레인 워커 | 레인마다 전담 1 + 공유 1(`<레인>_dedicated`·`<레인>_shared`, 총 6) | 사용자 10-29 — 레인 전담 보장 + 남는 워커는 다른 레인 소화(rn-01) |
+| | VLM_CAP | 2(`vlm_cap`) | gpu02 예산 (6/doc × 2 = 12동시) |
+| | steal 규칙 | 공유 워커만, 자기 레인이 비었을 때 가장 긴 다른 레인 | `pick_lane()` 표 시험 |
+| **대기열**(10-29) | 진입(warm) | 20(`warm`, `--warm`이 덮음) | 사용자 10-29 |
+| | 중간(파싱 끝·구조화 대기) | 구조화 스레드 × 2(`struct_backlog`, 0 = 없음) — 닿으면 새 파싱 시작 안 함 | 사용자 10-29(rn-02) |
+| | 구조화 스레드 | 2(`struct_workers`, `--struct-workers`가 덮음) | |
+| | 깊이 기록 | `batch_progress/queue_depth.jsonl` — dispatch·pick·parse_end·struct_put·struct_get마다 한 줄 | rn-02 |
 | **게이트** | light | bypass(=9) | light 즉시 소화 |
 | | medium/vlm | CPU_GATE=1.3 (조정 시 `--cpu-gate 1.1`) | 목표 밴드 75-85% 대비 |
 | **OCR** | 사용 | **전면 OFF** (스캔 PDF만) | rapidocr 엔진 제외, PREPARE_ROTATE=0 |
@@ -57,7 +61,7 @@
 | | FIGURES | VLM_FIGURES_MAX=10, FIG_OCR_BUDGET=0 | OCR분류 skip → 직접 VLM |
 | | vlm_page | **스캔 PDF만 ON**, VLM_PAGE_MAX=무제한 | 내부 스캔판정 쪽만 |
 | | VLM_PAGE_SLOW | 45s | 적응형 축소 |
-| **파이프라인** | PARSE_PHASES | 2,3r (phase 1 skip) | phase 1 중복 엔진 실행 제거 |
+| **파이프라인** | ~~PARSE_PHASES~~ | (10-29 삭제 — phase 없음, prd pl-22) | |
 | | PARSE_QA_LIGHT | 1 | cer/order 생략(cross_recall 유지→doc_accuracy 무손상) |
 | | PARSE_REP_SELECT | first | 첫 성공 엔진 사용 |
 | | PARSE_MERGE_PAGES | 1 | 페이지 병합 |
@@ -89,6 +93,7 @@
 | 10-26 (S4) | 이미지 배치가 `pipeline/`으로 바뀜 · 컨테이너 안 `docflow_probe.py` 자리 | 리팩토링 S4(`data_etl/` → `pipeline/`, `docflow_probe.py`는 저장소 루트 → `pipeline/extract/` — 이미지에 함께 들어감, T-14) | `python -m pipeline.…`·`pipeline.cli`로 명령 이름만 바꿈 · `CODE_MARKER` = `pipeline/extract/run_all.py` · 무게 판별은 `python3 /app/deploy/pipeline/extract/docflow_probe.py` — 새 이미지 판과 같은 때에 교체(`refactor.md` C-23) |
 | 10-27 (S6b) | 러너 자리·컨테이너 이름이 바뀜 | 리팩토링 S6b(D-020·D-026 — 파이프라인 이미지 합침 `data-pipeline`, 이름 사용자 10-27) | 저장소 자리 `run_script/run_docs.py` → `deploy/host/scripts/run_docs.py`(`test_space/`는 스크립트 옆 그대로) · docker exec·inspect 대상 `data-parsing`·`data-structure` → `data-pipeline-parse`·`data-pipeline-structure`(상수 `PARSE_C`·`STRUCT_C`) — 새 이미지 판과 같은 때에 교체(`refactor.md` C-29) |
 | 10-28 (S9 Step A) | 문서별 결과 폴더(`PIPE_OUT_ROOT` 등)·채널별 VLM 동시 수·후보정·CPU 게이트가 효과 없음 — 문서별 파싱이 공용 `/app/output`에 쓰고 구조화가 그 결과를 못 찾음(VS8b U-1) | S7e2부터 앱이 env의 옛 설정 이름을 읽지 않는데 러너는 `docker exec … bash -c 'X=값 python …'` env로 줬음(VS7e3 셸 스캔은 `.sh`·compose만 보고 Python 문자열 안 셸 명령은 안 봄 — 로컬 실행 금지라 실행 확인도 없었음) | 설정 칸은 명령 인자 `--set 이름=값`(`common.config.setarg` — 사용자 10-28, 비밀·호스트 칸은 거부)으로 · 명령 줄은 함수(`warm_cmd`·`parse_cmd`·`struct_cmd`·`publish_cmd`·`sweep_cmd`)로 떼어 `tests/general/deploy/test_run_docs.py`가 글자를 고정 · 고아 정리 표지는 env `RUN_DOCS_DOC`(설정 칸 아님) · 구조화는 파싱이 그 문서 폴더에 쓴 엔진 구성 사본을 다시 씀(`stackcfg --path` — VS8b R-1) · `[envcheck]` 줄은 컨테이너 env 대신 준 게이트 값 · 읽는 코드 없는 env 4개(`FIG_OCR_BUDGET`·`*_MASTER_CSV`)는 그대로 |
+| 10-29 (rn-01·rn-02) | 레인 배분·steal이 코드에 고정(1/2/1, 죽은 분기) · 구조화 대기열 상한 없음 · 대기 길이 기록 없음 | 사용자 10-29 — "lane은 담당, 일부 steal 허용, 우선순위는 담당 lane · 진입·중간 개수 관리" | settings.yaml `pipeline.host.run_docs`(레인마다 전담·공유 워커 수, warm 20, struct_workers 2, struct_backlog = 구조화×2, vlm_cap 2) · `pick_lane()`(자기 레인 먼저, 공유 워커만 가장 긴 다른 레인) · 상한에서 레인 워커 대기 · `queue_depth.jsonl` · 옛 상수(HEAVY_*·LIGHT_MAX·LANE_N) 지움 · `--workers`는 받기만 |
 
 ---
 

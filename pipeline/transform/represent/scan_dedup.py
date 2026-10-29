@@ -91,13 +91,14 @@ def pick(ocr_text, vlm_text):
     return winner, loser, src
 
 
-def dedup(base, doc_path, boxes=None):
+def dedup(base, doc_path, boxes=None, pages=None):
     """apply_post가 "vlm_page" 기능 중 PARSE_DEDUP_SCAN=1일 때 부른다 — 쪽마다 OCR(base)·VLM 글 중 하나만
     base에 남기고 나머지는 page_alt로. OCR이 그 쪽을 전혀 못 읽었으면(빈 글) 중복이 아니라 보강이므로 그대로
     VLM으로 채운다(기존 vlm_page 동작과 같은 효과 — 잃는 쪽 없음). boxes(rep["boxes"], OCR 엔진만)를 주면 실제
     쪽 번호로 맞춘다 — 없고 \\f로도 쪽 번호를 확정할 수 없으면(독립 검토 MAJOR-1) 이 문서는 건너뛰고 이유를 남긴다.
     반환: (바뀐 base, page_alt{쪽 번호: {from, text}}, [쪽별 provenance], 중복 제거한 쪽 수, 건너뜀 이유 또는 None)."""
-    pages = vp_mod.page_text_pages(doc_path)
+    if pages is None:  # represent가 이미 부른 결과가 있으면 그대로(10-29 M4 — 같은 쪽 VLM을 다시 안 부름)
+        pages = vp_mod.page_text_pages(doc_path)
     if not pages:
         return base, {}, [], 0, None
     base_pages = _page_texts(base, doc_path, boxes)

@@ -2,7 +2,7 @@
 # 문서 파이프라인 진입점(구조 개편 v4 단계5, 10-13 — 옛 dev/를 deploy/로) — 실행 전 점검(자원·연결·쓰기 권한·
 # 시간대) 후 명령 실행. 코드는 /app/deploy/data_pipeline(PYTHONPATH=/app/deploy, Dockerfile) — 전부 `python -m
 # data_pipeline.<패키지>.<이름>`으로 부른다(운영자가 쓰는 명령 이름 자체는 그대로).
-#   docker run --rm --init -v <settings.yaml>:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=<dev|stage|prd> \
+#   docker run --rm --init -v <settings.yaml>:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=<dev|prd> \
 #     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>   (S7e1·S7e2 — 옛 --env-file pipeline.env 대신 설정 파일 하나)
 # 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp · dedup · prepare ·
 #       night [인자] · run-stack [인자] · ask --q … · test-stack · full(data-pipeline만 — dedup → prepare → night)
@@ -58,7 +58,7 @@ case "${RAG_MODULE:-}:$cmd" in
   mcp:parse|mcp:dedup|mcp:prepare|mcp:full|mcp:structure|mcp:load|mcp:publish|mcp:night|mcp:run-stack|mcp:serve-trigger|mcp:migrate|mcp:set-stack|mcp:set-sources|mcp:show-sources)
     echo "[오류] '$cmd'는 이 이미지(mcp-server)에 없음 — 파싱·구조화·적재·판 관리(migrate·set-stack·*-sources — 엔진 등록부로 검사)는 data-pipeline. 이 이미지는 mcp·ask·test-stack·show-stack만"; exit 64;;
 esac
-# S7a(D-028 ②, 사용자 10-27) — 실행 환경(RUN_ENV) 없이는 앱 명령을 시작하지 않음. 이미지 ENV에는 넣지 않는다(서버가 dev·stage·prd를
+# S7a(D-028 ②, 사용자 10-27) — 실행 환경(RUN_ENV) 없이는 앱 명령을 시작하지 않음. 이미지 ENV에는 넣지 않는다(서버가 dev·prd를
 # 정해 compose environment로 줌 — refactor.md C-34). 시험·점검 명령(help·selftest·check·check-modules·resources·services·tool check_env)은 뺀다
 # (tool ping_models는 외부 모델을 부르므로 빼지 않음 — RUN_ENV가 외부 모델 허용을 정함, S7a2).
 # S7e2(VS7e1 R-9·U-1·C-45 ⑤, 사용자 10-28) — python 한 번(common.config.boot)으로: ① 관문(--gate — 서버면 설정 파일을 못 읽거나 이 이미지 절

@@ -90,7 +90,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
         assert _k2 not in (_k0, _k1)
     print("[selftest] SEC-2 — LLM_EXTRA_BODY(생각 켬/끔)별 캐시 열쇠 분리 통과")
 
-    # D-028 ⑧(S7b) — RUN_ENV가 dev·stage·prd면 외부 주소는 allow_external이 열려도 거부, local은 지금처럼 허용
+    # D-028 ⑧(S7b) — RUN_ENV가 dev·prd면 외부 주소는 allow_external이 열려도 거부, local은 지금처럼 허용
     _tmp3 = tempfile.mkdtemp()
     _adk.complete = lambda role, messages, **kw: ("외부 답", {"prompt_tokens": 1, "completion_tokens": 1})
     try:
@@ -112,4 +112,4 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
     finally:
         _adk.complete = _orig_complete
         shutil.rmtree(_tmp3, ignore_errors=True)
-    print("[selftest] RUN_ENV — dev·stage·prd는 외부 허용이 켜져도 외부 LLM 거부 · local은 허용 통과")
+    print("[selftest] RUN_ENV — dev·prd는 외부 허용이 켜져도 외부 LLM 거부 · local은 허용 통과")

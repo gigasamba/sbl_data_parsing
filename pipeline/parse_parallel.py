@@ -35,7 +35,7 @@ PARSE_PARALLEL_IO_WORKERS(기본 workers*2) — 받기·게시까지 포함한 �
   + Object Storage·EDW 쓰기 직렬화, I/O 자체는 가벼워 병목이 아님) → 삭제(그 문서의 작업 폴더 전체, finally).
 
   파싱 단계는 문서마다 완전히 자기 전용 폴더(PARSE_TMP/doc<N>/parse)에서 돌아 qa.json·index.json·
-  engines.csv·sources.jsonl·conflicts.jsonl·runs.jsonl·PROGRESS.md·PHASE_REPORT.md(모두 --parse-dir 밑)을
+  engines.csv·sources.jsonl·conflicts.jsonl·runs.jsonl·PROGRESS.md(모두 --parse-dir 밑)을
   둘 이상의 서브프로세스가 동시에 덮어쓰는 경합이 없다(stream.py도 배치 1건마다 이 파일들을 통째로 다시
   쓴다 — 배치=1문서가 이미 기본값, 이 모듈은 그 '배치 1건'을 여러 개 동시에 돌리는 것뿐). P0 원본 엔진·VLM
   캐시(output/parse/raw/**)·그림 PNG(output/parse/_images/**)는 PARSE_RAW_ROOT·PARSE_IMAGES_ROOT를 건드리지 않아
@@ -112,10 +112,6 @@ def _run(module, args, env):
     rc = RS.gated_popen(cmd, cwd=ROOT, env=env).wait()
     if rc:
         raise RuntimeError(f"[parallel] 실패({rc}): {' '.join(cmd)}")
-
-
-def _phase_args(ph):
-    return ["--phase", str(ph).rstrip("r")] + (["--rescue"] if str(ph).endswith("r") else [])
 
 
 def _merge_index(shared_rep_dir, doc_entry):
@@ -246,7 +242,6 @@ def _process_one(
     tmp,
     out_parse_shared,
     engines,
-    phases,
     procs,
     max_gb,
     fetch_lock,
@@ -258,7 +253,7 @@ def _process_one(
     source_system,
     source_root,
 ):
-    """문서 1건 — 받기 → 파싱(prepare·run_all×phase·parse_qa·represent, 이 문서 전용 폴더) → 게시(단일
+    """문서 1건 — 받기 → 파싱(prepare·run_all·parse_qa·represent, 이 문서 전용 폴더) → 게시(단일
     스레드로 위임) → 삭제(finally, 성공·실패 모두). 실패해도 예외를 밖으로 던지지 않고 (False, 사유)를
     돌려준다 — 문서 1건의 실패가 다른 N-1건의 동시 작업을 막지 않게(에러는 삼키지 않고 호출자가 집계·출력)."""
     doc_dir = tmp / f"doc{i:04d}"
@@ -274,23 +269,9 @@ def _process_one(
         only.write_text(name + "\n", encoding="utf-8")
         with cpu_sem:  # CPU 동시 실행 수 = workers(common/resources.plan() 그대로)
             _run("pipeline.extract.prepare", ["--src", raw_dir, "--out", prep_dir, "--only", only], env_base)
-            for ph in phases:
-                args = [
-                    "--src",
-                    prep_dir,
-                    "--out",
-                    parse_dir,
-                    "--procs",
-                    procs,
-                    *_phase_args(ph),
-                    "--engines",
-                    engines,
-                    "--docs-from",
-                    only,
-                ]
-                if str(ph).startswith("3"):
-                    args += ["--vlm-all", "--workers", "1"]  # 이 호출은 늘 문서 1건 — 문서 동시 수는 workers(바깥)가 맡음
-                _run("pipeline.extract.run_all", args, env_base)
+            # 이 호출은 늘 문서 1건(그 문서의 엔진들은 run_all이 동시에) — 문서 동시 수는 workers(바깥)가 맡음
+            args = ["--src", prep_dir, "--out", parse_dir, "--procs", procs, "--engines", engines, "--docs-from", only]
+            _run("pipeline.extract.run_all", args, env_base)
             _run("pipeline.transform.represent.parse_qa", ["--parse", parse_dir, "--src", prep_dir], env_base)
             from pipeline import stackcfg
 
@@ -348,8 +329,6 @@ def _run_all_docs(a, engines, tmp, PM):
     par = pc.cfg().extract.parallel  # S7c — 설정 객체(PARSE_PARALLEL_WORKERS·IO_WORKERS 기본 None = 계산값 · "0"도 준 값이라 or 안 씀)
     workers = max(1, par.workers if par.workers is not None else PRS.resolve_procs(a.procs))
     io_workers = max(workers, par.io_workers if par.io_workers is not None else workers * 2)
-    ph = getattr(a, "phases", None)
-    phases = [x.strip() for x in str(ph).split(",") if x.strip()] if ph else list(pc.cfg().extract.phases)
     pc.checked("PARSE_TMP_MAX_GB")  # 디스크 상한 — 형식 틀리면 옛 float()처럼 실패(조용히 '제한 없음'이 되지 않게 — S7c1 리뷰)
     max_gb = pc.cfg().extract.cache.parse_tmp_max_gb
     vlm_conc = RS.vlm_page_concurrency(workers, a.vlm_concurrency)  # 동시 문서 수(workers) × 쪽 동시 수가 VLM_MAX_CONCURRENCY를 안 넘게
@@ -390,7 +369,6 @@ def _run_all_docs(a, engines, tmp, PM):
                     tmp,
                     out_parse,
                     engines,
-                    phases,
                     "1",
                     max_gb,
                     fetch_lock,

@@ -35,7 +35,7 @@ export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.
 ```
 > ⚠️ **S8b 판부터(D-031) 원천 목록·엔진 구성은 pgvector 판 표(`struct.source_version`·`stack_version`)의 활성 판이다 — `$SERVER_ENV_DIR/sources.json` 덮어쓰기는 읽지 않는다**(그 파일이 있으면 반입 때 `set-sources --file`로 판을 넣음 — [release-and-patch.md](release-and-patch.md) §5-5, `refactor.md` C-12·C-49). 아래는 S8b 전 판의 설명: **I4 판부터 바뀐 동작 — 호스트 python(venv·네이티브 실행)은 `SERVER_ENV_DIR`이 있어야 `$SERVER_ENV_DIR/sources.json`을 본다.** 없으면 아무 안내 없이 코드 폴더의 기본 `resources/mappings/sources.json`(S2 판 전에는 `common_tools/runtime/sources.json`)을 쓴다(전에는 `/srv/rag/env/sources.json`이 있으면 늘 우선). 위 `export`는 그 셸에서만 살아 있으므로, 운영 계정 셸 설정(예: `~/.bashrc`)에 `export SERVER_ENV_DIR=/srv/rag/env`를 영구로 두거나 명령 앞에 붙인다. `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd unit은 스스로 이 값을 넘기고, 컨테이너는 이 폴더를 마운트하지 않는다(컨테이너에서 바꾸려면 `SOURCES_FILE` — [env-guide.md](env-guide.md) 1절).
 
-> **값 바꾸기(S7e3 — 사용자 10-28):** 앱 설정 값은 `settings.yaml`을 직접 고친다 — **한 번 실행에만 다른 값은 명령 인자 `--set 이름=값`**(S9 Step A — 사용자 10-28: `pipeline.cli`·`pipeline.extract.source`·`pipeline.stackcfg`·`build_bundle`·`pgvector_load`·`publish_parse_result`, 예 `docker exec data-pipeline-parse python -m pipeline.cli --set PIPE_PROCS=2 parse …` — 이름은 `settings.sample.yaml`의 `env=`, 모르는 이름·호스트 칸·비밀 칸은 종료 2, 형식 오류도 서버는 종료 2 · 호스트 `run_docs.py`가 문서별 값을 이렇게 줌) — 그 밖에는 한 번만 다르게 돌릴 값도 고쳐 돌린 뒤 되돌린다(고친 뒤 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`는 다시 띄움). `PIPE_PROCS=2 docker compose …`·`docker exec -e X=…` 같은 옛 env 이름 덮기는 효과가 없고(S7e2 — 시작 때 이름만 경고), 덮기 파일 도구 `python -m common.config.overrides`는 **PC 전용**이라 서버(`RUN_ENV` dev·stage·prd)에서는 안내 뒤 종료 2다(compose는 설정 파일 하나만 컨테이너에 붙여 덮기 파일의 `base`가 컨테이너 안에 없음 — VS7e2 B-2, [env-guide.md](env-guide.md) 0절 · `refactor.md` C-47 ⑥). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지 태그·자원·포트·호스트 경로 — `load_settings`가 이미 셸에 있는 이름은 안 덮음)뿐이다.
+> **값 바꾸기(S7e3 — 사용자 10-28):** 앱 설정 값은 `settings.yaml`을 직접 고친다 — **한 번 실행에만 다른 값은 명령 인자 `--set 이름=값`**(S9 Step A — 사용자 10-28: `pipeline.cli`·`pipeline.extract.source`·`pipeline.stackcfg`·`build_bundle`·`pgvector_load`·`publish_parse_result`, 예 `docker exec data-pipeline-parse python -m pipeline.cli --set PIPE_PROCS=2 parse …` — 이름은 `settings.sample.yaml`의 `env=`, 모르는 이름·호스트 칸·비밀 칸은 종료 2, 형식 오류도 서버는 종료 2 · 호스트 `run_docs.py`가 문서별 값을 이렇게 줌) — 그 밖에는 한 번만 다르게 돌릴 값도 고쳐 돌린 뒤 되돌린다(고친 뒤 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`는 다시 띄움). `PIPE_PROCS=2 docker compose …`·`docker exec -e X=…` 같은 옛 env 이름 덮기는 효과가 없고(S7e2 — 시작 때 이름만 경고), 덮기 파일 도구 `python -m common.config.overrides`는 **PC 전용**이라 서버(`RUN_ENV` dev·prd)에서는 안내 뒤 종료 2다(compose는 설정 파일 하나만 컨테이너에 붙여 덮기 파일의 `base`가 컨테이너 안에 없음 — VS7e2 B-2, [env-guide.md](env-guide.md) 0절 · `refactor.md` C-47 ⑥). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지 태그·자원·포트·호스트 경로 — `load_settings`가 이미 셸에 있는 이름은 안 덮음)뿐이다.
 
 ### 1-3. 기동 확인
 ```bash
@@ -52,7 +52,7 @@ docker run --rm data-pipeline:<태그> smoke --src <실문서 몇 건 폴더>   
 
 순서대로, **앞 모듈이 끝 표시를 남겨야 다음이 시작**(없으면 종료 코드 3). 한 결과 폴더(`RAG_OUT`)를 모듈이 파일로 주고받는다 — 서로 직접 부르지 않는다.
 ```bash
-bash deploy/host/scripts/trigger.sh parse       # dedup→prepare→phase→채점→대표 결과(_rep). 임베딩·DB 없음
+bash deploy/host/scripts/trigger.sh parse       # dedup→prepare→파싱→채점→대표 결과(_rep). 임베딩·DB 없음
 bash deploy/host/scripts/trigger.sh structure   # 대표 결과→청킹·사실·임베딩 묶음
 bash deploy/host/scripts/trigger.sh load        # 묶음→PostgreSQL(pgvector). PG 없으면 종료 코드 4
 bash deploy/host/scripts/trigger.sh publish     # 대표 결과(.md) Object Storage 업로드 + EDW 메타 — 스케줄 없음, 트리거만
@@ -61,6 +61,7 @@ bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서(NIGHTLY_M
 ```
 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock`으로 뒤쪽이 즉시 종료 코드 75(실행 중) — 재시도는 다음 트리거에서.
 `night`는 각 단계의 75(마감·잠금)를 실패로 안 치고 다음 단계로 넘어간다. `NIGHTLY_PUBLISH=0`(기본)이면 publish는 건너뜀.
+우선순위 낮추기(`pipeline.extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 **같은 세션·autogroup 안에서만** 효과가 있다: Linux가 `sched_autogroup_enabled=1`이면 CPU를 세션(autogroup)끼리 먼저 나눠 다른 컨테이너·세션의 parse MCP 서비스와는 nice로 겨루지 않고, 컨테이너끼리는 cgroup CPU 가중치(`cpu.weight`)가 정한다 — 확인: `cat /proc/sys/kernel/sched_autogroup_enabled`, 일괄 파싱과 `parse_document`를 동시에 걸어 응답 시간 비교(refactor.md C-65 ⑥).
 
 특정 도구만 따로 돌릴 때(`score_gold`·`run_board`·`rdb_discover`·`check_env`는 data-pipeline 이미지, `mcp_eval`은 mcp-server 이미지):
 ```bash

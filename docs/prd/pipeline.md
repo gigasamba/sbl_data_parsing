@@ -17,7 +17,7 @@ Prepare. Why: skip junk before the expensive parse.
 
 ## pl-03
 Engine stack parse. Why: no single parser handles every format well.
-- What: per file type, every engine in the stack runs (not a fallback chain); phases 1 (no model) → 2 (phase-1 timeouts) → 3 (VLM, `3r` = only docs with no successful engine); per-engine isolation; engine stack versioned in `struct.stack_version` (PC: `pipeline_stack.json`). Types: pdf (text/image), doc(x), ppt(x), xls(x/m), hwpx, txt, html/htm, mht, eml, msg, png, jpg. Not supported: old `.hwp`, zip.
+- What: per file type, every engine in the stack runs (not a fallback chain), max 2 per type, in parallel per document (no phases since 10-29 — [pl-22](#pl-22)); per-engine isolation; engine stack versioned in `struct.stack_version` (PC: `pipeline_stack.json`). Types: pdf (text/image), doc(x), ppt(x), xls(x/m), hwpx, txt, html/htm, mht, eml, msg, png, jpg. Not supported: old `.hwp`, zip.
 - Files: `pipeline/extract/run_all.py`, `pipeline/extract/engines/` (engine fingerprint — human review to change), `resources/config/pipeline_stack.json`, `docs/architecture/pipeline_stack.md`.
 - Status: done
 
@@ -65,7 +65,7 @@ Orchestration. Why: the server runs thousands of documents unattended.
 
 ## pl-11
 Model calls, cost and external-send guard (shared). Why: closed-network servers must never call external models; PC calls must stay cheap.
-- What: OpenAI-compatible roles llm/vlm/ocr_vlm/embed (rerank removed 10-29); servers (dev/stage/prd) refuse external models; external send needs `*_ALLOW_EXTERNAL` + synthetic-corpus truth file; budget, call caps, RPM, spend ledger; response cache; fake LLM for tests.
+- What: OpenAI-compatible roles llm/vlm/ocr_vlm/embed (rerank removed 10-29); servers (dev/prd) refuse external models; external send needs `*_ALLOW_EXTERNAL` + `RUN_ENV=local`; budget, call caps, RPM, spend ledger; response cache; fake LLM for tests.
 - Files: `common/ai/guard.py`, `common/ai/llm.py`, `common/ai/adk.py`, `common/config/settings.py`.
 - Status: done
 
@@ -122,12 +122,13 @@ Deferred settings removal. Why: unused/retired settings whose removal changes fi
 - Files: `common/config/settings.py`, `pipeline/config.py`, `pipeline/extract/run_all.py`, `common/core/paths.py`.
 - Status: todo — bundle with the next fingerprint-changing release.
 
-## pl-26
-`full` always publishes; no "skip publish" path (C-31). Why: help text said "no EDW load" while `full` published, and it ignored `NIGHTLY_PUBLISH`.
-- Decided (user 10-29 grill): publish (silver → Object Storage + EDW) is the default and only mode — remove `--no-publish` and `pipeline.host.nightly.publish`. Publish targets are required settings; missing → refuse to start.
-- Targets per `RUN_ENV`: `local`·`dev` pick one of (a) local path (folder for Object Storage, file DB for EDW) or (b) real connection info (API/DB); `stage`·`prd` real connection only. The PC keeps the CLAUDE.md §4 guard (no prod EDW/OS from the PC).
-- Files: `pipeline/cli.py` (`night`, `full`), `deploy/docker/entrypoint.sh`, publish in `pipeline/load/`, `pipeline/config.py`, `docs/operations/server-guide.md`.
-- Status: todo
+## pl-22
+Remove the parse phase concept (user 10-29). Why: phases 1/2/3r re-ran engines with tiny per-page limits and pushed timeouts to later passes; the `need_vlm` rule and OCR engines made image docs slow and duplicated the page VLM.
+- What: each document runs its stack engines (max 2 per type — more is a config error in `stackcfg.over_limit`) in parallel, one isolated child per engine; documents in parallel via `--workers` and `--procs` (doc shards). Limit per doc×engine = pages × `pipeline.extract.text_page_sec` (10) or `vlm_page_sec` (120) for VLM engines, `warmup_sec` floor for an engine's first doc, plus `isolate_overhead`; on timeout one retry with the limit doubled, then a failure record. Old phased timeout records are retried. OCR engines (`rapidocr`, `rapidocr_ko`) run only with `pipeline.extract.ocr_engine` (default off) — image/scan docs get the VLM engine only; the stack table is unchanged. Scan pages inside text PDFs: no `.pdf_image` engines any more; represent fills those pages from page VLM (`vlm_page.page_text_pages`, scan-signal pages only, parallel). Image/scan docs: one VLM pass per page — when the representative is a VLM engine with non-empty text on an image/scan type (`.pdf_image`, png, jpg — same type keys as run_all), represent skips page VLM and marks whole-page figures as covered (no figure VLM, also without `vlm_page`); page VLM runs only when `PARSE_POST` has `vlm_page`, once per doc (failed pages are not re-called). VLM engine children get `VLM_TIMEOUT` = min(`models.vlm.timeout`, `vlm_page_sec`). Batch engine children run at low priority (`pipeline.extract.low_priority` — nice +10 / Windows BELOW_NORMAL; only within one session/autogroup, containers follow cgroup CPU weights — C-65 ⑥); the parse service (`parse_document`) turns that off and uses its own limits (`pipeline.service.parse_mcp.text_page_sec` 1, `vlm_page_sec` 60, `warmup_sec` 20 — cold engine start) and kills the whole process group on job timeout. `PARSE_MCP_OCR` merged into `PARSE_OCR_ENGINE`. Known loss: AD47 number correction on 'hidden_overlap' pages (gaps §1); "covered" is per document — when it holds, pages the VLM engine left blank get no page VLM, and embedded figures on text pages of a mixed `.pdf_image` get no figure VLM. Removed: `--phase(s)`, `--rescue`, `--vlm-all`, `--need-vlm`, `--timeout`, `PARSE_PHASES`, `PARSE_PHASE_SEC`, `PARSE_MCP_OCR`, `PHASE2_FAILED`.
+- Files: `pipeline/extract/run_all.py`, `pipeline/stackcfg.py`, `pipeline/config.py`, `pipeline/cli.py`, `pipeline/stream.py`, `pipeline/parse_parallel.py`, `pipeline/mcp_parse_service.py`, `pipeline/transform/represent/represent.py`, `pipeline/transform/figures/vlm_page.py`, `deploy/host/scripts/run_docs.py`.
+- Tests: `tests/server/pipeline/test_run_all.py` (over_limit, OCR switch, page_timeout, old phase timeout), `tests/server/pipeline/test_vlm_page.py` (`pick_pages`), `tests/general/pipeline/test_represent.py` (page-VLM fill).
+- Open: text engines are not split per page (one child per doc×engine; per-page parallelism only inside the VLM engine via `VLM_CONCURRENCY`).
+- Status: dev — branch `feature/r2-phase`; server check pending (refactor.md C-65). VLM concurrency knobs not merged (separate follow-up).
 
 ## pl-23
 Incremental runs only; full reparse = explicit full e2e (C-52, C-08). Why: engine/handoff/code fingerprints changed for every doc; an automatic reparse of all docs would blow the nightly window.
@@ -139,7 +140,7 @@ Incremental runs only; full reparse = explicit full e2e (C-52, C-08). Why: engin
 ## pl-24
 Per-doc order in `run_docs`: parse → silver publish → delete original → gold (structure + load). Why: today publish waits for gold, and `cleanup_doc` deletes the original even on failure.
 - Decided (user 10-29 grill): originals are downloaded from Object Storage to the collection server, parsed, and deleted only after silver publish succeeds. Parse failure → keep the original, log cause + duration locally only, nothing in EDW. Gold failure → the EDW row stays with `gold_status` = failed (+ reason); gold can be rebuilt from silver.
-- New EDW column `AI.ParsingMeta.gold_status` (pending · ok · failed) — DDL to the DB owner (company DB, not Alembic) — review grade A.
+- New EDW column `AI.ParsingMeta.gold_status` (pending · ok · failed) + reason — DDL to the DB owner (company DB, not Alembic) — review grade A. The reduced ParsingMeta column list is in [pl-25](#pl-25).
 - Local test runs from `valid_env/` copy docs into a temp folder first and run there (never in place).
 - Files: `deploy/host/scripts/run_docs.py` (`doc_flow`, `cleanup_doc`, done query), `docs/operations/parsing_meta_mssql.sql`, publish (`parsing_meta`).
 - Status: todo — after [pl-25](#pl-25).
@@ -147,5 +148,22 @@ Per-doc order in `run_docs`: parse → silver publish → delete original → go
 ## pl-25
 DB schema spec, written before pl-26·pl-23·pl-24 are built. Why: table/column definitions are spread over Alembic migrations (`common/store/db/migrations/versions/`), `docs/operations/parsing_meta_mssql.sql` (ParsingMeta only) and code reading `AI.FileStorageMap` (no definition); the 10-20 reduced schema is only half applied in code (mc-10, mc-11, pl-14, pl-15).
 - Decided (user 10-29 grill): one doc `docs/architecture/db_schema.md` — per table: columns, type, meaning, which code writes/reads it — for EDW `AI.FileStorageMap` (id, s3_key, original_filename, file_size, `last_modified_time` assumed), `AI.ParsingMeta` (+ `gold_status`), pgvector search schema and `struct`. The reduced 10-20 schema is the truth; code that disagrees is fixed in mc-10/mc-11/pl-14/pl-15. One test compares the doc's columns with the migrations and the mssql sql. The user and the DB owner sign it off before implementation; the DB owner gets this doc.
+- Decided (user 10-30 grill — gold schema):
+  - Keys: `s3_key` is the only document key. Drop sha256 `doc_key`; re-key registry, `doc_hidden` and `doc_contract_link` to `s3_key` (unblocks [mcp.md#mc-14](mcp.md#mc-14) and [mcp.md#mc-15](mcp.md#mc-15) — rep_uri lookup by `ParsingMeta.source_key`). Search `doc`/`chunk` must carry `s3_key`.
+  - Gold now: ONE table set (`doc`, `chunk`, `chunk_term`, `term_stat`, `corpus_stat`). Later (design now, build later): every table per source system — SFDC · CRMS · LAS · Other, columns may differ per source; at that split MCP `search` requires a source (one contract change, new version, grade A). No optional `source` input before then.
+  - Source = `AI.FileStorageMap.source_system`; empty or not SFDC/CRMS/LAS → `Other`; mismatch with the s3_key prefix → log warning only.
+  - SFDC-only columns (`sf_acc_name`, `sf_op_id`, `sf_op_name`, `project_code__c`) stay in the one `doc` table (empty for other sources); they move to the SFDC doc table at the split.
+  - `load_run` and the Alembic version table stay in gold, shared after the split. `chunk` keeps `source_system` and `clients[]` (client isolation, source filter).
+  - `AI.ParsingMeta` keeps only read columns: `source_system`, `source_key` (s3_key), `parse_date`, `parse_status`, `status`, `status_at`, `rep_bucket`, `rep_key`, plus new `gold_status` + reason ([pl-24](#pl-24)). Drop `doc_key` and the 14 unread columns.
+  - `struct`: delete the document-derived tables `doc_location`, `doc_contract_link`, `doc_table`, `doc_cell` and their writers/readers (structured link/tables, `load_tables_db`, `find_table_cells`, aggregate `doc_link_list`/`table_cell_list`/`doc_location_list`, `AG.struct` server path) — that content lives only in chunk text. Keep `stack_version`/`source_version` (read at MCP start).
+  - Masters `contract_master`, `client_master` move to a SEPARATE Postgres (own connection setting, not the search PG), filled by a person from CSV (`structured load` style). Readers `gen_roster` (client_master) and `terms.py` (contract_master) use the new connection.
+  - EDW vector tables (`chunk_vec`, `edw_insert`, `edw_search`) are removed by PR #5.
 - Files: `docs/architecture/db_schema.md` (new), `docs/index.md`, `common/store/db/migrations/versions/`, `docs/operations/parsing_meta_mssql.sql`, `tests/server/common/` (one test).
 - Status: todo — first.
+
+## pl-26
+`full` always publishes; no "skip publish" path (C-31). Why: help text said "no EDW load" while `full` published, and it ignored `NIGHTLY_PUBLISH`.
+- Decided (user 10-29 grill): publish (silver → Object Storage + EDW) is the default and only mode — remove `--no-publish` and `pipeline.host.nightly.publish`. Publish targets are required settings; missing → refuse to start.
+- Targets per `RUN_ENV`: `local`·`dev` pick one of (a) local path (folder for Object Storage, file DB for EDW) or (b) real connection info (API/DB); `stage`·`prd` real connection only. The PC keeps the CLAUDE.md §4 guard (no prod EDW/OS from the PC).
+- Files: `pipeline/cli.py` (`night`, `full`), `deploy/docker/entrypoint.sh`, publish in `pipeline/load/`, `pipeline/config.py`, `docs/operations/server-guide.md`.
+- Status: todo

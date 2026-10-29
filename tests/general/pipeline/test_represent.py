@@ -513,7 +513,7 @@ def selftest():
         ):  # S7c — 설정 객체만 바꿔 끼움
             represent(stack4, pd4, src=d4)
         combo = json.loads((pd4 / "_rep" / f"{doc4}.json").read_text(encoding="utf-8"))
-        assert combo["rep"]["scan_fill"] == {"filled": {"2": "rapidocr_ko"}, "skip": None}  # OCR 채움은 그대로 적용됨
+        assert combo["rep"]["scan_fill"] == {"filled": {"2": "vlm_page"}, "skip": None}  # 10-29 — 쪽 VLM 글이 있으면 그것으로 채움
         parts = combo["text"].split("\f")
         assert len(parts) == 3 and parts[0] == "1쪽 글자" and parts[2] == "3쪽 글자"  # 쪽 번호 안 섞임(1·3쪽 그대로)
         assert "OCR 2쪽 스캔 글" in combo["text"] or "정돈된 VLM 글" in combo["text"]  # 2쪽 글 중 하나는 남음(값 손실 없음)
@@ -522,6 +522,105 @@ def selftest():
         _vp.scan_pages_detail = orig_scan_pages_detail
         _vp.vlm_page = orig_vlm_page
     print("[selftest] PE1 후속 — PARSE_SCAN_FILL × PARSE_DEDUP_SCAN=1 동시 켜짐: 쪽 번호 안 섞임·값 손실 없음 통과")
+
+    # 10-29 — 스캔 쪽은 쪽 VLM 글로 채움(OCR 엔진 결과보다 먼저) · VLM 글이 비면 옛 OCR 경로 · apply_post는 채운 쪽을 다시 안 덧붙임
+    try:
+        _vp.scan_pages_detail = lambda p: {2: "chars"}
+        fake_vlm = lambda p: [(2, "VLM 2쪽 스캔 글", {"cached": True})]  # 쪽 VLM 가짜(모델 호출 없음)
+        rep_v = dict(base_rep4)
+        assert fill_scan_pages(rep_v, doc4, dd4, stack4, pd4, pdf4, page_vlm=fake_vlm) == {"filled": {"2": "vlm_page"}, "skip": None}
+        assert rep_v["text"] == "1쪽 글자\fVLM 2쪽 스캔 글\f3쪽 글자", rep_v["text"]
+        rep_e = dict(base_rep4)  # VLM 글이 비면(호출 실패 등) 옛 OCR 엔진 결과로
+        fill_e = fill_scan_pages(rep_e, doc4, dd4, stack4, pd4, pdf4, page_vlm=lambda p: [(2, "", {})])
+        assert fill_e == {"filled": {"2": "rapidocr_ko"}, "skip": None}, fill_e
+        _vp.vlm_page = lambda img, det=None: ("VLM 2쪽 스캔 글", {"cached": True})
+        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_DEDUP_SCAN="0", PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"):
+            represent(stack4, pd4, src=d4)
+        v_out = json.loads((pd4 / "_rep" / f"{doc4}.json").read_text(encoding="utf-8"))
+        assert v_out["rep"]["scan_fill"]["filled"] == {"2": "vlm_page"}
+        assert v_out["text"].count("VLM 2쪽 스캔 글") == 1, v_out["text"]  # 채운 쪽을 apply_post가 또 덧붙이지 않음
+    finally:
+        _vp.scan_pages_detail = orig_scan_pages_detail
+        _vp.vlm_page = orig_vlm_page
+    print("[selftest] 10-29 — 스캔 쪽 쪽 VLM 글로 채움·VLM 빈 글이면 OCR 경로·채운 쪽 중복 덧붙임 없음 통과")
+
+    # 10-29 P1-1·M4 — 쪽 VLM은 PARSE_POST에 vlm_page가 있을 때만(supsub만이면 호출 0) · 실패한 쪽도 한 represent에서 한 번만 부름
+    calls = []
+    try:
+        _vp.scan_pages_detail = lambda p: {2: "chars"}
+        _vp.vlm_page = lambda img, det=None: (calls.append(1), ("", {"error": "가짜 실패", "cached": False}))[1]
+        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_DEDUP_SCAN="0", PARSE_POST="supsub", PARSE_SCAN_FILL="1"):
+            represent(stack4, pd4, src=d4)
+        assert calls == [], "쪽 VLM이 꺼져 있는데(supsub만) VLM을 부름"
+        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_DEDUP_SCAN="0", PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"):
+            represent(stack4, pd4, src=d4)
+        assert len(calls) == 1, calls  # 스캔 쪽 1장 — scan_fill과 apply_post가 같은 결과를 씀(실패해도 다시 안 부름)
+    finally:
+        _vp.scan_pages_detail = orig_scan_pages_detail
+        _vp.vlm_page = orig_vlm_page
+    print("[selftest] 10-29 — 쪽 VLM 끔이면 호출 0 · 실패한 쪽 재호출 없음 통과")
+
+    # 10-29 C — 이미지·스캔 문서를 VLM 엔진이 이미 옮겼으면 쪽 VLM 0회 · 쪽 전체 그림은 '쪽 VLM이 다룬 것'으로(그림 VLM 생략)
+
+    from PIL import Image as _Image
+
+    from pipeline.transform.figures.figures import figures as _figures
+
+    d6 = Path(_tf.mkdtemp())
+    pd6 = d6 / "parse"
+    (pd6 / "qwen_vlm").mkdir(parents=True)
+    (pd6 / "_rep").mkdir()
+    scan6 = d6 / "scan.pdf"
+    sd6 = _fitz.open()
+    buf6 = _io.BytesIO()
+    _Image.new("RGB", (200, 200), "gray").save(buf6, "PNG")
+    sd6.new_page(width=200, height=200).insert_image(_fitz.Rect(0, 0, 200, 200), stream=buf6.getvalue())
+    sd6.save(scan6)
+    sd6.close()
+    (pd6 / "qwen_vlm" / "scan.pdf.json").write_text(json.dumps({"text": "VLM 엔진이 옮긴 글"}, ensure_ascii=False), encoding="utf-8")
+    qa6 = {"docs": {"scan.pdf": {"format": ".pdf_image", "engines": {"qwen_vlm": {"ok": True}}, "ref": None, "pages": 1}}}
+    (pd6 / "qa.json").write_text(json.dumps(qa6, ensure_ascii=False), encoding="utf-8")
+    stack6 = {"parse": {".pdf_image": ["qwen_vlm"]}}
+    calls.clear()
+    try:
+        _vp.vlm_page = lambda img, det=None: (calls.append(1), ("쪽 VLM 글", {"cached": False}))[1]
+        with pc.PIPE.env(PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"):
+            represent(stack6, pd6, src=d6)
+        assert calls == [], "VLM 엔진이 이미 옮긴 스캔 문서에 쪽 VLM을 또 부름"
+        out6 = json.loads((pd6 / "_rep" / "scan.pdf.json").read_text(encoding="utf-8"))
+        assert out6["text"].count("VLM 엔진이 옮긴 글") == 1 and "쪽 VLM 글" not in out6["text"], out6["text"]
+        with pc.PIPE.env(PARSE_POST="figures"):  # 쪽 VLM 꺼짐 — 덮지 않으면 쪽 전체 그림은 그림 VLM 대상
+            assert not any(f["loc"].get("page_vlm") for f in _figures(scan6) if f["loc"].get("page_render"))
+            assert all(f["loc"].get("page_vlm") for f in _figures(scan6, page_covered=True) if f["loc"].get("page_render"))
+        # run_docs light 레인처럼 vlm_page 없이 figures만 — VLM 엔진이 옮긴 문서의 쪽 전체 그림은 그림 VLM 0회
+        from pipeline.transform.figures import figures as _fig_mod
+
+        fig_calls = []
+        orig_vlm_fig = _fig_mod.vlm_fig
+        _fig_mod.vlm_fig = lambda b, **kw: (fig_calls.append(1), ("그림 글", {}))[1]
+        try:
+            with pc.PIPE.env(PARSE_POST="figures", VLM_FIG_SELECT="0"):
+                represent(stack6, pd6, src=d6)
+        finally:
+            _fig_mod.vlm_fig = orig_vlm_fig
+        assert fig_calls == [], "VLM 엔진이 옮긴 쪽 전체 그림에 그림 VLM을 또 부름"
+    finally:
+        _vp.vlm_page = orig_vlm_page
+    # covered 판정 표 — 대표가 VLM 엔진·본문 있음·이미지/스캔 형식(run_all과 같은 형식 키)일 때만
+    from pipeline.transform.represent.represent import _vlm_transcribed as _vt
+
+    def _r(engine, text):
+        return {"rep": {"engine": engine}, "text": text}
+
+    for rep_x, fmt, want in (
+        (_r("qwen_vlm", "글"), ".pdf_image", True),  # 글자 쪽이 몇 장 섞인 .pdf_image도(is_scan과 달리)
+        (_r("qwen_vlm", "글"), ".png", True),
+        (_r("rapidocr_ko", "글"), ".pdf_image", False),  # OCR 엔진이 대표(ocr_engine 켬)
+        (_r("qwen_vlm", "  "), ".pdf_image", False),  # 빈 VLM 글은 쪽 VLM을 막지 않음
+        (_r("qwen_vlm", "글"), ".pdf_text", False),
+    ):
+        assert _vt(rep_x, {"format": fmt}) is want, (rep_x, fmt)
+    print("[selftest] 10-29 C — VLM 엔진이 옮긴 스캔 문서: 쪽 VLM 0회·쪽 전체 그림 VLM 생략(vlm_page 없을 때도)·covered 판정 표 통과")
 
     # AD29 P1 — PARSE_FUSE(기본 꺼짐): 끄면 rep에 "fused" 키 자체가 안 생기고 나머지 바이트 동일 · 켜면 두 텍스트
     # 레이어 엔진이 동의한 값(430,000)이 OCR 혼자 낸 값(430.000)을 이기고 rep["fused"]["facts"]에 들어간다

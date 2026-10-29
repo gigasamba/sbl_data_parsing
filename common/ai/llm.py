@@ -7,7 +7,7 @@
 - **비용 관문(2026-10, OpenRouter 85% 소진 이후)**: LLM_FAKE=1이면 네트워크 호출 없이 모의 응답(마지막 user 메시지 앞 200자+"[FAKE]") —
   캐시에 안 쓰고 usage()에 fake_calls·prompt_chars만 쌈(추정기가 이걸로 호출 수·글자 수를 모음). 실호출은 LLM_BUDGET_USD로 상한.
 - **외부 전송 가드(DONT 13, 여기 한 곳에서 강제)**: LLM_BASE_URL이 내부 주소(사설 IP·localhost·.local/.internal/.corp·단일 이름)가 아니면
-  `allow_external=True` **그리고** RUN_ENV=local일 때만 호출한다(서버 dev·stage·prd는 외부 호출 불가).
+  `allow_external=True` **그리고** RUN_ENV=local일 때만 호출한다(서버 dev·prd는 외부 호출 불가).
 - 호출·토큰 수는 usage()로 — 도구가 결과 파일에 함께 남긴다.
 - **빈 응답 안전망(RV12, 2026-10-09 재순위 실측 — glm-5.2가 생각에 max_tokens를 다 써 ~45% 빈 응답)**: 응답이 비어 있고(공백만
   포함) 토큰을 썼다면(completion_tokens>0 — 생각이 출력 상한을 다 썼다는 신호, finish_reason을 3개 전송 경로 모두에서
@@ -53,7 +53,7 @@ def configured():
     return bool(cfg().models.llm.base_url and cfg().models.llm.model)
 
 
-from common.ai.guard import external_ok, is_internal, require_internal, run_env_block  # noqa: E402,F401 — 내부망 확인은 common 한 곳
+from common.ai.guard import external_ok, fake_llm, is_internal, require_internal, run_env_block  # noqa: E402,F401 — 내부망 확인은 common 한 곳
 
 # CT1(10-16) — models.py 병합(역할별 모델 프로필 조회, agent_platform.config.ModelProfile 재사용 — 사용자 결정 2026-10-06).
 # 설정 객체에서만 읽음(S7b — 호출 시점 cfg(), 전환 기간엔 env로 만든 객체라 테스트가 env를 바꾸면 반영). 기존 LLM_BASE_URL·VLM_BASE_URL·VLM_MODEL_ALT·EMBED_* 등은 그대로 하위 호환.
@@ -304,7 +304,7 @@ def chat(messages, temperature=0.0, max_tokens=1024, json_mode=False, allow_exte
     cli/check_modules.py 정적 검사). 캐시 열쇠(messages·temperature 등)는 agent와 무관 — 요청 본문만 바뀐다.
     빈 응답 안전망(RV12, 기본 켬·LLM_EMPTY_RETRY=0으로 끔) — _empty_truncated()면 max_tokens×4(LLM_EMPTY_RETRY_MAX
     상한, 기본 8000)로 딱 한 번 재요청, 두 호출 다 공유 장부(_do_call)를 거쳐 예산·호출 수에 그대로 반영된다."""
-    if cfg().dev.llm_fake:
+    if fake_llm():
         last_user = next((m.get("content") or "" for m in reversed(messages) if m.get("role") == "user"), "")
         pc = sum(len(m.get("content") or "") for m in messages)
         record_fake_call(pc)

@@ -618,7 +618,7 @@ def render(d, a, out_label, plain=False, gold_min=GOLD_MIN):
         )
         + "</section>",
     ]
-    if a["phases"]:
+    if set(a["phases"]) - {"phase -"}:  # 10-29 phase 없앰 — 옛 phase 기록이 있을 때만(새 기록은 전부 'phase -')
         p.append(
             '<section class="panel"><h2>phase별 — 문서×엔진 시도 결과 · 소요 시간</h2><div class="fig">'
             + svg_engines(a["phases"], keep_order=True)

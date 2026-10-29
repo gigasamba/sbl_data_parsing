@@ -73,7 +73,7 @@ for _k in ("DOC_DIR", "DOC_DIR_PREPARED", "PIPE_EMBED", "SOFFICE_BIN"):
 
 # 사용자 10-29 — 입력이 필수인 칸은 맨 위에 settings.yaml 꼴로, 기본값이 있는 칸은 영역별 선택 목록으로(YAML은 같은 절을 두 번 못 써서 선택 칸은 주석 목록).
 # 필수 = 비우면 시작을 거부하거나 그 기능이 꺼지는 접속·비밀·모델 주소·원천·게시 위치, 그리고 서버에서 꼭 적어야 동작이 지켜지는 칸(run_mode·mcp store — C-43·C-54).
-# 칸 → 어디서 필수인가: 공통(PC·서버) · 서버(dev·stage·prd) · PC(RUN_ENV=local). 사용자 10-29 — settings.yaml에 쓰는 칸 중 필수를 구분.
+# 칸 → 어디서 필수인가: 공통(PC·서버) · 서버(dev·prd) · PC(RUN_ENV=local). 사용자 10-29 — settings.yaml에 쓰는 칸 중 필수를 구분.
 REQUIRED = {
     "common.run_env": "공통",
     **{f"common.connections.pg.{k}": "공통" for k in ("host", "port", "db", "user", "password", "db_schema")},
@@ -126,7 +126,7 @@ _OPS = re.compile(
 HYPER = {  # 이름 규칙으로는 운영값이지만 결과(파싱·청크·검색 순위)를 바꾸는 칸
     "common.models.llm.extra_body",  # 생각 켬/끔 등 — 답 글자가 바뀜
     "common.models.vlm.extra_body",
-    "pipeline.extract.phases",  # 3r = 성공 엔진 없는 문서만 VLM
+    "pipeline.extract.ocr_engine",  # 이미지·스캔 문서에 OCR 엔진도 돌림(파싱 결과가 바뀜)
     "pipeline.extract.table_grid_max_rows",
     "pipeline.extract.ocr.dpi",
     "pipeline.transform.represent.reread.dpi",
@@ -151,7 +151,6 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "common.models.embed.query_cache_max",
     "common.models.transport.down_after",
     "pipeline.extract.max_file_mb",
-    "pipeline.extract.phase_sec",
     "pipeline.extract.input_source",
     "pipeline.extract.dedup.fuzzy_max",
     "pipeline.extract.prepare.link",
@@ -333,7 +332,7 @@ _PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|
 
 # 설명 글자로는 선택지를 못 뽑는 칸 — 코드가 받는 값(읽는 코드·설명 기준).
 VALUES = {
-    "common.run_env": "local·dev·stage·prd 중 하나",
+    "common.run_env": "local·dev·prd 중 하나",
     "common.store.run_mode": "prod·test 중 하나",
     "common.store.struct_backend": "pg·sqlite·tsql 중 하나",
     "common.text.search_recency": "0(끔)·1(최신을 묻는 질문만)·2(항상) 중 하나",

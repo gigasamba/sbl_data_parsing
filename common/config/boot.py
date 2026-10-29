@@ -1,5 +1,5 @@
 """컨테이너 시작 설정 — deploy/docker/entrypoint.sh가 앱 명령마다 python 한 번으로 부른다(S7e2 — VS7e1 R-9·U-1·C-45 ⑤).
-  ① --gate: RUN_ENV 관문(require_run_env — 없거나 모르는 값이면 종료 2, 서버(dev·stage·prd)면 이 이미지 절을 끝까지 검증해 못 읽거나 틀리면 이유만 찍고 종료 2)
+  ① --gate: RUN_ENV 관문(require_run_env — 없거나 모르는 값이면 종료 2, 서버(dev·prd)면 이 이미지 절을 끝까지 검증해 못 읽거나 틀리면 이유만 찍고 종료 2)
   ② 셸 칸: 이 셸이 쓰는 칸(옛 env 이름 — DOC_DIR·DOC_DIR_PREPARED·PARSE_SOURCE·PG_HOST)을 설정에서 꺼내 `N='값'` 줄로(export 아님 — 셸 변수만,
      앱 env에 옛 이름이 새지 않게). 비밀 칸은 거부. 이 이미지 절에 없는 이름(mcp 이미지의 PARSE_SOURCE)은 건너뜀. env에 이미 있으면 내지 않음(사용자 env).
      값이 없으면 내지 않음(셸 기본값).
