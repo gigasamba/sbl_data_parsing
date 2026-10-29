@@ -53,6 +53,7 @@
 | division | VARCHAR(20) | 사업부(DS/DP/CD/CM/AD/AS) | build_bundle(file_meta) | 뷰 → search_svc, internal_docs(거르기) | 유지 |
 | service_type | VARCHAR(20) | 서비스 종류(CMO DS 등) | build_bundle(file_meta) | 뷰 → search_svc, internal_docs(거르기) | 유지 |
 | run_id | INT | 이 행을 넣은 적재(`load_run`) | pgvector_load `load` | 없음 | 유지 |
+| pipeline_version | TEXT | 이 문서를 만든 파이프라인 판(`VERSION` — ParsingMeta가 아니라 여기, C-62 사용자 10-30) | (pgvector_load `load`) | (운영자·재처리 판정) | 새로 |
 
 ### gold.chunk
 
@@ -378,6 +379,40 @@
 | company_id | TEXT PK | 고객사 id | (CSV 적재 — 사람) | (고객 별칭 — aggregate `_struct_client_aliases` 자리) | 새로 |
 | company | TEXT | 고객사 이름 | 〃 | 〃 | 새로 |
 | aliases | TEXT | 별칭(`\|` 구분) | 〃 | 〃 | 새로 |
+
+### master.glossary
+
+용어 사전(지금 `GLOSSARY_DIR`의 `domain_terms.csv` — C-21 사용자 10-30: 폴더 마운트 대신 마스터 PG 표). CSV 원본은 git 밖 서버 폴더(회사 데이터), 적재 명령이 경로를 받음. PC는 SQLite 대역. 칸 = 지금 CSV 머리글 그대로.
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| concept_id | TEXT PK | 개념 id | (CSV 적재 — 사람) | (common.core.terms) | 새로 |
+| canonical | TEXT | 정식 표기 | 〃 | 〃 | 새로 |
+| category | TEXT | 분류(org_client 등) | 〃 | 〃 | 새로 |
+| synonyms | TEXT | 동의어(구분자 목록) | 〃 | 〃 | 새로 |
+| abbreviations | TEXT | 약어 | 〃 | 〃 | 새로 |
+| weak_synonyms | TEXT | 약한 동의어(문맥 조건) | 〃 | 〃 | 새로 |
+| broader | TEXT | 상위 개념 | 〃 | 〃 | 새로 |
+| related | TEXT | 관련 개념 | 〃 | 〃 | 새로 |
+| context_required | TEXT | 문맥 필요 여부 | 〃 | 〃 | 새로 |
+| case_sensitive | TEXT | 대소문자 구분 여부 | 〃 | 〃 | 새로 |
+| definition_ko | TEXT | 정의(한국어) | 〃 | 〃 | 새로 |
+| definition_en | TEXT | 정의(영어) | 〃 | 〃 | 새로 |
+| source | TEXT | 출처 | 〃 | 〃 | 새로 |
+| owner | TEXT | 담당 | 〃 | 〃 | 새로 |
+| status | TEXT | approved·draft | 〃 | 〃 | 새로 |
+| updated | TEXT | 고친 때 | 〃 | 〃 | 새로 |
+
+### master.client_roster
+
+고객 명부(지금 `CLIENT_ROSTER` CSV 새 형식 — C-21 사용자 10-30: 마스터 PG 표). 원본·적재·PC 대역은 `master.glossary`와 같음. 칸 = 지금 CSV 새 형식 머리글(`common/core/terms.py` 명부 읽기).
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| canonical_name | TEXT PK | 고객 정식 이름 | (CSV 적재 — 사람, `gen_roster` 초안) | (common.core.terms 고객 별칭) | 새로 |
+| name_ko | TEXT | 한국어 이름(정식 이름이 비면 이것) | 〃 | 〃 | 새로 |
+| aliases | TEXT | 별칭(`;` 또는 `\|` 구분) | 〃 | 〃 | 새로 |
+| status | TEXT | inactive·deleted면 건너뜀 | 〃 | 〃 | 새로 |
 
 ## 6. DB 담당자 확인 필요
 

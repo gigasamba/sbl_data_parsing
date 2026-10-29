@@ -12,6 +12,7 @@
 | [operations/server-guide.md](operations/server-guide.md) | 서버 가이드 — 이미지 역할, 설치·첫 실행, 일상 실행, 결과 확인, 검색 MCP·EDW 질의 도구, 회사 맞춤, 문제 해결, 개발자에게 보고하는 법 | 서버를 설치·운영할 때 |
 | [operations/env-guide.md](operations/env-guide.md) | 설정 작성 가이드 — 서버·PC `settings.yaml`(S7e1 — 옛 `pipeline.env`)의 자리·권한·키(옛 env 이름)·기본값, 판마다 바뀐 설정 | 설정 값을 채우거나 바꿀 때, 새 판 반입 때 |
 | [operations/release-and-patch.md](operations/release-and-patch.md) | 릴리스·패치 — 이미지 기준판과 덧씌우기 만들기·적용·확인, selftest 반입 판정 | 새 이미지 판이나 덧씌우기를 만들거나 서버에 넣을 때 |
+| [history/refactor_c_items.md](history/refactor_c_items.md) | 끝난·옛 확인 항목 이력(refactor.md에서 10-30 옮김 — do-04): C-05·06·13·14·15·18·20·22~26·28·30·35·38·40·57·63, C-41 합성 정답 부분, PRD로 옮긴 C-31·32·33·50·53의 옛 글 | 옛 확인 항목의 결정·경위를 찾을 때 |
 | [operations/patch-history.md](operations/patch-history.md) | 긴급 패치 이력(생성물 — 원본은 release-and-patch §9) | 서버에 무엇이 들어간 판인지 볼 때 |
 | [operations/parsing_meta_mssql.sql](operations/parsing_meta_mssql.sql) | 회사 DB `AI.ParsingMeta` DDL — DBA가 1회 실행(코드는 표를 만들지 않음) | 첫 결과 게시(`publish --apply`) 전, DB 담당과 표를 맞출 때 |
 | [requirements/run_docs_req.md](requirements/run_docs_req.md) | 문서별 flow 러너(`deploy/host/scripts/run_docs.py`) 요구사항 — 사용자 발화 기록 | flow 러너를 고치기 전에 |
