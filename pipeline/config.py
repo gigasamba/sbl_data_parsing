@@ -193,17 +193,23 @@ class PipelineLoadPublish(Section):
 
 
 class PipelineServiceParseMcp(Section):
+    REMOVED = frozenset({"ocr"})  # 사용자 10-29 — PARSE_MCP_OCR를 pipeline.extract.ocr_engine으로 합침(남아 있어도 경고만 — 한 판 동안)
     job_timeout_sec: float | None = F(600.0, "PARSE_MCP_JOB_TIMEOUT_SEC", "parse MCP 서비스 작업 1건 제한 시간(초)")
     jobs_dir: str | None = F(None, "PARSE_MCP_JOBS_DIR", "parse MCP 서비스 작업 기록 폴더")
     max_mb: float | None = F(64.0, "PARSE_MCP_MAX_MB", "parse MCP 서비스가 받는 파일 크기 상한(MB)")
-    ocr: bool | None = F(False, "PARSE_MCP_OCR", "parse MCP 서비스에서 OCR 엔진 포함 여부 — 1이면 포함(느림)", on=("1",))
     port: Port | None = F(8766, "PARSE_MCP_PORT", "parse MCP 서비스 포트")
     procs: int | None = F(None, "PARSE_MCP_PROCS", "parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개)")
     queue_max: int | None = F(8, "PARSE_MCP_QUEUE_MAX", "parse MCP 서비스 대기 작업 상한(건)")
     roots: CsvList | None = F(
         None, "PARSE_MCP_ROOTS", "parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) — 비면 코드가 정함(<서비스 폴더>/inbox)"
     )
+    text_page_sec: float | None = F(
+        1.0, "PARSE_MCP_TEXT_PAGE_SEC", "parse MCP 서비스 작업의 글자 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
+    )
     token: SecretStr | None = F(None, "PARSE_MCP_TOKEN", "parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값)")
+    vlm_page_sec: float | None = F(
+        60.0, "PARSE_MCP_VLM_PAGE_SEC", "parse MCP 서비스 작업의 VLM 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
+    )
 
 
 class PipelineServiceTrigger(Section):
@@ -466,6 +472,12 @@ class PipelineExtract(Section):
     isolate_overhead: float | None = F(10.0, "PARSE_ISOLATE_OVERHEAD", "별도 프로세스 실행 시 쪽당 제한 시간에 더해 줄 시작 여유(초)")
     kreuzberg_prose_filter: bool | None = F(
         True, "KREUZBERG_PROSE_FILTER", "kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔)", pinned="engine"
+    )
+    low_priority: bool | None = F(
+        True,
+        "PARSE_LOW_PRIORITY",
+        "엔진 자식 프로세스를 낮은 우선순위로(POSIX nice +10 · Windows BELOW_NORMAL) — parse MCP 서비스 작업은 끔(=0)",
+        off=("0",),
     )
     max_file_mb: float | None = F(0.0, "MAX_FILE_MB", "이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음)")
     max_new: int | None = F(0, "PARSE_MAX_NEW", "이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음)")

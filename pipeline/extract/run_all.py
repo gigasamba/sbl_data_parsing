@@ -199,12 +199,11 @@ def main():
     from pipeline.extract import resources as presources  # 10-14 — resolve_procs·thread_env는 common.core.resources에서 옮김(P만 씀)
 
     a.procs = 1 if a.shard else presources.resolve_procs(a.procs)  # --shard = run_procs가 띄운 하위 → 다시 나누지 않음
-    # OC2(사용자 10-15) — 실제 동시 수(조각 procs × 조각마다 workers)로 CPU를 나눔(thread_share). 조각은 이 값을 setdefault로 물려받음.
-    # OC1 rapidocr 스레드도 이 OMP_NUM_THREADS를 따름.
+    # OC2(사용자 10-15) — 실제 동시 수로 CPU를 나눔(thread_share). 조각은 이 값을 setdefault로 물려받음. OC1 rapidocr 스레드도 OMP_NUM_THREADS를 따름.
+    # 10-29 — 동시 글자 엔진 자식 = 조각 × min(문서 workers × 형식당 엔진 2, 코어 ÷ 조각) — VLM 엔진(API 대기)은 이 상한 밖
+    slots = min(max(1, a.workers) * MAX_PER_TYPE, presources.text_slots(resources.cpus(), a.procs))
     thr = C.cfg().runtime.pipe_threads  # S7c — 설정 객체(float, auto·빈 값 = None — 옛 `int(get or 계산)`: "0"은 0이라 None일 때만 계산)
-    for k, v in presources.thread_env(
-        int(thr) if thr is not None else presources.thread_share(resources.cpus(), a.procs, a.workers)
-    ).items():
+    for k, v in presources.thread_env(int(thr) if thr is not None else presources.thread_share(resources.cpus(), a.procs, slots)).items():
         os.environ.setdefault(k, v)  # env 남김 — 라이브러리(5-3 H) · 단일 프로세스도 수치 라이브러리 스레드를 컨테이너 CPU 한도에 맞춤
     if a.src is None:
         a.src = str(doc_dir())
@@ -375,6 +374,8 @@ def main():
     done, tally, last_w = [0], Counter(), [0.0]
 
     warmed = set()
+    text_sem = threading.BoundedSemaphore(slots)  # 10-29 — 글자(CPU) 엔진 자식 동시 수 상한(VLM 엔진은 --workers만큼)
+    vlm_env = _vlm_child_env()  # M3 — VLM 엔진 자식의 VLM 호출 제한 = min(models.vlm.timeout, vlm_page_sec)
     env_failed = {}  # RB3② — 엔진 → 첫 env 실패 문서 이름. 이 실행(프로세스) 안에서만 기억(--procs 자식마다 별도 프로세스라 공유 안 됨 —
     # ponytail: 프로세스 간 공유가 필요해지면(--procs가 같은 엔진을 여러 조각으로 쪼갤 때) 파일 기반 공유로 올림)
 
@@ -419,22 +420,11 @@ def main():
             first = eng not in warmed
             warmed.add(eng)
         tmo = page_timeout(eng, n_pages(doc), first)
-        for attempt in range(2):  # 사용자 10-29 — 시간 초과면 같은 실행에서 제한 두 배로 한 번 더, 그래도 넘으면 실패로 기록
-            err = None
-            try:
-                if unset:
-                    raise LookupError("환경변수 미설정: " + ", ".join(unset))
-                _isolated(eng, doc, dst, a.profile, tmo)
-            except Exception as ex:
-                err = redact(f"{type(ex).__name__}: {str(ex)[:300]}")
-                if isinstance(ex, ImportError):
-                    err += " (미설치)"
-                elif not isinstance(ex, TimeoutError) and (not isinstance(ex, LookupError) or not unset):
-                    traceback.print_exc(limit=1)
-            if attempt or not (err and "Timeout" in err):
-                break
-            tmo = round(tmo * 2, 2)
-            print(f"RETRY {eng:18s} {doc.name}  시간 초과 — 제한 {tmo}초로 한 번 더", flush=True)
+        if eng in VLM_ENGINES:
+            err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, vlm_env)
+        else:
+            with text_sem:
+                err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, None)
         ever = P0.engine_version(eng)
         pkey = p0_key(eng, sha, ever)  # P0 열쇠(다음 실행의 재사용 판단용) — p0_status와 같은 함수
         if not err and dst.exists():
@@ -484,19 +474,7 @@ def main():
             except Exception as ex:  # 현황 파일 실패가 파싱을 멈추면 안 됨
                 print(f"(PROGRESS.md 갱신 실패: {type(ex).__name__}: {ex})", flush=True)
 
-    by_doc = {}
-    for job in jobs:
-        by_doc.setdefault(job[0], []).append(job)
-
-    def run_doc(doc_jobs):  # 사용자 10-29 — 한 문서의 엔진들(형식당 최대 2개)은 동시에, 엔진마다 별도 프로세스
-        if len(doc_jobs) == 1:
-            return run_job(doc_jobs[0])
-        # ponytail: scope=all(실험 경로)은 엔진이 2개보다 많을 수 있어 동시 수만 MAX_PER_TYPE으로 묶음
-        with ThreadPoolExecutor(max_workers=min(len(doc_jobs), MAX_PER_TYPE)) as pool:
-            list(pool.map(run_job, doc_jobs))
-
-    with ThreadPoolExecutor(max_workers=max(1, a.workers)) as pool:
-        list(pool.map(run_doc, by_doc.values()))
+    _run_docs(jobs, run_job, a.workers)
     for doc, eng, dst, sha, first in deferred:  # 사본: 먼저 돈 결과가 성공이면 복사, 아니면 사본은 기록 안 함(다음 실행에서 다시 판단)
         if first.exists():
             dst.write_bytes(first.read_bytes())
@@ -560,6 +538,55 @@ def run_procs(a, docs):
     with ThreadPoolExecutor(max_workers=k) as ex:
         list(ex.map(one, range(k)))
     write_progress(Path(a.src), Path(a.out), a.engines)
+
+
+def _run_docs(jobs, run_job, workers):
+    """사용자 10-29 — 문서 workers개를 동시에, 한 문서의 엔진들(형식당 최대 2개)도 동시에(엔진마다 별도 프로세스 — run_job).
+    ponytail: scope=all(실험 경로)은 엔진이 2개보다 많을 수 있어 문서 안 동시 수만 MAX_PER_TYPE으로 묶음."""
+    by_doc = {}
+    for job in jobs:
+        by_doc.setdefault(job[0], []).append(job)
+
+    def run_doc(doc_jobs):
+        if len(doc_jobs) == 1:
+            return run_job(doc_jobs[0])
+        with ThreadPoolExecutor(max_workers=min(len(doc_jobs), MAX_PER_TYPE)) as pool:
+            list(pool.map(run_job, doc_jobs))
+
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        list(pool.map(run_doc, by_doc.values()))
+
+
+def _run_with_retry(eng, doc, dst, profile, tmo, unset, env):
+    """문서×엔진 1건 — 시간 초과면 같은 실행에서 제한 두 배로 한 번 더(사용자 10-29), 그래도 넘으면 실패. 반환: (오류 글자 또는 None, 마지막 제한)."""
+    for attempt in range(2):
+        err = None
+        try:
+            if unset:
+                raise LookupError("환경변수 미설정: " + ", ".join(unset))
+            _isolated(eng, doc, dst, profile, tmo, env=env)
+        except Exception as ex:
+            err = redact(f"{type(ex).__name__}: {str(ex)[:300]}")
+            if isinstance(ex, ImportError):
+                err += " (미설치)"
+            elif not isinstance(ex, TimeoutError) and (not isinstance(ex, LookupError) or not unset):
+                traceback.print_exc(limit=1)
+        if attempt or not (err and "Timeout" in err):
+            break
+        tmo = round(tmo * 2, 2)
+        print(f"RETRY {eng:18s} {doc.name}  시간 초과 — 제한 {tmo}초로 한 번 더", flush=True)
+    return err, tmo
+
+
+def _vlm_child_env():
+    """VLM 엔진 자식 env — 엔진의 쪽당 VLM 호출 제한(VLM_TIMEOUT, 엔진이 env로 읽는 칸)을 min(models.vlm.timeout, vlm_page_sec)로(M3, 10-29 —
+    한 쪽 호출이 문서×엔진 쪽당 제한보다 길게 기다리지 않게. 엔진 코드는 그대로, 값만). 같으면 덮지 않음(None = child_env 기본)."""
+    from common.core.paths import child_env
+
+    cur, lim = C.cfg().models.vlm.timeout, pc.cfg().extract.vlm_page_sec
+    if cur is None or lim is None or float(lim) >= float(cur):
+        return None
+    return C.child_env(child_env(), VLM_TIMEOUT=str(max(1, int(lim))))
 
 
 def _old_phase_timeout(r):
@@ -670,35 +697,39 @@ def _env_error(err):
     return is_env_error(err)
 
 
-def _isolated(eng, doc, dst, profile, tmo, py=None):
+def _isolated(eng, doc, dst, profile, tmo, py=None, env=None):
     py = py or sys.executable
     retries = int(
         pc.cfg().extract.engine_retry
     )  # S7c — 설정 객체(기본 1) · 비정상 종료만 바로 다시(10-14 rapidocr ResizeImgError 1회성 — 단독 재실행은 성공)
     for attempt in range(retries + 1):
         try:
-            return _isolated_once(eng, doc, dst, profile, tmo, py)
+            return _isolated_once(eng, doc, dst, profile, tmo, py, env)
         except RuntimeError:
             if attempt == retries:
                 raise
 
 
-def _isolated_once(eng, doc, dst, profile, tmo, py):
+def _isolated_once(eng, doc, dst, profile, tmo, py, env=None):
     import subprocess
 
     from common.core import resources as RS
     from common.core.paths import child_env
+    from pipeline.extract import resources as PR  # 우선순위 OS 분기 한 곳
 
+    low = bool(pc.cfg().extract.low_priority)  # 10-29 — 일괄 파싱은 낮은 우선순위(parse MCP 서비스는 끔 — 요청이 CPU를 먼저)
     # PADDLE_PYTHON은 별도 venv(.venv-paddle)라 cwd 상속에 의존하지 않고 child_env()의 PYTHONPATH(deploy/)로 `-m pipeline.extract.parse_one`을 찾게 함
     pr = RS.gated_popen(
         [py, "-m", "pipeline.extract.parse_one", "--engine", eng, "--profile", profile, str(doc), str(dst)],
-        env=child_env(),
+        env=env if env is not None else child_env(),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         encoding="utf-8",
         errors="replace",
+        **PR.low_priority_kw(low),
     )
+    PR.renice_low(pr.pid, low)
     try:
         _, err = pr.communicate(timeout=tmo)
     except subprocess.TimeoutExpired as tmo_err:

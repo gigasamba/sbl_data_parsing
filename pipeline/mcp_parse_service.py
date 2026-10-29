@@ -57,7 +57,18 @@ def _job_env(post, stack=None):
     key = (post, str(stack), os.environ.get("SETTINGS_FILE"))  # env 남김 — 설정 파일 자리 신호
     extra = _JOB_ENVS.get(key)
     if extra is None or not Path(extra["SETTINGS_FILE"]).is_file():
-        made = settings_env(PARSE_FUSE_REREAD_P3="0", PARSE_POST=post, **({"STACK_SNAPSHOT": str(stack)} if stack else {}))
+        pm = pc.cfg().service.parse_mcp
+        # 10-29 — 파이프라인과 같은 규칙(쪽당 제한 + 두 배로 한 번 더)을 서비스 값으로 · 엔진 첫 문서 하한(warmup)은 0(작업마다 새 run_all이라
+        # 늘 '첫 문서' — 하한을 두면 쪽당 제한이 무의미, 시작 여유는 isolate_overhead) · 엔진 자식은 보통 우선순위(일괄 파싱보다 CPU 먼저)
+        made = settings_env(
+            PARSE_FUSE_REREAD_P3="0",
+            PARSE_POST=post,
+            PARSE_TEXT_PAGE_SEC=str(pm.text_page_sec),
+            PARSE_VLM_PAGE_SEC=str(pm.vlm_page_sec),
+            PARSE_WARMUP_SEC="0",
+            PARSE_LOW_PRIORITY="0",
+            **({"STACK_SNAPSHOT": str(stack)} if stack else {}),
+        )
         # 덮기 파일이 얹은 몫만 — 넘긴 칸(SETTINGS_FILE·영구 다리로 env에 든 칸)은 지금 env와 같아도 늘 넣음(뒤에 env가 바뀌어도 자식 env와
         # 덮기 파일이 어긋나지 않게 — VS8a R-5)
         extra = _JOB_ENVS[key] = {k: v for k, v in made.items() if k in _JOB_KEYS or os.environ.get(k) != v}  # env 남김 — 하위 프로세스
@@ -115,12 +126,28 @@ def _jail(path_str):
     return p
 
 
+def _run_group(cmd, timeout, env):
+    """작업 단계 하나(python -m …) — 새 프로세스 묶음으로 띄우고 시간 초과면 묶음째 끝냄(run_all이 띄운 parse_one 손자가 남지 않게,
+    cli._run_until과 같은 규칙 — pipeline.extract.resources). 시간 초과는 subprocess.TimeoutExpired로 올림(옛 subprocess.run과 같음)."""
+    from pipeline.extract import resources as PR
+
+    p = subprocess.Popen(
+        ["python", "-m", *cmd], cwd=APP_ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, **PR.group_kw()
+    )
+    try:
+        out, err = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        PR.kill_group(p)
+        raise
+    return subprocess.CompletedProcess(p.args, p.returncode, out, err)
+
+
 def _engines_no_ocr_arg():
     """run_all에 붙일 --engines 인자(2026-10-21 사용자: 이미지 비대상 — OCR 꺼짐 기본).
-    CORE에서 이미지·스캔 전용(rapidocr_ko·qwen_vlm·ocr_vlm)을 빼고 설치된 것만. PARSE_MCP_OCR=1이면 비워
-    run_all 기본(CORE 전체)으로 돌아간다 — 10-29부터 OCR 엔진은 pipeline.extract.ocr_engine도 켜야 돈다(VLM 엔진은 그대로 포함). 스캔 이미지 PDF는 글자층 엔진만 시도되어
+    CORE에서 이미지·스캔 전용(rapidocr_ko·qwen_vlm·ocr_vlm)을 빼고 설치된 것만. pipeline.extract.ocr_engine(PARSE_OCR_ENGINE — 10-29에
+    옛 PARSE_MCP_OCR를 합침)이 켜지면 비워 run_all 기본(CORE 전체 — OCR·VLM 엔진 포함)으로 돌아간다. 스캔 이미지 PDF는 글자층 엔진만 시도되어
     텍스트가 안 나오면 빠르게 실패한다(수 분 OCR로 큐를 막던 원인 제거 — 실측 10-21)."""
-    if pc.cfg().service.parse_mcp.ocr:  # S7c — 설정 객체(켜기 =1)
+    if pc.cfg().extract.ocr_engine:  # 10-29 — 파이프라인과 같은 OCR 스위치
         return []
     try:
         from pipeline.extract.engines import registry
@@ -251,7 +278,7 @@ def _worker():
                     "fields": {},
                     "rep_path": None,
                     "all_keys": [],
-                    "note": "이미지 문서 — text 파싱 결과 없음(OCR·VLM 기본 미실행 · 재가능: 서비스 env PARSE_MCP_OCR=1)",
+                    "note": "이미지 문서 — text 파싱 결과 없음(OCR·VLM 기본 미실행 · 재가능: pipeline.extract.ocr_engine 켬)",
                 }
                 j["status"] = "done"
             else:
@@ -267,14 +294,7 @@ def _worker():
                 job_env = _job_env(post or "supsub", stack)  # 하위 프로세스 — 덮기 파일(S7e2), 같은 값이면 한 번 만든 것 재사용(VS7e2 R-4)
                 # 2026-10-22 병목 해소: post 기본 all→supsub — RapidOCR·figures·vlm_page·context·attachments를 끔
                 # 교차재현율(③)·table_inline(⑦)은 0.0초로 병목이 아니었으므로 그대로 유지 — 실측 47→~0.3초
-                _run = lambda cmd: subprocess.run(
-                    ["python", "-m", *cmd],
-                    cwd=APP_ROOT,
-                    capture_output=True,
-                    text=True,
-                    timeout=left,  # noqa: B023 — 같은 반복 안에서만 부름
-                    env=job_env,  # noqa: B023
-                )
+                _run = lambda cmd: _run_group(cmd, left, job_env)  # noqa: B023 — 같은 반복 안에서만 부름
 
                 # ① prepare → run_all
                 for cmd in (

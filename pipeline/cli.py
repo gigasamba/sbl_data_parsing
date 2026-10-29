@@ -97,19 +97,13 @@ def _run_until(args, env, sec):
     cmd = [PY, "-m", str(args[0]), *map(str, args[1:])]
     print("$ " + " ".join(cmd), flush=True)
     from common.core import resources as RS
+    from pipeline.extract import resources as PR  # 프로세스 묶음(OS 분기 한 곳)
 
-    kw = {"start_new_session": True} if os.name != "nt" else {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
-    p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **kw)  # cwd=APP_ROOT(런타임 루트) — sh()와 같은 이유
+    p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **PR.group_kw())  # cwd=APP_ROOT(런타임 루트) — sh()와 같은 이유
     try:
         return p.wait(timeout=max(1, sec))
     except subprocess.TimeoutExpired:
-        if os.name == "nt":
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], capture_output=True)
-        else:
-            import signal
-
-            os.killpg(p.pid, signal.SIGTERM)
-        p.wait()
+        PR.kill_group(p)
         return None
 
 

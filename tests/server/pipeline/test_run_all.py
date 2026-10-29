@@ -246,3 +246,95 @@ def selftest():
 
 def test_main():  # 옛 `if "--selftest" in sys.argv:` 갈래
     selftest()
+
+
+def test_retry_doubles_limit():
+    """10-29 — 시간 초과면 같은 실행에서 제한을 두 배로 한 번 더(가짜 _isolated — 첫 번 TimeoutError, 둘째 성공 / 둘 다 실패)."""
+    from unittest import mock
+
+    from pipeline.extract import run_all as RA
+
+    seen = []
+
+    def once(eng, doc, dst, profile, tmo, env=None):
+        seen.append(tmo)
+        if len(seen) == 1:
+            raise TimeoutError(f"문서×엔진 시간 제한 초과({tmo}초)")
+
+    with mock.patch.object(RA, "_isolated", once):
+        err, tmo = RA._run_with_retry("pymupdf", Path("a.pdf"), Path("a.json"), "default", 20.0, [], None)
+    assert err is None and seen == [20.0, 40.0] and tmo == 40.0, (err, seen)
+
+    seen.clear()
+    always = mock.Mock(side_effect=TimeoutError("시간 제한 초과"))
+    with mock.patch.object(RA, "_isolated", always):
+        err, tmo = RA._run_with_retry("pymupdf", Path("a.pdf"), Path("a.json"), "default", 20.0, [], None)
+    assert err and "Timeout" in err and always.call_count == 2 and tmo == 40.0  # 한 번만 더 — 세 번째 없음
+
+    other = mock.Mock(side_effect=RuntimeError("깨짐"))
+    with mock.patch.object(RA, "_isolated", other):
+        err, _ = RA._run_with_retry("pymupdf", Path("a.pdf"), Path("a.json"), "default", 20.0, [], None)
+    assert err and other.call_count == 1  # 시간 초과가 아니면 다시 안 함
+
+
+def test_run_docs_engines_concurrent():
+    """10-29 — 한 문서의 엔진 2개는 동시에(둘이 같이 기다려야 풀리는 장벽 — 차례로 돌면 시간 초과로 깨짐)."""
+    import threading
+
+    from pipeline.extract.run_all import _run_docs
+
+    barrier = threading.Barrier(2, timeout=10)
+    ran = []
+
+    def job(j):
+        barrier.wait()
+        ran.append(j[1])
+
+    d = Path("one.pdf")
+    _run_docs([(d, "pymupdf", None, "s"), (d, "kreuzberg", None, "s")], job, workers=1)
+    assert sorted(ran) == ["kreuzberg", "pymupdf"]
+
+
+def test_run_procs_doc_shards():
+    """10-29 — --procs는 엔진 묶음이 아니라 문서 조각: 조각 수 = min(procs, 문서 수), 자식마다 --shard i/k --procs 1."""
+    import argparse
+    from unittest import mock
+
+    from common.core import resources
+    from pipeline.extract import run_all as RA
+
+    cmds = []
+    fake = mock.Mock(side_effect=lambda cmd, **kw: (cmds.append(cmd), mock.Mock(wait=lambda: 0))[1])
+    a = argparse.Namespace(procs=4, src="s", out="o", engines="")
+    argv = ["run_all", "--src", "s", "--procs", "4", "--engines", "pymupdf"]
+    with mock.patch.object(resources, "gated_popen", fake), mock.patch.object(RA, "write_progress"), mock.patch.object(sys, "argv", argv):
+        RA.run_procs(a, [Path("a.pdf"), Path("b.pdf"), Path("c.pdf")])
+    shards = sorted(c[c.index("--shard") + 1] for c in cmds)
+    assert shards == ["0/3", "1/3", "2/3"], shards
+    for c in cmds:
+        assert c[c.index("--procs") + 1] == "1" and c.count("--procs") == 1 and "--engines" in c  # 엔진 인자는 그대로 넘김
+
+
+def test_low_priority_children():
+    """10-29 — 일괄 파싱 엔진 자식은 낮은 우선순위(OS 분기 한 곳 — pipeline.extract.resources), 끄면(parse MCP 서비스) 아무 인자 없음."""
+    import os
+    import subprocess
+
+    from pipeline.extract import resources as PR
+
+    assert PR.low_priority_kw(False) == {}
+    if os.name == "nt":
+        assert PR.low_priority_kw(True) == {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS}
+    else:
+        assert PR.low_priority_kw(True) == {}  # POSIX는 띄운 뒤 renice_low
+        p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(2)"])
+        try:
+            before = os.getpriority(os.PRIO_PROCESS, p.pid)
+            PR.renice_low(p.pid, True)
+            assert os.getpriority(os.PRIO_PROCESS, p.pid) == min(19, before + PR.LOW_NICE)
+        finally:
+            p.kill()
+            p.wait()
+    with pc.PIPE.env(PARSE_LOW_PRIORITY="0"):
+        assert pc.cfg().extract.low_priority is False
+    assert pc.cfg().extract.low_priority is True  # 기본 켬(일괄 파싱)
