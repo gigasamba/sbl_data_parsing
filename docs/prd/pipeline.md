@@ -72,18 +72,19 @@ Model calls, cost and external-send guard (shared). Why: closed-network servers 
 ## pl-12
 Document registry upsert and publish guard. Why: registry upsert has a PG syntax error (C-54 ①); the publish guard is off because the server does not upload `source.json` (C-54 ②).
 - Files: `common/store/structdb.py`, `pipeline/load/publish_parse_result.py`, `tests/server/pipeline/test_publish_guard.py` (known fail).
-- Status: todo — design in the next version.
+- Decided (user 10-30 grill): ① keep the registry and fix it — the PG translation of `INSERT OR REPLACE` (`structdb._pg_sql` regex vs multi-line SQL in `registry.apply`); re-key to `s3_key` with [pl-25](#pl-25). New-doc detection stays FileStorageMap vs ParsingMeta ([pl-23](#pl-23)). ② publish guard reads EDW `AI.ParsingMeta` (`source_key` + `rep_bucket`/`rep_key`) instead of `source.json` sidecars: same doc → overwrite the same file (no `-2`/`-3.md` copies); a different source mapping to the same result key → refuse. Then `test_publish_guard` passes → remove it from `deploy/release/known_fail.txt`.
+- Status: todo — after [pl-25](#pl-25).
 
 ## pl-13
 `load --prune` deletes skipped documents. Why: unchanged docs that were skipped are pruned too (C-60).
 - Files: `pipeline/load/pgvector_load.py`.
 - Decided (user 10-29 grill): load only adds/updates — never deletes. Skipped (existing) docs stay. Docs deleted at the source and parse failures are only logged locally (cause + duration), no automatic removal. Drop the prune path from `load` and its callers (`pipeline/cli.py` load, the index builder `--pg`).
-- Status: todo — review grade A (server load behavior).
+- Status: dev — `feature/load-no-prune`: `prune`·`--prune`·`PRUNE_*` 설정 없앰(옛 설정 칸은 경고만), `cli load`·`run-stack`·색인 빌드 `--pg`가 더는 안 붙임, `--no-prune`은 옛 호출 호환으로 받기만, 색인 빌드 `--pg`는 `--replace`로(다시 빌드 때 고침). 남은 한계: `file_path`가 바뀐 같은 내용은 옛 행이 남음(사람이 지움 — 사용자 확인). 시험 `tests/server/pipeline/test_pl13_no_prune.py`. 검토 등급 A(서버 적재 동작).
 
 ## pl-14
 `pgvector_load deploy` backfill reads removed `doc.client`. Why: `backfill_chunk_clients` fails after the 10-20 reduced schema (tables and indexes are still created).
 - Files: `pipeline/load/pgvector_load.py`.
-- Status: todo
+- Status: done (10-30, `feature/search-path-fixes`) — backfill은 남기고(사용자 10-30) `doc.clients`만 읽음(없는 `doc.client` 안 고름, `_doc_row_clients`도 `clients`만 받음). NULL인 청크만 채우고 멱등인 것은 그대로. 동작은 같음 — 축소 스키마의 고객 라벨은 원래 `clients`에만 있음. 시험: `tests/server/pipeline/test_pl14_backfill.py`(가짜 DB, 이미지) · `tests/general/pipeline/test_pl14_deploy.py`(실 PG 임시 스키마에서 `deploy()` — PG 설정 없으면 건너뜀).
 
 ## pl-15
 `pipeline structure`/`load` contract check rejects new bundles. Why: `contract.py` `DOC_KEYS` still expects removed keys (the server does not use these modules).
@@ -133,6 +134,7 @@ Remove the parse phase concept (user 10-29). Why: phases 1/2/3r re-ran engines w
 ## pl-23
 Incremental runs only; full reparse = explicit full e2e (C-52, C-08). Why: engine/handoff/code fingerprints changed for every doc; an automatic reparse of all docs would blow the nightly window.
 - Decided (user 10-29 grill): nightly and `run_docs` process **new** docs only, even after a fingerprint change. "New" = `AI.FileStorageMap.s3_key` not yet in `AI.ParsingMeta` (s3 key only — no update-time check; `run_docs` already works this way). A full reparse runs only when a person starts a full e2e (occasional — after logic changes, then results are reviewed). The first load of this version is one full e2e.
+- Decided (user 10-30 grill): the nightly batch stays OFF (systemd timer and `pipeline.host.nightly.enabled` false); a person turns it on later in settings.yaml. No run time is fixed now.
 - Not used now: FileStorageMap update time — assumed column `last_modified_time`, to be added to the EDW example later ([pl-25](#pl-25)).
 - Files: `deploy/host/scripts/run_docs.py` (done set), `pipeline/cli.py` (`night` — check it does the same).
 - Status: todo
@@ -158,8 +160,12 @@ DB schema spec, written before pl-26·pl-23·pl-24 are built. Why: table/column 
   - `struct`: delete the document-derived tables `doc_location`, `doc_contract_link`, `doc_table`, `doc_cell` and their writers/readers (structured link/tables, `load_tables_db`, `find_table_cells`, aggregate `doc_link_list`/`table_cell_list`/`doc_location_list`, `AG.struct` server path) — that content lives only in chunk text. Keep `stack_version`/`source_version` (read at MCP start).
   - Masters `contract_master`, `client_master` move to a SEPARATE Postgres (own connection setting, not the search PG), filled by a person from CSV (`structured load` style). Readers `gen_roster` (client_master) and `terms.py` (contract_master) use the new connection.
   - EDW vector tables (`chunk_vec`, `edw_insert`, `edw_search`) are removed by PR #5.
+- Decided (user 10-30 — client fields): one client per doc comes from the EDW join chain (scalar). Clients found in the document text are a separate list. The MCP client filter uses ONLY the EDW client; a doc without an EDW client is excluded when a client filter is set. Using text-found clients in the filter is later ([pl-28](#pl-28)). Today both are mixed in `clients[]` (`build_bundle.infer_clients`) and `chunk.clients` drives the hard filter — fix with this row.
+- Naming rule (user 10-30): any field that can come from EDW and from document parsing gets two columns with the origin in the name (e.g. `client_edw`, `clients_doc`); `db_schema.md` fixes the exact suffixes.
+- Split timing (user 10-30): B — build ONE table set now; the per-source split is [pl-28](#pl-28).
+- Decided (user 10-30 grill round 7): `db_schema.md` U-1..U-6 as drafted. U-7: one `doc` row per `s3_key`, no `doc_alias` — remove `build_bundle`'s content-hash merge of identical files into the first key (`aliases`); identical content under two keys = two docs (the embedding cache reuses the vectors). D-2: the pipeline builds the EDW client join itself → [pl-29](#pl-29).
 - Files: `docs/architecture/db_schema.md` (new), `docs/index.md`, `common/store/db/migrations/versions/`, `docs/operations/parsing_meta_mssql.sql`, `tests/server/common/` (one test).
-- Status: todo — first.
+- Status: dev — `docs/architecture/db_schema.md` 설계안 + 시험 `tests/server/common/test_db_schema.py`(`feature/db-schema-spec`) — 사용자·DB 담당자 승인 대기(코드·스키마 변경 없음).
 
 ## pl-26
 `full` always publishes; no "skip publish" path (C-31). Why: help text said "no EDW load" while `full` published, and it ignored `NIGHTLY_PUBLISH`.
@@ -178,3 +184,15 @@ DB schema spec, written before pl-26·pl-23·pl-24 are built. Why: table/column 
 - Files: `common/core/exitclean.py`, `common/config/settings.py`, `common/config/setarg.py`, `common/core/resources.py`, `common/core/fingerprint.py`(분류 목록), `pipeline/extract/resources.py`, `pipeline/mcp_parse_service.py`.
 - 시험: `tests/server/common/test_exitclean.py` — 정상·오류 종료(모든 OS) · SIGTERM과 `--set`(execve)(POSIX 전용, Windows는 건너뜀 — python:3.12-slim에서 확인) · overrides 출력 파일은 남고 isolated는 블록 끝에서 지움.
 - Status: dev — `feature/exit-cleanup`. code_fp 모든 레이어가 바뀜(`common/` 공용 의존).
+
+## pl-28
+Per-source gold tables (designed in [pl-25](#pl-25), built later). Why: SFDC · CRMS · LAS · Other have different metadata; one table per source keeps columns clean.
+- What (user 10-30): every gold pair — `doc`, `chunk` and the BM25 tables (`chunk_term`, `term_stat`, `corpus_stat`) — exists once per source (4 sets); columns may differ per source (SFDC-only `sf_*`, `project_code__c` move to the SFDC doc table). `load_run` and the Alembic version table stay shared. MCP `search` then requires a source — one contract change, new version, review grade A. Also later: allow text-found clients (`clients_doc`) in the client filter.
+- Status: todo — later version; needs a full reload.
+
+## pl-29
+EDW 고객 매핑을 파이프라인이 직접 만든다. 왜: 문서마다 EDW 고객 하나(`client_edw` — MCP 고객 거르기의 유일한 키, [pl-25](#pl-25))와 SFDC 칸(`sf_acc_name`·`sf_op_id`·`sf_op_name`·`project_code__c` 등)을 지금은 외부에서 뽑은 `file_meta_new.jsonl`(`pipeline.paths.file_meta_path`)에서 읽는데, 그 파일을 만드는 코드가 저장소에 없다(db_schema.md D-2).
+- 결정(사용자 10-30 grill 7차): 파이프라인이 EDW 읽기 계정(`common.connections.rdb.read`)으로 조인을 직접 만든다. SFDC: `AI.FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account`(고객 = Account 이름). CRMS·LAS 경로는 DB 담당자 확인(D-2). `file_meta_new.jsonl` 읽기를 대신한다.
+- Files: `pipeline/extract/source.py`(FileStorageMap 읽기), `pipeline/transform/structure/build_bundle.py`(`_file_meta` → 조인 결과), `pipeline/config.py`(`file_meta_path`), `deploy/host/scripts/run_docs.py`(`FILE_META_PATH`), `docs/architecture/db_schema.md`.
+- Depends on: [pl-25](#pl-25)(스키마 — `client_edw` 칸).
+- Status: todo

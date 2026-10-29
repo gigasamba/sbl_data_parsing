@@ -16,6 +16,7 @@
 | [operations/parsing_meta_mssql.sql](operations/parsing_meta_mssql.sql) | 회사 DB `AI.ParsingMeta` DDL — DBA가 1회 실행(코드는 표를 만들지 않음) | 첫 결과 게시(`publish --apply`) 전, DB 담당과 표를 맞출 때 |
 | [requirements/run_docs_req.md](requirements/run_docs_req.md) | 문서별 flow 러너(`deploy/host/scripts/run_docs.py`) 요구사항 — 사용자 발화 기록 | flow 러너를 고치기 전에 |
 | [architecture/run_docs_design.md](architecture/run_docs_design.md) | 문서별 flow 러너 설계·파라미터·변경 이력 | flow 러너 구조를 보거나 고칠 때 |
+| [architecture/db_schema.md](architecture/db_schema.md) | DB 스키마 명세(pl-25 — 설계안, 사용자·DB 담당자 승인 전): gold(pgvector 검색)·struct·EDW(`AI.FileStorageMap`·`AI.ParsingMeta`)·마스터 PG 표마다 칸·타입·뜻·쓰는 코드·읽는 코드·유지/삭제/새로 + DB 담당자·사용자 확인 목록. 시험 `tests/server/common/test_db_schema.py`가 지금 칸을 판·SQL과 대조 | DB 표·칸을 바꾸거나 DB 담당자와 협의할 때 |
 | [architecture/pipeline_stack.md](architecture/pipeline_stack.md) | 엔진 구성·원천 목록 판 표(`struct.stack_version`·`source_version` — S8b) — 서버 DB·PC 파일·바꾸기·되돌리기 명령·엔진 거부·사본 파일 + 옛 `pipeline_stack.json` 메모 칸(D-017) | 엔진 구성·원천 목록을 바꾸거나 판을 되돌릴 때 |
 | [architecture/prompts.md](architecture/prompts.md) | AI 지시서 패키지 20개(`resources/prompts/` 18 — 10-29에 5개 삭제 + PC 전용 `triple_extract`·답변 점검 agent `rag_qa`(S10 — `valid_env/answer_test/`) — S11에 `research_check` 삭제) — 자리(`resources/prompts/`)·찾는 순서·패키지 구성·캐시 열쇠·패키지마다 무엇·입출력·호출부·모델 역할(옛 패키지 `README.md` 합침, S2) | 지시문·지시서를 고치거나 LLM·VLM 호출부를 볼 때 |
 

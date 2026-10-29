@@ -61,7 +61,8 @@ PC test data from PwC_Structure `valid_env`. Why: PwC lays test data out like th
 ## e2-10
 Minimize PC evaluation tools, then keep or delete their settings. Why: about 50 settings exist only for PC tests and experiments (`common.dev.*`, `pipeline.dev.*`, `pipeline.eval.*`, `mcp.dev.*`, `runtime.exp_*`, `graphiti.*`).
 - Files: `validation/e2e/`, `pipeline/eval/`, `mcp_server/cli/`, `common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`.
-- Status: todo — next step after e2-09.
+- Decided (user 10-30 grill): keep ONLY `validation/search_ui` (search check page) and `valid_env/answer_test` (answer check). Delete stack comparison, automatic question generation, scorers for deleted sets (e.g. `chart_values_score.py`) and their settings.
+- Status: todo
 
 ## e2-11
 PC general test known failures. Why: 7 general tests fail since before the refactor (C-54 ①, C-58): 3 read the shared dev PG (use temp SQLite/schemas), 2 need missing packages/modules (mark skip or fix), 1 needs EDW, 1 is a `find_table_cells` assertion in `test_structured`.
@@ -73,12 +74,14 @@ PC general test known failures. Why: 7 general tests fail since before the refac
 EDW value answers fail citation verification. Why: answers citing `query_edw` values are recorded as verify failures (C-56 M-1).
 - What: choose (a) a `kind="edw"` citation rule or (b) remove EDW values from the prompt.
 - Files: `valid_env/answer_test/rag_qa/`, `validation/e2e/answer_gen.py`.
-- Status: todo — when needed.
+- Decided (user 10-29/10-30 grill): keep as is — no change.
+- Status: done
 
 ## e2-13
 PC Docker smoke stops at the retriever. Why: depends on [mcp.md#mc-10](mcp.md#mc-10).
 - Files: `valid_env/docker/compose.test.yml`, `valid_env/docker/smoke_test.sh`.
-- Status: todo
+- Fixed with [mcp.md#mc-10](mcp.md#mc-10) (PR #12); re-run the smoke after it merges.
+- Status: todo — mc-10은 10-30에 고침(`feature/search-path-fixes`). PC Docker 스모크를 다시 돌려 검색까지 가는지 확인할 것.
 
 ## e2-14
 Release tests live only inside the image. Why: an overlay patch cannot update them (C-53).
@@ -99,4 +102,12 @@ Search check page shows fixed text "10 documents (20 chunks)".
 Remove unused functions found by the 10-29 audit. Why: dead code costs reading time and lint upkeep.
 - Removed 10-29 (no caller, fingerprints unchanged): `parse_env_file` (`common/config/migrate.py`), `_lane_push` (`deploy/host/scripts/run_docs.py`), `_bg_img` (`mcp_server/routers/dispatch.py`), `_scan_paren` (`mcp_server/services/edw_query.py`), `_local_sidecar_name` (`pipeline/load/parsing_meta.py`), module `pipeline/tools/check_runlog.py` (one-time runs.jsonl lock check — restore from git if needed).
 - Left: `fields_table` (`common/config/settings.py`) — wait for the next fingerprint release (`checklist` went with `decompose.py`, 10-29); tests only — `do_evidence_image`, `do_related` (`internal_docs.py`), `eval_labels` (`qtype.py`), `availability_note` (`stack_report.py`), `raster_chart_values` (`chart_values.py`, layer p1), `pool_distractor_files` (`stack_matrix.py`).
-- Status: todo — user decision on the tests-only ones (listed in [gaps.md](gaps.md)).
+- Decided (user 10-30 grill): delete the tests-only ones too, with their tests ([e2-18](#e2-18)).
+- Status: todo
+
+## e2-18
+Delete code with no requirement (gaps §2, user 10-30 grill). Why: unused paths still read removed columns and cost upkeep.
+- Delete: `internal_docs.py` hidden-doc functions (6, incl. document get/list that still SELECT removed doc columns), wiki tools, external KG adapter, tests-only functions ([e2-17](#e2-17)), scorers for deleted eval sets ([e2-10](#e2-10)).
+- Keep: `PARSE_STREAM`, shadow mode, `MCP_EVIDENCE_PATHS`, `SEARCH_TIE_BREAK`, SQLite fallback, registry CLI, mail attachments, glossary/roster tools, nightly timer, `os_put`, server checks.
+- Rule: MCP tool names and input/output stay unchanged; stop and ask if one would change.
+- Status: todo

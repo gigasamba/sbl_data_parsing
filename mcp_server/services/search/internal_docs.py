@@ -50,7 +50,7 @@ def do_get_document(doc, client=None):
         d = (
             docs[int(doc)]
             if str(doc).isdigit() and int(doc) < len(docs)
-            else next((x for x in docs if x["file_name"] == str(doc) or x["file_sha256"] == key), None)
+            else next((x for x in docs if x["file_name"] == str(doc) or x["doc_key"] == key), None)
         )
         if d is not None:
             d = {**d, "doc_id": docs.index(d)}
@@ -59,12 +59,12 @@ def do_get_document(doc, client=None):
     if d.get("file_sha256") in getattr(
         R, "hidden", ()
     ):  # OP1 — 숨김 문서는 본문 대신 이 메시지(error 관례, do_get_document 기존 패턴과 같음)
-        return {"error": "숨김(원천에서 삭제됨)", "doc_key": d.get("file_sha256"), "hidden": True}
+        return {"error": "숨김(원천에서 삭제됨)", "doc_key": d.get("doc_key") or d.get("file_sha256"), "hidden": True}
     from mcp_server.services.search import clientscope as CS
 
     allowed, strict, hard = CS.client_scope(None, client, R.clients())
     if hard and not CS.allows(d.get("client"), allowed, strict):
-        return {"error": "다른 고객 문서 — 거부(SEARCH_CLIENT_HARD)", "doc_key": d.get("file_sha256")}
+        return {"error": "다른 고객 문서 — 거부(SEARCH_CLIENT_HARD)", "doc_key": d.get("doc_key") or d.get("file_sha256")}
     out = {
         k: d.get(k)
         for k in (
@@ -84,7 +84,7 @@ def do_get_document(doc, client=None):
     }
     from common.core.contract import uri_from_path
 
-    out.update(doc_key=d.get("file_sha256"), source_uri=d.get("source_uri") or uri_from_path(d.get("file_path")))
+    out.update(doc_key=d.get("doc_key") or d.get("file_sha256"), source_uri=d.get("source_uri") or uri_from_path(d.get("file_path")))
     text = d.get("full_text") or ""
     lim = max(1000, CFG.MAX_CHARS - len(json.dumps(out, ensure_ascii=False, default=str)) - 200)
     out.update(chars=len(text), text=text[:lim], truncated=len(text) > lim)
@@ -515,7 +515,8 @@ def do_list_documents(client=None, doc_type=None, since=None, latest_only=True, 
     else:
         docs = [
             {
-                "file_sha256": d["file_sha256"],
+                "file_sha256": d.get("file_sha256"),  # mc-10 — 축소 스키마 묶음엔 없음(None)
+                "doc_key": d["doc_key"],  # mc-10 — Local이 채움(새 묶음 file_path · 옛 묶음 file_sha256)
                 "file_name": d["file_name"],
                 "file_path": d["file_path"],
                 "source_uri": d.get("source_uri"),
@@ -528,7 +529,7 @@ def do_list_documents(client=None, doc_type=None, since=None, latest_only=True, 
     superseded = SS.superseded_set(man.values())  # AR4② — aggregate.doc_location_list와 공용 규칙(modules/search/supersede.py)
     out = []
     for d in docs:
-        if d["file_sha256"] in R.hidden:  # OP1(독립 검토 BLOCK 반영) — 숨김 문서는 목록에도 안 올림
+        if d.get("file_sha256") in R.hidden:  # OP1(독립 검토 BLOCK 반영) — 숨김 문서는 목록에도 안 올림
             continue
         if cl is not None and d.get("client") not in cl:
             continue
@@ -547,7 +548,7 @@ def do_list_documents(client=None, doc_type=None, since=None, latest_only=True, 
             continue  # file_name과 비교하면 거의 안 걸림 — 이 문서 자신의 doc_id로 비교(AR4②, supersede.py 공용)
         out.append(
             {
-                "doc_key": d["file_sha256"],
+                "doc_key": d.get("doc_key") or d.get("file_sha256"),
                 "file_name": d["file_name"],
                 "source_uri": d.get("source_uri") or uri_from_path(d["file_path"]),
                 "client": d.get("client"),

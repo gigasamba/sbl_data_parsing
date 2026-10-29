@@ -124,6 +124,11 @@ def embed_query(meta, text):
     return (v / (np.linalg.norm(v) or 1)).astype("float32")
 
 
+def file_name_of(file_path):
+    """파일 이름 = file_path의 마지막 '/' 뒤 — v_chunk_source 뷰(`regexp_replace(file_path, '^.*/', '')`)와 같은 규칙(PG doc 행용 — mc-10)."""
+    return file_path.rsplit("/", 1)[-1]
+
+
 class Local:
     """로컬 검색 — 묶음 파일(numpy 정확 코사인 + 같은 BM25 + RRF). EDW 프로시저와 같은 규칙."""
 
@@ -132,6 +137,11 @@ class Local:
 
         B = Path(bundle)
         self.chunks, self.docs = jl(B / "chunks.jsonl"), jl(B / "docs.jsonl")
+        for d in (
+            self.docs
+        ):  # mc-10 — 축소 스키마 묶음(doc_key·file_path·doc_name만)과 옛 묶음(file_sha256·file_name)을 읽는 곳마다 가르지 않게 여기서 한 번
+            d.setdefault("doc_key", d.get("file_sha256") or d["file_path"])
+            d.setdefault("file_name", d.get("doc_name") or file_name_of(d["file_path"]))
         self.v = np.load(B / "vectors.npy", mmap_mode="r")  # 큰 묶음도 메모리에 다 올리지 않음
         self.tf = [Counter(tokens(index_text(c))) for c in self.chunks]
         self.df = Counter(t for tf in self.tf for t in tf)
