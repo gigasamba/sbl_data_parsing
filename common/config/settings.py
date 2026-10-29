@@ -987,6 +987,14 @@ def app_classes(names=("pipeline", "mcp")):
 
 # ── 덮기 파일 — 같은 프로세스(put)·자식(child_env)·PC 한 번 실행(common.config.overrides) (S7e2, 사용자 10-28) ─────────────
 _GEN = [0]  # put()이 올림 — 모든 Cache가 다음 get()에서 다시 읽음
+_EDW_READ_ONLY = [False]  # edw_read_only() — 이 프로세스는 EDW 읽기 계정만(CommonConnectionsRdb가 봄)
+
+
+def edw_read_only(on=True):
+    """이 프로세스는 EDW 읽기 계정만 본다 — 공용 settings.yaml에 쓰기 계정이 있어도 설정 객체에서 비운다(사용자 10-29 "정해진
+    항목만" — 검색 MCP 시작 때 부름, docs/prd/ops.md#op-02). 파일은 바꾸지 않고, 모든 설정 캐시가 다음 읽기에서 다시 읽는다."""
+    _EDW_READ_ONLY[0] = on
+    _GEN[0] += 1
 
 
 def _all_names():
@@ -1276,6 +1284,13 @@ class CommonConnectionsRdb(Section):
     )
     read: CommonConnectionsRdbRead = Field(default_factory=CommonConnectionsRdbRead)
     write: CommonConnectionsRdbWrite = Field(default_factory=CommonConnectionsRdbWrite)
+
+    @model_validator(mode="after")
+    def _read_only_process(self):
+        """검색 MCP 프로세스(edw_read_only())는 쓰기 계정 칸을 보지 않는다 — 공용 settings.yaml에 있어도 설정 객체에서 비움(사용자 10-29)."""
+        if _EDW_READ_ONLY[0]:
+            self.write = CommonConnectionsRdbWrite()
+        return self
 
 
 class CommonConnectionsPg(Section):

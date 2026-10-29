@@ -51,6 +51,23 @@ def test_standin_refused_off_pc():
         assert mssql.standin_path() == "x.sqlite"
 
 
+def test_mcp_process_never_holds_write_account():
+    """edw_read_only()(검색 MCP 시작) 뒤에는 공용 설정에 쓰기 계정이 있어도 설정 객체가 비어 있음 — 쓰기 접속도 빠진 칸으로 거부."""
+    from common.config import settings as S
+
+    S.edw_read_only()  # MCP 시작 때처럼 설정을 읽기 전에
+    try:
+        with COMMON.env(**FULL):
+            w = S.cfg().connections.rdb.write
+            assert w.user is None and w.password is None, "write account visible in a read-only process"
+            assert mssql.login("read")[1] == []
+            assert mssql.login("write")[1] == ["RDB_WRITE_USER", "RDB_WRITE_PASSWORD"]
+    finally:
+        S.edw_read_only(False)
+    with COMMON.env(**FULL):
+        assert S.cfg().connections.rdb.write.user == "wu"
+
+
 def test_unknown_role_refused():
     for bad in ("Read", "ro", "", None):
         try:
