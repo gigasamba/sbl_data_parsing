@@ -113,7 +113,7 @@ def _selftest_body(COMMON):
             assert not external_allowed("EMBED")
             require_internal("http://10.0.0.5:8000/v1", "EMBED")
     print(
-        "[selftest] 내부망 가드 — 외부 허용 잠금·점 없는 이름 주소 확인·리다이렉트 가드·RUN_ENV(없음·dev·stage·prd·모르는 글자 거부, local만 허용) 통과"
+        "[selftest] 내부망 가드 — 외부 허용 잠금·점 없는 이름 주소 확인·리다이렉트 가드·RUN_ENV(없음·dev·prd·모르는 글자 거부, local만 허용) 통과"
     )
     # 비용 관문(10-05 독립 검토) — NO_PAID_CALLS 차단 · 공유 장부 선차감이 동시 호출에도 상한을 넘지 않음
     import threading

@@ -2,7 +2,7 @@
   · 여러 파일을 주면 뒤 파일이 앞 파일 값을 덮는다(지금 셸 `. a; . b`와 같음) — 단 틀의 자리표시는 앞 파일의 실제 값을 덮지 않는다(VS7a2 R-e).
   · 옛 env 이름 → YAML 경로는 앱 설정 모델의 칸 표(settings.walk)로 찾는다. LOCAL_RUN=1은 common.run_env: local로.
   · 같은 env 이름이 앱 칸과 호스트 칸 둘에 있으면(RAG_OUT·GOLD_DIR — T-21) 둘 다에 넣고 보고에 "확인" 표시. 단 HOST_ONLY 이름(GOLD_DIR)은
-    서버 env 파일(RUN_ENV가 dev·stage·prd — S7a부터 서버 필수)이면 호스트 칸에만 넣는다 — 옛 컨테이너는 그 값을 받지 않고 이미지 안 자리를 썼다
+    서버 env 파일(RUN_ENV가 dev·prd — S7a부터 서버 필수)이면 호스트 칸에만 넣는다 — 옛 컨테이너는 그 값을 받지 않고 이미지 안 자리를 썼다
     (VS7e2 B-3). PC 파일이면 앱이 그 값을 바로 읽었으므로 두 칸 그대로. RUN_ENV가 없는 파일이면 두 칸에 넣되 "확인 필요"로 알린다
     (VS7e3 R-3 — 서버가 RUN_ENV를 셸·systemd로만 주었다면 파일에 RUN_ENV를 적고 다시 옮김, --compare도 확인 필요로 종료 1).
   · env로 남길 이름·스크립트 인자·삭제 후보·모르는 이름은 YAML에 넣지 않고 이름만 보고한다(값은 찍지 않음).
@@ -202,7 +202,7 @@ def convert(env, classes, holders=()):
     }
     server_file = (
         env.get("RUN_ENV") in S.SERVER_ENVS
-    )  # HOST_ONLY 판정 — 서버 env 파일은 RUN_ENV=dev·stage·prd(S7a부터 필수, C-34) · 그 밖(PC·RUN_ENV 없는 조각 파일)은 앱이 그 값을 바로 읽음
+    )  # HOST_ONLY 판정 — 서버 env 파일은 RUN_ENV=dev·prd(S7a부터 필수, C-34) · 그 밖(PC·RUN_ENV 없는 조각 파일)은 앱이 그 값을 바로 읽음
     for key in sorted(env):
         val = env[key]
         if key in OLD_ALIASES:  # C-35 — 옛 별칭은 새 칸 자리로(새 이름이 있으면 새 이름 값)
@@ -409,7 +409,7 @@ def main(argv=None):
         return 2
     print(f"[migrate] 읽은 키 {len(env)}개 — 앱 모델 {'·'.join(classes) or '없음'}", file=sys.stderr)
     if not (doc.get("common") or {}).get("run_env"):
-        print("  [주의] RUN_ENV 없음 — 만든 파일의 common.run_env에 local·dev·stage·prd를 적어야 앱이 시작함(D-028 ②)", file=sys.stderr)
+        print("  [주의] RUN_ENV 없음 — 만든 파일의 common.run_env에 local·dev·prd를 적어야 앱이 시작함(D-028 ②)", file=sys.stderr)
     for kind, names in report.items():
         if names:
             shown = "" if kind == "yaml" else ": " + " ".join(names)

@@ -172,7 +172,7 @@ def selftest():
     with COMMON.env(RUN_ENV="local", VLM_ALLOW_EXTERNAL="1"):
         assert _redirect_ok("http://8.8.8.8/x", "VLM") is True  # 외부 허용 + local이면 외부도 허용
         with COMMON.env(RUN_ENV="dev"):
-            assert _redirect_ok("http://8.8.8.8/x", "VLM") is False  # 서버(dev·stage·prd)는 허용이 열려도 외부 거부(S7b — D-028 ⑧)
+            assert _redirect_ok("http://8.8.8.8/x", "VLM") is False  # 서버(dev·prd)는 허용이 열려도 외부 거부(S7b — D-028 ⑧)
     print("[selftest] _redirect_ok 단위 시험(내부 허용·외부 거부·외부 허용) 통과")
 
     # 실제 호출 경로 — 내부 서버가 외부 주소(8.8.8.8, guard.py 자기점검과 같은 선택)로 리다이렉트하면 후킹이 요청을 끊고,

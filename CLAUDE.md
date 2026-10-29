@@ -59,7 +59,7 @@
 - **새 설정 항목을 추가할 때:** 해당 섹션의 모델(`common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`)에 항목·설명·기본값·옛 env 이름(alias)을 넣는다 → `python -m common.config.sample`로 sample을 다시 만든다 → `python -m common.config.keyscan --check`를 실행한다 → 운영에 영향이 있으면 [docs/operations/env-guide.md](docs/operations/env-guide.md)와 `refactor.md`에 적는다.
 - 기본값은 코드에, 환경마다 다른 값은 settings.yaml에 둔다. 비워 둔 항목은 코드 기본값을 쓴다.
 - 자식 프로세스에 값을 넘길 때는 env dict가 아니라 `settings.child_env(base, X=…)`(그 자식에게만) 또는 `settings.put(X=…)`(현재 프로세스와 이후 자식 모두)를 쓴다. 한 번만 다른 값으로 실행할 때는 명령 인자 `--set 이름=값`을 쓴다(진입 모듈에서 `setarg.apply()`). PC에서는 오버레이 설정 파일 `python -m common.config.overrides`도 쓸 수 있다.
-- `RUN_ENV`(`common.run_env`)는 `local`, `dev`, `stage`, `prd` 중 하나다. 서버(dev, stage, prd)는 외부 모델 호출을 거부하고, 설정 파일을 읽지 못하면 시작하지 않는다. PC 전용 분기는 `paths.LOCAL_RUN` 하나로만 가른다.
+- `RUN_ENV`(`common.run_env`)는 `local`, `dev`, `prd` 중 하나다(`stage`는 10-29에 없앰 — 입력하면 시작 거부). 서버(dev, prd)는 외부 모델 호출을 거부하고, `common.dev.llm_fake`(가짜 LLM 응답)가 켜져 있으면 시작하지 않으며, 설정 파일을 읽지 못하면 시작하지 않는다. 외부 모델·가짜 LLM은 `local`에서만 쓴다. PC 전용 분기는 `paths.LOCAL_RUN` 하나로만 가른다.
 - 비밀값은 문서, 로그, 커밋, 채팅, 오류 메시지에 쓰지 않는다. 화면에 키를 출력하지 않는다.
 
 ---

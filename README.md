@@ -163,7 +163,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 | 위치     | PC: 저장소 루트 `settings.yaml`(git 제외, 권한 600) · 서버: `$SERVER_ENV_DIR/settings.yaml`(기본 `/srv/rag/env`, 소유자 UID 10001, 권한 640) · 다른 파일은 env `SETTINGS_FILE`로 지정 |
 | 구조     | 최상위 섹션 `common`(공용) · `pipeline` · `mcp`. 각 앱은 `common`과 자기 섹션만 읽는다. 항목 설명과 기본값은 [settings.sample.yaml](settings.sample.yaml)                               |
 | 쓰는 법   | **기본값과 다르게 쓸 항목만** 적는다. 비워 둔 항목은 코드 기본값을 쓴다                                                                                                                 |
-| 필수     | `common.run_env` — `local`(PC) · `dev` · `stage` · `prd`(서버 — 외부 모델 호출을 거부하고, 설정 파일을 못 읽으면 시작하지 않는다)                                                        |
+| 필수     | `common.run_env` — `local`(PC) · `dev` · `prd`(서버 — 외부 모델 호출과 가짜 LLM(`llm_fake`)을 거부하고, 설정 파일을 못 읽으면 시작하지 않는다)                                                        |
 | 항목별 안내 | [docs/operations/env-guide.md](docs/operations/env-guide.md)                                                                                                |
 | **서버 반입** | `settings.yaml`은 **git에 올리지 않는다**(`.gitignore` — 비밀값·서버마다 다른 값). 반입 때 **사람이 서버용으로 직접 작성**한다: `settings.sample.yaml`의 「1. 필수 입력」 블록에서 `[필수: 공통]`·`[필수: 서버]` 칸을 모두 확인해 채우고 `python -m pipeline.config --file <파일>`로 확인. **PC 파일을 그대로 복사하지 않는다** — PC의 `run_env: local`·`*_allow_external: true`가 서버에서 외부 모델 호출을 연다(알려진 위험, 사용자 10-29 수용) |
 
@@ -439,7 +439,7 @@ export SERVER_ENV_DIR=/srv/rag/env
 
 | 항목                                                                                            | 이유                                                 |
 | --------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `common.run_env`                                                                              | `dev`·`stage`·`prd` — 없으면 앱·entrypoint·compose가 거부 |
+| `common.run_env`                                                                              | `dev`·`prd` — 없으면 앱·entrypoint·compose가 거부(`stage`는 없앰 — `prd`로 바꿈) |
 | `common.store.run_mode: prod`                                                                 | 빠지면 PG 장애 때 SQLite로 조용히 대체                         |
 | PG · EDW · Object Storage 접속 항목                                                               | 운영 접속                                              |
 | 토큰 `mcp.server.token` · `pipeline.service.parse_mcp.token` · `pipeline.service.trigger.token` | 코드 기본 토큰 없음                                        |

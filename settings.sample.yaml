@@ -20,7 +20,7 @@
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 
 common:
-  run_env:  # [필수: 공통] 실행 환경 — local(PC·valid_env 기준)·dev·stage·prd(서버, 외부 모델 거부). env RUN_ENV가 이 값을 이김 · 기본 없음 · 값: local·dev·stage·prd 중 하나 · env=RUN_ENV
+  run_env:  # [필수: 공통] 실행 환경 — local(PC·valid_env 기준)·dev·prd(서버, 외부 모델 거부). env RUN_ENV가 이 값을 이김 · 기본 없음 · 값: local·dev·prd 중 하나 · env=RUN_ENV
   connections:
     edw:
       database:  # [필수: 서버] EDW(SQL Server) 연결 DB 이름 · 기본 없음 · 값: 글자 · env=EDW_DATABASE

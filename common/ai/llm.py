@@ -7,7 +7,7 @@
 - **비용 관문(2026-10, OpenRouter 85% 소진 이후)**: LLM_FAKE=1이면 네트워크 호출 없이 모의 응답(마지막 user 메시지 앞 200자+"[FAKE]") —
   캐시에 안 쓰고 usage()에 fake_calls·prompt_chars만 쌈(추정기가 이걸로 호출 수·글자 수를 모음). 실호출은 LLM_BUDGET_USD로 상한.
 - **외부 전송 가드(DONT 13, 여기 한 곳에서 강제)**: LLM_BASE_URL이 내부 주소(사설 IP·localhost·.local/.internal/.corp·단일 이름)가 아니면
-  `allow_external=True` **그리고** RUN_ENV=local일 때만 호출한다(서버 dev·stage·prd는 외부 호출 불가).
+  `allow_external=True` **그리고** RUN_ENV=local일 때만 호출한다(서버 dev·prd는 외부 호출 불가).
 - 호출·토큰 수는 usage()로 — 도구가 결과 파일에 함께 남긴다.
 - **빈 응답 안전망(RV12, 2026-10-09 재순위 실측 — glm-5.2가 생각에 max_tokens를 다 써 ~45% 빈 응답)**: 응답이 비어 있고(공백만
   포함) 토큰을 썼다면(completion_tokens>0 — 생각이 출력 상한을 다 썼다는 신호, finish_reason을 3개 전송 경로 모두에서
