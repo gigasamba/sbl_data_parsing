@@ -4,6 +4,7 @@ jsonl 한 줄은 그대로 남는다. 전에는 없는 표에 INSERT를 보내 �
 import json
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from mcp_server import config as mc
@@ -19,17 +20,12 @@ class _PG:  # qa_log 표가 없는 PG — 어떤 질의든 받으면 기록(받�
 
     def q(self, sql, params=None):
         self.calls.append(sql)
-        raise RuntimeError('relation "ai.qa_log" does not exist')
-
-
-class _R:
-    def __init__(self):
-        self.pg = _PG()
+        return []
 
 
 def test_log_file_only():
     d = Path(tempfile.mkdtemp())
-    R = _R()
+    R = SimpleNamespace(pg=_PG())
     with mc.senv(MCP_QUERY_LOG_DIR=str(d)), patch.dict(_STATE, {"R": R, "stack": {"name": "dev-v1"}}):
         S._log("배치 수는?", [{"chunk_id": 7, "rank": 1, "via": "bm25"}], 12.34)
         recs = [json.loads(x) for x in (d / "qa_log.jsonl").read_text(encoding="utf-8").splitlines()]

@@ -13,7 +13,6 @@ from pathlib import Path
 from common.core.paths import APP_ROOT
 from mcp_server import config as mc  # 설정 객체(mcp 칸 — S7d)
 from mcp_server.config import CFG
-from mcp_server.services.search import retriever as RT
 from mcp_server.services.search.server_state import _STATE, _retriever
 
 
@@ -462,8 +461,7 @@ def do_lookup_term(term, k=5, client=None):
         if hard and d is not None and not CS.allows(d.get("client"), allowed, strict):
             continue
         if d is not None:
-            name = RT._file_name(d)  # mc-10 — 축소 스키마 묶음엔 file_name이 없음
-            docs[name] = docs.get(name, 0) + count
+            docs[d["file_name"]] = docs.get(d["file_name"], 0) + count
         out_chunks.append((chunk_key, count))
     return {**info, "docs": sorted(docs, key=lambda n: -docs[n])[:k], "chunks": [{"chunk_key": c, "count": n} for c, n in out_chunks]}
 

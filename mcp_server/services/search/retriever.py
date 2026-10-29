@@ -9,6 +9,7 @@ from pathlib import Path
 from common.core import docmeta as DM  # 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
 from common.core.contract import (
     jl,
+    make_chunk_key,
     uri_from_path,  # 원본 위치 규칙(모듈 계약)
 )
 from mcp_server import config as mc  # 설정 객체(mcp 칸 — S7d)
@@ -28,16 +29,17 @@ def evidence_gate_on():
     return mc.cfg().search.evidence_gate  # S7d — 설정 객체(켜기 칸 off=("0",) = 옛 != "0")
 
 
-def _doc_key(d):
-    """묶음 docs.jsonl 행의 문서 키 — 2026-10-20 축소 스키마 뒤 묶음은 doc_key(=file_path, pg 근거의 doc_key와 같은 값)만 있고,
-    옛 묶음은 file_sha256만 있다(mc-10 — 서버에서 d["file_sha256"]로 읽어 KeyError로 search가 멈췄음)."""
-    return d.get("doc_key") or d["file_sha256"]
+def _name(file_path):
+    """파일 이름 = file_path의 마지막 '/' 뒤 — v_chunk_source 뷰(`regexp_replace(file_path, '^.*/', '')`)와 같은 규칙(Windows 역슬래시는 안 나눔)."""
+    return file_path.rsplit("/", 1)[-1]
 
 
-def _file_name(d):
-    """묶음 docs.jsonl 행 또는 PG doc 행의 파일 이름 — 축소 스키마 뒤에는 file_name이 없어 file_path에서 뽑는다(mc-10).
-    v_chunk_source 뷰(`regexp_replace(file_path, '^.*/', '')`)와 같은 규칙: 마지막 '/' 뒤만(Windows '\'는 나누지 않음)."""
-    return d.get("file_name") or d["file_path"].rsplit("/", 1)[-1]
+def _fill_doc(d):
+    """mc-10 — 묶음 docs.jsonl 행에 doc_key·file_name을 한 번 채운다(있으면 그대로). 2026-10-20 축소 스키마 뒤 묶음은 doc_key(=file_path,
+    pg 근거의 doc_key와 같은 값)·file_path만 있고 옛 묶음은 file_sha256·file_name이 있다 — 읽는 곳마다 갈래를 두지 않게 Retriever가
+    묶음을 읽을 때 한 곳에서(local.py·internal_docs도 같은 dict를 봄). 전에는 서버에서 d["file_sha256"]로 읽어 search가 멈췄음."""
+    d.setdefault("doc_key", d.get("file_sha256") or d["file_path"])
+    d.setdefault("file_name", _name(d["file_path"]))
 
 
 class Retriever:
@@ -51,9 +53,11 @@ class Retriever:
         self.bundle, self.retrieve = Path(bundle), retrieve
         self.meta = json.loads((self.bundle / "meta.json").read_text(encoding="utf-8"))
         self.local = Local(bundle)
-        self.key_local = {f"{_doc_key(self.local.docs[c['doc']])}:{c['seq']}": i for i, c in enumerate(self.local.chunks)}
+        for d in self.local.docs:
+            _fill_doc(d)
+        self.key_local = {make_chunk_key(self.local.docs[c["doc"]]["doc_key"], c["seq"]): i for i, c in enumerate(self.local.chunks)}
         self.doc_meta = {
-            _doc_key(d): {
+            d["doc_key"]: {
                 "doc_date": d.get("doc_date"),
                 "version": d.get("version"),
                 "superseded": bool(d.get("superseded")),
@@ -119,11 +123,10 @@ class Retriever:
         return bool(self.hidden) and chunk_key.split(":", 1)[0] in self.hidden
 
     def _client_rows(self):
-        """BR52 — PG doc 표(file_path·file_name·client·clients)를 부를 때마다 새로 읽는다. 캐시하지 않음
+        """BR52 — PG doc 표(file_path·clients — 10-20 축소 스키마, mc-10)를 부를 때마다 새로 읽는다(client_map이 씀). 캐시하지 않음
         (security 검토 10-12): 서버가 도는 중 새 문서가 적재되면 캐시에 없는 문서가 '고객 미상'으로 보여
-        엄격 격리(비엄격 모드)에서 다른 고객 문서가 허용될 수 있었음 — 정확성이 우선, 문서 단위 행이라 읽는
-        비용은 작음. 10-14: clients(다중 라벨, JSON TEXT)도 같이 읽음 — client_map·client_path_map이 쓴다."""
-        return self.pg.q(f"SELECT file_path, clients FROM {self.pg.schema}.doc")  # mc-10 — 10-20 축소 스키마: client·file_name 열 없음
+        엄격 격리(비엄격 모드)에서 다른 고객 문서가 허용될 수 있었음 — 정확성이 우선, 문서 단위 행이라 읽는 비용은 작음."""
+        return self.pg.q(f"SELECT file_path, clients FROM {self.pg.schema}.doc")
 
     def client_map(self):
         """BR50(F·I) — file_name → 고객 라벨(단일 또는 다중 목록, clientscope.doc_clients) 전체 맵(그림 기록·
@@ -134,8 +137,8 @@ class Retriever:
         독립 검토 CONCERN(10-14) — 전엔 client(단일)만 읽어 다중 라벨 문서의 그림·OV가 두 번째 이하 고객
         범위에선 안 걸렸다 — 이제 CS.doc_clients로 clients 우선·client 낙하(allows()의 ANY-match를 그대로 씀)."""
         if self.pg:
-            return {_file_name(r): CS.doc_clients(None, r.get("clients")) for r in self._client_rows()}
-        return {_file_name(d): CS.doc_clients(d.get("client"), d.get("clients")) for d in self.local.docs}
+            return {_name(r["file_path"]): CS.doc_clients(None, r.get("clients")) for r in self._client_rows()}
+        return {d["file_name"]: CS.doc_clients(d.get("client"), d.get("clients")) for d in self.local.docs}
 
     def search(self, q, k, methods=None, client=None):
         """methods ⊂ {vector, bm25, id}(없으면 retrieve 설정대로) — 검색 MCP가 방법을 골라 씀(G3).
@@ -280,10 +283,10 @@ class Retriever:
                         "summary": d.get("summary"),
                         "text": c["chunk_text"],
                         "chunk_ref": ci,
-                        "chunk_key": f"{_doc_key(d)}:{c['seq']}",
-                        "doc_key": _doc_key(d),
+                        "chunk_key": make_chunk_key(d["doc_key"], c["seq"]),
+                        "doc_key": d["doc_key"],
                         "doc_id": c["doc"],
-                        "file_name": _file_name(d),
+                        "file_name": d["file_name"],
                         "source_uri": d.get("source_uri") or uri_from_path(d["file_path"]),
                         "client": d.get("client"),
                         "clients": CS.doc_clients(d.get("client"), d.get("clients")),

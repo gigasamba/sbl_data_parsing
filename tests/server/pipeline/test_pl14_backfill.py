@@ -1,6 +1,7 @@
 """pl-14 — pgvector_load.backfill_chunk_clients가 10-20 축소 스키마 doc 표(client 열 없음, clients JSON TEXT만)에서 돈다.
 전에는 d.client를 읽어 실 PG에서 deploy()가 오류로 멈췄다(night·load_module·run_stack이 적재 전에 멈춤)."""
 
+import contextlib
 import importlib
 import re
 
@@ -44,7 +45,7 @@ class _DB:
         return [{"doc_id": 1, "clients": '["A사", "B사"]'}, {"doc_id": 2, "clients": None}]
 
     def transaction(self):
-        return _Cur([])
+        return contextlib.nullcontext()
 
     def cursor(self):
         return _Cur(self.updates)
