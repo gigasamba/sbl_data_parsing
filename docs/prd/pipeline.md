@@ -117,7 +117,7 @@ Engine stack snapshot file approach review (C-50).
 - Status: todo
 
 ## pl-21
-Deferred settings removal. Why: unused/retired settings whose removal changes fingerprints, so they wait for the next image version: `common.paths.korean_font` (settings.py → every layer code_fp), `pipeline.paths.paddle_python` and `pipeline.eval.phase_report_legacy` (read in `run_all.py` → p0 of every engine).
+Deferred settings removal. Why: unused/retired settings whose removal changes fingerprints, so they wait for the next image version: `common.paths.korean_font` (settings.py → every layer code_fp).
 - Also (user 10-29 grill): remove `common.paths.eval_sets_dir` / `paths.EVAL_SETS_DIR` (and its cases in `tests/server/common/test_paths.py`) — the only reader is `validation/e2e/stack_matrix.py` (old sets, [e2e.md#e2-10](e2e.md#e2-10)). The folder `valid_env/eval_sets/` is deleted together with its doc references in [doc.md#do-03](doc.md#do-03) (no code reads its files); eval data may come back later under `tests/`.
 - Files: `common/config/settings.py`, `pipeline/config.py`, `pipeline/extract/run_all.py`, `common/core/paths.py`.
 - Status: todo — bundle with the next fingerprint-changing release.
@@ -164,6 +164,6 @@ DB schema spec, written before pl-26·pl-23·pl-24 are built. Why: table/column 
 ## pl-26
 `full` always publishes; no "skip publish" path (C-31). Why: help text said "no EDW load" while `full` published, and it ignored `NIGHTLY_PUBLISH`.
 - Decided (user 10-29 grill): publish (silver → Object Storage + EDW) is the default and only mode — remove `--no-publish` and `pipeline.host.nightly.publish`. Publish targets are required settings; missing → refuse to start.
-- Targets per `RUN_ENV`: `local`·`dev` pick one of (a) local path (folder for Object Storage, file DB for EDW) or (b) real connection info (API/DB); `stage`·`prd` real connection only. The PC keeps the CLAUDE.md §4 guard (no prod EDW/OS from the PC).
+- Targets per `RUN_ENV`: `local`·`dev` pick one of (a) local path (folder for Object Storage, file DB for EDW) or (b) real connection info (API/DB); `prd` real connection only (`stage` was dropped from RUN_ENV — op-02). The PC keeps the CLAUDE.md §4 guard (no prod EDW/OS from the PC).
 - Files: `pipeline/cli.py` (`night`, `full`), `deploy/docker/entrypoint.sh`, publish in `pipeline/load/`, `pipeline/config.py`, `docs/operations/server-guide.md`.
 - Status: todo
