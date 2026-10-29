@@ -394,7 +394,7 @@ def selftest():
             and ce_srv["RUN_ENV"] == "dev"
         )
         check(
-            "덮기 파일 도구는 서버(env·원본 파일 run_env가 dev·stage·prd, 모르는 글자)면 막음 · 코드 안 child_env는 서버에서도 그대로(base = 붙인 파일 경로)",
+            "덮기 파일 도구는 서버(env·원본 파일 run_env가 dev·prd, 모르는 글자)면 막음 · 코드 안 child_env는 서버에서도 그대로(base = 붙인 파일 경로)",
             blocked and srv_child,
         )
         (d / "ovb.yaml").write_text(
@@ -507,9 +507,27 @@ def selftest():
         )
         check(
             "resolve_run_env: env > 파일 common.run_env · 둘 다 없으면 None",
-            resolve_run_env({"RUN_ENV": "stage", "SETTINGS_FILE": str(good)}) == "stage"
+            resolve_run_env({"RUN_ENV": "dev", "SETTINGS_FILE": str(good)}) == "dev"
             and resolve_run_env({"SETTINGS_FILE": str(good)}) == "local"
             and resolve_run_env({"SETTINGS_FILE": str(d / "empty.yaml")}) is None,
+        )
+        check(
+            "RUN_ENV=stage 거부(op-02 — 사용자 10-29, local·dev·prd만)",
+            raises(lambda: resolve_run_env({"RUN_ENV": "stage"}), "local·dev·prd")[0],
+        )
+        # op-02 — LLM_FAKE는 local 전용: 서버(dev·prd)에서 켜져 있으면 시작 관문이 종료 2, 꺼져 있으면 통과
+        (d / "srv_fake.yaml").write_text("common:\n  run_env: dev\n  dev: {llm_fake: true}\n", encoding="utf-8")
+        (d / "srv_ok.yaml").write_text("common:\n  run_env: prd\n", encoding="utf-8")
+        try:
+            require_run_env("시험", {"SETTINGS_FILE": str(d / "srv_fake.yaml")}, sections=())
+            fake_gate = False
+        except SystemExit as e:
+            fake_gate = e.code == 2
+        check(
+            "require_run_env: 서버에서 llm_fake 켜면 종료 2 · 끄면 통과 · local은 켜도 통과",
+            fake_gate
+            and require_run_env("시험", {"SETTINGS_FILE": str(d / "srv_ok.yaml")}, sections=()) == "prd"
+            and require_run_env("시험", {"RUN_ENV": "local"}) == "local",
         )
         try:
             require_run_env("시험", {"SETTINGS_FILE": str(d / "empty.yaml")})
@@ -666,7 +684,7 @@ def selftest():
         and image_sections({"RAG_MODULE": "pipeline"}, in_image=False) == ("common", "pipeline"),
     )
     check(
-        "RUN_ENV 외부 모델: 정확히 local만 허용(지금 가드) — 없음·dev·stage·prd·모르는 글자(prod·PRD·' local')는 거부(VS7b U-1 b)",
+        "RUN_ENV 외부 모델: 정확히 local만 허용(지금 가드) — 없음·dev·prd·모르는 글자(prod·PRD·' local')는 거부(VS7b U-1 b)",
         not any(external_models_allowed(e) for e in (None, *SERVER_ENVS, "prod", "PRD", " local", "Local"))
         and external_models_allowed("local"),
     )

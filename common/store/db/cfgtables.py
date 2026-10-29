@@ -1,5 +1,5 @@
 """판 표 2개 — 엔진 구성 `struct.stack_version`·원천 목록 `struct.source_version` 읽기·쓰기(S8b — D-031, 사용자 10-28 Q1~Q10 a).
-· 서버(RUN_ENV dev·stage·prd, 또는 이미지 배치): DB 활성 판(is_active) — 프로세스마다 한 번 읽어 캐시(active). DB·판 표에 못 붙거나 활성 판이
+· 서버(RUN_ENV dev·prd, 또는 이미지 배치): DB 활성 판(is_active) — 프로세스마다 한 번 읽어 캐시(active). DB·판 표에 못 붙거나 활성 판이
   없으면 시작 거부(종료 코드 4 — Q7). PC(paths.LOCAL_RUN): 파일(common.paths.stack_file·sources_file — 비우면 resources/ 아래).
 · 판 행은 고치지 않는다 — 바꾸기 = 새 행 + 활성 옮기기(한 트랜잭션, put), 같은 body면 그 판을 다시 활성(activate). 활성 옮김은 activated_at·_by에.
 · body_sha = 정규 JSON(키 정렬·공백 없음·UTF-8)의 sha256 — 같은 구성이면 서버·PC 같은 값.

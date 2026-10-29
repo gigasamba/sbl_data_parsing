@@ -85,7 +85,7 @@ Full switch list with defaults: `settings.sample.yaml` part 2, groups "[기능 �
 | External (paid) models | `*_ALLOW_EXTERNAL=0`, PC only (`RUN_ENV=local`) | budget caps (`LLM_BUDGET_USD`, `LLM_MAX_CALLS`) | shared |
 | Answer check, stack/model matrices | — | LLM; paid runs need approval | e2e |
 
-Requested 10-29 "EDW and Object Storage load on by default": publish (Object Storage + `AI.ParsingMeta`) already runs by default once `PM_BUCKET` and the EDW write account are set; what is off is the nightly schedule (`NIGHTLY_ENABLED=0`) — not changed yet, needs the user's choice. The EDW vector load was deleted 10-29 (vectors only in pgvector — [ops.md#op-02](ops.md#op-02)).
+Requested 10-29 "EDW and Object Storage load on by default": publish (Object Storage + `AI.ParsingMeta`) already runs by default once `PM_BUCKET` and the EDW write account are set; what is off is the nightly schedule (`NIGHTLY_ENABLED=0`) — not changed yet, needs the user's choice. The EDW vector load was deleted 10-29 (vectors only in pgvector — [ops.md#op-03](ops.md#op-03)).
 
 ## 4. Removed 10-29 (user decision)
 

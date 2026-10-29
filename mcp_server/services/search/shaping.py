@@ -26,7 +26,7 @@ def _pm_db():
     try:
         from common.store import parsing_meta_db as PM
 
-        _STATE["_pm_db"] = PM.make_db("read")  # 검색 MCP는 읽기 계정만(사용자 10-29 — ops.md#op-02)
+        _STATE["_pm_db"] = PM.make_db("read")  # 검색 MCP는 읽기 계정만(사용자 10-29 — ops.md#op-03)
     except (Exception, SystemExit) as e:  # make_db()는 접속 정보 없으면 SystemExit — 기능 꺼짐으로만 처리
         print(f"[mcp] AI.ParsingMeta 연결 없음(근거의 '파싱 결과 경로' 칸은 빠짐) — {e}", flush=True)
         _STATE["_pm_db"] = None

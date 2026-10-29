@@ -18,8 +18,8 @@ mcp_server/config.py(common + mcp 절). 이 파일은 common 절 모델과 두 �
   · 글자 칸에 쓴 YAML 스칼라(yes·no·true·on·1·0·숫자)는 쓴 글자 그대로 글자로 받는다 — 옛 env 줄에 같은 글자를 쓴 것과 같게(VS7a R-3).
     숫자·켜기·JSON 칸은 YAML이 푼 값 그대로.
 파일 찾기: SETTINGS_FILE(env) > RUN_ENV가 없거나 local이면 저장소 루트 settings.yaml(있을 때만 — settings.sample.yaml 옆).
-RUN_ENV: env RUN_ENV > YAML common.run_env. local·dev·stage·prd. 없거나 dev·stage·prd인데 파일이 없으면 거부(D-028 ②).
-앱 시작 관문 require_run_env() — pipeline.cli(selftest 빼고)·mcp_server.main·trigger_server·mcp_parse_service가 맨 먼저 부른다. 서버(dev·stage·prd)면
+RUN_ENV: env RUN_ENV > YAML common.run_env. local·dev·prd. 없거나 dev·prd인데 파일이 없으면 거부(D-028 ②).
+앱 시작 관문 require_run_env() — pipeline.cli(selftest 빼고)·mcp_server.main·trigger_server·mcp_parse_service가 맨 먼저 부른다. 서버(dev·prd)면
 설정 파일을 못 읽거나 그 앱 절 검증에 실패해도 이유(칸 경로·오류 종류만)를 찍고 종료 2(VS7e1 U-1 — 사용자 10-28). 틀린 파일은 import common 때도
 서버면 바로 실패(pin_env — STRICT, S7b c안), local이면 경고 뒤 기본값.
 비밀 칸은 SecretStr — 출력·로그·검증 오류에 값이 나오지 않는다.
@@ -43,8 +43,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]  # PC = 저장소 루트 · 이�
 LOCAL_FILE = (
     REPO_ROOT / "settings.yaml"
 )  # RUN_ENV=local 기본 자리 — 저장소 루트, settings.sample.yaml 옆(git 밖 — .gitignore · 사용자 10-29)
-RUN_ENVS = ("local", "dev", "stage", "prd")
-SERVER_ENVS = ("dev", "stage", "prd")
+RUN_ENVS = ("local", "dev", "prd")  # 사용자 10-29(op-02) — stage 삭제(동작이 prd와 같았음), 입력도 거부
+SERVER_ENVS = ("dev", "prd")
 SECTIONS = ("common", "pipeline", "mcp")
 OVERLAY_KEYS = ("base", "overrides")  # 덮기 파일의 최상위 열쇠(위 모듈 설명 — S7e2)
 STRICT = True  # RUN_ENV가 없으면 거부(사용자 10-27, D-028 ②)
@@ -778,7 +778,7 @@ def load(
     if run_env in SERVER_ENVS and path is None and require_file:
         raise SettingsError(f"RUN_ENV={run_env} — 서버는 설정 파일이 있어야 함(SETTINGS_FILE)")
     if run_env is None and strict:
-        raise SettingsError("RUN_ENV 없음 — local·dev·stage·prd 중 하나를 env RUN_ENV나 settings.yaml common.run_env로")
+        raise SettingsError("RUN_ENV 없음 — local·dev·prd 중 하나를 env RUN_ENV나 settings.yaml common.run_env로")
     settings._source = str(path) if path else ""
     return settings
 
@@ -800,7 +800,7 @@ def resolve_run_env(environ=None, file=None):
 
 def require_run_env(app="", environ=None, sections=None):
     """앱 시작 관문(D-028 ②) — RUN_ENV가 없거나 모르는 값이면 안내를 찍고 종료 코드 2. 값을 돌려준다.
-    서버(dev·stage·prd)면 설정 파일을 읽고 sections(앱 절 — 없으면 이 이미지 절, image_sections)를 끝까지 검증한다 — 파일이 없거나 못 읽거나
+    서버(dev·prd)면 설정 파일을 읽고 sections(앱 절 — 없으면 이 이미지 절, image_sections)를 끝까지 검증한다 — 파일이 없거나 못 읽거나
     검증에 실패하면 이유(칸 경로·오류 종류만, 값 없음)를 찍고 종료 2(VS7e1 U-1, 사용자 10-28 — 옛 env_file처럼 시작 거부). local은 검증하지
     않는다(설정 객체가 경고 뒤 기본값 — 지금처럼)."""
     environ = os.environ if environ is None else environ  # env 남김 — RUN_ENV 신호
@@ -812,7 +812,7 @@ def require_run_env(app="", environ=None, sections=None):
         raise SystemExit(2) from None
     if value is None:
         print(
-            f"{tag}RUN_ENV 없음 — local(PC)·dev·stage·prd 중 하나를 env RUN_ENV로 주거나 settings.yaml common.run_env에 적음"
+            f"{tag}RUN_ENV 없음 — local(PC)·dev·prd 중 하나를 env RUN_ENV로 주거나 settings.yaml common.run_env에 적음"
             "(PC: 저장소 루트 settings.yaml · 서버: settings.yaml — refactor.md C-34)",
             file=sys.stderr,
         )
@@ -820,10 +820,13 @@ def require_run_env(app="", environ=None, sections=None):
     if value in SERVER_ENVS:
         names = image_sections(environ) if sections is None else ("common", *sections)
         try:
-            load(section_class(names)[0], environ=environ, require_file=True)
+            st = load(section_class(names)[0], environ=environ, require_file=True)
         except SettingsError as e:
             print(f"{tag}서버(RUN_ENV={value}) — 설정을 읽지 못해 시작하지 않음: {e}", file=sys.stderr)
             raise SystemExit(2) from None
+        if st.common.dev.llm_fake:  # op-02(사용자 10-29) — 가짜 LLM 응답은 local에서만, 서버는 시작 거부
+            print(f"{tag}서버(RUN_ENV={value}) — common.dev.llm_fake가 켜져 있어 시작하지 않음(local 전용)", file=sys.stderr)
+            raise SystemExit(2)
     return value
 
 
@@ -859,7 +862,7 @@ def image_sections(environ=None, in_image=None):
 
 
 def _server_env(environ, path):
-    """서버(dev·stage·prd)로 도는가 — env RUN_ENV, 없으면 설정 파일의 common.run_env(못 읽으면 모름 = local처럼)."""
+    """서버(dev·prd)로 도는가 — env RUN_ENV, 없으면 설정 파일의 common.run_env(못 읽으면 모름 = local처럼)."""
     run = environ.get("RUN_ENV") or None
     if run is None and path is not None:
         try:
@@ -883,7 +886,7 @@ def pin_env(environ=None):
     """영구 다리(D-028 ⑤ — import common 때 한 번, common/__init__.py가 부름): 엔진·인계 파일이 env로 읽는 칸(pinned 28키)을 설정 파일 값
     (+ 이 이미지 기본값 — B-2)으로 env에 낸다. env에 이미 있는 이름은 그대로(부모 프로세스·put()이 넘긴 값). 이 이미지 절만(U-a), pinned
     칸만 검증한다(다른 칸 오타는 그 앱 설정 객체·시작 관문이 알림 — 호스트 export가 다른 앱 절 오타로 멈추지 않게). 파일을 못 읽거나 pinned
-    칸이 틀리면 서버(dev·stage·prd)는 SettingsError(시작 실패 — STRICT, S7b c안), local은 경고 뒤 계속. 옛 env 이름(설정 칸 — pinned·호스트
+    칸이 틀리면 서버(dev·prd)는 SettingsError(시작 실패 — STRICT, S7b c안), local은 경고 뒤 계속. 옛 env 이름(설정 칸 — pinned·호스트
     칸 빼고)이 env에 있으면 읽지 않고 이름만 한 번 알린다. 반환: 낸 이름 수."""
     environ = os.environ if environ is None else environ  # env 남김 — RUN_ENV 신호
     allowed = image_sections(environ)
@@ -949,7 +952,7 @@ SHELL_EXPORTS = ("SERVER_ENV_DIR",)
 
 def external_models_allowed(run_env):
     """RUN_ENV 기준 외부 모델 허용 — 정확히 local일 때만 지금 가드(외부 허용 스위치·NO_PAID_CALLS·상한)대로. 없음(env·설정 파일 모두 —
-    이미지 selftest·관문 면제 점검 명령·관문 없는 스크립트)·dev·stage·prd·모르는 글자(prod·PRD·' local' 등)는 서버로 보고 거부
+    이미지 selftest·관문 면제 점검 명령·관문 없는 스크립트)·dev·prd·모르는 글자(prod·PRD·' local' 등)는 서버로 보고 거부
     (VS7b U-1 — 코디네이터 답 b, 안전한 쪽). guard.py가 guard_run_env()(모르는 글자 그대로)로 부른다(S7b·S7c1)."""
     return run_env == "local"
 
@@ -992,7 +995,7 @@ _EDW_READ_ONLY = [False]  # edw_read_only() — 이 프로세스는 EDW 읽기 �
 
 def edw_read_only(on=True):
     """이 프로세스는 EDW 읽기 계정만 본다 — 공용 settings.yaml에 쓰기 계정이 있어도 설정 객체에서 비운다(사용자 10-29 "정해진
-    항목만" — 검색 MCP 시작 때 부름, docs/prd/ops.md#op-02). 파일은 바꾸지 않고, 모든 설정 캐시가 다음 읽기에서 다시 읽는다."""
+    항목만" — 검색 MCP 시작 때 부름, docs/prd/ops.md#op-03). 파일은 바꾸지 않고, 모든 설정 캐시가 다음 읽기에서 다시 읽는다."""
     _EDW_READ_ONLY[0] = on
     _GEN[0] += 1
 
@@ -1254,7 +1257,7 @@ class CommonConnectionsObjectStorage(Section):
 class CommonConnectionsParsingMeta(Section):
     REMOVED = frozenset(
         {"connect_kwargs", "database", "host", "password", "port", "sqlite", "user"}
-    )  # 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-02)
+    )  # 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)
     table: str | None = F("AI.ParsingMeta", "PM_TABLE", "parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_)", blank="keep")
 
 
@@ -1271,7 +1274,7 @@ class CommonConnectionsRdbWrite(Section):
 
 
 class CommonConnectionsRdb(Section):
-    """EDW(SQL Server) 접속 하나 — 서버·DB는 하나, 계정은 읽기·쓰기 둘(사용자 10-29, docs/prd/ops.md#op-02)."""
+    """EDW(SQL Server) 접속 하나 — 서버·DB는 하나, 계정은 읽기·쓰기 둘(사용자 10-29, docs/prd/ops.md#op-03)."""
 
     connect_kwargs: SecretStr | None = F(None, "RDB_CONNECT_KWARGS", "EDW pymssql 연결에 더할 추가 인자(JSON 객체 — TLS·로그인 시간 등)")
     database: str | None = F(None, "RDB_DATABASE", "EDW 데이터베이스 이름")
@@ -1624,7 +1627,7 @@ class CommonText(Section):
 class CommonConnections(Section):
     REMOVED = frozenset(
         {"openviking", "edw"}
-    )  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안) · edw = EDW 벡터 경로(ops.md#op-02)
+    )  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안) · edw = EDW 벡터 경로(ops.md#op-03)
     object_storage: CommonConnectionsObjectStorage = Field(default_factory=CommonConnectionsObjectStorage)
     parsing_meta: CommonConnectionsParsingMeta = Field(default_factory=CommonConnectionsParsingMeta)
     pg: CommonConnectionsPg = Field(default_factory=CommonConnectionsPg)
@@ -1642,8 +1645,8 @@ class CommonModels(Section):
 
 
 class CommonSettings(Section):
-    run_env: Literal["local", "dev", "stage", "prd"] | None = F(
-        None, "RUN_ENV", "실행 환경 — local(PC·valid_env 기준)·dev·stage·prd(서버, 외부 모델 거부). env RUN_ENV가 이 값을 이김"
+    run_env: Literal["local", "dev", "prd"] | None = F(
+        None, "RUN_ENV", "실행 환경 — local(PC·valid_env 기준)·dev·prd(서버, 외부 모델 거부). env RUN_ENV가 이 값을 이김"
     )
     connections: CommonConnections = Field(default_factory=CommonConnections)
     dev: CommonDev = Field(default_factory=CommonDev)

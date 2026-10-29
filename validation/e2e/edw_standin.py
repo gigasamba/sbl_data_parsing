@@ -1,5 +1,5 @@
 """PC 가짜 EDW sqlite 하나 만들기 — valid_env/edw/*.sql(스키마마다 한 파일: ai·crms·las·sfdc)을 파일 하나에 넣는다
-(사용자 10-29 — docs/prd/ops.md#op-02). 코드는 이 파일을 스키마 이름마다 ATTACH해 `AI.FileStorageMap` 같은 이름으로 읽는다
+(사용자 10-29 — docs/prd/ops.md#op-03). 코드는 이 파일을 스키마 이름마다 ATTACH해 `AI.FileStorageMap` 같은 이름으로 읽는다
 (common.store.mssql.standin). 쓰려면 settings.yaml `common.connections.rdb.sqlite`에 경로를 적는다.
 사용: python -m validation.e2e.edw_standin [--out valid_env/edw/edw.sqlite]
 """

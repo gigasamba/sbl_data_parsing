@@ -430,7 +430,7 @@ def _selftest_mssql():
     env = contextlib.ExitStack()
     env.enter_context(
         COMMON.env(RDB_HOST="h", RDB_READ_USER="u", RDB_READ_PASSWORD="p", RDB_DATABASE="d")
-    )  # 설정 객체 덮어쓰기(os.environ은 안 바뀜) — 원천 읽기는 읽기 계정(ops.md#op-02)
+    )  # 설정 객체 덮어쓰기(os.environ은 안 바뀜) — 원천 읽기는 읽기 계정(ops.md#op-03)
     try:
         cols = _rdb_cols()
         rows = _mssql_rows("AI.FileStorageMap", cols, None, None, "id", None)

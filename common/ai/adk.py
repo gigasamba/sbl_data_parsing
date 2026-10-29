@@ -41,7 +41,7 @@ import urllib.request
 import uuid
 from pathlib import Path as _Path
 
-from common.ai.guard import precheck, require_internal
+from common.ai.guard import fake_llm, precheck, require_internal
 from common.ai.guard import urlopen as _g_urlopen
 from common.ai.llm import profile
 from common.config.settings import by_env, cfg, checked, reveal  # S7b — 설정 객체(호출 때마다 cfg() — 옛 env 읽기와 같은 시점 값)
@@ -1235,7 +1235,7 @@ def run_agent(
                 "ADK가 도구를 등록하는 이름과 달라 모델이 같은 이름으로 못 찾음"
             )
 
-    if role in ("llm", "vlm") and cfg().dev.llm_fake and fake_policy is not None:
+    if role in ("llm", "vlm") and fake_policy is not None and fake_llm():
         # AG11 2단계 — 가짜 정책 모델로(3단계: vlm 역할 판단 세션 parse_decide_vlm도 같은 시험 경로 — AG6 M2) run_agentic(실제 콜백: 허용 도구·도구/모델 호출·토큰 예산·궤적)을 끝까지(네트워크 0)
         # TODO: 리팩토링 후 구현 필요
         # from agent_platform.pipeline import run_agentic
@@ -1267,7 +1267,7 @@ def run_agent(
             )
         )
 
-    if role == "llm" and cfg().dev.llm_fake:
+    if role == "llm" and fake_llm():
         from common.ai import llm as _L
 
         text_in = "".join(p.text or "" for p in (contents.parts or []) if p.text)

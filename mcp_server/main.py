@@ -179,7 +179,7 @@ if __name__ == "__main__":
     utf8_stdout()
     from common.config.settings import edw_read_only, require_run_env
 
-    edw_read_only()  # 검색 MCP는 EDW 읽기 계정만 — 공용 설정 파일의 쓰기 계정 칸은 이 프로세스에서 비움(사용자 10-29, ops.md#op-02)
+    edw_read_only()  # 검색 MCP는 EDW 읽기 계정만 — 공용 설정 파일의 쓰기 계정 칸은 이 프로세스에서 비움(사용자 10-29, ops.md#op-03)
     require_run_env("mcp_server.main", sections=("mcp",))  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
     if mc.cfg().server.query_cache:  # S7e2 — 검색 MCP 전용 질의 임베딩 캐시(옛 compose EMBED_QUERY_CACHE 자리, 사용자 10-28)
         from common.config import settings as _S

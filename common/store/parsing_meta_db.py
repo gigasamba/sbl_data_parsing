@@ -164,7 +164,7 @@ def find_rep_path(db, doc_key):
 
 class MssqlStore:
     """실제 EDW 쓰기(PM1 결정 뒤) — PM_TABLE은 화이트리스트 확인(스키마.표만), 열 이름은 고정 상수, 값은 전부 %s
-    파라미터. 접속은 common.connections.rdb — 게시는 쓰기 계정, 조회(검색 MCP)는 읽기 계정(role, 사용자 10-29 ops.md#op-02). 한 실행 = 한 트랜잭션(커밋 전엔 아무것도 안 남음).
+    파라미터. 접속은 common.connections.rdb — 게시는 쓰기 계정, 조회(검색 MCP)는 읽기 계정(role, 사용자 10-29 ops.md#op-03). 한 실행 = 한 트랜잭션(커밋 전엔 아무것도 안 남음).
     KEY(source_system, source_key)가 이미 있으면(PM2 — 없으면 doc_key) 그 행은 건너뜀(INSERT만) — update_status()만
     예외(상태 열 UPDATE).
     PM2 하위 호환 — DBA가 새 DDL을 아직 안 돌려 옛 표(engines_used·engines_summary 없음, 그 밖은 PM1 그대로)에
@@ -308,7 +308,7 @@ class SqliteStore:
 
 
 def make_db(role):
-    """ParsingMeta 저장소 — role: 게시(파이프라인)는 "write", 조회(검색 MCP)는 "read"(사용자 10-29 — ops.md#op-02)."""
+    """ParsingMeta 저장소 — role: 게시(파이프라인)는 "write", 조회(검색 MCP)는 "read"(사용자 10-29 — ops.md#op-03)."""
     from common.store import mssql
 
     sqlite_path = mssql.standin_path()

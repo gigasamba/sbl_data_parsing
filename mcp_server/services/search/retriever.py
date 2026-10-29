@@ -31,7 +31,7 @@ def evidence_gate_on():
 
 class Retriever:
     """같은 질의 → 본문·출처 저장소(pgvector 또는 로컬 묶음)에서 하이브리드(벡터 + BM25 + 드문 ID → RRF).
-    벡터는 pgvector에만 둔다(사용자 10-29 — EDW 벡터 경로 삭제, docs/prd/ops.md#op-02)."""
+    벡터는 pgvector에만 둔다(사용자 10-29 — EDW 벡터 경로 삭제, docs/prd/ops.md#op-03)."""
 
     def __init__(self, bundle, retrieve="cosine", pg=False, hidden_db=None, pg_schema=None):
         """hidden_db(OP1, 기본 None — 안 주면 전과 바이트 동일) = 문서 대장 연결(common.store.registry.try_open_db()) —

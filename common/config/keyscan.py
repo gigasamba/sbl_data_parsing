@@ -92,7 +92,7 @@ NOT_SETTINGS = {
     "PYTHONPATH": ("env로 남김", "이미지·셸"),
     "RAG_MODULE": ("env로 남김", "이미지 신호(Dockerfile ENV)"),
     "RUNLOG_CHILD": ("env로 남김", "부모 → 자식 프로세스 신호"),
-    "RUN_ENV": ("env로 남김", "새 키(D-015) — local·dev·stage·prd"),
+    "RUN_ENV": ("env로 남김", "새 키(D-015) — local·dev·prd"),
     "RUNLOG_FILE": (
         "env로 남김",
         "내부 신호 — 부모가 정한 실행 기록 로그 파일을 자식이 이어 씀(S7e2 — 설정 칸에서 내부 신호로, 사용자 10-28)",

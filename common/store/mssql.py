@@ -60,7 +60,7 @@ def clear():
 
 def login(role, extra=True):
     """EDW 접속 인자(pymssql.connect 그대로)와 빠진 칸 이름 목록 — common.connections.rdb의 서버·DB + role 계정
-    ("read" | "write" — 사용자 10-29, docs/prd/ops.md#op-02). extra=False면 connect_kwargs를 안 넘김(gen_roster 옛 동작).
+    ("read" | "write" — 사용자 10-29, docs/prd/ops.md#op-03). extra=False면 connect_kwargs를 안 넘김(gen_roster 옛 동작).
     형식 틀린 포트는 연결 전에 실패(checked — 1433으로 조용히 붙지 않게). 값은 출력하지 않는다.
     role은 둘 중 하나만(오타가 쓰기 계정으로 새지 않게) · connect_kwargs는 계정·서버 칸을 덮지 못함(독립 검토 10-29)."""
     import json
@@ -107,7 +107,7 @@ STANDIN_SCHEMAS = ("AI", "CRMS", "LAS", "SFDC")  # PC 가짜 EDW sqlite 하나�
 
 def standin(path, readonly=True, timeout=5.0):
     """PC 가짜 EDW(common.connections.rdb.sqlite — 파일 하나에 모든 표) 연결 — 같은 파일을 스키마 이름마다 ATTACH해
-    `AI.FileStorageMap`·`CRMS.RM_MAS_CLIENT` 같은 T-SQL 이름이 그대로 돈다(사용자 10-29, ops.md#op-02).
+    `AI.FileStorageMap`·`CRMS.RM_MAS_CLIENT` 같은 T-SQL 이름이 그대로 돈다(사용자 10-29, ops.md#op-03).
     readonly면 SQLite `?mode=ro`(드라이버 수준 — ATTACH도 같은 URI라 쓰기 불가)."""
     import sqlite3
     from pathlib import Path

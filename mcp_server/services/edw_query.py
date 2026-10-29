@@ -6,7 +6,7 @@ post-process — no summarization or calculation happens here.
 Security boundary (independent review follows the urgent overlay that adds this file):
  - read-only by construction: exactly one SELECT/WITH statement, no DML/DDL/exec keywords anywhere
    (see `validate()`), run through the EDW **read** account (common.connections.rdb.read — the search
-   MCP never gets the write account; user 10-29, docs/prd/ops.md#op-02).
+   MCP never gets the write account; user 10-29, docs/prd/ops.md#op-03).
  - table allowlist: only `schema.table` names in EDW_QUERY_TABLES (or DEFAULT_TABLES) may appear in a
    FROM/JOIN; system catalogs are always rejected even if somehow listed.
  - limits: row count (EDW_QUERY_MAX_ROWS), wall-clock timeout (EDW_QUERY_TIMEOUT_SEC), response size
@@ -52,7 +52,7 @@ from common.config import settings as C  # common 칸(connections.rdb — 접속
 from mcp_server import config as mc  # 설정 객체(S7d — 호출마다 cfg())
 from mcp_server.schemas.edw_result import ColumnMeta, QueryResult  # noqa: F401 — S5: 출력 모양은 schemas/로(내용 그대로)
 
-DEFAULT_TABLES = "AI.FileStorageMap,AI.ParsingMeta,CRMS.RM_MAS_CLIENT,CRMS.RM_MAS_CLIENT_GENERAL,LAS.DIVISION_MAS,LAS.PROD_MAS,LAS.SERVICE_MAS,SFDC.Account,SFDC.Opportunity"  # PC stand-in tables (valid_env/edw — ops.md#op-02)
+DEFAULT_TABLES = "AI.FileStorageMap,AI.ParsingMeta,CRMS.RM_MAS_CLIENT,CRMS.RM_MAS_CLIENT_GENERAL,LAS.DIVISION_MAS,LAS.PROD_MAS,LAS.SERVICE_MAS,SFDC.Account,SFDC.Opportunity"  # PC stand-in tables (valid_env/edw — ops.md#op-03)
 _CELL_MAX = 2000
 _TRUNC_MARK = " …(truncated)"
 _SYSTEM_SCHEMAS = ("sys", "information_schema")

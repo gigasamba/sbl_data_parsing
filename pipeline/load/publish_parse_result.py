@@ -27,7 +27,7 @@ unhide`로 되돌릴 수 있음) · changed는 보고만(`output/registry/report
 env(전부 PM1 결정 대기 — 사람, docs/operations/server-guide.md 단계 6):
   PM_TABLE(기본 AI.ParsingMeta) · PM_BUCKET(업로드 버킷 — "file://<폴더>"면 로컬 폴더를 가짜 Object Storage로) ·
   PM_PREFIX(버킷 안 경로 접두, 선택) · common.connections.rdb 쓰기 계정(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_WRITE_USER·RDB_WRITE_PASSWORD
-  — 사용자 10-29 ops.md#op-02) · RDB_SQLITE(설정하면 SQLite를 가짜 EDW로, 접속 칸 안 봄) ·
+  — 사용자 10-29 ops.md#op-03) · RDB_SQLITE(설정하면 SQLite를 가짜 EDW로, 접속 칸 안 봄) ·
   OS_ENDPOINT·OS_ACCESS_KEY·OS_SECRET_KEY·OS_REGION·OS_VERIFY_TLS(업로드 접속 — source.py·os_put.py와 같음) ·
   PM_UPLOAD_STATUSES(콤마 목록, 기본 "ok,partial"만 올림) · PM_PARSE_DATE(--parse-date 대신 env로, 선택).
 원본 로컬 보존·즉시 삭제는 이제 modules/parse/source.py(SI39⑧ — 파싱이 끝나면 바로 지움, KEEP_LOCAL_ORIGINALS=1만

@@ -1,4 +1,4 @@
-"""PC 가짜 EDW sqlite 하나(사용자 10-29 — docs/prd/ops.md#op-02) — 같은 파일로 원천 조회(읽기)·query_edw(읽기 전용)·ParsingMeta 게시(쓰기)가
+"""PC 가짜 EDW sqlite 하나(사용자 10-29 — docs/prd/ops.md#op-03) — 같은 파일로 원천 조회(읽기)·query_edw(읽기 전용)·ParsingMeta 게시(쓰기)가
 모두 돈다. valid_env/edw/*.sql이 필요해 PC 전용(tests/general). 실제 접속 없음."""
 
 import tempfile

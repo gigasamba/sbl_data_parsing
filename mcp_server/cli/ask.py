@@ -7,7 +7,7 @@ import 금지). 함수 내용은 그대로 옮겼다(옛 pipeline/cli.py의 ask�
   ask         질문 → 근거 청크 + 원본 경로·쪽·줄·쪽 안 위치(bbox)·요약 — 로컬 묶음 또는 pgvector. 답변은
               검색만(10-13 답변 경로 통일 1단계 — 답변은 서빙되는 Answer Agent(rag_qa — valid_env/answer_test/rag_qa, 점검 validation/e2e/answer_gen.py)만, 중복 경로 제거).
               기본(로컬·pgvector 하이브리드)은 mcp_server.services.search.search_svc.do_search()에 위임(AR10) — MCP와 같은 결과,
-              --retrieve cosine만 예전 경로(EDW 벡터 --edw·--edw-client는 10-29 삭제 — ops.md#op-02)
+              --retrieve cosine만 예전 경로(EDW 벡터 --edw·--edw-client는 10-29 삭제 — ops.md#op-03)
   test-stack  문항(자동 생성 또는 --questions)으로 ask 전체 → 정답 포함·출처 일치·지연 → output/stack_test.md
 사용: python -m mcp_server.cli.ask ask --pg --bundle output/<이름>/bundle --k 3 --q "<질문>"
       python -m mcp_server.cli.ask test-stack [--questions output/eval/questions.jsonl]

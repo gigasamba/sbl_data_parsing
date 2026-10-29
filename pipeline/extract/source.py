@@ -414,7 +414,7 @@ def _mssql_rows(table, cols, company, doc_type, inc_col, since):
         sql += " WHERE " + " AND ".join(where)
     sql += f" ORDER BY [{inc_col}]"
     standin = mssql.standin_path()
-    if standin:  # PC 가짜 EDW(sqlite 하나 — 사용자 10-29 ops.md#op-02): 대괄호 식별자는 SQLite도 받음, %s → ?
+    if standin:  # PC 가짜 EDW(sqlite 하나 — 사용자 10-29 ops.md#op-03): 대괄호 식별자는 SQLite도 받음, %s → ?
         cn = mssql.standin(standin)
         try:
             cur = cn.execute(sql.replace("%s", "?"), params)
@@ -428,7 +428,7 @@ def _mssql_rows(table, cols, company, doc_type, inc_col, since):
 
 def rdb_connect(extra_kwargs=True):
     """RDB(mssql) 연결 — SQLAlchemy `mssql+pymssql`(S8b, 5-4 — common.store.mssql, 연결 풀 없음). 접속은 common.connections.rdb의
-    **읽기 계정**(사용자 10-29 — ops.md#op-02) + RDB_CONNECT_KWARGS(JSON — extra_kwargs=False면 안 넘김, gen_roster 옛 동작).
+    **읽기 계정**(사용자 10-29 — ops.md#op-03) + RDB_CONNECT_KWARGS(JSON — extra_kwargs=False면 안 넘김, gen_roster 옛 동작).
     rdb_discover·gen_roster도 이것으로."""
     from common.store import mssql
 

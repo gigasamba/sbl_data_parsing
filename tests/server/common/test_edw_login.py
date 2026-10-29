@@ -1,4 +1,4 @@
-"""EDW 접속 하나·계정 둘(사용자 10-29, docs/prd/ops.md#op-02) — 역할별 계정 선택과 "검색 MCP는 읽기 계정만"을 고정. 실제 접속 없음."""
+"""EDW 접속 하나·계정 둘(사용자 10-29, docs/prd/ops.md#op-03) — 역할별 계정 선택과 "검색 MCP는 읽기 계정만"을 고정. 실제 접속 없음."""
 
 from unittest import mock
 

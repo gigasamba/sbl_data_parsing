@@ -41,7 +41,7 @@ Structure — chunks, metadata, embeddings. Why: search needs cited chunks with 
 
 ## pl-07
 Load to pgvector. Why: the search server reads PG.
-- What: tables `load_run`·`doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + view `v_chunk_source` (Alembic only); docs already loaded are skipped by `file_path` (no sha column — changed content at the same path is skipped too unless `--replace`); `--prune` removes stale rows; named indexes (`index_id`). Vectors live only in pgvector (EDW vector insert deleted 10-29 — [ops.md#op-02](ops.md#op-02)).
+- What: tables `load_run`·`doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + view `v_chunk_source` (Alembic only); docs already loaded are skipped by `file_path` (no sha column — changed content at the same path is skipped too unless `--replace`); `--prune` removes stale rows; named indexes (`index_id`). Vectors live only in pgvector (EDW vector insert deleted 10-29 — [ops.md#op-03](ops.md#op-03)).
 - Files: `pipeline/load/pgvector_load.py`, `pipeline/load/index.py`, `common/store/db/migrations/`.
 - Status: done
 
@@ -65,7 +65,7 @@ Orchestration. Why: the server runs thousands of documents unattended.
 
 ## pl-11
 Model calls, cost and external-send guard (shared). Why: closed-network servers must never call external models; PC calls must stay cheap.
-- What: OpenAI-compatible roles llm/vlm/ocr_vlm/embed (rerank removed 10-29); servers (dev/stage/prd) refuse external models; external send needs `*_ALLOW_EXTERNAL` + synthetic-corpus truth file; budget, call caps, RPM, spend ledger; response cache; fake LLM for tests.
+- What: OpenAI-compatible roles llm/vlm/ocr_vlm/embed (rerank removed 10-29); servers (dev/prd) refuse external models; external send needs `*_ALLOW_EXTERNAL` + `RUN_ENV=local`; budget, call caps, RPM, spend ledger; response cache; fake LLM for tests.
 - Files: `common/ai/guard.py`, `common/ai/llm.py`, `common/ai/adk.py`, `common/config/settings.py`.
 - Status: done
 
