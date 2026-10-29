@@ -880,7 +880,7 @@ def _env_extra_body(role):
     메커니즘으로 보낸다. 여기 한 곳(complete())에서 role별로 읽어 호출자의 extra=와 합치므로 common/llm.py chat()
     (agent= 경유라 extra= 없이 호출)과 VLM 직접 호출부(figures.py·vlm_page.py·agent_step.py·reread_stage3.py 등) 둘 다
     같은 env로 적용된다 — 호출부마다 손대지 않음. 형식이 틀리면 바로 실패(기존 env JSON 관례 — RDB_CONNECT_KWARGS·
-    PM_DB_CONNECT_KWARGS와 같게 조용히 무시하지 않음)."""
+    RDB_CONNECT_KWARGS와 같게 조용히 무시하지 않음)."""
     import copy
 
     key = _EXTRA_ENV_KEY.get(role)

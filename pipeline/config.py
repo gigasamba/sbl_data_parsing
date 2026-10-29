@@ -66,17 +66,16 @@ class PipelineConnectionsGraphiti(Section):
 
 
 class PipelineConnectionsRdb(Section):
+    REMOVED = frozenset(
+        {"connect_kwargs", "database", "host", "password", "port", "user"}
+    )  # 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)
     bucket: str | None = F(None, "RDB_BUCKET", "RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값)")
     company: CsvList | None = F([], "RDB_COMPANY", "RDB에서 가져올 회사 ID 필터(쉼표 목록, 비우면 필터 없음)")
-    connect_kwargs: SecretStr | None = F(None, "RDB_CONNECT_KWARGS", "RDB(mssql) 접속 시 pymssql.connect에 추가로 넘길 인자(JSON 객체)")
-    database: str | None = F(None, "RDB_DATABASE", "RDB(mssql) 데이터베이스 이름")
     doc_type: CsvList | None = F([], "RDB_DOC_TYPE", "RDB에서 가져올 문서 유형 필터(쉼표 목록, 비우면 필터 없음)")
-    engine: str | None = F("mssql", "RDB_ENGINE", "RDB 종류(mssql | pg)", blank="keep")
-    host: str | None = F(None, "RDB_HOST", "RDB(mssql) 서버 주소")
+    engine: str | None = F(
+        "mssql", "RDB_ENGINE", "RDB 종류(mssql | pg) — mssql 접속은 common.connections.rdb(읽기 계정 · PC 시험은 그 sqlite)", blank="keep"
+    )
     increment_col: str | None = F(None, "RDB_INCREMENT_COL", "증분(since) 판정에 쓸 열 이름(updated 열이 없을 때 대체)")
-    password: SecretStr | None = F(None, "RDB_PASSWORD", "RDB(mssql) 접속 비밀번호")
-    port: Port | None = F(1433, "RDB_PORT", "RDB(mssql) 서버 포트")
-    user: str | None = F(None, "RDB_USER", "RDB(mssql) 접속 사용자 이름")
     columns: PipelineConnectionsRdbColumns = Field(default_factory=PipelineConnectionsRdbColumns)
 
 
@@ -574,10 +573,11 @@ class PipelineHost(Section):
 
 
 class PipelineLoad(Section):
-    REMOVED = frozenset({"structure_target"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset(
+        {"structure_target", "edw_load"}
+    )  # 사용자 10-29(edw_load — EDW 벡터 경로 삭제, ops.md#op-03) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     bm25_stat_rebuild: bool | None = F(False, "BM25_STAT_REBUILD", "적재 때 키워드 문서 빈도를 전체 다시 셈 — 1이면 켬", on=("1",))
     bm25_threads: int | None = F(4, "BM25_THREADS", "BM25 항목(term,tf) 계산 병렬 스레드 수(개)")
-    edw_load: bool | None = F(False, "EDW_LOAD", "EDW 벡터 적재(deploy·load) 허용 — 1이어야 진행, 아니면 거부 종료", on=("1",))
     edw_path_prefix: str | None = F(None, "EDW_PATH_PREFIX", "저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치)")
     index_lock_stale_sec: float | None = F(21600.0, "INDEX_LOCK_STALE_SEC", "색인 빌드 잠금 파일을 죽은 빌드로 보고 회수하는 경과 시간(초)")
     pg_create_extension: bool | None = F(

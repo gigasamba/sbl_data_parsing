@@ -1,4 +1,4 @@
--- [SYNTHETIC] PC stand-in for the EDW schema CRMS (client master). Built into valid_env/edw/crms.sqlite, ATTACHed AS CRMS.
+-- [SYNTHETIC] PC stand-in for the EDW schema CRMS (client master). Built into valid_env/edw/edw.sqlite (one file, all schemas — python -m validation.e2e.edw_standin), ATTACHed AS CRMS.
 -- STRICT + CHECK(length) mirror NVARCHAR(n)/CHAR(1). Column names = the edw_masters mapping in config_examples/etl.example.json.
 
 CREATE TABLE RM_MAS_CLIENT (

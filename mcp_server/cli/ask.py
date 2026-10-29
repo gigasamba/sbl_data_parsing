@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """검색 CLI — 질문 → 근거(ask)·문항 세트 검색 시험(test-stack). S5(10-26, T-15 — D-021 ④)에 파이프라인 진입점
 (pipeline/cli.py)에서 옮김: 파이프라인 CLI가 검색 코드(mcp_server)를 import하지 않게(refactor_plan 2-2 — pipeline ↔ mcp_server
-import 금지). 함수 내용은 그대로 옮겼다(옛 pipeline/cli.py의 ask·_ask_mcp·_ask_edw·test_stack·Retriever·table_md, 그리고 이
+import 금지). 함수 내용은 그대로 옮겼다(옛 pipeline/cli.py의 ask·_ask_mcp·_ask_edw(지금 _ask_cosine)·test_stack·Retriever·table_md, 그리고 이
 파일이 함께 쓰는 sh·connect 사본 — sh·connect는 파이프라인 명령도 써서 pipeline/cli.py에도 남음).
 
-  ask         질문 → 근거 청크 + 원본 경로·쪽·줄·쪽 안 위치(bbox)·요약 — 로컬 묶음 또는 --edw. 답변은
+  ask         질문 → 근거 청크 + 원본 경로·쪽·줄·쪽 안 위치(bbox)·요약 — 로컬 묶음 또는 pgvector. 답변은
               검색만(10-13 답변 경로 통일 1단계 — 답변은 서빙되는 Answer Agent(rag_qa — valid_env/answer_test/rag_qa, 점검 validation/e2e/answer_gen.py)만, 중복 경로 제거).
               기본(로컬·pgvector 하이브리드)은 mcp_server.services.search.search_svc.do_search()에 위임(AR10) — MCP와 같은 결과,
-              --edw·--edw-client·--retrieve cosine만 예전 경로
+              --retrieve cosine만 예전 경로(EDW 벡터 --edw·--edw-client는 10-29 삭제 — ops.md#op-03)
   test-stack  문항(자동 생성 또는 --questions)으로 ask 전체 → 정답 포함·출처 일치·지연 → output/stack_test.md
 사용: python -m mcp_server.cli.ask ask --pg --bundle output/<이름>/bundle --k 3 --q "<질문>"
       python -m mcp_server.cli.ask test-stack [--questions output/eval/questions.jsonl]
@@ -71,7 +71,7 @@ def table_md(g):
 
 
 def connect(a):
-    """연결 기본값(백로그 E6 · 사용자 2026-10-01): --pg·--edw·--edw-client·--local 지정이 없으면 Docker에 떠 있는 pgvector에 연결,
+    """연결 기본값(백로그 E6 · 사용자 2026-10-01): --pg·--local 지정이 없으면 Docker에 떠 있는 pgvector에 연결,
     없으면 로컬 묶음. → common/services.py"""
     from common.store import services
 
@@ -81,10 +81,9 @@ def connect(a):
 def ask(a):
     """질문 → 근거(파일·쪽·줄·bbox·점수·via) · 집계 포함. 기본(로컬 묶음·pgvector 하이브리드)은
     AR10(구조 리뷰 10-12 round4 QA095) — MCP search/mcp_server.do_search()에 그대로 위임한다(두 경로가
-    같은 질문에 다른 순위를 주던 분기 제거). --edw·--edw-client·--retrieve cosine는 do_search에 EDW
-    벡터 모드가 없어 예전 R.search 경로를 그대로 둔다(ponytail: do_search가 EDW를 지원하게 되면 이 분기를 지움)."""
-    if a.edw or a.edw_client or a.retrieve == "cosine":
-        return _ask_edw(a)
+    같은 질문에 다른 순위를 주던 분기 제거). --retrieve cosine은 do_search에 없어 예전 R.search 경로를 그대로 둔다."""
+    if a.retrieve == "cosine":
+        return _ask_cosine(a)
     return _ask_mcp(a)
 
 
@@ -125,11 +124,11 @@ def _ask_mcp(a):
         print(f"\n근거 상태: {res['evidence_status']}")
 
 
-def _ask_edw(a):
-    """예전 경로(그대로) — EDW 벡터 모드(--edw·--edw-client)·--retrieve cosine만. do_search는 EDW를 모름."""
+def _ask_cosine(a):
+    """예전 경로(그대로) — --retrieve cosine만(do_search에 없음)."""
     connect(a)
     st = _stack()
-    R = Retriever(a.bundle, a.edw, a.edw_client, a.retrieve or st.get("retrieve", "hybrid"), a.pg)
+    R = Retriever(a.bundle, a.retrieve or st.get("retrieve", "hybrid"), a.pg)
     k = a.k or st.get("k", 8)
     hits, ms = R.search(a.q, k)
     from mcp_server.services.search import aggregate as AG
@@ -142,8 +141,7 @@ def _ask_edw(a):
         "subs": subs,
         "aggregate": agg,
         "sub_aggregates": sub_aggs,
-        "source": ("pgvector" if a.pg else "local")
-        + (" + EDW 벡터→개발 서버 코사인" if a.edw_client else " + EDW 벡터 상위 k" if a.edw else ""),
+        "source": "pgvector" if a.pg else "local",
         "retrieve": R.retrieve,
         "ms": round(ms, 1),
         "hits": hits,
@@ -202,7 +200,7 @@ def test_stack(a):
         sh("pipeline.eval.auto_questions", "--src", a.src, "--out", qpath)
     qs = [json.loads(x) for x in qpath.read_text(encoding="utf-8").splitlines() if x.strip()][: a.limit]
     st0 = _stack()
-    R = Retriever(a.bundle, a.edw, a.edw_client, a.retrieve or st0.get("retrieve", "hybrid"), a.pg)
+    R = Retriever(a.bundle, a.retrieve or st0.get("retrieve", "hybrid"), a.pg)
     rows, ms = [], []
     for q in qs:
         hits, t = R.search(q.get("query") or q["question"], a.k)
@@ -251,7 +249,7 @@ def test_stack(a):
     st = _stack()
     lines = [
         f"# 고정 스택 기본 테스트 — {st.get('name', '')} ({time.strftime('%Y-%m-%d %H:%M')}, "
-        f"{'pgvector' if a.pg else ('EDW→개발 서버 코사인' if a.edw_client else ('EDW' if a.edw else '로컬'))} · 검색 {R.retrieve})",
+        f"{'pgvector' if a.pg else '로컬'} · 검색 {R.retrieve})",
         "",
         f"문항 {len(rows)} · 상위 k={a.k} · 검색 p50 {pct(ms, 0.5):.1f} ms · p95 {pct(ms, 0.95):.1f} ms(질의 임베딩 제외)",
         "",
@@ -293,10 +291,6 @@ def main(argv=None):
         p.add_argument("--bundle", default="output/edw/bundle")
         p.add_argument("--pg", action="store_true", help="pgvector에서 검색(지정 없어도 Docker pgvector가 떠 있으면 기본)")
         p.add_argument("--local", action="store_true", help="로컬 묶음(output/edw/bundle)에서 검색 — PG 설정이 있어도")
-        p.add_argument(
-            "--edw", action="store_true", help="벡터 순위만 EDW 안에서(usp_vec_topk) — 본문·BM25·출처는 개발 서버(EDW에는 벡터만)"
-        )
-        p.add_argument("--edw-client", action="store_true", help="EDW 벡터를 개발 서버로 가져와(캐시) 코사인 — 본문·출처는 개발 서버")
         p.add_argument("--retrieve", choices=["cosine", "hybrid"], help="기본 = stack.json retrieve(없으면 hybrid)")
         p.add_argument("--k", type=int, default=8, help="근거 수 — MCP search 기본과 같게 8(AR5 측정: k=8이 k=10과 같거나 나음, 잘림 적음)")
         if name == "ask":

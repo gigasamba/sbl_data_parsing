@@ -42,7 +42,7 @@ key가 문서마다 고유하므로(S3 키·전체 경로) 이 dedup만으로 �
 드라이버가 돌려준 값 그대로(시간대 변환 없음, DB가 UTC면 UTC), csv 시험 엔진은 ISO8601 문자열을 **문자열**로
 비교하므로(`_inc_value`) 모든 행이 같은 형식·같은 오프셋(예: 전부 `Z`)일 때만 올바르게 정렬된다.
 DB 엔진(RDB_ENGINE, 기본 mssql — 2026-10-07 EDW=Azure SQL Database(PaaS)=SQL Server로 확정): mssql은 pymssql
-(대괄호 식별자 `[AI].[FileStorageMap]`, 값은 %s 파라미터, env RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_USER·RDB_PASSWORD +
+(대괄호 식별자 `[AI].[FileStorageMap]`, 값은 %s 파라미터, common.connections.rdb 읽기 계정 RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_READ_USER·RDB_READ_PASSWORD +
 그 밖 연결 인자는 RDB_CONNECT_KWARGS(JSON)로 그대로 전달 — TLS·인증 방식 같은 접속 세부는 다루지 않음, 사용자 가이드
 참고). RDB_ENGINE=pg는 common/pg.py(conf()·PG) 재사용 + psycopg `sql.Identifier`로 표 이름만 대소문자 보존(열 이름은
 화이트리스트 문자열 그대로, 값은 파라미터 바인딩 — 자유 SQL 금지).
@@ -390,7 +390,7 @@ def _pg_rows(table, cols, company, doc_type, inc_col, since):
 
 def _mssql_rows(table, cols, company, doc_type, inc_col, since):
     """RDB_ENGINE=mssql(기본 — 2026-10-07 EDW=Azure SQL Database(PaaS)=SQL Server로 확정). pymssql로 최소 연결 —
-    env RDB_HOST·RDB_PORT(기본 1433)·RDB_DATABASE·RDB_USER·RDB_PASSWORD만 pymssql.connect에 그대로 넘기고, 그 밖
+    common.connections.rdb 읽기 계정(RDB_HOST·RDB_PORT(기본 1433)·RDB_DATABASE·RDB_READ_USER·RDB_READ_PASSWORD)만 pymssql.connect에 그대로 넘기고, 그 밖
     인자(TLS·로그인 타임아웃 등 접속 세부)는 RDB_CONNECT_KWARGS(JSON, 선택)로 통째 전달(이 함수는 접속 방식을
     모른다 — 사용자 가이드가 따로 적음). 식별자는 대괄호(`[AI].[FileStorageMap]`, TABLE_ID_RE로 화이트리스트 통과한
     이름만 — `]`는 원래 식별자에 못 들어가 안전), 값은 전부 %s 파라미터, 증분은 WHERE [inc_col] >= %s(DET1 — 엄격한
@@ -413,33 +413,29 @@ def _mssql_rows(table, cols, company, doc_type, inc_col, since):
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += f" ORDER BY [{inc_col}]"
+    standin = mssql.standin_path()
+    if standin:  # PC 가짜 EDW(sqlite 하나 — 사용자 10-29 ops.md#op-03): 대괄호 식별자는 SQLite도 받음, %s → ?
+        cn = mssql.standin(standin)
+        try:
+            cur = cn.execute(sql.replace("%s", "?"), params)
+            names = [d[0] for d in cur.description]
+            return [dict(zip(names, r)) for r in cur]
+        finally:
+            cn.close()
     with rdb_connect() as cn:
         return mssql.rows(cn, sql, params)
 
 
 def rdb_connect(extra_kwargs=True):
-    """RDB(mssql) 연결 — SQLAlchemy `mssql+pymssql`(S8b, 5-4 — common.store.mssql, 연결 풀 없음). 접속 인자는 옛 pymssql.connect 그대로:
-    RDB_HOST·RDB_PORT(글자)·RDB_USER·RDB_PASSWORD·RDB_DATABASE + RDB_CONNECT_KWARGS(JSON — extra_kwargs=False면 안 넘김, gen_roster 옛 동작).
+    """RDB(mssql) 연결 — SQLAlchemy `mssql+pymssql`(S8b, 5-4 — common.store.mssql, 연결 풀 없음). 접속은 common.connections.rdb의
+    **읽기 계정**(사용자 10-29 — ops.md#op-03) + RDB_CONNECT_KWARGS(JSON — extra_kwargs=False면 안 넘김, gen_roster 옛 동작).
     rdb_discover·gen_roster도 이것으로."""
     from common.store import mssql
 
-    rdb = pc.cfg().connections.rdb  # S7c — 설정 객체
-
-    def need(v, name):  # 옛 os.environ[name] — 없으면 KeyError(parsing_meta_db와 같은 꼴)
-        if v is None:
-            raise KeyError(name)
-        return C.reveal(v)
-
-    kwargs = json.loads(C.reveal(rdb.connect_kwargs) or "{}") if extra_kwargs else {}
-    pc.checked("RDB_PORT")  # 형식 틀린 포트는 옛처럼 연결 전에 실패(1433으로 조용히 붙지 않게)
-    return mssql.connect(
-        server=need(rdb.host, "RDB_HOST"),
-        port=str(rdb.port),  # 포트는 옛처럼 글자로(pymssql)
-        user=need(rdb.user, "RDB_USER"),
-        password=need(rdb.password, "RDB_PASSWORD"),
-        database=need(rdb.database, "RDB_DATABASE"),
-        **kwargs,
-    )
+    kw, miss = mssql.login("read", extra=extra_kwargs)
+    if miss:  # 옛 os.environ[name] — 없으면 KeyError(parsing_meta_db와 같은 꼴)
+        raise KeyError(miss[0])
+    return mssql.connect(**kw)
 
 
 def _rdb_rows(table, state, cols=None, default_bucket=None, source_name=None):

@@ -990,6 +990,14 @@ def app_classes(names=("pipeline", "mcp")):
 
 # ── 덮기 파일 — 같은 프로세스(put)·자식(child_env)·PC 한 번 실행(common.config.overrides) (S7e2, 사용자 10-28) ─────────────
 _GEN = [0]  # put()이 올림 — 모든 Cache가 다음 get()에서 다시 읽음
+_EDW_READ_ONLY = [False]  # edw_read_only() — 이 프로세스는 EDW 읽기 계정만(CommonConnectionsRdb가 봄)
+
+
+def edw_read_only(on=True):
+    """이 프로세스는 EDW 읽기 계정만 본다 — 공용 settings.yaml에 쓰기 계정이 있어도 설정 객체에서 비운다(사용자 10-29 "정해진
+    항목만" — 검색 MCP 시작 때 부름, docs/prd/ops.md#op-03). 파일은 바꾸지 않고, 모든 설정 캐시가 다음 읽기에서 다시 읽는다."""
+    _EDW_READ_ONLY[0] = on
+    _GEN[0] += 1
 
 
 def _all_names():
@@ -1241,20 +1249,6 @@ class Cache:
 # (S7a-MODELS) — 아래는 부록 D 분류표로 만든 칸 목록. 칸을 더하거나 옮기면 refactor_plan 부록 D·settings.sample.yaml을 함께 고친다.
 
 
-class CommonConnectionsEdw(Section):
-    conn_file: str | None = F(None, "EDW_CONN_FILE", "EDW 접속 정보를 KEY=VALUE로 담은 파일 경로(환경변수가 이 값을 덮음)")
-    database: str | None = F(None, "EDW_DATABASE", "EDW(SQL Server) 연결 DB 이름")
-    driver: str | None = F("pymssql", "EDW_DRIVER", "EDW 드라이버 선택(pymssql 기본, pyodbc 가능)")
-    encrypt: str | None = F("yes", "EDW_ENCRYPT", "pyodbc 연결 Encrypt 옵션(yes|no)")
-    odbc_driver: str | None = F("ODBC Driver 18 for SQL Server", "EDW_ODBC_DRIVER", "pyodbc가 쓸 ODBC 드라이버 이름")
-    password: SecretStr | None = F(None, "EDW_PASSWORD", "EDW 접속 비밀번호")
-    port: Port | None = F(1433, "EDW_PORT", "EDW 포트")
-    db_schema: str | None = F("AI", "EDW_SCHEMA", "EDW 표 스키마 이름(영문·숫자·_)")
-    server: str | None = F(None, "EDW_SERVER", "EDW 서버 주소(호스트)")
-    trust_cert: str | None = F("yes", "EDW_TRUST_CERT", "pyodbc 연결 TrustServerCertificate 옵션(yes|no)")
-    user: str | None = F(None, "EDW_USER", "EDW 접속 계정")
-
-
 class CommonConnectionsObjectStorage(Section):
     access_key: SecretStr | None = F(None, "OS_ACCESS_KEY", "Object Storage(S3) 액세스 키")
     endpoint: str | None = F(None, "OS_ENDPOINT", "Object Storage(S3 호환) 엔드포인트 URL — 비면 boto3 기본")
@@ -1264,14 +1258,45 @@ class CommonConnectionsObjectStorage(Section):
 
 
 class CommonConnectionsParsingMeta(Section):
-    connect_kwargs: SecretStr | None = F(None, "PM_DB_CONNECT_KWARGS", "parsing-meta EDW pymssql 연결에 더할 추가 인자(JSON 객체)")
-    database: str | None = F(None, "PM_DB_DATABASE", "parsing-meta EDW 연결 DB 이름")
-    host: str | None = F(None, "PM_DB_HOST", "parsing-meta EDW 서버 주소(호스트)")
-    password: SecretStr | None = F(None, "PM_DB_PASSWORD", "parsing-meta EDW 쓰기 계정 비밀번호")
-    port: Port | None = F(1433, "PM_DB_PORT", "parsing-meta EDW 포트")
-    sqlite: str | None = F(None, "PM_DB_SQLITE", "시험용 가짜 EDW(SQLite) 파일 경로 — 있으면 실제 EDW 대신 씀")
+    REMOVED = frozenset(
+        {"connect_kwargs", "database", "host", "password", "port", "sqlite", "user"}
+    )  # 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)
     table: str | None = F("AI.ParsingMeta", "PM_TABLE", "parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_)", blank="keep")
-    user: str | None = F(None, "PM_DB_USER", "parsing-meta EDW 쓰기 계정 이름")
+
+
+class CommonConnectionsRdbRead(Section):
+    password: SecretStr | None = F(None, "RDB_READ_PASSWORD", "EDW 읽기 계정 비밀번호")
+    user: str | None = F(
+        None, "RDB_READ_USER", "EDW 읽기 계정 이름 — 원천 목록·FileStorageMap·ParsingMeta 조회·query_edw(검색 MCP는 이 계정만)"
+    )
+
+
+class CommonConnectionsRdbWrite(Section):
+    password: SecretStr | None = F(None, "RDB_WRITE_PASSWORD", "EDW 쓰기 계정 비밀번호")
+    user: str | None = F(None, "RDB_WRITE_USER", "EDW 쓰기 계정 이름 — ParsingMeta 게시(INSERT·UPDATE)만")
+
+
+class CommonConnectionsRdb(Section):
+    """EDW(SQL Server) 접속 하나 — 서버·DB는 하나, 계정은 읽기·쓰기 둘(사용자 10-29, docs/prd/ops.md#op-03)."""
+
+    connect_kwargs: SecretStr | None = F(None, "RDB_CONNECT_KWARGS", "EDW pymssql 연결에 더할 추가 인자(JSON 객체 — TLS·로그인 시간 등)")
+    database: str | None = F(None, "RDB_DATABASE", "EDW 데이터베이스 이름")
+    host: str | None = F(None, "RDB_HOST", "EDW 서버 주소(호스트)")
+    port: Port | None = F(1433, "RDB_PORT", "EDW 포트")
+    sqlite: str | None = F(
+        None,
+        "RDB_SQLITE",
+        "시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) — 있으면 실제 EDW 대신 씀 · PC(RUN_ENV=local) 전용, 서버에서는 시작 거부",
+    )
+    read: CommonConnectionsRdbRead = Field(default_factory=CommonConnectionsRdbRead)
+    write: CommonConnectionsRdbWrite = Field(default_factory=CommonConnectionsRdbWrite)
+
+    @model_validator(mode="after")
+    def _read_only_process(self):
+        """검색 MCP 프로세스(edw_read_only())는 쓰기 계정 칸을 보지 않는다 — 공용 settings.yaml에 있어도 설정 객체에서 비움(사용자 10-29)."""
+        if _EDW_READ_ONLY[0]:
+            self.write = CommonConnectionsRdbWrite()
+        return self
 
 
 class CommonConnectionsPg(Section):
@@ -1603,11 +1628,13 @@ class CommonText(Section):
 
 
 class CommonConnections(Section):
-    REMOVED = frozenset({"openviking"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    edw: CommonConnectionsEdw = Field(default_factory=CommonConnectionsEdw)
+    REMOVED = frozenset(
+        {"openviking", "edw"}
+    )  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안) · edw = EDW 벡터 경로(ops.md#op-03)
     object_storage: CommonConnectionsObjectStorage = Field(default_factory=CommonConnectionsObjectStorage)
     parsing_meta: CommonConnectionsParsingMeta = Field(default_factory=CommonConnectionsParsingMeta)
     pg: CommonConnectionsPg = Field(default_factory=CommonConnectionsPg)
+    rdb: CommonConnectionsRdb = Field(default_factory=CommonConnectionsRdb)
 
 
 class CommonModels(Section):

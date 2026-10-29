@@ -308,11 +308,11 @@ class PgBackend:
 
 
 class TsqlBackend:
-    """T-SQL(EDW) 백엔드 스텁 — common/edwdb.py의 DB·conf()를 재사용해 연결하고 SCHEMA를 T-SQL 문법으로 바꾸면 된다
+    """T-SQL(EDW) 백엔드 스텁 — common.store.mssql로 연결하고 SCHEMA를 T-SQL 문법으로 바꾸면 된다
     (서버에 EDW 추출본이 연결되는 시점에 구현). 지금은 미구현 — sqlite만 지원."""
 
     def __init__(self, *a, **k):
-        raise NotImplementedError("STRUCT_BACKEND=tsql 미구현 — common/edwdb.py 재사용 예정(서버 EDW 연결 시)")
+        raise NotImplementedError("STRUCT_BACKEND=tsql 미구현 — common.store.mssql 재사용 예정(서버 EDW 연결 시)")
 
 
 MIGRATE_HINT = (

@@ -22,20 +22,10 @@
 common:
   run_env:  # [필수: 공통] 실행 환경 — local(PC·valid_env 기준)·dev·prd(서버, 외부 모델 거부). env RUN_ENV가 이 값을 이김 · 기본 없음 · 값: local·dev·prd 중 하나 · env=RUN_ENV
   connections:
-    edw:
-      database:  # [필수: 서버] EDW(SQL Server) 연결 DB 이름 · 기본 없음 · 값: 글자 · env=EDW_DATABASE
-      password:  # [필수: 서버] EDW 접속 비밀번호 · 값: 비밀 글자 · env=EDW_PASSWORD [비밀]
-      server:  # [필수: 서버] EDW 서버 주소(호스트) · 기본 없음 · 값: 호스트 이름·IP · env=EDW_SERVER
-      user:  # [필수: 서버] EDW 접속 계정 · 기본 없음 · 값: 글자 · env=EDW_USER
     object_storage:
       access_key:  # [필수: 서버] Object Storage(S3) 액세스 키 · 값: 비밀 글자 · env=OS_ACCESS_KEY [비밀]
       endpoint:  # [필수: 서버] Object Storage(S3 호환) 엔드포인트 URL — 비면 boto3 기본 · 기본 없음 · 값: URL · env=OS_ENDPOINT
       secret_key:  # [필수: 서버] Object Storage(S3) 시크릿 키 · 값: 비밀 글자 · env=OS_SECRET_KEY [비밀]
-    parsing_meta:
-      database:  # [필수: 서버] parsing-meta EDW 연결 DB 이름 · 기본 없음 · 값: 글자 · env=PM_DB_DATABASE
-      host:  # [필수: 서버] parsing-meta EDW 서버 주소(호스트) · 기본 없음 · 값: 호스트 이름·IP · env=PM_DB_HOST
-      password:  # [필수: 서버] parsing-meta EDW 쓰기 계정 비밀번호 · 값: 비밀 글자 · env=PM_DB_PASSWORD [비밀]
-      user:  # [필수: 서버] parsing-meta EDW 쓰기 계정 이름 · 기본 없음 · 값: 글자 · env=PM_DB_USER
     pg:
       db:  # [필수: 공통] PostgreSQL 데이터베이스 이름 · 기본 rag · 값: 경로 · env=PG_DB
       host:  # [필수: 공통] PostgreSQL 서버 주소 — PG_HOST·PG_PORT·PG_CONN_FILE이 모두 비면 docker ps로 pgvector를 자동 탐지, 그래도 없으면 127.0.0.1(common/store/pg.py) · 기본 없음 · 값: 호스트 이름·IP · env=PG_HOST
@@ -43,6 +33,15 @@ common:
       port:  # [필수: 공통] PostgreSQL 포트 — 비면 자동 탐지(PG_HOST 설명), 그래도 없으면 5432 · 기본 없음 · 값: 1~65535 · env=PG_PORT
       db_schema:  # [필수: 공통] pgvector 기본 스키마 이름(소문자·숫자·_) · 기본 없음 · 값: 글자 · env=PG_SCHEMA
       user:  # [필수: 공통] PostgreSQL 접속 계정 이름 · 기본 rag · 값: 글자 · env=PG_USER
+    rdb:
+      database:  # [필수: 서버] EDW 데이터베이스 이름 · 기본 없음 · 값: 글자 · env=RDB_DATABASE
+      host:  # [필수: 서버] EDW 서버 주소(호스트) · 기본 없음 · 값: 호스트 이름·IP · env=RDB_HOST
+      read:
+        password:  # [필수: 서버] EDW 읽기 계정 비밀번호 · 값: 비밀 글자 · env=RDB_READ_PASSWORD [비밀]
+        user:  # [필수: 서버] EDW 읽기 계정 이름 — 원천 목록·FileStorageMap·ParsingMeta 조회·query_edw(검색 MCP는 이 계정만) · 기본 없음 · 값: 글자 · env=RDB_READ_USER
+      write:
+        password:  # [필수: 서버] EDW 쓰기 계정 비밀번호 · 값: 비밀 글자 · env=RDB_WRITE_PASSWORD [비밀]
+        user:  # [필수: 서버] EDW 쓰기 계정 이름 — ParsingMeta 게시(INSERT·UPDATE)만 · 기본 없음 · 값: 글자 · env=RDB_WRITE_USER
   models:
     embed:
       api_key:  # [필수: 공통] 임베딩 엔드포인트 API 키(있을 때만 Authorization 헤더로 보냄) · 값: 비밀 글자 · env=EMBED_API_KEY [비밀]
@@ -67,12 +66,6 @@ common:
     source_uri_prefix:  # [필수: 서버] 원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///srv/rag/docs) · 기본 없음 · 값: 글자 · env=SOURCE_URI_PREFIX [인계 지문]
 
 pipeline:
-  connections:
-    rdb:
-      database:  # [필수: 서버] RDB(mssql) 데이터베이스 이름 · 기본 없음 · 값: 글자 · env=RDB_DATABASE
-      host:  # [필수: 서버] RDB(mssql) 서버 주소 · 기본 없음 · 값: 호스트 이름·IP · env=RDB_HOST
-      password:  # [필수: 서버] RDB(mssql) 접속 비밀번호 · 값: 비밀 글자 · env=RDB_PASSWORD [비밀]
-      user:  # [필수: 서버] RDB(mssql) 접속 사용자 이름 · 기본 없음 · 값: 글자 · env=RDB_USER
   extract:
     input_source:  # [필수: 서버] 파싱 원본 위치: 폴더·s3://버킷/접두·rdb:csv:경로·rdb:표 · 기본 없음 · 값: 경로 · env=PARSE_SOURCE
   host:
@@ -88,11 +81,6 @@ pipeline:
       token:  # [필수: 서버] 트리거 서버 Bearer 토큰 — 필수(없으면 시작 거부) · 값: 비밀 글자 · env=TRIGGER_TOKEN [비밀]
 
 mcp:
-  edw_query:
-    database:  # [필수: 서버] EDW 읽기 전용 접속 데이터베이스 이름 · 기본 없음 · 값: 글자 · env=EDW_QUERY_DATABASE
-    password:  # [필수: 서버] EDW 읽기 전용 접속 비밀번호 · 값: 비밀 글자 · env=EDW_QUERY_PASSWORD [비밀]
-    server:  # [필수: 서버] EDW 읽기 전용 접속 서버 주소 · 기본 없음 · 값: 호스트 이름·IP · env=EDW_QUERY_SERVER
-    user:  # [필수: 서버] EDW 읽기 전용 접속 계정 이름 · 기본 없음 · 값: 글자 · env=EDW_QUERY_USER
   host:
     image:  # [필수: 서버] mcp-server 컨테이너 이미지 이름:태그 · 기본 없음 · 값: 글자 · env=MCP_SERVER_IMAGE [호스트]
   parse_proxy:
@@ -112,24 +100,17 @@ mcp:
 #    같은 최상위 절을 두 번 쓰지 않는다 — YAML은 뒤의 절이 앞의 절을 통째로 덮는다.
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 
-# ─── 2-1. 공통 — 접속·저장소·글자 처리 (28칸) ───
-#   common.connections.edw.conn_file:  # EDW 접속 정보를 KEY=VALUE로 담은 파일 경로(환경변수가 이 값을 덮음) · 기본 없음 · 값: 경로 · env=EDW_CONN_FILE
-#   common.connections.edw.driver:  # EDW 드라이버 선택(pymssql 기본, pyodbc 가능) · 기본 pymssql · 값: pymssql·pyodbc 중 하나 · env=EDW_DRIVER
-#   common.connections.edw.encrypt:  # pyodbc 연결 Encrypt 옵션(yes|no) · 기본 yes · 값: yes·no 중 하나 · env=EDW_ENCRYPT
-#   common.connections.edw.odbc_driver:  # pyodbc가 쓸 ODBC 드라이버 이름 · 기본 ODBC Driver 18 for SQL Server · 값: 글자 · env=EDW_ODBC_DRIVER
-#   common.connections.edw.port:  # EDW 포트 · 기본 1433 · 값: 1~65535 · env=EDW_PORT
-#   common.connections.edw.db_schema:  # EDW 표 스키마 이름(영문·숫자·_) · 기본 AI · 값: 글자 · env=EDW_SCHEMA
-#   common.connections.edw.trust_cert:  # pyodbc 연결 TrustServerCertificate 옵션(yes|no) · 기본 yes · 값: yes·no 중 하나 · env=EDW_TRUST_CERT
+# ─── 2-1. 공통 — 접속·저장소·글자 처리 (21칸) ───
 #   common.connections.object_storage.region:  # Object Storage 리전 이름 · 기본 us-east-1 · 값: 글자 · env=OS_REGION
 #   common.connections.object_storage.verify_tls:  # TLS 인증서 검증(1=검증, 0=끔, 그 밖 문자열=CA 파일 경로) · 기본 1 · 값: 1(검증)·0(끔)·CA 파일 경로 · env=OS_VERIFY_TLS [빈 글자 유지]
-#   common.connections.parsing_meta.connect_kwargs:  # parsing-meta EDW pymssql 연결에 더할 추가 인자(JSON 객체) · 값: 비밀 글자 · env=PM_DB_CONNECT_KWARGS [비밀]
-#   common.connections.parsing_meta.port:  # parsing-meta EDW 포트 · 기본 1433 · 값: 1~65535 · env=PM_DB_PORT
-#   common.connections.parsing_meta.sqlite:  # 시험용 가짜 EDW(SQLite) 파일 경로 — 있으면 실제 EDW 대신 씀 · 기본 없음 · 값: 경로 · env=PM_DB_SQLITE
 #   common.connections.parsing_meta.table:  # parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_) · 기본 AI.ParsingMeta · 값: 글자 · env=PM_TABLE [빈 글자 유지]
 #   common.connections.pg.conn_file:  # PostgreSQL 접속 정보를 KEY=VALUE로 담은 파일 경로(환경변수가 덮음) · 기본 없음 · 값: 경로 · env=PG_CONN_FILE
 #   common.connections.pg.connect_timeout:  # PostgreSQL 연결 시도 제한 시간 · 기본 10 · 값: 0 이상 정수(초) · env=PG_CONNECT_TIMEOUT
 #   common.connections.pg.pool_max:  # 검색 MCP PostgreSQL 연결 풀 최대 연결 수 · 기본 8 · 값: 0 이상 정수 · env=PG_POOL_MAX
 #   common.connections.pg.standin_dir:  # PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더 · 기본 없음 · 값: 경로 · env=PG_STANDIN_DIR
+#   common.connections.rdb.connect_kwargs:  # EDW pymssql 연결에 더할 추가 인자(JSON 객체 — TLS·로그인 시간 등) · 값: 비밀 글자 · env=RDB_CONNECT_KWARGS [비밀]
+#   common.connections.rdb.port:  # EDW 포트 · 기본 1433 · 값: 1~65535 · env=RDB_PORT
+#   common.connections.rdb.sqlite:  # 시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) — 있으면 실제 EDW 대신 씀 · PC(RUN_ENV=local) 전용, 서버에서는 시작 거부 · 기본 없음 · 값: 경로 · env=RDB_SQLITE
 #   common.store.doc_registry:  # 문서 대장(doc_registry) 사용 — =0이면 끄고 필터 없이 동작 · 기본 true · 값: true·false · env=DOC_REGISTRY [끔: ''·0·none·false]
 #   common.store.registry_editions:  # 대장 '판 비교'(지문 기록·판 연결·내용 그룹) — =0이면 끄고 이전 동작 · 기본 true · 값: true·false · env=REGISTRY_EDITIONS [끔: ''·0·none·false]
 #   common.store.registry_etag_md5:  # ETag가 MD5 형식이면 그것만으로 '날짜만 바뀜'으로 확정 — =0이면 항상 원본 바이트 대조 · 기본 true · 값: true·false · env=REGISTRY_ETAG_MD5 [끔: ''·0·none·false]
@@ -211,7 +192,7 @@ mcp:
 #   pipeline.paths.soffice_bin:  # LibreOffice soffice 실행 파일 경로 — PATH·흔한 경로보다 먼저 봄(pipeline 이미지 안 기본 /usr/bin/soffice — 옛 Dockerfile ENV, B-2) · 기본 없음 · 값: 경로 · env=SOFFICE_BIN
 #   pipeline.paths.stack_snapshot:  # 엔진 구성 사본 파일(내부 신호 — 진입점이 활성 판에서 만들어 자식에 넘김, 사람이 쓰지 않음 · S8b) · 기본 없음 · 값: 경로 · env=STACK_SNAPSHOT
 
-# ─── 2-4. extract — 원천·준비·파싱 (69칸) ───
+# ─── 2-4. extract — 원천·준비·파싱 (67칸) ───
 #  [기능 켬/끔]
 #   pipeline.extract.auto_reparse_changed:  # 야간 계획에서 바뀐 문서(changed) 전체를 다시 파싱할지(=1 재파싱) · 기본 false · 값: true·false · env=AUTO_REPARSE_CHANGED [켬: 1만]
 #   pipeline.extract.dedup_scan:  # 스캔 쪽의 OCR 본문과 쪽 VLM 전사 중복을 쪽마다 하나로 정리할지 · 기본 false · 값: true·false · env=PARSE_DEDUP_SCAN [끔: ''·0·none·false]
@@ -234,11 +215,9 @@ mcp:
 #  [운영값(동시성·시간·용량·경로·접속)]
 #   pipeline.connections.rdb.bucket:  # RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값) · 기본 없음 · 값: 글자 · env=RDB_BUCKET
 #   pipeline.connections.rdb.company:  # RDB에서 가져올 회사 ID 필터(쉼표 목록, 비우면 필터 없음) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=RDB_COMPANY
-#   pipeline.connections.rdb.connect_kwargs:  # RDB(mssql) 접속 시 pymssql.connect에 추가로 넘길 인자(JSON 객체) · 값: 비밀 글자 · env=RDB_CONNECT_KWARGS [비밀]
 #   pipeline.connections.rdb.doc_type:  # RDB에서 가져올 문서 유형 필터(쉼표 목록, 비우면 필터 없음) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=RDB_DOC_TYPE
-#   pipeline.connections.rdb.engine:  # RDB 종류(mssql | pg) · 기본 mssql · 값: mssql·pg 중 하나 · env=RDB_ENGINE [빈 글자 유지]
+#   pipeline.connections.rdb.engine:  # RDB 종류(mssql | pg) — mssql 접속은 common.connections.rdb(읽기 계정 · PC 시험은 그 sqlite) · 기본 mssql · 값: mssql·pg 중 하나 · env=RDB_ENGINE [빈 글자 유지]
 #   pipeline.connections.rdb.increment_col:  # 증분(since) 판정에 쓸 열 이름(updated 열이 없을 때 대체) · 기본 없음 · 값: 글자 · env=RDB_INCREMENT_COL
-#   pipeline.connections.rdb.port:  # RDB(mssql) 서버 포트 · 기본 1433 · 값: 1~65535 · env=RDB_PORT
 #   pipeline.connections.rdb.columns.bucket:  # RDB 문서 위치 표에서 버킷 열의 이름(비우면 열 없음) · 기본 없음 · 값: 글자 · env=RDB_COL_BUCKET
 #   pipeline.connections.rdb.columns.company:  # RDB 문서 위치 표에서 회사 ID(필터용) 열의 이름(비우면 열 없음) · 기본 없음 · 값: 글자 · env=RDB_COL_COMPANY
 #   pipeline.connections.rdb.columns.content_type:  # RDB 문서 위치 표에서 콘텐츠 타입 열의 이름(비우면 열 없음) · 기본 없음 · 값: 글자 · env=RDB_COL_CONTENT_TYPE
@@ -333,10 +312,9 @@ mcp:
 #   pipeline.transform.vlm.page_min_concurrency:  # 쪽 VLM 적응형 병렬에서 느릴 때 줄일 수 있는 최소 워커 수 · 기본 2 · 값: 0 이상 정수 · env=VLM_PAGE_MIN_CONCURRENCY
 #   pipeline.transform.vlm.page_slow:  # 쪽 VLM 호출이 이 시간(초) 넘으면 다음 배치 병렬 수를 줄임 · 기본 60.0 · 값: 0 이상 초 · env=VLM_PAGE_SLOW
 
-# ─── 2-6. load — 적재·게시 (14칸) ───
+# ─── 2-6. load — 적재·게시 (13칸) ───
 #  [기능 켬/끔]
 #   pipeline.load.bm25_stat_rebuild:  # 적재 때 키워드 문서 빈도를 전체 다시 셈 — 1이면 켬 · 기본 false · 값: true·false · env=BM25_STAT_REBUILD [켬: 1만]
-#   pipeline.load.edw_load:  # EDW 벡터 적재(deploy·load) 허용 — 1이어야 진행, 아니면 거부 종료 · 기본 false · 값: true·false · env=EDW_LOAD [켬: 1만]
 #   pipeline.load.pg_create_extension:  # deploy 때 vector 확장 직접 생성 시도 — 1이면 켬(공유 PG에서는 금지) · 기본 false · 값: true·false · env=PG_CREATE_EXTENSION [켬: 1만]
 #   pipeline.load.prune_force:  # 옛 기록 정리 안전장치(묶음 문서 수 비율 미달 거부) 무시 — 1이면 진행 · 기본 false · 값: true·false · env=PRUNE_FORCE [켬: 1만]
 #   pipeline.load.publish.bucket_skip_overlap_check:  # PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 — 1이면 생략 · 기본 false · 값: true·false · env=PM_BUCKET_SKIP_OVERLAP_CHECK [켬: 1만]
@@ -351,7 +329,7 @@ mcp:
 #   pipeline.load.publish.source_system:  # 병렬 파싱 경로에서 게시 행에 기록하는 source_system 이름 · 기본 FileStorageMap · 값: 경로 · env=PM_SOURCE_SYSTEM [빈 글자 유지]
 #   pipeline.load.publish.upload_statuses:  # 원본을 업로드할 파싱 상태 목록(콤마 — 비면 parsing_meta.DEFAULT_UPLOAD_STATUSES) · 기본 ok,partial · 값: 쉼표 목록 또는 YAML 목록 · env=PM_UPLOAD_STATUSES
 
-# ─── 2-7. mcp — 검색 서버·검색 동작 (56칸) ───
+# ─── 2-7. mcp — 검색 서버·검색 동작 (53칸) ───
 #  [기능 켬/끔]
 #   mcp.edw_query.enabled:  # query_edw 도구 스위치 — 0이면 끔 · 기본 true · 값: true·false · env=EDW_QUERY [끔: 0만]
 #   mcp.edw_query.tables_strict:  # 1이면 허용 표 목록(EDW_QUERY_TABLES) 검사를 켬 — 기본은 전 스키마 허용 · 기본 false · 값: true·false · env=EDW_QUERY_TABLES_STRICT [켬: 1만]
@@ -377,11 +355,8 @@ mcp:
 #  [운영값(동시성·시간·용량·경로·접속)]
 #   mcp.edw_meta.dir:  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · 기본 없음 · 값: 경로 · env=EDW_META_DIR
 #   mcp.edw_meta.max_bytes:  # edw_meta 응답 크기 상한(바이트) — 넘으면 목록 꼬리를 자름 · 기본 200000 · 값: 0 이상 정수 · env=EDW_META_MAX_BYTES
-#   mcp.edw_query.conn_file:  # EDW 읽기 전용 접속 정보 파일(KEY=VALUE 줄) 경로 · 기본 없음 · 값: 경로 · env=EDW_QUERY_CONN_FILE
 #   mcp.edw_query.max_bytes:  # query_edw 응답 크기 상한(바이트) · 기본 2000000 · 값: 0 이상 정수 · env=EDW_QUERY_MAX_BYTES
 #   mcp.edw_query.max_rows:  # query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽) · 기본 2000 · 값: 0 이상 정수 · env=EDW_QUERY_MAX_ROWS [서버 옛 값: 1000]
-#   mcp.edw_query.port:  # EDW 읽기 전용 접속 포트 · 기본 1433 · 값: 1~65535 · env=EDW_QUERY_PORT
-#   mcp.edw_query.sqlite:  # query_edw를 EDW 대신 sqlite 파일로 연결(시험용 대역) · 기본 없음 · 값: 경로 · env=EDW_QUERY_SQLITE
 #   mcp.edw_query.tables:  # query_edw 허용 표 목록(쉼표) — TABLES_STRICT=1일 때만 적용, 안 주면 코드가 정함(sqlite 기본 표 · mssql 없음), 빈 값은 전부 거부 · 기본 없음 · 값: 쉼표 목록 또는 YAML 목록 · env=EDW_QUERY_TABLES [빈 글자 유지] [서버 옛 값: '']
 #   mcp.edw_query.timeout_sec:  # query_edw 질의 시간 상한(초) · 기본 20.0 · 값: 0 이상 초 · env=EDW_QUERY_TIMEOUT_SEC
 #   mcp.output.evid_local_roots:  # 근거 이미지를 file:// 원본에서 바로 자를 때 허용할 루트 폴더(쉼표 목록) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=MCP_EVID_LOCAL_ROOTS
