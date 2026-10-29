@@ -1,6 +1,6 @@
 """검색 MCP 설정 — settings.yaml의 common + mcp 절(S7a 모델, refactor_plan 5-2 · D-015). 칸 표는 refactor_plan 부록 D.
 mcp_server 코드가 읽는 객체는 설정 파일 기반 캐시 MCP다(S7e2 — 전환 다리 없앰: env의 옛 이름은 읽지 않음, 신호 SETTINGS_FILE·RUN_ENV만):
-  `from mcp_server import config as mc` → `mc.cfg().search.methods`(mcp 절) · `mc.given("DECOMPOSE")`(준 값만) · `mc.checked(X)` ·
+  `from mcp_server import config as mc` → `mc.cfg().search.methods`(mcp 절) · `mc.given("MCP_METHODS")`(준 값만) · `mc.checked(X)` ·
   시험 `with mc.senv(SEARCH_CLIENT_HARD="1", MCP_STORE=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
   env로 읽는 칸만 env에 씀). common 칸은 `common.config.settings.cfg()`로(COMMON).
 요청마다 읽던 값(MCP_TOOL_TIMEOUT_SEC·SEARCH_* 등)은 쓰는 자리에서 요청마다 cfg()로 읽고, 시작 때 한 번 읽던 상수는 CFG(아래)에
@@ -150,10 +150,6 @@ class McpSearch(Section):
     agg_vocab_file: str | None = F(None, "AGG_VOCAB_FILE", "집계 지표 단서어 사전(agg_vocab.json)을 다른 경로로 지정")
     copy_group: bool | None = F(True, "SEARCH_COPY_GROUP", "같은 사건의 사본(형식·재명명) 근거를 묶어 대표만 남김 — 0이면 끔", off=("0",))
     data_catalog: str | None = F(None, "DATA_CATALOG", "데이터 카탈로그(표·열 설명) JSON 경로 — 없으면 카탈로그 없이 동작")
-    decompose: bool | None = F(
-        True, "MCP_DECOMPOSE", "search 도구 복합 질문 분해 기본값 — 0이면 기본 끔(LLM 설정 시만 실제 분해)", off=("0",)
-    )
-    decompose_llm: bool | None = F(True, "DECOMPOSE", "복합 질문 분해(LLM) 스위치 — 0이면 끔", off=("0",))
     entity_split: bool | None = F(True, "SEARCH_ENTITY_SPLIT", "비교 질문(고객 2명 이상)을 고객별로 나눠 검색 — 0이면 끔", off=("0",))
     evidence_gate: bool | None = F(True, "SEARCH_EVIDENCE_GATE", "근거 점수·evidence_status 표시 — 0이면 끔(점수 칸도 안 실림)", off=("0",))
     methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector,bm25,id,graph 등)")
@@ -285,7 +281,6 @@ class MCPConfig:
         self.DEFAULT_METHODS = list(c.search.methods)  # 10-12 구조 검토: graph 기본에서 뺌 —
         # 그래프 단독 효과를 처음 따로 잼(9세트): 근거 지표 이득 0, 잡음 비율↑(4clients .366→.459), distractors-v2 정답 값 적중 .80→.72 ·
         # G10(10-02)의 비교형 6→12/12 개선은 분해(decompose) 몫 · 다시 켜기: MCP_METHODS=vector,bm25,id,graph
-        self.DEFAULT_DECOMPOSE = c.search.decompose  # G10: 분해 기본 켬(LLM 설정 시만 실제 분해 — 없으면 원 질문)
         # parse_document 프록시가 부르는 작업 서비스 주소(services/parse_proxy.py)
         self.PARSE_URL = c.parse_proxy.url
 

@@ -191,6 +191,19 @@ def _hard_filter_scope(hard):
     return {r["file_path"] for r in rows}, len(rows)
 
 
+def _gather(question, subs, search, base, per):
+    """원 질문은 search(q, base), 하위 검색(고객별)은 search(q, per)로 찾아 라운드로빈으로 합친다(중복 제거) — 원 질문 근거
+    개수는 그대로, 어느 하위 검색도 0개로 밀려나지 않게. 반환: [(키, 출처 번호 0=원 질문)]. 옛 decompose.gather(10-29 이동)."""
+    lists = [search(question, base)] + [search(q, per) for q in subs]
+    out, seen = [], set()
+    for rank in range(max(base, per)):
+        for qi, lst in enumerate(lists):
+            if rank < len(lst) and lst[rank] not in seen:
+                seen.add(lst[rank])
+                out.append((lst[rank], qi))
+    return out
+
+
 def do_search(
     question,
     k=10,
@@ -262,7 +275,6 @@ def do_search(
         if scope:  # 범위 필터 뒤에도 근거 k개가 남게 — 풀을 넉넉히(상한 MAX_K)
             k = min(CFG.MAX_K, max(user_k * 3, 30))
     methods = [m.lower() for m in (methods or CFG.DEFAULT_METHODS)]
-    asked, decompose = decompose is not None, CFG.DEFAULT_DECOMPOSE if decompose is None else decompose
     unknown = [m for m in methods if m not in CFG.CORE + ("graph", "image", "openviking", "concept")]
     if index_id:  # AD41 — 이름 있는 색인(없으면 기본 색인, 응답도 전과 같음)
         R, err, warn = _index_retriever(index_id)
@@ -276,17 +288,7 @@ def do_search(
     if unknown:
         notes.append(f"모르는 방법 무시: {unknown}")
     core = [m for m in methods if m in CFG.CORE]
-    subs = []
-    if decompose:
-        from common.ai import llm as L
-        from mcp_server.services.search import decompose as DC
-
-        if L.configured():
-            subs, _ = DC.split_question(
-                question, lambda p: L.chat([{"role": "user", "content": p}], temperature=0.0, max_tokens=400, agent="query_decompose")
-            )
-        elif asked:  # 기본값으로 켜진 경우엔 조용히(LLM 없는 곳에서 매번 알리지 않음)
-            notes.append("decompose 요청 — LLM 미설정이라 원 질문만")
+    subs = []  # 응답 모양 유지(질문 분해는 10-29에 지움 — 늘 빈 목록)
     sc = mc.cfg().search  # 한 번 묶음(S7d — 이 요청의 검색 스위치들이 같은 판 값)
     agg, agg_ex_note = None, None
     if sc.agg.route:  # BR23 — 집계로 갈 질문인지 먼저 판별(아래 엔티티 분해 게이트용) ·
@@ -300,26 +302,7 @@ def do_search(
         hits, _, r_notes = R.search_ex(
             question, k, core, client=client, scope=scope
         )  # S12: search_ex — note류를 반환값으로(공유 R을 여러 스레드가 써도 안 섞임)
-        if subs:
-            from mcp_server.services.search import decompose as DC
-
-            pool = {h["chunk_ref"]: h for h in hits}
-
-            def srch(q, n):
-                nonlocal r_notes
-                if q == question:
-                    return [h["chunk_ref"] for h in hits[:n]]
-                hs, _, r_notes = R.search_ex(q, n, core, client=client, scope=scope)
-                for h in hs:
-                    pool.setdefault(h["chunk_ref"], h)
-                return [h["chunk_ref"] for h in hs]
-
-            items = DC.gather(question, subs, srch, base=k, per=max(3, k // 2))
-            hits = [
-                {**pool[c], "rank": i + 1, "via": (pool[c].get("via") or "") + ("" if qi == 0 else f"·sub{qi}")}
-                for i, (c, qi) in enumerate(items)
-            ]
-        elif not agg_hit and sc.entity_split:  # BR23 — 비교 질문(고객 2명 이상 동시 언급)이
+        if not agg_hit and sc.entity_split:  # BR23 — 비교 질문(고객 2명 이상 동시 언급)이
             from common.core.terms import match_clients  # 한쪽 고객에 몰려 슬롯을 뺏기는 문제. R2-c 요건③(client+ID_LIKE)은
 
             ents = match_clients(question, R.clients())[:4]  # 94/115건 과다발동 p95+511ms로 기각됨 — 여기선 trigger를 "고객명
@@ -327,8 +310,6 @@ def do_search(
                 # agg_hit 제외 — 집계 비교(계약 건수·합계)는 구조화 집계가
                 # 답을 내고 전문 검색 근거는 참고용이라 분해해도 doc_hit·evid_cov
                 # 효과가 없다(synth-4clients-cmp 실측, [:4]는 호출 수 상한).
-                from mcp_server.services.search import decompose as DC
-
                 pool = {h["chunk_ref"]: h for h in hits}
 
                 def srch(q, n):
@@ -342,7 +323,7 @@ def do_search(
                         pool.setdefault(h["chunk_ref"], h)
                     return [h["chunk_ref"] for h in hs]
 
-                items = DC.gather(question, ents, srch, base=k, per=max(3, k // 2))
+                items = _gather(question, ents, srch, base=k, per=max(3, k // 2))
                 hits = [
                     {**pool[c], "rank": i + 1, "via": (pool[c].get("via") or "") + ("" if qi == 0 else f"·ent{qi}")}
                     for i, (c, qi) in enumerate(items)

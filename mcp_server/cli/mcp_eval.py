@@ -192,7 +192,6 @@ METHODS = ["vector", "bm25", "id"]  # 범위 축소(그래프·image·openviking
 # 확인. 공유 settings.yaml(서버와 같은 파일 — run_tool mcp_eval)에 적힌 값은 서버도 읽으므로 넣지 않는다(VS7e2 R-11).
 SERVER_ONLY_ENV = (
     "MCP_METHODS",
-    "MCP_DECOMPOSE",
     "SEARCH_RECENCY",
     "QUERY_EXPAND",
     "SEARCH_EVIDENCE_GATE",

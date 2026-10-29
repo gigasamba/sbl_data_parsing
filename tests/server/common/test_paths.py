@@ -84,7 +84,7 @@ def _demo():
     # (research_judge는 검색 전용이지만 agent_prompts·adk.py selftest가 모든 이미지에서 씀 — D-019 ④로 mcp/)
     assert resolve_agent_dir("research_judge") == RES_ROOT / "prompts" / "mcp" / "research_judge"
     assert resolve_agent_dir("value_choice") == RES_ROOT / "prompts" / "common" / "value_choice"
-    assert resolve_agent_dir("query_decompose") == RES_ROOT / "prompts" / "mcp" / "query_decompose"  # S11 — research_check 삭제(D-025)
+    assert resolve_agent_dir("agg_llm_route") == RES_ROOT / "prompts" / "mcp" / "agg_llm_route"  # S11 — research_check 삭제(D-025)
     assert resolve_agent_dir("wiki_term_draft") == RES_ROOT / "prompts" / "pipeline" / "wiki_term_draft"
     if E2E_ROOT.is_dir():  # S6a — PC 전용 validation/e2e/(이미지에는 없음 — D-019 ③)
         assert resolve_agent_dir("triple_extract") == E2E_ROOT / "triple_extract"

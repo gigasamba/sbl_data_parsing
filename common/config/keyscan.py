@@ -141,7 +141,6 @@ NOT_SETTINGS = {
     "OV_TAGS": ("삭제 후보", "options.conf에만 — 코드가 안 읽음"),
     "PLATFORM_CONFIG": ("삭제 후보", "agent_platform 삭제(D-013) — 옛 pipeline.env.example·answer_gen_test만(둘 다 없음 — S7e2·S10)"),
     "PLATFORM_STATE_DIR": ("삭제 후보", "agent_platform 삭제(D-013)"),
-    "QA_CHAT_DECOMPOSE": ("삭제 후보", "DECOMPOSE의 옛 별칭(decompose.py 기본값 식)"),
     "RAG_IMAGE": ("삭제 후보", "S6b 옛 이름"),
     "RAG_PARSE_IMAGE": ("삭제 후보", "S6b 옛 이름"),
     "RAG_RETRIEVAL_IMAGE": ("삭제 후보", "S6b 옛 이름"),

@@ -99,8 +99,7 @@ def _ask_mcp(a):
 
     k = a.k or st.get("k", 8)
     methods = (CFG.DEFAULT_METHODS + ["graph"]) if getattr(a, "graph", False) and not a.no_graph else None
-    decompose = False if a.no_decompose else None
-    res = MCP.do_search(a.q, k, methods=methods, decompose=decompose)
+    res = MCP.do_search(a.q, k, methods=methods)
     if a.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))
         return
@@ -134,33 +133,11 @@ def _ask_edw(a):
     R = Retriever(a.bundle, a.edw, a.edw_client, a.retrieve or st.get("retrieve", "hybrid"), a.pg)
     k = a.k or st.get("k", 8)
     hits, ms = R.search(a.q, k)
-    from common.ai import llm as L
     from mcp_server.services.search import aggregate as AG
-    from mcp_server.services.search import decompose as DC
 
     agg_of = lambda q: AG.struct(q) or (AG.pg(R.pg, q) if R.pg else AG.local(a.bundle, q))  # 정형 저장소 질문 먼저(X1, MCP와 같은 규칙)
     agg = agg_of(a.q)  # 건수·합계 질문이면 SQL 집계(검색 결과는 함께 보여 줌)
-    subs = []
-    if not a.no_decompose and L.configured():  # 복합 질문 → 하위 질문마다 검색·집계(LLM 1회 추가)
-        subs, _ = DC.split_question(
-            a.q, lambda p: L.chat([{"role": "user", "content": p}], temperature=0.0, max_tokens=400, agent="query_decompose")
-        )
-    sub_aggs = []
-    if subs:
-        names = R.clients()
-        find = lambda q: [c for c in names if AG.norm(c) in AG.norm(q)]
-        subs = DC.keep_context(subs, find(a.q), find)
-        pool = {h["chunk_ref"]: h for h in hits}
-
-        def srch(q, n):
-            hs = hits[:n] if q == a.q else R.search(q, n)[0]
-            for h in hs:
-                pool.setdefault(h["chunk_ref"], h)
-            return [h["chunk_ref"] for h in hs]
-
-        items = DC.gather(a.q, subs, srch, base=k, per=max(3, k // 2))
-        hits = [{**pool[c], "rank": i + 1, "via": "원 질문" if qi == 0 else f"하위 질문 {qi}"} for i, (c, qi) in enumerate(items)]
-        sub_aggs = [{"sub": i, "question": q, **x} for i, q in enumerate(subs, 1) for x in [agg_of(q)] if x]
+    subs, sub_aggs = [], []  # 질문 분해는 10-29에 지움(응답 칸은 유지)
     res = {
         "question": a.q,
         "subs": subs,
@@ -336,9 +313,6 @@ def main(argv=None):
             )
             p.add_argument("--no-graph", action="store_true", help="(옛 옵션 — 이제 기본이 끔, 남겨 둠)")
             p.add_argument("--json", action="store_true")
-            p.add_argument(
-                "--no-decompose", action="store_true", help="복합 질문 분해 끔(기본: LLM 설정 시 켬, modules/search/decompose.py)"
-            )
         else:
             p.add_argument("--questions", default="output/eval/questions.jsonl")
             p.add_argument("--src", default=src)

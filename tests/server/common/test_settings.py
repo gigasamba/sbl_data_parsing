@@ -785,7 +785,6 @@ def selftest():
             # C-35 — 옛 별칭은 새 칸으로(새 이름이 있으면 새 이름) · C-45 ⑤ — 라이브러리 env는 lib_env로, 목록 밖은 모델 밖
             doc_m, rep_m = M.convert(
                 {
-                    "QA_CHAT_DECOMPOSE": "0",
                     "SYNTHETIC_TRUTH": "/t.json",
                     "LLM_SYNTHETIC_TRUTH": "/n.json",
                     "TZ": "Asia/Seoul",
@@ -795,10 +794,9 @@ def selftest():
             )
             check(
                 f"migrate C-35·C-45 ⑤: 옛 별칭 옮김·라이브러리 env {rep_m['옛 이름 옮김']} {rep_m['라이브러리 env']}",
-                _peek(doc_m, "mcp.search.decompose_llm") == "0"
-                and _peek(doc_m, "common.models.guard.synthetic_truth") == "/n.json"
+                _peek(doc_m, "common.models.guard.synthetic_truth") == "/n.json"
                 and _peek(doc_m, "common.runtime.lib_env") == {"OMP_NUM_THREADS": "2", "TZ": "Asia/Seoul"}
-                and len(rep_m["옛 이름 옮김"]) == 2,
+                and len(rep_m["옛 이름 옮김"]) == 1,
             )
             if (
                 "pipeline" in app_classes()

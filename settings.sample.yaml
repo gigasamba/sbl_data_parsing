@@ -415,7 +415,7 @@ mcp:
 #   pipeline.load.publish.source_system:  # 병렬 파싱 경로에서 게시 행에 기록하는 source_system 이름 · env=PM_SOURCE_SYSTEM · str · 기본 FileStorageMap [빈 글자 유지]
 #   pipeline.load.publish.upload_statuses:  # 원본을 업로드할 파싱 상태 목록(콤마 — 비면 parsing_meta.DEFAULT_UPLOAD_STATUSES) · env=PM_UPLOAD_STATUSES · 목록(쉼표 또는 YAML 목록) · 기본 ok,partial
 
-# ─── 2-7. mcp — 검색 서버·검색 동작 (71칸) ───
+# ─── 2-7. mcp — 검색 서버·검색 동작 (69칸) ───
 #  [결과를 바꾸는 값(하이퍼파라미터)]
 #   mcp.search.methods:  # search 기본 검색 방법(쉼표 목록: vector,bm25,id,graph 등) · env=MCP_METHODS · 목록(쉼표 또는 YAML 목록) · 기본 vector,bm25,id
 #   mcp.search.min_score:  # 근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak · env=SEARCH_MIN_SCORE · float
@@ -435,8 +435,6 @@ mcp:
 #   mcp.output.evidence_paths:  # 근거의 '파싱 결과 경로' 조회(AI.ParsingMeta) 스위치 — 0이면 시도 안 함 · env=MCP_EVIDENCE_PATHS · bool · 기본 true [끔: 0만]
 #   mcp.query_log.enabled:  # 질의 기록(qa_log.jsonl) 스위치 — 0이면 기록 안 함 · env=MCP_QUERY_LOG · bool · 기본 true [끔: 0만]
 #   mcp.search.copy_group:  # 같은 사건의 사본(형식·재명명) 근거를 묶어 대표만 남김 — 0이면 끔 · env=SEARCH_COPY_GROUP · bool · 기본 true [끔: 0만]
-#   mcp.search.decompose:  # search 도구 복합 질문 분해 기본값 — 0이면 기본 끔(LLM 설정 시만 실제 분해) · env=MCP_DECOMPOSE · bool · 기본 true [끔: 0만]
-#   mcp.search.decompose_llm:  # 복합 질문 분해(LLM) 스위치 — 0이면 끔 · env=DECOMPOSE · bool · 기본 true [끔: 0만]
 #   mcp.search.entity_split:  # 비교 질문(고객 2명 이상)을 고객별로 나눠 검색 — 0이면 끔 · env=SEARCH_ENTITY_SPLIT · bool · 기본 true [끔: 0만]
 #   mcp.search.evidence_gate:  # 근거 점수·evidence_status 표시 — 0이면 끔(점수 칸도 안 실림) · env=SEARCH_EVIDENCE_GATE · bool · 기본 true [끔: 0만]
 #   mcp.search.tie_break:  # 동점 근거를 질문의 엔티티(고객·계약번호)로 깨기 — 0이면 끔 · env=SEARCH_TIE_BREAK · bool · 기본 true [끔: 0만]

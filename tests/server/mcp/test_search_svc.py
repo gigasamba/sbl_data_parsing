@@ -696,7 +696,7 @@ def _selftest_search_client_arg():
 def _selftest_entity_split():
     """BR23 — 비교 질문(고객 2명이 같이 나옴)에서 한쪽 고객 문서 3개가 점수를 다 차지해 다른 쪽 고객 문서 1개가
     top-k 밖으로 밀리는 재현(a1~a3=Acme Co, b1=Beta Inc, 질문 용어는 a쪽과 더 많이 겹침). SEARCH_ENTITY_SPLIT=0이면
-    바이트 동일(b1이 빠짐) · 기본(켬)이면 고객별 하위 검색(decompose.gather 재사용)이 b1을 끌어와 근거에 포함."""
+    바이트 동일(b1이 빠짐) · 기본(켬)이면 고객별 하위 검색(search_svc._gather)이 b1을 끌어와 근거에 포함."""
     docs = [
         {"file_path": f"a{i}.txt", "file_name": f"a{i}.txt", "file_sha256": str(i) * 64, "doc_format": ".txt", "client": "Acme Co"}
         for i in range(1, 4)
