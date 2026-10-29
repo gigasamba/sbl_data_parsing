@@ -104,11 +104,13 @@ Parse step location — `extract` or `transform`. Why: moving it changes code_fp
 
 ## pl-18
 `night`/`full` exit 0 after a midway stop. Why: schedulers cannot see the failure (C-33).
+- Decided (user 10-30 grill): exit codes — 0 targets = 0, failure = 1, deadline reached = 75.
 - Files: `pipeline/cli.py` (`night`), `deploy/docker/entrypoint.sh` (`full`).
 - Status: todo
 
 ## pl-19
 compose `index_a`/`index_b` fail when run to the end (C-32).
+- Decided (user 10-30 grill): delete the compose `index_a`/`index_b` examples.
 - Files: `deploy/host/`.
 - Status: todo
 
@@ -159,6 +161,7 @@ DB schema spec, written before pl-26·pl-23·pl-24 are built. Why: table/column 
   - `AI.ParsingMeta` keeps only read columns: `source_system`, `source_key` (s3_key), `parse_date`, `parse_status`, `status`, `status_at`, `rep_bucket`, `rep_key`, plus new `gold_status` + reason ([pl-24](#pl-24)). Drop `doc_key` and the 14 unread columns.
   - `struct`: delete the document-derived tables `doc_location`, `doc_contract_link`, `doc_table`, `doc_cell` and their writers/readers (structured link/tables, `load_tables_db`, `find_table_cells`, aggregate `doc_link_list`/`table_cell_list`/`doc_location_list`, `AG.struct` server path) — that content lives only in chunk text. Keep `stack_version`/`source_version` (read at MCP start).
   - Masters `contract_master`, `client_master` move to a SEPARATE Postgres (own connection setting, not the search PG), filled by a person from CSV (`structured load` style). Readers `gen_roster` (client_master) and `terms.py` (contract_master) use the new connection.
+  - (user 10-30 grill rounds 9–10) Glossary and client roster (C-21) also become tables in that master Postgres — no folder mount; the CSV originals stay in a server folder outside git (company data) and the load command takes the path; the PC uses a SQLite stand-in. `pipeline_version` (C-62) is a column in gold `doc`, not in ParsingMeta. Both are in `db_schema.md`.
   - EDW vector tables (`chunk_vec`, `edw_insert`, `edw_search`) are removed by PR #5.
 - Decided (user 10-30 — client fields): one client per doc comes from the EDW join chain (scalar). Clients found in the document text are a separate list. The MCP client filter uses ONLY the EDW client; a doc without an EDW client is excluded when a client filter is set. Using text-found clients in the filter is later ([pl-28](#pl-28)). Today both are mixed in `clients[]` (`build_bundle.infer_clients`) and `chunk.clients` drives the hard filter — fix with this row.
 - Naming rule (user 10-30): any field that can come from EDW and from document parsing gets two columns with the origin in the name (e.g. `client_edw`, `clients_doc`); `db_schema.md` fixes the exact suffixes.
@@ -185,3 +188,9 @@ EDW 고객 매핑을 파이프라인이 직접 만든다. 왜: 문서마다 EDW 
 - Files: `pipeline/extract/source.py`(FileStorageMap 읽기), `pipeline/transform/structure/build_bundle.py`(`_file_meta` → 조인 결과), `pipeline/config.py`(`file_meta_path`), `deploy/host/scripts/run_docs.py`(`FILE_META_PATH`), `docs/architecture/db_schema.md`.
 - Depends on: [pl-25](#pl-25)(스키마 — `client_edw` 칸).
 - Status: todo
+
+## pl-30
+Delete 4 env names no code reads (C-51). Why: `FIG_OCR_BUDGET`, `SERVICE_MASTER_CSV`, `DIVISION_MASTER_CSV`, `PROD_MASTER_CSV` are set in server env files but nothing reads them.
+- Decided (user 10-30 grill): delete them in the 0.1.0 release (with the other fingerprint-changing items).
+- Files: server env/settings examples, `common/config/` (if a setting or alias exists), `refactor.md` C-51.
+- Status: todo — in the 0.1.0 release.
