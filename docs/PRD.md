@@ -1,0 +1,31 @@
+# sbl_data_parsing — PRD
+
+Goal: cited evidence search over company documents on the closed network — parse → structure → load (pgvector) → search MCP — with the same results in the server Linux containers as on the PC.
+Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · pl = data pipeline · e2 = e2e runs, tests, evaluation). Status: todo | dev | done. Done features leave this table; their anchors keep `Status: done`.
+
+| ID | Bundle | Status | Detail |
+|---|---|---|---|
+| mc-10 | Retriever reads removed `file_sha256` | todo | [prd/mcp.md#mc-10](prd/mcp.md#mc-10) |
+| mc-11 | Aggregation path queries removed `file_sha256` | todo | [prd/mcp.md#mc-11](prd/mcp.md#mc-11) |
+| mc-12 | `graph`/`concept` search query dropped tables | todo | [prd/mcp.md#mc-12](prd/mcp.md#mc-12) |
+| pl-12 | Registry upsert PG error · publish guard off (C-54) | todo | [prd/pipeline.md#pl-12](prd/pipeline.md#pl-12) |
+| pl-13 | `load --prune` deletes skipped docs (C-60) | todo | [prd/pipeline.md#pl-13](prd/pipeline.md#pl-13) |
+| pl-14 | Deploy backfill reads removed `doc.client` | todo | [prd/pipeline.md#pl-14](prd/pipeline.md#pl-14) |
+| pl-15 | structure/load contract rejects new bundles | todo | [prd/pipeline.md#pl-15](prd/pipeline.md#pl-15) |
+| pl-16 | `PIPE_EMBED=none` builds `vector(0)` | todo | [prd/pipeline.md#pl-16](prd/pipeline.md#pl-16) |
+| pl-17 | Parse step location extract/transform (C-61) | todo | [prd/pipeline.md#pl-17](prd/pipeline.md#pl-17) |
+| pl-18 | `night`/`full` exit 0 after midway stop (C-33) | todo | [prd/pipeline.md#pl-18](prd/pipeline.md#pl-18) |
+| pl-19 | compose `index_a`/`index_b` fail (C-32) | todo | [prd/pipeline.md#pl-19](prd/pipeline.md#pl-19) |
+| pl-20 | Stack snapshot file review (C-50) | todo | [prd/pipeline.md#pl-20](prd/pipeline.md#pl-20) |
+| pl-21 | Deferred settings removal (fingerprint) | todo | [prd/pipeline.md#pl-21](prd/pipeline.md#pl-21) |
+| e2-09 | Test data from PwC_Structure `valid_env` | todo | [prd/e2e.md#e2-09](prd/e2e.md#e2-09) |
+| e2-10 | Minimize PC eval tools and their settings | todo | [prd/e2e.md#e2-10](prd/e2e.md#e2-10) |
+| e2-11 | PC general test known failures | todo | [prd/e2e.md#e2-11](prd/e2e.md#e2-11) |
+| e2-12 | EDW answer citation check (C-56) | todo | [prd/e2e.md#e2-12](prd/e2e.md#e2-12) |
+| e2-13 | PC Docker smoke stops at retriever | todo | [prd/e2e.md#e2-13](prd/e2e.md#e2-13) |
+| e2-14 | Release tests only inside the image (C-53) | todo | [prd/e2e.md#e2-14](prd/e2e.md#e2-14) |
+| e2-15 | Agent test package path points upstream | todo | [prd/e2e.md#e2-15](prd/e2e.md#e2-15) |
+| e2-16 | Search page fixed document count text | todo | [prd/e2e.md#e2-16](prd/e2e.md#e2-16) |
+| e2-17 | Remove unused functions (10-29 audit) | todo | [prd/e2e.md#e2-17](prd/e2e.md#e2-17) |
+
+Done: mcp 9 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 8 → [prd/e2e.md](prd/e2e.md)

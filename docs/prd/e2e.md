@@ -1,0 +1,99 @@
+# e2e — end-to-end runs, tests and evaluation (PC + release gate)
+
+Area of [PRD.md](../PRD.md). Covers how a change is proven: smoke runs, test layers, quality evaluation, answer checks, test data and the image release gate.
+One anchor per feature: what, why, code files. Open items carry a `Status:` line with progress.
+
+## e2-01
+PC smoke run — parse → embed → migrate → load → search. Why: proves the whole chain on 2–3 documents before a release.
+- What: README §4-4 steps; per-run values with `--set`; embedding cache `output/edw/embed_cache.sqlite`.
+- Files: `pipeline/cli.py` (`smoke`), `mcp_server/cli/ask.py`, `valid_env/unstructured/list-smoke10.txt`.
+- Status: done
+
+## e2-02
+Test layers. Why: release decision must run inside the image without network.
+- What: `tests/server/` (image release gate, run by `pipeline.cli selftest` through `tests/runner.py`), `tests/general/` (PC only: PG, Docker, slow); known failures listed, XPASS warns to remove them.
+- Files: `tests/runner.py`, `tests/conftest.py`, `deploy/release/known_fail.txt`.
+- Status: done
+
+## e2-03
+Parse quality evaluation. Why: engine/stack changes must not lower parse accuracy.
+- What: CER, value/table recall vs `criteria.json` and human gold, auto questions from cross-confirmed values, stack beam search, stage board and stack report.
+- Files: `pipeline/eval/score_gold.py`, `auto_questions.py`, `run_combo.py`, `run_board.py`, `stack_report.py`, `pipeline/transform/represent/parse_qa.py`, `resources/config/criteria.json`.
+- Status: done
+
+## e2-04
+Search evaluation. Why: retrieval changes must not lower hit rates.
+- What: hit@1/5/k, value_in_evidence, p50/p95 latency, `via` mix; tool smoke for the 4 tools; HTML/xlsx report.
+- Files: `mcp_server/cli/mcp_eval.py`, `mcp_server/cli/mcp_smoke.py`, `mcp_server/cli/qa_report.py`, `mcp_server/cli/search_checks.py`.
+- Status: done
+
+## e2-05
+Answer check (PC only). Why: the MCP returns evidence only; answers built on it need a citation check.
+- What: `rag_qa` agent calls `search`/`edw_meta`/`query_edw`, deterministic citation check.
+- Files: `validation/e2e/answer_gen.py`, `valid_env/answer_test/rag_qa/`.
+- Status: done
+
+## e2-06
+Stack and model comparison. Why: choose engines and models by measured results and cost.
+- What: stack matrix and model matrix runs with cost estimates; paid calls need approval (CLAUDE.md §7).
+- Files: `validation/e2e/stack_matrix.py`, `validation/e2e/model_matrix.py`.
+- Status: done
+
+## e2-07
+Search check page. Why: humans inspect evidence in a browser.
+- What: local page proxying to the MCP server and pgvector (http://127.0.0.1:8791).
+- Files: `validation/search_ui/serve.py`, `validation/search_ui/start_mcp.sh`, `start_ui.sh`.
+- Status: done
+
+## e2-08
+Image build and release gate. Why: the server must get images that passed selftest.
+- What: build/ship script, selftest gate reads the `[판정]` line, overlay patch for code-only changes.
+- Files: `deploy/release/build_ship.sh`, `deploy/release/selftest_gate.sh`, `docs/operations/release-and-patch.md`.
+- Status: done
+
+## e2-09
+Replace PC test data with PwC_Structure `valid_env`. Why: PwC lays test data out like the server (`object_storage/<system>/<uuid>/<file>` + `eval_sets/` gold and lists + `edw/` synthetic EDW sqlite), and this repo has no EDW stand-in.
+- What: bring `edw/` (sql + sqlite), `eval_sets/`, `object_storage/{CRMS,SFDC}` + `test_doc_purpose.md`; replace `valid_env/unstructured/`; point `EVAL_SETS_DIR` default (`common/core/paths.py`) and the list files at the new layout; move the two server tests that read `unstructured/synth-meta-rdb/meta/` to the EDW stand-in or to data made inside the test. Do not bring `local/` (secrets), `logs/`, `output/`, `tmp/`, `Parsing-Result/`.
+- Files: `valid_env/`, `common/core/paths.py` (every-layer dependency → code_fp), `tests/server/mcp/test_internal_docs.py`, `tests/server/mcp/test_search_svc.py`, `mcp_server/cli/mcp_eval.py`, `pipeline/eval/stack_report.py`, `pipeline/eval/chart_values_score.py`.
+- Status: todo — selection agreed 10-29; nothing moved yet. Coverage drops from 40 synthetic sets to 33 documents (charts, diagrams, versions, 4-client aggregation, terms) — confirm before deleting.
+
+## e2-10
+Minimize PC evaluation tools, then keep or delete their settings. Why: about 50 settings exist only for PC tests and experiments (`common.dev.*`, `pipeline.dev.*`, `pipeline.eval.*`, `mcp.dev.*`, `runtime.exp_*`, `graphiti.*`).
+- Files: `validation/e2e/`, `pipeline/eval/`, `mcp_server/cli/`, `common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`.
+- Status: todo — next step after e2-09.
+
+## e2-11
+PC general test known failures. Why: 7 general tests fail since before the refactor (C-54 ①, C-58): 3 read the shared dev PG (use temp SQLite/schemas), 2 need missing packages/modules (mark skip or fix), 1 needs EDW.
+- Files: `tests/conftest.py` (`GENERAL_KNOWN_FAIL`), `tests/general/`.
+- Status: todo
+
+## e2-12
+EDW value answers fail citation verification. Why: answers citing `query_edw` values are recorded as verify failures (C-56 M-1).
+- What: choose (a) a `kind="edw"` citation rule or (b) remove EDW values from the prompt.
+- Files: `valid_env/answer_test/rag_qa/`, `validation/e2e/answer_gen.py`.
+- Status: todo — when needed.
+
+## e2-13
+PC Docker smoke stops at the retriever. Why: depends on [mcp.md#mc-10](mcp.md#mc-10).
+- Files: `valid_env/docker/compose.test.yml`, `valid_env/docker/smoke_test.sh`.
+- Status: todo
+
+## e2-14
+Release tests live only inside the image. Why: an overlay patch cannot update them (C-53).
+- Files: `deploy/docker/Dockerfile`, `tests/server/`.
+- Status: todo
+
+## e2-15
+Agent test package path points at upstream. Why: `resolve_agent_dir` looks for `example_agentic` under `dev_tools/unit_test/fixtures/` (not in this repo), so the `run_agent` group in `test_adk` is skipped and `test_paths` asserts that path.
+- Files: `common/core/paths.py` (every-layer dependency → code_fp), `tests/server/common/test_adk.py`, `tests/server/common/test_paths.py`.
+- Status: todo — fix with the next fingerprint-changing release.
+
+## e2-16
+Search check page shows fixed text "10 documents (20 chunks)".
+- Files: `validation/search_ui/index.html`.
+- Status: todo
+
+## e2-17
+Remove unused functions found by the 10-29 audit. Why: dead code costs reading time and lint upkeep.
+- What: unused — `parse_env_file` (`common/config/migrate.py`), `fields_table` (`common/config/settings.py`), `_lane_push` (`deploy/host/scripts/run_docs.py`), `_bg_img` (`mcp_server/routers/dispatch.py`), `_scan_paren` (`mcp_server/services/edw_query.py`), `checklist` (`mcp_server/services/search/decompose.py`), `_local_sidecar_name` (`pipeline/load/parsing_meta.py`); tests only — `do_evidence_image`, `do_related` (`internal_docs.py`), `eval_labels` (`qtype.py`), `availability_note` (`stack_report.py`), `raster_chart_values` (`chart_values.py`), `pool_distractor_files` (`stack_matrix.py`); modules no code names — `pipeline/load/openviking_export.py`, `pipeline/tools/check_runlog.py`.
+- Status: todo — user decision. `settings.py`, `decompose.py` (layer r) and `chart_values.py` (layer p1) change code_fp: bundle those with the next fingerprint release; the rest are overlay-safe.

@@ -19,7 +19,7 @@
 | `deploy/docker/` | Dockerfile, requirements, entrypoint, `wheels/` | 앱 로직 | (빌드 원본) |
 | `deploy/release/` | 빌드·전송·오버레이 패치·배포 판정 스크립트, `known_fail.txt`, `lint_changed.sh` | 앱 로직 | 일부(배포 판정 파일) |
 | `deploy/host/` | **서버 호스트**에서 실행하는 compose, systemd, 셸 스크립트, `run_docs.py` | 컨테이너 안에서 실행되는 코드 | 아니요 |
-| `tests/` | 테스트 — `server/`(이미지 안에서 배포 판정에 쓰는 테스트, 외부 접속 없이 실행됨), `general/`(PC 전용 — PG·Docker가 필요하거나 느린 테스트), `fixtures/`, `runner.py` | 앱 코드 | `server/`만 |
+| `tests/` | 테스트 — `server/`(이미지 안에서 배포 판정에 쓰는 테스트, 외부 접속 없이 실행됨), `general/`(PC 전용 — PG·Docker가 필요하거나 느린 테스트), `runner.py` | 앱 코드 | `server/`만 |
 | `validation/` | PC 전용 **검증 도구 코드** — `search_ui/`(검증 페이지), `e2e/`(평가·비교·answer_gen) | 서버에서 실행되는 코드, 데이터 번들 | 아니요 |
 | `valid_env/` | PC 전용 **데이터** — 테스트 문서와 정답(`unstructured/`), 답변 점검 agent(`answer_test/`), PC 테스트 Docker(`docker/`) | 코드 로직, 비밀값, 운영 데이터 | 아니요 |
 | `docs/` | 사람이 읽는 문서(`operations/`, `architecture/`, `requirements/`, `refactoring/`) | 코드 | 아니요 |
@@ -32,7 +32,7 @@
 - `mcp_server/routers`에는 도구 등록만 두고 로직은 `services`에, 출력 구조는 `schemas`에 둔다.
 
 **파일·이름 규칙:**
-- 새 파일 이름은 20자 이하로 짓는다. `utils`, `helpers`, `common`, `misc` 같은 이름은 쓰지 않는다. 저장소 안에서 같은 파일 이름을 두 번 쓰지 않는다(예외: 엔진 파일, `tests/fixtures/prompts/<앱>/<패키지>.json`, systemd unit, 앱마다 하나씩 두는 `config.py`).
+- 새 파일 이름은 20자 이하로 짓는다. `utils`, `helpers`, `common`, `misc` 같은 이름은 쓰지 않는다. 저장소 안에서 같은 파일 이름을 두 번 쓰지 않는다(예외: 엔진 파일, systemd unit, 앱마다 하나씩 두는 `config.py`).
 - 파일 이름과 import 이름의 대소문자를 정확히 같게 쓴다(Linux는 대소문자를 구분하고, macOS와 Windows는 구분하지 않는다).
 - 큰 파일을 나눌 때는 **옮기는 커밋과 나누는 커밋을 따로 만든다**(먼저 그대로 옮겨서 변경 이력과 핑거프린트의 대응 관계를 유지한다).
 
@@ -155,7 +155,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 - 테스트는 pytest 형식(`test_*` 함수 + `assert`)으로 쓴다. 이미지에서는 `pipeline.cli selftest`(`tests/runner.py`)가, PC에서는 pytest가 실행한다. 이미지에는 pytest가 없다.
 - 테스트는 **멱등**하게 만든다. 공용 개발 PG에 흔적을 남기지 말고 임시 SQLite나 임시 스키마(`orca_*`, `test_*`)를 쓰며, 이름을 다시 확인한 뒤 정리한다. 설정은 `with pc.PIPE.env(X=…)`, `settings.isolated()` 같은 테스트 도우미로 덮어쓴다(os.environ을 건드리지 않는다). 함수를 바꿔 끼울 때는 `unittest.mock.patch.object`를 쓴다.
 - 앱 모듈 안에 `selftest()`나 `if __name__ == "__main__":` 점검 코드를 새로 두지 않는다. 테스트는 `tests/`에 둔다.
-- 고정 데이터: 테스트 문서는 `valid_env/unstructured/`에 있다. 프롬프트 사례 `tests/fixtures/prompts/<앱>/<패키지>.json`은 지금 읽는 테스트가 없다(지울지 결정 대기 — refactor.md C-63).
+- 고정 데이터: 테스트 문서는 `valid_env/unstructured/`에 있다(프롬프트 사례 `tests/fixtures/`는 10-29에 지움 — refactor.md C-63).
 
 ### 6-5. 스모크 테스트 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
 README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. 실행마다 다른 값은 `--set`(파이프라인 진입점)이나 오버레이 설정 파일(`mcp_server.main`, `ask`처럼 `--set`을 받지 않는 명령)로 준다. 테스트 문서는 `valid_env/unstructured/`(목록 `list-smoke10.txt`)에 있고, 임베딩 캐시는 `output/edw/embed_cache.sqlite`다(같은 청크는 다시 호출하지 않는다 — 실제 호출을 확인하려면 `EMBED_CACHE=<빈 sqlite>`).
@@ -178,6 +178,7 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 
 ## 8. 문서
 
+- 기능 요건·미개발 항목은 [docs/PRD.md](docs/PRD.md)와 `docs/prd/{mcp,pipeline,e2e}.md`에 있다(§10).
 - 문서 지도는 [docs/index.md](docs/index.md)다. 문서를 추가하거나 옮기면 같은 커밋에서 이 지도를 고친다. 새 문서는 꼭 필요할 때만 만들고, 먼저 기존 문서의 섹션으로 넣을 수 있는지 본다.
 - 서버나 사람이 확인해야 하는 일(저장소 안에서 끝낼 수 없는 것)은 [refactor.md](refactor.md)에 `C-xx`로 추가하고, 배포 순서는 그 파일의 "최종 — 사람이 할 일"에 둔다.
 - 결정 사항은 [docs/refactoring/refactor_plan.md](docs/refactoring/refactor_plan.md) 7절에 `D-xxx`로, 미정 사항은 8절에 둔다. 운영 절차는 `docs/operations/`(서버 가이드, 릴리스, 설정 가이드)에 있다.
@@ -189,17 +190,13 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 - 되돌리기 어려운 일(push, 서버 배포, DB 변경, 파일 삭제)은 하기 전에 확인을 받는다. 지울 때는 대상을 먼저 확인한다.
 - 결과는 있는 그대로 보고한다. 테스트가 실패하면 출력과 함께 알리고, 건너뛴 단계는 건너뛰었다고 밝힌다.
 
-## 10. 알려진 문제(리팩토링 전부터)
+## 10. 기능 요건과 알려진 문제 — `docs/PRD.md`
 
-10-20 축소 스키마(`file_sha256`, `client`, `file_name`, `s3_key` 제거)가 코드 일부에만 반영됐다.
-- 검색기 생성(`mcp_server/services/search/retriever.py`)이 `file_sha256`을 읽어 새 번들에서 실패한다. PC는 로컬 배치 분기(`paths.LOCAL_RUN`)로 피하고, 서버는 PG 경로만 쓴다. PC 테스트 Docker 스모크도 여기서 멈춘다.
-- 집계 경로가 없는 컬럼 `file_sha256`을 조회해서 검색 결과에 "집계 경로 오류" 메모가 붙는다(검색 근거 자체는 정상이다).
-- `pgvector_load deploy`의 `backfill_chunk_clients`가 `doc.client`를 읽어 실패한다(테이블과 인덱스 생성에는 영향이 없다).
-- `pipeline structure/load` 모듈의 계약 점검(`contract.py`의 DOC_KEYS)이 새 번들을 거부한다(서버는 이 모듈을 쓰지 않는다).
-- `pipeline structure`에 `PIPE_EMBED=none`을 주면 차원이 0이 되어 `vector(0)` 테이블을 만들 수 없다.
-- 문서 레지스트리 upsert가 PG에서 문법 오류를 낸다(C-54 ①). 퍼블리시 방어 로직이 꺼져 있다(C-54 ②). 다음 버전에서 설계한다.
-- `pgvector_load load --prune`이 바뀌지 않아 건너뛴 문서까지 지운다(C-60 — 고칠지 결정 대기).
-- `validation/search_ui/index.html` 첫 화면의 "10개 문서(20개 청크)"는 고정 문구다.
+기능 요건(무엇·왜·관련 코드 파일)과 아직 개발되지 않았거나 고장 난 항목(진행 상황)은 이 파일에 두지 않고 요건 문서에 둔다(10-29).
+- [docs/PRD.md](docs/PRD.md) — 미개발·미해결 항목 표(ID·상태·상세 링크). 작업 전에 이 표에서 맡은 행을 찾는다.
+- [docs/prd/mcp.md](docs/prd/mcp.md)(검색 MCP `mc-xx`) · [docs/prd/pipeline.md](docs/prd/pipeline.md)(데이터 파이프라인 `pl-xx`) · [docs/prd/e2e.md](docs/prd/e2e.md)(e2e 실행·테스트·평가 `e2-xx`) — 기능마다 앵커 하나(무엇·왜·관련 파일, 미개발이면 `Status:`에 진행 상황).
+- 옛 §10 알려진 문제(10-20 축소 스키마 일부 반영 등)는 `mc-10`·`mc-11`·`pl-12`~`pl-16`·`e2-13`·`e2-16`으로 옮겼다.
+- 기능을 더하거나 고치면 같은 커밋에서 해당 앵커를 고친다. 끝난 항목은 PRD 표에서 빼고 앵커에 `- Status: done`을 남긴다.
 
 ---
 

@@ -137,7 +137,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  ├─ docker/           Dockerfile(타깃 pipeline, mcp) · requirements · entrypoint.sh · IMAGE_BASE · wheels/(폐쇄망용 휠)
 │  ├─ release/          빌드·전송(build_ship, ship_stage) · 오버레이 패치 번들(make_patch) · 배포 판정(selftest_gate, known_fail.txt) · 커밋 전 점검(lint_changed.sh)
 │  └─ host/             서버 호스트에서 쓰는 것 — compose/ · scripts/(trigger, run_tool, mcp_up, settings_env, run_docs 등) · systemd/(새벽 배치, keepalive)
-├─ tests/               server/(이미지에 포함, 배포 판정) · general/(PC 전용) · fixtures/(프롬프트 사례 — 읽는 테스트 없음, C-63) · runner.py
+├─ tests/               server/(이미지에 포함, 배포 판정) · general/(PC 전용) · runner.py
 ├─ validation/          PC 전용 검증 도구 — search_ui/(검증 페이지) · e2e/(평가·비교, answer_gen)
 ├─ valid_env/           PC 전용 데이터 — unstructured/(합성 테스트 문서·정답) · answer_test/(답변 점검 agent) · docker/(PC 테스트 Docker)
 ├─ docs/                문서(지도: docs/index.md) — operations/ · architecture/ · requirements/ · refactoring/
@@ -591,6 +591,7 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 
 | 문서                                                                           | 내용                                                                     |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [docs/PRD.md](docs/PRD.md) · [docs/prd/](docs/prd/)                          | **기능 요건** — 검색 MCP(mcp.md) · 데이터 파이프라인(pipeline.md) · e2e 실행·테스트·평가(e2e.md)의 기능·목적·관련 파일, 미개발 항목 표 |
 | [docs/index.md](docs/index.md)                                               | 문서 지도                                                                  |
 | [CLAUDE.md](CLAUDE.md)                                                       | 개발 규칙 · 로컬 하네스 · 점검 명령 · 핑거프린트 기준값                                     |
 | [refactor.md](refactor.md)                                                   | 서버·사람이 확인할 사항(C-xx) · **"최종 — 사람이 할 일"**(첫 배포 순서)                      |
@@ -601,10 +602,6 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 | [docs/refactoring/refactor\_plan.md](docs/refactoring/refactor_plan.md)      | 리팩토링 가이드 · 결정 기록(D-xxx) · 파일 이동표                                       |
 
 
-**알려진 문제(리팩토링 전부터)** — 자세한 목록은 CLAUDE.md §10
-
-- 검색 결과에 "집계 경로 오류" 메모가 붙는다(축소 스키마에 없는 컬럼을 조회 — 검색 근거 자체는 정상).
-- `pgvector_load load --prune`이 바뀌지 않은 문서까지 지운다(C-60 — 고칠지 결정 대기).
-- 테스트의 알려진 실패: refactor.md C-54·C-58.
+**알려진 문제·미개발 항목** — [docs/PRD.md](docs/PRD.md) 표(축소 스키마 일부 반영 `mc-10`·`mc-11` · `load --prune` C-60 `pl-13` · 테스트 알려진 실패 `e2-11` 등).
 
 > 옛 문서와 코드 주석에는 리팩토링 중에 쓰던 용어가 남아 있다(시험=테스트, 반입=배포, 칸=항목·컬럼, 판=버전, 지문=핑거프린트, 열쇠=키, 층=레이어, 묶음=번들, 대장=레지스트리, 인계=핸드오프, 덧씌우기=오버레이 패치, 게시=퍼블리시, 지시서=프롬프트). 대응표는 CLAUDE.md 끝에 있다.
