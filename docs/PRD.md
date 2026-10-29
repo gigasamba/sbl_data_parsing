@@ -19,6 +19,7 @@ Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · p
 | pl-19 | compose `index_a`/`index_b` fail (C-32) | todo | [→](prd/pipeline.md#pl-19) |
 | pl-20 | Stack snapshot file review (C-50) | todo | [→](prd/pipeline.md#pl-20) |
 | pl-21 | Deferred settings removal (fingerprint) | todo | [→](prd/pipeline.md#pl-21) |
+| pl-22 | Remove parse phases · engines per doc in parallel · OCR engine off | dev | [→](prd/pipeline.md#pl-22) |
 | e2-10 | Minimize PC eval tools (old set names) and settings | todo | [→](prd/e2e.md#e2-10) |
 | e2-11 | PC general test known failures | todo | [→](prd/e2e.md#e2-11) |
 | e2-12 | EDW answer citation check (C-56) | todo | [→](prd/e2e.md#e2-12) |

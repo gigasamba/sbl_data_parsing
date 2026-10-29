@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""phase 결과 리포트 → output/parse/PHASE_REPORT.md (phase가 끝날 때마다 modules/parse/run_all.py --phase N이 자동 갱신)
+"""phase 결과 리포트 → output/parse/PHASE_REPORT.md — 10-29 phase 없앰: run_all이 더는 부르지 않고 옛 phase 기록(runs.jsonl의 phase 칸)
+요약용으로만 남음(새 기록은 phase '-'). 오류 분류(kind·FIX)는 실행판(run_board)이 씀.
 
   A. phase별 결과(시도·성공·다음 phase로 넘김·실패·환경)          B. 다음 phase 대기 목록(문서 × 엔진 · 쪽 · 제한 · 걸린 시간)
   C. 연결되지 않는 엔진 이슈(원인 분류 · 오류 · 조치 · 영향 문서)    D. 기준점과 사람 검토 목록 — 정답이 없는 실데이터용:
@@ -96,7 +97,7 @@ def write_phase_report(src, out, engines="", phase=0, truth=None, text_only=Fals
             f"| {p} | {c['ok'] + c['timeout'] + c['fail'] + c['env']} | {c['ok']} | {c['timeout']} | {c['fail']} | {c['env']} | {c['sec'] / 60:.1f}분 |"
         )
     if not by:
-        md.append("| — | phase 실행 기록 없음(`run_all.py --phase 1`) | | | | | |")
+        md.append("| — | 실행 기록 없음(`python -m pipeline.extract.run_all`) | | | | | |")
     # B. 다음 phase 대기
     wait = [r for r in last.values() if r["doc"] in names and status(r) == "timeout" and (r.get("phase") or 3) < 3]
     md += ["", f"## B. 다음 phase 대기 {len(wait)}건", ""]
@@ -106,17 +107,11 @@ def write_phase_report(src, out, engines="", phase=0, truth=None, text_only=Fals
             f"| {r['doc']} | {r['engine']} | {r.get('phase')} | {r.get('limit', r.get('timeout'))} | {r['sec']} |"
             for r in sorted(wait, key=lambda r: (r["engine"], r["doc"]))[:200]
         ]
-    nxt = min((r.get("phase") or 3) + 1 for r in wait) if wait else None
     md += [
         "",
-        (
-            "다음 할 일: phase 3는 기본 배치에서 뺌 — 시간 날 때 `python cli/pipeline.py parse --phases 3`(모듈) 또는 `night --phases 3`(대상 목록 PHASE2_FAILED.md)"
-            if nxt == 3
-            else f"다음 할 일: `python modules/parse/run_all.py --src {src.as_posix()} --phase {nxt} --procs 2`"
-        )
-        if nxt
-        else "다음 할 일: 대기 없음"
-        + (" — phase 3(VLM)까지 끝났으면 2단계/보고서로" if phase >= 3 else f" — `--phase {phase + 1 if phase else 1}`로 이어서"),
+        "다음 할 일: 옛 phase 시간 초과 — 다음 run_all 실행이 쪽당 제한(text_page_sec·vlm_page_sec)으로 다시 시도"
+        if wait
+        else "다음 할 일: 대기 없음",
     ]
     # C. 연결 안 되는 엔진
     env = defaultdict(list)

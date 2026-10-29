@@ -52,7 +52,7 @@ docker run --rm data-pipeline:<태그> smoke --src <실문서 몇 건 폴더>   
 
 순서대로, **앞 모듈이 끝 표시를 남겨야 다음이 시작**(없으면 종료 코드 3). 한 결과 폴더(`RAG_OUT`)를 모듈이 파일로 주고받는다 — 서로 직접 부르지 않는다.
 ```bash
-bash deploy/host/scripts/trigger.sh parse       # dedup→prepare→phase→채점→대표 결과(_rep). 임베딩·DB 없음
+bash deploy/host/scripts/trigger.sh parse       # dedup→prepare→파싱→채점→대표 결과(_rep). 임베딩·DB 없음
 bash deploy/host/scripts/trigger.sh structure   # 대표 결과→청킹·사실·임베딩 묶음
 bash deploy/host/scripts/trigger.sh load        # 묶음→PostgreSQL(pgvector). PG 없으면 종료 코드 4
 bash deploy/host/scripts/trigger.sh publish     # 대표 결과(.md) Object Storage 업로드 + EDW 메타 — 스케줄 없음, 트리거만
@@ -61,6 +61,7 @@ bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서(NIGHTLY_M
 ```
 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock`으로 뒤쪽이 즉시 종료 코드 75(실행 중) — 재시도는 다음 트리거에서.
 `night`는 각 단계의 75(마감·잠금)를 실패로 안 치고 다음 단계로 넘어간다. `NIGHTLY_PUBLISH=0`(기본)이면 publish는 건너뜀.
+우선순위 낮추기(`pipeline.extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 **같은 세션·autogroup 안에서만** 효과가 있다: Linux가 `sched_autogroup_enabled=1`이면 CPU를 세션(autogroup)끼리 먼저 나눠 다른 컨테이너·세션의 parse MCP 서비스와는 nice로 겨루지 않고, 컨테이너끼리는 cgroup CPU 가중치(`cpu.weight`)가 정한다 — 확인: `cat /proc/sys/kernel/sched_autogroup_enabled`, 일괄 파싱과 `parse_document`를 동시에 걸어 응답 시간 비교(refactor.md C-65 ⑥).
 
 특정 도구만 따로 돌릴 때(`score_gold`·`run_board`·`rdb_discover`·`check_env`는 data-pipeline 이미지, `mcp_eval`은 mcp-server 이미지):
 ```bash
