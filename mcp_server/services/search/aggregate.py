@@ -1,8 +1,9 @@
 """건수·합계·표 집계(검색 모듈) 질문 → 검색 대신 집계(SQL 데이터 + 규칙) — 근거 문서가 많아 상위 k 검색으로 다 못 가져오는 질문용. LLM 없음.
 
-대상 데이터(bundle이 만듦 — 로컬 docs.jsonl·facts.jsonl / pgvector ai.doc·ai.doc_fact 같은 내용):
+대상 데이터(bundle이 만듦 — 로컬 docs.jsonl·facts.jsonl만. pgvector 집계 pg()는 10-30에 지움 — doc_fact를 적재하지 않음,
+숫자 질문은 query_edw로 — docs/prd/mcp.md#mc-12):
   문서 메타   client · contract_no · contract{product_code, modality, signed_on, unit_price, amount, currency, batches}
-  표 사실     doc_fact(수량·용량 열 값)
+  표 사실     facts.jsonl(수량·용량 열 값)
   계약 기록   = 같은 계약 번호의 문서들을 합친 것(라벨로 뽑은 값·교차 확인 메타 우선)
 
 질문 판별(규칙):
@@ -22,13 +23,13 @@ struct_context(question, hits)(L3-6, W18)는 같은 저장소에서 (a) 검색�
 (c) 집계(합계·건수·최댓값 등) 질문이면 계약 마스터 전체(상한 STRUCT_CONTEXT_MAX)를 표로 돌려줌 — LLM이 답을 계산하게 근거만 준다(SQL 계산 안 함).
 (10-13 답변 경로 통일 2단계 — struct()·struct_context()·기존 집계를 한 목록으로 묶어 답변 프롬프트에 넘기던 answer_aggs()는
 archive됨(그 호출부였던 cli/pipeline.py ask --llm·evaluation/stack_matrix.py _answer_eval LLM 분기가 archive — 답변은
-서빙되는 Answer Agent rag_qa만, 중복 경로 제거). struct()·struct_context()·local()·pg()는 그대로(검색 MCP aggregate 도구가 씀).
+서빙되는 Answer Agent rag_qa만, 중복 경로 제거). struct()·struct_context()·local()은 그대로(검색 MCP aggregate 도구가 씀).
 
 route(question, docs, facts_of, aliases, llm_complete)(R1, AD42·AD45②) — detect() 정규식이 못 걸렸을 때만, env
 SEARCH_AGG_LLM(기본 끔, =1로 켬 — AR3 10-12)이고 llm_complete(호출자가 common/llm.py 등으로 만들어 주입)가 있으면 LLM 1회 호출로
 집계/검색 분류 + 인자(고객·기간·지표·모양) 추출(llm_plan) — 결과는 detect()와 같은 모양의 plan dict이고 _apply()가
 기존 집계 틀을 그대로 돈다(새 SQL 없음). 거부(확신 미달·모르는 고객/계약/모달리티·형식 깨짐·LLM 오류)는 전부 None →
-호출자가 검색으로 폴백. 결과 dict에 via="aggregate_llm"(mcp_server.py가 근거 표시에 씀). local()·pg()가 이 경유를 씀.
+호출자가 검색으로 폴백. 결과 dict에 via="aggregate_llm"(mcp_server.py가 근거 표시에 씀). local()이 이 경유를 씀.
 """
 
 import datetime as dt
@@ -581,7 +582,7 @@ def _apply(p, docs, facts_of=None):
     else:
         names = {norm(c) for c in ([tgt["client"]] if tgt.get("client") else tgt.get("clients", []))}
         recs = [r for r in recs if norm(r.get("client")) in names]
-    if p["kind"] == "sum":  # 표 수량 합계(doc_fact)
+    if p["kind"] == "sum":  # 표 수량 합계(facts.jsonl)
         fs = [(r, f) for r in recs for f in (facts_of(r["docs"][0]) if facts_of else [])]
         total = sum(f["num"] for _, f in fs if f.get("num") is not None)
         unit = next((f["unit"] for _, f in fs if f.get("unit")), "")
@@ -1014,7 +1015,7 @@ def struct_context(question, hits, client=None, client_strict=False):
       (b) 질문에 적힌 계약ID(그대로 포함) · 고객 별칭(client_master.aliases + common 명부)이 가리키는 계약
       (c) 합계·건수·최댓값 등 '계약' 집계 질문이면 계약 마스터 전체(상한 STRUCT_CONTEXT_MAX) — SQL 계산은 안 하고 LLM이 표에서 계산
     contract_id 기준으로 중복 제거(먼저 나온 근거를 유지: 연결 > 질문 언급 > 전체).
-    client·client_strict(BR52, pg()·local()과 같은 규칙) — 주어지면 계약 마스터를 company로 먼저 거른다(clientscope.allows,
+    client·client_strict(BR52, local()과 같은 규칙) — 주어지면 계약 마스터를 company로 먼저 거른다(clientscope.allows,
     research.py do_search와 같은 q 기준 scope를 그대로 넘겨받음) — (a)(b)(c) 전부 이 뒤에서 돈다(연결된 계약이 범위 밖이면
     '연결 없음'으로, (b)(c)의 다른 고객 계약은 후보에서 빠짐). None(기본, 안 주는 기존 호출부 전부)이면 전과 바이트 동일."""
     if not (C.given("STRUCT_BACKEND") or C.given("STRUCT_DB")):  # S7d — 준 값만(옛 있고 없음 판정)
@@ -1041,7 +1042,7 @@ def struct_context(question, hits, client=None, client_strict=False):
             return None  # 아직 적재 전(load 안 함) — 집계 경로처럼 조용히 패스
         if not contracts:
             return None
-        if client:  # BR52 — pg()·local()과 같은 필터(company 기준), 범위 밖이면 뒤의 (a)(b)(c) 전부 그 뒤 데이터로만
+        if client:  # BR52 — local()과 같은 필터(company 기준), 범위 밖이면 뒤의 (a)(b)(c) 전부 그 뒤 데이터로만
             contracts = [c for c in contracts if CS.allows(c.get("company"), client, client_strict)]
             if not contracts:
                 return None
@@ -1102,21 +1103,3 @@ def struct_context(question, hits, client=None, client_strict=False):
         }
     finally:
         db.close()
-
-
-def pg(db, question, llm_complete=None, hidden=None, client=None, client_strict=False):
-    """pgvector 저장소(ai.doc · ai.doc_fact)로 집계 — 같은 규칙. llm_complete: local()과 같음(R1).
-    hidden(OP1, 독립 검토 BLOCK 반영): local()과 같음 — file_sha256도 같이 읽어 route() 전에 뺀다.
-    client·client_strict(BR50 D): local()과 같음 — None(기본)이면 전과 바이트 동일."""
-    s = db.schema
-    docs = db.q(f"SELECT doc_id, file_path, file_sha256, client, clients, contract_no, meta_confirmed, contract FROM {s}.doc")
-    if hidden:
-        docs = [d for d in docs if d.get("file_sha256") not in hidden]
-    if client:
-        docs = [d for d in docs if CS.allows(CS.doc_clients(d.get("client"), d.get("clients")), client, client_strict)]
-    facts = db.q(f"""SELECT f.doc_id, f.num, f.unit, c.page, c.line_start AS line FROM {s}.doc_fact f
-                     LEFT JOIN {s}.chunk c ON c.chunk_id = f.chunk_id ORDER BY f.fact_id""")
-    by_doc = {}
-    for f in facts:
-        by_doc.setdefault(f["doc_id"], []).append(f)
-    return route(question, docs, lambda d: by_doc.get(d["doc_id"], []), llm_complete=llm_complete)

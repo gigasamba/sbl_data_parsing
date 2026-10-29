@@ -132,7 +132,9 @@ def _ask_cosine(a):
     hits, ms = R.search(a.q, k)
     from mcp_server.services.search import aggregate as AG
 
-    agg_of = lambda q: AG.struct(q) or (AG.pg(R.pg, q) if R.pg else AG.local(a.bundle, q))  # 정형 저장소 질문 먼저(X1, MCP와 같은 규칙)
+    agg_of = lambda q: (
+        AG.struct(q) or (None if R.pg else AG.local(a.bundle, q))
+    )  # 정형 저장소 질문 먼저(X1, MCP와 같은 규칙) · PG는 문서 집계 없음(mc-12)
     agg = agg_of(a.q)  # 건수·합계 질문이면 SQL 집계(검색 결과는 함께 보여 줌)
     subs, sub_aggs = [], []  # 질문 분해는 10-29에 지움(응답 칸은 유지)
     res = {
@@ -194,10 +196,10 @@ def test_stack(a):
         gold = S.normalize_value(str(q.get("answer", "")))
         ev = {(Path(e.get("file", "")).name, e.get("page")) for e in q.get("gold_evidence") or []}
         agg_ok = None
-        if q.get("category") in ("count", "sum"):
+        if q.get("category") in ("count", "sum") and not R.pg:  # PG는 문서 집계 없음(mc-12) — 집계 정답 칸에서 뺌(—)
             from mcp_server.services.search import aggregate as AG
 
-            ag = AG.pg(R.pg, q["question"]) if R.pg else AG.local(a.bundle, q["question"])
+            ag = AG.local(a.bundle, q["question"])
             try:
                 g = float(q.get("answer"))
                 agg_ok = bool(ag) and abs(float(ag["answer"]) - g) <= max(1e-9, abs(g) * (q.get("tolerance") or 0))

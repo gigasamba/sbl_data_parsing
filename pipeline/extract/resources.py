@@ -11,6 +11,7 @@ OS별 분기(POSIX·Windows)는 이 파일에만 둔다(CLAUDE.md §2)."""
 import os
 import subprocess
 
+from common.core import exitclean
 from common.core import resources as RS
 
 LOW_NICE = 10  # POSIX nice 증가분 — 일괄 파싱 엔진 자식(parse MCP 서비스의 자식은 0)
@@ -57,25 +58,8 @@ def group_kw():
 
 
 def kill_group(p):
-    """group_kw로 띄운 자식과 그 아래 프로세스 전부를 끝내고 기다림(시간 초과 처리)."""
-    if os.name == "nt":
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], capture_output=True)
-    else:
-        import signal
-
-        # SIGTERM 뒤 10초 기다린 다음 묶음째 SIGKILL — 맨 위 자식이 먼저 끝나도 SIGTERM을 무시한 손자가 파이프를 붙잡지 않도록 항상 보냄
-        try:
-            os.killpg(p.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        try:
-            p.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            pass
-        try:
-            os.killpg(p.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+    """group_kw로 띄운 자식과 그 아래 프로세스 전부를 끝내고 기다림(시간 초과 처리) — 끝내기·회수는 common.core.exitclean.stop 한 곳(pl-27)."""
+    exitclean.stop(p, group=True)
     p.communicate()
 
 
