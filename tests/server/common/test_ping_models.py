@@ -10,15 +10,15 @@ def selftest():
     assert payload("VLM", "v")[1]["messages"][0]["content"][1]["type"] == "image_url"
     assert payload("LLM", "l")[1]["max_tokens"] == 1
     # S7b — ping()은 설정 객체만 읽어 가짜 접두 ZZ_는 칸이 없다 → 같은 경로(어댑터 밖 — EMBED와 같은 /…로 보내는 쪽)를 타는
-    # 진짜 접두 RERANK(adk 역할 없음)로 같은 것을 시험: 미설정이면 None · 외부 주소는 보내기 전에 거부. os.environ은 안 바꿈(COMMON.env)
+    # 진짜 접두 EMBED(같은 경로 — 재순위 RERANK는 10-29에 지움)로 같은 것을 시험: 미설정이면 None · 외부 주소는 보내기 전에 거부. os.environ은 안 바꿈(COMMON.env)
     from common.config.settings import COMMON
 
-    with COMMON.env(RERANK_BASE_URL=None, RERANK_MODEL=None, RERANK_ALLOW_EXTERNAL=None):
-        assert ping("RERANK") is None
+    with COMMON.env(EMBED_BASE_URL=None, EMBED_MODEL=None, EMBED_ALLOW_EXTERNAL=None):
+        assert ping("EMBED") is None
     with COMMON.env(
-        RERANK_BASE_URL="https://api.example.com/v1", RERANK_MODEL="x", RERANK_ALLOW_EXTERNAL=None
+        EMBED_BASE_URL="https://api.example.com/v1", EMBED_MODEL="x", EMBED_ALLOW_EXTERNAL=None
     ):  # 외부 주소는 보내기 전에 거부
-        ok, _, _, why = ping("RERANK")
+        ok, _, _, why = ping("EMBED")
         assert not ok and "RuntimeError" in why, why
 
     # 보안 독립 검토(2026-10-06) — LLM도 ping()이 A.complete(preguarded 기본값 False)를 거쳐 외부 주소면 전송 전에 거부.

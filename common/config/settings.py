@@ -32,7 +32,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Annotated, Literal, get_args, get_origin
+from typing import Annotated, ClassVar, Literal, get_args, get_origin
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PrivateAttr, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -338,6 +338,7 @@ class Section(BaseModel):
     """설정 절 공통 — 모르는 칸은 거부(오타 잡기), 비운 칸은 기본값, YAML 스칼라는 칸 종류에 맞게(위 모듈 설명)."""
 
     model_config = ConfigDict(extra="forbid", validate_default=False)
+    REMOVED: ClassVar[frozenset[str]] = frozenset()  # 지운 칸 — 옛 설정 파일에 남아 있어도 경고만 하고 무시(한 판 동안 — 시작 거부 막기)
 
     @model_validator(mode="before")
     @classmethod
@@ -347,6 +348,9 @@ class Section(BaseModel):
         out = {}
         for k, v in data.items():
             if v is None:
+                continue
+            if k in cls.REMOVED:
+                sys.stderr.write(f"[settings] 지운 칸 무시: {k} — 설정 파일에서 지울 것(값은 출력 안 함)\n")
                 continue
             f = cls.model_fields.get(k)
             if f is None or _section_type(f.annotation) is not None:
@@ -944,7 +948,7 @@ SHELL_EXPORTS = ("SERVER_ENV_DIR",)
 
 
 def external_models_allowed(run_env):
-    """RUN_ENV 기준 외부 모델 허용 — 정확히 local일 때만 지금 가드(두 겹 잠금·NO_PAID_CALLS·상한)대로. 없음(env·설정 파일 모두 —
+    """RUN_ENV 기준 외부 모델 허용 — 정확히 local일 때만 지금 가드(외부 허용 스위치·NO_PAID_CALLS·상한)대로. 없음(env·설정 파일 모두 —
     이미지 selftest·관문 면제 점검 명령·관문 없는 스크립트)·dev·stage·prd·모르는 글자(prod·PRD·' local' 등)는 서버로 보고 거부
     (VS7b U-1 — 코디네이터 답 b, 안전한 쪽). guard.py가 guard_run_env()(모르는 글자 그대로)로 부른다(S7b·S7c1)."""
     return run_env == "local"
@@ -1253,12 +1257,6 @@ class CommonConnectionsObjectStorage(Section):
     verify_tls: str | None = F("1", "OS_VERIFY_TLS", "TLS 인증서 검증(1=검증, 0=끔, 그 밖 문자열=CA 파일 경로)", blank="keep")
 
 
-class CommonConnectionsOpenviking(Section):
-    features: CsvList | None = F([], "OV_FEATURES", "OpenViking 연동 기능 목록(summary·search·parse, 콤마) — 비면 전부 꺼짐")
-    host: str | None = F("127.0.0.1", "OV_HOST", "OV_URL이 없고 docker 탐지 불가일 때 포트(1933) 탐지할 호스트")
-    url: str | None = F(None, "OV_URL", "OpenViking 서버 주소 — 비면 Docker·포트(1933) 자동 탐지")
-
-
 class CommonConnectionsParsingMeta(Section):
     connect_kwargs: SecretStr | None = F(None, "PM_DB_CONNECT_KWARGS", "parsing-meta EDW pymssql 연결에 더할 추가 인자(JSON 객체)")
     database: str | None = F(None, "PM_DB_DATABASE", "parsing-meta EDW 연결 DB 이름")
@@ -1320,9 +1318,7 @@ class CommonDevDocker(Section):
 
 
 class CommonModelsEmbed(Section):
-    allow_external: bool | None = F(
-        False, "EMBED_ALLOW_EXTERNAL", "임베딩 외부 주소 허용 첫째 잠금(=1이면 열림, LLM_SYNTHETIC_TRUTH도 있어야 실제 허용)", on=("1",)
-    )
+    allow_external: bool | None = F(False, "EMBED_ALLOW_EXTERNAL", "임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "EMBED_API_KEY", "임베딩 엔드포인트 API 키(있을 때만 Authorization 헤더로 보냄)")
     base_url: str | None = F(None, "EMBED_BASE_URL", "임베딩 엔드포인트 주소(OpenAI 호환 …/v1)")
     dim: int | None = F(4096, "EMBED_DIM", "ping_models 점검에서 기대하는 임베딩 차원 수")
@@ -1335,6 +1331,7 @@ class CommonModelsEmbed(Section):
 
 
 class CommonModelsGuard(Section):
+    REMOVED = frozenset({"synthetic_truth"})  # 사용자 10-29 — 합성 문서 선언 잠금 삭제(옛 migrate C-35가 옮겨 둔 서버 파일 보호)
     budget_usd: float | None = F(
         None,
         "LLM_BUDGET_USD",
@@ -1353,11 +1350,10 @@ class CommonModelsGuard(Section):
     max_calls: int | None = F(0, "LLM_MAX_CALLS", "LLM 호출 수 상한(개) — 0이면 무제한")
     no_paid_calls: bool | None = F(False, "NO_PAID_CALLS", "=1이면 외부(유료) 주소 호출 자체를 거부", on=("1",))
     spend_file: str | None = F(None, "LLM_SPEND_FILE", "지출 장부 파일 경로(호출마다 금액 한 줄 — 프로세스·실행 전체가 공유)")
-    synthetic_truth: str | None = F(None, "LLM_SYNTHETIC_TRUTH", "합성 시험 문서 선언 파일(_meta 포함 JSON) 경로 — 외부 허용의 둘째 잠금")
 
 
 class CommonModelsLlm(Section):
-    allow_external: bool | None = F(False, "LLM_ALLOW_EXTERNAL", "LLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요)", on=("1",))
+    allow_external: bool | None = F(False, "LLM_ALLOW_EXTERNAL", "LLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "LLM_API_KEY", "LLM 엔드포인트 API 키(있을 때만 사용)")
     base_url: str | None = F(None, "LLM_BASE_URL", "LLM 엔드포인트 주소(OpenAI 호환 …/v1)")
     cache_dir: str | None = F(None, "LLM_CACHE_DIR", "LLM 응답 캐시 폴더(요청 해시별 json)")
@@ -1380,23 +1376,11 @@ class CommonModelsLlm(Section):
 
 
 class CommonModelsOcrvlm(Section):
-    allow_external: bool | None = F(
-        False, "OCRVLM_ALLOW_EXTERNAL", "OCR 전용 VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요)", on=("1",)
-    )
+    allow_external: bool | None = F(False, "OCRVLM_ALLOW_EXTERNAL", "OCR 전용 VLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "OCRVLM_API_KEY", "OCR 전용 VLM 엔드포인트 API 키(있을 때만)")
     base_url: str | None = F(None, "OCRVLM_BASE_URL", "OCR 전용 VLM 엔드포인트 주소(OpenAI 호환 …/v1)")
     est_usd: float | None = F(0.01, "OCRVLM_EST_USD", "OCR 전용 VLM 호출 1건당 예상 비용($) — 예산 선차감용")
     model: str | None = F(None, "OCRVLM_MODEL", "OCR 전용 VLM 모델 이름(0.9B급 GLM-OCR·PaddleOCR-VL 등)", pinned="engine")
-
-
-class CommonModelsRerank(Section):
-    allow_external: bool | None = F(
-        False, "RERANK_ALLOW_EXTERNAL", "재순위 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요)", on=("1",)
-    )
-    api_key: SecretStr | None = F(None, "RERANK_API_KEY", "재순위(rerank) 엔드포인트 API 키(있을 때만)")
-    base_url: str | None = F(None, "RERANK_BASE_URL", "재순위 엔드포인트 주소(TEI/Cohere 호환 /rerank)")
-    est_usd: float | None = F(0.001, "RERANK_EST_USD", "재순위 호출 1건당 예상 비용($) — 예산 선차감용")
-    model: str | None = F(None, "RERANK_MODEL", "재순위 모델 이름")
 
 
 class CommonModelsTransport(Section):
@@ -1408,7 +1392,7 @@ class CommonModelsTransport(Section):
 
 
 class CommonModelsVlm(Section):
-    allow_external: bool | None = F(False, "VLM_ALLOW_EXTERNAL", "VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요)", on=("1",))
+    allow_external: bool | None = F(False, "VLM_ALLOW_EXTERNAL", "VLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "VLM_API_KEY", "VLM 엔드포인트 API 키(있을 때만)", pinned="engine")
     base_url: str | None = F(None, "VLM_BASE_URL", "VLM 엔드포인트 주소(OpenAI 호환 …/v1)", pinned="engine")
     concurrency: int | None = F(4, "VLM_CONCURRENCY", "한 문서의 쪽(그림) VLM 동시 요청 수(개)", pinned="engine")
@@ -1613,19 +1597,19 @@ class CommonText(Section):
 
 
 class CommonConnections(Section):
+    REMOVED = frozenset({"openviking"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     edw: CommonConnectionsEdw = Field(default_factory=CommonConnectionsEdw)
     object_storage: CommonConnectionsObjectStorage = Field(default_factory=CommonConnectionsObjectStorage)
-    openviking: CommonConnectionsOpenviking = Field(default_factory=CommonConnectionsOpenviking)
     parsing_meta: CommonConnectionsParsingMeta = Field(default_factory=CommonConnectionsParsingMeta)
     pg: CommonConnectionsPg = Field(default_factory=CommonConnectionsPg)
 
 
 class CommonModels(Section):
+    REMOVED = frozenset({"rerank"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     embed: CommonModelsEmbed = Field(default_factory=CommonModelsEmbed)
     guard: CommonModelsGuard = Field(default_factory=CommonModelsGuard)
     llm: CommonModelsLlm = Field(default_factory=CommonModelsLlm)
     ocrvlm: CommonModelsOcrvlm = Field(default_factory=CommonModelsOcrvlm)
-    rerank: CommonModelsRerank = Field(default_factory=CommonModelsRerank)
     transport: CommonModelsTransport = Field(default_factory=CommonModelsTransport)
     vlm: CommonModelsVlm = Field(default_factory=CommonModelsVlm)
 

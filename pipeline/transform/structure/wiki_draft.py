@@ -2,8 +2,8 @@
 """용어 사전 LLM 초안(X4 ④) — 후보 용어(미등록 약어 등)를 LLM에 물어 사전 행(domain_terms.csv와 같은 열)을 **status=draft로만** 제안한다.
 자동 승인 없음 — 실사전(dev/glossary/domain_terms.csv)은 절대 건드리지 않고, 사람이 검토할 별도 CSV(--out)에만 쓴다.
 
-외부 LLM 가드: common/llm.py chat()의 두 겹 잠금(내부망 주소 또는 allow_external=True + 합성 정답 파일)을 그대로 쓴다 —
-실명 고객·거래 용어는 사내 데이터이므로 서버(내부망 LLM)에서만, 개발 PC 실험은 --allow-external(합성 정답 파일 필요).
+외부 LLM 가드: common/llm.py chat()의 가드(내부망 주소 또는 allow_external=True + RUN_ENV=local)를 그대로 쓴다 —
+실명 고객·거래 용어는 사내 데이터이므로 서버(내부망 LLM)에서만, 개발 PC 실험은 --allow-external(RUN_ENV=local).
 사용: python cli/wiki_draft.py --terms "PPQ,MTOP" [--out output/wiki/draft_terms.csv] [--allow-external] [--selftest]
 """
 
@@ -101,9 +101,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--terms", required=True, help="쉼표로 구분한 후보 용어(미등록 약어 등)")
     ap.add_argument("--out", default=str(ROOT / "output" / "wiki" / "draft_terms.csv"))
-    ap.add_argument(
-        "--allow-external", action="store_true", help="개발 PC 가상 데이터 실험에서만(두 겹 잠금 — 합성 정답 파일 필요, common/llm.py)"
-    )
+    ap.add_argument("--allow-external", action="store_true", help="개발 PC 가상 데이터 실험에서만(RUN_ENV=local 필요, common/llm.py)")
     a = ap.parse_args(argv)
     from common.ai import llm as L
 

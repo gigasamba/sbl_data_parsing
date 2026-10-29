@@ -1,17 +1,14 @@
 """모델 엔드포인트 내부망 확인 — 회사 문서를 외부 모델에 보내지 않음(DONT 13). 파싱(VLM)·구조화(임베딩)·검색(임베딩·LLM) 공통.
 
-외부 허용 = 두 겹(보안 검토 10-02 — VLM·임베딩이 한 겹이라 개발 PC env가 운영 서버로 복사되면 문서 이미지·본문이 바로 나갔음):
-  ① <PREFIX>_ALLOW_EXTERNAL=1  ② 가상 코퍼스 정답 파일(LLM_SYNTHETIC_TRUTH 또는 SYNTHETIC_TRUTH — make_corpus의 "_meta")
-실데이터 서버에는 ②가 없으므로 ①만 잘못 켜져도 거부된다. 리다이렉트로 외부로 가는 것도 막는다(urlopen)."""
+외부 허용 = <PREFIX>_ALLOW_EXTERNAL=1 이고 RUN_ENV가 정확히 local일 때만(서버 dev·stage·prd·없음은 거부).
+합성 문서 선언 파일(옛 LLM_SYNTHETIC_TRUTH) 잠금은 뺐다(사용자 10-29 — 실데이터 없음·사내 폐쇄망은 외부 경로 막힘). 리다이렉트로 외부로 가는 것도 막는다(urlopen)."""
 
 import http.client
 import ipaddress
-import json
 import os
 import socket
 import urllib.parse
 import urllib.request
-from pathlib import Path
 
 from common.config.settings import by_env, cfg, checked, external_models_allowed, guard_run_env
 
@@ -76,39 +73,32 @@ def is_internal(url):
 
 def run_env_block():
     """RUN_ENV가 정확히 local이 아니면(없음·dev·stage·prd·모르는 글자) 거부 이유 글자(서버는 내부망 전용 — D-028 ⑧, S7b ·
-    없음·모르는 글자도 서버로 — VS7b U-1 b), local이면 None(지금 가드대로). 두 겹 잠금이 다 열려 있어도 서버 환경이면 외부 모델을 못 쓴다."""
+    없음·모르는 글자도 서버로 — VS7b U-1 b), local이면 None(지금 가드대로). 외부 허용이 켜져 있어도 서버 환경이면 외부 모델을 못 쓴다."""
     run_env = guard_run_env()
     if external_models_allowed(run_env):
         return None
     return f"RUN_ENV={run_env} — 내부망 전용(외부 모델 거부)" if run_env else "RUN_ENV 없음 — local이 아니면 내부망 전용(외부 모델 거부)"
 
 
-def synthetic_ok():
-    """외부 허용 두 번째 잠금 — 가상 코퍼스 정답 파일(make_corpus의 "_meta")이 지정돼 있을 때만.
-    RUN_ENV가 dev·stage·prd면 파일이 있어도 닫힘(run_env_block, S7b). llm.chat·external_allowed가 이 한 곳을 거침."""
-    if run_env_block():
-        return False
-    p = cfg().models.guard.synthetic_truth  # S7e2 — 옛 별칭 SYNTHETIC_TRUTH는 읽지 않음(C-35, 사용자 10-28 — migrate가 새 칸으로 옮김)
-    try:
-        return bool(p) and "_meta" in json.loads(Path(p).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return False
+def external_ok(allow):
+    """외부 모델 허용 규칙 한 곳 — 허용 스위치가 켜지고 RUN_ENV=local일 때만(합성 문서 선언 잠금은 사용자 10-29에 삭제).
+    external_allowed(설정 칸)·llm.chat(allow_external 인자)이 이 한 곳을 거친다."""
+    return bool(allow) and not run_env_block()
 
 
 def external_allowed(prefix):
     # S7b — {prefix}_ALLOW_EXTERNAL은 객체 칸(켜기 =1) · 칸 없는 접두(시험의 가짜 접두)는 False
-    return bool(by_env(f"{prefix}_ALLOW_EXTERNAL", False)) and synthetic_ok()
+    return external_ok(by_env(f"{prefix}_ALLOW_EXTERNAL", False))
 
 
 def require_internal(url, prefix):
-    """모델 엔드포인트(VLM·OCRVLM·EMBED) 외부 전송 가드 — 내부망만(DONT 13). 합성 데이터 실험이면 <prefix>_ALLOW_EXTERNAL=1 + 합성 정답 파일."""
+    """모델 엔드포인트(VLM·OCRVLM·EMBED) 외부 전송 가드 — 내부망만(DONT 13). 개발 PC 실험이면 <prefix>_ALLOW_EXTERNAL=1(RUN_ENV=local)."""
     if url and not is_internal(url) and not external_allowed(prefix):
         host = urllib.parse.urlparse(url).hostname or url
         why = run_env_block()
         raise RuntimeError(
             f"{prefix}_BASE_URL이 외부 주소({host}) — 회사 문서는 내부망 모델만(DONT 13). "
-            f"합성 데이터 실험이면 {prefix}_ALLOW_EXTERNAL=1 + LLM_SYNTHETIC_TRUTH(가상 코퍼스 정답 파일) 둘 다"
-            + (f" ({why})" if why else "")
+            f"개발 PC 실험이면 {prefix}_ALLOW_EXTERNAL=1(RUN_ENV=local)" + (f" ({why})" if why else "")
         )
 
 
@@ -221,7 +211,7 @@ def spend_settle(delta):
 
 
 # llm.chat 밖에서 바로 부르는 유료 호출(VLM 그림·쪽, 임베딩, 재랭크)의 호출당 예상 비용($) — 예산 선차감용(보수적 고정값, env로 덮어씀)
-_EST_USD = {"VLM": 0.02, "EMBED": 0.001, "RERANK": 0.001}
+_EST_USD = {"VLM": 0.02, "EMBED": 0.001}
 
 
 class ScopeExceeded(RuntimeError):

@@ -22,7 +22,6 @@ from common.config.settings import (
     CsvText,
     EnvView,
     F,
-    JsonValue,
     Port,
     Section,
     WordList,
@@ -61,24 +60,9 @@ class PipelineTransformRepresentReread(Section):
 
 
 class PipelineConnectionsGraphiti(Section):
+    REMOVED = frozenset({"neo4j_uri"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     neo4j_password: SecretStr | None = F(None, "GRAPHITI_NEO4J_PASSWORD", "Graphiti용 Neo4j 접속 비밀번호")
-    neo4j_uri: str | None = F(
-        "bolt://localhost:7687", "GRAPHITI_NEO4J_URI", "외부 지식그래프 평가용 Graphiti의 Neo4j 접속 주소", blank="keep"
-    )
     neo4j_user: str | None = F("neo4j", "GRAPHITI_NEO4J_USER", "Graphiti용 Neo4j 접속 사용자 이름", blank="keep")
-
-
-class PipelineConnectionsOpenviking(Section):
-    account: str | None = F("default", "OV_ACCOUNT", "OpenViking 요청 헤더 X-OpenViking-Account 값(계정)", blank="keep")
-    api_key: SecretStr | None = F(None, "OV_API_KEY", "OpenViking 접속 API 키(있으면 X-API-Key 헤더로 보냄)")
-    args_json: JsonValue | None = F(
-        None, "OV_ARGS_JSON", "OpenViking add_resource 'args'로 그대로 넘길 서버 전용 추가 옵션(JSON 객체 문자열)"
-    )
-    doc_root: str | None = F(None, "OV_DOC_ROOT", "OpenViking 요약(L0 abstract·L1 overview)을 읽을 로컬 문서 폴더")
-    ingest_timeout: float | None = F(1800.0, "OV_INGEST_TIMEOUT", "OpenViking 문서 1건 적재 완료 대기 시간(초)")
-    processing_mode: str | None = F(None, "OV_PROCESSING_MODE", "OpenViking 적재 처리 방식(semantic_and_vectors | vectors_only)")
-    root: str | None = F(None, "OV_ROOT", "OpenViking 리소스 루트(viking://resources/<루트>) — 요약 받기·적재 대상")
-    user: str | None = F("default", "OV_USER", "OpenViking 요청 헤더 X-OpenViking-User 값(사용자)", blank="keep")
 
 
 class PipelineConnectionsRdb(Section):
@@ -255,22 +239,6 @@ class PipelineServiceTrigger(Section):
     upload_max_mb: int | None = F(50, "TRIGGER_UPLOAD_MAX_MB", "트리거 서버 /upload 본문 크기 상한(MB)")
 
 
-class PipelineTransformAgent(Section):
-    batch_sec: float | None = F(1800.0, "PARSE_AGENT_BATCH_SEC", "프로세스(배치) 하나의 판단 세션 시간 합 상한(초)")
-    enabled: str | None = F(None, "PARSE_AGENT", "파싱 판단 에이전트 모드 off|shadow|apply(on=apply, 0·false·none=off)")
-    fig: bool | None = F(True, "PARSE_AGENT_FIG", "판단 에이전트에 그림 VLM 값↔본문 갈림 조각을 포함(=0이면 제외)", off=("0",))
-    frags: int | None = F(3, "PARSE_AGENT_FRAGS", "문서당 판단 에이전트가 다루는 조각 수 상한")
-    margin: float | None = F(None, "PARSE_AGENT_MARGIN", "판단 에이전트가 '근소'로 보는 1·2위 점수차 문턱")
-    max_docs: int | None = F(50, "PARSE_AGENT_MAX_DOCS", "프로세스당 판단 세션을 열 문서 수 상한")
-    model: str | None = F("split", "PARSE_AGENT_MODEL", "판단 세션 모델 구성 split(LLM 판단+VLM 판독) | vlm(이미지 문서는 판단도 VLM)")
-    near: bool | None = F(
-        True, "PARSE_AGENT_NEAR", "판단 에이전트에 '근소' 조각(규칙이 신호로만 가른 자리)을 포함(=0이면 제외)", off=("0",)
-    )
-    session_sec: float | None = F(180.0, "PARSE_AGENT_SESSION_SEC", "판단 세션 1회의 시간 상한(초)")
-    tokens: int | None = F(24000, "PARSE_AGENT_TOKENS", "판단 세션 1회의 LLM 토큰(입력+출력) 상한")
-    vlm_max: int | None = F(3, "PARSE_AGENT_VLM_MAX", "판단 세션 도구 층의 문서당 VLM 호출 상한")
-
-
 class PipelineTransformFigures(Section):
     chart_values_det: bool | None = F(
         True, "CHART_VALUES_DET", "차트 값을 결정적(규칙) 추출로 보정(=0이면 VLM 눈대중 값만 사용)", off=("0",)
@@ -433,6 +401,7 @@ class PipelineTransformVlm(Section):
 
 
 class PipelineDev(Section):
+    REMOVED = frozenset({"parse_agent_fake"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     allow_common_mismatch: bool | None = F(
         False, "ALLOW_COMMON_MISMATCH", "앞 모듈 결과의 공통 코드 지문이 달라도 계속 진행할지(=1 계속 / 그 외 중단)", on=("1",)
     )
@@ -442,9 +411,6 @@ class PipelineDev(Section):
     parallel_test_crash: bool | None = F(
         False, "PARSE_PARALLEL_TEST_CRASH", "시험용 — =1이면 문서 병렬 파싱의 첫 문서에서 강제 종료(os._exit 17)", on=("1",)
     )
-    parse_agent_fake: bool | None = F(
-        False, "PARSE_AGENT_FAKE", "시험용 — =1이면 파싱 에이전트가 모델 대신 가짜 정책(fake_policy)으로 동작", on=("1",)
-    )
     stream_test_crash: bool | None = F(
         False, "PARSE_STREAM_TEST_CRASH", "시험용 — =1이면 스트리밍 파싱의 첫 묶음에서 강제 종료(os._exit 17)", on=("1",)
     )
@@ -453,6 +419,7 @@ class PipelineDev(Section):
 
 
 class PipelineEval(Section):
+    REMOVED = frozenset({"phase_report_legacy"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     diagram_raster_vlm: bool | None = F(
         False, "DIAGRAM_RASTER_VLM", "도식 간선 채점에서 raster 케이스에 실제 VLM을 부를지(=1 실호출 / 그 외 가짜)", on=("1",)
     )
@@ -465,9 +432,6 @@ class PipelineEval(Section):
         "정답 초안의 Mermaid 블록 2차 점검을 켤지(0/false/no면 끔)",
         off=("0", "false", "no"),
         fold="strip",
-    )
-    phase_report_legacy: bool | None = F(
-        False, "PHASE_REPORT_LEGACY", "옛 PHASE_REPORT.md·phase 보고서 자동 생성을 되살릴지(=1 생성 / 0 끔)", on=("1",)
     )
     qa_draft_max_pages: int | None = F(20, "QA_DRAFT_MAX_PAGES", "질문 초안 생성(qa_draft)에서 문서당 처리할 쪽 수 상한(쪽)")
     qa_draft_per_page: int | None = F(5, "QA_DRAFT_PER_PAGE", "질문 초안 생성에서 쪽당 질문 수 상한(개)")
@@ -565,6 +529,7 @@ class PipelineHost(Section):
 
 
 class PipelineLoad(Section):
+    REMOVED = frozenset({"structure_target"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     bm25_stat_rebuild: bool | None = F(False, "BM25_STAT_REBUILD", "적재 때 키워드 문서 빈도를 전체 다시 셈 — 1이면 켬", on=("1",))
     bm25_threads: int | None = F(4, "BM25_THREADS", "BM25 항목(term,tf) 계산 병렬 스레드 수(개)")
     edw_load: bool | None = F(False, "EDW_LOAD", "EDW 벡터 적재(deploy·load) 허용 — 1이어야 진행, 아니면 거부 종료", on=("1",))
@@ -575,7 +540,6 @@ class PipelineLoad(Section):
     )
     prune_force: bool | None = F(False, "PRUNE_FORCE", "옛 기록 정리 안전장치(묶음 문서 수 비율 미달 거부) 무시 — 1이면 진행", on=("1",))
     prune_min_ratio: float | None = F(0.5, "PRUNE_MIN_RATIO", "옛 기록 정리 허용 최소 비율(묶음 문서 수 / 저장 문서 수)")
-    structure_target: str | None = F("pg", "STRUCTURE_TARGET", "구조화 적재 대상: pg(기본, pgvector) | ov(OpenViking)")
     publish: PipelineLoadPublish = Field(default_factory=PipelineLoadPublish)
 
 
@@ -587,6 +551,9 @@ class PipelineNight(Section):
 
 
 class PipelinePaths(Section):
+    REMOVED = frozenset(
+        {"mineru_bin", "paddle_python", "soffice_candidates"}
+    )  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     file_meta_path: str | None = F(None, "FILE_META_PATH", "EDW 파일 메타 JSONL 경로(s3_key → 메타)")
     gold_dir: str | None = F(
         None,
@@ -594,10 +561,8 @@ class PipelinePaths(Section):
         "사람 정답(gold) 폴더 — score_gold·점검 도구의 기본 입력(코드가 읽는 경로 — 컨테이너 안은 run_tool.sh가 /data/gold로 줌, 원본은 pipeline.host.gold_dir — T-21)",
     )
     images_root: str | None = F(None, "PARSE_IMAGES_ROOT", "그림 PNG·index.jsonl 저장 루트")
-    index_conf: str | None = F(None, "INDEX_CONF", "색인 설정 JSON 경로(STRUCTURE_TARGET=pg일 때 색인 모듈로 구조화)")
-    mineru_bin: str | None = F("mineru", "MINERU_BIN", "MinerU 실행 파일 이름·경로", pinned="engine")
+    index_conf: str | None = F(None, "INDEX_CONF", "색인 설정 JSON 경로(있으면 색인 모듈로 구조화)")
     out_root: str | None = F(None, "PIPE_OUT_ROOT", "파이프라인 출력 루트(output)")
-    paddle_python: str | None = F(None, "PADDLE_PYTHON", "paddle 계열 엔진을 돌릴 별도 venv의 python 경로")
     parse_tmp: str | None = F(None, "PARSE_TMP", "스트리밍·병렬 파싱 임시 폴더 — output 아래 2단 이상 하위만 허용")
     raw_root: str | None = F(None, "PARSE_RAW_ROOT", "P0 원본 층(raw/VLM) 캐시 저장소 루트")
     report_digest_dir: str | None = F(None, "REPORT_DIGEST_DIR", "run_board 날짜·판 요약 폴더 루트(비우면 요약 안 만듦)")
@@ -606,15 +571,14 @@ class PipelinePaths(Section):
         "SOFFICE_BIN",
         "LibreOffice soffice 실행 파일 경로 — PATH·흔한 경로보다 먼저 봄(pipeline 이미지 안 기본 /usr/bin/soffice — 옛 Dockerfile ENV, B-2)",
     )
-    soffice_candidates: CsvList | None = F(None, "SOFFICE_CANDIDATES", "(읽는 곳 없음) soffice 후보 경로 목록")
     stack_snapshot: str | None = F(
         None, "STACK_SNAPSHOT", "엔진 구성 사본 파일(내부 신호 — 진입점이 활성 판에서 만들어 자식에 넘김, 사람이 쓰지 않음 · S8b)"
     )
 
 
 class PipelineConnections(Section):
+    REMOVED = frozenset({"openviking"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     graphiti: PipelineConnectionsGraphiti = Field(default_factory=PipelineConnectionsGraphiti)
-    openviking: PipelineConnectionsOpenviking = Field(default_factory=PipelineConnectionsOpenviking)
     rdb: PipelineConnectionsRdb = Field(default_factory=PipelineConnectionsRdb)
     secure_doc: PipelineConnectionsSecureDoc = Field(default_factory=PipelineConnectionsSecureDoc)
 
@@ -625,7 +589,7 @@ class PipelineService(Section):
 
 
 class PipelineTransform(Section):
-    agent: PipelineTransformAgent = Field(default_factory=PipelineTransformAgent)
+    REMOVED = frozenset({"agent"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     figures: PipelineTransformFigures = Field(default_factory=PipelineTransformFigures)
     represent: PipelineTransformRepresent = Field(default_factory=PipelineTransformRepresent)
     structure: PipelineTransformStructure = Field(default_factory=PipelineTransformStructure)

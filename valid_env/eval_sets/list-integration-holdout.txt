@@ -1,0 +1,4 @@
+# holdout 확인 세트(사용자 10-13, 범위는 10-21 VE2 keep list) — 튜닝에 쓰지 않는다(W13). 릴리스·이미지 판 전 통합 시험 뒤 한 번만. 3건.
+valid_env/object_storage/CRMS/f92c6ddb-2aae-5b43-ae62-30dbd022dbe6/ho_hidden_textbox.docx
+valid_env/object_storage/CRMS/80cad82c-deb0-53ab-853e-1687683d4836/ho_merged_cells_tbl.docx
+valid_env/object_storage/CRMS/6434280c-3427-5cac-8ce4-1f413ccce09b/ho_symbol_font_pua.docx

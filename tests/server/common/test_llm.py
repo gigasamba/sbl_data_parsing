@@ -1,6 +1,5 @@
 """common.ai.llm 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.ai.llm`."""
 
-import json
 from pathlib import Path
 
 from common.ai.guard import is_internal
@@ -12,9 +11,9 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
 
     assert is_internal("http://10.0.0.5:8000/v1") and is_internal("http://localhost:8765/v1") and is_internal("http://[::1]:8000/v1")
     assert not is_internal("https://generativelanguage.googleapis.com/v1beta/openai")
-    with COMMON.env(LLM_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai", LLM_MODEL="x", LLM_SYNTHETIC_TRUTH=None):
+    with COMMON.env(LLM_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai", LLM_MODEL="x"):
         try:
-            chat([{"role": "user", "content": "x"}], allow_external=True)  # 정답 파일 없음 → 호출 전에 거부
+            chat([{"role": "user", "content": "x"}])  # allow_external 없음 → 호출 전에 거부
             raise AssertionError("외부 가드 실패")
         except LLMUnavailable:
             pass
@@ -39,7 +38,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
 
     _adk.complete = _stub_truncated
     try:
-        with COMMON.env(LLM_BASE_URL="http://127.0.0.1:9/v1", LLM_MODEL="mock-reasoning", LLM_CACHE_DIR=_tmp1, LLM_SYNTHETIC_TRUTH=None):
+        with COMMON.env(LLM_BASE_URL="http://127.0.0.1:9/v1", LLM_MODEL="mock-reasoning", LLM_CACHE_DIR=_tmp1):
             before = dict(_stats)
             text = chat([{"role": "user", "content": "질문"}], max_tokens=500, agent="x")
             assert text == "실제 답", text
@@ -70,7 +69,6 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
             LLM_MODEL="mock-reasoning2",
             LLM_CACHE_DIR=_tmp2,
             LLM_EMPTY_RETRY="0",
-            LLM_SYNTHETIC_TRUTH=None,
         ):
             text = chat([{"role": "user", "content": "질문2"}], max_tokens=500, agent="x")
             assert text == "" and len(_hits) == 1, (text, _hits)  # LLM_EMPTY_RETRY=0 — 재요청 안 함
@@ -92,29 +90,26 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
         assert _k2 not in (_k0, _k1)
     print("[selftest] SEC-2 — LLM_EXTRA_BODY(생각 켬/끔)별 캐시 열쇠 분리 통과")
 
-    # D-028 ⑧(S7b) — RUN_ENV가 dev·stage·prd면 외부 주소는 두 겹 잠금(allow_external + 합성 정답 파일)이 다 열려도 거부, local은 지금처럼 허용
+    # D-028 ⑧(S7b) — RUN_ENV가 dev·stage·prd면 외부 주소는 allow_external이 열려도 거부, local은 지금처럼 허용
     _tmp3 = tempfile.mkdtemp()
-    _truth = Path(_tmp3) / "truth.json"
-    _truth.write_text(json.dumps({"_meta": {}}), encoding="utf-8")
     _adk.complete = lambda role, messages, **kw: ("외부 답", {"prompt_tokens": 1, "completion_tokens": 1})
     try:
         _ext = dict(
             LLM_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai",
             LLM_MODEL="x-ext",
             LLM_CACHE_DIR=str(Path(_tmp3) / "cache"),
-            LLM_SYNTHETIC_TRUTH=str(_truth),
             LLM_BUDGET_USD=None,
         )
-        for _env in ("dev", "stage", "prd"):
+        for _env in (None, "dev", "stage", "prd", "prod", "Local"):  # 없음·모르는 글자도 서버로 보고 거부(allow_external=True여도)
             with COMMON.env(RUN_ENV=_env, **_ext):
                 try:
                     chat([{"role": "user", "content": "q"}], allow_external=True, agent="x")
                     raise AssertionError(f"RUN_ENV={_env}인데 외부 LLM 허용됨")
                 except LLMUnavailable as _e:
-                    assert f"RUN_ENV={_env}" in str(_e), str(_e)
+                    assert ("RUN_ENV 없음" if _env is None else f"RUN_ENV={_env}") in str(_e), str(_e)
         with COMMON.env(RUN_ENV="local", **_ext):
             assert chat([{"role": "user", "content": "q"}], allow_external=True, agent="x") == "외부 답"
     finally:
         _adk.complete = _orig_complete
         shutil.rmtree(_tmp3, ignore_errors=True)
-    print("[selftest] RUN_ENV — dev·stage·prd는 두 겹 잠금이 열려도 외부 LLM 거부 · local은 허용 통과")
+    print("[selftest] RUN_ENV — dev·stage·prd는 외부 허용이 켜져도 외부 LLM 거부 · local은 허용 통과")

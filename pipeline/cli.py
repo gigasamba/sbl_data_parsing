@@ -26,6 +26,7 @@ import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from common.config import settings as C  # common 칸(S7c — 설정 객체 · cfg()·given()·render())
@@ -128,9 +129,9 @@ def _run_until(args, env, sec):
 
 
 def night(a):
-    """새벽 배치: 파싱(phase 1→2) → 대표 파싱 → publish(OS+EDW) → 구조화·임베딩 → PG 적재 → OV 적재.
-    --no-structure면 파싱+publish만. --no-publish로 OS+EDW publish 건너뜀. --no-ov로 OV 적재 건너뜀.
-    GPU 모델은 API로만(VLM_*·EMBED_*), LLM(LLM_*)은 부르지 않는다 — 요약은 OpenViking·발췌만. 마감(--deadline)을 넘으면 멈추고 다음 밤에 이어 감.
+    """새벽 배치: 파싱(phase 1→2) → 대표 파싱 → publish(OS+EDW) → 구조화·임베딩 → PG 적재.
+    --no-structure면 파싱+publish만. --no-publish로 OS+EDW publish 건너뜀.
+    GPU 모델은 API로만(VLM_*·EMBED_*), LLM(LLM_*)은 부르지 않는다 — 요약은 발췌만. 마감(--deadline)을 넘으면 멈추고 다음 밤에 이어 감.
     RV5(10-09): deploy/host/scripts/trigger.sh night(OP13 정본, compose 여러 컨테이너용)와는 배포 모양이 달라 따로 둠 — 이 함수는
     단일 컨테이너·Docker 밖 직접 실행(AGENTS.md 지시표·requirements.md S8 cron 예시)에서 쓰임, 호출처 있음(삭제 대상 아님)."""
     connect(a)
@@ -229,23 +230,6 @@ def night(a):
                 log.append(f"{' '.join(args)}: " + ("완료" if rc == 0 else f"멈춤({rc})"))
                 if rc != 0:
                     break
-        if not stopped and not getattr(a, "no_ov", False):
-            from common.store import services
-
-            if services.ov_enabled("ingest"):
-                left = _until(a.deadline)
-                rc = (
-                    _run_until(
-                        ["pipeline.load.openviking_load", "--rep-dir", str(OUT / "parse" / "_rep"), "--out", str(OUT / "ov_ingest")],
-                        env,
-                        left - 30,
-                    )
-                    if left > 30
-                    else None
-                )
-                log.append("ov_ingest: " + ("완료" if rc == 0 else "마감으로 중단" if rc is None else f"종료 코드 {rc}"))
-            else:
-                log.append("ov_ingest: 건너뜀 (OV_FEATURES에 ingest 없음)")
     md = [
         f"# 야간 배치 {time.strftime('%Y-%m-%d %H:%M')} — {(time.time() - t0) / 60:.0f}분",
         "",
@@ -808,38 +792,8 @@ def _structure_extra(embed):
     return {"embed": embed, "embed_url": C.cfg().models.embed.base_url or "", "code": P0.code_fp("s")}
 
 
-def _structure_target():
-    """10-14 요건 — 세 구조화 대상(OpenViking ×1 · pgvector ×2, AD41 index_id로 서로 다른 설정) 중 이 인스턴스가
-    맡을 것. 트리거 서버(cli/trigger_server.py, 다른 작업)가 상주 인스턴스별로 env만 다르게 주고 같은
-    `structure` 엔트리를 부른다 — 그 env를 여기서 한 번 읽는다.
-    STRUCTURE_TARGET(기본 pg) = "ov"(OpenViking — 스스로 chunking·tree·L0/L1, 이 쪽은 올리기만)
-                              | "pg"(기존 build_bundle.py·pgvector 적재 — INDEX_CONF 있으면 AD41 색인 설정으로, 없으면 기본 색인 그대로)."""
-    target = (pc.cfg().load.structure_target or "pg").strip().lower()
-    if target not in ("ov", "pg"):
-        raise SystemExit(f"[structure] STRUCTURE_TARGET 모름: {target!r}(pg|ov)")
-    return target
-
-
-def _structure_ov(a):
-    """STRUCTURE_TARGET=ov — OpenViking이 스스로 chunking·tree·L0/L1 요약을 만들게 대표 결과(_rep)만 올린다
-    (여기서는 build_bundle.py·pgvector를 안 거침). OV_FEATURES에 ingest가 없으면 pipeline.load.openviking_load가
-    조용히 건너뜀(기존 OV_FEATURES 명시 스위치 XS8과 같은 모양)."""
-    extra = {"target": "ov", "ov_root": pc.cfg().connections.openviking.root or ""}
-    m = need("parse", "structure", a.force, extra=extra)
-    if not m:
-        return
-    from common.core import contract
-
-    bad = contract.check_parse(OUT / "parse" / "_rep", sample=500)
-    if bad:
-        print("[structure] 파싱 인계 폴더가 계약과 다름 — " + " · ".join(bad[:5]), flush=True)
-        raise SystemExit(3)
-    sh("pipeline.load.openviking_load", "--rep-dir", OUT / "parse" / "_rep", "--out", OUT / "ov_ingest")
-    write_mark("structure", from_run=m["run_id"], extra=extra)
-
-
 def _structure_pg_indexed(a, index_conf):
-    """STRUCTURE_TARGET=pg + INDEX_CONF — AD41 색인 모듈(cli/index.py build)로 설정별 색인(pg-a·pg-b, 예 청크
+    """INDEX_CONF — AD41 색인 모듈(cli/index.py build)로 설정별 색인(pg-a·pg-b, 예 청크
     크기가 다른 두 설정)을 만든다. index.py가 자기 입력 지문(_rep·사전·명부·stack·코드)으로 재빌드를 판정하고
     같은 index_id 동시 빌드는 잠금으로 막으므로, 여기서 need()/write_mark로 다시 게이트하지 않는다(이중 판정
     이 서로 어긋나는 것을 피함) — --pg로 PostgreSQL 스키마 <PG_SCHEMA>_<index_id>까지 적재.
@@ -866,11 +820,7 @@ def _structure_pg_indexed(a, index_conf):
 
 def structure_module(a):
     """구조화 모듈: 대표 결과(_rep)만 읽어 청킹·사실·고객·그래프·임베딩(API·캐시) → 묶음(output/edw/bundle) → 끝 표시. 원본이 없어도 됨.
-    10-14 — STRUCTURE_TARGET=ov면 OpenViking 적재로, =pg(기본)+INDEX_CONF면 AD41 색인 빌더로 대신(아래 두 분기).
-    STRUCTURE_TARGET 미설정(기본 pg) + INDEX_CONF 없음은 이전 동작과 완전히 같다(바이트 동일 경로)."""
-    target = _structure_target()
-    if target == "ov":
-        return _structure_ov(a)
+    INDEX_CONF가 있으면 AD41 색인 빌더로 대신(아래 분기) — 없으면 기본 색인."""
     index_conf = pc.cfg().paths.index_conf
     if index_conf:
         return _structure_pg_indexed(a, index_conf)
@@ -988,7 +938,6 @@ def run_stack(a):
     engines = ",".join(sorted({e for es in st["parse"].values() for e in es}))
     if not a.skip_parse:
         parse_phases(a.src, engines, a.procs, phases_of(a))  # 이미 파싱된 문서×엔진은 다시 안 함(sha)
-    ov_import(a.src)  # OpenViking 요약·계층(E4): 연결돼 있으면 받아 와서 묶음 요약으로
     sh("pipeline.transform.represent.parse_qa", "--src", a.src)  # 대표 고르기용 정확도(교차 재현율)
     sh("pipeline.transform.represent.represent", "--stack", _stack()[0], "--src", a.src)
     sh(
@@ -1018,34 +967,9 @@ def run_stack(a):
     )
 
 
-def ov_import(src=None):
-    """OpenViking(OV_URL — 설정 또는 Docker 자동 탐색)과 OV_ROOT가 있으면 문서 폴더(본문·.abstract.md L0·.overview.md L1)를
-    output/ov_export에 내려받는다(이미 받은 문서는 건너뜀). 파싱 엔진으로 돌리지 않음 — 파싱 채점에 끼지 않게.
-    bundle.ov_summaries가 이 폴더를 요약 출처 'openviking'으로 씀(OV_DOC_ROOT를 주면 그 폴더 우선). 없으면 건너뜀.
-    XS8: OV_FEATURES에 summary가 없으면 OV_URL이 있어도 건너뜀(OV_URL 없을 때와 동일 출력)."""
-    from common.store import services
-
-    if not services.ov_enabled("summary"):
-        return
-    url, root = C.cfg().connections.openviking.url, pc.cfg().connections.openviking.root
-    if not url:
-        return
-    if not root:
-        print("(OpenViking 연결됨 — OV_ROOT(viking://resources/<루트>)가 없어 요약을 받지 않음: .env에 OV_ROOT)", flush=True)
-        return
-    import ov_export
-
-    out = OUT / "ov_export"
-    try:
-        got = ov_export.export(url, root, out, only=lambda n: not (out / n).is_dir(), log=lambda m: None)
-        print(f"OpenViking 요약 내려받기: 새 문서 {len(got)}개 → {out}", flush=True)
-    except Exception as ex:  # 요약은 보조 — 실패해도 발췌 요약으로 계속
-        print(f"(OpenViking 내려받기 실패 — 발췌 요약으로 계속: {type(ex).__name__}: {str(ex)[:120]})", flush=True)
-
-
 def connect(a):
     """연결 기본값(백로그 E6 · 사용자 2026-10-01): --pg·--edw·--edw-client·--local 지정이 없으면 Docker에 떠 있는 pgvector에 연결,
-    없으면 로컬 묶음. OpenViking도 Docker에서 찾으면 OV_URL로. → common/services.py"""
+    없으면 로컬 묶음. → common/services.py"""
     from common.store import services
 
     services.connect(a)
@@ -1145,6 +1069,12 @@ def _image_lacks(top):
     return _spec_missing("pipeline.extract" if top == "pipeline" else "mcp_server.services")
 
 
+def _selftest_workers():
+    """selftest 동시 사례 수 — 이 프로세스가 쓸 수 있는 CPU 수(컨테이너 CPU 고정 반영 — sched_getaffinity), 많아도 8."""
+    cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
+    return max(1, min(8, cpus))
+
+
 def selftest(a):
     """`docker run … IMG selftest` — 서버 반입 시험(tests/server)을 파일마다 자식 프로세스로(네트워크 0 · case_env) 돌려 PASS/FAIL 표. 하나라도
     FAIL이면 종료 코드 1. 이미지 안(RAG_MODULE=pipeline·mcp)에서는 다른 이미지 폴더의 사례를 SKIP, RAG_MODULE이 비면(PC) 전부. 공용(common) 사례가
@@ -1164,13 +1094,13 @@ def selftest(a):
     rows = []
     if not cases:
         rows.append((str(TESTS_ROOT / "server"), "FAIL", "서버 반입 시험이 없음(tests/server — 이미지 COPY·--only 확인)"))
-    for mod, img in cases:
+
+    def run_case(case):
+        mod, img = case
         if img == "?":
-            rows.append((mod, "FAIL", "모르는 시험 폴더(tests/server/{common,pipeline,mcp}만)"))
-            continue
+            return (mod, "FAIL", "모르는 시험 폴더(tests/server/{common,pipeline,mcp}만)")
         if image and img not in (None, image):
-            rows.append((mod, "SKIP", f"다른 이미지 사례({img})"))
-            continue
+            return (mod, "SKIP", f"다른 이미지 사례({img})")
         r = subprocess.run(
             [PY, "-m", "tests.runner", mod],
             cwd=ROOT,
@@ -1185,9 +1115,14 @@ def selftest(a):
         # 공용 사례가 이 이미지에 없는 앱 모듈 때문에만 실패했으면 SKIP(mcp 이미지에는 pipeline/ 중 cli.py·config.py만 — _image_lacks)
         miss = re.findall(r"ModuleNotFoundError: No module named '(pipeline|mcp_server)['.]", out)
         if r.returncode != 0 and miss and all(_image_lacks(m) for m in set(miss)):
-            rows.append((mod, "SKIP", f"다른 이미지 모듈 필요({', '.join(sorted(set(miss)))})"))
-            continue
-        rows.append((mod, "PASS" if r.returncode == 0 else "FAIL", "" if r.returncode == 0 else out[-1500:]))
+            return (mod, "SKIP", f"다른 이미지 모듈 필요({', '.join(sorted(set(miss)))})")
+        return (mod, "PASS" if r.returncode == 0 else "FAIL", "" if r.returncode == 0 else out[-1500:])
+
+    # 사례는 서로 다른 자식 프로세스라 함께 돌림(쓸 수 있는 CPU 수, 많아도 8개) — map은 순서를 지켜 표는 그대로
+    for mod, _ in cases:  # 덮기 파일 캐시(_CASE_ENVS)를 먼저 채움 — 스레드가 같은 파일을 두 번 만들지 않게
+        case_env(mod)
+    with ThreadPoolExecutor(max_workers=_selftest_workers()) as pool:
+        rows += pool.map(run_case, cases)
     fails = [name for name, status, _ in rows if status == "FAIL"]
     skips = sum(1 for _, status, _ in rows if status == "SKIP")
     for name, status, detail in rows:
@@ -1402,10 +1337,9 @@ def main(argv=None):
     p.add_argument(
         "--no-structure",
         action="store_true",
-        help="파싱+publish만(기본은 파싱 뒤 대표 파싱·publish·구조화·임베딩(API) → PostgreSQL·OV 적재까지)",
+        help="파싱+publish만(기본은 파싱 뒤 대표 파싱·publish·구조화·임베딩(API) → PostgreSQL 적재까지)",
     )
     p.add_argument("--no-publish", action="store_true", help="OS+EDW publish 건너뜀 (기본: 대표 파싱 직후 실행)")
-    p.add_argument("--no-ov", action="store_true", help="OpenViking 적재 건너뜀 (기본: PG 적재 후 실행, OV_FEATURES에 ingest 필요)")
     p.add_argument("--pg", action="store_true", help="구조화 뒤 pgvector 적재까지(지정 없어도 Docker pgvector가 떠 있으면 기본)")
     p.add_argument("--local", action="store_true", help="pgvector가 떠 있어도 로컬 묶음까지만")
     p.add_argument("--no-prune", action="store_true", help="삭제·바뀐 원본의 옛 기록을 PostgreSQL에서 지우지 않음")

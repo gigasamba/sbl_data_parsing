@@ -346,17 +346,16 @@ def cmd_selftest(config, a):
         LLM_PRICE_OUT="1",
         LLM_SPEND_FILE=str(Path(tempfile.mkdtemp()) / "spend.txt"),
     )
-    _orig_ok, _orig_complete2 = L._synthetic_ok, ADK.complete
-    L._synthetic_ok = lambda: True
+    _orig_complete2 = ADK.complete
     ADK.complete = lambda *aa, **kk: (_ for _ in ()).throw(AssertionError("예산 거부 전에 네트워크를 부름"))
     try:
-        with _budget:
+        with _budget, S.COMMON.env(RUN_ENV="local"):  # 외부 허용 규칙(guard.external_ok)을 진짜로 통과 — 설정 파일 없어도(새 워크트리)
             L.chat([{"role": "user", "content": f"예산 상한 테스트 {time.time()}"}], max_tokens=5, allow_external=True)
         check("LLM_BUDGET_USD: 한도 넘으면 호출 전에 거부(공유 장부 선차감)", False)
     except L.LLMUnavailable as e:
         check("LLM_BUDGET_USD: 한도 넘으면 호출 전에 거부(공유 장부 선차감)", "LLM_BUDGET_USD" in str(e))
     finally:
-        L._synthetic_ok, ADK.complete = _orig_ok, _orig_complete2
+        ADK.complete = _orig_complete2
 
     with tempfile.TemporaryDirectory() as td6:  # 작은 BM25 묶음(임베딩 없음) — k 재사용·--context-only 전용
         import numpy as _np
@@ -386,7 +385,7 @@ def cmd_selftest(config, a):
         ]
         (bdir / "chunks.jsonl").write_text("\n".join(json.dumps(c, ensure_ascii=False) for c in cks) + "\n", encoding="utf-8")
         _np.save(bdir / "vectors.npy", _np.zeros((12, 0), dtype="float32"))
-        _rr = S.isolated(SEARCH_RERANK=None)  # 꺼짐(기본) — k 재사용 동등성은 이 경우만 보장(S7e2 시험 설정 — 아래 finally에서 되돌림)
+        _rr = S.isolated()  # 재순위는 10-29에 지움 — k 재사용 동등성(S7e2 시험 설정 — 아래 finally에서 되돌림)
         _rr.__enter__()
         R6 = _RT(bdir)
         hits_max, _ = R6.search("단가는 얼마?", 10, methods=["bm25"])

@@ -1,0 +1,40 @@
+{
+ "values": [
+  {
+   "label": "Primary client",
+   "value": "Korvexa Life Sciences"
+  },
+  {
+   "label": "Mentioned client",
+   "value": "Pfizar Biopharma"
+  },
+  {
+   "label": "판단",
+   "value": "조건부 Go"
+  },
+  {
+   "label": "수주 가능성",
+   "value": "30% 정도"
+  },
+  {
+   "label": "슬롯 충돌",
+   "value": "2공장 2,000L 2호기 2027년 4분기"
+  },
+  {
+   "label": "요청 결정",
+   "value": "11/18(수) 영업회의"
+  }
+ ],
+ "client_filter": {
+  "primary": "C9005",
+  "mentioned": "C9001"
+ },
+ "hard_elements": [
+  {
+   "element": "cross-client internal memo (primary + mentioned client), Korean, CRLF",
+   "doc": "kvx_internal_note.txt",
+   "page": null,
+   "location": "whole file"
+  }
+ ]
+}

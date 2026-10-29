@@ -490,7 +490,7 @@ def do_list_documents(client=None, doc_type=None, since=None, latest_only=True, 
     client: 검색 search()와 같은 고객 명부(common.core.terms.match_clients)로 해석 — 별칭은 그 규칙을 그대로 따름(설정 안 됐으면 못 잡음).
     latest_only=True(기본): manifest의 supersedes_doc_id로 대체된 구판은 뺌(AR4② modules/search/supersede.py 공용 규칙,
     aggregate.doc_location_list와 같음). include_deleted=False(기본): is_deleted 문서는 뺌.
-    LIST_DOCS_MAX(env MCP_LIST_DOCS_MAX, 기본 200·0이면 무제한) 넘으면 documents를 자르고 count=전체 건수·
+    LIST_DOCS_MAX(200건 — mcp_server/config.py) 넘으면 documents를 자르고 count=전체 건수·
     truncated=true·note에 "외 N건"(AD38 남은 것 — 코퍼스가 커지면 상한 없이 응답이 그대로 커지던 문제)."""
     from common.core.contract import uri_from_path
     from common.core.terms import match_clients

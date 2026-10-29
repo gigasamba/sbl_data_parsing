@@ -62,3 +62,7 @@ exclude = [
 [[tool.mypy.overrides]]
 module = ["common.core.contract", "common.core.repfmt", "common.core.terms", "common.core.text"]
 ignore_errors = true
+
+[tool.pytest.ini_options]
+# 시험 파일마다 자식 프로세스라 서로 독립 — 8개씩 함께(pytest-xdist). 차례로: -n 0 · 더 많이: -n 16
+addopts = "-n 8 --dist worksteal"

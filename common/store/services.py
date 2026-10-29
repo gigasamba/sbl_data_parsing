@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
-"""외부 서비스 연결 — Docker에 떠 있는 pgvector·OpenViking을 찾아 연결하는 것이 기본, 없으면 Docker 없이 로컬.
+"""외부 서비스 연결 — Docker에 떠 있는 pgvector를 찾아 연결하는 것이 기본, 없으면 Docker 없이 로컬.
 모델(LLM·VLM·OCR VLM·임베딩)은 OpenAI 호환 주소를 환경변수로 자유롭게 바꿔 끼움 — 회사 문서가 나가므로 **내부망 주소만**(DONT 13).
-
-OV_FEATURES(XS8) — OpenViking은 `OV_URL`만 있으면 요약·검색·외부 그래프 비교가 전부 조용히 켜져 PC·서버 결과가 어긋났다(external-services.md P8).
-  OV_URL은 접속 정보로 `.env`에 늘 둬도 안전하고(진단 탐지는 계속 함), 실제로 그 연동을 쓰려면 `OV_FEATURES`(콤마 목록: summary·search·parse)를
-  명시해야 한다 — 기본(미설정·빈 값·`none`)은 전부 꺼짐(OV_URL 없을 때와 출력이 같음). OP11의 "새 기능 기본 켬"과는 다르다 — 이미 있는 외부
-  연동의 범위를 넓히지 않고 기존 암묵적 동작(있으면 켜짐)을 명시 스위치로 바꾸는 것이라, 묵묵히 결과가 갈리던 쪽을 막는 게 목적.
 
 찾는 순서(설정이 있으면 설정 우선):
   pgvector   PG_HOST·PG_PORT를 직접 줬으면 그대로 · 아니면 `docker ps`에서 이미지·이름에 pgvector가 든 컨테이너(기본 `rag-postgres`, 이미지 pgvector/pgvector)의 5432 공개 포트 —
@@ -13,10 +8,8 @@ OV_FEATURES(XS8) — OpenViking은 `OV_URL`만 있으면 요약·검색·외부 
              → 접속 시험(PG_PASSWORD 또는 PG_CONN_FILE 필요 — 비밀번호는 컨테이너에서 읽지 않음) → 되면 pgvector, 안 되면 로컬 묶음
              docker 명령이 권한 오류·없음이면(SI26) 듣는 포트로 대체 탐지: 127.0.0.1(PG_HOST가 있으면 그 주소)의 5432·15432를
              TCP로 확인 + 자격 증명이 있으면 psycopg로 SELECT 1까지. 비밀값은 로그에 안 찍고 '포트 탐지'로만 표시.
-  OpenViking OV_URL을 줬으면 그대로 · 아니면 `docker ps`에서 openviking 컨테이너의 공개 포트 → GET 응답이 오면 OV_URL로
-             docker 접근 불가면 같은 방식으로 127.0.0.1:1933 /health를 대체 탐지.
 모델 엔드포인트(접두어 LLM·VLM·OCRVLM·EMBED): <접두어>_BASE_URL(…/v1) · <접두어>_MODEL · <접두어>_API_KEY(선택).
-  외부 주소는 거부 — 합성 데이터 실험에서만 <접두어>_ALLOW_EXTERNAL=1(LLM은 common/llm.py 규칙: 가상 코퍼스 정답 파일 지정 시만).
+  외부 주소는 거부 — 개발 PC 실험에서만 <접두어>_ALLOW_EXTERNAL=1(RUN_ENV=local일 때만 — common/ai/guard.py).
 사용: python common/services.py        → 연결 상태 표(비밀값은 출력 안 함)
       python common/services.py --selftest
 """
@@ -40,7 +33,6 @@ HERE = Path(__file__).resolve().parent
 
 PORT_RE = re.compile(r"(?:(\d+\.\d+\.\d+\.\d+|\[::\]):)?(\d+)->(\d+)/tcp")
 PG_FALLBACK_PORTS = ("5432", "15432")
-OV_FALLBACK_PORT = "1933"
 
 
 def docker_ps():
@@ -57,7 +49,7 @@ def docker_ps():
         if "permission denied" in (r.stderr or "").lower():  # SI12 — docker ps 권한 없음은 "컨테이너 없음"과 다른 문제라 따로 안내
             print(
                 "[services] docker ps 권한 없음 — 실행 계정을 docker 그룹에 추가하거나, "
-                "PG_HOST·PG_PORT(pgvector) · OV_URL(OpenViking)을 직접 지정 — 듣는 포트로 대체 탐지 시도",
+                "PG_HOST·PG_PORT(pgvector)를 직접 지정 — 듣는 포트로 대체 탐지 시도",
                 file=sys.stderr,
                 flush=True,
             )
@@ -131,16 +123,6 @@ def _find(rows, word, cport=None):
     return None
 
 
-def _get(url, timeout=3):
-    try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
-            return r.status
-    except urllib.error.HTTPError as e:
-        return e.code
-    except Exception:
-        return None
-
-
 def detect_pg(docker=None):
     """docker: (rows, reason) — docker_ps()와 같은 꼴, None이면 새로 조회. → (ok, 설명).
     성공하면 설정 PG_HOST·PG_PORT를 채운다(settings.put — 이 프로세스·뒤에 띄우는 자식 pgstore도 같은 값, S7e2)."""
@@ -177,42 +159,8 @@ def detect_pg(docker=None):
         return False, f"{src}: 접속 실패({type(e).__name__})"
 
 
-def ov_enabled(feature):
-    """XS8 — OV_FEATURES(.env, 콤마 목록: summary·search·parse)에 feature가 있어야 그 OpenViking 연동을 켠다.
-    OV_FEATURES 미설정·빈 값·'none'이면 전부 꺼짐(OV_URL이 있어도 OV_URL 없을 때와 출력이 같아야 함) — 모든 OV 호출 지점이 이걸 거친다."""
-    feats = {f.strip().lower() for f in cfg().connections.openviking.features if f.strip()}  # S7b — 설정 객체(목록 칸)
-    return feature in feats
-
-
-def detect_ov(docker=None):
-    rows, reason = docker if docker is not None else docker_ps()
-    ov = cfg().connections.openviking  # S7b — 설정 객체
-    url = ov.url
-    src = "설정"
-    if not url:
-        hit = _find(rows, "openviking")
-        if hit:
-            name, ip, hp = hit
-            url, src = f"http://{ip}:{hp}", f"docker {name}"
-        elif reason:  # docker 권한 오류·없음(SI26) — 듣는 포트로 대체 탐지
-            host = ov.host or "127.0.0.1"
-            cand = f"http://{host}:{OV_FALLBACK_PORT}"
-            if _get(cand.rstrip("/") + "/health") is not None or _get(cand) is not None:
-                url, src = cand, "포트 탐지"
-            else:
-                return False, f"OpenViking 컨테이너 없음(docker {reason} — 포트 {OV_FALLBACK_PORT}도 응답 없음)"
-        else:
-            return False, "OpenViking 컨테이너 없음"
-    if _get(url.rstrip("/") + "/health") is None and _get(url) is None:
-        return False, f"{src} {url}: 응답 없음"
-    if url != ov.url:
-        put(OV_URL=url)  # S7e2 — 덮기 파일(이 프로세스·자식 — 옛 os.environ["OV_URL"])
-    return True, f"{src} {url}"
-
-
 def connect(a):
-    """명령 인자 a(--pg·--edw·--edw-client·--local)에 저장소 기본값을 채움: 지정이 없으면 Docker pgvector → 없으면 로컬.
-    OpenViking은 찾으면 OV_URL만 채움(요약·계층은 pipeline.ov_import·bundle이 씀). 한 줄로 알림."""
+    """명령 인자 a(--pg·--edw·--edw-client·--local)에 저장소 기본값을 채움: 지정이 없으면 Docker pgvector → 없으면 로컬. 한 줄로 알림."""
     docker = docker_ps()
     msg = []
     if not getattr(a, "local", False):  # --edw·--edw-client여도 본문·메타 저장소는 pgvector/로컬(EDW에는 벡터만)
@@ -221,8 +169,6 @@ def connect(a):
             raise SystemExit(f"[연결] --pg(또는 MCP_STORE=pg)를 지정했지만 PostgreSQL에 붙지 못함: {why}")
         a.pg = ok
         msg.append(f"저장소: {'pgvector(' + why + ')' if ok else '로컬 묶음 — ' + why}")
-    ok, why = detect_ov(docker)
-    msg.append(f"OpenViking: {why if ok else '없음 — ' + why}")
     print("[연결] " + " · ".join(msg), flush=True)
 
 
@@ -233,7 +179,7 @@ def model_status(prefix):
     internal = (
         "내부"
         if is_internal(base)
-        else ("외부(허용 — 합성 데이터)" if external_allowed(prefix) else "외부 — 거부됨(ALLOW_EXTERNAL + 합성 정답 파일 둘 다 필요)")
+        else ("외부(허용 — 개발 PC)" if external_allowed(prefix) else "외부 — 거부됨(ALLOW_EXTERNAL=1 + RUN_ENV=local 필요)")
     )
     if internal.startswith("외부 — 거부"):  # 막힌 외부 주소에는 /models도 안 보냄(키가 헤더로 나감 — 재검증 10-02)
         return internal, model or "(모델 미설정)", "확인 안 함(외부 거부)"
@@ -257,7 +203,7 @@ def status():
     print(
         f"| Docker 컨테이너 | {', '.join(n for n, _, _ in rows) or ('없음(또는 Docker 없음)' if not reason else f'docker {reason} — 포트로 대체 탐지')} |"
     )
-    for label, f in (("pgvector", detect_pg), ("OpenViking", detect_ov)):
+    for label, f in (("pgvector", detect_pg),):
         ok, why = f(docker)
         print(f"| {label} | {'✓ ' if ok else '✗ '}{why} |")
     print("\n| 모델 | 주소 구분 | 모델 | 상태 |", "|---|---|---|---|", sep="\n")

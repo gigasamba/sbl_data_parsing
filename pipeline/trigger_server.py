@@ -28,7 +28,7 @@ env:
   TRIGGER_SOCKET_TIMEOUT_SEC    연결당 소켓 read 상한(초, 기본 30) — 느린 클라이언트가 스레드를 안 붙잡게
   TRIGGER_SHUTDOWN_TIMEOUT_SEC  SIGTERM 뒤 실행 중 작업을 기다리는 한도(초, 기본 300)
   CHAIN_STRUCTURE_URL      parse 작업 성공 뒤 이 URL들(structure 서버, **콤마로 여러 개** — 같은 이미지를
-                           STRUCTURE_TARGET/INDEX_CONF 다른 값으로 띄운 구조화 인스턴스 여러 대, AD49)에
+                           INDEX_CONF 다른 값으로 띄운 구조화 인스턴스 여러 대, AD49)에
                            같은 토큰으로 독립적으로 후속 작업을 올림 — 하나가 실패해도 나머지는 그대로 올라가고,
                            결과는 각각 job record의 "chain"(목록, 대상마다 {url, ok, error?})에 남음
 
@@ -435,7 +435,7 @@ class JobManager:
         return {"run_id": run_id, "docs": docs}
 
     def _chain(self, job, log_text=""):
-        """parse 성공 → CHAIN_STRUCTURE_URL(콤마로 여러 대상, AD49 — 같은 이미지를 다른 STRUCTURE_TARGET/
+        """parse 성공 → CHAIN_STRUCTURE_URL(콤마로 여러 대상, AD49 — 같은 이미지를 다른
         INDEX_CONF로 띄운 구조화 인스턴스들)에 각각 독립적으로 structure 작업을 올림 — 하나가 실패해도
         나머지는 계속 보내고, 대상별 결과를 job["chain"](목록)에 남긴다(실패해도 이 parse 작업 자체는
         이미 done — 과업 설명대로 체이닝 실패는 기록만, 안 멈춤)."""

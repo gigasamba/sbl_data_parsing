@@ -4,7 +4,7 @@
 import 금지). 함수 내용은 그대로 옮겼다(옛 pipeline/cli.py의 ask·_ask_mcp·_ask_edw·test_stack·Retriever·table_md, 그리고 이
 파일이 함께 쓰는 sh·connect 사본 — sh·connect는 파이프라인 명령도 써서 pipeline/cli.py에도 남음).
 
-  ask         질문 → 근거 청크 + 원본 경로·쪽·줄·쪽 안 위치(bbox)·요약 (+ --graph 그래프 이웃) — 로컬 묶음 또는 --edw. 답변은
+  ask         질문 → 근거 청크 + 원본 경로·쪽·줄·쪽 안 위치(bbox)·요약 — 로컬 묶음 또는 --edw. 답변은
               검색만(10-13 답변 경로 통일 1단계 — 답변은 서빙되는 Answer Agent(rag_qa — valid_env/answer_test/rag_qa, 점검 validation/e2e/answer_gen.py)만, 중복 경로 제거).
               기본(로컬·pgvector 하이브리드)은 mcp_server.services.search.search_svc.do_search()에 위임(AR10) — MCP와 같은 결과,
               --edw·--edw-client·--retrieve cosine만 예전 경로
@@ -72,14 +72,14 @@ def table_md(g):
 
 def connect(a):
     """연결 기본값(백로그 E6 · 사용자 2026-10-01): --pg·--edw·--edw-client·--local 지정이 없으면 Docker에 떠 있는 pgvector에 연결,
-    없으면 로컬 묶음. OpenViking도 Docker에서 찾으면 OV_URL로. → common/services.py"""
+    없으면 로컬 묶음. → common/services.py"""
     from common.store import services
 
     services.connect(a)
 
 
 def ask(a):
-    """질문 → 근거(파일·쪽·줄·bbox·점수·via) · --graph·집계 포함. 기본(로컬 묶음·pgvector 하이브리드)은
+    """질문 → 근거(파일·쪽·줄·bbox·점수·via) · 집계 포함. 기본(로컬 묶음·pgvector 하이브리드)은
     AR10(구조 리뷰 10-12 round4 QA095) — MCP search/mcp_server.do_search()에 그대로 위임한다(두 경로가
     같은 질문에 다른 순위를 주던 분기 제거). --edw·--edw-client·--retrieve cosine는 do_search에 EDW
     벡터 모드가 없어 예전 R.search 경로를 그대로 둔다(ponytail: do_search가 EDW를 지원하게 되면 이 분기를 지움)."""
@@ -94,13 +94,11 @@ def _ask_mcp(a):
     do_search() 안 _log()가 이미 함(qa_log.append + PG qa_log INSERT) — 여기서 다시 넣지 않음(중복 기록 방지)."""
     st = _stack()
     C.put(MCP_STORE="local" if a.local else ("pg" if a.pg else ""), MCP_BUNDLE=str(a.bundle))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스)
-    from mcp_server.config import CFG  # S5 — 기본 검색 방법(옛 MCP.DEFAULT_METHODS)
     from mcp_server.services.search import search_svc as MCP
 
     k = a.k or st.get("k", 8)
-    methods = (CFG.DEFAULT_METHODS + ["graph"]) if getattr(a, "graph", False) and not a.no_graph else None
-    decompose = False if a.no_decompose else None
-    res = MCP.do_search(a.q, k, methods=methods, decompose=decompose)
+    methods = None
+    res = MCP.do_search(a.q, k, methods=methods)
     if a.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))
         return
@@ -134,33 +132,11 @@ def _ask_edw(a):
     R = Retriever(a.bundle, a.edw, a.edw_client, a.retrieve or st.get("retrieve", "hybrid"), a.pg)
     k = a.k or st.get("k", 8)
     hits, ms = R.search(a.q, k)
-    from common.ai import llm as L
     from mcp_server.services.search import aggregate as AG
-    from mcp_server.services.search import decompose as DC
 
     agg_of = lambda q: AG.struct(q) or (AG.pg(R.pg, q) if R.pg else AG.local(a.bundle, q))  # 정형 저장소 질문 먼저(X1, MCP와 같은 규칙)
     agg = agg_of(a.q)  # 건수·합계 질문이면 SQL 집계(검색 결과는 함께 보여 줌)
-    subs = []
-    if not a.no_decompose and L.configured():  # 복합 질문 → 하위 질문마다 검색·집계(LLM 1회 추가)
-        subs, _ = DC.split_question(
-            a.q, lambda p: L.chat([{"role": "user", "content": p}], temperature=0.0, max_tokens=400, agent="query_decompose")
-        )
-    sub_aggs = []
-    if subs:
-        names = R.clients()
-        find = lambda q: [c for c in names if AG.norm(c) in AG.norm(q)]
-        subs = DC.keep_context(subs, find(a.q), find)
-        pool = {h["chunk_ref"]: h for h in hits}
-
-        def srch(q, n):
-            hs = hits[:n] if q == a.q else R.search(q, n)[0]
-            for h in hs:
-                pool.setdefault(h["chunk_ref"], h)
-            return [h["chunk_ref"] for h in hs]
-
-        items = DC.gather(a.q, subs, srch, base=k, per=max(3, k // 2))
-        hits = [{**pool[c], "rank": i + 1, "via": "원 질문" if qi == 0 else f"하위 질문 {qi}"} for i, (c, qi) in enumerate(items)]
-        sub_aggs = [{"sub": i, "question": q, **x} for i, q in enumerate(subs, 1) for x in [agg_of(q)] if x]
+    subs, sub_aggs = [], []  # 질문 분해는 10-29에 지움(응답 칸은 유지)
     res = {
         "question": a.q,
         "subs": subs,
@@ -172,8 +148,6 @@ def _ask_edw(a):
         "ms": round(ms, 1),
         "hits": hits,
     }
-    if getattr(a, "graph", False) and not a.no_graph:  # 10-12: 기본 끔(MCP 기본 vector·bm25·id와 같게) — --graph로 켬
-        res["graph"] = R.graph(hits[:3])
     if a.pg:  # 개발 서버 질의 기록(qa_log)
         R.pg.q(
             f"INSERT INTO {R.pg.schema}.qa_log(question, stack_name, k, hits, answer, search_ms, asked_by) VALUES (%s,%s,%s,%s,%s,%s,%s)",
@@ -217,8 +191,6 @@ def _ask_edw(a):
             + (f"  §{h['section']}" if h.get("section") else "")
         )
         print("    " + h["text"].replace("\n", " ")[:220])
-    for g in res.get("graph", []):
-        print(f"  (그래프 {g['via']}) {g['file_path']} p.{g['page']} L.{g['line']}: {g['text'].replace(chr(10), ' ')[:120]}")
 
 
 def test_stack(a):
@@ -329,16 +301,7 @@ def main(argv=None):
         p.add_argument("--k", type=int, default=8, help="근거 수 — MCP search 기본과 같게 8(AR5 측정: k=8이 k=10과 같거나 나음, 잘림 적음)")
         if name == "ask":
             p.add_argument("--q", required=True)
-            p.add_argument(
-                "--graph",
-                action="store_true",
-                help="그래프 이웃 근거 켬 — 10-12부터 기본 끔: MCP 기본 methods(vector·bm25·id)와 같게(graph 단독 효과 0·잡음↑, af 012195a1)",
-            )
-            p.add_argument("--no-graph", action="store_true", help="(옛 옵션 — 이제 기본이 끔, 남겨 둠)")
             p.add_argument("--json", action="store_true")
-            p.add_argument(
-                "--no-decompose", action="store_true", help="복합 질문 분해 끔(기본: LLM 설정 시 켬, modules/search/decompose.py)"
-            )
         else:
             p.add_argument("--questions", default="output/eval/questions.jsonl")
             p.add_argument("--src", default=src)

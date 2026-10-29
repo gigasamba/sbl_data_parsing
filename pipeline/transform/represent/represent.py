@@ -651,18 +651,17 @@ def tried_of(doc, last, pd):
 from common.core.artifacts import code_fp  # noqa: E402
 from common.core.contract import source_record  # noqa: E402 — 문서 ID·원본 위치 규칙(모듈 계약)
 from pipeline.shared import postprocess as post_cfg  # noqa: E402 — PARSE_POST 해석(W1~W3·W9·W11 후보정 패키지)
-from pipeline.transform.represent import (  # noqa: E402 — 모듈 중간 import(기존 배치 그대로 — 위 함수 정의 뒤)
-    agent_step,  # AG11 2단계 판단 세션(PARSE_AGENT=off|shadow|apply, 기본 shadow — shadow는 rep 불변)
-    table_inline,  # TA1(사용자 10-15) 엔진별 표 그리드를 모아 본문 제자리에 GFM 표(PARSE_TABLE_INLINE, 기본 켬)
-    table_std,  # AD23·SI20③ 표 표준 형식(PARSE_TABLE_STD, 기본 켬)
-)
 from pipeline.transform.represent import fuse as fuse_mod  # noqa: E402 — AD29 P1 조각 단위 융합(fuse_mod.on() = PARSE_FUSE, 기본 켬)
 from pipeline.transform.represent import reread as reread_mod  # noqa: E402 — AD29 P2 좌표 재판독(reread_mod.on() = PARSE_FUSE_REREAD, 기본 켬)
 from pipeline.transform.represent import reread_stage3 as reread_p3_mod  # noqa: E402 — AD29 P3 그림 경계 OCR·VLM 선택형(on() = PARSE_FUSE_REREAD_P3, 기본 켬)
+from pipeline.transform.represent import (  # noqa: E402 — 모듈 중간 import(기존 배치 그대로 — 위 함수 정의 뒤)
+    table_inline,  # TA1(사용자 10-15) 엔진별 표 그리드를 모아 본문 제자리에 GFM 표(PARSE_TABLE_INLINE, 기본 켬)
+    table_std,  # AD23·SI20③ 표 표준 형식(PARSE_TABLE_STD, 기본 켬)
+)
 from pipeline.transform.represent import trace as trace_mod  # noqa: E402 — PA0 맥락 기록(trace_mod.on() = PARSE_CONTEXT, 기본 켬)
 
 
-def apply_post(rep, doc, doc_path, feats, out_images=None, fig_sink=None, figures_max=None):
+def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None):
     """후보정 패키지 적용 — base 본문에 쪽 VLM 옮기기·차트·그림 기록 블록을 덧붙이고, 첨자(supsub)는 그 줄만 base 안에서
     바꿔 넣는다(AD37 — 전엔 문서 전체를 다시 옮긴 블록을 덧붙여 대표 본문이 ~2배였음·청크·BM25·임베딩 중복). rep.post{config,
     features, code_fp, supsub(첨자 표기본 전체 — 색인에는 안 들어가고 여기만)}를 남긴다.
@@ -673,8 +672,6 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, fig_sink=None, figure
     out_images — 그림 PNG·index.jsonl·capped.jsonl이 쓰일 폴더(AG11 2단계 착수 조건, 10-08: 전엔 호출자가
     PARSE_IMAGES_ROOT 환경변수를 바꿔 치환해야 했던 것을 인자로 — 기본값 None이면 fig_mod.images_root()를 써
     이전과 바이트 동일, 운영 배치는 그대로 안 넘겨 기본 경로를 그대로 쓴다).
-    fig_sink — 리스트를 주면 '그림 VLM 값 ↔ 본문 언급 갈림'(value_check.conflict) 그림만 {image_id, page, conflict,
-    png_path}로 덧붙인다(AG11 3단계 c, agent_step 입력 — rep·반환값은 안 바뀜, 기본 None = 이전과 같음).
     figures_max — 그림 VLM 상한을 이번 호출만 바꿈(figures_resume — 기본 None = 설정 VLM_FIGURES_MAX, S7c2)."""
     post_spec = (
         pc.cfg().transform.represent.post
@@ -751,19 +748,7 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, fig_sink=None, figure
         records, plain, enriched = fig_mod.build_records(doc, doc_path, doc_text, doc_sha, out_images=out_images, figures_max=figures_max)
         use_context = "context" in feats
         blocks += enriched if use_context else plain
-        fig_rows = fig_mod.write_index(doc, records, out_images=out_images)
-        if fig_sink is not None:  # AG11 3단계 (c) — 갈린 그림만(PNG 경로는 write_index가 쓴 그 파일)
-            root = Path(out_images or fig_mod.images_root())
-            fig_sink += [
-                {
-                    "image_id": r["image_id"],
-                    "page": r.get("page"),
-                    "conflict": r["value_check"]["conflict"],
-                    "png_path": str(root.joinpath(*Path(r["png"]).parts[1:])),
-                }
-                for r in fig_rows
-                if r.get("png") and ((r.get("value_check") or {}).get("conflict"))
-            ]
+        fig_mod.write_index(doc, records, out_images=out_images)
         info["figures"] = len(records)
         info["figures_capped"] = any(r.get("skipped") == "VLM_FIGURES_MAX" for r in records)  # AD21① — 상한 걸린 문서 표시
         skips = [
@@ -968,7 +953,7 @@ def represent(stack, parse_dir, src=None):
             "richness": _richness(rep),  # 대표 엔진의 구조 인식 풍부도 (tables, facts, figures, boxes)
             "standardize": {"on": std_on, "changed": std_n},
         }  # SI20·AD46⑤ — 기호 맵·첨자 표기 표준화 적용 여부·바뀐 조각 수(되돌림 근거)
-        engine_docs = None  # AG11 2단계 — 융합을 켰을 때만 채워짐(agent_step 입력)
+        engine_docs = None  # 융합을 켰을 때만 채워짐
         if fuse_mod.on():  # AD29 P1 — 조각(라벨:값·표 칸) 단위 맞추기+투표(모델 호출 0), 기본 켬
             engine_docs = {best["engine"]: {"facts": best_facts_raw}}
             engine_docs.update({e: {"facts": od.get("facts") or []} for e, od in other_docs.items()})
@@ -998,8 +983,7 @@ def represent(stack, parse_dir, src=None):
                 rep["rep"]["scan_fill"] = fill
         _t["scanfill"] = time.time() - _t0
         _t0 = time.time()  # 2026-10-22 — scan_fill 완료
-        fig_sink = []  # AG11 3단계 (c) — 그림 VLM 값 ↔ 본문 갈림(agent_step 입력, rep엔 안 실림)
-        rep["post"] = apply_post(rep, doc, doc_path, feats, fig_sink=fig_sink)  # W1~W3·W9·W11 후보정(rep["text"]에 덧붙임)
+        rep["post"] = apply_post(rep, doc, doc_path, feats)  # W1~W3·W9·W11 후보정(rep["text"]에 덧붙임)
         _t["post"] = time.time() - _t0
         _t0 = time.time()  # 2026-10-22 — apply_post(그림 추출·쪽 VLM) 완료
         # TA1(사용자 10-15) — apply_post·scan_fill 뒤, 즉 이 문서가 실제로 내보낼 rep["text"]가 다 정해진 뒤에 부른다:
@@ -1013,11 +997,6 @@ def represent(stack, parse_dir, src=None):
             trace_mod.attach(rep, dd, cands, stack, feats, doc_path)
         _t["table"] = time.time() - _t0
         _t0 = time.time()  # 2026-10-22 — table_inline+trace 완료
-        agent_step.step(
-            rep, doc, doc_path, engine_docs, best["engine"], pd, fig_records=fig_sink
-        )  # AG11 — 규칙이 애매로 남긴 조각(P3 뒤 unverified·근소·그림 갈림)만
-        _t["agent"] = time.time() - _t0
-        _t0 = time.time()  # 2026-10-22 — agent 세션 완료
         rep["rep"]["stage_times"] = {k: round(v, 2) for k, v in _t.items()}  # 2026-10-22 — 단계별 소요(초) 기록
         _pdt = (rep.get("post") or {}).get("post_times") or {}
         _pdetail = (
@@ -1029,7 +1008,7 @@ def represent(stack, parse_dir, src=None):
         )
         print(
             f"[represent] {doc[:50]:50s} "
-            + " ".join(f"{k}={_t[k]:.1f}s" for k in ("load", "merge", "fuse", "scanfill", "post", "table", "agent"))
+            + " ".join(f"{k}={_t[k]:.1f}s" for k in ("load", "merge", "fuse", "scanfill", "post", "table"))
             + _pdetail,
             flush=True,
         )
@@ -1090,7 +1069,7 @@ def represent(stack, parse_dir, src=None):
         for r in conflicts_out:  # 갈린 엔진들(승자·패자·원문 표기) 문서 밖 한 파일로(PARSE_FUSE 꺼지면 빈 파일)
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     _agg = {}
-    for k in ("load", "merge", "fuse", "reread", "scanfill", "post", "table", "agent"):
+    for k in ("load", "merge", "fuse", "reread", "scanfill", "post", "table"):
         _agg[k] = round(
             sum(
                 (
@@ -1103,8 +1082,7 @@ def represent(stack, parse_dir, src=None):
             1,
         )
     print(
-        "[represent] 단계별 누적: "
-        + " ".join(f"{k}={_agg[k]:.0f}s" for k in ("load", "merge", "fuse", "scanfill", "post", "table", "agent")),
+        "[represent] 단계별 누적: " + " ".join(f"{k}={_agg[k]:.0f}s" for k in ("load", "merge", "fuse", "scanfill", "post", "table")),
         flush=True,
     )
     return index

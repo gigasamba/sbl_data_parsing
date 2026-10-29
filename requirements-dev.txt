@@ -3,3 +3,4 @@
 ruff==0.17.3
 mypy==2.4.1
 pytest==9.1.1
+pytest-xdist==3.8.0   # 시험 병렬(pyproject addopts -n 8)

@@ -27,7 +27,7 @@ _SKIP = (
     "deploy/release/lint_changed.sh",
 )  # 마지막 — PC 개발 점검 스크립트(FIX 등 셸 스위치는 설정 키가 아님, S12)
 _KEEP = ("valid_env/docker/",)  # PC 시험 Docker(compose·smoke_test.sh — S6b에 docker/에서 옮김, 5-3 C)
-PREFIXES = ("LLM", "VLM", "OCRVLM", "EMBED", "RERANK")
+PREFIXES = ("LLM", "VLM", "OCRVLM", "EMBED")
 
 # 규칙(아래 정규식)으로 못 잡는 읽기 — 이름 목록·동적 이름(9-4 "이름 목록") · S7a에 다시 모으며 찾음
 NAME_LIST = {
@@ -84,6 +84,10 @@ NOT_SETTINGS = {
         "삭제 후보",
         "S7b에 RUN_ENV=local로 대체 — 코드가 더 읽지 않음(migrate는 옛 env 파일의 LOCAL_RUN=1을 common.run_env: local로)",
     ),
+    "MINERU_BIN": (
+        "env로 남김",
+        "엔진 파일 registry.py가 env를 직접 읽음(기본 mineru — 엔진 지문 파일이라 그대로) · 설정 칸은 10-29에 지움(엔진 구성에서 뺀 엔진)",
+    ),
     "NETWORK_HOST": ("env로 남김", "entrypoint 신호(compose)"),
     "OMP_NUM_THREADS": ("env로 남김", "라이브러리(OpenMP)가 읽음"),
     "PARSE_RUN_ID": ("env로 남김", "부모 → 자식 프로세스 신호"),
@@ -137,7 +141,6 @@ NOT_SETTINGS = {
     "OV_TAGS": ("삭제 후보", "options.conf에만 — 코드가 안 읽음"),
     "PLATFORM_CONFIG": ("삭제 후보", "agent_platform 삭제(D-013) — 옛 pipeline.env.example·answer_gen_test만(둘 다 없음 — S7e2·S10)"),
     "PLATFORM_STATE_DIR": ("삭제 후보", "agent_platform 삭제(D-013)"),
-    "QA_CHAT_DECOMPOSE": ("삭제 후보", "DECOMPOSE의 옛 별칭(decompose.py 기본값 식)"),
     "RAG_IMAGE": ("삭제 후보", "S6b 옛 이름"),
     "RAG_PARSE_IMAGE": ("삭제 후보", "S6b 옛 이름"),
     "RAG_RETRIEVAL_IMAGE": ("삭제 후보", "S6b 옛 이름"),
@@ -153,7 +156,8 @@ NOT_SETTINGS = {
     "RESEARCH_RETRY_PARTIAL": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
     "RESEARCH_WORKERS": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
     "SMOKE_PATCH": ("삭제 후보", "S6c 삭제(D-027) — 문서 글자만"),
-    "SYNTHETIC_TRUTH": ("삭제 후보", "LLM_SYNTHETIC_TRUTH의 옛 별칭(guard.synthetic_ok) — 한 키로"),
+    "LLM_SYNTHETIC_TRUTH": ("삭제 후보", "합성 문서 선언 잠금 삭제(사용자 10-29) — 외부 허용은 *_ALLOW_EXTERNAL + RUN_ENV=local"),
+    "SYNTHETIC_TRUTH": ("삭제 후보", "LLM_SYNTHETIC_TRUTH의 옛 별칭 — 둘 다 삭제(사용자 10-29)"),
     "ZZ_BASE_URL": ("삭제 후보", "ping_models selftest의 가짜 이름"),
 }
 # 모은 키가 아닌 것(셸 문법·Dockerfile ARG·selftest 가짜 이름)

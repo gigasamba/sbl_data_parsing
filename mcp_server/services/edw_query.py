@@ -254,32 +254,6 @@ def _normalize_ref(raw):
     return re.sub(r"\s*\.\s*", ".", raw).replace("[", "").replace("]", "").lower()
 
 
-def _scan_paren(text, pos):
-    """pos is the index of '(' — returns the index just past its matching ')' (quote-aware, so a ')'
-    inside a string literal doesn't end the match early). Unterminated is not an error here: `_scan()`
-    already rejected unterminated strings/comments before `validate()` gets this far, and an unbalanced
-    paren in otherwise-valid SQL would fail at the database anyway — we just stop at end of text."""
-    n = len(text)
-    depth = 0
-    i = pos
-    while i < n:
-        c = text[i]
-        if c == "'":
-            i += 1
-            while i < n and text[i] != "'":
-                i += 1
-            i += 1
-            continue
-        if c == "(":
-            depth += 1
-        elif c == ")":
-            depth -= 1
-            if depth == 0:
-                return i + 1
-        i += 1
-    return n
-
-
 def _scan_from_list(text, pos):
     """fb review fix — parse the comma-separated target list right after a FROM/JOIN keyword (`pos` is
     the index just past the keyword). A plain `FROM a` is a one-item list; `FROM a, b, c` is the real

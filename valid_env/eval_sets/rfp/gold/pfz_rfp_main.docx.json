@@ -1,0 +1,198 @@
+{
+ "values": [
+  {
+   "label": "Client",
+   "value": "Pfizar Biopharma"
+  },
+  {
+   "label": "RFP ref",
+   "value": "PFZ-RFP-2026-04"
+  },
+  {
+   "label": "Doc No.",
+   "value": "PFZ-ES-RFP-0042"
+  },
+  {
+   "label": "Rev.",
+   "value": "1.0"
+  },
+  {
+   "label": "Effective",
+   "value": "2026-10-26"
+  },
+  {
+   "label": "Product code",
+   "value": "PFZ-SYN-MAB-11"
+  },
+  {
+   "label": "Proposal due",
+   "value": "2026-12-11, 17:00 KST"
+  },
+  {
+   "label": "CDA",
+   "value": "PFZ-CDA-2026-118"
+  },
+  {
+   "label": "Contact",
+   "value": "alex.carter@pfizar-bio.example"
+  },
+  {
+   "label": "Deadline for written questions",
+   "value": "2026-11-13"
+  },
+  {
+   "label": "Formulation",
+   "value": "lyophilized powder, 150 mg/vial"
+  },
+  {
+   "label": "Titer",
+   "value": "4.6 g/L"
+  },
+  {
+   "label": "Harvest VCD (Word superscript)",
+   "value": "1.8×10^7 cells/mL"
+  },
+  {
+   "label": "Inoculation density (Unicode)",
+   "value": "0.5×10⁶ cells/mL"
+  },
+  {
+   "label": "Award decision",
+   "value": "2027-02-26"
+  }
+ ],
+ "tables": [
+  {
+   "name": "Table 1 — Requested scope",
+   "markdown": "| Activity | DS — Primary site (Korea) | DS — Backup site (US) | DP — Primary site (Korea) | DP — Backup site |\n|---|---|---|---|---|\n| Technology transfer | Required | Quote requested | Required | Not required |\n| Engineering run | Required (1 run) | Not required | Not required | Not required |\n| PPQ | Required (3 batches) | Not required | Required (3 lots) | Not required |\n| Commercial supply | Required | Quote requested | Required | Not required |\n| Release and stability testing | Required | Quote requested | Required | Not required |\n",
+   "note": "two header rows flattened to one ('DS — <site>'): 'Activity' merged vertically, DS and DP merged horizontally over two site columns"
+  },
+  {
+   "name": "Table 2 — Engineering and PPQ batch plan",
+   "markdown": "| Batch | Type | Scale | Target start | Site | Purpose |\n|---|---|---|---|---|---|\n| ENG-01 | Engineering run (non-GMP) | 2,000 L | 2027-11 | DS, Korea | Confirm transfer at scale |\n| PPQ-01 | DS PPQ | 2,000 L | 2028-01 | DS, Korea | Process performance qualification |\n| PPQ-02 | DS PPQ | 2,000 L | 2028-02 | DS, Korea | Process performance qualification |\n| PPQ-03 | DS PPQ | 2,000 L | 2028-03 | DS, Korea | Process performance qualification |\n| DP-PPQ-01 | DP PPQ lot | ≈ 40,000 vials | 2028-04 | DP, Korea | Fill/lyo qualification |\n| DP-PPQ-02 | DP PPQ lot | ≈ 40,000 vials | 2028-05 | DP, Korea | Fill/lyo qualification |\n| DP-PPQ-03 | DP PPQ lot | ≈ 40,000 vials | 2028-06 | DP, Korea | Fill/lyo qualification |\n"
+  },
+  {
+   "name": "Table 3 — Annual demand forecast",
+   "markdown": "| Item | 2029 | 2030 | 2031 | 2032 | 2033 | Total 2029–2033 |\n|---|---|---|---|---|---|---|\n| DS demand (kg) | 30 | 60 | 90 | 120 | 120 | 420 |\n| Estimated DS batches (2,000 L, ≈ 6 kg/batch) | 5 | 10 | 15 | 20 | 20 | 70 |\n| DP demand (vials, 150 mg) | 180,000 | 360,000 | 540,000 | 720,000 | 720,000 | 2,520,000 |\n",
+   "note": "landscape page; last column is the 2029–2033 total"
+  },
+  {
+   "name": "Table 4 — Release specification",
+   "markdown": "| Category | Test | Method | Acceptance criteria — DS | Acceptance criteria — DP |\n|---|---|---|---|---|\n| Identity | Peptide map | LC-MS peptide mapping | Conforms to reference standard | Conforms to reference standard |\n| Identity | Charge profile | icIEF | Profile comparable to reference standard | Profile comparable to reference standard |\n| Quantity | Protein content | UV A280 | 150 ± 15 mg/mL | 150 mg/vial ± 10% (reconstituted) |\n| Purity | Monomer | SEC-HPLC | ≥ 97.0% | ≥ 97.0% |\n| Purity | High molecular weight species | SEC-HPLC | ≤ 2.0% | ≤ 2.0% |\n| Purity | Purity, non-reduced | CE-SDS (NR) | Main peak ≥ 95.0% | Main peak ≥ 95.0% |\n| Purity | Purity, reduced | CE-SDS (R) | HC + LC ≥ 97.0% | HC + LC ≥ 97.0% |\n| Purity | Charge variants | icIEF | Main 55–75%; acidic ≤ 30%; basic ≤ 15% | Main 55–75%; acidic ≤ 30%; basic ≤ 15% |\n| Potency | Biological activity | Cell-based reporter assay | 70–130% of reference standard | 70–130% of reference standard |\n| Potency | Target binding | ELISA | 80–125% of reference standard | 80–125% of reference standard |\n| Process impurities | Host cell protein | HCP ELISA | ≤ 100 ng/mg | Not tested |\n| Process impurities | Residual host cell DNA | qPCR | ≤ 10 pg/mg | Not tested |\n| Process impurities | Leached Protein A | ELISA | ≤ 10 ng/mg | Not tested |\n| Safety | Bacterial endotoxins | LAL kinetic chromogenic (USP <85>) | ≤ 0.5 EU/mg | ≤ 0.3 EU/mg |\n| Safety | Bioburden | Membrane filtration (USP <61>) | ≤ 10 CFU/10 mL | N/A |\n| Safety | Sterility | Membrane filtration (USP <71>) | N/A | Sterile |\n| Safety | Mycoplasma (unprocessed bulk) | qPCR (Ph. Eur. 2.6.7) | Not detected | N/A |\n| General | Appearance | Visual | Clear to slightly opalescent, colourless to slightly yellow | White to off-white lyophilized cake |\n| General | pH | Potentiometry (USP <791>) | 6.0 ± 0.3 | 6.0 ± 0.3 |\n| General | Osmolality | Freezing-point depression | 270–330 mOsm/kg | 270–330 mOsm/kg |\n| General | Polysorbate 80 | HPLC-CAD | 0.01–0.03% (w/v) | 0.01–0.03% (w/v) |\n| DP only | Water content | Karl Fischer (coulometric) | N/A | ≤ 2.0% |\n| DP only | Reconstitution time | Visual, 1.2 mL WFI | N/A | ≤ 5 min |\n| DP only | Visible particles | Visual inspection (USP <790>) | N/A | Practically free from particles |\n| DP only | Subvisible particles | Light obscuration (USP <788>) | N/A | ≥ 10 µm: ≤ 6,000/container; ≥ 25 µm: ≤ 600/container |\n| DP only | Container closure integrity | Helium leak / HVLD | N/A | Pass |\n",
+   "page_fragments": [
+    {
+     "page": 6,
+     "n_rows": 25,
+     "markdown": "| Category | Test | Method | Acceptance criteria — DS | Acceptance criteria — DP |\n|---|---|---|---|---|\n| Identity | Peptide map | LC-MS peptide mapping | Conforms to reference standard | Conforms to reference standard |\n| Identity | Charge profile | icIEF | Profile comparable to reference standard | Profile comparable to reference standard |\n| Quantity | Protein content | UV A280 | 150 ± 15 mg/mL | 150 mg/vial ± 10% (reconstituted) |\n| Purity | Monomer | SEC-HPLC | ≥ 97.0% | ≥ 97.0% |\n| Purity | High molecular weight species | SEC-HPLC | ≤ 2.0% | ≤ 2.0% |\n| Purity | Purity, non-reduced | CE-SDS (NR) | Main peak ≥ 95.0% | Main peak ≥ 95.0% |\n| Purity | Purity, reduced | CE-SDS (R) | HC + LC ≥ 97.0% | HC + LC ≥ 97.0% |\n| Purity | Charge variants | icIEF | Main 55–75%; acidic ≤ 30%; basic ≤ 15% | Main 55–75%; acidic ≤ 30%; basic ≤ 15% |\n| Potency | Biological activity | Cell-based reporter assay | 70–130% of reference standard | 70–130% of reference standard |\n| Potency | Target binding | ELISA | 80–125% of reference standard | 80–125% of reference standard |\n| Process impurities | Host cell protein | HCP ELISA | ≤ 100 ng/mg | Not tested |\n| Process impurities | Residual host cell DNA | qPCR | ≤ 10 pg/mg | Not tested |\n| Process impurities | Leached Protein A | ELISA | ≤ 10 ng/mg | Not tested |\n| Safety | Bacterial endotoxins | LAL kinetic chromogenic (USP <85>) | ≤ 0.5 EU/mg | ≤ 0.3 EU/mg |\n| Safety | Bioburden | Membrane filtration (USP <61>) | ≤ 10 CFU/10 mL | N/A |\n| Safety | Sterility | Membrane filtration (USP <71>) | N/A | Sterile |\n| Safety | Mycoplasma (unprocessed bulk) | qPCR (Ph. Eur. 2.6.7) | Not detected | N/A |\n| General | Appearance | Visual | Clear to slightly opalescent, colourless to slightly yellow | White to off-white lyophilized cake |\n| General | pH | Potentiometry (USP <791>) | 6.0 ± 0.3 | 6.0 ± 0.3 |\n| General | Osmolality | Freezing-point depression | 270–330 mOsm/kg | 270–330 mOsm/kg |\n| General | Polysorbate 80 | HPLC-CAD | 0.01–0.03% (w/v) | 0.01–0.03% (w/v) |\n| DP only | Water content | Karl Fischer (coulometric) | N/A | ≤ 2.0% |\n| DP only | Reconstitution time | Visual, 1.2 mL WFI | N/A | ≤ 5 min |\n| DP only | Visible particles | Visual inspection (USP <790>) | N/A | Practically free from particles |\n| DP only | Subvisible particles | Light obscuration (USP <788>) | N/A | ≥ 10 µm: ≤ 6,000/container; ≥ 25 µm: ≤ 600/container |\n"
+    },
+    {
+     "page": 7,
+     "n_rows": 1,
+     "markdown": "| Category | Test | Method | Acceptance criteria — DS | Acceptance criteria — DP |\n|---|---|---|---|---|\n| DP only | Container closure integrity | Helium leak / HVLD | N/A | Pass |\n"
+    }
+   ],
+   "note": "category cells merged vertically; where DS and DP criteria are the same the two criteria cells are merged (value repeated in both columns here); the two header rows repeat on each page"
+  }
+ ],
+ "mermaid": "flowchart LR\n    n0[\"1 Seed train N-1 perfusion 50–500 L\"] --> n1[\"2 Production bioreactor 2,000 L SUB, fed-batch, 14 d\"]\n    n1[\"2 Production bioreactor 2,000 L SUB, fed-batch, 14 d\"] --> n2[\"3 Harvest centrifuge + depth filtration\"]\n    n2[\"3 Harvest centrifuge + depth filtration\"] --> n3[\"4 Protein A capture bind/elute\"]\n    n3[\"4 Protein A capture bind/elute\"] --> n4[\"5 Low-pH viral inactivation pH 3.6 ± 0.1, 60–90 min\"]\n    n4[\"5 Low-pH viral inactivation pH 3.6 ± 0.1, 60–90 min\"] --> n5[\"6 CEX polishing bind/elute\"]\n    n5[\"6 CEX polishing bind/elute\"] --> n6[\"7 AEX polishing flow-through\"]\n    n6[\"7 AEX polishing flow-through\"] --> n7[\"8 Viral filtration 20 nm nanofilter\"]\n    n7[\"8 Viral filtration 20 nm nanofilter\"] --> n8[\"9 UF/DF + formulation 150 mg/mL, PS80 0.02%\"]\n    n8[\"9 UF/DF + formulation 150 mg/mL, PS80 0.02%\"] --> n9[\"10 DS fill & freeze 1 L bags ≤ −40 °C\"]\n    n9[\"10 DS fill & freeze 1 L bags ≤ −40 °C\"] --> n10[\"11 DP: thaw, compound, sterile filter, fill, lyophilize (150 mg/vial)\"]\n    n3[\"4 Protein A capture bind/elute\"] -->|\"IPC sample\"| n11[\"QC release testing (DS) per Table 4 (release specification)\"]\n    n7[\"8 Viral filtration 20 nm nanofilter\"] -->|\"IPC sample\"| n11[\"QC release testing (DS) per Table 4 (release specification)\"]",
+ "footnotes": 4,
+ "hard_elements": [
+  {
+   "element": "header table with logo image, merged cells and Page X of Y fields",
+   "doc": "pfz_rfp_main.docx",
+   "page": "all (1-8)",
+   "location": "page header"
+  },
+  {
+   "element": "SYNTHETIC mark in one header cell + footer",
+   "doc": "pfz_rfp_main.docx",
+   "page": "all (1-8)",
+   "location": "header cell / footer"
+  },
+  {
+   "element": "wide left binding margin (3.2 cm) and non-default margins",
+   "doc": "pfz_rfp_main.docx",
+   "page": "all (1-8)",
+   "location": "section properties"
+  },
+  {
+   "element": "cover page with confidentiality box, revision history and approval block",
+   "doc": "pfz_rfp_main.docx",
+   "page": 1,
+   "location": "cover page"
+  },
+  {
+   "element": "abbreviations table",
+   "doc": "pfz_rfp_main.docx",
+   "page": 2,
+   "location": "section 2"
+  },
+  {
+   "element": "footnotes (4, word/footnotes.xml)",
+   "doc": "pfz_rfp_main.docx",
+   "page": "2, 3, 5, 6",
+   "location": "sections 3, 4.2, 5, 6.1"
+  },
+  {
+   "element": "merged-cell table (vertical + horizontal), DS/DP x site",
+   "doc": "pfz_rfp_main.docx",
+   "page": 2,
+   "location": "section 4, Table 1"
+  },
+  {
+   "element": "special characters and Unicode super/subscripts (×10⁶, CO₂, ±, ≥, µ, °C, −)",
+   "doc": "pfz_rfp_main.docx",
+   "page": 3,
+   "location": "section 4.2"
+  },
+  {
+   "element": "Word-formatted superscript/subscript (w:vertAlign: 10^7, CO_2, log_10)",
+   "doc": "pfz_rfp_main.docx",
+   "page": 3,
+   "location": "section 4.2 second paragraph"
+  },
+  {
+   "element": "crossing-line flowchart with step numbers and legend (Mermaid gold, one deliberate crossing)",
+   "doc": "pfz_rfp_main.docx",
+   "page": 3,
+   "location": "section 4.2, Figure 1"
+  },
+  {
+   "element": "image over image (rotated CONFIDENTIAL stamp over the flowchart)",
+   "doc": "pfz_rfp_main.docx",
+   "page": 3,
+   "location": "Figure 1"
+  },
+  {
+   "element": "landscape section with wide table and totals column",
+   "doc": "pfz_rfp_main.docx",
+   "page": 5,
+   "location": "section 5, Table 3"
+  },
+  {
+   "element": "spec table: vertical merges (category), horizontal merges (DS = DP criteria), header rows repeat across pages (w:tblHeader)",
+   "doc": "pfz_rfp_main.docx",
+   "page": "6-7",
+   "location": "section 6.1, Table 4"
+  },
+  {
+   "element": "low-resolution image (72 dpi label artwork)",
+   "doc": "pfz_rfp_main.docx",
+   "page": 7,
+   "location": "section 7, Figure 2"
+  },
+  {
+   "element": "text box over image",
+   "doc": "pfz_rfp_main.docx",
+   "page": 7,
+   "location": "section 7, Figure 2"
+  },
+  {
+   "element": "pricing table with vertical merges (category)",
+   "doc": "pfz_rfp_main.docx",
+   "page": 7,
+   "location": "section 9, Table 5"
+  }
+ ],
+ "pages": 8
+}

@@ -217,7 +217,7 @@ def main():
         ("pdftoppm", "poppler — unstructured hi_res"),
         ("soffice", "LibreOffice — doc/ppt/hwp 변환"),
         ("gs", "Ghostscript — camelot 선택"),
-        ((pc.cfg().paths.mineru_bin or "mineru"), "MinerU CLI"),
+        ("mineru", "MinerU CLI"),
         ("nvidia-smi", "GPU(선택)"),
     ]:
         line(bool(shutil.which(tool)), tool, why)
@@ -233,7 +233,7 @@ def main():
     else:
         ok_n = 0
         for stack, m in registry.stacks().items():
-            tools = [(pc.cfg().paths.mineru_bin or "mineru") if t == "$MINERU_BIN" else t for t in m.REQUIRES["tools"]]
+            tools = ["mineru" if t == "$MINERU_BIN" else t for t in m.REQUIRES["tools"]]  # MINERU_BIN 칸은 지움(엔진 구성에서 뺀 엔진)
             miss = [x for x in m.REQUIRES["modules"] if importlib.util.find_spec(x) is None] + [t for t in tools if not shutil.which(t)]
             for e in m.ENGINES:
                 miss += [f"{e}: ${v}" for v in registry.missing_env(e)]

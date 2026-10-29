@@ -137,9 +137,9 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  ├─ docker/           Dockerfile(타깃 pipeline, mcp) · requirements · entrypoint.sh · IMAGE_BASE · wheels/(폐쇄망용 휠)
 │  ├─ release/          빌드·전송(build_ship, ship_stage) · 오버레이 패치 번들(make_patch) · 배포 판정(selftest_gate, known_fail.txt) · 커밋 전 점검(lint_changed.sh)
 │  └─ host/             서버 호스트에서 쓰는 것 — compose/ · scripts/(trigger, run_tool, mcp_up, settings_env, run_docs 등) · systemd/(새벽 배치, keepalive)
-├─ tests/               server/(이미지에 포함, 배포 판정) · general/(PC 전용) · fixtures/(프롬프트 사례 — 읽는 테스트 없음, C-63) · runner.py
+├─ tests/               server/(이미지에 포함, 배포 판정) · general/(PC 전용) · runner.py
 ├─ validation/          PC 전용 검증 도구 — search_ui/(검증 페이지) · e2e/(평가·비교, answer_gen)
-├─ valid_env/           PC 전용 데이터 — unstructured/(합성 테스트 문서·정답) · answer_test/(답변 점검 agent) · docker/(PC 테스트 Docker)
+├─ valid_env/           PC 전용 데이터 — object_storage/(합성 테스트 문서, 버킷 모양) · eval_sets/(정답·질문·목록) · edw/(합성 EDW sqlite) · answer_test/(답변 점검 agent) · docker/(PC 테스트 Docker)
 ├─ docs/                문서(지도: docs/index.md) — operations/ · architecture/ · requirements/ · refactoring/
 ├─ VERSION              두 이미지 공통 버전(SemVer)
 ├─ settings.sample.yaml 모든 설정 항목의 구조와 설명(자동 생성 — 손으로 고치지 않음)
@@ -165,6 +165,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 | 쓰는 법   | **기본값과 다르게 쓸 항목만** 적는다. 비워 둔 항목은 코드 기본값을 쓴다                                                                                                                 |
 | 필수     | `common.run_env` — `local`(PC) · `dev` · `stage` · `prd`(서버 — 외부 모델 호출을 거부하고, 설정 파일을 못 읽으면 시작하지 않는다)                                                        |
 | 항목별 안내 | [docs/operations/env-guide.md](docs/operations/env-guide.md)                                                                                                |
+| **서버 반입** | `settings.yaml`은 **git에 올리지 않는다**(`.gitignore` — 비밀값·서버마다 다른 값). 반입 때 **사람이 서버용으로 직접 작성**한다: `settings.sample.yaml`의 「1. 필수 입력」 블록에서 `[필수: 공통]`·`[필수: 서버]` 칸을 모두 확인해 채우고 `python -m pipeline.config --file <파일>`로 확인. **PC 파일을 그대로 복사하지 않는다** — PC의 `run_env: local`·`*_allow_external: true`가 서버에서 외부 모델 호출을 연다(알려진 위험, 사용자 10-29 수용) |
 
 
 **실행할 때 값을 넘기는 방법 3가지**
@@ -213,7 +214,6 @@ common:
     embed: {base_url: [[ORCA_RICH_MD:0896ceca59eeaa02d79aaf879fa2674c:inline-html:%3COpenAI%20%ED%98%B8%ED%99%98%20%EC%A3%BC%EC%86%8C%3E]], model: <임베딩 모델>, api_key: <키>, allow_external: true}
     guard:
       no_paid_calls: true                        # 평소에는 true(외부 호출 차단) — 임베딩이 필요한 실행 동안만 false
-      synthetic_truth: <합성 문서 선언 json 경로>   # 외부 전송 두 번째 잠금(테스트 문서라는 선언)
       budget_usd: 0.1                            # 비용 상한
       max_calls: 40
       spend_file: output/spend-ledger.json
@@ -226,7 +226,7 @@ mcp:
   server: {host: 127.0.0.1, port: 18769, store: pg}
 ```
 
-- **외부 임베딩은 세 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `synthetic_truth` 있음 · `no_paid_calls: false`. 하나라도 빠지면 호출하지 않는다.
+- **외부 임베딩은 세 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `run_env: local` · `no_paid_calls: false`. 하나라도 빠지면 호출하지 않는다(서버 dev·stage·prd는 늘 거부).
 - ⚠️ PG 접속 항목을 비워 두면 코드가 `docker ps`로 찾은 아무 pgvector에나 연결한다. 전용 PG 접속 정보를 항상 적는다.
 
 ### 4-3. 점검
@@ -249,20 +249,18 @@ export PYTHONPATH=$PWD                                   # 명령은 저장소 �
 **① 테스트 문서 고르기 — `valid_env`를 그대로 연결(복사 불필요)**
 
 ```bash
-SRC=valid_env/unstructured/synth-realpat     # 합성 테스트 문서 폴더를 그대로 --src로 넘긴다
+mkdir -p output/demo/src && grep -vE '^\s*(#|$)' valid_env/eval_sets/list-smoke10.txt | xargs -I{} cp {} output/demo/src/
+SRC=output/demo/src     # 목록 파일의 문서를 한 폴더로 모아 --src로 넘긴다(--src는 폴더만 받음)
 ```
 
-| 세트(`valid_env/unstructured/…`) | 문서 | 쓰임 |
+| 목록(`valid_env/eval_sets/…`) | 문서 | 쓰임 |
 |---|---|---|
-| `synth-realpat` | docx·pdf 8건 | 처음 확인용(빠름 — 1분 안쪽) |
-| `synth-mixedpdf` | pdf 6건 | 글자·스캔이 섞인 PDF |
-| `synth-images` | 18건 | 그림·차트 |
-| `synth-hard` | 22건 | 어려운 형식 |
+| `list-smoke10.txt` | 10건 | 처음 확인용(빠름) |
+| `list-integration.txt` | 25건 | 통합 확인(+ `integration-questions.jsonl`) |
+| `list-integration-holdout.txt` | 홀드아웃 | 조정에 쓰지 않는 확인용 |
 
-- 폴더 안의 **문서만** 읽는다. 정답 파일(`gold/`, `*.json`, `*.md`)은 건너뛰고, `valid_env`에는 아무것도 쓰지 않는다(결과는 모두 `out_root` 아래).
-- 세트별 설명은 [valid_env/unstructured/README.md](valid_env/unstructured/README.md). 내 문서로 하려면 `SRC=<문서 폴더>`.
-- 여러 세트에서 고른 **목록 파일**(`list-smoke10.txt` 등)은 `--src`가 폴더만 받으므로 한 폴더로 모은 뒤 쓴다:
-  `mkdir -p output/demo/src && grep -vE '^\s*(#|$)' valid_env/unstructured/list-smoke10.txt | xargs -I{} cp {} output/demo/src/ && SRC=output/demo/src`
+- 문서는 서버 버킷 모양 `valid_env/object_storage/<원천>/<uuid>/<파일>`에 있다 — `CRMS/`(어려운 사례 21건, 정답 `eval_sets/hard_cases/`) · `SFDC/`(RFP 12건, 정답 `eval_sets/rfp/`). 문서마다 왜 있는지는 [valid_env/object_storage/test_doc_purpose.md](valid_env/object_storage/test_doc_purpose.md), 전체 구조는 [valid_env/README.md](valid_env/README.md).
+- `valid_env`에는 아무것도 쓰지 않는다(결과는 모두 `out_root` 아래). 내 문서로 하려면 `SRC=<문서 폴더>`.
 
 **② 파싱 — 문서 → 대표 결과**
 
@@ -321,8 +319,8 @@ docker exec sbl-mcp-pg psql -U rag -d rag -c "SELECT version_id, name, is_active
 
 `settings.yaml`은 `no_paid_calls: true`인 채로 두고, 이번 실행에만 필요한 값을 명령 인자로 준다.
 ```bash
-O=$PWD/output/demo; SRC=valid_env/unstructured/synth-realpat     # ①과 같은 문서 폴더
-SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1 --set LLM_SYNTHETIC_TRUTH=<합성 문서 선언 json>
+O=$PWD/output/demo; SRC=$O/src     # ①과 같은 문서 폴더
+SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
       --set NO_PAID_CALLS=0 --set LLM_BUDGET_USD=0.10 --set LLM_MAX_CALLS=10 --set LLM_SPEND_FILE=$O/spend.json)
 
 .venv/bin/python -m pipeline.cli "${SETS[@]}" parse --src $SRC
@@ -332,7 +330,7 @@ SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1 -
 .venv/bin/python -m pipeline.load.pgvector_load "${SETS[@]}" load --bundle $O/bundle
 
 # ask·MCP는 --set을 받지 않으므로 오버레이 설정 파일(방법 C)로 같은 값을 넘긴다
-SF=$(.venv/bin/python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 LLM_SYNTHETIC_TRUTH=<합성 문서 선언 json> \
+SF=$(.venv/bin/python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 \
      NO_PAID_CALLS=0 LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_STORE=pg MCP_BUNDLE=$O/bundle MCP_PORT=18769)
 SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.ask ask --pg --bundle $O/bundle --k 3 --q "<질문>"
 SETTINGS_FILE=$SF nohup .venv/bin/python -m mcp_server.main > $O/mcp.log 2>&1 & echo $! > $O/mcp.pid
@@ -591,6 +589,7 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 
 | 문서                                                                           | 내용                                                                     |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [docs/PRD.md](docs/PRD.md) · [docs/prd/](docs/prd/)                          | **기능 요건** — 검색 MCP(mcp.md) · 데이터 파이프라인(pipeline.md) · e2e 실행·테스트·평가(e2e.md)의 기능·목적·관련 파일, 미개발 항목 표 · 요건과 다른 코드·안 쓰는 코드·꺼진 기능(gaps.md) |
 | [docs/index.md](docs/index.md)                                               | 문서 지도                                                                  |
 | [CLAUDE.md](CLAUDE.md)                                                       | 개발 규칙 · 로컬 하네스 · 점검 명령 · 핑거프린트 기준값                                     |
 | [refactor.md](refactor.md)                                                   | 서버·사람이 확인할 사항(C-xx) · **"최종 — 사람이 할 일"**(첫 배포 순서)                      |
@@ -601,10 +600,6 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 | [docs/refactoring/refactor\_plan.md](docs/refactoring/refactor_plan.md)      | 리팩토링 가이드 · 결정 기록(D-xxx) · 파일 이동표                                       |
 
 
-**알려진 문제(리팩토링 전부터)** — 자세한 목록은 CLAUDE.md §10
-
-- 검색 결과에 "집계 경로 오류" 메모가 붙는다(축소 스키마에 없는 컬럼을 조회 — 검색 근거 자체는 정상).
-- `pgvector_load load --prune`이 바뀌지 않은 문서까지 지운다(C-60 — 고칠지 결정 대기).
-- 테스트의 알려진 실패: refactor.md C-54·C-58.
+**알려진 문제·미개발 항목** — [docs/PRD.md](docs/PRD.md) 표(축소 스키마 일부 반영 `mc-10`·`mc-11` · `load --prune` C-60 `pl-13` · 테스트 알려진 실패 `e2-11` 등).
 
 > 옛 문서와 코드 주석에는 리팩토링 중에 쓰던 용어가 남아 있다(시험=테스트, 반입=배포, 칸=항목·컬럼, 판=버전, 지문=핑거프린트, 열쇠=키, 층=레이어, 묶음=번들, 대장=레지스트리, 인계=핸드오프, 덧씌우기=오버레이 패치, 게시=퍼블리시, 지시서=프롬프트). 대응표는 CLAUDE.md 끝에 있다.

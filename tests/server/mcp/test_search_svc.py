@@ -58,7 +58,7 @@ def _selftest_search_notes_no_race():
     barrier = threading.Barrier(n_threads)
 
     def fake_embed(meta, text):
-        barrier.wait()  # 다 같이 시작 — 겹칠 확률을 최대로
+        barrier.wait(timeout=30)  # 다 같이 시작 — 겹칠 확률을 최대로(한 스레드가 죽어도 나머지가 영원히 기다리지 않게)
         if "FAIL" in text:
             time.sleep(0.03)  # 레이스가 있으면 이 사이에 다른 스레드가 note를 덮어씀(스크래치 시험으로 36/80 재현 확인)
             raise RuntimeError("가짜 임베딩 장애")
@@ -70,6 +70,8 @@ def _selftest_search_notes_no_race():
     sys.setswitchinterval(0.0001)  # GIL을 자주 넘겨 스레드 전환을 늘림(레이스 노출 확률 ↑)
     old = {k: _STATE.get(k) for k in ("R", "bundle", "checked_at")}
     bad = []
+    # PC 루트 settings.yaml(mcp.server.store: pg 등)이 새지 않게 — 30초 뒤 재적재가 실제 PG로 가면 한 스레드가 죽어 barrier가 멈췄음(10-29)
+    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), MCP_QUERY_LOG_DIR=str(d / "qa_log"))
     try:
         R = RT.Retriever(d)
         _STATE["R"], _STATE["bundle"], _STATE["checked_at"] = R, d, time.time()
@@ -90,6 +92,7 @@ def _selftest_search_notes_no_race():
             t.join()
         assert not bad, f"note가 다른 요청과 섞임: {bad[:5]}"
     finally:
+        _env.close()
         RT.embed_query = real_embed
         sys.setswitchinterval(real_switch)
         _STATE.clear()
@@ -655,61 +658,6 @@ def _selftest_agg_fx():
     print("[selftest] SEARCH_AGG_FX(BR43) — 통화 2개 이상 섞인 집계만 환율 근거 추가 · 단일 통화 영향 없음 · =0 통과")
 
 
-def _selftest_rerank_cond():
-    """AD4 — SEARCH_RERANK가 켜졌을 때만 응답에 rerank: {applied, reason[, ms]}(꺼짐=기존처럼 칸 자체 없음).
-    SEARCH_RERANK_WHEN=cond: 일반형 질문·점수차 크고 문서 소수면 건너뜀 · 비교 질문이면 적용."""
-    from mcp_server.services.search import rerank as RR
-
-    docs = [
-        {"file_path": "a.txt", "file_name": "a.txt", "file_sha256": "a" * 64, "doc_format": ".txt"},
-        {"file_path": "b.txt", "file_name": "b.txt", "file_sha256": "b" * 64, "doc_format": ".txt"},
-    ]
-    chunks = [
-        {
-            "doc": i,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "단가는 100 USD",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        }
-        for i in range(2)
-    ]
-    d = _mk_bundle(docs, chunks)
-    orig_local = RR._score_local
-    _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
-    try:
-        with mc.senv(SEARCH_RERANK=None):
-            off = do_search("단가는?", k=2, methods=["bm25"], decompose=False)
-            assert "rerank" not in off, off  # 꺼짐(기본) — 칸 자체 없음(바이트 동일)
-
-        RR._score_local = lambda q, texts: [texts.index(t) * 1.0 for t in texts]
-        with mc.senv(SEARCH_RERANK="stub", SEARCH_RERANK_WHEN="always"):
-            on_always = do_search("단가는?", k=2, methods=["bm25"], decompose=False)
-            assert on_always["rerank"]["applied"] is True and "ms" in on_always["rerank"], on_always["rerank"]  # 기본값 — 신호 없어도 항상
-
-        with mc.senv(
-            SEARCH_RERANK="stub",
-            SEARCH_RERANK_WHEN="cond",
-            SEARCH_RERANK_GAP="0",  # 같은 텍스트 2건 — 점수차 0, (a) 끔
-            SEARCH_RERANK_SPREAD="99",
-        ):  # 문서 2개뿐 — (b) 끔
-            skip = do_search("단가는?", k=2, methods=["bm25"], decompose=False)  # 일반형 질문 — (c)도 안 걸림
-            assert skip["rerank"] == {"applied": False, "reason": skip["rerank"]["reason"]} and "ms" not in skip["rerank"], skip["rerank"]
-
-            applied = do_search("단가 비교는?", k=2, methods=["bm25"], decompose=False)  # 비교 질문 — (c) 적용
-            assert applied["rerank"]["applied"] is True and "ms" in applied["rerank"], applied["rerank"]
-    finally:
-        RR._score_local = orig_local
-        _env.close()
-        _STATE.clear()
-    print("[selftest] AD4 SEARCH_RERANK_WHEN=cond — 응답 rerank: {applied, reason[, ms]} · 꺼짐=칸 없음 · always=항상 적용 통과")
-
-
 def _selftest_search_client_arg():
     """AD38 — do_search(client=...)가 Retriever.search_ex로 그대로 전달되는지(MCP 계층 통합 확인).
     꺼짐(기본)이면 바이트 동일(둘 다 나옴, 앞으로만) · SEARCH_CLIENT_HARD=1이면 다른 고객은 근거에서 완전히 빠짐."""
@@ -751,7 +699,7 @@ def _selftest_search_client_arg():
 def _selftest_entity_split():
     """BR23 — 비교 질문(고객 2명이 같이 나옴)에서 한쪽 고객 문서 3개가 점수를 다 차지해 다른 쪽 고객 문서 1개가
     top-k 밖으로 밀리는 재현(a1~a3=Acme Co, b1=Beta Inc, 질문 용어는 a쪽과 더 많이 겹침). SEARCH_ENTITY_SPLIT=0이면
-    바이트 동일(b1이 빠짐) · 기본(켬)이면 고객별 하위 검색(decompose.gather 재사용)이 b1을 끌어와 근거에 포함."""
+    바이트 동일(b1이 빠짐) · 기본(켬)이면 고객별 하위 검색(search_svc._gather)이 b1을 끌어와 근거에 포함."""
     docs = [
         {"file_path": f"a{i}.txt", "file_name": f"a{i}.txt", "file_sha256": str(i) * 64, "doc_format": ".txt", "client": "Acme Co"}
         for i in range(1, 4)
@@ -787,68 +735,6 @@ def _selftest_entity_split():
         _env.close()
         _STATE.clear()
     print("[selftest] BR23 SEARCH_ENTITY_SPLIT — 고객 2명 비교 질문의 한쪽 고객 누락을 하위 검색으로 보정 통과")
-
-
-def _selftest_graph_client_restrict():
-    """GH1-12 — 그래프 확장(graph 방법)이 SEARCH_CLIENT_HARD 고객 제한을 비켜 가던 버그. a.txt(Acme Co)의 씨앗
-    청크가 공유 엔티티 노드를 통해 b.txt(Other Co)의 청크로 이어지는 합성 kg_nodes/kg_edges로 재현: 꺼짐(기본)이면
-    그래프 근거가 그대로(바이트 동일) · SEARCH_CLIENT_HARD=1 + client=Acme면 그래프로 들어온 다른 고객(b.txt) 근거가 빠진다."""
-    docs = [
-        {"file_path": "a.txt", "file_name": "a.txt", "file_sha256": "a" * 64, "doc_format": ".txt", "client": "Acme Co"},
-        {"file_path": "b.txt", "file_name": "b.txt", "file_sha256": "b" * 64, "doc_format": ".txt", "client": "Other Co"},
-    ]
-    chunks = [
-        {
-            "doc": 0,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "단가는 100 USD",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        },
-        {
-            "doc": 1,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "다른 고객 전용 문서 내용",
-            "n_terms": 4,
-            "bbox": None,
-            "section": None,
-        },
-    ]
-    d = _mk_bundle(docs, chunks)
-    kg_nodes = [
-        {"id": 10, "kind": "chunk", "node_key": "c0", "label": "c0", "chunk": 0},
-        {"id": 11, "kind": "chunk", "node_key": "c1", "label": "c1", "chunk": 1},
-        {"id": 20, "kind": "entity", "node_key": "단가", "label": "단가"},
-    ]
-    kg_edges = [{"src": 10, "dst": 20}, {"src": 11, "dst": 20, "chunk": 1}]
-    (d / "kg_nodes.jsonl").write_text("\n".join(json.dumps(n, ensure_ascii=False) for n in kg_nodes) + "\n", encoding="utf-8")
-    (d / "kg_edges.jsonl").write_text("\n".join(json.dumps(e, ensure_ascii=False) for e in kg_edges) + "\n", encoding="utf-8")
-    _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
-    try:
-        with mc.senv(SEARCH_CLIENT_HARD=None):
-            off = do_search("단가는?", k=5, methods=["bm25", "graph"], decompose=False)
-            assert any(e.get("via", "").startswith("graph(") and e["file_name"] == "b.txt" for e in off["evidence"]), off[
-                "evidence"
-            ]  # 꺼짐 — 그대로(바이트 동일)
-
-        with mc.senv(SEARCH_CLIENT_HARD="1"):
-            on = do_search("단가는?", k=5, methods=["bm25", "graph"], decompose=False, client="Acme Co")
-            assert not any(e.get("via", "").startswith("graph(") and e["file_name"] == "b.txt" for e in on["evidence"]), on[
-                "evidence"
-            ]  # 켬 — 그래프로 온 다른 고객도 빠짐
-            assert any(e["file_name"] == "a.txt" for e in on["evidence"]), on["evidence"]  # 자기 고객 근거는 그대로
-    finally:
-        _env.close()
-        _STATE.clear()
-    print("[selftest] GH1-12 graph 확장 고객 제한 — 꺼짐 바이트 동일 · SEARCH_CLIENT_HARD=1이면 그래프로 들어온 다른 고객 근거도 빠짐 통과")
 
 
 def _selftest_br50_client_scope():
@@ -985,9 +871,8 @@ def _selftest_br50_client_scope():
     _hard = None
     try:
         # 꺼짐(기본) — client를 줘도 전과 바이트 동일
-        off = do_search("바이러스 불활화 공정", k=5, methods=["bm25", "concept", "image"], decompose=False, client="Acme Co")
+        off = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False, client="Acme Co")
         assert {e.get("file_name") for e in off["evidence"] if e.get("file_name")} >= {"a.txt", "b.txt"}, off["evidence"]
-        assert {im["doc"] for im in off["images"]} == {"a.txt", "b.txt"}, off["images"]
 
         doc_off = do_get_document("b.txt", client="Acme Co")
         assert doc_off.get("file_name") == "b.txt" and "error" not in doc_off, doc_off
@@ -1005,9 +890,8 @@ def _selftest_br50_client_scope():
 
         # 켬 — SEARCH_CLIENT_HARD=1 + client="Acme Co" 명시
         _hard = mc.senv(SEARCH_CLIENT_HARD="1")
-        on = do_search("바이러스 불활화 공정", k=5, methods=["bm25", "concept", "image"], decompose=False, client="Acme Co")
+        on = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False, client="Acme Co")
         assert "b.txt" not in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # core·concept 둘 다 빠짐(F)
-        assert all(im["doc"] != "b.txt" for im in on["images"]), on["images"]  # 그림도 빠짐(G)
         assert "a.txt" in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # 자기 고객 근거는 그대로
 
         doc_on = do_get_document("b.txt", client="Acme Co")
@@ -1047,7 +931,7 @@ def _selftest_evidence_rdb_meta():
     manifest가 그 문서를 모르면(두 번째 문서) 칸 자체가 없고, manifest가 아예 없으면 바이트 동일(새 칸 0개)."""
     import csv
 
-    base = ROOT / "valid_env" / "unstructured" / "synth-meta-rdb" / "meta" / "doc_location.csv"
+    base = ROOT / "valid_env" / "edw" / "meta_rdb" / "doc_location.csv"
     if not base.exists():  # 이미지에는 예시 데이터 없음 → 건너뜀(10-14)
         print(f"[selftest] AD44 근거 RDB 메타 건너뜀 — 예시 표 없음({base})")
         return
@@ -1133,10 +1017,8 @@ def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) 
     _selftest_agg_fx()
     _selftest_search_client_arg()
     _selftest_entity_split()
-    _selftest_graph_client_restrict()
     _selftest_br50_client_scope()
     _selftest_evidence_rdb_meta()
-    _selftest_rerank_cond()
     _selftest_query_log()
     _selftest_evidence_rep_path()
     _selftest_index_id()

@@ -1,10 +1,8 @@
 """common.ai.guard 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.ai.guard --selftest`."""
 
-import json
 import os
 import socket
 import urllib.request
-from pathlib import Path
 
 from common.ai.guard import (
     BudgetExceeded,
@@ -16,7 +14,6 @@ from common.ai.guard import (
     spend_reserve,
     spend_settle,
     spend_total,
-    synthetic_ok,
     urlopen,
 )
 
@@ -26,7 +23,6 @@ def selftest():
     from common.config.settings import COMMON
 
     with COMMON.env(
-        LLM_SYNTHETIC_TRUTH=None,
         NO_PAID_CALLS=None,
         LLM_SPEND_FILE=None,
         LLM_BUDGET_USD=None,
@@ -85,27 +81,19 @@ def _selftest_body(COMMON):
             assert is_internal("http://llm.mycompany.co.kr/v1")
     finally:
         socket.getaddrinfo = socket_getaddrinfo
-    # 외부 허용 두 겹 잠금 — 옛 시험은 가짜 접두 X(X_ALLOW_EXTERNAL=1)였으나 설정 객체에는 가짜 접두 칸이 없어 진짜 접두 EMBED로 같은 것을 시험
+    # 외부 허용(스위치 + RUN_ENV=local) — 옛 시험은 가짜 접두 X(X_ALLOW_EXTERNAL=1)였으나 설정 객체에는 가짜 접두 칸이 없어 진짜 접두 EMBED로 같은 것을 시험
     import tempfile
 
     EXTU = "https://openrouter.ai/api/v1"
-    with COMMON.env(EMBED_ALLOW_EXTERNAL="1"):  # 한 겹만 → 거부
+    with COMMON.env(EMBED_ALLOW_EXTERNAL=None):  # 허용 없음 → 거부
         try:
             require_internal(EXTU, "EMBED")
-            raise AssertionError("한 겹으로 외부 허용됨")
+            raise AssertionError("허용 없이 외부 허용됨")
         except RuntimeError:
             pass
-    f = Path(tempfile.mkdtemp()) / "truth.json"
-    f.write_text(json.dumps({"_meta": {}}), encoding="utf-8")
-    with COMMON.env(EMBED_ALLOW_EXTERNAL="1", LLM_SYNTHETIC_TRUTH=str(f)):
-        require_internal(EXTU, "EMBED")  # 두 겹 → 허용 (RUN_ENV=local)
+    with COMMON.env(RUN_ENV="local", EMBED_ALLOW_EXTERNAL="1"):
+        require_internal(EXTU, "EMBED")  # 허용 + RUN_ENV=local → 허용(합성 문서 선언 잠금은 사용자 10-29에 삭제)
         assert external_allowed("EMBED") and not external_allowed("X")  # 칸 없는 접두는 허용 안 됨
-    with COMMON.env(LLM_SYNTHETIC_TRUTH=str(f)):  # 둘째 잠금만 → 거부
-        try:
-            require_internal(EXTU, "EMBED")
-            raise AssertionError("둘째 잠금만으로 외부 허용됨")
-        except RuntimeError:
-            pass
     for env in (
         None,
         "dev",
@@ -115,17 +103,17 @@ def _selftest_body(COMMON):
         "PRD",
         "Local",
         " local",
-    ):  # D-028 ⑧ — 서버 환경은 두 겹이 다 열려도 거부(내부 주소는 영향 없음) · 없음·모르는 글자도 서버로(VS7b U-1 b)
-        with COMMON.env(RUN_ENV=env, EMBED_ALLOW_EXTERNAL="1", LLM_SYNTHETIC_TRUTH=str(f)):
+    ):  # D-028 ⑧ — 서버 환경은 허용이 열려도 거부(내부 주소는 영향 없음) · 없음·모르는 글자도 서버로(VS7b U-1 b)
+        with COMMON.env(RUN_ENV=env, EMBED_ALLOW_EXTERNAL="1"):
             try:
                 require_internal(EXTU, "EMBED")
                 raise AssertionError(f"RUN_ENV={env}인데 외부 허용됨")
             except RuntimeError as e:
                 assert ("RUN_ENV 없음" if env is None else f"RUN_ENV={env}") in str(e), str(e)
-            assert not external_allowed("EMBED") and not synthetic_ok()
+            assert not external_allowed("EMBED")
             require_internal("http://10.0.0.5:8000/v1", "EMBED")
     print(
-        "[selftest] 내부망 가드 — 두 겹 잠금·점 없는 이름 주소 확인·리다이렉트 가드·RUN_ENV(없음·dev·stage·prd·모르는 글자 거부, local만 허용) 통과"
+        "[selftest] 내부망 가드 — 외부 허용 잠금·점 없는 이름 주소 확인·리다이렉트 가드·RUN_ENV(없음·dev·stage·prd·모르는 글자 거부, local만 허용) 통과"
     )
     # 비용 관문(10-05 독립 검토) — NO_PAID_CALLS 차단 · 공유 장부 선차감이 동시 호출에도 상한을 넘지 않음
     import threading

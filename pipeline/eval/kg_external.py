@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""외부 지식 그래프 스택 어댑터 — LightRAG·Cognee·Graphiti·OpenViking를 같은 인터페이스(build→search)로 감싸
+"""외부 지식 그래프 스택 어댑터 — LightRAG·Cognee·Graphiti를 같은 인터페이스(build→search)로 감싸
 output/eval/external/<스택>.jsonl({"anchor_id","units":[{"doc","text"}]})을 만든다. tools/run_combo.py가 이를
 combo {"parse":"external","retrieve":<스택>}로 같은 R 지표(eval-design.md §5 마지막 문단)로 채점한다.
 
@@ -252,8 +252,8 @@ class GraphitiAdapter(Adapter):
         except ImportError as err:
             raise _missing("graphiti-core", "(`uv pip install graphiti-core` + Neo4j docker — SETUP.md 4절)") from err
         base, model = _need_llm()
-        gr = pc.cfg().connections.graphiti  # S7c — 설정 객체(uri·user는 빈 값 그대로 — blank=keep, 비밀번호는 없으면 "")
-        uri, user = gr.neo4j_uri, gr.neo4j_user
+        gr = pc.cfg().connections.graphiti  # S7c — 설정 객체(user는 빈 값 그대로 — blank=keep, 비밀번호는 없으면 "")
+        uri, user = "bolt://localhost:7687", gr.neo4j_user  # 주소 칸은 지움(PC 평가 전용 — 로컬 Neo4j docker 고정)
         pw = C.reveal(gr.neo4j_password)
         pw = pw if pw is not None else ""
 
@@ -307,57 +307,6 @@ class GraphitiAdapter(Adapter):
         return [{"doc": _guess_doc(e.fact, self._corpus) or "", "text": e.fact} for e in edges[:k]]
 
 
-# ── OpenViking(AGPLv3) — 로컬 서버(SDK SyncHTTPClient, REST /api/v1/search 경유). 미검증 ──
-
-
-class OpenVikingAdapter(Adapter):
-    """mode: None(기본) · THINKING(설치된 SDK가 search(mode=...)를 받으면). 서버가 떠 있어야 한다(SETUP.md 3절).
-    XS8: OV_FEATURES에 parse가 없으면 --stack openviking*을 명시해도 거부(.env에 OV_FEATURES=parse 추가 안내)."""
-
-    def __init__(self, mode=None):
-        self.mode = mode
-        url = C.cfg().connections.openviking.url  # S7c — 설정 객체(없으면 기본 주소, 빈 값은 빈 글자 그대로)
-        self.base = url if url is not None else "http://127.0.0.1:1933"
-        self.client = None
-        self._corpus = {}
-
-    def build(self, corpus, workdir):
-        from common.store import services
-
-        if not services.ov_enabled("parse"):
-            raise RuntimeError(
-                "OV_FEATURES에 parse가 없음 — .env에 OV_FEATURES=parse(또는 summary,search,parse)를 추가해야 이 스택을 씀(XS8)"
-            )
-        self._corpus = corpus
-        try:
-            from openviking_sdk import SyncHTTPClient
-        except ImportError as err:
-            raise _missing("openviking-sdk", "(`uv pip install openviking-sdk` — SETUP.md 4절, 서버는 별도 docker)") from err
-        self.client = SyncHTTPClient(url=self.base)
-        try:
-            self.client.initialize()
-        except Exception as e:
-            raise RuntimeError(f"OpenViking 서버({self.base}) 연결 실패 — 떠 있는지 확인(SETUP.md 3절): {e}") from e
-        for name, text in corpus.items():
-            fp = Path(workdir) / name
-            fp.write_text(text, encoding="utf-8")
-            self.client.add_resource(str(fp), wait=True, timeout=600)
-
-    def search(self, query, k=10):
-        kw = {"limit": k, **({"mode": self.mode} if self.mode else {})}
-        try:
-            res = self.client.search(query, **kw)
-        except TypeError:
-            kw.pop("mode", None)
-            res = self.client.search(query, **kw)
-        items = [it for key in ("resources", "memories", "skills") for it in (res or {}).get(key, []) or []]
-        out = []
-        for it in items[:k]:
-            text = str(it.get("content") or it.get("overview") or it.get("abstract") or "")[:1500]
-            out.append({"doc": _guess_doc(text, self._corpus) or (it.get("uri") or ""), "text": text})
-        return out
-
-
 STACKS = {
     "mockgraph": lambda: MockGraphAdapter(),
     "lightrag": lambda: LightRAGAdapter("hybrid"),
@@ -374,8 +323,6 @@ STACKS = {
     "graphiti_rrf": lambda: GraphitiAdapter("rrf"),
     "graphiti_mmr": lambda: GraphitiAdapter("mmr"),
     "graphiti_cross_encoder": lambda: GraphitiAdapter("cross_encoder"),
-    "openviking": lambda: OpenVikingAdapter(None),
-    "openviking_thinking": lambda: OpenVikingAdapter("THINKING"),
 }
 
 
@@ -426,7 +373,6 @@ def build_cli():
     ap.add_argument("--out", default="output/eval")
     ap.add_argument("--k", type=int, default=10)
     ap.add_argument("--workdir")
-    ap.add_argument("--truth", help="(개발 PC) 가상 코퍼스 truth.json — 있을 때만 외부 LLM 허용(common/llm.py)")
     return ap
 
 
@@ -434,8 +380,6 @@ def main(argv=None):
     a = build_cli().parse_args(argv)
     if not a.stack:
         raise SystemExit("--stack 필요")
-    if a.truth:
-        C.put(LLM_SYNTHETIC_TRUTH=str(Path(a.truth).resolve()))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스)
     run_from_cli(a)
 
 

@@ -19,9 +19,9 @@
 | `deploy/docker/` | Dockerfile, requirements, entrypoint, `wheels/` | 앱 로직 | (빌드 원본) |
 | `deploy/release/` | 빌드·전송·오버레이 패치·배포 판정 스크립트, `known_fail.txt`, `lint_changed.sh` | 앱 로직 | 일부(배포 판정 파일) |
 | `deploy/host/` | **서버 호스트**에서 실행하는 compose, systemd, 셸 스크립트, `run_docs.py` | 컨테이너 안에서 실행되는 코드 | 아니요 |
-| `tests/` | 테스트 — `server/`(이미지 안에서 배포 판정에 쓰는 테스트, 외부 접속 없이 실행됨), `general/`(PC 전용 — PG·Docker가 필요하거나 느린 테스트), `fixtures/`, `runner.py` | 앱 코드 | `server/`만 |
+| `tests/` | 테스트 — `server/`(이미지 안에서 배포 판정에 쓰는 테스트, 외부 접속 없이 실행됨), `general/`(PC 전용 — PG·Docker가 필요하거나 느린 테스트), `runner.py` | 앱 코드 | `server/`만 |
 | `validation/` | PC 전용 **검증 도구 코드** — `search_ui/`(검증 페이지), `e2e/`(평가·비교·answer_gen) | 서버에서 실행되는 코드, 데이터 번들 | 아니요 |
-| `valid_env/` | PC 전용 **데이터** — 테스트 문서와 정답(`unstructured/`), 답변 점검 agent(`answer_test/`), PC 테스트 Docker(`docker/`) | 코드 로직, 비밀값, 운영 데이터 | 아니요 |
+| `valid_env/` | PC 전용 **데이터** — 외부 시스템 대역: 테스트 문서(`object_storage/` — 버킷 모양), 정답·질문·목록(`eval_sets/`), 합성 EDW·회사 DB 표(`edw/`), 답변 점검 agent(`answer_test/`), PC 테스트 Docker(`docker/`) | 코드 로직, 비밀값, 운영 데이터 | 아니요 |
 | `docs/` | 사람이 읽는 문서(`operations/`, `architecture/`, `requirements/`, `refactoring/`) | 코드 | 아니요 |
 
 **모듈 경계(자동 점검 — `python -m common.check.check_modules`):**
@@ -32,7 +32,7 @@
 - `mcp_server/routers`에는 도구 등록만 두고 로직은 `services`에, 출력 구조는 `schemas`에 둔다.
 
 **파일·이름 규칙:**
-- 새 파일 이름은 20자 이하로 짓는다. `utils`, `helpers`, `common`, `misc` 같은 이름은 쓰지 않는다. 저장소 안에서 같은 파일 이름을 두 번 쓰지 않는다(예외: 엔진 파일, `tests/fixtures/prompts/<앱>/<패키지>.json`, systemd unit, 앱마다 하나씩 두는 `config.py`).
+- 새 파일 이름은 20자 이하로 짓는다. `utils`, `helpers`, `common`, `misc` 같은 이름은 쓰지 않는다. 저장소 안에서 같은 파일 이름을 두 번 쓰지 않는다(예외: 엔진 파일, systemd unit, 앱마다 하나씩 두는 `config.py`).
 - 파일 이름과 import 이름의 대소문자를 정확히 같게 쓴다(Linux는 대소문자를 구분하고, macOS와 Windows는 구분하지 않는다).
 - 큰 파일을 나눌 때는 **옮기는 커밋과 나누는 커밋을 따로 만든다**(먼저 그대로 옮겨서 변경 이력과 핑거프린트의 대응 관계를 유지한다).
 
@@ -79,7 +79,7 @@
 ```bash
 PYTHONPATH=. .venv/bin/python -c "import common as c; from common.core import artifacts as a; print(c.FINGERPRINT, {l: a.code_fp(l) for l in sorted(a.LAYER_CODE)})"
 ```
-현재 값(10-29 S12 린트·타입 정리와 `/simplify` 이후): `FINGERPRINT ffa201eed4aed21a` · a `e3b0c44298fc` · p0 `bd17a3ce0b81` · p1 `99ba3cabee79` · r `acba3674ad06` · s `4fa6a1943a0d`. 리팩토링 중 값이 바뀐 과정과 되돌리는 방법은 [refactor.md](refactor.md) 부록 1~3에 있다.
+현재 값(10-29 `feature/settings-cleanup` — 설정 정리·기능 삭제·`feature/test-parallel` 병합 뒤, 엔진 핑거프린트 27개 그대로): `FINGERPRINT ffa201eed4aed21a` · a `e3b0c44298fc` · p0 `93ec91af2426` · p1 `95884df63474` · r `5942c410d895` · s `932af9fc8548`. 리팩토링 중 값이 바뀐 과정과 되돌리는 방법은 [refactor.md](refactor.md) 부록 1~3에 있다.
 
 **운영 접속 가드(필수):**
 - `deploy/host/scripts/run_docs.py`는 **PC에서 실행하지 않는다**(운영 EDW와 Object Storage에 접속한다). PC에서는 문법 확인, `--help`, `configure()`까지만 확인한다.
@@ -146,7 +146,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 
 ### 6-3. 테스트 기준선(10-29)과 알려진 실패
 - `selftest`는 **89개 중 88개 통과**다. 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
-- `pytest tests/`는 **142 passed · 8 xfailed**다(S12에 run_docs 흐름 테스트를 추가). 위 1개와 일반 테스트 7개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — C-54 ①, C-58)이며, 모두 리팩토링 전부터 있던 실패다.
+- `pytest tests/`는 **142 passed · 8 xfailed**다(S12에 run_docs 흐름 테스트를 추가 — 10-29 `feature/settings-cleanup`이 테스트 파일 5개를 지워 기준 PC에서 다시 잴 것). 위 1개와 일반 테스트 7개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — C-54 ①, C-58)이며, 모두 리팩토링 전부터 있던 실패다.
 - 알려진 실패가 통과하면 "XPASS — 목록에서 지울 수 있음" 경고가 나온다. 그때는 목록에서 지운다. **새 실패를 알려진 실패 목록에 추가하는 것은 고장을 숨기는 일이다** — 원인과 결정을 refactor.md에 적고 사람의 승인을 받은 뒤에만 추가한다.
 - Mac의 부하가 높으면 `test_trigger_server`가 시간 초과로 실패할 수 있다(환경 문제).
 
@@ -155,7 +155,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 - 테스트는 pytest 형식(`test_*` 함수 + `assert`)으로 쓴다. 이미지에서는 `pipeline.cli selftest`(`tests/runner.py`)가, PC에서는 pytest가 실행한다. 이미지에는 pytest가 없다.
 - 테스트는 **멱등**하게 만든다. 공용 개발 PG에 흔적을 남기지 말고 임시 SQLite나 임시 스키마(`orca_*`, `test_*`)를 쓰며, 이름을 다시 확인한 뒤 정리한다. 설정은 `with pc.PIPE.env(X=…)`, `settings.isolated()` 같은 테스트 도우미로 덮어쓴다(os.environ을 건드리지 않는다). 함수를 바꿔 끼울 때는 `unittest.mock.patch.object`를 쓴다.
 - 앱 모듈 안에 `selftest()`나 `if __name__ == "__main__":` 점검 코드를 새로 두지 않는다. 테스트는 `tests/`에 둔다.
-- 고정 데이터: 테스트 문서는 `valid_env/unstructured/`에 있다. 프롬프트 사례 `tests/fixtures/prompts/<앱>/<패키지>.json`은 지금 읽는 테스트가 없다(지울지 결정 대기 — refactor.md C-63).
+- 고정 데이터: 외부 시스템을 흉내 내는 데이터(문서·정답·EDW 대역)는 `valid_env/`에 둔다(10-29 PwC_Structure 배치 — `docs/prd/e2e.md#e2-09`). 서버 반입 테스트는 `valid_env`가 없는 이미지에서도 돌게 데이터를 임시 폴더에 만들어 쓴다(`tests/fixtures/`는 10-29에 지움 — refactor.md C-63).
 
 ### 6-5. 스모크 테스트 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
 README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. 실행마다 다른 값은 `--set`(파이프라인 진입점)이나 오버레이 설정 파일(`mcp_server.main`, `ask`처럼 `--set`을 받지 않는 명령)로 준다. 테스트 문서는 `valid_env/unstructured/`(목록 `list-smoke10.txt`)에 있고, 임베딩 캐시는 `output/edw/embed_cache.sqlite`다(같은 청크는 다시 호출하지 않는다 — 실제 호출을 확인하려면 `EMBED_CACHE=<빈 sqlite>`).
@@ -169,8 +169,8 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 ## 7. 외부 모델(OpenRouter 등 유료) — 비용 규칙
 
 - 기본값은 유료 호출 차단(`no_paid_calls: true`)이다. 개발 중에는 **기능 확인만** 한다(문서 2~3건, 질문 몇 개).
-- 실행할 때마다 상한을 건다 — `LLM_BUDGET_USD`, `LLM_MAX_CALLS`, `LLM_SPEND_FILE`(비용 장부). 외부 전송에는 두 가지 잠금이 함께 필요하다: `EMBED_ALLOW_EXTERNAL`과 `LLM_SYNTHETIC_TRUTH`(합성 테스트 문서라는 선언 파일).
-- 두 잠금은 루트 settings.yaml에 둬도 된다(사용자 10-29 — 설정 창구는 하나). 그때는 `no_paid_calls: true`를 기본으로 두고, 외부 호출이 필요한 동안만 `false`로 바꾼 뒤 되돌린다(평소 테스트가 외부를 호출하지 않도록). 한 번만 풀 때는 `--set`을 쓴다.
+- 실행할 때마다 상한을 건다 — `LLM_BUDGET_USD`, `LLM_MAX_CALLS`, `LLM_SPEND_FILE`(비용 장부). 외부 전송은 `<PREFIX>_ALLOW_EXTERNAL`(예 `EMBED_ALLOW_EXTERNAL`)이 켜지고 `RUN_ENV=local`일 때만 된다(합성 문서 선언 `LLM_SYNTHETIC_TRUTH` 잠금은 사용자 10-29에 삭제).
+- 외부 허용은 루트 settings.yaml에 둬도 된다(사용자 10-29 — 설정 창구는 하나). 그때는 `no_paid_calls: true`를 기본으로 두고, 외부 호출이 필요한 동안만 `false`로 바꾼 뒤 되돌린다(평소 테스트가 외부를 호출하지 않도록). 한 번만 풀 때는 `--set`을 쓴다.
 - `role=llm`을 `adk.complete`로 직접 호출하면 예산 장부를 거치지 않는다. 실제 호출은 `llm.chat`이나 `run_agent(per_turn_admit=True)`로 한다.
 - 기술 스택 비교처럼 호출이 많은 작업은 예상 비용(호출 수 × 평균 토큰 × 단가)을 먼저 보고하고 승인을 받는다. 서버는 내부망 모델만 쓴다(외부 모델은 거부).
 
@@ -178,6 +178,7 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 
 ## 8. 문서
 
+- 기능 요건·미개발 항목은 [docs/PRD.md](docs/PRD.md)와 `docs/prd/{mcp,pipeline,e2e}.md`에 있다(§10).
 - 문서 지도는 [docs/index.md](docs/index.md)다. 문서를 추가하거나 옮기면 같은 커밋에서 이 지도를 고친다. 새 문서는 꼭 필요할 때만 만들고, 먼저 기존 문서의 섹션으로 넣을 수 있는지 본다.
 - 서버나 사람이 확인해야 하는 일(저장소 안에서 끝낼 수 없는 것)은 [refactor.md](refactor.md)에 `C-xx`로 추가하고, 배포 순서는 그 파일의 "최종 — 사람이 할 일"에 둔다.
 - 결정 사항은 [docs/refactoring/refactor_plan.md](docs/refactoring/refactor_plan.md) 7절에 `D-xxx`로, 미정 사항은 8절에 둔다. 운영 절차는 `docs/operations/`(서버 가이드, 릴리스, 설정 가이드)에 있다.
@@ -189,17 +190,14 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 - 되돌리기 어려운 일(push, 서버 배포, DB 변경, 파일 삭제)은 하기 전에 확인을 받는다. 지울 때는 대상을 먼저 확인한다.
 - 결과는 있는 그대로 보고한다. 테스트가 실패하면 출력과 함께 알리고, 건너뛴 단계는 건너뛰었다고 밝힌다.
 
-## 10. 알려진 문제(리팩토링 전부터)
+## 10. 기능 요건과 알려진 문제 — `docs/PRD.md`
 
-10-20 축소 스키마(`file_sha256`, `client`, `file_name`, `s3_key` 제거)가 코드 일부에만 반영됐다.
-- 검색기 생성(`mcp_server/services/search/retriever.py`)이 `file_sha256`을 읽어 새 번들에서 실패한다. PC는 로컬 배치 분기(`paths.LOCAL_RUN`)로 피하고, 서버는 PG 경로만 쓴다. PC 테스트 Docker 스모크도 여기서 멈춘다.
-- 집계 경로가 없는 컬럼 `file_sha256`을 조회해서 검색 결과에 "집계 경로 오류" 메모가 붙는다(검색 근거 자체는 정상이다).
-- `pgvector_load deploy`의 `backfill_chunk_clients`가 `doc.client`를 읽어 실패한다(테이블과 인덱스 생성에는 영향이 없다).
-- `pipeline structure/load` 모듈의 계약 점검(`contract.py`의 DOC_KEYS)이 새 번들을 거부한다(서버는 이 모듈을 쓰지 않는다).
-- `pipeline structure`에 `PIPE_EMBED=none`을 주면 차원이 0이 되어 `vector(0)` 테이블을 만들 수 없다.
-- 문서 레지스트리 upsert가 PG에서 문법 오류를 낸다(C-54 ①). 퍼블리시 방어 로직이 꺼져 있다(C-54 ②). 다음 버전에서 설계한다.
-- `pgvector_load load --prune`이 바뀌지 않아 건너뛴 문서까지 지운다(C-60 — 고칠지 결정 대기).
-- `validation/search_ui/index.html` 첫 화면의 "10개 문서(20개 청크)"는 고정 문구다.
+기능 요건(무엇·왜·관련 코드 파일)과 아직 개발되지 않았거나 고장 난 항목(진행 상황)은 이 파일에 두지 않고 요건 문서에 둔다(10-29).
+- [docs/PRD.md](docs/PRD.md) — 미개발·미해결 항목 표(ID·상태·상세 링크). 작업 전에 이 표에서 맡은 행을 찾는다.
+- [docs/prd/mcp.md](docs/prd/mcp.md)(검색 MCP `mc-xx`) · [docs/prd/pipeline.md](docs/prd/pipeline.md)(데이터 파이프라인 `pl-xx`) · [docs/prd/e2e.md](docs/prd/e2e.md)(e2e 실행·테스트·평가 `e2-xx`) · [docs/prd/runner.md](docs/prd/runner.md)(서버 문서별 실행기 레인·대기열 `rn-xx`) · [docs/prd/doc.md](docs/prd/doc.md)(문서 배치 `do-xx`) · [docs/prd/ops.md](docs/prd/ops.md)(운영 로그 `op-xx`) — 기능마다 앵커 하나(무엇·왜·관련 파일, 미개발이면 `Status:`에 진행 상황).
+- [docs/prd/gaps.md](docs/prd/gaps.md) — 요건과 다르게 동작하는 코드 · 요건 없는 코드(남길지 지울지 검토) · 기본 꺼짐·설정이 필요한 기능 · 10-29에 지운 기능.
+- 옛 §10 알려진 문제(10-20 축소 스키마 일부 반영 등)는 `mc-10`·`mc-11`·`pl-12`~`pl-16`·`e2-13`·`e2-16`으로 옮겼다.
+- 기능을 더하거나 고치면 같은 커밋에서 해당 앵커를 고친다. 끝난 항목은 PRD 표에서 빼고 앵커에 `- Status: done`을 남긴다.
 
 ---
 

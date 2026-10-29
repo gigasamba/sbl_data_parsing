@@ -1,0 +1,13 @@
+# 개발 기본 점검 세트(사용자 10-13) — 백로그에 타겟 문서가 따로 없을 때 쓰는 10건(정답 있음, 약 1분).
+# 사용: python dev_tools/end_to_end_checks/run_end_to_end.py --docs @valid_env/eval_sets/list-smoke10.txt
+# VE2(10-21): 보관된 문서를 빼고 남은 정답 문서로 다시 채움 — B 8건(synth-realpat 4 · synth-mixedpdf 4) + synth-eml-charset 2건.
+valid_env/object_storage/CRMS/243f7ef5-e309-5808-b855-54e71426ad4e/hidden_textbox.docx
+valid_env/object_storage/CRMS/9d9a56af-8105-5ba8-8db2-9f5ef122d4eb/merged_cells_tbl.docx
+valid_env/object_storage/CRMS/e2ac272a-9ad3-54c8-837a-f4392abd493b/merged_visual_tbl.pdf
+valid_env/object_storage/CRMS/1e573cf6-589a-59b8-bbdd-3bc47c800339/symbol_font_pua.docx
+valid_env/object_storage/CRMS/73ab2382-c016-58d4-9882-9776680bd177/scan_no_text.pdf
+valid_env/object_storage/CRMS/f8b466f8-a7d4-559a-afaa-aaece7a8e27b/garbled_text_layer.pdf
+valid_env/object_storage/CRMS/de5289a4-a5b4-5dec-911a-d275e49d6500/mixed_scan_text.pdf
+valid_env/object_storage/CRMS/95194ebe-b50a-52f8-a457-3e4a07174053/text_only_control.pdf
+valid_env/object_storage/CRMS/c63782bc-1d59-5cca-a199-b330a4f1f112/ksc5601_ext_mail.eml
+valid_env/object_storage/CRMS/2569a3ca-c945-5881-9eea-bae296e47120/qp_euckr_mail.eml

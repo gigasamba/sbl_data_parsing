@@ -74,11 +74,6 @@
     "available": "auto",
     "reason_if_unavailable": "Docker pgvector 컨테이너·PG_PASSWORD 없음(deploy/common/store/services.py 탐지)"
    },
-   "openviking": {
-    "id": "openviking",
-    "available": "auto",
-    "reason_if_unavailable": "OpenViking 컨테이너 없음(deploy/common/store/services.py 탐지)"
-   },
    "lightrag": {
     "id": "lightrag",
     "available": "auto",
@@ -110,8 +105,7 @@
    ]
   ],
   "rerank_candidates": [
-   "off",
-   "bge-reranker-v2-m3"
+   "off"
   ],
   "rerank_top_n": 30,
   "k_candidates": [

@@ -1,7 +1,7 @@
 """검색 MCP 설정 — settings.yaml의 common + mcp 절(S7a 모델, refactor_plan 5-2 · D-015). 칸 표는 refactor_plan 부록 D.
 mcp_server 코드가 읽는 객체는 설정 파일 기반 캐시 MCP다(S7e2 — 전환 다리 없앰: env의 옛 이름은 읽지 않음, 신호 SETTINGS_FILE·RUN_ENV만):
-  `from mcp_server import config as mc` → `mc.cfg().search.rerank.mode`(mcp 절) · `mc.given("DECOMPOSE")`(준 값만) · `mc.checked(X)` ·
-  시험 `with mc.senv(SEARCH_RERANK="stub", MCP_STORE=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
+  `from mcp_server import config as mc` → `mc.cfg().search.methods`(mcp 절) · `mc.given("MCP_METHODS")`(준 값만) · `mc.checked(X)` ·
+  시험 `with mc.senv(SEARCH_CLIENT_HARD="1", MCP_STORE=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
   env로 읽는 칸만 env에 씀). common 칸은 `common.config.settings.cfg()`로(COMMON).
 요청마다 읽던 값(MCP_TOOL_TIMEOUT_SEC·SEARCH_* 등)은 쓰는 자리에서 요청마다 cfg()로 읽고, 시작 때 한 번 읽던 상수는 CFG(아래)에
 모은다(S5 — 이름·기본값은 옛 mcp_server.py 모듈 상수 그대로, 읽는 시점도 같음 — 이 모듈 import 때).
@@ -48,12 +48,6 @@ class McpSearchClient(Section):
     strict: bool | None = F(False, "SEARCH_CLIENT_STRICT", "하드 격리에서 고객 미상 문서도 제외 — 1이면 켬", on=("1",))
 
 
-class McpSearchGraph(Section):
-    concept_expand: bool | None = F(True, "SEARCH_GRAPH_CONCEPT_EXPAND", "그래프 확장에서 개념 상위·관련 2홉 확장 — 0이면 끔", off=("0",))
-    concept_per: int | None = F(1, "SEARCH_GRAPH_CONCEPT_PER", "개념 2홉 확장에서 개념당 청크 수(개)")
-    concept_seeds: int | None = F(None, "SEARCH_GRAPH_CONCEPT_SEEDS", "개념 2홉 씨앗으로 쓰는 개념 수 상한(개)")
-
-
 class McpSearchPg(Section):
     filter_exact_max: int | None = F(20000, "PG_FILTER_EXACT_MAX", "고객 필터 허용 집합이 이 크기 이하면 벡터 정확 검색으로 전환(청크 수)")
     vector_search: str | None = F(None, "PG_VECTOR_SEARCH", "벡터 검색 방식 — exact면 색인 없이 정확 검색, 비우면 근사(HNSW)")
@@ -63,16 +57,6 @@ class McpSearchQueryExpand(Section):
     draft: bool | None = F(True, "QUERY_EXPAND_DRAFT", "질문 용어 확장에서 draft 용어 사전 사용 — 0이면 끔", off=("0",))
     enabled: bool | None = F(True, "QUERY_EXPAND", "질문 용어 확장(BM25, 용어 사전) 스위치 — 0이면 끔", off=("0",))
     shorttok: bool | None = F(True, "QUERY_EXPAND_SHORTTOK", "용어 확장에서 한 글자 비숫자 토큰 제거 — 0이면 제거 안 함", off=("0",))
-
-
-class McpSearchRerank(Section):
-    gap: float | None = F(0.02, "SEARCH_RERANK_GAP", "조건부 재순위(WHEN=cond)에서 상위 1·2위 융합 점수 차 문턱")
-    max_chars: int | None = F(1200, "RERANK_MAX_CHARS", "재순위 모델에 넣는 후보 본문 최대 글자 수")
-    mode: str | None = F("off", "SEARCH_RERANK", "재순위 방식 — off, local(cross-encoder), api:<모델>(RERANK_BASE_URL 필요)")
-    spread: int | None = F(3, "SEARCH_RERANK_SPREAD", "조건부 재순위(WHEN=cond)에서 후보가 흩어진 문서 수 문턱(개)")
-    timeout_ms: int | None = F(3000, "RERANK_TIMEOUT_MS", "재순위 호출 시간 상한(밀리초) — 넘으면 원 순서로 폴백")
-    top_n: int | None = F(30, "RERANK_TOP_N", "재순위에 넣는 후보 수(개)")
-    when: str | None = F("always", "SEARCH_RERANK_WHEN", "재순위 적용 시점 — always(항상) 또는 cond(효과 있을 때만)")
 
 
 class McpSearchWeights(Section):
@@ -126,6 +110,7 @@ class McpHost(Section):
 
 
 class McpOutput(Section):
+    REMOVED = frozenset({"list_docs_max"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     cap_ranked: bool | None = F(
         True, "CAP_RANKED", "검색 응답 크기 상한(cap)을 순위 인지 방식으로 줄임 — 0이면 옛 방식(긴 본문부터 반씩 자름)", off=("0",)
     )
@@ -141,7 +126,6 @@ class McpOutput(Section):
         True, "MCP_EVIDENCE_PATHS", "근거의 '파싱 결과 경로' 조회(AI.ParsingMeta) 스위치 — 0이면 시도 안 함", off=("0",)
     )
     images: str | None = F(None, "MCP_IMAGES", "그림 색인(index.jsonl) 경로")
-    list_docs_max: int | None = F(200, "MCP_LIST_DOCS_MAX", "list_documents 결과 건수 상한 — 0이면 무제한")
     max_chars: int | None = F(20000, "MCP_MAX_CHARS", "search 응답 크기 상한(JSON UTF-8 바이트) — 넘으면 근거 본문을 줄임")
     max_image_px: int | None = F(1600, "MCP_MAX_IMAGE_PX", "근거 이미지 한 변 최대 픽셀(썸네일 크기)")
 
@@ -157,20 +141,18 @@ class McpQueryLog(Section):
 
 
 class McpSearch(Section):
+    REMOVED = frozenset(
+        {"decompose", "decompose_llm", "graph", "ov_search_path", "rerank"}
+    )  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     agg_today: str | None = F(None, "AGG_TODAY", "집계 질문의 '오늘' 기준일(YYYY-MM-DD) 고정 — 비우면 실제 오늘")
     agg_vocab_file: str | None = F(None, "AGG_VOCAB_FILE", "집계 지표 단서어 사전(agg_vocab.json)을 다른 경로로 지정")
     copy_group: bool | None = F(True, "SEARCH_COPY_GROUP", "같은 사건의 사본(형식·재명명) 근거를 묶어 대표만 남김 — 0이면 끔", off=("0",))
     data_catalog: str | None = F(None, "DATA_CATALOG", "데이터 카탈로그(표·열 설명) JSON 경로 — 없으면 카탈로그 없이 동작")
-    decompose: bool | None = F(
-        True, "MCP_DECOMPOSE", "search 도구 복합 질문 분해 기본값 — 0이면 기본 끔(LLM 설정 시만 실제 분해)", off=("0",)
-    )
-    decompose_llm: bool | None = F(True, "DECOMPOSE", "복합 질문 분해(LLM) 스위치 — 0이면 끔", off=("0",))
     entity_split: bool | None = F(True, "SEARCH_ENTITY_SPLIT", "비교 질문(고객 2명 이상)을 고객별로 나눠 검색 — 0이면 끔", off=("0",))
     evidence_gate: bool | None = F(True, "SEARCH_EVIDENCE_GATE", "근거 점수·evidence_status 표시 — 0이면 끔(점수 칸도 안 실림)", off=("0",))
-    methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector,bm25,id,graph 등)")
+    methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서)")
     min_score: float | None = F(None, "SEARCH_MIN_SCORE", "근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak")
     ocr_dpi: int | None = F(200, "OCR_DPI", "쪽 이미지 렌더링 해상도(DPI) — OCR·근거 이미지 좌표 환산에 씀", pinned="engine")
-    ov_search_path: str | None = F("/api/v1/search/find", "OV_SEARCH_PATH", "OpenViking 검색 API 경로")
     struct_context_max: int | None = F(200, "STRUCT_CONTEXT_MAX", "집계 질문에서 계약 마스터 전체를 표로 넘길 때 계약 수 상한(개)")
     tie_break: bool | None = F(True, "SEARCH_TIE_BREAK", "동점 근거를 질문의 엔티티(고객·계약번호)로 깨기 — 0이면 끔", off=("0",))
     type_weights: bool | None = F(
@@ -185,10 +167,8 @@ class McpSearch(Section):
     )
     agg: McpSearchAgg = Field(default_factory=McpSearchAgg)
     client: McpSearchClient = Field(default_factory=McpSearchClient)
-    graph: McpSearchGraph = Field(default_factory=McpSearchGraph)
     pg: McpSearchPg = Field(default_factory=McpSearchPg)
     query_expand: McpSearchQueryExpand = Field(default_factory=McpSearchQueryExpand)
-    rerank: McpSearchRerank = Field(default_factory=McpSearchRerank)
     weights: McpSearchWeights = Field(default_factory=McpSearchWeights)
 
 
@@ -292,12 +272,11 @@ class MCPConfig:
         self.MAX_CHARS = c.output.max_chars  # GH1-13: cap()이 이 값을 바이트(UTF-8)로 씀 — 이름·기본값은 그대로(실측 재조정은 서버에서)
         self.MAX_IMAGE_PX = c.output.max_image_px
         self.MAX_K = 50
-        self.LIST_DOCS_MAX = c.output.list_docs_max  # AD38 — list_documents 결과 크기 상한(=0으로 끔, OP11)
+        self.LIST_DOCS_MAX = 200  # AD38 — list_documents 결과 크기 상한(내부 함수 전용이라 설정 칸은 지움)
         self.CORE = ("vector", "bm25", "id")
         self.DEFAULT_METHODS = list(c.search.methods)  # 10-12 구조 검토: graph 기본에서 뺌 —
         # 그래프 단독 효과를 처음 따로 잼(9세트): 근거 지표 이득 0, 잡음 비율↑(4clients .366→.459), distractors-v2 정답 값 적중 .80→.72 ·
         # G10(10-02)의 비교형 6→12/12 개선은 분해(decompose) 몫 · 다시 켜기: MCP_METHODS=vector,bm25,id,graph
-        self.DEFAULT_DECOMPOSE = c.search.decompose  # G10: 분해 기본 켬(LLM 설정 시만 실제 분해 — 없으면 원 질문)
         # parse_document 프록시가 부르는 작업 서비스 주소(services/parse_proxy.py)
         self.PARSE_URL = c.parse_proxy.url
 

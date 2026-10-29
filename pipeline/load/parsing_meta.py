@@ -214,11 +214,6 @@ def _local_md_name(row):
     return f"tmp_{row.get('source_key', '')[:0]}{_hash10(row.get('source_key', ''))}_{row.get('parse_date', '')}.md"
 
 
-def _local_sidecar_name(row):
-    """apply()가 sidecar(source.json)를 올리기 전 잠깐 쓰는 로컬 파일 이름 — _local_md_name과 같은 규칙."""
-    return f"tmp_{_hash10(row.get('source_key', ''))}_{row.get('parse_date', '')}.source.json"
-
-
 def status_of(name, rep_by_doc, summary, skipped=None, keep=None):
     """문서 하나의 파싱 상태 — skipped(이름→drm_*·encrypted_* 사유, modules/parse/prepare.py의 skipped.jsonl)·
     keep(dedup keep.txt에 있는 이름 집합, None = dedup 정보 없음 → 전부 포함) 순서로 먼저 걸러진 뒤 대표 결과(rep)를 본다."""
