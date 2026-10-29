@@ -299,14 +299,6 @@ def _lane_total():
         return sum(len(q) for q in LANEQ.values())
 
 
-def _lane_push(seq):
-    """분류된 문서를 해당 레인 큐에 투입(dispatched 마킹 포함) — downloader가 warm 직후 호출."""
-    with _warm_lock:
-        LANEQ[_class.get(seq) or "light"].append(seq)
-        mark(seq, "dispatched")
-        _warm_lock.notify_all()
-
-
 _warm_lock = threading.Condition()
 _warmed: list = []  # 다운로드 완료·미시작 문서 seq(대기열)
 _warming: set = set()  # 지금 다운로드 진행 중인 seq(마지막 문서 조기 종료 방지)

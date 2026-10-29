@@ -1198,7 +1198,7 @@ S5a(10-26) 뒤 다시 셈: 지운 파일 11개(D-025)를 삭제 기록 행으로
 | `data_parsing/stream.py` | `data_etl/stream.py` | grep 12/12 run_etl_pipeline(data_etl 루트) · 코디네이터 Q1 |
 | `data_parsing/review/__init__.py` | `data_etl/tools/__init__.py` | 성격(빈 파일) · 코디네이터 Q6 |
 | `data_parsing/tools/check_residue.py` | `data_etl/tools/check_residue.py` | 성격(점검 도구 — upstream run_etl_pipeline에 합침) · 코디네이터 Q7 |
-| `data_parsing/tools/check_runlog.py` | `data_etl/tools/check_runlog.py` | 성격(잠금 점검 도구, upstream 대응 없음) · 코디네이터 Q7 |
+| `data_parsing/tools/check_runlog.py` | `data_etl/tools/check_runlog.py` | 성격(잠금 점검 도구, upstream 대응 없음) · 코디네이터 Q7 · **10-29 지움**(`pipeline/tools/check_runlog.py` — 읽는 곳 없음, PRD e2-17) |
 | `data_structure/tools/resources.py` | `data_etl/tools/resources.py` | 성격(check_env·e2e만 씀, extract/resources.py와 이름 겹침) · 코디네이터 Q5 |
 | `data_parsing/postprocess/chart_values.py` | `data_etl/transform/figures/chart_values.py` | rename R094 extract_chart_values |
 | `data_parsing/postprocess/charts.py` | `data_etl/transform/figures/charts.py` | grep 2/2 extract_chart_values |

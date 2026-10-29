@@ -156,11 +156,6 @@ def parse_env_text(text, known=None):
     return out, notes
 
 
-def parse_env_file(path, known=None):
-    """env 파일 → 값 사전(위 규칙 — 확인 필요 표시는 parse_env_text)."""
-    return parse_env_text(Path(path).read_text(encoding="utf-8"), known)[0]
-
-
 def read_files(files, notes=None):
     """(env, holders) — 파일마다 자리표시 값을 먼저 걸러 내고 합친다(뒤 파일이 이김). 서버 env + 틀을 함께 넣어도 틀의
     `<…>`가 앞 파일의 실제 값을 지우지 않게(VS7a2 R-e). holders = 끝까지 실제 값이 없는 자리표시 이름.

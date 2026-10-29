@@ -59,13 +59,6 @@ async def _bg(fn, *a, **kw):
         _INFLIGHT -= 1
 
 
-async def _bg_img(fn, *a, **kw):
-    """get_image·get_evidence_image는 (meta, png) 튜플을 돌려줌 — _bg가 과부하로 {"error": ...} dict를
-    돌려주면 (dict, None)으로 맞춰 호출부의 튜플 풀기가 그대로 동작하게."""
-    r = await _bg(fn, *a, **kw)
-    return r if isinstance(r, tuple) else (r, None)
-
-
 async def _bg_long(fn, budget, *a, **kw):
     """parse_document 전용 _bg 변형(2026-10-21 단일화) — 도구 시간 상한을 MCP_TOOL_TIMEOUT_SEC(기본 30초) 대신
     budget(+10초 여유)으로 기다린다. 대기열·동시 상한·busy 판정은 _bg와 같은 규칙(S12·MC2) — 파싱은 서버 부하에 따라
