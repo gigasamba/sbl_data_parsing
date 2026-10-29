@@ -9,8 +9,6 @@ Rows with an ID are open defects; the rest are behaviors to know.
 | What the requirement expects | What the code does | Where | ID |
 |---|---|---|---|
 | Retriever builds on the reduced schema | reads removed `doc.file_sha256`·`client`·`file_name` → fails on new bundles (PC uses the local branch) | `mcp_server/services/search/retriever.py` | mc-10 |
-| Aggregation runs without errors | selects removed columns → "aggregation path error" note on every result | `aggregate.py` | mc-11 |
-| Fact aggregation answers | `doc_fact` is not loaded any more → that path returns nothing | `aggregate.py`, `pgvector_load.py` | mc-12 |
 | Query log in PG | inserts into a `qa_log` table no migration creates (error swallowed; jsonl log works) | `search_svc.py`, `0001_search_base.py` | mc-13 |
 | Registry upsert, publish guard | upsert has a PG syntax error; guard off (no `source.json` on the server) | `structdb.py`, `publish_parse_result.py` | pl-12 |
 | `--prune` removes stale rows only | also deletes skipped (unchanged) documents | `pgvector_load.py` | pl-13 |

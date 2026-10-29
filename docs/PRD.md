@@ -6,8 +6,6 @@ Row = one open feature. ID prefix = `prd/<area>.md` (mc = search MCP · pl = dat
 | ID | Bundle | Status | Detail |
 |---|---|---|---|
 | mc-10 | Retriever reads removed `file_sha256` | todo | [→](prd/mcp.md#mc-10) |
-| mc-11 | Aggregation path queries removed `file_sha256` | todo | [→](prd/mcp.md#mc-11) |
-| mc-12 | Fact aggregation queries dropped `doc_fact` | todo | [→](prd/mcp.md#mc-12) |
 | mc-13 | PG `qa_log` table never created | todo | [→](prd/mcp.md#mc-13) |
 | pl-12 | Registry upsert PG error · publish guard off (C-54) | todo | [→](prd/pipeline.md#pl-12) |
 | pl-13 | `load --prune` deletes skipped docs (C-60) | todo | [→](prd/pipeline.md#pl-13) |
@@ -39,5 +37,5 @@ Row = one open feature. ID prefix = `prd/<area>.md` (mc = search MCP · pl = dat
 | op-02 | RUN_ENV `local`·`dev`·`prd` (drop `stage`) · LLM_FAKE only in `local` | design done | [→](prd/ops.md#op-02) |
 | op-03 | One EDW connection, read/write account | dev | [→](prd/ops.md#op-03) |
 
-Done: mcp 8 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 9 → [prd/e2e.md](prd/e2e.md) · runner 2 → [prd/runner.md](prd/runner.md)
+Done: mcp 10 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 9 → [prd/e2e.md](prd/e2e.md) · runner 2 → [prd/runner.md](prd/runner.md)
 Code vs requirements — mismatches, code with no requirement, off-by-default features, removed 10-29: [prd/gaps.md](prd/gaps.md)
