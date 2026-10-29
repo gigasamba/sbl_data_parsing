@@ -679,7 +679,7 @@ from pipeline.transform.represent import (  # noqa: E402 — 모듈 중간 impor
 from pipeline.transform.represent import trace as trace_mod  # noqa: E402 — PA0 맥락 기록(trace_mod.on() = PARSE_CONTEXT, 기본 켬)
 
 
-def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None):
+def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_pages=None, page_covered=False):
     """후보정 패키지 적용 — base 본문에 쪽 VLM 옮기기·차트·그림 기록 블록을 덧붙이고, 첨자(supsub)는 그 줄만 base 안에서
     바꿔 넣는다(AD37 — 전엔 문서 전체를 다시 옮긴 블록을 덧붙여 대표 본문이 ~2배였음·청크·BM25·임베딩 중복). rep.post{config,
     features, code_fp, supsub(첨자 표기본 전체 — 색인에는 안 들어가고 여기만)}를 남긴다.
@@ -690,7 +690,9 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None):
     out_images — 그림 PNG·index.jsonl·capped.jsonl이 쓰일 폴더(AG11 2단계 착수 조건, 10-08: 전엔 호출자가
     PARSE_IMAGES_ROOT 환경변수를 바꿔 치환해야 했던 것을 인자로 — 기본값 None이면 fig_mod.images_root()를 써
     이전과 바이트 동일, 운영 배치는 그대로 안 넘겨 기본 경로를 그대로 쓴다).
-    figures_max — 그림 VLM 상한을 이번 호출만 바꿈(figures_resume — 기본 None = 설정 VLM_FIGURES_MAX, S7c2)."""
+    figures_max — 그림 VLM 상한을 이번 호출만 바꿈(figures_resume — 기본 None = 설정 VLM_FIGURES_MAX, S7c2).
+    vp_pages — represent()가 이 문서에 한 번만 부른 쪽 VLM 결과(10-29 M4 — scan_fill과 같은 결과를 써서 실패한 쪽도 다시 안 부름,
+    None이면 여기서 부름) · page_covered — 이미지·스캔 문서를 VLM 엔진이 이미 쪽마다 옮김(10-29 C — 쪽 VLM·쪽 전체 그림 VLM 생략)."""
     post_spec = (
         pc.cfg().transform.represent.post
     )  # S7c — 설정 객체(글자 칸 — 쓴 글자 그대로라 rep.post.config가 옛 env 글자와 바이트 같음, 없으면 "all")
@@ -726,7 +728,7 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None):
     doc_text = base  # 그림 근처 본문 언급(link_context) 검색 대상 — 쪽 VLM 옮기기 글자도 포함(스캔은 OCR 본문이 부실할 수 있어)
     if "vlm_page" in feats:
         if scan_dedup.on():
-            base, page_alt, provs, n_dedup, dedup_skip = scan_dedup.dedup(base, doc_path, rep.get("boxes"))
+            base, page_alt, provs, n_dedup, dedup_skip = scan_dedup.dedup(base, doc_path, rep.get("boxes"), pages=vp_pages)
             if page_alt:
                 info["page_alt"] = page_alt
             info["dedup_scan"] = n_dedup
@@ -738,7 +740,8 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None):
         else:
             # 10-29 — scan_fill이 쪽 VLM 글로 이미 채운 쪽은 덧붙이지 않음(같은 쪽이 본문에 두 번 — 호출은 캐시라 다시 안 감)
             sf = ((rep.get("rep") or {}).get("scan_fill") or {}).get("filled") or {}
-            vp_pages = vp_mod.page_text_pages(doc_path)
+            if vp_pages is None:
+                vp_pages = vp_mod.page_text_pages(doc_path)
             vt = "\n".join(t for i, t, _ in vp_pages if t and sf.get(str(i)) != "vlm_page")
             provs = [pv for _, _, pv in vp_pages]
             if vt.strip():
@@ -767,7 +770,9 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None):
     _pt0 = time.time()
     if "figures" in feats:
         doc_sha = (rep.get("rep") or {}).get("source", {}).get("sha256") or fig_mod.sha(Path(doc_path).read_bytes())
-        records, plain, enriched = fig_mod.build_records(doc, doc_path, doc_text, doc_sha, out_images=out_images, figures_max=figures_max)
+        records, plain, enriched = fig_mod.build_records(
+            doc, doc_path, doc_text, doc_sha, out_images=out_images, figures_max=figures_max, page_covered=page_covered
+        )
         use_context = "context" in feats
         blocks += enriched if use_context else plain
         fig_mod.write_index(doc, records, out_images=out_images)
@@ -809,6 +814,13 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None):
     info["post_times"] = {k: round(v, 2) for k, v in _pt.items()}  # 2026-10-22 — apply_post 하위 소요(초)
     rep["text"] = base + "\n\n" + "\n\n".join(blocks) if blocks else base
     return info
+
+
+def _vlm_engine_ok(dd):
+    """이 문서에서 VLM 엔진(qwen_vlm 등 — run_all.VLM_ENGINES)이 성공했는가 — 이미지·스캔 문서의 쪽을 이미 옮겼다는 뜻(10-29 C)."""
+    from pipeline.extract.run_all import VLM_ENGINES
+
+    return any((dd.get("engines", {}).get(e) or {}).get("ok") for e in VLM_ENGINES)
 
 
 def _current_sha16(doc, last):
@@ -999,15 +1011,25 @@ def represent(stack, parse_dir, src=None):
                 _t0 = time.time()  # 2026-10-22 — reread P2+P3 시간
         source = rep["rep"]["source"]
         doc_path = Path(source["path"]) if source else None
-        if scan_fill_on():  # PE1 후속 — .pdf_text 대표의 스캔 쪽만 OCR 쪽 글로 채움(apply_post 전, 후보정이 채운 본문을 기준으로 돌게)
-            from pipeline.transform.figures.vlm_page import page_text_pages
+        # 10-29 — 쪽 VLM은 PARSE_POST에 vlm_page가 있을 때만(run_docs light 레인·parse MCP의 supsub만 존중 — P1-1), 문서당 한 번만(M4).
+        # 이미지·스캔 문서를 VLM 엔진이 이미 옮겼으면 쪽 VLM을 안 부르고 쪽 전체 그림 VLM도 생략(쪽마다 VLM 한 번 — C)
+        vp_pages, covered = None, False
+        if "vlm_page" in feats and doc_path and Path(doc_path).exists():
+            from pipeline.transform.figures import vlm_page as vp_mod
 
-            fill = fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=page_text_pages)  # 10-29 — 스캔 쪽은 쪽 VLM 글로
+            covered = _vlm_engine_ok(dd) and vp_mod.is_scan(doc_path)
+            vp_pages = [] if covered else vp_mod.page_text_pages(doc_path)
+        if (
+            scan_fill_on()
+        ):  # PE1 후속 — .pdf_text 대표의 스캔 쪽만 쪽 VLM(없으면 OCR) 글로 채움(apply_post 전, 후보정이 채운 본문을 기준으로 돌게)
+            fill = fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=(lambda _p: vp_pages) if vp_pages is not None else None)
             if fill is not None:
                 rep["rep"]["scan_fill"] = fill
         _t["scanfill"] = time.time() - _t0
         _t0 = time.time()  # 2026-10-22 — scan_fill 완료
-        rep["post"] = apply_post(rep, doc, doc_path, feats)  # W1~W3·W9·W11 후보정(rep["text"]에 덧붙임)
+        rep["post"] = apply_post(
+            rep, doc, doc_path, feats, vp_pages=vp_pages, page_covered=covered
+        )  # W1~W3·W9·W11 후보정(rep["text"]에 덧붙임)
         _t["post"] = time.time() - _t0
         _t0 = time.time()  # 2026-10-22 — apply_post(그림 추출·쪽 VLM) 완료
         # TA1(사용자 10-15) — apply_post·scan_fill 뒤, 즉 이 문서가 실제로 내보낼 rep["text"]가 다 정해진 뒤에 부른다:
