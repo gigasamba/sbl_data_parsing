@@ -79,7 +79,7 @@
 ```bash
 PYTHONPATH=. .venv/bin/python -c "import common as c; from common.core import artifacts as a; print(c.FINGERPRINT, {l: a.code_fp(l) for l in sorted(a.LAYER_CODE)})"
 ```
-현재 값(10-29 S12 린트·타입 정리와 `/simplify` 이후): `FINGERPRINT ffa201eed4aed21a` · a `e3b0c44298fc` · p0 `bd17a3ce0b81` · p1 `99ba3cabee79` · r `acba3674ad06` · s `4fa6a1943a0d`. 리팩토링 중 값이 바뀐 과정과 되돌리는 방법은 [refactor.md](refactor.md) 부록 1~3에 있다.
+현재 값(10-29 `feature/settings-cleanup` — 설정 정리·기능 삭제 뒤, 엔진 핑거프린트 27개 그대로): `FINGERPRINT ffa201eed4aed21a` · a `e3b0c44298fc` · p0 `935f3673f556` · p1 `3363091acebf` · r `dbec4ca166af` · s `4187f91bc9c4`. 리팩토링 중 값이 바뀐 과정과 되돌리는 방법은 [refactor.md](refactor.md) 부록 1~3에 있다.
 
 **운영 접속 가드(필수):**
 - `deploy/host/scripts/run_docs.py`는 **PC에서 실행하지 않는다**(운영 EDW와 Object Storage에 접속한다). PC에서는 문법 확인, `--help`, `configure()`까지만 확인한다.
@@ -146,7 +146,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 
 ### 6-3. 테스트 기준선(10-29)과 알려진 실패
 - `selftest`는 **89개 중 88개 통과**다. 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
-- `pytest tests/`는 **142 passed · 8 xfailed**다(S12에 run_docs 흐름 테스트를 추가). 위 1개와 일반 테스트 7개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — C-54 ①, C-58)이며, 모두 리팩토링 전부터 있던 실패다.
+- `pytest tests/`는 **142 passed · 8 xfailed**다(S12에 run_docs 흐름 테스트를 추가 — 10-29 `feature/settings-cleanup`이 테스트 파일 5개를 지워 기준 PC에서 다시 잴 것). 위 1개와 일반 테스트 7개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — C-54 ①, C-58)이며, 모두 리팩토링 전부터 있던 실패다.
 - 알려진 실패가 통과하면 "XPASS — 목록에서 지울 수 있음" 경고가 나온다. 그때는 목록에서 지운다. **새 실패를 알려진 실패 목록에 추가하는 것은 고장을 숨기는 일이다** — 원인과 결정을 refactor.md에 적고 사람의 승인을 받은 뒤에만 추가한다.
 - Mac의 부하가 높으면 `test_trigger_server`가 시간 초과로 실패할 수 있다(환경 문제).
 
