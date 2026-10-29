@@ -1,5 +1,0 @@
-[Synthetic example] Test document — not related to any real company data or agreement.
-Supply Agreement Summary — Pfizer Inc.
-Counterparty: Pfizer Inc. Agreement ID: XL-SA-2026-07.
-Contracted volume: 8 batches of drug substance. Manufacturing site: Plant 2.
-Unit price: USD 2.4M per batch. Term: 30 months from 2026-01-01.

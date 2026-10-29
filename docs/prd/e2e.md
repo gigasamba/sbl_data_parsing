@@ -52,10 +52,11 @@ Image build and release gate. Why: the server must get images that passed selfte
 - Status: done
 
 ## e2-09
-Replace PC test data with PwC_Structure `valid_env`. Why: PwC lays test data out like the server (`object_storage/<system>/<uuid>/<file>` + `eval_sets/` gold and lists + `edw/` synthetic EDW sqlite), and this repo has no EDW stand-in.
-- What: bring `edw/` (sql + sqlite), `eval_sets/`, `object_storage/{CRMS,SFDC}` + `test_doc_purpose.md`; replace `valid_env/unstructured/`; point `EVAL_SETS_DIR` default (`common/core/paths.py`) and the list files at the new layout; move the two server tests that read `unstructured/synth-meta-rdb/meta/` to the EDW stand-in or to data made inside the test. Do not bring `local/` (secrets), `logs/`, `output/`, `tmp/`, `Parsing-Result/`.
-- Files: `valid_env/`, `common/core/paths.py` (every-layer dependency → code_fp), `tests/server/mcp/test_internal_docs.py`, `tests/server/mcp/test_search_svc.py`, `mcp_server/cli/mcp_eval.py`, `pipeline/eval/stack_report.py`, `pipeline/eval/chart_values_score.py`.
-- Status: todo — selection agreed 10-29; nothing moved yet. Coverage drops from 40 synthetic sets to 33 documents (charts, diagrams, versions, 4-client aggregation, terms) — confirm before deleting.
+PC test data from PwC_Structure `valid_env`. Why: PwC lays test data out like the server — `object_storage/<system>/<uuid>/<file>` documents, `eval_sets/` gold and run lists, `edw/` synthetic EDW sqlite — and this repo had no EDW stand-in.
+- What (10-29): `valid_env/unstructured/` deleted (781 files, 40 MB); brought `edw/` (sql + sqlite), `eval_sets/`, `object_storage/{CRMS,SFDC}` + `test_doc_purpose.md` from PwC HEAD with `git archive` (33 documents, sha256 match `object_keys.csv`); `unstructured/synth-meta-rdb/meta/` moved to `edw/meta_rdb/` because three server tests read it.
+- Files: `valid_env/README.md`, `.gitattributes`, `tests/server/mcp/test_internal_docs.py`, `tests/server/mcp/test_search_svc.py`, `tests/server/pipeline/test_source.py`, README §4-4.
+- Left: `EVAL_SETS_DIR` default → [pipeline.md#pl-21](pipeline.md#pl-21); PC tools that name old sets → [e2-10](#e2-10).
+- Status: done
 
 ## e2-10
 Minimize PC evaluation tools, then keep or delete their settings. Why: about 50 settings exist only for PC tests and experiments (`common.dev.*`, `pipeline.dev.*`, `pipeline.eval.*`, `mcp.dev.*`, `runtime.exp_*`, `graphiti.*`).

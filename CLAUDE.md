@@ -21,7 +21,7 @@
 | `deploy/host/` | **서버 호스트**에서 실행하는 compose, systemd, 셸 스크립트, `run_docs.py` | 컨테이너 안에서 실행되는 코드 | 아니요 |
 | `tests/` | 테스트 — `server/`(이미지 안에서 배포 판정에 쓰는 테스트, 외부 접속 없이 실행됨), `general/`(PC 전용 — PG·Docker가 필요하거나 느린 테스트), `runner.py` | 앱 코드 | `server/`만 |
 | `validation/` | PC 전용 **검증 도구 코드** — `search_ui/`(검증 페이지), `e2e/`(평가·비교·answer_gen) | 서버에서 실행되는 코드, 데이터 번들 | 아니요 |
-| `valid_env/` | PC 전용 **데이터** — 테스트 문서와 정답(`unstructured/`), 답변 점검 agent(`answer_test/`), PC 테스트 Docker(`docker/`) | 코드 로직, 비밀값, 운영 데이터 | 아니요 |
+| `valid_env/` | PC 전용 **데이터** — 외부 시스템 대역: 테스트 문서(`object_storage/` — 버킷 모양), 정답·질문·목록(`eval_sets/`), 합성 EDW·회사 DB 표(`edw/`), 답변 점검 agent(`answer_test/`), PC 테스트 Docker(`docker/`) | 코드 로직, 비밀값, 운영 데이터 | 아니요 |
 | `docs/` | 사람이 읽는 문서(`operations/`, `architecture/`, `requirements/`, `refactoring/`) | 코드 | 아니요 |
 
 **모듈 경계(자동 점검 — `python -m common.check.check_modules`):**
@@ -155,7 +155,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 - 테스트는 pytest 형식(`test_*` 함수 + `assert`)으로 쓴다. 이미지에서는 `pipeline.cli selftest`(`tests/runner.py`)가, PC에서는 pytest가 실행한다. 이미지에는 pytest가 없다.
 - 테스트는 **멱등**하게 만든다. 공용 개발 PG에 흔적을 남기지 말고 임시 SQLite나 임시 스키마(`orca_*`, `test_*`)를 쓰며, 이름을 다시 확인한 뒤 정리한다. 설정은 `with pc.PIPE.env(X=…)`, `settings.isolated()` 같은 테스트 도우미로 덮어쓴다(os.environ을 건드리지 않는다). 함수를 바꿔 끼울 때는 `unittest.mock.patch.object`를 쓴다.
 - 앱 모듈 안에 `selftest()`나 `if __name__ == "__main__":` 점검 코드를 새로 두지 않는다. 테스트는 `tests/`에 둔다.
-- 고정 데이터: 테스트 문서는 `valid_env/unstructured/`에 있다(프롬프트 사례 `tests/fixtures/`는 10-29에 지움 — refactor.md C-63).
+- 고정 데이터: 외부 시스템을 흉내 내는 데이터(문서·정답·EDW 대역)는 `valid_env/`에 둔다(10-29 PwC_Structure 배치 — `docs/prd/e2e.md#e2-09`). 서버 반입 테스트는 `valid_env`가 없는 이미지에서도 돌게 데이터를 임시 폴더에 만들어 쓴다(`tests/fixtures/`는 10-29에 지움 — refactor.md C-63).
 
 ### 6-5. 스모크 테스트 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
 README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. 실행마다 다른 값은 `--set`(파이프라인 진입점)이나 오버레이 설정 파일(`mcp_server.main`, `ask`처럼 `--set`을 받지 않는 명령)로 준다. 테스트 문서는 `valid_env/unstructured/`(목록 `list-smoke10.txt`)에 있고, 임베딩 캐시는 `output/edw/embed_cache.sqlite`다(같은 청크는 다시 호출하지 않는다 — 실제 호출을 확인하려면 `EMBED_CACHE=<빈 sqlite>`).

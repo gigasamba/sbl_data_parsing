@@ -115,7 +115,8 @@ Engine stack snapshot file approach review (C-50).
 
 ## pl-21
 Deferred settings removal. Why: unused/retired settings whose removal changes fingerprints, so they wait for the next image version: `common.paths.korean_font` (settings.py → every layer code_fp), `pipeline.paths.paddle_python` and `pipeline.eval.phase_report_legacy` (read in `run_all.py` → p0 of every engine).
-- Files: `common/config/settings.py`, `pipeline/config.py`, `pipeline/extract/run_all.py`.
+- Also: the `EVAL_SETS_DIR` PC default in `common/core/paths.py` still says `valid_env/unstructured` (deleted 10-29, [e2e.md#e2-09](e2e.md#e2-09)) — change to `valid_env/eval_sets` with `tests/server/common/test_paths.py`; until then set `common.paths.eval_sets_dir` on the PC.
+- Files: `common/config/settings.py`, `pipeline/config.py`, `pipeline/extract/run_all.py`, `common/core/paths.py`.
 - Status: todo — bundle with the next fingerprint-changing release.
 
 ## pl-22

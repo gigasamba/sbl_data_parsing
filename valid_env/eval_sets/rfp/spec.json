@@ -1,0 +1,1206 @@
+{
+ "generator": "archive/code/dev_tools/synthetic_data_gen/gen_rfp_set.py",
+ "split": "dev",
+ "sample_stage": false,
+ "rebuilt": "DS2 10-21 (realistic CDMO document forms)",
+ "note": "[SYNTHETIC] EV1 RFP/RFI set — 3 fictional-lookalike pharma clients (not real companies), 4 client projects, 12 documents, invented content; SYNTHETIC mark on every page.",
+ "full_set_design": [
+  {
+   "doc": "pfz_rfp_main.docx",
+   "client": "Pfizar Biopharma (fictional)",
+   "format": "Client RFP (Word): commercial DS/DP manufacturing",
+   "hard_elements": [
+    "header table with logo image, merged cells and Page X of Y fields",
+    "SYNTHETIC mark in one header cell + footer",
+    "wide left binding margin (3.2 cm) and non-default margins",
+    "cover page with confidentiality box, revision history and approval block",
+    "abbreviations table",
+    "footnotes (4, word/footnotes.xml)",
+    "merged-cell table (vertical + horizontal), DS/DP x site",
+    "special characters and Unicode super/subscripts (×10⁶, CO₂, ±, ≥, µ, °C, −)",
+    "Word-formatted superscript/subscript (w:vertAlign: 10^7, CO_2, log_10)",
+    "crossing-line flowchart with step numbers and legend (Mermaid gold, one deliberate crossing)",
+    "image over image (rotated CONFIDENTIAL stamp over the flowchart)",
+    "landscape section with wide table and totals column",
+    "spec table: vertical merges (category), horizontal merges (DS = DP criteria), header rows repeat across pages (w:tblHeader)",
+    "low-resolution image (72 dpi label artwork)",
+    "text box over image",
+    "pricing table with vertical merges (category)"
+   ],
+   "client_filter_role": "client-only",
+   "status": "generated",
+   "project_id": "P2026014"
+  },
+  {
+   "doc": "pfz_qa_thread_en.eml",
+   "client": "Pfizar Biopharma (fictional)",
+   "format": "Q&A mail thread (English, 3 messages, CSV attachment)",
+   "hard_elements": [
+    "mail thread: 3 messages, '>' quoting, Message-ID/In-Reply-To/References, CC, signature, disclaimer, CSV attachment, +0900"
+   ],
+   "client_filter_role": "client-only",
+   "status": "generated",
+   "project_id": "P2026014"
+  },
+  {
+   "doc": "pfz_fwd_mail_ko.eml",
+   "client": "Pfizar Biopharma (fictional)",
+   "format": "Korean internal forward + reply of the English client mail",
+   "hard_elements": [
+    "Korean reply on top of a Korean forward of an English client mail (Outlook original-message blocks, base64 UTF-8 body)"
+   ],
+   "client_filter_role": "client-only",
+   "status": "generated",
+   "project_id": "P2026014"
+  },
+  {
+   "doc": "pfz_chat_capture.png",
+   "client": "Pfizar Biopharma (fictional)",
+   "format": "Internal messenger capture (Korean)",
+   "hard_elements": [
+    "chat capture: app frame, timestamps, read marks, Korean text in image"
+   ],
+   "client_filter_role": "client-only",
+   "status": "generated",
+   "project_id": "P2026014"
+  },
+  {
+   "doc": "astra_rfp_main.docx",
+   "client": "AstraNova Bio (fictional)",
+   "format": "Client RFP (Word): Phase 2 vaccine DP",
+   "hard_elements": [
+    "header logo + footer Page X of Y, SYNTHETIC mark in header + footer",
+    "merged-rows-only table (contacts)",
+    "two-column section (w:cols num=2, continuous section breaks)",
+    "merged-columns-only table (scope by site)",
+    "swimlane process figure with step numbers and legend (Mermaid gold)",
+    "diagram side-by-side with text (borderless 2-column table)",
+    "table breaks across page, header NOT repeated (negative control)",
+    "Gantt-like timeline figure"
+   ],
+   "client_filter_role": "client-only",
+   "status": "generated",
+   "project_id": "P2026033"
+  },
+  {
+   "doc": "astra_qa_thread_en.eml",
+   "client": "AstraNova Bio (fictional)",
+   "format": "Q&A mail thread (English, 3 messages)",
+   "hard_elements": [
+    "mail thread: 3 messages, '>' quoting, Message-ID chain, CC, signature, +0900"
+   ],
+   "client_filter_role": "client-only",
+   "status": "generated",
+   "project_id": "P2026033"
+  },
+  {
+   "doc": "astra_chat_capture.png",
+   "client": "AstraNova Bio (fictional)",
+   "format": "Mobile messenger capture (Korean)",
+   "hard_elements": [
+    "mobile chat capture: bubbles, timestamps, unread mark, Korean text in image"
+   ],
+   "client_filter_role": "client-only",
+   "status": "generated",
+   "project_id": "P2026033"
+  },
+  {
+   "doc": "astra_rfi_form.xlsx",
+   "client": "AstraNova Bio (fictional)",
+   "format": "Client RFI form (3 sheets) for a second molecule",
+   "hard_elements": [
+    "xlsx with 3 sheets (Instructions, RFI, Pricing)",
+    "merged section labels aligned top + merged banner rows",
+    "Y/N data validation, freeze panes, borders, header fill, input-cell fill",
+    "formula cell without cached value (=SUM)"
+   ],
+   "client_filter_role": "client-only",
+   "status": "generated",
+   "project_id": "P2026052"
+  },
+  {
+   "doc": "kvx_rfp_main.pdf",
+   "client": "Korvexa Life Sciences (fictional)",
+   "format": "Client RFP exported from Word to PDF (TOC, rotated page)",
+   "hard_elements": [
+    "real Word -> PDF export (LibreOffice text layer)",
+    "table of contents with dotted leaders and page numbers (TOC field result)",
+    "numbered headings 1 / 1.1 / 1.1.1",
+    "header table with logo + footer Page X of Y, SYNTHETIC mark in header cell + footer",
+    "diagram, full page (ADC process, Mermaid gold)",
+    "rotated page (/Rotate 90): landscape Gantt table stored on a portrait page",
+    "Gantt table: shaded cells, year headers merged horizontally, header cells merged vertically",
+    "RFI questionnaire embedded in the RFP"
+   ],
+   "client_filter_role": "client-only",
+   "status": "generated",
+   "project_id": "P2026047"
+  },
+  {
+   "doc": "kvx_scan_copy.pdf",
+   "client": "Korvexa Life Sciences (fictional)",
+   "format": "Signed cover letter + faxed intent-to-bid form (scan, no text layer)",
+   "hard_elements": [
+    "scan without text layer: JPEG pages, skew ±1°, noise, blur",
+    "signature, round company seal over text, approval boxes with stamps",
+    "fax header line, grayscale faxed page, ticked checkbox, handwritten fields"
+   ],
+   "client_filter_role": "client-only",
+   "status": "generated",
+   "project_id": "P2026047"
+  },
+  {
+   "doc": "kvx_qa_thread_en.eml",
+   "client": "Korvexa Life Sciences (fictional)",
+   "format": "Q&A mail thread (English, 3 messages)",
+   "hard_elements": [
+    "mail thread: 3 messages, '>' quoting, Message-ID chain, CC, signature, +0900"
+   ],
+   "client_filter_role": "client-only",
+   "status": "generated",
+   "project_id": "P2026047"
+  },
+  {
+   "doc": "kvx_internal_note.txt",
+   "client": "Korvexa Life Sciences (fictional)",
+   "format": "Korean internal go/no-go memo (mentions Pfizar slot conflict)",
+   "hard_elements": [
+    "cross-client internal memo (primary + mentioned client), Korean, CRLF"
+   ],
+   "client_filter_role": "cross-client doc (primary + mentioned)",
+   "status": "generated",
+   "project_id": "P2026047"
+  }
+ ],
+ "hard_elements": [
+  {
+   "element": "header table with logo image, merged cells and Page X of Y fields",
+   "doc": "pfz_rfp_main.docx",
+   "page": "all (1-8)",
+   "location": "page header"
+  },
+  {
+   "element": "SYNTHETIC mark in one header cell + footer",
+   "doc": "pfz_rfp_main.docx",
+   "page": "all (1-8)",
+   "location": "header cell / footer"
+  },
+  {
+   "element": "wide left binding margin (3.2 cm) and non-default margins",
+   "doc": "pfz_rfp_main.docx",
+   "page": "all (1-8)",
+   "location": "section properties"
+  },
+  {
+   "element": "cover page with confidentiality box, revision history and approval block",
+   "doc": "pfz_rfp_main.docx",
+   "page": 1,
+   "location": "cover page"
+  },
+  {
+   "element": "abbreviations table",
+   "doc": "pfz_rfp_main.docx",
+   "page": 2,
+   "location": "section 2"
+  },
+  {
+   "element": "footnotes (4, word/footnotes.xml)",
+   "doc": "pfz_rfp_main.docx",
+   "page": "2, 3, 5, 6",
+   "location": "sections 3, 4.2, 5, 6.1"
+  },
+  {
+   "element": "merged-cell table (vertical + horizontal), DS/DP x site",
+   "doc": "pfz_rfp_main.docx",
+   "page": 2,
+   "location": "section 4, Table 1"
+  },
+  {
+   "element": "special characters and Unicode super/subscripts (×10⁶, CO₂, ±, ≥, µ, °C, −)",
+   "doc": "pfz_rfp_main.docx",
+   "page": 3,
+   "location": "section 4.2"
+  },
+  {
+   "element": "Word-formatted superscript/subscript (w:vertAlign: 10^7, CO_2, log_10)",
+   "doc": "pfz_rfp_main.docx",
+   "page": 3,
+   "location": "section 4.2 second paragraph"
+  },
+  {
+   "element": "crossing-line flowchart with step numbers and legend (Mermaid gold, one deliberate crossing)",
+   "doc": "pfz_rfp_main.docx",
+   "page": 3,
+   "location": "section 4.2, Figure 1"
+  },
+  {
+   "element": "image over image (rotated CONFIDENTIAL stamp over the flowchart)",
+   "doc": "pfz_rfp_main.docx",
+   "page": 3,
+   "location": "Figure 1"
+  },
+  {
+   "element": "landscape section with wide table and totals column",
+   "doc": "pfz_rfp_main.docx",
+   "page": 5,
+   "location": "section 5, Table 3"
+  },
+  {
+   "element": "spec table: vertical merges (category), horizontal merges (DS = DP criteria), header rows repeat across pages (w:tblHeader)",
+   "doc": "pfz_rfp_main.docx",
+   "page": "6-7",
+   "location": "section 6.1, Table 4"
+  },
+  {
+   "element": "low-resolution image (72 dpi label artwork)",
+   "doc": "pfz_rfp_main.docx",
+   "page": 7,
+   "location": "section 7, Figure 2"
+  },
+  {
+   "element": "text box over image",
+   "doc": "pfz_rfp_main.docx",
+   "page": 7,
+   "location": "section 7, Figure 2"
+  },
+  {
+   "element": "pricing table with vertical merges (category)",
+   "doc": "pfz_rfp_main.docx",
+   "page": 7,
+   "location": "section 9, Table 5"
+  },
+  {
+   "element": "mail thread: 3 messages, '>' quoting, Message-ID/In-Reply-To/References, CC, signature, disclaimer, CSV attachment, +0900",
+   "doc": "pfz_qa_thread_en.eml",
+   "page": null,
+   "location": "whole message"
+  },
+  {
+   "element": "Korean reply on top of a Korean forward of an English client mail (Outlook original-message blocks, base64 UTF-8 body)",
+   "doc": "pfz_fwd_mail_ko.eml",
+   "page": null,
+   "location": "whole message"
+  },
+  {
+   "element": "chat capture: app frame, timestamps, read marks, Korean text in image",
+   "doc": "pfz_chat_capture.png",
+   "page": 1,
+   "location": "image"
+  },
+  {
+   "element": "header logo + footer Page X of Y, SYNTHETIC mark in header + footer",
+   "doc": "astra_rfp_main.docx",
+   "page": "all (1-4)",
+   "location": "header/footer"
+  },
+  {
+   "element": "merged-rows-only table (contacts)",
+   "doc": "astra_rfp_main.docx",
+   "page": 1,
+   "location": "section 2"
+  },
+  {
+   "element": "two-column section (w:cols num=2, continuous section breaks)",
+   "doc": "astra_rfp_main.docx",
+   "page": 1,
+   "location": "section 3"
+  },
+  {
+   "element": "merged-columns-only table (scope by site)",
+   "doc": "astra_rfp_main.docx",
+   "page": 1,
+   "location": "section 4, Table 1"
+  },
+  {
+   "element": "swimlane process figure with step numbers and legend (Mermaid gold)",
+   "doc": "astra_rfp_main.docx",
+   "page": 2,
+   "location": "section 4.2, Figure 1"
+  },
+  {
+   "element": "diagram side-by-side with text (borderless 2-column table)",
+   "doc": "astra_rfp_main.docx",
+   "page": 3,
+   "location": "section 5.2, Figure 2"
+  },
+  {
+   "element": "table breaks across page, header NOT repeated (negative control)",
+   "doc": "astra_rfp_main.docx",
+   "page": "2-3",
+   "location": "section 5.1, Table 3"
+  },
+  {
+   "element": "Gantt-like timeline figure",
+   "doc": "astra_rfp_main.docx",
+   "page": 4,
+   "location": "section 6, Figure 3"
+  },
+  {
+   "element": "mail thread: 3 messages, '>' quoting, Message-ID chain, CC, signature, +0900",
+   "doc": "astra_qa_thread_en.eml",
+   "page": null,
+   "location": "whole message"
+  },
+  {
+   "element": "mobile chat capture: bubbles, timestamps, unread mark, Korean text in image",
+   "doc": "astra_chat_capture.png",
+   "page": 1,
+   "location": "image"
+  },
+  {
+   "element": "xlsx with 3 sheets (Instructions, RFI, Pricing)",
+   "doc": "astra_rfi_form.xlsx",
+   "page": "all",
+   "location": "workbook"
+  },
+  {
+   "element": "merged section labels aligned top + merged banner rows",
+   "doc": "astra_rfi_form.xlsx",
+   "page": "RFI",
+   "location": "column B, rows 1-2"
+  },
+  {
+   "element": "Y/N data validation, freeze panes, borders, header fill, input-cell fill",
+   "doc": "astra_rfi_form.xlsx",
+   "page": "RFI",
+   "location": "columns D-G"
+  },
+  {
+   "element": "formula cell without cached value (=SUM)",
+   "doc": "astra_rfi_form.xlsx",
+   "page": "Pricing",
+   "location": "E13"
+  },
+  {
+   "element": "real Word -> PDF export (LibreOffice text layer)",
+   "doc": "kvx_rfp_main.pdf",
+   "page": "all (1-7)",
+   "location": "whole document"
+  },
+  {
+   "element": "table of contents with dotted leaders and page numbers (TOC field result)",
+   "doc": "kvx_rfp_main.pdf",
+   "page": 2,
+   "location": "Contents"
+  },
+  {
+   "element": "numbered headings 1 / 1.1 / 1.1.1",
+   "doc": "kvx_rfp_main.pdf",
+   "page": "3-7",
+   "location": "body"
+  },
+  {
+   "element": "header table with logo + footer Page X of Y, SYNTHETIC mark in header cell + footer",
+   "doc": "kvx_rfp_main.pdf",
+   "page": "all (1-7)",
+   "location": "header/footer"
+  },
+  {
+   "element": "diagram, full page (ADC process, Mermaid gold)",
+   "doc": "kvx_rfp_main.pdf",
+   "page": 5,
+   "location": "section 5, Figure 1"
+  },
+  {
+   "element": "rotated page (/Rotate 90): landscape Gantt table stored on a portrait page",
+   "doc": "kvx_rfp_main.pdf",
+   "page": 6,
+   "location": "section 6"
+  },
+  {
+   "element": "Gantt table: shaded cells, year headers merged horizontally, header cells merged vertically",
+   "doc": "kvx_rfp_main.pdf",
+   "page": 6,
+   "location": "section 6"
+  },
+  {
+   "element": "RFI questionnaire embedded in the RFP",
+   "doc": "kvx_rfp_main.pdf",
+   "page": 7,
+   "location": "Appendix A"
+  },
+  {
+   "element": "scan without text layer: JPEG pages, skew ±1°, noise, blur",
+   "doc": "kvx_scan_copy.pdf",
+   "page": "1-2",
+   "location": "whole document"
+  },
+  {
+   "element": "signature, round company seal over text, approval boxes with stamps",
+   "doc": "kvx_scan_copy.pdf",
+   "page": "1-2",
+   "location": "signature blocks"
+  },
+  {
+   "element": "fax header line, grayscale faxed page, ticked checkbox, handwritten fields",
+   "doc": "kvx_scan_copy.pdf",
+   "page": 2,
+   "location": "page 2"
+  },
+  {
+   "element": "mail thread: 3 messages, '>' quoting, Message-ID chain, CC, signature, +0900",
+   "doc": "kvx_qa_thread_en.eml",
+   "page": null,
+   "location": "whole message"
+  },
+  {
+   "element": "cross-client internal memo (primary + mentioned client), Korean, CRLF",
+   "doc": "kvx_internal_note.txt",
+   "page": null,
+   "location": "whole file"
+  }
+ ],
+ "glossary": {
+  "client_master": "config_examples/client_master.example.csv",
+  "client_roster": "config_examples/client_roster.example.csv",
+  "doc_client_map": "edw/ai.sql + edw/sfdc.sql (AI.FileStorageMap.sf_op_id -> SFDC.Opportunity -> SFDC.Account)",
+  "n_clients": 4,
+  "known_gap_sv15": "3-letter aliases PFZ/ANB/KVX are stripped by common_tools/tokens_and_terms.py _SHORT_EN — included on purpose as SV15 test data, not a bug here."
+ },
+ "documents": [
+  {
+   "file": "SFDC/a274ce2c-45f7-4b63-8760-66bc552004eb/pfz_rfp_main.docx",
+   "format": "docx",
+   "client": "Pfizar Biopharma",
+   "project_id": "P2026014",
+   "pages": 8,
+   "elements": [
+    "header table with logo image, merged cells and Page X of Y fields",
+    "SYNTHETIC mark in one header cell + footer",
+    "wide left binding margin (3.2 cm) and non-default margins",
+    "cover page with confidentiality box, revision history and approval block",
+    "abbreviations table",
+    "footnotes (4, word/footnotes.xml)",
+    "merged-cell table (vertical + horizontal), DS/DP x site",
+    "special characters and Unicode super/subscripts (×10⁶, CO₂, ±, ≥, µ, °C, −)",
+    "Word-formatted superscript/subscript (w:vertAlign: 10^7, CO_2, log_10)",
+    "crossing-line flowchart with step numbers and legend (Mermaid gold, one deliberate crossing)",
+    "image over image (rotated CONFIDENTIAL stamp over the flowchart)",
+    "landscape section with wide table and totals column",
+    "spec table: vertical merges (category), horizontal merges (DS = DP criteria), header rows repeat across pages (w:tblHeader)",
+    "low-resolution image (72 dpi label artwork)",
+    "text box over image",
+    "pricing table with vertical merges (category)"
+   ],
+   "content": "Client RFP (Word): commercial DS/DP manufacturing",
+   "expect": "values/tables/mermaid/hard elements all reproduced",
+   "facts": [
+    {
+     "kw": [
+      "Pfizar Biopharma"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "PFZ-RFP-2026-04"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "PFZ-ES-RFP-0042"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "1.0"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-10-26"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "PFZ-SYN-MAB-11"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-12-11, 17:00 KST"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "PFZ-CDA-2026-118"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "alex.carter@pfizar-bio.example"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-11-13"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "lyophilized powder, 150 mg/vial"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "4.6 g/L"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "1.8×10^7 cells/mL"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "0.5×10⁶ cells/mL"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2027-02-26"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": [
+    "real-company contact, price, or product claim"
+   ]
+  },
+  {
+   "file": "SFDC/72048b36-1ef9-479b-8f0d-6c7ad29b61b9/pfz_qa_thread_en.eml",
+   "format": "eml",
+   "client": "Pfizar Biopharma",
+   "project_id": "P2026014",
+   "pages": null,
+   "elements": [
+    "mail thread: 3 messages, '>' quoting, Message-ID/In-Reply-To/References, CC, signature, disclaimer, CSV attachment, +0900"
+   ],
+   "content": "Q&A mail thread (English, 3 messages, CSV attachment)",
+   "expect": "values/tables/mermaid/hard elements all reproduced",
+   "facts": [
+    {
+     "kw": [
+      "PFZ-RFP-2026-04"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "non-GMP engineering run is acceptable"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "three consecutive DS PPQ batches in one campaign"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "The US backup quote is for DS only"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "October 2027 instead of November 2027"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "week of 18 October 2027"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "PFZ-RFP-2026-04_QA_log_Saebit.csv"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": [
+    "real-company contact, price, or product claim"
+   ]
+  },
+  {
+   "file": "SFDC/64d6f4fb-ac54-4323-82c3-4f679cb6f419/pfz_fwd_mail_ko.eml",
+   "format": "eml",
+   "client": "Pfizar Biopharma",
+   "project_id": "P2026014",
+   "pages": null,
+   "elements": [
+    "Korean reply on top of a Korean forward of an English client mail (Outlook original-message blocks, base64 UTF-8 body)"
+   ],
+   "content": "Korean internal forward + reply of the English client mail",
+   "expect": "values/tables/mermaid/hard elements all reproduced",
+   "facts": [
+    {
+     "kw": [
+      "PFZ-RFP-2026-04"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "ENG-01을 2027년 11월에서 10월로 앞당길 수 있는지"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2027년 10월 18일 주"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2공장 2,000L 2호기"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "11월 16일(월) 슬롯 회의"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Can you offer a slot in October 2027 instead of November 2027?"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": [
+    "real-company contact, price, or product claim"
+   ]
+  },
+  {
+   "file": "SFDC/6dd6c33f-257c-4c9f-8729-a746849499b7/pfz_chat_capture.png",
+   "format": "png",
+   "client": "Pfizar Biopharma",
+   "project_id": "P2026014",
+   "pages": null,
+   "elements": [
+    "chat capture: app frame, timestamps, read marks, Korean text in image"
+   ],
+   "content": "Internal messenger capture (Korean)",
+   "expect": "values/tables/mermaid/hard elements all reproduced",
+   "facts": [
+    {
+     "kw": [
+      "2027년 10월 18일 주, 2공장 2호기"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "PPQ-01 1월, PPQ-02 2월, PPQ-03 3월"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Korvexa 건이 수주되면 2호기 11월 이후는 비워 두기 어려워요"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": [
+    "real-company contact, price, or product claim"
+   ]
+  },
+  {
+   "file": "SFDC/770f2b9c-691f-4d38-85b7-18fd0462bc05/astra_rfp_main.docx",
+   "format": "docx",
+   "client": "AstraNova Bio",
+   "project_id": "P2026033",
+   "pages": 4,
+   "elements": [
+    "header logo + footer Page X of Y, SYNTHETIC mark in header + footer",
+    "merged-rows-only table (contacts)",
+    "two-column section (w:cols num=2, continuous section breaks)",
+    "merged-columns-only table (scope by site)",
+    "swimlane process figure with step numbers and legend (Mermaid gold)",
+    "diagram side-by-side with text (borderless 2-column table)",
+    "table breaks across page, header NOT repeated (negative control)",
+    "Gantt-like timeline figure"
+   ],
+   "content": "Client RFP (Word): Phase 2 vaccine DP",
+   "expect": "values/tables/mermaid/hard elements all reproduced",
+   "facts": [
+    {
+     "kw": [
+      "AstraNova Bio"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "ANB-RFP-2026-03"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "ANB-SYN-VAC-03"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-10-19"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-11-27"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "25 µg antigen and 0.5 mg Al³⁺"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "nominal fill of 0.6 mL"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "drug product (DP)"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "ANB-CDA-2025-031"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2027-01-15"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": [
+    "real-company contact, price, or product claim"
+   ]
+  },
+  {
+   "file": "SFDC/082a76fa-cb64-4225-8a00-b9deb0188233/astra_qa_thread_en.eml",
+   "format": "eml",
+   "client": "AstraNova Bio",
+   "project_id": "P2026033",
+   "pages": null,
+   "elements": [
+    "mail thread: 3 messages, '>' quoting, Message-ID chain, CC, signature, +0900"
+   ],
+   "content": "Q&A mail thread (English, 3 messages)",
+   "expect": "values/tables/mermaid/hard elements all reproduced",
+   "facts": [
+    {
+     "kw": [
+      "ANB-RFP-2026-03"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "The CDMO procures the adjuvant"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "up to 12,000 vials/hour for 2R vials"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "8,000 vials/hour"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "60,000 vials"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": [
+    "real-company contact, price, or product claim"
+   ]
+  },
+  {
+   "file": "SFDC/f685a4f7-d9fc-4ddf-8b66-53b34913d824/astra_chat_capture.png",
+   "format": "png",
+   "client": "AstraNova Bio",
+   "project_id": "P2026033",
+   "pages": null,
+   "elements": [
+    "mobile chat capture: bubbles, timestamps, unread mark, Korean text in image"
+   ],
+   "content": "Mobile messenger capture (Korean)",
+   "expect": "values/tables/mermaid/hard elements all reproduced",
+   "facts": [
+    {
+     "kw": [
+      "시간당 12,000병"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "시간당 8,000병"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2027년 4월 정기 일정"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": [
+    "real-company contact, price, or product claim"
+   ]
+  },
+  {
+   "file": "SFDC/64960b49-fe52-4277-8c2e-2c3969c66bf6/astra_rfi_form.xlsx",
+   "format": "xlsx",
+   "client": "AstraNova Bio",
+   "project_id": "P2026052",
+   "pages": 3,
+   "elements": [
+    "xlsx with 3 sheets (Instructions, RFI, Pricing)",
+    "merged section labels aligned top + merged banner rows",
+    "Y/N data validation, freeze panes, borders, header fill, input-cell fill",
+    "formula cell without cached value (=SUM)"
+   ],
+   "content": "Client RFI form (3 sheets) for a second molecule",
+   "expect": "values/tables/mermaid/hard elements all reproduced",
+   "facts": [
+    {
+     "kw": [
+      "ANB-RFI-2026-07"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "ANB-SYN-FC-21"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-12-04"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Daniel Osei"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Toxicology batch (200 L, non-GMP)"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": [
+    "real-company contact, price, or product claim"
+   ]
+  },
+  {
+   "file": "SFDC/17ae1841-d031-48b5-85b2-2df6058b5857/kvx_rfp_main.pdf",
+   "format": "pdf",
+   "client": "Korvexa Life Sciences",
+   "project_id": "P2026047",
+   "pages": 7,
+   "elements": [
+    "real Word -> PDF export (LibreOffice text layer)",
+    "table of contents with dotted leaders and page numbers (TOC field result)",
+    "numbered headings 1 / 1.1 / 1.1.1",
+    "header table with logo + footer Page X of Y, SYNTHETIC mark in header cell + footer",
+    "diagram, full page (ADC process, Mermaid gold)",
+    "rotated page (/Rotate 90): landscape Gantt table stored on a portrait page",
+    "Gantt table: shaded cells, year headers merged horizontally, header cells merged vertically",
+    "RFI questionnaire embedded in the RFP"
+   ],
+   "content": "Client RFP exported from Word to PDF (TOC, rotated page)",
+   "expect": "values/tables/mermaid/hard elements all reproduced",
+   "facts": [
+    {
+     "kw": [
+      "Korvexa Life Sciences K.K."
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "KVX-RFP-2026-05"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "KVX-SCM-RFP-0105"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "A"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "KVX-SYN-ADC-02"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-10-23"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-12-15"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-10-30"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "the DAR target is 4.0"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "OEL ≤ 0.1 µg/m³"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Hana Sato, VP Supply Chain"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "haruka.mori@korvexa.example"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": [
+    "real-company contact, price, or product claim"
+   ]
+  },
+  {
+   "file": "SFDC/1f450a85-3272-42a9-8664-893cff5bb22c/kvx_scan_copy.pdf",
+   "format": "pdf(scan)",
+   "client": "Korvexa Life Sciences",
+   "project_id": "P2026047",
+   "pages": 2,
+   "elements": [
+    "scan without text layer: JPEG pages, skew ±1°, noise, blur",
+    "signature, round company seal over text, approval boxes with stamps",
+    "fax header line, grayscale faxed page, ticked checkbox, handwritten fields"
+   ],
+   "content": "Signed cover letter + faxed intent-to-bid form (scan, no text layer)",
+   "expect": "values/tables/mermaid/hard elements all reproduced",
+   "facts": [
+    {
+     "kw": [
+      "KVX-RFP-2026-05"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Minho Choi, Director, Business Development"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-10-29"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "We intend to submit a proposal."
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "KVX-CDA-2026-022"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "OCT-29-2026 16:42"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": [
+    "real-company contact, price, or product claim"
+   ]
+  },
+  {
+   "file": "SFDC/f55fa16f-bde6-4cab-831b-878c96c079f9/kvx_qa_thread_en.eml",
+   "format": "eml",
+   "client": "Korvexa Life Sciences",
+   "project_id": "P2026047",
+   "pages": null,
+   "elements": [
+    "mail thread: 3 messages, '>' quoting, Message-ID chain, CC, signature, +0900"
+   ],
+   "content": "Q&A mail thread (English, 3 messages)",
+   "expect": "values/tables/mermaid/hard elements all reproduced",
+   "facts": [
+    {
+     "kw": [
+      "KVX-RFP-2026-05"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "DAR acceptance range 3.5–4.5 by HIC-HPLC"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Unconjugated antibody ≤ 5.0%"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Korvexa supplies the drug-linker for all runs"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": [
+    "real-company contact, price, or product claim"
+   ]
+  },
+  {
+   "file": "SFDC/23213095-ea73-4db0-8107-f03a28ff3b78/kvx_internal_note.txt",
+   "format": "txt",
+   "client": "Korvexa Life Sciences",
+   "project_id": "P2026047",
+   "pages": null,
+   "elements": [
+    "cross-client internal memo (primary + mentioned client), Korean, CRLF"
+   ],
+   "content": "Korean internal go/no-go memo (mentions Pfizar slot conflict)",
+   "expect": "values/tables/mermaid/hard elements all reproduced",
+   "facts": [
+    {
+     "kw": [
+      "Korvexa Life Sciences"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Pfizar Biopharma"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "조건부 Go"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "30% 정도"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2공장 2,000L 2호기 2027년 4분기"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "11/18(수) 영업회의"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": [
+    "real-company contact, price, or product claim"
+   ]
+  }
+ ],
+ "projects": {
+  "P2026014": {
+   "client": "Pfizar Biopharma"
+  },
+  "P2026033": {
+   "client": "AstraNova Bio"
+  },
+  "P2026052": {
+   "client": "AstraNova Bio"
+  },
+  "P2026047": {
+   "client": "Korvexa Life Sciences"
+  }
+ }
+}

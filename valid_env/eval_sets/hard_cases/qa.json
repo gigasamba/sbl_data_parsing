@@ -1,0 +1,828 @@
+{
+ "set": "hard_cases",
+ "scoring": "_synth_images_qa.score",
+ "items": [
+  {
+   "type": "symbol_read",
+   "question": "시험 규격서에서 입자 크기 기준은?",
+   "gold_answer": "≥ 95%",
+   "answer_keywords": [
+    "≥ 95%|>= 95%|95% 이상"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "symbol_font_pua.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "symbol_font_pua.docx",
+     "path": "valid_env/object_storage/CRMS/1e573cf6-589a-59b8-bbdd-3bc47c800339/symbol_font_pua.docx",
+     "where": "표 1행"
+    }
+   ],
+   "id": "RPQ001",
+   "source_set": "synth-realpat",
+   "split": "dev"
+  },
+  {
+   "type": "symbol_read",
+   "question": "시험 규격서에서 pH 기준은?",
+   "gold_answer": "7.0 ± 0.2",
+   "answer_keywords": [
+    "7.0 ± 0.2|7.0±0.2|7.0 +/- 0.2"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "symbol_font_pua.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "symbol_font_pua.docx",
+     "path": "valid_env/object_storage/CRMS/1e573cf6-589a-59b8-bbdd-3bc47c800339/symbol_font_pua.docx",
+     "where": "표 2행"
+    }
+   ],
+   "id": "RPQ002",
+   "source_set": "synth-realpat",
+   "split": "dev"
+  },
+  {
+   "type": "symbol_read",
+   "question": "시험 규격서에서 함량 기준은?",
+   "gold_answer": "95 μg/mL",
+   "answer_keywords": [
+    "95 μg/mL|95 ug/mL|95µg/mL"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "symbol_font_pua.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "symbol_font_pua.docx",
+     "path": "valid_env/object_storage/CRMS/1e573cf6-589a-59b8-bbdd-3bc47c800339/symbol_font_pua.docx",
+     "where": "표 4행"
+    }
+   ],
+   "id": "RPQ003",
+   "source_set": "synth-realpat",
+   "split": "dev"
+  },
+  {
+   "type": "symbol_read",
+   "question": "시험 규격서에서 보관 온도는?",
+   "gold_answer": "2-8°C",
+   "answer_keywords": [
+    "2-8°C|2-8C|2~8°C"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "symbol_font_pua.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "symbol_font_pua.docx",
+     "path": "valid_env/object_storage/CRMS/1e573cf6-589a-59b8-bbdd-3bc47c800339/symbol_font_pua.docx",
+     "where": "표 5행"
+    }
+   ],
+   "id": "RPQ004",
+   "source_set": "synth-realpat",
+   "split": "dev"
+  },
+  {
+   "type": "supsub_read",
+   "question": "시험 규격서의 세포 밀도 목표(단위 포함)는?",
+   "gold_answer": "1.0×10^6 cells/mL",
+   "answer_keywords": [
+    "1.0×10^6|1.0x10^6"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "symbol_font_pua.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "symbol_font_pua.docx",
+     "path": "valid_env/object_storage/CRMS/1e573cf6-589a-59b8-bbdd-3bc47c800339/symbol_font_pua.docx",
+     "where": "본문"
+    }
+   ],
+   "id": "RPQ005",
+   "source_set": "synth-realpat",
+   "split": "dev"
+  },
+  {
+   "type": "supsub_read",
+   "question": "시험 규격서의 배양 조건 CO2 농도는?",
+   "gold_answer": "CO₂ 농도 5%",
+   "answer_keywords": [
+    "5%"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "symbol_font_pua.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "symbol_font_pua.docx",
+     "path": "valid_env/object_storage/CRMS/1e573cf6-589a-59b8-bbdd-3bc47c800339/symbol_font_pua.docx",
+     "where": "본문"
+    }
+   ],
+   "id": "RPQ006",
+   "source_set": "synth-realpat",
+   "split": "dev"
+  },
+  {
+   "type": "table_merge",
+   "question": "품질·공정 기준표에서 배치 B-21의 희석배율 기준은?",
+   "gold_answer": "× 10",
+   "answer_keywords": [
+    "× 10|x 10|×10"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "merged_cells_tbl.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "merged_cells_tbl.docx",
+     "path": "valid_env/object_storage/CRMS/9d9a56af-8105-5ba8-8db2-9f5ef122d4eb/merged_cells_tbl.docx",
+     "where": "B-21 2행"
+    }
+   ],
+   "id": "RPQ007",
+   "source_set": "synth-realpat",
+   "split": "dev"
+  },
+  {
+   "type": "table_merge",
+   "question": "품질·공정 기준표에서 배치 B-22의 순도 기준과 보관온도는?",
+   "gold_answer": "≥ 95%, 2-8°C",
+   "answer_keywords": [
+    "≥ 95%|>= 95%",
+    "2-8°C|2-8C"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "merged_cells_tbl.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "merged_cells_tbl.docx",
+     "path": "valid_env/object_storage/CRMS/9d9a56af-8105-5ba8-8db2-9f5ef122d4eb/merged_cells_tbl.docx",
+     "where": "B-22 2행"
+    }
+   ],
+   "id": "RPQ008",
+   "source_set": "synth-realpat",
+   "split": "dev"
+  },
+  {
+   "type": "table_merge",
+   "question": "품질·공정 기준표 머리글에서 '품질 기준' 아래 하위 항목 두 개는?",
+   "gold_answer": "항목, 기준값",
+   "answer_keywords": [
+    "항목",
+    "기준값"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "merged_cells_tbl.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "merged_cells_tbl.docx",
+     "path": "valid_env/object_storage/CRMS/9d9a56af-8105-5ba8-8db2-9f5ef122d4eb/merged_cells_tbl.docx",
+     "where": "머리글 2단"
+    }
+   ],
+   "id": "RPQ009",
+   "source_set": "synth-realpat",
+   "split": "dev"
+  },
+  {
+   "type": "hidden_term",
+   "question": "임상시험 결과 요약(hidden_textbox.docx)에서 다루는 시험물질의 실제 이름은?",
+   "gold_answer": "velorimab",
+   "answer_keywords": [
+    "velorimab"
+   ],
+   "needs": [
+    "text",
+    "header_footer"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "hidden_textbox.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "hidden_textbox.docx",
+     "path": "valid_env/object_storage/CRMS/243f7ef5-e309-5808-b855-54e71426ad4e/hidden_textbox.docx",
+     "where": "머리글/바닥글/텍스트 상자"
+    }
+   ],
+   "id": "RPQ011",
+   "source_set": "synth-realpat",
+   "split": "dev"
+  },
+  {
+   "type": "hidden_term_neg",
+   "question": "임상시험 결과 요약(hidden_textbox.docx) 본문에 시험물질의 이름이 직접 적혀 있는가?",
+   "gold_answer": "아니오 — 본문은 가명(시험물질)만 쓰고, 이름은 머리글·바닥글·텍스트 상자·캡션에만 있다",
+   "answer_keywords": [
+    "아니오|없습니다|없다|적혀 있지 않"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "hidden_textbox.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "hidden_textbox.docx",
+     "path": "valid_env/object_storage/CRMS/243f7ef5-e309-5808-b855-54e71426ad4e/hidden_textbox.docx",
+     "where": "본문"
+    }
+   ],
+   "id": "RPQ012",
+   "source_set": "synth-realpat",
+   "split": "dev"
+  },
+  {
+   "type": "text_value",
+   "question": "배치 생산 요약에서 배치 MX-B01의 생산량은?",
+   "gold_answer": "1,240 kg",
+   "answer_keywords": [
+    "1,240 kg|1240 kg"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "text_only_control.pdf"
+    }
+   ],
+   "references": [
+    {
+     "doc": "text_only_control.pdf",
+     "path": "valid_env/object_storage/CRMS/95194ebe-b50a-52f8-a457-3e4a07174053/text_only_control.pdf",
+     "where": "1쪽"
+    }
+   ],
+   "id": "MXQ001",
+   "source_set": "synth-mixedpdf",
+   "split": "dev"
+  },
+  {
+   "type": "scan_value",
+   "question": "공급 현황 메모 2쪽(스캔)에서 창고 코드 MX-W11의 입고량은?",
+   "gold_answer": "2,150개",
+   "answer_keywords": [
+    "2,150개|2150개|2150문항|2150 문항|2150 개|2150건|2150 건|2150곳|2150 곳"
+   ],
+   "needs": [
+    "ocr",
+    "vlm"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "mixed_scan_text.pdf"
+    }
+   ],
+   "references": [
+    {
+     "doc": "mixed_scan_text.pdf",
+     "path": "valid_env/object_storage/CRMS/de5289a4-a5b4-5dec-911a-d275e49d6500/mixed_scan_text.pdf",
+     "where": "2쪽 스캔"
+    }
+   ],
+   "id": "MXQ002",
+   "source_set": "synth-mixedpdf",
+   "split": "dev"
+  },
+  {
+   "type": "scan_value",
+   "question": "공급 현황 메모 3쪽(글자+스캔 혼합)의 라벨 스캔에 적힌 창고 코드는?",
+   "gold_answer": "MX-W12",
+   "answer_keywords": [
+    "MX-W12"
+   ],
+   "needs": [
+    "ocr",
+    "vlm"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "mixed_scan_text.pdf"
+    }
+   ],
+   "references": [
+    {
+     "doc": "mixed_scan_text.pdf",
+     "path": "valid_env/object_storage/CRMS/de5289a4-a5b4-5dec-911a-d275e49d6500/mixed_scan_text.pdf",
+     "where": "3쪽 라벨 스캔"
+    }
+   ],
+   "id": "MXQ003",
+   "source_set": "synth-mixedpdf",
+   "split": "dev"
+  },
+  {
+   "type": "garbled_value",
+   "question": "품질 점검 기록 2쪽(글자층 깨짐)에서 점검 ID MX-Q21의 측정값은?",
+   "gold_answer": "5.8 mg/L",
+   "answer_keywords": [
+    "5.8"
+   ],
+   "needs": [
+    "ocr",
+    "vlm"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "garbled_text_layer.pdf"
+    }
+   ],
+   "references": [
+    {
+     "doc": "garbled_text_layer.pdf",
+     "path": "valid_env/object_storage/CRMS/f8b466f8-a7d4-559a-afaa-aaece7a8e27b/garbled_text_layer.pdf",
+     "where": "2쪽(글자층 깨짐)"
+    }
+   ],
+   "id": "MXQ004",
+   "source_set": "synth-mixedpdf",
+   "split": "dev"
+  },
+  {
+   "type": "scan_value",
+   "question": "월간 생산 보고 3쪽에서 다음 달 목표 생산량은?",
+   "gold_answer": "13,000 kg",
+   "answer_keywords": [
+    "13,000 kg|13000 kg"
+   ],
+   "needs": [
+    "ocr",
+    "vlm"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "scan_no_text.pdf"
+    }
+   ],
+   "references": [
+    {
+     "doc": "scan_no_text.pdf",
+     "path": "valid_env/object_storage/CRMS/73ab2382-c016-58d4-9882-9776680bd177/scan_no_text.pdf",
+     "where": "3쪽"
+    }
+   ],
+   "id": "MXQ006",
+   "source_set": "synth-mixedpdf",
+   "split": "dev"
+  },
+  {
+   "type": "eml_ksc5601_ext",
+   "question": "공급 통지(ks_c_5601-1987 메일)의 비고란에 적힌 문구는?",
+   "gold_answer": "똠 쀍 테스트",
+   "answer_keywords": [
+    "똠",
+    "쀍"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "ksc5601_ext_mail.eml"
+    }
+   ],
+   "references": [
+    {
+     "doc": "ksc5601_ext_mail.eml",
+     "path": "valid_env/object_storage/CRMS/c63782bc-1d59-5cca-a199-b330a4f1f112/ksc5601_ext_mail.eml",
+     "where": "본문 비고"
+    }
+   ],
+   "id": "ECQ002",
+   "source_set": "synth-eml-charset",
+   "split": "dev"
+  },
+  {
+   "type": "eml_no_charset",
+   "question": "charset 선언이 없는 통지 메일의 계약번호와 배치 수는?",
+   "gold_answer": "CT-2026-104, 5건",
+   "answer_keywords": [
+    "CT-2026-104",
+    "5건|5개|5단계|5곳|5 개|5 단계|개 수는 5|개수는5|개 수: 5|개수:5|개 수 5|개수5|개: 5|개:5|건 수는 5|건수는5|건 수: 5|건수:5|건 수 5|건수5|건: 5|건:5|곳 수는 5|곳수는5|곳 수: 5|곳수:5|곳 수 5|곳수5|곳: 5|곳:5|단계 수는 5|단계수는5|단계 수: 5|단계수:5|단계 수 5|단계수5|단계: 5|단계:5|5 steps|5steps|5 step|5step|5문항|5 문항|5 건|5 곳"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "no_charset_mail.eml"
+    }
+   ],
+   "references": [
+    {
+     "doc": "no_charset_mail.eml",
+     "path": "valid_env/object_storage/CRMS/1ca833b4-daaa-563a-8a20-ad59728e81c7/no_charset_mail.eml",
+     "where": "본문"
+    }
+   ],
+   "id": "ECQ003",
+   "source_set": "synth-eml-charset",
+   "split": "dev"
+  },
+  {
+   "type": "eml_attachment",
+   "question": "첨부 통지 메일의 첨부 파일(배치내역.csv)에 적힌 LOT 번호와 수량은?",
+   "gold_answer": "LOT-901, 7",
+   "answer_keywords": [
+    "LOT-901",
+    "7"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "b64_attach_mail.eml"
+    }
+   ],
+   "references": [
+    {
+     "doc": "b64_attach_mail.eml",
+     "path": "valid_env/object_storage/CRMS/e84d6a6f-d90a-5ae9-9617-3956f6a23a3e/b64_attach_mail.eml",
+     "where": "첨부 csv"
+    }
+   ],
+   "id": "ECQ004",
+   "source_set": "synth-eml-charset",
+   "split": "dev"
+  },
+  {
+   "type": "symbol_read",
+   "question": "시험 규격서에서 용해도 상한 기준은?",
+   "gold_answer": "≤ 90%",
+   "answer_keywords": [
+    "≤ 90%|<= 90%|90% 이하"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "ho_symbol_font_pua.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "ho_symbol_font_pua.docx",
+     "path": "valid_env/object_storage/CRMS/6434280c-3427-5cac-8ce4-1f413ccce09b/ho_symbol_font_pua.docx",
+     "where": "표 1행"
+    }
+   ],
+   "id": "RHQ001",
+   "source_set": "synth-realpat-ho",
+   "split": "holdout"
+  },
+  {
+   "type": "symbol_read",
+   "question": "시험 규격서에서 희석 배율 기준은?",
+   "gold_answer": "÷ 8",
+   "answer_keywords": [
+    "÷ 8|/ 8|/8"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "ho_symbol_font_pua.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "ho_symbol_font_pua.docx",
+     "path": "valid_env/object_storage/CRMS/6434280c-3427-5cac-8ce4-1f413ccce09b/ho_symbol_font_pua.docx",
+     "where": "표 3행"
+    }
+   ],
+   "id": "RHQ002",
+   "source_set": "synth-realpat-ho",
+   "split": "holdout"
+  },
+  {
+   "type": "symbol_read",
+   "question": "시험 규격서에서 보관 온도는?",
+   "gold_answer": "4-10°C",
+   "answer_keywords": [
+    "4-10°C|4-10C|4~10°C"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "ho_symbol_font_pua.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "ho_symbol_font_pua.docx",
+     "path": "valid_env/object_storage/CRMS/6434280c-3427-5cac-8ce4-1f413ccce09b/ho_symbol_font_pua.docx",
+     "where": "표 5행"
+    }
+   ],
+   "id": "RHQ003",
+   "source_set": "synth-realpat-ho",
+   "split": "holdout"
+  },
+  {
+   "type": "supsub_read",
+   "question": "시험 규격서의 세포 밀도 목표(단위 포함)는?",
+   "gold_answer": "2.0×10^7 cells/mL",
+   "answer_keywords": [
+    "2.0×10^7|2.0x10^7"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "ho_symbol_font_pua.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "ho_symbol_font_pua.docx",
+     "path": "valid_env/object_storage/CRMS/6434280c-3427-5cac-8ce4-1f413ccce09b/ho_symbol_font_pua.docx",
+     "where": "본문"
+    }
+   ],
+   "id": "RHQ004",
+   "source_set": "synth-realpat-ho",
+   "split": "holdout"
+  },
+  {
+   "type": "table_merge",
+   "question": "공정·품질 기준표에서 배치 B-77의 희석배율 기준은?",
+   "gold_answer": "÷ 8",
+   "answer_keywords": [
+    "÷ 8|/ 8"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "ho_merged_cells_tbl.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "ho_merged_cells_tbl.docx",
+     "path": "valid_env/object_storage/CRMS/80cad82c-deb0-53ab-853e-1687683d4836/ho_merged_cells_tbl.docx",
+     "where": "B-77 2행"
+    }
+   ],
+   "id": "RHQ005",
+   "source_set": "synth-realpat-ho",
+   "split": "holdout"
+  },
+  {
+   "type": "table_merge",
+   "question": "공정·품질 기준표 머리글에서 '공정 조건' 아래 하위 항목 두 개는?",
+   "gold_answer": "파라미터, 목표값",
+   "answer_keywords": [
+    "파라미터",
+    "목표값"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "ho_merged_cells_tbl.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "ho_merged_cells_tbl.docx",
+     "path": "valid_env/object_storage/CRMS/80cad82c-deb0-53ab-853e-1687683d4836/ho_merged_cells_tbl.docx",
+     "where": "머리글 2단"
+    }
+   ],
+   "id": "RHQ006",
+   "source_set": "synth-realpat-ho",
+   "split": "holdout"
+  },
+  {
+   "type": "hidden_term",
+   "question": "임상시험 결과 요약(ho_hidden_textbox.docx)에서 다루는 시험물질의 실제 이름은?",
+   "gold_answer": "kerovantin",
+   "answer_keywords": [
+    "kerovantin"
+   ],
+   "needs": [
+    "text",
+    "header_footer"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "ho_hidden_textbox.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "ho_hidden_textbox.docx",
+     "path": "valid_env/object_storage/CRMS/f92c6ddb-2aae-5b43-ae62-30dbd022dbe6/ho_hidden_textbox.docx",
+     "where": "머리글/바닥글/텍스트 상자"
+    }
+   ],
+   "id": "RHQ008",
+   "source_set": "synth-realpat-ho",
+   "split": "holdout"
+  },
+  {
+   "type": "hidden_term_neg",
+   "question": "임상시험 결과 요약(ho_hidden_textbox.docx) 본문에 시험물질의 이름이 직접 적혀 있는가?",
+   "gold_answer": "아니오 — 본문은 가명(대상물질)만 쓰고, 이름은 머리글·바닥글·텍스트 상자·캡션에만 있다",
+   "answer_keywords": [
+    "아니오|없습니다|없다|적혀 있지 않"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "ho_hidden_textbox.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "ho_hidden_textbox.docx",
+     "path": "valid_env/object_storage/CRMS/f92c6ddb-2aae-5b43-ae62-30dbd022dbe6/ho_hidden_textbox.docx",
+     "where": "본문"
+    }
+   ],
+   "id": "RHQ009",
+   "source_set": "synth-realpat-ho",
+   "split": "holdout"
+  }
+ ]
+}

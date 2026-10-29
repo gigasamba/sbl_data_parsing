@@ -261,13 +261,13 @@ def _selftest_rdb():
 
 def _selftest_rdb_doc_location_fields():
     """AD38 — doc_location의 version·supersedes_doc_id·is_deleted가 manifest에 그대로 실리는지(list_documents 출처).
-    실제 합성 표(valid_env/unstructured/synth-meta-rdb/meta/doc_location.csv)로 — 옛 열 이름이라 _legacy_rdb_cols로 맞춤."""
+    실제 합성 표(valid_env/edw/meta_rdb/doc_location.csv)로 — 옛 열 이름이라 _legacy_rdb_cols로 맞춤."""
     import tempfile
 
     # S9 — 옛 `global _s3` → `M._s3`(모듈 전역 대입)
     real_s3 = M._s3
     with _legacy_rdb_cols():
-        csv_path = ROOT / "valid_env" / "unstructured" / "synth-meta-rdb" / "meta" / "doc_location.csv"
+        csv_path = ROOT / "valid_env" / "edw" / "meta_rdb" / "doc_location.csv"
         if not csv_path.exists():  # 10-15 — valid_env는 이미지에 없음(PC 시험 전용) → 이 부분만 건너뜀
             print(f"[selftest] RDB doc_location 실표 확인 건너뜀 — 합성 표 없음({csv_path.name}, 이미지)")
             return

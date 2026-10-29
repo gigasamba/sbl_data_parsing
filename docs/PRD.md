@@ -19,8 +19,7 @@ Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · p
 | pl-20 | Stack snapshot file review (C-50) | todo | [prd/pipeline.md#pl-20](prd/pipeline.md#pl-20) |
 | pl-21 | Deferred settings removal (fingerprint) | todo | [prd/pipeline.md#pl-21](prd/pipeline.md#pl-21) |
 | pl-22 | OpenViking summary import broken (`ov_export`) | todo | [prd/pipeline.md#pl-22](prd/pipeline.md#pl-22) |
-| e2-09 | Test data from PwC_Structure `valid_env` | todo | [prd/e2e.md#e2-09](prd/e2e.md#e2-09) |
-| e2-10 | Minimize PC eval tools and their settings | todo | [prd/e2e.md#e2-10](prd/e2e.md#e2-10) |
+| e2-10 | Minimize PC eval tools (old set names) and settings | todo | [prd/e2e.md#e2-10](prd/e2e.md#e2-10) |
 | e2-11 | PC general test known failures | todo | [prd/e2e.md#e2-11](prd/e2e.md#e2-11) |
 | e2-12 | EDW answer citation check (C-56) | todo | [prd/e2e.md#e2-12](prd/e2e.md#e2-12) |
 | e2-13 | PC Docker smoke stops at retriever | todo | [prd/e2e.md#e2-13](prd/e2e.md#e2-13) |
@@ -29,4 +28,4 @@ Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · p
 | e2-16 | Search page fixed document count text | todo | [prd/e2e.md#e2-16](prd/e2e.md#e2-16) |
 | e2-17 | Remaining unused functions (10-29 audit) | todo | [prd/e2e.md#e2-17](prd/e2e.md#e2-17) |
 
-Done: mcp 9 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 8 → [prd/e2e.md](prd/e2e.md)
+Done: mcp 9 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 9 → [prd/e2e.md](prd/e2e.md)

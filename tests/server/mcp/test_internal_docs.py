@@ -321,14 +321,14 @@ def _selftest_evidence_image_office_and_bbox():
 
 
 def _selftest_list_documents():
-    """AD38 — list_documents, 실제 synth-meta-rdb 표(valid_env/unstructured/synth-meta-rdb)로: 고객 필터 때 다른 고객 0 ·
+    """AD38 — list_documents, 실제 synth-meta-rdb 표(valid_env/edw/meta_rdb)로: 고객 필터 때 다른 고객 0 ·
     반환된 contract_no로 추리면 '계약 C-RDB-2025-005 문서 목록' 4/4(다른 세션 실측: 검색 상위10은 2/4) ·
     최신판만(대체 구판 제외)·is_deleted 제외가 기본값대로 동작하는지."""
     import csv
     import hashlib
     import tempfile
 
-    base = ROOT / "valid_env" / "unstructured" / "synth-meta-rdb" / "meta"
+    base = ROOT / "valid_env" / "edw" / "meta_rdb"
     doc_loc, client_m = base / "doc_location.csv", base / "client_master.csv"
     if not (
         doc_loc.exists() and client_m.exists()

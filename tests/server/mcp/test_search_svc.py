@@ -1047,7 +1047,7 @@ def _selftest_evidence_rdb_meta():
     manifest가 그 문서를 모르면(두 번째 문서) 칸 자체가 없고, manifest가 아예 없으면 바이트 동일(새 칸 0개)."""
     import csv
 
-    base = ROOT / "valid_env" / "unstructured" / "synth-meta-rdb" / "meta" / "doc_location.csv"
+    base = ROOT / "valid_env" / "edw" / "meta_rdb" / "doc_location.csv"
     if not base.exists():  # 이미지에는 예시 데이터 없음 → 건너뜀(10-14)
         print(f"[selftest] AD44 근거 RDB 메타 건너뜀 — 예시 표 없음({base})")
         return

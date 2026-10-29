@@ -1,0 +1,45 @@
+{
+ "values": [
+  {
+   "label": "RFP ref",
+   "value": "PFZ-RFP-2026-04"
+  },
+  {
+   "label": "ENG-01 GMP status",
+   "value": "non-GMP engineering run is acceptable"
+  },
+  {
+   "label": "DS PPQ",
+   "value": "three consecutive DS PPQ batches in one campaign"
+  },
+  {
+   "label": "US backup",
+   "value": "The US backup quote is for DS only"
+  },
+  {
+   "label": "Requested ENG-01 slot",
+   "value": "October 2027 instead of November 2027"
+  },
+  {
+   "label": "Tentative slot",
+   "value": "week of 18 October 2027"
+  },
+  {
+   "label": "Attachment",
+   "value": "PFZ-RFP-2026-04_QA_log_Saebit.csv"
+  }
+ ],
+ "thread_message_ids": [
+  "<20261104101530.4F1A.PFZ0426@saebit-bio.example>",
+  "<CAPFZ-20261109-0731.ES2@pfizar-bio.example>",
+  "<20261112174210.4F1C.PFZ0426@saebit-bio.example>"
+ ],
+ "hard_elements": [
+  {
+   "element": "mail thread: 3 messages, '>' quoting, Message-ID/In-Reply-To/References, CC, signature, disclaimer, CSV attachment, +0900",
+   "doc": "pfz_qa_thread_en.eml",
+   "page": null,
+   "location": "whole message"
+  }
+ ]
+}

@@ -1,0 +1,41 @@
+﻿문서,라벨,값
+symbol_font_pua.docx,입자 크기,≥ 95%
+symbol_font_pua.docx,pH,7.0 ± 0.2
+symbol_font_pua.docx,희석 배율,× 10
+symbol_font_pua.docx,함량,95 μg/mL
+symbol_font_pua.docx,보관 온도,2-8°C
+merged_cells_tbl.docx,B-21 순도,≥ 95%
+merged_cells_tbl.docx,B-22 보관온도,2-8°C
+merged_visual_tbl.pdf,B-21 순도,≥ 95%
+merged_visual_tbl.pdf,B-22 보관온도,2-8°C
+hidden_textbox.docx,시험물질 이름,velorimab
+text_only_control.pdf,배치ID 1쪽,MX-B01
+text_only_control.pdf,배치ID 2쪽,MX-B02
+mixed_scan_text.pdf,창고코드 1쪽,MX-W10
+mixed_scan_text.pdf,창고코드 2쪽(스캔),MX-W11
+mixed_scan_text.pdf,창고코드 3쪽(스캔),MX-W12
+garbled_text_layer.pdf,점검ID 1쪽,MX-Q20
+garbled_text_layer.pdf,점검ID 2쪽(글자층 깨짐),MX-Q21
+scan_no_text.pdf,보고ID,MX-R40
+cp949_mail.eml,계약번호,CT-2026-102
+cp949_mail.eml,배치 수,9건
+cp949_mail.eml,금액,USD 27,500
+ksc5601_ext_mail.eml,계약번호,CT-2026-103
+ksc5601_ext_mail.eml,배치 수,22건
+ksc5601_ext_mail.eml,비고,똠 쀍 테스트
+no_charset_mail.eml,계약번호,CT-2026-104
+no_charset_mail.eml,배치 수,5건
+no_charset_mail.eml,금액,USD 14,000
+qp_euckr_mail.eml,계약번호,CT-2026-105
+qp_euckr_mail.eml,배치 수,30건
+qp_euckr_mail.eml,금액,USD 88,000
+b64_attach_mail.eml,계약번호,CT-2026-107
+b64_attach_mail.eml,배치 수,7건
+b64_attach_mail.eml,첨부 LOT,LOT-901
+b64_attach_mail.eml,첨부 수량,7
+ho_symbol_font_pua.docx,용해도 상한,≤ 90%
+ho_symbol_font_pua.docx,희석 배율,÷ 8
+ho_symbol_font_pua.docx,보관 온도,4-10°C
+ho_merged_cells_tbl.docx,B-77 순도,≤ 90%
+ho_merged_cells_tbl.docx,B-78 보관온도,4-10°C
+ho_hidden_textbox.docx,시험물질 이름,kerovantin

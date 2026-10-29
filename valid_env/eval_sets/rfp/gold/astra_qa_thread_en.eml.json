@@ -1,0 +1,32 @@
+{
+ "values": [
+  {
+   "label": "RFP ref",
+   "value": "ANB-RFP-2026-03"
+  },
+  {
+   "label": "Adjuvant supply",
+   "value": "The CDMO procures the adjuvant"
+  },
+  {
+   "label": "Rated line speed",
+   "value": "up to 12,000 vials/hour for 2R vials"
+  },
+  {
+   "label": "Planned line speed",
+   "value": "8,000 vials/hour"
+  },
+  {
+   "label": "Maximum batch size",
+   "value": "60,000 vials"
+  }
+ ],
+ "hard_elements": [
+  {
+   "element": "mail thread: 3 messages, '>' quoting, Message-ID chain, CC, signature, +0900",
+   "doc": "astra_qa_thread_en.eml",
+   "page": null,
+   "location": "whole message"
+  }
+ ]
+}
