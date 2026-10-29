@@ -22,6 +22,7 @@ Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · p
 | pl-22 | `full` always publishes, targets required (C-31) | todo | [→](prd/pipeline.md#pl-22) |
 | pl-23 | Incremental only; full reparse = full e2e (C-52) | todo | [→](prd/pipeline.md#pl-23) |
 | pl-24 | run_docs order: silver → delete original → gold | todo | [→](prd/pipeline.md#pl-24) |
+| pl-25 | DB schema spec doc + column check test (first) | todo | [→](prd/pipeline.md#pl-25) |
 | e2-10 | Minimize PC eval tools (old set names) and settings | todo | [→](prd/e2e.md#e2-10) |
 | e2-11 | PC general test known failures | todo | [→](prd/e2e.md#e2-11) |
 | e2-12 | EDW answer citation check (C-56) | todo | [→](prd/e2e.md#e2-12) |

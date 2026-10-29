@@ -118,7 +118,7 @@ Engine stack snapshot file approach review (C-50).
 
 ## pl-21
 Deferred settings removal. Why: unused/retired settings whose removal changes fingerprints, so they wait for the next image version: `common.paths.korean_font` (settings.py → every layer code_fp), `pipeline.paths.paddle_python` and `pipeline.eval.phase_report_legacy` (read in `run_all.py` → p0 of every engine).
-- Also: the `EVAL_SETS_DIR` PC default in `common/core/paths.py` still says `valid_env/unstructured` (deleted 10-29, [e2e.md#e2-09](e2e.md#e2-09)) — change to `valid_env/eval_sets` with `tests/server/common/test_paths.py`; until then set `common.paths.eval_sets_dir` on the PC.
+- Also (user 10-29 grill): remove `common.paths.eval_sets_dir` / `paths.EVAL_SETS_DIR` (and its cases in `tests/server/common/test_paths.py`) — the only reader is `validation/e2e/stack_matrix.py` (old sets, [e2e.md#e2-10](e2e.md#e2-10)). The folder `valid_env/eval_sets/` is deleted together with its doc references in [doc.md#do-03](doc.md#do-03) (no code reads its files); eval data may come back later under `tests/`.
 - Files: `common/config/settings.py`, `pipeline/config.py`, `pipeline/extract/run_all.py`, `common/core/paths.py`.
 - Status: todo — bundle with the next fingerprint-changing release.
 
@@ -131,9 +131,9 @@ Deferred settings removal. Why: unused/retired settings whose removal changes fi
 
 ## pl-23
 Incremental runs only; full reparse = explicit full e2e (C-52, C-08). Why: engine/handoff/code fingerprints changed for every doc; an automatic reparse of all docs would blow the nightly window.
-- Decided (user 10-29 grill): nightly and `run_docs` process **new** docs only, even after a fingerprint change. "New" = EDW `AI.FileStorageMap` s3 key + update time vs `AI.ParsingMeta`. A full reparse runs only when a person starts a full e2e (occasional — after logic changes, then results are reviewed). The first load of this version is one full e2e.
-- Open: FileStorageMap update-time column name — EDW owner confirms on the server; code reads the name from a settings.yaml item.
-- Files: `deploy/host/scripts/run_docs.py` (done set — today s3 key only), `pipeline/cli.py` (`night`), `pipeline/extract/` source.
+- Decided (user 10-29 grill): nightly and `run_docs` process **new** docs only, even after a fingerprint change. "New" = `AI.FileStorageMap.s3_key` not yet in `AI.ParsingMeta` (s3 key only — no update-time check; `run_docs` already works this way). A full reparse runs only when a person starts a full e2e (occasional — after logic changes, then results are reviewed). The first load of this version is one full e2e.
+- Not used now: FileStorageMap update time — assumed column `last_modified_time`, to be added to the EDW example later ([pl-25](#pl-25)).
+- Files: `deploy/host/scripts/run_docs.py` (done set), `pipeline/cli.py` (`night` — check it does the same).
 - Status: todo
 
 ## pl-24
@@ -142,4 +142,10 @@ Per-doc order in `run_docs`: parse → silver publish → delete original → go
 - New EDW column `AI.ParsingMeta.gold_status` (pending · ok · failed) — DDL to the DB owner (company DB, not Alembic) — review grade A.
 - Local test runs from `valid_env/` copy docs into a temp folder first and run there (never in place).
 - Files: `deploy/host/scripts/run_docs.py` (`doc_flow`, `cleanup_doc`, done query), `docs/operations/parsing_meta_mssql.sql`, publish (`parsing_meta`).
-- Status: todo
+- Status: todo — after [pl-25](#pl-25).
+
+## pl-25
+DB schema spec, written before pl-22..24 are built. Why: table/column definitions are spread over Alembic migrations (`common/store/db/migrations/versions/`), `docs/operations/parsing_meta_mssql.sql` (ParsingMeta only) and code reading `AI.FileStorageMap` (no definition); the 10-20 reduced schema is only half applied in code (mc-10, mc-11, pl-14, pl-15).
+- Decided (user 10-29 grill): one doc `docs/architecture/db_schema.md` — per table: columns, type, meaning, which code writes/reads it — for EDW `AI.FileStorageMap` (id, s3_key, original_filename, file_size, `last_modified_time` assumed), `AI.ParsingMeta` (+ `gold_status`), pgvector search schema and `struct`. The reduced 10-20 schema is the truth; code that disagrees is fixed in mc-10/mc-11/pl-14/pl-15. One test compares the doc's columns with the migrations and the mssql sql. The user and the DB owner sign it off before implementation; the DB owner gets this doc.
+- Files: `docs/architecture/db_schema.md` (new), `docs/index.md`, `common/store/db/migrations/versions/`, `docs/operations/parsing_meta_mssql.sql`, `tests/server/common/` (one test).
+- Status: todo — first.
