@@ -56,7 +56,7 @@
 │  ├─ docker/           Dockerfile(타깃 pipeline, mcp) · requirements · entrypoint.sh · wheels/(폐쇄망용 휠)
 │  ├─ release/          이미지 빌드·전송(build_ship, ship_stage) · 오버레이 패치 번들(make_patch) · 배포 판정(selftest_gate, known_fail.txt) · 커밋 전 점검(lint_changed.sh)
 │  └─ host/             서버 호스트에서 실행하는 것 — compose/ · systemd/(새벽 배치, keepalive) · scripts/(trigger, run_tool, mcp_up, settings_env, run_docs 등)
-├─ tests/               테스트 — server/(이미지에 포함, 배포 판정) · general/(PC 전용) · fixtures/ · runner.py
+├─ tests/               테스트 — server/(이미지에 포함, 배포 판정) · general/(PC 전용) · fixtures/(프롬프트 사례 — 읽는 테스트 없음, refactor.md C-63) · runner.py
 ├─ validation/          PC 전용 검증 도구(이미지에 포함되지 않음)
 │  ├─ search_ui/        검증 페이지 — 검색 MCP와 pgvector를 브라우저로 확인
 │  └─ e2e/              평가·비교 도구(stack_matrix, model_matrix, graph_llm, answer_gen) · triple_extract 프롬프트
@@ -65,6 +65,7 @@
 │  ├─ answer_test/      답변 점검 agent rag_qa
 │  └─ docker/           PC 테스트 Docker(compose.pg, compose.test, smoke_test)
 ├─ docs/                문서(지도: docs/index.md) — operations/(서버 운영) · architecture/ · requirements/ · refactoring/
+├─ VERSION             두 이미지(data-pipeline, mcp-server) 공통 버전(SemVer — 이미지 태그·DB 버전 표기에 쓰임)
 ├─ settings.sample.yaml 모든 설정 항목의 구조와 설명(값 없음, 자동 생성 — 손으로 고치지 않음)
 ├─ settings.yaml        PC 로컬 설정(git 제외 · 권한 600 — 직접 만듦)
 ├─ pyproject.toml · requirements-dev.txt · .githooks/   PC 개발 도구(ruff, mypy, pytest) 설정과 커밋 전 점검 hook
@@ -199,7 +200,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 ### 3-6. 그 밖
 - 답변 생성 점검(PC 전용): `.venv/bin/python -m validation.e2e.answer_gen --url http://127.0.0.1:18767/mcp --q "<질문>"` — `valid_env/answer_test/rag_qa` agent로 답변, 인용, 인용 검증을 확인한다. LLM 설정(`common.models.llm`)과 예산 상한이 필요하다.
 - PC 테스트 Docker(이미지 배치 그대로): `valid_env/docker/smoke_test.sh`.
-- 이미지 로컬 빌드: `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<태그> bash deploy/release/build_ship.sh` → `bash deploy/release/selftest_gate.sh docker run --rm data-pipeline:<태그> selftest`(판정은 `[판정]` 줄로 한다). Docker 23 미만이면 `build_ship.sh`가 BuildKit 인자를 자동으로 붙인다.
+- 이미지 로컬 빌드: `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh`(TAG를 빼면 `data-pipeline:<VERSION>` — 버전 태그는 배포용으로 남겨 둔다) → `bash deploy/release/selftest_gate.sh docker run --rm data-pipeline:<태그> selftest`(판정은 `[판정]` 줄로 한다). Docker 23 미만이면 `build_ship.sh`가 BuildKit 인자를 자동으로 붙인다.
 
 ---
 
@@ -210,14 +211,14 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 > **이번 리팩토링 버전(S2~S12 — 첫 배포)은 [refactor.md](refactor.md) 맨 앞 "최종 — 사람이 할 일"의 순서(①검토 → ②배포 전 → ③배포 때 → ④배포 후)를 그대로 따른다.** 엔진 핑거프린트, 핸드오프 핑거프린트, code_fp가 모두 바뀌어 서버 문서 전체를 다시 파싱해야 하므로(재파싱 시간 산정 C-08이 먼저), 설정 이관, DB 버전 기록, 옛 컨테이너와 systemd 정리가 함께 필요하다.
 
 ### 4-1. PC에서 — 빌드와 전송
+**버전:** 두 이미지는 저장소 루트 `VERSION`(SemVer, 지금 `0.1.0`)을 함께 쓴다. 이미지 태그는 `data-pipeline:<버전>`, `mcp-server:<버전>`이고, 빌드한 커밋은 이미지 라벨(`org.opencontainers.image.revision`)에 남는다. 회사 DB `AI.ParsingMeta.pipeline_version`과 실행 보드에도 이 버전이 기록된다. 버전은 `release/<버전>` 브랜치에서 올린다 — MAJOR(계약·스키마가 깨질 때), MINOR(새 이미지 버전), PATCH(오버레이 패치). 자세한 규칙은 [release-and-patch.md](docs/operations/release-and-patch.md) §5.
 ```bash
 # 폐쇄망 빌드라면 deploy/docker/wheels/에 휠(linux/amd64, py3.12)을, 저장소 루트 assets/rapidocr/에 *.onnx를 먼저 둔다
-docker build -f deploy/docker/Dockerfile --target pipeline -t data-pipeline:<태그> .
-docker build -f deploy/docker/Dockerfile --target mcp      -t mcp-server:<태그> .
-bash deploy/release/selftest_gate.sh docker run --rm data-pipeline:<태그> selftest   # [판정] 통과 확인(알려진 실패 외 0)
+BUILD_ONLY=1 IMAGE_TARGET=pipeline bash deploy/release/build_ship.sh   # data-pipeline:<VERSION> 빌드 → selftest 판정 → 비밀값 흔적 점검
+BUILD_ONLY=1 IMAGE_TARGET=mcp      bash deploy/release/build_ship.sh   # mcp-server:<VERSION>
 
-TARGET=user@서버 IMAGE_TARGET=pipeline bash deploy/release/build_ship.sh             # 빌드→점검→저장→전송→적재(SSH)
-bash deploy/release/ship_stage.sh <태그> pipeline mcp                                # 또는 저장만(95MB 조각 + sha256)
+TARGET=user@서버 IMAGE_TARGET=pipeline bash deploy/release/build_ship.sh             # 또는 한 번에: 빌드→점검→저장→전송→적재(SSH — 같은 태그가 이미 있으면 멈춤)
+bash deploy/release/ship_stage.sh pipeline mcp                                      # 또는 저장만(95MB 조각 + sha256, 태그 = VERSION)
 ```
 
 ### 4-2. 서버 — 설치와 첫 실행

@@ -185,22 +185,30 @@ def fingerprint(root=None, handoff=HANDOFF_FILES):
 FINGERPRINT = fingerprint()
 
 
-def pipeline_version():
-    """판 표기(한 곳) — git 짧은 커밋 → env PIPELINE_VERSION → common/PATCH_VERSION(make_patch 덧씌우기 묶음) → 'unknown'.
-    publish(modules/load/parsing_meta)·실행판(cli/run_board)이 같이 씀 — rag-parse 이미지엔 modules/load가 없어 common에 둠."""
-    import os
-    import subprocess
+def _semver(text):
+    """'MAJOR.MINOR.PATCH' → 비교용 튜플, 그 꼴이 아니면 None."""
+    parts = text.split(".")
+    if len(parts) == 3 and all(p.isdigit() for p in parts):
+        return tuple(int(p) for p in parts)
+    return None
 
-    root = _ROOT
-    try:
-        r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=root, capture_output=True, text=True, timeout=5)
-        if r.returncode == 0 and r.stdout.strip():
-            return r.stdout.strip()
-    except Exception:
-        pass
-    if os.environ.get("PIPELINE_VERSION"):  # env 남김 — 내부 신호(5-3 H)
-        return os.environ["PIPELINE_VERSION"]  # env 남김 — 내부 신호
-    try:
-        return (_ROOT / "PATCH_VERSION").read_text(encoding="utf-8").strip() or "unknown"
-    except OSError:
-        return "unknown"
+
+def pipeline_version(root=None):
+    """버전 표기(한 곳 — D-036, 사용자 10-29: 버전만) — 두 이미지 공통 SemVer. 후보는 저장소 루트 VERSION(이미지 /app/deploy/VERSION)과
+    common/PATCH_VERSION(make_patch 오버레이 패치 묶음 — 이미지 위에 올린 코드의 버전) 둘이고, 더 높은 버전을 쓴다(새 이미지로 바꾼 뒤
+    코드 폴더에 남은 옛 PATCH_VERSION이 이기지 않게). 둘 다 SemVer 꼴이 아니면 env PIPELINE_VERSION → 'unknown'.
+    publish(AI.ParsingMeta.pipeline_version)·실행 보드(run_board)·parse_parallel이 같이 씀. 10-29 전에는 git 짧은 커밋을 먼저 썼다(C-62)."""
+    import os
+
+    base = Path(root) if root else _ROOT
+    found = []
+    for f in (base.parent / "VERSION", base / "PATCH_VERSION"):
+        try:
+            v = f.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if _semver(v):
+            found.append(v)
+    if found:
+        return max(found, key=_semver)
+    return os.environ.get("PIPELINE_VERSION") or "unknown"  # env 남김 — 내부 신호(5-3 H)

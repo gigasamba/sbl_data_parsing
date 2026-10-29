@@ -1,6 +1,6 @@
 #!/bin/bash
 # 서버 이미지(S6b D-020 — 2개: pipeline·mcp) — 로컬 스테이징만(push 안 함·저장소 생성 안 함 — 사람 승인 뒤 수동 push, release-20261016.md §1-2).
-#   bash deploy/release/ship_stage.sh <태그 — 예: 20261016-abcdef1> [대상들… 기본 pipeline mcp]
+#   bash deploy/release/ship_stage.sh [태그 — 기본 저장소 루트 VERSION(D-036), 예: 0.1.0] [대상들… 기본 pipeline mcp]
 # 전제: 이미지가 이미 로컬에 빌드돼 있어야 함(release-20261016.md §1-1) — 이 스크립트는 빌드하지 않는다.
 # 이미지를 저장(docker save) → gzip → CHUNK(기본 95m, GitHub 100 MB 상한 — image-patch-process.md §4-1 관례) 조각 →
 #   sha256 체크섬 → output/ship/<repo>/images/<태그>/<이미지 이름>/ 에 쌓는다. 사용자 10-14: 이미지 단위로 저장소를
@@ -9,7 +9,11 @@
 # 서버 쪽 재조립: cat <이름>.tar.gz.part* > <이름>.tar.gz && sha256sum -c <이름>.sha256 && gunzip -c <이름>.tar.gz | docker load
 set -euo pipefail
 cd "$(dirname "$0")/../.."                                # deploy/release/ → 저장소 루트(S6b)
-TAG="${1:?태그 — 예: 20261016-<커밋 7자>}"; shift || true
+. deploy/release/image_names.sh   # image_name_of·app_version — 타깃 → 이미지 이름(S6c, build_ship.sh와 같은 파일) — 대상은 repo_of()가 이미 걸러냄
+case "${1:-}" in
+  ""|pipeline|mcp) TAG=$(app_version) || exit 2 ;;   # 태그를 안 주면 VERSION(두 이미지 같은 버전 태그)
+  *) TAG="$1"; shift ;;
+esac
 if [ "$#" -gt 0 ]; then TARGETS=("$@"); else TARGETS=(pipeline mcp); fi
 OUT="${OUT:-output/ship}"
 CHUNK="${CHUNK:-95m}"
@@ -22,7 +26,6 @@ repo_of() {    # 사용자 10-14: 이미지 저장소는 하나(mono repo) — �
   esac
 }
 
-. deploy/release/image_names.sh   # image_name_of — 타깃 → 이미지 이름(S6c, build_ship.sh와 같은 파일) — 대상은 repo_of()가 이미 걸러냄
 
 stage_one() {
   local target="$1" tag repo dir n

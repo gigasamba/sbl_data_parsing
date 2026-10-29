@@ -841,7 +841,7 @@ def key_block(a, name):
 
 
 def version():
-    """판 — common.pipeline_version()(git → PIPELINE_VERSION → common/PATCH_VERSION)."""
+    """버전 — common.pipeline_version()(저장소 루트 VERSION·오버레이 패치 PATCH_VERSION 중 높은 것 — D-036)."""
     from common import pipeline_version
 
     return pipeline_version()

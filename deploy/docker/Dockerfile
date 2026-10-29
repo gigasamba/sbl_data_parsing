@@ -90,6 +90,8 @@ COPY --from=src /src/mcp_server /app/deploy/mcp_server
 # S7c1 — cli.py가 pipeline 설정 모델(config.py — 단계 코드 아님, common.config만 import)을 맨 위에서 읽어 함께 넣는다(PIPE_EMBED 등 pipeline 칸)
 COPY --from=src /src/pipeline/__init__.py /src/pipeline/cli.py /src/pipeline/config.py /app/deploy/pipeline/
 COPY --from=src /src/resources /app/deploy/resources
+# 두 이미지 공통 버전(D-036) — common.pipeline_version()이 읽음(COPY 줄 끝에는 주석을 달 수 없음)
+COPY --from=src /src/VERSION /app/deploy/VERSION
 COPY --from=src /src/appdocker /app/docker
 # S9(D-018) — 서버 반입 시험(이미지 명령 selftest가 돌림): 실행기 + 공용·이 이미지 폴더만(tests/server/{common,mcp} — 사례 이름 = 시험 모듈 이름)
 COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/deploy/tests/
@@ -102,6 +104,13 @@ ENV TZ=Asia/Seoul LANG=C.UTF-8 PYTHONUTF8=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBU
     HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 DO_NOT_TRACK=1 SCARF_NO_ANALYTICS=true \
     RAG_MODULE=mcp
 RUN env > /app/docker/image_env.txt   # S7e2 — 이미지 ENV 기록(entrypoint가 lib_env와 견줘 사용자 env와 가름 — 비밀 없음)
+# 버전 라벨(D-036, 사용자 10-29) — build_ship.sh가 APP_VERSION(저장소 루트 VERSION)·VCS_REF(빌드 커밋)를 넘긴다. 직접 빌드하면 빈 값.
+# 넘긴 APP_VERSION이 이미지에 넣은 VERSION과 다르면 빌드를 멈춘다(태그와 이미지 안 버전 표기가 어긋나지 않게).
+ARG APP_VERSION=
+ARG VCS_REF=
+RUN [ -z "$APP_VERSION" ] || [ "$APP_VERSION" = "$(tr -d ' \r\n' < /app/deploy/VERSION)" ] \
+    || { echo "APP_VERSION($APP_VERSION) ≠ VERSION 파일" >&2; exit 1; }
+LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=mcp-server
 USER rag
 VOLUME ["/app/output"]
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
@@ -117,6 +126,8 @@ COPY --from=src /src/pipeline /app/deploy/pipeline
 # 이 이미지 하나로 mcp.host 칸(MCP_SERVER_IMAGE 등)까지 꺼내게(mcp 이미지에 pipeline/config.py를 넣은 S7c1과 같은 꼴 — 다리는 RAG_MODULE대로 pipeline 절만)
 COPY --from=src /src/mcp_server/__init__.py /src/mcp_server/config.py /app/deploy/mcp_server/
 COPY --from=src /src/resources /app/deploy/resources
+# 두 이미지 공통 버전(D-036) — common.pipeline_version()이 읽음(COPY 줄 끝에는 주석을 달 수 없음)
+COPY --from=src /src/VERSION /app/deploy/VERSION
 COPY --from=src /src/appdocker /app/docker
 # S9(D-018) — 서버 반입 시험(이미지 명령 selftest가 돌림): 실행기 + 공용·이 이미지 폴더만(tests/server/{common,pipeline})
 COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/deploy/tests/
@@ -147,6 +158,13 @@ ENV TZ=Asia/Seoul LANG=C.UTF-8 PYTHONUTF8=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBU
     HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 DO_NOT_TRACK=1 SCARF_NO_ANALYTICS=true \
     RAG_MODULE=pipeline HOME=/tmp
 RUN env > /app/docker/image_env.txt   # S7e2 — 이미지 ENV 기록(entrypoint가 lib_env와 견줘 사용자 env와 가름 — 비밀 없음)
+# 버전 라벨(D-036, 사용자 10-29) — build_ship.sh가 APP_VERSION(저장소 루트 VERSION)·VCS_REF(빌드 커밋)를 넘긴다. 직접 빌드하면 빈 값.
+# 넘긴 APP_VERSION이 이미지에 넣은 VERSION과 다르면 빌드를 멈춘다(태그와 이미지 안 버전 표기가 어긋나지 않게).
+ARG APP_VERSION=
+ARG VCS_REF=
+RUN [ -z "$APP_VERSION" ] || [ "$APP_VERSION" = "$(tr -d ' \r\n' < /app/deploy/VERSION)" ] \
+    || { echo "APP_VERSION($APP_VERSION) ≠ VERSION 파일" >&2; exit 1; }
+LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=data-pipeline
 USER rag
 VOLUME ["/app/output"]
 ENTRYPOINT ["/app/docker/entrypoint.sh"]

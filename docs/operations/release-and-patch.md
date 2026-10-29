@@ -116,21 +116,28 @@ PC 쪽: push 전에 **RELEASE_NOTES.md**(이번 묶음 목적·바뀐 코드·�
 **리팩토링 판(I6·I7·S2~S11 한 이미지 판)은 [refactor.md](../../refactor.md) 머리의 "최종 — 사람이 할 일" 절**(사람 할 일의 정본 — 검토 등급 A·반입 전·때·뒤·다음 판, 누가·언제·`C-xx`)을 따른다 — 이 절(§5-1~§5-5)은 그 안의 단계별 명령이다.
 - **`deploy/docker/IMAGE_BASE`**(한 줄 `<커밋 7자> <이미지 태그>` — `make_patch.sh image`·`last`의 기준)는 지금 upstream 판 `e305b14 20261016-e305b14`(10-16 판 — §8)라 이 저장소에 없는 커밋이다(`make_patch.sh`가 종료 코드 3 "새 이미지 판 필요"). 새 이미지 판을 서버에 넣은 뒤 그 판을 만든 이 저장소 커밋·태그로 고쳐 커밋한다 — 그 뒤부터 덧씌우기를 만들 수 있다.
 
+**버전(D-036, 10-29)** — 두 이미지(`data-pipeline`·`mcp-server`)는 같은 버전을 쓴다. 정본은 저장소 루트 `VERSION` 한 줄(SemVer `MAJOR.MINOR.PATCH`, 첫 배포 `0.1.0`)이다.
+- 올리는 규칙(D-009): MAJOR = MCP 도구 계약·DB 스키마·핸드오프 형식처럼 서로 맞춰야 하는 것이 깨질 때 · MINOR = 새 이미지 버전(의존성·Dockerfile·마운트 경로) 또는 큰 기능 · PATCH = 오버레이 패치(코드만 교체). `release/<버전>` 브랜치에서 `VERSION`을 고치고, main 머지 커밋에 git 태그 `v<버전>`(annotated)을 붙인다.
+- 이미지 태그 = 버전(`data-pipeline:0.1.0`·`mcp-server:0.1.0`). `build_ship.sh`·`ship_stage.sh`가 태그를 안 주면 `VERSION`을 쓰고, 빌드한 커밋은 이미지 라벨 `org.opencontainers.image.revision`(커밋 안 한 변경이 섞이면 `-dirty`)에 남긴다 — `docker inspect -f '{{json .Config.Labels}}' data-pipeline:0.1.0`. 같은 태그가 이미 있으면 `build_ship.sh`가 멈춘다(다시 만들 때만 `FORCE_TAG=1`).
+- 버전 표기(`common.pipeline_version()` — 회사 DB `AI.ParsingMeta.pipeline_version`·실행 보드)는 이미지 안 `/app/deploy/VERSION`과 오버레이 패치의 `common/PATCH_VERSION`(`make_patch.sh`가 HEAD의 `VERSION`을 적음 — 이미지 태그와 같으면 종료 2) 중 높은 버전이다. 10-29 전에는 git 짧은 커밋이었다(`refactor.md` C-62).
+- `deploy/docker/IMAGE_BASE` 둘째 칸(이미지 태그)도 버전으로 적는다(예 `<커밋 7자> 0.1.0`).
+
 ### 5-1. 빌드 → 전송 → 적재
 ```bash
 # 저장소 루트에서 — 2개(또는 바뀐 것만, S6b D-020). Docker 23 미만이면 아래 '로컬 빌드' 인자를 붙인다
-docker build -f deploy/docker/Dockerfile --target pipeline  -t data-pipeline:<태그> .
-docker build -f deploy/docker/Dockerfile --target mcp       -t mcp-server:<태그> .
+V=$(cat VERSION)   # 두 이미지 같은 버전 태그(D-036) — 라벨까지 넣으려면 build_ship.sh(아래)를 쓴다
+docker build -f deploy/docker/Dockerfile --target pipeline --build-arg APP_VERSION=$V -t data-pipeline:$V .
+docker build -f deploy/docker/Dockerfile --target mcp      --build-arg APP_VERSION=$V -t mcp-server:$V .
 # ↑ 직접 빌드는 assets/rapidocr가 없어도 멈추지 않고 빈 assets/로 빌드된다(S6b부터 — 전에는 COPY 실패). 먼저 `ls assets/rapidocr/*.onnx`로 확인하거나 build_ship.sh를 쓴다(아래 — 없으면 멈춤)
 
 # 빌드만(빌드→selftest 판정→resources→비밀값 흔적 점검, 저장·전송 없음 — PC 확인용)
-BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<태그> bash deploy/release/build_ship.sh
+BUILD_ONLY=1 IMAGE_TARGET=pipeline bash deploy/release/build_ship.sh            # 태그 = data-pipeline:<VERSION> · 시험 빌드는 TAG=data-pipeline:<다른 태그>
 
 # 한 번에(빌드→점검→저장→전송→적재→원격 점검, SSH 쪽으로)
 TARGET=user@수집서버 IMAGE_TARGET=pipeline bash deploy/release/build_ship.sh
 
 # 또는 저장만(95MB 조각 + sha256, 저장소 push는 사람이 따로)
-bash deploy/release/ship_stage.sh <태그> pipeline mcp
+bash deploy/release/ship_stage.sh pipeline mcp            # 태그 = VERSION(다른 태그면 첫 인자로: ship_stage.sh <태그> pipeline mcp)
 ```
 **로컬 빌드(I3, 10-26 · S6b 10-27)** — 빌드 컨텍스트는 이 저장소 루트다(Dockerfile은 `deploy/docker/Dockerfile` — 이미지 안 경로 `/app/deploy/<폴더>`·`/app/docker`는 그대로). 루트 `.dockerignore`가 허용 목록이라 `common`·`pipeline`·`mcp_server`·`resources`·`deploy/docker`·`deploy/release`·`assets`만 컨텍스트에 들어간다(`deploy/host`·`.venv`·`output`·`valid_env`·`.env.local`·코드 폴더 안 `output/`은 빠짐 · 빈 틀 `common/config/*.example` 예외는 그 파일이 S7e2에 없어져 S11에 지움). Dockerfile pipeline 단계의 heredoc(`RUN python - <<'EOF'`) 때문에 **Docker 23 미만(예: 20.10)** 은 파일 전체를 못 읽는다 — `DOCKER_BUILDKIT=1 docker build --build-arg BUILDKIT_SYNTAX=docker/dockerfile:1.7 …`로 빌드한다(`docker/dockerfile` 이미지를 받으므로 인터넷 필요). `build_ship.sh`는 docker 판을 보고 이 인자를 스스로 붙이고(`BUILDKIT_SYNTAX=<값>`으로 바꿀 수 있음), podman은 서버에서 확인한다. selftest 판정은 §3-3과 같다(`selftest_gate.sh` — 알려진 FAIL 밖 0).
 
