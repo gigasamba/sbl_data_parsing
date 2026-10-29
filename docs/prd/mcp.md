@@ -56,7 +56,7 @@ Server runtime and safety. Why: shared internal service — must stay up and ref
 ## mc-10
 Retriever reads removed column `file_sha256`. Why: the 10-20 reduced schema dropped `file_sha256`·`client`·`file_name`·`s3_key`, but the retriever still reads `doc.file_sha256` (`hidden_names`) and `doc.client`·`doc.file_name` (`_client_rows`), so building a retriever on a new bundle fails.
 - Files: `mcp_server/services/search/retriever.py`.
-- Status: done (10-30, `feature/search-path-fixes`) — 묶음 문서 키를 `doc_key` 우선(옛 묶음은 `file_sha256`)으로 읽고(`_doc_key`), PG `doc` 조회는 남은 열(`file_path`·`clients`)만 고름(`_client_rows`·`client_map`). 파일 이름은 `file_path`의 마지막 `/` 뒤(`_file_name` — `v_chunk_source` 뷰와 같은 규칙, 로컬 묶음 검색·`client_map`·`do_lookup_term`). 시험 `tests/server/mcp/test_mc10_doc_key.py`. `hidden_names`의 `file_sha256` 조회는 숨김 키 문제라 [mc-14](#mc-14)로. 범위 밖으로 남은 것: EDW 벡터 키(`sha:seq`)는 새 묶음 키와 안 맞음(PR #5가 EDW 벡터 경로를 지움) · `internal_docs.py`의 문서 조회·목록(PG `doc`에서 `file_name`·`file_sha256`·`source_uri` 등 없는 열을 고름)은 별도 항목으로 볼 것.
+- Status: done (10-30, `feature/search-path-fixes`) — 묶음 `docs.jsonl`을 읽을 때(`local.Local`) 문서마다 `doc_key`(새 묶음 `file_path`, 옛 묶음 `file_sha256`)와 `file_name`(`doc_name`, 없으면 `file_path`의 마지막 `/` 뒤 — `v_chunk_source` 뷰와 같은 규칙)을 한 번 채운다 — 검색 근거·`client_map`·`internal_docs`의 문서 목록·조회·용어 찾기가 같은 값을 봄. PG `doc` 조회는 남은 열(`file_path`·`clients`)만 고름(`_client_rows`). 시험 `tests/server/mcp/test_mc10_doc_key.py`(새·옛 묶음, Windows 경로, 목록·조회). 범위 밖으로 남은 것: `internal_docs`의 PG 쪽 문서 조회·목록(없는 열 `file_name`·`file_sha256`·`client`를 고름 — 별도 항목) · `get_document`는 `:` 앞을 문서 키로 봐서 Windows 경로(`C:\…`)로는 못 찾음(서버 경로는 해당 없음) · 숨김 키 비교는 [mc-14](#mc-14).
 
 ## mc-11
 Aggregation path queries removed columns. Why: `aggregate.pg()` selects `file_sha256`, `client`, `contract_no`, `meta_confirmed`, `contract`, so every search result gets an "aggregation path error" note (evidence itself is fine).
@@ -71,10 +71,10 @@ Fact aggregation queries a dropped table. Why: `kg_node`·`kg_edge`·`doc_fact`�
 ## mc-13
 PG query log writes to a table no migration creates. Why: `search_svc` does `INSERT INTO qa_log` on the PG store, but `0001_search_base` has no `qa_log` table; the error is swallowed, so only the jsonl log works.
 - Files: `mcp_server/services/search/search_svc.py`, `mcp_server/services/search/qa_log.py`, `common/store/db/migrations/versions/0001_search_base.py`.
-- Status: done (10-30, `feature/search-path-fixes`) — 사용자 결정: 질의 기록은 파일(`qa_log.jsonl`)만. `search_svc._log`와 `ask.py`의 PG `qa_log` INSERT를 지움(표는 만들지 않음). jsonl 기록은 그대로. 시험 `tests/server/mcp/test_mc13_qa_log.py`.
+- Status: done (10-30, `feature/search-path-fixes`) — 사용자 결정: 질의 기록은 파일(`qa_log.jsonl`)만. `search_svc._log`와 `ask.py`의 PG `qa_log` INSERT를 지움(표는 만들지 않음). jsonl 기록은 그대로. 시험 `tests/server/mcp/test_mc13_qa_log.py`. 남은 것: `ask --retrieve cosine`(옛 직접 검색 길)은 전에도 PG에만 남겼고 이제 기록이 없음 — 기본 길(`do_search`)은 jsonl에 남김.
 
 ## mc-14
-숨김 문서가 검색에서 빠지지 않는다. 왜: 숨김 표(`doc_hidden`, struct 스키마)의 키는 문서 대장 `doc_key` = 원본 sha256인데(`registry.apply()`가 원천에서 사라진 문서를 자동 숨김, `registry_cli hide`도 같은 키), 10-20 축소 스키마 뒤 검색 쪽 문서 키는 `file_path`다 — `pgsearch._not_hidden_restrict`가 sha256을 `doc.file_path`와 비교해 절대 안 맞고, 로컬 묶음(`local.py`)·`retriever.hidden_names`는 PG에서 없는 열(`file_name`·`file_sha256`)을 골라 숨김 문서가 하나라도 있으면 오류가 난다(그림 조회 `internal_docs.py`).
+숨김 문서가 검색에서 빠지지 않는다. 왜: 숨김 표(`doc_hidden`, struct 스키마)의 키는 문서 대장 `doc_key` = 원본 sha256인데(`registry.apply()`가 원천에서 사라진 문서를 자동 숨김, `registry_cli hide`도 같은 키), 10-20 축소 스키마 뒤 검색 쪽 문서 키는 `file_path`다 — `pgsearch._not_hidden_restrict`가 sha256을 `doc.file_path`와 비교해 절대 안 맞고, 로컬 묶음(`local.py`)·`retriever.hidden_names`는 PG에서 없는 열을 골라 숨김 문서가 하나라도 있으면 오류가 났다 — 10-30부터 PG에서는 빈 집합(오류 대신, 숨김 안 됨은 그대로).
 - 조사(10-30): 스키마 변경 없이 잇는 길이 없다. 검색 `doc` 표에는 sha256도 원본 키(`s3_key`)도 없고(`file_path` = `edw_path_prefix` + 파일 이름 또는 PC 경로), 문서 대장의 `source_keys`(`local::<경로>`·`<출처>::<원본 키>`)는 모양이 달라 정확히 맞출 수 없다. 파일 이름으로 맞추면 다른 폴더·고객의 같은 이름 문서가 잘못 숨겨진다(engine-qa 10-08이 이름 짝짓기를 금지한 이유와 같음).
 - 결정(사용자 10-30): 모든 문서 키를 `s3_key`로 바꾸고 문서 대장·숨김 표를 DB 명세로 다시 키를 잡는다(pl-25, 스키마 변경 — Alembic·DB 담당자). 그때 이 비교를 같은 키로 고친다.
 - Files: `mcp_server/services/search/pgsearch.py`(`_not_hidden_restrict`), `mcp_server/services/search/local.py`, `mcp_server/services/search/retriever.py`(`hidden_names`), `common/store/registry.py`.

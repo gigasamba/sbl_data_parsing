@@ -16,7 +16,7 @@ from mcp_server import config as mc  # 설정 객체(mcp 칸 — S7d)
 from mcp_server.services.search import (
     clientscope as CS,  # BR50 고객 범위 단일 규칙(client_scope·allows, local.py·pgsearch.py·mcp_server.py와 공용)
 )
-from mcp_server.services.search.local import Local, embed_query
+from mcp_server.services.search.local import Local, embed_query, file_name_of
 from mcp_server.services.search.terms import (  # 용어 사전(X3·X4, 구조화와 같은 규칙) · SI43⑤ 벡터 질의 별칭 덧붙이기(10-16 검색 전용으로 분리)
     expand_query,
     vector_alias_text,
@@ -27,19 +27,6 @@ def evidence_gate_on():
     """R3(AD42) SEARCH_EVIDENCE_GATE(기본 켬, =0으로 끔) — 단일 읽기 지점(mcp_server.py do_search도 이 함수를 씀).
     켜지면 hits에 score 칸이 실리고(mcp_server.evidence_status의 근거), 꺼지면(=0) 예전처럼 score 없음(바이트 동일)."""
     return mc.cfg().search.evidence_gate  # S7d — 설정 객체(켜기 칸 off=("0",) = 옛 != "0")
-
-
-def _name(file_path):
-    """파일 이름 = file_path의 마지막 '/' 뒤 — v_chunk_source 뷰(`regexp_replace(file_path, '^.*/', '')`)와 같은 규칙(Windows 역슬래시는 안 나눔)."""
-    return file_path.rsplit("/", 1)[-1]
-
-
-def _fill_doc(d):
-    """mc-10 — 묶음 docs.jsonl 행에 doc_key·file_name을 한 번 채운다(있으면 그대로). 2026-10-20 축소 스키마 뒤 묶음은 doc_key(=file_path,
-    pg 근거의 doc_key와 같은 값)·file_path만 있고 옛 묶음은 file_sha256·file_name이 있다 — 읽는 곳마다 갈래를 두지 않게 Retriever가
-    묶음을 읽을 때 한 곳에서(local.py·internal_docs도 같은 dict를 봄). 전에는 서버에서 d["file_sha256"]로 읽어 search가 멈췄음."""
-    d.setdefault("doc_key", d.get("file_sha256") or d["file_path"])
-    d.setdefault("file_name", _name(d["file_path"]))
 
 
 class Retriever:
@@ -53,8 +40,6 @@ class Retriever:
         self.bundle, self.retrieve = Path(bundle), retrieve
         self.meta = json.loads((self.bundle / "meta.json").read_text(encoding="utf-8"))
         self.local = Local(bundle)
-        for d in self.local.docs:
-            _fill_doc(d)
         self.key_local = {make_chunk_key(self.local.docs[c["doc"]]["doc_key"], c["seq"]): i for i, c in enumerate(self.local.chunks)}
         self.doc_meta = {
             d["doc_key"]: {
@@ -113,8 +98,9 @@ class Retriever:
         if not self.hidden:
             return set()
         if self.pg:
-            rows = self.pg.q(f"SELECT file_name FROM {self.pg.schema}.doc WHERE file_sha256 = ANY(%s)", (sorted(self.hidden),))
-            return {r["file_name"] for r in rows}
+            return (
+                set()
+            )  # mc-14 — PG doc 표에 숨김 키(sha256)·file_name 열이 없음(10-20 축소 스키마): 오류 대신 빈 집합, pl-25(s3_key) 뒤 고침
         return {d["file_name"] for d in self.local.docs if d.get("file_sha256") in self.hidden}
 
     def _chunk_key_hidden(self, chunk_key):
@@ -137,7 +123,7 @@ class Retriever:
         독립 검토 CONCERN(10-14) — 전엔 client(단일)만 읽어 다중 라벨 문서의 그림·OV가 두 번째 이하 고객
         범위에선 안 걸렸다 — 이제 CS.doc_clients로 clients 우선·client 낙하(allows()의 ANY-match를 그대로 씀)."""
         if self.pg:
-            return {_name(r["file_path"]): CS.doc_clients(None, r.get("clients")) for r in self._client_rows()}
+            return {file_name_of(r["file_path"]): CS.doc_clients(None, r.get("clients")) for r in self._client_rows()}
         return {d["file_name"]: CS.doc_clients(d.get("client"), d.get("clients")) for d in self.local.docs}
 
     def search(self, q, k, methods=None, client=None):

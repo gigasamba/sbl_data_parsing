@@ -56,3 +56,21 @@ def test_doc_key_bundle():
         R = RT.Retriever(_bundle(cases[0][0]))
         with patch.object(R, "pg", _PG()):
             assert R.client_map() == {"a.txt": ["A사"]}, R.client_map()
+
+
+def test_local_doc_readers():
+    """코드 리뷰(10-30) — 같은 묶음 dict를 읽는 internal_docs 목록·조회도 새 묶음에서 돈다 · Windows 경로(역슬래시)는 doc_name을 파일 이름으로."""
+    from mcp_server.services.search import internal_docs as ID
+
+    win = "C:\\docs\\b.txt"  # PC(Windows) — build_bundle이 str(orig.resolve())를 file_path로 씀
+    srv = "/data/docs/c.txt"  # 서버 경로(get_document는 ':' 앞을 문서 키로 봄 — Windows 경로는 조회 키로 못 씀, 서버는 해당 없음)
+    with mc.senv(GLOSSARY_DIR=None):
+        R = RT.Retriever(_bundle({"file_path": win, "doc_key": win, "doc_name": "b.txt"}))
+        assert R.local.docs[0]["file_name"] == "b.txt", R.local.docs[0]
+        with patch.object(ID, "_retriever", return_value=R):
+            rows = ID.do_list_documents(latest_only=False)
+        R = RT.Retriever(_bundle({"file_path": srv, "doc_key": srv}))
+        with patch.object(ID, "_retriever", return_value=R):
+            got = ID.do_get_document(srv)
+    assert [r["doc_key"] for r in rows["documents"]] == [win] and rows["documents"][0]["file_name"] == "b.txt", rows
+    assert got.get("doc_key") == srv and got.get("file_name") == "c.txt" and "error" not in got, got
