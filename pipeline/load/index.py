@@ -11,7 +11,7 @@
 index_id = 설정만의 지문(PG 스키마 이름이 안정). 다시 지을지는 따로 '입력 지문'(index.json inputs = _rep/index.json · 용어 사전
 GLOSSARY_DIR · 고객 명부 CLIENT_ROSTER · stack.json · common 지문 · modules/structure 코드 지문)으로 판정 — 하나라도 바뀌면 --force 없이도 다시 빌드.
 같은 index_id 동시 빌드는 INDEX_ROOT/<id>.lock(O_EXCL)으로 막음 — 이미 빌드 중이면 종료 코드 75, INDEX_LOCK_STALE_SEC(기본 6시간) 지난 잠금은 회수.
---pg면 PG 스키마 <PG_SCHEMA>_<index_id>에 deploy·load(더하고 고치기만 — pl-13). 설정이 없으면 이 명령을 안 씀 — 기본 색인은 pipeline.py 그대로.
+--pg면 PG 스키마 <PG_SCHEMA>_<index_id>에 deploy·load --replace(묶음 문서는 고치고, 묶음에 없는 문서는 안 지움 — pl-13). 설정이 없으면 이 명령을 안 씀 — 기본 색인은 pipeline.py 그대로.
 종료 코드: 2 설정 오류 · 3 인계 폴더 계약 위반·dim 불일치 · 5 임베딩 연결 없음(api)·임베딩 없는 묶음의 --pg · 75 같은 색인 빌드 중."""
 
 import argparse
@@ -161,7 +161,9 @@ def _build_locked(conf, iid, a):
         schema = ICS.pg_schema(iid)
         penv = settings_env(env, PG_SCHEMA=schema)  # 색인 스키마 — 덮기 파일(S7e3 B-1: env dict의 설정 이름은 자식이 안 읽음)
         _run("pipeline.load.pgvector_load", ["deploy", "--bundle", bundle], penv)
-        _run("pipeline.load.pgvector_load", ["load", "--bundle", bundle], penv)
+        _run(
+            "pipeline.load.pgvector_load", ["load", "--bundle", bundle, "--replace"], penv
+        )  # pl-13 — 다시 빌드면 같은 문서도 새 묶음으로 고침(안 붙이면 건너뛰어 옛 청크가 남음)
     info = {
         "index_id": iid,
         "conf": conf,

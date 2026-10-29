@@ -3,6 +3,7 @@
 외부 접속 없음, 임시 폴더만."""
 
 import json
+import shutil
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -17,8 +18,8 @@ from pipeline.load import pgvector_load as M
 DIM = 4
 
 
-def _bundle(paths):
-    d = Path(tempfile.mkdtemp())
+def _bundle(paths, tmp):
+    d = Path(tempfile.mkdtemp(dir=tmp))
     (d / "meta.json").write_text(json.dumps({"dim": DIM, "embed_model": "test"}), encoding="utf-8")
     docs = [{"file_path": p, "summary": p, "clients": ["A사"]} for p in paths]
     chunks = [
@@ -48,16 +49,35 @@ def _count(db, sql):
     return int(db.q(sql)[0]["n"] or 0)
 
 
+def _callers_no_prune():
+    """호출부(cli load·run-stack, 색인 빌드 --pg)가 만드는 명령에 --prune이 없음(C-60은 호출부가 붙이던 결함) — 그 파일 글자로 확인."""
+    from pipeline import cli
+    from pipeline.load import index
+
+    for mod in (cli, index):
+        src = Path(mod.__file__).read_text(encoding="utf-8")
+        assert '"--prune"' not in src, f"{mod.__name__}가 아직 --prune을 붙임"
+
+
 def test_load_keeps_docs_not_in_run():
-    """호출부가 쓰는 명령 입구(main load — cli load·run-stack·색인 빌드 --pg가 부름)로 두 번 적재."""
+    """명령 입구(main load — 호출부가 부르는 것)로 두 번 적재. 임시 폴더는 끝나면 지움."""
+    _callers_no_prune()
     S = "orca_pl13_t"
-    with COMMON.env(PG_STANDIN_DIR=tempfile.mkdtemp()):
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        _run_twice(S, tmp)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _run_twice(S, tmp):
+    with COMMON.env(PG_STANDIN_DIR=str(tmp / "pg")):
         db = PS.StandinPG(S)
         with db.cn.cursor() as cur:
             cur.execute(standin_script(S, DIM))
     with patch.object(M, "pg_connect", return_value=db):  # 늘 대역 — 설정 파일에 실 PG가 있어도 닿지 않게
-        M.main(["load", "--bundle", str(_bundle(["/d/a.txt", "/d/b.txt"]))])
-        M.main(["load", "--bundle", str(_bundle(["/d/c.txt", "/d/a.txt"]))])  # b는 이번 묶음에 없음 · a는 이미 있음(건너뜀)
+        M.main(["load", "--bundle", str(_bundle(["/d/a.txt", "/d/b.txt"], tmp))])
+        M.main(["load", "--bundle", str(_bundle(["/d/c.txt", "/d/a.txt"], tmp))])  # b는 이번 묶음에 없음 · a는 이미 있음(건너뜀)
         docs = sorted(str(r["file_path"]) for r in db.q(f"SELECT file_path FROM {S}.doc"))
         n_chunks = _count(db, f"SELECT COUNT(*) AS n FROM {S}.chunk")
         b_terms = _count(

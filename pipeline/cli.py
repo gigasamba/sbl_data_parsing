@@ -1303,9 +1303,7 @@ def main(argv=None):
             p.add_argument("--pg", action="store_true", help="pgvector에 배포·적재까지(지정 없어도 Docker pgvector가 떠 있으면 기본)")
             p.add_argument("--local", action="store_true", help="pgvector가 떠 있어도 로컬 묶음까지만")
             p.add_argument("--replace", action="store_true")
-            p.add_argument(
-                "--no-prune", action="store_true", help=argparse.SUPPRESS
-            )  # pl-13 — 적재는 늘 안 지움: 옛 호출(트리거 허용 목록·스크립트) 호환용으로만 받음
+            p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
             p.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
     p = sub.add_parser("night", help="새벽 파싱 배치(GPU 모델 API만, LLM 없음, 마감 시각에 멈추고 다음 밤에 이어 감)")
     p.add_argument("--src", default=src)
@@ -1329,9 +1327,7 @@ def main(argv=None):
     p.add_argument("--no-publish", action="store_true", help="OS+EDW publish 건너뜀 (기본: 대표 파싱 직후 실행)")
     p.add_argument("--pg", action="store_true", help="구조화 뒤 pgvector 적재까지(지정 없어도 Docker pgvector가 떠 있으면 기본)")
     p.add_argument("--local", action="store_true", help="pgvector가 떠 있어도 로컬 묶음까지만")
-    p.add_argument(
-        "--no-prune", action="store_true", help=argparse.SUPPRESS
-    )  # pl-13 — 적재는 늘 안 지움: 옛 호출(트리거 허용 목록·스크립트) 호환용으로만 받음
+    p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
     for name, hlp in (
         ("parse", "파싱 모듈 1회(트리거): 파싱 → 채점 → 대표 결과 → 끝 표시 · 임베딩·DB 없음"),
         ("structure", "구조화 모듈 1회(트리거): 대표 결과 → 청킹·임베딩·그래프 묶음 · 새 파싱 결과 없으면 건너뜀"),
@@ -1370,9 +1366,7 @@ def main(argv=None):
             p.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
         if name == "load":
             p.add_argument("--replace", action="store_true")
-            p.add_argument(
-                "--no-prune", action="store_true", help=argparse.SUPPRESS
-            )  # pl-13 — 적재는 늘 안 지움: 옛 호출(트리거 허용 목록·스크립트) 호환용으로만 받음
+            p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
     p = sub.add_parser("set-stack")
     p.add_argument("--from-selection", action="store_true")
     p.add_argument("--parse", help='".pdf_text=pymupdf,pdfplumber;.docx=office;…"')
