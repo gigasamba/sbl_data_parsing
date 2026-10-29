@@ -1953,7 +1953,7 @@ erDiagram
 | `KEEP_LOCAL_ORIGINALS` | `pipeline/extract/source.py` · `pipeline/stream.py` 외 1 | pipeline | false | bool | `pipeline.extract.cache.keep_local_originals` | YAML |  | 내려받은 원본을 파싱 뒤에도 지우지 않고 남길지(=1 보관, 디버그·샘플용) — 켜기 판정 꼴: `1`만 켬(옛 `== "1"` — S7c1) |
 | `KEEP_RAW_LAYER` | `pipeline/stream.py` · `pipeline/tools/check_residue.py` | pipeline | true | bool | `pipeline.extract.cache.keep_raw_layer` | YAML |  | P0 원본 층 캐시(output/parse/raw/**)를 유지할지(1 유지 / 그 외 이번 묶음 것 삭제) — 켜기 판정 꼴: `1`만 켬(옛 `== "1"` — S7c1) · `tools/check_residue.py`도 같은 꼴(옛은 `0`일 때만 검사 — S7c1 보고서) |
 | `KNOWN_FAIL` | `deploy/release/selftest_gate.sh` | 빌드 | <selftest_gate.sh 폴더>/known_fail.txt | path |  | 인자(5-3 B) |  | selftest 판정이 쓰는 '알려진 FAIL' 목록 파일 경로 — 빌드·반입·시험 스크립트 인자(5-3 B) |
-| `KOREAN_FONT` | (새 키) |  |  | str | `common.paths.korean_font` | YAML |  | 한글 글꼴 파일 경로(그림 렌더·점검용) — **10-29 칸 지움**(읽는 곳 없음) |
+| `KOREAN_FONT` | (새 키) |  |  | str | `common.paths.korean_font` | YAML |  | 한글 글꼴 파일 경로(그림 렌더·점검용) — 읽는 곳 없음 · **10-29 삭제 보류**(사용자 — 한글 글꼴 처리와 관계 확인 중, PRD pl-21) |
 | `KREUZBERG_PROSE_FILTER` | `pipeline/extract/engines/kreuzberg/parser.py` | pipeline | true | bool | `pipeline.extract.kreuzberg_prose_filter` | YAML · 엔진 지문 고정 |  | kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔) |
 | `LITELLM_LOCAL_MODEL_COST_MAP` | `common/ai/adk.py` | 공용 | True | str |  | env로 남김 |  | litellm이 가격표를 외부에서 받지 않고 내장본을 쓰게 함(폐쇄망) — 미설정이면 코드가 True로 채움 — 라이브러리(litellm)가 읽음 |
 | `LLM_ALLOW_EXTERNAL` | `common/ai/guard.py` · `pipeline/transform/structure/build_bundle.py` 외 3 | PC+공용+pipeline | false | bool | `common.models.llm.allow_external` | YAML |  | LLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) — 켜기 판정 꼴: `1`만 켬(옛 `== "1"` — S7b · VS7a2 R-c) |
