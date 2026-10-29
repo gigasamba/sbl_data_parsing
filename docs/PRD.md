@@ -1,7 +1,7 @@
 # sbl_data_parsing — PRD
 
 목표: 폐쇄망 회사 문서에서 출처 달린 근거를 찾는다 — 파싱 → 구조화 → 적재(pgvector) → 검색 MCP, 서버와 PC에서 같게.
-행 = 묶음 하나(끝난 것 포함). 상태: todo · dev · done(그 밖에 design done, partly done). ID는 그대로 두고 카테고리 파일이 자리를 정한다. 상세는 ID 링크.
+행 = 묶음 하나(끝난 것 포함). 상태: todo · dev · done(그 밖에 partly done). ID는 그대로 두고 카테고리 파일이 자리를 정한다. 상세는 ID 링크.
 
 ## 지금 진행 중
 - pl-13 적재가 지우지 않음 — dev, `feature/load-no-prune` → PR 검토·병합.
@@ -67,7 +67,7 @@
 ## 설정·운영 (settings)
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
 |---|---|---|---|
-| RUN_ENV 셋 · LLM_FAKE는 local만 | design done | `stage` 거부 · 시작 관문 | [op-02](prd/settings.md#op-02) |
+| RUN_ENV 셋 · LLM_FAKE는 local만 | done | `stage` 거부 · 시작 관문 | [op-02](prd/settings.md#op-02) |
 | 모델 호출·비용·외부 전송 가드 | done | 역할 · 외부 거부 · 예산 | [pl-11](prd/settings.md#pl-11) |
 | EDW 접속 하나·계정 둘 | done | `common.connections.rdb` · 읽기·쓰기 · sqlite 대역 | [op-03](prd/settings.md#op-03) |
 | 프로세스 종료 정리 | dev | 덮기 파일 지움 · 자식 회수 · SIGTERM | [pl-27](prd/settings.md#pl-27) |

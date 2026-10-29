@@ -20,7 +20,7 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 서버 할 일: `run_env: stage`인 서버 `settings.yaml`은 이 릴리스 전에 `prd`로 바꾼다(env-guide 행).
 - 위험: `common/config/settings.py`는 모든 레이어의 code_fp에 들어간다 → 서버 재처리. 핑거프린트 전후를 기록. settings.py 변경은 작게(92와 r2-phase도 고침).
 - 수용 기준: `RUN_ENV=stage`는 시작 거부(모르는 값). `RUN_ENV=dev`/`prd` + `LLM_FAKE=1`이면 앱 시작이 0이 아닌 코드로 끝남. `local` + `LLM_FAKE=1`은 시작. 외부 모델은 dev/prd에서 거부, local에서 허용. 이미지 안 selftest 통과. 전체 pytest + 린트 통과.
-- Status: design done (user confirm pending)
+- Status: done (10-30, PR #6 병합 — 사용자 승인) — 서버 할 일은 refactor.md C-66.
 
 <a id="pl-11"></a>
 ## pl-11 · 모델 호출, 비용, 외부 전송 가드(공용)
