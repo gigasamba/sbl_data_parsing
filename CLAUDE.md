@@ -156,7 +156,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 - 테스트는 pytest 형식(`test_*` 함수 + `assert`)으로 쓴다. 이미지에서는 `pipeline.cli selftest`(`tests/runner.py`)가, PC에서는 pytest가 실행한다. 이미지에는 pytest가 없다.
 - 테스트는 **멱등**하게 만든다. 공용 개발 PG에 흔적을 남기지 말고 임시 SQLite나 임시 스키마(`orca_*`, `test_*`)를 쓰며, 이름을 다시 확인한 뒤 정리한다. 설정은 `with pc.PIPE.env(X=…)`, `settings.isolated()` 같은 테스트 도우미로 덮어쓴다(os.environ을 건드리지 않는다). 함수를 바꿔 끼울 때는 `unittest.mock.patch.object`를 쓴다.
 - 앱 모듈 안에 `selftest()`나 `if __name__ == "__main__":` 점검 코드를 새로 두지 않는다. 테스트는 `tests/`에 둔다.
-- 고정 데이터: 외부 시스템을 흉내 내는 데이터(문서·정답·EDW 대역)는 `valid_env/`에 둔다(10-29 PwC_Structure 배치 — `docs/prd/e2e.md#e2-09`). 서버 반입 테스트는 `valid_env`가 없는 이미지에서도 돌게 데이터를 임시 폴더에 만들어 쓴다(`tests/fixtures/`는 10-29에 지움 — refactor.md C-63).
+- 고정 데이터: 외부 시스템을 흉내 내는 데이터(문서·정답·EDW 대역)는 `valid_env/`에 둔다(10-29 PwC_Structure 배치 — `docs/prd/test.md#e2-09`). 서버 반입 테스트는 `valid_env`가 없는 이미지에서도 돌게 데이터를 임시 폴더에 만들어 쓴다(`tests/fixtures/`는 10-29에 지움 — refactor.md C-63).
 
 ### 6-5. 스모크 테스트 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
 README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. 실행마다 다른 값은 `--set`(파이프라인 진입점)이나 오버레이 설정 파일(`mcp_server.main`, `ask`처럼 `--set`을 받지 않는 명령)로 준다. 테스트 문서는 `valid_env/unstructured/`(목록 `list-smoke10.txt`)에 있고, 임베딩 캐시는 `output/edw/embed_cache.sqlite`다(같은 청크는 다시 호출하지 않는다 — 실제 호출을 확인하려면 `EMBED_CACHE=<빈 sqlite>`).
@@ -179,7 +179,7 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 
 ## 8. 문서
 
-- 기능 요건·미개발 항목은 [docs/PRD.md](docs/PRD.md)와 `docs/prd/{mcp,pipeline,e2e}.md`에 있다(§10).
+- 기능 요건·미개발 항목은 [docs/PRD.md](docs/PRD.md)와 `docs/prd/<카테고리>.md`에 있다(§10).
 - 문서 지도는 [docs/index.md](docs/index.md)다. 문서를 추가하거나 옮기면 같은 커밋에서 이 지도를 고친다. 새 문서는 꼭 필요할 때만 만들고, 먼저 기존 문서의 섹션으로 넣을 수 있는지 본다.
 - 서버나 사람이 확인해야 하는 일(저장소 안에서 끝낼 수 없는 것)은 [refactor.md](refactor.md)에 `C-xx`로 추가하고, 배포 순서는 그 파일의 "최종 — 사람이 할 일"에 둔다.
 - 결정 사항은 [docs/refactoring/refactor_plan.md](docs/refactoring/refactor_plan.md) 7절에 `D-xxx`로, 미정 사항은 8절에 둔다. 운영 절차는 `docs/operations/`(서버 가이드, 릴리스, 설정 가이드)에 있다.
@@ -194,16 +194,15 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 ## 10. 기능 요건과 알려진 문제 — `docs/PRD.md`
 
 기능 요건(무엇·왜·관련 코드 파일)과 아직 개발되지 않았거나 고장 난 항목(진행 상황)은 이 파일에 두지 않고 요건 문서에 둔다(10-29).
-- [docs/PRD.md](docs/PRD.md) — 미개발·미해결 항목 표(ID·상태·상세 링크). 작업 전에 이 표에서 맡은 행을 찾는다.
-- [docs/prd/mcp.md](docs/prd/mcp.md)(검색 MCP `mc-xx`) · [docs/prd/pipeline.md](docs/prd/pipeline.md)(데이터 파이프라인 `pl-xx`) · [docs/prd/e2e.md](docs/prd/e2e.md)(e2e 실행·테스트·평가 `e2-xx`) · [docs/prd/runner.md](docs/prd/runner.md)(서버 문서별 실행기 레인·대기열 `rn-xx`) · [docs/prd/doc.md](docs/prd/doc.md)(문서 배치 `do-xx`) · [docs/prd/ops.md](docs/prd/ops.md)(운영 로그 `op-xx`) — 기능마다 앵커 하나(무엇·왜·관련 파일, 미개발이면 `Status:`에 진행 상황).
-- [docs/prd/gaps.md](docs/prd/gaps.md) — 요건과 다르게 동작하는 코드 · 요건 없는 코드(남길지 지울지 검토) · 기본 꺼짐·설정이 필요한 기능 · 10-29에 지운 기능.
+- [docs/PRD.md](docs/PRD.md) — 카테고리별 묶음 표(끝난 것 포함, ID·상태·단계·상세 링크)와 "지금 진행 중". 작업 전에 이 표에서 맡은 행을 찾는다.
+- 카테고리 파일 [etl](docs/prd/etl.md)(수집·게시·적재·DB·러너) · [parse](docs/prd/parse.md)(파싱 실행) · [mcp](docs/prd/mcp.md)(검색 MCP) · [settings](docs/prd/settings.md)(설정·운영) · [test](docs/prd/test.md)(테스트·평가) · [doc](docs/prd/doc.md)(문서·릴리스) — ID(`mc-xx`·`pl-xx`·`e2-xx`·`rn-xx`·`op-xx`·`do-xx`)는 그대로, 항목마다 `<a id>` + `## ID · 한글 이름`(무엇·왜·관련 파일, 미개발이면 `Status:`에 진행 상황). 파일 끝 "코드와 다른 점 · 지울 코드"에 요건과 다른 코드 · 요건 없는 코드 · 기본 꺼짐 기능 · 10-29에 지운 기능(옛 gaps.md).
 - 옛 §10 알려진 문제(10-20 축소 스키마 일부 반영 등)는 `mc-10`·`mc-11`·`pl-12`~`pl-16`·`e2-13`·`e2-16`으로 옮겼다.
-- 기능을 더하거나 고치면 같은 커밋에서 해당 앵커를 고친다. 끝난 항목은 PRD 표에서 빼고 앵커에 `- Status: done`을 남긴다.
+- 기능을 더하거나 고치면 같은 커밋에서 해당 앵커를 고친다. 끝난 항목도 PRD 표에 남기고 상태를 done으로, 앵커에 `- Status: done`을 남긴다(do-04 10-30).
 
 ---
 
 ### 옛 절 번호(10-29 이전 버전 CLAUDE.md) — 코드 주석이나 기록 문서의 옛 참조를 찾을 때
 옛 1절(저장소·이름 대응) → README·refactor_plan 9절 · 옛 2절(문서) → §8 · 옛 3절(지켜야 할 규칙) → §2(배포 환경)·§3(설정)·§4(핑거프린트·계약·운영 가드) · 옛 4절(작업 절차) → §5·§9 · 옛 5절(OpenRouter) → §7 · 옛 6절(로컬 하네스) → §6 · 옛 7절(알려진 문제) → §10 · 옛 8절(사용자 결정 대기) → refactor.md "최종" ⑤·refactor_plan 8절. 코드 주석 속 옛 번호는 일부러 고치지 않았다(공용·레이어 파일은 고치면 code_fp가 바뀌고, 그 밖의 파일은 주석 한 줄 때문에 옛 린트 경고까지 정리해야 해서 — §5-2).
 
-### 용어 대응(옛 문서·코드 주석의 표현)
-옛 문서와 코드 주석에는 리팩토링 중에 쓰던 말이 남아 있다: 시험=테스트 · 반입=(폐쇄망) 배포 · 칸=항목/컬럼 · 판=버전 · 지문=핑거프린트 · 열쇠=키 · 층=레이어 · 묶음=번들 · 대장=레지스트리 · 인계=핸드오프 · 덧씌우기=오버레이 패치 · 덮기 파일=오버레이 설정 파일 · 게시=퍼블리시 · 지시서/지시문=프롬프트.
+### 용어 대응
+옛 문서·코드 주석의 표현과 약어는 [docs/index.md](docs/index.md#glossary) `## Glossary`에 있다(do-02).

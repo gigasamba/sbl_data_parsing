@@ -1,0 +1,83 @@
+# 설정·운영 — settings.yaml·RUN_ENV·계정·로그·외부 모델
+
+[PRD.md](../PRD.md)의 카테고리 하나. 두 앱이 함께 쓰는 설정, 실행 환경(`RUN_ENV`), EDW 계정, 로그, 외부 모델 호출 가드.
+op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 표준).
+
+순서(주제별): 실행 환경·외부 모델 op-02·pl-11 → 계정 op-03 → 로그 op-01 → 미룬 설정 정리 pl-21 → 코드와 다른 점.
+
+<a id="op-02"></a>
+## op-02 · RUN_ENV는 `local`·`dev`·`prd` 셋(`stage` 없앰) · LLM_FAKE는 `local`에서만
+- 무엇: `local`(PC), `dev`(개발 서버), `prd`(운영). `stage`는 없앤다.
+- 이유: `stage`는 `prd`와 똑같이 동작했다(실행 기록에만 적힘). 허브가 방식 수를 줄이자고 했다(10-29). LLM_FAKE에는 RUN_ENV 확인이 없어 서버에서 가짜 답이 돌 수 있었다.
+- 결정(사용자, grill-me 10-29):
+  1. `local`을 PC 신호로 유지(저장소 루트 settings.yaml 찾기, 파일 기반 스택·원천, `paths.LOCAL_RUN`) — 새 설정도, 코드 위치 규칙도 없음. (허브는 dev/prd만 제안했고 사용자가 셋을 골랐다.)
+  2. 외부 모델(OpenRouter 등)과 `LLM_FAKE`는 **`local`에서만** 허용. `dev`와 `prd`는 둘 다 거부.
+  3. `dev`/`prd`에서 `LLM_FAKE`가 켜져 있으면 앱 시작에서 거부(`require_run_env` 관문), 호출마다가 아님.
+  4. `stage`는 더는 받지 않는다: `local`·`dev`·`prd`만 받고, `stage`는 모르는 값처럼 거부(시작 거부, 메시지에 세 값을 보임). 대응 없음. 코드 검색 10-29: `stage` 전용 동작은 없고 값 목록·메시지·문서에만 나온다.
+  5. RUN_ENV는 모든 곳에서(PC 포함) 필수 — 기본값 없음.
+- 따라 나온 것(질문 불필요): RUN_ENV 없는 명령(이미지 안 `selftest`, 점검 명령)은 앱 시작이 아니라 시험 사례에서 LLM_FAKE로 계속 동작. PC Docker 스모크(`valid_env/docker/compose.test.yml`)는 `RUN_ENV: local` 유지. 외부 모델 규칙 `external_models_allowed` = `local`만(그대로).
+- 파일: `common/config/settings.py`(RUN_ENVS, SERVER_ENVS, run_env Literal, stage 대응, 시작 관문), `common/ai/llm.py`/`adk.py`(시작 관문이 덮으면 그대로), `common/config/{migrate,keyscan,overrides,setarg}.py`, `deploy/host/compose/*.yml` 글, `deploy/host/scripts/settings_env.sh`, `deploy/docker/entrypoint.sh`, 문서(CLAUDE.md §3, README §3, env-guide, refactor.md), `settings.sample.yaml` 다시 만들기, 시험.
+- 서버 할 일: `run_env: stage`인 서버 `settings.yaml`은 이 릴리스 전에 `prd`로 바꾼다(env-guide 행).
+- 위험: `common/config/settings.py`는 모든 레이어의 code_fp에 들어간다 → 서버 재처리. 핑거프린트 전후를 기록. settings.py 변경은 작게(92와 r2-phase도 고침).
+- 수용 기준: `RUN_ENV=stage`는 시작 거부(모르는 값). `RUN_ENV=dev`/`prd` + `LLM_FAKE=1`이면 앱 시작이 0이 아닌 코드로 끝남. `local` + `LLM_FAKE=1`은 시작. 외부 모델은 dev/prd에서 거부, local에서 허용. 이미지 안 selftest 통과. 전체 pytest + 린트 통과.
+- Status: design done (user confirm pending)
+
+<a id="pl-11"></a>
+## pl-11 · 모델 호출, 비용, 외부 전송 가드(공용)
+- 이유: 폐쇄망 서버는 외부 모델을 절대 부르면 안 되고, PC 호출은 싸게 유지해야 한다.
+- 무엇: OpenAI 호환 역할 llm/vlm/ocr_vlm/embed(rerank는 10-29에 지움). 서버(dev/prd)는 외부 모델 거부. 외부 전송은 `*_ALLOW_EXTERNAL` + `RUN_ENV=local`이어야 함. 예산, 호출 상한, RPM, 비용 장부, 응답 캐시, 시험용 가짜 LLM.
+- 파일: `common/ai/guard.py`, `common/ai/llm.py`, `common/ai/adk.py`, `common/config/settings.py`.
+- Status: done
+
+<a id="op-03"></a>
+## op-03 · EDW 접속 하나, 공용 계정 둘(읽기·쓰기)
+- 이유: 사용자 10-29 "계정 하나로 합침" — 블록 넷(`common.connections.edw`, `common.connections.parsing_meta`, `pipeline.connections.rdb`, `mcp.edw_query`)이 EDW 하나에 대해 저마다 서버/포트/DB/사용자/비밀번호를 들고 있어 서버 파일에 같은 값이 네 번 반복된다.
+- 정한 것(사용자 10-29, grill 1~2차):
+  - 벡터는 pgvector에만, EDW에는 절대 안 넣음. EDW 벡터 길을 지운다: `pipeline/load/edw_insert.py`(`usp_vec_load`), `mcp_server/services/search/edw_search.py`, `retriever.py`의 EDW 분기, `common/store/edwdb.py`, 설정 블록 `common.connections.edw`(+ `EDW_LOAD`).
+  - ParsingMeta, FileStorageMap, RDB 원천 표, `query_edw`는 같은 EDW 서버·DB에 있다 → 접속 블록 하나.
+  - 공용 계정 둘: **읽기**와 **쓰기**. MCP 서버는 읽기만. 파이프라인은 기능별로 고른다: 읽기(RDB 원천 목록, discover, 고객 목록, FileStorageMap, ParsingMeta 상태) → 읽기, ParsingMeta 게시(INSERT/UPDATE) → 쓰기. 호스트 러너 `run_docs.py`의 읽기 → 읽기.
+  - PC 대역: 모든 표(AI, CRMS, LAS, SFDC 표를 함께)를 담은 sqlite 파일 하나. `query_edw`는 계속 읽기 전용으로 연다.
+  - 옛 키: 옮겨 주는 기능 없음 — sample을 다시 만들고 서버 파일을 다시 채운다. 옛 칸은 `Section.REMOVED`로(한 판 동안 경고만, 시작 거부 없음). env-guide + refactor.md C-xx에 서버 할 일을 적는다.
+- 규칙에서 정한 것(묻지 않음):
+  - 블록 `common.connections.rdb`(두 앱이 씀 → `common`, CLAUDE.md §1): `host`, `port`, `database`, `connect_kwargs`, `sqlite`, `read.{user,password}`, `write.{user,password}`. 드라이버는 pymssql만(pyodbc 선택지는 지운 벡터 길 것).
+  - 목적별 항목은 제자리: `PM_TABLE`, RDB `engine`/`bucket`/`columns`/거르기, `query_edw` `enabled`/`tables`/`tables_strict`/상한.
+  - `CONN_FILE`(`EDW_CONN_FILE`, `EDW_QUERY_CONN_FILE`) 없앰 — 비밀값은 settings.yaml에만(§3).
+  - sqlite: 코드가 파일 하나를 스키마 별칭(`AI`, `CRMS`, `LAS`, `SFDC`)마다 ATTACH해 `AI.ParsingMeta` 같은 SQL이 그대로 돈다. RDB 원천에 PC 시험용 `engine: sqlite`를 더한다(지금은 csv만).
+  - code_fp: `settings.py`와 `retriever.py`(레이어 r)가 바뀜 → 모든 레이어 code_fp가 바뀜. 이번 차례의 핑거프린트 변경에 함께 싣고 전후를 커밋에 적는다.
+  - 검토 등급 A(DB 계정, 운영 접속): PR에서 사람 검토, Claude 검토로 대신하지 않음.
+- 겹침: `deploy/host/scripts/run_docs.py` 116~134줄 근처가 PM 키를 날 YAML에서 읽는다 — parse-phase 작업 몫, 새 키 이름을 그 담당에게 넘긴다.
+- 수용 기준: 길마다 표 시험 하나(읽기·쓰기 계정 선택, MCP는 쓰기 비밀을 받지 않음, sqlite 파일이 PM 쓰기 + query_edw 읽기 전용 + RDB 원천 읽기를 모두 받음). `common.config.sample --check`, `keyscan --check`, 전체 `pytest tests/`와 `selftest`가 기준선. `EDW_SERVER|PM_DB_|RDB_USER\b|EDW_QUERY_SERVER|usp_vec_load` grep = REMOVED·이력 밖에서 0.
+- 파일: `common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`, `common/store/{parsing_meta_db,edwdb,mssql}.py`, `pipeline/extract/{source,rdb_discover}.py`, `pipeline/transform/structure/gen_roster.py`, `pipeline/load/{parsing_meta,edw_insert}.py`, `mcp_server/services/{edw_query,search/edw_search,search/retriever,search/shaping}.py`, `valid_env/edw/`, 시험, `docs/operations/{env-guide,server-guide}.md`.
+- 만든 것: `common.store.mssql.login(role)`(계정) · `mssql.standin(path)`(파일 하나를 AI·CRMS·LAS·SFDC로 ATTACH, 기본 읽기 전용) · 빌더 `python -m validation.e2e.edw_standin` → `valid_env/edw/edw.sqlite`(스키마별 .sqlite 넷은 지움, .sql 원본은 유지) · `query_edw` sqlite 허용 목록 = 대역 표 아홉. 안 한 것(필요 없음): `rdb_discover`/`gen_roster`용 sqlite(서버 도구).
+- MCP 프로세스: `mcp_server.main`이 먼저 `settings.edw_read_only()`를 불러, 공용 settings.yaml 하나여도 그 설정 객체의 쓰기 계정은 비어 있다(사용자 10-29 "정해진 항목만", 검토 P1). 파일 자체는 컨테이너 안에서 여전히 읽힌다.
+- 시험: `tests/server/common/test_edw_login.py`, `tests/general/common/test_edw_standin.py`.
+- Status: done (10-30, PR #5 병합) — 서버 설정 다시 채우기와 DBA 계정 준비는 refactor.md C-67.
+
+<a id="op-01"></a>
+## op-01 · JSON Lines 사건 기록(두 앱)
+- 이유: 지금 `common/core/runlog.py`는 실행마다 요약 하나(`output/runlog.jsonl`)와 날 콘솔 기록(`output/logs/*.log`, `_mask()`로 가림)을 쓰고, 러너는 `doc_stats.jsonl`, MCP 서버는 질의 jsonl을 쓴다. 공통 사건 줄(level, request id, duration)도 로그 수준 설정도 없다.
+- 단계: (1) 표준 `logging` + `common/core/`에 작은 JSON 포매터 하나 — 키 `time, level, msg, request_id, duration_ms, err`, `_mask()` 재사용(새 패키지 없음). (2) 로그 수준은 **settings.yaml** 항목(검토의 `LOG_LEVEL` env는 CLAUDE.md §3과 충돌 — 옛 env 이름은 별칭으로만). (3) PC는 `logs/<앱>.jsonl`(git 제외), 서버는 stdout. (4) 비밀값과 개인정보를 가린다.
+- 위험: `common/`을 고침 → code_fp가 바뀔 수 있음(서버 재처리). 설계 때 사용자에게 알리고 핑거프린트 전후를 커밋에. 검토 등급 A(비밀값 처리).
+- 수용 기준: 줄마다 필수 키가 있는 JSON으로 읽힘, 예시 비밀 문자열이 가려짐, 수준 설정이 줄을 거름.
+- 파일: `common/core/`(새 포매터), `common/config/settings.py`, `mcp_server/main.py`, `pipeline/cli.py`, `.gitignore`.
+- 결정(사용자 10-30 grill): gold DB 변경([etl.md#pl-25](etl.md#pl-25))과 같은 판에 싣는다 — 재처리 한 번.
+- Status: todo
+
+<a id="pl-21"></a>
+## pl-21 · 미룬 설정 지우기(핑거프린트)
+- 이유: 안 쓰거나 은퇴한 설정인데 지우면 핑거프린트가 바뀌어 다음 이미지 판을 기다린다: `common.paths.korean_font`(settings.py → 모든 레이어 code_fp).
+- 또(사용자 10-29 grill): `common.paths.eval_sets_dir` / `paths.EVAL_SETS_DIR`(과 `tests/server/common/test_paths.py`의 사례)을 지운다 — 읽는 곳은 `validation/e2e/stack_matrix.py`뿐(옛 묶음, [test.md#e2-10](test.md#e2-10)). 폴더 `valid_env/eval_sets/`는 그 문서 참조와 함께 [doc.md#do-03](doc.md#do-03)에서 지운다(그 파일을 읽는 코드 없음). 평가 자료는 나중에 `tests/` 아래로 돌아올 수 있다.
+- 파일: `common/config/settings.py`, `pipeline/config.py`, `pipeline/extract/run_all.py`, `common/core/paths.py`.
+- Status: todo — 다음 핑거프린트가 바뀌는 릴리스에 묶는다.
+
+## 코드와 다른 점 · 지울 코드
+
+### 요건과 다르게 동작
+| 요건 | 코드가 하는 일 | 위치 | ID |
+|---|---|---|---|
+| 평가 묶음 경로 기본값 | `EVAL_SETS_DIR` 기본이 아직 `valid_env/unstructured`(지움) — PC에서는 `common.paths.eval_sets_dir`를 설정 | `common/core/paths.py` | pl-21 |
+
+### 기본 꺼짐·설정 필요
+| 기능 | 스위치 = 기본값 | 필요한 것 |
+|---|---|---|
+| 외부(유료) 모델 | `*_ALLOW_EXTERNAL=0`, PC만(`RUN_ENV=local`) | 예산 상한(`LLM_BUDGET_USD`, `LLM_MAX_CALLS`) |
