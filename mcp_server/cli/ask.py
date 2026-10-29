@@ -19,7 +19,6 @@ import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settin
 # isort: split
 import argparse
 import json
-import os
 import statistics
 import sys
 import time
@@ -90,7 +89,7 @@ def ask(a):
 def _ask_mcp(a):
     """기본 경로 — MCP_STORE·MCP_BUNDLE만 ask()의 --pg/--local/--bundle에 맞춰 세팅하고 do_search()를 그대로 부름
     (mcp_server._build_retriever가 이 둘로 저장소를 고름 — modules/search/mcp_server.py ~L105-130). 질의 기록은
-    do_search() 안 _log()가 이미 함(qa_log.append + PG qa_log INSERT) — 여기서 다시 넣지 않음(중복 기록 방지)."""
+    do_search() 안 _log()가 이미 함(qa_log.append — 파일만, mc-13) — 여기서 다시 넣지 않음(중복 기록 방지)."""
     st = _stack()
     C.put(MCP_STORE="local" if a.local else ("pg" if a.pg else ""), MCP_BUNDLE=str(a.bundle))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스)
     from mcp_server.services.search import search_svc as MCP
@@ -148,19 +147,6 @@ def _ask_cosine(a):
         "ms": round(ms, 1),
         "hits": hits,
     }
-    if a.pg:  # 개발 서버 질의 기록(qa_log)
-        R.pg.q(
-            f"INSERT INTO {R.pg.schema}.qa_log(question, stack_name, k, hits, answer, search_ms, asked_by) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-            (
-                a.q,
-                st.get("name"),
-                len(hits),
-                json.dumps([{"chunk_id": h["chunk_ref"], "rank": h["rank"], "score": h.get("score")} for h in hits]),
-                res.get("answer"),
-                res["ms"],
-                os.environ.get("USERNAME") or os.environ.get("USER"),
-            ),
-        )  # env 남김 — OS 값
     if a.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))
         return

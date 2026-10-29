@@ -5,11 +5,10 @@ Row = one open feature. ID prefix = `prd/<area>.md` (mc = search MCP · pl = dat
 
 | ID | Bundle | Status | Detail |
 |---|---|---|---|
-| mc-10 | Retriever reads removed `file_sha256` | todo | [→](prd/mcp.md#mc-10) |
-| mc-13 | PG `qa_log` table never created | todo | [→](prd/mcp.md#mc-13) |
+| mc-14 | 숨김 문서가 검색에서 안 빠짐(숨김 키 sha256 ↔ 검색 키 file_path) — pl-25 대기 | todo | [→](prd/mcp.md#mc-14) |
+| mc-15 | 근거의 `rep_uri`(파싱 결과 경로)가 늘 비어 있음(ParsingMeta 키 sha256 ↔ 검색 키 file_path) — pl-25 대기 | todo | [→](prd/mcp.md#mc-15) |
 | pl-12 | Registry upsert PG error · publish guard off (C-54) | todo | [→](prd/pipeline.md#pl-12) |
 | pl-13 | `load --prune` deletes skipped docs (C-60) | todo | [→](prd/pipeline.md#pl-13) |
-| pl-14 | Deploy backfill reads removed `doc.client` | todo | [→](prd/pipeline.md#pl-14) |
 | pl-15 | structure/load contract rejects new bundles | todo | [→](prd/pipeline.md#pl-15) |
 | pl-16 | `PIPE_EMBED=none` builds `vector(0)` | todo | [→](prd/pipeline.md#pl-16) |
 | pl-17 | Parse step location extract/transform (C-61) | todo | [→](prd/pipeline.md#pl-17) |
@@ -23,6 +22,7 @@ Row = one open feature. ID prefix = `prd/<area>.md` (mc = search MCP · pl = dat
 | pl-25 | DB schema spec doc + column check test (first) | todo | [→](prd/pipeline.md#pl-25) |
 | pl-26 | `full` always publishes, targets required (C-31) | todo | [→](prd/pipeline.md#pl-26) |
 | pl-28 | Per-source gold tables · source required in search (later) | todo | [→](prd/pipeline.md#pl-28) |
+| pl-29 | EDW 고객 매핑을 파이프라인이 직접 만든다 | todo | [→](prd/pipeline.md#pl-29) |
 | e2-10 | Minimize PC eval tools (old set names) and settings | todo | [→](prd/e2e.md#e2-10) |
 | e2-11 | PC general test known failures | todo | [→](prd/e2e.md#e2-11) |
 | e2-13 | PC Docker smoke stops at retriever | todo | [→](prd/e2e.md#e2-13) |

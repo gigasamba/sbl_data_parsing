@@ -11,7 +11,7 @@
 
 | 규칙 | 내용 |
 |---|---|
-| 문서 키 | `s3_key`(Object Storage 원본 전체 키)만 문서 키로 쓴다. sha256 `doc_key`는 없앤다. 문서 대장(`doc_registry`·`doc_registry_seen`)과 숨김(`doc_hidden`)은 `s3_key`로 다시 키를 잡는다. 검색 `doc`·`chunk`도 `s3_key`를 든다. 같은 내용이 여러 `s3_key`로 들어온 경우(지금 `build_bundle`은 첫 키만 `doc` 행으로 두고 나머지는 `aliases`로 합침)는 확인 U-7. |
+| 문서 키 | `s3_key`(Object Storage 원본 전체 키)만 문서 키로 쓴다. sha256 `doc_key`는 없앤다. 문서 대장(`doc_registry`·`doc_registry_seen`)과 숨김(`doc_hidden`)은 `s3_key`로 다시 키를 잡는다. 검색 `doc`·`chunk`도 `s3_key`를 든다. 같은 내용이 여러 `s3_key`로 들어오면 문서도 여러 개다 — `s3_key`마다 `doc` 행 하나(U-7 결정, `doc_alias` 없음). `build_bundle`의 내용 해시로 첫 키에 합치기(`aliases`)는 없앤다. 임베딩은 캐시가 다시 씀. |
 | 출처 표시 이름 | EDW에서도, 문서 파싱에서도 나올 수 있는 값은 칸을 둘로 나누고 이름 끝에 출처를 붙인다 — EDW `_edw`, 문서 본문 `_doc`. 지금 해당하는 값: 고객(`client_edw`·`clients_doc`). |
 | 고객 거르기 | MCP의 고객 거르기는 EDW 고객(`client_edw`, 문서당 하나)만 쓴다. EDW 고객이 없는 문서는 고객 거르기를 걸면 빠진다. 본문에서 찾은 고객(`clients_doc`)으로 거르는 것은 나중([pl-28](../prd/pipeline.md#pl-28)). |
 | 원천 | `source_system` = `AI.FileStorageMap.source_system`. 비었거나 SFDC·CRMS·LAS가 아니면 `Other`. `s3_key` 접두와 다르면 경고만 남김. |
@@ -39,7 +39,7 @@
 | file_path | TEXT | 개발 서버 기준 원본 경로(파일 이름은 여기서 뽑음) | build_bundle `main` | pgsearch, retriever, search_svc, 뷰 | 유지 |
 | s3_key | TEXT | 문서 키 — Object Storage 원본 전체 키(`AI.FileStorageMap.s3_key`) | (build_bundle가 이미 `_s3_key`로 알지만 묶음에 안 넣음) | (대장·숨김·ParsingMeta 조회) | 새로 |
 | clients | TEXT(JSON) | 고객 목록 — 지금은 본문에서 찾은 이름(`infer_clients`)과 섞여 있음 | build_bundle `infer_clients` | pgsearch `_client_restrict`, retriever, internal_docs, search_svc | 삭제 |
-| client_edw | TEXT | EDW 조인으로 얻은 고객 하나 — MCP 고객 거르기의 유일한 키 | (새로 — EDW 조인, 아래 확인 2) | (pgsearch 고객 거르기) | 새로 |
+| client_edw | TEXT | EDW 조인으로 얻은 고객 하나 — MCP 고객 거르기의 유일한 키 | (파이프라인이 EDW 읽기 계정으로 직접 조인 — [pl-29](../prd/pipeline.md#pl-29)) | (pgsearch 고객 거르기) | 새로 |
 | clients_doc | TEXT(JSON) | 문서 본문에서 찾은 고객 목록(참고용 — 거르기에 안 씀) | (build_bundle `infer_clients`) | (근거 표시) | 새로 |
 | summary | TEXT | 요약(검색 결과용) | build_bundle | 뷰 → retriever → shaping | 유지 |
 | source_system | VARCHAR(20) | SFDC·CRMS·LAS·Other | build_bundle(`s3_key` 접두, 없으면 file_meta) | 뷰 → search_svc, internal_docs | 유지 |
@@ -384,21 +384,23 @@
 | # | 무엇 | 왜 |
 |---|---|---|
 | D-1 | `AI.FileStorageMap`의 실제 정의 — 특히 고친 때 칸 이름(`last_modified_time` 가정)과 `source_system` 값 목록 | 저장소에는 PC 대역(`valid_env/edw/ai.sql` — `created_at`만)뿐 |
-| D-2 | 문서당 EDW 고객 하나(`client_edw`)를 얻는 조인 경로 — 원천별(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account.Name`로 보임, CRMS·LAS는?) | 지금은 외부에서 뽑은 `file_meta_new.jsonl`을 읽고, 그 파일을 만드는 코드가 저장소에 없음 |
+| D-2 | 문서당 EDW 고객 하나(`client_edw`)를 얻는 조인 경로 — 원천별(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account.Name`로 보임, CRMS·LAS는?) | 지금은 외부에서 뽑은 `file_meta_new.jsonl`을 읽고, 그 파일을 만드는 코드가 저장소에 없음 → **결정(사용자 10-30):** 파이프라인이 EDW 읽기 계정으로 조인을 직접 만든다(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account`) — `file_meta_new.jsonl`을 대신함, [pl-29](../prd/pipeline.md#pl-29). CRMS·LAS 경로는 여전히 확인 필요 |
 | D-3 | `AI.ParsingMeta` 칸 15개 삭제·`gold_status`·`gold_reason` 추가(ALTER) — 권한, 기존 행, 다른 사용처 | 이 프로젝트 밖에서 그 칸을 읽는 곳이 있는지 모름 |
 | D-4 | `ParsingMeta.doc_key` 삭제 때 `UQ_ParsingMeta_dockey`·`IX_ParsingMeta_doc_key` 색인 처리 · `source_key`를 필수(NOT NULL)로 | 지금 `source_key`가 비면 `doc_key`가 겹침 키 |
 | D-5 | 마스터 PostgreSQL 자리·계정·백업 | 새 DB(검색 PG와 분리) |
 | D-6 | gold 스키마 변경(`s3_key`·`client_edw`·`clients_doc` 추가, `clients` 삭제)은 Alembic 새 판 — 뷰 `v_chunk_source`를 지우고 다시 만듦(`doc.clients`에 걸려 있음), 기존 서버 데이터는 다시 적재 | 첫 적재가 전체 e2e([pl-23](../prd/pipeline.md#pl-23))와 함께 |
 | D-7 | struct 표 지우기(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`·`prod_master`, 마스터 2개 이동) 전 백업 | 되돌릴 수 없는 삭제 |
 
-## 7. 사용자 확인 필요
+## 7. 사용자 결정 (10-30 grill 7차)
 
-| # | 무엇 | 이 문서의 안 |
+U-1~U-6은 이 문서의 안대로, U-7은 아래 결정대로 한다.
+
+| # | 무엇 | 결정 |
 |---|---|---|
 | U-1 | `chunk.clients[]`(지금 고객 거르기 키, GIN) — 10-30 결정 "청크는 `clients[]` 유지"와 "거르기는 EDW 고객만"이 겹침 | `chunk.clients` 삭제 → `chunk.client_edw` 새로(거르기 키) |
 | U-2 | `struct.prod_master` — 쓰기만 하고 읽는 코드가 없음 | 삭제 |
-| U-3 | `doc_contract_link` — pl-25에 "s3_key로 다시 키"와 "문서 파생 표 삭제"가 함께 있음 | 삭제(10-30 중앙 세션 지시대로) |
+| U-3 | `doc_contract_link` — pl-25에 "s3_key로 다시 키"와 "문서 파생 표 삭제"가 함께 있음 | 삭제 |
 | U-4 | 마스터 읽는 곳 — pl-25는 `gen_roster`·`terms.py`라 했지만 실제로 DB를 읽는 곳은 `aggregate`(`_struct_client_aliases`, 지울 `struct_context`·`_table_cell_scope_docs`·`doc_location_list`)와 `structured._client_aliases`(`gen_roster`는 CSV·EDW 표, `terms.py`는 안 읽음) | 남는 읽는 곳은 고객 별칭뿐 — 마스터 PG에서 읽음 |
 | U-5 | 출처 표시 이름을 붙일 값 — 지금은 고객만. 계약 id(`contract_id`)·제품 이름은 EDW에서만 옴 | 고객만 `_edw`·`_doc`로 나눔, 나머지는 그대로 |
 | U-6 | `ParsingMeta.status_at`은 SELECT하는 코드가 없음(운영자가 봄) · `parse_meta_id`·`source_key_hash`는 DB 키 | 셋 다 유지 |
-| U-7 | 같은 내용이 여러 `s3_key`로 들어온 문서 — 지금은 첫 키만 `doc` 행, 나머지는 `aliases`(묶음 안). 키가 하나뿐인 설계라 둘째 키는 숨김·ParsingMeta 조회가 안 맞음 | `doc_alias`(s3_key → doc) 표를 더하거나 키마다 `doc` 행 — 결정 필요 |
+| U-7 | 같은 내용이 여러 `s3_key`로 들어온 문서 — 지금은 첫 키만 `doc` 행, 나머지는 `aliases`(묶음 안). 키가 하나뿐인 설계라 둘째 키는 숨김·ParsingMeta 조회가 안 맞음 | `s3_key`마다 `doc` 행 하나 — `doc_alias` 없음. `build_bundle`의 내용 해시 합치기(첫 키로 `aliases`)를 없앰 — 같은 내용이 두 키면 문서 둘(임베딩은 캐시가 다시 씀) |

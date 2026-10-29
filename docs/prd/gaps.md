@@ -8,11 +8,10 @@ Rows with an ID are open defects; the rest are behaviors to know.
 
 | What the requirement expects | What the code does | Where | ID |
 |---|---|---|---|
-| Retriever builds on the reduced schema | reads removed `doc.file_sha256`·`client`·`file_name` → fails on new bundles (PC uses the local branch) | `mcp_server/services/search/retriever.py` | mc-10 |
-| Query log in PG | inserts into a `qa_log` table no migration creates (error swallowed; jsonl log works) | `search_svc.py`, `0001_search_base.py` | mc-13 |
+| 숨김 문서는 검색에서 빠짐 | 숨김 키(sha256)를 검색 키(`file_path`)와 비교 → 안 빠짐 | `pgsearch.py`, `local.py` | mc-14 |
+| 근거에 파싱 결과 경로(`rep_uri`) | ParsingMeta를 `file_path`로 찾음(그쪽 키는 sha256) → 늘 비어 있음 | `shaping.py` | mc-15 |
 | Registry upsert, publish guard | upsert has a PG syntax error; guard off (no `source.json` on the server) | `structdb.py`, `publish_parse_result.py` | pl-12 |
 | `--prune` removes stale rows only | also deletes skipped (unchanged) documents | `pgvector_load.py` | pl-13 |
-| Deploy backfill | reads removed `doc.client` (tables and indexes still created) | `pgvector_load.py` | pl-14 |
 | `pipeline structure/load` modules accept new bundles | contract `DOC_KEYS` rejects them (server does not use these modules) | `common/core/contract.py` | pl-15 |
 | Structure without embeddings | `PIPE_EMBED=none` → `vector(0)` table fails | `build_bundle.py`, `pgvector_load.py` | pl-16 |
 | Midway stop is visible | `night`/`full` exit 0 after a midway stop | `pipeline/cli.py`, `entrypoint.sh` | pl-18 |
@@ -20,7 +19,7 @@ Rows with an ID are open defects; the rest are behaviors to know.
 | Evaluation sets path default | `EVAL_SETS_DIR` default still `valid_env/unstructured` (deleted) — set `common.paths.eval_sets_dir` on the PC | `common/core/paths.py` | pl-21 |
 | PC tests pass | 7 general tests fail since before the refactor | `tests/conftest.py` | e2-11 |
 | Answers citing `query_edw` values pass citation check | recorded as verify failures | `valid_env/answer_test/rag_qa/` | e2-12 |
-| PC Docker smoke reaches search | stops at the retriever (mc-10) | `valid_env/docker/` | e2-13 |
+| PC Docker smoke reaches search | stopped at the retriever (mc-10 — 10-30 고침, 다시 돌려 확인 필요) | `valid_env/docker/` | e2-13 |
 | Agent test package found | looks under upstream `dev_tools/unit_test/fixtures/` → `run_agent` test group skipped | `common/core/paths.py` | e2-15 |
 | Search page shows real counts | fixed text "10 documents (20 chunks)" | `validation/search_ui/index.html` | e2-16 |
 | Load skips only unchanged documents | skips by `file_path` (no sha column) — changed content at the same path is skipped too unless `--replace` | `pgvector_load.py` | pl-07 |

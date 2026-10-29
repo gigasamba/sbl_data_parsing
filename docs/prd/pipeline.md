@@ -79,12 +79,12 @@ Document registry upsert and publish guard. Why: registry upsert has a PG syntax
 `load --prune` deletes skipped documents. Why: unchanged docs that were skipped are pruned too (C-60).
 - Files: `pipeline/load/pgvector_load.py`.
 - Decided (user 10-29 grill): load only adds/updates — never deletes. Skipped (existing) docs stay. Docs deleted at the source and parse failures are only logged locally (cause + duration), no automatic removal. Drop the prune path from `load` and its callers (`pipeline/cli.py` load, the index builder `--pg`).
-- Status: todo — review grade A (server load behavior).
+- Status: dev — `feature/load-no-prune`: `prune`·`--prune`·`PRUNE_*` 설정 없앰(옛 설정 칸은 경고만), `cli load`·`run-stack`·색인 빌드 `--pg`가 더는 안 붙임, `--no-prune`은 옛 호출 호환으로 받기만, 색인 빌드 `--pg`는 `--replace`로(다시 빌드 때 고침). 남은 한계: `file_path`가 바뀐 같은 내용은 옛 행이 남음(사람이 지움 — 사용자 확인). 시험 `tests/server/pipeline/test_pl13_no_prune.py`. 검토 등급 A(서버 적재 동작).
 
 ## pl-14
 `pgvector_load deploy` backfill reads removed `doc.client`. Why: `backfill_chunk_clients` fails after the 10-20 reduced schema (tables and indexes are still created).
 - Files: `pipeline/load/pgvector_load.py`.
-- Status: todo
+- Status: done (10-30, `feature/search-path-fixes`) — backfill은 남기고(사용자 10-30) `doc.clients`만 읽음(없는 `doc.client` 안 고름, `_doc_row_clients`도 `clients`만 받음). NULL인 청크만 채우고 멱등인 것은 그대로. 동작은 같음 — 축소 스키마의 고객 라벨은 원래 `clients`에만 있음. 시험: `tests/server/pipeline/test_pl14_backfill.py`(가짜 DB, 이미지) · `tests/general/pipeline/test_pl14_deploy.py`(실 PG 임시 스키마에서 `deploy()` — PG 설정 없으면 건너뜀).
 
 ## pl-15
 `pipeline structure`/`load` contract check rejects new bundles. Why: `contract.py` `DOC_KEYS` still expects removed keys (the server does not use these modules).
@@ -163,6 +163,7 @@ DB schema spec, written before pl-26·pl-23·pl-24 are built. Why: table/column 
 - Decided (user 10-30 — client fields): one client per doc comes from the EDW join chain (scalar). Clients found in the document text are a separate list. The MCP client filter uses ONLY the EDW client; a doc without an EDW client is excluded when a client filter is set. Using text-found clients in the filter is later ([pl-28](#pl-28)). Today both are mixed in `clients[]` (`build_bundle.infer_clients`) and `chunk.clients` drives the hard filter — fix with this row.
 - Naming rule (user 10-30): any field that can come from EDW and from document parsing gets two columns with the origin in the name (e.g. `client_edw`, `clients_doc`); `db_schema.md` fixes the exact suffixes.
 - Split timing (user 10-30): B — build ONE table set now; the per-source split is [pl-28](#pl-28).
+- Decided (user 10-30 grill round 7): `db_schema.md` U-1..U-6 as drafted. U-7: one `doc` row per `s3_key`, no `doc_alias` — remove `build_bundle`'s content-hash merge of identical files into the first key (`aliases`); identical content under two keys = two docs (the embedding cache reuses the vectors). D-2: the pipeline builds the EDW client join itself → [pl-29](#pl-29).
 - Files: `docs/architecture/db_schema.md` (new), `docs/index.md`, `common/store/db/migrations/versions/`, `docs/operations/parsing_meta_mssql.sql`, `tests/server/common/` (one test).
 - Status: dev — `docs/architecture/db_schema.md` 설계안 + 시험 `tests/server/common/test_db_schema.py`(`feature/db-schema-spec`) — 사용자·DB 담당자 승인 대기(코드·스키마 변경 없음).
 
@@ -177,3 +178,10 @@ DB schema spec, written before pl-26·pl-23·pl-24 are built. Why: table/column 
 Per-source gold tables (designed in [pl-25](#pl-25), built later). Why: SFDC · CRMS · LAS · Other have different metadata; one table per source keeps columns clean.
 - What (user 10-30): every gold pair — `doc`, `chunk` and the BM25 tables (`chunk_term`, `term_stat`, `corpus_stat`) — exists once per source (4 sets); columns may differ per source (SFDC-only `sf_*`, `project_code__c` move to the SFDC doc table). `load_run` and the Alembic version table stay shared. MCP `search` then requires a source — one contract change, new version, review grade A. Also later: allow text-found clients (`clients_doc`) in the client filter.
 - Status: todo — later version; needs a full reload.
+
+## pl-29
+EDW 고객 매핑을 파이프라인이 직접 만든다. 왜: 문서마다 EDW 고객 하나(`client_edw` — MCP 고객 거르기의 유일한 키, [pl-25](#pl-25))와 SFDC 칸(`sf_acc_name`·`sf_op_id`·`sf_op_name`·`project_code__c` 등)을 지금은 외부에서 뽑은 `file_meta_new.jsonl`(`pipeline.paths.file_meta_path`)에서 읽는데, 그 파일을 만드는 코드가 저장소에 없다(db_schema.md D-2).
+- 결정(사용자 10-30 grill 7차): 파이프라인이 EDW 읽기 계정(`common.connections.rdb.read`)으로 조인을 직접 만든다. SFDC: `AI.FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account`(고객 = Account 이름). CRMS·LAS 경로는 DB 담당자 확인(D-2). `file_meta_new.jsonl` 읽기를 대신한다.
+- Files: `pipeline/extract/source.py`(FileStorageMap 읽기), `pipeline/transform/structure/build_bundle.py`(`_file_meta` → 조인 결과), `pipeline/config.py`(`file_meta_path`), `deploy/host/scripts/run_docs.py`(`FILE_META_PATH`), `docs/architecture/db_schema.md`.
+- Depends on: [pl-25](#pl-25)(스키마 — `client_edw` 칸).
+- Status: todo
