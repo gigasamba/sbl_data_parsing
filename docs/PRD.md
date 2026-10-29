@@ -20,6 +20,10 @@ Row = one open feature. ID prefix = `prd/<area>.md` (mc = search MCP · pl = dat
 | pl-20 | Stack snapshot file review (C-50) | todo | [→](prd/pipeline.md#pl-20) |
 | pl-21 | Deferred settings removal (fingerprint) | todo | [→](prd/pipeline.md#pl-21) |
 | pl-22 | Remove parse phases · engines per doc in parallel · OCR engine off | dev | [→](prd/pipeline.md#pl-22) |
+| pl-23 | Incremental only; full reparse = full e2e (C-52) | todo | [→](prd/pipeline.md#pl-23) |
+| pl-24 | run_docs order: silver → delete original → gold | todo | [→](prd/pipeline.md#pl-24) |
+| pl-25 | DB schema spec doc + column check test (first) | todo | [→](prd/pipeline.md#pl-25) |
+| pl-26 | `full` always publishes, targets required (C-31) | todo | [→](prd/pipeline.md#pl-26) |
 | e2-10 | Minimize PC eval tools (old set names) and settings | todo | [→](prd/e2e.md#e2-10) |
 | e2-11 | PC general test known failures | todo | [→](prd/e2e.md#e2-11) |
 | e2-12 | EDW answer citation check (C-56) | todo | [→](prd/e2e.md#e2-12) |
@@ -30,6 +34,7 @@ Row = one open feature. ID prefix = `prd/<area>.md` (mc = search MCP · pl = dat
 | e2-17 | Remaining unused functions (10-29 audit) | todo | [→](prd/e2e.md#e2-17) |
 | do-01 | Move `refactor.md` to `docs/refactoring/` | todo | [→](prd/doc.md#do-01) |
 | do-02 | Glossary in `docs/index.md` | todo | [→](prd/doc.md#do-02) |
+| do-03 | Sync `refactor.md` with 10-29 merges | todo | [→](prd/doc.md#do-03) |
 | op-01 | JSON Lines event log | todo | [→](prd/ops.md#op-01) |
 | op-02 | RUN_ENV `local`·`dev`·`prd` (drop `stage`) · LLM_FAKE only in `local` | design done | [→](prd/ops.md#op-02) |
 | op-03 | One EDW connection, read/write account | dev | [→](prd/ops.md#op-03) |
