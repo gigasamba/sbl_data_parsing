@@ -338,3 +338,41 @@ def test_low_priority_children():
     with pc.PIPE.env(PARSE_LOW_PRIORITY="0"):
         assert pc.cfg().extract.low_priority is False
     assert pc.cfg().extract.low_priority is True  # 기본 켬(일괄 파싱)
+
+
+def test_kill_group_reaps_grandchild():
+    """10-29 — group_kw로 띄운 자식이 손자를 띄워도 kill_group이 묶음째 끝냄(POSIX만 — Windows는 taskkill /T, 여기선 건너뜀)."""
+    import os
+    import subprocess
+    import time
+
+    from pipeline.extract import resources as PR
+
+    if os.name == "nt":
+        print("[selftest] kill_group — Windows는 건너뜀(taskkill /T)")
+        return
+    code = "import subprocess, sys, time; g = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); print(g.pid, flush=True); time.sleep(60)"
+    p = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True, **PR.group_kw())
+    gpid = int(p.stdout.readline())
+    PR.kill_group(p)
+    assert p.returncode is not None
+    for _ in range(50):  # 손자는 init이 거둠 — 잠깐 기다림
+        try:
+            os.kill(gpid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError(f"손자 {gpid}가 남음")
+
+
+def test_vlm_child_env_caps_timeout():
+    """10-29 M3 — VLM 엔진 자식의 VLM_TIMEOUT = min(models.vlm.timeout, vlm_page_sec) · 쪽당 제한이 더 길면 덮지 않음(None)."""
+    from common.config.settings import COMMON
+    from pipeline.extract.run_all import _vlm_child_env
+
+    with COMMON.env(VLM_TIMEOUT="180"), pc.PIPE.env(PARSE_VLM_PAGE_SEC="60"):
+        env = _vlm_child_env()
+        assert env is not None and env["VLM_TIMEOUT"] == "60", env and env.get("VLM_TIMEOUT")
+    with COMMON.env(VLM_TIMEOUT="100"), pc.PIPE.env(PARSE_VLM_PAGE_SEC="120"):
+        assert _vlm_child_env() is None

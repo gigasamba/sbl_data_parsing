@@ -58,14 +58,14 @@ def _job_env(post, stack=None):
     extra = _JOB_ENVS.get(key)
     if extra is None or not Path(extra["SETTINGS_FILE"]).is_file():
         pm = pc.cfg().service.parse_mcp
-        # 10-29 — 파이프라인과 같은 규칙(쪽당 제한 + 두 배로 한 번 더)을 서비스 값으로 · 엔진 첫 문서 하한(warmup)은 0(작업마다 새 run_all이라
-        # 늘 '첫 문서' — 하한을 두면 쪽당 제한이 무의미, 시작 여유는 isolate_overhead) · 엔진 자식은 보통 우선순위(일괄 파싱보다 CPU 먼저)
+        # 10-29 — 파이프라인과 같은 규칙(쪽당 제한 + 두 배로 한 번 더)을 서비스 값으로 · 첫 시도 하한은 서비스 칸 warmup_sec(작업마다 새 run_all이라
+        # 늘 '첫 문서' — 파이프라인 warmup 60초면 쪽당 제한이 무의미, 콜드 시작 여유는 이 칸) · 엔진 자식은 보통 우선순위(일괄 파싱보다 CPU 먼저)
         made = settings_env(
             PARSE_FUSE_REREAD_P3="0",
             PARSE_POST=post,
             PARSE_TEXT_PAGE_SEC=str(pm.text_page_sec),
             PARSE_VLM_PAGE_SEC=str(pm.vlm_page_sec),
-            PARSE_WARMUP_SEC="0",
+            PARSE_WARMUP_SEC=str(pm.warmup_sec),
             PARSE_LOW_PRIORITY="0",
             **({"STACK_SNAPSHOT": str(stack)} if stack else {}),
         )

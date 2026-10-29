@@ -411,7 +411,7 @@ mcp:
 #   mcp.server.reload_check_sec:  # 적재 버전 변경 확인 간격(초) — 바뀌면 검색기·edw_meta 다시 읽음 · 기본 30.0 · 값: 0 이상 초 · env=MCP_RELOAD_CHECK_SEC
 #   mcp.server.tool_timeout_sec:  # 도구 1회 실행 시간 상한(초) — 넘으면 timeout 응답, 0이면 무제한 · 기본 30.0 · 값: 0 이상 초 (0 = 무제한) · env=MCP_TOOL_TIMEOUT_SEC
 
-# ─── 2-8. 실행 자원·상주 서비스·새벽 배치 (44칸) ───
+# ─── 2-8. 실행 자원·상주 서비스·새벽 배치 (45칸) ───
 #   common.runtime.cpu_max_load:  # 새 하위 프로세스를 띄우는 CPU 부하 상한(1분 부하 평균 ÷ 코어 수) · 기본 0.9 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=CPU_MAX_LOAD [auto = 비움]
 #   common.runtime.draft_terms_lock_timeout:  # 용어 초안 CSV 쓰기 잠금 대기 시간(초) — 못 얻으면 이번엔 포기 · 기본 5.0 · 값: 0 이상 초 · env=DRAFT_TERMS_LOCK_TIMEOUT [인계 지문]
 #   common.runtime.exp_max_workers:  # 실험 도구(stack_matrix) 병렬 작업 수 상한(개) · 기본 8 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=EXP_MAX_WORKERS [auto = 비움]
@@ -444,6 +444,7 @@ mcp:
 #   pipeline.service.parse_mcp.queue_max:  # parse MCP 서비스 대기 작업 상한(건) · 기본 8 · 값: 0 이상 정수 · env=PARSE_MCP_QUEUE_MAX
 #   pipeline.service.parse_mcp.roots:  # parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) — 비면 코드가 정함(<서비스 폴더>/inbox) · 기본 없음 · 값: 쉼표 목록 또는 YAML 목록 · env=PARSE_MCP_ROOTS
 #   pipeline.service.parse_mcp.text_page_sec:  # parse MCP 서비스 작업의 글자 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더 · 기본 1.0 · 값: 0 이상 초 · env=PARSE_MCP_TEXT_PAGE_SEC
+#   pipeline.service.parse_mcp.warmup_sec:  # parse MCP 서비스 작업의 첫 시도 제한 하한(초) — 새 프로세스에서 엔진을 처음 띄울 때(import·모델 적재) 여유 · 기본 20.0 · 값: 0 이상 초 · env=PARSE_MCP_WARMUP_SEC
 #   pipeline.service.parse_mcp.vlm_page_sec:  # parse MCP 서비스 작업의 VLM 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더 · 기본 60.0 · 값: 0 이상 초 · env=PARSE_MCP_VLM_PAGE_SEC
 #   pipeline.service.trigger.allow_no_token:  # TRIGGER_TOKEN 없이 무인증 시작 허용 — 1이면 허용(PC 전용, 경고) · 기본 false · 값: true·false · env=TRIGGER_ALLOW_NO_TOKEN [켬: 1만]
 #   pipeline.service.trigger.chain_structure_url:  # parse 성공 뒤 structure 작업을 올릴 트리거 서버 URL(쉼표로 여러 개) — 비면 이어 올리지 않음(서버 compose는 http://127.0.0.1:8771을 줌) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=CHAIN_STRUCTURE_URL [서버 옛 값: http://127.0.0.1:8771]

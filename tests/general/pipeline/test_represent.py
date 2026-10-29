@@ -592,9 +592,35 @@ def selftest():
         with pc.PIPE.env(PARSE_POST="figures"):  # 쪽 VLM 꺼짐 — 덮지 않으면 쪽 전체 그림은 그림 VLM 대상
             assert not any(f["loc"].get("page_vlm") for f in _figures(scan6) if f["loc"].get("page_render"))
             assert all(f["loc"].get("page_vlm") for f in _figures(scan6, page_covered=True) if f["loc"].get("page_render"))
+        # run_docs light 레인처럼 vlm_page 없이 figures만 — VLM 엔진이 옮긴 문서의 쪽 전체 그림은 그림 VLM 0회
+        from pipeline.transform.figures import figures as _fig_mod
+
+        fig_calls = []
+        orig_vlm_fig = _fig_mod.vlm_fig
+        _fig_mod.vlm_fig = lambda b, **kw: (fig_calls.append(1), ("그림 글", {}))[1]
+        try:
+            with pc.PIPE.env(PARSE_POST="figures", VLM_FIG_SELECT="0"):
+                represent(stack6, pd6, src=d6)
+        finally:
+            _fig_mod.vlm_fig = orig_vlm_fig
+        assert fig_calls == [], "VLM 엔진이 옮긴 쪽 전체 그림에 그림 VLM을 또 부름"
     finally:
         _vp.vlm_page = orig_vlm_page
-    print("[selftest] 10-29 C — VLM 엔진이 옮긴 스캔 문서: 쪽 VLM 0회·쪽 전체 그림 VLM 생략 표시 통과")
+    # covered 판정 표 — 대표가 VLM 엔진·본문 있음·이미지/스캔 형식(run_all과 같은 형식 키)일 때만
+    from pipeline.transform.represent.represent import _vlm_transcribed as _vt
+
+    def _r(engine, text):
+        return {"rep": {"engine": engine}, "text": text}
+
+    for rep_x, fmt, want in (
+        (_r("qwen_vlm", "글"), ".pdf_image", True),  # 글자 쪽이 몇 장 섞인 .pdf_image도(is_scan과 달리)
+        (_r("qwen_vlm", "글"), ".png", True),
+        (_r("rapidocr_ko", "글"), ".pdf_image", False),  # OCR 엔진이 대표(ocr_engine 켬)
+        (_r("qwen_vlm", "  "), ".pdf_image", False),  # 빈 VLM 글은 쪽 VLM을 막지 않음
+        (_r("qwen_vlm", "글"), ".pdf_text", False),
+    ):
+        assert _vt(rep_x, {"format": fmt}) is want, (rep_x, fmt)
+    print("[selftest] 10-29 C — VLM 엔진이 옮긴 스캔 문서: 쪽 VLM 0회·쪽 전체 그림 VLM 생략(vlm_page 없을 때도)·covered 판정 표 통과")
 
     # AD29 P1 — PARSE_FUSE(기본 꺼짐): 끄면 rep에 "fused" 키 자체가 안 생기고 나머지 바이트 동일 · 켜면 두 텍스트
     # 레이어 엔진이 동의한 값(430,000)이 OCR 혼자 낸 값(430.000)을 이기고 rep["fused"]["facts"]에 들어간다

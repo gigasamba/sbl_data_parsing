@@ -816,11 +816,23 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     return info
 
 
-def _vlm_engine_ok(dd):
-    """이 문서에서 VLM 엔진(qwen_vlm 등 — run_all.VLM_ENGINES)이 성공했는가 — 이미지·스캔 문서의 쪽을 이미 옮겼다는 뜻(10-29 C)."""
+IMAGE_TYPES = {
+    ".pdf_image",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tif",
+    ".tiff",
+    ".bmp",
+}  # run_all과 같은 형식 키(qa.json format — progress.doc_types)
+
+
+def _vlm_transcribed(rep, dd):
+    """이미지·스캔 형식(run_all과 같은 형식 키 — 글자 쪽이 몇 장 섞인 .pdf_image 포함) 문서의 대표가 VLM 엔진(run_all.VLM_ENGINES)이고
+    본문이 비어 있지 않음 = 쪽을 이미 VLM으로 옮김(10-29 C). OCR 엔진이 대표거나 VLM 글이 비면 False(쪽 VLM을 막지 않음)."""
     from pipeline.extract.run_all import VLM_ENGINES
 
-    return any((dd.get("engines", {}).get(e) or {}).get("ok") for e in VLM_ENGINES)
+    return dd.get("format") in IMAGE_TYPES and (rep.get("rep") or {}).get("engine") in VLM_ENGINES and bool((rep.get("text") or "").strip())
 
 
 def _current_sha16(doc, last):
@@ -1013,11 +1025,11 @@ def represent(stack, parse_dir, src=None):
         doc_path = Path(source["path"]) if source else None
         # 10-29 — 쪽 VLM은 PARSE_POST에 vlm_page가 있을 때만(run_docs light 레인·parse MCP의 supsub만 존중 — P1-1), 문서당 한 번만(M4).
         # 이미지·스캔 문서를 VLM 엔진이 이미 옮겼으면 쪽 VLM을 안 부르고 쪽 전체 그림 VLM도 생략(쪽마다 VLM 한 번 — C)
-        vp_pages, covered = None, False
+        # covered는 vlm_page 기능과 무관하게(그림 VLM 생략에도 씀 — run_docs light 레인처럼 vlm_page 없이 figures만 켠 경우)
+        covered, vp_pages = _vlm_transcribed(rep, dd), None
         if "vlm_page" in feats and doc_path and Path(doc_path).exists():
             from pipeline.transform.figures import vlm_page as vp_mod
 
-            covered = _vlm_engine_ok(dd) and vp_mod.is_scan(doc_path)
             vp_pages = [] if covered else vp_mod.page_text_pages(doc_path)
         if (
             scan_fill_on()
