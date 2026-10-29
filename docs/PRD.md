@@ -8,6 +8,7 @@
 - pl-22 파싱 phase 없애기 — dev, `feature/r2-phase` 병합됨 → 서버 확인(refactor.md C-65), VLM 동시 수 손잡이는 후속.
 - pl-27 프로세스 종료 정리 — dev, `feature/exit-cleanup` 병합됨 → code_fp 모든 레이어 바뀜(다음 반입에서 재처리).
 - pl-25 DB 스키마 명세 — dev, `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인.
+- do-03 refactor.md 동기화 — dev, `feature/refactor-sync`(#20) → 검토·병합.
 - do-04 문서 재구성 1부 — `feature/prd-by-category` → PR. 2부는 나중.
 
 ## ETL — 수집·퍼블리시·적재·DB (etl)
@@ -73,6 +74,7 @@
 | 프로세스 종료 정리 | dev | 덮기 파일 지움 · 자식 회수 · SIGTERM | [pl-27](prd/settings.md#pl-27) |
 | JSON Lines 사건 기록 | todo | 포매터 · 수준 설정 · 가림 | [op-01](prd/settings.md#op-01) |
 | 미룬 설정 지우기 | todo | `korean_font` · `eval_sets_dir` | [pl-21](prd/settings.md#pl-21) |
+| 안 읽는 env 이름 4개 지우기 | todo | 0.1.0 릴리스에서(C-51) | [pl-30](prd/settings.md#pl-30) |
 
 ## 테스트·평가 (test)
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
@@ -101,6 +103,6 @@
 |---|---|---|---|
 | 문서 재구성 · 한국어 | todo | 1부 PRD 카테고리 · 2부 CLAUDE.md | [do-04](prd/doc.md#do-04) |
 | `docs/index.md` 용어집 | done | 용어 대응 옮김 · 링크 한 줄 | [do-02](prd/doc.md#do-02) |
-| `refactor.md`를 병합과 맞춤 | todo | 낡은 줄 · PRD 링크 · 검토자 | [do-03](prd/doc.md#do-03) |
+| `refactor.md`를 병합과 맞춤 | dev | 낡은 줄 · PRD 링크 · 검토자 | [do-03](prd/doc.md#do-03) |
 | `refactor.md`를 `docs/refactoring/`으로 | todo | 옮기기 · 링크 | [do-01](prd/doc.md#do-01) |
 | 첫 릴리스 태그 `v0.1.0` | todo | 태그 · 릴리스 노트 | [op-04](prd/doc.md#op-04) |
