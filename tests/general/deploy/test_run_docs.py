@@ -99,3 +99,54 @@ def test_sweep_marker_matches_parse():
     """고아 정리가 찾는 표지 env가 파싱 명령이 주는 표지와 같다(옛 PIPE_OUT_ROOT env 자리)."""
     mark = f"{RD.DOC_MARK}=/app/output/docflow/9"
     assert mark in _inner(GOLDEN["parse_vlm_scan"]) and mark in GOLDEN["sweep"]
+
+
+# ── 레인·대기열 정책(사용자 10-29 — docs/prd/runner.md rn-01·rn-02) ──
+# (자기 레인, 공유 워커?, 대기 길이 light/medium/vlm, 진행 중 vlm, vlm 상한) → 꺼낼 레인
+PICK_CASES = [
+    ("light", False, (2, 5, 5), 0, 2, "light"),  # 자기 레인 먼저
+    ("light", False, (0, 5, 5), 0, 2, None),  # 전담 — 다른 레인이 차 있어도 안 가져옴
+    ("light", True, (0, 5, 3), 0, 2, "medium"),  # 공유 — 비었으면 가장 긴 다른 레인
+    ("light", True, (1, 5, 9), 0, 2, "light"),  # 공유도 자기 레인이 있으면 steal 안 함
+    ("medium", True, (0, 0, 4), 2, 2, None),  # vlm 상한이면 vlm 문서 건너뜀
+    ("medium", True, (1, 0, 4), 2, 2, "light"),  # 상한일 때 다음 레인으로
+    ("vlm", False, (0, 0, 4), 2, 2, None),  # 전담 vlm도 상한을 지킴
+    ("vlm", False, (0, 0, 4), 1, 2, "vlm"),
+]
+
+
+def test_pick_lane_table():
+    for own, shared, (nl, nm, nv), vlm_run, cap, want in PICK_CASES:
+        queues = {"light": [0] * nl, "medium": [0] * nm, "vlm": [0] * nv}
+        got = RD.pick_lane(own, shared, queues, {"light": 0, "medium": 0, "vlm": vlm_run}, cap)
+        assert got == want, (own, shared, (nl, nm, nv), vlm_run, got, want)
+
+
+def test_policy_from_settings():
+    vals, probs = RD.run_docs_policy({})
+    assert vals == RD.RUN_DOCS_DEFAULTS and probs == []
+    doc = {"pipeline": {"host": {"run_docs": {"warm": "30", "struct_backlog": "0", "vlm_shared": "", "light_dedicated": "2"}}}}
+    vals, probs = RD.run_docs_policy(doc)  # BaseLoader — 글자로 들어옴
+    assert (vals["warm"], vals["struct_backlog"], vals["vlm_shared"], vals["light_dedicated"]) == (30, 0, 1, 2) and probs == []
+    _, probs = RD.run_docs_policy({"pipeline": {"host": {"run_docs": {"warm": "-1", "vlm_cap": "x"}}}})
+    assert len(probs) == 2 and all("형식 오류" in p for p in probs), probs
+    no_shared = {f"{c}_shared": "0" for c in RD.LANES}
+    # 배치가 끝나지 않는 설정(PR #7 리뷰) → 문제 있음 / 경계 바로 안쪽 → 문제 없음
+    for sec, bad in [
+        ({f"{c}_{k}": "0" for c in RD.LANES for k in ("dedicated", "shared")}, True),
+        ({"vlm_cap": "0"}, True),
+        ({"warm": "0"}, True),
+        ({**no_shared, "vlm_dedicated": "0"}, True),
+        ({**no_shared}, False),
+        ({"vlm_dedicated": "0"}, False),  # 공유 워커가 vlm을 가져감
+        ({"vlm_cap": "1", "warm": "1"}, False),
+    ]:
+        probs = RD.run_docs_policy({"pipeline": {"host": {"run_docs": sec}}})[1]
+        assert bool(probs) == bad, (sec, probs)
+
+
+def test_defaults_match_settings_model():
+    """러너 기본값 = 설정 모델 기본값(호스트 python은 모델을 import하지 않아 두 곳에 있음)."""
+    from pipeline.config import PipelineHostRunDocs
+
+    assert RD.RUN_DOCS_DEFAULTS == {k: f.default for k, f in PipelineHostRunDocs.model_fields.items()}

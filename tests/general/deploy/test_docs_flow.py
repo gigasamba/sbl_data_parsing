@@ -22,7 +22,7 @@ def _load():
     return mod
 
 
-def _run_main(work, rows, parse_one, structure_one, cleanup_doc):
+def _run_main(work, rows, parse_one, structure_one, cleanup_doc, setup=None):
     """가짜 함수로 main()을 돌리고 모듈을 돌려준다. 외부 명령 가드는 main() 스레드가 끝날 때까지 유지한다(멈추면 가드 안에서 실패)."""
     M = _load()
 
@@ -41,6 +41,8 @@ def _run_main(work, rows, parse_one, structure_one, cleanup_doc):
         M.DOCSPACE = work / "out"
         M.DOCFLOW, M.WARM = M.DOCSPACE / "docflow", M.DOCSPACE / "_warm"
         M.MCP_JOBS_DIR = work / "jobs"
+        if setup:
+            setup(M)
         return []
 
     M.configure = configure
@@ -111,3 +113,29 @@ def test_main_survives_errors_in_failure_path():
         assert M._lane_inflight == {"light": 0, "medium": 0, "vlm": 0}
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
         assert "문서별 flow 끝: 2건(완료 0 · 파싱실패 1 · 구조실패 1)" in log, log
+
+
+def test_struct_backlog_holds_new_parses():
+    """중간 대기(파싱 끝·구조화 대기)가 상한이면 레인 워커가 새 파싱을 시작하지 않는다(rn-02) — pick 순간의 대기 길이 < 상한."""
+    import json
+    import time
+
+    rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"doc{i}.txt", "file_size": 10} for i in range(8)]
+    with tempfile.TemporaryDirectory(prefix="orca_rn02_") as tmp:
+        work = Path(tmp)
+
+        def setup(M):
+            M._BACKLOG_SETTING, M.STRUCT_WORKERS = 1, 1  # 상한 1 · 구조화 1개(느림)
+
+        def structure_one(seq, row, enq_t=None):
+            time.sleep(0.3)
+            return True
+
+        M = _run_main(work, rows, lambda seq, row: (True, work / f"{seq}"), structure_one, lambda seq, row: None, setup)
+        lines = [json.loads(x) for x in (M.PROG / "queue_depth.jsonl").read_text(encoding="utf-8").splitlines()]
+        picks = [x for x in lines if x["event"] == "pick"]
+        assert len(picks) == 8, len(picks)
+        assert all(x["struct_wait"] < 1 for x in picks), [x["struct_wait"] for x in picks]
+        assert max(x["struct_wait"] for x in lines) >= 1  # 실제로 쌓였다가 막힘(시험이 헛돌지 않음)
+        log = (M.PROG / "progress.log").read_text(encoding="utf-8")
+        assert "문서별 flow 끝: 8건(완료 8" in log and "light 1/1 medium 1/1 vlm 1/1" in log, log
