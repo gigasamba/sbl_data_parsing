@@ -104,9 +104,7 @@ def backfill_chunk_clients(db):
     that one bad row could abort). Idempotent: only rows with clients IS NULL. Search keeps the old (correct) path while any
     NULL remains (pgsearch._has_chunk_clients), so a half-done or failed backfill never makes strict queries return empty."""
     s = db.schema
-    rows = db.q(
-        f"SELECT DISTINCT d.doc_id, d.client, d.clients FROM {s}.doc d JOIN {s}.chunk c ON c.doc_id = d.doc_id WHERE c.clients IS NULL"
-    )
+    rows = db.q(f"SELECT DISTINCT d.doc_id, d.clients FROM {s}.doc d JOIN {s}.chunk c ON c.doc_id = d.doc_id WHERE c.clients IS NULL")
     if not rows:
         return 0
     for i in range(0, len(rows), 200):  # 94 review — commit every 200 docs (short row locks; partial progress is safe, NULL-gated)
@@ -114,7 +112,7 @@ def backfill_chunk_clients(db):
             for r in rows[i : i + 200]:
                 cur.execute(
                     f"UPDATE {s}.chunk SET clients = %s WHERE doc_id = %s AND clients IS NULL",
-                    (_doc_row_clients(r["client"], r["clients"]), r["doc_id"]),
+                    (_doc_row_clients(None, r["clients"]), r["doc_id"]),  # pl-14 — doc has no client column since the 10-20 reduced schema
                 )
     return len(rows)
 

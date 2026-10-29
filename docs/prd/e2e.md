@@ -78,7 +78,7 @@ EDW value answers fail citation verification. Why: answers citing `query_edw` va
 ## e2-13
 PC Docker smoke stops at the retriever. Why: depends on [mcp.md#mc-10](mcp.md#mc-10).
 - Files: `valid_env/docker/compose.test.yml`, `valid_env/docker/smoke_test.sh`.
-- Status: todo
+- Status: todo — mc-10은 10-30에 고침(`feature/search-path-fixes`). PC Docker 스모크를 다시 돌려 검색까지 가는지 확인할 것.
 
 ## e2-14
 Release tests live only inside the image. Why: an overlay patch cannot update them (C-53).

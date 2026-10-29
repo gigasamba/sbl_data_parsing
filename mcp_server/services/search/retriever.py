@@ -11,7 +11,6 @@ from common.core.contract import (
     jl,
     uri_from_path,  # 원본 위치 규칙(모듈 계약)
 )
-from common.core.paths import LOCAL_RUN  # 로컬 배치 분기(STACK·STACK_FILE은 쓰는 곳이 없어 지움 — VS8b R-8)
 from mcp_server import config as mc  # 설정 객체(mcp 칸 — S7d)
 from mcp_server.services.search import (
     clientscope as CS,  # BR50 고객 범위 단일 규칙(client_scope·allows, local.py·pgsearch.py·mcp_server.py와 공용)
@@ -29,6 +28,12 @@ def evidence_gate_on():
     return mc.cfg().search.evidence_gate  # S7d — 설정 객체(켜기 칸 off=("0",) = 옛 != "0")
 
 
+def _doc_key(d):
+    """묶음 docs.jsonl 행의 문서 키 — 2026-10-20 축소 스키마 뒤 묶음은 doc_key(=file_path, pg 근거의 doc_key와 같은 값)만 있고,
+    옛 묶음은 file_sha256만 있다(mc-10 — 서버에서 d["file_sha256"]로 읽어 KeyError로 search가 멈췄음)."""
+    return d.get("doc_key") or d["file_sha256"]
+
+
 class Retriever:
     """같은 질의 → 본문·출처 저장소(pgvector 또는 로컬 묶음)에서 하이브리드(벡터 + BM25 + 드문 ID → RRF).
     EDW(--edw · --edw-client)는 **벡터 순위만** 준다(EDW에는 벡터만 있음) — 키(sha:seq)를 저장소 청크로 바꿔 나머지는 개발 서버에서."""
@@ -40,15 +45,9 @@ class Retriever:
         self.bundle, self.retrieve = Path(bundle), retrieve
         self.meta = json.loads((self.bundle / "meta.json").read_text(encoding="utf-8"))
         self.local = Local(bundle)
-        # 로컬 배치(paths.LOCAL_RUN — RUN_ENV=local, S7b 전 env LOCAL_RUN=1) — 2026-10-20 축소 스키마 뒤 묶음엔 file_sha256 대신
-        # doc_key(=file_path). 아니면 서버 그대로 file_sha256
-        if LOCAL_RUN:
-            dkey = lambda d: d.get("file_sha256") or d["doc_key"]
-        else:
-            dkey = lambda d: d["file_sha256"]
-        self.key_local = {f"{dkey(self.local.docs[c['doc']])}:{c['seq']}": i for i, c in enumerate(self.local.chunks)}
+        self.key_local = {f"{_doc_key(self.local.docs[c['doc']])}:{c['seq']}": i for i, c in enumerate(self.local.chunks)}
         self.doc_meta = {
-            dkey(d): {
+            _doc_key(d): {
                 "doc_date": d.get("doc_date"),
                 "version": d.get("version"),
                 "superseded": bool(d.get("superseded")),
@@ -133,7 +132,7 @@ class Retriever:
         (security 검토 10-12): 서버가 도는 중 새 문서가 적재되면 캐시에 없는 문서가 '고객 미상'으로 보여
         엄격 격리(비엄격 모드)에서 다른 고객 문서가 허용될 수 있었음 — 정확성이 우선, 문서 단위 행이라 읽는
         비용은 작음. 10-14: clients(다중 라벨, JSON TEXT)도 같이 읽음 — client_map·client_path_map이 쓴다."""
-        return self.pg.q(f"SELECT file_path, file_name, client, clients FROM {self.pg.schema}.doc")
+        return self.pg.q(f"SELECT file_path, clients FROM {self.pg.schema}.doc")  # mc-10 — 10-20 축소 스키마: client·file_name 열 없음
 
     def client_map(self):
         """BR50(F·I) — file_name → 고객 라벨(단일 또는 다중 목록, clientscope.doc_clients) 전체 맵(그림 기록·
@@ -144,7 +143,7 @@ class Retriever:
         독립 검토 CONCERN(10-14) — 전엔 client(단일)만 읽어 다중 라벨 문서의 그림·OV가 두 번째 이하 고객
         범위에선 안 걸렸다 — 이제 CS.doc_clients로 clients 우선·client 낙하(allows()의 ANY-match를 그대로 씀)."""
         if self.pg:
-            return {r["file_name"]: CS.doc_clients(r.get("client"), r.get("clients")) for r in self._client_rows()}
+            return {Path(r["file_path"]).name: CS.doc_clients(None, r.get("clients")) for r in self._client_rows()}
         return {d["file_name"]: CS.doc_clients(d.get("client"), d.get("clients")) for d in self.local.docs}
 
     def search(self, q, k, methods=None, client=None):
@@ -298,8 +297,8 @@ class Retriever:
                         "summary": d.get("summary"),
                         "text": c["chunk_text"],
                         "chunk_ref": ci,
-                        "chunk_key": f"{d['file_sha256']}:{c['seq']}",
-                        "doc_key": d["file_sha256"],
+                        "chunk_key": f"{_doc_key(d)}:{c['seq']}",
+                        "doc_key": _doc_key(d),
                         "doc_id": c["doc"],
                         "file_name": d["file_name"],
                         "source_uri": d.get("source_uri") or uri_from_path(d["file_path"]),
