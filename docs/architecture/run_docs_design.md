@@ -61,7 +61,7 @@
 | | FIGURES | VLM_FIGURES_MAX=10, FIG_OCR_BUDGET=0 | OCR분류 skip → 직접 VLM |
 | | vlm_page | **스캔 PDF만 ON**, VLM_PAGE_MAX=무제한 | 내부 스캔판정 쪽만 |
 | | VLM_PAGE_SLOW | 45s | 적응형 축소 |
-| **파이프라인** | PARSE_PHASES | 2,3r (phase 1 skip) | phase 1 중복 엔진 실행 제거 |
+| **파이프라인** | ~~PARSE_PHASES~~ | (10-29 삭제 — phase 없음, prd pl-22) | |
 | | PARSE_QA_LIGHT | 1 | cer/order 생략(cross_recall 유지→doc_accuracy 무손상) |
 | | PARSE_REP_SELECT | first | 첫 성공 엔진 사용 |
 | | PARSE_MERGE_PAGES | 1 | 페이지 병합 |

@@ -120,7 +120,7 @@ _OPS = re.compile(
 HYPER = {  # 이름 규칙으로는 운영값이지만 결과(파싱·청크·검색 순위)를 바꾸는 칸
     "common.models.llm.extra_body",  # 생각 켬/끔 등 — 답 글자가 바뀜
     "common.models.vlm.extra_body",
-    "pipeline.extract.phases",  # 3r = 성공 엔진 없는 문서만 VLM
+    "pipeline.extract.ocr_engine",  # 이미지·스캔 문서에 OCR 엔진도 돌림(파싱 결과가 바뀜)
     "pipeline.extract.table_grid_max_rows",
     "pipeline.extract.ocr.dpi",
     "pipeline.transform.represent.reread.dpi",
@@ -145,7 +145,6 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "common.models.embed.query_cache_max",
     "common.models.transport.down_after",
     "pipeline.extract.max_file_mb",
-    "pipeline.extract.phase_sec",
     "pipeline.extract.input_source",
     "pipeline.extract.dedup.fuzzy_max",
     "pipeline.extract.prepare.link",

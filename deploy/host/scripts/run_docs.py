@@ -166,7 +166,6 @@ PARSE_SET = (
     "FUSE_REREAD_MAX=3",
     "FUSE_REREAD_DPI=120",
     "PARSE_FUSE_REREAD_P3=0",
-    "PARSE_PHASES=2,3r",
     "PARSE_QA_LIGHT=1",
 )
 LIB_ENV = "PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache"  # env 남김 — 라이브러리(파이썬 자체 env, 설정 칸 아님)

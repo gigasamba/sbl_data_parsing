@@ -79,8 +79,8 @@ def build_context(doc_path, dd, cands, rep):
 
 
 def _ocr_fallback(doc_path, dd, stack):
-    """AD12 run_all._ocr_fallback_needed와 같은 신호(pipeline.transform.figures.vlm_page.scan_pages, 캐시 재사용) —
-    .pdf_text 문서 안에 스캔 쪽이 있으면 True(그러면 run_all이 .pdf_image 엔진도 합쳐 돈다). registry(엔진 등록,
+    """AD12 스캔 쪽 신호(10-29부터 run_all은 OCR 엔진을 안 합치고 대표 결과의 쪽 VLM이 그 쪽을 채움)(pipeline.transform.figures.vlm_page.scan_pages, 캐시 재사용) —
+    .pdf_text 문서 안에 스캔 쪽이 있으면 True. registry(엔진 등록,
     무거운 임포트)는 건드리지 않고 stack.json에 이미 적힌 .pdf_image 목록만 본다."""
     if dd.get("format") != ".pdf_text" or not stack["parse"].get(".pdf_image") or not doc_path:
         return None
@@ -119,7 +119,7 @@ def build_decisions(rep, dd, stack, feats, doc_path):
             {
                 "step": "ocr_fallback",
                 "choice": fb,
-                "reason": "스캔 쪽 감지 — .pdf_image 엔진 합침(AD12)" if fb else "스캔 쪽 없음",
+                "reason": "스캔 쪽 감지 — 그 쪽만 쪽 VLM 글로 채움(10-29, OCR 엔진은 안 합침)" if fb else "스캔 쪽 없음",
                 "inputs": {"ocr_pool": stack["parse"].get(".pdf_image") or []},
             }
         )
