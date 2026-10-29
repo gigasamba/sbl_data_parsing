@@ -23,7 +23,7 @@ from mcp_server import config as mc  # 설정 객체(S7d)
 
 def doc_clients(client, clients):
     """독립 검토 CONCERN(10-14) — "clients(다중)가 있으면 그걸, 없으면 client(단일)로 낙하"를 한 곳에서.
-    local.py·retriever.py(client_map·client_path_map·hit dict 둘 다)·aggregate.py(local·pg)가 전부 이
+    local.py·retriever.py(client_map·client_path_map·hit dict 둘 다)·aggregate.py(local)가 전부 이
     함수를 거친다(전에는 각자 `d.get("clients") or d.get("client")`를 따로 적어 그래프 후처리·그림·OV·집계
     범위가 `client`만 보고 다중 라벨을 놓치는 곳이 남았다). clients가 PG에서 읽은 그대로(JSON 인코딩 TEXT —
     pgstore.load()가 json.dumps로 적재, array·jsonb 아님 — AD41 sqlite stand-in은 array/unnest 미지원)면

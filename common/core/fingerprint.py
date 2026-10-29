@@ -46,6 +46,7 @@ EXCLUDED_FILES = (
     "check/check_modules.py",  # 모듈 경계 점검 — 개발·반입 점검 도구, 인계 내용과 무관
     "check/os_put.py",  # 시험용 Object Storage 올리기 — 운영 도구
     "check/ping_models.py",  # 모델 연결 확인 — 운영 도구
+    "core/exitclean.py",  # 종료 정리(pl-27 — 임시 파일 지우기·자식 회수) — 프로세스 관리, 인계 내용과 무관
     "core/console.py",  # CLI 표준 출력을 UTF-8로(S12 /simplify — utf8_stdout) — 화면 출력만, 인계 내용과 무관
     "core/fingerprint.py",  # 이 파일 자신(S3 — 옛 __init__.py) — CONTRACT는 따로 버전으로 확인, pipeline_version()은 인계 내용과 무관
     "config/boot.py",  # 컨테이너 시작 설정(S7e2 — entrypoint의 RUN_ENV 관문·셸 칸·라이브러리 env) — 운영 도구

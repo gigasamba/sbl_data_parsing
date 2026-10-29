@@ -61,12 +61,15 @@ Retriever reads removed column `file_sha256`. Why: the 10-20 reduced schema drop
 ## mc-11
 Aggregation path queries removed columns. Why: `aggregate.pg()` selects `file_sha256`, `client`, `contract_no`, `meta_confirmed`, `contract`, so every search result gets an "aggregation path error" note (evidence itself is fine).
 - Files: `mcp_server/services/search/aggregate.py`.
-- Status: todo
+- Done 10-30: closed with mc-12 — `aggregate.pg()` (the aggregation path's reader of those columns) is deleted; `retriever.py` still reads them (mc-10).
+- Status: done
 
 ## mc-12
 Fact aggregation queries a dropped table. Why: `kg_node`·`kg_edge`·`doc_fact`·`concept_chunk`·`doc_image`·`chunk_image` are no longer created or loaded (`pipeline/load/pgvector_load.py`). The graph and concept search methods that read them were removed 10-29; the `doc_fact`-based aggregation path in `aggregate.py` still queries `doc_fact`, so it returns nothing on PG.
 - Files: `mcp_server/services/search/aggregate.py`, `pipeline/load/pgvector_load.py`.
-- Status: todo — decide: load `doc_fact` again (Alembic migration, DB owner) or drop that aggregation path.
+- Done 10-30 (user decision): drop the path — `aggregate.pg()` deleted; on a PG store `do_aggregate` returns the "not an aggregation question — use search" note and `ask --pg` shows no document aggregate (the `--pg` flag itself stays: it selects PG search). Numeric questions go to `query_edw`. Bundle (`local()`) and struct DB (`struct()`) aggregation unchanged. No MCP tool contract or DB change.
+- Files: `mcp_server/services/search/{aggregate,internal_docs}.py`, `mcp_server/cli/ask.py`.
+- Status: done
 
 ## mc-13
 PG query log writes to a table no migration creates. Why: `search_svc` does `INSERT INTO qa_log` on the PG store, but `0001_search_base` has no `qa_log` table; the error is swallowed, so only the jsonl log works.

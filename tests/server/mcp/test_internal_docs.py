@@ -1,6 +1,7 @@
 """mcp_server.services.search.internal_docs 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.internal_docs`."""
 
 from mcp_server import config as mc
+from mcp_server.services.search import internal_docs as M
 from mcp_server.services.search.internal_docs import do_aggregate
 
 
@@ -10,6 +11,27 @@ def _selftest_aggregate_struct_fail():
         r = do_aggregate("계약 ID 없는 RFI 중 계약으로 이어진 것은?")  # doc_link_question에 걸리는 질문 — structdb 경로를 탐
         assert "정형 저장소 연결 실패" in (r.get("note") or ""), r
     print("[selftest] RUN_MODE=prod + PG 실패 — do_aggregate가 안 죽고 note로 알림 통과")
+
+
+def test_aggregate_off_on_pg():
+    """mc-12(사용자 10-30) — PG 저장소에서는 문서 집계를 안 함(doc_fact 미적재): 묶음 집계를 부르지 않고 query_edw 안내만."""
+    from unittest import mock
+
+    from mcp_server.services.search import aggregate as AG
+
+    class PgR:
+        pg, hidden = object(), None
+
+    def boom(*a, **k):
+        raise AssertionError("PG에서 묶음 집계를 부름")
+
+    with (
+        mock.patch.object(AG, "struct", lambda *a, **k: None),
+        mock.patch.object(AG, "local", boom),
+        mock.patch.object(M, "_retriever", PgR),
+    ):
+        r = do_aggregate("Acme 계약은 몇 건?")
+    assert "kind" not in r and "query_edw" in r["note"], r
 
 
 def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) — internal_docs.py엔 __main__이 없었음
