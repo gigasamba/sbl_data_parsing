@@ -252,8 +252,8 @@ class GraphitiAdapter(Adapter):
         except ImportError as err:
             raise _missing("graphiti-core", "(`uv pip install graphiti-core` + Neo4j docker — SETUP.md 4절)") from err
         base, model = _need_llm()
-        gr = pc.cfg().connections.graphiti  # S7c — 설정 객체(uri·user는 빈 값 그대로 — blank=keep, 비밀번호는 없으면 "")
-        uri, user = gr.neo4j_uri, gr.neo4j_user
+        gr = pc.cfg().connections.graphiti  # S7c — 설정 객체(user는 빈 값 그대로 — blank=keep, 비밀번호는 없으면 "")
+        uri, user = "bolt://localhost:7687", gr.neo4j_user  # 주소 칸은 지움(PC 평가 전용 — 로컬 Neo4j docker 고정)
         pw = C.reveal(gr.neo4j_password)
         pw = pw if pw is not None else ""
 

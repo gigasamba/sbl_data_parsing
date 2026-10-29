@@ -62,9 +62,6 @@ class PipelineTransformRepresentReread(Section):
 
 class PipelineConnectionsGraphiti(Section):
     neo4j_password: SecretStr | None = F(None, "GRAPHITI_NEO4J_PASSWORD", "Graphiti용 Neo4j 접속 비밀번호")
-    neo4j_uri: str | None = F(
-        "bolt://localhost:7687", "GRAPHITI_NEO4J_URI", "외부 지식그래프 평가용 Graphiti의 Neo4j 접속 주소", blank="keep"
-    )
     neo4j_user: str | None = F("neo4j", "GRAPHITI_NEO4J_USER", "Graphiti용 Neo4j 접속 사용자 이름", blank="keep")
 
 
@@ -595,7 +592,6 @@ class PipelinePaths(Section):
     )
     images_root: str | None = F(None, "PARSE_IMAGES_ROOT", "그림 PNG·index.jsonl 저장 루트")
     index_conf: str | None = F(None, "INDEX_CONF", "색인 설정 JSON 경로(STRUCTURE_TARGET=pg일 때 색인 모듈로 구조화)")
-    mineru_bin: str | None = F("mineru", "MINERU_BIN", "MinerU 실행 파일 이름·경로", pinned="engine")
     out_root: str | None = F(None, "PIPE_OUT_ROOT", "파이프라인 출력 루트(output)")
     paddle_python: str | None = F(None, "PADDLE_PYTHON", "paddle 계열 엔진을 돌릴 별도 venv의 python 경로")
     parse_tmp: str | None = F(None, "PARSE_TMP", "스트리밍·병렬 파싱 임시 폴더 — output 아래 2단 이상 하위만 허용")
@@ -606,7 +602,6 @@ class PipelinePaths(Section):
         "SOFFICE_BIN",
         "LibreOffice soffice 실행 파일 경로 — PATH·흔한 경로보다 먼저 봄(pipeline 이미지 안 기본 /usr/bin/soffice — 옛 Dockerfile ENV, B-2)",
     )
-    soffice_candidates: CsvList | None = F(None, "SOFFICE_CANDIDATES", "(읽는 곳 없음) soffice 후보 경로 목록")
     stack_snapshot: str | None = F(
         None, "STACK_SNAPSHOT", "엔진 구성 사본 파일(내부 신호 — 진입점이 활성 판에서 만들어 자식에 넘김, 사람이 쓰지 않음 · S8b)"
     )

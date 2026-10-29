@@ -1934,7 +1934,7 @@ erDiagram
 | `GOLD_DRAFT_MAX_PAGES` | `pipeline/eval/gold_draft.py` | pipeline | 30 | int | `pipeline.eval.gold_draft_max_pages` | YAML |  | 정답 초안 생성(gold_draft)에서 문서당 처리할 쪽 수 상한(쪽) |
 | `GOLD_DRAFT_MERMAID_CHECK` | `pipeline/eval/gold_draft.py` | pipeline | true | bool | `pipeline.eval.gold_draft_mermaid_check` | YAML |  | 정답 초안의 Mermaid 블록 2차 점검을 켤지(0/false/no면 끔) — 켜기 판정 꼴: 앞뒤 공백만 빼고 `0`·`false`·`no`면 끔(대소문자 구분 — 옛 `.strip() in (…)`, S7c2) |
 | `GRAPHITI_NEO4J_PASSWORD` | `pipeline/eval/kg_external.py` | pipeline |  | SecretStr | `pipeline.connections.graphiti.neo4j_password` | YAML | 비밀 | Graphiti용 Neo4j 접속 비밀번호 |
-| `GRAPHITI_NEO4J_URI` | `pipeline/eval/kg_external.py` | pipeline | bolt://localhost:7687 | str | `pipeline.connections.graphiti.neo4j_uri` | YAML |  | 외부 지식그래프 평가용 Graphiti의 Neo4j 접속 주소 — 빈 글자 `''` 유지(옛 `get(X, 기본)` — `blank="keep"`, S7a2) |
+| `GRAPHITI_NEO4J_URI` | `pipeline/eval/kg_external.py` | pipeline | bolt://localhost:7687 | str | `pipeline.connections.graphiti.neo4j_uri` | YAML |  | 외부 지식그래프 평가용 Graphiti의 Neo4j 접속 주소 — 빈 글자 `''` 유지(옛 `get(X, 기본)` — `blank="keep"`, S7a2) — **10-29 칸 지움**(PC 평가 전용 — 주소는 코드에 고정) |
 | `GRAPHITI_NEO4J_USER` | `pipeline/eval/kg_external.py` | pipeline | neo4j | str | `pipeline.connections.graphiti.neo4j_user` | YAML |  | Graphiti용 Neo4j 접속 사용자 이름 — 빈 글자 `''` 유지(옛 `get(X, 기본)` — `blank="keep"`, S7a2) |
 | `HF_HOME` | `deploy/release/assets.py` · `pipeline/check_env.py` 외 2 | PC+빌드+pipeline | ~/.cache/huggingface | path |  | env로 남김 |  | HuggingFace 캐시 루트 폴더(하위 hub/에서 모델 확인) — 라이브러리(huggingface)가 읽음 |
 | `HF_HUB_OFFLINE` | `common/ai/embed.py` · `mcp_server/services/search/rerank.py` 외 4 | 공용+mcp+pipeline | 1 | bool |  | env로 남김 |  | HF 모델 다운로드 차단(1=캐시만 사용). 코드가 import 때 미설정이면 1로 채움 — 라이브러리가 읽음 |
@@ -1953,7 +1953,7 @@ erDiagram
 | `KEEP_LOCAL_ORIGINALS` | `pipeline/extract/source.py` · `pipeline/stream.py` 외 1 | pipeline | false | bool | `pipeline.extract.cache.keep_local_originals` | YAML |  | 내려받은 원본을 파싱 뒤에도 지우지 않고 남길지(=1 보관, 디버그·샘플용) — 켜기 판정 꼴: `1`만 켬(옛 `== "1"` — S7c1) |
 | `KEEP_RAW_LAYER` | `pipeline/stream.py` · `pipeline/tools/check_residue.py` | pipeline | true | bool | `pipeline.extract.cache.keep_raw_layer` | YAML |  | P0 원본 층 캐시(output/parse/raw/**)를 유지할지(1 유지 / 그 외 이번 묶음 것 삭제) — 켜기 판정 꼴: `1`만 켬(옛 `== "1"` — S7c1) · `tools/check_residue.py`도 같은 꼴(옛은 `0`일 때만 검사 — S7c1 보고서) |
 | `KNOWN_FAIL` | `deploy/release/selftest_gate.sh` | 빌드 | <selftest_gate.sh 폴더>/known_fail.txt | path |  | 인자(5-3 B) |  | selftest 판정이 쓰는 '알려진 FAIL' 목록 파일 경로 — 빌드·반입·시험 스크립트 인자(5-3 B) |
-| `KOREAN_FONT` | (새 키) |  |  | str | `common.paths.korean_font` | YAML |  | 한글 글꼴 파일 경로(그림 렌더·점검용) |
+| `KOREAN_FONT` | (새 키) |  |  | str | `common.paths.korean_font` | YAML |  | 한글 글꼴 파일 경로(그림 렌더·점검용) — **10-29 칸 지움**(읽는 곳 없음) |
 | `KREUZBERG_PROSE_FILTER` | `pipeline/extract/engines/kreuzberg/parser.py` | pipeline | true | bool | `pipeline.extract.kreuzberg_prose_filter` | YAML · 엔진 지문 고정 |  | kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔) |
 | `LITELLM_LOCAL_MODEL_COST_MAP` | `common/ai/adk.py` | 공용 | True | str |  | env로 남김 |  | litellm이 가격표를 외부에서 받지 않고 내장본을 쓰게 함(폐쇄망) — 미설정이면 코드가 True로 채움 — 라이브러리(litellm)가 읽음 |
 | `LLM_ALLOW_EXTERNAL` | `common/ai/guard.py` · `pipeline/transform/structure/build_bundle.py` 외 3 | PC+공용+pipeline | false | bool | `common.models.llm.allow_external` | YAML |  | LLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) — 켜기 판정 꼴: `1`만 켬(옛 `== "1"` — S7b · VS7a2 R-c) |
@@ -1996,7 +1996,7 @@ erDiagram
 | `MCP_IMAGES` | `mcp_server/services/search/internal_docs.py` | mcp | <APP_ROOT>/output/parse/_images/index.jsonl | str | `mcp.output.images` | YAML |  | 그림 색인(index.jsonl) 경로 |
 | `MCP_INSTRUCTIONS` | `mcp_server/main.py` | mcp | (코드 내장 문구) | str | `mcp.server.instructions` | YAML |  | MCP 서버 instructions 글자(도구 안내문) 교체 |
 | `MCP_JOBS_DIR` | `deploy/host/scripts/run_docs.py` | 호스트 | <결과 폴더>/mcp_parse/jobs | str | `mcp.host.jobs_dir` | YAML · 호스트 |  | MCP parse_document 업로드 작업 폴더(공유 볼륨) — medium 레인 양보 감지용 · S7e1부터 run_docs.py가 settings.yaml에서 읽음(env 아님) |
-| `MCP_LIST_DOCS_MAX` | `mcp_server/config.py` | mcp | 200 | int | `mcp.output.list_docs_max` | YAML |  | list_documents 결과 건수 상한 — 0이면 무제한 |
+| `MCP_LIST_DOCS_MAX` | `mcp_server/config.py` | mcp | 200 | int | `mcp.output.list_docs_max` | YAML |  | list_documents 결과 건수 상한 — 0이면 무제한 — **10-29 칸 지움**(list_documents는 MCP 도구가 아님 — 200건 고정) |
 | `MCP_MANIFEST` | `mcp_server/services/search/internal_docs.py` | mcp | <APP_ROOT>/output/parse/_source/manifest.jsonl | str | `mcp.server.manifest` | YAML |  | 수집 manifest.jsonl 경로(문서 유형·버전·삭제 여부 출처) |
 | `MCP_MAX_CHARS` | `mcp_server/config.py` | mcp | 20000 | int | `mcp.output.max_chars` | YAML |  | search 응답 크기 상한(JSON UTF-8 바이트) — 넘으면 근거 본문을 줄임 |
 | `MCP_MAX_CONCURRENCY` | `mcp_server/routers/dispatch.py` | mcp | 8 | int | `mcp.server.max_concurrency` | YAML |  | 도구 동시 실행 상한(개) |
@@ -2020,7 +2020,7 @@ erDiagram
 | `MEM_SETTLE_MARGIN` | `common/core/resources.py` | 공용 | 5.0 | float | `common.runtime.mem_settle_margin` | YAML |  | 상한(MEM_MAX_PCT) 이만큼(%p) 아래부터 프로세스 띄운 뒤 잠깐 쉼 — `auto`·빈 값 = 코드 계산·기본(옛 `resources._f`의 `float()` — 소수 가능, S7b · VS7a2 R-d) |
 | `MEM_SETTLE_SEC` | `common/core/resources.py` | 공용 | 2.0 | float | `common.runtime.mem_settle_sec` | YAML |  | 메모리가 상한 근처일 때 프로세스 띄운 뒤 쉬는 시간(초) — `auto`·빈 값 = 코드 계산·기본(옛 `resources._f`의 `float()` — 소수 가능, S7b · VS7a2 R-d) |
 | `MEM_START_PCT` | `common/core/resources.py` | 공용 | 90.0 | float | `common.runtime.mem_start_pct` | YAML |  | wait_mem 기본 상한 — 실험 도구가 새 프로세스를 띄우는 메모리 사용률(%) — `auto`·빈 값 = 코드 계산·기본(옛 `resources._f`의 `float()` — 소수 가능, S7b · VS7a2 R-d) |
-| `MINERU_BIN` | `pipeline/check_env.py` · `pipeline/extract/engines/registry.py` | pipeline | mineru | str | `pipeline.paths.mineru_bin` | YAML · 엔진 지문 고정 |  | MinerU 실행 파일 이름·경로 |
+| `MINERU_BIN` | `pipeline/check_env.py` · `pipeline/extract/engines/registry.py` | pipeline | mineru | str | `pipeline.paths.mineru_bin` | YAML · 엔진 지문 고정 |  | MinerU 실행 파일 이름·경로 — **10-29 칸 지움**(엔진 구성에서 뺀 엔진) |
 | `MINIO_IMAGE` | `valid_env/docker/compose.test.yml` | PC | bitnamilegacy/minio:latest | str | `common.dev.docker.minio_image` | YAML |  | 시험용 minio 이미지 |
 | `MINIO_PUBLISH_PORT` | `valid_env/docker/compose.test.yml` · `valid_env/docker/smoke_test.sh` | PC | 19000 | int | `common.dev.docker.minio_publish_port` | YAML |  | 시험 minio를 호스트에 게시할 포트 |
 | `MIN_GOLD_COVERAGE` | `validation/e2e/stack_matrix.py` | PC | 0.95 | float | `common.dev.min_gold_coverage` | YAML |  | stack_matrix에서 정답 문서 포함률이 이 값 이상이어야 valid |
@@ -2358,7 +2358,7 @@ erDiagram
 | `SMOKE_PM_BUCKET` | `valid_env/docker/compose.test.yml` · `valid_env/docker/smoke_test.sh` | PC | rag-publish | str | `common.dev.docker.smoke_pm_bucket` | YAML |  | 시험 결과 게시용 minio 버킷 이름 |
 | `SMOKE_SOURCE` | `valid_env/docker/compose.test.yml` · `valid_env/docker/smoke_test.sh` | PC | /data/docs | str | `common.dev.docker.smoke_source` | YAML |  | 시험 원천 위치(/data/docs 또는 s3://버킷/접두) |
 | `SOFFICE_BIN` | `pipeline/transform/figures/pptx_render.py` | pipeline |  | str | `pipeline.paths.soffice_bin` | YAML |  | LibreOffice soffice 실행 파일 경로 — PATH·흔한 경로보다 먼저 봄 |
-| `SOFFICE_CANDIDATES` | (새 키) |  |  | 목록(쉼표 또는 YAML 목록) | `pipeline.paths.soffice_candidates` | YAML |  | (읽는 곳 없음) soffice 후보 경로 목록 |
+| `SOFFICE_CANDIDATES` | (새 키) |  |  | 목록(쉼표 또는 YAML 목록) | `pipeline.paths.soffice_candidates` | YAML |  | (읽는 곳 없음) soffice 후보 경로 목록 — **10-29 칸 지움**(읽는 곳 없음) |
 | `SOURCES_FILE` | `common/core/sources.py` · `common/store/db/cfgtables.py` | 공용 | <RES_ROOT>/mappings/sources.json | str | `common.paths.sources_file` | YAML |  | PC(RUN_ENV=local) 원천 목록 파일 경로 — 서버는 판 표 struct.source_version 활성 판(S8b — `$SERVER_ENV_DIR/sources.json` 덮어쓰기 없앰) |
 | `SOURCE_FETCH_WORKERS` | `pipeline/extract/source.py` | pipeline | 1 | int | `pipeline.extract.source.fetch_workers` | YAML |  | 원본 문서 병렬 다운로드 스레드 수(개) |
 | `SOURCE_MANIFEST` | `common/core/contract.py` · `pipeline/extract/source.py` | 공용+pipeline |  | str | `common.paths.source_manifest` | YAML · 인계 지문 고정 |  | 원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응) |

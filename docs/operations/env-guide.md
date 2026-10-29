@@ -20,7 +20,7 @@
 - **한 번 실행에만 다른 값 — 명령 인자 `--set 이름=값`(S9 Step A, 사용자 10-28 — 서버 포함):** `python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/x --set PARSE_POST=supsub parse …`처럼 진입 모듈(`pipeline.cli`·`pipeline.extract.source`·`pipeline.stackcfg`·`pipeline.transform.structure.build_bundle`·`pipeline.load.pgvector_load`·`pipeline.load.publish_parse_result`)에 여러 번 준다(같은 이름은 뒤 값). 그 프로세스가 덮기 파일(설정 파일을 `base`로 — 비밀 복사 없음)을 만들어 자기와 자식에 넘긴다(`common.config.setarg`). 모르는 이름·호스트 칸·**비밀 칸**(명령 줄은 ps·로그에 남음)은 모든 환경에서 종료 2, 값 형식 오류는 서버 종료 2·local 경고(이름만) · 서버(dev·stage·prd)에서 설정 파일(`SETTINGS_FILE`)이 없으면 종료 2(S9b — VS9 R-1: 전에는 원본 없는 덮기 파일이 "설정 파일 필수" 관문을 지나감). `run_docs.py`가 문서별 결과 폴더·동시 수를 이렇게 넘긴다(S7e2~S8b 판에서는 `bash -c 'X=값 python …'` env라 효과가 없었음 — VS8b U-1).
 - 라이브러리가 읽는 env(`TZ`·`OMP_NUM_THREADS`·`HF_HUB_OFFLINE`·`TESSDATA_PREFIX`·`PIPELINE_VERSION` 등 — 허용 목록 `common.config.settings.LIB_ENV_NAMES`, 비밀 아님)는 `common.runtime.lib_env` 사전에 적는다 — 컨테이너 entrypoint가 시작 때 env로 낸다(이미지 ENV 값은 덮고 `docker run -e`로 준 값은 안 덮음 — S7e2, `refactor.md` C-47 ③). 목록 밖 이름은 검증 오류(이름만).
 
-새 서버: `cp <저장소 ZIP>/settings.sample.yaml /srv/rag/env/settings.yaml` → 권한(위) → 아래 1절만 채움(`[서버 옛 값]` 칸 포함) → `python -m pipeline.check_env`로 확인.
+새 서버: `cp <저장소 ZIP>/settings.sample.yaml /srv/rag/env/settings.yaml` → 권한(위) → sample 맨 위 「1. 필수 입력」 블록과 아래 1절만 채움(선택 칸은 sample 「2. 선택」에 영역별 목록 — `[서버 옛 값]` 칸 포함) → `python -m pipeline.check_env`로 확인.
 
 ## 1. 꼭 채울 것 (영역별)
 

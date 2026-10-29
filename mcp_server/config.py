@@ -141,7 +141,6 @@ class McpOutput(Section):
         True, "MCP_EVIDENCE_PATHS", "근거의 '파싱 결과 경로' 조회(AI.ParsingMeta) 스위치 — 0이면 시도 안 함", off=("0",)
     )
     images: str | None = F(None, "MCP_IMAGES", "그림 색인(index.jsonl) 경로")
-    list_docs_max: int | None = F(200, "MCP_LIST_DOCS_MAX", "list_documents 결과 건수 상한 — 0이면 무제한")
     max_chars: int | None = F(20000, "MCP_MAX_CHARS", "search 응답 크기 상한(JSON UTF-8 바이트) — 넘으면 근거 본문을 줄임")
     max_image_px: int | None = F(1600, "MCP_MAX_IMAGE_PX", "근거 이미지 한 변 최대 픽셀(썸네일 크기)")
 
@@ -292,7 +291,7 @@ class MCPConfig:
         self.MAX_CHARS = c.output.max_chars  # GH1-13: cap()이 이 값을 바이트(UTF-8)로 씀 — 이름·기본값은 그대로(실측 재조정은 서버에서)
         self.MAX_IMAGE_PX = c.output.max_image_px
         self.MAX_K = 50
-        self.LIST_DOCS_MAX = c.output.list_docs_max  # AD38 — list_documents 결과 크기 상한(=0으로 끔, OP11)
+        self.LIST_DOCS_MAX = 200  # AD38 — list_documents 결과 크기 상한(내부 함수 전용이라 설정 칸은 지움)
         self.CORE = ("vector", "bm25", "id")
         self.DEFAULT_METHODS = list(c.search.methods)  # 10-12 구조 검토: graph 기본에서 뺌 —
         # 그래프 단독 효과를 처음 따로 잼(9세트): 근거 지표 이득 0, 잡음 비율↑(4clients .366→.459), distractors-v2 정답 값 적중 .80→.72 ·
