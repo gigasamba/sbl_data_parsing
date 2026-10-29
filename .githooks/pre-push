@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# push 전 저장소 전체 점검(CLAUDE.md §5-2) — ruff check · ruff format --check · mypy가 모두 0이어야 push.
+set -e
+cd "$(git rev-parse --show-toplevel)"
+if [ -x .venv/bin/python ]; then BIN=.venv/bin; else BIN=.venv/Scripts; fi
+"$BIN/ruff" check .
+"$BIN/ruff" format --check .
+PYTHONPATH=. "$BIN/mypy"
