@@ -147,7 +147,6 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "pipeline.extract.input_source",
     "pipeline.extract.dedup.fuzzy_max",
     "pipeline.extract.prepare.link",
-    "pipeline.load.prune_min_ratio",
     "pipeline.load.publish.path_map",
     "pipeline.load.publish.upload_statuses",
     "pipeline.transform.represent.shadow_max",

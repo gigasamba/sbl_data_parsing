@@ -9,14 +9,14 @@ from pathlib import Path
 from common.core import docmeta as DM  # 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
 from common.core.contract import (
     jl,
+    make_chunk_key,
     uri_from_path,  # 원본 위치 규칙(모듈 계약)
 )
-from common.core.paths import LOCAL_RUN  # 로컬 배치 분기(STACK·STACK_FILE은 쓰는 곳이 없어 지움 — VS8b R-8)
 from mcp_server import config as mc  # 설정 객체(mcp 칸 — S7d)
 from mcp_server.services.search import (
     clientscope as CS,  # BR50 고객 범위 단일 규칙(client_scope·allows, local.py·pgsearch.py·mcp_server.py와 공용)
 )
-from mcp_server.services.search.local import Local, embed_query
+from mcp_server.services.search.local import Local, embed_query, file_name_of
 from mcp_server.services.search.terms import (  # 용어 사전(X3·X4, 구조화와 같은 규칙) · SI43⑤ 벡터 질의 별칭 덧붙이기(10-16 검색 전용으로 분리)
     expand_query,
     vector_alias_text,
@@ -40,15 +40,9 @@ class Retriever:
         self.bundle, self.retrieve = Path(bundle), retrieve
         self.meta = json.loads((self.bundle / "meta.json").read_text(encoding="utf-8"))
         self.local = Local(bundle)
-        # 로컬 배치(paths.LOCAL_RUN — RUN_ENV=local, S7b 전 env LOCAL_RUN=1) — 2026-10-20 축소 스키마 뒤 묶음엔 file_sha256 대신
-        # doc_key(=file_path). 아니면 서버 그대로 file_sha256
-        if LOCAL_RUN:
-            dkey = lambda d: d.get("file_sha256") or d["doc_key"]
-        else:
-            dkey = lambda d: d["file_sha256"]
-        self.key_local = {f"{dkey(self.local.docs[c['doc']])}:{c['seq']}": i for i, c in enumerate(self.local.chunks)}
+        self.key_local = {make_chunk_key(self.local.docs[c["doc"]]["doc_key"], c["seq"]): i for i, c in enumerate(self.local.chunks)}
         self.doc_meta = {
-            dkey(d): {
+            d["doc_key"]: {
                 "doc_date": d.get("doc_date"),
                 "version": d.get("version"),
                 "superseded": bool(d.get("superseded")),
@@ -104,8 +98,9 @@ class Retriever:
         if not self.hidden:
             return set()
         if self.pg:
-            rows = self.pg.q(f"SELECT file_name FROM {self.pg.schema}.doc WHERE file_sha256 = ANY(%s)", (sorted(self.hidden),))
-            return {r["file_name"] for r in rows}
+            return (
+                set()
+            )  # mc-14 — PG doc 표에 숨김 키(sha256)·file_name 열이 없음(10-20 축소 스키마): 오류 대신 빈 집합, pl-25(s3_key) 뒤 고침
         return {d["file_name"] for d in self.local.docs if d.get("file_sha256") in self.hidden}
 
     def _chunk_key_hidden(self, chunk_key):
@@ -114,11 +109,10 @@ class Retriever:
         return bool(self.hidden) and chunk_key.split(":", 1)[0] in self.hidden
 
     def _client_rows(self):
-        """BR52 — PG doc 표(file_path·file_name·client·clients)를 부를 때마다 새로 읽는다. 캐시하지 않음
+        """BR52 — PG doc 표(file_path·clients — 10-20 축소 스키마, mc-10)를 부를 때마다 새로 읽는다(client_map이 씀). 캐시하지 않음
         (security 검토 10-12): 서버가 도는 중 새 문서가 적재되면 캐시에 없는 문서가 '고객 미상'으로 보여
-        엄격 격리(비엄격 모드)에서 다른 고객 문서가 허용될 수 있었음 — 정확성이 우선, 문서 단위 행이라 읽는
-        비용은 작음. 10-14: clients(다중 라벨, JSON TEXT)도 같이 읽음 — client_map·client_path_map이 쓴다."""
-        return self.pg.q(f"SELECT file_path, file_name, client, clients FROM {self.pg.schema}.doc")
+        엄격 격리(비엄격 모드)에서 다른 고객 문서가 허용될 수 있었음 — 정확성이 우선, 문서 단위 행이라 읽는 비용은 작음."""
+        return self.pg.q(f"SELECT file_path, clients FROM {self.pg.schema}.doc")
 
     def client_map(self):
         """BR50(F·I) — file_name → 고객 라벨(단일 또는 다중 목록, clientscope.doc_clients) 전체 맵(그림 기록·
@@ -129,7 +123,7 @@ class Retriever:
         독립 검토 CONCERN(10-14) — 전엔 client(단일)만 읽어 다중 라벨 문서의 그림·OV가 두 번째 이하 고객
         범위에선 안 걸렸다 — 이제 CS.doc_clients로 clients 우선·client 낙하(allows()의 ANY-match를 그대로 씀)."""
         if self.pg:
-            return {r["file_name"]: CS.doc_clients(r.get("client"), r.get("clients")) for r in self._client_rows()}
+            return {file_name_of(r["file_path"]): CS.doc_clients(None, r.get("clients")) for r in self._client_rows()}
         return {d["file_name"]: CS.doc_clients(d.get("client"), d.get("clients")) for d in self.local.docs}
 
     def search(self, q, k, methods=None, client=None):
@@ -275,8 +269,8 @@ class Retriever:
                         "summary": d.get("summary"),
                         "text": c["chunk_text"],
                         "chunk_ref": ci,
-                        "chunk_key": f"{d['file_sha256']}:{c['seq']}",
-                        "doc_key": d["file_sha256"],
+                        "chunk_key": make_chunk_key(d["doc_key"], c["seq"]),
+                        "doc_key": d["doc_key"],
                         "doc_id": c["doc"],
                         "file_name": d["file_name"],
                         "source_uri": d.get("source_uri") or uri_from_path(d["file_path"]),

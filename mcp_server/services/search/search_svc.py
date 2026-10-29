@@ -3,7 +3,6 @@ S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/m
 (설정 상수만 mcp_server/config.py의 CFG로).
 """
 
-import json
 import time
 
 from mcp_server import config as mc  # mcp 설정 객체(S7d)
@@ -14,30 +13,13 @@ from mcp_server.services.search.shaping import _evidence, cap, evidence_status
 
 
 def _log(question, evidence, ms):
+    """질의 기록 — qa_log.jsonl 파일만(mc-13, 사용자 10-30: PG qa_log 표는 만들지 않음 — 그 INSERT는 늘 실패해 삼켜졌음)."""
     from mcp_server.services.search import qa_log
 
     try:  # engine-qa BLOCK 1 — qa_log.append 안에서도 쓰기 실패를 잡지만, do_search를 절대 죽이지 않게 여기서도 한 번 더
         qa_log.append(question, evidence, ms, CALLER.get(), stack_name=_STATE.get("stack", {}).get("name"))  # OP6
     except Exception:
         pass
-    R = _STATE.get("R")
-    if R is None or not R.pg:
-        return
-    try:
-        R.pg.q(
-            f"INSERT INTO {R.pg.schema}.qa_log(question, stack_name, k, hits, answer, search_ms, asked_by) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-            (
-                question,
-                _STATE.get("stack", {}).get("name"),
-                len(evidence),
-                json.dumps([{"chunk_id": e.get("chunk_id"), "rank": e.get("rank"), "via": e.get("via")} for e in evidence]),
-                None,
-                round(ms, 1),
-                CALLER.get(),
-            ),
-        )
-    except Exception:
-        pass  # 기록 실패가 검색을 막으면 안 됨
 
 
 def _hard_filter_scope(hard):

@@ -304,7 +304,7 @@ docker exec sbl-mcp-pg psql -U rag -d rag -c "SELECT version_id, name, is_active
 ```
 
 - 이미 적재한 문서를 다시 넣을 때는 `--replace`를 붙인다.
-- ⚠️ `--prune`을 단독으로 쓰지 않는다 — 바뀌지 않아 건너뛴 문서까지 지워지는 알려진 결함이 있다(C-60). 필요하면 `--replace --prune`.
+- 적재는 더하고 고치기만 한다 — 이번 묶음에 없는 문서(원천에서 지운 문서 포함)를 PostgreSQL에서 지우지 않는다(`--prune` 없앰 — pl-13, 사용자 10-29). 지워야 하면 사람이 따로 한다.
 
 **(선택) MCP 없이 검색만 확인**
 
@@ -600,6 +600,6 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 | [docs/refactoring/refactor\_plan.md](docs/refactoring/refactor_plan.md)      | 리팩토링 가이드 · 결정 기록(D-xxx) · 파일 이동표                                       |
 
 
-**알려진 문제·미개발 항목** — [docs/PRD.md](docs/PRD.md) 표(축소 스키마 일부 반영 `mc-10`·`mc-11` · `load --prune` C-60 `pl-13` · 테스트 알려진 실패 `e2-11` 등).
+**알려진 문제·미개발 항목** — [docs/PRD.md](docs/PRD.md) 표(축소 스키마 일부 반영 `mc-10`·`mc-11` · 테스트 알려진 실패 `e2-11` 등).
 
 > 옛 문서와 코드 주석에는 리팩토링 중에 쓰던 용어가 남아 있다(시험=테스트, 반입=배포, 칸=항목·컬럼, 판=버전, 지문=핑거프린트, 열쇠=키, 층=레이어, 묶음=번들, 대장=레지스트리, 인계=핸드오프, 덧씌우기=오버레이 패치, 게시=퍼블리시, 지시서=프롬프트). 대응표는 CLAUDE.md 끝에 있다.

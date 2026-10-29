@@ -568,8 +568,8 @@ class PipelineHost(Section):
 
 class PipelineLoad(Section):
     REMOVED = frozenset(
-        {"structure_target", "edw_load"}
-    )  # 사용자 10-29(edw_load — EDW 벡터 경로 삭제, ops.md#op-03) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+        {"structure_target", "edw_load", "prune_force", "prune_min_ratio"}
+    )  # 사용자 10-29(prune_* — 적재가 안 지움, pl-13 · edw_load — EDW 벡터 경로 삭제, ops.md#op-03) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     bm25_stat_rebuild: bool | None = F(False, "BM25_STAT_REBUILD", "적재 때 키워드 문서 빈도를 전체 다시 셈 — 1이면 켬", on=("1",))
     bm25_threads: int | None = F(4, "BM25_THREADS", "BM25 항목(term,tf) 계산 병렬 스레드 수(개)")
     edw_path_prefix: str | None = F(None, "EDW_PATH_PREFIX", "저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치)")
@@ -577,8 +577,6 @@ class PipelineLoad(Section):
     pg_create_extension: bool | None = F(
         False, "PG_CREATE_EXTENSION", "deploy 때 vector 확장 직접 생성 시도 — 1이면 켬(공유 PG에서는 금지)", on=("1",)
     )
-    prune_force: bool | None = F(False, "PRUNE_FORCE", "옛 기록 정리 안전장치(묶음 문서 수 비율 미달 거부) 무시 — 1이면 진행", on=("1",))
-    prune_min_ratio: float | None = F(0.5, "PRUNE_MIN_RATIO", "옛 기록 정리 허용 최소 비율(묶음 문서 수 / 저장 문서 수)")
     publish: PipelineLoadPublish = Field(default_factory=PipelineLoadPublish)
 
 

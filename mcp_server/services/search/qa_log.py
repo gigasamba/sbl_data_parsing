@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""OP6 — MCP 질의 기록 90일 보존. mcp_server.py._log()가 쓰는 PostgreSQL qa_log 표와 같은 꼴(question·stack_name·
-k·hits·answer·search_ms·asked_by)로 output/ 아래 JSONL에 한 줄씩 남긴다(PostgreSQL 없는 로컬 묶음에서도 기록되게 —
-PG qa_log는 PG일 때만 기록돼 왔음). hits는 근거 chunk_id·rank·via만(원문·점수는 안 남김). 개인정보·시크릿(토큰)은
+"""OP6 — MCP 질의 기록 90일 보존. question·stack_name·k·hits·answer·search_ms·asked_by를 output/ 아래 JSONL에 한 줄씩
+남긴다 — 질의 기록은 이 파일뿐이다(mc-13, 사용자 10-30: PG qa_log 표는 만들지 않음). hits는 근거 chunk_id·rank·via만(원문·점수는 안 남김). 개인정보·시크릿(토큰)은
 적지 않음 — asked_by는 mcp_server.py가 이미 'mcp:<호출자>'로 다듬은 값만 받는다(Authorization 값은 여기 안 옴).
 기본 켬 — MCP_QUERY_LOG=0으로 끔. 90일 지난 줄은 기동 때 또는 마지막 정리로부터 24시간 지난 첫 기록 때 지운다.
 """

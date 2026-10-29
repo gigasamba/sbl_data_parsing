@@ -56,7 +56,7 @@ Server runtime and safety. Why: shared internal service — must stay up and ref
 ## mc-10
 Retriever reads removed column `file_sha256`. Why: the 10-20 reduced schema dropped `file_sha256`·`client`·`file_name`·`s3_key`, but the retriever still reads `doc.file_sha256` (`hidden_names`) and `doc.client`·`doc.file_name` (`_client_rows`), so building a retriever on a new bundle fails.
 - Files: `mcp_server/services/search/retriever.py`.
-- Status: todo — PC avoids it through the local branch (`paths.LOCAL_RUN`); server uses the PG path only; the PC Docker smoke stops here ([e2e.md#e2-13](e2e.md#e2-13)).
+- Status: done (10-30, `feature/search-path-fixes`) — 묶음 `docs.jsonl`을 읽을 때(`local.Local`) 문서마다 `doc_key`(새 묶음 `file_path`, 옛 묶음 `file_sha256`)와 `file_name`(`doc_name`, 없으면 `file_path`의 마지막 `/` 뒤 — `v_chunk_source` 뷰와 같은 규칙)을 한 번 채운다 — 검색 근거·`client_map`·`internal_docs`의 문서 목록·조회·용어 찾기가 같은 값을 봄. PG `doc` 조회는 남은 열(`file_path`·`clients`)만 고름(`_client_rows`). 시험 `tests/server/mcp/test_mc10_doc_key.py`(새·옛 묶음, Windows 경로, 목록·조회). 범위 밖으로 남은 것: `internal_docs`의 PG 쪽 문서 조회·목록(없는 열 `file_name`·`file_sha256`·`client`를 고름 — 별도 항목) · `get_document`는 `:` 앞을 문서 키로 봐서 Windows 경로(`C:\…`)로는 못 찾음(서버 경로는 해당 없음) · 숨김 키 비교는 [mc-14](#mc-14).
 
 ## mc-11
 Aggregation path queries removed columns. Why: `aggregate.pg()` selects `file_sha256`, `client`, `contract_no`, `meta_confirmed`, `contract`, so every search result gets an "aggregation path error" note (evidence itself is fine).
@@ -71,4 +71,18 @@ Fact aggregation queries a dropped table. Why: `kg_node`·`kg_edge`·`doc_fact`�
 ## mc-13
 PG query log writes to a table no migration creates. Why: `search_svc` does `INSERT INTO qa_log` on the PG store, but `0001_search_base` has no `qa_log` table; the error is swallowed, so only the jsonl log works.
 - Files: `mcp_server/services/search/search_svc.py`, `mcp_server/services/search/qa_log.py`, `common/store/db/migrations/versions/0001_search_base.py`.
-- Status: todo — add the table (Alembic, DB owner) or drop the PG write.
+- Status: done (10-30, `feature/search-path-fixes`) — 사용자 결정: 질의 기록은 파일(`qa_log.jsonl`)만. `search_svc._log`와 `ask.py`의 PG `qa_log` INSERT를 지움(표는 만들지 않음). jsonl 기록은 그대로. 시험 `tests/server/mcp/test_mc13_qa_log.py`. 남은 것: `ask --retrieve cosine`(옛 직접 검색 길)은 전에도 PG에만 남겼고 이제 기록이 없음 — 기본 길(`do_search`)은 jsonl에 남김.
+
+## mc-14
+숨김 문서가 검색에서 빠지지 않는다. 왜: 숨김 표(`doc_hidden`, struct 스키마)의 키는 문서 대장 `doc_key` = 원본 sha256인데(`registry.apply()`가 원천에서 사라진 문서를 자동 숨김, `registry_cli hide`도 같은 키), 10-20 축소 스키마 뒤 검색 쪽 문서 키는 `file_path`다 — `pgsearch._not_hidden_restrict`가 sha256을 `doc.file_path`와 비교해 절대 안 맞고, 로컬 묶음(`local.py`)·`retriever.hidden_names`는 PG에서 없는 열을 골라 숨김 문서가 하나라도 있으면 오류가 났다 — 10-30부터 PG에서는 빈 집합(오류 대신, 숨김 안 됨은 그대로).
+- 조사(10-30): 스키마 변경 없이 잇는 길이 없다. 검색 `doc` 표에는 sha256도 원본 키(`s3_key`)도 없고(`file_path` = `edw_path_prefix` + 파일 이름 또는 PC 경로), 문서 대장의 `source_keys`(`local::<경로>`·`<출처>::<원본 키>`)는 모양이 달라 정확히 맞출 수 없다. 파일 이름으로 맞추면 다른 폴더·고객의 같은 이름 문서가 잘못 숨겨진다(engine-qa 10-08이 이름 짝짓기를 금지한 이유와 같음).
+- 결정(사용자 10-30): 모든 문서 키를 `s3_key`로 바꾸고 문서 대장·숨김 표를 DB 명세로 다시 키를 잡는다(pl-25, 스키마 변경 — Alembic·DB 담당자). 그때 이 비교를 같은 키로 고친다.
+- Files: `mcp_server/services/search/pgsearch.py`(`_not_hidden_restrict`), `mcp_server/services/search/local.py`, `mcp_server/services/search/retriever.py`(`hidden_names`), `common/store/registry.py`.
+- Status: todo — pl-25 대기(코드 수정 없음 — 키 설계는 [db_schema.md](../architecture/db_schema.md) §1·§3).
+
+## mc-15
+검색 근거의 `rep_uri`(대표 파싱 결과 경로)가 늘 비어 있다. 왜: `shaping._rep_uri`가 근거의 `doc_key`(= `file_path`)로 `AI.ParsingMeta`를 찾는데(`parsing_meta_db.find_rep_path` → `find_by_doc_key`), ParsingMeta의 `doc_key`는 원본 sha256이다(`docs/operations/parsing_meta_mssql.sql` — 유일한 필수 열). 그래서 한 번도 맞지 않는다.
+- 조사(10-30): ParsingMeta에서 원본을 가리키는 열은 `doc_key`(sha256)·`source_key`(Object Storage 원본 전체 키)·`source_uri`·`original_filename`이다. 검색 `doc` 표에는 sha256도 원본 키도 없어서(10-20 축소 스키마가 `s3_key`를 뺌, `build_bundle`의 `_meta`에도 안 남음) 정확히 맞출 열이 없다. `original_filename`으로 맞추면 같은 이름 문서가 섞인다(mc-14와 같은 이유로 하지 않음).
+- 결정: mc-14와 같이 pl-25(문서 키 `s3_key` 통일 — 검색 `doc`에 원본 키가 들어옴)를 기다린다. 그 뒤 `source_key`로 조회하도록 고친다(ParsingMeta 쪽 스키마 변경은 필요 없음).
+- Files: `mcp_server/services/search/shaping.py`, `common/store/parsing_meta_db.py`.
+- Status: todo — pl-25 대기(코드 수정 없음 — 키 설계는 [db_schema.md](../architecture/db_schema.md) §1·§3).
