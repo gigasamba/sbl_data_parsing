@@ -80,6 +80,17 @@ def run_env_block():
     return f"RUN_ENV={run_env} — 내부망 전용(외부 모델 거부)" if run_env else "RUN_ENV 없음 — local이 아니면 내부망 전용(외부 모델 거부)"
 
 
+def fake_llm():
+    """가짜 LLM 응답(common.dev.llm_fake)을 쓸지 — op-02(사용자 10-29): local 전용. 서버(dev·prd)·모르는 RUN_ENV에서 켜져 있으면
+    RuntimeError(시작 관문을 안 거치는 docker exec 모듈도 막음). RUN_ENV 없음(selftest·시험)은 지금처럼 허용."""
+    if not cfg().dev.llm_fake:
+        return False
+    run = guard_run_env()
+    if run is not None and run != "local":
+        raise RuntimeError(f"RUN_ENV={run} — 가짜 LLM 응답(common.dev.llm_fake)은 local 전용(서버에서 끔)")
+    return True
+
+
 def external_ok(allow):
     """외부 모델 허용 규칙 한 곳 — 허용 스위치가 켜지고 RUN_ENV=local일 때만(합성 문서 선언 잠금은 사용자 10-29에 삭제).
     external_allowed(설정 칸)·llm.chat(allow_external 인자)이 이 한 곳을 거친다."""

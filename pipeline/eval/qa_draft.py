@@ -31,6 +31,7 @@ import json
 import sys
 from pathlib import Path
 
+from common.ai.guard import fake_llm
 from common.config import settings as C  # S7c — 설정 객체(common 칸: VLM_*·LLM_FAKE)
 from common.core.console import utf8_stdout
 from pipeline import config as pc  # S7c — 설정 객체(pipeline 칸: VLM_DEADLINE·QA_DRAFT_*)
@@ -88,7 +89,7 @@ def _vlm_qa(img_bytes, max_items):
     model_dir = V._model_dir(model)
     p_qa = _template("qa_draft", "qa").replace("{max_items}", str(max_items))
     prompt_text = p_qa + "\n\n" + _tail("qa_draft")
-    if C.cfg().dev.llm_fake:  # S7c — 설정 객체(옛 env == "1") · 네트워크·캐시 0 모의 응답(경로 연기 시험 — c0 10-14)
+    if fake_llm():  # S7c — 설정 객체(옛 env == "1") · 네트워크·캐시 0 모의 응답(경로 연기 시험 — c0 10-14)
         from common.ai.llm import fake_reply
 
         text, u = fake_reply([{"role": "user", "content": [{"type": "text", "text": prompt_text}]}])
