@@ -1,5 +1,5 @@
 -- PM1 — EDW(SQL Server) 파싱 결과 메타 표 AI.ParsingMeta (사람·DBA가 1회 실행, 코드는 표를 만들지 않음)
--- 쓰는 곳: pipeline/load/publish_parse_result.py(INSERT·status UPDATE, 계정 PM_DB_*) · mcp_server/services/search/shaping.py(rep_uri 조회, doc_key — S5 전 data_retrieval/mcp_server.py)
+-- 쓰는 곳: pipeline/load/publish_parse_result.py(INSERT·status UPDATE, 쓰기 계정 common.connections.rdb.write) · mcp_server/services/search/shaping.py(rep_uri 조회, doc_key — S5 전 data_retrieval/mcp_server.py)
 -- 열 이름·순서 = common_tools/parsing_meta_db.py COLUMNS (시험 test_parsing_meta_ddl.py가 같은지 고정)
 -- 10-14 Object Storage 구조(사용자): rep_key = 문서 폴더 `.../Parsing-Result/<출처>/<UUID>/<원본파일명>/`(끝 '/'),
 --   parse_date = 'YYYY-MM-DD_HHMMSS'(같은 이름 충돌 시 '-2'… 접미) — 날짜형이 아니라 글자.
@@ -73,6 +73,6 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ParsingMeta_doc_key' AND object_id = OBJECT_ID(N'AI.ParsingMeta'))
 CREATE INDEX IX_ParsingMeta_doc_key ON [AI].[ParsingMeta] (doc_key);
 GO
--- 쓰기 계정(PM_DB_USER)은 이 표에 SELECT·INSERT·UPDATE만(DELETE·DDL 없음), 읽기(검색 MCP)는 SELECT만.
+-- 쓰기 계정(common.connections.rdb.write)은 이 표에 SELECT·INSERT·UPDATE만(DELETE·DDL 없음), 읽기(검색 MCP)는 SELECT만.
 -- ponytail: 이미 있는지 확인(SELECT … WHERE source_system=? AND source_key=? 또는 doc_key=?)은 색인을 못 타
 --   표 훑기 일 수 있다 — 행 수가 수십만을 넘어 게시가 느려지면 코드 쪽 조회를 더 다듬을 것.

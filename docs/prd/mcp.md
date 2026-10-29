@@ -32,7 +32,7 @@ Client scope, versions and duplicates. Why: answers must not mix clients or cite
 ## mc-06
 `query_edw` tool — read-only EDW SQL. Why: structured questions answered from the company EDW.
 - What: one SELECT/WITH only, table allowlist (mssql: off by default — `EDW_QUERY_TABLES_STRICT=0` allows every schema except system catalogs; the sqlite stand-in uses its bundled list), row/time/byte caps, separate low-privilege login; sqlite stand-in for PC tests.
-- Files: `mcp_server/services/edw_query.py`, `mcp_server/services/edw_calls.py`, `common/store/edwdb.py`.
+- Files: `mcp_server/services/edw_query.py`, `mcp_server/services/edw_calls.py`.
 - Status: done
 
 ## mc-07

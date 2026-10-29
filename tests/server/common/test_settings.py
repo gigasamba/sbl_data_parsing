@@ -138,9 +138,9 @@ def selftest():
         # R-3 — YAML 스칼라: 글자 칸은 쓴 글자 그대로, 켜기·숫자·JSON 칸은 YAML이 푼 값
         y = d / "scalars.yaml"
         y.write_text(
-            "common:\n  run_env: local\n  connections:\n    edw:\n      encrypt: yes\n      trust_cert: no\n      port: '1433'\n"
-            "    object_storage:\n      verify_tls: 1\n    pg:\n      password: 1234\n      db: True\n"
-            "    parsing_meta:\n      sqlite: 2026-10-27\n"
+            "common:\n  run_env: local\n  connections:\n"
+            "    object_storage:\n      verify_tls: 1\n      region: yes\n    pg:\n      password: 1234\n      db: True\n      host: no\n"
+            "    rdb:\n      sqlite: 2026-10-27\n"
             "  models:\n    embed:\n      allow_external: true\n    vlm:\n      allow_external: '1'\n"
             "    guard:\n      internal_host_suffixes: [corp, 10]\n"
             "      internal_ip_ranges: 10\n"
@@ -151,12 +151,12 @@ def selftest():
         c = sy.common.connections
         check(
             "YAML 스칼라(R-3): 글자 칸 yes·no·1·True → 쓴 글자 'yes'·'no'·'1'·'True'(옛 env 줄과 같은 글자)",
-            (c.edw.encrypt, c.edw.trust_cert, c.object_storage.verify_tls, c.pg.db) == ("yes", "no", "1", "True")
-            and type(c.edw.encrypt) is str,
+            (c.object_storage.region, c.pg.host, c.object_storage.verify_tls, c.pg.db) == ("yes", "no", "1", "True")
+            and type(c.object_storage.region) is str,
         )
         check(
             "YAML 스칼라(R-3): 비밀 칸 숫자 1234 → 글자 '1234' · 날짜 2026-10-27 → 글자 그대로",
-            c.pg.password.get_secret_value() == "1234" and c.parsing_meta.sqlite == "2026-10-27",
+            c.pg.password.get_secret_value() == "1234" and c.rdb.sqlite == "2026-10-27",
         )
         check(
             "목록 칸에 스칼라 하나(internal_ip_ranges: 10) → ['10'](옛 env 한 값과 같게)",
@@ -190,21 +190,19 @@ def selftest():
             sy.common.models.llm.extra_body == {"reasoning": {"enabled": False}, "n": 1},
         )
         with Cache(_TApp).override(
-            data={"common": {"connections": {"edw": {"encrypt": True}}}}, file=d / "empty.yaml", environ={"RUN_ENV": "local"}
+            data={"common": {"connections": {"object_storage": {"region": True}}}}, file=d / "empty.yaml", environ={"RUN_ENV": "local"}
         ) as so:
-            check("시험 data=: 글자 칸에 파이썬 True → 옛 env 꼴 '1'", so.common.connections.edw.encrypt == "1")
+            check("시험 data=: 글자 칸에 파이썬 True → 옛 env 꼴 '1'", so.common.connections.object_storage.region == "1")
         # R-4 — 빈 글자: 기본값 있는 칸은 설정 안 함(옛 `get(X) or 기본값`), 기본값 None인 글자 칸만 '' 유지 · 옛 env·migrate도 같은 규칙
         bl = load(
             _TApp,
             file=d / "empty.yaml",
             environ={"RUN_ENV": "local"},
-            names={"EDW_DRIVER": "", "OS_REGION": "", "PG_HOST": "", "EMBED_TIMEOUT": "", "INTERNAL_IP_RANGES": ""},
+            names={"OS_REGION": "", "PG_HOST": "", "EMBED_TIMEOUT": "", "INTERNAL_IP_RANGES": ""},
         )
         check(
-            "빈 글자(R-4): 기본값 있는 글자 칸(EDW_DRIVER·OS_REGION)의 ''은 기본값, 설정 안 한 칸으로 봄",
-            bl.common.connections.edw.driver == "pymssql"
-            and bl.common.connections.object_storage.region == "us-east-1"
-            and not _is_set(bl, "common.connections.edw.driver"),
+            "빈 글자(R-4): 기본값 있는 글자 칸(OS_REGION)의 ''은 기본값, 설정 안 한 칸으로 봄",
+            bl.common.connections.object_storage.region == "us-east-1" and not _is_set(bl, "common.connections.object_storage.region"),
         )
         check(
             "빈 글자(R-4): 기본값 None 글자 칸(PG_HOST)은 '' 유지 · 숫자·목록 칸 ''은 기본값",
@@ -212,14 +210,10 @@ def selftest():
             and bl.common.models.embed.timeout == 60
             and bl.common.models.guard.internal_ip_ranges == [],
         )
-        bk = load(
-            _TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"EDW_ENCRYPT": "", "OS_VERIFY_TLS": "", "EXTERNAL_SCOPE": ""}
-        )
+        bk = load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"OS_VERIFY_TLS": "", "EXTERNAL_SCOPE": ""})
         check(
-            "빈 글자: blank=keep 칸(옛 os.environ.get(X, 기본) — OS_VERIFY_TLS·EXTERNAL_SCOPE)은 '' 유지(S7a2 (b)) · "
-            "EDW_ENCRYPT는 기본값(edwdb.py가 `if os.environ.get(k)`로 빈 값을 거름)",
-            (bk.common.connections.object_storage.verify_tls, bk.common.models.guard.external_scope) == ("", "")
-            and bk.common.connections.edw.encrypt == "yes",
+            "빈 글자: blank=keep 칸(옛 os.environ.get(X, 기본) — OS_VERIFY_TLS·EXTERNAL_SCOPE)은 '' 유지(S7a2 (b))",
+            (bk.common.connections.object_storage.verify_tls, bk.common.models.guard.external_scope) == ("", ""),
         )
         check(
             "PG_HOST·PG_PORT 기본값 None(둘 다 없으면 docker 자동 탐지 — services.detect_pg)",
@@ -652,7 +646,7 @@ def selftest():
         # U-a(사용자 10-27) — 영구 다리는 이미지마다 common + 자기 앱 절의 엔진·인계 칸만(RAG_MODULE), 관계없는 앱 절은 내지도 검증하지도 않음
         ua = d / "ua.yaml"
         ua.write_text(
-            "common:\n  paths:\n    glossary_dir: /g\npipeline:\n  extract:\n    ocr:\n      dpi: 150\n  connections:\n    rdb:\n      password: dummy-ua\n"
+            "common:\n  paths:\n    glossary_dir: /g\npipeline:\n  extract:\n    ocr:\n      dpi: 150\n  connections:\n    secure_doc:\n      password: dummy-ua\n"
             "mcp:\n  search:\n    weights:\n      id: 7\n",
             encoding="utf-8",
         )
@@ -664,7 +658,11 @@ def selftest():
             env_e = {"SETTINGS_FILE": str(f), "RAG_MODULE": mod, "RUN_ENV": "dev"}
             try:
                 pin_env(env_e)
-                seen[(mod, f.name)] = (env_e.get("GLOSSARY_DIR"), env_e.get("OCR_DPI"), "RDB_PASSWORD" in env_e or "SEARCH_W_ID" in env_e)
+                seen[(mod, f.name)] = (
+                    env_e.get("GLOSSARY_DIR"),
+                    env_e.get("OCR_DPI"),
+                    "SECURE_DOC_PASSWORD" in env_e or "SEARCH_W_ID" in env_e,
+                )
             except SettingsError:
                 seen[(mod, f.name)] = "거부"
         ocr = "150" if has_p else None

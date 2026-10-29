@@ -13,7 +13,7 @@ from tests.server.pipeline.test_publish_parse import make_fixture
 def test_sidecar_guard():  # 옛 test_publish_parse의 r2·r3 업로드 단언(+ 그 전제 source.json)
     d, out, a = make_fixture()
     os_dir, db_path = d / "os", d / "edw.sqlite"
-    with pc.PIPE.env(PM_BUCKET=f"file://{os_dir}"), COMMON.env(PM_DB_SQLITE=str(db_path), STRUCT_DB=str(d / "struct.sqlite")):
+    with pc.PIPE.env(PM_BUCKET=f"file://{os_dir}"), COMMON.env(RDB_SQLITE=str(db_path), STRUCT_DB=str(d / "struct.sqlite")):
         a.apply = True
         run(a)
         folder = next(os_dir.rglob("a_2026-10-08.md")).parent

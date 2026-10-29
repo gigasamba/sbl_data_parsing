@@ -61,7 +61,6 @@ EXCLUDED_FILES = (
     "ai/agent_prompts.py",  # 지시문 글자 변경은 agent_platform.pipeline._package_digest가 이미 따로 추적(여기서 또 볼 필요 없음)
     "core/artifacts.py",  # 실험 저장소 계약(code_fp·캐시 정리) — cli/stack_matrix.py·파싱 이식 도구 전용, parse↔structure↔load 런타임 핸드오프 밖
     "core/docmeta.py",  # structure(build_bundle.py)↔search(retriever.py) 전용(날짜·구판 판정) — parse·load는 안 씀, 이 FINGERPRINT가 보는 두 경계(parse→structure·structure→load) 밖
-    "store/edwdb.py",  # EDW(SQL Server) 연결 설정 — 접속 방법만
     "ai/embed.py",  # 임베딩 계산은 structure(쓰기)·search(질의)가 맞아야 하지만 search는 이 FINGERPRINT 경계 밖(MARK에 없음)이라 넣어도 그 위험을 못 막고,
     # 질의 캐시 코드(RV1)가 내용과 무관하게 자주 바뀌어 넣으면 그 캐시 수정마다 재파싱을 유발(10-09 사고). structure 쪽 재사용 판정은 common/artifacts.code_fp("s")가 이미 embed.py를 따로 잡음(cli/index.py)
     "ai/guard.py",  # 내부망 확인(허용/거부) — 통과하면 호출 내용을 바꾸지 않음, _rep/bundle 바이트·해석과 무관
@@ -89,7 +88,7 @@ EXCLUDED_FILES = (
 # 최상위 *.py만 보므로 옮긴 파일은 더 이상 거기 잡히지 않음 — 위 목록은 fingerprint() 읽기 경로 용으로 계속 정확히 유지).
 # S3(10-26, refactor_plan 9-1·9-2) — common_tools → common/{core,ai,store,check}. 위 두 목록은 새 자리(이 폴더 기준)이고,
 # 지문에 넣는 이름은 아래 _HANDOFF_LEGACY의 옛 상대 경로 그대로(경로 글자만 바뀐 것으로 FINGERPRINT가 바뀌지 않게).
-# store/edwdb.py·objectstore.py 등 store/·check/ 아래 나머지는 처음부터 이 목록 밖이었다(최상위만 _unclassified가 봄).
+# store/objectstore.py 등 store/·check/ 아래 나머지는 처음부터 이 목록 밖이었다(최상위만 _unclassified가 봄).
 # S4(10-26, VS3 R-1 — 코디네이터 Task) — _unclassified가 common/ 하위 폴더까지 본다(S3 전에는 최상위 common_tools/*.py
 # 4개를 봤는데, S3로 그 파일들이 core/로 내려가 최상위에는 __init__.py만 남아 검사가 사실상 비어 있었음). 빠져 있던
 # 하위 패키지 __init__.py 5개·check/ 도구 3개를 EXCLUDED_FILES에 더함 — FINGERPRINT는 HANDOFF_FILES만 보므로 그대로.

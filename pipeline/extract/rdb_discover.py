@@ -7,11 +7,11 @@ size_bytes·size → size · updated_at·mod_seq·id → increment)으로 맞춰
 표시(그 열은 사람이 sources.json에서 직접 채움) — bucket·enabled는 늘 빈 값·false로 출력(사람이 검토 후 채움).
 
 사용:
-  python cli/rdb_discover.py --like "FileStorageMap%"        # RDB_ENGINE(기본 mssql)·RDB_HOST 등 접속 env로 질의
+  python cli/rdb_discover.py --like "FileStorageMap%"        # RDB_ENGINE(기본 mssql) · 접속은 common.connections.rdb 읽기 계정
   python cli/rdb_discover.py --from-csv <경로> [--table <이름>]  # 시험용 — RDB 없이 csv 머리글만 열로(행 값은 안 읽음)
 
 접속(실제 질의일 때만): RDB_ENGINE(기본 mssql, common/sources.py와 무관 — modules/parse/source.py와 같은 env) ·
-mssql(pymssql) RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_USER·RDB_PASSWORD·RDB_CONNECT_KWARGS · pg는 common/pg.py 재사용.
+mssql(pymssql) common.connections.rdb(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_READ_USER·RDB_READ_PASSWORD·RDB_CONNECT_KWARGS) · pg는 common/pg.py 재사용.
 """
 
 import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settings.pin_env)를 첫 줄에서(S7e2 — 옛 옵션 카탈로그 채우기 자리)

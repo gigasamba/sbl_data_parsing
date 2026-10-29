@@ -30,12 +30,10 @@ Rows with an ID are open defects; the rest are behaviors to know.
 | Hard filters on every store | PG store only; local bundle: filters-only returns an error, question + filters searches unfiltered | `search_svc.py` | mc-01 |
 | Knowledge graph searchable | built into the bundle, not loaded to PG, no search method reads it now | `build_bundle.py` | pl-06 |
 | DRM/password files decrypted in the flow | decryption is a manual CLI (`python -m pipeline.extract.secure_docs decrypt`) | `secure_docs.py` | pl-02 |
-| EDW vector load | `edw_insert` exists but nothing calls it (CLI, compose, run_docs) | `pipeline/load/edw_insert.py` | — |
 
 ## 2. Code with no requirement — keep (write an anchor) or delete?
 
 **mcp**
-- EDW vector search — `usp_vec_topk`, `EdwClient`; only `ask --edw`/`--edw-client`, the server builds its retriever with EDW off. `mcp_server/services/search/edw_search.py`, `mcp_server/cli/ask.py`, `common/store/edwdb.py`.
 - Evidence parse-result paths from `AI.ParsingMeta` (`MCP_EVIDENCE_PATHS`, on). `shaping.py`.
 - Evidence image crops and internal lookups not exposed as tools: `do_evidence_image`, `do_get_image`, `do_related` (tests only), `do_lookup_term`, `do_get_document`, `do_list_documents`. `internal_docs.py`.
 - Tie-break by question entities (`SEARCH_TIE_BREAK`, on). `search_svc.py`.
@@ -43,7 +41,6 @@ Rows with an ID are open defects; the rest are behaviors to know.
 - Document registry CLI. `mcp_server/cli/registry_cli.py`.
 
 **pipeline**
-- EDW vector insert with no caller — `pipeline/load/edw_insert.py` (`EDW_LOAD=0`).
 - Email attachments: recursive `.eml`/`.msg` attachment parse (depth 1, 20 MB, 10 files) and quoted-thread folding (`ATTACH_*`). `represent/attachments.py`.
 - Streaming parse — fetch a small batch, parse, delete originals at once (`PARSE_STREAM=0`; nothing turns it on, run_docs does not use it). `pipeline/stream.py`.
 - Shadow mode — asks an LLM what it would decide at each recorded rule decision and logs agree/disagree to `parse/_shadow/`; never changes results; manual CLI only (`PARSE_SHADOW=0`). Not tied to the removed parse agent. `represent/shadow.py`, `pipeline/eval/parse_shadow.py`.
@@ -70,7 +67,7 @@ Full switch list with defaults: `settings.sample.yaml` part 2, groups "[기능 �
 | Hard client isolation | `SEARCH_CLIENT_HARD=0`, `SEARCH_CLIENT_STRICT=0` | — | mcp |
 | Newest version first always | `SEARCH_RECENCY=1` (only "latest" questions; `2` = always) | — | mcp |
 | LLM router for borderline aggregation | `SEARCH_AGG_LLM=0` | LLM | mcp |
-| `query_edw` | `EDW_QUERY=1` | `EDW_QUERY_SERVER/USER/PASSWORD` or `EDW_QUERY_SQLITE` | mcp |
+| `query_edw` | `EDW_QUERY=1` | `common.connections.rdb` + read account, or `RDB_SQLITE` | mcp |
 | `edw_meta` | — | dataset at `EDW_META_DIR` (default `/app/config/edw_meta`) | mcp |
 | `parse_document` | `PARSE_OCR_ENGINE=0` (no OCR/VLM engines — `PARSE_MCP_OCR` merged 10-29) · limits 1 s/page text, 60 s/page VLM | `mcp_parse_service` running + `PARSE_SERVICE_TOKEN` | mcp |
 | VLM engine, figures, page VLM | on (OCR engines off — `PARSE_OCR_ENGINE=0`, pl-22) | VLM endpoint; soffice (`SOFFICE_BIN`) for slides/shapes | pipeline |
@@ -80,15 +77,14 @@ Full switch list with defaults: `settings.sample.yaml` part 2, groups "[기능 �
 | Split big tables by rows | `CHUNK_TABLE` unset (tables whole) | — | pipeline |
 | LLM summaries | `EDW_SUMMARY_LLM=0` (lead text) | LLM | pipeline |
 | Embeddings | image default `PIPE_EMBED=api` | `EMBED_BASE_URL`, `EMBED_MODEL` | pipeline |
-| EDW vector load | `EDW_LOAD=0` | a call site (none today) + EDW settings | pipeline |
-| Publish to Object Storage + `AI.ParsingMeta` | runs by default in `night`, run_docs and the image `publish` step (all pass `--apply`; `NIGHTLY_PUBLISH=1`) | `PM_BUCKET`, `PM_DB_*` (exits without `PM_BUCKET`) | pipeline |
+| Publish to Object Storage + `AI.ParsingMeta` | runs by default in `night`, run_docs and the image `publish` step (all pass `--apply`; `NIGHTLY_PUBLISH=1`) | `PM_BUCKET`, `common.connections.rdb` write account (exits without `PM_BUCKET`) | pipeline |
 | Nightly schedule | `NIGHTLY_ENABLED=0` | — | pipeline |
 | `--prune`, create `vector` extension | opt-in · `PG_CREATE_EXTENSION=0` | — | pipeline |
 | Trigger server | — | `TRIGGER_TOKEN` (refuses to start without) | pipeline |
 | External (paid) models | `*_ALLOW_EXTERNAL=0`, PC only (`RUN_ENV=local`) | budget caps (`LLM_BUDGET_USD`, `LLM_MAX_CALLS`) | shared |
 | Answer check, stack/model matrices | — | LLM; paid runs need approval | e2e |
 
-Requested 10-29 "EDW and Object Storage load on by default": publish (Object Storage + `AI.ParsingMeta`) already runs by default once `PM_BUCKET`/`PM_DB_*` are set; what is off is the nightly schedule (`NIGHTLY_ENABLED=0`) and the EDW vector load (`EDW_LOAD=0`, no caller). Not changed yet — needs the user's choice (and the DB owner for EDW writes).
+Requested 10-29 "EDW and Object Storage load on by default": publish (Object Storage + `AI.ParsingMeta`) already runs by default once `PM_BUCKET` and the EDW write account are set; what is off is the nightly schedule (`NIGHTLY_ENABLED=0`) — not changed yet, needs the user's choice. The EDW vector load was deleted 10-29 (vectors only in pgvector — [ops.md#op-03](ops.md#op-03)).
 
 ## 4. Removed 10-29 (user decision)
 

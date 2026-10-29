@@ -16,7 +16,7 @@ def test_registry_update():  # publish --apply의 문서 대장 갱신이 실패
     d, out, a = make_fixture()
     with (
         pc.PIPE.env(PM_BUCKET=f"file://{d / 'os'}"),
-        COMMON.env(PM_DB_SQLITE=str(d / "edw.sqlite"), RUN_MODE="prod", STRUCT_DB=str(d / "struct.sqlite")),
+        COMMON.env(RDB_SQLITE=str(d / "edw.sqlite"), RUN_MODE="prod", STRUCT_DB=str(d / "struct.sqlite")),
     ):
         a.apply = True
         note = (run(a).get("registry_status_update") or {}).get("note") or ""

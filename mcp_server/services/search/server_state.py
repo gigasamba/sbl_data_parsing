@@ -63,9 +63,7 @@ def _build_retriever():
     cur = cfgtables.active("stack")  # S8b — 엔진 구성 활성 판(서버 = 판 표 — 프로세스 시작 때 읽은 것, PC = 파일)
     st = cur.named()
     bundle = C.cfg().paths.mcp_bundle or str(APP_ROOT / "output" / "edw" / "bundle")  # S7e1 — common 칸(옛 mcp.server.bundle)
-    R = RT.Retriever(
-        bundle, False, False, st.get("retrieve", "hybrid"), a.pg, REG.try_open_db()
-    )  # OP1 — 숨김 집합(best-effort, 없으면 바이트 동일)
+    R = RT.Retriever(bundle, st.get("retrieve", "hybrid"), a.pg, REG.try_open_db())  # OP1 — 숨김 집합(best-effort, 없으면 바이트 동일)
     _STATE["R"], _STATE["bundle"], _STATE["stack"] = R, bundle, st
     _STATE["version"], _STATE["checked_at"] = _version_of(R.pg, bundle), time.time()
     if old is not None and old.pg is not None and old.pg is not R.pg:
@@ -147,8 +145,6 @@ def _index_retriever(index_id):
         pg = base.pg is not None
         R = RT.Retriever(
             bundle,
-            False,
-            False,
             (_STATE.get("stack") or {}).get("retrieve", "hybrid"),
             pg,
             REG.try_open_db(),

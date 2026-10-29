@@ -35,8 +35,8 @@ keep.txt에서 빠짐) · not_parsed(이번 파싱 대상 아님) · skipped_dis
 
 쓰기 대상(전부 PM1 결정 대기 — 사람):
   PM_TABLE(기본 AI.ParsingMeta) · PM_BUCKET(업로드 버킷, "file://<폴더>"면 로컬 폴더를 가짜 Object Storage로 — L2 시험) ·
-  PM_PREFIX(버킷 안 경로 접두, 선택) · PM_DB_HOST·PM_DB_PORT(1433)·PM_DB_DATABASE·PM_DB_USER·PM_DB_PASSWORD
-  (EDW 쓰기 전용 계정 — RDB_* 읽기 계정과 분리) · PM_DB_SQLITE(설정하면 SQLite를 가짜 EDW로 — L2 시험, PM_DB_* 안 봄).
+  PM_PREFIX(버킷 안 경로 접두, 선택) · common.connections.rdb 쓰기 계정(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_WRITE_USER·RDB_WRITE_PASSWORD
+  — 사용자 10-29 ops.md#op-03) · RDB_SQLITE(설정하면 SQLite를 가짜 EDW로 — L2 시험, 접속 칸 안 봄).
 업로드 접속은 Object Storage 읽기와 같은 env(OS_ENDPOINT·OS_ACCESS_KEY·OS_SECRET_KEY·OS_REGION·OS_VERIFY_TLS —
 modules/parse/source.py·cli/os_put.py와 같음).
 

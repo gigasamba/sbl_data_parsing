@@ -1,5 +1,5 @@
--- [SYNTHETIC] PC stand-in for the EDW schema AI (real EDW = SQL Server). Built into valid_env/edw/ai.sqlite by
--- dev_tools/test_tools/edw_sample.py; the connector ATTACHes that file AS AI, so AI.FileStorageMap resolves like T-SQL.
+-- [SYNTHETIC] PC stand-in for the EDW schema AI (real EDW = SQL Server). Built into valid_env/edw/edw.sqlite (one file, all schemas — python -m validation.e2e.edw_standin);
+-- the connector ATTACHes that file AS AI, so AI.FileStorageMap resolves like T-SQL.
 -- STRICT tables + CHECK(length) mirror the NVARCHAR(n)/BIGINT/INT/FLOAT types, so a bad value fails here as on the server.
 
 -- AI.FileStorageMap — one row per stored source file (s3_key 1:1). Columns read by data_etl/tools/source.py
@@ -19,7 +19,7 @@ CREATE TABLE FileStorageMap (
 ) STRICT;
 
 -- AI.ParsingMeta — same columns and keys as deploy/data_etl/tools/parsing_meta_mssql.sql
--- (common_tools/handoff_contract.py PARSING_META_COLUMNS). Written by data_etl/publish_results.py (PM_DB_SQLITE).
+-- (common_tools/handoff_contract.py PARSING_META_COLUMNS). Written by pipeline/load/publish_parse_result.py (RDB_SQLITE).
 CREATE TABLE ParsingMeta (
     parse_meta_id     INTEGER PRIMARY KEY AUTOINCREMENT,                                          -- BIGINT IDENTITY
     source_system     TEXT    CHECK (source_system IS NULL OR length(source_system) <= 64),

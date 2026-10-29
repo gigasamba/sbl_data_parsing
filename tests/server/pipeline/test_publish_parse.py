@@ -109,7 +109,7 @@ def selftest():
     os_dir, db_path = d / "os", d / "edw.sqlite"
     with (
         pc.PIPE.env(PM_BUCKET=f"file://{os_dir}"),
-        COMMON.env(PM_DB_SQLITE=str(db_path), STRUCT_DB=str(d / "struct.sqlite")),
+        COMMON.env(RDB_SQLITE=str(db_path), STRUCT_DB=str(d / "struct.sqlite")),
     ):  # S7c — 시험하는 코드가 객체만 읽음(os.environ 안 건드림)
         a.apply = True
         r1 = run(a)

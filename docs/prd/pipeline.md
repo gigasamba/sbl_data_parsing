@@ -41,8 +41,8 @@ Structure — chunks, metadata, embeddings. Why: search needs cited chunks with 
 
 ## pl-07
 Load to pgvector. Why: the search server reads PG.
-- What: tables `load_run`·`doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + view `v_chunk_source` (Alembic only); docs already loaded are skipped by `file_path` (no sha column — changed content at the same path is skipped too unless `--replace`); `--prune` removes stale rows; named indexes (`index_id`); optional EDW vector insert.
-- Files: `pipeline/load/pgvector_load.py`, `pipeline/load/index.py`, `pipeline/load/edw_insert.py`, `common/store/db/migrations/`.
+- What: tables `load_run`·`doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + view `v_chunk_source` (Alembic only); docs already loaded are skipped by `file_path` (no sha column — changed content at the same path is skipped too unless `--replace`); `--prune` removes stale rows; named indexes (`index_id`). Vectors live only in pgvector (EDW vector insert deleted 10-29 — [ops.md#op-03](ops.md#op-03)).
+- Files: `pipeline/load/pgvector_load.py`, `pipeline/load/index.py`, `common/store/db/migrations/`.
 - Status: done
 
 ## pl-08
@@ -77,7 +77,8 @@ Document registry upsert and publish guard. Why: registry upsert has a PG syntax
 ## pl-13
 `load --prune` deletes skipped documents. Why: unchanged docs that were skipped are pruned too (C-60).
 - Files: `pipeline/load/pgvector_load.py`.
-- Status: todo — decide whether to fix (one line, changes server load behavior).
+- Decided (user 10-29 grill): load only adds/updates — never deletes. Skipped (existing) docs stay. Docs deleted at the source and parse failures are only logged locally (cause + duration), no automatic removal. Drop the prune path from `load` and its callers (`pipeline/cli.py` load, the index builder `--pg`).
+- Status: todo — review grade A (server load behavior).
 
 ## pl-14
 `pgvector_load deploy` backfill reads removed `doc.client`. Why: `backfill_chunk_clients` fails after the 10-20 reduced schema (tables and indexes are still created).
@@ -96,7 +97,9 @@ Document registry upsert and publish guard. Why: registry upsert has a PG syntax
 
 ## pl-17
 Parse step location — `extract` or `transform`. Why: moving it changes code_fp p0; cheapest before the first deployment (C-61).
-- Status: todo — user decision.
+- Decided (user 10-29 grill): move `pipeline/extract/{engines/,run_all.py,parse_one.py}` → `pipeline/transform/parse/`; rename `run_all.py` → `run_parse.py` (it only parses docs × engines; "run all" reads like e2e). `extract/` keeps source · rdb_discover · dedup · prepare. One commit moves, a second renames (CLAUDE.md §1). Keep engine fingerprints via `_LEGACY_NAMES`; code_fp p0 changes — free now because the first load is a full e2e ([pl-23](#pl-23)).
+- Files: `pipeline/extract/`, `pipeline/transform/`, `common/core/artifacts.py` (`LAYER_CODE`), `pipeline/cli.py`, docs and command tables.
+- Status: todo — review grade A (fingerprints).
 
 ## pl-18
 `night`/`full` exit 0 after a midway stop. Why: schedulers cannot see the failure (C-33).
@@ -114,8 +117,8 @@ Engine stack snapshot file approach review (C-50).
 - Status: todo
 
 ## pl-21
-Deferred settings removal. Why: unused/retired settings whose removal changes fingerprints, so they wait for the next image version: `common.paths.korean_font` (settings.py → every layer code_fp), `pipeline.paths.paddle_python` and `pipeline.eval.phase_report_legacy` (read in `run_all.py` → p0 of every engine).
-- Also: the `EVAL_SETS_DIR` PC default in `common/core/paths.py` still says `valid_env/unstructured` (deleted 10-29, [e2e.md#e2-09](e2e.md#e2-09)) — change to `valid_env/eval_sets` with `tests/server/common/test_paths.py`; until then set `common.paths.eval_sets_dir` on the PC.
+Deferred settings removal. Why: unused/retired settings whose removal changes fingerprints, so they wait for the next image version: `common.paths.korean_font` (settings.py → every layer code_fp).
+- Also (user 10-29 grill): remove `common.paths.eval_sets_dir` / `paths.EVAL_SETS_DIR` (and its cases in `tests/server/common/test_paths.py`) — the only reader is `validation/e2e/stack_matrix.py` (old sets, [e2e.md#e2-10](e2e.md#e2-10)). The folder `valid_env/eval_sets/` is deleted together with its doc references in [doc.md#do-03](doc.md#do-03) (no code reads its files); eval data may come back later under `tests/`.
 - Files: `common/config/settings.py`, `pipeline/config.py`, `pipeline/extract/run_all.py`, `common/core/paths.py`.
 - Status: todo — bundle with the next fingerprint-changing release.
 
@@ -126,3 +129,41 @@ Remove the parse phase concept (user 10-29). Why: phases 1/2/3r re-ran engines w
 - Tests: `tests/server/pipeline/test_run_all.py` (over_limit, OCR switch, page_timeout, old phase timeout), `tests/server/pipeline/test_vlm_page.py` (`pick_pages`), `tests/general/pipeline/test_represent.py` (page-VLM fill).
 - Open: text engines are not split per page (one child per doc×engine; per-page parallelism only inside the VLM engine via `VLM_CONCURRENCY`).
 - Status: dev — branch `feature/r2-phase`; server check pending (refactor.md C-65). VLM concurrency knobs not merged (separate follow-up).
+
+## pl-23
+Incremental runs only; full reparse = explicit full e2e (C-52, C-08). Why: engine/handoff/code fingerprints changed for every doc; an automatic reparse of all docs would blow the nightly window.
+- Decided (user 10-29 grill): nightly and `run_docs` process **new** docs only, even after a fingerprint change. "New" = `AI.FileStorageMap.s3_key` not yet in `AI.ParsingMeta` (s3 key only — no update-time check; `run_docs` already works this way). A full reparse runs only when a person starts a full e2e (occasional — after logic changes, then results are reviewed). The first load of this version is one full e2e.
+- Not used now: FileStorageMap update time — assumed column `last_modified_time`, to be added to the EDW example later ([pl-25](#pl-25)).
+- Files: `deploy/host/scripts/run_docs.py` (done set), `pipeline/cli.py` (`night` — check it does the same).
+- Status: todo
+
+## pl-24
+Per-doc order in `run_docs`: parse → silver publish → delete original → gold (structure + load). Why: today publish waits for gold, and `cleanup_doc` deletes the original even on failure.
+- Decided (user 10-29 grill): originals are downloaded from Object Storage to the collection server, parsed, and deleted only after silver publish succeeds. Parse failure → keep the original, log cause + duration locally only, nothing in EDW. Gold failure → the EDW row stays with `gold_status` = failed (+ reason); gold can be rebuilt from silver.
+- New EDW column `AI.ParsingMeta.gold_status` (pending · ok · failed) + reason — DDL to the DB owner (company DB, not Alembic) — review grade A. The reduced ParsingMeta column list is in [pl-25](#pl-25).
+- Local test runs from `valid_env/` copy docs into a temp folder first and run there (never in place).
+- Files: `deploy/host/scripts/run_docs.py` (`doc_flow`, `cleanup_doc`, done query), `docs/operations/parsing_meta_mssql.sql`, publish (`parsing_meta`).
+- Status: todo — after [pl-25](#pl-25).
+
+## pl-25
+DB schema spec, written before pl-26·pl-23·pl-24 are built. Why: table/column definitions are spread over Alembic migrations (`common/store/db/migrations/versions/`), `docs/operations/parsing_meta_mssql.sql` (ParsingMeta only) and code reading `AI.FileStorageMap` (no definition); the 10-20 reduced schema is only half applied in code (mc-10, mc-11, pl-14, pl-15).
+- Decided (user 10-29 grill): one doc `docs/architecture/db_schema.md` — per table: columns, type, meaning, which code writes/reads it — for EDW `AI.FileStorageMap` (id, s3_key, original_filename, file_size, `last_modified_time` assumed), `AI.ParsingMeta` (+ `gold_status`), pgvector search schema and `struct`. The reduced 10-20 schema is the truth; code that disagrees is fixed in mc-10/mc-11/pl-14/pl-15. One test compares the doc's columns with the migrations and the mssql sql. The user and the DB owner sign it off before implementation; the DB owner gets this doc.
+- Decided (user 10-30 grill — gold schema):
+  - Keys: `s3_key` is the only document key. Drop sha256 `doc_key`; re-key registry, `doc_hidden` and `doc_contract_link` to `s3_key` (unblocks [mcp.md#mc-14](mcp.md#mc-14) and [mcp.md#mc-15](mcp.md#mc-15) — rep_uri lookup by `ParsingMeta.source_key`). Search `doc`/`chunk` must carry `s3_key`.
+  - Gold now: ONE table set (`doc`, `chunk`, `chunk_term`, `term_stat`, `corpus_stat`). Later (design now, build later): every table per source system — SFDC · CRMS · LAS · Other, columns may differ per source; at that split MCP `search` requires a source (one contract change, new version, grade A). No optional `source` input before then.
+  - Source = `AI.FileStorageMap.source_system`; empty or not SFDC/CRMS/LAS → `Other`; mismatch with the s3_key prefix → log warning only.
+  - SFDC-only columns (`sf_acc_name`, `sf_op_id`, `sf_op_name`, `project_code__c`) stay in the one `doc` table (empty for other sources); they move to the SFDC doc table at the split.
+  - `load_run` and the Alembic version table stay in gold, shared after the split. `chunk` keeps `source_system` and `clients[]` (client isolation, source filter).
+  - `AI.ParsingMeta` keeps only read columns: `source_system`, `source_key` (s3_key), `parse_date`, `parse_status`, `status`, `status_at`, `rep_bucket`, `rep_key`, plus new `gold_status` + reason ([pl-24](#pl-24)). Drop `doc_key` and the 14 unread columns.
+  - `struct`: delete the document-derived tables `doc_location`, `doc_contract_link`, `doc_table`, `doc_cell` and their writers/readers (structured link/tables, `load_tables_db`, `find_table_cells`, aggregate `doc_link_list`/`table_cell_list`/`doc_location_list`, `AG.struct` server path) — that content lives only in chunk text. Keep `stack_version`/`source_version` (read at MCP start).
+  - Masters `contract_master`, `client_master` move to a SEPARATE Postgres (own connection setting, not the search PG), filled by a person from CSV (`structured load` style). Readers `gen_roster` (client_master) and `terms.py` (contract_master) use the new connection.
+  - EDW vector tables (`chunk_vec`, `edw_insert`, `edw_search`) are removed by PR #5.
+- Files: `docs/architecture/db_schema.md` (new), `docs/index.md`, `common/store/db/migrations/versions/`, `docs/operations/parsing_meta_mssql.sql`, `tests/server/common/` (one test).
+- Status: todo — first.
+
+## pl-26
+`full` always publishes; no "skip publish" path (C-31). Why: help text said "no EDW load" while `full` published, and it ignored `NIGHTLY_PUBLISH`.
+- Decided (user 10-29 grill): publish (silver → Object Storage + EDW) is the default and only mode — remove `--no-publish` and `pipeline.host.nightly.publish`. Publish targets are required settings; missing → refuse to start.
+- Targets per `RUN_ENV`: `local`·`dev` pick one of (a) local path (folder for Object Storage, file DB for EDW) or (b) real connection info (API/DB); `prd` real connection only (`stage` was dropped from RUN_ENV — op-02). The PC keeps the CLAUDE.md §4 guard (no prod EDW/OS from the PC).
+- Files: `pipeline/cli.py` (`night`, `full`), `deploy/docker/entrypoint.sh`, publish in `pipeline/load/`, `pipeline/config.py`, `docs/operations/server-guide.md`.
+- Status: todo

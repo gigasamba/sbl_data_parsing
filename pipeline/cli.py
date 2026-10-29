@@ -10,7 +10,7 @@
                   --activate N 되돌리기) — 서버 = 판 표 struct.stack_version 새 판·활성(--reason 필수), PC = 파일(S8b — docs/architecture/pipeline_stack.md)
   show-stack      지금 엔진 구성(서버 = 활성 판 + 최근 판)
   set-sources · show-sources  원천 목록(서버 = 판 표 struct.source_version, PC = 파일) — --file·--activate·--check-columns
-  run-stack       스택 엔진만 파싱 → 대표 파싱(문서마다 하나, modules/parse/represent.py) → 구조화·벡터화·그래프(modules/structure/build_bundle.py) → (--edw) EDW 적재
+  run-stack       스택 엔진만 파싱 → 대표 파싱(문서마다 하나, modules/parse/represent.py) → 구조화·벡터화·그래프(modules/structure/build_bundle.py)
   parse · structure · load  모듈 1회 실행(트리거) — 앞 모듈 끝 표시(_DONE.json)를 보고 이어 받음, 새 입력 없으면 건너뜀(docs/architecture.md)
   (ask · test-stack — 검색 명령은 S5(10-26, T-15)에 python -m mcp_server.cli.ask로 옮김: 파이프라인 CLI가 검색 코드를 import하지 않게)
 산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서) · output/stack_test.md · output/RUNLOG.md(명령 요약)
@@ -939,7 +939,7 @@ def run_stack(a):
 
 
 def connect(a):
-    """연결 기본값(백로그 E6 · 사용자 2026-10-01): --pg·--edw·--edw-client·--local 지정이 없으면 Docker에 떠 있는 pgvector에 연결,
+    """연결 기본값(백로그 E6 · 사용자 2026-10-01): --pg·--local 지정이 없으면 Docker에 떠 있는 pgvector에 연결,
     없으면 로컬 묶음. → common/services.py"""
     from common.store import services
 

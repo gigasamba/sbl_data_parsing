@@ -1,5 +1,5 @@
 -- [SYNTHETIC] PC stand-in for the EDW schema LAS (product/service/division masters — real tables TBD on the server).
--- Built into valid_env/edw/las.sqlite, ATTACHed AS LAS. Column names = the edw_masters mapping in config_examples/etl.example.json.
+-- Built into valid_env/edw/edw.sqlite (one file, all schemas — python -m validation.e2e.edw_standin), ATTACHed AS LAS. Column names = the edw_masters mapping in config_examples/etl.example.json.
 
 CREATE TABLE DIVISION_MAS (
     DIV_CD        TEXT PRIMARY KEY CHECK (length(DIV_CD) BETWEEN 1 AND 20),
