@@ -32,7 +32,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Annotated, Literal, get_args, get_origin
+from typing import Annotated, ClassVar, Literal, get_args, get_origin
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PrivateAttr, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -338,6 +338,7 @@ class Section(BaseModel):
     """설정 절 공통 — 모르는 칸은 거부(오타 잡기), 비운 칸은 기본값, YAML 스칼라는 칸 종류에 맞게(위 모듈 설명)."""
 
     model_config = ConfigDict(extra="forbid", validate_default=False)
+    REMOVED: ClassVar[frozenset[str]] = frozenset()  # 지운 칸 — 옛 설정 파일에 남아 있어도 경고만 하고 무시(한 판 동안 — 시작 거부 막기)
 
     @model_validator(mode="before")
     @classmethod
@@ -347,6 +348,9 @@ class Section(BaseModel):
         out = {}
         for k, v in data.items():
             if v is None:
+                continue
+            if k in cls.REMOVED:
+                sys.stderr.write(f"[settings] 지운 칸 무시: {k} — 설정 파일에서 지울 것(값은 출력 안 함)\n")
                 continue
             f = cls.model_fields.get(k)
             if f is None or _section_type(f.annotation) is not None:
@@ -1327,6 +1331,7 @@ class CommonModelsEmbed(Section):
 
 
 class CommonModelsGuard(Section):
+    REMOVED = frozenset({"synthetic_truth"})  # 사용자 10-29 — 합성 문서 선언 잠금 삭제(옛 migrate C-35가 옮겨 둔 서버 파일 보호)
     budget_usd: float | None = F(
         None,
         "LLM_BUDGET_USD",
@@ -1592,6 +1597,7 @@ class CommonText(Section):
 
 
 class CommonConnections(Section):
+    REMOVED = frozenset({"openviking"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     edw: CommonConnectionsEdw = Field(default_factory=CommonConnectionsEdw)
     object_storage: CommonConnectionsObjectStorage = Field(default_factory=CommonConnectionsObjectStorage)
     parsing_meta: CommonConnectionsParsingMeta = Field(default_factory=CommonConnectionsParsingMeta)
@@ -1599,6 +1605,7 @@ class CommonConnections(Section):
 
 
 class CommonModels(Section):
+    REMOVED = frozenset({"rerank"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     embed: CommonModelsEmbed = Field(default_factory=CommonModelsEmbed)
     guard: CommonModelsGuard = Field(default_factory=CommonModelsGuard)
     llm: CommonModelsLlm = Field(default_factory=CommonModelsLlm)

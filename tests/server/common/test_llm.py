@@ -100,13 +100,13 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
             LLM_CACHE_DIR=str(Path(_tmp3) / "cache"),
             LLM_BUDGET_USD=None,
         )
-        for _env in ("dev", "stage", "prd"):
+        for _env in (None, "dev", "stage", "prd", "prod", "Local"):  # 없음·모르는 글자도 서버로 보고 거부(allow_external=True여도)
             with COMMON.env(RUN_ENV=_env, **_ext):
                 try:
                     chat([{"role": "user", "content": "q"}], allow_external=True, agent="x")
                     raise AssertionError(f"RUN_ENV={_env}인데 외부 LLM 허용됨")
                 except LLMUnavailable as _e:
-                    assert f"RUN_ENV={_env}" in str(_e), str(_e)
+                    assert ("RUN_ENV 없음" if _env is None else f"RUN_ENV={_env}") in str(_e), str(_e)
         with COMMON.env(RUN_ENV="local", **_ext):
             assert chat([{"role": "user", "content": "q"}], allow_external=True, agent="x") == "외부 답"
     finally:

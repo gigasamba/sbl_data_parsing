@@ -795,6 +795,48 @@ def selftest():
                 _peek(doc_m, "common.runtime.lib_env") == {"OMP_NUM_THREADS": "2", "TZ": "Asia/Seoul"}
                 and not rep_m["옛 이름 옮김"],  # 10-29: 옛 별칭(QA_CHAT_DECOMPOSE·SYNTHETIC_TRUTH)은 기능과 함께 지움
             )
+            # 사용자 10-29 — 지운 칸 synthetic_truth(옛 migrate C-35가 서버 파일에 옮겨 둠)는 경고만 하고 무시 · 다른 모르는 칸은 그대로 거부
+            from common.config.settings import CommonModelsGuard
+
+            _g = CommonModelsGuard.model_validate({"synthetic_truth": "/t.json", "budget_usd": 0.1})
+            try:
+                CommonModelsGuard.model_validate({"synthetic_truthx": "/t.json"})
+                _typo_rejected = False
+            except ValueError:
+                _typo_rejected = True
+            check("지운 칸 synthetic_truth: 시작 거부 대신 무시 · 오타 칸은 거부", _g.budget_usd == 0.1 and _typo_rejected)
+            # 사용자 10-29 — 기능 삭제(OpenViking·재순위·질문 분해·graph 검색·파싱 판단 에이전트 등)로 지운 칸·절도 옛 파일에 남아 있으면 무시
+            _old = {
+                "common": {"connections": {"openviking": {"url": "http://x:1933"}}, "models": {"rerank": {"model": "m"}}},
+            }
+            if "pipeline" in app_classes():
+                _old["pipeline"] = {
+                    "paths": {"mineru_bin": "mineru", "paddle_python": "/p", "soffice_candidates": ["a"]},
+                    "transform": {"agent": {"enabled": "shadow"}},
+                    "load": {"structure_target": "pg"},
+                    "eval": {"phase_report_legacy": False},
+                    "dev": {"parse_agent_fake": False},
+                    "connections": {"openviking": {"root": "r"}, "graphiti": {"neo4j_uri": "bolt://x"}},
+                }
+            if "mcp" in app_classes():
+                _old["mcp"] = {
+                    "output": {"list_docs_max": 200},
+                    "search": {
+                        "rerank": {"mode": "off"},
+                        "graph": {"concept_per": 1},
+                        "decompose": True,
+                        "decompose_llm": True,
+                        "ov_search_path": "/x",
+                    },
+                }
+            _of = d / "old_removed.yaml"
+            import yaml as _yaml
+
+            from common.config import settings as _S
+
+            _of.write_text(_yaml.safe_dump(_old, allow_unicode=True), encoding="utf-8")
+            _loaded = [_S.load(cls, file=_of, environ={}, strict=False) for cls in app_classes().values()]
+            check("10-29 지운 칸·절 17개: 옛 설정 파일에 남아도 앱마다 읽힘(경고만)", len(_loaded) == len(app_classes()))
             if (
                 "pipeline" in app_classes()
             ):  # B-3(VS7e2) — 서버 env 파일의 GOLD_DIR는 호스트 칸에만(앱 칸 비움 → 이미지 안 /data/gold), PC 파일은 두 칸

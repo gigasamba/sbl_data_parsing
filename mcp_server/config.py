@@ -110,6 +110,7 @@ class McpHost(Section):
 
 
 class McpOutput(Section):
+    REMOVED = frozenset({"list_docs_max"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     cap_ranked: bool | None = F(
         True, "CAP_RANKED", "검색 응답 크기 상한(cap)을 순위 인지 방식으로 줄임 — 0이면 옛 방식(긴 본문부터 반씩 자름)", off=("0",)
     )
@@ -140,6 +141,9 @@ class McpQueryLog(Section):
 
 
 class McpSearch(Section):
+    REMOVED = frozenset(
+        {"decompose", "decompose_llm", "graph", "ov_search_path", "rerank"}
+    )  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     agg_today: str | None = F(None, "AGG_TODAY", "집계 질문의 '오늘' 기준일(YYYY-MM-DD) 고정 — 비우면 실제 오늘")
     agg_vocab_file: str | None = F(None, "AGG_VOCAB_FILE", "집계 지표 단서어 사전(agg_vocab.json)을 다른 경로로 지정")
     copy_group: bool | None = F(True, "SEARCH_COPY_GROUP", "같은 사건의 사본(형식·재명명) 근거를 묶어 대표만 남김 — 0이면 끔", off=("0",))

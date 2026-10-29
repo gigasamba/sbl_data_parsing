@@ -60,6 +60,7 @@ class PipelineTransformRepresentReread(Section):
 
 
 class PipelineConnectionsGraphiti(Section):
+    REMOVED = frozenset({"neo4j_uri"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     neo4j_password: SecretStr | None = F(None, "GRAPHITI_NEO4J_PASSWORD", "Graphiti용 Neo4j 접속 비밀번호")
     neo4j_user: str | None = F("neo4j", "GRAPHITI_NEO4J_USER", "Graphiti용 Neo4j 접속 사용자 이름", blank="keep")
 
@@ -400,6 +401,7 @@ class PipelineTransformVlm(Section):
 
 
 class PipelineDev(Section):
+    REMOVED = frozenset({"parse_agent_fake"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     allow_common_mismatch: bool | None = F(
         False, "ALLOW_COMMON_MISMATCH", "앞 모듈 결과의 공통 코드 지문이 달라도 계속 진행할지(=1 계속 / 그 외 중단)", on=("1",)
     )
@@ -417,6 +419,7 @@ class PipelineDev(Section):
 
 
 class PipelineEval(Section):
+    REMOVED = frozenset({"phase_report_legacy"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     diagram_raster_vlm: bool | None = F(
         False, "DIAGRAM_RASTER_VLM", "도식 간선 채점에서 raster 케이스에 실제 VLM을 부를지(=1 실호출 / 그 외 가짜)", on=("1",)
     )
@@ -526,6 +529,7 @@ class PipelineHost(Section):
 
 
 class PipelineLoad(Section):
+    REMOVED = frozenset({"structure_target"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     bm25_stat_rebuild: bool | None = F(False, "BM25_STAT_REBUILD", "적재 때 키워드 문서 빈도를 전체 다시 셈 — 1이면 켬", on=("1",))
     bm25_threads: int | None = F(4, "BM25_THREADS", "BM25 항목(term,tf) 계산 병렬 스레드 수(개)")
     edw_load: bool | None = F(False, "EDW_LOAD", "EDW 벡터 적재(deploy·load) 허용 — 1이어야 진행, 아니면 거부 종료", on=("1",))
@@ -547,6 +551,9 @@ class PipelineNight(Section):
 
 
 class PipelinePaths(Section):
+    REMOVED = frozenset(
+        {"mineru_bin", "paddle_python", "soffice_candidates"}
+    )  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     file_meta_path: str | None = F(None, "FILE_META_PATH", "EDW 파일 메타 JSONL 경로(s3_key → 메타)")
     gold_dir: str | None = F(
         None,
@@ -570,6 +577,7 @@ class PipelinePaths(Section):
 
 
 class PipelineConnections(Section):
+    REMOVED = frozenset({"openviking"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     graphiti: PipelineConnectionsGraphiti = Field(default_factory=PipelineConnectionsGraphiti)
     rdb: PipelineConnectionsRdb = Field(default_factory=PipelineConnectionsRdb)
     secure_doc: PipelineConnectionsSecureDoc = Field(default_factory=PipelineConnectionsSecureDoc)
@@ -581,6 +589,7 @@ class PipelineService(Section):
 
 
 class PipelineTransform(Section):
+    REMOVED = frozenset({"agent"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     figures: PipelineTransformFigures = Field(default_factory=PipelineTransformFigures)
     represent: PipelineTransformRepresent = Field(default_factory=PipelineTransformRepresent)
     structure: PipelineTransformStructure = Field(default_factory=PipelineTransformStructure)
