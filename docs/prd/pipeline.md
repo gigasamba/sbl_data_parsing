@@ -159,7 +159,7 @@ DB schema spec, written before pl-26·pl-23·pl-24 are built. Why: table/column 
   - Masters `contract_master`, `client_master` move to a SEPARATE Postgres (own connection setting, not the search PG), filled by a person from CSV (`structured load` style). Readers `gen_roster` (client_master) and `terms.py` (contract_master) use the new connection.
   - EDW vector tables (`chunk_vec`, `edw_insert`, `edw_search`) are removed by PR #5.
 - Files: `docs/architecture/db_schema.md` (new), `docs/index.md`, `common/store/db/migrations/versions/`, `docs/operations/parsing_meta_mssql.sql`, `tests/server/common/` (one test).
-- Status: todo — first.
+- Status: dev — `docs/architecture/db_schema.md` 설계안 + 시험 `tests/server/common/test_db_schema.py`(`feature/db-schema-spec`) — 사용자·DB 담당자 승인 대기(코드·스키마 변경 없음).
 
 ## pl-26
 `full` always publishes; no "skip publish" path (C-31). Why: help text said "no EDW load" while `full` published, and it ignored `NIGHTLY_PUBLISH`.
