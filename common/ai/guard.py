@@ -73,16 +73,22 @@ def is_internal(url):
 
 def run_env_block():
     """RUN_ENV가 정확히 local이 아니면(없음·dev·stage·prd·모르는 글자) 거부 이유 글자(서버는 내부망 전용 — D-028 ⑧, S7b ·
-    없음·모르는 글자도 서버로 — VS7b U-1 b), local이면 None(지금 가드대로). 두 겹 잠금이 다 열려 있어도 서버 환경이면 외부 모델을 못 쓴다."""
+    없음·모르는 글자도 서버로 — VS7b U-1 b), local이면 None(지금 가드대로). 외부 허용이 켜져 있어도 서버 환경이면 외부 모델을 못 쓴다."""
     run_env = guard_run_env()
     if external_models_allowed(run_env):
         return None
     return f"RUN_ENV={run_env} — 내부망 전용(외부 모델 거부)" if run_env else "RUN_ENV 없음 — local이 아니면 내부망 전용(외부 모델 거부)"
 
 
+def external_ok(allow):
+    """외부 모델 허용 규칙 한 곳 — 허용 스위치가 켜지고 RUN_ENV=local일 때만(합성 문서 선언 잠금은 사용자 10-29에 삭제).
+    external_allowed(설정 칸)·llm.chat(allow_external 인자)이 이 한 곳을 거친다."""
+    return bool(allow) and not run_env_block()
+
+
 def external_allowed(prefix):
     # S7b — {prefix}_ALLOW_EXTERNAL은 객체 칸(켜기 =1) · 칸 없는 접두(시험의 가짜 접두)는 False
-    return bool(by_env(f"{prefix}_ALLOW_EXTERNAL", False)) and not run_env_block()
+    return external_ok(by_env(f"{prefix}_ALLOW_EXTERNAL", False))
 
 
 def require_internal(url, prefix):

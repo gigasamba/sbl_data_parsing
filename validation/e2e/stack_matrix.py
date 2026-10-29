@@ -92,7 +92,7 @@ def _sub(args, env):
     from common.core import resources as RS
 
     # 10-13 — cwd=APP_ROOT(런타임 루트): env의 상대경로(LLM_SPEND_FILE 등)가
-    # 부모와 같은 곳을 가리키게. NM1 뒤 DEV(deploy/common_tools)에서 띄우면 합성 정답을 못 찾아 VLM이 전부 내부망 가드에 막혔음.
+    # 부모와 같은 곳을 가리키게.
     env = MM.child_env(env)  # S7e2 — 덮을 칸 사전 → 자식 env(덮기 파일)
     pr = RS.gated_popen(
         args, cwd=APP_ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace"
@@ -459,12 +459,6 @@ def cmd_sources(config, a):
         if r.returncode != 0 or not idx.exists():
             print(f"  - {ds}: 실패 — {MM._scrub(((r.stderr or r.stdout) or '')[-2000:])}")
             continue
-        truth_path = out_root / "corpus" / "truth.json"
-        truth_path.parent.mkdir(parents=True, exist_ok=True)
-        truth_path.write_text(
-            json.dumps({"_meta": {"synthetic": f"valid_env/unstructured/{ds} — 합성 데이터(외부 모델 시험 허용)"}}, ensure_ascii=False),
-            encoding="utf-8",
-        )
         print(f"  - {ds}: 완료 ({idx})")
 
 
@@ -2488,7 +2482,7 @@ def main():
         help="작업 안 동시 질문 수(스레드 — API 대기라 메모리 거의 안 듦) · auto = LLM_MAX_CONCURRENCY ÷ workers",
     )
     sp.add_argument("--allow-stale", action="store_true")
-    sp.add_argument("--allow-external", action="store_true", help="합성 데이터 실험 — 외부 LLM(두 겹 잠금의 한 겹)")
+    sp.add_argument("--allow-external", action="store_true", help="합성 데이터 실험 — 외부 LLM 허용(RUN_ENV=local일 때만)")
     sp.add_argument("--with-distractors", action="store_true", help="V11 — X+방해 문서 묶음의 S로 답 평가")
     sp.add_argument("--pool", help="pool.json — 풀 S로 답 평가, synth-distractors-v2는 oldver_value_in_answer도")
     sp.add_argument("--context-only", action="store_true", help="비용 관문 — LLM 호출 0, kw_in_context@k 곡선만(검색은 질문당 1회)")

@@ -53,7 +53,7 @@ def configured():
     return bool(cfg().models.llm.base_url and cfg().models.llm.model)
 
 
-from common.ai.guard import is_internal, require_internal, run_env_block  # noqa: E402,F401 — 내부망 확인은 common 한 곳
+from common.ai.guard import external_ok, is_internal, require_internal, run_env_block  # noqa: E402,F401 — 내부망 확인은 common 한 곳
 
 # CT1(10-16) — models.py 병합(역할별 모델 프로필 조회, agent_platform.config.ModelProfile 재사용 — 사용자 결정 2026-10-06).
 # 설정 객체에서만 읽음(S7b — 호출 시점 cfg(), 전환 기간엔 env로 만든 객체라 테스트가 env를 바꾸면 반영). 기존 LLM_BASE_URL·VLM_BASE_URL·VLM_MODEL_ALT·EMBED_* 등은 그대로 하위 호환.
@@ -312,10 +312,11 @@ def chat(messages, temperature=0.0, max_tokens=1024, json_mode=False, allow_exte
     base, model = cfg().models.llm.base_url, cfg().models.llm.model
     if not (base and model):
         raise LLMUnavailable("LLM_BASE_URL·LLM_MODEL 미설정(.env)")
-    if not is_internal(base) and not (allow_external and not run_env_block()):
+    if not is_internal(base) and not external_ok(allow_external):
+        why = run_env_block()
         raise LLMUnavailable(
             f"외부 LLM 주소({urllib.parse.urlparse(base).hostname}) — 회사 문서는 내부망 LLM만(DONT 13). "
-            "개발 PC 가상 문서 실험이면 도구의 --allow-external" + (f" ({run_env_block()})" if run_env_block() else "")
+            "개발 PC 가상 문서 실험이면 도구의 --allow-external" + (f" ({why})" if why else "")
         )
     key = cache_key(model, messages, temperature, max_tokens, json_mode)
     cp = _cache_path(key)

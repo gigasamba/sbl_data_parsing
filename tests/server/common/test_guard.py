@@ -81,7 +81,7 @@ def _selftest_body(COMMON):
             assert is_internal("http://llm.mycompany.co.kr/v1")
     finally:
         socket.getaddrinfo = socket_getaddrinfo
-    # 외부 허용 두 겹 잠금 — 옛 시험은 가짜 접두 X(X_ALLOW_EXTERNAL=1)였으나 설정 객체에는 가짜 접두 칸이 없어 진짜 접두 EMBED로 같은 것을 시험
+    # 외부 허용(스위치 + RUN_ENV=local) — 옛 시험은 가짜 접두 X(X_ALLOW_EXTERNAL=1)였으나 설정 객체에는 가짜 접두 칸이 없어 진짜 접두 EMBED로 같은 것을 시험
     import tempfile
 
     EXTU = "https://openrouter.ai/api/v1"

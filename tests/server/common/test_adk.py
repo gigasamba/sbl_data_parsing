@@ -166,7 +166,7 @@ def selftest():
     # 리다이렉트 차단 — adk 전송. litellm/openai의 httpx 클라이언트는 follow_redirects=True가 기본이고(실측 확인),
     # client 생성 시점에 follow_redirects=False를 줘도 openai SDK가 매 요청마다 kwargs.setdefault("follow_redirects", True)로
     # 덮어써 무력하다(openai/_base_client.py 확인) — 그래서 httpx event_hooks(_guarded_client)로 리다이렉트 **응답 자체**를
-    # 가로채 거부한다. 판단 로직(_redirect_ok)은 네트워크 없이 단위 시험 — common.guard와 같은 두 겹 규칙.
+    # 가로채 거부한다. 판단 로직(_redirect_ok)은 네트워크 없이 단위 시험 — common.guard와 같은 규칙.
     assert _redirect_ok("http://127.0.0.1:1/x", "VLM") is True  # 내부(루프백) — 그대로 따라가도 됨
     assert _redirect_ok("http://8.8.8.8/x", "VLM") is False  # 외부 + 허용 없음 — 거부
     with COMMON.env(RUN_ENV="local", VLM_ALLOW_EXTERNAL="1"):

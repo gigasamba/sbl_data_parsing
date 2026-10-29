@@ -112,4 +112,4 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
     finally:
         _adk.complete = _orig_complete
         shutil.rmtree(_tmp3, ignore_errors=True)
-    print("[selftest] RUN_ENV — dev·stage·prd는 두 겹 잠금이 열려도 외부 LLM 거부 · local은 허용 통과")
+    print("[selftest] RUN_ENV — dev·stage·prd는 외부 허용이 켜져도 외부 LLM 거부 · local은 허용 통과")

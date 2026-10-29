@@ -345,9 +345,9 @@ def cmd_selftest(config, a):
         LLM_PRICE_IN="1",
         LLM_PRICE_OUT="1",
         LLM_SPEND_FILE=str(Path(tempfile.mkdtemp()) / "spend.txt"),
+        RUN_ENV="local",  # 외부 허용 규칙(guard.external_ok)을 진짜로 통과시킴 — 가드 자체는 바꾸지 않음
     )
-    _orig_ok, _orig_complete2 = L.run_env_block, ADK.complete
-    L.run_env_block = lambda: None
+    _orig_complete2 = ADK.complete
     ADK.complete = lambda *aa, **kk: (_ for _ in ()).throw(AssertionError("예산 거부 전에 네트워크를 부름"))
     try:
         with _budget:
@@ -356,7 +356,7 @@ def cmd_selftest(config, a):
     except L.LLMUnavailable as e:
         check("LLM_BUDGET_USD: 한도 넘으면 호출 전에 거부(공유 장부 선차감)", "LLM_BUDGET_USD" in str(e))
     finally:
-        L.run_env_block, ADK.complete = _orig_ok, _orig_complete2
+        ADK.complete = _orig_complete2
 
     with tempfile.TemporaryDirectory() as td6:  # 작은 BM25 묶음(임베딩 없음) — k 재사용·--context-only 전용
         import numpy as _np

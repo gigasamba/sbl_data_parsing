@@ -769,8 +769,8 @@ _client_cache_lock = threading.Lock()
 
 
 def _redirect_ok(loc, prefix):
-    """리다이렉트 대상(loc)을 따라가도 되나 — common.guard와 같은 두 겹 규칙(내부 주소 또는 <prefix>_ALLOW_EXTERNAL=1
-    + 합성 정답 파일). 순수 함수로 빼서 네트워크 없이 단위 시험 가능(_guarded_client 후킹의 판단 로직 그대로)."""
+    """리다이렉트 대상(loc)을 따라가도 되나 — common.guard와 같은 규칙(내부 주소 또는 <prefix>_ALLOW_EXTERNAL=1
+    + RUN_ENV=local). 순수 함수로 빼서 네트워크 없이 단위 시험 가능(_guarded_client 후킹의 판단 로직 그대로)."""
     from common.ai.guard import external_allowed, is_internal
 
     return is_internal(loc) or external_allowed(prefix)

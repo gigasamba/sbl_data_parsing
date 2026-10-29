@@ -72,7 +72,6 @@ def _selftest_search_notes_no_race():
     bad = []
     # PC 루트 settings.yaml(mcp.server.store: pg 등)이 새지 않게 — 30초 뒤 재적재가 실제 PG로 가면 한 스레드가 죽어 barrier가 멈췄음(10-29)
     _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), MCP_QUERY_LOG_DIR=str(d / "qa_log"))
-    _env.__enter__()
     try:
         R = RT.Retriever(d)
         _STATE["R"], _STATE["bundle"], _STATE["checked_at"] = R, d, time.time()
@@ -93,7 +92,7 @@ def _selftest_search_notes_no_race():
             t.join()
         assert not bad, f"note가 다른 요청과 섞임: {bad[:5]}"
     finally:
-        _env.__exit__(None, None, None)
+        _env.close()
         RT.embed_query = real_embed
         sys.setswitchinterval(real_switch)
         _STATE.clear()

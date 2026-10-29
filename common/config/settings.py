@@ -944,7 +944,7 @@ SHELL_EXPORTS = ("SERVER_ENV_DIR",)
 
 
 def external_models_allowed(run_env):
-    """RUN_ENV 기준 외부 모델 허용 — 정확히 local일 때만 지금 가드(두 겹 잠금·NO_PAID_CALLS·상한)대로. 없음(env·설정 파일 모두 —
+    """RUN_ENV 기준 외부 모델 허용 — 정확히 local일 때만 지금 가드(외부 허용 스위치·NO_PAID_CALLS·상한)대로. 없음(env·설정 파일 모두 —
     이미지 selftest·관문 면제 점검 명령·관문 없는 스크립트)·dev·stage·prd·모르는 글자(prod·PRD·' local' 등)는 서버로 보고 거부
     (VS7b U-1 — 코디네이터 답 b, 안전한 쪽). guard.py가 guard_run_env()(모르는 글자 그대로)로 부른다(S7b·S7c1)."""
     return run_env == "local"

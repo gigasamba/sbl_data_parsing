@@ -16,7 +16,7 @@ OV_FEATURES(XS8) — OpenViking은 `OV_URL`만 있으면 요약·검색·외부 
   OpenViking OV_URL을 줬으면 그대로 · 아니면 `docker ps`에서 openviking 컨테이너의 공개 포트 → GET 응답이 오면 OV_URL로
              docker 접근 불가면 같은 방식으로 127.0.0.1:1933 /health를 대체 탐지.
 모델 엔드포인트(접두어 LLM·VLM·OCRVLM·EMBED): <접두어>_BASE_URL(…/v1) · <접두어>_MODEL · <접두어>_API_KEY(선택).
-  외부 주소는 거부 — 합성 데이터 실험에서만 <접두어>_ALLOW_EXTERNAL=1(LLM은 common/llm.py 규칙: 가상 코퍼스 정답 파일 지정 시만).
+  외부 주소는 거부 — 개발 PC 실험에서만 <접두어>_ALLOW_EXTERNAL=1(RUN_ENV=local일 때만 — common/ai/guard.py).
 사용: python common/services.py        → 연결 상태 표(비밀값은 출력 안 함)
       python common/services.py --selftest
 """
@@ -233,7 +233,7 @@ def model_status(prefix):
     internal = (
         "내부"
         if is_internal(base)
-        else ("외부(허용 — 합성 데이터)" if external_allowed(prefix) else "외부 — 거부됨(ALLOW_EXTERNAL + 합성 정답 파일 둘 다 필요)")
+        else ("외부(허용 — 개발 PC)" if external_allowed(prefix) else "외부 — 거부됨(ALLOW_EXTERNAL=1 + RUN_ENV=local 필요)")
     )
     if internal.startswith("외부 — 거부"):  # 막힌 외부 주소에는 /models도 안 보냄(키가 헤더로 나감 — 재검증 10-02)
         return internal, model or "(모델 미설정)", "확인 안 함(외부 거부)"
