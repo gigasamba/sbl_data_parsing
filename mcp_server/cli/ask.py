@@ -72,7 +72,7 @@ def table_md(g):
 
 def connect(a):
     """연결 기본값(백로그 E6 · 사용자 2026-10-01): --pg·--edw·--edw-client·--local 지정이 없으면 Docker에 떠 있는 pgvector에 연결,
-    없으면 로컬 묶음. OpenViking도 Docker에서 찾으면 OV_URL로. → common/services.py"""
+    없으면 로컬 묶음. → common/services.py"""
     from common.store import services
 
     services.connect(a)

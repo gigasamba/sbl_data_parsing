@@ -22,7 +22,6 @@ from common.config.settings import (
     CsvText,
     EnvView,
     F,
-    JsonValue,
     Port,
     Section,
     WordList,
@@ -63,19 +62,6 @@ class PipelineTransformRepresentReread(Section):
 class PipelineConnectionsGraphiti(Section):
     neo4j_password: SecretStr | None = F(None, "GRAPHITI_NEO4J_PASSWORD", "Graphiti용 Neo4j 접속 비밀번호")
     neo4j_user: str | None = F("neo4j", "GRAPHITI_NEO4J_USER", "Graphiti용 Neo4j 접속 사용자 이름", blank="keep")
-
-
-class PipelineConnectionsOpenviking(Section):
-    account: str | None = F("default", "OV_ACCOUNT", "OpenViking 요청 헤더 X-OpenViking-Account 값(계정)", blank="keep")
-    api_key: SecretStr | None = F(None, "OV_API_KEY", "OpenViking 접속 API 키(있으면 X-API-Key 헤더로 보냄)")
-    args_json: JsonValue | None = F(
-        None, "OV_ARGS_JSON", "OpenViking add_resource 'args'로 그대로 넘길 서버 전용 추가 옵션(JSON 객체 문자열)"
-    )
-    doc_root: str | None = F(None, "OV_DOC_ROOT", "OpenViking 요약(L0 abstract·L1 overview)을 읽을 로컬 문서 폴더")
-    ingest_timeout: float | None = F(1800.0, "OV_INGEST_TIMEOUT", "OpenViking 문서 1건 적재 완료 대기 시간(초)")
-    processing_mode: str | None = F(None, "OV_PROCESSING_MODE", "OpenViking 적재 처리 방식(semantic_and_vectors | vectors_only)")
-    root: str | None = F(None, "OV_ROOT", "OpenViking 리소스 루트(viking://resources/<루트>) — 요약 받기·적재 대상")
-    user: str | None = F("default", "OV_USER", "OpenViking 요청 헤더 X-OpenViking-User 값(사용자)", blank="keep")
 
 
 class PipelineConnectionsRdb(Section):
@@ -553,7 +539,6 @@ class PipelineLoad(Section):
     )
     prune_force: bool | None = F(False, "PRUNE_FORCE", "옛 기록 정리 안전장치(묶음 문서 수 비율 미달 거부) 무시 — 1이면 진행", on=("1",))
     prune_min_ratio: float | None = F(0.5, "PRUNE_MIN_RATIO", "옛 기록 정리 허용 최소 비율(묶음 문서 수 / 저장 문서 수)")
-    structure_target: str | None = F("pg", "STRUCTURE_TARGET", "구조화 적재 대상: pg(기본, pgvector) | ov(OpenViking)")
     publish: PipelineLoadPublish = Field(default_factory=PipelineLoadPublish)
 
 
@@ -572,7 +557,7 @@ class PipelinePaths(Section):
         "사람 정답(gold) 폴더 — score_gold·점검 도구의 기본 입력(코드가 읽는 경로 — 컨테이너 안은 run_tool.sh가 /data/gold로 줌, 원본은 pipeline.host.gold_dir — T-21)",
     )
     images_root: str | None = F(None, "PARSE_IMAGES_ROOT", "그림 PNG·index.jsonl 저장 루트")
-    index_conf: str | None = F(None, "INDEX_CONF", "색인 설정 JSON 경로(STRUCTURE_TARGET=pg일 때 색인 모듈로 구조화)")
+    index_conf: str | None = F(None, "INDEX_CONF", "색인 설정 JSON 경로(있으면 색인 모듈로 구조화)")
     out_root: str | None = F(None, "PIPE_OUT_ROOT", "파이프라인 출력 루트(output)")
     paddle_python: str | None = F(None, "PADDLE_PYTHON", "paddle 계열 엔진을 돌릴 별도 venv의 python 경로")
     parse_tmp: str | None = F(None, "PARSE_TMP", "스트리밍·병렬 파싱 임시 폴더 — output 아래 2단 이상 하위만 허용")
@@ -590,7 +575,6 @@ class PipelinePaths(Section):
 
 class PipelineConnections(Section):
     graphiti: PipelineConnectionsGraphiti = Field(default_factory=PipelineConnectionsGraphiti)
-    openviking: PipelineConnectionsOpenviking = Field(default_factory=PipelineConnectionsOpenviking)
     rdb: PipelineConnectionsRdb = Field(default_factory=PipelineConnectionsRdb)
     secure_doc: PipelineConnectionsSecureDoc = Field(default_factory=PipelineConnectionsSecureDoc)
 

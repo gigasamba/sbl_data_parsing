@@ -224,7 +224,7 @@ def usable_embeds(config):
 
 
 def store_availability(config):
-    """S 저장소(local·pgvector·openviking·lightrag) 가용성 — Docker·패키지 탐지, 설치는 안 함(스펙)."""
+    """S 저장소(local·pgvector·lightrag) 가용성 — Docker·패키지 탐지, 설치는 안 함(스펙)."""
     out = {"local": (True, "")}
     try:
         from common.store import services as SV
@@ -233,13 +233,6 @@ def store_availability(config):
     except Exception as ex:
         ok, why = False, f"{type(ex).__name__}: {ex}"
     out["pgvector"] = (ok, "" if ok else (why or config["structure"]["stores"]["pgvector"]["reason_if_unavailable"]))
-    try:
-        from common.store import services as SV
-
-        ok, why = SV.detect_ov()
-    except Exception as ex:
-        ok, why = False, f"{type(ex).__name__}: {ex}"
-    out["openviking"] = (ok, "" if ok else (why or config["structure"]["stores"]["openviking"]["reason_if_unavailable"]))
     import importlib.util
 
     has_lr = importlib.util.find_spec("lightrag") is not None

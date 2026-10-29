@@ -1,4 +1,4 @@
-"""검색 서비스 — do_search(하이브리드 근거 검색·하드 필터·집계 근거·그림·OpenViking·질의 기록).
+"""검색 서비스 — do_search(하이브리드 근거 검색·하드 필터·집계 근거·질의 기록).
 S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/main.py(옛 data_retrieval/mcp_server.py)에서 옮김 — 내용 그대로
 (설정 상수만 mcp_server/config.py의 CFG로).
 """

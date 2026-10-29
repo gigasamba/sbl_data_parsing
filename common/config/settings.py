@@ -1253,12 +1253,6 @@ class CommonConnectionsObjectStorage(Section):
     verify_tls: str | None = F("1", "OS_VERIFY_TLS", "TLS 인증서 검증(1=검증, 0=끔, 그 밖 문자열=CA 파일 경로)", blank="keep")
 
 
-class CommonConnectionsOpenviking(Section):
-    features: CsvList | None = F([], "OV_FEATURES", "OpenViking 연동 기능 목록(summary·search·parse, 콤마) — 비면 전부 꺼짐")
-    host: str | None = F("127.0.0.1", "OV_HOST", "OV_URL이 없고 docker 탐지 불가일 때 포트(1933) 탐지할 호스트")
-    url: str | None = F(None, "OV_URL", "OpenViking 서버 주소 — 비면 Docker·포트(1933) 자동 탐지")
-
-
 class CommonConnectionsParsingMeta(Section):
     connect_kwargs: SecretStr | None = F(None, "PM_DB_CONNECT_KWARGS", "parsing-meta EDW pymssql 연결에 더할 추가 인자(JSON 객체)")
     database: str | None = F(None, "PM_DB_DATABASE", "parsing-meta EDW 연결 DB 이름")
@@ -1605,7 +1599,6 @@ class CommonText(Section):
 class CommonConnections(Section):
     edw: CommonConnectionsEdw = Field(default_factory=CommonConnectionsEdw)
     object_storage: CommonConnectionsObjectStorage = Field(default_factory=CommonConnectionsObjectStorage)
-    openviking: CommonConnectionsOpenviking = Field(default_factory=CommonConnectionsOpenviking)
     parsing_meta: CommonConnectionsParsingMeta = Field(default_factory=CommonConnectionsParsingMeta)
     pg: CommonConnectionsPg = Field(default_factory=CommonConnectionsPg)
 

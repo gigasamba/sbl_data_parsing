@@ -149,7 +149,6 @@ class McpSearch(Section):
     methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서)")
     min_score: float | None = F(None, "SEARCH_MIN_SCORE", "근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak")
     ocr_dpi: int | None = F(200, "OCR_DPI", "쪽 이미지 렌더링 해상도(DPI) — OCR·근거 이미지 좌표 환산에 씀", pinned="engine")
-    ov_search_path: str | None = F("/api/v1/search/find", "OV_SEARCH_PATH", "OpenViking 검색 API 경로")
     struct_context_max: int | None = F(200, "STRUCT_CONTEXT_MAX", "집계 질문에서 계약 마스터 전체를 표로 넘길 때 계약 수 상한(개)")
     tie_break: bool | None = F(True, "SEARCH_TIE_BREAK", "동점 근거를 질문의 엔티티(고객·계약번호)로 깨기 — 0이면 끔", off=("0",))
     type_weights: bool | None = F(

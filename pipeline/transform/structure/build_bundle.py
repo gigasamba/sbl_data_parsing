@@ -4,10 +4,10 @@
 기술 비교 없이 **파싱에서 선정된 엔진만** 쓴다(output/parse/selection.json `final` 형식별 주 엔진 → 실패면 예비 → route 순).
   청크   : structure 청커(pipeline.transform.structure.chunking, AD32③ — evaluation.stages는 조합 실험용으로 같은 것을 가져다 씀) — 본문은 정제 텍스트(쪽 번호 줄 제외), 위치 = 파일 경로·쪽·줄·문자 범위·제목,
            쪽 안 위치(bbox, pt) = OCR 엔진은 글자 상자 합집합, 텍스트 PDF는 원본 PDF에서 청크 첫·끝 줄을 찾아 합집합
-  요약   : OpenViking L0 abstract·L1 overview(OV_DOC_ROOT) → 없으면 --summary llm(내부망 GLM) → 없으면 앞부분 발췌
+  요약   : --summary llm(내부망 GLM) → 없으면 앞부분 발췌
   메타   : 고객사·계약 번호 — 파싱 모듈 교차 확인 값(_rep rep.meta)(서로 다른 계열 파서 2개+)만
   임베딩 : --embed api(EMBED_BASE_URL·EMBED_MODEL — 서버 임베딩 전용 모델) · bge-m3 · e5-small … (L2 정규화 저장, 차원은 첫 응답에서)
-  그래프 : OpenViking 계층(폴더 → 문서) + 문서 → 청크(+순서) + 청크 → 개체(ID·이메일·날짜 + AD28② 업무 개체: 고객·계약·제품·모달리티·
+  그래프 : 폴더 → 문서 + 문서 → 청크(+순서) + 청크 → 개체(ID·이메일·날짜 + AD28② 업무 개체: 고객·계약·제품·모달리티·
            배치/로트)·라벨·값(사실)·개념(AD28③, 용어 사전 — broader·related 간선 포함). 같은 값 = 같은 노드 → 문서 간 연결.
            업무 관계(문서 단위): client-has-contract·contract-covers-product·doc-links-contract
 산출: docs.jsonl · chunks.jsonl · vectors.npy(float32, chunks 순서) · kg_nodes.jsonl · kg_edges.jsonl · meta.json · images.jsonl(F8, doc_image·chunk_image 적재 원본)
@@ -32,7 +32,6 @@ from common.core import terms as T  # noqa: E402 — 고객 명부·이름 정�
 from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
 from common.core.contract import (  # noqa: E402 — 문서 ID(doc_key) 규칙(GH1-04: orig_sha256으로 parse와 같은 값)
     file_hash,
-    openviking_key,
     original_file_hash,
 )
 from common.core.meaning import strip_page_numbers  # noqa: E402
@@ -104,24 +103,6 @@ def pdf_bbox(path, page, chunk_text, _cache={}):  # noqa: B006 — 일부러 함
     return ",".join(
         f"{v:.0f}" for v in (min(r.x0 for r in rects), min(r.y0 for r in rects), max(r.x1 for r in rects), max(r.y1 for r in rects))
     )
-
-
-def ov_summaries(parse_dir, doc):
-    """OpenViking 요약(L0 abstract · L1 overview) — OV_DOC_ROOT/<문서명>/(pipeline.ov_import가 받은 폴더 또는 직접 지정).
-    XS8: OV_FEATURES에 summary가 없으면 OV_DOC_ROOT·OV_URL이 있어도 건너뜀(둘 다 없을 때와 동일 출력)."""
-    from common.store import services
-
-    if not services.ov_enabled("summary"):
-        return None, None
-    root = pc.cfg().connections.openviking.doc_root or (
-        C.cfg().connections.openviking.url and str(APP_ROOT / "output" / "ov_export")
-    )  # pipeline.ov_import가 받은 폴더 · S7c — 설정 객체
-    if root and Path(root).is_dir():
-        d = next((x for x in Path(root).iterdir() if x.is_dir() and openviking_key(x.name) == openviking_key(doc)), None)
-        if d is not None:
-            rd = lambda n: (d / f".{n}.md").read_text(encoding="utf-8", errors="replace") if (d / f".{n}.md").exists() else None
-            return rd("abstract"), rd("overview")
-    return None, None
 
 
 def lead_summary(text, n=300):
@@ -730,7 +711,9 @@ def main(argv=None):
     ap.add_argument(
         "--embed", default=pc.cfg().transform.structure.edw_embed or ("api" if C.cfg().models.embed.base_url else "bge-m3")
     )  # S7c — 설정 객체
-    ap.add_argument("--summary", default="auto", choices=["auto", "llm", "lead"], help="auto = OpenViking 요약 → 없으면 앞부분 발췌")
+    ap.add_argument(
+        "--summary", default="auto", choices=["auto", "llm", "lead"], help="auto = EDW_SUMMARY_LLM이면 LLM 요약, 아니면 앞부분 발췌"
+    )
     ap.add_argument("--chunk", default=None, help="기본 = stack.json chunk(없으면 structure)")
     ap.add_argument("--stack", default=str(STACK_FILE))
     ap.add_argument("--no-rep", action="store_true", help="대표 파싱(output/parse/_rep) 대신 선정 엔진을 문서마다 고름(단계 1 실험용)")
@@ -788,7 +771,7 @@ def main(argv=None):
                 r = json.loads(line)
                 if r.get("file_name") and r.get("key"):
                     _manifest_keys[r["file_name"]] = r["key"]
-    docs, chunks, n_sum, seen_sha, facts, images = [], [], {"openviking": 0, "llm": 0, "lead": 0}, {}, [], []
+    docs, chunks, n_sum, seen_sha, facts, images = [], [], {"llm": 0, "lead": 0}, {}, [], []
     alias = {}  # 견적·주문 번호 → 같은 문서의 (교차 확인된) 계약 번호
     for md in meta_docs.values():
         con = AQ.pick(md["pairs"], AQ.CONTRACT_FIRST)
@@ -812,10 +795,7 @@ def main(argv=None):
         text, _ = S.load_parse_doc(pd, folder, doc)
         if not text.strip():
             continue
-        ab, ov = (None, None) if a.summary == "llm" else ov_summaries(pd, doc)
-        if ab:
-            ssrc = "openviking"
-        elif a.summary == "llm" or (a.summary == "auto" and pc.cfg().transform.structure.edw_summary_llm):  # S7c — 설정 객체(켜기 "1")
+        if a.summary == "llm" or (a.summary == "auto" and pc.cfg().transform.structure.edw_summary_llm):  # S7c — 설정 객체(켜기 "1")
             ab, ssrc = llm_summary(text), "llm"
         else:
             ab, ssrc = lead_summary(text), "lead"
@@ -976,7 +956,7 @@ def main(argv=None):
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True, exist_ok=True)
     vecs = embed_all(a.embed, [index_text(c) for c in chunks], out=str(out / "vectors.npy"))  # 머리말 포함(G9)
-    folder_of = lambda d: str(Path(d["file_path"]).parent).replace("\\", "/")  # OpenViking 계층과 같은 폴더 단위
+    folder_of = lambda d: str(Path(d["file_path"]).parent).replace("\\", "/")  # 폴더 단위
     glossary = T.load_glossary()  # X4 — 개념→청크 역색인(사전 없으면 빈 목록, 추가 파일이라 묶음 계약은 안 바뀜)
     concept_chunk = build_concept_chunk(docs, chunks, glossary)
     nodes, edges = build_graph(docs, chunks, folder_of, glossary, concept_chunk)  # AD28②③ — 업무 개체·관계 + 개념 노드도 같이
