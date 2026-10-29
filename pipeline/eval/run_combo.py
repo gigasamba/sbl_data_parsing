@@ -15,7 +15,7 @@
   - `--embed`에 none 아닌 실제 모델(e5-small·e5-base·bge-m3)을 쓰려면 모델이 준비돼 있어야 함
     (HF_HUB_OFFLINE=1 + 반입 캐시, 또는 .env EMBED_BASE_URL·EMBED_MODEL) — AGENTS.md A9.
   - `--graph llm`은 LLM을 쓰는 유일한 옵션(그 외 축은 전부 LLM 0회 — S6a부터 PC 전용 validation/e2e/graph_llm.py, 서버 이미지에서는 ValueError) — LLM_BASE_URL(내부망, 서버 GLM)이 있어야 하고,
-    외부 주소는 합성 코퍼스 실험일 때만(--truth로 LLM_SYNTHETIC_TRUTH 자동 설정 + *_ALLOW_EXTERNAL=1) common/guard.py가 통과시킨다.
+    외부 주소는 *_ALLOW_EXTERNAL=1 + RUN_ENV=local일 때만 common/guard.py가 통과시킨다.
     **실문서에는 외부 주소를 열지 않는다(DONT 13) — 이 가드는 완화하지 않는다.** AGENTS.md A10.
   - `--rerank`가 없으면 retrieve=rerank 조합은 combo_valid()가 걸러냄(CPU 재순위 느림 — 기본 off, 켜려면 이 플래그).
   - `--full`이 없으면 빔 탐색(기본, 적은 수만 평가) — 축 조합이 작을 때만 전체 곱(--full)을 켠다.
@@ -34,7 +34,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-from common.config.settings import cfg, put  # common 칸(S7c — 설정 객체: LLM_BASE_URL·EMBED_BASE_URL)
+from common.config.settings import cfg  # common 칸(S7c — 설정 객체: LLM_BASE_URL·EMBED_BASE_URL)
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")  # env 남김 — 라이브러리(5-3 H)
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")  # env 남김 — 라이브러리(5-3 H)
@@ -331,8 +331,6 @@ def split_list(s):
 
 
 def run(a):
-    if a.truth:  # --graph llm의 외부 LLM 허용은 가상 코퍼스 정답이 있을 때만(common/llm.py)
-        put(LLM_SYNTHETIC_TRUTH=str(Path(a.truth).resolve()))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스)
     out_dir = Path(a.out)
     parse_dir = Path(a.parse_dir)
     if not a.src:

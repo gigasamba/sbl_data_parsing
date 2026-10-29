@@ -91,7 +91,7 @@ def _sub(args, env):
     """하위 프로세스 실행 — 공용 메모리 문(common/resources.gated_popen: 85% 상한, 상한 근처에서만 settle)을 거쳐 띄움(사용자 10-04)."""
     from common.core import resources as RS
 
-    # 10-13 — cwd=APP_ROOT(런타임 루트): env의 상대경로(LLM_SYNTHETIC_TRUTH=output/corpus/truth.json·LLM_SPEND_FILE 등)가
+    # 10-13 — cwd=APP_ROOT(런타임 루트): env의 상대경로(LLM_SPEND_FILE 등)가
     # 부모와 같은 곳을 가리키게. NM1 뒤 DEV(deploy/common_tools)에서 띄우면 합성 정답을 못 찾아 VLM이 전부 내부망 가드에 막혔음.
     env = MM.child_env(env)  # S7e2 — 덮을 칸 사전 → 자식 env(덮기 파일)
     pr = RS.gated_popen(
@@ -675,8 +675,6 @@ def build_s(store, config, p1_target, post_cfg, ds, combo, embed_cands, base_env
         env["CHUNK_SIZE"] = str(combo["chunk_size"])
     env["EMBED_CACHE"] = str(store / "embed_cache.sqlite")  # S 빌드 전체가 공유 — 같은 모델·본문이면 API 재호출 안 함
     reuse = config["reuse_bundles"][ds]
-    if cand.get("kind") == "api" and reuse.get("truth"):  # 외부 embed 가드 두 번째 잠금(합성 데이터 세션만)
-        env["LLM_SYNTHETIC_TRUTH"] = reuse["truth"]
     t0 = time.time()
     args = [
         PY,
@@ -1087,8 +1085,6 @@ def run_r(store, config, post_cfg, ds, combo, base_env, s_target, skey, limit=No
     reuse = config.get("reuse_bundles", {}).get(ds) or {}
     if reuse.get("roster"):
         env["CLIENT_ROSTER"] = reuse["roster"]
-    if reuse.get("truth"):
-        env["LLM_SYNTHETIC_TRUTH"] = reuse["truth"]
     result = _run_retrieval(env, ds, list(combo["methods"]), out_file, limit, distractors)
     p1t = p1_dir(store, post_cfg, ds, distractors)  # W20 — must_not 위반을 R 결과에도(파싱 오염이 검색까지 왔는지 한눈에)
     mnv_file = p1t / "doc_stats.json"
@@ -1530,9 +1526,6 @@ def cmd_run(config, a):
             env["RERANK_TIMEOUT_MS"] = str(
                 config["retrieve"].get("rerank_timeout_ms", 120000)
             )  # 실험은 넉넉히(CPU 7초/질의 — 3초 기본이면 전부 대체돼 비교 무효였음, 10-03)
-            reuse = config.get("reuse_bundles", {}).get(ds) or {}
-            if reuse.get("truth"):
-                env["LLM_SYNTHETIC_TRUTH"] = reuse["truth"]
             rk = A.key("r", r_parts(skey, combo, ds))
             a_res, a_status = run_a(store, config, rk, ds, env, a.limit)
             row["answer"] = a_res
@@ -2273,9 +2266,8 @@ def cmd_answer(config, a):
             env["SEARCH_RERANK"] = combo["rerank"]
             env["RERANK_TIMEOUT_MS"] = str(config["retrieve"].get("rerank_timeout_ms", 120000))
             reuse = config.get("reuse_bundles", {}).get(ds) or {}
-            for key, ev in (("roster", "CLIENT_ROSTER"), ("truth", "LLM_SYNTHETIC_TRUTH")):
-                if reuse.get(key):
-                    env[ev] = reuse[key]
+            if reuse.get("roster"):
+                env["CLIENT_ROSTER"] = reuse["roster"]
             env["LLM_CACHE_DIR"] = str(store / "llm_cache")  # 같은 질문·근거·모델이면 다시 부르지 않음
             need_ks = [k for k, *_ in need]
             tmp = run_dir / "raw" / "answer" / combo["name"] / ds / (",".join(map(str, need_ks)) + ".json")

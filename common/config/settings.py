@@ -1320,9 +1320,7 @@ class CommonDevDocker(Section):
 
 
 class CommonModelsEmbed(Section):
-    allow_external: bool | None = F(
-        False, "EMBED_ALLOW_EXTERNAL", "임베딩 외부 주소 허용 첫째 잠금(=1이면 열림, LLM_SYNTHETIC_TRUTH도 있어야 실제 허용)", on=("1",)
-    )
+    allow_external: bool | None = F(False, "EMBED_ALLOW_EXTERNAL", "임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "EMBED_API_KEY", "임베딩 엔드포인트 API 키(있을 때만 Authorization 헤더로 보냄)")
     base_url: str | None = F(None, "EMBED_BASE_URL", "임베딩 엔드포인트 주소(OpenAI 호환 …/v1)")
     dim: int | None = F(4096, "EMBED_DIM", "ping_models 점검에서 기대하는 임베딩 차원 수")
@@ -1353,11 +1351,10 @@ class CommonModelsGuard(Section):
     max_calls: int | None = F(0, "LLM_MAX_CALLS", "LLM 호출 수 상한(개) — 0이면 무제한")
     no_paid_calls: bool | None = F(False, "NO_PAID_CALLS", "=1이면 외부(유료) 주소 호출 자체를 거부", on=("1",))
     spend_file: str | None = F(None, "LLM_SPEND_FILE", "지출 장부 파일 경로(호출마다 금액 한 줄 — 프로세스·실행 전체가 공유)")
-    synthetic_truth: str | None = F(None, "LLM_SYNTHETIC_TRUTH", "합성 시험 문서 선언 파일(_meta 포함 JSON) 경로 — 외부 허용의 둘째 잠금")
 
 
 class CommonModelsLlm(Section):
-    allow_external: bool | None = F(False, "LLM_ALLOW_EXTERNAL", "LLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요)", on=("1",))
+    allow_external: bool | None = F(False, "LLM_ALLOW_EXTERNAL", "LLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "LLM_API_KEY", "LLM 엔드포인트 API 키(있을 때만 사용)")
     base_url: str | None = F(None, "LLM_BASE_URL", "LLM 엔드포인트 주소(OpenAI 호환 …/v1)")
     cache_dir: str | None = F(None, "LLM_CACHE_DIR", "LLM 응답 캐시 폴더(요청 해시별 json)")
@@ -1380,9 +1377,7 @@ class CommonModelsLlm(Section):
 
 
 class CommonModelsOcrvlm(Section):
-    allow_external: bool | None = F(
-        False, "OCRVLM_ALLOW_EXTERNAL", "OCR 전용 VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요)", on=("1",)
-    )
+    allow_external: bool | None = F(False, "OCRVLM_ALLOW_EXTERNAL", "OCR 전용 VLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "OCRVLM_API_KEY", "OCR 전용 VLM 엔드포인트 API 키(있을 때만)")
     base_url: str | None = F(None, "OCRVLM_BASE_URL", "OCR 전용 VLM 엔드포인트 주소(OpenAI 호환 …/v1)")
     est_usd: float | None = F(0.01, "OCRVLM_EST_USD", "OCR 전용 VLM 호출 1건당 예상 비용($) — 예산 선차감용")
@@ -1390,9 +1385,7 @@ class CommonModelsOcrvlm(Section):
 
 
 class CommonModelsRerank(Section):
-    allow_external: bool | None = F(
-        False, "RERANK_ALLOW_EXTERNAL", "재순위 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요)", on=("1",)
-    )
+    allow_external: bool | None = F(False, "RERANK_ALLOW_EXTERNAL", "재순위 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "RERANK_API_KEY", "재순위(rerank) 엔드포인트 API 키(있을 때만)")
     base_url: str | None = F(None, "RERANK_BASE_URL", "재순위 엔드포인트 주소(TEI/Cohere 호환 /rerank)")
     est_usd: float | None = F(0.001, "RERANK_EST_USD", "재순위 호출 1건당 예상 비용($) — 예산 선차감용")
@@ -1408,7 +1401,7 @@ class CommonModelsTransport(Section):
 
 
 class CommonModelsVlm(Section):
-    allow_external: bool | None = F(False, "VLM_ALLOW_EXTERNAL", "VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요)", on=("1",))
+    allow_external: bool | None = F(False, "VLM_ALLOW_EXTERNAL", "VLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "VLM_API_KEY", "VLM 엔드포인트 API 키(있을 때만)", pinned="engine")
     base_url: str | None = F(None, "VLM_BASE_URL", "VLM 엔드포인트 주소(OpenAI 호환 …/v1)", pinned="engine")
     concurrency: int | None = F(4, "VLM_CONCURRENCY", "한 문서의 쪽(그림) VLM 동시 요청 수(개)", pinned="engine")

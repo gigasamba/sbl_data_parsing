@@ -426,7 +426,6 @@ def build_cli():
     ap.add_argument("--out", default="output/eval")
     ap.add_argument("--k", type=int, default=10)
     ap.add_argument("--workdir")
-    ap.add_argument("--truth", help="(개발 PC) 가상 코퍼스 truth.json — 있을 때만 외부 LLM 허용(common/llm.py)")
     return ap
 
 
@@ -434,8 +433,6 @@ def main(argv=None):
     a = build_cli().parse_args(argv)
     if not a.stack:
         raise SystemExit("--stack 필요")
-    if a.truth:
-        C.put(LLM_SYNTHETIC_TRUTH=str(Path(a.truth).resolve()))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스)
     run_from_cli(a)
 
 

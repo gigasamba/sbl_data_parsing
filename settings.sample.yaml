@@ -99,7 +99,7 @@ common:
     prune_keep:  # prune_old.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값) · env=PRUNE_KEEP · int · 기본 2 [호스트]
   models:
     embed:
-      allow_external:  # 임베딩 외부 주소 허용 첫째 잠금(=1이면 열림, LLM_SYNTHETIC_TRUTH도 있어야 실제 허용) · env=EMBED_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
+      allow_external:  # 임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만) · env=EMBED_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
       api_key:  # 임베딩 엔드포인트 API 키(있을 때만 Authorization 헤더로 보냄) · env=EMBED_API_KEY · SecretStr [비밀]
       base_url:  # 임베딩 엔드포인트 주소(OpenAI 호환 …/v1) · env=EMBED_BASE_URL · str
       dim:  # ping_models 점검에서 기대하는 임베딩 차원 수 · env=EMBED_DIM · int · 기본 4096
@@ -119,9 +119,8 @@ common:
       max_calls:  # LLM 호출 수 상한(개) — 0이면 무제한 · env=LLM_MAX_CALLS · int · 기본 0
       no_paid_calls:  # =1이면 외부(유료) 주소 호출 자체를 거부 · env=NO_PAID_CALLS · bool · 기본 false [켬: 1만]
       spend_file:  # 지출 장부 파일 경로(호출마다 금액 한 줄 — 프로세스·실행 전체가 공유) · env=LLM_SPEND_FILE · str
-      synthetic_truth:  # 합성 시험 문서 선언 파일(_meta 포함 JSON) 경로 — 외부 허용의 둘째 잠금 · env=LLM_SYNTHETIC_TRUTH · str
     llm:
-      allow_external:  # LLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · env=LLM_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
+      allow_external:  # LLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · env=LLM_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
       api_key:  # LLM 엔드포인트 API 키(있을 때만 사용) · env=LLM_API_KEY · SecretStr [비밀]
       base_url:  # LLM 엔드포인트 주소(OpenAI 호환 …/v1) · env=LLM_BASE_URL · str
       cache_dir:  # LLM 응답 캐시 폴더(요청 해시별 json) · env=LLM_CACHE_DIR · str
@@ -136,13 +135,13 @@ common:
       rpm:  # LLM 분당 호출 상한(건) — 0이면 무제한 · env=LLM_RPM · int · 기본 0
       timeout:  # LLM 호출 제한 시간(초) — 호출자가 timeout을 주면 그 값이 우선 · env=LLM_TIMEOUT · float · 기본 120.0
     ocrvlm:
-      allow_external:  # OCR 전용 VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · env=OCRVLM_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
+      allow_external:  # OCR 전용 VLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · env=OCRVLM_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
       api_key:  # OCR 전용 VLM 엔드포인트 API 키(있을 때만) · env=OCRVLM_API_KEY · SecretStr [비밀]
       base_url:  # OCR 전용 VLM 엔드포인트 주소(OpenAI 호환 …/v1) · env=OCRVLM_BASE_URL · str
       est_usd:  # OCR 전용 VLM 호출 1건당 예상 비용($) — 예산 선차감용 · env=OCRVLM_EST_USD · float · 기본 0.01
       model:  # OCR 전용 VLM 모델 이름(0.9B급 GLM-OCR·PaddleOCR-VL 등) · env=OCRVLM_MODEL · str [엔진 지문]
     rerank:
-      allow_external:  # 재순위 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · env=RERANK_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
+      allow_external:  # 재순위 외부 주소 허용(=1, RUN_ENV=local일 때만) · env=RERANK_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
       api_key:  # 재순위(rerank) 엔드포인트 API 키(있을 때만) · env=RERANK_API_KEY · SecretStr [비밀]
       base_url:  # 재순위 엔드포인트 주소(TEI/Cohere 호환 /rerank) · env=RERANK_BASE_URL · str
       est_usd:  # 재순위 호출 1건당 예상 비용($) — 예산 선차감용 · env=RERANK_EST_USD · float · 기본 0.001
@@ -154,7 +153,7 @@ common:
       ping_timeout:  # ping_models 점검의 호출 제한 시간(초) · env=PING_TIMEOUT · int · 기본 60
       transport:  # 모델 호출 전송 방식 — adk(기본) 또는 http(urllib 롤백 경로) · env=MODEL_TRANSPORT · str · 기본 adk
     vlm:
-      allow_external:  # VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · env=VLM_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
+      allow_external:  # VLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · env=VLM_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
       api_key:  # VLM 엔드포인트 API 키(있을 때만) · env=VLM_API_KEY · SecretStr [엔진 지문] [비밀]
       base_url:  # VLM 엔드포인트 주소(OpenAI 호환 …/v1) · env=VLM_BASE_URL · str [엔진 지문]
       concurrency:  # 한 문서의 쪽(그림) VLM 동시 요청 수(개) · env=VLM_CONCURRENCY · int · 기본 4 [엔진 지문]

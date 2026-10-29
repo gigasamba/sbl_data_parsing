@@ -9,15 +9,6 @@ from common.ai.adk import ModelUnavailable, _redirect_ok, _to_contents, complete
 from common.core.paths import resolve_agent_dir
 
 
-def _truth_file():
-    import tempfile
-    from pathlib import Path
-
-    f = Path(tempfile.mkdtemp()) / "truth.json"
-    f.write_text(json.dumps({"_meta": {}}), encoding="utf-8")
-    return f
-
-
 def selftest():
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -50,21 +41,18 @@ def selftest():
     assert joined == "최종 답", joined
 
     # 가드 — 외부 주소 거부(require_internal이 그대로 전파, VLM 모듈이 지금도 안 잡는 것과 같게)
-    with COMMON.env(VLM_ALLOW_EXTERNAL=None, LLM_SYNTHETIC_TRUTH=None, VLM_BASE_URL="https://openrouter.ai/api/v1", VLM_MODEL="x"):
+    with COMMON.env(VLM_ALLOW_EXTERNAL=None, VLM_BASE_URL="https://openrouter.ai/api/v1", VLM_MODEL="x"):
         try:
             complete("vlm", [{"role": "user", "content": "x"}])
             raise AssertionError("외부 주소인데 거부 안 됨")
         except RuntimeError as ex:
             assert "외부 주소" in str(ex), ex
 
-    # NO_PAID_CALLS=1 — 외부 호출 차단(합성 정답이 있어도, require_internal은 통과하지만 precheck가 막음)
+    # NO_PAID_CALLS=1 — 외부 호출 차단(외부 허용이 있어도, require_internal은 통과하지만 precheck가 막음)
     from common.ai.guard import BudgetExceeded
 
-    f = _truth_file()
     # (옛 시험은 위 블록의 VLM_BASE_URL·VLM_MODEL을 지우지 않고 이어 씀 — 같은 값을 다시 준다)
-    with COMMON.env(
-        VLM_BASE_URL="https://openrouter.ai/api/v1", VLM_MODEL="x", LLM_SYNTHETIC_TRUTH=str(f), VLM_ALLOW_EXTERNAL="1", NO_PAID_CALLS="1"
-    ):
+    with COMMON.env(VLM_BASE_URL="https://openrouter.ai/api/v1", VLM_MODEL="x", VLM_ALLOW_EXTERNAL="1", NO_PAID_CALLS="1"):
         try:
             complete("vlm", [{"role": "user", "content": "x"}])
             raise AssertionError("NO_PAID_CALLS인데 통과됨")
@@ -181,11 +169,11 @@ def selftest():
     # 가로채 거부한다. 판단 로직(_redirect_ok)은 네트워크 없이 단위 시험 — common.guard와 같은 두 겹 규칙.
     assert _redirect_ok("http://127.0.0.1:1/x", "VLM") is True  # 내부(루프백) — 그대로 따라가도 됨
     assert _redirect_ok("http://8.8.8.8/x", "VLM") is False  # 외부 + 허용 없음 — 거부
-    with COMMON.env(VLM_ALLOW_EXTERNAL="1", LLM_SYNTHETIC_TRUTH=str(_truth_file())):
-        assert _redirect_ok("http://8.8.8.8/x", "VLM") is True  # 두 겹 다 있으면 외부도 허용
+    with COMMON.env(RUN_ENV="local", VLM_ALLOW_EXTERNAL="1"):
+        assert _redirect_ok("http://8.8.8.8/x", "VLM") is True  # 외부 허용 + local이면 외부도 허용
         with COMMON.env(RUN_ENV="dev"):
-            assert _redirect_ok("http://8.8.8.8/x", "VLM") is False  # 서버(dev·stage·prd)는 두 겹이 열려도 외부 거부(S7b — D-028 ⑧)
-    print("[selftest] _redirect_ok 단위 시험(내부 허용·외부 거부·두 겹 허용) 통과")
+            assert _redirect_ok("http://8.8.8.8/x", "VLM") is False  # 서버(dev·stage·prd)는 허용이 열려도 외부 거부(S7b — D-028 ⑧)
+    print("[selftest] _redirect_ok 단위 시험(내부 허용·외부 거부·외부 허용) 통과")
 
     # 실제 호출 경로 — 내부 서버가 외부 주소(8.8.8.8, guard.py 자기점검과 같은 선택)로 리다이렉트하면 후킹이 요청을 끊고,
     # litellm이 밖에서 재매핑해도 _find_redirect_block이 원래 문구("…외부(8.8.8.8)로 리다이렉트…")를 체인에서 다시 꺼내
