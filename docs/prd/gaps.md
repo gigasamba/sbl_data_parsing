@@ -10,8 +10,6 @@ Rows with an ID are open defects; the rest are behaviors to know.
 |---|---|---|---|
 | 숨김 문서는 검색에서 빠짐 | 숨김 키(sha256)를 검색 키(`file_path`)와 비교 → 안 빠짐 | `pgsearch.py`, `local.py` | mc-14 |
 | 근거에 파싱 결과 경로(`rep_uri`) | ParsingMeta를 `file_path`로 찾음(그쪽 키는 sha256) → 늘 비어 있음 | `shaping.py` | mc-15 |
-| Aggregation runs without errors | selects removed columns → "aggregation path error" note on every result | `aggregate.py` | mc-11 |
-| Fact aggregation answers | `doc_fact` is not loaded any more → that path returns nothing | `aggregate.py`, `pgvector_load.py` | mc-12 |
 | Registry upsert, publish guard | upsert has a PG syntax error; guard off (no `source.json` on the server) | `structdb.py`, `publish_parse_result.py` | pl-12 |
 | `--prune` removes stale rows only | also deletes skipped (unchanged) documents | `pgvector_load.py` | pl-13 |
 | `pipeline structure/load` modules accept new bundles | contract `DOC_KEYS` rejects them (server does not use these modules) | `common/core/contract.py` | pl-15 |

@@ -5,8 +5,6 @@ Row = one open feature. ID prefix = `prd/<area>.md` (mc = search MCP · pl = dat
 
 | ID | Bundle | Status | Detail |
 |---|---|---|---|
-| mc-11 | Aggregation path queries removed `file_sha256` | todo | [→](prd/mcp.md#mc-11) |
-| mc-12 | Fact aggregation queries dropped `doc_fact` | todo | [→](prd/mcp.md#mc-12) |
 | mc-14 | 숨김 문서가 검색에서 안 빠짐(숨김 키 sha256 ↔ 검색 키 file_path) — pl-25 대기 | todo | [→](prd/mcp.md#mc-14) |
 | mc-15 | 근거의 `rep_uri`(파싱 결과 경로)가 늘 비어 있음(ParsingMeta 키 sha256 ↔ 검색 키 file_path) — pl-25 대기 | todo | [→](prd/mcp.md#mc-15) |
 | pl-12 | Registry upsert PG error · publish guard off (C-54) | todo | [→](prd/pipeline.md#pl-12) |
@@ -43,5 +41,5 @@ Row = one open feature. ID prefix = `prd/<area>.md` (mc = search MCP · pl = dat
 | op-03 | One EDW connection, read/write account | dev | [→](prd/ops.md#op-03) |
 | op-04 | First release tag `v0.1.0` + release notes | todo | [→](prd/ops.md#op-04) |
 
-Done: mcp 8 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 10 → [prd/e2e.md](prd/e2e.md) · runner 2 → [prd/runner.md](prd/runner.md)
+Done: mcp 10 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 10 → [prd/e2e.md](prd/e2e.md) · runner 2 → [prd/runner.md](prd/runner.md)
 Code vs requirements — mismatches, code with no requirement, off-by-default features, removed 10-29: [prd/gaps.md](prd/gaps.md)

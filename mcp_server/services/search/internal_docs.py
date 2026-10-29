@@ -397,7 +397,7 @@ def do_evidence_image(doc, page=1, bbox=None, dpi=150, client=None):
 
 def do_aggregate(question, client=None):
     """client(BR50 D) — do_search의 client 인자와 같은 범위: SEARCH_CLIENT_HARD=1이면 route() 전에 다른 고객
-    문서를 뺀다(clientscope 공용 규칙, aggregate.local()·aggregate.pg()에서 — 집계가 '최상위 근거'로 다른 고객
+    문서를 뺀다(clientscope 공용 규칙, aggregate.local()에서 — 집계가 '최상위 근거'로 다른 고객
     구조화 행을 돌려주던 구멍). client를 안 주면(기존 호출부 전부) 전과 바이트 동일.
     struct()(doc_link_list 등, X1/X1b 옵트인) 경로는 이번 범위 밖 — 남은 한계로 보고에 적음."""
     from mcp_server.services.search import aggregate as AG
@@ -410,15 +410,15 @@ def do_aggregate(question, client=None):
     if st is not None:
         return st
     R = _retriever()
+    if R.pg:  # PG 저장소는 문서·표 사실 집계 없음(doc_fact 미적재 — 10-30 지움, 숫자 질문은 query_edw — docs/prd/mcp.md#mc-12)
+        return {"note": "PG 저장소는 문서 집계(건수·합계·표) 없음 — 숫자 질문은 query_edw를 쓰세요"}
     from mcp_server.services.search import clientscope as CS
 
     allowed, strict, hard = CS.client_scope(question, client, R.clients())
     cl_kw = {"client": allowed, "client_strict": strict} if hard else {}
     llm_complete = _agg_llm_complete()  # R1(AD42·AD45②) — SEARCH_AGG_LLM=1이고 LLM 설정됐을 때만(아니면 None)
-    r = (
-        AG.pg(R.pg, question, llm_complete=llm_complete, hidden=R.hidden, **cl_kw)
-        if R.pg
-        else AG.local(_STATE["bundle"], question, llm_complete=llm_complete, hidden=R.hidden, **cl_kw)
+    r = AG.local(
+        _STATE["bundle"], question, llm_complete=llm_complete, hidden=R.hidden, **cl_kw
     )  # OP1 — 숨김 문서는 집계(건수·합계·표)에서도 제외
     return r or {"note": "집계 질문으로 판별되지 않음(건수·합계·표) — search를 쓰세요"}
 
