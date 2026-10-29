@@ -52,7 +52,7 @@ docker run --rm data-pipeline:<태그> smoke --src <실문서 몇 건 폴더>   
 
 순서대로, **앞 모듈이 끝 표시를 남겨야 다음이 시작**(없으면 종료 코드 3). 한 결과 폴더(`RAG_OUT`)를 모듈이 파일로 주고받는다 — 서로 직접 부르지 않는다.
 ```bash
-bash deploy/host/scripts/trigger.sh parse       # dedup→prepare→phase→채점→대표 결과(_rep). 임베딩·DB 없음
+bash deploy/host/scripts/trigger.sh parse       # dedup→prepare→파싱→채점→대표 결과(_rep). 임베딩·DB 없음
 bash deploy/host/scripts/trigger.sh structure   # 대표 결과→청킹·사실·임베딩 묶음
 bash deploy/host/scripts/trigger.sh load        # 묶음→PostgreSQL(pgvector). PG 없으면 종료 코드 4
 bash deploy/host/scripts/trigger.sh publish     # 대표 결과(.md) Object Storage 업로드 + EDW 메타 — 스케줄 없음, 트리거만

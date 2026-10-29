@@ -14,7 +14,7 @@ Lane policy as one table: owner lane first, steal only from listed lanes. Why: t
 - Steps: (1) one policy table per lane: `workers`, `steal_from` (empty = dedicated lane). Default = today's behavior. (2) A worker steals only when its own queue is empty; among allowed lanes, longest first; `VLM_CAP` still applies. (3) Input: runner arg `--lanes` (host script — whether a settings.yaml section is needed is decided at design; never env, CLAUDE.md §3). (4) Remove dead branches.
 - Acceptance / QA: table rows in `tests/general/deploy/test_run_docs.py` — (queues, policy) → picked doc. A dedicated lane never takes other docs even when they wait; own non-empty queue → no steal; vlm over cap is skipped; default policy picks the same docs as today.
 - Files: `deploy/host/scripts/run_docs.py`, `tests/general/deploy/test_run_docs.py`, `docs/architecture/run_docs_design.md`.
-- Overlap: parse "phase" removal on feature/settings-cleanup's follow-up touches the same runner — coordinate first.
+- Overlap: parse "phase" removal ([pipeline.md#pl-22](pipeline.md#pl-22), `feature/r2-phase`) only dropped the `PARSE_PHASES` `--set` from the runner; lanes untouched.
 - Status: todo
 
 ## rn-02

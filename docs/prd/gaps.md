@@ -72,8 +72,8 @@ Full switch list with defaults: `settings.sample.yaml` part 2, groups "[기능 �
 | LLM router for borderline aggregation | `SEARCH_AGG_LLM=0` | LLM | mcp |
 | `query_edw` | `EDW_QUERY=1` | `EDW_QUERY_SERVER/USER/PASSWORD` or `EDW_QUERY_SQLITE` | mcp |
 | `edw_meta` | — | dataset at `EDW_META_DIR` (default `/app/config/edw_meta`) | mcp |
-| `parse_document` | `PARSE_MCP_OCR=0` (no OCR), no VLM phase | `mcp_parse_service` running + `PARSE_SERVICE_TOKEN` | mcp |
-| VLM phase 3, figures, page VLM | on | VLM endpoint; soffice (`SOFFICE_BIN`) for slides/shapes | pipeline |
+| `parse_document` | `PARSE_MCP_OCR=0` (no OCR/VLM engines) | `mcp_parse_service` running + `PARSE_SERVICE_TOKEN` | mcp |
+| VLM engine, figures, page VLM | on (OCR engines off — `PARSE_OCR_ENGINE=0`, pl-22) | VLM endpoint; soffice (`SOFFICE_BIN`) for slides/shapes | pipeline |
 | Streaming parse · per-doc parallel pipeline | `PARSE_STREAM=0` · `PARSE_PARALLEL_PIPELINE=0` | — | pipeline |
 | Scan OCR/VLM de-dup · render-OCR signals · auto re-parse changed | `PARSE_DEDUP_SCAN=0` · `PARSE_SIGNAL_OCR=0` · `AUTO_REPARSE_CHANGED=0` | — | pipeline |
 | Shadow mode | `PARSE_SHADOW=0` | LLM, manual CLI | pipeline |

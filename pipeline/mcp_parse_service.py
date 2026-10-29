@@ -118,7 +118,7 @@ def _jail(path_str):
 def _engines_no_ocr_arg():
     """run_all에 붙일 --engines 인자(2026-10-21 사용자: 이미지 비대상 — OCR 꺼짐 기본).
     CORE에서 이미지·스캔 전용(rapidocr_ko·qwen_vlm·ocr_vlm)을 빼고 설치된 것만. PARSE_MCP_OCR=1이면 비워
-    run_all 기본(CORE 전체 — 스캔 PDF OCR 포함)으로 돌아간다. 스캔 이미지 PDF는 글자층 엔진만 시도되어
+    run_all 기본(CORE 전체)으로 돌아간다 — 10-29부터 OCR 엔진은 pipeline.extract.ocr_engine도 켜야 돈다(VLM 엔진은 그대로 포함). 스캔 이미지 PDF는 글자층 엔진만 시도되어
     텍스트가 안 나오면 빠르게 실패한다(수 분 OCR로 큐를 막던 원인 제거 — 실측 10-21)."""
     if pc.cfg().service.parse_mcp.ocr:  # S7c — 설정 객체(켜기 =1)
         return []
