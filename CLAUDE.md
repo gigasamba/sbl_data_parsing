@@ -194,7 +194,7 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 
 기능 요건(무엇·왜·관련 코드 파일)과 아직 개발되지 않았거나 고장 난 항목(진행 상황)은 이 파일에 두지 않고 요건 문서에 둔다(10-29).
 - [docs/PRD.md](docs/PRD.md) — 미개발·미해결 항목 표(ID·상태·상세 링크). 작업 전에 이 표에서 맡은 행을 찾는다.
-- [docs/prd/mcp.md](docs/prd/mcp.md)(검색 MCP `mc-xx`) · [docs/prd/pipeline.md](docs/prd/pipeline.md)(데이터 파이프라인 `pl-xx`) · [docs/prd/e2e.md](docs/prd/e2e.md)(e2e 실행·테스트·평가 `e2-xx`) — 기능마다 앵커 하나(무엇·왜·관련 파일, 미개발이면 `Status:`에 진행 상황).
+- [docs/prd/mcp.md](docs/prd/mcp.md)(검색 MCP `mc-xx`) · [docs/prd/pipeline.md](docs/prd/pipeline.md)(데이터 파이프라인 `pl-xx`) · [docs/prd/e2e.md](docs/prd/e2e.md)(e2e 실행·테스트·평가 `e2-xx`) · [docs/prd/runner.md](docs/prd/runner.md)(서버 문서별 실행기 레인·대기열 `rn-xx`) · [docs/prd/doc.md](docs/prd/doc.md)(문서 배치 `do-xx`) · [docs/prd/ops.md](docs/prd/ops.md)(운영 로그 `op-xx`) — 기능마다 앵커 하나(무엇·왜·관련 파일, 미개발이면 `Status:`에 진행 상황).
 - [docs/prd/gaps.md](docs/prd/gaps.md) — 요건과 다르게 동작하는 코드 · 요건 없는 코드(남길지 지울지 검토) · 기본 꺼짐·설정이 필요한 기능 · 10-29에 지운 기능.
 - 옛 §10 알려진 문제(10-20 축소 스키마 일부 반영 등)는 `mc-10`·`mc-11`·`pl-12`~`pl-16`·`e2-13`·`e2-16`으로 옮겼다.
 - 기능을 더하거나 고치면 같은 커밋에서 해당 앵커를 고친다. 끝난 항목은 PRD 표에서 빼고 앵커에 `- Status: done`을 남긴다.
