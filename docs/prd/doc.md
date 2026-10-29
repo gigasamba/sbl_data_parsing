@@ -23,3 +23,8 @@ Sync `refactor.md` with the 10-29 merges (PR #4). Why: a cross-check found stale
 - `valid_env/eval_sets/` deleted ([pipeline.md#pl-21](pipeline.md#pl-21)) — fix references in CLAUDE.md §6-5 (`list-smoke10.txt`), `valid_env/README.md`, `docs/prd/e2e.md`.
 - Also: re-measure the CLAUDE.md §6-3 baseline (selftest 89/88, pytest 142/8 — test files were deleted 10-29).
 - Status: todo — before do-01 moves the file.
+
+## do-04
+Docs restructure (user 10-29/10-30). Why: too many overlapping docs; requirements are spread outside the PRD.
+- What: fewer docs, compact, keep decisions and requirements; long docs get sub-headings; human docs in Korean. `docs/history/` holds history (refactor_plan, refactor.md stale C items — C-35, C-41 synthetic part, C-63, C-05/06, C-18/20/22/23/24/26/28, C-25/30 — run_docs bug/speed history, patch history, release §8–9). `docs/requirements/*` move into the PRD. CLAUDE.md content that is not a rule moves to PRD/README/INDEX. C items duplicated in the PRD (C-31/32/33/50/53/58) keep one line "moved to PRD xx-nn" plus any open server check. Size caps are guidance only.
+- Status: todo — after do-03.
