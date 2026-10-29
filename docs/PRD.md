@@ -7,7 +7,7 @@ Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · p
 |---|---|---|---|
 | mc-10 | Retriever reads removed `file_sha256` | todo | [prd/mcp.md#mc-10](prd/mcp.md#mc-10) |
 | mc-11 | Aggregation path queries removed `file_sha256` | todo | [prd/mcp.md#mc-11](prd/mcp.md#mc-11) |
-| mc-12 | `graph`/`concept` search query dropped tables | todo | [prd/mcp.md#mc-12](prd/mcp.md#mc-12) |
+| mc-12 | Fact aggregation queries dropped `doc_fact` | todo | [prd/mcp.md#mc-12](prd/mcp.md#mc-12) |
 | mc-13 | PG `qa_log` table never created | todo | [prd/mcp.md#mc-13](prd/mcp.md#mc-13) |
 | pl-12 | Registry upsert PG error · publish guard off (C-54) | todo | [prd/pipeline.md#pl-12](prd/pipeline.md#pl-12) |
 | pl-13 | `load --prune` deletes skipped docs (C-60) | todo | [prd/pipeline.md#pl-13](prd/pipeline.md#pl-13) |
@@ -19,7 +19,6 @@ Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · p
 | pl-19 | compose `index_a`/`index_b` fail (C-32) | todo | [prd/pipeline.md#pl-19](prd/pipeline.md#pl-19) |
 | pl-20 | Stack snapshot file review (C-50) | todo | [prd/pipeline.md#pl-20](prd/pipeline.md#pl-20) |
 | pl-21 | Deferred settings removal (fingerprint) | todo | [prd/pipeline.md#pl-21](prd/pipeline.md#pl-21) |
-| pl-22 | OpenViking summary import broken (`ov_export`) | todo | [prd/pipeline.md#pl-22](prd/pipeline.md#pl-22) |
 | e2-10 | Minimize PC eval tools (old set names) and settings | todo | [prd/e2e.md#e2-10](prd/e2e.md#e2-10) |
 | e2-11 | PC general test known failures | todo | [prd/e2e.md#e2-11](prd/e2e.md#e2-11) |
 | e2-12 | EDW answer citation check (C-56) | todo | [prd/e2e.md#e2-12](prd/e2e.md#e2-12) |
@@ -29,4 +28,5 @@ Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · p
 | e2-16 | Search page fixed document count text | todo | [prd/e2e.md#e2-16](prd/e2e.md#e2-16) |
 | e2-17 | Remaining unused functions (10-29 audit) | todo | [prd/e2e.md#e2-17](prd/e2e.md#e2-17) |
 
-Done: mcp 9 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 9 → [prd/e2e.md](prd/e2e.md)
+Done: mcp 8 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 9 → [prd/e2e.md](prd/e2e.md)
+Code vs requirements — mismatches, code with no requirement, off-by-default features, removed 10-29: [prd/gaps.md](prd/gaps.md)

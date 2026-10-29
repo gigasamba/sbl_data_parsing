@@ -6,21 +6,15 @@ Tool contract (names, inputs, outputs, `tools/list` order) is fixed — change o
 ## mc-01
 `search` tool — evidence search over loaded documents. Why: the single entry clients use to get cited evidence.
 - What: three modes — question only (hybrid search), filters only (every chunk of matching docs, no scoring), question + filters (scope applied in the store query, pool `min(50, max(3k, 30))`, then filtered and renumbered — no re-rank step). Filters `client`, `client_like`, `source_system`, `project_id`, `division`, `service_type` work on the PG store only (local bundle: filters-only returns an error, question + filters searches unfiltered); `index_id` picks a named index; `limit` applies to filters-only mode.
-- Retrieval: vector (pgvector cosine, HNSW; binary quantize + top-200 re-score above HNSW dims) + BM25 (`chunk_term`·`term_stat`·`corpus_stat`) + rare-ID regex, fused by weighted RRF (weights by question type).
+- Retrieval: methods `vector`·`bm25`·`id` only (graph·concept·image·openviking removed 10-29 — other values are ignored with a note): vector (pgvector cosine, HNSW; binary quantize + top-200 re-score above HNSW dims) + BM25 (`chunk_term`·`term_stat`·`corpus_stat`) + rare-ID regex, fused by weighted RRF (weights by question type).
 - Output: evidence items (`chunk_id`, `source_uri`, `page`, `bbox`, `section`, `text`, `score`, `via`, `rank`, …), `evidence_status` found/weak/none (labels only, drops nothing), `notes`.
 - Files: `mcp_server/routers/`, `mcp_server/services/search/search_svc.py`, `retriever.py`, `pgsearch.py`, `local.py`, `shaping.py`, `mcp_server/schemas/evidence.py`.
 - Status: done
 
 ## mc-02
-Query understanding — expansion and decomposition. Why: users ask with synonyms, abbreviations and compound questions.
-- What: glossary expansion for BM25 (synonym 1.0 / abbreviation 0.8 / weak 0.3, roster aliases, max 20), alias text on the vector query, LLM decomposition into ≤ 5 sub-questions (only when a cheap regex fires), per-client split for comparison questions, rule-based question type for weights.
-- Files: `mcp_server/services/search/terms.py`, `decompose.py`, `qtype.py`, `resources/prompts/mcp/query_decompose/`.
-- Status: done
-
-## mc-03
-Re-ranking (optional, default off). Why: better top-k when fused scores are close.
-- What: local cross-encoder `BAAI/bge-reranker-v2-m3` or `api:<model>`; conditional mode re-ranks only on a small top-2 gap, results spread across docs, or comparison/latest questions; timeout falls back to fused order.
-- Files: `mcp_server/services/search/rerank.py`.
+Query understanding — expansion. Why: users ask with synonyms, abbreviations and several clients at once.
+- What: glossary expansion for BM25 (synonym 1.0 / abbreviation 0.8 / weak 0.3, roster aliases, max 20), alias text on the vector query, per-client split for comparison questions (`SEARCH_ENTITY_SPLIT`, round-robin merge `search_svc._gather`), rule-based question type for weights. LLM decomposition was removed 10-29 (`decompose` input accepted and ignored, `subs` always `[]`).
+- Files: `mcp_server/services/search/terms.py`, `qtype.py`, `search_svc.py`.
 - Status: done
 
 ## mc-04
@@ -70,9 +64,9 @@ Aggregation path queries removed columns. Why: `aggregate.pg()` selects `file_sh
 - Status: todo
 
 ## mc-12
-`graph` / `concept` search methods and fact aggregation query dropped tables. Why: `kg_node`·`kg_edge`·`doc_fact`·`concept_chunk`·`doc_image`·`chunk_image` are no longer created or loaded (`pipeline/load/pgvector_load.py`), but `pgsearch.graph_neighbors` and `concept_broader_chunks` still query them (and `v_chunk_source.file_sha256`, which the view no longer has), so these methods return nothing or fail on PG.
-- Files: `mcp_server/services/search/pgsearch.py`, `mcp_server/services/search/aggregate.py`.
-- Status: todo — decide: restore the tables (Alembic migration, DB owner) or remove the methods and their settings (`mcp.search.graph.*`).
+Fact aggregation queries a dropped table. Why: `kg_node`·`kg_edge`·`doc_fact`·`concept_chunk`·`doc_image`·`chunk_image` are no longer created or loaded (`pipeline/load/pgvector_load.py`). The graph and concept search methods that read them were removed 10-29; the `doc_fact`-based aggregation path in `aggregate.py` still queries `doc_fact`, so it returns nothing on PG.
+- Files: `mcp_server/services/search/aggregate.py`, `pipeline/load/pgvector_load.py`.
+- Status: todo — decide: load `doc_fact` again (Alembic migration, DB owner) or drop that aggregation path.
 
 ## mc-13
 PG query log writes to a table no migration creates. Why: `search_svc` does `INSERT INTO qa_log` on the PG store, but `0001_search_base` has no `qa_log` table; the error is swallowed, so only the jsonl log works.

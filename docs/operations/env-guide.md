@@ -61,8 +61,7 @@
 | `MCP_HOST` | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부 |
 | `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 호출부 env에만 · 공백만인 토큰은 없음과 같음(S7d) · `MCP_PORT` 형식이 틀리면 시작 실패(값은 안 찍음) |
 | `PARSE_SERVICE_TOKEN` | 비움(→ `MCP_TOKEN`) | `parse_document`가 parse 작업 서비스를 부를 때 쓰는 토큰 — data-pipeline-parse의 `PARSE_MCP_TOKEN`과 같은 값. 이것도 `MCP_TOKEN`도 없으면(공백만 포함) `parse_document`가 "parse 서비스 토큰 없음" 오류를 돌려줌(S7d — 코드 대체 토큰 삭제, `refactor.md` C-44) |
-| `MCP_METHODS` | `vector,bm25,id` | 그래프는 기본 빠짐 |
-| `MCP_DECOMPOSE` | 0(상주 기본) | 단순 검색만 — 질문 분해는 MCP 밖 |
+| `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음(graph·concept·image·openviking은 10-29에 지움) |
 | `MCP_ALLOWED_HOSTS` | 비움 | `MCP_HOST`가 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |
 
 ### EDW 쿼리 도구(EQ1, `describe_edw`·`query_edw` — 읽기 전용 SQL, 근거 MCP의 별도 도구 2개)
@@ -107,13 +106,6 @@
 | `EDW_SERVER`·`EDW_PORT`·`EDW_DATABASE`·`EDW_USER`·`EDW_PASSWORD`·`EDW_SCHEMA`·`EDW_DRIVER` | EDW 벡터 적재(`EDW_LOAD=1`일 때만) — 기본 `pymssql`, `pyodbc`는 **지원 안 함**(이미지에 없음) |
 | `PM_PATH_MAP` | 결과 키 앞부분 바꾸기 `이전 앞부분=새 앞부분`(쉼표 목록, 짝 없으면 `source_system/원본 폴더`) — 문서 폴더 = `<PM_PREFIX>/<새 앞부분>/<나머지 폴더>/<원본파일명>/`(EDW rep_key) · 대표 결과 `<파일명>_<YYYY-MM-DD_HHMMSS>.md`·엔진별 원본 `engine/` · 예 `SFDC=Parsing-Result/SFDC`면 `.../SFDC/<UUID>/a.pdf` → `.../Parsing-Result/SFDC/<UUID>/a.pdf/` |
 | `PM_BUCKET`·`PM_PREFIX`·`PM_DB_HOST`·`PM_DB_DATABASE`·`PM_DB_USER`·`PM_DB_PASSWORD` | 결과 게시(쓰기, 마지막 단계) — 읽기 계정과 분리. 폴더 저장소로 먼저 시험: `PM_BUCKET=file://…` · **첫 게시 전 EDW 표를 DBA가 1회 생성**: [`docs/operations/parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(S1부터 저장소 문서 자리 — 코드 폴더·덧씌우기 묶음에는 없음 · PM2, 10-15 — DBA가 아직 한 번도 실행 안 함, 이 최신 판을 그대로 1회·코드는 표를 만들지 않음, 없으면 첫 INSERT에서 실패) · 필수 열은 `doc_key`(원본 sha256) 하나뿐, `source_system`·`source_key`·`parse_date`는 비어도 됨(비면 각각 'unknown'·NULL·처리 시각) · `parse_date`는 글자 `YYYY-MM-DD_HHMMSS`, `rep_key`는 문서 폴더(끝 `/`) · `engines_used`(JSON 배열)·`engines_summary`(한 줄) — 이 문서에 쓰인 엔진 전부(VLM·OCR 포함, `pipeline/load/parsing_meta.py`의 `engines_used()`) |
-
-### OpenViking (기존 컨테이너, 선택)
-| 이름 | 메모 |
-|---|---|
-| `OV_URL` | 접속 정보 — 늘 둬도 안전(이것만으로는 동작이 안 바뀜) |
-| `OV_FEATURES` | `summary,search,parse,ingest` 콤마 목록(기본 비움=none) — 켜야 실제로 씀 |
-| `OV_ROOT` | OpenViking 적재·내려받기 루트 |
 
 ### 상주 트리거 서버 (선택, 10-14~)
 | 이름 | 메모 |
@@ -161,6 +153,7 @@ python -m common.check.ping_models   # LLM·VLM·EMBED 실호출(OK/FAIL·지연
 
 | 판 | 바뀐 것 | 서버 할 일 |
 |---|---|---|
+| 10-29 기능 정리(사용자 결정 — `feature/settings-cleanup`) | **설정 칸 지움**: 파싱 판단 에이전트 `PARSE_AGENT*`(12) · 재순위 `SEARCH_RERANK*`·`RERANK_*`(12) · 질문 분해 `MCP_DECOMPOSE`·`DECOMPOSE`(옛 `QA_CHAT_DECOMPOSE`) · 그래프·개념 검색 `SEARCH_GRAPH_CONCEPT_*`(3) · OpenViking `OV_*`(12)·`STRUCTURE_TARGET` · `SOFFICE_CANDIDATES`·`MINERU_BIN`·`GRAPHITI_NEO4J_URI`·`MCP_LIST_DOCS_MAX` — settings.yaml에 남아 있으면 지운다(모르는 칸은 검증 오류). `search` 도구 입력은 그대로(`methods`의 vector·bm25·id 밖 값과 `decompose`는 무시) | settings.yaml에서 위 칸 지우기 · 첫 실행에 구조화·색인 다시 만들기(code_fp s 바뀜 — 임베딩 캐시 재사용) |
 | S9 Step A VS8b 처리(10-28 — 같은 새 이미지 판) | ① **명령 인자 `--set 이름=값`**(진입 모듈 6개 — 한 번 실행 덮기, 서버 포함 · 비밀·호스트 칸 거부) ② `run_docs.py`의 문서별 설정(결과 폴더·VLM 동시 수·후보정·CPU 게이트·임베딩 동시 수 등 33개)을 env 대신 `--set`으로 — S7e2~S8b 판에서 효과가 없던 것(문서별 파싱이 공용 `/app/output`에 씀)을 옛(S7e1 전)과 같게 되돌림 ③ 구조화가 파싱이 그 문서 폴더에 쓴 엔진 구성 사본을 다시 씀(파싱과 구조화 사이 `set-stack`이 있어도 한 문서는 한 판) ④ 동시 `set-stack`·`set-sources`에서 진 쪽·그사이 판이 바뀐 쪽은 종료 2 안내(덮지 않음) ⑤ `show-stack`·`show-sources`는 `data-pipeline` 컨테이너에서(`mcp-server`는 `/app/output:ro`라 실행 기록을 못 씀) | `run_docs.py`를 이 판과 같은 때에 바꿈(옛 러너 + 새 이미지는 동작은 하나 문서별 값이 효과 없음 — 새 러너 + 옛 이미지는 `--set`을 모르는 인자로 거부) · `refactor.md` C-51 |
 | S7e3 VS7e2 처리(10-28, D-028·D-029 — 같은 새 이미지 판) | ① 코드가 자식 프로세스에 넘기는 설정 값(색인 스키마 `PG_SCHEMA`·새벽 배치 LLM 요약 끄기·LLM 호출 차단·스트리밍 건너뜀 기록·selftest 유료 호출 잠금)을 덮기 파일로 — S7e2에서 효과가 없던 것을 옛(S7e1 전 env_file 판)과 같게 되돌림 ② **덮기 파일 도구 `common.config.overrides`는 PC 전용** — 서버(`RUN_ENV` dev·stage·prd)면 안내 뒤 종료 2: 서버는 settings.yaml을 직접 고친다 ③ migrate가 서버 env 파일의 `GOLD_DIR`를 호스트 칸에만 옮김(앱 칸은 비워 컨테이너 안 `/data/gold`) ④ 덮기 파일의 모르는 이름·형식 오류는 서버에서 시작 거부(local은 경고) · 손으로 쓴 `true`·`false`는 settings.yaml 절 안과 같은 규칙 ⑤ 상주 트리거 서버는 공통 `pipeline.service.trigger.port`를 쓰지 않음(옛 compose와 같음) ⑥ parse 작업 서비스 기동 예시는 `docker exec -d data-pipeline-parse python -m pipeline.mcp_parse_service`(토큰은 settings.yaml — `-e PARSE_MCP_TOKEN`은 효과 없음) | 서버 settings.yaml에 `pipeline.paths.gold_dir`를 적었다면 지움(호스트 칸만) · 한 번 덮어 돌리던 습관은 settings.yaml 직접 수정으로(`refactor.md` C-47 ⑥) |
 | S7e2 설정 전환 4b — 옛 틀 삭제·전환 다리 제거(10-28, D-028 — 같은 새 이미지 판) | ① **env의 옛 설정 이름을 더 읽지 않음** — 설정 값은 settings.yaml(+ 덮기 파일)로만, 엔진·인계 28키만 영구 다리로 env에 ② `options.conf`·`.env*.example`·`pipeline.env.example`·`env_files.py` 삭제 ③ compose의 덮기 env(`TRIGGER_*`·`CHAIN_STRUCTURE_URL`·`MCP_HOST/PORT/STORE`·`EMBED_QUERY_CACHE`)·run_tool `-e GOLD_DIR` 삭제 — 같은 값을 settings.yaml 칸으로 ④ Dockerfile ENV에서 `PIPE_EMBED`·`PIPE_PROCS`·`DOC_DIR`·`DOC_DIR_PREPARED`·`SOFFICE_BIN` 삭제(이미지 안 기본값 — settings.yaml이 이김) ⑤ 라이브러리 env는 `common.runtime.lib_env` ⑥ 서버에서 설정 파일을 못 읽거나 틀리면 시작 거부(종료 2) ⑦ `EDW_USER` 필수(코드 기본 계정 이름 삭제) ⑧ 옛 별칭 `QA_CHAT_DECOMPOSE`·`SYNTHETIC_TRUTH`·`DOC_SRC`(앱)는 안 읽음 — migrate가 옮김 ⑨ migrate가 env 파일을 compose `env_file` 규칙(이스케이프·`$`)으로 읽고 "확인 필요" 이름을 냄 | `refactor.md` C-47 — `chain_structure_url`·`mcp.server.store: pg`·EDW 계정을 settings.yaml에, `migrate --compare`의 "확인 필요"·"옛 이름 옮김" 줄 확인, 덮기 파일 임시 폴더 검토(C-46) |

@@ -35,7 +35,7 @@ Figures. Why: charts, diagrams and images carry values that text extraction miss
 
 ## pl-06
 Structure — chunks, metadata, embeddings. Why: search needs cited chunks with metadata.
-- What: chunking structure (default, 800 chars, headings, tables whole) / fixed 512+64 / sentence / page, big tables by 25 rows; summaries (OpenViking → LLM → lead text); facts (product, modality, date, price, amount, currency, batch); client/contract kept only when cross-checked; rule-based knowledge graph (built into the bundle, no longer loaded to PG — [mcp.md#mc-12](mcp.md#mc-12)); embeddings local (e5, bge-m3) or internal `api`.
+- What: chunking structure (default, 800 chars, headings, tables whole) / fixed 512+64 / sentence / page, big tables by 25 rows; summaries (LLM when `EDW_SUMMARY_LLM=1`, else lead text — OpenViking summaries removed 10-29); facts (product, modality, date, price, amount, currency, batch); client/contract kept only when cross-checked; rule-based knowledge graph (built into the bundle, no longer loaded to PG — [mcp.md#mc-12](mcp.md#mc-12)); embeddings local (e5, bge-m3) or internal `api`.
 - Files: `pipeline/transform/structure/build_bundle.py`, `chunking.py`, `facts.py`, `draft_terms.py`, `common/ai/embed.py`.
 - Status: done
 
@@ -65,7 +65,7 @@ Orchestration. Why: the server runs thousands of documents unattended.
 
 ## pl-11
 Model calls, cost and external-send guard (shared). Why: closed-network servers must never call external models; PC calls must stay cheap.
-- What: OpenAI-compatible roles llm/vlm/ocr_vlm/embed/rerank; servers (dev/stage/prd) refuse external models; external send needs `*_ALLOW_EXTERNAL` + synthetic-corpus truth file; budget, call caps, RPM, spend ledger; response cache; fake LLM for tests.
+- What: OpenAI-compatible roles llm/vlm/ocr_vlm/embed (rerank removed 10-29); servers (dev/stage/prd) refuse external models; external send needs `*_ALLOW_EXTERNAL` + synthetic-corpus truth file; budget, call caps, RPM, spend ledger; response cache; fake LLM for tests.
 - Files: `common/ai/guard.py`, `common/ai/llm.py`, `common/ai/adk.py`, `common/config/settings.py`.
 - Status: done
 
@@ -118,8 +118,3 @@ Deferred settings removal. Why: unused/retired settings whose removal changes fi
 - Also: the `EVAL_SETS_DIR` PC default in `common/core/paths.py` still says `valid_env/unstructured` (deleted 10-29, [e2e.md#e2-09](e2e.md#e2-09)) — change to `valid_env/eval_sets` with `tests/server/common/test_paths.py`; until then set `common.paths.eval_sets_dir` on the PC.
 - Files: `common/config/settings.py`, `pipeline/config.py`, `pipeline/extract/run_all.py`, `common/core/paths.py`.
 - Status: todo — bundle with the next fingerprint-changing release.
-
-## pl-22
-OpenViking summary download import is broken. Why: `ov_import` in `pipeline/cli.py` does `import ov_export`, the old module name — the module is now `pipeline/load/openviking_export.py`, so turning on `OV_FEATURES=summary` with `OV_URL`·`OV_ROOT` set fails with ModuleNotFoundError (the import is outside the try). OpenViking is optional and off by default.
-- Files: `pipeline/cli.py` (`ov_import`), `pipeline/load/openviking_export.py`.
-- Status: todo — fix the import (`from pipeline.load import openviking_export`) or drop the OpenViking summary path.
