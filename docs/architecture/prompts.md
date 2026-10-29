@@ -1,7 +1,7 @@
 # AI 지시서(지시서 패키지)
 
 LLM·VLM을 **부르는** 단계의 지시서 패키지 25개(`resources/prompts/` 23개 + PC 전용 `validation/e2e/`의 `triple_extract`·`valid_env/answer_test/`의 `rag_qa` — S11에 `research_check` 삭제)를 한 표로 모았다. 검색·집계·청킹처럼 모델을 부르지 않는 결정적 단계는 지시서가 아니라 코드다(맨 아래 "도구" 표).
-S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26개와 폴더 설명(`common_tools/prompts/README.md`)을 이 문서 하나로 합쳤고, `cases.json`은 `tests/fixtures/prompts/<앱>/<패키지>.json`으로 옮겼다. 호출부 경로는 S2 시점 코드 자리로 고쳤다(옛 README의 `dev/…`·`modules/…`·`deploy/data_parsing/…`는 낡은 경로였다).
+S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26개와 폴더 설명(`common_tools/prompts/README.md`)을 이 문서 하나로 합쳤고, `cases.json`은 `tests/fixtures/prompts/<앱>/<패키지>.json`으로 옮겼다(읽는 곳이 없어 10-29에 지움 — `refactor.md` C-63). 호출부 경로는 S2 시점 코드 자리로 고쳤다(옛 README의 `dev/…`·`modules/…`·`deploy/data_parsing/…`는 낡은 경로였다).
 
 ## 1. 자리와 찾는 순서
 
@@ -11,7 +11,6 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 | `resources/prompts/pipeline/<패키지>/` | 파싱·구조화·평가 지시서(옛 `data_etl/agent/`) | 모든 이미지 |
 | `resources/prompts/mcp/<패키지>/` | 검색 MCP 지시서(옛 `data_retrieval/prompts/`) · `research_judge`(D-019 ④) | 모든 이미지 |
 | `validation/e2e/triple_extract/` | 평가 실험(LLM 그래프 모드 — `validation/e2e/graph_llm.py`, T-02로 `stages.py`에서 쪼갬) 지시서 — S6a에 쓰는 도구와 함께 옮김(D-019 ③) | 없음 — PC 전용(서버 이미지에 안 들어감) |
-| `tests/fixtures/prompts/<앱>/<패키지>.json` | 오프라인 사례(옛 패키지 `cases.json`) — 실행 코드·테스트 모두 읽지 않음(지울지 결정 대기 — `refactor.md` C-63) | 없음(PC 전용) |
 
 - 찾는 자리는 `common/core/paths.py` `resolve_agent_dir()` 한 곳이다. 순서는 ① `resources/prompts/common` ② `resources/prompts/pipeline` ③ `resources/prompts/mcp` ④ `validation/e2e`(`triple_extract` — PC 전용, S6a · 이미지에는 폴더가 없어 건너뜀) ⑤ `valid_env/answer_test`(`rag_qa` — PC 전용 데이터, S10에 `validation/e2e`로 옮겼다가 10-29 사용자 결정으로 되돌림 · 이미지에 없음) ⑥ 시험 고정물(`dev_tools/unit_test/fixtures` — 이 저장소에는 없음). 패키지 이름은 겹치지 않아 순서가 결과를 바꾸지는 않지만, 결정적이어야 캐시·로그가 재현된다.
 - `resources/`는 저장소 루트 바로 아래이고, 이미지 안에서는 `/app/deploy/resources`다(`paths.RES_ROOT` = 코드 패키지들이 import되는 자리의 `resources/`).
@@ -24,7 +23,6 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 - **output_schema:** JSON을 돌려주는 패키지는 `agent.json`에 `output_schema`를 둔다(호출부 파서가 기대하던 키·형식 그대로, 더 엄격하지 않게). `adk.complete(..., agent=...)`가 응답을 이 스키마로 검사하고, 어긋나면 원 메시지 + 안내 한 줄로 1회만 다시 묻는다(새 메시지라 원 캐시는 그대로). 그래도 어긋나면 호출부 기본값 처리에 맡긴다. 집계는 `adk.schema_stats()`(`invalid`·`retry_ok`·`retry_failed`). `LLM_FAKE=1` 경로(`common/ai/llm.py`)는 `adk.complete`를 거치지 않아 검사 대상이 아니다.
 - **공용 꼬리(ADK14 P1, 인젝션 방어):** `resources/prompts/common/_common/tail.md`(패키지 아님 — 꼬리 파일만) — 자료 속 지시 무시·지어내기 금지·형식 준수 3줄을 `load()`가 지시문 **맨 끝**에 붙인다. `agent.json` `common_tail`: 칸 없음 = `tail.md` · `false` = 안 붙음 · `"free_text"` = `tail_free.md`(JSON 전용 3번째 줄을 뺀 것 — 출력이 자유 글인 패키지). 자료를 문자열 이어붙이기로 템플릿 뒤에 붙이는 호출부는 `load()` 대신 `template()`(꼬리 없음) + 자료 + `tail(agent_id)`를 써서 꼬리가 항상 자료 뒤에 오게 한다(아래 표 "꼬리" 칸 `template+tail`).
 - **실행:** `adk.py` `_load_pipeline_agent`·`_run_once`·`_run_agentic`(I6 임시 대체 구현 — 옛 `agent_platform`은 D-013으로 지움). `complete(..., agent=<id>)`가 가드·캐시·재시도·사용량·형식 검사를 감싼다. 1회 호출 패키지는 local_tools가 없다(되돌이·분기는 호출자 파이썬 코드).
-- **사례(`tests/fixtures/prompts/`):** 2~3개, `{"user_text", "note", "expected"(output_schema 있는 패키지만), "checks": {"contains", "any_of", "not_contains", "regex"}, "tags": ["fabrication"]}`. 읽는 테스트가 없어 기록용이다 — 내력·선택지(지움 / 회귀 테스트로 살림)는 `refactor.md` C-63. 근거로 답하는 4개(`research_judge`·`value_choice`·`figure_extract`·`triple_extract`)는 `fabrication` 사례가 1개 이상 있다(`research_check`는 S11에 사례와 함께 지움).
 
 ## 3. 패키지 표
 
