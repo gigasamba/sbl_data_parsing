@@ -72,7 +72,8 @@ Model calls, cost and external-send guard (shared). Why: closed-network servers 
 ## pl-12
 Document registry upsert and publish guard. Why: registry upsert has a PG syntax error (C-54 ①); the publish guard is off because the server does not upload `source.json` (C-54 ②).
 - Files: `common/store/structdb.py`, `pipeline/load/publish_parse_result.py`, `tests/server/pipeline/test_publish_guard.py` (known fail).
-- Status: todo — design in the next version.
+- Decided (user 10-30 grill): ① keep the registry and fix it — the PG translation of `INSERT OR REPLACE` (`structdb._pg_sql` regex vs multi-line SQL in `registry.apply`); re-key to `s3_key` with [pl-25](#pl-25). New-doc detection stays FileStorageMap vs ParsingMeta ([pl-23](#pl-23)). ② publish guard reads EDW `AI.ParsingMeta` (`source_key` + `rep_bucket`/`rep_key`) instead of `source.json` sidecars: same doc → overwrite the same file (no `-2`/`-3.md` copies); a different source mapping to the same result key → refuse. Then `test_publish_guard` passes → remove it from `deploy/release/known_fail.txt`.
+- Status: todo — after [pl-25](#pl-25).
 
 ## pl-13
 `load --prune` deletes skipped documents. Why: unchanged docs that were skipped are pruned too (C-60).
@@ -133,6 +134,7 @@ Remove the parse phase concept (user 10-29). Why: phases 1/2/3r re-ran engines w
 ## pl-23
 Incremental runs only; full reparse = explicit full e2e (C-52, C-08). Why: engine/handoff/code fingerprints changed for every doc; an automatic reparse of all docs would blow the nightly window.
 - Decided (user 10-29 grill): nightly and `run_docs` process **new** docs only, even after a fingerprint change. "New" = `AI.FileStorageMap.s3_key` not yet in `AI.ParsingMeta` (s3 key only — no update-time check; `run_docs` already works this way). A full reparse runs only when a person starts a full e2e (occasional — after logic changes, then results are reviewed). The first load of this version is one full e2e.
+- Decided (user 10-30 grill): the nightly batch stays OFF (systemd timer and `pipeline.host.nightly.enabled` false); a person turns it on later in settings.yaml. No run time is fixed now.
 - Not used now: FileStorageMap update time — assumed column `last_modified_time`, to be added to the EDW example later ([pl-25](#pl-25)).
 - Files: `deploy/host/scripts/run_docs.py` (done set), `pipeline/cli.py` (`night` — check it does the same).
 - Status: todo
@@ -158,8 +160,11 @@ DB schema spec, written before pl-26·pl-23·pl-24 are built. Why: table/column 
   - `struct`: delete the document-derived tables `doc_location`, `doc_contract_link`, `doc_table`, `doc_cell` and their writers/readers (structured link/tables, `load_tables_db`, `find_table_cells`, aggregate `doc_link_list`/`table_cell_list`/`doc_location_list`, `AG.struct` server path) — that content lives only in chunk text. Keep `stack_version`/`source_version` (read at MCP start).
   - Masters `contract_master`, `client_master` move to a SEPARATE Postgres (own connection setting, not the search PG), filled by a person from CSV (`structured load` style). Readers `gen_roster` (client_master) and `terms.py` (contract_master) use the new connection.
   - EDW vector tables (`chunk_vec`, `edw_insert`, `edw_search`) are removed by PR #5.
+- Decided (user 10-30 — client fields): one client per doc comes from the EDW join chain (scalar). Clients found in the document text are a separate list. The MCP client filter uses ONLY the EDW client; a doc without an EDW client is excluded when a client filter is set. Using text-found clients in the filter is later ([pl-28](#pl-28)). Today both are mixed in `clients[]` (`build_bundle.infer_clients`) and `chunk.clients` drives the hard filter — fix with this row.
+- Naming rule (user 10-30): any field that can come from EDW and from document parsing gets two columns with the origin in the name (e.g. `client_edw`, `clients_doc`); `db_schema.md` fixes the exact suffixes.
+- Split timing (user 10-30): B — build ONE table set now; the per-source split is [pl-28](#pl-28).
 - Files: `docs/architecture/db_schema.md` (new), `docs/index.md`, `common/store/db/migrations/versions/`, `docs/operations/parsing_meta_mssql.sql`, `tests/server/common/` (one test).
-- Status: todo — first.
+- Status: dev — `docs/architecture/db_schema.md` 설계안 + 시험 `tests/server/common/test_db_schema.py`(`feature/db-schema-spec`) — 사용자·DB 담당자 승인 대기(코드·스키마 변경 없음).
 
 ## pl-26
 `full` always publishes; no "skip publish" path (C-31). Why: help text said "no EDW load" while `full` published, and it ignored `NIGHTLY_PUBLISH`.
@@ -167,3 +172,8 @@ DB schema spec, written before pl-26·pl-23·pl-24 are built. Why: table/column 
 - Targets per `RUN_ENV`: `local`·`dev` pick one of (a) local path (folder for Object Storage, file DB for EDW) or (b) real connection info (API/DB); `prd` real connection only (`stage` was dropped from RUN_ENV — op-02). The PC keeps the CLAUDE.md §4 guard (no prod EDW/OS from the PC).
 - Files: `pipeline/cli.py` (`night`, `full`), `deploy/docker/entrypoint.sh`, publish in `pipeline/load/`, `pipeline/config.py`, `docs/operations/server-guide.md`.
 - Status: todo
+
+## pl-28
+Per-source gold tables (designed in [pl-25](#pl-25), built later). Why: SFDC · CRMS · LAS · Other have different metadata; one table per source keeps columns clean.
+- What (user 10-30): every gold pair — `doc`, `chunk` and the BM25 tables (`chunk_term`, `term_stat`, `corpus_stat`) — exists once per source (4 sets); columns may differ per source (SFDC-only `sf_*`, `project_code__c` move to the SFDC doc table). `load_run` and the Alembic version table stay shared. MCP `search` then requires a source — one contract change, new version, review grade A. Also later: allow text-found clients (`clients_doc`) in the client filter.
+- Status: todo — later version; needs a full reload.

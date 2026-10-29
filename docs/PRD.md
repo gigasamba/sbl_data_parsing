@@ -22,20 +22,23 @@ Row = one open feature. ID prefix = `prd/<area>.md` (mc = search MCP · pl = dat
 | pl-24 | run_docs order: silver → delete original → gold | todo | [→](prd/pipeline.md#pl-24) |
 | pl-25 | DB schema spec doc + column check test (first) | todo | [→](prd/pipeline.md#pl-25) |
 | pl-26 | `full` always publishes, targets required (C-31) | todo | [→](prd/pipeline.md#pl-26) |
+| pl-28 | Per-source gold tables · source required in search (later) | todo | [→](prd/pipeline.md#pl-28) |
 | e2-10 | Minimize PC eval tools (old set names) and settings | todo | [→](prd/e2e.md#e2-10) |
 | e2-11 | PC general test known failures | todo | [→](prd/e2e.md#e2-11) |
-| e2-12 | EDW answer citation check (C-56) | todo | [→](prd/e2e.md#e2-12) |
 | e2-13 | PC Docker smoke stops at retriever | todo | [→](prd/e2e.md#e2-13) |
 | e2-14 | Release tests only inside the image (C-53) | todo | [→](prd/e2e.md#e2-14) |
 | e2-15 | Agent test package path points upstream | todo | [→](prd/e2e.md#e2-15) |
 | e2-16 | Search page fixed document count text | todo | [→](prd/e2e.md#e2-16) |
 | e2-17 | Remaining unused functions (10-29 audit) | todo | [→](prd/e2e.md#e2-17) |
+| e2-18 | Delete code with no requirement (gaps §2) | todo | [→](prd/e2e.md#e2-18) |
 | do-01 | Move `refactor.md` to `docs/refactoring/` | todo | [→](prd/doc.md#do-01) |
 | do-02 | Glossary in `docs/index.md` | todo | [→](prd/doc.md#do-02) |
 | do-03 | Sync `refactor.md` with 10-29 merges | todo | [→](prd/doc.md#do-03) |
+| do-04 | Docs restructure · `docs/history/` · Korean | todo | [→](prd/doc.md#do-04) |
 | op-01 | JSON Lines event log | todo | [→](prd/ops.md#op-01) |
 | op-02 | RUN_ENV `local`·`dev`·`prd` (drop `stage`) · LLM_FAKE only in `local` | design done | [→](prd/ops.md#op-02) |
 | op-03 | One EDW connection, read/write account | dev | [→](prd/ops.md#op-03) |
+| op-04 | First release tag `v0.1.0` + release notes | todo | [→](prd/ops.md#op-04) |
 
-Done: mcp 10 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 9 → [prd/e2e.md](prd/e2e.md) · runner 2 → [prd/runner.md](prd/runner.md)
+Done: mcp 10 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 10 → [prd/e2e.md](prd/e2e.md) · runner 2 → [prd/runner.md](prd/runner.md)
 Code vs requirements — mismatches, code with no requirement, off-by-default features, removed 10-29: [prd/gaps.md](prd/gaps.md)
