@@ -77,7 +77,8 @@ Document registry upsert and publish guard. Why: registry upsert has a PG syntax
 ## pl-13
 `load --prune` deletes skipped documents. Why: unchanged docs that were skipped are pruned too (C-60).
 - Files: `pipeline/load/pgvector_load.py`.
-- Status: todo — decide whether to fix (one line, changes server load behavior).
+- Decided (user 10-29 grill): load only adds/updates — never deletes. Skipped (existing) docs stay. Docs deleted at the source and parse failures are only logged locally (cause + duration), no automatic removal. Drop the prune path from `load` and its callers (`pipeline/cli.py` load, the index builder `--pg`).
+- Status: todo — review grade A (server load behavior).
 
 ## pl-14
 `pgvector_load deploy` backfill reads removed `doc.client`. Why: `backfill_chunk_clients` fails after the 10-20 reduced schema (tables and indexes are still created).
@@ -96,7 +97,9 @@ Document registry upsert and publish guard. Why: registry upsert has a PG syntax
 
 ## pl-17
 Parse step location — `extract` or `transform`. Why: moving it changes code_fp p0; cheapest before the first deployment (C-61).
-- Status: todo — user decision.
+- Decided (user 10-29 grill): move `pipeline/extract/{engines/,run_all.py,parse_one.py}` → `pipeline/transform/parse/`; rename `run_all.py` → `run_parse.py` (it only parses docs × engines; "run all" reads like e2e). `extract/` keeps source · rdb_discover · dedup · prepare. One commit moves, a second renames (CLAUDE.md §1). Keep engine fingerprints via `_LEGACY_NAMES`; code_fp p0 changes — free now because the first load is a full e2e ([pl-23](#pl-23)).
+- Files: `pipeline/extract/`, `pipeline/transform/`, `common/core/artifacts.py` (`LAYER_CODE`), `pipeline/cli.py`, docs and command tables.
+- Status: todo — review grade A (fingerprints).
 
 ## pl-18
 `night`/`full` exit 0 after a midway stop. Why: schedulers cannot see the failure (C-33).
@@ -118,3 +121,25 @@ Deferred settings removal. Why: unused/retired settings whose removal changes fi
 - Also: the `EVAL_SETS_DIR` PC default in `common/core/paths.py` still says `valid_env/unstructured` (deleted 10-29, [e2e.md#e2-09](e2e.md#e2-09)) — change to `valid_env/eval_sets` with `tests/server/common/test_paths.py`; until then set `common.paths.eval_sets_dir` on the PC.
 - Files: `common/config/settings.py`, `pipeline/config.py`, `pipeline/extract/run_all.py`, `common/core/paths.py`.
 - Status: todo — bundle with the next fingerprint-changing release.
+
+## pl-22
+`full` always publishes; no "skip publish" path (C-31). Why: help text said "no EDW load" while `full` published, and it ignored `NIGHTLY_PUBLISH`.
+- Decided (user 10-29 grill): publish (silver → Object Storage + EDW) is the default and only mode — remove `--no-publish` and `pipeline.host.nightly.publish`. Publish targets are required settings; missing → refuse to start.
+- Targets per `RUN_ENV`: `local`·`dev` pick one of (a) local path (folder for Object Storage, file DB for EDW) or (b) real connection info (API/DB); `stage`·`prd` real connection only. The PC keeps the CLAUDE.md §4 guard (no prod EDW/OS from the PC).
+- Files: `pipeline/cli.py` (`night`, `full`), `deploy/docker/entrypoint.sh`, publish in `pipeline/load/`, `pipeline/config.py`, `docs/operations/server-guide.md`.
+- Status: todo
+
+## pl-23
+Incremental runs only; full reparse = explicit full e2e (C-52, C-08). Why: engine/handoff/code fingerprints changed for every doc; an automatic reparse of all docs would blow the nightly window.
+- Decided (user 10-29 grill): nightly and `run_docs` process **new** docs only, even after a fingerprint change. "New" = EDW `AI.FileStorageMap` s3 key + update time vs `AI.ParsingMeta`. A full reparse runs only when a person starts a full e2e (occasional — after logic changes, then results are reviewed). The first load of this version is one full e2e.
+- Open: FileStorageMap update-time column name — EDW owner confirms on the server; code reads the name from a settings.yaml item.
+- Files: `deploy/host/scripts/run_docs.py` (done set — today s3 key only), `pipeline/cli.py` (`night`), `pipeline/extract/` source.
+- Status: todo
+
+## pl-24
+Per-doc order in `run_docs`: parse → silver publish → delete original → gold (structure + load). Why: today publish waits for gold, and `cleanup_doc` deletes the original even on failure.
+- Decided (user 10-29 grill): originals are downloaded from Object Storage to the collection server, parsed, and deleted only after silver publish succeeds. Parse failure → keep the original, log cause + duration locally only, nothing in EDW. Gold failure → the EDW row stays with `gold_status` = failed (+ reason); gold can be rebuilt from silver.
+- New EDW column `AI.ParsingMeta.gold_status` (pending · ok · failed) — DDL to the DB owner (company DB, not Alembic) — review grade A.
+- Local test runs from `valid_env/` copy docs into a temp folder first and run there (never in place).
+- Files: `deploy/host/scripts/run_docs.py` (`doc_flow`, `cleanup_doc`, done query), `docs/operations/parsing_meta_mssql.sql`, publish (`parsing_meta`).
+- Status: todo

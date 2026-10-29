@@ -19,6 +19,9 @@ Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · p
 | pl-19 | compose `index_a`/`index_b` fail (C-32) | todo | [→](prd/pipeline.md#pl-19) |
 | pl-20 | Stack snapshot file review (C-50) | todo | [→](prd/pipeline.md#pl-20) |
 | pl-21 | Deferred settings removal (fingerprint) | todo | [→](prd/pipeline.md#pl-21) |
+| pl-22 | `full` always publishes, targets required (C-31) | todo | [→](prd/pipeline.md#pl-22) |
+| pl-23 | Incremental only; full reparse = full e2e (C-52) | todo | [→](prd/pipeline.md#pl-23) |
+| pl-24 | run_docs order: silver → delete original → gold | todo | [→](prd/pipeline.md#pl-24) |
 | e2-10 | Minimize PC eval tools (old set names) and settings | todo | [→](prd/e2e.md#e2-10) |
 | e2-11 | PC general test known failures | todo | [→](prd/e2e.md#e2-11) |
 | e2-12 | EDW answer citation check (C-56) | todo | [→](prd/e2e.md#e2-12) |
@@ -31,6 +34,7 @@ Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · p
 | rn-02 | Mid-queue cap + queue depth log | todo | [→](prd/runner.md#rn-02) |
 | do-01 | Move `refactor.md` to `docs/refactoring/` | todo | [→](prd/doc.md#do-01) |
 | do-02 | Glossary in `docs/index.md` | todo | [→](prd/doc.md#do-02) |
+| do-03 | Sync `refactor.md` with 10-29 merges | todo | [→](prd/doc.md#do-03) |
 | op-01 | JSON Lines event log | todo | [→](prd/ops.md#op-01) |
 
 Done: mcp 8 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 9 → [prd/e2e.md](prd/e2e.md)
