@@ -6,7 +6,7 @@ User 10-29: "data-pipeline 하는데 3개 lane으로 해서, light/medium/vlm �
 
 ## Already there (pass — no row)
 - 3-lane split: `classify_doc()` sorts each warmed doc into light/medium/vlm; workers `LANE_N` light 1 / medium 2 / vlm 1; each worker drains its own lane first ([pipeline.md](pipeline.md) server flow runner).
-- Entry queue: `WARM_TARGET` (12, `--warm`) docs downloaded ahead; in-flight docs not counted; temp files removed when a doc ends.
+- Entry queue: `WARM_TARGET` docs downloaded ahead (20 since 10-29 — `pipeline.host.run_docs.warm`, `--warm`); in-flight docs not counted; temp files removed when a doc ends.
 - MCP priority: `_mcp_pause_monitor()` stops the medium lane from taking new docs while `mcp_parse/jobs` is active (server measurement still open — design doc).
 
 ## rn-01
@@ -15,11 +15,13 @@ Lane policy as one table: owner lane first, steal only from listed lanes. Why: t
 - Acceptance / QA: table rows in `tests/general/deploy/test_run_docs.py` — (queues, policy) → picked doc. A dedicated lane never takes other docs even when they wait; own non-empty queue → no steal; vlm over cap is skipped; default policy picks the same docs as today.
 - Files: `deploy/host/scripts/run_docs.py`, `tests/general/deploy/test_run_docs.py`, `docs/architecture/run_docs_design.md`.
 - Overlap: parse "phase" removal ([pipeline.md#pl-22](pipeline.md#pl-22), `feature/r2-phase`) only dropped the `PARSE_PHASES` `--set` from the runner; lanes untouched.
-- Status: todo
+- Done 10-29 (user grill): settings.yaml `pipeline.host.run_docs` — per lane `<lane>_dedicated` (own lane only) and `<lane>_shared` (own lane first, else the longest other lane), default 1 + 1 each (6 workers); `vlm_cap` 2 applies to dedicated workers too; settings that would never finish the batch are refused at start (`warm` or `vlm_cap` below 1, or a lane with no dedicated worker and no shared worker); MCP pause holds the medium dedicated worker. `pick_lane()` is a pure function with a table test. Dead constants removed; `--workers` accepted but unused.
+- Status: done
 
 ## rn-02
 Mid-queue cap (parsed → waiting for structure) and queue depth log. Why: `struct_q` has no limit, so a slow structure step lets parsed results pile up (disk, wait time); the 10-22 ask "queue 더 쌓이면 구조화 대기가 더 오래 걸리는지" has no depth data — only per-doc `queue_wait` in `doc_stats.jsonl`.
 - Steps: (1) `--struct-backlog N`: when N docs wait for structure, lane workers take no new doc (block at pick time in `lane_worker`, not at `struct_q.put`, so a parse worker never holds a finished result). 0 = no cap (today). (2) On every `mark()` event write one line `{t, warm, lanes: {light: [waiting, running], ...}, struct_wait}` to the progress folder (follow op-01's line format if it lands first).
 - Acceptance / QA: with structure stubbed to stall, waiting-for-structure never exceeds N; N=0 matches today; depth lines parse as JSON and add up to the docs seen.
 - Files: `deploy/host/scripts/run_docs.py`, `tests/general/deploy/test_run_docs.py`.
-- Status: todo
+- Done 10-29 (user grill): `pipeline.host.run_docs.warm` 20 (entry), `struct_workers` 2, `struct_backlog` default = struct_workers × 2 (0 = off); lane workers check the cap at pick time (`test_struct_backlog_holds_new_parses`); `batch_progress/queue_depth.jsonl` gets a line on dispatch / pick / parse_end / struct_put / struct_get.
+- Status: done

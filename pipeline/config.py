@@ -528,6 +528,24 @@ class PipelineExtract(Section):
     stream: PipelineExtractStream = Field(default_factory=PipelineExtractStream)
 
 
+class PipelineHostRunDocs(Section):
+    """문서별 flow 러너(deploy/host/scripts/run_docs.py — 호스트에서 글자 그대로 읽음) 레인·대기열(사용자 10-29, docs/prd/runner.md rn-01·rn-02).
+    기본값은 run_docs.py RUN_DOCS_DEFAULTS와 같다(tests/general/deploy/test_run_docs.py가 대조)."""
+
+    warm: int | None = F(20, "RUN_DOCS_WARM", "진입 대기열 — 미리 받아 둘 문서 수(진행 중 제외, 명령 인자 --warm이 덮음)")
+    struct_workers: int | None = F(2, "RUN_DOCS_STRUCT_WORKERS", "구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음)")
+    struct_backlog: int | None = F(
+        None, "RUN_DOCS_STRUCT_BACKLOG", "중간 대기열 상한(파싱 끝·구조화 대기 문서 수) — 비우면 구조화 스레드 × 2, 0이면 상한 없음"
+    )
+    vlm_cap: int | None = F(2, "RUN_DOCS_VLM_CAP", "vlm 레인 문서 동시 파싱 상한(gpu 예산)")
+    light_dedicated: int | None = F(1, "RUN_DOCS_LIGHT_DEDICATED", "light 레인 전담 워커 수(light 문서만)")
+    light_shared: int | None = F(1, "RUN_DOCS_LIGHT_SHARED", "light 레인 공유 워커 수(light 먼저, 비면 가장 긴 다른 레인에서 가져옴)")
+    medium_dedicated: int | None = F(1, "RUN_DOCS_MEDIUM_DEDICATED", "medium 레인 전담 워커 수(MCP 업로드 처리 중에는 쉼)")
+    medium_shared: int | None = F(1, "RUN_DOCS_MEDIUM_SHARED", "medium 레인 공유 워커 수(medium 먼저, 비면 다른 레인)")
+    vlm_dedicated: int | None = F(1, "RUN_DOCS_VLM_DEDICATED", "vlm 레인 전담 워커 수(vlm 문서만)")
+    vlm_shared: int | None = F(1, "RUN_DOCS_VLM_SHARED", "vlm 레인 공유 워커 수(vlm 먼저, 비면 다른 레인)")
+
+
 class PipelineHost(Section):
     gold_dir: str | None = F(
         None,
@@ -552,6 +570,7 @@ class PipelineHost(Section):
     structure_cpus: float | None = F(2.0, "STRUCTURE_CPUS", "structure 컨테이너(job·상주 트리거·색인) CPU 개수 상한(개)")
     structure_mem_limit: str | None = F("8g", "STRUCTURE_MEM_LIMIT", "structure 컨테이너 메모리·스왑 상한(docker 형식)")
     nightly: PipelineHostNightly = Field(default_factory=PipelineHostNightly)
+    run_docs: PipelineHostRunDocs = Field(default_factory=PipelineHostRunDocs)
 
 
 class PipelineLoad(Section):

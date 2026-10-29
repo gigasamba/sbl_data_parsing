@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """문서별 flow 러너(2026-10-22 사용자 지정 설계) — 배치 장벽 제거.
 
-1) 대기열 — 앞으로 나올 문서 WARM_TARGET(12)개를 미리 warm 다운로드. 진행중 문서는 대기 개수에서 제외.
-   파싱이 하나 시작되면 다음 문서를 즉시 받아 12개를 유지. 문서 flow가 끝나면 docflow 임시 디렉토리·warm 잔여 삭제.
-2) 파싱 flow — PARSE_WORKERS(4)개 문서 동시. 문서당 VLM 호출 4(vgate)·OCR 1회·vlm_page off·OCR_DPI=150.
-   문서별 docker run --rm 컨테이너(출력 디렉토리 격리) — 한 문서가 다른 문서 끝을 기다리지 않음.
+1) 대기열 — 앞으로 나올 문서 WARM_TARGET(기본 20)개를 미리 warm 다운로드. 진행중 문서는 대기 개수에서 제외.
+   파싱이 하나 시작되면 다음 문서를 즉시 받아 개수를 유지. 문서 flow가 끝나면 docflow 임시 디렉토리·warm 잔여 삭제.
+2) 파싱 flow — 레인 light·medium·vlm(warm 때 분류)마다 전담 워커(자기 레인만)·공유 워커(자기 레인 먼저, 비면 가장 긴
+   다른 레인에서 가져옴) — 기본 레인마다 1·1(사용자 10-29, docs/prd/runner.md rn-01). vlm 문서는 동시 VLM_CAP(2)까지.
+   구조화 대기 문서가 STRUCT_BACKLOG(기본 구조화 워커 × 2)개 이상이면 새 파싱을 시작하지 않고 기다림(rn-02).
+   레인·대기 길이는 상태가 바뀔 때마다 batch_progress/queue_depth.jsonl에 한 줄(rn-02).
+   값은 settings.yaml pipeline.host.run_docs(비우면 아래 RUN_DOCS_DEFAULTS) — --warm·--struct-workers 인자가 그 위를 덮음.
 3) 구조화+적재 — 문서 경계 없이: 파싱이 끝난 문서부터 곧바로 build_bundle(EMBED_BATCH=32·EMBED_CONCURRENCY=6,
    문서당 제약 없이 구조화 스트림 안에서 적용) → pgvector_load(BM25_THREADS=2) → publish(OS+EDW) → 임시 삭제.
-   STRUCT_WORKERS(기본 1)개 스레드가 문서를 연속으로 처리 — 배치 장벽 없이 파싱 끝나는 순서대로 흐름.
+   STRUCT_WORKERS(기본 2)개 스레드가 문서를 연속으로 처리 — 배치 장벽 없이 파싱 끝나는 순서대로 흐름.
 
-사용: python3 run_docs.py --start-offset 1072 [--workers 4] [--warm 12] [--struct-workers 2]
+사용: python3 run_docs.py --start-offset 1072 [--warm 20] [--struct-workers 2]
                   [--filter RFP,proposal] [--limit N](시험: N건만) [--no-cleanup](임시 유지)
 로그: test_space/batch_progress/progress.log · 문서별 파싱 로그 progress/doc_<seq>.log
 """
@@ -101,8 +104,11 @@ def configure(settings_file=None):
     run_env = _yget(doc, "common.run_env")
     if run_env not in (None, "") and run_env not in ("dev", "stage", "prd"):
         probs.append("common.run_env가 dev·stage·prd가 아님 — 서버 전용 러너(로컬 실행 금지, CLAUDE.md 3절)")
+    policy, bad = run_docs_policy(doc)
+    probs += bad
     if probs:
         return probs
+    apply_policy(policy)
     TEST = work_dir(doc)
     PROG = TEST / "batch_progress"
     ENVFILE = TEST / "batches" / "docflow_env.list"
@@ -272,21 +278,32 @@ def sweep_cmd(seq):
     )
 
 
-WARM_TARGET, PARSE_WORKERS, STRUCT_WORKERS, NO_CLEANUP = 12, 4, 2, False
+# ── 레인·대기열 정책(사용자 10-29 — docs/prd/runner.md rn-01·rn-02) — settings.yaml pipeline.host.run_docs(configure()가 읽음).
+# 기본값은 설정 모델 pipeline.config.PipelineHostRunDocs와 같다(이 스크립트는 호스트 python이라 모델을 import하지 않음 — 시험이 둘을 대조).
+RUN_DOCS_DEFAULTS = {
+    "warm": 20,  # 진입 대기열 — 미리 받아 둘 문서 수(진행 중 제외)
+    "struct_workers": 2,  # 구조화·적재 스레드 수
+    "struct_backlog": None,  # 중간 대기열 상한(파싱 끝·구조화 대기) — 비우면 구조화 워커 × 2, 0 = 상한 없음
+    "vlm_cap": 2,  # vlm 문서 동시 파싱 상한(gpu 예산)
+    "light_dedicated": 1,  # 레인별 전담 워커(자기 레인 문서만)
+    "light_shared": 1,  # 레인별 공유 워커(자기 레인 먼저, 비면 다른 레인에서 가져옴)
+    "medium_dedicated": 1,
+    "medium_shared": 1,
+    "vlm_dedicated": 1,
+    "vlm_shared": 1,
+}
+LANES = ("light", "medium", "vlm")
+WARM_TARGET, STRUCT_WORKERS, VLM_CAP = RUN_DOCS_DEFAULTS["warm"], RUN_DOCS_DEFAULTS["struct_workers"], RUN_DOCS_DEFAULTS["vlm_cap"]
+LANE_WORKERS = {c: (RUN_DOCS_DEFAULTS[f"{c}_dedicated"], RUN_DOCS_DEFAULTS[f"{c}_shared"]) for c in LANES}  # 레인 → (전담, 공유)
+_BACKLOG_SETTING = RUN_DOCS_DEFAULTS["struct_backlog"]  # main()이 STRUCT_BACKLOG로 풂(구조화 워커 수 인자가 덮은 뒤)
+STRUCT_BACKLOG = 0
+PARSE_WORKERS, NO_CLEANUP = 4, False  # PARSE_WORKERS — 옛 --workers(지금은 레인 워커 수가 정함, 인자만 받음)
 CPU_GATE = 1.3  # 2026-10-23 사용자 지정 — 파이프라인 게이트 기본 · 조정 시 --cpu-gate 1.1
-HEAVY_CAP = 3  # 2026-10-23 사용자 지정 — heavy 3 + light 1 전용채널(총 4)
-HEAVY_MAX = 3  # heavy는 3으로 하드캡 — 4번째 슬롯은 light 예약(대기 허용)
-LIGHT_MAX = 4  # light는 heavy 없으면 4까지
-_heavy_inflight = [0]
-_light_inflight = [0]
-_class: dict = {}  # seq → "heavy"/"light"(warm 시점 분류, 2026-10-22)
+_class: dict = {}  # seq → "light"/"medium"/"vlm"(warm 시점 분류)
 _scan: set = set()  # seq — 스캔 판정된 PDF(vlm_page 대상)만 담음(2026-10-23 사용자 지정)
-_scan_inflight = [0]  # 스캔 동시 파싱 수(heavy 중에서도 VLM 대량 호출이라 1로 제한, 2026-10-23)
 
-# ── 2026-10-23 사용자 지정 — 3클래스 레인(light/medium/vlm) 큐 + steal(자기 큐 비면 가장 긴 큐 인계) ──
-LANEQ = {"light": __import__("collections").deque(), "medium": __import__("collections").deque(), "vlm": __import__("collections").deque()}
-LANE_N = {"light": 1, "medium": 2, "vlm": 1}  # 배분 1/2/1 (총 4워커 — 코어 4 정합)
-VLM_CAP = 2  # vlm 동시 상한(gpu02 예산 — vgate 6/문서 × 2 = 12동시)
+LANEQ = {c: __import__("collections").deque() for c in LANES}  # 레인별 대기 문서(dispatched 순서)
+_struct_q: "queue.Queue" = queue.Queue()  # 중간 대기열 — 파싱 끝·구조화 대기(main()이 씀)
 MCP_JOBS_DIR = None  # MCP parse_document 업로드 작업 경로 — configure()(mcp.host.jobs_dir, 없으면 결과 폴더/mcp_parse/jobs — data-pipeline-parse의 mcp_parse_service 공유 볼륨)
 _mcp_pause = False  # 2026-10-23 사용자 지정 — MCP 업로드 파싱 중 medium 레인 완보(사람 대기 응답 우선)
 _last_write: dict = dict()  # 방어용 마지막 활동 시각 저장
@@ -312,6 +329,68 @@ def mark(seq, event, **extra):
     with _stats_lock:
         with (PROG / "doc_stats.jsonl").open("a", encoding="utf-8") as fp:
             fp.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
+def depth(event):
+    """대기열 깊이 한 줄(rn-02) → queue_depth.jsonl — 레인별 [대기, 진행]·받는 중·구조화 대기. 상태가 바뀌는 자리(dispatch·
+    pick·파싱 끝·구조화 넣기·꺼내기)에서 부른다. _warm_lock은 재진입 가능(Condition 기본 RLock)."""
+    with _warm_lock:
+        rec = {
+            "time": time.time(),
+            "event": event,
+            "lanes": {c: [len(LANEQ[c]), _lane_inflight[c]] for c in LANES},
+            "warming": len(_warming),
+            "struct_wait": _struct_q.qsize(),
+        }
+    with _stats_lock:
+        with (PROG / "queue_depth.jsonl").open("a", encoding="utf-8") as fp:
+            fp.write(json.dumps(rec) + "\n")
+
+
+def pick_lane(own, shared, queues, inflight, vlm_cap):
+    """다음 문서를 꺼낼 레인(없으면 None) — 자기 레인 먼저, 공유 워커만 자기 레인이 비었을 때 가장 긴 다른 레인에서(rn-01).
+    vlm 문서는 진행 중이 vlm_cap이면 건너뜀(전담 워커도)."""
+    order = [own] + (sorted((c for c in queues if c != own), key=lambda c: -len(queues[c])) if shared else [])
+    for c in order:
+        if queues[c] and not (c == "vlm" and inflight["vlm"] >= vlm_cap):
+            return c
+    return None
+
+
+def run_docs_policy(doc):
+    """settings.yaml pipeline.host.run_docs → (값, 문제 목록). 비운 칸은 RUN_DOCS_DEFAULTS. 글자 그대로 읽으므로(BaseLoader) 정수로 바꿈."""
+    sec = _yget(doc, "pipeline.host.run_docs")
+    sec = sec if isinstance(sec, dict) else {}
+    vals, probs = {}, []
+    for k, d in RUN_DOCS_DEFAULTS.items():
+        v = sec.get(k)
+        if v in (None, ""):
+            vals[k] = d
+            continue
+        try:
+            vals[k] = int(v)
+        except ValueError:
+            vals[k] = -1
+        if vals[k] < 0:
+            probs.append(f"pipeline.host.run_docs.{k} 형식 오류 — 0 이상 정수만")
+    if probs:
+        return vals, probs
+    for k in ("warm", "vlm_cap"):  # 0이면 문서를 안 받거나(warm) vlm 레인을 아무도 안 집어 배치가 끝나지 않음(PR #7 리뷰)
+        if vals[k] < 1:
+            probs.append(f"pipeline.host.run_docs.{k} — 1 이상만")
+    shared = sum(vals[f"{c}_shared"] for c in LANES)
+    for c in LANES:  # 어느 워커도 못 집는 레인이 있으면 그 큐가 안 비어 배치가 끝나지 않음
+        if vals[f"{c}_dedicated"] + shared < 1:
+            probs.append(f"pipeline.host.run_docs — {c} 레인을 처리할 워커가 없음({c}_dedicated와 모든 *_shared가 0)")
+    return vals, probs
+
+
+def apply_policy(vals):
+    """run_docs_policy() 값 → 모듈 값(configure()가 부름)."""
+    global WARM_TARGET, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING
+    WARM_TARGET, STRUCT_WORKERS, VLM_CAP = vals["warm"], vals["struct_workers"], vals["vlm_cap"]
+    LANE_WORKERS = {c: (vals[f"{c}_dedicated"], vals[f"{c}_shared"]) for c in LANES}
+    _BACKLOG_SETTING = vals["struct_backlog"]
 
 
 def sh(cmd, timeout=1800, log=None):
@@ -493,6 +572,7 @@ def downloader(rows, order):
             mark(seq, "dispatched")
             _warming.discard(seq)
             _warm_lock.notify_all()
+        depth("dispatch")
 
 
 def _sweep_orphan(seq):
@@ -642,12 +722,16 @@ def _safe_cleanup(seq, row):
 
 
 def main():
-    global WARM_TARGET, PARSE_WORKERS, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE
+    global WARM_TARGET, PARSE_WORKERS, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE, STRUCT_BACKLOG
     ap = argparse.ArgumentParser()
     ap.add_argument("--start-offset", type=int, default=1072)
-    ap.add_argument("--workers", type=int, default=4)
-    ap.add_argument("--warm", type=int, default=12)
-    ap.add_argument("--struct-workers", type=int, default=2)
+    ap.add_argument("--workers", type=int, default=4, help="쓰지 않음(옛 인자) — 레인 워커 수는 settings.yaml pipeline.host.run_docs")
+    ap.add_argument(
+        "--warm", type=int, default=None, help="진입 대기열(미리 받을 문서 수) — 기본 settings.yaml pipeline.host.run_docs.warm(20)"
+    )
+    ap.add_argument(
+        "--struct-workers", type=int, default=None, help="구조화 스레드 수 — 기본 settings.yaml pipeline.host.run_docs.struct_workers(2)"
+    )
     ap.add_argument("--filter", default="RFP,proposal")
     ap.add_argument("--limit", type=int, default=0, help="시험 — 이 개수만 처리")
     ap.add_argument("--seqs", default="", help="임의 문서 집합(쉼표 seq 목록) — 지정 시 연속 범위 대신 이 목록만 처리")
@@ -661,7 +745,12 @@ def main():
         for msg in bad:
             print(f"[중단] {msg}", flush=True)
         raise SystemExit(2)
-    WARM_TARGET, PARSE_WORKERS, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE = a.warm, a.workers, a.struct_workers, a.no_cleanup, a.cpu_gate
+    PARSE_WORKERS, NO_CLEANUP, CPU_GATE = a.workers, a.no_cleanup, a.cpu_gate
+    if a.warm is not None:
+        WARM_TARGET = a.warm
+    if a.struct_workers is not None:
+        STRUCT_WORKERS = a.struct_workers
+    STRUCT_BACKLOG = _BACKLOG_SETTING if _BACKLOG_SETTING is not None else 2 * max(1, STRUCT_WORKERS)
 
     PROG.mkdir(parents=True, exist_ok=True)
     probs = code_layout_problems()
@@ -683,8 +772,9 @@ def main():
         log(f"start-offset {start} ≥ 대상 {len(rows)}건 — 종료")
         return
     log(
-        f"=== 문서별 flow 시작: offset={start} · 남은 {len(rows) - start}건 · 파싱 {PARSE_WORKERS}동시 · "
-        f"warm {WARM_TARGET} · 구조화 {STRUCT_WORKERS}동시 · env {n_env}개 · {'제한 ' + str(a.limit) + '건' if a.limit else '제한 없음'} ==="
+        f"=== 문서별 flow 시작: offset={start} · 남은 {len(rows) - start}건 · 레인(전담/공유) "
+        f"{' '.join(f'{c} {d}/{s}' for c, (d, s) in LANE_WORKERS.items())} · vlm 동시 {VLM_CAP} · "
+        f"warm {WARM_TARGET} · 구조화 {STRUCT_WORKERS}동시(대기 상한 {STRUCT_BACKLOG or '없음'}) · env {n_env}개 · {'제한 ' + str(a.limit) + '건' if a.limit else '제한 없음'} ==="
     )
 
     order = (
@@ -705,11 +795,14 @@ def main():
     tf.start()
 
     cnt = {"ok": 0, "parse_fail": 0, "struct_fail": 0}
-    struct_q = queue.Queue()
+    struct_q = _struct_q
 
     def _struct_loop():
         while True:
             item = struct_q.get()
+            depth("struct_get")
+            with _warm_lock:
+                _warm_lock.notify_all()  # 중간 대기 하나 줄어듦 → 상한에서 기다리던 레인 워커
             if item is None:
                 struct_q.task_done()
                 return
@@ -748,13 +841,14 @@ def main():
             ok = False
         if ok:
             struct_q.put((doc_seq, row_doc, enq_t))
+            depth("struct_put")
         else:
             with _warm_lock:
                 cnt["parse_fail"] += 1
             _safe_cleanup(doc_seq, row_doc)
 
-    # ── 2026-10-23 사용자 지정 — 3클래스 레인 워커(1/2/1) + steal: 자기 큐 우선, 비면 가장 긴 다른 큐에서 가져옴.
-    # vlm은 동시 캡 2(gpu02 예산) · vlm 전용 워커는 medium(CPU 장기점유)을 steal하지 않고 vlmm/light만 — 긴급 vlm 문서에 대기 가능.
+    # ── 레인 워커(사용자 10-29 — rn-01·rn-02): 레인마다 전담(자기 레인만)·공유(자기 레인 먼저, 비면 가장 긴 다른 레인 — pick_lane).
+    # 구조화 대기가 STRUCT_BACKLOG 이상이면 새 파싱을 시작하지 않음. MCP 업로드 처리 중에는 medium 전담 워커가 쉼(2026-10-23 사용자 지정).
     def _flow_done():
         with _warm_lock:
             return (
@@ -764,36 +858,20 @@ def main():
                 and all(v == 0 for v in _lane_inflight.values())
             )
 
-    def lane_worker(pref):
+    def lane_worker(own, shared):
         while not _stop.is_set():
             seq = None
             with _warm_lock:
-                if pref == "medium" and _mcp_pause:
-                    # 일Ү MCP 업로드 처리 중(pause: 진행 중 문서 parcel 그대로 마치고; 컨테이너의 mcp run이 CPU를 받도록 양보) — 새 문서 안 뽑음
+                hold = (own == "medium" and not shared and _mcp_pause) or (STRUCT_BACKLOG and _struct_q.qsize() >= STRUCT_BACKLOG)
+                c = None if hold else pick_lane(own, shared, LANEQ, _lane_inflight, VLM_CAP)
+                if c is None:
                     if _flow_done():
                         return
                     _warm_lock.wait(5)
                     continue
-                if LANEQ[pref]:
-                    seq = LANEQ[pref].popleft()
-                else:
-                    for c in sorted((c for c in LANEQ if LANEQ[c]), key=lambda c: -len(LANEQ[c])):
-                        if c == "vlm" and _lane_inflight["vlm"] >= VLM_CAP:
-                            continue
-                        if c == "medium" and pref in ("vlm", "light"):
-                            continue
-                        if c == "medium" and pref == "vlm":
-                            continue
-                        if c == "vlm" and pref != "vlm":
-                            pass
-                        seq = LANEQ[c].popleft()
-                        break
-                if seq is None:
-                    if _flow_done():
-                        return
-                    _warm_lock.wait(5)
-                    continue
+                seq = LANEQ[c].popleft()
                 _lane_inflight[_class.get(seq) or "light"] += 1
+                depth("pick")
                 _warm_lock.notify_all()  # 파싱 1개 시작 → warm 보충 신호
             try:
                 _one(seq, rows[seq])
@@ -805,13 +883,15 @@ def main():
                 with _warm_lock:
                     _lane_inflight[_class.get(seq) or "light"] -= 1
                     _warm_lock.notify_all()  # 슬롯 반납 → warm 보충 신호
+                depth("parse_end")
 
-    threading.Thread(target=_mcp_pause_monitor, daemon=True, name="mcp-watch").start()  # 2026-10-23 — MCP 업로드 감시(medium 레인 완보)
+    threading.Thread(target=_mcp_pause_monitor, daemon=True, name="mcp-watch").start()  # 2026-10-23 — MCP 업로드 감시(medium 전담 워커 쉼)
 
     lane_threads = []
-    for c, n in LANE_N.items():
-        for _ in range(n):
-            t = threading.Thread(target=lane_worker, args=(c,), daemon=True, name=f"lane-{c}")
+    for c in LANES:
+        ded, shr = LANE_WORKERS[c]
+        for shared in [False] * ded + [True] * shr:
+            t = threading.Thread(target=lane_worker, args=(c, shared), daemon=True, name=f"lane-{c}-{'shared' if shared else 'own'}")
             t.start()
             lane_threads.append(t)
     while not _flow_done() and not _stop.is_set():
