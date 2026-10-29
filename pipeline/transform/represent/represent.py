@@ -506,9 +506,12 @@ def _numbers_conflict(hidden_text, ocr_text):
     return h != o
 
 
-def fill_scan_pages(rep, doc, dd, stack, pd, doc_path):
+def fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=None):
     """PE1 후속(2026-10-07) — .pdf_text 대표 문서(rep) 안 스캔 쪽만 그 쪽의 OCR 엔진(.pdf_image 계열, stack 순서로
     정확도 가장 높은 성공 후보) 결과로 채운다(글자층 쪽은 그대로 — 쪽 전체를 OCR 글로 바꾸지 않음).
+    사용자 10-29 — page_vlm(쪽 VLM 함수, vlm_page.page_text_pages — 스캔 신호 쪽만 병렬 호출)을 주면 그 쪽 글을 먼저 쓴다
+    (기록 엔진 이름 "vlm_page" — OCR 엔진은 기본으로 안 돌고 .pdf_text 문서에 .pdf_image 엔진도 안 합침). 쪽 VLM 글이 하나도
+    없을 때만 옛 OCR 엔진 결과로. 쪽 VLM은 글자 상자(boxes)가 없어 'hidden_overlap' 쪽의 국소 확인은 늘 '원래 글 유지'.
     쪽 경계는 pipeline.transform.represent.scan_dedup._page_texts 재사용(boxes 있으면 그걸로, 없으면 \f 개수가 문서의 실제
     쪽 수와 같을 때만) — 대표·OCR 어느 쪽이든 쪽 번호를 확정할 수 없으면 건너뛴다(틀린 쪽끼리 바꿔치기하는 것보다 안전).
     쪽 단위 품질 검사(독립 검토 보강) — 그 쪽 OCR 글의 garbage_ratio가 scan_dedup.pick과 같은 기준(OCR 신뢰도
@@ -534,33 +537,20 @@ def fill_scan_pages(rep, doc, dd, stack, pd, doc_path):
         return None
     from pipeline.transform.figures.vlm_page import scan_pages_detail
     from pipeline.transform.represent.parse_qa import garbage_ratio
-    from pipeline.transform.represent.repfmt import doc_accuracy
     from pipeline.transform.represent.scan_dedup import _page_texts
 
     pages_detail = scan_pages_detail(doc_path)
     pages = list(pages_detail.keys())
     if not pages:
         return None
-    ocr_list = stack["parse"].get(".pdf_image", [])
-    ocr_cands = [
-        {
-            "engine": e,
-            "ok": bool((dd["engines"].get(e) or {}).get("ok")),
-            "acc": doc_accuracy(dd["engines"][e], dd.get("ref")) if e in dd["engines"] else None,
-        }
-        for e in ocr_list
-    ]
-    ocr_ok = [c for c in ocr_cands if c["ok"]]
-    if not ocr_ok:
-        return {"filled": {}, "skip": "OCR 엔진(.pdf_image) 성공 결과 없음"}
-    best = max(ocr_ok, key=lambda c: ((c["acc"] if c["acc"] is not None else -1), -ocr_ok.index(c)))
-    f = pd / best["engine"] / f"{doc}.json"
-    if not f.exists():
-        return {"filled": {}, "skip": "OCR 엔진(.pdf_image) 성공 결과 없음"}
-    ocr_rep = json.loads(f.read_text(encoding="utf-8"))
-    ocr_pages = _page_texts(ocr_rep.get("text") or "", doc_path, ocr_rep.get("boxes"))
-    if ocr_pages is None:
-        return {"filled": {}, "skip": "OCR 쪽 번호 확정 불가(\\f 개수 ≠ 문서 쪽 수, boxes 없음)"}
+    vlm = {i: t for i, t, _ in page_vlm(doc_path) if (t or "").strip()} if page_vlm else {}
+    if vlm:
+        src_engine, ocr_pages, ocr_boxes = "vlm_page", vlm, None
+    else:
+        picked = _ocr_pages(doc, dd, stack, pd, doc_path)
+        if isinstance(picked, dict):
+            return picked
+        src_engine, ocr_pages, ocr_boxes = picked
     base_pages = _page_texts(rep.get("text") or "", doc_path, rep.get("boxes"))
     if base_pages is None:
         return {"filled": {}, "skip": "대표 쪽 번호 확정 불가(\\f 개수 ≠ 문서 쪽 수, boxes 없음)"}
@@ -581,7 +571,7 @@ def fill_scan_pages(rep, doc, dd, stack, pd, doc_path):
                 page_skip[p] = f"hidden-agree(원래 글과 일치 {agree} ≥ {HIDDEN_AGREE_MIN}) — 원래 글(숨은 층) 유지"
                 continue
         elif pages_detail.get(p) == "hidden_overlap":  # AD47 검토자 반영 — 쪽 전체가 아니라 국소(겹친 상자 주변)만
-            conflict, why, fixes = _hidden_overlap_conflict(doc_path, p, ocr_rep.get("boxes"))
+            conflict, why, fixes = _hidden_overlap_conflict(doc_path, p, ocr_boxes)
             if not conflict:
                 page_skip[p] = f"hidden-overlap-local({why}) — 원래 글(숨은 층) 유지"
                 continue
@@ -589,7 +579,7 @@ def fill_scan_pages(rep, doc, dd, stack, pd, doc_path):
             if fixes:  # AD47② — 쪽 전체가 아니라 충돌 숫자만 OCR 표기로(나머지 글자층 그대로)
                 text = _NUM_TOK.sub(lambda m: fixes.get(_canon_num(m.group()), m.group()), base_pages.get(p, ""))  # noqa: B023 — sub 안에서 바로 부름
         base_pages[p] = text
-        filled[p] = best["engine"]
+        filled[p] = src_engine
     if not filled:
         out = {"filled": {}, "skip": None}
         if page_skip:
@@ -601,6 +591,34 @@ def fill_scan_pages(rep, doc, dd, stack, pd, doc_path):
     if page_skip:
         out["page_skip"] = {str(p): r for p, r in page_skip.items()}
     return out
+
+
+def _ocr_pages(doc, dd, stack, pd, doc_path):
+    """옛 경로 — .pdf_image 계열 OCR 엔진 중 정확도 가장 높은 성공 후보의 쪽별 글. 반환: (엔진, {쪽: 글}, boxes) 또는 건너뜀 dict."""
+    from pipeline.transform.represent.repfmt import doc_accuracy
+    from pipeline.transform.represent.scan_dedup import _page_texts
+
+    ocr_list = stack["parse"].get(".pdf_image", [])
+    ocr_cands = [
+        {
+            "engine": e,
+            "ok": bool((dd["engines"].get(e) or {}).get("ok")),
+            "acc": doc_accuracy(dd["engines"][e], dd.get("ref")) if e in dd["engines"] else None,
+        }
+        for e in ocr_list
+    ]
+    ocr_ok = [c for c in ocr_cands if c["ok"]]
+    if not ocr_ok:
+        return {"filled": {}, "skip": "OCR 엔진(.pdf_image) 성공 결과 없음"}
+    best = max(ocr_ok, key=lambda c: ((c["acc"] if c["acc"] is not None else -1), -ocr_ok.index(c)))
+    f = pd / best["engine"] / f"{doc}.json"
+    if not f.exists():
+        return {"filled": {}, "skip": "OCR 엔진(.pdf_image) 성공 결과 없음"}
+    ocr_rep = json.loads(f.read_text(encoding="utf-8"))
+    ocr_pages = _page_texts(ocr_rep.get("text") or "", doc_path, ocr_rep.get("boxes"))
+    if ocr_pages is None:
+        return {"filled": {}, "skip": "OCR 쪽 번호 확정 불가(\\f 개수 ≠ 문서 쪽 수, boxes 없음)"}
+    return best["engine"], ocr_pages, ocr_rep.get("boxes")
 
 
 def status(r):
@@ -718,7 +736,11 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None):
             _pt0 = time.time()  # 2026-10-22 — dedup 완료
             doc_text = base
         else:
-            vt, provs = vp_mod.page_text(doc_path)
+            # 10-29 — scan_fill이 쪽 VLM 글로 이미 채운 쪽은 덧붙이지 않음(같은 쪽이 본문에 두 번 — 호출은 캐시라 다시 안 감)
+            sf = ((rep.get("rep") or {}).get("scan_fill") or {}).get("filled") or {}
+            vp_pages = vp_mod.page_text_pages(doc_path)
+            vt = "\n".join(t for i, t, _ in vp_pages if t and sf.get(str(i)) != "vlm_page")
+            provs = [pv for _, _, pv in vp_pages]
             if vt.strip():
                 blocks.append(vt)
                 doc_text = base + "\n" + vt
@@ -978,7 +1000,9 @@ def represent(stack, parse_dir, src=None):
         source = rep["rep"]["source"]
         doc_path = Path(source["path"]) if source else None
         if scan_fill_on():  # PE1 후속 — .pdf_text 대표의 스캔 쪽만 OCR 쪽 글로 채움(apply_post 전, 후보정이 채운 본문을 기준으로 돌게)
-            fill = fill_scan_pages(rep, doc, dd, stack, pd, doc_path)
+            from pipeline.transform.figures.vlm_page import page_text_pages
+
+            fill = fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=page_text_pages)  # 10-29 — 스캔 쪽은 쪽 VLM 글로
             if fill is not None:
                 rep["rep"]["scan_fill"] = fill
         _t["scanfill"] = time.time() - _t0

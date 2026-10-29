@@ -274,7 +274,7 @@ def selftest():
             assert sig[0]["hidden_ratio"] < PAGE_HIDDEN_RATIO and sig[0]["image_area_ratio"] < PAGE_HIDDEN_AREA  # 쪽 전체 비율로는 못 잡음
             assert sig[0]["hidden_over_image"] is True, sig[0]  # 국소 겹침만 잡음
             assert scan_pages_detail(mismatch_doc) == {1: "hidden_overlap"}
-            assert scan_pages(mismatch_doc) == [1]  # _ocr_fallback_needed(run_all.py)가 그대로 재사용
+            assert scan_pages(mismatch_doc) == [1]  # 쪽 VLM 대상(page_targets)이 그대로 재사용
             with pc.PIPE.env(PARSE_HIDDEN_OVERLAP_MAX="0"):  # 끔 — 이전과 바이트 동일(이 조건 자체를 안 봄)
                 assert scan_pages_detail(mismatch_doc) == {}
         finally:
@@ -299,6 +299,17 @@ def selftest():
     assert (
         PAGE_SIGNALS_VERSION == "v3"
     )  # 캐시 버전 — 판정 바뀜(AD31·AD47, 이유 추가는 버전 영향 없음) · 10-08 세 새 이유는 기존 필드만 다시 읽어 버전 영향 없음
+
+
+def test_pick_pages():
+    """10-29 — 쪽 VLM 대상 쪽(순수 함수): 전체 스캔이면 전부, 글자 PDF면 스캔 신호 쪽만, cap으로 앞에서 자름."""
+    from pipeline.transform.figures.vlm_page import pick_pages
+
+    assert pick_pages(3, True, [], None) == {1, 2, 3}
+    assert pick_pages(3, True, [], 2) == {1, 2}
+    assert pick_pages(0, False, [2, 5], None) == {2, 5}
+    assert pick_pages(0, False, [5, 2, 7], 2) == {5, 2}  # 신호 순서대로 자름
+    assert pick_pages(0, False, [], None) == set()  # 스캔 쪽 없음 — 쪽 VLM 호출 없음
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

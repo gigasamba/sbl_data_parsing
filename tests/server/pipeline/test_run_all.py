@@ -40,9 +40,7 @@ def selftest():
     # PE1(2026-10-07) — PARSE_ENGINE_SCOPE: stack이면 문서 형식 키(stack.json과 같은 키)의 parse 목록으로만 좁힘
     pdf_cands, doc_cands = ([e for e in registry.engines_for(x) if e not in OCR_ENGINES] for x in (".pdf", ".doc"))  # OCR 기본 끔(10-29)
     assert "pymupdf" in pdf_cands and "kreuzberg" in pdf_cands and len(pdf_cands) > 2  # 좁혀짐을 보려면 전체가 2개보다 많아야
-    stack_parse = {
-        ".pdf_text": ["pymupdf", "kreuzberg"]
-    }  # .pdf_image 키 없음 — 아래서 _ocr_fallback_needed가 안 불림(extra가 빈 목록이라 단락 평가)
+    stack_parse = {".pdf_text": ["pymupdf", "kreuzberg"]}
     missing = set()
     a_pdf = Path("a.pdf")
     assert engines_for_doc(a_pdf, "stack", stack_parse, {"a.pdf": ".pdf_text"}, missing) == [

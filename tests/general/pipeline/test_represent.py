@@ -513,7 +513,7 @@ def selftest():
         ):  # S7c — 설정 객체만 바꿔 끼움
             represent(stack4, pd4, src=d4)
         combo = json.loads((pd4 / "_rep" / f"{doc4}.json").read_text(encoding="utf-8"))
-        assert combo["rep"]["scan_fill"] == {"filled": {"2": "rapidocr_ko"}, "skip": None}  # OCR 채움은 그대로 적용됨
+        assert combo["rep"]["scan_fill"] == {"filled": {"2": "vlm_page"}, "skip": None}  # 10-29 — 쪽 VLM 글이 있으면 그것으로 채움
         parts = combo["text"].split("\f")
         assert len(parts) == 3 and parts[0] == "1쪽 글자" and parts[2] == "3쪽 글자"  # 쪽 번호 안 섞임(1·3쪽 그대로)
         assert "OCR 2쪽 스캔 글" in combo["text"] or "정돈된 VLM 글" in combo["text"]  # 2쪽 글 중 하나는 남음(값 손실 없음)
@@ -522,6 +522,27 @@ def selftest():
         _vp.scan_pages_detail = orig_scan_pages_detail
         _vp.vlm_page = orig_vlm_page
     print("[selftest] PE1 후속 — PARSE_SCAN_FILL × PARSE_DEDUP_SCAN=1 동시 켜짐: 쪽 번호 안 섞임·값 손실 없음 통과")
+
+    # 10-29 — 스캔 쪽은 쪽 VLM 글로 채움(OCR 엔진 결과보다 먼저) · VLM 글이 비면 옛 OCR 경로 · apply_post는 채운 쪽을 다시 안 덧붙임
+    try:
+        _vp.scan_pages_detail = lambda p: {2: "chars"}
+        fake_vlm = lambda p: [(2, "VLM 2쪽 스캔 글", {"cached": True})]  # 쪽 VLM 가짜(모델 호출 없음)
+        rep_v = dict(base_rep4)
+        assert fill_scan_pages(rep_v, doc4, dd4, stack4, pd4, pdf4, page_vlm=fake_vlm) == {"filled": {"2": "vlm_page"}, "skip": None}
+        assert rep_v["text"] == "1쪽 글자\fVLM 2쪽 스캔 글\f3쪽 글자", rep_v["text"]
+        rep_e = dict(base_rep4)  # VLM 글이 비면(호출 실패 등) 옛 OCR 엔진 결과로
+        fill_e = fill_scan_pages(rep_e, doc4, dd4, stack4, pd4, pdf4, page_vlm=lambda p: [(2, "", {})])
+        assert fill_e == {"filled": {"2": "rapidocr_ko"}, "skip": None}, fill_e
+        _vp.vlm_page = lambda img, det=None: ("VLM 2쪽 스캔 글", {"cached": True})
+        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_DEDUP_SCAN="0", PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"):
+            represent(stack4, pd4, src=d4)
+        v_out = json.loads((pd4 / "_rep" / f"{doc4}.json").read_text(encoding="utf-8"))
+        assert v_out["rep"]["scan_fill"]["filled"] == {"2": "vlm_page"}
+        assert v_out["text"].count("VLM 2쪽 스캔 글") == 1, v_out["text"]  # 채운 쪽을 apply_post가 또 덧붙이지 않음
+    finally:
+        _vp.scan_pages_detail = orig_scan_pages_detail
+        _vp.vlm_page = orig_vlm_page
+    print("[selftest] 10-29 — 스캔 쪽 쪽 VLM 글로 채움·VLM 빈 글이면 OCR 경로·채운 쪽 중복 덧붙임 없음 통과")
 
     # AD29 P1 — PARSE_FUSE(기본 꺼짐): 끄면 rep에 "fused" 키 자체가 안 생기고 나머지 바이트 동일 · 켜면 두 텍스트
     # 레이어 엔진이 동의한 값(430,000)이 OCR 혼자 낸 값(430.000)을 이기고 rep["fused"]["facts"]에 들어간다
