@@ -7,7 +7,6 @@ Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · p
 |---|---|---|---|
 | mc-11 | Aggregation path queries removed `file_sha256` | todo | [→](prd/mcp.md#mc-11) |
 | mc-12 | Fact aggregation queries dropped `doc_fact` | todo | [→](prd/mcp.md#mc-12) |
-| mc-13 | PG `qa_log` table never created | todo | [→](prd/mcp.md#mc-13) |
 | mc-14 | 숨김 문서가 검색에서 안 빠짐(숨김 키 sha256 ↔ 검색 키 file_path) — pl-25 대기 | todo | [→](prd/mcp.md#mc-14) |
 | mc-15 | 근거의 `rep_uri`(파싱 결과 경로)가 늘 비어 있음(ParsingMeta 키 sha256 ↔ 검색 키 file_path) — pl-25 대기 | todo | [→](prd/mcp.md#mc-15) |
 | pl-12 | Registry upsert PG error · publish guard off (C-54) | todo | [→](prd/pipeline.md#pl-12) |

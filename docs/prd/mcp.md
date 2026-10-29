@@ -71,7 +71,7 @@ Fact aggregation queries a dropped table. Why: `kg_node`·`kg_edge`·`doc_fact`�
 ## mc-13
 PG query log writes to a table no migration creates. Why: `search_svc` does `INSERT INTO qa_log` on the PG store, but `0001_search_base` has no `qa_log` table; the error is swallowed, so only the jsonl log works.
 - Files: `mcp_server/services/search/search_svc.py`, `mcp_server/services/search/qa_log.py`, `common/store/db/migrations/versions/0001_search_base.py`.
-- Status: todo — add the table (Alembic, DB owner) or drop the PG write.
+- Status: done (10-30, `feature/search-path-fixes`) — 사용자 결정: 질의 기록은 파일(`qa_log.jsonl`)만. `search_svc._log`와 `ask.py`의 PG `qa_log` INSERT를 지움(표는 만들지 않음). jsonl 기록은 그대로. 시험 `tests/server/mcp/test_mc13_qa_log.py`.
 
 ## mc-14
 숨김 문서가 검색에서 빠지지 않는다. 왜: 숨김 표(`doc_hidden`, struct 스키마)의 키는 문서 대장 `doc_key` = 원본 sha256인데(`registry.apply()`가 원천에서 사라진 문서를 자동 숨김, `registry_cli hide`도 같은 키), 10-20 축소 스키마 뒤 검색 쪽 문서 키는 `file_path`다 — `pgsearch._not_hidden_restrict`가 sha256을 `doc.file_path`와 비교해 절대 안 맞고, 로컬 묶음(`local.py`)·`retriever.hidden_names`도 이제 없는 `file_sha256`으로 본다.

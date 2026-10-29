@@ -82,7 +82,7 @@ Document registry upsert and publish guard. Why: registry upsert has a PG syntax
 ## pl-14
 `pgvector_load deploy` backfill reads removed `doc.client`. Why: `backfill_chunk_clients` fails after the 10-20 reduced schema (tables and indexes are still created).
 - Files: `pipeline/load/pgvector_load.py`.
-- Status: done (10-30, `feature/search-path-fixes`) — backfill이 `doc.clients`만 읽음(없는 `doc.client` 안 고름). 동작은 같음 — 축소 스키마의 고객 라벨은 원래 `clients`에만 있음. 시험 `tests/server/pipeline/test_pl14_backfill.py`.
+- Status: done (10-30, `feature/search-path-fixes`) — backfill은 남기고(사용자 10-30) `doc.clients`만 읽음(없는 `doc.client` 안 고름, `_doc_row_clients`도 `clients`만 받음). NULL인 청크만 채우고 멱등인 것은 그대로. 동작은 같음 — 축소 스키마의 고객 라벨은 원래 `clients`에만 있음. 시험: `tests/server/pipeline/test_pl14_backfill.py`(가짜 DB, 이미지) · `tests/general/pipeline/test_pl14_deploy.py`(실 PG 임시 스키마에서 `deploy()` — PG 설정 없으면 건너뜀).
 
 ## pl-15
 `pipeline structure`/`load` contract check rejects new bundles. Why: `contract.py` `DOC_KEYS` still expects removed keys (the server does not use these modules).
