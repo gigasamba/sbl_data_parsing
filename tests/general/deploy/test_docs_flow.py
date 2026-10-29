@@ -8,6 +8,7 @@ import importlib.util
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 from unittest import mock
 
@@ -24,6 +25,16 @@ def _load():
 def _run_main(work, rows, parse_one, structure_one, cleanup_doc):
     """가짜 함수로 main()을 돌리고 모듈을 돌려준다. 외부 명령 가드는 main() 스레드가 끝날 때까지 유지한다(멈추면 가드 안에서 실패)."""
     M = _load()
+
+    class _FastTime:  # run_docs의 5초 대기 고리(_mcp_pause_monitor·흐름 끝 기다림)를 짧게 — 다른 time 기능은 그대로
+        def __getattr__(self, name):
+            return getattr(time, name)
+
+        @staticmethod
+        def sleep(sec):
+            time.sleep(min(sec, 0.05))
+
+    M.time = _FastTime()
 
     def configure(_settings):  # 설정 파일 대신 — 작업 폴더만 임시 폴더로
         M.TEST, M.PROG = work, work / "batch_progress"
