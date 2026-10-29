@@ -374,8 +374,15 @@ def run_docs_policy(doc):
             vals[k] = -1
         if vals[k] < 0:
             probs.append(f"pipeline.host.run_docs.{k} 형식 오류 — 0 이상 정수만")
-    if not probs and not any(vals[f"{c}_dedicated"] + vals[f"{c}_shared"] for c in LANES):
-        probs.append("pipeline.host.run_docs — 레인 워커가 하나도 없음")
+    if probs:
+        return vals, probs
+    for k in ("warm", "vlm_cap"):  # 0이면 문서를 안 받거나(warm) vlm 레인을 아무도 안 집어 배치가 끝나지 않음(PR #7 리뷰)
+        if vals[k] < 1:
+            probs.append(f"pipeline.host.run_docs.{k} — 1 이상만")
+    shared = sum(vals[f"{c}_shared"] for c in LANES)
+    for c in LANES:  # 어느 워커도 못 집는 레인이 있으면 그 큐가 안 비어 배치가 끝나지 않음
+        if vals[f"{c}_dedicated"] + shared < 1:
+            probs.append(f"pipeline.host.run_docs — {c} 레인을 처리할 워커가 없음({c}_dedicated와 모든 *_shared가 0)")
     return vals, probs
 
 

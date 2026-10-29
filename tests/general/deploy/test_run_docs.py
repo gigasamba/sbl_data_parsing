@@ -130,8 +130,19 @@ def test_policy_from_settings():
     assert (vals["warm"], vals["struct_backlog"], vals["vlm_shared"], vals["light_dedicated"]) == (30, 0, 1, 2) and probs == []
     _, probs = RD.run_docs_policy({"pipeline": {"host": {"run_docs": {"warm": "-1", "vlm_cap": "x"}}}})
     assert len(probs) == 2 and all("형식 오류" in p for p in probs), probs
-    zero = {f"{c}_{k}": "0" for c in RD.LANES for k in ("dedicated", "shared")}
-    assert RD.run_docs_policy({"pipeline": {"host": {"run_docs": zero}}})[1], "레인 워커 0개를 받아들임"
+    no_shared = {f"{c}_shared": "0" for c in RD.LANES}
+    # 배치가 끝나지 않는 설정(PR #7 리뷰) → 문제 있음 / 경계 바로 안쪽 → 문제 없음
+    for sec, bad in [
+        ({f"{c}_{k}": "0" for c in RD.LANES for k in ("dedicated", "shared")}, True),
+        ({"vlm_cap": "0"}, True),
+        ({"warm": "0"}, True),
+        ({**no_shared, "vlm_dedicated": "0"}, True),
+        ({**no_shared}, False),
+        ({"vlm_dedicated": "0"}, False),  # 공유 워커가 vlm을 가져감
+        ({"vlm_cap": "1", "warm": "1"}, False),
+    ]:
+        probs = RD.run_docs_policy({"pipeline": {"host": {"run_docs": sec}}})[1]
+        assert bool(probs) == bad, (sec, probs)
 
 
 def test_defaults_match_settings_model():
