@@ -226,7 +226,7 @@ mcp:
   server: {host: 127.0.0.1, port: 18769, store: pg}
 ```
 
-- **외부 임베딩은 세 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `run_env: local` · `no_paid_calls: false`. 하나라도 빠지면 호출하지 않는다(서버 dev·stage·prd는 늘 거부).
+- **외부 임베딩은 세 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `run_env: local` · `no_paid_calls: false`. 하나라도 빠지면 호출하지 않는다(서버 dev·prd는 늘 거부).
 - ⚠️ PG 접속 항목을 비워 두면 코드가 `docker ps`로 찾은 아무 pgvector에나 연결한다. 전용 PG 접속 정보를 항상 적는다.
 
 ### 4-3. 점검

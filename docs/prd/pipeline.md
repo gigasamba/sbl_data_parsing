@@ -65,7 +65,7 @@ Orchestration. Why: the server runs thousands of documents unattended.
 
 ## pl-11
 Model calls, cost and external-send guard (shared). Why: closed-network servers must never call external models; PC calls must stay cheap.
-- What: OpenAI-compatible roles llm/vlm/ocr_vlm/embed (rerank removed 10-29); servers (dev/stage/prd) refuse external models; external send needs `*_ALLOW_EXTERNAL` + synthetic-corpus truth file; budget, call caps, RPM, spend ledger; response cache; fake LLM for tests.
+- What: OpenAI-compatible roles llm/vlm/ocr_vlm/embed (rerank removed 10-29); servers (dev/prd) refuse external models; external send needs `*_ALLOW_EXTERNAL` + `RUN_ENV=local`; budget, call caps, RPM, spend ledger; response cache; fake LLM for tests.
 - Files: `common/ai/guard.py`, `common/ai/llm.py`, `common/ai/adk.py`, `common/config/settings.py`.
 - Status: done
 
