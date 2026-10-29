@@ -899,7 +899,7 @@ def load_module(a):
         print("[load] 임베딩 없는 묶음(PIPE_EMBED=none) — PostgreSQL에는 적재 안 함(로컬 묶음으로 키워드·ID 검색만)", flush=True)
         raise SystemExit(5)
     sh("pipeline.load.pgvector_load", "deploy")
-    sh("pipeline.load.pgvector_load", "load", *(["--replace"] if a.replace else []), *([] if a.no_prune else ["--prune"]))
+    sh("pipeline.load.pgvector_load", "load", *(["--replace"] if a.replace else []))  # 더하고 고치기만(pl-13 — 지우지 않음)
     write_mark("load", from_run=m["run_id"], docs=m.get("docs"), chunks=m.get("chunks"), extra=dest_fp)
 
 
@@ -924,9 +924,7 @@ def run_stack(a):
     load_tables_db()
     if a.pg:
         sh("pipeline.load.pgvector_load", "deploy")
-        sh(
-            "pipeline.load.pgvector_load", "load", *(["--replace"] if a.replace else []), *([] if a.no_prune else ["--prune"])
-        )  # 삭제·바뀐 원본의 옛 기록 정리
+        sh("pipeline.load.pgvector_load", "load", *(["--replace"] if a.replace else []))  # 더하고 고치기만(pl-13 — 지우지 않음)
     summ = json.loads((OUT / "edw" / "bundle" / "meta.json").read_text(encoding="utf-8")).get("summary") or {}
     print(
         "→ 대표 파싱 output/parse/_rep · 구조화 output/edw/bundle"
@@ -1305,7 +1303,7 @@ def main(argv=None):
             p.add_argument("--pg", action="store_true", help="pgvector에 배포·적재까지(지정 없어도 Docker pgvector가 떠 있으면 기본)")
             p.add_argument("--local", action="store_true", help="pgvector가 떠 있어도 로컬 묶음까지만")
             p.add_argument("--replace", action="store_true")
-            p.add_argument("--no-prune", action="store_true", help="삭제·바뀐 원본의 옛 기록을 PostgreSQL에서 지우지 않음")
+            p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
             p.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
     p = sub.add_parser("night", help="새벽 파싱 배치(GPU 모델 API만, LLM 없음, 마감 시각에 멈추고 다음 밤에 이어 감)")
     p.add_argument("--src", default=src)
@@ -1329,7 +1327,7 @@ def main(argv=None):
     p.add_argument("--no-publish", action="store_true", help="OS+EDW publish 건너뜀 (기본: 대표 파싱 직후 실행)")
     p.add_argument("--pg", action="store_true", help="구조화 뒤 pgvector 적재까지(지정 없어도 Docker pgvector가 떠 있으면 기본)")
     p.add_argument("--local", action="store_true", help="pgvector가 떠 있어도 로컬 묶음까지만")
-    p.add_argument("--no-prune", action="store_true", help="삭제·바뀐 원본의 옛 기록을 PostgreSQL에서 지우지 않음")
+    p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
     for name, hlp in (
         ("parse", "파싱 모듈 1회(트리거): 파싱 → 채점 → 대표 결과 → 끝 표시 · 임베딩·DB 없음"),
         ("structure", "구조화 모듈 1회(트리거): 대표 결과 → 청킹·임베딩·그래프 묶음 · 새 파싱 결과 없으면 건너뜀"),
@@ -1368,7 +1366,7 @@ def main(argv=None):
             p.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
         if name == "load":
             p.add_argument("--replace", action="store_true")
-            p.add_argument("--no-prune", action="store_true")
+            p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
     p = sub.add_parser("set-stack")
     p.add_argument("--from-selection", action="store_true")
     p.add_argument("--parse", help='".pdf_text=pymupdf,pdfplumber;.docx=office;…"')
