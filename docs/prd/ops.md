@@ -16,10 +16,11 @@ RUN_ENV becomes three values: `local` (PC), `dev` (dev server), `prd` (productio
   1. Keep `local` as the PC signal (repo-root settings.yaml lookup, file-based stack/sources, `paths.LOCAL_RUN`) — no new setting, no code-location rule. (Hub had proposed dev/prd only; user chose three values.)
   2. External models (OpenRouter etc.) and `LLM_FAKE` are allowed **only in `local`**. `dev` and `prd` refuse both.
   3. `LLM_FAKE` on in `dev`/`prd` → refuse at app start (`require_run_env` gate), not per call.
-  4. Old `stage` in settings files or env → read as `prd` with a one-line warning (one release); then removed.
+  4. `stage` is no longer a valid input: only `local`·`dev`·`prd` are accepted; `stage` is refused like any unknown value (start refused, message lists the three values). No mapping. Code search 10-29: no `stage`-specific behavior exists — it appears only in value lists, messages, and docs.
   5. RUN_ENV stays required everywhere (PC too) — no default.
 - Derived (no question needed): commands without RUN_ENV (in-image `selftest`, check commands) are not app starts, so they keep working with LLM_FAKE in test cases; PC Docker smoke (`valid_env/docker/compose.test.yml`) keeps `RUN_ENV: local`; external-model rule `external_models_allowed` = `local` only (unchanged).
 - Files: `common/config/settings.py` (RUN_ENVS, SERVER_ENVS, run_env Literal, stage mapping, start gate), `common/ai/llm.py`/`adk.py` untouched if the start gate covers it, `common/config/{migrate,keyscan,overrides,setarg}.py`, `deploy/host/compose/*.yml` text, `deploy/host/scripts/settings_env.sh`, `deploy/docker/entrypoint.sh`, docs (CLAUDE.md §3, README §3, env-guide, refactor.md), `settings.sample.yaml` regen, tests.
+- Server action: a server `settings.yaml` with `run_env: stage` must be changed to `prd` before this release (env-guide row).
 - Risk: `common/config/settings.py` is in every layer's code_fp → server reprocessing; record fingerprints before/after. Keep the settings.py diff small (92 and r2-phase edit it too).
-- Acceptance / QA: `RUN_ENV=stage` loads as `prd` with warning; `RUN_ENV=dev`/`prd` + `LLM_FAKE=1` app start exits non-zero; `local` + `LLM_FAKE=1` starts; external models refused in dev/prd, allowed in local; in-image selftest still passes; full pytest + lint pass.
+- Acceptance / QA: `RUN_ENV=stage` refuses start (unknown value); `RUN_ENV=dev`/`prd` + `LLM_FAKE=1` app start exits non-zero; `local` + `LLM_FAKE=1` starts; external models refused in dev/prd, allowed in local; in-image selftest still passes; full pytest + lint pass.
 - Status: design done (user confirm pending)
