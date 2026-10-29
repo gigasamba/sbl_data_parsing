@@ -1,6 +1,6 @@
 """모델 엔드포인트 내부망 확인 — 회사 문서를 외부 모델에 보내지 않음(DONT 13). 파싱(VLM)·구조화(임베딩)·검색(임베딩·LLM) 공통.
 
-외부 허용 = <PREFIX>_ALLOW_EXTERNAL=1 이고 RUN_ENV가 정확히 local일 때만(서버 dev·stage·prd·없음은 거부).
+외부 허용 = <PREFIX>_ALLOW_EXTERNAL=1 이고 RUN_ENV가 정확히 local일 때만(서버 dev·prd·없음은 거부).
 합성 문서 선언 파일(옛 LLM_SYNTHETIC_TRUTH) 잠금은 뺐다(사용자 10-29 — 실데이터 없음·사내 폐쇄망은 외부 경로 막힘). 리다이렉트로 외부로 가는 것도 막는다(urlopen)."""
 
 import http.client
@@ -72,12 +72,23 @@ def is_internal(url):
 
 
 def run_env_block():
-    """RUN_ENV가 정확히 local이 아니면(없음·dev·stage·prd·모르는 글자) 거부 이유 글자(서버는 내부망 전용 — D-028 ⑧, S7b ·
+    """RUN_ENV가 정확히 local이 아니면(없음·dev·prd·모르는 글자) 거부 이유 글자(서버는 내부망 전용 — D-028 ⑧, S7b ·
     없음·모르는 글자도 서버로 — VS7b U-1 b), local이면 None(지금 가드대로). 외부 허용이 켜져 있어도 서버 환경이면 외부 모델을 못 쓴다."""
     run_env = guard_run_env()
     if external_models_allowed(run_env):
         return None
     return f"RUN_ENV={run_env} — 내부망 전용(외부 모델 거부)" if run_env else "RUN_ENV 없음 — local이 아니면 내부망 전용(외부 모델 거부)"
+
+
+def fake_llm():
+    """가짜 LLM 응답(common.dev.llm_fake)을 쓸지 — op-02(사용자 10-29): local 전용. 서버(dev·prd)·모르는 RUN_ENV에서 켜져 있으면
+    RuntimeError(시작 관문을 안 거치는 docker exec 모듈도 막음). RUN_ENV 없음(selftest·시험)은 지금처럼 허용."""
+    if not cfg().dev.llm_fake:
+        return False
+    run = guard_run_env()
+    if run is not None and run != "local":
+        raise RuntimeError(f"RUN_ENV={run} — 가짜 LLM 응답(common.dev.llm_fake)은 local 전용(서버에서 끔)")
+    return True
 
 
 def external_ok(allow):

@@ -4,7 +4,7 @@
 
 ## 1. 어디서 읽나
 
-| | 서버(RUN_ENV dev·stage·prd · 이미지 배치 — PC 시험 Docker 포함) | PC(`RUN_ENV=local` + 저장소 배치 — `paths.LOCAL_RUN`) |
+| | 서버(RUN_ENV dev·prd · 이미지 배치 — PC 시험 Docker 포함) | PC(`RUN_ENV=local` + 저장소 배치 — `paths.LOCAL_RUN`) |
 |---|---|---|
 | 엔진 구성 | `struct.stack_version`의 활성 판(`is_active`) | `common.paths.stack_file`(비우면 `resources/config/pipeline_stack.json`) |
 | 원천 목록 | `struct.source_version`의 활성 판 | `common.paths.sources_file`(비우면 `resources/mappings/sources.json`) |

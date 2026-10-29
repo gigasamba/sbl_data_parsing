@@ -34,7 +34,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 # S7e1(사용자 10-27 Q8 · D-028 ⑨ · C-29 ⑨) — 운영 접속 값·비밀·운영 고정값을 코드에서 지우고 서버 settings.yaml에서 읽는다(configure() — 시작 때 한 번).
 #   파일: --settings 또는 SETTINGS_FILE, 없으면 $SERVER_ENV_DIR/settings.yaml(기본 배치 /srv/rag/env). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
-#   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). common.run_env가 dev·stage·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
+#   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). common.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
 #   docker exec로 부르는 컨테이너(data-pipeline-parse·structure)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
 #   작업 폴더(진행 기록 batch_progress/·batches/)는 pipeline.host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더(옛 test_space/rfp_all_output)는
 #   common.host.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로, C-29 ⓑ를 코드로 보장 — 사용자 Q8 ⑤).
@@ -42,7 +42,7 @@ TEST = PROG = DOCSPACE = DOCFLOW = WARM = ENVFILE = PATCH_CODE = None  # configu
 _EDW: dict = {}  # parsing-meta EDW 접속(호스트 pymssql — edw_list·edw_done_keys)
 WARM_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # warm 파일 이름의 원천 버킷 · 문서 수 세기(psql)
 SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거부
-    ("common.run_env", "실행 환경(dev·stage·prd)"),
+    ("common.run_env", "실행 환경(dev·prd)"),
     ("common.host.output_root", "결과 공유 폴더(RAG_OUT — 컨테이너 /app/output 원본)"),
     ("common.connections.parsing_meta.host", "EDW(parsing-meta) 서버 — 호스트 조회·publish"),
     ("common.connections.parsing_meta.database", "EDW(parsing-meta) DB"),
@@ -102,8 +102,8 @@ def configure(settings_file=None):
         return [err]
     probs = [f"설정 필요: {p} — {why}" for p, why in SETTINGS_REQUIRED if _yget(doc, p) in (None, "")]
     run_env = _yget(doc, "common.run_env")
-    if run_env not in (None, "") and run_env not in ("dev", "stage", "prd"):
-        probs.append("common.run_env가 dev·stage·prd가 아님 — 서버 전용 러너(로컬 실행 금지, CLAUDE.md 3절)")
+    if run_env not in (None, "") and run_env not in ("dev", "prd"):
+        probs.append("common.run_env가 dev·prd가 아님 — 서버 전용 러너(로컬 실행 금지, CLAUDE.md 3절)")
     policy, bad = run_docs_policy(doc)
     probs += bad
     if probs:
