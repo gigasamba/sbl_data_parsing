@@ -108,6 +108,8 @@ def _cleanup(lock_timeout=-1):
 
 
 def _on_term(signum, _frame):
+    if _CLOSING.is_set():
+        return  # 정리가 이미 도는 중(정상 종료의 atexit 포함) — SystemExit로 끊지 않고 끝까지 하게(PR #14 리뷰 P2)
     try:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)  # 정리 중 두 번째 SIGTERM이 정리를 끊지 않게
     except ValueError:
