@@ -35,7 +35,7 @@ def _bundle(doc):
 def test_doc_key_bundle():
     path = "/data/docs/a.txt"
     cases = [  # (묶음 docs.jsonl 행, 기대 doc_key)
-        ({"file_path": path, "file_name": "a.txt", "doc_key": path}, path),  # 새 묶음 — doc_key만
+        ({"file_path": path, "doc_key": path}, path),  # 새 묶음 — doc_key만(file_name·file_sha256 없음, build_bundle 그대로)
         ({"file_path": path, "file_name": "a.txt", "file_sha256": "a" * 64}, "a" * 64),  # 옛 묶음 — file_sha256만
     ]
     with mc.senv(GLOSSARY_DIR=None):
@@ -44,6 +44,7 @@ def test_doc_key_bundle():
             assert list(R.doc_meta) == [want] and list(R.key_local) == [f"{want}:0"]
             hits, _ = R.search("바이러스", 5, methods=["bm25"])
             assert hits and hits[0]["doc_key"] == want and hits[0]["chunk_key"] == f"{want}:0", hits
+            assert hits[0]["file_name"] == "a.txt" and R.client_map() == {"a.txt": None}, hits  # 고객 미상 = None(clientscope.doc_clients)
 
         class _PG:  # doc 표의 축소 열(file_path·clients)만 있음 — 없는 열을 고르면 실 PG처럼 오류
             schema = "ai"

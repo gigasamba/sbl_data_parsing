@@ -34,6 +34,12 @@ def _doc_key(d):
     return d.get("doc_key") or d["file_sha256"]
 
 
+def _file_name(d):
+    """묶음 docs.jsonl 행 또는 PG doc 행의 파일 이름 — 축소 스키마 뒤에는 file_name이 없어 file_path에서 뽑는다(mc-10).
+    v_chunk_source 뷰(`regexp_replace(file_path, '^.*/', '')`)와 같은 규칙: 마지막 '/' 뒤만(Windows '\'는 나누지 않음)."""
+    return d.get("file_name") or d["file_path"].rsplit("/", 1)[-1]
+
+
 class Retriever:
     """같은 질의 → 본문·출처 저장소(pgvector 또는 로컬 묶음)에서 하이브리드(벡터 + BM25 + 드문 ID → RRF).
     EDW(--edw · --edw-client)는 **벡터 순위만** 준다(EDW에는 벡터만 있음) — 키(sha:seq)를 저장소 청크로 바꿔 나머지는 개발 서버에서."""
@@ -143,8 +149,8 @@ class Retriever:
         독립 검토 CONCERN(10-14) — 전엔 client(단일)만 읽어 다중 라벨 문서의 그림·OV가 두 번째 이하 고객
         범위에선 안 걸렸다 — 이제 CS.doc_clients로 clients 우선·client 낙하(allows()의 ANY-match를 그대로 씀)."""
         if self.pg:
-            return {Path(r["file_path"]).name: CS.doc_clients(None, r.get("clients")) for r in self._client_rows()}
-        return {d["file_name"]: CS.doc_clients(d.get("client"), d.get("clients")) for d in self.local.docs}
+            return {_file_name(r): CS.doc_clients(None, r.get("clients")) for r in self._client_rows()}
+        return {_file_name(d): CS.doc_clients(d.get("client"), d.get("clients")) for d in self.local.docs}
 
     def search(self, q, k, methods=None, client=None):
         """methods ⊂ {vector, bm25, id}(없으면 retrieve 설정대로) — 검색 MCP가 방법을 골라 씀(G3).
@@ -300,7 +306,7 @@ class Retriever:
                         "chunk_key": f"{_doc_key(d)}:{c['seq']}",
                         "doc_key": _doc_key(d),
                         "doc_id": c["doc"],
-                        "file_name": d["file_name"],
+                        "file_name": _file_name(d),
                         "source_uri": d.get("source_uri") or uri_from_path(d["file_path"]),
                         "client": d.get("client"),
                         "clients": CS.doc_clients(d.get("client"), d.get("clients")),
