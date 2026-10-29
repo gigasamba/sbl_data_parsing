@@ -8,6 +8,7 @@ JSON Lines event log for both apps. Why: today `common/core/runlog.py` writes on
 - Risk: edits `common/` → code_fp may change (server reprocessing) — tell the user at design, put before/after fingerprints in the commit. Review grade A (secret handling).
 - Acceptance / QA: each line parses as JSON with the required keys; a sample secret string is masked; level setting filters lines.
 - Files: `common/core/` (new formatter), `common/config/settings.py`, `mcp_server/main.py`, `pipeline/cli.py`, `.gitignore`.
+- Decided (user 10-30 grill): ship in the same version as the gold DB change ([pipeline.md#pl-25](pipeline.md#pl-25)) — one reprocessing.
 - Status: todo
 
 ## op-02
@@ -50,3 +51,8 @@ Overlap: `deploy/host/scripts/run_docs.py` lines ~116–134 read the PM keys fro
 - MCP process: `mcp_server.main` calls `settings.edw_read_only()` first, so the write account is blank in its settings object even with one shared settings.yaml (user 10-29 "정해진 항목만"; review P1). The file itself is still readable inside the container.
 - Tests: `tests/server/common/test_edw_login.py`, `tests/general/common/test_edw_standin.py`.
 - Status: dev — steps 1–3 done (user confirmed design 10-29); waiting for PR.
+
+## op-04
+First release tag `v0.1.0` and release notes. Why: `VERSION` and image tags exist but no tag or release notes have been made.
+- What: on `release/0.1.0` — tag `main`, write `RELEASE_NOTES` (changes, settings to fill, fingerprint changes, server steps from refactor.md "최종").
+- Status: todo — user decides the timing (asked 10-30: not now).
