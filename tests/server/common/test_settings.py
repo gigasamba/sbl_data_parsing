@@ -797,6 +797,16 @@ def selftest():
                 and _peek(doc_m, "common.runtime.lib_env") == {"OMP_NUM_THREADS": "2", "TZ": "Asia/Seoul"}
                 and len(rep_m["옛 이름 옮김"]) == 1,
             )
+            # 사용자 10-29 — 지운 칸 synthetic_truth(옛 migrate C-35가 서버 파일에 옮겨 둠)는 경고만 하고 무시 · 다른 모르는 칸은 그대로 거부
+            from common.config.settings import CommonModelsGuard
+
+            _g = CommonModelsGuard.model_validate({"synthetic_truth": "/t.json", "budget_usd": 0.1})
+            try:
+                CommonModelsGuard.model_validate({"synthetic_truthx": "/t.json"})
+                _typo_rejected = False
+            except ValueError:
+                _typo_rejected = True
+            check("지운 칸 synthetic_truth: 시작 거부 대신 무시 · 오타 칸은 거부", _g.budget_usd == 0.1 and _typo_rejected)
             if (
                 "pipeline" in app_classes()
             ):  # B-3(VS7e2) — 서버 env 파일의 GOLD_DIR는 호스트 칸에만(앱 칸 비움 → 이미지 안 /data/gold), PC 파일은 두 칸
