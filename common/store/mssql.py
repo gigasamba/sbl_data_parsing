@@ -86,3 +86,20 @@ def login(role, extra=True):
     if extra:
         kw.update(json.loads(reveal(c.connect_kwargs) or "{}"))
     return kw, miss
+
+
+STANDIN_SCHEMAS = ("AI", "CRMS", "LAS", "SFDC")  # PC 가짜 EDW sqlite 하나에 든 스키마(valid_env/edw/*.sql — validation/e2e/edw_standin.py)
+
+
+def standin(path, readonly=True, timeout=5.0):
+    """PC 가짜 EDW(common.connections.rdb.sqlite — 파일 하나에 모든 표) 연결 — 같은 파일을 스키마 이름마다 ATTACH해
+    `AI.FileStorageMap`·`CRMS.RM_MAS_CLIENT` 같은 T-SQL 이름이 그대로 돈다(사용자 10-29, ops.md#op-02).
+    readonly면 SQLite `?mode=ro`(드라이버 수준 — ATTACH도 같은 URI라 쓰기 불가)."""
+    import sqlite3
+    from pathlib import Path
+
+    uri = f"file:{Path(path).resolve().as_posix()}" + ("?mode=ro" if readonly else "")
+    cn = sqlite3.connect(uri, uri=True, timeout=timeout)
+    for s in STANDIN_SCHEMAS:
+        cn.execute(f"ATTACH DATABASE ? AS {s}", (uri,))
+    return cn

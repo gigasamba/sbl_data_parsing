@@ -1,5 +1,5 @@
--- [SYNTHETIC] PC stand-in for the EDW schema AI (real EDW = SQL Server). Built into valid_env/edw/ai.sqlite by
--- dev_tools/test_tools/edw_sample.py; the connector ATTACHes that file AS AI, so AI.FileStorageMap resolves like T-SQL.
+-- [SYNTHETIC] PC stand-in for the EDW schema AI (real EDW = SQL Server). Built into valid_env/edw/edw.sqlite (one file, all schemas — python -m validation.e2e.edw_standin);
+-- the connector ATTACHes that file AS AI, so AI.FileStorageMap resolves like T-SQL.
 -- STRICT tables + CHECK(length) mirror the NVARCHAR(n)/BIGINT/INT/FLOAT types, so a bad value fails here as on the server.
 
 -- AI.FileStorageMap — one row per stored source file (s3_key 1:1). Columns read by data_etl/tools/source.py

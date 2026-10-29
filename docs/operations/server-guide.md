@@ -140,7 +140,7 @@ LLM 에이전트가 직접 SELECT를 보내 EDW(SQL Server)를 읽는 도구 2�
    - 보안 재검토(10-15) 반영 — DBA가 이 계정에 추가로: `DENY VIEW DEFINITION`(FROM 없이 메타데이터 함수로 표 정의를 읽는 길 차단) · 다른 데이터베이스·연결 서버(linked server) 권한 없음 · 가능하면 Resource Governor 등으로 이 계정의 질의 시간·CPU 상한(코드 상한 `EDW_QUERY_TIMEOUT_SEC`은 드라이버 쪽이라 서버에서 실제로 취소되는지 확인 필요).
 3. 켠 뒤 확인: `describe_edw()`(table 없이) 호출로 허용 표·열이 기대와 같은지, `query_edw({"sql": "DROP TABLE ..."})` 같은 호출이 `rejected:*`로 막히는지 한 번 확인.
 
-PC 시험(서버 연결 없이): `RDB_SQLITE=<sqlite 파일>`(`common.connections.rdb.sqlite` — 모든 대역 표를 한 파일에) — SQL Server와 같은 `AI.<표>` 이름으로 ATTACH돼 같은 SQL 문이 그대로 돈다.
+PC 시험(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`common.connections.rdb.sqlite` — 모든 대역 표를 한 파일에, `python -m validation.e2e.edw_standin`으로 다시 만듦) — SQL Server와 같은 `AI.<표>` 이름으로 ATTACH돼 같은 SQL 문이 그대로 돈다.
 
 ## 5. 회사 맞춤(도메인 튜닝) — 요약
 

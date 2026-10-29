@@ -47,13 +47,12 @@ import time
 from datetime import date, datetime
 from datetime import time as dt_time
 from decimal import Decimal
-from pathlib import Path
 
 from common.config import settings as C  # common 칸(connections.rdb — 접속·sqlite 대역)
 from mcp_server import config as mc  # 설정 객체(S7d — 호출마다 cfg())
 from mcp_server.schemas.edw_result import ColumnMeta, QueryResult  # noqa: F401 — S5: 출력 모양은 schemas/로(내용 그대로)
 
-DEFAULT_TABLES = "AI.client,AI.contract,AI.batch,AI.quote"
+DEFAULT_TABLES = "AI.FileStorageMap,AI.ParsingMeta,CRMS.RM_MAS_CLIENT,CRMS.RM_MAS_CLIENT_GENERAL,LAS.DIVISION_MAS,LAS.PROD_MAS,LAS.SERVICE_MAS,SFDC.Account,SFDC.Opportunity"  # PC stand-in tables (valid_env/edw — ops.md#op-02)
 _CELL_MAX = 2000
 _TRUNC_MARK = " …(truncated)"
 _SYSTEM_SCHEMAS = ("sys", "information_schema")
@@ -533,9 +532,11 @@ def _connect_sqlite(path, timeout):
     ATTACH/PRAGMA are already blocked keywords for user-supplied SQL (see `_BLOCKED_RE`) — this is
     about the connection's OWN internal self-attach (used so `AI.client` resolves exactly like it
     would in T-SQL), which now goes through the same read-only URI so that path can't write either."""
-    uri = f"file:{Path(path).resolve().as_posix()}?mode=ro"
-    conn = sqlite3.connect(uri, uri=True, timeout=min(timeout, 5))
-    conn.execute("ATTACH DATABASE ? AS AI", (uri,))  # same read-only file, alias "AI" — AI.client works like T-SQL
+    from common.store import mssql
+
+    conn = mssql.standin(
+        path, readonly=True, timeout=min(timeout, 5)
+    )  # one stand-in file ATTACHed per schema (AI·CRMS·LAS·SFDC), all ?mode=ro
     deadline = time.monotonic() + timeout
     conn.set_progress_handler(lambda: time.monotonic() > deadline, 1000)
     return conn

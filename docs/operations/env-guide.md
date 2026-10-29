@@ -69,9 +69,9 @@
 | 이름 | 기본 | 메모 |
 |---|---|---|
 | `EDW_QUERY` | `1`(켬) | `=0`이면 두 도구 모두 `not_configured`로 강제 꺼짐(기동엔 영향 없음) |
-| `RDB_SQLITE` | 비움 | PC 시험용 SQLite 대역 파일 하나(모든 표) — 설정돼 있으면 이게 먼저(SQL Server보다 우선) |
+| `RDB_SQLITE` | 비움 | PC 시험용 SQLite 대역 파일 하나(모든 표 — `valid_env/edw/edw.sqlite`, `python -m validation.e2e.edw_standin`으로 다시 만듦) — 설정돼 있으면 원천 조회·게시·`query_edw` 모두 이게 먼저 |
 | `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_READ_USER`·`RDB_READ_PASSWORD` | 비움·`1433`·비움·비움·비움 | 서버 EDW 접속(pymssql) — `common.connections.rdb` |
-| `EDW_QUERY_TABLES` | `AI.client,AI.contract,AI.batch,AI.quote`(샘플) | 읽기 허용 `schema.table` 쉼표 목록 — 서버는 실제 EDW 표 이름으로 반드시 바꿔 적음 |
+| `EDW_QUERY_TABLES` | 비움(PC 대역은 그 안의 표 9개) | 읽기 허용 `schema.table` 쉼표 목록 — 서버는 실제 EDW 표 이름으로 반드시 바꿔 적음 |
 | `EDW_QUERY_MAX_ROWS` | `2000` | `query_edw(max_rows=)` 호출값의 상한 |
 | `EDW_QUERY_TIMEOUT_SEC` | `20` | 넘으면 `{"ok": false, "error": "timeout: ..."}`  |
 | `EDW_QUERY_MAX_BYTES` | `2000000`(2MB) | 응답 JSON 크기 상한 — 넘으면 뒤에서부터 행을 줄이고 `truncated: true` |

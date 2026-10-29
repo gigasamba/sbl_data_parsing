@@ -68,7 +68,7 @@
 ## 시험 문서를 추가하려면
 1. 파일을 `valid_env/object_storage/<원천>/<uuid>/<파일>`(s3_key)에 둔다.
 2. `valid_env/eval_sets/object_keys.csv`에 한 행 추가(file_name·s3_key·source_system·set·sha256).
-3. `valid_env/edw/ai.sql`의 `FileStorageMap` INSERT에 같은 행을 더한다.
+3. `valid_env/edw/ai.sql`의 `FileStorageMap` INSERT에 같은 행을 더하고 `python -m validation.e2e.edw_standin`으로 `valid_env/edw/edw.sqlite`를 다시 만든다.
 4. 필요하면 `eval_sets/<세트>/gold/`에 정답을 추가한다(형식은 세트 기존 gold와 동일).
 5. `python dev_tools/repo_maintain/validation_catalog.py build`를 돌려 `doc_catalog.jsonl`을 갱신한다.
 6. 이 파일에도 행 하나를 더한다.
