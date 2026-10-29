@@ -1,6 +1,6 @@
 # DB 스키마 명세 (pl-25)
 
-이 프로젝트가 쓰는 DB 표와 칸을 한곳에 모은 문서다. 표마다 칸, 타입, 뜻, 그 칸을 쓰는 코드, 읽는 코드, 그리고 10-29·10-30 사용자 결정에 따른 앞으로의 처리(유지·삭제·새로)를 적는다. 요건과 결정의 원문은 [prd/pipeline.md#pl-25](../prd/pipeline.md#pl-25)에 있다.
+이 프로젝트가 쓰는 DB 표와 칸을 한곳에 모은 문서다. 표마다 칸, 타입, 뜻, 그 칸을 쓰는 코드, 읽는 코드, 그리고 10-29·10-30 사용자 결정에 따른 앞으로의 처리(유지·삭제·새로)를 적는다. 요건과 결정의 원문은 [prd/etl.md#pl-25](../prd/etl.md#pl-25)에 있다.
 
 - **이 문서는 설계안이다.** 사용자와 DB 담당자가 승인한 뒤 구현한다. 이 문서를 고치는 브랜치는 코드·스키마·마이그레이션을 바꾸지 않는다.
 - **결정 칸:** `유지` = 지금 있고 남김 · `삭제` = 지금 있고 없앰 · `새로` = 지금 없고 만듦. 지금 상태 = `유지`+`삭제`, 목표 상태 = `유지`+`새로`.
@@ -13,9 +13,9 @@
 |---|---|
 | 문서 키 | `s3_key`(Object Storage 원본 전체 키)만 문서 키로 쓴다. sha256 `doc_key`는 없앤다. 문서 대장(`doc_registry`·`doc_registry_seen`)과 숨김(`doc_hidden`)은 `s3_key`로 다시 키를 잡는다. 검색 `doc`·`chunk`도 `s3_key`를 든다. 같은 내용이 여러 `s3_key`로 들어오면 문서도 여러 개다 — `s3_key`마다 `doc` 행 하나(U-7 결정, `doc_alias` 없음). `build_bundle`의 내용 해시로 첫 키에 합치기(`aliases`)는 없앤다. 임베딩은 캐시가 다시 씀. |
 | 출처 표시 이름 | EDW에서도, 문서 파싱에서도 나올 수 있는 값은 칸을 둘로 나누고 이름 끝에 출처를 붙인다 — EDW `_edw`, 문서 본문 `_doc`. 지금 해당하는 값: 고객(`client_edw`·`clients_doc`). |
-| 고객 거르기 | MCP의 고객 거르기는 EDW 고객(`client_edw`, 문서당 하나)만 쓴다. EDW 고객이 없는 문서는 고객 거르기를 걸면 빠진다. 본문에서 찾은 고객(`clients_doc`)으로 거르는 것은 나중([pl-28](../prd/pipeline.md#pl-28)). |
+| 고객 거르기 | MCP의 고객 거르기는 EDW 고객(`client_edw`, 문서당 하나)만 쓴다. EDW 고객이 없는 문서는 고객 거르기를 걸면 빠진다. 본문에서 찾은 고객(`clients_doc`)으로 거르는 것은 나중([pl-28](../prd/etl.md#pl-28)). |
 | 원천 | `source_system` = `AI.FileStorageMap.source_system`. 비었거나 SFDC·CRMS·LAS가 아니면 `Other`. `s3_key` 접두와 다르면 경고만 남김. |
-| 표 나누기 시점 | B — 지금은 gold 표 한 벌. 원천별(SFDC·CRMS·LAS·Other) 표 나누기와 MCP `search`의 원천 필수 입력은 [pl-28](../prd/pipeline.md#pl-28)(MCP 계약 변경 — 검토 등급 A). |
+| 표 나누기 시점 | B — 지금은 gold 표 한 벌. 원천별(SFDC·CRMS·LAS·Other) 표 나누기와 MCP `search`의 원천 필수 입력은 [pl-28](../prd/etl.md#pl-28)(MCP 계약 변경 — 검토 등급 A). |
 
 ## 2. gold — 검색 스키마 (pgvector, `PG_SCHEMA`)
 
@@ -39,7 +39,7 @@
 | file_path | TEXT | 개발 서버 기준 원본 경로(파일 이름은 여기서 뽑음) | build_bundle `main` | pgsearch, retriever, search_svc, 뷰 | 유지 |
 | s3_key | TEXT | 문서 키 — Object Storage 원본 전체 키(`AI.FileStorageMap.s3_key`) | (build_bundle가 이미 `_s3_key`로 알지만 묶음에 안 넣음) | (대장·숨김·ParsingMeta 조회) | 새로 |
 | clients | TEXT(JSON) | 고객 목록 — 지금은 본문에서 찾은 이름(`infer_clients`)과 섞여 있음 | build_bundle `infer_clients` | pgsearch `_client_restrict`, retriever, internal_docs, search_svc | 삭제 |
-| client_edw | TEXT | EDW 조인으로 얻은 고객 하나 — MCP 고객 거르기의 유일한 키 | (파이프라인이 EDW 읽기 계정으로 직접 조인 — [pl-29](../prd/pipeline.md#pl-29)) | (pgsearch 고객 거르기) | 새로 |
+| client_edw | TEXT | EDW 조인으로 얻은 고객 하나 — MCP 고객 거르기의 유일한 키 | (파이프라인이 EDW 읽기 계정으로 직접 조인 — [pl-29](../prd/etl.md#pl-29)) | (pgsearch 고객 거르기) | 새로 |
 | clients_doc | TEXT(JSON) | 문서 본문에서 찾은 고객 목록(참고용 — 거르기에 안 씀) | (build_bundle `infer_clients`) | (근거 표시) | 새로 |
 | summary | TEXT | 요약(검색 결과용) | build_bundle | 뷰 → retriever → shaping | 유지 |
 | source_system | VARCHAR(20) | SFDC·CRMS·LAS·Other | build_bundle(`s3_key` 접두, 없으면 file_meta) | 뷰 → search_svc, internal_docs | 유지 |
@@ -316,7 +316,7 @@
 
 ### edw.ParsingMeta
 
-`AI.ParsingMeta` — 파싱 결과(silver) 게시 기록. 정의: `docs/operations/parsing_meta_mssql.sql`. 쓰는 곳: `pipeline/load/parsing_meta.py`(`plan`·`apply` — 행 만들기, `apply_registry_status` — 상태 UPDATE), `common/store/parsing_meta_db.py`(`insert_new`, `update_status`). 10-30 결정: 읽는 칸만 남기고 `gold_status`·`gold_reason`을 더한다([pl-24](../prd/pipeline.md#pl-24)).
+`AI.ParsingMeta` — 파싱 결과(silver) 게시 기록. 정의: `docs/operations/parsing_meta_mssql.sql`. 쓰는 곳: `pipeline/load/parsing_meta.py`(`plan`·`apply` — 행 만들기, `apply_registry_status` — 상태 UPDATE), `common/store/parsing_meta_db.py`(`insert_new`, `update_status`). 10-30 결정: 읽는 칸만 남기고 `gold_status`·`gold_reason`을 더한다([pl-24](../prd/etl.md#pl-24)).
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
@@ -419,11 +419,11 @@
 | # | 무엇 | 왜 |
 |---|---|---|
 | D-1 | `AI.FileStorageMap`의 실제 정의 — 특히 고친 때 칸 이름(`last_modified_time` 가정)과 `source_system` 값 목록 | 저장소에는 PC 대역(`valid_env/edw/ai.sql` — `created_at`만)뿐 |
-| D-2 | 문서당 EDW 고객 하나(`client_edw`)를 얻는 조인 경로 — 원천별(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account.Name`로 보임, CRMS·LAS는?) | 지금은 외부에서 뽑은 `file_meta_new.jsonl`을 읽고, 그 파일을 만드는 코드가 저장소에 없음 → **결정(사용자 10-30):** 파이프라인이 EDW 읽기 계정으로 조인을 직접 만든다(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account`) — `file_meta_new.jsonl`을 대신함, [pl-29](../prd/pipeline.md#pl-29). CRMS·LAS 경로는 여전히 확인 필요 |
+| D-2 | 문서당 EDW 고객 하나(`client_edw`)를 얻는 조인 경로 — 원천별(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account.Name`로 보임, CRMS·LAS는?) | 지금은 외부에서 뽑은 `file_meta_new.jsonl`을 읽고, 그 파일을 만드는 코드가 저장소에 없음 → **결정(사용자 10-30):** 파이프라인이 EDW 읽기 계정으로 조인을 직접 만든다(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account`) — `file_meta_new.jsonl`을 대신함, [pl-29](../prd/etl.md#pl-29). CRMS·LAS 경로는 여전히 확인 필요 |
 | D-3 | `AI.ParsingMeta` 칸 15개 삭제·`gold_status`·`gold_reason` 추가(ALTER) — 권한, 기존 행, 다른 사용처 | 이 프로젝트 밖에서 그 칸을 읽는 곳이 있는지 모름 |
 | D-4 | `ParsingMeta.doc_key` 삭제 때 `UQ_ParsingMeta_dockey`·`IX_ParsingMeta_doc_key` 색인 처리 · `source_key`를 필수(NOT NULL)로 | 지금 `source_key`가 비면 `doc_key`가 겹침 키 |
 | D-5 | 마스터 PostgreSQL 자리·계정·백업 | 새 DB(검색 PG와 분리) |
-| D-6 | gold 스키마 변경(`s3_key`·`client_edw`·`clients_doc` 추가, `clients` 삭제)은 Alembic 새 판 — 뷰 `v_chunk_source`를 지우고 다시 만듦(`doc.clients`에 걸려 있음), 기존 서버 데이터는 다시 적재 | 첫 적재가 전체 e2e([pl-23](../prd/pipeline.md#pl-23))와 함께 |
+| D-6 | gold 스키마 변경(`s3_key`·`client_edw`·`clients_doc` 추가, `clients` 삭제)은 Alembic 새 판 — 뷰 `v_chunk_source`를 지우고 다시 만듦(`doc.clients`에 걸려 있음), 기존 서버 데이터는 다시 적재 | 첫 적재가 전체 e2e([pl-23](../prd/etl.md#pl-23))와 함께 |
 | D-7 | struct 표 지우기(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`·`prod_master`, 마스터 2개 이동) 전 백업 | 되돌릴 수 없는 삭제 |
 
 ## 7. 사용자 결정 (10-30 grill 7차)

@@ -589,7 +589,7 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 
 | 문서                                                                           | 내용                                                                     |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| [docs/PRD.md](docs/PRD.md) · [docs/prd/](docs/prd/)                          | **기능 요건** — 검색 MCP(mcp.md) · 데이터 파이프라인(pipeline.md) · e2e 실행·테스트·평가(e2e.md)의 기능·목적·관련 파일, 미개발 항목 표 · 요건과 다른 코드·안 쓰는 코드·꺼진 기능(gaps.md) |
+| [docs/PRD.md](docs/PRD.md) · [docs/prd/](docs/prd/)                          | **기능 요건** — 카테고리 6개(etl·parse·mcp·settings·test·doc)의 기능·목적·관련 파일, 카테고리별 묶음 표(끝난 것 포함) · 파일 끝에 요건과 다른 코드·안 쓰는 코드·꺼진 기능 |
 | [docs/index.md](docs/index.md)                                               | 문서 지도                                                                  |
 | [CLAUDE.md](CLAUDE.md)                                                       | 개발 규칙 · 로컬 하네스 · 점검 명령 · 핑거프린트 기준값                                     |
 | [refactor.md](refactor.md)                                                   | 서버·사람이 확인할 사항(C-xx) · **"최종 — 사람이 할 일"**(첫 배포 순서)                      |

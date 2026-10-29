@@ -65,7 +65,7 @@
 | `MCP_ALLOWED_HOSTS` | 비움 | `MCP_HOST`가 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |
 
 ### EDW 쿼리 도구(EQ1, `describe_edw`·`query_edw` — 읽기 전용 SQL, 근거 MCP의 별도 도구 2개)
-접속은 `common.connections.rdb`의 **읽기 계정**(`RDB_READ_*`)만 쓴다 — 검색 MCP에는 쓰기 계정을 주지 않는다(사용자 10-29, [ops.md#op-03](../prd/ops.md#op-03)). 이 읽기 계정은 파이프라인의 원천 조회와 함께 쓴다. 서버 설정 절차는 [server-guide.md](server-guide.md) "EDW 쿼리 도구" 참고.
+접속은 `common.connections.rdb`의 **읽기 계정**(`RDB_READ_*`)만 쓴다 — 검색 MCP에는 쓰기 계정을 주지 않는다(사용자 10-29, [settings.md#op-03](../prd/settings.md#op-03)). 이 읽기 계정은 파이프라인의 원천 조회와 함께 쓴다. 서버 설정 절차는 [server-guide.md](server-guide.md) "EDW 쿼리 도구" 참고.
 | 이름 | 기본 | 메모 |
 |---|---|---|
 | `EDW_QUERY` | `1`(켬) | `=0`이면 두 도구 모두 `not_configured`로 강제 꺼짐(기동엔 영향 없음) |
@@ -101,7 +101,7 @@
 | 이름 | 메모 |
 |---|---|
 | `OS_ENDPOINT`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | 읽기 전용 — 사내 CA면 `OS_VERIFY_TLS=<CA 파일>` |
-| `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_CONNECT_KWARGS` | EDW 접속 하나(`common.connections.rdb` — 사용자 10-29, [ops.md#op-03](../prd/ops.md#op-03)). 원천 목록·FileStorageMap·ParsingMeta 조회·`query_edw`는 같은 서버·DB(어느 표·열은 `SOURCES_FILE`) |
+| `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_CONNECT_KWARGS` | EDW 접속 하나(`common.connections.rdb` — 사용자 10-29, [settings.md#op-03](../prd/settings.md#op-03)). 원천 목록·FileStorageMap·ParsingMeta 조회·`query_edw`는 같은 서버·DB(어느 표·열은 `SOURCES_FILE`) |
 | `RDB_READ_USER`·`RDB_READ_PASSWORD` | 읽기 계정 — 원천 조회·호스트 러너 조회·검색 MCP(근거 경로·`query_edw`) |
 | `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD` | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만 |
 | `PM_PATH_MAP` | 결과 키 앞부분 바꾸기 `이전 앞부분=새 앞부분`(쉼표 목록, 짝 없으면 `source_system/원본 폴더`) — 문서 폴더 = `<PM_PREFIX>/<새 앞부분>/<나머지 폴더>/<원본파일명>/`(EDW rep_key) · 대표 결과 `<파일명>_<YYYY-MM-DD_HHMMSS>.md`·엔진별 원본 `engine/` · 예 `SFDC=Parsing-Result/SFDC`면 `.../SFDC/<UUID>/a.pdf` → `.../Parsing-Result/SFDC/<UUID>/a.pdf/` |
