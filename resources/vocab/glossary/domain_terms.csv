@@ -1,0 +1,125 @@
+﻿concept_id,canonical,category,synonyms,abbreviations,weak_synonyms,broader,related,context_required,case_sensitive,definition_ko,definition_en,source,owner,status,updated
+BIZ.CDMO,Contract Development and Manufacturing Organization,business,위탁개발생산|위탁개발생산기관|위탁 개발·생산|수탁개발생산,CDMO,CMO|CDO,,BIZ.CMO|BIZ.CDO,,N,의약품 공정·분석법 개발부터 임상·상업 생산까지 위탁으로 수행하는 기업,Company providing outsourced process/analytical development and clinical-to-commercial manufacturing,예제,영업,approved,2026-10-14
+BIZ.CMO,Contract Manufacturing Organization,business,위탁생산|위탁생산기관|수탁생산|contract manufacturer,CMO,,,BIZ.CDMO,위탁생산|수탁생산|contract manufacturer|생산|제조|계약|선정,N,고객이 확립한 공정으로 생산만 위탁 수행,Outsourced manufacturing of a client-established process,예제,영업,approved,2026-10-14
+BIZ.CDO,Contract Development Organization,business,위탁개발|위탁개발기관|수탁개발|contract development,CDO,,,BIZ.CDMO,위탁개발|수탁개발|contract development|개발|계약|선정,N,세포주·공정·제형·분석법 개발을 위탁 수행(생산 전 단계),"Outsourced cell line, process, formulation and analytical development",예제,영업,approved,2026-10-14
+BIZ.CRO,Contract Research Organization,business,임상시험수탁기관|연구수탁기관,CRO,,,BIZ.CDMO,임상시험수탁기관|연구수탁기관|clinical research|계약|선정,N,임상시험·비임상 연구를 위탁 수행하는 기관(생산 아님),Outsourced clinical/non-clinical research (not manufacturing),예제,영업,approved,2026-10-14
+BIZ.RFI,Request for Information,business,정보요청서|RFI 질의서|사전 질의서,RFI,questionnaire|설문,,BIZ.RFP,,N,고객이 공급사의 역량·시설·품질 체계·이력을 확인하려 보내는 질의서(가격 협상 전 단계),"Questionnaire to assess a supplier's capabilities, facilities and quality system",예제,영업,approved,2026-10-02
+BIZ.RFP,Request for Proposal,business,제안요청서|제안 요청,RFP,,,BIZ.RFI|BIZ.RFQ,,N,요구 조건·물량·일정을 제시하고 가격·계약 조건 제안을 요청하는 문서,"Document requesting a priced proposal against stated requirements, volumes and timelines",예제,영업,approved,2026-10-02
+BIZ.RFQ,Request for Quotation,business,견적요청서|견적 요청,RFQ,,,BIZ.RFP|BIZ.QUOTE,,N,정해진 사양에 대한 가격 견적만 요청,Request for a price quote on a defined scope,예제,영업,approved,2026-10-02
+BIZ.QUOTE,Quotation,business,견적서|견적|Quote|견적 회신,,,,BIZ.RFQ,,Y,공급사가 정해진 사양에 대해 제시한 가격 견적(고객의 견적 요청 RFQ에 대한 회신 문서),Supplier's priced quote for a defined scope (the reply to an RFQ),예제,영업,approved,2026-10-12
+BIZ.PM,Project Manager,business,프로젝트 매니저|프로젝트 담당자|과제 책임자,PM,,,,프로젝트|담당|고객|일정|킥오프|project|manager|kick-off|timeline,N,고객 과제의 일정·범위·소통을 총괄하는 담당자,"Owner of client project scope, timeline and communication",예제,PMO,approved,2026-10-02
+MAINT.PM,Preventive Maintenance,quality,예방정비|예방 보전|정기 점검,PM,,,,설비|장비|정비|보전|maintenance|equipment|calibration|교정,N,설비 고장을 막기 위한 계획 정비(PM이 프로젝트 매니저와 겹침 — 문맥 조건 필수),Planned equipment maintenance (ambiguous with Project Manager),예제,엔지니어링,approved,2026-10-02
+BIZ.TT,Technology Transfer,business,기술이전|공정 이전|tech transfer,TT,,,,기술|이전|공정|사이트|transfer|site|process,N,고객 또는 타 사이트의 공정·분석법을 당사 생산 시설로 옮겨 재현하는 과정,Transfer of a process/analytical methods into the receiving manufacturing site,예제,MSAT,approved,2026-10-02
+BIZ.TCO,Total Cost of Ownership,business,총소유비용|총 보유 비용,TCO,,,,,N,고객이 자체 생산할 때의 총비용 — 위탁 가격 비교 기준,"Client's full cost of in-house manufacturing, used as a benchmark for outsourcing price",예제,영업,approved,2026-10-02
+BIZ.SLOT,Manufacturing Slot,business,생산 슬롯|생산 일정 슬롯|capacity slot,,capacity|가동 일정,,,,Y,특정 기간에 고객 배치를 생산하도록 예약된 설비 시간,Reserved equipment time for a client's batches,예제,생산계획,approved,2026-10-02
+CON.MSA,Master Service Agreement,contract,기본 서비스 계약|기본계약|master agreement,MSA,,,,,N,개별 작업(SOW)에 공통으로 적용되는 상위 계약 조건,Umbrella terms governing individual statements of work,예제,법무,approved,2026-10-02
+CON.SOW,Statement of Work,contract,작업 범위 기술서|작업명세서|과업 범위,SOW,,CON.MSA,,,Y,개별 과제의 범위·산출물·일정·가격을 정한 문서,"Scope, deliverables, timeline and price of a specific project",예제,법무,approved,2026-10-02
+CON.QAA,Quality Agreement,contract,품질 협약|품질계약|품질 합의서|quality technical agreement,QAA|QTA,,,,,N,고객과 공급사의 GMP 품질 책임 분담을 정한 협약,Allocation of GMP quality responsibilities between client and supplier,예제,QA,approved,2026-10-02
+CON.CDA,Confidential Disclosure Agreement,contract,비밀유지계약|비밀유지협약|기밀유지계약,CDA|NDA,,,,,N,거래 검토 단계에서 정보 공개 범위와 비밀 유지 의무를 정한 계약,Confidentiality agreement for information exchanged during evaluation,예제,법무,approved,2026-10-02
+CON.MTOP,Minimum Take-or-Pay,contract,최소 구매 약정|최소 인수 약정|take-or-pay|최소 물량 약정,MTOP|TOP,,,,,Y,고객이 약정 최소 물량을 주문하지 않아도 그 대금을 지급하는 조건,Client pays for a committed minimum volume whether or not ordered,예제,영업,approved,2026-10-02
+CON.BINDING_FC,Binding Forecast,contract,확정 예측 물량|구속력 있는 예측|binding forecast,,rolling forecast|예측 물량,,,,Y,일정 기간 앞의 주문 예측 중 변경·취소가 제한되는 확정 구간,Portion of the order forecast that is firm and cannot be reduced,예제,영업,approved,2026-10-02
+CON.RESERVATION,Reservation Fee,contract,예약금|슬롯 예약금|capacity reservation fee,,선수금|deposit,,,,Y,생산 슬롯을 확보하기 위해 고객이 미리 내는 금액,Fee paid to secure manufacturing capacity,예제,영업,approved,2026-10-02
+CON.CANCEL_FEE,Cancellation Fee,contract,취소 수수료|위약금|취소 위약금,,penalty,,,,Y,예약 배치를 고객이 취소할 때 시점에 따라 부과하는 금액,"Charge for client cancellation of reserved batches, tiered by notice period",예제,법무,approved,2026-10-02
+CON.PRICE_CAP,Annual Price Adjustment Cap,contract,연간 가격 조정 상한|가격 인상 상한|escalation cap|price escalation cap,,물가 연동|CPI 연동,,,,Y,계약 기간 중 단가를 매년 올릴 수 있는 최대 비율,Maximum annual unit-price increase allowed during the term,예제,영업,approved,2026-10-02
+CON.FTE,Full-Time Equivalent,contract,인력 환산|상근 인력 기준,FTE,,,,인력|과금|요율|rate|staff|개발,N,개발 과제를 투입 인력(상근 기준) 단위로 과금하는 방식,Billing development work by full-time-equivalent staff,예제,영업,approved,2026-10-02
+REG.GMP,Good Manufacturing Practice,regulatory,우수의약품 제조 및 품질관리기준|의약품 제조품질관리기준,GMP|cGMP,,,,,N,의약품 제조·품질관리의 법적 기준(cGMP = 현행 GMP),Regulatory standard for drug manufacturing and quality control,예제,QA,approved,2026-10-02
+REG.BLA,Biologics License Application,regulatory,생물의약품 허가신청|바이오의약품 허가신청,BLA,,,,,N,미국 FDA에 생물의약품 판매 허가를 신청하는 절차·서류,FDA marketing application for a biologic,예제,RA,approved,2026-10-02
+REG.IND,Investigational New Drug,regulatory,임상시험계획 승인신청|임상시험 신청,IND,,,,임상|FDA|신청|clinical|filing,N,사람 대상 임상시험 개시를 위해 규제기관에 내는 신청,Application to begin human clinical trials,예제,RA,approved,2026-10-02
+REG.PAI,Pre-Approval Inspection,regulatory,허가 전 실사|허가전 실사|사전승인 실사,PAI,,,,,N,허가 심사 중 규제기관이 생산 시설을 점검하는 실사,Regulatory site inspection during application review,예제,QA,approved,2026-10-02
+REG.FDA,U.S. Food and Drug Administration,regulatory,미국 식품의약국|미 FDA,FDA,,,,,N,미국 의약품 규제기관,US drug regulator,예제,RA,approved,2026-10-02
+REG.EMA,European Medicines Agency,regulatory,유럽 의약품청|유럽의약품청,EMA,,,,,N,EU 의약품 규제기관,EU drug regulator,예제,RA,approved,2026-10-02
+REG.MFDS,Ministry of Food and Drug Safety,regulatory,식품의약품안전처|식약처,MFDS|KFDA,,,,,N,한국 의약품 규제기관(KFDA는 옛 표기),Korean drug regulator (KFDA is the former name),예제,RA,approved,2026-10-02
+REG.PMDA,Pharmaceuticals and Medical Devices Agency,regulatory,일본 의약품의료기기종합기구,PMDA,,,,,N,일본 의약품 규제기관,Japanese drug regulator,예제,RA,approved,2026-10-02
+REG.ANNEX1,EU GMP Annex 1,regulatory,애넥스 1|무균의약품 제조 기준|Annex 1,,sterile manufacturing|무균 공정,,,,Y,EU GMP 무균의약품 제조 부속서(기준 지역: EU),EU GMP annex on manufacture of sterile medicinal products,예제,QA,approved,2026-10-02
+REG.ICH,International Council for Harmonisation,regulatory,국제의약품규제조화위원회|ICH 가이드라인,ICH,,,,,N,의약품 규제 기준의 국제 조화 가이드라인 기구(예: Q7·Q8·Q9·Q10),"International harmonised guideline body (e.g., Q7–Q10)",예제,RA,approved,2026-10-02
+QUAL.QA,Quality Assurance,quality,품질보증|품질 보증,QA,,,,품질|보증|GMP|감사|audit|deviation|release|출하|일탈,N,GMP 체계 전반(문서·일탈·변경·출하 승인)을 보증하는 조직·활동(질문-답변 'QA'와 구분),Function assuring the GMP quality system (not Q&A),예제,QA,approved,2026-10-02
+QUAL.QC,Quality Control,quality,품질관리|품질 시험|품질관리 시험,QC,,,,시험|분석|품질|test|assay|release|lab,N,원료·공정·제품 시험을 수행하는 조직·활동,"Laboratory testing of materials, in-process and product",예제,QC,approved,2026-10-02
+QUAL.CAPA,Corrective and Preventive Action,quality,시정 및 예방 조치|시정조치|예방조치,CAPA,,QUAL.DEV,,,Y,일탈·불만의 근본 원인을 고치고 재발을 막는 조치,Actions addressing root cause and preventing recurrence,예제,QA,approved,2026-10-14
+QUAL.DEV,Deviation,quality,일탈|공정 일탈|deviation event,,이상|nonconformance|부적합,,,,Y,승인된 절차·기준에서 벗어난 사건,Departure from an approved procedure or standard,예제,QA,approved,2026-10-02
+QUAL.OOS,Out of Specification,quality,기준 일탈 결과|규격 이탈|시험 기준 초과,OOS,,,,,N,시험 결과가 승인 규격을 벗어난 경우,Test result outside approved specification,예제,QC,approved,2026-10-02
+QUAL.OOT,Out of Trend,quality,경향 이탈|추세 이탈,OOT,,,,,N,규격 안이지만 과거 추세에서 벗어난 결과,Result within spec but outside historical trend,예제,QC,approved,2026-10-02
+QUAL.COA,Certificate of Analysis,quality,시험성적서|분석증명서,CoA|COA,,,,,N,배치의 시험 결과와 규격 적합을 증명하는 문서,Batch test results vs specification,예제,QC,approved,2026-10-02
+QUAL.CQA,Critical Quality Attribute,quality,핵심 품질 특성|중요 품질 특성,CQA,,,QUAL.CPP,,N,제품 품질에 영향이 커서 범위 안에 관리해야 하는 특성,Quality attribute that must be controlled within limits,예제,MSAT,approved,2026-10-02
+QUAL.CPP,Critical Process Parameter,quality,핵심 공정 변수|중요 공정 파라미터,CPP,,,QUAL.CQA,,N,CQA에 영향을 주는 공정 변수,Process parameter impacting a CQA,예제,MSAT,approved,2026-10-02
+QUAL.SOP,Standard Operating Procedure,quality,표준작업절차서|표준 운영 절차,SOP,,,,,Y,작업을 일관되게 수행하기 위한 승인 절차서,Approved procedure for consistent execution,예제,QA,approved,2026-10-02
+QUAL.PV,Process Validation,quality,공정 밸리데이션|공정 검증,PV,,,,공정|밸리데이션|validation|PPQ,N,공정이 일관되게 규격 제품을 만드는지 입증하는 활동(설계–적격성 평가–지속 검증),Lifecycle evidence that the process consistently meets quality,예제,MSAT,approved,2026-10-02
+QUAL.PPQ,Process Performance Qualification,quality,공정 성능 적격성 평가|공정성능 적격성 평가|PPQ 배치,PPQ,,QUAL.PV,,,N,상업 생산 전 연속 배치(보통 3배치)로 공정 재현성을 입증하는 단계,Commercial-scale consecutive batches demonstrating reproducibility,예제,MSAT,approved,2026-10-02
+QUAL.CC,Change Control,quality,변경관리|변경 관리|change management,CC,,,,변경|change|승인|QA,N,공정·시설·문서 변경의 영향 평가와 승인 절차,Assessment and approval of changes,예제,QA,approved,2026-10-02
+QUAL.AUDIT,Customer Audit,quality,고객 실사|고객 감사|공급사 실사|supplier audit,,inspection|점검,,,,Y,고객이 공급사 GMP 체계를 점검하는 실사,Client audit of the supplier's GMP system,예제,QA,approved,2026-10-02
+QUAL.VISINSP,Visual Inspection,quality,육안검사|외관 검사|이물 검사,VI,,,,육안|외관|이물|inspection|vial|syringe|particle|충전,N,충전 용기의 이물·외관 결함을 검사(VI가 바이러스 불활화와 겹침 — 문맥 조건 필수),Inspection of filled units for particles/defects (ambiguous with Viral Inactivation),예제,QC,approved,2026-10-02
+QUAL.ENDOTOXIN,Endotoxin,quality,엔도톡신|내독소|bacterial endotoxin,,LAL|발열성,,,,Y,그람음성균 세포벽 유래 발열성 물질(단위 EU/mL),Pyrogenic component of Gram-negative bacteria (EU/mL),예제,QC,approved,2026-10-02
+QUAL.HCP,Host Cell Protein,quality,숙주세포 단백질|숙주세포단백질,HCP,,,,,N,생산 세포 유래 불순물 단백질(ppm 또는 ng/mg),Process-related impurity from production cells,예제,QC,approved,2026-10-02
+QUAL.HMW,High Molecular Weight Species,quality,고분자량 응집체|응집체|aggregate,HMW,,,QUAL.LMW,,N,단량체보다 큰 응집 형태(%),Aggregated species above monomer (%),예제,QC,approved,2026-10-02
+QUAL.LMW,Low Molecular Weight Species,quality,저분자량 분해물|단편,LMW,,,QUAL.HMW,,N,단량체보다 작은 분해 형태(%),Fragment species below monomer (%),예제,QC,approved,2026-10-02
+QUAL.BIOBURDEN,Bioburden,quality,미생물 오염도|바이오버든,,미생물 한도,,,,Y,공정 중 미생물 수(CFU),Microbial count in process (CFU),예제,QC,approved,2026-10-02
+QUAL.DAR,Drug-to-Antibody Ratio,quality,약물 항체 비율|약물-항체 비,DAR,,MOD.ADC,,약물 항체 비율|payload|linker|ADC|결합,N,ADC 항체 1개당 결합된 약물 수의 평균,Average payloads per antibody in an ADC,예제,QC,approved,2026-10-14
+QUAL.LRV,Log Reduction Value,quality,로그 감소값|바이러스 제거 로그값,LRV,,,PROC.VI|PROC.VF,,N,바이러스 제거·불활화 단계의 감소 능력(log10),Viral clearance capability of a step (log10),예제,MSAT,approved,2026-10-02
+PROC.USP,Upstream Processing,process,상류 공정|배양 공정|업스트림,USP,,,,,N,세포 배양으로 목적 단백질을 생산하는 단계,Cell culture production of the product,예제,MSAT,approved,2026-10-02
+PROC.DSP,Downstream Processing,process,하류 공정|정제 공정|다운스트림,DSP,,,,,N,수확액에서 목적 단백질을 정제하는 단계,Purification of the product from harvest,예제,MSAT,approved,2026-10-02
+PROC.SEED,Seed Train,process,종균 배양|시드 트레인|세포 증식 단계,,,PROC.USP,,,Y,생산 반응기 접종 전 세포를 단계적으로 늘리는 배양,Stepwise cell expansion before the production bioreactor,예제,MSAT,approved,2026-10-02
+PROC.BIOREACTOR,Bioreactor,process,생물반응기|배양기|바이오리액터,,SUB|single-use bioreactor|일회용 반응기,PROC.USP,,,Y,"세포 배양 용기(규모 L 단위, 예: 2,000L·15,000L)",Cell culture vessel (scale in L),예제,MSAT,approved,2026-10-02
+PROC.FEDBATCH,Fed-batch Culture,process,유가식 배양|페드배치,,,PROC.USP,PROC.PERFUSION,,Y,배양 중 영양분을 추가하며 기간 끝에 한 번 수확,Culture with nutrient feeds and single harvest,예제,MSAT,approved,2026-10-02
+PROC.PERFUSION,Perfusion Culture,process,관류 배양|연속 배양,,,PROC.USP,PROC.FEDBATCH,,Y,배지를 계속 교체하며 장기간 배양·수확,Continuous media exchange and harvest,예제,MSAT,approved,2026-10-02
+PROC.HARVEST,Harvest,process,수확|세포 제거|clarification,,원심분리|depth filtration,PROC.DSP,,,Y,배양액에서 세포를 제거해 정제 원료를 얻는 단계,Removal of cells to obtain clarified harvest,예제,MSAT,approved,2026-10-02
+PROC.PROA,Protein A Chromatography,process,단백질 A 크로마토그래피|Protein A|프로틴 A|capture chromatography,ProA,,PROC.DSP,,,Y,항체를 선택적으로 붙잡는 첫 정제(포획) 단계,Affinity capture step for antibodies,예제,MSAT,approved,2026-10-02
+PROC.VI,Viral Inactivation,process,바이러스 불활화|바이러스 비활성화|virus inactivation,VI,low pH hold|저 pH 유지|solvent/detergent,PROC.DSP,PROC.VF|QUAL.LRV,pH|hold|virus|바이러스|불활화|DSP|정제,N,저 pH 유지 등으로 바이러스를 불활화하는 정제 단계(VI가 육안검사와 겹침 — 문맥 조건 필수),"Purification step inactivating viruses, e.g., low-pH hold",예제,MSAT,approved,2026-10-02
+PROC.VF,Viral Filtration,process,바이러스 여과|나노여과|nanofiltration,VF,,PROC.DSP,PROC.VI|QUAL.LRV,,N,미세 필터로 바이러스를 물리적으로 제거,Size-based viral removal by nanofilters,예제,MSAT,approved,2026-10-02
+PROC.POLISH,Polishing Chromatography,process,폴리싱|미세 정제|AEX|CEX,,음이온 교환|양이온 교환,PROC.DSP,,,Y,포획 후 불순물(HCP·응집체)을 줄이는 크로마토그래피,Chromatography removing residual impurities after capture,예제,MSAT,approved,2026-10-02
+PROC.UFDF,Ultrafiltration/Diafiltration,process,한외여과/투석여과|한외여과|UF/DF|UFDF,UF/DF,,PROC.DSP,,,N,농축과 완충액 교환으로 최종 제형 조건을 맞추는 단계,Concentration and buffer exchange to final formulation,예제,MSAT,approved,2026-10-02
+PROC.DS,Drug Substance,process,원료의약품|원액|bulk drug substance,DS|BDS,API,,,원료의약품|원료|원액|bulk|정제|substance,N,정제를 마친 유효성분(완제 충전 전),Purified active ingredient before fill,예제,MSAT,approved,2026-10-14
+PROC.DP,Drug Product,process,완제의약품|완제품|제제|finished product|filled drug product,DP,,,,완제의약품|완제품|완제|충전|바이알|vial|syringe|제형|fill|product,N,원료의약품을 제형·충전한 최종 제품(DP가 데이터 포인트와 겹침 — 문맥 조건),Formulated and filled final product,예제,MSAT,approved,2026-10-14
+PROC.FF,Fill & Finish,process,충전·마감|무균 충전|완제 충전|fill-finish,F&F,,PROC.DP,PROC.LYO,,N,원료의약품을 바이알·주사기에 무균 충전하고 마감,Aseptic filling into vials/syringes and finishing,예제,생산,approved,2026-10-02
+PROC.LYO,Lyophilization,process,동결건조|냉동건조,Lyo,,PROC.FF,,,N,충전 후 수분을 승화로 제거해 안정성을 높이는 공정,Freeze-drying after fill for stability,예제,생산,approved,2026-10-02
+PROC.CIPSIP,Clean-in-Place / Steam-in-Place,process,정치 세척|정치 멸균|CIP/SIP,CIP|SIP,,,,,Y,설비를 분해하지 않고 세척·증기 멸균,In-situ cleaning and steam sterilization,예제,생산,approved,2026-10-02
+PROC.TITER,Titer,process,역가|생산성|발현량|titer,,volumetric productivity|생산량,,,,Y,배양액 단위 부피당 목적 단백질 양(g/L),Product concentration in culture (g/L),예제,MSAT,approved,2026-10-02
+PROC.VCD,Viable Cell Density,process,생존 세포 농도|생세포 농도,VCD,,,,,N,배양액 단위 부피당 살아 있는 세포 수(×10^6 cells/mL),Live cells per mL,예제,MSAT,approved,2026-10-02
+PROC.ENGRUN,Engineering Run,process,엔지니어링 배치|엔지니어링 런|시험 생산,,,,QUAL.PPQ|BIZ.TT,,Y,기술이전 후 GMP 전 공정 재현성을 확인하는 시험 생산,Pre-GMP run confirming process transfer,예제,MSAT,approved,2026-10-02
+PROC.BATCH,Batch,process,배치|로트|lot|생산 배치|제조번호,,run|campaign,,PROC.BATCH_RECORD|PROC.BATCH_SIZE,,Y,한 번의 생산 단위(동일 조건·동일 식별번호),Single production unit under one identifier,예제,생산,approved,2026-10-14
+PROC.SCALEUP,Scale-up,process,스케일업|규모 확대|scale up,,,,,,Y,실험실·임상 규모에서 상업 규모로 생산 규모를 키우는 일,Increasing production scale toward commercial,예제,MSAT,approved,2026-10-02
+MOD.MAB,Monoclonal Antibody,modality,단일클론항체|단클론항체|단일클론 항체|monoclonal antibody,mAb|MAB,,,,,N,단일 항원 부위에 결합하는 항체 의약품,Antibody binding a single epitope,예제,영업,approved,2026-10-02
+MOD.BSAB,Bispecific Antibody,modality,이중항체|이중특이항체|bispecific,bsAb|BsAb|BiTE,,MOD.MAB,,,N,서로 다른 두 항원에 동시에 결합하는 항체,Antibody binding two different antigens,예제,영업,approved,2026-10-02
+MOD.ADC,Antibody–Drug Conjugate,modality,항체약물접합체|항체-약물 접합체|antibody-drug conjugate,ADC,payload|linker|접합,,QUAL.DAR,,N,항체에 링커로 세포독성 약물(payload)을 붙인 의약품,Antibody linked to a cytotoxic payload,예제,영업,approved,2026-10-02
+MOD.FUSION,Fusion Protein,modality,융합단백질|Fc 융합단백질|Fc-fusion,,,,,,Y,단백질에 항체 Fc 등을 붙여 반감기·기능을 늘린 의약품,Protein fused to Fc or other domains,예제,영업,approved,2026-10-02
+MOD.VACCINE,Vaccine,modality,백신|예방백신,,항원|adjuvant|면역증강제,,,,Y,면역 반응을 유도해 질병을 예방하는 의약품,Product inducing protective immunity,예제,영업,approved,2026-10-02
+MOD.MRNA,mRNA Therapeutic,modality,mRNA 의약품|메신저 RNA|mRNA 백신,mRNA,LNP|지질나노입자,,,,N,mRNA를 지질나노입자(LNP)로 전달해 단백질을 만들게 하는 의약품,mRNA delivered by lipid nanoparticles,예제,영업,approved,2026-10-02
+MOD.PDNA,Plasmid DNA,modality,플라스미드 DNA|플라스미드,pDNA,,,,,N,mRNA·바이러스 벡터 생산의 출발 물질로 쓰는 원형 DNA,Circular DNA used as starting material,예제,영업,approved,2026-10-02
+MOD.AAV,Adeno-Associated Virus Vector,modality,AAV 벡터|아데노 연관 바이러스|유전자치료 벡터,AAV,viral vector|바이러스 벡터|gene therapy,,,,N,유전자를 세포에 전달하는 바이러스 벡터(유전자치료제),Viral vector for gene therapy,예제,영업,approved,2026-10-02
+MOD.CART,CAR-T Cell Therapy,modality,CAR-T 세포치료제|키메라 항원 수용체 T세포,CAR-T,cell therapy|세포치료,,,,N,환자 T세포를 유전자 변형해 암세포를 공격하게 하는 세포치료제,Engineered T-cell therapy,예제,영업,approved,2026-10-02
+MOD.BIOSIMILAR,Biosimilar,modality,바이오시밀러|바이오 동등 의약품|동등생물의약품,,follow-on biologic,,,,Y,허가된 바이오의약품과 품질·효능이 동등함을 입증한 의약품,Biologic shown highly similar to a reference product,예제,영업,approved,2026-10-02
+PRD.TRASTUZUMAB,trastuzumab,product_example,트라스투주맙|Herceptin|허셉틴,,,MOD.MAB,,,Y,HER2 표적 단일클론항체(유방암·위암) — 예시,HER2-targeted mAb (example),공개 의약품,,approved,2026-10-02
+PRD.PEMBROLIZUMAB,pembrolizumab,product_example,펨브롤리주맙|Keytruda|키트루다,,,MOD.MAB,,,Y,PD-1 면역관문억제 단일클론항체 — 예시,PD-1 checkpoint inhibitor mAb (example),공개 의약품,,approved,2026-10-02
+PRD.ADALIMUMAB,adalimumab,product_example,아달리무맙|Humira|휴미라,,,MOD.MAB,MOD.BIOSIMILAR,,Y,"TNF-α 표적 단일클론항체, 바이오시밀러 다수 — 예시",TNF-α mAb with multiple biosimilars (example),공개 의약품,,approved,2026-10-02
+PRD.T_DXD,trastuzumab deruxtecan,product_example,트라스투주맙 데룩스테칸|Enhertu|엔허투|T-DXd,,,MOD.ADC,,,Y,HER2 표적 ADC — 예시,HER2-directed ADC (example),공개 의약품,,approved,2026-10-02
+PRD.T_DM1,ado-trastuzumab emtansine,product_example,트라스투주맙 엠탄신|Kadcyla|캐싸일라|T-DM1,,,MOD.ADC,,,Y,HER2 표적 ADC — 예시,HER2-directed ADC (example),공개 의약품,,approved,2026-10-02
+PRD.BLINATUMOMAB,blinatumomab,product_example,블리나투모맙|Blincyto|블린사이토,,,MOD.BSAB,,,Y,CD19×CD3 이중특이 T세포 연결 항체(BiTE) — 예시,CD19×CD3 BiTE bispecific (example),공개 의약품,,approved,2026-10-02
+PRD.BNT162B2,BNT162b2 (tozinameran),product_example,Comirnaty|코미나티|토지나메란,,,MOD.MRNA,,,Y,COVID-19 mRNA 백신 — 예시,COVID-19 mRNA vaccine (example),공개 의약품,,approved,2026-10-02
+ORG.C.PFE,Pfizer Inc.,org_client,화이자|Pfizer|화이자 본사,PFE,,,,,Y,(예제 고객) 글로벌 제약사,,합성 4고객 데이터셋(공개 기업명),영업,approved,2026-10-02
+ORG.C.SOL,Solvantis Biologics Inc.,org_client,솔반티스|Solvantis,SOL,,,,,Y,(가상 고객),,합성 4고객 데이터셋(가상),영업,approved,2026-10-02
+ORG.C.MRH,미르하제약(주),org_client,미르하제약|미르하|Mirha Pharma,MRH,,,,,Y,(가상 고객),,합성 4고객 데이터셋(가상),영업,approved,2026-10-02
+ORG.C.CRB,청람바이오(주),org_client,청람바이오|청람|Cheongram Bio,CRB,,,,,Y,(가상 고객),,합성 4고객 데이터셋(가상),영업,approved,2026-10-02
+ORG.C.HBL,"Hanbit Biologics Co., Ltd.",org_client,한빛바이오로직스|한빛바이오|Hanbit Biologics,HBL,,,,,Y,(가상 고객),,합성 xling 데이터셋(가상 — BR41 XL008),영업,approved,2026-10-11
+ORG.B.SAMSUNG,Samsung Biologics,org_cdmo,삼성바이오로직스|삼성 바이오로직스|삼바,SBL,,,,,Y,(표기 예시) 국내 CDMO,,공개 기업명,,approved,2026-10-02
+ORG.B.LONZA,Lonza,org_cdmo,론자|Lonza Group,,,,,,Y,(표기 예시) CDMO,,공개 기업명,,approved,2026-10-02
+ORG.B.WUXI,WuXi Biologics,org_cdmo,우시바이오로직스|우시 바이오로직스|WuXi Bio,,,,,,Y,(표기 예시) CDMO,,공개 기업명,,approved,2026-10-02
+ORG.B.FUJIFILM,Fujifilm Diosynth Biotechnologies,org_cdmo,후지필름 다이오신스|후지필름 디오신스|Fujifilm Diosynth,FDB,,,,,Y,(표기 예시) CDMO,,공개 기업명,,approved,2026-10-02
+ORG.B.BI,Boehringer Ingelheim BioXcellence,org_cdmo,베링거인겔하임|베링거인겔하임 바이오엑설런스|BI BioXcellence,,,,,,Y,(표기 예시) CDMO,,공개 기업명,,approved,2026-10-02
+ORG.B.AGC,AGC Biologics,org_cdmo,AGC 바이오로직스,,,,,,Y,(표기 예시) CDMO,,공개 기업명,,approved,2026-10-02
+ORG.B.CELLTRION,Celltrion,org_cdmo,셀트리온,,,,,,Y,(표기 예시) 바이오 기업 — 약어 CT는 임상시험과 겹쳐 등록하지 않음,,공개 기업명,,approved,2026-10-02
+ORG.I.KKR,KKR,org_investor,케이케이알|Kohlberg Kravis Roberts,,,,,,Y,(표기 예시) 투자사,,공개 기업명,,approved,2026-10-02
+ORG.I.BLACKSTONE,Blackstone,org_investor,블랙스톤,,,,,,Y,(표기 예시) 투자사,,공개 기업명,,approved,2026-10-02
+ORG.I.NOVOHOLDINGS,Novo Holdings,org_investor,노보 홀딩스|노보홀딩스,,,,,,Y,(표기 예시) 투자사,,공개 기업명,,approved,2026-10-02
+MODCODE.ADC,ADC,modality_code,,,,MOD.ADC,,,Y,집계·구조화 모달리티 코드(DT1 c1) — contract_master.modality 저장 값과 그대로 일치,Aggregation modality short code (DT1 c1) matching contract_master.modality,예제,,approved,2026-10-08
+MODCODE.MAB,mAb,modality_code,,,,MOD.MAB,,,Y,집계·구조화 모달리티 코드(DT1 c1),Aggregation modality short code (DT1 c1),예제,,approved,2026-10-08
+MODCODE.BISPECIFIC,bispecific,modality_code,이중항체,,,MOD.BSAB,,,Y,집계·구조화 모달리티 코드(DT1 c1),Aggregation modality short code (DT1 c1),예제,,approved,2026-10-08
+MODCODE.VACCINE,vaccine,modality_code,백신,,,MOD.VACCINE,,,Y,집계·구조화 모달리티 코드(DT1 c1),Aggregation modality short code (DT1 c1),예제,,approved,2026-10-08
+ORG.I.KIP,Korea Investment Partners,org_investor,한국투자파트너스|한투파,KIP,,,,,Y,(표기 예시) 국내 벤처캐피털,,공개 기업명,,approved,2026-10-02
+BIZ.QUESTIONNAIRE,Questionnaire,business,설문서|질의서|실사 질문지|due diligence questionnaire|quality questionnaire|security questionnaire,,,,BIZ.RFI,,N,고객이 공급사의 역량·품질·보안 체계를 점검하기 위해 보내는 질의 문서(실사 질문지·품질/보안 설문 포함),"Document a client sends to assess a supplier's capabilities, quality or security practices (incl. due-diligence/quality/security questionnaires)",예제,영업,approved,2026-10-14
+PROC.BATCH_RECORD,Batch Manufacturing Record,process,배치기록|배치 기록|제조기록|Batch Record,BMR,,,PROC.BATCH,,N,한 배치의 생산·점검 기록을 모은 문서(배치 기록),Document set recording the production and checks for one batch,예제,생산,approved,2026-10-14
+PROC.BATCH_SIZE,Batch Size,process,배치 크기|배치 규모|배치 사이즈,,,,PROC.BATCH,,N,한 배치에서 생산하는 물량 규모,Production quantity per batch,예제,생산,approved,2026-10-14
+BIZ.CAPACITY,Manufacturing Capacity,business,캐파|생산능력|생산 능력|설비 용량|생산 용량|capacity,capa,,,BIZ.SLOT,L|kL|리터|킬로리터|바이오리액터|bioreactor|생산능력|캐파|capacity|용량|증설|확대|설비 용량|생산 용량|라인 증설|공장 증설,N,"생산 설비가 일정 기간 처리할 수 있는 최대 물량·규모(생산능력·설비 용량, 단위 L·kL 등) — 품질 용어 CAPA(시정 및 예방 조치)와 다름","Maximum production volume or equipment scale a facility can process in a period (capacity, in L/kL, etc.) — distinct from quality term CAPA",예제,생산계획,approved,2026-10-14
+PROC.YIELD,Yield,process,수율|공정 수율|생산 수율|recovery,,,,PROC.TITER,,N,투입·이론치 대비 실제로 얻은 목적 물질의 비율(%),Actual product recovered relative to theoretical/input amount (%),예제,MSAT,approved,2026-10-14
+QUAL.COC,Certificate of Conformance,quality,적합성증명서|순응증명서|conformance certificate,CoC|COC,,,QUAL.COA,,N,제품이 합의된 사양대로 생산되었음을 공급사가 확인하는 문서(시험 결과 전체는 안 담음 — CoA와 구분),Supplier statement that a batch was made to agreed specs (no full test data; distinct from CoA),예제,QC,approved,2026-10-14
+PROC.CAMPAIGN,Manufacturing Campaign,process,캠페인 생산|생산 캠페인|campaign manufacturing,,,,PROC.BATCH,,N,같은 제품을 설비 전환 없이 연속으로 여러 배치 생산하는 일정 단위,Series of consecutive batches of the same product run without changeover,예제,생산,approved,2026-10-14
+PROC.MCB,Master Cell Bank,process,마스터 세포주은행|모세포은행|주세포은행,MCB,,,PROC.WCB|PROC.CLD,,N,최초로 특성·안정성을 확인해 둔 세포주 원천 보관분(WCB 제조의 출발점),Characterized source stock of a cell line used to generate all Working Cell Banks,예제,MSAT,approved,2026-10-14
+PROC.WCB,Working Cell Bank,process,워킹 세포은행|실무 세포은행|작업용 세포은행,WCB,,,PROC.MCB,,N,MCB에서 증식해 실제 생산(종균 배양)에 쓰는 세포 보관분,Cell stock expanded from the MCB and used for routine production seed trains,예제,MSAT,approved,2026-10-14
+PROC.CLD,Cell Line Development,process,세포주 개발|클론 선별|clone selection,CLD,,,PROC.MCB,,N,목적 단백질을 안정적으로 생산하는 세포주를 선별·구축하는 단계(MCB 제조 전 단계),Selection and construction of a stable production cell line (precedes MCB generation),예제,MSAT,approved,2026-10-14

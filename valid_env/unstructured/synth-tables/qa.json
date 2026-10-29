@@ -1,0 +1,418 @@
+{
+ "set": "synth-tables",
+ "split": "holdout",
+ "scoring": "_synth_images_qa.score",
+ "items": [
+  {
+   "type": "table_supsub",
+   "question": "세포주 CL-03의 최대 생존 세포 밀도는?(지수 표기)",
+   "gold_answer": "4.5×10^5 cells/mL",
+   "answer_keywords": [
+    "4.5",
+    "10^5|10<sup>5|450000|45만"
+   ],
+   "evidence": [
+    {
+     "doc": "tables_styles.docx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "X02",
+    "T01"
+   ],
+   "lang": "ko",
+   "id": "TQ001"
+  },
+  {
+   "type": "table_subscript",
+   "question": "배양 기체 조성에서 CO2 비율은?",
+   "gold_answer": "5% (CO_2)",
+   "answer_keywords": [
+    "5%"
+   ],
+   "evidence": [
+    {
+     "doc": "tables_styles.docx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "X02"
+   ],
+   "lang": "ko",
+   "id": "TQ002"
+  },
+  {
+   "type": "nested_table",
+   "question": "로트 L-2701 세부 시험 결과 중 엔도톡신 값은?",
+   "gold_answer": "<0.05 EU/mL",
+   "answer_keywords": [
+    "0.05"
+   ],
+   "evidence": [
+    {
+     "doc": "tables_styles.docx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "T07"
+   ],
+   "lang": "ko",
+   "id": "TQ003"
+  },
+  {
+   "type": "merged_header",
+   "question": "2026년 하반기 4분기 CDO 실적은?",
+   "gold_answer": "51억원",
+   "answer_keywords": [
+    "51억|51 억"
+   ],
+   "evidence": [
+    {
+     "doc": "tables_styles.docx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "T03"
+   ],
+   "lang": "ko",
+   "id": "TQ004"
+  },
+  {
+   "type": "merged_header",
+   "question": "2026년 상반기 CDMO 실적 합계는?",
+   "gold_answer": "255억원(120+135)",
+   "answer_keywords": [
+    "255"
+   ],
+   "evidence": [
+    {
+     "doc": "tables_styles.docx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "T03",
+    "Q07"
+   ],
+   "lang": "ko",
+   "id": "TQ005"
+  },
+  {
+   "type": "footnote_sup",
+   "question": "클린룸 총 면적과 각주 내용은?",
+   "gold_answer": "1,850 m^2, 각주: 2026-06 증축분 포함",
+   "answer_keywords": [
+    "1850|1,850",
+    "증축"
+   ],
+   "evidence": [
+    {
+     "doc": "tables_styles.docx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "X02"
+   ],
+   "lang": "ko",
+   "id": "TQ006"
+  },
+  {
+   "type": "leader",
+   "question": "견적서의 기본 단가와 긴급 발주 가산율은?",
+   "gold_answer": "1,250,000원, 15%",
+   "answer_keywords": [
+    "1250000",
+    "15%"
+   ],
+   "evidence": [
+    {
+     "doc": "separators_doc.docx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q01",
+    "T08"
+   ],
+   "lang": "ko",
+   "id": "TQ007"
+  },
+  {
+   "type": "odd_delimiter",
+   "question": "견적 결제 조건(선금·잔금 비율)은?",
+   "gold_answer": "선금 30%, 잔금 70%",
+   "answer_keywords": [
+    "30%",
+    "70%"
+   ],
+   "evidence": [
+    {
+     "doc": "separators_doc.docx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q01",
+    "T08"
+   ],
+   "lang": "ko",
+   "id": "TQ008"
+  },
+  {
+   "type": "ascii_table",
+   "question": "문자로 그린 표에서 순도 기준은?",
+   "gold_answer": "≥ 98.5%",
+   "answer_keywords": [
+    "98.5"
+   ],
+   "evidence": [
+    {
+     "doc": "separators_doc.docx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "T08"
+   ],
+   "lang": "ko",
+   "id": "TQ009"
+  },
+  {
+   "type": "separators_pdf",
+   "question": "운전 지침에서 세척 조건(용액·온도·시간)은?",
+   "gold_answer": "0.5 M NaOH, 70 °C, 45 min",
+   "answer_keywords": [
+    "NaOH",
+    "70 °C|70°C",
+    "45 min|45분"
+   ],
+   "evidence": [
+    {
+     "doc": "separators_pdf.pdf"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q01",
+    "T08"
+   ],
+   "lang": "ko",
+   "id": "TQ010"
+  },
+  {
+   "type": "separators_pdf",
+   "question": "운전 지침의 무결성 시험 기준은?",
+   "gold_answer": "3,450 mbar 이상",
+   "answer_keywords": [
+    "3450"
+   ],
+   "evidence": [
+    {
+     "doc": "separators_pdf.pdf"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q01",
+    "T08"
+   ],
+   "lang": "ko",
+   "id": "TQ011"
+  },
+  {
+   "type": "big_table",
+   "question": "청정도 기록에서 시료 S-237의 입자 수와 판정은?",
+   "gold_answer": "3.3(×10^3/m^3), 적합",
+   "answer_keywords": [
+    "S-237~~3.3|3.3",
+    "적합"
+   ],
+   "evidence": [
+    {
+     "doc": "big_table.pdf"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "T02",
+    "T05"
+   ],
+   "lang": "ko",
+   "id": "TQ012"
+  },
+  {
+   "type": "big_table_agg",
+   "question": "2026-05에 채취한 시료 중 판정이 '주의'인 건수는?",
+   "gold_answer": "9건",
+   "answer_keywords": [
+    "9건|9 건|9개|9문항|9 문항|9 개|9곳|9 곳"
+   ],
+   "evidence": [
+    {
+     "doc": "big_table.pdf"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "T02",
+    "Q07"
+   ],
+   "lang": "ko",
+   "id": "TQ013"
+  },
+  {
+   "type": "multi_table",
+   "question": "장비 가동률 표에서 BR-2002의 가동률과 비고는?",
+   "gold_answer": "71%, 점검 2주",
+   "answer_keywords": [
+    "71%",
+    "점검"
+   ],
+   "evidence": [
+    {
+     "doc": "multi_table.xlsx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "T01"
+   ],
+   "lang": "ko",
+   "id": "TQ014"
+  },
+  {
+   "type": "multi_table",
+   "question": "원료 사용 현황에서 2월 Glucose 사용량은?",
+   "gold_answer": "135",
+   "answer_keywords": [
+    "Glucose~~135|135"
+   ],
+   "evidence": [
+    {
+     "doc": "multi_table.xlsx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03"
+   ],
+   "lang": "ko",
+   "id": "TQ015"
+  },
+  {
+   "type": "pptx_table",
+   "question": "2027년 계획에서 L2 라인의 배치 수와 가동률은?",
+   "gold_answer": "18배치, 70%",
+   "answer_keywords": [
+    "18배치|배치 수는 18|배치수는18|배치 수: 18|배치수:18|배치 수 18|배치수18|배치: 18|배치:18|18 batches|18batches|18 batch|18batch",
+    "70%"
+   ],
+   "evidence": [
+    {
+     "doc": "table_plan.pptx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "T03"
+   ],
+   "lang": "ko",
+   "id": "TQ016"
+  },
+  {
+   "type": "nested_html",
+   "question": "로트 L-2702의 Titer와 판정은?",
+   "gold_answer": "4.3 g/L, 적합",
+   "answer_keywords": [
+    "4.3",
+    "적합"
+   ],
+   "evidence": [
+    {
+     "doc": "nested_table.html"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "T07"
+   ],
+   "lang": "ko",
+   "id": "TQ017"
+  },
+  {
+   "type": "multi_doc",
+   "question": "두 로트(L-2701 docx · L-2702 html)의 엔도톡신 결과는 같은가?",
+   "gold_answer": "둘 다 <0.05 EU/mL로 같음",
+   "answer_keywords": [
+    "0.05"
+   ],
+   "evidence": [
+    {
+     "doc": "tables_styles.docx"
+    },
+    {
+     "doc": "nested_table.html"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q04",
+    "T07"
+   ],
+   "lang": "ko",
+   "id": "TQ018"
+  }
+ ]
+}

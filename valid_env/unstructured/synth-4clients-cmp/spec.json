@@ -1,0 +1,91 @@
+{
+ "version": "2026-10-11",
+ "generator": "tools/synthetic_data/gen_synth_4clients.py --cmp-only",
+ "note": "[SYNTHETIC] 통화 인지 비교 문항 전용 — 계약 문서는 synth-4clients의 기존 파일을 그대로 복사(재생성 안 함), fx_rate.txt만 새 문서.",
+ "documents": [
+  {
+   "file": "docs/C-MRH-2020-05.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/C-MRH-2023-02.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/C-PFE-2022-01.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/C-PFE-2024-03.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/C-PFE-2024-04.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/C-PFE-2024-08.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/C-PFE-2025-09.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/C-SOL-2021-03.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/C-SOL-2023-04.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/C-SOL-2024-02.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/scan_C-CRB-2022-01.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/scan_C-MRH-2020-01.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/scan_C-MRH-2022-04.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/scan_C-MRH-2023-03.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/scan_C-MRH-2023-06.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/scan_C-PFE-2021-06.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/scan_C-PFE-2024-02.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/scan_C-PFE-2025-05.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/scan_C-PFE-2025-07.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/scan_C-SOL-2020-01.pdf",
+   "kind": "contract"
+  },
+  {
+   "file": "docs/fx_rate.txt",
+   "kind": "fx_reference"
+  }
+ ]
+}

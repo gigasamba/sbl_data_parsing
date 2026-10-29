@@ -1,0 +1,167 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_xling.py",
+ "split": "dev",
+ "note": "[SYNTHETIC] SI43 한글 질문 × 영어 문서 — 회사·제품 이름 매핑(용어집 회사·제품 동의어 / 명부만 / 어디에도 없음). 내용은 전부 가상, 이름은 표기 시험용",
+ "documents": [
+  {
+   "file": "celltrion_supply_2025.docx",
+   "format": "docx",
+   "lang": "en",
+   "content": "Supply Agreement Summary — Celltrion / Counterparty: Celltrion. Agreement ID: XL-SA-2025-01. / Contracted volume: 12 batches of drug substance. Manufacturing site: Plant 3. / Unit price: USD 1.8M per batch. Term: 24 months from 2025-04-01.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "fujifilm_supply_2025.txt",
+   "format": "txt",
+   "lang": "en",
+   "content": "Supply Agreement Summary — Fujifilm Diosynth Biotechnologies / Counterparty: Fujifilm Diosynth. Agreement ID: XL-SA-2025-02. / Contracted volume: 10 batches of drug substance. Manufacturing site: Plant 1. / Unit price: USD 1.6M per batch. Term: 18 months from 2025-06-01.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "samsung_biologics_quote_2025.txt",
+   "format": "txt",
+   "lang": "en",
+   "content": "Quotation — Samsung Biologics / Quote ID: XL-Q-2025-07. Scope: 2,000 L fed-batch, 4 batches. / Price per batch: USD 2.1M. Valid until 2025-12-31.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "lonza_capacity_2024.docx",
+   "format": "docx",
+   "lang": "en",
+   "content": "Capacity Review — Lonza / Available bioreactor capacity: 20,000 L across two suites. / Earliest slot: 2024-Q4. Review owner: Supply Planning.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "wuxi_biologics_rfi_2026.txt",
+   "format": "txt",
+   "lang": "en",
+   "content": "RFI Response Request — WuXi Biologics / RFI ID: XL-RFI-2026-03. Response due: 2026-02-27. / Topics: tech transfer timeline, viral clearance data, batch record format.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "hanbit_biologics_contract_2025.docx",
+   "format": "docx",
+   "lang": "en",
+   "content": "Master Services Agreement — Hanbit Biologics / Counterparty: Hanbit Biologics Co., Ltd. Agreement ID: XL-MSA-2025-11. / Term: 36 months. Governing law: Republic of Korea.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "daon_therapeutics_msa_2026.txt",
+   "format": "txt",
+   "lang": "en",
+   "content": "Master Services Agreement — Daon Therapeutics / Counterparty: Daon Therapeutics Inc. Agreement ID: XL-MSA-2026-02. / Signed on 2026-03-14. Term: 48 months.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "herceptin_biosimilar_note_2024.txt",
+   "format": "txt",
+   "lang": "en",
+   "content": "Process Note — Herceptin biosimilar (trastuzumab) / Downstream step yield: 82% (average of 3 runs). / Next campaign: 2024-11.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "keytruda_fill_finish_2025.docx",
+   "format": "docx",
+   "lang": "en",
+   "content": "Fill-Finish Schedule — Keytruda (pembrolizumab) program / Fill-finish start date: 2025-09-15. Lots planned: 6.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "청람바이오_견적_2025.txt",
+   "format": "txt",
+   "lang": "ko",
+   "content": "견적서 — 청람바이오(주) / 견적 번호: XL-Q-2025-KO-1. 범위: 500 L 배치 3건. / 배치당 단가: USD 0.9M. 유효 기간: 2025-11-30.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "pfizer_global_supply_2026.txt",
+   "format": "txt",
+   "lang": "en",
+   "content": "Supply Agreement Summary — Pfizer Inc. / Counterparty: Pfizer Inc. Agreement ID: XL-SA-2026-07. / Contracted volume: 8 batches of drug substance. Manufacturing site: Plant 2. / Unit price: USD 2.4M per batch. Term: 30 months from 2026-01-01.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "pfizer_rfi_2026.docx",
+   "format": "docx",
+   "lang": "en",
+   "content": "RFI Response Request — Pfizer Inc. / RFI ID: XL-RFI-2026-09. Response due: 2026-05-20. / Topics: fill-finish capacity, batch release timeline.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "mirha_capacity_2026.txt",
+   "format": "txt",
+   "lang": "en",
+   "content": "Capacity Review — MIRHA / Available bioreactor capacity: 15,000 L across three suites. / Earliest slot: 2026-Q2. Review owner: Supply Planning.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "mirha_quote_2026.docx",
+   "format": "docx",
+   "lang": "en",
+   "content": "Quotation — MIRHA / Quote ID: XL-Q-2026-03. Scope: 1,500 L fed-batch, 5 batches. / Price per batch: USD 1.3M. Valid until 2026-10-31.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "화이자_한국지사_계약_2026.txt",
+   "format": "txt",
+   "lang": "ko",
+   "content": "계약 요약 — 화이자 한국지사 / 상대방: 화이자. 계약번호: XL-SA-2026-KO-2. / 계약 배치 수: 6건. 생산 공장: 3공장. / 배치당 단가: USD 2.0M. 계약 기간: 2026-02-01부터 24개월.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  },
+  {
+   "file": "미르하_용량검토_2026.txt",
+   "format": "txt",
+   "lang": "ko",
+   "content": "용량 검토 — 미르하 / 가용 바이오리액터 용량: 12,000 L, 두 개 라인. / 최단 가능 시점: 2026년 3분기.",
+   "facts": [],
+   "elements": [
+    "본문"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,210 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_edw.py",
+ "split": "holdout",
+ "note": "[SYNTHETIC]",
+ "documents": [
+  {
+   "file": "edw/contract_master.csv",
+   "format": "csv(EDW 계약 마스터)",
+   "elements": [
+    "정형 데이터 8행"
+   ],
+   "content": "계약 ID·고객·총액·공장·제품·배치 수·기간",
+   "expect": "행 단위 값",
+   "facts": [
+    {
+     "kw": [
+      "C-EDW-2026-008~~34500000"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "C-EDW-2025-004~~Plant3"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "rfp_kestrel_2023.pdf",
+   "format": "pdf",
+   "elements": [
+    "RFP",
+    "계약 ID 기입"
+   ],
+   "content": "계약 번호 기입",
+   "expect": "고객·제품·규모·시기 글자",
+   "facts": [
+    {
+     "kw": [
+      "KST-mAb-01"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "rfi_kestrel_adc_2024.docx",
+   "format": "docx",
+   "elements": [
+    "RFI",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "별칭 Kestrel Bio + 제품 코드 변형(KST ADC-02) + ADC + 6배치·2024 하반기",
+   "expect": "고객·제품·규모·시기 글자",
+   "facts": [
+    {
+     "kw": [
+      "KST ADC-02"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "rfp_aurelion_bsab.xlsx",
+   "format": "xlsx",
+   "elements": [
+    "RFP",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "Aurelion + AUR-BsAb-01 + 8배치·2024 Q1",
+   "expect": "고객·제품·규모·시기 글자",
+   "facts": [
+    {
+     "kw": [
+      "AUR-BsAb-01"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "rfi_cheongwoon_vaccine.eml",
+   "format": "eml",
+   "elements": [
+    "RFI",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "별칭 CWB·청운바이오 + CWB-VAC-01 + 10배치·2025-01",
+   "expect": "고객·제품·규모·시기 글자",
+   "facts": [
+    {
+     "kw": [
+      "CWB-VAC-01"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "rfp_brightwater_2025.pdf",
+   "format": "pdf",
+   "elements": [
+    "RFP",
+    "계약 ID 기입"
+   ],
+   "content": "계약 번호 기입(별칭 Brightwater Tx)",
+   "expect": "고객·제품·규모·시기 글자",
+   "facts": [
+    {
+     "kw": [
+      "BWT-mAb-02"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "rfp_aurelion_mab_2025.docx",
+   "format": "docx",
+   "elements": [
+    "RFP",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "Aurelion 계약 2건 중 제품(AUR-mAb-03)·시기로 구분",
+   "expect": "고객·제품·규모·시기 글자",
+   "facts": [
+    {
+     "kw": [
+      "AUR-mAb-03"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "rfi_cheongwoon_mab_2026.docx",
+   "format": "docx",
+   "elements": [
+    "RFI",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "청운바이오 계약 2건 중 제품(mAb)·시기로 구분",
+   "expect": "고객·제품·규모·시기 글자",
+   "facts": [
+    {
+     "kw": [
+      "CWB mAb-02"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "rfp_kestrel_renewal_2026.pdf",
+   "format": "pdf",
+   "elements": [
+    "RFP",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "같은 제품 KST-mAb-01 계약 2건(2023·2026) 중 시기·물량으로 구분",
+   "expect": "고객·제품·규모·시기 글자",
+   "facts": [
+    {
+     "kw": [
+      "KST-mAb-01"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "rfp_halcyon_2025.docx",
+   "format": "docx",
+   "elements": [
+    "RFP",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "계약 마스터에 없는 고객·실주",
+   "expect": "고객·제품·규모·시기 글자",
+   "facts": [
+    {
+     "kw": [
+      "HAL-mAb-01"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "rfi_aurelion_cgt_2026.pdf",
+   "format": "pdf",
+   "elements": [
+    "RFI",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "같은 고객이지만 계약에 없는 제품(CGT)",
+   "expect": "고객·제품·규모·시기 글자",
+   "facts": [
+    {
+     "kw": [
+      "AUR-CGT-01"
+     ],
+     "source": "text"
+    }
+   ]
+  }
+ ]
+}

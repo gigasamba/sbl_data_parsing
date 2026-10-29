@@ -1,0 +1,6 @@
+Account_Id,Account_Name,Account_Name_KR,Alias_List,Account_Type,Billing_Country,Parent_Id,Account_Status
+C0001,Hanbit Biologics,한빛바이오로직스,Hanbit Biologics Co. Ltd.;한빛바이오,Customer,KR,,Active
+C0001,Hanbit Biologics,,Hanbit Bio,Customer,KR,,Active
+C0002,Hanbit Biologics USA,,Hanbit USA,Customer,US,C0001,Active
+C0003,Mirae Therapeutics,미래테라퓨틱스,Mirae Tx|미래테라,Prospect,KR,,Active
+C0009,Old Pharm,올드팜,,Customer,KR,,Inactive

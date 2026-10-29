@@ -1,0 +1,72 @@
+{
+  "agent_id": "figure_judge",
+  "owner": "developer",
+  "description": "독립 추출과 우리 기록을 대조한 자동 diff를 감사(검토 루프 판정자)",
+  "kind": "pipeline",
+  "model_role": "vlm_judge",
+  "classification": "internal",
+  "budget": {
+    "model_calls": 1
+  },
+  "local_tools": [],
+  "prompt_ids": [
+    "judge"
+  ],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "items",
+      "verdict"
+    ],
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "item": {
+              "type": "string"
+            },
+            "verdict": {
+              "enum": [
+                "ok",
+                "missing",
+                "wrong",
+                "order",
+                "unsure"
+              ]
+            },
+            "severity": {
+              "enum": [
+                "material",
+                "minor"
+              ]
+            },
+            "note": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "semantic_ok": {
+        "type": [
+          "boolean",
+          "null"
+        ]
+      },
+      "verdict": {
+        "enum": [
+          "pass",
+          "fix",
+          "human"
+        ]
+      },
+      "issues": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

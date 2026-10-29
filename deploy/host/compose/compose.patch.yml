@@ -1,0 +1,26 @@
+# 덧씌우기 코드 연결(image-patch-process.md §2) — 이미지는 그대로, 코드 폴더만 PATCH_CODE(기준 코드+덧씌우기)로 덮음.
+#   docker compose -f compose.pipeline.yml -f compose.patch.yml run --rm parse ...   (MCP만 compose.mcp.yml로 띄우면 compose.patch.mcp.yml)
+#   S6b — compose 파일은 저장소 deploy/host/compose/(옛 docker/, compose.modules.yml → compose.pipeline.yml). 마운트 원본(live/app/…)은 그대로.
+#   PATCH_CODE 기본 /srv/rag/code/live — 구조 개편 v4 단계5(10-13)부터 live/app 가 컨테이너 /app 과 그대로 거울
+#   (agent_platform은 I5 10-26에 삭제 — 마운트 없음, D-013). 읽기 전용 — 쓰기는 output/만(C4).
+#   /app/docker도 덮음(S6b — 이미지 안 /app/docker = entrypoint.sh·selftest_gate.sh·known_fail.txt·assets.py만, live/app/docker도 같은 4개) — entrypoint.sh의 새 모듈(예: SI39 publish)이 기준 이미지 안 entrypoint에는 없어서(샘플 세션 지적 10-08).
+#   entrypoint는 bash로 직접 실행 — ZIP을 풀면 실행 비트가 빠질 수 있음(make_patch는 git 저장본 그대로 = LF라 CRLF 문제 없음).
+x-code: &code
+  - ${PATCH_CODE:-/srv/rag/code/live}/app/deploy/common:/app/deploy/common:ro,z   # S3 — 공용 코드(refactor.md C-22: live에 폴더가 먼저 있어야 함)
+  - ${PATCH_CODE:-/srv/rag/code/live}/app/deploy/pipeline:/app/deploy/pipeline:ro,z
+  - ${PATCH_CODE:-/srv/rag/code/live}/app/deploy/mcp_server:/app/deploy/mcp_server:ro,z
+  - ${PATCH_CODE:-/srv/rag/code/live}/app/deploy/resources:/app/deploy/resources:ro,z   # S2 — 지시서·설정 기본값·어휘(refactor.md C-20: live에 폴더가 먼저 있어야 함)
+  - ${PATCH_CODE:-/srv/rag/code/live}/app/docker:/app/docker:ro,z
+x-entry: &entry ["bash", "/app/docker/entrypoint.sh"]
+
+services:
+  parse: {volumes: *code, entrypoint: *entry}
+  structure: {volumes: *code, entrypoint: *entry}
+  load: {volumes: *code, entrypoint: *entry}
+  publish: {volumes: *code, entrypoint: *entry}
+  mcp: {volumes: *code, entrypoint: *entry}
+  retrieval: {volumes: *code, entrypoint: *entry}   # 10-16 — mcp_eval 등 도구 전용 job 서비스
+  index_a: {volumes: *code, entrypoint: *entry}     # 10-16 — AD41 2개 설정 예시(compose.pipeline.yml)
+  index_b: {volumes: *code, entrypoint: *entry}
+  data-pipeline-parse: {volumes: *code, entrypoint: *entry}       # 10-14 — 상주 트리거 서버(S6b — 옛 data-parsing·data-structure, 둘 다 data-pipeline 이미지)
+  data-pipeline-structure: {volumes: *code, entrypoint: *entry}

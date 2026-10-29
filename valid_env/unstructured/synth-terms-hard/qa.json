@@ -1,0 +1,711 @@
+{
+ "set": "synth-terms-hard",
+ "split": "holdout",
+ "scoring": "_synth_images_qa.score",
+ "items": [
+  {
+   "type": "term_hard_homonym",
+   "question": "정제 공정 저 pH 유지 단계의 VI 절차서의 기록 보관 기간은?",
+   "gold_answer": "10년",
+   "answer_keywords": [
+    "10년"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_101.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_101.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_101.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "PROC.VI",
+    "query_form": "VI",
+    "doc_form": "바이러스 불활화",
+    "kind": "homonym"
+   },
+   "forbid_keywords": [
+    "16년"
+   ],
+   "id": "HQ-T001"
+  },
+  {
+   "type": "term_hard_homonym",
+   "question": "정제 공정 저 pH 유지 단계의 VI 절차서의 정기 점검 주기는?",
+   "gold_answer": "36개월",
+   "answer_keywords": [
+    "36개월"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_101.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_101.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_101.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "PROC.VI",
+    "query_form": "VI",
+    "doc_form": "바이러스 불활화",
+    "kind": "homonym"
+   },
+   "forbid_keywords": [
+    "12개월"
+   ],
+   "id": "HQ-T002"
+  },
+  {
+   "type": "term_hard_homonym",
+   "question": "충전 라인 바이알 VI 절차서의 기록 보관 기간은?",
+   "gold_answer": "16년",
+   "answer_keywords": [
+    "16년"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_102.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_102.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_102.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "QUAL.VISINSP",
+    "query_form": "VI",
+    "doc_form": "육안검사",
+    "kind": "homonym"
+   },
+   "forbid_keywords": [
+    "10년"
+   ],
+   "id": "HQ-T003"
+  },
+  {
+   "type": "term_hard_homonym",
+   "question": "충전 라인 바이알 VI 절차서의 정기 점검 주기는?",
+   "gold_answer": "12개월",
+   "answer_keywords": [
+    "12개월"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_102.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_102.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_102.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "QUAL.VISINSP",
+    "query_form": "VI",
+    "doc_form": "육안검사",
+    "kind": "homonym"
+   },
+   "forbid_keywords": [
+    "36개월"
+   ],
+   "id": "HQ-T004"
+  },
+  {
+   "type": "term_hard_homonym",
+   "question": "생물반응기 설비 PM 절차서의 기록 보관 기간은?",
+   "gold_answer": "12년",
+   "answer_keywords": [
+    "12년"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_103.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_103.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_103.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "MAINT.PM",
+    "query_form": "PM",
+    "doc_form": "예방정비",
+    "kind": "homonym"
+   },
+   "forbid_keywords": [
+    "18년"
+   ],
+   "id": "HQ-T005"
+  },
+  {
+   "type": "term_hard_homonym",
+   "question": "생물반응기 설비 PM 절차서의 정기 점검 주기는?",
+   "gold_answer": "24개월",
+   "answer_keywords": [
+    "24개월"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_103.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_103.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_103.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "MAINT.PM",
+    "query_form": "PM",
+    "doc_form": "예방정비",
+    "kind": "homonym"
+   },
+   "forbid_keywords": [
+    "48개월"
+   ],
+   "id": "HQ-T006"
+  },
+  {
+   "type": "term_hard_homonym",
+   "question": "고객 킥오프·일정 관리를 맡는 PM 절차서의 기록 보관 기간은?",
+   "gold_answer": "18년",
+   "answer_keywords": [
+    "18년"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_104.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_104.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_104.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "BIZ.PM",
+    "query_form": "PM",
+    "doc_form": "프로젝트 매니저 업무",
+    "kind": "homonym"
+   },
+   "forbid_keywords": [
+    "12년"
+   ],
+   "id": "HQ-T007"
+  },
+  {
+   "type": "term_hard_homonym",
+   "question": "고객 킥오프·일정 관리를 맡는 PM 절차서의 정기 점검 주기는?",
+   "gold_answer": "48개월",
+   "answer_keywords": [
+    "48개월"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_104.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_104.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_104.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "BIZ.PM",
+    "query_form": "PM",
+    "doc_form": "프로젝트 매니저 업무",
+    "kind": "homonym"
+   },
+   "forbid_keywords": [
+    "24개월"
+   ],
+   "id": "HQ-T008"
+  },
+  {
+   "type": "term_hard_abbr",
+   "question": "UF/DF 절차서의 기록 보관 기간은?",
+   "gold_answer": "14년",
+   "answer_keywords": [
+    "14년"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_105.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_105.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_105.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "PROC.UFDF",
+    "query_form": "UF/DF",
+    "doc_form": "한외여과/투석여과",
+    "kind": "abbr"
+   },
+   "id": "HQ-T009"
+  },
+  {
+   "type": "term_hard_abbr",
+   "question": "UF/DF 절차서의 정기 점검 주기는?",
+   "gold_answer": "18개월",
+   "answer_keywords": [
+    "18개월"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_105.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_105.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_105.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "PROC.UFDF",
+    "query_form": "UF/DF",
+    "doc_form": "한외여과/투석여과",
+    "kind": "abbr"
+   },
+   "id": "HQ-T010"
+  },
+  {
+   "type": "term_hard_abbr",
+   "question": "CAPA 절차서의 기록 보관 기간은?",
+   "gold_answer": "11년",
+   "answer_keywords": [
+    "11년"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_106.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_106.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_106.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "QUAL.CAPA",
+    "query_form": "CAPA",
+    "doc_form": "시정 및 예방 조치",
+    "kind": "abbr"
+   },
+   "id": "HQ-T011"
+  },
+  {
+   "type": "term_hard_abbr",
+   "question": "CAPA 절차서의 정기 점검 주기는?",
+   "gold_answer": "30개월",
+   "answer_keywords": [
+    "30개월"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_106.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_106.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_106.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "QUAL.CAPA",
+    "query_form": "CAPA",
+    "doc_form": "시정 및 예방 조치",
+    "kind": "abbr"
+   },
+   "id": "HQ-T012"
+  },
+  {
+   "type": "term_hard_synonym",
+   "question": "change control 절차서의 기록 보관 기간은?",
+   "gold_answer": "13년",
+   "answer_keywords": [
+    "13년"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_107.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_107.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_107.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "QUAL.CC",
+    "query_form": "change control",
+    "doc_form": "변경관리",
+    "kind": "synonym"
+   },
+   "id": "HQ-T013"
+  },
+  {
+   "type": "term_hard_synonym",
+   "question": "change control 절차서의 정기 점검 주기는?",
+   "gold_answer": "42개월",
+   "answer_keywords": [
+    "42개월"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_107.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_107.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_107.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "QUAL.CC",
+    "query_form": "change control",
+    "doc_form": "변경관리",
+    "kind": "synonym"
+   },
+   "id": "HQ-T014"
+  },
+  {
+   "type": "term_hard_synonym",
+   "question": "process validation 절차서의 기록 보관 기간은?",
+   "gold_answer": "17년",
+   "answer_keywords": [
+    "17년"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_108.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_108.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_108.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "QUAL.PV",
+    "query_form": "process validation",
+    "doc_form": "공정 밸리데이션",
+    "kind": "synonym"
+   },
+   "id": "HQ-T015"
+  },
+  {
+   "type": "term_hard_synonym",
+   "question": "process validation 절차서의 정기 점검 주기는?",
+   "gold_answer": "60개월",
+   "answer_keywords": [
+    "60개월"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_108.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_108.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_108.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "QUAL.PV",
+    "query_form": "process validation",
+    "doc_form": "공정 밸리데이션",
+    "kind": "synonym"
+   },
+   "id": "HQ-T016"
+  },
+  {
+   "type": "term_hard_abbr",
+   "question": "OOS 절차서의 기록 보관 기간은?",
+   "gold_answer": "15년",
+   "answer_keywords": [
+    "15년"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_109.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_109.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_109.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "QUAL.OOS",
+    "query_form": "OOS",
+    "doc_form": "기준 일탈 결과 조사",
+    "kind": "abbr"
+   },
+   "id": "HQ-T017"
+  },
+  {
+   "type": "term_hard_abbr",
+   "question": "OOS 절차서의 정기 점검 주기는?",
+   "gold_answer": "54개월",
+   "answer_keywords": [
+    "54개월"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_109.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_109.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_109.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "QUAL.OOS",
+    "query_form": "OOS",
+    "doc_form": "기준 일탈 결과 조사",
+    "kind": "abbr"
+   },
+   "id": "HQ-T018"
+  },
+  {
+   "type": "term_hard_synonym",
+   "question": "tech transfer 절차서의 기록 보관 기간은?",
+   "gold_answer": "19년",
+   "answer_keywords": [
+    "19년"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_110.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_110.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_110.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "BIZ.TT",
+    "query_form": "tech transfer",
+    "doc_form": "기술이전",
+    "kind": "synonym"
+   },
+   "id": "HQ-T019"
+  },
+  {
+   "type": "term_hard_synonym",
+   "question": "tech transfer 절차서의 정기 점검 주기는?",
+   "gold_answer": "20개월",
+   "answer_keywords": [
+    "20개월"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_110.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_110.docx",
+     "path": "valid_env/unstructured/synth-terms-hard/sop_110.docx",
+     "where": "3·4항"
+    }
+   ],
+   "term": {
+    "concept": "BIZ.TT",
+    "query_form": "tech transfer",
+    "doc_form": "기술이전",
+    "kind": "synonym"
+   },
+   "id": "HQ-T020"
+  }
+ ]
+}

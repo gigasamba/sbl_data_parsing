@@ -1,0 +1,24 @@
+{
+ "values": [
+  {
+   "series": null,
+   "x": "Batch-01",
+   "value": 1200.0
+  },
+  {
+   "series": null,
+   "x": "Batch-02",
+   "value": 3450.0
+  },
+  {
+   "series": null,
+   "x": "Batch-03",
+   "value": 2100.0
+  }
+ ],
+ "trend": {
+  "direction": "정점 후 감소",
+  "period": "Batch-01–Batch-03",
+  "basis": "Batch-01 1200 → Batch-03 2100"
+ }
+}

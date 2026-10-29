@@ -1,0 +1,205 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_terms.py",
+ "split": "holdout",
+ "note": "[SYNTHETIC] 모든 값 가상 — 질문은 문서와 다른 표기",
+ "documents": [
+  {
+   "file": "maintenance_sop_br2101.docx",
+   "format": "docx",
+   "elements": [
+    "용어 한 가지 표기만"
+   ],
+   "content": "예방정비 6개월",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "6개월"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-07-14"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "tech_transfer_plan_halden.pdf",
+   "format": "pdf",
+   "elements": [
+    "용어 한 가지 표기만"
+   ],
+   "content": "Technology Transfer · Project Manager",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "박서준"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-02-03"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "dsp_batch_record.xlsx",
+   "format": "xlsx",
+   "elements": [
+    "용어 한 가지 표기만"
+   ],
+   "content": "Viral Inactivation 60 min",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "Viral Inactivation~~60 min"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Target concentration~~50 g/L"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "fill_finish_report.pdf",
+   "format": "pdf",
+   "elements": [
+    "용어 한 가지 표기만"
+   ],
+   "content": "육안검사 불량률",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "0.12%"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "quality_capa_log.xlsx",
+   "format": "xlsx",
+   "elements": [
+    "용어 한 가지 표기만"
+   ],
+   "content": "시정조치 3건",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "QC-2026-11~~진행"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "oos_investigation_2026.docx",
+   "format": "docx",
+   "elements": [
+    "용어 한 가지 표기만"
+   ],
+   "content": "기준 일탈 결과 조사",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "표준품 희석 오류"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "regulatory_history.pdf",
+   "format": "pdf",
+   "elements": [
+    "용어 한 가지 표기만"
+   ],
+   "content": "허가신청·허가 전 실사",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "2025-01-20"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "NAI"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "client_meeting_notes.docx",
+   "format": "docx",
+   "elements": [
+    "용어 한 가지 표기만"
+   ],
+   "content": "고객 미팅",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "2026-08-21"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "3년"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "ufdf_params.pptx",
+   "format": "pptx",
+   "elements": [
+    "용어 한 가지 표기만"
+   ],
+   "content": "한외여과/투석여과",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "50 g/L"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "30 kDa"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  }
+ ]
+}

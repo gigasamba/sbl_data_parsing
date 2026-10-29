@@ -1,0 +1,64 @@
+# 개발 도구 설정(PC 전용 — 서버 이미지에는 들어가지 않음 · .dockerignore 허용 목록 밖).
+# 린트·타입 검사는 CLAUDE.md "커밋 전 점검" 순서로 돌린다. 설치: uv pip install --python .venv/bin/python -r requirements-dev.txt
+#
+# ⚠️ 바이트가 캐시 열쇠인 파일은 린트·포맷 자동 수정에서 뺀다(CLAUDE.md "지문") — 엔진 파일(엔진 지문), 인계 파일 4개(FINGERPRINT),
+#    지시서 패키지(지시서 지문). 이 파일들을 고쳐야 할 때는 지문 영향을 먼저 확인하고 사람 검토를 받는다.
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+force-exclude = true                   # 파일을 직접 넘겨도 아래 제외 목록을 지킴(lint_changed.sh)
+extend-exclude = [
+  "pipeline/extract/engines",          # 엔진 지문
+  "common/core/contract.py",           # 인계 지문(FINGERPRINT) — common/core/fingerprint.py HANDOFF_FILES
+  "common/core/repfmt.py",
+  "common/core/terms.py",
+  "common/core/text.py",
+  "resources/prompts",                 # 지시서 지문
+  "validation/e2e/triple_extract",
+  "valid_env",                         # PC 전용 데이터(rag_qa 지시서 패키지 포함)
+  "output",
+]
+
+[tool.ruff.lint]
+# 좁게 시작 — 흔한 버그·안 쓰는 import·이름 충돌·import 순서·옛 문법. 넓힐 때는 이 줄과 CLAUDE.md를 같이 고친다.
+select = ["E", "F", "W", "I", "B", "UP", "RUF100"]   # RUF100 — 쓸모없어진 noqa를 잡음(mypy warn_unused_ignores와 같은 역할)
+ignore = [
+  "E501",   # 줄 길이 — 한국어 주석이 길어 line-length로만 본다(포맷이 맞춤)
+  "E731",   # lambda 대입 — 기존 코드 관례
+  "B905",   # zip() strict 없음 — strict=False를 붙여도 동작이 같아 표시만 늘어남. 길이가 같아야 하는 곳은 그 자리에서 strict=True로(동작 변경으로 따로)
+]
+
+# RUF100(쓸모없는 noqa)은 자동 수정하지 않는다 — ruff --fix가 noqa 뒤 이유 설명까지 지움. 경고가 나면 코드만 빼고 이유는 일반 주석으로 남긴다(S12).
+unfixable = ["RUF100"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["common", "pipeline", "mcp_server", "validation", "tests"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "."
+explicit_package_bases = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = false
+# 저장소 전체 점검 범위(S12, 10-29 — 0건): `PYTHONPATH=. .venv/bin/mypy`만 쳐도 이 범위가 돈다. 파일을 넘기면(lint_changed.sh) 그 파일만.
+files = ["common", "pipeline", "mcp_server", "deploy", "validation", "tests"]
+# annotation-unchecked는 오류가 아니라 안내(타입 표시 없는 함수 몸통은 안 봄 — check_untyped_defs=false)라 끈다.
+disable_error_code = ["annotation-unchecked"]
+exclude = [
+  "^pipeline/extract/engines/",
+  "^resources/",
+  "^valid_env/",
+  "^output/",
+  "^validation/e2e/triple_extract/",
+]
+
+# 인계 파일 4개(FINGERPRINT — 바이트를 고치면 인계 지문이 바뀜, CLAUDE.md §4)는 고칠 수 없어 오류를 보지 않는다.
+# 지금 남은 것: contract.py `sys.stdout.reconfigure` union-attr 1건(다른 진입점은 공용 common.core.console.utf8_stdout() — S12 /simplify).
+[[tool.mypy.overrides]]
+module = ["common.core.contract", "common.core.repfmt", "common.core.terms", "common.core.text"]
+ignore_errors = true

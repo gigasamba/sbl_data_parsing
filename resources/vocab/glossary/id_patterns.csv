@@ -1,0 +1,10 @@
+﻿id_type,regex,example,note,updated
+product_code,"[A-Z]{2,4}-(MAB|ADC|BSA|BIS|VAC)-\d{2,3}",PFE-MAB-01,합성 데이터 형식 — 실데이터 제품 코드 규칙으로 교체,2026-10-02
+contract_no,"C-[A-Z]{2,4}-\d{4}-\d{2}",C-PFE-2024-02,합성 데이터 형식,2026-10-02
+rfi_no,"[A-Z]{2,4}-RFI-\d{4}-\d{2}",SOL-RFI-2026-01,합성 데이터 형식,2026-10-02
+deal_no,D-\d{4}-\d{3},D-2024-190,기존 합성 데이터(synth-clients) 형식,2026-10-02
+lot_no,"LOT-\d{4}-\d{3,}",LOT-2025-324,예시,2026-10-02
+batch_no,"[A-Z]{2,4}-DS-\d{4}",FX-DS-2402,예시 — 원료의약품 배치,2026-10-02
+deviation_no,"DEV-\d{4}-\d{3,}",DEV-2025-031,예시 — 사내 QMS 번호 규칙으로 교체,2026-10-02
+capa_no,"CAPA-\d{4}-\d{3,}",CAPA-2025-012,예시,2026-10-02
+change_control_no,"CC-\d{4}-\d{3,}",CC-2026-044,예시,2026-10-02

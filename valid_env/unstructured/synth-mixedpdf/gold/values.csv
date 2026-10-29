@@ -1,0 +1,12 @@
+문서,라벨,값
+text_only.pdf,배치ID 1쪽,MX-B01
+text_only.pdf,배치ID 2쪽,MX-B02
+mixed_pages.pdf,창고코드 1쪽,MX-W10
+mixed_pages.pdf,창고코드 2쪽(스캔),MX-W11
+mixed_pages.pdf,창고코드 3쪽(스캔),MX-W12
+garbled_layer.pdf,점검ID 1쪽,MX-Q20
+garbled_layer.pdf,점검ID 2쪽(글자층 깨짐),MX-Q21
+scan_table.pdf,배치 1행,MX-T30
+scan_table.pdf,배치 2행,MX-T31
+scan_table.pdf,배치 3행,MX-T32
+scan_report.pdf,보고ID,MX-R40

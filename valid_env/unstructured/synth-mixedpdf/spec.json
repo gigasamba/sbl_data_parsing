@@ -1,0 +1,318 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_mixedpdf.py",
+ "split": "dev",
+ "note": "[SYNTHETIC] 혼합 PDF 합성 세트(RB3④) — 글자 쪽·스캔 쪽·글자층이 깨진 쪽·표 스캔 쪽이 한 문서에 섞임. 혼합 문서의 낮은 값 재현율은 PE1 후속 한계(docs/pipeline/backlog/parse.md PE1) — 그대로 기록, 고치지 않음.",
+ "documents": [
+  {
+   "file": "text_only.pdf",
+   "format": "pdf",
+   "elements": [
+    "글자 쪽만(선택 가능한 텍스트)"
+   ],
+   "content": "2쪽, 배치 생산 요약(ID·값 각 4건)",
+   "expect": "글자 쪽만 — 혼합 문서 비교용 대조군(정상 파싱 기대)",
+   "facts": [
+    {
+     "kw": [
+      "MX-B01"
+     ],
+     "source": "text",
+     "note": null
+    },
+    {
+     "kw": [
+      "1,240 kg"
+     ],
+     "source": "text",
+     "note": null
+    },
+    {
+     "kw": [
+      "92.5%"
+     ],
+     "source": "text",
+     "note": null
+    },
+    {
+     "kw": [
+      "98.0%"
+     ],
+     "source": "text",
+     "note": null
+    },
+    {
+     "kw": [
+      "MX-B02"
+     ],
+     "source": "text",
+     "note": null
+    },
+    {
+     "kw": [
+      "980 kg"
+     ],
+     "source": "text",
+     "note": null
+    },
+    {
+     "kw": [
+      "88.1%"
+     ],
+     "source": "text",
+     "note": null
+    },
+    {
+     "kw": [
+      "2026-11-03"
+     ],
+     "source": "text",
+     "note": null
+    }
+   ],
+   "must_not": [],
+   "defects": []
+  },
+  {
+   "file": "mixed_pages.pdf",
+   "format": "pdf",
+   "elements": [
+    "글자 쪽",
+    "스캔 쪽(글자층 없음)",
+    "한 쪽 안 글자+스캔 혼합"
+   ],
+   "content": "3쪽: 1쪽 글자 · 2쪽 전체 스캔 · 3쪽 글자+스캔 혼합",
+   "expect": "문서 평균 글자수로 pdf_text/pdf_image 중 하나로 분류되면 다른 쪽 전용 엔진이 후보에서 빠질 수 있음(PE1 안전판이 scan_pages 재신호로 보완 시도) — 대표 결과의 스캔 쪽(2·3쪽) 값 재현율이 낮게 나올 수 있음",
+   "facts": [
+    {
+     "kw": [
+      "MX-W10"
+     ],
+     "source": "text",
+     "note": null
+    },
+    {
+     "kw": [
+      "3,400개"
+     ],
+     "source": "text",
+     "note": null
+    },
+    {
+     "kw": [
+      "MX-W11"
+     ],
+     "source": "scan",
+     "note": null
+    },
+    {
+     "kw": [
+      "2,150개"
+     ],
+     "source": "scan",
+     "note": null
+    },
+    {
+     "kw": [
+      "2026-10-02"
+     ],
+     "source": "scan",
+     "note": null
+    },
+    {
+     "kw": [
+      "MX-W12"
+     ],
+     "source": "scan",
+     "note": null
+    },
+    {
+     "kw": [
+      "500개"
+     ],
+     "source": "scan",
+     "note": null
+    }
+   ],
+   "must_not": [],
+   "defects": [
+    "PE1"
+   ]
+  },
+  {
+   "file": "garbled_layer.pdf",
+   "format": "pdf",
+   "elements": [
+    "글자 쪽(정상)",
+    "글자층이 깨진 쪽(시각은 정상, 텍스트 층은 그림과 무관한 글자)"
+   ],
+   "content": "2쪽: 1쪽 정상 텍스트 · 2쪽은 그림(시각)과 보이지 않는 쓰레기 글자층이 겹침",
+   "expect": "텍스트 추출기가 글자층을 그대로 읽으면 2쪽 값은 안 나오고 무관한 글자만 나옴 — OCR/VLM으로 다시 읽어야 정답. 쓰레기 글자층이 있다는 이유로 pdf_text로 분류되면 스캔 전용 엔진이 후보에서 아예 빠질 수 있음(PE1보다 나쁜 사례)",
+   "facts": [
+    {
+     "kw": [
+      "MX-Q20"
+     ],
+     "source": "text",
+     "note": null
+    },
+    {
+     "kw": [
+      "7.2 mg/L"
+     ],
+     "source": "text",
+     "note": null
+    },
+    {
+     "kw": [
+      "MX-Q21"
+     ],
+     "source": "scan",
+     "note": null
+    },
+    {
+     "kw": [
+      "5.8 mg/L"
+     ],
+     "source": "scan",
+     "note": null
+    }
+   ],
+   "must_not": [],
+   "defects": [
+    "PE1"
+   ]
+  },
+  {
+   "file": "scan_table.pdf",
+   "format": "pdf",
+   "elements": [
+    "스캔 쪽(글자층 없음)",
+    "표(그림 안, 실제 셀 구조 없음)"
+   ],
+   "content": "1쪽, 배치 품질 검사표(3행)",
+   "expect": "전체가 스캔이라 pdf_image로 바르게 분류될 가능성이 높음(대조군) — 표 구조는 그림 안에만 있어 OCR/VLM이 표 칸까지 인식해야 표 칸 재현",
+   "facts": [
+    {
+     "kw": [
+      "MX-T30"
+     ],
+     "source": "scan_table",
+     "note": null
+    },
+    {
+     "kw": [
+      "98.6"
+     ],
+     "source": "scan_table",
+     "note": null
+    },
+    {
+     "kw": [
+      "0.42"
+     ],
+     "source": "scan_table",
+     "note": null
+    },
+    {
+     "kw": [
+      "합격"
+     ],
+     "source": "scan_table",
+     "note": null
+    },
+    {
+     "kw": [
+      "MX-T31"
+     ],
+     "source": "scan_table",
+     "note": null
+    },
+    {
+     "kw": [
+      "97.9"
+     ],
+     "source": "scan_table",
+     "note": null
+    },
+    {
+     "kw": [
+      "0.55"
+     ],
+     "source": "scan_table",
+     "note": null
+    },
+    {
+     "kw": [
+      "MX-T32"
+     ],
+     "source": "scan_table",
+     "note": null
+    },
+    {
+     "kw": [
+      "96.1"
+     ],
+     "source": "scan_table",
+     "note": null
+    },
+    {
+     "kw": [
+      "0.88"
+     ],
+     "source": "scan_table",
+     "note": null
+    },
+    {
+     "kw": [
+      "재검토"
+     ],
+     "source": "scan_table",
+     "note": null
+    }
+   ],
+   "must_not": [],
+   "defects": []
+  },
+  {
+   "file": "scan_report.pdf",
+   "format": "pdf",
+   "elements": [
+    "스캔 쪽만(연속 3쪽)"
+   ],
+   "content": "3쪽, 월간 생산 보고(전부 스캔)",
+   "expect": "전체가 스캔이라 pdf_image로 바르게 분류될 가능성이 높음(대조군) — 쪽이 늘어나도 값 재현율이 유지되는지 확인",
+   "facts": [
+    {
+     "kw": [
+      "MX-R40"
+     ],
+     "source": "scan",
+     "note": null
+    },
+    {
+     "kw": [
+      "12,500 kg"
+     ],
+     "source": "scan",
+     "note": null
+    },
+    {
+     "kw": [
+      "1.3%"
+     ],
+     "source": "scan",
+     "note": null
+    },
+    {
+     "kw": [
+      "13,000 kg"
+     ],
+     "source": "scan",
+     "note": null
+    }
+   ],
+   "must_not": [],
+   "defects": []
+  }
+ ]
+}

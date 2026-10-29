@@ -1,0 +1,386 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_r2.py",
+ "note": "[SYNTHETIC] 모든 값 가상 — 고객 코발트팜(주)·CDMO 루멘바이오(주)",
+ "source": "round1/failures.md §5 요청 4~9 + backlog BR9·BR13",
+ "documents": [
+  {
+   "file": "docs/mail_notice.eml",
+   "request": "4",
+   "case": "같은 메일(eml)",
+   "facts": [
+    {
+     "kw": [
+      "3분기"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/mail_notice.htm",
+   "request": "4",
+   "case": "같은 메일(htm 사본)",
+   "facts": [
+    {
+     "kw": [
+      "3분기"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/mail_notice.mht",
+   "request": "4",
+   "case": "같은 메일(mht 사본)",
+   "facts": [
+    {
+     "kw": [
+      "3분기"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/mail_notice.png",
+   "request": "4",
+   "case": "같은 메일(스크린샷, 글자 이미지)",
+   "facts": [
+    {
+     "kw": [
+      "3분기"
+     ],
+     "source": "scan"
+    }
+   ]
+  },
+  {
+   "file": "docs/contract_C-LUX-2026-09.docx",
+   "request": "4",
+   "case": "답이 실제로 있는 계약서",
+   "facts": [
+    {
+     "kw": [
+      "94000000"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/quote_C-LUX-2026-09.pdf",
+   "request": "4",
+   "case": "답이 실제로 있는 견적서",
+   "facts": [
+    {
+     "kw": [
+      "4~batch|4배치"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/spec_LUX-ADC-04.pdf",
+   "request": "5",
+   "case": "제품 사양서",
+   "facts": [
+    {
+     "kw": [
+      "4.3"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2ml|2 ml"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/contract_C-LUX-2025-11.docx",
+   "request": "5",
+   "case": "계약서",
+   "facts": [
+    {
+     "kw": [
+      "81000000"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2025-11-03"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/mail_delivery_LUX-ADC-04.eml",
+   "request": "5",
+   "case": "메일",
+   "facts": [
+    {
+     "kw": [
+      "2026-11-30"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "물류팀"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/hub_report_LUX-VAC-03.docx",
+   "request": "6",
+   "case": "허브 문서(키워드 독점, 값은 옛 분기뿐)",
+   "facts": [
+    {
+     "kw": [
+      "코발트팜(주)"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "11배치"
+     ],
+     "source": "text",
+     "note": "함정(2025 Q3 구값)"
+    }
+   ]
+  },
+  {
+   "file": "docs/hub_data.xlsx",
+   "request": "6",
+   "case": "실제 값(2026 Q3)이 있는 xlsx",
+   "facts": [
+    {
+     "kw": [
+      "14"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/hub_long_table.docx",
+   "request": "6",
+   "case": "60행 표 중 1행만 질문 대상",
+   "facts": [
+    {
+     "kw": [
+      "83500000"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/rates_v1.xlsx",
+   "request": "7",
+   "case": "구판(기준일 2025-01-01, 함정)",
+   "facts": [
+    {
+     "kw": [
+      "89000000"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/rates_v2.xlsx",
+   "request": "7",
+   "case": "최신판(기준일 2026-01-01)",
+   "facts": [
+    {
+     "kw": [
+      "101500000"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "16"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/MAIL-LUX-14.eml",
+   "request": "8",
+   "case": "본문에 ID 없음(파일명에만)",
+   "facts": [
+    {
+     "kw": [
+      "B-77"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/MAIL-LUX-15.eml",
+   "request": "8",
+   "case": "본문에 ID 없음(파일명에만)",
+   "facts": [
+    {
+     "kw": [
+      "B-81"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/blank_mail_1.png",
+   "request": "9",
+   "case": "거의 빈 이미지(머리글만)",
+   "facts": [],
+   "must_not": [
+    "질문 근거로 인용되면 안 됨"
+   ]
+  },
+  {
+   "file": "docs/blank_mail_2.png",
+   "request": "9",
+   "case": "거의 빈 이미지(머리글만)",
+   "facts": [],
+   "must_not": [
+    "질문 근거로 인용되면 안 됨"
+   ]
+  },
+  {
+   "file": "docs/blank_mail_3.png",
+   "request": "9",
+   "case": "거의 빈 이미지(머리글만)",
+   "facts": [],
+   "must_not": [
+    "질문 근거로 인용되면 안 됨"
+   ]
+  },
+  {
+   "file": "docs/target_memo.docx",
+   "request": "9",
+   "case": "실제 답이 있는 문서",
+   "facts": [
+    {
+     "kw": [
+      "9"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-12-15"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/big_table.xlsx",
+   "request": "BR9",
+   "case": "240행·2시트",
+   "facts": [
+    {
+     "kw": [
+      "BT-0137"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "BT-0006"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/big_table.pdf",
+   "request": "BR9",
+   "case": "70행·쪽 넘김·머리글 반복",
+   "facts": [
+    {
+     "kw": [
+      "P-045"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "485"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/steps_order.docx",
+   "request": "BR13",
+   "case": "단계 목록(순서 바뀌면 오답)",
+   "facts": [
+    {
+     "kw": [
+      "이상 발견 즉시 생산 중단"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "QA팀 통보"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "원인 조사"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "CAPA 수립"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "재가동 승인"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/two_col_layout.pdf",
+   "request": "BR13",
+   "case": "2단 레이아웃(좌·우 값 혼동 위험)",
+   "facts": [
+    {
+     "kw": [
+      "68000000"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "73500000"
+     ],
+     "source": "text"
+    }
+   ]
+  }
+ ]
+}

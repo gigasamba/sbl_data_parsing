@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SBL 검색 검증</title>
+<link rel="icon" href="data:,">
+<style>
+/* 레이아웃: 왼쪽 설정·상태 사이드바, 가운데 대화(질문 → 근거 카드), 오른쪽 임베딩 패널(열 때만). 외부 리소스 없음. */
+:root {
+  --bg: #f7f5f0; --panel: #efece5; --surface: #ffffff; --ink: #24211c; --muted: #6b655b; --line: #e2ddd3;
+  --accent: #c2622d; --accent-ink: #ffffff; --accent-soft: #f6e6db;
+  --v: #2f6fb3; --v-soft: #e3edf8; --b: #2f8a5b; --b-soft: #e1f2e8; --i: #8a5a12; --i-soft: #f6ecd8; --g: #7a4a9a; --g-soft: #efe5f6;
+  --pos: #c2622d; --neg: #2f6fb3; --code: #f1eee8; --warn: #a3322a; --warn-soft: #f8e3e1; --ok: #2f8a5b;
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+  --font: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1f1e1c; --panel: #262523; --surface: #2c2b28; --ink: #ece8e1; --muted: #a39d93; --line: #3a3834;
+    --accent: #e08452; --accent-ink: #1f1e1c; --accent-soft: #3d2c22;
+    --v: #8fb6ea; --v-soft: #22303f; --b: #7fcfa3; --b-soft: #1f3529; --i: #e3bd78; --i-soft: #3a2f1c; --g: #c9a1e6; --g-soft: #33263d;
+    --pos: #e08452; --neg: #8fb6ea; --code: #23221f; --warn: #f0978d; --warn-soft: #3d2321; --ok: #7fcfa3;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.2);
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.6; }
+.app { display: grid; grid-template-columns: 272px minmax(0, 1fr); height: 100vh; }
+.app.with-drawer { grid-template-columns: 272px minmax(0, 1fr) 420px; }
+
+/* 사이드바 */
+aside.side { background: var(--panel); border-right: 1px solid var(--line); padding: 18px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+.brand { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.new-chat { width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
+.new-chat:hover { border-color: var(--accent); }
+.sec-title { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+.status { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13px; display: grid; gap: 4px; }
+.status .row { display: flex; justify-content: space-between; gap: 8px; }
+.status .row span:last-child { font-family: var(--mono); font-size: 12px; text-align: right; overflow-wrap: anywhere; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+.pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.pill.ok::before { background: var(--ok); } .pill.bad::before { background: var(--warn); }
+.meter { height: 6px; border-radius: 99px; background: var(--line); overflow: hidden; margin-top: 4px; }
+.meter > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+label.opt { display: flex; align-items: center; gap: 8px; font-size: 13.5px; padding: 3px 0; cursor: pointer; }
+.field { display: grid; gap: 4px; font-size: 13.5px; }
+.field select, .field input[type=number] { font: inherit; font-size: 13.5px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.hist { display: grid; gap: 2px; }
+.hist button { text-align: left; background: none; border: 0; padding: 6px 8px; border-radius: 8px; color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hist button:hover { background: var(--surface); }
+.side .foot { margin-top: auto; font-size: 11.5px; color: var(--muted); }
+
+/* 대화 */
+main.chat { display: flex; flex-direction: column; min-width: 0; height: 100vh; }
+.scroll { flex: 1; overflow-y: auto; padding: 28px 20px 12px; }
+.thread { max-width: 820px; margin: 0 auto; display: grid; gap: 22px; }
+.empty { text-align: center; padding-top: 12vh; }
+.empty h1 { font-size: 28px; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.01em; }
+.empty p { color: var(--muted); margin: 0 0 22px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 13.5px; cursor: pointer; }
+.chip:hover { border-color: var(--accent); }
+.msg-user { justify-self: end; max-width: 80%; background: var(--accent-soft); border-radius: 16px 16px 4px 16px; padding: 10px 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg-bot { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; }
+.avatar { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+.bot-body { min-width: 0; display: grid; gap: 10px; }
+.summary { font-size: 13.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.summary b { color: var(--ink); font-weight: 600; }
+.badge { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--code); color: var(--muted); }
+.badge.found { background: var(--b-soft); color: var(--b); } .badge.weak { background: var(--i-soft); color: var(--i); } .badge.none { background: var(--warn-soft); color: var(--warn); }
+.via-v { background: var(--v-soft); color: var(--v); } .via-k { background: var(--b-soft); color: var(--b); } .via-i { background: var(--i-soft); color: var(--i); } .via-g { background: var(--g-soft); color: var(--g); }
+.err { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 10px 12px; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.typing { color: var(--muted); font-size: 14px; }
+.typing::after { content: "…"; animation: blink 1.2s infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow); display: grid; gap: 6px; }
+.card.active { border-color: var(--accent); }
+.card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rank { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); min-width: 22px; }
+.fname { font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }
+.score { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.meta { font-size: 12px; color: var(--muted); font-family: var(--mono); overflow-wrap: anywhere; }
+.text { font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 7.2em; overflow: hidden; position: relative; }
+.text.open { max-height: none; }
+.card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn { font: inherit; font-size: 12.5px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+pre.json { background: var(--code); border-radius: 10px; padding: 10px 12px; font-family: var(--mono); font-size: 12px; overflow: auto; max-height: 360px; margin: 0; }
+table.rows { border-collapse: collapse; font-size: 12.5px; width: 100%; }
+table.rows th, table.rows td { border-bottom: 1px solid var(--line); padding: 5px 8px; text-align: left; font-family: var(--mono); }
+.tbl-wrap { overflow: auto; max-height: 360px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+
+/* 입력창 */
+.composer-wrap { padding: 10px 20px 18px; }
+.composer { max-width: 820px; margin: 0 auto; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); padding: 10px 10px 8px 14px; display: grid; gap: 6px; }
+.composer:focus-within { border-color: var(--accent); }
+.composer textarea { border: 0; outline: none; resize: none; background: transparent; color: var(--ink); font: inherit; font-size: 15px; min-height: 26px; max-height: 200px; }
+.composer .bar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.composer .bar .mode { font-family: var(--mono); }
+.send { margin-left: auto; width: 34px; height: 34px; border-radius: 10px; border: 0; background: var(--accent); color: var(--accent-ink); font-size: 17px; cursor: pointer; }
+.send:disabled { opacity: .4; cursor: default; }
+
+/* 임베딩 패널 */
+aside.drawer { display: none; border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; padding: 18px 16px; }
+.app.with-drawer aside.drawer { display: block; }
+.drawer-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.drawer-head h2 { font-size: 15px; margin: 0; }
+.drawer-head .x { margin-left: auto; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 13px; margin-bottom: 12px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; }
+.box h3 { font-size: 12.5px; margin: 0 0 6px; color: var(--muted); font-weight: 600; }
+svg.profile { width: 100%; height: 120px; display: block; }
+.head-vals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; font-family: var(--mono); font-size: 11.5px; }
+.head-vals span { background: var(--code); border-radius: 6px; padding: 2px 4px; text-align: right; }
+.nb { display: grid; gap: 6px; }
+.nb button { text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 7px 9px; color: var(--ink); font: inherit; font-size: 12.5px; cursor: pointer; display: grid; gap: 3px; }
+.nb button:hover { border-color: var(--accent); }
+.nb .cos { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.nb .cos .meter { flex: 1; margin: 0; }
+.note { font-size: 12px; color: var(--muted); }
+
+@media (max-width: 1100px) { .app.with-drawer { grid-template-columns: 0 minmax(0, 1fr) 400px; } .app.with-drawer aside.side { display: none; } }
+@media (max-width: 760px) {
+  .app, .app.with-drawer { grid-template-columns: minmax(0, 1fr); }
+  aside.side { display: none; }
+  .app.with-drawer main.chat { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="side">
+    <div class="brand"><span class="dot"></span>SBL 검색 검증</div>
+    <button class="new-chat" id="newChat">＋ 새 대화</button>
+
+    <div>
+      <div class="sec-title">연결 상태</div>
+      <div class="status" id="status">
+        <div class="row"><span class="pill" id="mcpPill">MCP 확인 중</span><span id="store">—</span></div>
+        <div class="row"><span>임베딩</span><span id="embModel">—</span></div>
+        <div class="row"><span>pgvector</span><span id="pgAddr">—</span></div>
+        <div class="row"><span>VLM · LLM</span><span id="models">—</span></div>
+        <div class="row"><span>임베딩 지출</span><span id="spendTxt">—</span></div>
+        <div class="meter"><div id="spendBar"></div></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-title">도구</div>
+      <div class="field">
+        <select id="tool">
+          <option value="search">search — 질문으로 근거 찾기</option>
+          <option value="query_edw">query_edw — EDW 읽기 전용 SQL</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="searchOpts">
+      <div class="sec-title">검색 설정</div>
+      <div class="field" style="margin-bottom:8px"><span>top-k</span><input type="number" id="k" min="1" max="20" value="5"></div>
+      <label class="opt"><input type="checkbox" name="m" value="vector" checked> vector (임베딩 코사인)</label>
+      <label class="opt"><input type="checkbox" name="m" value="bm25" checked> bm25 (키워드)</label>
+      <label class="opt"><input type="checkbox" name="m" value="id" checked> id (문서 번호·코드)</label>
+      <label class="opt"><input type="checkbox" name="m" value="graph"> graph (그래프 이웃)</label>
+      <p class="note">vector만 켜면 순수 임베딩 top-k. 여러 개면 RRF로 합친 순위(score = RRF 점수).</p>
+    </div>
+
+    <div>
+      <div class="sec-title">이번 대화</div>
+      <div class="hist" id="hist"></div>
+    </div>
+
+    <div class="foot">search 1회 = 질문 임베딩 1회(OpenRouter). 임베딩 패널은 pgvector SQL만 써서 비용 0.</div>
+  </aside>
+
+  <main class="chat">
+    <div class="scroll" id="scroll">
+      <div class="thread" id="thread">
+        <div class="empty" id="empty">
+          <h1>무엇을 찾아볼까요?</h1>
+          <p>적재된 10개 문서(20개 청크)에서 MCP <code>search</code>로 근거를 받아 옵니다.</p>
+          <div class="chips">
+            <button class="chip">병합된 표의 기준값</button>
+            <button class="chip">품질·공정 기준표</button>
+            <button class="chip">공급 통지 메일</button>
+            <button class="chip">머리글이나 텍스트 상자에 있는 용어</button>
+            <button class="chip">스캔 문서 내용</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="composer-wrap">
+      <div class="composer">
+        <textarea id="input" rows="1" placeholder="질문을 입력하세요"></textarea>
+        <div class="bar">
+          <span class="mode" id="modeHint">search · k=5 · vector+bm25+id</span>
+          <span>Enter 보내기 · Shift+Enter 줄바꿈</span>
+          <button class="send" id="send" title="보내기">↑</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="drawer" id="drawer">
+    <div class="drawer-head"><h2>임베딩 보기</h2><button class="btn x" id="closeDrawer">닫기</button></div>
+    <div id="drawerBody"></div>
+  </aside>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const VIA = { v: "vector", k: "bm25", i: "id", g: "graph", a: "aggregate" };   // search_backends.py의 via 글자
+  const thread = $("thread"), scroll = $("scroll"), input = $("input"), send = $("send");
+  const history = [];
+  let busy = false, activeCard = null;
+
+  // 입력창 높이 자동
+  input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); } });
+  send.addEventListener("click", submit);
+  document.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => { input.value = c.textContent; submit(); }));
+  $("newChat").addEventListener("click", () => { location.reload(); });
+  $("closeDrawer").addEventListener("click", closeDrawer);
+  $("tool").addEventListener("change", updateMode);
+  $("k").addEventListener("input", updateMode);
+  document.querySelectorAll("input[name=m]").forEach((c) => c.addEventListener("change", updateMode));
+
+  function methods() { return [...document.querySelectorAll("input[name=m]:checked")].map((c) => c.value); }
+  function updateMode() {
+    const tool = $("tool").value;
+    $("searchOpts").style.display = tool === "search" ? "" : "none";
+    input.placeholder = tool === "search" ? "질문을 입력하세요" : "SELECT id, s3_key FROM AI.FileStorageMap LIMIT 5  (읽기 전용 · PC 대역은 sqlite라 LIMIT)";
+    $("modeHint").textContent = tool === "search" ? `search · k=${$("k").value} · ${methods().join("+") || "기본"}` : "query_edw · SELECT만";
+  }
+
+  async function api(path, body) {
+    const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+    const d = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
+    if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
+    return d;
+  }
+
+  async function refreshHealth() {
+    try {
+      const h = await api("api/health");
+      const ok = h.mcp && h.mcp.ready;
+      $("mcpPill").className = "pill " + (ok ? "ok" : "bad");
+      $("mcpPill").textContent = ok ? "MCP 연결됨" : "MCP 안 됨";
+      $("store").textContent = (h.mcp && (h.mcp.store || h.mcp.error)) || "—";
+      $("embModel").textContent = h.config.EMBED_MODEL || "—";
+      $("pgAddr").textContent = `${h.config.PG_HOST}:${h.config.PG_PORT}/${h.config.PG_SCHEMA}`;
+      $("models").textContent = `${h.vlm_configured ? "VLM 설정됨!" : "VLM 없음"} · ${h.llm_configured ? "LLM 있음" : "LLM 없음"}`;
+      showSpend(h.spend);
+    } catch (e) {
+      $("mcpPill").className = "pill bad"; $("mcpPill").textContent = "검증 서버 안 됨"; $("store").textContent = e.message;
+    }
+  }
+  function showSpend(s) {
+    if (!s) return;
+    const used = s.used_usd ?? 0, budget = s.budget_usd;
+    $("spendTxt").textContent = budget ? `$${used.toFixed(4)} / $${budget.toFixed(2)}` : `$${used.toFixed(4)}`;
+    $("spendBar").style.width = budget ? Math.min(100, (used / budget) * 100) + "%" : "0";
+  }
+
+  function addUser(text) {
+    const empty = $("empty"); if (empty) empty.remove();
+    const d = document.createElement("div"); d.className = "msg-user"; d.textContent = text; thread.appendChild(d);
+    const h = document.createElement("button"); h.textContent = text; h.title = text;
+    h.addEventListener("click", () => d.scrollIntoView({ behavior: "smooth", block: "start" }));
+    $("hist").prepend(h);
+  }
+  function addBot() {
+    const w = document.createElement("div"); w.className = "msg-bot";
+    w.innerHTML = `<div class="avatar">S</div><div class="bot-body"><div class="typing">MCP에 묻는 중</div></div>`;
+    thread.appendChild(w); scrollDown(); return w.querySelector(".bot-body");
+  }
+  function scrollDown() { scroll.scrollTop = scroll.scrollHeight; }
+
+  async function submit() {
+    const text = input.value.trim();
+    if (!text || busy) return;
+    busy = true; send.disabled = true;
+    input.value = ""; input.style.height = "auto";
+    const tool = $("tool").value;
+    addUser(text);
+    const body = addBot();
+    const args = tool === "search"
+      ? { question: text, k: Math.max(1, Math.min(20, +$("k").value || 5)), ...(methods().length ? { methods: methods() } : {}) }
+      : { sql: text };
+    try {
+      const d = await api("api/call", { tool, args });
+      history.push({ tool, args, result: d.result });
+      showSpend(d.spend);
+      if (tool === "search") renderSearch(body, d, args); else renderEdw(body, d);
+    } catch (e) {
+      body.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+    } finally {
+      busy = false; send.disabled = false; input.focus(); scrollDown();
+    }
+  }
+
+  function renderSearch(body, d, args) {
+    const r = d.result || {};
+    const ev = r.evidence || [];
+    const st = r.evidence_status || "—";
+    body.innerHTML = "";
+    const sum = document.createElement("div"); sum.className = "summary";
+    sum.innerHTML = `<span>근거 <b>${ev.length}</b>건</span><span class="badge ${esc(st)}">${esc(st)}</span>`
+      + `<span>저장소 <b>${esc(r.store || "—")}</b></span><span>방법 <b>${esc((r.methods || args.methods || []).join("+") || "기본")}</b></span>`
+      + `<span>MCP ${esc(r.ms ?? "—")}ms · 전체 ${esc(d.ui_ms)}ms</span>`;
+    body.appendChild(sum);
+    if (r.ok === false || r.error) body.insertAdjacentHTML("beforeend", `<div class="err">${esc(r.error || "ok:false")}</div>`);
+    if (r.notes && r.notes.length) body.insertAdjacentHTML("beforeend", `<div class="note">notes: ${esc(JSON.stringify(r.notes))}</div>`);
+    ev.forEach((e) => body.appendChild(card(e)));
+    if (!ev.length) body.insertAdjacentHTML("beforeend", `<div class="note">근거가 없습니다.</div>`);
+    body.appendChild(rawToggle(r));
+  }
+
+  function card(e) {
+    const c = document.createElement("div"); c.className = "card";
+    const via = String(e.via || "");
+    const viaBadges = [...via].map((ch) => `<span class="badge via-${esc(ch)}">${esc(VIA[ch] || ch)}</span>`).join(" ");
+    const loc = [e.page != null ? `p.${e.page}` : null, e.line ? `줄 ${e.line}` : null, e.section ? `§ ${e.section}` : null].filter(Boolean).join(" · ");
+    c.innerHTML = `
+      <div class="card-head"><span class="rank">#${esc(e.rank)}</span><span class="fname">${esc(e.file_name || "(이름 없음)")}</span>${viaBadges}
+        <span class="score" title="RRF 순위 점수">score ${esc(e.score)}</span></div>
+      <div class="meta">${esc(e.source_uri || "")}${loc ? " · " + esc(loc) : ""} · chunk_id ${esc(e.chunk_id)}</div>
+      <div class="text">${esc(e.text || "")}</div>
+      <div class="card-actions">
+        <button class="btn primary" data-a="emb">임베딩 보기</button>
+        <button class="btn" data-a="more">본문 펼치기</button>
+        <button class="btn" data-a="json">JSON</button>
+      </div>`;
+    const text = c.querySelector(".text");
+    c.querySelector('[data-a="more"]').addEventListener("click", (ev) => { text.classList.toggle("open"); ev.target.textContent = text.classList.contains("open") ? "본문 접기" : "본문 펼치기"; });
+    c.querySelector('[data-a="json"]').addEventListener("click", () => {
+      const old = c.querySelector("pre.json"); if (old) { old.remove(); return; }
+      const p = document.createElement("pre"); p.className = "json"; p.textContent = JSON.stringify(e, null, 2); c.appendChild(p);
+    });
+    c.querySelector('[data-a="emb"]').addEventListener("click", () => { if (activeCard) activeCard.classList.remove("active"); activeCard = c; c.classList.add("active"); openChunk(e.chunk_id); });
+    return c;
+  }
+
+  function rawToggle(obj) {
+    const w = document.createElement("div");
+    const b = document.createElement("button"); b.className = "btn"; b.textContent = "MCP 응답 전체(JSON)";
+    b.addEventListener("click", () => {
+      const old = w.querySelector("pre"); if (old) { old.remove(); return; }
+      const p = document.createElement("pre"); p.className = "json"; p.textContent = JSON.stringify(obj, null, 2); w.appendChild(p);
+    });
+    w.appendChild(b); return w;
+  }
+
+  function renderEdw(body, d) {
+    const r = d.result || {};
+    body.innerHTML = "";
+    const sum = document.createElement("div"); sum.className = "summary";
+    sum.innerHTML = `<span>ok <b>${esc(r.ok)}</b></span><span>행 <b>${esc(r.row_count ?? (r.rows || []).length)}</b></span><span>${esc(r.dialect || "")}</span><span>전체 ${esc(d.ui_ms)}ms</span>`;
+    body.appendChild(sum);
+    if (r.ok === false) body.insertAdjacentHTML("beforeend", `<div class="err">${esc(r.error || "")}${r.allowed_tables ? "\n허용 표: " + esc(r.allowed_tables.map((t) => t.name || t).join(", ")) : ""}</div>`);
+    const rows = r.rows || [];
+    if (rows.length) {
+      const cols = (r.columns || Object.keys(rows[0])).map((c) => (c && typeof c === "object" ? c.name : c));
+      const tr = (cells, tag) => "<tr>" + cells.map((x) => `<${tag}>${esc(typeof x === "object" && x !== null ? JSON.stringify(x) : x)}</${tag}>`).join("") + "</tr>";
+      const asRow = (row) => Array.isArray(row) ? row : cols.map((c) => row[c]);
+      body.insertAdjacentHTML("beforeend", `<div class="tbl-wrap"><table class="rows"><thead>${tr(cols, "th")}</thead><tbody>${rows.map((x) => tr(asRow(x), "td")).join("")}</tbody></table></div>`);
+    }
+    body.appendChild(rawToggle(r));
+  }
+
+  // 임베딩 패널 — pgvector에서 그 청크의 벡터와 가까운 청크(비용 0)
+  async function openChunk(id) {
+    $("app").classList.add("with-drawer");
+    const b = $("drawerBody"); b.innerHTML = `<div class="typing">pgvector에서 읽는 중</div>`;
+    try {
+      const d = await api("api/chunk/" + encodeURIComponent(id));
+      b.innerHTML = `
+        <dl class="kv">
+          <dt>chunk_id</dt><dd>${esc(d.chunk_id)}</dd>
+          <dt>문서</dt><dd>${esc(d.file_name)}</dd>
+          <dt>s3_key</dt><dd>${esc(d.s3_key)}</dd>
+          <dt>위치</dt><dd>${esc([d.page != null ? "p." + d.page : null, d.lines ? "줄 " + d.lines : null].filter(Boolean).join(" · ") || "—")} · ${esc(d.n_chars)}자</dd>
+          <dt>모델</dt><dd>${esc(d.embed_model)}</dd>
+          <dt>차원</dt><dd>${esc(d.dims)}</dd>
+          <dt>L2 크기</dt><dd>${esc(d.l2_norm)} <span class="note">(정규화 저장 → 1에 가까워야 정상)</span></dd>
+          <dt>최소 / 최대 / 평균</dt><dd>${esc(d.min)} / ${esc(d.max)} / ${esc(d.mean)}</dd>
+        </dl>
+        <div class="box"><h3>값 분포 — ${esc(d.dims)}차원을 ${esc(d.profile.length)}구간 평균(구간당 ${esc(d.profile_step)}개)</h3>${profileSvg(d.profile)}</div>
+        <div class="box"><h3>앞 16개 값</h3><div class="head-vals">${d.head.map((x) => `<span>${x.toFixed(4)}</span>`).join("")}</div></div>
+        <div class="box"><h3>코사인으로 가까운 청크 (전체 ${esc(d.total_chunks)}개 중)</h3><div class="nb" id="nb"></div>
+          <p class="note">이 청크 벡터와 저장된 다른 청크 벡터의 코사인 유사도(1 − <code>&lt;=&gt;</code>). 누르면 그 청크로 이동.</p></div>
+        <div class="box"><h3>청크 본문</h3><div style="white-space:pre-wrap;font-size:13px">${esc(d.text)}</div></div>`;
+      const nb = $("nb");
+      d.neighbors.forEach((n) => {
+        const x = document.createElement("button");
+        x.innerHTML = `<span><b>${esc(n.file_name)}</b> · chunk ${esc(n.chunk_id)}</span><span>${esc(n.text)}</span>
+          <span class="cos"><span>cos ${n.cosine.toFixed(4)}</span><span class="meter"><div style="width:${Math.max(0, Math.min(100, n.cosine * 100))}%"></div></span></span>`;
+        x.addEventListener("click", () => openChunk(n.chunk_id));
+        nb.appendChild(x);
+      });
+    } catch (e) {
+      b.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+    }
+  }
+  function closeDrawer() { $("app").classList.remove("with-drawer"); if (activeCard) activeCard.classList.remove("active"); activeCard = null; }
+
+  function profileSvg(vals) {
+    if (!vals.length) return `<div class="note">벡터 없음</div>`;
+    const W = 380, H = 120, mid = H / 2, max = Math.max(...vals.map(Math.abs)) || 1, bw = W / vals.length;
+    const bars = vals.map((v, i) => {
+      const h = Math.abs(v) / max * (mid - 4), y = v >= 0 ? mid - h : mid;
+      return `<rect x="${(i * bw).toFixed(2)}" y="${y.toFixed(2)}" width="${Math.max(bw - 0.6, 0.6).toFixed(2)}" height="${Math.max(h, 0.5).toFixed(2)}" fill="var(${v >= 0 ? "--pos" : "--neg"})"><title>구간 ${i}: ${v.toFixed(5)}</title></rect>`;
+    }).join("");
+    return `<svg class="profile" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="임베딩 값 분포">
+      <line x1="0" y1="${mid}" x2="${W}" y2="${mid}" stroke="var(--line)" />${bars}</svg>`;
+  }
+
+  updateMode();
+  refreshHealth();
+  setInterval(refreshHealth, 15000);
+})();
+</script>
+</body>
+</html>

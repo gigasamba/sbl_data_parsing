@@ -1,0 +1,65 @@
+{
+  "agent_id": "research_judge",
+  "owner": "developer",
+  "description": "근거 조각이 하위 질문에 답하는지 판정(검색한 사람과 다른 기준)",
+  "kind": "pipeline",
+  "model_role": "llm",
+  "classification": "internal",
+  "budget": {
+    "model_calls": 1
+  },
+  "local_tools": [],
+  "prompt_ids": [
+    "judge"
+  ],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "status"
+    ],
+    "properties": {
+      "status": {
+        "enum": [
+          "found",
+          "partial",
+          "not_found"
+        ]
+      },
+      "answer": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "cite": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        }
+      },
+      "near_miss": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "cite": {
+              "type": "integer"
+            },
+            "what": {
+              "type": "string"
+            },
+            "why_not": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "follow_up": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  }
+}

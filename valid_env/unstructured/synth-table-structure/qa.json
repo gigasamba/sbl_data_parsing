@@ -1,0 +1,29 @@
+{
+ "set": "synth-table-structure",
+ "split": "holdout",
+ "scoring": "_synth_images_qa.score",
+ "items": [
+  {
+   "type": "figure_caption",
+   "question": "공정 사진의 반응조 라벨은?",
+   "gold_answer": "반응조 R-1",
+   "answer_keywords": [
+    "반응조",
+    "R-1"
+   ],
+   "evidence": [
+    {
+     "doc": "annotated_figure.pptx"
+    }
+   ],
+   "needs": [
+    "image"
+   ],
+   "dims": [
+    "Q03"
+   ],
+   "lang": "ko",
+   "id": "SQ001"
+  }
+ ]
+}

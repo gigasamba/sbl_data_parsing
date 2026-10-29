@@ -1,0 +1,255 @@
+<meta charset="utf-8">
+<title>파이프라인 문항 탐색기</title>
+<style>
+:root {
+  --bg: #f3f6f5; --surface: #ffffff; --ink: #17211d; --muted: #5b6862; --rule: #d5ddd9; --rule-soft: #e7ece9;
+  --accent: #1c6b57; --accent-soft: #e0efe9; --ok: #1d7a4e; --ok-soft: #dff1e7; --miss: #b23d2d; --miss-soft: #f7e2de;
+  --na: #8a948f; --chip: #edf1ef; --near: #946400; --near-soft: #f6ecd2;
+  --sans: system-ui, -apple-system, "Segoe UI", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", Roboto, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "D2Coding", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f1412; --surface: #161d1a; --ink: #e2eae6; --muted: #98a6a0; --rule: #2b3632; --rule-soft: #202926;
+    --accent: #5cc2a2; --accent-soft: #1a2d27; --ok: #6fd3a0; --ok-soft: #173024; --miss: #ef8a7c; --miss-soft: #34201c;
+    --na: #6c7772; --chip: #1f2825; --near: #e3b35c; --near-soft: #33291a;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1412; --surface: #161d1a; --ink: #e2eae6; --muted: #98a6a0; --rule: #2b3632; --rule-soft: #202926;
+  --accent: #5cc2a2; --accent-soft: #1a2d27; --ok: #6fd3a0; --ok-soft: #173024; --miss: #ef8a7c; --miss-soft: #34201c;
+  --na: #6c7772; --chip: #1f2825; --near: #e3b35c; --near-soft: #33291a;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14.5px; line-height: 1.55; margin: 0; padding-inline: 16px; padding-block: 24px 64px; }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; }
+h1, h2, h3 { margin: 0; line-height: 1.3; text-wrap: balance; }
+h1 { font-size: 26px; }
+h2 { font-size: 18px; }
+p { margin: 0; max-width: 78ch; }
+.muted { color: var(--muted); }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { padding: 7px 9px; border-bottom: 1px solid var(--rule-soft); text-align: left; vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--bg); white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); white-space: nowrap; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.box { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; display: grid; gap: 8px; align-content: start; }
+.box h3 { font-size: 14px; }
+ul { margin: 0; padding-left: 20px; display: grid; gap: 5px; }
+.sets { display: grid; gap: 8px; }
+.sets button { font: inherit; font-size: 13px; background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 5px; padding: 6px 12px; cursor: pointer; }
+.sets button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+.sets button:focus-visible, .ctl:focus-visible, .more:focus-visible, tr.q:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.controls label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+.ctl { font: inherit; font-size: 13.5px; background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 5px; padding: 5px 8px; min-width: 0; }
+input.ctl { width: 220px; max-width: 100%; }
+.note { font-size: 12.5px; color: var(--muted); }
+.mark { display: inline-grid; place-items: center; width: 22px; height: 20px; border-radius: 4px; font-size: 12px; font-weight: 700; font-family: var(--mono); }
+.mark.y { background: var(--ok-soft); color: var(--ok); }
+.mark.n { background: var(--miss-soft); color: var(--miss); }
+.mark.x { color: var(--na); }
+.mark.m { background: var(--near-soft); color: var(--near); }
+.setgrp { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.setgrp .glabel { font-size: 12px; color: var(--muted); font-weight: 600; min-width: 11em; }
+tr.q { cursor: pointer; }
+tr.q:hover td { background: var(--accent-soft); }
+td.qt { min-width: 260px; max-width: 460px; }
+td.id { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.chip { font-size: 11.5px; background: var(--chip); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+tr.detail td { background: var(--bg); }
+.detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; padding: 6px 2px; }
+.detail-grid h4 { margin: 0 0 4px; font-size: 12.5px; color: var(--muted); }
+.ans { display: grid; grid-template-columns: max-content 1fr; gap: 3px 10px; font-size: 13px; }
+.ans .v { font-family: var(--mono); overflow-wrap: anywhere; }
+.atoms { font-family: var(--mono); font-size: 12.5px; display: grid; gap: 2px; }
+.summary td.num.hi { color: var(--ok); font-weight: 700; }
+.colbtn { font: inherit; font-size: 12px; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; }
+.colbtn:focus-visible { outline: 2px solid var(--accent); }
+.more { font: inherit; font-size: 13px; background: var(--surface); color: var(--accent); border: 1px solid var(--rule); border-radius: 5px; padding: 6px 12px; cursor: pointer; justify-self: start; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:10px">
+    <div class="eyebrow" id="eyebrow">파이프라인 조합 평가</div>
+    <h1>파이프라인 문항 탐색기</h1>
+    <p class="muted">평가에 쓴 문항을 한 줄씩 봅니다. 질문(검색 앵커 또는 파싱 QA 항목), 정답, 그리고 파서·조합(스택)별로 맞혔는지(✓/△/✗)를 나란히 보여 줍니다. 행을 누르면 파서별 실제 출력, 조합별 검색 상위 결과(LLM에 넘길 글), LLM 답이 펼쳐집니다. 실패가 많은 문항이 위로 정렬되고, 표 머리의 이름을 누르면 그 파서·조합이 실패한 문항만 남습니다. 데이터는 도구가 만든 파일에서 자동으로 채워지므로 문서가 바뀌어도 같은 구성으로 다시 만들어집니다.</p>
+  </header>
+
+  <section class="cols">
+    <div class="box"><h3>세 가지 측정</h3>
+      <ul>
+        <li><b>파싱 QA</b>(LLM 0회): 문서의 정답 값(숫자·날짜·ID·라벨 값)이 파서 출력에 있는가. 행 = 값 하나, 열 = 파서.</li>
+        <li><b>검색 근거</b>(LLM 0회): 값을 뺀 질의로 검색했을 때 상위 5개 안에 그 문서의 그 값을 담은 조각이 있으면 ✓, 6~10위면 △, 없으면 ✗. 근거가 없으면 LLM은 맞힐 수 없습니다.</li>
+        <li><b>답변 정답</b>(LLM 사용, 서버): 상위 조합의 컨텍스트로 GLM이 답한 값이 정답과 같은가. 아쉬움 △는 점수 없이 따로 셉니다.</li>
+        <li><b>정답의 출처</b>: truth = 가상 문서 정답 · answer_key = 사람 정답지 · native = 텍스트형 원본 · consensus = 인식 계열 3개 이상 합의(은, silver).</li>
+      </ul></div>
+    <div class="box"><h3>문항 세트가 여러 개인 이유</h3>
+      <div class="scroll" style="border:0"><table>
+        <thead><tr><th>세트</th><th class="num">문항</th><th class="num">답변</th><th>설명</th></tr></thead>
+        <tbody id="setTable"></tbody>
+      </table></div></div>
+  </section>
+
+  <section style="display:grid;gap:12px">
+    <div class="sets" id="sets" role="group" aria-label="문항 세트"></div>
+    <p class="note" id="setNote"></p>
+    <div class="controls">
+      <label for="fType">세부 유형<select class="ctl" id="fType"></select></label>
+      <label for="fSplit">분할<select class="ctl" id="fSplit"></select></label>
+      <label for="fArm">스택<select class="ctl" id="fArm"></select></label>
+      <label for="fState">상태<select class="ctl" id="fState">
+        <option value="">전체</option><option value="evn">근거 놓침</option><option value="evy">근거 포함</option>
+        <option value="fail">실패(근거 놓침·오답·아쉬움 포함)</option><option value="near">아쉬움(한 끗 차이)만</option><option value="ann">오답</option><option value="any">정답</option><option value="split">스택끼리 결과가 갈림</option>
+      </select></label>
+      <label for="fText">검색(질문·ID·고객)<input class="ctl" id="fText" type="search" placeholder="예: Galvano, 합계"></label>
+    </div>
+  </section>
+
+  <section style="display:grid;gap:8px">
+    <h2 id="sumTitle">스택별 요약</h2>
+    <div class="scroll"><table class="summary" id="summary"></table></div>
+  </section>
+
+  <section style="display:grid;gap:8px">
+    <h2 id="listTitle">문항</h2>
+    <div class="scroll"><table id="list"></table></div>
+    <button class="more" id="more" type="button">더 보기</button>
+  </section>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const $ = id => document.getElementById(id);
+const L = a => (cur && cur.armNames && cur.armNames[a]) || DATA.arms[a] || a;
+let cur = DATA.sets[0], shown = 200, open = new Set();
+
+function store(k, v) { try { localStorage.setItem("qx." + k, v); } catch (e) {} }
+function load(k) { try { return localStorage.getItem("qx." + k); } catch (e) { return null; } }
+
+function setButtons() {
+  $("sets").innerHTML = "";
+  const cats = [...new Set(DATA.sets.map(s => s.cat))];
+  cats.forEach(cat => {
+    const g = document.createElement("div"); g.className = "setgrp";
+    g.innerHTML = `<span class="glabel">${cat}</span>`;
+    DATA.sets.filter(s => s.cat === cat).forEach(s => {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = s.title; b.setAttribute("aria-pressed", String(s === cur));
+      b.onclick = () => { cur = s; shown = 200; open.clear(); store("set", s.key); init(); };
+      g.appendChild(b);
+    });
+    $("sets").appendChild(g);
+  });
+}
+function opts(sel, vals, all) {
+  sel.innerHTML = `<option value="">${all}</option>` + vals.map(v => `<option value="${v}">${v}</option>`).join("");
+}
+function setTable() {
+  $("setTable").innerHTML = DATA.sets.map(s => `<tr><td>${esc(s.title)}</td><td class="num">${s.n.toLocaleString()}</td><td class="num">${s.nAns || "—"}</td><td>${esc(s.note)}</td></tr>`).join("");
+  if (DATA.eyebrow) $("eyebrow").textContent = DATA.eyebrow;
+}
+function init() {
+  setButtons();
+  $("setNote").textContent = cur.note + ` 문항 ${cur.n.toLocaleString()}개 · LLM 답변 ${cur.nAns}문항.`;
+  opts($("fType"), [...new Set(cur.rows.map(r => r.s))].sort(), "전체");
+  opts($("fSplit"), [...new Set(cur.rows.map(r => r.sp).filter(Boolean))].sort(), "전체");
+  const arms = [...new Set([...cur.evArms, ...cur.anArms])];
+  $("fArm").innerHTML = `<option value="">전체</option>` + arms.map(a => `<option value="${a}">${L(a)}</option>`).join("");
+  render();
+}
+function match(r) {
+  const t = $("fType").value, sp = $("fSplit").value, arm = $("fArm").value, st = $("fState").value;
+  const q = $("fText").value.trim().toLowerCase();
+  if (t && r.s !== t) return false;
+  if (sp && r.sp !== sp) return false;
+  if (q && !(r.q.toLowerCase().includes(q) || r.id.toLowerCase().includes(q) || (r.doc || "").toLowerCase().includes(q))) return false;
+  if (!st) return true;
+  const arms = arm ? [arm] : null;
+  const evs = arms ? arms.map(a => r.e[a]) : Object.values(r.e);
+  const ans = arms ? arms.map(a => r.a[a]).filter(Boolean) : Object.values(r.a);
+  if (st === "evn") return evs.some(v => isN(v) || v === "near");
+  if (st === "evy") return evs.length > 0 && evs.every(isY);
+  if (st === "ann") return ans.some(v => cls(v) !== "y");
+  if (st === "any") return ans.length > 0 && ans.every(v => cls(v) === "y");
+  if (st === "near") return evs.includes("near") || ans.some(v => cls(v) === "near");
+  if (st === "fail") return arm ? fails(r, arm) > 0 : fails(r) > 0;
+  if (st === "split") { const v = Object.values(r.e); return v.includes(true) && v.includes(false); }
+  return true;
+}
+const isY = v => v === true || v === "y", isN = v => v === false || v === "n";
+const cls = v => v.c || (v.ok ? "y" : "n");
+function fails(r, arm) {
+  const ks = arm ? [arm] : [...new Set([...Object.keys(r.e), ...Object.keys(r.a)])];
+  return ks.filter(k => (k in r.e && !isY(r.e[k])) || (r.a[k] && cls(r.a[k]) !== "y")).length;
+}
+const mark = v => isY(v) ? '<span class="mark y" aria-label="정답">✓</span>' : v === "near" ? '<span class="mark m" aria-label="아쉬움">△</span>' : isN(v) ? '<span class="mark n" aria-label="실패">✗</span>' : '<span class="mark x">·</span>';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+function render() {
+  const rows = cur.rows.filter(match).map((r, i) => [r, i]).sort((x, y) => fails(y[0]) - fails(x[0]) || x[1] - y[1]).map(x => x[0]);   // 실패 많은 문항 먼저, 전부 맞힌 문항은 아래
+  // 요약
+  const arms = [...new Set([...cur.evArms, ...cur.anArms])];
+  const evCnt = a => rows.filter(r => isY(r.e[a])).length, evN = a => rows.filter(r => a in r.e).length;
+  const evNear = a => rows.filter(r => r.e[a] === "near").length;
+  const anCnt = a => rows.filter(r => r.a[a] && cls(r.a[a]) === "y").length, anN = a => rows.filter(r => r.a[a]).length;
+  const anNear = a => rows.filter(r => r.a[a] && cls(r.a[a]) === "near").length;
+  // 파서마다 처리하는 문서(=문항) 수가 달라 개수가 아니라 비율로 비교(개수로 강조하면 형식을 많이 받는 파서가 늘 1위처럼 보임)
+  const evRate = a => evN(a) ? evCnt(a) / evN(a) : -1;
+  const bestEvR = Math.max(-1, ...arms.map(evRate)), bestAn = Math.max(0, ...arms.map(anCnt));
+  $("sumTitle").textContent = `스택별 요약 — 현재 필터 ${rows.length.toLocaleString()}문항`;
+  const parse = cur.mode === "parse";
+  const P = cur.pass || {};
+  const passCell = a => { const p = P[a]; if (!p) return "—"; const t = p.fail.length ? `미달: ${p.fail.join(", ")}` : "전부 통과";
+    return `<span title="${esc(t)}">${p.ok === p.n ? "✓ " : ""}${p.ok} / ${p.n}</span>`; };
+  const armsSorted = parse ? [...arms].sort((x, y) => evRate(y) - evRate(x) || evN(y) - evN(x)) : arms;
+  $("summary").innerHTML = `<thead><tr><th>${parse ? "파서" : "스택"}</th><th class="num">${parse ? "정답 값 포함(정확도)" : "근거 포함"}</th>${parse ? '<th class="num">QA 기준 통과(P0·P1·P2·P2h·P3·P4)</th>' : '<th class="num">근거 아쉬움 △</th><th class="num">답변 정답</th><th class="num">답변 아쉬움 △</th>'}</tr></thead><tbody>` +
+    armsSorted.map(a => `<tr><td>${L(a)}</td><td class="num ${evN(a) && Math.abs(evRate(a) - bestEvR) < 1e-9 ? "hi" : ""}">${evN(a) ? `${evCnt(a)} / ${evN(a)} (${(100 * evRate(a)).toFixed(1)}%)` : "—"}</td>` +
+      (parse ? `<td class="num">${passCell(a)}</td>` : `<td class="num">${evN(a) ? evNear(a) : "—"}</td>`) +
+      (parse ? "" : `<td class="num ${anN(a) && anCnt(a) === bestAn ? "hi" : ""}">${anN(a) ? `${anCnt(a)} / ${anN(a)}` : "—"}</td><td class="num">${anN(a) ? anNear(a) : "—"}</td>`) + `</tr>`).join("") + `</tbody>`;
+  // 목록
+  const evA = cur.evArms, anA = cur.anArms;
+  let h = `<thead><tr><th>ID</th><th>세부 유형</th><th>질문</th><th>정답</th>` +
+    evA.map(a => `<th><button class="colbtn" type="button" data-arm="${a}" title="${L(a)}가 실패한 행만 보기">${L(a)}</button></th>`).join("") + (anA.length ? `<th>답변 정답(맞힌 스택 수)</th>` : "") + `</tr></thead><tbody>`;
+  rows.slice(0, shown).forEach(r => {
+    const nA = Object.keys(r.a).length, okA = Object.values(r.a).filter(v => cls(v) === "y").length, nearA = Object.values(r.a).filter(v => cls(v) === "near").length;
+    h += `<tr class="q" tabindex="0" data-id="${esc(r.id)}"><td class="id">${esc(r.id)}${r.fmt ? ` <span class="chip">${esc(r.fmt)}</span>` : ""}${r.low ? ` <span class="chip" style="color:var(--warn,#9a6400);font-weight:600" title="파싱 성공 엔진 또는 독립 인식 계열 2개 이하 — 정확도를 믿기 어려움">⚠ 모수 적음</span>` : ""}</td><td><span class="chip">${esc(r.s)}</span></td>` +
+      `<td class="qt">${esc(r.q)}</td><td class="num">${esc(r.g)}</td>` + evA.map(a => `<td>${mark(r.e[a])}</td>`).join("") +
+      (anA.length ? `<td class="num">${nA ? `${okA} / ${nA}${nearA ? ` · △${nearA}` : ""}` : "—"}</td>` : "") + `</tr>`;
+    if (open.has(r.id)) {
+      h += `<tr class="detail"><td colspan="${4 + evA.length + (anA.length ? 1 : 0)}"><div class="detail-grid">` +
+        `<div><h4>근거 원자 (모두 한 블록에 있어야 "근거 포함")</h4><div class="atoms">${r.ev.length ? r.ev.map(x => `<span>${esc(x)}</span>`).join("") : '<span class="muted">이 세트에는 근거 원자가 없습니다</span>'}</div></div>` +
+        (r.top ? `<div><h4>조합별 검색 상위 결과 (LLM에 넘길 글)</h4><div class="ans">${Object.entries(r.top).map(([a, us]) => `<span>${mark(r.e[a])} ${L(a)}</span><span class="v">${us.length ? us.map((u, k) => `${k + 1}. ${u.hit ? "✓" : ""}[${esc(u.doc)}] ${esc(u.text)}`).join("<br>") : "결과 없음"}</span>`).join("")}</div></div>` : "") +
+        `<div><h4>${cur.mode === "parse" ? "파서별 실제 출력" : "스택별 LLM 답"}</h4><div class="ans">${nA ? Object.entries(r.a).map(([a, v]) => `<span>${mark(cls(v))} ${L(a)}</span><span class="v">${esc(v.a || (v.err ? "오류" : "빈 답"))}</span>`).join("") : '<span class="muted">이 문항은 LLM 답변을 받지 않았습니다(근거만 측정)</span><span></span>'}</div></div>` +
+        `<div><h4>정보</h4><div class="ans"><span>유형</span><span>${esc(r.t)} / ${esc(r.s)}</span><span>분할</span><span>${esc(r.sp || "—")}</span><span>정답</span><span class="v">${esc(r.g)}</span>${r.doc ? `<span>원본 문서</span><span class="v">${esc(r.doc)} (${esc(r.fmt)})</span>` : ""}</div>` +
+        (r.src && r.src.length ? `<h4 style="margin-top:10px">원본 데이터 (정답이 나오는 곳)</h4><div class="atoms">${r.src.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : "") + `</div>` +
+        `</div></td></tr>`;
+    }
+  });
+  $("list").innerHTML = h + `</tbody>`;
+  $("listTitle").textContent = `문항 ${Math.min(shown, rows.length).toLocaleString()} / ${rows.length.toLocaleString()}`;
+  $("more").hidden = rows.length <= shown;
+}
+$("list").addEventListener("click", e => {
+  const tr = e.target.closest("tr.q"); if (!tr) return;
+  const id = tr.dataset.id; open.has(id) ? open.delete(id) : open.add(id); render();
+});
+$("list").addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const tr = e.target.closest("tr.q"); if (!tr) return;
+  e.preventDefault(); const id = tr.dataset.id; open.has(id) ? open.delete(id) : open.add(id); render();
+});
+$("more").onclick = () => { shown += 300; render(); };
+$("list").addEventListener("click", e => {
+  const b = e.target.closest("button.colbtn"); if (!b) return;
+  e.stopPropagation(); $("fArm").value = b.dataset.arm; $("fState").value = "fail"; shown = 200; render();
+}, true);
+["fType", "fSplit", "fArm", "fState"].forEach(id => $(id).addEventListener("change", () => { shown = 200; render(); }));
+$("fText").addEventListener("input", () => { shown = 200; render(); });
+const saved = load("set"); if (saved) cur = DATA.sets.find(s => s.key === saved) || cur;
+setTable(); init();
+</script>

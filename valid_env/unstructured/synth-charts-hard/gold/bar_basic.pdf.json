@@ -1,0 +1,29 @@
+{
+ "values": [
+  {
+   "series": null,
+   "x": "Q1",
+   "value": 41.0
+  },
+  {
+   "series": null,
+   "x": "Q2",
+   "value": 47.0
+  },
+  {
+   "series": null,
+   "x": "Q3",
+   "value": 39.0
+  },
+  {
+   "series": null,
+   "x": "Q4",
+   "value": 52.0
+  }
+ ],
+ "trend": {
+  "direction": "변동",
+  "period": "Q1–Q4",
+  "basis": "Q1 41 → Q4 52"
+ }
+}

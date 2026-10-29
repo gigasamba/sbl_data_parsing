@@ -1,0 +1,30 @@
+{
+  "agent_id": "table_struct_judge",
+  "owner": "developer",
+  "description": "경계 표(행 30~90% 일치)만 — 정답 표와 출력 표가 같은 행×열 관계인지 판정(score_gold TS1 표 구조 재현율 보조)",
+  "kind": "pipeline",
+  "model_role": "llm",
+  "classification": "internal",
+  "budget": {
+    "model_calls": 1
+  },
+  "local_tools": [],
+  "prompt_ids": [
+    "judge"
+  ],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "pass",
+      "reason"
+    ],
+    "properties": {
+      "pass": {
+        "type": "boolean"
+      },
+      "reason": {
+        "type": "string"
+      }
+    }
+  }
+}

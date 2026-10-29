@@ -1,0 +1,39 @@
+{
+ "values": [
+  {
+   "series": "A",
+   "x": "J1",
+   "value": 25.0
+  },
+  {
+   "series": "A",
+   "x": "J2",
+   "value": 40.0
+  },
+  {
+   "series": "A",
+   "x": "J3",
+   "value": 55.0
+  },
+  {
+   "series": "B",
+   "x": "J1",
+   "value": 50.0
+  },
+  {
+   "series": "B",
+   "x": "J2",
+   "value": 65.0
+  },
+  {
+   "series": "B",
+   "x": "J3",
+   "value": 80.0
+  }
+ ],
+ "trend": {
+  "direction": "증가",
+  "period": "J1–J3",
+  "basis": "J1 75 → J3 135"
+ }
+}

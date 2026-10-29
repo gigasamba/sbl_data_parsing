@@ -1,0 +1,44 @@
+{
+  "agent_id": "diagram_arrows",
+  "owner": "developer",
+  "description": "그림 속 화살표(가로·세로·대각선·되돌림 포함) 전부를 세어보고 edges로 — 셀프체크(화살표 개수)",
+  "kind": "pipeline",
+  "model_role": "vlm",
+  "classification": "internal",
+  "budget": {
+    "model_calls": 1
+  },
+  "local_tools": [],
+  "prompt_ids": [
+    "arrows"
+  ],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "edges",
+      "arrow_count"
+    ],
+    "properties": {
+      "edges": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "arrow_count": {
+        "type": "integer"
+      }
+    }
+  }
+}

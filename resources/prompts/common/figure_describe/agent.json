@@ -1,0 +1,77 @@
+{
+  "agent_id": "figure_describe",
+  "owner": "developer",
+  "description": "그림 1장을 검색용 기록(JSON)으로 — 종류·요약·글자·값·연결·표",
+  "kind": "pipeline",
+  "model_role": "vlm",
+  "classification": "internal",
+  "budget": {
+    "model_calls": 1
+  },
+  "local_tools": [],
+  "prompt_ids": [
+    "figjson"
+  ],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "kind"
+    ],
+    "properties": {
+      "kind": {
+        "enum": [
+          "흐름도",
+          "그래프",
+          "표",
+          "사진",
+          "분자",
+          "스크린샷",
+          "기타"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "text": {
+        "type": "string"
+      },
+      "values": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "unit": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "edges": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "table_md": {
+        "type": "string"
+      }
+    }
+  }
+}

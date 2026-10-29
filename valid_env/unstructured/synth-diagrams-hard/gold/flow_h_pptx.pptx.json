@@ -1,0 +1,34 @@
+{
+ "nodes": [
+  "접수 Intake",
+  "검토 Review",
+  "승인 Approval",
+  "시행 Execute",
+  "완료 Done"
+ ],
+ "edges": [
+  {
+   "from": "접수 Intake",
+   "to": "검토 Review"
+  },
+  {
+   "from": "검토 Review",
+   "to": "승인 Approval"
+  },
+  {
+   "from": "승인 Approval",
+   "to": "시행 Execute"
+  },
+  {
+   "from": "시행 Execute",
+   "to": "완료 Done"
+  },
+  {
+   "from": "완료 Done",
+   "to": "승인 Approval"
+  }
+ ],
+ "template": "flow_h",
+ "orientation": "h",
+ "repr": "pptx"
+}

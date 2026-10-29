@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# 커밋 전 점검(켜기 한 번: git config core.hooksPath .githooks) — 바꾼 파일 ruff·mypy·모듈 경계. 건너뛰기는 사람이 판단할 때만(git commit --no-verify).
+exec bash "$(git rev-parse --show-toplevel)/deploy/release/lint_changed.sh" HEAD

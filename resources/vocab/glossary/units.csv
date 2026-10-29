@@ -1,0 +1,24 @@
+﻿canonical,variants,quantity,equivalent_to,note,updated
+g/L,g/l|g per L|그램/리터|그램 퍼 리터,concentration,mg/mL,1 g/L = 1 mg/mL — 같은 표준 토큰으로(값 비교는 SQL),2026-10-02
+mg/mL,mg/ml|밀리그램/밀리리터,concentration,g/L,,2026-10-02
+µg/mL,ug/mL|ug/ml|mcg/mL|μg/mL|마이크로그램/밀리리터,concentration,mg/L,µ(U+00B5)·μ(U+03BC) 둘 다,2026-10-02
+ng/mL,ng/ml,concentration,,,2026-10-02
+ng/mg,ng/mg,impurity_ratio,ppm,HCP 표기 — 1 ng/mg = 1 ppm,2026-10-02
+ppm,ppm|피피엠|parts per million,impurity_ratio,ng/mg,붙여 쓰기(10ppm)·띄어 쓰기(10 ppm) 모두 숫자 + ppm 두 토큰으로,2026-10-02
+ppb,ppb|parts per billion,impurity_ratio,,,2026-10-02
+EU/mL,eu/ml|EU/ml|endotoxin units per mL,endotoxin,,,2026-10-02
+CFU/mL,cfu/ml|CFU/ml|cfu,bioburden,,,2026-10-02
+cells/mL,cells/ml|세포/mL|cell/mL|×10^6 cells/mL|x10^6 cells/mL|1e6 cells/mL,cell_density,,×10^6 접두는 숫자 쪽에서 처리,2026-10-02
+L,l|리터|liter|litre|ℓ,volume,,"2,000L → 2000 + L + 2000L",2026-10-02
+mL,ml|밀리리터|㎖,volume,,,2026-10-02
+°C,℃|degC|deg C|도씨|섭씨,temperature,,25°C → 25 + °C,2026-10-02
+%,percent|퍼센트|pct,ratio,,92.5% → 92.5 + %,2026-10-02
+wt%,wt %|중량%|w/w%,ratio,,,2026-10-02
+v/v,v/v %|부피비,ratio,,,2026-10-02
+kDa,kda|킬로달톤,molecular_weight,,,2026-10-02
+pH,ph|피에이치,acidity,,pH 3.6 → pH + 3.6,2026-10-02
+log10,log|LRV|로그,clearance,,바이러스 제거 log 감소값,2026-10-02
+batch,batches|배치|lot|로트,count,,물량 단위,2026-10-02
+g,gram|그램|grams,mass,,단가 USD/g 등,2026-10-02
+USD,$|US$|달러|미화,currency,,"USD 160,000 → USD + 160000",2026-10-02
+KRW,원|₩|원화,currency,,,2026-10-02

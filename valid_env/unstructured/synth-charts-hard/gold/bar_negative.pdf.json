@@ -1,0 +1,24 @@
+{
+ "values": [
+  {
+   "series": null,
+   "x": "N1",
+   "value": 30.0
+  },
+  {
+   "series": null,
+   "x": "N2",
+   "value": -10.0
+  },
+  {
+   "series": null,
+   "x": "N3",
+   "value": 15.0
+  }
+ ],
+ "trend": {
+  "direction": "변동",
+  "period": "N1–N3",
+  "basis": "N1 30 → N3 15"
+ }
+}

@@ -1,0 +1,40 @@
+{
+  "agent_id": "nested_figure",
+  "owner": "developer",
+  "description": "쪽 전체 그림(page_render) 안의 자식 그림(그래프·사진·도면·표) bbox 찾기 — F7 중첩",
+  "kind": "pipeline",
+  "model_role": "vlm",
+  "classification": "internal",
+  "budget": {
+    "model_calls": 1
+  },
+  "local_tools": [],
+  "prompt_ids": [
+    "bbox"
+  ],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "regions"
+    ],
+    "properties": {
+      "regions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "bbox": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "kind": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

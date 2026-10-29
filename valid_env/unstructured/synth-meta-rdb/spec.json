@@ -1,0 +1,397 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_meta_rdb.py",
+ "split": "dev",
+ "note": "[SYNTHETIC]",
+ "documents": [
+  {
+   "file": "docs/rfp_veridian_mab_2023.pdf",
+   "format": "pdf",
+   "elements": [
+    "RFP",
+    "계약 ID 기입"
+   ],
+   "content": "Request for Proposal — Veridian BioWorks (fictional)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": [
+    {
+     "kw": [
+      "3.5 g/L"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/contract_veridian_mab_2023.docx",
+   "format": "docx",
+   "elements": [
+    "CONTRACT",
+    "계약 ID 기입"
+   ],
+   "content": "공급 계약서 — Veridian BioWorks (가상)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/mail_veridian_followup_2023.eml",
+   "format": "eml",
+   "elements": [
+    "MAIL",
+    "계약 ID 기입"
+   ],
+   "content": "Batch schedule confirmation — C-RDB-2023-001",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/minutes_veridian_kickoff_2023.txt",
+   "format": "txt",
+   "elements": [
+    "MINUTES",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "Veridian BioWorks 킥오프 회의록",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/rfi_sjm_vaccine_2023.docx",
+   "format": "docx",
+   "elements": [
+    "RFI",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "RFI — 선진메디팜 백신 위탁생산 문의 (가상)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/rfp_sjm_vaccine_2024.pdf",
+   "format": "pdf",
+   "elements": [
+    "RFP",
+    "계약 ID 기입"
+   ],
+   "content": "Request for Proposal — Sunjin Medipharm (fictional)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/contract_sjm_vaccine_2024.docx",
+   "format": "docx",
+   "elements": [
+    "CONTRACT",
+    "계약 ID 기입"
+   ],
+   "content": "공급 계약서 — 선진메디팜(주) (가상)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/rfi_answer_sjm_2023_v1.docx",
+   "format": "docx",
+   "elements": [
+    "RFI_ANSWER",
+    "계약 없음"
+   ],
+   "content": "RFI 답변서 — 선진메디팜 역량 소개 v1 (가상)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/rfi_answer_sjm_2023_v2.docx",
+   "format": "docx",
+   "elements": [
+    "RFI_ANSWER",
+    "계약 없음"
+   ],
+   "content": "RFI 답변서 — 선진메디팜 역량 소개 v2 (가상, v1 갱신)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/rfi_answer_sjm_2024.pdf",
+   "format": "pdf",
+   "elements": [
+    "RFI_ANSWER",
+    "계약 없음"
+   ],
+   "content": "Capability Statement — Sunjin Medipharm 2024 (fictional)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/rfi_answer_sjm_2025.xlsx",
+   "format": "xlsx",
+   "elements": [
+    "RFI_ANSWER",
+    "계약 없음"
+   ],
+   "content": "RFI 답변서 초안 — 선진메디팜 (가상, 배포 전 회수)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/rfi_answer_sjm_2026.docx",
+   "format": "docx",
+   "elements": [
+    "RFI_ANSWER",
+    "계약 없음"
+   ],
+   "content": "RFI 답변서 — 선진메디팜 역량 소개 2026 (가상)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": [
+    {
+     "kw": [
+      "20배치"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/rfp_sjm_mab_2025.docx",
+   "format": "docx",
+   "elements": [
+    "RFP",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "RFP — 선진메디팜 항체(mAb) 신규 프로그램 (가상)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/contract_sjm_mab_2025.txt",
+   "format": "txt",
+   "elements": [
+    "CONTRACT",
+    "계약 ID 기입"
+   ],
+   "content": "공급 계약서 — 선진메디팜(주) mAb (가상)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/quote_sjm_mab_2025.xlsx",
+   "format": "xlsx",
+   "elements": [
+    "QUOTE",
+    "계약 ID 기입"
+   ],
+   "content": "Quote — SJM-mAb-03 (fictional)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/mail_sjm_negotiation_2025.eml",
+   "format": "eml",
+   "elements": [
+    "MAIL",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "[협상] SJM-mAb-03 단가 조정 요청",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": [
+    {
+     "kw": [
+      "5%"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/rfi_nordholm_adc_2024.docx",
+   "format": "docx",
+   "elements": [
+    "RFI",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "RFI — Nordholm Therapeutics ADC Program (fictional)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": [
+    {
+     "kw": [
+      "OEB5"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/rfp_nordholm_adc_2024.pdf",
+   "format": "pdf",
+   "elements": [
+    "RFP",
+    "계약 ID 기입"
+   ],
+   "content": "Request for Proposal — Nordholm Therapeutics (fictional)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/contract_nordholm_adc_2024.docx",
+   "format": "docx",
+   "elements": [
+    "CONTRACT",
+    "계약 ID 기입"
+   ],
+   "content": "공급 계약서 — Nordholm Therapeutics (가상)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/minutes_nordholm_review_2025.txt",
+   "format": "txt",
+   "elements": [
+    "MINUTES",
+    "계약 ID 기입"
+   ],
+   "content": "Nordholm Therapeutics 중간 점검 회의록",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/rfp_castellan_mab_2024.docx",
+   "format": "docx",
+   "elements": [
+    "RFP",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "RFP — Castellan Biologics 항체 신규 프로그램 (가상)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/contract_castellan_mab_2025.pdf",
+   "format": "pdf",
+   "elements": [
+    "CONTRACT",
+    "계약 ID 기입"
+   ],
+   "content": "공급 계약서 — Castellan Biologics (가상)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": [
+    {
+     "kw": [
+      "Plant1"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/quote_castellan_2025.xlsx",
+   "format": "xlsx",
+   "elements": [
+    "QUOTE",
+    "계약 ID 기입"
+   ],
+   "content": "Quote — CST-mAb-02 (fictional)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/rfp_castellan_cgt_2026.pdf",
+   "format": "pdf",
+   "elements": [
+    "RFP",
+    "계약 없음"
+   ],
+   "content": "Request for Proposal — Castellan Biologics CGT (fictional)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/rfi_marwick_vaccine_2025.eml",
+   "format": "eml",
+   "elements": [
+    "RFI",
+    "계약 ID 없음(연결 추론 필요)"
+   ],
+   "content": "[RFI] 마윅 백신 위탁생산 문의",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/rfp_marwick_vaccine_2025.docx",
+   "format": "docx",
+   "elements": [
+    "RFP",
+    "계약 ID 기입"
+   ],
+   "content": "Request for Proposal — Marwick Vaccines (fictional)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "docs/contract_marwick_vaccine_2026.txt",
+   "format": "txt",
+   "elements": [
+    "CONTRACT",
+    "계약 ID 기입"
+   ],
+   "content": "공급 계약서 — Marwick Vaccines (가상)",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": [
+    {
+     "kw": [
+      "14배치"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "docs/mail_marwick_followup_2026.eml",
+   "format": "eml",
+   "elements": [
+    "MAIL",
+    "계약 ID 기입"
+   ],
+   "content": "[확인] C-RDB-2026-006 배치 일정",
+   "expect": "RDB 메타(문서종류·고객·계약·판·삭제) + 본문 사실",
+   "facts": []
+  },
+  {
+   "file": "meta/contract_master.csv",
+   "format": "csv(RDB 메타)",
+   "elements": [
+    "정형 데이터"
+   ],
+   "content": "계약 ID·고객·총액·공장·제품·배치 수·기간",
+   "expect": "행 단위 값",
+   "facts": []
+  },
+  {
+   "file": "meta/client_master.csv",
+   "format": "csv(RDB 메타)",
+   "elements": [
+    "정형 데이터"
+   ],
+   "content": "고객 ID·법인명·별칭",
+   "expect": "행 단위 값",
+   "facts": []
+  },
+  {
+   "file": "meta/doc_location.csv",
+   "format": "csv(RDB 메타)",
+   "elements": [
+    "정형 데이터"
+   ],
+   "content": "문서 위치·종류·계약 연결·판·삭제 여부",
+   "expect": "행 단위 값",
+   "facts": []
+  },
+  {
+   "file": "meta/doc_contract_link.csv",
+   "format": "csv(RDB 메타)",
+   "elements": [
+    "정형 데이터"
+   ],
+   "content": "문서↔계약 연결(추론, 빈 표)",
+   "expect": "행 단위 값",
+   "facts": []
+  }
+ ]
+}

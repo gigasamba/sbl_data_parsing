@@ -1,0 +1,54 @@
+{
+ "values": [
+  {
+   "series": "mAb",
+   "x": "2024",
+   "value": 15.0
+  },
+  {
+   "series": "ADC",
+   "x": "2024",
+   "value": 6.0
+  },
+  {
+   "series": "Vaccine",
+   "x": "2024",
+   "value": 3.0
+  },
+  {
+   "series": "mAb",
+   "x": "2025",
+   "value": 18.0
+  },
+  {
+   "series": "ADC",
+   "x": "2025",
+   "value": 8.0
+  },
+  {
+   "series": "Vaccine",
+   "x": "2025",
+   "value": 4.0
+  },
+  {
+   "series": "mAb",
+   "x": "2026",
+   "value": 21.0
+  },
+  {
+   "series": "ADC",
+   "x": "2026",
+   "value": 10.0
+  },
+  {
+   "series": "Vaccine",
+   "x": "2026",
+   "value": 5.0
+  }
+ ],
+ "trend": {
+  "direction": "증가",
+  "period": "2024–2026",
+  "basis": "2024 24 → 2026 36"
+ }
+}

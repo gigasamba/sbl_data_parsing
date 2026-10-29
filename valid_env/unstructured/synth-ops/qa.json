@@ -1,0 +1,515 @@
+{
+ "set": "synth-ops",
+ "split": "holdout",
+ "scoring": "_synth_images_qa.score",
+ "items": [
+  {
+   "type": "rfi_status",
+   "question": "Norvanta Biologics (가상) 2026 RFI 회신 마감일과 아직 답하지 않은 문항 수는?",
+   "gold_answer": "2026-11-14, 미답변 3문항(Q3·Q5·Q7)",
+   "answer_keywords": [
+    "2026-11-14",
+    "3문항|3 문항|3개|3 개|3건|3 건|3곳|3 곳"
+   ],
+   "evidence": [
+    {
+     "doc": "rfi_questionnaire_2026.xlsx"
+    }
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01",
+    "Q07",
+    "Q03"
+   ],
+   "lang": "ko",
+   "id": "OQ001"
+  },
+  {
+   "type": "rfi_reuse",
+   "question": "작년 Norvanta RFI에서 2,000L 캐파 질문에 뭐라고 답했나?",
+   "gold_answer": "2,000L 라인 2025년 가용 캐파는 약 30%",
+   "answer_keywords": [
+    "30%"
+   ],
+   "evidence": [
+    {
+     "doc": "rfi_response_2025.docx"
+    }
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "id": "OQ002"
+  },
+  {
+   "type": "rfi_reuse",
+   "question": "Norvanta RFI 소유구조 질문에 쓸 수 있는 과거 답변은?",
+   "gold_answer": "FX홀딩스 100% 소유(2025-03 기준)",
+   "answer_keywords": [
+    "FX홀딩스",
+    "100%"
+   ],
+   "evidence": [
+    {
+     "doc": "rfi_response_2025.docx"
+    }
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "id": "OQ003"
+  },
+  {
+   "type": "negotiation",
+   "question": "Norvanta와의 2026 단가 조정 결과(조정률·적용일)와 새 단가는?",
+   "gold_answer": "3.5% 인하, 2026-04-01 적용, 새 단가 397,580 USD/batch",
+   "answer_keywords": [
+    "3.5%",
+    "2026-04-01",
+    "397580"
+   ],
+   "evidence": [
+    {
+     "doc": "email_price_thread.eml"
+    }
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01",
+    "C04"
+   ],
+   "lang": "ko",
+   "id": "OQ004"
+  },
+  {
+   "type": "negotiation",
+   "question": "단가 협상에서 처음 고객이 요청한 인하율과 우리가 처음 제안한 인하율은?",
+   "gold_answer": "고객 5% 요청, FX Bio 3% 제안",
+   "answer_keywords": [
+    "5%",
+    "3%"
+   ],
+   "evidence": [
+    {
+     "doc": "email_price_thread.eml"
+    }
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "id": "OQ005"
+  },
+  {
+   "type": "contract_diff",
+   "question": "기본계약 v2에서 v1 대비 바뀐 조항(가격 상한·해지 통지·MTOP)은?",
+   "gold_answer": "가격 상한 5%→4%, 해지 통지 90일→120일, MTOP 6→5배치",
+   "answer_keywords": [
+    "4%",
+    "120일",
+    "5배치"
+   ],
+   "evidence": [
+    {
+     "doc": "msa_v1.docx"
+    },
+    {
+     "doc": "msa_v2.docx"
+    }
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q04",
+    "X04"
+   ],
+   "lang": "ko",
+   "id": "OQ006"
+  },
+  {
+   "type": "conflict_latest",
+   "question": "Norvanta 계약의 현재 유효한 가격 조정 상한은?",
+   "gold_answer": "4% (v2, 2026-06-15 개정 — v1의 5%는 옛 값)",
+   "answer_keywords": [
+    "4%"
+   ],
+   "evidence": [
+    {
+     "doc": "msa_v1.docx"
+    },
+    {
+     "doc": "msa_v2.docx"
+    }
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "forbid_keywords": [
+    "현재 5%",
+    "상한은 5%"
+   ],
+   "id": "OQ007"
+  },
+  {
+   "type": "rephrase",
+   "question": "노르반타 MTOP 몇 배치로 바뀌었어?",
+   "gold_answer": "연 5배치(v2, 이전 6배치)",
+   "answer_keywords": [
+    "5배치|5 배치"
+   ],
+   "evidence": [
+    {
+     "doc": "msa_v2.docx"
+    }
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q09"
+   ],
+   "lang": "ko",
+   "id": "OQ008"
+  },
+  {
+   "type": "qaa",
+   "question": "QAA에서 출하 승인(Batch release)의 최종 책임은 누구에게 있나?",
+   "gold_answer": "위탁사 QP(Norvanta)",
+   "answer_keywords": [
+    "위탁사"
+   ],
+   "evidence": [
+    {
+     "doc": "qaa_norvanta.docx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "T03"
+   ],
+   "lang": "ko",
+   "id": "OQ009"
+  },
+  {
+   "type": "version_latest",
+   "question": "최신 역량 소개 슬라이드 기준 총 배양 용량과 생산 라인 수는?",
+   "gold_answer": "14,000L, 8개 라인(v3, 2026-08)",
+   "answer_keywords": [
+    "14000",
+    "8개|8 개|8문항|8 문항|8건|8 건|8곳|8 곳"
+   ],
+   "evidence": [
+    {
+     "doc": "capability_deck_v2.pptx"
+    },
+    {
+     "doc": "capability_deck_v3.pptx"
+    }
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "forbid_keywords": [
+    "10,000L입니다",
+    "총 10000"
+   ],
+   "id": "OQ010"
+  },
+  {
+   "type": "capa",
+   "question": "FDA 483 지적 중 CAPA가 아직 종결되지 않은 항목과 기한은?",
+   "gold_answer": "OBS-2(CAPA-2024-032), 기한 2026-12-31",
+   "answer_keywords": [
+    "OBS-2",
+    "2026-12-31"
+   ],
+   "evidence": [
+    {
+     "doc": "fda483_capa_tracker.xlsx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03"
+   ],
+   "lang": "ko",
+   "id": "OQ011"
+  },
+  {
+   "type": "validation",
+   "question": "BR-2001 OQ에서 교반 속도 검증 범위와 판정은?",
+   "gold_answer": "50~150 rpm, 적합",
+   "answer_keywords": [
+    "50~150|50-150|50 ~ 150|50 - 150",
+    "적합"
+   ],
+   "evidence": [
+    {
+     "doc": "validation_oq_br2001.pdf"
+    }
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "id": "OQ012"
+  },
+  {
+   "type": "calibration",
+   "question": "BR-2001 압력계 PT-205의 마지막 교정일과 다음 교정 예정일은?",
+   "gold_answer": "2026-09-28, 다음 2027-09-28",
+   "answer_keywords": [
+    "2026-09-28",
+    "2027-09-28"
+   ],
+   "evidence": [
+    {
+     "doc": "calibration_log.xlsx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "Q05"
+   ],
+   "lang": "ko",
+   "forbid_keywords": [
+    "2025-10-02에 마지막"
+   ],
+   "id": "OQ013"
+  },
+  {
+   "type": "em_trend",
+   "question": "R-205 차압 이탈이 가장 많았던 달과 횟수는?",
+   "gold_answer": "2026-09, 2회",
+   "answer_keywords": [
+    "2026-09",
+    "2회|2 회|2번|2026-09, 2|2026-09: 2"
+   ],
+   "evidence": [
+    {
+     "doc": "em_dp_trend_r205.xlsx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03",
+    "Q07"
+   ],
+   "lang": "ko",
+   "id": "OQ014"
+  },
+  {
+   "type": "audit",
+   "question": "2026 고객 감사 지적 중 미종결 항목은?",
+   "gold_answer": "A-2(교육 기록), A-3(교정 라벨)",
+   "answer_keywords": [
+    "A-2",
+    "A-3"
+   ],
+   "evidence": [
+    {
+     "doc": "audit_findings_2026.docx"
+    }
+   ],
+   "needs": [
+    "table"
+   ],
+   "dims": [
+    "Q03"
+   ],
+   "lang": "ko",
+   "id": "OQ015"
+  },
+  {
+   "type": "coa",
+   "question": "원료 Lot RM-2609 CoA의 순도는 규격 이내인가?",
+   "gold_answer": "99.2% — 규격 ≥ 99.0% 이내(적합)",
+   "answer_keywords": [
+    "99.2",
+    "적합"
+   ],
+   "evidence": [
+    {
+     "doc": "coa_rm2609.pdf"
+    }
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "id": "OQ016"
+  },
+  {
+   "type": "multi_doc",
+   "question": "아직 진행 중인 483 CAPA가 관련된 방에서 2026-09에 차압 이탈이 몇 번 있었나?",
+   "gold_answer": "OBS-2 → R-205, 2026-09 이탈 2회",
+   "answer_keywords": [
+    "R-205",
+    "2회|2 회|2번"
+   ],
+   "evidence": [
+    {
+     "doc": "fda483_capa_tracker.xlsx"
+    },
+    {
+     "doc": "em_dp_trend_r205.xlsx"
+    }
+   ],
+   "needs": [
+    "table",
+    "multi"
+   ],
+   "dims": [
+    "Q04",
+    "Q03"
+   ],
+   "lang": "ko",
+   "id": "OQ017"
+  },
+  {
+   "type": "multi_doc",
+   "question": "감사 지적 A-3(온도 기록계 교정 라벨)과 관련해, 교정 기록상 WFI 온도계 TT-102의 다음 교정 예정일은?",
+   "gold_answer": "2027-03-11",
+   "answer_keywords": [
+    "2027-03-11"
+   ],
+   "evidence": [
+    {
+     "doc": "audit_findings_2026.docx"
+    },
+    {
+     "doc": "calibration_log.xlsx"
+    }
+   ],
+   "needs": [
+    "table",
+    "multi"
+   ],
+   "dims": [
+    "Q04"
+   ],
+   "lang": "ko",
+   "id": "OQ018"
+  },
+  {
+   "type": "compound",
+   "question": "Norvanta 작년 RFI의 규제 실사 답변 내용과, 올해 RFI에서 실사 이력 문항(Q4)의 상태는?",
+   "gold_answer": "FDA PAI 2024-09 지적 없음(NAI) / Q4 답변완료",
+   "answer_keywords": [
+    "PAI",
+    "답변완료"
+   ],
+   "evidence": [
+    {
+     "doc": "rfi_response_2025.docx"
+    },
+    {
+     "doc": "rfi_questionnaire_2026.xlsx"
+    }
+   ],
+   "needs": [
+    "multi"
+   ],
+   "dims": [
+    "Q10",
+    "Q04"
+   ],
+   "lang": "ko",
+   "id": "OQ019"
+  },
+  {
+   "type": "negative",
+   "question": "PT-205의 교정 성적서 번호는?",
+   "gold_answer": "근거 없음(교정 기록에 성적서 번호 없음)",
+   "answer_keywords": [
+    "근거 없음|없|명시되지"
+   ],
+   "evidence": [
+    {
+     "doc": "calibration_log.xlsx"
+    }
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q06"
+   ],
+   "lang": "ko",
+   "forbid_keywords": [
+    "성적서 번호는"
+   ],
+   "id": "OQ020"
+  },
+  {
+   "type": "negative",
+   "question": "Norvanta 세포주 로열티 조건에 대한 우리 답변은?",
+   "gold_answer": "근거 없음 — 2026 RFI Q7은 미답변이며 과거 답변에도 없음",
+   "answer_keywords": [
+    "근거 없음|미답변|없"
+   ],
+   "evidence": [
+    {
+     "doc": "rfi_questionnaire_2026.xlsx"
+    },
+    {
+     "doc": "rfi_response_2025.docx"
+    }
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q06"
+   ],
+   "lang": "ko",
+   "forbid_keywords": [
+    "로열티는"
+   ],
+   "id": "OQ021"
+  }
+ ]
+}

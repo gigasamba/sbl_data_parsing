@@ -1,0 +1,28 @@
+[
+ {
+  "name": "FileStorageMap",
+  "table": "AI.FileStorageMap",
+  "bucket": "rag-src",
+  "enabled": true,
+  "columns": {
+   "doc_id": "id",
+   "key": "s3_key",
+   "filename": "original_filename",
+   "size": "file_size",
+   "increment": "id"
+  }
+ },
+ {
+  "name": "FileStorageMap_CRMS",
+  "table": "AI.FileStorageMap_CRMS",
+  "bucket": "rag-src",
+  "enabled": true,
+  "columns": {
+   "doc_id": "file_id",
+   "key": "object_path",
+   "filename": "file_name",
+   "size": "size_bytes",
+   "increment": "mod_seq"
+  }
+ }
+]

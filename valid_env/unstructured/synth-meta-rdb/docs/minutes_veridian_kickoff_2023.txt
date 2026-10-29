@@ -1,0 +1,6 @@
+Veridian BioWorks 킥오프 회의록
+[가상 예시] 합성 시험 문서 — 실존 회사·데이터와 무관.
+Veridian BioWorks 킥오프 회의록 (2023-02-15)
+참석: SCM·QA·생산
+안건: VRD-mAb-01 라인 배정(Plant1 BR-M1), 품질 합의서 초안 공유
+결정: 3월 첫째 주 PPQ 배치 착수

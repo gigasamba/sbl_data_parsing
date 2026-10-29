@@ -1,0 +1,71 @@
+{
+  "_주석": "모델 조합 실험 설정 — 코드에 모델 이름을 넣지 않는다(tools/model_matrix.py가 이 파일만 읽음). 서버 구성을 맥락으로 단 OpenRouter 후보.",
+  "roles": {
+    "llm": {
+      "baseline": "glm-5.2",
+      "env": {"base_url": "LLM_BASE_URL", "model": "LLM_MODEL", "key": "LLM_API_KEY"},
+      "candidates": [
+        {"id": "glm-5.2", "model": "z-ai/glm-5.2", "base_url_env": "LLM_BASE_URL", "key_env": "LLM_API_KEY", "kind": "api"},
+        {"id": "glm-5.3", "model": "z-ai/glm-5.3", "base_url_env": "LLM_BASE_URL", "key_env": "LLM_API_KEY", "kind": "api"}
+      ]
+    },
+    "vlm": {
+      "baseline": "qwen3.5-397b",
+      "env": {"base_url": "VLM_BASE_URL", "model": "VLM_MODEL", "key": "VLM_API_KEY"},
+      "candidates": [
+        {"id": "qwen3.5-397b", "model": "qwen/qwen3.5-397b-a17b", "base_url_env": "VLM_BASE_URL", "key_env": "VLM_API_KEY", "kind": "api"},
+        {"id": "qwen3.8-flash", "model": "qwen/qwen3.8-flash", "base_url_env": "VLM_BASE_URL", "key_env": "VLM_API_KEY", "kind": "api"}
+      ]
+    },
+    "embed": {
+      "baseline": "qwen3-embedding-8b",
+      "env": {"base_url": "EMBED_BASE_URL", "model": "EMBED_MODEL", "key": "EMBED_API_KEY"},
+      "candidates": [
+        {"id": "qwen3-embedding-8b", "model": "qwen/qwen3-embedding-8b", "base_url_env": "EMBED_BASE_URL", "key_env": "EMBED_API_KEY", "kind": "api", "bundle_embed_arg": "api"},
+        {"id": "bge-m3", "model": "bge-m3", "base_url_env": null, "key_env": null, "kind": "local", "bundle_embed_arg": "bge-m3"},
+        {"id": "qwen3-vl-embedding", "model": "qwen3-vl-embedding", "kind": "api", "server_only": true}
+      ]
+    }
+  },
+  "design": "staged",
+  "_design_주석": "staged(기본, 2026-10-02 조정자 확정) — 1단계: embed만 A/B, retrieval만(결정적, 전 데이터셋) → held-out R@5(동률이면 dev R@5)로 승자 고정. 2단계: 그 embed로 llm×vlm 2x2, stage2_limit 문항만. ofat은 그대로 선택 가능(design:\"ofat\").",
+  "stage2_mode": "split",
+  "_stage2_mode_주석": "split(기본) = research는 LLM만 바꿔, 그림 검토는 VLM만 바꿔 잼(지금은 VLM 결과가 색인에 거의 안 들어가 둘이 섞이지 않음) · factorial = 2x2 전부(백로그 L1 반영 뒤)",
+  "stage2_limit": 20,
+  "repeats": 2,
+  "judge_cross": false,
+  "extra": [],
+  "datasets": {
+    "dev": ["synth-4clients", "synth-images", "synth-hard"],
+    "holdout": ["synth-plant", "synth-charts"]
+  },
+  "eval_set_path": "valid_env/unstructured/eval_set.json",
+  "research_sets": ["synth-4clients", "synth-images", "synth-hard", "synth-plant", "synth-charts", "synth-ops", "synth-tables"],
+  "figure_sets": ["synth-images", "synth-hard", "synth-plant", "synth-charts", "synth-ops", "synth-tables"],
+  "stack_json": "pipeline_stack.json",
+  "research_limit": 20,
+  "research_k": 8,
+  "figure_review_limit": 8,
+  "workers": 4,
+  "latency": {
+    "research_calls_per_question": 5.5,
+    "research_sec_per_call_min": 6.5,
+    "research_sec_per_call_max": 11,
+    "figure_calls_per_figure_min": 2,
+    "figure_calls_per_figure_max": 3,
+    "figure_sec_per_call_min": 8,
+    "figure_sec_per_call_max": 60,
+    "query_embed_sec": 4,
+    "structure_sec_per_200docs": 30
+  },
+  "reuse_bundles": {
+    "_주석": "이미 지은 묶음을 다시 쓸 때만 채움 — {\"<데이터셋>\": {\"<embed id>\": {\"bundle\", \"cache\", \"parse_dir\", \"prepared_dir\", \"truth\"(, \"roster\")}}}, 경로는 그대로 쓰이므로 절대 경로이거나, 저장소 루트에서 실행할 때의 상대 경로(예: output/eval/model_matrix/<run>/edw/bundle). I4(10-26): 개인 PC 세션 scratchpad 절대 경로(세션 종료 후 사라짐)라 비움 — 없으면 prepare가 새로 짓거나 needs_parse로 알림."
+  },
+  "vlm_parse_variant_bundles": {
+    "_주석": "참고용(이 harness는 아직 안 씀) — phase3 VLM(qwen3.5-397b)로 다시 파싱한 묶음. 다른 VLM 후보로 다시 지으려면 docker parse(phase 3)부터.",
+    "synth-images": {"qwen3.5-397b": "ipv_out/edw/bundle"},
+    "synth-plant": {"qwen3.5-397b": "ipv_out/edw/bundle"},
+    "synth-charts": {"qwen3.5-397b": "cv_out/edw/bundle"}
+  },
+  "mcp_store": "local"
+}

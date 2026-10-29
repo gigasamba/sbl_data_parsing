@@ -1,0 +1,153 @@
+"""common.core.resources 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.core.resources --selftest`."""
+
+import math
+import sys
+from pathlib import Path
+from unittest import mock
+
+import common.core.resources as M
+from common.core.resources import (
+    cpus,
+    gated_popen,
+    mem_gb,
+    mem_used_pct,
+    plan,
+    plan_experiment,
+    resolve_inner_workers,
+    resolve_workers,
+    wait_cpu,
+    wait_mem,
+)
+
+
+def selftest():
+    import tempfile
+
+    d = Path(tempfile.mkdtemp())
+    (d / "cpu.max").write_text("200000 100000\n")  # --cpus 2
+    (d / "memory.max").write_text(str(8 * 1024**3) + "\n")  # --memory 8g
+    mi = d / "meminfo"
+    mi.write_text("MemTotal:       33554432 kB\n")  # 호스트 32 GB
+    assert cpus(d) <= 2 and mem_gb(d, mi) == 8.0
+    (d / "cpu.max").write_text("max 100000\n")
+    (d / "memory.max").write_text("max\n")
+    assert mem_gb(d, mi) == 32.0
+    import contextlib
+
+    from common.config.settings import COMMON  # S7b — 시험이 env 대신 설정 객체를 덮어씀(os.environ은 안 바뀜)
+
+    _env = contextlib.ExitStack()  # 아래 덮어쓰기는 selftest 끝까지 유지(옛 os.environ.pop도 끝까지 남았음)
+    _env.enter_context(COMMON.env(PIPE_PROCS=None, PIPE_THREADS=None, PIPE_RESERVE_CPUS=None, PIPE_RESERVE_GB=None, PIPE_PROC_GB=None))
+    p = plan(cpu=4, mem=32)
+    assert (p["procs"], p["threads"]) == (3, 1), p  # 개발 서버 4 vCPU·32 GB
+    p = plan(cpu=64, mem=512)
+    assert p["procs"] == 8, p  # 상한
+    p = plan(cpu=16, mem=12)
+    assert (p["procs"], p["threads"]) == (2, 8), p  # 메모리가 제한: (12−4)÷3 = 2
+    p = plan(cpu=1, mem=None)
+    assert (p["procs"], p["threads"]) == (1, 1), p
+    with COMMON.env(PIPE_PROCS="5"):
+        assert plan(cpu=4, mem=32)["procs"] == 5  # resolve_procs("2")==2는 pipeline.extract.resources.selftest()로 옮김(10-14, P만 씀)
+    (d / "memory.current").write_text(str(6 * 1024**3) + "\n")  # cgroup 8 GB 중 6 GB = 75%
+    (d / "memory.max").write_text(str(8 * 1024**3) + "\n")
+    assert round(mem_used_pct(d, mi)) == 75
+    (d / "memory.current").write_text(str(8 * 1024**3) + "\n")  # 현재 8 GB · 파일 캐시(회수 가능) 5 GB · 한도 10 GB
+    (d / "memory.max").write_text(str(10 * 1024**3) + "\n")
+    (d / "memory.stat").write_text(f"inactive_file {5 * 1024**3}\nanon {1 * 1024**3}\n")
+    assert round(mem_used_pct(d, mi)) == 30, round(mem_used_pct(d, mi))  # (8−5)÷10 — 파일 캐시를 빼야 과대평가 안 함(D5)
+    (d / "memory.stat").unlink()
+    assert mem_used_pct(d / "없음", d / "없음") is None or sys.platform == "win32"
+    assert wait_mem(start_pct=101, log=lambda *_: None) is None or True  # 문이 열려 있으면 바로 통과
+    print("[selftest] CPU·메모리(cgroup) 감지·병렬 수 결정·메모리 문 통과")
+
+    # 가짜 사용률 수열(90 → 90 → 70) — MEM_MAX_PCT(85) 넘는 압박 중엔 새 작업을 대기시키고(통과 전 폴링 2회),
+    # 로그는 1번만(소음 억제), 떨어지면(70 < 85) 통과 — mem_used_pct를 모듈 전역에서 잠깐 바꿔 넣음(끝나면 원복)
+    seq, calls, orig = [90.0, 90.0, 70.0], [], M.mem_used_pct
+
+    def fake_mem():
+        calls.append(1)
+        return seq[min(len(calls) - 1, len(seq) - 1)]
+
+    M.mem_used_pct = fake_mem
+    try:
+        logs = []
+        u = wait_mem(start_pct=85, poll=0, log=logs.append)
+        assert u == 70.0 and len(logs) == 1 and len(calls) >= 3  # 대기 2회(폴링) 후 통과, 로그는 1번만
+    finally:
+        M.mem_used_pct = orig
+    print("[selftest] 메모리 문(가짜 사용률 90→90→70) — 압박 중 새 작업 대기·로그 1번·하락 뒤 통과")
+
+    # gated_popen — 문 통과(사용률 낮게 가짜 처리) 뒤 실제 하위 프로세스를 띄우고 settle 뒤 돌려줌(communicate·wait는 호출자)
+    with mock.patch.object(M, "mem_used_pct", lambda: 10.0):  # 시험용 가짜 함수로 바꿔 끼움(끝나면 원래 함수로)
+        pr = gated_popen([sys.executable, "-c", "pass"], settle=0)
+        assert pr.wait(timeout=10) == 0
+    print("[selftest] gated_popen — 메모리 문 통과 뒤 하위 프로세스 기동(settle 0) 통과")
+
+    # 성능 회귀 수정(코디네이터 10-04): 여유 있으면(상한 − MEM_SETTLE_MARGIN보다 낮음) settle을 건너뜀 —
+    # 문서×엔진 수천 건 실행에서 매번 쉬면 launch가 초당 1/settle로 묶여 전체가 느려짐.
+    # 벽시계로 재면 바쁜 PC에서 들쭉날쭉(10-05: 프로세스 10개 기동이 3초를 넘어 가끔 실패) → time.sleep 호출을 가로채 settle 여부만 셈(결정적).
+    import time as _t
+
+    slept, orig_sleep = [], _t.sleep
+    _t.sleep = lambda s: slept.append(s)
+    try:
+        mem = mock.patch.object(M, "mem_used_pct").start()  # 가짜 사용률 — side_effect로 값을 바꿔 가며(끝나면 원래 함수로)
+        mem.side_effect = lambda: 10.0  # 여유 있음(상한 90 − 여백 5 = 85보다 훨씬 낮음)
+        for _ in range(10):
+            gated_popen([sys.executable, "-c", "pass"], settle=2).wait(timeout=30)
+        assert 2 not in slept, slept  # settle=2를 10번 다 건너뜀
+        mem.side_effect = lambda: 86.0  # 상한 90에 가까움(90−5=85 이상) — settle 적용
+        gated_popen([sys.executable, "-c", "pass"], settle=0.3).wait(timeout=30)
+        assert 0.3 in slept, slept
+        # RB3① 경계값(margin 10→5, 10-07): 84%는 새 문턱(85) 아래라 건너뛰고, 85%는 문턱에 닿아 settle(77% 평소 사용률이면 안 걸려야 함)
+        mem.side_effect = lambda: 77.0  # PC 평소 사용률 — 새 문턱 85에서는 걸리지 않아야 함(10-07 실측 회귀 방지)
+        gated_popen([sys.executable, "-c", "pass"], settle=0.4).wait(timeout=30)
+        assert 0.4 not in slept, slept
+        mem.side_effect = lambda: 84.0  # 문턱(85) 바로 아래 — 안 쉼
+        gated_popen([sys.executable, "-c", "pass"], settle=0.5).wait(timeout=30)
+        assert 0.5 not in slept, slept
+        mem.side_effect = lambda: 85.0  # 문턱(85) 그대로 — 쉼
+        gated_popen([sys.executable, "-c", "pass"], settle=0.6).wait(timeout=30)
+        assert 0.6 in slept, slept
+    finally:
+        _t.sleep = orig_sleep
+        mock.patch.stopall()
+    print("[selftest] gated_popen — 여유 있으면 settle 건너뜀(10회) · 상한 가까우면 settle 적용 통과(호출 기록으로 판정, 시간 무관)")
+
+    # CPU 문(wait_cpu) — 가짜 부하 수열(부하/코어 1.0 → 1.0 → 0.25, 실제 cpus()에 맞춰 스케일) CPU_MAX_LOAD(기본 0.9 — 사용자 10-07: CPU 상한 90%) 이상인 동안 대기,
+    # 로그 1번만, 떨어지면 통과 · Windows(getloadavg 없음)는 실제 호출에선 None이라 바로 통과하지만 여기선 가짜로 수열을 강제
+    n_cpu = cpus()
+    cseq, ccalls, corig = [n_cpu * 1.0, n_cpu * 1.0, n_cpu * 0.25], [], M._loadavg1
+
+    def fake_load():
+        ccalls.append(1)
+        return cseq[min(len(ccalls) - 1, len(cseq) - 1)]
+
+    M._loadavg1 = fake_load
+    try:
+        clogs = []
+        u = wait_cpu(max_load=1.0, poll=0, log=clogs.append)
+        assert u == n_cpu * 0.25 and len(clogs) == 1 and len(ccalls) >= 3, (u, clogs, ccalls)  # 부하 1.0 ≥ 1.0 두 번 대기 후 통과
+    finally:
+        M._loadavg1 = corig
+    print("[selftest] CPU 문(가짜 부하 수열) — 포화 중 새 작업 대기·로그 1번·하락 뒤 통과")
+
+    # plan_experiment — 4 vCPU·32 GB(개발 서버) → CPU가 제한(4−1=3) · 32 GB·62 GB(이 PC류) → min(CPU−1, 메모리 식) 그대로
+    _env.enter_context(COMMON.env(EXP_PROC_GB_RUN=None, EXP_PROC_GB_BUILD=None, EXP_RESERVE_GB=None, LLM_MAX_CONCURRENCY=None))
+    p = plan_experiment("run", cpu=4, mem=32)
+    assert p["workers"] == 3, p  # CPU 4−1=3 · 메모리 (32−4)÷0.5=56 → CPU가 제한
+    p = plan_experiment("build", cpu=32, mem=62)
+    assert p["workers"] == min(31, math.floor((62 - 4) / 1.5), 8), p  # 공식(CPU·메모리 중 작은 쪽) + 상한 EXP_MAX_WORKERS 8
+    for workers in (1, 2, 3, 8):  # workers ≤ LLM_MAX_CONCURRENCY(기본 8)면 총 동시 요청이 상한 안
+        p = plan_experiment("answer", cpu=workers + 1, mem=32)
+        assert p["workers"] == workers and p["workers"] * p["inner_workers"] <= 8, p
+    p = plan_experiment("answer", cpu=21, mem=32)  # CPU로는 20이지만 상한 EXP_MAX_WORKERS 8 → 8×inner 1 = 8 ≤ LLM 상한 8
+    assert p["workers"] == 8 and p["inner_workers"] == 1, p
+    assert resolve_workers("run", "auto") == plan_experiment("run")["workers"] and resolve_workers("run", "5") == 5
+    assert resolve_inner_workers("auto", 3) == max(1, 8 // 3) and resolve_inner_workers("2", 3) == 2
+    print("[selftest] plan_experiment — CPU·메모리 기준 workers(서버 4vCPU→3) · inner-workers auto가 LLM_MAX_CONCURRENCY 안 통과")
+    _env.close()
+
+
+def test_main():  # 옛 `if __name__ == "__main__":` 의 --selftest 갈래
+    selftest()

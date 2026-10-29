@@ -1,0 +1,6 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_fsm.py",
+ "split": "dev",
+ "note": "[SYNTHETIC] SI41 원천 표 여러 개 — 열 이름이 다른 두 표에서 s3_key로 원본 찾기 · 시험: csv:<표 파일>을 sources의 table 대신(가짜 EDW), docs/를 가짜 Object Storage 버킷 rag-src에",
+ "documents": []
+}

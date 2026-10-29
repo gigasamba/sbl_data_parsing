@@ -1,0 +1,29 @@
+{
+ "values": [
+  {
+   "series": null,
+   "x": "D0",
+   "value": 500.0
+  },
+  {
+   "series": null,
+   "x": "D2",
+   "value": 8000.0
+  },
+  {
+   "series": null,
+   "x": "D4",
+   "value": 200000.0
+  },
+  {
+   "series": null,
+   "x": "D6",
+   "value": 4000000.0
+  }
+ ],
+ "trend": {
+  "direction": "증가",
+  "period": "D0–D6",
+  "basis": "D0 500 → D6 4000000"
+ }
+}

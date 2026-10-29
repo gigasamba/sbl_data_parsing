@@ -1,0 +1,594 @@
+{
+ "set": "synth-revisions-tune",
+ "split": "dev",
+ "scoring": "_synth_images_qa.score",
+ "items": [
+  {
+   "type": "current",
+   "question": "SOP-MFG-022 기준 현재 세척 후 보관 가능 시간은?",
+   "gold_answer": "72시간(Rev.C, 2026-03-23)",
+   "answer_keywords": [
+    "72시간"
+   ],
+   "needs": [
+    "text",
+    "multi"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_mfg022_a.pdf"
+    },
+    {
+     "doc": "sop_mfg022_b.pdf"
+    },
+    {
+     "doc": "sop_mfg022_c.pdf"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_mfg022_a.pdf",
+     "path": "valid_env/unstructured/synth-revisions-tune/sop_mfg022_a.pdf",
+     "where": "본문"
+    },
+    {
+     "doc": "sop_mfg022_b.pdf",
+     "path": "valid_env/unstructured/synth-revisions-tune/sop_mfg022_b.pdf",
+     "where": "본문"
+    },
+    {
+     "doc": "sop_mfg022_c.pdf",
+     "path": "valid_env/unstructured/synth-revisions-tune/sop_mfg022_c.pdf",
+     "where": "본문"
+    }
+   ],
+   "forbid_keywords": [
+    "보관 가능 시간은 48시간",
+    "보관 가능 시간은 24시간",
+    "현재 48시간",
+    "현재 24시간"
+   ],
+   "id": "RD001"
+  },
+  {
+   "type": "current",
+   "question": "현재 승인 공급사 수는?",
+   "gold_answer": "8곳(2026 목록)",
+   "answer_keywords": [
+    "8곳|8문항|8 문항|8개|8 개|8건|8 건|8 곳"
+   ],
+   "needs": [
+    "text",
+    "multi"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "approved_suppliers_2024.docx"
+    },
+    {
+     "doc": "approved_suppliers_2025.docx"
+    },
+    {
+     "doc": "approved_suppliers_2026.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "approved_suppliers_2024.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/approved_suppliers_2024.docx",
+     "where": "본문"
+    },
+    {
+     "doc": "approved_suppliers_2025.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/approved_suppliers_2025.docx",
+     "where": "본문"
+    },
+    {
+     "doc": "approved_suppliers_2026.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/approved_suppliers_2026.docx",
+     "where": "본문"
+    }
+   ],
+   "forbid_keywords": [
+    "공급사 수는 9곳",
+    "공급사 수는 7곳",
+    "현재 9곳",
+    "현재 7곳"
+   ],
+   "id": "RD002"
+  },
+  {
+   "type": "current",
+   "question": "Orion Media의 현재 공급사 상태는?",
+   "gold_answer": "승인(2026 목록 — 2025년에는 보류)",
+   "answer_keywords": [
+    "승인"
+   ],
+   "needs": [
+    "text",
+    "multi"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "approved_suppliers_2024.docx"
+    },
+    {
+     "doc": "approved_suppliers_2025.docx"
+    },
+    {
+     "doc": "approved_suppliers_2026.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "approved_suppliers_2024.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/approved_suppliers_2024.docx",
+     "where": "본문"
+    },
+    {
+     "doc": "approved_suppliers_2025.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/approved_suppliers_2025.docx",
+     "where": "본문"
+    },
+    {
+     "doc": "approved_suppliers_2026.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/approved_suppliers_2026.docx",
+     "where": "본문"
+    }
+   ],
+   "forbid_keywords": [
+    "현재 보류",
+    "상태는 보류"
+   ],
+   "id": "RD003"
+  },
+  {
+   "type": "current_field_absent",
+   "question": "Halden 품질계약의 현재 일탈 통보 기한은?",
+   "gold_answer": "발생 후 48시간 이내 — 개정 2호(2025-05-26). 개정 3호는 감사 주기만 바꿈",
+   "answer_keywords": [
+    "48시간"
+   ],
+   "needs": [
+    "text",
+    "multi"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "qaa_amendment_1.docx"
+    },
+    {
+     "doc": "qaa_amendment_2.docx"
+    },
+    {
+     "doc": "qaa_amendment_3.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "qaa_amendment_1.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/qaa_amendment_1.docx",
+     "where": "본문"
+    },
+    {
+     "doc": "qaa_amendment_2.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/qaa_amendment_2.docx",
+     "where": "본문"
+    },
+    {
+     "doc": "qaa_amendment_3.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/qaa_amendment_3.docx",
+     "where": "본문"
+    }
+   ],
+   "forbid_keywords": [
+    "통보 기한은 72시간",
+    "현재 72시간"
+   ],
+   "id": "RD004"
+  },
+  {
+   "type": "current",
+   "question": "Halden 품질계약의 현재 정기 감사 주기는?",
+   "gold_answer": "3년(개정 3호)",
+   "answer_keywords": [
+    "3년"
+   ],
+   "needs": [
+    "text",
+    "multi"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "qaa_amendment_1.docx"
+    },
+    {
+     "doc": "qaa_amendment_2.docx"
+    },
+    {
+     "doc": "qaa_amendment_3.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "qaa_amendment_1.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/qaa_amendment_1.docx",
+     "where": "본문"
+    },
+    {
+     "doc": "qaa_amendment_2.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/qaa_amendment_2.docx",
+     "where": "본문"
+    },
+    {
+     "doc": "qaa_amendment_3.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/qaa_amendment_3.docx",
+     "where": "본문"
+    }
+   ],
+   "forbid_keywords": [
+    "감사 주기는 2년",
+    "현재 2년"
+   ],
+   "id": "RD005"
+  },
+  {
+   "type": "current",
+   "question": "현재 보유한 생물반응기 수는?",
+   "gold_answer": "9기(2026-06 설비 목록)",
+   "answer_keywords": [
+    "9기"
+   ],
+   "needs": [
+    "text",
+    "multi"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "equipment_list_2024.xlsx"
+    },
+    {
+     "doc": "equipment_list_2026.xlsx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "equipment_list_2024.xlsx",
+     "path": "valid_env/unstructured/synth-revisions-tune/equipment_list_2024.xlsx",
+     "where": "본문"
+    },
+    {
+     "doc": "equipment_list_2026.xlsx",
+     "path": "valid_env/unstructured/synth-revisions-tune/equipment_list_2026.xlsx",
+     "where": "본문"
+    }
+   ],
+   "forbid_keywords": [
+    "생물반응기는 6기",
+    "현재 6기"
+   ],
+   "id": "RD006"
+  },
+  {
+   "type": "filename_trap",
+   "question": "HCP 분석법의 현재 정량 한계(LOQ)는?",
+   "gold_answer": "0.04% — 작성일이 가장 늦은 method_final_rev2(2025-08-19). 이름 'final_last'(2025-04)는 옛 판",
+   "answer_keywords": [
+    "0.04%"
+   ],
+   "needs": [
+    "text",
+    "multi"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "method_final.pptx"
+    },
+    {
+     "doc": "method_final_last.pptx"
+    },
+    {
+     "doc": "method_final_rev2.pptx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "method_final.pptx",
+     "path": "valid_env/unstructured/synth-revisions-tune/method_final.pptx",
+     "where": "본문"
+    },
+    {
+     "doc": "method_final_last.pptx",
+     "path": "valid_env/unstructured/synth-revisions-tune/method_final_last.pptx",
+     "where": "본문"
+    },
+    {
+     "doc": "method_final_rev2.pptx",
+     "path": "valid_env/unstructured/synth-revisions-tune/method_final_rev2.pptx",
+     "where": "본문"
+    }
+   ],
+   "forbid_keywords": [
+    "loq는 0.03%",
+    "현재 0.03%",
+    "한계는 0.03%"
+   ],
+   "id": "RD007"
+  },
+  {
+   "type": "specific_version",
+   "question": "SOP-MFG-022 Rev.B의 보관 가능 시간은?",
+   "gold_answer": "48시간",
+   "answer_keywords": [
+    "48시간"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_mfg022_b.pdf"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_mfg022_b.pdf",
+     "path": "valid_env/unstructured/synth-revisions-tune/sop_mfg022_b.pdf",
+     "where": "본문"
+    }
+   ],
+   "forbid_keywords": [
+    "보관 가능 시간은 72시간"
+   ],
+   "id": "RD008"
+  },
+  {
+   "type": "specific_version",
+   "question": "2025년 목록에서 Orion Media 상태는?",
+   "gold_answer": "보류",
+   "answer_keywords": [
+    "보류"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "approved_suppliers_2025.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "approved_suppliers_2025.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/approved_suppliers_2025.docx",
+     "where": "본문"
+    }
+   ],
+   "forbid_keywords": [
+    "상태는 승인"
+   ],
+   "id": "RD009"
+  },
+  {
+   "type": "specific_version",
+   "question": "품질계약 개정 1호의 일탈 통보 기한은?",
+   "gold_answer": "72시간 이내",
+   "answer_keywords": [
+    "72시간"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "qaa_amendment_1.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "qaa_amendment_1.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/qaa_amendment_1.docx",
+     "where": "본문"
+    }
+   ],
+   "forbid_keywords": [
+    "통보 기한은 48시간"
+   ],
+   "id": "RD010"
+  },
+  {
+   "type": "history",
+   "question": "승인 공급사 수는 2024~2026년에 어떻게 바뀌었나?",
+   "gold_answer": "7곳 → 9곳 → 8곳",
+   "answer_keywords": [
+    "7곳|7문항|7 문항|7개|7 개|7건|7 건|7 곳",
+    "9곳|9문항|9 문항|9개|9 개|9건|9 건|9 곳",
+    "8곳|8문항|8 문항|8개|8 개|8건|8 건|8 곳"
+   ],
+   "needs": [
+    "text",
+    "multi"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "approved_suppliers_2024.docx"
+    },
+    {
+     "doc": "approved_suppliers_2025.docx"
+    },
+    {
+     "doc": "approved_suppliers_2026.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "approved_suppliers_2024.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/approved_suppliers_2024.docx",
+     "where": "본문"
+    },
+    {
+     "doc": "approved_suppliers_2025.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/approved_suppliers_2025.docx",
+     "where": "본문"
+    },
+    {
+     "doc": "approved_suppliers_2026.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/approved_suppliers_2026.docx",
+     "where": "본문"
+    }
+   ],
+   "id": "RD011"
+  },
+  {
+   "type": "history",
+   "question": "품질계약 개정 2호와 3호가 각각 바꾼 항목은?",
+   "gold_answer": "2호: 일탈 통보 72→48시간 · 3호: 감사 주기 2→3년",
+   "answer_keywords": [
+    "통보",
+    "감사 주기"
+   ],
+   "needs": [
+    "text",
+    "multi"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "qaa_amendment_1.docx"
+    },
+    {
+     "doc": "qaa_amendment_2.docx"
+    },
+    {
+     "doc": "qaa_amendment_3.docx"
+    }
+   ],
+   "references": [
+    {
+     "doc": "qaa_amendment_1.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/qaa_amendment_1.docx",
+     "where": "본문"
+    },
+    {
+     "doc": "qaa_amendment_2.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/qaa_amendment_2.docx",
+     "where": "본문"
+    },
+    {
+     "doc": "qaa_amendment_3.docx",
+     "path": "valid_env/unstructured/synth-revisions-tune/qaa_amendment_3.docx",
+     "where": "본문"
+    }
+   ],
+   "id": "RD012"
+  },
+  {
+   "type": "negative",
+   "question": "SOP-MFG-022 Rev.D의 시행일은?",
+   "gold_answer": "근거 없음 — Rev.D 문서가 없음(최신은 Rev.C)",
+   "answer_keywords": [
+    "근거 없음|없|확인되지"
+   ],
+   "needs": [
+    "text",
+    "multi"
+   ],
+   "dims": [
+    "Q05",
+    "X04"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "sop_mfg022_a.pdf"
+    },
+    {
+     "doc": "sop_mfg022_b.pdf"
+    },
+    {
+     "doc": "sop_mfg022_c.pdf"
+    }
+   ],
+   "references": [
+    {
+     "doc": "sop_mfg022_a.pdf",
+     "path": "valid_env/unstructured/synth-revisions-tune/sop_mfg022_a.pdf",
+     "where": "본문"
+    },
+    {
+     "doc": "sop_mfg022_b.pdf",
+     "path": "valid_env/unstructured/synth-revisions-tune/sop_mfg022_b.pdf",
+     "where": "본문"
+    },
+    {
+     "doc": "sop_mfg022_c.pdf",
+     "path": "valid_env/unstructured/synth-revisions-tune/sop_mfg022_c.pdf",
+     "where": "본문"
+    }
+   ],
+   "forbid_keywords": [
+    "rev.d는 2026"
+   ],
+   "id": "RD013"
+  }
+ ]
+}

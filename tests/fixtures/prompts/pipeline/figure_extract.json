@@ -1,0 +1,124 @@
+[
+  {
+    "user_text": "이 그림만 보고 독립적으로 분석해 JSON 하나만 출력하라. ... (막대그래프 이미지)",
+    "note": "막대그래프 독립 추출 예",
+    "expected": {
+      "kind": "chart",
+      "texts": [
+        "2024",
+        "2025",
+        "2026"
+      ],
+      "meaning": {
+        "subject": "매출",
+        "metric": "매출액",
+        "period": "2024~2026",
+        "unit": "억원",
+        "statement": "매출이 매년 증가"
+      },
+      "values": [
+        {
+          "label": "2024",
+          "series": "",
+          "x": "",
+          "value": "120",
+          "unit": "억원"
+        }
+      ],
+      "nodes": [],
+      "edges": [],
+      "order": [],
+      "table": {
+        "header": [],
+        "rows": [
+          []
+        ]
+      },
+      "uncertain": [],
+      "outside_texts": []
+    }
+  },
+  {
+    "user_text": "이 그림만 보고 독립적으로 분석해 JSON 하나만 출력하라. ... (공정 흐름도 이미지)",
+    "note": "흐름도 독립 추출 예",
+    "expected": {
+      "kind": "flow",
+      "texts": [
+        "배양",
+        "정제",
+        "충전"
+      ],
+      "meaning": {
+        "subject": "",
+        "metric": "",
+        "period": "",
+        "unit": "",
+        "statement": "세포 배양부터 충전까지 3단계 공정"
+      },
+      "values": [],
+      "nodes": [
+        "배양",
+        "정제",
+        "충전"
+      ],
+      "edges": [
+        {
+          "from": "배양",
+          "to": "정제",
+          "label": ""
+        },
+        {
+          "from": "정제",
+          "to": "충전",
+          "label": ""
+        }
+      ],
+      "order": [
+        "배양",
+        "정제",
+        "충전"
+      ],
+      "table": {
+        "header": [],
+        "rows": [
+          []
+        ]
+      },
+      "uncertain": [],
+      "outside_texts": []
+    }
+  },
+  {
+    "user_text": "이 그림만 보고 독립적으로 분석해 JSON 하나만 출력하라. ... (흐려서 글자·수치를 알아볼 수 없는 이미지)",
+    "note": "흐려서 읽을 수 없음 — 값을 지어내지 않고 uncertain에만 적음(지어내기 차단)",
+    "expected": {
+      "kind": "other",
+      "texts": [],
+      "meaning": {
+        "subject": "",
+        "metric": "",
+        "period": "",
+        "unit": "",
+        "statement": ""
+      },
+      "values": [],
+      "nodes": [],
+      "edges": [],
+      "order": [],
+      "table": {
+        "header": [],
+        "rows": [
+          []
+        ]
+      },
+      "uncertain": [
+        "이미지가 흐려 글자·수치를 읽을 수 없음"
+      ],
+      "outside_texts": []
+    },
+    "checks": {
+      "contains": ["uncertain"]
+    },
+    "tags": ["fabrication"]
+  }
+]

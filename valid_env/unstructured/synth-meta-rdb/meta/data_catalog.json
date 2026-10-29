@@ -1,0 +1,315 @@
+{
+ "note": "[SYNTHETIC]",
+ "rows": [
+  {
+   "table_name": "client_master",
+   "column_name": null,
+   "description": "고객(법인) 마스터 — 별칭 포함",
+   "unit": null,
+   "example": null,
+   "allowed_values": null,
+   "join_key": null,
+   "answers": "고객이 몇 곳인가·별칭으로 어느 법인인가"
+  },
+  {
+   "table_name": "client_master",
+   "column_name": "company_id",
+   "description": "고객 ID",
+   "unit": null,
+   "example": "CL-2002",
+   "allowed_values": null,
+   "join_key": null,
+   "answers": null
+  },
+  {
+   "table_name": "client_master",
+   "column_name": "company",
+   "description": "법인명(정식)",
+   "unit": null,
+   "example": "선진메디팜(주)",
+   "allowed_values": null,
+   "join_key": null,
+   "answers": null
+  },
+  {
+   "table_name": "client_master",
+   "column_name": "aliases",
+   "description": "별칭(한글·영문·약어, | 구분)",
+   "unit": null,
+   "example": "선진메디팜|Sunjin Medipharm|SJM",
+   "allowed_values": null,
+   "join_key": null,
+   "answers": "별칭으로 법인 찾기"
+  },
+  {
+   "table_name": "contract_master",
+   "column_name": null,
+   "description": "계약 마스터 — EDW 적재 형식(synth-edw와 같은 열)",
+   "unit": null,
+   "example": null,
+   "allowed_values": null,
+   "join_key": null,
+   "answers": "계약 몇 건·총액·기간·공장"
+  },
+  {
+   "table_name": "contract_master",
+   "column_name": "contract_id",
+   "description": "계약 ID",
+   "unit": null,
+   "example": "C-RDB-2025-005",
+   "allowed_values": null,
+   "join_key": "doc_location.contract_id",
+   "answers": null
+  },
+  {
+   "table_name": "contract_master",
+   "column_name": "company_id",
+   "description": "고객 ID",
+   "unit": null,
+   "example": "CL-2002",
+   "allowed_values": null,
+   "join_key": "client_master.company_id",
+   "answers": null
+  },
+  {
+   "table_name": "contract_master",
+   "column_name": "contract_value_usd",
+   "description": "계약 총액",
+   "unit": "USD",
+   "example": "20700000",
+   "allowed_values": null,
+   "join_key": null,
+   "answers": "고객·공장별 계약 총액 합계"
+  },
+  {
+   "table_name": "contract_master",
+   "column_name": "batches_contracted",
+   "description": "계약 생산 배치 총 개수",
+   "unit": "batch",
+   "example": "9",
+   "allowed_values": null,
+   "join_key": null,
+   "answers": "배치 수 비교·최다"
+  },
+  {
+   "table_name": "contract_master",
+   "column_name": "site",
+   "description": "생산 공장 ID",
+   "unit": null,
+   "example": "Plant1",
+   "allowed_values": "Plant1|Plant2|Plant3",
+   "join_key": null,
+   "answers": "공장별 계약 집계"
+  },
+  {
+   "table_name": "contract_master",
+   "column_name": "status",
+   "description": "계약 상태",
+   "unit": null,
+   "example": "active",
+   "allowed_values": "active|completed",
+   "join_key": null,
+   "answers": null
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": null,
+   "description": "문서 위치 메타(Object Storage 경유 파싱용) — RDB가 무엇을 어디서 가져올지 쥐고 있음",
+   "unit": null,
+   "example": null,
+   "allowed_values": null,
+   "join_key": null,
+   "answers": "문서 목록·최신판·삭제 여부·계약 연결"
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "doc_id",
+   "description": "문서 식별자(파일 stem)",
+   "unit": null,
+   "example": "rfi_answer_sjm_2026",
+   "allowed_values": null,
+   "join_key": null,
+   "answers": null
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "bucket",
+   "description": "Object Storage 버킷",
+   "unit": null,
+   "example": "rag-docs-rdb",
+   "allowed_values": null,
+   "join_key": null,
+   "answers": null
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "object_key",
+   "description": "버킷 안 경로",
+   "unit": null,
+   "example": "clients/CL-2002/2026/rfi_answer_sjm_2026.docx",
+   "allowed_values": null,
+   "join_key": null,
+   "answers": null
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "etag",
+   "description": "Object Storage ETag(md5)",
+   "unit": null,
+   "example": null,
+   "allowed_values": null,
+   "join_key": null,
+   "answers": "변경 감지(증분 수집)"
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "size_bytes",
+   "description": "파일 크기",
+   "unit": "byte",
+   "example": null,
+   "allowed_values": null,
+   "join_key": null,
+   "answers": null
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "content_type",
+   "description": "MIME 형식",
+   "unit": null,
+   "example": "application/pdf",
+   "allowed_values": null,
+   "join_key": null,
+   "answers": null
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "company_id",
+   "description": "고객 ID",
+   "unit": null,
+   "example": "CL-2002",
+   "allowed_values": null,
+   "join_key": "client_master.company_id",
+   "answers": "고객별 문서 목록"
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "doc_type",
+   "description": "문서 종류",
+   "unit": null,
+   "example": "RFI_ANSWER",
+   "allowed_values": "RFI_ANSWER|RFI|RFP|CONTRACT|QUOTE|MAIL|MINUTES",
+   "join_key": null,
+   "answers": "종류별 문서 목록·건수"
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "contract_id",
+   "description": "대응 계약 ID(모르면 NULL — RFI_ANSWER처럼 특정 계약에 안 묶이거나 실주)",
+   "unit": null,
+   "example": "C-RDB-2025-005",
+   "allowed_values": null,
+   "join_key": "contract_master.contract_id",
+   "answers": "계약 관련 문서 목록"
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "version",
+   "description": "문서 판 번호(같은 문서 계열 안에서 1부터)",
+   "unit": null,
+   "example": "2",
+   "allowed_values": null,
+   "join_key": null,
+   "answers": "최신판 판단"
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "supersedes_doc_id",
+   "description": "이 판이 대체하는 이전 판 doc_id(없으면 NULL)",
+   "unit": null,
+   "example": "rfi_answer_sjm_2023_v1",
+   "allowed_values": null,
+   "join_key": "doc_location.doc_id",
+   "answers": "개정 이력"
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "language",
+   "description": "문서 주 언어",
+   "unit": null,
+   "example": "ko",
+   "allowed_values": "ko|en",
+   "join_key": null,
+   "answers": null
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "received_at",
+   "description": "문서 접수·발행일",
+   "unit": null,
+   "example": "2026-01-15",
+   "allowed_values": null,
+   "join_key": null,
+   "answers": "연도·기간별 수신 문서 수"
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "updated_at",
+   "description": "Object Storage 최종 수정 시각(증분 선별용)",
+   "unit": null,
+   "example": "2026-01-15T00:00:00Z",
+   "allowed_values": null,
+   "join_key": null,
+   "answers": null
+  },
+  {
+   "table_name": "doc_location",
+   "column_name": "is_deleted",
+   "description": "삭제 표시(1=삭제 — 목록·최신판에서 제외)",
+   "unit": null,
+   "example": "0",
+   "allowed_values": "0|1",
+   "join_key": null,
+   "answers": "삭제 문서 제외"
+  },
+  {
+   "table_name": "doc_contract_link",
+   "column_name": null,
+   "description": "문서↔계약 연결(추론 결과, structdb.doc_contract_link와 같은 모양) — 이 생성기는 빈 표만 만듦(파이프라인 link 명령이 채움)",
+   "unit": null,
+   "example": null,
+   "allowed_values": null,
+   "join_key": null,
+   "answers": null
+  },
+  {
+   "table_name": "doc_contract_link",
+   "column_name": "doc_key",
+   "description": "문서 키(파싱 결과의 file_sha256 등)",
+   "unit": null,
+   "example": null,
+   "allowed_values": null,
+   "join_key": "doc_location.doc_id(간접)",
+   "answers": null
+  },
+  {
+   "table_name": "doc_contract_link",
+   "column_name": "contract_id",
+   "description": "추론된 계약 ID",
+   "unit": null,
+   "example": null,
+   "allowed_values": null,
+   "join_key": "contract_master.contract_id",
+   "answers": null
+  },
+  {
+   "table_name": "doc_contract_link",
+   "column_name": "status",
+   "description": "확정|후보",
+   "unit": null,
+   "example": "확정",
+   "allowed_values": "확정|후보",
+   "join_key": null,
+   "answers": null
+  }
+ ]
+}

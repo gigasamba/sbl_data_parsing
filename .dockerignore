@@ -1,0 +1,32 @@
+# 빌드 컨텍스트 허용 목록(deploy/docker/Dockerfile — I3 10-26, V2-R1): 이미지에 COPY하는 폴더만 보낸다(S2 — resources/ 추가 · S3 — common/ 추가 · S6a — common_tools/ 없어짐 ·
+# S6b — docker/ → deploy/docker(빌드 원본·entrypoint)·deploy/release(이미지 /app/docker에 들어가는 반입 판정·자산 설치), deploy/host는 이미지에 안 들어감).
+# 그 밖(.venv·output·valid_env·validation·deploy/host·docs·.env.local 등)은 컨텍스트에도 들어가지 않는다.
+*
+!common
+!pipeline
+!mcp_server
+!resources
+!deploy/docker
+!deploy/release
+!assets
+# S9(D-018) — 서버 반입 시험만(실행기·tests/server) — 일반 시험(tests/general)·pytest 설정(conftest.py)·시험 데이터는 이미지에 안 들어감
+!tests/__init__.py
+!tests/runner.py
+!tests/server
+**/__pycache__
+**/*.pyc
+**/*.bak
+**/*.bak-*
+**/.DS_Store
+**/.env
+**/.env.local
+**/*.env
+# S6b(VS6a R-2) — 코드 폴더 안에 생긴 실행 결과(output/ — 예: model_matrix가 common/output을 만듦)가 이미지에 들지 않게
+**/output
+# S6a 리뷰 — common/config/에 .env*.example이 있어, 그 안내대로 만든 키 파일(.env.openrouter 등)이 컨텍스트에 들지 않게. 빈 틀만 보냄
+# S6b(VS6a R-6) — 빈 틀 예외를 common/config/로 좁힘(전에는 !**/*.example이 다른 *.example도 다시 넣었음)
+# S11(VS10 D-11) — 빈 틀(.env*.example)이 S7e2에 없어져 예외 줄 `!common/config/*.example`을 지움(빌드 컨텍스트 같음)
+**/.env.*
+# S11 리뷰 — S7e2부터 비밀은 settings.yaml(+ 덮기 파일 yaml)에 있음: 코드 폴더 안에 둔 사본이 이미지에 들지 않게(git이 추적하는 settings*.yaml 없음 — 빌드 컨텍스트 같음)
+**/settings.yaml
+**/settings.*.yaml

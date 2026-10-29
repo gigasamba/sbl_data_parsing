@@ -1,0 +1,38 @@
+# ⚠️ PC·단독 시험 전용 — 공유 pgvector가 이미 떠 있는 서버에서는 이 compose를 띄우지 말 것(포트 충돌·이중 기동, XS6).
+#    서버에서는 기존 공유 pgvector/OpenViking을 그대로 쓴다 — 가이드: docs/architecture.md(외부 서비스)
+#    이 컨테이너는 막 띄운 새 PG라 vector 확장이 아직 없다 — 첫 deploy만 PG_CREATE_EXTENSION=1로 돌려 직접 생성(XS3).
+#    공유 PG에서는 절대 켜지 말 것(관리자가 설치하는 것, 우리가 만들지 않음).
+#
+# 개발 서버 PostgreSQL + pgvector (폐쇄망) — 이미지는 반입 자산에서:
+#   dev_server_pgvector 브랜치 ZIP → 조각 합치기·sha256 확인 → docker load -i pgvector-pg16.tar.gz
+#   (pgvector/pgvector:pg16 = PostgreSQL 16.15 + pgvector 0.8.6 — 요청 이미지, 2026-10-01)
+#   PG_PASSWORD=<비밀번호> docker compose -f valid_env/docker/compose.pg.yml up -d   (S6b — 옛 pipeline/load/pg/docker-compose.yml)
+# 접속 값은 .env(PG_HOST·PG_PORT·PG_DB·PG_USER·PG_PASSWORD·PG_SCHEMA)와 같게. 비밀번호는 .env에만(커밋 금지).
+services:
+  postgres:                                           # PostgreSQL 16 서버(pgvector 확장이 미리 든 이미지) — 일반 PostgreSQL로도 사용
+    image: pgvector/pgvector:pg16
+    container_name: rag-postgres                       # 이름 변경(2026-10-01, 구 rag-pgvector) — 볼륨 rag_pgdata는 그대로라 데이터 유지
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PG_DB:-rag}
+      POSTGRES_USER: ${PG_USER:-rag}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?PG_PASSWORD 필요}
+    ports:
+      - "${PG_BIND:-127.0.0.1}:${PG_PORT:-5432}:5432"   # 기본은 개발 서버 안에서만 접속
+    volumes:
+      - rag_pgdata:/var/lib/postgresql/data
+    # 메모리·병렬 설정 = .env로 조정(기본값은 개발 서버 RHEL 9.6 · 4 vCPU · 32 GB 기준). 다른 서버는 물리 메모리의 대략
+    #   shared_buffers 1/8 · effective_cache_size 3/8 · maintenance_work_mem 1/16(HNSW 생성) · shm ≥ maintenance_work_mem + 1g
+    command: >
+      postgres -c shared_buffers=${PG_SHARED_BUFFERS:-4GB} -c effective_cache_size=${PG_EFFECTIVE_CACHE:-12GB} -c work_mem=${PG_WORK_MEM:-64MB}
+               -c maintenance_work_mem=${PG_MAINT_MEM:-2GB} -c max_parallel_maintenance_workers=${PG_PARALLEL:-2}
+               -c max_parallel_workers_per_gather=${PG_PARALLEL:-2} -c max_connections=${PG_MAX_CONN:-50}
+    shm_size: ${PG_SHM:-3g}                             # 병렬 HNSW 생성 공유 메모리(≥ maintenance_work_mem)
+    mem_limit: ${PG_MEM_LIMIT:-12g}                     # 컨테이너 메모리 상한 — 다른 서비스(OpenViking·Gitea·파이프라인)와 같이 쓰므로
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+volumes:
+  rag_pgdata:

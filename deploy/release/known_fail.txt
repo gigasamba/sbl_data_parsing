@@ -1,0 +1,12 @@
+# selftest 알려진 FAIL — 반입 판정(selftest_gate.sh)은 이 목록 밖의 FAIL이 0개면 통과(V2-R5, I3 10-26).
+# 한 줄에 사례 이름(S9부터 서버 반입 시험 모듈 이름 — tests/server/<앱>/test_*.py, 옛 pipeline/cli.py SELFTEST_CASES의 모듈 이름) 하나, '#' 뒤는 이유 주석.
+# 고쳐서 PASS가 되면 이 목록에서 지운다(selftest_gate.sh가 "목록에서 지울 수 있음"이라고 알려 줌).
+# 새 줄을 더하는 것은 고장을 숨기는 일이다 — 리팩토링 전부터 있던 실패만, 이유와 함께.
+
+# 옛 두 줄(S9 전 pipeline.transform.structure.build_bundle · pipeline.load.publish_parse_result — 서버가 코드를 고칠 때 기대값을 갱신하지 않음)은
+# S9b(10-28, refactor.md C-54)에 지움: build_bundle은 시험 데이터 문서 행 키만 낡음(10-20 축소 스키마 doc_key·doc_name — 시험 데이터를 맞춤) ·
+# publish_parse는 기대값을 지금 서버 동작(_meta.json·source.json 안 올림 — 서버가 일부러 뺌)에 맞추고, 그 동작으로 꺼진 방어선과
+# 문서 대장 갱신 실패(둘 다 pre-refactor 서버 코드부터 — 사용자 10-28: ②는 기록만, ①은 이번 판에서 안 고침)만 아래 시험으로 뺌.
+#   test_publish_guard — source.json을 안 올려 재실행 업로드 건너뜀(skip_exists)·키 충돌 거부가 꺼짐(C-54 ②)
+#   (문서 대장 갱신 실패 C-54 ①은 PG가 있어야 판정 — 일반 시험 tests.general.pipeline.test_pub_registry, tests/conftest.py GENERAL_KNOWN_FAIL)
+tests.server.pipeline.test_publish_guard

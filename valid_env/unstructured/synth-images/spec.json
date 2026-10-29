@@ -1,0 +1,858 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_images.py",
+ "design": "docs/plans/image-parsing-2026-10-01.md",
+ "notice": "[가상 예시] 합성 시험 문서 — 실존 회사·데이터와 무관.",
+ "documents": [
+  {
+   "file": "process_flow_vector.pdf",
+   "format": "pdf",
+   "images": [
+    {
+     "page": 1,
+     "origin": "vector",
+     "text_layer": true,
+     "kind": "flowchart",
+     "nodes": [
+      "Seed Train",
+      "Bioreactor 2000L",
+      "Harvest",
+      "Protein A",
+      "Viral Inactivation",
+      "UF/DF",
+      "Fill & Finish",
+      "Waste Treatment"
+     ],
+     "edges": [
+      [
+       "Seed Train",
+       "Bioreactor 2000L"
+      ],
+      [
+       "Bioreactor 2000L",
+       "Harvest"
+      ],
+      [
+       "Harvest",
+       "Protein A"
+      ],
+      [
+       "Protein A",
+       "Viral Inactivation"
+      ],
+      [
+       "Viral Inactivation",
+       "UF/DF"
+      ],
+      [
+       "UF/DF",
+       "Fill & Finish"
+      ],
+      [
+       "Harvest",
+       "Waste Treatment"
+      ]
+     ],
+     "edge_labels": [
+      [
+       "Seed Train",
+       "Bioreactor 2000L",
+       "Day 0-14"
+      ],
+      [
+       "Protein A",
+       "Viral Inactivation",
+       "pH 3.6, 60 min"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "file": "process_flow_raster.pdf",
+   "format": "pdf",
+   "body_facts": [
+    "2,000L",
+    "pH 3.6",
+    "60분"
+   ],
+   "images": [
+    {
+     "page": 1,
+     "origin": "raster",
+     "text_layer": false,
+     "kind": "flowchart",
+     "nodes": [
+      "Seed Train",
+      "Bioreactor 2000L",
+      "Harvest",
+      "Protein A",
+      "Viral Inactivation",
+      "UF/DF",
+      "Fill & Finish",
+      "Waste Treatment"
+     ],
+     "edges": [
+      [
+       "Seed Train",
+       "Bioreactor 2000L"
+      ],
+      [
+       "Bioreactor 2000L",
+       "Harvest"
+      ],
+      [
+       "Harvest",
+       "Protein A"
+      ],
+      [
+       "Protein A",
+       "Viral Inactivation"
+      ],
+      [
+       "Viral Inactivation",
+       "UF/DF"
+      ],
+      [
+       "UF/DF",
+       "Fill & Finish"
+      ],
+      [
+       "Harvest",
+       "Waste Treatment"
+      ]
+     ],
+     "edge_labels": [
+      [
+       "Seed Train",
+       "Bioreactor 2000L",
+       "Day 0-14"
+      ],
+      [
+       "Protein A",
+       "Viral Inactivation",
+       "pH 3.6, 60 min"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "file": "molecule.pdf",
+   "format": "pdf",
+   "images": [
+    {
+     "page": 1,
+     "origin": "raster",
+     "text_layer": false,
+     "kind": "molecule",
+     "atom_labels": [
+      "O",
+      "OH",
+      "O",
+      "O",
+      "CH3"
+     ],
+     "drawn_name": null,
+     "truth_name": "acetylsalicylic acid (aspirin)",
+     "truth_formula": "C9H8O4",
+     "note": "이름·분자식은 그림에 없음 — VLM이 추정하면 추정으로 표시해야 정답(단정하면 감점)"
+    },
+    {
+     "page": 2,
+     "origin": "vector",
+     "text_layer": true,
+     "kind": "molecule",
+     "atom_labels": [
+      "O",
+      "OH",
+      "O",
+      "O",
+      "CH3"
+     ],
+     "drawn_name": null,
+     "truth_name": "acetylsalicylic acid (aspirin)",
+     "truth_formula": "C9H8O4",
+     "note": "이름·분자식은 그림에 없음 — VLM이 추정하면 추정으로 표시해야 정답(단정하면 감점)"
+    }
+   ]
+  },
+  {
+   "file": "edx_map.pdf",
+   "format": "pdf",
+   "body_facts": [
+    "LOT-A17"
+   ],
+   "images": [
+    {
+     "page": 1,
+     "origin": "raster",
+     "text_layer": false,
+     "kind": "plot",
+     "title": "EDX Elemental Composition - Sample LOT-A17",
+     "x_axis": "Element",
+     "y_axis": "Weight %",
+     "points": [
+      [
+       "C",
+       52.1
+      ],
+      [
+       "O",
+       28.4
+      ],
+      [
+       "N",
+       12.3
+      ],
+      [
+       "S",
+       4.8
+      ],
+      [
+       "P",
+       2.4
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "file": "batch_trend.xlsx",
+   "format": "xlsx",
+   "body_facts": [
+    "B-04",
+    "3.9"
+   ],
+   "images": [
+    {
+     "sheet": "Batch",
+     "anchor": "E2",
+     "origin": "embedded",
+     "text_layer": false,
+     "kind": "plot",
+     "title": "Titer Trend by Batch",
+     "x_axis": "Batch",
+     "y_axis": "Titer (g/L)",
+     "points": [
+      [
+       "B-01",
+       3.2
+      ],
+      [
+       "B-02",
+       3.5
+      ],
+      [
+       "B-03",
+       3.4
+      ],
+      [
+       "B-04",
+       3.9
+      ],
+      [
+       "B-05",
+       4.1
+      ],
+      [
+       "B-06",
+       4.0
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "file": "rfp_appendix.docx",
+   "format": "docx",
+   "body_facts": [
+    "FX-MAB-01",
+    "7단계"
+   ],
+   "images": [
+    {
+     "page": 0,
+     "origin": "embedded",
+     "text_layer": false,
+     "kind": "flowchart",
+     "nodes": [
+      "Seed Train",
+      "Bioreactor 2000L",
+      "Harvest",
+      "Protein A",
+      "Viral Inactivation",
+      "UF/DF",
+      "Fill & Finish",
+      "Waste Treatment"
+     ],
+     "edges": [
+      [
+       "Seed Train",
+       "Bioreactor 2000L"
+      ],
+      [
+       "Bioreactor 2000L",
+       "Harvest"
+      ],
+      [
+       "Harvest",
+       "Protein A"
+      ],
+      [
+       "Protein A",
+       "Viral Inactivation"
+      ],
+      [
+       "Viral Inactivation",
+       "UF/DF"
+      ],
+      [
+       "UF/DF",
+       "Fill & Finish"
+      ],
+      [
+       "Harvest",
+       "Waste Treatment"
+      ]
+     ],
+     "edge_labels": [
+      [
+       "Seed Train",
+       "Bioreactor 2000L",
+       "Day 0-14"
+      ],
+      [
+       "Protein A",
+       "Viral Inactivation",
+       "pH 3.6, 60 min"
+      ]
+     ]
+    }
+   ],
+   "rfi_question": "원료의약품 공정 흐름을 설명하고 흐름도를 첨부하시오."
+  },
+  {
+   "file": "logo_noise.pdf",
+   "format": "pdf",
+   "body_facts": [
+    "ISO 9001"
+   ],
+   "images": [
+    {
+     "page": 1,
+     "origin": "raster",
+     "kind": "logo",
+     "expect_skipped": "small"
+    }
+   ]
+  },
+  {
+   "file": "stability_mixed.pdf",
+   "format": "pdf",
+   "body_facts": [
+    "95.0%",
+    "FX-DS-2401"
+   ],
+   "images": [
+    {
+     "page": 2,
+     "origin": "raster",
+     "text_layer": false,
+     "kind": "plot",
+     "title": "Long-term & Accelerated Stability - Assay",
+     "x_axis": "Months",
+     "y_axis": "Assay (%)",
+     "spec_line": 95.0,
+     "series": [
+      {
+       "name": "25°C/60%RH",
+       "points": [
+        [
+         0,
+         100.0
+        ],
+        [
+         3,
+         99.6
+        ],
+        [
+         6,
+         99.1
+        ],
+        [
+         9,
+         98.7
+        ],
+        [
+         12,
+         98.2
+        ]
+       ]
+      },
+      {
+       "name": "40°C/75%RH",
+       "points": [
+        [
+         0,
+         100.0
+        ],
+        [
+         3,
+         98.4
+        ],
+        [
+         6,
+         96.9
+        ],
+        [
+         9,
+         95.1
+        ],
+        [
+         12,
+         93.6
+        ]
+       ]
+      }
+     ]
+    },
+    {
+     "page": 3,
+     "origin": "vector",
+     "text_layer": true,
+     "kind": "plot",
+     "title": "Impurity at 12M (25C)",
+     "x_axis": "",
+     "y_axis": "Impurity (%)",
+     "points": [
+      [
+       "HMW",
+       1.8
+      ],
+      [
+       "LMW",
+       0.9
+      ],
+      [
+       "Charge variants",
+       3.2
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "file": "eds_mapping.pdf",
+   "format": "pdf",
+   "body_facts": [
+    "P-07"
+   ],
+   "images": [
+    {
+     "page": 1,
+     "origin": "raster",
+     "text_layer": false,
+     "kind": "plot",
+     "title": "EDS Elemental Mapping - Particle P-07",
+     "panels": [
+      {
+       "element": "Fe Kα",
+       "max_counts": 120,
+       "hotspot": "upper-left"
+      },
+      {
+       "element": "Zn Kα",
+       "max_counts": 80,
+       "hotspot": "center"
+      },
+      {
+       "element": "Cu Kα",
+       "max_counts": 45,
+       "hotspot": "lower-right"
+      }
+     ],
+     "scale_bar": "5 µm"
+    }
+   ]
+  },
+  {
+   "file": "qc_workflow.pptx",
+   "format": "pptx",
+   "images": [
+    {
+     "page": 1,
+     "origin": "embedded",
+     "text_layer": false,
+     "kind": "flowchart",
+     "nodes": [
+      "Deviation Detected",
+      "QA Review",
+      "Impact Assessment",
+      "Batch Impact?",
+      "Investigation (CAPA)",
+      "QA Approval",
+      "Close Deviation"
+     ],
+     "edges": [
+      [
+       "Deviation Detected",
+       "QA Review",
+       ""
+      ],
+      [
+       "QA Review",
+       "Impact Assessment",
+       ""
+      ],
+      [
+       "Impact Assessment",
+       "Batch Impact?",
+       ""
+      ],
+      [
+       "Batch Impact?",
+       "Investigation (CAPA)",
+       "Yes"
+      ],
+      [
+       "Investigation (CAPA)",
+       "QA Approval",
+       ""
+      ],
+      [
+       "Batch Impact?",
+       "Close Deviation",
+       "No"
+      ]
+     ]
+    },
+    {
+     "page": 2,
+     "origin": "native_shapes",
+     "text_layer": true,
+     "kind": "flowchart",
+     "nodes": [
+      "Change Request",
+      "Change Review Board",
+      "Risk Assessment",
+      "GMP Impact?",
+      "Validation Plan",
+      "QA Release",
+      "Document & Close"
+     ],
+     "edges": [
+      [
+       "Change Request",
+       "Change Review Board",
+       ""
+      ],
+      [
+       "Change Review Board",
+       "Risk Assessment",
+       ""
+      ],
+      [
+       "Risk Assessment",
+       "GMP Impact?",
+       ""
+      ],
+      [
+       "GMP Impact?",
+       "Validation Plan",
+       "Yes"
+      ],
+      [
+       "Validation Plan",
+       "QA Release",
+       ""
+      ],
+      [
+       "GMP Impact?",
+       "Document & Close",
+       "No"
+      ]
+     ],
+     "note": "pptx 도형·연결선 — 그림 객체가 아니라 도형이라 텍스트는 python-pptx로 바로 나오고 연결은 connector의 begin/end로 복원 가능"
+    }
+   ]
+  },
+  {
+   "file": "process_params.xlsx",
+   "format": "xlsx",
+   "body_facts": [
+    "Elution pH",
+    "50 g/L"
+   ],
+   "images": [
+    {
+     "sheet": "Flow",
+     "anchor": "B3",
+     "origin": "embedded",
+     "text_layer": false,
+     "kind": "flowchart",
+     "nodes": [
+      "Seed Train",
+      "Bioreactor 2000L",
+      "Harvest",
+      "Protein A",
+      "Viral Inactivation",
+      "UF/DF",
+      "Fill & Finish",
+      "Waste Treatment"
+     ],
+     "edges": [
+      [
+       "Seed Train",
+       "Bioreactor 2000L"
+      ],
+      [
+       "Bioreactor 2000L",
+       "Harvest"
+      ],
+      [
+       "Harvest",
+       "Protein A"
+      ],
+      [
+       "Protein A",
+       "Viral Inactivation"
+      ],
+      [
+       "Viral Inactivation",
+       "UF/DF"
+      ],
+      [
+       "UF/DF",
+       "Fill & Finish"
+      ],
+      [
+       "Harvest",
+       "Waste Treatment"
+      ]
+     ],
+     "edge_labels": [
+      [
+       "Seed Train",
+       "Bioreactor 2000L",
+       "Day 0-14"
+      ],
+      [
+       "Protein A",
+       "Viral Inactivation",
+       "pH 3.6, 60 min"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "file": "scan_report_nested.pdf",
+   "format": "scan_pdf",
+   "body_facts": [
+    "FX-DS-2402",
+    "2,000L"
+   ],
+   "images": [
+    {
+     "page": 1,
+     "origin": "raster",
+     "page_render": true,
+     "kind": "page",
+     "text_layer": false,
+     "children": [
+      {
+       "id_suffix": "c1",
+       "origin": "raster",
+       "kind": "plot",
+       "title": "Viable Cell Density - Batch FX-DS-2402",
+       "x_axis": "Day",
+       "y_axis": "VCD (x10^6 cells/mL)",
+       "points": [
+        [
+         0,
+         0.4
+        ],
+        [
+         2,
+         1.1
+        ],
+        [
+         4,
+         3.2
+        ],
+        [
+         6,
+         7.8
+        ],
+        [
+         8,
+         14.5
+        ],
+        [
+         10,
+         19.6
+        ],
+        [
+         12,
+         21.3
+        ],
+        [
+         14,
+         18.9
+        ]
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "screenshot_nested.png",
+   "format": "png",
+   "body_facts": [
+    "Engineering Run 2회",
+    "PPQ 3배치"
+   ],
+   "images": [
+    {
+     "page": 1,
+     "origin": "raster",
+     "page_render": true,
+     "kind": "page",
+     "text_layer": false,
+     "children": [
+      {
+       "id_suffix": "c1",
+       "origin": "raster",
+       "kind": "flowchart",
+       "nodes": [
+        "Gap Analysis",
+        "Engineering Run",
+        "PPQ",
+        "Commercial Supply"
+       ],
+       "edges": [
+        [
+         "Gap Analysis",
+         "Engineering Run"
+        ],
+        [
+         "Engineering Run",
+         "PPQ"
+        ],
+        [
+         "PPQ",
+         "Commercial Supply"
+        ]
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "file": "docx_shape_flow.docx",
+   "format": "docx",
+   "images": [
+    {
+     "page": 1,
+     "origin": "shape_render",
+     "text_layer": false,
+     "kind": "flowchart",
+     "nodes": [
+      "접수",
+      "검토",
+      "승인"
+     ],
+     "edges": [
+      [
+       "접수",
+       "검토"
+      ],
+      [
+       "검토",
+       "승인"
+      ]
+     ],
+     "note": "삽입 이미지 없음 — 도형(텍스트 상자)·연결선만 soffice로 렌더해 그림 기록(AD14)"
+    }
+   ]
+  },
+  {
+   "file": "xlsx_shape_diagram.xlsx",
+   "format": "xlsx",
+   "images": [
+    {
+     "page": 1,
+     "origin": "shape_render",
+     "text_layer": false,
+     "kind": "flowchart",
+     "nodes": [
+      "출고 준비",
+      "검수"
+     ],
+     "edges": [
+      [
+       "출고 준비",
+       "검수"
+      ]
+     ],
+     "note": "삽입 이미지 없음 — xlsx 도형(텍스트 상자)·연결선만 soffice로 렌더해 그림 기록(AD14)"
+    }
+   ]
+  },
+  {
+   "file": "flow_boxline.pdf",
+   "format": "pdf",
+   "images": [
+    {
+     "page": 1,
+     "origin": "vector",
+     "text_layer": true,
+     "kind": "flowchart",
+     "nodes": [
+      "접수 Intake",
+      "검토 Review",
+      "승인 Approval",
+      "완료 Done"
+     ],
+     "edges": [
+      [
+       "접수 Intake",
+       "검토 Review"
+      ],
+      [
+       "검토 Review",
+       "승인 Approval"
+      ],
+      [
+       "승인 Approval",
+       "완료 Done"
+      ]
+     ],
+     "note": "상자는 테두리만(채움 없음)·연결선은 직선만(화살촉·곡선·사선 없음) — AD13 오탐 회귀 샘플"
+    }
+   ]
+  },
+  {
+   "file": "bordered_table.pdf",
+   "format": "pdf",
+   "images": [],
+   "body_facts": [
+    "B-01",
+    "92%"
+   ],
+   "note": "AD13 음성 대조 — 칸이 서로 맞물린 평범한 표(도식 아님), vector_regions가 그림으로 올리면 안 됨"
+  },
+  {
+   "file": "form_like.pdf",
+   "format": "pdf",
+   "images": [],
+   "body_facts": [
+    "신청자",
+    "품질관리부"
+   ],
+   "note": "AD13b 음성 대조 — 라벨→값 1:1 상자쌍(사슬 길이 2)만 있는 서식, vector_regions가 그림으로 올리면 안 됨"
+  }
+ ]
+}

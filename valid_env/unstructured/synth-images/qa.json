@@ -1,0 +1,1172 @@
+{
+ "dataset": "synth-images",
+ "spec": "spec.json",
+ "scoring": {
+  "answer": "정규화(NFKC·소문자·쉼표 제거) 후 answer_keywords 전부 포함('a|b'는 하나라도, 'a~b'는 a 뒤 20자 안에 b) · forbid_keywords 하나라도 있으면 오답",
+  "evidence": "evidence의 image_id 또는 doc 본문이 검색 상위 k 근거에 있나 — alt_docs(같은 그림이 든 다른 문서)도 정답",
+  "attachment": "attachment_request는 답변 attachments ∩ expected_attachments ≠ ∅"
+ },
+ "counts": {
+  "figure_structure": 8,
+  "figure_count": 4,
+  "figure_body_cross": 5,
+  "figure_fact": 8,
+  "text_layer": 6,
+  "figure_negative": 4,
+  "figure_compare": 5,
+  "figure_calc": 2,
+  "inference_flag": 1,
+  "nested_figure": 3,
+  "attachment_request": 7
+ },
+ "items": [
+  {
+   "id": "IQ001",
+   "type": "figure_structure",
+   "lang": "ko",
+   "question": "가상 제품 FX-MAB-01 공정에서 Protein A 다음 단계는 무엇인가?",
+   "gold_answer": "Viral Inactivation",
+   "answer_keywords": [
+    "Viral Inactivation|바이러스 불활화|바이러스 불활성화"
+   ],
+   "evidence": [
+    {
+     "doc": "process_flow_raster.pdf",
+     "image_id": "process_flow_raster.pdf#p1#i1",
+     "alt_docs": [
+      "rfp_appendix.docx",
+      "process_params.xlsx"
+     ]
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ002",
+   "type": "figure_count",
+   "lang": "ko",
+   "question": "공정 흐름도에서 Seed Train부터 Fill & Finish까지 주 공정 단계는 몇 개인가? (분기 처리 제외)",
+   "gold_answer": "7개",
+   "answer_keywords": [
+    "7개|7단계|7건|7곳|7 개|7 단계|개 수는 7|개수는7|개 수: 7|개수:7|개 수 7|개수7|개: 7|개:7|건 수는 7|건수는7|건 수: 7|건수:7|건 수 7|건수7|건: 7|건:7|곳 수는 7|곳수는7|곳 수: 7|곳수:7|곳 수 7|곳수7|곳: 7|곳:7|단계 수는 7|단계수는7|단계 수: 7|단계수:7|단계 수 7|단계수7|단계: 7|단계:7|7 steps|7steps|7 step|7step|7문항|7 문항|7 건|7 곳"
+   ],
+   "evidence": [
+    {
+     "doc": "process_flow_raster.pdf",
+     "image_id": "process_flow_raster.pdf#p1#i1",
+     "alt_docs": [
+      "rfp_appendix.docx",
+      "process_params.xlsx"
+     ]
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ003",
+   "type": "figure_structure",
+   "lang": "ko",
+   "question": "공정 흐름도에서 Harvest 단계에서 갈라져 나가는 처리는 무엇인가?",
+   "gold_answer": "Waste Treatment",
+   "answer_keywords": [
+    "Waste Treatment"
+   ],
+   "evidence": [
+    {
+     "doc": "process_flow_raster.pdf",
+     "image_id": "process_flow_raster.pdf#p1#i1",
+     "alt_docs": [
+      "rfp_appendix.docx",
+      "process_params.xlsx"
+     ]
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ004",
+   "type": "figure_body_cross",
+   "lang": "ko",
+   "question": "바이러스 불활화 단계의 조건(pH·시간)은? 흐름도와 본문을 함께 확인하라.",
+   "gold_answer": "pH 3.6, 60분(60 min)",
+   "answer_keywords": [
+    "3.6",
+    "60분|60 min|60min|60 minutes|60minutes"
+   ],
+   "evidence": [
+    {
+     "doc": "process_flow_raster.pdf",
+     "image_id": "process_flow_raster.pdf#p1#i1",
+     "alt_docs": [
+      "rfp_appendix.docx",
+      "process_params.xlsx"
+     ]
+    },
+    {
+     "doc": "process_flow_raster.pdf",
+     "text": true
+    }
+   ],
+   "needs": [
+    "vlm",
+    "body"
+   ]
+  },
+  {
+   "id": "IQ005",
+   "type": "figure_fact",
+   "lang": "ko",
+   "question": "흐름도에서 Seed Train → Bioreactor 2000L 구간에 표시된 기간은?",
+   "gold_answer": "Day 0-14",
+   "answer_keywords": [
+    "0-14"
+   ],
+   "evidence": [
+    {
+     "doc": "process_flow_raster.pdf",
+     "image_id": "process_flow_raster.pdf#p1#i1",
+     "alt_docs": [
+      "rfp_appendix.docx",
+      "process_params.xlsx"
+     ]
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ006",
+   "type": "text_layer",
+   "lang": "ko",
+   "question": "벡터로 그린 공정 흐름도(process_flow_vector.pdf)에서 UF/DF 다음 단계는?",
+   "gold_answer": "Fill & Finish",
+   "answer_keywords": [
+    "Fill & Finish|충전|완제 충전"
+   ],
+   "evidence": [
+    {
+     "doc": "process_flow_vector.pdf",
+     "image_id": "process_flow_vector.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "text_layer",
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ007",
+   "type": "text_layer",
+   "lang": "ko",
+   "question": "벡터 흐름도의 상자 이름을 모두 나열하라.",
+   "gold_answer": "Seed Train, Bioreactor 2000L, Harvest, Protein A, Viral Inactivation, UF/DF, Fill & Finish, Waste Treatment",
+   "answer_keywords": [
+    "Seed Train|종균 배양|시드 트레인|시드 배양",
+    "Bioreactor 2000L",
+    "Harvest|수확",
+    "Protein A",
+    "Viral Inactivation|바이러스 불활화|바이러스 불활성화",
+    "UF/DF",
+    "Fill & Finish|충전|완제 충전",
+    "Waste Treatment"
+   ],
+   "evidence": [
+    {
+     "doc": "process_flow_vector.pdf",
+     "image_id": "process_flow_vector.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "text_layer"
+   ]
+  },
+  {
+   "id": "IQ008",
+   "type": "figure_body_cross",
+   "lang": "ko",
+   "question": "Excel 공정 파라미터 파일에서 Protein A 단계의 핵심 파라미터와 목표값, 그리고 흐름도상 그 다음 단계는?",
+   "gold_answer": "Elution pH 3.6, 다음 단계 Viral Inactivation",
+   "answer_keywords": [
+    "Elution pH",
+    "3.6",
+    "Viral Inactivation|바이러스 불활화|바이러스 불활성화"
+   ],
+   "evidence": [
+    {
+     "doc": "process_params.xlsx",
+     "text": true
+    },
+    {
+     "doc": "process_params.xlsx",
+     "image_id": "process_params.xlsx#sFlow#i1",
+     "alt_docs": [
+      "process_flow_raster.pdf",
+      "rfp_appendix.docx"
+     ]
+    }
+   ],
+   "needs": [
+    "table",
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ009",
+   "type": "figure_structure",
+   "lang": "ko",
+   "question": "RFP 부록 docx의 흐름도에서 Bioreactor 2000L 바로 앞 단계는?",
+   "gold_answer": "Seed Train",
+   "answer_keywords": [
+    "Seed Train|종균 배양|시드 트레인|시드 배양"
+   ],
+   "evidence": [
+    {
+     "doc": "rfp_appendix.docx",
+     "image_id": "rfp_appendix.docx#p0#i1",
+     "alt_docs": [
+      "process_flow_raster.pdf",
+      "process_params.xlsx"
+     ]
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ010",
+   "type": "figure_structure",
+   "lang": "ko",
+   "question": "QC 일탈 처리 절차에서 'Batch Impact?' 판단이 Yes이면 다음 단계는?",
+   "gold_answer": "Investigation (CAPA)",
+   "answer_keywords": [
+    "Investigation",
+    "CAPA"
+   ],
+   "evidence": [
+    {
+     "doc": "qc_workflow.pptx",
+     "image_id": "qc_workflow.pptx#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ011",
+   "type": "figure_structure",
+   "lang": "ko",
+   "question": "QC 일탈 처리 절차에서 'Batch Impact?' 판단이 No이면 어떻게 되는가?",
+   "gold_answer": "Close Deviation(일탈 종결)",
+   "answer_keywords": [
+    "Close Deviation|일탈 종료|일탈 종결"
+   ],
+   "evidence": [
+    {
+     "doc": "qc_workflow.pptx",
+     "image_id": "qc_workflow.pptx#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ012",
+   "type": "figure_structure",
+   "lang": "ko",
+   "question": "일탈 처리 절차의 첫 단계와, CAPA 조사 뒤 단계는?",
+   "gold_answer": "Deviation Detected → … → Investigation (CAPA) → QA Approval",
+   "answer_keywords": [
+    "Deviation Detected",
+    "QA Approval|QA 승인"
+   ],
+   "evidence": [
+    {
+     "doc": "qc_workflow.pptx",
+     "image_id": "qc_workflow.pptx#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ013",
+   "type": "text_layer",
+   "lang": "ko",
+   "question": "변경 관리 절차(도형 슬라이드)에서 'GMP Impact?' 판단이 Yes이면 이후 두 단계는?",
+   "gold_answer": "Validation Plan → QA Release",
+   "answer_keywords": [
+    "Validation Plan|밸리데이션 계획|검증 계획",
+    "QA Release|QA 출하 승인|QA 릴리스"
+   ],
+   "evidence": [
+    {
+     "doc": "qc_workflow.pptx",
+     "image_id": "qc_workflow.pptx#p2#i1"
+    }
+   ],
+   "needs": [
+    "text_layer"
+   ]
+  },
+  {
+   "id": "IQ014",
+   "type": "text_layer",
+   "lang": "ko",
+   "question": "변경 관리 절차의 첫 단계와, GMP 영향이 없을 때의 처리는?",
+   "gold_answer": "Change Request로 시작, GMP 영향 없으면(No) Document & Close",
+   "answer_keywords": [
+    "Change Request|변경 요청",
+    "Document & Close|문서화 후 종료|문서화 및 종료"
+   ],
+   "evidence": [
+    {
+     "doc": "qc_workflow.pptx",
+     "image_id": "qc_workflow.pptx#p2#i1"
+    }
+   ],
+   "needs": [
+    "text_layer"
+   ]
+  },
+  {
+   "id": "IQ015",
+   "type": "figure_negative",
+   "lang": "ko",
+   "question": "변경 관리 절차(도형 슬라이드)에 CAPA 조사 단계가 있는가?",
+   "gold_answer": "아니오 — CAPA는 일탈 처리 절차(그림 슬라이드)에만 있다",
+   "answer_keywords": [
+    "아니오|아니요|없습니다|없다|없으며|포함되어 있지 않|포함되지 않|있지 않"
+   ],
+   "evidence": [
+    {
+     "doc": "qc_workflow.pptx",
+     "image_id": "qc_workflow.pptx#p2#i1"
+    }
+   ],
+   "needs": [
+    "text_layer"
+   ]
+  },
+  {
+   "id": "IQ016",
+   "type": "figure_count",
+   "lang": "ko",
+   "question": "QC 일탈 처리 절차 그림에 있는 판단(마름모) 단계는 몇 개인가?",
+   "gold_answer": "1개(Batch Impact?)",
+   "answer_keywords": [
+    "1개|1단계|1건|1곳|1 개|1 단계|개 수는 1|개수는1|개 수: 1|개수:1|개 수 1|개수1|개: 1|개:1|건 수는 1|건수는1|건 수: 1|건수:1|건 수 1|건수1|건: 1|건:1|곳 수는 1|곳수는1|곳 수: 1|곳수:1|곳 수 1|곳수1|곳: 1|곳:1|단계 수는 1|단계수는1|단계 수: 1|단계수:1|단계 수 1|단계수1|단계: 1|단계:1|1 steps|1steps|1 step|1step|1문항|1 문항|1 건|1 곳"
+   ],
+   "evidence": [
+    {
+     "doc": "qc_workflow.pptx",
+     "image_id": "qc_workflow.pptx#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ017",
+   "type": "figure_compare",
+   "lang": "ko",
+   "question": "EDX 원소 분석에서 함량이 가장 높은 원소와 그 값은?",
+   "gold_answer": "C(탄소) 52.1 wt%",
+   "answer_keywords": [
+    "C~52.1"
+   ],
+   "evidence": [
+    {
+     "doc": "edx_map.pdf",
+     "image_id": "edx_map.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ018",
+   "type": "figure_fact",
+   "lang": "ko",
+   "question": "EDX 결과에서 황(S)의 함량은?",
+   "gold_answer": "4.8 wt%",
+   "answer_keywords": [
+    "4.8"
+   ],
+   "evidence": [
+    {
+     "doc": "edx_map.pdf",
+     "image_id": "edx_map.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ019",
+   "type": "figure_calc",
+   "lang": "ko",
+   "question": "EDX 결과에서 탄소와 산소 함량의 합은?",
+   "gold_answer": "80.5 wt%",
+   "answer_keywords": [
+    "80.5"
+   ],
+   "evidence": [
+    {
+     "doc": "edx_map.pdf",
+     "image_id": "edx_map.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ020",
+   "type": "figure_compare",
+   "lang": "ko",
+   "question": "EDX에서 검출된 원소 중 가장 함량이 낮은 원소는?",
+   "gold_answer": "P(인) 2.4 wt%",
+   "answer_keywords": [
+    "P~2.4"
+   ],
+   "evidence": [
+    {
+     "doc": "edx_map.pdf",
+     "image_id": "edx_map.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ021",
+   "type": "figure_body_cross",
+   "lang": "ko",
+   "question": "시료 LOT-A17에서 금속 원소가 검출되었는가?",
+   "gold_answer": "아니오 — 금속 원소는 검출 한계 미만(본문)",
+   "answer_keywords": [
+    "검출 한계 미만"
+   ],
+   "evidence": [
+    {
+     "doc": "edx_map.pdf",
+     "text": true
+    }
+   ],
+   "needs": [
+    "body"
+   ]
+  },
+  {
+   "id": "IQ022",
+   "type": "figure_fact",
+   "lang": "ko",
+   "question": "입자 P-07 EDS 맵핑에서 Zn 신호의 최대 계수(색 막대 최댓값)는?",
+   "gold_answer": "80 cts",
+   "answer_keywords": [
+    "80 cts|80cts"
+   ],
+   "evidence": [
+    {
+     "doc": "eds_mapping.pdf",
+     "image_id": "eds_mapping.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ023",
+   "type": "figure_fact",
+   "lang": "ko",
+   "question": "EDS 맵핑에서 Fe가 집중된 위치는?",
+   "gold_answer": "왼쪽 위(upper-left)",
+   "answer_keywords": [
+    "왼쪽 위|upper-left|좌상|좌측 상단|왼쪽 상단"
+   ],
+   "evidence": [
+    {
+     "doc": "eds_mapping.pdf",
+     "image_id": "eds_mapping.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ024",
+   "type": "figure_compare",
+   "lang": "ko",
+   "question": "EDS 맵핑의 세 원소 중 최대 계수가 가장 큰 원소는?",
+   "gold_answer": "Fe (120 cts)",
+   "answer_keywords": [
+    "Fe~120"
+   ],
+   "evidence": [
+    {
+     "doc": "eds_mapping.pdf",
+     "image_id": "eds_mapping.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ025",
+   "type": "figure_fact",
+   "lang": "ko",
+   "question": "EDS 맵핑 그림의 스케일 바 길이는?",
+   "gold_answer": "5 µm",
+   "answer_keywords": [
+    "5 µm|5µm"
+   ],
+   "evidence": [
+    {
+     "doc": "eds_mapping.pdf",
+     "image_id": "eds_mapping.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ026",
+   "type": "figure_fact",
+   "lang": "ko",
+   "question": "가속 조건(40°C/75%RH) 6개월 함량은?",
+   "gold_answer": "96.9%",
+   "answer_keywords": [
+    "96.9"
+   ],
+   "evidence": [
+    {
+     "doc": "stability_mixed.pdf",
+     "image_id": "stability_mixed.pdf#p2#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ027",
+   "type": "figure_body_cross",
+   "lang": "ko",
+   "question": "가속 조건에서 함량이 기준(95.0% 이상)을 처음 벗어나는 시점과 값은?",
+   "gold_answer": "12개월, 93.6%",
+   "answer_keywords": [
+    "12개월|12 months|12months|12 month|12month|12 M|12M",
+    "93.6"
+   ],
+   "evidence": [
+    {
+     "doc": "stability_mixed.pdf",
+     "image_id": "stability_mixed.pdf#p2#i1"
+    },
+    {
+     "doc": "stability_mixed.pdf",
+     "text": true
+    }
+   ],
+   "needs": [
+    "vlm",
+    "body"
+   ]
+  },
+  {
+   "id": "IQ028",
+   "type": "figure_calc",
+   "lang": "ko",
+   "question": "장기 조건(25°C/60%RH)에서 12개월 동안 함량은 몇 %p 감소했는가?",
+   "gold_answer": "1.8%p",
+   "answer_keywords": [
+    "1.8"
+   ],
+   "evidence": [
+    {
+     "doc": "stability_mixed.pdf",
+     "image_id": "stability_mixed.pdf#p2#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ029",
+   "type": "text_layer",
+   "lang": "ko",
+   "question": "12개월 25°C 불순물 중 Charge variants 값은?",
+   "gold_answer": "3.2%",
+   "answer_keywords": [
+    "3.2"
+   ],
+   "evidence": [
+    {
+     "doc": "stability_mixed.pdf",
+     "image_id": "stability_mixed.pdf#p3#i1"
+    }
+   ],
+   "needs": [
+    "text_layer"
+   ]
+  },
+  {
+   "id": "IQ030",
+   "type": "figure_compare",
+   "lang": "ko",
+   "question": "12개월 불순물 막대 중 가장 낮은 항목은?",
+   "gold_answer": "LMW 0.9%",
+   "answer_keywords": [
+    "LMW~0.9"
+   ],
+   "evidence": [
+    {
+     "doc": "stability_mixed.pdf",
+     "image_id": "stability_mixed.pdf#p3#i1"
+    }
+   ],
+   "needs": [
+    "text_layer",
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ031",
+   "type": "figure_compare",
+   "lang": "ko",
+   "question": "배치별 titer 추세에서 가장 높은 배치와 값은?",
+   "gold_answer": "B-05 4.1 g/L",
+   "answer_keywords": [
+    "B-05~4.1"
+   ],
+   "evidence": [
+    {
+     "doc": "batch_trend.xlsx",
+     "image_id": "batch_trend.xlsx#sBatch#i1"
+    },
+    {
+     "doc": "batch_trend.xlsx",
+     "text": true
+    }
+   ],
+   "needs": [
+    "vlm",
+    "table"
+   ]
+  },
+  {
+   "id": "IQ032",
+   "type": "figure_fact",
+   "lang": "ko",
+   "question": "titer 추세 그래프의 y축 단위는?",
+   "gold_answer": "g/L",
+   "answer_keywords": [
+    "g/L"
+   ],
+   "evidence": [
+    {
+     "doc": "batch_trend.xlsx",
+     "image_id": "batch_trend.xlsx#sBatch#i1"
+    }
+   ],
+   "needs": [
+    "vlm",
+    "table"
+   ]
+  },
+  {
+   "id": "IQ033",
+   "type": "figure_fact",
+   "lang": "ko",
+   "question": "원료 화합물 구조 그림에 표시된 원자 라벨을 모두 나열하라.",
+   "gold_answer": "O, OH, O, O, CH3",
+   "answer_keywords": [
+    "OH",
+    "CH3"
+   ],
+   "evidence": [
+    {
+     "doc": "molecule.pdf",
+     "image_id": "molecule.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ034",
+   "type": "text_layer",
+   "lang": "ko",
+   "question": "벡터로 그린 분자 구조(2쪽)에서 메틸기 표기는?",
+   "gold_answer": "CH3",
+   "answer_keywords": [
+    "CH3"
+   ],
+   "evidence": [
+    {
+     "doc": "molecule.pdf",
+     "image_id": "molecule.pdf#p2#i1"
+    }
+   ],
+   "needs": [
+    "text_layer"
+   ]
+  },
+  {
+   "id": "IQ035",
+   "type": "inference_flag",
+   "lang": "ko",
+   "question": "원료 화합물 구조 그림의 화합물 이름은?",
+   "gold_answer": "그림에 이름이 적혀 있지 않음. 골격으로 보아 아세틸살리실산(아스피린)으로 추정 — 추정임을 밝혀야 정답",
+   "answer_keywords": [
+    "추정|적혀 있지 않|적지 않|명시되지 않|표기되지 않"
+   ],
+   "evidence": [
+    {
+     "doc": "molecule.pdf",
+     "image_id": "molecule.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ],
+   "forbid_keywords": [
+    "아스피린입니다",
+    "아세틸살리실산입니다"
+   ]
+  },
+  {
+   "id": "IQ036",
+   "type": "figure_negative",
+   "lang": "ko",
+   "question": "원료 화합물 구조 그림에 적힌 분자량은?",
+   "gold_answer": "근거 없음 — 그림·본문에 분자량 표기 없음",
+   "answer_keywords": [
+    "근거 없음|없음|표기되지 않"
+   ],
+   "evidence": [
+    {
+     "doc": "molecule.pdf",
+     "image_id": "molecule.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ],
+   "forbid_keywords": [
+    "180"
+   ]
+  },
+  {
+   "id": "IQ037",
+   "type": "figure_negative",
+   "lang": "ko",
+   "question": "EDX 결과에서 염소(Cl) 함량은?",
+   "gold_answer": "근거 없음 — 측정 원소에 Cl 없음",
+   "answer_keywords": [
+    "근거 없음|없음|검출되지 않|표시되지 않"
+   ],
+   "evidence": [
+    {
+     "doc": "edx_map.pdf",
+     "image_id": "edx_map.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ038",
+   "type": "figure_negative",
+   "lang": "ko",
+   "question": "공급사 개요 문서의 로고 그림에 적힌 인증 번호는?",
+   "gold_answer": "근거 없음 — 로고는 작은 장식 그림(분석 대상 아님)",
+   "answer_keywords": [
+    "근거 없음|없음"
+   ],
+   "evidence": [
+    {
+     "doc": "logo_noise.pdf",
+     "text": true
+    }
+   ],
+   "needs": [
+    "body"
+   ]
+  },
+  {
+   "id": "IQ039",
+   "type": "nested_figure",
+   "lang": "ko",
+   "question": "스캔한 배양 중간 보고서의 그림 1에서 Day 10의 VCD 값은?",
+   "gold_answer": "19.6 (x10^6 cells/mL)",
+   "answer_keywords": [
+    "19.6"
+   ],
+   "evidence": [
+    {
+     "doc": "scan_report_nested.pdf",
+     "image_id": "scan_report_nested.pdf#p1#page.c1"
+    }
+   ],
+   "needs": [
+    "ocr",
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ040",
+   "type": "nested_figure",
+   "lang": "ko",
+   "question": "스캔 보고서 그래프에서 VCD가 가장 높은 날과 값은?",
+   "gold_answer": "Day 12, 21.3",
+   "answer_keywords": [
+    "12~21.3"
+   ],
+   "evidence": [
+    {
+     "doc": "scan_report_nested.pdf",
+     "image_id": "scan_report_nested.pdf#p1#page.c1"
+    }
+   ],
+   "needs": [
+    "ocr",
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ041",
+   "type": "figure_body_cross",
+   "lang": "ko",
+   "question": "스캔 보고서의 배치 번호와 수확일은? (본문 글자도 이미지라 OCR 필요)",
+   "gold_answer": "FX-DS-2402, Day 14 수확",
+   "answer_keywords": [
+    "FX-DS-2402",
+    "Day 14|Day14"
+   ],
+   "evidence": [
+    {
+     "doc": "scan_report_nested.pdf",
+     "image_id": "scan_report_nested.pdf#p1#page"
+    }
+   ],
+   "needs": [
+    "ocr"
+   ]
+  },
+  {
+   "id": "IQ042",
+   "type": "nested_figure",
+   "lang": "ko",
+   "question": "기술이전 계획 화면 캡처 안 흐름도에서 Engineering Run 다음 단계는?",
+   "gold_answer": "PPQ",
+   "answer_keywords": [
+    "PPQ"
+   ],
+   "evidence": [
+    {
+     "doc": "screenshot_nested.png",
+     "image_id": "screenshot_nested.png#p1#page.c1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ043",
+   "type": "figure_count",
+   "lang": "ko",
+   "question": "기술이전 계획 화면의 흐름도는 몇 단계이며 마지막 단계는?",
+   "gold_answer": "4단계, 마지막 Commercial Supply",
+   "answer_keywords": [
+    "4단계|4개|4건|4곳|4 개|4 단계|개 수는 4|개수는4|개 수: 4|개수:4|개 수 4|개수4|개: 4|개:4|건 수는 4|건수는4|건 수: 4|건수:4|건 수 4|건수4|건: 4|건:4|곳 수는 4|곳수는4|곳 수: 4|곳수:4|곳 수 4|곳수4|곳: 4|곳:4|단계 수는 4|단계수는4|단계 수: 4|단계수:4|단계 수 4|단계수4|단계: 4|단계:4|4 steps|4steps|4 step|4step|4문항|4 문항|4 건|4 곳",
+    "Commercial Supply|상업 공급|상업 생산"
+   ],
+   "evidence": [
+    {
+     "doc": "screenshot_nested.png",
+     "image_id": "screenshot_nested.png#p1#page.c1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ044",
+   "type": "attachment_request",
+   "lang": "ko",
+   "question": "원료의약품 공정 흐름을 설명하고 흐름도를 첨부하시오.",
+   "gold_answer": "7단계(Seed Train → … → Fill & Finish), 수확 단계 폐액 별도 처리 + 흐름도 첨부",
+   "answer_keywords": [
+    "7단계|7개|7건|7곳|7 개|7 단계|개 수는 7|개수는7|개 수: 7|개수:7|개 수 7|개수7|개: 7|개:7|건 수는 7|건수는7|건 수: 7|건수:7|건 수 7|건수7|건: 7|건:7|곳 수는 7|곳수는7|곳 수: 7|곳수:7|곳 수 7|곳수7|곳: 7|곳:7|단계 수는 7|단계수는7|단계 수: 7|단계수:7|단계 수 7|단계수7|단계: 7|단계:7|7 steps|7steps|7 step|7step|7문항|7 문항|7 건|7 곳"
+   ],
+   "evidence": [
+    {
+     "doc": "rfp_appendix.docx",
+     "image_id": "rfp_appendix.docx#p0#i1",
+     "alt_docs": [
+      "process_flow_raster.pdf",
+      "process_params.xlsx"
+     ]
+    },
+    {
+     "doc": "process_flow_raster.pdf",
+     "image_id": "process_flow_raster.pdf#p1#i1",
+     "alt_docs": [
+      "rfp_appendix.docx",
+      "process_params.xlsx"
+     ]
+    },
+    {
+     "doc": "process_flow_vector.pdf",
+     "image_id": "process_flow_vector.pdf#p1#i1"
+    },
+    {
+     "doc": "process_params.xlsx",
+     "image_id": "process_params.xlsx#sFlow#i1",
+     "alt_docs": [
+      "process_flow_raster.pdf",
+      "rfp_appendix.docx"
+     ]
+    }
+   ],
+   "needs": [
+    "vlm"
+   ],
+   "expected_attachments": [
+    "rfp_appendix.docx#p0#i1",
+    "process_flow_raster.pdf#p1#i1",
+    "process_flow_vector.pdf#p1#i1",
+    "process_params.xlsx#sFlow#i1"
+   ],
+   "attachment_rule": "expected_attachments 중 1개 이상 첨부 · 무관한 그림(로고 등) 첨부 시 감점"
+  },
+  {
+   "id": "IQ045",
+   "type": "attachment_request",
+   "lang": "ko",
+   "question": "일탈(Deviation) 처리 절차를 설명하고 절차도를 첨부하시오.",
+   "gold_answer": "Deviation Detected → QA Review → Impact Assessment → Batch Impact? (Yes: CAPA → QA Approval / No: Close) + 절차도 첨부",
+   "answer_keywords": [
+    "QA Review|QA 검토|QA 리뷰",
+    "CAPA"
+   ],
+   "evidence": [
+    {
+     "doc": "qc_workflow.pptx",
+     "image_id": "qc_workflow.pptx#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ],
+   "expected_attachments": [
+    "qc_workflow.pptx#p1#i1"
+   ],
+   "attachment_rule": "expected_attachments 중 1개 이상 첨부 · 무관한 그림(로고 등) 첨부 시 감점"
+  },
+  {
+   "id": "IQ046",
+   "type": "attachment_request",
+   "lang": "ko",
+   "question": "변경 관리 절차를 설명하고 절차도를 첨부하시오.",
+   "gold_answer": "Change Request → Change Review Board → Risk Assessment → GMP Impact? (Yes: Validation Plan → QA Release / No: Document & Close) + 절차도 첨부",
+   "answer_keywords": [
+    "Change Review Board|변경 검토 위원회",
+    "Validation Plan|밸리데이션 계획|검증 계획"
+   ],
+   "evidence": [
+    {
+     "doc": "qc_workflow.pptx",
+     "image_id": "qc_workflow.pptx#p2#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ],
+   "expected_attachments": [
+    "qc_workflow.pptx#p2#i1"
+   ],
+   "attachment_rule": "expected_attachments 중 1개 이상 첨부 · 무관한 그림(로고 등) 첨부 시 감점"
+  },
+  {
+   "id": "IQ047",
+   "type": "attachment_request",
+   "lang": "ko",
+   "question": "원료의약품 안정성 데이터를 요약하고 근거 그래프를 첨부하시오.",
+   "gold_answer": "장기 12개월 98.2%, 가속 12개월 93.6%로 기준 미달 + 그래프 첨부",
+   "answer_keywords": [
+    "98.2",
+    "93.6"
+   ],
+   "evidence": [
+    {
+     "doc": "stability_mixed.pdf",
+     "image_id": "stability_mixed.pdf#p2#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ],
+   "expected_attachments": [
+    "stability_mixed.pdf#p2#i1"
+   ],
+   "attachment_rule": "expected_attachments 중 1개 이상 첨부 · 무관한 그림(로고 등) 첨부 시 감점"
+  },
+  {
+   "id": "IQ048",
+   "type": "attachment_request",
+   "lang": "ko",
+   "question": "이물 입자 원소 분석 결과를 설명하고 분석 그림을 첨부하시오.",
+   "gold_answer": "Fe(왼쪽 위·120 cts)·Zn(중앙·80)·Cu(오른쪽 아래·45) 분포 + 맵 첨부",
+   "answer_keywords": [
+    "Fe",
+    "Zn",
+    "Cu"
+   ],
+   "evidence": [
+    {
+     "doc": "eds_mapping.pdf",
+     "image_id": "eds_mapping.pdf#p1#i1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ],
+   "expected_attachments": [
+    "eds_mapping.pdf#p1#i1"
+   ],
+   "attachment_rule": "expected_attachments 중 1개 이상 첨부 · 무관한 그림(로고 등) 첨부 시 감점"
+  },
+  {
+   "id": "IQ049",
+   "type": "attachment_request",
+   "lang": "ko",
+   "question": "기술이전 단계를 설명하고 단계도를 첨부하시오.",
+   "gold_answer": "Gap Analysis → Engineering Run → PPQ → Commercial Supply + 단계도(캡처 안 흐름도만 잘라서) 첨부",
+   "answer_keywords": [
+    "Engineering Run|엔지니어링 런|엔지니어링 배치",
+    "PPQ"
+   ],
+   "evidence": [
+    {
+     "doc": "screenshot_nested.png",
+     "image_id": "screenshot_nested.png#p1#page.c1"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ],
+   "expected_attachments": [
+    "screenshot_nested.png#p1#page.c1"
+   ],
+   "attachment_rule": "expected_attachments 중 1개 이상 첨부 · 무관한 그림(로고 등) 첨부 시 감점"
+  },
+  {
+   "id": "IQ050",
+   "type": "attachment_request",
+   "lang": "ko",
+   "question": "가상 민원 접수 절차를 설명하고 절차도를 첨부하시오.",
+   "gold_answer": "접수 → 검토 → 승인 + 절차도(도형 도식) 첨부",
+   "answer_keywords": [
+    "접수",
+    "승인"
+   ],
+   "evidence": [
+    {
+     "doc": "docx_shape_flow.docx",
+     "image_id": "docx_shape_flow.docx#p1#page"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ],
+   "expected_attachments": [
+    "docx_shape_flow.docx#p1#page"
+   ],
+   "attachment_rule": "expected_attachments 중 1개 이상 첨부 · 무관한 그림(로고 등) 첨부 시 감점"
+  },
+  {
+   "id": "IQ051",
+   "type": "figure_structure",
+   "lang": "ko",
+   "question": "도형(텍스트 상자)으로만 그린 흐름도에서 접수 다음 단계는?",
+   "gold_answer": "검토",
+   "answer_keywords": [
+    "검토"
+   ],
+   "evidence": [
+    {
+     "doc": "docx_shape_flow.docx",
+     "image_id": "docx_shape_flow.docx#p1#page"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ052",
+   "type": "figure_count",
+   "lang": "ko",
+   "question": "도형 도식 문서(docx)의 흐름도는 몇 단계인가?",
+   "gold_answer": "3개",
+   "answer_keywords": [
+    "3개|3단계|3건|3곳|3 개|3 단계|개 수는 3|개수는3|개 수: 3|개수:3|개 수 3|개수3|개: 3|개:3|건 수는 3|건수는3|건 수: 3|건수:3|건 수 3|건수3|건: 3|건:3|곳 수는 3|곳수는3|곳 수: 3|곳수:3|곳 수 3|곳수3|곳: 3|곳:3|단계 수는 3|단계수는3|단계 수: 3|단계수:3|단계 수 3|단계수3|단계: 3|단계:3|3 steps|3steps|3 step|3step|3문항|3 문항|3 건|3 곳"
+   ],
+   "evidence": [
+    {
+     "doc": "docx_shape_flow.docx",
+     "image_id": "docx_shape_flow.docx#p1#page"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  },
+  {
+   "id": "IQ053",
+   "type": "figure_structure",
+   "lang": "ko",
+   "question": "Excel 도형 도식에서 연결선으로 이어진 두 단계는?",
+   "gold_answer": "출고 준비 → 검수",
+   "answer_keywords": [
+    "출고 준비",
+    "검수"
+   ],
+   "evidence": [
+    {
+     "doc": "xlsx_shape_diagram.xlsx",
+     "image_id": "xlsx_shape_diagram.xlsx#p1#page"
+    }
+   ],
+   "needs": [
+    "vlm"
+   ]
+  }
+ ]
+}

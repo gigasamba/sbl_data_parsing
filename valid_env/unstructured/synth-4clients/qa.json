@@ -1,0 +1,4027 @@
+{
+ "version": "2026-09-30",
+ "n": 115,
+ "by_type": {
+  "latest_version": 10,
+  "single_fact": 28,
+  "table_aggregate": 10,
+  "historical": 14,
+  "format_mixed": 6,
+  "negative": 8,
+  "comparison": 12,
+  "cross_document": 13,
+  "aggregate": 8,
+  "ocr_only": 6
+ },
+ "items": [
+  {
+   "id": "QA001",
+   "type": "latest_version",
+   "lang": "en",
+   "question": "In the latest RFP for SOL-MAB-01, what is the price adjustment cap (% per annum)?",
+   "gold_answer": "4%",
+   "evidence": [
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-SOL-MAB-01-v2#xlsx"
+    },
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-SOL-MAB-01-v2#jpg"
+    }
+   ]
+  },
+  {
+   "id": "QA002",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "When does Pfizer Inc.'s contract C-PFE-2022-01 (PFE-MAB-01) expire?",
+   "gold_answer": "2024-03-01",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA003",
+   "type": "table_aggregate",
+   "lang": "ko",
+   "question": "우리가 준비한 화이자가 과거 3년 동안 계약한 계약 건수와 제품 종류, 제품 종류별 계약 배치 수를 정리해줘. 각 계약마다 계약 단가를 고려해서 전체 계약 규모도 같이 표로 정리해줘.",
+   "gold_answer": null,
+   "gold_table": {
+    "columns": [
+     "제품 종류",
+     "계약 건수",
+     "계약 배치 수 합계",
+     "계약 금액 합계"
+    ],
+    "rows": [
+     [
+      "ADC",
+      2,
+      7,
+      "2,950,000 USD"
+     ],
+     [
+      "bispecific",
+      1,
+      3,
+      "900,000 USD"
+     ],
+     [
+      "mAb",
+      3,
+      16,
+      "3,365,000 USD"
+     ],
+     [
+      "vaccine",
+      1,
+      5,
+      "475,000 USD"
+     ]
+    ],
+    "totals": {
+     "계약 건수": 7,
+     "계약 배치 수 합계": 31,
+     "계약 금액 합계": "7,690,000 USD"
+    }
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-05#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2021-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-07#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-08#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-09#pdf"
+    }
+   ],
+   "basis": [
+    {
+     "contract_id": "C-PFE-2024-04",
+     "product": "PFE-ADC-03",
+     "signed_date": "2024-01-20",
+     "batch_volume": 3,
+     "unit_price": 410000,
+     "currency": "USD",
+     "contract_value": 1230000
+    },
+    {
+     "contract_id": "C-PFE-2024-02",
+     "product": "PFE-MAB-01",
+     "signed_date": "2024-02-15",
+     "batch_volume": 7,
+     "unit_price": 235000,
+     "currency": "USD",
+     "contract_value": 1645000
+    },
+    {
+     "contract_id": "C-PFE-2024-03",
+     "product": "PFE-MAB-02",
+     "signed_date": "2024-06-10",
+     "batch_volume": 4,
+     "unit_price": 180000,
+     "currency": "USD",
+     "contract_value": 720000
+    },
+    {
+     "contract_id": "C-PFE-2024-08",
+     "product": "PFE-VAC-06",
+     "signed_date": "2024-09-01",
+     "batch_volume": 5,
+     "unit_price": 95000,
+     "currency": "USD",
+     "contract_value": 475000
+    },
+    {
+     "contract_id": "C-PFE-2025-07",
+     "product": "PFE-BSA-05",
+     "signed_date": "2025-02-01",
+     "batch_volume": 3,
+     "unit_price": 300000,
+     "currency": "USD",
+     "contract_value": 900000
+    },
+    {
+     "contract_id": "C-PFE-2025-09",
+     "product": "PFE-MAB-07",
+     "signed_date": "2025-06-15",
+     "batch_volume": 5,
+     "unit_price": 200000,
+     "currency": "USD",
+     "contract_value": 1000000
+    },
+    {
+     "contract_id": "C-PFE-2025-05",
+     "product": "PFE-ADC-03",
+     "signed_date": "2025-11-05",
+     "batch_volume": 4,
+     "unit_price": 430000,
+     "currency": "USD",
+     "contract_value": 1720000
+    }
+   ],
+   "window": {
+    "start": "2023-10-01",
+    "end": "2026-09-30"
+   },
+   "evidence_keywords": [
+    "C-PFE-2024-04",
+    "C-PFE-2024-02",
+    "C-PFE-2024-03",
+    "C-PFE-2024-08",
+    "C-PFE-2025-07",
+    "C-PFE-2025-09",
+    "C-PFE-2025-05",
+    "1230000",
+    "1645000",
+    "720000",
+    "475000",
+    "900000",
+    "1000000",
+    "1720000"
+   ],
+   "evidence_n": 14
+  },
+  {
+   "id": "QA004",
+   "type": "historical",
+   "lang": "ko",
+   "question": "미르하제약(주)의 2023년 RFI(MRH-RFI-2023-01)에서 '최근 규제기관 실사 이력을 제시하시오.'에 대해 뭐라고 답했나?",
+   "gold_answer": "해당 시점 자료 별도 제공",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-MRH-RFI-2023-01#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-MRH-RFI-2023-01#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-MRH-RFI-2023-01#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA005",
+   "type": "table_aggregate",
+   "lang": "en",
+   "question": "Across all of Pfizer's contracts on file (not limited to the past 3 years), what is the contract count and total batch volume and contract value per product modality?",
+   "gold_answer": null,
+   "gold_table": {
+    "columns": [
+     "Modality",
+     "Contract count",
+     "Batch volume total",
+     "Contract value total"
+    ],
+    "rows": [
+     [
+      "ADC",
+      3,
+      10,
+      "4,090,000 USD"
+     ],
+     [
+      "bispecific",
+      1,
+      3,
+      "900,000 USD"
+     ],
+     [
+      "mAb",
+      4,
+      22,
+      "4,685,000 USD"
+     ],
+     [
+      "vaccine",
+      1,
+      5,
+      "475,000 USD"
+     ]
+    ],
+    "totals": {
+     "Contract count": 9,
+     "Batch volume total": 40,
+     "Contract value total": "10,150,000 USD"
+    }
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-05#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2021-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-07#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-08#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-09#pdf"
+    }
+   ],
+   "basis": [
+    {
+     "contract_id": "C-PFE-2022-01",
+     "product": "PFE-MAB-01",
+     "signed_date": "2022-03-01",
+     "batch_volume": 6,
+     "unit_price": 220000,
+     "currency": "USD",
+     "contract_value": 1320000
+    },
+    {
+     "contract_id": "C-PFE-2024-02",
+     "product": "PFE-MAB-01",
+     "signed_date": "2024-02-15",
+     "batch_volume": 7,
+     "unit_price": 235000,
+     "currency": "USD",
+     "contract_value": 1645000
+    },
+    {
+     "contract_id": "C-PFE-2024-03",
+     "product": "PFE-MAB-02",
+     "signed_date": "2024-06-10",
+     "batch_volume": 4,
+     "unit_price": 180000,
+     "currency": "USD",
+     "contract_value": 720000
+    },
+    {
+     "contract_id": "C-PFE-2024-04",
+     "product": "PFE-ADC-03",
+     "signed_date": "2024-01-20",
+     "batch_volume": 3,
+     "unit_price": 410000,
+     "currency": "USD",
+     "contract_value": 1230000
+    },
+    {
+     "contract_id": "C-PFE-2025-05",
+     "product": "PFE-ADC-03",
+     "signed_date": "2025-11-05",
+     "batch_volume": 4,
+     "unit_price": 430000,
+     "currency": "USD",
+     "contract_value": 1720000
+    },
+    {
+     "contract_id": "C-PFE-2021-06",
+     "product": "PFE-ADC-04",
+     "signed_date": "2021-07-15",
+     "batch_volume": 3,
+     "unit_price": 380000,
+     "currency": "USD",
+     "contract_value": 1140000
+    },
+    {
+     "contract_id": "C-PFE-2025-07",
+     "product": "PFE-BSA-05",
+     "signed_date": "2025-02-01",
+     "batch_volume": 3,
+     "unit_price": 300000,
+     "currency": "USD",
+     "contract_value": 900000
+    },
+    {
+     "contract_id": "C-PFE-2024-08",
+     "product": "PFE-VAC-06",
+     "signed_date": "2024-09-01",
+     "batch_volume": 5,
+     "unit_price": 95000,
+     "currency": "USD",
+     "contract_value": 475000
+    },
+    {
+     "contract_id": "C-PFE-2025-09",
+     "product": "PFE-MAB-07",
+     "signed_date": "2025-06-15",
+     "batch_volume": 5,
+     "unit_price": 200000,
+     "currency": "USD",
+     "contract_value": 1000000
+    }
+   ],
+   "evidence_keywords": [
+    "C-PFE-2022-01",
+    "C-PFE-2024-02",
+    "C-PFE-2024-03",
+    "C-PFE-2024-04",
+    "C-PFE-2025-05",
+    "C-PFE-2021-06",
+    "C-PFE-2025-07",
+    "C-PFE-2024-08",
+    "C-PFE-2025-09",
+    "1320000",
+    "1645000",
+    "720000",
+    "1230000",
+    "1720000",
+    "1140000",
+    "900000",
+    "475000",
+    "1000000"
+   ],
+   "evidence_n": 18
+  },
+  {
+   "id": "QA006",
+   "type": "historical",
+   "lang": "en",
+   "question": "In Pfizer Inc.'s 2024 RFI (PFE-RFI-2024-02), what was the answer to 'State recent regulatory inspection history.'?",
+   "gold_answer": "Provided separately at the time",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-PFE-RFI-2024-02#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-PFE-RFI-2024-02#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-PFE-RFI-2024-02#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA007",
+   "type": "historical",
+   "lang": "en",
+   "question": "In Solvantis Biologics Inc.'s 2023 RFI (SOL-RFI-2023-01), what was the answer to 'State average technology-transfer duration.'?",
+   "gold_answer": "9.6개월 (as of 2023)",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-SOL-RFI-2023-01#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-SOL-RFI-2023-01#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-SOL-RFI-2023-01#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA008",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "When does Solvantis Biologics Inc.'s contract C-SOL-2020-01 (SOL-MAB-01) expire?",
+   "gold_answer": "2024-06-15",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA009",
+   "type": "table_aggregate",
+   "lang": "ko",
+   "question": "화이자가 최근 1년(2025-10-01~2026-09-30) 동안 체결한 계약 건수와 총 계약 규모는?",
+   "gold_answer": null,
+   "gold_table": {
+    "columns": [
+     "계약ID",
+     "제품",
+     "제품종류",
+     "체결일",
+     "배치 수",
+     "단가",
+     "계약금액"
+    ],
+    "rows": [
+     [
+      "C-PFE-2025-05",
+      "PFE-ADC-03",
+      "ADC",
+      "2025-11-05",
+      4,
+      "430,000 USD",
+      "1,720,000 USD"
+     ]
+    ],
+    "totals": {
+     "계약 건수": 1,
+     "계약 금액 합계": "1,720,000 USD"
+    }
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-05#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2021-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-07#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-08#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-09#pdf"
+    }
+   ],
+   "basis": [
+    {
+     "contract_id": "C-PFE-2025-05",
+     "product": "PFE-ADC-03",
+     "signed_date": "2025-11-05",
+     "batch_volume": 4,
+     "unit_price": 430000,
+     "currency": "USD",
+     "contract_value": 1720000
+    }
+   ],
+   "window": {
+    "start": "2025-10-01",
+    "end": "2026-09-30"
+   },
+   "evidence_keywords": [
+    "C-PFE-2025-05",
+    "430000",
+    "1720000"
+   ],
+   "evidence_n": 3
+  },
+  {
+   "id": "QA010",
+   "type": "format_mixed",
+   "lang": "ko",
+   "question": "제품 MRH-BSA-02에 대해 계약 단가, 모달리티, 최근 협상 이메일의 제안가를 각 근거 문서에서 찾아 종합 설명하라.",
+   "gold_answer": "계약 단가 491,000,000 KRW, 모달리티 bispecific, 최근 협상 이메일 제안가 487,000,000 KRW(협상용, 최종은 계약가 적용)",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-03#scan_pdf"
+    },
+    {
+     "doc_kind": "product_page",
+     "doc_id": "product-MRH-BSA-02#htm"
+    },
+    {
+     "doc_kind": "product_page",
+     "doc_id": "product-MRH-BSA-02#mht"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-MRH-03#eml"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-MRH-03#msg"
+    }
+   ],
+   "formats_used": [
+    "eml",
+    "htm",
+    "mht",
+    "msg",
+    "scan_pdf"
+   ],
+   "answer_keywords": [
+    "491,000,000",
+    "bispecific",
+    "487,000,000"
+   ]
+  },
+  {
+   "id": "QA011",
+   "type": "latest_version",
+   "lang": "ko",
+   "question": "MRH-MAB-01의 최신 RFP에서 MTOP은 몇 batches/year인가?",
+   "gold_answer": "7",
+   "evidence": [
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-MRH-MAB-01-v2#xlsx"
+    }
+   ]
+  },
+  {
+   "id": "QA012",
+   "type": "negative",
+   "lang": "en",
+   "question": "Is the unit price of Solvantis Biologics Inc.'s contract C-SOL-2024-02 11,511,001 USD?",
+   "gold_answer": "No evidence — the documented price is 311,000 USD; 11,511,001 appears in no document.",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2024-02#pdf"
+    }
+   ],
+   "fabricated_value": "11,511,001",
+   "evidence_keywords": [
+    "C-SOL-2024-02",
+    "311000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA013",
+   "type": "historical",
+   "lang": "en",
+   "question": "In Pfizer Inc.'s 2023 RFI (PFE-RFI-2023-01), what was the answer to 'State average technology-transfer duration.'?",
+   "gold_answer": "9.86개월 (as of 2023)",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-PFE-RFI-2023-01#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-PFE-RFI-2023-01#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-PFE-RFI-2023-01#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA014",
+   "type": "single_fact",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2023-03(MRH-BSA-02) 단가는 얼마인가?",
+   "gold_answer": "491,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-03#scan_pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA015",
+   "type": "comparison",
+   "lang": "ko",
+   "question": "청람바이오(주)과 Solvantis Biologics Inc. 중 계약 건수가 더 많은 곳은?",
+   "gold_answer": "Solvantis Biologics Inc.",
+   "compare": {
+    "winner": "Solvantis Biologics Inc.",
+    "loser": "청람바이오(주)",
+    "direction": "more",
+    "winner_forms": [
+     "Solvantis Biologics Inc.",
+     "Solvantis"
+    ],
+    "loser_forms": [
+     "청람바이오(주)",
+     "청람바이오",
+     "청람"
+    ]
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-CRB-2022-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2024-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2021-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2023-04#pdf"
+    }
+   ],
+   "evidence_keywords": [
+    "C-CRB-2022-01",
+    "C-SOL-2020-01",
+    "C-SOL-2024-02",
+    "C-SOL-2021-03",
+    "C-SOL-2023-04"
+   ],
+   "evidence_n": 5
+  },
+  {
+   "id": "QA016",
+   "type": "cross_document",
+   "lang": "en",
+   "question": "Between the price proposed in email MAIL-SOL-01 and the final contract (C-SOL-2020-01), which one is authoritative?",
+   "gold_answer": "302,000 USD (C-SOL-2020-01, contract governs over negotiation email)",
+   "evidence": [
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-SOL-01#eml"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-SOL-01#msg"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    }
+   ],
+   "answer_keywords": [
+    "302,000",
+    "C-SOL-2020-01"
+   ],
+   "evidence_keywords": [
+    "284000",
+    "3624000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA017",
+   "type": "cross_document",
+   "lang": "ko",
+   "question": "이메일 MAIL-CRB-01에서 제안한 단가와 최종 계약(C-CRB-2022-01) 단가 중 유효한 것은?",
+   "gold_answer": "104,000,000 KRW (C-CRB-2022-01, contract governs over negotiation email)",
+   "evidence": [
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-CRB-01#eml"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-CRB-01#msg"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-CRB-2022-01#scan_pdf"
+    }
+   ],
+   "answer_keywords": [
+    "104,000,000",
+    "C-CRB-2022-01"
+   ],
+   "evidence_keywords": [
+    "113000000",
+    "1040000000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA018",
+   "type": "negative",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2023-02 단가가 15,688,004,001 KRW인가?",
+   "gold_answer": "근거 없음 — 문서상 실제 단가는 424,000,000 KRW이며 15,688,004,001는 어떤 문서에도 없다.",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-02#pdf"
+    }
+   ],
+   "fabricated_value": "15,688,004,001",
+   "evidence_keywords": [
+    "C-MRH-2023-02",
+    "424000000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA019",
+   "type": "cross_document",
+   "lang": "en",
+   "question": "Between the price proposed in email MAIL-PFE-03 and the final contract (C-PFE-2024-03), which one is authoritative?",
+   "gold_answer": "180,000 USD (C-PFE-2024-03, contract governs over negotiation email)",
+   "evidence": [
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-PFE-03#eml"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-03#pdf"
+    }
+   ],
+   "answer_keywords": [
+    "180,000",
+    "C-PFE-2024-03"
+   ],
+   "evidence_keywords": [
+    "164000",
+    "720000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA020",
+   "type": "aggregate",
+   "lang": "en",
+   "question": "How many products does Pfizer Inc. have in production?",
+   "gold_answer": "7",
+   "evidence": [
+    {
+     "doc_kind": "press_release",
+     "doc_id": "press-PFE#htm"
+    }
+   ],
+   "evidence_keywords": [
+    "7개 제품|for 7 products|for 7 product"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "QA021",
+   "type": "aggregate",
+   "lang": "ko",
+   "question": "미르하제약(주)의 전체 계약 금액 합계는 얼마인가(모든 계약 contract_value 합)?",
+   "gold_answer": "39,678,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-03#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2022-04#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-05#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-06#scan_pdf"
+    }
+   ],
+   "evidence_keywords": [
+    "7650000000",
+    "4240000000",
+    "15712000000",
+    "2520000000",
+    "5860000000",
+    "3696000000"
+   ],
+   "evidence_n": 6
+  },
+  {
+   "id": "QA022",
+   "type": "comparison",
+   "lang": "en",
+   "question": "Between 미르하제약(주) and Pfizer Inc., which has more products in production?",
+   "gold_answer": "Pfizer Inc.",
+   "compare": {
+    "winner": "Pfizer Inc.",
+    "loser": "미르하제약(주)",
+    "direction": "more",
+    "winner_forms": [
+     "Pfizer Inc.",
+     "Pfizer",
+     "화이자"
+    ],
+    "loser_forms": [
+     "미르하제약(주)",
+     "미르하제약",
+     "미르하"
+    ]
+   },
+   "evidence": [
+    {
+     "doc_kind": "press_release",
+     "doc_id": "press-MRH#html"
+    },
+    {
+     "doc_kind": "press_release",
+     "doc_id": "press-PFE#htm"
+    }
+   ],
+   "evidence_keywords": [
+    "5개 제품|for 5 products|for 5 product",
+    "7개 제품|for 7 products|for 7 product"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA023",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "When does Solvantis Biologics Inc.'s contract C-SOL-2023-04 (SOL-ADC-03) expire?",
+   "gold_answer": "2025-10-09",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2023-04#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA024",
+   "type": "single_fact",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2023-03(MRH-BSA-02) 만료일은 언제인가?",
+   "gold_answer": "2027-01-23",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-03#scan_pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA025",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "When does Solvantis Biologics Inc.'s contract C-SOL-2024-02 (SOL-MAB-01) expire?",
+   "gold_answer": "2028-03-15",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2024-02#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA026",
+   "type": "comparison",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 금액 합계가 Solvantis Biologics Inc.보다 작다 — 맞는가?",
+   "gold_answer": "아니오",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-03#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2022-04#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-05#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2024-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2021-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2023-04#pdf"
+    }
+   ],
+   "evidence_keywords": [
+    "7650000000",
+    "4240000000",
+    "15712000000",
+    "2520000000",
+    "5860000000",
+    "3696000000",
+    "3624000",
+    "4976000",
+    "11196000",
+    "6972000"
+   ],
+   "evidence_n": 10
+  },
+  {
+   "id": "QA027",
+   "type": "historical",
+   "lang": "en",
+   "question": "In Solvantis Biologics Inc.'s 2024 RFI (SOL-RFI-2024-02), what was the answer to 'State the share of lines using single-use systems.'?",
+   "gold_answer": "64.48% (as of 2024)",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-SOL-RFI-2024-02#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-SOL-RFI-2024-02#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-SOL-RFI-2024-02#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA028",
+   "type": "ocr_only",
+   "lang": "ko",
+   "question": "청람바이오(주)의 계약 C-CRB-2022-01(CRB-VAC-01) 단가는 얼마인가?(참고: 텍스트 사본 없음, 스캔본만 존재)",
+   "gold_answer": "104,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-CRB-2022-01#scan_pdf"
+    }
+   ],
+   "ocr_format": "scan_pdf"
+  },
+  {
+   "id": "QA029",
+   "type": "table_aggregate",
+   "lang": "ko",
+   "question": "화이자 전체 계약 이력에서 bispecific·vaccine 계약은 각각 몇 건이며, 배치 수 합계와 계약 금액 합계는 얼마인가?",
+   "gold_answer": null,
+   "gold_table": {
+    "columns": [
+     "제품 종류",
+     "계약 건수",
+     "계약 배치 수 합계",
+     "계약 금액 합계"
+    ],
+    "rows": [
+     [
+      "bispecific",
+      1,
+      3,
+      "900,000 USD"
+     ],
+     [
+      "vaccine",
+      1,
+      5,
+      "475,000 USD"
+     ]
+    ],
+    "totals": {}
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-05#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2021-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-07#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-08#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-09#pdf"
+    }
+   ],
+   "basis": [
+    {
+     "contract_id": "C-PFE-2025-07",
+     "product": "PFE-BSA-05",
+     "signed_date": "2025-02-01",
+     "batch_volume": 3,
+     "unit_price": 300000,
+     "currency": "USD",
+     "contract_value": 900000
+    },
+    {
+     "contract_id": "C-PFE-2024-08",
+     "product": "PFE-VAC-06",
+     "signed_date": "2024-09-01",
+     "batch_volume": 5,
+     "unit_price": 95000,
+     "currency": "USD",
+     "contract_value": 475000
+    }
+   ],
+   "evidence_keywords": [
+    "C-PFE-2025-07",
+    "C-PFE-2024-08",
+    "900000",
+    "475000"
+   ],
+   "evidence_n": 4
+  },
+  {
+   "id": "QA030",
+   "type": "latest_version",
+   "lang": "ko",
+   "question": "CRB-VAC-01의 최신 RFP에서 MTOP은 몇 batches/year인가?",
+   "gold_answer": "7",
+   "evidence": [
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-CRB-VAC-01-v2#xlsx"
+    },
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-CRB-VAC-01-v2#jpg"
+    }
+   ]
+  },
+  {
+   "id": "QA031",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "When does Solvantis Biologics Inc.'s contract C-SOL-2021-03 (SOL-MAB-02) expire?",
+   "gold_answer": "2025-03-05",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2021-03#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA032",
+   "type": "format_mixed",
+   "lang": "en",
+   "question": "For product PFE-MAB-01, synthesize the contract price, modality and the latest negotiation email's proposed price, each from its own evidence document.",
+   "gold_answer": "Contract price 220,000 USD, modality mAb, latest negotiation email proposed 218,000 USD(negotiation-stage; the contract price governs)",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    },
+    {
+     "doc_kind": "product_page",
+     "doc_id": "product-PFE-MAB-01#htm"
+    },
+    {
+     "doc_kind": "product_page",
+     "doc_id": "product-PFE-MAB-01#mht"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-PFE-01#eml"
+    }
+   ],
+   "formats_used": [
+    "eml",
+    "htm",
+    "mht",
+    "pdf"
+   ],
+   "answer_keywords": [
+    "220,000",
+    "mAb",
+    "218,000"
+   ]
+  },
+  {
+   "id": "QA033",
+   "type": "cross_document",
+   "lang": "en",
+   "question": "Between the price proposed in email MAIL-SOL-03 and the final contract (C-SOL-2021-03), which one is authoritative?",
+   "gold_answer": "311,000 USD (C-SOL-2021-03, contract governs over negotiation email)",
+   "evidence": [
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-SOL-03#eml"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-SOL-03#msg"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2021-03#pdf"
+    }
+   ],
+   "answer_keywords": [
+    "311,000",
+    "C-SOL-2021-03"
+   ],
+   "evidence_keywords": [
+    "348000",
+    "11196000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA034",
+   "type": "aggregate",
+   "lang": "ko",
+   "question": "청람바이오(주)의 생산 제품 수는 몇 개인가?",
+   "gold_answer": "1",
+   "evidence": [
+    {
+     "doc_kind": "press_release",
+     "doc_id": "press-CRB#html"
+    }
+   ],
+   "evidence_keywords": [
+    "1개 제품|for 1 products|for 1 product"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "QA035",
+   "type": "cross_document",
+   "lang": "en",
+   "question": "Between the price proposed in email MAIL-SOL-02 and the final contract (C-SOL-2020-01), which one is authoritative?",
+   "gold_answer": "302,000 USD (C-SOL-2020-01, contract governs over negotiation email)",
+   "evidence": [
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-SOL-02#eml"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-SOL-02#msg"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    }
+   ],
+   "answer_keywords": [
+    "302,000",
+    "C-SOL-2020-01"
+   ],
+   "evidence_keywords": [
+    "296000",
+    "3624000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA036",
+   "type": "latest_version",
+   "lang": "en",
+   "question": "In the latest RFP for PFE-ADC-03, what is the price adjustment cap (% per annum)?",
+   "gold_answer": "2%",
+   "evidence": [
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-PFE-ADC-03-v2#xls"
+    }
+   ]
+  },
+  {
+   "id": "QA037",
+   "type": "single_fact",
+   "lang": "ko",
+   "question": "청람바이오(주)의 계약 C-CRB-2022-01(CRB-VAC-01) 단가는 얼마인가?",
+   "gold_answer": "104,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-CRB-2022-01#scan_pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA038",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "When does Pfizer Inc.'s contract C-PFE-2024-04 (PFE-ADC-03) expire?",
+   "gold_answer": "2026-01-20",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA039",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "What is the unit price of Pfizer Inc.'s contract C-PFE-2024-04 (PFE-ADC-03)?",
+   "gold_answer": "410,000 USD",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA040",
+   "type": "table_aggregate",
+   "lang": "en",
+   "question": "For Solvantis Biologics Inc., break down contract count, total batch volume, and total contract value by product modality.",
+   "gold_answer": null,
+   "gold_table": {
+    "columns": [
+     "Modality",
+     "Contract count",
+     "Batch volume total",
+     "Contract value total"
+    ],
+    "rows": [
+     [
+      "ADC",
+      1,
+      7,
+      "6,972,000 USD"
+     ],
+     [
+      "mAb",
+      3,
+      16,
+      "19,796,000 USD"
+     ]
+    ],
+    "totals": {
+     "Contract count": 4,
+     "Batch volume total": 23,
+     "Contract value total": "26,768,000 USD"
+    }
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2024-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2021-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2023-04#pdf"
+    }
+   ],
+   "basis": [
+    {
+     "contract_id": "C-SOL-2020-01",
+     "product": "SOL-MAB-01",
+     "signed_date": "2020-06-15",
+     "batch_volume": 3,
+     "unit_price": 302000,
+     "currency": "USD",
+     "contract_value": 3624000
+    },
+    {
+     "contract_id": "C-SOL-2024-02",
+     "product": "SOL-MAB-01",
+     "signed_date": "2024-03-15",
+     "batch_volume": 4,
+     "unit_price": 311000,
+     "currency": "USD",
+     "contract_value": 4976000
+    },
+    {
+     "contract_id": "C-SOL-2021-03",
+     "product": "SOL-MAB-02",
+     "signed_date": "2021-03-05",
+     "batch_volume": 9,
+     "unit_price": 311000,
+     "currency": "USD",
+     "contract_value": 11196000
+    },
+    {
+     "contract_id": "C-SOL-2023-04",
+     "product": "SOL-ADC-03",
+     "signed_date": "2023-10-09",
+     "batch_volume": 7,
+     "unit_price": 498000,
+     "currency": "USD",
+     "contract_value": 6972000
+    }
+   ],
+   "evidence_keywords": [
+    "C-SOL-2020-01",
+    "C-SOL-2024-02",
+    "C-SOL-2021-03",
+    "C-SOL-2023-04",
+    "3624000",
+    "4976000",
+    "11196000",
+    "6972000"
+   ],
+   "evidence_n": 8
+  },
+  {
+   "id": "QA041",
+   "type": "historical",
+   "lang": "ko",
+   "question": "미르하제약(주)의 2024년 RFI(MRH-RFI-2024-02)에서 '최근 3년 TRIR을 제시하시오.'에 대해 뭐라고 답했나?",
+   "gold_answer": "0.18 (2024 시점 자료)",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-MRH-RFI-2024-02#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-MRH-RFI-2024-02#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-MRH-RFI-2024-02#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA042",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "What is the unit price of Pfizer Inc.'s contract C-PFE-2024-02 (PFE-MAB-01)?",
+   "gold_answer": "235,000 USD",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA043",
+   "type": "historical",
+   "lang": "en",
+   "question": "In Solvantis Biologics Inc.'s 2024 RFI (SOL-RFI-2024-02), what was the answer to 'State the dual-sourcing rate for critical raw materials.'?",
+   "gold_answer": "79.4% (as of 2024)",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-SOL-RFI-2024-02#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-SOL-RFI-2024-02#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-SOL-RFI-2024-02#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA044",
+   "type": "format_mixed",
+   "lang": "en",
+   "question": "For product SOL-ADC-03, synthesize the contract price, modality and the latest negotiation email's proposed price, each from its own evidence document.",
+   "gold_answer": "Contract price 498,000 USD, modality ADC, latest negotiation email proposed 529,000 USD(negotiation-stage; the contract price governs)",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2023-04#pdf"
+    },
+    {
+     "doc_kind": "product_page",
+     "doc_id": "product-SOL-ADC-03#htm"
+    },
+    {
+     "doc_kind": "product_page",
+     "doc_id": "product-SOL-ADC-03#mht"
+    },
+    {
+     "doc_kind": "product_page",
+     "doc_id": "product-SOL-ADC-03#png"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-SOL-05#eml"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-SOL-05#msg"
+    }
+   ],
+   "formats_used": [
+    "eml",
+    "htm",
+    "mht",
+    "msg",
+    "pdf",
+    "png"
+   ],
+   "answer_keywords": [
+    "498,000",
+    "ADC",
+    "529,000"
+   ]
+  },
+  {
+   "id": "QA045",
+   "type": "single_fact",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2020-05(MRH-ADC-04) 만료일은 언제인가?",
+   "gold_answer": "2022-11-14",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-05#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA046",
+   "type": "cross_document",
+   "lang": "ko",
+   "question": "이메일 MAIL-CRB-02에서 제안한 단가와 최종 계약(C-CRB-2022-01) 단가 중 유효한 것은?",
+   "gold_answer": "104,000,000 KRW (C-CRB-2022-01, contract governs over negotiation email)",
+   "evidence": [
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-CRB-02#eml"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-CRB-02#msg"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-CRB-2022-01#scan_pdf"
+    }
+   ],
+   "answer_keywords": [
+    "104,000,000",
+    "C-CRB-2022-01"
+   ],
+   "evidence_keywords": [
+    "102000000",
+    "1040000000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA047",
+   "type": "negative",
+   "lang": "en",
+   "question": "Does Solvantis Biologics Inc.'s contract C-SOL-2023-04 expire on 2099-03-01?",
+   "gold_answer": "No evidence — the documented expiry is 2025-10-09; 2099-03-01 appears in no document.",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2023-04#pdf"
+    }
+   ],
+   "fabricated_value": "2099-03-01",
+   "evidence_keywords": [
+    "C-SOL-2023-04",
+    "2025-10-09"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA048",
+   "type": "negative",
+   "lang": "ko",
+   "question": "청람바이오(주)의 계약 C-CRB-2022-01의 만료일은 2099-01-01인가?",
+   "gold_answer": "근거 없음 — 문서상 실제 만료일은 2024-06-07이며 2099-01-01는 어떤 문서에도 없다.",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-CRB-2022-01#scan_pdf"
+    }
+   ],
+   "fabricated_value": "2099-01-01",
+   "evidence_keywords": [
+    "C-CRB-2022-01",
+    "2024-06-07"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA049",
+   "type": "aggregate",
+   "lang": "ko",
+   "question": "미르하제약(주)의 생산 제품 수는 몇 개인가?",
+   "gold_answer": "5",
+   "evidence": [
+    {
+     "doc_kind": "press_release",
+     "doc_id": "press-MRH#html"
+    }
+   ],
+   "evidence_keywords": [
+    "5개 제품|for 5 products|for 5 product"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "QA050",
+   "type": "negative",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2022-04의 만료일은 2099-05-01인가?",
+   "gold_answer": "근거 없음 — 문서상 실제 만료일은 2026-08-15이며 2099-05-01는 어떤 문서에도 없다.",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2022-04#scan_pdf"
+    }
+   ],
+   "fabricated_value": "2099-05-01",
+   "evidence_keywords": [
+    "C-MRH-2022-04",
+    "2026-08-15"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA051",
+   "type": "comparison",
+   "lang": "en",
+   "question": "Between 청람바이오(주) and Pfizer Inc., which has a larger total contract value?",
+   "gold_answer": "청람바이오(주)",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-CRB-2022-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-05#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2021-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-07#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-08#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-09#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA052",
+   "type": "historical",
+   "lang": "en",
+   "question": "In Pfizer Inc.'s 2023 RFI (PFE-RFI-2023-01), what was the answer to 'State the dual-sourcing rate for critical raw materials.'?",
+   "gold_answer": "91.27% (as of 2023)",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-PFE-RFI-2023-01#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-PFE-RFI-2023-01#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-PFE-RFI-2023-01#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA053",
+   "type": "cross_document",
+   "lang": "en",
+   "question": "Between the price proposed in email MAIL-PFE-01 and the final contract (C-PFE-2022-01), which one is authoritative?",
+   "gold_answer": "220,000 USD (C-PFE-2022-01, contract governs over negotiation email)",
+   "evidence": [
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-PFE-01#eml"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    }
+   ],
+   "answer_keywords": [
+    "220,000",
+    "C-PFE-2022-01"
+   ],
+   "evidence_keywords": [
+    "218000",
+    "1320000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA054",
+   "type": "comparison",
+   "lang": "ko",
+   "question": "청람바이오(주)과 Pfizer Inc. 중 생산 제품 수가 더 많은 곳은?",
+   "gold_answer": "Pfizer Inc.",
+   "compare": {
+    "winner": "Pfizer Inc.",
+    "loser": "청람바이오(주)",
+    "direction": "more",
+    "winner_forms": [
+     "Pfizer Inc.",
+     "Pfizer",
+     "화이자"
+    ],
+    "loser_forms": [
+     "청람바이오(주)",
+     "청람바이오",
+     "청람"
+    ]
+   },
+   "evidence": [
+    {
+     "doc_kind": "press_release",
+     "doc_id": "press-CRB#html"
+    },
+    {
+     "doc_kind": "press_release",
+     "doc_id": "press-PFE#htm"
+    }
+   ],
+   "evidence_keywords": [
+    "1개 제품|for 1 products|for 1 product",
+    "7개 제품|for 7 products|for 7 product"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA055",
+   "type": "negative",
+   "lang": "en",
+   "question": "Is the unit price of Pfizer Inc.'s contract C-PFE-2024-04 15,174,001 USD?",
+   "gold_answer": "No evidence — the documented price is 410,000 USD; 15,174,001 appears in no document.",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    }
+   ],
+   "fabricated_value": "15,174,001",
+   "evidence_keywords": [
+    "C-PFE-2024-04",
+    "410000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA056",
+   "type": "table_aggregate",
+   "lang": "en",
+   "question": "Excluding Pfizer contracts signed more than 3 years ago (before 2023-10-01), how many of the 9 contracts on file remain, and how many are excluded?",
+   "gold_answer": null,
+   "gold_table": {
+    "columns": [
+     "Bucket",
+     "Contract count"
+    ],
+    "rows": [
+     [
+      "Within past 3 years",
+      7
+     ],
+     [
+      "Excluded (signed before 2023-10-01)",
+      2
+     ]
+    ],
+    "totals": {
+     "Total contracts on file": 9
+    }
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-05#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2021-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-07#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-08#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-09#pdf"
+    }
+   ],
+   "basis": [
+    {
+     "contract_id": "C-PFE-2022-01",
+     "product": "PFE-MAB-01",
+     "signed_date": "2022-03-01",
+     "batch_volume": 6,
+     "unit_price": 220000,
+     "currency": "USD",
+     "contract_value": 1320000
+    },
+    {
+     "contract_id": "C-PFE-2024-02",
+     "product": "PFE-MAB-01",
+     "signed_date": "2024-02-15",
+     "batch_volume": 7,
+     "unit_price": 235000,
+     "currency": "USD",
+     "contract_value": 1645000
+    },
+    {
+     "contract_id": "C-PFE-2024-03",
+     "product": "PFE-MAB-02",
+     "signed_date": "2024-06-10",
+     "batch_volume": 4,
+     "unit_price": 180000,
+     "currency": "USD",
+     "contract_value": 720000
+    },
+    {
+     "contract_id": "C-PFE-2024-04",
+     "product": "PFE-ADC-03",
+     "signed_date": "2024-01-20",
+     "batch_volume": 3,
+     "unit_price": 410000,
+     "currency": "USD",
+     "contract_value": 1230000
+    },
+    {
+     "contract_id": "C-PFE-2025-05",
+     "product": "PFE-ADC-03",
+     "signed_date": "2025-11-05",
+     "batch_volume": 4,
+     "unit_price": 430000,
+     "currency": "USD",
+     "contract_value": 1720000
+    },
+    {
+     "contract_id": "C-PFE-2021-06",
+     "product": "PFE-ADC-04",
+     "signed_date": "2021-07-15",
+     "batch_volume": 3,
+     "unit_price": 380000,
+     "currency": "USD",
+     "contract_value": 1140000
+    },
+    {
+     "contract_id": "C-PFE-2025-07",
+     "product": "PFE-BSA-05",
+     "signed_date": "2025-02-01",
+     "batch_volume": 3,
+     "unit_price": 300000,
+     "currency": "USD",
+     "contract_value": 900000
+    },
+    {
+     "contract_id": "C-PFE-2024-08",
+     "product": "PFE-VAC-06",
+     "signed_date": "2024-09-01",
+     "batch_volume": 5,
+     "unit_price": 95000,
+     "currency": "USD",
+     "contract_value": 475000
+    },
+    {
+     "contract_id": "C-PFE-2025-09",
+     "product": "PFE-MAB-07",
+     "signed_date": "2025-06-15",
+     "batch_volume": 5,
+     "unit_price": 200000,
+     "currency": "USD",
+     "contract_value": 1000000
+    }
+   ],
+   "window": {
+    "start": "2023-10-01",
+    "end": "2026-09-30"
+   },
+   "evidence_keywords": [
+    "2022-03-01",
+    "2024-02-15",
+    "2024-06-10",
+    "2024-01-20",
+    "2025-11-05",
+    "2021-07-15",
+    "2025-02-01",
+    "2024-09-01",
+    "2025-06-15"
+   ],
+   "evidence_n": 9
+  },
+  {
+   "id": "QA057",
+   "type": "single_fact",
+   "lang": "ko",
+   "question": "청람바이오(주)의 계약 C-CRB-2022-01(CRB-VAC-01) 만료일은 언제인가?",
+   "gold_answer": "2024-06-07",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-CRB-2022-01#scan_pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA058",
+   "type": "latest_version",
+   "lang": "ko",
+   "question": "CRB-VAC-01의 최신 RFP에서 price adjustment cap은 연 몇 %인가?",
+   "gold_answer": "4%",
+   "evidence": [
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-CRB-VAC-01-v2#xlsx"
+    },
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-CRB-VAC-01-v2#jpg"
+    }
+   ]
+  },
+  {
+   "id": "QA059",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "What is the unit price of Solvantis Biologics Inc.'s contract C-SOL-2021-03 (SOL-MAB-02)?",
+   "gold_answer": "311,000 USD",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2021-03#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA060",
+   "type": "ocr_only",
+   "lang": "en",
+   "question": "What is the unit price of Solvantis Biologics Inc.'s contract C-SOL-2020-01 (SOL-MAB-01)? (note: no text copy exists, only a scanned image)",
+   "gold_answer": "302,000 USD",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    }
+   ],
+   "ocr_format": "scan_pdf"
+  },
+  {
+   "id": "QA061",
+   "type": "historical",
+   "lang": "ko",
+   "question": "미르하제약(주)의 2024년 RFI(MRH-RFI-2024-02)에서 'single-use 시스템 적용 라인 비율을 제시하시오.'에 대해 뭐라고 답했나?",
+   "gold_answer": "63.02% (2024 시점 자료)",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-MRH-RFI-2024-02#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-MRH-RFI-2024-02#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-MRH-RFI-2024-02#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA062",
+   "type": "comparison",
+   "lang": "en",
+   "question": "Is it true that Pfizer Inc. has fewer products than 청람바이오(주)?",
+   "gold_answer": "No",
+   "evidence": [
+    {
+     "doc_kind": "press_release",
+     "doc_id": "press-PFE#htm"
+    },
+    {
+     "doc_kind": "press_release",
+     "doc_id": "press-CRB#html"
+    }
+   ],
+   "evidence_keywords": [
+    "7개 제품|for 7 products|for 7 product",
+    "1개 제품|for 1 products|for 1 product"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA063",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "What is the unit price of Pfizer Inc.'s contract C-PFE-2024-08 (PFE-VAC-06)?",
+   "gold_answer": "95,000 USD",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-08#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA064",
+   "type": "latest_version",
+   "lang": "en",
+   "question": "In the latest RFP for PFE-MAB-01, what is the MTOP (batches/year)?",
+   "gold_answer": "9",
+   "evidence": [
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-PFE-MAB-01-v2#xls"
+    }
+   ]
+  },
+  {
+   "id": "QA065",
+   "type": "historical",
+   "lang": "en",
+   "question": "In Solvantis Biologics Inc.'s 2023 RFI (SOL-RFI-2023-01), what was the answer to 'State your trailing 3-year TRIR.'?",
+   "gold_answer": "0.19 (as of 2023)",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-SOL-RFI-2023-01#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-SOL-RFI-2023-01#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-SOL-RFI-2023-01#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA066",
+   "type": "cross_document",
+   "lang": "ko",
+   "question": "이메일 MAIL-MRH-02에서 제안한 단가와 최종 계약(C-MRH-2020-01) 단가 중 유효한 것은?",
+   "gold_answer": "425,000,000 KRW (C-MRH-2020-01, contract governs over negotiation email)",
+   "evidence": [
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-MRH-02#eml"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-MRH-02#msg"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-01#scan_pdf"
+    }
+   ],
+   "answer_keywords": [
+    "425,000,000",
+    "C-MRH-2020-01"
+   ],
+   "evidence_keywords": [
+    "434000000",
+    "7650000000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA067",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "What is the unit price of Solvantis Biologics Inc.'s contract C-SOL-2023-04 (SOL-ADC-03)?",
+   "gold_answer": "498,000 USD",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2023-04#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA068",
+   "type": "negative",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2023-06 단가가 11,396,004,001 KRW인가?",
+   "gold_answer": "근거 없음 — 문서상 실제 단가는 308,000,000 KRW이며 11,396,004,001는 어떤 문서에도 없다.",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-06#scan_pdf"
+    }
+   ],
+   "fabricated_value": "11,396,004,001",
+   "evidence_keywords": [
+    "C-MRH-2023-06",
+    "308000000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA069",
+   "type": "latest_version",
+   "lang": "en",
+   "question": "In the latest RFP for PFE-ADC-03, what is the MTOP (batches/year)?",
+   "gold_answer": "8",
+   "evidence": [
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-PFE-ADC-03-v2#xls"
+    }
+   ]
+  },
+  {
+   "id": "QA070",
+   "type": "cross_document",
+   "lang": "en",
+   "question": "Between the price proposed in email MAIL-PFE-02 and the final contract (C-PFE-2022-01), which one is authoritative?",
+   "gold_answer": "220,000 USD (C-PFE-2022-01, contract governs over negotiation email)",
+   "evidence": [
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-PFE-02#eml"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    }
+   ],
+   "answer_keywords": [
+    "220,000",
+    "C-PFE-2022-01"
+   ],
+   "evidence_keywords": [
+    "206000",
+    "1320000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA071",
+   "type": "single_fact",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2020-01(MRH-MAB-01) 단가는 얼마인가?",
+   "gold_answer": "425,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-01#scan_pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA072",
+   "type": "aggregate",
+   "lang": "en",
+   "question": "What is the total contract value across all of Pfizer Inc.'s contracts?",
+   "gold_answer": "10,150,000 USD",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-05#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2021-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-07#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-08#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-09#pdf"
+    }
+   ],
+   "evidence_keywords": [
+    "1320000",
+    "1645000",
+    "720000",
+    "1230000",
+    "1720000",
+    "1140000",
+    "900000",
+    "475000",
+    "1000000"
+   ],
+   "evidence_n": 9
+  },
+  {
+   "id": "QA073",
+   "type": "single_fact",
+   "lang": "ko",
+   "question": "청람바이오(주)의 CRB-VAC-01 QBR 슬라이드(PPT 사본)에 기재된 최근 계약 단가는?",
+   "gold_answer": "104,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "qbr",
+     "doc_id": "qbr-CRB-VAC-01#ppt"
+    }
+   ],
+   "source_format": "ppt"
+  },
+  {
+   "id": "QA074",
+   "type": "cross_document",
+   "lang": "ko",
+   "question": "이메일 MAIL-CRB-02(MSG 사본)에서 제안한 단가는 얼마인가?",
+   "gold_answer": "102,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-CRB-02#msg"
+    }
+   ],
+   "source_format": "msg",
+   "evidence_keywords": [
+    "102000000"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "QA075",
+   "type": "comparison",
+   "lang": "en",
+   "question": "Between Solvantis Biologics Inc. and 미르하제약(주), which has more contracts?",
+   "gold_answer": "미르하제약(주)",
+   "compare": {
+    "winner": "미르하제약(주)",
+    "loser": "Solvantis Biologics Inc.",
+    "direction": "more",
+    "winner_forms": [
+     "미르하제약(주)",
+     "미르하제약",
+     "미르하"
+    ],
+    "loser_forms": [
+     "Solvantis Biologics Inc.",
+     "Solvantis"
+    ]
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2024-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2021-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2023-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-03#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2022-04#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-05#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-06#scan_pdf"
+    }
+   ],
+   "evidence_keywords": [
+    "C-SOL-2020-01",
+    "C-SOL-2024-02",
+    "C-SOL-2021-03",
+    "C-SOL-2023-04",
+    "C-MRH-2020-01",
+    "C-MRH-2023-02",
+    "C-MRH-2023-03",
+    "C-MRH-2022-04",
+    "C-MRH-2020-05",
+    "C-MRH-2023-06"
+   ],
+   "evidence_n": 10
+  },
+  {
+   "id": "QA076",
+   "type": "format_mixed",
+   "lang": "ko",
+   "question": "제품 MRH-ADC-04에 대해 계약 단가, 모달리티, 최근 협상 이메일의 제안가를 각 근거 문서에서 찾아 종합 설명하라.",
+   "gold_answer": "계약 단가 586,000,000 KRW, 모달리티 ADC, 최근 협상 이메일 제안가 639,000,000 KRW(협상용, 최종은 계약가 적용)",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-05#pdf"
+    },
+    {
+     "doc_kind": "product_page",
+     "doc_id": "product-MRH-ADC-04#htm"
+    },
+    {
+     "doc_kind": "product_page",
+     "doc_id": "product-MRH-ADC-04#mht"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-MRH-07#eml"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-MRH-07#msg"
+    }
+   ],
+   "formats_used": [
+    "eml",
+    "htm",
+    "mht",
+    "msg",
+    "pdf"
+   ],
+   "answer_keywords": [
+    "586,000,000",
+    "ADC",
+    "639,000,000"
+   ]
+  },
+  {
+   "id": "QA077",
+   "type": "comparison",
+   "lang": "ko",
+   "question": "미르하제약(주)과 Pfizer Inc. 중 전체 계약 금액이 더 큰 곳은?",
+   "gold_answer": "미르하제약(주)",
+   "compare": {
+    "winner": "미르하제약(주)",
+    "loser": "Pfizer Inc.",
+    "direction": "more",
+    "winner_forms": [
+     "미르하제약(주)",
+     "미르하제약",
+     "미르하"
+    ],
+    "loser_forms": [
+     "Pfizer Inc.",
+     "Pfizer",
+     "화이자"
+    ]
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-03#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2022-04#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-05#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-05#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2021-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-07#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-08#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-09#pdf"
+    }
+   ],
+   "evidence_keywords": [
+    "7650000000",
+    "4240000000",
+    "15712000000",
+    "2520000000",
+    "5860000000",
+    "3696000000",
+    "1320000",
+    "1645000",
+    "720000",
+    "1230000",
+    "1720000",
+    "1140000",
+    "900000",
+    "475000",
+    "1000000"
+   ],
+   "evidence_n": 15
+  },
+  {
+   "id": "QA078",
+   "type": "single_fact",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2023-02(MRH-MAB-01) 단가는 얼마인가?",
+   "gold_answer": "424,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-02#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA079",
+   "type": "ocr_only",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2022-04(MRH-VAC-03) 단가는 얼마인가?(참고: 텍스트 사본 없음, 스캔본만 존재)",
+   "gold_answer": "126,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2022-04#scan_pdf"
+    }
+   ],
+   "ocr_format": "scan_pdf"
+  },
+  {
+   "id": "QA080",
+   "type": "comparison",
+   "lang": "ko",
+   "question": "Solvantis Biologics Inc.과 Pfizer Inc. 중 생산 제품 수가 더 많은 곳은?",
+   "gold_answer": "Pfizer Inc.",
+   "compare": {
+    "winner": "Pfizer Inc.",
+    "loser": "Solvantis Biologics Inc.",
+    "direction": "more",
+    "winner_forms": [
+     "Pfizer Inc.",
+     "Pfizer",
+     "화이자"
+    ],
+    "loser_forms": [
+     "Solvantis Biologics Inc.",
+     "Solvantis"
+    ]
+   },
+   "evidence": [
+    {
+     "doc_kind": "press_release",
+     "doc_id": "press-SOL#htm"
+    },
+    {
+     "doc_kind": "press_release",
+     "doc_id": "press-PFE#htm"
+    }
+   ],
+   "evidence_keywords": [
+    "3개 제품|for 3 products|for 3 product",
+    "7개 제품|for 7 products|for 7 product"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA081",
+   "type": "historical",
+   "lang": "ko",
+   "question": "청람바이오(주)의 2023년 RFI(CRB-RFI-2023-01)에서 '최근 규제기관 실사 이력을 제시하시오.'에 대해 뭐라고 답했나?",
+   "gold_answer": "해당 시점 자료 별도 제공",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-CRB-RFI-2023-01#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-CRB-RFI-2023-01#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-CRB-RFI-2023-01#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA082",
+   "type": "comparison",
+   "lang": "en",
+   "question": "Between 청람바이오(주) and Solvantis Biologics Inc., which has a larger total contract value?",
+   "gold_answer": "청람바이오(주)",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-CRB-2022-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2024-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2021-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2023-04#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA083",
+   "type": "comparison",
+   "lang": "en",
+   "question": "Between Solvantis Biologics Inc. and 미르하제약(주), which has a larger total contract value?",
+   "gold_answer": "미르하제약(주)",
+   "compare": {
+    "winner": "미르하제약(주)",
+    "loser": "Solvantis Biologics Inc.",
+    "direction": "more",
+    "winner_forms": [
+     "미르하제약(주)",
+     "미르하제약",
+     "미르하"
+    ],
+    "loser_forms": [
+     "Solvantis Biologics Inc.",
+     "Solvantis"
+    ]
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2024-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2021-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2023-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-03#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2022-04#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-05#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-06#scan_pdf"
+    }
+   ],
+   "evidence_keywords": [
+    "3624000",
+    "4976000",
+    "11196000",
+    "6972000",
+    "7650000000",
+    "4240000000",
+    "15712000000",
+    "2520000000",
+    "5860000000",
+    "3696000000"
+   ],
+   "evidence_n": 10
+  },
+  {
+   "id": "QA084",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "When does Pfizer Inc.'s contract C-PFE-2024-02 (PFE-MAB-01) expire?",
+   "gold_answer": "2027-02-15",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA085",
+   "type": "single_fact",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2020-01(MRH-MAB-01) 만료일은 언제인가?",
+   "gold_answer": "2023-04-09",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-01#scan_pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA086",
+   "type": "cross_document",
+   "lang": "ko",
+   "question": "이메일 MAIL-MRH-01에서 제안한 단가와 최종 계약(C-MRH-2020-01) 단가 중 유효한 것은?",
+   "gold_answer": "425,000,000 KRW (C-MRH-2020-01, contract governs over negotiation email)",
+   "evidence": [
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-MRH-01#eml"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-MRH-01#msg"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-01#scan_pdf"
+    }
+   ],
+   "answer_keywords": [
+    "425,000,000",
+    "C-MRH-2020-01"
+   ],
+   "evidence_keywords": [
+    "383000000",
+    "7650000000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA087",
+   "type": "historical",
+   "lang": "ko",
+   "question": "청람바이오(주)의 2023년 RFI(CRB-RFI-2023-01)에서 '최근 12개월 평균 공장 가동률을 제시하시오.'에 대해 뭐라고 답했나?",
+   "gold_answer": "75.0% (2023 시점 자료)",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-CRB-RFI-2023-01#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-CRB-RFI-2023-01#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-CRB-RFI-2023-01#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA088",
+   "type": "table_aggregate",
+   "lang": "ko",
+   "question": "미르하제약(주)의 제품 종류별 계약 건수·배치 수 합계·계약 금액 합계를 표로 정리해줘.",
+   "gold_answer": null,
+   "gold_table": {
+    "columns": [
+     "제품 종류",
+     "계약 건수",
+     "계약 배치 수 합계",
+     "계약 금액 합계"
+    ],
+    "rows": [
+     [
+      "ADC",
+      1,
+      5,
+      "5,860,000,000 KRW"
+     ],
+     [
+      "bispecific",
+      1,
+      8,
+      "15,712,000,000 KRW"
+     ],
+     [
+      "mAb",
+      3,
+      17,
+      "15,586,000,000 KRW"
+     ],
+     [
+      "vaccine",
+      1,
+      5,
+      "2,520,000,000 KRW"
+     ]
+    ],
+    "totals": {
+     "계약 건수": 6,
+     "계약 배치 수 합계": 35,
+     "계약 금액 합계": "39,678,000,000 KRW"
+    }
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-03#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2022-04#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-05#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-06#scan_pdf"
+    }
+   ],
+   "basis": [
+    {
+     "contract_id": "C-MRH-2020-01",
+     "product": "MRH-MAB-01",
+     "signed_date": "2020-04-09",
+     "batch_volume": 6,
+     "unit_price": 425000000,
+     "currency": "KRW",
+     "contract_value": 7650000000
+    },
+    {
+     "contract_id": "C-MRH-2023-02",
+     "product": "MRH-MAB-01",
+     "signed_date": "2023-02-09",
+     "batch_volume": 5,
+     "unit_price": 424000000,
+     "currency": "KRW",
+     "contract_value": 4240000000
+    },
+    {
+     "contract_id": "C-MRH-2023-03",
+     "product": "MRH-BSA-02",
+     "signed_date": "2023-01-23",
+     "batch_volume": 8,
+     "unit_price": 491000000,
+     "currency": "KRW",
+     "contract_value": 15712000000
+    },
+    {
+     "contract_id": "C-MRH-2022-04",
+     "product": "MRH-VAC-03",
+     "signed_date": "2022-08-15",
+     "batch_volume": 5,
+     "unit_price": 126000000,
+     "currency": "KRW",
+     "contract_value": 2520000000
+    },
+    {
+     "contract_id": "C-MRH-2020-05",
+     "product": "MRH-ADC-04",
+     "signed_date": "2020-11-14",
+     "batch_volume": 5,
+     "unit_price": 586000000,
+     "currency": "KRW",
+     "contract_value": 5860000000
+    },
+    {
+     "contract_id": "C-MRH-2023-06",
+     "product": "MRH-MAB-05",
+     "signed_date": "2023-04-21",
+     "batch_volume": 6,
+     "unit_price": 308000000,
+     "currency": "KRW",
+     "contract_value": 3696000000
+    }
+   ],
+   "evidence_keywords": [
+    "C-MRH-2020-01",
+    "C-MRH-2023-02",
+    "C-MRH-2023-03",
+    "C-MRH-2022-04",
+    "C-MRH-2020-05",
+    "C-MRH-2023-06",
+    "7650000000",
+    "4240000000",
+    "15712000000",
+    "2520000000",
+    "5860000000",
+    "3696000000"
+   ],
+   "evidence_n": 12
+  },
+  {
+   "id": "QA089",
+   "type": "ocr_only",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2023-03(MRH-BSA-02) 단가는 얼마인가?(참고: 텍스트 사본 없음, 스캔본만 존재)",
+   "gold_answer": "491,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-03#scan_pdf"
+    }
+   ],
+   "ocr_format": "scan_pdf"
+  },
+  {
+   "id": "QA090",
+   "type": "single_fact",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2020-05(MRH-ADC-04) 단가는 얼마인가?",
+   "gold_answer": "586,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-05#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA091",
+   "type": "single_fact",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2023-02(MRH-MAB-01) 만료일은 언제인가?",
+   "gold_answer": "2025-02-09",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-02#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA092",
+   "type": "table_aggregate",
+   "lang": "en",
+   "question": "How many ADC contracts has Pfizer signed in the past 3 years, and what is the batch volume, unit price, and contract value of each?",
+   "gold_answer": null,
+   "gold_table": {
+    "columns": [
+     "Contract ID",
+     "Product",
+     "Signed",
+     "Batch volume",
+     "Unit price",
+     "Contract value"
+    ],
+    "rows": [
+     [
+      "C-PFE-2024-04",
+      "PFE-ADC-03",
+      "2024-01-20",
+      3,
+      "410,000 USD",
+      "1,230,000 USD"
+     ],
+     [
+      "C-PFE-2025-05",
+      "PFE-ADC-03",
+      "2025-11-05",
+      4,
+      "430,000 USD",
+      "1,720,000 USD"
+     ]
+    ],
+    "totals": {
+     "Contract count": 2,
+     "Batch volume total": 7,
+     "Contract value total": "2,950,000 USD"
+    }
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-05#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2021-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-07#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-08#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-09#pdf"
+    }
+   ],
+   "basis": [
+    {
+     "contract_id": "C-PFE-2024-04",
+     "product": "PFE-ADC-03",
+     "signed_date": "2024-01-20",
+     "batch_volume": 3,
+     "unit_price": 410000,
+     "currency": "USD",
+     "contract_value": 1230000
+    },
+    {
+     "contract_id": "C-PFE-2025-05",
+     "product": "PFE-ADC-03",
+     "signed_date": "2025-11-05",
+     "batch_volume": 4,
+     "unit_price": 430000,
+     "currency": "USD",
+     "contract_value": 1720000
+    }
+   ],
+   "evidence_keywords": [
+    "C-PFE-2024-04",
+    "C-PFE-2025-05",
+    "410000",
+    "430000",
+    "1230000",
+    "1720000"
+   ],
+   "evidence_n": 6
+  },
+  {
+   "id": "QA093",
+   "type": "format_mixed",
+   "lang": "en",
+   "question": "For product SOL-MAB-01, synthesize the contract price, modality and the latest negotiation email's proposed price, each from its own evidence document.",
+   "gold_answer": "Contract price 302,000 USD, modality mAb, latest negotiation email proposed 284,000 USD(negotiation-stage; the contract price governs)",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "product_page",
+     "doc_id": "product-SOL-MAB-01#htm"
+    },
+    {
+     "doc_kind": "product_page",
+     "doc_id": "product-SOL-MAB-01#mht"
+    },
+    {
+     "doc_kind": "product_page",
+     "doc_id": "product-SOL-MAB-01#png"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-SOL-01#eml"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-SOL-01#msg"
+    }
+   ],
+   "formats_used": [
+    "eml",
+    "htm",
+    "mht",
+    "msg",
+    "png",
+    "scan_pdf"
+   ],
+   "answer_keywords": [
+    "302,000",
+    "mAb",
+    "284,000"
+   ]
+  },
+  {
+   "id": "QA094",
+   "type": "aggregate",
+   "lang": "ko",
+   "question": "청람바이오(주)의 전체 계약 금액 합계는 얼마인가(모든 계약 contract_value 합)?",
+   "gold_answer": "1,040,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-CRB-2022-01#scan_pdf"
+    }
+   ],
+   "evidence_keywords": [
+    "1040000000"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "QA095",
+   "type": "latest_version",
+   "lang": "en",
+   "question": "In the latest RFP for SOL-MAB-01, what is the MTOP (batches/year)?",
+   "gold_answer": "5",
+   "evidence": [
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-SOL-MAB-01-v2#xlsx"
+    },
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-SOL-MAB-01-v2#jpg"
+    }
+   ]
+  },
+  {
+   "id": "QA096",
+   "type": "aggregate",
+   "lang": "en",
+   "question": "How many products does Solvantis Biologics Inc. have in production?",
+   "gold_answer": "3",
+   "evidence": [
+    {
+     "doc_kind": "press_release",
+     "doc_id": "press-SOL#htm"
+    }
+   ],
+   "evidence_keywords": [
+    "3개 제품|for 3 products|for 3 product"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "QA097",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "What is the unit price of Solvantis Biologics Inc.'s contract C-SOL-2020-01 (SOL-MAB-01)?",
+   "gold_answer": "302,000 USD",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA098",
+   "type": "table_aggregate",
+   "lang": "ko",
+   "question": "화이자가 과거 3년 동안 mAb 제품으로 체결한 계약은 몇 건이며, 계약별 배치 수·단가와 계약 규모 합계는 얼마인가?",
+   "gold_answer": null,
+   "gold_table": {
+    "columns": [
+     "계약ID",
+     "제품",
+     "체결일",
+     "배치 수",
+     "단가",
+     "계약금액"
+    ],
+    "rows": [
+     [
+      "C-PFE-2024-02",
+      "PFE-MAB-01",
+      "2024-02-15",
+      7,
+      "235,000 USD",
+      "1,645,000 USD"
+     ],
+     [
+      "C-PFE-2024-03",
+      "PFE-MAB-02",
+      "2024-06-10",
+      4,
+      "180,000 USD",
+      "720,000 USD"
+     ],
+     [
+      "C-PFE-2025-09",
+      "PFE-MAB-07",
+      "2025-06-15",
+      5,
+      "200,000 USD",
+      "1,000,000 USD"
+     ]
+    ],
+    "totals": {
+     "계약 건수": 3,
+     "배치 수 합계": 16,
+     "계약 금액 합계": "3,365,000 USD"
+    }
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-05#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2021-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-07#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-08#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-09#pdf"
+    }
+   ],
+   "basis": [
+    {
+     "contract_id": "C-PFE-2024-02",
+     "product": "PFE-MAB-01",
+     "signed_date": "2024-02-15",
+     "batch_volume": 7,
+     "unit_price": 235000,
+     "currency": "USD",
+     "contract_value": 1645000
+    },
+    {
+     "contract_id": "C-PFE-2024-03",
+     "product": "PFE-MAB-02",
+     "signed_date": "2024-06-10",
+     "batch_volume": 4,
+     "unit_price": 180000,
+     "currency": "USD",
+     "contract_value": 720000
+    },
+    {
+     "contract_id": "C-PFE-2025-09",
+     "product": "PFE-MAB-07",
+     "signed_date": "2025-06-15",
+     "batch_volume": 5,
+     "unit_price": 200000,
+     "currency": "USD",
+     "contract_value": 1000000
+    }
+   ],
+   "evidence_keywords": [
+    "C-PFE-2024-02",
+    "C-PFE-2024-03",
+    "C-PFE-2025-09",
+    "235000",
+    "180000",
+    "200000",
+    "1645000",
+    "720000",
+    "1000000"
+   ],
+   "evidence_n": 9
+  },
+  {
+   "id": "QA099",
+   "type": "cross_document",
+   "lang": "ko",
+   "question": "이메일 MAIL-MRH-03에서 제안한 단가와 최종 계약(C-MRH-2023-03) 단가 중 유효한 것은?",
+   "gold_answer": "491,000,000 KRW (C-MRH-2023-03, contract governs over negotiation email)",
+   "evidence": [
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-MRH-03#eml"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-MRH-03#msg"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-03#scan_pdf"
+    }
+   ],
+   "answer_keywords": [
+    "491,000,000",
+    "C-MRH-2023-03"
+   ],
+   "evidence_keywords": [
+    "487000000",
+    "15712000000"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA100",
+   "type": "latest_version",
+   "lang": "ko",
+   "question": "MRH-MAB-01의 최신 RFP에서 price adjustment cap은 연 몇 %인가?",
+   "gold_answer": "3%",
+   "evidence": [
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-MRH-MAB-01-v2#xlsx"
+    }
+   ]
+  },
+  {
+   "id": "QA101",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "What is the latest contract price shown on Solvantis Biologics Inc.'s SOL-MAB-01 QBR slide (PPT copy)?",
+   "gold_answer": "302,000 USD",
+   "evidence": [
+    {
+     "doc_kind": "qbr",
+     "doc_id": "qbr-SOL-MAB-01#ppt"
+    }
+   ],
+   "source_format": "ppt"
+  },
+  {
+   "id": "QA102",
+   "type": "format_mixed",
+   "lang": "en",
+   "question": "For product PFE-ADC-03, synthesize the contract price, modality and the latest negotiation email's proposed price, each from its own evidence document.",
+   "gold_answer": "Contract price 410,000 USD, modality ADC, latest negotiation email proposed 416,000 USD(negotiation-stage; the contract price governs)",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    },
+    {
+     "doc_kind": "product_page",
+     "doc_id": "product-PFE-ADC-03#htm"
+    },
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-PFE-05#eml"
+    }
+   ],
+   "formats_used": [
+    "eml",
+    "htm",
+    "pdf"
+   ],
+   "answer_keywords": [
+    "410,000",
+    "ADC",
+    "416,000"
+   ]
+  },
+  {
+   "id": "QA103",
+   "type": "historical",
+   "lang": "en",
+   "question": "In Pfizer Inc.'s 2024 RFI (PFE-RFI-2024-02), what was the answer to 'State average technology-transfer duration.'?",
+   "gold_answer": "10.57개월 (as of 2024)",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-PFE-RFI-2024-02#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-PFE-RFI-2024-02#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-PFE-RFI-2024-02#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA104",
+   "type": "aggregate",
+   "lang": "en",
+   "question": "What is the total contract value across all of Solvantis Biologics Inc.'s contracts?",
+   "gold_answer": "26,768,000 USD",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2024-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2021-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2023-04#pdf"
+    }
+   ],
+   "evidence_keywords": [
+    "3624000",
+    "4976000",
+    "11196000",
+    "6972000"
+   ],
+   "evidence_n": 4
+  },
+  {
+   "id": "QA105",
+   "type": "comparison",
+   "lang": "ko",
+   "question": "청람바이오(주)과 미르하제약(주) 중 계약 건수가 더 많은 곳은?",
+   "gold_answer": "미르하제약(주)",
+   "compare": {
+    "winner": "미르하제약(주)",
+    "loser": "청람바이오(주)",
+    "direction": "more",
+    "winner_forms": [
+     "미르하제약(주)",
+     "미르하제약",
+     "미르하"
+    ],
+    "loser_forms": [
+     "청람바이오(주)",
+     "청람바이오",
+     "청람"
+    ]
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-CRB-2022-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-03#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2022-04#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-05#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-06#scan_pdf"
+    }
+   ],
+   "evidence_keywords": [
+    "C-CRB-2022-01",
+    "C-MRH-2020-01",
+    "C-MRH-2023-02",
+    "C-MRH-2023-03",
+    "C-MRH-2022-04",
+    "C-MRH-2020-05",
+    "C-MRH-2023-06"
+   ],
+   "evidence_n": 7
+  },
+  {
+   "id": "QA106",
+   "type": "historical",
+   "lang": "ko",
+   "question": "미르하제약(주)의 2023년 RFI(MRH-RFI-2023-01)에서 '최근 3년 TRIR을 제시하시오.'에 대해 뭐라고 답했나?",
+   "gold_answer": "0.2 (2023 시점 자료)",
+   "evidence": [
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-MRH-RFI-2023-01#docx"
+    },
+    {
+     "doc_kind": "rfi_history_questionnaire",
+     "doc_id": "rfihist-q-MRH-RFI-2023-01#doc"
+    },
+    {
+     "doc_kind": "rfi_history_response",
+     "doc_id": "rfihist-a-MRH-RFI-2023-01#docx"
+    }
+   ]
+  },
+  {
+   "id": "QA107",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "What is the unit price of Solvantis Biologics Inc.'s contract C-SOL-2024-02 (SOL-MAB-01)?",
+   "gold_answer": "311,000 USD",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2024-02#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA108",
+   "type": "latest_version",
+   "lang": "en",
+   "question": "In the latest RFP for PFE-MAB-01, what is the price adjustment cap (% per annum)?",
+   "gold_answer": "4%",
+   "evidence": [
+    {
+     "doc_kind": "rfp",
+     "doc_id": "rfp-PFE-MAB-01-v2#xls"
+    }
+   ]
+  },
+  {
+   "id": "QA109",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "When does Pfizer Inc.'s contract C-PFE-2024-08 (PFE-VAC-06) expire?",
+   "gold_answer": "2026-09-01",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-08#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA110",
+   "type": "negative",
+   "lang": "en",
+   "question": "Does Pfizer Inc.'s contract C-PFE-2024-02 expire on 2099-07-01?",
+   "gold_answer": "No evidence — the documented expiry is 2027-02-15; 2099-07-01 appears in no document.",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    }
+   ],
+   "fabricated_value": "2099-07-01",
+   "evidence_keywords": [
+    "C-PFE-2024-02",
+    "2027-02-15"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "QA111",
+   "type": "table_aggregate",
+   "lang": "ko",
+   "question": "고객 4곳(청람바이오(주), Solvantis Biologics Inc., 미르하제약(주), Pfizer Inc.) 각각의 전체 계약 건수와 계약 금액 합계(통화 표시)를 표로 정리해줘.",
+   "gold_answer": null,
+   "gold_table": {
+    "columns": [
+     "고객",
+     "통화",
+     "계약 건수",
+     "계약 금액 합계"
+    ],
+    "rows": [
+     [
+      "청람바이오(주)",
+      "KRW",
+      1,
+      "1,040,000,000 KRW"
+     ],
+     [
+      "Solvantis Biologics Inc.",
+      "USD",
+      4,
+      "26,768,000 USD"
+     ],
+     [
+      "미르하제약(주)",
+      "KRW",
+      6,
+      "39,678,000,000 KRW"
+     ],
+     [
+      "Pfizer Inc.",
+      "USD",
+      9,
+      "10,150,000 USD"
+     ]
+    ],
+    "totals": {
+     "전체 계약 건수": 20
+    }
+   },
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-CRB-2022-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2024-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2021-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-SOL-2023-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-01#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-02#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-03#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2022-04#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-05#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-02#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-03#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-04#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-05#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2021-06#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-07#scan_pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2024-08#pdf"
+    },
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2025-09#pdf"
+    }
+   ],
+   "basis": [
+    {
+     "contract_id": "C-CRB-2022-01",
+     "product": "CRB-VAC-01",
+     "signed_date": "2022-06-07",
+     "batch_volume": 5,
+     "unit_price": 104000000,
+     "currency": "KRW",
+     "contract_value": 1040000000
+    },
+    {
+     "contract_id": "C-SOL-2020-01",
+     "product": "SOL-MAB-01",
+     "signed_date": "2020-06-15",
+     "batch_volume": 3,
+     "unit_price": 302000,
+     "currency": "USD",
+     "contract_value": 3624000
+    },
+    {
+     "contract_id": "C-SOL-2024-02",
+     "product": "SOL-MAB-01",
+     "signed_date": "2024-03-15",
+     "batch_volume": 4,
+     "unit_price": 311000,
+     "currency": "USD",
+     "contract_value": 4976000
+    },
+    {
+     "contract_id": "C-SOL-2021-03",
+     "product": "SOL-MAB-02",
+     "signed_date": "2021-03-05",
+     "batch_volume": 9,
+     "unit_price": 311000,
+     "currency": "USD",
+     "contract_value": 11196000
+    },
+    {
+     "contract_id": "C-SOL-2023-04",
+     "product": "SOL-ADC-03",
+     "signed_date": "2023-10-09",
+     "batch_volume": 7,
+     "unit_price": 498000,
+     "currency": "USD",
+     "contract_value": 6972000
+    },
+    {
+     "contract_id": "C-MRH-2020-01",
+     "product": "MRH-MAB-01",
+     "signed_date": "2020-04-09",
+     "batch_volume": 6,
+     "unit_price": 425000000,
+     "currency": "KRW",
+     "contract_value": 7650000000
+    },
+    {
+     "contract_id": "C-MRH-2023-02",
+     "product": "MRH-MAB-01",
+     "signed_date": "2023-02-09",
+     "batch_volume": 5,
+     "unit_price": 424000000,
+     "currency": "KRW",
+     "contract_value": 4240000000
+    },
+    {
+     "contract_id": "C-MRH-2023-03",
+     "product": "MRH-BSA-02",
+     "signed_date": "2023-01-23",
+     "batch_volume": 8,
+     "unit_price": 491000000,
+     "currency": "KRW",
+     "contract_value": 15712000000
+    },
+    {
+     "contract_id": "C-MRH-2022-04",
+     "product": "MRH-VAC-03",
+     "signed_date": "2022-08-15",
+     "batch_volume": 5,
+     "unit_price": 126000000,
+     "currency": "KRW",
+     "contract_value": 2520000000
+    },
+    {
+     "contract_id": "C-MRH-2020-05",
+     "product": "MRH-ADC-04",
+     "signed_date": "2020-11-14",
+     "batch_volume": 5,
+     "unit_price": 586000000,
+     "currency": "KRW",
+     "contract_value": 5860000000
+    },
+    {
+     "contract_id": "C-MRH-2023-06",
+     "product": "MRH-MAB-05",
+     "signed_date": "2023-04-21",
+     "batch_volume": 6,
+     "unit_price": 308000000,
+     "currency": "KRW",
+     "contract_value": 3696000000
+    },
+    {
+     "contract_id": "C-PFE-2022-01",
+     "product": "PFE-MAB-01",
+     "signed_date": "2022-03-01",
+     "batch_volume": 6,
+     "unit_price": 220000,
+     "currency": "USD",
+     "contract_value": 1320000
+    },
+    {
+     "contract_id": "C-PFE-2024-02",
+     "product": "PFE-MAB-01",
+     "signed_date": "2024-02-15",
+     "batch_volume": 7,
+     "unit_price": 235000,
+     "currency": "USD",
+     "contract_value": 1645000
+    },
+    {
+     "contract_id": "C-PFE-2024-03",
+     "product": "PFE-MAB-02",
+     "signed_date": "2024-06-10",
+     "batch_volume": 4,
+     "unit_price": 180000,
+     "currency": "USD",
+     "contract_value": 720000
+    },
+    {
+     "contract_id": "C-PFE-2024-04",
+     "product": "PFE-ADC-03",
+     "signed_date": "2024-01-20",
+     "batch_volume": 3,
+     "unit_price": 410000,
+     "currency": "USD",
+     "contract_value": 1230000
+    },
+    {
+     "contract_id": "C-PFE-2025-05",
+     "product": "PFE-ADC-03",
+     "signed_date": "2025-11-05",
+     "batch_volume": 4,
+     "unit_price": 430000,
+     "currency": "USD",
+     "contract_value": 1720000
+    },
+    {
+     "contract_id": "C-PFE-2021-06",
+     "product": "PFE-ADC-04",
+     "signed_date": "2021-07-15",
+     "batch_volume": 3,
+     "unit_price": 380000,
+     "currency": "USD",
+     "contract_value": 1140000
+    },
+    {
+     "contract_id": "C-PFE-2025-07",
+     "product": "PFE-BSA-05",
+     "signed_date": "2025-02-01",
+     "batch_volume": 3,
+     "unit_price": 300000,
+     "currency": "USD",
+     "contract_value": 900000
+    },
+    {
+     "contract_id": "C-PFE-2024-08",
+     "product": "PFE-VAC-06",
+     "signed_date": "2024-09-01",
+     "batch_volume": 5,
+     "unit_price": 95000,
+     "currency": "USD",
+     "contract_value": 475000
+    },
+    {
+     "contract_id": "C-PFE-2025-09",
+     "product": "PFE-MAB-07",
+     "signed_date": "2025-06-15",
+     "batch_volume": 5,
+     "unit_price": 200000,
+     "currency": "USD",
+     "contract_value": 1000000
+    }
+   ],
+   "evidence_keywords": [
+    "1040000000",
+    "3624000",
+    "4976000",
+    "11196000",
+    "6972000",
+    "7650000000",
+    "4240000000",
+    "15712000000",
+    "2520000000",
+    "5860000000",
+    "3696000000",
+    "1320000",
+    "1645000",
+    "720000",
+    "1230000",
+    "1720000",
+    "1140000",
+    "900000",
+    "475000",
+    "1000000"
+   ],
+   "evidence_n": 20
+  },
+  {
+   "id": "QA112",
+   "type": "single_fact",
+   "lang": "en",
+   "question": "What is the unit price of Pfizer Inc.'s contract C-PFE-2022-01 (PFE-MAB-01)?",
+   "gold_answer": "220,000 USD",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-PFE-2022-01#pdf"
+    }
+   ]
+  },
+  {
+   "id": "QA113",
+   "type": "ocr_only",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2020-01(MRH-MAB-01) 단가는 얼마인가?(참고: 텍스트 사본 없음, 스캔본만 존재)",
+   "gold_answer": "425,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2020-01#scan_pdf"
+    }
+   ],
+   "ocr_format": "scan_pdf"
+  },
+  {
+   "id": "QA114",
+   "type": "cross_document",
+   "lang": "ko",
+   "question": "이메일 MAIL-CRB-01(MSG 사본)에서 제안한 단가는 얼마인가?",
+   "gold_answer": "113,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "email",
+     "doc_id": "MAIL-CRB-01#msg"
+    }
+   ],
+   "source_format": "msg",
+   "evidence_keywords": [
+    "113000000"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "QA115",
+   "type": "ocr_only",
+   "lang": "ko",
+   "question": "미르하제약(주)의 계약 C-MRH-2023-06(MRH-MAB-05) 단가는 얼마인가?(참고: 텍스트 사본 없음, 스캔본만 존재)",
+   "gold_answer": "308,000,000 KRW",
+   "evidence": [
+    {
+     "doc_kind": "contract",
+     "doc_id": "contract-C-MRH-2023-06#scan_pdf"
+    }
+   ],
+   "ocr_format": "scan_pdf"
+  }
+ ]
+}

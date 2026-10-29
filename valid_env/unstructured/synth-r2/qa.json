@@ -1,0 +1,469 @@
+{
+ "set": "synth-r2",
+ "scoring": "tools/synthetic_data/_synth_images_qa.score와 같은 규칙(리스트=AND, '|'=OR)",
+ "items": [
+  {
+   "id": "R2Q001",
+   "type": "notice_separate_answer",
+   "request": "4",
+   "feature": "같은 메일의 eml·htm·mht·스크린샷 사본 — 답 값은 메일에 없고 별도 계약서·견적서에만 있음",
+   "lang": "ko",
+   "question": "LUX-MAB-02 생산 일정 확정 메일(여러 형식 사본)에서 안내된 계약 C-LUX-2026-09의 단가는? (메일 자체에는 가격 정보가 없음 — 계약서로 확인)",
+   "gold_answer": "94,000,000 KRW",
+   "answer_keywords": [
+    "94000000"
+   ],
+   "evidence": [
+    {
+     "doc": "contract_C-LUX-2026-09.docx"
+    }
+   ],
+   "evidence_keywords": [
+    "94000000"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q002",
+   "type": "notice_separate_answer",
+   "request": "4",
+   "feature": "같은 메일의 eml·htm·mht·스크린샷 사본 — 답 값은 메일에 없고 별도 계약서·견적서에만 있음",
+   "lang": "ko",
+   "question": "같은 안내 메일에서 언급된 LUX-MAB-02의 최소 발주량은? (메일에는 없음 — 견적서로 확인)",
+   "gold_answer": "연 4배치",
+   "answer_keywords": [
+    "4배치|배치 수는 4|배치수는4|배치 수: 4|배치수:4|배치 수 4|배치수4|배치: 4|배치:4|4 batches|4batches|4 batch|4batch"
+   ],
+   "evidence": [
+    {
+     "doc": "quote_C-LUX-2026-09.pdf"
+    }
+   ],
+   "evidence_keywords": [
+    "4배치"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q003",
+   "type": "cross_3doc",
+   "request": "5",
+   "feature": "제품 사양서 + 계약서 + 메일 3종에서 하위 사실 3개를 모으는 질문(사실마다 따로 채점)",
+   "lang": "ko",
+   "question": "LUX-ADC-04의 titer(제품 사양서), 계약 C-LUX-2025-11의 단가, 배송 안내 메일의 배송 예정일을 각각 알려줘.",
+   "gold_answer": "4.3 g/L / 81,000,000 KRW / 2026-11-30",
+   "answer_keywords": [
+    "4.3",
+    "81000000",
+    "2026-11-30"
+   ],
+   "evidence": [
+    {
+     "doc": "spec_LUX-ADC-04.pdf"
+    },
+    {
+     "doc": "contract_C-LUX-2025-11.docx"
+    },
+    {
+     "doc": "mail_delivery_LUX-ADC-04.eml"
+    }
+   ],
+   "evidence_keywords": [
+    "4.3",
+    "81000000",
+    "2026-11-30"
+   ],
+   "evidence_n": 3
+  },
+  {
+   "id": "R2Q004",
+   "type": "cross_3doc",
+   "request": "5",
+   "feature": "제품 사양서 + 계약서 + 메일 3종에서 하위 사실 3개를 모으는 질문(사실마다 따로 채점)",
+   "lang": "ko",
+   "question": "LUX-ADC-04의 포장 포맷(제품 사양서), 계약 C-LUX-2025-11의 서명일, 배송 안내 메일의 발신 부서는 각각 무엇인가?",
+   "gold_answer": "2mL 바이알 / 2025-11-03 / 물류팀",
+   "answer_keywords": [
+    "2ml|2 ml",
+    "2025-11-03",
+    "물류팀"
+   ],
+   "evidence": [
+    {
+     "doc": "spec_LUX-ADC-04.pdf"
+    },
+    {
+     "doc": "contract_C-LUX-2025-11.docx"
+    },
+    {
+     "doc": "mail_delivery_LUX-ADC-04.eml"
+    }
+   ],
+   "evidence_keywords": [
+    "2mL",
+    "2025-11-03",
+    "물류팀"
+   ],
+   "evidence_n": 3
+  },
+  {
+   "id": "R2Q005",
+   "type": "hub_minority_value",
+   "request": "6",
+   "feature": "허브 문서(같은 고객·제품명 수십 회 반복)가 검색을 독점 — 실제 값은 xlsx·긴 표의 소수 행에만",
+   "lang": "ko",
+   "question": "코발트팜(주) LUX-VAC-03의 2026년 3분기 배치 수는?",
+   "gold_answer": "14배치",
+   "answer_keywords": [
+    "14배치|배치 수는 14|배치수는14|배치 수: 14|배치수:14|배치 수 14|배치수14|배치: 14|배치:14|14 batches|14batches|14 batch|14batch"
+   ],
+   "evidence": [
+    {
+     "doc": "hub_data.xlsx"
+    }
+   ],
+   "forbid_keywords": [
+    "11배치"
+   ],
+   "evidence_keywords": [
+    "LUX-VAC-03~~14"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q006",
+   "type": "hub_minority_value",
+   "request": "6",
+   "feature": "허브 문서(같은 고객·제품명 수십 회 반복)가 검색을 독점 — 실제 값은 xlsx·긴 표의 소수 행에만",
+   "lang": "ko",
+   "question": "코발트팜(주) 제품 출하 단가 목록 표에서 LUX-ADC-37의 출하단가는?",
+   "gold_answer": "83,500,000 KRW",
+   "answer_keywords": [
+    "83500000"
+   ],
+   "evidence": [
+    {
+     "doc": "hub_long_table.docx"
+    }
+   ],
+   "evidence_keywords": [
+    "83500000"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q007",
+   "type": "stale_version_trap",
+   "request": "7",
+   "feature": "표 모양이 같은 옛 판·방해 판 xlsx(평탄 값 시트 + 수식 시트) — 판 구분은 기준일, 옛 판 값은 함정",
+   "lang": "ko",
+   "question": "단가표 최신판(rates_v2, 기준일 2026-01-01) 기준 LUX-MAB-02 단가는?",
+   "gold_answer": "101,500,000 KRW",
+   "answer_keywords": [
+    "101500000"
+   ],
+   "evidence": [
+    {
+     "doc": "rates_v2.xlsx"
+    }
+   ],
+   "forbid_keywords": [
+    "89000000"
+   ],
+   "evidence_keywords": [
+    "101500000"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q008",
+   "type": "stale_version_trap",
+   "request": "7",
+   "feature": "표 모양이 같은 옛 판·방해 판 xlsx(평탄 값 시트 + 수식 시트) — 판 구분은 기준일, 옛 판 값은 함정",
+   "lang": "ko",
+   "question": "rates_v2(최신판) Formula 시트의 연간 배치 합계는?",
+   "gold_answer": "16배치",
+   "answer_keywords": [
+    "16배치|배치 수는 16|배치수는16|배치 수: 16|배치수:16|배치 수 16|배치수16|배치: 16|배치:16|16 batches|16batches|16 batch|16batch|합계는 16입|합계는16입|합계는 16배치|합계 16배치|합계: 16배치|합계:16배치"
+   ],
+   "evidence": [
+    {
+     "doc": "rates_v2.xlsx"
+    }
+   ],
+   "forbid_keywords": [
+    "13배치"
+   ],
+   "evidence_keywords": [
+    "Q1 배치~~4",
+    "Q2 배치~~3",
+    "Q3 배치~~5",
+    "Q4 배치~~4",
+    "2026-01-01"
+   ],
+   "evidence_n": 5
+  },
+  {
+   "id": "R2Q009",
+   "type": "id_in_filename_only",
+   "request": "8",
+   "feature": "ID가 파일명에만 있고 본문에는 없는 메일 — 본문만으로는 어느 메일인지 구분 불가(파일명 채널 필요)",
+   "lang": "ko",
+   "question": "파일명이 MAIL-LUX-14.eml인 메일에서 언급된 배치 번호와 출하일은?",
+   "gold_answer": "B-77, 2026-09-05",
+   "answer_keywords": [
+    "B-77",
+    "2026-09-05"
+   ],
+   "evidence": [
+    {
+     "doc": "MAIL-LUX-14.eml"
+    }
+   ],
+   "evidence_keywords": [
+    "B-77",
+    "2026-09-05"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "R2Q010",
+   "type": "id_in_filename_only",
+   "request": "8",
+   "feature": "ID가 파일명에만 있고 본문에는 없는 메일 — 본문만으로는 어느 메일인지 구분 불가(파일명 채널 필요)",
+   "lang": "ko",
+   "question": "파일명이 MAIL-LUX-15.eml인 메일에서 언급된 배치 번호와 출하일은?",
+   "gold_answer": "B-81, 2026-09-12",
+   "answer_keywords": [
+    "B-81",
+    "2026-09-12"
+   ],
+   "evidence": [
+    {
+     "doc": "MAIL-LUX-15.eml"
+    }
+   ],
+   "evidence_keywords": [
+    "B-81",
+    "2026-09-12"
+   ],
+   "evidence_n": 2
+  },
+  {
+   "id": "R2Q011",
+   "type": "blank_image_distractor",
+   "request": "9",
+   "feature": "비었거나 거의 빈 이미지(스크린샷 머리글만) 다수 — 근거로 잘못 올라오면 안 됨, 답은 target_memo에만",
+   "lang": "ko",
+   "question": "LUX-VAC-03의 2026년 4분기 예상 배치 수는?",
+   "gold_answer": "9배치",
+   "answer_keywords": [
+    "9배치|배치 수는 9|배치수는9|배치 수: 9|배치수:9|배치 수 9|배치수9|배치: 9|배치:9|9 batches|9batches|9 batch|9batch"
+   ],
+   "evidence": [
+    {
+     "doc": "target_memo.docx"
+    }
+   ],
+   "evidence_keywords": [
+    "9배치"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q012",
+   "type": "blank_image_distractor",
+   "request": "9",
+   "feature": "비었거나 거의 빈 이미지(스크린샷 머리글만) 다수 — 근거로 잘못 올라오면 안 됨, 답은 target_memo에만",
+   "lang": "ko",
+   "question": "같은 메모에서 LUX-VAC-03의 예상 출하일은?",
+   "gold_answer": "2026-12-15",
+   "answer_keywords": [
+    "2026-12-15"
+   ],
+   "evidence": [
+    {
+     "doc": "target_memo.docx"
+    }
+   ],
+   "evidence_keywords": [
+    "2026-12-15"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q013",
+   "type": "big_table_row",
+   "request": "BR9",
+   "feature": "큰 표 — 240행 xlsx(2시트), 행 조회 + 집계(최댓값)",
+   "lang": "ko",
+   "question": "big_table.xlsx에서 배치 BT-0137의 수량은?",
+   "gold_answer": "5배치",
+   "answer_keywords": [
+    "BT-0137~~5|5배치|배치 수는 5|배치수는5|배치 수: 5|배치수:5|배치 수 5|배치수5|배치: 5|배치:5|5 batches|5batches|5 batch|5batch"
+   ],
+   "evidence": [
+    {
+     "doc": "big_table.xlsx"
+    }
+   ],
+   "evidence_keywords": [
+    "BT-0137~~5"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q014",
+   "type": "big_table_agg",
+   "request": "BR9",
+   "feature": "큰 표 — 240행 xlsx(2시트), 행 조회 + 집계(최댓값)",
+   "lang": "ko",
+   "question": "big_table.xlsx 240개 배치 중 수량이 가장 많은 배치와 그 수량은?",
+   "gold_answer": "BT-0006, 12배치",
+   "answer_keywords": [
+    "BT-0006~~12|12배치|배치 수는 12|배치수는12|배치 수: 12|배치수:12|배치 수 12|배치수12|배치: 12|배치:12|12 batches|12batches|12 batch|12batch"
+   ],
+   "evidence": [
+    {
+     "doc": "big_table.xlsx"
+    }
+   ],
+   "evidence_keywords": [
+    "BT-0006~~12"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q015",
+   "type": "big_table_row",
+   "request": "BR9",
+   "feature": "큰 표 — 70행 PDF(쪽 넘김·머리글 반복), 행 조회 + 집계(합계)",
+   "lang": "ko",
+   "question": "big_table.pdf에서 배치 P-045의 수량은?",
+   "gold_answer": "12배치",
+   "answer_keywords": [
+    "P-045~~12|12배치|배치 수는 12|배치수는12|배치 수: 12|배치수:12|배치 수 12|배치수12|배치: 12|배치:12|12 batches|12batches|12 batch|12batch"
+   ],
+   "evidence": [
+    {
+     "doc": "big_table.pdf"
+    }
+   ],
+   "evidence_keywords": [
+    "P-045~12"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q016",
+   "type": "big_table_agg",
+   "request": "BR9",
+   "feature": "큰 표 — 70행 PDF(쪽 넘김·머리글 반복), 행 조회 + 집계(합계)",
+   "lang": "ko",
+   "question": "big_table.pdf 70개 배치의 수량 합계는?",
+   "gold_answer": "485배치",
+   "answer_keywords": [
+    "485"
+   ],
+   "evidence": [
+    {
+     "doc": "big_table.pdf"
+    }
+   ],
+   "evidence_keywords": [
+    "485"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q017",
+   "type": "step_order",
+   "request": "BR13",
+   "feature": "번호 목록의 줄바꿈·문단 순서가 의미를 바꿈 — 개정 전/후 순서가 같은 문서에 섞여 있음",
+   "lang": "ko",
+   "question": "현재 품질 이상 처리 절차에서 세 번째 단계는?",
+   "gold_answer": "원인 조사",
+   "answer_keywords": [
+    "원인 조사"
+   ],
+   "evidence": [
+    {
+     "doc": "steps_order.docx"
+    }
+   ],
+   "evidence_keywords": [
+    "원인 조사"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q018",
+   "type": "step_order",
+   "request": "BR13",
+   "feature": "번호 목록의 줄바꿈·문단 순서가 의미를 바꿈 — 개정 전/후 순서가 같은 문서에 섞여 있음",
+   "lang": "ko",
+   "question": "현재 절차의 마지막(다섯 번째) 단계는?",
+   "gold_answer": "재가동 승인",
+   "answer_keywords": [
+    "재가동 승인"
+   ],
+   "evidence": [
+    {
+     "doc": "steps_order.docx"
+    }
+   ],
+   "evidence_keywords": [
+    "재가동 승인"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q019",
+   "type": "two_col_order",
+   "request": "BR13",
+   "feature": "2단 레이아웃 — 읽기 순서가 섞이면 왼쪽·오른쪽 단 값이 엇갈림",
+   "lang": "ko",
+   "question": "2단 레이아웃 문서에서 왼쪽 단(협력사 A)의 단가는?",
+   "gold_answer": "68,000,000 KRW",
+   "answer_keywords": [
+    "68000000"
+   ],
+   "evidence": [
+    {
+     "doc": "two_col_layout.pdf"
+    }
+   ],
+   "forbid_keywords": [
+    "73500000"
+   ],
+   "evidence_keywords": [
+    "68000000"
+   ],
+   "evidence_n": 1
+  },
+  {
+   "id": "R2Q020",
+   "type": "two_col_order",
+   "request": "BR13",
+   "feature": "2단 레이아웃 — 읽기 순서가 섞이면 왼쪽·오른쪽 단 값이 엇갈림",
+   "lang": "ko",
+   "question": "같은 문서에서 오른쪽 단(협력사 B)의 최소 발주량은?",
+   "gold_answer": "연 6배치",
+   "answer_keywords": [
+    "6배치|배치 수는 6|배치수는6|배치 수: 6|배치수:6|배치 수 6|배치수6|배치: 6|배치:6|6 batches|6batches|6 batch|6batch"
+   ],
+   "evidence": [
+    {
+     "doc": "two_col_layout.pdf"
+    }
+   ],
+   "forbid_keywords": [
+    "8배치"
+   ],
+   "evidence_keywords": [
+    "6배치"
+   ],
+   "evidence_n": 1
+  }
+ ]
+}

@@ -1,0 +1,85 @@
+{
+  "agent_id": "rag_qa",
+  "owner": "researcher",
+  "description": "내부 업무 질문에 검색 MCP 도구(search·edw_meta·query_edw)를 스스로 골라 호출해 근거를 찾고, 숫자마다 인용을 붙여 답하는 agentic 검색 QA(PC 답변 점검 — validation/e2e/answer_gen.py). 근거를 못 찾으면 not_found로 답한다.",
+  "kind": "pipeline",
+  "model_role": "llm",
+  "classification": "internal",
+  "agentic": true,
+  "max_turns": 12,
+  "local_tools": [
+    "search",
+    "edw_meta",
+    "query_edw",
+    "verify_citations"
+  ],
+  "sub_agents": [],
+  "budget": {
+    "seconds": 300,
+    "model_calls": 12,
+    "tool_calls": 20
+  },
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "answer",
+      "status",
+      "citations"
+    ],
+    "properties": {
+      "answer": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "found",
+          "partial",
+          "not_found"
+        ]
+      },
+      "citations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "doc_key",
+            "chunk_key",
+            "page",
+            "quote"
+          ],
+          "properties": {
+            "doc_key": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "chunk_key": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "page": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "quote": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "source",
+                "aggregate"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

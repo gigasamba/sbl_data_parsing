@@ -1,0 +1,312 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_confuse.py",
+ "split": "holdout",
+ "note": "[SYNTHETIC] 모든 값·회사 가상 · must_not = 이 문서에 없는 값(나오면 섞임·지어냄)",
+ "documents": [
+  {
+   "file": "contract_summary.xlsx",
+   "format": "xlsx",
+   "elements": [
+    "계약 목록(비슷한 고객·제품)"
+   ],
+   "content": "4계약 — 같은 제품 두 법인·비슷한 제품 코드",
+   "expect": "본문·표·그림 값",
+   "facts": [
+    {
+     "kw": [
+      "CT-2026-004~~Halden Therapeutics Korea"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "CT-2026-004~~2610000"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "CT-2025-044~~HDN-MAB-70"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "CT-2025-052~~HDN-MAB-17"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "contract_htk_2026.pdf",
+   "format": "pdf",
+   "elements": [
+    "계약서 본문"
+   ],
+   "content": "Halden Korea 6배치",
+   "expect": "본문·표·그림 값",
+   "facts": [
+    {
+     "kw": [
+      "6배치"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2610000|2,610,000"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": [
+    {
+     "kw": "3,360,000",
+     "why": "본사 계약 금액"
+    }
+   ]
+  },
+  {
+   "file": "holden_email_2025.eml",
+   "format": "eml",
+   "elements": [
+    "이메일 — 별개 회사"
+   ],
+   "content": "Holden 첫 배치",
+   "expect": "본문·표·그림 값",
+   "facts": [
+    {
+     "kw": [
+      "2025-09-10"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "edx_2023_lotB09.pdf",
+   "format": "pdf(가로 막대 래스터)",
+   "elements": [
+    "과거 원소 분석 plot"
+   ],
+   "content": "LOT-B09 2023",
+   "expect": "본문·표·그림 값",
+   "facts": [
+    {
+     "kw": [
+      "Fe~0.42"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "C~48.6"
+     ],
+     "source": "image"
+    }
+   ],
+   "must_not": [
+    {
+     "kw": "0.18",
+     "why": "2025 값"
+    },
+    {
+     "kw": "51.3",
+     "why": "2025 값"
+    }
+   ]
+  },
+  {
+   "file": "edx_2025_lotB21.docx",
+   "format": "docx(원형 그림·범례에만 값)",
+   "elements": [
+    "최신 원소 분석 plot"
+   ],
+   "content": "LOT-B21 2025",
+   "expect": "본문·표·그림 값",
+   "facts": [
+    {
+     "kw": [
+      "Fe~0.18"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "C~51.3"
+     ],
+     "source": "image"
+    }
+   ],
+   "must_not": [
+    {
+     "kw": "0.42",
+     "why": "2023 값"
+    },
+    {
+     "kw": "48.6",
+     "why": "2023 값"
+    }
+   ]
+  },
+  {
+   "file": "titer_grouped_bar.pptx",
+   "format": "pptx(묶음 막대 그림)",
+   "elements": [
+    "라인×분기 묶음 막대"
+   ],
+   "content": "2025 titer",
+   "expect": "본문·표·그림 값",
+   "facts": [
+    {
+     "kw": [
+      "3.5"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "4.1"
+     ],
+     "source": "image"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "yield_dualaxis.png",
+   "format": "png(이중 축)",
+   "elements": [
+    "수율 선 + 배치 수 막대"
+   ],
+   "content": "H1 2026 수율",
+   "expect": "본문·표·그림 값",
+   "facts": [
+    {
+     "kw": [
+      "69"
+     ],
+     "source": "image"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "scatter_outlier.xlsx",
+   "format": "xlsx(산점도 그림 + 데이터)",
+   "elements": [
+    "이상치 주석 산점도"
+   ],
+   "content": "이상치 FX-B-0233",
+   "expect": "본문·표·그림 값",
+   "facts": [
+    {
+     "kw": [
+      "Outlier~FX-B-0233|이상치~FX-B-0233|FX-B-0233~outlier|FX-B-0233~이상치"
+     ],
+     "source": "image"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "swimlane_release.png",
+   "format": "png(스윔레인)",
+   "elements": [
+    "담당 구역별 흐름"
+   ],
+   "content": "출하 절차 5단계",
+   "expect": "본문·표·그림 값",
+   "facts": [
+    {
+     "kw": [
+      "QP Release"
+     ],
+     "source": "image"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "rfi_response_halden_2024.docx",
+   "format": "docx(그림 3장)",
+   "elements": [
+    "과거 RFI 답변",
+    "흐름도·plot·배치도"
+   ],
+   "content": "2024 Halden 답변",
+   "expect": "본문·표·그림 값",
+   "facts": [
+    {
+     "kw": [
+      "25%"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "0.42"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Purification"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "R-303~Grade B"
+     ],
+     "source": "image"
+    }
+   ],
+   "must_not": [
+    {
+     "kw": "40%",
+     "why": "2026 캐파"
+    }
+   ]
+  },
+  {
+   "file": "rfi_holden_2026.xlsx",
+   "format": "xlsx",
+   "elements": [
+    "새 RFI 질문지"
+   ],
+   "content": "Holden 2026 5문항",
+   "expect": "본문·표·그림 값",
+   "facts": [
+    {
+     "kw": [
+      "Q5~~세포주"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "capacity_update_2026.pdf",
+   "format": "pdf",
+   "elements": [
+    "최신 캐파"
+   ],
+   "content": "40%",
+   "expect": "본문·표·그림 값",
+   "facts": [
+    {
+     "kw": [
+      "40%"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  }
+ ]
+}

@@ -1,0 +1,92 @@
+{
+ "name": "dev-v1",
+ "reason": "S8b 시드 — resources/config/pipeline_stack.json(updated 2026-10-07 19:29)의 설정 칸(메모 칸은 docs/architecture/pipeline_stack.md)",
+ "body": {
+  "parse": {
+   ".pptx": [
+    "anydoc",
+    "kreuzberg"
+   ],
+   ".doc": [
+    "kreuzberg"
+   ],
+   ".docx": [
+    "office",
+    "anydoc"
+   ],
+   ".hwpx": [
+    "hwpx"
+   ],
+   ".png": [
+    "rapidocr_ko",
+    "qwen_vlm"
+   ],
+   ".jpg": [
+    "rapidocr_ko",
+    "qwen_vlm"
+   ],
+   ".eml": [
+    "mhtml",
+    "kreuzberg"
+   ],
+   ".mht": [
+    "mhtml",
+    "kreuzberg"
+   ],
+   ".txt": [
+    "plaintext",
+    "markitdown"
+   ],
+   ".html": [
+    "html_stdlib",
+    "kreuzberg"
+   ],
+   ".htm": [
+    "html_stdlib",
+    "markitdown"
+   ],
+   ".pdf_image": [
+    "rapidocr_ko",
+    "qwen_vlm"
+   ],
+   ".pdf_text": [
+    "pymupdf",
+    "kreuzberg"
+   ],
+   ".xls": [
+    "kreuzberg",
+    "markitdown"
+   ],
+   ".xlsm": [
+    "office",
+    "kreuzberg"
+   ],
+   ".xlsx": [
+    "office",
+    "kreuzberg"
+   ],
+   ".ppt": [
+    "kreuzberg",
+    "anydoc"
+   ],
+   ".msg": [
+    "msg_extract",
+    "kreuzberg"
+   ]
+  },
+  "source": "selection.json(단계 1 최종 엔진 조합)",
+  "embed": "bge-m3",
+  "chunk": "structure",
+  "graph": "table+entity",
+  "retrieve": "hybrid",
+  "k": 10,
+  "candidates": [
+   "kreuzberg",
+   "qwen_vlm",
+   "anydoc",
+   "docx2python",
+   "pymupdf4llm",
+   "markitdown"
+  ]
+ }
+}

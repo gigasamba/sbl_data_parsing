@@ -1,0 +1,213 @@
+# 파이프라인 컨테이너(docs/operations/server-guide.md §0) — 수집 서버. S6b(10-27, D-020 — 옛 compose.modules.yml): 파이프라인 이미지를
+#   하나로 합쳐 서버 이미지는 2개 — data-pipeline(파싱·구조화·적재·게시, 옛 data-parsing+data-structure) · mcp-server(검색 MCP, 옛 data-retrieval).
+#   파싱·구조화·적재·게시는 트리거(1회 실행 후 종료), 검색 MCP만 상주. job 서비스 이름(parse·structure·load·publish·index_a·index_b·
+#   retrieval·mcp)은 그대로, 상주 컨테이너 이름은 새 이름(사용자 10-27): data-pipeline-parse·data-pipeline-structure(옛 data-parsing·
+#   data-structure — 같은 data-pipeline 이미지에 TRIGGER_MODULE=parse|structure만 다름, run_docs.py의 docker exec 대상) · mcp-server(옛 data-retrieval).
+#   준비(저장소 루트에서): docker build -f deploy/docker/Dockerfile --target pipeline -t data-pipeline:<태그> . ·
+#                          --target mcp -t mcp-server:<태그> .
+#   트리거(순서대로, 앞 모듈 끝 표시가 있어야 다음이 시작 — 없으면 종료 코드 3): bash deploy/host/scripts/trigger.sh parse|structure|load|all
+#   compose를 직접 부를 때(S7e1 — 셸에 설정 값을 먼저 export, 옛 --env-file pipeline.env 대신). 하위 셸 ( … )로 — 대화형 셸에 export해 두면
+#   그 뒤 settings.yaml을 고쳐도 그 셸에는 안 먹음(VS7e1 R-2):
+#     ( . deploy/host/scripts/settings_env.sh && load_settings && docker compose -f deploy/host/compose/compose.pipeline.yml run --rm parse )
+#       (인자를 주면 명령을 덮으므로: run --rm parse parse --phases 3) · 같은 꼴로 run --rm structure · run --rm load · up -d mcp
+# 결과 폴더(RAG_OUT)를 모든 모듈이 같이 씀 — 모듈 사이 전달은 이 폴더의 파일(+ PostgreSQL)뿐, 서로 직접 부르지 않음.
+# 주의: `docker compose config`는 치환한 값을 그대로 출력함 — 확인은 `config --quiet`만(S7e1부터 비밀은 compose에 없지만 호스트 경로·이름이 나옴).
+# 이미지 변수: DATA_PIPELINE_IMAGE·MCP_SERVER_IMAGE(S6b 새 이름) — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE·DATA_RETRIEVAL_IMAGE·RAG_*_IMAGE·
+#   RAG_IMAGE는 별칭으로 읽지 않는다 — trigger.sh·run_tool.sh·mcp_up.sh(image_vars.sh)가 새 이름이 비고 옛 이름만 있으면 "새 이미지 판 필요"로
+#   멈춘다(코디네이터 답 Q2 a). compose를 직접 부를 때는 image 줄의 `:?` 메시지가 같은 안내를 낸다(S6c — VS6b R-11).
+# S7e1(사용자 10-27 Q1·Q3, D-028 ⑭) — 옛 pipeline.env 통째 넘기기(비밀까지 컨테이너 env에)를 없앴다. 서비스마다 설정 파일 하나를 읽기 전용으로
+#   붙이고 env는 SETTINGS_FILE·RUN_ENV만 넘긴다(docker inspect에 비밀 없음). 앱이 붙인 파일에서 common + 자기 앱 절을 읽는다(전환 기간에는 다리가
+#   프로세스 env로 — U-a). compose 치환 값(이미지·자원·포트·호스트 경로)은 셸 env에서 — deploy/host/scripts/settings_env.sh의 load_settings가
+#   settings.yaml 호스트 칸을 export(trigger.sh·run_tool.sh·mcp_up.sh·systemd가 부름). YAML에 없는 칸은 아래 ${X:-기본값}이 그대로 걸린다.
+#   파일 권한: 컨테이너 사용자 UID 10001이 읽어야 함 — 주인 10001·그룹 운영 계정 그룹·640(운영 계정 UID가 10001이면 600 — refactor.md C-09, Q2).
+#   값 바꾸기(S7e3 — 사용자 10-28): 앱 설정 값은 settings.yaml을 직접 고친다(한 번만 다르게 돌릴 값도 — 고쳐 돌리고 되돌림). 셸·`-e`로 준 옛 env
+#   이름은 앱이 읽지 않고(S7e2), 덮기 파일 도구 `python -m common.config.overrides`는 PC 전용이라 서버에서는 종료 2(이 compose는 SETTINGS_FILE 한 파일만
+#   붙여 덮기 파일의 base가 컨테이너 안에 없음 — VS7e2 B-2). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지·자원·포트·호스트 경로)뿐.
+x-settings: &settings "${SETTINGS_FILE:?SETTINGS_FILE=<settings.yaml 절대 경로> 필요 — deploy/host/scripts/settings_env.sh load_settings가 export(refactor.md C-09)}:/etc/rag/settings.yaml:ro,z"
+x-job: &job
+  network_mode: host                       # PostgreSQL·모델 API에 서버 주소 그대로(NETWORK_HOST=1)
+  init: true
+  environment: {NETWORK_HOST: "1", SETTINGS_FILE: /etc/rag/settings.yaml, RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|stage|prd 필요 — settings.yaml common.run_env(load_settings가 export — refactor.md C-34, D-028)}"}
+  profiles: ["job"]                        # `up`으로는 안 뜸 — run --rm(트리거)로만
+  pids_limit: 2048
+  logging:
+    options: {max-size: "50m", max-file: "3"}
+
+services:
+  parse:                                   # ① 파싱(1회 job): dedup → prepare → phase(기본 1·2) → 채점 → 대표 결과(_rep) · 임베딩·DB 없음
+    <<: *job
+    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
+    command: ["parse"]
+    volumes:
+      - *settings
+      - ${DOC_SRC:?DOC_SRC=<원본 문서 폴더>}:/data/docs:ro,z
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
+    mem_limit: ${PARSE_MEM_LIMIT:-16g}
+    memswap_limit: ${PARSE_MEM_LIMIT:-16g}
+    cpus: ${PARSE_CPUS:-3}
+
+  # 10-14(사용자) — 상주 트리거 서버: 웹 업로드가 "파싱 시작"을 여기로 호출(POST /jobs, Bearer TRIGGER_TOKEN).
+  # 기존 parse(위, 1회 job) 트리거·trigger.sh·새벽 배치는 그대로 둠 — 이 서비스는 병행(선택, §2-8 release-20261016.md).
+  # pipeline.trigger_server(다른 세션 작업)가 아직 이미지에 없으면 entrypoint.sh의 serve-trigger가
+  # 또렷한 오류로 멈춤(트레이스백 아님) — 그때는 이 서비스를 up하지 않고 기존 parse job만 쓴다.
+  # S6b — 서비스·컨테이너 이름 data-pipeline-parse(옛 data-parsing — run_docs.py·mcp_parse_service가 이 이름으로 docker exec), 이미지 data-pipeline, 모듈 TRIGGER_MODULE.
+  data-pipeline-parse:
+    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
+    container_name: data-pipeline-parse
+    command: ["serve-trigger"]
+    restart: unless-stopped
+    network_mode: host                      # CHAIN_STRUCTURE_URL 호출·PostgreSQL·모델 API에 서버 주소 그대로
+    init: true
+    environment:
+      SETTINGS_FILE: /etc/rag/settings.yaml      # S7e1 — 붙인 설정 파일(x-settings)
+      RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|stage|prd 필요 — settings.yaml common.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
+      TRIGGER_MODULE: parse                      # S6b — 합친 이미지에서 이 상주 서버가 맡을 모듈(entrypoint serve-trigger)
+      # S7e2(사용자 10-28) — 바인드 주소·포트·이어 올리기 URL은 settings.yaml에서(pipeline.service.trigger.host·parse_port·chain_structure_url —
+      #   옛 TRIGGER_HOST·TRIGGER_PORT·CHAIN_STRUCTURE_URL env). 서버 yaml에 chain_structure_url: [http://127.0.0.1:8771]을 적어야 parse 성공 뒤 structure를 이어 올림(C-45)
+    volumes:
+      - *settings
+      - ${DOC_SRC:?DOC_SRC=<원본 문서 폴더>}:/data/docs:ro,z
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
+    mem_limit: ${PARSE_MEM_LIMIT:-16g}
+    memswap_limit: ${PARSE_MEM_LIMIT:-16g}
+    cpus: ${PARSE_CPUS:-3}
+    pids_limit: 2048
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request as u; u.urlopen('http://127.0.0.1:${TRIGGER_PARSE_PORT:-8770}/health', timeout=3)"]   # S7e2 — 포트는 compose 치환(load_settings)
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      options: {max-size: "50m", max-file: "3"}
+
+  structure:                               # ② 구조화: _rep → 청킹·사실·고객·그래프·임베딩(API·캐시) → output/edw/bundle · 원본 없어도 됨
+                                           #   (output/prepared가 실제 파일이면 글자 PDF 위치(bbox)도 — 원본 링크(symlink)면 rep.source로)
+                                           #   S6b: 이미지가 data-pipeline으로(옛 data-structure)
+    <<: *job
+    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
+    command: ["structure"]
+    volumes:
+      - *settings
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
+    mem_limit: ${STRUCTURE_MEM_LIMIT:-8g}
+    memswap_limit: ${STRUCTURE_MEM_LIMIT:-8g}
+    cpus: ${STRUCTURE_CPUS:-2}
+
+  # AD41 — 같은 data-pipeline 이미지(S6b — 옛 data-structure)로 설정이 다른 색인을 나란히(예: 청크 크기) 띄우는 예시. index_a·index_b는
+  # 기본 structure·load 트리거 대신 pipeline/load/index.py(entrypoint의 범용 `tool index` 경유 — S6c에 찾는 목록에 더함, 그 전엔 "모르는 도구")로 색인을 짓는다 — index_id(설정
+  # 지문)가 달라지므로 같은 PG에 스키마 <PG_SCHEMA>_<index_id>로 나란히 쌓인다(서로 안 덮음). 평소엔 안 씀 —
+  # 여러 설정을 비교·운영할 때만 `docker compose run --rm index_a`처럼 따로 불러서(트리거 순서 밖, profiles: job).
+  index_a:
+    <<: *job
+    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
+    command: ["tool", "index", "build", "--conf", "/app/output/index-conf/a.json", "--pg"]
+    volumes:
+      - *settings
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
+      - ${INDEX_CONF_DIR:?INDEX_CONF_DIR=<색인 설정 json 폴더 — a.json·b.json>}:/app/output/index-conf:ro,z
+    mem_limit: ${STRUCTURE_MEM_LIMIT:-8g}
+    cpus: ${STRUCTURE_CPUS:-2}
+
+  index_b:                                 # index_a와 같은 이미지·다른 설정 파일(청크 크기 등) — "2개 이상 인스턴스" 예시
+    <<: *job
+    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
+    command: ["tool", "index", "build", "--conf", "/app/output/index-conf/b.json", "--pg"]
+    volumes:
+      - *settings
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
+      - ${INDEX_CONF_DIR:?INDEX_CONF_DIR=<색인 설정 json 폴더 — a.json·b.json>}:/app/output/index-conf:ro,z
+    mem_limit: ${STRUCTURE_MEM_LIMIT:-8g}
+    cpus: ${STRUCTURE_CPUS:-2}
+
+  load:                                    # ③ 적재(1회 job): 묶음 → PostgreSQL(pgvector), 옛 기록 정리 · PG 없으면 종료 코드 4 · S6b: data-pipeline(옛 data-structure)
+    <<: *job
+    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
+    command: ["load"]
+    volumes:
+      - *settings
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
+    mem_limit: ${LOAD_MEM_LIMIT:-4g}
+    memswap_limit: ${LOAD_MEM_LIMIT:-4g}
+    cpus: ${LOAD_CPUS:-1}
+
+  # 10-14(사용자) — 상주 트리거 서버: parse 상주가 끝낸 문서를 체인 호출로 받아 구조화+적재(load까지).
+  # 기존 structure·load(위, 1회 job) 트리거는 그대로 둠 — 병행(선택).
+  # S6b — 서비스·컨테이너 이름 data-pipeline-structure(옛 data-structure), 이미지 data-pipeline.
+  data-pipeline-structure:
+    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
+    container_name: data-pipeline-structure
+    command: ["serve-trigger"]
+    restart: unless-stopped
+    network_mode: host
+    init: true
+    environment:
+      SETTINGS_FILE: /etc/rag/settings.yaml      # S7e1 — 붙인 설정 파일(x-settings)
+      RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|stage|prd 필요 — settings.yaml common.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
+      TRIGGER_MODULE: structure                  # S6b — structure+load(trigger_server _MODULE_STAGES) · 주소·포트는 settings.yaml(structure_port — S7e2)
+    volumes:
+      - *settings
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
+    mem_limit: ${STRUCTURE_MEM_LIMIT:-8g}
+    memswap_limit: ${STRUCTURE_MEM_LIMIT:-8g}
+    cpus: ${STRUCTURE_CPUS:-2}
+    pids_limit: 2048
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request as u; u.urlopen('http://127.0.0.1:${TRIGGER_STRUCTURE_PORT:-8771}/health', timeout=3)"]   # S7e2 — 포트는 compose 치환(load_settings)
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      options: {max-size: "50m", max-file: "3"}
+
+  publish:                                 # SI39: 대표 결과(.md) Object Storage 업로드 + EDW AI.ParsingMeta — 맨 마지막 별도 단계, 자동 스케줄 없음(트리거만) · S6b: data-pipeline(옛 data-structure, load.parsing_meta)
+    <<: *job
+    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
+    command: ["publish"]
+    volumes:
+      - *settings
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
+    mem_limit: ${PUBLISH_MEM_LIMIT:-2g}
+    memswap_limit: ${PUBLISH_MEM_LIMIT:-2g}
+    cpus: ${PUBLISH_CPUS:-1}
+
+  retrieval:                               # 도구 전용(job, mcp-server 이미지) — mcp_eval처럼 mcp_server(검색)가 필요한 cli 도구(run_tool.sh). 상주 mcp와는 별개.
+    <<: *job
+    image: ${MCP_SERVER_IMAGE:?MCP_SERVER_IMAGE=mcp-server:<태그> 필요 — 옛 DATA_RETRIEVAL_IMAGE·RAG_IMAGE는 S6b에 바뀜(refactor.md C-29)}
+    command: ["help"]
+    volumes:
+      - *settings
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
+    mem_limit: ${RETRIEVAL_TOOL_MEM_LIMIT:-2g}
+    cpus: ${RETRIEVAL_TOOL_CPUS:-1}
+
+  mcp:                                     # ④ 검색 MCP(상주) — compose.mcp.yml과 같음 · S6b: 이미지·컨테이너 mcp-server
+    image: ${MCP_SERVER_IMAGE:?MCP_SERVER_IMAGE=mcp-server:<태그> 필요 — 옛 DATA_RETRIEVAL_IMAGE·RAG_IMAGE는 S6b에 바뀜(refactor.md C-29)}
+    container_name: mcp-server             # S6b(사용자 10-27) — 옛 data-retrieval(그 전 rag-mcp)
+    command: ["mcp"]
+    restart: unless-stopped
+    network_mode: host
+    init: true
+    environment:
+      SETTINGS_FILE: /etc/rag/settings.yaml      # S7e1 — 붙인 설정 파일(x-settings)
+      RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|stage|prd 필요 — settings.yaml common.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
+      # S7e2(사용자 10-28) — 바인드·포트·저장소·질의 캐시는 settings.yaml mcp.server.host·port·store·query_cache(옛 env MCP_HOST·MCP_PORT·MCP_STORE·
+      #   EMBED_QUERY_CACHE — 질의 캐시는 이미지 안 기본 /tmp/mcp_query_cache.sqlite). 서버 yaml에 store: pg를 적음(없으면 자동 탐지 — C-45)
+    volumes:
+      - *settings
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:ro,z
+    mem_limit: ${MCP_MEM_LIMIT:-4g}
+    cpus: ${MCP_CPUS:-1}             # mcp(상주) + parse(최대 PARSE_CPUS 3) ≤ 4 vCPU 개발 서버 — 2였으면 5로 넘침(D4)
+    pids_limit: 512
+    healthcheck:                     # 이미지에 curl 없음 — python 한 줄(/health, 토큰 불필요)
+      test: ["CMD", "python", "-c",
+             "import urllib.request as u; u.urlopen('http://${MCP_HOST:-127.0.0.1}:${MCP_PORT:-8765}/health', timeout=3)"]   # S7e2 — 주소·포트는 compose 치환(load_settings)
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      options: {max-size: "20m", max-file: "3"}

@@ -1,0 +1,16 @@
+[
+  {
+    "user_text": "이 이미지는 래스터(사진·스캔) 차트를 2~3배 확대한 crop이다. ... (단계식 지시문, 눈금 0·100 막대그래프 예)",
+    "note": "눈금 2개(0·100)·막대 1개(top_px 비율 50%)",
+    "expected": {
+      "y_ticks": [
+        {"value": 0, "y_px": 380},
+        {"value": 100, "y_px": 20}
+      ],
+      "log_axis": false,
+      "items": [
+        {"x": "Q1", "series": null, "top_px": 200, "unit": null}
+      ]
+    }
+  }
+]

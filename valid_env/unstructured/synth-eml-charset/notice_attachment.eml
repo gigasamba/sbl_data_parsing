@@ -1,0 +1,24 @@
+Subject: =?euc-kr?B?w7e6ziDF68H2IENULTIwMjYtMTA3?=
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="SYNTHEMLCHARSETBOUND0001"
+
+--SYNTHEMLCHARSETBOUND0001
+Content-Type: text/plain; charset="cp949"
+Content-Transfer-Encoding: 8bit
+
+[가상 예시] 합성 시험 메일 - 실존 회사·데이터와 무관.
+
+버추얼팜코 첨부 통지 (가상, 한글 첨부 파일명 cp949)
+
+계약번호: CT-2026-107
+배치 수: 7건
+첨부 LOT: LOT-901
+첨부 수량: 7
+
+--SYNTHEMLCHARSETBOUND0001
+Content-Type: text/csv; charset="cp949"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename*=cp949''%B9%E8%C4%A1%B3%BB%BF%AA.csv
+
+uejEobn4yKMsvPa3rgpMT1QtOTAxLDcK
+--SYNTHEMLCHARSETBOUND0001--

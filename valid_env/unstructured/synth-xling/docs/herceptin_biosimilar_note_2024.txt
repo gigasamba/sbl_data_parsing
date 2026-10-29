@@ -1,0 +1,4 @@
+[Synthetic example] Test document — not related to any real company data or agreement.
+Process Note — Herceptin biosimilar (trastuzumab)
+Downstream step yield: 82% (average of 3 runs).
+Next campaign: 2024-11.

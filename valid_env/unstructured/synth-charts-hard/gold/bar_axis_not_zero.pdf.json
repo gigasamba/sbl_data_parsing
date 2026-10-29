@@ -1,0 +1,24 @@
+{
+ "values": [
+  {
+   "series": null,
+   "x": "P1",
+   "value": 90.0
+  },
+  {
+   "series": null,
+   "x": "P2",
+   "value": 70.0
+  },
+  {
+   "series": null,
+   "x": "P3",
+   "value": 50.0
+  }
+ ],
+ "trend": {
+  "direction": "감소",
+  "period": "P1–P3",
+  "basis": "P1 90 → P3 50"
+ }
+}

@@ -1,0 +1,123 @@
+{
+ "set": "synth-eml-charset",
+ "split": "dev",
+ "scoring": "_synth_images_qa.score",
+ "items": [
+  {
+   "type": "eml_euckr",
+   "question": "버추얼팜코 배치 통지(euc-kr 메일)의 계약번호와 배치 수는?",
+   "gold_answer": "CT-2026-101, 18건",
+   "answer_keywords": [
+    "CT-2026-101",
+    "18건|18개|18단계|18곳|18 개|18 단계|개 수는 18|개수는18|개 수: 18|개수:18|개 수 18|개수18|개: 18|개:18|건 수는 18|건수는18|건 수: 18|건수:18|건 수 18|건수18|건: 18|건:18|곳 수는 18|곳수는18|곳 수: 18|곳수:18|곳 수 18|곳수18|곳: 18|곳:18|단계 수는 18|단계수는18|단계 수: 18|단계수:18|단계 수 18|단계수18|단계: 18|단계:18|18 steps|18steps|18 step|18step|18문항|18 문항|18 건|18 곳"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "notice_euckr.eml"
+    }
+   ],
+   "references": [
+    {
+     "doc": "notice_euckr.eml",
+     "path": "valid_env/unstructured/synth-eml-charset/notice_euckr.eml",
+     "where": "본문"
+    }
+   ],
+   "id": "ECQ001"
+  },
+  {
+   "type": "eml_ksc5601_ext",
+   "question": "공급 통지(ks_c_5601-1987 메일)의 비고란에 적힌 문구는?",
+   "gold_answer": "똠 쀍 테스트",
+   "answer_keywords": [
+    "똠",
+    "쀍"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "notice_ksc5601_ext.eml"
+    }
+   ],
+   "references": [
+    {
+     "doc": "notice_ksc5601_ext.eml",
+     "path": "valid_env/unstructured/synth-eml-charset/notice_ksc5601_ext.eml",
+     "where": "본문 비고"
+    }
+   ],
+   "id": "ECQ002"
+  },
+  {
+   "type": "eml_no_charset",
+   "question": "charset 선언이 없는 통지 메일의 계약번호와 배치 수는?",
+   "gold_answer": "CT-2026-104, 5건",
+   "answer_keywords": [
+    "CT-2026-104",
+    "5건|5개|5단계|5곳|5 개|5 단계|개 수는 5|개수는5|개 수: 5|개수:5|개 수 5|개수5|개: 5|개:5|건 수는 5|건수는5|건 수: 5|건수:5|건 수 5|건수5|건: 5|건:5|곳 수는 5|곳수는5|곳 수: 5|곳수:5|곳 수 5|곳수5|곳: 5|곳:5|단계 수는 5|단계수는5|단계 수: 5|단계수:5|단계 수 5|단계수5|단계: 5|단계:5|5 steps|5steps|5 step|5step|5문항|5 문항|5 건|5 곳"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "notice_no_charset.eml"
+    }
+   ],
+   "references": [
+    {
+     "doc": "notice_no_charset.eml",
+     "path": "valid_env/unstructured/synth-eml-charset/notice_no_charset.eml",
+     "where": "본문"
+    }
+   ],
+   "id": "ECQ003"
+  },
+  {
+   "type": "eml_attachment",
+   "question": "첨부 통지 메일의 첨부 파일(배치내역.csv)에 적힌 LOT 번호와 수량은?",
+   "gold_answer": "LOT-901, 7",
+   "answer_keywords": [
+    "LOT-901",
+    "7"
+   ],
+   "needs": [
+    "text"
+   ],
+   "dims": [
+    "Q01"
+   ],
+   "lang": "ko",
+   "evidence": [
+    {
+     "doc": "notice_attachment.eml"
+    }
+   ],
+   "references": [
+    {
+     "doc": "notice_attachment.eml",
+     "path": "valid_env/unstructured/synth-eml-charset/notice_attachment.eml",
+     "where": "첨부 csv"
+    }
+   ],
+   "id": "ECQ004"
+  }
+ ]
+}

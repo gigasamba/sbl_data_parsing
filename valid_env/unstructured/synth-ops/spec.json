@@ -1,0 +1,271 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_ops.py",
+ "split": "holdout",
+ "note": "[SYNTHETIC] 모든 값 가상",
+ "documents": [
+  {
+   "file": "rfi_questionnaire_2026.xlsx",
+   "format": "xlsx",
+   "elements": [
+    "RFI 질문지(번호·상태)",
+    "마감일"
+   ],
+   "content": "Norvanta RFI 2026 7문항",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "2026-11-14"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Q3~~미답변"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "rfi_response_2025.docx",
+   "format": "docx",
+   "elements": [
+    "과거 RFI 답변(재사용)"
+   ],
+   "content": "작년 RFI 답변",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "FX홀딩스"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "30%"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "email_price_thread.eml",
+   "format": "eml(인용 스레드 + xlsx 첨부)",
+   "elements": [
+    "이메일 협상 스레드",
+    "첨부 파일 속 표"
+   ],
+   "content": "단가 조정 5%→3%→3.5% 합의",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "3.5%"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "397580|397,580"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "msa_v1.docx",
+   "format": "docx",
+   "elements": [
+    "계약 v1"
+   ],
+   "content": "가격 상한 5%·해지 90일·MTOP 6배치",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "5%"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "msa_v2.docx",
+   "format": "docx",
+   "elements": [
+    "계약 v2(개정)"
+   ],
+   "content": "가격 상한 4%·해지 120일·MTOP 5배치",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "4%"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "120일"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "qaa_norvanta.docx",
+   "format": "docx",
+   "elements": [
+    "책임 분담 표(병합 머리글)"
+   ],
+   "content": "QAA 책임 분담 4항목",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "출하 승인~~위탁사"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "capability_deck_v2.pptx",
+   "format": "pptx",
+   "elements": [
+    "역량 슬라이드 옛 버전"
+   ],
+   "content": "총 10,000L",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "10,000L|10000L"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "capability_deck_v3.pptx",
+   "format": "pptx",
+   "elements": [
+    "역량 슬라이드 최신 버전"
+   ],
+   "content": "총 14,000L",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "14,000L|14000L"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "fda483_capa_tracker.xlsx",
+   "format": "xlsx",
+   "elements": [
+    "483 지적·CAPA 추적표"
+   ],
+   "content": "OBS 3건·상태",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "OBS-2~~진행"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "validation_oq_br2001.pdf",
+   "format": "pdf",
+   "elements": [
+    "밸리데이션(OQ) 보고서"
+   ],
+   "content": "교반 50~150 rpm 적합",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "50~150|50-150"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "calibration_log.xlsx",
+   "format": "xlsx",
+   "elements": [
+    "교정 기록(같은 계기 여러 행)"
+   ],
+   "content": "PT-205 등",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "2026-09-28"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "em_dp_trend_r205.xlsx",
+   "format": "xlsx",
+   "elements": [
+    "차압 월별 추이"
+   ],
+   "content": "R-205 이탈 횟수",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "2026-09~~2"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "audit_findings_2026.docx",
+   "format": "docx",
+   "elements": [
+    "감사 지적 표"
+   ],
+   "content": "지적 3건",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "A-2~~미종결"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "coa_rm2609.pdf",
+   "format": "pdf",
+   "elements": [
+    "시험성적서"
+   ],
+   "content": "순도 99.2%",
+   "expect": "본문·표 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "99.2%"
+     ],
+     "source": "text"
+    }
+   ]
+  }
+ ]
+}

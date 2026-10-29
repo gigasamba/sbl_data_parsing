@@ -1,0 +1,11 @@
+# 부팅 1분 뒤 + 2분마다 근거 MCP 확인(떠 있으면 아무것도 안 함 — 비용 거의 0).
+[Unit]
+Description=근거 MCP 상주 확인 2분마다
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

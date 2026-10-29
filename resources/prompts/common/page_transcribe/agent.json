@@ -1,0 +1,16 @@
+{
+  "agent_id": "page_transcribe",
+  "owner": "developer",
+  "description": "스캔·이미지 문서 쪽 1장을 마크다운으로 옮김(OCR 교차 확인용)",
+  "kind": "pipeline",
+  "model_role": "vlm",
+  "classification": "internal",
+  "budget": {
+    "model_calls": 1
+  },
+  "local_tools": [],
+  "prompt_ids": [
+    "page"
+  ],
+  "common_tail": "free_text"
+}

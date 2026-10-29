@@ -1,0 +1,7446 @@
+{
+ "version": "2026-09-29",
+ "seed": 20260929,
+ "note": "[가상 예시] 고객·계약·이메일 전부 허구. 내부 역량 수치(우리 CDMO)는 test_code/samples/rfi_answer/samples/supplier_facts_2026Q3.csv·answer_library_{ko,en}.md 원장과 모순 없다.",
+ "internal_facts_source": [
+  "test_code/samples/rfi_answer/samples/supplier_facts_2026Q3.csv",
+  "test_code/samples/rfi_answer/samples/answer_library_ko.md",
+  "test_code/samples/rfi_answer/samples/answer_library_en.md"
+ ],
+ "clients": [
+  {
+   "tag": "CRB",
+   "name": "청람바이오(주)",
+   "lang": "ko",
+   "country": "KR",
+   "tier": "C",
+   "currency": "KRW",
+   "products": [
+    {
+     "code": "CRB-VAC-01",
+     "modality": "vaccine",
+     "desc": "재조합 단백질 백신(애주번트 포함, 바이알)"
+    }
+   ],
+   "contracts": [
+    {
+     "id": "C-CRB-2022-01",
+     "product": "CRB-VAC-01",
+     "modality": "vaccine",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2022-06-07",
+     "currency": "KRW",
+     "unit_price": 104000000,
+     "mtop": 2,
+     "batch_volume": 5,
+     "term_months": 24,
+     "price_adjustment_clause": "연 3% 상한(CPI 연동), 매년 1월 갱신",
+     "expiry_date": "2024-06-07",
+     "contract_value": 1040000000
+    }
+   ],
+   "rfp_versions": [
+    {
+     "product": "CRB-VAC-01",
+     "modality": "vaccine",
+     "version": 1,
+     "year": 2025,
+     "mtop": 6,
+     "shared_mtop": false,
+     "effective_contract_term": 4,
+     "reserve_batch": 1,
+     "price_adjustment_cap": 5,
+     "price_adjustment_waivers": 1,
+     "binding_forecast": 3,
+     "one_way_partial_binding": 45,
+     "forecast": {
+      "FY2026": 3,
+      "FY2027": 3,
+      "FY2028": 4,
+      "FY2029": 2,
+      "FY2030": 3
+     }
+    },
+    {
+     "product": "CRB-VAC-01",
+     "modality": "vaccine",
+     "version": 2,
+     "year": 2026,
+     "mtop": 7,
+     "shared_mtop": false,
+     "effective_contract_term": 4,
+     "reserve_batch": 1,
+     "price_adjustment_cap": 4,
+     "price_adjustment_waivers": 1,
+     "binding_forecast": 3,
+     "one_way_partial_binding": 50,
+     "forecast": {
+      "FY2026": 3,
+      "FY2027": 4,
+      "FY2028": 6,
+      "FY2029": 2,
+      "FY2030": 5
+     },
+     "revision_note": "Rev.B — 2026-06 갱신판"
+    }
+   ],
+   "rfi_history": [
+    {
+     "year": 2023,
+     "ref": "CRB-RFI-2023-01",
+     "questions": [
+      {
+       "qid": "H1",
+       "item_key": "I.utilization",
+       "question": "최근 12개월 평균 공장 가동률을 제시하시오.",
+       "our_answer": "75.0% (2023 시점 자료)"
+      },
+      {
+       "qid": "H2",
+       "item_key": "G.inspection_history",
+       "question": "최근 규제기관 실사 이력을 제시하시오.",
+       "our_answer": "해당 시점 자료 별도 제공"
+      },
+      {
+       "qid": "H3",
+       "item_key": "K.trir",
+       "question": "최근 3년 TRIR을 제시하시오.",
+       "our_answer": "0.2 (2023 시점 자료)"
+      },
+      {
+       "qid": "H4",
+       "item_key": "F.tt_duration",
+       "question": "평균 기술이전 소요 기간을 제시하시오.",
+       "our_answer": "11.68개월 (2023 시점 자료)"
+      }
+     ]
+    }
+   ],
+   "new_rfi_2026": {
+    "ref": "CRB-RFI-2026-01",
+    "issued": "2026-09-15",
+    "response_due": "2026-10-13",
+    "questions": [
+     {
+      "qid": "Q1",
+      "text": "소유 구조에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "A",
+       "item_key": "ownership",
+       "new_item": false
+      },
+      "gold_answer": "당사는 비상장 단일 법인(legal entity)으로 최대주주는 [가상]○○홀딩스(지분 72%)이며 별도 모회사·SPC 구조 없이 Plant1~3(사업장) 전체를 직접 소유·운영한다(2026-09-30 기준). change of control 발생 시 주요 공급계약상 고객 사전통지 의무가 있다.",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q2",
+      "text": "감사 재무제표 3개년에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "A",
+       "item_key": "audited_financials",
+       "new_item": false
+      },
+      "gold_answer": "최근 3개년 매출은 FY2023 2,350억원 → FY2024 2,780억원 → FY2025 3,200억원(연평균 +17%)이며 영업이익률은 20~23% 수준으로, 매년 외부감사인의 감사보고서(audited financial statements)를 발간한다.",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q3",
+      "text": "총 고용에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "B",
+       "item_key": "headcount",
+       "new_item": false
+      },
+      "gold_answer": "12750명 (2026-09-30 기준, HR 월간 인력 현황 2026-09 (사내 HRIS))",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q4",
+      "text": "근속·이직률에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "B",
+       "item_key": "tenure_attrition",
+       "new_item": false
+      },
+      "gold_answer": "4.3% (2026-09-25 기준, hris_roster(내부 데이터 — 생산 직무 최근 12개월 퇴사 9명 / 재직·휴직 211명 · 2026-09-25 기준 · 구 [허구] 6.8은 근속 6.8년 오기))",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q5",
+      "text": "배양 titer에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "C",
+       "item_key": "titer",
+       "new_item": false
+      },
+      "gold_answer": "5.3g/L (2026-09-30 기준, MSAT 월간 공정 리포트 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q6",
+      "text": "정제 수율에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "C",
+       "item_key": "yield",
+       "new_item": false
+      },
+      "gold_answer": "78% (2026-09-30 기준, MSAT 월간 공정 리포트 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q7",
+      "text": "single-use 적용에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "C",
+       "item_key": "single_use",
+       "new_item": false
+      },
+      "gold_answer": "60% (2026-09-30 기준, 생산본부 설비 현황 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q8",
+      "text": "안정성 시험 인프라에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "D",
+       "item_key": "stability",
+       "new_item": false
+      },
+      "gold_answer": "42대 (2026-06-30 기준, QC 시설 현황)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q9",
+      "text": "viral clearance 스터디에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "E",
+       "item_key": "viral_clearance",
+       "new_item": false
+      },
+      "gold_answer": "38건 (2026-06-30 기준, 공정개발 바이러스 안전성 대장)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q10",
+      "text": "전담 TT 조직에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "F",
+       "item_key": "tt_organization",
+       "new_item": false
+      },
+      "gold_answer": "MSAT 산하에 전담 Technology Transfer 조직을 두고 PM·분석법·공정 엔지니어를 프로젝트별로 고정 배정한다. 최근 누적 완료 TT 프로젝트는 47건, 평균 소요 11개월이다(2026-09-30 기준, 별도 항목).",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q11",
+      "text": "규제기관 실사 이력에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "G",
+       "item_key": "inspection_history",
+       "new_item": false
+      },
+      "gold_answer": null,
+      "human_confirm": true
+     },
+     {
+      "qid": "Q12",
+      "text": "deviation율에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "G",
+       "item_key": "deviation_rate",
+       "new_item": false
+      },
+      "gold_answer": "1.2% (2026-06-30 기준, 품질 분기 보고 2026Q2)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q13",
+      "text": "현재 가동률에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "I",
+       "item_key": "utilization",
+       "new_item": false
+      },
+      "gold_answer": "74% (2026-09-30 기준, 생산기획 월간 리포트 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q14",
+      "text": "상업 생산 실적에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "I",
+       "item_key": "commercial_batches",
+       "new_item": false
+      },
+      "gold_answer": "1840배치 (2026-09-30 기준, MSAT 생산 실적 대장)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q15",
+      "text": "원자재 이원화에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "J",
+       "item_key": "dual_sourcing",
+       "new_item": false
+      },
+      "gold_answer": "85% (2026-09-30 기준, 구매 공급망 현황 2026Q3)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q16",
+      "text": "TRIR에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "K",
+       "item_key": "trir",
+       "new_item": false
+      },
+      "gold_answer": "0.192 (2026-06-30 기준, EHS 원장 재계산(pooled = Σ recordable+lost_time×200000 / Σ근무시간 · 2023~2025 전사 · OSHA 방식) — 구 값 0.18(EHS 분기 보고 2026Q2 · 정의 불명 상수)에서 정정)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q17",
+      "text": "LIMS 밸리데이션에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "M",
+       "item_key": "lims_validation",
+       "new_item": false
+      },
+      "gold_answer": "GAMP5 CSV 완료 (2026-06-30 기준, QA CSV 대장)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q18",
+      "text": "Scope 1/2에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "N",
+       "item_key": "scope12",
+       "new_item": false
+      },
+      "gold_answer": "2025년 기준 Scope 1 약 4,800 tCO2e, Scope 2(market-based) 약 7,700 tCO2e로 추정한다. [가상 — 총 바이오리액터 약 52,000L 규모를 동종업계 784,000L 규모(Scope1 약 72,000·Scope2 약 116,000 tCO2e)의 약 6.6%로 환산한 추정치]",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q19",
+      "text": "청람바이오(주) 개별 조건에 따른 딜 텀 별도 RFP 양식 회신을(를) 제시하시오.",
+      "gold": {
+       "code": "O",
+       "item_key": "rfp_deal_terms",
+       "new_item": false
+      },
+      "gold_answer": null,
+      "human_confirm": true,
+      "human_confirm_reason": "고객별 상업조건은 영업 협상 사안 — 표준 원장 없음"
+     },
+     {
+      "qid": "Q20",
+      "text": "청람바이오(주) 개별 조건에 따른 표준 계약 조건 개요을(를) 제시하시오.",
+      "gold": {
+       "code": "O",
+       "item_key": "standard_contract_terms",
+       "new_item": false
+      },
+      "gold_answer": null,
+      "human_confirm": true,
+      "human_confirm_reason": "고객별 상업조건은 영업 협상 사안 — 표준 원장 없음"
+     },
+     {
+      "qid": "Q21",
+      "text": "무균 충전 라인의 봉쇄등급(OEB)과 백신 특이적 콜드체인 이탈 대응 SOP 번호를 제시하시오.",
+      "gold": {
+       "code": null,
+       "item_key": null,
+       "new_item": true
+      },
+      "gold_answer": null,
+      "human_confirm": true,
+      "human_confirm_reason": "카탈로그 밖 신규 문항"
+     }
+    ]
+   },
+   "emails": [
+    {
+     "id": "MAIL-CRB-01",
+     "product": "CRB-VAC-01",
+     "from": {
+      "name": "박지아",
+      "email": "jia.park@crb.example"
+     },
+     "to": [
+      {
+       "name": "최민준",
+       "email": "minjun.choi@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-01-01 09:30",
+     "subject": "CRB-VAC-01 단가 협상 회신",
+     "body": "CRB-VAC-01 건 단가 협상 관련하여 회신드립니다.\n제안 단가 113,000,000 KRW / batch, 연 2 batches(MTOP) 조건으로 검토 부탁드립니다.\n(본 메일의 단가는 협상 중 값이며 최종 확정가는 서명된 계약서를 따릅니다.)",
+     "negotiated_price": 113000000,
+     "negotiated_price_str": "113,000,000",
+     "final_contract_id": "C-CRB-2022-01",
+     "final_unit_price": 104000000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-CRB-02",
+     "product": "CRB-VAC-01",
+     "from": {
+      "name": "이도현",
+      "email": "dohyun.lee@crb.example"
+     },
+     "to": [
+      {
+       "name": "박지아",
+       "email": "jia.park@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-04-08 09:30",
+     "subject": "CRB-VAC-01 기술이전 일정 공유",
+     "body": "CRB-VAC-01 기술이전(Tech Transfer) 일정을 공유드립니다.\n1차 엔지니어링 배치 예정, 검증 배치 3회 계획입니다.\n첨부 일정표 확인 부탁드립니다.\n(참고 단가: 102,000,000 KRW/batch, 협상 중 값)",
+     "negotiated_price": 102000000,
+     "negotiated_price_str": "102,000,000",
+     "final_contract_id": "C-CRB-2022-01",
+     "final_unit_price": 104000000,
+     "price_matches_final": false
+    }
+   ]
+  },
+  {
+   "tag": "SOL",
+   "name": "Solvantis Biologics Inc.",
+   "lang": "en",
+   "country": "US",
+   "tier": "B",
+   "currency": "USD",
+   "products": [
+    {
+     "code": "SOL-MAB-01",
+     "modality": "mAb",
+     "desc": "Anti-IL-6 mAb (commercial)"
+    },
+    {
+     "code": "SOL-MAB-02",
+     "modality": "mAb",
+     "desc": "Anti-TNF mAb (commercial)"
+    },
+    {
+     "code": "SOL-ADC-03",
+     "modality": "ADC",
+     "desc": "HER2-targeting ADC (Phase 3)"
+    }
+   ],
+   "contracts": [
+    {
+     "id": "C-SOL-2020-01",
+     "product": "SOL-MAB-01",
+     "modality": "mAb",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2020-06-15",
+     "currency": "USD",
+     "unit_price": 302000,
+     "mtop": 2,
+     "batch_volume": 3,
+     "term_months": 48,
+     "price_adjustment_clause": "Annual cap 3% (CPI-linked), reset every January",
+     "expiry_date": "2024-06-15",
+     "contract_value": 3624000
+    },
+    {
+     "id": "C-SOL-2024-02",
+     "product": "SOL-MAB-01",
+     "modality": "mAb",
+     "kind": "renewal",
+     "supersedes": "C-SOL-2020-01",
+     "signed_date": "2024-03-15",
+     "currency": "USD",
+     "unit_price": 311000,
+     "mtop": 2,
+     "batch_volume": 4,
+     "term_months": 48,
+     "price_adjustment_clause": "Annual cap 5%, waived in year 1",
+     "expiry_date": "2028-03-15",
+     "contract_value": 4976000
+    },
+    {
+     "id": "C-SOL-2021-03",
+     "product": "SOL-MAB-02",
+     "modality": "mAb",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2021-03-05",
+     "currency": "USD",
+     "unit_price": 311000,
+     "mtop": 6,
+     "batch_volume": 9,
+     "term_months": 48,
+     "price_adjustment_clause": "Annual cap 3% (CPI-linked), reset every January",
+     "expiry_date": "2025-03-05",
+     "contract_value": 11196000
+    },
+    {
+     "id": "C-SOL-2023-04",
+     "product": "SOL-ADC-03",
+     "modality": "ADC",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2023-10-09",
+     "currency": "USD",
+     "unit_price": 498000,
+     "mtop": 5,
+     "batch_volume": 7,
+     "term_months": 24,
+     "price_adjustment_clause": "Annual cap 5%, waived in year 1",
+     "expiry_date": "2025-10-09",
+     "contract_value": 6972000
+    }
+   ],
+   "rfp_versions": [
+    {
+     "product": "SOL-MAB-01",
+     "modality": "mAb",
+     "version": 1,
+     "year": 2025,
+     "mtop": 4,
+     "shared_mtop": true,
+     "effective_contract_term": 3,
+     "reserve_batch": 2,
+     "price_adjustment_cap": 5,
+     "price_adjustment_waivers": 1,
+     "binding_forecast": 3,
+     "one_way_partial_binding": 50,
+     "forecast": {
+      "FY2026": 4,
+      "FY2027": 3,
+      "FY2028": 3,
+      "FY2029": 3,
+      "FY2030": 4
+     }
+    },
+    {
+     "product": "SOL-MAB-01",
+     "modality": "mAb",
+     "version": 2,
+     "year": 2026,
+     "mtop": 5,
+     "shared_mtop": true,
+     "effective_contract_term": 3,
+     "reserve_batch": 2,
+     "price_adjustment_cap": 4,
+     "price_adjustment_waivers": 1,
+     "binding_forecast": 3,
+     "one_way_partial_binding": 55,
+     "forecast": {
+      "FY2026": 4,
+      "FY2027": 5,
+      "FY2028": 3,
+      "FY2029": 5,
+      "FY2030": 4
+     },
+     "revision_note": "Rev.B — updated 2026-06"
+    },
+    {
+     "product": "SOL-MAB-02",
+     "modality": "mAb",
+     "version": 1,
+     "year": 2025,
+     "mtop": 4,
+     "shared_mtop": false,
+     "effective_contract_term": 4,
+     "reserve_batch": 1,
+     "price_adjustment_cap": 4,
+     "price_adjustment_waivers": 1,
+     "binding_forecast": 2,
+     "one_way_partial_binding": 50,
+     "forecast": {
+      "FY2026": 8,
+      "FY2027": 8,
+      "FY2028": 5,
+      "FY2029": 5,
+      "FY2030": 7
+     }
+    },
+    {
+     "product": "SOL-ADC-03",
+     "modality": "ADC",
+     "version": 1,
+     "year": 2025,
+     "mtop": 7,
+     "shared_mtop": true,
+     "effective_contract_term": 3,
+     "reserve_batch": 0,
+     "price_adjustment_cap": 4,
+     "price_adjustment_waivers": 1,
+     "binding_forecast": 3,
+     "one_way_partial_binding": 45,
+     "forecast": {
+      "FY2026": 4,
+      "FY2027": 4,
+      "FY2028": 6,
+      "FY2029": 4,
+      "FY2030": 4
+     }
+    }
+   ],
+   "rfi_history": [
+    {
+     "year": 2023,
+     "ref": "SOL-RFI-2023-01",
+     "questions": [
+      {
+       "qid": "H1",
+       "item_key": "K.trir",
+       "question": "State your trailing 3-year TRIR.",
+       "our_answer": "0.19 (as of 2023)"
+      },
+      {
+       "qid": "H2",
+       "item_key": "F.tt_duration",
+       "question": "State average technology-transfer duration.",
+       "our_answer": "9.6개월 (as of 2023)"
+      },
+      {
+       "qid": "H3",
+       "item_key": "C.single_use",
+       "question": "State the share of lines using single-use systems.",
+       "our_answer": "59.64% (as of 2023)"
+      },
+      {
+       "qid": "H4",
+       "item_key": "I.utilization",
+       "question": "State average plant utilization over the trailing 12 months.",
+       "our_answer": "69.6% (as of 2023)"
+      }
+     ]
+    },
+    {
+     "year": 2024,
+     "ref": "SOL-RFI-2024-02",
+     "questions": [
+      {
+       "qid": "H1",
+       "item_key": "J.dual_sourcing",
+       "question": "State the dual-sourcing rate for critical raw materials.",
+       "our_answer": "79.4% (as of 2024)"
+      },
+      {
+       "qid": "H2",
+       "item_key": "C.single_use",
+       "question": "State the share of lines using single-use systems.",
+       "our_answer": "64.48% (as of 2024)"
+      },
+      {
+       "qid": "H3",
+       "item_key": "I.utilization",
+       "question": "State average plant utilization over the trailing 12 months.",
+       "our_answer": "78.0% (as of 2024)"
+      },
+      {
+       "qid": "H4",
+       "item_key": "G.inspection_history",
+       "question": "State recent regulatory inspection history.",
+       "our_answer": "Provided separately at the time"
+      }
+     ]
+    }
+   ],
+   "new_rfi_2026": {
+    "ref": "SOL-RFI-2026-01",
+    "issued": "2026-09-15",
+    "response_due": "2026-10-13",
+    "questions": [
+     {
+      "qid": "Q1",
+      "text": "State the current figure/status for: 소유 구조.",
+      "gold": {
+       "code": "A",
+       "item_key": "ownership",
+       "new_item": false
+      },
+      "gold_answer": "The company is a single, privately held legal entity (unlisted); its largest shareholder is [Hypothetical] OO Holdings (72%), with no intermediate parent company/SPC layer above Plant1-3 (as of 2026-09-30). A change of control triggers customer pre-notification obligations under key supply agreements.",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q2",
+      "text": "State the current figure/status for: 감사 재무제표 3개년.",
+      "gold": {
+       "code": "A",
+       "item_key": "audited_financials",
+       "new_item": false
+      },
+      "gold_answer": "Revenue over the last three years was KRW 235.0B (FY2023) -> KRW 278.0B (FY2024) -> KRW 320.0B (FY2025), a ~17% CAGR, with an operating margin of 20-23%; audited financial statements are issued annually by an external auditor.",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q3",
+      "text": "State the current figure/status for: 총 고용.",
+      "gold": {
+       "code": "B",
+       "item_key": "headcount",
+       "new_item": false
+      },
+      "gold_answer": "12750명 (2026-09-30 기준, HR 월간 인력 현황 2026-09 (사내 HRIS))",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q4",
+      "text": "State the current figure/status for: 근속·이직률.",
+      "gold": {
+       "code": "B",
+       "item_key": "tenure_attrition",
+       "new_item": false
+      },
+      "gold_answer": "4.3% (2026-09-25 기준, hris_roster(내부 데이터 — 생산 직무 최근 12개월 퇴사 9명 / 재직·휴직 211명 · 2026-09-25 기준 · 구 [허구] 6.8은 근속 6.8년 오기))",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q5",
+      "text": "State the current figure/status for: 배양 titer.",
+      "gold": {
+       "code": "C",
+       "item_key": "titer",
+       "new_item": false
+      },
+      "gold_answer": "5.3g/L (2026-09-30 기준, MSAT 월간 공정 리포트 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q6",
+      "text": "State the current figure/status for: 정제 수율.",
+      "gold": {
+       "code": "C",
+       "item_key": "yield",
+       "new_item": false
+      },
+      "gold_answer": "78% (2026-09-30 기준, MSAT 월간 공정 리포트 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q7",
+      "text": "State the current figure/status for: single-use 적용.",
+      "gold": {
+       "code": "C",
+       "item_key": "single_use",
+       "new_item": false
+      },
+      "gold_answer": "60% (2026-09-30 기준, 생산본부 설비 현황 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q8",
+      "text": "State the current figure/status for: 안정성 시험 인프라.",
+      "gold": {
+       "code": "D",
+       "item_key": "stability",
+       "new_item": false
+      },
+      "gold_answer": "42대 (2026-06-30 기준, QC 시설 현황)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q9",
+      "text": "State the current figure/status for: viral clearance 스터디.",
+      "gold": {
+       "code": "E",
+       "item_key": "viral_clearance",
+       "new_item": false
+      },
+      "gold_answer": "38건 (2026-06-30 기준, 공정개발 바이러스 안전성 대장)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q10",
+      "text": "State the current figure/status for: 전담 TT 조직.",
+      "gold": {
+       "code": "F",
+       "item_key": "tt_organization",
+       "new_item": false
+      },
+      "gold_answer": "A dedicated Technology Transfer organization sits under MSAT, with PM, analytical and process engineers assigned per project. Cumulative completed TT projects total 47, averaging 11 months (as of 2026-09-30, see separate item).",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q11",
+      "text": "State the current figure/status for: 규제기관 실사 이력.",
+      "gold": {
+       "code": "G",
+       "item_key": "inspection_history",
+       "new_item": false
+      },
+      "gold_answer": null,
+      "human_confirm": true
+     },
+     {
+      "qid": "Q12",
+      "text": "State the current figure/status for: deviation율.",
+      "gold": {
+       "code": "G",
+       "item_key": "deviation_rate",
+       "new_item": false
+      },
+      "gold_answer": "1.2% (2026-06-30 기준, 품질 분기 보고 2026Q2)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q13",
+      "text": "State the current figure/status for: 현재 가동률.",
+      "gold": {
+       "code": "I",
+       "item_key": "utilization",
+       "new_item": false
+      },
+      "gold_answer": "74% (2026-09-30 기준, 생산기획 월간 리포트 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q14",
+      "text": "State the current figure/status for: 상업 생산 실적.",
+      "gold": {
+       "code": "I",
+       "item_key": "commercial_batches",
+       "new_item": false
+      },
+      "gold_answer": "1840배치 (2026-09-30 기준, MSAT 생산 실적 대장)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q15",
+      "text": "State the current figure/status for: 원자재 이원화.",
+      "gold": {
+       "code": "J",
+       "item_key": "dual_sourcing",
+       "new_item": false
+      },
+      "gold_answer": "85% (2026-09-30 기준, 구매 공급망 현황 2026Q3)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q16",
+      "text": "State the current figure/status for: TRIR.",
+      "gold": {
+       "code": "K",
+       "item_key": "trir",
+       "new_item": false
+      },
+      "gold_answer": "0.192 (2026-06-30 기준, EHS 원장 재계산(pooled = Σ recordable+lost_time×200000 / Σ근무시간 · 2023~2025 전사 · OSHA 방식) — 구 값 0.18(EHS 분기 보고 2026Q2 · 정의 불명 상수)에서 정정)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q17",
+      "text": "State the current figure/status for: LIMS 밸리데이션.",
+      "gold": {
+       "code": "M",
+       "item_key": "lims_validation",
+       "new_item": false
+      },
+      "gold_answer": "GAMP5 CSV 완료 (2026-06-30 기준, QA CSV 대장)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q18",
+      "text": "State the current figure/status for: Scope 1/2.",
+      "gold": {
+       "code": "N",
+       "item_key": "scope12",
+       "new_item": false
+      },
+      "gold_answer": "Estimated 2025 Scope 1 is ~4,800 tCO2e and Scope 2 (market-based) is ~7,700 tCO2e. [Hypothetical -- scaled from a 784,000L-scale industry peer (Scope1 ~72,000 / Scope2 ~116,000 tCO2e) at our ~52,000L total bioreactor volume, roughly 6.6%]",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q19",
+      "text": "Provide 딜 텀 별도 RFP 양식 회신 specific to Solvantis Biologics Inc.'s deal.",
+      "gold": {
+       "code": "O",
+       "item_key": "rfp_deal_terms",
+       "new_item": false
+      },
+      "gold_answer": null,
+      "human_confirm": true,
+      "human_confirm_reason": "Deal-specific commercial terms — not in the standard ledger"
+     },
+     {
+      "qid": "Q20",
+      "text": "Provide 표준 계약 조건 개요 specific to Solvantis Biologics Inc.'s deal.",
+      "gold": {
+       "code": "O",
+       "item_key": "standard_contract_terms",
+       "new_item": false
+      },
+      "gold_answer": null,
+      "human_confirm": true,
+      "human_confirm_reason": "Deal-specific commercial terms — not in the standard ledger"
+     },
+     {
+      "qid": "Q21",
+      "text": "Provide the itemized list of FDA Form 483 observations over the last 3 years.",
+      "gold": {
+       "code": null,
+       "item_key": null,
+       "new_item": true
+      },
+      "gold_answer": null,
+      "human_confirm": true,
+      "human_confirm_reason": "Item outside the catalog"
+     }
+    ]
+   },
+   "emails": [
+    {
+     "id": "MAIL-SOL-01",
+     "product": "SOL-MAB-01",
+     "from": {
+      "name": "Daniel Ortiz",
+      "email": "d.ortiz@sol.example"
+     },
+     "to": [
+      {
+       "name": "Lukas Brandt",
+       "email": "l.brandt@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-01-01 09:30",
+     "subject": "SOL-MAB-01 unit price negotiation — reply",
+     "body": "Following up on SOL-MAB-01 pricing.\nProposed unit price 284,000 USD / batch, at MTOP 2 batches/year.\n(This price is a negotiation-stage figure; the signed contract governs the final price.)",
+     "negotiated_price": 284000,
+     "negotiated_price_str": "284,000",
+     "final_contract_id": "C-SOL-2020-01",
+     "final_unit_price": 302000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-SOL-02",
+     "product": "SOL-MAB-01",
+     "from": {
+      "name": "Grace Lin",
+      "email": "g.lin@sol.example"
+     },
+     "to": [
+      {
+       "name": "Mira Takeda",
+       "email": "m.takeda@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-04-08 09:30",
+     "subject": "SOL-MAB-01 tech transfer schedule",
+     "body": "Sharing the SOL-MAB-01 technology transfer schedule.\nOne engineering batch planned, followed by 3 PPQ batches.\nSee attached schedule.\n(Reference price: 296,000 USD/batch, negotiation-stage.)",
+     "negotiated_price": 296000,
+     "negotiated_price_str": "296,000",
+     "final_contract_id": "C-SOL-2020-01",
+     "final_unit_price": 302000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-SOL-03",
+     "product": "SOL-MAB-02",
+     "from": {
+      "name": "Lukas Brandt",
+      "email": "l.brandt@sol.example"
+     },
+     "to": [
+      {
+       "name": "Mira Takeda",
+       "email": "m.takeda@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-07-15 09:30",
+     "subject": "RE: SOL-MAB-02 RFP submission package",
+     "body": "Attached is the SOL-MAB-02 RFP submission package.\nMTOP 6 batches/year; price-adjustment cap still under discussion.\nProposed price 348,000 USD/batch. Please reply by Friday.",
+     "negotiated_price": 348000,
+     "negotiated_price_str": "348,000",
+     "final_contract_id": "C-SOL-2021-03",
+     "final_unit_price": 311000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-SOL-04",
+     "product": "SOL-MAB-02",
+     "from": {
+      "name": "Lukas Brandt",
+      "email": "l.brandt@sol.example"
+     },
+     "to": [
+      {
+       "name": "Daniel Ortiz",
+       "email": "d.ortiz@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-01-22 09:30",
+     "subject": "SOL-MAB-02 contract renewal terms — inquiry",
+     "body": "Following up on the SOL-MAB-02 renewal.\nRequesting a price review (proposed 299,000 USD/batch) at current volumes, and please also consider a term extension option.",
+     "negotiated_price": 299000,
+     "negotiated_price_str": "299,000",
+     "final_contract_id": "C-SOL-2021-03",
+     "final_unit_price": 311000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-SOL-05",
+     "product": "SOL-ADC-03",
+     "from": {
+      "name": "Lukas Brandt",
+      "email": "l.brandt@sol.example"
+     },
+     "to": [
+      {
+       "name": "Grace Lin",
+       "email": "g.lin@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-04-02 09:30",
+     "subject": "SOL-ADC-03 unit price negotiation — reply",
+     "body": "Following up on SOL-ADC-03 pricing.\nProposed unit price 529,000 USD / batch, at MTOP 5 batches/year.\n(This price is a negotiation-stage figure; the signed contract governs the final price.)",
+     "negotiated_price": 529000,
+     "negotiated_price_str": "529,000",
+     "final_contract_id": "C-SOL-2023-04",
+     "final_unit_price": 498000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-SOL-06",
+     "product": "SOL-ADC-03",
+     "from": {
+      "name": "Mira Takeda",
+      "email": "m.takeda@sol.example"
+     },
+     "to": [
+      {
+       "name": "Daniel Ortiz",
+       "email": "d.ortiz@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-07-09 09:30",
+     "subject": "SOL-ADC-03 tech transfer schedule",
+     "body": "Sharing the SOL-ADC-03 technology transfer schedule.\nOne engineering batch planned, followed by 3 PPQ batches.\nSee attached schedule.\n(Reference price: 523,000 USD/batch, negotiation-stage.)",
+     "negotiated_price": 523000,
+     "negotiated_price_str": "523,000",
+     "final_contract_id": "C-SOL-2023-04",
+     "final_unit_price": 498000,
+     "price_matches_final": false
+    }
+   ]
+  },
+  {
+   "tag": "MRH",
+   "name": "미르하제약(주)",
+   "lang": "ko",
+   "country": "KR",
+   "tier": "A",
+   "currency": "KRW",
+   "products": [
+    {
+     "code": "MRH-MAB-01",
+     "modality": "mAb",
+     "desc": "바이오베터 mAb 원료의약품"
+    },
+    {
+     "code": "MRH-BSA-02",
+     "modality": "bispecific",
+     "desc": "이중항체(knob-into-hole)"
+    },
+    {
+     "code": "MRH-VAC-03",
+     "modality": "vaccine",
+     "desc": "재조합 단백질 백신"
+    },
+    {
+     "code": "MRH-ADC-04",
+     "modality": "ADC",
+     "desc": "고형암 표적 ADC"
+    },
+    {
+     "code": "MRH-MAB-05",
+     "modality": "mAb",
+     "desc": "항암 mAb 원료의약품"
+    }
+   ],
+   "contracts": [
+    {
+     "id": "C-MRH-2020-01",
+     "product": "MRH-MAB-01",
+     "modality": "mAb",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2020-04-09",
+     "currency": "KRW",
+     "unit_price": 425000000,
+     "mtop": 4,
+     "batch_volume": 6,
+     "term_months": 36,
+     "price_adjustment_clause": "연 4% 상한, 원자재 지수 연동, 2년차부터 적용",
+     "expiry_date": "2023-04-09",
+     "contract_value": 7650000000
+    },
+    {
+     "id": "C-MRH-2023-02",
+     "product": "MRH-MAB-01",
+     "modality": "mAb",
+     "kind": "renewal",
+     "supersedes": "C-MRH-2020-01",
+     "signed_date": "2023-02-09",
+     "currency": "KRW",
+     "unit_price": 424000000,
+     "mtop": 4,
+     "batch_volume": 5,
+     "term_months": 24,
+     "price_adjustment_clause": "연 5% 상한, 최초 1년 면제",
+     "expiry_date": "2025-02-09",
+     "contract_value": 4240000000
+    },
+    {
+     "id": "C-MRH-2023-03",
+     "product": "MRH-BSA-02",
+     "modality": "bispecific",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2023-01-23",
+     "currency": "KRW",
+     "unit_price": 491000000,
+     "mtop": 5,
+     "batch_volume": 8,
+     "term_months": 48,
+     "price_adjustment_clause": "연 5% 상한, 최초 1년 면제",
+     "expiry_date": "2027-01-23",
+     "contract_value": 15712000000
+    },
+    {
+     "id": "C-MRH-2022-04",
+     "product": "MRH-VAC-03",
+     "modality": "vaccine",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2022-08-15",
+     "currency": "KRW",
+     "unit_price": 126000000,
+     "mtop": 4,
+     "batch_volume": 5,
+     "term_months": 48,
+     "price_adjustment_clause": "고정가(계약 기간 중 조정 없음)",
+     "expiry_date": "2026-08-15",
+     "contract_value": 2520000000
+    },
+    {
+     "id": "C-MRH-2020-05",
+     "product": "MRH-ADC-04",
+     "modality": "ADC",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2020-11-14",
+     "currency": "KRW",
+     "unit_price": 586000000,
+     "mtop": 4,
+     "batch_volume": 5,
+     "term_months": 24,
+     "price_adjustment_clause": "연 4% 상한, 원자재 지수 연동, 2년차부터 적용",
+     "expiry_date": "2022-11-14",
+     "contract_value": 5860000000
+    },
+    {
+     "id": "C-MRH-2023-06",
+     "product": "MRH-MAB-05",
+     "modality": "mAb",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2023-04-21",
+     "currency": "KRW",
+     "unit_price": 308000000,
+     "mtop": 3,
+     "batch_volume": 6,
+     "term_months": 24,
+     "price_adjustment_clause": "연 5% 상한, 최초 1년 면제",
+     "expiry_date": "2025-04-21",
+     "contract_value": 3696000000
+    }
+   ],
+   "rfp_versions": [
+    {
+     "product": "MRH-MAB-01",
+     "modality": "mAb",
+     "version": 1,
+     "year": 2025,
+     "mtop": 5,
+     "shared_mtop": false,
+     "effective_contract_term": 4,
+     "reserve_batch": 2,
+     "price_adjustment_cap": 4,
+     "price_adjustment_waivers": 1,
+     "binding_forecast": 2,
+     "one_way_partial_binding": 45,
+     "forecast": {
+      "FY2026": 4,
+      "FY2027": 1,
+      "FY2028": 2,
+      "FY2029": 4,
+      "FY2030": 4
+     }
+    },
+    {
+     "product": "MRH-MAB-01",
+     "modality": "mAb",
+     "version": 2,
+     "year": 2026,
+     "mtop": 7,
+     "shared_mtop": false,
+     "effective_contract_term": 4,
+     "reserve_batch": 2,
+     "price_adjustment_cap": 3,
+     "price_adjustment_waivers": 1,
+     "binding_forecast": 2,
+     "one_way_partial_binding": 50,
+     "forecast": {
+      "FY2026": 6,
+      "FY2027": 1,
+      "FY2028": 3,
+      "FY2029": 4,
+      "FY2030": 5
+     },
+     "revision_note": "Rev.B — 2026-06 갱신판"
+    },
+    {
+     "product": "MRH-BSA-02",
+     "modality": "bispecific",
+     "version": 1,
+     "year": 2025,
+     "mtop": 8,
+     "shared_mtop": true,
+     "effective_contract_term": 5,
+     "reserve_batch": 2,
+     "price_adjustment_cap": 5,
+     "price_adjustment_waivers": 0,
+     "binding_forecast": 2,
+     "one_way_partial_binding": 45,
+     "forecast": {
+      "FY2026": 7,
+      "FY2027": 7,
+      "FY2028": 5,
+      "FY2029": 4,
+      "FY2030": 5
+     }
+    },
+    {
+     "product": "MRH-VAC-03",
+     "modality": "vaccine",
+     "version": 1,
+     "year": 2025,
+     "mtop": 3,
+     "shared_mtop": false,
+     "effective_contract_term": 5,
+     "reserve_batch": 1,
+     "price_adjustment_cap": 5,
+     "price_adjustment_waivers": 0,
+     "binding_forecast": 3,
+     "one_way_partial_binding": 45,
+     "forecast": {
+      "FY2026": 5,
+      "FY2027": 2,
+      "FY2028": 5,
+      "FY2029": 3,
+      "FY2030": 4
+     }
+    },
+    {
+     "product": "MRH-ADC-04",
+     "modality": "ADC",
+     "version": 1,
+     "year": 2025,
+     "mtop": 6,
+     "shared_mtop": true,
+     "effective_contract_term": 3,
+     "reserve_batch": 0,
+     "price_adjustment_cap": 3,
+     "price_adjustment_waivers": 0,
+     "binding_forecast": 2,
+     "one_way_partial_binding": 45,
+     "forecast": {
+      "FY2026": 3,
+      "FY2027": 1,
+      "FY2028": 3,
+      "FY2029": 2,
+      "FY2030": 4
+     }
+    },
+    {
+     "product": "MRH-MAB-05",
+     "modality": "mAb",
+     "version": 1,
+     "year": 2025,
+     "mtop": 6,
+     "shared_mtop": true,
+     "effective_contract_term": 3,
+     "reserve_batch": 1,
+     "price_adjustment_cap": 5,
+     "price_adjustment_waivers": 0,
+     "binding_forecast": 2,
+     "one_way_partial_binding": 40,
+     "forecast": {
+      "FY2026": 7,
+      "FY2027": 7,
+      "FY2028": 7,
+      "FY2029": 7,
+      "FY2030": 7
+     }
+    }
+   ],
+   "rfi_history": [
+    {
+     "year": 2023,
+     "ref": "MRH-RFI-2023-01",
+     "questions": [
+      {
+       "qid": "H1",
+       "item_key": "G.inspection_history",
+       "question": "최근 규제기관 실사 이력을 제시하시오.",
+       "our_answer": "해당 시점 자료 별도 제공"
+      },
+      {
+       "qid": "H2",
+       "item_key": "K.trir",
+       "question": "최근 3년 TRIR을 제시하시오.",
+       "our_answer": "0.2 (2023 시점 자료)"
+      },
+      {
+       "qid": "H3",
+       "item_key": "C.single_use",
+       "question": "single-use 시스템 적용 라인 비율을 제시하시오.",
+       "our_answer": "63.18% (2023 시점 자료)"
+      },
+      {
+       "qid": "H4",
+       "item_key": "F.tt_duration",
+       "question": "평균 기술이전 소요 기간을 제시하시오.",
+       "our_answer": "10.5개월 (2023 시점 자료)"
+      }
+     ]
+    },
+    {
+     "year": 2024,
+     "ref": "MRH-RFI-2024-02",
+     "questions": [
+      {
+       "qid": "H1",
+       "item_key": "C.single_use",
+       "question": "single-use 시스템 적용 라인 비율을 제시하시오.",
+       "our_answer": "63.02% (2024 시점 자료)"
+      },
+      {
+       "qid": "H2",
+       "item_key": "K.trir",
+       "question": "최근 3년 TRIR을 제시하시오.",
+       "our_answer": "0.18 (2024 시점 자료)"
+      },
+      {
+       "qid": "H3",
+       "item_key": "J.dual_sourcing",
+       "question": "주요 원자재 이원화 비율을 제시하시오.",
+       "our_answer": "82.11% (2024 시점 자료)"
+      },
+      {
+       "qid": "H4",
+       "item_key": "G.inspection_history",
+       "question": "최근 규제기관 실사 이력을 제시하시오.",
+       "our_answer": "해당 시점 자료 별도 제공"
+      }
+     ]
+    }
+   ],
+   "new_rfi_2026": {
+    "ref": "MRH-RFI-2026-01",
+    "issued": "2026-09-15",
+    "response_due": "2026-10-13",
+    "questions": [
+     {
+      "qid": "Q1",
+      "text": "소유 구조에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "A",
+       "item_key": "ownership",
+       "new_item": false
+      },
+      "gold_answer": "당사는 비상장 단일 법인(legal entity)으로 최대주주는 [가상]○○홀딩스(지분 72%)이며 별도 모회사·SPC 구조 없이 Plant1~3(사업장) 전체를 직접 소유·운영한다(2026-09-30 기준). change of control 발생 시 주요 공급계약상 고객 사전통지 의무가 있다.",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q2",
+      "text": "감사 재무제표 3개년에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "A",
+       "item_key": "audited_financials",
+       "new_item": false
+      },
+      "gold_answer": "최근 3개년 매출은 FY2023 2,350억원 → FY2024 2,780억원 → FY2025 3,200억원(연평균 +17%)이며 영업이익률은 20~23% 수준으로, 매년 외부감사인의 감사보고서(audited financial statements)를 발간한다.",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q3",
+      "text": "총 고용에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "B",
+       "item_key": "headcount",
+       "new_item": false
+      },
+      "gold_answer": "12750명 (2026-09-30 기준, HR 월간 인력 현황 2026-09 (사내 HRIS))",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q4",
+      "text": "근속·이직률에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "B",
+       "item_key": "tenure_attrition",
+       "new_item": false
+      },
+      "gold_answer": "4.3% (2026-09-25 기준, hris_roster(내부 데이터 — 생산 직무 최근 12개월 퇴사 9명 / 재직·휴직 211명 · 2026-09-25 기준 · 구 [허구] 6.8은 근속 6.8년 오기))",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q5",
+      "text": "배양 titer에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "C",
+       "item_key": "titer",
+       "new_item": false
+      },
+      "gold_answer": "5.3g/L (2026-09-30 기준, MSAT 월간 공정 리포트 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q6",
+      "text": "정제 수율에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "C",
+       "item_key": "yield",
+       "new_item": false
+      },
+      "gold_answer": "78% (2026-09-30 기준, MSAT 월간 공정 리포트 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q7",
+      "text": "single-use 적용에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "C",
+       "item_key": "single_use",
+       "new_item": false
+      },
+      "gold_answer": "60% (2026-09-30 기준, 생산본부 설비 현황 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q8",
+      "text": "안정성 시험 인프라에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "D",
+       "item_key": "stability",
+       "new_item": false
+      },
+      "gold_answer": "42대 (2026-06-30 기준, QC 시설 현황)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q9",
+      "text": "viral clearance 스터디에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "E",
+       "item_key": "viral_clearance",
+       "new_item": false
+      },
+      "gold_answer": "38건 (2026-06-30 기준, 공정개발 바이러스 안전성 대장)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q10",
+      "text": "전담 TT 조직에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "F",
+       "item_key": "tt_organization",
+       "new_item": false
+      },
+      "gold_answer": "MSAT 산하에 전담 Technology Transfer 조직을 두고 PM·분석법·공정 엔지니어를 프로젝트별로 고정 배정한다. 최근 누적 완료 TT 프로젝트는 47건, 평균 소요 11개월이다(2026-09-30 기준, 별도 항목).",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q11",
+      "text": "규제기관 실사 이력에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "G",
+       "item_key": "inspection_history",
+       "new_item": false
+      },
+      "gold_answer": null,
+      "human_confirm": true
+     },
+     {
+      "qid": "Q12",
+      "text": "deviation율에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "G",
+       "item_key": "deviation_rate",
+       "new_item": false
+      },
+      "gold_answer": "1.2% (2026-06-30 기준, 품질 분기 보고 2026Q2)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q13",
+      "text": "현재 가동률에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "I",
+       "item_key": "utilization",
+       "new_item": false
+      },
+      "gold_answer": "74% (2026-09-30 기준, 생산기획 월간 리포트 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q14",
+      "text": "상업 생산 실적에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "I",
+       "item_key": "commercial_batches",
+       "new_item": false
+      },
+      "gold_answer": "1840배치 (2026-09-30 기준, MSAT 생산 실적 대장)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q15",
+      "text": "원자재 이원화에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "J",
+       "item_key": "dual_sourcing",
+       "new_item": false
+      },
+      "gold_answer": "85% (2026-09-30 기준, 구매 공급망 현황 2026Q3)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q16",
+      "text": "TRIR에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "K",
+       "item_key": "trir",
+       "new_item": false
+      },
+      "gold_answer": "0.192 (2026-06-30 기준, EHS 원장 재계산(pooled = Σ recordable+lost_time×200000 / Σ근무시간 · 2023~2025 전사 · OSHA 방식) — 구 값 0.18(EHS 분기 보고 2026Q2 · 정의 불명 상수)에서 정정)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q17",
+      "text": "LIMS 밸리데이션에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "M",
+       "item_key": "lims_validation",
+       "new_item": false
+      },
+      "gold_answer": "GAMP5 CSV 완료 (2026-06-30 기준, QA CSV 대장)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q18",
+      "text": "Scope 1/2에 대해 최신 수치·현황을 제시하시오.",
+      "gold": {
+       "code": "N",
+       "item_key": "scope12",
+       "new_item": false
+      },
+      "gold_answer": "2025년 기준 Scope 1 약 4,800 tCO2e, Scope 2(market-based) 약 7,700 tCO2e로 추정한다. [가상 — 총 바이오리액터 약 52,000L 규모를 동종업계 784,000L 규모(Scope1 약 72,000·Scope2 약 116,000 tCO2e)의 약 6.6%로 환산한 추정치]",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q19",
+      "text": "미르하제약(주) 개별 조건에 따른 딜 텀 별도 RFP 양식 회신을(를) 제시하시오.",
+      "gold": {
+       "code": "O",
+       "item_key": "rfp_deal_terms",
+       "new_item": false
+      },
+      "gold_answer": null,
+      "human_confirm": true,
+      "human_confirm_reason": "고객별 상업조건은 영업 협상 사안 — 표준 원장 없음"
+     },
+     {
+      "qid": "Q20",
+      "text": "미르하제약(주) 개별 조건에 따른 표준 계약 조건 개요을(를) 제시하시오.",
+      "gold": {
+       "code": "O",
+       "item_key": "standard_contract_terms",
+       "new_item": false
+      },
+      "gold_answer": null,
+      "human_confirm": true,
+      "human_confirm_reason": "고객별 상업조건은 영업 협상 사안 — 표준 원장 없음"
+     },
+     {
+      "qid": "Q21",
+      "text": "귀사가 보유한 특허·라이선스 포트폴리오 목록을 제시하시오.",
+      "gold": {
+       "code": null,
+       "item_key": null,
+       "new_item": true
+      },
+      "gold_answer": null,
+      "human_confirm": true,
+      "human_confirm_reason": "카탈로그 밖 신규 문항"
+     }
+    ]
+   },
+   "emails": [
+    {
+     "id": "MAIL-MRH-01",
+     "product": "MRH-MAB-01",
+     "from": {
+      "name": "박지아",
+      "email": "jia.park@mrh.example"
+     },
+     "to": [
+      {
+       "name": "최민준",
+       "email": "minjun.choi@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-01-01 09:30",
+     "subject": "MRH-MAB-01 단가 협상 회신",
+     "body": "MRH-MAB-01 건 단가 협상 관련하여 회신드립니다.\n제안 단가 383,000,000 KRW / batch, 연 4 batches(MTOP) 조건으로 검토 부탁드립니다.\n(본 메일의 단가는 협상 중 값이며 최종 확정가는 서명된 계약서를 따릅니다.)",
+     "negotiated_price": 383000000,
+     "negotiated_price_str": "383,000,000",
+     "final_contract_id": "C-MRH-2020-01",
+     "final_unit_price": 425000000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-MRH-02",
+     "product": "MRH-MAB-01",
+     "from": {
+      "name": "박지아",
+      "email": "jia.park@mrh.example"
+     },
+     "to": [
+      {
+       "name": "김서윤",
+       "email": "seoyun.kim@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-04-08 09:30",
+     "subject": "MRH-MAB-01 기술이전 일정 공유",
+     "body": "MRH-MAB-01 기술이전(Tech Transfer) 일정을 공유드립니다.\n1차 엔지니어링 배치 예정, 검증 배치 3회 계획입니다.\n첨부 일정표 확인 부탁드립니다.\n(참고 단가: 434,000,000 KRW/batch, 협상 중 값)",
+     "negotiated_price": 434000000,
+     "negotiated_price_str": "434,000,000",
+     "final_contract_id": "C-MRH-2020-01",
+     "final_unit_price": 425000000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-MRH-03",
+     "product": "MRH-BSA-02",
+     "from": {
+      "name": "이도현",
+      "email": "dohyun.lee@mrh.example"
+     },
+     "to": [
+      {
+       "name": "박지아",
+       "email": "jia.park@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-07-15 09:30",
+     "subject": "RE: MRH-BSA-02 RFP 제출 서류",
+     "body": "MRH-BSA-02 RFP 제출 서류 보내드립니다.\nMTOP 5 batches/year, 가격조정 상한 협의 중입니다.\n제안 단가 487,000,000 KRW/batch 기준으로 검토 부탁드립니다. 회신 기한: 금주 금요일.",
+     "negotiated_price": 487000000,
+     "negotiated_price_str": "487,000,000",
+     "final_contract_id": "C-MRH-2023-03",
+     "final_unit_price": 491000000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-MRH-04",
+     "product": "MRH-BSA-02",
+     "from": {
+      "name": "최민준",
+      "email": "minjun.choi@mrh.example"
+     },
+     "to": [
+      {
+       "name": "김서윤",
+       "email": "seoyun.kim@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-01-22 09:30",
+     "subject": "MRH-BSA-02 계약 갱신 조건 문의",
+     "body": "MRH-BSA-02 계약 갱신과 관련하여 문의드립니다.\n현재 물량 기준 단가 재산정(484,000,000 KRW/batch 협상안)을 요청드리며, 계약 기간 연장 옵션도 검토 부탁드립니다.",
+     "negotiated_price": 484000000,
+     "negotiated_price_str": "484,000,000",
+     "final_contract_id": "C-MRH-2023-03",
+     "final_unit_price": 491000000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-MRH-05",
+     "product": "MRH-VAC-03",
+     "from": {
+      "name": "최민준",
+      "email": "minjun.choi@mrh.example"
+     },
+     "to": [
+      {
+       "name": "이도현",
+       "email": "dohyun.lee@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-04-02 09:30",
+     "subject": "MRH-VAC-03 단가 협상 회신",
+     "body": "MRH-VAC-03 건 단가 협상 관련하여 회신드립니다.\n제안 단가 128,000,000 KRW / batch, 연 4 batches(MTOP) 조건으로 검토 부탁드립니다.\n(본 메일의 단가는 협상 중 값이며 최종 확정가는 서명된 계약서를 따릅니다.)",
+     "negotiated_price": 128000000,
+     "negotiated_price_str": "128,000,000",
+     "final_contract_id": "C-MRH-2022-04",
+     "final_unit_price": 126000000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-MRH-06",
+     "product": "MRH-VAC-03",
+     "from": {
+      "name": "최민준",
+      "email": "minjun.choi@mrh.example"
+     },
+     "to": [
+      {
+       "name": "박지아",
+       "email": "jia.park@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-07-09 09:30",
+     "subject": "MRH-VAC-03 기술이전 일정 공유",
+     "body": "MRH-VAC-03 기술이전(Tech Transfer) 일정을 공유드립니다.\n1차 엔지니어링 배치 예정, 검증 배치 3회 계획입니다.\n첨부 일정표 확인 부탁드립니다.\n(참고 단가: 131,000,000 KRW/batch, 협상 중 값)",
+     "negotiated_price": 131000000,
+     "negotiated_price_str": "131,000,000",
+     "final_contract_id": "C-MRH-2022-04",
+     "final_unit_price": 126000000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-MRH-07",
+     "product": "MRH-ADC-04",
+     "from": {
+      "name": "최민준",
+      "email": "minjun.choi@mrh.example"
+     },
+     "to": [
+      {
+       "name": "김서윤",
+       "email": "seoyun.kim@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-01-16 09:30",
+     "subject": "RE: MRH-ADC-04 RFP 제출 서류",
+     "body": "MRH-ADC-04 RFP 제출 서류 보내드립니다.\nMTOP 4 batches/year, 가격조정 상한 협의 중입니다.\n제안 단가 639,000,000 KRW/batch 기준으로 검토 부탁드립니다. 회신 기한: 금주 금요일.",
+     "negotiated_price": 639000000,
+     "negotiated_price_str": "639,000,000",
+     "final_contract_id": "C-MRH-2020-05",
+     "final_unit_price": 586000000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-MRH-08",
+     "product": "MRH-ADC-04",
+     "from": {
+      "name": "김서윤",
+      "email": "seoyun.kim@mrh.example"
+     },
+     "to": [
+      {
+       "name": "최민준",
+       "email": "minjun.choi@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-04-23 09:30",
+     "subject": "MRH-ADC-04 계약 갱신 조건 문의",
+     "body": "MRH-ADC-04 계약 갱신과 관련하여 문의드립니다.\n현재 물량 기준 단가 재산정(560,000,000 KRW/batch 협상안)을 요청드리며, 계약 기간 연장 옵션도 검토 부탁드립니다.",
+     "negotiated_price": 560000000,
+     "negotiated_price_str": "560,000,000",
+     "final_contract_id": "C-MRH-2020-05",
+     "final_unit_price": 586000000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-MRH-09",
+     "product": "MRH-MAB-05",
+     "from": {
+      "name": "최민준",
+      "email": "minjun.choi@mrh.example"
+     },
+     "to": [
+      {
+       "name": "이도현",
+       "email": "dohyun.lee@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-07-03 09:30",
+     "subject": "MRH-MAB-05 단가 협상 회신",
+     "body": "MRH-MAB-05 건 단가 협상 관련하여 회신드립니다.\n제안 단가 337,000,000 KRW / batch, 연 3 batches(MTOP) 조건으로 검토 부탁드립니다.\n(본 메일의 단가는 협상 중 값이며 최종 확정가는 서명된 계약서를 따릅니다.)",
+     "negotiated_price": 337000000,
+     "negotiated_price_str": "337,000,000",
+     "final_contract_id": "C-MRH-2023-06",
+     "final_unit_price": 308000000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-MRH-10",
+     "product": "MRH-MAB-05",
+     "from": {
+      "name": "이도현",
+      "email": "dohyun.lee@mrh.example"
+     },
+     "to": [
+      {
+       "name": "최민준",
+       "email": "minjun.choi@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-01-10 09:30",
+     "subject": "MRH-MAB-05 기술이전 일정 공유",
+     "body": "MRH-MAB-05 기술이전(Tech Transfer) 일정을 공유드립니다.\n1차 엔지니어링 배치 예정, 검증 배치 3회 계획입니다.\n첨부 일정표 확인 부탁드립니다.\n(참고 단가: 313,000,000 KRW/batch, 협상 중 값)",
+     "negotiated_price": 313000000,
+     "negotiated_price_str": "313,000,000",
+     "final_contract_id": "C-MRH-2023-06",
+     "final_unit_price": 308000000,
+     "price_matches_final": false
+    }
+   ]
+  },
+  {
+   "tag": "PFE",
+   "name": "Pfizer Inc.",
+   "lang": "en",
+   "country": "US",
+   "tier": "A",
+   "currency": "USD",
+   "products": [
+    {
+     "code": "PFE-MAB-01",
+     "modality": "mAb",
+     "desc": "Commercial mAb DS (15,000L class)"
+    },
+    {
+     "code": "PFE-MAB-02",
+     "modality": "mAb",
+     "desc": "Commercial mAb DS (2,000L class)"
+    },
+    {
+     "code": "PFE-ADC-03",
+     "modality": "ADC",
+     "desc": "Interchain cysteine-linked ADC"
+    },
+    {
+     "code": "PFE-ADC-04",
+     "modality": "ADC",
+     "desc": "Site-specific conjugation ADC"
+    },
+    {
+     "code": "PFE-BSA-05",
+     "modality": "bispecific",
+     "desc": "IgG-like bispecific"
+    },
+    {
+     "code": "PFE-VAC-06",
+     "modality": "vaccine",
+     "desc": "mRNA-adjacent recombinant vaccine"
+    },
+    {
+     "code": "PFE-MAB-07",
+     "modality": "mAb",
+     "desc": "Biosimilar mAb DS"
+    }
+   ],
+   "contracts": [
+    {
+     "id": "C-PFE-2022-01",
+     "product": "PFE-MAB-01",
+     "modality": "mAb",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2022-03-01",
+     "currency": "USD",
+     "unit_price": 220000,
+     "mtop": 6,
+     "batch_volume": 6,
+     "term_months": 24,
+     "price_adjustment_clause": "Fixed price (no adjustment during term)",
+     "expiry_date": "2024-03-01",
+     "contract_value": 1320000
+    },
+    {
+     "id": "C-PFE-2024-02",
+     "product": "PFE-MAB-01",
+     "modality": "mAb",
+     "kind": "renewal",
+     "supersedes": "C-PFE-2022-01",
+     "signed_date": "2024-02-15",
+     "currency": "USD",
+     "unit_price": 235000,
+     "mtop": 7,
+     "batch_volume": 7,
+     "term_months": 36,
+     "price_adjustment_clause": "Annual cap 3% (CPI-linked), reset every January",
+     "expiry_date": "2027-02-15",
+     "contract_value": 1645000
+    },
+    {
+     "id": "C-PFE-2024-03",
+     "product": "PFE-MAB-02",
+     "modality": "mAb",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2024-06-10",
+     "currency": "USD",
+     "unit_price": 180000,
+     "mtop": 4,
+     "batch_volume": 4,
+     "term_months": 36,
+     "price_adjustment_clause": "Annual cap 4%, raw-material index linked, effective from year 2",
+     "expiry_date": "2027-06-10",
+     "contract_value": 720000
+    },
+    {
+     "id": "C-PFE-2024-04",
+     "product": "PFE-ADC-03",
+     "modality": "ADC",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2024-01-20",
+     "currency": "USD",
+     "unit_price": 410000,
+     "mtop": 3,
+     "batch_volume": 3,
+     "term_months": 24,
+     "price_adjustment_clause": "Fixed price (no adjustment during term)",
+     "expiry_date": "2026-01-20",
+     "contract_value": 1230000
+    },
+    {
+     "id": "C-PFE-2025-05",
+     "product": "PFE-ADC-03",
+     "modality": "ADC",
+     "kind": "renewal",
+     "supersedes": "C-PFE-2024-04",
+     "signed_date": "2025-11-05",
+     "currency": "USD",
+     "unit_price": 430000,
+     "mtop": 4,
+     "batch_volume": 4,
+     "term_months": 24,
+     "price_adjustment_clause": "Annual cap 3% (CPI-linked), reset every January",
+     "expiry_date": "2027-11-05",
+     "contract_value": 1720000
+    },
+    {
+     "id": "C-PFE-2021-06",
+     "product": "PFE-ADC-04",
+     "modality": "ADC",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2021-07-15",
+     "currency": "USD",
+     "unit_price": 380000,
+     "mtop": 3,
+     "batch_volume": 3,
+     "term_months": 24,
+     "price_adjustment_clause": "Annual cap 5%, waived in year 1",
+     "expiry_date": "2023-07-15",
+     "contract_value": 1140000
+    },
+    {
+     "id": "C-PFE-2025-07",
+     "product": "PFE-BSA-05",
+     "modality": "bispecific",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2025-02-01",
+     "currency": "USD",
+     "unit_price": 300000,
+     "mtop": 3,
+     "batch_volume": 3,
+     "term_months": 36,
+     "price_adjustment_clause": "Annual cap 4%, raw-material index linked, effective from year 2",
+     "expiry_date": "2028-02-01",
+     "contract_value": 900000
+    },
+    {
+     "id": "C-PFE-2024-08",
+     "product": "PFE-VAC-06",
+     "modality": "vaccine",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2024-09-01",
+     "currency": "USD",
+     "unit_price": 95000,
+     "mtop": 5,
+     "batch_volume": 5,
+     "term_months": 24,
+     "price_adjustment_clause": "Fixed price (no adjustment during term)",
+     "expiry_date": "2026-09-01",
+     "contract_value": 475000
+    },
+    {
+     "id": "C-PFE-2025-09",
+     "product": "PFE-MAB-07",
+     "modality": "mAb",
+     "kind": "initial",
+     "supersedes": null,
+     "signed_date": "2025-06-15",
+     "currency": "USD",
+     "unit_price": 200000,
+     "mtop": 5,
+     "batch_volume": 5,
+     "term_months": 36,
+     "price_adjustment_clause": "Annual cap 3% (CPI-linked), reset every January",
+     "expiry_date": "2028-06-15",
+     "contract_value": 1000000
+    }
+   ],
+   "rfp_versions": [
+    {
+     "product": "PFE-MAB-01",
+     "modality": "mAb",
+     "version": 1,
+     "year": 2025,
+     "mtop": 7,
+     "shared_mtop": false,
+     "effective_contract_term": 3,
+     "reserve_batch": 0,
+     "price_adjustment_cap": 5,
+     "price_adjustment_waivers": 1,
+     "binding_forecast": 2,
+     "one_way_partial_binding": 45,
+     "forecast": {
+      "FY2026": 5,
+      "FY2027": 7,
+      "FY2028": 4,
+      "FY2029": 6,
+      "FY2030": 6
+     }
+    },
+    {
+     "product": "PFE-MAB-01",
+     "modality": "mAb",
+     "version": 2,
+     "year": 2026,
+     "mtop": 9,
+     "shared_mtop": false,
+     "effective_contract_term": 3,
+     "reserve_batch": 0,
+     "price_adjustment_cap": 4,
+     "price_adjustment_waivers": 1,
+     "binding_forecast": 2,
+     "one_way_partial_binding": 50,
+     "forecast": {
+      "FY2026": 5,
+      "FY2027": 8,
+      "FY2028": 4,
+      "FY2029": 7,
+      "FY2030": 6
+     },
+     "revision_note": "Rev.B — updated 2026-06"
+    },
+    {
+     "product": "PFE-MAB-02",
+     "modality": "mAb",
+     "version": 1,
+     "year": 2025,
+     "mtop": 8,
+     "shared_mtop": false,
+     "effective_contract_term": 4,
+     "reserve_batch": 1,
+     "price_adjustment_cap": 3,
+     "price_adjustment_waivers": 1,
+     "binding_forecast": 3,
+     "one_way_partial_binding": 50,
+     "forecast": {
+      "FY2026": 3,
+      "FY2027": 5,
+      "FY2028": 4,
+      "FY2029": 5,
+      "FY2030": 6
+     }
+    },
+    {
+     "product": "PFE-ADC-03",
+     "modality": "ADC",
+     "version": 1,
+     "year": 2025,
+     "mtop": 7,
+     "shared_mtop": false,
+     "effective_contract_term": 3,
+     "reserve_batch": 0,
+     "price_adjustment_cap": 3,
+     "price_adjustment_waivers": 0,
+     "binding_forecast": 2,
+     "one_way_partial_binding": 40,
+     "forecast": {
+      "FY2026": 5,
+      "FY2027": 3,
+      "FY2028": 4,
+      "FY2029": 6,
+      "FY2030": 4
+     }
+    },
+    {
+     "product": "PFE-ADC-03",
+     "modality": "ADC",
+     "version": 2,
+     "year": 2026,
+     "mtop": 8,
+     "shared_mtop": false,
+     "effective_contract_term": 3,
+     "reserve_batch": 0,
+     "price_adjustment_cap": 2,
+     "price_adjustment_waivers": 0,
+     "binding_forecast": 2,
+     "one_way_partial_binding": 45,
+     "forecast": {
+      "FY2026": 5,
+      "FY2027": 5,
+      "FY2028": 4,
+      "FY2029": 8,
+      "FY2030": 6
+     },
+     "revision_note": "Rev.B — updated 2026-06"
+    },
+    {
+     "product": "PFE-ADC-04",
+     "modality": "ADC",
+     "version": 1,
+     "year": 2025,
+     "mtop": 8,
+     "shared_mtop": false,
+     "effective_contract_term": 3,
+     "reserve_batch": 1,
+     "price_adjustment_cap": 5,
+     "price_adjustment_waivers": 1,
+     "binding_forecast": 2,
+     "one_way_partial_binding": 40,
+     "forecast": {
+      "FY2026": 3,
+      "FY2027": 5,
+      "FY2028": 3,
+      "FY2029": 5,
+      "FY2030": 5
+     }
+    },
+    {
+     "product": "PFE-BSA-05",
+     "modality": "bispecific",
+     "version": 1,
+     "year": 2025,
+     "mtop": 4,
+     "shared_mtop": false,
+     "effective_contract_term": 5,
+     "reserve_batch": 2,
+     "price_adjustment_cap": 4,
+     "price_adjustment_waivers": 0,
+     "binding_forecast": 2,
+     "one_way_partial_binding": 50,
+     "forecast": {
+      "FY2026": 4,
+      "FY2027": 7,
+      "FY2028": 7,
+      "FY2029": 5,
+      "FY2030": 4
+     }
+    },
+    {
+     "product": "PFE-VAC-06",
+     "modality": "vaccine",
+     "version": 1,
+     "year": 2025,
+     "mtop": 4,
+     "shared_mtop": true,
+     "effective_contract_term": 4,
+     "reserve_batch": 0,
+     "price_adjustment_cap": 4,
+     "price_adjustment_waivers": 0,
+     "binding_forecast": 2,
+     "one_way_partial_binding": 45,
+     "forecast": {
+      "FY2026": 3,
+      "FY2027": 3,
+      "FY2028": 4,
+      "FY2029": 5,
+      "FY2030": 3
+     }
+    },
+    {
+     "product": "PFE-MAB-07",
+     "modality": "mAb",
+     "version": 1,
+     "year": 2025,
+     "mtop": 6,
+     "shared_mtop": true,
+     "effective_contract_term": 3,
+     "reserve_batch": 1,
+     "price_adjustment_cap": 4,
+     "price_adjustment_waivers": 0,
+     "binding_forecast": 3,
+     "one_way_partial_binding": 50,
+     "forecast": {
+      "FY2026": 6,
+      "FY2027": 5,
+      "FY2028": 6,
+      "FY2029": 8,
+      "FY2030": 8
+     }
+    }
+   ],
+   "rfi_history": [
+    {
+     "year": 2023,
+     "ref": "PFE-RFI-2023-01",
+     "questions": [
+      {
+       "qid": "H1",
+       "item_key": "J.dual_sourcing",
+       "question": "State the dual-sourcing rate for critical raw materials.",
+       "our_answer": "91.27% (as of 2023)"
+      },
+      {
+       "qid": "H2",
+       "item_key": "F.tt_duration",
+       "question": "State average technology-transfer duration.",
+       "our_answer": "9.86개월 (as of 2023)"
+      },
+      {
+       "qid": "H3",
+       "item_key": "G.inspection_history",
+       "question": "State recent regulatory inspection history.",
+       "our_answer": "Provided separately at the time"
+      },
+      {
+       "qid": "H4",
+       "item_key": "C.single_use",
+       "question": "State the share of lines using single-use systems.",
+       "our_answer": "53.57% (as of 2023)"
+      }
+     ]
+    },
+    {
+     "year": 2024,
+     "ref": "PFE-RFI-2024-02",
+     "questions": [
+      {
+       "qid": "H1",
+       "item_key": "F.tt_duration",
+       "question": "State average technology-transfer duration.",
+       "our_answer": "10.57개월 (as of 2024)"
+      },
+      {
+       "qid": "H2",
+       "item_key": "G.inspection_history",
+       "question": "State recent regulatory inspection history.",
+       "our_answer": "Provided separately at the time"
+      },
+      {
+       "qid": "H3",
+       "item_key": "C.single_use",
+       "question": "State the share of lines using single-use systems.",
+       "our_answer": "58.87% (as of 2024)"
+      },
+      {
+       "qid": "H4",
+       "item_key": "I.utilization",
+       "question": "State average plant utilization over the trailing 12 months.",
+       "our_answer": "65.06% (as of 2024)"
+      }
+     ]
+    },
+    {
+     "year": 2025,
+     "ref": "PFE-RFI-2025-03",
+     "questions": [
+      {
+       "qid": "H1",
+       "item_key": "C.single_use",
+       "question": "State the share of lines using single-use systems.",
+       "our_answer": "57.48% (as of 2025)"
+      },
+      {
+       "qid": "H2",
+       "item_key": "F.tt_duration",
+       "question": "State average technology-transfer duration.",
+       "our_answer": "10.61개월 (as of 2025)"
+      },
+      {
+       "qid": "H3",
+       "item_key": "K.trir",
+       "question": "State your trailing 3-year TRIR.",
+       "our_answer": "0.17 (as of 2025)"
+      },
+      {
+       "qid": "H4",
+       "item_key": "G.inspection_history",
+       "question": "State recent regulatory inspection history.",
+       "our_answer": "Provided separately at the time"
+      }
+     ]
+    }
+   ],
+   "new_rfi_2026": {
+    "ref": "PFE-RFI-2026-01",
+    "issued": "2026-09-15",
+    "response_due": "2026-10-13",
+    "questions": [
+     {
+      "qid": "Q1",
+      "text": "State the current figure/status for: 소유 구조.",
+      "gold": {
+       "code": "A",
+       "item_key": "ownership",
+       "new_item": false
+      },
+      "gold_answer": "The company is a single, privately held legal entity (unlisted); its largest shareholder is [Hypothetical] OO Holdings (72%), with no intermediate parent company/SPC layer above Plant1-3 (as of 2026-09-30). A change of control triggers customer pre-notification obligations under key supply agreements.",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q2",
+      "text": "State the current figure/status for: 감사 재무제표 3개년.",
+      "gold": {
+       "code": "A",
+       "item_key": "audited_financials",
+       "new_item": false
+      },
+      "gold_answer": "Revenue over the last three years was KRW 235.0B (FY2023) -> KRW 278.0B (FY2024) -> KRW 320.0B (FY2025), a ~17% CAGR, with an operating margin of 20-23%; audited financial statements are issued annually by an external auditor.",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q3",
+      "text": "State the current figure/status for: 총 고용.",
+      "gold": {
+       "code": "B",
+       "item_key": "headcount",
+       "new_item": false
+      },
+      "gold_answer": "12750명 (2026-09-30 기준, HR 월간 인력 현황 2026-09 (사내 HRIS))",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q4",
+      "text": "State the current figure/status for: 근속·이직률.",
+      "gold": {
+       "code": "B",
+       "item_key": "tenure_attrition",
+       "new_item": false
+      },
+      "gold_answer": "4.3% (2026-09-25 기준, hris_roster(내부 데이터 — 생산 직무 최근 12개월 퇴사 9명 / 재직·휴직 211명 · 2026-09-25 기준 · 구 [허구] 6.8은 근속 6.8년 오기))",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q5",
+      "text": "State the current figure/status for: 배양 titer.",
+      "gold": {
+       "code": "C",
+       "item_key": "titer",
+       "new_item": false
+      },
+      "gold_answer": "5.3g/L (2026-09-30 기준, MSAT 월간 공정 리포트 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q6",
+      "text": "State the current figure/status for: 정제 수율.",
+      "gold": {
+       "code": "C",
+       "item_key": "yield",
+       "new_item": false
+      },
+      "gold_answer": "78% (2026-09-30 기준, MSAT 월간 공정 리포트 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q7",
+      "text": "State the current figure/status for: single-use 적용.",
+      "gold": {
+       "code": "C",
+       "item_key": "single_use",
+       "new_item": false
+      },
+      "gold_answer": "60% (2026-09-30 기준, 생산본부 설비 현황 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q8",
+      "text": "State the current figure/status for: 안정성 시험 인프라.",
+      "gold": {
+       "code": "D",
+       "item_key": "stability",
+       "new_item": false
+      },
+      "gold_answer": "42대 (2026-06-30 기준, QC 시설 현황)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q9",
+      "text": "State the current figure/status for: viral clearance 스터디.",
+      "gold": {
+       "code": "E",
+       "item_key": "viral_clearance",
+       "new_item": false
+      },
+      "gold_answer": "38건 (2026-06-30 기준, 공정개발 바이러스 안전성 대장)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q10",
+      "text": "State the current figure/status for: 전담 TT 조직.",
+      "gold": {
+       "code": "F",
+       "item_key": "tt_organization",
+       "new_item": false
+      },
+      "gold_answer": "A dedicated Technology Transfer organization sits under MSAT, with PM, analytical and process engineers assigned per project. Cumulative completed TT projects total 47, averaging 11 months (as of 2026-09-30, see separate item).",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q11",
+      "text": "State the current figure/status for: 규제기관 실사 이력.",
+      "gold": {
+       "code": "G",
+       "item_key": "inspection_history",
+       "new_item": false
+      },
+      "gold_answer": null,
+      "human_confirm": true
+     },
+     {
+      "qid": "Q12",
+      "text": "State the current figure/status for: deviation율.",
+      "gold": {
+       "code": "G",
+       "item_key": "deviation_rate",
+       "new_item": false
+      },
+      "gold_answer": "1.2% (2026-06-30 기준, 품질 분기 보고 2026Q2)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q13",
+      "text": "State the current figure/status for: 현재 가동률.",
+      "gold": {
+       "code": "I",
+       "item_key": "utilization",
+       "new_item": false
+      },
+      "gold_answer": "74% (2026-09-30 기준, 생산기획 월간 리포트 2026-09)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q14",
+      "text": "State the current figure/status for: 상업 생산 실적.",
+      "gold": {
+       "code": "I",
+       "item_key": "commercial_batches",
+       "new_item": false
+      },
+      "gold_answer": "1840배치 (2026-09-30 기준, MSAT 생산 실적 대장)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q15",
+      "text": "State the current figure/status for: 원자재 이원화.",
+      "gold": {
+       "code": "J",
+       "item_key": "dual_sourcing",
+       "new_item": false
+      },
+      "gold_answer": "85% (2026-09-30 기준, 구매 공급망 현황 2026Q3)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q16",
+      "text": "State the current figure/status for: TRIR.",
+      "gold": {
+       "code": "K",
+       "item_key": "trir",
+       "new_item": false
+      },
+      "gold_answer": "0.192 (2026-06-30 기준, EHS 원장 재계산(pooled = Σ recordable+lost_time×200000 / Σ근무시간 · 2023~2025 전사 · OSHA 방식) — 구 값 0.18(EHS 분기 보고 2026Q2 · 정의 불명 상수)에서 정정)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q17",
+      "text": "State the current figure/status for: LIMS 밸리데이션.",
+      "gold": {
+       "code": "M",
+       "item_key": "lims_validation",
+       "new_item": false
+      },
+      "gold_answer": "GAMP5 CSV 완료 (2026-06-30 기준, QA CSV 대장)",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q18",
+      "text": "State the current figure/status for: Scope 1/2.",
+      "gold": {
+       "code": "N",
+       "item_key": "scope12",
+       "new_item": false
+      },
+      "gold_answer": "Estimated 2025 Scope 1 is ~4,800 tCO2e and Scope 2 (market-based) is ~7,700 tCO2e. [Hypothetical -- scaled from a 784,000L-scale industry peer (Scope1 ~72,000 / Scope2 ~116,000 tCO2e) at our ~52,000L total bioreactor volume, roughly 6.6%]",
+      "human_confirm": false
+     },
+     {
+      "qid": "Q19",
+      "text": "Provide 딜 텀 별도 RFP 양식 회신 specific to Pfizer Inc.'s deal.",
+      "gold": {
+       "code": "O",
+       "item_key": "rfp_deal_terms",
+       "new_item": false
+      },
+      "gold_answer": null,
+      "human_confirm": true,
+      "human_confirm_reason": "Deal-specific commercial terms — not in the standard ledger"
+     },
+     {
+      "qid": "Q20",
+      "text": "Provide 표준 계약 조건 개요 specific to Pfizer Inc.'s deal.",
+      "gold": {
+       "code": "O",
+       "item_key": "standard_contract_terms",
+       "new_item": false
+      },
+      "gold_answer": null,
+      "human_confirm": true,
+      "human_confirm_reason": "Deal-specific commercial terms — not in the standard ledger"
+     },
+     {
+      "qid": "Q21",
+      "text": "State the share of reserved slots dedicated to us versus competitors.",
+      "gold": {
+       "code": null,
+       "item_key": null,
+       "new_item": true
+      },
+      "gold_answer": null,
+      "human_confirm": true,
+      "human_confirm_reason": "Item outside the catalog"
+     }
+    ]
+   },
+   "emails": [
+    {
+     "id": "MAIL-PFE-01",
+     "product": "PFE-MAB-01",
+     "from": {
+      "name": "Grace Lin",
+      "email": "g.lin@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Daniel Ortiz",
+       "email": "d.ortiz@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-01-01 09:30",
+     "subject": "PFE-MAB-01 unit price negotiation — reply",
+     "body": "Following up on PFE-MAB-01 pricing.\nProposed unit price 218,000 USD / batch, at MTOP 6 batches/year.\n(This price is a negotiation-stage figure; the signed contract governs the final price.)",
+     "negotiated_price": 218000,
+     "negotiated_price_str": "218,000",
+     "final_contract_id": "C-PFE-2022-01",
+     "final_unit_price": 220000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-PFE-02",
+     "product": "PFE-MAB-01",
+     "from": {
+      "name": "Daniel Ortiz",
+      "email": "d.ortiz@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Lukas Brandt",
+       "email": "l.brandt@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-04-08 09:30",
+     "subject": "PFE-MAB-01 tech transfer schedule",
+     "body": "Sharing the PFE-MAB-01 technology transfer schedule.\nOne engineering batch planned, followed by 3 PPQ batches.\nSee attached schedule.\n(Reference price: 206,000 USD/batch, negotiation-stage.)",
+     "negotiated_price": 206000,
+     "negotiated_price_str": "206,000",
+     "final_contract_id": "C-PFE-2022-01",
+     "final_unit_price": 220000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-PFE-03",
+     "product": "PFE-MAB-02",
+     "from": {
+      "name": "Lukas Brandt",
+      "email": "l.brandt@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Daniel Ortiz",
+       "email": "d.ortiz@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-07-15 09:30",
+     "subject": "RE: PFE-MAB-02 RFP submission package",
+     "body": "Attached is the PFE-MAB-02 RFP submission package.\nMTOP 4 batches/year; price-adjustment cap still under discussion.\nProposed price 164,000 USD/batch. Please reply by Friday.",
+     "negotiated_price": 164000,
+     "negotiated_price_str": "164,000",
+     "final_contract_id": "C-PFE-2024-03",
+     "final_unit_price": 180000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-PFE-04",
+     "product": "PFE-MAB-02",
+     "from": {
+      "name": "Mira Takeda",
+      "email": "m.takeda@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Daniel Ortiz",
+       "email": "d.ortiz@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-01-22 09:30",
+     "subject": "PFE-MAB-02 contract renewal terms — inquiry",
+     "body": "Following up on the PFE-MAB-02 renewal.\nRequesting a price review (proposed 182,000 USD/batch) at current volumes, and please also consider a term extension option.",
+     "negotiated_price": 182000,
+     "negotiated_price_str": "182,000",
+     "final_contract_id": "C-PFE-2024-03",
+     "final_unit_price": 180000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-PFE-05",
+     "product": "PFE-ADC-03",
+     "from": {
+      "name": "Mira Takeda",
+      "email": "m.takeda@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Grace Lin",
+       "email": "g.lin@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-04-02 09:30",
+     "subject": "PFE-ADC-03 unit price negotiation — reply",
+     "body": "Following up on PFE-ADC-03 pricing.\nProposed unit price 416,000 USD / batch, at MTOP 3 batches/year.\n(This price is a negotiation-stage figure; the signed contract governs the final price.)",
+     "negotiated_price": 416000,
+     "negotiated_price_str": "416,000",
+     "final_contract_id": "C-PFE-2024-04",
+     "final_unit_price": 410000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-PFE-06",
+     "product": "PFE-ADC-03",
+     "from": {
+      "name": "Daniel Ortiz",
+      "email": "d.ortiz@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Mira Takeda",
+       "email": "m.takeda@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-07-09 09:30",
+     "subject": "PFE-ADC-03 tech transfer schedule",
+     "body": "Sharing the PFE-ADC-03 technology transfer schedule.\nOne engineering batch planned, followed by 3 PPQ batches.\nSee attached schedule.\n(Reference price: 431,000 USD/batch, negotiation-stage.)",
+     "negotiated_price": 431000,
+     "negotiated_price_str": "431,000",
+     "final_contract_id": "C-PFE-2024-04",
+     "final_unit_price": 410000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-PFE-07",
+     "product": "PFE-ADC-04",
+     "from": {
+      "name": "Mira Takeda",
+      "email": "m.takeda@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Grace Lin",
+       "email": "g.lin@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-01-16 09:30",
+     "subject": "RE: PFE-ADC-04 RFP submission package",
+     "body": "Attached is the PFE-ADC-04 RFP submission package.\nMTOP 3 batches/year; price-adjustment cap still under discussion.\nProposed price 402,000 USD/batch. Please reply by Friday.",
+     "negotiated_price": 402000,
+     "negotiated_price_str": "402,000",
+     "final_contract_id": "C-PFE-2021-06",
+     "final_unit_price": 380000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-PFE-08",
+     "product": "PFE-ADC-04",
+     "from": {
+      "name": "Mira Takeda",
+      "email": "m.takeda@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Lukas Brandt",
+       "email": "l.brandt@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-04-23 09:30",
+     "subject": "PFE-ADC-04 contract renewal terms — inquiry",
+     "body": "Following up on the PFE-ADC-04 renewal.\nRequesting a price review (proposed 379,000 USD/batch) at current volumes, and please also consider a term extension option.",
+     "negotiated_price": 379000,
+     "negotiated_price_str": "379,000",
+     "final_contract_id": "C-PFE-2021-06",
+     "final_unit_price": 380000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-PFE-09",
+     "product": "PFE-BSA-05",
+     "from": {
+      "name": "Lukas Brandt",
+      "email": "l.brandt@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Mira Takeda",
+       "email": "m.takeda@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-07-03 09:30",
+     "subject": "PFE-BSA-05 unit price negotiation — reply",
+     "body": "Following up on PFE-BSA-05 pricing.\nProposed unit price 293,000 USD / batch, at MTOP 3 batches/year.\n(This price is a negotiation-stage figure; the signed contract governs the final price.)",
+     "negotiated_price": 293000,
+     "negotiated_price_str": "293,000",
+     "final_contract_id": "C-PFE-2025-07",
+     "final_unit_price": 300000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-PFE-10",
+     "product": "PFE-BSA-05",
+     "from": {
+      "name": "Mira Takeda",
+      "email": "m.takeda@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Lukas Brandt",
+       "email": "l.brandt@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-01-10 09:30",
+     "subject": "PFE-BSA-05 tech transfer schedule",
+     "body": "Sharing the PFE-BSA-05 technology transfer schedule.\nOne engineering batch planned, followed by 3 PPQ batches.\nSee attached schedule.\n(Reference price: 329,000 USD/batch, negotiation-stage.)",
+     "negotiated_price": 329000,
+     "negotiated_price_str": "329,000",
+     "final_contract_id": "C-PFE-2025-07",
+     "final_unit_price": 300000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-PFE-11",
+     "product": "PFE-VAC-06",
+     "from": {
+      "name": "Grace Lin",
+      "email": "g.lin@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Daniel Ortiz",
+       "email": "d.ortiz@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-04-17 09:30",
+     "subject": "RE: PFE-VAC-06 RFP submission package",
+     "body": "Attached is the PFE-VAC-06 RFP submission package.\nMTOP 5 batches/year; price-adjustment cap still under discussion.\nProposed price 103,000 USD/batch. Please reply by Friday.",
+     "negotiated_price": 103000,
+     "negotiated_price_str": "103,000",
+     "final_contract_id": "C-PFE-2024-08",
+     "final_unit_price": 95000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-PFE-12",
+     "product": "PFE-VAC-06",
+     "from": {
+      "name": "Lukas Brandt",
+      "email": "l.brandt@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Mira Takeda",
+       "email": "m.takeda@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-07-24 09:30",
+     "subject": "PFE-VAC-06 contract renewal terms — inquiry",
+     "body": "Following up on the PFE-VAC-06 renewal.\nRequesting a price review (proposed 90,000 USD/batch) at current volumes, and please also consider a term extension option.",
+     "negotiated_price": 90000,
+     "negotiated_price_str": "90,000",
+     "final_contract_id": "C-PFE-2024-08",
+     "final_unit_price": 95000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-PFE-13",
+     "product": "PFE-MAB-07",
+     "from": {
+      "name": "Grace Lin",
+      "email": "g.lin@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Lukas Brandt",
+       "email": "l.brandt@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-01-04 09:30",
+     "subject": "PFE-MAB-07 unit price negotiation — reply",
+     "body": "Following up on PFE-MAB-07 pricing.\nProposed unit price 206,000 USD / batch, at MTOP 5 batches/year.\n(This price is a negotiation-stage figure; the signed contract governs the final price.)",
+     "negotiated_price": 206000,
+     "negotiated_price_str": "206,000",
+     "final_contract_id": "C-PFE-2025-09",
+     "final_unit_price": 200000,
+     "price_matches_final": false
+    },
+    {
+     "id": "MAIL-PFE-14",
+     "product": "PFE-MAB-07",
+     "from": {
+      "name": "Mira Takeda",
+      "email": "m.takeda@pfe.example"
+     },
+     "to": [
+      {
+       "name": "Lukas Brandt",
+       "email": "l.brandt@cdmo-sales.example"
+      }
+     ],
+     "date": "2025-04-11 09:30",
+     "subject": "PFE-MAB-07 tech transfer schedule",
+     "body": "Sharing the PFE-MAB-07 technology transfer schedule.\nOne engineering batch planned, followed by 3 PPQ batches.\nSee attached schedule.\n(Reference price: 219,000 USD/batch, negotiation-stage.)",
+     "negotiated_price": 219000,
+     "negotiated_price_str": "219,000",
+     "final_contract_id": "C-PFE-2025-09",
+     "final_unit_price": 200000,
+     "price_matches_final": false
+    }
+   ]
+  }
+ ],
+ "documents": [
+  {
+   "doc_id": "contract-C-CRB-2022-01#scan_pdf",
+   "variant_of": "contract-C-CRB-2022-01",
+   "ref": "C-CRB-2022-01",
+   "kind": "contract",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "scan_pdf",
+   "file": "docs\\scan_pdf\\scan_C-CRB-2022-01.pdf",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "104,000,000 KRW",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2024-06-07",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "2 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "1,040,000,000 KRW",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-SOL-2020-01#scan_pdf",
+   "variant_of": "contract-C-SOL-2020-01",
+   "ref": "C-SOL-2020-01",
+   "kind": "contract",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "scan_pdf",
+   "file": "docs\\scan_pdf\\scan_C-SOL-2020-01.pdf",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "302,000 USD",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2024-06-15",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "2 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "3,624,000 USD",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-SOL-2024-02#pdf",
+   "variant_of": "contract-C-SOL-2024-02",
+   "ref": "C-SOL-2024-02",
+   "kind": "contract",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "pdf",
+   "file": "docs\\pdf\\C-SOL-2024-02.pdf",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "311,000 USD",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2028-03-15",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "2 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "4,976,000 USD",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-SOL-2021-03#pdf",
+   "variant_of": "contract-C-SOL-2021-03",
+   "ref": "C-SOL-2021-03",
+   "kind": "contract",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "pdf",
+   "file": "docs\\pdf\\C-SOL-2021-03.pdf",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "311,000 USD",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2025-03-05",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "6 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "11,196,000 USD",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-SOL-2023-04#pdf",
+   "variant_of": "contract-C-SOL-2023-04",
+   "ref": "C-SOL-2023-04",
+   "kind": "contract",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "pdf",
+   "file": "docs\\pdf\\C-SOL-2023-04.pdf",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "498,000 USD",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2025-10-09",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "5 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "6,972,000 USD",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-MRH-2020-01#scan_pdf",
+   "variant_of": "contract-C-MRH-2020-01",
+   "ref": "C-MRH-2020-01",
+   "kind": "contract",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "scan_pdf",
+   "file": "docs\\scan_pdf\\scan_C-MRH-2020-01.pdf",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "425,000,000 KRW",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2023-04-09",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "4 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "7,650,000,000 KRW",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-MRH-2023-02#pdf",
+   "variant_of": "contract-C-MRH-2023-02",
+   "ref": "C-MRH-2023-02",
+   "kind": "contract",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "pdf",
+   "file": "docs\\pdf\\C-MRH-2023-02.pdf",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "424,000,000 KRW",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2025-02-09",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "4 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "4,240,000,000 KRW",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-MRH-2023-03#scan_pdf",
+   "variant_of": "contract-C-MRH-2023-03",
+   "ref": "C-MRH-2023-03",
+   "kind": "contract",
+   "client_tag": "MRH",
+   "product": "MRH-BSA-02",
+   "lang": "ko",
+   "format": "scan_pdf",
+   "file": "docs\\scan_pdf\\scan_C-MRH-2023-03.pdf",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "491,000,000 KRW",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2027-01-23",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "5 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "15,712,000,000 KRW",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-MRH-2022-04#scan_pdf",
+   "variant_of": "contract-C-MRH-2022-04",
+   "ref": "C-MRH-2022-04",
+   "kind": "contract",
+   "client_tag": "MRH",
+   "product": "MRH-VAC-03",
+   "lang": "ko",
+   "format": "scan_pdf",
+   "file": "docs\\scan_pdf\\scan_C-MRH-2022-04.pdf",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "126,000,000 KRW",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2026-08-15",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "4 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "2,520,000,000 KRW",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-MRH-2020-05#pdf",
+   "variant_of": "contract-C-MRH-2020-05",
+   "ref": "C-MRH-2020-05",
+   "kind": "contract",
+   "client_tag": "MRH",
+   "product": "MRH-ADC-04",
+   "lang": "ko",
+   "format": "pdf",
+   "file": "docs\\pdf\\C-MRH-2020-05.pdf",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "586,000,000 KRW",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2022-11-14",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "4 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "5,860,000,000 KRW",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-MRH-2023-06#scan_pdf",
+   "variant_of": "contract-C-MRH-2023-06",
+   "ref": "C-MRH-2023-06",
+   "kind": "contract",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-05",
+   "lang": "ko",
+   "format": "scan_pdf",
+   "file": "docs\\scan_pdf\\scan_C-MRH-2023-06.pdf",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "308,000,000 KRW",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2025-04-21",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "3 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "3,696,000,000 KRW",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-PFE-2022-01#pdf",
+   "variant_of": "contract-C-PFE-2022-01",
+   "ref": "C-PFE-2022-01",
+   "kind": "contract",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-01",
+   "lang": "en",
+   "format": "pdf",
+   "file": "docs\\pdf\\C-PFE-2022-01.pdf",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "220,000 USD",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2024-03-01",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "6 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "1,320,000 USD",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-PFE-2024-02#scan_pdf",
+   "variant_of": "contract-C-PFE-2024-02",
+   "ref": "C-PFE-2024-02",
+   "kind": "contract",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-01",
+   "lang": "en",
+   "format": "scan_pdf",
+   "file": "docs\\scan_pdf\\scan_C-PFE-2024-02.pdf",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "235,000 USD",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2027-02-15",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "7 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "1,645,000 USD",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-PFE-2024-03#pdf",
+   "variant_of": "contract-C-PFE-2024-03",
+   "ref": "C-PFE-2024-03",
+   "kind": "contract",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-02",
+   "lang": "en",
+   "format": "pdf",
+   "file": "docs\\pdf\\C-PFE-2024-03.pdf",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "180,000 USD",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2027-06-10",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "4 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "720,000 USD",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-PFE-2024-04#pdf",
+   "variant_of": "contract-C-PFE-2024-04",
+   "ref": "C-PFE-2024-04",
+   "kind": "contract",
+   "client_tag": "PFE",
+   "product": "PFE-ADC-03",
+   "lang": "en",
+   "format": "pdf",
+   "file": "docs\\pdf\\C-PFE-2024-04.pdf",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "410,000 USD",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2026-01-20",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "3 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "1,230,000 USD",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-PFE-2025-05#scan_pdf",
+   "variant_of": "contract-C-PFE-2025-05",
+   "ref": "C-PFE-2025-05",
+   "kind": "contract",
+   "client_tag": "PFE",
+   "product": "PFE-ADC-03",
+   "lang": "en",
+   "format": "scan_pdf",
+   "file": "docs\\scan_pdf\\scan_C-PFE-2025-05.pdf",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "430,000 USD",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2027-11-05",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "4 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "1,720,000 USD",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-PFE-2021-06#scan_pdf",
+   "variant_of": "contract-C-PFE-2021-06",
+   "ref": "C-PFE-2021-06",
+   "kind": "contract",
+   "client_tag": "PFE",
+   "product": "PFE-ADC-04",
+   "lang": "en",
+   "format": "scan_pdf",
+   "file": "docs\\scan_pdf\\scan_C-PFE-2021-06.pdf",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "380,000 USD",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2023-07-15",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "3 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "1,140,000 USD",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-PFE-2025-07#scan_pdf",
+   "variant_of": "contract-C-PFE-2025-07",
+   "ref": "C-PFE-2025-07",
+   "kind": "contract",
+   "client_tag": "PFE",
+   "product": "PFE-BSA-05",
+   "lang": "en",
+   "format": "scan_pdf",
+   "file": "docs\\scan_pdf\\scan_C-PFE-2025-07.pdf",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "300,000 USD",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2028-02-01",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "3 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "900,000 USD",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-PFE-2024-08#pdf",
+   "variant_of": "contract-C-PFE-2024-08",
+   "ref": "C-PFE-2024-08",
+   "kind": "contract",
+   "client_tag": "PFE",
+   "product": "PFE-VAC-06",
+   "lang": "en",
+   "format": "pdf",
+   "file": "docs\\pdf\\C-PFE-2024-08.pdf",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "95,000 USD",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2026-09-01",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "5 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "475,000 USD",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "contract-C-PFE-2025-09#pdf",
+   "variant_of": "contract-C-PFE-2025-09",
+   "ref": "C-PFE-2025-09",
+   "kind": "contract",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-07",
+   "lang": "en",
+   "format": "pdf",
+   "file": "docs\\pdf\\C-PFE-2025-09.pdf",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "unit_price",
+     "value": "200,000 USD",
+     "locator": "표: 단가"
+    },
+    {
+     "key": "expiry_date",
+     "value": "2028-06-15",
+     "locator": "표: 만료일"
+    },
+    {
+     "key": "mtop",
+     "value": "5 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "contract_value",
+     "value": "1,000,000 USD",
+     "locator": "표: 계약금액"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-CRB-VAC-01-v1#xlsx",
+   "variant_of": "rfp-CRB-VAC-01-v1",
+   "ref": "CRB-VAC-01-v1",
+   "kind": "rfp",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "xlsx",
+   "file": "docs\\xlsx\\RFP_CRB-VAC-01_v1.xlsx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "6 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "5%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "45%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-CRB-VAC-01-v2#xlsx",
+   "variant_of": "rfp-CRB-VAC-01-v2",
+   "ref": "CRB-VAC-01-v2",
+   "kind": "rfp",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "xlsx",
+   "file": "docs\\xlsx\\RFP_CRB-VAC-01_v2.xlsx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "7 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "4%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "50%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-SOL-MAB-01-v1#xlsx",
+   "variant_of": "rfp-SOL-MAB-01-v1",
+   "ref": "SOL-MAB-01-v1",
+   "kind": "rfp",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "xlsx",
+   "file": "docs\\xlsx\\RFP_SOL-MAB-01_v1.xlsx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "4 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "5%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "50%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-SOL-MAB-01-v2#xlsx",
+   "variant_of": "rfp-SOL-MAB-01-v2",
+   "ref": "SOL-MAB-01-v2",
+   "kind": "rfp",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "xlsx",
+   "file": "docs\\xlsx\\RFP_SOL-MAB-01_v2.xlsx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "5 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "4%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "55%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-SOL-MAB-02-v1#xlsx",
+   "variant_of": "rfp-SOL-MAB-02-v1",
+   "ref": "SOL-MAB-02-v1",
+   "kind": "rfp",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "xlsx",
+   "file": "docs\\xlsx\\RFP_SOL-MAB-02_v1.xlsx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "4 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "4%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "50%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-SOL-ADC-03-v1#xlsx",
+   "variant_of": "rfp-SOL-ADC-03-v1",
+   "ref": "SOL-ADC-03-v1",
+   "kind": "rfp",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "xlsx",
+   "file": "docs\\xlsx\\RFP_SOL-ADC-03_v1.xlsx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "7 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "4%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "45%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-MRH-MAB-01-v1#xlsx",
+   "variant_of": "rfp-MRH-MAB-01-v1",
+   "ref": "MRH-MAB-01-v1",
+   "kind": "rfp",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "xlsx",
+   "file": "docs\\xlsx\\RFP_MRH-MAB-01_v1.xlsx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "5 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "4%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "45%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-MRH-MAB-01-v2#xlsx",
+   "variant_of": "rfp-MRH-MAB-01-v2",
+   "ref": "MRH-MAB-01-v2",
+   "kind": "rfp",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "xlsx",
+   "file": "docs\\xlsx\\RFP_MRH-MAB-01_v2.xlsx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "7 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "3%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "50%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-MRH-BSA-02-v1#xlsx",
+   "variant_of": "rfp-MRH-BSA-02-v1",
+   "ref": "MRH-BSA-02-v1",
+   "kind": "rfp",
+   "client_tag": "MRH",
+   "product": "MRH-BSA-02",
+   "lang": "ko",
+   "format": "xlsx",
+   "file": "docs\\xlsx\\RFP_MRH-BSA-02_v1.xlsx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "8 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "5%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "45%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-MRH-VAC-03-v1#xlsx",
+   "variant_of": "rfp-MRH-VAC-03-v1",
+   "ref": "MRH-VAC-03-v1",
+   "kind": "rfp",
+   "client_tag": "MRH",
+   "product": "MRH-VAC-03",
+   "lang": "ko",
+   "format": "xlsx",
+   "file": "docs\\xlsx\\RFP_MRH-VAC-03_v1.xlsx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "3 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "5%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "45%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-MRH-ADC-04-v1#xlsx",
+   "variant_of": "rfp-MRH-ADC-04-v1",
+   "ref": "MRH-ADC-04-v1",
+   "kind": "rfp",
+   "client_tag": "MRH",
+   "product": "MRH-ADC-04",
+   "lang": "ko",
+   "format": "xlsx",
+   "file": "docs\\xlsx\\RFP_MRH-ADC-04_v1.xlsx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "6 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "3%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "45%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-MRH-MAB-05-v1#xls",
+   "variant_of": "rfp-MRH-MAB-05-v1",
+   "ref": "MRH-MAB-05-v1",
+   "kind": "rfp",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-05",
+   "lang": "ko",
+   "format": "xls",
+   "file": "docs\\xls\\RFP_MRH-MAB-05_v1.xls",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "6 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "5%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "40%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-PFE-MAB-01-v1#xls",
+   "variant_of": "rfp-PFE-MAB-01-v1",
+   "ref": "PFE-MAB-01-v1",
+   "kind": "rfp",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-01",
+   "lang": "en",
+   "format": "xls",
+   "file": "docs\\xls\\RFP_PFE-MAB-01_v1.xls",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "7 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "5%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "45%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-PFE-MAB-01-v2#xls",
+   "variant_of": "rfp-PFE-MAB-01-v2",
+   "ref": "PFE-MAB-01-v2",
+   "kind": "rfp",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-01",
+   "lang": "en",
+   "format": "xls",
+   "file": "docs\\xls\\RFP_PFE-MAB-01_v2.xls",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "9 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "4%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "50%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-PFE-MAB-02-v1#xls",
+   "variant_of": "rfp-PFE-MAB-02-v1",
+   "ref": "PFE-MAB-02-v1",
+   "kind": "rfp",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-02",
+   "lang": "en",
+   "format": "xls",
+   "file": "docs\\xls\\RFP_PFE-MAB-02_v1.xls",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "8 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "3%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "50%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-PFE-ADC-03-v1#xls",
+   "variant_of": "rfp-PFE-ADC-03-v1",
+   "ref": "PFE-ADC-03-v1",
+   "kind": "rfp",
+   "client_tag": "PFE",
+   "product": "PFE-ADC-03",
+   "lang": "en",
+   "format": "xls",
+   "file": "docs\\xls\\RFP_PFE-ADC-03_v1.xls",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "7 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "3%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "40%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-PFE-ADC-03-v2#xls",
+   "variant_of": "rfp-PFE-ADC-03-v2",
+   "ref": "PFE-ADC-03-v2",
+   "kind": "rfp",
+   "client_tag": "PFE",
+   "product": "PFE-ADC-03",
+   "lang": "en",
+   "format": "xls",
+   "file": "docs\\xls\\RFP_PFE-ADC-03_v2.xls",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "8 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "2%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "45%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-PFE-ADC-04-v1#xls",
+   "variant_of": "rfp-PFE-ADC-04-v1",
+   "ref": "PFE-ADC-04-v1",
+   "kind": "rfp",
+   "client_tag": "PFE",
+   "product": "PFE-ADC-04",
+   "lang": "en",
+   "format": "xls",
+   "file": "docs\\xls\\RFP_PFE-ADC-04_v1.xls",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "8 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "5%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "40%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-PFE-BSA-05-v1#xls",
+   "variant_of": "rfp-PFE-BSA-05-v1",
+   "ref": "PFE-BSA-05-v1",
+   "kind": "rfp",
+   "client_tag": "PFE",
+   "product": "PFE-BSA-05",
+   "lang": "en",
+   "format": "xls",
+   "file": "docs\\xls\\RFP_PFE-BSA-05_v1.xls",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "4 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "4%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "50%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-PFE-VAC-06-v1#xls",
+   "variant_of": "rfp-PFE-VAC-06-v1",
+   "ref": "PFE-VAC-06-v1",
+   "kind": "rfp",
+   "client_tag": "PFE",
+   "product": "PFE-VAC-06",
+   "lang": "en",
+   "format": "xls",
+   "file": "docs\\xls\\RFP_PFE-VAC-06_v1.xls",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "4 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "4%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "45%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-PFE-MAB-07-v1#xls",
+   "variant_of": "rfp-PFE-MAB-07-v1",
+   "ref": "PFE-MAB-07-v1",
+   "kind": "rfp",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-07",
+   "lang": "en",
+   "format": "xls",
+   "file": "docs\\xls\\RFP_PFE-MAB-07_v1.xls",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "6 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "4%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "50%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "newrfi-CRB#docx",
+   "variant_of": "newrfi-CRB",
+   "ref": "CRB",
+   "kind": "new_rfi",
+   "client_tag": "CRB",
+   "product": null,
+   "lang": "ko",
+   "format": "docx",
+   "file": "docs\\docx\\newrfi-CRB.docx",
+   "checkable": true,
+   "facts": []
+  },
+  {
+   "doc_id": "newrfi-SOL#docx",
+   "variant_of": "newrfi-SOL",
+   "ref": "SOL",
+   "kind": "new_rfi",
+   "client_tag": "SOL",
+   "product": null,
+   "lang": "en",
+   "format": "docx",
+   "file": "docs\\docx\\newrfi-SOL.docx",
+   "checkable": true,
+   "facts": []
+  },
+  {
+   "doc_id": "newrfi-MRH#docx",
+   "variant_of": "newrfi-MRH",
+   "ref": "MRH",
+   "kind": "new_rfi",
+   "client_tag": "MRH",
+   "product": null,
+   "lang": "ko",
+   "format": "docx",
+   "file": "docs\\docx\\newrfi-MRH.docx",
+   "checkable": true,
+   "facts": []
+  },
+  {
+   "doc_id": "newrfi-PFE#docx",
+   "variant_of": "newrfi-PFE",
+   "ref": "PFE",
+   "kind": "new_rfi",
+   "client_tag": "PFE",
+   "product": null,
+   "lang": "en",
+   "format": "docx",
+   "file": "docs\\docx\\newrfi-PFE.docx",
+   "checkable": true,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-q-CRB-RFI-2023-01#docx",
+   "variant_of": "rfihist-q-CRB-RFI-2023-01",
+   "ref": "CRB-RFI-2023-01",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "CRB",
+   "product": null,
+   "lang": "ko",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-q-CRB-RFI-2023-01.docx",
+   "checkable": true,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-a-CRB-RFI-2023-01#docx",
+   "variant_of": "rfihist-a-CRB-RFI-2023-01",
+   "ref": "CRB-RFI-2023-01",
+   "kind": "rfi_history_response",
+   "client_tag": "CRB",
+   "product": null,
+   "lang": "ko",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-a-CRB-RFI-2023-01.docx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "answer_H1",
+     "value": "75.0% (2023 시점 자료)",
+     "locator": "표: H1 우리 응답"
+    },
+    {
+     "key": "answer_H2",
+     "value": "해당 시점 자료 별도 제공",
+     "locator": "표: H2 우리 응답"
+    },
+    {
+     "key": "answer_H3",
+     "value": "0.2 (2023 시점 자료)",
+     "locator": "표: H3 우리 응답"
+    },
+    {
+     "key": "answer_H4",
+     "value": "11.68개월 (2023 시점 자료)",
+     "locator": "표: H4 우리 응답"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfihist-q-SOL-RFI-2023-01#docx",
+   "variant_of": "rfihist-q-SOL-RFI-2023-01",
+   "ref": "SOL-RFI-2023-01",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "SOL",
+   "product": null,
+   "lang": "en",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-q-SOL-RFI-2023-01.docx",
+   "checkable": true,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-a-SOL-RFI-2023-01#docx",
+   "variant_of": "rfihist-a-SOL-RFI-2023-01",
+   "ref": "SOL-RFI-2023-01",
+   "kind": "rfi_history_response",
+   "client_tag": "SOL",
+   "product": null,
+   "lang": "en",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-a-SOL-RFI-2023-01.docx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "answer_H1",
+     "value": "0.19 (as of 2023)",
+     "locator": "표: H1 우리 응답"
+    },
+    {
+     "key": "answer_H2",
+     "value": "9.6개월 (as of 2023)",
+     "locator": "표: H2 우리 응답"
+    },
+    {
+     "key": "answer_H3",
+     "value": "59.64% (as of 2023)",
+     "locator": "표: H3 우리 응답"
+    },
+    {
+     "key": "answer_H4",
+     "value": "69.6% (as of 2023)",
+     "locator": "표: H4 우리 응답"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfihist-q-SOL-RFI-2024-02#docx",
+   "variant_of": "rfihist-q-SOL-RFI-2024-02",
+   "ref": "SOL-RFI-2024-02",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "SOL",
+   "product": null,
+   "lang": "en",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-q-SOL-RFI-2024-02.docx",
+   "checkable": true,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-a-SOL-RFI-2024-02#docx",
+   "variant_of": "rfihist-a-SOL-RFI-2024-02",
+   "ref": "SOL-RFI-2024-02",
+   "kind": "rfi_history_response",
+   "client_tag": "SOL",
+   "product": null,
+   "lang": "en",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-a-SOL-RFI-2024-02.docx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "answer_H1",
+     "value": "79.4% (as of 2024)",
+     "locator": "표: H1 우리 응답"
+    },
+    {
+     "key": "answer_H2",
+     "value": "64.48% (as of 2024)",
+     "locator": "표: H2 우리 응답"
+    },
+    {
+     "key": "answer_H3",
+     "value": "78.0% (as of 2024)",
+     "locator": "표: H3 우리 응답"
+    },
+    {
+     "key": "answer_H4",
+     "value": "Provided separately at the time",
+     "locator": "표: H4 우리 응답"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfihist-q-MRH-RFI-2023-01#docx",
+   "variant_of": "rfihist-q-MRH-RFI-2023-01",
+   "ref": "MRH-RFI-2023-01",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "MRH",
+   "product": null,
+   "lang": "ko",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-q-MRH-RFI-2023-01.docx",
+   "checkable": true,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-a-MRH-RFI-2023-01#docx",
+   "variant_of": "rfihist-a-MRH-RFI-2023-01",
+   "ref": "MRH-RFI-2023-01",
+   "kind": "rfi_history_response",
+   "client_tag": "MRH",
+   "product": null,
+   "lang": "ko",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-a-MRH-RFI-2023-01.docx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "answer_H1",
+     "value": "해당 시점 자료 별도 제공",
+     "locator": "표: H1 우리 응답"
+    },
+    {
+     "key": "answer_H2",
+     "value": "0.2 (2023 시점 자료)",
+     "locator": "표: H2 우리 응답"
+    },
+    {
+     "key": "answer_H3",
+     "value": "63.18% (2023 시점 자료)",
+     "locator": "표: H3 우리 응답"
+    },
+    {
+     "key": "answer_H4",
+     "value": "10.5개월 (2023 시점 자료)",
+     "locator": "표: H4 우리 응답"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfihist-q-MRH-RFI-2024-02#docx",
+   "variant_of": "rfihist-q-MRH-RFI-2024-02",
+   "ref": "MRH-RFI-2024-02",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "MRH",
+   "product": null,
+   "lang": "ko",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-q-MRH-RFI-2024-02.docx",
+   "checkable": true,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-a-MRH-RFI-2024-02#docx",
+   "variant_of": "rfihist-a-MRH-RFI-2024-02",
+   "ref": "MRH-RFI-2024-02",
+   "kind": "rfi_history_response",
+   "client_tag": "MRH",
+   "product": null,
+   "lang": "ko",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-a-MRH-RFI-2024-02.docx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "answer_H1",
+     "value": "63.02% (2024 시점 자료)",
+     "locator": "표: H1 우리 응답"
+    },
+    {
+     "key": "answer_H2",
+     "value": "0.18 (2024 시점 자료)",
+     "locator": "표: H2 우리 응답"
+    },
+    {
+     "key": "answer_H3",
+     "value": "82.11% (2024 시점 자료)",
+     "locator": "표: H3 우리 응답"
+    },
+    {
+     "key": "answer_H4",
+     "value": "해당 시점 자료 별도 제공",
+     "locator": "표: H4 우리 응답"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfihist-q-PFE-RFI-2023-01#docx",
+   "variant_of": "rfihist-q-PFE-RFI-2023-01",
+   "ref": "PFE-RFI-2023-01",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "PFE",
+   "product": null,
+   "lang": "en",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-q-PFE-RFI-2023-01.docx",
+   "checkable": true,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-a-PFE-RFI-2023-01#docx",
+   "variant_of": "rfihist-a-PFE-RFI-2023-01",
+   "ref": "PFE-RFI-2023-01",
+   "kind": "rfi_history_response",
+   "client_tag": "PFE",
+   "product": null,
+   "lang": "en",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-a-PFE-RFI-2023-01.docx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "answer_H1",
+     "value": "91.27% (as of 2023)",
+     "locator": "표: H1 우리 응답"
+    },
+    {
+     "key": "answer_H2",
+     "value": "9.86개월 (as of 2023)",
+     "locator": "표: H2 우리 응답"
+    },
+    {
+     "key": "answer_H3",
+     "value": "Provided separately at the time",
+     "locator": "표: H3 우리 응답"
+    },
+    {
+     "key": "answer_H4",
+     "value": "53.57% (as of 2023)",
+     "locator": "표: H4 우리 응답"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfihist-q-PFE-RFI-2024-02#docx",
+   "variant_of": "rfihist-q-PFE-RFI-2024-02",
+   "ref": "PFE-RFI-2024-02",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "PFE",
+   "product": null,
+   "lang": "en",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-q-PFE-RFI-2024-02.docx",
+   "checkable": true,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-a-PFE-RFI-2024-02#docx",
+   "variant_of": "rfihist-a-PFE-RFI-2024-02",
+   "ref": "PFE-RFI-2024-02",
+   "kind": "rfi_history_response",
+   "client_tag": "PFE",
+   "product": null,
+   "lang": "en",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-a-PFE-RFI-2024-02.docx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "answer_H1",
+     "value": "10.57개월 (as of 2024)",
+     "locator": "표: H1 우리 응답"
+    },
+    {
+     "key": "answer_H2",
+     "value": "Provided separately at the time",
+     "locator": "표: H2 우리 응답"
+    },
+    {
+     "key": "answer_H3",
+     "value": "58.87% (as of 2024)",
+     "locator": "표: H3 우리 응답"
+    },
+    {
+     "key": "answer_H4",
+     "value": "65.06% (as of 2024)",
+     "locator": "표: H4 우리 응답"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfihist-q-PFE-RFI-2025-03#docx",
+   "variant_of": "rfihist-q-PFE-RFI-2025-03",
+   "ref": "PFE-RFI-2025-03",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "PFE",
+   "product": null,
+   "lang": "en",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-q-PFE-RFI-2025-03.docx",
+   "checkable": true,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-a-PFE-RFI-2025-03#docx",
+   "variant_of": "rfihist-a-PFE-RFI-2025-03",
+   "ref": "PFE-RFI-2025-03",
+   "kind": "rfi_history_response",
+   "client_tag": "PFE",
+   "product": null,
+   "lang": "en",
+   "format": "docx",
+   "file": "docs\\docx\\rfihist-a-PFE-RFI-2025-03.docx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "answer_H1",
+     "value": "57.48% (as of 2025)",
+     "locator": "표: H1 우리 응답"
+    },
+    {
+     "key": "answer_H2",
+     "value": "10.61개월 (as of 2025)",
+     "locator": "표: H2 우리 응답"
+    },
+    {
+     "key": "answer_H3",
+     "value": "0.17 (as of 2025)",
+     "locator": "표: H3 우리 응답"
+    },
+    {
+     "key": "answer_H4",
+     "value": "Provided separately at the time",
+     "locator": "표: H4 우리 응답"
+    }
+   ]
+  },
+  {
+   "doc_id": "newrfi-CRB#doc",
+   "variant_of": "newrfi-CRB",
+   "ref": "CRB",
+   "kind": "new_rfi",
+   "client_tag": "CRB",
+   "product": null,
+   "lang": "ko",
+   "format": "doc",
+   "file": "docs\\doc\\newrfi-CRB.doc",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "newrfi-MRH#doc",
+   "variant_of": "newrfi-MRH",
+   "ref": "MRH",
+   "kind": "new_rfi",
+   "client_tag": "MRH",
+   "product": null,
+   "lang": "ko",
+   "format": "doc",
+   "file": "docs\\doc\\newrfi-MRH.doc",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-q-CRB-RFI-2023-01#doc",
+   "variant_of": "rfihist-q-CRB-RFI-2023-01",
+   "ref": "CRB-RFI-2023-01",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "CRB",
+   "product": null,
+   "lang": "ko",
+   "format": "doc",
+   "file": "docs\\doc\\rfihist-q-CRB-RFI-2023-01.doc",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-q-SOL-RFI-2023-01#doc",
+   "variant_of": "rfihist-q-SOL-RFI-2023-01",
+   "ref": "SOL-RFI-2023-01",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "SOL",
+   "product": null,
+   "lang": "en",
+   "format": "doc",
+   "file": "docs\\doc\\rfihist-q-SOL-RFI-2023-01.doc",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-q-SOL-RFI-2024-02#doc",
+   "variant_of": "rfihist-q-SOL-RFI-2024-02",
+   "ref": "SOL-RFI-2024-02",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "SOL",
+   "product": null,
+   "lang": "en",
+   "format": "doc",
+   "file": "docs\\doc\\rfihist-q-SOL-RFI-2024-02.doc",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-q-MRH-RFI-2023-01#doc",
+   "variant_of": "rfihist-q-MRH-RFI-2023-01",
+   "ref": "MRH-RFI-2023-01",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "MRH",
+   "product": null,
+   "lang": "ko",
+   "format": "doc",
+   "file": "docs\\doc\\rfihist-q-MRH-RFI-2023-01.doc",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-q-MRH-RFI-2024-02#doc",
+   "variant_of": "rfihist-q-MRH-RFI-2024-02",
+   "ref": "MRH-RFI-2024-02",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "MRH",
+   "product": null,
+   "lang": "ko",
+   "format": "doc",
+   "file": "docs\\doc\\rfihist-q-MRH-RFI-2024-02.doc",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-q-PFE-RFI-2023-01#doc",
+   "variant_of": "rfihist-q-PFE-RFI-2023-01",
+   "ref": "PFE-RFI-2023-01",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "PFE",
+   "product": null,
+   "lang": "en",
+   "format": "doc",
+   "file": "docs\\doc\\rfihist-q-PFE-RFI-2023-01.doc",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-q-PFE-RFI-2024-02#doc",
+   "variant_of": "rfihist-q-PFE-RFI-2024-02",
+   "ref": "PFE-RFI-2024-02",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "PFE",
+   "product": null,
+   "lang": "en",
+   "format": "doc",
+   "file": "docs\\doc\\rfihist-q-PFE-RFI-2024-02.doc",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "rfihist-q-PFE-RFI-2025-03#doc",
+   "variant_of": "rfihist-q-PFE-RFI-2025-03",
+   "ref": "PFE-RFI-2025-03",
+   "kind": "rfi_history_questionnaire",
+   "client_tag": "PFE",
+   "product": null,
+   "lang": "en",
+   "format": "doc",
+   "file": "docs\\doc\\rfihist-q-PFE-RFI-2025-03.doc",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "qbr-CRB-VAC-01#pptx",
+   "variant_of": "qbr-CRB-VAC-01",
+   "ref": "CRB-VAC-01",
+   "kind": "qbr",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "pptx",
+   "file": "docs\\pptx\\qbr-CRB-VAC-01.pptx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "104,000,000 KRW",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "5 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-SOL-MAB-01#pptx",
+   "variant_of": "qbr-SOL-MAB-01",
+   "ref": "SOL-MAB-01",
+   "kind": "qbr",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "pptx",
+   "file": "docs\\pptx\\qbr-SOL-MAB-01.pptx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "302,000 USD",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "3 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-SOL-MAB-02#pptx",
+   "variant_of": "qbr-SOL-MAB-02",
+   "ref": "SOL-MAB-02",
+   "kind": "qbr",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "pptx",
+   "file": "docs\\pptx\\qbr-SOL-MAB-02.pptx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "311,000 USD",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "9 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-SOL-ADC-03#pptx",
+   "variant_of": "qbr-SOL-ADC-03",
+   "ref": "SOL-ADC-03",
+   "kind": "qbr",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "pptx",
+   "file": "docs\\pptx\\qbr-SOL-ADC-03.pptx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "498,000 USD",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "7 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-MRH-MAB-01#pptx",
+   "variant_of": "qbr-MRH-MAB-01",
+   "ref": "MRH-MAB-01",
+   "kind": "qbr",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "pptx",
+   "file": "docs\\pptx\\qbr-MRH-MAB-01.pptx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "425,000,000 KRW",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "6 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-MRH-BSA-02#pptx",
+   "variant_of": "qbr-MRH-BSA-02",
+   "ref": "MRH-BSA-02",
+   "kind": "qbr",
+   "client_tag": "MRH",
+   "product": "MRH-BSA-02",
+   "lang": "ko",
+   "format": "pptx",
+   "file": "docs\\pptx\\qbr-MRH-BSA-02.pptx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "491,000,000 KRW",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "8 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-MRH-VAC-03#pptx",
+   "variant_of": "qbr-MRH-VAC-03",
+   "ref": "MRH-VAC-03",
+   "kind": "qbr",
+   "client_tag": "MRH",
+   "product": "MRH-VAC-03",
+   "lang": "ko",
+   "format": "pptx",
+   "file": "docs\\pptx\\qbr-MRH-VAC-03.pptx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "126,000,000 KRW",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "5 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-MRH-ADC-04#pptx",
+   "variant_of": "qbr-MRH-ADC-04",
+   "ref": "MRH-ADC-04",
+   "kind": "qbr",
+   "client_tag": "MRH",
+   "product": "MRH-ADC-04",
+   "lang": "ko",
+   "format": "pptx",
+   "file": "docs\\pptx\\qbr-MRH-ADC-04.pptx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "586,000,000 KRW",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "5 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-MRH-MAB-05#pptx",
+   "variant_of": "qbr-MRH-MAB-05",
+   "ref": "MRH-MAB-05",
+   "kind": "qbr",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-05",
+   "lang": "ko",
+   "format": "pptx",
+   "file": "docs\\pptx\\qbr-MRH-MAB-05.pptx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "308,000,000 KRW",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "6 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-PFE-MAB-01#pptx",
+   "variant_of": "qbr-PFE-MAB-01",
+   "ref": "PFE-MAB-01",
+   "kind": "qbr",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-01",
+   "lang": "en",
+   "format": "pptx",
+   "file": "docs\\pptx\\qbr-PFE-MAB-01.pptx",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "220,000 USD",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "6 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-CRB-VAC-01#ppt",
+   "variant_of": "qbr-CRB-VAC-01",
+   "ref": "CRB-VAC-01",
+   "kind": "qbr",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "ppt",
+   "file": "docs\\ppt\\qbr-CRB-VAC-01.ppt",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "104,000,000 KRW",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "5 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-SOL-MAB-01#ppt",
+   "variant_of": "qbr-SOL-MAB-01",
+   "ref": "SOL-MAB-01",
+   "kind": "qbr",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "ppt",
+   "file": "docs\\ppt\\qbr-SOL-MAB-01.ppt",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "302,000 USD",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "3 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-SOL-MAB-02#ppt",
+   "variant_of": "qbr-SOL-MAB-02",
+   "ref": "SOL-MAB-02",
+   "kind": "qbr",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "ppt",
+   "file": "docs\\ppt\\qbr-SOL-MAB-02.ppt",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "311,000 USD",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "9 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-SOL-ADC-03#ppt",
+   "variant_of": "qbr-SOL-ADC-03",
+   "ref": "SOL-ADC-03",
+   "kind": "qbr",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "ppt",
+   "file": "docs\\ppt\\qbr-SOL-ADC-03.ppt",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "498,000 USD",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "7 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-MRH-MAB-01#ppt",
+   "variant_of": "qbr-MRH-MAB-01",
+   "ref": "MRH-MAB-01",
+   "kind": "qbr",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "ppt",
+   "file": "docs\\ppt\\qbr-MRH-MAB-01.ppt",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "425,000,000 KRW",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "6 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-MRH-BSA-02#ppt",
+   "variant_of": "qbr-MRH-BSA-02",
+   "ref": "MRH-BSA-02",
+   "kind": "qbr",
+   "client_tag": "MRH",
+   "product": "MRH-BSA-02",
+   "lang": "ko",
+   "format": "ppt",
+   "file": "docs\\ppt\\qbr-MRH-BSA-02.ppt",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "491,000,000 KRW",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "8 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-MRH-VAC-03#ppt",
+   "variant_of": "qbr-MRH-VAC-03",
+   "ref": "MRH-VAC-03",
+   "kind": "qbr",
+   "client_tag": "MRH",
+   "product": "MRH-VAC-03",
+   "lang": "ko",
+   "format": "ppt",
+   "file": "docs\\ppt\\qbr-MRH-VAC-03.ppt",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "126,000,000 KRW",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "5 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-MRH-ADC-04#ppt",
+   "variant_of": "qbr-MRH-ADC-04",
+   "ref": "MRH-ADC-04",
+   "kind": "qbr",
+   "client_tag": "MRH",
+   "product": "MRH-ADC-04",
+   "lang": "ko",
+   "format": "ppt",
+   "file": "docs\\ppt\\qbr-MRH-ADC-04.ppt",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "586,000,000 KRW",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "5 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-MRH-MAB-05#ppt",
+   "variant_of": "qbr-MRH-MAB-05",
+   "ref": "MRH-MAB-05",
+   "kind": "qbr",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-05",
+   "lang": "ko",
+   "format": "ppt",
+   "file": "docs\\ppt\\qbr-MRH-MAB-05.ppt",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "308,000,000 KRW",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "6 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "qbr-PFE-MAB-01#ppt",
+   "variant_of": "qbr-PFE-MAB-01",
+   "ref": "PFE-MAB-01",
+   "kind": "qbr",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-01",
+   "lang": "en",
+   "format": "ppt",
+   "file": "docs\\ppt\\qbr-PFE-MAB-01.ppt",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "qbr_unit_price",
+     "value": "220,000 USD",
+     "locator": "슬라이드: 최근 계약 단가"
+    },
+    {
+     "key": "qbr_volume",
+     "value": "6 batches/year",
+     "locator": "슬라이드: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-CRB-VAC-01#html",
+   "variant_of": "product-CRB-VAC-01",
+   "ref": "CRB-VAC-01",
+   "kind": "product_page",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "html",
+   "file": "docs\\html\\product-CRB-VAC-01.html",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "vaccine",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-SOL-MAB-01#htm",
+   "variant_of": "product-SOL-MAB-01",
+   "ref": "SOL-MAB-01",
+   "kind": "product_page",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "htm",
+   "file": "docs\\htm\\product-SOL-MAB-01.htm",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-SOL-MAB-02#html",
+   "variant_of": "product-SOL-MAB-02",
+   "ref": "SOL-MAB-02",
+   "kind": "product_page",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "html",
+   "file": "docs\\html\\product-SOL-MAB-02.html",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-SOL-ADC-03#htm",
+   "variant_of": "product-SOL-ADC-03",
+   "ref": "SOL-ADC-03",
+   "kind": "product_page",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "htm",
+   "file": "docs\\htm\\product-SOL-ADC-03.htm",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "ADC",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-MRH-MAB-01#html",
+   "variant_of": "product-MRH-MAB-01",
+   "ref": "MRH-MAB-01",
+   "kind": "product_page",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "html",
+   "file": "docs\\html\\product-MRH-MAB-01.html",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-MRH-BSA-02#htm",
+   "variant_of": "product-MRH-BSA-02",
+   "ref": "MRH-BSA-02",
+   "kind": "product_page",
+   "client_tag": "MRH",
+   "product": "MRH-BSA-02",
+   "lang": "ko",
+   "format": "htm",
+   "file": "docs\\htm\\product-MRH-BSA-02.htm",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "bispecific",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-MRH-VAC-03#html",
+   "variant_of": "product-MRH-VAC-03",
+   "ref": "MRH-VAC-03",
+   "kind": "product_page",
+   "client_tag": "MRH",
+   "product": "MRH-VAC-03",
+   "lang": "ko",
+   "format": "html",
+   "file": "docs\\html\\product-MRH-VAC-03.html",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "vaccine",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-MRH-ADC-04#htm",
+   "variant_of": "product-MRH-ADC-04",
+   "ref": "MRH-ADC-04",
+   "kind": "product_page",
+   "client_tag": "MRH",
+   "product": "MRH-ADC-04",
+   "lang": "ko",
+   "format": "htm",
+   "file": "docs\\htm\\product-MRH-ADC-04.htm",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "ADC",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-MRH-MAB-05#html",
+   "variant_of": "product-MRH-MAB-05",
+   "ref": "MRH-MAB-05",
+   "kind": "product_page",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-05",
+   "lang": "ko",
+   "format": "html",
+   "file": "docs\\html\\product-MRH-MAB-05.html",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-PFE-MAB-01#htm",
+   "variant_of": "product-PFE-MAB-01",
+   "ref": "PFE-MAB-01",
+   "kind": "product_page",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-01",
+   "lang": "en",
+   "format": "htm",
+   "file": "docs\\htm\\product-PFE-MAB-01.htm",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-PFE-MAB-02#html",
+   "variant_of": "product-PFE-MAB-02",
+   "ref": "PFE-MAB-02",
+   "kind": "product_page",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-02",
+   "lang": "en",
+   "format": "html",
+   "file": "docs\\html\\product-PFE-MAB-02.html",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-PFE-ADC-03#htm",
+   "variant_of": "product-PFE-ADC-03",
+   "ref": "PFE-ADC-03",
+   "kind": "product_page",
+   "client_tag": "PFE",
+   "product": "PFE-ADC-03",
+   "lang": "en",
+   "format": "htm",
+   "file": "docs\\htm\\product-PFE-ADC-03.htm",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "ADC",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-PFE-ADC-04#html",
+   "variant_of": "product-PFE-ADC-04",
+   "ref": "PFE-ADC-04",
+   "kind": "product_page",
+   "client_tag": "PFE",
+   "product": "PFE-ADC-04",
+   "lang": "en",
+   "format": "html",
+   "file": "docs\\html\\product-PFE-ADC-04.html",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "ADC",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-PFE-BSA-05#htm",
+   "variant_of": "product-PFE-BSA-05",
+   "ref": "PFE-BSA-05",
+   "kind": "product_page",
+   "client_tag": "PFE",
+   "product": "PFE-BSA-05",
+   "lang": "en",
+   "format": "htm",
+   "file": "docs\\htm\\product-PFE-BSA-05.htm",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "bispecific",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-PFE-VAC-06#html",
+   "variant_of": "product-PFE-VAC-06",
+   "ref": "PFE-VAC-06",
+   "kind": "product_page",
+   "client_tag": "PFE",
+   "product": "PFE-VAC-06",
+   "lang": "en",
+   "format": "html",
+   "file": "docs\\html\\product-PFE-VAC-06.html",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "vaccine",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-PFE-MAB-07#htm",
+   "variant_of": "product-PFE-MAB-07",
+   "ref": "PFE-MAB-07",
+   "kind": "product_page",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-07",
+   "lang": "en",
+   "format": "htm",
+   "file": "docs\\htm\\product-PFE-MAB-07.htm",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "press-CRB#html",
+   "variant_of": "press-CRB",
+   "ref": "CRB",
+   "kind": "press_release",
+   "client_tag": "CRB",
+   "product": null,
+   "lang": "ko",
+   "format": "html",
+   "file": "docs\\html\\press-CRB.html",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "product_count",
+     "value": "1",
+     "locator": "본문: 제품 수"
+    }
+   ]
+  },
+  {
+   "doc_id": "press-SOL#htm",
+   "variant_of": "press-SOL",
+   "ref": "SOL",
+   "kind": "press_release",
+   "client_tag": "SOL",
+   "product": null,
+   "lang": "en",
+   "format": "htm",
+   "file": "docs\\htm\\press-SOL.htm",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "product_count",
+     "value": "3",
+     "locator": "본문: 제품 수"
+    }
+   ]
+  },
+  {
+   "doc_id": "press-MRH#html",
+   "variant_of": "press-MRH",
+   "ref": "MRH",
+   "kind": "press_release",
+   "client_tag": "MRH",
+   "product": null,
+   "lang": "ko",
+   "format": "html",
+   "file": "docs\\html\\press-MRH.html",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "product_count",
+     "value": "5",
+     "locator": "본문: 제품 수"
+    }
+   ]
+  },
+  {
+   "doc_id": "press-PFE#htm",
+   "variant_of": "press-PFE",
+   "ref": "PFE",
+   "kind": "press_release",
+   "client_tag": "PFE",
+   "product": null,
+   "lang": "en",
+   "format": "htm",
+   "file": "docs\\htm\\press-PFE.htm",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "product_count",
+     "value": "7",
+     "locator": "본문: 제품 수"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-CRB-VAC-01#mht",
+   "variant_of": "product-CRB-VAC-01",
+   "ref": "CRB-VAC-01",
+   "kind": "product_page",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "mht",
+   "file": "docs\\mht\\product-CRB-VAC-01.mht",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "vaccine",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-SOL-MAB-01#mht",
+   "variant_of": "product-SOL-MAB-01",
+   "ref": "SOL-MAB-01",
+   "kind": "product_page",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "mht",
+   "file": "docs\\mht\\product-SOL-MAB-01.mht",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-SOL-MAB-02#mht",
+   "variant_of": "product-SOL-MAB-02",
+   "ref": "SOL-MAB-02",
+   "kind": "product_page",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "mht",
+   "file": "docs\\mht\\product-SOL-MAB-02.mht",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-SOL-ADC-03#mht",
+   "variant_of": "product-SOL-ADC-03",
+   "ref": "SOL-ADC-03",
+   "kind": "product_page",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "mht",
+   "file": "docs\\mht\\product-SOL-ADC-03.mht",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "ADC",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-MRH-MAB-01#mht",
+   "variant_of": "product-MRH-MAB-01",
+   "ref": "MRH-MAB-01",
+   "kind": "product_page",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "mht",
+   "file": "docs\\mht\\product-MRH-MAB-01.mht",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-MRH-BSA-02#mht",
+   "variant_of": "product-MRH-BSA-02",
+   "ref": "MRH-BSA-02",
+   "kind": "product_page",
+   "client_tag": "MRH",
+   "product": "MRH-BSA-02",
+   "lang": "ko",
+   "format": "mht",
+   "file": "docs\\mht\\product-MRH-BSA-02.mht",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "bispecific",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-MRH-VAC-03#mht",
+   "variant_of": "product-MRH-VAC-03",
+   "ref": "MRH-VAC-03",
+   "kind": "product_page",
+   "client_tag": "MRH",
+   "product": "MRH-VAC-03",
+   "lang": "ko",
+   "format": "mht",
+   "file": "docs\\mht\\product-MRH-VAC-03.mht",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "vaccine",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-MRH-ADC-04#mht",
+   "variant_of": "product-MRH-ADC-04",
+   "ref": "MRH-ADC-04",
+   "kind": "product_page",
+   "client_tag": "MRH",
+   "product": "MRH-ADC-04",
+   "lang": "ko",
+   "format": "mht",
+   "file": "docs\\mht\\product-MRH-ADC-04.mht",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "ADC",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-MRH-MAB-05#mht",
+   "variant_of": "product-MRH-MAB-05",
+   "ref": "MRH-MAB-05",
+   "kind": "product_page",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-05",
+   "lang": "ko",
+   "format": "mht",
+   "file": "docs\\mht\\product-MRH-MAB-05.mht",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-PFE-MAB-01#mht",
+   "variant_of": "product-PFE-MAB-01",
+   "ref": "PFE-MAB-01",
+   "kind": "product_page",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-01",
+   "lang": "en",
+   "format": "mht",
+   "file": "docs\\mht\\product-PFE-MAB-01.mht",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "meeting-CRB-VAC-01#txt",
+   "variant_of": "meeting-CRB-VAC-01",
+   "ref": "CRB-VAC-01",
+   "kind": "meeting_note",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "txt",
+   "file": "docs\\txt\\meeting-CRB-VAC-01.utf8.txt",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "volume_note",
+     "value": "5 batches",
+     "locator": "본문: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "meeting-SOL-MAB-01#txt",
+   "variant_of": "meeting-SOL-MAB-01",
+   "ref": "SOL-MAB-01",
+   "kind": "meeting_note",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "txt",
+   "file": "docs\\txt\\meeting-SOL-MAB-01.utf8.txt",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "volume_note",
+     "value": "3 batches",
+     "locator": "본문: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "meeting-SOL-MAB-02#txt",
+   "variant_of": "meeting-SOL-MAB-02",
+   "ref": "SOL-MAB-02",
+   "kind": "meeting_note",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "txt",
+   "file": "docs\\txt\\meeting-SOL-MAB-02.utf8.txt",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "volume_note",
+     "value": "9 batches",
+     "locator": "본문: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "meeting-SOL-ADC-03#txt",
+   "variant_of": "meeting-SOL-ADC-03",
+   "ref": "SOL-ADC-03",
+   "kind": "meeting_note",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "txt",
+   "file": "docs\\txt\\meeting-SOL-ADC-03.utf8.txt",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "volume_note",
+     "value": "7 batches",
+     "locator": "본문: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "meeting-MRH-MAB-01#txt",
+   "variant_of": "meeting-MRH-MAB-01",
+   "ref": "MRH-MAB-01",
+   "kind": "meeting_note",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "txt",
+   "file": "docs\\txt\\meeting-MRH-MAB-01.cp949.txt",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "volume_note",
+     "value": "6 batches",
+     "locator": "본문: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "meeting-MRH-BSA-02#txt",
+   "variant_of": "meeting-MRH-BSA-02",
+   "ref": "MRH-BSA-02",
+   "kind": "meeting_note",
+   "client_tag": "MRH",
+   "product": "MRH-BSA-02",
+   "lang": "ko",
+   "format": "txt",
+   "file": "docs\\txt\\meeting-MRH-BSA-02.utf8sig.txt",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "volume_note",
+     "value": "8 batches",
+     "locator": "본문: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "meeting-MRH-VAC-03#txt",
+   "variant_of": "meeting-MRH-VAC-03",
+   "ref": "MRH-VAC-03",
+   "kind": "meeting_note",
+   "client_tag": "MRH",
+   "product": "MRH-VAC-03",
+   "lang": "ko",
+   "format": "txt",
+   "file": "docs\\txt\\meeting-MRH-VAC-03.utf8.txt",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "volume_note",
+     "value": "5 batches",
+     "locator": "본문: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "meeting-MRH-ADC-04#txt",
+   "variant_of": "meeting-MRH-ADC-04",
+   "ref": "MRH-ADC-04",
+   "kind": "meeting_note",
+   "client_tag": "MRH",
+   "product": "MRH-ADC-04",
+   "lang": "ko",
+   "format": "txt",
+   "file": "docs\\txt\\meeting-MRH-ADC-04.cp949.txt",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "volume_note",
+     "value": "5 batches",
+     "locator": "본문: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "meeting-MRH-MAB-05#txt",
+   "variant_of": "meeting-MRH-MAB-05",
+   "ref": "MRH-MAB-05",
+   "kind": "meeting_note",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-05",
+   "lang": "ko",
+   "format": "txt",
+   "file": "docs\\txt\\meeting-MRH-MAB-05.utf8sig.txt",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "volume_note",
+     "value": "6 batches",
+     "locator": "본문: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "meeting-PFE-MAB-01#txt",
+   "variant_of": "meeting-PFE-MAB-01",
+   "ref": "PFE-MAB-01",
+   "kind": "meeting_note",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-01",
+   "lang": "en",
+   "format": "txt",
+   "file": "docs\\txt\\meeting-PFE-MAB-01.utf8.txt",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "volume_note",
+     "value": "6 batches",
+     "locator": "본문: 연간 물량"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-CRB-01#eml",
+   "variant_of": "MAIL-CRB-01",
+   "ref": "MAIL-CRB-01",
+   "kind": "email",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-CRB-01.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "113,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "CRB-VAC-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-CRB-02#eml",
+   "variant_of": "MAIL-CRB-02",
+   "ref": "MAIL-CRB-02",
+   "kind": "email",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-CRB-02.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "102,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "CRB-VAC-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-SOL-01#eml",
+   "variant_of": "MAIL-SOL-01",
+   "ref": "MAIL-SOL-01",
+   "kind": "email",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-SOL-01.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "284,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "SOL-MAB-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-SOL-02#eml",
+   "variant_of": "MAIL-SOL-02",
+   "ref": "MAIL-SOL-02",
+   "kind": "email",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-SOL-02.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "296,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "SOL-MAB-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-SOL-03#eml",
+   "variant_of": "MAIL-SOL-03",
+   "ref": "MAIL-SOL-03",
+   "kind": "email",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-SOL-03.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "348,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "SOL-MAB-02",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-SOL-04#eml",
+   "variant_of": "MAIL-SOL-04",
+   "ref": "MAIL-SOL-04",
+   "kind": "email",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-SOL-04.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "299,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "SOL-MAB-02",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-SOL-05#eml",
+   "variant_of": "MAIL-SOL-05",
+   "ref": "MAIL-SOL-05",
+   "kind": "email",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-SOL-05.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "529,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "SOL-ADC-03",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-SOL-06#eml",
+   "variant_of": "MAIL-SOL-06",
+   "ref": "MAIL-SOL-06",
+   "kind": "email",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-SOL-06.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "523,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "SOL-ADC-03",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-01#eml",
+   "variant_of": "MAIL-MRH-01",
+   "ref": "MAIL-MRH-01",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-MRH-01.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "383,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-MAB-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-02#eml",
+   "variant_of": "MAIL-MRH-02",
+   "ref": "MAIL-MRH-02",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-MRH-02.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "434,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-MAB-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-03#eml",
+   "variant_of": "MAIL-MRH-03",
+   "ref": "MAIL-MRH-03",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-BSA-02",
+   "lang": "ko",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-MRH-03.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "487,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-BSA-02",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-04#eml",
+   "variant_of": "MAIL-MRH-04",
+   "ref": "MAIL-MRH-04",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-BSA-02",
+   "lang": "ko",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-MRH-04.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "484,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-BSA-02",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-05#eml",
+   "variant_of": "MAIL-MRH-05",
+   "ref": "MAIL-MRH-05",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-VAC-03",
+   "lang": "ko",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-MRH-05.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "128,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-VAC-03",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-06#eml",
+   "variant_of": "MAIL-MRH-06",
+   "ref": "MAIL-MRH-06",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-VAC-03",
+   "lang": "ko",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-MRH-06.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "131,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-VAC-03",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-07#eml",
+   "variant_of": "MAIL-MRH-07",
+   "ref": "MAIL-MRH-07",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-ADC-04",
+   "lang": "ko",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-MRH-07.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "639,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-ADC-04",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-08#eml",
+   "variant_of": "MAIL-MRH-08",
+   "ref": "MAIL-MRH-08",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-ADC-04",
+   "lang": "ko",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-MRH-08.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "560,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-ADC-04",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-09#eml",
+   "variant_of": "MAIL-MRH-09",
+   "ref": "MAIL-MRH-09",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-05",
+   "lang": "ko",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-MRH-09.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "337,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-MAB-05",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-10#eml",
+   "variant_of": "MAIL-MRH-10",
+   "ref": "MAIL-MRH-10",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-05",
+   "lang": "ko",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-MRH-10.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "313,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-MAB-05",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-01#eml",
+   "variant_of": "MAIL-PFE-01",
+   "ref": "MAIL-PFE-01",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-01",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-01.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "218,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-MAB-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-02#eml",
+   "variant_of": "MAIL-PFE-02",
+   "ref": "MAIL-PFE-02",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-01",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-02.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "206,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-MAB-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-03#eml",
+   "variant_of": "MAIL-PFE-03",
+   "ref": "MAIL-PFE-03",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-02",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-03.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "164,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-MAB-02",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-04#eml",
+   "variant_of": "MAIL-PFE-04",
+   "ref": "MAIL-PFE-04",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-02",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-04.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "182,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-MAB-02",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-05#eml",
+   "variant_of": "MAIL-PFE-05",
+   "ref": "MAIL-PFE-05",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-ADC-03",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-05.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "416,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-ADC-03",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-06#eml",
+   "variant_of": "MAIL-PFE-06",
+   "ref": "MAIL-PFE-06",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-ADC-03",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-06.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "431,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-ADC-03",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-07#eml",
+   "variant_of": "MAIL-PFE-07",
+   "ref": "MAIL-PFE-07",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-ADC-04",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-07.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "402,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-ADC-04",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-08#eml",
+   "variant_of": "MAIL-PFE-08",
+   "ref": "MAIL-PFE-08",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-ADC-04",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-08.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "379,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-ADC-04",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-09#eml",
+   "variant_of": "MAIL-PFE-09",
+   "ref": "MAIL-PFE-09",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-BSA-05",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-09.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "293,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-BSA-05",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-10#eml",
+   "variant_of": "MAIL-PFE-10",
+   "ref": "MAIL-PFE-10",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-BSA-05",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-10.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "329,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-BSA-05",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-11#eml",
+   "variant_of": "MAIL-PFE-11",
+   "ref": "MAIL-PFE-11",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-VAC-06",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-11.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "103,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-VAC-06",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-12#eml",
+   "variant_of": "MAIL-PFE-12",
+   "ref": "MAIL-PFE-12",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-VAC-06",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-12.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "90,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-VAC-06",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-13#eml",
+   "variant_of": "MAIL-PFE-13",
+   "ref": "MAIL-PFE-13",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-07",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-13.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "206,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-MAB-07",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-PFE-14#eml",
+   "variant_of": "MAIL-PFE-14",
+   "ref": "MAIL-PFE-14",
+   "kind": "email",
+   "client_tag": "PFE",
+   "product": "PFE-MAB-07",
+   "lang": "en",
+   "format": "eml",
+   "file": "docs\\eml\\MAIL-PFE-14.eml",
+   "checkable": true,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "219,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "PFE-MAB-07",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-CRB-01#msg",
+   "variant_of": "MAIL-CRB-01",
+   "ref": "MAIL-CRB-01",
+   "kind": "email",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-CRB-01.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "113,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "CRB-VAC-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-CRB-02#msg",
+   "variant_of": "MAIL-CRB-02",
+   "ref": "MAIL-CRB-02",
+   "kind": "email",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-CRB-02.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "102,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "CRB-VAC-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-SOL-01#msg",
+   "variant_of": "MAIL-SOL-01",
+   "ref": "MAIL-SOL-01",
+   "kind": "email",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-SOL-01.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "284,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "SOL-MAB-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-SOL-02#msg",
+   "variant_of": "MAIL-SOL-02",
+   "ref": "MAIL-SOL-02",
+   "kind": "email",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-SOL-02.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "296,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "SOL-MAB-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-SOL-03#msg",
+   "variant_of": "MAIL-SOL-03",
+   "ref": "MAIL-SOL-03",
+   "kind": "email",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-SOL-03.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "348,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "SOL-MAB-02",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-SOL-04#msg",
+   "variant_of": "MAIL-SOL-04",
+   "ref": "MAIL-SOL-04",
+   "kind": "email",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-SOL-04.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "299,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "SOL-MAB-02",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-SOL-05#msg",
+   "variant_of": "MAIL-SOL-05",
+   "ref": "MAIL-SOL-05",
+   "kind": "email",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-SOL-05.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "529,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "SOL-ADC-03",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-SOL-06#msg",
+   "variant_of": "MAIL-SOL-06",
+   "ref": "MAIL-SOL-06",
+   "kind": "email",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-SOL-06.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "523,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "SOL-ADC-03",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-01#msg",
+   "variant_of": "MAIL-MRH-01",
+   "ref": "MAIL-MRH-01",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-MRH-01.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "383,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-MAB-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-02#msg",
+   "variant_of": "MAIL-MRH-02",
+   "ref": "MAIL-MRH-02",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-MRH-02.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "434,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-MAB-01",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-03#msg",
+   "variant_of": "MAIL-MRH-03",
+   "ref": "MAIL-MRH-03",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-BSA-02",
+   "lang": "ko",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-MRH-03.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "487,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-BSA-02",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-04#msg",
+   "variant_of": "MAIL-MRH-04",
+   "ref": "MAIL-MRH-04",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-BSA-02",
+   "lang": "ko",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-MRH-04.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "484,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-BSA-02",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-05#msg",
+   "variant_of": "MAIL-MRH-05",
+   "ref": "MAIL-MRH-05",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-VAC-03",
+   "lang": "ko",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-MRH-05.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "128,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-VAC-03",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-06#msg",
+   "variant_of": "MAIL-MRH-06",
+   "ref": "MAIL-MRH-06",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-VAC-03",
+   "lang": "ko",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-MRH-06.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "131,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-VAC-03",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-07#msg",
+   "variant_of": "MAIL-MRH-07",
+   "ref": "MAIL-MRH-07",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-ADC-04",
+   "lang": "ko",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-MRH-07.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "639,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-ADC-04",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-MRH-08#msg",
+   "variant_of": "MAIL-MRH-08",
+   "ref": "MAIL-MRH-08",
+   "kind": "email",
+   "client_tag": "MRH",
+   "product": "MRH-ADC-04",
+   "lang": "ko",
+   "format": "msg",
+   "file": "docs\\msg\\MAIL-MRH-08.msg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "negotiated_price",
+     "value": "560,000,000",
+     "locator": "본문: 제안 단가"
+    },
+    {
+     "key": "product",
+     "value": "MRH-ADC-04",
+     "locator": "제목: 제품코드"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-CRB-VAC-01-v1#jpg",
+   "variant_of": "rfp-CRB-VAC-01-v1",
+   "ref": "CRB-VAC-01-v1",
+   "kind": "rfp",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "jpg",
+   "file": "docs\\jpg\\spectable_rfp-CRB-VAC-01-v1.jpg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "6 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "5%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "45%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-CRB-VAC-01-v2#jpg",
+   "variant_of": "rfp-CRB-VAC-01-v2",
+   "ref": "CRB-VAC-01-v2",
+   "kind": "rfp",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "jpg",
+   "file": "docs\\jpg\\spectable_rfp-CRB-VAC-01-v2.jpg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "7 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "4%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "50%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-SOL-MAB-01-v1#jpg",
+   "variant_of": "rfp-SOL-MAB-01-v1",
+   "ref": "SOL-MAB-01-v1",
+   "kind": "rfp",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "jpg",
+   "file": "docs\\jpg\\spectable_rfp-SOL-MAB-01-v1.jpg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "4 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "5%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "50%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "rfp-SOL-MAB-01-v2#jpg",
+   "variant_of": "rfp-SOL-MAB-01-v2",
+   "ref": "SOL-MAB-01-v2",
+   "kind": "rfp",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "jpg",
+   "file": "docs\\jpg\\spectable_rfp-SOL-MAB-01-v2.jpg",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "mtop",
+     "value": "5 batches/year",
+     "locator": "표: MTOP"
+    },
+    {
+     "key": "price_adjustment_cap",
+     "value": "4%",
+     "locator": "표: Price adjustment cap"
+    },
+    {
+     "key": "one_way_partial_binding",
+     "value": "55%",
+     "locator": "표: One-way partial binding"
+    }
+   ]
+  },
+  {
+   "doc_id": "MAIL-CRB-01#jpg",
+   "variant_of": "MAIL-CRB-01",
+   "ref": "MAIL-CRB-01",
+   "kind": "email_shot",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "jpg",
+   "file": "docs\\jpg\\mailshot_MAIL-CRB-01.jpg",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "MAIL-CRB-02#png",
+   "variant_of": "MAIL-CRB-02",
+   "ref": "MAIL-CRB-02",
+   "kind": "email_shot",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "png",
+   "file": "docs\\png\\mailshot_MAIL-CRB-02.png",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "MAIL-SOL-01#jpg",
+   "variant_of": "MAIL-SOL-01",
+   "ref": "MAIL-SOL-01",
+   "kind": "email_shot",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "jpg",
+   "file": "docs\\jpg\\mailshot_MAIL-SOL-01.jpg",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "MAIL-SOL-02#png",
+   "variant_of": "MAIL-SOL-02",
+   "ref": "MAIL-SOL-02",
+   "kind": "email_shot",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "png",
+   "file": "docs\\png\\mailshot_MAIL-SOL-02.png",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "MAIL-SOL-03#jpg",
+   "variant_of": "MAIL-SOL-03",
+   "ref": "MAIL-SOL-03",
+   "kind": "email_shot",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "jpg",
+   "file": "docs\\jpg\\mailshot_MAIL-SOL-03.jpg",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "MAIL-SOL-04#png",
+   "variant_of": "MAIL-SOL-04",
+   "ref": "MAIL-SOL-04",
+   "kind": "email_shot",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "png",
+   "file": "docs\\png\\mailshot_MAIL-SOL-04.png",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "MAIL-SOL-05#jpg",
+   "variant_of": "MAIL-SOL-05",
+   "ref": "MAIL-SOL-05",
+   "kind": "email_shot",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "jpg",
+   "file": "docs\\jpg\\mailshot_MAIL-SOL-05.jpg",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "MAIL-SOL-06#png",
+   "variant_of": "MAIL-SOL-06",
+   "ref": "MAIL-SOL-06",
+   "kind": "email_shot",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "png",
+   "file": "docs\\png\\mailshot_MAIL-SOL-06.png",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "MAIL-MRH-01#jpg",
+   "variant_of": "MAIL-MRH-01",
+   "ref": "MAIL-MRH-01",
+   "kind": "email_shot",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "jpg",
+   "file": "docs\\jpg\\mailshot_MAIL-MRH-01.jpg",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "MAIL-MRH-02#png",
+   "variant_of": "MAIL-MRH-02",
+   "ref": "MAIL-MRH-02",
+   "kind": "email_shot",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "png",
+   "file": "docs\\png\\mailshot_MAIL-MRH-02.png",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "MAIL-MRH-03#jpg",
+   "variant_of": "MAIL-MRH-03",
+   "ref": "MAIL-MRH-03",
+   "kind": "email_shot",
+   "client_tag": "MRH",
+   "product": "MRH-BSA-02",
+   "lang": "ko",
+   "format": "jpg",
+   "file": "docs\\jpg\\mailshot_MAIL-MRH-03.jpg",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "MAIL-MRH-04#png",
+   "variant_of": "MAIL-MRH-04",
+   "ref": "MAIL-MRH-04",
+   "kind": "email_shot",
+   "client_tag": "MRH",
+   "product": "MRH-BSA-02",
+   "lang": "ko",
+   "format": "png",
+   "file": "docs\\png\\mailshot_MAIL-MRH-04.png",
+   "checkable": false,
+   "facts": []
+  },
+  {
+   "doc_id": "product-CRB-VAC-01#png",
+   "variant_of": "product-CRB-VAC-01",
+   "ref": "CRB-VAC-01",
+   "kind": "product_page",
+   "client_tag": "CRB",
+   "product": "CRB-VAC-01",
+   "lang": "ko",
+   "format": "png",
+   "file": "docs\\png\\shot_product-CRB-VAC-01.png",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "vaccine",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-SOL-MAB-01#png",
+   "variant_of": "product-SOL-MAB-01",
+   "ref": "SOL-MAB-01",
+   "kind": "product_page",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-01",
+   "lang": "en",
+   "format": "png",
+   "file": "docs\\png\\shot_product-SOL-MAB-01.png",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-SOL-MAB-02#png",
+   "variant_of": "product-SOL-MAB-02",
+   "ref": "SOL-MAB-02",
+   "kind": "product_page",
+   "client_tag": "SOL",
+   "product": "SOL-MAB-02",
+   "lang": "en",
+   "format": "png",
+   "file": "docs\\png\\shot_product-SOL-MAB-02.png",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-SOL-ADC-03#png",
+   "variant_of": "product-SOL-ADC-03",
+   "ref": "SOL-ADC-03",
+   "kind": "product_page",
+   "client_tag": "SOL",
+   "product": "SOL-ADC-03",
+   "lang": "en",
+   "format": "png",
+   "file": "docs\\png\\shot_product-SOL-ADC-03.png",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "ADC",
+     "locator": "표: 모달리티"
+    }
+   ]
+  },
+  {
+   "doc_id": "product-MRH-MAB-01#png",
+   "variant_of": "product-MRH-MAB-01",
+   "ref": "MRH-MAB-01",
+   "kind": "product_page",
+   "client_tag": "MRH",
+   "product": "MRH-MAB-01",
+   "lang": "ko",
+   "format": "png",
+   "file": "docs\\png\\shot_product-MRH-MAB-01.png",
+   "checkable": false,
+   "facts": [
+    {
+     "key": "modality",
+     "value": "mAb",
+     "locator": "표: 모달리티"
+    }
+   ]
+  }
+ ]
+}

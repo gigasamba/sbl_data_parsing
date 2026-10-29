@@ -1,0 +1,32 @@
+{
+  "agent_id": "parse_agent",
+  "owner": "developer",
+  "description": "AG11 1단계 — 파싱 에이전트(설계 dev/docs/common/parse-agent-design.md 'AG11 구현 계획' 절). shadow 모드에서는 다음 행동만 제안(실행은 지금 규칙), on은 아직 거부(2단계 PA3).",
+  "kind": "pipeline",
+  "model_role": "llm",
+  "classification": "internal",
+  "agentic": true,
+  "max_turns": 12,
+  "local_tools": [
+    "inspect_document",
+    "parse_text",
+    "extract_images",
+    "detect_rotation",
+    "ocr_region",
+    "vlm_read",
+    "summarize_document",
+    "cross_check",
+    "choose_representative",
+    "apply_post",
+    "finalize"
+  ],
+  "sub_agents": [],
+  "prompt_ids": [
+    "plan"
+  ],
+  "budget": {
+    "model_calls": 12,
+    "tool_calls": 20,
+    "seconds": 180
+  }
+}

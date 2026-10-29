@@ -1,0 +1,5 @@
+id,content_version_id,s3_key,original_filename,file_size
+101,CV-0101,crm/2023/contract_veridian_mab_2023.docx,contract_veridian_mab_2023.docx,36869
+102,CV-0102,crm/2024/rfi_answer_sjm_2024.pdf,rfi_answer_sjm_2024.pdf,70150
+103,CV-0103,crm/2025/quote_castellan_2025.xlsx,quote_castellan_2025.xlsx,5127
+104,CV-0104,crm/2025/minutes/minutes_nordholm_review_2025.txt,minutes_nordholm_review_2025.txt,290

@@ -1,0 +1,5 @@
+[Synthetic example] Test document — not related to any real company data or agreement.
+Supply Agreement Summary — Fujifilm Diosynth Biotechnologies
+Counterparty: Fujifilm Diosynth. Agreement ID: XL-SA-2025-02.
+Contracted volume: 10 batches of drug substance. Manufacturing site: Plant 1.
+Unit price: USD 1.6M per batch. Term: 18 months from 2025-06-01.

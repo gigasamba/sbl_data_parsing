@@ -1,0 +1,7 @@
+# holdout 확인 세트(사용자 10-13) — 튜닝에 쓰지 않는다(W13). 릴리스·이미지 판 전 통합 시험 뒤 한 번만.
+valid_env/unstructured/synth-realpat-ho/hidden_term_ho.docx
+valid_env/unstructured/synth-realpat-ho/hidden_term_ho.pdf
+valid_env/unstructured/synth-realpat-ho/merged_table_ho.docx
+valid_env/unstructured/synth-realpat-ho/symbol_spec_ho.docx
+valid_env/unstructured/synth-realpat-ho/two_column_ho.pdf
+valid_env/unstructured/synth-realpat-ho/wrap_lines_ho.pdf

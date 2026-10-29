@@ -1,0 +1,34 @@
+{
+ "values": [
+  {
+   "series": null,
+   "x": "D0",
+   "value": 300.0
+  },
+  {
+   "series": null,
+   "x": "D3",
+   "value": 4000.0
+  },
+  {
+   "series": null,
+   "x": "D6",
+   "value": 90000.0
+  },
+  {
+   "series": null,
+   "x": "D9",
+   "value": 6000000.0
+  },
+  {
+   "series": null,
+   "x": "D12",
+   "value": 2000000.0
+  }
+ ],
+ "trend": {
+  "direction": "정점 후 감소",
+  "period": "D0–D12",
+  "basis": "D0 300 → D12 2000000"
+ }
+}

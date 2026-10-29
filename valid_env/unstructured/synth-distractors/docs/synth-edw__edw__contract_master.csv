@@ -1,0 +1,9 @@
+_synthetic,contract_id,company,company_id,product_code,modality,site,line_id,batches_contracted,contract_value_usd,currency,term_months,signed_on,start_date,end_date,status
+[SYNTHETIC],C-EDW-4362-666,Veltrix Biologics,CL-5465,KST-mAb-01,mAb,Plant1,BR-M1,13,31680000,USD,38,2016-03-10,2016-04-01,2019-03-31,completed
+[SYNTHETIC],C-EDW-4366-445,Veltrix Biologics,CL-5465,KST-ADC-99,ADC,Plant2,BR-A1,6,18900000,USD,26,2017-06-12,2017-07-01,2019-06-30,active
+[SYNTHETIC],C-EDW-7135-848,Corvane Pharma,CL-3904,AUR-BsAb-01,bispecific,Plant2,BR-B1,8,20580000,USD,38,2017-01-15,2017-02-01,1818-01-31,active
+[SYNTHETIC],C-EDW-2822-405,하늘바이오(주),CL-6382,HNB-VAC-47,vaccine,Plant3,BR-V1,11,8550000,USD,26,2017-12-02,2018-01-01,2019-12-31,active
+[SYNTHETIC],C-EDW-0526-271,Stonefield Therapeutics,CL-6614,BWT-mAb-02,mAb,Plant1,BR-M2,16,38475000,USD,38,2018-04-08,2018-05-01,2223-04-30,active
+[SYNTHETIC],C-EDW-5683-100,Corvane Pharma,CL-3904,AUR-mAb-03,mAb,Plant1,BR-M1,9,21735000,USD,26,2018-08-20,2018-09-01,1818-08-31,active
+[SYNTHETIC],C-EDW-3205-709,하늘바이오(주),CL-6382,HNB-mAb-02,mAb,Plant1,BR-M2,6,12420000,USD,13,2019-02-10,2019-03-01,1818-02-28,active
+[SYNTHETIC],C-EDW-3563-258,Veltrix Biologics,CL-5465,KST-mAb-01,mAb,Plant1,BR-M1,16,31050000,USD,38,2019-03-05,2019-04-01,2123-03-31,active

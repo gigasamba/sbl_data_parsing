@@ -1,0 +1,5 @@
+file_id,object_path,file_name,size_bytes,mod_seq
+R-7001,crms/2025/mail_sjm_negotiation_2025.eml,mail_sjm_negotiation_2025.eml,488,1
+R-7002,crms/2024/answers/rfi_answer_sjm_2024.pdf,rfi_answer_sjm_2024.pdf,70150,2
+R-7003,s3://rag-src/crms/2026/rfp_castellan_cgt_2026.pdf,rfp_castellan_cgt_2026.pdf,70781,3
+R-7004,crms/2025/contract_sjm_mab_2025.txt,contract_sjm_mab_2025.txt,320,4

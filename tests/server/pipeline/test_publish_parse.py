@@ -1,0 +1,224 @@
+"""pipeline.load.publish_parse_result 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.load.publish_parse_result --selftest`.
+S9b(C-54 ②, 사용자 10-28 — 기록만): 기대값을 지금 서버 동작에 맞춤 — 업로드 폴더에 `<stem>_<date>_meta.json`·`source.json`이 없음
+(pre-refactor 서버 사본이 일부러 뺌 — `_meta.json`은 EDW에, `source.json`은 내부용). source.json에 기대던 방어선(재실행 업로드 건너뜀
+`skip_exists`·키 충돌 거부 `error_key_collision`)은 `test_publish_guard.py`(알려진 FAIL — 이유 C-54)로 뺌. 산출물 만들기는 `make_fixture()`로.
+S10(VS9b R-4): 문서 대장이 SQLite로 대체될 때(PG 없음 — 이미지·PG 꺼진 PC) 개발자 기본 대장이 아닌 시험 폴더 STRUCT_DB에 쓰게."""
+
+import json
+from pathlib import Path
+
+from common.config.settings import COMMON
+from pipeline import config as pc
+from pipeline.load.publish_parse_result import run
+
+
+class A:
+    pass
+
+
+def make_fixture():
+    """publish 시험 산출물(문서 4개 — ok·failed·not_parsed·DRM)과 인자 a(dry-run) → (임시 폴더, out, a). test_publish_guard도 씀(S9b)."""
+    import tempfile
+
+    d = Path(tempfile.mkdtemp())
+    out = d / "output"
+    (out / "_source_files").mkdir(parents=True)
+    (out / "parse" / "_source").mkdir(parents=True)
+    (out / "parse" / "_rep").mkdir(parents=True)
+    (out / "prepared").mkdir(parents=True)
+
+    docs = {"a.pdf": "content-a", "b.pdf": "content-b", "c.pdf": "content-c", "d.pdf": "content-d-drm"}
+    for name, content in docs.items():
+        (out / "_source_files" / name).write_text(content, encoding="utf-8")
+    manifest = [
+        {"file_name": "a.pdf", "doc_id": "1", "key": "docs/a.pdf", "uri": "s3://bkt/docs/a.pdf", "original_filename": "a.pdf"},
+        {"file_name": "b.pdf", "doc_id": "2", "key": "docs/b.pdf", "uri": "s3://bkt/docs/b.pdf", "original_filename": "b.pdf"},
+        {"file_name": "c.pdf", "doc_id": "3", "key": "docs/c.pdf", "uri": "s3://bkt/docs/c.pdf", "original_filename": "c.pdf"},
+        {"file_name": "d.pdf", "doc_id": "4", "key": "docs/d.pdf", "uri": "s3://bkt/docs/d.pdf", "original_filename": "d.pdf"},
+    ]
+    (out / "parse" / "_source" / "manifest.jsonl").write_text(
+        "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in manifest), encoding="utf-8"
+    )
+    rep_docs = [
+        {"doc": "a.pdf", "engine": "pymupdf", "format": ".pdf_text", "acc": 0.99, "pages": 2, "doc_key": "k" * 64},
+        {"doc": "b.pdf", "engine": None, "format": ".pdf_text", "reason": "성공한 엔진 없음"},
+    ]
+    # c.pdf는 색인에 없음 → not_parsed · d.pdf는 DRM이라 엔진에 안 보냄(prepare.py가 먼저 걸러 색인에도 없음)
+    (out / "parse" / "_rep" / "index.json").write_text(json.dumps({"docs": rep_docs}, ensure_ascii=False), encoding="utf-8")
+    (out / "parse" / "_rep" / "a.pdf.json").write_text(
+        json.dumps({"text": "본문 A", "tables_std": []}, ensure_ascii=False), encoding="utf-8"
+    )
+    (out / "parse" / "parse_summary.json").write_text(json.dumps({"types": {}}), encoding="utf-8")
+    # 사용자 10-14 — 엔진별 원본·그림 기록(VLM 모델·맥락)도 함께 올림 · signals/ 같은 엔진 아닌 폴더는 제외
+    for eng, ver in (("pymupdf", "1.28.2"), ("rapidocr_ko", "3.9.2")):
+        (out / "parse" / eng).mkdir(parents=True)
+        (out / "parse" / eng / "a.pdf.json").write_text(
+            json.dumps({"text": f"{eng} 원본", "provenance": {"engine": eng, "engine_version": ver}}, ensure_ascii=False), encoding="utf-8"
+        )
+    (out / "parse" / "runs.jsonl").write_text(
+        json.dumps(  # pymupdf는 runs.jsonl로 · rapidocr_ko는 옛 산출물처럼 provenance로
+            {"doc": "a.pdf", "engine": "pymupdf", "error": None, "engine_version": "1.28.2", "p0_key": "pk", "run_id": "r1"}
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (out / "parse" / "signals").mkdir(parents=True)
+    (out / "parse" / "signals" / "a.pdf.json").write_text("{}", encoding="utf-8")
+    (out / "parse" / "_images").mkdir(parents=True)
+    (out / "parse" / "_images" / "index.jsonl").write_text(
+        json.dumps(
+            {
+                "image_id": "a.pdf#p1#i1",
+                "doc": "a.pdf",
+                "caption": "그림 1",
+                "mentions": ["본문 언급"],
+                "vlm": {"model": "qwen-vl", "summary": "요약"},
+                "provenance": {"model": "qwen-vl", "prompt_id": "figure_describe@v3"},
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (out / "prepared" / "skipped.jsonl").write_text(
+        json.dumps({"file": "d.pdf", "reason": "drm_fasoo", "sha256": "x"}) + "\n", encoding="utf-8"
+    )
+
+    a = A()
+    a.out, a.manifest, a.source_dir, a.rep, a.summary, a.skipped, a.keep = str(out), None, None, None, None, None, None
+    a.source_system, a.version, a.parse_date, a.reparse, a.apply = "FileStorageMap", "v1", "2026-10-08", None, False
+    return d, out, a
+
+
+def selftest():
+    import shutil
+
+    d, out, a = make_fixture()
+    r = run(a)
+    assert r["rows_planned"] == 4 and r["missing_file"] == 0, r
+    assert r["by_status"] == {"ok": 1, "failed": 1, "not_parsed": 1, "skipped_drm": 1}, r["by_status"]
+    assert r["upload_statuses"] == ["ok", "partial"] and r["upload_plan"] == {"eligible": 1, "excluded": 3}, r
+    no_up = {s["status"]: s["upload"] for s in r["sample_rows"]}
+    assert no_up == {"ok": True, "failed": False, "not_parsed": False, "skipped_drm": False}, no_up
+    reasons = {s["status"]: s["no_upload_reason"] for s in r["sample_rows"] if not s["upload"]}
+    assert all(reasons.values()) and "EDW에도 안 들어감" in reasons["failed"] and "EDW에도 안 들어감" in reasons["skipped_drm"], reasons
+    assert r["sample_rows"][0]["rep_key"] == "FileStorageMap/docs/", r["sample_rows"][
+        0
+    ]  # S9 정리(Q7 a) — 서버가 rep_key 꼴을 바꿈(파일 이름 단 없음 — 기대값만 맞춤)
+
+    os_dir, db_path = d / "os", d / "edw.sqlite"
+    with (
+        pc.PIPE.env(PM_BUCKET=f"file://{os_dir}"),
+        COMMON.env(PM_DB_SQLITE=str(db_path), STRUCT_DB=str(d / "struct.sqlite")),
+    ):  # S7c — 시험하는 코드가 객체만 읽음(os.environ 안 건드림)
+        a.apply = True
+        r1 = run(a)
+        # SI39 — ok(a)만 .md 업로드 · EDW는 ok(a)+not_parsed(c) 2행(failed·skipped_drm은 ⑥로 EDW 제외, 보고서로만)
+        assert r1["result"] == {
+            "uploaded": 1,
+            "skip_exists": 0,
+            "upload_excluded": 3,
+            "inserted": 2,
+            "edw_skip_existing": 0,
+            "edw_excluded_drm_failed": 2,
+            "key_collision_errors": 0,
+            "key_collision_details": [],
+            "rows": 4,
+        }, r1["result"]
+        md_files = [p for p in os_dir.rglob("*.md")]
+        assert len(md_files) == 1 and md_files[0].name == "a_2026-10-08.md", md_files  # 원본(.pdf)은 전혀 안 올라감
+        assert "본문 A" in md_files[0].read_text(encoding="utf-8")
+        assert not any(p.is_file() and p.suffix == ".pdf" for p in os_dir.rglob("*")), "원본 파일이 올라감(SI39① 위반)"
+        folder = md_files[0].parent
+        got = sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file())
+        assert got == [
+            "a_2026-10-08.json",
+            "a_2026-10-08.md",
+            "engine/pymupdf_1.28.2_a.json",
+            "engine/rapidocr_ko_3.9.2_a.json",
+            "engine/vlm_qwen-vl_a.jsonl",
+        ], got  # signals/는 엔진 아님 — 제외
+        # S9b(C-54 ②) — 서버 동작: _meta.json·source.json은 안 올림(옛 기대값의 meta 내용 단언 3줄은 대상 파일이 없어 뺌)
+        assert not (folder / "a_2026-10-08_meta.json").exists() and not (folder / "source.json").exists(), got
+        assert json.loads((folder / "engine" / "pymupdf_1.28.2_a.json").read_text(encoding="utf-8"))["text"] == "pymupdf 원본"
+        assert json.loads((folder / "a_2026-10-08.json").read_text(encoding="utf-8"))["text"] == "본문 A"
+        assert not list((Path(a.out) / "publish" / "_md_tmp").glob("*")), "임시 파일이 남음"
+        excluded_md = Path(r1["excluded_report"]).read_text(encoding="utf-8")
+        assert "failed" in excluded_md and "skipped_drm" in excluded_md and "docs/b.pdf" in excluded_md, excluded_md
+
+        r2 = run(
+            a
+        )  # 같은 걸 재실행 — a·c의 (source_system, 원본 키)가 이미 있음 → EDW 건너뜀(업로드 건너뜀 skip_exists는 source.json 방어선 — test_publish_guard, C-54 ②)
+        assert r2["result"]["inserted"] == 0 and r2["result"]["edw_skip_existing"] == 2, (
+            r2
+        )  # SI39 — INSERT만, UPDATE 없음(a·c 둘 다 KEY 존재)
+
+        a.version = "v2"  # 판이 달라도 KEY(출처+원본 키)가 같으면 EDW는 그대로 건너뜀
+        r3 = run(a)
+        assert r3["result"]["inserted"] == 0, r3
+
+        # SI39③ — 명시적 재파싱(--reparse)만 새 날짜 폴더 · 옛 결과(a_2026-10-08.md)는 그대로
+        reparse_f = d / "reparse.txt"
+        reparse_f.write_text("docs/a.pdf\n", encoding="utf-8")
+        a.reparse = str(reparse_f)
+        old_md = next(
+            os_dir.rglob("a_2026-10-08.md")
+        )  # 처음 올린 결과(S9b 리뷰 — r2·r3이 -2·-3 사본을 올려 a_*.md의 첫 것이 사본일 수 있음)
+        old_content = old_md.read_text(encoding="utf-8")
+        r4 = run(a)
+        assert r4["result"]["uploaded"] == 1 and r4["result"]["inserted"] == 1, r4["result"]  # 재파싱 1건만 새로 올라감·새 행
+        # S9b(C-54 ②) — 옛 `len(md_files2) == 2`(r2·r3이 업로드를 건너뛴다는 전제 — test_publish_guard)·재파싱 새 날짜의 meta 단언 대신:
+        import sqlite3
+
+        dates = {r[0] for r in sqlite3.connect(db_path).execute("select parse_date from ParsingMeta where source_key='docs/a.pdf'")}
+        new_dates = dates - {"2026-10-08"}
+        assert "2026-10-08" in dates and len(new_dates) == 1, dates  # 옛 행 그대로 + 재파싱 새 날짜 행 하나
+        new_md = list(os_dir.rglob(f"a_{next(iter(new_dates))}.md"))
+        assert len(new_md) == 1 and new_md[0] != old_md, new_md  # 새 날짜 이름으로 따로 올림
+        assert old_md.read_text(encoding="utf-8") == old_content, "재파싱인데 옛 결과가 바뀜(덮어쓰기 금지 위반)"
+        a.reparse = None
+        a.apply = False
+        with pc.PIPE.env(PM_UPLOAD_RAW="0"):  # 되돌리기 — rep.md만(source.json은 서버가 안 올림 — C-54 ②)
+            assert run(a)["sample_rows"][0]["raw_files"] == []
+        assert run(a)["sample_rows"][0]["raw_files"] == [
+            "<stem>_<date>.json",
+            "engine/pymupdf_1.28.2_<stem>.json",
+            "engine/rapidocr_ko_3.9.2_<stem>.json",
+            "engine/vlm_qwen-vl_<stem>.jsonl",
+        ]  # S9b(C-54 ②) — <stem>_<date>_meta.json 없음(서버 동작)
+        a.apply = True
+
+        total = sqlite3.connect(db_path).execute("select count(*) from ParsingMeta").fetchone()[0]
+        assert total == 3, total  # a(최초) + c(not_parsed) + a(재파싱, 새 parse_date) = 3 — failed·skipped_drm은 전혀 안 들어감
+
+        with pc.PIPE.env(
+            PM_UPLOAD_STATUSES="ok,partial,failed"
+        ):  # PM1에서 넓히기로 정하면 env로 — failed도 업로드 대상이 됨(EDW는 여전히 제외)
+            a.apply = False
+            r5 = run(a)
+            assert r5["upload_plan"]["eligible"] == 1, (
+                r5
+            )  # ok(a)만 — failed(b)는 업로드 허용해도 EDW_EXCLUDED라 render_md용 _rep/b.pdf.json이 없어 제외됨
+
+    # SI39⑤ — PM_BUCKET이 원천 원본 버킷과 같으면 거부(dry-run도)
+    a2 = A()
+    a2.out, a2.manifest, a2.source_dir, a2.rep, a2.summary, a2.skipped, a2.keep = str(out), None, None, None, None, None, None
+    a2.source_system, a2.version, a2.parse_date, a2.reparse, a2.apply = "FileStorageMap", "v1", "2026-10-08", None, False
+    with pc.PIPE.env(PM_BUCKET="bkt"):  # manifest의 uri가 s3://bkt/... — 원천과 같은 버킷
+        try:
+            run(a2)
+            raise AssertionError("PM_BUCKET이 원천 버킷과 겹치는데 거부되지 않음(SI39⑤ 위반)")
+        except SystemExit as e:
+            assert "SI39" in str(e) or "버킷" in str(e), e
+
+    shutil.rmtree(d, ignore_errors=True)
+    print(
+        "[selftest] SI39 — dry-run 쓰기 0 · 대표 결과(.md)만 올라감(원본은 전혀 안 올라감) · KEY(출처+원본 전체 "
+        "키)가 이미 있으면 EDW는 건너뜀(UPDATE 없음 — 업로드 건너뜀은 source.json 방어선이라 test_publish_guard, C-54 ②) · "
+        "--reparse만 새 날짜 이름·새 EDW 행(옛 결과 보존) · _meta.json·source.json 안 올림(서버 동작) · "
+        "DRM·실패는 EDW 제외하고 보고서로만 · PM_BUCKET이 원천 버킷과 같으면 거부 통과"
+    )
+
+
+def test_main():  # 옛 `if a.selftest:` 갈래(main() 안)
+    selftest()

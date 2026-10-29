@@ -1,0 +1,173 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_edge.py",
+ "split": "holdout",
+ "note": "[SYNTHETIC] 실데이터 난제 — 멈추지 않고 조용히 빠뜨리지 않는지",
+ "documents": [
+  {
+   "file": "long_320p.pdf",
+   "format": "pdf(320쪽)",
+   "elements": [
+    "300쪽+ 긴 문서",
+    "중간 쪽 값"
+   ],
+   "content": "7·163·311쪽에만 값",
+   "expect": "정상 파싱",
+   "facts": [
+    {
+     "kw": [
+      "RS-0704"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "87배치"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "78.5%"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "secured_open.pdf",
+   "format": "pdf(소유자 암호·복사 제한)",
+   "elements": [
+    "보안 PDF — 열기 가능"
+   ],
+   "content": "감사 점수 92점",
+   "expect": "정상 파싱",
+   "facts": [
+    {
+     "kw": [
+      "92점"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "secured_locked.pdf",
+   "format": "pdf(열기 암호 AES-256)",
+   "elements": [
+    "보안 PDF — 열기 불가"
+   ],
+   "content": "읽을 수 없음",
+   "expect": "암호 문서로 기록하고 건너뜀(실패 처리·멈춤 없음·내용 없음)",
+   "facts": [],
+   "must_not": []
+  },
+  {
+   "file": "nested_mail.eml",
+   "format": "eml(메일 안 메일 + zip)",
+   "elements": [
+    "중첩 첨부",
+    "zip 안 docx"
+   ],
+   "content": "가장 안쪽 첨부에만 값",
+   "expect": "정상 파싱",
+   "facts": [
+    {
+     "kw": [
+      "212.4"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-11-18"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "excel_hard.xlsx",
+   "format": "xlsx(숨긴 시트·수식·그림 22장)",
+   "elements": [
+    "숨긴/매우 숨긴 시트",
+    "저장값 없는 수식",
+    "병합 칸",
+    "그림 상한 초과"
+   ],
+   "content": "숨긴 시트 값·22번째 그림 값",
+   "expect": "정상 파싱",
+   "facts": [
+    {
+     "kw": [
+      "8 °C|8°C"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "APV-5521"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "SUM(Data!B2:B11)|120"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "99.6%"
+     ],
+     "source": "image"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "notice.hwpx",
+   "format": "hwpx",
+   "elements": [
+    "HWPX(OWPML)"
+   ],
+   "content": "교육 일정",
+   "expect": "정상 파싱",
+   "facts": [
+    {
+     "kw": [
+      "2026-11-25"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "huge_scan.png",
+   "format": "png(6000×8500)",
+   "elements": [
+    "초대형 이미지"
+   ],
+   "content": "설비 BR-6001",
+   "expect": "정상 파싱",
+   "facts": [
+    {
+     "kw": [
+      "BR-6001"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "4,500 L|4500 L|4,500L|4500L"
+     ],
+     "source": "image"
+    }
+   ],
+   "must_not": []
+  }
+ ]
+}

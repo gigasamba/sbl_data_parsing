@@ -1,0 +1,32 @@
+﻿_synthetic,table_name,column_name,description,unit,example,allowed_values,join_key,answers
+[SYNTHETIC],client_master,,고객(법인) 마스터 — 별칭 포함,,,,,고객이 몇 곳인가·별칭으로 어느 법인인가
+[SYNTHETIC],client_master,company_id,고객 ID,,CL-2002,,,
+[SYNTHETIC],client_master,company,법인명(정식),,선진메디팜(주),,,
+[SYNTHETIC],client_master,aliases,"별칭(한글·영문·약어, | 구분)",,선진메디팜|Sunjin Medipharm|SJM,,,별칭으로 법인 찾기
+[SYNTHETIC],contract_master,,계약 마스터 — EDW 적재 형식(synth-edw와 같은 열),,,,,계약 몇 건·총액·기간·공장
+[SYNTHETIC],contract_master,contract_id,계약 ID,,C-RDB-2025-005,,doc_location.contract_id,
+[SYNTHETIC],contract_master,company_id,고객 ID,,CL-2002,,client_master.company_id,
+[SYNTHETIC],contract_master,contract_value_usd,계약 총액,USD,20700000,,,고객·공장별 계약 총액 합계
+[SYNTHETIC],contract_master,batches_contracted,계약 생산 배치 총 개수,batch,9,,,배치 수 비교·최다
+[SYNTHETIC],contract_master,site,생산 공장 ID,,Plant1,Plant1|Plant2|Plant3,,공장별 계약 집계
+[SYNTHETIC],contract_master,status,계약 상태,,active,active|completed,,
+[SYNTHETIC],doc_location,,문서 위치 메타(Object Storage 경유 파싱용) — RDB가 무엇을 어디서 가져올지 쥐고 있음,,,,,문서 목록·최신판·삭제 여부·계약 연결
+[SYNTHETIC],doc_location,doc_id,문서 식별자(파일 stem),,rfi_answer_sjm_2026,,,
+[SYNTHETIC],doc_location,bucket,Object Storage 버킷,,rag-docs-rdb,,,
+[SYNTHETIC],doc_location,object_key,버킷 안 경로,,clients/CL-2002/2026/rfi_answer_sjm_2026.docx,,,
+[SYNTHETIC],doc_location,etag,Object Storage ETag(md5),,,,,변경 감지(증분 수집)
+[SYNTHETIC],doc_location,size_bytes,파일 크기,byte,,,,
+[SYNTHETIC],doc_location,content_type,MIME 형식,,application/pdf,,,
+[SYNTHETIC],doc_location,company_id,고객 ID,,CL-2002,,client_master.company_id,고객별 문서 목록
+[SYNTHETIC],doc_location,doc_type,문서 종류,,RFI_ANSWER,RFI_ANSWER|RFI|RFP|CONTRACT|QUOTE|MAIL|MINUTES,,종류별 문서 목록·건수
+[SYNTHETIC],doc_location,contract_id,대응 계약 ID(모르면 NULL — RFI_ANSWER처럼 특정 계약에 안 묶이거나 실주),,C-RDB-2025-005,,contract_master.contract_id,계약 관련 문서 목록
+[SYNTHETIC],doc_location,version,문서 판 번호(같은 문서 계열 안에서 1부터),,2,,,최신판 판단
+[SYNTHETIC],doc_location,supersedes_doc_id,이 판이 대체하는 이전 판 doc_id(없으면 NULL),,rfi_answer_sjm_2023_v1,,doc_location.doc_id,개정 이력
+[SYNTHETIC],doc_location,language,문서 주 언어,,ko,ko|en,,
+[SYNTHETIC],doc_location,received_at,문서 접수·발행일,,2026-01-15,,,연도·기간별 수신 문서 수
+[SYNTHETIC],doc_location,updated_at,Object Storage 최종 수정 시각(증분 선별용),,2026-01-15T00:00:00Z,,,
+[SYNTHETIC],doc_location,is_deleted,삭제 표시(1=삭제 — 목록·최신판에서 제외),,0,0|1,,삭제 문서 제외
+[SYNTHETIC],doc_contract_link,,"문서↔계약 연결(추론 결과, structdb.doc_contract_link와 같은 모양) — 이 생성기는 빈 표만 만듦(파이프라인 link 명령이 채움)",,,,,
+[SYNTHETIC],doc_contract_link,doc_key,문서 키(파싱 결과의 file_sha256 등),,,,doc_location.doc_id(간접),
+[SYNTHETIC],doc_contract_link,contract_id,추론된 계약 ID,,,,contract_master.contract_id,
+[SYNTHETIC],doc_contract_link,status,확정|후보,,확정,확정|후보,,

@@ -1,0 +1,24 @@
+{
+ "values": [
+  {
+   "series": null,
+   "x": "S1",
+   "value": 22.0
+  },
+  {
+   "series": null,
+   "x": "S2",
+   "value": 31.0
+  },
+  {
+   "series": null,
+   "x": "S3",
+   "value": 18.0
+  }
+ ],
+ "trend": {
+  "direction": "정점 후 감소",
+  "period": "S1–S3",
+  "basis": "S1 22 → S3 18"
+ }
+}

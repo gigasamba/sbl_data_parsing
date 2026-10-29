@@ -1,0 +1,31 @@
+# 수집 서버 파이프라인 이미지 — 고정 스택(dev-v1) + 단계 2(대표 파싱·구조화·PostgreSQL 적재)에 필요한 것만.
+# 빠진 것(이미지에서 '미설치'로 건너뜀, 실패로 세지 않음): camelot · opendataloader(Java) · tika(서버) · tesseract(시스템 바이너리)
+#   · 중국어 rapidocr-onnxruntime · docling·marker·unstructured·EasyOCR(requirements-models, 6~8 GB) · paddleocr(별도 venv, 아래 WITH_PADDLE)
+# 폐쇄망 빌드: 인터넷 되는 같은 OS·아키텍처(linux/amd64, Python 3.12)에서 `pip download -r requirements-image.txt -d deploy/docker/wheels` 후 반입.
+pypdf==6.19.0
+pdfplumber==0.11.10
+pdfminer.six==20260107
+pymupdf==1.28.2            # AGPL-3.0
+pymupdf4llm==1.28.2        # AGPL-3.0 (비교 후보)
+pypdfium2==5.10.1          # 쪽 이미지(OCR·VLM)
+markitdown[pdf,docx,pptx,xlsx]==0.1.8
+kreuzberg==4.10.4
+firecrawl-anydoc==0.2.4
+python-docx==1.2.0
+python-pptx==1.0.2
+openpyxl==3.1.5
+python-calamine==0.8.2
+xlrd==2.0.2
+docx2python==3.7.1         # 비교 후보
+extract-msg                # .msg · GPL-3.0
+pandas==2.3.3
+rapidocr==3.9.2            # rapidocr_ko + prepare.py 방향 보정 — 한국어 모델은 assets/rapidocr에서 복사
+onnxruntime==1.20.1
+rapidfuzz
+numpy
+pillow
+psycopg[binary]==3.3.6     # PostgreSQL + pgvector
+mcp==1.30.0               # 검색 MCP 서버(modules/search/mcp_server.py) — uvicorn·starlette·httpx 포함
+boto3                      # Object Storage(S3 호환) 입력 — 파싱 모듈 --source s3:// (modules/parse/source.py)
+google-adk[mcp]==2.9.2    # 모델 호출(GA) — common/adk.py, 파싱 이미지도 VLM을 부름(figures.py·vlm_page.py)
+litellm==1.101.0

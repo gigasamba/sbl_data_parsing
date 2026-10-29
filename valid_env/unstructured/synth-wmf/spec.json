@@ -1,0 +1,48 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_wmf.py",
+ "split": "dev",
+ "note": "[SYNTHETIC] WMF 그림이 든 docx — Linux Pillow가 WMF를 못 열어 대표 결과·_DONE.json이 멈추던 서버 이슈 SI30 재현",
+ "documents": [
+  {
+   "file": "wmf_in_docx.docx",
+   "format": "docx",
+   "elements": [
+    "WMF 그림 1개",
+    "표 1개"
+   ],
+   "content": "품질 기준서 QS-3101 (가상) / 아래 그림은 공정 흐름도(WMF)이다. / 보관 온도는 2-8°C, 유효기간은 24개월.",
+   "expect": "WMF 그림은 '변환 불가'로 기록하고 문서는 끝까지 — 본문·표 값은 그대로 나오고 _rep/_DONE.json 생성",
+   "facts": [
+    "순도=≥ 98%",
+    "수분=≤ 0.5%"
+   ],
+   "must_not": [
+    "대표 결과 전체 중단"
+   ],
+   "defects": [
+    "wmf"
+   ]
+  },
+  {
+   "file": "wmf_two_figs.docx",
+   "format": "docx",
+   "elements": [
+    "WMF 그림 2개",
+    "PNG 그림 1개",
+    "표 1개"
+   ],
+   "content": "장비 점검표 EQ-4410 (가상) / 그림 1·2는 WMF, 그림 3은 PNG. / 점검 주기 30일 · 담당 A팀.",
+   "expect": "WMF 그림은 '변환 불가'로 기록하고 문서는 끝까지 — 본문·표 값은 그대로 나오고 _rep/_DONE.json 생성",
+   "facts": [
+    "EQ-01=정상",
+    "EQ-02=교정 필요"
+   ],
+   "must_not": [
+    "대표 결과 전체 중단"
+   ],
+   "defects": [
+    "wmf"
+   ]
+  }
+ ]
+}

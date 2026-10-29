@@ -1,0 +1,549 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_plant.py",
+ "theme": "FX Bio 2공장(가상) · 제품 FX-MAB-01",
+ "note": "[SYNTHETIC] 모든 값 가상",
+ "documents": [
+  {
+   "file": "bioreactor_schematic.png",
+   "format": "png",
+   "elements": [
+    "순수 이미지",
+    "논문형 설비 구조도",
+    "라벨·설정값",
+    "화살표 흐름"
+   ],
+   "content": "BR-2001 2,000 L STR 구조도 — 교반·DO(옛 값 35%)·pH·온도·작업 부피·피드·배기·수확 라벨",
+   "expect": "그림 기록: 종류=설비 구조도 · 설정값 6개 · 피드/배기/수확 흐름 · 요약",
+   "facts": [
+    {
+     "kw": [
+      "120 rpm"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "35%"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "36.5"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "1800|1,800"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "DC-300"
+     ],
+     "source": "image"
+    }
+   ],
+   "figures": [
+    {
+     "caption": "Figure 3",
+     "mention": null,
+     "facts": [
+      "120 rpm",
+      "35%",
+      "DC-300"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "facility_layout_scan.pdf",
+   "format": "pdf(이미지만)",
+   "elements": [
+    "순수 이미지 PDF 3쪽",
+    "설비 배치도",
+    "90° 회전 쪽(표)",
+    "270° 회전 쪽(동선도)",
+    "2단 머리글 이미지 표"
+   ],
+   "content": "1쪽 2층 배치도(방·등급·차압·설비) · 2쪽 설비 목록 표(90°) · 3쪽 인원·자재 동선(270°)",
+   "expect": "쪽별 방향 보정 → 방 5개·등급·차압·설비 위치 · 설비 표 8행 · 동선 2개",
+   "facts": [
+    {
+     "kw": [
+      "R-205~BR-2001"
+     ],
+     "source": "scan"
+    },
+    {
+     "kw": [
+      "Grade C|C 등급|등급 C"
+     ],
+     "source": "scan"
+    },
+    {
+     "kw": [
+      "+30|30 Pa"
+     ],
+     "source": "scan"
+    },
+    {
+     "kw": [
+      "UF-320"
+     ],
+     "source": "scan"
+    },
+    {
+     "kw": [
+      "BR-2002~점검"
+     ],
+     "source": "scan"
+    },
+    {
+     "kw": [
+      "PB-2"
+     ],
+     "source": "scan"
+    },
+    {
+     "kw": [
+      "AL-1"
+     ],
+     "source": "scan"
+    }
+   ]
+  },
+  {
+   "file": "equipment_overview.pptx",
+   "format": "pptx",
+   "elements": [
+    "슬라이드 1~3 서로 다른 네이티브 도형 도식",
+    "연결선(begin/end)",
+    "분기 판단(마름모)",
+    "슬라이드 4 그림 도식"
+   ],
+   "content": "1 하류 공정 6단계+설비 ID · 2 WFI 계통 5단계 · 3 QC 시료 흐름(Pass/Fail 분기) · 4 시드 트레인 그림",
+   "expect": "슬라이드별 노드·연결 순서 · 분기 라벨 · 4쪽 그림은 VLM",
+   "facts": [
+    {
+     "kw": [
+      "CH-301"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "WT-100"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "OOS 조사"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Pass"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Day 8-22|Day 8–22"
+     ],
+     "source": "image"
+    }
+   ],
+   "figures": [
+    {
+     "caption": "시드 트레인",
+     "mention": null,
+     "facts": [
+      "Day 8-22|Day 8–22",
+      "SB-0201"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "equipment_spec.docx",
+   "format": "docx",
+   "elements": [
+    "본문+설비 설명도",
+    "콜아웃 수치",
+    "캡션·본문 언급",
+    "병합 셀 2단 머리글 표"
+   ],
+   "content": "CH-301 스키드 설명도(내경·충진 높이·선속도·압력·레진) + 정제 설비 사양 표(병합 머리글 4행)",
+   "expect": "그림 콜아웃 5개 · 표의 병합 머리글을 열 이름으로 풀어 4행 · 캡션 연결",
+   "facts": [
+    {
+     "kw": [
+      "20 cm"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "3 bar"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "MabSelect"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "UF-320~30 kDa"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "AEX-315~5 m²|AEX-315~5 m2"
+     ],
+     "source": "text"
+    }
+   ],
+   "figures": [
+    {
+     "caption": "그림 1",
+     "mention": "60 cm",
+     "facts": [
+      "3 bar",
+      "MabSelect"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "batch_records.xlsx",
+   "format": "xlsx",
+   "elements": [
+    "240행 큰 표",
+    "병합 제목·2단 머리글",
+    "두 번째 시트 요약",
+    "셀 위 추세 그림"
+   ],
+   "content": "FX-B-0001~0240 생산일·반응기·titer·수율·일탈 + 월별 요약 + 추세 그래프",
+   "expect": "240행 누락 없이 · 깊은 행(187번째) 값 · 일탈 ID 행 · 요약 시트 · 그림 값",
+   "facts": [
+    {
+     "kw": [
+      "FX-B-0187~~3.55"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "FX-B-0123~~FX-DV-014"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "FX-B-0240"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-03~~3.87"
+     ],
+     "source": "text"
+    }
+   ],
+   "figures": [
+    {
+     "caption": "월별",
+     "mention": null,
+     "facts": [
+      "titer"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "tech_transfer_report.pdf",
+   "format": "pdf(텍스트)",
+   "elements": [
+    "6쪽",
+    "테두리 없는 표",
+    "3~5쪽 이어지는 70행 표(머리글 3쪽만)",
+    "그림+캡션+본문 언급",
+    "개정 이력(옛 값 vs 새 값)"
+   ],
+   "content": "목표 titer 4.0 g/L · DO 35→40% 개정 · 공정 조건 표 · 파라미터 70개 · 하류 공정 그림",
+   "expect": "테두리 없는 표 4행 · 70행 표의 5쪽 끝 행까지 · 그림 4 캡션 연결",
+   "facts": [
+    {
+     "kw": [
+      "4.0 g/L"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "PP-070"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "PP-052"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "교반~120"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Viral Inactivation"
+     ],
+     "source": "image"
+    }
+   ],
+   "figures": [
+    {
+     "caption": "그림 4",
+     "mention": "Protein A 다음",
+     "facts": [
+      "Viral Inactivation",
+      "UF-320"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "deviation_report.pdf",
+   "format": "pdf(혼합)",
+   "elements": [
+    "1쪽 텍스트",
+    "2쪽 270° 회전 스캔 표"
+   ],
+   "content": "일탈 FX-DV-014(R-205·FX-B-0123·차압 6 Pa) + 회전된 온도·차압 기록 스캔",
+   "expect": "회전 쪽 보정 → 기록 표 13행 · 차압 6 Pa 시각",
+   "facts": [
+    {
+     "kw": [
+      "FX-DV-014"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "10:20~6"
+     ],
+     "source": "scan"
+    },
+    {
+     "kw": [
+      "10:25~6"
+     ],
+     "source": "scan"
+    }
+   ]
+  },
+  {
+   "file": "supplier_quote.eml",
+   "format": "eml(HTML 표)",
+   "elements": [
+    "HTML 표 rowspan·colspan",
+    "2단 머리글"
+   ],
+   "content": "필터 견적 3품목(면적·단가·납기)",
+   "expect": "병합된 품목 칸을 아래 행에도 채워 3행",
+   "facts": [
+    {
+     "kw": [
+      "DF-60~2300000"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "VF-20~8주"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "long_sop.pdf",
+   "format": "pdf(텍스트 60쪽)",
+   "elements": [
+    "매우 긴 문서(60쪽)",
+    "비슷한 문장 반복 속 중간 쪽 사실",
+    "40쪽 표"
+   ],
+   "content": "세척·점검 SOP — 17·33·48쪽 핵심 기준, 40쪽 CIP 단계 표",
+   "expect": "중간 쪽 사실 3개와 표 4행을 청크·검색에서 놓치지 않음",
+   "facts": [
+    {
+     "kw": [
+      "1.3 µS/cm|1.3 μS/cm|1.3µS"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "3450|3,450"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "2026-04-02"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "Caustic~70"
+     ],
+     "source": "text"
+    }
+   ]
+  },
+  {
+   "file": "utility_pid.pdf",
+   "format": "pdf(텍스트+벡터 도식)",
+   "elements": [
+    "벡터 계통도(캡션·언급 없음)",
+    "도식 글자는 드래그됨 — 연결·화살표는 글자에 없음",
+    "벡터 막대그래프(캡션 있음)",
+    "표 격자(그림 아님)"
+   ],
+   "content": "WFI 계통도(WT-100→P-101→FV-102→POU-1/2→복귀) · 사용처별 사용량 막대 · 사용처 표",
+   "expect": "도형 신호로 그림 영역 2개 찾기(표 격자는 제외) → 영역 캡처 VLM으로 연결 순서·막대 값",
+   "facts": [
+    {
+     "kw": [
+      "WT-100 → P-101|WT-100→P-101"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "P-101 → FV-102|P-101→FV-102"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "POU-3~140"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "PT-101"
+     ],
+     "source": "text"
+    }
+   ],
+   "figures": [
+    {
+     "caption": null,
+     "mention": null,
+     "facts": [
+      "WT-100 → P-101|WT-100→P-101",
+      "FV-102"
+     ]
+    },
+    {
+     "caption": "그림 2",
+     "mention": null,
+     "facts": [
+      "POU-3~140",
+      "POU-2~85"
+     ]
+    }
+   ],
+   "vector_figures": 2
+  },
+  {
+   "file": "searchable_scan.pdf",
+   "format": "pdf(스캔+보이지 않는 OCR 글자층)",
+   "elements": [
+    "검색 가능한 스캔 PDF",
+    "글자층은 라벨만(구조·연결 없음)",
+    "래스터 분자 구조",
+    "래스터 흐름도"
+   ],
+   "content": "1쪽 분자 구조 그림 + 원자 라벨 글자층 · 2쪽 시드 트레인 흐름도 그림 + 단계 이름 글자층",
+   "expect": "글자층이 있어도 쪽 그림을 그림 기록으로 → 분자 결합 구조·흐름 순서",
+   "facts": [
+    {
+     "kw": [
+      "CH3"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "20 L 플라스크 → SB-0201|20 L 플라스크→SB-0201|20L 플라스크 → SB-0201"
+     ],
+     "source": "image"
+    },
+    {
+     "kw": [
+      "SB-0201 200 L → BR-2001|SB-0201 200 L→BR-2001|SB-0201 200L → BR-2001"
+     ],
+     "source": "image"
+    }
+   ],
+   "figures": [
+    {
+     "caption": null,
+     "mention": null,
+     "facts": [
+      "OH"
+     ]
+    },
+    {
+     "caption": null,
+     "mention": null,
+     "facts": [
+      "SB-0201"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "qc_release_table.png",
+   "format": "png",
+   "elements": [
+    "순수 이미지 표",
+    "2단 병합 머리글"
+   ],
+   "content": "출하 시험 3로트(pH·삼투압·엔도톡신·판정)",
+   "expect": "이미지 표 → 5열 3행, 병합 머리글 풀기",
+   "facts": [
+    {
+     "kw": [
+      "L-2602~0.12"
+     ],
+     "source": "scan"
+    },
+    {
+     "kw": [
+      "L-2602~부적합"
+     ],
+     "source": "scan"
+    }
+   ]
+  }
+ ]
+}

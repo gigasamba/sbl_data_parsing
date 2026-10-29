@@ -1,0 +1,247 @@
+{
+ "generator": "tools/synthetic_data/gen_synth_terms_hard.py",
+ "split": "holdout",
+ "note": "[SYNTHETIC] 같은 양식 — 이름만 다름",
+ "documents": [
+  {
+   "file": "sop_101.docx",
+   "format": "docx",
+   "elements": [
+    "같은 양식 SOP"
+   ],
+   "content": "바이러스 불활화",
+   "expect": "본문 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "10년"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "36개월"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "sop_102.docx",
+   "format": "docx",
+   "elements": [
+    "같은 양식 SOP"
+   ],
+   "content": "육안검사",
+   "expect": "본문 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "16년"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "12개월"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "sop_103.docx",
+   "format": "docx",
+   "elements": [
+    "같은 양식 SOP"
+   ],
+   "content": "예방정비",
+   "expect": "본문 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "12년"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "24개월"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "sop_104.docx",
+   "format": "docx",
+   "elements": [
+    "같은 양식 SOP"
+   ],
+   "content": "프로젝트 매니저 업무",
+   "expect": "본문 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "18년"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "48개월"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "sop_105.docx",
+   "format": "docx",
+   "elements": [
+    "같은 양식 SOP"
+   ],
+   "content": "한외여과/투석여과",
+   "expect": "본문 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "14년"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "18개월"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "sop_106.docx",
+   "format": "docx",
+   "elements": [
+    "같은 양식 SOP"
+   ],
+   "content": "시정 및 예방 조치",
+   "expect": "본문 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "11년"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "30개월"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "sop_107.docx",
+   "format": "docx",
+   "elements": [
+    "같은 양식 SOP"
+   ],
+   "content": "변경관리",
+   "expect": "본문 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "13년"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "42개월"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "sop_108.docx",
+   "format": "docx",
+   "elements": [
+    "같은 양식 SOP"
+   ],
+   "content": "공정 밸리데이션",
+   "expect": "본문 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "17년"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "60개월"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "sop_109.docx",
+   "format": "docx",
+   "elements": [
+    "같은 양식 SOP"
+   ],
+   "content": "기준 일탈 결과 조사",
+   "expect": "본문 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "15년"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "54개월"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  },
+  {
+   "file": "sop_110.docx",
+   "format": "docx",
+   "elements": [
+    "같은 양식 SOP"
+   ],
+   "content": "기술이전",
+   "expect": "본문 글자 그대로",
+   "facts": [
+    {
+     "kw": [
+      "19년"
+     ],
+     "source": "text"
+    },
+    {
+     "kw": [
+      "20개월"
+     ],
+     "source": "text"
+    }
+   ],
+   "must_not": []
+  }
+ ]
+}

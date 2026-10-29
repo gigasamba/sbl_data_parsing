@@ -1,0 +1,10 @@
+# 새벽 배치 시각(준비만). 예: 매일 01:00 KST 시작 → 파싱은 PARSE_DEADLINE(03:30)까지 → 구조화·적재. 서버 시간대 KST 확인(timedatectl).
+[Unit]
+Description=RAG 새벽 배치 시작
+
+[Timer]
+OnCalendar=*-*-* 01:00:00
+Persistent=false
+
+[Install]
+WantedBy=timers.target

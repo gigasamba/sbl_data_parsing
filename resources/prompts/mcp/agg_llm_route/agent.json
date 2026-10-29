@@ -1,0 +1,64 @@
+{
+  "agent_id": "agg_llm_route",
+  "owner": "developer",
+  "description": "집계(SQL 틀) vs 검색 질문 분류 + 인자(고객·기간·지표·모양) 추출 — 기존 정해진 집계 틀에만, 자유 SQL 없음(R1, AD42·AD45②)",
+  "kind": "pipeline",
+  "model_role": "llm",
+  "classification": "internal",
+  "budget": {
+    "model_calls": 1
+  },
+  "local_tools": [],
+  "prompt_ids": [
+    "classify"
+  ],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "route",
+      "confidence"
+    ],
+    "properties": {
+      "route": {
+        "type": "string",
+        "enum": ["aggregate", "search"]
+      },
+      "confidence": {
+        "type": "number"
+      },
+      "want_count": {
+        "type": "boolean"
+      },
+      "want_amount": {
+        "type": "boolean"
+      },
+      "want_batches": {
+        "type": "boolean"
+      },
+      "clients": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "contract": {
+        "type": ["string", "null"]
+      },
+      "window": {
+        "type": ["object", "null"]
+      },
+      "modalities": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "group": {
+        "type": ["string", "null"]
+      },
+      "listing": {
+        "type": "boolean"
+      }
+    }
+  }
+}

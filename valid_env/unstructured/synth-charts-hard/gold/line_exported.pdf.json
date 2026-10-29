@@ -1,0 +1,29 @@
+{
+ "values": [
+  {
+   "series": null,
+   "x": "Jan",
+   "value": 12.0
+  },
+  {
+   "series": null,
+   "x": "Feb",
+   "value": 28.0
+  },
+  {
+   "series": null,
+   "x": "Mar",
+   "value": 44.0
+  },
+  {
+   "series": null,
+   "x": "Apr",
+   "value": 61.0
+  }
+ ],
+ "trend": {
+  "direction": "증가",
+  "period": "Jan–Apr",
+  "basis": "Jan 12 → Apr 61"
+ }
+}

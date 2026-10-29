@@ -1,0 +1,41 @@
+# OS
+.DS_Store
+
+# 개인 Claude 스킬 설정 — 커밋하지 않음(사용자 10-28, S11 — CLAUDE.md 8절에서 닫음)
+.claude/skills/
+skills-lock.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Env / secrets (옛 *.example 틀은 S7e2에 지움 — 설정은 settings.sample.yaml)
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.env
+!*.env.example
+
+# Backups
+*.bak
+*.bak-*
+
+# Build artifacts
+deploy/docker/wheels/*
+!deploy/docker/wheels/.gitkeep
+
+# 로컬 실행 결과
+output/
+
+.playwright-mcp/
+
+# 설정 파일(S7a, D-015) — 값·비밀이 들어감. git에는 settings.sample.yaml만
+settings.yaml
+valid_env/local/

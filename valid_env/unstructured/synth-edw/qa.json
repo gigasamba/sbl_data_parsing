@@ -1,0 +1,389 @@
+{
+ "set": "synth-edw",
+ "split": "holdout",
+ "items": [
+  {
+   "type": "link_infer",
+   "question": "Kestrel의 KST-mAb-01 갱신 RFP는 어느 계약으로 이어졌고, 그 계약 총액과 배치 수는?",
+   "gold_answer": "C-EDW-2026-008, 34,500,000 USD, 15배치",
+   "answer_keywords": [
+    "C-EDW-2026-008",
+    "34500000|34.5",
+    "15배치|배치 수는 15|배치수는15|배치 수: 15|배치수:15|배치 수 15|배치수15|배치: 15|배치:15|15 batches|15batches|15 batch|15batch"
+   ],
+   "evidence": [
+    {
+     "doc": "rfp_kestrel_renewal_2026.pdf"
+    },
+    {
+     "doc": "edw/contract_master.csv"
+    }
+   ],
+   "needs": [
+    "text",
+    "structured",
+    "link"
+   ],
+   "dims": [
+    "Q04",
+    "Q13"
+   ],
+   "lang": "ko",
+   "forbid_keywords": [
+    "C-EDW-2023-001로 이어"
+   ],
+   "id": "EQ001"
+  },
+  {
+   "type": "link_infer",
+   "question": "Kestrel Bio의 ADC RFI(2024-03)는 어떤 계약과 대응되나? 생산 공장과 계약 기간은?",
+   "gold_answer": "C-EDW-2024-002, Plant2, 2024-07-01~2026-06-30",
+   "answer_keywords": [
+    "C-EDW-2024-002",
+    "Plant2",
+    "2026-06-30"
+   ],
+   "evidence": [
+    {
+     "doc": "rfi_kestrel_adc_2024.docx"
+    },
+    {
+     "doc": "edw/contract_master.csv"
+    }
+   ],
+   "needs": [
+    "text",
+    "structured",
+    "link"
+   ],
+   "dims": [
+    "Q04",
+    "Q13"
+   ],
+   "lang": "ko",
+   "id": "EQ002"
+  },
+  {
+   "type": "link_reverse",
+   "question": "계약 C-EDW-2024-003에 대응하는 RFP 문서와, 그 RFP의 titer 기준은?",
+   "gold_answer": "rfp_aurelion_bsab.xlsx, ≥ 3.0 g/L",
+   "answer_keywords": [
+    "aurelion",
+    "3.0"
+   ],
+   "evidence": [
+    {
+     "doc": "rfp_aurelion_bsab.xlsx"
+    },
+    {
+     "doc": "edw/contract_master.csv"
+    }
+   ],
+   "needs": [
+    "text",
+    "structured",
+    "link"
+   ],
+   "dims": [
+    "Q04",
+    "Q13"
+   ],
+   "lang": "ko",
+   "id": "EQ003"
+  },
+  {
+   "type": "link_infer",
+   "question": "청운바이오 백신 RFI의 회신 요청일과, 실제 체결된 계약의 생산 공장·배치 수는?",
+   "gold_answer": "2024-10-31, Plant3, 10배치",
+   "answer_keywords": [
+    "2024-10-31",
+    "Plant3",
+    "10배치|10 배치|배치 수는 10|배치수는10|배치 수: 10|배치수:10|배치 수 10|배치수10|배치: 10|배치:10|10 batches|10batches|10 batch|10batch"
+   ],
+   "evidence": [
+    {
+     "doc": "rfi_cheongwoon_vaccine.eml"
+    },
+    {
+     "doc": "edw/contract_master.csv"
+    }
+   ],
+   "needs": [
+    "text",
+    "structured",
+    "link"
+   ],
+   "dims": [
+    "Q04",
+    "Q13"
+   ],
+   "lang": "ko",
+   "id": "EQ004"
+  },
+  {
+   "type": "link_ambiguous",
+   "question": "Aurelion 항체(mAb) 신규 RFP가 이어진 계약 ID와 계약 총액은? (Aurelion 계약은 2건)",
+   "gold_answer": "C-EDW-2025-006, 20,700,000 USD",
+   "answer_keywords": [
+    "C-EDW-2025-006",
+    "20700000|20.7"
+   ],
+   "evidence": [
+    {
+     "doc": "rfp_aurelion_mab_2025.docx"
+    },
+    {
+     "doc": "edw/contract_master.csv"
+    }
+   ],
+   "needs": [
+    "text",
+    "structured",
+    "link"
+   ],
+   "dims": [
+    "Q04",
+    "Q13"
+   ],
+   "lang": "ko",
+   "forbid_keywords": [
+    "C-EDW-2024-003으로 이어"
+   ],
+   "id": "EQ005"
+  },
+  {
+   "type": "link_ambiguous",
+   "question": "청운바이오 항체 RFI는 어느 계약과 대응되나?",
+   "gold_answer": "C-EDW-2026-007(CWB-mAb-02)",
+   "answer_keywords": [
+    "C-EDW-2026-007"
+   ],
+   "evidence": [
+    {
+     "doc": "rfi_cheongwoon_mab_2026.docx"
+    },
+    {
+     "doc": "edw/contract_master.csv"
+    }
+   ],
+   "needs": [
+    "text",
+    "structured",
+    "link"
+   ],
+   "dims": [
+    "Q04",
+    "Q13"
+   ],
+   "lang": "ko",
+   "forbid_keywords": [
+    "C-EDW-2025-004와 대응"
+   ],
+   "id": "EQ006"
+  },
+  {
+   "type": "link_none",
+   "question": "Halcyon Bio RFP는 어느 계약으로 이어졌나?",
+   "gold_answer": "계약 없음(2025-06 타사 선정, 계약 마스터에 없음)",
+   "answer_keywords": [
+    "실주|타사|계약 없음|계약이 없|체결되지 않|미체결"
+   ],
+   "evidence": [
+    {
+     "doc": "rfp_halcyon_2025.docx"
+    },
+    {
+     "doc": "edw/contract_master.csv"
+    }
+   ],
+   "needs": [
+    "text",
+    "structured",
+    "link"
+   ],
+   "dims": [
+    "Q06",
+    "Q13"
+   ],
+   "lang": "ko",
+   "forbid_keywords": [
+    "C-EDW-"
+   ],
+   "id": "EQ007"
+  },
+  {
+   "type": "link_none",
+   "question": "Aurelion 세포치료(CGT) RFI의 계약 총액은?",
+   "gold_answer": "계약 없음(미체결) — 근거 없음",
+   "answer_keywords": [
+    "없|미체결"
+   ],
+   "evidence": [
+    {
+     "doc": "rfi_aurelion_cgt_2026.pdf"
+    },
+    {
+     "doc": "edw/contract_master.csv"
+    }
+   ],
+   "needs": [
+    "text",
+    "structured",
+    "link"
+   ],
+   "dims": [
+    "Q06",
+    "Q13"
+   ],
+   "lang": "ko",
+   "forbid_keywords": [
+    "20,700,000",
+    "19,600,000"
+   ],
+   "id": "EQ008"
+  },
+  {
+   "type": "link_written",
+   "question": "Brightwater RFP에 적힌 계약 번호의 계약 기간과 배치 수는?",
+   "gold_answer": "C-EDW-2025-005, 2025-05-01~2028-04-30, 18배치",
+   "answer_keywords": [
+    "2028-04-30",
+    "18배치|배치 수는 18|배치수는18|배치 수: 18|배치수:18|배치 수 18|배치수18|배치: 18|배치:18|18 batches|18batches|18 batch|18batch"
+   ],
+   "evidence": [
+    {
+     "doc": "rfp_brightwater_2025.pdf"
+    },
+    {
+     "doc": "edw/contract_master.csv"
+    }
+   ],
+   "needs": [
+    "text",
+    "structured"
+   ],
+   "dims": [
+    "Q04",
+    "Q13"
+   ],
+   "lang": "ko",
+   "id": "EQ009"
+  },
+  {
+   "type": "structured_agg",
+   "question": "Plant1에서 생산하는 계약의 총액 합계는?",
+   "gold_answer": "138,300,000 USD (C-EDW-2023-001·2025-005·2025-006·2026-007·2026-008)",
+   "answer_keywords": [
+    "138300000|138.3"
+   ],
+   "evidence": [
+    {
+     "doc": "edw/contract_master.csv"
+    }
+   ],
+   "needs": [
+    "structured"
+   ],
+   "dims": [
+    "Q07",
+    "Q13"
+   ],
+   "lang": "ko",
+   "id": "EQ010"
+  },
+  {
+   "type": "structured_agg",
+   "question": "2025년에 시작한 계약 중 배치 수가 가장 많은 계약과 배치 수는?",
+   "gold_answer": "C-EDW-2025-005, 18배치",
+   "answer_keywords": [
+    "C-EDW-2025-005",
+    "18배치|배치 수는 18|배치수는18|배치 수: 18|배치수:18|배치 수 18|배치수18|배치: 18|배치:18|18 batches|18batches|18 batch|18batch"
+   ],
+   "evidence": [
+    {
+     "doc": "edw/contract_master.csv"
+    }
+   ],
+   "needs": [
+    "structured"
+   ],
+   "dims": [
+    "Q07",
+    "Q13"
+   ],
+   "lang": "ko",
+   "id": "EQ011"
+  },
+  {
+   "type": "structured_alias",
+   "question": "케스트렐이 맺은 KST-mAb-01 계약은 몇 건이고 각각 기간은?",
+   "gold_answer": "2건 — C-EDW-2023-001(2023-04-01~2026-03-31), C-EDW-2026-008(2026-04-01~2029-03-31)",
+   "answer_keywords": [
+    "2건|2 건|두 건|2문항|2 문항|2개|2 개|2곳|2 곳",
+    "2023-04-01",
+    "2026-04-01"
+   ],
+   "evidence": [
+    {
+     "doc": "edw/contract_master.csv"
+    }
+   ],
+   "needs": [
+    "structured"
+   ],
+   "dims": [
+    "Q09",
+    "Q13"
+   ],
+   "lang": "ko",
+   "id": "EQ012"
+  },
+  {
+   "type": "link_list",
+   "question": "계약 ID가 적혀 있지 않은 RFI·RFP 중 계약으로 이어진 것을 계약 ID와 함께 나열하라.",
+   "gold_answer": "rfi_kestrel_adc_2024→C-EDW-2024-002, rfp_aurelion_bsab→C-EDW-2024-003, rfi_cheongwoon_vaccine→C-EDW-2025-004, rfp_aurelion_mab_2025→C-EDW-2025-006, rfi_cheongwoon_mab_2026→C-EDW-2026-007, rfp_kestrel_renewal_2026→C-EDW-2026-008",
+   "answer_keywords": [
+    "C-EDW-2024-002",
+    "C-EDW-2024-003",
+    "C-EDW-2025-004",
+    "C-EDW-2025-006",
+    "C-EDW-2026-007",
+    "C-EDW-2026-008"
+   ],
+   "evidence": [
+    {
+     "doc": "rfi_kestrel_adc_2024.docx"
+    },
+    {
+     "doc": "rfp_aurelion_bsab.xlsx"
+    },
+    {
+     "doc": "rfi_cheongwoon_vaccine.eml"
+    },
+    {
+     "doc": "rfp_aurelion_mab_2025.docx"
+    },
+    {
+     "doc": "rfi_cheongwoon_mab_2026.docx"
+    },
+    {
+     "doc": "rfp_kestrel_renewal_2026.pdf"
+    },
+    {
+     "doc": "edw/contract_master.csv"
+    }
+   ],
+   "needs": [
+    "text",
+    "structured",
+    "link"
+   ],
+   "dims": [
+    "Q04",
+    "Q13"
+   ],
+   "lang": "ko",
+   "id": "EQ013"
+  }
+ ]
+}

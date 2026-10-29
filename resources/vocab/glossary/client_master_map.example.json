@@ -1,0 +1,10 @@
+{
+  "name": "Account_Name",
+  "aliases": "Alias_List",
+  "client_id": "Account_Id",
+  "name_ko": "Account_Name_KR",
+  "client_type": "Account_Type",
+  "country": "Billing_Country",
+  "parent_client_id": "Parent_Id",
+  "status": "Account_Status"
+}
