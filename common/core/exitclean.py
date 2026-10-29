@@ -1,71 +1,66 @@
 """프로세스 종료 정리 한 곳(pl-27, 사용자 10-30) — 정상 종료·오류·SIGTERM 어느 쪽으로 끝나도
-① 이 프로세스가 띄운 자식(track)을 끝내고 회수한다(wait — 좀비·고아를 남기지 않음, 손자는 프로세스 묶음째)
-② 이 프로세스가 만든 임시 파일(remove_at_exit — 덮기 설정 파일·PID 기록)을 지운다(자식을 먼저 끝낸 뒤 — 자식이 끝까지 읽음).
-SIGTERM은 파이썬 기본 동작이 바로 죽는 것이라 finally·atexit가 안 돈다 → 처음 쓸 때 SIGTERM을 SystemExit(143)으로 바꾼다
-(이미 다른 처리기를 단 프로세스 — trigger_server 등 — 는 그대로 둠: 그쪽이 정상 종료하면 atexit가 돈다).
-OS별 분기(POSIX 프로세스 묶음·Windows taskkill)는 이 파일에만 둔다(CLAUDE.md §2)."""
+① 이 프로세스가 띄운 자식(track)을 끝내고 회수한다(wait — 좀비를 남기지 않음)
+② 이 프로세스가 맡은 임시 파일(remove_at_exit — 덮기 설정 파일·PID 기록)을 지운다(자식을 먼저 끝낸 뒤 — 자식이 끝까지 읽음).
+SIGTERM은 파이썬 기본 동작이 바로 죽는 것이라 finally·atexit가 안 돈다 → import 때(주 스레드) SIGTERM 처리기를 단다: 처리기 안에서
+바로 정리하고(작업 스레드 join보다 먼저 — 바깥 kill_group이 10초 뒤 SIGKILL하기 전에) SystemExit(143). 이미 다른 처리기를 단
+프로세스(trigger_server 등)는 그쪽이 덮어쓰고, 그쪽이 정상 종료하면 atexit가 정리한다.
+OS별 분기(POSIX 프로세스 묶음·Windows taskkill)는 stop()에만 둔다."""
 
 import atexit
 import os
 import signal
 import subprocess
 import threading
+import time
 
+GRACE = 10  # SIGTERM 뒤 SIGKILL까지(초) — 옛 kill_group과 같음
 _LOCK = threading.Lock()
 _FILES: set[str] = set()
-_PROCS: list[subprocess.Popen] = []
-_ARMED = [False]
+_PROCS: list[tuple[subprocess.Popen, bool]] = []  # (자식, 묶음째 끝낼지)
+_CLOSING = threading.Event()  # 정리를 시작한 뒤 띄운 자식은 바로 끝냄(데몬 작업 스레드가 정리 중에 새 자식을 띄우는 경우)
 
 
 def remove_at_exit(path):
-    """path를 프로세스가 끝날 때 지운다(없으면 조용히). 반환: path 그대로."""
-    _arm()
+    """path를 이 프로세스가 끝날 때 지운다(없으면 조용히). 반환: path 그대로."""
     with _LOCK:
         _FILES.add(str(path))
     return path
 
 
-def track(p):
-    """띄운 자식 p를 기억 — 프로세스가 끝날 때 아직 돌고 있으면 stop(p). 끝난 자식은 그때그때 목록에서 뺀다. 반환: p."""
-    _arm()
+def forget(path):
+    """remove_at_exit 취소 — 호출자가 이미 지웠을 때(settings.isolated)."""
     with _LOCK:
-        _PROCS[:] = [q for q in _PROCS if q.poll() is None]
-        _PROCS.append(p)
+        _FILES.discard(str(path))
+
+
+def track(p, group=False):
+    """띄운 자식 p를 기억 — 프로세스가 끝날 때 아직 돌면 stop(p, group). group=True는 p를 새 프로세스 묶음(세션)으로 띄웠을 때만.
+    끝난 자식은 returncode로만 거른다(poll()로 남의 스레드 자식을 대신 회수하지 않음). 정리 중이면 바로 끝낸다. 반환: p."""
+    if _CLOSING.is_set():
+        stop(p, group)
+        return p
+    with _LOCK:
+        _PROCS[:] = [(q, g) for q, g in _PROCS if q.returncode is None]
+        _PROCS.append((p, group))
     return p
 
 
-def group_kw():
-    """POSIX — 자식을 새 프로세스 묶음(세션)으로 띄우는 Popen 인자(stop이 손자까지 끝내게). Windows는 없음(taskkill /T가 트리째)."""
-    return {} if os.name == "nt" else {"start_new_session": True}
+def stop(p, group=False, grace=GRACE):
+    """자식 p를 끝내고 회수(wait). group=True(새 묶음으로 띄움)면 POSIX는 묶음째 SIGTERM → grace초 → SIGKILL(맨 위가 먼저 끝나도
+    SIGTERM을 무시한 손자가 파이프를 붙잡지 않도록 묶음에는 늘 보냄 — 옛 kill_group과 같음), 아니면 그 프로세스만. Windows는 taskkill /T /F."""
+    _send(p, signal.SIGTERM, group)
+    if os.name != "nt":
+        _wait(p, grace)
+        _send(p, signal.SIGKILL, group)
+    _wait(p, grace)
 
 
-def stop(p, grace=10):
-    """자식 p와 그 아래를 끝내고 회수(wait) — 자기 묶음의 맨 위(group_kw로 띄움)면 묶음째 SIGTERM → grace초 → SIGKILL,
-    아니면 그 프로세스만. Windows는 taskkill /T /F(트리째). 이미 끝났으면 회수만."""
-    if os.name == "nt":
-        if p.poll() is None:
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], capture_output=True)
-    else:
-        try:
-            own_group = os.getpgid(p.pid) == p.pid
-        except ProcessLookupError:
-            own_group = False
-        # 맨 위 자식이 먼저 끝나도 SIGTERM을 무시한 손자가 파이프를 붙잡지 않도록 묶음에는 늘 보냄(옛 kill_group과 같음)
-        _signal(p, signal.SIGTERM, own_group)
-        try:
-            p.wait(timeout=grace)
-        except subprocess.TimeoutExpired:
-            pass
-        _signal(p, signal.SIGKILL, own_group)
+def _send(p, sig, group):
     try:
-        p.wait(timeout=grace)
-    except subprocess.TimeoutExpired:
-        pass  # ponytail: SIGKILL 뒤에도 안 끝남(D 상태 등) — 더 할 수 있는 것이 없음
-
-
-def _signal(p, sig, own_group):
-    try:
-        if own_group:
+        if os.name == "nt":
+            if p.poll() is None:
+                subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], capture_output=True)
+        elif group:
             os.killpg(p.pid, sig)
         elif p.poll() is None:
             p.send_signal(sig)
@@ -73,32 +68,50 @@ def _signal(p, sig, own_group):
         pass
 
 
-def _arm():
-    if _ARMED[0]:
-        return
-    _ARMED[0] = True
-    atexit.register(_cleanup)
+def _wait(p, sec):
     try:
-        if signal.getsignal(signal.SIGTERM) in (signal.SIG_DFL, None):
-            signal.signal(signal.SIGTERM, _on_term)
-    except ValueError:
-        pass  # ponytail: 처음 쓴 곳이 주 스레드가 아님 — SIGTERM은 기본(즉시 종료)대로, 정상·오류 종료 정리만
-
-
-def _on_term(signum, _frame):
-    raise SystemExit(128 + signum)
+        p.wait(timeout=max(0.0, sec))
+    except subprocess.TimeoutExpired:
+        pass  # ponytail: SIGKILL 뒤에도 안 끝남(D 상태 등) — 더 할 수 있는 것이 없음
 
 
 def _cleanup():
+    """자식 전부에 SIGTERM → 한 마감(GRACE초)까지 기다림 → 남은 것 SIGKILL·회수 → 파일 지움. 두 번 불려도 안전(두 번째는 빈 목록)."""
+    _CLOSING.set()
     with _LOCK:
         procs, files = list(_PROCS), sorted(_FILES)
         _PROCS.clear()
         _FILES.clear()
-    for p in procs:  # 자식 먼저 — 자식이 읽는 덮기 파일을 그 뒤에 지움
-        if p.poll() is None:
-            stop(p)
-    for f in files:
+    live = [(p, g) for p, g in procs if p.poll() is None]
+    for p, g in live:
+        _send(p, signal.SIGTERM, g)
+    if os.name != "nt":
+        end = time.monotonic() + GRACE
+        for p, _ in live:
+            _wait(p, end - time.monotonic())
+        for p, g in live:
+            _send(p, signal.SIGKILL, g)
+    for p, _ in live:
+        _wait(p, GRACE)
+    for f in files:  # 자식을 먼저 끝낸 뒤 — 자식이 읽는 덮기 파일
         try:
             os.unlink(f)
         except OSError:
             pass
+
+
+def _on_term(signum, _frame):
+    try:
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)  # 정리 중 두 번째 SIGTERM이 정리를 끊지 않게
+    except ValueError:
+        pass
+    _cleanup()
+    raise SystemExit(128 + signum)
+
+
+atexit.register(_cleanup)
+try:
+    if signal.getsignal(signal.SIGTERM) in (signal.SIG_DFL, None):
+        signal.signal(signal.SIGTERM, _on_term)
+except ValueError:
+    pass  # ponytail: 주 스레드가 아닌 곳에서 처음 import — SIGTERM은 기본(즉시 종료)대로, 정상·오류 종료 정리만

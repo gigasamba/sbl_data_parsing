@@ -37,6 +37,7 @@ from typing import Annotated, ClassVar, Literal, get_args, get_origin
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PrivateAttr, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from common.core import exitclean  # pl-27 — 맡은 덮기 파일은 프로세스가 끝날 때 지움
 from common.core.console import utf8_stdout
 
 REPO_ROOT = Path(__file__).resolve().parents[2]  # PC = 저장소 루트 · 이미지 = /app/deploy
@@ -1055,8 +1056,8 @@ def _env_text(v):
 def overlay_file(names, base=None, environ=None):
     """덮기 파일을 만든다 — base(설정 파일 — 없으면 지금 SETTINGS_FILE·로컬 파일)를 가리키고 names({옛 env 이름: 값|None})를 overrides로 든
     yaml을 임시 파일(mktemp — 권한 600)로 쓴다. 원본 내용(비밀)은 복사하지 않는다(base로 가리킴 — refactor.md C-46). base가 덮기 파일이면
-    그 base·overrides를 이어받아 한 단으로. 임시 파일은 만든 프로세스가 끝날 때 지운다(pl-27 — 정상·오류·SIGTERM, 그 프로세스의 자식을
-    먼저 끝낸 뒤라 자식은 끝까지 읽음 — common.core.exitclean). 반환: 경로."""
+    그 base·overrides를 이어받아 한 단으로. 지우는 것은 부른 쪽 몫 — put·child_env는 이 프로세스가 끝날 때(pl-27 exitclean, 자식을 먼저
+    끝낸 뒤), isolated는 블록이 끝날 때, overrides 도구(경로를 다른 프로세스에 넘김)는 안 지움. 반환: 경로."""
     import tempfile
 
     import yaml
@@ -1091,9 +1092,7 @@ def overlay_file(names, base=None, environ=None):
         fh.write("# 덮기 파일(common.config.settings.overlay_file — S7e2) — base 위에 overrides를 겹쳐 읽음\n")
         fh.write(yaml.dump(doc, Dumper=_raw_dumper(), allow_unicode=True, sort_keys=False))
     os.chmod(p, 0o600)
-    from common.core import exitclean
-
-    return Path(exitclean.remove_at_exit(p))
+    return Path(p)
 
 
 class _Raw(str):
@@ -1135,7 +1134,7 @@ def put(**names):
     자식도 같은 값을 받음), 모든 설정 캐시가 다음 읽기에서 다시 읽게 한다. 엔진·인계 칸은 env에도 쓴다. None = 그 칸 비움(기본값).
     칸이 없는 이름은 KeyError. 반환: 덮기 파일 경로."""
     known = _check_names(names)
-    p = overlay_file(names)
+    p = exitclean.remove_at_exit(overlay_file(names))  # pl-27 — 이 프로세스가 끝날 때 지움
     os.environ["SETTINGS_FILE"] = str(p)  # env 남김 — 설정 파일 자리 신호(5-2)
     _pin_names(os.environ, names, known)  # env 남김 — 영구 다리
     _GEN[0] += 1
@@ -1148,7 +1147,7 @@ def child_env(base=None, **names):
     env = dict(os.environ if base is None else base)  # env 남김 — 하위 프로세스
     if names:
         known = _check_names(names)
-        env["SETTINGS_FILE"] = str(overlay_file(names, environ=env))
+        env["SETTINGS_FILE"] = str(exitclean.remove_at_exit(overlay_file(names, environ=env)))  # pl-27 — 이 프로세스가 끝날 때 지움
         _pin_names(env, names, known)
     return env
 
@@ -1159,12 +1158,14 @@ def isolated(**names):
     되돌린다(옛 시험의 os.environ 저장·복원 자리 — S7e2). None = 그 칸 비움."""
     known = _check_names(names)
     keep = {k: os.environ.get(k) for k in ("SETTINGS_FILE", *(n for n, pin in known.items() if pin))}  # env 남김 — 시험
-    os.environ["SETTINGS_FILE"] = str(overlay_file(names))  # env 남김 — 설정 파일 자리 신호(시험 — 끝나면 되돌림)
+    p = overlay_file(names)
+    os.environ["SETTINGS_FILE"] = str(p)  # env 남김 — 설정 파일 자리 신호(시험 — 끝나면 되돌림)
     _pin_names(os.environ, names, known)  # env 남김 — 영구 다리
     _GEN[0] += 1
     try:
         yield
     finally:
+        p.unlink(missing_ok=True)  # pl-27 — 블록 안에서만 쓰는 파일
         for k, v in keep.items():
             os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)  # env 남김 — 시험: 신호·엔진/인계 env 되돌림
         _GEN[0] += 1

@@ -59,7 +59,7 @@ def group_kw():
 
 def kill_group(p):
     """group_kw로 띄운 자식과 그 아래 프로세스 전부를 끝내고 기다림(시간 초과 처리) — 끝내기·회수는 common.core.exitclean.stop 한 곳(pl-27)."""
-    exitclean.stop(p)
+    exitclean.stop(p, group=True)
     p.communicate()
 
 

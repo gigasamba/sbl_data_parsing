@@ -52,7 +52,7 @@ def _job_stack():
 
 def _job_env(post, stack=None):
     """작업 자식 env — 덮기 파일(PARSE_FUSE_REREAD_P3=0·PARSE_POST)을 서비스 설정 파일·후보정 값마다 한 번만 만든다(임시 파일이 작업 수만큼
-    쌓이지 않게 — refactor.md C-46). OS 임시 폴더 정리(tmpwatch·systemd-tmpfiles·macOS periodic)가 오래 도는 서비스의 그 파일을 지웠으면
+    쌓이지 않게 — refactor.md C-46). 만든 파일은 서비스가 끝날 때 지운다(pl-27 — child_env가 exitclean에 맡김). OS 임시 폴더 정리(tmpwatch·systemd-tmpfiles·macOS periodic)가 오래 도는 서비스의 그 파일을 지웠으면
     다시 만든다(리뷰 S7e3 — 지워진 파일을 가리키면 서버 자식은 시작 거부, PC는 기본 후보정 all로 돎). 캐시는 덮기 파일이 얹는 몫만 — env는
     작업마다 지금 os.environ에서 새로 만든다(VS7e3 R-6 — 오래 도는 서비스의 라이브러리 env가 바뀌어도 작업 자식에 감). 반환은 새 dict."""
     key = (post, str(stack), os.environ.get("SETTINGS_FILE"))  # env 남김 — 설정 파일 자리 신호
@@ -132,10 +132,11 @@ def _run_group(cmd, timeout, env):
     cli._run_until과 같은 규칙 — pipeline.extract.resources). 시간 초과는 subprocess.TimeoutExpired로 올림(옛 subprocess.run과 같음)."""
     from pipeline.extract import resources as PR
 
-    p = exitclean.track(  # pl-27 — 서비스가 끝날 때 아직 돌면 끝내고 회수
+    p = exitclean.track(  # pl-27 — 서비스가 끝날 때 아직 돌면 묶음째 끝내고 회수
         subprocess.Popen(
             ["python", "-m", *cmd], cwd=APP_ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, **PR.group_kw()
-        )
+        ),
+        group=True,
     )
     try:
         out, err = p.communicate(timeout=timeout)
@@ -492,9 +493,8 @@ if __name__ == "__main__":
     for r in ROOTS:
         Path(r).mkdir(parents=True, exist_ok=True)
     # 2026-10-22 패치: docker exec -d 기동이라 표준출력이 안 남는다 → PID·환경을 파일로 남긴다(지연 원인 추적용 — txt 3분 대기 이슈)
-    with open(
-        exitclean.remove_at_exit(SERVICE_DIR / "service.json"), "w", encoding="utf-8"
-    ) as f:  # pl-27 — PID 기록은 서비스가 끝나면 지움
+    svc = exitclean.remove_at_exit(SERVICE_DIR / "service.json")  # pl-27 — PID 기록은 서비스가 끝나면 지움
+    with open(svc, "w", encoding="utf-8") as f:
         json.dump(
             {
                 "pid": os.getpid(),

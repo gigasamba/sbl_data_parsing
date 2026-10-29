@@ -31,7 +31,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]  # dev/
-from common.core import exitclean  # noqa: E402 — pl-27 종료 정리
 from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
 from pipeline.shared.postprocess import raw_root  # noqa: E402
 from pipeline.transform.figures import shape_detect  # noqa: E402 — AD14
@@ -107,19 +106,16 @@ def _convert_to_pdf(pptx_path, out_dir, timeout):
         return None
     # 변환마다 독립 프로필(engine-qa 10-08) — 이미 떠 있는 LibreOffice·다른 워커와 프로필 잠금·위임 없이 이 프로세스가 직접 변환
     profile = (Path(out_dir) / "lo_profile").resolve().as_uri()
-    # pl-27 — soffice는 soffice.bin을 따로 띄움: 새 프로세스 묶음으로 띄워 시간 초과·종료 때 묶음째 끝내고 회수(손자 고아·좀비 방지)
-    proc = exitclean.track(
-        subprocess.Popen(
-            [binp, f"-env:UserInstallation={profile}", "--headless", "--convert-to", "pdf", "--outdir", str(out_dir), str(pptx_path)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            **exitclean.group_kw(),
-        )
+    proc = subprocess.Popen(
+        [binp, f"-env:UserInstallation={profile}", "--headless", "--convert-to", "pdf", "--outdir", str(out_dir), str(pptx_path)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     try:
         proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        exitclean.stop(proc)
+        proc.kill()
+        proc.wait()
         return None
     if proc.returncode != 0:
         return None

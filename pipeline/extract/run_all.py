@@ -713,7 +713,6 @@ def _isolated(eng, doc, dst, profile, tmo, py=None, env=None):
 def _isolated_once(eng, doc, dst, profile, tmo, py, env=None):
     import subprocess
 
-    from common.core import exitclean
     from common.core import resources as RS
     from common.core.paths import child_env
     from pipeline.extract import resources as PR  # 우선순위 OS 분기 한 곳
@@ -729,13 +728,12 @@ def _isolated_once(eng, doc, dst, profile, tmo, py, env=None):
         encoding="utf-8",
         errors="replace",
         **PR.low_priority_kw(low),
-        **exitclean.group_kw(),  # pl-27 — 엔진 손자(soffice 등)까지 묶음째 끝내게
     )
     PR.renice_low(pr.pid, low)
     try:
         _, err = pr.communicate(timeout=tmo)
     except subprocess.TimeoutExpired as tmo_err:
-        exitclean.stop(pr)  # pl-27 — 묶음째 끝내고 회수(전에는 parse_one만 kill — 손자가 고아로 남음)
+        pr.kill()
         pr.communicate()
         dst.unlink(missing_ok=True)  # 쓰다 만 결과를 남기지 않음
         raise TimeoutError(f"문서×엔진 시간 제한 초과({tmo}초)") from tmo_err
