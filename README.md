@@ -165,6 +165,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 | 쓰는 법   | **기본값과 다르게 쓸 항목만** 적는다. 비워 둔 항목은 코드 기본값을 쓴다                                                                                                                 |
 | 필수     | `common.run_env` — `local`(PC) · `dev` · `stage` · `prd`(서버 — 외부 모델 호출을 거부하고, 설정 파일을 못 읽으면 시작하지 않는다)                                                        |
 | 항목별 안내 | [docs/operations/env-guide.md](docs/operations/env-guide.md)                                                                                                |
+| **서버 반입** | `settings.yaml`은 **git에 올리지 않는다**(`.gitignore` — 비밀값·서버마다 다른 값). 반입 때 **사람이 서버용으로 직접 작성**한다: `settings.sample.yaml`의 「1. 필수 입력」 블록에서 `[필수: 공통]`·`[필수: 서버]` 칸을 모두 확인해 채우고 `python -m pipeline.config --file <파일>`로 확인. **PC 파일을 그대로 복사하지 않는다** — PC의 `run_env: local`·`*_allow_external: true`가 서버에서 외부 모델 호출을 연다(알려진 위험, 사용자 10-29 수용) |
 
 
 **실행할 때 값을 넘기는 방법 3가지**
