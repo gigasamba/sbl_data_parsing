@@ -89,7 +89,7 @@ sha256_of = file_hash  # RV6 — common/ids.file_sha256과 중복 구현이던 �
 
 
 def pipeline_version():
-    """판 — common.pipeline_version()(git → PIPELINE_VERSION → common/PATCH_VERSION, 실행판과 같은 규칙 한 곳)."""
+    """버전 — common.pipeline_version()(저장소 루트 VERSION·오버레이 패치 PATCH_VERSION 중 높은 것 — D-036, 실행 보드와 같은 규칙 한 곳)."""
     from common import pipeline_version as _pv
 
     return _pv()
