@@ -54,7 +54,6 @@ from common.core.console import utf8_stdout
 from common.core.paths import (  # 폴더 재편 뒤 이 두 상수만 바뀌면 됨
     APP_ROOT,
     PARSING_ROOT,
-    PKG_ROOT,
     atomic_write_text,  # RV6, tmp+os.replace 공용(아래 _write_atomic이 감쌈)
     doc_dir,
 )
@@ -180,9 +179,7 @@ def _drop_uninstalled(want):
     문서 단위로 하던 것 — 이 함수는 그 전에, 시도 자체를 0으로 줄인다). 등록 안 된 이름(예: 스택 후보 목록에
     남은 archive 이동 엔진)도 여기서 같이 거름 — registry.installed()는 등록된 이름만 받는다."""
     known = registry.engines()
-    # PADDLE_PYTHON이 있으면 paddle 계열은 별도 venv에서 돈다(_isolated) — 본 venv의 installed()로 판정하면 오판(검토 10-13).
-    other_venv = PADDLE_ENGINES if pc.cfg().paths.paddle_python else set()  # S7c — 설정 객체
-    bad = sorted(e for e in want if e not in known or (e not in other_venv and not registry.installed(e)))
+    bad = sorted(e for e in want if e not in known or not registry.installed(e))
     if bad:
         print(f"[engine-check] 설치·등록 안 됨 — 이번 실행에서 건너뜀(시작 시 1회 확인): {', '.join(bad)}", flush=True)
     return want - set(bad)
@@ -571,8 +568,8 @@ def main():
             # 엔진의 첫 문서는 라이브러리 import(pandas·모델 적재 등)가 들어 있어 쪽당 0.1~1초 제한이 import 도중에 끊으면
             # 반쯤 초기화된 모듈이 남아 같은 엔진의 나머지 문서가 전부 실패(Linux 컨테이너 실측 10-02, markitdown 136건) — 첫 문서만 넉넉히
             tmo = max(tmo, float(pc.cfg().extract.warmup_sec))  # S7c — 설정 객체(기본 60)
-        if a.phase in (1, 2, 3) and (a.isolate or (eng in PADDLE_ENGINES and pc.cfg().paths.paddle_python)):
-            # 별도 프로세스(VLM 동시 실행·Windows·paddle)는 시작·import 시간이 제한에 들어감 — 쪽당 제한은 '파싱 시간'에만(시작 여유 더함)
+        if a.phase in (1, 2, 3) and a.isolate:
+            # 별도 프로세스(VLM 동시 실행·Windows)는 시작·import 시간이 제한에 들어감 — 쪽당 제한은 '파싱 시간'에만(시작 여유 더함)
             # 10초: 컨테이너 실측(10-02) rapidocr·pymupdf4llm OCR 1쪽 스캔이 별도 프로세스에서 모델 적재 포함 4.3~6.2초(5초면 절반 실패)
             tmo += float(pc.cfg().extract.isolate_overhead)  # S7c — 설정 객체(기본 10)
         _FIRED[0] = False
@@ -583,8 +580,6 @@ def main():
                 signal.setitimer(signal.ITIMER_REAL, tmo)  # 소수 초(쪽당 0.1초)도 가능
             if a.isolate:
                 _isolated(eng, doc, dst, a.profile, tmo)
-            elif eng in PADDLE_ENGINES and pc.cfg().paths.paddle_python:  # S7c — 설정 객체
-                _isolated(eng, doc, dst, a.profile, tmo, pc.cfg().paths.paddle_python)  # paddle 전용 venv로 자동
             else:
                 _write_atomic(dst, json.dumps(registry.run(eng, doc, a.profile), ensure_ascii=False))
         except Exception as ex:  # ponytail: SIGALRM은 C 확장 안에서 멈추면 못 끊음 — 그런 엔진은 --isolate
@@ -837,46 +832,22 @@ def phase2_failed(src, out):
 
 
 def _phase_done(a, src, out):
-    import subprocess
 
     from pipeline.shared.phase_report import write_phase_report
 
     if a.phase == 2:
         phase2_failed(src, out)
-    # OP23(사용자 10-08) — 옛 PHASE_REPORT.md·phase<N>-report.html 자동 생성은 기본 끔(실행판 run_board가 대신), PHASE_REPORT_LEGACY=1이면 예전처럼
-    legacy = pc.cfg().eval.phase_report_legacy  # S7c — 설정 객체(켜기 칸 on=("1",) — 옛 `== "1"`)
+    # OP23(사용자 10-08) — 옛 PHASE_REPORT.md·phase<N>-report.html 자동 생성은 기본 끔(실행판 run_board가 대신), 10-29 PHASE_REPORT_LEGACY 칸 삭제로 늘 끔
     try:
-        p = write_phase_report(src, out, a.engines, a.phase, a.truth or None, text_only=not legacy)
+        p = write_phase_report(src, out, a.engines, a.phase, a.truth or None, text_only=True)
     except Exception as ex:
         print(f"(phase 결과 계산 실패: {type(ex).__name__}: {ex} — python modules/parse/phase_report.py로 다시)", flush=True)
         return
-    txt = p.read_text(encoding="utf-8") if legacy else p
+    txt = p
     print(
-        "\n"
-        + txt.split("## C.")[0].strip()
-        + (
-            f"\n\n(연결 안 되는 엔진·기준점·사람 검토: {p})"
-            if legacy
-            else f"\n\n(실행판: python cli/run_board.py --out {out.parent.as_posix()} — 옛 PHASE_REPORT는 PHASE_REPORT_LEGACY=1)"
-        ),
+        "\n" + txt.split("## C.")[0].strip() + f"\n\n(실행판: python cli/run_board.py --out {out.parent.as_posix()})",
         flush=True,
     )
-    if (
-        legacy
-    ):  # phase 중간 보고서(HTML) — 방금 갱신된 qa·selection으로. 대기분은 채점에서 빠지고 머리에 '중간 결과' 표시(report.snapshot_note)
-        dest = out.parent / "report" / f"phase{a.phase}-report.html"
-        r = subprocess.run(
-            [sys.executable, "-m", "pipeline.eval.report", "--out", str(out.parent), "--dest", str(dest)],
-            cwd=PKG_ROOT,
-            capture_output=True,
-            text=True,
-        )
-        print(
-            f"phase {a.phase} 보고서: {dest}"
-            if r.returncode == 0
-            else f"(phase 보고서 생성 실패 — python cli/report.py --dest {dest}: {r.stderr.strip()[-200:]})",
-            flush=True,
-        )
     from common.core.runlog import note
     from pipeline.shared.runlog import next_step  # 10-14 — common.core.runlog에서 옮김(P만 씀)
 
@@ -1016,15 +987,8 @@ def _env_error(err):
     return is_env_error(err)
 
 
-PADDLE_ENGINES = {
-    "paddleocr",
-    "ppstructure",
-    "paddleocr_vl",
-}  # 본 venv와 섞이면 깨짐 — PADDLE_PYTHON(.venv-paddle/bin/python)으로 자동 실행
-
-
 def _isolated(eng, doc, dst, profile, tmo, py=None):
-    py = py or (pc.cfg().paths.paddle_python if eng in PADDLE_ENGINES else None) or sys.executable  # S7c — 설정 객체
+    py = py or sys.executable
     retries = int(
         pc.cfg().extract.engine_retry
     )  # S7c — 설정 객체(기본 1) · 비정상 종료만 바로 다시(10-14 rapidocr ResizeImgError 1회성 — 단독 재실행은 성공)

@@ -50,7 +50,6 @@ CATALOG_VALUES = {
     "LLM_SPEND_FILE": "",
     "MCP_BUNDLE": "",
     "MCP_STORE": "",
-    "PADDLE_PYTHON": "",
     "PARSE_ENGINE_SCOPE": "all",
     "PARSE_POST": "all",
     "PIPE_EMBED": "",

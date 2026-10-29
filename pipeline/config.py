@@ -430,9 +430,6 @@ class PipelineEval(Section):
         off=("0", "false", "no"),
         fold="strip",
     )
-    phase_report_legacy: bool | None = F(
-        False, "PHASE_REPORT_LEGACY", "옛 PHASE_REPORT.md·phase 보고서 자동 생성을 되살릴지(=1 생성 / 0 끔)", on=("1",)
-    )
     qa_draft_max_pages: int | None = F(20, "QA_DRAFT_MAX_PAGES", "질문 초안 생성(qa_draft)에서 문서당 처리할 쪽 수 상한(쪽)")
     qa_draft_per_page: int | None = F(5, "QA_DRAFT_PER_PAGE", "질문 초안 생성에서 쪽당 질문 수 상한(개)")
     review_max_rounds: int | None = F(2, "REVIEW_MAX_ROUNDS", "도식 검토 루프의 최대 재추출 횟수(회)")
@@ -559,7 +556,6 @@ class PipelinePaths(Section):
     images_root: str | None = F(None, "PARSE_IMAGES_ROOT", "그림 PNG·index.jsonl 저장 루트")
     index_conf: str | None = F(None, "INDEX_CONF", "색인 설정 JSON 경로(있으면 색인 모듈로 구조화)")
     out_root: str | None = F(None, "PIPE_OUT_ROOT", "파이프라인 출력 루트(output)")
-    paddle_python: str | None = F(None, "PADDLE_PYTHON", "paddle 계열 엔진을 돌릴 별도 venv의 python 경로")
     parse_tmp: str | None = F(None, "PARSE_TMP", "스트리밍·병렬 파싱 임시 폴더 — output 아래 2단 이상 하위만 허용")
     raw_root: str | None = F(None, "PARSE_RAW_ROOT", "P0 원본 층(raw/VLM) 캐시 저장소 루트")
     report_digest_dir: str | None = F(None, "REPORT_DIGEST_DIR", "run_board 날짜·판 요약 폴더 루트(비우면 요약 안 만듦)")

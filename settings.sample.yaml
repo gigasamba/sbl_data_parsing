@@ -186,7 +186,7 @@ mcp:
 #   common.models.vlm.retry:  # VLM 쪽 호출 시간 초과·연결 오류 때 재시도 횟수(회) · 기본 1 · 값: 0 이상 정수 · env=VLM_RETRY [엔진 지문]
 #   common.models.vlm.timeout:  # VLM 쪽당 호출 제한 시간(초) · 기본 180 · 값: 0 이상 정수(초) · env=VLM_TIMEOUT [엔진 지문]
 
-# ─── 2-3. 경로 (25칸) ───
+# ─── 2-3. 경로 (24칸) ───
 #   common.paths.client_roster:  # 고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) — 용어·별칭에 합침 · 기본 없음 · 값: 경로 · env=CLIENT_ROSTER [인계 지문]
 #   common.paths.criteria_file:  # 판정 문턱값 파일 경로(criteria.json) · 기본 없음 · 값: 경로 · env=CRITERIA_FILE
 #   common.paths.doc_dir_prepared:  # 준비(dedup·회전) 끝난 문서 폴더 — 파싱의 --src 기본값(pipeline 이미지 안 기본 /app/output/prepared — 옛 Dockerfile ENV, B-2) · 기본 없음 · 값: 경로 · env=DOC_DIR_PREPARED
@@ -206,7 +206,6 @@ mcp:
 #   pipeline.paths.images_root:  # 그림 PNG·index.jsonl 저장 루트 · 기본 없음 · 값: 경로 · env=PARSE_IMAGES_ROOT
 #   pipeline.paths.index_conf:  # 색인 설정 JSON 경로(있으면 색인 모듈로 구조화) · 기본 없음 · 값: 경로 · env=INDEX_CONF
 #   pipeline.paths.out_root:  # 파이프라인 출력 루트(output) · 기본 없음 · 값: 경로 · env=PIPE_OUT_ROOT
-#   pipeline.paths.paddle_python:  # paddle 계열 엔진을 돌릴 별도 venv의 python 경로 · 기본 없음 · 값: 경로 · env=PADDLE_PYTHON
 #   pipeline.paths.parse_tmp:  # 스트리밍·병렬 파싱 임시 폴더 — output 아래 2단 이상 하위만 허용 · 기본 없음 · 값: 경로 · env=PARSE_TMP
 #   pipeline.paths.raw_root:  # P0 원본 층(raw/VLM) 캐시 저장소 루트 · 기본 없음 · 값: 경로 · env=PARSE_RAW_ROOT
 #   pipeline.paths.report_digest_dir:  # run_board 날짜·판 요약 폴더 루트(비우면 요약 안 만듦) · 기본 없음 · 값: 경로 · env=REPORT_DIGEST_DIR
@@ -485,7 +484,7 @@ mcp:
 #   mcp.host.tool_cpus:  # 검색 도구 실행 컨테이너(run_tool) CPU 한도 · 기본 1.0 · 값: 0 이상 · env=RETRIEVAL_TOOL_CPUS [호스트]
 #   mcp.host.tool_mem_limit:  # 검색 도구 실행 컨테이너(run_tool) 메모리 한도 · 기본 2g · 값: 글자 · env=RETRIEVAL_TOOL_MEM_LIMIT [호스트]
 
-# ─── 2-10. e2e·시험·평가(PC 전용) (49칸) ───
+# ─── 2-10. e2e·시험·평가(PC 전용) (48칸) ───
 #   common.dev.exp_store:  # PC 평가(stack_matrix) 결과 저장소 폴더 · 기본 없음 · 값: 경로 · env=EXP_STORE
 #   common.dev.llm_est_in_tokens:  # stack_matrix 비용 추정에서 질문당 입력 토큰 가정 · 기본 1500 · 값: 0 이상 정수 · env=LLM_EST_IN_TOKENS
 #   common.dev.llm_est_out_tokens:  # stack_matrix 비용 추정에서 질문당 출력 토큰 가정 · 기본 없음 · 값: 0 이상 정수 · env=LLM_EST_OUT_TOKENS [서버 옛 값: 1200]
@@ -527,7 +526,6 @@ mcp:
 #   pipeline.eval.e2e_questions:  # e2e 질문 파일 경로(또는 auto = 그 자리에서 생성) · 기본 없음 · 값: 경로 · env=E2E_QUESTIONS
 #   pipeline.eval.gold_draft_max_pages:  # 정답 초안 생성(gold_draft)에서 문서당 처리할 쪽 수 상한(쪽) · 기본 30 · 값: 0 이상 정수 · env=GOLD_DRAFT_MAX_PAGES
 #   pipeline.eval.gold_draft_mermaid_check:  # 정답 초안의 Mermaid 블록 2차 점검을 켤지(0/false/no면 끔) · 기본 true · 값: true·false · env=GOLD_DRAFT_MERMAID_CHECK [끔: 0·false·no]
-#   pipeline.eval.phase_report_legacy:  # 옛 PHASE_REPORT.md·phase 보고서 자동 생성을 되살릴지(=1 생성 / 0 끔) · 기본 false · 값: true·false · env=PHASE_REPORT_LEGACY [켬: 1만]
 #   pipeline.eval.qa_draft_max_pages:  # 질문 초안 생성(qa_draft)에서 문서당 처리할 쪽 수 상한(쪽) · 기본 20 · 값: 0 이상 정수 · env=QA_DRAFT_MAX_PAGES
 #   pipeline.eval.qa_draft_per_page:  # 질문 초안 생성에서 쪽당 질문 수 상한(개) · 기본 5 · 값: 0 이상 정수 · env=QA_DRAFT_PER_PAGE
 #   pipeline.eval.review_max_rounds:  # 도식 검토 루프의 최대 재추출 횟수(회) · 기본 2 · 값: 0 이상 정수 · env=REVIEW_MAX_ROUNDS
