@@ -48,12 +48,6 @@ class McpSearchClient(Section):
     strict: bool | None = F(False, "SEARCH_CLIENT_STRICT", "하드 격리에서 고객 미상 문서도 제외 — 1이면 켬", on=("1",))
 
 
-class McpSearchGraph(Section):
-    concept_expand: bool | None = F(True, "SEARCH_GRAPH_CONCEPT_EXPAND", "그래프 확장에서 개념 상위·관련 2홉 확장 — 0이면 끔", off=("0",))
-    concept_per: int | None = F(1, "SEARCH_GRAPH_CONCEPT_PER", "개념 2홉 확장에서 개념당 청크 수(개)")
-    concept_seeds: int | None = F(None, "SEARCH_GRAPH_CONCEPT_SEEDS", "개념 2홉 씨앗으로 쓰는 개념 수 상한(개)")
-
-
 class McpSearchPg(Section):
     filter_exact_max: int | None = F(20000, "PG_FILTER_EXACT_MAX", "고객 필터 허용 집합이 이 크기 이하면 벡터 정확 검색으로 전환(청크 수)")
     vector_search: str | None = F(None, "PG_VECTOR_SEARCH", "벡터 검색 방식 — exact면 색인 없이 정확 검색, 비우면 근사(HNSW)")
@@ -152,7 +146,7 @@ class McpSearch(Section):
     data_catalog: str | None = F(None, "DATA_CATALOG", "데이터 카탈로그(표·열 설명) JSON 경로 — 없으면 카탈로그 없이 동작")
     entity_split: bool | None = F(True, "SEARCH_ENTITY_SPLIT", "비교 질문(고객 2명 이상)을 고객별로 나눠 검색 — 0이면 끔", off=("0",))
     evidence_gate: bool | None = F(True, "SEARCH_EVIDENCE_GATE", "근거 점수·evidence_status 표시 — 0이면 끔(점수 칸도 안 실림)", off=("0",))
-    methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector,bm25,id,graph 등)")
+    methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서)")
     min_score: float | None = F(None, "SEARCH_MIN_SCORE", "근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak")
     ocr_dpi: int | None = F(200, "OCR_DPI", "쪽 이미지 렌더링 해상도(DPI) — OCR·근거 이미지 좌표 환산에 씀", pinned="engine")
     ov_search_path: str | None = F("/api/v1/search/find", "OV_SEARCH_PATH", "OpenViking 검색 API 경로")
@@ -170,7 +164,6 @@ class McpSearch(Section):
     )
     agg: McpSearchAgg = Field(default_factory=McpSearchAgg)
     client: McpSearchClient = Field(default_factory=McpSearchClient)
-    graph: McpSearchGraph = Field(default_factory=McpSearchGraph)
     pg: McpSearchPg = Field(default_factory=McpSearchPg)
     query_expand: McpSearchQueryExpand = Field(default_factory=McpSearchQueryExpand)
     weights: McpSearchWeights = Field(default_factory=McpSearchWeights)

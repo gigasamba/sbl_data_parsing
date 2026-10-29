@@ -734,68 +734,6 @@ def _selftest_entity_split():
     print("[selftest] BR23 SEARCH_ENTITY_SPLIT — 고객 2명 비교 질문의 한쪽 고객 누락을 하위 검색으로 보정 통과")
 
 
-def _selftest_graph_client_restrict():
-    """GH1-12 — 그래프 확장(graph 방법)이 SEARCH_CLIENT_HARD 고객 제한을 비켜 가던 버그. a.txt(Acme Co)의 씨앗
-    청크가 공유 엔티티 노드를 통해 b.txt(Other Co)의 청크로 이어지는 합성 kg_nodes/kg_edges로 재현: 꺼짐(기본)이면
-    그래프 근거가 그대로(바이트 동일) · SEARCH_CLIENT_HARD=1 + client=Acme면 그래프로 들어온 다른 고객(b.txt) 근거가 빠진다."""
-    docs = [
-        {"file_path": "a.txt", "file_name": "a.txt", "file_sha256": "a" * 64, "doc_format": ".txt", "client": "Acme Co"},
-        {"file_path": "b.txt", "file_name": "b.txt", "file_sha256": "b" * 64, "doc_format": ".txt", "client": "Other Co"},
-    ]
-    chunks = [
-        {
-            "doc": 0,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "단가는 100 USD",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        },
-        {
-            "doc": 1,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "다른 고객 전용 문서 내용",
-            "n_terms": 4,
-            "bbox": None,
-            "section": None,
-        },
-    ]
-    d = _mk_bundle(docs, chunks)
-    kg_nodes = [
-        {"id": 10, "kind": "chunk", "node_key": "c0", "label": "c0", "chunk": 0},
-        {"id": 11, "kind": "chunk", "node_key": "c1", "label": "c1", "chunk": 1},
-        {"id": 20, "kind": "entity", "node_key": "단가", "label": "단가"},
-    ]
-    kg_edges = [{"src": 10, "dst": 20}, {"src": 11, "dst": 20, "chunk": 1}]
-    (d / "kg_nodes.jsonl").write_text("\n".join(json.dumps(n, ensure_ascii=False) for n in kg_nodes) + "\n", encoding="utf-8")
-    (d / "kg_edges.jsonl").write_text("\n".join(json.dumps(e, ensure_ascii=False) for e in kg_edges) + "\n", encoding="utf-8")
-    _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
-    try:
-        with mc.senv(SEARCH_CLIENT_HARD=None):
-            off = do_search("단가는?", k=5, methods=["bm25", "graph"], decompose=False)
-            assert any(e.get("via", "").startswith("graph(") and e["file_name"] == "b.txt" for e in off["evidence"]), off[
-                "evidence"
-            ]  # 꺼짐 — 그대로(바이트 동일)
-
-        with mc.senv(SEARCH_CLIENT_HARD="1"):
-            on = do_search("단가는?", k=5, methods=["bm25", "graph"], decompose=False, client="Acme Co")
-            assert not any(e.get("via", "").startswith("graph(") and e["file_name"] == "b.txt" for e in on["evidence"]), on[
-                "evidence"
-            ]  # 켬 — 그래프로 온 다른 고객도 빠짐
-            assert any(e["file_name"] == "a.txt" for e in on["evidence"]), on["evidence"]  # 자기 고객 근거는 그대로
-    finally:
-        _env.close()
-        _STATE.clear()
-    print("[selftest] GH1-12 graph 확장 고객 제한 — 꺼짐 바이트 동일 · SEARCH_CLIENT_HARD=1이면 그래프로 들어온 다른 고객 근거도 빠짐 통과")
-
-
 def _selftest_br50_client_scope():
     """BR50 — 고객 범위 단일 규칙(clientscope.py) 종단 점검. 합성 2고객 묶음(Acme Co·Beta Inc)으로:
     꺼짐(기본, SEARCH_CLIENT_HARD 미설정)이면 client 인자를 줘도 core 검색·개념(concept)·그림(image)·집계(aggregate)·
@@ -930,9 +868,8 @@ def _selftest_br50_client_scope():
     _hard = None
     try:
         # 꺼짐(기본) — client를 줘도 전과 바이트 동일
-        off = do_search("바이러스 불활화 공정", k=5, methods=["bm25", "concept", "image"], decompose=False, client="Acme Co")
+        off = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False, client="Acme Co")
         assert {e.get("file_name") for e in off["evidence"] if e.get("file_name")} >= {"a.txt", "b.txt"}, off["evidence"]
-        assert {im["doc"] for im in off["images"]} == {"a.txt", "b.txt"}, off["images"]
 
         doc_off = do_get_document("b.txt", client="Acme Co")
         assert doc_off.get("file_name") == "b.txt" and "error" not in doc_off, doc_off
@@ -950,9 +887,8 @@ def _selftest_br50_client_scope():
 
         # 켬 — SEARCH_CLIENT_HARD=1 + client="Acme Co" 명시
         _hard = mc.senv(SEARCH_CLIENT_HARD="1")
-        on = do_search("바이러스 불활화 공정", k=5, methods=["bm25", "concept", "image"], decompose=False, client="Acme Co")
+        on = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False, client="Acme Co")
         assert "b.txt" not in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # core·concept 둘 다 빠짐(F)
-        assert all(im["doc"] != "b.txt" for im in on["images"]), on["images"]  # 그림도 빠짐(G)
         assert "a.txt" in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # 자기 고객 근거는 그대로
 
         doc_on = do_get_document("b.txt", client="Acme Co")
@@ -1078,7 +1014,6 @@ def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) 
     _selftest_agg_fx()
     _selftest_search_client_arg()
     _selftest_entity_split()
-    _selftest_graph_client_restrict()
     _selftest_br50_client_scope()
     _selftest_evidence_rdb_meta()
     _selftest_query_log()

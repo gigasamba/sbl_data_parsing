@@ -4,7 +4,7 @@
 import 금지). 함수 내용은 그대로 옮겼다(옛 pipeline/cli.py의 ask·_ask_mcp·_ask_edw·test_stack·Retriever·table_md, 그리고 이
 파일이 함께 쓰는 sh·connect 사본 — sh·connect는 파이프라인 명령도 써서 pipeline/cli.py에도 남음).
 
-  ask         질문 → 근거 청크 + 원본 경로·쪽·줄·쪽 안 위치(bbox)·요약 (+ --graph 그래프 이웃) — 로컬 묶음 또는 --edw. 답변은
+  ask         질문 → 근거 청크 + 원본 경로·쪽·줄·쪽 안 위치(bbox)·요약 — 로컬 묶음 또는 --edw. 답변은
               검색만(10-13 답변 경로 통일 1단계 — 답변은 서빙되는 Answer Agent(rag_qa — valid_env/answer_test/rag_qa, 점검 validation/e2e/answer_gen.py)만, 중복 경로 제거).
               기본(로컬·pgvector 하이브리드)은 mcp_server.services.search.search_svc.do_search()에 위임(AR10) — MCP와 같은 결과,
               --edw·--edw-client·--retrieve cosine만 예전 경로
@@ -79,7 +79,7 @@ def connect(a):
 
 
 def ask(a):
-    """질문 → 근거(파일·쪽·줄·bbox·점수·via) · --graph·집계 포함. 기본(로컬 묶음·pgvector 하이브리드)은
+    """질문 → 근거(파일·쪽·줄·bbox·점수·via) · 집계 포함. 기본(로컬 묶음·pgvector 하이브리드)은
     AR10(구조 리뷰 10-12 round4 QA095) — MCP search/mcp_server.do_search()에 그대로 위임한다(두 경로가
     같은 질문에 다른 순위를 주던 분기 제거). --edw·--edw-client·--retrieve cosine는 do_search에 EDW
     벡터 모드가 없어 예전 R.search 경로를 그대로 둔다(ponytail: do_search가 EDW를 지원하게 되면 이 분기를 지움)."""
@@ -94,11 +94,10 @@ def _ask_mcp(a):
     do_search() 안 _log()가 이미 함(qa_log.append + PG qa_log INSERT) — 여기서 다시 넣지 않음(중복 기록 방지)."""
     st = _stack()
     C.put(MCP_STORE="local" if a.local else ("pg" if a.pg else ""), MCP_BUNDLE=str(a.bundle))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스)
-    from mcp_server.config import CFG  # S5 — 기본 검색 방법(옛 MCP.DEFAULT_METHODS)
     from mcp_server.services.search import search_svc as MCP
 
     k = a.k or st.get("k", 8)
-    methods = (CFG.DEFAULT_METHODS + ["graph"]) if getattr(a, "graph", False) and not a.no_graph else None
+    methods = None
     res = MCP.do_search(a.q, k, methods=methods)
     if a.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))
@@ -149,8 +148,6 @@ def _ask_edw(a):
         "ms": round(ms, 1),
         "hits": hits,
     }
-    if getattr(a, "graph", False) and not a.no_graph:  # 10-12: 기본 끔(MCP 기본 vector·bm25·id와 같게) — --graph로 켬
-        res["graph"] = R.graph(hits[:3])
     if a.pg:  # 개발 서버 질의 기록(qa_log)
         R.pg.q(
             f"INSERT INTO {R.pg.schema}.qa_log(question, stack_name, k, hits, answer, search_ms, asked_by) VALUES (%s,%s,%s,%s,%s,%s,%s)",
@@ -194,8 +191,6 @@ def _ask_edw(a):
             + (f"  §{h['section']}" if h.get("section") else "")
         )
         print("    " + h["text"].replace("\n", " ")[:220])
-    for g in res.get("graph", []):
-        print(f"  (그래프 {g['via']}) {g['file_path']} p.{g['page']} L.{g['line']}: {g['text'].replace(chr(10), ' ')[:120]}")
 
 
 def test_stack(a):
@@ -306,12 +301,6 @@ def main(argv=None):
         p.add_argument("--k", type=int, default=8, help="근거 수 — MCP search 기본과 같게 8(AR5 측정: k=8이 k=10과 같거나 나음, 잘림 적음)")
         if name == "ask":
             p.add_argument("--q", required=True)
-            p.add_argument(
-                "--graph",
-                action="store_true",
-                help="그래프 이웃 근거 켬 — 10-12부터 기본 끔: MCP 기본 methods(vector·bm25·id)와 같게(graph 단독 효과 0·잡음↑, af 012195a1)",
-            )
-            p.add_argument("--no-graph", action="store_true", help="(옛 옵션 — 이제 기본이 끔, 남겨 둠)")
             p.add_argument("--json", action="store_true")
         else:
             p.add_argument("--questions", default="output/eval/questions.jsonl")

@@ -415,15 +415,13 @@ mcp:
 #   pipeline.load.publish.source_system:  # 병렬 파싱 경로에서 게시 행에 기록하는 source_system 이름 · env=PM_SOURCE_SYSTEM · str · 기본 FileStorageMap [빈 글자 유지]
 #   pipeline.load.publish.upload_statuses:  # 원본을 업로드할 파싱 상태 목록(콤마 — 비면 parsing_meta.DEFAULT_UPLOAD_STATUSES) · env=PM_UPLOAD_STATUSES · 목록(쉼표 또는 YAML 목록) · 기본 ok,partial
 
-# ─── 2-7. mcp — 검색 서버·검색 동작 (69칸) ───
+# ─── 2-7. mcp — 검색 서버·검색 동작 (66칸) ───
 #  [결과를 바꾸는 값(하이퍼파라미터)]
-#   mcp.search.methods:  # search 기본 검색 방법(쉼표 목록: vector,bm25,id,graph 등) · env=MCP_METHODS · 목록(쉼표 또는 YAML 목록) · 기본 vector,bm25,id
+#   mcp.search.methods:  # search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서) · env=MCP_METHODS · 목록(쉼표 또는 YAML 목록) · 기본 vector,bm25,id
 #   mcp.search.min_score:  # 근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak · env=SEARCH_MIN_SCORE · float
 #   mcp.search.ocr_dpi:  # 쪽 이미지 렌더링 해상도(DPI) — OCR·근거 이미지 좌표 환산에 씀 · env=OCR_DPI · int · 기본 200 [엔진 지문]
 #   mcp.search.struct_context_max:  # 집계 질문에서 계약 마스터 전체를 표로 넘길 때 계약 수 상한(개) · env=STRUCT_CONTEXT_MAX · int · 기본 200
 #   mcp.search.agg.llm_min:  # 집계 LLM 분류 확신도 하한(0~1) — 미달이면 검색으로 폴백 · env=SEARCH_AGG_LLM_MIN · float · 기본 0.6
-#   mcp.search.graph.concept_per:  # 개념 2홉 확장에서 개념당 청크 수(개) · env=SEARCH_GRAPH_CONCEPT_PER · int · 기본 1
-#   mcp.search.graph.concept_seeds:  # 개념 2홉 씨앗으로 쓰는 개념 수 상한(개) · env=SEARCH_GRAPH_CONCEPT_SEEDS · int
 #   mcp.search.weights.bm25:  # RRF 융합에서 BM25 가중치 · env=SEARCH_W_BM25 · float · 기본 1.0
 #   mcp.search.weights.bm25_table:  # 집계 질문일 때 BM25 가중치(SEARCH_TYPE_WEIGHTS 켠 경우) · env=SEARCH_W_BM25_TABLE · float · 기본 0.2
 #   mcp.search.weights.id:  # RRF 융합에서 ID(드문 식별자) 가중치 · env=SEARCH_W_ID · float · 기본 2.0
@@ -446,7 +444,6 @@ mcp:
 #   mcp.search.client.filter:  # 질문에 나온 고객명으로 검색 범위 거르기 — 0이면 끔 · env=SEARCH_CLIENT_FILTER · bool · 기본 true [끔: 0만]
 #   mcp.search.client.hard:  # 고객 범위를 하드 격리(다른 고객 문서 제외) — 1이면 켬 · env=SEARCH_CLIENT_HARD · bool · 기본 false [켬: 1만]
 #   mcp.search.client.strict:  # 하드 격리에서 고객 미상 문서도 제외 — 1이면 켬 · env=SEARCH_CLIENT_STRICT · bool · 기본 false [켬: 1만]
-#   mcp.search.graph.concept_expand:  # 그래프 확장에서 개념 상위·관련 2홉 확장 — 0이면 끔 · env=SEARCH_GRAPH_CONCEPT_EXPAND · bool · 기본 true [끔: 0만]
 #   mcp.search.query_expand.draft:  # 질문 용어 확장에서 draft 용어 사전 사용 — 0이면 끔 · env=QUERY_EXPAND_DRAFT · bool · 기본 true [끔: 0만]
 #   mcp.search.query_expand.enabled:  # 질문 용어 확장(BM25, 용어 사전) 스위치 — 0이면 끔 · env=QUERY_EXPAND · bool · 기본 true [끔: 0만]
 #   mcp.search.query_expand.shorttok:  # 용어 확장에서 한 글자 비숫자 토큰 제거 — 0이면 제거 안 함 · env=QUERY_EXPAND_SHORTTOK · bool · 기본 true [끔: 0만]

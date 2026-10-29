@@ -3,7 +3,7 @@
 
 도구(G2):
   search(question, k=8, methods=[vector,bm25,id], decompose=false, client=None)  근거 목록 — BM25는 용어 사전으로 확장(X3, notes에 표시) ·
-    methods에 graph·image·openviking·concept 추가 가능(G3·X4). client(AD38): 고객 명시(SEARCH_CLIENT_HARD=1이면 저장소 질의
+    methods는 vector·bm25·id만(graph·image·openviking·concept·decompose는 10-29에 지움 — 입력은 받고 무시). client(AD38): 고객 명시(SEARCH_CLIENT_HARD=1이면 저장소 질의
     단계에서 다른 고객 제외, 기본 꺼짐). 기본 켬(AD42, R3·R1 — =0으로 끔): SEARCH_EVIDENCE_GATE이면 응답에
     evidence_status(found/weak/none)·근거별 low_score(SEARCH_MIN_SCORE 문턱) 표시만(근거는 안 줄임) · SEARCH_AGG_ROUTE이면
     집계 질문을 aggregate.detect()로 가려 집계 결과(기존 정해진 함수만, 자유 SQL 없음)를 근거 맨 앞에 via="aggregate"로 —

@@ -6,7 +6,6 @@ import argparse
 import json
 import time
 from collections import Counter
-from itertools import groupby
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -235,95 +234,6 @@ def search(
     docmeta = {c: (rows[c].get("file_name"), rows[c].get("client"), rows[c].get("contract_no"), rows[c].get("product_code")) for c in top}
     top = tie_break(top, {c: rrf[c] for c in top}, docmeta, question)
     return [{**rows[c], "rrf": round(rrf[c], 5), "via": via[c]} for c in top]
-
-
-MID_KINDS = ("entity", "label", "value", "client", "contract", "product", "modality", "batch", "id", "concept")
-# AD28②③ — graph_neighbors()·Retriever._graph_local()이 씨앗 청크에서 넘어갈 수 있는 중간 노드 종류(한 곳에서 — enforcement §2).
-# entity·label·value(기존) + client·contract·product·modality·batch·id(②, 업무 개체) + concept(③, 용어 사전).
-
-
-def graph_neighbors(db, key_pg, seed_keys):
-    """그래프 확장(AD28①②③) — ai.kg_node/ai.kg_edge에서 한 질의로: 씨앗 청크(kind=chunk) → 중간 노드(MID_KINDS) →
-    다른 청크(근거 청크 = 그 edge의 chunk_id). Retriever.graph()가 씀 — 묶음 kg_nodes/kg_edges.jsonl 없이도 동작(S12: N+1 금지, 호출 1회).
-    key_pg = Retriever가 이미 만든 {chunk_key(sha256:seq): pg chunk_id} — 추가 질의 없이 씨앗을 chunk_id로 바꿈.
-    반환: {seed_chunk_key: [(mid_kind, mid_label, mid_key, [근거 청크 dict, …]), …]} — mid_key(③, concept_id 등)는
-    Retriever.graph()가 개념 2홉 확장(concept_broader_chunks)의 씨앗으로 씀.
-    정렬(로컬 묶음 경로 Retriever._graph_local과 같은 kg 데이터면 같은 결과 — 저장소가 매기는 id가 달라도 의미만으로 결정적):
-      중간 노드는 (node_key, kind) 오름차순 · 근거 청크는 chunk_key(file_sha256:seq) 오름차순."""
-    s = db.schema
-    ids = [key_pg[k] for k in seed_keys if k in key_pg]
-    if not ids:
-        return {}
-    rows = db.q(
-        f"""
-        SELECT cn.chunk_id AS seed_chunk_id, mid.kind AS mid_kind, mid.label AS mid_label, mid.node_key AS mid_key,
-               vs.file_path, vs.page, vs.line_start, vs.chunk_text, vs.file_sha256, vs.seq
-        FROM {s}.kg_node cn
-        JOIN {s}.kg_edge e1 ON e1.src_id = cn.node_id
-        JOIN {s}.kg_node mid ON mid.node_id = e1.dst_id
-        JOIN {s}.kg_edge e2 ON e2.dst_id = mid.node_id AND e2.chunk_id IS NOT NULL
-        JOIN {s}.kg_node sc ON sc.node_id = e2.src_id AND sc.kind = 'chunk'
-        JOIN {s}.v_chunk_source vs ON vs.chunk_id = e2.chunk_id
-        WHERE cn.kind = 'chunk' AND cn.chunk_id = ANY(%s) AND mid.kind = ANY(%s)
-        ORDER BY cn.chunk_id, mid.node_key, mid.kind, vs.file_sha256, vs.seq""",
-        (ids, list(MID_KINDS)),
-    )
-    id_to_key = {v: k for k, v in key_pg.items()}
-    out = {}
-    for seed_id, srows in groupby(rows, key=lambda r: r["seed_chunk_id"]):
-        seed_key = id_to_key.get(seed_id)
-        if seed_key is None:
-            continue
-        mids = []
-        for (mk, mkind), mrows in groupby(srows, key=lambda r: (r["mid_key"], r["mid_kind"])):
-            rs = list(mrows)
-            chunks = [
-                {
-                    "chunk_key": f"{r['file_sha256']}:{r['seq']}",
-                    "file_path": r["file_path"],
-                    "page": r["page"],
-                    "line_start": r["line_start"],
-                    "text": r["chunk_text"],
-                }
-                for r in rs
-            ]
-            mids.append((mkind, rs[0]["mid_label"], mk, chunks))
-        out[seed_key] = mids
-    return out
-
-
-def concept_broader_chunks(db, concept_ids, per=1):
-    """AD28③ — 개념의 상위(broader)·관련(related) 개념이 멘션하는 청크(2홉: 개념→개념→청크). graph_neighbors()보다
-    가중치 낮은 확장 — Retriever.graph()가 per(기본 1, SEARCH_GRAPH_CONCEPT_PER)로 슬롯을 적게 주고 1차 결과 뒤에 붙임,
-    SEARCH_GRAPH_CONCEPT_EXPAND=0이면 호출 자체를 안 함. concept_ids 전체를 한 번에(N+1 아님)."""
-    if not concept_ids:
-        return {}
-    s = db.schema
-    rows = db.q(
-        f"""
-        SELECT src.node_key AS concept_id, vs.file_path, vs.page, vs.line_start, vs.chunk_text, vs.file_sha256, vs.seq
-        FROM {s}.kg_node src
-        JOIN {s}.kg_edge e1 ON e1.src_id = src.node_id AND e1.rel IN ('broader', 'related')
-        JOIN {s}.kg_node dst ON dst.node_id = e1.dst_id AND dst.kind = 'concept'
-        JOIN {s}.kg_edge e2 ON e2.src_id = dst.node_id AND e2.rel = 'concept_chunk' AND e2.chunk_id IS NOT NULL
-        JOIN {s}.v_chunk_source vs ON vs.chunk_id = e2.chunk_id
-        WHERE src.kind = 'concept' AND src.node_key = ANY(%s)
-        ORDER BY src.node_key, dst.node_key, vs.file_sha256, vs.seq""",
-        (concept_ids,),
-    )
-    out = {}
-    for cid, rs in groupby(rows, key=lambda r: r["concept_id"]):
-        out[cid] = [
-            {
-                "chunk_key": f"{r['file_sha256']}:{r['seq']}",
-                "file_path": r["file_path"],
-                "page": r["page"],
-                "line_start": r["line_start"],
-                "text": r["chunk_text"],
-            }
-            for r in list(rs)[:per]
-        ]
-    return out
 
 
 def bench(db, bundle, questions, k=10, limit=50, out="output/edw"):
