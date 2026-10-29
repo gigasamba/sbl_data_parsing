@@ -85,7 +85,7 @@ Full switch list with defaults: `settings.sample.yaml` part 2, groups "[기능 �
 | Nightly schedule | `NIGHTLY_ENABLED=0` | — | pipeline |
 | `--prune`, create `vector` extension | opt-in · `PG_CREATE_EXTENSION=0` | — | pipeline |
 | Trigger server | — | `TRIGGER_TOKEN` (refuses to start without) | pipeline |
-| External (paid) models | `*_ALLOW_EXTERNAL=0`, PC only (`RUN_ENV=local`) | synthetic truth file, budget caps | shared |
+| External (paid) models | `*_ALLOW_EXTERNAL=0`, PC only (`RUN_ENV=local`) | budget caps (`LLM_BUDGET_USD`, `LLM_MAX_CALLS`) | shared |
 | Answer check, stack/model matrices | — | LLM; paid runs need approval | e2e |
 
 Requested 10-29 "EDW and Object Storage load on by default": publish (Object Storage + `AI.ParsingMeta`) already runs by default once `PM_BUCKET`/`PM_DB_*` are set; what is off is the nightly schedule (`NIGHTLY_ENABLED=0`) and the EDW vector load (`EDW_LOAD=0`, no caller). Not changed yet — needs the user's choice (and the DB owner for EDW writes).

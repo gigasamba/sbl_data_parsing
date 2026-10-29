@@ -26,9 +26,7 @@ def selftest():
     assert PORT_RE.findall("0.0.0.0:1933->1933/tcp, [::]:1933->1933/tcp")[0] == ("0.0.0.0", "1933", "1933")
     for u in ("http://10.0.0.5:8000/v1", "http://localhost:8765/v1", "http://127.0.0.1:8000/v1"):
         require_internal(u, "EMBED")
-    with isolated(
-        EMBED_ALLOW_EXTERNAL=None, LLM_SYNTHETIC_TRUTH=None
-    ):  # 기본(잠금 없음) 고정 — PC 루트 settings.yaml에 두 잠금이 있어도(D-035)
+    with isolated(EMBED_ALLOW_EXTERNAL=None):  # 기본(허용 없음) 고정 — PC 루트 settings.yaml에 허용이 있어도(D-035)
         try:
             require_internal("https://api.openai.com/v1", "EMBED")
             raise AssertionError("외부 주소가 통과됨")

@@ -142,13 +142,13 @@ mcp:
 #   common.text.search_en_stem:  # 검색 토큰의 영어 복수→단수 정규화(G16, 가산만) — =0이면 끔 · 기본 true · 값: true·false · env=SEARCH_EN_STEM [인계 지문] [끔: 0만]
 #   common.text.token_num_norm:  # 검색 토큰의 숫자·단위 정규화(T1) — =0이면 끄고 이전 동작 · 기본 true · 값: true·false · env=TOKEN_NUM_NORM [인계 지문] [끔: ''·0·none·false]
 
-# ─── 2-2. 모델 — LLM·VLM·임베딩·재순위·비용 가드 (40칸) ───
+# ─── 2-2. 모델 — LLM·VLM·임베딩·재순위·비용 가드 (39칸) ───
 #  [기능 켬/끔]
-#   common.models.embed.allow_external:  # 임베딩 외부 주소 허용 첫째 잠금(=1이면 열림, LLM_SYNTHETIC_TRUTH도 있어야 실제 허용) · 기본 false · 값: true·false · env=EMBED_ALLOW_EXTERNAL [켬: 1만]
-#   common.models.llm.allow_external:  # LLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · 기본 false · 값: true·false · env=LLM_ALLOW_EXTERNAL [켬: 1만]
+#   common.models.embed.allow_external:  # 임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만) · 기본 false · 값: true·false · env=EMBED_ALLOW_EXTERNAL [켬: 1만]
+#   common.models.llm.allow_external:  # LLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · 기본 false · 값: true·false · env=LLM_ALLOW_EXTERNAL [켬: 1만]
 #   common.models.llm.empty_retry:  # 빈 응답(생각이 토큰 소진) 안전망 — =0이면 끔, 그 밖이면 max_tokens×4로 1회 재요청 · 기본 true · 값: true·false · env=LLM_EMPTY_RETRY [끔: 0만]
-#   common.models.ocrvlm.allow_external:  # OCR 전용 VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · 기본 false · 값: true·false · env=OCRVLM_ALLOW_EXTERNAL [켬: 1만]
-#   common.models.vlm.allow_external:  # VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · 기본 false · 값: true·false · env=VLM_ALLOW_EXTERNAL [켬: 1만]
+#   common.models.ocrvlm.allow_external:  # OCR 전용 VLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · 기본 false · 값: true·false · env=OCRVLM_ALLOW_EXTERNAL [켬: 1만]
+#   common.models.vlm.allow_external:  # VLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · 기본 false · 값: true·false · env=VLM_ALLOW_EXTERNAL [켬: 1만]
 #  [운영값(동시성·시간·용량·경로·접속)]
 #   common.models.embed.dim:  # ping_models 점검에서 기대하는 임베딩 차원 수 · 기본 4096 · 값: 0 이상 정수 · env=EMBED_DIM
 #   common.models.embed.est_usd:  # 임베딩 호출 1건당 예상 비용($) — 예산 선차감용 · 기본 0.001 · 값: 0 이상 · env=EMBED_EST_USD
@@ -163,7 +163,6 @@ mcp:
 #   common.models.guard.internal_ip_ranges:  # 사설(RFC1918) 밖의 사내 IP 대역 CIDR 목록(쉼표 구분) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=INTERNAL_IP_RANGES
 #   common.models.guard.max_calls:  # LLM 호출 수 상한(개) — 0이면 무제한 · 기본 0 · 값: 0 이상 정수 (0 = 무제한) · env=LLM_MAX_CALLS
 #   common.models.guard.spend_file:  # 지출 장부 파일 경로(호출마다 금액 한 줄 — 프로세스·실행 전체가 공유) · 기본 없음 · 값: 경로 · env=LLM_SPEND_FILE
-#   common.models.guard.synthetic_truth:  # 합성 시험 문서 선언 파일(_meta 포함 JSON) 경로 — 외부 허용의 둘째 잠금 · 기본 없음 · 값: 경로 · env=LLM_SYNTHETIC_TRUTH
 #   common.models.llm.cache_dir:  # LLM 응답 캐시 폴더(요청 해시별 json) · 기본 없음 · 값: 경로 · env=LLM_CACHE_DIR
 #   common.models.llm.empty_retry_max:  # 빈 응답 재요청 때 max_tokens 상한(토큰) · 기본 8000 · 값: 0 이상 정수 · env=LLM_EMPTY_RETRY_MAX
 #   common.models.llm.est_usd:  # LLM 한 턴(run_agent)당 예상 비용($) — 예산 선차감용 · 기본 0.01 · 값: 0 이상 · env=LLM_EST_USD

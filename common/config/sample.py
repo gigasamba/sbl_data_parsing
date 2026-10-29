@@ -138,7 +138,6 @@ HYPER = {  # 이름 규칙으로는 운영값이지만 결과(파싱·청크·�
 }
 OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "common.models.llm.empty_retry_max",
-    "common.models.guard.synthetic_truth",
     "common.models.transport.down_cooldown",
     "pipeline.extract.isolate_overhead",
     "mcp.output.max_image_px",

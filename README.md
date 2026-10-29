@@ -213,7 +213,6 @@ common:
     embed: {base_url: [[ORCA_RICH_MD:0896ceca59eeaa02d79aaf879fa2674c:inline-html:%3COpenAI%20%ED%98%B8%ED%99%98%20%EC%A3%BC%EC%86%8C%3E]], model: <임베딩 모델>, api_key: <키>, allow_external: true}
     guard:
       no_paid_calls: true                        # 평소에는 true(외부 호출 차단) — 임베딩이 필요한 실행 동안만 false
-      synthetic_truth: <합성 문서 선언 json 경로>   # 외부 전송 두 번째 잠금(테스트 문서라는 선언)
       budget_usd: 0.1                            # 비용 상한
       max_calls: 40
       spend_file: output/spend-ledger.json
@@ -226,7 +225,7 @@ mcp:
   server: {host: 127.0.0.1, port: 18769, store: pg}
 ```
 
-- **외부 임베딩은 세 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `synthetic_truth` 있음 · `no_paid_calls: false`. 하나라도 빠지면 호출하지 않는다.
+- **외부 임베딩은 세 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `run_env: local` · `no_paid_calls: false`. 하나라도 빠지면 호출하지 않는다(서버 dev·stage·prd는 늘 거부).
 - ⚠️ PG 접속 항목을 비워 두면 코드가 `docker ps`로 찾은 아무 pgvector에나 연결한다. 전용 PG 접속 정보를 항상 적는다.
 
 ### 4-3. 점검
@@ -320,7 +319,7 @@ docker exec sbl-mcp-pg psql -U rag -d rag -c "SELECT version_id, name, is_active
 `settings.yaml`은 `no_paid_calls: true`인 채로 두고, 이번 실행에만 필요한 값을 명령 인자로 준다.
 ```bash
 O=$PWD/output/demo; SRC=$O/src     # ①과 같은 문서 폴더
-SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1 --set LLM_SYNTHETIC_TRUTH=<합성 문서 선언 json>
+SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
       --set NO_PAID_CALLS=0 --set LLM_BUDGET_USD=0.10 --set LLM_MAX_CALLS=10 --set LLM_SPEND_FILE=$O/spend.json)
 
 .venv/bin/python -m pipeline.cli "${SETS[@]}" parse --src $SRC
@@ -330,7 +329,7 @@ SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1 -
 .venv/bin/python -m pipeline.load.pgvector_load "${SETS[@]}" load --bundle $O/bundle
 
 # ask·MCP는 --set을 받지 않으므로 오버레이 설정 파일(방법 C)로 같은 값을 넘긴다
-SF=$(.venv/bin/python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 LLM_SYNTHETIC_TRUTH=<합성 문서 선언 json> \
+SF=$(.venv/bin/python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 \
      NO_PAID_CALLS=0 LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_STORE=pg MCP_BUNDLE=$O/bundle MCP_PORT=18769)
 SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.ask ask --pg --bundle $O/bundle --k 3 --q "<질문>"
 SETTINGS_FILE=$SF nohup .venv/bin/python -m mcp_server.main > $O/mcp.log 2>&1 & echo $! > $O/mcp.pid

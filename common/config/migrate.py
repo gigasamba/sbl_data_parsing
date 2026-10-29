@@ -31,7 +31,7 @@ _KEY = re.compile(r"[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_.-]*)[ \t]*=[ \t
 MASK = "<가림>"
 _PLACEHOLDER = re.compile(r"^<.*[가-힣].*>$")  # 빈 틀의 자리표시(`<여기에 기입>`·`<원본 문서 폴더 절대경로>`) — 한글 설명이 든 <…>만
 # 옛 별칭(C-35, 사용자 10-28) — 코드는 더 읽지 않는다. env 파일에서 만나면 새 칸 자리로 옮긴다(새 이름이 같은 파일들에 있으면 새 이름이 이김).
-OLD_ALIASES = {"SYNTHETIC_TRUTH": "LLM_SYNTHETIC_TRUTH"}
+OLD_ALIASES: dict[str, str] = {}  # 10-29: QA_CHAT_DECOMPOSE(분해 삭제)·SYNTHETIC_TRUTH(둘째 잠금 삭제) 별칭 없음
 # 서버 env 파일에서는 호스트 칸에만 옮기는 이름(VS7e2 B-3 — 코디네이터 10-28 "옛 실효 값과 같게"): 옛 run_tool.sh가 `-e GOLD_DIR=/data/gold`로
 # env_file 값(호스트 경로)을 덮어 컨테이너 앱은 늘 /data/gold를 읽었다 — 앱 칸(pipeline.paths.gold_dir)은 비워 이미지 안 /data/gold 규칙
 # (pipeline.config.gold_dir)이 걸리게 한다.

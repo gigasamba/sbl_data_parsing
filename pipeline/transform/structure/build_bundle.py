@@ -126,7 +126,7 @@ def llm_summary(text):
         },  # 글자는 resources/prompts/common/doc_summary/prompt.md(AD33)
         {"role": "user", "content": strip_page_numbers(text)[:6000]},
     ]
-    # 외부 LLM은 두 겹 잠금(LLM_ALLOW_EXTERNAL=1 + 합성 정답 파일)일 때만 — research와 같은 규칙(실데이터 서버엔 정답 파일 없음)
+    # 외부 LLM은 LLM_ALLOW_EXTERNAL=1 + RUN_ENV=local일 때만(서버 dev·stage·prd는 늘 거부 — common/ai/guard.py)
     return L.chat(
         msg, temperature=0.0, max_tokens=300, allow_external=C.cfg().models.llm.allow_external, agent="doc_summary"
     ).strip()  # S7c — 설정 객체(켜기 "1")

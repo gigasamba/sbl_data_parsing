@@ -156,7 +156,8 @@ NOT_SETTINGS = {
     "RESEARCH_RETRY_PARTIAL": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
     "RESEARCH_WORKERS": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
     "SMOKE_PATCH": ("삭제 후보", "S6c 삭제(D-027) — 문서 글자만"),
-    "SYNTHETIC_TRUTH": ("삭제 후보", "LLM_SYNTHETIC_TRUTH의 옛 별칭(guard.synthetic_ok) — 한 키로"),
+    "LLM_SYNTHETIC_TRUTH": ("삭제 후보", "합성 문서 선언 잠금 삭제(사용자 10-29) — 외부 허용은 *_ALLOW_EXTERNAL + RUN_ENV=local"),
+    "SYNTHETIC_TRUTH": ("삭제 후보", "LLM_SYNTHETIC_TRUTH의 옛 별칭 — 둘 다 삭제(사용자 10-29)"),
     "ZZ_BASE_URL": ("삭제 후보", "ping_models selftest의 가짜 이름"),
 }
 # 모은 키가 아닌 것(셸 문법·Dockerfile ARG·selftest 가짜 이름)

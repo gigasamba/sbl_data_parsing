@@ -782,11 +782,9 @@ def selftest():
                 and set(why) == {"B", "C", "D", "E", "F", "G", "H", "M"}
                 and "x" not in " ".join(why.values()),
             )
-            # C-35 — 옛 별칭은 새 칸으로(새 이름이 있으면 새 이름) · C-45 ⑤ — 라이브러리 env는 lib_env로, 목록 밖은 모델 밖
+            # C-45 ⑤ — 라이브러리 env는 lib_env로, 목록 밖은 모델 밖
             doc_m, rep_m = M.convert(
                 {
-                    "SYNTHETIC_TRUTH": "/t.json",
-                    "LLM_SYNTHETIC_TRUTH": "/n.json",
                     "TZ": "Asia/Seoul",
                     "OMP_NUM_THREADS": "2",
                 },
@@ -794,9 +792,8 @@ def selftest():
             )
             check(
                 f"migrate C-35·C-45 ⑤: 옛 별칭 옮김·라이브러리 env {rep_m['옛 이름 옮김']} {rep_m['라이브러리 env']}",
-                _peek(doc_m, "common.models.guard.synthetic_truth") == "/n.json"
-                and _peek(doc_m, "common.runtime.lib_env") == {"OMP_NUM_THREADS": "2", "TZ": "Asia/Seoul"}
-                and len(rep_m["옛 이름 옮김"]) == 1,
+                _peek(doc_m, "common.runtime.lib_env") == {"OMP_NUM_THREADS": "2", "TZ": "Asia/Seoul"}
+                and not rep_m["옛 이름 옮김"],  # 10-29: 옛 별칭(QA_CHAT_DECOMPOSE·SYNTHETIC_TRUTH)은 기능과 함께 지움
             )
             if (
                 "pipeline" in app_classes()

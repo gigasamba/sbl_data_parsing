@@ -58,7 +58,7 @@ def _selftest_search_notes_no_race():
     barrier = threading.Barrier(n_threads)
 
     def fake_embed(meta, text):
-        barrier.wait()  # 다 같이 시작 — 겹칠 확률을 최대로
+        barrier.wait(timeout=30)  # 다 같이 시작 — 겹칠 확률을 최대로(한 스레드가 죽어도 나머지가 영원히 기다리지 않게)
         if "FAIL" in text:
             time.sleep(0.03)  # 레이스가 있으면 이 사이에 다른 스레드가 note를 덮어씀(스크래치 시험으로 36/80 재현 확인)
             raise RuntimeError("가짜 임베딩 장애")
@@ -70,6 +70,8 @@ def _selftest_search_notes_no_race():
     sys.setswitchinterval(0.0001)  # GIL을 자주 넘겨 스레드 전환을 늘림(레이스 노출 확률 ↑)
     old = {k: _STATE.get(k) for k in ("R", "bundle", "checked_at")}
     bad = []
+    # PC 루트 settings.yaml(mcp.server.store: pg 등)이 새지 않게 — 30초 뒤 재적재가 실제 PG로 가면 한 스레드가 죽어 barrier가 멈췄음(10-29)
+    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), MCP_QUERY_LOG_DIR=str(d / "qa_log"))
     try:
         R = RT.Retriever(d)
         _STATE["R"], _STATE["bundle"], _STATE["checked_at"] = R, d, time.time()
@@ -90,6 +92,7 @@ def _selftest_search_notes_no_race():
             t.join()
         assert not bad, f"note가 다른 요청과 섞임: {bad[:5]}"
     finally:
+        _env.close()
         RT.embed_query = real_embed
         sys.setswitchinterval(real_switch)
         _STATE.clear()

@@ -169,8 +169,8 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 ## 7. 외부 모델(OpenRouter 등 유료) — 비용 규칙
 
 - 기본값은 유료 호출 차단(`no_paid_calls: true`)이다. 개발 중에는 **기능 확인만** 한다(문서 2~3건, 질문 몇 개).
-- 실행할 때마다 상한을 건다 — `LLM_BUDGET_USD`, `LLM_MAX_CALLS`, `LLM_SPEND_FILE`(비용 장부). 외부 전송에는 두 가지 잠금이 함께 필요하다: `EMBED_ALLOW_EXTERNAL`과 `LLM_SYNTHETIC_TRUTH`(합성 테스트 문서라는 선언 파일).
-- 두 잠금은 루트 settings.yaml에 둬도 된다(사용자 10-29 — 설정 창구는 하나). 그때는 `no_paid_calls: true`를 기본으로 두고, 외부 호출이 필요한 동안만 `false`로 바꾼 뒤 되돌린다(평소 테스트가 외부를 호출하지 않도록). 한 번만 풀 때는 `--set`을 쓴다.
+- 실행할 때마다 상한을 건다 — `LLM_BUDGET_USD`, `LLM_MAX_CALLS`, `LLM_SPEND_FILE`(비용 장부). 외부 전송은 `<PREFIX>_ALLOW_EXTERNAL`(예 `EMBED_ALLOW_EXTERNAL`)이 켜지고 `RUN_ENV=local`일 때만 된다(합성 문서 선언 `LLM_SYNTHETIC_TRUTH` 잠금은 사용자 10-29에 삭제).
+- 외부 허용은 루트 settings.yaml에 둬도 된다(사용자 10-29 — 설정 창구는 하나). 그때는 `no_paid_calls: true`를 기본으로 두고, 외부 호출이 필요한 동안만 `false`로 바꾼 뒤 되돌린다(평소 테스트가 외부를 호출하지 않도록). 한 번만 풀 때는 `--set`을 쓴다.
 - `role=llm`을 `adk.complete`로 직접 호출하면 예산 장부를 거치지 않는다. 실제 호출은 `llm.chat`이나 `run_agent(per_turn_admit=True)`로 한다.
 - 기술 스택 비교처럼 호출이 많은 작업은 예상 비용(호출 수 × 평균 토큰 × 단가)을 먼저 보고하고 승인을 받는다. 서버는 내부망 모델만 쓴다(외부 모델은 거부).
 

@@ -26,6 +26,7 @@ import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from common.config import settings as C  # common 칸(S7c — 설정 객체 · cfg()·given()·render())
@@ -1068,6 +1069,12 @@ def _image_lacks(top):
     return _spec_missing("pipeline.extract" if top == "pipeline" else "mcp_server.services")
 
 
+def _selftest_workers():
+    """selftest 동시 사례 수 — 이 프로세스가 쓸 수 있는 CPU 수(컨테이너 CPU 고정 반영 — sched_getaffinity), 많아도 8."""
+    cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
+    return max(1, min(8, cpus))
+
+
 def selftest(a):
     """`docker run … IMG selftest` — 서버 반입 시험(tests/server)을 파일마다 자식 프로세스로(네트워크 0 · case_env) 돌려 PASS/FAIL 표. 하나라도
     FAIL이면 종료 코드 1. 이미지 안(RAG_MODULE=pipeline·mcp)에서는 다른 이미지 폴더의 사례를 SKIP, RAG_MODULE이 비면(PC) 전부. 공용(common) 사례가
@@ -1087,13 +1094,13 @@ def selftest(a):
     rows = []
     if not cases:
         rows.append((str(TESTS_ROOT / "server"), "FAIL", "서버 반입 시험이 없음(tests/server — 이미지 COPY·--only 확인)"))
-    for mod, img in cases:
+
+    def run_case(case):
+        mod, img = case
         if img == "?":
-            rows.append((mod, "FAIL", "모르는 시험 폴더(tests/server/{common,pipeline,mcp}만)"))
-            continue
+            return (mod, "FAIL", "모르는 시험 폴더(tests/server/{common,pipeline,mcp}만)")
         if image and img not in (None, image):
-            rows.append((mod, "SKIP", f"다른 이미지 사례({img})"))
-            continue
+            return (mod, "SKIP", f"다른 이미지 사례({img})")
         r = subprocess.run(
             [PY, "-m", "tests.runner", mod],
             cwd=ROOT,
@@ -1108,9 +1115,14 @@ def selftest(a):
         # 공용 사례가 이 이미지에 없는 앱 모듈 때문에만 실패했으면 SKIP(mcp 이미지에는 pipeline/ 중 cli.py·config.py만 — _image_lacks)
         miss = re.findall(r"ModuleNotFoundError: No module named '(pipeline|mcp_server)['.]", out)
         if r.returncode != 0 and miss and all(_image_lacks(m) for m in set(miss)):
-            rows.append((mod, "SKIP", f"다른 이미지 모듈 필요({', '.join(sorted(set(miss)))})"))
-            continue
-        rows.append((mod, "PASS" if r.returncode == 0 else "FAIL", "" if r.returncode == 0 else out[-1500:]))
+            return (mod, "SKIP", f"다른 이미지 모듈 필요({', '.join(sorted(set(miss)))})")
+        return (mod, "PASS" if r.returncode == 0 else "FAIL", "" if r.returncode == 0 else out[-1500:])
+
+    # 사례는 서로 다른 자식 프로세스라 함께 돌림(쓸 수 있는 CPU 수, 많아도 8개) — map은 순서를 지켜 표는 그대로
+    for mod, _ in cases:  # 덮기 파일 캐시(_CASE_ENVS)를 먼저 채움 — 스레드가 같은 파일을 두 번 만들지 않게
+        case_env(mod)
+    with ThreadPoolExecutor(max_workers=_selftest_workers()) as pool:
+        rows += pool.map(run_case, cases)
     fails = [name for name, status, _ in rows if status == "FAIL"]
     skips = sum(1 for _, status, _ in rows if status == "SKIP")
     for name, status, detail in rows:

@@ -9,7 +9,7 @@
              docker 명령이 권한 오류·없음이면(SI26) 듣는 포트로 대체 탐지: 127.0.0.1(PG_HOST가 있으면 그 주소)의 5432·15432를
              TCP로 확인 + 자격 증명이 있으면 psycopg로 SELECT 1까지. 비밀값은 로그에 안 찍고 '포트 탐지'로만 표시.
 모델 엔드포인트(접두어 LLM·VLM·OCRVLM·EMBED): <접두어>_BASE_URL(…/v1) · <접두어>_MODEL · <접두어>_API_KEY(선택).
-  외부 주소는 거부 — 합성 데이터 실험에서만 <접두어>_ALLOW_EXTERNAL=1(LLM은 common/llm.py 규칙: 가상 코퍼스 정답 파일 지정 시만).
+  외부 주소는 거부 — 개발 PC 실험에서만 <접두어>_ALLOW_EXTERNAL=1(RUN_ENV=local일 때만 — common/ai/guard.py).
 사용: python common/services.py        → 연결 상태 표(비밀값은 출력 안 함)
       python common/services.py --selftest
 """
@@ -179,7 +179,7 @@ def model_status(prefix):
     internal = (
         "내부"
         if is_internal(base)
-        else ("외부(허용 — 합성 데이터)" if external_allowed(prefix) else "외부 — 거부됨(ALLOW_EXTERNAL + 합성 정답 파일 둘 다 필요)")
+        else ("외부(허용 — 개발 PC)" if external_allowed(prefix) else "외부 — 거부됨(ALLOW_EXTERNAL=1 + RUN_ENV=local 필요)")
     )
     if internal.startswith("외부 — 거부"):  # 막힌 외부 주소에는 /models도 안 보냄(키가 헤더로 나감 — 재검증 10-02)
         return internal, model or "(모델 미설정)", "확인 안 함(외부 거부)"
