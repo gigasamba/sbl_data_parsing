@@ -3,7 +3,7 @@
 from common.core.terms import load_glossary
 from common.core.text import tokens
 from mcp_server import config as mc
-from mcp_server.services.search.terms import _exp_tokens, expand_query, lookup_term, match_concepts, vector_alias_text
+from mcp_server.services.search.terms import _exp_tokens, expand_query, match_concepts, vector_alias_text
 
 
 def _selftest_glossary_rows():
@@ -76,12 +76,9 @@ def selftest():
         t6, n6 = expand_query("VI 공정에서 pH 조건은?", g)
         assert not n6 and set(t6) == set(tokens("VI 공정에서 pH 조건은?"))
 
-    # 개념 조회·용어 조회
+    # 개념 조회
     assert match_concepts("바이러스 불활화", g) == ["A"]
-    info = lookup_term("DSP", g)
-    assert info["concept_id"] == "B" and info["canonical"] == "Downstream Process"
-    assert lookup_term("없는말", g) is None
-    print("[selftest] 질문 확장(동음이의 문맥 조건)·match_concepts·lookup_term 통과")
+    print("[selftest] 질문 확장(동음이의 문맥 조건)·match_concepts 통과")
 
     _selftest_legal_suffix()
     _selftest_alias_roster()
@@ -165,9 +162,6 @@ def _selftest_alias_roster():
         GLOSSARY_DIR=str(d), CLIENT_ROSTER=str(f)
     )  # 인계 파일(common.core.terms)이 env로 읽음 — senv가 os.environ에도 쓰고 되돌림(S7d)
     try:
-        info = lookup_term("셀트리온", g)
-        assert info["canonical"] == "Celltrion" and set(info["aliases"]) == {"셀트리온", "CT Inc"}, info
-
         # ⑦ 한글 고유명사 뒤 조사 — '셀트리온과'(명부·용어집 둘 다)
         t, n = expand_query("셀트리온과 맺은 공급 계약", g)
         assert t.get("celltrion") == 1.0 and any("Celltrion" in x for x in n), (t, n)
@@ -179,7 +173,7 @@ def _selftest_alias_roster():
         assert t4.get("셀트리온") == 1.0 and any("alias" in x for x in n4), (t4, n4)
     finally:
         _env.close()
-    print("[selftest] SI43⑥⑦ — lookup_term 명부 별칭·한글 조사(조사 뒤 오탐 금지)·roster 전용 별칭(XL008) expand_query 통과")
+    print("[selftest] SI43⑦ — 한글 조사(조사 뒤 오탐 금지)·roster 전용 별칭(XL008) expand_query 통과")
 
 
 def _selftest_case_insensitive_glossary():

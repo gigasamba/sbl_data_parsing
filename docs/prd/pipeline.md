@@ -121,7 +121,7 @@ Engine stack snapshot file approach review (C-50).
 Deferred settings removal. Why: unused/retired settings whose removal changes fingerprints, so they wait for the next image version: `common.paths.korean_font` (settings.py → every layer code_fp).
 - Also (user 10-29 grill): remove `common.paths.eval_sets_dir` / `paths.EVAL_SETS_DIR` (and its cases in `tests/server/common/test_paths.py`) — the only reader is `validation/e2e/stack_matrix.py` (old sets, [e2e.md#e2-10](e2e.md#e2-10)). The folder `valid_env/eval_sets/` is deleted together with its doc references in [doc.md#do-03](doc.md#do-03) (no code reads its files); eval data may come back later under `tests/`.
 - Files: `common/config/settings.py`, `pipeline/config.py`, `pipeline/extract/run_all.py`, `common/core/paths.py`.
-- Status: todo — bundle with the next fingerprint-changing release.
+- Status: todo — bundle with the next fingerprint-changing release. · 10-30: `valid_env/eval_sets/`는 지웠다(`feature/drop-unused`) — 상수 `EVAL_SETS_DIR`·설정 `common.paths.eval_sets_dir`는 code_fp 때문에 이 판까지 남아 지운 폴더(기본값은 옛 `valid_env/unstructured`)를 가리킴.
 
 ## pl-22
 Remove the parse phase concept (user 10-29). Why: phases 1/2/3r re-ran engines with tiny per-page limits and pushed timeouts to later passes; the `need_vlm` rule and OCR engines made image docs slow and duplicated the page VLM.

@@ -154,7 +154,7 @@ PC 시험(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`common.c
 | 제품 코드 규칙 | `app/deploy/resources/vocab/glossary/id_patterns.csv` |
 | 원천 표·열(문서 위치) | 서버 = 판 표 `struct.source_version` 활성 판(`set-sources`·`show-sources` — S8b, [docs/architecture/pipeline_stack.md](../architecture/pipeline_stack.md)) · PC = `resources/mappings/sources.json`(`common.paths.sources_file`) — `python -m pipeline.extract.rdb_discover`가 초안 |
 | 엔진 구성 | 서버 = 판 표 `struct.stack_version` 활성 판(`set-stack`·`show-stack` — S8b) · PC = `resources/config/pipeline_stack.json`(`common.paths.stack_file`) |
-| 정답 세트·질문 세트 | `valid_env/eval_sets/*`·`valid_env/object_storage/*`(합성 — 10-29) · 서버 정답 폴더(settings.yaml 호스트 칸 `pipeline.host.gold_dir` — `run_tool.sh`가 컨테이너 `/data/gold`로 붙임, S7e3) |
+| 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성 — 10-29 · 정답 세트 `eval_sets/`는 10-30 지움) · 서버 정답 폴더(settings.yaml 호스트 칸 `pipeline.host.gold_dir` — `run_tool.sh`가 컨테이너 `/data/gold`로 붙임, S7e3) |
 | 집계 지표 단서어 | `app/deploy/resources/vocab/agg_vocab.json`(settings.yaml `mcp.search.agg_vocab_file`로 다른 파일 — 옛 env `AGG_VOCAB_FILE`) |
 | MCP 안내 문구 | settings.yaml `mcp.server.instructions`(옛 env `MCP_INSTRUCTIONS`) |
 
