@@ -99,6 +99,33 @@ def _setarg_exec():
     print("[시험] --set(execve) — 덮기 파일 지움")
 
 
+_HELD = """
+import os, signal, sys
+from common.config import settings as C
+from common.core import exitclean
+p = C.child_env(None, PIPE_PROCS="1")["SETTINGS_FILE"]
+print(p, flush=True)
+with exitclean._LOCK:  # 주 스레드가 목록 잠금을 쥔 채 SIGTERM을 받음(track·remove_at_exit 도중과 같음)
+    os.kill(os.getpid(), signal.SIGTERM)
+    signal.pause()
+"""
+
+
+def _term_while_locked():
+    """POSIX — PR #14 리뷰 P1: 잠금을 쥔 주 스레드가 SIGTERM을 받아도 교착 없이 끝나고(143) atexit가 덮기 파일을 지운다."""
+    m = subprocess.Popen([sys.executable, "-c", _HELD], env=child_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    assert m.stdout is not None
+    overlay = m.stdout.readline().strip()
+    try:
+        _, err = m.communicate(timeout=30)
+    except subprocess.TimeoutExpired:
+        m.kill()
+        raise AssertionError("잠금을 쥔 채 SIGTERM — 교착(30초 안에 안 끝남)") from None
+    assert m.returncode == 143, (m.returncode, err[-500:])
+    assert not Path(overlay).exists(), f"덮기 파일이 남음 {overlay}"
+    print("[시험] 잠금 쥔 채 SIGTERM — 교착 없이 끝남, 덮기 파일 지움")
+
+
 def test_exit_cleanup():
     _kept_files()
     for mode in ("ok", "error"):
@@ -108,3 +135,4 @@ def test_exit_cleanup():
     else:
         _case("term")
         _setarg_exec()
+        _term_while_locked()

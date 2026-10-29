@@ -75,13 +75,19 @@ def _wait(p, sec):
         pass  # ponytail: SIGKILL 뒤에도 안 끝남(D 상태 등) — 더 할 수 있는 것이 없음
 
 
-def _cleanup():
-    """자식 전부에 SIGTERM → 한 마감(GRACE초)까지 기다림 → 남은 것 SIGKILL·회수 → 파일 지움. 두 번 불려도 안전(두 번째는 빈 목록)."""
+def _cleanup(lock_timeout=-1):
+    """자식 전부에 SIGTERM → 한 마감(GRACE초)까지 기다림 → 남은 것 SIGKILL·회수 → 파일 지움. 두 번 불려도 안전(두 번째는 빈 목록).
+    lock_timeout(초) 안에 목록 잠금을 못 잡으면 아무것도 안 하고 False — SIGTERM 처리기용: 처리기는 주 스레드에서 돌므로 주 스레드가
+    track·remove_at_exit 도중(잠금을 쥔 채)이면 기다려도 안 풀림(PR #14 리뷰 P1 — 교착). 그때는 SystemExit로 그 블록을 풀고 atexit가 다시 부른다."""
     _CLOSING.set()
-    with _LOCK:
+    if not _LOCK.acquire(timeout=lock_timeout):
+        return False
+    try:
         procs, files = list(_PROCS), sorted(_FILES)
         _PROCS.clear()
         _FILES.clear()
+    finally:
+        _LOCK.release()
     live = [(p, g) for p, g in procs if p.poll() is None]
     for p, g in live:
         _send(p, signal.SIGTERM, g)
@@ -98,6 +104,7 @@ def _cleanup():
             os.unlink(f)
         except OSError:
             pass
+    return True
 
 
 def _on_term(signum, _frame):
@@ -105,7 +112,7 @@ def _on_term(signum, _frame):
         signal.signal(signal.SIGTERM, signal.SIG_IGN)  # 정리 중 두 번째 SIGTERM이 정리를 끊지 않게
     except ValueError:
         pass
-    _cleanup()
+    _cleanup(lock_timeout=1.0)  # 못 잡으면(주 스레드가 쥔 채 신호를 받음) 정리는 atexit에서 — 잠금이 풀린 뒤
     raise SystemExit(128 + signum)
 
 
