@@ -247,7 +247,6 @@ PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys;
 | MCP `/health` 준비 안 됨 | 기동 직후 저장소 연결 중(예열) | 잠시 뒤 재시도 |
 | MCP 401 | `MCP_TOKEN` 없음·틀림 | 호출부 env에만 넣기(코드·로그에 쓰지 않음) |
 | MCP가 안 뜸(이미지 판인데) | settings.yaml에 `common.models.embed`(질의 임베딩 — 옛 `EMBED_*`) 없음 · 컨테이너가 설정 파일을 못 읽음(권한 — C-09) | [env-guide.md](env-guide.md)로 필수 값 채우기 |
-| `get_evidence_image`가 늘 `source_storage_unavailable` | 이 이미지에 `boto3`가 없을 수 있음(이미지 판에 따라 다름) | `PM_BUCKET=file://…`+`MCP_EVID_LOCAL_ROOTS`(폴더 저장소)로 대신하거나 새 이미지 판 필요 여부 확인 |
 | 포트 충돌 | PostgreSQL·OpenViking과 겹침 | settings.yaml의 `mcp.server.port`(`MCP_PORT`) 등 포트 값만 바꿈(기존 컨테이너는 건드리지 않음) |
 | 설정값이 조용히 틀림 | (옛 env 파일) `docker run --env-file`은 줄 끝 주석·따옴표를 값에 그대로 넣음 | S7e1부터 settings.yaml — 틀린 칸은 검증 오류로 칸 경로만 찍힘. 옮긴 뒤 `python -m common.config.migrate --compare`로 옛 값과 대조(release-and-patch.md §5-4) |
 | SELinux `Permission denied`(파일은 있는데) | 볼륨 라벨 안 맞음 | 볼륨에 `:z`(공유)·`:Z`(전용) 붙이기 |

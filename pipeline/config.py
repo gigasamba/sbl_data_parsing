@@ -59,12 +59,6 @@ class PipelineTransformRepresentReread(Section):
     vlm_max_tokens: int | None = F(400, "FUSE_VLM_MAX_TOKENS", "재판독·맥락 판독 VLM 응답 최대 토큰 수")
 
 
-class PipelineConnectionsGraphiti(Section):
-    REMOVED = frozenset({"neo4j_uri"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    neo4j_password: SecretStr | None = F(None, "GRAPHITI_NEO4J_PASSWORD", "Graphiti용 Neo4j 접속 비밀번호")
-    neo4j_user: str | None = F("neo4j", "GRAPHITI_NEO4J_USER", "Graphiti용 Neo4j 접속 사용자 이름", blank="keep")
-
-
 class PipelineConnectionsRdb(Section):
     REMOVED = frozenset(
         {"connect_kwargs", "database", "host", "password", "port", "user"}
@@ -622,8 +616,9 @@ class PipelinePaths(Section):
 
 
 class PipelineConnections(Section):
-    REMOVED = frozenset({"openviking"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    graphiti: PipelineConnectionsGraphiti = Field(default_factory=PipelineConnectionsGraphiti)
+    REMOVED = frozenset(
+        {"openviking", "graphiti"}
+    )  # 사용자 10-29 · graphiti 10-30(e2-18 — 외부 KG 어댑터 지움) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     rdb: PipelineConnectionsRdb = Field(default_factory=PipelineConnectionsRdb)
     secure_doc: PipelineConnectionsSecureDoc = Field(default_factory=PipelineConnectionsSecureDoc)
 

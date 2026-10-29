@@ -1,7 +1,7 @@
 """LLM 그래프 모드 — 청크마다 LLM으로 (주어, 관계, 목적어) 삼중항을 뽑아 networkx 그래프에 더한다(PC 전용 평가 실험).
 S6a(10-26, D-019 ③ · T-02) — pipeline/eval/stages.py build_graph의 `elif mode == "llm":` 본문을 옮김(들여쓰기 한 단만 줄임 —
 글자는 그대로). 지시서 triple_extract(같은 폴더)도 여기서만 읽는다. import하면 stages.GRAPH_MODES["llm"]에 등록되고,
-stages.graph_mode_ready("llm")가 처음 쓸 때 이 모듈을 부른다(run_combo `--graph llm`·kg_external mockgraph). 서버 이미지에는 없다.
+stages.graph_mode_ready("llm")가 처음 쓸 때 이 모듈을 부른다(run_combo `--graph llm`). 서버 이미지에는 없다.
 """
 
 import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settings.pin_env)를 첫 줄에서(S7e2 — 옛 옵션 카탈로그 채우기 자리)

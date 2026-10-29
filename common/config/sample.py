@@ -107,7 +107,7 @@ GROUPS = [
     ),
     ("실행 자원·상주 서비스·새벽 배치", ("common.runtime", "pipeline.service", "pipeline.night")),
     ("호스트(compose·systemd·셸이 읽음)", ("common.host", "pipeline.host", "mcp.host")),
-    ("e2e·시험·평가(PC 전용)", ("common.dev", "pipeline.dev", "pipeline.eval", "mcp.dev", "pipeline.connections.graphiti")),
+    ("e2e·시험·평가(PC 전용)", ("common.dev", "pipeline.dev", "pipeline.eval", "mcp.dev")),
 ]
 SPLIT = {GROUPS[i][0] for i in (1, 3, 4, 5, 6)}  # 종류(KINDS)로 한 번 더 나누는 묶음 — 모델·extract·transform·load·mcp
 KINDS = ("결과를 바꾸는 값(하이퍼파라미터)", "기능 켬/끔", "운영값(동시성·시간·용량·경로·접속)")
@@ -134,7 +134,6 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "common.models.llm.empty_retry_max",
     "common.models.transport.down_cooldown",
     "pipeline.extract.isolate_overhead",
-    "mcp.output.max_image_px",
     "mcp.server.allowed_hosts",
     "common.models.transport.transport",
     "common.models.guard.external_scope",

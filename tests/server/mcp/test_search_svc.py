@@ -847,18 +847,6 @@ def _selftest_br50_client_scope():
                 "updated": "",
             }
         )
-    img_idx = d / "images_index.jsonl"
-    img_idx.write_text(
-        "\n".join(
-            json.dumps(x, ensure_ascii=False)
-            for x in [
-                {"image_id": "img-a", "doc": "a.txt", "page": 1, "bbox": None, "kind": "figure", "vlm": {"summary": "불활화 도표"}},
-                {"image_id": "img-b", "doc": "b.txt", "page": 1, "bbox": None, "kind": "figure", "vlm": {"summary": "불활화 도표"}},
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
     # BR50 D — 질문 자체엔 고객 이름이 없고 계약ID(C-B01, Beta Inc 소유)만 적힘: client="Acme Co"로 범위를 좁히면
     # docs가 route() 전에 걸려 detect()의 contracts 후보에 C-B01이 없어져 "집계 아님"으로 빠진다(질문에 고객명을
     # 적어 넓히는 기존 search 쪽 동작 — retriever.py AD38·BR23 — 과는 다른 축: 여긴 "클라이언트가 모르는 남의
@@ -867,7 +855,7 @@ def _selftest_br50_client_scope():
 
     _STATE.clear()
     # 설정 객체 덮기(S7d) — GLOSSARY_DIR는 인계 파일이 env로 읽어 senv가 os.environ에도 쓰고 되돌림 · SEARCH_CLIENT_HARD=None은 옛 pop
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), MCP_IMAGES=str(img_idx), GLOSSARY_DIR=str(gdir), SEARCH_CLIENT_HARD=None)
+    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), GLOSSARY_DIR=str(gdir), SEARCH_CLIENT_HARD=None)
     _hard = None
     try:
         # 꺼짐(기본) — client를 줘도 전과 바이트 동일

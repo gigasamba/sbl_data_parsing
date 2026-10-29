@@ -19,7 +19,7 @@ docstring 참고). 그래서 두 결과가 같은 질문에서 어긋날 수 있
 
 호출자: modules/search/local.py weights()(G14 SEARCH_TYPE_WEIGHTS — bm25 가중 조정) · modules/search/rerank.py
 (비교·최신 유형이면 재순위 게이트). 옛 호출자 research.py(RESEARCH_PLANNER=typed)·do_search의 notes 표시는 S5a·S5(10-26, D-025)에 지움.
-사용: python -m mcp_server.services.search.qtype (자기 점검 — resources/vocab/qtype_labels.json 정확도)
+정확도 점검: tests/server/mcp/test_qtype.py(resources/vocab/qtype_labels.json)
 """
 
 import copy

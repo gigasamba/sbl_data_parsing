@@ -1,6 +1,5 @@
 """대체판(superseded) 판정 단일 규칙(AR4②) — "이 레코드가 더 최신판으로 대체됐나"를 한 곳에서.
-mcp_server.do_list_documents(manifest.jsonl 기반, GH1-15)·aggregate.doc_location_list(doc_location SQL 기반,
-AD45①)가 모두 이 모듈만 거친다 — 전에는 같은 패턴(supersedes_doc_id를 모아 집합을 만들고, 레코드 자신의
+aggregate.doc_location_list(doc_location SQL 기반, AD45①)가 이 모듈을 거친다(manifest 기반 do_list_documents는 10-30 지움 — e2-18) — 전에는 같은 패턴(supersedes_doc_id를 모아 집합을 만들고, 레코드 자신의
 doc_id가 그 집합에 있으면 구판으로 판정)이 두 곳에 따로 적혀 있었다. 두 호출자는 데이터 원천이 다르다
 (manifest.jsonl의 레코드 vs doc_location 테이블의 행)지만 doc_id·supersedes_doc_id 필드 모양은 같아서 레코드
 dict 리스트만 받으면 된다.

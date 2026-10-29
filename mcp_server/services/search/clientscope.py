@@ -76,7 +76,7 @@ def allows(doc_client, allowed, strict):
     없으면(옛 묶음) 단일 client로 자동 낙하(fall back) — 이 함수 쪽은 모양만 보고 그대로 처리.
     local.py의 벡터·BM25·ID 후보 거르기, pgsearch.py의 저장소 질의 단계 제한(_client_restrict, 문서 단위로
     한 번만 판정 — PG array/unnest 없이 순수 파이썬, AD41 sqlite stand-in에도 그대로 동작), retriever.py의
-    소프트 승격·그래프·개념 검색, mcp_server.py의 그래프 후처리·그림·OpenViking·단건 조회(do_get_document 등)가
+    소프트 승격·그래프·개념 검색, mcp_server.py의 그래프 후처리·OpenViking이
     전부 이 한 함수로 판정한다."""
     if allowed is None:
         return True

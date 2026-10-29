@@ -1,14 +1,7 @@
 """mcp_server.services.search.internal_docs 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.internal_docs`."""
 
-from pathlib import Path
-
 from mcp_server import config as mc
-from mcp_server.services.search import internal_docs as M
 from mcp_server.services.search.internal_docs import do_aggregate
-
-ROOT = (
-    Path(M.__file__).resolve().parents[3]
-)  # 옛 main.py의 ROOT(= mcp_server/의 부모, 저장소 루트)와 같은 값 — selftest만 씀(옛 internal_docs.py의 줄 — `__file__`은 모듈 것으로)
 
 
 def _selftest_aggregate_struct_fail():
