@@ -167,3 +167,13 @@ DB schema spec, written before pl-26·pl-23·pl-24 are built. Why: table/column 
 - Targets per `RUN_ENV`: `local`·`dev` pick one of (a) local path (folder for Object Storage, file DB for EDW) or (b) real connection info (API/DB); `prd` real connection only (`stage` was dropped from RUN_ENV — op-02). The PC keeps the CLAUDE.md §4 guard (no prod EDW/OS from the PC).
 - Files: `pipeline/cli.py` (`night`, `full`), `deploy/docker/entrypoint.sh`, publish in `pipeline/load/`, `pipeline/config.py`, `docs/operations/server-guide.md`.
 - Status: todo
+
+## pl-27
+프로세스가 끝날 때 뒷정리를 한다. 왜: 덮기 설정 파일(`settings-*.yaml`, refactor.md C-46)이 OS 임시 폴더에 쌓이고, 시간 초과로 끝낸 자식의 손자(soffice 등)가 고아·좀비로 남았다(사용자 10-30에 좀비 PID를 봄). 파이썬은 SIGTERM을 받으면 `finally`·`atexit` 없이 바로 끝나 아무것도 못 지웠다.
+- 결정(사용자 10-30): ① 덮기 설정 파일은 그 파일을 만든 프로세스가 끝날 때 지운다 — 정상 종료·오류·SIGTERM 모두 ② 프로세스가 끝날 때 그 프로세스가 띄운 자식도 끝내고 회수한다(좀비 없음) · PID 기록 파일도 지운다.
+- 한 곳: `common/core/exitclean.py` — `remove_at_exit(경로)`(끝날 때 지움) · `track(Popen)`(끝날 때 아직 돌면 끝내고 `wait`로 회수) · `stop(p)`(POSIX는 프로세스 묶음째 SIGTERM → 10초 → SIGKILL, Windows는 `taskkill /T`) · `group_kw()`. 처음 쓸 때 SIGTERM 처리기가 기본값이면 `SystemExit(143)`으로 바꿔 `finally`·`atexit`가 돌게 한다(이미 처리기를 단 프로세스 — `trigger_server` — 는 그대로). 순서: 자식 먼저 끝내고 그 뒤 파일 지움(자식이 덮기 파일을 끝까지 읽음).
+- 연결한 곳: `settings.overlay_file`(덮기 파일) · `resources.gated_popen`(파이프라인 자식 전부) · `pipeline/extract/resources.kill_group`(→ `stop`) · `run_all` 엔진 자식 시간 초과(전에는 `parse_one`만 kill — 손자가 고아) · `pptx_render`의 soffice 시간 초과(soffice가 띄운 `soffice.bin`까지) · `mcp_parse_service` 작업 자식과 PID 기록 `service.json`.
+- 남은 한계: `setarg.apply()`가 `os.execve`로 자기를 바꿔 띄울 때는 `atexit`가 안 돌아 그때 만든 덮기 파일은 남는다(새 프로세스가 그 파일을 읽어야 하므로 지우면 안 됨) · 상주 서비스(`mcp_parse_service` 등)가 작업마다 만드는 `child_env` 파일은 서비스가 끝날 때 한꺼번에 지운다 · 컨테이너 PID 1 고아 회수는 compose `init: true`(이미 있음) · 호스트 `run_docs.py`는 파이썬 공용 코드를 안 씀(systemd가 cgroup째 정리).
+- Files: `common/core/exitclean.py`, `common/config/settings.py`, `common/core/resources.py`, `common/core/fingerprint.py`(분류 목록), `pipeline/extract/resources.py`, `pipeline/extract/run_all.py`, `pipeline/transform/figures/pptx_render.py`, `pipeline/mcp_parse_service.py`.
+- 시험: `tests/server/common/test_exitclean.py` — 정상·오류 종료(모든 OS) · SIGTERM(POSIX 전용, Windows는 건너뜀).
+- Status: dev — `feature/exit-cleanup`. code_fp 모든 레이어가 바뀜(`common/` 공용 의존).

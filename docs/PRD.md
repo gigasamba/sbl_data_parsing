@@ -24,6 +24,7 @@ Row = one open feature. ID prefix = `prd/<area>.md` (mc = search MCP · pl = dat
 | pl-24 | run_docs order: silver → delete original → gold | todo | [→](prd/pipeline.md#pl-24) |
 | pl-25 | DB schema spec doc + column check test (first) | todo | [→](prd/pipeline.md#pl-25) |
 | pl-26 | `full` always publishes, targets required (C-31) | todo | [→](prd/pipeline.md#pl-26) |
+| pl-27 | 프로세스 종료 정리 — 임시 설정 파일·PID 기록 지움, 자식 회수 | dev | [→](prd/pipeline.md#pl-27) |
 | e2-10 | Minimize PC eval tools (old set names) and settings | todo | [→](prd/e2e.md#e2-10) |
 | e2-11 | PC general test known failures | todo | [→](prd/e2e.md#e2-11) |
 | e2-12 | EDW answer citation check (C-56) | todo | [→](prd/e2e.md#e2-12) |

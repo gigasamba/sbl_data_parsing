@@ -119,14 +119,19 @@ def selftest():
         def kill(self):
             self.killed = True
 
-    orig_popen, orig_soffice3 = subprocess.Popen, M.soffice_bin
-    subprocess.Popen = lambda *a, **k: _FakeTimeoutProc()
+        def poll(self):  # exitclean.track·종료 정리가 부름
+            return 0 if self.killed else None
+
+    fake = _FakeTimeoutProc()
+    orig_popen, orig_soffice3, orig_stop = subprocess.Popen, M.soffice_bin, M.exitclean.stop
+    subprocess.Popen = lambda *a, **k: fake
     M.soffice_bin = lambda: "fake-soffice"
+    M.exitclean.stop = lambda p, grace=10: p.kill()  # pl-27 — 묶음째 끝내기·회수(실제 신호·taskkill은 test_exitclean이 봄)
     try:
         r = M._convert_to_pdf(pptx_path, d, 0.01)
-        assert r is None
+        assert r is None and fake.killed
     finally:
-        subprocess.Popen, M.soffice_bin = orig_popen, orig_soffice3
+        subprocess.Popen, M.soffice_bin, M.exitclean.stop = orig_popen, orig_soffice3, orig_stop
     print("[selftest] 변환 타임아웃 — 자식 프로세스만 종료(kill)하고 None(빈 결과), 고아 없음 통과")
 
     # AD14 — shape_render_pages(): 꺼짐·확장자 아님·shape_detect 문턱 미달(soffice 호출 자체를 안 함)·soffice 없음
