@@ -84,19 +84,14 @@ def deploy(db, dim):
     return kind
 
 
-def _doc_row_clients(client, clients):
-    """doc row (client TEXT, clients JSON TEXT) -> label list. Bad JSON never raises (falls back to client) — 94 review:
-    one broken row must not fail deploy()."""
-    if clients:
-        try:
-            v = json.loads(clients)
-            if isinstance(v, list):
-                names = [str(x) for x in v if x]
-                if names:
-                    return names
-        except (ValueError, TypeError):
-            pass
-    return [client] if client else []
+def _doc_row_clients(clients):
+    """doc.clients (JSON TEXT) -> label list, [] = unknown. Bad JSON never raises — 94 review: one broken row must not fail
+    deploy(). pl-14 — the 10-20 reduced doc table has no client column, so there is no single-label fallback any more."""
+    try:
+        v = json.loads(clients or "[]")
+    except (ValueError, TypeError):
+        return []
+    return [str(x) for x in v if x] if isinstance(v, list) else []
 
 
 def backfill_chunk_clients(db):
@@ -104,9 +99,7 @@ def backfill_chunk_clients(db):
     that one bad row could abort). Idempotent: only rows with clients IS NULL. Search keeps the old (correct) path while any
     NULL remains (pgsearch._has_chunk_clients), so a half-done or failed backfill never makes strict queries return empty."""
     s = db.schema
-    rows = db.q(
-        f"SELECT DISTINCT d.doc_id, d.client, d.clients FROM {s}.doc d JOIN {s}.chunk c ON c.doc_id = d.doc_id WHERE c.clients IS NULL"
-    )
+    rows = db.q(f"SELECT DISTINCT d.doc_id, d.clients FROM {s}.doc d JOIN {s}.chunk c ON c.doc_id = d.doc_id WHERE c.clients IS NULL")
     if not rows:
         return 0
     for i in range(0, len(rows), 200):  # 94 review — commit every 200 docs (short row locks; partial progress is safe, NULL-gated)
@@ -114,7 +107,7 @@ def backfill_chunk_clients(db):
             for r in rows[i : i + 200]:
                 cur.execute(
                     f"UPDATE {s}.chunk SET clients = %s WHERE doc_id = %s AND clients IS NULL",
-                    (_doc_row_clients(r["client"], r["clients"]), r["doc_id"]),
+                    (_doc_row_clients(r["clients"]), r["doc_id"]),
                 )
     return len(rows)
 
