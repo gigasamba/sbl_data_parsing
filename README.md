@@ -246,17 +246,28 @@ export PYTHONPATH=$PWD                                   # 명령은 저장소 �
 
 먼저 `settings.yaml`의 `no_paid_calls`를 `false`로 바꾼다(외부 임베딩 허용). 끝나면 ⑥에서 되돌린다.
 
-**① 테스트 문서 준비**
+**① 테스트 문서 고르기 — `valid_env`를 그대로 연결(복사 불필요)**
 
 ```bash
-mkdir -p output/demo/src
-cp valid_env/unstructured/synth-realpat/{hidden_term,merged_table}.docx output/demo/src/
+SRC=valid_env/unstructured/synth-realpat     # 합성 테스트 문서 폴더를 그대로 --src로 넘긴다
 ```
+
+| 세트(`valid_env/unstructured/…`) | 문서 | 쓰임 |
+|---|---|---|
+| `synth-realpat` | docx·pdf 8건 | 처음 확인용(빠름 — 1분 안쪽) |
+| `synth-mixedpdf` | pdf 6건 | 글자·스캔이 섞인 PDF |
+| `synth-images` | 18건 | 그림·차트 |
+| `synth-hard` | 22건 | 어려운 형식 |
+
+- 폴더 안의 **문서만** 읽는다. 정답 파일(`gold/`, `*.json`, `*.md`)은 건너뛰고, `valid_env`에는 아무것도 쓰지 않는다(결과는 모두 `out_root` 아래).
+- 세트별 설명은 [valid_env/unstructured/README.md](valid_env/unstructured/README.md). 내 문서로 하려면 `SRC=<문서 폴더>`.
+- 여러 세트에서 고른 **목록 파일**(`list-smoke10.txt` 등)은 `--src`가 폴더만 받으므로 한 폴더로 모은 뒤 쓴다:
+  `mkdir -p output/demo/src && grep -vE '^\s*(#|$)' valid_env/unstructured/list-smoke10.txt | xargs -I{} cp {} output/demo/src/ && SRC=output/demo/src`
 
 **② 파싱 — 문서 → 대표 결과**
 
 ```bash
-.venv/bin/python -m pipeline.cli parse --src output/demo/src
+.venv/bin/python -m pipeline.cli parse --src $SRC
 ```
 
 - 처리: 중복 제거 → 쪽 방향 보정 → 엔진별 파싱 → 대표 결과
@@ -266,7 +277,7 @@ cp valid_env/unstructured/synth-realpat/{hidden_term,merged_table}.docx output/d
 
 ```bash
 .venv/bin/python -m pipeline.transform.structure.build_bundle \
-  --parse-dir output/demo/parse --src output/demo/src --embed api --summary lead --out output/demo/bundle
+  --parse-dir output/demo/parse --src $SRC --embed api --summary lead --out output/demo/bundle
 ```
 
 - 결과: `output/demo/bundle/`(docs.jsonl · chunks.jsonl · vectors.npy · kg\_*.jsonl · meta.json)
@@ -310,13 +321,13 @@ docker exec sbl-mcp-pg psql -U rag -d rag -c "SELECT version_id, name, is_active
 
 `settings.yaml`은 `no_paid_calls: true`인 채로 두고, 이번 실행에만 필요한 값을 명령 인자로 준다.
 ```bash
-O=$PWD/output/demo
+O=$PWD/output/demo; SRC=valid_env/unstructured/synth-realpat     # ①과 같은 문서 폴더
 SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1 --set LLM_SYNTHETIC_TRUTH=<합성 문서 선언 json>
       --set NO_PAID_CALLS=0 --set LLM_BUDGET_USD=0.10 --set LLM_MAX_CALLS=10 --set LLM_SPEND_FILE=$O/spend.json)
 
-.venv/bin/python -m pipeline.cli "${SETS[@]}" parse --src $O/src
+.venv/bin/python -m pipeline.cli "${SETS[@]}" parse --src $SRC
 .venv/bin/python -m pipeline.transform.structure.build_bundle "${SETS[@]}" \
-    --parse-dir $O/parse --src $O/src --embed api --summary lead --out $O/bundle
+    --parse-dir $O/parse --src $SRC --embed api --summary lead --out $O/bundle
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle $O/bundle
 .venv/bin/python -m pipeline.load.pgvector_load "${SETS[@]}" load --bundle $O/bundle
 
