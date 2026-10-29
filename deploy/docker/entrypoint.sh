@@ -100,12 +100,12 @@ case "$cmd" in
     # report·run_combo·server_checks·stages 등은 pipeline/eval/(옛 data_etl/eval_tools·common_tools/cli·evaluation) ·
     # S6c(사용자 10-27, C-30 ①) — index(AD41 색인 빌더 — compose.pipeline.yml index_a·index_b의 `tool index build`)는 pipeline/load/(옛 data_structure/ —
     #   pre-refactor부터 찾는 목록에 없어 "모르는 도구"였음).
-    # S5 — mcp_eval·qa_report·search_checks(옛 server_checks의 br54·l8·gh114 — T-15)는 mcp_server/cli/(mcp 이미지 — S6b 전 retrieval) · S6a — model_matrix·stack_matrix는 validation/e2e/(PC 전용 — 이미지에 없음, T-15), assets는 /app/docker/assets.py(파일로 실행 — `python /app/docker/assets.py install`, 저장소 자리 deploy/release/ — S6b), eval_research는 S5a 삭제.
+    # S5 — mcp_eval·search_checks(옛 server_checks의 br54·l8·gh114 — T-15)는 mcp_server/cli/(mcp 이미지 — S6b 전 retrieval) · S6a — model_matrix·stack_matrix는 validation/e2e/(PC 전용 — 이미지에 없음, T-15), assets는 /app/docker/assets.py(파일로 실행 — `python /app/docker/assets.py install`, 저장소 자리 deploy/release/ — S6b), eval_research는 S5a 삭제.
     # 옛 `tool pipeline`(common_tools.cli.pipeline)은 pipeline.cli로. `패키지:이름,…`은 그 이름만 — S4 전에 tool로 부를 수 있던 것만
     # (pipeline 단계 모듈 run_all·dedup·stream 등을 preflight·잠금 없이 부르지 않게).
     # 이름은 sys.argv로 전달(소스 문자열에 끼워 넣지 않음). 찾기는 python 한 번에(VS3 R-7 — 전에는 패키지마다 프로세스 하나).
     [ "$name" = pipeline ] && name=cli
-    TOOL_PKGS="common.check pipeline:check_env,cli,parse_parallel,trigger_server pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest pipeline.transform.figures:figure_review pipeline.load:index pipeline.eval mcp_server.cli:mcp_eval,qa_report,search_checks"
+    TOOL_PKGS="common.check pipeline:check_env,cli,parse_parallel,trigger_server pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest pipeline.transform.figures:figure_review pipeline.load:index pipeline.eval mcp_server.cli:mcp_eval,search_checks"
     # shellcheck disable=SC2086
     mod=$(python -c "
 import importlib.util, sys

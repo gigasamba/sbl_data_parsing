@@ -1,45 +1,107 @@
 # sbl_data_parsing — PRD
 
-Goal: cited evidence search over company docs on the closed network — parse → structure → load (pgvector) → search MCP — same on server and PC.
-Row = one open feature. ID prefix = `prd/<area>.md` (mc = search MCP · pl = data pipeline · e2 = e2e, tests, eval · rn = flow runner · do = docs layout · op = logs, DB accounts). Status: todo | dev | done.
+목표: 폐쇄망 회사 문서에서 출처 달린 근거를 찾는다 — 파싱 → 구조화 → 적재(pgvector) → 검색 MCP, 서버와 PC에서 같게.
+행 = 묶음 하나(끝난 것 포함). 상태: todo · dev · done(그 밖에 partly done). ID는 그대로 두고 카테고리 파일이 자리를 정한다. 상세는 ID 링크.
 
-| ID | Bundle | Status | Detail |
+## 지금 진행 중
+- pl-13 적재가 지우지 않음 — dev, `feature/load-no-prune` 병합됨(#17) → 상태 정리.
+- pl-22 파싱 phase 없애기 — dev, `feature/r2-phase` 병합됨 → 서버 확인(refactor.md C-65), VLM 동시 수 손잡이는 후속.
+- pl-27 프로세스 종료 정리 — dev, `feature/exit-cleanup` 병합됨 → code_fp 모든 레이어 바뀜(다음 반입에서 재처리).
+- pl-25 DB 스키마 명세 — dev, `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인.
+- do-04 문서 재구성 1부 — `feature/prd-by-category` → PR. 2부는 나중.
+
+## ETL — 수집·퍼블리시·적재·DB (etl)
+| 묶음 (L4) | 상태 | 단계 (L5) | ID |
 |---|---|---|---|
-| mc-14 | 숨김 문서가 검색에서 안 빠짐(숨김 키 sha256 ↔ 검색 키 file_path) — pl-25 대기 | todo | [→](prd/mcp.md#mc-14) |
-| mc-15 | 근거의 `rep_uri`(파싱 결과 경로)가 늘 비어 있음(ParsingMeta 키 sha256 ↔ 검색 키 file_path) — pl-25 대기 | todo | [→](prd/mcp.md#mc-15) |
-| pl-12 | Registry upsert PG error · publish guard off (C-54) | todo | [→](prd/pipeline.md#pl-12) |
-| pl-13 | `load --prune` deletes skipped docs (C-60) | todo | [→](prd/pipeline.md#pl-13) |
-| pl-15 | structure/load contract rejects new bundles | todo | [→](prd/pipeline.md#pl-15) |
-| pl-16 | `PIPE_EMBED=none` builds `vector(0)` | todo | [→](prd/pipeline.md#pl-16) |
-| pl-17 | Parse step location extract/transform (C-61) | todo | [→](prd/pipeline.md#pl-17) |
-| pl-18 | `night`/`full` exit 0 after midway stop (C-33) | todo | [→](prd/pipeline.md#pl-18) |
-| pl-19 | compose `index_a`/`index_b` fail (C-32) | todo | [→](prd/pipeline.md#pl-19) |
-| pl-20 | Stack snapshot file review (C-50) | todo | [→](prd/pipeline.md#pl-20) |
-| pl-21 | Deferred settings removal (fingerprint) | todo | [→](prd/pipeline.md#pl-21) |
-| pl-22 | Remove parse phases · engines per doc in parallel · OCR engine off | dev | [→](prd/pipeline.md#pl-22) |
-| pl-23 | Incremental only; full reparse = full e2e (C-52) | todo | [→](prd/pipeline.md#pl-23) |
-| pl-24 | run_docs order: silver → delete original → gold | todo | [→](prd/pipeline.md#pl-24) |
-| pl-25 | DB schema spec doc + column check test (first) | todo | [→](prd/pipeline.md#pl-25) |
-| pl-26 | `full` always publishes, targets required (C-31) | todo | [→](prd/pipeline.md#pl-26) |
-| pl-27 | 프로세스 종료 정리 — 임시 설정 파일·PID 기록 지움, 자식 회수 | dev | [→](prd/pipeline.md#pl-27) |
-| pl-28 | Per-source gold tables · source required in search (later) | todo | [→](prd/pipeline.md#pl-28) |
-| pl-29 | EDW 고객 매핑을 파이프라인이 직접 만든다 | todo | [→](prd/pipeline.md#pl-29) |
-| e2-10 | Minimize PC eval tools (old set names) and settings | todo | [→](prd/e2e.md#e2-10) |
-| e2-11 | PC general test known failures | todo | [→](prd/e2e.md#e2-11) |
-| e2-13 | PC Docker smoke stops at retriever | todo | [→](prd/e2e.md#e2-13) |
-| e2-14 | Release tests only inside the image (C-53) | todo | [→](prd/e2e.md#e2-14) |
-| e2-15 | Agent test package path points upstream | todo | [→](prd/e2e.md#e2-15) |
-| e2-16 | Search page fixed document count text | todo | [→](prd/e2e.md#e2-16) |
-| e2-17 | Remaining unused functions (10-29 audit) | todo | [→](prd/e2e.md#e2-17) |
-| e2-18 | Delete code with no requirement (gaps §2) | todo | [→](prd/e2e.md#e2-18) |
-| do-01 | Move `refactor.md` to `docs/refactoring/` | todo | [→](prd/doc.md#do-01) |
-| do-02 | Glossary in `docs/index.md` | todo | [→](prd/doc.md#do-02) |
-| do-03 | Sync `refactor.md` with 10-29 merges | todo | [→](prd/doc.md#do-03) |
-| do-04 | Docs restructure · `docs/history/` · Korean | todo | [→](prd/doc.md#do-04) |
-| op-01 | JSON Lines event log | todo | [→](prd/ops.md#op-01) |
-| op-02 | RUN_ENV `local`·`dev`·`prd` (drop `stage`) · LLM_FAKE only in `local` | design done | [→](prd/ops.md#op-02) |
-| op-03 | One EDW connection, read/write account | dev | [→](prd/ops.md#op-03) |
-| op-04 | First release tag `v0.1.0` + release notes | todo | [→](prd/ops.md#op-04) |
+| 원천과 가져오기 | done | 폴더·S3·RDB · 증분 · 스트리밍 · warm | [pl-01](prd/etl.md#pl-01) |
+| EDW 고객 매핑을 파이프라인이 만듦 | todo | FileStorageMap 조인 · `file_meta` 대체 | [pl-29](prd/etl.md#pl-29) |
+| 구조화 — 청크·메타·임베딩 | done | 청크 · 요약 · 사실 · 임베딩 | [pl-06](prd/etl.md#pl-06) |
+| structure/load 계약이 새 묶음 거부 | todo | `DOC_KEYS` 고침(사람 검토) | [pl-15](prd/etl.md#pl-15) |
+| `PIPE_EMBED=none`이면 `vector(0)` | todo | 차원 0 처리 | [pl-16](prd/etl.md#pl-16) |
+| pgvector 적재 | done | Alembic 표 · 건너뛰기 · 색인 | [pl-07](prd/etl.md#pl-07) |
+| 적재는 지우지 않음(`--prune` 없앰) | dev | prune 길 없앰 · 시험 | [pl-13](prd/etl.md#pl-13) |
+| 배포 backfill이 `doc.clients`만 읽음 | done | backfill 고침 · 시험 | [pl-14](prd/etl.md#pl-14) |
+| compose `index_a`/`index_b` 실패 | todo | 원인 · 고침 | [pl-19](prd/etl.md#pl-19) |
+| 정형 DB와 문서 대장 | done | 마스터 · 연결 · 대장 | [pl-08](prd/etl.md#pl-08) |
+| 문서 대장 upsert·게시 가드 | todo | PG 번역 · ParsingMeta 가드 | [pl-12](prd/etl.md#pl-12) |
+| 파싱 결과 게시 | done | Object Storage · ParsingMeta | [pl-09](prd/etl.md#pl-09) |
+| `full`은 늘 게시, 대상 필수 | todo | `--no-publish` 없앰 · 시작 거부 | [pl-26](prd/etl.md#pl-26) |
+| 실행 관리(오케스트레이션) | done | CLI · entrypoint · flow 러너 · trigger | [pl-10](prd/etl.md#pl-10) |
+| 중간 멈춤에도 종료 코드 0 | todo | `night` · `full` 종료 코드 | [pl-18](prd/etl.md#pl-18) |
+| 증분만, 전체 재파싱은 전체 e2e | todo | 새 문서 = s3_key · 밤 배치 끔 | [pl-23](prd/etl.md#pl-23) |
+| `run_docs` 순서: silver → 원본 삭제 → gold | todo | 순서 · `gold_status` · 임시 폴더 | [pl-24](prd/etl.md#pl-24) |
+| 레인 정책 — 담당 먼저, 허용 레인만 | done | 전담·공유 워커 · `pick_lane` | [rn-01](prd/etl.md#rn-01) |
+| 중간 대기열 상한·길이 기록 | done | `struct_backlog` · `queue_depth.jsonl` | [rn-02](prd/etl.md#rn-02) |
+| DB 스키마 명세 | dev | `db_schema.md` · 시험 · 승인 | [pl-25](prd/etl.md#pl-25) |
+| 원천별 gold 표(나중) | todo | 원천 4벌 · `search` 원천 필수 | [pl-28](prd/etl.md#pl-28) |
 
-Done: mcp 10 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 10 → [prd/e2e.md](prd/e2e.md) · runner 2 → [prd/runner.md](prd/runner.md)
-Code vs requirements — mismatches, code with no requirement, off-by-default features, removed 10-29: [prd/gaps.md](prd/gaps.md)
+## 파싱 실행 — 엔진·스택·represent (parse)
+| 묶음 (L4) | 상태 | 단계 (L5) | ID |
+|---|---|---|---|
+| 준비 | done | 중복 · 회전 · DRM 감지 | [pl-02](prd/parse.md#pl-02) |
+| 엔진 스택 파싱 | done | 형식별 엔진 · 격리 · 스택 판 | [pl-03](prd/parse.md#pl-03) |
+| 파싱 phase 없애기 · OCR 엔진 끔 | dev | 병렬 엔진 · 제한 · 쪽 VLM · 서버 확인 | [pl-22](prd/parse.md#pl-22) |
+| 엔진 스택 사본 파일 검토 | todo | 방식 검토(C-50) | [pl-20](prd/parse.md#pl-20) |
+| 파싱 단계를 `transform/parse/`로 | todo | 옮기기 · 이름 바꾸기 · code_fp | [pl-17](prd/parse.md#pl-17) |
+| represent — 고르고 고치기 | done | 대표 · 합치기 · 다시 읽기 · 표 | [pl-04](prd/parse.md#pl-04) |
+| 그림 | done | VLM 설명 · 차트 값 · 도식 | [pl-05](prd/parse.md#pl-05) |
+
+## 검색 MCP (mcp)
+| 묶음 (L4) | 상태 | 단계 (L5) | ID |
+|---|---|---|---|
+| `search` 도구 | done | 세 방식 · 혼합 찾기 · 근거 출력 | [mc-01](prd/mcp.md#mc-01) |
+| 질문 넓히기 | done | 용어집 · 고객별 나누기 · 질문 유형 | [mc-02](prd/mcp.md#mc-02) |
+| 고객 범위·판·중복 | done | 고객 범위 · 숨김 · 최신 판 | [mc-05](prd/mcp.md#mc-05) |
+| 집계 답 | done | 규칙 집계 · 통화 · LLM 라우터 | [mc-04](prd/mcp.md#mc-04) |
+| 집계 길이 지운 칸을 고름 | done | `aggregate.pg()` 지움(mc-12와 함께) | [mc-11](prd/mcp.md#mc-11) |
+| 사실 집계가 지운 `doc_fact` 질의 | done | PG 집계 길 지움 · 숫자는 `query_edw` | [mc-12](prd/mcp.md#mc-12) |
+| retriever가 지운 칸을 읽음 | done | 묶음 `doc_key` · PG 열 | [mc-10](prd/mcp.md#mc-10) |
+| 질의 기록은 jsonl만 | done | PG `qa_log` INSERT 지움 | [mc-13](prd/mcp.md#mc-13) |
+| 숨김 문서가 검색에서 안 빠짐 | todo | pl-25 대기 · `s3_key`로 비교 | [mc-14](prd/mcp.md#mc-14) |
+| 근거의 `rep_uri`가 늘 빔 | todo | pl-25 대기 · `source_key` 조회 | [mc-15](prd/mcp.md#mc-15) |
+| `query_edw` 도구 | done | SELECT만 · 허용 목록 · 상한 | [mc-06](prd/mcp.md#mc-06) |
+| `edw_meta` 도구 | done | 스키마 → 표 → 칸 | [mc-07](prd/mcp.md#mc-07) |
+| `parse_document` 도구 | done | 파싱 서비스 전달 · `job_id` | [mc-08](prd/mcp.md#mc-08) |
+| 서버 실행과 안전 | done | 토큰 · health · 동시 수 · 기록 | [mc-09](prd/mcp.md#mc-09) |
+
+## 설정·운영 (settings)
+| 묶음 (L4) | 상태 | 단계 (L5) | ID |
+|---|---|---|---|
+| RUN_ENV 셋 · LLM_FAKE는 local만 | done | `stage` 거부 · 시작 관문 | [op-02](prd/settings.md#op-02) |
+| 모델 호출·비용·외부 전송 가드 | done | 역할 · 외부 거부 · 예산 | [pl-11](prd/settings.md#pl-11) |
+| EDW 접속 하나·계정 둘 | done | `common.connections.rdb` · 읽기·쓰기 · sqlite 대역 | [op-03](prd/settings.md#op-03) |
+| 프로세스 종료 정리 | dev | 덮기 파일 지움 · 자식 회수 · SIGTERM | [pl-27](prd/settings.md#pl-27) |
+| JSON Lines 사건 기록 | todo | 포매터 · 수준 설정 · 가림 | [op-01](prd/settings.md#op-01) |
+| 미룬 설정 지우기 | todo | `korean_font` · `eval_sets_dir` | [pl-21](prd/settings.md#pl-21) |
+| 안 읽는 env 이름 4개 지우기 | todo | 0.1.0 릴리스에서(C-51) | [pl-30](prd/settings.md#pl-30) |
+
+## 테스트·평가 (test)
+| 묶음 (L4) | 상태 | 단계 (L5) | ID |
+|---|---|---|---|
+| 시험 층 | done | server · general · 알려진 실패 | [e2-02](prd/test.md#e2-02) |
+| 이미지 빌드·반입 관문 | done | build_ship · `[판정]` · 오버레이 | [e2-08](prd/test.md#e2-08) |
+| 반입 시험이 이미지 안에만 | todo | 오버레이로 시험 갱신(C-53) | [e2-14](prd/test.md#e2-14) |
+| PC 일반 시험 알려진 실패 | partly done | 공용 PG 3개 고침 · 남은 4개 | [e2-11](prd/test.md#e2-11) |
+| 에이전트 시험 패키지 경로 | todo | `resolve_agent_dir`(code_fp) | [e2-15](prd/test.md#e2-15) |
+| PC 스모크 | done | 파싱 → 검색 2~3건 | [e2-01](prd/test.md#e2-01) |
+| PC Docker 스모크가 retriever에서 멈춤 | todo | mc-10 뒤 다시 돌림 | [e2-13](prd/test.md#e2-13) |
+| PwC `valid_env` 시험 자료 | done | 옛 자료 삭제 · EDW 대역 | [e2-09](prd/test.md#e2-09) |
+| 파싱 품질 평가 | done | CER · 재현율 · 스택 보고서 | [e2-03](prd/test.md#e2-03) |
+| 검색 평가 | done | hit@k · 지연 · 보고서 | [e2-04](prd/test.md#e2-04) |
+| 답변 점검 | done | `rag_qa` · 인용 점검 | [e2-05](prd/test.md#e2-05) |
+| EDW 값 답변 인용 실패 | done | 그대로 둠(결정) | [e2-12](prd/test.md#e2-12) |
+| 스택·모델 비교 | done | 행렬 · 예상 비용 | [e2-06](prd/test.md#e2-06) |
+| 검색 점검 페이지 | done | 로컬 페이지 · 포트 | [e2-07](prd/test.md#e2-07) |
+| 검색 페이지 고정 글 | todo | 실제 개수 표시 | [e2-16](prd/test.md#e2-16) |
+| PC 평가 도구 줄이기 | todo | 둘만 남김 · 설정 지움 | [e2-10](prd/test.md#e2-10) |
+| 안 쓰는 함수 지우기 | todo | 시험만 부르는 것도 | [e2-17](prd/test.md#e2-17) |
+| 요건 없는 코드 지우기 | todo | 지움 · 남김 목록 | [e2-18](prd/test.md#e2-18) |
+
+## 문서·릴리스 (doc)
+| 묶음 (L4) | 상태 | 단계 (L5) | ID |
+|---|---|---|---|
+| 문서 재구성 · 한국어 | todo | 1부 PRD 카테고리 · 2부 CLAUDE.md | [do-04](prd/doc.md#do-04) |
+| `docs/index.md` 용어집 | done | 용어 대응 옮김 · 링크 한 줄 | [do-02](prd/doc.md#do-02) |
+| `refactor.md`를 병합과 맞춤 | done | 낡은 줄 · PRD 링크 · 검토자 | [do-03](prd/doc.md#do-03) |
+| `refactor.md`를 `docs/refactoring/`으로 | todo | 옮기기 · 링크 | [do-01](prd/doc.md#do-01) |
+| 첫 릴리스 태그 `v0.1.0` | todo | 태그 · 릴리스 노트 | [op-04](prd/doc.md#op-04) |

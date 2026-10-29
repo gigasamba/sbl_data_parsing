@@ -1017,7 +1017,6 @@ _STAGE4_TOOLS = frozenset(
                 "server_checks",
                 "anchors",
                 "auto_questions",
-                "stack_report",
                 "stages",
             )
         ),

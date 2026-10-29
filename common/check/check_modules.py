@@ -88,10 +88,9 @@ MOVED_TOOLS = {
         "server_checks",
         "anchors",
         "auto_questions",
-        "stack_report",
         "stages",
     },
-    "search": {"mcp_eval", "qa_report", "ask", "search_checks"},
+    "search": {"mcp_eval", "ask", "search_checks"},
 }
 PKG_AREA = (
     ("data_etl", "etl"),
