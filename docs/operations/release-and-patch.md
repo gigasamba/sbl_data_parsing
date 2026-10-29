@@ -240,7 +240,7 @@ $DC run --rm load migrate check --target all
       set-sources --file /tmp/server_sources.json --check-columns --reason "서버 덮어쓰기 이관(C-12)" --by "<사람>"
   ```
   - 바꾸기·되돌리기: `set-stack --parse … --reason …`(새 판 + 활성 — 이미지에 없는 엔진이면 종료 2) · `set-stack --activate <판 번호> --reason …`(되돌리기) · 원천 목록도 같은 꼴(`set-sources`). 오래 도는 검색 MCP는 시작 때 읽으므로 판을 바꾼 뒤 다시 띄운다(`mcp_up.sh`) — 파싱 MCP 서비스는 작업마다 다시 읽는다. 자세히 [docs/architecture/pipeline_stack.md](../architecture/pipeline_stack.md).
-  - 재사용 열쇠: 엔진 지문·지시서 지문·인계 지문은 그대로. 파이프라인은 판 사본 `_stack/stack-v<판>-<sha8>.json`을 쓰므로 **첫 실행에 AD41 색인(`index`)이 한 번 다시 지어진다**(입력 지문이 git 파일 바이트 → 사본 바이트 — `refactor.md` C-50). 회사 DB `AI.ParsingMeta.pipeline_version`은 사본과 무관(판 표기 규칙 `pipeline_version()` 그대로 — git → env `PIPELINE_VERSION` → `common/PATCH_VERSION`, 이미지에는 `.git`이 없음 — `refactor.md` C-22·"최종" ④).
+  - 재사용 열쇠: 엔진 지문·지시서 지문·인계 지문은 그대로. 파이프라인은 판 사본 `_stack/stack-v<판>-<sha8>.json`을 쓰므로 **첫 실행에 AD41 색인(`index`)이 한 번 다시 지어진다**(입력 지문이 git 파일 바이트 → 사본 바이트 — `refactor.md` C-50). 회사 DB `AI.ParsingMeta.pipeline_version`은 사본과 무관(버전 표기 `pipeline_version()` — 10-29부터 `VERSION`·`PATCH_VERSION` 중 높은 버전, 위 §5 "버전" · D-036 · `refactor.md` C-62).
 - **계정의 기본 스키마가 우리 스키마여도 같음(VS8a B-1 — S8b Step A):** DB 계정의 `search_path`가 우리 스키마로 정해져 있거나(`ALTER ROLE … SET search_path`), 계정 이름 = 스키마 이름(`"$user"`), `PG_SCHEMA=public`이어도 ②가 표·칸을 그대로 비교한다(S8a 판은 이때 "표 없음"만 보이고 ③-b가 칸이 다른 스키마도 판 기록했음 — S8a 판으로 판을 기록했다면 이 판에서 ②를 다시 돌려 차이 0인지 확인).
 - **모르는 판:** 판 표에 코드가 모르는 판이 하나라도 있으면(새 이미지 → 옛 이미지로 되돌린 뒤 등) 적재·`up`·`stamp` 모두 종료 2.
 - PC: `python -m common.store.db.dbtool <up|stamp|current|check> --target …`([CLAUDE.md](../../CLAUDE.md) §6 — 전용 PG에 처음 한 번 `up --target struct`) · 기본 스키마·vector 확장 자리 사례 `--pg-cases orca_<새 이름>`(새 시험 DB를 만듦 — PC 전용).
