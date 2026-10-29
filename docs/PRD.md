@@ -4,7 +4,7 @@
 행 = 묶음 하나(끝난 것 포함). 상태: todo · dev · done(그 밖에 partly done). ID는 그대로 두고 카테고리 파일이 자리를 정한다. 상세는 ID 링크.
 
 ## 지금 진행 중
-- pl-13 적재가 지우지 않음 — dev, `feature/load-no-prune` → PR 검토·병합.
+- pl-13 적재가 지우지 않음 — dev, `feature/load-no-prune` 병합됨(#17) → 상태 정리.
 - pl-22 파싱 phase 없애기 — dev, `feature/r2-phase` 병합됨 → 서버 확인(refactor.md C-65), VLM 동시 수 손잡이는 후속.
 - pl-27 프로세스 종료 정리 — dev, `feature/exit-cleanup` 병합됨 → code_fp 모든 레이어 바뀜(다음 반입에서 재처리).
 - pl-25 DB 스키마 명세 — dev, `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인.
