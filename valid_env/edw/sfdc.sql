@@ -1,4 +1,4 @@
--- [SYNTHETIC] PC stand-in for the EDW schema SFDC (Salesforce copy). Built into valid_env/edw/sfdc.sqlite, ATTACHed AS SFDC.
+-- [SYNTHETIC] PC stand-in for the EDW schema SFDC (Salesforce copy). Built into valid_env/edw/edw.sqlite (one file, all schemas — python -m validation.e2e.edw_standin), ATTACHed AS SFDC.
 -- STRICT + CHECK(length) mirror NVARCHAR(n)/NCHAR(18)/BIT/DATE/DECIMAL. Fictional data only.
 
 CREATE TABLE Account (

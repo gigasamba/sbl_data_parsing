@@ -1,7 +1,7 @@
 # sbl_data_parsing — PRD
 
-Goal: cited evidence search over company documents on the closed network — parse → structure → load (pgvector) → search MCP — same results on the server as on the PC.
-Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · pl = data pipeline · e2 = e2e runs, tests, evaluation · rn = server flow runner · do = docs layout · op = logging). Status: todo | dev | done.
+Goal: cited evidence search over company docs on the closed network — parse → structure → load (pgvector) → search MCP — same on server and PC.
+Row = one open feature. ID prefix = `prd/<area>.md` (mc = search MCP · pl = data pipeline · e2 = e2e, tests, eval · rn = flow runner · do = docs layout · op = logs, DB accounts). Status: todo | dev | done.
 
 | ID | Bundle | Status | Detail |
 |---|---|---|---|
@@ -32,6 +32,7 @@ Row = one open feature. ID prefix = area = `prd/<area>.md` (mc = search MCP · p
 | do-02 | Glossary in `docs/index.md` | todo | [→](prd/doc.md#do-02) |
 | op-01 | JSON Lines event log | todo | [→](prd/ops.md#op-01) |
 | op-02 | RUN_ENV `local`·`dev`·`prd` (drop `stage`) · LLM_FAKE only in `local` | design done | [→](prd/ops.md#op-02) |
+| op-03 | One EDW connection, read/write account | dev | [→](prd/ops.md#op-03) |
 
 Done: mcp 8 → [prd/mcp.md](prd/mcp.md) · pipeline 11 → [prd/pipeline.md](prd/pipeline.md) · e2e 9 → [prd/e2e.md](prd/e2e.md) · runner 2 → [prd/runner.md](prd/runner.md)
 Code vs requirements — mismatches, code with no requirement, off-by-default features, removed 10-29: [prd/gaps.md](prd/gaps.md)

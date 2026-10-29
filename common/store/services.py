@@ -160,10 +160,10 @@ def detect_pg(docker=None):
 
 
 def connect(a):
-    """명령 인자 a(--pg·--edw·--edw-client·--local)에 저장소 기본값을 채움: 지정이 없으면 Docker pgvector → 없으면 로컬. 한 줄로 알림."""
+    """명령 인자 a(--pg·--local)에 저장소 기본값을 채움: 지정이 없으면 Docker pgvector → 없으면 로컬. 한 줄로 알림."""
     docker = docker_ps()
     msg = []
-    if not getattr(a, "local", False):  # --edw·--edw-client여도 본문·메타 저장소는 pgvector/로컬(EDW에는 벡터만)
+    if not getattr(a, "local", False):
         ok, why = detect_pg(docker)  # --pg를 줘도 주소(PG_HOST·PG_PORT)는 찾음 — 안 그러면 기본 5432로만 붙음
         if a.pg and not ok:
             raise SystemExit(f"[연결] --pg(또는 MCP_STORE=pg)를 지정했지만 PostgreSQL에 붙지 못함: {why}")

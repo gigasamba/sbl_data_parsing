@@ -18,7 +18,6 @@ ROOT = Path(__file__).resolve().parents[1]
 GENERAL_KNOWN_FAIL = {
     "tests.general.pipeline.test_kg_external": "import mock_llm — 저장소에 없는 모듈(S9 옮기기 전부터)",
     "tests.general.pipeline.test_run_combo": "sentence_transformers가 PC venv에 없음(S9 옮기기 전부터)",
-    "tests.general.common.test_edwdb": "시험 접속 파일에 EDW_USER 없음(S9 옮기기 전부터)",
     "tests.general.pipeline.test_pub_registry": "PG에서 문서 대장 upsert(여러 줄 INSERT OR REPLACE)가 번역되지 않음(pre-refactor 서버 코드부터 — refactor.md C-54 ①, 사용자 10-28: 이번 판에서 안 고침)",
 }
 

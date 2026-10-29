@@ -136,12 +136,12 @@ docker run --rm -v "$RAG_OUT:/app/output:ro" data-pipeline:<태그> tool run_boa
 ### 4-1. EDW 쿼리 도구(EQ1) 설정 — `describe_edw`·`query_edw`
 LLM 에이전트가 직접 SELECT를 보내 EDW(SQL Server)를 읽는 도구 2개. 집계·가공은 에이전트 몫 — 이 도구는 원본 행만 돌려준다. 보안 경계(읽기 전용·표 허용목록·상한)는 코드([mcp_server/services/edw_query.py](../../mcp_server/services/edw_query.py))가 강제하지만, **운영자가 아래 둘을 준비해야 실제로 안전**하다.
 
-1. **읽기 전용 SQL Server 계정 하나**(쓰기 계정과 분리, 1절 `PM_DB_*`·`RDB_*`와도 분리) — 허용 표에만 `SELECT` 권한, 그 밖 아무 권한도 주지 않는다(DDL·DML·`EXEC`·시스템 프로시저 권한 전부 거부). settings.yaml `mcp.edw_query` 절(옛 env 이름 `EDW_QUERY_SERVER`·`EDW_QUERY_PORT`·`EDW_QUERY_DATABASE`·`EDW_QUERY_USER`·`EDW_QUERY_PASSWORD`(또는 `EDW_QUERY_CONN_FILE` 파일 하나))로 적는다 — 이름·기본값은 [env-guide.md](env-guide.md) "EDW 쿼리 도구" 절.
-2. **`EDW_QUERY_TABLES`** — 에이전트가 볼 수 있는 `schema.table` 쉼표 목록(기본값은 PC 샘플용 4개뿐, 서버는 반드시 실제 표 이름으로 바꿔 적는다). 여기 없는 표·뷰는 코드가 `FROM`/`JOIN`을 정규식으로 찾아 전부 거부 — `sys.*`·`INFORMATION_SCHEMA.*`는 목록에 있어도 거부.
+1. **EDW 읽기 계정**(`common.connections.rdb.read` — 사용자 10-29, [ops.md#op-03](../prd/ops.md#op-03)) — 파이프라인 원천 조회(원천 목록·`AI.FileStorageMap`·`AI.ParsingMeta`)와 함께 쓰는 계정. `SELECT` 권한만, 그 밖 아무 권한도 주지 않는다(DDL·DML·`EXEC`·시스템 프로시저 권한 전부 거부). 검색 MCP 프로세스는 시작할 때 쓰기 계정 칸(`common.connections.rdb.write`)을 설정 객체에서 비운다(`edw_read_only()` — 공용 settings.yaml에 있어도 쓰지 않음, 사용자 10-29). 파일 자체는 컨테이너가 읽을 수 있으니 완전히 떼려면 mcp-server에 쓰기 칸 없는 설정 파일을 따로 붙인다. ⚠️ 같은 계정이라 `query_edw`도 파이프라인이 읽는 표(`AI.FileStorageMap`·`AI.ParsingMeta`)를 읽을 수 있다 — 막으려면 `EDW_QUERY_TABLES_STRICT=1`과 `EDW_QUERY_TABLES`로 좁힌다.
+2. **`EDW_QUERY_TABLES`** — 에이전트가 볼 수 있는 `schema.table` 쉼표 목록(기본값은 PC 대역 표 9개뿐, 서버는 반드시 실제 표 이름으로 바꿔 적는다). 여기 없는 표·뷰는 코드가 `FROM`/`JOIN`을 정규식으로 찾아 전부 거부 — `sys.*`·`INFORMATION_SCHEMA.*`는 목록에 있어도 거부.
    - 보안 재검토(10-15) 반영 — DBA가 이 계정에 추가로: `DENY VIEW DEFINITION`(FROM 없이 메타데이터 함수로 표 정의를 읽는 길 차단) · 다른 데이터베이스·연결 서버(linked server) 권한 없음 · 가능하면 Resource Governor 등으로 이 계정의 질의 시간·CPU 상한(코드 상한 `EDW_QUERY_TIMEOUT_SEC`은 드라이버 쪽이라 서버에서 실제로 취소되는지 확인 필요).
 3. 켠 뒤 확인: `describe_edw()`(table 없이) 호출로 허용 표·열이 기대와 같은지, `query_edw({"sql": "DROP TABLE ..."})` 같은 호출이 `rejected:*`로 막히는지 한 번 확인.
 
-PC 시험(서버 연결 없이): `EDW_QUERY_SQLITE=valid_env/structured/edw_sample.sqlite`(없으면 `python dev_tools/synthetic_data_gen/gen_edw_sample.py`로 생성, gitignore 대상이라 매번 새로 만듦) — SQL Server와 같은 `AI.client`·`AI.contract`·`AI.batch`·`AI.quote` 이름으로 ATTACH돼 같은 SQL 문이 그대로 돈다.
+PC 시험(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`common.connections.rdb.sqlite` — 모든 대역 표를 한 파일에, `python -m validation.e2e.edw_standin`으로 다시 만듦) — SQL Server와 같은 `AI.<표>` 이름으로 ATTACH돼 같은 SQL 문이 그대로 돈다.
 
 ## 5. 회사 맞춤(도메인 튜닝) — 요약
 
@@ -202,7 +202,7 @@ PC 시험(서버 연결 없이): `EDW_QUERY_SQLITE=valid_env/structured/edw_samp
 ```bash
 PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --kind client \
   --source csv:/srv/rag/env/client_master.csv --mapping /srv/rag/env/client_master_map.json \
-  --out /srv/rag/env/client_roster.csv          # EDW 표에서 바로: --source rdb:<스키마.표>(접속은 settings.yaml pipeline.connections.rdb — 옛 RDB_* env)
+  --out /srv/rag/env/client_roster.csv          # EDW 표에서 바로: --source rdb:<스키마.표>(접속은 settings.yaml common.connections.rdb 읽기 계정)
 PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --check /srv/rag/env/client_roster.csv   # 오류 0 확인 후 반영
 ```
 

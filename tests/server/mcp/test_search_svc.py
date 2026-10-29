@@ -260,8 +260,8 @@ def _selftest_query_log():
 
 def _selftest_evidence_rep_path():
     """OP21(S78) — do_search 근거에 AI.ParsingMeta의 '파싱 결과 경로'(rep_uri, find_rep_path가 쓴 같은 rep_key) —
-    가짜 EDW(PM_DB_SQLITE)에 그 문서의 doc_key 행이 있을 때만 붙고(원본 경로는 기존 source_uri 칸 그대로,
-    바이트 동일) · 없는 문서·PM_DB_SQLITE 미설정(기본 서버)은 칸 자체가 없음(바이트 동일, 새 칸 0개) ·
+    가짜 EDW(RDB_SQLITE)에 그 문서의 doc_key 행이 있을 때만 붙고(원본 경로는 기존 source_uri 칸 그대로,
+    바이트 동일) · 없는 문서·RDB_SQLITE 미설정(기본 서버)은 칸 자체가 없음(바이트 동일, 새 칸 0개) ·
     rep_bucket이 "file://<폴더>"(폴더 저장소 환경 시험, 사용자 결정 10-08)면 s3:// 접두를 덧씌우지 않고 그
     값 그대로 rep_key를 이음(find_rep_path)."""
     import tempfile
@@ -308,7 +308,7 @@ def _selftest_evidence_rep_path():
     db.close()
 
     _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), PM_DB_SQLITE=str(pm_path))  # 설정 객체 덮기(S7d)
+    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), RDB_SQLITE=str(pm_path))  # 설정 객체 덮기(S7d)
     try:
         on = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
         by_name = {e["file_name"]: e for e in on["evidence"]}
@@ -317,13 +317,13 @@ def _selftest_evidence_rep_path():
         assert "rep_uri" not in by_name["y.txt"], by_name["y.txt"]  # ParsingMeta에 없는 문서 — 새 칸 없음
 
         _STATE.clear()
-        with mc.senv(PM_DB_SQLITE=None):  # 설정 자체가 없음(기본 서버) — 바이트 동일(새 칸 0개)
+        with mc.senv(RDB_SQLITE=None):  # 설정 자체가 없음(기본 서버) — 바이트 동일(새 칸 0개)
             off = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
             for e in off["evidence"]:
                 assert "rep_uri" not in e, e
 
         _STATE.clear()
-        with mc.senv(PM_DB_SQLITE=str(pm_path), MCP_EVIDENCE_PATHS="0"):  # 명시적으로 꺼도 바이트 동일
+        with mc.senv(RDB_SQLITE=str(pm_path), MCP_EVIDENCE_PATHS="0"):  # 명시적으로 꺼도 바이트 동일
             gated = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
             for e in gated["evidence"]:
                 assert "rep_uri" not in e, e

@@ -6,12 +6,11 @@
 """
 
 import datetime
-import json
 import re
 import sqlite3
 import sys
 
-from common.config.settings import cfg, checked, reveal
+from common.config.settings import cfg
 
 DEFAULT_TABLE = "AI.ParsingMeta"
 TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # source.py TABLE_ID_RE와 같은 규칙(SQL 삽입 방지)
@@ -165,7 +164,7 @@ def find_rep_path(db, doc_key):
 
 class MssqlStore:
     """실제 EDW 쓰기(PM1 결정 뒤) — PM_TABLE은 화이트리스트 확인(스키마.표만), 열 이름은 고정 상수, 값은 전부 %s
-    파라미터. 쓰기 계정은 PM_DB_*(RDB_* 읽기 계정과 분리). 한 실행 = 한 트랜잭션(커밋 전엔 아무것도 안 남음).
+    파라미터. 접속은 common.connections.rdb — 게시는 쓰기 계정, 조회(검색 MCP)는 읽기 계정(role, 사용자 10-29 ops.md#op-03). 한 실행 = 한 트랜잭션(커밋 전엔 아무것도 안 남음).
     KEY(source_system, source_key)가 이미 있으면(PM2 — 없으면 doc_key) 그 행은 건너뜀(INSERT만) — update_status()만
     예외(상태 열 UPDATE).
     PM2 하위 호환 — DBA가 새 DDL을 아직 안 돌려 옛 표(engines_used·engines_summary 없음, 그 밖은 PM1 그대로)에
@@ -174,36 +173,21 @@ class MssqlStore:
     독립 검토 CONCERN(10-15) — 필터 유일 색인이 있는 표라 연결 직후(그 밖 어떤 INSERT·SELECT보다 먼저) SET_OPTIONS_SQL을
     이 세션에 실행한다(parsing_meta_mssql.sql 맨 앞과 같은 7개 옵션) — 안 하면 SQL Server가 그 뒤 모든 쓰기를 거부한다."""
 
-    def __init__(self, table=DEFAULT_TABLE):
+    def __init__(self, table, role):
         if not TABLE_ID_RE.match(table):
             raise ValueError(f"[parsing_meta] PM_TABLE 값이 올바르지 않음(영문·숫자·_, 스키마.표만) — {table!r}")
         self.ident = ".".join(f"[{p}]" for p in table.split("."))
         self.schema, self.table_name = table.split(".", 1) if "." in table else (None, table)
         self._cols = None  # 지연 조회(_available_columns) — 연결하자마자 바로 안 봄, 첫 insert_new에서만
-        pm = cfg().connections.parsing_meta  # S7b — 설정 객체
-
-        def need(v, name):  # 옛 os.environ[name] — 없으면 KeyError
-            if v is None:
-                raise KeyError(name)
-            return reveal(v)
-
-        kwargs = json.loads(reveal(pm.connect_kwargs) or "{}")
-        checked("PM_DB_PORT")  # 형식 틀린 포트는 옛처럼 연결 전에 실패(VS7b R-7 — 1433으로 조용히 붙지 않게)
         from common.store import (
             mssql,
         )  # S8b(5-4) — SQLAlchemy가 연 연결(인자 그대로) · 쓰기 도우미가 SQLite 대역과 같은 DBAPI 커서 코드라 커서 그대로
 
+        kw, miss = mssql.login(role)
+        if miss:  # 옛 os.environ[name] — 없으면 KeyError
+            raise KeyError(miss[0])
         # 독립 검토 CONCERN — SET_OPTIONS_SQL은 이 세션의 첫 실행문(INSERT·SELECT보다 먼저, commit) — mssql.engine의 연결 생성 자리에서
-        self.cn = mssql.raw(
-            SET_OPTIONS_SQL,
-            server=need(pm.host, "PM_DB_HOST"),
-            port=str(pm.port),  # 포트는 옛처럼 글자로(pymssql)
-            user=need(pm.user, "PM_DB_USER"),
-            password=need(pm.password, "PM_DB_PASSWORD"),
-            database=need(pm.database, "PM_DB_DATABASE"),
-            autocommit=False,
-            **kwargs,
-        )
+        self.cn = mssql.raw(SET_OPTIONS_SQL, autocommit=False, **kw)
 
     def _available_columns(self, cur):
         """PM2 — COLUMNS 중 지금 EDW 표에 실제 있는 것만(한 연결에 한 번만 조회, 결과 캐시). 없는 열이 있으면
@@ -266,16 +250,21 @@ class MssqlStore:
 
 
 class SqliteStore:
-    """가짜 EDW(PM_DB_SQLITE=<경로>) — L2 시험용. 실제 표와 같은 열(설계 §2) · 표 이름은 고정 ParsingMeta(시험 전용이라
+    """가짜 EDW(RDB_SQLITE=<경로> — common.connections.rdb.sqlite) — L2 시험용. 실제 표와 같은 열(설계 §2) · 표 이름은 고정 ParsingMeta(시험 전용이라
     PM_TABLE 임의값을 SQLite 식별자로 안 씀). KEY(source_system, source_key)가 이미 있으면(PM2 — 없으면 doc_key)
     그 행은 건너뜀(INSERT만). PM2 — doc_key만 필수(NOT NULL), 그 밖은 전부 NULL 허용 · 고유 키는 MSSQL DDL과
     같은 두 필터 색인(source_key 있으면 (source_system, source_key, parse_date), 없으면 (doc_key, parse_date))."""
 
-    def __init__(self, path, table="ParsingMeta"):
+    def __init__(self, path, table="ParsingMeta", readonly=False):
         self.table = table
+        if readonly:  # 검색 MCP 조회(role "read") — ?mode=ro로 열고 표·색인을 만들지 않음(대역 파일을 바꾸지 않게 — 독립 검토 10-29)
+            from common.store import mssql
+
+            self.cn = mssql.standin(path)
+            return
         from pathlib import Path
 
-        Path(path).parent.mkdir(parents=True, exist_ok=True)  # PM_DB_SQLITE=/app/output/pm_test/edw.sqlite처럼 새 폴더여도(샘플 세션 10-08)
+        Path(path).parent.mkdir(parents=True, exist_ok=True)  # RDB_SQLITE=/app/output/pm_test/edw.sqlite처럼 새 폴더여도(샘플 세션 10-08)
         self.cn = sqlite3.connect(path)
         cols_sql = ", ".join(f"{c} {_SQLITE_TYPE.get(c, 'TEXT')}" + (" NOT NULL" if c == "doc_key" else "") for c in COLUMNS)
         self.cn.execute(
@@ -318,25 +307,15 @@ class SqliteStore:
         self.cn.close()
 
 
-def make_db():
-    pm = cfg().connections.parsing_meta  # S7b — 설정 객체
-    sqlite_path = pm.sqlite
+def make_db(role):
+    """ParsingMeta 저장소 — role: 게시(파이프라인)는 "write", 조회(검색 MCP)는 "read"(사용자 10-29 — ops.md#op-03)."""
+    from common.store import mssql
+
+    sqlite_path = mssql.standin_path()
     if sqlite_path:
-        return SqliteStore(sqlite_path)
-    table = pm.table  # 기본 'AI.ParsingMeta'(DEFAULT_TABLE과 같음) · 빈 값 그대로(blank=keep)
-    miss = [
-        k
-        for k, v in (
-            ("PM_DB_HOST", pm.host),
-            ("PM_DB_DATABASE", pm.database),
-            ("PM_DB_USER", pm.user),
-            ("PM_DB_PASSWORD", reveal(pm.password)),
-        )
-        if not v
-    ]
+        return SqliteStore(sqlite_path, readonly=role == "read")
+    table = cfg().connections.parsing_meta.table  # 기본 'AI.ParsingMeta'(DEFAULT_TABLE과 같음) · 빈 값 그대로(blank=keep)
+    _, miss = mssql.login(role, extra=False)
     if miss:
-        raise SystemExit(
-            f"[parsing_meta] EDW 쓰기 접속 정보 없음: {', '.join(miss)}"
-            "(PM_DB_* — RDB_* 읽기 계정과 분리, PM1 결정 뒤) 또는 PM_DB_SQLITE(시험)"
-        )
-    return MssqlStore(table)
+        raise SystemExit(f"[parsing_meta] EDW 접속 정보 없음: {', '.join(miss)}(common.connections.rdb) 또는 RDB_SQLITE(시험)")
+    return MssqlStore(table, role)

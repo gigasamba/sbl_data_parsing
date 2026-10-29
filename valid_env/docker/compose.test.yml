@@ -43,7 +43,7 @@ services:
     <<: *job
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE}
     command: ["publish"]
-    volumes: [*settings, *overlay, "${RAG_OUT:?RAG_OUT}:/app/output"]   # OS_ENDPOINT·PM_BUCKET·PM_PREFIX·PM_DB_SQLITE — job.yaml
+    volumes: [*settings, *overlay, "${RAG_OUT:?RAG_OUT}:/app/output"]   # OS_ENDPOINT·PM_BUCKET·PM_PREFIX·RDB_SQLITE — job.yaml
     depends_on: {}
 
   load:
