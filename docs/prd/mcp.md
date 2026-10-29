@@ -39,13 +39,15 @@
 ## mc-11 · 집계 길이 지운 칸을 고름
 - 이유: `aggregate.pg()`가 `file_sha256`, `client`, `contract_no`, `meta_confirmed`, `contract`를 골라 모든 검색 결과에 "집계 경로 오류" 메모가 붙는다(근거 자체는 정상).
 - 파일: `mcp_server/services/search/aggregate.py`.
-- Status: todo
+- 끝남 10-30: mc-12와 함께 닫음 — `aggregate.pg()`(집계 길에서 그 칸을 읽던 곳)를 지움. `retriever.py`는 아직 그 칸을 읽는다(mc-10).
+- Status: done
 
 <a id="mc-12"></a>
 ## mc-12 · 사실 집계가 지운 표를 질의
 - 이유: `kg_node`·`kg_edge`·`doc_fact`·`concept_chunk`·`doc_image`·`chunk_image`는 더는 만들거나 적재하지 않는다(`pipeline/load/pgvector_load.py`). 그 표를 읽던 graph·concept 검색 방법은 10-29에 지웠지만 `aggregate.py`의 `doc_fact` 기반 집계 길은 아직 `doc_fact`를 질의해 PG에서는 아무것도 돌려주지 않는다.
-- 파일: `mcp_server/services/search/aggregate.py`, `pipeline/load/pgvector_load.py`.
-- Status: todo — 결정: `doc_fact`를 다시 적재(Alembic 마이그레이션, DB 담당자)하거나 그 집계 길을 지운다.
+- 끝남 10-30(사용자 결정): 그 길을 지움 — `aggregate.pg()` 삭제. PG 저장소에서 `do_aggregate`는 "집계 질문이 아님 — search를 쓰세요" 메모를 돌려주고, `ask --pg`는 문서 집계를 보이지 않는다(`--pg` 옵션 자체는 남음 — PG 검색을 고름). 숫자 질문은 `query_edw`로. 묶음(`local()`)과 정형 DB(`struct()`) 집계는 그대로. MCP 도구 계약·DB 변경 없음.
+- 파일: `mcp_server/services/search/{aggregate,internal_docs}.py`, `mcp_server/cli/ask.py`, `pipeline/load/pgvector_load.py`.
+- Status: done
 
 <a id="mc-10"></a>
 ## mc-10 · retriever가 지운 칸 `file_sha256`을 읽음
@@ -110,8 +112,6 @@
 |---|---|---|---|
 | 숨김 문서는 검색에서 빠짐 | 숨김 키(sha256)를 검색 키(`file_path`)와 비교 → 안 빠짐 | `pgsearch.py`, `local.py` | mc-14 |
 | 근거에 파싱 결과 경로(`rep_uri`) | ParsingMeta를 `file_path`로 찾음(그쪽 키는 sha256) → 늘 비어 있음 | `shaping.py` | mc-15 |
-| 집계가 오류 없이 돎 | 지운 칸을 골라 모든 결과에 "집계 경로 오류" 메모 | `aggregate.py` | mc-11 |
-| 사실 집계 답 | `doc_fact`를 더 적재하지 않아 그 길은 아무것도 안 돌려줌 | `aggregate.py`, `pgvector_load.py` | mc-12 |
 | `query_edw` 표 허용 목록 | mssql에서 기본 꺼짐(`EDW_QUERY_TABLES_STRICT=0` → 시스템 카탈로그를 뺀 모든 스키마) | `edw_query.py` | mc-06 |
 | 모든 저장소에서 하드 거르기 | PG 저장소만. 로컬 묶음: 거르기만이면 오류, 질문 + 거르기면 거르지 않고 검색 | `search_svc.py` | mc-01 |
 

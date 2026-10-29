@@ -551,6 +551,27 @@ def _selftest_lookup_term():
     print("[selftest] lookup_term·related(X4) 통과")
 
 
+def test_aggregate_off_on_pg():
+    """mc-12(사용자 10-30) — PG 저장소에서는 문서 집계를 안 함(doc_fact 미적재): 묶음 집계를 부르지 않고 query_edw 안내만."""
+    from unittest import mock
+
+    from mcp_server.services.search import aggregate as AG
+
+    class PgR:
+        pg, hidden = object(), None
+
+    def boom(*a, **k):
+        raise AssertionError("PG에서 묶음 집계를 부름")
+
+    with (
+        mock.patch.object(AG, "struct", lambda *a, **k: None),
+        mock.patch.object(AG, "local", boom),
+        mock.patch.object(M, "_retriever", PgR),
+    ):
+        r = do_aggregate("Acme 계약은 몇 건?")
+    assert "kind" not in r and "query_edw" in r["note"], r
+
+
 def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) — internal_docs.py엔 __main__이 없었음
     from common.core.paths import STACK_FILE
     from common.store.db import cfgtables

@@ -6,6 +6,7 @@
 ## 지금 진행 중
 - pl-13 적재가 지우지 않음 — dev, `feature/load-no-prune` → PR 검토·병합.
 - pl-22 파싱 phase 없애기 — dev, `feature/r2-phase` 병합됨 → 서버 확인(refactor.md C-65), VLM 동시 수 손잡이는 후속.
+- pl-27 프로세스 종료 정리 — dev, `feature/exit-cleanup` 병합됨 → code_fp 모든 레이어 바뀜(다음 반입에서 재처리).
 - pl-25 DB 스키마 명세 — dev, `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인.
 - do-04 문서 재구성 1부 — `feature/prd-by-category` → PR. 2부는 나중.
 
@@ -52,8 +53,8 @@
 | 질문 넓히기 | done | 용어집 · 고객별 나누기 · 질문 유형 | [mc-02](prd/mcp.md#mc-02) |
 | 고객 범위·판·중복 | done | 고객 범위 · 숨김 · 최신 판 | [mc-05](prd/mcp.md#mc-05) |
 | 집계 답 | done | 규칙 집계 · 통화 · LLM 라우터 | [mc-04](prd/mcp.md#mc-04) |
-| 집계 길이 지운 칸을 고름 | todo | `aggregate.pg()` | [mc-11](prd/mcp.md#mc-11) |
-| 사실 집계가 지운 `doc_fact` 질의 | todo | 다시 적재 또는 길 지우기 | [mc-12](prd/mcp.md#mc-12) |
+| 집계 길이 지운 칸을 고름 | done | `aggregate.pg()` 지움(mc-12와 함께) | [mc-11](prd/mcp.md#mc-11) |
+| 사실 집계가 지운 `doc_fact` 질의 | done | PG 집계 길 지움 · 숫자는 `query_edw` | [mc-12](prd/mcp.md#mc-12) |
 | retriever가 지운 칸을 읽음 | done | 묶음 `doc_key` · PG 열 | [mc-10](prd/mcp.md#mc-10) |
 | 질의 기록은 jsonl만 | done | PG `qa_log` INSERT 지움 | [mc-13](prd/mcp.md#mc-13) |
 | 숨김 문서가 검색에서 안 빠짐 | todo | pl-25 대기 · `s3_key`로 비교 | [mc-14](prd/mcp.md#mc-14) |
@@ -69,6 +70,7 @@
 | RUN_ENV 셋 · LLM_FAKE는 local만 | design done | `stage` 거부 · 시작 관문 | [op-02](prd/settings.md#op-02) |
 | 모델 호출·비용·외부 전송 가드 | done | 역할 · 외부 거부 · 예산 | [pl-11](prd/settings.md#pl-11) |
 | EDW 접속 하나·계정 둘 | done | `common.connections.rdb` · 읽기·쓰기 · sqlite 대역 | [op-03](prd/settings.md#op-03) |
+| 프로세스 종료 정리 | dev | 덮기 파일 지움 · 자식 회수 · SIGTERM | [pl-27](prd/settings.md#pl-27) |
 | JSON Lines 사건 기록 | todo | 포매터 · 수준 설정 · 가림 | [op-01](prd/settings.md#op-01) |
 | 미룬 설정 지우기 | todo | `korean_font` · `eval_sets_dir` | [pl-21](prd/settings.md#pl-21) |
 
