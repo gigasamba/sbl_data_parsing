@@ -14,7 +14,7 @@ Lane policy as one table: owner lane first, steal only from listed lanes. Why: t
 - Steps: (1) one policy table per lane: `workers`, `steal_from` (empty = dedicated lane). Default = today's behavior. (2) A worker steals only when its own queue is empty; among allowed lanes, longest first; `VLM_CAP` still applies. (3) Input: runner arg `--lanes` (host script — whether a settings.yaml section is needed is decided at design; never env, CLAUDE.md §3). (4) Remove dead branches.
 - Acceptance / QA: table rows in `tests/general/deploy/test_run_docs.py` — (queues, policy) → picked doc. A dedicated lane never takes other docs even when they wait; own non-empty queue → no steal; vlm over cap is skipped; default policy picks the same docs as today.
 - Files: `deploy/host/scripts/run_docs.py`, `tests/general/deploy/test_run_docs.py`, `docs/architecture/run_docs_design.md`.
-- Overlap: parse "phase" removal on feature/settings-cleanup's follow-up touches the same runner — coordinate first.
+- Overlap: parse "phase" removal ([pipeline.md#pl-22](pipeline.md#pl-22), `feature/r2-phase`) only dropped the `PARSE_PHASES` `--set` from the runner; lanes untouched.
 - Done 10-29 (user grill): settings.yaml `pipeline.host.run_docs` — per lane `<lane>_dedicated` (own lane only) and `<lane>_shared` (own lane first, else the longest other lane), default 1 + 1 each (6 workers); `vlm_cap` 2 applies to dedicated workers too; settings that would never finish the batch are refused at start (`warm` or `vlm_cap` below 1, or a lane with no dedicated worker and no shared worker); MCP pause holds the medium dedicated worker. `pick_lane()` is a pure function with a table test. Dead constants removed; `--workers` accepted but unused.
 - Status: done
 

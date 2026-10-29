@@ -530,18 +530,19 @@ def page_targets(doc_path):
     if cap == 0:
         return set()
     p = Path(doc_path)
-    targets = None  # None = 전체 쪽(기존 동작)
-    if not is_scan(p):
-        if not pc.cfg().extract.page_scan or p.suffix.lower() != ".pdf":
-            return set()
-        targets = scan_pages(p)  # AD12·AD31 — 글자 PDF 안의 스캔 쪽만(쓰레기·숨은 글자층·
-        if not targets:  # OCR≫글자층·회전·벡터 도식 신호 — scan_pages_detail 참고)
-            return set()
-    if targets is None:
-        targets = list(range(1, len(pages_of(p)) + 1))
-    if cap is not None:
-        targets = targets[:cap]
-    return set(targets)
+    if is_scan(p):
+        return pick_pages(len(pages_of(p)), True, [], cap)
+    if not pc.cfg().extract.page_scan or p.suffix.lower() != ".pdf":
+        return set()
+    # AD12·AD31 — 글자 PDF 안의 스캔 쪽만(쓰레기·숨은 글자층·OCR≫글자층·회전·벡터 도식 신호 — scan_pages_detail 참고)
+    return pick_pages(0, False, scan_pages(p), cap)
+
+
+def pick_pages(n_pages, whole_scan, scan, cap):
+    """쪽 VLM 대상 쪽(순수 함수, 10-29) — 문서 전체가 스캔이면 1..n_pages 전부, 아니면 스캔 신호 쪽(scan)만 · cap(None = 제한 없음)으로
+    앞에서 자른 집합. 글자 PDF 안의 스캔 쪽만 쪽 VLM을 부르고(병렬 — page_text_pages) 대표 결과가 그 쪽을 VLM 글로 채운다."""
+    targets = list(range(1, n_pages + 1)) if whole_scan else list(scan)
+    return set(targets if cap is None else targets[:cap])
 
 
 def page_text_pages(doc_path):
