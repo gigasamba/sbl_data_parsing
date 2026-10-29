@@ -34,7 +34,6 @@ LAYER_CODE = {
     + [
         f"pipeline/transform/represent/{n}.py"
         for n in (
-            "agent_step",
             "attachments",
             "context",
             "fuse",

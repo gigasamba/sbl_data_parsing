@@ -27,9 +27,17 @@ from pipeline import config as pc  # pipeline 칸(S7c — 설정 객체: PARSE_S
 
 ROOT = PKG_ROOT  # dev/
 from pipeline.transform.represent import shadow as S  # noqa: E402
-from pipeline.transform.represent.agent_tools import rag_out  # noqa: E402
 
 DEFAULT_MAX = 50
+
+
+def rag_out():
+    """결과 루트 — common.paths.output_root(없으면 저장소 output/). 옛 agent_tools.rag_out(10-29 파싱 판단 에이전트와 함께 지움)."""
+    from common.config.settings import cfg
+    from common.core.paths import APP_ROOT
+
+    base = cfg().paths.output_root
+    return Path(base) if base else APP_ROOT / "output"
 
 
 def _default_llm_complete(prompt):

@@ -252,22 +252,6 @@ class PipelineServiceTrigger(Section):
     upload_max_mb: int | None = F(50, "TRIGGER_UPLOAD_MAX_MB", "트리거 서버 /upload 본문 크기 상한(MB)")
 
 
-class PipelineTransformAgent(Section):
-    batch_sec: float | None = F(1800.0, "PARSE_AGENT_BATCH_SEC", "프로세스(배치) 하나의 판단 세션 시간 합 상한(초)")
-    enabled: str | None = F(None, "PARSE_AGENT", "파싱 판단 에이전트 모드 off|shadow|apply(on=apply, 0·false·none=off)")
-    fig: bool | None = F(True, "PARSE_AGENT_FIG", "판단 에이전트에 그림 VLM 값↔본문 갈림 조각을 포함(=0이면 제외)", off=("0",))
-    frags: int | None = F(3, "PARSE_AGENT_FRAGS", "문서당 판단 에이전트가 다루는 조각 수 상한")
-    margin: float | None = F(None, "PARSE_AGENT_MARGIN", "판단 에이전트가 '근소'로 보는 1·2위 점수차 문턱")
-    max_docs: int | None = F(50, "PARSE_AGENT_MAX_DOCS", "프로세스당 판단 세션을 열 문서 수 상한")
-    model: str | None = F("split", "PARSE_AGENT_MODEL", "판단 세션 모델 구성 split(LLM 판단+VLM 판독) | vlm(이미지 문서는 판단도 VLM)")
-    near: bool | None = F(
-        True, "PARSE_AGENT_NEAR", "판단 에이전트에 '근소' 조각(규칙이 신호로만 가른 자리)을 포함(=0이면 제외)", off=("0",)
-    )
-    session_sec: float | None = F(180.0, "PARSE_AGENT_SESSION_SEC", "판단 세션 1회의 시간 상한(초)")
-    tokens: int | None = F(24000, "PARSE_AGENT_TOKENS", "판단 세션 1회의 LLM 토큰(입력+출력) 상한")
-    vlm_max: int | None = F(3, "PARSE_AGENT_VLM_MAX", "판단 세션 도구 층의 문서당 VLM 호출 상한")
-
-
 class PipelineTransformFigures(Section):
     chart_values_det: bool | None = F(
         True, "CHART_VALUES_DET", "차트 값을 결정적(규칙) 추출로 보정(=0이면 VLM 눈대중 값만 사용)", off=("0",)
@@ -438,9 +422,6 @@ class PipelineDev(Section):
     )
     parallel_test_crash: bool | None = F(
         False, "PARSE_PARALLEL_TEST_CRASH", "시험용 — =1이면 문서 병렬 파싱의 첫 문서에서 강제 종료(os._exit 17)", on=("1",)
-    )
-    parse_agent_fake: bool | None = F(
-        False, "PARSE_AGENT_FAKE", "시험용 — =1이면 파싱 에이전트가 모델 대신 가짜 정책(fake_policy)으로 동작", on=("1",)
     )
     stream_test_crash: bool | None = F(
         False, "PARSE_STREAM_TEST_CRASH", "시험용 — =1이면 스트리밍 파싱의 첫 묶음에서 강제 종료(os._exit 17)", on=("1",)
@@ -620,7 +601,6 @@ class PipelineService(Section):
 
 
 class PipelineTransform(Section):
-    agent: PipelineTransformAgent = Field(default_factory=PipelineTransformAgent)
     figures: PipelineTransformFigures = Field(default_factory=PipelineTransformFigures)
     represent: PipelineTransformRepresent = Field(default_factory=PipelineTransformRepresent)
     structure: PipelineTransformStructure = Field(default_factory=PipelineTransformStructure)
