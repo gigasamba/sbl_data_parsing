@@ -1,7 +1,7 @@
 """검색 MCP 설정 — settings.yaml의 common + mcp 절(S7a 모델, refactor_plan 5-2 · D-015). 칸 표는 refactor_plan 부록 D.
 mcp_server 코드가 읽는 객체는 설정 파일 기반 캐시 MCP다(S7e2 — 전환 다리 없앰: env의 옛 이름은 읽지 않음, 신호 SETTINGS_FILE·RUN_ENV만):
-  `from mcp_server import config as mc` → `mc.cfg().search.rerank.mode`(mcp 절) · `mc.given("DECOMPOSE")`(준 값만) · `mc.checked(X)` ·
-  시험 `with mc.senv(SEARCH_RERANK="stub", MCP_STORE=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
+  `from mcp_server import config as mc` → `mc.cfg().search.methods`(mcp 절) · `mc.given("DECOMPOSE")`(준 값만) · `mc.checked(X)` ·
+  시험 `with mc.senv(SEARCH_CLIENT_HARD="1", MCP_STORE=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
   env로 읽는 칸만 env에 씀). common 칸은 `common.config.settings.cfg()`로(COMMON).
 요청마다 읽던 값(MCP_TOOL_TIMEOUT_SEC·SEARCH_* 등)은 쓰는 자리에서 요청마다 cfg()로 읽고, 시작 때 한 번 읽던 상수는 CFG(아래)에
 모은다(S5 — 이름·기본값은 옛 mcp_server.py 모듈 상수 그대로, 읽는 시점도 같음 — 이 모듈 import 때).
@@ -63,16 +63,6 @@ class McpSearchQueryExpand(Section):
     draft: bool | None = F(True, "QUERY_EXPAND_DRAFT", "질문 용어 확장에서 draft 용어 사전 사용 — 0이면 끔", off=("0",))
     enabled: bool | None = F(True, "QUERY_EXPAND", "질문 용어 확장(BM25, 용어 사전) 스위치 — 0이면 끔", off=("0",))
     shorttok: bool | None = F(True, "QUERY_EXPAND_SHORTTOK", "용어 확장에서 한 글자 비숫자 토큰 제거 — 0이면 제거 안 함", off=("0",))
-
-
-class McpSearchRerank(Section):
-    gap: float | None = F(0.02, "SEARCH_RERANK_GAP", "조건부 재순위(WHEN=cond)에서 상위 1·2위 융합 점수 차 문턱")
-    max_chars: int | None = F(1200, "RERANK_MAX_CHARS", "재순위 모델에 넣는 후보 본문 최대 글자 수")
-    mode: str | None = F("off", "SEARCH_RERANK", "재순위 방식 — off, local(cross-encoder), api:<모델>(RERANK_BASE_URL 필요)")
-    spread: int | None = F(3, "SEARCH_RERANK_SPREAD", "조건부 재순위(WHEN=cond)에서 후보가 흩어진 문서 수 문턱(개)")
-    timeout_ms: int | None = F(3000, "RERANK_TIMEOUT_MS", "재순위 호출 시간 상한(밀리초) — 넘으면 원 순서로 폴백")
-    top_n: int | None = F(30, "RERANK_TOP_N", "재순위에 넣는 후보 수(개)")
-    when: str | None = F("always", "SEARCH_RERANK_WHEN", "재순위 적용 시점 — always(항상) 또는 cond(효과 있을 때만)")
 
 
 class McpSearchWeights(Section):
@@ -187,7 +177,6 @@ class McpSearch(Section):
     graph: McpSearchGraph = Field(default_factory=McpSearchGraph)
     pg: McpSearchPg = Field(default_factory=McpSearchPg)
     query_expand: McpSearchQueryExpand = Field(default_factory=McpSearchQueryExpand)
-    rerank: McpSearchRerank = Field(default_factory=McpSearchRerank)
     weights: McpSearchWeights = Field(default_factory=McpSearchWeights)
 
 

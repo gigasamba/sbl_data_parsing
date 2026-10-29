@@ -135,7 +135,6 @@ HYPER = {  # 이름 규칙으로는 운영값이지만 결과(파싱·청크·�
     "pipeline.transform.vlm.fig_photo_max_tokens",
     "pipeline.transform.represent.reread.vlm_max_tokens",
     "mcp.search.ocr_dpi",
-    "mcp.search.rerank.max_chars",
     "mcp.search.struct_context_max",
 }
 OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸

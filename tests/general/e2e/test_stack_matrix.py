@@ -386,7 +386,7 @@ def cmd_selftest(config, a):
         ]
         (bdir / "chunks.jsonl").write_text("\n".join(json.dumps(c, ensure_ascii=False) for c in cks) + "\n", encoding="utf-8")
         _np.save(bdir / "vectors.npy", _np.zeros((12, 0), dtype="float32"))
-        _rr = S.isolated(SEARCH_RERANK=None)  # 꺼짐(기본) — k 재사용 동등성은 이 경우만 보장(S7e2 시험 설정 — 아래 finally에서 되돌림)
+        _rr = S.isolated()  # 재순위는 10-29에 지움 — k 재사용 동등성(S7e2 시험 설정 — 아래 finally에서 되돌림)
         _rr.__enter__()
         R6 = _RT(bdir)
         hits_max, _ = R6.search("단가는 얼마?", 10, methods=["bm25"])

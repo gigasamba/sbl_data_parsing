@@ -27,7 +27,7 @@ _SKIP = (
     "deploy/release/lint_changed.sh",
 )  # 마지막 — PC 개발 점검 스크립트(FIX 등 셸 스위치는 설정 키가 아님, S12)
 _KEEP = ("valid_env/docker/",)  # PC 시험 Docker(compose·smoke_test.sh — S6b에 docker/에서 옮김, 5-3 C)
-PREFIXES = ("LLM", "VLM", "OCRVLM", "EMBED", "RERANK")
+PREFIXES = ("LLM", "VLM", "OCRVLM", "EMBED")
 
 # 규칙(아래 정규식)으로 못 잡는 읽기 — 이름 목록·동적 이름(9-4 "이름 목록") · S7a에 다시 모으며 찾음
 NAME_LIST = {

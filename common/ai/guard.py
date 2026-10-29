@@ -221,7 +221,7 @@ def spend_settle(delta):
 
 
 # llm.chat 밖에서 바로 부르는 유료 호출(VLM 그림·쪽, 임베딩, 재랭크)의 호출당 예상 비용($) — 예산 선차감용(보수적 고정값, env로 덮어씀)
-_EST_USD = {"VLM": 0.02, "EMBED": 0.001, "RERANK": 0.001}
+_EST_USD = {"VLM": 0.02, "EMBED": 0.001}
 
 
 class ScopeExceeded(RuntimeError):

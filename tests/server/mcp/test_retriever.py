@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 from mcp_server import config as mc
-from mcp_server.services.search import rerank as RR
 from mcp_server.services.search.retriever import Retriever
 
 
@@ -79,58 +78,8 @@ def selftest():
         _selftest_graph()
         _selftest_client_hard()
         _selftest_concept_hits_client()
-        _selftest_rerank_gate()
     finally:
         _env.close()
-
-
-def _selftest_rerank_gate():
-    """AD4 — _search_ex가 담는 fused_top2가 rerank.should_rerank() 게이트까지 이어지는지(로컬 경로).
-    always(기본) = 신호 없어도 항상 재순위(기존 동작) · cond = 일반형·점수차 크고 문서 소수면 건너뜀·비교 질문이면 적용."""
-    import tempfile
-
-    import numpy as np
-
-    d = Path(tempfile.mkdtemp())
-    docs = [{"file_path": f"{i}.txt", "file_name": f"{i}.txt", "file_sha256": f"{i:064d}", "doc_format": ".txt"} for i in range(2)]
-    (d / "meta.json").write_text(json.dumps({"dim": 0}), encoding="utf-8")
-    (d / "docs.jsonl").write_text("\n".join(json.dumps(x, ensure_ascii=False) for x in docs) + "\n", encoding="utf-8")
-    chunks = [
-        {
-            "doc": i,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "단가는 100 USD",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        }
-        for i in range(2)
-    ]
-    (d / "chunks.jsonl").write_text("\n".join(json.dumps(c, ensure_ascii=False) for c in chunks) + "\n", encoding="utf-8")
-    np.save(d / "vectors.npy", np.zeros((2, 0), dtype="float32"))
-    R = Retriever(d)
-    orig_local = RR._score_local
-    RR._score_local = lambda q, texts: [texts.index(t) * 1.0 for t in texts]  # 결정적 더미 재정렬
-    _env = mc.senv(SEARCH_RERANK="stub")  # S7d — 설정 객체 덮기
-    try:
-        _env.enter_context(mc.senv(SEARCH_RERANK_WHEN="always"))
-        R.search("단가는?", 2, methods=["bm25"])
-        assert R.rerank_info.get("applied", True) is True  # 기본값 — 전과 동일(게이트 없음)
-
-        # 같은 텍스트 2건 — bm25 점수 동일(점수차 0) → 0<0 거짓, 신호 (a) 끔(GAP=0) · 문서 2개뿐 — 신호 (b)도 끔(SPREAD=99)
-        _env.enter_context(mc.senv(SEARCH_RERANK_WHEN="cond", SEARCH_RERANK_GAP="0", SEARCH_RERANK_SPREAD="99"))
-        R.search("단가는?", 2, methods=["bm25"])
-        assert R.rerank_info.get("applied") is False and "reason" in R.rerank_info  # 일반형 질문 → 건너뜀
-
-        R.search("단가 비교는?", 2, methods=["bm25"])
-        assert R.rerank_info.get("applied") is True  # 비교 질문(c) → 적용
-    finally:
-        RR._score_local = orig_local
-        _env.close()
-    print("[selftest] AD4 — Retriever가 fused_top2를 게이트까지 이어 always=기존과 동일·cond 신호 없으면 건너뜀 통과")
 
 
 def _selftest_recency():

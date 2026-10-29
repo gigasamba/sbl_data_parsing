@@ -655,61 +655,6 @@ def _selftest_agg_fx():
     print("[selftest] SEARCH_AGG_FX(BR43) — 통화 2개 이상 섞인 집계만 환율 근거 추가 · 단일 통화 영향 없음 · =0 통과")
 
 
-def _selftest_rerank_cond():
-    """AD4 — SEARCH_RERANK가 켜졌을 때만 응답에 rerank: {applied, reason[, ms]}(꺼짐=기존처럼 칸 자체 없음).
-    SEARCH_RERANK_WHEN=cond: 일반형 질문·점수차 크고 문서 소수면 건너뜀 · 비교 질문이면 적용."""
-    from mcp_server.services.search import rerank as RR
-
-    docs = [
-        {"file_path": "a.txt", "file_name": "a.txt", "file_sha256": "a" * 64, "doc_format": ".txt"},
-        {"file_path": "b.txt", "file_name": "b.txt", "file_sha256": "b" * 64, "doc_format": ".txt"},
-    ]
-    chunks = [
-        {
-            "doc": i,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "단가는 100 USD",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        }
-        for i in range(2)
-    ]
-    d = _mk_bundle(docs, chunks)
-    orig_local = RR._score_local
-    _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
-    try:
-        with mc.senv(SEARCH_RERANK=None):
-            off = do_search("단가는?", k=2, methods=["bm25"], decompose=False)
-            assert "rerank" not in off, off  # 꺼짐(기본) — 칸 자체 없음(바이트 동일)
-
-        RR._score_local = lambda q, texts: [texts.index(t) * 1.0 for t in texts]
-        with mc.senv(SEARCH_RERANK="stub", SEARCH_RERANK_WHEN="always"):
-            on_always = do_search("단가는?", k=2, methods=["bm25"], decompose=False)
-            assert on_always["rerank"]["applied"] is True and "ms" in on_always["rerank"], on_always["rerank"]  # 기본값 — 신호 없어도 항상
-
-        with mc.senv(
-            SEARCH_RERANK="stub",
-            SEARCH_RERANK_WHEN="cond",
-            SEARCH_RERANK_GAP="0",  # 같은 텍스트 2건 — 점수차 0, (a) 끔
-            SEARCH_RERANK_SPREAD="99",
-        ):  # 문서 2개뿐 — (b) 끔
-            skip = do_search("단가는?", k=2, methods=["bm25"], decompose=False)  # 일반형 질문 — (c)도 안 걸림
-            assert skip["rerank"] == {"applied": False, "reason": skip["rerank"]["reason"]} and "ms" not in skip["rerank"], skip["rerank"]
-
-            applied = do_search("단가 비교는?", k=2, methods=["bm25"], decompose=False)  # 비교 질문 — (c) 적용
-            assert applied["rerank"]["applied"] is True and "ms" in applied["rerank"], applied["rerank"]
-    finally:
-        RR._score_local = orig_local
-        _env.close()
-        _STATE.clear()
-    print("[selftest] AD4 SEARCH_RERANK_WHEN=cond — 응답 rerank: {applied, reason[, ms]} · 꺼짐=칸 없음 · always=항상 적용 통과")
-
-
 def _selftest_search_client_arg():
     """AD38 — do_search(client=...)가 Retriever.search_ex로 그대로 전달되는지(MCP 계층 통합 확인).
     꺼짐(기본)이면 바이트 동일(둘 다 나옴, 앞으로만) · SEARCH_CLIENT_HARD=1이면 다른 고객은 근거에서 완전히 빠짐."""
@@ -1136,7 +1081,6 @@ def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) 
     _selftest_graph_client_restrict()
     _selftest_br50_client_scope()
     _selftest_evidence_rdb_meta()
-    _selftest_rerank_cond()
     _selftest_query_log()
     _selftest_evidence_rep_path()
     _selftest_index_id()

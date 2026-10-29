@@ -16,7 +16,6 @@ from mcp_server import config as mc  # 설정 객체(mcp 칸 — S7d)
 from mcp_server.services.search import (
     clientscope as CS,  # BR50 고객 범위 단일 규칙(client_scope·allows, local.py·pgsearch.py·mcp_server.py와 공용)
 )
-from mcp_server.services.search import rerank as RR  # 선택 재순위 단계(G8, 기본 꺼짐)
 from mcp_server.services.search.local import Local, embed_query
 from mcp_server.services.search.terms import (  # 용어 사전(X3·X4, 구조화와 같은 규칙) · SI43⑤ 벡터 질의 별칭 덧붙이기(10-16 검색 전용으로 분리)
     expand_query,
@@ -163,17 +162,15 @@ class Retriever:
         G12 메타 먼저 거르기: 질문에 고객(이름·별칭 — 용어 사전 T3)이 나오면 그 고객 문서(고객 미상 포함)를 앞으로, 못 찾으면 전체.
         ponytail: 후보를 넓게(k×5) 뽑아 거르는 방식(기본) — 고객 문서가 후보 밖이면 못 잡음, SEARCH_CLIENT_HARD=1이면
         저장소 질의 단계에서 진짜 제한(client 참조).
-        재순위(G8, SEARCH_RERANK)가 켜지면 고객 거르기 다음 단계로 후보를 RERANK_TOP_N까지 넓혀 뽑고 다시 정렬 — self.rerank_info에 결과(꺼져있으면 동작 그대로).
-        AD4: SEARCH_RERANK_WHEN=cond면 _search_ex가 담아온 fused_top2(상위1·2 융합 점수, 저장소별 PG rrf·로컬 score)로 rerank.should_rerank() 게이트를 거침(기본 always는 게이트 없음).
         L3-1: 마지막으로 같은 문서군(family) 최신성 순위(demote, 안 지움) — self.recency_note에 결과(SEARCH_RECENCY=0이면 끔).
         단일 스레드 호출부(pipeline.py·stack_matrix.py 등)용 — note류를 self 속성에도 채운다. 공유 인스턴스를 여러 스레드가 쓰면(검색 MCP) search_ex를 쓴다(S12)."""
         hits, ms, notes = self.search_ex(q, k, methods, client=client)
         self.expand_notes, self.note = notes.get("expand_notes"), notes.get("note")
-        self.rerank_info, self.recency_note = notes.get("rerank_info"), notes.get("recency_note")
+        self.recency_note = notes.get("recency_note")
         return hits, ms
 
     def search_ex(self, q, k, methods=None, recency=None, client=None, client_only=False, client_strict=None, scope=None):
-        """search()와 같은 동작이지만 note류(expand_notes·note·rerank_info·recency_note)를 self 속성이 아니라
+        """search()와 같은 동작이지만 note류(expand_notes·note·recency_note)를 self 속성이 아니라
         반환값 notes(dict)로 준다 — 검색 MCP처럼 같은 Retriever를 여러 스레드가 동시에 쓸 때 A 요청 응답에 B의 note가
         섞이는 것을 막음(S12). recency: 이 질의 1건만 docmeta.recency_rerank 모드를 강제(None이면 env, AG1 engine-qa
         보완 — 전역 env를 바꾸면 동시에 도는 다른 질의가 섞임, S12와 같은 원칙).
@@ -194,7 +191,7 @@ class Retriever:
         scope(2026-10-20 통합 search) = 하드 필터 범위 **안** 문서 file_path 집합 — 주어지면 저장소 질의 단계부터 그
         문서의 청크만 후보로(PG는 pgsearch._scope_restrict·restrict, 로컬 묶음은 파이썬 거르기). None이면 전과 바이트 동일.
         반환: (hits, ms, notes)."""
-        n = max(k, RR._cand_n()) if RR.enabled() else k
+        n = k
         allowed, strict, hard = CS.client_scope(q, client, self.clients(), client_only=client_only, strict_override=client_strict)
         if allowed is None:
             hits, ms, notes = self._search_ex(q, n, methods, scope=scope)
@@ -208,12 +205,12 @@ class Retriever:
             else:
                 top = (inn + [h for h in hits if h not in inn])[:n]
                 hits = [{**h, "rank": i + 1} for i, h in enumerate(top)]
-        if scope:  # 2026-10-20 통합 search — 로컬 묶음 경로·남는 새는 것 방지(안전망, rerank 전에)
+        if scope:  # 2026-10-20 통합 search — 로컬 묶음 경로·남는 새는 것 방지(안전망)
             hits = [h for h in hits if (h.get("file_path") or "") in scope]
         for h in hits:  # pgvector·EDW 경로도 로컬 묶음 문서 메타로(같은 규칙, 묶음은 항상 로드됨)
             m = self.doc_meta.get(h.get("doc_key")) or {}
             h["doc_date"], h["version"], h["superseded"] = m.get("doc_date"), m.get("version"), m.get("superseded")
-        hits, notes["rerank_info"] = RR.rerank(q, hits, k, fused_top2=notes.get("fused_top2"))
+        hits = hits[:k]
         hits, notes["recency_note"] = DM.recency_rerank(hits, self.doc_meta, q, mode=recency)
         return hits, ms, notes
 
@@ -282,7 +279,6 @@ class Retriever:
                 }
                 for i, r in enumerate(rows)
             ]
-            fused_top2 = [r["rrf"] for r in rows[:2]]  # AD4 게이트용(상위1·2 융합 점수) — 저장소 모름, retriever에서만 씀
         else:
             L = self.local
             vr = None if keys is None else [self.key_local[x] for x in keys if x in self.key_local]
@@ -324,10 +320,7 @@ class Retriever:
                         **({"score": score.get(ci)} if evidence_gate_on() else {}),
                     }
                 )  # 꺼짐(=0)이면 예전처럼 score 없음(AD42 검토)
-            fused_top2 = [
-                score[ci] for ci in order[:2] if ci in score
-            ]  # AD4 게이트용 — SEARCH_EVIDENCE_GATE와 무관하게 늘 계산(hits에는 안 실림)
-        return hits, (time.perf_counter() - t0) * 1000, {"expand_notes": expand_notes, "note": note, "fused_top2": fused_top2}
+        return hits, (time.perf_counter() - t0) * 1000, {"expand_notes": expand_notes, "note": note}
 
     def clients(self):
         """적재된 고객사 이름 — 하위 질문 고객 맥락 보정용(decompose.keep_context).

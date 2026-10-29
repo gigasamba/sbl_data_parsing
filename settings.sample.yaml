@@ -143,12 +143,11 @@ mcp:
 #   common.text.search_en_stem:  # 검색 토큰의 영어 복수→단수 정규화(G16, 가산만) — =0이면 끔 · env=SEARCH_EN_STEM · bool · 기본 true [인계 지문] [끔: 0만]
 #   common.text.token_num_norm:  # 검색 토큰의 숫자·단위 정규화(T1) — =0이면 끄고 이전 동작 · env=TOKEN_NUM_NORM · bool · 기본 true [인계 지문] [끔: ''·0·none·false]
 
-# ─── 2-2. 모델 — LLM·VLM·임베딩·재순위·비용 가드 (50칸) ───
+# ─── 2-2. 모델 — LLM·VLM·임베딩·재순위·비용 가드 (45칸) ───
 #  [결과를 바꾸는 값(하이퍼파라미터)]
 #   common.models.embed.query_prefix:  # 질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …/nQuery: ') · env=EMBED_QUERY_PREFIX · str
 #   common.models.llm.extra_body:  # LLM 요청 본문에 합칠 JSON 객체(예: 생각 끄기 {'reasoning':{'enabled':false}}) · env=LLM_EXTRA_BODY · JSON(사전·목록)
 #   common.models.ocrvlm.model:  # OCR 전용 VLM 모델 이름(0.9B급 GLM-OCR·PaddleOCR-VL 등) · env=OCRVLM_MODEL · str [엔진 지문]
-#   common.models.rerank.model:  # 재순위 모델 이름 · env=RERANK_MODEL · str
 #   common.models.vlm.extra_body:  # VLM(·OCRVLM) 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기) · env=VLM_EXTRA_BODY · JSON(사전·목록)
 #   common.models.vlm.model_alt:  # 그림 검토 판정용 VLM 모델 이름(없으면 VLM_MODEL과 같음) · env=VLM_MODEL_ALT · str
 #  [기능 켬/끔]
@@ -156,7 +155,6 @@ mcp:
 #   common.models.llm.allow_external:  # LLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · env=LLM_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
 #   common.models.llm.empty_retry:  # 빈 응답(생각이 토큰 소진) 안전망 — =0이면 끔, 그 밖이면 max_tokens×4로 1회 재요청 · env=LLM_EMPTY_RETRY · bool · 기본 true [끔: 0만]
 #   common.models.ocrvlm.allow_external:  # OCR 전용 VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · env=OCRVLM_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
-#   common.models.rerank.allow_external:  # 재순위 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · env=RERANK_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
 #   common.models.vlm.allow_external:  # VLM 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요) · env=VLM_ALLOW_EXTERNAL · bool · 기본 false [켬: 1만]
 #  [운영값(동시성·시간·용량·경로·접속)]
 #   common.models.embed.dim:  # ping_models 점검에서 기대하는 임베딩 차원 수 · env=EMBED_DIM · int · 기본 4096
@@ -184,9 +182,6 @@ mcp:
 #   common.models.ocrvlm.api_key:  # OCR 전용 VLM 엔드포인트 API 키(있을 때만) · env=OCRVLM_API_KEY · SecretStr [비밀]
 #   common.models.ocrvlm.base_url:  # OCR 전용 VLM 엔드포인트 주소(OpenAI 호환 …/v1) · env=OCRVLM_BASE_URL · str
 #   common.models.ocrvlm.est_usd:  # OCR 전용 VLM 호출 1건당 예상 비용($) — 예산 선차감용 · env=OCRVLM_EST_USD · float · 기본 0.01
-#   common.models.rerank.api_key:  # 재순위(rerank) 엔드포인트 API 키(있을 때만) · env=RERANK_API_KEY · SecretStr [비밀]
-#   common.models.rerank.base_url:  # 재순위 엔드포인트 주소(TEI/Cohere 호환 /rerank) · env=RERANK_BASE_URL · str
-#   common.models.rerank.est_usd:  # 재순위 호출 1건당 예상 비용($) — 예산 선차감용 · env=RERANK_EST_USD · float · 기본 0.001
 #   common.models.transport.connect_timeout:  # 모델 서버 연결(connect) 전용 제한 시간(초) — 0 이하면 끔 · env=MODEL_CONNECT_TIMEOUT · float · 기본 10.0
 #   common.models.transport.down_after:  # 연속 연결 실패 몇 번이면 그 주소를 '다운'으로 보는가(회) · env=MODEL_DOWN_AFTER · int · 기본 3
 #   common.models.transport.down_cooldown:  # '다운' 판정 뒤 네트워크를 보내지 않고 즉시 거부하는 시간(초) · env=MODEL_DOWN_COOLDOWN · float · 기본 300.0
@@ -420,7 +415,7 @@ mcp:
 #   pipeline.load.publish.source_system:  # 병렬 파싱 경로에서 게시 행에 기록하는 source_system 이름 · env=PM_SOURCE_SYSTEM · str · 기본 FileStorageMap [빈 글자 유지]
 #   pipeline.load.publish.upload_statuses:  # 원본을 업로드할 파싱 상태 목록(콤마 — 비면 parsing_meta.DEFAULT_UPLOAD_STATUSES) · env=PM_UPLOAD_STATUSES · 목록(쉼표 또는 YAML 목록) · 기본 ok,partial
 
-# ─── 2-7. mcp — 검색 서버·검색 동작 (78칸) ───
+# ─── 2-7. mcp — 검색 서버·검색 동작 (71칸) ───
 #  [결과를 바꾸는 값(하이퍼파라미터)]
 #   mcp.search.methods:  # search 기본 검색 방법(쉼표 목록: vector,bm25,id,graph 등) · env=MCP_METHODS · 목록(쉼표 또는 YAML 목록) · 기본 vector,bm25,id
 #   mcp.search.min_score:  # 근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak · env=SEARCH_MIN_SCORE · float
@@ -429,12 +424,6 @@ mcp:
 #   mcp.search.agg.llm_min:  # 집계 LLM 분류 확신도 하한(0~1) — 미달이면 검색으로 폴백 · env=SEARCH_AGG_LLM_MIN · float · 기본 0.6
 #   mcp.search.graph.concept_per:  # 개념 2홉 확장에서 개념당 청크 수(개) · env=SEARCH_GRAPH_CONCEPT_PER · int · 기본 1
 #   mcp.search.graph.concept_seeds:  # 개념 2홉 씨앗으로 쓰는 개념 수 상한(개) · env=SEARCH_GRAPH_CONCEPT_SEEDS · int
-#   mcp.search.rerank.gap:  # 조건부 재순위(WHEN=cond)에서 상위 1·2위 융합 점수 차 문턱 · env=SEARCH_RERANK_GAP · float · 기본 0.02
-#   mcp.search.rerank.max_chars:  # 재순위 모델에 넣는 후보 본문 최대 글자 수 · env=RERANK_MAX_CHARS · int · 기본 1200
-#   mcp.search.rerank.mode:  # 재순위 방식 — off, local(cross-encoder), api:<모델>(RERANK_BASE_URL 필요) · env=SEARCH_RERANK · str · 기본 off
-#   mcp.search.rerank.spread:  # 조건부 재순위(WHEN=cond)에서 후보가 흩어진 문서 수 문턱(개) · env=SEARCH_RERANK_SPREAD · int · 기본 3
-#   mcp.search.rerank.top_n:  # 재순위에 넣는 후보 수(개) · env=RERANK_TOP_N · int · 기본 30
-#   mcp.search.rerank.when:  # 재순위 적용 시점 — always(항상) 또는 cond(효과 있을 때만) · env=SEARCH_RERANK_WHEN · str · 기본 always
 #   mcp.search.weights.bm25:  # RRF 융합에서 BM25 가중치 · env=SEARCH_W_BM25 · float · 기본 1.0
 #   mcp.search.weights.bm25_table:  # 집계 질문일 때 BM25 가중치(SEARCH_TYPE_WEIGHTS 켠 경우) · env=SEARCH_W_BM25_TABLE · float · 기본 0.2
 #   mcp.search.weights.id:  # RRF 융합에서 ID(드문 식별자) 가중치 · env=SEARCH_W_ID · float · 기본 2.0
@@ -492,7 +481,6 @@ mcp:
 #   mcp.search.agg.text_max_src_rows:  # 계약별 근거 행 상한(개) · env=SEARCH_AGG_TEXT_MAX_SRC_ROWS · int · 기본 40
 #   mcp.search.pg.filter_exact_max:  # 고객 필터 허용 집합이 이 크기 이하면 벡터 정확 검색으로 전환(청크 수) · env=PG_FILTER_EXACT_MAX · int · 기본 20000
 #   mcp.search.pg.vector_search:  # 벡터 검색 방식 — exact면 색인 없이 정확 검색, 비우면 근사(HNSW) · env=PG_VECTOR_SEARCH · str
-#   mcp.search.rerank.timeout_ms:  # 재순위 호출 시간 상한(밀리초) — 넘으면 원 순서로 폴백 · env=RERANK_TIMEOUT_MS · int · 기본 3000
 #   mcp.server.allowed_hosts:  # 비루프백 바인드 때 추가로 허용할 Host(쉼표 목록, 리버스 프록시 이름 등) · env=MCP_ALLOWED_HOSTS · 목록(쉼표 또는 YAML 목록) · 기본 (빈 목록)
 #   mcp.server.instructions:  # MCP 서버 instructions 글자(도구 안내문) 교체 · env=MCP_INSTRUCTIONS · str
 #   mcp.server.manifest:  # 수집 manifest.jsonl 경로(문서 유형·버전·삭제 여부 출처) · env=MCP_MANIFEST · str

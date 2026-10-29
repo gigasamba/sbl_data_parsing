@@ -193,7 +193,6 @@ METHODS = ["vector", "bm25", "id"]  # 범위 축소(그래프·image·openviking
 SERVER_ONLY_ENV = (
     "MCP_METHODS",
     "MCP_DECOMPOSE",
-    "SEARCH_RERANK",
     "SEARCH_RECENCY",
     "QUERY_EXPAND",
     "SEARCH_EVIDENCE_GATE",

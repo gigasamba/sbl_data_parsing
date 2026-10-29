@@ -29,7 +29,6 @@ from tests.server.mcp.test_search_svc import (
     _selftest_graph_client_restrict,
     _selftest_index_id,
     _selftest_query_log,
-    _selftest_rerank_cond,
     _selftest_search_client_arg,
     _selftest_search_notes_no_race,
 )
@@ -105,7 +104,6 @@ def selftest():
     _selftest_list_documents()
     _selftest_list_documents_latest_only_doc_id()
     _selftest_evidence_rdb_meta()
-    _selftest_rerank_cond()
     _selftest_query_log()
     _selftest_evidence_rep_path()
     _selftest_evidence_image_fetch()

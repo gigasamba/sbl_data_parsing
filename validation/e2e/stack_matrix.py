@@ -1079,11 +1079,6 @@ def run_r(store, config, post_cfg, ds, combo, base_env, s_target, skey, limit=No
             return json.loads(out_file.read_text(encoding="utf-8")), "reused"
     env = base_env.copy()
     env["MCP_BUNDLE"], env["MCP_STORE"] = str(s_target / "bundle"), config.get("mcp_store", "local")
-    env["SEARCH_RERANK"] = combo["rerank"]
-    env["RERANK_TOP_N"] = str(config["retrieve"].get("rerank_top_n", 30))
-    env["RERANK_TIMEOUT_MS"] = str(
-        config["retrieve"].get("rerank_timeout_ms", 120000)
-    )  # 실험은 넉넉히(CPU 7초/질의 — 3초 기본이면 전부 대체돼 비교 무효였음, 10-03)
     reuse = config.get("reuse_bundles", {}).get(ds) or {}
     if reuse.get("roster"):
         env["CLIENT_ROSTER"] = reuse["roster"]
@@ -1417,7 +1412,7 @@ def cmd_run_pool(config, a):
     from common.ai.guard import check_scope  # AD43 — cmd_run과 같은 가드(풀 조합 비교도 같은 위험)
 
     check_scope(
-        [base_env.get("LLM_BASE_URL"), base_env.get("VLM_BASE_URL"), base_env.get("EMBED_BASE_URL"), base_env.get("RERANK_BASE_URL")],
+        [base_env.get("LLM_BASE_URL"), base_env.get("VLM_BASE_URL"), base_env.get("EMBED_BASE_URL")],
         n_combos=len(combos),
     )
     results, layers_used, run_meta = [], [], []
@@ -1435,9 +1430,6 @@ def cmd_run_pool(config, a):
         layers_used.append({"layer": "s", "dir": str(target), "stale": stale})
         env = base_env.copy()
         env["MCP_BUNDLE"], env["MCP_STORE"] = str(target / "bundle"), config.get("mcp_store", "local")
-        env["SEARCH_RERANK"] = combo["rerank"]
-        env["RERANK_TOP_N"] = str(config["retrieve"].get("rerank_top_n", 30))
-        env["RERANK_TIMEOUT_MS"] = str(config["retrieve"].get("rerank_timeout_ms", 120000))
         res, status, rkey, r_target = run_pool_r(store, skey, combo, env, a.pool, members, target / "rename_map.json", a.limit)
         layers_used.append({"layer": "r", "dir": str(r_target), "stale": False})
         if isinstance(res, dict) and "error" in res and "retrieval" not in res:
@@ -1483,7 +1475,7 @@ def cmd_run(config, a):
     from common.ai.guard import check_scope
 
     check_scope(
-        [base_env.get("LLM_BASE_URL"), base_env.get("VLM_BASE_URL"), base_env.get("EMBED_BASE_URL"), base_env.get("RERANK_BASE_URL")],
+        [base_env.get("LLM_BASE_URL"), base_env.get("VLM_BASE_URL"), base_env.get("EMBED_BASE_URL")],
         n_combos=len(combos),
     )
     with_distractors = bool(getattr(a, "with_distractors", False))
@@ -1525,11 +1517,6 @@ def cmd_run(config, a):
         if ds_llm:
             env = base_env.copy()
             env["MCP_BUNDLE"], env["MCP_STORE"] = str(target / "bundle"), config.get("mcp_store", "local")
-            env["SEARCH_RERANK"] = combo["rerank"]
-            env["RERANK_TOP_N"] = str(config["retrieve"].get("rerank_top_n", 30))
-            env["RERANK_TIMEOUT_MS"] = str(
-                config["retrieve"].get("rerank_timeout_ms", 120000)
-            )  # 실험은 넉넉히(CPU 7초/질의 — 3초 기본이면 전부 대체돼 비교 무효였음, 10-03)
             reuse = config.get("reuse_bundles", {}).get(ds) or {}
             if reuse.get("truth"):
                 env["LLM_SYNTHETIC_TRUTH"] = reuse["truth"]
@@ -1974,8 +1961,6 @@ def cmd_answer_pool(config, a):
         rename_map_file = target / "rename_map.json"
         env = base_env.copy()
         env["MCP_BUNDLE"], env["MCP_STORE"] = str(target / "bundle"), config.get("mcp_store", "local")
-        env["SEARCH_RERANK"] = combo["rerank"]
-        env["RERANK_TIMEOUT_MS"] = str(config["retrieve"].get("rerank_timeout_ms", 120000))
         env["LLM_CACHE_DIR"] = str(store / "llm_cache")
         ds_list = [ds for ds in members if ds not in (DISTRACTOR_DS, DISTRACTOR_V2_DS) and (MM.VALID / ds / "qa.json").exists()]
         if (MM.VALID / DISTRACTOR_V2_DS / "qa.json").exists():
@@ -2057,8 +2042,6 @@ def cmd_answer_context_only(config, a):
                 continue
             env = base_env.copy()
             env["MCP_BUNDLE"], env["MCP_STORE"] = str(target / "bundle"), config.get("mcp_store", "local")
-            env["SEARCH_RERANK"] = combo["rerank"]
-            env["RERANK_TIMEOUT_MS"] = str(config["retrieve"].get("rerank_timeout_ms", 120000))
             tmp = run_dir / "raw" / "context" / combo["name"] / f"{ds}.json"
             args = [
                 PY,
@@ -2147,8 +2130,6 @@ def cmd_answer_estimate(config, a):
                 continue
             env = base_env.copy()
             env["MCP_BUNDLE"], env["MCP_STORE"] = str(target / "bundle"), config.get("mcp_store", "local")
-            env["SEARCH_RERANK"] = combo["rerank"]
-            env["RERANK_TIMEOUT_MS"] = str(config["retrieve"].get("rerank_timeout_ms", 120000))
             tmp = run_dir / "raw" / "estimate" / combo["name"] / f"{ds}.json"
             args = [
                 PY,
@@ -2270,8 +2251,6 @@ def cmd_answer(config, a):
         if need:
             env = base_env.copy()
             env["MCP_BUNDLE"], env["MCP_STORE"] = str(target / "bundle"), config.get("mcp_store", "local")
-            env["SEARCH_RERANK"] = combo["rerank"]
-            env["RERANK_TIMEOUT_MS"] = str(config["retrieve"].get("rerank_timeout_ms", 120000))
             reuse = config.get("reuse_bundles", {}).get(ds) or {}
             for key, ev in (("roster", "CLIENT_ROSTER"), ("truth", "LLM_SYNTHETIC_TRUTH")):
                 if reuse.get(key):
@@ -2360,8 +2339,6 @@ def cmd_preflight(config, a):
                 continue
             env = base_env.copy()
             env["MCP_BUNDLE"], env["MCP_STORE"] = str(target / "bundle"), config.get("mcp_store", "local")
-            env["SEARCH_RERANK"] = combo["rerank"]
-            env["RERANK_TIMEOUT_MS"] = str(config["retrieve"].get("rerank_timeout_ms", 120000))
             tmp = run_dir / "raw" / "preflight" / combo["name"] / f"{ds}.json"
             args = [
                 PY,

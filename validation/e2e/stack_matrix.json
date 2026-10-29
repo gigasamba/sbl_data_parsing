@@ -110,8 +110,7 @@
    ]
   ],
   "rerank_candidates": [
-   "off",
-   "bge-reranker-v2-m3"
+   "off"
   ],
   "rerank_top_n": 30,
   "k_candidates": [

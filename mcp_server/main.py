@@ -13,8 +13,6 @@
     더 찾아 진짜 환율 패턴일 때만 집계 근거 text 끝에 붙인다(단일 통화면 영향 없음).
     근거마다 doc_type·version·supersedes_doc_id·is_deleted·contract_id·updated_at·company는 RDB 문서 위치 메타(AD44
     manifest)에 그 문서가 있을 때만(없으면 칸 자체가 없음).
-    SEARCH_RERANK가 켜져 있을 때만(기본 꺼짐, G8): SEARCH_RERANK_WHEN=cond(기본 always)면 점수차·문서흩어짐·비교/최신
-    질문 신호가 있을 때만 재순위(AD4, 지연 절감) — 응답에 rerank: {applied, reason[, ms]}.
   (2026-10-20 사용자 결정·같은 날 통합 · 10-21 파싱 도구 추가) MCP 노출 도구는 search·query_edw·parse_document·edw_meta — 문서 목록(list_documents)·문서 단건
     (get_document)·그림(get_image)·근거 이미지(get_evidence_image)·집계 질의(aggregate)·요건별 연구(research)·용어(lookup_term)·
     개념(related)·describe_edw는 노출에서 뺐다. 내부 구현(do_*)은 search 안쪽 경로·셀프테스트만 남아 있고 MCP로는 호출 불가.

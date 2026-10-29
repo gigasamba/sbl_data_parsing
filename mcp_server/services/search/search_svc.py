@@ -418,18 +418,6 @@ def do_search(
     exn = r_notes.get("expand_notes")  # X3 — BM25 질의 확장(용어 사전)이 적용됐으면 표시
     if exn:
         notes.append("용어 확장: " + "; ".join(exn))
-    ri = r_notes.get("rerank_info")  # 재순위(G8·AD4) — 꺼짐(backend=off)이면 알리지 않음
-    rerank_out = {}
-    if ri and ri.get("backend") != "off":
-        if ri.get("applied") is False:  # AD4 SEARCH_RERANK_WHEN=cond — 효과 없을 신호라 건너뜀
-            notes.append(f"재순위: {ri['backend']} · 건너뜀({ri.get('reason')})")
-            rerank_out = {"rerank": {"applied": False, "reason": ri.get("reason")}}
-        else:
-            notes.append(
-                f"재순위: {ri['backend']}"
-                + (f" fallback({ri['fallback']})" if ri.get("fallback") else f" · {ri['n']}개 · {ri['ms']:.0f}ms")
-            )
-            rerank_out = {"rerank": {"applied": True, "reason": ri.get("reason"), "ms": ri.get("ms")}}
     if r_notes.get("recency_note"):  # L3-1 — 같은 문서군 최신성 순위가 적용됐으면 표시
         notes.append(r_notes["recency_note"])
     if "graph" in methods and hits:
@@ -496,7 +484,6 @@ def do_search(
             "notes": notes,
             "ms": round(ms, 1),
             **gate,
-            **rerank_out,
             **({"index_id": index_id} if index_id else {}),
             **({"filter": hard, "scope_docs": scope_docs} if hard else {}),
         }

@@ -141,7 +141,7 @@ def selftest():
             "common:\n  run_env: local\n  connections:\n    edw:\n      encrypt: yes\n      trust_cert: no\n      port: '1433'\n"
             "    object_storage:\n      verify_tls: 1\n    pg:\n      password: 1234\n      db: True\n"
             "    parsing_meta:\n      sqlite: 2026-10-27\n"
-            "  models:\n    rerank:\n      allow_external: true\n    vlm:\n      allow_external: '1'\n"
+            "  models:\n    embed:\n      allow_external: true\n    vlm:\n      allow_external: '1'\n"
             "    guard:\n      internal_host_suffixes: [corp, 10]\n"
             "      internal_ip_ranges: 10\n"
             "    llm:\n      extra_body: {reasoning: {enabled: no}, n: 1}\n  runtime:\n    cpu_max_load: 5\n",
@@ -164,7 +164,7 @@ def selftest():
         )
         check(
             "YAML 켜기 칸(VS7a2 R-c): true → True · '1' → True · 숫자 칸 5 → 5.0 · 목록 [corp, 10] → 글자",
-            sy.common.models.rerank.allow_external is True
+            sy.common.models.embed.allow_external is True
             and sy.common.models.vlm.allow_external is True
             and sy.common.runtime.cpu_max_load == 5.0
             and sy.common.models.guard.internal_host_suffixes == ["corp", "10"],
@@ -635,7 +635,7 @@ def selftest():
         ua = d / "ua.yaml"
         ua.write_text(
             "common:\n  paths:\n    glossary_dir: /g\npipeline:\n  extract:\n    ocr:\n      dpi: 150\n  connections:\n    rdb:\n      password: dummy-ua\n"
-            "mcp:\n  search:\n    rerank:\n      top_n: 7\n",
+            "mcp:\n  search:\n    weights:\n      id: 7\n",
             encoding="utf-8",
         )
         ua_bad = d / "ua_bad.yaml"
@@ -646,7 +646,7 @@ def selftest():
             env_e = {"SETTINGS_FILE": str(f), "RAG_MODULE": mod, "RUN_ENV": "dev"}
             try:
                 pin_env(env_e)
-                seen[(mod, f.name)] = (env_e.get("GLOSSARY_DIR"), env_e.get("OCR_DPI"), "RDB_PASSWORD" in env_e or "RERANK_TOP_N" in env_e)
+                seen[(mod, f.name)] = (env_e.get("GLOSSARY_DIR"), env_e.get("OCR_DPI"), "RDB_PASSWORD" in env_e or "SEARCH_W_ID" in env_e)
             except SettingsError:
                 seen[(mod, f.name)] = "거부"
         ocr = "150" if has_p else None

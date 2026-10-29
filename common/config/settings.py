@@ -1389,16 +1389,6 @@ class CommonModelsOcrvlm(Section):
     model: str | None = F(None, "OCRVLM_MODEL", "OCR 전용 VLM 모델 이름(0.9B급 GLM-OCR·PaddleOCR-VL 등)", pinned="engine")
 
 
-class CommonModelsRerank(Section):
-    allow_external: bool | None = F(
-        False, "RERANK_ALLOW_EXTERNAL", "재순위 외부 주소 허용 첫째 잠금(=1, LLM_SYNTHETIC_TRUTH도 필요)", on=("1",)
-    )
-    api_key: SecretStr | None = F(None, "RERANK_API_KEY", "재순위(rerank) 엔드포인트 API 키(있을 때만)")
-    base_url: str | None = F(None, "RERANK_BASE_URL", "재순위 엔드포인트 주소(TEI/Cohere 호환 /rerank)")
-    est_usd: float | None = F(0.001, "RERANK_EST_USD", "재순위 호출 1건당 예상 비용($) — 예산 선차감용")
-    model: str | None = F(None, "RERANK_MODEL", "재순위 모델 이름")
-
-
 class CommonModelsTransport(Section):
     connect_timeout: float | None = F(10.0, "MODEL_CONNECT_TIMEOUT", "모델 서버 연결(connect) 전용 제한 시간(초) — 0 이하면 끔")
     down_after: int | None = F(3, "MODEL_DOWN_AFTER", "연속 연결 실패 몇 번이면 그 주소를 '다운'으로 보는가(회)")
@@ -1625,7 +1615,6 @@ class CommonModels(Section):
     guard: CommonModelsGuard = Field(default_factory=CommonModelsGuard)
     llm: CommonModelsLlm = Field(default_factory=CommonModelsLlm)
     ocrvlm: CommonModelsOcrvlm = Field(default_factory=CommonModelsOcrvlm)
-    rerank: CommonModelsRerank = Field(default_factory=CommonModelsRerank)
     transport: CommonModelsTransport = Field(default_factory=CommonModelsTransport)
     vlm: CommonModelsVlm = Field(default_factory=CommonModelsVlm)
 
