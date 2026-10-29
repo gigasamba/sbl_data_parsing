@@ -478,7 +478,7 @@ def main():
         "skipped.jsonl",
         ".gitkeep",
     }  # 원본에서 지워졌거나 중복으로 빠진 파일 → out에서도 뺌(skipped.jsonl은 누적 기록이라 안 지움)
-    for q in out.iterdir():  #   (뒤 단계 묶음·PostgreSQL 정리 --prune이 따라감)
+    for q in out.iterdir():  #   (뒤 단계 묶음이 따라감 — PostgreSQL은 안 지움, pl-13)
         if (q.is_file() or q.is_symlink()) and q.name not in names:
             q.unlink()
             gone += 1

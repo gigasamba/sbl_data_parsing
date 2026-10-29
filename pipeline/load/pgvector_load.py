@@ -5,7 +5,8 @@ PostgreSQL은 Docker로(이미지 = dev_server_pgvector 브랜치의 pgvector/pg
 접속: PG_CONN_FILE=<KEY=VALUE 파일> 또는 환경변수 PG_HOST(127.0.0.1) · PG_PORT(5432) · PG_DB(rag) · PG_USER(rag) · PG_PASSWORD · PG_SCHEMA(ai)
 드라이버: psycopg 3(반입 휠 assets/wheels/psycopg*) — 비밀번호는 파일·환경변수에만.
 
-명령: check · deploy · load(묶음 → 한 트랜잭션, 같은 sha 건너뜀, --replace · --prune) — 검색은 modules/search/pgsearch.py
+명령: check · deploy · load(묶음 → 한 트랜잭션, 같은 문서 건너뜀, --replace) — 검색은 modules/search/pgsearch.py
+load는 더하고 고치기만 한다 — 이번 묶음에 없는 문서를 지우지 않는다(pl-13, 사용자 10-29: 원천에서 지운 문서·파싱 실패는 로컬 기록만).
 S8a — deploy는 확인(vector 확장·남의 스키마·차원) 뒤 migrate(common.store.db.dbtool up --target search — Alembic 기준판)를 부른다.
 load는 판 기록을 먼저 본다(없으면 경고 뒤 계속, 끝보다 낮거나 모르는 판이면 종료 2).
 """
@@ -42,10 +43,10 @@ def _has_marker(db):
 
 
 def _require_marked_schema(db):
-    """--replace·--prune은 우리가 만든 스키마(load_run 표가 있음)에서만(XS3) — 표식 없는 기존 스키마는 남의 것일 수 있어 거부."""
+    """--replace는 우리가 만든 스키마(load_run 표가 있음)에서만(XS3) — 표식 없는 기존 스키마는 남의 것일 수 있어 거부."""
     if not _has_marker(db):
         raise SystemExit(
-            f"--replace·--prune 거부: 스키마 {db.schema}에 우리 표식(load_run)이 없음 — "
+            f"--replace 거부: 스키마 {db.schema}에 우리 표식(load_run)이 없음 — "
             "남의 기존 스키마일 수 있음(deploy로 먼저 만들거나 다른 PG_SCHEMA 사용)"
         )
 
@@ -150,26 +151,10 @@ def drop_terms(cur, s, doc_ids):
     cur.execute(f"DELETE FROM {_tbl(s, 'term_stat')} WHERE df <= 0")
 
 
-def prune(cur, s, paths):
-    """이번 묶음(전체 원본)에 없는 문서 = 삭제·내용이 바뀐 원본의 옛 기록 → 지움(2026-10-20 축소 — file_path 기준, chunk CASCADE).
-    묶음 문서가 저장된 문서의 PRUNE_MIN_RATIO(기본 0.5)보다 적으면 일부만 만든 묶음일 수 있어 거부(PRUNE_FORCE=1이면 진행)."""
-    cur.execute(f"SELECT doc_id, file_path FROM {s}.doc")
-    rows = cur.fetchall()
-    gone = [d for d, p in rows if p not in paths]
-    if not gone:
-        return 0
-    if len(paths) < float(pc.cfg().load.prune_min_ratio) * len(rows) and not pc.cfg().load.prune_force:
-        raise SystemExit(
-            f"정리 거부: 묶음 문서 {len(paths)}개 < 저장 {len(rows)}개의 절반 — 일부만 만든 묶음일 수 있음(확실하면 PRUNE_FORCE=1)"
-        )
-    drop_terms(cur, s, gone)
-    cur.execute(f"DELETE FROM {_tbl(s, 'doc')} WHERE doc_id = ANY(%s)", (gone,))  # chunk는 ON DELETE CASCADE
-    return len(gone)
-
-
-def load(db, bundle, replace=False, do_prune=False):
-    if replace or do_prune:
-        _require_marked_schema(db)  # XS3 — 남의 기존 스키마에 --replace·--prune 금지
+def load(db, bundle, replace=False):
+    """묶음 → 한 트랜잭션. 저장된 문서(file_path 같음)는 건너뜀(replace면 지우고 다시 넣음 — 고치기). 묶음에 없는 저장 문서는 그대로 둠(pl-13)."""
+    if replace:
+        _require_marked_schema(db)  # XS3 — 남의 기존 스키마에 --replace 금지
     import numpy as np
 
     B = Path(bundle)
@@ -265,7 +250,6 @@ def load(db, bundle, replace=False, do_prune=False):
                 ):  # 머리말 포함(G9) — 규칙은 common.core.text
                     cp.write_row((term, ci_db[ci], min(tf, 32767)))
                     n_terms += 1
-        n_pruned = prune(cur, s, [docs[i]["file_path"] for i in doc_id]) if do_prune else 0
         # 문서 빈도: 새 청크 단어만 더함(지운 문서는 drop_terms에서 뺌). 비었거나 BM25_STAT_REBUILD=1이면 전체 다시 셈
         cur.execute(f"SELECT NOT EXISTS (SELECT 1 FROM {s}.term_stat)")
         if cur.fetchone()[0] or pc.cfg().load.bm25_stat_rebuild:
@@ -282,7 +266,7 @@ def load(db, bundle, replace=False, do_prune=False):
                         ON CONFLICT (id) DO UPDATE SET n_chunks = EXCLUDED.n_chunks, avg_len = EXCLUDED.avg_len, dim = EXCLUDED.dim""",
             (meta["dim"],),
         )
-        counts = {"docs": len(doc_id), "chunks": len(sel), "terms": n_terms, "pruned": n_pruned, "sec": round(time.time() - t0, 1)}
+        counts = {"docs": len(doc_id), "chunks": len(sel), "terms": n_terms, "sec": round(time.time() - t0, 1)}
         cur.execute(f"UPDATE {s}.load_run SET finished_at = now(), counts = %s WHERE run_id = %s", (json.dumps(counts), run))
     return counts
 
@@ -292,7 +276,6 @@ def main(argv=None):
     ap.add_argument("cmd", choices=["check", "deploy", "load"])
     ap.add_argument("--bundle", default="output/edw/bundle")
     ap.add_argument("--replace", action="store_true")
-    ap.add_argument("--prune", action="store_true", help="이번 묶음에 없는 문서(삭제·내용이 바뀐 원본의 옛 기록)를 지움")
     a = ap.parse_args(argv)
     db = pg_connect()
     print(
@@ -320,7 +303,7 @@ def main(argv=None):
             from common.store.db import dbtool
 
             dbtool.require_current(db.q, "search", db.schema)
-        print(json.dumps(load(db, a.bundle, a.replace, a.prune), ensure_ascii=False))
+        print(json.dumps(load(db, a.bundle, a.replace), ensure_ascii=False))
 
 
 if __name__ == "__main__":

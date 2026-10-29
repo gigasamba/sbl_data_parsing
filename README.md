@@ -304,7 +304,7 @@ docker exec sbl-mcp-pg psql -U rag -d rag -c "SELECT version_id, name, is_active
 ```
 
 - 이미 적재한 문서를 다시 넣을 때는 `--replace`를 붙인다.
-- ⚠️ `--prune`을 단독으로 쓰지 않는다 — 바뀌지 않아 건너뛴 문서까지 지워지는 알려진 결함이 있다(C-60). 필요하면 `--replace --prune`.
+- 적재는 더하고 고치기만 한다 — 이번 묶음에 없는 문서(원천에서 지운 문서 포함)를 PostgreSQL에서 지우지 않는다(`--prune` 없앰 — pl-13, 사용자 10-29). 지워야 하면 사람이 따로 한다.
 
 **(선택) MCP 없이 검색만 확인**
 
