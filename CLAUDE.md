@@ -79,7 +79,7 @@
 ```bash
 PYTHONPATH=. .venv/bin/python -c "import common as c; from common.core import artifacts as a; print(c.FINGERPRINT, {l: a.code_fp(l) for l in sorted(a.LAYER_CODE)})"
 ```
-현재 값(10-29 `feature/settings-cleanup` — 설정 정리·기능 삭제·`feature/test-parallel` 병합 뒤, 엔진 핑거프린트 27개 그대로): `FINGERPRINT ffa201eed4aed21a` · a `e3b0c44298fc` · p0 `94d2e1f25c95` · p1 `f0361f4dd6c6` · r `b6b57d05bf59` · s `0d3fb05765c8`. 리팩토링 중 값이 바뀐 과정과 되돌리는 방법은 [refactor.md](refactor.md) 부록 1~3에 있다.
+현재 값(10-29 `feature/settings-cleanup` — 설정 정리·기능 삭제·`feature/test-parallel` 병합 뒤, 엔진 핑거프린트 27개 그대로): `FINGERPRINT ffa201eed4aed21a` · a `e3b0c44298fc` · p0 `93ec91af2426` · p1 `95884df63474` · r `5942c410d895` · s `932af9fc8548`. 리팩토링 중 값이 바뀐 과정과 되돌리는 방법은 [refactor.md](refactor.md) 부록 1~3에 있다.
 
 **운영 접속 가드(필수):**
 - `deploy/host/scripts/run_docs.py`는 **PC에서 실행하지 않는다**(운영 EDW와 Object Storage에 접속한다). PC에서는 문법 확인, `--help`, `configure()`까지만 확인한다.
