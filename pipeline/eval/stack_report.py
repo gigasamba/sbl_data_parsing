@@ -291,17 +291,6 @@ def fmt_ci(ci):
     return f"[{lo:+.3f}, {hi:+.3f}]"
 
 
-def availability_note(n, valid=True, min_n=5):
-    """F8 — 미실행/데이터 부족/무효를 하나의 'n/a'로 뭉치지 않는다."""
-    if n is None or n == 0:
-        return "미실행"
-    if valid is False:
-        return "무효(정답 문서 포함률<95%)"
-    if n < min_n:
-        return f"데이터 부족(n={n}<{min_n})"
-    return None
-
-
 def human_label(combo_name):
     """F9 — 콤보 기술 이름 옆 사람말 라벨."""
     if combo_name == "baseline":

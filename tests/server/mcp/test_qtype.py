@@ -2,7 +2,20 @@
 
 import json
 
-from mcp_server.services.search.qtype import classify, eval_labels
+from common.core.paths import RES_ROOT
+from mcp_server.services.search.qtype import classify
+
+
+def eval_labels():
+    """resources/vocab/qtype_labels.json(질문 글자만 보고 손으로 붙인 라벨) → (정확도, 혼동 행렬) — 10-30 앱 코드(qtype.py)에서 옮김(시험만 씀, e2-17)."""
+    items = json.loads((RES_ROOT / "vocab" / "qtype_labels.json").read_text(encoding="utf-8"))
+    confusion, correct = {}, 0
+    for it in items:
+        qtype, _ = classify(it["question"])
+        confusion.setdefault(it["type"], {}).setdefault(qtype, 0)
+        confusion[it["type"]][qtype] += 1
+        correct += qtype == it["type"]
+    return correct / len(items), confusion
 
 
 def selftest():

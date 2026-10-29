@@ -82,7 +82,6 @@ MOVED_TOOLS = {
         "rdb_discover",
         "gen_roster",
         "glossary_suggest",
-        "kg_external",
         "make_questions",
         "run_combo",
         "report",

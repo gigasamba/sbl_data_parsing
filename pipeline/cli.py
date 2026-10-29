@@ -1013,7 +1013,6 @@ _STAGE4_TOOLS = frozenset(
         *(
             f"pipeline.eval.{n}"
             for n in (
-                "kg_external",
                 "make_questions",
                 "run_combo",
                 "report",

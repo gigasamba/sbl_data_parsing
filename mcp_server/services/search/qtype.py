@@ -23,14 +23,12 @@ docstring 참고). 그래서 두 결과가 같은 질문에서 어긋날 수 있
 """
 
 import copy
-import json
 import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 from common.core.docmeta import RE_LATEST_QUESTION  # noqa: E402 — 최신판 질문 단서(L3-1과 같은 규칙)
-from common.core.paths import RES_ROOT  # noqa: E402 — 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
 from mcp_server.services.search.aggregate import COUNT_RE, LIST_RE, MAXMIN_RE, SUM_RE  # noqa: E402 — 집계·목록 단서 재사용
 
 _AVG_RE = re.compile(r"평균|average|\bavg\b", re.I)  # AD1 aggregate(평균)은 기존 조각에 없어 새로 둠
@@ -68,18 +66,3 @@ def classify(question):
         if rx.search(q):
             return qtype, copy.deepcopy(cfg)
     return DEFAULT_TYPE, copy.deepcopy(DEFAULT_CONFIG)
-
-
-def eval_labels(path=None):
-    """resources/vocab/qtype_labels.json(질문 글자만 보고 손으로 붙인 라벨) → (정확도, 혼동 행렬 {정답유형: {예측유형: 건수}})."""
-    p = Path(path) if path else RES_ROOT / "vocab" / "qtype_labels.json"
-    items = json.loads(p.read_text(encoding="utf-8"))
-    confusion = {}
-    correct = 0
-    for it in items:
-        qtype, _ = classify(it["question"])
-        gold = it["type"]
-        confusion.setdefault(gold, {}).setdefault(qtype, 0)
-        confusion[gold][qtype] += 1
-        correct += qtype == gold
-    return correct / len(items), confusion

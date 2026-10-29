@@ -15,7 +15,6 @@ from validation.e2e.stack_matrix import (
     AXES,
     CONFIG_PATH,
     DISTRACTOR_DS,
-    DISTRACTOR_V2_DS,
     PROJ_ROOT,
     _answer_eval,
     _distractor_cache,
@@ -33,7 +32,6 @@ from validation.e2e.stack_matrix import (
     ofat_combos,
     p1_dir,
     p1_status,
-    pool_distractor_files,
     pool_fp,
     pool_r_parts,
     qa_fp,
@@ -234,12 +232,6 @@ def cmd_selftest(config, a):
     ev3 = [{"file_name": "gold.pdf"}] + [{"file_name": f"n{i}.pdf"} for i in range(8)] + [{"file_name": "old.pdf"}]
     rank3, conf3 = _rank_confusion(ev3, {"old.pdf"}, gold_rank=1)
     check("_rank_confusion: 정답보다 늦어도 top10 안이면 오인", rank3 == 10 and conf3 is True)
-
-    # BR42 — pool_distractor_files: v1+v2만 모으고 다른 데이터셋은 제외(measure.py의 distractors-v2 풀 행이
-    # distractor_files_for(DISTRACTOR_V2_DS)로 늘 빈 집합을 받던 결함의 대체 lookup)
-    rmap_fixture = {(DISTRACTOR_DS, "a.pdf"): "a.pdf", (DISTRACTOR_V2_DS, "b.pdf"): "b.pdf", ("dsX", "c.pdf"): "c.pdf"}
-    check("pool_distractor_files: v1+v2 합집합, 다른 데이터셋 제외", pool_distractor_files(rmap_fixture) == {"a.pdf", "b.pdf"})
-    check("pool_distractor_files: rename_map 없으면 빈 집합", pool_distractor_files(None) == set())
 
     # W20 — must_not 위반(실제 synth-confuse spec.json, 읽기만)
     with tempfile.TemporaryDirectory() as td4:

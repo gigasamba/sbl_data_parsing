@@ -7,7 +7,6 @@ import pipeline.eval.stack_report as M
 from pipeline.eval.stack_report import (
     POOL_V2_DS,
     TABS,
-    availability_note,
     build_context,
     build_data_quality_warnings,
     build_html,
@@ -217,9 +216,6 @@ def cmd_selftest():
     check("fmt_ms: 정수", fmt_ms(991.4989628315094) == "991")
     check("human_label: baseline", human_label("baseline") == "기준 조합")
     check("human_label: post=none", "끔" in human_label("post=none"))
-    check("availability_note: 미실행", availability_note(0) == "미실행")
-    check("availability_note: 무효", availability_note(10, valid=False) == "무효(정답 문서 포함률<95%)")
-    check("availability_note: 데이터 부족", availability_note(2) is not None and "부족" in availability_note(2))
 
     # G1 — 손으로 다시 계산해 pooled_rate가 맞는지 확인(무효 세트 제외 + 문항 단위 풀링, 세트 평균 아님).
     idx_syn = {

@@ -103,11 +103,11 @@ Remove unused functions found by the 10-29 audit. Why: dead code costs reading t
 - Removed 10-29 (no caller, fingerprints unchanged): `parse_env_file` (`common/config/migrate.py`), `_lane_push` (`deploy/host/scripts/run_docs.py`), `_bg_img` (`mcp_server/routers/dispatch.py`), `_scan_paren` (`mcp_server/services/edw_query.py`), `_local_sidecar_name` (`pipeline/load/parsing_meta.py`), module `pipeline/tools/check_runlog.py` (one-time runs.jsonl lock check — restore from git if needed).
 - Left: `fields_table` (`common/config/settings.py`) — wait for the next fingerprint release (`checklist` went with `decompose.py`, 10-29); tests only — `do_evidence_image`, `do_related` (`internal_docs.py`), `eval_labels` (`qtype.py`), `availability_note` (`stack_report.py`), `raster_chart_values` (`chart_values.py`, layer p1), `pool_distractor_files` (`stack_matrix.py`).
 - Decided (user 10-30 grill): delete the tests-only ones too, with their tests ([e2-18](#e2-18)).
-- Status: todo
+- Status: done (10-30, `feature/drop-unused`) — 지움: `do_evidence_image`·`do_related`(`internal_docs.py`), `availability_note`(`stack_report.py`), `pool_distractor_files`(`stack_matrix.py`) + 그 시험 줄. `eval_labels`는 앱 코드(`qtype.py`)에서 지우고 시험(`test_qtype.py`)으로 옮김 — 유형 라우터 정확도 점검은 남김. 남김(지문 보호 — 사람 결정 필요): `raster_chart_values`(`chart_values.py`, 레이어 p1), `fields_table`(`common/config/settings.py`, 모든 레이어) — 지문을 바꾸는 판에서.
 
 ## e2-18
 Delete code with no requirement (gaps §2, user 10-30 grill). Why: unused paths still read removed columns and cost upkeep.
 - Delete: `internal_docs.py` hidden-doc functions (6, incl. document get/list that still SELECT removed doc columns), wiki tools, external KG adapter, tests-only functions ([e2-17](#e2-17)), scorers for deleted eval sets ([e2-10](#e2-10)).
 - Keep: `PARSE_STREAM`, shadow mode, `MCP_EVIDENCE_PATHS`, `SEARCH_TIE_BREAK`, SQLite fallback, registry CLI, mail attachments, glossary/roster tools, nightly timer, `os_put`, server checks.
 - Rule: MCP tool names and input/output stay unchanged; stop and ask if one would change.
-- Status: todo
+- Status: done (10-30, `feature/drop-unused`) — 지움: `internal_docs.py`의 `do_get_document`·`do_get_image`·`do_evidence_image`·`do_lookup_term`·`do_related`·`do_list_documents`와 그것만 쓰던 도우미 12개(MCP 도구 아님 — 도구 이름·입출력 그대로), 개념 위키 `pipeline/transform/structure/wiki.py`, 외부 KG 어댑터 `pipeline/eval/kg_external.py`(LightRAG·Cognee·Graphiti), 지운 세트 채점기 `pipeline/eval/chart_values_score.py`(e2-10에 이름이 있는 것만), 시험만 쓰던 함수(e2-17) + 각 시험. 지문 그대로. 남김: `wiki_draft.py`(용어 사전 LLM 초안 — 남길 목록의 용어 사전 도구로 봄, `common/ai/adk.py`가 가리킴), `validation/e2e/graph_llm.py`(run_combo의 LLM 그래프 모드 — e2-10 평가 도구 정리 때), `diagram_edges_score.py`(e2-10에 이름 없음), `retriever._concept_top`(이제 부르는 곳 없음 — 레이어 r 파일이라 지문 바꾸는 판에서).

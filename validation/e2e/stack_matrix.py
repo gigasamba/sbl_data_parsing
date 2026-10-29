@@ -131,16 +131,6 @@ def distractor_unique_ids(ds):
     return {q["id"] for q in distractor_targets()["questions"] if q.get("dataset") == ds and q.get("unique_under_distractors")}
 
 
-def pool_distractor_files(rename_map):
-    """BR42 — 풀(pool.json) 안의 방해 문서 파일명 전체(v1 synth-distractors + v2 구판, 풀 접두 반영) — rename_map의
-    키 데이터셋이 DISTRACTOR_DS·DISTRACTOR_V2_DS인 값만 모은다. distractor_files_for(ds)는 ds가 targets.json의
-    source_dataset(원 데이터셋, 예 synth-plant)일 때만 맞는 lookup이라 — measure.py의 distractors-v2 풀 행처럼
-    ds가 풀 자신의 이름(synth-distractors-v2)이면 늘 빈 집합이 됐다(BR42: frac_distractor_above_gold5 n=0).
-    이 함수는 질문의 원 데이터셋과 무관하게 풀 전체 기준(_pool_retrieve_eval의 distractor_confusion·oldver_confusion과
-    같은 재료)이라 — 호출부에서 ds를 고를 필요가 없다."""
-    return {n for (d, _o), n in (rename_map or {}).items() if d in (DISTRACTOR_DS, DISTRACTOR_V2_DS)}
-
-
 def distractor_fp(ds=DISTRACTOR_DS):
     """방해 문서 원본 묶음(synth-distractors·기본, v2도 같은 방식) 지문 — src_fp(ds)와 같은 방식, 다시 만들면 바뀜."""
     import hashlib

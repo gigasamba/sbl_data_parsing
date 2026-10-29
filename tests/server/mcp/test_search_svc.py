@@ -8,7 +8,7 @@ from pathlib import Path
 from mcp_server import config as mc
 from mcp_server.schemas.evidence import _EVIDENCE_BASE_KEYS, _MANIFEST_EXTRA_KEYS
 from mcp_server.services.search import search_svc as M
-from mcp_server.services.search.internal_docs import do_aggregate, do_get_document, do_get_image, do_lookup_term
+from mcp_server.services.search.internal_docs import do_aggregate
 from mcp_server.services.search.search_svc import do_search
 from mcp_server.services.search.server_state import _STATE, CALLER
 from mcp_server.services.search.shaping import evidence_status
@@ -874,15 +874,6 @@ def _selftest_br50_client_scope():
         off = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False, client="Acme Co")
         assert {e.get("file_name") for e in off["evidence"] if e.get("file_name")} >= {"a.txt", "b.txt"}, off["evidence"]
 
-        doc_off = do_get_document("b.txt", client="Acme Co")
-        assert doc_off.get("file_name") == "b.txt" and "error" not in doc_off, doc_off
-
-        term_off = do_lookup_term("VI", client="Acme Co")
-        assert set(term_off["docs"]) == {"a.txt", "b.txt"}, term_off
-
-        img_off, _ = do_get_image("img-b", client="Acme Co")
-        assert "error" not in img_off, img_off
-
         agg_off = do_aggregate(q_contract)  # client 없음 — 바이트 동일(남의 계약ID라도 그대로 찾아짐)
         assert agg_off.get("answer") == "500 USD", agg_off
         agg_off_cl = do_aggregate(q_contract, client="Acme Co")  # HARD 꺼짐인데 client만 줌 — 영향 없음(바이트 동일)
@@ -893,21 +884,6 @@ def _selftest_br50_client_scope():
         on = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False, client="Acme Co")
         assert "b.txt" not in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # core·concept 둘 다 빠짐(F)
         assert "a.txt" in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # 자기 고객 근거는 그대로
-
-        doc_on = do_get_document("b.txt", client="Acme Co")
-        assert doc_on.get("error"), doc_on  # 다른 고객 — 거부(I)
-        doc_on_self = do_get_document("a.txt", client="Acme Co")
-        assert doc_on_self.get("file_name") == "a.txt" and "error" not in doc_on_self, doc_on_self  # 자기 고객 — 그대로
-        doc_on_noclient = do_get_document("b.txt")  # 켬이지만 client 인자를 안 줌 — 알려진 한계(그대로, 바이트 동일)
-        assert "error" not in doc_on_noclient, doc_on_noclient
-
-        term_on = do_lookup_term("VI", client="Acme Co")
-        assert set(term_on["docs"]) == {"a.txt"}, term_on  # 다른 고객 청크·문서 제외(I)
-
-        img_on, _ = do_get_image("img-b", client="Acme Co")
-        assert img_on.get("error"), img_on  # 다른 고객 그림 — 거부(I)
-        img_on_self, _ = do_get_image("img-a", client="Acme Co")
-        assert "error" not in img_on_self, img_on_self
 
         agg_on = do_aggregate(q_contract, client="Acme Co")  # D — Beta Inc 계약ID를 적어도 범위 밖이라 "집계 아님"으로 빠짐
         dump_on = json.dumps(agg_on, ensure_ascii=False)
