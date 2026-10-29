@@ -63,16 +63,19 @@ def kill_group(p):
     else:
         import signal
 
-        for sig in (signal.SIGTERM, signal.SIGKILL):  # SIGTERM 뒤 10초 안에 안 끝나면 묶음째 SIGKILL
-            try:
-                os.killpg(p.pid, sig)
-            except ProcessLookupError:
-                break
-            try:
-                p.wait(timeout=10)
-                break
-            except subprocess.TimeoutExpired:
-                continue
+        # SIGTERM 뒤 10초 기다린 다음 묶음째 SIGKILL — 맨 위 자식이 먼저 끝나도 SIGTERM을 무시한 손자가 파이프를 붙잡지 않도록 항상 보냄
+        try:
+            os.killpg(p.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            p.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            os.killpg(p.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
     p.communicate()
 
 
