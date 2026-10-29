@@ -37,6 +37,7 @@ import sys
 import threading
 from pathlib import Path
 
+from common.core import exitclean  # pl-27 — 띄운 자식은 종료 때 회수
 from common.core.console import utf8_stdout
 
 CG = Path("/sys/fs/cgroup")
@@ -206,7 +207,9 @@ def gated_popen(args, settle=None, log=print, **kwargs):
     with _LAUNCH:
         u = wait_mem(start_pct=lim, log=log)
         wait_cpu(log=log)
-        pr = subprocess.Popen(args, **kwargs)
+        pr = exitclean.track(
+            subprocess.Popen(args, **kwargs), group=bool(kwargs.get("start_new_session"))
+        )  # pl-27 — 끝날 때 아직 돌면 끝내고 회수
         if u is not None and u >= lim - _f("MEM_SETTLE_MARGIN", 5):
             time.sleep(settle if settle is not None else _f("MEM_SETTLE_SEC", 2))
     return pr
