@@ -56,7 +56,7 @@
 │  ├─ docker/           Dockerfile(타깃 pipeline, mcp) · requirements · entrypoint.sh · wheels/(폐쇄망용 휠)
 │  ├─ release/          이미지 빌드·전송(build_ship, ship_stage) · 오버레이 패치 번들(make_patch) · 배포 판정(selftest_gate, known_fail.txt) · 커밋 전 점검(lint_changed.sh)
 │  └─ host/             서버 호스트에서 실행하는 것 — compose/ · systemd/(새벽 배치, keepalive) · scripts/(trigger, run_tool, mcp_up, settings_env, run_docs 등)
-├─ tests/               테스트 — server/(이미지에 포함, 배포 판정) · general/(PC 전용) · fixtures/ · runner.py
+├─ tests/               테스트 — server/(이미지에 포함, 배포 판정) · general/(PC 전용) · fixtures/(프롬프트 사례 — 읽는 테스트 없음, refactor.md C-63) · runner.py
 ├─ validation/          PC 전용 검증 도구(이미지에 포함되지 않음)
 │  ├─ search_ui/        검증 페이지 — 검색 MCP와 pgvector를 브라우저로 확인
 │  └─ e2e/              평가·비교 도구(stack_matrix, model_matrix, graph_llm, answer_gen) · triple_extract 프롬프트
