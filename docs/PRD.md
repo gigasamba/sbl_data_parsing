@@ -8,7 +8,6 @@
 - pl-22 파싱 phase 없애기 — dev, `feature/r2-phase` 병합됨 → 서버 확인(refactor.md C-65), VLM 동시 수 손잡이는 후속.
 - pl-27 프로세스 종료 정리 — dev, `feature/exit-cleanup` 병합됨 → code_fp 모든 레이어 바뀜(다음 반입에서 재처리).
 - pl-25 DB 스키마 명세 — dev, `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인.
-- do-04 문서 재구성 2부 — `feature/doc-cleanup-2` → PR(1부는 PR #21로 병합).
 
 ## ETL — 수집·퍼블리시·적재·DB (etl)
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
