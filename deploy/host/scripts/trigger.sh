@@ -2,8 +2,8 @@
 # 모듈 트리거(1회 실행) — docs/architecture.md. 개발 서버 시험·나중의 새벽 배치(deploy/host/systemd/)가 같은 스크립트를 부름.
 #   bash deploy/host/scripts/trigger.sh parse|structure|load|publish|all|night [모듈 인자…]   (코드 폴더 루트에서 — S6b, 옛 docker/trigger.sh)
 #   publish(SI39) = 대표 결과(.md) Object Storage 업로드 + EDW 메타(cli/publish_parse.py --apply) — "all"에 포함(파싱 직후)
-#   night(OP13) = 자정 배치 순서(NIGHTLY_MODULES, 기본 "parse publish structure load") — ENABLED와 무관하게 요청하면 바로 돎
-#     (스케줄 ON/OFF 게이트는 이 스크립트가 아니라 deploy/host/systemd/data-pipeline-nightly.service의 NIGHTLY_ENABLED 확인 몫 — §env-guide 1-3)
+#   night(OP13) = 자정 배치 순서(NIGHTLY_MODULES, 기본 "parse publish structure load") — 시각과 무관하게 요청하면 바로 돎
+#   scheduled = 타이머용 — NIGHTLY_TIME 시각(5분 창)에만 night(아래 — §env-guide 1-3)
 #     NIGHTLY_PUBLISH=1(기본)이면 publish 실행 · parse 단계는 PARSE_DEADLINE 있으면 전달, 새 문서 상한은 NIGHTLY_MAX_NEW(기본 2000)
 #     이 night(컨테이너별 모듈 트리거, OP13 정본)과 cli/pipeline.py의 night()(한 프로세스 안 단계별 마감 예산)은
 #     서로 다른 배포 모양(compose 여러 컨테이너 ↔ 단일 컨테이너·Docker 밖 직접 실행, AGENTS.md 45행)을 각자 맡음 —
@@ -23,7 +23,21 @@ cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트(
 . deploy/host/scripts/image_vars.sh   # S6b — compose.pipeline.yml은 두 이미지 변수를 다 치환하므로 둘 다 확인(옛 변수만 있으면 종료 코드 2)
 need_image pipeline || exit 2; need_image mcp || exit 2
 DC="docker compose -f deploy/host/compose/compose.pipeline.yml"
-mod=${1:?parse|structure|load|all|night}; shift || true
+mod=${1:?parse|structure|load|all|night|scheduled}; shift || true
+# scheduled(pl-32, 사용자 10-30) = systemd 타이머가 5분마다 부름 — settings.yaml pipeline.host.nightly.time(NIGHTLY_TIME, HH:MM)이
+# 비면 조용히 끝(새벽 배치 없음), 지금이 그 시각부터 5분 안이면 night로 이어감. 켬/끔과 시각은 이 칸 하나(옛 NIGHTLY_ENABLED·고정 01:00 대신).
+if [ "$mod" = "scheduled" ]; then
+  t=${NIGHTLY_TIME:-}
+  [ -z "$t" ] && exit 0
+  case "$t" in
+    [01][0-9]:[0-5][0-9] | 2[0-3]:[0-5][0-9]) ;;
+    *) echo "[trigger] NIGHTLY_TIME 형식 오류(HH:MM이어야 함) — 새벽 배치 안 돎" >&2; exit 2 ;;
+  esac
+  now=$(date +%H:%M)
+  d=$(( (10#${now%%:*} * 60 + 10#${now#*:}) - (10#${t%%:*} * 60 + 10#${t#*:}) ))
+  if [ "$d" -lt 0 ] || [ "$d" -ge 5 ]; then exit 0; fi
+  mod=night
+fi
 run() {
   echo "[trigger] $(date '+%F %T') $1 시작"
   $DC run --rm "$1" "$1" "${@:2}"; rc=$?          # compose run의 인자는 command를 덮음 → 모듈 이름을 다시 줌

@@ -123,7 +123,7 @@
 ## pl-23 · 증분 실행만, 전체 재파싱은 명시적인 전체 e2e
 - 이유: 엔진·핸드오프·코드 핑거프린트가 모든 문서에서 바뀌었다. 전체 자동 재파싱은 밤 작업 시간을 넘긴다(C-52, C-08).
 - 결정(사용자 10-29 grill): 밤 작업과 `run_docs`는 핑거프린트가 바뀌어도 **새** 문서만 처리한다. "새" = `AI.FileStorageMap.s3_key`가 아직 `AI.ParsingMeta`에 없음(s3 키만 — 갱신 시각 확인 없음, `run_docs`는 이미 이렇게 동작). 전체 재파싱은 사람이 전체 e2e를 시작할 때만(가끔 — 로직을 바꾼 뒤, 결과를 검토). 이 판의 첫 적재는 전체 e2e 한 번.
-- 결정(사용자 10-30 grill): 밤 배치는 꺼 둔다(systemd 타이머와 `pipeline.host.nightly.enabled` false). 나중에 사람이 settings.yaml에서 켠다. 실행 시각은 지금 정하지 않는다.
+- 결정(사용자 10-30 grill): 밤 배치는 꺼 둔다(settings.yaml `pipeline.host.nightly.time` 비움 — 10-30 pl-32에서 `nightly.enabled` 대신 시각 칸 하나). 나중에 사람이 settings.yaml에 시각을 적어 켠다.
 - 지금 안 씀: FileStorageMap 갱신 시각 — 가정한 칸 `last_modified_time`, 나중에 EDW 예시에 추가([pl-25](#pl-25)).
 - 파일: `deploy/host/scripts/run_docs.py`(처리 끝난 집합), `pipeline/cli.py`(`night` — 같게 동작하는지 확인).
 - Status: todo
@@ -255,7 +255,7 @@
 | LLM 요약 | `EDW_SUMMARY_LLM=0`(앞부분) | LLM |
 | 임베딩 | 이미지 기본 `PIPE_EMBED=api` | `EMBED_BASE_URL`, `EMBED_MODEL` |
 | Object Storage + `AI.ParsingMeta` 게시 | `night`, run_docs, 이미지 `publish` 단계에서 기본 실행(모두 `--apply`, `NIGHTLY_PUBLISH=1`) | `PM_BUCKET`, `common.connections.rdb` 쓰기 계정(`PM_BUCKET` 없으면 종료) |
-| 밤 일정 | `NIGHTLY_ENABLED=0` | — |
+| 밤 일정 | `NIGHTLY_TIME` 비움 | 시각(HH:MM) |
 | `--prune`, `vector` 확장 만들기 | 선택 · `PG_CREATE_EXTENSION=0` | — |
 | trigger 서버 | — | `TRIGGER_TOKEN`(없으면 시작 거부) |
 

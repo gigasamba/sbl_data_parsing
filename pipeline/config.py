@@ -158,7 +158,12 @@ class PipelineExtractStream(Section):
 
 
 class PipelineHostNightly(Section):
-    enabled: bool | None = F(False, "NIGHTLY_ENABLED", "새벽 배치 타이머 켬/끔 — 1이면 실행, 그 외엔 로그 1줄 남기고 종료")
+    REMOVED = frozenset({"enabled"})  # 사용자 10-30(pl-32) — 켬/끔은 time 하나로(비우면 새벽 배치 없음)
+    time: str | None = F(
+        None,
+        "NIGHTLY_TIME",
+        "새벽 배치 시작 시각(HH:MM, 서버 시간) — 비우면 새벽 배치 없음. 타이머가 5분마다 깨워 이 시각부터 5분 안이면 시작(trigger.sh scheduled)",
+    )
     max_new: int | None = F(2000, "NIGHTLY_MAX_NEW", "새벽 배치 parse가 밤당 처음 파싱할 문서 수 상한(건)")
     modules: WordList | None = F(
         ["parse", "publish", "structure", "load"], "NIGHTLY_MODULES", "새벽 배치가 차례로 돌릴 모듈(공백 구분 목록 — trigger.sh 기본)"

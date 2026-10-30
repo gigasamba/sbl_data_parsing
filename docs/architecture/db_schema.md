@@ -209,7 +209,7 @@
 | content_group | TEXT | 같은 글 묶음 id | registry `content_groups` | 〃 | 유지 |
 | value_changes | TEXT | 바뀐 값 목록(JSON) | registry `link_editions` | 〃 | 유지 |
 | source_keys | TEXT | `원천::원본 키` 목록(JSON — 지금 sha256↔원본 키 다리) | registry `apply` | registry `link_editions` | 유지 |
-| fail_count | INTEGER | 연속 파싱 실패 수 | registry `apply` | registry `nightly_plan`, registry_cli | 유지 |
+| fail_count | INTEGER | 연속 파싱 실패 수 | (없음 — 10-30 pl-32: 코드가 안 씀) | (없음) | **삭제**(0.1.0 마이그레이션 — PR 3a, D-7 묶음) |
 
 ### struct.doc_registry_seen
 

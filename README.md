@@ -494,7 +494,7 @@ bash deploy/host/scripts/mcp_up.sh     # 여러 번 실행해도 안전 — 꺼�
 | ------ | ----------------------------------------- | ---------------------------------------------------------------- | ------------------------- | --------------- | ------------------------------- |
 | 모듈 하나씩 | `trigger.sh parse` → `structure` → `load` | 사람이 차례로                                                          | 따로 `trigger.sh publish`   | 그 모듈만 끝남        | **E→T→L만 하고 싶을 때(권장)** · 단계별 확인 |
 | 한 번에   | `trigger.sh all`                          | parse → publish → structure → load                               | ⚠️ **항상 실행**              | 거기서 멈춤          | publish 대상(버킷·EDW 쓰기 계정)이 준비된 뒤 |
-| 새벽 배치  | `trigger.sh night`(systemd 01:00)         | `pipeline.host.nightly.modules`(기본 parse publish structure load) | `nightly.publish`가 켜졌을 때만 | 건너뛰고 다음 모듈로     | 정기 운영                           |
+| 새벽 배치  | `trigger.sh night`(systemd — `nightly.time` 시각)         | `pipeline.host.nightly.modules`(기본 parse publish structure load) | `nightly.publish`가 켜졌을 때만 | 건너뛰고 다음 모듈로     | 정기 운영                           |
 | 문서별 흐름 | `run_docs.py`                             | 문서마다 파싱 → 구조화 → 적재 → publish(스트리밍)                               | 포함                        | —               | 대량 처리                           |
 
 
@@ -507,7 +507,7 @@ bash deploy/host/scripts/trigger.sh publish     # ④ Object Storage 업로드 +
 
 # 한 번에 / 새벽 배치 순서
 bash deploy/host/scripts/trigger.sh all         # parse → publish → structure → load(publish 항상 포함)
-bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서를 지금 바로(nightly.enabled와 무관하게 실행)
+bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서를 지금 바로(nightly.time과 무관하게 실행)
 ```
 
 - 앞 모듈의 완료 표시가 없으면 다음 모듈은 종료 코드 3으로 멈춘다(1-2). 새 입력이 없으면 건너뛴다.
@@ -520,7 +520,7 @@ bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서를 지금
 | 무엇                                                 | 방법                                                                                                                                                            |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 검색 MCP 상주 확인                                       | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_up.sh`                                                                                             |
-| 새벽 배치                                              | systemd `data-pipeline-nightly.timer`(매일 01:00 — 시각은 `.timer`의 `OnCalendar`). **스위치가 두 개다:** 타이머 + settings.yaml `pipeline.host.nightly.enabled: true`(기본 꺼짐) |
+| 새벽 배치                                              | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `pipeline.host.nightly.time: "HH:MM"`(그 시각부터 5분 안에 시작 — 비우면 새벽 배치 없음, 기본 비움 · pl-32) |
 | 상주 트리거 서버(선택 — 웹 업로드에서 파싱 직접 호출, `run_docs.py`가 씀) | `docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-parse data-pipeline-structure`                                                |
 | MCP `parse_document` 작업 서비스                        | compose가 띄우지 않으므로 파싱 컨테이너가 다시 시작될 때마다: `docker exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service`                                           |
 
