@@ -1147,10 +1147,11 @@ def represent(stack, parse_dir, src=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument(
+    sg = ap.add_mutually_exclusive_group()  # 둘 다 주면 거부(종료 2) — 파일은 PC 실험·시험 전용, 생산 경로는 판 번호만(pl-32)
+    sg.add_argument(
         "--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 판: --stack-version > STACK_VERSION > PC 파일, pl-32)"
     )
-    ap.add_argument("--stack-version", type=int, default=None, help="엔진 구성 판 번호(진입점이 넘김)")
+    sg.add_argument("--stack-version", type=int, default=None, help="엔진 구성 판 번호(진입점이 넘김)")
     ap.add_argument("--parse-dir", default="output/parse")
     ap.add_argument("--src", default=None, help="파싱한 문서 폴더(원본 경로·sha256을 대표 결과에 남김 — 구조화 모듈이 원본 없이 돌 때 씀)")
     a = ap.parse_args(argv)

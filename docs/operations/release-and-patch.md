@@ -272,7 +272,7 @@ $DC run --rm load migrate check --target all
       set-sources --file /tmp/server_sources.json --check-columns --reason "서버 덮어쓰기 이관(C-12)" --by "<사람>"
   ```
   - 바꾸기·되돌리기: `set-stack --parse … --reason …`(새 버전 + 활성 — 이미지에 없는 엔진이면 종료 2) · `set-stack --activate <버전 번호> --reason …`(되돌리기) · 원천 목록도 같은 꼴(`set-sources`). 오래 도는 검색 MCP는 시작 때 읽으므로 버전을 바꾼 뒤 다시 띄운다(`mcp_up.sh`) — 파싱 MCP 서비스는 작업마다 다시 읽는다. 자세히 [docs/architecture/pipeline_stack.md](../architecture/pipeline_stack.md).
-  - 재사용 키: 엔진·프롬프트·핸드오프 핑거프린트는 그대로. 파이프라인은 버전 사본 `_stack/stack-v<버전>-<sha8>.json`을 쓰므로 **첫 실행에 AD41 색인(`index`)이 한 번 다시 지어진다**(입력 핑거프린트가 git 파일 바이트 → 사본 바이트 — `refactor.md` C-50). 회사 DB `AI.ParsingMeta.pipeline_version`은 사본과 무관(버전 표기 `pipeline_version()` — §5 "버전" · D-036 · `refactor.md` C-62).
+  - 재사용 키: 엔진·프롬프트·핸드오프 핑거프린트는 그대로. 엔진 구성 입력 지문은 판의 정규 바이트(`stackcfg.snapshot_bytes` — 0.1.0 pl-32에서 사본 파일을 없앴지만 바이트는 같음)라 S8b 판 표로 처음 옮길 때 **첫 실행에 AD41 색인(`index`)이 한 번 다시 지어진다**(입력 핑거프린트가 git 파일 바이트 → 판 바이트 — `refactor.md` C-50). 회사 DB `AI.ParsingMeta.pipeline_version`은 판과 무관(버전 표기 `pipeline_version()` — §5 "버전" · D-036 · `refactor.md` C-62).
 - **계정의 기본 스키마가 우리 스키마여도 같음(VS8a B-1):** DB 계정의 `search_path`가 우리 스키마로 정해져 있거나(`ALTER ROLE … SET search_path`), 계정 이름 = 스키마 이름(`"$user"`), `PG_SCHEMA=public`이어도 ②가 표·컬럼을 그대로 비교한다. S8a 버전으로 버전을 기록했다면(그때는 "표 없음"만 보이고 ③-b가 컬럼이 다른 스키마도 기록했음) 지금 버전에서 ②를 다시 돌려 차이 0인지 확인한다.
 - **모르는 리비전:** 버전 표에 코드가 모르는 리비전이 하나라도 있으면(새 이미지 → 옛 이미지로 되돌린 뒤 등) 적재·`up`·`stamp` 모두 종료 2.
 - PC: `python -m common.store.db.dbtool <up|stamp|current|check> --target …`([CLAUDE.md](../../CLAUDE.md) §6 — 전용 PG에 처음 한 번 `up --target struct`) · 기본 스키마·vector 확장 자리 사례 `--pg-cases orca_<새 이름>`(새 테스트 DB를 만듦 — PC 전용).

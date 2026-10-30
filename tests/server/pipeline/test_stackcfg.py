@@ -74,3 +74,16 @@ def selftest():
 
 def test_main():  # 옛 `if "--selftest" in sys.argv:` 갈래
     raise SystemExit(selftest())
+
+
+def test_stack_file_and_version_refused_together():
+    """--stack(파일 — PC 실험·시험 전용)과 --stack-version(생산 경로)을 같이 주면 거부(종료 2 — 코디네이터 10-30, pl-32)."""
+    from pipeline.transform.represent import represent
+    from pipeline.transform.structure import build_bundle
+
+    for main in (represent.main, build_bundle.main):
+        try:
+            main(["--stack", "x.json", "--stack-version", "3"])
+            raise AssertionError(f"{main.__module__}: 둘 다 줬는데 거부 안 됨")
+        except SystemExit as e:
+            assert e.code == 2, (main.__module__, e.code)

@@ -45,9 +45,9 @@ def selftest():
         g.mkdir()
         (g / "domain_terms.csv").write_text("a", encoding="utf-8")
         e1 = {"GLOSSARY_DIR": str(g)}
-        i1 = inputs(Path(d), Path(d) / "none.json", e1)
+        i1 = inputs(Path(d), b"", e1)
         (g / "domain_terms.csv").write_text("b", encoding="utf-8")
-        i2 = inputs(Path(d), Path(d) / "none.json", e1)
+        i2 = inputs(Path(d), b"", e1)
         assert i1["glossary"] != i2["glossary"] and {k: v for k, v in i1.items() if k != "glossary"} == {
             k: v for k, v in i2.items() if k != "glossary"
         }
