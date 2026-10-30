@@ -40,7 +40,10 @@ for t in "${TARGETS[@]}"; do
   $DOCKER build --network=none -f deploy/docker/Dockerfile.bake --target "$t" \
     --build-arg RUNTIME_IMAGE="$rt" --build-arg RUNTIME_ID="$rid" \
     --build-arg APP_VERSION="$(app_version)" --build-arg VCS_REF="$commit" -t "$tag" .
-  bash deploy/release/selftest_gate.sh $DOCKER run --rm "$tag" selftest   # 코드 폴더 마운트 없이 — [판정] 통과여야 다음으로
-  OUT="$OUT" DOCKER="$DOCKER" CODE_BUNDLE="$BUNDLE" bash deploy/release/ship_stage.sh "$TAG" "$t"
+  # 판정·저장이 실패하면 구운 태그를 지운다(다시 실행이 "이미 있는 태그"로 막히지 않게)
+  bash deploy/release/selftest_gate.sh $DOCKER run --rm "$tag" selftest \
+    || { echo "[bake] 반입 판정 실패 — $tag 지움" >&2; $DOCKER rmi "$tag" >/dev/null || true; exit 1; }   # 코드 폴더 마운트 없이
+  OUT="$OUT" DOCKER="$DOCKER" CODE_BUNDLE="$BUNDLE" bash deploy/release/ship_stage.sh "$TAG" "$t" \
+    || { echo "[bake] 저장 실패 — $tag 지움" >&2; $DOCKER rmi "$tag" >/dev/null || true; exit 1; }
 done
 echo "[bake] 끝 — $OUT 아래 조각·sha256을 운영 서버로 옮겨 재조립·load(release-and-patch.md §1-2)"

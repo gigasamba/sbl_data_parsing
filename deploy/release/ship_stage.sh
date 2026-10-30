@@ -43,7 +43,8 @@ stage_one() {
   # `if stage_one`에서는 set -e가 꺼짐 — 저장 실패(디스크 부족 등)를 직접 실패로(잘린 조각에 sha256을 만들지 않게)
   $DOCKER save "$tag" | gzip -1 | split -b "$CHUNK" -d -a 3 - "$dir/$target.tar.gz.part" \
     || { echo "[ship_stage] 저장 실패: $tag"; rm -f "$dir/$target.tar.gz.part"*; return 1; }
-  ( cd "$dir" && sha256sum "$target".tar.gz.part* > "$target.sha256" )
+  ( cd "$dir" && sha256sum "$target".tar.gz.part* > "$target.sha256" ) \
+    || { echo "[ship_stage] sha256 실패: $dir"; rm -f "$dir/$target.sha256"; return 1; }
   n=$(ls "$dir/$target".tar.gz.part* | wc -l)
   echo "[ship_stage] $target → $repo: 조각 ${n}개 · 합계 $(du -ch "$dir/$target".tar.gz.part* 2>/dev/null | tail -1 | cut -f1)"
 }
@@ -51,8 +52,10 @@ stage_one() {
 ok=0; fail=0
 if [ -n "${CODE_BUNDLE:-}" ]; then   # op-06 — 실행 이미지와 함께 보낼 코드 폴더 묶음(build_ship.sh가 만든 code-<버전>-<커밋>.tar.gz)
   d="$OUT/$(repo_of pipeline)/images/$TAG"; mkdir -p "$d"
-  cp "$CODE_BUNDLE" "$d/" && ( cd "$d" && sha256sum "$(basename "$CODE_BUNDLE")" > "$(basename "$CODE_BUNDLE").sha256" )
-  echo "[ship_stage] 코드 폴더 묶음 → $d/$(basename "$CODE_BUNDLE")"
+  b=$(basename "$CODE_BUNDLE")
+  { cp "$CODE_BUNDLE" "$d/" && ( cd "$d" && sha256sum "$b" > "$b.sha256" ); } \
+    || { echo "[ship_stage] 코드 폴더 묶음 복사·sha256 실패: $d/$b"; rm -f "$d/$b" "$d/$b.sha256"; exit 1; }
+  echo "[ship_stage] 코드 폴더 묶음 → $d/$b"
 fi
 for t in "${TARGETS[@]}"; do
   if stage_one "$t"; then ok=$((ok + 1)); else fail=$((fail + 1)); fi
