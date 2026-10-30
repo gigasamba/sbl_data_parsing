@@ -130,7 +130,7 @@ PC 쪽: push 전에 **RELEASE_NOTES.md**(이번 번들 목적·바뀐 코드·�
 **`deploy/docker/IMAGE_BASE`** — 한 줄 `<커밋 7자> <이미지 태그>`, `make_patch.sh image`·`last`의 기준. 지금은 upstream 10-16 버전 `e305b14 20261016-e305b14`([release_history.md](../history/release_history.md) §8)라 이 저장소에 없는 커밋이다(`make_patch.sh`가 종료 코드 3 "새 이미지 버전 필요"). 새 이미지 버전을 서버에 넣은 뒤 그 버전을 만든 이 저장소 커밋·태그로 고쳐 커밋한다 — 그 뒤부터 오버레이 패치를 만들 수 있다. 둘째 항목(이미지 태그)은 버전으로 적는다(예 `<커밋 7자> 0.1.0`).
 
 **버전(D-036, 10-29)** — 두 이미지(`data-pipeline`·`mcp-server`)는 같은 버전을 쓴다. 정본은 저장소 루트 `VERSION` 한 줄(SemVer `MAJOR.MINOR.PATCH`, 첫 배포 `0.1.0`).
-- 올리는 규칙(D-009): MAJOR = MCP 도구 계약·DB 스키마·핸드오프 형식처럼 서로 맞춰야 하는 것이 깨질 때 · MINOR = 새 이미지 버전(의존성·Dockerfile·마운트 경로) 또는 큰 기능 · PATCH = 오버레이 패치(코드만 교체). `release/<버전>` 브랜치에서 `VERSION`을 고치고, main 머지 커밋에 git 태그 `v<버전>`(annotated)을 붙인다.
+- 올리는 규칙(D-009): MAJOR = MCP 도구 계약·DB 스키마·핸드오프 형식처럼 서로 맞춰야 하는 것이 깨질 때(첫 릴리스 0.1.0은 예외 — 그 전의 계약 변경은 0.1.0에 함께 싣고 MAJOR를 따로 올리지 않음, 사용자 10-30 G7) · MINOR = 새 이미지 버전(의존성·Dockerfile·마운트 경로) 또는 큰 기능 · PATCH = 오버레이 패치(코드만 교체). `release/<버전>` 브랜치에서 `VERSION`을 고치고, main 머지 커밋에 git 태그 `v<버전>`(annotated)을 붙인다.
 - 이미지 태그 = 버전(`data-pipeline:0.1.0`·`mcp-server:0.1.0`). `build_ship.sh`·`ship_stage.sh`는 태그를 안 주면 `VERSION`을 쓰고, 빌드한 커밋은 이미지 라벨 `org.opencontainers.image.revision`(커밋 안 한 변경이 섞이면 `-dirty`)에 남긴다 — `docker inspect -f '{{json .Config.Labels}}' data-pipeline:0.1.0`. 같은 태그가 이미 있으면 `build_ship.sh`가 멈춘다(다시 만들 때만 `FORCE_TAG=1`).
 - 버전 표기(`common.pipeline_version()` — 회사 DB `AI.ParsingMeta.pipeline_version`·실행 보드)는 이미지 안 `/app/deploy/VERSION`과 오버레이 패치의 `common/PATCH_VERSION`(`make_patch.sh`가 HEAD의 `VERSION`을 적음 — 이미지 태그와 같으면 종료 2) 중 높은 버전이다(10-29 전에는 git 짧은 커밋 — `refactor.md` C-62).
 
