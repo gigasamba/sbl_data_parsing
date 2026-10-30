@@ -104,6 +104,20 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 파일: `common/config/sample.py`(생성기), `settings.sample.yaml`, `common/config/{settings,keyscan}.py`, `pipeline/config.py`, `mcp_server/config.py`, `docs/operations/env-guide.md`.
 - Status: done (10-30) — `python -m common.config.sample`이 모든 칸을 코드 기본값과 함께 `common`·`pipeline`·`mcp` 아래 카테고리 순서(제목 주석 `─── N. … ───`)로 낸다. 비우는 칸: 필수·비밀·기본 없음·빈 글자·이미지 기본값 칸(DOC_DIR 등 — 이미지·PC 값이 다름)·적었는지로 동작이 갈리는 칸(`sample.SET_MATTERS` — `given()`·`resources._f`·`model_matrix.own`이 읽는 이름, 예 `STRUCT_BACKEND`를 적으면 정형 저장소가 켜짐)·핑거프린트 칸(pinned — 적으면 `pin_env`가 env로 내어 자식 프로세스 설정을 덮음). 결과를 바꾸는 칸은 `[파라미터]` 표시. 시험: `tests/server/common/test_sample_yaml.py`(복사한 sample로 서버 STRICT 시작 · 적힌 값 = 코드 기본값), `appcheck`(sample 파일 대조).
 
+<a id="op-08"></a>
+## op-08 · 설정 구조 재편 — 필수 묶음 + 역할별 파라미터
+- 이유(사용자 10-30): `settings.sample.yaml`(칸 약 443개)과 실제 쓰는 settings.yaml(필수만 모은 40여 줄)의 차이가 너무 크다. 필수 입력은 맨 위에 카테고리별로 모으고, 나머지는 역할별 파라미터로 나누고, 칸 수도 줄인다.
+- 결정(사용자 10-30 grill):
+  - 칸 경로를 바꾼다(보기만 정리하지 않음) — YAML은 같은 절을 두 번 쓰면 뒤가 앞을 덮으므로, 필수 묶음은 별도 최상위 절 `required`로 둔다.
+  - 구조: 맨 위 `required`(필수 입력만 — 실행 환경 · PG(gold) · EDW · Object Storage · 모델 연결·키 · 서버 이미지 등, 카테고리마다 구분선과 `[PC·서버]`·`[서버만]`·`[PC만]` 표시를 칸마다가 아니라 카테고리 제목에 한 번) → 구분선 → 파라미터 절 7개 `common`·`extract`·`transform`·`load`·`search`(MCP 검색)·`ops`(실행 자원·스케줄·서비스·서버 컨테이너·경로)·`dev`(PC·시험·평가 전용).
+  - 필수 = 운영자가 꼭 넣어야 하는 값(기본값이 쓸 수 없는 연결 주소·계정·비밀·이미지 태그). 기본값이 있으면 필수가 아니라 파라미터(예: EDW 포트 1433, Object Storage 리전).
+  - 설명은 짧게(한 줄) — 옛 env 이름·판정 꼴 같은 내부 표시는 sample에서 뺀다(필요하면 env-guide).
+  - 사용처가 없는 칸·뜻이 겹치는 칸은 코드에서 지운다(고정값이면 코드 상수로). 지울 목록은 지우기 전에 사용자 확인.
+  - 시점: 0.2.0에 함께 — 설정 모델 파일은 모든 레이어의 code_fp에 들어가 서버 전체 재처리가 생기므로, 전체 재적재가 있는 gold 원천별 스키마(pl-28)와 한 번에 묶는다.
+- 열린 질문: 칸별 분류표(사용처 조사 결과)와 지울 목록 확인 · 서버 settings.yaml 옮기기 방법(`common.config.migrate`로 새 경로 변환).
+- 파일: `common/config/{settings,sample,keyscan,migrate,export}.py`, `pipeline/config.py`, `mcp_server/config.py`, `settings.sample.yaml`, `deploy/host/`(설정 꺼내 쓰는 셸), `docs/operations/env-guide.md`.
+- Status: todo
+
 ## 코드와 다른 점 · 지울 코드
 
 ### 요건과 다르게 동작

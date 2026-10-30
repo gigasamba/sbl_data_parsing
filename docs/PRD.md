@@ -88,6 +88,7 @@
 | 프로세스 종료 정리 | dev | 덮기 파일 지움 · 자식 회수 · SIGTERM | [pl-27](prd/settings.md#pl-27) |
 | JSON Lines 사건 기록 | todo | 포매터 · 수준 설정 · 가림 | [op-01](prd/settings.md#op-01) |
 | settings.yaml 하나 · sample에 모든 키·기본값 | done | 주석 해제 · 카테고리 묶음 · 생성기 · 0.1.0 | [op-05](prd/settings.md#op-05) |
+| 설정 구조 재편 — 필수 묶음 + 역할별 파라미터 | todo | `required` 맨 위 · 7개 역할 절 · 죽은 칸 삭제 · 0.2.0 | [op-08](prd/settings.md#op-08) |
 | 미룬 설정 지우기 | done | `korean_font` · `eval_sets_dir`(fp-batch) | [pl-21](prd/settings.md#pl-21) |
 | 안 읽는 env 이름 4개 지우기 | done | run_docs의 안 읽는 env 4개(fp-batch) | [pl-30](prd/settings.md#pl-30) |
 
