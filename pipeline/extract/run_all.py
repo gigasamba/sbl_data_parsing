@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """문서 폴더 × 엔진 일괄 파싱 → output/parse/<engine>/<문서>.json + output/parse/runs.jsonl(시간·오류).
 
-사용: python modules/parse/run_all.py [--src <원본 문서 폴더>] [--out output/parse] [--engines pdfplumber,docling] [--limit N]
+사용: python modules/parse/run_all.py [--src <원본 문서 폴더>] [--out output/parse] [--engines pdfplumber,pymupdf] [--limit N]
   --src 생략 시 DOC_DIR env 필수(없으면 SystemExit) — common/paths.py.doc_dir.
   제한 시간(사용자 10-29 — phase 없앰): 문서×엔진 1건 = 쪽 수 × 쪽당 초 — 글자 엔진 text_page_sec(PARSE_TEXT_PAGE_SEC, 기본 10) ·
     VLM 엔진 vlm_page_sec(PARSE_VLM_PAGE_SEC, 기본 120) + 엔진의 첫 문서는 warmup_sec 하한 + 별도 프로세스 시작 여유 isolate_overhead.
@@ -61,9 +61,9 @@ def redact(s):
     return _QUOTED.sub(lambda m: m.group(1) + "…[가림]…" + m.group(1), s or "")
 
 
-VLM_ENGINES = {"qwen_vlm", "docling_vlm", "marker_llm"}
+VLM_ENGINES = {"qwen_vlm"}  # docling_vlm·marker_llm은 10-30 지움(pl-31)
 # 사용자 10-29 — OCR 엔진은 기본으로 안 돌림(ocr_engine 설정, 기본 끔). 엔진 코드는 남김(나중에 쪽 회전 판정에 씀) · stack 표는 그대로
-OCR_ENGINES = {"rapidocr", "rapidocr_ko"}
+OCR_ENGINES = {"rapidocr_ko"}  # rapidocr(1.x)는 10-30 지움(pl-31)
 
 
 def n_pages(doc):
@@ -170,7 +170,7 @@ def main():
     ap.add_argument(
         "--engines",
         default="",
-        help="비우면 핵심 19종(registry.CORE, 사용자 10-07: paddleocr·docling_ocr 제외 · openviking_import·cognee_import는 SI33로 어댑터 자체 삭제) · all = 전부 · a,b = 그것만",
+        help="비우면 핵심 16종(registry.CORE, 10-30 docling·unstructured_auto 지움 — pl-31 · 사용자 10-07: paddleocr·docling_ocr 제외 · openviking_import·cognee_import는 SI33로 어댑터 자체 삭제) · all = 전부 · a,b = 그것만",
     )
     ap.add_argument("--profile", default="default", choices=["default", "tuned"])
     ap.add_argument("--limit", type=int, default=0)

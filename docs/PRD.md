@@ -38,6 +38,7 @@
 | DB 스키마 명세 | dev | `db_schema.md` · 시험 · 승인 | [pl-25](prd/etl.md#pl-25) |
 | 저장 구조 — silver OS uuid 폴더 · 메타 EDW · gold pgvector | todo | uuid5 폴더 · 최신 행만 · 로컬 상태 지움 · 0.1.0 | [pl-32](prd/etl.md#pl-32) |
 | 분류 단계 — silver 뒤, gold 앞 | todo | SFDC·LAS 라벨 · sha256 묶음 전파 · `doc_class` | [pl-33](prd/etl.md#pl-33) |
+| FAQ 원천 — 질의응답 엑셀 행 단위 | todo | 시트 = FAQ_group · 행 = 청크 · FileStorageMap FAQ · 0.1.0 | [pl-39](prd/etl.md#pl-39) |
 | 원천별 gold 표(나중) | todo | 원천 4벌 · `search` 원천 필수 | [pl-28](prd/etl.md#pl-28) |
 
 ## 파싱 실행 — 엔진·스택·represent (parse)

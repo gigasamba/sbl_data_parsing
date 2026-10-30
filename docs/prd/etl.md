@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. 수집 → 파싱([parse.md](parse.md)) → 구조화 → 적재(pgvector·정형 DB)·게시(silver), 서버 러너(`run_docs.py`) 레인·대기열.
 
-순서(주제별): 수집 pl-01·pl-29 → 구조화 pl-06·pl-15·pl-16 → 적재 pl-07·pl-13·pl-14·pl-19 → 정형 DB·문서 대장 pl-08·pl-38·pl-12 → 게시 pl-09·pl-26 → 실행·흐름 러너 pl-10·pl-18·pl-23·pl-24·rn-01·rn-02·rn-03·rn-04 → DB 스키마·저장 구조·분류 pl-25·pl-32·pl-33·pl-28 → 코드와 다른 점.
+순서(주제별): 수집 pl-01·pl-29 → 구조화 pl-06·pl-15·pl-16 → 적재 pl-07·pl-13·pl-14·pl-19 → 정형 DB·문서 대장 pl-08·pl-38·pl-12 → 게시 pl-09·pl-26 → 실행·흐름 러너 pl-10·pl-18·pl-23·pl-24·rn-01·rn-02·rn-03·rn-04 → DB 스키마·저장 구조·분류·FAQ pl-25·pl-32·pl-33·pl-39·pl-28 → 코드와 다른 점.
 
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
@@ -20,6 +20,7 @@
 - 선행: [pl-25](#pl-25)(스키마 — `client_edw` 칸), [pl-32](#pl-32)(저장 구조).
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) C6·T7): 고객 연결은 운영 4단계를 따른다 — 출발점 `FileStorageMap`, 순서 기회 직접 > `Task.WhatId` > `Event.WhatId` > Quote 스냅샷, 계정 직접 연결도 포함. 결과는 pgvector doc에만. 같은 sha256 묶음에도 고객은 전파하지 않는다(C3).
 - 열린 점: Quote 단계는 레플리카에 Quote 표가 없어 SFDC REST 스냅샷에 기댄다 — 서버에서 스냅샷을 어떻게 공급할지 정해야 함.
+- 결정(G2·T16 — 2차 grill(사용자 10-30, 원본은 git 밖)): `client_edw`(문서당 고객 하나)는 SFDC(4단계 연결)와 **CRMS**(`FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST` — DB 담당자 확인, D-2)에서 채운다. LAS는 상대사 출처가 정해질 때까지 비워 둔다. FAQ는 고객 연결 없음([pl-39](#pl-39)).
 - Status: todo
 
 <a id="pl-06"></a>
@@ -214,6 +215,8 @@
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖)):
   - M4·T4: gold `doc`에 `doc_class`(분류 라벨 하나 — C5, low_conf·모델·시각은 두지 않음)와 `created_at`(원천 등록 시각을 KST로 해석)을 더한다 — Alembic(D-6).
   - C2·T8: 분류·고객 결과는 gold(pgvector)에만 doc 단위로. 운영이 ParsingMeta에 더한 분류·고객 칸은 0.1.0과 동시에 지운다(DB 담당자 D-3, 등급 A). 그때 운영 분류 스크립트가 멈춘다 — 운영 담당자에게 알릴 것.
+  - G1(2차 grill(사용자 10-30, 원본은 git 밖) — C2를 고침): EDW `ParsingMeta`에 `doc_class`·`sf_op_id`·`parsed_at`·`rep_engine` 4칸은 **남긴다** — 파이프라인이 쓰고 `list_doc_fulltext`([mcp.md#mc-17](mcp.md#mc-17))가 목록으로 읽는다(운영 계약 그대로). 나머지 운영 고객 칸(`sf_acc_name` 등)은 0.1.0에서 지운다. `doc_class`는 ParsingMeta와 pgvector `doc` 양쪽에 쓴다. T8 범위는 이만큼 줄어든다.
+  - G4(2차 grill(사용자 10-30, 원본은 git 밖)): `source_system` 값은 `SFDC`·`CRMS`·`LAS`·`FAQ`로 통일(T9와 함께) — MCP 두 도구에서 `-test`가 붙은 입력(`SFDC-test` 등)도 같은 뜻으로 받는다([mcp.md#mc-16](mcp.md#mc-16)).
   - T9: `source_system`·`parse_status` 값 정리(`pipeline/extract/source.py`, `pipeline/transform/structure/build_bundle.py`).
 - Status: dev — `docs/architecture/db_schema.md` 설계안 + 시험 `tests/server/common/test_db_schema.py`(`feature/db-schema-spec`) — 사용자·DB 담당자 승인 대기(코드·스키마 변경 없음).
 
@@ -241,6 +244,7 @@
   - **알려진 빈틈(PR 4에서 고침):** 파싱 성공 행은 지금 게시(publish) 단계의 `REG.build`에서만 써진다. 마감에 걸리면 파싱이 종료 75로 바로 끝나 대표 결과·게시가 없으니 그 밤에 끝난 문서도 성공 행이 없어 다음 밤에 다시 골라진다(밤을 넘는 진행이 없음). 서버는 새벽 배치가 꺼져 있어(nightly.time 비움) 지금 운영 영향은 없음. → PR 4(ParsingMeta·대장 단계별, D-3)에 넣음: 파싱 직후(마감으로 멈춰도) 끝난 문서는 represent + `REG.build`(파싱 상태)로 성공 행을 쓰고, 그 몫의 시간을 마감 전에 남김.
   - `StandinPG`·structdb SQLite는 시험과 이미지 관문에만 — dev/prd 실행 중 조용히 대신하는 일은 없다.
 - 0.1.0 구현 PR 순서(사용자 10-30, PR 1은 3a에 합침): 2a ∥ 2b → 2c → (DB 담당자 D-1~D-7) → 3a + 3b 연달아 병합 ∥ 4 → 2d → 5(SFDC 먼저, CRMS·LAS는 D-2 전까지 Other) → 6.
+  - FAQ 원천 [pl-39](#pl-39)는 PR 3a 뒤(gold 칸이 필요).
   - reference 비교 행(10-30): 분류 단계 [pl-33](#pl-33)와 MCP [mc-16](mcp.md#mc-16)·[mc-17](mcp.md#mc-17)은 PR 5 뒤 — 정확한 자리는 허브가 정함. 파싱 p1 묶음 [pl-34](parse.md#pl-34)·잔재 정리 [pl-35](parse.md#pl-35)는 순서 미정(허브).
 - 구조화 입력: 같은 실행 안에서는 로컬 작업 폴더를 읽고, 나중에 gold만 다시 만들 때는 Object Storage uuid 폴더에서 silver를 받는다.
 - PC도 서버와 같은 흐름 — 대역만 다름(OS 폴더, EDW SQLite, PC pgvector), 따로 생기는 로컬 파일 없음.
@@ -258,7 +262,20 @@
   - LLM은 서버 내부 모델만 `llm.chat`으로 예산 장부를 거쳐(CLAUDE.md §7). 프롬프트는 `resources/prompts/pipeline/`. 라벨이 정해진 값이 아니면 NULL.
   - 원본 등록표나 Object Storage를 지우는 동작(운영 `purge_delete_targets.py` 같은 것)은 옮겨 오지 않는다.
 - 파일: `pipeline/transform/structure/`(새 파일), `resources/prompts/pipeline/`(새 프롬프트), `pipeline/load/`.
+- 결정(G1·G8 — 2차 grill(사용자 10-30, 원본은 git 밖)): `doc_class`는 gold `doc`과 EDW `ParsingMeta` 양쪽에 쓴다. FAQ는 분류하지 않는다([pl-39](#pl-39)).
 - Status: todo — 0.1.0, 순서는 허브가 정함([pl-32](#pl-32)).
+
+<a id="pl-39"></a>
+## pl-39 · FAQ 원천 — 질의응답 엑셀을 행 단위로
+- 결정(G3·G8·T15 — 2차 grill(사용자 10-30, 원본은 git 밖)): FAQ를 이번 범위에 넣는다.
+  - 질의응답 엑셀: 시트 이름 = `FAQ_group`, 행 하나 = 청크 하나(칸: type, client question, answer, last modified date). 청크 메타에 `FAQ_group`, `search` 필터로 쓸 수 있게.
+  - Object Storage에 `FAQ/<uuid>/<파일>`로 올리고 `AI.FileStorageMap`에 `source_system='FAQ'`로 등록 — 다른 원천과 같은 길로 파싱·적재(EDW 담당자 협의, DB 담당자 D-8).
+  - 분류(C7)·고객 연결은 하지 않는다. `created_at`은 FileStorageMap 등록 시각.
+  - PC 예제: `valid_env/object_storage/FAQ/`(지금은 로컬에만 — 이 PR에는 넣지 않음).
+  - 옮겨 올 참고 코드: GitHub `gigasamba/bio_data_parsing` 브랜치 `feature/qna-dataset-embedding`의 `_qna_rows.py`·`test_qna_rows.py`.
+- 파일: `pipeline/extract/`(행 단위 엑셀 처리), `pipeline/transform/structure/`(청크 메타), `mcp_server/services/search/`(필터).
+- 선행: PR 3a(gold 칸) 뒤([pl-32](#pl-32)).
+- Status: todo — 0.1.0.
 
 <a id="pl-28"></a>
 ## pl-28 · 원천별 gold 표(설계는 pl-25, 만들기는 나중)

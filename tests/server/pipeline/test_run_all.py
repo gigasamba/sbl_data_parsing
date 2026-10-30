@@ -63,7 +63,7 @@ def selftest():
 
     # 사용자 10-29 — OCR 엔진은 ocr_engine(PARSE_OCR_ENGINE) 켤 때만 · 기본은 이미지·스캔 문서도 VLM 엔진만
     png_stack = {".png": ["rapidocr_ko", "qwen_vlm"]}
-    assert OCR_ENGINES == {"rapidocr", "rapidocr_ko"}
+    assert OCR_ENGINES == {"rapidocr_ko"}  # rapidocr(1.x) 10-30 지움 — pl-31
     assert engines_for_doc(Path("x.png"), "stack", png_stack, {"x.png": ".png"}, set()) == ["qwen_vlm"]
     assert not OCR_ENGINES & set(engines_for_doc(Path("x.png"), "all", {}, {}, set()))
     with pc.PIPE.env(PARSE_OCR_ENGINE="1"):
