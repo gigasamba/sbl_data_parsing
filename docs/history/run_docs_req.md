@@ -1,4 +1,6 @@
-# 문서 파싱 병렬화·최적화 요구사항 요약 (사용자 발화 기록)
+# 문서 파싱 병렬화·최적화 요구사항 — 사용자 발화 기록(10-22·10-23)
+
+`docs/requirements/run_docs_req.md`에서 옮김(10-30, do-04 2부). 요건 요약은 [PRD etl.md#pl-10](../prd/etl.md#pl-10), 지금 설정은 [rn-01](../prd/etl.md#rn-01)·[rn-02](../prd/etl.md#rn-02)·[parse.md#pl-22](../prd/parse.md#pl-22).
 
 ## 2026-10-22
 
