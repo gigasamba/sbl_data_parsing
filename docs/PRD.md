@@ -33,6 +33,7 @@
 | 레인 정책 — 담당 먼저, 허용 레인만 | done | 전담·공유 워커 · `pick_lane` | [rn-01](prd/etl.md#rn-01) |
 | 중간 대기열 상한·길이 기록 | done | `struct_backlog` · `queue_depth.jsonl` | [rn-02](prd/etl.md#rn-02) |
 | MCP `parse_document`에 CPU 먼저 | todo | 지금 nice(같은 컨테이너) · 논의: 컨테이너 분리 | [rn-03](prd/etl.md#rn-03) |
+| run_docs 작은 수정·레인 테스트 | todo | 감시 루프 · 로그 · 흐름 테스트 · 0.1.0 | [rn-04](prd/etl.md#rn-04) |
 | DB 스키마 명세 | dev | `db_schema.md` · 시험 · 승인 | [pl-25](prd/etl.md#pl-25) |
 | 원천별 gold 표(나중) | todo | 원천 4벌 · `search` 원천 필수 | [pl-28](prd/etl.md#pl-28) |
 
@@ -43,7 +44,7 @@
 | 엔진 스택 파싱 | done | 형식별 엔진 · 격리 · 스택 판 | [pl-03](prd/parse.md#pl-03) |
 | 파싱 phase 없애기 · OCR 엔진 끔 | dev | 병렬 엔진 · 제한 · 쪽 VLM · 서버 확인 | [pl-22](prd/parse.md#pl-22) |
 | ocr_vlm·vlm.model_alt 삭제 | done | 0.1.0 · 엔진 핑거프린트 바뀜(등급 A) | [pl-31](prd/parse.md#pl-31) |
-| 엔진 스택 사본 파일 검토 | todo | 방식 검토(C-50) | [pl-20](prd/parse.md#pl-20) |
+| 엔진 스택 사본 파일 검토 | todo | 새 저장 설계로 대체 중(grill) | [pl-20](prd/parse.md#pl-20) |
 | 파싱 단계를 `transform/parse/`로 | todo | 옮기기 · 이름 바꾸기 · code_fp | [pl-17](prd/parse.md#pl-17) |
 | represent — 고르고 고치기 | done | 대표 · 합치기 · 다시 읽기 · 표 | [pl-04](prd/parse.md#pl-04) |
 | 그림 | done | VLM 설명 · 차트 값 · 도식 | [pl-05](prd/parse.md#pl-05) |
@@ -93,6 +94,7 @@
 | 검색 평가 | done | hit@k · 지연 · 보고서 | [e2-04](prd/test.md#e2-04) |
 | 답변 점검 | done | `rag_qa` · 인용 점검 | [e2-05](prd/test.md#e2-05) |
 | EDW 값 답변 인용 실패 | done | 그대로 둠(결정) | [e2-12](prd/test.md#e2-12) |
+| answer_gen 인용 버그 | todo | L-2 · P-2 · CR-2~7 | [e2-19](prd/test.md#e2-19) |
 | 스택·모델 비교 | done | 행렬 · 예상 비용 | [e2-06](prd/test.md#e2-06) |
 | 검색 점검 페이지 | done | 로컬 페이지 · 포트 | [e2-07](prd/test.md#e2-07) |
 | 검색 페이지 고정 글 | todo | 실제 개수 표시 | [e2-16](prd/test.md#e2-16) |
