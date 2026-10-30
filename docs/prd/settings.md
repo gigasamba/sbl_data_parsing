@@ -119,7 +119,19 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
   - 지운다(10개): `common.paths.criteria_file`(코드 상수 사용) · `pipeline.load.publish.source_system`(코드 고정값) · `mcp.search.ocr_dpi`(읽는 곳 없음) · `common.paths.config_dir`(셸은 `$SERVER_ENV_DIR`) · `pipeline.eval.e2e_qa_set`·`e2e_questions`(형식 점검만) · `common.dev.docker.postgres_db`·`postgres_user`(compose는 `PG_DB`·`PG_USER`) · 중복 `mcp.server.query_cache` → `common.models.embed.query_cache`, `pipeline.transform.structure.edw_embed` → `structure.embed`로 합침.
   - 켜기·끄기 스위치(약 40개)는 세분 카테고리로 모아 목록으로 보여 준다 — 기능이 없어진 스위치는 지운다. 파라미터 절의 카테고리는 더 세분해도 된다.
   - 운영 값(대기 시간·작업자 수·자원 한도·상한 등)은 파라미터로 두되, 기본값 말고 다른 값을 쓴 흔적이 없는 것을 "코드 상수 후보"로 추려 보여 준다.
-- 열린 질문: 스위치 목록·코드 상수 후보 확인 · 서버 settings.yaml 옮기기 방법(`common.config.migrate`로 새 경로 변환).
+- 조사(10-30, 켜기·끄기 스위치 91개): 기능 없어짐 0 · 되돌리기 전용(기본 켬, 끄면 옛 동작) 51 · 실험·기본 끔 27 · 양쪽 다 쓰임 13. 운영 값 254개 중 기본값 외 값을 쓴 흔적 없음 = 코드 상수 후보 103.
+- 결정(사용자 10-30 3차):
+  - 되돌리기 전용 스위치는 스위치와 옛 동작 코드를 지우고 항상 켠다. 단 엔진·핸드오프 지문 파일 안의 5개(`pipeline.extract.fill_merged`·`kreuzberg_prose_filter`·`ocr.table_grid`, `common.text.search_en_stem`·`token_num_norm`)는 재파싱을 피하려고 남기고 다음 엔진 개정 때 정리한다.
+  - 스트리밍 파싱(`pipeline/stream.py`)은 기능째 지운다 — 스위치 `stream.stream`·`stream.fingerprint`·`cache.keep_raw_layer`·`cache.keep_engine_cache`·`dev.stream_test_crash`도 함께.
+  - 쓰지 않는 실험 기능(기본 끔)은 기능째 지운다 — 목록은 지우기 전에 확인. 운영·보안 선택(고객 하드 격리, 표 허용 목록, 외부 허용, 가짜 LLM 등)과 run_docs가 실제로 켜는 칸(`qa_light`, `bucket_skip_overlap_check`)은 파라미터로 남긴다.
+- 결정(사용자 10-30 4차):
+  - 실험 기능 6개를 기능째 지운다: 그림자 모드(`transform.represent.shadow` + 평가 도구 `parse_shadow`) · 집계 LLM 분류(`mcp.search.agg.llm`·`llm_timeout`) · LLM 묶음 요약(`structure.edw_summary_llm`) · 글자 이미지 VLM 생략(`vlm.fig_text_skip`) · 키워드 통계 전체 재계산(`load.bm25_stat_rebuild`) · 원본 보관(`cache.keep_local_originals`). 남김: OCR 엔진, `qa_light`·`bucket_skip_overlap_check`(run_docs가 켬), `pg_create_extension`·`score_table_judge`(→ `dev`).
+  - `common.models.embed.dim`은 지운다 — 적재·검색은 모델이 준 벡터 길이를 쓰고, 이 칸은 `ping_models`의 기대값 비교에만 쓰였다(점검은 받은 차원을 보여 주기만).
+  - 코드 상수 후보는 바로 지우지 않고 sample 맨 아래 별도 절(구분선)에 모은다 — 내부 조정값 32개(재시도·내부 대기·묶음 크기·출력 상한 등)와 자원·대기·병렬 세부값 약 20개(자동 계산 내부 계수 `mem_*`·`pipe_max_procs`·`pipe_proc_gb`·`pipe_reserve_*`·`pipe_threads`·`cpu_max_load`, `llm.timeout`·`embed.timeout`·`attach.timeout`·`vlm.deadline`, `vlm.page_concurrency`·`page_min_concurrency`·`figures.vlm_parallel`·`night.vlm_concurrency`·`night.workers`·`parse_mcp.procs`). 상수로 내릴지는 그 절을 보고 나중에 정한다.
+  - 프로세스 수·메모리는 필수 입력이 아니다 — 비우면 CPU·메모리로 자동 계산. 역할 절에 남기는 자원 칸: `pipe_procs`·`pipe_workers`·`vlm.max_concurrency`·`llm.rpm`, 새벽 배치 시각·마감, run_docs 레인 워커 수, 컨테이너 CPU·메모리 한도, 내부망 주소 범위.
+  - 엔진 지문 파일이 읽는 `vlm.retry`·`vlm.timeout`도 다음 엔진 개정 때 정리한다.
+  - 서버 settings.yaml은 `python -m common.config.migrate`가 옛 경로 → 새 경로로 바꿔 준다(지운 칸은 "삭제됨"으로 알림).
+- 열린 질문: 없음 — 설계 확인 대기.
 - 파일: `common/config/{settings,sample,keyscan,migrate,export}.py`, `pipeline/config.py`, `mcp_server/config.py`, `settings.sample.yaml`, `deploy/host/`(설정 꺼내 쓰는 셸), `docs/operations/env-guide.md`.
 - Status: todo
 
