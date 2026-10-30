@@ -51,8 +51,8 @@ DB 엔진(RDB_ENGINE, 기본 mssql — 2026-10-07 EDW=Azure SQL Database(PaaS)=S
 Object Storage의 실제 값이 RDB가 적은 값과 다르면 받지 않고 거부·기록(output/parse/_source/rejected.jsonl) — 그 문서
 하나만 건너뛰고 나머지는 계속 받는다(크래시 안 함), 다음 실행이 다시 시도.
 
-스트리밍(백로그 X2, PARSE_STREAM=1): plan()은 대상 이름만 정하고(표본·제한 적용) 받지 않는다 — modules/parse/stream.py가
-fetch_one(name, dest)으로 한 건(또는 작은 묶음)씩 받아 처리한 뒤 바로 지운다. 묶음마다 다시 표본을 뽑으면(남은 것 중 top-N)
+plan()은 대상 이름만 정하고(표본·제한 적용) 받지 않는다 — fetch_one(name, dest)으로 한 건씩 받는다(스트리밍 파싱 호출부는
+op-08에 지움 — 지금은 시험만 부름). 묶음마다 다시 표본을 뽑으면(남은 것 중 top-N)
 표본이 흔들리므로(처리될수록 "남은 것"이 바뀜) 반드시 한 번만 호출해 이름 목록을 고정한다.
 """
 
@@ -1186,8 +1186,7 @@ def plan(source, out, limit=0, mode="prod"):
 
         def fetch_one(name, dest):
             # GH1-02b — fetch_s3와 같은 패턴: ETag가 그대로면 생략, 받을 땐 임시 파일+os.replace(원자적, 실패 시
-            # 임시 파일 지움, _s3_download). 스트리밍은 묶음마다 dest(raw_dir)를 통째로 지우므로(stream.py
-            # _run_batches) 실제로는 매번 새로 받지만, 받다가 끊겨 반쪽 파일이 남는 일은 여기서도 똑같이 막아야 한다.
+            # 임시 파일 지움, _s3_download). 받다가 끊겨 반쪽 파일이 남는 일은 여기서도 똑같이 막아야 한다.
             o = by_name[name]
             etag = o["ETag"].strip('"')
             source_id = f"s3://{bucket}/{o['Key']}"

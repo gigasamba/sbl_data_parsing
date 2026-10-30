@@ -7,8 +7,8 @@
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
 - 이유: 문서는 폴더, Object Storage, 회사 RDB 목록에서 온다.
-- 무엇: `input_source` = 폴더 · `s3://버킷/접두` · `rdb:csv:<경로>` · `rdb:<표>`. RDB 열 대응(`RDB_COL_*`), since/watermark 증분, 스트리밍(한 묶음 받기 → 파싱 → 지우기), 미리 받기(warm), 서버 원천 목록은 `struct.source_version`에 판으로 둔다.
-- 파일: `pipeline/extract/source.py`, `pipeline/extract/rdb_discover.py`, `pipeline/stream.py`, `resources/mappings/sources.json`.
+- 무엇: `input_source` = 폴더 · `s3://버킷/접두` · `rdb:csv:<경로>` · `rdb:<표>`. RDB 열 대응(`RDB_COL_*`), since/watermark 증분, 미리 받기(warm), 서버 원천 목록은 `struct.source_version`에 판으로 둔다.
+- 파일: `pipeline/extract/source.py`, `pipeline/extract/rdb_discover.py`, `resources/mappings/sources.json`.
 - Status: done
 
 <a id="pl-29"></a>
@@ -321,7 +321,6 @@
 
 ### 요건 없는 코드 — 남길지(앵커를 씀) 지울지([test.md#e2-18](test.md#e2-18))
 - 메일 첨부: `.eml`/`.msg` 첨부를 재귀 파싱(깊이 1, 20 MB, 10개)하고 인용 스레드 접기(`ATTACH_*`). `represent/attachments.py`.
-- 스트리밍 파싱 — 작은 묶음을 받아 파싱하고 원본을 바로 지움(`PARSE_STREAM=0` — 켜는 곳 없음, run_docs는 안 씀). `pipeline/stream.py`.
 - 용어집·위키 도구(개념 위키, LLM 용어집 초안, 약어 제안, EDW 마스터로 만드는 고객 목록). `transform/structure/wiki.py`, `wiki_draft.py`, `glossary_suggest.py`, `gen_roster.py`.
 - 밤 호스트 타이머와 trigger 연결(`NIGHTLY_*`, `CHAIN_STRUCTURE_URL`). `deploy/host/`, `pipeline/trigger_server.py`.
 - Object Storage 시험 업로드(MinIO). `common/check/os_put.py`.
@@ -332,7 +331,6 @@
 
 | 기능 | 스위치 = 기본값 | 필요한 것 |
 |---|---|---|
-| 스트리밍 파싱 | `PARSE_STREAM=0` | — (문서별 병렬 파이프라인 `PARSE_PARALLEL_PIPELINE`은 10-30 지움 — pl-35) |
 | 큰 표를 행으로 나누기 | `CHUNK_TABLE` 비움(표는 통째) | — |
 | LLM 요약 | `EDW_SUMMARY_LLM=0`(앞부분) | LLM |
 | 임베딩 | 이미지 기본 `PIPE_EMBED=api` | `EMBED_BASE_URL`, `EMBED_MODEL` |

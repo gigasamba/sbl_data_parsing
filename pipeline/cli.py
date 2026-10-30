@@ -625,19 +625,14 @@ def parse_module(a):
         "%Y%m%d-%H%M%S"
     )  # env 남김 — 내부 신호(5-3 H) · SI23 — run_all·_DONE.json이 같은 id를 쓰게(run_board가 이번 실행만 거르는 기준)
     os.environ["PARSE_RUN_ID"] = (
-        run_id  # env 남김 — 하위 프로세스·엔진에 넘김 · 이후 모든 하위 호출(dedup·prepare·run_all·streaming)이 os.environ 상속으로 받음
+        run_id  # env 남김 — 하위 프로세스·엔진에 넘김 · 이후 모든 하위 호출(dedup·prepare·run_all)이 os.environ 상속으로 받음
     )
     st = _stack()
     engines = a.engines or ",".join(_engines_of(st))
     _set_engine_scope_default(a.engines)  # PE1(2026-10-07) — 생산 기본 stack(무거움 해소), 명시 --engines·실험 경로는 영향 없음
-    # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) — 아래 갈래는 스트리밍·일괄만
-    streaming = bool(a.source) and pc.cfg().extract.stream.stream  # 백로그 X2 — 묶음(기본 1건)씩 받아 처리 후 즉시 지움
+    # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) · 스트리밍 파싱은 op-08에 지움
     lim, src_info = [], None
-    if streaming:
-        from pipeline import stream as STREAM
-
-        STREAM.run(a, engines)  # 원본·사본·엔진별 중간 결과는 묶음마다 이미 지움(try/finally)
-    elif a.source:  # 문서 위치: 같은 서버 폴더 → Object Storage 몇 건 → 전체(사용자 10-02)
+    if a.source:  # 문서 위치: 같은 서버 폴더 → Object Storage 몇 건 → 전체(사용자 10-02)
         from pipeline.extract import source as SRC
 
         local, names, state = SRC.resolve(a.source, OUT, a.source_limit, a.mode)
@@ -666,54 +661,49 @@ def parse_module(a):
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)
         lim = ["--docs-from", only]
-    if not streaming:
-        from common.core import resources as RS
+    from common.core import resources as RS
 
-        vlm_conc = RS.vlm_page_concurrency(a.workers, a.vlm_concurrency)  # 문서 동시 수 × 쪽 동시 수가 VLM_MAX_CONCURRENCY를 넘지 않게
-        from common.core.paths import child_env
+    vlm_conc = RS.vlm_page_concurrency(a.workers, a.vlm_concurrency)  # 문서 동시 수 × 쪽 동시 수가 VLM_MAX_CONCURRENCY를 넘지 않게
+    from common.core.paths import child_env
 
-        env = C.child_env(
-            child_env(), VLM_CONCURRENCY=str(vlm_conc), LLM_BASE_URL=None
-        )  # 파싱 모듈은 LLM을 부르지 않음 — 덮기 파일(S7e3 B-1)
-        if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
-            names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
-            new = _registry_unparsed(names)  # pl-32 — 문서 대장에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
-            pick = new[: a.max_new]
-            f = OUT / "parse" / "_batch_docs.txt"
-            f.parent.mkdir(parents=True, exist_ok=True)
-            if lim:  # --source 선택과 겹치는 것만
-                sel_names = set(Path(lim[1]).read_text(encoding="utf-8").splitlines())
-                pick = [n for n in pick if n in sel_names]
-            f.write_text("\n".join(pick) + "\n", encoding="utf-8")
-            lim = ["--docs-from", f]
-            print(
-                f"[parse] 새·실패 문서 {min(len(new), a.max_new)}/{len(new)}개(PARSE_MAX_NEW {a.max_new}) — 나머지는 다음 실행", flush=True
-            )
-        args = [
-            "pipeline.extract.run_all",
-            "--src",
-            a.src,
-            "--out",
-            OUT / "parse",
-            "--procs",
-            a.procs,
-            "--workers",
-            a.workers,
-            "--engines",
-            engines,
-            *lim,
-        ]
-        if _run_until(args, env, _left(a) - 120) is None:
-            raise SystemExit(75)  # 마감 — 끝 표시 안 바꿈, 다음 실행이 이어 감
-        _tstep("t_parse")
-        for args in (
-            ["pipeline.transform.represent.parse_qa", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
-            ["pipeline.transform.represent.represent", *_stack_arg(), "--src", a.src, "--parse-dir", OUT / "parse"],
-        ):
-            rc = _run_until(args, env, _left(a) - 60)
-            _tstep("t_" + args[0].rsplit(".", 1)[-1])  # 2026-10-22 — qa·represent 분리 계측(docflow 기타 분해)
-            if rc != 0:
-                raise SystemExit(75 if rc is None else rc)
+    env = C.child_env(child_env(), VLM_CONCURRENCY=str(vlm_conc), LLM_BASE_URL=None)  # 파싱 모듈은 LLM을 부르지 않음 — 덮기 파일(S7e3 B-1)
+    if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
+        names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
+        new = _registry_unparsed(names)  # pl-32 — 문서 대장에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
+        pick = new[: a.max_new]
+        f = OUT / "parse" / "_batch_docs.txt"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        if lim:  # --source 선택과 겹치는 것만
+            sel_names = set(Path(lim[1]).read_text(encoding="utf-8").splitlines())
+            pick = [n for n in pick if n in sel_names]
+        f.write_text("\n".join(pick) + "\n", encoding="utf-8")
+        lim = ["--docs-from", f]
+        print(f"[parse] 새·실패 문서 {min(len(new), a.max_new)}/{len(new)}개(PARSE_MAX_NEW {a.max_new}) — 나머지는 다음 실행", flush=True)
+    args = [
+        "pipeline.extract.run_all",
+        "--src",
+        a.src,
+        "--out",
+        OUT / "parse",
+        "--procs",
+        a.procs,
+        "--workers",
+        a.workers,
+        "--engines",
+        engines,
+        *lim,
+    ]
+    if _run_until(args, env, _left(a) - 120) is None:
+        raise SystemExit(75)  # 마감 — 끝 표시 안 바꿈, 다음 실행이 이어 감
+    _tstep("t_parse")
+    for args in (
+        ["pipeline.transform.represent.parse_qa", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
+        ["pipeline.transform.represent.represent", *_stack_arg(), "--src", a.src, "--parse-dir", OUT / "parse"],
+    ):
+        rc = _run_until(args, env, _left(a) - 60)
+        _tstep("t_" + args[0].rsplit(".", 1)[-1])  # 2026-10-22 — qa·represent 분리 계측(docflow 기타 분해)
+        if rc != 0:
+            raise SystemExit(75 if rc is None else rc)
     import hashlib
 
     print(f"[docflow-step] {_tdone()}", flush=True)  # 2026-10-22 — resolve~represent까지 docflow 기타 분해 로그
@@ -749,7 +739,7 @@ def parse_module(a):
         rep_ok=sum(1 for r in idx if r.get("engine")),
         run_id=run_id,
     )
-    if not streaming and src_info:  # 스트리밍은 묶음마다 이미 지웠음(SRC.mark_done)
+    if src_info:
         from pipeline.extract import source as SRC
 
         if SRC.is_remote(a.source):

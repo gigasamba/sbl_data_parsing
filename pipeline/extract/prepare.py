@@ -379,9 +379,7 @@ def main():
     if out.resolve() == src.resolve():  # out은 만들어 내는 폴더(지우고 다시 씀) — 원본 폴더면 원본이 지워짐
         raise SystemExit("--out이 원본 폴더와 같음 — 다른 폴더를 지정")
     out.mkdir(parents=True, exist_ok=True)
-    skipped_log = Path(
-        pc.cfg().extract.skipped_log or (out / "skipped.jsonl")
-    )  # S7c — 설정 객체   # D4 — 스트리밍은 stream.py가 output/parse/_source로 돌림(--out이 지워지는 임시 폴더라)
+    skipped_log = Path(pc.cfg().extract.skipped_log or (out / "skipped.jsonl"))  # S7c — 설정 객체
     only = {x.strip() for x in Path(a.only).read_text(encoding="utf-8").splitlines() if x.strip()} if a.only else None
     files = sorted(p for p in src.iterdir() if p.is_file() and p.name != ".gitkeep" and (only is None or p.name in only))
     old = {}

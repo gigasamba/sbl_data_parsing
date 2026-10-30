@@ -1,5 +1,5 @@
 """엔진 구성 — 활성 판 → 검사 → 판 번호를 자식에 넘김(S8b, D-031 · pl-32 사용자 10-30: 사본 파일 `_stack/stack-v*.json`·STACK_SNAPSHOT 없앰).
-진입점(pipeline.cli·stream·parse_parallel·mcp_parse_service·load.index)이 부른다: common.store.db.cfgtables.active("stack")(서버 = DB 활성 판,
+진입점(pipeline.cli·mcp_parse_service·load.index)이 부른다: common.store.db.cfgtables.active("stack")(서버 = DB 활성 판,
 PC = 파일) → 이미지에 없는 엔진 거부(등록부 + 설치 — parse ∪ candidates) → 판 번호를 설정 칸 STACK_VERSION(pipeline.paths.stack_version)으로
 넘긴다(put — 자식 프로세스도 받음). 자식·층(run_all·attachments·represent·build_bundle)은 pipeline.config.stack()으로 그 판을 판 표에서 읽는다 —
 실행 중 활성 판이 바뀌어도 한 실행은 한 판. 호스트 스크립트(run_docs)는 `--version`으로 판 번호를 한 번 받아 파싱·구조화에 --set으로 준다."""
@@ -70,7 +70,7 @@ def resolve(refresh=False, publish=True):
 
 def current():
     """이미 넘겨받은 판(STACK_VERSION — 부모 진입점이 정함)이 있으면 그 판, 없으면 resolve() — 함수로도 불리고 단독으로도 도는
-    모듈(stream·parse_parallel·load.index)이 쓴다. 반환: cfgtables.Active."""
+    모듈(load.index)이 쓴다. 반환: cfgtables.Active."""
     from common.store.db import cfgtables
     from pipeline import config as pc
 

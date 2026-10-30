@@ -143,9 +143,7 @@ def fingerprint_one(p, source_id=None):
     source_id — 원천의 진짜 식별자(원격 URI·key, 폴더면 원본 폴더 기준 file:// URI) — load_manifest()가
     이것으로 "같은 문서"를 가린다(독립 검토 #3 재검토: file_name만으로 가리면 서로 다른 경로·접두의 같은
     이름 문서가 하나로 뭉개진다, 아래 load_manifest 참고).
-    스트리밍·병렬(parse/stream.py·cli/parse_parallel.py)은 이 함수를 쓰지 않는다 — `record_fingerprint()`가
-    훨씬 적은 필드만 쓴다(2026-10-14 재설계: 근사 중복 후보는 사람이 안 보는 산출물이라 뺐다 — 아래
-    `record_fingerprint` 설명)."""
+    (스트리밍 파싱과 그 전용 최소 지문 record_fingerprint는 op-08에 지움.)"""
     st = p.stat()
     t = text_of(p) if p.suffix.lower() not in IMG else ""
     sh = shingles(t) if len(t.strip()) >= 50 else None
@@ -189,8 +187,7 @@ def _manifest_lock_path(manifest_path):
 
 
 def _lock_pid_alive(pid):
-    """parse/stream.py._pid_alive와 같은 판정 — dedup↔stream 순환 import를 피하려고 그대로 복붙한다
-    (둘 다 10줄 안팎이라 공용 모듈로 뽑는 비용이 더 큼)."""
+    """잠금을 쥔 프로세스가 살아 있는지(Windows는 tasklist, 그 밖은 signal 0)."""
     if os.name == "nt":
         import subprocess
 
@@ -205,12 +202,9 @@ def _lock_pid_alive(pid):
 
 
 def _acquire_manifest_lock(lock, max_wait=30.0, poll=0.02):
-    """O_EXCL 잠금 + 죽은 프로세스 자동 회수(parse/stream.py와 같은 패턴, 독립 검토 #2) — 서로 다른
-    프로세스 둘이 같은 매니페스트에 동시에 쓸 때(예: 스트리밍 두 인스턴스가 서로 다른 PARSE_TMP로 동시에
-    돌 때)만 줄 경계가 안 섞이게 기다린다(거부가 아니라 대기 — stream.py의 '이미 돌고 있음 거부'와 달리
-    여러 쓰기가 다 끝나야 하는 경우라 순서대로 기다렸다 쓴다). **같은 프로세스 안의 동시 호출은 이 잠금이
-    막을 일이 없다** — 호출부(parse_parallel.py는 게시 전용 스레드 하나, stream.py는 배치를 순차 처리)가
-    이미 한 스레드로 몰아 둔다(코디네이터 메모 10-14)."""
+    """O_EXCL 잠금 + 죽은 프로세스 자동 회수(독립 검토 #2) — 서로 다른 프로세스 둘이 같은 매니페스트에
+    동시에 쓸 때만 줄 경계가 안 섞이게 기다린다(거부가 아니라 대기 — 여러 쓰기가 다 끝나야 하는 경우라
+    순서대로 기다렸다 쓴다). **같은 프로세스 안의 동시 호출은 이 잠금이 막을 일이 없다**(코디네이터 메모 10-14)."""
     import time
 
     t0 = time.monotonic()
@@ -271,22 +265,6 @@ def _unlink_retry(p, tries=5):
             time.sleep(0.02 * (i + 1))
 
 
-def record_fingerprint(p, manifest_path, source_id=None, etag=None, updated_at=None):
-    """스트리밍(parse/stream.py)·병렬(cli/parse_parallel.py) 전용 — 원본이 지워지기 전에 **최소** 지문
-    (source_id·updated_at·etag·size·sha256)만 매니페스트(보통 output/dedup/manifest.jsonl)에 append-only로
-    남긴다. 2026-10-14 재설계(사용자 결정) — 근사 중복(MinHash·이미지 dHash·64개 sketch)은 뺐다: keep 결정은
-    완전 중복(sha256)만으로 이미 정해지고(decide()의 by_sha 선택 — 근사 중복 연결은 keep 집합을 줄이지
-    않는다), 근사 중복 후보는 사람이 보는 report.html용 부산물일 뿐인데 스트리밍에선 파일이 없어 그 report도
-    못 만든다(아무도 안 보는 산출물, no-human-in-loop). 완전 중복 판정 자체는 parse/source.py의 받기 전
-    (ETag+크기)·받은 뒤(sha256) 확인이 `find_duplicate()`로 한다 — 이 함수는 지문만 남긴다.
-    source_id — 원천의 진짜 식별자(원격 URI·key·폴더면 file:// URI) — load_manifest()가 같은 이름·다른
-    경로의 서로 다른 문서를 안 뭉개게 한다(독립 검토 #3 재검토, 그대로 유지)."""
-    p = Path(p)
-    append_manifest(
-        {"source_id": source_id, "updated_at": updated_at, "etag": etag, "size": p.stat().st_size, "sha": sha(p)}, manifest_path
-    )
-
-
 def record_duplicate(manifest_path, source_id, duplicate_of, etag=None, size=None, updated_at=None, sha=None):
     """받기 전(ETag+크기, 비멀티파트 전제) 또는 받은 뒤(sha256)에 다른 원천과 완전히 같은 내용으로 판단된
     문서 — `duplicate_of`(일치한 다른 원천의 source_id)를 남겨 결정이 사람에게도 보이게 한다(요건 — "기록해
@@ -316,7 +294,7 @@ def find_duplicate(manifest_path, source_id, *, etag=None, size=None, sha=None):
 
 def load_manifest(manifest_path):
     """매니페스트(append-only) → 원본 식별자별 가장 최근 지문 1개만. 식별자 = source_id(원천의 진짜 URI·
-    key — 호출부가 record_fingerprint에 넘겼으면)가 있으면 그것, 없으면 sha256 폴백(2026-10-14 재설계 —
+    key — 호출부가 넘겼으면)가 있으면 그것, 없으면 sha256 폴백(2026-10-14 재설계 —
     최소 지문은 file_name을 안 담아 (file_name, sha) 폴백을 못 쓴다; sha만으로도 같은 내용 재기록은
     여전히 1건으로 합쳐지고, 내용이 바뀌면 다른 키가 되어 옛 지문이 같이 남는 것도 그대로다 — 알려진
     한계, source_id가 있는 경로에서는 안 생김) — 독립 검토 #3 재검토(file_name만으로 묶으면 서로 다른

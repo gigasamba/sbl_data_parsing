@@ -216,6 +216,17 @@ NOT_SETTINGS = {
         )
     },
     "PARSE_TABLE_DB": ("삭제 후보", "삭제됨(op-08, 사용자 10-30) — 표 정형 적재(doc_table·doc_cell) 기능째 지움"),
+    **{
+        n: ("삭제 후보", "삭제됨(op-08, 사용자 10-30) — 스트리밍 파싱(pipeline/stream.py) 기능째 지움")
+        for n in (
+            "PARSE_STREAM",
+            "PARSE_STREAM_FINGERPRINT",
+            "PARSE_STREAM_BATCH",
+            "KEEP_RAW_LAYER",
+            "KEEP_ENGINE_CACHE",
+            "PARSE_STREAM_TEST_CRASH",
+        )
+    },
 }
 # 모은 키가 아닌 것(셸 문법·Dockerfile ARG·selftest 가짜 이름)
 IGNORE = {"BASE", "X_ALLOW_EXTERNAL"}

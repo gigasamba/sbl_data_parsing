@@ -13,7 +13,7 @@
 ## ETL — 수집·퍼블리시·적재·DB (etl)
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
 |---|---|---|---|
-| 원천과 가져오기 | done | 폴더·S3·RDB · 증분 · 스트리밍 · warm | [pl-01](prd/etl.md#pl-01) |
+| 원천과 가져오기 | done | 폴더·S3·RDB · 증분 · warm | [pl-01](prd/etl.md#pl-01) |
 | EDW 고객 매핑을 파이프라인이 만듦 | todo | FileStorageMap 조인 · `file_meta` 대체 | [pl-29](prd/etl.md#pl-29) |
 | 구조화 — 청크·메타·임베딩 | done | 청크 · 요약 · 사실 · 임베딩 | [pl-06](prd/etl.md#pl-06) |
 | structure/load 계약이 새 묶음 거부 | todo | `DOC_KEYS` 고침(사람 검토) | [pl-15](prd/etl.md#pl-15) |

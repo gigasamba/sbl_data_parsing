@@ -1,7 +1,7 @@
 """pipeline 앱 설정 — settings.yaml의 common + pipeline 절만 읽는다(S7a, refactor_plan 5-2 · D-015). 다른 앱(mcp) 절은 무시.
 pipeline 코드가 읽는 객체는 설정 파일 기반 캐시 PIPE다(S7e2 — 전환 다리 없앰: env의 옛 이름은 읽지 않음, 신호 SETTINGS_FILE·RUN_ENV만):
   `from pipeline import config as pc` → `pc.cfg().extract.max_new`(pipeline 절) · `pc.given("PM_BUCKET")`(준 값만) · `pc.checked(X)` ·
-  `pc.by_env(f"{p}_X")` · 시험 `with pc.PIPE.env(PARSE_TMP=…, KEEP_RAW_LAYER=None):`(설정 위에 옛 env 이름으로 덮음 — os.environ 안 건드림).
+  `pc.by_env(f"{p}_X")` · 시험 `with pc.PIPE.env(PARSE_TMP=…, PARSE_CACHE_MAX_GB=None):`(설정 위에 옛 env 이름으로 덮음 — os.environ 안 건드림).
   common 칸은 `common.config.settings.cfg()`로(COMMON). 값을 바꿔 자식에 넘길 때는 `settings.put()`·`settings.child_env()`(덮기 파일).
 SETTINGS(common + pipeline 절)는 확인 명령(python -m pipeline.config)·시험용. 칸 표는 refactor_plan 부록 D.
 사용: python -m pipeline.config [--file 경로]   # 읽어서 요약(비밀 가림) · export --section pipeline.host …
@@ -76,14 +76,11 @@ class PipelineExtractAttach(Section):
 
 
 class PipelineExtractCache(Section):
-    keep_engine_cache: bool | None = F(
-        False, "KEEP_ENGINE_CACHE", "엔진별 중간 결과(output/parse/<엔진>/<문서>.json)를 지우지 않고 남길지(=1 보관)", on=("1",)
-    )
+    REMOVED = frozenset(
+        {"keep_engine_cache", "keep_raw_layer"}
+    )  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     keep_local_originals: bool | None = F(
         False, "KEEP_LOCAL_ORIGINALS", "내려받은 원본을 파싱 뒤에도 지우지 않고 남길지(=1 보관, 디버그·샘플용)", on=("1",)
-    )
-    keep_raw_layer: bool | None = F(
-        True, "KEEP_RAW_LAYER", "P0 원본 층 캐시(output/parse/raw/**)를 유지할지(1 유지 / 그 외 이번 묶음 것 삭제)", on=("1",)
     )
     parse_cache_max_gb: float | None = F(
         5.0, "PARSE_CACHE_MAX_GB", "재판독 중간 캐시 3종 합계 용량 상한(GB, 넘으면 오래된 것부터 삭제, 0=끔)"
@@ -125,14 +122,6 @@ class PipelineExtractPrepare(Section):
 class PipelineExtractSource(Section):
     fetch_workers: int | None = F(1, "SOURCE_FETCH_WORKERS", "원본 문서 병렬 다운로드 스레드 수(개)")
     warm: str | None = F(None, "SOURCE_WARM", "미리받기(warm) 저장 폴더 — 비면 warm 기능 꺼짐")
-
-
-class PipelineExtractStream(Section):
-    batch: int | None = F(1, "PARSE_STREAM_BATCH", "스트리밍 파싱에서 한 바퀴에 받아 처리할 문서 수(건)")
-    fingerprint: bool | None = F(
-        True, "PARSE_STREAM_FINGERPRINT", "받은 파일 삭제 전 최소 지문을 dedup manifest에 남길지 — 0이면 끔", off=("0",)
-    )
-    stream: bool | None = F(False, "PARSE_STREAM", "스트리밍 파싱(묶음씩 받아 처리 후 즉시 삭제) 사용 — 1이면 켬", on=("1",))
 
 
 class PipelineHostNightly(Section):
@@ -334,16 +323,13 @@ class PipelineTransformVlm(Section):
 
 class PipelineDev(Section):
     REMOVED = frozenset(
-        {"parse_agent_fake", "parallel_test_crash"}
+        {"stream_test_crash", "parse_agent_fake", "parallel_test_crash"}
     )  # 사용자 10-29 · parallel_test_crash 10-30(pl-35) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     allow_common_mismatch: bool | None = F(
         False, "ALLOW_COMMON_MISMATCH", "앞 모듈 결과의 공통 코드 지문이 달라도 계속 진행할지(=1 계속 / 그 외 중단)", on=("1",)
     )
     check_env_any_py: bool | None = F(
         False, "CHECK_ENV_ANY_PY", "check_env가 시스템 python에서도 멈추지 않고 계속할지(=1 계속 / 그 외 중단)", on=("1",)
-    )
-    stream_test_crash: bool | None = F(
-        False, "PARSE_STREAM_TEST_CRASH", "시험용 — =1이면 스트리밍 파싱의 첫 묶음에서 강제 종료(os._exit 17)", on=("1",)
     )
     test_min_docs: int | None = F(50, "TEST_MIN_DOCS", "시험 모드(--mode test)에서 표본 추출을 시작하는 최소 문서 수(개)")
     test_per_type: int | None = F(5, "TEST_PER_TYPE", "시험 모드 표본에서 확장자별로 고르는 문서 수(개)")
@@ -371,6 +357,7 @@ class PipelineExtract(Section):
     REMOVED = frozenset(
         {
             "merge_pages",
+            "stream",
             "page_scan",
             "scan_fill",
             "phases",
@@ -433,7 +420,6 @@ class PipelineExtract(Section):
     ocr: PipelineExtractOcr = Field(default_factory=PipelineExtractOcr)
     prepare: PipelineExtractPrepare = Field(default_factory=PipelineExtractPrepare)
     source: PipelineExtractSource = Field(default_factory=PipelineExtractSource)
-    stream: PipelineExtractStream = Field(default_factory=PipelineExtractStream)
 
 
 class PipelineHostRunDocs(Section):
@@ -515,7 +501,7 @@ class PipelinePaths(Section):
     images_root: str | None = F(None, "PARSE_IMAGES_ROOT", "그림 PNG·index.jsonl 저장 루트")
     index_conf: str | None = F(None, "INDEX_CONF", "색인 설정 JSON 경로(있으면 색인 모듈로 구조화)")
     out_root: str | None = F(None, "PIPE_OUT_ROOT", "파이프라인 출력 루트(output)")
-    parse_tmp: str | None = F(None, "PARSE_TMP", "스트리밍·병렬 파싱 임시 폴더 — output 아래 2단 이상 하위만 허용")
+    parse_tmp: str | None = F(None, "PARSE_TMP", "임시 폴더(첨부 임시 파일은 형제 attach/) — output 아래 2단 이상 하위만 허용")
     raw_root: str | None = F(None, "PARSE_RAW_ROOT", "P0 원본 층(raw/VLM) 캐시 저장소 루트")
     report_digest_dir: str | None = F(None, "REPORT_DIGEST_DIR", "run_board 날짜·판 요약 폴더 루트(비우면 요약 안 만듦)")
     soffice_bin: str | None = F(
@@ -612,7 +598,7 @@ def stack(version=None):
     v = version if version is not None else cfg().paths.stack_version  # 인자(--stack-version) > 넘겨받은 칸
     if v is None and not paths.LOCAL_RUN:
         print(
-            "[엔진 구성] 판 번호 없음(STACK_VERSION) — 서버는 진입점(pipeline.cli·stream·parse_parallel·mcp_parse_service·load.index)으로 "
+            "[엔진 구성] 판 번호 없음(STACK_VERSION) — 서버는 진입점(pipeline.cli·mcp_parse_service·load.index)으로 "
             "실행해야 활성 판 번호를 정해 넘긴다. 도구를 따로 돌릴 때는 --set STACK_VERSION=$(python -m pipeline.stackcfg --version)",
             file=sys.stderr,
             flush=True,
