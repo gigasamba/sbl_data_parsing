@@ -396,6 +396,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 ```bash
 # 폐쇄망 빌드라면 먼저 deploy/docker/wheels/에 휠(linux/amd64, py3.12), 저장소 루트 assets/rapidocr/에 *.onnx를 둔다
+#   (assets/ 준비: docs/operations/release-and-patch.md §5-6 — assets.py pack)
 
 # 방법 1) 빌드만 → 따로 저장·전송
 BUILD_ONLY=1 IMAGE_TARGET=pipeline bash deploy/release/build_ship.sh   # data-pipeline:<VERSION> 빌드 → selftest 판정 → 비밀값 흔적 점검

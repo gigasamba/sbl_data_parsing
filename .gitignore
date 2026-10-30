@@ -39,3 +39,8 @@ output/
 # 설정 파일(S7a, D-015) — 값·비밀이 들어감. git에는 settings.sample.yaml만
 settings.yaml
 valid_env/local/
+
+# 반입 자산(모델·언어 팩·글꼴·휠) — git 밖(release-and-patch §5-6)
+assets/
+dl/
+tessdata_best/
