@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나 — 변경을 어떻게 증명하나: 스모크 실행, 시험 층, 품질 평가, 답변 점검, 시험 자료, 이미지 반입 판정(PC + 반입 관문).
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서(주제별): 시험 층·반입 e2-02·e2-08·e2-14·e2-11·e2-15 → 스모크·시험 자료 e2-01·e2-13·e2-09 → 평가·점검 e2-03·e2-04·e2-05·e2-12·e2-06·e2-07·e2-16 → 정리 e2-10·e2-17·e2-18 → 코드와 다른 점.
+순서(주제별): 시험 층·반입 e2-02·e2-08·e2-14·e2-11·e2-15 → 스모크·시험 자료 e2-01·e2-13·e2-09 → 평가·점검 e2-03·e2-04·e2-05·e2-12·e2-19·e2-06·e2-07·e2-16 → 정리 e2-10·e2-17·e2-18 → 코드와 다른 점.
 
 <a id="e2-02"></a>
 ## e2-02 · 시험 층
@@ -96,6 +96,16 @@
 - 파일: `valid_env/answer_test/rag_qa/`, `validation/e2e/answer_gen.py`.
 - 결정(사용자 10-29/10-30 grill): 그대로 둔다 — 바꾸지 않음.
 - Status: done
+
+<a id="e2-19"></a>
+## e2-19 · answer_gen 인용 버그 고치기
+- 결정(사용자 10-30): 답변 점검(`answer_gen`)의 인용 버그를 지금 고친다(e2-12의 EDW 값 인용 규칙은 그대로). 출처: [refactor.md](../../refactor.md) "최종" ⑤ 행(원 보고서 VS10-verify K-1·S11-impl·VS11-verify는 git 밖).
+  - L-2·P-2·CR-2~4: `verify_note`가 문제 글의 앞부분(접두어)에 기댄다.
+  - CR-5: `answer_gen.verify`가 JSON으로 못 바꾸는 인자에서 TypeError.
+  - CR-6: `python -O`이면 `verify_citations.py`의 `assert`가 빠진다.
+  - CR-7: dict를 직렬화했다가 다시 읽어, 인자를 펼쳐 넘기는 모델이면 시그니처 TypeError(실제로는 드묾).
+- 파일: `validation/e2e/answer_gen.py`, `valid_env/answer_test/rag_qa/`.
+- Status: todo
 
 <a id="e2-06"></a>
 ## e2-06 · 스택·모델 비교

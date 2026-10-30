@@ -53,7 +53,7 @@
 ## pl-20 · 엔진 스택 사본 파일 방식 검토
 - 이유: C-50.
 - 파일: `pipeline/config.py`(`paths.stack_snapshot`), `docs/architecture/pipeline_stack.md`.
-- Status: todo
+- Status: todo — 사용자 10-30: 스냅샷 파일 대신 silver는 Object Storage uuid 폴더, 메타는 EDW ParsingMeta(단계별·성공 시), gold는 pgvector만 — 설계 grill 중(새 저장 설계가 이 행을 대신함).
 
 <a id="pl-17"></a>
 ## pl-17 · 파싱 단계 위치 — `extract` 또는 `transform`
