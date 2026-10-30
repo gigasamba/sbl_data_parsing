@@ -10,7 +10,7 @@ SETTINGS(common + pipeline 절)는 확인 명령(python -m pipeline.config)·시
 import sys
 from pathlib import Path
 
-from pydantic import Field, SecretStr  # 칸 형식
+from pydantic import Field, SecretStr, field_validator  # 칸 형식
 
 from common.config.settings import (
     IMAGE_PATHS,
@@ -166,6 +166,13 @@ class PipelineHostNightly(Section):
         pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$",  # 틀린 꼴은 설정을 읽을 때 거부(타이머가 5분마다 실패로 남기지 않게)
     )
     max_new: int | None = F(2000, "NIGHTLY_MAX_NEW", "새벽 배치 parse가 밤당 처음 파싱할 문서 수 상한(건)")
+
+    @field_validator("time", mode="before")
+    @classmethod
+    def _blank_is_off(cls, v):
+        """빈 글자·공백만 = 새벽 배치 없음(None) — sample·손으로 쓴 settings.yaml의 `time: ""`가 꼴 검사에 걸려 시작을 막지 않게(PR #44 리뷰)."""
+        return None if isinstance(v, str) and not v.strip() else v
+
     modules: WordList | None = F(
         ["parse", "publish", "structure", "load"], "NIGHTLY_MODULES", "새벽 배치가 차례로 돌릴 모듈(공백 구분 목록 — trigger.sh 기본)"
     )

@@ -24,7 +24,7 @@ mod=${1:?parse|structure|load|all|night|scheduled}; shift || true
 # scheduled(pl-32, 사용자 10-30) = systemd 타이머가 5분마다 부름 — settings.yaml pipeline.host.nightly.time(NIGHTLY_TIME, HH:MM)이
 # 비면 조용히 끝(새벽 배치 없음), 지금이 그 시각부터 5분 안이면 night로 이어감(이미지 확인 전 — 5분마다 도는 몫을 가볍게). 켬/끔과 시각은 이 칸 하나(옛 NIGHTLY_ENABLED·고정 01:00 대신).
 if [ "$mod" = "scheduled" ]; then
-  t=${NIGHTLY_TIME:-}
+  t=$(printf '%s' "${NIGHTLY_TIME:-}" | tr -d '[:space:]')   # 공백만이면 비움과 같음(설정 모델과 같게)
   [ -z "$t" ] && exit 0
   case "$t" in
     [01][0-9]:[0-5][0-9] | 2[0-3]:[0-5][0-9]) ;;
