@@ -50,14 +50,13 @@ AD17②(10-08, 파싱 뒤 '판 비교', D10) — 위 AD17①은 원본 **바이�
   · "changed_values"(라벨 집합은 같고 숫자 값만 다름) — 새 판으로 연결(edition_of) + 바뀐 값 목록(label·before·after·page, value_changes)
   · "different"(그 밖 — 라벨이 늘거나 줄거나 글자 값이 바뀜) — 보통 새 판(edition_of 없음)
 비교는 common.core.text.normalize_value·common.core.repfmt.pairs_of/locate/nlabel/NUM_RE만 재사용 — 새 해시·새 정규화 규칙
-없음. REGISTRY_EDITIONS(기본 켬, =0으로 끔) — 끄면 build()가 이 단계 전체를 안 돌려 이전 동작과 바이트 동일
-(rep_sha·rep_pairs·edition_of·content_group·value_changes는 그대로 NULL).
+없음.
 
 AD15(10-08, 같은 내용 다른 형식) — 같은 내용을 다른 형식으로 받은 문서(.eml↔.msg·PDF↔Word 등, 이름도 다를 수
 있음)를 doc_registry.content_group(그룹 안에서 가장 먼저 등록된 doc_key)으로 묶는다(지우거나 숨기지 않음 —
 검색 중복만 줄이는 표시). ① rep_sha(정규화한 대표 본문 sha256)가 완전히 같으면 즉시 한 그룹 ② 다르면(형식이
 달라 머리말 등 소소한 차이) 정규화한 본문의 5-gram 글자 Jaccard 유사도(CONTENT_GROUP_SIM)로 근접 판정 — 아직
-어느 그룹에도 안 묶인 문서끼리만(전수 비교, REGISTRY_EDITIONS와 같은 스위치)."""
+어느 그룹에도 안 묶인 문서끼리만(전수 비교)."""
 
 import json
 import re
@@ -341,12 +340,6 @@ def apply(db, observed, diff, build_id, seen_at=None):
 
 
 # ── AD17②·AD15(10-08, 파싱 뒤 '판 비교') — 모듈 docstring 참고 ───────────────
-def editions_on():
-    """REGISTRY_EDITIONS(기본 켬, =0으로 끔) — 끄면 build()가 update_rep_fingerprints·link_editions·content_groups를
-    안 불러 이전 동작과 바이트 동일(새 칸은 그대로 NULL)."""
-    return bool(cfg().store.registry_editions)  # S7b — 설정 객체(켜기 칸, 기본 켬)
-
-
 def _load_rep(out_dir, name):
     """대표 결과(modules/parse/represent.py가 `out_dir/parse/_rep/<name>.json`에 씀, name = 관측한 파일 이름
     그대로 — represent.py의 "doc" 키와 같은 값) — 없거나 못 읽으면 None(아직 파싱 전·실패)."""
@@ -617,9 +610,9 @@ def nightly_plan(db, observed, reparse_keys=None, fetch_sha256=None):
 
 
 def build(out_dir, db, build_id=None, seen_at=None, fetch_sha256=None):
-    """scan → diff_against → apply → (REGISTRY_EDITIONS면) 대표 결과 비교 → commit. build_id 생략 시 UTC 초 단위
+    """scan → diff_against → apply → 대표 결과 비교 → commit. build_id 생략 시 UTC 초 단위
     타임스탬프(같은 초 안에 두 번 부르면 합쳐짐 — 시험·배치 호출은 --build-id로 명시). fetch_sha256(선택) =
-    diff_against()에 그대로 전달. AD17②·AD15(10-08, editions_on() 기본 켬) — apply() 뒤 update_rep_fingerprints
+    diff_against()에 그대로 전달. AD17②·AD15(10-08) — apply() 뒤 update_rep_fingerprints
     (이번 build의 new·changed doc_key만 _rep 읽어 rep_sha·rep_pairs 저장)·link_editions(이름이 같은 new/deleted
     짝만 판 관계 — diff["editions"]에 담아 돌려줌)·content_groups(전체 doc_registry, 같은 내용 다른 형식 묶음).
     → (diff, build_id)."""
@@ -627,9 +620,8 @@ def build(out_dir, db, build_id=None, seen_at=None, fetch_sha256=None):
     diff = diff_against(db, observed, fetch_sha256=fetch_sha256)
     build_id = build_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     apply(db, observed, diff, build_id, seen_at)
-    if editions_on():
-        update_rep_fingerprints(db, out_dir, diff)
-        diff["editions"] = link_editions(db, diff)
-        content_groups(db, out_dir)
+    update_rep_fingerprints(db, out_dir, diff)
+    diff["editions"] = link_editions(db, diff)
+    content_groups(db, out_dir)
     db.commit()
     return diff, build_id

@@ -33,17 +33,16 @@ from common.config.settings import (  # noqa: F401 — token_text: 토큰 규칙
 
 
 class McpSearchAgg(Section):
-    fx: bool | None = F(True, "SEARCH_AGG_FX", "통화가 2개 이상 섞인 집계에 환율 근거 추가 — 0이면 끔", off=("0",))
+    REMOVED = frozenset({"fx", "route"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     llm: bool | None = F(False, "SEARCH_AGG_LLM", "집계 질문 분류에 LLM 경계 분류 사용 — 1이면 켬(기본 끔)", on=("1",))
     llm_min: float | None = F(0.6, "SEARCH_AGG_LLM_MIN", "집계 LLM 분류 확신도 하한(0~1) — 미달이면 검색으로 폴백")
     llm_timeout: float | None = F(8.0, "SEARCH_AGG_LLM_TIMEOUT", "집계 LLM 분류 호출 시간 상한(초)")
-    route: bool | None = F(True, "SEARCH_AGG_ROUTE", "집계 질문이면 집계 결과를 근거 맨 앞에 — 0이면 끔", off=("0",))
     text_max_rows: int | None = F(30, "SEARCH_AGG_TEXT_MAX_ROWS", "집계 근거 text에 붙이는 표 행 상한(개)")
     text_max_src_rows: int | None = F(40, "SEARCH_AGG_TEXT_MAX_SRC_ROWS", "계약별 근거 행 상한(개)")
 
 
 class McpSearchClient(Section):
-    filter: bool | None = F(True, "SEARCH_CLIENT_FILTER", "질문에 나온 고객명으로 검색 범위 거르기 — 0이면 끔", off=("0",))
+    REMOVED = frozenset({"filter"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     hard: bool | None = F(False, "SEARCH_CLIENT_HARD", "고객 범위를 하드 격리(다른 고객 문서 제외) — 1이면 켬", on=("1",))
     strict: bool | None = F(False, "SEARCH_CLIENT_STRICT", "하드 격리에서 고객 미상 문서도 제외 — 1이면 켬", on=("1",))
 
@@ -53,15 +52,9 @@ class McpSearchPg(Section):
     vector_search: str | None = F(None, "PG_VECTOR_SEARCH", "벡터 검색 방식 — exact면 색인 없이 정확 검색, 비우면 근사(HNSW)")
 
 
-class McpSearchQueryExpand(Section):
-    draft: bool | None = F(True, "QUERY_EXPAND_DRAFT", "질문 용어 확장에서 draft 용어 사전 사용 — 0이면 끔", off=("0",))
-    enabled: bool | None = F(True, "QUERY_EXPAND", "질문 용어 확장(BM25, 용어 사전) 스위치 — 0이면 끔", off=("0",))
-    shorttok: bool | None = F(True, "QUERY_EXPAND_SHORTTOK", "용어 확장에서 한 글자 비숫자 토큰 제거 — 0이면 제거 안 함", off=("0",))
-
-
 class McpSearchWeights(Section):
     bm25: float | None = F(1.0, "SEARCH_W_BM25", "RRF 융합에서 BM25 가중치")
-    bm25_table: float | None = F(0.2, "SEARCH_W_BM25_TABLE", "집계 질문일 때 BM25 가중치(SEARCH_TYPE_WEIGHTS 켠 경우)")
+    bm25_table: float | None = F(0.2, "SEARCH_W_BM25_TABLE", "집계 질문일 때 BM25 가중치")
     id: float | None = F(2.0, "SEARCH_W_ID", "RRF 융합에서 ID(드문 식별자) 가중치")
     vector: float | None = F(1.0, "SEARCH_W_VECTOR", "RRF 융합에서 벡터 가중치")
 
@@ -107,11 +100,17 @@ class McpHost(Section):
 
 class McpOutput(Section):
     REMOVED = frozenset(
-        {"list_docs_max", "evid_local_roots", "evid_max_concurrency", "evid_max_mb", "evid_timeout_sec", "images", "max_image_px"}
+        {
+            "cap_ranked",
+            "list_docs_max",
+            "evid_local_roots",
+            "evid_max_concurrency",
+            "evid_max_mb",
+            "evid_timeout_sec",
+            "images",
+            "max_image_px",
+        }
     )  # 사용자 10-29·10-30(e2-18 — 근거 이미지·그림 조회 지움) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    cap_ranked: bool | None = F(
-        True, "CAP_RANKED", "검색 응답 크기 상한(cap)을 순위 인지 방식으로 줄임 — 0이면 옛 방식(긴 본문부터 반씩 자름)", off=("0",)
-    )
     evidence_paths: bool | None = F(
         True, "MCP_EVIDENCE_PATHS", "근거의 '파싱 결과 경로' 조회(AI.ParsingMeta) 스위치 — 0이면 시도 안 함", off=("0",)
     )
@@ -130,32 +129,31 @@ class McpQueryLog(Section):
 
 class McpSearch(Section):
     REMOVED = frozenset(
-        {"decompose", "decompose_llm", "graph", "ov_search_path", "rerank", "ocr_dpi"}
+        {
+            "copy_group",
+            "query_expand",
+            "entity_split",
+            "evidence_gate",
+            "tie_break",
+            "type_weights",
+            "vector_alias_expand",
+            "decompose",
+            "decompose_llm",
+            "graph",
+            "ov_search_path",
+            "rerank",
+            "ocr_dpi",
+        }
     )  # 사용자 10-29 · ocr_dpi 10-30(op-08) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     agg_today: str | None = F(None, "AGG_TODAY", "집계 질문의 '오늘' 기준일(YYYY-MM-DD) 고정 — 비우면 실제 오늘")
     agg_vocab_file: str | None = F(None, "AGG_VOCAB_FILE", "집계 지표 단서어 사전(agg_vocab.json)을 다른 경로로 지정")
-    copy_group: bool | None = F(True, "SEARCH_COPY_GROUP", "같은 사건의 사본(형식·재명명) 근거를 묶어 대표만 남김 — 0이면 끔", off=("0",))
     data_catalog: str | None = F(None, "DATA_CATALOG", "데이터 카탈로그(표·열 설명) JSON 경로 — 없으면 카탈로그 없이 동작")
-    entity_split: bool | None = F(True, "SEARCH_ENTITY_SPLIT", "비교 질문(고객 2명 이상)을 고객별로 나눠 검색 — 0이면 끔", off=("0",))
-    evidence_gate: bool | None = F(True, "SEARCH_EVIDENCE_GATE", "근거 점수·evidence_status 표시 — 0이면 끔(점수 칸도 안 실림)", off=("0",))
     methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서)")
     min_score: float | None = F(None, "SEARCH_MIN_SCORE", "근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak")
     struct_context_max: int | None = F(200, "STRUCT_CONTEXT_MAX", "집계 질문에서 계약 마스터 전체를 표로 넘길 때 계약 수 상한(개)")
-    tie_break: bool | None = F(True, "SEARCH_TIE_BREAK", "동점 근거를 질문의 엔티티(고객·계약번호)로 깨기 — 0이면 끔", off=("0",))
-    type_weights: bool | None = F(
-        True,
-        "SEARCH_TYPE_WEIGHTS",
-        "집계 질문이면 BM25 가중을 SEARCH_W_BM25_TABLE로 교체 — 끄는 값 0·none·false·빈 값",
-        off=("", "0", "none", "false"),
-        fold="lower",
-    )
-    vector_alias_expand: bool | None = F(
-        True, "SEARCH_VECTOR_ALIAS_EXPAND", "벡터 질의에 교차 문자 체계 별칭을 덧붙임 — 0이면 끔", off=("0",)
-    )
     agg: McpSearchAgg = Field(default_factory=McpSearchAgg)
     client: McpSearchClient = Field(default_factory=McpSearchClient)
     pg: McpSearchPg = Field(default_factory=McpSearchPg)
-    query_expand: McpSearchQueryExpand = Field(default_factory=McpSearchQueryExpand)
     weights: McpSearchWeights = Field(default_factory=McpSearchWeights)
 
 

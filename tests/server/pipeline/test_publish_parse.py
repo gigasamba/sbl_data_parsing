@@ -178,8 +178,6 @@ def selftest():
         assert old_md.read_text(encoding="utf-8") == old_content, "재파싱인데 옛 결과가 바뀜(덮어쓰기 금지 위반)"
         a.reparse = None
         a.apply = False
-        with pc.PIPE.env(PM_UPLOAD_RAW="0"):  # 되돌리기 — rep.md만(source.json은 서버가 안 올림 — C-54 ②)
-            assert run(a)["sample_rows"][0]["raw_files"] == []
         assert run(a)["sample_rows"][0]["raw_files"] == [
             "<stem>_<date>.json",
             "engine/pymupdf_1.28.2_<stem>.json",

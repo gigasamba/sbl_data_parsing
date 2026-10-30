@@ -267,13 +267,11 @@ def selftest():
                 "models.guard.no_paid_calls",
                 {"1": True, "yes": False, "true": False, "on": False, "": False, "0": False, " 1": False},
             ),
-            ("LLM_EMPTY_RETRY", "models.llm.empty_retry", {"0": False, "no": True, "false": True, "": True, "1": True}),
             (
                 "DOC_REGISTRY",
                 "store.doc_registry",
                 {"0": False, " False ": False, "none": False, "": False, "no": True, "off": True, "1": True},
             ),
-            ("PARSE_TOKEN_NORM", "text.parse_token_norm", {"NONE": False, "x": True}),
         ]
         bad_j = []
         for env_n, path_n, table in cases:

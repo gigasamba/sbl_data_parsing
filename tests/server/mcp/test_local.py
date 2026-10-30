@@ -26,20 +26,17 @@ def selftest():
     assert r_w == [2, 0, 1] and r_w != r_list  # b 가중치를 올리면 b만 있는 청크(2)가 1위로(가중이 실제로 반영됨)
     print("[selftest] BM25 가중 질의어(확장 없으면 동일 · 가중 반영) 통과")
 
-    # G14 — weights(question) 질문 유형별 가중치(SEARCH_TYPE_WEIGHTS 기본 켬 + SEARCH_W_BM25_TABLE)
-    with mc.senv(SEARCH_TYPE_WEIGHTS=None, SEARCH_W_BM25_TABLE=None, SEARCH_W_BM25=None):  # 설정 객체 덮기(S7d — 끝나면 되돌림)
-        with mc.senv(SEARCH_TYPE_WEIGHTS="0"):
-            w0 = weights()
-            assert w0 == {"vector": 1.0, "bm25": 1.0, "id": 2.0}, w0  # 기본값(BR58 1.3은 10-12 되돌림) — question 없음(바이트 동일)
-            assert weights("고객별 계약 건수 합계는?") == w0  # SEARCH_TYPE_WEIGHTS=0 — question 줘도 영향 없음
-        # 기본(미설정) = 켬
-        assert weights(None) == w0  # question 없으면(아무 데서나 호출) 켜져도 그대로
+    # G14 — weights(question) 질문 유형별 가중치(SEARCH_W_BM25_TABLE)
+    with mc.senv(SEARCH_W_BM25_TABLE=None, SEARCH_W_BM25=None):  # 설정 객체 덮기(S7d — 끝나면 되돌림)
+        w0 = weights()
+        assert w0 == {"vector": 1.0, "bm25": 1.0, "id": 2.0}, w0  # 기본값(BR58 1.3은 10-12 되돌림) — question 없음
+        assert weights(None) == w0  # question 없으면(아무 데서나 호출) 그대로
         assert weights("단가는 얼마인가요?") == w0  # 집계형 아닌 질문 — 그대로
         w_table = weights("고객별 계약 건수 합계는?")  # 집계형(qtype.classify()=="aggregate") — bm25만 낮춤
         assert w_table["vector"] == 1.0 and w_table["id"] == 2.0 and w_table["bm25"] == 0.2, w_table
         with mc.senv(SEARCH_W_BM25_TABLE="0.05"):
             assert weights("몇 건입니까?")["bm25"] == 0.05  # env로 값 바꿈
-    print("[selftest] G14 weights(question) 질문 유형별 가중치(SEARCH_TYPE_WEIGHTS 기본 켬·SEARCH_W_BM25_TABLE, =0이면 바이트 동일) 통과")
+    print("[selftest] G14 weights(question) 질문 유형별 가중치(SEARCH_W_BM25_TABLE) 통과")
 
     _selftest_id_doc_level()
     _selftest_hidden()
@@ -49,7 +46,7 @@ def selftest():
 def _selftest_tie_break():
     """BR41 — tie_break()·entity_hints() 단위 점검(DB·Local 인스턴스 없이, 순수 함수).
     동점 구간(상대 오차 TIE_EPS_REL 안) + 질문에 나온 고객 엔티티가 한쪽 문서(B)에만 맞으면 B가 앞으로(A는
-    동점이 아닌 C는 그대로 — 안정 정렬, 구간 밖은 안 건드림) · SEARCH_TIE_BREAK=0·질문에 엔티티 없음·동점 아님
+    동점이 아닌 C는 그대로 — 안정 정렬, 구간 밖은 안 건드림) · 질문에 엔티티 없음·동점 아님
     이면 셋 다 바이트 동일(그대로)."""
     ordered = [1, 2, 3]  # A(1) 1위, B(2)·C(3)는 A와 거의 동점
     scores = {1: 1.0, 2: 0.9995, 3: 0.3}  # 1↔2 상대 오차 5e-4 < 1e-3(동점) · 3은 멀어 동점 아님
@@ -91,10 +88,6 @@ def _selftest_tie_break():
     finally:
         _env.close()
 
-    with mc.senv(SEARCH_TIE_BREAK="0"):
-        off = tie_break(ordered, scores, docmeta, "Beta Co 계약은?")
-        assert off == ordered, off  # 꺼짐 — 바이트 동일
-
     # entity_hints — 계약번호·제품코드(id_patterns.csv)도 질문 문자열에서 그대로 집음(사전 있는 환경에서만, 없으면 빈 집합)
     m_cl, mi = entity_hints("C-PFE-2024-02 계약 배치 수는?", [])
     assert m_cl == set() and (mi == {"C-PFE-2024-02"} or mi == set()), (
@@ -103,7 +96,7 @@ def _selftest_tie_break():
     )  # GLOSSARY_DIR 미설정이면 mi도 빈 집합(사전 선택 장치 — load_glossary와 같은 원칙)
     print(
         "[selftest] BR41 tie_break·entity_hints — 동점 구간만·질문 엔티티 맞는 문서 앞으로·동점 아니면 안 건드림·"
-        "구조화 필드 정확 일치만(파일명 부분 일치 없음, QA093·R2Q005 회귀 재현 방지)·SEARCH_TIE_BREAK=0 바이트 동일 통과"
+        "구조화 필드 정확 일치만(파일명 부분 일치 없음, QA093·R2Q005 회귀 재현 방지) 통과"
     )
 
 

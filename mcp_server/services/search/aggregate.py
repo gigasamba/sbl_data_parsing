@@ -457,7 +457,7 @@ def route(question, docs, facts_of=None, aliases=None, llm_complete=None):
         return _apply(p, docs, facts_of)
     if not agg_llm_on() or llm_complete is None:
         return None
-    if not AGG_CUE_RE.search(question or ""):  # 수·합계·목록을 묻는 단서가 있는 질문만 LLM — SEARCH_AGG_ROUTE가 모든 검색
+    if not AGG_CUE_RE.search(question or ""):  # 수·합계·목록을 묻는 단서가 있는 질문만 LLM — 집계 경로가 모든 검색
         return None  # 질문을 여기로 보내므로, 안 그러면 일반 질문마다 LLM 1회(지연·토큰 — OP11 검토)
     p = llm_plan(question, clients, contracts, aliases, llm_complete)
     if not p:

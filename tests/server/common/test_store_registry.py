@@ -480,29 +480,6 @@ def _selftest_editions():
     row_dupB, _ = _row(db, sdupB)
     assert row_dupB["edition_of"] is None, row_dupB
 
-    # REGISTRY_EDITIONS=0 — 이 단계 전체를 안 돌림(새 doc_key여도 rep_sha 등은 그대로 NULL, diff에 editions 키 없음)
-    sm = "m" * 64
-    base_fp = fp([(n, s, 2000.0) for n, s in v2]) + [
-        {"path": "/src/customerB/dup.pdf", "sha": sdupB, "size": 100, "mtime": 1000.0},
-        {"path": "/src/q.pdf", "sha": sq2, "size": 100, "mtime": 3000.0},
-        {"path": "/src/r.pdf", "sha": sr2, "size": 100, "mtime": 4000.0},
-    ]
-    w("dedup/fingerprints.jsonl", base_fp + [{"path": "/src/m.pdf", "sha": sm, "size": 100, "mtime": 3000.0}])
-    tail_docs = [
-        ("q.pdf", sq2),
-        ("r.pdf", sr2),
-        ("dup.pdf", sdupB),
-        ("m.pdf", sm),
-    ]  # status='seen'으로 안 꺼지게(무관한 부수효과 방지) 유지
-    w("parse/_rep/sources.jsonl", src(v2 + tail_docs))
-    w("parse/_rep/index.json", idx(v2 + tail_docs))
-    w_rep("m.pdf", "새 문서" + long_tail)
-    with COMMON.env(REGISTRY_EDITIONS="0"):
-        diff3, b3 = build(out, db, build_id="e3")
-    assert diff3["new"] == [sm] and "editions" not in diff3, diff3
-    row_m, _ = _row(db, sm)
-    assert row_m["rep_sha"] is None and row_m["content_group"] is None, row_m  # 꺼짐 — 바이트 동일(새 칸 그대로 NULL)
-
     db.close()
     print(
         "[selftest] AD17②(10-08) — 파싱 뒤 대표 글 비교: same(글 완전히 같음·새 판 아님)·changed_values(숫자만 "
@@ -510,7 +487,7 @@ def _selftest_editions():
     )
     print(
         "[selftest] AD15(10-08) — 같은 내용 다른 형식(.eml/.msg·.pdf/.docx) content_group 묶음(완전 일치·5-gram "
-        "근접) · 서로 다른 문서 오탐 없음 · REGISTRY_EDITIONS=0 바이트 동일 통과"
+        "근접) · 서로 다른 문서 오탐 없음 통과"
     )
 
 

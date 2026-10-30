@@ -348,13 +348,11 @@ def text_tokens(text):
 def build_token_consensus(per_doc_toks, eng_fam, min_fams=2):
     """문서별 '유의미 텍스트' = 서로 다른 계열 min_fams개 이상이 뽑은 토큰. 계열이 min_fams보다 적으면 없음(판정 불가).
     반환 = (cons, conflicts). cons는 이전과 완전히 같은 모양(doc → 토큰 집합) — 호출부 로직 불변.
-    conflicts는 AD25(a) 추가 — PARSE_TOKEN_NORM 기본 켬일 때만(=0이면 항상 {}): 같은 문서에서 숫자 표기가 갈리지만
+    conflicts는 AD25(a) 추가: 같은 문서에서 숫자 표기가 갈리지만
     같은 값일 수 있는 자리(pipeline.shared.meaning.canon_num_key, 예 430.000↔430,000)를 엔진별 원문 표기와 함께 기록한다
     (합치지 않고 표시만 — 판정은 AD26 이후 몫)."""
-    from common.core.meaning import _norm_enabled
     from pipeline.shared.meaning import canon_num_key
 
-    norm = _norm_enabled()  # 단일 읽기 지점(meaning.py) — 여기서 따로 os.environ을 읽지 않음
     out, conflicts = {}, {}
     for doc, by_eng in per_doc_toks.items():
         fams = defaultdict(set)
@@ -362,10 +360,9 @@ def build_token_consensus(per_doc_toks, eng_fam, min_fams=2):
         for eng, ts in by_eng.items():
             for t in ts:
                 fams[t].add(eng_fam.get(eng, eng))
-                if norm:
-                    k = canon_num_key(t)
-                    if k:
-                        canon[k][t].add(eng)
+                k = canon_num_key(t)
+                if k:
+                    canon[k][t].add(eng)
         if len({eng_fam.get(e, e) for e in by_eng}) >= min_fams:
             out[doc] = {t for t, s in fams.items() if len(s) >= min_fams}
             hits = [{"value": k, "forms": {s: sorted(e) for s, e in surf.items()}} for k, surf in canon.items() if len(surf) >= 2]
@@ -653,7 +650,7 @@ def run(parse_dir, src_dir, truth_path, akey_dir, prev_docs=None):
         "phase": phase_done,
         "pending": dict(pending),
     }
-    if tok_conflicts:  # PARSE_TOKEN_NORM 기본 켬일 때만 채워짐(AD25) — =0이면 키 자체를 안 넣어 meta.json 바이트 동일
+    if tok_conflicts:  # AD25 — 갈린 숫자 표기가 있을 때만
         meta["token_conflicts"] = tok_conflicts
     return {"meta": meta, "docs": qa_docs, "engines": dict(agg)}, route
 
@@ -967,15 +964,12 @@ def main():
         )
     out_dir = Path(a.out) if a.out else Path(a.parse)
     prev_docs = None
-    if (
-        pc.cfg().transform.represent.qa_carry_forward
-    ):  # S7c — 설정 객체(off=("0",) = 옛 !="0") · O3 — 기본 켬(스트리밍이 지운 문서를 이전 qa.json에서 들고옴)
-        prev_qa = out_dir / "qa.json"
-        if prev_qa.exists():
-            try:
-                prev_docs = json.loads(prev_qa.read_text(encoding="utf-8")).get("docs")
-            except (OSError, ValueError):
-                prev_docs = None
+    prev_qa = out_dir / "qa.json"  # O3 — 지워진 문서 결과를 이전 qa.json에서 들고옴
+    if prev_qa.exists():
+        try:
+            prev_docs = json.loads(prev_qa.read_text(encoding="utf-8")).get("docs")
+        except (OSError, ValueError):
+            prev_docs = None
     qa, route = run(Path(a.parse), Path(a.src), Path(a.truth), Path(a.answer_key) if a.answer_key else None, prev_docs=prev_docs)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "qa.json").write_text(json.dumps(qa, ensure_ascii=False, indent=1), encoding="utf-8")

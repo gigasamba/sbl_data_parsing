@@ -203,7 +203,6 @@ def night(a):
             else:
                 pm = read_mark("parse") or {}
                 write_mark("structure", from_run=pm.get("run_id"), by="night")
-                load_tables_db(env)
         targets = [("pipeline.load.pgvector_load", "deploy"), ("pipeline.load.pgvector_load", "load")] if a.pg else []
         if targets and not stopped:
             for args in map(list, targets):
@@ -505,39 +504,6 @@ def write_mark(name, **kw):
     MARK[name].parent.mkdir(parents=True, exist_ok=True)
     MARK[name].write_text(json.dumps(m, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"[{name}] 끝 표시 → {MARK[name]} (run_id {m['run_id']})", flush=True)
-
-
-def load_tables_db(env=None):
-    """AD23 leftover — 구조화 뒤 _rep의 tables_std를 doc_table·doc_cell로(modules/load/structured.py tables 명령,
-    find_table_cells·aggregate.table_cell_list가 쓸 데이터). X1(로컬 정형 저장소) 옵트인이라 STRUCT_BACKEND·
-    STRUCT_DB 둘 다 없으면 건너뜀(기존과 바이트 동일 — 그 둘을 안 쓰면 do_aggregate().struct()도 안 돌아 표 칸
-    질문 라우팅 자체가 꺼져 있음). PARSE_TABLE_DB=0이면 꺼짐(기본 켬, OP11). _rep가 아직 없으면 건너뜀.
-    재실행 안전(structured.py load_tables_docs가 같은 table_key를 지우고 다시 씀) — 보조 기능(X1처럼, 서버
-    runbook의 load·link와 같은 결합도)이라 실패해도 로그만 남기고 삼킨다(engine-qa BLOCK① — structure·night·
-    run-stack 전체를 절대 막지 않음, 값은 안 돌려줌)."""
-    if not pc.cfg().transform.represent.table_db or not (
-        C.given("STRUCT_BACKEND") or C.given("STRUCT_DB")
-    ):  # S7c — given: 준 값만(STRUCT_BACKEND 기본 pg는 준 값이 아님)
-        return
-    rep = OUT / "parse" / "_rep"
-    if not rep.exists():
-        return
-    try:
-        from common.core import resources as RS
-        from common.core.paths import child_env
-
-        rc = RS.gated_popen(
-            [PY, "-m", "pipeline.load.structured", "tables", "--rep", str(rep)], cwd=APP_ROOT, env=env or child_env()
-        ).wait()  # child_env() — PYTHONPATH(deploy/) 보장(env=None 기본 호출 포함) · cwd=APP_ROOT — 위 sh()와 같은 이유
-        print(
-            f"[tables] doc_table·doc_cell 적재(AD23) — 종료 코드 {rc}" + ("" if rc == 0 else " (집계·검색은 그대로, 표 칸 질문만 영향)"),
-            flush=True,
-        )
-    except Exception as e:
-        print(
-            f"[tables] doc_table·doc_cell 적재 실패(무시 — 집계·검색·structure·night·run-stack은 계속) {type(e).__name__}: {e}", flush=True
-        )
-    return
 
 
 def need(prev, name, force, extra=None):
@@ -877,7 +843,6 @@ def structure_module(a):
         embed_model=meta.get("embed_model"),
         extra=_structure_extra(embed),
     )
-    load_tables_db(env)
 
 
 def _pg_dest_fp():
@@ -952,7 +917,6 @@ def run_stack(a):
         *_stack_arg(),
         *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
     )
-    load_tables_db()
     if a.pg:
         sh("pipeline.load.pgvector_load", "deploy")
         sh("pipeline.load.pgvector_load", "load", *(["--replace"] if a.replace else []))  # 더하고 고치기만(pl-13 — 지우지 않음)

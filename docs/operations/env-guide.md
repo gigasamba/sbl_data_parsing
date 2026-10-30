@@ -51,7 +51,7 @@
 **작성 규칙**
 - 비운 항목·빈 글자 `''`은 코드 기본값이다. 예외: 기본값이 없는 글자 항목과 sample에 `[빈 글자 유지]`로 표시된 항목만 `''`이 빈 글자(옛 env `X=`과 같게).
 - 글자 항목에 쓴 `yes`·`no`·`1`·`0`은 쓴 글자 그대로다(옛 env 줄과 같음).
-- 켜기 항목은 YAML `true`·`false`. sample에 `[켬: …]`·`[끔: …]` 표시가 있는 항목(코드가 설정 객체로 읽는 항목)은 `0`·`1`도 되고 `yes`·`on`·`off` 등은 검증 오류(항목 이름만 찍음). env로 줄 때는 키마다 옛 판정 꼴 그대로(예 `NO_PAID_CALLS`는 `1`만 켬, `LLM_EMPTY_RETRY`는 `0`만 끔).
+- 켜기 항목은 YAML `true`·`false`. sample에 `[켬: …]`·`[끔: …]` 표시가 있는 항목(코드가 설정 객체로 읽는 항목)은 `0`·`1`도 되고 `yes`·`on`·`off` 등은 검증 오류(항목 이름만 찍음). env로 줄 때는 키마다 옛 판정 꼴 그대로(예 `NO_PAID_CALLS`는 `1`만 켬, `MCP_WARMUP`은 `0`만 끔).
 - `pipe_procs`·`pipe_threads`는 숫자(소수 가능) 또는 `auto`(= 비움, 계산).
 - `pipeline.host.nightly.modules`는 공백 목록(`parse publish structure load`) 또는 YAML 목록.
 - 검증 오류 메시지는 항목 경로·오류 종류만 찍는다(값은 안 찍음). 빈 틀의 자리표시 값(`<여기에 기입>`)은 migrate가 비운 항목으로 옮긴다.
@@ -167,7 +167,7 @@
 
 ## 3. 새 기능 스위치 — 기본 켬, 끌 때만 `=0`
 
-- 새 기능은 기본 켬이다. 자주 끄는 것: `PARSE_FUSE`류(조각 융합)·`PARSE_TABLE_STD`·`SEARCH_TYPE_WEIGHTS`·`SEARCH_EVIDENCE_GATE`·`SEARCH_COPY_GROUP`·`MCP_QUERY_LOG`·`FIG_OCR_FALLBACK`·`LLM_EMPTY_RETRY`. `REGISTRY_ETAG_MD5`는 SSE-KMS·SSE-C 암호화 버킷처럼 ETag가 MD5가 아닐 수 있는 원천에서 끈다(§5 10-08 AD17① 줄).
+- 새 기능은 기본 켬이다. 되돌리기 전용 스위치는 op-08(10-30)에 지웠다 — 그 동작은 늘 켬. 끌 수 있는 것: `MCP_QUERY_LOG` 등 운영 선택. `REGISTRY_ETAG_MD5`는 SSE-KMS·SSE-C 암호화 버킷처럼 ETag가 MD5가 아닐 수 있는 원천에서 끈다(§5 10-08 AD17① 줄).
 - **전체 목록은 `settings.sample.yaml`**(생성 `python -m common.config.sample` — 모든 항목을 코드 기본값과 함께 카테고리별로, 줄 끝 주석에 설명·옛 env 이름·켜기 판정 꼴·`[파라미터]`). 서버에서 바꿀 옵션은 settings.yaml의 그 항목 값을 고친다. 코드 기본값과 다르게 채우던 서버 값은 sample의 `[서버 옛 값: …]`(C-39).
 - 읽는 순서: 테스트 값 > 오버레이 설정 파일 `overrides` > settings.yaml > 코드 기본값(env의 옛 이름은 읽지 않음 — 이름만 경고).
 

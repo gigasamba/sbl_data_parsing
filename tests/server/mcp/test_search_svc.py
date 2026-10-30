@@ -104,7 +104,7 @@ def _selftest_search_notes_no_race():
 
 def _selftest_copy_group():
     """R2-c 요건① — 같은 메일의 다른 형식(.eml/.msg)이 evidence 슬롯을 독점하지 않고 한 슬롯(대표) + variants로
-    묶이는지 · SEARCH_COPY_GROUP=0이면 끈 전과 바이트 동일(variants 칸 자체가 없음)."""
+    묶이는지."""
     from mcp_server.services.search import retriever as RT
 
     body = "MRH-MAB-01 기술이전 관련 문의드립니다 1차 트랜스퍼 배치 완료 추가 배치 3회 계획 단가 434000000 KRW"
@@ -134,14 +134,10 @@ def _selftest_copy_group():
         assert [e["file_name"] for e in out["evidence"]] == ["MAIL-X.eml"], out["evidence"]
         assert out["evidence"][0]["variants"] == ["MAIL-X.msg"], out["evidence"][0]
         assert any("사본 그룹" in n for n in out["notes"]), out["notes"]
-        with mc.senv(SEARCH_COPY_GROUP="0"):  # 설정 객체 덮기(S7d — 끝나면 되돌림)
-            out0 = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
-            names0 = [e["file_name"] for e in out0["evidence"]]
-            assert names0 == ["MAIL-X.eml", "MAIL-X.msg"] and "variants" not in out0["evidence"][0], names0
     finally:
         _STATE.clear()
         _STATE.update({k: v for k, v in old.items() if v is not None})
-    print("[selftest] R2-c 사본 그룹 — 한 슬롯 + variants · SEARCH_COPY_GROUP=0 바이트 동일 통과")
+    print("[selftest] R2-c 사본 그룹 — 한 슬롯 + variants 통과")
 
 
 def _selftest_copy_group_rep_text():
@@ -200,10 +196,7 @@ def _selftest_copy_group_rep_text():
     old = {k: _STATE.get(k) for k in ("R", "bundle", "checked_at")}
     try:
         _STATE["R"], _STATE["bundle"], _STATE["checked_at"] = RT.Retriever(d), d, time.time()
-        with mc.senv(SEARCH_COPY_GROUP="0"):
-            pre = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
-            assert pre["evidence"][0]["file_name"] == "mailshot_MAIL-X.png", pre["evidence"]  # 묶기 전: 이미지가 실제로 1위(BM25, 짧아서)
-        out = do_search("단가는?", k=5, methods=["bm25"], decompose=False)  # 기본값(SEARCH_COPY_GROUP 켬)으로 다시
+        out = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
         rep = out["evidence"][0]
         assert rep["file_name"] in ("MAIL-X.eml", "MAIL-X.msg"), rep  # ① 대표 텍스트는 형식 우선(이미지 아님)
         assert "배치" in rep["text"], rep["text"]  # ① 이미지에만 없던 문장이 대표 텍스트에 있음
@@ -361,7 +354,7 @@ def _selftest_evidence_rep_path():
 
 
 def _selftest_evidence_gate():
-    """R3(AD42) — found/weak/none·근거별 low_score(SEARCH_EVIDENCE_GATE 기본 켬일 때 계산·표시, =0이면 바이트 동일)."""
+    """R3(AD42) — found/weak/none·근거별 low_score 계산·표시."""
     ev_found = [{"text": "계약 C-001 금액은 100 USD", "score": 0.9}]
     assert evidence_status("C-001 계약 금액은?", ev_found, min_score=0.1) == ("found", [False])
     ev_off_topic = [{"text": "관련 없는 내용", "score": 0.9}]  # 핵심어(C-001) 없음 → weak
@@ -391,24 +384,16 @@ def _selftest_evidence_gate():
     _STATE.clear()
     _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
     try:
-        with mc.senv(SEARCH_EVIDENCE_GATE="0"):  # =0 — 이전 동작과 바이트 동일
-            off = do_search("색인에 없는 XYZ999-계약은?", k=3, methods=["bm25"], decompose=False)
-            assert "evidence_status" not in off and not any("low_score" in e for e in off["evidence"]), off
-            off_hit = do_search("단가는?", k=3, methods=["bm25"], decompose=False)  # =0 = 예전 응답(로컬 score None 유지 — AD42 검토)
-            assert off_hit["evidence"] and all(e.get("score") is None for e in off_hit["evidence"]), off_hit
+        none = do_search("색인에 없는 XYZ999-계약은?", k=3, methods=["bm25"], decompose=False)  # BM25 0건
+        assert none["evidence_status"] == "none", none
 
-        for gate_val in (None, "1"):  # 기본(미설정) = 켬과 명시적 "1" — 둘 다 같은 동작
-            with mc.senv(SEARCH_EVIDENCE_GATE=gate_val):
-                none = do_search("색인에 없는 XYZ999-계약은?", k=3, methods=["bm25"], decompose=False)  # BM25 0건
-                assert none["evidence_status"] == "none", (gate_val, none)
-
-                with mc.senv(SEARCH_MIN_SCORE="99999"):  # 무조건 문턱 미달
-                    weak = do_search("단가는?", k=3, methods=["bm25"], decompose=False)
-                    assert weak["evidence_status"] == "weak" and weak["evidence"][0]["low_score"] is True, (gate_val, weak)
+        with mc.senv(SEARCH_MIN_SCORE="99999"):  # 무조건 문턱 미달
+            weak = do_search("단가는?", k=3, methods=["bm25"], decompose=False)
+            assert weak["evidence_status"] == "weak" and weak["evidence"][0]["low_score"] is True, weak
     finally:
         _env.close()
         _STATE.clear()
-    print("[selftest] SEARCH_EVIDENCE_GATE — 기본 켬(미설정·'1') found/weak/none·근거별 low_score · =0이면 필드 없음(바이트 동일) 통과")
+    print("[selftest] R3 근거 게이트 — found/weak/none·근거별 low_score 통과")
 
 
 def _selftest_index_id():
@@ -461,8 +446,8 @@ def _selftest_index_id():
 
 
 def _selftest_agg_route():
-    """R1(AD42) — SEARCH_AGG_ROUTE(기본 켬)이면 집계 질문은 aggregate.detect() 경로(기존 정해진 함수만)의 결과가 근거 맨 앞에
-    via="aggregate"로 붙고, 비집계 질문·=0은 영향 없음(새 코드가 전부 그 env 분기 안에 있어 꺼지면 그대로 — 바이트 동일)."""
+    """R1(AD42) — 집계 질문은 aggregate.detect() 경로(기존 정해진 함수만)의 결과가 근거 맨 앞에
+    via="aggregate"로 붙고, 비집계 질문은 영향 없음."""
     docs = [
         {
             "file_path": "c1.txt",
@@ -503,23 +488,15 @@ def _selftest_agg_route():
     _STATE.clear()
     _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
     try:
-        with mc.senv(SEARCH_AGG_ROUTE="0"):  # =0 — 이전 동작과 바이트 동일
-            off = do_search("Acme Co의 계약 건수는 몇 건인가?", k=5, methods=["bm25"], decompose=False)
-            assert not any(e.get("via") == "aggregate" for e in off["evidence"]), off["evidence"]
+        on = do_search("Acme Co의 계약 건수는 몇 건인가?", k=5, methods=["bm25"], decompose=False)
+        assert on["evidence"][0]["via"] == "aggregate" and on["evidence"][0]["answer"] == 2, on["evidence"][0]
 
-        for route_val in (None, "1"):  # 기본(미설정) = 켬과 명시적 "1" — 둘 다 같은 동작
-            with mc.senv(SEARCH_AGG_ROUTE=route_val):
-                on = do_search("Acme Co의 계약 건수는 몇 건인가?", k=5, methods=["bm25"], decompose=False)
-                assert on["evidence"][0]["via"] == "aggregate" and on["evidence"][0]["answer"] == 2, (route_val, on["evidence"][0])
-
-                plain = do_search("단가는 얼마인가?", k=5, methods=["bm25"], decompose=False)  # 비집계 질문 — 집계 경로 영향 없음
-                assert not any(e.get("via") == "aggregate" for e in plain["evidence"]), (route_val, plain["evidence"])
+        plain = do_search("단가는 얼마인가?", k=5, methods=["bm25"], decompose=False)  # 비집계 질문 — 집계 경로 영향 없음
+        assert not any(e.get("via") == "aggregate" for e in plain["evidence"]), plain["evidence"]
     finally:
         _env.close()
         _STATE.clear()
-    print(
-        "[selftest] SEARCH_AGG_ROUTE — 기본 켬(미설정·'1') 집계 질문 aggregate 근거 맨 앞 · 비집계 질문 영향 없음 · =0이면 바이트 동일 통과"
-    )
+    print("[selftest] R1 집계 경로 — 집계 질문 aggregate 근거 맨 앞 · 비집계 질문 영향 없음 통과")
 
 
 def _selftest_agg_table_text():
@@ -578,7 +555,7 @@ def _selftest_agg_table_text():
 
 
 def _selftest_agg_fx():
-    """BR43 — 집계 결과 통화가 2개 이상 섞이면(비교 질문) SEARCH_AGG_FX(기본 켬)가 환율 근거를 집계 text 끝에 붙이고,
+    """BR43 — 집계 결과 통화가 2개 이상 섞이면(비교 질문) 환율 근거를 집계 text 끝에 붙이고,
     통화가 하나뿐이면(no-op) 영향이 없다 · =0이면 섞여도 안 붙는다."""
     docs = [
         {
@@ -650,14 +627,10 @@ def _selftest_agg_fx():
 
         single = do_search("Acme Co의 계약 건수는 몇 건인가?", k=5, methods=["bm25"], decompose=False)  # no-op — 통화 1개
         assert "환율 근거:" not in single["evidence"][0]["text"], single["evidence"][0]["text"]
-
-        with mc.senv(SEARCH_AGG_FX="0"):
-            off = do_search("Acme Co와 Beta Inc 중 전체 계약 금액 합계가 더 큰 곳은?", k=5, methods=["bm25"], decompose=False)
-            assert "환율 근거:" not in off["evidence"][0]["text"], off["evidence"][0]["text"]
     finally:
         _env.close()
         _STATE.clear()
-    print("[selftest] SEARCH_AGG_FX(BR43) — 통화 2개 이상 섞인 집계만 환율 근거 추가 · 단일 통화 영향 없음 · =0 통과")
+    print("[selftest] BR43 — 통화 2개 이상 섞인 집계만 환율 근거 추가 · 단일 통화 영향 없음 통과")
 
 
 def _selftest_search_client_arg():
@@ -700,8 +673,8 @@ def _selftest_search_client_arg():
 
 def _selftest_entity_split():
     """BR23 — 비교 질문(고객 2명이 같이 나옴)에서 한쪽 고객 문서 3개가 점수를 다 차지해 다른 쪽 고객 문서 1개가
-    top-k 밖으로 밀리는 재현(a1~a3=Acme Co, b1=Beta Inc, 질문 용어는 a쪽과 더 많이 겹침). SEARCH_ENTITY_SPLIT=0이면
-    바이트 동일(b1이 빠짐) · 기본(켬)이면 고객별 하위 검색(search_svc._gather)이 b1을 끌어와 근거에 포함."""
+    top-k 밖으로 밀리는 재현(a1~a3=Acme Co, b1=Beta Inc, 질문 용어는 a쪽과 더 많이 겹침).
+    고객별 하위 검색(search_svc._gather)이 b1을 끌어와 근거에 포함."""
     docs = [
         {"file_path": f"a{i}.txt", "file_name": f"a{i}.txt", "file_sha256": str(i) * 64, "doc_format": ".txt", "client": "Acme Co"}
         for i in range(1, 4)
@@ -725,18 +698,13 @@ def _selftest_entity_split():
     _STATE.clear()
     _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
     try:
-        with mc.senv(SEARCH_ENTITY_SPLIT="0"):
-            off = do_search(q, k=2, methods=["bm25"], decompose=False)
-            assert "b1.txt" not in {e["file_name"] for e in off["evidence"]}, off["evidence"]  # 재현 — 꺼짐이면 Beta Inc 근거가 없음
-
-        with mc.senv(SEARCH_ENTITY_SPLIT=None):  # 기본(켬)
-            on = do_search(q, k=2, methods=["bm25"], decompose=False)
-            assert "b1.txt" in {e["file_name"] for e in on["evidence"]}, on["evidence"]  # 켬 — Beta Inc 근거가 끌려옴
-            assert any("엔티티 분해" in n for n in on["notes"]), on["notes"]
+        on = do_search(q, k=2, methods=["bm25"], decompose=False)
+        assert "b1.txt" in {e["file_name"] for e in on["evidence"]}, on["evidence"]  # Beta Inc 근거가 끌려옴
+        assert any("엔티티 분해" in n for n in on["notes"]), on["notes"]
     finally:
         _env.close()
         _STATE.clear()
-    print("[selftest] BR23 SEARCH_ENTITY_SPLIT — 고객 2명 비교 질문의 한쪽 고객 누락을 하위 검색으로 보정 통과")
+    print("[selftest] BR23 엔티티 분해 — 고객 2명 비교 질문의 한쪽 고객 누락을 하위 검색으로 보정 통과")
 
 
 def _selftest_br50_client_scope():

@@ -119,7 +119,7 @@ def selftest():
         assert by_id["doc.pdf#p1#i2"]["png"] is None and by_id["doc.pdf#p1#i2"]["skipped"] == "unconvertible:image"
         assert by_id["doc.pdf#p1#i1"]["png"] is not None  # 정상 그림은 그대로(바이트 동일)
         text2, prov2 = M.vlm_fig(bad)
-        assert text2 == "" and prov2["skipped"] == "unconvertible:image"  # VLM_FIG_SELECT=0 옛 경로 가드(select_figures 분류와 무관)
+        assert text2 == "" and prov2["skipped"] == "unconvertible:image"  # vlm_fig 자체 가드(select_figures 분류와 무관)
         print("[selftest] SI30 — Pillow가 못 여는 그림은 예외 없이 unconvertible로 기록·다른 그림은 계속(write_index 안 멈춤) 통과")
 
         big_png = io.BytesIO()
@@ -137,7 +137,7 @@ def selftest():
 
         # 독립 검토 B(AD12) — 기본 켬(AD31)이면 scan_pages() 쪽(글자 거의 없음+이미지 꽉 찬 쪽)도 쪽 전체 래스터
         # 기록은 figures()가 남긴다(BR56: 전엔 통째로 건너뛰어 그림 기록이 0건이 되는 버그였음) — loc.page_vlm=True만
-        # 남겨 build_records가 VLM만 생략(쪽 VLM과 중복 호출 방지). PARSE_PAGE_SCAN=0으로 끄면 그 표시도 없음(이전 동작).
+        # 남겨 build_records가 VLM만 생략(쪽 VLM과 중복 호출 방지).
         import fitz
 
         mixed = d / "mixed.pdf"
@@ -154,14 +154,10 @@ def selftest():
             recs_on = figures(mixed)
             rec2_on = next(r for r in recs_on if r["loc"]["page"] == 2)  # BR56 — 2쪽 scan_pages 대상이어도 기록은 남음
             assert rec2_on["loc"]["page_vlm"] is True
-            with _senv(PARSE_PAGE_SCAN="0"):
-                recs_off = figures(mixed)
-                rec2_off = next(r for r in recs_off if r["loc"]["page"] == 2)  # 0으로 끔 — 2쪽 그림도 평소처럼(표시 없음)
-                assert rec2_off["loc"].get("page_vlm") is False
         finally:
             _e.close()
         print(
-            "[selftest] BR56·독립 검토 B(AD12)·AD31 — 기본 켬=scan_pages 쪽도 그림 기록은 남기고 page_vlm 표시만(VLM은 build_records가 생략)·PARSE_PAGE_SCAN=0으로 끄면 표시 없음 통과"
+            "[selftest] BR56·독립 검토 B(AD12)·AD31 — scan_pages 쪽도 그림 기록은 남기고 page_vlm 표시만(VLM은 build_records가 생략) 통과"
         )
 
         # AD20 후속(10-11) — pptx_render.target_slides()가 돌려준 슬라이드(쪽 VLM이 이미 전체를 다룸)는 그 슬라이드의
@@ -209,7 +205,7 @@ def selftest():
             _e.close()
         print("[selftest] BR56 — 단독 이미지 문서(figures() 분기 없던 공백)도 그림 1건으로 기록 통과")
 
-        # BR56 — build_records: loc.page_vlm=True 그림은 VLM_FIG_SELECT 설정과 무관하게 그림 VLM을 안 부르고
+        # BR56 — build_records: loc.page_vlm=True 그림은 그림 VLM을 안 부르고
         # (skip_reason="page_vlm") 기록은 그대로 남는다(VLM 호출 수 불변 확인).
         _e = _senv(PARSE_RAW_ROOT=str(d / "store4"), PARSE_IMAGES_ROOT=str(d / "images4"))
         calls = []
@@ -223,20 +219,17 @@ def selftest():
         try:
             recs_bm, _, _ = build_records("standalone.png", standalone_png, "", "docsha_br56c")
             assert len(recs_bm) == 1 and recs_bm[0]["skipped"] == "page_vlm" and calls == []
-            with _senv(VLM_FIG_SELECT="0"):  # 옛 동작(select_figures 안 씀)에서도 이중 호출 금지는 유지
-                recs_bm2, _, _ = build_records("standalone.png", standalone_png, "", "docsha_br56d")
-                assert len(recs_bm2) == 1 and recs_bm2[0]["skipped"] == "page_vlm" and calls == []
         finally:
             _p.stop()
             _e.close()
-        print("[selftest] BR56 — build_records: page_vlm 그림은 VLM_FIG_SELECT 설정과 무관하게 기록은 남고 그림 VLM은 0회 통과")
+        print("[selftest] BR56 — build_records: page_vlm 그림은 기록은 남고 그림 VLM은 0회 통과")
     finally:
         _env.close()  # S7c — 맨 위에서 바꿔 끼운 VLM 미설정 되돌림(VS7c2 R-6 — 실패해도)
 
 
 def selftest_select():
     """AD9·AD21①②③ — 상한 2·그림 5개 문서: skipped 표시·우선순위(캡션·본문 언급·면적)·작은/반복 제외·
-    capped.jsonl upsert·이어서 처리(캐시 재사용 — 재호출 0)·VLM_FIG_SELECT=0(옛 동작) 통과."""
+    capped.jsonl upsert·이어서 처리(캐시 재사용 — 재호출 0) 통과."""
     import tempfile
 
     import docx as _docx
@@ -277,8 +270,8 @@ def selftest_select():
 
     # S7c — 설정 객체만 바꿔 끼움(finally에서 되돌림). 옛 시험은 앞 selftest()가 지운 VLM_BASE_URL이 그대로 지워진 채 돌았음 — 같은 상태 유지
     _env = _senv(
-        PARSE_RAW_ROOT=str(d / "store"), VLM_MODEL="test/model", VLM_BASE_URL=None, PARSE_IMAGES_ROOT=str(d / "images"), VLM_FIG_KIND="0"
-    )  # AD10은 selftest_kind()가 따로 다룸 — 이 시험은 AD9·AD21(select/cap) 전용, 바이트 동일 유지
+        PARSE_RAW_ROOT=str(d / "store"), VLM_MODEL="test/model", VLM_BASE_URL=None, PARSE_IMAGES_ROOT=str(d / "images")
+    )  # AD10은 selftest_kind()가 따로 다룸 — 이 시험은 AD9·AD21(select/cap) 전용
     try:
         for data, summary in ((big, "공정 개요"), (mid, "수율 추이")):  # P0 캐시 미리 채움 — 네트워크 호출 0
             out = raw_vlm_path(raw_root(), _model_dir("test/model"), "figjson", "v2-nothink", P_FIGJ, sha(data))
@@ -322,13 +315,6 @@ def selftest_select():
         assert not capped_path().read_text(encoding="utf-8").strip()  # 더는 안 걸림 — capped.jsonl에서 지워짐(upsert)
         print("[selftest] AD21③ 이어서 VLM — 앞서 처리한 그림 재호출 0 · capped.jsonl 비워짐 통과")
 
-        _env.enter_context(_senv(VLM_FIG_SELECT="0", VLM_FIGURES_MAX="2"))  # 꺼짐 — 옛 문서 순서로 상한(작은/반복 구분 없음)
-        recs3, _, _ = build_records("sel.docx", path, doc_text, "docsha123")
-        by_i3 = {r["image_id"].rsplit("#i", 1)[1]: r for r in recs3}
-        assert by_i3["1"]["skipped"] is None and by_i3["2"]["skipped"] is None  # 문서 순서 1·2번째만 처리
-        assert all(by_i3[k]["skipped"] == "VLM_FIGURES_MAX" for k in ("3", "4", "5"))  # 작은/반복 구분 없이 상한 사유만
-        print("[selftest] VLM_FIG_SELECT=0 — 옛 문서 순서·동작 통과")
-
         # out_images= 인자(AG11 2단계 착수 조건, 10-08) — PARSE_IMAGES_ROOT(env, d/images) 밖의 세션 폴더를 직접
         # 지정하면(parse_agent_tools.py의 쓰기 범위와 같은 모양 — out_dir/_images) capped.jsonl·PNG가 그 폴더에만
         # 쓰이고 env 쪽(images_root())은 안 건드린다(이전엔 env 교체로만 격리 가능했음).
@@ -349,7 +335,7 @@ def selftest_select():
 def selftest_kind():
     """AD10 — classify_figure_kind() 순수 분류(모델 호출 없음) + build_records 연동(기본은 분류만 기록하고 VLM은
     그대로 호출 — engine-qa BLOCK 10-08 ②: text_image "VLM 생략"은 실 글자 이미지 표본으로 검증 전까지
-    VLM_FIG_TEXT_SKIP=1일 때만, photo는 기본 켬으로 vlm_fig 출력 상한만 낮춤, VLM_FIG_KIND=0 끄면 이전 동작 그대로)."""
+    VLM_FIG_TEXT_SKIP=1일 때만, photo는 vlm_fig 출력 상한만 낮춤)."""
     assert classify_figure_kind({"loc": {"signals": {"bars": 4, "curve_diag_arrow": 0}}}) == "chart"
     assert classify_figure_kind({"loc": {"signals": {"bars": 0, "curve_diag_arrow": 4}}}) == "flow"
     assert classify_figure_kind({"loc": {"signals": {"bars": 1, "curve_diag_arrow": 1}}}) == "other"  # 약한 신호 — 안전하게 other
@@ -386,7 +372,6 @@ def selftest_kind():
     _env = _senv(
         PARSE_RAW_ROOT=str(d / "store"),
         PARSE_IMAGES_ROOT=str(d / "images"),  # S7c — 설정 객체만 바꿔 끼움(finally에서 되돌림)
-        FIG_OCR_FALLBACK="0",  # OP11 — 이 시험은 AD10 분류·VLM 생략만 다룸(fallback은 selftest_ocr_fallback 전용)
         VLM_MODEL=None,
         VLM_BASE_URL=None,
     )
@@ -431,14 +416,6 @@ def selftest_kind():
         assert by_ierr["1"]["provenance"]["fig_kind"] == "other" and by_ierr["2"]["provenance"]["fig_kind"] == "other"
         assert by_ierr["1"]["vlm_error"] and "미설정" in by_ierr["1"]["vlm_error"]  # other → vlm_fig 그대로 호출(생략 안 됨)
         print("[selftest] AD10 — crop OCR 실패해도 kind=other로 안전하게(기존 전체 VLM 그대로) 통과")
-
-        # VLM_FIG_KIND=0 — 끄면 이전 동작(모두 vlm_fig, 분류 자체를 안 함, 바이트 동일)
-        _env.enter_context(_senv(VLM_MODEL=None, VLM_FIG_KIND="0"))
-        recs3, _, _ = build_records("kind.docx", path, "", "docsha_kind", ocr_fn=fake_ocr)
-        by_i3 = {r["image_id"].rsplit("#i", 1)[1]: r for r in recs3}
-        assert by_i3["1"]["kind"] != "text_image" and by_i3["1"]["vlm_error"]  # 꺼지면 그냥 vlm_fig(미설정 오류)
-        assert "fig_kind" not in by_i3["1"]["provenance"] or by_i3["1"]["provenance"]["fig_kind"] is None  # 분류 자체를 안 함
-        print("[selftest] AD10 — VLM_FIG_KIND=0 끄면 이전 동작(모두 vlm_fig, 분류 안 함) 통과")
     finally:
         _env.close()
 
@@ -492,8 +469,8 @@ def selftest_mt_cache():
 
 def selftest_ocr_fallback():
     """OP11(10-11) — 글자 쪽 안에 박힌 그림(스캔 라벨 등)의 VLM 응답이 빈 경우(미설정·오류·빈 응답)만 같은 crop의
-    OCR 글자로 채운다(기본 켬) · 분류(AD10) OCR이 이미 돈 그림은 fallback이 재호출 안 함(호출 수 공유 상한) ·
-    끄면(FIG_OCR_FALLBACK=0) 이전 동작(값 복구 없음) · OCR도 글자가 없거나 실패해도 문서는 계속 ·
+    OCR 글자로 채운다 · 분류(AD10) OCR이 이미 돈 그림은 fallback이 재호출 안 함(호출 수 공유 상한) ·
+    OCR도 글자가 없거나 실패해도 문서는 계속 ·
     engine-qa CONCERN(10-11) ① — 의미 있는 글자 수가 문턱(기본 10) 미만인 로고·워터마크 조각은 안 씀 ·
     ② — 복구돼도 원래 VLM 실패 사유(vlm_error)는 지우지 않음."""
     import tempfile
@@ -523,7 +500,7 @@ def selftest_ocr_fallback():
         PARSE_RAW_ROOT=str(d / "store"), PARSE_IMAGES_ROOT=str(d / "images"), VLM_MODEL=None, VLM_BASE_URL=None
     )  # S7c — 설정 객체만 바꿔 끼움
     try:
-        # 기본(VLM_FIG_KIND=1 기본 켬) — AD10 분류가 이미 ocr_text를 채워 둠 → fallback은 재호출 없이 그대로 재사용
+        # AD10 분류가 이미 ocr_text를 채워 둠 → fallback은 재호출 없이 그대로 재사용
         recs, _, _ = build_records("fb.docx", path, "", "docsha_fb1", ocr_fn=fake_ocr)
         r = recs[0]
         assert len(calls) == 1  # 분류 때 1번만(fallback 재호출 없음)
@@ -532,33 +509,18 @@ def selftest_ocr_fallback():
         assert r["provenance"].get("ocr_fallback") is True and r["provenance"]["model"] == "ocr:rapidocr_ko"
         print("[selftest] OP11 — VLM 빈 결과(미설정) → crop OCR(분류 때 이미 돈 결과 재사용, 재호출 없음) · vlm_error 보존 통과")
 
-        # VLM_FIG_KIND=0 — 분류 자체를 안 해 ocr_text가 없음 → fallback이 새로 한 번만 호출해 복구
-        calls.clear()
-        with _senv(VLM_FIG_KIND="0"):
-            recs2, _, _ = build_records("fb.docx", path, "", "docsha_fb2", ocr_fn=fake_ocr)
-            assert len(calls) == 1 and recs2[0]["vlm"]["text"] == "숨은 라벨 velorimab"
-        print("[selftest] OP11 — VLM_FIG_KIND=0(분류 꺼짐)도 fallback이 OCR을 새로 한 번 돌려 복구 통과")
-
-        # 끔(FIG_OCR_FALLBACK=0) — 이전 동작(VLM 미설정 오류만, 값 복구 안 함)
-        with _senv(FIG_OCR_FALLBACK="0"):
-            recs3, _, _ = build_records("fb.docx", path, "", "docsha_fb3", ocr_fn=fake_ocr)
-            assert recs3[0]["vlm"]["text"] is None and recs3[0]["vlm_error"] and "미설정" in recs3[0]["vlm_error"]
-            assert not recs3[0]["provenance"].get("ocr_fallback")
-        print("[selftest] OP11 — FIG_OCR_FALLBACK=0 끔 → 이전 동작(값 복구 안 함) 통과")
-
         # OCR도 글자가 없으면(진짜 로고·백지) 복구할 것이 없음 — VLM 실패 기록 그대로, 재호출도 없음(이미 분류 때 "" 확정)
         recs4, _, _ = build_records("fb.docx", path, "", "docsha_fb4", ocr_fn=lambda b: "")
         assert recs4[0]["vlm"]["text"] is None and not recs4[0]["provenance"].get("ocr_fallback")
         print("[selftest] OP11 — OCR도 글자 없음 → 복구할 것 없음(VLM 실패 기록 그대로) 통과")
 
-        # fallback이 새로 호출하는 경로(분류 꺼짐)에서 OCR이 예외를 던져도 문서는 계속(engine-qa BLOCK ③과 같은 관례)
+        # OCR이 예외를 던져도 문서는 계속(engine-qa BLOCK ③과 같은 관례)
         def boom_ocr(b):
             raise RuntimeError("가짜 OCR 실패")
 
-        with _senv(VLM_FIG_KIND="0"):
-            recs5, _, _ = build_records("fb.docx", path, "", "docsha_fb5", ocr_fn=boom_ocr)
-            assert recs5[0]["vlm"]["text"] is None and not recs5[0]["provenance"].get("ocr_fallback")
-        print("[selftest] OP11 — fallback OCR 실패해도 문서는 계속(VLM 실패 기록 그대로) 통과")
+        recs5, _, _ = build_records("fb.docx", path, "", "docsha_fb5", ocr_fn=boom_ocr)
+        assert recs5[0]["vlm"]["text"] is None and not recs5[0]["provenance"].get("ocr_fallback")
+        print("[selftest] OP11 — OCR 실패해도 문서는 계속(VLM 실패 기록 그대로) 통과")
 
         # engine-qa CONCERN(10-11) ① — 로고·워터마크·짧은 머리글 조각(의미 있는 글자 10 미만)은 안 씀
         assert _meaningful_chars("# Outlook") == 7 and _meaningful_chars("OK") == 2  # 실측 — 문턱(기본 10) 미만

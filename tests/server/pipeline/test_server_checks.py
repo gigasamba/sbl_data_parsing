@@ -5,70 +5,13 @@ import types
 from collections import Counter
 from pathlib import Path
 
-from common.core.paths import STACK_FILE
 from pipeline.eval.server_checks import (
-    AR1_CONFIGS,
     _ar6_counts,
     _ar6_markdown,
     _index_text_from_pg_row,
-    _run_ar1,
-    cmd_ar1,
     cmd_ar6,
     cmd_t1,
 )
-
-
-def selftest_ar1():
-    """represent.py·score_gold.py는 가짜로 주입(서버 없이) — 내 오케스트레이션(문서 수 제한·설정별 env 격리·
-    마크다운)만 검증."""
-    import tempfile
-
-    with tempfile.TemporaryDirectory() as td:
-        d = Path(td)
-        parse_dir = d / "parse"
-        for eng in ("pymupdf", "rapidocr_ko"):
-            (parse_dir / eng).mkdir(parents=True)
-            for doc in ("a.pdf", "b.pdf", "c.pdf"):
-                (parse_dir / eng / f"{doc}.json").write_text(json.dumps({"text": "x"}), encoding="utf-8")
-        runs = [
-            {"doc": doc, "engine": eng, "error": None, "sec": 0.1, "phase": 1}
-            for doc in ("a.pdf", "b.pdf", "c.pdf")
-            for eng in ("pymupdf", "rapidocr_ko")
-        ]
-        (parse_dir / "runs.jsonl").write_text("\n".join(json.dumps(r) for r in runs), encoding="utf-8")
-        out_dir = d / "output"
-
-        calls = []
-
-        def fake_represent(dev_root, stack_path, pd, src, env):
-            calls.append((str(pd), dict(env)))
-            (pd / "_rep").mkdir(parents=True, exist_ok=True)
-            (pd / "_rep" / "conflicts.jsonl").write_text(json.dumps({"doc": "a.pdf", "conflicts": [1, 2]}) + "\n", encoding="utf-8")
-            return 0.5
-
-        def fake_score(dev_root, gold_dir, pd, src, out, env):
-            cfg = Path(pd).name
-            vr = 0.5 if "PARSE_FUSE_off" in cfg or cfg == "cfg_baseline" else 0.9
-            return {
-                "rep": {"value_recall": vr, "char_acc_post": 0.8, "table_cell_recall": 0.7, "num_halluc": 0.0},
-                "docs": {"a.pdf": {"rep": {"value_recall": vr}}},
-            }
-
-        results2, md2 = _run_ar1(
-            parse_dir,
-            d / "src",
-            d / "gold",
-            out_dir,
-            STACK_FILE,
-            max_docs=2,
-            represent_fn=fake_represent,
-            score_fn=fake_score,
-        )
-        assert set(results2) == {c[0] for c in AR1_CONFIGS}, results2
-        assert results2["PARSE_FUSE_off"]["rep"]["value_recall"] == 0.5
-        assert results2["baseline"]["rep"]["value_recall"] == 0.5
-        assert len(list((out_dir / "engine_base" / "pymupdf").glob("*.json"))) == 2  # --max-docs 제한
-    print("[selftest] ar1 — --max-docs 제한·설정 전부 실행·결과 집계 통과(재판독 P3·--run-vlm은 pl-34에 지움)")
 
 
 def selftest_ar6():
@@ -186,7 +129,6 @@ def selftest_t1():
 
 
 SUBCOMMANDS = {
-    "ar1": (cmd_ar1, selftest_ar1),
     "ar6": (cmd_ar6, selftest_ar6),
     "t1": (cmd_t1, selftest_t1),
 }
@@ -195,7 +137,7 @@ SUBCOMMANDS = {
 def run_all_selftests():
     for _name, (_func, selftest_fn) in SUBCOMMANDS.items():
         selftest_fn()
-    print("[selftest] server_checks — 전체(ar1·ar6·t1) 통과")
+    print("[selftest] server_checks — 전체(ar6·t1) 통과")
     return 0
 
 

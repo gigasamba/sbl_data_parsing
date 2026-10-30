@@ -113,12 +113,10 @@ class PipelineExtractOcr(Section):
 
 
 class PipelineExtractPrepare(Section):
+    REMOVED = frozenset({"rotate_fast"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     link: str | None = F("auto", "PREPARE_LINK", "회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy")
     ocr: str | None = F("auto", "PREPARE_OCR", "회전 검토용 OCR 엔진 선택: auto|v1|v3(v3=rapidocr 3.x 강제)", blank="keep")
     rotate: bool | None = F(True, "PREPARE_ROTATE", "스캔 PDF 회전 검토(OCR 점수) 켬/끔 — 0이면 생략하고 그대로 복사", off=("0",))
-    rotate_fast: bool | None = F(
-        True, "PREPARE_ROTATE_FAST", "회전 검토 빠른 경로(앞쪽 공통 각도 힌트+축소 점검) 켬/끔 — 0이면 매 쪽 4방향 전체", off=("0",)
-    )
     rotate_lead: int | None = F(3, "PREPARE_ROTATE_LEAD", "빠른 회전 검토에서 기대 각도를 정하는 문서 맨 앞 쪽 수(개)")
     rotate_probe_fast: int | None = F(480, "PREPARE_ROTATE_PROBE_FAST", "빠른 회전 검토의 축소 점검 이미지 크기(px)")
     rotate_s0_min: float | None = F(150.0, "PREPARE_ROTATE_S0_MIN", "빠른 회전 검토에서 힌트 각도를 믿는 최소 OCR 점수")
@@ -160,7 +158,7 @@ class PipelineHostNightly(Section):
 
 
 class PipelineLoadPublish(Section):
-    REMOVED = frozenset({"source_system"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset({"upload_raw", "source_system"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     bucket: str | None = F(None, "PM_BUCKET", "publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소)")
     bucket_skip_overlap_check: bool | None = F(
         False, "PM_BUCKET_SKIP_OVERLAP_CHECK", "PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 — 1이면 생략", on=("1",)
@@ -168,9 +166,6 @@ class PipelineLoadPublish(Section):
     parse_date: str | None = F(None, "PM_PARSE_DATE", "업로드 키의 날짜 폴더(YYYY-MM-DD) — 비면 오늘")
     path_map: CsvList | None = F([], "PM_PATH_MAP", "원본 키 앞부분 치환표 '이전=새' 쉼표 목록(결과 키 경로 구성용)")
     prefix: str | None = F(None, "PM_PREFIX", "버킷 안 업로드 경로 접두")
-    upload_raw: bool | None = F(
-        True, "PM_UPLOAD_RAW", "rep.md 옆에 rep.json·엔진 원본·figures·meta도 올릴지 — 0이면 rep.md 등 옛 동작", off=("0",)
-    )
     upload_statuses: CsvList | None = F(
         ["ok", "partial"], "PM_UPLOAD_STATUSES", "원본을 업로드할 파싱 상태 목록(콤마 — 비면 parsing_meta.DEFAULT_UPLOAD_STATUSES)"
     )
@@ -236,68 +231,54 @@ class PipelineServiceTrigger(Section):
 
 class PipelineTransformFigures(Section):
     REMOVED = frozenset(
-        {"ocrvlm_prompt"}
+        {
+            "chart_values_det",
+            "diagram_edges_det",
+            "doc_shape_figure",
+            "nested_figure",
+            "ocr_fallback",
+            "overlay_cluster",
+            "page_child_dedup",
+            "pptx_slide_vlm",
+            "vector_box_diagram",
+            "ocrvlm_prompt",
+        }
     )  # 사용자 10-30(pl-31 — ocr_vlm 엔진과 함께 지움) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    chart_values_det: bool | None = F(
-        True, "CHART_VALUES_DET", "차트 값을 결정적(규칙) 추출로 보정(=0이면 VLM 눈대중 값만 사용)", off=("0",)
-    )
-    diagram_edges_det: bool | None = F(
-        True, "DIAGRAM_EDGES_DET", "도식 연결선을 결정적 추출로 보강(=0이면 pptx_xml·vlm 경로만)", off=("0",)
-    )
-    doc_shape_figure: bool | None = F(
-        True, "PARSE_DOC_SHAPE_FIGURE", "docx·xlsx 도형 도식을 soffice로 렌더해 그림 기록(=0이면 끔)", off=("0",)
-    )
-    nested_figure: bool | None = F(
-        True, "PARSE_NESTED_FIGURE", "그림 안 자식 그림 찾기·VLM 기록(=0이면 VLM 설정과 무관하게 안 함)", off=("0",)
-    )
-    ocr_fallback: bool | None = F(True, "FIG_OCR_FALLBACK", "VLM 결과가 빈 그림에 같은 crop OCR 글자를 대신 채움(=0이면 끔)", off=("0",))
     ocr_fallback_min_chars: int | None = F(
         10, "FIG_OCR_FALLBACK_MIN_CHARS", "OCR 대체 사용 최소 의미 글자 수(미만이면 로고·워터마크로 보고 버림)"
     )
     ocr_parallel: int | None = F(3, "FIGURES_OCR_PARALLEL", "그림 crop OCR 병렬 워커 수(OCR 대상 수가 상한)")
-    overlay_cluster: bool | None = F(
-        True, "FIG_OVERLAY_CLUSTER", "겹친 개체(그림+글상자·도형)를 한 묶음으로 찾아 기록(=0이면 그림마다 따로)", off=("0",)
-    )
-    page_child_dedup: bool | None = F(
-        True, "FIG_PAGE_CHILD_DEDUP", "쪽 VLM이 이미 옮긴 쪽의 하위 그림은 검색 청크를 안 만듦(=0이면 옛 동작)", off=("0",)
-    )
     pptx_convert_sec: int | None = F(60, "PARSE_PPTX_CONVERT_SEC", "soffice 문서→PDF 변환 시간 상한(초, 넘으면 해당 프로세스 종료)")
     pptx_render_max: int | None = F(10, "PARSE_PPTX_RENDER_MAX", "문서당 렌더·VLM 호출할 슬라이드·도형 쪽 수 상한")
     pptx_shapes_max: int | None = F(20, "PARSE_PPTX_SHAPES_MAX", "연결선 없는 도형 배치 슬라이드 후보 수 상한(0이면 이 사유는 안 봄)")
-    pptx_slide_vlm: bool | None = F(True, "PARSE_PPTX_SLIDE_VLM", "pptx 슬라이드 쪽 VLM 전사 기능(=0이면 끔)", off=("0",))
     pptx_smartart_max: int | None = F(20, "PARSE_PPTX_SMARTART_MAX", "SmartArt 슬라이드 후보 수 상한(0이면 이 사유는 안 봄)")
-    vector_box_diagram: bool | None = F(
-        True, "VECTOR_BOX_DIAGRAM", "상자+직선만 있는 벡터 영역도 도식으로 인정(=0이면 표 격자로 버리는 옛 동작)", off=("0",)
-    )
     vectors_max: int | None = F(20, "PARSE_VECTORS_MAX", "쪽 VLM 후보로 볼 벡터 도형 많은 쪽 수 상한(0이면 이 사유는 안 봄)")
     vlm_parallel: int | None = F(None, "FIGURES_VLM_PARALLEL", "그림 VLM 호출 병렬 워커 수")
 
 
 class PipelineTransformRepresent(Section):
     REMOVED = frozenset(
-        {"fuse_reread_p3", "fuse_reread", "reread_fallback_best", "reread"}
+        {
+            "context",
+            "fuse",
+            "fuse_signals",
+            "qa_carry_forward",
+            "standardize",
+            "table_db",
+            "table_inline",
+            "table_std",
+            "table_stitch",
+            "fuse_reread_p3",
+            "fuse_reread",
+            "reread_fallback_best",
+            "reread",
+        }
     )  # pl-34(10-30) — 재판독 P2·P3를 모두 지움(사용자 10-30, 옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    context: bool | None = F(
-        True, "PARSE_CONTEXT", "문서·쪽 신호 맥락(rep.context·decisions) 기록(=0이면 안 남김)", off=("", "0", "none", "false"), fold="lower"
-    )
-    fuse: bool | None = F(
-        True, "PARSE_FUSE", "엔진별 결과 조각 투표(융합 P1) 사용(=0이면 끔)", off=("", "0", "none", "false"), fold="lower"
-    )
-    fuse_signals: bool | None = F(
-        True,
-        "PARSE_FUSE_SIGNALS",
-        "융합 점수에 사전·명부·교차 언급 신호를 반영(=0이면 기본 점수만)",
-        off=("", "0", "none", "false"),
-        fold="lower",
-    )
     post: CsvText | None = F(
         None,
         "PARSE_POST",
         "후보정 기능 선택: all(전부)|none(끔)|콤마 목록(vlm_page,supsub,charts,figures,context,attachments) — 없으면 자리마다 다름(파이프라인 all · parse MCP 서비스 supsub), 빈 값은 끔(옛 get(X, 'all')의 '' — blank keep) · 쓴 글자 그대로 rep.post.config에 남음(YAML 목록은 쉼표로 이음 — S7c2)",
         blank="keep",
-    )
-    qa_carry_forward: bool | None = F(
-        True, "PARSE_QA_CARRY_FORWARD", "parse_qa가 지워진 문서 결과를 이전 qa.json에서 가져옴(=0이면 안 가져옴)", off=("0",)
     )
     qa_light: bool | None = F(False, "PARSE_QA_LIGHT", "=1이면 native 대비 풀문서 CER·순서 비교를 생략(경량화)", on=("1",))
     rep_select: str | None = F(None, "PARSE_REP_SELECT", "대표 엔진 선택 방식: first(첫 성공 엔진)|acc(정확도만)|그 외 best(정확도+풍부도)")
@@ -305,49 +286,16 @@ class PipelineTransformRepresent(Section):
         False, "PARSE_SHADOW", "그림자 모드(파싱 판단 규칙 vs LLM 제안 비교)를 켬(=1이면 켬)", off=("", "0", "none", "false"), fold="lower"
     )
     shadow_max: int | None = F(50, "PARSE_SHADOW_MAX", "그림자 모드 한 번에 훑는 문서 수 상한")
-    standardize: bool | None = F(
-        True, "PARSE_STANDARDIZE", "엔진 묶음 직후 기호 맵·첨자 표기 표준화(=0이면 끔)", off=("", "0", "none", "false"), fold="lower"
-    )
-    table_db: bool | None = F(True, "PARSE_TABLE_DB", "구조화 뒤 _rep의 표를 정형 저장소 doc_table·doc_cell로 적재(=0이면 끔)", off=("0",))
-    table_inline: bool | None = F(
-        True,
-        "PARSE_TABLE_INLINE",
-        "엔진별 표 그리드를 모아 본문 제자리에 GFM 표로 넣음(=0이면 대표 엔진 표만)",
-        off=("", "0", "none", "false"),
-        fold="lower",
-    )
-    table_std: bool | None = F(
-        True,
-        "PARSE_TABLE_STD",
-        "표를 표준 형식(tables_std 칸)으로 변환(=0이면 칸 자체가 안 생김)",
-        off=("", "0", "none", "false"),
-        fold="lower",
-    )
-    table_stitch: bool | None = F(
-        True,
-        "PARSE_TABLE_STITCH",
-        "쪽 경계에서 쪼개진 표를 이어 붙임(=0이면 쪽마다 쪼개진 채 둠)",
-        off=("", "0", "none", "false"),
-        fold="lower",
-    )
 
 
 class PipelineTransformStructure(Section):
     REMOVED = frozenset(
-        {"wiki_domain_phrase", "edw_embed"}
+        {"bundle_keep_empty_fig", "chunk_head", "client_roster_seed", "draft_terms", "wiki_domain_phrase", "edw_embed"}
     )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐 · op-08 edw_embed → embed로 합침) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    bundle_keep_empty_fig: bool | None = F(
-        False, "BUNDLE_KEEP_EMPTY_FIG", "=1이면 내용이 빈 VLM 그림도 청크로 색인(되돌리기), 기본 0은 빈 그림 청크 안 만듦", on=("1",)
-    )
-    chunk_head: bool | None = F(True, "CHUNK_HEAD", "청크 앞에 [문서명·고객·절 제목] 머리말을 붙임(=0이면 안 붙임)", off=("0",))
     chunk_overlap: int | None = F(64, "CHUNK_OVERLAP", "고정 길이 청커(chunk_fixed512)의 청크 간 겹침 글자 수")
     chunk_size: int | None = F(None, "CHUNK_SIZE", "청크 목표 길이(글자) — 청커별 기본이 다름")
     chunk_table: str | None = F(None, "CHUNK_TABLE", "'rows'이면 큰 표를 행 묶음 단위로 쪼갬(그 외 값·미설정은 표를 통째로 둠)")
     chunk_table_rows: int | None = F(25, "CHUNK_TABLE_ROWS", "표를 쪼갤 때 청크당 행 수(CHUNK_TABLE=rows일 때만)")
-    client_roster_seed: bool | None = F(
-        True, "CLIENT_ROSTER_SEED", "고객 추론에 주요 바이오·제약사 공개 이름 seed 명부를 더함(=0이면 안 더함)", off=("0",)
-    )
-    draft_terms: bool | None = F(True, "DRAFT_TERMS", "새 회사 이름 후보를 용어집 draft로 자동 추가(=0이면 안 함)", off=("0",))
     edw_summary_llm: bool | None = F(
         False, "EDW_SUMMARY_LLM", "=1이면 묶음 요약을 LLM으로 생성(--summary auto일 때만, 기본은 앞부분 발췌)", on=("1",)
     )
@@ -365,14 +313,13 @@ class PipelineTransformStructure(Section):
 
 
 class PipelineTransformVlm(Section):
+    REMOVED = frozenset({"fig_kind", "fig_select"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     deadline: float | None = F(360.0, "VLM_DEADLINE", "VLM 호출 1건 제한 시간(초)")
-    fig_kind: bool | None = F(True, "VLM_FIG_KIND", "그림 종류(차트·사진·글자 이미지) 분류를 기록(=0이면 분류 끔)", off=("0",))
     fig_min_px: int | None = F(64, "VLM_FIG_MIN_PX", "이 값보다 짧은 변의 그림은 VLM 대상에서 제외(픽셀)")
     fig_ocr_max: int | None = F(8, "VLM_FIG_OCR_MAX", "문서당 그림 crop OCR 횟수 상한(비용 가드)")
     fig_photo_area_min: float | None = F(0.03, "VLM_FIG_PHOTO_AREA_MIN", "사진류(photo)로 볼 그림의 최소 면적 비율(쪽 대비)")
     fig_photo_max_tokens: int | None = F(300, "VLM_FIG_PHOTO_MAX_TOKENS", "사진류 그림 VLM 응답 최대 토큰 수(한 줄 요약 유도)")
     fig_photo_ocr_max: int | None = F(5, "VLM_FIG_PHOTO_OCR_MAX", "crop OCR 글자 수가 이 값 이하(+면적 충분)이면 사진류로 분류")
-    fig_select: bool | None = F(True, "VLM_FIG_SELECT", "VLM 보낼 그림을 크기·반복 기준으로 선별(=0이면 문서 순서로 상한만)", off=("0",))
     fig_text_ocr_min: int | None = F(
         200, "VLM_FIG_TEXT_OCR_MIN", "crop OCR 글자 수(공백 제외)가 이 값 이상이면 글자 이미지(text_image)로 분류"
     )
@@ -422,7 +369,18 @@ class PipelineEval(Section):
 
 class PipelineExtract(Section):
     REMOVED = frozenset(
-        {"phases", "phase_sec", "auto_reparse_changed", "parallel", "dedup_scan", "ocr_gt_max", "signal_ocr"}
+        {
+            "merge_pages",
+            "page_scan",
+            "scan_fill",
+            "phases",
+            "phase_sec",
+            "auto_reparse_changed",
+            "parallel",
+            "dedup_scan",
+            "ocr_gt_max",
+            "signal_ocr",
+        }
     )  # 사용자 10-29 — phase 없앰 · 10-30 auto_reparse_changed·parallel 지움(pl-35) · dedup_scan·ocr_gt_max·signal_ocr 지움(pl-34)(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     disk_free_warn_gb: float | None = F(10.0, "DISK_FREE_WARN_GB", "디스크 남은 용량이 이 값(GB)보다 작으면 보관 용량 경고 출력")
     doc_parallel: int | None = F(1, "PARSE_DOC_PARALLEL", "대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개)")
@@ -448,26 +406,17 @@ class PipelineExtract(Section):
     )
     max_file_mb: float | None = F(0.0, "MAX_FILE_MB", "이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음)")
     max_new: int | None = F(0, "PARSE_MAX_NEW", "이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음)")
-    merge_pages: bool | None = F(True, "PARSE_MERGE_PAGES", "엔진 간 쪽·문단 단위 보정(쪽 합치기)을 켤지(=0이면 끔)", off=("0",))
     ocr_engine: bool | None = F(
         False,
         "PARSE_OCR_ENGINE",
         "OCR 엔진(rapidocr·rapidocr_ko)을 파싱 엔진으로 돌릴지(=1 켬) — 끄면 이미지·스캔 문서는 VLM 엔진만",
         on=("1",),
     )
-    page_scan: bool | None = F(True, "PARSE_PAGE_SCAN", "글자 PDF 안의 스캔 쪽을 신호로 찾아 쪽 VLM에 보낼지(=0이면 끔)", off=("0",))
     prefetch_workers: int | None = F(2, "PREFETCH_WORKERS", "미리받기(warm) 명령의 동시 다운로드 스레드 수(개)")
     rapidocr_page_workers: int | None = F(
         1, "RAPIDOCR_PAGE_WORKERS", "rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개)", pinned="engine"
     )
     rotated_max: int | None = F(20, "PARSE_ROTATED_MAX", "쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) — 0이면 rotation.csv를 안 읽음")
-    scan_fill: bool | None = F(
-        True,
-        "PARSE_SCAN_FILL",
-        "스캔 쪽을 OCR로 채우는 대표 결과 보정 켬/끔 — 0이면 이전 동작과 바이트 동일",
-        off=("", "0", "none", "false"),
-        fold="lower",
-    )
     skipped_log: str | None = F(None, "PARSE_SKIPPED_LOG", "건너뛴 문서(암호 PDF 등) 기록 jsonl 경로")
     source_limit: int | None = F(0, "PARSE_SOURCE_LIMIT", "원본에서 처리할 문서 건수 상한(0=제한 없음)")
     text_page_sec: float | None = F(

@@ -1378,15 +1378,12 @@ class CommonModelsGuard(Section):
 
 class CommonModelsLlm(Section):
     REMOVED = frozenset(
-        {"max_concurrency"}
+        {"empty_retry", "max_concurrency"}
     )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     allow_external: bool | None = F(False, "LLM_ALLOW_EXTERNAL", "LLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "LLM_API_KEY", "LLM 엔드포인트 API 키(있을 때만 사용)")
     base_url: str | None = F(None, "LLM_BASE_URL", "LLM 엔드포인트 주소(OpenAI 호환 …/v1)")
     cache_dir: str | None = F(None, "LLM_CACHE_DIR", "LLM 응답 캐시 폴더(요청 해시별 json)")
-    empty_retry: bool | None = F(
-        True, "LLM_EMPTY_RETRY", "빈 응답(생각이 토큰 소진) 안전망 — =0이면 끔, 그 밖이면 max_tokens×4로 1회 재요청", off=("0",)
-    )
     empty_retry_max: int | None = F(8000, "LLM_EMPTY_RETRY_MAX", "빈 응답 재요청 때 max_tokens 상한(토큰)")
     est_usd: float | None = F(0.01, "LLM_EST_USD", "LLM 한 턴(run_agent)당 예상 비용($) — 예산 선차감용")
     extra_body: JsonValue | None = F(
@@ -1541,16 +1538,11 @@ class CommonRuntime(Section):
 
 
 class CommonStore(Section):
-    REMOVED = frozenset({"registry_retry_max"})  # 사용자 10-30(pl-32 — 재시도 횟수 없음, 실패 문서는 늘 다시) — 옛 파일에 남아도 경고만
+    REMOVED = frozenset(
+        {"registry_editions", "registry_retry_max"}
+    )  # 사용자 10-30(pl-32 — 재시도 횟수 없음, 실패 문서는 늘 다시) — 옛 파일에 남아도 경고만
     doc_registry: bool | None = F(
         True, "DOC_REGISTRY", "문서 대장(doc_registry) 사용 — =0이면 끄고 필터 없이 동작", off=("", "0", "none", "false"), fold="lower"
-    )
-    registry_editions: bool | None = F(
-        True,
-        "REGISTRY_EDITIONS",
-        "대장 '판 비교'(지문 기록·판 연결·내용 그룹) — =0이면 끄고 이전 동작",
-        off=("", "0", "none", "false"),
-        fold="lower",
     )
     registry_etag_md5: bool | None = F(
         True,
@@ -1569,15 +1561,9 @@ class CommonStore(Section):
 
 
 class CommonText(Section):
+    REMOVED = frozenset({"parse_token_norm"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     draft_terms_max: int | None = F(
         500, "DRAFT_TERMS_MAX", "용어 자동 초안 파일 행 수 상한(개) — 넘으면 가장 빈번한 것만 유지", pinned="handoff"
-    )
-    parse_token_norm: bool | None = F(
-        True,
-        "PARSE_TOKEN_NORM",
-        "파싱 결과 비교의 숫자 표기 정규화(AD25) — =0이면 끄고 이전 동작",
-        off=("", "0", "none", "false"),
-        fold="lower",
     )
     search_recency: str | None = F(
         "1",

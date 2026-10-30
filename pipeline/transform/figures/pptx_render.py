@@ -4,7 +4,6 @@ candidate_slides() 자체는 어디서도 안 불리던 상태(바이트 영향 
 
 SOFFICE_BIN(env) → PATH의 soffice/soffice.exe → 흔한 설치 경로(_common_soffice_paths) 순으로 찾고, 다 없으면 조용히
 건너뜀(이전 동작과 바이트 동일) — 못 찾으면 이 프로세스에서 1번만 stderr 경고(독립 검토 10-13, 매 문서 반복 아님).
-PARSE_PPTX_SLIDE_VLM(env, 기본 켬, OP11 — "새 기능 기본 켬") — =0이면 이 기능 자체를 안 봄(candidate_slides도 안 부름).
 PARSE_PPTX_RENDER_MAX(env, 기본 10) — 문서당 실제 렌더·VLM 호출할 슬라이드 상한(candidate_slides 자체 상한 20+20과 별개 안전판
 — LibreOffice 변환은 슬라이드 수와 무관하게 문서 1번이지만 VLM 호출은 쪽마다라 비용이 큼).
 PARSE_PPTX_CONVERT_SEC(env, 기본 60초) — soffice 변환 시간 상한, 넘으면 그 자식 프로세스만 종료(이름 단위 taskkill 금지)하고 빈 결과.
@@ -19,7 +18,7 @@ AD14(10-13) — docx·xlsx의 도형 도식(텍스트 상자·연결선·SmartAr
 render_slides·target_slides·pptx_slide_vlm은 그대로 — 바이트 영향 0). shape_detect.py의 cheap 문턱(soffice
 호출 전 문서/drawing 단위 bool)을 지나면 문서 전체를 한 번 변환해 열고, 쪽마다 '벡터 그려진 것이 있고 래스터
 이미지가 없음'(get_drawings() 있음 + get_images() 없음 — 백로그가 제시한 바로 그 규칙)인 쪽만 그림 후보로
-돌려준다. PARSE_DOC_SHAPE_FIGURE(env, 기본 켬, OP11) — =0이면 꺼짐. PARSE_PPTX_RENDER_MAX·PARSE_PPTX_CONVERT_SEC
+돌려준다(늘 켬 — 끄기 스위치는 op-08에 지움). PARSE_PPTX_RENDER_MAX·PARSE_PPTX_CONVERT_SEC
 재사용(새 env 없음) — postprocess.figures._office_shape_figures()가 이 목록을 그림 레코드로 바꿔 보통 그림과
 같은 VLM·캡 경로를 탄다."""
 
@@ -53,10 +52,6 @@ _soffice_warned = [False]  # 독립 검토(10-13) — soffice_bin()이 끝까지
 # (이전엔 pptx_slide_vlm()이 호출마다 — 문서마다 — 찍어 배치에서 같은 줄이 반복됐고, target_slides()·render_slides()
 # 호출부는 아예 안 찍어 조용히 꺼진 채 티가 안 났다. 한 곳(soffice_bin 자신)에서만 찍으면 모든 호출부가 같은
 # 경고를 공유(중복 구현 없음).
-
-
-def on():
-    return pc.cfg().transform.figures.pptx_slide_vlm  # S7c — 설정 객체(off=("0",) = 옛 !="0")
 
 
 def _common_soffice_paths():
@@ -127,15 +122,13 @@ def target_slides(doc_path):
     """AD20 후속(10-11) — 이 문서에서 **실제로** 쪽 VLM이 호출될 슬라이드 번호 집합(candidate_slides를
     PARSE_PPTX_RENDER_MAX 상한·soffice 유무까지 적용해 거른 것) — pptx_slide_vlm()이 렌더할 목록을 고르는
     바로 그 계산이자, `figures.py`가 '이 슬라이드는 쪽 VLM이 이미 전체를 다루니 삽입 그림을 또 기록하지
-    않는다'는 중복 방지 판단에 쓰는 한 곳(한 계산을 두 곳이 같이 봄 — 따로 추정 안 함). 꺼짐·pptx 아님·
+    않는다'는 중복 방지 판단에 쓰는 한 곳(한 계산을 두 곳이 같이 봄 — 따로 추정 안 함). pptx 아님·
     후보 0건·soffice 없음이면 빈 집합(그 경우 쪽 VLM도 안 돌아 figures()가 평소처럼 그림을 기록해야 함).
     독립 검토 반영(10-11, AD31/AD20 BLOCK) — soffice가 PATH에 있다고 변환이 꼭 성공하는 건 아니다(타임아웃·
     0이 아닌 종료 코드·깨진 파일). pptx_slide_vlm()이 이 문서에 대해 이미(이 프로세스에서) 변환을 시도해
     실패를 기록해 두었으면(_conversion_ok) 예측 대신 그 실제 결과로 빈 집합을 돌려준다 — 변환이 실패하면
     쪽 VLM도 비어서([]) 그 슬라이드의 삽입 그림을 figures()가 건너뛰면 안 되기 때문(원래 버그: 예측만 보고
     실제 변환 결과를 몰랐음)."""
-    if not on():
-        return set()
     from pipeline.shared.postprocess import (
         active_features,
     )  # 재검토(10-11): PARSE_POST에 vlm_page가 없으면 쪽 VLM이 안 도니 그림도 건너뛰면 안 됨(page_targets와 같은 규칙)
@@ -196,10 +189,6 @@ def render_slides(doc_path, slide_nums, timeout=None):
     return render_office_pages(p, slide_nums, timeout)
 
 
-def shape_figure_on():
-    return pc.cfg().transform.figures.doc_shape_figure  # S7c — 설정 객체(off=("0",) = 옛 !="0")
-
-
 def _is_table_like(pg):
     """독립 검토 반영(10-13) — shape_render_pages()가 "그려진 것 있음 + 이미지 없음"만 보면 표 테두리·밑줄만
     있는 쪽(축 정렬 선·윤곽선 사각형만, 채움 없음)도 후보로 잡힌다. 쪽에 pymupdf가 실제로 표를 찾으면(내장
@@ -226,7 +215,7 @@ def _is_table_like(pg):
 
 def shape_render_pages(doc_path, timeout=None):
     """AD14 — docx·xlsx의 도형 도식(텍스트 상자·연결선·SmartArt, 삽입 이미지 없음) → {쪽 번호(soffice가 만든
-    PDF 쪽, 1부터): PNG bytes}. 꺼짐(PARSE_DOC_SHAPE_FIGURE=0)·docx·xlsx 아님·shape_detect 문턱 미달(soffice를
+    PDF 쪽, 1부터): PNG bytes}. docx·xlsx 아님·shape_detect 문턱 미달(soffice를
     아예 안 부름)·soffice 없음·변환 실패면 빈 묶음(조용히 건너뜀, soffice 없을 때만 stderr 진단 1줄).
     문서 전체를 soffice로 한 번만 PDF 변환(render_slides와 같은 _convert_to_pdf 재사용) 후 쪽마다 '벡터로
     그려진 것이 있고 래스터 이미지가 없음'(get_drawings() 있음 + get_images() 없음 — 백로그가 제시한 규칙,
@@ -235,7 +224,7 @@ def shape_render_pages(doc_path, timeout=None):
     VLM 호출은 쪽마다라 비용이 큼 — render_slides·pptx_slide_vlm과 같은 안전판 재사용, 새 env 없음)."""
     p = Path(doc_path)
     ext = p.suffix.lower()
-    if ext not in (".docx", ".xlsx") or not shape_figure_on():
+    if ext not in (".docx", ".xlsx"):
         return {}
     has_shapes = shape_detect.docx_has_shapes(p) if ext == ".docx" else shape_detect.xlsx_has_shapes(p)
     if not has_shapes:
@@ -268,10 +257,8 @@ def shape_render_pages(doc_path, timeout=None):
 
 def pptx_slide_vlm(doc_path):
     """후보 슬라이드(candidate_slides)만 렌더해 쪽 VLM — [(슬라이드 번호, 글, provenance{..., "reason"})].
-    꺼짐(PARSE_PPTX_SLIDE_VLM=0)·pptx 아님·후보 0건·soffice 없음·변환 실패면 []( 바이트 영향 0,
+    pptx 아님·후보 0건·soffice 없음·변환 실패면 []( 바이트 영향 0,
     soffice 없을 때만 stderr 진단 1줄)."""
-    if not on():
-        return []
     p = Path(doc_path)
     if p.suffix.lower() != ".pptx":
         return []

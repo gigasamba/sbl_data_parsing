@@ -3,16 +3,15 @@
 search 도구만 호출해 hit@1·@5·@k·value_in_evidence@k(정답 값이 근거 원문에 있나)·근거 수·응답 바이트·지연 p50/p95·via 분포를 잰다.
 재순위·질문 분해·그래프·용어 확장·답변 생성은 범위 밖(서버 쪽 env로 끔 — 이 도구는 끄지 않음, 호출만).
 
-AD42 R3·R1 문턱 보정(서버 스위치 SEARCH_EVIDENCE_GATE·SEARCH_AGG_ROUTE는 기본 꺼짐, 이 도구는 끄지도 켜지도 않음 —
-서버를 두 env로 각각 띄워 같은 --set을 두 번 돌려 비교):
+AD42 R3·R1 문턱 보정(근거 게이트·집계 경로는 서버에서 늘 켬):
   evidence_status 분포·근거별 low_score — 매 응답의 evidence(score·text 필드, 서버 env와 무관하게 항상 있음)로
     mcp_server.services.search.shaping.evidence_status()를 클라이언트에서 그대로 재계산(--min-score 문턱마다, 서버의 실제 게이트와 같은 함수) —
-    서버가 SEARCH_EVIDENCE_GATE=1로 응답에 evidence_status를 이미 넣어도 비교 가능하게 항상 재계산.
+    서버 응답에 evidence_status가 이미 있어도 비교 가능하게 항상 재계산.
   negative 정탐·오탐 — 평가셋 자체 negative 문항은 실제로는 근거가 있어 반박하는 문항(synth-4clients, 옛 eval_research.py 주석)이라
     "정답 문서 없음" 판정에 안 맞음 → --negative-from <다른 세트>로 그 세트 질문 중 **지금 묶음에 없는 문서가 gold인 것만** 섞어
     "정답 문서 없는 질문" negative로 — found면 오탐, weak·none이면 정탐.
-  집계 질문 hit — qa.json의 type이 aggregate·table_aggregate인 문항에서 evidence[0].via=="aggregate"(SEARCH_AGG_ROUTE=1일 때만
-    나타남)·gold_answer와 집계 answer 일치율.
+  집계 질문 hit — qa.json의 type이 aggregate·table_aggregate인 문항에서 evidence[0].via=="aggregate"
+    ·gold_answer와 집계 answer 일치율.
 
 채점 재사용(새로 안 만듦): _load_qa_items(gold_docs 추출 — S5에 model_matrix에서 이 파일로) · _score_4clients(synth-4clients 정답 포함 판정 — S5a에 옛
 cli/eval_research.py에서 이 파일로 옮김) · src/tools/data/_synth_images_qa.score(answer_keywords·forbid_keywords) ·
@@ -30,7 +29,7 @@ parts.embed=="bge-m3"·parts.dataset(또는 pool=true)로 가장 최근 것을 �
   python cli/mcp_eval.py --set synth-terms-hard,synth-revisions-tune,synth-4clients,synth-distractors-v2 \
       --pool --url ... --store-root <...>     # 풀 묶음을 가리키는 서버에 여러 세트를 한 번에(문서 이름은 자동 치환)
   python cli/mcp_eval.py --set synth-4clients --negative-from synth-terms-hard --min-score none,0,0.02,0.05,0.1 \
-      --url ... --store-root <...>            # (서버는 SEARCH_EVIDENCE_GATE=1로 — 로컬 묶음 score는 게이트 켤 때만 응답에 실림) R3 문턱 보정표 + negative 정탐·오탐 + synth-4clients 집계 문항 hit
+      --url ... --store-root <...>            # R3 문턱 보정표 + negative 정탐·오탐 + synth-4clients 집계 문항 hit
 """
 
 import argparse
@@ -192,9 +191,6 @@ METHODS = ["vector", "bm25", "id"]  # 범위 축소(그래프·image·openviking
 SERVER_ONLY_ENV = (
     "MCP_METHODS",
     "SEARCH_RECENCY",
-    "QUERY_EXPAND",
-    "SEARCH_EVIDENCE_GATE",
-    "SEARCH_AGG_ROUTE",
 )
 
 

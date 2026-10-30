@@ -392,14 +392,13 @@ def infer_clients(docs, head=400, roster=None):
     (2) 그래도 clients가 비면 제품 코드 접두어(MRH-MAB-01 → MRH)를 다른 문서에서 그 고객과 함께 나온 것으로
     배워 채움(client_src='product') — 그대로, clients에도 반영.
     알려진 고객 = 교차 확인된 고객 + 고객 명부(roster, 기본 T._aliases() — stack.json client_aliases·CLIENT_ROSTER·
-    GLOSSARY_DIR org_client) + CLIENT_ROSTER_SEED(기본 켬, =0으로 끔 — 주요 바이오·제약사 공개 이름 seed,
-    pipeline.transform.structure.terms.seed_roster()) 합집합 — roster를 명시하면(옛 호출자·시험) seed는 안 더함(바이트 동일).
+    GLOSSARY_DIR org_client) + 주요 바이오·제약사 공개 이름 seed(pipeline.transform.structure.terms.seed_roster())
+    합집합 — roster를 명시하면(옛 호출자·시험) seed는 안 더함(바이트 동일).
     ponytail: 알려진 고객 수 × 문서 전체 길이 스캔(O(roster×len(text))) — 명부가 아주 커지면 아호코라식 등으로."""
     if roster is None:
         roster = dict(T._aliases())
-        if pc.cfg().transform.structure.client_roster_seed:  # S7c — 설정 객체(끄기 "0")
-            for c, al in ST.seed_roster().items():
-                roster[c] = sorted(set(roster.get(c, [])) | set(al))
+        for c, al in ST.seed_roster().items():
+            roster[c] = sorted(set(roster.get(c, [])) | set(al))
     known = {d["client"]: [] for d in docs if d.get("meta_confirmed") and d.get("client")}
     known.update({c: list(a) for c, a in roster.items()})
     for d in docs:
@@ -458,13 +457,11 @@ def collect_draft_terms(docs, glossary_dir=None):
     검토 BLOCK 1, 10-13: GLOSSARY_DIR은 서버에서 이미지 밖 실 운영 사전 폴더라 거기 쓰면 PermissionError로
     구조화 전체가 깨진다)에 쌓는다 — 사람 승인 없이, BM25 weak 가중만(하드 필터·고객 판별엔 안 들어감).
     glossary_dir 인자는 **읽기**(이미 아는 approved 이름 판별)에만 쓰고, 쓰기 경로는 항상 output/(또는
-    DRAFT_TERMS_OUT) — 둘을 혼동하지 않는다. DRAFT_TERMS=0(기본 켬)이면 아무것도 안 함. 이 함수 전체(명부·
+    DRAFT_TERMS_OUT) — 둘을 혼동하지 않는다. 이 함수 전체(명부·
     용어집 읽기 포함)를 try/except로 감싸 — 어떤 이유로든(디스크 가득·권한·잠긴 파일) 실패해도 WARNING만 찍고
     빈 목록을 돌려준다(warn_if_no_client_roster와 같은 관례) — 구조화(build_bundle.py main())가 이 보조 기능 때문에
     멈추지 않게. 반환: 새로 추가한 이름 목록(로그용, 실패하면 빈 목록)."""
     d = glossary_dir or C.cfg().paths.glossary_dir  # S7c — 설정 객체(인계 칸 — terms.py는 아직 env로 읽음)
-    if not pc.cfg().transform.structure.draft_terms:  # S7c — 설정 객체(끄기 "0")
-        return []
     try:
         from pipeline.transform.structure import draft_terms as DT
 
@@ -640,8 +637,8 @@ def fig_empty(rec):
 
 def fig_page_child(rec, page_vlm_ids):
     """F11 — 쪽 VLM이 이미 쪽 전체를 옮겨 적은(부모 skipped=page_vlm) 하위 그림: 내용이 본문 청크와 겹쳐 합본 잡음·1위 하락
-    → 검색 청크는 안 만들고 image_id만 본문 청크에 연결(get_image·images.jsonl엔 남음). FIG_PAGE_CHILD_DEDUP=0이면 옛 동작."""
-    return rec.get("parent_image_id") in page_vlm_ids and pc.cfg().transform.figures.page_child_dedup  # S7c — 설정 객체(끄기 "0")
+    → 검색 청크는 안 만들고 image_id만 본문 청크에 연결(get_image·images.jsonl엔 남음)."""
+    return rec.get("parent_image_id") in page_vlm_ids
 
 
 def fig_host(doc_chunks, page):
@@ -751,10 +748,7 @@ def main(argv=None):
 
         meta_docs = build(a.parse_dir, a.src)  # 교차 확인 (라벨, 값)
     src = Path(a.src)
-    keep_empty_fig = (
-        pc.cfg().transform.structure.bundle_keep_empty_fig
-    )  # S7c — 설정 객체(켜기 "1") · AD21③ — 되돌리기 스위치(기본 꺼짐: 빈 VLM 청크 색인 안 함)
-    n_fig_dropped = 0
+    n_fig_dropped = 0  # AD21③ — 빈 VLM 그림은 청크를 만들지 않음
 
     # EDW 파일 메타 로드 (FILE_META_PATH env 또는 --file-meta 인자)
     _file_meta = {}
@@ -926,7 +920,7 @@ def main(argv=None):
         page_vlm_ids = {r["image_id"] for r in fig_by_doc.get(doc, []) if r.get("skipped") == "page_vlm"}
         for rec in fig_by_doc.get(doc, []):  # L1: 그림 1개 = 청크 1개(자르지 않음) — 텍스트 청크 뒤 이어서
             img = image_record(di, rec)  # F8 — 그림 관리 표(doc_image) 행: 청크 본문과 별도로 그림 자체 메타를 보관
-            if fig_page_child(rec, page_vlm_ids) or (fig_empty(rec) and not keep_empty_fig):  # AD21③ 빈 VLM · F11 쪽 VLM과 중복
+            if fig_page_child(rec, page_vlm_ids) or fig_empty(rec):  # AD21③ 빈 VLM · F11 쪽 VLM과 중복
                 n_fig_dropped += 1
                 host = fig_host(doc_text_chunks, rec.get("page"))
                 if host is not None:  # 원본 이미지 조회(get_image)용 image_id 연결은 문서/쪽 청크에 남김
@@ -943,16 +937,13 @@ def main(argv=None):
     canon_clients(docs)
     infer_clients(docs)
     warn_if_no_client_roster(docs)
-    added = collect_draft_terms(docs)  # SI43④ — 새 회사 이름 후보를 glossary draft로(약한 BM25만, DRAFT_TERMS=0로 끔)
+    added = collect_draft_terms(docs)  # SI43④ — 새 회사 이름 후보를 glossary draft로(약한 BM25만)
     if added:
         print(f"[bundle] 새 회사 이름 후보 {len(added)}건을 용어집 draft로 추가(사람 승인 전): {', '.join(added)}", flush=True)
-    if (
-        pc.cfg().transform.structure.chunk_head
-    ):  # S7c — 설정 객체(끄기 "0") · G9: 청크 머리말 [문서명 · 고객 · 절 제목] — 같은 양식 다른 고객·문서를 가름
-        for c in chunks:
-            d = docs[c["doc"]]
-            c["head"] = "[" + " · ".join(x for x in (Path(d["doc_name"]).stem, d.get("client"), c.get("section")) if x) + "]"
-            c["n_terms"] = len(tokens(index_text(c)))
+    for c in chunks:  # G9: 청크 머리말 [문서명 · 고객 · 절 제목] — 같은 양식 다른 고객·문서를 가름
+        d = docs[c["doc"]]
+        c["head"] = "[" + " · ".join(x for x in (Path(d["doc_name"]).stem, d.get("client"), c.get("section")) if x) + "]"
+        c["n_terms"] = len(tokens(index_text(c)))
     final = Path(a.out)
     out = final.with_name(
         final.name + ".tmp"
@@ -998,9 +989,7 @@ def main(argv=None):
         "engines": sorted({d.get("parse_engine") or "rep" for d in docs}),
         "bbox": sum(1 for c in chunks if c["bbox"]),
         "fig_chunks": sum(1 for c in chunks if c.get("image_id")),  # L1
-        **(
-            {"figure_chunks_dropped": n_fig_dropped} if not keep_empty_fig else {}
-        ),  # AD21③ — 켜졌을 때만(독립 검토 MINOR④, 꺼짐=옛 meta와 바이트 동일)
+        "figure_chunks_dropped": n_fig_dropped,  # AD21③
         "concepts": len(glossary),
         "concept_chunk": len(concept_chunk),  # X4
         "sec": round(time.time() - t0, 1),

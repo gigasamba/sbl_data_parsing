@@ -1,6 +1,5 @@
 """pipeline.transform.represent.fuse 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.fuse`."""
 
-from pipeline import config as pc
 from pipeline.transform.represent.fuse import (
     _doc_locale_pref,
     _doc_value_graph,
@@ -10,8 +9,6 @@ from pipeline.transform.represent.fuse import (
     fuse,
     fuse_facts,
     norm_key,
-    on,
-    on_signals,
     term_plausibility,
     trust_weight,
     vote_fragment,
@@ -119,36 +116,18 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통
     assert conflicts[0]["split"] is False and conflicts[0]["resolved_by"] == "trust"  # 신뢰도만으로 확실히 갈렸다(기본 점수 동점 아님)
     print("[selftest] fuse_facts — 라벨 키 자리 맞추기·신뢰도 투표·갈린 자리만 conflicts 기록·split·resolved_by 통과")
 
-    # fuse_facts — AD29 ④ 그래프 대역(문서 내 교차 언급)이 PARSE_FUSE_SIGNALS 켬/끔에 따라 동점을 깨는지.
-    # engine-qa 10-08 (1)(2)(5): 교차 언급은 "신뢰도로 이긴 것"이 아니라 보조 신호라 켜져도 split=True(resolved_by
-    # ="heuristic")로 남는다(대표 텍스트만 X1로 뽑힘) · 꺼지면 conflicts.jsonl에 "split"·"resolved_by" 키 자체가
-    # 없다(스키마가 이 기능 이전과 바이트 동일).
+    # fuse_facts — AD29 ④ 그래프 대역(문서 내 교차 언급)이 동점을 깨는지.
+    # engine-qa 10-08 (1)(2)(5): 교차 언급은 "신뢰도로 이긴 것"이 아니라 보조 신호라 split=True(resolved_by
+    # ="heuristic")로 남는다(대표 텍스트만 X1로 뽑힘).
     docs3 = {
         "pdfplumber": {"facts": [{"context": ["금액1"], "value": "X1"}, {"context": ["금액2"], "value": "X1"}]},
         "office": {"facts": [{"context": ["금액1"], "value": "X2"}]},
     }
-    with pc.PIPE.env(PARSE_FUSE_SIGNALS="0"):  # S7c — 설정 객체만 바꿔 끼움
-        _, conf_off = fuse_facts(docs3, None)
-    assert "split" not in conf_off[0] and "resolved_by" not in conf_off[0]  # 꺼지면 키 자체가 없음(스키마 보존)
-    with pc.PIPE.env(PARSE_FUSE_SIGNALS="1"):
-        _, conf_on = fuse_facts(docs3, None)
+    _, conf_on = fuse_facts(docs3, None)
     assert conf_on[0]["winner"] == "X1" and conf_on[0]["split"] is True and conf_on[0]["resolved_by"] == "heuristic"
-    print(
-        "[selftest] fuse_facts — PARSE_FUSE_SIGNALS 켬/끔: 꺼지면 split·resolved_by 키 자체가 없음(스키마 동일) "
-        "· 켜져도 교차 언급만으로 깬 동점은 split=True·resolved_by=heuristic로 남음 통과"
-    )
+    print("[selftest] fuse_facts — 교차 언급만으로 깬 동점은 split=True·resolved_by=heuristic로 남음 통과")
 
     # fuse() 전체 — 결정적(두 번 불러도 같은 결과)
     out1, out2 = fuse(docs, "pdfplumber"), fuse(docs, "pdfplumber")
     assert out1 == out2 and out1["stats"] == {"fragments": 2, "conflicts": 1, "engines": ["pdfplumber", "pymupdf", "rapidocr_ko"]}
     print("[selftest] fuse — 결정적(같은 입력 → 같은 결과)·stats 통과")
-
-    # on() — PARSE_FUSE 기본 켬, =0으로 끔
-    with pc.PIPE.env(PARSE_FUSE=None):
-        assert on() is True and on("1") is True and on("0") is False
-    print("[selftest] PARSE_FUSE on() 기본 켬(=0으로 끔) 통과")
-
-    # on_signals() — PARSE_FUSE_SIGNALS 기본 켬, =0으로 끔
-    with pc.PIPE.env(PARSE_FUSE_SIGNALS=None):
-        assert on_signals() is True and on_signals("1") is True and on_signals("0") is False
-    print("[selftest] PARSE_FUSE_SIGNALS on_signals() 기본 켬(=0으로 끔) 통과")

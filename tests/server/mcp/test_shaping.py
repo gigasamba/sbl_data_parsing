@@ -2,7 +2,6 @@
 
 import json
 
-from mcp_server import config as mc
 from mcp_server.services.search.shaping import cap
 
 
@@ -11,7 +10,7 @@ def _cap_bytes(obj):
 
 
 def _selftest_cap_ranked():
-    """AR5 — 랭크 인지 cap(): 1위 보호·aggregate 보호·꼬리부터 뺌·CAP_RANKED=0 바이트 동일.
+    """AR5 — 랭크 인지 cap(): 1위 보호·aggregate 보호·꼬리부터 뺌.
     독립 검토 BLOCK(10-12) 뒤 — 랭크 경로의 모든 사례에 바이트 상한 assert 추가(truncation 칸이 루프 끝난 뒤
     붙어 그 칸만큼 limit을 넘기던 결함 재발 방지) + non-str text(int·list·None) 복원력 사례."""
     # 1) 1위(index 0) 보호 — 꼬리(가장 낮은 순위)만 줄여도 한도 안이면 1위는 안 건드림
@@ -42,33 +41,12 @@ def _selftest_cap_ranked():
     cap(o, 100)
     assert _cap_bytes(o) <= 100
 
-    # 6) non-str text(int·list·None) — 죽지 않고 str()로 다뤄짐(랭크 경로만, CAP_RANKED=0은 예전처럼 안 건드림)
+    # 6) non-str text(int·list·None) — 죽지 않고 str()로 다뤄짐
     o = {"evidence": [{"text": 12345}, {"text": ["a", "b"]}, {"text": None}, {"text": "z" * 5000}]}
     cap(o, 1000)
     assert _cap_bytes(o) <= 1000
 
-    # 4) CAP_RANKED=0 — 예전 알고리즘과 바이트 동일(새 truncation 칸도 안 붙음)
-    def _legacy_cap(obj, limit):
-        items = obj.get("evidence", [])
-        while len(json.dumps(obj, ensure_ascii=False).encode("utf-8")) > limit and items:
-            e = max(items, key=lambda x: len(x.get("text") or ""))
-            t = e.get("text") or ""
-            if len(t) <= 80:
-                items.pop()
-                obj["truncated"] = True
-                continue
-            e["text"] = t[: len(t) // 2] + " …(잘림)"
-            obj["truncated"] = True
-        return obj
-
-    o_new = {"evidence": [{"text": "가" * 5000}, {"text": "나" * 5000}]}
-    o_legacy = {"evidence": [{"text": "가" * 5000}, {"text": "나" * 5000}]}
-    with mc.senv(CAP_RANKED="0"):
-        cap(o_new, 3000)
-    _legacy_cap(o_legacy, 3000)
-    assert json.dumps(o_new, ensure_ascii=False) == json.dumps(o_legacy, ensure_ascii=False)
-    assert "truncation" not in o_new
-    print("[selftest] cap() AR5 — 1위·aggregate 보호·꼬리 drop·CAP_RANKED=0 바이트 동일 통과")
+    print("[selftest] cap() AR5 — 1위·aggregate 보호·꼬리 drop 통과")
 
 
 def _selftest_cap_fuzz():

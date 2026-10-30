@@ -6,7 +6,7 @@
 ① 올릴 것 = **대표 결과(.md)** — 원본 파일은 올리지 않는다(원천 원본은 읽기만, 수정·삭제 금지). `render_md()`가
    `_rep/<doc>.json`(text·tables_std)에서 마크다운을 만든다.
    + 사용자 10-14: 같은 날짜 폴더에 파싱 결과 원본도 함께(`raw_artifacts()` — <파일명>_<날짜>.json·<엔진>_<판>_<파일명>.json·vlm_<모델>_<파일명>.jsonl·
-   <파일명>_<날짜>_meta.json, rep.md를 마지막에 써서 완료 표시 · `PM_UPLOAD_RAW=0`이면 옛 동작). 원본 문서 파일은 여전히 안 올림.
+   <파일명>_<날짜>_meta.json, rep.md를 마지막에 써서 완료 표시). 원본 문서 파일은 여전히 안 올림.
 ② 겹침/건너뜀 키(KEY) = (source_system, source_key) — source_key는 **원본 Object Storage 전체 키**(경로 포함,
    manifest의 "key" — 폴더 직접 소스 등 키가 없으면 상대 경로인 file_name으로 대체). 파일 이름만 보던 SI37보다 더
    정확한 키(두 폴더의 같은 이름 파일이 서로 안 겹침).
@@ -181,7 +181,7 @@ def render_md(rep):
     """대표 결과(`_rep/<doc>.json`) → 마크다운(SI39① — 업로드 대상은 이것, 원본이 아님). 본문(쪽 구분 \\f는 빈
     줄로) + 표(`tables_std`가 있으면 GitHub 표, 없으면 원시 `tables[].text`를 코드블록으로) — 이 저장소에 기존
     md 렌더러가 없어 최소 결정적 렌더러로 새로 만듦(순수 함수, I/O 없음).
-    TA1 — `table_inline`(PARSE_TABLE_INLINE, 기본 켬)이 표를 이미 본문 제자리에 넣은 표(entry["inline"] True)는
+    TA1 — `table_inline`이 표를 이미 본문 제자리에 넣은 표(entry["inline"] True)는
     여기서 다시 안 붙인다(끝에 또 붙으면 같은 표가 두 번 — 이 백로그가 고치려던 것). 자리를 못 찾아 본문엔 안
     들어간 표(inline False·끈 경우 inline 칸 자체가 없음, 옛 동작과 같음)는 그대로 끝에 붙인다."""
     parts = []
@@ -388,13 +388,11 @@ def engines_used(rep_json, env_fallback=True):
 
 
 def raw_artifacts(parse_dir, name, figs, runs=None):
-    """PM_UPLOAD_RAW(사용자 10-14, 기본 켬 · =0이면 옛 동작 rep.md만) — rep.md와 같은 날짜 폴더에 함께 올릴 것
+    """사용자 10-14 — rep.md와 같은 날짜 폴더에 함께 올릴 것
     [(파일 이름, 로컬 Path 또는 텍스트)]: rep.json(후보정까지 끝난 대표 결과 원본 전체) · engines/<엔진>.json(엔진별
     파싱 원본 — provenance.engine_version 포함) · figures.jsonl(이 문서 그림 기록 — VLM 모델·prompt_id·캡션·본문
     언급) · meta.json(엔진 판·VLM 모델·prompt_id·맥락 요약). 큰 파일은 Path로 넘겨 apply()가 그대로 올린다(메모리에
     안 담음)."""
-    if not pc.cfg().load.publish.upload_raw:
-        return []
     parse_dir = Path(parse_dir)
     out = []
     rep_p = parse_dir / "_rep" / f"{name}.json"
@@ -456,9 +454,8 @@ def plan(
     reparse_keys = reparse_keys or set()
     parse_date = parse_date or today()
     out, missing = [], 0
-    raw_on = pc.cfg().load.publish.upload_raw
-    figs_by_doc = _figures_by_doc(Path(rep_dir).parent) if raw_on else {}
-    runs = _runs_by_doc_engine(Path(rep_dir).parent) if raw_on else {}
+    figs_by_doc = _figures_by_doc(Path(rep_dir).parent)
+    runs = _runs_by_doc_engine(Path(rep_dir).parent)
     for e in entries:
         name = e.get("file_name")
         if not name:

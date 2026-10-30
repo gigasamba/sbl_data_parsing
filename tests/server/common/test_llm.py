@@ -54,7 +54,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
         shutil.rmtree(_tmp1, ignore_errors=True)
     print("[selftest] RV12 — 빈 응답(생각이 토큰 다 씀) 재요청 1회(4배)·캐시는 성공 응답만(원래 키)·공유 장부 2건 집계 통과")
 
-    # LLM_EMPTY_RETRY=0 — 재요청 없이 빈 응답 그대로 · 빈 응답은 캐시에 안 씀(전에는 캐시에 고착돼 다음 호출도 계속 빈 응답 재생)
+    # 재요청 뒤에도 빈 응답이면 그대로 · 빈 응답은 캐시에 안 씀(전에는 캐시에 고착돼 다음 호출도 계속 빈 응답 재생)
     _tmp2 = tempfile.mkdtemp()
     _hits = []
 
@@ -68,16 +68,15 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
             LLM_BASE_URL="http://127.0.0.1:9/v1",
             LLM_MODEL="mock-reasoning2",
             LLM_CACHE_DIR=_tmp2,
-            LLM_EMPTY_RETRY="0",
         ):
             text = chat([{"role": "user", "content": "질문2"}], max_tokens=500, agent="x")
-            assert text == "" and len(_hits) == 1, (text, _hits)  # LLM_EMPTY_RETRY=0 — 재요청 안 함
+            assert text == "" and len(_hits) == 2, (text, _hits)  # 1회 재요청(4배) 뒤에도 빈 응답
             key = cache_key("mock-reasoning2", [{"role": "user", "content": "질문2"}], 0.0, 500, False)
             assert not _cache_path(key).exists(), "빈 응답을 캐시에 쓰면 안 됨"
     finally:
         _adk.complete = _orig_complete
         shutil.rmtree(_tmp2, ignore_errors=True)
-    print("[selftest] RV12 — LLM_EMPTY_RETRY=0(끔) 재요청 없음 · 빈 응답 캐시 안 씀 통과")
+    print("[selftest] RV12 — 재요청 뒤에도 빈 응답이면 그대로 · 빈 응답 캐시 안 씀 통과")
 
     _m = [{"role": "user", "content": "q"}]
     with COMMON.env(LLM_EXTRA_BODY=None):

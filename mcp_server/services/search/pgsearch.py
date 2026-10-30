@@ -148,7 +148,7 @@ def search(
 ):
     """코사인(기본) 또는 하이브리드(코사인 + BM25 + 드문 ID → RRF). 결과 = v_chunk_source 행 + rrf·via.
     vr = 벡터 순위(chunk_id 목록)를 밖에서 줄 때(EDW 벡터 검색 결과) — 없으면 pgvector로 계산.
-    methods = 쓸 방법 {vector, bm25, id}(없으면 retrieve대로) · 가중치 weights(question)(SEARCH_W_*, G14 SEARCH_TYPE_WEIGHTS —
+    methods = 쓸 방법 {vector, bm25, id}(없으면 retrieve대로) · 가중치 weights(question)(SEARCH_W_*, G14 —
     local.py와 같은 함수를 import해 씀, 가중치가 두 저장소에서 갈라지지 않음).
     client(AD38 SEARCH_CLIENT_HARD) = 허용할 고객 이름 집합 — 주어지면 저장소 질의 단계에서 그 고객 문서(고객 미상은 기본
     포함, client_strict=True면 미상도 뺌)만 후보로. None(기본)이면 제한 없음 — 전과 바이트 동일.
@@ -158,7 +158,7 @@ def search(
     그 문서의 청크만 후보로(vector·bm25·ID 전부). None이면 전과 바이트 동일.
     question(G14) = 원문 질문 글자(weights()에 그대로 건넴 — 안 주면 전과 바이트 동일, BR41 tie_break에도 그대로 건넴).
     BR41 — 최종 top-k 안에서(멤버십 불변, 추가 질의 없음) 동점(상대 오차 TIE_EPS_REL)이면 질문 엔티티(고객·계약번호·
-    제품코드)와 맞는 문서를 앞으로(local.py tie_break 공용, SEARCH_TIE_BREAK=0이면 바이트 동일)."""
+    제품코드)와 맞는 문서를 앞으로(local.py tie_break 공용)."""
     s = db.schema
     q = vec(qv) if qv is not None else None  # 질의 임베딩이 없으면(장애) 키워드·ID만 — 부르는 쪽이 methods에서 vector를 뺌
     m = set(methods) if methods else ({"vector"} if retrieve == "cosine" else {"vector", "bm25", "id"})

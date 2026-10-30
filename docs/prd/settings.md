@@ -135,6 +135,7 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 열린 질문: 없음.
 - 진행: ① 칸·기능 삭제 커밋 → ② 경로 재편(`required`·역할 절·`tuning`) + migrate 변환 + sample 생성기 → ③ 문서(env-guide, README 설정 예시).
   - ①-1(10-30): A 10 + E 1 지움 — 옛 설정 파일의 지운 칸은 경고만(`REMOVED`), 옛 env 이름은 migrate가 "삭제 후보(삭제됨 op-08)"로 알림. 검색 MCP 질의 캐시 기본(`/tmp/mcp_query_cache.sqlite`)은 mcp 이미지의 `common.models.embed.query_cache` 기본값으로 옮김.
+  - ①-2(10-30): B 되돌리기 스위치 45 지움 — 동작은 늘 기본값(켬), 옛 동작 코드·끔 경로 시험도 지움. `represent.table_db`는 표 정형 적재(`load_tables_db`·`structured tables`)째 지움 — 검색 쪽 `doc_table`·`doc_cell` 읽기 코드와 표 정의는 pl-28(D-7)에서. 빈 절 `mcp.search.query_expand`도 지움. 평가 도구 AR1(융합 켬/끔 비교)도 지움.
 - 파일: `common/config/{settings,sample,keyscan,migrate,export}.py`, `pipeline/config.py`, `mcp_server/config.py`, `settings.sample.yaml`, `deploy/host/`(설정 꺼내 쓰는 셸), `docs/operations/env-guide.md`.
 - Status: todo
 
