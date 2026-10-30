@@ -41,7 +41,7 @@ CORE = {"pdfplumber", "pymupdf", "kreuzberg",                                  #
 
 def missing_deps(engine):
     """엔진의 REQUIRES(모듈 import·PATH 도구)가 지금 환경에 없는 것 — check_env.py의 스택별 점검과 같은 판정(AD48, 중복 금지로 여기 한 곳).
-    한 스택 파일에 엔진이 여러 개면 보통 REQUIRES를 같이 쓰지만, 엔진마다 쓰는 패키지가 서로 다르면(예: rapidocr·rapidocr_ko)
+    한 스택 파일에 엔진이 여러 개면 보통 REQUIRES를 같이 쓰지만, 엔진마다 쓰는 패키지가 서로 다르면(옛 예: rapidocr 1.x·rapidocr_ko — 1.x는 10-30 지움, 지금 쓰는 엔진 없음)
     REQUIRES_ENGINE = {엔진: {"modules": [...], "tools": [...]}}로 엔진별로 따로 적고 여기서 그걸 먼저 본다(없으면 REQUIRES로).
     REQUIRES_ENV(모델 서빙 주소 등 설정값)는 설치 여부와 다른 문제라 missing_env()가 따로 본다."""
     _, m = engines()[engine]

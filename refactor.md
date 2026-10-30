@@ -215,7 +215,7 @@ S11(10-28)에 VS10 배포 준비 목록(`output/orca/VS10-verify.md` 끝 절)을
 ### 부록 2. 엔진 핑거프린트 27개(엔진별)
 
 - 10-30 pl-31(`feature/drop-ocrvlm`, 0.1.0): `ocr_vlm` 엔진 지움(27 → 26 — 아래 표의 `ocr_vlm` 줄은 기록) · `qwen_vlm` `52ca47bc4c6e` → `7381bf2b79d2` · 나머지 25개 그대로. 이어 `feature/ocrvlm-leftovers`(qwen_vlm 파서의 안 쓰는 인자 지움): `qwen_vlm` `7381bf2b79d2` → `06f937fcc39e`, 나머지 25개 그대로.
-- 10-30 pl-31 남은 일(`feature/pl31-engines`, 0.1.0, 등급 A): 엔진 8개 지움 — `docling`·`docling_ocr`·`docling_vlm`(`ce98b1e26c00`) · `unstructured`·`unstructured_auto`·`unstructured_ocr`(`92c1debb0683`) · `rapidocr`(1.x) · `kreuzberg_ocr` (26 → 18 — 아래 표의 그 줄은 기록) · 바뀜: `kreuzberg` `4220f1fbd3bb` → `7e7c9ac44287`, `rapidocr_ko` `926d70c2f65c` → `990ebae04429`(같은 parser.py에서 지운 엔진 몫이 빠짐) · 나머지 16개 그대로 · 등록부 `engines/registry.py` sha `5f390232f293` → `6e29c5810b8b`(CORE에서 docling·unstructured_auto 빠짐, 도구 API TOOL_SPECS·call_tool 지움 — 엔진 키에는 안 들어감, p0만).
+- 10-30 pl-31 남은 일(`feature/pl31-engines`, 0.1.0, 등급 A): 엔진 8개 지움 — `docling`·`docling_ocr`·`docling_vlm`(`ce98b1e26c00`) · `unstructured`·`unstructured_auto`·`unstructured_ocr`(`92c1debb0683`) · `rapidocr`(1.x) · `kreuzberg_ocr` (26 → 18 — 아래 표의 그 줄은 기록) · 바뀜: `kreuzberg` `4220f1fbd3bb` → `7e7c9ac44287`, `rapidocr_ko` `926d70c2f65c` → `990ebae04429`(같은 parser.py에서 지운 엔진 몫이 빠짐) · 나머지 16개 그대로 · 등록부 `engines/registry.py` sha `5f390232f293` → `a3d948df71e0`(CORE에서 docling·unstructured_auto 빠짐, 도구 API TOOL_SPECS·call_tool 지움 — 엔진 키에는 안 들어감, p0만).
 
 | 엔진 | 기준선 = S9 전(S8b) | S9 엔진 커밋 뒤(`0c23f06`) | S9b 엔진 커밋 뒤(`64af4a8`) = HEAD |
 |---|---|---|---|

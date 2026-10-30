@@ -174,7 +174,7 @@ def main():
     ap.add_argument(
         "--engines",
         default="",
-        help="비우면 핵심 17종(registry.CORE, 10-30 docling·unstructured_auto 지움 — pl-31 · 사용자 10-07: paddleocr·docling_ocr 제외 · openviking_import·cognee_import는 SI33로 어댑터 자체 삭제) · all = 전부 · a,b = 그것만",
+        help="비우면 핵심 16종(registry.CORE, 10-30 docling·unstructured_auto 지움 — pl-31 · 사용자 10-07: paddleocr·docling_ocr 제외 · openviking_import·cognee_import는 SI33로 어댑터 자체 삭제) · all = 전부 · a,b = 그것만",
     )
     ap.add_argument("--profile", default="default", choices=["default", "tuned"])
     ap.add_argument("--limit", type=int, default=0)
