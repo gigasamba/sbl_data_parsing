@@ -16,7 +16,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from common.config.settings import cfg
+from common.config.settings import cfg, guard_run_env
 from common.core.paths import LOCAL_RUN
 
 HERE = Path(__file__).resolve().parent
@@ -439,10 +439,10 @@ def open_backend(db_path=None):
     단 RUN_MODE=prod(cli/pipeline.py와 같은 환경변수)면 대체하지 않고 StructDBError로 알린다(운영에서 조용히 SQLite로
     떨어지면 안 됨 — SystemExit이 아닌 이유는 mcp_server 같은 장수 프로세스를 호출자가 죽이지 않고 잡아 처리할 수 있어야 해서)."""
     st = cfg().store  # S7b — 설정 객체
-    if cfg().run_env in ("dev", "prd") and (st.run_mode != "prod" or st.struct_backend == "sqlite"):
+    if guard_run_env() not in (None, "local") and (st.run_mode != "prod" or st.struct_backend == "sqlite"):
         # pl-12(사용자 10-30) — 서버는 SQLite 문서 대장·정형 저장소를 쓰지 않는다(조용한 대체로 다른 문서를 잘못 처리하던 길)
         raise StructDBError(
-            f"RUN_ENV={cfg().run_env} — common.store.run_mode: prod·struct_backend: pg(또는 tsql) 필수(SQLite 대체 금지, pl-12)"
+            f"RUN_ENV={guard_run_env()} — common.store.run_mode: prod·struct_backend: pg(또는 tsql) 필수(SQLite 대체 금지, pl-12)"
         )
     backend = st.struct_backend  # 옛 get("STRUCT_BACKEND", "pg") — 칸 기본 'pg', ''이면 ''(blank keep — 알 수 없음 오류, VS7b R-11)
     if backend == "sqlite":

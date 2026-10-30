@@ -1561,7 +1561,7 @@ class CommonStore(Section):
         off=("", "0", "none", "false"),
         fold="lower",
     )
-    run_mode: Literal["prod", "test"] | None = F(
+    run_mode: Annotated[Literal["prod", "test"] | None, BeforeValidator(lambda v: v or None)] = F(  # "" = 설정 안 함(옛 str 칸과 같게)
         None,
         "RUN_MODE",
         "실행 모드 prod|test — pipeline --mode 기본, prod이면 PG 실패 시 SQLite 대체 금지·VLM 시간 완화. dev·prd 서버는 prod 필수(pl-12 — 아니면 정형 저장소가 시작 거부)",

@@ -192,9 +192,8 @@ def scan(out_dir):
         )  # rdb: 질의(AD44)만 manifest에 doc_id를 적음(source.py _rdb_rows) — 그 밖 Object Storage는 s3
         # SI39 겹침 키(source_system, source_key)와 같은 모양 — manifest가 가장 구체적인 원본 전체 키(경로 포함) 정보
         d["source_keys"].add(f"{r.get('source_system') or d['source']}::{r.get('key') or name}")
-        if r.get("is_deleted"):
-            d["status"] = "deleted"
-        elif d["status"] == "seen" and r.get("key") in done_object_keys:
+        # pl-12(사용자 10-30) — 원천의 is_deleted도 status='deleted'로 바꾸지 않음(문서 대장은 deleted를 쓰지 않음 · 검색은 manifest is_deleted로 거름)
+        if d["status"] == "seen" and r.get("key") in done_object_keys:
             d["status"] = "parsed"  # 대표 결과 산출물이 이미 지워졌어도(X2) 처리 완료 기록으로 보강
 
     for d in observed.values():
@@ -584,10 +583,15 @@ def try_open_db(db_path=None):
     연결이 안 되면 None(호출자는 필터 없이 그대로 — 바이트 동일, 검색·파싱을 막지 않음)."""
     if not cfg().store.doc_registry:  # S7b — 설정 객체(켜기 칸, 기본 켬)
         return None
-    try:
-        from common.store.structdb import open_backend
+    from common.config.settings import guard_run_env
+    from common.store.structdb import StructDBError, open_backend
 
+    try:
         return open_backend(db_path)
+    except StructDBError:
+        if guard_run_env() not in (None, "local"):
+            raise  # pl-12 — 서버의 거부(SQLite 대체 금지)는 삼키지 않음
+        return None
     except Exception:
         return None
 
