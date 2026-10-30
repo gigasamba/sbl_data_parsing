@@ -75,7 +75,7 @@ def _demo():
     # S2 — resources/prompts/는 모든 이미지에 폴더째 있으므로 앱별 묶음도 이미지 구분 없이 확인
     # (research_judge는 검색 전용이지만 agent_prompts·adk.py selftest가 모든 이미지에서 씀 — D-019 ④로 mcp/)
     assert resolve_agent_dir("research_judge") == RES_ROOT / "prompts" / "mcp" / "research_judge"
-    assert resolve_agent_dir("value_choice") == RES_ROOT / "prompts" / "common" / "value_choice"
+    assert resolve_agent_dir("doc_summary") == RES_ROOT / "prompts" / "common" / "doc_summary"
     assert resolve_agent_dir("agg_llm_route") == RES_ROOT / "prompts" / "mcp" / "agg_llm_route"  # S11 — research_check 삭제(D-025)
     assert (RES_ROOT / "prompts" / "common" / "_common" / "tail.md").is_file() and CRITERIA_FILE.is_file() and TEMPLATES_DIR.is_dir()
     assert STACK_FILE.is_file() and (GLOSSARY_ROOT / "domain_terms.csv").is_file()
