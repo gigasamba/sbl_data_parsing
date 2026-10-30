@@ -122,16 +122,6 @@ class PipelineExtractOcr(Section):
     )
 
 
-class PipelineExtractParallel(Section):
-    io_workers: int | None = F(
-        None, "PARSE_PARALLEL_IO_WORKERS", "문서 단위 병렬 파이프라인에서 받기·게시 포함 전체 동시 진행 수(개, workers 이상)"
-    )
-    pipeline: bool | None = F(
-        False, "PARSE_PARALLEL_PIPELINE", "--source 파싱을 문서 단위 병렬 파이프라인(받기→파싱→게시→삭제)으로 돌릴지(=1)", on=("1",)
-    )
-    workers: int | None = F(None, "PARSE_PARALLEL_WORKERS", "문서 단위 병렬 파싱의 CPU 동시 문서 수(개)")
-
-
 class PipelineExtractPrepare(Section):
     link: str | None = F("auto", "PREPARE_LINK", "회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy")
     ocr: str | None = F("auto", "PREPARE_OCR", "회전 검토용 OCR 엔진 선택: auto|v1|v3(v3=rapidocr 3.x 강제)", blank="keep")
@@ -420,15 +410,14 @@ class PipelineTransformVlm(Section):
 
 
 class PipelineDev(Section):
-    REMOVED = frozenset({"parse_agent_fake"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset(
+        {"parse_agent_fake", "parallel_test_crash"}
+    )  # 사용자 10-29 · parallel_test_crash 10-30(pl-35) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     allow_common_mismatch: bool | None = F(
         False, "ALLOW_COMMON_MISMATCH", "앞 모듈 결과의 공통 코드 지문이 달라도 계속 진행할지(=1 계속 / 그 외 중단)", on=("1",)
     )
     check_env_any_py: bool | None = F(
         False, "CHECK_ENV_ANY_PY", "check_env가 시스템 python에서도 멈추지 않고 계속할지(=1 계속 / 그 외 중단)", on=("1",)
-    )
-    parallel_test_crash: bool | None = F(
-        False, "PARSE_PARALLEL_TEST_CRASH", "시험용 — =1이면 문서 병렬 파싱의 첫 문서에서 강제 종료(os._exit 17)", on=("1",)
     )
     stream_test_crash: bool | None = F(
         False, "PARSE_STREAM_TEST_CRASH", "시험용 — =1이면 스트리밍 파싱의 첫 묶음에서 강제 종료(os._exit 17)", on=("1",)
@@ -458,10 +447,9 @@ class PipelineEval(Section):
 
 
 class PipelineExtract(Section):
-    REMOVED = frozenset({"phases", "phase_sec"})  # 사용자 10-29 — phase 없앰(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    auto_reparse_changed: bool | None = F(
-        False, "AUTO_REPARSE_CHANGED", "야간 계획에서 바뀐 문서(changed) 전체를 다시 파싱할지(=1 재파싱)", on=("1",)
-    )
+    REMOVED = frozenset(
+        {"phases", "phase_sec", "auto_reparse_changed", "parallel"}
+    )  # 사용자 10-29 — phase 없앰 · 10-30 auto_reparse_changed·parallel 지움(pl-35)(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     dedup_scan: bool | None = F(
         False,
         "PARSE_DEDUP_SCAN",
@@ -529,7 +517,6 @@ class PipelineExtract(Section):
     cache: PipelineExtractCache = Field(default_factory=PipelineExtractCache)
     dedup: PipelineExtractDedup = Field(default_factory=PipelineExtractDedup)
     ocr: PipelineExtractOcr = Field(default_factory=PipelineExtractOcr)
-    parallel: PipelineExtractParallel = Field(default_factory=PipelineExtractParallel)
     prepare: PipelineExtractPrepare = Field(default_factory=PipelineExtractPrepare)
     source: PipelineExtractSource = Field(default_factory=PipelineExtractSource)
     stream: PipelineExtractStream = Field(default_factory=PipelineExtractStream)
