@@ -76,6 +76,7 @@
 - 이유: 엔진·스택을 바꿔도 파싱 정확도가 떨어지면 안 된다.
 - 무엇: CER, `criteria.json`과 사람 정답에 대한 값·표 재현율, 교차 확인된 값으로 자동 질문, 스택 빔 탐색, 단계 보드와 스택 보고서.
 - 파일: `pipeline/eval/score_gold.py`, `auto_questions.py`, `run_combo.py`, `run_board.py`, `stack_report.py`, `pipeline/transform/represent/parse_qa.py`, `resources/config/criteria.json`.
+- C7(사용자 10-30 PRD grill): 비교 도구(`model_matrix`·`score_gold`·`mcp_eval` 등)는 두지 않는다([e2-10](#e2-10)) — 비교는 필요할 때 다시 만든다. 이 행의 도구(`score_gold`·`run_combo`·`stack_report` 등)는 e2-10에 따라 지운다.
 - Status: done
 
 <a id="e2-04"></a>
@@ -83,6 +84,7 @@
 - 이유: 찾기를 바꿔도 적중률이 떨어지면 안 된다.
 - 무엇: hit@1/5/k, value_in_evidence, p50/p95 지연, `via` 구성. 도구 4개의 스모크, HTML/xlsx 보고서.
 - 파일: `mcp_server/cli/mcp_eval.py`, `mcp_server/cli/mcp_smoke.py`, `mcp_server/cli/search_checks.py`(`qa_report.py`는 10-30 지움 — 사용자).
+- C7(사용자 10-30 PRD grill): 비교 도구(`model_matrix`·`score_gold`·`mcp_eval` 등)는 두지 않는다([e2-10](#e2-10)) — 비교는 필요할 때 다시 만든다. `mcp_eval`·`mcp_smoke`·`search_checks`는 e2-10에 따라 지운다.
 - Status: done
 
 <a id="e2-05"></a>
@@ -126,6 +128,7 @@
 - 이유: 엔진과 모델을 측정 결과와 비용으로 고른다.
 - 무엇: 스택 행렬·모델 행렬 실행과 예상 비용. 유료 호출은 승인 필요(CLAUDE.md §7).
 - 파일: `validation/e2e/model_matrix.py`(`stack_matrix.py`·`stack_matrix.json`·보고서 `pipeline/eval/stack_report.py`는 10-30 지움 — [e2-18](#e2-18)).
+- C7(사용자 10-30 PRD grill): 비교 도구(`model_matrix`·`score_gold`·`mcp_eval` 등)는 두지 않는다([e2-10](#e2-10)) — 비교는 필요할 때 다시 만든다. `model_matrix`는 e2-10에 따라 지운다.
 - Status: done
 
 <a id="e2-07"></a>
