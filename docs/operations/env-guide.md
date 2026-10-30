@@ -151,8 +151,8 @@
 | 이름 | 켜면 | 기본 |
 |---|---|---|
 | `NIGHTLY_TIME` | 그 시각(HH:MM, 서버 시간)에 새벽 배치 시작 — 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시각을 봄 | 비움(새벽 배치 없음) |
-| `NIGHTLY_MODULES` | 배치 순서 | `parse structure load publish` |
-| `NIGHTLY_PUBLISH` | 마지막 퍼블리시 단계 실행 | 0 |
+| `NIGHTLY_MODULES` | 배치 순서 | `parse publish structure load` |
+| `NIGHTLY_PUBLISH` | 배치에서 publish 단계 실행 | true(1) |
 | `PARSE_DEADLINE` | 파싱 마감 시각(HH:MM) | 비움 |
 | `NIGHTLY_MAX_NEW` | 밤당 새 문서 상한 | 2000 |
 

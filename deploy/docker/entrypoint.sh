@@ -150,6 +150,8 @@ for entry in sys.argv[2:]:
       *)             preflight; locked python -m common.store.db.dbtool "$@";;
     esac;;
   publish)    # SI39 — 대표 결과(.md) Object Storage 업로드 + EDW AI.ParsingMeta 기록(원본은 올리지 않음) — 자동 스케줄 없음, 트리거 전용
+    # publish --dry-run = 무엇을 올리고 쓸지 표만(쓰기 0) — 첫 publish 전에(사용자 10-30 검토 S3). 그 밖은 늘 --apply.
+    if [ "${1:-}" = --dry-run ]; then shift; preflight; exec python -m pipeline.load.publish_parse_result "$@"; fi
     preflight; locked python -m pipeline.load.publish_parse_result --apply "$@";;
   ask|test-stack)   # S5(T-15) — 검색 명령은 mcp_server/cli/ask.py(옛 pipeline.cli ask·test-stack)
     preflight; exec python -m mcp_server.cli.ask "$cmd" "$@";;
