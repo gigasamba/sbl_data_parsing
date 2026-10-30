@@ -99,7 +99,11 @@
 
 <a id="e2-19"></a>
 ## e2-19 · answer_gen 인용 버그 고치기
-- 결정(사용자 10-30): 답변 점검(`answer_gen`)의 인용 버그 L-2, P-2, CR-2~CR-7을 지금 고친다(e2-12의 EDW 값 인용 규칙은 그대로).
+- 결정(사용자 10-30): 답변 점검(`answer_gen`)의 인용 버그를 지금 고친다(e2-12의 EDW 값 인용 규칙은 그대로). 출처: [refactor.md](../../refactor.md) "최종" ⑤ 행(원 보고서 VS10-verify K-1·S11-impl·VS11-verify는 git 밖).
+  - L-2·P-2·CR-2~4: `verify_note`가 문제 글의 앞부분(접두어)에 기댄다.
+  - CR-5: `answer_gen.verify`가 JSON으로 못 바꾸는 인자에서 TypeError.
+  - CR-6: `python -O`이면 `verify_citations.py`의 `assert`가 빠진다.
+  - CR-7: dict를 직렬화했다가 다시 읽어, 인자를 펼쳐 넘기는 모델이면 시그니처 TypeError(실제로는 드묾).
 - 파일: `validation/e2e/answer_gen.py`, `valid_env/answer_test/rag_qa/`.
 - Status: todo
 
