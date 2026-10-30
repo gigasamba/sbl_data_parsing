@@ -8,7 +8,6 @@ from pathlib import Path
 
 from common.core import docmeta as DM  # 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
 from common.core.contract import (
-    jl,
     make_chunk_key,
     uri_from_path,  # 원본 위치 규칙(모듈 계약)
 )
@@ -16,7 +15,7 @@ from mcp_server import config as mc  # 설정 객체(mcp 칸 — S7d)
 from mcp_server.services.search import (
     clientscope as CS,  # BR50 고객 범위 단일 규칙(client_scope·allows, local.py·pgsearch.py·mcp_server.py와 공용)
 )
-from mcp_server.services.search.local import Local, embed_query, file_name_of
+from mcp_server.services.search.local import Local, embed_query
 from mcp_server.services.search.terms import (  # 용어 사전(X3·X4, 구조화와 같은 규칙) · SI43⑤ 벡터 질의 별칭 덧붙이기(10-16 검색 전용으로 분리)
     expand_query,
     vector_alias_text,
@@ -92,39 +91,10 @@ class Retriever:
             if owns:
                 db.close()
 
-    def hidden_names(self):
-        """OP1 — 숨김 문서의 file_name 집합(self.hidden=doc_key에서 파생) — 그림 기록처럼 이름으로만 연결된
-        산출물을 거를 때 씀(get_image 등). self.hidden이 비었으면 빈 집합 그대로(질의 안 함)."""
-        if not self.hidden:
-            return set()
-        if self.pg:
-            return (
-                set()
-            )  # mc-14 — PG doc 표에 숨김 키(sha256)·file_name 열이 없음(10-20 축소 스키마): 오류 대신 빈 집합, pl-25(s3_key) 뒤 고침
-        return {d["file_name"] for d in self.local.docs if d.get("file_sha256") in self.hidden}
-
     def _chunk_key_hidden(self, chunk_key):
         """OP1 — chunk_key(file_sha256:seq) 앞부분이 self.hidden에 있는지(그래프 이웃·개념 검색처럼 chunk_key로만
         들고 있는 결과를 거를 때 공용으로 씀 — doc 조회 없이 문자열만 비교, 추가 질의 없음)."""
         return bool(self.hidden) and chunk_key.split(":", 1)[0] in self.hidden
-
-    def _client_rows(self):
-        """BR52 — PG doc 표(file_path·clients — 10-20 축소 스키마, mc-10)를 부를 때마다 새로 읽는다(client_map이 씀). 캐시하지 않음
-        (security 검토 10-12): 서버가 도는 중 새 문서가 적재되면 캐시에 없는 문서가 '고객 미상'으로 보여
-        엄격 격리(비엄격 모드)에서 다른 고객 문서가 허용될 수 있었음 — 정확성이 우선, 문서 단위 행이라 읽는 비용은 작음."""
-        return self.pg.q(f"SELECT file_path, clients FROM {self.pg.schema}.doc")
-
-    def client_map(self):
-        """BR50(F·I) — file_name → 고객 라벨(단일 또는 다중 목록, clientscope.doc_clients) 전체 맵(그림 기록·
-        OpenViking처럼 이름으로만 연결된 산출물의 고객 범위를 확인할 때 씀, hidden_names()와 같은 방식으로
-        한 번만 질의 — N+1 없음). 비어 있는 store라도 빈 dict. file_name 키라 같은 이름이 고객마다 있으면
-        충돌(먼저 온 쪽만 남음) — hidden_names()와 같은 남은 한계(고유 키는 file_sha256:client쌍인데 그림
-        기록·OpenViking이 이름으로만 연결돼 있어 아직 못 바꿈). BR52: PG는 _client_rows()(매번 새로 읽음).
-        독립 검토 CONCERN(10-14) — 전엔 client(단일)만 읽어 다중 라벨 문서의 그림·OV가 두 번째 이하 고객
-        범위에선 안 걸렸다 — 이제 CS.doc_clients로 clients 우선·client 낙하(allows()의 ANY-match를 그대로 씀)."""
-        if self.pg:
-            return {file_name_of(r["file_path"]): CS.doc_clients(None, r.get("clients")) for r in self._client_rows()}
-        return {d["file_name"]: CS.doc_clients(d.get("client"), d.get("clients")) for d in self.local.docs}
 
     def search(self, q, k, methods=None, client=None):
         """methods ⊂ {vector, bm25, id}(없으면 retrieve 설정대로) — 검색 MCP가 방법을 골라 씀(G3).
@@ -292,25 +262,3 @@ class Retriever:
                 out.update(CS.doc_clients(None, r["clients"]))
             return sorted(out)
         return sorted({d["client"] for d in self.local.docs if d.get("client")})
-
-    def _concept_top(self, cid, k):
-        """개념 → concept_chunk 상위(횟수 많은 순) [(chunk_key, count), ...] — 로컬 묶음 파일 또는 PostgreSQL 표(X4).
-        OP1(독립 검토 BLOCK 반영) — 숨김 문서의 청크는 여기서 공용으로 빠짐(concept_hits·do_lookup_term 둘 다 이
-        함수를 거치므로 한 곳에서만 거르면 됨) · LIMIT k는 거르기 전에 걸림(상위 몇 개가 숨김이면 k개보다 적게
-        돌아올 수 있음 — 안전 쪽, 숨김 문서를 메우러 더 안 뽑음)."""
-        if self.pg:
-            s = self.pg.schema
-            rows = self.pg.q(
-                f"""SELECT cc.count, c.seq, d.file_sha256 FROM {s}.concept_chunk cc
-                               JOIN {s}.chunk c ON c.chunk_id = cc.chunk_id JOIN {s}.doc d ON d.doc_id = c.doc_id
-                               WHERE cc.concept_id = %s ORDER BY cc.count DESC LIMIT %s""",
-                (cid, k),
-            )
-            pairs = [(f"{r['file_sha256']}:{r['seq']}", r["count"]) for r in rows]
-        else:
-            if self._cc is None:
-                f = self.bundle / "concept_chunk.jsonl"
-                self._cc = jl(f) if f.exists() else []
-            rows = sorted((r for r in self._cc if r["concept_id"] == cid), key=lambda r: -r["count"])[:k]
-            pairs = [(r["chunk_key"], r["count"]) for r in rows]
-        return [(ck, c) for ck, c in pairs if not self._chunk_key_hidden(ck)]
