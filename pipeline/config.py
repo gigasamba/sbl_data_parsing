@@ -160,6 +160,7 @@ class PipelineHostNightly(Section):
 
 
 class PipelineLoadPublish(Section):
+    REMOVED = frozenset({"source_system"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     bucket: str | None = F(None, "PM_BUCKET", "publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소)")
     bucket_skip_overlap_check: bool | None = F(
         False, "PM_BUCKET_SKIP_OVERLAP_CHECK", "PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 — 1이면 생략", on=("1",)
@@ -167,9 +168,6 @@ class PipelineLoadPublish(Section):
     parse_date: str | None = F(None, "PM_PARSE_DATE", "업로드 키의 날짜 폴더(YYYY-MM-DD) — 비면 오늘")
     path_map: CsvList | None = F([], "PM_PATH_MAP", "원본 키 앞부분 치환표 '이전=새' 쉼표 목록(결과 키 경로 구성용)")
     prefix: str | None = F(None, "PM_PREFIX", "버킷 안 업로드 경로 접두")
-    source_system: str | None = F(
-        "FileStorageMap", "PM_SOURCE_SYSTEM", "병렬 파싱 경로에서 게시 행에 기록하는 source_system 이름", blank="keep"
-    )
     upload_raw: bool | None = F(
         True, "PM_UPLOAD_RAW", "rep.md 옆에 rep.json·엔진 원본·figures·meta도 올릴지 — 0이면 rep.md 등 옛 동작", off=("0",)
     )
@@ -336,8 +334,8 @@ class PipelineTransformRepresent(Section):
 
 class PipelineTransformStructure(Section):
     REMOVED = frozenset(
-        {"wiki_domain_phrase"}
-    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+        {"wiki_domain_phrase", "edw_embed"}
+    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐 · op-08 edw_embed → embed로 합침) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     bundle_keep_empty_fig: bool | None = F(
         False, "BUNDLE_KEEP_EMPTY_FIG", "=1이면 내용이 빈 VLM 그림도 청크로 색인(되돌리기), 기본 0은 빈 그림 청크 안 만듦", on=("1",)
     )
@@ -350,7 +348,6 @@ class PipelineTransformStructure(Section):
         True, "CLIENT_ROSTER_SEED", "고객 추론에 주요 바이오·제약사 공개 이름 seed 명부를 더함(=0이면 안 더함)", off=("0",)
     )
     draft_terms: bool | None = F(True, "DRAFT_TERMS", "새 회사 이름 후보를 용어집 draft로 자동 추가(=0이면 안 함)", off=("0",))
-    edw_embed: str | None = F(None, "EDW_EMBED", "build_bundle 임베딩 방식(--embed 기본값) — api 또는 bge-m3 등")
     edw_summary_llm: bool | None = F(
         False, "EDW_SUMMARY_LLM", "=1이면 묶음 요약을 LLM으로 생성(--summary auto일 때만, 기본은 앞부분 발췌)", on=("1",)
     )
@@ -407,10 +404,8 @@ class PipelineDev(Section):
 
 class PipelineEval(Section):
     REMOVED = frozenset(
-        {"diagram_raster_vlm", "phase_report_legacy"}
-    )  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    e2e_qa_set: str | None = F(None, "E2E_QA_SET", "e2e 시험 질문 묶음 이름(valid_env/unstructured/<이름>/qa.json)")
-    e2e_questions: str | None = F(None, "E2E_QUESTIONS", "e2e 질문 파일 경로(또는 auto = 그 자리에서 생성)")
+        {"diagram_raster_vlm", "phase_report_legacy", "e2e_qa_set", "e2e_questions"}
+    )  # 사용자 10-29 · e2e_* 10-30(op-08) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     gold_draft_max_pages: int | None = F(30, "GOLD_DRAFT_MAX_PAGES", "정답 초안 생성(gold_draft)에서 문서당 처리할 쪽 수 상한(쪽)")
     gold_draft_mermaid_check: bool | None = F(
         True,

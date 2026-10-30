@@ -89,22 +89,12 @@ def check_critical_imports():
 
 # OP15(c1) — env-guide 1-2 경로 묶음(서버 LLM이 바꿀 곳). 각 항목: (이름, 값→실제 경로 또는 None(형식 검사만)).
 # 값 없으면 '미설정(선택)'(오류 아님) · 값이 있는데 경로가 없으면 경고만(line(False, …)) — 실패 종료 아님(req_bad에 안 섞음).
-def _qa_set_path(v):
-    return ROOT / "valid_env" / "unstructured" / v / "qa.json"
-
-
-def _questions_path(v):
-    return None if v == "auto" else Path(v)  # auto = 그 자리에서 생성(파일 없어도 정상)
-
-
 def _parse_source_path(v):
     return None if v.startswith(("rdb:", "s3://")) else Path(v)  # rdb:*·s3://는 형식만(파일 경로 아님)
 
 
 PATH_BUNDLE = [
     ("GOLD_DIR", Path),
-    ("E2E_QA_SET", _qa_set_path),
-    ("E2E_QUESTIONS", _questions_path),
     ("CLIENT_ROSTER", Path),
     ("GLOSSARY_DIR", Path),
     ("SOURCES_FILE", Path),

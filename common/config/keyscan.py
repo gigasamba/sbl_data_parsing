@@ -32,8 +32,6 @@ PREFIXES = ("LLM", "VLM", "EMBED")
 # 규칙(아래 정규식)으로 못 잡는 읽기 — 이름 목록·동적 이름(9-4 "이름 목록") · S7a에 다시 모으며 찾음
 NAME_LIST = {
     "TRIGGER_SHUTDOWN_TIMEOUT_SEC": "pipeline/trigger_server.py(_serve 인자 기본값)",
-    "E2E_QA_SET": "pipeline/check_env.py(경로 점검 표)",
-    "E2E_QUESTIONS": "pipeline/check_env.py(경로 점검 표)",
     "VLM_EXTRA_BODY": "common/ai/adk.py(_EXTRA_ENV_KEY 표)",
     **{
         f"RDB_COL_{f}": 'pipeline/extract/source.py(f"RDB_COL_{k.upper()}")'
@@ -153,6 +151,21 @@ NOT_SETTINGS = {
     "LLM_SYNTHETIC_TRUTH": ("삭제 후보", "합성 문서 선언 잠금 삭제(사용자 10-29) — 외부 허용은 *_ALLOW_EXTERNAL + RUN_ENV=local"),
     "SYNTHETIC_TRUTH": ("삭제 후보", "LLM_SYNTHETIC_TRUTH의 옛 별칭 — 둘 다 삭제(사용자 10-29)"),
     "ZZ_BASE_URL": ("삭제 후보", "ping_models selftest의 가짜 이름"),
+    "SERVER_ENV_DIR": ("env로 남김", "호스트 셸·systemd가 settings.yaml을 찾는 폴더(설정 칸 common.paths.config_dir는 op-08에 지움)"),
+    "POSTGRES_DB": ("env로 남김", "PG 컨테이너 env — compose가 PG_DB로 채움(설정 칸은 op-08에 지움)"),
+    "POSTGRES_USER": ("env로 남김", "PG 컨테이너 env — compose가 PG_USER로 채움(설정 칸은 op-08에 지움)"),
+    **{
+        n: ("삭제 후보", f"삭제됨(op-08, 사용자 10-30) — {why}")
+        for n, why in (
+            ("CRITERIA_FILE", "코드 상수 paths.CRITERIA_FILE"),
+            ("PM_SOURCE_SYSTEM", "코드 고정값 FileStorageMap"),
+            ("E2E_QA_SET", "형식 점검만 하던 칸"),
+            ("E2E_QUESTIONS", "형식 점검만 하던 칸"),
+            ("MCP_QUERY_CACHE", "common.models.embed.query_cache(EMBED_QUERY_CACHE)로 합침"),
+            ("EDW_EMBED", "pipeline.transform.structure.embed(PIPE_EMBED)로 합침"),
+            ("EMBED_DIM", "ping_models는 받은 차원만 보여 줌"),
+        )
+    },
 }
 # 모은 키가 아닌 것(셸 문법·Dockerfile ARG·selftest 가짜 이름)
 IGNORE = {"BASE", "X_ALLOW_EXTERNAL"}

@@ -81,7 +81,6 @@ REQUIRED = {
     **{f"common.connections.object_storage.{k}": "서버" for k in ("endpoint", "access_key", "secret_key")},
     **{f"common.connections.rdb.{k}": "서버" for k in ("host", "database", "read.user", "read.password", "write.user", "write.password")},
     **{f"common.models.{r}.{k}": "서버" for r in ("llm", "vlm") for k in ("base_url", "model", "api_key")},
-    "common.paths.config_dir": "서버",
     "common.paths.doc_dir": "서버",
     "common.text.source_uri_prefix": "서버",
     "pipeline.extract.input_source": "서버",
@@ -127,7 +126,6 @@ HYPER = {  # 이름 규칙으로는 운영값이지만 결과(파싱·청크·�
     "pipeline.extract.ocr.dpi",
     "pipeline.transform.structure.page_chunk_max",
     "pipeline.transform.vlm.fig_photo_max_tokens",
-    "mcp.search.ocr_dpi",
     "mcp.search.struct_context_max",
 }
 OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
@@ -353,7 +351,6 @@ VALUES = {
     "pipeline.transform.represent.post": "all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments)",
     "pipeline.transform.represent.rep_select": "first·acc·best 중 하나(그 밖 값 = best)",
     "pipeline.transform.structure.embed": "api·bge-m3·e5-small·e5-base·none 중 하나",
-    "pipeline.transform.structure.edw_embed": "api·bge-m3·e5-small·e5-base 중 하나",
     "pipeline.transform.structure.chunk_table": "rows 또는 비움(표 통째로)",
     "mcp.server.host": "127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부",
     "mcp.server.store": "pg·local 중 하나 또는 비움(자동 탐지)",

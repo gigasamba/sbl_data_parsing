@@ -130,8 +130,8 @@ class McpQueryLog(Section):
 
 class McpSearch(Section):
     REMOVED = frozenset(
-        {"decompose", "decompose_llm", "graph", "ov_search_path", "rerank"}
-    )  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+        {"decompose", "decompose_llm", "graph", "ov_search_path", "rerank", "ocr_dpi"}
+    )  # 사용자 10-29 · ocr_dpi 10-30(op-08) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     agg_today: str | None = F(None, "AGG_TODAY", "집계 질문의 '오늘' 기준일(YYYY-MM-DD) 고정 — 비우면 실제 오늘")
     agg_vocab_file: str | None = F(None, "AGG_VOCAB_FILE", "집계 지표 단서어 사전(agg_vocab.json)을 다른 경로로 지정")
     copy_group: bool | None = F(True, "SEARCH_COPY_GROUP", "같은 사건의 사본(형식·재명명) 근거를 묶어 대표만 남김 — 0이면 끔", off=("0",))
@@ -140,7 +140,6 @@ class McpSearch(Section):
     evidence_gate: bool | None = F(True, "SEARCH_EVIDENCE_GATE", "근거 점수·evidence_status 표시 — 0이면 끔(점수 칸도 안 실림)", off=("0",))
     methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서)")
     min_score: float | None = F(None, "SEARCH_MIN_SCORE", "근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak")
-    ocr_dpi: int | None = F(200, "OCR_DPI", "쪽 이미지 렌더링 해상도(DPI) — OCR·근거 이미지 좌표 환산에 씀", pinned="engine")
     struct_context_max: int | None = F(200, "STRUCT_CONTEXT_MAX", "집계 질문에서 계약 마스터 전체를 표로 넘길 때 계약 수 상한(개)")
     tie_break: bool | None = F(True, "SEARCH_TIE_BREAK", "동점 근거를 질문의 엔티티(고객·계약번호)로 깨기 — 0이면 끔", off=("0",))
     type_weights: bool | None = F(
@@ -161,6 +160,9 @@ class McpSearch(Section):
 
 
 class McpServer(Section):
+    REMOVED = frozenset(
+        {"query_cache"}
+    )  # 사용자 10-30(op-08) — common.models.embed.query_cache로 합침(mcp 이미지 기본은 그 칸에) — 옛 설정 파일에 남아도 경고만
     allowed_hosts: CsvList | None = F([], "MCP_ALLOWED_HOSTS", "비루프백 바인드 때 추가로 허용할 Host(쉼표 목록, 리버스 프록시 이름 등)")
     host: str | None = F("127.0.0.1", "MCP_HOST", "MCP 서버 바인드 주소 — auto면 컨테이너 자기 사설 IP")
     instructions: str | None = F(None, "MCP_INSTRUCTIONS", "MCP 서버 instructions 글자(도구 안내문) 교체")
@@ -168,11 +170,6 @@ class McpServer(Section):
     max_concurrency: int | None = F(8, "MCP_MAX_CONCURRENCY", "도구 동시 실행 상한(개)")
     max_queue: int | None = F(None, "MCP_MAX_QUEUE", "도구 대기열 상한(개) — 넘으면 즉시 busy 응답, 0이면 무제한")
     port: Port | None = F(8765, "MCP_PORT", "MCP 서버 포트")
-    query_cache: str | None = F(
-        image_default("MCP_QUERY_CACHE"),
-        "MCP_QUERY_CACHE",
-        "검색 MCP의 질의 임베딩 캐시 sqlite 경로 — 있으면 시작 때 common.models.embed.query_cache를 이 값으로(mcp 이미지 안 기본 /tmp/mcp_query_cache.sqlite — 결과 폴더는 읽기 전용, 옛 compose EMBED_QUERY_CACHE 자리 — S7e2)",
-    )
     reload_check_sec: float | None = F(30.0, "MCP_RELOAD_CHECK_SEC", "적재 버전 변경 확인 간격(초) — 바뀌면 검색기·edw_meta 다시 읽음")
     store: str | None = F(None, "MCP_STORE", "검색 저장소 종류 — pg 또는 local, 비우면 자동 탐지(Docker pgvector → 없으면 로컬 묶음)")
     token: SecretStr | None = F(None, "MCP_TOKEN", "MCP 서버 Bearer 토큰(비루프백 바인드면 필수)")

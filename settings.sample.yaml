@@ -80,10 +80,9 @@ common:
       allow_external:  # 임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만) · 기본 false · 값: true·false · env=EMBED_ALLOW_EXTERNAL [켬: 1만]
       api_key:  # [필수: 공통] 임베딩 엔드포인트 API 키(있을 때만 Authorization 헤더로 보냄) · 값: 비밀 글자 · env=EMBED_API_KEY [비밀]
       base_url:  # [필수: 공통] 임베딩 엔드포인트 주소(OpenAI 호환 …/v1) · 기본 없음 · 값: URL · env=EMBED_BASE_URL
-      dim: 4096  # ping_models 점검에서 기대하는 임베딩 차원 수 · 기본 4096 · 값: 0 이상 정수 · env=EMBED_DIM
       est_usd: 0.001  # 임베딩 호출 1건당 예상 비용($) — 예산 선차감용 · 기본 0.001 · 값: 0 이상 · env=EMBED_EST_USD
       model:  # [필수: 공통] 임베딩 모델 이름(색인과 같아야 함 — 질의 임베딩·캐시 열쇠에도 씀) · 기본 없음 · 값: 글자 · env=EMBED_MODEL
-      query_cache:  # 질의 임베딩 캐시 sqlite 경로(0이면 캐시 끔) · 기본 없음 · 값: 경로 · env=EMBED_QUERY_CACHE
+      query_cache:  # 질의 임베딩 캐시 sqlite 경로(0이면 캐시 끔 — mcp 이미지 안 기본 /tmp/mcp_query_cache.sqlite: 결과 폴더가 읽기 전용) · 기본 없음 · 값: 경로 · env=EMBED_QUERY_CACHE [서버 옛 값: '']
       query_cache_max: 20000  # 질의 임베딩 캐시 최대 행 수(넘으면 오래된 것부터 삭제, 0이면 무제한) · 기본 20000 · 값: 0 이상 정수 (0 = 무제한) · env=EMBED_QUERY_CACHE_MAX
       query_prefix:  # [파라미터] 질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …/nQuery: ') · 기본 없음 · 값: 글자 · env=EMBED_QUERY_PREFIX
       timeout: 60  # 임베딩 API 호출 제한 시간(초) · 기본 60 · 값: 0 이상 정수(초) · env=EMBED_TIMEOUT
@@ -131,8 +130,6 @@ common:
   # ─── 3. 경로 ───
   paths:
     client_roster:  # 고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) — 용어·별칭에 합침 · 기본 없음 · 값: 경로 · env=CLIENT_ROSTER [인계 지문]
-    config_dir:  # [필수: 서버] 서버 설정 폴더(코드 폴더 밖) — 호스트 스크립트가 settings.yaml을 여기서 찾음(원천 목록 sources.json 덮어쓰기는 S8b에 없앰 — 서버는 판 표) · 기본 없음 · 값: 호스트 이름·IP · env=SERVER_ENV_DIR
-    criteria_file:  # 판정 문턱값 파일 경로(criteria.json) · 기본 없음 · 값: 경로 · env=CRITERIA_FILE
     doc_dir:  # [필수: 서버] 원본 문서 폴더 — 원본 위치 주소·파싱 입력의 기준(pipeline 이미지 안 기본 /data/docs — 옛 Dockerfile ENV, B-2) · 기본 없음 · 값: 경로 · env=DOC_DIR [인계 지문]
     doc_dir_prepared:  # 준비(dedup·회전) 끝난 문서 폴더 — 파싱의 --src 기본값(pipeline 이미지 안 기본 /app/output/prepared — 옛 Dockerfile ENV, B-2) · 기본 없음 · 값: 경로 · env=DOC_DIR_PREPARED
     draft_terms_out:  # 용어 자동 초안 CSV 경로 · 기본 없음 · 값: 경로 · env=DRAFT_TERMS_OUT [인계 지문]
@@ -187,8 +184,6 @@ common:
       pg_shared_buffers: 4GB  # 시험 PG shared_buffers · 기본 4GB · 값: 글자 · env=PG_SHARED_BUFFERS
       pg_shm: 3g  # 시험 PG 컨테이너 공유 메모리(shm_size) · 기본 3g · 값: 글자 · env=PG_SHM
       pg_work_mem: 64MB  # 시험 PG work_mem · 기본 64MB · 값: 글자 · env=PG_WORK_MEM
-      postgres_db: rag  # PG 컨테이너 안에서 healthcheck가 쓰는 DB 이름(compose가 PG_DB로 채움) · 기본 rag · 값: 경로 · env=POSTGRES_DB
-      postgres_user: rag  # PG 컨테이너 안에서 healthcheck가 쓰는 계정(compose가 PG_USER로 채움) · 기본 rag · 값: 글자 · env=POSTGRES_USER
       smoke_settings:  # 스모크 시험 컨테이너가 붙여 읽는 설정 파일(settings.yaml) 경로 — MCP 토큰·임베딩·Object Storage 키 등(S7e1 — 옛 SMOKE_ENV env 파일) · 기본 없음 · 값: 경로 · env=SMOKE_SETTINGS
       smoke_keep: false  # 1이면 시험 끝나도 pg·minio 컨테이너를 남김 · 기본 false · 값: true·false · env=SMOKE_KEEP
       smoke_limit: 0  # 시험에서 파싱할 문서 수 상한(0이면 제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음) · env=SMOKE_LIMIT
@@ -344,7 +339,6 @@ pipeline:
       chunk_table_rows: 25  # [파라미터] 표를 쪼갤 때 청크당 행 수(CHUNK_TABLE=rows일 때만) · 기본 25 · 값: 0 이상 정수 · env=CHUNK_TABLE_ROWS
       client_roster_seed: true  # 고객 추론에 주요 바이오·제약사 공개 이름 seed 명부를 더함(=0이면 안 더함) · 기본 true · 값: true·false · env=CLIENT_ROSTER_SEED [끔: 0만]
       draft_terms: true  # 새 회사 이름 후보를 용어집 draft로 자동 추가(=0이면 안 함) · 기본 true · 값: true·false · env=DRAFT_TERMS [끔: 0만]
-      edw_embed:  # [파라미터] build_bundle 임베딩 방식(--embed 기본값) — api 또는 bge-m3 등 · 기본 없음 · 값: api·bge-m3·e5-small·e5-base 중 하나 · env=EDW_EMBED
       edw_summary_llm: false  # =1이면 묶음 요약을 LLM으로 생성(--summary auto일 때만, 기본은 앞부분 발췌) · 기본 false · 값: true·false · env=EDW_SUMMARY_LLM [켬: 1만]
       embed:  # [파라미터] 구조화·적재에 쓸 임베딩 방식(api 등, none이면 임베딩 없음 — 이미지 안 기본 api: 옛 Dockerfile ENV, B-2) · 기본 없음 · 값: api·bge-m3·e5-small·e5-base·none 중 하나 · env=PIPE_EMBED
       embed_batch: 32  # 임베딩 API 한 번에 보내는 청크 수 · 기본 32 · 값: 0 이상 정수 · env=EMBED_BATCH
@@ -383,7 +377,6 @@ pipeline:
       parse_date:  # 업로드 키의 날짜 폴더(YYYY-MM-DD) — 비면 오늘 · 기본 없음 · 값: YYYY-MM-DD · env=PM_PARSE_DATE
       path_map: []  # 원본 키 앞부분 치환표 '이전=새' 쉼표 목록(결과 키 경로 구성용) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록 · env=PM_PATH_MAP
       prefix:  # [필수: 서버] 버킷 안 업로드 경로 접두 · 기본 없음 · 값: 경로 · env=PM_PREFIX
-      source_system: FileStorageMap  # 병렬 파싱 경로에서 게시 행에 기록하는 source_system 이름 · 기본 FileStorageMap · 값: 경로 · env=PM_SOURCE_SYSTEM [빈 글자 유지]
       upload_raw: true  # rep.md 옆에 rep.json·엔진 원본·figures·meta도 올릴지 — 0이면 rep.md 등 옛 동작 · 기본 true · 값: true·false · env=PM_UPLOAD_RAW [끔: 0만]
       upload_statuses: [ok, partial]  # 원본을 업로드할 파싱 상태 목록(콤마 — 비면 parsing_meta.DEFAULT_UPLOAD_STATUSES) · 기본 ok,partial · 값: 쉼표 목록 또는 YAML 목록 · env=PM_UPLOAD_STATUSES
   # ─── 8. 실행 자원·상주 서비스·새벽 배치 ───
@@ -456,8 +449,6 @@ pipeline:
     test_min_docs: 50  # 시험 모드(--mode test)에서 표본 추출을 시작하는 최소 문서 수(개) · 기본 50 · 값: 0 이상 정수 · env=TEST_MIN_DOCS
     test_per_type: 5  # 시험 모드 표본에서 확장자별로 고르는 문서 수(개) · 기본 5 · 값: 0 이상 정수 · env=TEST_PER_TYPE
   eval:
-    e2e_qa_set:  # e2e 시험 질문 묶음 이름(valid_env/unstructured/<이름>/qa.json) · 기본 없음 · 값: 글자 · env=E2E_QA_SET
-    e2e_questions:  # e2e 질문 파일 경로(또는 auto = 그 자리에서 생성) · 기본 없음 · 값: 경로 · env=E2E_QUESTIONS
     gold_draft_max_pages: 30  # 정답 초안 생성(gold_draft)에서 문서당 처리할 쪽 수 상한(쪽) · 기본 30 · 값: 0 이상 정수 · env=GOLD_DRAFT_MAX_PAGES
     gold_draft_mermaid_check: true  # 정답 초안의 Mermaid 블록 2차 점검을 켤지(0/false/no면 끔) · 기본 true · 값: true·false · env=GOLD_DRAFT_MERMAID_CHECK [끔: 0·false·no]
     qa_draft_max_pages: 20  # 질문 초안 생성(qa_draft)에서 문서당 처리할 쪽 수 상한(쪽) · 기본 20 · 값: 0 이상 정수 · env=QA_DRAFT_MAX_PAGES
@@ -496,7 +487,6 @@ mcp:
     evidence_gate: true  # 근거 점수·evidence_status 표시 — 0이면 끔(점수 칸도 안 실림) · 기본 true · 값: true·false · env=SEARCH_EVIDENCE_GATE [끔: 0만]
     methods:  # [파라미터] search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서) · 기본 vector,bm25,id · 값: 쉼표 목록 또는 YAML 목록 · env=MCP_METHODS
     min_score:  # [파라미터] 근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak · 기본 없음 · 값: 0 이상 · env=SEARCH_MIN_SCORE
-    ocr_dpi:  # [파라미터] 쪽 이미지 렌더링 해상도(DPI) — OCR·근거 이미지 좌표 환산에 씀 · 기본 200 · 값: 0 이상 정수 · env=OCR_DPI [엔진 지문]
     struct_context_max: 200  # [파라미터] 집계 질문에서 계약 마스터 전체를 표로 넘길 때 계약 수 상한(개) · 기본 200 · 값: 0 이상 정수 · env=STRUCT_CONTEXT_MAX
     tie_break: true  # 동점 근거를 질문의 엔티티(고객·계약번호)로 깨기 — 0이면 끔 · 기본 true · 값: true·false · env=SEARCH_TIE_BREAK [끔: 0만]
     type_weights: true  # 집계 질문이면 BM25 가중을 SEARCH_W_BM25_TABLE로 교체 — 끄는 값 0·none·false·빈 값 · 기본 true · 값: true·false · env=SEARCH_TYPE_WEIGHTS [끔: ''·0·none·false]
@@ -533,7 +523,6 @@ mcp:
     max_concurrency: 8  # 도구 동시 실행 상한(개) · 기본 8 · 값: 0 이상 정수 · env=MCP_MAX_CONCURRENCY
     max_queue:  # 도구 대기열 상한(개) — 넘으면 즉시 busy 응답, 0이면 무제한 · 기본 없음 · 값: 0 이상 정수 (0 = 무제한) · env=MCP_MAX_QUEUE
     port: 8765  # MCP 서버 포트 · 기본 8765 · 값: 1~65535 · env=MCP_PORT
-    query_cache:  # 검색 MCP의 질의 임베딩 캐시 sqlite 경로 — 있으면 시작 때 common.models.embed.query_cache를 이 값으로(mcp 이미지 안 기본 /tmp/mcp_query_cache.sqlite — 결과 폴더는 읽기 전용, 옛 compose EMBED_QUERY_CACHE 자리 — S7e2) · 기본 없음 · 값: 경로 · env=MCP_QUERY_CACHE
     reload_check_sec: 30.0  # 적재 버전 변경 확인 간격(초) — 바뀌면 검색기·edw_meta 다시 읽음 · 기본 30.0 · 값: 0 이상 초 · env=MCP_RELOAD_CHECK_SEC
     store:  # [필수: 서버] 검색 저장소 종류 — pg 또는 local, 비우면 자동 탐지(Docker pgvector → 없으면 로컬 묶음) · 기본 없음 · 값: pg·local 중 하나 또는 비움(자동 탐지) · env=MCP_STORE [서버 옛 값: pg]
     token:  # [필수: 서버] MCP 서버 Bearer 토큰(비루프백 바인드면 필수) · 값: 비밀 글자 · env=MCP_TOKEN [비밀]

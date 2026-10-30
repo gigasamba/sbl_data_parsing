@@ -66,7 +66,7 @@ _IMAGE_DEFAULTS = {
         "PIPE_PROCS": "auto",
         "SOFFICE_BIN": "/usr/bin/soffice",
     },
-    "mcp": {"PIPE_EMBED": "api", "MCP_QUERY_CACHE": "/tmp/mcp_query_cache.sqlite"},  # MCP_QUERY_CACHE — 옛 compose 기본(S7e2)
+    "mcp": {"PIPE_EMBED": "api", "EMBED_QUERY_CACHE": "/tmp/mcp_query_cache.sqlite"},  # 질의 캐시 — 옛 compose 기본(S7e2·op-08)
 }
 IMAGE_DEFAULTS = _IMAGE_DEFAULTS.get(os.environ.get("RAG_MODULE", ""), {}) if IN_IMAGE else {}  # env 남김 — 이미지 신호(5-3 H)
 
@@ -889,8 +889,8 @@ def pin_env(environ=None):
     pins = _pinned(cls)
     legacy = sorted(n for n in _env_map(cls, False) if n in environ and n not in pins.values() and n != "RUN_ENV") if environ else []
     legacy = [
-        n for n in legacy if n not in _env_map(cls, True) and n not in SHELL_EXPORTS
-    ]  # 호스트 칸 이름(load_settings가 셸에 냄)·셸 export 이름은 빼고 — 이 이미지 절만(다른 앱 설정 모듈 import 안 함, U-a)
+        n for n in legacy if n not in _env_map(cls, True)
+    ]  # 호스트 칸 이름(load_settings가 셸에 냄)은 빼고 — 이 이미지 절만(다른 앱 설정 모듈 import 안 함, U-a)
     if legacy:
         _warn_once(f"[설정] env의 옛 설정 이름은 읽지 않음(S7e2 — settings.yaml 칸·덮기 파일로): {' '.join(legacy)}")
     st = None
@@ -936,7 +936,6 @@ def pin_env(environ=None):
 PINNED: set = set()  # 이 프로세스에서 pin_env가 env에 낸 이름(사용자 env와 가름 — common.config.boot)
 # 호스트 셸이 늘 export하는 설정 이름(settings_env.sh load_settings·systemd Environment=) — 앱 설정 칸과 이름이 같지만 셸 자신이 쓰는 값이라
 # "env의 옛 설정 이름" 경고에서 뺀다(VS7e2 R-5 — 운영자에게 매번 거짓 경고). 앱은 그 칸도 settings.yaml에서만 읽는다.
-SHELL_EXPORTS = ("SERVER_ENV_DIR",)
 
 
 def external_models_allowed(run_env):
@@ -1306,6 +1305,9 @@ class CommonConnectionsPg(Section):
 
 
 class CommonDevDocker(Section):
+    REMOVED = frozenset(
+        {"postgres_db", "postgres_user"}
+    )  # 사용자 10-30(op-08) — compose는 PG_DB·PG_USER로 채움(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     mcp_publish_port: Port | None = F(18765, "MCP_PUBLISH_PORT", "시험 compose에서 MCP를 호스트에 게시할 포트")
     minio_image: str | None = F("bitnamilegacy/minio:latest", "MINIO_IMAGE", "시험용 minio 이미지")
     minio_publish_port: Port | None = F(19000, "MINIO_PUBLISH_PORT", "시험 minio를 호스트에 게시할 포트")
@@ -1319,8 +1321,6 @@ class CommonDevDocker(Section):
     pg_shared_buffers: str | None = F("4GB", "PG_SHARED_BUFFERS", "시험 PG shared_buffers")
     pg_shm: str | None = F("3g", "PG_SHM", "시험 PG 컨테이너 공유 메모리(shm_size)")
     pg_work_mem: str | None = F("64MB", "PG_WORK_MEM", "시험 PG work_mem")
-    postgres_db: str | None = F("rag", "POSTGRES_DB", "PG 컨테이너 안에서 healthcheck가 쓰는 DB 이름(compose가 PG_DB로 채움)")
-    postgres_user: str | None = F("rag", "POSTGRES_USER", "PG 컨테이너 안에서 healthcheck가 쓰는 계정(compose가 PG_USER로 채움)")
     smoke_settings: str | None = F(
         None,
         "SMOKE_SETTINGS",
@@ -1338,13 +1338,17 @@ class CommonDevDocker(Section):
 
 
 class CommonModelsEmbed(Section):
+    REMOVED = frozenset({"dim"})  # 사용자 10-30(op-08) — ping_models는 받은 차원만 보여 줌(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     allow_external: bool | None = F(False, "EMBED_ALLOW_EXTERNAL", "임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "EMBED_API_KEY", "임베딩 엔드포인트 API 키(있을 때만 Authorization 헤더로 보냄)")
     base_url: str | None = F(None, "EMBED_BASE_URL", "임베딩 엔드포인트 주소(OpenAI 호환 …/v1)")
-    dim: int | None = F(4096, "EMBED_DIM", "ping_models 점검에서 기대하는 임베딩 차원 수")
     est_usd: float | None = F(0.001, "EMBED_EST_USD", "임베딩 호출 1건당 예상 비용($) — 예산 선차감용")
     model: str | None = F(None, "EMBED_MODEL", "임베딩 모델 이름(색인과 같아야 함 — 질의 임베딩·캐시 열쇠에도 씀)")
-    query_cache: str | None = F(None, "EMBED_QUERY_CACHE", "질의 임베딩 캐시 sqlite 경로(0이면 캐시 끔)")
+    query_cache: str | None = F(
+        image_default("EMBED_QUERY_CACHE"),
+        "EMBED_QUERY_CACHE",
+        "질의 임베딩 캐시 sqlite 경로(0이면 캐시 끔 — mcp 이미지 안 기본 /tmp/mcp_query_cache.sqlite: 결과 폴더가 읽기 전용)",
+    )
     query_cache_max: int | None = F(20000, "EMBED_QUERY_CACHE_MAX", "질의 임베딩 캐시 최대 행 수(넘으면 오래된 것부터 삭제, 0이면 무제한)")
     query_prefix: str | None = F(None, "EMBED_QUERY_PREFIX", "질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …/nQuery: ')")
     timeout: int | None = F(60, "EMBED_TIMEOUT", "임베딩 API 호출 제한 시간(초)")
@@ -1451,17 +1455,11 @@ class CommonHost(Section):
 
 class CommonPaths(Section):
     REMOVED = frozenset(
-        {"eval_sets_dir", "korean_font"}
-    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+        {"eval_sets_dir", "korean_font", "config_dir", "criteria_file"}
+    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치 · op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     client_roster: str | None = F(
         None, "CLIENT_ROSTER", "고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) — 용어·별칭에 합침", pinned="handoff"
     )
-    config_dir: str | None = F(
-        None,
-        "SERVER_ENV_DIR",
-        "서버 설정 폴더(코드 폴더 밖) — 호스트 스크립트가 settings.yaml을 여기서 찾음(원천 목록 sources.json 덮어쓰기는 S8b에 없앰 — 서버는 판 표)",
-    )
-    criteria_file: str | None = F(None, "CRITERIA_FILE", "판정 문턱값 파일 경로(criteria.json)")
     doc_dir: str | None = F(
         image_default("DOC_DIR"),
         "DOC_DIR",

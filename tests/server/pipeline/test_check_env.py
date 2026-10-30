@@ -40,17 +40,17 @@ def selftest():
         (docs / "b.pdf").write_text("원본", encoding="utf-8")  # 짝 없음
         # S7c — check_path_bundle이 설정 객체로 읽으므로 객체에 겹쳐 씀(os.environ 안 건드림 — pipeline 칸은 PIPE, common 칸은 COMMON)
         with (
-            pc.PIPE.env(GOLD_DIR=str(gold), PARSE_SOURCE="rdb:*", E2E_QUESTIONS="auto"),
+            pc.PIPE.env(GOLD_DIR=str(gold), PARSE_SOURCE="rdb:*"),
             C.COMMON.env(CLIENT_ROSTER=None, GLOSSARY_DIR=str(d / "없는폴더")),
         ):
-            # PARSE_SOURCE·E2E_QUESTIONS: 형식만(경로 존재 안 봄) · CLIENT_ROSTER: 미설정(선택) 경로 · GLOSSARY_DIR: 있는데 없음(경고만, 죽지 않음)
+            # PARSE_SOURCE: 형식만(경로 존재 안 봄) · CLIENT_ROSTER: 미설정(선택) 경로 · GLOSSARY_DIR: 있는데 없음(경고만, 죽지 않음)
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
                 check_path_bundle(docs)
             out = buf.getvalue()
             assert "GOLD_DIR" in out and str(gold) in out
             assert "미설정(선택)" in out  # CLIENT_ROSTER 등
-            assert "rdb:*" in out and "auto" in out
+            assert "rdb:*" in out
             assert "이름 짝" in out and "짝 1건" in out  # a만 매칭, b는 안 됨
     print("[selftest] check_env 경로 묶음(OP15 c1) — 미설정·경고·GOLD_DIR 이름 짝 통과")
 

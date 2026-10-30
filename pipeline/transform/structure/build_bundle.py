@@ -709,7 +709,7 @@ def main(argv=None):
         help="저장소(doc.file_path)에 기록할 원본 경로 접두(서버의 실제 보관 위치) — 없으면 --src 절대 경로",
     )
     ap.add_argument(
-        "--embed", default=pc.cfg().transform.structure.edw_embed or ("api" if C.cfg().models.embed.base_url else "bge-m3")
+        "--embed", default=pc.cfg().transform.structure.embed or ("api" if C.cfg().models.embed.base_url else "bge-m3")
     )  # S7c — 설정 객체
     ap.add_argument(
         "--summary", default="auto", choices=["auto", "llm", "lead"], help="auto = EDW_SUMMARY_LLM이면 LLM 요약, 아니면 앞부분 발췌"
