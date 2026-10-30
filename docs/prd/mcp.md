@@ -85,12 +85,18 @@
 - 필터용 칸 `doc_class`·`created_at`은 gold `doc`에 Alembic으로 더한다(M4 — [etl.md#pl-25](etl.md#pl-25)).
 - 남은 확인: 운영 MCP 서버 소스는 없음 — 명세 기준으로 새로 구현, 구하면 대조.
 - 파일: `mcp_server/routers/`, `mcp_server/schemas/`, `mcp_server/services/search/`.
+- 결정(2차 grill(사용자 10-30, 원본은 git 밖)):
+  - G4: `source_system` 값은 `SFDC`·`CRMS`·`LAS`·`FAQ`로 통일, `-test`가 붙은 입력(`SFDC-test` 등)도 같은 뜻으로 받는다(두 도구 모두).
+  - G5: "하드 필터 최소 1개"는 권고만 — 강제하지 않는다.
+  - G6: `search` 속도 목표는 두지 않는다.
+  - G7: MCP 계약 변경은 첫 릴리스 0.1.0에 함께 싣는다 — 아직 릴리스 태그가 없어(op-04) 따로 MAJOR를 올리지 않는다(D-036).
 - Status: todo — 순서는 허브가 정함([etl.md#pl-32](etl.md#pl-32)).
 
 <a id="mc-17"></a>
 ## mc-17 · 원문 전송 도구 `list_doc_fulltext`·`get_doc_fulltext`
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) M2·T3): 두 도구를 더한다(운영 명세 `05_mcp_tools_schema.md` §6). 새 도구 — 계약 추가라 검토 등급 A.
 - 파일: `mcp_server/routers/`, `mcp_server/services/`(새 파일).
+- 결정(2차 grill(사용자 10-30, 원본은 git 밖)): G1 — 목록은 EDW `ParsingMeta`의 `doc_class`·`sf_op_id`·`parsed_at`·`rep_engine`을 읽는다(운영 계약 그대로, [etl.md#pl-25](etl.md#pl-25)). G4 — `source_system` 통일·`-test` 별칭. G7 — 0.1.0에 함께 싣고 따로 MAJOR 없음.
 - Status: todo — 순서는 허브가 정함.
 
 <a id="mc-06"></a>
