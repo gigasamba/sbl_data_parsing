@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나. 두 앱이 함께 쓰는 설정, 실행 환경(`RUN_ENV`), EDW 계정, 로그, 외부 모델 호출 가드.
 op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 표준).
 
-순서(주제별): 실행 환경·외부 모델 op-02·pl-11 → 계정 op-03 → 종료 정리 pl-27 → 로그 op-01 → 미룬 설정 정리 pl-21·pl-30 → 코드와 다른 점.
+순서(주제별): 실행 환경·외부 모델 op-02·pl-11 → 계정 op-03 → 종료 정리 pl-27 → 로그 op-01 → 미룬 설정 정리 pl-21·pl-30 → 파라미터 파일 op-05 → 코드와 다른 점.
 
 <a id="op-02"></a>
 ## op-02 · RUN_ENV는 `local`·`dev`·`prd` 셋(`stage` 없앰) · LLM_FAKE는 `local`에서만
@@ -63,7 +63,7 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 남은 한계: `subprocess.run`으로 띄운 짧은 자식(`load/index.py`·`eval/server_checks`·`cli selftest` 등)은 추적 안 함 — SIGTERM 때 부모가 먼저 끝나면 그 자식이 읽던 덮기 파일이 먼저 지워질 수 있음 · 주 스레드가 아닌 곳에서 처음 import되면 SIGTERM 처리기를 못 닮(정상·오류 종료 정리만) · SIGKILL·OOM은 정리 못 함 · 컨테이너 PID 1 고아 회수는 compose `init: true`(이미 있음) · 호스트 `run_docs.py`는 파이썬 공용 코드를 안 씀(systemd가 cgroup째 정리) · `run_all`·`pptx_render`의 시간 초과는 전처럼 그 자식만 끝냄(손자는 바깥 묶음 정리·`init`이 맡음).
 - 파일: `common/core/exitclean.py`, `common/config/settings.py`, `common/config/setarg.py`, `common/core/resources.py`, `common/core/fingerprint.py`(분류 목록), `pipeline/extract/resources.py`, `pipeline/mcp_parse_service.py`.
 - 시험: `tests/server/common/test_exitclean.py` — 정상·오류 종료(모든 OS) · SIGTERM과 `--set`(execve)(POSIX 전용, Windows는 건너뜀 — python:3.12-slim에서 확인) · overrides 출력 파일은 남고 isolated는 블록 끝에서 지움.
-- Status: dev — `feature/exit-cleanup`. code_fp 모든 레이어가 바뀜(`common/` 공용 의존).
+- Status: dev — `feature/exit-cleanup`. code_fp 모든 레이어가 바뀜(`common/` 공용 의존). 남은 일(todo, 사용자 10-30 grill 12~13차 — refactor.md C-46): 강제 종료(SIGKILL·OOM)로 남은 덮기 설정 임시 파일은 다음 시작 때 지운다 — 만든 프로세스가 더는 없는 임시 설정 파일을 지움.
 
 <a id="op-01"></a>
 ## op-01 · JSON Lines 사건 기록(두 앱)
@@ -88,6 +88,20 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 결정(사용자 10-30 grill): 0.1.0 릴리스에서 지운다(핑거프린트가 바뀌는 다른 항목과 함께).
 - 파일: 서버 env·settings 예시, `common/config/`(설정이나 별칭이 있으면), `refactor.md` C-51.
 - Status: todo — 0.1.0 릴리스에서.
+
+<a id="op-05"></a>
+## op-05 · 파라미터 파일 분리
+- 이유(사용자 10-30 grill 12~13차): `settings.sample.yaml`이 길어 서버에서 채울 값과 바꿀 일 없는 조정 값이 섞여 있다. 같은 키가 코드 기본값·settings.yaml 두 곳에 있으면 어느 값이 쓰였는지 알기 어렵다.
+- 무엇:
+  - `settings.sample.yaml` §3 파라미터와 §2 옵션 중 비밀이 아니고 환경마다 다르지 않은 것을 `resources/config/`의 파라미터 파일로 옮긴다. 이 파일은 git과 이미지에 들어가고 그 값의 유일한 출처다.
+  - settings.yaml에는 필수값·비밀값·서버마다 다른 값만 남는다.
+  - 덮어쓰기 없음: 키는 정확히 한 곳에만 있다. settings.yaml에 파라미터·옵션 키가 있으면 거부한다. 바꾸려면 커밋과 릴리스.
+  - 파일 셋: parsing, structure(청크 + 임베딩), mcp. 모델 파라미터는 쓰는 곳 옆에 — vlm·llm은 parsing, embed는 structure. MCP는 임베딩 모델을 structure 파일에서 읽는다.
+  - 파라미터 파일이 기본값을 들고 있으므로 필수 입력이 아니다. 서버는 settings.yaml만 채운다(CLAUDE.md §3).
+- 핑거프린트: 파라미터 파일이 바뀌어도 자동 재처리는 **없다** — 파라미터 해시는 code_fp에 넣지 않는다. 새 값은 새 문서부터 적용되고, 필요하면 재처리는 사람이 한다. 사용자가 명시적으로 고른 등급 A 선택.
+- CLAUDE.md §3: "settings.yaml 하나" → settings.yaml(필수값·비밀값·서버마다 다른 값) + `resources/config` 파라미터 파일 3개(이 PR에서 고침, 사용자 승인).
+- 파일: `settings.sample.yaml`, `common/config/{settings,sample,keyscan}.py`, `pipeline/config.py`, `mcp_server/config.py`, `resources/config/`(새 파일 셋), `docs/operations/env-guide.md`.
+- Status: todo — 0.1.0에 싣는다.
 
 ## 코드와 다른 점 · 지울 코드
 

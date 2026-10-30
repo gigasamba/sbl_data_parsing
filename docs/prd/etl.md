@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나. 흐름: 수집(원천 → 준비) → 파싱([parse.md](parse.md)) → 구조화 → 적재(pgvector · 정형 DB) · 게시(silver). 서버 문서별 실행기(`run_docs.py`)의 레인·대기열도 여기 둔다.
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서(주제별): 수집 pl-01·pl-29 → 구조화 pl-06·pl-15·pl-16 → 적재 pl-07·pl-13·pl-14·pl-19 → 정형 DB·문서 대장 pl-08·pl-12 → 게시 pl-09·pl-26 → 실행·흐름 러너 pl-10·pl-18·pl-23·pl-24·rn-01·rn-02 → DB 스키마 pl-25·pl-28 → 코드와 다른 점.
+순서(주제별): 수집 pl-01·pl-29 → 구조화 pl-06·pl-15·pl-16 → 적재 pl-07·pl-13·pl-14·pl-19 → 정형 DB·문서 대장 pl-08·pl-12 → 게시 pl-09·pl-26 → 실행·흐름 러너 pl-10·pl-18·pl-23·pl-24·rn-01·rn-02·rn-03 → DB 스키마 pl-25·pl-28 → 코드와 다른 점.
 
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
@@ -80,6 +80,7 @@
 - 결정(사용자 10-30 grill):
   - ① 문서 대장은 남기고 고친다 — `INSERT OR REPLACE`의 PG 번역(`structdb._pg_sql` 정규식 ↔ `registry.apply`의 여러 줄 SQL). [pl-25](#pl-25)와 함께 키를 `s3_key`로 바꾼다. 새 문서 판별은 FileStorageMap ↔ ParsingMeta 그대로([pl-23](#pl-23)).
   - ② 게시 가드는 `source.json` 사이드카 대신 EDW `AI.ParsingMeta`(`source_key` + `rep_bucket`/`rep_key`)를 읽는다. 같은 문서 → 같은 파일에 덮어씀(`-2`/`-3.md` 사본 없음). 다른 원천이 같은 결과 키로 오면 → 거부. 그러면 `test_publish_guard`가 통과 → `deploy/release/known_fail.txt`에서 뺀다.
+- 결정(사용자 10-30 grill 12~13차): 원천에서 사라진 문서(deleted) 처리 길은 통째로 없앤다 — 지우기·숨기기·EDW `deleted` 표시 모두 없음, 로컬 기록만(refactor.md C-54).
 - Status: todo — [pl-25](#pl-25) 뒤.
 
 <a id="pl-09"></a>
@@ -153,6 +154,17 @@
 - 파일: `deploy/host/scripts/run_docs.py`, `tests/general/deploy/test_run_docs.py`.
 - 끝남 10-29(사용자 grill): `pipeline.host.run_docs.warm` 20(진입), `struct_workers` 2, `struct_backlog` 기본 = struct_workers × 2(0 = 끔). 레인 워커는 고르는 시점에서 상한을 본다(`test_struct_backlog_holds_new_parses`). `batch_progress/queue_depth.jsonl`에 dispatch / pick / parse_end / struct_put / struct_get마다 한 줄.
 - Status: done
+
+<a id="rn-03"></a>
+## rn-03 · MCP `parse_document`에 CPU 먼저 주기
+- 이유: 일괄 파싱이 CPU를 다 쓰면 검색 MCP의 `parse_document`(사람이 기다리는 요청)가 느려진다. 지금은 일괄 엔진 자식을 nice +10으로 낮추지만(`pipeline.extract.low_priority`, [parse.md#pl-22](parse.md#pl-22)) nice는 한 세션·autogroup 안에서만 효과가 있고 컨테이너끼리는 cgroup CPU 가중치가 정한다(refactor.md C-65 ⑥).
+- 지금 결정(사용자 10-30): 선택지 2 — 같은 컨테이너(`data-pipeline-parse`) 안에서 우선순위로(nice).
+- 선택지:
+  1. 같은 이미지로 컨테이너를 따로 띄우고 cgroup `cpu.weight`로 나눈다(허브 추천). 장점: 컨테이너끼리도 확실히 먼저 받음, 서버에서 숫자로 조정. 단점: 컨테이너·compose·systemd가 하나 늘고 메모리를 더 씀, 서버 설정 일.
+  2. 같은 컨테이너 안에서 nice로(지금 결정). 장점: 구성 변경 없음, 이미 있는 `low_priority`를 씀. 단점: 다른 컨테이너·세션과는 nice로 겨루지 않음(`sched_autogroup_enabled=1`이면 효과가 세션 안에만), 효과를 서버에서 재 봐야 앎.
+- 서버 확인: C-65 ⑥ — 일괄 파싱만 / 일괄 파싱 + `parse_document` 동시에서 서비스 응답 시간 비교. 효과가 없으면 선택지 1로.
+- 파일: `deploy/host/compose/`, `pipeline/mcp_parse_service.py`, `common/core/resources.py`.
+- Status: todo — 논의 대상(지금은 선택지 2).
 
 <a id="pl-25"></a>
 ## pl-25 · DB 스키마 명세 — pl-26·pl-23·pl-24를 만들기 전에 먼저
