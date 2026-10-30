@@ -39,6 +39,7 @@
 - 이유: 일반 시험 7개가 리팩토링 전부터 실패한다(C-54 ①, C-58): 3개는 공용 개발 PG를 읽음(임시 SQLite·스키마를 쓸 것), 2개는 없는 패키지·모듈이 필요(건너뜀 표시 또는 고침), 1개는 EDW 필요, 1개는 `test_structured`의 `find_table_cells` 단언.
 - 파일: `tests/conftest.py`(`GENERAL_KNOWN_FAIL`), `tests/general/`.
 - 진행 10-29(`feature/test-cleanup`): 공용 개발 PG 실패 3개를 고쳤다 — PC 시험 자식 프로세스가 더는 개발 루트 `settings.yaml`을 읽지 않음(`pipeline/cli.py` `case_env`가 시험 전용 바탕 `run_env: local`을 줌). `test_structured`, `test_structdb`, `test_aggregate`를 목록에서 뺐다. 남음: `test_kg_external`, `test_run_combo`, `test_edwdb`, `test_pub_registry`(일부러 실 PG, C-54 ①).
+- 결정(사용자 10-30 PRD grill): S4 — 이미 지운 모듈의 시험(`test_kg_external`, `test_edwdb`)은 목록과 함께 지운다. `test_run_combo`는 C7(e2-10, 평가 도구 둘만)에 따라 도구와 함께 지운다.
 - Status: partly done
 
 <a id="e2-15"></a>
