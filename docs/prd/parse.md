@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나. 수집([etl.md](etl.md)) 다음, 구조화 앞 단계: 준비 → 엔진 스택 파싱 → represent(대표 결과 고르기·고치기) → 그림.
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서(주제별): 준비 pl-02 → 엔진 스택 pl-03·pl-22·pl-31·pl-20·pl-17 → represent·그림 pl-04·pl-05 → 코드와 다른 점.
+순서(주제별): 준비 pl-02 → 엔진 스택 pl-03·pl-22·pl-31·pl-20·pl-17 → represent·그림 pl-34·pl-04·pl-05·pl-36·pl-37 → 잔재 pl-35 → 코드와 다른 점.
 
 <a id="pl-02"></a>
 ## pl-02 · 준비
@@ -17,6 +17,7 @@
 - 이유: 모든 형식을 잘 다루는 파서 하나는 없다.
 - 무엇: 파일 형식마다 스택의 모든 엔진이 돈다(대체 사슬이 아님). 형식당 최대 2개, 문서마다 병렬(10-29부터 phase 없음 — [pl-22](#pl-22)). 엔진마다 격리. 엔진 스택은 `struct.stack_version`에 판으로 둔다(PC: `pipeline_stack.json`). 형식: pdf(글자/이미지), doc(x), ppt(x), xls(x/m), hwpx, txt, html/htm, mht, eml, msg, png, jpg. 미지원: 옛 `.hwp`, zip.
 - 파일: `pipeline/extract/run_all.py`, `pipeline/extract/engines/`(엔진 핑거프린트 — 바꾸려면 사람 검토), `resources/config/pipeline_stack.json`, `docs/architecture/pipeline_stack.md`.
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P1): 엔진 범위는 `stack` 그대로(형식당 2개) — 서버 settings.yaml에 `all`을 적지 않는다.
 - Status: done
 
 <a id="pl-22"></a>
@@ -35,6 +36,7 @@
 - 파일: `pipeline/extract/run_all.py`, `pipeline/stackcfg.py`, `pipeline/config.py`, `pipeline/cli.py`, `pipeline/stream.py`, `pipeline/parse_parallel.py`, `pipeline/mcp_parse_service.py`, `pipeline/transform/represent/represent.py`, `pipeline/transform/figures/vlm_page.py`, `deploy/host/scripts/run_docs.py`.
 - 시험: `tests/server/pipeline/test_run_all.py`(over_limit, OCR 스위치, page_timeout, 옛 phase 시간 초과), `tests/server/pipeline/test_vlm_page.py`(`pick_pages`), `tests/general/pipeline/test_represent.py`(쪽 VLM 채우기).
 - 열린 것: 글자 엔진은 쪽으로 나누지 않는다(문서×엔진마다 자식 하나, 쪽 병렬은 VLM 엔진 안에서만 `VLM_CONCURRENCY`로).
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P7·P8): 그대로 둠 — 그림자 모드·스트리밍(e2-18 남김), 복호화(수동 CLI 요건), figure_review(e2-10에서 판단), rapidocr_ko(다른 단계가 씀). 실행 구성(D-2~14)은 pl-22·rn-01·rn-02·mc-08 결정대로, 워커 6은 서버 실측(C-65) 뒤 조정.
 - Status: dev — 브랜치 `feature/r2-phase`, 서버 확인 대기(refactor.md C-65). VLM 동시 수 손잡이는 병합 안 됨(따로 후속).
 
 <a id="pl-31"></a>
@@ -47,6 +49,7 @@
 - `vlm.model_alt`(`VLM_MODEL_ALT`) 지움: figure_review 판정은 `vlm.model`(지금 기본값 — 결과 그대로). `parsing_meta.py`의 대체 길을 고치고 `model_matrix`의 연결을 뺀다. 옛 키는 `Section.REMOVED`(경고만).
 - settings.yaml에 남김: `llm.extra_body`·`vlm.extra_body`·`embed.query_prefix` — 값이 모델에 따라 달라짐(예: thinking 끄기, [settings.md#op-05](settings.md#op-05)).
 - 파일(10-30 grep — ocr_vlm·ocrvlm·model_alt가 나오는 곳): `common/config/{settings,keyscan}.py`, `pipeline/config.py`, `common/ai/{adk,llm,guard}.py`, `common/check/ping_models.py`, `common/store/services.py`, `pipeline/extract/engines/{registry.py,qwen_vlm/parser.py}`, `pipeline/extract/run_all.py`, `pipeline/mcp_parse_service.py`, `pipeline/cli.py`, `pipeline/shared/{phase_report,summarize}.py`, `pipeline/eval/report.py`, `pipeline/transform/figures/figure_review.py`, `pipeline/transform/represent/parse_qa.py`, `pipeline/load/parsing_meta.py`, `resources/config/report_templates/catalog.json`, `deploy/docker/Dockerfile`, `validation/e2e/model_matrix.py`, `validation/search_ui/{serve.py,start_mcp.sh}`, `tests/server/common/test_settings.py`, `settings.sample.yaml`.
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P3·T11): 같은 0.1.0 엔진 묶음에서 설치·사용하지 않는 엔진도 지운다 — rapidocr v1, docling, unstructured, kreuzberg_ocr(+ ocr_vlm). **docx2python은 남김**(e2-06 비교용). 검토 등급 A. 파일: `pipeline/extract/engines/{docling,unstructured,rapidocr,kreuzberg,qwen_vlm}`, registry `CORE`, `pipeline/check_env.py`.
 - Status: done (10-30) — `vlm.model_alt`는 `feature/fp-batch`(#27), ocr_vlm은 `feature/drop-ocrvlm`: 엔진·설정(`common.models.ocrvlm`·`ocrvlm_prompt` → `Section.REMOVED`)·역할 표·라벨·`catalog.json` 행 지움. 엔진 재파싱 키(`run_all.engine_code_fp`): `qwen_vlm` `52ca47bc4c6e` → `7381bf2b79d2`, 나머지 25개 그대로, `ocr_vlm` 없어짐(27 → 26). 레이어 code_fp도 바뀜(공용·레이어 파일 — `engines/registry.py`의 CORE 목록 포함): p0 `840199fcacb6` → `2a828b0470c1` · p1 `08cd37047cbd` → `deb6efc4a5f0` · r `b706f28ce48e` → `0d4fcc7a4cbc` · s `eb0597ed7f7b` → `bd154d04467a`(FINGERPRINT `abe9b7b0799ceaae`·a 그대로). 검토 등급 A(엔진 파일·`engines/registry.py` — 사용자). · 남은 정리(`feature/ocrvlm-leftovers`, 등급 A): qwen_vlm 파서의 ocr_vlm용 인자 `pre`·`prompt` 지움(`qwen_vlm` `7381bf2b79d2` → `06f937fcc39e`) · fuse `_OCR_FAMS`의 `ocr-vlm` 지움(p1 `deb6efc4a5f0` → `9ee173300a82`) · VLM 엔진 집합은 `run_all.VLM_ENGINES` 한 곳(phase_report·report가 가져다 씀).
 
 <a id="pl-20"></a>
@@ -62,6 +65,33 @@
 - 결정(사용자 10-29 grill): `pipeline/extract/{engines/,run_all.py,parse_one.py}` → `pipeline/transform/parse/`로 옮긴다. `run_all.py` → `run_parse.py`로 이름을 바꾼다(문서 × 엔진 파싱만 함 — "run all"은 e2e로 읽힘). `extract/`에는 source · rdb_discover · dedup · prepare가 남는다. 옮기는 커밋과 이름 바꾸는 커밋을 나눈다(CLAUDE.md §1). 엔진 핑거프린트는 `_LEGACY_NAMES`로 유지. code_fp p0는 바뀌지만 첫 적재가 전체 e2e라 지금은 공짜([etl.md#pl-23](etl.md#pl-23)).
 - 파일: `pipeline/extract/`, `pipeline/transform/`, `common/core/artifacts.py`(`LAYER_CODE`), `pipeline/cli.py`, 문서와 명령 표.
 - Status: todo — 검토 등급 A(핑거프린트).
+
+<a id="pl-34"></a>
+## pl-34 · 파싱 p1 묶음 — 재판독 P3·scan_dedup·렌더 OCR 신호 지우기
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P2·P5·T10): 재판독 P3(`reread_stage3.py`, 프롬프트 `value_choice`)를 코드에서 지우고, 같은 p1 묶음에서 scan_dedup(`scan_dedup.py`)과 렌더 OCR 신호(`figures/vlm_page.py`의 신호 부분)도 지운다. `_page_texts`는 `fill_scan_pages`가 쓰므로 남긴다. [pl-04](#pl-04)(represent)의 일부를 걷어냄.
+- code_fp p1이 바뀜 — 0.1.0 핑거프린트 묶음, 검토 등급 A.
+- 파일: `pipeline/transform/represent/{reread_stage3,scan_dedup}.py`, `pipeline/transform/figures/vlm_page.py`, `resources/prompts/pipeline/value_choice`.
+- Status: todo — 0.1.0.
+
+<a id="pl-35"></a>
+## pl-35 · 핑거프린트 영향 없는 잔재 지우기
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P4·P6·T12): registry 도구 API·`marker_llm`, `pipeline/parse_parallel.py`, `figures/figures_resume.py`, `shared/phase_report.py`, 고아 프롬프트 `parse_agent`·`parse_decide`·`parse_decide_vlm`, `AUTO_REPARSE_CHANGED`(pl-23 — 증분만)를 지운다.
+- 파일: `pipeline/extract/engines/registry.py`, `pipeline/extract/run_all.py`, 위 모듈들, `resources/prompts/pipeline/`, `pipeline/config.py`.
+- Status: todo
+
+<a id="pl-36"></a>
+## pl-36 · 메일 첨부 파싱
+- 이유(reference 비교(사용자 grill 10-30, 원본은 git 밖) P9): 서버에서 켜져 있어 요건 앵커를 단다.
+- 무엇: `.eml`·`.msg` 첨부를 재귀 파싱(형식별 엔진, 깊이 `ATTACH_MAX_DEPTH` 기본 1, 크기 `ATTACH_MAX_MB` 20, 개수 `ATTACH_MAX_N` 10 상한), 인용 스레드 단락화, 대표 본문에 `[첨부 <파일명>]` 절로 덧붙임, 결과는 P0 원본 층에 캐시. 인라인 그림(cid)은 그림 기능이 맡음.
+- 파일: `pipeline/transform/represent/attachments.py`.
+- Status: done
+
+<a id="pl-37"></a>
+## pl-37 · 그림 근처 맥락 기록(신호 기록)
+- 이유(reference 비교(사용자 grill 10-30, 원본은 git 밖) P9): 서버에서 켜져 있어 요건 앵커를 단다.
+- 무엇: 그림 근처 본문 후보정 — 캡션 연결, 본문 언급, 값 일치·충돌 표시 — 와 그림 기록을 본문 청크 한 덩어리로 렌더.
+- 파일: `pipeline/transform/represent/context.py`.
+- Status: done
 
 <a id="pl-04"></a>
 ## pl-04 · represent — 가장 좋은 결과를 고르고 고치기

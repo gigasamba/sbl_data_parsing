@@ -55,6 +55,8 @@
 | service_type | VARCHAR(20) | 서비스 종류(CMO DS 등) | build_bundle(file_meta → EDW 직접) | 뷰 → search_svc, internal_docs(거르기) | 유지 |
 | run_id | INT | 이 행을 넣은 적재(`load_run`) | pgvector_load `load` | 없음 | 유지 |
 | pipeline_version | TEXT | 이 문서를 만든 파이프라인 판(`VERSION` — ParsingMeta가 아니라 여기, C-62 사용자 10-30) | (pgvector_load `load`) | (운영자·재처리 판정) | 새로 |
+| doc_class | TEXT | 문서 분류 라벨 하나(SFDC: RFI/RFP/RFI+RFP/Proposal/Other, LAS: MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other, 다른 원천 NULL) — low_conf·모델·시각은 두지 않음 | (분류 단계 → 적재 — [pl-33](../prd/etl.md#pl-33)) | (MCP `search` 필터 — mc-16) | 새로(reference 비교 10-30, D-6) |
+| created_at | TIMESTAMPTZ | 원천 등록 시각(KST로 해석) | (적재 — FileStorageMap 등록 시각) | (MCP `search` 필터 — mc-16) | 새로(reference 비교 10-30, D-6) |
 
 ### gold.chunk
 
@@ -351,6 +353,8 @@
 | stack_version | INT | 파싱 엔진 스택 판(`struct.stack_version`) — 엔진이 모두 실패하면 NULL | (파싱 단계 성공 때) | (운영자·재처리 판정) | 새로 |
 | gold_version | NVARCHAR(64) | gold 모듈·파이프라인 판 — gold가 끝나기 전에는 NULL | (gold 성공 때) | (운영자·재처리 판정) | 새로 |
 | engines_failed | NVARCHAR(MAX) | 실패한 엔진(JSON — 이름·이유·걸린 시간), 없으면 NULL | (파싱 단계 — 사용자 10-30 "EDW에도") | (운영자·재시도 판단) | 새로 |
+
+**운영이 더한 분류·고객 칸(reference 비교 10-30, C2):** 운영 ParsingMeta에 더해진 분류·고객 칸은 0.1.0과 동시에 지운다(DB 담당자 D-3, 등급 A) — 분류·고객 결과는 gold에만([pl-33](../prd/etl.md#pl-33), [pl-29](../prd/etl.md#pl-29)). 그때 운영 분류 스크립트가 멈추므로 운영 담당자에게 알린다.
 
 **단계별 기록(사용자 10-30 grill — 등급 A, DB 담당자 D-3):** 단계마다 성공했을 때만 쓴다 — 파싱: `stack_version`·성공한 엔진(`engines_used`)·실패한 엔진(`engines_failed`)·대표 silver 엔진 + 판(`rep_engine`) · gold: `gold_version`·`gold_status`. 3차의 "읽는 칸만" 안에 칸을 다시 더한 것이다. 저장 구조(silver = Object Storage uuid5 폴더 · gold = pgvector)는 [pl-32](../prd/etl.md#pl-32).
 

@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. 수집 → 파싱([parse.md](parse.md)) → 구조화 → 적재(pgvector·정형 DB)·게시(silver), 서버 러너(`run_docs.py`) 레인·대기열.
 
-순서(주제별): 수집 pl-01·pl-29 → 구조화 pl-06·pl-15·pl-16 → 적재 pl-07·pl-13·pl-14·pl-19 → 정형 DB·문서 대장 pl-08·pl-12 → 게시 pl-09·pl-26 → 실행·흐름 러너 pl-10·pl-18·pl-23·pl-24·rn-01·rn-02·rn-03·rn-04 → DB 스키마·저장 구조 pl-25·pl-32·pl-28 → 코드와 다른 점.
+순서(주제별): 수집 pl-01·pl-29 → 구조화 pl-06·pl-15·pl-16 → 적재 pl-07·pl-13·pl-14·pl-19 → 정형 DB·문서 대장 pl-08·pl-12 → 게시 pl-09·pl-26 → 실행·흐름 러너 pl-10·pl-18·pl-23·pl-24·rn-01·rn-02·rn-03·rn-04 → DB 스키마·저장 구조·분류 pl-25·pl-32·pl-33·pl-28 → 코드와 다른 점.
 
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
@@ -18,6 +18,8 @@
 - 결정(사용자 10-30 grill — pl-25 검토): 고객뿐 아니라 나머지 문서 메타(`sf_*`, `project_code__c`, `contract_id`, `contract_date`, `prod_name`, `division`, `service_type`)도 같은 자리에서 EDW에서 직접 읽는다 — 외부 파일 `file_meta_new.jsonl`은 없어진다.
 - 파일: `pipeline/extract/source.py`(FileStorageMap 읽기), `pipeline/transform/structure/build_bundle.py`(`_file_meta` → 조인 결과), `pipeline/config.py`(`file_meta_path`), `deploy/host/scripts/run_docs.py`(`FILE_META_PATH`), `docs/architecture/db_schema.md`.
 - 선행: [pl-25](#pl-25)(스키마 — `client_edw` 칸), [pl-32](#pl-32)(저장 구조).
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) C6·T7): 고객 연결은 운영 4단계를 따른다 — 출발점 `FileStorageMap`, 순서 기회 직접 > `Task.WhatId` > `Event.WhatId` > Quote 스냅샷, 계정 직접 연결도 포함. 결과는 pgvector doc에만. 같은 sha256 묶음에도 고객은 전파하지 않는다(C3).
+- 열린 점: Quote 단계는 레플리카에 Quote 표가 없어 SFDC REST 스냅샷에 기댄다 — 서버에서 스냅샷을 어떻게 공급할지 정해야 함.
 - Status: todo
 
 <a id="pl-06"></a>
@@ -202,6 +204,10 @@
   - MCP `search` 근거 출력의 `file_path`: 제거 대상(사용자 10-30 "mcp 기능에서 제거될 것이니 pass" · "reference 기준으로 하면 file_path 관련 부분 뺄거라 제거 대상으로 간주만 하고 일단 pass") — 시기·버전 처리는 나중([mcp.md#mc-01](mcp.md#mc-01)). 계약 변경이라 등급 A.
   - 나머지 문서 메타(`sf_*`, `project_code__c`, `contract_id`, `contract_date`, `prod_name`, `division`, `service_type`)도 파이프라인이 EDW에서 직접 읽는다 — [pl-29](#pl-29)의 고객 조인과 같은 자리. 외부 파일 `file_meta_new.jsonl`은 없어진다.
 - 파일: `docs/architecture/db_schema.md`(새), `docs/index.md`, `common/store/db/migrations/versions/`, `docs/operations/parsing_meta_mssql.sql`, `tests/server/common/`(시험 하나).
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖)):
+  - M4·T4: gold `doc`에 `doc_class`(분류 라벨 하나 — C5, low_conf·모델·시각은 두지 않음)와 `created_at`(원천 등록 시각을 KST로 해석)을 더한다 — Alembic(D-6).
+  - C2·T8: 분류·고객 결과는 gold(pgvector)에만 doc 단위로. 운영이 ParsingMeta에 더한 분류·고객 칸은 0.1.0과 동시에 지운다(DB 담당자 D-3, 등급 A). 그때 운영 분류 스크립트가 멈춘다 — 운영 담당자에게 알릴 것.
+  - T9: `source_system`·`parse_status` 값 정리(`pipeline/extract/source.py`, `pipeline/transform/structure/build_bundle.py`).
 - Status: dev — `docs/architecture/db_schema.md` 설계안 + 시험 `tests/server/common/test_db_schema.py`(`feature/db-schema-spec`) — 사용자·DB 담당자 승인 대기(코드·스키마 변경 없음).
 
 <a id="pl-32"></a>
@@ -225,10 +231,24 @@
   - `runs.jsonl`: 재사용 역할만 없애고 작업 폴더 안 실행별 기록으로 남긴다.
   - `StandinPG`·structdb SQLite는 시험과 이미지 관문에만 — dev/prd 실행 중 조용히 대신하는 일은 없다.
 - 0.1.0 구현 PR 순서(사용자 10-30, PR 1은 3a에 합침): 2a ∥ 2b → 2c → (DB 담당자 D-1~D-7) → 3a + 3b 연달아 병합 ∥ 4 → 2d → 5(SFDC 먼저, CRMS·LAS는 D-2 전까지 Other) → 6.
+  - reference 비교 행(10-30): 분류 단계 [pl-33](#pl-33)와 MCP [mc-16](mcp.md#mc-16)·[mc-17](mcp.md#mc-17)은 PR 5 뒤 — 정확한 자리는 허브가 정함. 파싱 p1 묶음 [pl-34](parse.md#pl-34)·잔재 정리 [pl-35](parse.md#pl-35)는 순서 미정(허브).
 - 구조화 입력: 같은 실행 안에서는 로컬 작업 폴더를 읽고, 나중에 gold만 다시 만들 때는 Object Storage uuid 폴더에서 silver를 받는다.
 - PC도 서버와 같은 흐름 — 대역만 다름(OS 폴더, EDW SQLite, PC pgvector), 따로 생기는 로컬 파일 없음.
 - 파일: `pipeline/load/{publish_parse_result,parsing_meta}.py`, `pipeline/extract/run_all.py`(`runs.jsonl`·`_DONE`), `pipeline/stackcfg.py`·`pipeline/config.py`(`STACK_SNAPSHOT`), `pipeline/cli.py`(`nightly_plan`), `common/store/{registry,structdb}.py`(SQLite 대체), `deploy/host/scripts/run_docs.py`, `docs/architecture/db_schema.md`.
 - Status: todo — 0.1.0.
+
+<a id="pl-33"></a>
+## pl-33 · 분류 단계 — silver 뒤, gold 앞
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) C1·C3·C4·C5·C7·C8·C9, T5·T6):
+  - 분류는 파이프라인 단계다 — silver 뒤, gold 적재 전에 분류하고 적재가 `doc_class`를 함께 넣는다([pl-24](#pl-24) 순서). 운영의 gold 동기화 스크립트 같은 별도 동기화는 두지 않는다.
+  - 대상: SFDC(RFI/RFP/RFI+RFP/Proposal/Other), LAS(MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other)만. 다른 원천은 NULL.
+  - 같은 sha256 묶음에는 라벨만 전파(LLM은 묶음당 한 번). 고객은 전파하지 않음. U-7(키가 다르면 별개 문서)은 그대로.
+  - 운영 ParsingMeta의 기존 라벨(SFDC 5,647·LAS 881)은 쓰지 않는다 — 칸 구성·값 종류만 참고, 0.1.0 전체 e2e에서 새로 분류.
+  - gold 분류 칸은 `doc_class` 하나([pl-25](#pl-25)).
+  - LLM은 서버 내부 모델만 `llm.chat`으로 예산 장부를 거쳐(CLAUDE.md §7). 프롬프트는 `resources/prompts/pipeline/`. 라벨이 정해진 값이 아니면 NULL.
+  - 원본 등록표나 Object Storage를 지우는 동작(운영 `purge_delete_targets.py` 같은 것)은 옮겨 오지 않는다.
+- 파일: `pipeline/transform/structure/`(새 파일), `resources/prompts/pipeline/`(새 프롬프트), `pipeline/load/`.
+- Status: todo — 0.1.0, 순서는 허브가 정함([pl-32](#pl-32)).
 
 <a id="pl-28"></a>
 ## pl-28 · 원천별 gold 표(설계는 pl-25, 만들기는 나중)
