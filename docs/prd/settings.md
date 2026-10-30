@@ -94,9 +94,10 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 이유(사용자 10-30 grill 12~13차): `settings.sample.yaml`이 길어 서버에서 채울 값과 바꿀 일 없는 조정 값이 섞여 있다. 같은 키가 코드 기본값·settings.yaml 두 곳에 있으면 어느 값이 쓰였는지 알기 어렵다.
 - 무엇:
   - `settings.sample.yaml` §3 파라미터와 §2 옵션 중 비밀이 아니고 환경마다 다르지 않은 것을 `resources/config/`의 파라미터 파일로 옮긴다. 이 파일은 git과 이미지에 들어가고 그 값의 유일한 출처다.
-  - settings.yaml에는 필수값·비밀값·서버마다 다른 값만 남는다.
+  - settings.yaml에는 필수값·비밀값·서버마다 다른 값·모델 연결 정보(모델별 값 포함)만 남는다.
   - 덮어쓰기 없음: 키는 정확히 한 곳에만 있다. settings.yaml에 파라미터·옵션 키가 있으면 거부한다. 바꾸려면 커밋과 릴리스.
-  - 파일 셋: parsing, structure(청크 + 임베딩), mcp. 모델 파라미터는 쓰는 곳 옆에 — vlm·llm은 parsing, embed는 structure. MCP는 임베딩 모델을 structure 파일에서 읽는다.
+  - 파일 셋: parsing, structure(청크 + 임베딩), mcp — 모델과 상관없는 값만 든다.
+  - 모델 연결 정보는 settings.yaml에 남는다(사용자 10-30 grill "모델 연결 정보면 settings.yaml에 남겨야지"): 연결된 모델·엔드포인트에 따라 달라지는 값은 그 연결 블록과 함께 settings.yaml에 둔다. sample §3-1의 모델 키 5개 — `common.models.embed.query_prefix`, `llm.extra_body`, `vlm.extra_body`, `ocrvlm.model`, `vlm.model_alt` — 도 파라미터 파일로 옮기지 않는다(앞서 적은 "모델 파라미터는 쓰는 곳 옆에 — vlm·llm은 parsing, embed는 structure"를 대신함).
   - 파라미터 파일이 기본값을 들고 있으므로 필수 입력이 아니다. 서버는 settings.yaml만 채운다(CLAUDE.md §3).
 - 핑거프린트: 파라미터 파일이 바뀌어도 자동 재처리는 **없다** — 파라미터 해시는 code_fp에 넣지 않는다. 새 값은 새 문서부터 적용되고, 필요하면 재처리는 사람이 한다. 사용자가 명시적으로 고른 등급 A 선택.
 - CLAUDE.md §3: "settings.yaml 하나" → settings.yaml(필수값·비밀값·서버마다 다른 값) + `resources/config` 파라미터 파일 3개(이 PR에서 고침, 사용자 승인).
