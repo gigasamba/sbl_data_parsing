@@ -9,7 +9,6 @@ modules/parse/run_all.py가 문서×엔진 1건을 끝낼 때마다 자동으로
 
 import argparse
 import json
-import re
 import statistics
 import time
 from collections import Counter, defaultdict
@@ -40,18 +39,9 @@ ENV_ERR = (
     "initialization fai",
 )
 
-# 암호·DRM 오류 단서 — 한 곳(SI44③ run_all 암호 문서 phase 재시도 중단 · run_board.py SRC_RULES와 같은 패턴, 거기도 이걸로
-# 바꿀 수 있음). 엔진마다 메시지가 다름 — kreuzberg 'workbook is password protected' · calamine 'password error' ·
-# anydoc 'document is encrypted'. 좁게: password·encrypt·암호 포함 메시지만(원본 손상은 다른 신호라 여기 안 넣음).
-ENCRYPTED_ERR = re.compile(r"password|encrypt|암호", re.I)
-
 
 def is_env_error(err):
     return bool(err) and any(k in err for k in ENV_ERR)
-
-
-def is_encrypted_error(err):
-    return bool(err) and bool(ENCRYPTED_ERR.search(err))
 
 
 def status(rec):

@@ -385,7 +385,7 @@ S9·S9b는 엔진·핸드오프 파일 안 자기 점검 블록을 `tests/`로 �
 | `pipeline.transform.figures.diagram_edges` | 없음 | `tests/server/pipeline/test_diagram_edges.py` |
 | `pipeline.transform.figures.figure_review` | --selftest | `tests/server/pipeline/test_figure_review.py` |
 | `pipeline.transform.figures.figures` | 없음 | `tests/server/pipeline/test_figures.py` |
-| `pipeline.transform.figures.figures_resume` | --selftest | `tests/server/pipeline/test_figures_resume.py` |
+| `pipeline.transform.figures.figures_resume` | --selftest | `tests/server/pipeline/test_figures_resume.py`(10-30 둘 다 지움 — pl-32 2c·pl-35) |
 | `pipeline.transform.figures.nested` | 없음 | `tests/server/pipeline/test_nested.py` |
 | `pipeline.transform.figures.overlay` | 없음 | `tests/server/pipeline/test_overlay.py` |
 | `pipeline.transform.figures.pptx_edges` | 없음 | `tests/server/pipeline/test_pptx_edges.py` |
