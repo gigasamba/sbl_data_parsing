@@ -26,7 +26,10 @@ After=network-online.target docker.service
 
 [Service]
 Type=oneshot
-User=rag
+# 서버 컨테이너 도구 = root podman 하나(사용자 10-30 검토 B4 — 이미지를 sudo podman load로 넣은 저장소와 같게). docker 서버면 User=rag(docker 그룹)·DOCKER=docker.
+# /srv/rag/code/live = 지금 쓰는 코드 폴더 링크(zip을 푼 폴더 — `sudo ln -sfn <zip 폴더> /srv/rag/code/live`, README §5-0) — 판을 바꿀 때 이 링크만 옮긴다.
+User=root
+Environment=DOCKER=podman
 WorkingDirectory=/srv/rag/code/live
 # 서버 배치 값(I4) — WorkingDirectory는 systemd가 변수를 못 받아 직접 적고, 설정 폴더는 SERVER_ENV_DIR로 넘김(settings_env.sh)
 # S6b — WorkingDirectory는 코드 폴더 루트(호스트 스크립트 deploy/host/scripts/, 옛 live/app/docker/). trigger.sh는 git에서 실행 비트가 없어 bash로 부른다.

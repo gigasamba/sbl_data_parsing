@@ -390,15 +390,60 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 | 단계 | 어디서 → 어디로 | run_env | 만드는 곳·스크립트 | 이미지 | 코드 | 컨테이너 구성 |
 |---|---|---|---|---|---|---|
-| ① 개발 반입 | PC → 개발 서버(폐쇄망) | `local` → `dev` | PC: `IMAGE_TARGET=pipeline-runtime`·`mcp-runtime bash deploy/release/build_ship.sh` | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`(코드 없음) | PC git 커밋 → 코드 폴더 묶음 `output/ship/code-<버전>-<커밋>.tar.gz`(`CODE_COMMIT`) | `/srv/rag/code/<버전>-<커밋>` → `live` 링크를 `/app/deploy`에 읽기 전용 마운트(`CODE_DIR`). 코드만 바꿀 때 = 새 코드 폴더 + 다시 띄움 |
-| ② 운영 반입 | 개발 서버 → 운영(수집) 서버 | `dev` → `prd` | 개발 서버: `bash /srv/rag/code/live/deploy/release/bake.sh <실행 이미지 판>` | 코드가 든 이미지 `data-pipeline`·`mcp-server`(개발에서 쓴 실행 이미지 그 판 + 코드) | 개발 서버에서 시험한 `live` 폴더(코드 커밋은 이미지 라벨 `org.opencontainers.image.revision`) | 컨테이너에 코드 폴더 마운트 없음(`CODE_DIR` 두지 않음) — 호스트 스크립트(`deploy/host/`)만 같이 온 코드 묶음에서. 바꿀 때 = 새로 구운 이미지 |
+| ① 개발 반입 | PC → 개발 서버(폐쇄망) | `local` → `dev` | PC: `IMAGE_TARGET=pipeline-runtime`·`mcp-runtime bash deploy/release/build_ship.sh` → 이미지 git(`sbl_images`)에 분할 조각 | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`(코드 없음) | `main`(release 병합)의 커밋 — 코드 git zip을 푼 폴더(`CODE_COMMIT`) | 그 코드 폴더를 `/app/deploy`에 읽기 전용 마운트(스크립트가 자기 루트를 자동으로 — 아래). 코드만 바꿀 때 = 새 코드 zip + 다시 띄움 |
+| ② 운영 반입 | 개발 서버 → 운영(수집) 서버 | `dev` → `prd` | 개발 서버: `bash <코드 폴더>/deploy/release/bake.sh <실행 이미지 판>` | 코드가 든 이미지 `data-pipeline`·`mcp-server`(개발에서 쓴 실행 이미지 그 판 + 코드) | 개발 서버에서 시험한 코드 폴더(코드 커밋은 이미지 라벨 `org.opencontainers.image.revision`) | 컨테이너에 코드 폴더 마운트 없음(`CODE_DIR` 두지 않음) — 호스트 스크립트(`deploy/host/`)만 같이 온 코드 묶음에서. 바꿀 때 = 새로 구운 이미지 |
 
 - run_env는 `local`(PC)·`dev`(개발 서버)·`prd`(운영 서버) 셋뿐(`stage`는 10-29에 없앰).
-- 어느 코드인가: ①은 PC의 git 커밋(묶음 안 `CODE_COMMIT`, 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`), ②는 개발 서버 `live` 폴더 그대로(구운 이미지 라벨에 커밋·실행 이미지 ID).
+- 어느 코드인가: ①은 PC의 git 커밋(묶음 안 `CODE_COMMIT`, 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`), ②는 개발 서버에서 시험한 코드 폴더 그대로(구운 이미지 라벨에 커밋·실행 이미지 ID).
 - 의존성(`requirements*`·휠·Dockerfile·assets)이 바뀌면 ①에서 새 실행 이미지가 필요하다(코드의 `deploy/docker/DEPS_HASH`와 이미지 지문이 다르면 시작·굽기 모두 거부).
 - PC에서 `IMAGE_TARGET=pipeline`·`mcp`로 코드가 든 이미지를 직접 빌드하는 길은 PC 시험(이미지 관문)·비상용으로만 남긴다 — 운영 반입은 ②(개발에서 시험한 그대로). 오버레이 패치(§5-8)도 운영 서버 비상 수정용.
 
-개발 서버 순서: 실행 이미지 적재(아래 5-2와 같은 `docker load`) → `/srv/rag/code/<버전>-<커밋>/`에 코드 폴더 묶음 풀기(`tar -xzf … --no-same-owner` 뒤 `chown -R 10001:10001` 또는 `chmod -R a+rX` — 컨테이너 사용자 10001이 읽어야 함) → `ln -sfn <그 폴더> /srv/rag/code/live` → settings.yaml `pipeline.host.image`·`mcp.host.image`를 실행 이미지 태그로 → systemd unit·셸에 `CODE_DIR=/srv/rag/code/live` → `trigger.sh`·`mcp_up.sh`. 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`으로 어느 판이 도는지 확인. 되돌리기는 `release-and-patch.md` §1-1.
+#### 개발 서버 설치 — 코드 git·이미지 git을 zip으로 받아 한 폴더에(①, 사용자 10-30)
+
+반입은 git 저장소 두 개를 **zip으로 받아 같은 폴더에 풀면** 끝난다.
+- 코드: `gigasamba/sbl_data_parsing`의 `main`. 받을 판의 태그나 커밋으로 받는다.
+- 이미지: 비공개 `jehunlee302/sbl_images`. 판마다 폴더가 있고, 실행 이미지를 분할한 조각이 들어 있다.
+
+코드는 zip을 푼 폴더가 그대로 코드 폴더다(tar 묶음·`live` 링크·`CODE_DIR` 불필요).
+
+```
+/srv/rag/                                    ← 작업 폴더(아무 곳이나 — 두 zip을 여기 풂)
+├── env/settings.yaml                        ← $SERVER_ENV_DIR · image: data-pipeline-runtime:<판> · mcp-server-runtime:<판>
+├── sbl_data_parsing-<판>/                    ← 코드 zip을 푼 폴더 = 코드 폴더(컨테이너 /app/deploy에 읽기 전용)
+│   ├── common/   pipeline/   mcp_server/   resources/
+│   ├── deploy/host/scripts/trigger.sh · mcp_up.sh · run_tool.sh   ← 여기서 실행
+│   ├── deploy/docker/DEPS_HASH                ← 실행 이미지 지문과 같아야 시작
+│   └── VERSION   CODE_COMMIT                  ← CODE_COMMIT = zip이 채운 커밋(시작 로그에 찍힘)
+└── sbl_images-main/                          ← 이미지 zip을 푼 폴더
+    ├── load.sh                                ← sha256 확인 → 조각 합치기 → docker/podman load
+    └── <판>/data-pipeline-runtime/ · mcp-server-runtime/   ← *.tar.gz.part000… + *.sha256
+```
+
+**컨테이너 도구는 root podman 하나로 쓴다.**
+- 서버 명령은 모두 root 셸(`sudo -i`)에서 실행한다.
+- settings.yaml에 `common.host.docker: podman`을 적는다.
+- 일반 사용자 셸에서 실행할 때는 `DOCKER="sudo podman"`을 앞에 붙인다.
+- 이미지를 불러온 저장소와 컨테이너를 띄우는 저장소가 같아야 한다. 일반 사용자 podman(rootless)과 root podman은 이미지를 따로 보관하므로, 섞으면 이미지가 보이지 않는다.
+- compose 실행기(`podman-compose`나 `docker-compose` 플러그인)가 깔려 있어야 한다. `podman compose version`으로 확인한다.
+
+설치 순서(처음 한 번):
+1. 두 zip을 같은 폴더에 푼다.
+2. 코드 폴더를 준비한다.
+   - 컨테이너 사용자(UID 10001)가 읽을 수 있게 한다: `chmod -R a+rX sbl_data_parsing-<판>`
+   - 지금 쓰는 판을 링크로 건다: `ln -sfn /srv/rag/sbl_data_parsing-<판> /srv/rag/code/live`. systemd unit과 아래 명령은 이 경로를 쓴다.
+3. 이미지를 불러온다: `DOCKER=podman bash sbl_images-main/load.sh <판>`
+4. 설정을 채운다(§5-3 ②). `pipeline.host.image`·`mcp.host.image`에는 실행 이미지 태그(`data-pipeline-runtime:<판>`, `mcp-server-runtime:<판>`)를 적는다.
+5. DB를 만들고, 연결을 점검하고, 이미지를 점검한다(§5-3 ③~⑤).
+6. 실행한다: `bash /srv/rag/code/live/deploy/host/scripts/mcp_up.sh`, `… trigger.sh parse` 등.
+   - 이미지 태그가 `*-runtime`이면 스크립트가 자기 코드 폴더 루트를 `/app/deploy`에 붙인다(`image_vars.sh`의 `code_dir_default`).
+   - 셸이나 systemd에 `CODE_DIR`가 있으면 그 값이 우선한다.
+   - 호스트 python이 설정을 읽지 못하면(RHEL 9 기본 python 3.9 등), 실행 이미지 `data-pipeline-runtime:<VERSION>` 안에서 이 코드 폴더를 붙여 읽는다(`settings_env.sh`).
+7. 확인: 시작 로그 첫 줄 `[image] 이미지 … · 코드 <커밋> · 의존성 …`으로 어느 판이 도는지 본다.
+
+- 코드만 바뀐 판: 새 코드 zip을 옆에 풀고, `live` 링크를 새 폴더로 옮긴 뒤 다시 띄운다. 의존성(`DEPS_HASH`)이 같으면 이미지는 그대로 둔다. 되돌리기는 링크를 옛 폴더로 되돌리면 된다.
+- systemd unit(`deploy/host/systemd/`)은 `/srv/rag/code/live` 경로를 쓰므로 판을 바꿀 때 고칠 필요가 없다.
+- git clone으로 받아도 동작은 같다. 다만 `CODE_COMMIT`이 채워지지 않아 시작 로그의 커밋이 틀 그대로 보인다(zip·`git archive`만 채움).
+- tar 묶음(`build_ship.sh`의 `code-<버전>-<커밋>.tar.gz`) + `live` 링크 + `CODE_DIR` 방식도 그대로 쓸 수 있다.
 
 ### 5-1. 버전 올리기
 
@@ -425,74 +470,83 @@ TARGET=user@서버 IMAGE_TARGET=pipeline bash deploy/release/build_ship.sh
 
 ### 5-3. 서버 — 처음 설치
 
-**① 이미지 적재**
+**① 이미지와 코드 폴더** — §5-0 "개발 서버 설치" 1~3. 운영 서버(구운 이미지)는 §5-0 ②와 [release-and-patch](docs/operations/release-and-patch.md) §1-2.
+
+아래 명령은 root 셸의 코드 폴더(`cd /srv/rag/code/live`)에서 실행한다. 먼저 이 셸에서만 쓸 함수 하나를 정의한다. 이 함수는 settings.yaml을 읽고, 실행 이미지면 코드 폴더를 붙여 compose를 부른다.
 
 ```bash
-sha256sum -c pipeline.sha256 && cat pipeline.tar.gz.part* | gunzip -c | docker load    # mcp-server는 mcp.* 파일로 같게
+export SERVER_ENV_DIR=/srv/rag/env DOCKER=podman
+dc() { ( . deploy/host/scripts/settings_env.sh && load_settings && . deploy/host/scripts/image_vars.sh && code_dir_default DATA_PIPELINE_IMAGE && \
+         $DOCKER compose -f deploy/host/compose/compose.pipeline.yml ${CODE_DIR:+-f deploy/host/compose/compose.code.yml} "$@" ); }
 ```
 
-**② 코드 폴더** — 저장소 내용을 `/srv/rag/code/live`에 둔다. 전체를 덮어쓴다면 먼저 백업하고, 서버에서 직접 고친 코드는 `server-changes.md`를 보고 다시 반영한다.
-
-**③ 설정 파일과 결과 폴더**
+**② 설정 파일과 결과 폴더**
 
 ```bash
-sudo mkdir -p /srv/rag/env && sudo chmod 700 /srv/rag/env
+mkdir -p /srv/rag/env && chmod 700 /srv/rag/env
 cp settings.sample.yaml /srv/rag/env/settings.yaml                  # 필요한 항목만 값을 채움
-sudo chown 10001:<운영 그룹> /srv/rag/env/settings.yaml && sudo chmod 640 /srv/rag/env/settings.yaml
-sudo mkdir -p /srv/rag/output && sudo chown 10001 /srv/rag/output    # 컨테이너 사용자 UID 10001
-export SERVER_ENV_DIR=/srv/rag/env
+chown 10001:<운영 그룹> /srv/rag/env/settings.yaml && chmod 640 /srv/rag/env/settings.yaml
+mkdir -p /srv/rag/output && chown 10001 /srv/rag/output              # 컨테이너 사용자 UID 10001(root podman이라 그대로 맞음)
 ```
 
-서버 settings.yaml에 **반드시 적을 항목**(빠지면 시작을 거부하거나 동작이 조용히 바뀐다 — 전체 표는 refactor.md "최종" ②-1):
+서버 settings.yaml에 **반드시 적을 항목**이다. 빠지면 시작을 거부하거나 동작이 조용히 바뀐다(전체 표는 refactor.md "최종" ②-1).
 
-
-| 항목                                                                                            | 이유                                                 |
-| --------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `common.run_env`                                                                              | `dev`·`prd` — 없으면 앱·entrypoint·compose가 거부(`stage`는 없앰 — `prd`로 바꿈) |
-| `common.store.run_mode: prod`                                                                 | 빠지면 PG 장애 때 SQLite로 조용히 대체                         |
-| PG · EDW · Object Storage 접속 항목                                                               | 운영 접속                                              |
-| 토큰 `mcp.server.token` · `pipeline.service.parse_mcp.token` · `pipeline.service.trigger.token` | 코드 기본 토큰 없음                                        |
-| 이미지 `pipeline.host.image` · `mcp.host.image`                                                  | 예: `data-pipeline:0.1.0`, `mcp-server:0.1.0`       |
-| sample에 `[서버 옛 값: …]`으로 표시된 항목                                                                | 옛 서버 동작 유지                                         |
-
+| 항목 | 이유 |
+|---|---|
+| `common.run_env` | `dev`·`prd` — 없으면 앱·entrypoint·compose가 거부(`stage`는 없앰 — `prd`로 바꿈) |
+| `common.store.run_mode: prod` | ⚠️ 빠지거나 오타가 나면 PG 장애 때 SQLite로 조용히 대체되고, publish가 다른 문서를 deleted로 만들 수 있다(PRD pl-12 — 고치기 전까지 꼭 확인) |
+| `common.host.docker: podman` | 호스트 스크립트의 컨테이너 도구(위 root podman) |
+| `common.host.output_root` · `common.host.doc_src` | 결과 폴더(`/srv/rag/output`)·원천 문서 폴더 — 비면 compose가 `:?` 안내로 멈춤 |
+| PG · EDW(`common.connections.rdb.read`·`.write`) · Object Storage 접속 항목 | 운영 접속 |
+| 토큰 `mcp.server.token` · `mcp.parse_proxy.token` · `pipeline.service.parse_mcp.token` · `pipeline.service.trigger.token` | 코드 기본 토큰 없음 |
+| 이미지 `pipeline.host.image` · `mcp.host.image` | 예: `data-pipeline-runtime:0.1.0`, `mcp-server-runtime:0.1.0`(개발 서버) · 운영 서버는 `data-pipeline:0.1.0`, `mcp-server:0.1.0` |
+| sample에 `[서버 옛 값: …]`으로 표시된 항목 | 옛 서버 동작 유지 |
 
 모델 주소는 모두 내부망 주소여야 한다(서버는 외부 모델 호출을 거부). 옛 `pipeline.env`가 있으면 이관 도구를 쓴다: `python -m common.config.migrate <옛 env> --out <yaml>` → `--compare`로 대조(release-and-patch §5-4).
 
-**④ DB 마이그레이션과 시드**(1-4 — **컨테이너를 띄우고 selftest를 하기 전에** 끝낸다)
+**③ DB 마이그레이션과 시드** — 컨테이너를 띄우고 selftest를 하기 전에 끝낸다.
 
 ```bash
-( . deploy/host/scripts/settings_env.sh && load_settings && . deploy/host/scripts/image_vars.sh && \
-  DC="docker compose -f deploy/host/compose/compose.pipeline.yml" && \
-  $DC run --rm load migrate current && \
-  $DC run --rm load migrate check --target all )                # a. 지금 버전과 차이 확인(읽기만)
+dc run --rm load migrate current
+dc run --rm load migrate check --target all                # a. 지금 버전과 차이 확인(읽기만)
 
 # b. 검색 스키마 — 옛 코드가 만든 스키마가 있고 차이가 0이면 실행 없이 기록만, 없거나 빠진 것만 있으면 up
-#      $DC run --rm load migrate stamp --target search     또는     $DC run --rm load migrate up --target search
+#      dc run --rm load migrate stamp --target search     또는     dc run --rm load migrate up --target search
 # c. struct — 테이블 + 버전 테이블 + 시드(엔진 구성·원천 목록 버전 1 활성)
-#      $DC run --rm load migrate up --target struct
+#      dc run --rm load migrate up --target struct
 # d. 확인 — 둘 다 "차이 없음", 시드가 활성 버전으로 보이는지
-#      $DC run --rm load migrate check --target all
-#      $DC run --rm load show-stack --history 5             # 엔진 구성 버전 1(dev-v1)이 활성이면 정상
-#      $DC run --rm load show-sources --history 5
+#      dc run --rm load migrate check --target all
+#      dc run --rm load show-stack --history 5             # 엔진 구성 버전 1(dev-v1)이 활성이면 정상
+#      dc run --rm load show-sources --history 5
 ```
 
 - 컬럼 이름·형식·NULL·키가 다르거나 남는 테이블이 있으면 `stamp`·`up` 모두 거부된다(종료 코드 2). 멈추고 출력(이름만)을 DB 담당자와 협의한다.
 - 서버에만 따로 쓰던 원천 목록 파일이 있으면 시드 다음 버전으로 넣는다(`set-sources --file …` — release-and-patch §5-5).
 - 색인 빌더 스키마(`index_a`·`index_b`)를 쓰면 스키마마다 `migrate check|stamp|up --target search --schema <스키마>_<index_id>`.
 
-**⑤ 점검**
+**④ 연결 점검** — 파이프라인을 돌리기 전에 접속을 하나씩 확인한다.
 
 ```bash
-( . deploy/host/scripts/settings_env.sh && load_settings && . deploy/host/scripts/image_vars.sh && \
-  docker compose -f deploy/host/compose/compose.pipeline.yml run --rm parse check )
-docker run --rm data-pipeline:<버전> check-modules
-bash deploy/release/selftest_gate.sh docker run --rm data-pipeline:<버전> selftest   # 기대: 알려진 실패 test_publish_guard 1개만
-bash deploy/release/selftest_gate.sh docker run --rm mcp-server:<버전> selftest      # 기대: 실패 0
+bash deploy/host/scripts/run_tool.sh ping_models     # 모델 주소(LLM·VLM·임베딩) — 하나라도 실패면 종료 코드 1
+bash deploy/host/scripts/run_tool.sh check_env       # PG·VLM·설정 요약(⚠️ PG 연결 실패를 "건너뜀"으로 보일 수 있음 — 출력을 읽는다)
+dc run --rm load migrate check --target all          # PG 스키마(③ d와 같음)
+dc run --rm parse check                              # PG·모델 요약(⚠️ 실패해도 종료 코드 0 — 출력을 읽는다)
 ```
 
-selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다.
+- EDW 읽기·쓰기 로그인과 Object Storage 버킷을 따로 확인하는 명령은 아직 없다. 첫 파싱 뒤 publish 미리보기(`dc run --rm publish publish --dry-run`)로 확인한다.
+- ⚠️ publish 실제 실행(`trigger.sh publish`)은 한 번만 한다. 다시 돌리면 Object Storage에 같은 파일을 또 올린다(PRD pl-12 ② — 고치기 전까지). EDW는 이미 있는 행을 건너뛴다.
 
-> 💡 `load_settings`는 settings.yaml의 호스트 항목을 셸 env로 내보낸다. 대화형 셸에서 그대로 실행하면 이후 settings.yaml을 고쳐도 그 셸에는 반영되지 않으므로, 위처럼 하위 셸 `( … )`로 감싼다. `trigger.sh` 등 스크립트는 스스로 부른다.
+**⑤ 이미지 점검**
+
+```bash
+$DOCKER run --rm -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> check-modules
+bash deploy/release/selftest_gate.sh $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> selftest   # 기대: 알려진 실패 test_publish_guard 1개만
+bash deploy/release/selftest_gate.sh $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" mcp-server-runtime:<판> selftest      # 기대: 실패 0
+```
+
+selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다. 운영 서버(구운 이미지)는 `-v …` 없이 `data-pipeline:<판>`·`mcp-server:<판>`으로 실행한다.
+
+> 💡 `dc`는 하위 셸 `( … )` 안에서 settings.yaml을 읽는다. 그래서 settings.yaml을 고치면 다음 `dc`부터 바로 반영된다. `trigger.sh` 같은 스크립트는 설정을 스스로 읽는다.
 
 **⑥ 검색 MCP 띄우기**
 
