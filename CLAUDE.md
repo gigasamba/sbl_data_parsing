@@ -1,6 +1,6 @@
 # sbl_data_parsing — 개발 규칙(Claude·개발자 공통)
 
-문서 파싱 → 구조화(청킹·임베딩) → 적재(pgvector) → 근거 검색(MCP)으로 이어지는 파이프라인이다. 프로젝트 소개, 폴더 구조, 실행 방법은 [README.md](README.md)에, 문서 지도·용어집(약어, 옛 용어, 옛 절 번호)은 [docs/index.md](docs/index.md)에 있다. **이 파일은 코드를 고칠 때 지킬 규칙과 하네스(점검 도구·명령)만 다룬다.** 코드를 고치기 전에 이 파일을 읽는다.
+문서 파싱 → 구조화(청킹·임베딩) → 적재(pgvector) → 근거 검색(MCP)으로 이어지는 파이프라인이다. 프로젝트 소개, 폴더 구조, 실행 방법은 [README.md](README.md)에, 문서 지도·용어집(약어, 옛 용어, 옛 절 번호)은 [docs/INDEX.md](docs/INDEX.md)에 있다. **이 파일은 코드를 고칠 때 지킬 규칙과 하네스(점검 도구·명령)만 다룬다.** 코드를 고치기 전에 이 파일을 읽는다.
 
 개발은 외부망 PC(macOS, Windows)에서 하고, 결과물은 **내부망(폐쇄망) RHEL 서버**에서 Docker/podman 이미지 2개(`data-pipeline`, `mcp-server`)로 실행된다. 그래서 "내 PC에서 된다"는 기준이 될 수 없다. **서버의 리눅스 컨테이너에서 같은 결과가 나와야 한다.**
 
@@ -182,7 +182,7 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 ## 8. 문서
 
 - 기능 요건·미개발 항목은 [docs/PRD.md](docs/PRD.md)와 `docs/prd/<카테고리>.md`에 있다(§10).
-- 문서 지도는 [docs/index.md](docs/index.md)다. 문서를 추가하거나 옮기면 같은 커밋에서 이 지도를 고친다. 새 문서는 꼭 필요할 때만 만들고, 먼저 기존 문서의 섹션으로 넣을 수 있는지 본다.
+- 문서 지도는 [docs/INDEX.md](docs/INDEX.md)다. 문서를 추가하거나 옮기면 같은 커밋에서 이 지도를 고친다. 새 문서는 꼭 필요할 때만 만들고, 먼저 기존 문서의 섹션으로 넣을 수 있는지 본다.
 - 서버나 사람이 확인해야 하는 일(저장소 안에서 끝낼 수 없는 것)은 [refactor.md](docs/refactoring/refactor.md)에 `C-xx`로 추가하고, 배포 순서는 그 파일의 "최종 — 사람이 할 일"에 둔다.
 - 결정 사항(`D-xxx`)·미정 사항은 PRD 행과 refactor.md에 둔다(옛 결정 장부는 [docs/history/refactor_plan.md](docs/history/refactor_plan.md) 7·8절). 지난 기록은 `docs/history/`에 둔다. 운영 절차는 `docs/operations/`(서버 가이드, 릴리스, 설정 가이드)에 있다.
 
@@ -198,8 +198,8 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 - 기능 요건(무엇·왜·관련 파일)과 미개발·고장 항목(진행 상황)은 이 파일이 아니라 [docs/PRD.md](docs/PRD.md)와 `docs/prd/<카테고리>.md`에 둔다. 작업 전에 PRD 표에서 맡은 행을 찾는다.
 - 항목마다 `<a id>` + `## ID · 한글 이름`과 `- Status:` 줄. ID는 바꾸지 않는다.
 - 기능을 더하거나 고치면 같은 커밋에서 해당 앵커를 고친다. 끝난 항목도 PRD 표에 남기고 상태를 done으로, 앵커에 `- Status: done`을 남긴다.
-- (카테고리 설명·옛 §10 알려진 문제가 옮겨 간 ID: [docs/index.md](docs/index.md) 문서 지도·Glossary)
+- (카테고리 설명·옛 §10 알려진 문제가 옮겨 간 ID: [docs/INDEX.md](docs/INDEX.md) 문서 지도·Glossary)
 
 ---
 
-옛 절 번호·용어 대응은 [docs/index.md](docs/index.md#glossary) Glossary로 옮겼다.
+옛 절 번호·용어 대응은 [docs/INDEX.md](docs/INDEX.md#glossary) Glossary로 옮겼다.

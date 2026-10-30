@@ -117,7 +117,7 @@
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
 |---|---|---|---|
 | 문서 재구성 · 한국어 | dev | 1부 PRD 카테고리 · 2부 CLAUDE.md | [do-04](prd/doc.md#do-04) |
-| `docs/index.md` 용어집 | done | 용어 대응 옮김 · 링크 한 줄 | [do-02](prd/doc.md#do-02) |
+| `docs/INDEX.md` 용어집 | done | 용어 대응 옮김 · 링크 한 줄 | [do-02](prd/doc.md#do-02) |
 | `refactor.md`를 병합과 맞춤 | done | 낡은 줄 · PRD 링크 · 검토자 | [do-03](prd/doc.md#do-03) |
 | `refactor.md`를 `docs/refactoring/`으로 | done | 옮기기 · 링크 | [do-01](prd/doc.md#do-01) |
 | 첫 릴리스 태그 `v0.1.0` | done | 태그 · 릴리스 노트 | [op-04](prd/doc.md#op-04) |
