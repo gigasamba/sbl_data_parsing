@@ -724,7 +724,9 @@ def main(argv=None):
     ap.add_argument("--images-dir", default=None, help="그림 기록 index.jsonl 폴더(L1, 기본 = --parse-dir/_images) — 없으면 그림 청크 0건")
     ap.add_argument("--out", default="output/edw/bundle")
     a = ap.parse_args(argv)
-    stack = json.loads(Path(a.stack).read_text(encoding="utf-8")) if a.stack else pc.stack(a.stack_version)
+    if a.stack_version is not None:  # 같은 프로세스·자식도 이 판을(pl-32 리뷰 — represent와 같게)
+        C.put(STACK_VERSION=str(a.stack_version))
+    stack = json.loads(Path(a.stack).read_text(encoding="utf-8")) if a.stack else pc.stack()
     a.chunk = a.chunk or stack.get("chunk") or "structure"
     t0 = time.time()
     pd = Path(a.parse_dir)

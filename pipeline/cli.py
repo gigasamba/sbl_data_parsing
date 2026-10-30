@@ -785,8 +785,7 @@ def _structure_pg_indexed(a, index_conf):
         OUT / "parse",
         "--src",
         a.src,
-        *_stack_arg(),
-        "--pg",
+        "--pg",  # 엔진 구성 판은 넘겨받은 STACK_VERSION 칸으로(index는 --stack-version 인자가 없음 — pl-32 리뷰)
         *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
         check=False,
     )

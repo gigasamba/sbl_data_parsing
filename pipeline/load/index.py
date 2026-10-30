@@ -98,6 +98,8 @@ def _build_locked(conf, iid, a):
     rep = Path(a.parse_dir) / "_rep"
     stack_args = ["--stack", a.stack]
     if a.stack:  # 엔진 구성 파일(PC 실험·시험 — 옛 사본과 같은 꼴)
+        if not Path(a.stack).is_file():
+            raise SystemExit(f"[index] --stack 파일 없음: {a.stack}")
         stack_bytes = Path(a.stack).read_bytes()
     else:  # pl-32 — 넘겨받은 판(STACK_VERSION), 없으면 여기서(서버 판 표·PC 파일)
         from pipeline import stackcfg

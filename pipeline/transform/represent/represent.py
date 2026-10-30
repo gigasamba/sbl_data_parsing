@@ -1155,7 +1155,11 @@ def main(argv=None):
     ap.add_argument("--parse-dir", default="output/parse")
     ap.add_argument("--src", default=None, help="파싱한 문서 폴더(원본 경로·sha256을 대표 결과에 남김 — 구조화 모듈이 원본 없이 돌 때 씀)")
     a = ap.parse_args(argv)
-    idx = represent(load_stack(a.stack) if a.stack else pc.stack(a.stack_version), a.parse_dir, a.src)
+    if a.stack_version is not None:  # 같은 프로세스의 첨부(attachments — pc.stack())도 이 판을(pl-32 리뷰)
+        from common.config import settings as C
+
+        C.put(STACK_VERSION=str(a.stack_version))
+    idx = represent(load_stack(a.stack) if a.stack else pc.stack(), a.parse_dir, a.src)
     done = [r for r in idx if r["engine"]]
     from collections import Counter
 

@@ -87,3 +87,28 @@ def test_stack_file_and_version_refused_together():
             raise AssertionError(f"{main.__module__}: 둘 다 줬는데 거부 안 됨")
         except SystemExit as e:
             assert e.code == 2, (main.__module__, e.code)
+
+
+def test_cli_child_args_accepted():
+    """서버(판 번호 있음)에서 pipeline.cli가 색인 빌드에 넘기는 인자를 index의 인자 해석기가 받는다 — --stack-version을 index에
+    넘겨 종료 2가 나던 것(pl-32 리뷰). 자식은 띄우지 않고 인자만 잡는다."""
+    from types import SimpleNamespace
+
+    from pipeline import cli
+    from pipeline.load import index
+
+    calls = []
+    keep = dict(cli._STACK)
+    try:
+        cli._STACK["v"] = {"name": "t", "version_id": 7, "body_sha": "x", "parse": {}}  # 서버 판 7을 이미 정함
+        with mock.patch.object(cli, "sh", side_effect=lambda module, *args, check=True: calls.append((module, args)) or 0):
+            cli._structure_pg_indexed(SimpleNamespace(src="src", path_prefix=None), "conf.json")
+    finally:
+        cli._STACK.clear()
+        cli._STACK.update(keep)
+    (module, args), *_ = calls
+    assert module == "pipeline.load.index", module
+    built = []
+    with mock.patch.object(index, "build_one", side_effect=lambda c, a: built.append(a)):
+        index.main([str(x) for x in args])  # 모르는 인자면 argparse가 종료 2
+    assert built and built[0].stack is None  # 판은 인자가 아니라 넘겨받은 STACK_VERSION 칸으로
