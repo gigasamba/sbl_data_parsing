@@ -139,7 +139,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  └─ host/             서버 호스트에서 쓰는 것 — compose/ · scripts/(trigger, run_tool, mcp_up, settings_env, run_docs 등) · systemd/(새벽 배치, keepalive)
 ├─ tests/               server/(이미지에 포함, 배포 판정) · general/(PC 전용) · runner.py
 ├─ validation/          PC 전용 검증 도구 — search_ui/(검증 페이지) · e2e/(평가·비교, answer_gen)
-├─ valid_env/           PC 전용 데이터 — object_storage/(합성 테스트 문서, 버킷 모양) · eval_sets/(정답·질문·목록) · edw/(합성 EDW sqlite) · answer_test/(답변 점검 agent) · docker/(PC 테스트 Docker)
+├─ valid_env/           PC 전용 데이터 — object_storage/(합성 테스트 문서, 버킷 모양) · edw/(합성 EDW sqlite) · answer_test/(답변 점검 agent) · docker/(PC 테스트 Docker)
 ├─ docs/                문서(지도: docs/index.md) — operations/ · architecture/ · requirements/ · refactoring/
 ├─ VERSION              두 이미지 공통 버전(SemVer)
 ├─ settings.sample.yaml 모든 설정 항목의 구조와 설명(자동 생성 — 손으로 고치지 않음)
@@ -246,20 +246,14 @@ export PYTHONPATH=$PWD                                   # 명령은 저장소 �
 
 먼저 `settings.yaml`의 `no_paid_calls`를 `false`로 바꾼다(외부 임베딩 허용). 끝나면 ⑥에서 되돌린다.
 
-**① 테스트 문서 고르기 — `valid_env`를 그대로 연결(복사 불필요)**
+**① 테스트 문서 고르기 — `valid_env/object_storage`에서 몇 건을 한 폴더로 모음**
 
 ```bash
-mkdir -p output/demo/src && grep -vE '^\s*(#|$)' valid_env/eval_sets/list-smoke10.txt | xargs -I{} cp {} output/demo/src/
-SRC=output/demo/src     # 목록 파일의 문서를 한 폴더로 모아 --src로 넘긴다(--src는 폴더만 받음)
+mkdir -p output/demo/src && find valid_env/object_storage -type f ! -name '*.md' | head -10 | xargs -I{} cp {} output/demo/src/
+SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 모아 넘긴다
 ```
 
-| 목록(`valid_env/eval_sets/…`) | 문서 | 쓰임 |
-|---|---|---|
-| `list-smoke10.txt` | 10건 | 처음 확인용(빠름) |
-| `list-integration.txt` | 25건 | 통합 확인(+ `integration-questions.jsonl`) |
-| `list-integration-holdout.txt` | 홀드아웃 | 조정에 쓰지 않는 확인용 |
-
-- 문서는 서버 버킷 모양 `valid_env/object_storage/<원천>/<uuid>/<파일>`에 있다 — `CRMS/`(어려운 사례 21건, 정답 `eval_sets/hard_cases/`) · `SFDC/`(RFP 12건, 정답 `eval_sets/rfp/`). 문서마다 왜 있는지는 [valid_env/object_storage/test_doc_purpose.md](valid_env/object_storage/test_doc_purpose.md), 전체 구조는 [valid_env/README.md](valid_env/README.md).
+- 문서는 서버 버킷 모양 `valid_env/object_storage/<원천>/<uuid>/<파일>`에 있다 — `CRMS/`(어려운 사례 21건) · `SFDC/`(RFP 12건). 정답·목록 세트(`valid_env/eval_sets/`)는 10-30 지웠다(사용자 — e2-10: 남기는 평가 도구는 검색 확인 페이지와 답변 점검뿐). 문서마다 왜 있는지는 [valid_env/object_storage/test_doc_purpose.md](valid_env/object_storage/test_doc_purpose.md), 전체 구조는 [valid_env/README.md](valid_env/README.md).
 - `valid_env`에는 아무것도 쓰지 않는다(결과는 모두 `out_root` 아래). 내 문서로 하려면 `SRC=<문서 폴더>`.
 
 **② 파싱 — 문서 → 대표 결과**

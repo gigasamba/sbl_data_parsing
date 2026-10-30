@@ -5,13 +5,13 @@ Data that imitates what the server reads from outside systems lives here, in one
 | Folder | Stands in for | Content | Git |
 |---|---|---|---|
 | `object_storage/` | Object Storage bucket (original documents) | one document = `<system>/<uuid>/<file>`: `CRMS/` 21 hard cases, `SFDC/` 12 RFP documents. Why each document exists: [object_storage/test_doc_purpose.md](object_storage/test_doc_purpose.md) | tracked, bytes as-is |
-| `eval_sets/` | answers and run lists — **to be deleted** with pl-21 (user 10-29/10-30: PwC's 5 sets not adopted; only `answer_test` stays — e2-10) | `object_keys.csv` (document list + sha256 — the source of truth), `doc_catalog.jsonl`, `hard_cases/` (gold, spec, qa, expected), `rfp/` (gold, spec, questions), `list-smoke10.txt`, `list-integration*.txt`, `integration-questions.jsonl` | tracked |
 | `edw/` | company EDW (SQL Server) | `ai`·`crms`·`las`·`sfdc` `.sql` (schema + synthetic rows, `[SYNTHETIC]`) and the `.sqlite` built from them; `meta_rdb/` = RDB document-location and master tables (old `unstructured/synth-meta-rdb/meta`, read by three server tests) | tracked |
 | `answer_test/rag_qa/` | serving Answer Agent (PC answer check) | agent package used by `python -m validation.e2e.answer_gen` | tracked |
 | `docker/` | server containers | PC test compose (`compose.pg.yml`, `compose.test.yml`, `smoke_test.sh`) | tracked |
 
 - Everything here is synthetic. Nothing is written here at run time — results go under `out_root`.
 - List files hold repo-relative paths (`valid_env/object_storage/...`). `--src` takes a folder, so copy the listed files into one folder first (README §4-4).
+- `eval_sets/` (answers and run lists) was deleted 10-30 (user — e2-10/e2-18: only `answer_test` and the search check page stay).
 - Not wired yet (PRD `e2-09`): the `EVAL_SETS_DIR` default in `common/core/paths.py` still points at `valid_env/unstructured` (changing it changes every layer code_fp — next fingerprint release; on the PC set `common.paths.eval_sets_dir: valid_env/eval_sets`), and the PC evaluation tools that name old sets (`synth-4clients` …) are handled in PRD `e2-10`.
 
 ## Production DB guard

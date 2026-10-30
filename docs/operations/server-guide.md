@@ -154,7 +154,7 @@ PC 시험(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`common.c
 | 제품 코드 규칙 | `app/deploy/resources/vocab/glossary/id_patterns.csv` |
 | 원천 표·열(문서 위치) | 서버 = 판 표 `struct.source_version` 활성 판(`set-sources`·`show-sources` — S8b, [docs/architecture/pipeline_stack.md](../architecture/pipeline_stack.md)) · PC = `resources/mappings/sources.json`(`common.paths.sources_file`) — `python -m pipeline.extract.rdb_discover`가 초안 |
 | 엔진 구성 | 서버 = 판 표 `struct.stack_version` 활성 판(`set-stack`·`show-stack` — S8b) · PC = `resources/config/pipeline_stack.json`(`common.paths.stack_file`) |
-| 정답 세트·질문 세트 | `valid_env/eval_sets/*`·`valid_env/object_storage/*`(합성 — 10-29) · 서버 정답 폴더(settings.yaml 호스트 칸 `pipeline.host.gold_dir` — `run_tool.sh`가 컨테이너 `/data/gold`로 붙임, S7e3) |
+| 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성 — 10-29 · 정답 세트 `eval_sets/`는 10-30 지움) · 서버 정답 폴더(settings.yaml 호스트 칸 `pipeline.host.gold_dir` — `run_tool.sh`가 컨테이너 `/data/gold`로 붙임, S7e3) |
 | 집계 지표 단서어 | `app/deploy/resources/vocab/agg_vocab.json`(settings.yaml `mcp.search.agg_vocab_file`로 다른 파일 — 옛 env `AGG_VOCAB_FILE`) |
 | MCP 안내 문구 | settings.yaml `mcp.server.instructions`(옛 env `MCP_INSTRUCTIONS`) |
 
@@ -247,7 +247,6 @@ PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys;
 | MCP `/health` 준비 안 됨 | 기동 직후 저장소 연결 중(예열) | 잠시 뒤 재시도 |
 | MCP 401 | `MCP_TOKEN` 없음·틀림 | 호출부 env에만 넣기(코드·로그에 쓰지 않음) |
 | MCP가 안 뜸(이미지 판인데) | settings.yaml에 `common.models.embed`(질의 임베딩 — 옛 `EMBED_*`) 없음 · 컨테이너가 설정 파일을 못 읽음(권한 — C-09) | [env-guide.md](env-guide.md)로 필수 값 채우기 |
-| `get_evidence_image`가 늘 `source_storage_unavailable` | 이 이미지에 `boto3`가 없을 수 있음(이미지 판에 따라 다름) | `PM_BUCKET=file://…`+`MCP_EVID_LOCAL_ROOTS`(폴더 저장소)로 대신하거나 새 이미지 판 필요 여부 확인 |
 | 포트 충돌 | PostgreSQL·OpenViking과 겹침 | settings.yaml의 `mcp.server.port`(`MCP_PORT`) 등 포트 값만 바꿈(기존 컨테이너는 건드리지 않음) |
 | 설정값이 조용히 틀림 | (옛 env 파일) `docker run --env-file`은 줄 끝 주석·따옴표를 값에 그대로 넣음 | S7e1부터 settings.yaml — 틀린 칸은 검증 오류로 칸 경로만 찍힘. 옮긴 뒤 `python -m common.config.migrate --compare`로 옛 값과 대조(release-and-patch.md §5-4) |
 | SELinux `Permission denied`(파일은 있는데) | 볼륨 라벨 안 맞음 | 볼륨에 `:z`(공유)·`:Z`(전용) 붙이기 |

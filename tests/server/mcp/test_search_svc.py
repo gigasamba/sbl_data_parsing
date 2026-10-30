@@ -8,7 +8,7 @@ from pathlib import Path
 from mcp_server import config as mc
 from mcp_server.schemas.evidence import _EVIDENCE_BASE_KEYS, _MANIFEST_EXTRA_KEYS
 from mcp_server.services.search import search_svc as M
-from mcp_server.services.search.internal_docs import do_aggregate, do_get_document, do_get_image, do_lookup_term
+from mcp_server.services.search.internal_docs import do_aggregate
 from mcp_server.services.search.search_svc import do_search
 from mcp_server.services.search.server_state import _STATE, CALLER
 from mcp_server.services.search.shaping import evidence_status
@@ -847,18 +847,6 @@ def _selftest_br50_client_scope():
                 "updated": "",
             }
         )
-    img_idx = d / "images_index.jsonl"
-    img_idx.write_text(
-        "\n".join(
-            json.dumps(x, ensure_ascii=False)
-            for x in [
-                {"image_id": "img-a", "doc": "a.txt", "page": 1, "bbox": None, "kind": "figure", "vlm": {"summary": "불활화 도표"}},
-                {"image_id": "img-b", "doc": "b.txt", "page": 1, "bbox": None, "kind": "figure", "vlm": {"summary": "불활화 도표"}},
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
     # BR50 D — 질문 자체엔 고객 이름이 없고 계약ID(C-B01, Beta Inc 소유)만 적힘: client="Acme Co"로 범위를 좁히면
     # docs가 route() 전에 걸려 detect()의 contracts 후보에 C-B01이 없어져 "집계 아님"으로 빠진다(질문에 고객명을
     # 적어 넓히는 기존 search 쪽 동작 — retriever.py AD38·BR23 — 과는 다른 축: 여긴 "클라이언트가 모르는 남의
@@ -867,21 +855,12 @@ def _selftest_br50_client_scope():
 
     _STATE.clear()
     # 설정 객체 덮기(S7d) — GLOSSARY_DIR는 인계 파일이 env로 읽어 senv가 os.environ에도 쓰고 되돌림 · SEARCH_CLIENT_HARD=None은 옛 pop
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), MCP_IMAGES=str(img_idx), GLOSSARY_DIR=str(gdir), SEARCH_CLIENT_HARD=None)
+    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), GLOSSARY_DIR=str(gdir), SEARCH_CLIENT_HARD=None)
     _hard = None
     try:
         # 꺼짐(기본) — client를 줘도 전과 바이트 동일
         off = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False, client="Acme Co")
         assert {e.get("file_name") for e in off["evidence"] if e.get("file_name")} >= {"a.txt", "b.txt"}, off["evidence"]
-
-        doc_off = do_get_document("b.txt", client="Acme Co")
-        assert doc_off.get("file_name") == "b.txt" and "error" not in doc_off, doc_off
-
-        term_off = do_lookup_term("VI", client="Acme Co")
-        assert set(term_off["docs"]) == {"a.txt", "b.txt"}, term_off
-
-        img_off, _ = do_get_image("img-b", client="Acme Co")
-        assert "error" not in img_off, img_off
 
         agg_off = do_aggregate(q_contract)  # client 없음 — 바이트 동일(남의 계약ID라도 그대로 찾아짐)
         assert agg_off.get("answer") == "500 USD", agg_off
@@ -893,21 +872,6 @@ def _selftest_br50_client_scope():
         on = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False, client="Acme Co")
         assert "b.txt" not in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # core·concept 둘 다 빠짐(F)
         assert "a.txt" in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # 자기 고객 근거는 그대로
-
-        doc_on = do_get_document("b.txt", client="Acme Co")
-        assert doc_on.get("error"), doc_on  # 다른 고객 — 거부(I)
-        doc_on_self = do_get_document("a.txt", client="Acme Co")
-        assert doc_on_self.get("file_name") == "a.txt" and "error" not in doc_on_self, doc_on_self  # 자기 고객 — 그대로
-        doc_on_noclient = do_get_document("b.txt")  # 켬이지만 client 인자를 안 줌 — 알려진 한계(그대로, 바이트 동일)
-        assert "error" not in doc_on_noclient, doc_on_noclient
-
-        term_on = do_lookup_term("VI", client="Acme Co")
-        assert set(term_on["docs"]) == {"a.txt"}, term_on  # 다른 고객 청크·문서 제외(I)
-
-        img_on, _ = do_get_image("img-b", client="Acme Co")
-        assert img_on.get("error"), img_on  # 다른 고객 그림 — 거부(I)
-        img_on_self, _ = do_get_image("img-a", client="Acme Co")
-        assert "error" not in img_on_self, img_on_self
 
         agg_on = do_aggregate(q_contract, client="Acme Co")  # D — Beta Inc 계약ID를 적어도 범위 밖이라 "집계 아님"으로 빠짐
         dump_on = json.dumps(agg_on, ensure_ascii=False)

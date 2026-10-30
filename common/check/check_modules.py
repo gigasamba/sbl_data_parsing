@@ -82,17 +82,15 @@ MOVED_TOOLS = {
         "rdb_discover",
         "gen_roster",
         "glossary_suggest",
-        "kg_external",
         "make_questions",
         "run_combo",
         "report",
         "server_checks",
         "anchors",
         "auto_questions",
-        "stack_report",
         "stages",
     },
-    "search": {"mcp_eval", "qa_report", "ask", "search_checks"},
+    "search": {"mcp_eval", "ask", "search_checks"},
 }
 PKG_AREA = (
     ("data_etl", "etl"),

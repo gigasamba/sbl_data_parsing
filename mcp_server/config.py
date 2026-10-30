@@ -106,24 +106,16 @@ class McpHost(Section):
 
 
 class McpOutput(Section):
-    REMOVED = frozenset({"list_docs_max"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset(
+        {"list_docs_max", "evid_local_roots", "evid_max_concurrency", "evid_max_mb", "evid_timeout_sec", "images", "max_image_px"}
+    )  # 사용자 10-29·10-30(e2-18 — 근거 이미지·그림 조회 지움) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     cap_ranked: bool | None = F(
         True, "CAP_RANKED", "검색 응답 크기 상한(cap)을 순위 인지 방식으로 줄임 — 0이면 옛 방식(긴 본문부터 반씩 자름)", off=("0",)
     )
-    evid_local_roots: CsvList | None = F(
-        [], "MCP_EVID_LOCAL_ROOTS", "근거 이미지를 file:// 원본에서 바로 자를 때 허용할 루트 폴더(쉼표 목록)"
-    )
-    evid_max_concurrency: int | None = F(
-        4, "MCP_EVID_MAX_CONCURRENCY", "근거 이미지 원천 재접근(Object Storage 다운로드) 동시 요청 상한(개)"
-    )
-    evid_max_mb: float | None = F(50.0, "MCP_EVID_MAX_MB", "근거 이미지 원천 파일 크기 상한(MB)")
-    evid_timeout_sec: float | None = F(20.0, "MCP_EVID_TIMEOUT_SEC", "근거 이미지 원천 받기 시간 상한(초)")
     evidence_paths: bool | None = F(
         True, "MCP_EVIDENCE_PATHS", "근거의 '파싱 결과 경로' 조회(AI.ParsingMeta) 스위치 — 0이면 시도 안 함", off=("0",)
     )
-    images: str | None = F(None, "MCP_IMAGES", "그림 색인(index.jsonl) 경로")
     max_chars: int | None = F(20000, "MCP_MAX_CHARS", "search 응답 크기 상한(JSON UTF-8 바이트) — 넘으면 근거 본문을 줄임")
-    max_image_px: int | None = F(1600, "MCP_MAX_IMAGE_PX", "근거 이미지 한 변 최대 픽셀(썸네일 크기)")
 
 
 class McpParseProxy(Section):
@@ -260,15 +252,13 @@ def _put_env(values):
 
 
 class MCPConfig:
-    """검색 MCP 시작 때 읽는 상수 한 묶음 — 속성 이름은 옛 모듈 상수 이름 그대로(시험은 속성을 바꿔 끼움, 예: CFG.LIST_DOCS_MAX).
+    """검색 MCP 시작 때 읽는 상수 한 묶음 — 속성 이름은 옛 모듈 상수 이름 그대로(시험은 속성을 바꿔 끼움, 예: CFG.MAX_CHARS).
     S7d: env 대신 설정 객체(cfg())에서 — 값·기본값·읽는 시점(이 모듈 import 때)은 그대로(S7e2 — 다리가 없어져 import 순서와 무관)."""
 
     def __init__(self):
         c = cfg()
         self.MAX_CHARS = c.output.max_chars  # GH1-13: cap()이 이 값을 바이트(UTF-8)로 씀 — 이름·기본값은 그대로(실측 재조정은 서버에서)
-        self.MAX_IMAGE_PX = c.output.max_image_px
         self.MAX_K = 50
-        self.LIST_DOCS_MAX = 200  # AD38 — list_documents 결과 크기 상한(내부 함수 전용이라 설정 칸은 지움)
         self.CORE = ("vector", "bm25", "id")
         self.DEFAULT_METHODS = list(c.search.methods)  # 10-12 구조 검토: graph 기본에서 뺌 —
         # 그래프 단독 효과를 처음 따로 잼(9세트): 근거 지표 이득 0, 잡음 비율↑(4clients .366→.459), distractors-v2 정답 값 적중 .80→.72 ·

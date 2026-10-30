@@ -32,6 +32,7 @@
 | `run_docs` 순서: silver → 원본 삭제 → gold | todo | 순서 · `gold_status` · 임시 폴더 | [pl-24](prd/etl.md#pl-24) |
 | 레인 정책 — 담당 먼저, 허용 레인만 | done | 전담·공유 워커 · `pick_lane` | [rn-01](prd/etl.md#rn-01) |
 | 중간 대기열 상한·길이 기록 | done | `struct_backlog` · `queue_depth.jsonl` | [rn-02](prd/etl.md#rn-02) |
+| MCP `parse_document`에 CPU 먼저 | todo | 지금 nice(같은 컨테이너) · 논의: 컨테이너 분리 | [rn-03](prd/etl.md#rn-03) |
 | DB 스키마 명세 | dev | `db_schema.md` · 시험 · 승인 | [pl-25](prd/etl.md#pl-25) |
 | 원천별 gold 표(나중) | todo | 원천 4벌 · `search` 원천 필수 | [pl-28](prd/etl.md#pl-28) |
 
@@ -74,6 +75,7 @@
 | JSON Lines 사건 기록 | todo | 포매터 · 수준 설정 · 가림 | [op-01](prd/settings.md#op-01) |
 | 미룬 설정 지우기 | todo | `korean_font` · `eval_sets_dir` | [pl-21](prd/settings.md#pl-21) |
 | 안 읽는 env 이름 4개 지우기 | todo | 0.1.0 릴리스에서(C-51) | [pl-30](prd/settings.md#pl-30) |
+| 파라미터 파일 분리 | todo | 파일 셋 · settings.yaml은 필수·비밀·서버값만 · 0.1.0 | [op-05](prd/settings.md#op-05) |
 
 ## 테스트·평가 (test)
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |

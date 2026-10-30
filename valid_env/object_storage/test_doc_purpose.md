@@ -2,7 +2,7 @@
 
 `valid_env/object_storage/`는 서버 Object Storage 버킷을 PC에서 흉내 낸 폴더다. 문서 1건 = `<원천>/<uuid>/<파일>` 객체 하나다(`CRMS/<uuid>/...`는 hard_cases 세트, `SFDC/<uuid>/...`는 rfp 세트). `Parsing-Result/`는 파이프라인이 실행 중 쓰는 결과 폴더로 git에 없다. 이 파일(`test_doc_purpose.md`)은 시험 문서가 아니라 안내문이다 — `validation_catalog.py`·동기화 점검 둘 다 이 파일 이름을 예외로 둔다.
 
-정답·목록은 여기 없다 — `valid_env/eval_sets/`에 있다: `rfp/`(gold·spec·questions), `hard_cases/`(gold·spec·qa·expected), `object_keys.csv`(문서 목록 정본), `doc_catalog.jsonl`(문서별 메타, 생성 파일).
+정답·목록 세트(`valid_env/eval_sets/` — rfp·hard_cases 정답, `object_keys.csv`, `doc_catalog.jsonl`)는 10-30 지웠다(사용자 — e2-10). 필요하면 git 이력에서 되살린다.
 
 아래 표는 문서마다 "왜" 있는지 — 어떤 파싱 난도를 시험하는지 — 를 적는다. 자세한 요소 목록은 `docs/architecture.md` §10-3, 생성 배경은 `eval_sets/rfp/spec.json`·`eval_sets/hard_cases/spec.json`·`expected.json` 참고.
 
@@ -67,8 +67,5 @@
 
 ## 시험 문서를 추가하려면
 1. 파일을 `valid_env/object_storage/<원천>/<uuid>/<파일>`(s3_key)에 둔다.
-2. `valid_env/eval_sets/object_keys.csv`에 한 행 추가(file_name·s3_key·source_system·set·sha256).
-3. `valid_env/edw/ai.sql`의 `FileStorageMap` INSERT에 같은 행을 더하고 `python -m validation.e2e.edw_standin`으로 `valid_env/edw/edw.sqlite`를 다시 만든다.
-4. 필요하면 `eval_sets/<세트>/gold/`에 정답을 추가한다(형식은 세트 기존 gold와 동일).
-5. `python dev_tools/repo_maintain/validation_catalog.py build`를 돌려 `doc_catalog.jsonl`을 갱신한다.
-6. 이 파일에도 행 하나를 더한다.
+2. `valid_env/edw/ai.sql`의 `FileStorageMap` INSERT에 같은 행을 더하고 `python -m validation.e2e.edw_standin`으로 `valid_env/edw/edw.sqlite`를 다시 만든다.
+3. 이 파일에도 행 하나를 더한다.
