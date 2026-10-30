@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나. 두 앱이 함께 쓰는 설정, 실행 환경(`RUN_ENV`), EDW 계정, 로그, 외부 모델 호출 가드.
 op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 표준).
 
-순서(주제별): 실행 환경·외부 모델 op-02·pl-11 → 계정 op-03 → 종료 정리 pl-27 → 로그 op-01 → 미룬 설정 정리 pl-21·pl-30 → 파라미터 파일 op-05 → 코드와 다른 점.
+순서(주제별): 실행 환경·외부 모델 op-02·pl-11 → 계정 op-03 → 종료 정리 pl-27 → 로그 op-01 → 미룬 설정 정리 pl-21·pl-30 → settings.yaml 하나 op-05 → 코드와 다른 점.
 
 <a id="op-02"></a>
 ## op-02 · RUN_ENV는 `local`·`dev`·`prd` 셋(`stage` 없앰) · LLM_FAKE는 `local`에서만
@@ -91,19 +91,18 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - Status: done (10-30, `feature/fp-batch`) — `deploy/host/scripts/run_docs.py`의 `UNREAD_PARSE_ENV`·`UNREAD_STRUCT_ENV`(4개 이름)를 명령에서 뺌, 시험 기대 명령도. 핑거프린트 그대로(호스트 스크립트).
 
 <a id="op-05"></a>
-## op-05 · 파라미터 파일 분리
-- 이유(사용자 10-30 grill 12~13차): `settings.sample.yaml`이 길어 서버에서 채울 값과 바꿀 일 없는 조정 값이 섞여 있다. 같은 키가 코드 기본값·settings.yaml 두 곳에 있으면 어느 값이 쓰였는지 알기 어렵다.
+## op-05 · settings.yaml 하나 — sample에 모든 키·기본값을 카테고리별로
+- 결정(사용자 10-30): "resources/config로 분리하지 말고 그냥 하나의 settings.yaml로 관리하고, 아래 option, default 값 넣고, 카테고리 분류해서 넣으면 될 것 같아. 주석처리도 다 해제하고."
 - 무엇:
-  - `settings.sample.yaml` §3 파라미터와 §2 옵션 중 비밀이 아니고 환경마다 다르지 않은 것을 `resources/config/`의 파라미터 파일로 옮긴다. 이 파일은 git과 이미지에 들어가고 그 값의 유일한 출처다.
-  - settings.yaml에는 필수값·비밀값·서버마다 다른 값·모델 연결 정보(모델별 값 포함)만 남는다.
-  - 덮어쓰기 없음: 키는 정확히 한 곳에만 있다. settings.yaml에 파라미터·옵션 키가 있으면 거부한다. 바꾸려면 커밋과 릴리스.
-  - 파일 셋: parsing, structure(청크 + 임베딩), mcp — 모델과 상관없는 값만 든다.
-  - 모델 연결 정보는 settings.yaml에 남는다(사용자 10-30 grill "모델 연결 정보면 settings.yaml에 남겨야지"): 연결된 모델·엔드포인트에 따라 달라지는 값은 그 연결 블록과 함께 settings.yaml에 둔다. sample §3-1의 모델 키 3개 — `common.models.embed.query_prefix`, `llm.extra_body`, `vlm.extra_body`(값이 모델에 따라 달라짐 — 예: thinking 끄기) — 도 파라미터 파일로 옮기지 않는다. `ocrvlm.model`·`vlm.model_alt`는 0.1.0에서 지운다([parse.md#pl-31](parse.md#pl-31))(앞서 적은 "모델 파라미터는 쓰는 곳 옆에 — vlm·llm은 parsing, embed는 structure"를 대신함).
-  - 파라미터 파일이 기본값을 들고 있으므로 필수 입력이 아니다. 서버는 settings.yaml만 채운다(CLAUDE.md §3).
-- 핑거프린트: 파라미터 파일이 바뀌어도 자동 재처리는 **없다** — 파라미터 해시는 code_fp에 넣지 않는다. 새 값은 새 문서부터 적용되고, 필요하면 재처리는 사람이 한다. 사용자가 명시적으로 고른 등급 A 선택.
-- CLAUDE.md §3: "settings.yaml 하나" → settings.yaml(필수값·비밀값·서버마다 다른 값) + `resources/config` 파라미터 파일 3개(이 PR에서 고침, 사용자 승인).
-- 파일: `settings.sample.yaml`, `common/config/{settings,sample,keyscan}.py`, `pipeline/config.py`, `mcp_server/config.py`, `resources/config/`(새 파일 셋), `docs/operations/env-guide.md`.
-- Status: todo — 0.1.0에 싣는다.
+  - `resources/config` 파라미터 파일은 만들지 않는다. 설정은 settings.yaml 하나에 모두 둔다.
+  - `settings.sample.yaml` §2(옵션)·§3(파라미터)를 주석이 아닌 실제 YAML로 쓴다 — 모든 키를 기본값과 함께 섹션(`common`·`pipeline`·`mcp`) 아래에 넣고, 지금 2-1·2-2 … 묶음처럼 카테고리 제목 블록으로 묶는다. 설명·선택지·옛 env 이름은 줄 끝 주석으로 남긴다.
+  - 서버·PC의 settings.yaml = sample을 복사해 필수값·비밀값을 채운 것.
+  - 모델 연결 정보(모델별 값 — `common.models.embed.query_prefix`, `llm.extra_body`, `vlm.extra_body`)도 그 연결 블록과 함께 settings.yaml에 둔다. `ocrvlm.model`·`vlm.model_alt`는 0.1.0에서 지운다([parse.md#pl-31](parse.md#pl-31)).
+- 결과(알아 둘 것): settings.yaml에 적힌 값이 코드 기본값보다 이긴다. 나중에 코드 기본값을 바꿔도 settings.yaml(또는 sample을 다시 복사)을 고치지 않으면 반영되지 않는다. "키는 한 곳에만" 규칙은 이제 settings.yaml 안에서만의 뜻이다.
+- 핑거프린트: 설정 값은 code_fp에 들어가지 않는다 — 값을 바꿔도 자동 재처리는 없고, 필요하면 사람이 재처리한다(10-30 결정 그대로).
+- 대체됨(10-30): 앞서 정한 "파라미터 파일 3개(parsing·structure·mcp)로 분리, settings.yaml은 필수·비밀·서버값만, settings.yaml에 파라미터 키가 있으면 거부"는 이 결정으로 없앤다.
+- 파일: `common/config/sample.py`(생성기), `settings.sample.yaml`, `common/config/{settings,keyscan}.py`, `pipeline/config.py`, `mcp_server/config.py`, `docs/operations/env-guide.md`.
+- Status: todo — 구현: sample 생성기 `python -m common.config.sample`이 주석을 푼 카테고리별 기본값을 낸다(0.1.0).
 
 ## 코드와 다른 점 · 지울 코드
 
