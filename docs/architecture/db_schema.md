@@ -211,7 +211,7 @@
 | content_group | TEXT | 같은 글 묶음 id | registry `content_groups` | 〃 | 유지 |
 | value_changes | TEXT | 바뀐 값 목록(JSON) | registry `link_editions` | 〃 | 유지 |
 | source_keys | TEXT | `원천::원본 키` 목록(JSON — 지금 sha256↔원본 키 다리) | registry `apply` | registry `link_editions` | 유지 |
-| fail_count | INTEGER | 연속 파싱 실패 수 — 사용자 10-30 — 실패 횟수 없앰, 성공했을 때만 갱신 · `registry_retry_max` 설정도 지움, [pl-32](../prd/etl.md#pl-32) | registry `apply` | registry `nightly_plan`, registry_cli | 삭제 |
+| fail_count | INTEGER | 연속 파싱 실패 수 — 사용자 10-30 — 실패 횟수 없앰, 성공했을 때만 갱신 · `registry_retry_max` 설정도 지움, [pl-32](../prd/etl.md#pl-32) | (없음 — 10-30 코드가 안 씀) | (없음) | 삭제 |
 
 ### struct.doc_registry_seen
 

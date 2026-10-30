@@ -146,11 +146,11 @@
 | `CHAIN_STRUCTURE_URL` | parse 완료 뒤 structure를 자동 호출할 주소 — ⚠ **서버는 `http://127.0.0.1:8771`을 적는다**(compose가 주지 않음, sample `[서버 옛 값]`) |
 
 ### 새벽 배치 (systemd `data-pipeline-nightly`)
-코드 주석의 "env-guide 1-3"이 이 절이다(스케줄 ON/OFF는 `NIGHTLY_ENABLED`).
+코드 주석의 "env-guide 1-3"이 이 절이다(스케줄은 `NIGHTLY_TIME` 하나 — 비우면 없음, pl-32 10-30).
 
 | 이름 | 켜면 | 기본 |
 |---|---|---|
-| `NIGHTLY_ENABLED` | 타이머가 실제로 돎 | 0 |
+| `NIGHTLY_TIME` | 그 시각(HH:MM, 서버 시간)에 새벽 배치 시작 — 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시각을 봄 | 비움(새벽 배치 없음) |
 | `NIGHTLY_MODULES` | 배치 순서 | `parse structure load publish` |
 | `NIGHTLY_PUBLISH` | 마지막 퍼블리시 단계 실행 | 0 |
 | `PARSE_DEADLINE` | 파싱 마감 시각(HH:MM) | 비움 |
@@ -185,6 +185,7 @@ python -m common.check.ping_models   # LLM·VLM·EMBED 실호출(OK/FAIL·지연
 | 판 | 바뀐 것 | 서버 할 일 |
 |---|---|---|
 | 0.1.0 ocr_vlm 지움(사용자 10-30 — pl-31) | ① 엔진 `ocr_vlm`(OCR 전용 소형 VLM — 스택에 없어 쓰이지 않던 것) 지움: 엔진 26개 · `qwen_vlm` 엔진 핑거프린트 바뀜(이미지·스캔 문서 재파싱 — 0.1.0 재처리에 포함) · 레이어 code_fp p0·p1·r·s도 바뀜(전후 값 = parse.md#pl-31) ② 칸 지움(`Section.REMOVED` — 남아 있어도 경고만): `common.models.ocrvlm.*`(`OCRVLM_BASE_URL`·`OCRVLM_MODEL`·`OCRVLM_API_KEY`·`OCRVLM_ALLOW_EXTERNAL`·`OCRVLM_EST_USD`)·`pipeline.transform.figures.ocrvlm_prompt`(`OCRVLM_PROMPT`) ③ `ping_models`는 LLM·VLM·EMBED만 | 서버 settings.yaml에서 위 칸을 지움(남아 있으면 경고만) · 옛 env 이름(`OCRVLM_*`)은 읽지 않음 · 덮기 파일 `overrides`·`--set`에 옛 이름을 쓰면 모르는 이름으로 거부 |
+| 0.1.0 새벽 배치 시각·재시도 상한(사용자 10-30 — pl-32) | ① `pipeline.host.nightly.enabled`(`NIGHTLY_ENABLED`) 지움 → `pipeline.host.nightly.time`(`NIGHTLY_TIME`, HH:MM — 비우면 새벽 배치 없음) 하나로 · 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시각을 봄(옛 고정 01:00) ② `common.store.registry_retry_max`(`REGISTRY_RETRY_MAX`) 지움 — 실패 문서는 횟수 상한 없이 다음 실행에서 늘 다시 · `registry report`·`diff`의 "재시도 중단" 줄 없음 | 서버 settings.yaml에서 `nightly.enabled`·`registry_retry_max`를 지움(남아 있으면 경고만) · 새 `data-pipeline-nightly.timer`(5분 주기)·`.service`(`trigger.sh scheduled`) **둘 다** /etc/systemd/system에 다시 복사하고 `systemctl daemon-reload`(오버레이 패치는 unit 파일을 안 바꿈 — 하나만 바꾸면 새벽 배치가 조용히 안 돎) · 켤 때 `nightly.time`에 시각을 적음(꼴이 틀리면 설정 읽기에서 거부) · 타이머는 새벽 배치를 쓸 때만 enable(5분마다 설정을 읽음) |
 | 0.1.0 지문 배치(사용자 10-30 — pl-21·pl-30) | ① 칸 지움(`Section.REMOVED` — 남아 있어도 경고만): `KOREAN_FONT`·`EVAL_SETS_DIR`·`EXP_STORE`·`LLM_EST_IN_TOKENS`·`LLM_EST_OUT_TOKENS`·`MIN_GOLD_COVERAGE`·`EXP_MAX_WORKERS`·`EXP_PROC_GB_*`·`EXP_RESERVE_GB`·`LLM_MAX_CONCURRENCY`·`WIKI_DOMAIN_PHRASE`·`DIAGRAM_RASTER_VLM` ② `run_docs.py`가 `FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`를 더는 안 넘김(읽는 코드 없었음) | 서버 settings.yaml·env 파일에서 위 이름을 지움(경고 끔) |
 | 10-30 요건 없는 코드 지움(사용자 10-30 — e2-18) | ① MCP에 노출하지 않던 내부 조회 지움: 문서 단건·그림·근거 이미지·용어·개념·문서 목록(`internal_docs.py` — MCP 도구 4개의 이름·입출력은 그대로) ② 칸 지움: `mcp.output.evid_local_roots`(`MCP_EVID_LOCAL_ROOTS`)·`evid_max_concurrency`·`evid_max_mb`·`evid_timeout_sec`·`images`(`MCP_IMAGES`)·`max_image_px`(`MCP_MAX_IMAGE_PX`), 절 `pipeline.connections.graphiti`(`GRAPHITI_NEO4J_*`) — `Section.REMOVED`라 남아 있어도 경고만 ③ 개념 위키(`structure/wiki.py`)·외부 KG 어댑터(`eval/kg_external.py`)·채점기 `chart_values_score.py` 지움 | 서버 settings.yaml에서 위 칸을 지움(경고 끔) |
 | 10-30 적재는 안 지움(사용자 10-29 — pl-13) | ① `pgvector_load load --prune` 없앰 — 적재는 더하고 고치기만, 이번 묶음에 없는 문서(원천에서 지운 문서·이번에 건너뛴 문서)를 지우지 않음(전에는 `cli load`·`run-stack --pg`·색인 빌드 `--pg`가 늘 `--prune`을 붙여 바뀌지 않은 문서까지 지웠음 — C-60) ② 칸 지움: `pipeline.load.prune_force`(`PRUNE_FORCE`)·`prune_min_ratio`(`PRUNE_MIN_RATIO`) — `Section.REMOVED`라 남아 있어도 경고만 ③ 색인 빌드(`pipeline.load.index --pg`)는 `load --replace`로 적재(다시 빌드 때 같은 문서도 새 묶음으로 고침) ④ `pipeline.cli load·run-stack`의 `--no-prune`은 받기만 하고 아무것도 안 함(옛 호출·트리거 허용 목록 호환) | 서버 settings.yaml에서 `prune_force`·`prune_min_ratio`를 지움(경고 끔) · 지운 문서를 검색에서 빼야 하면 숨김(`registry_cli hide`)이나 사람이 직접 · ⚠️ 같은 내용의 `file_path`가 바뀌면(`EDW_PATH_PREFIX`·`--path-prefix` 변경, 원본 이동·이름 변경) 옛 행이 남아 검색에 겹쳐 나옴 — 사람이 지움 |

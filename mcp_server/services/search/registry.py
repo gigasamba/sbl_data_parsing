@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """문서 대장(doc_registry) — 검색 MCP(R) 전용 조회·숨김 복구·날짜별 보고(AD16/OP1/DET1 Fix3, 10-14 common.store.registry
 에서 옮김 — 검색 이미지(R)만 쓴다: registry_cli.py의 show·report·hide·unhide, retriever.py의 hidden_set). 핵심 집계
-(scan·diff_against·apply·build, 파싱·구조화도 쓴다)·hide()·retry_max()는 common.store.registry에 그대로 남아 있다."""
+(scan·diff_against·apply·build, 파싱·구조화도 쓴다)·hide()는 common.store.registry에 그대로 남아 있다."""
 
 import json
 import time
-
-from common.store import registry as REG
 
 
 def unhide(db, doc_key, by, reason=None, at=None):
@@ -41,12 +39,9 @@ def report_by_date(db, since, until=None):
     touched(AD17①, 원본 바이트가 안 바뀌고 날짜만 바뀜)는 모듈 docstring대로 **애초에** doc_registry_seen에
     행이 안 남는다(의도적 설계 — 재처리·변경 보고 대상이 아님) — 이 보고도 그 설계를 그대로 따르므로 touched는
     늘 0(과거 일별로 추적할 이력이 없다는 뜻이지 이 함수가 놓친 게 아님).
-    retries stopped(DET1 Fix2) — doc_registry_seen에 쌓이는 이력이 아니라 nightly_plan()과 같은 **지금** 상태
-    (doc_registry.fail_count ≥ retry_max())의 스냅숏 — last_seen이 [since,until] 구간인 문서만 이 날짜 구간
-    보고에 넣는다(과거 그 날짜에 실제로 멈췄었는지의 이력이 아니라 "그 구간에 마지막으로 관측됐고 지금 멈춰
-    있는" 문서 — retry_max()==0이면 기능 자체가 꺼져 있어 늘 0).
-    → {"since","until","new","changed","touched","deleted","retry_stopped", "docs"(날짜 구간 new/changed/deleted
-    문서 목록, doc_key·names·event·seen_at), "retry_stopped_docs"(doc_key·names·fail_count)}."""
+    (옛 "재시도 중단" 칸은 지움 — 재시도 횟수 상한 없음, 사용자 10-30 pl-32.)
+    → {"since","until","new","changed","touched","deleted", "docs"(날짜 구간 new/changed/deleted
+    문서 목록, doc_key·names·event·seen_at)}."""
     until = until or since
     rows = db.query("SELECT doc_key, build_id, names, status, seen_at FROM doc_registry_seen ORDER BY seen_at, build_id")
     first_build = {}
@@ -67,15 +62,6 @@ def report_by_date(db, since, until=None):
     from collections import Counter
 
     counts = Counter(d["event"] for d in docs)
-    cap = REG.retry_max()
-    stopped_docs = []
-    if cap:
-        for row in db.query("SELECT doc_key, names, fail_count, last_seen FROM doc_registry"):
-            ls = (row.get("last_seen") or "")[:10]
-            if (row.get("fail_count") or 0) >= cap and since <= ls <= until:
-                stopped_docs.append(
-                    {"doc_key": row["doc_key"], "names": json.loads(row.get("names") or "[]"), "fail_count": row.get("fail_count")}
-                )
     return {
         "since": since,
         "until": until,
@@ -83,7 +69,5 @@ def report_by_date(db, since, until=None):
         "changed": counts.get("changed", 0),
         "touched": 0,
         "deleted": counts.get("deleted", 0),
-        "retry_stopped": len(stopped_docs),
         "docs": sorted(docs, key=lambda d: (d["seen_at"], d["doc_key"])),
-        "retry_stopped_docs": stopped_docs,
     }

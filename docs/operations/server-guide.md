@@ -93,7 +93,7 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 
 ### 2-2. 새벽 배치(선택)
 `sudo cp deploy/host/systemd/data-pipeline-nightly.* /etc/systemd/system/ && sudo systemctl enable --now data-pipeline-nightly.timer`. 옛 `rag-nightly.*`가 있으면 disable 뒤 지운다.
-- 스케줄 ON/OFF는 settings.yaml `pipeline.host.nightly.enabled`(env 이름 `NIGHTLY_ENABLED`, 기본 0). 꺼져 있으면 타이머가 깨워도 로그 1줄만 남기고 끝난다.
+- 스케줄은 settings.yaml `pipeline.host.nightly.time`(env 이름 `NIGHTLY_TIME`, HH:MM — 기본 비움 = 새벽 배치 없음, pl-32). 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 그 시각부터 5분 안일 때만 배치를 시작한다(그 밖에는 말없이 끝). 옛 `nightly.enabled`는 지움(남아 있으면 경고만).
 - 꺼진 채로도 `bash deploy/host/scripts/trigger.sh night`는 요청하면 바로 돈다.
 
 ### 2-3. 상주 트리거 서버(선택)

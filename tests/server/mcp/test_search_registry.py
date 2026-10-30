@@ -115,44 +115,46 @@ def _selftest_body():
     rep_all = report_by_date(db, "2026-10-01", "2026-10-02")
     assert rep_all["new"] == 4 and rep_all["changed"] == 1 and rep_all["deleted"] == 1, rep_all
 
-    # DET1 Fix2 — REGISTRY_RETRY_MAX=1이면 새 문서(e)가 처음 실패하자마자 재시도 중단(지금 상태 스냅숏)
-    with mc.senv(REGISTRY_RETRY_MAX="1"):
-        se = "e" * 64
-        w(
-            "dedup/fingerprints.jsonl",
-            [
-                {"path": "/src/a.pdf", "sha": sa, "size": 100, "mtime": 1000.0},
-                {"path": "/src/b.pdf", "sha": sb, "size": 200, "mtime": 2000.0},
-                {"path": "/src/c.pdf", "sha": sc, "size": 400, "mtime": 4000.0},
-                {"path": "/src/e.pdf", "sha": se, "size": 500, "mtime": 9000.0},
-            ],
-        )
-        w(
-            "parse/_rep/sources.jsonl",
-            [
-                {"doc_key": sa, "uri": "file:///src/a.pdf", "file_name": "a.pdf", "engine": "pymupdf"},
-                {"doc_key": sb, "uri": "file:///src/b.pdf", "file_name": "b.pdf", "engine": "pymupdf"},
-                {"doc_key": sc, "uri": "file:///src/c.pdf", "file_name": "c.pdf", "engine": "pymupdf"},
-            ],
-        )
-        w(
-            "parse/_rep/index.json",
-            {
-                "docs": [
-                    {"doc": "a.pdf", "engine": "pymupdf", "doc_key": sa},
-                    {"doc": "b.pdf", "engine": "pymupdf", "doc_key": sb},
-                    {"doc": "c.pdf", "engine": "pymupdf", "doc_key": sc},
-                    {"doc": "e.pdf", "engine": None, "reason": "실패"},
-                ]
-            },
-        )
-        REG.build(out, db, build_id="b3", seen_at="2026-10-03T00:00:00Z")
-        rep3 = report_by_date(db, "2026-10-03")
-        assert rep3["retry_stopped"] == 1 and rep3["retry_stopped_docs"][0]["doc_key"] == se, rep3
+    # pl-32(사용자 10-30) — 재시도 횟수 상한 없음: 실패 문서(e)는 다음 밤에도 늘 파싱 대상, 보고에 "재시도 중단" 칸 없음
+    se = "e" * 64
+    w(
+        "dedup/fingerprints.jsonl",
+        [
+            {"path": "/src/a.pdf", "sha": sa, "size": 100, "mtime": 1000.0},
+            {"path": "/src/b.pdf", "sha": sb, "size": 200, "mtime": 2000.0},
+            {"path": "/src/c.pdf", "sha": sc, "size": 400, "mtime": 4000.0},
+            {"path": "/src/e.pdf", "sha": se, "size": 500, "mtime": 9000.0},
+        ],
+    )
+    w(
+        "parse/_rep/sources.jsonl",
+        [
+            {"doc_key": sa, "uri": "file:///src/a.pdf", "file_name": "a.pdf", "engine": "pymupdf"},
+            {"doc_key": sb, "uri": "file:///src/b.pdf", "file_name": "b.pdf", "engine": "pymupdf"},
+            {"doc_key": sc, "uri": "file:///src/c.pdf", "file_name": "c.pdf", "engine": "pymupdf"},
+        ],
+    )
+    w(
+        "parse/_rep/index.json",
+        {
+            "docs": [
+                {"doc": "a.pdf", "engine": "pymupdf", "doc_key": sa},
+                {"doc": "b.pdf", "engine": "pymupdf", "doc_key": sb},
+                {"doc": "c.pdf", "engine": "pymupdf", "doc_key": sc},
+                {"doc": "e.pdf", "engine": None, "reason": "실패"},
+            ]
+        },
+    )
+    REG.build(out, db, build_id="b3", seen_at="2026-10-03T00:00:00Z")
+    rep3 = report_by_date(db, "2026-10-03")
+    assert "retry_stopped" not in rep3 and "retry_stopped_docs" not in rep3, rep3
+    for _ in range(3):  # 몇 밤 실패해도 멈추지 않음
+        REG.build(out, db, seen_at="2026-10-04T00:00:00Z")
+        assert "e.pdf" in REG.nightly_plan(db, REG.scan(out))["parse_names"]
 
     db.close()
     print("[selftest] AD16/OP1 — history(읽기 전용 조회) · hidden_set·unhide(색인 행 안 건드림, 복구 왕복) 통과")
-    print("[selftest] DET1 Fix2/Fix3 — report_by_date(날짜별 new/changed/deleted·구간 합·retry_stopped 스냅숏) 통과")
+    print("[selftest] DET1 Fix2/Fix3 — report_by_date(날짜별 new/changed/deleted·구간 합) · 실패 문서 늘 재시도(pl-32) 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통
