@@ -99,7 +99,7 @@ def _until(deadline):
 
 
 def _run_until(args, env, sec):
-    """마감까지만 실행 — 넘으면 프로세스 묶음(--procs 자식 포함)을 끝냄. 끝난 문서×엔진은 runs.jsonl에 남아 다음 밤에 건너뜀.
+    """마감까지만 실행 — 넘으면 프로세스 묶음(--procs 자식 포함)을 끝냄. 다음 밤은 문서 대장에 파싱 성공 행이 없는 문서를 다시 고른다(pl-32 — 마감에 걸린 밤의 문서는 PR 4 전까지 반복될 수 있음).
     args[0] = 모듈 점 표기(예: pipeline.extract.run_all)."""
     cmd = [PY, "-m", str(args[0]), *map(str, args[1:])]
     print("$ " + " ".join(cmd), flush=True)
@@ -117,7 +117,7 @@ def _run_until(args, env, sec):
 def night(a):
     """새벽 배치: 파싱 → 대표 파싱 → publish(OS+EDW) → 구조화·임베딩 → PG 적재.
     --no-structure면 파싱+publish만. --no-publish로 OS+EDW publish 건너뜀.
-    GPU 모델은 API로만(VLM_*·EMBED_*), LLM(LLM_*)은 부르지 않는다 — 요약은 발췌만. 마감(--deadline)을 넘으면 멈추고 다음 밤에 이어 감.
+    GPU 모델은 API로만(VLM_*·EMBED_*), LLM(LLM_*)은 부르지 않는다 — 요약은 발췌만. 마감(--deadline)을 넘으면 멈춤 — 다음 밤은 문서 대장 기준(성공 행 없는 문서)으로 다시 고름(pl-32).
     RV5(10-09): deploy/host/scripts/trigger.sh night(OP13 정본, compose 여러 컨테이너용)와는 배포 모양이 달라 따로 둠 — 이 함수는
     단일 컨테이너·Docker 밖 직접 실행(AGENTS.md 지시표·requirements.md S8 cron 예시)에서 쓰임, 호출처 있음(삭제 대상 아님)."""
     connect(a)
@@ -219,7 +219,11 @@ def night(a):
         "",
     ]
     md += [f"- {x}" for x in log] + (
-        [f"- **멈춤: {stopped}** — 다음 밤에 같은 명령이면 끝난 문서×엔진은 건너뛰고 이어 감"] if stopped else ["- 전부 끝남"]
+        [
+            f"- **멈춤: {stopped}** — 다음 밤은 문서 대장에 성공 행이 없는 문서를 다시 고름(PR 4 전에는 이 밤의 문서가 반복될 수 있음 — pl-32)"
+        ]
+        if stopped
+        else ["- 전부 끝남"]
     )
     md += ["", "진행·결과: output/parse/PROGRESS.md · output/RUNLOG.md"]
     Path("output").mkdir(exist_ok=True)
@@ -474,6 +478,7 @@ def show_sources(a=None):
 # ── 모듈(트리거 실행 — docs/architecture.md) ──────────────────────
 # 파싱 → 구조화 → 적재를 따로 부른다(각 Docker 컨테이너 1회 실행). 앞 모듈의 끝 표시(_DONE.json)를 보고 시작하고,
 # 앞 결과가 바뀌지 않았으면 아무것도 안 하고 끝낸다(트리거·나중의 새벽 배치가 여러 번 불러도 안전).
+# pl-32(10-30) — 이것은 한 새벽 배치·트리거 실행 안에서 모듈 사이 인계(앞 모듈이 이번에 낸 결과가 있나)이지 문서 결과 재사용이 아니다 — 남김.
 from common import CONTRACT, FINGERPRINT  # noqa: E402 — 인계 형식 버전 · common 코드 지문(이미지 버전 어긋남 확인)
 
 MARK = {
@@ -577,13 +582,12 @@ def _registry_new_names(out_dir, names):
     기본 전부 빠짐(자동 재파싱 안 함, OP1) · deleted는 observed에 없어 자동으로 빠짐).
     OP14 — env `AUTO_REPARSE_CHANGED=1`이면 changed 전체를 REG.nightly_plan의 reparse_keys로 넘겨 다음 배치
     대상에 포함(새 run_id로 재파싱 — 결과는 run_id별로 쌓여 옛 결과·이력이 그대로 남음). 기본(0)은 전과 동일(탐지·보고만).
-    문서 대장을 못 열면(DOC_REGISTRY=0·DB 없음·그 밖 오류 — try_open_db가 이미 삼킴) None(필터 없음 — 전과
-    동일, 파싱이 안 깨짐)."""
+    문서 대장을 못 열면 _no_registry()(서버 run_mode prod = 종료 4, 그 밖 = None — 필터 없음, pl-32 10-30)."""
     from common.store import registry as REG
 
     db = REG.try_open_db()
     if db is None:
-        return None
+        return _no_registry()
     try:
         observed = REG.scan(out_dir)
         auto_reparse = pc.cfg().extract.auto_reparse_changed
@@ -594,6 +598,39 @@ def _registry_new_names(out_dir, names):
     finally:
         db.close()
     return {n for n in names if n in new_names}
+
+
+def _no_registry():
+    """문서 대장을 못 열 때(pl-32 사용자 10-30 — 실행을 넘는 문서 고르기는 문서 대장 하나만): run_mode prod(서버)는 종료 4(인프라 없음 —
+    전체를 다시 파싱하지 않음), 그 밖(PC·DOC_REGISTRY=0)은 이력 없이 받은 목록 그대로(None) + 로그 한 줄."""
+    if C.cfg().store.run_mode == "prod":
+        print("[parse] 문서 대장(doc_registry)을 열지 못함 — run_mode prod는 멈춤(종료 4, 전체 재파싱 안 함)", file=sys.stderr, flush=True)
+        raise SystemExit(4)
+    print("[parse] 문서 대장 없음(DOC_REGISTRY=0 또는 연결 안 됨) — 이력 없이 받은 목록 그대로 처리", flush=True)
+    return None
+
+
+def _registry_unparsed(names):
+    """문서 대장에 파싱 성공 행(status parsed)이 없는 이름만 — 순서: 대장에 없거나 아직 시도 전(seen)인 문서(이름순) 먼저, 그다음 실패 문서
+    (마지막 시도가 오래된 것부터). --max-new로 앞에서 자르므로 늘 실패하는 문서가 새 문서 자리를 막지 않는다(PR #49 리뷰) — 실패 문서도
+    자리가 남으면 매번 다시(pl-32). 대장을 못 열면 _no_registry()대로(None이면 받은 목록 그대로). 앞 실행 runs.jsonl은 보지 않는다."""
+    from common.store import registry as REG
+
+    db = REG.try_open_db()
+    if db is None:
+        _no_registry()
+        return list(names)
+    try:
+        rows = db.query("SELECT names, status, last_seen FROM doc_registry")
+    finally:
+        db.close()
+    state = {}  # 이름 → (status, last_seen)
+    for r in rows:
+        for n in json.loads(r["names"] or "[]"):
+            state[n] = (r["status"], r["last_seen"] or "")
+    fresh = [n for n in names if state.get(n, ("seen", ""))[0] == "seen"]
+    failed = sorted((n for n in names if state.get(n, ("seen", ""))[0] not in ("seen", "parsed")), key=lambda n: (state[n][1], n))
+    return fresh + failed
 
 
 _T_STEP: dict = {}
@@ -680,12 +717,9 @@ def parse_module(a):
             child_env(), VLM_CONCURRENCY=str(vlm_conc), LLM_BASE_URL=None
         )  # 파싱 모듈은 LLM을 부르지 않음 — 덮기 파일(S7e3 B-1)
         if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
-            from pipeline.transform.represent.represent import last_runs
-
-            seen = {d for d, _ in last_runs(OUT / "parse")}
             names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
-            new = [n for n in names if n not in seen]
-            pick = [n for n in names if n in seen] + new[: a.max_new]
+            new = _registry_unparsed(names)  # pl-32 — 문서 대장에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
+            pick = new[: a.max_new]
             f = OUT / "parse" / "_batch_docs.txt"
             f.parent.mkdir(parents=True, exist_ok=True)
             if lim:  # --source 선택과 겹치는 것만
@@ -693,7 +727,9 @@ def parse_module(a):
                 pick = [n for n in pick if n in sel_names]
             f.write_text("\n".join(pick) + "\n", encoding="utf-8")
             lim = ["--docs-from", f]
-            print(f"[parse] 새 문서 {min(len(new), a.max_new)}/{len(new)}개(PARSE_MAX_NEW {a.max_new}) — 나머지는 다음 실행", flush=True)
+            print(
+                f"[parse] 새·실패 문서 {min(len(new), a.max_new)}/{len(new)}개(PARSE_MAX_NEW {a.max_new}) — 나머지는 다음 실행", flush=True
+            )
         args = [
             "pipeline.extract.run_all",
             "--src",
@@ -1305,7 +1341,7 @@ def main(argv=None):
             p.add_argument("--replace", action="store_true")
             p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
             p.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
-    p = sub.add_parser("night", help="새벽 파싱 배치(GPU 모델 API만, LLM 없음, 마감 시각에 멈추고 다음 밤에 이어 감)")
+    p = sub.add_parser("night", help="새벽 파싱 배치(GPU 모델 API만, LLM 없음, 마감 시각에 멈춤 — 다음 밤은 문서 대장 기준으로 다시 고름)")
     p.add_argument("--src", default=src)
     p.add_argument(
         "--source",

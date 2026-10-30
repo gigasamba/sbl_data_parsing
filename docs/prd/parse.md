@@ -77,7 +77,7 @@
 ## pl-35 · 핑거프린트 영향 없는 잔재 지우기
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P4·P6·T12): registry 도구 API·`marker_llm`, `pipeline/parse_parallel.py`, `figures/figures_resume.py`, `shared/phase_report.py`, 고아 프롬프트 `parse_agent`·`parse_decide`·`parse_decide_vlm`, `AUTO_REPARSE_CHANGED`(pl-23 — 증분만)를 지운다.
 - 파일: `pipeline/extract/engines/registry.py`, `pipeline/extract/run_all.py`, 위 모듈들, `resources/prompts/pipeline/`, `pipeline/config.py`.
-- Status: todo
+- Status: todo — `figures/figures_resume.py`(+ 시험)는 10-30 `feature/no-cross-run-done`(pl-32 2c)에서 지움(나머지는 그대로 todo). 남은 흔적: 층 파일 `figures.py`·`represent.py`의 주석과 `figures_max` 인자·`capped.jsonl` 쓰기(지우면 p1 핑거프린트가 바뀌어 이 행 범위 밖 — 다음 핑거프린트 묶음에서).
 
 <a id="pl-36"></a>
 ## pl-36 · 메일 첨부 파싱
