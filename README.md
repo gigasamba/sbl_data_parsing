@@ -386,16 +386,19 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 > **이번 리팩토링 버전(0.1.0 — 첫 배포)은 [refactor.md](refactor.md) 맨 앞 "최종 — 사람이 할 일"의 순서(①검토 → ②배포 전 → ③배포 때 → ④배포 후)를 그대로 따른다.** 핑거프린트가 모두 바뀌어 서버 문서 전체를 다시 파싱해야 하고(재파싱 시간 산정 C-08이 먼저), 설정 이관 · DB 버전 기록 · 옛 컨테이너와 systemd 정리가 함께 필요하다.
 
-### 5-0. 두 갈래 — 개발 서버와 수집 서버(op-06, 사용자 10-30)
+### 5-0. 배포 단계 — 어디서 어디로, 어떤 이미지·코드로(op-06·op-07, 사용자 10-30)
 
-| 서버 | 이미지 | 코드 | 바꾸는 법 |
-|---|---|---|---|
-| **개발 서버**(폐쇄망) | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`(코드 없음 — `IMAGE_TARGET=pipeline-runtime`·`mcp-runtime`) | 코드 폴더(저장소 트리 그대로 — `build_ship.sh`가 만든 `code-<버전>-<커밋>.tar.gz`를 판 폴더로 풀고 `live` 링크로 가리킴)를 `/app/deploy`에 읽기 전용 마운트 — 셸에 `CODE_DIR=<live 링크>` | 기능 = 새 코드 폴더 + `live` 링크 옮김 + 다시 띄움 · 의존성(`requirements*`·휠·Dockerfile·assets)이 바뀌면 새 실행 이미지(코드의 `deploy/docker/DEPS_HASH`와 이미지 지문이 다르면 시작 거부) |
-| **수집 서버** | 코드가 든 이미지 `data-pipeline`·`mcp-server`(지금 그대로) | 이미지 안 | 새 이미지 또는 오버레이 패치(§5-8) |
+| 단계 | 어디서 → 어디로 | run_env | 만드는 곳·스크립트 | 이미지 | 코드 | 컨테이너 구성 |
+|---|---|---|---|---|---|---|
+| ① 개발 반입 | PC → 개발 서버(폐쇄망) | `local` → `dev` | PC: `IMAGE_TARGET=pipeline-runtime`·`mcp-runtime bash deploy/release/build_ship.sh` | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`(코드 없음) | PC git 커밋 → 코드 폴더 묶음 `output/ship/code-<버전>-<커밋>.tar.gz`(`CODE_COMMIT`) | `/srv/rag/code/<버전>-<커밋>` → `live` 링크를 `/app/deploy`에 읽기 전용 마운트(`CODE_DIR`). 코드만 바꿀 때 = 새 코드 폴더 + 다시 띄움 |
+| ② 운영 반입 | 개발 서버 → 운영(수집) 서버 | `dev` → `prd` | 개발 서버: `bash /srv/rag/code/live/deploy/release/bake.sh <실행 이미지 판>` | 코드가 든 이미지 `data-pipeline`·`mcp-server`(개발에서 쓴 실행 이미지 그 판 + 코드) | 개발 서버에서 시험한 `live` 폴더(코드 커밋은 이미지 라벨 `org.opencontainers.image.revision`) | 코드 폴더 없음. 바꿀 때 = 새로 구운 이미지 |
+
+- run_env는 `local`(PC)·`dev`(개발 서버)·`prd`(운영 서버) 셋뿐(`stage`는 10-29에 없앰).
+- 어느 코드인가: ①은 PC의 git 커밋(묶음 안 `CODE_COMMIT`, 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`), ②는 개발 서버 `live` 폴더 그대로(구운 이미지 라벨에 커밋·실행 이미지 ID).
+- 의존성(`requirements*`·휠·Dockerfile·assets)이 바뀌면 ①에서 새 실행 이미지가 필요하다(코드의 `deploy/docker/DEPS_HASH`와 이미지 지문이 다르면 시작·굽기 모두 거부).
+- PC에서 `IMAGE_TARGET=pipeline`·`mcp`로 코드가 든 이미지를 직접 빌드하는 길은 PC 시험(이미지 관문)·비상용으로만 남긴다 — 운영 반입은 ②(개발에서 시험한 그대로). 오버레이 패치(§5-8)도 운영 서버 비상 수정용.
 
 개발 서버 순서: 실행 이미지 적재(아래 5-2와 같은 `docker load`) → `/srv/rag/code/<버전>-<커밋>/`에 코드 폴더 묶음 풀기(`tar -xzf … --no-same-owner` 뒤 `chown -R 10001:10001` 또는 `chmod -R a+rX` — 컨테이너 사용자 10001이 읽어야 함) → `ln -sfn <그 폴더> /srv/rag/code/live` → settings.yaml `pipeline.host.image`·`mcp.host.image`를 실행 이미지 태그로 → systemd unit·셸에 `CODE_DIR=/srv/rag/code/live` → `trigger.sh`·`mcp_up.sh`. 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`으로 어느 판이 도는지 확인. 되돌리기는 `release-and-patch.md` §1-1.
-
-개발 → 운영(op-07): 운영 이미지는 개발 서버에서 쓰던 실행 이미지 그 판 + 시험한 코드 폴더를 그대로 묶어 만든다 — 개발 서버에서 `bash /srv/rag/code/live/deploy/release/bake.sh <실행 이미지 판>`(지문 확인 → `Dockerfile.bake` 빌드 → 반입 판정 → 저장·분할). 자세히는 `release-and-patch.md` §1-2.
 
 ### 5-1. 버전 올리기
 
