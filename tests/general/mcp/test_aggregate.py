@@ -13,13 +13,11 @@ from mcp_server.services.search.aggregate import (
     BATCH_Q,
     _load_agg_vocab,
     _table_cell_tokens,
-    agg_llm_on,
     detect,
     doc_link_list,
     doc_link_question,
     fx_evidence_text,
     mixed_currencies,
-    route,
     run,
     struct,
     struct_context,
@@ -363,140 +361,6 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통
         assert "[doc_location 카탈로그] 문서 위치 메타" in struct("계약 C-RDB-2025-005 관련 문서 목록은?")["note"]
     _env.close()
     print("[selftest] AD45① doc_location SQL(문서 목록·건수·최근 판) 4/4 · 데이터 카탈로그(있으면 note 동봉·없으면 그대로) 통과")
-
-    # R1(AD42·AD45②) — SEARCH_AGG_LLM(=1일 때)일 때 route(): regex가 놓친 집계 질문을 LLM이 분류·인자 추출(가짜 llm_complete, 실모델 호출 없음)
-    miss_q = "화이자와 체결된 딜 숫자를 좀 알려줄래?"
-    assert detect(miss_q, {"Pfizer Inc."}, set(), al) is None  # 먼저 확인: COUNT_RE 등 어떤 지표 단어도 없어 regex가 진짜로 못 걸림
-    assert agg_llm_on() is False  # 기본(미설정) = 끔(AR3 10-12)
-
-    def _fake(d):
-        return lambda _prompt: json.dumps(d, ensure_ascii=False)
-
-    _env = mc.senv(SEARCH_AGG_LLM="1")  # 켠 경우의 동작 시험(기본은 끔)
-    try:
-        ok = route(
-            miss_q,
-            docs,
-            aliases=al,
-            llm_complete=_fake(
-                {
-                    "route": "aggregate",
-                    "confidence": 0.9,
-                    "want_count": True,
-                    "want_amount": False,
-                    "want_batches": False,
-                    "clients": ["화이자"],
-                    "contract": None,
-                    "window": None,
-                    "modalities": [],
-                    "group": None,
-                    "listing": False,
-                }
-            ),
-        )
-        assert ok is not None and ok["via"] == "aggregate_llm" and ok["answer"] == 2, ok  # C-1·C-2 두 계약(기존 집계 엔진 그대로)
-
-        assert (
-            route("계약서에 적힌 해지 조항 내용을 알려줘", docs, aliases=al, llm_complete=_fake({"route": "search", "confidence": 0.9}))
-            is None
-        )  # 비집계 질문 → None(검색 폴백)
-        assert route(miss_q, docs, aliases=al, llm_complete=lambda p: "이건 JSON이 아니다") is None  # JSON 깨짐
-        assert (
-            route(
-                miss_q,
-                docs,
-                aliases=al,
-                llm_complete=_fake(
-                    {
-                        "route": "aggregate",
-                        "confidence": 0.9,
-                        "want_count": True,
-                        "clients": ["존재하지않는회사"],
-                        "contract": None,
-                        "window": None,
-                        "modalities": [],
-                        "group": None,
-                        "listing": False,
-                    }
-                ),
-            )
-            is None
-        )  # 명부에 없는 고객(지어낸 인자) → 거부
-        assert (
-            route(
-                miss_q,
-                docs,
-                aliases=al,
-                llm_complete=_fake(
-                    {
-                        "route": "aggregate",
-                        "confidence": 0.3,
-                        "want_count": True,
-                        "clients": ["화이자"],
-                        "contract": None,
-                        "window": None,
-                        "modalities": [],
-                        "group": None,
-                        "listing": False,
-                    }
-                ),
-            )
-            is None
-        )  # 확신 미달(SEARCH_AGG_LLM_MIN 기본 0.6)
-        assert (
-            route(
-                miss_q,
-                docs,
-                aliases=al,
-                llm_complete=_fake(
-                    {
-                        "route": "aggregate",
-                        "confidence": 0.9,
-                        "want_count": True,
-                        "clients": ["화이자; DROP TABLE contract_master;--"],
-                        "contract": None,
-                        "window": None,
-                        "modalities": [],
-                        "group": None,
-                        "listing": False,
-                    }
-                ),
-            )
-            is None
-        )  # 자유 SQL처럼 보이는 글자 → 거부
-
-        ok1 = route(
-            miss_q,
-            docs,
-            aliases=al,
-            llm_complete=_fake(
-                {
-                    "route": "aggregate",
-                    "confidence": 0.9,
-                    "want_count": True,
-                    "want_amount": False,
-                    "want_batches": False,
-                    "clients": ["화이자"],
-                    "contract": None,
-                    "window": None,
-                    "modalities": [],
-                    "group": None,
-                    "listing": False,
-                }
-            ),
-        )
-        assert ok1 is not None and ok1["via"] == "aggregate_llm" and ok1["answer"] == 2, ok1
-    finally:
-        _env.close()
-    with mc.senv(SEARCH_AGG_LLM="0"):
-        assert agg_llm_on() is False
-        assert (
-            route(miss_q, docs, aliases=al, llm_complete=lambda p: 1 / 0) is None
-        )  # =0이면 llm_complete를 부르지도 않음(바이트 동일 경로)
-    print(
-        "[selftest] R1(AD42·AD45②) SEARCH_AGG_LLM(=1일 때) — regex가 놓친 집계 질문을 LLM 경계 분류로 잡음(via=aggregate_llm)"
-        " · 비집계·JSON 깨짐·모르는 고객·확신 미달·SQL처럼 보이는 글자는 거부(검색 폴백) · =0이면 LLM 호출 자체가 없음 통과"
-    )
 
     # DT1 c1 — 집계 지표 단서어(agg_vocab.json). 기본 파일(dev/common/agg_vocab.json)이 코드 기본값과 바이트 동일한지 ·
     # AGG_VOCAB_FILE로 가짜 회사 예시(배치 대신 'lots')를 넣으면 BATCH_Q가 바로 반영되는지.

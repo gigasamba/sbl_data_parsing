@@ -4,14 +4,14 @@
 기술 비교 없이 **파싱에서 선정된 엔진만** 쓴다(output/parse/selection.json `final` 형식별 주 엔진 → 실패면 예비 → route 순).
   청크   : structure 청커(pipeline.transform.structure.chunking, AD32③ — evaluation.stages는 조합 실험용으로 같은 것을 가져다 씀) — 본문은 정제 텍스트(쪽 번호 줄 제외), 위치 = 파일 경로·쪽·줄·문자 범위·제목,
            쪽 안 위치(bbox, pt) = OCR 엔진은 글자 상자 합집합, 텍스트 PDF는 원본 PDF에서 청크 첫·끝 줄을 찾아 합집합
-  요약   : --summary llm(내부망 GLM) → 없으면 앞부분 발췌
+  요약   : 앞부분 발췌(LLM 요약은 op-08에 지움 — --summary auto·lead 둘 다 발췌)
   메타   : 고객사·계약 번호 — 파싱 모듈 교차 확인 값(_rep rep.meta)(서로 다른 계열 파서 2개+)만
   임베딩 : --embed api(EMBED_BASE_URL·EMBED_MODEL — 서버 임베딩 전용 모델) · bge-m3 · e5-small … (L2 정규화 저장, 차원은 첫 응답에서)
   그래프 : 폴더 → 문서 + 문서 → 청크(+순서) + 청크 → 개체(ID·이메일·날짜 + AD28② 업무 개체: 고객·계약·제품·모달리티·
            배치/로트)·라벨·값(사실)·개념(AD28③, 용어 사전 — broader·related 간선 포함). 같은 값 = 같은 노드 → 문서 간 연결.
            업무 관계(문서 단위): client-has-contract·contract-covers-product·doc-links-contract
 산출: docs.jsonl · chunks.jsonl · vectors.npy(float32, chunks 순서) · kg_nodes.jsonl · kg_edges.jsonl · meta.json · images.jsonl(F8, doc_image·chunk_image 적재 원본)
-사용: python -m pipeline.transform.structure.build_bundle [--parse-dir output/parse] [--src output/prepared] [--embed api|bge-m3] [--summary auto|llm|lead] [--out output/edw/bundle]
+사용: python -m pipeline.transform.structure.build_bundle [--parse-dir output/parse] [--src output/prepared] [--embed api|bge-m3] [--summary auto|lead] [--out output/edw/bundle]
 """
 
 import argparse
@@ -23,7 +23,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[0]
-from common.ai.agent_prompts import load as _load_prompt  # noqa: E402 — AD33
 from common.ai.embed import embed_texts  # noqa: E402
 from common.config import settings as C  # noqa: E402 — S7c: 설정 객체(common 칸 EMBED_MODEL·EMBED_BASE_URL·LLM_ALLOW_EXTERNAL·GLOSSARY_DIR·OV_URL)
 from common.core import docmeta as DM  # noqa: E402 — 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
@@ -114,22 +113,6 @@ def lead_summary(text, n=300):
         if sum(map(len, out)) >= n:
             break
     return " ".join(out)[:n]
-
-
-def llm_summary(text):
-    from common.ai import llm as L
-
-    msg = [
-        {
-            "role": "system",
-            "content": _load_prompt("doc_summary", "summary"),
-        },  # 글자는 resources/prompts/common/doc_summary/prompt.md(AD33)
-        {"role": "user", "content": strip_page_numbers(text)[:6000]},
-    ]
-    # 외부 LLM은 LLM_ALLOW_EXTERNAL=1 + RUN_ENV=local일 때만(서버 dev·prd는 늘 거부 — common/ai/guard.py)
-    return L.chat(
-        msg, temperature=0.0, max_tokens=300, allow_external=C.cfg().models.llm.allow_external, agent="doc_summary"
-    ).strip()  # S7c — 설정 객체(켜기 "1")
 
 
 def _embed(model, texts, kind):
@@ -708,9 +691,7 @@ def main(argv=None):
     ap.add_argument(
         "--embed", default=pc.cfg().transform.structure.embed or ("api" if C.cfg().models.embed.base_url else "bge-m3")
     )  # S7c — 설정 객체
-    ap.add_argument(
-        "--summary", default="auto", choices=["auto", "llm", "lead"], help="auto = EDW_SUMMARY_LLM이면 LLM 요약, 아니면 앞부분 발췌"
-    )
+    ap.add_argument("--summary", default="auto", choices=["auto", "lead"], help="둘 다 앞부분 발췌(옛 호출·색인 설정 호환)")
     ap.add_argument("--chunk", default=None, help="기본 = stack.json chunk(없으면 structure)")
     sg = ap.add_mutually_exclusive_group()  # 둘 다 주면 거부(종료 2) — 파일은 PC 실험·시험 전용, 생산 경로는 판 번호만(pl-32)
     sg.add_argument(
@@ -795,11 +776,8 @@ def main(argv=None):
         text, _ = S.load_parse_doc(pd, folder, doc)
         if not text.strip():
             continue
-        if a.summary == "llm" or (a.summary == "auto" and pc.cfg().transform.structure.edw_summary_llm):  # S7c — 설정 객체(켜기 "1")
-            ab, ssrc = llm_summary(text), "llm"
-        else:
-            ab, ssrc = lead_summary(text), "lead"
-        n_sum[ssrc] += 1
+        ab = lead_summary(text)
+        n_sum["lead"] += 1
         md = meta_docs.get(doc, {})
         cl = AQ.pick(md.get("pairs", []), AQ.CLIENT_RE, AQ.SUPPLIER_RE)
         co = AQ.pick(md.get("pairs", []), AQ.CONTRACT_RE)

@@ -218,7 +218,7 @@ def cmd_t1(args, db_factory=None):
     rate = round(mism / checked, 4) if checked else None
     print(f"[t1] 표본 {checked}건(번들 대조 {bundle_hits}건) · 불일치 {mism}건 · 불일치율 {rate}")
     if mism:
-        print("[t1] 불일치 > 0 — BM25_STAT_REBUILD=1 python cli/pipeline.py load --replace 아직 필요(T1 백로그)")
+        print("[t1] 불일치 > 0 — term_stat을 비우고 load --replace로 다시 셈(T1 백로그)")
     out_dir = _out_dir("t1", args.out)
     (out_dir / "t1_report.json").write_text(
         json.dumps(

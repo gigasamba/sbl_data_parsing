@@ -57,6 +57,7 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 - **`table_struct_judge`** — 결정적 결과를 먼저 계산하고 판정자는 **승격만**(0 → 1) 한다. 가드(`NO_PAID_CALLS`·`LLM_FAKE`·내부망 전용)는 `common.ai.llm.chat()`이 집행(`allow_external`을 주지 않아 내부망 LLM만). 판정자 호출 실패는 조용히 "승격 안 함". `vlm` 모드는 아직 TODO.
 - **`parse_shadow`** — 제안은 저장·집계만 되고 파싱 결과·점수에는 손대지 않는다. `action`은 step마다 고정된 행동 목록(`shadow.STEP_ACTIONS`, "keep" = 규칙 그대로) 중 하나만 유효하고, 목록 밖이거나 decisions에 없는 step은 `shadow.parse_proposals`가 버린다. `shadow.py`는 adk를 모르고 `llm_complete` 콜백만 받는다(CLI가 `llm.chat(..., agent="parse_shadow")`를 주입). 캐시는 `llm.chat()`의 (모델·메시지·온도) 해시 그대로. `--mode rules`는 LLM 없이 규칙 결정을 "keep"으로 echo(배선 시험용).
 - **`agg_llm_route`** — 인자는 기존 집계 틀(`aggregate._apply`)에만 대입하고 자유 SQL은 만들지 않는다(R1, AD42·AD45②). 거부(→ None, 검색 폴백): 확신 미달(`SEARCH_AGG_LLM_MIN`) · 모르는 고객/계약/모달리티 · window 날짜 형식 오류 · 지표 전부 거짓 · 고객·계약 둘 다 없음 · JSON 깨짐 · SQL처럼 보이는 글자(`_SQLISH_RE`) · route="search".
+- **`parse_shadow`·`agg_llm_route`·`doc_summary`** — 호출부(그림자 모드·집계 LLM 분류·LLM 묶음 요약)는 op-08(10-30)에 지웠다. 지시문 묶음은 프롬프트 바이트 규칙과 시험(`test_paths`·`test_adk`·`test_agent_prompts`)이 읽어 남긴다.
 - **`research_judge`** — 호출부 `research.py`는 S5a(10-26)에 지웠지만(D-025), `tests/server/common/test_agent_prompts.py`·`test_adk.py`(S9 전 각 모듈 selftest)가 모든 이미지에서 이 id로 지시문 읽기·`model_role`·`output_schema` 가드를 시험해 남긴다. `resources/`는 폴더째 모든 이미지에 들어가므로 `mcp/`에 있어도 찾는다. 같이 쓰던 `research_decompose`·`research_rewrite`는 S5a에, 호출부 없이 자리 확인만 남았던 `research_check`는 S11(10-28, 사용자 — `refactor.md` C-25 ③)에 지웠다.
 
 ## 5. 도구(결정적 — 모델 호출 없음)

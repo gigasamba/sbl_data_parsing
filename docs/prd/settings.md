@@ -137,6 +137,7 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
   - ①-1(10-30): A 10 + E 1 지움 — 옛 설정 파일의 지운 칸은 경고만(`REMOVED`), 옛 env 이름은 migrate가 "삭제 후보(삭제됨 op-08)"로 알림. 검색 MCP 질의 캐시 기본(`/tmp/mcp_query_cache.sqlite`)은 mcp 이미지의 `common.models.embed.query_cache` 기본값으로 옮김.
   - ①-2(10-30): B 되돌리기 스위치 45 지움 — 동작은 늘 기본값(켬), 옛 동작 코드·끔 경로 시험도 지움. `represent.table_db`는 표 정형 적재(`load_tables_db`·`structured tables`)째 지움 — 검색 쪽 `doc_table`·`doc_cell` 읽기 코드와 표 정의는 pl-28(D-7)에서. 빈 절 `mcp.search.query_expand`도 지움. 평가 도구 AR1(융합 켬/끔 비교)도 지움.
   - ①-3(10-30): C 스트리밍 6 지움 — `pipeline/stream.py`·`pipeline/tools/check_residue.py`·`dedup.record_fingerprint`와 그 시험, 빈 절 `pipeline.extract.stream`. 첨부 임시 폴더 `attach_dir`는 `represent/attachments.py`로 옮김(자리 그대로 — PARSE_TMP의 형제 `attach/`).
+  - ①-4(10-30): D 실험 7 지움 — 그림자 모드(`represent/shadow.py`·`eval/parse_shadow.py`), 집계 LLM 분류(`aggregate.llm_plan`·`route`의 LLM 갈래), LLM 묶음 요약(`build_bundle --summary llm`·색인 설정 `summary: llm`), 글자 이미지 VLM 생략, 키워드 통계 전체 재계산 스위치, 원본 보관(보존 상한 경로 포함)과 그 시험. 쓰는 곳이 없어진 칸(`shadow_max`·`agg.llm_min`·`cache.parse_keep_max_gb`, C의 `parse_tmp_max_gb`·`disk_free_warn_gb`·`engine_cache_warn_gb`)은 남김 — ②에서 정함. 지시문 묶음 `parse_shadow`·`agg_llm_route`·`doc_summary`는 시험이 읽어 남김.
 - 파일: `common/config/{settings,sample,keyscan,migrate,export}.py`, `pipeline/config.py`, `mcp_server/config.py`, `settings.sample.yaml`, `deploy/host/`(설정 꺼내 쓰는 셸), `docs/operations/env-guide.md`.
 - Status: todo
 

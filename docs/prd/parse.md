@@ -125,13 +125,12 @@
 | DRM·암호 파일을 흐름 안에서 복호화 | 복호화는 수동 CLI(`python -m pipeline.extract.secure_docs decrypt`) | `secure_docs.py` | pl-02 |
 
 ### 요건 없는 코드 — 남길지 지울지([test.md#e2-18](test.md#e2-18))
-- 그림자 모드 — 기록된 규칙 판단마다 LLM에 무엇을 고를지 묻고 일치/불일치를 `parse/_shadow/`에 기록. 결과는 바꾸지 않음, 수동 CLI만(`PARSE_SHADOW=0`). 지운 파싱 에이전트와는 관계없음. `represent/shadow.py`, `pipeline/eval/parse_shadow.py`.
+- 없음(그림자 모드는 op-08에 지움).
 
 ### 기본 꺼짐·설정 필요
 | 기능 | 스위치 = 기본값 | 필요한 것 |
 |---|---|---|
 | VLM 엔진, 그림, 쪽 VLM | 켜짐(OCR 엔진은 꺼짐 — `PARSE_OCR_ENGINE=0`, pl-22) | VLM 주소. 슬라이드·도형은 soffice(`SOFFICE_BIN`) |
-| 그림자 모드 | `PARSE_SHADOW=0` | LLM, 수동 CLI |
 
 ### 10-29에 지운 기능(사용자 결정)
 - 파싱 판단 에이전트(`PARSE_AGENT`, 기본 shadow — 결과를 바꾸지 않으면서 서버에서 LLM 세션을 열었음) — `77433fe`.

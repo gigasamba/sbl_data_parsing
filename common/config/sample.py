@@ -152,7 +152,6 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "pipeline.transform.vlm.page_min_concurrency",
     "mcp.search.pg.filter_exact_max",
     "mcp.search.pg.vector_search",
-    "mcp.search.agg.llm_timeout",
 }
 REQ_HEAD = """\
 

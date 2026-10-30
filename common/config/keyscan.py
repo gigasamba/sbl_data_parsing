@@ -227,6 +227,18 @@ NOT_SETTINGS = {
             "PARSE_STREAM_TEST_CRASH",
         )
     },
+    **{
+        n: ("삭제 후보", "삭제됨(op-08, 사용자 10-30) — 실험 기능째 지움")
+        for n in (
+            "PARSE_SHADOW",
+            "SEARCH_AGG_LLM",
+            "SEARCH_AGG_LLM_TIMEOUT",
+            "EDW_SUMMARY_LLM",
+            "VLM_FIG_TEXT_SKIP",
+            "BM25_STAT_REBUILD",
+            "KEEP_LOCAL_ORIGINALS",
+        )
+    },
 }
 # 모은 키가 아닌 것(셸 문법·Dockerfile ARG·selftest 가짜 이름)
 IGNORE = {"BASE", "X_ALLOW_EXTERNAL"}

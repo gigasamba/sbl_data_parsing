@@ -243,9 +243,9 @@ def load(db, bundle, replace=False):
                 ):  # 머리말 포함(G9) — 규칙은 common.core.text
                     cp.write_row((term, ci_db[ci], min(tf, 32767)))
                     n_terms += 1
-        # 문서 빈도: 새 청크 단어만 더함(지운 문서는 drop_terms에서 뺌). 비었거나 BM25_STAT_REBUILD=1이면 전체 다시 셈
+        # 문서 빈도: 새 청크 단어만 더함(지운 문서는 drop_terms에서 뺌). 비었으면 전체 다시 셈(BM25_STAT_REBUILD는 op-08에 지움)
         cur.execute(f"SELECT NOT EXISTS (SELECT 1 FROM {s}.term_stat)")
-        if cur.fetchone()[0] or pc.cfg().load.bm25_stat_rebuild:
+        if cur.fetchone()[0]:
             cur.execute(f"DELETE FROM {_tbl(s, 'term_stat')}")
             cur.execute(f"INSERT INTO {s}.term_stat SELECT term, COUNT(*) FROM {s}.chunk_term GROUP BY term")
         elif ci_db:

@@ -627,13 +627,6 @@ def _crop_ocr(img_bytes):
     return _default_ocr(img_bytes) or ""
 
 
-def _ocr_only_record(f):
-    """AD10 — text_image 분류: VLM을 생략하고 crop OCR 글자만 기록(f['ocr_text'] — classify_figure_kind 직전에
-    한 번 돌린 결과를 그대로 재사용, OCR 재호출 없음). parse_json()이 그대로 읽을 수 있게 같은 JSON 글자 모양."""
-    rec = {"kind": "text_image", "text": f.get("ocr_text") or "", "summary": None, "values": [], "edges": [], "table_md": ""}
-    return json.dumps(rec, ensure_ascii=False), {"model": "ocr:rapidocr_ko", "ocr_chars": f.get("ocr_chars")}
-
-
 FIG_OCR_FALLBACK_MIN_CHARS_DEFAULT = 10  # engine-qa CONCERN(10-11) ① — 로고·워터마크·스크린샷 머리글("# Outlook" 등)
 # 1~2글자 조각이 VLM 미설정 문서마다 그대로 색인에 섞이는 문제. 실측(10-11, 이 기능이 살려낸 값들의 "의미 있는 글자"
 # 수 — 한글·영문·숫자만 세고 공백·기호 제외): hidden_term velorimab 36자 · mixed_pages MX-W11 37자·MX-W12 19자(가장
@@ -984,7 +977,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
     skipped: "VLM_FIGURES_MAX"로 기록에 남고, 문서 단위로 capped.jsonl에 upsert(record_capped).
     out_images — capped.jsonl이 쓰일 폴더를 직접 고름(AG11 2단계 착수 조건, 10-08: PARSE_IMAGES_ROOT 환경변수 교체
     대신 인자로 — 기본값 None이면 record_capped가 images_root()를 써 이전과 바이트 동일).
-    AD10 — VLM 보낼 그림(send)마다 classify_figure_kind()로 종류를 가늠(모델 호출 없음): text_image는 VLM 생략(crop OCR 글자만), photo는 max_tokens를 낮춰 한 줄 요약 유도,
+    AD10 — VLM 보낼 그림(send)마다 classify_figure_kind()로 종류를 가늠(모델 호출 없음): text_image는 기록만(VLM 그대로), photo는 max_tokens를 낮춰 한 줄 요약 유도,
     chart·flow·other(모름 포함)는 지금처럼 전체 P_FIGJ 호출 — 지시문 글자·prompt_id는 안 바꿔 기존 VLM 캐시 그대로
     재사용한다. ocr_fn — crop OCR 재사용 지점(없으면 _crop_ocr, 테스트는 가짜 OCR 주입).
     OP11 — VLM 응답이 빈 경우(미설정·오류·빈 응답)만 같은 crop의 OCR 글자로 채운다(_ocr_fallback). VLM 응답이
@@ -1019,10 +1012,8 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
     order = [i for i in order if i not in skip_reason]  # VLM_FIGURES_MAX 상한은 실제로 VLM이 필요한 그림끼리만 다툰다
     send = set(order[:cap])
     capped_ids = []
-    # engine-qa BLOCK(10-08) ② — text_image의 "VLM 생략"은 실 글자 이미지 표본으로 문턱을 검증하기 전까지 기본 끔
-    # (OP11 예외: 정답률 우선 — 실 표본 검증 전까지 손실 위험 기능은 기본 끔). classify_figure_kind는 그대로 돌려
-    # provenance.fig_kind로 기록만 하고, VLM_FIG_TEXT_SKIP=1일 때만 실제로 VLM을 생략한다.
-    text_skip_on = pc.cfg().transform.vlm.fig_text_skip  # S7c — 설정 객체(옛 !="0" — 칸 판정 꼴 off=("0",))
+    # engine-qa BLOCK(10-08) ② — classify_figure_kind는 provenance.fig_kind로 기록만 하고 text_image도 VLM을 부른다
+    # (글자 이미지 VLM 생략 VLM_FIG_TEXT_SKIP은 op-08에 지움).
     ocr_budget = [VLM_FIG_OCR_MAX]  # 문서당 crop OCR 상한(공유 카운터, 리스트로 함수 밖에서도 줄임)
     _fitz_cache = {}
 
@@ -1058,7 +1049,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
     _kinds = {}
     for i in sorted(send):
         _kinds[i] = classify_figure_kind(figs[i])
-    _vlm_set = [i for i in sorted(send) if not (_kinds[i] == "text_image" and text_skip_on)]
+    _vlm_set = sorted(send)
 
     def _vlm_one(fi):
         f = figs[fi]
@@ -1086,9 +1077,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
         if i in skip_reason:
             text, prov = "", {"skipped": skip_reason[i]}
         elif i in send:
-            if _kinds[i] == "text_image" and text_skip_on:
-                text, prov = _ocr_only_record(f)
-            elif i in _vlm_dict:
+            if i in _vlm_dict:
                 text, prov = _vlm_dict[i]
             else:
                 text, prov = "", {}

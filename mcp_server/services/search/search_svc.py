@@ -222,7 +222,6 @@ def do_search(
     if agg_hit and hard:  # (2026-10-20 통합) 집계 근거는 전체 구조화 집계라 하드 필터 범위와 안 맞음 — 생략
         notes.append("집계 경로 감지 — 하드 필터 범위 밖 집계라 근거 삽입 생략")
     if not hard and agg_hit:  # kind 있음 = aggregate.detect()(또는 struct() 연결 판별)가 집계로 판별
-        via = agg.get("via") or "aggregate"  # R1(AD42·AD45②) — LLM 경로만 aggregate.route()가 via="aggregate_llm"을 심음
         from mcp_server.services.search import (
             aggregate as AG,
         )  # RV-aggtext — table_text(합계 뒤에 고객별·제품 종류별 표 행을 text에 붙임)
@@ -242,7 +241,7 @@ def do_search(
         evidence.insert(
             0,
             {
-                "via": via,
+                "via": "aggregate",
                 "text": text,
                 "answer": agg.get("answer"),
                 "unit": agg.get("unit"),
@@ -252,11 +251,7 @@ def do_search(
                 "totals": agg.get("totals"),
             },
         )
-        notes.append(
-            "집계 경로 사용(SEARCH_AGG_ROUTE)"
-            + (" · R1 LLM 경계 분류" if via == "aggregate_llm" else "")
-            + (f" · {agg['note']}" if agg.get("note") else "")
-        )
+        notes.append("집계 경로 사용(SEARCH_AGG_ROUTE)" + (f" · {agg['note']}" if agg.get("note") else ""))
     if r_notes.get("note"):  # 질의 임베딩 장애·임베딩 없는 묶음 → 키워드·ID만(G11)
         notes.append(r_notes["note"])
     exn = r_notes.get("expand_notes")  # X3 — BM25 질의 확장(용어 사전)이 적용됐으면 표시
@@ -266,7 +261,7 @@ def do_search(
         notes.append(r_notes["recency_note"])
     images = []  # 응답 모양 유지(그림 검색 image는 10-29에 지움)
     if hard and scope:  # (2026-10-20 통합) 하드 필터 범위 안 문서만 남기고 다시 1..n 순위 — 요청한 k개로
-        kept_agg = evidence[0] if evidence and evidence[0].get("via") in ("aggregate", "aggregate_llm") else None
+        kept_agg = evidence[0] if evidence and evidence[0].get("via") == "aggregate" else None
         scoped = [e for e in evidence if e is not kept_agg and (e.get("file_path") or "") in scope]
         for i, e in enumerate(scoped):
             e["rank"] = i + 1

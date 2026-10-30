@@ -77,11 +77,8 @@ class PipelineExtractAttach(Section):
 
 class PipelineExtractCache(Section):
     REMOVED = frozenset(
-        {"keep_engine_cache", "keep_raw_layer"}
+        {"keep_local_originals", "keep_engine_cache", "keep_raw_layer"}
     )  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    keep_local_originals: bool | None = F(
-        False, "KEEP_LOCAL_ORIGINALS", "내려받은 원본을 파싱 뒤에도 지우지 않고 남길지(=1 보관, 디버그·샘플용)", on=("1",)
-    )
     parse_cache_max_gb: float | None = F(
         5.0, "PARSE_CACHE_MAX_GB", "재판독 중간 캐시 3종 합계 용량 상한(GB, 넘으면 오래된 것부터 삭제, 0=끔)"
     )
@@ -248,6 +245,7 @@ class PipelineTransformFigures(Section):
 class PipelineTransformRepresent(Section):
     REMOVED = frozenset(
         {
+            "shadow",
             "context",
             "fuse",
             "fuse_signals",
@@ -271,23 +269,17 @@ class PipelineTransformRepresent(Section):
     )
     qa_light: bool | None = F(False, "PARSE_QA_LIGHT", "=1이면 native 대비 풀문서 CER·순서 비교를 생략(경량화)", on=("1",))
     rep_select: str | None = F(None, "PARSE_REP_SELECT", "대표 엔진 선택 방식: first(첫 성공 엔진)|acc(정확도만)|그 외 best(정확도+풍부도)")
-    shadow: bool | None = F(
-        False, "PARSE_SHADOW", "그림자 모드(파싱 판단 규칙 vs LLM 제안 비교)를 켬(=1이면 켬)", off=("", "0", "none", "false"), fold="lower"
-    )
     shadow_max: int | None = F(50, "PARSE_SHADOW_MAX", "그림자 모드 한 번에 훑는 문서 수 상한")
 
 
 class PipelineTransformStructure(Section):
     REMOVED = frozenset(
-        {"bundle_keep_empty_fig", "chunk_head", "client_roster_seed", "draft_terms", "wiki_domain_phrase", "edw_embed"}
+        {"edw_summary_llm", "bundle_keep_empty_fig", "chunk_head", "client_roster_seed", "draft_terms", "wiki_domain_phrase", "edw_embed"}
     )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐 · op-08 edw_embed → embed로 합침) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     chunk_overlap: int | None = F(64, "CHUNK_OVERLAP", "고정 길이 청커(chunk_fixed512)의 청크 간 겹침 글자 수")
     chunk_size: int | None = F(None, "CHUNK_SIZE", "청크 목표 길이(글자) — 청커별 기본이 다름")
     chunk_table: str | None = F(None, "CHUNK_TABLE", "'rows'이면 큰 표를 행 묶음 단위로 쪼갬(그 외 값·미설정은 표를 통째로 둠)")
     chunk_table_rows: int | None = F(25, "CHUNK_TABLE_ROWS", "표를 쪼갤 때 청크당 행 수(CHUNK_TABLE=rows일 때만)")
-    edw_summary_llm: bool | None = F(
-        False, "EDW_SUMMARY_LLM", "=1이면 묶음 요약을 LLM으로 생성(--summary auto일 때만, 기본은 앞부분 발췌)", on=("1",)
-    )
     embed: str | None = F(
         image_default("PIPE_EMBED"),
         "PIPE_EMBED",
@@ -302,7 +294,9 @@ class PipelineTransformStructure(Section):
 
 
 class PipelineTransformVlm(Section):
-    REMOVED = frozenset({"fig_kind", "fig_select"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset(
+        {"fig_text_skip", "fig_kind", "fig_select"}
+    )  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     deadline: float | None = F(360.0, "VLM_DEADLINE", "VLM 호출 1건 제한 시간(초)")
     fig_min_px: int | None = F(64, "VLM_FIG_MIN_PX", "이 값보다 짧은 변의 그림은 VLM 대상에서 제외(픽셀)")
     fig_ocr_max: int | None = F(8, "VLM_FIG_OCR_MAX", "문서당 그림 crop OCR 횟수 상한(비용 가드)")
@@ -312,7 +306,6 @@ class PipelineTransformVlm(Section):
     fig_text_ocr_min: int | None = F(
         200, "VLM_FIG_TEXT_OCR_MIN", "crop OCR 글자 수(공백 제외)가 이 값 이상이면 글자 이미지(text_image)로 분류"
     )
-    fig_text_skip: bool | None = F(False, "VLM_FIG_TEXT_SKIP", "=1이면 글자 이미지(text_image)로 분류된 그림은 VLM 호출 생략", off=("0",))
     figures_max: int | None = F(20, "VLM_FIGURES_MAX", "문서당 VLM에 보낼 그림 수 상한(0이면 VLM 안 부름)")
     global_concurrency: int | None = F(12, "VLM_GLOBAL_CONCURRENCY", "모든 VLM 호출의 전역 동시 실행 수 합 상한")
     page_concurrency: int | None = F(None, "VLM_PAGE_CONCURRENCY", "쪽 VLM 병렬 워커 수 최대값")
@@ -469,9 +462,8 @@ class PipelineHost(Section):
 
 class PipelineLoad(Section):
     REMOVED = frozenset(
-        {"structure_target", "edw_load", "prune_force", "prune_min_ratio"}
+        {"bm25_stat_rebuild", "structure_target", "edw_load", "prune_force", "prune_min_ratio"}
     )  # 사용자 10-29(prune_* — 적재가 안 지움, pl-13 · edw_load — EDW 벡터 경로 삭제, ops.md#op-03) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    bm25_stat_rebuild: bool | None = F(False, "BM25_STAT_REBUILD", "적재 때 키워드 문서 빈도를 전체 다시 셈 — 1이면 켬", on=("1",))
     bm25_threads: int | None = F(4, "BM25_THREADS", "BM25 항목(term,tf) 계산 병렬 스레드 수(개)")
     edw_path_prefix: str | None = F(None, "EDW_PATH_PREFIX", "저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치)")
     index_lock_stale_sec: float | None = F(21600.0, "INDEX_LOCK_STALE_SEC", "색인 빌드 잠금 파일을 죽은 빌드로 보고 회수하는 경과 시간(초)")

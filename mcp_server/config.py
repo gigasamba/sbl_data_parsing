@@ -33,10 +33,10 @@ from common.config.settings import (  # noqa: F401 — token_text: 토큰 규칙
 
 
 class McpSearchAgg(Section):
-    REMOVED = frozenset({"fx", "route"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    llm: bool | None = F(False, "SEARCH_AGG_LLM", "집계 질문 분류에 LLM 경계 분류 사용 — 1이면 켬(기본 끔)", on=("1",))
+    REMOVED = frozenset(
+        {"llm", "llm_timeout", "fx", "route"}
+    )  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     llm_min: float | None = F(0.6, "SEARCH_AGG_LLM_MIN", "집계 LLM 분류 확신도 하한(0~1) — 미달이면 검색으로 폴백")
-    llm_timeout: float | None = F(8.0, "SEARCH_AGG_LLM_TIMEOUT", "집계 LLM 분류 호출 시간 상한(초)")
     text_max_rows: int | None = F(30, "SEARCH_AGG_TEXT_MAX_ROWS", "집계 근거 text에 붙이는 표 행 상한(개)")
     text_max_src_rows: int | None = F(40, "SEARCH_AGG_TEXT_MAX_SRC_ROWS", "계약별 근거 행 상한(개)")
 

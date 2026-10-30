@@ -25,11 +25,8 @@ struct_context(question, hits)(L3-6, W18)는 같은 저장소에서 (a) 검색�
 archive됨(그 호출부였던 cli/pipeline.py ask --llm·evaluation/stack_matrix.py _answer_eval LLM 분기가 archive — 답변은
 서빙되는 Answer Agent rag_qa만, 중복 경로 제거). struct()·struct_context()·local()은 그대로(검색 MCP aggregate 도구가 씀).
 
-route(question, docs, facts_of, aliases, llm_complete)(R1, AD42·AD45②) — detect() 정규식이 못 걸렸을 때만, env
-SEARCH_AGG_LLM(기본 끔, =1로 켬 — AR3 10-12)이고 llm_complete(호출자가 common/llm.py 등으로 만들어 주입)가 있으면 LLM 1회 호출로
-집계/검색 분류 + 인자(고객·기간·지표·모양) 추출(llm_plan) — 결과는 detect()와 같은 모양의 plan dict이고 _apply()가
-기존 집계 틀을 그대로 돈다(새 SQL 없음). 거부(확신 미달·모르는 고객/계약/모달리티·형식 깨짐·LLM 오류)는 전부 None →
-호출자가 검색으로 폴백. 결과 dict에 via="aggregate_llm"(mcp_server.py가 근거 표시에 씀). local()이 이 경유를 씀.
+route(question, docs, facts_of, aliases) — detect() 정규식으로 집계 질문을 가려 _apply()로 기존 집계 틀을 돈다(못 걸리면 None →
+호출자가 검색으로 폴백). LLM 경계 분류(R1, SEARCH_AGG_LLM)는 op-08에 지움. local()이 이 경유를 씀.
 """
 
 import datetime as dt
@@ -38,7 +35,6 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-from common.ai.agent_prompts import load as _load_prompt  # noqa: E402 — R1 LLM 경계 분류 지시문(가벼움, LLM 클라이언트는 import 안 함 — 호출자가 llm_complete 주입)
 from common.config import settings as C  # noqa: E402 — 설정 객체(common 칸 — STRUCT_BACKEND·STRUCT_DB, S7d)
 from common.core.paths import RES_ROOT  # noqa: E402 — 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
 from common.core.terms import ID_LIKE, _aliases, match_clients, modalities, norm  # noqa: E402 — 고객·어휘 규칙(구조화와 같게, DT1 c1: 용어집 modality_code 우선)
@@ -47,19 +43,6 @@ from mcp_server import config as mc  # noqa: E402 — 설정 객체(mcp 칸 — 
 from mcp_server.services.search import clientscope as CS  # noqa: E402 — BR50(D) 고객 범위 단일 규칙(local.py·pgsearch.py·retriever.py·mcp_server.py와 공용)
 from mcp_server.services.search import supersede as SS  # noqa: E402 — AR4② 대체판 판정 단일 규칙
 from mcp_server.services.search.structdb import find_table_row  # noqa: E402 — 10-14 함수별 분리로 이전
-
-_AGG_LLM_PROMPT = _load_prompt("agg_llm_route", "classify")  # 글자: dev/agents/agg_llm_route/prompts/classify.md
-_SQLISH_RE = re.compile(r";|--|/\*|\b(select|insert|update|delete|drop|union|exec|alter|create\s+table)\b", re.I)
-# ↑ R1 방어(AD42·AD45②) — LLM 응답이 JSON 틀을 지키면서도 값 안에 SQL처럼 보이는 글자를 넣으면(예: clients에 "; DROP TABLE")
-#   전체 응답을 거부하고 검색으로 폴백한다. _apply()는 어차피 SQL을 실행하지 않지만, 이 값들이 나중에 문맥 표시로 그대로
-#   노출될 수 있어 이중 방어.
-
-
-def agg_llm_on():
-    """R1(AD42·AD45②) SEARCH_AGG_LLM(기본 끔, =1로 켬 — AR3 10-12) — 단일 읽기 지점(mcp_server._agg_llm_complete도 이 함수를 씀)."""
-    # AR3(10-12 실모델 측정): 규칙만 오분류 0/8 · 규칙+LLM 2/8(BR16 오분류 재현)·새로 맞힌 것 0·질문당 ≈6초 → 기본 끔, =1로 켬
-    return mc.cfg().search.agg.llm  # S7d — 설정 객체(켜기 칸 on=("1",) = 옛 == "1")
-
 
 NOID_RE = re.compile(r"계약\s*(id|아이디|번호)(?=[^.?!]{0,20}(없|안\s|않))|no\s+contract\s+id", re.I)
 # ↑ '계약 ID가 없는' 뿐 아니라 '계약 ID가 적혀 있지 않은'·'계약 번호를 안 적은'처럼 부정어가 뒤에 떨어져 나오는 표현도 잡음(AD45③, 창 20자) — 그 안에 '없/안 /않'이 없으면 안 걸림(오탐 방지)
@@ -436,145 +419,15 @@ def run(question, docs, facts_of=None, aliases=None):
     return _apply(p, docs, facts_of)
 
 
-# R1 LLM을 부를 만한 질문인지(값싼 1차 거름) — qtype보다 넓게: regex detect()가 놓친 표현("딜 숫자를 알려줄래", "몇 배치")도
-# 잡되 "~ 단가는?" 같은 일반 질문엔 LLM을 안 부름. ponytail: 단어 목록 — 놓치는 표현이 보이면 여기에 추가.
-AGG_CUE_RE = re.compile(
-    r"숫자|몇|건수|개수|수량|합계|총|금액|규모|얼마|평균|최대|최소|가장\s*많|목록|리스트|전부|모두|"
-    r"how\s+many|number\s+of|total|sum|count|average|list",
-    re.I,
-)
-
-
-def route(question, docs, facts_of=None, aliases=None, llm_complete=None):
-    """detect() 정규식 우선 — 못 걸리면(SEARCH_AGG_LLM 기본 끔·=1로 켬 + llm_complete 주입 + 질문 유형이 집계·목록일 때만) R1 LLM 경계 분류·인자 추출(AD42·
-    AD45②)로 한 번 더 시도, 그래도 못 걸리거나 거부되면 None(호출자가 검색으로 폴백). llm_complete(prompt:str)->str
-    는 호출자가 만든다(common/llm.py 등 — 이 모듈은 LLM 클라이언트를 모름, decompose.split_question과 같은 주입 방식).
-    결과는 detect() 경로와 같은 모양 + LLM 경로만 result["via"]="aggregate_llm"(regex 경로는 그 칸이 아예 없음 —
-    mcp_server.py가 via="aggregate"로 기본값)."""
+def route(question, docs, facts_of=None, aliases=None):
+    """detect() 정규식으로 집계 계획을 세워 _apply() — 못 걸리면 None(호출자가 검색으로 폴백)."""
     clients, contracts = {d.get("client") for d in docs}, {d.get("contract_no") for d in docs}
     p = detect(question, clients, contracts, aliases)
-    if p:
-        return _apply(p, docs, facts_of)
-    if not agg_llm_on() or llm_complete is None:
-        return None
-    if not AGG_CUE_RE.search(question or ""):  # 수·합계·목록을 묻는 단서가 있는 질문만 LLM — 집계 경로가 모든 검색
-        return None  # 질문을 여기로 보내므로, 안 그러면 일반 질문마다 LLM 1회(지연·토큰 — OP11 검토)
-    p = llm_plan(question, clients, contracts, aliases, llm_complete)
-    if not p:
-        return None
-    out = _apply(p, docs, facts_of)
-    if out is not None:
-        out["via"] = "aggregate_llm"
-    return out
-
-
-def llm_plan(question, clients, contracts, aliases, llm_complete):
-    """R1 LLM 분류·인자 추출(AD42·AD45②) — JSON 1회 호출, 성공하면 detect()와 같은 모양의 plan dict, 그 외(JSON
-    깨짐·route!=aggregate·확신 미달·모르는 고객/계약/모달리티·window 날짜 형식 오류·지표 전부 거짓·고객·계약 둘 다
-    없음·SQL처럼 보이는 글자) 전부 None — **자유 SQL 생성 없음**: 출력은 고정 필드(want_count/amount/batches·
-    clients·contract·window·modalities·group·listing)뿐이고 이미 있는 집계 틀(_apply)이 그대로 계산한다."""
-    today = _today().isoformat()
-    known_clients = sorted(c for c in clients if c)
-    known_mods = sorted(set(modalities().values()))
-    cat = _catalog_note(
-        "contract_master",
-        ["contract_id", "company", "product_code", "modality", "batches_contracted", "contract_value_usd", "currency", "signed_on"],
-    )
-    prompt = _AGG_LLM_PROMPT.format(
-        clients=", ".join(known_clients) or "(없음)", modalities=", ".join(known_mods), today=today, catalog_note=cat, question=question
-    )
-    try:
-        raw = llm_complete(prompt)
-    except Exception:
-        return None
-    if _SQLISH_RE.search(raw or ""):
-        return None
-    m = re.search(r"\{.*\}", raw or "", re.S)
-    if not m:
-        return None
-    try:
-        d = json.loads(m.group())
-    except (json.JSONDecodeError, AttributeError):
-        return None
-    if not isinstance(d, dict) or d.get("route") != "aggregate":
-        return None
-    try:
-        conf = float(d.get("confidence"))
-    except (TypeError, ValueError):
-        return None
-    min_conf = mc.cfg().search.agg.llm_min  # S7d — 설정 객체
-    if conf < min_conf:
-        return None
-    want_count, want_amount, want_batches = bool(d.get("want_count")), bool(d.get("want_amount")), bool(d.get("want_batches"))
-    if not (want_count or want_amount or want_batches):
-        return None
-    raw_clients = d.get("clients")
-    if not isinstance(raw_clients, list):
-        return None
-    cls = []
-    for c in raw_clients:
-        if not isinstance(c, str):
-            return None
-        hit = match_clients(c, clients, aliases)  # 명부·별칭으로 확인 — 못 찾으면 거부(지어낸 고객 방지)
-        if not hit:
-            return None
-        cls.extend(hit)
-    cls = sorted(set(cls))
-    contract = d.get("contract")
-    if contract is not None:
-        if not isinstance(contract, str) or contract not in contracts:
-            return None  # 알려진 계약 ID가 아니면 거부(지어낸 계약 ID 방지)
-    if not (cls or contract):
-        return None  # 둘 다 없으면 어느 범위인지 모름 — 집계 틀을 못 고름
-    raw_mods = d.get("modalities")
-    if not isinstance(raw_mods, list):
-        return None
-    known_mod_set = set(modalities().values())
-    for mo in raw_mods:
-        if mo not in known_mod_set:
-            return None  # 카탈로그 밖 제품 종류 — 거부
-    window = d.get("window")
-    win = None
-    if window is not None:
-        if not isinstance(window, dict) or "start" not in window or "end" not in window:
-            return None
-        try:
-            lo, hi = dt.date.fromisoformat(window["start"]), dt.date.fromisoformat(window["end"])
-        except (TypeError, ValueError):
-            return None
-        if lo > hi:
-            return None
-        win = (window["start"], window["end"])
-    group = d.get("group")
-    if group not in (None, "modality", "client"):
-        return None
-    p = {
-        "clients": cls,
-        "contract": contract,
-        "window": win,
-        "modalities": sorted(set(raw_mods)),
-        "count": want_count,
-        "amount": want_amount,
-        "batches": want_batches,
-        "exclude_years": None,
-        "group": group,
-        "listing": bool(d.get("listing")),
-    }
-    p["kind"] = (
-        "table"
-        if (p["group"] or p["listing"])
-        else "amount"
-        if want_amount and not want_count
-        else "batches"
-        if want_batches and not (want_count or want_amount)
-        else "count"
-    )
-    p["target"] = {"contract": contract} if contract else ({"client": cls[0]} if len(cls) == 1 else {"clients": cls})
-    return p
+    return _apply(p, docs, facts_of) if p else None
 
 
 def _apply(p, docs, facts_of=None):
-    """detect()(또는 llm_plan())가 돌려준 plan dict p → 집계 결과(run()·route() 공용 엔진, 자유 SQL 없음)."""
+    """detect()가 돌려준 plan dict p → 집계 결과(run()·route() 공용 엔진, 자유 SQL 없음)."""
     recs = records(docs)
     tgt = p["target"]
     if tgt.get("contract"):
@@ -677,9 +530,8 @@ def _apply(p, docs, facts_of=None):
     return out
 
 
-def local(bundle, question, llm_complete=None, hidden=None, client=None, client_strict=False):
-    """로컬 묶음(docs.jsonl · facts.jsonl · chunks.jsonl)으로 집계. llm_complete(R1, AD42·AD45②): detect()가 못
-    걸렀을 때 route()가 쓸 LLM 콜백(주입 안 하면 또는 SEARCH_AGG_LLM 꺼지면 지금처럼 regex 결과만).
+def local(bundle, question, hidden=None, client=None, client_strict=False):
+    """로컬 묶음(docs.jsonl · facts.jsonl · chunks.jsonl)으로 집계.
     hidden(OP1, 독립 검토 BLOCK 반영) = 숨길 doc_key(file_sha256) 집합 — route()에 넘기기 전에 docs에서 뺌(건수·
     합계·표에서 공용 제외, None·빈 집합이면 전과 바이트 동일). facts의 "doc" 색인은 원래 docs.jsonl 순서 그대로라
     _i를 거르기 전에 매겨 둠(거른 뒤에도 by_doc 조회가 안 깨짐).
@@ -699,7 +551,7 @@ def local(bundle, question, llm_complete=None, hidden=None, client=None, client_
     for f in facts:
         ch = chunks[f["chunk"]] if f.get("chunk") is not None else None
         by_doc.setdefault(f["doc"], []).append({**f, "page": ch and ch["page"], "line": ch and ch["line_start"]})
-    return route(question, docs, lambda d: by_doc.get(d["_i"], []), llm_complete=llm_complete)
+    return route(question, docs, lambda d: by_doc.get(d["_i"], []))
 
 
 def doc_link_question(question):

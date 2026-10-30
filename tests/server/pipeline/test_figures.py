@@ -334,8 +334,7 @@ def selftest_select():
 
 def selftest_kind():
     """AD10 — classify_figure_kind() 순수 분류(모델 호출 없음) + build_records 연동(기본은 분류만 기록하고 VLM은
-    그대로 호출 — engine-qa BLOCK 10-08 ②: text_image "VLM 생략"은 실 글자 이미지 표본으로 검증 전까지
-    VLM_FIG_TEXT_SKIP=1일 때만, photo는 vlm_fig 출력 상한만 낮춤)."""
+    그대로 호출 — engine-qa BLOCK 10-08 ②, photo는 vlm_fig 출력 상한만 낮춤)."""
     assert classify_figure_kind({"loc": {"signals": {"bars": 4, "curve_diag_arrow": 0}}}) == "chart"
     assert classify_figure_kind({"loc": {"signals": {"bars": 0, "curve_diag_arrow": 4}}}) == "flow"
     assert classify_figure_kind({"loc": {"signals": {"bars": 1, "curve_diag_arrow": 1}}}) == "other"  # 약한 신호 — 안전하게 other
@@ -376,21 +375,12 @@ def selftest_kind():
         VLM_BASE_URL=None,
     )
     try:
-        # 기본(VLM_FIG_TEXT_SKIP 꺼짐) — text_image도 "종류만 기록"하고 VLM은 그대로 호출(engine-qa BLOCK ②)
+        # text_image도 "종류만 기록"하고 VLM은 그대로 호출(engine-qa BLOCK ②)
         recs0, _, _ = build_records("kind.docx", path, "", "docsha_kind", ocr_fn=fake_ocr)
         by_i0 = {r["image_id"].rsplit("#i", 1)[1]: r for r in recs0}
         assert by_i0["1"]["provenance"]["fig_kind"] == "text_image" and by_i0["1"]["vlm_error"] and "미설정" in by_i0["1"]["vlm_error"]
         assert by_i0["2"]["provenance"]["fig_kind"] == "photo" and by_i0["2"]["vlm_error"] and "미설정" in by_i0["2"]["vlm_error"]
-        print("[selftest] AD10 — 기본값(VLM_FIG_TEXT_SKIP=0)은 text_image도 분류만 기록, VLM은 그대로 호출 통과")
-
-        # VLM_FIG_TEXT_SKIP=1 — 그때만 text_image가 실제로 VLM을 생략(crop OCR 글자만)
-        _env.enter_context(_senv(VLM_FIG_TEXT_SKIP="1"))
-        recs, _, _ = build_records("kind.docx", path, "", "docsha_kind", ocr_fn=fake_ocr)
-        by_i = {r["image_id"].rsplit("#i", 1)[1]: r for r in recs}
-        assert by_i["1"]["kind"] == "text_image" and by_i["1"]["vlm"]["text"] == "가" * 250
-        assert by_i["1"]["vlm_error"] is None  # VLM 생략 — 미설정 오류 안 남음(호출 자체가 없음)
-        assert by_i["2"]["vlm_error"] and "미설정" in by_i["2"]["vlm_error"]  # photo는 기본 켬 — vlm_fig는 호출(출력 상한만 다름)
-        print("[selftest] AD10 — VLM_FIG_TEXT_SKIP=1이면 text_image는 VLM 생략(crop OCR만)·photo는 vlm_fig 호출(출력 상한만 변경) 통과")
+        print("[selftest] AD10 — text_image도 분류만 기록, VLM은 그대로 호출 통과")
 
         # 종류와 무관하게 기존 VLM 캐시(모델·prompt_id·그림 sha)가 그대로 재사용되는지 — photo로 분류돼도(max_tokens=300)
         # 전체 캐시(FULL_VERSION)가 있으면 호출 0으로 그 내용을 그대로 돌려준다(지시문 글자·prompt_id를 안 바꿨기 때문)

@@ -260,7 +260,6 @@ pipeline:
       max_n: 10  # [파라미터] 문서 하나에서 처리할 첨부 개수 상한(개) · 기본 10 · 값: 0 이상 정수 · env=ATTACH_MAX_N
       timeout: 120.0  # 첨부 1개를 별도 프로세스로 파싱할 때 제한 시간(초) · 기본 120.0 · 값: 0 이상 초 · env=ATTACH_TIMEOUT
     cache:
-      keep_local_originals: false  # 내려받은 원본을 파싱 뒤에도 지우지 않고 남길지(=1 보관, 디버그·샘플용) · 기본 false · 값: true·false · env=KEEP_LOCAL_ORIGINALS [켬: 1만]
       parse_cache_max_gb: 5.0  # 재판독 중간 캐시 3종 합계 용량 상한(GB, 넘으면 오래된 것부터 삭제, 0=끔) · 기본 5.0 · 값: 0 이상 (0 = 끔) · env=PARSE_CACHE_MAX_GB
       parse_keep_max_gb:  # 보존 폴더(KEEP_LOCAL_ORIGINALS=1) 용량 상한(GB, 넘으면 보존 포기·즉시 삭제) · 기본 없음 · 값: 0 이상 · env=PARSE_KEEP_MAX_GB
       parse_tmp_max_gb: 0.0  # PARSE_TMP 사용량 상한(GB, 넘으면 다음 묶음 받기 전 대기, 0=제한 없음) · 기본 0.0 · 값: 0 이상 (0 = 제한 없음) · env=PARSE_TMP_MAX_GB
@@ -297,14 +296,12 @@ pipeline:
       post:  # [파라미터] 후보정 기능 선택: all(전부)|none(끔)|콤마 목록(vlm_page,supsub,charts,figures,context,attachments) — 없으면 자리마다 다름(파이프라인 all · parse MCP 서비스 supsub), 빈 값은 끔(옛 get(X, 'all')의 '' — blank keep) · 쓴 글자 그대로 rep.post.config에 남음(YAML 목록은 쉼표로 이음 — S7c2) · 기본 없음 · 값: all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments) · env=PARSE_POST [빈 글자 유지] [서버 옛 값: all]
       qa_light: false  # =1이면 native 대비 풀문서 CER·순서 비교를 생략(경량화) · 기본 false · 값: true·false · env=PARSE_QA_LIGHT [켬: 1만]
       rep_select:  # [파라미터] 대표 엔진 선택 방식: first(첫 성공 엔진)|acc(정확도만)|그 외 best(정확도+풍부도) · 기본 없음 · 값: first·acc·best 중 하나(그 밖 값 = best) · env=PARSE_REP_SELECT
-      shadow: false  # 그림자 모드(파싱 판단 규칙 vs LLM 제안 비교)를 켬(=1이면 켬) · 기본 false · 값: true·false · env=PARSE_SHADOW [끔: ''·0·none·false]
       shadow_max: 50  # 그림자 모드 한 번에 훑는 문서 수 상한 · 기본 50 · 값: 0 이상 정수 · env=PARSE_SHADOW_MAX
     structure:
       chunk_overlap: 64  # [파라미터] 고정 길이 청커(chunk_fixed512)의 청크 간 겹침 글자 수 · 기본 64 · 값: 0 이상 정수 · env=CHUNK_OVERLAP
       chunk_size:  # [파라미터] 청크 목표 길이(글자) — 청커별 기본이 다름 · 기본 없음 · 값: 0 이상 정수 · env=CHUNK_SIZE
       chunk_table:  # [파라미터] 'rows'이면 큰 표를 행 묶음 단위로 쪼갬(그 외 값·미설정은 표를 통째로 둠) · 기본 없음 · 값: rows 또는 비움(표 통째로) · env=CHUNK_TABLE
       chunk_table_rows: 25  # [파라미터] 표를 쪼갤 때 청크당 행 수(CHUNK_TABLE=rows일 때만) · 기본 25 · 값: 0 이상 정수 · env=CHUNK_TABLE_ROWS
-      edw_summary_llm: false  # =1이면 묶음 요약을 LLM으로 생성(--summary auto일 때만, 기본은 앞부분 발췌) · 기본 false · 값: true·false · env=EDW_SUMMARY_LLM [켬: 1만]
       embed:  # [파라미터] 구조화·적재에 쓸 임베딩 방식(api 등, none이면 임베딩 없음 — 이미지 안 기본 api: 옛 Dockerfile ENV, B-2) · 기본 없음 · 값: api·bge-m3·e5-small·e5-base·none 중 하나 · env=PIPE_EMBED
       embed_batch: 32  # 임베딩 API 한 번에 보내는 청크 수 · 기본 32 · 값: 0 이상 정수 · env=EMBED_BATCH
       embed_cache:  # 임베딩 캐시 sqlite 경로(0 또는 빈 값이면 캐시 끔) · 기본 없음 · 값: 경로 · env=EMBED_CACHE
@@ -320,7 +317,6 @@ pipeline:
       fig_photo_max_tokens: 300  # [파라미터] 사진류 그림 VLM 응답 최대 토큰 수(한 줄 요약 유도) · 기본 300 · 값: 0 이상 정수 · env=VLM_FIG_PHOTO_MAX_TOKENS
       fig_photo_ocr_max: 5  # [파라미터] crop OCR 글자 수가 이 값 이하(+면적 충분)이면 사진류로 분류 · 기본 5 · 값: 0 이상 정수 · env=VLM_FIG_PHOTO_OCR_MAX
       fig_text_ocr_min: 200  # [파라미터] crop OCR 글자 수(공백 제외)가 이 값 이상이면 글자 이미지(text_image)로 분류 · 기본 200 · 값: 0 이상 정수 · env=VLM_FIG_TEXT_OCR_MIN
-      fig_text_skip: false  # =1이면 글자 이미지(text_image)로 분류된 그림은 VLM 호출 생략 · 기본 false · 값: true·false · env=VLM_FIG_TEXT_SKIP [끔: 0만]
       figures_max: 20  # [파라미터] 문서당 VLM에 보낼 그림 수 상한(0이면 VLM 안 부름) · 기본 20 · 값: 0 이상 정수 (0 = VLM 안 부름) · env=VLM_FIGURES_MAX
       global_concurrency: 12  # 모든 VLM 호출의 전역 동시 실행 수 합 상한 · 기본 12 · 값: 0 이상 정수 · env=VLM_GLOBAL_CONCURRENCY
       page_concurrency:  # 쪽 VLM 병렬 워커 수 최대값 · 기본 없음 · 값: 0 이상 정수 · env=VLM_PAGE_CONCURRENCY
@@ -329,7 +325,6 @@ pipeline:
       page_slow: 60.0  # 쪽 VLM 호출이 이 시간(초) 넘으면 다음 배치 병렬 수를 줄임 · 기본 60.0 · 값: 0 이상 초 · env=VLM_PAGE_SLOW
   # ─── 6. load — 적재·게시 ───
   load:
-    bm25_stat_rebuild: false  # 적재 때 키워드 문서 빈도를 전체 다시 셈 — 1이면 켬 · 기본 false · 값: true·false · env=BM25_STAT_REBUILD [켬: 1만]
     bm25_threads: 4  # BM25 항목(term,tf) 계산 병렬 스레드 수(개) · 기본 4 · 값: 0 이상 정수 · env=BM25_THREADS
     edw_path_prefix:  # 저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치) · 기본 없음 · 값: 경로 · env=EDW_PATH_PREFIX
     index_lock_stale_sec: 21600.0  # 색인 빌드 잠금 파일을 죽은 빌드로 보고 회수하는 경과 시간(초) · 기본 21600.0 · 값: 0 이상 초 · env=INDEX_LOCK_STALE_SEC
@@ -446,9 +441,7 @@ mcp:
     min_score:  # [파라미터] 근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak · 기본 없음 · 값: 0 이상 · env=SEARCH_MIN_SCORE
     struct_context_max: 200  # [파라미터] 집계 질문에서 계약 마스터 전체를 표로 넘길 때 계약 수 상한(개) · 기본 200 · 값: 0 이상 정수 · env=STRUCT_CONTEXT_MAX
     agg:
-      llm: false  # 집계 질문 분류에 LLM 경계 분류 사용 — 1이면 켬(기본 끔) · 기본 false · 값: true·false · env=SEARCH_AGG_LLM [켬: 1만]
       llm_min: 0.6  # [파라미터] 집계 LLM 분류 확신도 하한(0~1) — 미달이면 검색으로 폴백 · 기본 0.6 · 값: 0~1 · env=SEARCH_AGG_LLM_MIN
-      llm_timeout: 8.0  # 집계 LLM 분류 호출 시간 상한(초) · 기본 8.0 · 값: 0 이상 초 · env=SEARCH_AGG_LLM_TIMEOUT
       text_max_rows: 30  # 집계 근거 text에 붙이는 표 행 상한(개) · 기본 30 · 값: 0 이상 정수 · env=SEARCH_AGG_TEXT_MAX_ROWS
       text_max_src_rows: 40  # 계약별 근거 행 상한(개) · 기본 40 · 값: 0 이상 정수 · env=SEARCH_AGG_TEXT_MAX_SRC_ROWS
     client:

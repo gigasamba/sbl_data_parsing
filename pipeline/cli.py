@@ -129,9 +129,7 @@ def night(a):
     vlm_conc = RS.vlm_page_concurrency(a.workers, a.vlm_concurrency)  # 문서 동시 수 × 쪽 동시 수가 VLM_MAX_CONCURRENCY를 넘지 않게
     from common.core.paths import child_env
 
-    night_names = dict(
-        VLM_CONCURRENCY=str(vlm_conc), EDW_SUMMARY_LLM="0", LLM_BASE_URL=None
-    )  # 야간 배치에서는 LLM 호출 차단(그래프·요약·답변 모두)
+    night_names = dict(VLM_CONCURRENCY=str(vlm_conc), LLM_BASE_URL=None)  # 야간 배치에서는 LLM 호출 차단(그래프·답변 모두)
     env = C.child_env(child_env(), **night_names)  # 설정 이름은 덮기 파일로(S7e3 B-1 — env dict의 설정 이름은 자식이 안 읽음)
     log, t0 = [], time.time()
     stopped = None
@@ -806,9 +804,7 @@ def structure_module(a):
         raise SystemExit(3)
     from common.core.paths import child_env
 
-    env = C.child_env(
-        child_env(), **({"EDW_SUMMARY_LLM": "0"} if a.deadline else {})
-    )  # 새벽 배치(마감 지정)면 LLM 요약 안 함 — night와 같게(덮기 파일 — S7e3 B-1)
+    env = child_env()
     args = [
         "pipeline.transform.structure.build_bundle",
         "--src",

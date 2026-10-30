@@ -34,29 +34,8 @@ def do_aggregate(question, client=None):
 
     allowed, strict, hard = CS.client_scope(question, client, R.clients())
     cl_kw = {"client": allowed, "client_strict": strict} if hard else {}
-    llm_complete = _agg_llm_complete()  # R1(AD42·AD45②) — SEARCH_AGG_LLM=1이고 LLM 설정됐을 때만(아니면 None)
-    r = AG.local(
-        _STATE["bundle"], question, llm_complete=llm_complete, hidden=R.hidden, **cl_kw
-    )  # OP1 — 숨김 문서는 집계(건수·합계·표)에서도 제외
+    r = AG.local(_STATE["bundle"], question, hidden=R.hidden, **cl_kw)  # OP1 — 숨김 문서는 집계(건수·합계·표)에서도 제외
     return r or {"note": "집계 질문으로 판별되지 않음(건수·합계·표) — search를 쓰세요"}
-
-
-def _agg_llm_complete():
-    """R1(AD42·AD45②) — SEARCH_AGG_LLM(기본 끔, =1로 켬 — AR3 10-12)이고 LLM이 설정돼 있을 때만 aggregate.route()에 줄 콜백을 만든다(아니면 None
-    → route()가 조용히 regex 결과만 씀, 꺼짐이면 완전히 지금과 같음 · LLM 미설정이면 여기서 조용히 None — 외부 호출 없음).
-    gamma 패키지 agg_llm_route 경유(GA2, agent= 필수) — decompose.split_question에 L.chat을 주입하는 것과 같은 방식(mcp_server.py do_search)."""
-    from mcp_server.services.search.aggregate import agg_llm_on  # 단일 읽기 지점(aggregate.route()와 공용)
-
-    if not agg_llm_on():
-        return None
-    from common.ai import llm as L
-
-    if not L.configured():
-        return None
-    tmo = mc.cfg().search.agg.llm_timeout  # MCP p95 3초 목표(OP8) — 검색 경로라 짧게, 넘으면 검색으로 폴백(OP11 검토)
-    return lambda p: L.chat(
-        [{"role": "user", "content": p}], temperature=0.0, max_tokens=500, json_mode=True, agent="agg_llm_route", timeout=tmo
-    )
 
 
 def _manifest_by_name():

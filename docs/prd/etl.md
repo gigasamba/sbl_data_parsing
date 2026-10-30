@@ -27,7 +27,7 @@
 <a id="pl-06"></a>
 ## pl-06 · 구조화 — 청크·메타데이터·임베딩
 - 이유: 검색에는 출처가 달린 청크와 메타데이터가 필요하다.
-- 무엇: 청크 나누기 structure(기본, 800자, 제목, 표는 통째) / fixed 512+64 / sentence / page, 큰 표는 25행씩. 요약(`EDW_SUMMARY_LLM=1`이면 LLM, 아니면 앞부분 — OpenViking 요약은 10-29에 지움). 사실(제품, 모달리티, 날짜, 단가, 금액, 통화, 배치). 고객·계약은 교차 확인된 것만 남긴다. 규칙 기반 지식 그래프(묶음에는 만들지만 PG에는 더 적재하지 않음 — [mcp.md#mc-12](mcp.md#mc-12)). 임베딩은 로컬(e5, bge-m3) 또는 내부 `api`.
+- 무엇: 청크 나누기 structure(기본, 800자, 제목, 표는 통째) / fixed 512+64 / sentence / page, 큰 표는 25행씩. 요약(앞부분 발췌 — OpenViking 요약은 10-29, LLM 요약은 op-08에 지움). 사실(제품, 모달리티, 날짜, 단가, 금액, 통화, 배치). 고객·계약은 교차 확인된 것만 남긴다. 규칙 기반 지식 그래프(묶음에는 만들지만 PG에는 더 적재하지 않음 — [mcp.md#mc-12](mcp.md#mc-12)). 임베딩은 로컬(e5, bge-m3) 또는 내부 `api`.
 - 파일: `pipeline/transform/structure/build_bundle.py`, `chunking.py`, `facts.py`, `draft_terms.py`, `common/ai/embed.py`.
 - Status: done
 
@@ -332,7 +332,6 @@
 | 기능 | 스위치 = 기본값 | 필요한 것 |
 |---|---|---|
 | 큰 표를 행으로 나누기 | `CHUNK_TABLE` 비움(표는 통째) | — |
-| LLM 요약 | `EDW_SUMMARY_LLM=0`(앞부분) | LLM |
 | 임베딩 | 이미지 기본 `PIPE_EMBED=api` | `EMBED_BASE_URL`, `EMBED_MODEL` |
 | Object Storage + `AI.ParsingMeta` 게시 | `night`, run_docs, 이미지 `publish` 단계에서 기본 실행(모두 `--apply`, `NIGHTLY_PUBLISH=1`) | `PM_BUCKET`, `common.connections.rdb` 쓰기 계정(`PM_BUCKET` 없으면 종료) |
 | 밤 일정 | `NIGHTLY_TIME` 비움 | 시각(HH:MM) |

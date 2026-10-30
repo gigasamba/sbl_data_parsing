@@ -152,7 +152,6 @@
 |---|---|---|
 | 하드 고객 격리 | `SEARCH_CLIENT_HARD=0`, `SEARCH_CLIENT_STRICT=0` | — |
 | 늘 새 판 먼저 | `SEARCH_RECENCY=1`("최신" 질문만, `2` = 늘) | — |
-| 애매한 집계용 LLM 라우터 | `SEARCH_AGG_LLM=0` | LLM |
 | `query_edw` | `EDW_QUERY=1` | `common.connections.rdb` + 읽기 계정, 또는 `RDB_SQLITE` |
 | `edw_meta` | — | `EDW_META_DIR`의 자료(기본 `/app/config/edw_meta`) |
 | `parse_document` | `PARSE_OCR_ENGINE=0`(OCR/VLM 엔진 없음 — `PARSE_MCP_OCR`은 10-29에 합침) · 제한 글자 쪽당 1초, VLM 쪽당 60초 | `mcp_parse_service` 실행 + `PARSE_SERVICE_TOKEN` |
