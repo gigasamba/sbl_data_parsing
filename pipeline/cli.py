@@ -21,6 +21,7 @@ from common.core.console import utf8_stdout
 
 # isort: split
 import argparse
+import contextlib
 import json
 import os
 import subprocess
@@ -53,15 +54,49 @@ def _stack():
     return _STACK["v"]
 
 
+TRACED_COMMANDS = (
+    "parse",
+    "structure",
+    "load",
+    "night",
+    "run-stack",
+    "compare-parse",
+    "compare-all",
+)  # 성능 추적(op-01) 대상 — 문서를 처리하는 명령
+
+
+def _traced(module, call):
+    """하위 프로세스 1개 = proc.run span(op-01) — 자식이 이어받는 parent span이 되고, 메모리·CPU 문 대기가 이 span에 쌓임.
+    call()은 종료 코드(마감으로 끝냈으면 None)를 돌려준다."""
+    from common.core.span import span
+
+    with span("proc.run", "run", module=module) as sp:
+        rc = call()
+        sp.add(rc=-1 if rc is None else rc)
+        if rc is None:
+            sp.result("timeout", "timeout", "마감 시각 도달")
+        elif rc:
+            sp.result("fail", None, f"종료 코드 {rc}")
+        return rc
+
+
+def _trace_info(a, st=None):
+    """pipe_run 종료 행에 스택 이름·동시 문서 수를 보탬(op-01)."""
+    from pipeline.shared import runtrace
+
+    workers = getattr(a, "workers", None)
+    runtrace.info(stack=(st or {}).get("name"), workers=int(workers) if str(workers).isdigit() else None)
+
+
 def sh(module, *args, check=True):
     cmd = [PY, "-m", module, *map(str, args)]
     print("$ " + " ".join(cmd), flush=True)
     from common.core import resources as RS
     from common.core.paths import child_env
 
-    rc = RS.gated_popen(
-        cmd, cwd=APP_ROOT, env=child_env()
-    ).wait()  # child_env() — PYTHONPATH(deploy/)로 `-m data_pipeline.x.y` 해석 보장 · cwd=APP_ROOT(런타임 루트) — ROOT(data_pipeline/ 코드 루트)로 하면 --src 상대경로가 거기 기준으로 풀려 못 찾음(FS v4 회귀)
+    rc = _traced(
+        module, lambda: RS.gated_popen(cmd, cwd=APP_ROOT, env=child_env()).wait()
+    )  # child_env() — PYTHONPATH(deploy/)로 `-m data_pipeline.x.y` 해석 보장 · cwd=APP_ROOT(런타임 루트) — ROOT(data_pipeline/ 코드 루트)로 하면 --src 상대경로가 거기 기준으로 풀려 못 찾음(FS v4 회귀)
     if check and rc:
         raise SystemExit(f"실패({rc}): {' '.join(cmd)}")
     return rc
@@ -99,12 +134,15 @@ def _run_until(args, env, sec):
     from common.core import resources as RS
     from pipeline.extract import resources as PR  # 프로세스 묶음(OS 분기 한 곳)
 
-    p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **PR.group_kw())  # cwd=APP_ROOT(런타임 루트) — sh()와 같은 이유
-    try:
-        return p.wait(timeout=max(1, sec))
-    except subprocess.TimeoutExpired:
-        PR.kill_group(p)
-        return None
+    def call():
+        p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **PR.group_kw())  # cwd=APP_ROOT(런타임 루트) — sh()와 같은 이유
+        try:
+            return p.wait(timeout=max(1, sec))
+        except subprocess.TimeoutExpired:
+            PR.kill_group(p)
+            return None
+
+    return _traced(str(args[0]), call)
 
 
 def night(a):
@@ -115,6 +153,7 @@ def night(a):
     단일 컨테이너·Docker 밖 직접 실행(AGENTS.md 지시표·requirements.md S8 cron 예시)에서 쓰임, 호출처 있음(삭제 대상 아님)."""
     connect(a)
     st = _stack()[1]
+    _trace_info(a, st)
     engines = a.engines or ",".join(_engines_of(st))
     _set_engine_scope_default(a.engines)  # PE1 — night도 생산 경로(서버 entrypoint full)라 같은 기본
     from common.core import resources as RS
@@ -515,9 +554,12 @@ def load_tables_db(env=None):
         from common.core import resources as RS
         from common.core.paths import child_env
 
-        rc = RS.gated_popen(
-            [PY, "-m", "pipeline.load.structured", "tables", "--rep", str(rep)], cwd=APP_ROOT, env=env or child_env()
-        ).wait()  # child_env() — PYTHONPATH(deploy/) 보장(env=None 기본 호출 포함) · cwd=APP_ROOT — 위 sh()와 같은 이유
+        rc = _traced(
+            "pipeline.load.structured",
+            lambda: RS.gated_popen(
+                [PY, "-m", "pipeline.load.structured", "tables", "--rep", str(rep)], cwd=APP_ROOT, env=env or child_env()
+            ).wait(),
+        )  # child_env() — PYTHONPATH(deploy/) 보장(env=None 기본 호출 포함) · cwd=APP_ROOT — 위 sh()와 같은 이유
         print(
             f"[tables] doc_table·doc_cell 적재(AD23) — 종료 코드 {rc}" + ("" if rc == 0 else " (집계·검색은 그대로, 표 칸 질문만 영향)"),
             flush=True,
@@ -609,6 +651,23 @@ def _tdone():
     return " · ".join(parts)
 
 
+def _trace_docs_parse(idx, run_id):
+    """pipe_run 문서 수(op-01) — 대표 결과가 있는 문서 = ok, 이번 run_id로 엔진을 돌린 기록이 없는 문서 = 재사용(runs.jsonl). 실패해도 파싱은 계속."""
+    from pipeline.shared import runtrace
+
+    ok = sum(1 for r in idx if r.get("engine"))
+    reused = None
+    try:
+        ran = set()
+        for line in (OUT / "parse" / "runs.jsonl").read_text(encoding="utf-8").splitlines():
+            if f'"run_id": "{run_id}"' in line:
+                ran.add(json.loads(line).get("doc"))
+        reused = sum(1 for r in idx if r.get("doc") not in ran)
+    except (OSError, ValueError):
+        pass
+    runtrace.docs(total=len(idx), ok=ok, fail=len(idx) - ok, reused=reused)
+
+
 def parse_module(a):
     """파싱 모듈: (--source면) 가져오기·시험 표본 → 중복 확인 → 방향 보정 → 파싱 → 채점 → 대표 결과 → 끝 표시 → (s3) 원본 정리.
     임베딩·DB 연결 없음 — 수집 서버에 이것만 보낼 수 있음. --source 없으면 --src(이미 준비된 폴더)를 그대로."""
@@ -622,6 +681,7 @@ def parse_module(a):
         run_id  # env 남김 — 하위 프로세스·엔진에 넘김 · 이후 모든 하위 호출(dedup·prepare·run_all·streaming)이 os.environ 상속으로 받음
     )
     st = _stack()[1]
+    _trace_info(a, st)
     engines = a.engines or ",".join(_engines_of(st))
     _set_engine_scope_default(a.engines)  # PE1(2026-10-07) — 생산 기본 stack(무거움 해소), 명시 --engines·실험 경로는 영향 없음
     parallel = bool(a.source) and pc.cfg().extract.parallel.pipeline  # OP26 — 문서 단위 받기→파싱→게시→삭제를 N명이 동시에
@@ -717,6 +777,7 @@ def parse_module(a):
 
     print(f"[docflow-step] {_tdone()}", flush=True)  # 2026-10-22 — resolve~represent까지 docflow 기타 분해 로그
     idx = json.loads((OUT / "parse" / "_rep" / "index.json").read_text(encoding="utf-8"))["docs"]
+    _trace_docs_parse(idx, run_id)
     core = [{k: v for k, v in r.items() if k != "tried"} for r in idx]  # 시도 기록(시각)은 빼고 대표 결과만 비교
     content = []  # GH1-05 — core는 chars·facts_added(길이·개수)만 있어 길이·개수가 같은 내용 교체를 못 잡음 → 본문·facts 자체의 sha256
     for r in idx:
@@ -796,6 +857,7 @@ def structure_module(a):
     if index_conf:
         return _structure_pg_indexed(a, index_conf)
     st = _stack()[1]
+    _trace_info(a, st)
     embed = pc.cfg().transform.structure.embed or st.get("embed", "api")
     m = need("parse", "structure", a.force, extra=_structure_extra(embed))
     if not m:
@@ -836,6 +898,9 @@ def structure_module(a):
     if rc != 0:
         raise SystemExit(75 if rc is None else rc)
     meta = json.loads((OUT / "edw" / "bundle" / "meta.json").read_text(encoding="utf-8"))
+    from pipeline.shared import runtrace
+
+    runtrace.docs(total=meta["docs"])
     write_mark(
         "structure",
         from_run=m["run_id"],
@@ -898,6 +963,9 @@ def load_module(a):
     if not m.get("dim"):
         print("[load] 임베딩 없는 묶음(PIPE_EMBED=none) — PostgreSQL에는 적재 안 함(로컬 묶음으로 키워드·ID 검색만)", flush=True)
         raise SystemExit(5)
+    from pipeline.shared import runtrace
+
+    runtrace.docs(total=m.get("docs"))
     sh("pipeline.load.pgvector_load", "deploy")
     sh("pipeline.load.pgvector_load", "load", *(["--replace"] if a.replace else []))  # 더하고 고치기만(pl-13 — 지우지 않음)
     write_mark("load", from_run=m["run_id"], docs=m.get("docs"), chunks=m.get("chunks"), extra=dest_fp)
@@ -1427,6 +1495,12 @@ if __name__ == "__main__":
     setarg.apply()  # --set 이름=값(S9 Step A — 한 번 실행 덮기, 서버 포함 · 호스트 run_docs.py 문서별 파싱이 결과 폴더 등을 넘김)
     utf8_stdout()
     from common.core.runlog import session
+    from pipeline.shared import runtrace
 
-    with session("pipeline"):
+    subcommand = next((x for x in sys.argv[1:] if not x.startswith("-")), "")
+    traced = subcommand in TRACED_COMMANDS  # 점검·설정 명령은 추적하지 않음(시작 0.5초 절약)
+    with (
+        session("pipeline"),
+        runtrace.run(subcommand, sys.argv[1:]) if traced else contextlib.nullcontext(),
+    ):  # op-01 — run_id 생성·pipe_run, 하위 프로세스가 이어받음
         main()

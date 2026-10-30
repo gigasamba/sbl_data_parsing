@@ -15,6 +15,7 @@
 """
 
 import argparse
+import contextlib
 import json
 import re
 import sys
@@ -28,6 +29,7 @@ from common.ai.embed import embed_texts  # noqa: E402
 from common.config import settings as C  # noqa: E402 — S7c: 설정 객체(common 칸 EMBED_MODEL·EMBED_BASE_URL·LLM_ALLOW_EXTERNAL·GLOSSARY_DIR·OV_URL)
 from common.core import docmeta as DM  # noqa: E402 — 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
 from common.core import repfmt as AQ  # noqa: E402 — 대표 결과 형식 읽기(라벨 어휘·키-값 쌍·표 행)
+from common.core import span as SP  # noqa: E402 — op-01 성능 span
 from common.core import terms as T  # noqa: E402 — 고객 명부·이름 정규화·ID 모양(검색과 같은 규칙)
 from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
 from common.core.contract import (  # noqa: E402 — 문서 ID(doc_key) 규칙(GH1-04: orig_sha256으로 parse와 같은 값)
@@ -42,6 +44,7 @@ from common.core.text import (  # noqa: E402 — 색인 본문·토큰 규칙(�
     tokens,
 )
 from pipeline import config as pc  # noqa: E402 — S7c: 설정 객체(pipeline 칸)
+from pipeline.shared import runtrace  # noqa: E402 — op-01 run.progress
 from pipeline.transform.structure import chunking as S  # noqa: E402 — 청킹·개체 정규식(구조화 모듈)
 from pipeline.transform.structure import facts as AG  # noqa: E402 — 계약 사실 추출(contract_facts)·제품 코드
 from pipeline.transform.structure import terms as ST  # noqa: E402 — name_hits·seed_roster(구조화 전용, 10-16 분리)
@@ -199,6 +202,7 @@ def embed_all(model, texts, batch=None, cache=None, out=None):
             except (OSError, TimeoutError):
                 if k == retry:
                     raise
+                SP.add_current(embed_retries=1)  # op-01 — 임베딩 서버 일시 오류로 다시 보낸 횟수
                 _t.sleep(2 * (k + 1))
 
     def _store(idx, v):  # 메인 스레드에서만 — put()의 arr 첫 할당·sqlite 쓰기가 스레드 경합 없게
@@ -212,7 +216,7 @@ def embed_all(model, texts, batch=None, cache=None, out=None):
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         with ThreadPoolExecutor(max_workers=conc) as ex:
-            futs = {ex.submit(_one, idx): idx for idx in slices}
+            futs = {ex.submit(SP.carry(_one), idx): idx for idx in slices}  # op-01 — 풀 스레드에 run/span ID를 실음
             for fut in as_completed(futs):
                 _store(futs[fut], fut.result())
     else:
@@ -220,6 +224,9 @@ def embed_all(model, texts, batch=None, cache=None, out=None):
             _store(idx, _one(idx))
     if db is not None:
         db.close()
+    SP.add_current(
+        texts=len(texts), cache_hit=len(texts) - len(todo), cache_miss=len(todo), batches=len(slices), concurrency=conc, batch_size=batch
+    )
     print(
         f"임베딩 캐시: 재사용 {len(texts) - len(todo)} · 새로 {len(todo)}"
         + (f" ({cache})" if db is not None else "")
@@ -779,6 +786,8 @@ def main(argv=None):
             for p in md["pairs"]:
                 if AQ.CONTRACT_RE.search(p["label"]) and " / " not in p["label"]:
                     alias[normalize_value(p["value"])] = con["value"]
+    progress = contextlib.ExitStack()  # op-01 — 60초마다 run.progress(처리한 문서/전체)
+    progress.enter_context(runtrace.Progress(total=len(items), done=lambda: len(docs), unit="doc"))
     for doc, dd in items:
         if use_rep:
             raw = reps.get(doc)
@@ -889,32 +898,36 @@ def main(argv=None):
         )
         first = len(chunks)
         seq = 0
-        for c in S.chunk_all({doc: text}, a.chunk, {doc: eng}):
-            m = c["meta"]
-            bbox = None
-            if raw.get("boxes"):
-                bbox = ocr_bbox(raw["boxes"], text, m["span"])
-            elif dd["format"] == ".pdf_text" and orig:  # 글자 PDF 위치는 원본에서 찾음 — 원본이 없으면 비워 둠
-                bbox = pdf_bbox(str(orig), m["page"] or 1, c["text"])
-            toks = tokens(c["text"])
-            chunks.append(
-                {
-                    "doc": di,
-                    "seq": seq,
-                    "page": m["page"] or (1 if dd.get("pages") == 1 else None),  # 한 쪽짜리 문서는 1
-                    "line_start": m["line"],
-                    "line_end": m["line_end"],
-                    "char_start": m["span"][0],
-                    "char_end": m["span"][1],
-                    "bbox": bbox,
-                    "section": m["section"],
-                    "chunk_text": c["text"],
-                    "n_chars": len(c["text"]),
-                    "n_terms": len(toks),
-                    "source_system": _src_sys,
-                }
-            )
-            seq += 1
+        with SP.span(
+            "transform.structure", doc_id=doc, ext=Path(doc).suffix.lower(), cpu=False
+        ) as sp:  # op-01 — 청킹+위치(bbox) 계산 1문서
+            for c in S.chunk_all({doc: text}, a.chunk, {doc: eng}):
+                m = c["meta"]
+                bbox = None
+                if raw.get("boxes"):
+                    bbox = ocr_bbox(raw["boxes"], text, m["span"])
+                elif dd["format"] == ".pdf_text" and orig:  # 글자 PDF 위치는 원본에서 찾음 — 원본이 없으면 비워 둠
+                    bbox = pdf_bbox(str(orig), m["page"] or 1, c["text"])
+                toks = tokens(c["text"])
+                chunks.append(
+                    {
+                        "doc": di,
+                        "seq": seq,
+                        "page": m["page"] or (1 if dd.get("pages") == 1 else None),  # 한 쪽짜리 문서는 1
+                        "line_start": m["line"],
+                        "line_end": m["line_end"],
+                        "char_start": m["span"][0],
+                        "char_end": m["span"][1],
+                        "bbox": bbox,
+                        "section": m["section"],
+                        "chunk_text": c["text"],
+                        "n_chars": len(c["text"]),
+                        "n_terms": len(toks),
+                        "source_system": _src_sys,
+                    }
+                )
+                seq += 1
+            sp.add(chunks=seq, chunk_chars=sum(len(c["chunk_text"]) for c in chunks[first:]), text_chars=len(text))
         facts += doc_facts(di, raw, [(i, chunks[i]) for i in range(first, len(chunks))])
         doc_text_chunks = chunks[first : len(chunks)]  # 이 문서의 텍스트 청크(그림 청크 추가 전) — 빈 그림의 image_id를 붙일 자리
         page_vlm_ids = {r["image_id"] for r in fig_by_doc.get(doc, []) if r.get("skipped") == "page_vlm"}
@@ -934,6 +947,8 @@ def main(argv=None):
             img["chunk"], img["rel"] = len(chunks) - 1, "figure_chunk"  # F8 — chunk_image: 그림 자신의 청크
             images.append(img)
             seq += 1
+    progress.close()
+    runtrace.docs(total=len(docs))  # op-01 — pipe_run 문서 수(구조화에 들어간 문서)
     canon_clients(docs)
     infer_clients(docs)
     warn_if_no_client_roster(docs)
@@ -955,7 +970,9 @@ def main(argv=None):
 
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True, exist_ok=True)
-    vecs = embed_all(a.embed, [index_text(c) for c in chunks], out=str(out / "vectors.npy"))  # 머리말 포함(G9)
+    with SP.span("embed.bundle", "embed", model=a.embed) as sp:  # op-01 — 임베딩 1회 = 1행(캐시 적중·배치 수·호출 지연은 metrics)
+        vecs = embed_all(a.embed, [index_text(c) for c in chunks], out=str(out / "vectors.npy"))  # 머리말 포함(G9)
+        sp.add(chunks=len(chunks))
     folder_of = lambda d: str(Path(d["file_path"]).parent).replace("\\", "/")  # 폴더 단위
     glossary = T.load_glossary()  # X4 — 개념→청크 역색인(사전 없으면 빈 목록, 추가 파일이라 묶음 계약은 안 바뀜)
     concept_chunk = build_concept_chunk(docs, chunks, glossary)
@@ -1027,4 +1044,5 @@ if __name__ == "__main__":
         "common.config.setarg"
     ).apply()  # --set 이름=값(S9 Step A — 호스트 run_docs.py 구조화가 임베딩 동시 수 등을 넘김)
     utf8_stdout()
-    main()
+    with runtrace.run("build_bundle", sys.argv[1:]):  # op-01 — 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
+        main()

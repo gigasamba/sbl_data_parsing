@@ -77,6 +77,7 @@ EXCLUDED_FILES = (
     "core/resources.py",  # 실행 자원(CPU·메모리) 판단 — 병렬 수 결정만
     "core/jsonlog.py",  # op-01 JSON 사건 기록·상관 ID — 인계 내용과 무관
     "store/logsink.py",  # op-01 비동기 DB 기록 — 인계 내용과 무관
+    "core/span.py",  # op-01 파이프라인 성능 span — 인계 내용과 무관
     "core/runlog.py",  # 실행 로그(output/RUNLOG.md 등)
     "store/services.py",  # 외부 서비스 탐색(Docker pgvector 등) — 연결 방법만
     "core/sources.py",  # 수집(ingest) 원천 표 목록 — parse 이전 단계(수집 서버), 모듈 핸드오프 밖

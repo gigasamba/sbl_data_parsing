@@ -62,6 +62,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 from common.config import settings as C  # noqa: E402 — S7e2 put(덮기 파일)
 from common.core import resources as RS  # noqa: E402
+from common.core import span as SP  # noqa: E402 — op-01 성능 span
 from common.core.contract import jl  # noqa: E402
 from common.core.paths import (  # noqa: E402
     APP_ROOT,
@@ -109,7 +110,11 @@ def tmp_root():
 def _run(module, args, env):
     """pipeline.* 서브프로세스 — stream._run과 같은 패턴(gated_popen — 메모리·CPU 문 공유)."""
     cmd = [PY, "-m", module, *map(str, args)]
-    rc = RS.gated_popen(cmd, cwd=ROOT, env=env).wait()
+    with SP.span("proc.run", "run", module=module) as sp:  # op-01 — 하위 프로세스 1개(자식 span의 부모, 메모리·CPU 문 대기)
+        rc = RS.gated_popen(cmd, cwd=ROOT, env=env).wait()
+        sp.add(rc=rc)
+        if rc:
+            sp.result("fail", None, f"종료 코드 {rc}")
     if rc:
         raise RuntimeError(f"[parallel] 실패({rc}): {' '.join(cmd)}")
 
@@ -361,7 +366,7 @@ def _run_all_docs(a, engines, tmp, PM):
         with ThreadPoolExecutor(max_workers=io_workers) as pool:
             futs = {
                 pool.submit(
-                    _process_one,
+                    SP.carry(_process_one),  # op-01 — 풀 스레드에 run/span ID를 실음
                     i,
                     name,
                     fetch_one,

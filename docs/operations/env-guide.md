@@ -22,6 +22,8 @@
 
 DB 장애/문장 시간 초과(기본 2초)는 앱 호출을 기다리게 하지 않고 `common.log.fallback_dir`(기본 `output/applog`)에 마스킹된 `{table,row}` JSON Lines로 남는다. 경고는 프로세스당 한 번이며, `logsink.stats()`의 `dropped`·`fallback_errors`를 운영 점검에 포함한다. 파일 재적재는 자동으로 하지 않는다. 큐 상한 10000, 배치 200/1초이며 종료는 5초 대기 후 남은 배치를 파일에 쓴다. 종료 중 결과가 불명확한 DB 커밋과 대체 파일은 중복될 수 있어 request_id/run_id/span_id로 대조한다. 대체 파일/PC 로그는 삭제하지 않으므로 디스크 회수·접근 권한·보관 정책도 운영에서 정한다(C-68). 내부 신호 `APPLOG_CONTEXT`는 settings.child_env가 ID만 전달하며 사용자 설정 env가 아니다.
 
+파이프라인 성능·추적 기록(T2)은 별도 설정 없이 위 스위치(`common.log.db_enabled`)를 따른다. 실행 1건이 `applog.pipe_run` 1행, 문서×단계가 `applog.pipe_event` 행이고 60초마다 `stage='run.progress'`가 남는다(규모: 문서 수 × 엔진·단계 수 — 큐 상한 10000이 넘게 한꺼번에 쓰는 일이 없도록 재사용 판단은 문서마다가 아니라 `extract.plan` 1행으로 요약). 분석은 `python -m pipeline.tools.perf [<run_id>]`(`--runs` 목록, `--compare`로 실행 비교, DB가 꺼져 있으면 `--file output/applog/*.jsonl`). 내부 신호 `APPLOG_CONTEXT`는 `settings.child_env`뿐 아니라 `gated_popen`도 자식에 이어 붙인다(run_id가 있을 때만). 자식 프로세스(`run_all` 조각·`represent`·`build_bundle`·`pgvector_load`)는 각자 sink를 열어 같은 `run_id`로 쓴다.
+
 ### 0-1. 읽는 규칙
 - **옛 `pipeline.env`는 읽지 않는다.** settings.yaml 없이 `pipeline.env`만 있으면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·새벽 배치가 "설정 이관 필요"로 종료 코드 2. 옮기기·대조는 [release-and-patch.md](release-and-patch.md) §5-4.
 - **크리덴셜**(비밀번호·키·토큰)과 **접속 정보**(주소·포트·DB 이름)는 전부 이 파일 하나에만 둔다. 각 컨테이너는 common + 자기 앱 절(pipeline·mcp)만 읽는다(`RAG_MODULE`). 엔진·핸드오프 파일이 env로 읽는 항목(`VLM_API_KEY` 등 — 핑거프린트 때문에 고치지 않는 파일, D-028 ⑤, 영구 다리)은 컨테이너 **안 프로세스 env**에는 들어간다(`docker inspect`에는 안 나옴 — 사용자가 받아들임).
