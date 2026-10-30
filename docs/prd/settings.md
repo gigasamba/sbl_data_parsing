@@ -83,7 +83,7 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 수용 기준: 줄마다 필수 키가 있는 JSON으로 읽힘, 예시 비밀 문자열이 가려짐, 수준 설정이 줄을 거름.
 - 파일: `common/core/`(새 포매터), `common/config/settings.py`, `mcp_server/main.py`, `pipeline/cli.py`, `.gitignore`.
 - 결정(사용자 10-30 grill): gold DB 변경([etl.md#pl-25](etl.md#pl-25))과 같은 판에 싣는다 — 재처리 한 번.
-- Status: todo
+- Status: todo — 0.2.0(사용자 10-30 PRD grill C1).
 
 <a id="pl-21"></a>
 ## pl-21 · 미룬 설정 지우기(핑거프린트)

@@ -46,7 +46,7 @@
 ## e2-15 · 에이전트 시험 패키지 경로가 상류를 가리킴
 - 이유: `resolve_agent_dir`가 `example_agentic`을 `dev_tools/unit_test/fixtures/`(이 저장소에 없음)에서 찾아 `test_adk`의 `run_agent` 묶음이 건너뛰어지고, `test_paths`가 그 경로를 단언한다.
 - 파일: `common/core/paths.py`(모든 레이어 의존 → code_fp), `tests/server/common/test_adk.py`, `tests/server/common/test_paths.py`.
-- Status: todo — 다음 핑거프린트가 바뀌는 릴리스와 함께 고친다.
+- Status: todo — 0.2.0(사용자 10-30 PRD grill C1 — 다음 핑거프린트가 바뀌는 릴리스).
 
 <a id="e2-01"></a>
 ## e2-01 · PC 스모크 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
