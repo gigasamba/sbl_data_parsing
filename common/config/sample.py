@@ -6,7 +6,6 @@
 
 import re
 import sys
-from pathlib import Path
 
 import yaml
 
@@ -264,16 +263,48 @@ def _emit(model, depth, path, lines, gidx, last):
 
 
 def _value(p, f):
-    """칸에 적을 기본값(YAML 한 줄) — 비우는 칸: 필수·비밀·기본 없음·빈 글자·이미지 기본값 칸·PC 경로가 든 기본값(만든 PC마다 달라짐)."""
+    """칸에 적을 기본값(YAML 한 줄) — 비우는 칸: 필수·비밀·기본 없음·빈 글자·이미지 기본값 칸·적었는지로 동작이 갈리는 칸(SET_MATTERS·pinned)·저장소 경로가 든 기본값(만든 PC마다 달라짐)."""
     d = f.get_default(call_default_factory=True)
-    if p in REQUIRED or S.is_secret(f) or d is None or d == "" or S.env_name(f) in _IMAGE_ENVS:
+    if p in REQUIRED or S.is_secret(f) or d is None or d == "" or S.env_name(f) in _IMAGE_ENVS | SET_MATTERS:
         return ""
-    if isinstance(d, str) and (str(S.REPO_ROOT) in d or str(Path.home()) in d):
+    if (f.json_schema_extra or {}).get("pinned"):  # pin_env가 적힌 칸만 env로 냄 — 적으면 자식 프로세스의 자기 설정 값을 덮음
+        return ""
+    if isinstance(d, str) and str(S.REPO_ROOT) in d:
         return ""
     return yaml.safe_dump(d, default_flow_style=True, allow_unicode=True, width=10**9).removesuffix("\n").removesuffix("\n...")
 
 
 _IMAGE_ENVS = {k for d in S._IMAGE_DEFAULTS.values() for k in d}
+# 적었는지(기본값과 구별 — given()·resources._f·model_matrix.own)로 동작이 갈리는 칸 — 기본값을 적으면 기능이 켜지거나 읽는 쪽 기본값이 밀림
+# (op-05 리뷰: STRUCT_BACKEND=pg → 정형 저장소 켬 · 모듈 포트 → 공통 포트 무시 · RDB 목록 [] → 빈 필터). 비워 둔다.
+# 시험 test_sample_yaml이 코드의 given("X")·_f("X")·own("X") 이름이 여기(또는 비우는 칸)에 다 있는지 본다.
+SET_MATTERS = {
+    "CPU_MAX_LOAD",
+    "MCP_METHODS",
+    "MEM_MAX_PCT",
+    "MEM_SETTLE_MARGIN",
+    "MEM_SETTLE_SEC",
+    "MEM_START_PCT",
+    "NIGHT_WORKERS",
+    "PIPE_MAX_PROCS",
+    "PIPE_PROC_GB",
+    "PIPE_PROCS",
+    "PIPE_RESERVE_CPUS",
+    "PIPE_RESERVE_GB",
+    "PIPE_THREADS",
+    "PIPE_WORKERS",
+    "PM_BUCKET",
+    "STRUCT_BACKEND",
+    "STRUCT_DB",
+    "TRIGGER_PARSE_PORT",
+    "TRIGGER_STRUCTURE_PORT",
+    "VLM_MAX_CONCURRENCY",
+    "RDB_COMPANY",
+    "RDB_DOC_TYPE",
+    "EMBED_ALLOW_EXTERNAL",
+    "LLM_ALLOW_EXTERNAL",
+    "VLM_ALLOW_EXTERNAL",
+}
 
 
 def _note(p, f):
