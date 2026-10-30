@@ -36,7 +36,7 @@
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
 | doc_id | SERIAL PK | 문서 행 번호(내부) | pgvector_load `load` | pgsearch, 뷰 `v_chunk_source` | 유지 |
-| file_path | TEXT | 개발 서버 기준 원본 경로(파일 이름은 여기서 뽑음) | build_bundle `main` | pgsearch, retriever, search_svc, shaping, local, aggregate, `schemas/evidence.py`(MCP `search` 출력 키), `cli/ask.py`, `models/search_tables.py`(칸·`VIEWS_EXPECTED`·뷰 SQL), `schemas/search_rows.py`, 뷰, pgvector_load·build_bundle(건너뛰기 키 → `s3_key`), `validation/search_ui/serve.py` | 삭제(사용자 10-30 grill — 보여 줄 때는 `s3_key` + `original_filename` · MCP 출력에서도 뺌 — 계약 변경, 등급 A, [pl-25](../prd/etl.md#pl-25)) |
+| file_path | TEXT | 개발 서버 기준 원본 경로(파일 이름은 여기서 뽑음) | build_bundle `main` | pgsearch, retriever, search_svc, shaping, local, aggregate, `schemas/evidence.py`(MCP `search` 출력 키), `cli/ask.py`, `models/search_tables.py`(칸·`VIEWS_EXPECTED`·뷰 SQL), `schemas/search_rows.py`, 뷰, pgvector_load·build_bundle(건너뛰기 키 → `s3_key`), `validation/search_ui/serve.py` | 삭제(사용자 10-30 grill — 보여 줄 때는 `s3_key` + `original_filename` · MCP 출력의 `file_path`는 제거 대상 — 시기·버전 처리는 나중, 등급 A, [pl-25](../prd/etl.md#pl-25)) |
 | original_filename | TEXT | 원본 파일 이름(보여 주기용) | (파이프라인 — `AI.FileStorageMap.original_filename`) | (pgsearch, retriever, search_svc, shaping, 뷰) | 새로 |
 | s3_key | TEXT | 문서 키 — Object Storage 원본 전체 키(`AI.FileStorageMap.s3_key`) | (build_bundle가 이미 `_s3_key`로 알지만 묶음에 안 넣음) | (대장·숨김·ParsingMeta 조회) | 새로 |
 | clients | TEXT(JSON) | 고객 목록 — 지금은 본문에서 찾은 이름(`infer_clients`)과 섞여 있음 | build_bundle `infer_clients` | pgsearch `_client_restrict`, retriever, internal_docs, search_svc | 삭제 |
@@ -209,7 +209,7 @@
 | content_group | TEXT | 같은 글 묶음 id | registry `content_groups` | 〃 | 유지 |
 | value_changes | TEXT | 바뀐 값 목록(JSON) | registry `link_editions` | 〃 | 유지 |
 | source_keys | TEXT | `원천::원본 키` 목록(JSON — 지금 sha256↔원본 키 다리) | registry `apply` | registry `link_editions` | 유지 |
-| fail_count | INTEGER | 연속 파싱 실패 수 | registry `apply` | registry `nightly_plan`, registry_cli | 유지 |
+| fail_count | INTEGER | 연속 파싱 실패 수 | registry `apply` | registry `nightly_plan`, registry_cli | 삭제(사용자 10-30 — 실패 횟수 없앰, 성공했을 때만 갱신 · `registry_retry_max` 설정도 지움, [pl-32](../prd/etl.md#pl-32)) |
 
 ### struct.doc_registry_seen
 

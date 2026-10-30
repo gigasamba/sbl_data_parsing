@@ -81,7 +81,7 @@
   - ① 문서 대장은 남기고 고친다 — `INSERT OR REPLACE`의 PG 번역(`structdb._pg_sql` 정규식 ↔ `registry.apply`의 여러 줄 SQL). [pl-25](#pl-25)와 함께 키를 `s3_key`로 바꾼다. 새 문서 판별은 FileStorageMap ↔ ParsingMeta 그대로([pl-23](#pl-23)).
   - ② 게시 가드는 `source.json` 사이드카 대신 EDW `AI.ParsingMeta`(`source_key` + `rep_bucket`/`rep_key`)를 읽는다. 같은 문서 → 같은 파일에 덮어씀(`-2`/`-3.md` 사본 없음). 다른 원천이 같은 결과 키로 오면 → 거부. 그러면 `test_publish_guard`가 통과 → `deploy/release/known_fail.txt`에서 뺀다.
 - 결정(사용자 10-30 grill 12~13차): 원천에서 사라진 문서(deleted) 처리 길은 통째로 없앤다 — 지우기·숨기기·EDW `deleted` 표시 모두 없음, 로컬 기록만(refactor.md C-54).
-- 10-30 [pl-32](#pl-32): PG `doc_registry`는 남고 로컬 SQLite 대체는 없앤다.
+- 10-30 [pl-32](#pl-32): PG `doc_registry`는 남고 로컬 SQLite 대체는 없앤다. 실패 횟수(`fail_count`)·재시도 설정(`registry_retry_max`)은 없앤다 — 성공했을 때만 갱신(사용자 10-30).
 - Status: todo — [pl-25](#pl-25) 뒤.
 
 <a id="pl-09"></a>
@@ -124,6 +124,7 @@
 - 이유: 엔진·핸드오프·코드 핑거프린트가 모든 문서에서 바뀌었다. 전체 자동 재파싱은 밤 작업 시간을 넘긴다(C-52, C-08).
 - 결정(사용자 10-29 grill): 밤 작업과 `run_docs`는 핑거프린트가 바뀌어도 **새** 문서만 처리한다. "새" = `AI.FileStorageMap.s3_key`가 아직 `AI.ParsingMeta`에 없음(s3 키만 — 갱신 시각 확인 없음, `run_docs`는 이미 이렇게 동작). 전체 재파싱은 사람이 전체 e2e를 시작할 때만(가끔 — 로직을 바꾼 뒤, 결과를 검토). 이 판의 첫 적재는 전체 e2e 한 번.
 - 결정(사용자 10-30 grill): 밤 배치는 꺼 둔다(systemd 타이머와 `pipeline.host.nightly.enabled` false). 나중에 사람이 settings.yaml에서 켠다. 실행 시각은 지금 정하지 않는다.
+- 결정(사용자 10-30): 새벽 배치 계획을 settings.yaml 키(파라미터)로 — null이면 새벽 배치 안 함, 값이 있으면 돈다([pl-32](#pl-32)). 켜기·끄기 스위치와 시각을 이 한 값이 정한다(구현 todo).
 - 지금 안 씀: FileStorageMap 갱신 시각 — 가정한 칸 `last_modified_time`, 나중에 EDW 예시에 추가([pl-25](#pl-25)).
 - 파일: `deploy/host/scripts/run_docs.py`(처리 끝난 집합), `pipeline/cli.py`(`night` — 같게 동작하는지 확인).
 - Status: todo
@@ -198,7 +199,7 @@
 - 결정(사용자 10-30 grill — 검토):
   - 0.1.0에 Alembic 마이그레이션 하나로 gold 변경과 struct 지우기(마스터·문서 파생 표·`prod_master`)를 함께 — DB 담당자 승인 한 번.
   - gold `doc.file_path`는 지운다. 보여 줄 때는 `s3_key` + 새 원본 파일 이름 칸(`FileStorageMap.original_filename`에서). 고칠 곳: `mcp_server/services/search/{pgsearch,retriever,search_svc,shaping,local,aggregate}.py`, `mcp_server/schemas/evidence.py`(`search` 근거 출력의 `file_path` 키), `mcp_server/cli/ask.py`, `common/store/db/models/search_tables.py`(칸·`VIEWS_EXPECTED`·뷰 SQL), `common/store/db/schemas/search_rows.py`, 뷰 `v_chunk_source`(`common/store/db/migrations/versions/0001_search_base.py`), `pipeline/load/pgvector_load.py`·`pipeline/transform/structure/build_bundle.py`(적재가 `file_path`를 건너뛰기 키로 씀 → `s3_key`가 대신함), `validation/search_ui/serve.py`.
-  - MCP 계약 변경(사용자 10-30 "mcp 기능에서 제거될 것이니 pass" — 등급 A, 사용자 승인): `search` 근거 출력에서도 `file_path`를 뺀다([mcp.md#mc-01](mcp.md#mc-01)). 버전 규칙(CLAUDE.md §5-2, D-036 — D-009 git flow): 계약이 깨지면 MAJOR. 0.1.0은 첫 릴리스(태그된 버전 없음)라 이 변경을 0.1.0에 싣고 릴리스 노트([doc.md#op-04](doc.md#op-04))에 깨지는 변경으로 적는다 — 0.1.0 뒤의 계약 변경은 MAJOR.
+  - MCP `search` 근거 출력의 `file_path`: 제거 대상(사용자 10-30 "mcp 기능에서 제거될 것이니 pass" · "reference 기준으로 하면 file_path 관련 부분 뺄거라 제거 대상으로 간주만 하고 일단 pass") — 시기·버전 처리는 나중([mcp.md#mc-01](mcp.md#mc-01)). 계약 변경이라 등급 A.
   - 나머지 문서 메타(`sf_*`, `project_code__c`, `contract_id`, `contract_date`, `prod_name`, `division`, `service_type`)도 파이프라인이 EDW에서 직접 읽는다 — [pl-29](#pl-29)의 고객 조인과 같은 자리. 외부 파일 `file_meta_new.jsonl`은 없어진다.
 - 파일: `docs/architecture/db_schema.md`(새), `docs/index.md`, `common/store/db/migrations/versions/`, `docs/operations/parsing_meta_mssql.sql`, `tests/server/common/`(시험 하나).
 - Status: dev — `docs/architecture/db_schema.md` 설계안 + 시험 `tests/server/common/test_db_schema.py`(`feature/db-schema-spec`) — 사용자·DB 담당자 승인 대기(코드·스키마 변경 없음).
@@ -211,7 +212,10 @@
 - 메타는 EDW `AI.ParsingMeta`에 단계별로, 성공했을 때만 쓴다([pl-25](#pl-25)).
 - gold는 pgvector만.
 - 로컬에 남기는 것: 로그와 임베딩 캐시뿐. 문서별 작업 폴더는 지금처럼 문서가 끝나면 지운다. 지울 것: `_stack/stack-v*.json` 사본과 `STACK_SNAPSHOT`, `runs.jsonl` 재사용 저장소, `_DONE` 표시, 로컬 대장·작업 상태 파일.
-- [pl-12](#pl-12)("대장은 고쳐서 남김")와 맞춤: PG `doc_registry`는 남고, 로컬 SQLite 대체만 없앤다. 열린 점: 로컬 상태와 함께 가는 `nightly_plan`·`fail_count`를 어디로 옮길지(또는 없앨지) — grill에서 정하지 않음.
+- [pl-12](#pl-12)("대장은 고쳐서 남김")와 맞춤: PG `doc_registry`는 남고, 로컬 SQLite 대체만 없앤다.
+- 새벽 배치 계획(사용자 10-30 "새벽 배치 계획은 parameter로 하면 될 것 같아. null 이면 새벽 배치 안하고, 입력되어있으면 작동"): settings.yaml 키 하나(op-05 — settings.yaml 하나). 값이 null이면 새벽 배치를 하지 않고, 값이 있으면 돈다([pl-23](#pl-23)).
+- 실패 횟수 없앰(사용자 10-30 "fail count 는 제거하자. 그냥 현재 상태에만 성공하면 업데이트"): 재시도 횟수를 어디에도 두지 않는다 — `doc_registry.fail_count`와 `common.store.registry_retry_max`(`REGISTRY_RETRY_MAX`) 설정을 지운다(todo). ParsingMeta는 성공했을 때만 갱신.
+- 실패한 엔진(사용자 확인 대기 — 허브 추천안): 실패한 엔진(이름·이유·걸린 시간)은 로컬 로그에만, EDW에는 성공한 엔진만.
 - 구조화 입력: 같은 실행 안에서는 로컬 작업 폴더를 읽고, 나중에 gold만 다시 만들 때는 Object Storage uuid 폴더에서 silver를 받는다.
 - PC도 서버와 같은 흐름 — 대역만 다름(OS 폴더, EDW SQLite, PC pgvector), 따로 생기는 로컬 파일 없음.
 - 파일: `pipeline/load/{publish_parse_result,parsing_meta}.py`, `pipeline/extract/run_all.py`(`runs.jsonl`·`_DONE`), `pipeline/stackcfg.py`·`pipeline/config.py`(`STACK_SNAPSHOT`), `pipeline/cli.py`(`nightly_plan`), `common/store/{registry,structdb}.py`(SQLite 대체), `deploy/host/scripts/run_docs.py`, `docs/architecture/db_schema.md`.

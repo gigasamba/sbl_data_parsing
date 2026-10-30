@@ -11,7 +11,7 @@
 - 무엇: 세 방식 — 질문만(혼합 검색), 거르기만(맞는 문서의 모든 청크, 점수 없음), 질문 + 거르기(저장소 질의에서 범위를 걸고 후보 `min(50, max(3k, 30))`을 거른 뒤 번호를 다시 매김 — 재순위 단계 없음). 거르기 `client`, `client_like`, `source_system`, `project_id`, `division`, `service_type`은 PG 저장소에서만 동작(로컬 묶음: 거르기만이면 오류, 질문 + 거르기면 거르지 않고 검색). `index_id`는 이름 붙은 색인을 고른다. `limit`은 거르기만 방식에 적용.
 - 찾기: 방법은 `vector`·`bm25`·`id`만(graph·concept·image·openviking은 10-29에 지움 — 다른 값은 메모와 함께 무시). vector(pgvector 코사인, HNSW. HNSW 차원을 넘으면 binary quantize + 상위 200 다시 점수) + BM25(`chunk_term`·`term_stat`·`corpus_stat`) + 드문 ID 정규식을 가중 RRF로 합친다(질문 유형별 가중치).
 - 출력: 근거 항목(`chunk_id`, `source_uri`, `page`, `bbox`, `section`, `text`, `score`, `via`, `rank`, …), `evidence_status` found/weak/none(라벨만, 빼는 것 없음), `notes`.
-- 계약 변경 예정(사용자 10-30 — 등급 A, 승인): 근거 항목의 `file_path` 키를 0.1.0에서 뺀다(gold `doc.file_path` 삭제 — [etl.md#pl-25](etl.md#pl-25)). 버전 규칙(CLAUDE.md §5-2, D-036 — D-009 git flow): 계약이 깨지면 MAJOR. 0.1.0은 첫 릴리스(태그된 버전 없음)라 이 변경을 0.1.0에 싣고 릴리스 노트([doc.md#op-04](doc.md#op-04))에 깨지는 변경으로 적는다 — 0.1.0 뒤의 계약 변경은 MAJOR.
+- `file_path` 키: 제거 대상(사용자 10-30) — 시기·버전 처리는 나중(gold `doc.file_path` 삭제와 함께 — [etl.md#pl-25](etl.md#pl-25)). 계약 변경이라 등급 A.
 - 파일: `mcp_server/routers/`, `mcp_server/services/search/search_svc.py`, `retriever.py`, `pgsearch.py`, `local.py`, `shaping.py`, `mcp_server/schemas/evidence.py`.
 - Status: done
 
