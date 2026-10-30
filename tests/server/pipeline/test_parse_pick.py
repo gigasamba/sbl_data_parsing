@@ -14,8 +14,7 @@ class _FakeDB:
         self.rows = rows
 
     def query(self, sql, params=None):
-        assert "status = 'parsed'" in sql, sql  # 성공 행만 봄
-        return [{"names": json.dumps(r["names"])} for r in self.rows if r["status"] == "parsed"]
+        return [{"names": json.dumps(r["names"]), "status": r["status"], "last_seen": r.get("last_seen")} for r in self.rows]
 
     def close(self):
         pass
@@ -27,8 +26,8 @@ ROWS = [
     {"names": ["seen.pdf"], "status": "seen"},  # 아직 시도 전 — 고름
 ]
 CASES = [  # (대장 행, run_mode, 기대 — 이름 목록 또는 종료 코드)
-    (ROWS, "prod", ["bad.pdf", "new.pdf", "seen.pdf"]),
-    (ROWS, None, ["bad.pdf", "new.pdf", "seen.pdf"]),
+    (ROWS, "prod", ["new.pdf", "seen.pdf", "bad.pdf"]),  # 새·시도 전 먼저, 실패는 뒤
+    (ROWS, None, ["new.pdf", "seen.pdf", "bad.pdf"]),
     (None, None, ["bad.pdf", "new.pdf", "ok.pdf", "seen.pdf"]),  # 대장 없음(PC·DOC_REGISTRY=0) — 받은 목록 그대로
     (None, "prod", 4),  # 대장 없음(서버) — 멈춤
 ]
@@ -52,3 +51,17 @@ def test_registry_pick():
                     assert e.code == want
             else:
                 assert cli._registry_unparsed(names) == want, (rows is None, mode)
+
+
+def test_failed_docs_do_not_starve_new():
+    """PR #49 리뷰 — 늘 실패하는 문서가 이름순으로 앞서도 --max-new 자리를 막지 않는다: 새 문서 먼저, 실패는 마지막 시도가 오래된 것부터."""
+    rows = [
+        {"names": ["a1.pdf"], "status": "failed", "last_seen": "2026-10-03T00:00:00Z"},
+        {"names": ["a2.pdf"], "status": "failed", "last_seen": "2026-10-01T00:00:00Z"},
+        {"names": ["a3.pdf"], "status": "failed", "last_seen": "2026-10-02T00:00:00Z"},
+    ]
+    names = ["a1.pdf", "a2.pdf", "a3.pdf", "z_new.pdf"]
+    with COMMON.env(RUN_MODE="prod"), mock.patch.object(REG, "try_open_db", return_value=_FakeDB(rows)):
+        pick = cli._registry_unparsed(names)
+    assert pick == ["z_new.pdf", "a2.pdf", "a3.pdf", "a1.pdf"], pick
+    assert pick[:2] == ["z_new.pdf", "a2.pdf"]  # max_new=2 — 새 문서가 들고 실패 중 가장 오래된 것 하나

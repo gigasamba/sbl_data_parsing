@@ -611,8 +611,9 @@ def _no_registry():
 
 
 def _registry_unparsed(names):
-    """문서 대장에 파싱 성공 행(status parsed)이 없는 이름만(새 문서 + 실패 문서 — 순서 유지). 대장을 못 열면 _no_registry()대로
-    (None이면 받은 목록 그대로). 앞 실행의 runs.jsonl은 보지 않는다(이번 실행 기록일 뿐 — pl-32)."""
+    """문서 대장에 파싱 성공 행(status parsed)이 없는 이름만 — 순서: 대장에 없거나 아직 시도 전(seen)인 문서(이름순) 먼저, 그다음 실패 문서
+    (마지막 시도가 오래된 것부터). --max-new로 앞에서 자르므로 늘 실패하는 문서가 새 문서 자리를 막지 않는다(PR #49 리뷰) — 실패 문서도
+    자리가 남으면 매번 다시(pl-32). 대장을 못 열면 _no_registry()대로(None이면 받은 목록 그대로). 앞 실행 runs.jsonl은 보지 않는다."""
     from common.store import registry as REG
 
     db = REG.try_open_db()
@@ -620,10 +621,16 @@ def _registry_unparsed(names):
         _no_registry()
         return list(names)
     try:
-        done = {n for r in db.query("SELECT names FROM doc_registry WHERE status = 'parsed'") for n in json.loads(r["names"] or "[]")}
+        rows = db.query("SELECT names, status, last_seen FROM doc_registry")
     finally:
         db.close()
-    return [n for n in names if n not in done]
+    state = {}  # 이름 → (status, last_seen)
+    for r in rows:
+        for n in json.loads(r["names"] or "[]"):
+            state[n] = (r["status"], r["last_seen"] or "")
+    fresh = [n for n in names if state.get(n, ("seen", ""))[0] == "seen"]
+    failed = sorted((n for n in names if state.get(n, ("seen", ""))[0] not in ("seen", "parsed")), key=lambda n: (state[n][1], n))
+    return fresh + failed
 
 
 _T_STEP: dict = {}
