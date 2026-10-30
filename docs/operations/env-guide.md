@@ -5,7 +5,7 @@
 **원칙**
 - 코드는 이미지+패치로 관리하고, 서버에서 손대는 것은 **설정 파일 하나**(`settings.yaml` — D-015·D-028)뿐이다.
 - 값은 문서·채팅·로그에 쓰지 않는다 — 이 문서는 **이름만** 적는다.
-- 코드에 기본값이 있는 설정은 settings.yaml에 적지 않는다(적으면 코드 기본값이 바뀌어도 서버만 옛 값에 묶인다). 단 `settings.sample.yaml`에 `[서버 옛 값: …]`이 붙은 항목은 그 값을 적는다(지금 동작을 지킴 — `refactor.md` C-39·C-43).
+- settings.yaml = `settings.sample.yaml`을 복사해 `[필수]`·`[비밀]` 항목을 채운 것이다(op-05 — sample에 모든 항목이 코드 기본값과 함께 카테고리별로 들어 있음. 값이 빈 항목은 적으면 동작이 바뀌는 것도 있으니 필요할 때만 채운다). 적힌 값은 코드 기본값보다 이긴다 — 나중에 코드 기본값이 바뀌어도 settings.yaml을 고치지(또는 새 sample을 다시 복사하지) 않으면 반영되지 않는다. `[서버 옛 값: …]`이 붙은 항목은 그 값을 적는다(지금 동작을 지킴 — `refactor.md` C-39·C-43).
 
 ## 0. 파일 위치 · 적용 방법
 
@@ -36,7 +36,7 @@
 **PC의 settings.yaml을 복사하지 않는다** — PC의 `run_env: local`·`*_allow_external`이 서버에서 외부 모델을 연다. settings.yaml은 git에 올리지 않는다.
 1. `cp <저장소 ZIP>/settings.sample.yaml /srv/rag/env/settings.yaml`
 2. 권한을 맞춘다(위 표 — 주인 10001·640).
-3. sample 맨 위 「1. 필수 입력」 블록과 아래 1절만 채운다(선택 항목은 sample 「2. 선택」에 영역별 목록 — `[서버 옛 값]` 항목 포함).
+3. `[필수]`·`[비밀]` 항목과 아래 1절만 채운다(그 밖 항목은 코드 기본값이 적혀 있음 — 바꿀 것만 고침, `[서버 옛 값]` 항목 포함).
 4. `python -m pipeline.check_env`로 확인한다.
 
 ## 1. 꼭 채울 것 (영역별)
@@ -168,7 +168,7 @@
 ## 3. 새 기능 스위치 — 기본 켬, 끌 때만 `=0`
 
 - 새 기능은 기본 켬이다. 자주 끄는 것: `PARSE_FUSE`류(조각 융합)·`PARSE_TABLE_STD`·`SEARCH_TYPE_WEIGHTS`·`SEARCH_EVIDENCE_GATE`·`SEARCH_COPY_GROUP`·`MCP_QUERY_LOG`·`FIG_OCR_FALLBACK`·`LLM_EMPTY_RETRY`. `REGISTRY_ETAG_MD5`는 SSE-KMS·SSE-C 암호화 버킷처럼 ETag가 MD5가 아닐 수 있는 원천에서 끈다(§5 10-08 AD17① 줄).
-- **전체 목록은 `settings.sample.yaml`**(생성 `python -m common.config.sample` — 항목마다 설명·옛 env 이름·기본값·켜기 판정 꼴). 서버에서 바꿀 옵션이 있으면 그 항목을 settings.yaml에 적는다. 코드 기본값과 다르게 채우던 서버 값은 sample의 `[서버 옛 값: …]`(C-39).
+- **전체 목록은 `settings.sample.yaml`**(생성 `python -m common.config.sample` — 모든 항목을 코드 기본값과 함께 카테고리별로, 줄 끝 주석에 설명·옛 env 이름·켜기 판정 꼴·`[파라미터]`). 서버에서 바꿀 옵션은 settings.yaml의 그 항목 값을 고친다. 코드 기본값과 다르게 채우던 서버 값은 sample의 `[서버 옛 값: …]`(C-39).
 - 읽는 순서: 테스트 값 > 오버레이 설정 파일 `overrides` > settings.yaml > 코드 기본값(env의 옛 이름은 읽지 않음 — 이름만 경고).
 
 ## 4. 확인
