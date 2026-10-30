@@ -131,7 +131,9 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
   - 프로세스 수·메모리는 필수 입력이 아니다 — 비우면 CPU·메모리로 자동 계산. 역할 절에 남기는 자원 칸: `pipe_procs`·`pipe_workers`·`vlm.max_concurrency`·`llm.rpm`, 새벽 배치 시각·마감, run_docs 레인 워커 수, 컨테이너 CPU·메모리 한도, 내부망 주소 범위.
   - 엔진 지문 파일이 읽는 `vlm.retry`·`vlm.timeout`도 다음 엔진 개정 때 정리한다.
   - 서버 settings.yaml은 `python -m common.config.migrate`가 옛 경로 → 새 경로로 바꿔 준다(지운 칸은 "삭제됨"으로 알림).
-- 열린 질문: 없음 — 설계 확인 대기.
+- 결정(사용자 10-30 5차 — 설계 확인): 지울 칸 68개 목록대로 진행(A 사용처 없음·중복 10 · B 되돌리기 스위치 45 · C 스트리밍 6 · D 실험 7 · E `embed.dim` 1). `represent.table_db`는 "항상 켬"이 아니라 기능째 지운다(정형 저장소 `doc_table`·`doc_cell`은 D-7로 0.2.0에 없어짐). 원칙: 스위치를 지울 때 그 스위치가 고르던 다른 길(옛 동작·옵션 기능) 코드도 함께 지운다 — 나중에 켜기·끄기가 필요하면 새 기능으로 다시 넣는다.
+- 열린 질문: 없음.
+- 진행: ① 칸·기능 삭제 커밋 → ② 경로 재편(`required`·역할 절·`tuning`) + migrate 변환 + sample 생성기 → ③ 문서(env-guide, README 설정 예시).
 - 파일: `common/config/{settings,sample,keyscan,migrate,export}.py`, `pipeline/config.py`, `mcp_server/config.py`, `settings.sample.yaml`, `deploy/host/`(설정 꺼내 쓰는 셸), `docs/operations/env-guide.md`.
 - Status: todo
 
