@@ -108,7 +108,6 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 ### 요건과 다르게 동작
 | 요건 | 코드가 하는 일 | 위치 | ID |
 |---|---|---|---|
-| 평가 묶음 경로 기본값 | `EVAL_SETS_DIR` 기본이 아직 `valid_env/unstructured`(지움) — PC에서는 `common.paths.eval_sets_dir`를 설정 | `common/core/paths.py` | pl-21 |
 
 ### 기본 꺼짐·설정 필요
 | 기능 | 스위치 = 기본값 | 필요한 것 |

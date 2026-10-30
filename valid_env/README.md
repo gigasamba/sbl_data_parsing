@@ -12,7 +12,6 @@ Data that imitates what the server reads from outside systems lives here, in one
 - Everything here is synthetic. Nothing is written here at run time — results go under `out_root`.
 - List files hold repo-relative paths (`valid_env/object_storage/...`). `--src` takes a folder, so copy the listed files into one folder first (README §4-4).
 - `eval_sets/` (answers and run lists) was deleted 10-30 (user — e2-10/e2-18: only `answer_test` and the search check page stay).
-- Not wired yet (PRD `e2-09`): the `EVAL_SETS_DIR` default in `common/core/paths.py` still points at `valid_env/unstructured` (changing it changes every layer code_fp — next fingerprint release; on the PC set `common.paths.eval_sets_dir: valid_env/eval_sets`), and the PC evaluation tools that name old sets (`synth-4clients` …) are handled in PRD `e2-10`.
 
 ## Production DB guard
 
