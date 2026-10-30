@@ -56,7 +56,7 @@
 | run_id | INT | 이 행을 넣은 적재(`load_run`) | pgvector_load `load` | 없음 | 유지 |
 | pipeline_version | TEXT | 이 문서를 만든 파이프라인 판(`VERSION` — ParsingMeta가 아니라 여기, C-62 사용자 10-30) | (pgvector_load `load`) | (운영자·재처리 판정) | 새로 |
 | doc_class | TEXT | 문서 분류 라벨 하나(SFDC: RFI/RFP/RFI+RFP/Proposal/Other, LAS: MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other, 다른 원천 NULL) — low_conf·모델·시각은 두지 않음 — reference 비교 10-30, D-6 | (분류 단계 → 적재 — [pl-33](../prd/etl.md#pl-33)) | (MCP `search` 필터 — mc-16) | 새로 |
-| created_at | TIMESTAMPTZ | 원천 등록 시각(KST로 해석) — reference 비교 10-30, D-6 | (적재 — FileStorageMap 등록 시각) | (MCP `search` 필터 — mc-16) | 새로 |
+| created_at | TIMESTAMPTZ | 원천 등록 시각 — 출처는 `AI.FileStorageMap.created_at`(시간대 없는 값은 KST로 읽음, ParsingMeta `created_at`과 같은 값 — G9). `search`의 `created_since`/`created_until` 거르기에 씀 — reference 비교 10-30, D-6 | (적재 — FileStorageMap 등록 시각) | (MCP `search` 필터 — mc-16) | 새로 |
 
 ### gold.chunk
 
@@ -349,6 +349,7 @@
 | engines_used | NVARCHAR(MAX) | 쓰인 엔진 전부(JSON) — 0.1.0: 성공한 엔진만(이름 + 판, 사용자 10-30 grill) | parsing_meta `plan` | 없음 | 유지 |
 | engines_summary | NVARCHAR(512) | 엔진 한 줄 요약 | 〃 | 없음 | 삭제 |
 | parsed_at | DATETIME2(0) | 넣은 때(기본 SYSUTCDATETIME) — 남김(G1, 사용자 10-30 2차 grill: `list_doc_fulltext`가 읽음) | DB 기본값 | (mc-17 `list_doc_fulltext`) | 유지 |
+| created_at | DATETIME2(0) | 원천 파일이 등록된 때 — silver를 만들 때 `AI.FileStorageMap.created_at`에서 옮김(시간대 없는 값은 KST로 읽음). 파싱 시각이 아님(그건 `parsed_at`) — 운영이 더한 칸, G9로 남김(사용자 10-30) | (silver 만들 때) | MCP `list_doc_fulltext`의 `created_since`/`created_until` 거르기·`created_at` 출력, `get_doc_fulltext`의 생성 범위 가드 | 새로 |
 | source_key_hash | BINARY(32) 계산 칸 | `source_key` sha256 — 유일 색인 키(1700바이트 상한 우회) | DB | 유일 색인 | 유지 |
 | gold_status | NVARCHAR(32) | gold(검색 DB) 적재 상태 | (pl-24 — run_docs·적재) | (pl-24 재시도·건너뜀) | 새로 |
 | gold_reason | NVARCHAR(2000) | gold 상태 이유(실패 원인 등) | (pl-24) | (운영자) | 새로 |
@@ -356,7 +357,7 @@
 | gold_version | NVARCHAR(64) | gold 모듈·파이프라인 판 — gold가 끝나기 전에는 NULL | (gold 성공 때) | (운영자·재처리 판정) | 새로 |
 | engines_failed | NVARCHAR(MAX) | 실패한 엔진(JSON — 이름·이유·걸린 시간), 없으면 NULL | (파싱 단계 — 사용자 10-30 "EDW에도") | (운영자·재시도 판단) | 새로 |
 
-**운영이 더한 분류·고객 칸(reference 비교 10-30, C2 — 2차 grill G1로 고침):** `doc_class`·`sf_op_id`는 남기고(위 표), 나머지 운영 분류·고객 칸은 0.1.0과 동시에 지운다(DB 담당자 D-3, 등급 A) — 분류·고객 결과는 gold에만([pl-33](../prd/etl.md#pl-33), [pl-29](../prd/etl.md#pl-29)). 그때 운영 분류 스크립트가 멈추므로 운영 담당자에게 알린다.
+**운영이 더한 분류·고객 칸(reference 비교 10-30, C2 — 2차 grill G1로 고침):** `doc_class`·`sf_op_id`·`created_at`은 남기고(위 표), 나머지 운영 분류·고객 칸은 0.1.0과 동시에 지운다(DB 담당자 D-3, 등급 A) — 분류·고객 결과는 gold에만([pl-33](../prd/etl.md#pl-33), [pl-29](../prd/etl.md#pl-29)). 그때 운영 분류 스크립트가 멈추므로 운영 담당자에게 알린다.
 
 **단계별 기록(사용자 10-30 grill — 등급 A, DB 담당자 D-3):** 단계마다 성공했을 때만 쓴다 — 파싱: `stack_version`·성공한 엔진(`engines_used`)·실패한 엔진(`engines_failed`)·대표 silver 엔진 + 판(`rep_engine`) · gold: `gold_version`·`gold_status`. 3차의 "읽는 칸만" 안에 칸을 다시 더한 것이다. 저장 구조(silver = Object Storage uuid5 폴더 · gold = pgvector)는 [pl-32](../prd/etl.md#pl-32).
 
@@ -378,9 +379,9 @@
 
 | # | 무엇 | 왜 |
 |---|---|---|
-| D-1 | `AI.FileStorageMap`의 실제 정의 — 특히 고친 때 칸 이름(`last_modified_time` 가정)과 `source_system` 값 목록 | 저장소에는 PC 대역(`valid_env/edw/ai.sql` — `created_at`만)뿐 |
+| D-1 | `AI.FileStorageMap`의 실제 정의 — 특히 고친 때 칸 이름(`last_modified_time` 가정)과 `source_system` 값 목록 | 저장소에는 PC 대역(`valid_env/edw/ai.sql` — `created_at`만)뿐 · **G9(사용자 10-30) 확인:** 지금 운영 `ParsingMeta.created_at`은 원천별 표에서 온다(SFDC `ContentVersion_dump.CreatedDate`, CRMS `RM_CM_DOCU.INIT_DTTM`, LAS `FileManager.CreateDate`) — `FileStorageMap.created_at`이 같은 값을 갖는지 |
 | D-2 | 문서당 EDW 고객 하나(`client_edw`)를 얻는 조인 경로 — 원천별(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account.Name`로 보임, CRMS·LAS는?) | 지금은 외부에서 뽑은 `file_meta_new.jsonl`을 읽고, 그 파일을 만드는 코드가 저장소에 없음 → **결정(사용자 10-30):** 파이프라인이 EDW 읽기 계정으로 조인을 직접 만든다(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account`) — `file_meta_new.jsonl`을 대신함, [pl-29](../prd/etl.md#pl-29). CRMS·LAS 경로는 여전히 확인 필요 · **2차 grill(사용자 10-30, G2):** CRMS는 `FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST`로 채움(DB 담당자 확인) · LAS는 상대사 출처가 정해질 때까지 비움 |
-| D-3 | `AI.ParsingMeta` 칸 삭제·`gold_status`·`gold_reason`·단계별 칸(`stack_version`·`gold_version`·`engines_failed`, `engines_used`·`rep_engine` 뜻 바꿈 — 사용자 10-30) 추가(ALTER) — 권한, 기존 행, 다른 사용처 | 이 프로젝트 밖에서 그 칸을 읽는 곳이 있는지 모름 · **G1(10-30):** `doc_class`·`sf_op_id`·`parsed_at`·`rep_engine`은 남김(`list_doc_fulltext`가 읽음), 나머지 운영 고객 칸은 지움 |
+| D-3 | `AI.ParsingMeta` 칸 삭제·`gold_status`·`gold_reason`·단계별 칸(`stack_version`·`gold_version`·`engines_failed`, `engines_used`·`rep_engine` 뜻 바꿈 — 사용자 10-30) 추가(ALTER) — 권한, 기존 행, 다른 사용처 | 이 프로젝트 밖에서 그 칸을 읽는 곳이 있는지 모름 · **G1·G9(10-30):** `doc_class`·`sf_op_id`·`parsed_at`·`rep_engine`·`created_at` 5칸은 남김(`list_doc_fulltext`가 읽음), 나머지 운영 고객 칸은 지움 |
 | D-4 | `ParsingMeta.doc_key` 삭제 때 `UQ_ParsingMeta_dockey`·`IX_ParsingMeta_doc_key` 색인 처리 · `source_key`를 필수(NOT NULL)로 | 지금 `source_key`가 비면 `doc_key`가 겹침 키 |
 | D-5 | (없어짐 — 사용자 10-30: 마스터는 CSV 파일, 마스터 PostgreSQL 없음) | — |
 | D-6 | gold 스키마 변경(`s3_key`·`client_edw`·`clients_doc` 추가, `clients` 삭제)은 Alembic 새 판 — 뷰 `v_chunk_source`를 지우고 다시 만듦(`doc.clients`에 걸려 있음), 기존 서버 데이터는 다시 적재 | 첫 적재가 전체 e2e([pl-23](../prd/etl.md#pl-23))와 함께 |
