@@ -108,22 +108,25 @@ def _for_model(result):
 
 def verify(answer_json, pool):
     """rag_qa verify_citations + 인용 항목 형식 — 객체가 아닌 인용(글자 등)은 problems로(VS10 L-1 — 그냥 두면 숫자 없는 답이 ok.
-    패키지 파일은 지시서 지문을 지키려고 안 고침, S11). 모델 도구와 최종 행 검증이 같이 씀."""
+    패키지 파일은 지시서 지문을 지키려고 안 고침, S11). 모델 도구와 최종 행 검증이 같이 씀. answer_json = JSON 글자 또는 이미 읽은 객체.
+    format_error = 답 모양(객체·JSON 값·citations 목록·인용 항목) 문제 — found 답의 인용 0건은 EDW 답일 수 있어 넣지 않음 — 근거 대조 실패와 가름(VS11 CR-2)."""
     _verify = _verify_citations()
-
-    if not isinstance(
-        answer_json, (str, bytes, bytearray)
-    ):  # 모델이 도구 인자를 객체로 넘기면 json.loads가 TypeError(VS11 CR-1) — 글자로 바꿔 같은 검사
-        answer_json = json.dumps(answer_json, ensure_ascii=False)
-    out = _verify(answer_json, pool)
+    try:  # 객체로 넘긴 인자는 다시 직렬화·파싱하지 않음(VS11 CR-1·VS11b CR-7)
+        data = json.loads(answer_json) if isinstance(answer_json, (str, bytes, bytearray)) else answer_json
+    except ValueError:
+        data = None
+    if not isinstance(data, dict):  # 패키지는 assert로 가려 python -O에서 빠짐(VS11b CR-6) — 여기서 먼저
+        return {"ok": False, "problems": ["answer_json must be a JSON object"], "format_error": True}
     try:
-        cites = json.loads(answer_json).get("citations")
-    except (ValueError, AttributeError):
-        return out
+        text = json.dumps(data, ensure_ascii=False)
+    except (TypeError, ValueError):  # JSON으로 못 바꾸는 값(VS11b CR-5 — TypeError로 질문이 멈추지 않게)
+        return {"ok": False, "problems": ["answer_json must hold JSON values only"], "format_error": True}
+    out = _verify(text, pool)
+    cites = data.get("citations")
     bad = [c for c in cites if not isinstance(c, dict)] if isinstance(cites, list) else []
     if bad:
         out = {**out, "ok": False, "problems": [*out.get("problems", []), f"citations 항목은 객체여야 함: {len(bad)}개"]}
-    return out
+    return {**out, "format_error": not isinstance(cites, list) or bool(bad)}
 
 
 def make_tools(call, contracts, pool, k_default):
@@ -146,7 +149,10 @@ def make_tools(call, contracts, pool, k_default):
     async def query_edw(sql: str, max_rows: int = 200) -> dict:
         return await call("query_edw", {"sql": sql, "max_rows": max_rows})
 
-    def verify_citations(answer_json: str) -> dict:
+    def verify_citations(answer_json: str = "", answer: str = "", status: str = "", citations: list | None = None) -> dict:
+        # 모델이 answer_json 대신 답 칸을 펼쳐 넘겨도 서명 TypeError 없이 같은 검사(VS11b CR-7)
+        if not answer_json and (answer or status or citations is not None):
+            return verify({"answer": answer, "status": status, "citations": citations}, pool)
         return verify(answer_json, pool)
 
     verify_citations.__doc__ = _verify.__doc__
@@ -230,13 +236,9 @@ def ask_one(i, q, n, url, token, contracts, k, fake, timeout):
         try:
             out = final_json(text)
             row.update({k2: out.get(k2) for k2 in ("answer", "status", "citations")})
-            row["verify"] = verify(json.dumps(out, ensure_ascii=False), pool)  # 최종 답을 이번 근거로 다시 검증(결정적)
-            if (
-                "query_edw" in row["tools_used"]
-                and not row["verify"]["ok"]
-                and not any(p.startswith(("citations", "answer_json")) for p in row["verify"]["problems"])
-            ):  # 형식 오류는 EDW와 무관
-                row["verify_note"] = EDW_NOTE
+            row["verify"] = verify(out, pool)  # 최종 답을 이번 근거로 다시 검증(결정적)
+            if "query_edw" in row["tools_used"] and not row["verify"]["ok"] and not row["verify"]["format_error"]:
+                row["verify_note"] = EDW_NOTE  # 모양 오류는 EDW와 무관(VS11 CR-2 — problems 글 머리가 아니라 format_error로 가름)
         except ValueError:
             row["raw_output"] = text
             if row["run_status"] == "ok":
