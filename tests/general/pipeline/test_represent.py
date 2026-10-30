@@ -516,7 +516,7 @@ def selftest():
         fill_e = fill_scan_pages(rep_e, doc4, dd4, stack4, pd4, pdf4, page_vlm=lambda p: [(2, "", {})])
         assert fill_e == {"filled": {"2": "rapidocr_ko"}, "skip": None}, fill_e
         _vp.vlm_page = lambda img, det=None: ("VLM 2쪽 스캔 글", {"cached": True})
-        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_DEDUP_SCAN="0", PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"):
+        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"):
             represent(stack4, pd4, src=d4)
         v_out = json.loads((pd4 / "_rep" / f"{doc4}.json").read_text(encoding="utf-8"))
         assert v_out["rep"]["scan_fill"]["filled"] == {"2": "vlm_page"}
@@ -531,10 +531,10 @@ def selftest():
     try:
         _vp.scan_pages_detail = lambda p: {2: "chars"}
         _vp.vlm_page = lambda img, det=None: (calls.append(1), ("", {"error": "가짜 실패", "cached": False}))[1]
-        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_DEDUP_SCAN="0", PARSE_POST="supsub", PARSE_SCAN_FILL="1"):
+        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_POST="supsub", PARSE_SCAN_FILL="1"):
             represent(stack4, pd4, src=d4)
         assert calls == [], "쪽 VLM이 꺼져 있는데(supsub만) VLM을 부름"
-        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_DEDUP_SCAN="0", PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"):
+        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"):
             represent(stack4, pd4, src=d4)
         assert len(calls) == 1, calls  # 스캔 쪽 1장 — scan_fill과 apply_post가 같은 결과를 씀(실패해도 다시 안 부름)
     finally:
@@ -637,20 +637,19 @@ def selftest():
         encoding="utf-8",
     )
     stack5 = {"name": "t5", "parse": {".txt": ["pdfplumber", "pymupdf", "rapidocr_ko"]}}
-    FUSE_FAM = ("PARSE_FUSE", "PARSE_FUSE_REREAD")
+    FUSE_FAM = ("PARSE_FUSE",)  # 재판독 P2·P3는 pl-34 10-30에 지움
     ALL_OFF = FUSE_FAM + ("PARSE_CONTEXT",)  # 아래 off5·off6가 같은 "전부 =0" 바탕이게(PARSE_CONTEXT도 기본 켬이라 같이 꺼야 함)
     with pc.PIPE.env(**{k: "0" for k in ALL_OFF}):  # S7c — 설정 객체만 바꿔 끼움
         represent(stack5, pd5)  # =0 — 전부 꺼짐
     off5 = json.loads((pd5 / "_rep" / f"{doc5}.json").read_text(encoding="utf-8"))
     assert "fused" not in off5 and off5["text"] == "본문" and "context" not in off5
-    with pc.PIPE.env(PARSE_FUSE_REREAD="0"):  # P1만 보려고 REREAD는 꺼둠(PARSE_FUSE는 기본 켬 그대로)
-        represent(stack5, pd5)
+    represent(stack5, pd5)  # 기본 — PARSE_FUSE 켬
     on5 = json.loads((pd5 / "_rep" / f"{doc5}.json").read_text(encoding="utf-8"))
     assert on5["text"] == off5["text"] and on5["facts"] == off5["facts"]  # 켜도 본문·기존 facts는 그대로
     by5 = {f["context"][0]: f for f in on5["fused"]["facts"]}
     assert by5["금액"]["value"] == "430,000" and set(by5["금액"]["engines"]) == {"pdfplumber", "pymupdf"}
     assert on5["fused"]["conflicts"][0]["losers"][0]["engines"] == ["rapidocr_ko"]
-    assert "reread" not in on5["fused"]  # REREAD=0이라 재판독 칸 없음
+    assert "reread" not in on5["fused"]  # 재판독 칸 없음(pl-34에 지움)
     print(
         "[selftest] AD29 P1 — PARSE_FUSE =0=rep 바이트 동일(fused 키 없음) · 기본 켬=라벨:값 조각 투표(신뢰도 높은 쪽 승, 본문·기존 facts 불변) 통과"
     )
@@ -671,24 +670,6 @@ def selftest():
     assert on6["context"]["format"] == ".txt" and set(on6["context"]["engines"]) == {"pdfplumber", "pymupdf", "rapidocr_ko"}
     assert [x["step"] for x in on6["decisions"]][:2] == ["engine_scope", "representative"]
     print("[selftest] PA0 — PARSE_CONTEXT =0=rep 바이트 동일(context·decisions 키 없음) · 기본 켬=문서·엔진 신호 + 규칙 결정 기록 통과")
-
-    # AD29 P2 — PARSE_FUSE_REREAD(기본 켬, =0으로 끔, PARSE_FUSE 전제): =0이면(또는 PARSE_FUSE가 =0이면) rep["fused"]에
-    # "reread" 칸 자체가 안 생겨 바이트 동일 · 켜져도 이 문서(doc5="e.txt")는 source 경로가 없어(합성 selftest라
-    # 실제 파일이 없음) 전부 건너뛰고 reason만 남긴다 — 실제 PDF로 좌표를 찾아 뒤집는 전 과정은 reread.py 자체
-    # selftest(합성 PDF + 주입 OCR)와 cli/eval_fuse_conflicts.py --reread(실제 judge-conflicts 문서)가 맡는다
-    # (무거운 OCR 모델을 매번 represent 선택 검사에서 불러오지 않으려는 의도, 결정적·가벼움 우선).
-    with pc.PIPE.env(PARSE_FUSE="0"):  # PARSE_FUSE_REREAD는 기본 켬 그대로 — PARSE_FUSE 꺼짐이 우선인지 확인
-        represent(stack5, pd5)
-    off_rr = json.loads((pd5 / "_rep" / f"{doc5}.json").read_text(encoding="utf-8"))
-    assert "fused" not in off_rr  # PARSE_FUSE 꺼짐이 우선 — PARSE_FUSE_REREAD가 켜져 있어도 아무 효과 없음
-    represent(stack5, pd5)  # 기본(PARSE_FUSE·PARSE_FUSE_REREAD 켬)
-    on_rr = json.loads((pd5 / "_rep" / f"{doc5}.json").read_text(encoding="utf-8"))
-    assert on_rr["fused"]["facts"] == on5["fused"]["facts"]  # source 없음(doc_path None) — 재판독이 값을 안 건드림
-    assert on_rr["fused"]["reread"]["skip_reason"] == "no_pdf"
-    assert "p3" not in on_rr["fused"]["reread"]  # 재판독 P3는 pl-34 10-30에 지움
-    print(
-        "[selftest] AD29 P2 — PARSE_FUSE_REREAD =0(또는 PARSE_FUSE =0)=rep 바이트 동일 · 기본 켬 + PDF 없는 문서는 건너뛰고 이유만 기록 통과"
-    )
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

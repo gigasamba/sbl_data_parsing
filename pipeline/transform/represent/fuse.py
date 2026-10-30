@@ -3,7 +3,7 @@
 설계(backlog dev/docs/backlog/parse.md AD29): ① 조각 나누기 = 줄·표 칸·라벨:값 · 엔진 간 같은 자리 맞추기 =
 좌표가 있으면 좌표, 없으면 쪽별 순서 정렬(정규화 글자 비교, OCR 앙상블 ROVER 방식) ② 조각별 투표 = 점수
 = 출처 신뢰도(원문 추출 > VLM > OCR) × 형식 타당성(3자리 쉼표 묶음·깨짐 비율) + 동점이면 대표 엔진 가산점,
-결과마다 출처(동의 엔진·탈락 후보) 기록. ③(좌표 영역만 다시 읽기)는 범위 밖(P2 `reread.py` — P3는 pl-34 10-30에 지움).
+결과마다 출처(동의 엔진·탈락 후보) 기록. ③(좌표 영역만 다시 읽기)는 범위 밖(재판독 P2·P3는 pl-34 10-30에 지움).
 
 ④(사전·그래프 타당성, AD29 ④)·AD26 2:2 동점 판정을 이 모듈(P1)에 더함(10-08 조각 대표값 마무리, engine-qa
 CONCERN 반영 10-08 2차):
@@ -30,9 +30,9 @@ CONCERN 반영 10-08 2차):
     매겨 1위·2위를 비교한다: 기본 점수로도 이미 갈렸으면 **"trust"**(split=False, 가산 없이도 확실) · 기본
     점수는 동점인데 전체 점수가 갈랐으면 **"heuristic"**(split=**True로 유지** — 대표는 그래도 전체 점수가
     높은 후보로 뽑지만, 근거가 신뢰도·형식이 아니라 사전·그래프·로캘 같은 보조 신호뿐이라 **아직 확인된 건
-    아니다**로 보고 P2·P3 재판독·AG11 판단 세션이 이 자리를 먼저 보게 한다) · 전체 점수도 동점이면
-    **None**(split=True, 아무 신호로도 못 깸). P2(`reread.py`)가 좌표로 실제
-    확인하면 split을 False로 해소한다(resolved_by는 그대로 — 원래 무엇이 판정했는지 기록).
+    아니다**로 보고 미확인 자리로 남긴다) · 전체 점수도 동점이면
+    **None**(split=True, 아무 신호로도 못 깸). (옛 P2 재판독이 좌표로 실제
+    확인하면 split을 False로 해소했다 — pl-34에 지움, 이제 split은 그대로 남는다.)
 
 PARSE_FUSE_SIGNALS(환경변수, 기본 켬, =0으로 끔, PARSE_FUSE 전제) — 끄면(=0) 사전·명부·문서 내 교차 언급·
 로캘의 **점수 가산만** 빠져 이 커밋 이전과 점수가 바이트 동일(trust×format_plausibility만, format_plausibility
@@ -236,8 +236,8 @@ def vote_fragment(candidates, rep_engine=None, tie_bonus=0.5, locale_pref=None, 
     무관하게 항상 계산**(engine-qa 10-08 ⑤) — 승자·최선 패자의 **기본** 점수까지 비교해서 셋 중 하나로 가른다:
     기본 점수로 이미 갈렸으면 resolved_by="trust"(split=False, 사전·그래프·로캘 없이도 확실) · 기본 점수는
     동점인데 전체 점수가 갈랐으면 resolved_by="heuristic"(**split=True 유지** — AD26 (f): 대표는 그래도
-    전체 점수가 높은 후보로 뽑지만, 신뢰도·형식만으로는 못 가른 자리라 "확인된 건 아님"으로 보고 P2·P3
-    재판독·AG11 판단 세션이 먼저 보게 한다) · 전체 점수도 동점이면 resolved_by=None(split=True, 아무 신호로도
+    전체 점수가 높은 후보로 뽑지만, 신뢰도·형식만으로는 못 가른 자리라 "확인된 건 아님"으로 남긴다 — 재판독
+    P2·P3는 pl-34 10-30에 지움) · 전체 점수도 동점이면 resolved_by=None(split=True, 아무 신호로도
     못 갈림). 패자가 없으면 split=False·resolved_by=None(갈릴 상대가 없음).
     반환: {"text", "engines"(동의), "score", "split", "resolved_by", "losers":[{engines,text,score}]}(승자
     기준 — 결과마다 동의 엔진·탈락 후보를 남겨 출처를 추적, AD29 ②) 또는 후보가 전부 비면 None.

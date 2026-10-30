@@ -22,11 +22,6 @@ PARSE_SCAN_FILL(환경변수, 기본 켬) — PE1 후속(2026-10-07, 정답률 1
 PARSE_CONTEXT(환경변수, 기본 켬, =0으로 끔) — PA0(2026-10-08): 켜지면(기본) 이미 계산된 문서·쪽 신호
   (pipeline.transform.represent.trace)를 rep["context"]·규칙 결정과 이유를 rep["decisions"]로 남긴다(새 엔진 실행·VLM 호출
   없음, 나중 파싱 에이전트 PA2의 바탕). 꺼지면(=0) 이 모듈을 안 불러 이전 동작과 바이트 동일.
-PARSE_FUSE_REREAD(환경변수, 기본 켬, =0으로 끔, PARSE_FUSE 전제) — AD29 P2: fuse_mod.fuse() 뒤 pipeline.transform.represent.reread가
-  근소하게 갈렸거나 승자가 한 인식 계열뿐인 조각만 글자층 좌표(pymupdf 단어 bbox)로 찾아 고해상도로 다시 OCR해
-  보고, 확인되면 승자를 바꾼다(AD19 "확인되면 채택") — 아무 것도 안 맞으면 값은 그대로 두고 unverified만 표시.
-  doc_path가 PDF가 아니면 전부 건너뜀(이 단계는 OCR·PDF 글자층 전용, rep.fused.reread.skip_reason). 문서당 재판독
-  횟수 상한 FUSE_REREAD_MAX(기본 20). 꺼지면(=0) 안 불러 rep["fused"]가 PARSE_FUSE만 켰을 때와 바이트 동일.
 PARSE_TABLE_INLINE(환경변수, 기본 켬, =0으로 끔) — TA1(사용자 10-15): 대표 엔진 하나의 표만 쓰던 것을, 이 문서를
   표로 인식한 엔진 전부(대표 + other_docs)의 그리드를 모아(pipeline.transform.represent.table_inline) 표 자리마다
   가장 구조가 완전한(칸 채움 비율·다른 엔진과의 칸 글자 일치도) 것 하나를 고르고, 대표 본문(rep["text"]) 안
@@ -92,47 +87,6 @@ def _select_best(ok, pd, doc):
         return (acc, r, -ok.index(c))
 
     return max(ok, key=score)
-
-
-def _engine_out_rank(pd, doc, engines):
-    """2026-10-22 사용자 지정 — reread(P2)에서조차 못 가릴 때 따라갈 '산출 정확도 높은 엔진' 순서(내림차순).
-    기준(사용자 지정 우선순위): ① 머리글/바닥글 제외 본문 풍부도(글자 수) ② 표 인식 칸 수(구조 표 rows×cols
-    합, 없으면 마크다운 표 줄의 '|' 개수 합) ③ 이미지 존재 인식 수(엔진 원본 산출 기준 — 텍스트 계열엔 figures
-    필드가 없어 boxes가 있는 OCR 계열만 0이 아님. post.figures는 represent 이후라 여기 기준에 못 쓴다).
-    각 엔진의 원본 결과(pd/<엔진>/<문서>.json)를 그대로 읽는다(대표 표준화·병합 이전의 그 엔진 산출)."""
-
-    def score(e):
-        try:
-            r = json.loads((pd / e / f"{doc}.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return (-1, -1, -1)
-        t = r.get("text") or ""
-        blocks = [b for b in t.split("\f") if b.strip()]
-        if len(blocks) >= 3:  # 쪽 구분(\f)이 있으면 — 첫/끝 줄이 절반 이상의 쪽에서 반복되면 머리글/바닥글로 보고 제외
-            from collections import Counter
-
-            firsts = Counter((b.strip().splitlines() or [""])[0] for b in blocks)
-            lasts = Counter((b.strip().splitlines() or [""])[-1] for b in blocks)
-            half = max(2, len(blocks) // 2)
-            body_lines = []
-            for b in blocks:
-                lines = b.strip().splitlines()
-                if lines:
-                    if firsts.get(lines[0], 0) >= half:
-                        lines = lines[1:]
-                    if lines and lasts.get(lines[-1], 0) >= half:
-                        lines = lines[:-1]
-                body_lines += lines
-            text_len = sum(len(x) for x in body_lines)
-        else:
-            text_len = len(t)  # 쪽 구분이 없는 엔진 산출 — 머리글/바닥글 분리 근거가 없어 전체 글자 수
-        cells = sum((tb.get("rows") or 0) * (tb.get("cols") or 0) for tb in (r.get("tables") or []))
-        if not cells:
-            cells = sum(ln.count("|") for ln in t.splitlines() if ln.strip().startswith("|"))
-        fig_marks = len(r["figures"]) if isinstance(r.get("figures"), list) else len(r.get("boxes") or [])
-        return (text_len, cells, fig_marks)
-
-    return sorted(engines, key=lambda e: (score(e), e), reverse=True)  # 동점이면 이름 역정렬로 결정적
 
 
 def _para_has_structure(para):
@@ -408,7 +362,7 @@ def _page_agreement(text_a, text_b, min_len=HIDDEN_AGREE_MIN_LEN):
 LOCAL_AGREE_MIN_LEN = 4  # 국소 비교는 원래 짧다(상자 하나 분량) — HIDDEN_AGREE_MIN_LEN(20)은 쪽 전체용이라
 # 그대로 쓰면 항상 "판단 불가"가 나옴. 그래도 극단적으로 짧은 조각(숫자 1~2자)은 거름.
 LOCAL_PAD_PT = 20.0  # 겹친 숨은 글자 상자 둘레 여백(pt) — 그 상자와 겹치는 OCR 줄만 "주변"으로 본다
-# (AD29 P2 reread.py FUSE_REREAD_PAD_PT=40pt보다 좁음 — 여긴 그림 하나 안에서만 비교).
+# (여긴 그림 하나 안에서만 비교).
 _NUM_TOK = __import__("re").compile(r"\d[\d.,]*\d|\d")
 
 
@@ -703,7 +657,6 @@ from common.core.artifacts import code_fp  # noqa: E402
 from common.core.contract import source_record  # noqa: E402 — 문서 ID·원본 위치 규칙(모듈 계약)
 from pipeline.shared import postprocess as post_cfg  # noqa: E402 — PARSE_POST 해석(W1~W3·W9·W11 후보정 패키지)
 from pipeline.transform.represent import fuse as fuse_mod  # noqa: E402 — AD29 P1 조각 단위 융합(fuse_mod.on() = PARSE_FUSE, 기본 켬)
-from pipeline.transform.represent import reread as reread_mod  # noqa: E402 — AD29 P2 좌표 재판독(reread_mod.on() = PARSE_FUSE_REREAD, 기본 켬)
 from pipeline.transform.represent import (  # noqa: E402 — 모듈 중간 import(기존 배치 그대로 — 위 함수 정의 뒤)
     table_inline,  # TA1(사용자 10-15) 엔진별 표 그리드를 모아 본문 제자리에 GFM 표(PARSE_TABLE_INLINE, 기본 켬)
     table_std,  # AD23·SI20③ 표 표준 형식(PARSE_TABLE_STD, 기본 켬)
@@ -943,7 +896,7 @@ def represent(stack, parse_dir, src=None):
                 "tried": tried_of(doc, last, pd),
             }
             return None
-        _t = {"load": 0.0, "merge": 0.0, "fuse": 0.0, "reread": 0.0, "scanfill": 0.0, "post": 0.0, "table": 0.0, "agent": 0.0}
+        _t = {"load": 0.0, "merge": 0.0, "fuse": 0.0, "scanfill": 0.0, "post": 0.0, "table": 0.0, "agent": 0.0}
         _t0 = time.time()
         # 2026-10-22 — PARSE_REP_SELECT: first(첫 성공 엔진·파일 읽기 0) | acc(정확도만·파일 읽기 0) | best(정확도+풍부도, 기본)
         _sel = pc.cfg().transform.represent.rep_select or ""  # S7c — 설정 객체(없음·'' = "")
@@ -1023,20 +976,11 @@ def represent(stack, parse_dir, src=None):
             engine_docs.update({e: {"facts": od.get("facts") or []} for e, od in other_docs.items()})
             rep["fused"] = fuse_mod.fuse(engine_docs, best["engine"])  # 대표 본문·기존 facts는 안 건드림 — 새 칸만 추가
             _t["fuse"] = time.time() - _t0
-            _t0 = time.time()  # 2026-10-22 — fuse 완료 (reread 전)
+            _t0 = time.time()  # 2026-10-22 — fuse 완료
             if rep["fused"].get("conflicts"):  # AD25(b)(c) — 자리(행 라벨)·엔진별 원문 표기·계열 수를 문서 밖
                 conflicts_out.append(
                     {"doc": doc, "conflicts": rep["fused"]["conflicts"]}
                 )  # conflicts.jsonl로도 모음(지금까진 각 문서 _rep/<문서>.json 안에만 있었음)
-            if reread_mod.on():  # AD29 P2 — 갈린·한 계열뿐인 조각만 좌표 재판독(OCR, 기본 켬, PARSE_FUSE 전제)
-                rr_source = rep["rep"]["source"]
-                rr_doc_path = Path(rr_source["path"]) if rr_source else None
-                _rank = (
-                    _engine_out_rank(pd, doc, list(engine_docs)) if pc.cfg().transform.represent.reread_fallback_best else None
-                )  # 2026-10-22 사용자 지정 — P2도 못 가리면 산출 정확도 최고 엔진 후보로
-                reread_mod.rereview_facts(engine_docs, rep["fused"], best["engine"], rr_doc_path, engine_rank=_rank)
-                _t["reread"] = time.time() - _t0
-                _t0 = time.time()  # 2026-10-22 — reread P2 시간
         source = rep["rep"]["source"]
         doc_path = Path(source["path"]) if source else None
         # 10-29 — 쪽 VLM은 PARSE_POST에 vlm_page가 있을 때만(run_docs light 레인·parse MCP의 supsub만 존중 — P1-1), 문서당 한 번만(M4).
@@ -1143,7 +1087,7 @@ def represent(stack, parse_dir, src=None):
         for r in conflicts_out:  # 갈린 엔진들(승자·패자·원문 표기) 문서 밖 한 파일로(PARSE_FUSE 꺼지면 빈 파일)
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     _agg = {}
-    for k in ("load", "merge", "fuse", "reread", "scanfill", "post", "table"):
+    for k in ("load", "merge", "fuse", "scanfill", "post", "table"):
         _agg[k] = round(
             sum(
                 (

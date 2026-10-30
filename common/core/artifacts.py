@@ -36,7 +36,6 @@ LAYER_CODE = {
             "attachments",
             "context",
             "fuse",
-            "reread",
             "shadow",
             "supsub",
             "table_inline",

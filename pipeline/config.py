@@ -49,16 +49,6 @@ class PipelineConnectionsRdbColumns(Section):
     version: str | None = F(None, "RDB_COL_VERSION", "RDB 문서 위치 표에서 문서 버전 열의 이름(비우면 열 없음)")
 
 
-class PipelineTransformRepresentReread(Section):
-    REMOVED = frozenset(
-        {"p3_img_max", "vlm_max", "vlm_max_tokens"}
-    )  # pl-34(10-30) — 재판독 P3·scan_dedup·렌더 OCR 신호를 지움(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    dpi: int | None = F(400, "FUSE_REREAD_DPI", "융합 재판독(P2)용 크롭 재렌더 해상도(dpi)")
-    margin: float | None = F(1.5, "FUSE_REREAD_MARGIN", "승자와 최선 패자 점수차가 이 값 이하면 '근소'로 보고 재판독")
-    max: int | None = F(20, "FUSE_REREAD_MAX", "문서당 융합 재판독(P2) 횟수 상한(0이면 재판독 안 함)")
-    pad_pt: float | None = F(40.0, "FUSE_REREAD_PAD_PT", "재판독 때 bbox 둘레에 더할 여백(pt)")
-
-
 class PipelineConnectionsRdb(Section):
     REMOVED = frozenset(
         {"connect_kwargs", "database", "host", "password", "port", "user"}
@@ -287,20 +277,13 @@ class PipelineTransformFigures(Section):
 
 class PipelineTransformRepresent(Section):
     REMOVED = frozenset(
-        {"fuse_reread_p3"}
-    )  # pl-34(10-30) — 재판독 P3·scan_dedup·렌더 OCR 신호를 지움(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+        {"fuse_reread_p3", "fuse_reread", "reread_fallback_best", "reread"}
+    )  # pl-34(10-30) — 재판독 P2·P3를 모두 지움(사용자 10-30, 옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     context: bool | None = F(
         True, "PARSE_CONTEXT", "문서·쪽 신호 맥락(rep.context·decisions) 기록(=0이면 안 남김)", off=("", "0", "none", "false"), fold="lower"
     )
     fuse: bool | None = F(
         True, "PARSE_FUSE", "엔진별 결과 조각 투표(융합 P1) 사용(=0이면 끔)", off=("", "0", "none", "false"), fold="lower"
-    )
-    fuse_reread: bool | None = F(
-        True,
-        "PARSE_FUSE_REREAD",
-        "융합 뒤 근소·미확인 자리를 다시 읽는 재판독(P2) 사용(=0이면 끔)",
-        off=("", "0", "none", "false"),
-        fold="lower",
     )
     fuse_signals: bool | None = F(
         True,
@@ -320,9 +303,6 @@ class PipelineTransformRepresent(Section):
     )
     qa_light: bool | None = F(False, "PARSE_QA_LIGHT", "=1이면 native 대비 풀문서 CER·순서 비교를 생략(경량화)", on=("1",))
     rep_select: str | None = F(None, "PARSE_REP_SELECT", "대표 엔진 선택 방식: first(첫 성공 엔진)|acc(정확도만)|그 외 best(정확도+풍부도)")
-    reread_fallback_best: bool | None = F(
-        True, "REREAD_FALLBACK_BEST", "P2도 못 가리면 산출 정확도 최고 엔진 후보로 대체(=0이면 안 함)", off=("0",)
-    )
     shadow: bool | None = F(
         False, "PARSE_SHADOW", "그림자 모드(파싱 판단 규칙 vs LLM 제안 비교)를 켬(=1이면 켬)", off=("", "0", "none", "false"), fold="lower"
     )
@@ -352,7 +332,6 @@ class PipelineTransformRepresent(Section):
         off=("", "0", "none", "false"),
         fold="lower",
     )
-    reread: PipelineTransformRepresentReread = Field(default_factory=PipelineTransformRepresentReread)
 
 
 class PipelineTransformStructure(Section):

@@ -125,7 +125,6 @@ HYPER = {  # 이름 규칙으로는 운영값이지만 결과(파싱·청크·�
     "pipeline.extract.ocr_engine",  # 이미지·스캔 문서에 OCR 엔진도 돌림(파싱 결과가 바뀜)
     "pipeline.extract.table_grid_max_rows",
     "pipeline.extract.ocr.dpi",
-    "pipeline.transform.represent.reread.dpi",
     "pipeline.transform.structure.page_chunk_max",
     "pipeline.transform.vlm.fig_photo_max_tokens",
     "mcp.search.ocr_dpi",

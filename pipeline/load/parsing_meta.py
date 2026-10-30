@@ -335,7 +335,7 @@ def engines_used(rep_json, env_fallback=True):
       rep.rep.engine(대표로 뽑힌 엔진) → role='rep' · rep.rep.tried(시도한 엔진 전부, rapidocr_ko·qwen_vlm 포함) 중
       대표가 아닌 것 → role='ocr'(_OCR_ENGINE_NAMES) 또는 'candidate'(그 밖 텍스트 엔진) · rep.post.vlm_page_calls
       (+모델 rep.post.vlm_models.page) → role='vlm_page' · rep.post.figures(+모델 rep.post.vlm_models.figure) →
-      role='vlm_figure' · rep.fused.reread(좌표 재판독 OCR) → role='reread' · rep.agent(AG11 판단, 있으면) →
+      role='vlm_figure' · rep.agent(AG11 판단, 있으면) →
       role='agent'. 항목 = {"engine","role","status","version_or_model","calls"}.
     rep_json이 비었으면([], None)."""
     if not rep_json:
@@ -368,11 +368,6 @@ def engines_used(rep_json, env_fallback=True):
         if fig_fb:
             row["source"] = "env_fallback"
         out.append(row)
-    reread = (rep_json.get("fused") or {}).get("reread") or {}
-    if reread:
-        out.append(
-            {"engine": "reread_ocr", "role": "reread", "status": "ok", "version_or_model": None, "calls": reread.get("attempted") or 0}
-        )
     agent = rep_json.get("agent") or {}
     if agent:
         out.append(
@@ -386,8 +381,6 @@ def engines_used(rep_json, env_fallback=True):
     vlm_bits = ([f"page×{page_calls}"] if page_calls else []) + ([f"fig×{fig_calls}"] if fig_calls else [])
     if vlm_bits:
         parts.append(f"vlm={page_model or fig_model or '모델?'} " + " ".join(vlm_bits))
-    if reread.get("attempted"):
-        parts.append(f"reread×{reread['attempted']}")
     if agent:
         parts.append(f"agent={agent.get('agent') or 'agent'}")
     summary = "; ".join(parts) or None

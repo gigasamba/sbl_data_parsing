@@ -11,6 +11,7 @@ import io
 import json
 import re
 import time
+import uuid
 from email import policy
 from pathlib import Path
 
@@ -606,11 +607,34 @@ def classify_figure_kind(fig):
     return "other"
 
 
-def _crop_ocr(img_bytes):
-    """그림 crop OCR(글자 그대로) — pipeline.transform.represent.reread._default_ocr 재사용(모델 설정 중복 방지,
-    rapidocr_ko, 결정적). 비용 큼(모델 로드·추론) — 호출부(build_records)가 문서당 상한을 건다."""
-    from pipeline.transform.represent.reread import _default_ocr
+_TMP_DIR = (
+    APP_ROOT / "output" / "_reread_tmp"
+)  # 쓰기는 output/만(C4, dev/out = 컨테이너 /app/output 볼륨) — 크롭 PNG를 parser.py 계약(파일 경로)에 맞춰 잠깐 씀
+# (pl-34 10-30 — 재판독 reread.py를 지우며 _default_ocr와 함께 이리로 옮김, 폴더 이름·로직 그대로)
 
+
+def _default_ocr(png_bytes):
+    """크롭 PNG → 글자(공백 join) — tools/engines/rapidocr/parser.py의 운영 OCR 경로(parse_rapidocr_ko, 한국어
+    PP-OCRv5 모델)를 그대로 재사용한다(모델 설정 중복 방지, 결정적 — 같은 PNG면 같은 모델·같은 글자). 그 함수가
+    파일 경로를 전제하는 공용 계약이라 크롭을 output/ 밑 임시 PNG로 한 번 썼다 바로 지운다(C4 — output/ 밖에 안 씀)."""
+    from pipeline.extract.engines.rapidocr.parser import parse_rapidocr_ko
+
+    _TMP_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = _TMP_DIR / f"{uuid.uuid4().hex}.png"
+    tmp.write_bytes(png_bytes)
+    try:
+        out = parse_rapidocr_ko(str(tmp))
+        return (out.get("text") or "").replace("\n", " ").replace("\f", " ").strip()
+    finally:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+
+
+def _crop_ocr(img_bytes):
+    """그림 crop OCR(글자 그대로) — _default_ocr(rapidocr_ko, 결정적, 모델 설정 중복 방지).
+    비용 큼(모델 로드·추론) — 호출부(build_records)가 문서당 상한을 건다."""
     return _default_ocr(img_bytes) or ""
 
 

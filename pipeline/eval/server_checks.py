@@ -7,8 +7,8 @@ S5(10-26, T-15 — D-021 ④) — 검색 측정 br54·l8·gh114는 mcp_server/cl
 import하지 않게 — 결과 폴더 output/server_checks/<이름>은 그대로).
 
 서브커맨드:
-  ar1    조각 투표 계열(PARSE_FUSE·_SIGNALS·_REREAD) 끄고 켬 — 사람 정답(GOLD_DIR) 기준 재채점.
-         기존 엔진 결과(--parse-dir)를 복사해 다시 represent만 돈다(엔진 재실행 없음). (재판독 P3·--run-vlm은 pl-34 10-30에 지움)
+  ar1    조각 투표 계열(PARSE_FUSE·_SIGNALS) 끄고 켬 — 사람 정답(GOLD_DIR) 기준 재채점.
+         기존 엔진 결과(--parse-dir)를 복사해 다시 represent만 돈다(엔진 재실행 없음). (재판독 P2·P3·--run-vlm은 pl-34 10-30에 지움)
   ar6    기존 파싱 결과(_images/index.jsonl)에서 그림 종류별·문서 형식별 VLM 호출 수를 센다. 새 VLM 호출 없음.
          --ocr을 주면(선택, 로컬 OCR — VLM 아님) OCR 게이트(글자 수≥N·숫자 비율<0.30) 후보 비율도 같이 잰다.
   t1     PG 표본 청크의 chunk_term을 common.core.text.tokens로 다시 계산해 저장된 값과 비교(재색인 필요 여부).
@@ -51,12 +51,11 @@ def _out_dir(name, override=None):
 
 
 # ───────────────────────── AR1 — 조각 투표 계열 끄고 켬(사람 정답 재채점) ─────────────────────────
-AR1_SWITCH_KEYS = ("PARSE_FUSE", "PARSE_FUSE_SIGNALS", "PARSE_FUSE_REREAD")
+AR1_SWITCH_KEYS = ("PARSE_FUSE", "PARSE_FUSE_SIGNALS")
 AR1_CONFIGS = [
     ("baseline", {}),
     ("PARSE_FUSE_off", {"PARSE_FUSE": "0"}),
     ("PARSE_FUSE_SIGNALS_off", {"PARSE_FUSE_SIGNALS": "0"}),
-    ("PARSE_FUSE_REREAD_off", {"PARSE_FUSE_REREAD": "0"}),
 ]
 
 

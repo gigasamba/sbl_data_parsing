@@ -68,17 +68,18 @@
 - Status: todo — 검토 등급 A(핑거프린트).
 
 <a id="pl-34"></a>
-## pl-34 · 파싱 p1 묶음 — 재판독 P3·scan_dedup·렌더 OCR 신호 지우기
+## pl-34 · 파싱 p1 묶음 — 재판독(P2·P3)·scan_dedup·렌더 OCR 신호 지우기
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P2·P5·T10): 재판독 P3(`reread_stage3.py`, 프롬프트 `value_choice`)를 코드에서 지우고, 같은 p1 묶음에서 scan_dedup(`scan_dedup.py`)과 렌더 OCR 신호(`figures/vlm_page.py`의 신호 부분)도 지운다. `_page_texts`는 `fill_scan_pages`가 쓰므로 남긴다. [pl-04](#pl-04)(represent)의 일부를 걷어냄.
 - code_fp p1이 바뀜 — 0.1.0 핑거프린트 묶음, 검토 등급 A.
 - 한 것(10-30 `feature/pl34-p1-cleanup`):
-  - 지움: `reread_stage3.py`(재판독 P3 — 그림 경계 OCR·VLM 선택형) · `scan_dedup.py`(스캔 쪽 OCR/VLM 중복 제거) · 프롬프트 `resources/prompts/common/value_choice` · `vlm_page.py`의 렌더 OCR 신호(`_render_ocr_chars`·`ocr_chars` 칸·이유 `ocr_gt_text`). `_page_texts`(+ `_doc_page_count`)는 `represent.py`로 옮김(로직 그대로 — `fill_scan_pages`·`_ocr_pages`가 씀).
-  - 설정 칸 지움(옛 설정 파일에 남아 있으면 경고만 — `REMOVED`): `pipeline.extract.{dedup_scan,signal_ocr,ocr_gt_max}`, `pipeline.transform.represent.fuse_reread_p3`, `pipeline.transform.represent.reread.{p3_img_max,vlm_max,vlm_max_tokens}`.
-  - 같이 고침: `run_docs.py`·`mcp_parse_service.py`가 넘기던 `PARSE_FUSE_REREAD_P3=0`(칸이 없어져 `--set`이 거부할 것이라 지움) · 측정 도구 `server_checks ar1`의 P3 설정·`--run-vlm`·P3 호출 추정, `ar6`의 P3 충돌 추정.
-  - 바뀐 동작: P3(기본 켬)이 P2가 미확인으로 남긴 자리를 그림 OCR·VLM으로 고르던 것이 없어짐 — 그 자리는 미확인 그대로. 렌더 OCR 신호·dedup은 기본 꺼짐이라 기본 동작 그대로. 쪽 신호 캐시(`page_signals@v3`)는 그대로 씀(옛 캐시의 `ocr_chars` 칸은 안 봄).
-  - 핑거프린트: p1 `660fa1588e57` → `ca87ef714d14`(서버 문서 후보정 다시 — 0.1.0 묶음). FINGERPRINT·p0·r·s·엔진 키 그대로.
-  - 안 한 것: `common/ai/{adk,agent_prompts}.py` 주석의 `reread_stage3`·`value_choice` 언급은 그대로(공용 파일 — 고치면 다른 층 지문이 바뀜). 옛 캐시 폴더 `_reread_p3/_vlm_cache`는 `purge_caches` 목록에 남겨 정리되게.
-- 파일: `pipeline/transform/represent/{represent,fuse}.py`, `pipeline/transform/figures/vlm_page.py`, `pipeline/config.py`, `common/core/artifacts.py`(LAYER_CODE p1 목록), `common/config/sample.py`, `pipeline/{mcp_parse_service,eval/server_checks}.py`, `deploy/host/scripts/run_docs.py`, 시험(`test_vlm_page`·`test_server_checks`·`test_agent_prompts`·`test_paths`·`test_represent`·`test_run_docs`).
+  - 결정 보탬(사용자 10-30, 허브 전달): 재판독은 P3만이 아니라 **전부**(P2 `reread.py` 좌표 재판독 OCR 포함) 끄고 지운다 — 같은 PR(p1 한 번만 바뀜).
+  - 지움: `reread.py`(재판독 P2 — 근소·한 계열 조각을 좌표로 다시 OCR) · `reread_stage3.py`(재판독 P3 — 그림 경계 OCR·VLM 선택형) · `scan_dedup.py`(스캔 쪽 OCR/VLM 중복 제거) · 프롬프트 `resources/prompts/common/value_choice` · `vlm_page.py`의 렌더 OCR 신호(`_render_ocr_chars`·`ocr_chars` 칸·이유 `ocr_gt_text`). `_page_texts`(+ `_doc_page_count`)는 `represent.py`로, 그림 crop OCR이 쓰던 `reread._default_ocr`(+ 임시 폴더 `output/_reread_tmp`)는 `figures.py`로 옮김(로직 그대로). `represent._engine_out_rank`(P2 폴백 전용)도 지움. 적재 `parsing_meta.py`의 role='reread' 행·요약 조각을 지움(표 구조는 그대로 — 그 행이 안 생길 뿐).
+  - 설정 칸 지움(옛 설정 파일에 남아 있으면 경고만 — `REMOVED`): `pipeline.extract.{dedup_scan,signal_ocr,ocr_gt_max}`, `pipeline.transform.represent.fuse_reread_p3`, `pipeline.transform.represent.{fuse_reread,reread_fallback_best}`, 절 `pipeline.transform.represent.reread` 통째(dpi·margin·max·pad_pt·p3_img_max·vlm_max·vlm_max_tokens).
+  - 같이 고침: `run_docs.py`가 넘기던 `--set PARSE_FUSE_REREAD_P3=0`·`FUSE_REREAD_MAX=3`·`FUSE_REREAD_DPI=120`과 `mcp_parse_service.py`의 `PARSE_FUSE_REREAD_P3=0`(칸이 없어져 `--set`이 거부할 것이라 지움 — **배포 때 코드와 `deploy/host/`를 같이 바꿀 것**, 옛 run_docs.py가 남으면 모든 파싱 레인이 종료 2) · 측정 도구 `server_checks ar1`의 재판독 설정(P2·P3)·`--run-vlm`·P3 호출 추정, `ar6`의 P3 충돌 추정.
+  - 바뀐 동작: 재판독(P2·P3, 기본 켬)이 근소·미확인 조각을 다시 읽어 승자를 바꾸던 것이 없어짐 — 융합(P1) 결과의 split·미확인이 그대로 남고 rep.fused에 `reread` 칸이 안 생김(AI.ParsingMeta의 role='reread' 행도 안 생김). 렌더 OCR 신호·dedup은 기본 꺼짐이라 기본 동작 그대로. 쪽 신호 캐시(`page_signals@v3`)는 그대로 씀(옛 캐시의 `ocr_chars` 칸은 안 봄).
+  - 핑거프린트: p1 `660fa1588e57` → `81cfe39fd09e`(서버 문서 후보정 다시 — 0.1.0 묶음). FINGERPRINT·p0·r·s·엔진 키 그대로.
+  - 안 한 것: `common/ai/{adk,agent_prompts}.py` 주석의 `reread_stage3`·`value_choice` 언급은 그대로(`adk.py`는 p1·s·r 셋 모두의 지문에 들어가 주석만 고쳐도 서버 재청크·재임베딩 — 허브 10-30, s/r이 바뀌는 판에 같이). 옛 캐시 폴더 `_reread_p3/_vlm_cache`는 `purge_caches` 목록에 남겨 정리되게.
+- 파일: `pipeline/transform/represent/{represent,fuse}.py`, `pipeline/transform/figures/{vlm_page,figures}.py`, `pipeline/load/parsing_meta.py`, `pipeline/shared/{meaning,artifacts}.py`, `pipeline/config.py`, `common/core/artifacts.py`(LAYER_CODE p1 목록), `common/config/sample.py`, `pipeline/{mcp_parse_service,eval/server_checks}.py`, `deploy/host/scripts/run_docs.py`, 시험(`test_vlm_page`·`test_server_checks`·`test_agent_prompts`·`test_paths`·`test_represent`·`test_run_docs`).
 - Status: done (10-30 `feature/pl34-p1-cleanup`, 등급 A)
 
 <a id="pl-35"></a>
@@ -105,7 +106,7 @@
 ## pl-04 · represent — 가장 좋은 결과를 고르고 고치기
 - 이유: 엔진마다 결과가 다르다. 핸드오프는 가장 정확한 글이어야 한다.
 - 무엇: 대표 엔진 고르기(정확도 + 풍부함), 투표로 줄 단위 합치기, 다투는 곳 OCR/VLM 다시 읽기, 엔진 사이 라벨·값 교차 확인, 글자 PDF 안 스캔 쪽 채우기, 표준 표(`tables_std`), 기호·위첨자/아래첨자 표준화, 표 잇기, 파싱 QA.
-- 파일: `pipeline/transform/represent/represent.py`, `fuse.py`, `reread.py`, `reread_stage3.py`, `crosscheck.py`, `table_std.py`, `parse_qa.py`.
+- 파일: `pipeline/transform/represent/represent.py`, `fuse.py`, `crosscheck.py`, `table_std.py`, `parse_qa.py`(재판독 `reread.py`·`reread_stage3.py`는 [pl-34](#pl-34)에 지움).
 - Status: done
 
 <a id="pl-05"></a>

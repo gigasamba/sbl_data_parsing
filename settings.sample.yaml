@@ -323,13 +323,11 @@ pipeline:
     represent:
       context: true  # 문서·쪽 신호 맥락(rep.context·decisions) 기록(=0이면 안 남김) · 기본 true · 값: true·false · env=PARSE_CONTEXT [끔: ''·0·none·false]
       fuse: true  # 엔진별 결과 조각 투표(융합 P1) 사용(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_FUSE [끔: ''·0·none·false]
-      fuse_reread: true  # 융합 뒤 근소·미확인 자리를 다시 읽는 재판독(P2) 사용(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_FUSE_REREAD [끔: ''·0·none·false]
       fuse_signals: true  # 융합 점수에 사전·명부·교차 언급 신호를 반영(=0이면 기본 점수만) · 기본 true · 값: true·false · env=PARSE_FUSE_SIGNALS [끔: ''·0·none·false]
       post:  # [파라미터] 후보정 기능 선택: all(전부)|none(끔)|콤마 목록(vlm_page,supsub,charts,figures,context,attachments) — 없으면 자리마다 다름(파이프라인 all · parse MCP 서비스 supsub), 빈 값은 끔(옛 get(X, 'all')의 '' — blank keep) · 쓴 글자 그대로 rep.post.config에 남음(YAML 목록은 쉼표로 이음 — S7c2) · 기본 없음 · 값: all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments) · env=PARSE_POST [빈 글자 유지] [서버 옛 값: all]
       qa_carry_forward: true  # parse_qa가 지워진 문서 결과를 이전 qa.json에서 가져옴(=0이면 안 가져옴) · 기본 true · 값: true·false · env=PARSE_QA_CARRY_FORWARD [끔: 0만]
       qa_light: false  # =1이면 native 대비 풀문서 CER·순서 비교를 생략(경량화) · 기본 false · 값: true·false · env=PARSE_QA_LIGHT [켬: 1만]
       rep_select:  # [파라미터] 대표 엔진 선택 방식: first(첫 성공 엔진)|acc(정확도만)|그 외 best(정확도+풍부도) · 기본 없음 · 값: first·acc·best 중 하나(그 밖 값 = best) · env=PARSE_REP_SELECT
-      reread_fallback_best: true  # P2도 못 가리면 산출 정확도 최고 엔진 후보로 대체(=0이면 안 함) · 기본 true · 값: true·false · env=REREAD_FALLBACK_BEST [끔: 0만]
       shadow: false  # 그림자 모드(파싱 판단 규칙 vs LLM 제안 비교)를 켬(=1이면 켬) · 기본 false · 값: true·false · env=PARSE_SHADOW [끔: ''·0·none·false]
       shadow_max: 50  # 그림자 모드 한 번에 훑는 문서 수 상한 · 기본 50 · 값: 0 이상 정수 · env=PARSE_SHADOW_MAX
       standardize: true  # 엔진 묶음 직후 기호 맵·첨자 표기 표준화(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_STANDARDIZE [끔: ''·0·none·false]
@@ -337,11 +335,6 @@ pipeline:
       table_inline: true  # 엔진별 표 그리드를 모아 본문 제자리에 GFM 표로 넣음(=0이면 대표 엔진 표만) · 기본 true · 값: true·false · env=PARSE_TABLE_INLINE [끔: ''·0·none·false]
       table_std: true  # 표를 표준 형식(tables_std 칸)으로 변환(=0이면 칸 자체가 안 생김) · 기본 true · 값: true·false · env=PARSE_TABLE_STD [끔: ''·0·none·false]
       table_stitch: true  # 쪽 경계에서 쪼개진 표를 이어 붙임(=0이면 쪽마다 쪼개진 채 둠) · 기본 true · 값: true·false · env=PARSE_TABLE_STITCH [끔: ''·0·none·false]
-      reread:
-        dpi: 400  # [파라미터] 융합 재판독(P2)용 크롭 재렌더 해상도(dpi) · 기본 400 · 값: 0 이상 정수 · env=FUSE_REREAD_DPI
-        margin: 1.5  # [파라미터] 승자와 최선 패자 점수차가 이 값 이하면 '근소'로 보고 재판독 · 기본 1.5 · 값: 0 이상 · env=FUSE_REREAD_MARGIN
-        max: 20  # [파라미터] 문서당 융합 재판독(P2) 횟수 상한(0이면 재판독 안 함) · 기본 20 · 값: 0 이상 정수 (0 = 재판독 안 함) · env=FUSE_REREAD_MAX
-        pad_pt: 40.0  # [파라미터] 재판독 때 bbox 둘레에 더할 여백(pt) · 기본 40.0 · 값: 0 이상 · env=FUSE_REREAD_PAD_PT
     structure:
       bundle_keep_empty_fig: false  # =1이면 내용이 빈 VLM 그림도 청크로 색인(되돌리기), 기본 0은 빈 그림 청크 안 만듦 · 기본 false · 값: true·false · env=BUNDLE_KEEP_EMPTY_FIG [켬: 1만]
       chunk_head: true  # 청크 앞에 [문서명·고객·절 제목] 머리말을 붙임(=0이면 안 붙임) · 기본 true · 값: true·false · env=CHUNK_HEAD [끔: 0만]
