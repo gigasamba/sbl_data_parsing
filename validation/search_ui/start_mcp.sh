@@ -6,5 +6,5 @@
 # 영구 다리, env가 이김)은 env로 읽히므로 셸에 남은 값이 새지 않게 지운다(리뷰 S7e2 — VLM/LLM 없는 검증 서버).
 set -euo pipefail
 . "$(dirname "$0")/_env.sh"
-unset VLM_BASE_URL VLM_MODEL VLM_API_KEY VLM_CONCURRENCY VLM_RETRY VLM_TIMEOUT OCRVLM_MODEL
+unset VLM_BASE_URL VLM_MODEL VLM_API_KEY VLM_CONCURRENCY VLM_RETRY VLM_TIMEOUT
 exec "$PY" -m mcp_server.main

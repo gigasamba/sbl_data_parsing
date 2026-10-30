@@ -244,6 +244,9 @@ class PipelineServiceTrigger(Section):
 
 
 class PipelineTransformFigures(Section):
+    REMOVED = frozenset(
+        {"ocrvlm_prompt"}
+    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     chart_values_det: bool | None = F(
         True, "CHART_VALUES_DET", "차트 값을 결정적(규칙) 추출로 보정(=0이면 VLM 눈대중 값만 사용)", off=("0",)
     )
@@ -261,7 +264,6 @@ class PipelineTransformFigures(Section):
         10, "FIG_OCR_FALLBACK_MIN_CHARS", "OCR 대체 사용 최소 의미 글자 수(미만이면 로고·워터마크로 보고 버림)"
     )
     ocr_parallel: int | None = F(3, "FIGURES_OCR_PARALLEL", "그림 crop OCR 병렬 워커 수(OCR 대상 수가 상한)")
-    ocrvlm_prompt: str | None = F(None, "OCRVLM_PROMPT", "OCR 전용 소형 VLM 엔진(ocr_vlm)에 보낼 지시문(모델 카드 권장값)", pinned="engine")
     overlay_cluster: bool | None = F(
         True, "FIG_OVERLAY_CLUSTER", "겹친 개체(그림+글상자·도형)를 한 묶음으로 찾아 기록(=0이면 그림마다 따로)", off=("0",)
     )
