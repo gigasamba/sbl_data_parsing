@@ -390,49 +390,49 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 | 단계 | 어디서 → 어디로 | run_env | 만드는 곳·스크립트 | 이미지 | 코드 | 컨테이너 구성 |
 |---|---|---|---|---|---|---|
-| ① 개발 반입 | PC → 개발 서버(폐쇄망) | `local` → `dev` | PC: `IMAGE_TARGET=pipeline-runtime`·`mcp-runtime bash deploy/release/build_ship.sh` | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`(코드 없음) | PC git 커밋 → 코드 폴더 묶음 `output/ship/code-<버전>-<커밋>.tar.gz`(`CODE_COMMIT`) | `/srv/rag/code/<버전>-<커밋>` → `live` 링크를 `/app/deploy`에 읽기 전용 마운트(`CODE_DIR`). 코드만 바꿀 때 = 새 코드 폴더 + 다시 띄움 |
-| ② 운영 반입 | 개발 서버 → 운영(수집) 서버 | `dev` → `prd` | 개발 서버: `bash /srv/rag/code/live/deploy/release/bake.sh <실행 이미지 판>` | 코드가 든 이미지 `data-pipeline`·`mcp-server`(개발에서 쓴 실행 이미지 그 판 + 코드) | 개발 서버에서 시험한 `live` 폴더(코드 커밋은 이미지 라벨 `org.opencontainers.image.revision`) | 컨테이너에 코드 폴더 마운트 없음(`CODE_DIR` 두지 않음) — 호스트 스크립트(`deploy/host/`)만 같이 온 코드 묶음에서. 바꿀 때 = 새로 구운 이미지 |
+| ① 개발 반입 | PC → 개발 서버(폐쇄망) | `local` → `dev` | PC: `IMAGE_TARGET=pipeline-runtime`·`mcp-runtime bash deploy/release/build_ship.sh` → 이미지 git(`sbl_images`)에 분할 조각 | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`(코드 없음) | `main`(release 병합)의 커밋 — 코드 git zip을 푼 폴더(`CODE_COMMIT`) | 그 코드 폴더를 `/app/deploy`에 읽기 전용 마운트(스크립트가 자기 루트를 자동으로 — 아래). 코드만 바꿀 때 = 새 코드 zip + 다시 띄움 |
+| ② 운영 반입 | 개발 서버 → 운영(수집) 서버 | `dev` → `prd` | 개발 서버: `bash <코드 폴더>/deploy/release/bake.sh <실행 이미지 판>` | 코드가 든 이미지 `data-pipeline`·`mcp-server`(개발에서 쓴 실행 이미지 그 판 + 코드) | 개발 서버에서 시험한 코드 폴더(코드 커밋은 이미지 라벨 `org.opencontainers.image.revision`) | 컨테이너에 코드 폴더 마운트 없음(`CODE_DIR` 두지 않음) — 호스트 스크립트(`deploy/host/`)만 같이 온 코드 묶음에서. 바꿀 때 = 새로 구운 이미지 |
 
 - run_env는 `local`(PC)·`dev`(개발 서버)·`prd`(운영 서버) 셋뿐(`stage`는 10-29에 없앰).
-- 어느 코드인가: ①은 PC의 git 커밋(묶음 안 `CODE_COMMIT`, 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`), ②는 개발 서버 `live` 폴더 그대로(구운 이미지 라벨에 커밋·실행 이미지 ID).
+- 어느 코드인가: ①은 PC의 git 커밋(묶음 안 `CODE_COMMIT`, 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`), ②는 개발 서버에서 시험한 코드 폴더 그대로(구운 이미지 라벨에 커밋·실행 이미지 ID).
 - 의존성(`requirements*`·휠·Dockerfile·assets)이 바뀌면 ①에서 새 실행 이미지가 필요하다(코드의 `deploy/docker/DEPS_HASH`와 이미지 지문이 다르면 시작·굽기 모두 거부).
 - PC에서 `IMAGE_TARGET=pipeline`·`mcp`로 코드가 든 이미지를 직접 빌드하는 길은 PC 시험(이미지 관문)·비상용으로만 남긴다 — 운영 반입은 ②(개발에서 시험한 그대로). 오버레이 패치(§5-8)도 운영 서버 비상 수정용.
 
-#### 개발 서버 폴더 구조 — 이미지와 코드 폴더를 한 반입 폴더에 같이(①)
+#### 개발 서버 설치 — 코드 git·이미지 git을 zip으로 받아 한 폴더에(①, 사용자 10-30)
 
-PC가 보내는 반입 묶음은 **폴더 하나**다 — 실행 이미지(조각)와 코드 폴더 묶음이 같은 판 폴더 안에 같이 들어 있다. 받은 그대로 서버에 옮긴다.
+반입은 git 저장소 두 개를 **zip으로 받아 같은 폴더에 풀면** 끝난다.
+- 코드: `gigasamba/sbl_data_parsing`의 `main`. 받을 판의 태그나 커밋으로 받는다.
+- 이미지: 비공개 `jehunlee302/sbl_images`. 판마다 폴더가 있고, 실행 이미지를 분할한 조각이 들어 있다.
 
-```
-0.1.0-rc0/                                ← 반입 폴더 하나(PC output/ship/dev/<판>/ — 이 폴더째 옮김)
-├── data-pipeline-runtime/                 ← 파이프라인 실행 이미지(코드 없음) 조각
-│   ├── data-pipeline-runtime.tar.gz.part000 … part008
-│   └── data-pipeline-runtime.sha256
-├── mcp-server-runtime/                    ← 검색 MCP 실행 이미지(코드 없음) 조각
-│   ├── mcp-server-runtime.tar.gz.part000 … part003
-│   └── mcp-server-runtime.sha256
-├── code-0.1.0-<커밋>.tar.gz               ← 코드 폴더 묶음(저장소 트리 그대로)
-└── code-0.1.0-<커밋>.sha256
-```
-
-서버에 설치한 뒤 모양 — 이미지는 `docker load`(podman load)로 컨테이너 도구 안에 들어가고, 코드 묶음은 판 폴더로 푼다. 컨테이너는 `live`가 가리키는 판 폴더 **하나**를 `/app/deploy`에 읽기 전용으로 붙여, 그 아래 `common/`·`pipeline/`·`mcp_server/`·`resources/`를 그대로 쓴다(하위 폴더를 따로 지정하지 않음 — 이미지의 `PYTHONPATH=/app/deploy`).
+코드는 zip을 푼 폴더가 그대로 코드 폴더다(tar 묶음·`live` 링크·`CODE_DIR` 불필요).
 
 ```
-/srv/rag/
-├── env/settings.yaml                      ← $SERVER_ENV_DIR (image: data-pipeline-runtime:<판> · mcp-server-runtime:<판>)
-└── code/
-    ├── 0.1.0-<커밋>/                       ← 코드 묶음을 푼 판 폴더 = 저장소 트리 그대로(주인 10001 또는 모두 읽기)
-    │   ├── common/   pipeline/   mcp_server/   resources/
-    │   ├── deploy/   (docker/ · host/ · release/)   ← 호스트 스크립트도 여기 것을 씀(deploy/host/scripts/…)
-    │   ├── tests/server/   VERSION   CODE_COMMIT
-    │   └── deploy/docker/DEPS_HASH        ← 실행 이미지 지문과 같아야 시작
-    ├── 0.1.0-<앞 커밋>/                    ← 되돌리기용으로 남김(최근 2개 이상)
-    └── live -> 0.1.0-<커밋>                ← 지금 쓰는 판 · CODE_DIR=/srv/rag/code/live
+/srv/rag/                                    ← 작업 폴더(아무 곳이나 — 두 zip을 여기 풂)
+├── env/settings.yaml                        ← $SERVER_ENV_DIR · image: data-pipeline-runtime:<판> · mcp-server-runtime:<판>
+├── sbl_data_parsing-<판>/                    ← 코드 zip을 푼 폴더 = 코드 폴더(컨테이너 /app/deploy에 읽기 전용)
+│   ├── common/   pipeline/   mcp_server/   resources/
+│   ├── deploy/host/scripts/trigger.sh · mcp_up.sh · run_tool.sh   ← 여기서 실행
+│   ├── deploy/docker/DEPS_HASH                ← 실행 이미지 지문과 같아야 시작
+│   └── VERSION   CODE_COMMIT                  ← CODE_COMMIT = zip이 채운 커밋(시작 로그에 찍힘)
+└── sbl_images-main/                          ← 이미지 zip을 푼 폴더
+    ├── load.sh                                ← sha256 확인 → 조각 합치기 → docker/podman load
+    └── <판>/data-pipeline-runtime/ · mcp-server-runtime/   ← *.tar.gz.part000… + *.sha256
 ```
 
-- 코드만 바뀐 판은 반입 폴더에 코드 묶음만 온다(이미지는 그대로 — `DEPS_HASH`가 같을 때). 새 판 폴더에 풀고 `live`를 옮긴 뒤 다시 띄운다.
-- 스크립트는 `live` 아래 것으로 실행한다(`bash /srv/rag/code/live/deploy/host/scripts/trigger.sh …`) — 컨테이너가 보는 코드와 호스트 스크립트가 같은 판이 되게.
+설치 순서(처음 한 번):
+1. 두 zip을 같은 폴더에 푼다.
+2. 컨테이너 사용자(UID 10001)가 코드를 읽을 수 있게 한다: `chmod -R a+rX sbl_data_parsing-<판>`.
+3. 이미지를 불러온다: `bash sbl_images-main/load.sh <판>`. podman이면 `DOCKER=podman`을 앞에 붙인다.
+4. `$SERVER_ENV_DIR/settings.yaml`의 `pipeline.host.image`·`mcp.host.image`를 실행 이미지 태그로 적는다.
+5. 코드 폴더에서 실행한다: `bash sbl_data_parsing-<판>/deploy/host/scripts/mcp_up.sh`, `… trigger.sh parse` 등.
+   - 이미지 태그가 `*-runtime`이면 스크립트가 자기 코드 폴더 루트를 `/app/deploy`에 붙인다(`image_vars.sh` `code_dir_default`).
+   - 셸이나 systemd에 `CODE_DIR`가 있으면 그 값이 이긴다(옛 `/srv/rag/code/live` 배치).
+6. 확인: 시작 로그 첫 줄 `[image] 이미지 … · 코드 <커밋> · 의존성 …`으로 어느 판이 도는지 본다.
 
-개발 서버 순서: 실행 이미지 적재(아래 5-2와 같은 `docker load`) → `/srv/rag/code/<버전>-<커밋>/`에 코드 폴더 묶음 풀기(`tar -xzf … --no-same-owner` 뒤 `chown -R 10001:10001` 또는 `chmod -R a+rX` — 컨테이너 사용자 10001이 읽어야 함) → `ln -sfn <그 폴더> /srv/rag/code/live` → settings.yaml `pipeline.host.image`·`mcp.host.image`를 실행 이미지 태그로 → systemd unit·셸에 `CODE_DIR=/srv/rag/code/live` → `trigger.sh`·`mcp_up.sh`. 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`으로 어느 판이 도는지 확인. 되돌리기는 `release-and-patch.md` §1-1.
+- 코드만 바뀐 판: 새 코드 zip을 옆에 풀고, 새 폴더의 스크립트로 다시 띄운다. 의존성(`DEPS_HASH`)이 같으면 이미지는 그대로 둔다. 되돌리기는 옛 폴더의 스크립트로 다시 띄우면 된다.
+- systemd unit(`deploy/host/systemd/`)은 스크립트 경로를 그 판 폴더로 적는다.
+- git clone으로 받아도 동작은 같다. 다만 `CODE_COMMIT`이 채워지지 않아 시작 로그의 커밋이 틀 그대로 보인다(zip·`git archive`만 채움).
+- tar 묶음(`build_ship.sh`의 `code-<버전>-<커밋>.tar.gz`) + `live` 링크 + `CODE_DIR` 방식도 그대로 쓸 수 있다.
 
 ### 5-1. 버전 올리기
 

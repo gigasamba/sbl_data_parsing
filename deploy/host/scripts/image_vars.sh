@@ -13,6 +13,13 @@ _set_somewhere() {   # _set_somewhere <이름들> — 셸 env에 값이 있으�
   for n in $1; do [ -n "${!n:-}" ] && return 0; done
   return 1
 }
+# op-06(사용자 10-30) — 실행 이미지(*-runtime:태그)인데 CODE_DIR가 비면 이 코드 폴더 루트(부른 스크립트가 cd한 곳 —
+#   git zip을 푼 폴더 그대로)를 코드 폴더로 쓴다. 이미 CODE_DIR가 있으면 그 값(옛 live 링크 배치). 코드가 든 이미지는 손대지 않음.
+code_dir_default() {   # code_dir_default <이미지 변수 이름>
+  [ -n "${CODE_DIR:-}" ] && return 0
+  case "${!1:-}" in *-runtime:*) CODE_DIR=$(pwd); export CODE_DIR ;; esac
+  return 0
+}
 need_image() {
   local new old example
   case "$1" in
