@@ -4,7 +4,7 @@ Data that imitates what the server reads from outside systems lives here, in one
 
 | Folder | Stands in for | Content | Git |
 |---|---|---|---|
-| `object_storage/` | Object Storage bucket (original documents) | one document = `<system>/<uuid>/<file>`: `CRMS/` 21 hard cases, `SFDC/` 12 RFP documents. Why each document exists: [object_storage/test_doc_purpose.md](object_storage/test_doc_purpose.md) | tracked, bytes as-is |
+| `object_storage/` | Object Storage bucket (original documents) | one document = `<system>/<uuid>/<file>`: `CRMS/` 21 hard cases + 36 hanbit documents, `SFDC/` 12 RFP + 10 hanbit documents. Why each document exists: [object_storage/test_doc_purpose.md](object_storage/test_doc_purpose.md) | tracked, bytes as-is |
 | `edw/` | company EDW (SQL Server) | `ai`·`crms`·`las`·`sfdc` `.sql` (schema + synthetic rows, `[SYNTHETIC]`) and the `.sqlite` built from them; `meta_rdb/` = RDB document-location and master tables (old `unstructured/synth-meta-rdb/meta`, read by three server tests) | tracked |
 | `answer_test/rag_qa/` | serving Answer Agent (PC answer check) | agent package used by `python -m validation.e2e.answer_gen` | tracked |
 | `docker/` | server containers | PC test compose (`compose.pg.yml`, `compose.test.yml`, `smoke_test.sh`) | tracked |
