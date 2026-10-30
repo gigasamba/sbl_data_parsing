@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. 수집 → 파싱([parse.md](parse.md)) → 구조화 → 적재(pgvector·정형 DB)·게시(silver), 서버 러너(`run_docs.py`) 레인·대기열.
 
-순서(주제별): 수집 pl-01·pl-29 → 구조화 pl-06·pl-15·pl-16 → 적재 pl-07·pl-13·pl-14·pl-19 → 정형 DB·문서 대장 pl-08·pl-12 → 게시 pl-09·pl-26 → 실행·흐름 러너 pl-10·pl-18·pl-23·pl-24·rn-01·rn-02·rn-03·rn-04 → DB 스키마·저장 구조·분류 pl-25·pl-32·pl-33·pl-28 → 코드와 다른 점.
+순서(주제별): 수집 pl-01·pl-29 → 구조화 pl-06·pl-15·pl-16 → 적재 pl-07·pl-13·pl-14·pl-19 → 정형 DB·문서 대장 pl-08·pl-38·pl-12 → 게시 pl-09·pl-26 → 실행·흐름 러너 pl-10·pl-18·pl-23·pl-24·rn-01·rn-02·rn-03·rn-04 → DB 스키마·저장 구조·분류 pl-25·pl-32·pl-33·pl-28 → 코드와 다른 점.
 
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
@@ -74,6 +74,13 @@
 - 무엇: `contract_master`·`client_master`·`prod_master`·`doc_contract_link`(점수 매기는 연결기)·`doc_location`·`doc_registry`·`doc_hidden`·`doc_table`·`doc_cell`. PG 또는 SQLite.
 - 파일: `pipeline/load/structured.py`, `common/store/structdb.py`.
 - Status: done
+
+<a id="pl-38"></a>
+## pl-38 · 마스터 CSV 활용 방안 설계(후순위)
+- 결정(사용자 10-30): "contract_master, client_master 등 활용하는 방안 같이 설계하자. 후순위로 해줘."
+- 사실: PR 3a 뒤에는 `resources/vocab/glossary/contract_master.csv`·`client_master.csv`를 읽는 코드가 없다. `client_master.example.csv`는 `gen_roster` 입력. 두 파일은 설계가 끝날 때까지 git에 남긴다 — 3a에서 지우지 않는다.
+- 열린 질문: 마스터마다 무엇에 쓰나(검색 거르기 / 분류 단서 / mc-05의 고객 별칭 그룹), EDW 고객 연결([pl-29](#pl-29))·분류 단계([pl-33](#pl-33))와 어떻게 이어지나.
+- Status: todo — 후순위, 사용자와 함께 설계(grill). 0.1.0 아님.
 
 <a id="pl-12"></a>
 ## pl-12 · 문서 대장 upsert와 게시 가드
