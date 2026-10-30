@@ -356,13 +356,11 @@ class PipelineExtract(Section):
             "signal_ocr",
             "disk_free_warn_gb",
             "engine_cache_warn_gb",
+            "engine_scope",
         }
-    )  # 사용자 10-29 — phase 없앰 · 10-30 auto_reparse_changed·parallel 지움(pl-35) · dedup_scan·ocr_gt_max·signal_ocr 지움(pl-34)(남으면 경고만)
+    )  # 사용자 10-29 — phase 없앰 · 10-30 auto_reparse_changed·parallel 지움(pl-35) · dedup_scan·ocr_gt_max·signal_ocr 지움(pl-34) · engine_scope 지움(pl-03 — stack 하나)(남으면 경고만)
     doc_parallel: int | None = F(1, "PARSE_DOC_PARALLEL", "대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개)")
     engine_retry: int | None = F(1, "PARSE_ENGINE_RETRY", "엔진 별도 프로세스가 비정상 종료했을 때 바로 다시 시도할 횟수(회)")
-    engine_scope: str | None = F(
-        None, "PARSE_ENGINE_SCOPE", "문서마다 돌릴 엔진 범위(stack = 형식별 stack.json 목록만 / all = 등록 엔진 전부)"
-    )
     fill_merged: bool | None = F(True, "PARSE_FILL_MERGED", "표에서 병합 셀이 덮은 빈 칸을 원본 칸 값으로 채울지", pinned="engine")
     hidden_overlap_max: int | None = F(
         20, "PARSE_HIDDEN_OVERLAP_MAX", "'숨은 글자-그림 겹침' 신호로 쪽 VLM 후보에 올릴 쪽 수 상한(쪽, 0=끔)"

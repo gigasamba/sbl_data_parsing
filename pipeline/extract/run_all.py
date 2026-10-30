@@ -11,11 +11,9 @@
   OCR 엔진(OCR_ENGINES — rapidocr·rapidocr_ko)은 ocr_engine(PARSE_OCR_ENGINE, 기본 끔)일 때만 돈다 — 이미지·스캔 문서는 VLM 엔진만.
     글자 PDF 안의 스캔 쪽은 여기서 OCR 엔진을 더하지 않고 대표 결과(represent)의 쪽 VLM이 그 쪽만 채운다.
   진행 현황: 1건 끝날 때마다 <out>/PROGRESS.md 갱신(형식별·엔진별 표·남은 시간) — 서버에서 `watch -n 30 cat output/parse/PROGRESS.md`.
-  --engines 생략 시 형식별로 등록된 엔진 전부(tools/engines/<스택>/parser.py의 FORMATS).
-  PARSE_ENGINE_SCOPE(환경변수, 기본 all) — stack: 문서마다 형식 키(.pdf_text/.pdf_image/확장자, stack.json과 같은 키)에
-    해당하는 stack.json parse 목록으로만 좁힌다(생산 서버에서 PDF 1건에 OCR·VLM까지 9개+ 전부 도는 무거움 해소, 2026-10-07).
-    stack.json에 그 키가 없으면 지금처럼 그대로(핵심 엔진 합집합, 누락 방지)+1회 로그. all(기본) = 지금 동작 그대로
-    (--engines 명시 호출·compare-parse 등 실험 경로는 이 env를 안 건드리므로 영향 없음).
+  엔진 범위는 stack 하나(pl-03, 사용자 10-30 — 옛 PARSE_ENGINE_SCOPE all·--engines all 길은 지움): 문서마다 형식 키
+    (.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록만 돈다. --engines는 그 안에서 더 좁힐 뿐(비교 실험은
+    stack json을 고쳐서). stack.json에 그 키가 없으면 핵심 엔진 합집합으로 대체(누락 방지)+형식별 1회 로그.
   앞 실행 결과를 다시 쓰지 않는다(pl-32 사용자 10-30 — 실행마다 새 작업 폴더): 요청한 문서×엔진은 늘 돈다. runs.jsonl은 이번 실행의
     시간·오류 기록(보고 도구가 읽음). 같은 실행 안의 같은 내용 사본(sha 같음)은 한 번만 파싱해 복사(runs에 reused_from).
   RB3② — 미설치·미설정(환경) 엔진은 이번 실행(프로세스) 안에서 처음 실패한 문서 뒤로 같은 엔진은 나머지 문서를 시도하지 않고
@@ -87,19 +85,16 @@ def page_timeout(eng, pages, first=False):
     return round(tmo + float(x.isolate_overhead), 2)
 
 
-def engines_for_doc(doc, scope, stack_parse, types, logged_missing):
-    """문서 하나에 돌릴 엔진 후보(이후 --engines want로 더 좁혀짐) — PE1(2026-10-07, PARSE_ENGINE_SCOPE). doc은 Path.
-    scope != "stack"(기본 all) → registry.engines_for(suffix) 그대로(실험 경로·명시 --engines).
-    scope == "stack" → 문서 형식 키(.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록으로 좁힌다.
+def engines_for_doc(doc, stack_parse, types, logged_missing):
+    """문서 하나에 돌릴 엔진 후보(이후 --engines want로 더 좁혀짐) — PE1(2026-10-07) · pl-03(10-30, stack 하나). doc은 Path.
+    문서 형식 키(.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록으로 좁힌다.
     그 키가 stack.json에 없으면 그대로(핵심 엔진 합집합으로 대체, 누락 방지) + 형식별 1회만 로그.
     사용자 10-29 — .pdf_text 안 스캔 쪽 때문에 .pdf_image 엔진을 합치지 않음(대표 결과의 쪽 VLM이 그 쪽만 채움) ·
-    OCR 엔진은 ocr_engine 설정이 켜졌을 때만(두 scope 모두)."""
+    OCR 엔진은 ocr_engine 설정이 켜졌을 때만."""
     suffix = doc.suffix
     cands = registry.engines_for(suffix)
     if not pc.cfg().extract.ocr_engine:
         cands = [e for e in cands if e not in OCR_ENGINES]
-    if scope != "stack":
-        return cands
     key = types.get(doc.name, suffix.lower())
     stack_eng = stack_parse.get(key)
     if stack_eng is None:
@@ -239,20 +234,17 @@ def main():
     # pl-32(사용자 10-30) — 앞 실행의 runs.jsonl로 건너뛰거나 결과를 복사하지 않는다(실행마다 새 작업 폴더 — runs.jsonl은 이번 실행 기록만).
     # 같은 실행 안의 같은 내용 사본은 한 번만 파싱 후 복사(planned·deferred).
     jobs, skip, planned, deferred = [], Counter(), {}, []
-    scope = pc.cfg().extract.engine_scope  # S7c — 설정 객체(옛 `get(X, "all")`: 없음 → all, 빈 글자는 그대로)
-    scope = scope if scope is not None else "all"  # PE1 — stack: 문서 형식별 stack.json 목록만(생산 기본), all(기본): 지금 동작 그대로
-    stack_parse = {}
-    if scope == "stack":
-        stack = pc.stack()  # pl-32 — 진입점이 정한 판(판 번호 STACK_VERSION — PC는 파일)
-        stack_parse = stack.get("parse") or {}
-        bad = over_limit({"parse": stack_parse})  # 사용자 10-29 — 형식당 엔진 2개 넘으면 설정 오류(진입점 resolve도 같은 검사)
-        if bad:
-            raise SystemExit(f"[엔진 구성] 판 {stack.get('version_id') or '파일'} — " + " · ".join(bad))
+    # pl-03(사용자 10-30) — 엔진 범위는 stack 하나: 문서 형식별 stack.json 목록만
+    stack = pc.stack()  # pl-32 — 진입점이 정한 판(판 번호 STACK_VERSION — PC는 파일)
+    stack_parse = stack.get("parse") or {}
+    bad = over_limit({"parse": stack_parse})  # 사용자 10-29 — 형식당 엔진 2개 넘으면 설정 오류(진입점 resolve도 같은 검사)
+    if bad:
+        raise SystemExit(f"[엔진 구성] 판 {stack.get('version_id') or '파일'} — " + " · ".join(bad))
     types = doc_types(docs, out) if stack_parse else {}
     logged_missing = set()
     for doc in docs:
         sha = _sha(doc)
-        cand = engines_for_doc(doc, scope, stack_parse, types, logged_missing)
+        cand = engines_for_doc(doc, stack_parse, types, logged_missing)
         for eng in cand:
             if want and eng not in want:
                 continue
