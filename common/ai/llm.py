@@ -56,7 +56,7 @@ def configured():
 from common.ai.guard import external_ok, fake_llm, is_internal, require_internal, run_env_block  # noqa: E402,F401 — 내부망 확인은 common 한 곳
 
 # CT1(10-16) — models.py 병합(역할별 모델 프로필 조회, agent_platform.config.ModelProfile 재사용 — 사용자 결정 2026-10-06).
-# 설정 객체에서만 읽음(S7b — 호출 시점 cfg(), 전환 기간엔 env로 만든 객체라 테스트가 env를 바꾸면 반영). 기존 LLM_BASE_URL·VLM_BASE_URL·VLM_MODEL_ALT·EMBED_* 등은 그대로 하위 호환.
+# 설정 객체에서만 읽음(S7b — 호출 시점 cfg(), 전환 기간엔 env로 만든 객체라 테스트가 env를 바꾸면 반영). 기존 LLM_BASE_URL·VLM_BASE_URL·EMBED_* 등은 그대로 하위 호환.
 _ROLE_PREFIX = {"llm": "LLM", "vlm": "VLM", "ocrvlm": "OCRVLM", "embed": "EMBED"}
 
 
@@ -82,8 +82,7 @@ class ModelProfile:
 
 
 def profile(role):
-    """역할 → ModelProfile. vlm_judge는 VLM_MODEL_ALT가 있으면 그 모델, 주소·키는 VLM_*
-    (AD22 전제 — 지금은 judge용 다른 VLM 서버를 못 씀, 없으면 VLM_MODEL과 같음).
+    """역할 → ModelProfile. vlm_judge는 VLM_MODEL·VLM_*(판정 전용 모델 칸 VLM_MODEL_ALT는 10-30 지움 — pl-31).
     agent_platform import는 여기서 늦게(지연) — structure·retrieval 이미지는 agent_platform 없이도 이 모듈을
     import할 수 있어야 한다(profile()을 실제로 부르는 경로만 agent_platform이 필요, MOD 10-14)."""
     # TODO: 리팩토링 후 구현 필요
@@ -96,7 +95,7 @@ def profile(role):
     if role == "vlm_judge":
         prefix = "VLM"
         v = cfg().models.vlm
-        base, model, key = v.base_url, v.model_alt or v.model, reveal(v.api_key)
+        base, model, key = v.base_url, v.model, reveal(v.api_key)
     else:
         prefix = _ROLE_PREFIX[role]
         base, model = by_env(f"{prefix}_BASE_URL"), by_env(f"{prefix}_MODEL")  # key_env는 env 이름 글자 그대로(아래)

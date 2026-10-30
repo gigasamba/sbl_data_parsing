@@ -161,7 +161,6 @@
 | 이름 | 메모 |
 |---|---|
 | `MCP_INSTRUCTIONS` | MCP 안내 문구 |
-| `WIKI_DOMAIN_PHRASE` | 용어 초안 프롬프트의 업종 문구(기본 "바이오 CDMO") |
 
 ## 2. 자원·병렬 (보통 안 건드림 — 버거울 때만 낮춤)
 
@@ -186,6 +185,7 @@ python -m common.check.ping_models   # LLM·VLM·EMBED 실호출(OK/FAIL·지연
 
 | 판 | 바뀐 것 | 서버 할 일 |
 |---|---|---|
+| 0.1.0 지문 배치(사용자 10-30 — pl-21·pl-30) | ① 칸 지움(`Section.REMOVED` — 남아 있어도 경고만): `KOREAN_FONT`·`EVAL_SETS_DIR`·`EXP_STORE`·`LLM_EST_IN_TOKENS`·`LLM_EST_OUT_TOKENS`·`MIN_GOLD_COVERAGE`·`EXP_MAX_WORKERS`·`EXP_PROC_GB_*`·`EXP_RESERVE_GB`·`LLM_MAX_CONCURRENCY`·`WIKI_DOMAIN_PHRASE`·`DIAGRAM_RASTER_VLM` ② `run_docs.py`가 `FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`를 더는 안 넘김(읽는 코드 없었음) | 서버 settings.yaml·env 파일에서 위 이름을 지움(경고 끔) |
 | 10-30 요건 없는 코드 지움(사용자 10-30 — e2-18) | ① MCP에 노출하지 않던 내부 조회 지움: 문서 단건·그림·근거 이미지·용어·개념·문서 목록(`internal_docs.py` — MCP 도구 4개의 이름·입출력은 그대로) ② 칸 지움: `mcp.output.evid_local_roots`(`MCP_EVID_LOCAL_ROOTS`)·`evid_max_concurrency`·`evid_max_mb`·`evid_timeout_sec`·`images`(`MCP_IMAGES`)·`max_image_px`(`MCP_MAX_IMAGE_PX`), 절 `pipeline.connections.graphiti`(`GRAPHITI_NEO4J_*`) — `Section.REMOVED`라 남아 있어도 경고만 ③ 개념 위키(`structure/wiki.py`)·외부 KG 어댑터(`eval/kg_external.py`)·채점기 `chart_values_score.py` 지움 | 서버 settings.yaml에서 위 칸을 지움(경고 끔) |
 | 10-30 적재는 안 지움(사용자 10-29 — pl-13) | ① `pgvector_load load --prune` 없앰 — 적재는 더하고 고치기만, 이번 묶음에 없는 문서(원천에서 지운 문서·이번에 건너뛴 문서)를 지우지 않음(전에는 `cli load`·`run-stack --pg`·색인 빌드 `--pg`가 늘 `--prune`을 붙여 바뀌지 않은 문서까지 지웠음 — C-60) ② 칸 지움: `pipeline.load.prune_force`(`PRUNE_FORCE`)·`prune_min_ratio`(`PRUNE_MIN_RATIO`) — `Section.REMOVED`라 남아 있어도 경고만 ③ 색인 빌드(`pipeline.load.index --pg`)는 `load --replace`로 적재(다시 빌드 때 같은 문서도 새 묶음으로 고침) ④ `pipeline.cli load·run-stack`의 `--no-prune`은 받기만 하고 아무것도 안 함(옛 호출·트리거 허용 목록 호환) | 서버 settings.yaml에서 `prune_force`·`prune_min_ratio`를 지움(경고 끔) · 지운 문서를 검색에서 빼야 하면 숨김(`registry_cli hide`)이나 사람이 직접 · ⚠️ 같은 내용의 `file_path`가 바뀌면(`EDW_PATH_PREFIX`·`--path-prefix` 변경, 원본 이동·이름 변경) 옛 행이 남아 검색에 겹쳐 나옴 — 사람이 지움 |
 | RUN_ENV 셋으로(10-29, 사용자 — op-02) | ① `RUN_ENV`는 `local`·`dev`·`prd`만 — `stage`를 주면 모르는 값으로 시작 거부(옛 `stage`도 동작은 `prd`와 같았음) ② 서버(`dev`·`prd`)에서 `common.dev.llm_fake`(env 이름 `LLM_FAKE`)가 켜져 있으면 앱 시작 관문이 종료 2, 관문을 안 거치는 모듈(`docker exec … python -m …`)은 호출 때 거부(`guard.fake_llm`) — 가짜 LLM 응답은 `local` 전용 ③ 외부 모델은 지금처럼 `local`만 ④ code_fp 바뀜(settings.py — 이번 판 재처리에 포함) | 서버 settings.yaml·env에 `run_env: stage`(`RUN_ENV=stage`)가 있으면 **반입 전에 `prd`로 바꿈** · `llm_fake`가 켜져 있지 않은지 확인 |

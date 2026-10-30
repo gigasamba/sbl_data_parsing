@@ -78,16 +78,6 @@ GLOSSARY_ROOT = RES_ROOT / "vocab" / "glossary"  # 용어집·명부 예시·고
 APP_ROOT = PROJ_ROOT  # 런타임 루트(output/·assets/·docker/가 있는 곳) — PC=저장소 루트, 이미지=/app(둘 다 PROJ_ROOT와 같음, 위 설명)
 
 
-def __getattr__(name):
-    """EVAL_SETS_DIR — 평가 세트(합성 E2E·정답률 측정) 저장소. PC 기본값은 valid_env/unstructured, 서버는 설정(EVAL_SETS_DIR)으로.
-    S7b — 설정 객체에서 읽으므로 import 때가 아니라 처음 쓸 때 읽는다(이 파일은 거의 모든 프로세스가 import — pydantic을 늦게)."""
-    if name == "EVAL_SETS_DIR":
-        from common.config.settings import cfg
-
-        return Path(cfg().paths.eval_sets_dir or (PROJ_ROOT / "valid_env" / "unstructured"))
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 def child_env(extra=None):
     """하위 프로세스(python -m common.x.y·pipeline.x·validation.e2e.x 등 또는 스크립트 실행)가 파이프라인 패키지를 import하게 할
     env — PYTHONPATH를 세팅하는 유일한 자리(다른 곳은 여기를 거친다). os.environ을 베이스로 PKG_ROOT.parent
@@ -162,7 +152,7 @@ def resolve_agent_dir(agent_id):
 
 
 def resolve_run_dir(run_root, run_dir=None, *, new=True, label=None, rel_hint=None):
-    """실행(run) 폴더 — 쓰기용(만들거나 재사용). RV6(10-09) — cli/model_matrix.py·cli/stack_matrix.py에 따로 있던
+    """실행(run) 폴더 — 쓰기용(만들거나 재사용). RV6(10-09) — cli/model_matrix.py·옛 cli/stack_matrix.py에 따로 있던
     같은 이름 함수를 하나로(차이는 인자로): run_dir이 있으면 그 경로 그대로 · 없고 new=True(기본)면 run_root 아래
     오늘 시각(`%Y%m%d-%H%M%S`) 새 폴더 · 없고 new=False면 run_root 아래 가장 최근(이름 정렬 — 시각 폴더라 사전식
     정렬 = 시간 순) 폴더, 하나도 없으면 SystemExit(label·rel_hint로 기존 문구 그대로 재현). 둘 다 mkdir(parents=True,

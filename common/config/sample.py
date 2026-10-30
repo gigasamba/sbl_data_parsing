@@ -42,7 +42,6 @@ CATALOG_VALUES = {
     "EMBED_QUERY_CACHE": "",
     "EMBED_QUERY_PREFIX": "",
     "INDEX_CONF": "",
-    "LLM_EST_OUT_TOKENS": "1200",
     "LLM_MODEL": "",
     "LLM_SPEND_FILE": "",
     "MCP_BUNDLE": "",

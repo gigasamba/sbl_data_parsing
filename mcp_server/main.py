@@ -63,7 +63,6 @@
   각각 =0이면 그 상한 없음(이전 동작). 호출자별 상한은 안 둠(토큰이 서버 전체 하나뿐이라 호출자 구분이 신뢰 경계가 아님).
 실행: python -m mcp_server.main               → HTTP(streamable) http://MCP_HOST:MCP_PORT/mcp (기본 127.0.0.1:8765)
       python -m mcp_server.main --stdio       → 같은 서버의 클라이언트가 프로세스로 띄울 때
-      python -m mcp_server.main --selftest
 파일 배치(S5 10-26, refactor_plan 5-1 — FastMCP 그대로): 이 파일은 앱 조립·토큰·서버 시작만 · 도구 등록 routers/ · 실제 일 services/
 (검색 services/search/search_svc.py) · 출력 모양 schemas/ · 시작 때 읽는 설정 config.py(CFG). 위 설명의 함수 이름은 그대로다.
 """

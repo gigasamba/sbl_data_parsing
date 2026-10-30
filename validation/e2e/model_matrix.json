@@ -33,7 +33,6 @@
   "_stage2_mode_주석": "split(기본) = research는 LLM만 바꿔, 그림 검토는 VLM만 바꿔 잼(지금은 VLM 결과가 색인에 거의 안 들어가 둘이 섞이지 않음) · factorial = 2x2 전부(백로그 L1 반영 뒤)",
   "stage2_limit": 20,
   "repeats": 2,
-  "judge_cross": false,
   "extra": [],
   "datasets": {
     "dev": ["synth-4clients", "synth-images", "synth-hard"],

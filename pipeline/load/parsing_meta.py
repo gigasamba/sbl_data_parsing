@@ -313,14 +313,14 @@ _OCR_ENGINE_NAMES = {"rapidocr_ko"}  # PM2 — role='ocr'로 구분할 알려진
 
 def _vlm_model(model, env_fallback):
     """PM2 — rep.post.vlm_models에 모델 이름이 있으면 그대로, 없으면(env_fallback=True일 때만) 지금 프로세스의
-    VLM_MODEL·VLM_MODEL_ALT로 대신한다(옛 rep·게시가 파싱과 다른 env로 돌 때의 마지막 대체 경로일 뿐 — rep가
+    VLM_MODEL로 대신한다(옛 rep·게시가 파싱과 다른 env로 돌 때의 마지막 대체 경로일 뿐 — rep가
     1차). 둘째 반환값 True = 대체를 썼다는 표시(engines_used()가 그 항목에 "source":"env_fallback"을 남김)."""
     if model:
         return model, False
     if not env_fallback:
         return None, False
     vlm = C.cfg().models.vlm
-    fb = vlm.model or vlm.model_alt
+    fb = vlm.model
     return fb, bool(fb)
 
 
@@ -328,7 +328,7 @@ def engines_used(rep_json, env_fallback=True):
     """PM2 요건(b) — 문서 하나의 대표 결과(`_rep/<문서>.json` 전체, status_of()가 쓰는 index.json 요약이 아님)
     에서 실제로 쓰인 엔진 전부(VLM·OCR 포함) → (engines_used 목록, 한 줄 요약) — EDW `engines_used`·
     `engines_summary` 두 열의 값. 순수 함수(rep_json만 읽음) — 단 env_fallback=True(기본)이면 rep에 VLM 모델
-    이름이 없을 때만 현재 프로세스의 VLM_MODEL·VLM_MODEL_ALT를 대신 읽는다(그 항목에 "source":"env_fallback"
+    이름이 없을 때만 현재 프로세스의 VLM_MODEL을 대신 읽는다(그 항목에 "source":"env_fallback"
     표시 — publish는 파싱과 다른 실행·env일 수 있어 rep를 1차로, env는 rep에 없을 때만의 대체).
 
     보는 자리(설계):

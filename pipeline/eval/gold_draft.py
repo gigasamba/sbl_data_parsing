@@ -24,7 +24,6 @@ pymupdf parser 등)으로 쪼개 쪽마다 맞는 참고 글을 건넨다.
   건너뜀. 그 밖(xlsx·pptx)은 건너뛰고 review.csv에 'PDF로 저장해 다시' 표시.
 비용: 쪽마다 VLM 1회(캐시 재사용) · GOLD_DRAFT_MAX_PAGES(기본 30)로 문서당 쪽 상한 · 유료 외부 모델이면 LLM_MAX_CALLS·LLM_BUDGET_USD 함께.
 사용: python -m pipeline.eval.gold_draft --src <원본 폴더> [--out output/gold_draft] [--with-parse output/parse]
-      python -m pipeline.eval.gold_draft --selftest   (VLM 대역 — 네트워크·캐시 없음)
 """
 
 import argparse

@@ -11,7 +11,6 @@
 모델 엔드포인트(접두어 LLM·VLM·OCRVLM·EMBED): <접두어>_BASE_URL(…/v1) · <접두어>_MODEL · <접두어>_API_KEY(선택).
   외부 주소는 거부 — 개발 PC 실험에서만 <접두어>_ALLOW_EXTERNAL=1(RUN_ENV=local일 때만 — common/ai/guard.py).
 사용: python common/services.py        → 연결 상태 표(비밀값은 출력 안 함)
-      python common/services.py --selftest
 """
 
 import json

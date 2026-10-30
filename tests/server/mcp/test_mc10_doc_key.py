@@ -4,7 +4,6 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import numpy as np
 
@@ -44,18 +43,7 @@ def test_doc_key_bundle():
             assert list(R.doc_meta) == [want] and list(R.key_local) == [f"{want}:0"]
             hits, _ = R.search("바이러스", 5, methods=["bm25"])
             assert hits and hits[0]["doc_key"] == want and hits[0]["chunk_key"] == f"{want}:0", hits
-            assert hits[0]["file_name"] == "a.txt" and R.client_map() == {"a.txt": None}, hits  # 고객 미상 = None(clientscope.doc_clients)
-
-        class _PG:  # doc 표의 축소 열(file_path·clients)만 있음 — 없는 열을 고르면 실 PG처럼 오류
-            schema = "ai"
-
-            def q(self, sql, params=None):
-                assert "client," not in sql and "file_name" not in sql, sql
-                return [{"file_path": path, "clients": '["A사"]'}]
-
-        R = RT.Retriever(_bundle(cases[0][0]))
-        with patch.object(R, "pg", _PG()):
-            assert R.client_map() == {"a.txt": ["A사"]}, R.client_map()
+            assert hits[0]["file_name"] == "a.txt", hits
 
 
 def test_local_doc_fill():

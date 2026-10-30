@@ -74,8 +74,6 @@
 | EDW 접속 하나·계정 둘 | done | `common.connections.rdb` · 읽기·쓰기 · sqlite 대역 | [op-03](prd/settings.md#op-03) |
 | 프로세스 종료 정리 | dev | 덮기 파일 지움 · 자식 회수 · SIGTERM | [pl-27](prd/settings.md#pl-27) |
 | JSON Lines 사건 기록 | todo | 포매터 · 수준 설정 · 가림 | [op-01](prd/settings.md#op-01) |
-| 미룬 설정 지우기 | todo | `korean_font` · `eval_sets_dir` | [pl-21](prd/settings.md#pl-21) |
-| 안 읽는 env 이름 4개 지우기 | todo | 0.1.0 릴리스에서(C-51) | [pl-30](prd/settings.md#pl-30) |
 | 파라미터 파일 분리 | todo | 파일 셋 · settings.yaml은 필수·비밀·서버값만 · 0.1.0 | [op-05](prd/settings.md#op-05) |
 
 ## 테스트·평가 (test)
@@ -97,8 +95,6 @@
 | 검색 점검 페이지 | done | 로컬 페이지 · 포트 | [e2-07](prd/test.md#e2-07) |
 | 검색 페이지 고정 글 | todo | 실제 개수 표시 | [e2-16](prd/test.md#e2-16) |
 | PC 평가 도구 줄이기 | todo | 둘만 남김 · 설정 지움 | [e2-10](prd/test.md#e2-10) |
-| 안 쓰는 함수 지우기 | todo | 시험만 부르는 것도 | [e2-17](prd/test.md#e2-17) |
-| 요건 없는 코드 지우기 | todo | 지움 · 남김 목록 | [e2-18](prd/test.md#e2-18) |
 
 ## 문서·릴리스 (doc)
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |

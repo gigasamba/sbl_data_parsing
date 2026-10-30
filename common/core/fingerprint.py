@@ -11,7 +11,6 @@ artifacts.py 캐시 정리·embed.py 질의 캐시처럼 인계 내용과 무관
 거부해(종료 코드 3) 서버가 멀쩡한 결과를 다시 파싱해야 했다(10-09 실측). 이제는 HANDOFF_FILES(아래, 선정
 기준 주석 포함)만 본다 — 새 common/**/*.py(S4부터 하위 폴더 포함)를 추가하면 HANDOFF_FILES나 EXCLUDED_FILES 둘 중
 하나에 넣어야 한다(안 넣으면 import 때 바로 거부 — _unclassified()).
-사용: python -m common.__init__ --selftest(이 파일 selftest — 직접 -m으로 돌리면 패키지가 먼저 import해 runpy 경고가 남)
 """
 
 import hashlib
@@ -60,7 +59,7 @@ EXCLUDED_FILES = (
     "config/show.py",  # 앱 설정 확인 명령(S7a) — 운영 도구
     "ai/adk.py",  # LLM·VLM 호출 메커니즘(세션·재시도) — 생성된 글자 자체는 agent_prompts(별도로 agent_platform._package_digest가 추적)·모델 설정이 결정
     "ai/agent_prompts.py",  # 지시문 글자 변경은 agent_platform.pipeline._package_digest가 이미 따로 추적(여기서 또 볼 필요 없음)
-    "core/artifacts.py",  # 실험 저장소 계약(code_fp·캐시 정리) — cli/stack_matrix.py·파싱 이식 도구 전용, parse↔structure↔load 런타임 핸드오프 밖
+    "core/artifacts.py",  # 실험 저장소 계약(code_fp·캐시 정리) — 파싱 이식 도구 전용, parse↔structure↔load 런타임 핸드오프 밖
     "core/docmeta.py",  # structure(build_bundle.py)↔search(retriever.py) 전용(날짜·구판 판정) — parse·load는 안 씀, 이 FINGERPRINT가 보는 두 경계(parse→structure·structure→load) 밖
     "ai/embed.py",  # 임베딩 계산은 structure(쓰기)·search(질의)가 맞아야 하지만 search는 이 FINGERPRINT 경계 밖(MARK에 없음)이라 넣어도 그 위험을 못 막고,
     # 질의 캐시 코드(RV1)가 내용과 무관하게 자주 바뀌어 넣으면 그 캐시 수정마다 재파싱을 유발(10-09 사고). structure 쪽 재사용 판정은 common/artifacts.code_fp("s")가 이미 embed.py를 따로 잡음(cli/index.py)

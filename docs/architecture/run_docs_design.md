@@ -58,7 +58,7 @@
 | | RAPIDOCR_PAGE_WORKERS | 2 | (운영상 남아 있으나 스캔 레인에선 미사용) |
 | | OCR_DPI | 120 | 렌더 비용 절감 |
 | **VLM** | 문서당 동시 | **6** (vlm class) / 8 (light) | 3vlm×6=글로벌 18 |
-| | FIGURES | VLM_FIGURES_MAX=10, FIG_OCR_BUDGET=0 | OCR분류 skip → 직접 VLM |
+| | FIGURES | VLM_FIGURES_MAX=10 (`FIG_OCR_BUDGET`은 읽는 코드가 없어 10-30 지움 — pl-30) | OCR분류 skip → 직접 VLM |
 | | vlm_page | **스캔 PDF만 ON**, VLM_PAGE_MAX=무제한 | 내부 스캔판정 쪽만 |
 | | VLM_PAGE_SLOW | 45s | 적응형 축소 |
 | **파이프라인** | ~~PARSE_PHASES~~ | (10-29 삭제 — phase 없음, prd pl-22) | |

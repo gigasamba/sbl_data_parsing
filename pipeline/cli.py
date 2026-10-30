@@ -1127,7 +1127,7 @@ def selftest(a):
 # 이 이미지에 있는 것만(find_spec, selftest와 같은 감지) 실제로 돌려 사람이 읽는 요약을 남긴다 — "실문서 전에
 # 와이어링 점검"(샘플은 이미지 안에 안 넣는다, 운영자가 서버에서 폴더를 직접 줌). 지금은 parse만 실제로 문서를
 # 읽는다(structure·load·search는 대표 파싱 결과(_rep)가 있어야 돌아 raw 문서만으로는 못 함 — 이미 있는 그
-# 모듈들의 --selftest가 와이어링은 따로 확인) → skipped: structure·load·search의 파일별 처리, 필요해지면
+# 모듈들의 시험(tests/)이 와이어링은 따로 확인) → skipped: structure·load·search의 파일별 처리, 필요해지면
 # parse로 만든 _rep를 같은 실행에서 이어 쓰게(예: --src가 parse 이미지의 output/parse/_rep를 가리킬 때) 확장.
 def _parse_engine_needs_endpoint(engine):
     """registry.missing_env와 같은 자리(REQUIRES_ENV)를 보되, 지금 비어 있는지가 아니라 "애초에 모델 엔드포인트가

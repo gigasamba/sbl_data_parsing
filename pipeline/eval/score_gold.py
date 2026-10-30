@@ -20,7 +20,6 @@
   --plain-names면 원래 이름) · names.json(해시 ↔ 이름, 서버에만 둘 것).
 주의: rapidfuzz가 없으면 parse_qa의 줄 비교가 difflib 대체로 느려져 큰 문서에서 멈춘 것처럼 보임(서버 실측) → 없으면 읽기 순서는 건너뜀.
 사용: python cli/score_gold.py --gold <정답 폴더> [--parse output/parse] [--src output/prepared] [--out output/eval/gold_score] [--plain-names]
-      python cli/score_gold.py --selftest
 """
 
 import argparse

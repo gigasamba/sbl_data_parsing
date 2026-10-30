@@ -16,13 +16,10 @@ import하지 않게 — 결과 폴더 output/server_checks/<이름>은 그대로
          --bundle을 주면 그 번들의 head 포함 원문으로 더 정확히 비교(없으면 PG의 doc.file_name·client·chunk.section으로
          head를 재구성 — CHUNK_HEAD 끔이면 머리말 없음).
 
-공통: 서브커맨드마다 --selftest(서버 없이 로컬 번들·가짜 데이터로 돌아감). 전체 선택: `server_checks.py --selftest`.
-
 사용:
   python -m pipeline.eval.server_checks ar1 --gold /srv/rag/answer-key --parse-dir output/parse --src output/prepared [--max-docs 5] [--run-vlm]
   python -m pipeline.eval.server_checks ar6 --parse-dir output/parse --src output/prepared [--ocr]
   python -m pipeline.eval.server_checks t1 [--sample 200] [--bundle output/edw/bundle] [--pool]
-  python -m pipeline.eval.server_checks --selftest   (또는 각 서브커맨드 뒤에 --selftest)
 """
 
 import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settings.pin_env)를 첫 줄에서(S7e2 — 옛 옵션 카탈로그 채우기 자리)

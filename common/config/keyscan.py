@@ -34,9 +34,6 @@ NAME_LIST = {
     "TRIGGER_SHUTDOWN_TIMEOUT_SEC": "pipeline/trigger_server.py(_serve 인자 기본값)",
     "E2E_QA_SET": "pipeline/check_env.py(경로 점검 표)",
     "E2E_QUESTIONS": "pipeline/check_env.py(경로 점검 표)",
-    "EXP_PROC_GB_BUILD": "common/core/resources.py(이름 목록)",
-    "EXP_PROC_GB_RUN": "common/core/resources.py(이름 목록)",
-    "EXP_PROC_GB_ANSWER": "common/core/resources.py(EXP_PROC_GB_<cmd> 이름 짓기)",
     "VLM_EXTRA_BODY": "common/ai/adk.py(_EXTRA_ENV_KEY 표)",
     **{
         f"RDB_COL_{f}": 'pipeline/extract/source.py(f"RDB_COL_{k.upper()}")'
@@ -324,7 +321,7 @@ def object_reads():
 
 def check(found=None):
     """(빠진 키, 모델에만 있는 칸) — 빠진 키: 코드가 읽는데 모델 칸·NOT_SETTINGS 어디에도 없음(0이어야 함).
-    모델에만 있는 칸: 새 칸(KOREAN_FONT 등 아직 안 읽는 것)이나 지운 읽기 — 알리기만(설정 객체로 읽는 칸은 읽는 것으로 침 — S7b)."""
+    모델에만 있는 칸: 새 칸(아직 안 읽는 것)이나 지운 읽기 — 알리기만(설정 객체로 읽는 칸은 읽는 것으로 침 — S7b)."""
     from common.config import settings as S
 
     found = scan() if found is None else found

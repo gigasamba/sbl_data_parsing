@@ -430,7 +430,7 @@ def find_table_cells(db, text, limit=20):
 
 class StructDBError(RuntimeError):
     """정형 저장소 연결 실패 — SystemExit과 달리 서버 프로세스(mcp_server 등 장수 프로세스)를 죽이지 않는다(X1b 리뷰).
-    CLI(structured.py --selftest 아닌 load·link 등)만 이걸 받아 종료 코드로 바꾼다."""
+    CLI(structured.py의 load·link 등)만 이걸 받아 종료 코드로 바꾼다."""
 
 
 def open_backend(db_path=None):

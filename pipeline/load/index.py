@@ -5,7 +5,6 @@
   python cli/index.py id   <설정.json> ...                                 # index_id만 출력
   python cli/index.py build --conf a.json [--conf b.json] [--parse-dir output/parse] [--src output/prepared] [--pg] [--force]
   python cli/index.py list                                               # 완료된 색인(index.json) 목록
-  python cli/index.py --selftest
 
 결과: INDEX_ROOT(기본 dev/out/index)/<index_id>/bundle/ + index.json(마지막에 씀 = 완료 표시 — 없으면 MCP가 안 씀).
 index_id = 설정만의 지문(PG 스키마 이름이 안정). 다시 지을지는 따로 '입력 지문'(index.json inputs = _rep/index.json · 용어 사전

@@ -29,7 +29,6 @@ rep["tables_std"](modules/parse/post/table_std.py, PARSE_TABLE_STD 기본 켬)�
   load --csv-dir <폴더> [--db <경로>]            contract_master·client_master 적재(같은 키는 덮어씀 — 재실행 안전)
   link (--bundle <묶음> | --rep <_rep 폴더>) [--db <경로>]   문서↔계약 연결 → doc_contract_link
   tables --rep <_rep 폴더> [--db <경로>]         AD23 — tables_std → doc_table·doc_cell(같은 table_key는 다시 지우고 적재 — 재실행 안전)
-  --selftest                                     오프라인 임시 DB로 자체 검증(운영 DB 접근 없음)
 """
 
 import argparse

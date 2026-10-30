@@ -4,7 +4,6 @@
 
 사용: python cli/check_env.py
   VLM_BASE_URL(OpenAI 호환 내부망 주소)·VLM_MODEL을 설정하면 /models 응답과 모델 이름도 확인.
-      python cli/check_env.py --selftest   → requirements 대조 로직만 가짜 파일로 점검
 """
 
 import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settings.pin_env)를 첫 줄에서(S7e2 — 옛 옵션 카탈로그 채우기 자리)

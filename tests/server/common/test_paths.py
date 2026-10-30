@@ -3,7 +3,6 @@
 import os
 from pathlib import Path
 
-import common.core.paths as M
 from common.core.paths import (
     APP_ROOT,
     CRITERIA_FILE,
@@ -30,12 +29,6 @@ def _demo():
 
     from common.config.settings import COMMON
 
-    with COMMON.env(EVAL_SETS_DIR=None):
-        assert M.__getattr__("EVAL_SETS_DIR") == PROJ_ROOT / "valid_env" / "unstructured"
-    with COMMON.env(EVAL_SETS_DIR=""):
-        assert M.__getattr__("EVAL_SETS_DIR") == PROJ_ROOT / "valid_env" / "unstructured"  # 빈 값 = 기본(옛 `or`)
-    with COMMON.env(EVAL_SETS_DIR="x/sets"):
-        assert M.__getattr__("EVAL_SETS_DIR") == Path("x/sets")
     assert DEPLOY_ROOT == (PROJ_ROOT if LOCAL_RUN else PROJ_ROOT / "deploy") and PKG_ROOT == DEPLOY_ROOT / "common"
     assert APP_ROOT == PROJ_ROOT
     env = child_env({"X_DEMO": "1"})

@@ -169,12 +169,6 @@ PARSE_SET = (
     "PARSE_QA_LIGHT=1",
 )
 LIB_ENV = "PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache"  # env 남김 — 라이브러리(파이썬 자체 env, 설정 칸 아님)
-# env 남김 — 읽는 코드 없음(pre-refactor에도 없던 이름 — 설정 칸이 아니라 --set이 거부함, 지울지는 따로): 옛 명령 글자 그대로 둠
-UNREAD_PARSE_ENV = "FIG_OCR_BUDGET=0"
-UNREAD_STRUCT_ENV = (
-    "SERVICE_MASTER_CSV=/app/config/service_master.csv DIVISION_MASTER_CSV=/app/config/division_master.csv "
-    "PROD_MASTER_CSV=/app/config/prod_master.csv"
-)
 DOC_MARK = "RUN_DOCS_DOC"  # 문서 표지 env(설정 칸 아님) — 고아 정리(sweep_cmd)가 /proc/*/environ에서 찾음(옛 PIPE_OUT_ROOT env 자리)
 
 
@@ -234,7 +228,7 @@ def parse_cmd(seq, chan, scan, gate):
     return (
         f"docker exec {PARSE_C} bash -c 'cd /app && "
         f"echo [envcheck] gate={gate} 채널={chan}; "
-        f"{DOC_MARK}={inside} {UNREAD_PARSE_ENV} {LIB_ENV} "
+        f"{DOC_MARK}={inside} {LIB_ENV} "
         f"python -m pipeline.cli{doc} parse --source rdb:csv:{inside}/batch.csv{scan_eng}'"
     )
 
@@ -248,7 +242,7 @@ def struct_cmd(seq):
     )  # 묶음·적재 python에(stackcfg는 이 칸을 안 읽어 뺌 — 덮기 파일 하나 덜, 리뷰 S9)
     return (
         f"docker exec {STRUCT_C} bash -c 'cd /app && "
-        f"{UNREAD_STRUCT_ENV} PYTHONPATH=/app/deploy "
+        f"PYTHONPATH=/app/deploy "
         f"S=$(python -m pipeline.stackcfg --path {inside}) && "  # S8b — 엔진 구성 사본(파싱이 이 폴더에 쓴 것, 없으면 판 표에서 — 못 읽으면 종료 4)
         f'python -m pipeline.transform.structure.build_bundle{st} --parse-dir {inside}/parse --stack "$S" --out {inside}/bundle && '
         f"python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle "

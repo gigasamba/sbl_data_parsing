@@ -1,6 +1,6 @@
 # AI 지시서(지시서 패키지)
 
-LLM·VLM을 **부르는** 단계의 지시서 패키지 20개(`resources/prompts/` 18개 — 10-29 파싱 판단 에이전트 4개·`query_decompose` 삭제 + PC 전용 `validation/e2e/`의 `triple_extract`·`valid_env/answer_test/`의 `rag_qa` — S11에 `research_check` 삭제)를 한 표로 모았다. 검색·집계·청킹처럼 모델을 부르지 않는 결정적 단계는 지시서가 아니라 코드다(맨 아래 "도구" 표).
+LLM·VLM을 **부르는** 단계의 지시서 패키지 16개(`resources/prompts/` 15개 + `valid_env/answer_test/`의 `rag_qa` — 10-29 파싱 판단 에이전트 4개·`query_decompose`, S11 `research_check`, 10-30 `wiki_term_draft`·`triple_extract`·`figure_chart_raster`·`diagram_arrows`를 지움 — e2-18)를 한 표로 모았다. 검색·집계·청킹처럼 모델을 부르지 않는 결정적 단계는 지시서가 아니라 코드다(맨 아래 "도구" 표).
 S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26개와 폴더 설명(`common_tools/prompts/README.md`)을 이 문서 하나로 합쳤고, `cases.json`은 `tests/fixtures/prompts/<앱>/<패키지>.json`으로 옮겼다(읽는 곳이 없어 10-29에 지움 — `refactor.md` C-63). 호출부 경로는 S2 시점 코드 자리로 고쳤다(옛 README의 `dev/…`·`modules/…`·`deploy/data_parsing/…`는 낡은 경로였다).
 
 ## 1. 자리와 찾는 순서
@@ -10,7 +10,6 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 | `resources/prompts/common/<패키지>/` | 여러 단계·이미지가 함께 쓰는 지시서, 공용 꼬리 `_common/` | 모든 이미지(`resources/` 폴더째) |
 | `resources/prompts/pipeline/<패키지>/` | 파싱·구조화·평가 지시서(옛 `data_etl/agent/`) | 모든 이미지 |
 | `resources/prompts/mcp/<패키지>/` | 검색 MCP 지시서(옛 `data_retrieval/prompts/`) · `research_judge`(D-019 ④) | 모든 이미지 |
-| `validation/e2e/triple_extract/` | 평가 실험(LLM 그래프 모드 — `validation/e2e/graph_llm.py`, T-02로 `stages.py`에서 쪼갬) 지시서 — S6a에 쓰는 도구와 함께 옮김(D-019 ③) | 없음 — PC 전용(서버 이미지에 안 들어감) |
 
 - 찾는 자리는 `common/core/paths.py` `resolve_agent_dir()` 한 곳이다. 순서는 ① `resources/prompts/common` ② `resources/prompts/pipeline` ③ `resources/prompts/mcp` ④ `validation/e2e`(`triple_extract` — PC 전용, S6a · 이미지에는 폴더가 없어 건너뜀) ⑤ `valid_env/answer_test`(`rag_qa` — PC 전용 데이터, S10에 `validation/e2e`로 옮겼다가 10-29 사용자 결정으로 되돌림 · 이미지에 없음) ⑥ 시험 고정물(`dev_tools/unit_test/fixtures` — 이 저장소에는 없음). 패키지 이름은 겹치지 않아 순서가 결과를 바꾸지는 않지만, 결정적이어야 캐시·로그가 재현된다.
 - `resources/`는 저장소 루트 바로 아래이고, 이미지 안에서는 `/app/deploy/resources`다(`paths.RES_ROOT` = 코드 패키지들이 import되는 자리의 `resources/`).
@@ -36,10 +35,7 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 | `page_transcribe` | `common/` | vlm | 스캔·이미지 쪽 1장 → 마크다운(OCR 교차 확인용) | 쪽 PNG + 지시문(사용자, 출력 상한 없음) → 마크다운 | `pipeline/transform/figures/vlm_page.py` `vlm_page()`(`P_PAGE`) | free · 없음 |
 | `value_choice` | `common/` | vlm | 조각 재판독 후보 중 이미지에 보이는 값 하나 고르기(AD29 P3) | 크롭 PNG + 지시문(후보 목록 포함) → `{"answer": "<후보 하나 또는 NONE>"}` | `pipeline/transform/represent/reread_stage3.py` `_default_vlm_call()` | template+tail · 있음 |
 | `research_judge` | `mcp/` | llm | 근거 조각이 하위 질문에 답하는지 판정 | 하위 질문 + 번호 붙은 근거 조각 → status/answer/cite JSON | 시험만 — `tests/server/common/test_adk.py`·`test_agent_prompts.py`·`test_paths.py`(S9 전 각 모듈 selftest · 호출부 `research.py`는 S5a 삭제 — D-025) | 기본 · 있음 |
-| `triple_extract` | (`validation/e2e/` — PC 전용) | llm | 청크 글자 → (주어, 관계, 목적어) 삼중항(지식그래프 간선) | 지시문(시스템) + 문서명·청크 글자 → triples JSON | `validation/e2e/graph_llm.py` `build_llm_graph`(`_TRIPLE_SYSTEM`, 모듈 import 때 읽음 — `stages.build_graph("llm")`가 PC에서만 불러 등록, S6a) | 기본 · 있음 |
 | `rag_qa` | (`valid_env/answer_test/` — PC 전용, S10에 `validation/e2e/`로 옮겼다가 10-29 되돌림) | llm | 검색 MCP 도구(`search`·`edw_meta`·`query_edw`)를 스스로 골라 근거를 찾고 숫자마다 인용을 붙여 답함(agentic — `max_turns` 12, 로컬 도구 `verify_citations`: 답의 숫자가 인용 `quote`에 있고 그 quote가 이번 질문의 검색 근거에 있는지) | 질문(사용자) → `{answer, status: found\|partial\|not_found, citations}` | `validation/e2e/answer_gen.py`(`common.ai.adk.run_agent(per_turn_admit=True)` — 도구 함수·근거 pool은 호출자, 지시문 `instructions.md` + 출력 스키마, 옛 패키지 README는 S10에 지움) | 없음(instruction에 지시문) · 있음 |
-| `diagram_arrows` | `pipeline/` | vlm | 래스터 그림 속 화살표를 전부 세어 edges로(셀프체크: 화살표 개수) | 2~3배 확대 크롭 + 지시문(생각 끔) → `{"edges", "arrow_count"}` | `pipeline/eval/diagram_edges_score.py` `raster_stub_extract()`(`DIAGRAM_RASTER_VLM=1`일 때만) | 기본 · 있음 |
-| `figure_chart_raster` | `pipeline/` | vlm | 래스터 차트 값을 단계식으로(눈금·격자 → 비율 → 보간) 읽기(F14 b) | 2~3배 확대 크롭 + 지시문 → `{y_ticks, log_axis, items}` | `pipeline/transform/figures/chart_values.py` `raster_chart_values()`(`RASTER_PROMPT` — 운영 파이프라인에 배선 안 됨, 시험은 가짜 `call_fn`) | 기본 · 있음 |
 | `figure_extract` | `pipeline/` | vlm | 그림만 보고 독립 재추출(검토 루프 — 원본 기록은 안 보여 줌) | 그림 PNG + 지시문 + 근처 맥락·이전 지적 → figure-v1 JSON | `pipeline/transform/figures/figure_review.py` `extract()`·`_vlm_call(which="extract")`(`P_EXTRACT`) | template+tail · 있음 |
 | `figure_judge` | `pipeline/` | vlm_judge | 독립 추출과 우리 기록의 자동 diff 감사(검토 루프 판정자) | 그림 PNG + 지시문 + 우리 기록·대조 결과·맥락 → items/verdict JSON | `pipeline/transform/figures/figure_review.py` `_vlm_call(which="judge")`(`P_JUDGE`) | template+tail · 있음 |
 | `figure_overlay` | `pipeline/` | vlm | 겹친 개체 묶음(그림 + 글상자·화살표·도형) 1장 → 검색용 기록(F12) | 묶음 union bbox 크롭 + 지시문(생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figures.py` `vlm_fig_overlay()`(`P_FIGOVERLAY`) | 기본 · 있음 |
@@ -49,7 +45,6 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 | `parse_shadow` | `pipeline/` | llm | PA2 그림자 모드 — 규칙이 내린 결정 지점마다 "다음 행동" 제안만(기록만) | PA0 context·decisions 줄인 JSON → `{"proposals": [{step, action, reason, confidence}]}` | `pipeline/eval/parse_shadow.py` `_default_llm_complete()` ← `pipeline/transform/represent/shadow.py` `propose_llm()`(끄기 `PARSE_SHADOW=0`) | 기본 · 있음 |
 | `qa_draft` | `pipeline/` | vlm | 쪽 이미지 → 표·그래프·흐름도 구조를 읽어야 맞출 수 있는 질문-답변 초안(QA1) | 쪽 PNG + `template()`(`{max_items}`) + `tail()` → `{"items": [...]}` | `pipeline/eval/qa_draft.py` `_vlm_qa()` | 기본(template+tail) · 없음 |
 | `table_struct_judge` | `pipeline/` | llm | 표 구조 채점(TS1) 경계 표를 한 번 더 봐서 승격만 하는 보조 판정자 | 정답 표 + 출력 표(`{gold_table}`·`{out_table}`) → `{"pass", "reason"}` | `pipeline/eval/score_gold.py` `_table_judge_fn()._judge()`(켜기 `SCORE_TABLE_JUDGE=llm`) | 기본 · 있음 |
-| `wiki_term_draft` | `pipeline/` | llm | 미등록 용어 1개의 사전 행 초안(자동 승인 없음 — status=draft) | 용어(사용자) → canonical/definition_ko 등 JSON | `pipeline/transform/structure/wiki_draft.py` `propose_term()`·`main()`(`_PROMPT`) | 기본 · 있음 |
 | `agg_llm_route` | `mcp/` | llm | 집계(SQL 틀) 질문인지 검색 질문인지 분류 + 인자(고객·기간·지표·모양) 추출 | 분류 지시문 + 질문 → JSON(`aggregate.llm_plan`이 검증) | `mcp_server/services/search/aggregate.py` `llm_plan()`(`_AGG_LLM_PROMPT`) ← `mcp_server/services/search/internal_docs.py` `_agg_llm_complete()`(`SEARCH_AGG_LLM=1`, `detect()` 정규식이 못 걸렸을 때만) | 기본 · 있음 |
 
 시험 고정물(`example_agentic`·`example_agentic_vlm_sub` — `tests/server/common/test_adk.py`(S9 전 `adk.py` selftest)의 `run_agent` 묶음)은 upstream `dev_tools/unit_test/fixtures/`에 있고 이 저장소에는 없다. 없으면 시험이 그 묶음을 건너뛴다.
@@ -58,8 +53,6 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 
 - **`value_choice`** — 답이 후보 목록 밖이거나 `NONE`이면 호출부가 미확인으로 둔다(값을 지어내지 않음, AD19 "지우지 않음"과 같은 원칙).
 - **`figure_overlay`** — 출력 스키마는 `figure_describe`와 같고(kind/summary/text/values/edges/table_md), 지시문이 "위 개체는 아래 그림을 설명할 수 있다"는 관계를 읽게 한다. 캐시 이름 `figoverlay` — 같은 그림이라도 `figure_describe`와 다른 열쇠.
-- **`figure_chart_raster`** — `figure_extract`(눈대중 values)와 별개 패키지. 실 VLM 호출 없음(`call_fn`은 시험에서만 가짜로 주입 — CLAUDE.md §7 비용 규칙).
-- **`diagram_arrows`** — 개발 중에는 가짜 모델만. 실 VLM 호출은 비용 추정 + 사용자 승인 뒤(CLAUDE.md §7).
 - **`gold_draft`** — `page_transcribe`와 별도 지시문·캐시 열쇠라 이 패키지를 바꿔도 파싱 VLM 캐시·동작은 그대로다.
 - **`mermaid_check`** — 옮긴 화살표 목록은 보여 주지 않고 단계 이름만 준다(앵커링 방지) → 단계별 '나가는 화살표' 답과 Mermaid를 코드로 대조. 흐름도가 아닌 그림이면 `is_flowchart=false` → Mermaid 블록을 뺀다.
 - **`qa_draft`** — 유형: table_cell(행×열 칸) · chart_value(x → y, 어림이면 범위 + confidence low) · flow_next · flow_input · flow_order.

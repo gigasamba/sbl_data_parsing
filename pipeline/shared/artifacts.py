@@ -2,7 +2,6 @@
 """pipeline 전용 아티팩트 계약(10-14 함수별 분리 — common/core/artifacts.py에서 이전, 로직 바이트 동일).
 P0 원본 캐시 경로·지시문 id·엔진 버전·중간 캐시 정리 — 파싱 쪽(S6b 전 data-parsing 이미지, 지금 data-pipeline)에서만 쓴다(다른 이미지는 호출하지
 않음, common.core.artifacts에는 둘 이상의 이미지가 쓰는 code_fp·key·manifest·is_stale·sha8만 남는다).
-사용: python -m pipeline.shared.artifacts --selftest
 """
 
 import importlib.metadata

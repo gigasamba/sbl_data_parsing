@@ -6,7 +6,7 @@ mcp_server 코드가 읽는 객체는 설정 파일 기반 캐시 MCP다(S7e2 �
 요청마다 읽던 값(MCP_TOOL_TIMEOUT_SEC·SEARCH_* 등)은 쓰는 자리에서 요청마다 cfg()로 읽고, 시작 때 한 번 읽던 상수는 CFG(아래)에
 모은다(S5 — 이름·기본값은 옛 mcp_server.py 모듈 상수 그대로, 읽는 시점도 같음 — 이 모듈 import 때).
 SETTINGS(common + mcp 절)는 확인 명령(python -m mcp_server.config)·시험용.
-사용: python -m mcp_server.config [--file 경로] · export --section mcp.host … · --selftest
+사용: python -m mcp_server.config [--file 경로] · export --section mcp.host …
 """
 
 import contextlib

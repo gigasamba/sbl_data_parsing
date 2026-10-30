@@ -5,9 +5,7 @@
     최소제곱 피팅해 픽셀→값 변환을 만든다(눈금이 전부 10의 정수 거듭제곱이면 로그축). 채운 사각형(막대, 누적이면
     세그먼트별로)·꺾은선(여러 "l" 세그먼트로 이은 한 drawing)의 꼭짓점을 이 변환으로 값으로 바꾼다. 축 눈금이
     2개 미만(표·흐름도 등 숫자 눈금이 없는 그림)이면 빈 목록 — 값을 지어내지 않는다.
-(b) 래스터 차트: VLM만(실 호출 없음, call_fn은 테스트 가짜). 눈금값·격자선 픽셀 위치를 먼저 읽게 한 뒤 그 비율로
-    막대/점을 배치 → 보간(ratio_values). 지시문 글자는 prompts/figure_chart_raster/prompt.md(신규, 기존 프롬프트
-    폴더는 안 건드림 — 이미지 동결).
+(b) 래스터 차트 단계식(VLM — 실 호출 배선 없이 시험만 부르던 raster_chart_values·지시서 figure_chart_raster)은 10-30 지움(e2-17).
 (c) 추세: compute_trend — 값이 있으면 상대변화 문턱으로 결정적 판정(ponytail: 단순 규칙, 실측 쌓이면 재조정).
 """
 
@@ -571,61 +569,3 @@ def merge_values(det_values, vlm_values):
 
 
 # ── (b) 래스터: VLM 전용(실 호출 없음) — 단계식: 눈금값·격자선 픽셀 → 비율 배치 → 보간 ───────────────
-def enlarge(img_bytes, factor=2.5):
-    """crop 확대(2~3배) — 작은 글자 눈금을 읽기 쉽게."""
-    import io
-
-    from PIL import Image
-
-    im = Image.open(io.BytesIO(img_bytes))
-    im = im.resize((max(1, int(im.width * factor)), max(1, int(im.height * factor))), Image.LANCZOS)
-    buf = io.BytesIO()
-    im.save(buf, "PNG")
-    return buf.getvalue()
-
-
-def ratio_place(ticks, items):
-    """단계 2 — 눈금([{value,y_px}], >=2) 기준으로 item(bar/point, {"x","top_px"} 또는 {"x","y_px"})의 비율 위치를
-    선형 보간해 값으로. ticks는 extract_vector의 _fit_axis와 같은 최소제곱 피팅을 재사용."""
-    fit = _fit_axis([(t["y_px"], t["value"]) for t in ticks])
-    if fit is None:
-        return []
-    out = []
-    for it in items:
-        px = it.get("top_px", it.get("y_px"))
-        out.append(
-            {
-                "series": it.get("series"),
-                "x": it.get("x"),
-                "value": round(_px_to_value(px, fit), 4),
-                "unit": it.get("unit"),
-                "label": it.get("x"),
-            }
-        )
-    return out
-
-
-def raster_chart_values(img_bytes, call_fn, prompt=None):
-    """래스터 차트 단계식 추출 — call_fn(prompt_text, enlarged_png_bytes) -> 모델 글자(JSON). 실제로는 항상
-    가짜/스텁 call_fn만 써야 한다(OpenRouter 규칙 — 실 호출 없음, 운영 배선 전). 반환: (values, raw_json|None)."""
-    import json
-
-    big = enlarge(img_bytes)
-    text = call_fn(prompt or RASTER_PROMPT, big)
-    try:
-        data = json.loads(text)
-    except (ValueError, TypeError):
-        return [], None
-    ticks = data.get("y_ticks") or []
-    items = data.get("items") or []
-    if len(ticks) < 2 or not items:
-        return [], data
-    return ratio_place(ticks, items), data
-
-
-try:
-    from common.ai.agent_prompts import load as _load_prompt
-
-    RASTER_PROMPT = _load_prompt("figure_chart_raster", "raster_chart")
-except Exception:  # 프롬프트 폴더가 아직 없는 초기 상태에서도 import는 깨지지 않게
-    RASTER_PROMPT = ""
