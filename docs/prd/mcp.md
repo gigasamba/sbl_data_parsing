@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나 — 이미지 `mcp-server`. 항목마다 무엇·왜·관련 파일. 끝난 항목은 `Status: done`, 열린 항목은 `Status:` 줄에 진행 상황.
 도구 계약(이름, 입력, 출력, `tools/list` 순서)은 고정이다 — 협의와 새 판으로만 바꾼다([CLAUDE.md](../../CLAUDE.md) §4).
 
-순서(주제별): `search` 도구 mc-01·mc-02·mc-05 → 집계 mc-04·mc-11·mc-12 → 문서 키·기록 결함 mc-10·mc-13·mc-14·mc-15 → 다른 도구 mc-06·mc-07·mc-08 → 서버 실행 mc-09 → 코드와 다른 점.
+순서(주제별): `search` 도구 mc-01·mc-02·mc-05 → 집계 mc-04·mc-11·mc-12 → 문서 키·기록 결함 mc-10·mc-13·mc-14·mc-15 → 운영 계약 mc-16·mc-17 → 다른 도구 mc-06·mc-07·mc-08 → 서버 실행 mc-09 → 코드와 다른 점.
 
 <a id="mc-01"></a>
 ## mc-01 · `search` 도구 — 적재된 문서에서 근거 찾기
@@ -27,7 +27,8 @@
 - 이유: 답이 고객을 섞거나 옛 판을 인용하면 안 된다.
 - 무엇: 부드러운/하드 고객 범위, 숨김 문서 제외, 최신을 묻는 질문에서는 새 판을 옛 판보다 위로(`SEARCH_RECENCY=1` 기본, `2` = 늘. 옛 판은 남기고 `superseded` 표시), 사본 묶음이 이름 바뀐 사본을 합친다.
 - 파일: `mcp_server/services/search/clientscope.py`, `supersede.py`, `common/core/docmeta.py`.
-- Status: done
+- 고칠 것(reference 비교(사용자 grill 10-30, 원본은 git 밖) M3·T2 — 버그): `client` 판정을 운영 10-28 방식으로 — 별칭 그룹으로 정확히 일치, `sf_acc_name`이 비었을 때만 라벨로 판정, 목록은 OR로 받는다. 파일: `mcp_server/services/search/search_svc.py`, `clientscope.py`.
+- Status: todo — client 판정 고침(T2). 나머지는 done.
 
 <a id="mc-04"></a>
 ## mc-04 · 집계 답
@@ -78,11 +79,26 @@
 - 파일: `mcp_server/services/search/shaping.py`, `common/store/parsing_meta_db.py`.
 - Status: todo — pl-25 대기(코드 수정 없음 — 키 설계는 [db_schema.md](../architecture/db_schema.md) §1·§3).
 
+<a id="mc-16"></a>
+## mc-16 · `search` 운영 계약 구현
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) M1·T1): `search`를 운영 계약 그대로 구현한다 — `question` 필수, 필터 11종, 출력 축소. 기준 명세는 운영 `05_mcp_tools_schema.md` §2(git 밖). MCP 계약 변경이라 검토 등급 A, 새 판.
+- 필터용 칸 `doc_class`·`created_at`은 gold `doc`에 Alembic으로 더한다(M4 — [etl.md#pl-25](etl.md#pl-25)).
+- 남은 확인: 운영 MCP 서버 소스는 없음 — 명세 기준으로 새로 구현, 구하면 대조.
+- 파일: `mcp_server/routers/`, `mcp_server/schemas/`, `mcp_server/services/search/`.
+- Status: todo — 순서는 허브가 정함([etl.md#pl-32](etl.md#pl-32)).
+
+<a id="mc-17"></a>
+## mc-17 · 원문 전송 도구 `list_doc_fulltext`·`get_doc_fulltext`
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) M2·T3): 두 도구를 더한다(운영 명세 `05_mcp_tools_schema.md` §6). 새 도구 — 계약 추가라 검토 등급 A.
+- 파일: `mcp_server/routers/`, `mcp_server/services/`(새 파일).
+- Status: todo — 순서는 허브가 정함.
+
 <a id="mc-06"></a>
 ## mc-06 · `query_edw` 도구 — 읽기 전용 EDW SQL
 - 이유: 정형 질문은 회사 EDW에서 답한다.
 - 무엇: SELECT/WITH 하나만, 표 허용 목록(mssql: 기본 꺼짐 — `EDW_QUERY_TABLES_STRICT=0`이면 시스템 카탈로그를 뺀 모든 스키마 허용, sqlite 대역은 함께 든 목록), 행·시간·바이트 상한, 낮은 권한의 별도 로그인, PC 시험용 sqlite 대역.
 - 파일: `mcp_server/services/edw_query.py`, `mcp_server/services/edw_calls.py`.
+- 배포 주의(reference 비교(사용자 grill 10-30, 원본은 git 밖) T14): `query_edw` 가드의 오탐(정상 SELECT 거부)을 서버에서 확인.
 - Status: done
 
 <a id="mc-07"></a>
@@ -90,6 +106,7 @@
 - 이유: 클라이언트는 SQL을 쓰기 전에 표·칸 이름이 필요하다.
 - 무엇: 정적 개인정보 제거 자료(`catalog.json` + `columns.jsonl`)에서 3단계 찾기(스키마 → 표 → 칸). 모르는 이름은 difflib 제안. LLM·벡터 없음.
 - 파일: `mcp_server/services/edw_meta.py`.
+- 배포 주의(reference 비교(사용자 grill 10-30, 원본은 git 밖) T14): `edw_meta` 표 이름 끝 공백 확인.
 - Status: done
 
 <a id="mc-08"></a>
@@ -104,6 +121,7 @@
 - 이유: 공용 내부 서비스라 계속 떠 있어야 하고 위험한 노출은 거부해야 한다.
 - 무엇: FastMCP streamable HTTP(`/mcp`, 기본 127.0.0.1:8765) 또는 `--stdio`. loopback이 아닌 주소는 `MCP_TOKEN` 필요(상수 시간 비교), 0.0.0.0 거부, DNS 리바인딩 가드, `/health`(준비 중이면 503), 동시 8 + 대기열 + 도구 시간 30초, 새 적재 판이면 다시 읽기, `query_edw` 호출을 포함한 jsonl 질의 기록(90일).
 - 파일: `mcp_server/main.py`, `mcp_server/routers/dispatch.py`, `mcp_server/config.py`.
+- 배포 주의(reference 비교(사용자 grill 10-30, 원본은 git 밖) T14): 질의 기록(`qa_log.jsonl`) 경로를 컨테이너에서 쓰기 가능한 곳으로.
 - Status: done
 
 ## 코드와 다른 점 · 지울 코드

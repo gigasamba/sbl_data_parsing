@@ -36,6 +36,7 @@
 | run_docs 작은 수정·레인 테스트 | done | 감시 루프 · 로그 · 흐름 테스트 · 0.1.0 | [rn-04](prd/etl.md#rn-04) |
 | DB 스키마 명세 | dev | `db_schema.md` · 시험 · 승인 | [pl-25](prd/etl.md#pl-25) |
 | 저장 구조 — silver OS uuid 폴더 · 메타 EDW · gold pgvector | todo | uuid5 폴더 · 최신 행만 · 로컬 상태 지움 · 0.1.0 | [pl-32](prd/etl.md#pl-32) |
+| 분류 단계 — silver 뒤, gold 앞 | todo | SFDC·LAS 라벨 · sha256 묶음 전파 · `doc_class` | [pl-33](prd/etl.md#pl-33) |
 | 원천별 gold 표(나중) | todo | 원천 4벌 · `search` 원천 필수 | [pl-28](prd/etl.md#pl-28) |
 
 ## 파싱 실행 — 엔진·스택·represent (parse)
@@ -45,6 +46,10 @@
 | 엔진 스택 파싱 | done | 형식별 엔진 · 격리 · 스택 판 | [pl-03](prd/parse.md#pl-03) |
 | 파싱 phase 없애기 · OCR 엔진 끔 | dev | 병렬 엔진 · 제한 · 쪽 VLM · 서버 확인 | [pl-22](prd/parse.md#pl-22) |
 | ocr_vlm·vlm.model_alt 삭제 | done | 0.1.0 · 엔진 핑거프린트 바뀜(등급 A) | [pl-31](prd/parse.md#pl-31) |
+| 파싱 p1 묶음 — 재판독 P3·scan_dedup·렌더 OCR 신호 | todo | 0.1.0 · p1 바뀜(등급 A) | [pl-34](prd/parse.md#pl-34) |
+| 핑거프린트 영향 없는 잔재 지우기 | todo | parse_parallel · figures_resume · phase_report · 고아 프롬프트 | [pl-35](prd/parse.md#pl-35) |
+| 메일 첨부 파싱 | done | 재귀 · 상한 · 인용 단락화 | [pl-36](prd/parse.md#pl-36) |
+| 그림 근처 맥락 기록 | done | 캡션 · 본문 언급 · 값 확인 | [pl-37](prd/parse.md#pl-37) |
 | 엔진 스택 사본 파일 검토 | done | 대체됨 → pl-32 | [pl-20](prd/parse.md#pl-20) |
 | 파싱 단계를 `transform/parse/`로 | todo | 옮기기 · 이름 바꾸기 · code_fp | [pl-17](prd/parse.md#pl-17) |
 | represent — 고르고 고치기 | done | 대표 · 합치기 · 다시 읽기 · 표 | [pl-04](prd/parse.md#pl-04) |
@@ -55,7 +60,7 @@
 |---|---|---|---|
 | `search` 도구 | done | 세 방식 · 혼합 찾기 · 근거 출력 | [mc-01](prd/mcp.md#mc-01) |
 | 질문 넓히기 | done | 용어집 · 고객별 나누기 · 질문 유형 | [mc-02](prd/mcp.md#mc-02) |
-| 고객 범위·판·중복 | done | 고객 범위 · 숨김 · 최신 판 | [mc-05](prd/mcp.md#mc-05) |
+| 고객 범위·판·중복 | todo | 고객 범위 · 숨김 · 최신 판 | [mc-05](prd/mcp.md#mc-05) |
 | 집계 답 | done | 규칙 집계 · 통화 · LLM 라우터 | [mc-04](prd/mcp.md#mc-04) |
 | 집계 길이 지운 칸을 고름 | done | `aggregate.pg()` 지움(mc-12와 함께) | [mc-11](prd/mcp.md#mc-11) |
 | 사실 집계가 지운 `doc_fact` 질의 | done | PG 집계 길 지움 · 숫자는 `query_edw` | [mc-12](prd/mcp.md#mc-12) |
@@ -63,6 +68,8 @@
 | 질의 기록은 jsonl만 | done | PG `qa_log` INSERT 지움 | [mc-13](prd/mcp.md#mc-13) |
 | 숨김 문서가 검색에서 안 빠짐 | todo | pl-25 대기 · `s3_key`로 비교 | [mc-14](prd/mcp.md#mc-14) |
 | 근거의 `rep_uri`가 늘 빔 | todo | pl-25 대기 · `source_key` 조회 | [mc-15](prd/mcp.md#mc-15) |
+| `search` 운영 계약 구현 | todo | question 필수 · 필터 11종 · 출력 축소(등급 A) | [mc-16](prd/mcp.md#mc-16) |
+| 원문 전송 도구 2개 | todo | `list_doc_fulltext` · `get_doc_fulltext`(등급 A) | [mc-17](prd/mcp.md#mc-17) |
 | `query_edw` 도구 | done | SELECT만 · 허용 목록 · 상한 | [mc-06](prd/mcp.md#mc-06) |
 | `edw_meta` 도구 | done | 스키마 → 표 → 칸 | [mc-07](prd/mcp.md#mc-07) |
 | `parse_document` 도구 | done | 파싱 서비스 전달 · `job_id` | [mc-08](prd/mcp.md#mc-08) |

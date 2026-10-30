@@ -36,7 +36,7 @@
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
 | doc_id | SERIAL PK | 문서 행 번호(내부) | pgvector_load `load` | pgsearch, 뷰 `v_chunk_source` | 유지 |
-| file_path | TEXT | 개발 서버 기준 원본 경로(파일 이름은 여기서 뽑음) | build_bundle `main` | pgsearch, retriever, search_svc, shaping, local, aggregate, `schemas/evidence.py`(MCP `search` 출력 키), `cli/ask.py`, `models/search_tables.py`(칸·`VIEWS_EXPECTED`·뷰 SQL), `schemas/search_rows.py`, 뷰, pgvector_load·build_bundle(건너뛰기 키 → `s3_key`), `validation/search_ui/serve.py` | 삭제(사용자 10-30 grill — 보여 줄 때는 `s3_key` + `original_filename` · MCP 출력의 `file_path`는 제거 대상 — 시기·버전 처리는 나중, 등급 A, [pl-25](../prd/etl.md#pl-25)) |
+| file_path | TEXT | 개발 서버 기준 원본 경로(파일 이름은 여기서 뽑음) — 0.1.0 삭제(사용자 10-30 grill): 보여 줄 때는 `s3_key` + `original_filename` · MCP 출력의 `file_path`는 제거 대상 — 시기·버전 처리는 나중, 등급 A, [pl-25](../prd/etl.md#pl-25) | build_bundle `main` | pgsearch, retriever, search_svc, shaping, local, aggregate, `schemas/evidence.py`(MCP `search` 출력 키), `cli/ask.py`, `models/search_tables.py`(칸·`VIEWS_EXPECTED`·뷰 SQL), `schemas/search_rows.py`, 뷰, pgvector_load·build_bundle(건너뛰기 키 → `s3_key`), `validation/search_ui/serve.py` | 삭제 |
 | original_filename | TEXT | 원본 파일 이름(보여 주기용) | (파이프라인 — `AI.FileStorageMap.original_filename`) | (pgsearch, retriever, search_svc, shaping, 뷰) | 새로 |
 | s3_key | TEXT | 문서 키 — Object Storage 원본 전체 키(`AI.FileStorageMap.s3_key`) | (build_bundle가 이미 `_s3_key`로 알지만 묶음에 안 넣음) | (대장·숨김·ParsingMeta 조회) | 새로 |
 | clients | TEXT(JSON) | 고객 목록 — 지금은 본문에서 찾은 이름(`infer_clients`)과 섞여 있음 | build_bundle `infer_clients` | pgsearch `_client_restrict`, retriever, internal_docs, search_svc | 삭제 |
@@ -55,6 +55,8 @@
 | service_type | VARCHAR(20) | 서비스 종류(CMO DS 등) | build_bundle(file_meta → EDW 직접) | 뷰 → search_svc, internal_docs(거르기) | 유지 |
 | run_id | INT | 이 행을 넣은 적재(`load_run`) | pgvector_load `load` | 없음 | 유지 |
 | pipeline_version | TEXT | 이 문서를 만든 파이프라인 판(`VERSION` — ParsingMeta가 아니라 여기, C-62 사용자 10-30) | (pgvector_load `load`) | (운영자·재처리 판정) | 새로 |
+| doc_class | TEXT | 문서 분류 라벨 하나(SFDC: RFI/RFP/RFI+RFP/Proposal/Other, LAS: MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other, 다른 원천 NULL) — low_conf·모델·시각은 두지 않음 — reference 비교 10-30, D-6 | (분류 단계 → 적재 — [pl-33](../prd/etl.md#pl-33)) | (MCP `search` 필터 — mc-16) | 새로 |
+| created_at | TIMESTAMPTZ | 원천 등록 시각(KST로 해석) — reference 비교 10-30, D-6 | (적재 — FileStorageMap 등록 시각) | (MCP `search` 필터 — mc-16) | 새로 |
 
 ### gold.chunk
 
@@ -209,7 +211,7 @@
 | content_group | TEXT | 같은 글 묶음 id | registry `content_groups` | 〃 | 유지 |
 | value_changes | TEXT | 바뀐 값 목록(JSON) | registry `link_editions` | 〃 | 유지 |
 | source_keys | TEXT | `원천::원본 키` 목록(JSON — 지금 sha256↔원본 키 다리) | registry `apply` | registry `link_editions` | 유지 |
-| fail_count | INTEGER | 연속 파싱 실패 수 | registry `apply` | registry `nightly_plan`, registry_cli | 삭제(사용자 10-30 — 실패 횟수 없앰, 성공했을 때만 갱신 · `registry_retry_max` 설정도 지움, [pl-32](../prd/etl.md#pl-32)) |
+| fail_count | INTEGER | 연속 파싱 실패 수 — 사용자 10-30 — 실패 횟수 없앰, 성공했을 때만 갱신 · `registry_retry_max` 설정도 지움, [pl-32](../prd/etl.md#pl-32) | registry `apply` | registry `nightly_plan`, registry_cli | 삭제 |
 
 ### struct.doc_registry_seen
 
@@ -334,7 +336,7 @@
 | rep_etag | NVARCHAR(128) | 대표 결과 etag | 〃 | 없음 | 삭제 |
 | parse_status | NVARCHAR(32) | ok·partial | parsing_meta `plan` | run_docs `edw_done_keys` | 유지 |
 | status_reason | NVARCHAR(2000) | 상태 이유 | 〃 | 없음 | 삭제 |
-| rep_engine | NVARCHAR(128) | 대표 엔진 | 〃 | 없음 | 유지 → 대표 silver 엔진 + 판으로(사용자 10-30 grill — 아래 단계별 칸) |
+| rep_engine | NVARCHAR(128) | 대표 엔진 — 0.1.0: 대표 silver 엔진 + 판(사용자 10-30 grill — 아래 단계별 칸) | 〃 | 없음 | 유지 |
 | rep_acc | FLOAT | 대표 정확도 | 〃 | 없음 | 삭제 |
 | page_count | INT | 쪽 수 | 〃 | 없음 | 삭제 |
 | doc_key | NVARCHAR(64) | 원본 sha256(지금 유일한 필수 칸 — 검색 키와 안 맞아 `rep_uri`가 늘 빔, mc-15) | 〃 | parsing_meta_db `find_by_doc_key` | 삭제 |
@@ -342,7 +344,7 @@
 | pipeline_version | NVARCHAR(64) | 파이프라인 판 | parsing_meta `plan` | 없음 | 삭제 |
 | status | NVARCHAR(16) | active·changed·deleted | 〃, `apply_registry_status` | find·`find_rep_path`·상태 UPDATE 조건 | 유지 |
 | status_at | NVARCHAR(32) | 상태 바뀐 때(UTC) | `apply_registry_status` | 없음(SELECT 안 함 — 운영자가 봄) | 유지 |
-| engines_used | NVARCHAR(MAX) | 쓰인 엔진 전부(JSON) | parsing_meta `plan` | 없음 | 바꿈 → 성공한 엔진만(이름 + 판, 사용자 10-30 grill) |
+| engines_used | NVARCHAR(MAX) | 쓰인 엔진 전부(JSON) — 0.1.0: 성공한 엔진만(이름 + 판, 사용자 10-30 grill) | parsing_meta `plan` | 없음 | 유지 |
 | engines_summary | NVARCHAR(512) | 엔진 한 줄 요약 | 〃 | 없음 | 삭제 |
 | parsed_at | DATETIME2(0) | 넣은 때(기본 SYSUTCDATETIME) | DB 기본값 | 없음 | 삭제 |
 | source_key_hash | BINARY(32) 계산 칸 | `source_key` sha256 — 유일 색인 키(1700바이트 상한 우회) | DB | 유일 색인 | 유지 |
@@ -351,6 +353,8 @@
 | stack_version | INT | 파싱 엔진 스택 판(`struct.stack_version`) — 엔진이 모두 실패하면 NULL | (파싱 단계 성공 때) | (운영자·재처리 판정) | 새로 |
 | gold_version | NVARCHAR(64) | gold 모듈·파이프라인 판 — gold가 끝나기 전에는 NULL | (gold 성공 때) | (운영자·재처리 판정) | 새로 |
 | engines_failed | NVARCHAR(MAX) | 실패한 엔진(JSON — 이름·이유·걸린 시간), 없으면 NULL | (파싱 단계 — 사용자 10-30 "EDW에도") | (운영자·재시도 판단) | 새로 |
+
+**운영이 더한 분류·고객 칸(reference 비교 10-30, C2):** 운영 ParsingMeta에 더해진 분류·고객 칸은 0.1.0과 동시에 지운다(DB 담당자 D-3, 등급 A) — 분류·고객 결과는 gold에만([pl-33](../prd/etl.md#pl-33), [pl-29](../prd/etl.md#pl-29)). 그때 운영 분류 스크립트가 멈추므로 운영 담당자에게 알린다.
 
 **단계별 기록(사용자 10-30 grill — 등급 A, DB 담당자 D-3):** 단계마다 성공했을 때만 쓴다 — 파싱: `stack_version`·성공한 엔진(`engines_used`)·실패한 엔진(`engines_failed`)·대표 silver 엔진 + 판(`rep_engine`) · gold: `gold_version`·`gold_status`. 3차의 "읽는 칸만" 안에 칸을 다시 더한 것이다. 저장 구조(silver = Object Storage uuid5 폴더 · gold = pgvector)는 [pl-32](../prd/etl.md#pl-32).
 
