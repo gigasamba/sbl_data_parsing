@@ -87,7 +87,7 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 이유: `FIG_OCR_BUDGET`, `SERVICE_MASTER_CSV`, `DIVISION_MASTER_CSV`, `PROD_MASTER_CSV`가 서버 env 파일에 있지만 읽는 코드가 없다(C-51).
 - 결정(사용자 10-30 grill): 0.1.0 릴리스에서 지운다(핑거프린트가 바뀌는 다른 항목과 함께).
 - 파일: 서버 env·settings 예시, `common/config/`(설정이나 별칭이 있으면), `refactor.md` C-51.
-- Status: todo — 0.1.0 릴리스에서.
+- Status: done (10-30, `feature/fp-batch`) — `deploy/host/scripts/run_docs.py`의 `UNREAD_PARSE_ENV`·`UNREAD_STRUCT_ENV`(4개 이름)를 명령에서 뺌, 시험 기대 명령도. 핑거프린트 그대로(호스트 스크립트).
 
 ## 코드와 다른 점 · 지울 코드
 
