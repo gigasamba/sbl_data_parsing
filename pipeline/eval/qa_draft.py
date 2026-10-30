@@ -22,7 +22,6 @@ gold_draft(쪽 옮겨 적기)와는 다른 지시문(prompts/qa_draft)·캐시 �
   유료 외부 모델이면 LLM_MAX_CALLS·LLM_BUDGET_USD를 함께(개발 중엔 문서 몇 건으로 기능 시험만).
 사용: python -m pipeline.eval.qa_draft --src <원본 폴더> [--out output/qa_draft]
       python -m pipeline.eval.qa_draft --finalize output/qa_draft
-      python -m pipeline.eval.qa_draft --selftest   (VLM 대역 — 네트워크·캐시 없음)
 """
 
 import argparse
@@ -31,6 +30,7 @@ import json
 import sys
 from pathlib import Path
 
+from common.ai.guard import fake_llm
 from common.config import settings as C  # S7c — 설정 객체(common 칸: VLM_*·LLM_FAKE)
 from common.core.console import utf8_stdout
 from pipeline import config as pc  # S7c — 설정 객체(pipeline 칸: VLM_DEADLINE·QA_DRAFT_*)
@@ -88,7 +88,7 @@ def _vlm_qa(img_bytes, max_items):
     model_dir = V._model_dir(model)
     p_qa = _template("qa_draft", "qa").replace("{max_items}", str(max_items))
     prompt_text = p_qa + "\n\n" + _tail("qa_draft")
-    if C.cfg().dev.llm_fake:  # S7c — 설정 객체(옛 env == "1") · 네트워크·캐시 0 모의 응답(경로 연기 시험 — c0 10-14)
+    if fake_llm():  # S7c — 설정 객체(옛 env == "1") · 네트워크·캐시 0 모의 응답(경로 연기 시험 — c0 10-14)
         from common.ai.llm import fake_reply
 
         text, u = fake_reply([{"role": "user", "content": [{"type": "text", "text": prompt_text}]}])

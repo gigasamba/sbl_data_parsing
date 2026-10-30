@@ -13,7 +13,7 @@ import sys
 from contextlib import contextmanager
 from pathlib import Path
 
-from common.config.settings import cfg, checked, given, reveal
+from common.config.settings import cfg, checked, given, guard_run_env, reveal
 
 HNSW_MAX = 2000  # pgvector HNSW 차원 상한(vector) — 적재(색인 종류)와 검색(질의 방식)이 같은 기준
 
@@ -66,6 +66,8 @@ def _standin_schema(pg_schema=None):
 def _warn_standin():
     """코디네이터 지시(10-14) — 연결 정보를 잊고 서버에 올려도 조용히 넘어가지 않게, 스탠드인을 고를 때마다
     첫 줄 WARNING(stderr). 억제 스위치 없음(의도 — 서버에서 안 보여야 할 줄이지, 숨길 일이 아님)."""
+    if guard_run_env() not in (None, "local"):  # pl-12(사용자 10-30) — 서버(dev·prd·모르는 값)는 스탠드인으로 대체하지 않고 멈춤
+        raise SystemExit(f"RUN_ENV={guard_run_env()} — PG 접속 정보 없음(common.connections.pg) · 서버는 로컬 대체 DB를 쓰지 않음(pl-12)")
     print(
         "WARNING: PG 접속 정보 없음 → 로컬 대체 DB(output/pg_standin) 사용 — 서버면 pipeline.env의 PG_* 확인", file=sys.stderr, flush=True
     )

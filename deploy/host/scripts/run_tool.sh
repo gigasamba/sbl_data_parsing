@@ -16,8 +16,9 @@ set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트(S6b)
 patch_given=${PATCH_CODE:-}             # 부른 쪽이 준 PATCH_CODE만(아래 load_settings 전 — 옛 동작 그대로)
 . deploy/host/scripts/settings_env.sh && load_settings || exit $?   # S7e1 — settings.yaml 호스트 칸 → 셸 env(trigger.sh와 같음)
-. deploy/host/scripts/image_vars.sh   # S6b — need_image(아래 — compose.pipeline.yml이 두 변수를 다 치환하므로 둘 다)
-DC="docker compose -f deploy/host/compose/compose.pipeline.yml"
+. deploy/host/scripts/image_vars.sh; code_dir_default DATA_PIPELINE_IMAGE   # op-06 — 실행 이미지면 코드 폴더 루트 · S6b — need_image(아래 — compose.pipeline.yml이 두 변수를 다 치환하므로 둘 다)
+DC="${DOCKER:-docker} compose -f deploy/host/compose/compose.pipeline.yml"   # DOCKER(settings common.host.docker) — podman이면 podman compose(사용자 10-30 검토 B4)
+[ -n "${CODE_DIR:-}" ] && DC="$DC -f deploy/host/compose/compose.code.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 /app/deploy에
 [ -n "$patch_given" ] && [ -f deploy/host/compose/compose.patch.yml ] && DC="$DC -f deploy/host/compose/compose.patch.yml"
 
 tool=${1:?도구 이름 — 예: score_gold·run_board·mcp_eval·rdb_discover·check_env}; shift || true
@@ -25,8 +26,8 @@ tool=${tool%.py}
 case "$tool" in
   score_gold|run_board) svc=parse ;;        # data-pipeline(엔진 의존성 — score_gold·run_board는 파싱 결과 포맷을 읽음)
   mcp_eval) svc=retrieval ;;                # mcp-server(mcp_server를 top-level import — 파이프라인 이미지엔 search 없음)
-  rdb_discover|check_env) svc=load ;;       # data-pipeline(load 서비스 — common/* 의존성만, 자원 한도가 작음)
-  *) echo "[run_tool] 모르는 도구: $tool — score_gold·run_board·rdb_discover·check_env(data-pipeline 이미지) · mcp_eval(mcp-server 이미지) 중 하나" >&2; exit 2 ;;
+  rdb_discover|check_env|ping_models) svc=load ;;   # data-pipeline(load 서비스 — common/* 의존성만, 자원 한도가 작음) · ping_models = 모델 주소 연결 점검(설치 점검 — 사용자 10-30)
+  *) echo "[run_tool] 모르는 도구: $tool — score_gold·run_board·rdb_discover·check_env·ping_models(data-pipeline 이미지) · mcp_eval(mcp-server 이미지) 중 하나" >&2; exit 2 ;;
 esac
 
 need_image pipeline || exit 2; need_image mcp || exit 2   # S6b — 옛 이미지 변수만 있으면 종료 코드 2

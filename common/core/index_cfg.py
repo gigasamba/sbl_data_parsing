@@ -39,7 +39,7 @@ def _dev_path(p):
 
 
 def glossary_fp(env=None):
-    """용어 사전(GLOSSARY_DIR) 지문 — *.csv 이름+내용 sha256 8자, 없으면 'none'(stack_matrix.terms_fp와 같은 규칙)."""
+    """용어 사전(GLOSSARY_DIR) 지문 — *.csv 이름+내용 sha256 8자, 없으면 'none'."""
     from common.config.settings import cfg  # S7b — 인자 env(사전)를 받으면 호출자가 넘긴 사전을 읽고, 없을 때만 설정 객체
 
     d = cfg().paths.glossary_dir if env is None else env.get("GLOSSARY_DIR")

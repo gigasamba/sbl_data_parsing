@@ -12,7 +12,7 @@ _LIMITER = None
 
 
 def _limiter():
-    """동시 도구 실행 상한(MCP_MAX_CONCURRENCY, 기본 8 — LLM_MAX_CONCURRENCY·VLM_MAX_CONCURRENCY와 같은 기본값)."""
+    """동시 도구 실행 상한(MCP_MAX_CONCURRENCY, 기본 8 — VLM_MAX_CONCURRENCY와 같은 기본값)."""
     global _LIMITER
     if _LIMITER is None:
         _LIMITER = anyio.CapacityLimiter(int(mc.cfg().server.max_concurrency))  # 기본 8(모델) — 한 번 만들어 둠
@@ -57,13 +57,6 @@ async def _bg(fn, *a, **kw):
             return {"error": "timeout"}
     finally:
         _INFLIGHT -= 1
-
-
-async def _bg_img(fn, *a, **kw):
-    """get_image·get_evidence_image는 (meta, png) 튜플을 돌려줌 — _bg가 과부하로 {"error": ...} dict를
-    돌려주면 (dict, None)으로 맞춰 호출부의 튜플 풀기가 그대로 동작하게."""
-    r = await _bg(fn, *a, **kw)
-    return r if isinstance(r, tuple) else (r, None)
 
 
 async def _bg_long(fn, budget, *a, **kw):

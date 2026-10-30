@@ -26,14 +26,14 @@ unhide`로 되돌릴 수 있음) · changed는 보고만(`output/registry/report
 
 env(전부 PM1 결정 대기 — 사람, docs/operations/server-guide.md 단계 6):
   PM_TABLE(기본 AI.ParsingMeta) · PM_BUCKET(업로드 버킷 — "file://<폴더>"면 로컬 폴더를 가짜 Object Storage로) ·
-  PM_PREFIX(버킷 안 경로 접두, 선택) · PM_DB_HOST·PM_DB_PORT(1433)·PM_DB_DATABASE·PM_DB_USER·PM_DB_PASSWORD
-  (EDW 쓰기 전용 계정 — RDB_* 읽기 계정과 분리) · PM_DB_SQLITE(설정하면 SQLite를 가짜 EDW로, PM_DB_* 안 봄) ·
+  PM_PREFIX(버킷 안 경로 접두, 선택) · common.connections.rdb 쓰기 계정(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_WRITE_USER·RDB_WRITE_PASSWORD
+  — 사용자 10-29 ops.md#op-03) · RDB_SQLITE(설정하면 SQLite를 가짜 EDW로, 접속 칸 안 봄) ·
   OS_ENDPOINT·OS_ACCESS_KEY·OS_SECRET_KEY·OS_REGION·OS_VERIFY_TLS(업로드 접속 — source.py·os_put.py와 같음) ·
   PM_UPLOAD_STATUSES(콤마 목록, 기본 "ok,partial"만 올림) · PM_PARSE_DATE(--parse-date 대신 env로, 선택).
 원본 로컬 보존·즉시 삭제는 이제 modules/parse/source.py(SI39⑧ — 파싱이 끝나면 바로 지움, KEEP_LOCAL_ORIGINALS=1만
 디버그 보존)가 맡는다 — 이 CLI는 원본 삭제를 하지 않는다(올리지도 않으므로, SI37 때와 달리 X2 책임이 없음).
 DDL은 이 코드가 실행하지 않는다(설계 §2 초안 — 사람이 만듦). SQL은 식별자 화이트리스트·값 바인딩(AD44 관례),
-비밀값(PM_DB_PASSWORD 등)은 어떤 모드에서도 출력하지 않는다.
+비밀값(RDB_WRITE_PASSWORD 등)은 어떤 모드에서도 출력하지 않는다.
 """
 
 import argparse
@@ -144,7 +144,7 @@ def run(a):
         print(json.dumps(out, ensure_ascii=False))
         print("[dry-run] 쓰기 0 — 실제 업로드·EDW 쓰기는 --apply 명시")
         return out
-    storage, db = PM.make_storage(), PM.make_db()
+    storage, db = PM.make_storage(), PM.make_db("write")
     md_dir = Path(a.out) / "publish" / "_md_tmp"
     try:
         result = PM.apply(rows, storage, db, md_dir, prefix)
@@ -165,8 +165,8 @@ def run(a):
 
 
 def _apply_registry_status(out_dir, db):
-    """OP1/OP9 — publish --apply에서만: 문서 대장을 갱신(scan·diff·apply — deleted는 apply()가 자동 hide, OP1)하고
-    changed·deleted·touched(AD17①) doc_key의 EDW status UPDATE(PM.apply_registry_status, update_status()만 씀 —
+    """OP1/OP9 — publish --apply에서만: 문서 대장을 갱신(scan·diff·apply — 이번 관측에 없는 문서는 기록만, 숨기거나 deleted로 쓰지 않음, pl-12)하고
+    changed·touched(AD17①) doc_key의 EDW status UPDATE(PM.apply_registry_status, update_status()만 씀 —
     touched는 status 값은 그대로, status_at만). changed는 report.md로만(재파싱 안 함, OP1) — output/registry/report.md에
     이번 build의 new/touched/changed/deleted 요약(touched는 건수만, 목록 없음).
     문서 대장을 못 열면(DOC_REGISTRY=0·DB 없음·그 밖 오류) 조용히 건너뜀(게시 자체는 막지 않음 — 전과 동일)."""
@@ -189,7 +189,7 @@ def _apply_registry_status(out_dir, db):
             f"# 문서 대장 build {build_id}\n\n"
             f"- 새 문서 {len(diff['new'])}건 · **날짜만 바뀜(touched, 원본 바이트는 같음 — 재파싱·새 판·변경 보고 제외) "
             f"{len(diff.get('touched') or [])}건** · **바뀜(보고만, 재파싱 안 함) {len(diff['changed'])}건** · "
-            f"**삭제(검색에서 숨김) {len(diff['deleted'])}건** · 그대로 {len(diff['unchanged'])}건\n\n"
+            f"이번 관측에 없음 {len(diff['deleted'])}건(기록만, 숨기지 않음) · 그대로 {len(diff['unchanged'])}건\n\n"
             + (
                 "## 바뀜(changed) — 사람 조치 뒤 재파싱 전까지 옛 내용 그대로 서빙\n"
                 + "\n".join(f"- {k}" for k in diff["changed"])
@@ -198,7 +198,7 @@ def _apply_registry_status(out_dir, db):
                 else ""
             )
             + (
-                "## 삭제(deleted) — 검색에서 숨김(색인 행 삭제 아님, cli/registry.py unhide로 되돌릴 수 있음)\n"
+                "## 이번 관측에 없음 — 기록만(숨기지 않음·deleted로 쓰지 않음, pl-12)\n"
                 + "\n".join(f"- {k}" for k in diff["deleted"])
                 + "\n"
                 if diff["deleted"]
@@ -234,7 +234,7 @@ def main(argv=None):
         help="SI41 — manifest 행이 source_system을 들고 있으면(rdb:*·rdb:<이름>) 그 값을 쓰고, 이 값은 "
         "폴백(레거시 단일 표 소스)에만 쓰인다",
     )
-    ap.add_argument("--version", help="기본 git rev-parse --short HEAD(또는 env PIPELINE_VERSION)")
+    ap.add_argument("--version", help="기본 저장소 루트 VERSION(오버레이 패치면 PATCH_VERSION — common.pipeline_version, D-036)")
     ap.add_argument("--parse-date", help="기본 오늘(YYYY-MM-DD, 또는 env PM_PARSE_DATE) — Object Storage 키의 날짜 폴더(SI39③)")
     ap.add_argument("--reparse", help="사람 조치 뒤 재파싱 대상 원본 키 목록 파일(한 줄에 하나, SI39③) — 새 날짜 폴더로, 옛 결과는 안 지움")
     ap.add_argument("--apply", action="store_true", help="실제 업로드 + EDW 쓰기(기본은 dry-run — 표만 출력, 쓰기 0)")

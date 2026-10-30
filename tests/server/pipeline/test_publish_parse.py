@@ -109,8 +109,8 @@ def selftest():
     os_dir, db_path = d / "os", d / "edw.sqlite"
     with (
         pc.PIPE.env(PM_BUCKET=f"file://{os_dir}"),
-        COMMON.env(PM_DB_SQLITE=str(db_path), STRUCT_DB=str(d / "struct.sqlite")),
-    ):  # S7c — 시험하는 코드가 객체만 읽음(os.environ 안 건드림)
+        COMMON.env(RDB_SQLITE=str(db_path), STRUCT_DB=str(d / "struct.sqlite"), RUN_ENV="local"),
+    ):  # S7c — 시험하는 코드가 객체만 읽음(os.environ 안 건드림) · 가짜 EDW(RDB_SQLITE)는 local 전용 — 이미지(서버 RUN_ENV)에서도 시험 안에서만 local(이미지 관문 10-30)
         a.apply = True
         r1 = run(a)
         # SI39 — ok(a)만 .md 업로드 · EDW는 ok(a)+not_parsed(c) 2행(failed·skipped_drm은 ⑥로 EDW 제외, 보고서로만)

@@ -8,7 +8,6 @@ from pipeline.transform.figures.chart_values import (
     compute_trend,
     extract_vector,
     merge_values,
-    raster_chart_values,
 )
 
 
@@ -121,27 +120,6 @@ def selftest():
     assert len(merged2) == 2 and merged2[0]["value"] == 50.0, merged2  # "q1"(공백·대소문자만 다름)은 det와 겹쳐 안 남음
     assert merged2[1]["label"] == "Ｑ２"  # "Q2"는 det에 없어 보존
     print("[selftest] merge_values — 정규화 (series,x) 비교로 겹치는 지점은 det 우선, 서식 달라도 중복 안 남김 통과")
-
-    # (b) 래스터 단계식 — 가짜 call_fn(실 VLM 호출 없음)
-    def fake_call(prompt_text, png_bytes):
-        import json as _json
-
-        return _json.dumps(
-            {
-                "y_ticks": [{"value": 0, "y_px": 380}, {"value": 100, "y_px": 20}],
-                "items": [{"x": "Q1", "top_px": 200, "series": None, "unit": None}],
-            }
-        )
-
-    import io as _io
-
-    from PIL import Image
-
-    buf = _io.BytesIO()
-    Image.new("RGB", (40, 40), "white").save(buf, "PNG")
-    rv, raw = raster_chart_values(buf.getvalue(), fake_call)
-    assert abs(rv[0]["value"] - 50) < 1, rv
-    print("[selftest] F14(b) — 래스터 단계식(가짜 VLM): 눈금 비율 배치·보간 통과")
 
     # 독립 검토(10-14) — 눈금 글자 파싱 확장: 쉼표·통화 기호·K/M/B 단위·과학적 표기
     assert _to_number("1,200") == 1200.0

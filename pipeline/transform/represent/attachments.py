@@ -111,8 +111,7 @@ def extract(doc_path):
 
 # ── 첨부 1건 파싱(+ P0 캐시) ─────────────────────────────────────────────
 def _stack_parse():
-    f = pc.stack_path()  # S8b — 진입점이 만든 판 사본(PC는 파일 — 옛 STACK_FILE)
-    return json.loads(f.read_text(encoding="utf-8")).get("parse", {}) if f.exists() else {}
+    return pc.stack().get("parse", {})  # pl-32 — 진입점이 정한 판(판 번호 STACK_VERSION — PC는 파일)
 
 
 def parse_attachment(entry, store=None):

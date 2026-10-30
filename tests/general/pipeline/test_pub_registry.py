@@ -1,8 +1,8 @@
 """publish 문서 대장 갱신 시험 — S9b(refactor.md C-54 ①, 사용자 10-28 — 이번 판에서 안 고침). **알려진 FAIL**(일반 시험 — tests/conftest.py GENERAL_KNOWN_FAIL).
 문서 대장(PG)이 있어야 판정되므로 일반 시험(PC 전용)에 둔다 — 이미지 안에는 PG가 없어 늘 "사용 안 함"으로 통과해 반입 판정에 뜻이 없음(S9b 리뷰).
 PG 백엔드에서 doc_registry upsert(여러 줄 `INSERT OR REPLACE`)가 `structdb._pg_sql`에서 번역되지 않아 "문서 대장 갱신 실패 — SyntaxError" →
-changed·deleted의 EDW status UPDATE·자동 숨김·registry/report.md가 늘 건너뜀. 고치면 run_docs 문서별 publish가 그 전 문서를 deleted·숨김으로 만드는 위험이 있어 다음 판에 문서별 publish 설계와 함께 정함 — 그때 통과하면 known_fail에서 지운다.
-⚠️ 고친 뒤 PC에서 돌면 설정의 PG(전용 PG `rag` DB의 struct 스키마)에 대장을 쓰고 diff의 deleted로 다른 문서를 숨길 수 있다 — 그때 시험 DB로 가른다.
+changed의 EDW status UPDATE·registry/report.md가 늘 건너뜀. pl-12(사용자 10-30)부터 deleted·자동 숨김 길은 없음(문서 대장·EDW 모두 deleted를 쓰지 않음) —
+번역을 고치면(pl-12 ①) 통과할 것이고 그때 known_fail에서 지운다. 고친 뒤 PC에서 돌면 설정의 PG(전용 PG `rag` DB의 struct 스키마)에 대장 행을 쓴다 — 시험 DB로 가른다.
 S10(VS9b R-4): PG가 꺼져 있으면 SQLite 대체로 upsert가 성공해 헛되이 통과(XPASS)하고 개발자 기본 SQLite 대장에 쓰던 것 — RUN_MODE=prod로
 대체를 막고("사용 안 함"이면 실패 — PG 없이는 판정 못 함) STRUCT_DB는 시험 폴더로."""
 
@@ -16,7 +16,7 @@ def test_registry_update():  # publish --apply의 문서 대장 갱신이 실패
     d, out, a = make_fixture()
     with (
         pc.PIPE.env(PM_BUCKET=f"file://{d / 'os'}"),
-        COMMON.env(PM_DB_SQLITE=str(d / "edw.sqlite"), RUN_MODE="prod", STRUCT_DB=str(d / "struct.sqlite")),
+        COMMON.env(RDB_SQLITE=str(d / "edw.sqlite"), RUN_MODE="prod", STRUCT_DB=str(d / "struct.sqlite")),
     ):
         a.apply = True
         note = (run(a).get("registry_status_update") or {}).get("note") or ""

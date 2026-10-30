@@ -138,10 +138,10 @@ def selftest():
         # R-3 — YAML 스칼라: 글자 칸은 쓴 글자 그대로, 켜기·숫자·JSON 칸은 YAML이 푼 값
         y = d / "scalars.yaml"
         y.write_text(
-            "common:\n  run_env: local\n  connections:\n    edw:\n      encrypt: yes\n      trust_cert: no\n      port: '1433'\n"
-            "    object_storage:\n      verify_tls: 1\n    pg:\n      password: 1234\n      db: True\n"
-            "    parsing_meta:\n      sqlite: 2026-10-27\n"
-            "  models:\n    rerank:\n      allow_external: true\n    vlm:\n      allow_external: '1'\n"
+            "common:\n  run_env: local\n  connections:\n"
+            "    object_storage:\n      verify_tls: 1\n      region: yes\n    pg:\n      password: 1234\n      db: True\n      host: no\n"
+            "    rdb:\n      sqlite: 2026-10-27\n"
+            "  models:\n    embed:\n      allow_external: true\n    vlm:\n      allow_external: '1'\n"
             "    guard:\n      internal_host_suffixes: [corp, 10]\n"
             "      internal_ip_ranges: 10\n"
             "    llm:\n      extra_body: {reasoning: {enabled: no}, n: 1}\n  runtime:\n    cpu_max_load: 5\n",
@@ -151,12 +151,12 @@ def selftest():
         c = sy.common.connections
         check(
             "YAML 스칼라(R-3): 글자 칸 yes·no·1·True → 쓴 글자 'yes'·'no'·'1'·'True'(옛 env 줄과 같은 글자)",
-            (c.edw.encrypt, c.edw.trust_cert, c.object_storage.verify_tls, c.pg.db) == ("yes", "no", "1", "True")
-            and type(c.edw.encrypt) is str,
+            (c.object_storage.region, c.pg.host, c.object_storage.verify_tls, c.pg.db) == ("yes", "no", "1", "True")
+            and type(c.object_storage.region) is str,
         )
         check(
             "YAML 스칼라(R-3): 비밀 칸 숫자 1234 → 글자 '1234' · 날짜 2026-10-27 → 글자 그대로",
-            c.pg.password.get_secret_value() == "1234" and c.parsing_meta.sqlite == "2026-10-27",
+            c.pg.password.get_secret_value() == "1234" and c.rdb.sqlite == "2026-10-27",
         )
         check(
             "목록 칸에 스칼라 하나(internal_ip_ranges: 10) → ['10'](옛 env 한 값과 같게)",
@@ -164,7 +164,7 @@ def selftest():
         )
         check(
             "YAML 켜기 칸(VS7a2 R-c): true → True · '1' → True · 숫자 칸 5 → 5.0 · 목록 [corp, 10] → 글자",
-            sy.common.models.rerank.allow_external is True
+            sy.common.models.embed.allow_external is True
             and sy.common.models.vlm.allow_external is True
             and sy.common.runtime.cpu_max_load == 5.0
             and sy.common.models.guard.internal_host_suffixes == ["corp", "10"],
@@ -190,21 +190,19 @@ def selftest():
             sy.common.models.llm.extra_body == {"reasoning": {"enabled": False}, "n": 1},
         )
         with Cache(_TApp).override(
-            data={"common": {"connections": {"edw": {"encrypt": True}}}}, file=d / "empty.yaml", environ={"RUN_ENV": "local"}
+            data={"common": {"connections": {"object_storage": {"region": True}}}}, file=d / "empty.yaml", environ={"RUN_ENV": "local"}
         ) as so:
-            check("시험 data=: 글자 칸에 파이썬 True → 옛 env 꼴 '1'", so.common.connections.edw.encrypt == "1")
+            check("시험 data=: 글자 칸에 파이썬 True → 옛 env 꼴 '1'", so.common.connections.object_storage.region == "1")
         # R-4 — 빈 글자: 기본값 있는 칸은 설정 안 함(옛 `get(X) or 기본값`), 기본값 None인 글자 칸만 '' 유지 · 옛 env·migrate도 같은 규칙
         bl = load(
             _TApp,
             file=d / "empty.yaml",
             environ={"RUN_ENV": "local"},
-            names={"EDW_DRIVER": "", "OS_REGION": "", "PG_HOST": "", "EMBED_TIMEOUT": "", "INTERNAL_IP_RANGES": ""},
+            names={"OS_REGION": "", "PG_HOST": "", "EMBED_TIMEOUT": "", "INTERNAL_IP_RANGES": ""},
         )
         check(
-            "빈 글자(R-4): 기본값 있는 글자 칸(EDW_DRIVER·OS_REGION)의 ''은 기본값, 설정 안 한 칸으로 봄",
-            bl.common.connections.edw.driver == "pymssql"
-            and bl.common.connections.object_storage.region == "us-east-1"
-            and not _is_set(bl, "common.connections.edw.driver"),
+            "빈 글자(R-4): 기본값 있는 글자 칸(OS_REGION)의 ''은 기본값, 설정 안 한 칸으로 봄",
+            bl.common.connections.object_storage.region == "us-east-1" and not _is_set(bl, "common.connections.object_storage.region"),
         )
         check(
             "빈 글자(R-4): 기본값 None 글자 칸(PG_HOST)은 '' 유지 · 숫자·목록 칸 ''은 기본값",
@@ -212,14 +210,10 @@ def selftest():
             and bl.common.models.embed.timeout == 60
             and bl.common.models.guard.internal_ip_ranges == [],
         )
-        bk = load(
-            _TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"EDW_ENCRYPT": "", "OS_VERIFY_TLS": "", "EXTERNAL_SCOPE": ""}
-        )
+        bk = load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"OS_VERIFY_TLS": "", "EXTERNAL_SCOPE": ""})
         check(
-            "빈 글자: blank=keep 칸(옛 os.environ.get(X, 기본) — OS_VERIFY_TLS·EXTERNAL_SCOPE)은 '' 유지(S7a2 (b)) · "
-            "EDW_ENCRYPT는 기본값(edwdb.py가 `if os.environ.get(k)`로 빈 값을 거름)",
-            (bk.common.connections.object_storage.verify_tls, bk.common.models.guard.external_scope) == ("", "")
-            and bk.common.connections.edw.encrypt == "yes",
+            "빈 글자: blank=keep 칸(옛 os.environ.get(X, 기본) — OS_VERIFY_TLS·EXTERNAL_SCOPE)은 '' 유지(S7a2 (b))",
+            (bk.common.connections.object_storage.verify_tls, bk.common.models.guard.external_scope) == ("", ""),
         )
         check(
             "PG_HOST·PG_PORT 기본값 None(둘 다 없으면 docker 자동 탐지 — services.detect_pg)",
@@ -400,17 +394,17 @@ def selftest():
             and ce_srv["RUN_ENV"] == "dev"
         )
         check(
-            "덮기 파일 도구는 서버(env·원본 파일 run_env가 dev·stage·prd, 모르는 글자)면 막음 · 코드 안 child_env는 서버에서도 그대로(base = 붙인 파일 경로)",
+            "덮기 파일 도구는 서버(env·원본 파일 run_env가 dev·prd, 모르는 글자)면 막음 · 코드 안 child_env는 서버에서도 그대로(base = 붙인 파일 경로)",
             blocked and srv_child,
         )
         (d / "ovb.yaml").write_text(
-            f"base: {tf}\noverrides:\n  NO_PAID_CALLS: true\n  EMBED_TIMEOUT: 9\n  LLM_MODEL: true\n  OCRVLM_MODEL: 1.10\n  PM_PREFIX: 0123\n",
+            f"base: {tf}\noverrides:\n  NO_PAID_CALLS: true\n  EMBED_TIMEOUT: 9\n  LLM_MODEL: true\n  VLM_MODEL: 1.10\n  PM_PREFIX: 0123\n",
             encoding="utf-8",
         )
         ovb = load(CommonAppSettings, file=d / "ovb.yaml", environ={})
         ovb_flat = load(CommonAppSettings, file=overlay_file({"LLM_TIMEOUT": "5"}, base=d / "ovb.yaml"), environ={})
         same_rule = [
-            (o.common.models.guard.no_paid_calls, o.common.models.embed.timeout, o.common.models.llm.model, o.common.models.ocrvlm.model)
+            (o.common.models.guard.no_paid_calls, o.common.models.embed.timeout, o.common.models.llm.model, o.common.models.vlm.model)
             for o in (ovb, ovb_flat)
         ]
         (d / "ovy.yaml").write_text(f"base: {tf}\noverrides:\n  NO_PAID_CALLS: yes\n", encoding="utf-8")
@@ -451,8 +445,7 @@ def selftest():
         )
         check(
             "overridden()(R-11): 지금 덮기 파일의 overrides 이름만(공유 settings.yaml 값은 아님)",
-            overridden({"SETTINGS_FILE": str(d / "ovb.yaml")})
-            == {"NO_PAID_CALLS", "EMBED_TIMEOUT", "LLM_MODEL", "OCRVLM_MODEL", "PM_PREFIX"}
+            overridden({"SETTINGS_FILE": str(d / "ovb.yaml")}) == {"NO_PAID_CALLS", "EMBED_TIMEOUT", "LLM_MODEL", "VLM_MODEL", "PM_PREFIX"}
             and overridden({"SETTINGS_FILE": str(tf)}) == frozenset(),
         )
         check(
@@ -513,9 +506,27 @@ def selftest():
         )
         check(
             "resolve_run_env: env > 파일 common.run_env · 둘 다 없으면 None",
-            resolve_run_env({"RUN_ENV": "stage", "SETTINGS_FILE": str(good)}) == "stage"
+            resolve_run_env({"RUN_ENV": "dev", "SETTINGS_FILE": str(good)}) == "dev"
             and resolve_run_env({"SETTINGS_FILE": str(good)}) == "local"
             and resolve_run_env({"SETTINGS_FILE": str(d / "empty.yaml")}) is None,
+        )
+        check(
+            "RUN_ENV=stage 거부(op-02 — 사용자 10-29, local·dev·prd만)",
+            raises(lambda: resolve_run_env({"RUN_ENV": "stage"}), "local·dev·prd")[0],
+        )
+        # op-02 — LLM_FAKE는 local 전용: 서버(dev·prd)에서 켜져 있으면 시작 관문이 종료 2, 꺼져 있으면 통과
+        (d / "srv_fake.yaml").write_text("common:\n  run_env: dev\n  dev: {llm_fake: true}\n", encoding="utf-8")
+        (d / "srv_ok.yaml").write_text("common:\n  run_env: prd\n", encoding="utf-8")
+        try:
+            require_run_env("시험", {"SETTINGS_FILE": str(d / "srv_fake.yaml")}, sections=())
+            fake_gate = False
+        except SystemExit as e:
+            fake_gate = e.code == 2
+        check(
+            "require_run_env: 서버에서 llm_fake 켜면 종료 2 · 끄면 통과 · local은 켜도 통과",
+            fake_gate
+            and require_run_env("시험", {"SETTINGS_FILE": str(d / "srv_ok.yaml")}, sections=()) == "prd"
+            and require_run_env("시험", {"RUN_ENV": "local"}) == "local",
         )
         try:
             require_run_env("시험", {"SETTINGS_FILE": str(d / "empty.yaml")})
@@ -634,8 +645,8 @@ def selftest():
         # U-a(사용자 10-27) — 영구 다리는 이미지마다 common + 자기 앱 절의 엔진·인계 칸만(RAG_MODULE), 관계없는 앱 절은 내지도 검증하지도 않음
         ua = d / "ua.yaml"
         ua.write_text(
-            "common:\n  paths:\n    glossary_dir: /g\npipeline:\n  extract:\n    ocr:\n      dpi: 150\n  connections:\n    rdb:\n      password: dummy-ua\n"
-            "mcp:\n  search:\n    rerank:\n      top_n: 7\n",
+            "common:\n  paths:\n    glossary_dir: /g\npipeline:\n  extract:\n    ocr:\n      dpi: 150\n  connections:\n    secure_doc:\n      password: dummy-ua\n"
+            "mcp:\n  search:\n    weights:\n      id: 7\n",
             encoding="utf-8",
         )
         ua_bad = d / "ua_bad.yaml"
@@ -646,7 +657,11 @@ def selftest():
             env_e = {"SETTINGS_FILE": str(f), "RAG_MODULE": mod, "RUN_ENV": "dev"}
             try:
                 pin_env(env_e)
-                seen[(mod, f.name)] = (env_e.get("GLOSSARY_DIR"), env_e.get("OCR_DPI"), "RDB_PASSWORD" in env_e or "RERANK_TOP_N" in env_e)
+                seen[(mod, f.name)] = (
+                    env_e.get("GLOSSARY_DIR"),
+                    env_e.get("OCR_DPI"),
+                    "SECURE_DOC_PASSWORD" in env_e or "SEARCH_W_ID" in env_e,
+                )
             except SettingsError:
                 seen[(mod, f.name)] = "거부"
         ocr = "150" if has_p else None
@@ -668,7 +683,7 @@ def selftest():
         and image_sections({"RAG_MODULE": "pipeline"}, in_image=False) == ("common", "pipeline"),
     )
     check(
-        "RUN_ENV 외부 모델: 정확히 local만 허용(지금 가드) — 없음·dev·stage·prd·모르는 글자(prod·PRD·' local')는 거부(VS7b U-1 b)",
+        "RUN_ENV 외부 모델: 정확히 local만 허용(지금 가드) — 없음·dev·prd·모르는 글자(prod·PRD·' local')는 거부(VS7b U-1 b)",
         not any(external_models_allowed(e) for e in (None, *SERVER_ENVS, "prod", "PRD", " local", "Local"))
         and external_models_allowed("local"),
     )
@@ -782,12 +797,9 @@ def selftest():
                 and set(why) == {"B", "C", "D", "E", "F", "G", "H", "M"}
                 and "x" not in " ".join(why.values()),
             )
-            # C-35 — 옛 별칭은 새 칸으로(새 이름이 있으면 새 이름) · C-45 ⑤ — 라이브러리 env는 lib_env로, 목록 밖은 모델 밖
+            # C-45 ⑤ — 라이브러리 env는 lib_env로, 목록 밖은 모델 밖
             doc_m, rep_m = M.convert(
                 {
-                    "QA_CHAT_DECOMPOSE": "0",
-                    "SYNTHETIC_TRUTH": "/t.json",
-                    "LLM_SYNTHETIC_TRUTH": "/n.json",
                     "TZ": "Asia/Seoul",
                     "OMP_NUM_THREADS": "2",
                 },
@@ -795,11 +807,51 @@ def selftest():
             )
             check(
                 f"migrate C-35·C-45 ⑤: 옛 별칭 옮김·라이브러리 env {rep_m['옛 이름 옮김']} {rep_m['라이브러리 env']}",
-                _peek(doc_m, "mcp.search.decompose_llm") == "0"
-                and _peek(doc_m, "common.models.guard.synthetic_truth") == "/n.json"
-                and _peek(doc_m, "common.runtime.lib_env") == {"OMP_NUM_THREADS": "2", "TZ": "Asia/Seoul"}
-                and len(rep_m["옛 이름 옮김"]) == 2,
+                _peek(doc_m, "common.runtime.lib_env") == {"OMP_NUM_THREADS": "2", "TZ": "Asia/Seoul"}
+                and not rep_m["옛 이름 옮김"],  # 10-29: 옛 별칭(QA_CHAT_DECOMPOSE·SYNTHETIC_TRUTH)은 기능과 함께 지움
             )
+            # 사용자 10-29 — 지운 칸 synthetic_truth(옛 migrate C-35가 서버 파일에 옮겨 둠)는 경고만 하고 무시 · 다른 모르는 칸은 그대로 거부
+            from common.config.settings import CommonModelsGuard
+
+            _g = CommonModelsGuard.model_validate({"synthetic_truth": "/t.json", "budget_usd": 0.1})
+            try:
+                CommonModelsGuard.model_validate({"synthetic_truthx": "/t.json"})
+                _typo_rejected = False
+            except ValueError:
+                _typo_rejected = True
+            check("지운 칸 synthetic_truth: 시작 거부 대신 무시 · 오타 칸은 거부", _g.budget_usd == 0.1 and _typo_rejected)
+            # 사용자 10-29 — 기능 삭제(OpenViking·재순위·질문 분해·graph 검색·파싱 판단 에이전트 등)로 지운 칸·절도 옛 파일에 남아 있으면 무시
+            _old = {
+                "common": {"connections": {"openviking": {"url": "http://x:1933"}}, "models": {"rerank": {"model": "m"}}},
+            }
+            if "pipeline" in app_classes():
+                _old["pipeline"] = {
+                    "paths": {"mineru_bin": "mineru", "paddle_python": "/p", "soffice_candidates": ["a"]},
+                    "transform": {"agent": {"enabled": "shadow"}},
+                    "load": {"structure_target": "pg"},
+                    "eval": {"phase_report_legacy": False},
+                    "dev": {"parse_agent_fake": False},
+                    "connections": {"openviking": {"root": "r"}, "graphiti": {"neo4j_uri": "bolt://x"}},
+                }
+            if "mcp" in app_classes():
+                _old["mcp"] = {
+                    "output": {"list_docs_max": 200},
+                    "search": {
+                        "rerank": {"mode": "off"},
+                        "graph": {"concept_per": 1},
+                        "decompose": True,
+                        "decompose_llm": True,
+                        "ov_search_path": "/x",
+                    },
+                }
+            _of = d / "old_removed.yaml"
+            import yaml as _yaml
+
+            from common.config import settings as _S
+
+            _of.write_text(_yaml.safe_dump(_old, allow_unicode=True), encoding="utf-8")
+            _loaded = [_S.load(cls, file=_of, environ={}, strict=False) for cls in app_classes().values()]
+            check("10-29 지운 칸·절 17개: 옛 설정 파일에 남아도 앱마다 읽힘(경고만)", len(_loaded) == len(app_classes()))
             if (
                 "pipeline" in app_classes()
             ):  # B-3(VS7e2) — 서버 env 파일의 GOLD_DIR는 호스트 칸에만(앱 칸 비움 → 이미지 안 /data/gold), PC 파일은 두 칸

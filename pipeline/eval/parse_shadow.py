@@ -14,7 +14,6 @@ LLM_BASE_URL·LLM_MODEL 미설정이면 chat()이 LLMUnavailable을 올리고 sh
 parse/_shadow(출력) — 하드코딩 금지.
 
 사용: python cli/parse_shadow.py [--rep-dir 폴더] [--out 폴더] [--mode llm|rules] [--max N] [--force]
-      python cli/parse_shadow.py --selftest
 """
 
 import argparse
@@ -27,9 +26,17 @@ from pipeline import config as pc  # pipeline 칸(S7c — 설정 객체: PARSE_S
 
 ROOT = PKG_ROOT  # dev/
 from pipeline.transform.represent import shadow as S  # noqa: E402
-from pipeline.transform.represent.agent_tools import rag_out  # noqa: E402
 
 DEFAULT_MAX = 50
+
+
+def rag_out():
+    """결과 루트 — common.paths.output_root(없으면 저장소 output/). 옛 agent_tools.rag_out(10-29 파싱 판단 에이전트와 함께 지움)."""
+    from common.config.settings import cfg
+    from common.core.paths import APP_ROOT
+
+    base = cfg().paths.output_root
+    return Path(base) if base else APP_ROOT / "output"
 
 
 def _default_llm_complete(prompt):

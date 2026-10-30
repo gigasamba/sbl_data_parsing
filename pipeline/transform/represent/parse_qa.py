@@ -10,7 +10,6 @@ tables[].grid — 행×열, 선택 칸 — 가 있으면 본문 줄과 함께 �
 
 사용: python modules/parse/parse_qa.py [--parse output/parse] [--src <원본 문서 폴더>]   (--src 생략 시 DOC_DIR env 필수)
       [--truth output/corpus/truth.json] [--answer-key answer_key] [--out output/parse]
-자기점검: python modules/parse/parse_qa.py --selftest
 """
 
 import argparse
@@ -798,7 +797,7 @@ def summary_md(ps):
     return md
 
 
-VLM_ENV = ("VLM_", "OCRVLM_", "LLM_")  # 서버 모델 연결 설정 — 개발 PC에서 비어 있어 못 돈 엔진은 '문제'가 아니라 '서버에서 추가'
+VLM_ENV = ("VLM_", "LLM_")  # 서버 모델 연결 설정 — 개발 PC에서 비어 있어 못 돈 엔진은 '문제'가 아니라 '서버에서 추가'
 
 
 def select_final(qa, per_type=3, target=10, tol=0.05):

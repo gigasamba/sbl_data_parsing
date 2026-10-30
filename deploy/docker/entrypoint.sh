@@ -2,7 +2,7 @@
 # 문서 파이프라인 진입점(구조 개편 v4 단계5, 10-13 — 옛 dev/를 deploy/로) — 실행 전 점검(자원·연결·쓰기 권한·
 # 시간대) 후 명령 실행. 코드는 /app/deploy/data_pipeline(PYTHONPATH=/app/deploy, Dockerfile) — 전부 `python -m
 # data_pipeline.<패키지>.<이름>`으로 부른다(운영자가 쓰는 명령 이름 자체는 그대로).
-#   docker run --rm --init -v <settings.yaml>:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=<dev|stage|prd> \
+#   docker run --rm --init -v <settings.yaml>:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=<dev|prd> \
 #     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>   (S7e1·S7e2 — 옛 --env-file pipeline.env 대신 설정 파일 하나)
 # 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp · dedup · prepare ·
 #       night [인자] · run-stack [인자] · ask --q … · test-stack · full(data-pipeline만 — dedup → prepare → night)
@@ -58,7 +58,7 @@ case "${RAG_MODULE:-}:$cmd" in
   mcp:parse|mcp:dedup|mcp:prepare|mcp:full|mcp:structure|mcp:load|mcp:publish|mcp:night|mcp:run-stack|mcp:serve-trigger|mcp:migrate|mcp:set-stack|mcp:set-sources|mcp:show-sources)
     echo "[오류] '$cmd'는 이 이미지(mcp-server)에 없음 — 파싱·구조화·적재·판 관리(migrate·set-stack·*-sources — 엔진 등록부로 검사)는 data-pipeline. 이 이미지는 mcp·ask·test-stack·show-stack만"; exit 64;;
 esac
-# S7a(D-028 ②, 사용자 10-27) — 실행 환경(RUN_ENV) 없이는 앱 명령을 시작하지 않음. 이미지 ENV에는 넣지 않는다(서버가 dev·stage·prd를
+# S7a(D-028 ②, 사용자 10-27) — 실행 환경(RUN_ENV) 없이는 앱 명령을 시작하지 않음. 이미지 ENV에는 넣지 않는다(서버가 dev·prd를
 # 정해 compose environment로 줌 — refactor.md C-34). 시험·점검 명령(help·selftest·check·check-modules·resources·services·tool check_env)은 뺀다
 # (tool ping_models는 외부 모델을 부르므로 빼지 않음 — RUN_ENV가 외부 모델 허용을 정함, S7a2).
 # S7e2(VS7e1 R-9·U-1·C-45 ⑤, 사용자 10-28) — python 한 번(common.config.boot)으로: ① 관문(--gate — 서버면 설정 파일을 못 읽거나 이 이미지 절
@@ -100,12 +100,12 @@ case "$cmd" in
     # report·run_combo·server_checks·stages 등은 pipeline/eval/(옛 data_etl/eval_tools·common_tools/cli·evaluation) ·
     # S6c(사용자 10-27, C-30 ①) — index(AD41 색인 빌더 — compose.pipeline.yml index_a·index_b의 `tool index build`)는 pipeline/load/(옛 data_structure/ —
     #   pre-refactor부터 찾는 목록에 없어 "모르는 도구"였음).
-    # S5 — mcp_eval·qa_report·search_checks(옛 server_checks의 br54·l8·gh114 — T-15)는 mcp_server/cli/(mcp 이미지 — S6b 전 retrieval) · S6a — model_matrix·stack_matrix는 validation/e2e/(PC 전용 — 이미지에 없음, T-15), assets는 /app/docker/assets.py(파일로 실행 — `python /app/docker/assets.py install`, 저장소 자리 deploy/release/ — S6b), eval_research는 S5a 삭제.
+    # S5 — mcp_eval·search_checks(옛 server_checks의 br54·l8·gh114 — T-15)는 mcp_server/cli/(mcp 이미지 — S6b 전 retrieval) · S6a — model_matrix·stack_matrix는 validation/e2e/(PC 전용 — 이미지에 없음, T-15), assets는 /app/docker/assets.py(파일로 실행 — `python /app/docker/assets.py install`, 저장소 자리 deploy/release/ — S6b), eval_research는 S5a 삭제.
     # 옛 `tool pipeline`(common_tools.cli.pipeline)은 pipeline.cli로. `패키지:이름,…`은 그 이름만 — S4 전에 tool로 부를 수 있던 것만
     # (pipeline 단계 모듈 run_all·dedup·stream 등을 preflight·잠금 없이 부르지 않게).
     # 이름은 sys.argv로 전달(소스 문자열에 끼워 넣지 않음). 찾기는 python 한 번에(VS3 R-7 — 전에는 패키지마다 프로세스 하나).
     [ "$name" = pipeline ] && name=cli
-    TOOL_PKGS="common.check pipeline:check_env,cli,parse_parallel,trigger_server pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest pipeline.transform.figures:figure_review pipeline.load:index pipeline.eval mcp_server.cli:mcp_eval,qa_report,search_checks"
+    TOOL_PKGS="common.check pipeline:check_env,cli,trigger_server pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest pipeline.transform.figures:figure_review pipeline.load:index pipeline.eval mcp_server.cli:mcp_eval,search_checks"
     # shellcheck disable=SC2086
     mod=$(python -c "
 import importlib.util, sys
@@ -150,6 +150,8 @@ for entry in sys.argv[2:]:
       *)             preflight; locked python -m common.store.db.dbtool "$@";;
     esac;;
   publish)    # SI39 — 대표 결과(.md) Object Storage 업로드 + EDW AI.ParsingMeta 기록(원본은 올리지 않음) — 자동 스케줄 없음, 트리거 전용
+    # publish --dry-run = 무엇을 올리고 쓸지 표만(쓰기 0) — 첫 publish 전에(사용자 10-30 검토 S3). 그 밖은 늘 --apply.
+    if [ "${1:-}" = --dry-run ]; then shift; preflight; exec python -m pipeline.load.publish_parse_result "$@"; fi
     preflight; locked python -m pipeline.load.publish_parse_result --apply "$@";;
   ask|test-stack)   # S5(T-15) — 검색 명령은 mcp_server/cli/ask.py(옛 pipeline.cli ask·test-stack)
     preflight; exec python -m mcp_server.cli.ask "$cmd" "$@";;

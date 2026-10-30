@@ -1,16 +1,16 @@
 """pipeline 앱 설정 — settings.yaml의 common + pipeline 절만 읽는다(S7a, refactor_plan 5-2 · D-015). 다른 앱(mcp) 절은 무시.
 pipeline 코드가 읽는 객체는 설정 파일 기반 캐시 PIPE다(S7e2 — 전환 다리 없앰: env의 옛 이름은 읽지 않음, 신호 SETTINGS_FILE·RUN_ENV만):
-  `from pipeline import config as pc` → `pc.cfg().extract.phases`(pipeline 절) · `pc.given("PM_BUCKET")`(준 값만) · `pc.checked(X)` ·
+  `from pipeline import config as pc` → `pc.cfg().extract.max_new`(pipeline 절) · `pc.given("PM_BUCKET")`(준 값만) · `pc.checked(X)` ·
   `pc.by_env(f"{p}_X")` · 시험 `with pc.PIPE.env(PARSE_TMP=…, KEEP_RAW_LAYER=None):`(설정 위에 옛 env 이름으로 덮음 — os.environ 안 건드림).
   common 칸은 `common.config.settings.cfg()`로(COMMON). 값을 바꿔 자식에 넘길 때는 `settings.put()`·`settings.child_env()`(덮기 파일).
 SETTINGS(common + pipeline 절)는 확인 명령(python -m pipeline.config)·시험용. 칸 표는 refactor_plan 부록 D.
-사용: python -m pipeline.config [--file 경로]   # 읽어서 요약(비밀 가림) · export --section pipeline.host … · --selftest
+사용: python -m pipeline.config [--file 경로]   # 읽어서 요약(비밀 가림) · export --section pipeline.host …
 """
 
 import sys
 from pathlib import Path
 
-from pydantic import Field, SecretStr  # 칸 형식
+from pydantic import Field, SecretStr, field_validator  # 칸 형식
 
 from common.config.settings import (
     IMAGE_PATHS,
@@ -22,7 +22,6 @@ from common.config.settings import (
     CsvText,
     EnvView,
     F,
-    JsonValue,
     Port,
     Section,
     WordList,
@@ -50,49 +49,17 @@ class PipelineConnectionsRdbColumns(Section):
     version: str | None = F(None, "RDB_COL_VERSION", "RDB 문서 위치 표에서 문서 버전 열의 이름(비우면 열 없음)")
 
 
-class PipelineTransformRepresentReread(Section):
-    dpi: int | None = F(400, "FUSE_REREAD_DPI", "융합 재판독(P2)용 크롭 재렌더 해상도(dpi)")
-    margin: float | None = F(1.5, "FUSE_REREAD_MARGIN", "승자와 최선 패자 점수차가 이 값 이하면 '근소'로 보고 재판독")
-    max: int | None = F(20, "FUSE_REREAD_MAX", "문서당 융합 재판독(P2) 횟수 상한(0이면 재판독 안 함)")
-    p3_img_max: int | None = F(2, "FUSE_REREAD_P3_IMG_MAX", "재판독 3단계에서 조각 하나당 다시 볼 그림 상한(가까운 순)")
-    pad_pt: float | None = F(40.0, "FUSE_REREAD_PAD_PT", "재판독 때 bbox 둘레에 더할 여백(pt)")
-    vlm_max: int | None = F(5, "FUSE_VLM_MAX", "문서당 재판독 3단계 VLM 호출 상한(비용 가드)")
-    vlm_max_tokens: int | None = F(400, "FUSE_VLM_MAX_TOKENS", "재판독·맥락 판독 VLM 응답 최대 토큰 수")
-
-
-class PipelineConnectionsGraphiti(Section):
-    neo4j_password: SecretStr | None = F(None, "GRAPHITI_NEO4J_PASSWORD", "Graphiti용 Neo4j 접속 비밀번호")
-    neo4j_uri: str | None = F(
-        "bolt://localhost:7687", "GRAPHITI_NEO4J_URI", "외부 지식그래프 평가용 Graphiti의 Neo4j 접속 주소", blank="keep"
-    )
-    neo4j_user: str | None = F("neo4j", "GRAPHITI_NEO4J_USER", "Graphiti용 Neo4j 접속 사용자 이름", blank="keep")
-
-
-class PipelineConnectionsOpenviking(Section):
-    account: str | None = F("default", "OV_ACCOUNT", "OpenViking 요청 헤더 X-OpenViking-Account 값(계정)", blank="keep")
-    api_key: SecretStr | None = F(None, "OV_API_KEY", "OpenViking 접속 API 키(있으면 X-API-Key 헤더로 보냄)")
-    args_json: JsonValue | None = F(
-        None, "OV_ARGS_JSON", "OpenViking add_resource 'args'로 그대로 넘길 서버 전용 추가 옵션(JSON 객체 문자열)"
-    )
-    doc_root: str | None = F(None, "OV_DOC_ROOT", "OpenViking 요약(L0 abstract·L1 overview)을 읽을 로컬 문서 폴더")
-    ingest_timeout: float | None = F(1800.0, "OV_INGEST_TIMEOUT", "OpenViking 문서 1건 적재 완료 대기 시간(초)")
-    processing_mode: str | None = F(None, "OV_PROCESSING_MODE", "OpenViking 적재 처리 방식(semantic_and_vectors | vectors_only)")
-    root: str | None = F(None, "OV_ROOT", "OpenViking 리소스 루트(viking://resources/<루트>) — 요약 받기·적재 대상")
-    user: str | None = F("default", "OV_USER", "OpenViking 요청 헤더 X-OpenViking-User 값(사용자)", blank="keep")
-
-
 class PipelineConnectionsRdb(Section):
+    REMOVED = frozenset(
+        {"connect_kwargs", "database", "host", "password", "port", "user"}
+    )  # 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)
     bucket: str | None = F(None, "RDB_BUCKET", "RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값)")
     company: CsvList | None = F([], "RDB_COMPANY", "RDB에서 가져올 회사 ID 필터(쉼표 목록, 비우면 필터 없음)")
-    connect_kwargs: SecretStr | None = F(None, "RDB_CONNECT_KWARGS", "RDB(mssql) 접속 시 pymssql.connect에 추가로 넘길 인자(JSON 객체)")
-    database: str | None = F(None, "RDB_DATABASE", "RDB(mssql) 데이터베이스 이름")
     doc_type: CsvList | None = F([], "RDB_DOC_TYPE", "RDB에서 가져올 문서 유형 필터(쉼표 목록, 비우면 필터 없음)")
-    engine: str | None = F("mssql", "RDB_ENGINE", "RDB 종류(mssql | pg)", blank="keep")
-    host: str | None = F(None, "RDB_HOST", "RDB(mssql) 서버 주소")
+    engine: str | None = F(
+        "mssql", "RDB_ENGINE", "RDB 종류(mssql | pg) — mssql 접속은 common.connections.rdb(읽기 계정 · PC 시험은 그 sqlite)", blank="keep"
+    )
     increment_col: str | None = F(None, "RDB_INCREMENT_COL", "증분(since) 판정에 쓸 열 이름(updated 열이 없을 때 대체)")
-    password: SecretStr | None = F(None, "RDB_PASSWORD", "RDB(mssql) 접속 비밀번호")
-    port: Port | None = F(1433, "RDB_PORT", "RDB(mssql) 서버 포트")
-    user: str | None = F(None, "RDB_USER", "RDB(mssql) 접속 사용자 이름")
     columns: PipelineConnectionsRdbColumns = Field(default_factory=PipelineConnectionsRdbColumns)
 
 
@@ -145,16 +112,6 @@ class PipelineExtractOcr(Section):
     )
 
 
-class PipelineExtractParallel(Section):
-    io_workers: int | None = F(
-        None, "PARSE_PARALLEL_IO_WORKERS", "문서 단위 병렬 파이프라인에서 받기·게시 포함 전체 동시 진행 수(개, workers 이상)"
-    )
-    pipeline: bool | None = F(
-        False, "PARSE_PARALLEL_PIPELINE", "--source 파싱을 문서 단위 병렬 파이프라인(받기→파싱→게시→삭제)으로 돌릴지(=1)", on=("1",)
-    )
-    workers: int | None = F(None, "PARSE_PARALLEL_WORKERS", "문서 단위 병렬 파싱의 CPU 동시 문서 수(개)")
-
-
 class PipelineExtractPrepare(Section):
     link: str | None = F("auto", "PREPARE_LINK", "회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy")
     ocr: str | None = F("auto", "PREPARE_OCR", "회전 검토용 OCR 엔진 선택: auto|v1|v3(v3=rapidocr 3.x 강제)", blank="keep")
@@ -181,8 +138,21 @@ class PipelineExtractStream(Section):
 
 
 class PipelineHostNightly(Section):
-    enabled: bool | None = F(False, "NIGHTLY_ENABLED", "새벽 배치 타이머 켬/끔 — 1이면 실행, 그 외엔 로그 1줄 남기고 종료")
+    REMOVED = frozenset({"enabled"})  # 사용자 10-30(pl-32) — 켬/끔은 time 하나로(비우면 새벽 배치 없음)
+    time: str | None = F(
+        None,
+        "NIGHTLY_TIME",
+        "새벽 배치 시작 시각(HH:MM, 서버 시간) — 비우면 새벽 배치 없음. 타이머가 5분마다 깨워 이 시각부터 5분 안이면 시작(trigger.sh scheduled)",
+        pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$",  # 틀린 꼴은 설정을 읽을 때 거부(타이머가 5분마다 실패로 남기지 않게)
+    )
     max_new: int | None = F(2000, "NIGHTLY_MAX_NEW", "새벽 배치 parse가 밤당 처음 파싱할 문서 수 상한(건)")
+
+    @field_validator("time", mode="before")
+    @classmethod
+    def _blank_is_off(cls, v):
+        """빈 글자·공백만 = 새벽 배치 없음(None) — sample·손으로 쓴 settings.yaml의 `time: ""`가 꼴 검사에 걸려 시작을 막지 않게(PR #44 리뷰)."""
+        return None if isinstance(v, str) and not v.strip() else v
+
     modules: WordList | None = F(
         ["parse", "publish", "structure", "load"], "NIGHTLY_MODULES", "새벽 배치가 차례로 돌릴 모듈(공백 구분 목록 — trigger.sh 기본)"
     )
@@ -209,17 +179,28 @@ class PipelineLoadPublish(Section):
 
 
 class PipelineServiceParseMcp(Section):
+    REMOVED = frozenset({"ocr"})  # 사용자 10-29 — PARSE_MCP_OCR를 pipeline.extract.ocr_engine으로 합침(남아 있어도 경고만 — 한 판 동안)
     job_timeout_sec: float | None = F(600.0, "PARSE_MCP_JOB_TIMEOUT_SEC", "parse MCP 서비스 작업 1건 제한 시간(초)")
     jobs_dir: str | None = F(None, "PARSE_MCP_JOBS_DIR", "parse MCP 서비스 작업 기록 폴더")
     max_mb: float | None = F(64.0, "PARSE_MCP_MAX_MB", "parse MCP 서비스가 받는 파일 크기 상한(MB)")
-    ocr: bool | None = F(False, "PARSE_MCP_OCR", "parse MCP 서비스에서 OCR 엔진 포함 여부 — 1이면 포함(느림)", on=("1",))
     port: Port | None = F(8766, "PARSE_MCP_PORT", "parse MCP 서비스 포트")
     procs: int | None = F(None, "PARSE_MCP_PROCS", "parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개)")
     queue_max: int | None = F(8, "PARSE_MCP_QUEUE_MAX", "parse MCP 서비스 대기 작업 상한(건)")
     roots: CsvList | None = F(
         None, "PARSE_MCP_ROOTS", "parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) — 비면 코드가 정함(<서비스 폴더>/inbox)"
     )
+    text_page_sec: float | None = F(
+        1.0, "PARSE_MCP_TEXT_PAGE_SEC", "parse MCP 서비스 작업의 글자 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
+    )
     token: SecretStr | None = F(None, "PARSE_MCP_TOKEN", "parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값)")
+    warmup_sec: float | None = F(
+        20.0,
+        "PARSE_MCP_WARMUP_SEC",
+        "parse MCP 서비스 작업의 첫 시도 제한 하한(초) — 새 프로세스에서 엔진을 처음 띄울 때(import·모델 적재) 여유",
+    )
+    vlm_page_sec: float | None = F(
+        60.0, "PARSE_MCP_VLM_PAGE_SEC", "parse MCP 서비스 작업의 VLM 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
+    )
 
 
 class PipelineServiceTrigger(Section):
@@ -255,23 +236,10 @@ class PipelineServiceTrigger(Section):
     upload_max_mb: int | None = F(50, "TRIGGER_UPLOAD_MAX_MB", "트리거 서버 /upload 본문 크기 상한(MB)")
 
 
-class PipelineTransformAgent(Section):
-    batch_sec: float | None = F(1800.0, "PARSE_AGENT_BATCH_SEC", "프로세스(배치) 하나의 판단 세션 시간 합 상한(초)")
-    enabled: str | None = F(None, "PARSE_AGENT", "파싱 판단 에이전트 모드 off|shadow|apply(on=apply, 0·false·none=off)")
-    fig: bool | None = F(True, "PARSE_AGENT_FIG", "판단 에이전트에 그림 VLM 값↔본문 갈림 조각을 포함(=0이면 제외)", off=("0",))
-    frags: int | None = F(3, "PARSE_AGENT_FRAGS", "문서당 판단 에이전트가 다루는 조각 수 상한")
-    margin: float | None = F(None, "PARSE_AGENT_MARGIN", "판단 에이전트가 '근소'로 보는 1·2위 점수차 문턱")
-    max_docs: int | None = F(50, "PARSE_AGENT_MAX_DOCS", "프로세스당 판단 세션을 열 문서 수 상한")
-    model: str | None = F("split", "PARSE_AGENT_MODEL", "판단 세션 모델 구성 split(LLM 판단+VLM 판독) | vlm(이미지 문서는 판단도 VLM)")
-    near: bool | None = F(
-        True, "PARSE_AGENT_NEAR", "판단 에이전트에 '근소' 조각(규칙이 신호로만 가른 자리)을 포함(=0이면 제외)", off=("0",)
-    )
-    session_sec: float | None = F(180.0, "PARSE_AGENT_SESSION_SEC", "판단 세션 1회의 시간 상한(초)")
-    tokens: int | None = F(24000, "PARSE_AGENT_TOKENS", "판단 세션 1회의 LLM 토큰(입력+출력) 상한")
-    vlm_max: int | None = F(3, "PARSE_AGENT_VLM_MAX", "판단 세션 도구 층의 문서당 VLM 호출 상한")
-
-
 class PipelineTransformFigures(Section):
+    REMOVED = frozenset(
+        {"ocrvlm_prompt"}
+    )  # 사용자 10-30(pl-31 — ocr_vlm 엔진과 함께 지움) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     chart_values_det: bool | None = F(
         True, "CHART_VALUES_DET", "차트 값을 결정적(규칙) 추출로 보정(=0이면 VLM 눈대중 값만 사용)", off=("0",)
     )
@@ -289,7 +257,6 @@ class PipelineTransformFigures(Section):
         10, "FIG_OCR_FALLBACK_MIN_CHARS", "OCR 대체 사용 최소 의미 글자 수(미만이면 로고·워터마크로 보고 버림)"
     )
     ocr_parallel: int | None = F(3, "FIGURES_OCR_PARALLEL", "그림 crop OCR 병렬 워커 수(OCR 대상 수가 상한)")
-    ocrvlm_prompt: str | None = F(None, "OCRVLM_PROMPT", "OCR 전용 소형 VLM 엔진(ocr_vlm)에 보낼 지시문(모델 카드 권장값)", pinned="engine")
     overlay_cluster: bool | None = F(
         True, "FIG_OVERLAY_CLUSTER", "겹친 개체(그림+글상자·도형)를 한 묶음으로 찾아 기록(=0이면 그림마다 따로)", off=("0",)
     )
@@ -309,21 +276,14 @@ class PipelineTransformFigures(Section):
 
 
 class PipelineTransformRepresent(Section):
+    REMOVED = frozenset(
+        {"fuse_reread_p3", "fuse_reread", "reread_fallback_best", "reread"}
+    )  # pl-34(10-30) — 재판독 P2·P3를 모두 지움(사용자 10-30, 옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     context: bool | None = F(
         True, "PARSE_CONTEXT", "문서·쪽 신호 맥락(rep.context·decisions) 기록(=0이면 안 남김)", off=("", "0", "none", "false"), fold="lower"
     )
     fuse: bool | None = F(
         True, "PARSE_FUSE", "엔진별 결과 조각 투표(융합 P1) 사용(=0이면 끔)", off=("", "0", "none", "false"), fold="lower"
-    )
-    fuse_reread: bool | None = F(
-        True,
-        "PARSE_FUSE_REREAD",
-        "융합 뒤 근소·미확인 자리를 다시 읽는 재판독(P2) 사용(=0이면 끔)",
-        off=("", "0", "none", "false"),
-        fold="lower",
-    )
-    fuse_reread_p3: bool | None = F(
-        True, "PARSE_FUSE_REREAD_P3", "재판독 3단계(그림 경계 OCR·VLM 선택형) 사용(=0이면 끔)", off=("", "0", "none", "false"), fold="lower"
     )
     fuse_signals: bool | None = F(
         True,
@@ -343,9 +303,6 @@ class PipelineTransformRepresent(Section):
     )
     qa_light: bool | None = F(False, "PARSE_QA_LIGHT", "=1이면 native 대비 풀문서 CER·순서 비교를 생략(경량화)", on=("1",))
     rep_select: str | None = F(None, "PARSE_REP_SELECT", "대표 엔진 선택 방식: first(첫 성공 엔진)|acc(정확도만)|그 외 best(정확도+풍부도)")
-    reread_fallback_best: bool | None = F(
-        True, "REREAD_FALLBACK_BEST", "P2도 못 가리면 산출 정확도 최고 엔진 후보로 대체(=0이면 안 함)", off=("0",)
-    )
     shadow: bool | None = F(
         False, "PARSE_SHADOW", "그림자 모드(파싱 판단 규칙 vs LLM 제안 비교)를 켬(=1이면 켬)", off=("", "0", "none", "false"), fold="lower"
     )
@@ -375,10 +332,12 @@ class PipelineTransformRepresent(Section):
         off=("", "0", "none", "false"),
         fold="lower",
     )
-    reread: PipelineTransformRepresentReread = Field(default_factory=PipelineTransformRepresentReread)
 
 
 class PipelineTransformStructure(Section):
+    REMOVED = frozenset(
+        {"wiki_domain_phrase"}
+    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     bundle_keep_empty_fig: bool | None = F(
         False, "BUNDLE_KEEP_EMPTY_FIG", "=1이면 내용이 빈 VLM 그림도 청크로 색인(되돌리기), 기본 0은 빈 그림 청크 안 만듦", on=("1",)
     )
@@ -406,9 +365,6 @@ class PipelineTransformStructure(Section):
     embed_max_chars: int | None = F(8000, "EMBED_MAX_CHARS", "임베딩 입력 청크 최대 글자 수(넘으면 자름, 400 오류 방지 안전망)")
     embed_retry: int | None = F(2, "EMBED_RETRY", "임베딩 API 실패 시 재시도 횟수")
     page_chunk_max: int | None = F(None, "PAGE_CHUNK_MAX", "쪽 청크 최대 글자 수(임베딩 입력 한도 초과 방지)")
-    wiki_domain_phrase: str | None = F(
-        "바이오 CDMO", "WIKI_DOMAIN_PHRASE", "위키 초안 지시문의 도메인 예시 문구(기본 '바이오 CDMO')를 바꿈"
-    )
 
 
 class PipelineTransformVlm(Section):
@@ -433,17 +389,14 @@ class PipelineTransformVlm(Section):
 
 
 class PipelineDev(Section):
+    REMOVED = frozenset(
+        {"parse_agent_fake", "parallel_test_crash"}
+    )  # 사용자 10-29 · parallel_test_crash 10-30(pl-35) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     allow_common_mismatch: bool | None = F(
         False, "ALLOW_COMMON_MISMATCH", "앞 모듈 결과의 공통 코드 지문이 달라도 계속 진행할지(=1 계속 / 그 외 중단)", on=("1",)
     )
     check_env_any_py: bool | None = F(
         False, "CHECK_ENV_ANY_PY", "check_env가 시스템 python에서도 멈추지 않고 계속할지(=1 계속 / 그 외 중단)", on=("1",)
-    )
-    parallel_test_crash: bool | None = F(
-        False, "PARSE_PARALLEL_TEST_CRASH", "시험용 — =1이면 문서 병렬 파싱의 첫 문서에서 강제 종료(os._exit 17)", on=("1",)
-    )
-    parse_agent_fake: bool | None = F(
-        False, "PARSE_AGENT_FAKE", "시험용 — =1이면 파싱 에이전트가 모델 대신 가짜 정책(fake_policy)으로 동작", on=("1",)
     )
     stream_test_crash: bool | None = F(
         False, "PARSE_STREAM_TEST_CRASH", "시험용 — =1이면 스트리밍 파싱의 첫 묶음에서 강제 종료(os._exit 17)", on=("1",)
@@ -453,9 +406,9 @@ class PipelineDev(Section):
 
 
 class PipelineEval(Section):
-    diagram_raster_vlm: bool | None = F(
-        False, "DIAGRAM_RASTER_VLM", "도식 간선 채점에서 raster 케이스에 실제 VLM을 부를지(=1 실호출 / 그 외 가짜)", on=("1",)
-    )
+    REMOVED = frozenset(
+        {"diagram_raster_vlm", "phase_report_legacy"}
+    )  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     e2e_qa_set: str | None = F(None, "E2E_QA_SET", "e2e 시험 질문 묶음 이름(valid_env/unstructured/<이름>/qa.json)")
     e2e_questions: str | None = F(None, "E2E_QUESTIONS", "e2e 질문 파일 경로(또는 auto = 그 자리에서 생성)")
     gold_draft_max_pages: int | None = F(30, "GOLD_DRAFT_MAX_PAGES", "정답 초안 생성(gold_draft)에서 문서당 처리할 쪽 수 상한(쪽)")
@@ -466,9 +419,6 @@ class PipelineEval(Section):
         off=("0", "false", "no"),
         fold="strip",
     )
-    phase_report_legacy: bool | None = F(
-        False, "PHASE_REPORT_LEGACY", "옛 PHASE_REPORT.md·phase 보고서 자동 생성을 되살릴지(=1 생성 / 0 끔)", on=("1",)
-    )
     qa_draft_max_pages: int | None = F(20, "QA_DRAFT_MAX_PAGES", "질문 초안 생성(qa_draft)에서 문서당 처리할 쪽 수 상한(쪽)")
     qa_draft_per_page: int | None = F(5, "QA_DRAFT_PER_PAGE", "질문 초안 생성에서 쪽당 질문 수 상한(개)")
     review_max_rounds: int | None = F(2, "REVIEW_MAX_ROUNDS", "도식 검토 루프의 최대 재추출 횟수(회)")
@@ -476,16 +426,9 @@ class PipelineEval(Section):
 
 
 class PipelineExtract(Section):
-    auto_reparse_changed: bool | None = F(
-        False, "AUTO_REPARSE_CHANGED", "야간 계획에서 바뀐 문서(changed) 전체를 다시 파싱할지(=1 재파싱)", on=("1",)
-    )
-    dedup_scan: bool | None = F(
-        False,
-        "PARSE_DEDUP_SCAN",
-        "스캔 쪽의 OCR 본문과 쪽 VLM 전사 중복을 쪽마다 하나로 정리할지",
-        off=("", "0", "none", "false"),
-        fold="lower",
-    )
+    REMOVED = frozenset(
+        {"phases", "phase_sec", "auto_reparse_changed", "parallel", "dedup_scan", "ocr_gt_max", "signal_ocr"}
+    )  # 사용자 10-29 — phase 없앰 · 10-30 auto_reparse_changed·parallel 지움(pl-35) · dedup_scan·ocr_gt_max·signal_ocr 지움(pl-34)(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     disk_free_warn_gb: float | None = F(10.0, "DISK_FREE_WARN_GB", "디스크 남은 용량이 이 값(GB)보다 작으면 보관 용량 경고 출력")
     doc_parallel: int | None = F(1, "PARSE_DOC_PARALLEL", "대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개)")
     engine_cache_warn_gb: float | None = F(20.0, "ENGINE_CACHE_WARN_GB", "엔진별 중간 결과 합계가 이 값(GB)을 넘으면 보관 용량 경고 출력")
@@ -502,13 +445,22 @@ class PipelineExtract(Section):
     kreuzberg_prose_filter: bool | None = F(
         True, "KREUZBERG_PROSE_FILTER", "kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔)", pinned="engine"
     )
+    low_priority: bool | None = F(
+        True,
+        "PARSE_LOW_PRIORITY",
+        "엔진 자식 프로세스를 낮은 우선순위로(POSIX nice +10 · Windows BELOW_NORMAL) — parse MCP 서비스 작업은 끔(=0)",
+        off=("0",),
+    )
     max_file_mb: float | None = F(0.0, "MAX_FILE_MB", "이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음)")
     max_new: int | None = F(0, "PARSE_MAX_NEW", "이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음)")
     merge_pages: bool | None = F(True, "PARSE_MERGE_PAGES", "엔진 간 쪽·문단 단위 보정(쪽 합치기)을 켤지(=0이면 끔)", off=("0",))
-    ocr_gt_max: int | None = F(20, "PARSE_OCR_GT_MAX", "'OCR 글자 수가 글자층의 3배 이상'인 쪽을 쪽 VLM 후보로 올릴 상한(쪽, 0=끔)")
+    ocr_engine: bool | None = F(
+        False,
+        "PARSE_OCR_ENGINE",
+        "OCR 엔진(rapidocr·rapidocr_ko)을 파싱 엔진으로 돌릴지(=1 켬) — 끄면 이미지·스캔 문서는 VLM 엔진만",
+        on=("1",),
+    )
     page_scan: bool | None = F(True, "PARSE_PAGE_SCAN", "글자 PDF 안의 스캔 쪽을 신호로 찾아 쪽 VLM에 보낼지(=0이면 끔)", off=("0",))
-    phase_sec: CsvList | None = F(["0.1", "1", "1"], "PARSE_PHASE_SEC", "phase 1·2·3의 쪽당 제한 시간(초, 쉼표 3개)")
-    phases: CsvList | None = F(["1", "2", "3r"], "PARSE_PHASES", "돌릴 phase 목록(쉼표, 3r = 성공 엔진이 없는 문서만 phase 3)")
     prefetch_workers: int | None = F(2, "PREFETCH_WORKERS", "미리받기(warm) 명령의 동시 다운로드 스레드 수(개)")
     rapidocr_page_workers: int | None = F(
         1, "RAPIDOCR_PAGE_WORKERS", "rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개)", pinned="engine"
@@ -521,21 +473,41 @@ class PipelineExtract(Section):
         off=("", "0", "none", "false"),
         fold="lower",
     )
-    signal_ocr: bool | None = F(False, "PARSE_SIGNAL_OCR", "쪽 신호 계산에 렌더 OCR 글자 수를 채울지 — 1이면 켬(비용 큼)", on=("1",))
     skipped_log: str | None = F(None, "PARSE_SKIPPED_LOG", "건너뛴 문서(암호 PDF 등) 기록 jsonl 경로")
     source_limit: int | None = F(0, "PARSE_SOURCE_LIMIT", "원본에서 처리할 문서 건수 상한(0=제한 없음)")
+    text_page_sec: float | None = F(
+        10.0, "PARSE_TEXT_PAGE_SEC", "글자 엔진(VLM 아님) 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
+    )
     table_grid_max_rows: int | None = F(
         2000, "TABLE_GRID_MAX_ROWS", "표 grid JSON에 담는 최대 행 수(개) — 넘으면 앞부분만 자르고 truncated 표시", pinned="engine"
     )
-    warmup_sec: float | None = F(60.0, "PARSE_WARMUP_SEC", "엔진 첫 문서의 쪽당 제한 시간 하한(초) — import·모델 적재 여유")
+    vlm_page_sec: float | None = F(120.0, "PARSE_VLM_PAGE_SEC", "VLM 엔진 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더")
+    warmup_sec: float | None = F(60.0, "PARSE_WARMUP_SEC", "엔진 첫 문서의 제한 시간 하한(초) — import·모델 적재 여유")
     attach: PipelineExtractAttach = Field(default_factory=PipelineExtractAttach)
     cache: PipelineExtractCache = Field(default_factory=PipelineExtractCache)
     dedup: PipelineExtractDedup = Field(default_factory=PipelineExtractDedup)
     ocr: PipelineExtractOcr = Field(default_factory=PipelineExtractOcr)
-    parallel: PipelineExtractParallel = Field(default_factory=PipelineExtractParallel)
     prepare: PipelineExtractPrepare = Field(default_factory=PipelineExtractPrepare)
     source: PipelineExtractSource = Field(default_factory=PipelineExtractSource)
     stream: PipelineExtractStream = Field(default_factory=PipelineExtractStream)
+
+
+class PipelineHostRunDocs(Section):
+    """문서별 flow 러너(deploy/host/scripts/run_docs.py — 호스트에서 글자 그대로 읽음) 레인·대기열(사용자 10-29, docs/prd/runner.md rn-01·rn-02).
+    기본값은 run_docs.py RUN_DOCS_DEFAULTS와 같다(tests/general/deploy/test_run_docs.py가 대조)."""
+
+    warm: int | None = F(20, "RUN_DOCS_WARM", "진입 대기열 — 미리 받아 둘 문서 수(진행 중 제외, 명령 인자 --warm이 덮음)")
+    struct_workers: int | None = F(2, "RUN_DOCS_STRUCT_WORKERS", "구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음)")
+    struct_backlog: int | None = F(
+        None, "RUN_DOCS_STRUCT_BACKLOG", "중간 대기열 상한(파싱 끝·구조화 대기 문서 수) — 비우면 구조화 스레드 × 2, 0이면 상한 없음"
+    )
+    vlm_cap: int | None = F(2, "RUN_DOCS_VLM_CAP", "vlm 레인 문서 동시 파싱 상한(gpu 예산)")
+    light_dedicated: int | None = F(1, "RUN_DOCS_LIGHT_DEDICATED", "light 레인 전담 워커 수(light 문서만)")
+    light_shared: int | None = F(1, "RUN_DOCS_LIGHT_SHARED", "light 레인 공유 워커 수(light 먼저, 비면 가장 긴 다른 레인에서 가져옴)")
+    medium_dedicated: int | None = F(1, "RUN_DOCS_MEDIUM_DEDICATED", "medium 레인 전담 워커 수(MCP 업로드 처리 중에는 쉼)")
+    medium_shared: int | None = F(1, "RUN_DOCS_MEDIUM_SHARED", "medium 레인 공유 워커 수(medium 먼저, 비면 다른 레인)")
+    vlm_dedicated: int | None = F(1, "RUN_DOCS_VLM_DEDICATED", "vlm 레인 전담 워커 수(vlm 문서만)")
+    vlm_shared: int | None = F(1, "RUN_DOCS_VLM_SHARED", "vlm 레인 공유 워커 수(vlm 먼저, 비면 다른 레인)")
 
 
 class PipelineHost(Section):
@@ -562,20 +534,20 @@ class PipelineHost(Section):
     structure_cpus: float | None = F(2.0, "STRUCTURE_CPUS", "structure 컨테이너(job·상주 트리거·색인) CPU 개수 상한(개)")
     structure_mem_limit: str | None = F("8g", "STRUCTURE_MEM_LIMIT", "structure 컨테이너 메모리·스왑 상한(docker 형식)")
     nightly: PipelineHostNightly = Field(default_factory=PipelineHostNightly)
+    run_docs: PipelineHostRunDocs = Field(default_factory=PipelineHostRunDocs)
 
 
 class PipelineLoad(Section):
+    REMOVED = frozenset(
+        {"structure_target", "edw_load", "prune_force", "prune_min_ratio"}
+    )  # 사용자 10-29(prune_* — 적재가 안 지움, pl-13 · edw_load — EDW 벡터 경로 삭제, ops.md#op-03) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     bm25_stat_rebuild: bool | None = F(False, "BM25_STAT_REBUILD", "적재 때 키워드 문서 빈도를 전체 다시 셈 — 1이면 켬", on=("1",))
     bm25_threads: int | None = F(4, "BM25_THREADS", "BM25 항목(term,tf) 계산 병렬 스레드 수(개)")
-    edw_load: bool | None = F(False, "EDW_LOAD", "EDW 벡터 적재(deploy·load) 허용 — 1이어야 진행, 아니면 거부 종료", on=("1",))
     edw_path_prefix: str | None = F(None, "EDW_PATH_PREFIX", "저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치)")
     index_lock_stale_sec: float | None = F(21600.0, "INDEX_LOCK_STALE_SEC", "색인 빌드 잠금 파일을 죽은 빌드로 보고 회수하는 경과 시간(초)")
     pg_create_extension: bool | None = F(
         False, "PG_CREATE_EXTENSION", "deploy 때 vector 확장 직접 생성 시도 — 1이면 켬(공유 PG에서는 금지)", on=("1",)
     )
-    prune_force: bool | None = F(False, "PRUNE_FORCE", "옛 기록 정리 안전장치(묶음 문서 수 비율 미달 거부) 무시 — 1이면 진행", on=("1",))
-    prune_min_ratio: float | None = F(0.5, "PRUNE_MIN_RATIO", "옛 기록 정리 허용 최소 비율(묶음 문서 수 / 저장 문서 수)")
-    structure_target: str | None = F("pg", "STRUCTURE_TARGET", "구조화 적재 대상: pg(기본, pgvector) | ov(OpenViking)")
     publish: PipelineLoadPublish = Field(default_factory=PipelineLoadPublish)
 
 
@@ -583,10 +555,13 @@ class PipelineNight(Section):
     deadline: str | None = F("06:30", "NIGHT_DEADLINE", "새벽 파싱 배치 마감 시각(HH:MM, 컨테이너 TZ 기준)", blank="keep")
     parse_deadline: str | None = F(None, "PARSE_DEADLINE", "새벽 배치 parse 단계 마감 시각(HH:MM) — 비우면 무제한")
     vlm_concurrency: int | None = F(8, "NIGHT_VLM_CONCURRENCY", "새벽 배치: 문서 하나의 쪽 VLM 동시 요청 수(개)")
-    workers: int | None = F(4, "NIGHT_WORKERS", "새벽 배치: phase 3 VLM 동시 처리 문서 수(개)")
+    workers: int | None = F(4, "NIGHT_WORKERS", "새벽 배치: 동시 처리 문서 수(개)")
 
 
 class PipelinePaths(Section):
+    REMOVED = frozenset(
+        {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot"}
+    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32 — 사본 파일 대신 판 번호) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     file_meta_path: str | None = F(None, "FILE_META_PATH", "EDW 파일 메타 JSONL 경로(s3_key → 메타)")
     gold_dir: str | None = F(
         None,
@@ -594,10 +569,8 @@ class PipelinePaths(Section):
         "사람 정답(gold) 폴더 — score_gold·점검 도구의 기본 입력(코드가 읽는 경로 — 컨테이너 안은 run_tool.sh가 /data/gold로 줌, 원본은 pipeline.host.gold_dir — T-21)",
     )
     images_root: str | None = F(None, "PARSE_IMAGES_ROOT", "그림 PNG·index.jsonl 저장 루트")
-    index_conf: str | None = F(None, "INDEX_CONF", "색인 설정 JSON 경로(STRUCTURE_TARGET=pg일 때 색인 모듈로 구조화)")
-    mineru_bin: str | None = F("mineru", "MINERU_BIN", "MinerU 실행 파일 이름·경로", pinned="engine")
+    index_conf: str | None = F(None, "INDEX_CONF", "색인 설정 JSON 경로(있으면 색인 모듈로 구조화)")
     out_root: str | None = F(None, "PIPE_OUT_ROOT", "파이프라인 출력 루트(output)")
-    paddle_python: str | None = F(None, "PADDLE_PYTHON", "paddle 계열 엔진을 돌릴 별도 venv의 python 경로")
     parse_tmp: str | None = F(None, "PARSE_TMP", "스트리밍·병렬 파싱 임시 폴더 — output 아래 2단 이상 하위만 허용")
     raw_root: str | None = F(None, "PARSE_RAW_ROOT", "P0 원본 층(raw/VLM) 캐시 저장소 루트")
     report_digest_dir: str | None = F(None, "REPORT_DIGEST_DIR", "run_board 날짜·판 요약 폴더 루트(비우면 요약 안 만듦)")
@@ -606,15 +579,15 @@ class PipelinePaths(Section):
         "SOFFICE_BIN",
         "LibreOffice soffice 실행 파일 경로 — PATH·흔한 경로보다 먼저 봄(pipeline 이미지 안 기본 /usr/bin/soffice — 옛 Dockerfile ENV, B-2)",
     )
-    soffice_candidates: CsvList | None = F(None, "SOFFICE_CANDIDATES", "(읽는 곳 없음) soffice 후보 경로 목록")
-    stack_snapshot: str | None = F(
-        None, "STACK_SNAPSHOT", "엔진 구성 사본 파일(내부 신호 — 진입점이 활성 판에서 만들어 자식에 넘김, 사람이 쓰지 않음 · S8b)"
+    stack_version: int | None = F(
+        None, "STACK_VERSION", "엔진 구성 판 번호(내부 신호 — 진입점이 활성 판 번호를 정해 자식에 넘김, 사람이 쓰지 않음 · pl-32)"
     )
 
 
 class PipelineConnections(Section):
-    graphiti: PipelineConnectionsGraphiti = Field(default_factory=PipelineConnectionsGraphiti)
-    openviking: PipelineConnectionsOpenviking = Field(default_factory=PipelineConnectionsOpenviking)
+    REMOVED = frozenset(
+        {"openviking", "graphiti"}
+    )  # 사용자 10-29 · graphiti 10-30(e2-18 — 외부 KG 어댑터 지움) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     rdb: PipelineConnectionsRdb = Field(default_factory=PipelineConnectionsRdb)
     secure_doc: PipelineConnectionsSecureDoc = Field(default_factory=PipelineConnectionsSecureDoc)
 
@@ -625,7 +598,7 @@ class PipelineService(Section):
 
 
 class PipelineTransform(Section):
-    agent: PipelineTransformAgent = Field(default_factory=PipelineTransformAgent)
+    REMOVED = frozenset({"agent"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     figures: PipelineTransformFigures = Field(default_factory=PipelineTransformFigures)
     represent: PipelineTransformRepresent = Field(default_factory=PipelineTransformRepresent)
     structure: PipelineTransformStructure = Field(default_factory=PipelineTransformStructure)
@@ -684,27 +657,25 @@ def gold_dir():
     return v
 
 
-def stack_path():
-    """엔진 구성 파일(S8b — D-031 Q10 a): 진입점(pipeline/stackcfg.py)이 활성 판에서 만든 사본(STACK_SNAPSHOT). 없으면 PC(paths.LOCAL_RUN)는
-    PC 파일(common.paths.stack_file — 비우면 resources/config/pipeline_stack.json), 서버는 거부(종료 2 — git 기본 파일로 넘어가지 않게, Q7).
+def stack(version=None):
+    """엔진 구성(사전 — name·version_id·body_sha + body, pl-32 사용자 10-30: 사본 파일 없음). 서버는 진입점(pipeline/stackcfg.py)이 정해
+    넘긴 판 번호(STACK_VERSION)의 판을 판 표에서, PC(paths.LOCAL_RUN)는 PC 파일(common.paths.stack_file — 비우면
+    resources/config/pipeline_stack.json). 서버에서 판 번호가 없으면 거부(종료 2 — 실행 중 활성 판이 바뀌어도 한 실행은 한 판, Q7).
     층 파일(run_all·attachments)이 이것만 부른다 — 이 모듈은 층의 code_fp 의존이 아니다(common 아래만 셈)."""
-    snap = cfg().paths.stack_snapshot
-    if snap:
-        return Path(snap)
     from common.core import paths
+    from common.store.db import cfgtables  # 판 표 읽기 한 곳(이 모듈은 층의 code_fp 의존이 아님)
 
-    if paths.LOCAL_RUN:
-        from common.store.db import cfgtables  # PC 파일 자리 규칙 한 곳(이 모듈은 층의 code_fp 의존이 아님)
-
-        return cfgtables.pc_file("stack")
-    print(
-        "[엔진 구성] 사본 없음(STACK_SNAPSHOT) — 서버는 진입점(pipeline.cli·stream·parse_parallel·mcp_parse_service·load.index)으로 "
-        "실행해야 판 표 활성 판의 사본을 만든다. 도구를 따로 돌릴 때는 사본을 먼저 만들어 넘긴다: "
-        "S=$(python -m pipeline.stackcfg --path <결과 폴더>) 뒤 represent·build_bundle은 --stack $S, 그 밖은 --set을 받는 진입점(pipeline.cli 등 — D-032)에 --set STACK_SNAPSHOT=$S(VS8b R-4)",
-        file=sys.stderr,
-        flush=True,
-    )
-    raise SystemExit(2)
+    v = version if version is not None else cfg().paths.stack_version  # 인자(--stack-version) > 넘겨받은 칸
+    if v is None and not paths.LOCAL_RUN:
+        print(
+            "[엔진 구성] 판 번호 없음(STACK_VERSION) — 서버는 진입점(pipeline.cli·stream·parse_parallel·mcp_parse_service·load.index)으로 "
+            "실행해야 활성 판 번호를 정해 넘긴다. 도구를 따로 돌릴 때는 --set STACK_VERSION=$(python -m pipeline.stackcfg --version)",
+            file=sys.stderr,
+            flush=True,
+        )
+        raise SystemExit(2)
+    a = cfgtables.active("stack", version_id=v)
+    return {"name": a.name, "version_id": a.version_id, "body_sha": a.body_sha, **a.body}
 
 
 if __name__ == "__main__":

@@ -11,7 +11,6 @@ artifacts.py 캐시 정리·embed.py 질의 캐시처럼 인계 내용과 무관
 거부해(종료 코드 3) 서버가 멀쩡한 결과를 다시 파싱해야 했다(10-09 실측). 이제는 HANDOFF_FILES(아래, 선정
 기준 주석 포함)만 본다 — 새 common/**/*.py(S4부터 하위 폴더 포함)를 추가하면 HANDOFF_FILES나 EXCLUDED_FILES 둘 중
 하나에 넣어야 한다(안 넣으면 import 때 바로 거부 — _unclassified()).
-사용: python -m common.__init__ --selftest(이 파일 selftest — 직접 -m으로 돌리면 패키지가 먼저 import해 runpy 경고가 남)
 """
 
 import hashlib
@@ -46,6 +45,7 @@ EXCLUDED_FILES = (
     "check/check_modules.py",  # 모듈 경계 점검 — 개발·반입 점검 도구, 인계 내용과 무관
     "check/os_put.py",  # 시험용 Object Storage 올리기 — 운영 도구
     "check/ping_models.py",  # 모델 연결 확인 — 운영 도구
+    "core/exitclean.py",  # 종료 정리(pl-27 — 임시 파일 지우기·자식 회수) — 프로세스 관리, 인계 내용과 무관
     "core/console.py",  # CLI 표준 출력을 UTF-8로(S12 /simplify — utf8_stdout) — 화면 출력만, 인계 내용과 무관
     "core/fingerprint.py",  # 이 파일 자신(S3 — 옛 __init__.py) — CONTRACT는 따로 버전으로 확인, pipeline_version()은 인계 내용과 무관
     "config/boot.py",  # 컨테이너 시작 설정(S7e2 — entrypoint의 RUN_ENV 관문·셸 칸·라이브러리 env) — 운영 도구
@@ -59,9 +59,8 @@ EXCLUDED_FILES = (
     "config/show.py",  # 앱 설정 확인 명령(S7a) — 운영 도구
     "ai/adk.py",  # LLM·VLM 호출 메커니즘(세션·재시도) — 생성된 글자 자체는 agent_prompts(별도로 agent_platform._package_digest가 추적)·모델 설정이 결정
     "ai/agent_prompts.py",  # 지시문 글자 변경은 agent_platform.pipeline._package_digest가 이미 따로 추적(여기서 또 볼 필요 없음)
-    "core/artifacts.py",  # 실험 저장소 계약(code_fp·캐시 정리) — cli/stack_matrix.py·파싱 이식 도구 전용, parse↔structure↔load 런타임 핸드오프 밖
+    "core/artifacts.py",  # 실험 저장소 계약(code_fp·캐시 정리) — 파싱 이식 도구 전용, parse↔structure↔load 런타임 핸드오프 밖
     "core/docmeta.py",  # structure(build_bundle.py)↔search(retriever.py) 전용(날짜·구판 판정) — parse·load는 안 씀, 이 FINGERPRINT가 보는 두 경계(parse→structure·structure→load) 밖
-    "store/edwdb.py",  # EDW(SQL Server) 연결 설정 — 접속 방법만
     "ai/embed.py",  # 임베딩 계산은 structure(쓰기)·search(질의)가 맞아야 하지만 search는 이 FINGERPRINT 경계 밖(MARK에 없음)이라 넣어도 그 위험을 못 막고,
     # 질의 캐시 코드(RV1)가 내용과 무관하게 자주 바뀌어 넣으면 그 캐시 수정마다 재파싱을 유발(10-09 사고). structure 쪽 재사용 판정은 common/artifacts.code_fp("s")가 이미 embed.py를 따로 잡음(cli/index.py)
     "ai/guard.py",  # 내부망 확인(허용/거부) — 통과하면 호출 내용을 바꾸지 않음, _rep/bundle 바이트·해석과 무관
@@ -89,7 +88,7 @@ EXCLUDED_FILES = (
 # 최상위 *.py만 보므로 옮긴 파일은 더 이상 거기 잡히지 않음 — 위 목록은 fingerprint() 읽기 경로 용으로 계속 정확히 유지).
 # S3(10-26, refactor_plan 9-1·9-2) — common_tools → common/{core,ai,store,check}. 위 두 목록은 새 자리(이 폴더 기준)이고,
 # 지문에 넣는 이름은 아래 _HANDOFF_LEGACY의 옛 상대 경로 그대로(경로 글자만 바뀐 것으로 FINGERPRINT가 바뀌지 않게).
-# store/edwdb.py·objectstore.py 등 store/·check/ 아래 나머지는 처음부터 이 목록 밖이었다(최상위만 _unclassified가 봄).
+# store/objectstore.py 등 store/·check/ 아래 나머지는 처음부터 이 목록 밖이었다(최상위만 _unclassified가 봄).
 # S4(10-26, VS3 R-1 — 코디네이터 Task) — _unclassified가 common/ 하위 폴더까지 본다(S3 전에는 최상위 common_tools/*.py
 # 4개를 봤는데, S3로 그 파일들이 core/로 내려가 최상위에는 __init__.py만 남아 검사가 사실상 비어 있었음). 빠져 있던
 # 하위 패키지 __init__.py 5개·check/ 도구 3개를 EXCLUDED_FILES에 더함 — FINGERPRINT는 HANDOFF_FILES만 보므로 그대로.
@@ -185,22 +184,30 @@ def fingerprint(root=None, handoff=HANDOFF_FILES):
 FINGERPRINT = fingerprint()
 
 
-def pipeline_version():
-    """판 표기(한 곳) — git 짧은 커밋 → env PIPELINE_VERSION → common/PATCH_VERSION(make_patch 덧씌우기 묶음) → 'unknown'.
-    publish(modules/load/parsing_meta)·실행판(cli/run_board)이 같이 씀 — rag-parse 이미지엔 modules/load가 없어 common에 둠."""
-    import os
-    import subprocess
+def _semver(text):
+    """'MAJOR.MINOR.PATCH' → 비교용 튜플, 그 꼴이 아니면 None."""
+    parts = text.split(".")
+    if len(parts) == 3 and all(p.isdigit() for p in parts):
+        return tuple(int(p) for p in parts)
+    return None
 
-    root = _ROOT
-    try:
-        r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=root, capture_output=True, text=True, timeout=5)
-        if r.returncode == 0 and r.stdout.strip():
-            return r.stdout.strip()
-    except Exception:
-        pass
-    if os.environ.get("PIPELINE_VERSION"):  # env 남김 — 내부 신호(5-3 H)
-        return os.environ["PIPELINE_VERSION"]  # env 남김 — 내부 신호
-    try:
-        return (_ROOT / "PATCH_VERSION").read_text(encoding="utf-8").strip() or "unknown"
-    except OSError:
-        return "unknown"
+
+def pipeline_version(root=None):
+    """버전 표기(한 곳 — D-036, 사용자 10-29: 버전만) — 두 이미지 공통 SemVer. 후보는 저장소 루트 VERSION(이미지 /app/deploy/VERSION)과
+    common/PATCH_VERSION(make_patch 오버레이 패치 묶음 — 이미지 위에 올린 코드의 버전) 둘이고, 더 높은 버전을 쓴다(새 이미지로 바꾼 뒤
+    코드 폴더에 남은 옛 PATCH_VERSION이 이기지 않게). 둘 다 SemVer 꼴이 아니면 env PIPELINE_VERSION → 'unknown'.
+    publish(AI.ParsingMeta.pipeline_version)·실행 보드(run_board)·parse_parallel이 같이 씀. 10-29 전에는 git 짧은 커밋을 먼저 썼다(C-62)."""
+    import os
+
+    base = Path(root) if root else _ROOT
+    found = []
+    for f in (base.parent / "VERSION", base / "PATCH_VERSION"):
+        try:
+            v = f.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if _semver(v):
+            found.append(v)
+    if found:
+        return max(found, key=_semver)
+    return os.environ.get("PIPELINE_VERSION") or "unknown"  # env 남김 — 내부 신호(5-3 H)

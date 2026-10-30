@@ -1,9 +1,0 @@
-_synthetic,contract_id,company,company_id,product_code,modality,site,line_id,batches_contracted,contract_value_usd,currency,term_months,signed_on,start_date,end_date,status
-[SYNTHETIC],C-EDW-2023-001,Kestrel Biologics,CL-1001,KST-mAb-01,mAb,Plant1,BR-M1,13,30240000,USD,40,2022-03-10,2022-04-01,2025-03-31,completed
-[SYNTHETIC],C-EDW-2024-002,Kestrel Biologics,CL-1001,KST-ADC-02,ADC,Plant2,BR-A1,6,19950000,USD,26,2023-06-12,2023-07-01,2025-06-30,active
-[SYNTHETIC],C-EDW-2024-003,Aurelion Pharma,CL-1002,AUR-BsAb-01,bispecific,Plant2,BR-B1,8,20580000,USD,40,2023-01-15,2023-02-01,2026-01-31,active
-[SYNTHETIC],C-EDW-2025-004,청운바이오(주),CL-1003,CWB-VAC-01,vaccine,Plant3,BR-V1,11,8550000,USD,26,2023-12-02,2024-01-01,2025-12-31,active
-[SYNTHETIC],C-EDW-2025-005,Brightwater Therapeutics,CL-1004,BWT-mAb-02,mAb,Plant1,BR-M2,17,38475000,USD,40,2024-04-08,2024-05-01,2027-04-30,active
-[SYNTHETIC],C-EDW-2025-006,Aurelion Pharma,CL-1002,AUR-mAb-03,mAb,Plant1,BR-M1,9,18630000,USD,26,2024-08-20,2024-09-01,2026-08-31,active
-[SYNTHETIC],C-EDW-2026-007,청운바이오(주),CL-1003,CWB-mAb-02,mAb,Plant1,BR-M2,6,12420000,USD,13,2025-02-10,2025-03-01,2026-02-28,active
-[SYNTHETIC],C-EDW-2026-008,Kestrel Biologics,CL-1001,KST-mAb-01,mAb,Plant1,BR-M1,16,36225000,USD,40,2025-03-05,2025-04-01,2028-03-31,active

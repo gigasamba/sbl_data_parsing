@@ -1,7 +1,7 @@
 """코드·스크립트가 읽는 환경변수 이름 모으기 — 설정 분류표(refactor_plan 부록 D)와 설정 모델이 빠진 키 없이 맞는지 본다(S7a, D-015).
 모으는 규칙은 refactor_plan 9-4 그대로다(git 추적 파일 — valid_env/·.claude/·docs/ 제외):
   파이썬 — os.environ.get·os.getenv·environ.get·setdefault·os.environ["X"](대입 제외)·"X" in os.environ·지역 도우미
-           (_f·_cap·g·_list·_case·_flag·base_env.get·env.get·c.get·conf.get)·동적 이름 f"{prefix}_X"(LLM·VLM·OCRVLM·EMBED·RERANK)
+           (_f·_cap·g·_list·_case·_flag·base_env.get·env.get·c.get·conf.get)·동적 이름 f"{prefix}_X"(LLM·VLM·EMBED·RERANK)
   셸 — ${X:-…}(그 파일에서 대입해도 입력) · ${X}·$X 중 그 파일에서 대입하지 않은 것 · compose·systemd — ${X} 전부
   (valid_env/ 중 PC 시험 Docker valid_env/docker/는 넣음 — 5-3 C)
 이름 목록을 돌며 읽는 키(for k in ("PG_HOST", …))처럼 규칙으로 못 잡는 것은 NAME_LIST에 적는다.
@@ -27,19 +27,13 @@ _SKIP = (
     "deploy/release/lint_changed.sh",
 )  # 마지막 — PC 개발 점검 스크립트(FIX 등 셸 스위치는 설정 키가 아님, S12)
 _KEEP = ("valid_env/docker/",)  # PC 시험 Docker(compose·smoke_test.sh — S6b에 docker/에서 옮김, 5-3 C)
-PREFIXES = ("LLM", "VLM", "OCRVLM", "EMBED", "RERANK")
+PREFIXES = ("LLM", "VLM", "EMBED")
 
 # 규칙(아래 정규식)으로 못 잡는 읽기 — 이름 목록·동적 이름(9-4 "이름 목록") · S7a에 다시 모으며 찾음
 NAME_LIST = {
-    "EDW_SERVER": "common/store/edwdb.py",
-    "EDW_DATABASE": "common/store/edwdb.py",
-    "EDW_PASSWORD": "common/store/edwdb.py",
     "TRIGGER_SHUTDOWN_TIMEOUT_SEC": "pipeline/trigger_server.py(_serve 인자 기본값)",
     "E2E_QA_SET": "pipeline/check_env.py(경로 점검 표)",
     "E2E_QUESTIONS": "pipeline/check_env.py(경로 점검 표)",
-    "EXP_PROC_GB_BUILD": "common/core/resources.py(이름 목록)",
-    "EXP_PROC_GB_RUN": "common/core/resources.py(이름 목록)",
-    "EXP_PROC_GB_ANSWER": "common/core/resources.py(EXP_PROC_GB_<cmd> 이름 짓기)",
     "VLM_EXTRA_BODY": "common/ai/adk.py(_EXTRA_ENV_KEY 표)",
     **{
         f"RDB_COL_{f}": 'pipeline/extract/source.py(f"RDB_COL_{k.upper()}")'
@@ -84,14 +78,18 @@ NOT_SETTINGS = {
         "삭제 후보",
         "S7b에 RUN_ENV=local로 대체 — 코드가 더 읽지 않음(migrate는 옛 env 파일의 LOCAL_RUN=1을 common.run_env: local로)",
     ),
+    "MINERU_BIN": (
+        "env로 남김",
+        "엔진 파일 registry.py가 env를 직접 읽음(기본 mineru — 엔진 지문 파일이라 그대로) · 설정 칸은 10-29에 지움(엔진 구성에서 뺀 엔진)",
+    ),
     "NETWORK_HOST": ("env로 남김", "entrypoint 신호(compose)"),
     "OMP_NUM_THREADS": ("env로 남김", "라이브러리(OpenMP)가 읽음"),
     "PARSE_RUN_ID": ("env로 남김", "부모 → 자식 프로세스 신호"),
-    "PIPELINE_VERSION": ("env로 남김", "판 표기 신호(git 없는 곳)"),
+    "PIPELINE_VERSION": ("env로 남김", "버전 표기 마지막 대체(VERSION·PATCH_VERSION이 없을 때 — D-036)"),
     "PYTHONPATH": ("env로 남김", "이미지·셸"),
     "RAG_MODULE": ("env로 남김", "이미지 신호(Dockerfile ENV)"),
     "RUNLOG_CHILD": ("env로 남김", "부모 → 자식 프로세스 신호"),
-    "RUN_ENV": ("env로 남김", "새 키(D-015) — local·dev·stage·prd"),
+    "RUN_ENV": ("env로 남김", "새 키(D-015) — local·dev·prd"),
     "RUNLOG_FILE": (
         "env로 남김",
         "내부 신호 — 부모가 정한 실행 기록 로그 파일을 자식이 이어 씀(S7e2 — 설정 칸에서 내부 신호로, 사용자 10-28)",
@@ -110,6 +108,7 @@ NOT_SETTINGS = {
     "BUILD_ARGS": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "BUILD_ONLY": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "CHUNK": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
+    "FORCE_TAG": ("인자", "build_ship.sh — 이미 있는 버전 태그를 다시 만들 때만 1(D-036)"),
     "IMAGE_BASE": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "IMAGE_BASE_FILE": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "IMAGE_TAG": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
@@ -136,7 +135,6 @@ NOT_SETTINGS = {
     "OV_TAGS": ("삭제 후보", "options.conf에만 — 코드가 안 읽음"),
     "PLATFORM_CONFIG": ("삭제 후보", "agent_platform 삭제(D-013) — 옛 pipeline.env.example·answer_gen_test만(둘 다 없음 — S7e2·S10)"),
     "PLATFORM_STATE_DIR": ("삭제 후보", "agent_platform 삭제(D-013)"),
-    "QA_CHAT_DECOMPOSE": ("삭제 후보", "DECOMPOSE의 옛 별칭(decompose.py 기본값 식)"),
     "RAG_IMAGE": ("삭제 후보", "S6b 옛 이름"),
     "RAG_PARSE_IMAGE": ("삭제 후보", "S6b 옛 이름"),
     "RAG_RETRIEVAL_IMAGE": ("삭제 후보", "S6b 옛 이름"),
@@ -152,7 +150,8 @@ NOT_SETTINGS = {
     "RESEARCH_RETRY_PARTIAL": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
     "RESEARCH_WORKERS": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
     "SMOKE_PATCH": ("삭제 후보", "S6c 삭제(D-027) — 문서 글자만"),
-    "SYNTHETIC_TRUTH": ("삭제 후보", "LLM_SYNTHETIC_TRUTH의 옛 별칭(guard.synthetic_ok) — 한 키로"),
+    "LLM_SYNTHETIC_TRUTH": ("삭제 후보", "합성 문서 선언 잠금 삭제(사용자 10-29) — 외부 허용은 *_ALLOW_EXTERNAL + RUN_ENV=local"),
+    "SYNTHETIC_TRUTH": ("삭제 후보", "LLM_SYNTHETIC_TRUTH의 옛 별칭 — 둘 다 삭제(사용자 10-29)"),
     "ZZ_BASE_URL": ("삭제 후보", "ping_models selftest의 가짜 이름"),
 }
 # 모은 키가 아닌 것(셸 문법·Dockerfile ARG·selftest 가짜 이름)
@@ -322,7 +321,7 @@ def object_reads():
 
 def check(found=None):
     """(빠진 키, 모델에만 있는 칸) — 빠진 키: 코드가 읽는데 모델 칸·NOT_SETTINGS 어디에도 없음(0이어야 함).
-    모델에만 있는 칸: 새 칸(KOREAN_FONT 등 아직 안 읽는 것)이나 지운 읽기 — 알리기만(설정 객체로 읽는 칸은 읽는 것으로 침 — S7b)."""
+    모델에만 있는 칸: 새 칸(아직 안 읽는 것)이나 지운 읽기 — 알리기만(설정 객체로 읽는 칸은 읽는 것으로 침 — S7b)."""
     from common.config import settings as S
 
     found = scan() if found is None else found

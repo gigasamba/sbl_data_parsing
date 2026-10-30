@@ -2,7 +2,7 @@
 """파이프라인 진입점 — 두 단계를 나눠 부른다(요청 문장 → 명령 대응표는 AGENTS.md "요청 → 명령").
 
 단계 1 · 비교(기술 스택 고르기)
-  compare-parse   여러 파싱 엔진 비교: run_all(phase 1→2, 3은 --phases 3) → parse_qa → 보고서(엔진 × 형식·선정 후보)
+  compare-parse   여러 파싱 엔진 비교: run_all → parse_qa → 보고서(엔진 × 형식·선정 후보)
   compare-all     파싱 + 데이터 구조화(청킹·임베딩·그래프) + 검색까지 전체 조합 비교 → 보고서·문항 탐색기(답변 비교 단계는
                   10-13 답변 경로 통일 4단계로 archive — 답변 품질은 dev_tools/perform_test/answer_stage/run.py, rag_qa만)
 단계 2 · 고정 스택(정해진 기술로 실제 파이프라인 + 기본 테스트)
@@ -10,7 +10,7 @@
                   --activate N 되돌리기) — 서버 = 판 표 struct.stack_version 새 판·활성(--reason 필수), PC = 파일(S8b — docs/architecture/pipeline_stack.md)
   show-stack      지금 엔진 구성(서버 = 활성 판 + 최근 판)
   set-sources · show-sources  원천 목록(서버 = 판 표 struct.source_version, PC = 파일) — --file·--activate·--check-columns
-  run-stack       스택 엔진만 파싱 → 대표 파싱(문서마다 하나, modules/parse/represent.py) → 구조화·벡터화·그래프(modules/structure/build_bundle.py) → (--edw) EDW 적재
+  run-stack       스택 엔진만 파싱 → 대표 파싱(문서마다 하나, modules/parse/represent.py) → 구조화·벡터화·그래프(modules/structure/build_bundle.py)
   parse · structure · load  모듈 1회 실행(트리거) — 앞 모듈 끝 표시(_DONE.json)를 보고 이어 받음, 새 입력 없으면 건너뜀(docs/architecture.md)
   (ask · test-stack — 검색 명령은 S5(10-26, T-15)에 python -m mcp_server.cli.ask로 옮김: 파이프라인 CLI가 검색 코드를 import하지 않게)
 산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서) · output/stack_test.md · output/RUNLOG.md(명령 요약)
@@ -26,6 +26,7 @@ import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from common.config import settings as C  # common 칸(S7c — 설정 객체 · cfg()·given()·render())
@@ -43,13 +44,20 @@ _STACK: dict = {}
 
 
 def _stack():
-    """엔진 구성 활성 판의 사본 (경로, dict) — 프로세스마다 한 번(S8b — pipeline/stackcfg.py: 서버 = 판 표 활성 판·PC = 파일 → 이미지에 없는
-    엔진 거부 → OUT/_stack/ 사본 → STACK_SNAPSHOT 칸으로 자식에 넘김). 서버에서 판 표를 못 읽으면 종료 4, 없는 엔진이면 종료 2."""
+    """엔진 구성(사전) — 프로세스마다 한 번(pipeline/stackcfg.py: 서버 = 판 표 활성 판·PC = 파일 → 이미지에 없는 엔진 거부 → 판 번호를
+    STACK_VERSION 칸으로 자식에 넘김 — 이미 받았으면 그 판, pl-32). 서버에서 판 표를 못 읽으면 종료 4, 없는 엔진이면 종료 2."""
     if "v" not in _STACK:
         from pipeline import stackcfg
 
-        _STACK["v"] = stackcfg.resolve(OUT)
+        stackcfg.current()
+        _STACK["v"] = pc.stack()
     return _STACK["v"]
+
+
+def _stack_arg():
+    """represent·build_bundle에 넘길 판 번호 인자(PC 파일이면 없음 — 자식도 파일을 읽음)."""
+    v = _stack().get("version_id")
+    return [] if v is None else ["--stack-version", str(v)]
 
 
 def sh(module, *args, check=True):
@@ -73,23 +81,8 @@ def _set_engine_scope_default(explicit_engines):
         C.put(PARSE_ENGINE_SCOPE="all" if explicit_engines else "stack")
 
 
-def phases_of(a):
-    """돌릴 phase — 기본 1,2,3r(PARSE_PHASES). 3r = 성공한 엔진이 하나도 없는 문서만 phase 3(스캔 계약서가 빠져 집계가 틀리던 것 —
-    처음부터 시험 10-02). 전체 phase 3(VLM 포함, 쪽당 1초 넘으면 넘김)는 시간 날 때 `parse --phases 3`·`night --phases 3`."""
-    ph = getattr(a, "phases", None)
-    if ph:
-        return [x.strip() for x in str(ph).split(",") if x.strip()]
-    return list(pc.cfg().extract.phases)  # S7c — 설정 객체(PARSE_PHASES, 기본 1,2,3r · 빈 값 = 기본값)
-
-
-def _phase_args(ph):
-    """'3r' → ['--phase', '3', '--rescue'] · '2' → ['--phase', '2']."""
-    return ["--phase", str(ph).rstrip("r")] + (["--rescue"] if str(ph).endswith("r") else [])
-
-
-def parse_phases(src, engines, procs, phases=(1, 2)):
-    for ph in phases:
-        sh("pipeline.extract.run_all", "--src", src, "--procs", procs, *_phase_args(ph), *(["--engines", engines] if engines else []))
+def parse_docs(src, engines, procs):
+    sh("pipeline.extract.run_all", "--src", src, "--procs", procs, *(["--engines", engines] if engines else []))
 
 
 # ── 야간 배치(새벽 파싱 — GPU가 비는 시간, LLM 호출 없음) ─────────
@@ -106,35 +99,29 @@ def _until(deadline):
 
 
 def _run_until(args, env, sec):
-    """마감까지만 실행 — 넘으면 프로세스 묶음(--procs 자식 포함)을 끝냄. 끝난 문서×엔진은 runs.jsonl에 남아 다음 밤에 건너뜀.
+    """마감까지만 실행 — 넘으면 프로세스 묶음(--procs 자식 포함)을 끝냄. 다음 밤은 문서 대장에 파싱 성공 행이 없는 문서를 다시 고른다(pl-32 — 마감에 걸린 밤의 문서는 PR 4 전까지 반복될 수 있음).
     args[0] = 모듈 점 표기(예: pipeline.extract.run_all)."""
     cmd = [PY, "-m", str(args[0]), *map(str, args[1:])]
     print("$ " + " ".join(cmd), flush=True)
     from common.core import resources as RS
+    from pipeline.extract import resources as PR  # 프로세스 묶음(OS 분기 한 곳)
 
-    kw = {"start_new_session": True} if os.name != "nt" else {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
-    p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **kw)  # cwd=APP_ROOT(런타임 루트) — sh()와 같은 이유
+    p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **PR.group_kw())  # cwd=APP_ROOT(런타임 루트) — sh()와 같은 이유
     try:
         return p.wait(timeout=max(1, sec))
     except subprocess.TimeoutExpired:
-        if os.name == "nt":
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)], capture_output=True)
-        else:
-            import signal
-
-            os.killpg(p.pid, signal.SIGTERM)
-        p.wait()
+        PR.kill_group(p)
         return None
 
 
 def night(a):
-    """새벽 배치: 파싱(phase 1→2) → 대표 파싱 → publish(OS+EDW) → 구조화·임베딩 → PG 적재 → OV 적재.
-    --no-structure면 파싱+publish만. --no-publish로 OS+EDW publish 건너뜀. --no-ov로 OV 적재 건너뜀.
-    GPU 모델은 API로만(VLM_*·EMBED_*), LLM(LLM_*)은 부르지 않는다 — 요약은 OpenViking·발췌만. 마감(--deadline)을 넘으면 멈추고 다음 밤에 이어 감.
+    """새벽 배치: 파싱 → 대표 파싱 → publish(OS+EDW) → 구조화·임베딩 → PG 적재.
+    --no-structure면 파싱+publish만. --no-publish로 OS+EDW publish 건너뜀.
+    GPU 모델은 API로만(VLM_*·EMBED_*), LLM(LLM_*)은 부르지 않는다 — 요약은 발췌만. 마감(--deadline)을 넘으면 멈춤 — 다음 밤은 문서 대장 기준(성공 행 없는 문서)으로 다시 고름(pl-32).
     RV5(10-09): deploy/host/scripts/trigger.sh night(OP13 정본, compose 여러 컨테이너용)와는 배포 모양이 달라 따로 둠 — 이 함수는
     단일 컨테이너·Docker 밖 직접 실행(AGENTS.md 지시표·requirements.md S8 cron 예시)에서 쓰임, 호출처 있음(삭제 대상 아님)."""
     connect(a)
-    st = _stack()[1]
+    st = _stack()
     engines = a.engines or ",".join(_engines_of(st))
     _set_engine_scope_default(a.engines)  # PE1 — night도 생산 경로(서버 entrypoint full)라 같은 기본
     from common.core import resources as RS
@@ -164,25 +151,21 @@ def night(a):
         a.docs_from = only
     else:
         a.docs_from = None
-    for ph in phases_of(a):
-        left = _until(a.deadline)
-        if left < 300:
-            stopped = f"phase {ph} 시작 전 마감 {a.deadline} 도달"
-            break
-        args = ["pipeline.extract.run_all", "--src", a.src, "--procs", a.procs, *_phase_args(ph), "--engines", engines]
+    left = _until(a.deadline)
+    if left < 300:
+        stopped = f"파싱 시작 전 마감 {a.deadline} 도달"
+    else:
+        args = ["pipeline.extract.run_all", "--src", a.src, "--procs", a.procs, "--workers", a.workers, "--engines", engines]
         if a.docs_from:
             args += ["--docs-from", str(a.docs_from)]
-        if str(ph).startswith("3"):
-            args += ["--vlm-all", "--workers", a.workers]
         rc = _run_until(args, env, left - 120)
-        log.append(f"phase {ph}: " + ("완료" if rc == 0 else "마감으로 중단" if rc is None else f"종료 코드 {rc}"))
+        log.append("파싱: " + ("완료" if rc == 0 else "마감으로 중단" if rc is None else f"종료 코드 {rc}"))
         if rc is None:
-            stopped = f"phase {ph} 도중 마감 {a.deadline}"
-            break
+            stopped = f"파싱 도중 마감 {a.deadline}"
     if not a.no_structure and not stopped:
         for args in (
             ["pipeline.transform.represent.parse_qa", "--src", a.src],
-            ["pipeline.transform.represent.represent", "--stack", _stack()[0], "--src", a.src],
+            ["pipeline.transform.represent.represent", *_stack_arg(), "--src", a.src],
         ):
             left = _until(a.deadline)
             rc = _run_until(args, env, left - 60) if left > 120 else None
@@ -191,7 +174,7 @@ def night(a):
                 stopped = stopped or f"{args[0]}에서 멈춤"
                 break
             if args[0] == "pipeline.transform.represent.represent":
-                write_mark("parse", src=str(a.src), phases=phases_of(a), engines=engines.split(","), by="night")
+                write_mark("parse", src=str(a.src), engines=engines.split(","), by="night")
         if source and not stopped:
             from pipeline.extract import source as SRC
 
@@ -209,8 +192,7 @@ def night(a):
                 a.src,
                 "--embed",
                 pc.cfg().transform.structure.embed or st.get("embed", "api"),
-                "--stack",
-                _stack()[0],
+                *_stack_arg(),
                 "--summary",
                 "auto",
             ]
@@ -229,23 +211,6 @@ def night(a):
                 log.append(f"{' '.join(args)}: " + ("완료" if rc == 0 else f"멈춤({rc})"))
                 if rc != 0:
                     break
-        if not stopped and not getattr(a, "no_ov", False):
-            from common.store import services
-
-            if services.ov_enabled("ingest"):
-                left = _until(a.deadline)
-                rc = (
-                    _run_until(
-                        ["pipeline.load.openviking_load", "--rep-dir", str(OUT / "parse" / "_rep"), "--out", str(OUT / "ov_ingest")],
-                        env,
-                        left - 30,
-                    )
-                    if left > 30
-                    else None
-                )
-                log.append("ov_ingest: " + ("완료" if rc == 0 else "마감으로 중단" if rc is None else f"종료 코드 {rc}"))
-            else:
-                log.append("ov_ingest: 건너뜀 (OV_FEATURES에 ingest 없음)")
     md = [
         f"# 야간 배치 {time.strftime('%Y-%m-%d %H:%M')} — {(time.time() - t0) / 60:.0f}분",
         "",
@@ -254,9 +219,13 @@ def night(a):
         "",
     ]
     md += [f"- {x}" for x in log] + (
-        [f"- **멈춤: {stopped}** — 다음 밤에 같은 명령이면 끝난 문서×엔진은 건너뛰고 이어 감"] if stopped else ["- 전부 끝남"]
+        [
+            f"- **멈춤: {stopped}** — 다음 밤은 문서 대장에 성공 행이 없는 문서를 다시 고름(PR 4 전에는 이 밤의 문서가 반복될 수 있음 — pl-32)"
+        ]
+        if stopped
+        else ["- 전부 끝남"]
     )
-    md += ["", "진행·결과: output/parse/PROGRESS.md · PHASE_REPORT.md · output/report/phase<N>-report.html · output/RUNLOG.md"]
+    md += ["", "진행·결과: output/parse/PROGRESS.md · output/RUNLOG.md"]
     Path("output").mkdir(exist_ok=True)
     Path("output/NIGHT.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     print("\n".join(md))
@@ -269,11 +238,11 @@ def night(a):
 def compare_parse(a):
     engines = a.engines
     if engines == "candidates":  # 스택의 선정 엔진 + 사용자 후보 목록(stack.json candidates)
-        st = _stack()[1]
+        st = _stack()
         engines = ",".join(_engines_of(st))
         print(f"비교 엔진: {engines}")
     if not a.skip_parse:
-        parse_phases(a.src, engines, a.procs, phases_of(a))
+        parse_docs(a.src, engines, a.procs)
     sh("pipeline.transform.represent.parse_qa", "--src", a.src)
     sh("pipeline.eval.report")
     print("→ output/report/report.html(파싱 결과 탭: 엔진 × 형식 · 최종 엔진 조합 후보) · output/parse/selection.json")
@@ -509,6 +478,7 @@ def show_sources(a=None):
 # ── 모듈(트리거 실행 — docs/architecture.md) ──────────────────────
 # 파싱 → 구조화 → 적재를 따로 부른다(각 Docker 컨테이너 1회 실행). 앞 모듈의 끝 표시(_DONE.json)를 보고 시작하고,
 # 앞 결과가 바뀌지 않았으면 아무것도 안 하고 끝낸다(트리거·나중의 새벽 배치가 여러 번 불러도 안전).
+# pl-32(10-30) — 이것은 한 새벽 배치·트리거 실행 안에서 모듈 사이 인계(앞 모듈이 이번에 낸 결과가 있나)이지 문서 결과 재사용이 아니다 — 남김.
 from common import CONTRACT, FINGERPRINT  # noqa: E402 — 인계 형식 버전 · common 코드 지문(이미지 버전 어긋남 확인)
 
 MARK = {
@@ -610,25 +580,54 @@ def _registry_new_names(out_dir, names):
     바뀜)인데 아직 성공 못한 doc_key(status != 'parsed' — 반복 실패·'seen' 모두 매일 재시도) · 성공해서 안 바뀐
     문서는 뺌(다시 할 필요 없음, touched도 포함 — 원본 바이트가 안 바뀌었으니 재파싱 대상이 아님) · changed는
     기본 전부 빠짐(자동 재파싱 안 함, OP1) · deleted는 observed에 없어 자동으로 빠짐).
-    OP14 — env `AUTO_REPARSE_CHANGED=1`이면 changed 전체를 REG.nightly_plan의 reparse_keys로 넘겨 다음 배치
-    대상에 포함(새 run_id로 재파싱 — 결과는 run_id별로 쌓여 옛 결과·이력이 그대로 남음). 기본(0)은 전과 동일(탐지·보고만).
-    문서 대장을 못 열면(DOC_REGISTRY=0·DB 없음·그 밖 오류 — try_open_db가 이미 삼킴) None(필터 없음 — 전과
-    동일, 파싱이 안 깨짐)."""
+    (옛 OP14 AUTO_REPARSE_CHANGED — changed 자동 재파싱 — 는 10-30 지움(pl-35, pl-23 증분만).)
+    문서 대장을 못 열면 _no_registry()(서버 run_mode prod = 종료 4, 그 밖 = None — 필터 없음, pl-32 10-30)."""
     from common.store import registry as REG
 
     db = REG.try_open_db()
     if db is None:
-        return None
+        return _no_registry()
     try:
         observed = REG.scan(out_dir)
-        auto_reparse = pc.cfg().extract.auto_reparse_changed
-        reparse_keys = set(REG.diff_against(db, observed)["changed"]) if auto_reparse else None
-        new_names = set(REG.nightly_plan(db, observed, reparse_keys=reparse_keys)["parse_names"])
+        new_names = set(REG.nightly_plan(db, observed)["parse_names"])
     except Exception:
         return None
     finally:
         db.close()
     return {n for n in names if n in new_names}
+
+
+def _no_registry():
+    """문서 대장을 못 열 때(pl-32 사용자 10-30 — 실행을 넘는 문서 고르기는 문서 대장 하나만): run_mode prod(서버)는 종료 4(인프라 없음 —
+    전체를 다시 파싱하지 않음), 그 밖(PC·DOC_REGISTRY=0)은 이력 없이 받은 목록 그대로(None) + 로그 한 줄."""
+    if C.cfg().store.run_mode == "prod" or C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)도
+        print("[parse] 문서 대장(doc_registry)을 열지 못함 — run_mode prod는 멈춤(종료 4, 전체 재파싱 안 함)", file=sys.stderr, flush=True)
+        raise SystemExit(4)
+    print("[parse] 문서 대장 없음(DOC_REGISTRY=0 또는 연결 안 됨) — 이력 없이 받은 목록 그대로 처리", flush=True)
+    return None
+
+
+def _registry_unparsed(names):
+    """문서 대장에 파싱 성공 행(status parsed)이 없는 이름만 — 순서: 대장에 없거나 아직 시도 전(seen)인 문서(이름순) 먼저, 그다음 실패 문서
+    (마지막 시도가 오래된 것부터). --max-new로 앞에서 자르므로 늘 실패하는 문서가 새 문서 자리를 막지 않는다(PR #49 리뷰) — 실패 문서도
+    자리가 남으면 매번 다시(pl-32). 대장을 못 열면 _no_registry()대로(None이면 받은 목록 그대로). 앞 실행 runs.jsonl은 보지 않는다."""
+    from common.store import registry as REG
+
+    db = REG.try_open_db()
+    if db is None:
+        _no_registry()
+        return list(names)
+    try:
+        rows = db.query("SELECT names, status, last_seen FROM doc_registry")
+    finally:
+        db.close()
+    state = {}  # 이름 → (status, last_seen)
+    for r in rows:
+        for n in json.loads(r["names"] or "[]"):
+            state[n] = (r["status"], r["last_seen"] or "")
+    fresh = [n for n in names if state.get(n, ("seen", ""))[0] == "seen"]
+    failed = sorted((n for n in names if state.get(n, ("seen", ""))[0] not in ("seen", "parsed")), key=lambda n: (state[n][1], n))
+    return fresh + failed
 
 
 _T_STEP: dict = {}
@@ -651,7 +650,7 @@ def _tdone():
 
 
 def parse_module(a):
-    """파싱 모듈: (--source면) 가져오기·시험 표본 → 중복 확인 → 방향 보정 → phase(기본 1,2,3r) → 채점 → 대표 결과 → 끝 표시 → (s3) 원본 정리.
+    """파싱 모듈: (--source면) 가져오기·시험 표본 → 중복 확인 → 방향 보정 → 파싱 → 채점 → 대표 결과 → 끝 표시 → (s3) 원본 정리.
     임베딩·DB 연결 없음 — 수집 서버에 이것만 보낼 수 있음. --source 없으면 --src(이미 준비된 폴더)를 그대로."""
     from common.core.paths import child_env
 
@@ -662,17 +661,13 @@ def parse_module(a):
     os.environ["PARSE_RUN_ID"] = (
         run_id  # env 남김 — 하위 프로세스·엔진에 넘김 · 이후 모든 하위 호출(dedup·prepare·run_all·streaming)이 os.environ 상속으로 받음
     )
-    st = _stack()[1]
+    st = _stack()
     engines = a.engines or ",".join(_engines_of(st))
     _set_engine_scope_default(a.engines)  # PE1(2026-10-07) — 생산 기본 stack(무거움 해소), 명시 --engines·실험 경로는 영향 없음
-    parallel = bool(a.source) and pc.cfg().extract.parallel.pipeline  # OP26 — 문서 단위 받기→파싱→게시→삭제를 N명이 동시에
-    streaming = bool(a.source) and not parallel and pc.cfg().extract.stream.stream  # 백로그 X2 — 묶음(기본 1건)씩 받아 처리 후 즉시 지움
+    # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) — 아래 갈래는 스트리밍·일괄만
+    streaming = bool(a.source) and pc.cfg().extract.stream.stream  # 백로그 X2 — 묶음(기본 1건)씩 받아 처리 후 즉시 지움
     lim, src_info = [], None
-    if parallel:
-        from pipeline import parse_parallel as PARALLEL
-
-        PARALLEL.run(a, engines)  # 원본·중간 결과는 문서마다 이미 지움(try/finally) · 게시도 문서마다 이미 끝남
-    elif streaming:
+    if streaming:
         from pipeline import stream as STREAM
 
         STREAM.run(a, engines)  # 원본·사본·엔진별 중간 결과는 묶음마다 이미 지움(try/finally)
@@ -705,7 +700,7 @@ def parse_module(a):
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)
         lim = ["--docs-from", only]
-    if not streaming and not parallel:
+    if not streaming:
         from common.core import resources as RS
 
         vlm_conc = RS.vlm_page_concurrency(a.workers, a.vlm_concurrency)  # 문서 동시 수 × 쪽 동시 수가 VLM_MAX_CONCURRENCY를 넘지 않게
@@ -715,12 +710,9 @@ def parse_module(a):
             child_env(), VLM_CONCURRENCY=str(vlm_conc), LLM_BASE_URL=None
         )  # 파싱 모듈은 LLM을 부르지 않음 — 덮기 파일(S7e3 B-1)
         if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
-            from pipeline.transform.represent.represent import last_runs
-
-            seen = {d for d, _ in last_runs(OUT / "parse")}
             names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
-            new = [n for n in names if n not in seen]
-            pick = [n for n in names if n in seen] + new[: a.max_new]
+            new = _registry_unparsed(names)  # pl-32 — 문서 대장에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
+            pick = new[: a.max_new]
             f = OUT / "parse" / "_batch_docs.txt"
             f.parent.mkdir(parents=True, exist_ok=True)
             if lim:  # --source 선택과 겹치는 것만
@@ -728,29 +720,29 @@ def parse_module(a):
                 pick = [n for n in pick if n in sel_names]
             f.write_text("\n".join(pick) + "\n", encoding="utf-8")
             lim = ["--docs-from", f]
-            print(f"[parse] 새 문서 {min(len(new), a.max_new)}/{len(new)}개(PARSE_MAX_NEW {a.max_new}) — 나머지는 다음 실행", flush=True)
-        for ph in phases_of(a):
-            args = [
-                "pipeline.extract.run_all",
-                "--src",
-                a.src,
-                "--out",
-                OUT / "parse",
-                "--procs",
-                a.procs,
-                *_phase_args(ph),
-                "--engines",
-                engines,
-                *lim,
-            ]
-            if str(ph).startswith("3"):
-                args += ["--vlm-all", "--workers", a.workers]
-            if _run_until(args, env, _left(a) - 120) is None:
-                raise SystemExit(75)  # 마감 — 끝 표시 안 바꿈, 다음 실행이 이어 감
-            _tstep(f"t_phase{ph}")
+            print(
+                f"[parse] 새·실패 문서 {min(len(new), a.max_new)}/{len(new)}개(PARSE_MAX_NEW {a.max_new}) — 나머지는 다음 실행", flush=True
+            )
+        args = [
+            "pipeline.extract.run_all",
+            "--src",
+            a.src,
+            "--out",
+            OUT / "parse",
+            "--procs",
+            a.procs,
+            "--workers",
+            a.workers,
+            "--engines",
+            engines,
+            *lim,
+        ]
+        if _run_until(args, env, _left(a) - 120) is None:
+            raise SystemExit(75)  # 마감 — 끝 표시 안 바꿈, 다음 실행이 이어 감
+        _tstep("t_parse")
         for args in (
             ["pipeline.transform.represent.parse_qa", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
-            ["pipeline.transform.represent.represent", "--stack", _stack()[0], "--src", a.src, "--parse-dir", OUT / "parse"],
+            ["pipeline.transform.represent.represent", *_stack_arg(), "--src", a.src, "--parse-dir", OUT / "parse"],
         ):
             rc = _run_until(args, env, _left(a) - 60)
             _tstep("t_" + args[0].rsplit(".", 1)[-1])  # 2026-10-22 — qa·represent 분리 계측(docflow 기타 분해)
@@ -785,15 +777,13 @@ def parse_module(a):
         src=str(a.src),
         source=str(a.source or a.src),
         mode=a.mode,
-        phases=phases_of(a),
         engines=engines.split(","),
         docs=len(idx),
         digest=digest,
         rep_ok=sum(1 for r in idx if r.get("engine")),
-        failed="output/parse/PHASE2_FAILED.md",
         run_id=run_id,
     )
-    if not streaming and not parallel and src_info:  # 스트리밍·병렬은 문서/묶음마다 이미 지웠음(SRC.mark_done)
+    if not streaming and src_info:  # 스트리밍은 묶음마다 이미 지웠음(SRC.mark_done)
         from pipeline.extract import source as SRC
 
         if SRC.is_remote(a.source):
@@ -808,38 +798,8 @@ def _structure_extra(embed):
     return {"embed": embed, "embed_url": C.cfg().models.embed.base_url or "", "code": P0.code_fp("s")}
 
 
-def _structure_target():
-    """10-14 요건 — 세 구조화 대상(OpenViking ×1 · pgvector ×2, AD41 index_id로 서로 다른 설정) 중 이 인스턴스가
-    맡을 것. 트리거 서버(cli/trigger_server.py, 다른 작업)가 상주 인스턴스별로 env만 다르게 주고 같은
-    `structure` 엔트리를 부른다 — 그 env를 여기서 한 번 읽는다.
-    STRUCTURE_TARGET(기본 pg) = "ov"(OpenViking — 스스로 chunking·tree·L0/L1, 이 쪽은 올리기만)
-                              | "pg"(기존 build_bundle.py·pgvector 적재 — INDEX_CONF 있으면 AD41 색인 설정으로, 없으면 기본 색인 그대로)."""
-    target = (pc.cfg().load.structure_target or "pg").strip().lower()
-    if target not in ("ov", "pg"):
-        raise SystemExit(f"[structure] STRUCTURE_TARGET 모름: {target!r}(pg|ov)")
-    return target
-
-
-def _structure_ov(a):
-    """STRUCTURE_TARGET=ov — OpenViking이 스스로 chunking·tree·L0/L1 요약을 만들게 대표 결과(_rep)만 올린다
-    (여기서는 build_bundle.py·pgvector를 안 거침). OV_FEATURES에 ingest가 없으면 pipeline.load.openviking_load가
-    조용히 건너뜀(기존 OV_FEATURES 명시 스위치 XS8과 같은 모양)."""
-    extra = {"target": "ov", "ov_root": pc.cfg().connections.openviking.root or ""}
-    m = need("parse", "structure", a.force, extra=extra)
-    if not m:
-        return
-    from common.core import contract
-
-    bad = contract.check_parse(OUT / "parse" / "_rep", sample=500)
-    if bad:
-        print("[structure] 파싱 인계 폴더가 계약과 다름 — " + " · ".join(bad[:5]), flush=True)
-        raise SystemExit(3)
-    sh("pipeline.load.openviking_load", "--rep-dir", OUT / "parse" / "_rep", "--out", OUT / "ov_ingest")
-    write_mark("structure", from_run=m["run_id"], extra=extra)
-
-
 def _structure_pg_indexed(a, index_conf):
-    """STRUCTURE_TARGET=pg + INDEX_CONF — AD41 색인 모듈(cli/index.py build)로 설정별 색인(pg-a·pg-b, 예 청크
+    """INDEX_CONF — AD41 색인 모듈(cli/index.py build)로 설정별 색인(pg-a·pg-b, 예 청크
     크기가 다른 두 설정)을 만든다. index.py가 자기 입력 지문(_rep·사전·명부·stack·코드)으로 재빌드를 판정하고
     같은 index_id 동시 빌드는 잠금으로 막으므로, 여기서 need()/write_mark로 다시 게이트하지 않는다(이중 판정
     이 서로 어긋나는 것을 피함) — --pg로 PostgreSQL 스키마 <PG_SCHEMA>_<index_id>까지 적재.
@@ -854,9 +814,7 @@ def _structure_pg_indexed(a, index_conf):
         OUT / "parse",
         "--src",
         a.src,
-        "--stack",
-        _stack()[0],
-        "--pg",
+        "--pg",  # 엔진 구성 판은 넘겨받은 STACK_VERSION 칸으로(index는 --stack-version 인자가 없음 — pl-32 리뷰)
         *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
         check=False,
     )
@@ -866,15 +824,11 @@ def _structure_pg_indexed(a, index_conf):
 
 def structure_module(a):
     """구조화 모듈: 대표 결과(_rep)만 읽어 청킹·사실·고객·그래프·임베딩(API·캐시) → 묶음(output/edw/bundle) → 끝 표시. 원본이 없어도 됨.
-    10-14 — STRUCTURE_TARGET=ov면 OpenViking 적재로, =pg(기본)+INDEX_CONF면 AD41 색인 빌더로 대신(아래 두 분기).
-    STRUCTURE_TARGET 미설정(기본 pg) + INDEX_CONF 없음은 이전 동작과 완전히 같다(바이트 동일 경로)."""
-    target = _structure_target()
-    if target == "ov":
-        return _structure_ov(a)
+    INDEX_CONF가 있으면 AD41 색인 빌더로 대신(아래 분기) — 없으면 기본 색인."""
     index_conf = pc.cfg().paths.index_conf
     if index_conf:
         return _structure_pg_indexed(a, index_conf)
-    st = _stack()[1]
+    st = _stack()
     embed = pc.cfg().transform.structure.embed or st.get("embed", "api")
     m = need("parse", "structure", a.force, extra=_structure_extra(embed))
     if not m:
@@ -905,8 +859,7 @@ def structure_module(a):
         a.src,
         "--embed",
         embed,
-        "--stack",
-        _stack()[0],
+        *_stack_arg(),
         "--summary",
         "auto",
         *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
@@ -978,35 +931,31 @@ def load_module(a):
         print("[load] 임베딩 없는 묶음(PIPE_EMBED=none) — PostgreSQL에는 적재 안 함(로컬 묶음으로 키워드·ID 검색만)", flush=True)
         raise SystemExit(5)
     sh("pipeline.load.pgvector_load", "deploy")
-    sh("pipeline.load.pgvector_load", "load", *(["--replace"] if a.replace else []), *([] if a.no_prune else ["--prune"]))
+    sh("pipeline.load.pgvector_load", "load", *(["--replace"] if a.replace else []))  # 더하고 고치기만(pl-13 — 지우지 않음)
     write_mark("load", from_run=m["run_id"], docs=m.get("docs"), chunks=m.get("chunks"), extra=dest_fp)
 
 
 def run_stack(a):
     connect(a)
-    st = _stack()[1]
+    st = _stack()
     engines = ",".join(sorted({e for es in st["parse"].values() for e in es}))
     if not a.skip_parse:
-        parse_phases(a.src, engines, a.procs, phases_of(a))  # 이미 파싱된 문서×엔진은 다시 안 함(sha)
-    ov_import(a.src)  # OpenViking 요약·계층(E4): 연결돼 있으면 받아 와서 묶음 요약으로
+        parse_docs(a.src, engines, a.procs)  # 이미 파싱된 문서×엔진은 다시 안 함(sha)
     sh("pipeline.transform.represent.parse_qa", "--src", a.src)  # 대표 고르기용 정확도(교차 재현율)
-    sh("pipeline.transform.represent.represent", "--stack", _stack()[0], "--src", a.src)
+    sh("pipeline.transform.represent.represent", *_stack_arg(), "--src", a.src)
     sh(
         "pipeline.transform.structure.build_bundle",
         "--src",
         a.src,
         "--embed",
         pc.cfg().transform.structure.embed or st["embed"],
-        "--stack",
-        _stack()[0],
+        *_stack_arg(),
         *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
     )
     load_tables_db()
     if a.pg:
         sh("pipeline.load.pgvector_load", "deploy")
-        sh(
-            "pipeline.load.pgvector_load", "load", *(["--replace"] if a.replace else []), *([] if a.no_prune else ["--prune"])
-        )  # 삭제·바뀐 원본의 옛 기록 정리
+        sh("pipeline.load.pgvector_load", "load", *(["--replace"] if a.replace else []))  # 더하고 고치기만(pl-13 — 지우지 않음)
     summ = json.loads((OUT / "edw" / "bundle" / "meta.json").read_text(encoding="utf-8")).get("summary") or {}
     print(
         "→ 대표 파싱 output/parse/_rep · 구조화 output/edw/bundle"
@@ -1018,34 +967,9 @@ def run_stack(a):
     )
 
 
-def ov_import(src=None):
-    """OpenViking(OV_URL — 설정 또는 Docker 자동 탐색)과 OV_ROOT가 있으면 문서 폴더(본문·.abstract.md L0·.overview.md L1)를
-    output/ov_export에 내려받는다(이미 받은 문서는 건너뜀). 파싱 엔진으로 돌리지 않음 — 파싱 채점에 끼지 않게.
-    bundle.ov_summaries가 이 폴더를 요약 출처 'openviking'으로 씀(OV_DOC_ROOT를 주면 그 폴더 우선). 없으면 건너뜀.
-    XS8: OV_FEATURES에 summary가 없으면 OV_URL이 있어도 건너뜀(OV_URL 없을 때와 동일 출력)."""
-    from common.store import services
-
-    if not services.ov_enabled("summary"):
-        return
-    url, root = C.cfg().connections.openviking.url, pc.cfg().connections.openviking.root
-    if not url:
-        return
-    if not root:
-        print("(OpenViking 연결됨 — OV_ROOT(viking://resources/<루트>)가 없어 요약을 받지 않음: .env에 OV_ROOT)", flush=True)
-        return
-    import ov_export
-
-    out = OUT / "ov_export"
-    try:
-        got = ov_export.export(url, root, out, only=lambda n: not (out / n).is_dir(), log=lambda m: None)
-        print(f"OpenViking 요약 내려받기: 새 문서 {len(got)}개 → {out}", flush=True)
-    except Exception as ex:  # 요약은 보조 — 실패해도 발췌 요약으로 계속
-        print(f"(OpenViking 내려받기 실패 — 발췌 요약으로 계속: {type(ex).__name__}: {str(ex)[:120]})", flush=True)
-
-
 def connect(a):
-    """연결 기본값(백로그 E6 · 사용자 2026-10-01): --pg·--edw·--edw-client·--local 지정이 없으면 Docker에 떠 있는 pgvector에 연결,
-    없으면 로컬 묶음. OpenViking도 Docker에서 찾으면 OV_URL로. → common/services.py"""
+    """연결 기본값(백로그 E6 · 사용자 2026-10-01): --pg·--local 지정이 없으면 Docker에 떠 있는 pgvector에 연결,
+    없으면 로컬 묶음. → common/services.py"""
     from common.store import services
 
     services.connect(a)
@@ -1060,6 +984,8 @@ def connect(a):
 TESTS_ROOT = Path(__file__).resolve().parents[1] / "tests"  # 저장소 루트 tests/ · 이미지 /app/deploy/tests(PYTHONPATH와 같은 뿌리)
 IMAGE_DIRS = {"common": None, "pipeline": "pipeline", "mcp": "mcp"}  # tests/server/<폴더> → 도는 이미지(None = 둘 다)
 _FAKE_LLM_CASES = frozenset({"tests.server.mcp.test_mcp_main"})  # LLM_FAKE를 켜는 사례(질문 분해 — 옛 mcp_server.main 사례)
+# PC에서 개발자 루트 settings.yaml(실 PG)을 그대로 읽어야 판정되는 사례(실 PG에서만 C-54 ① 재현) — 그 밖 PC 사례는 시험 전용 바탕 설정(case_env, 10-29)
+_PC_SETTINGS_CASES = frozenset({"tests.general.pipeline.test_pub_registry"})
 
 
 def server_cases():
@@ -1079,20 +1005,35 @@ def case_env(mod):
     from common.core.paths import child_env
 
     fake = mod in _FAKE_LLM_CASES
-    if fake not in _CASE_ENVS:
-        blank = dict.fromkeys(("LLM_BASE_URL", "VLM_BASE_URL", "OCRVLM_BASE_URL", "EMBED_BASE_URL", "LLM_BUDGET_USD"))
-        _CASE_ENVS[fake] = C.child_env(child_env({"PYTHONUTF8": "1"}), NO_PAID_CALLS="1", LLM_FAKE="1" if fake else None, **blank)
-    return dict(_CASE_ENVS[fake])
+    own = not C.IN_IMAGE and mod not in _PC_SETTINGS_CASES  # PC 시험은 시험 전용 바탕 설정(아래 _case_settings)
+    if (fake, own) not in _CASE_ENVS:
+        blank = dict.fromkeys(("LLM_BASE_URL", "VLM_BASE_URL", "EMBED_BASE_URL", "LLM_BUDGET_USD"))
+        base = child_env({"PYTHONUTF8": "1"})
+        if own:  # PC — 개발자 루트 settings.yaml(실 PG·모델 키) 대신 시험 전용 최소 설정 위에 덮음(10-29 — 시험 격리)
+            base["SETTINGS_FILE"] = _case_settings()
+        _CASE_ENVS[(fake, own)] = C.child_env(base, NO_PAID_CALLS="1", LLM_FAKE="1" if fake else None, **blank)
+    return dict(_CASE_ENVS[(fake, own)])
 
 
-# 단계 4 도구 16개(S4 — 옛 공용 cli/·evaluation/에서 pipeline/로 옮김). S9 전에는 "공용" 사례였고 mcp 이미지에서는 모듈이 없어 SKIP이었다 —
+def _case_settings():
+    """PC 시험 사례의 바탕 설정 파일 — run_env: local만(접속·키 없음 → 정형 저장소는 SQLite, 모델 호출 없음). 한 번 만든다."""
+    if "file" not in _CASE_ENVS:
+        import tempfile
+
+        fd, path = tempfile.mkstemp(prefix="case_settings_", suffix=".yaml")
+        os.write(fd, b"common:\n  run_env: local\n")
+        os.close(fd)
+        _CASE_ENVS["file"] = path
+    return _CASE_ENVS["file"]
+
+
+# 단계 4 도구 15개(10-30 parse_parallel 지움 — pl-35)(S4 — 옛 공용 cli/·evaluation/에서 pipeline/로 옮김). S9 전에는 "공용" 사례였고 mcp 이미지에서는 모듈이 없어 SKIP이었다 —
 # S9부터 그 시험은 tests/server/pipeline(mcp 이미지에서 "다른 이미지 사례" SKIP — 결과 같음). 여기서는 두 손 목록 확인만(check_modules.MOVED_TOOLS).
-# S6a — 목록은 전에 경계 점검의 LEGACY_TOOLS(파일 경로 → 옛 자리)에서 읽었다. 경계 판정에 더 안 쓰여 그 표를 지우고 여기 둔다(같은 16개).
+# S6a — 목록은 전에 경계 점검의 LEGACY_TOOLS(파일 경로 → 옛 자리)에서 읽었다. 경계 판정에 더 안 쓰여 그 표를 지우고 여기 둔다(같은 15개).
 _STAGE4_TOOLS = frozenset(
     {
         "pipeline.cli",
         "pipeline.check_env",
-        "pipeline.parse_parallel",
         "pipeline.trigger_server",
         "pipeline.extract.rdb_discover",
         "pipeline.transform.structure.gen_roster",
@@ -1100,14 +1041,12 @@ _STAGE4_TOOLS = frozenset(
         *(
             f"pipeline.eval.{n}"
             for n in (
-                "kg_external",
                 "make_questions",
                 "run_combo",
                 "report",
                 "server_checks",
                 "anchors",
                 "auto_questions",
-                "stack_report",
                 "stages",
             )
         ),
@@ -1145,6 +1084,12 @@ def _image_lacks(top):
     return _spec_missing("pipeline.extract" if top == "pipeline" else "mcp_server.services")
 
 
+def _selftest_workers():
+    """selftest 동시 사례 수 — 이 프로세스가 쓸 수 있는 CPU 수(컨테이너 CPU 고정 반영 — sched_getaffinity), 많아도 8."""
+    cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
+    return max(1, min(8, cpus))
+
+
 def selftest(a):
     """`docker run … IMG selftest` — 서버 반입 시험(tests/server)을 파일마다 자식 프로세스로(네트워크 0 · case_env) 돌려 PASS/FAIL 표. 하나라도
     FAIL이면 종료 코드 1. 이미지 안(RAG_MODULE=pipeline·mcp)에서는 다른 이미지 폴더의 사례를 SKIP, RAG_MODULE이 비면(PC) 전부. 공용(common) 사례가
@@ -1164,13 +1109,13 @@ def selftest(a):
     rows = []
     if not cases:
         rows.append((str(TESTS_ROOT / "server"), "FAIL", "서버 반입 시험이 없음(tests/server — 이미지 COPY·--only 확인)"))
-    for mod, img in cases:
+
+    def run_case(case):
+        mod, img = case
         if img == "?":
-            rows.append((mod, "FAIL", "모르는 시험 폴더(tests/server/{common,pipeline,mcp}만)"))
-            continue
+            return (mod, "FAIL", "모르는 시험 폴더(tests/server/{common,pipeline,mcp}만)")
         if image and img not in (None, image):
-            rows.append((mod, "SKIP", f"다른 이미지 사례({img})"))
-            continue
+            return (mod, "SKIP", f"다른 이미지 사례({img})")
         r = subprocess.run(
             [PY, "-m", "tests.runner", mod],
             cwd=ROOT,
@@ -1185,9 +1130,14 @@ def selftest(a):
         # 공용 사례가 이 이미지에 없는 앱 모듈 때문에만 실패했으면 SKIP(mcp 이미지에는 pipeline/ 중 cli.py·config.py만 — _image_lacks)
         miss = re.findall(r"ModuleNotFoundError: No module named '(pipeline|mcp_server)['.]", out)
         if r.returncode != 0 and miss and all(_image_lacks(m) for m in set(miss)):
-            rows.append((mod, "SKIP", f"다른 이미지 모듈 필요({', '.join(sorted(set(miss)))})"))
-            continue
-        rows.append((mod, "PASS" if r.returncode == 0 else "FAIL", "" if r.returncode == 0 else out[-1500:]))
+            return (mod, "SKIP", f"다른 이미지 모듈 필요({', '.join(sorted(set(miss)))})")
+        return (mod, "PASS" if r.returncode == 0 else "FAIL", "" if r.returncode == 0 else out[-1500:])
+
+    # 사례는 서로 다른 자식 프로세스라 함께 돌림(쓸 수 있는 CPU 수, 많아도 8개) — map은 순서를 지켜 표는 그대로
+    for mod, _ in cases:  # 덮기 파일 캐시(_CASE_ENVS)를 먼저 채움 — 스레드가 같은 파일을 두 번 만들지 않게
+        case_env(mod)
+    with ThreadPoolExecutor(max_workers=_selftest_workers()) as pool:
+        rows += pool.map(run_case, cases)
     fails = [name for name, status, _ in rows if status == "FAIL"]
     skips = sum(1 for _, status, _ in rows if status == "SKIP")
     for name, status, detail in rows:
@@ -1207,7 +1157,7 @@ def selftest(a):
 # 이 이미지에 있는 것만(find_spec, selftest와 같은 감지) 실제로 돌려 사람이 읽는 요약을 남긴다 — "실문서 전에
 # 와이어링 점검"(샘플은 이미지 안에 안 넣는다, 운영자가 서버에서 폴더를 직접 줌). 지금은 parse만 실제로 문서를
 # 읽는다(structure·load·search는 대표 파싱 결과(_rep)가 있어야 돌아 raw 문서만으로는 못 함 — 이미 있는 그
-# 모듈들의 --selftest가 와이어링은 따로 확인) → skipped: structure·load·search의 파일별 처리, 필요해지면
+# 모듈들의 시험(tests/)이 와이어링은 따로 확인) → skipped: structure·load·search의 파일별 처리, 필요해지면
 # parse로 만든 _rep를 같은 실행에서 이어 쓰게(예: --src가 parse 이미지의 output/parse/_rep를 가리킬 때) 확장.
 def _parse_engine_needs_endpoint(engine):
     """registry.missing_env와 같은 자리(REQUIRES_ENV)를 보되, 지금 비어 있는지가 아니라 "애초에 모델 엔드포인트가
@@ -1374,7 +1324,6 @@ def main(argv=None):
         p.add_argument("--src", default=src)
         p.add_argument("--procs", default=_default_procs(), help="CPU 엔진 프로세스 수 · auto = CPU·메모리(cgroup) 기준")
         p.add_argument("--skip-parse", action="store_true", help="파싱은 이미 했으면 건너뜀")
-        p.add_argument("--phases", default=None, help="돌릴 phase(기본 PARSE_PHASES 또는 1,2 — phase 3는 시간 날 때 --phases 3)")
         if name != "run-stack":
             p.add_argument("--engines", default="", help="비우면 핵심 엔진(registry.CORE) · all = 전부 · candidates = stack.json 선정+후보")
             p.add_argument("--top", default="4")
@@ -1382,10 +1331,9 @@ def main(argv=None):
             p.add_argument("--pg", action="store_true", help="pgvector에 배포·적재까지(지정 없어도 Docker pgvector가 떠 있으면 기본)")
             p.add_argument("--local", action="store_true", help="pgvector가 떠 있어도 로컬 묶음까지만")
             p.add_argument("--replace", action="store_true")
-            p.add_argument("--no-prune", action="store_true", help="삭제·바뀐 원본의 옛 기록을 PostgreSQL에서 지우지 않음")
+            p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
             p.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
-    p = sub.add_parser("night", help="새벽 파싱 배치(GPU 모델 API만, LLM 없음, 마감 시각에 멈추고 다음 밤에 이어 감)")
-    p.add_argument("--phases", default=None, help="돌릴 phase(기본 PARSE_PHASES 또는 1,2 — phase 3는 시간 날 때 --phases 3)")
+    p = sub.add_parser("night", help="새벽 파싱 배치(GPU 모델 API만, LLM 없음, 마감 시각에 멈춤 — 다음 밤은 문서 대장 기준으로 다시 고름)")
     p.add_argument("--src", default=src)
     p.add_argument(
         "--source",
@@ -1397,20 +1345,19 @@ def main(argv=None):
     p.add_argument("--engines", default="", help="비우면 stack.json 선정 엔진 + 후보(candidates)")
     p.add_argument("--deadline", default=pc.cfg().night.deadline)
     p.add_argument("--procs", default=_default_procs(), help="CPU 엔진 프로세스 수 · auto = CPU·메모리(cgroup) 기준(common/resources.py)")
-    p.add_argument("--workers", default=_default_workers(), help="phase 3 VLM 동시 문서 수")
+    p.add_argument("--workers", default=_default_workers(), help="동시 처리 문서 수(문서 안 엔진들은 늘 동시에)")
     p.add_argument("--vlm-concurrency", type=int, default=pc.cfg().night.vlm_concurrency, help="문서 하나의 쪽 동시 요청 수")
     p.add_argument(
         "--no-structure",
         action="store_true",
-        help="파싱+publish만(기본은 파싱 뒤 대표 파싱·publish·구조화·임베딩(API) → PostgreSQL·OV 적재까지)",
+        help="파싱+publish만(기본은 파싱 뒤 대표 파싱·publish·구조화·임베딩(API) → PostgreSQL 적재까지)",
     )
     p.add_argument("--no-publish", action="store_true", help="OS+EDW publish 건너뜀 (기본: 대표 파싱 직후 실행)")
-    p.add_argument("--no-ov", action="store_true", help="OpenViking 적재 건너뜀 (기본: PG 적재 후 실행, OV_FEATURES에 ingest 필요)")
     p.add_argument("--pg", action="store_true", help="구조화 뒤 pgvector 적재까지(지정 없어도 Docker pgvector가 떠 있으면 기본)")
     p.add_argument("--local", action="store_true", help="pgvector가 떠 있어도 로컬 묶음까지만")
-    p.add_argument("--no-prune", action="store_true", help="삭제·바뀐 원본의 옛 기록을 PostgreSQL에서 지우지 않음")
+    p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
     for name, hlp in (
-        ("parse", "파싱 모듈 1회(트리거): phase → 채점 → 대표 결과 → 끝 표시 · 임베딩·DB 없음"),
+        ("parse", "파싱 모듈 1회(트리거): 파싱 → 채점 → 대표 결과 → 끝 표시 · 임베딩·DB 없음"),
         ("structure", "구조화 모듈 1회(트리거): 대표 결과 → 청킹·임베딩·그래프 묶음 · 새 파싱 결과 없으면 건너뜀"),
         ("load", "적재 모듈 1회(트리거): 묶음 → PostgreSQL(pgvector) · 새 묶음 없으면 건너뜀"),
     ):
@@ -1434,7 +1381,6 @@ def main(argv=None):
                 help="test = 대상이 50건 이상이면 파일 형식별 5건씩만(TEST_MIN_DOCS·TEST_PER_TYPE) · prod = 전부",
             )
             p.add_argument("--engines", default="")
-            p.add_argument("--phases", default=None, help="기본 PARSE_PHASES 또는 1,2")
             p.add_argument("--procs", default=_default_procs())
             p.add_argument("--workers", default=_default_workers())
             p.add_argument("--vlm-concurrency", type=int, default=pc.cfg().night.vlm_concurrency)
@@ -1448,7 +1394,7 @@ def main(argv=None):
             p.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
         if name == "load":
             p.add_argument("--replace", action="store_true")
-            p.add_argument("--no-prune", action="store_true")
+            p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
     p = sub.add_parser("set-stack")
     p.add_argument("--from-selection", action="store_true")
     p.add_argument("--parse", help='".pdf_text=pymupdf,pdfplumber;.docx=office;…"')

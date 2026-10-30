@@ -24,7 +24,6 @@ pymupdf parser 등)으로 쪼개 쪽마다 맞는 참고 글을 건넨다.
   건너뜀. 그 밖(xlsx·pptx)은 건너뛰고 review.csv에 'PDF로 저장해 다시' 표시.
 비용: 쪽마다 VLM 1회(캐시 재사용) · GOLD_DRAFT_MAX_PAGES(기본 30)로 문서당 쪽 상한 · 유료 외부 모델이면 LLM_MAX_CALLS·LLM_BUDGET_USD 함께.
 사용: python -m pipeline.eval.gold_draft --src <원본 폴더> [--out output/gold_draft] [--with-parse output/parse]
-      python -m pipeline.eval.gold_draft --selftest   (VLM 대역 — 네트워크·캐시 없음)
 """
 
 import argparse
@@ -33,6 +32,7 @@ import json
 import sys
 from pathlib import Path
 
+from common.ai.guard import fake_llm
 from common.config import settings as C  # S7c — 설정 객체(common 칸: VLM_*·LLM_FAKE)
 from common.core.console import utf8_stdout
 from pipeline import config as pc  # S7c — 설정 객체(pipeline 칸: VLM_DEADLINE·GOLD_DRAFT_*)
@@ -159,7 +159,7 @@ def _vlm_gold(img_bytes, ref_text, source=False):
     )
     prompt_text = p_gold + ref_block + _tail("gold_draft")
     combo_sha = V.sha(img_bytes + ref_block.encode("utf-8", "ignore"))  # 참고 글이 열쇠에 섞임 — 파싱이 바뀌면 새 캐시
-    if C.cfg().dev.llm_fake:  # S7c — 설정 객체(옛 env == "1") · 네트워크·캐시 0 모의 응답(경로 연기 시험 — c0 10-14)
+    if fake_llm():  # S7c — 설정 객체(옛 env == "1") · 네트워크·캐시 0 모의 응답(경로 연기 시험 — c0 10-14)
         from common.ai.llm import fake_reply
 
         text, u = fake_reply([{"role": "user", "content": [{"type": "text", "text": prompt_text}]}])
@@ -252,7 +252,7 @@ def _vlm_check_mermaid(img_bytes, nodes):
     p_chk = _template("mermaid_check", "check")
     block = "\n\n[단계 이름]\n" + "\n".join(f"- {n}" for n in nodes)
     prompt_text = p_chk + block + "\n\n" + _tail("mermaid_check")
-    if C.cfg().dev.llm_fake:  # S7c — 설정 객체(옛 env == "1") · 네트워크·캐시 0 모의 응답(경로 연기 시험 — c0 10-14)
+    if fake_llm():  # S7c — 설정 객체(옛 env == "1") · 네트워크·캐시 0 모의 응답(경로 연기 시험 — c0 10-14)
         from common.ai.llm import fake_reply
 
         text, u = fake_reply([{"role": "user", "content": [{"type": "text", "text": prompt_text}]}])

@@ -5,13 +5,12 @@
   python cli/index.py id   <설정.json> ...                                 # index_id만 출력
   python cli/index.py build --conf a.json [--conf b.json] [--parse-dir output/parse] [--src output/prepared] [--pg] [--force]
   python cli/index.py list                                               # 완료된 색인(index.json) 목록
-  python cli/index.py --selftest
 
 결과: INDEX_ROOT(기본 dev/out/index)/<index_id>/bundle/ + index.json(마지막에 씀 = 완료 표시 — 없으면 MCP가 안 씀).
 index_id = 설정만의 지문(PG 스키마 이름이 안정). 다시 지을지는 따로 '입력 지문'(index.json inputs = _rep/index.json · 용어 사전
 GLOSSARY_DIR · 고객 명부 CLIENT_ROSTER · stack.json · common 지문 · modules/structure 코드 지문)으로 판정 — 하나라도 바뀌면 --force 없이도 다시 빌드.
 같은 index_id 동시 빌드는 INDEX_ROOT/<id>.lock(O_EXCL)으로 막음 — 이미 빌드 중이면 종료 코드 75, INDEX_LOCK_STALE_SEC(기본 6시간) 지난 잠금은 회수.
---pg면 PG 스키마 <PG_SCHEMA>_<index_id>에 deploy·load(--prune). 설정이 없으면 이 명령을 안 씀 — 기본 색인은 pipeline.py 그대로.
+--pg면 PG 스키마 <PG_SCHEMA>_<index_id>에 deploy·load --replace(묶음 문서는 고치고, 묶음에 없는 문서는 안 지움 — pl-13). 설정이 없으면 이 명령을 안 씀 — 기본 색인은 pipeline.py 그대로.
 종료 코드: 2 설정 오류 · 3 인계 폴더 계약 위반·dim 불일치 · 5 임베딩 연결 없음(api)·임베딩 없는 묶음의 --pg · 75 같은 색인 빌드 중."""
 
 import argparse
@@ -97,11 +96,18 @@ class _lock:
 
 def _build_locked(conf, iid, a):
     rep = Path(a.parse_dir) / "_rep"
-    if not a.stack:  # S8b — 엔진 구성 활성 판의 사본(넘겨받은 것 — 없으면 여기서: 서버 판 표·PC 파일)
+    stack_args = ["--stack", a.stack]
+    if a.stack:  # 엔진 구성 파일(PC 실험·시험 — 옛 사본과 같은 꼴)
+        if not Path(a.stack).is_file():
+            raise SystemExit(f"[index] --stack 파일 없음: {a.stack}")
+        stack_bytes = Path(a.stack).read_bytes()
+    else:  # pl-32 — 넘겨받은 판(STACK_VERSION), 없으면 여기서(서버 판 표·PC 파일)
         from pipeline import stackcfg
 
-        a.stack = str(stackcfg.current(Path(a.parse_dir).parent)[0])
-    inputs = ICS.inputs(rep, a.stack)  # 재빌드 판정용 입력 지문(_rep·사전·명부·stack·common·구조화 코드) — index_id와 별개
+        st = stackcfg.current()
+        stack_bytes = stackcfg.snapshot_bytes(st)
+        stack_args = [] if st.version_id is None else ["--stack-version", str(st.version_id)]
+    inputs = ICS.inputs(rep, stack_bytes)  # 재빌드 판정용 입력 지문(_rep·사전·명부·stack·common·구조화 코드) — index_id와 별개
     done = IC.info(iid)
     if done and done.get("inputs") == inputs and bool(done.get("pg_schema")) == a.pg and not a.force:
         print(f"[index] {iid} 이미 있음(입력 지문 같음) — 건너뜀(--force로 다시)", flush=True)
@@ -142,8 +148,7 @@ def _build_locked(conf, iid, a):
             conf["summary"],
             "--chunk",
             conf["chunker"],
-            "--stack",
-            a.stack,
+            *stack_args,
             "--out",
             bundle,
             *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
@@ -161,7 +166,9 @@ def _build_locked(conf, iid, a):
         schema = ICS.pg_schema(iid)
         penv = settings_env(env, PG_SCHEMA=schema)  # 색인 스키마 — 덮기 파일(S7e3 B-1: env dict의 설정 이름은 자식이 안 읽음)
         _run("pipeline.load.pgvector_load", ["deploy", "--bundle", bundle], penv)
-        _run("pipeline.load.pgvector_load", ["load", "--bundle", bundle, "--prune"], penv)
+        _run(
+            "pipeline.load.pgvector_load", ["load", "--bundle", bundle, "--replace"], penv
+        )  # pl-13 — 다시 빌드면 같은 문서도 새 묶음으로 고침(안 붙이면 건너뛰어 옛 청크가 남음)
     info = {
         "index_id": iid,
         "conf": conf,
@@ -190,7 +197,7 @@ def main(argv=None):
     b.add_argument("--conf", action="append", required=True, help="색인 설정 JSON(여러 번 — 같은 _rep에서 차례로)")
     b.add_argument("--parse-dir", default="output/parse")
     b.add_argument("--src", default="output/prepared")
-    b.add_argument("--stack", default=None, help="엔진 구성 파일(비우면 활성 판의 사본 — S8b)")
+    b.add_argument("--stack", default=None, help="엔진 구성 파일(PC 실험·시험 — 비우면 넘겨받은 판·활성 판, pl-32)")
     b.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
     b.add_argument("--pg", action="store_true", help="PostgreSQL 스키마 <PG_SCHEMA>_<index_id>에 적재")
     b.add_argument("--force", action="store_true")

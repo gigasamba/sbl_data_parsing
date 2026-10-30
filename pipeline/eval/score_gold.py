@@ -20,7 +20,6 @@
   --plain-names면 원래 이름) · names.json(해시 ↔ 이름, 서버에만 둘 것).
 주의: rapidfuzz가 없으면 parse_qa의 줄 비교가 difflib 대체로 느려져 큰 문서에서 멈춘 것처럼 보임(서버 실측) → 없으면 읽기 순서는 건너뜀.
 사용: python cli/score_gold.py --gold <정답 폴더> [--parse output/parse] [--src output/prepared] [--out output/eval/gold_score] [--plain-names]
-      python cli/score_gold.py --selftest
 """
 
 import argparse
@@ -290,13 +289,13 @@ def table_struct(gold_text, out_text, judge=None):
 
 
 def mermaid_recall(gold_text, out_text):
-    """TS1 c) — 정답 ```mermaid``` 블록 vs 출력 ```mermaid``` 블록의 edge 재현율 — diagram_edges_score.edge_score ·
+    """TS1 c) — 정답 ```mermaid``` 블록 vs 출력 ```mermaid``` 블록의 edge 재현율(방향까지 맞은 edge ÷ 정답 edge — 옛 diagram_edges_score.edge_score의 recall, 10-30 그 채점기를 지우며 여기로) ·
     gold_draft.parse_mermaid 재사용(같은 패키지 pipeline.eval 안, 작은 접착만). 정답에 mermaid 블록이
     없으면 None(평균에서 빠짐)."""
     import re
 
-    from pipeline.eval.diagram_edges_score import edge_score
     from pipeline.eval.gold_draft import MERMAID_BLOCK_RX, parse_mermaid
+    from pipeline.transform.figures.diagram_edges import norm_node
 
     gold_blocks = re.findall(MERMAID_BLOCK_RX, gold_text or "", re.S)
     if not gold_blocks:
@@ -304,7 +303,12 @@ def mermaid_recall(gold_text, out_text):
     gold_edges = [e for b in gold_blocks for e in parse_mermaid(b)]
     out_blocks = re.findall(MERMAID_BLOCK_RX, out_text or "", re.S)
     out_edges = [e for b in out_blocks for e in parse_mermaid(b)]
-    return edge_score(out_edges, gold_edges)["recall"]
+
+    def pairs(edges):
+        return {(norm_node(e.get("from")), norm_node(e.get("to"))) for e in edges if e.get("from") and e.get("to")}
+
+    gold = pairs(gold_edges)
+    return round(len(pairs(out_edges) & gold) / len(gold), 4) if gold else 1.0
 
 
 def _table_judge_fn():

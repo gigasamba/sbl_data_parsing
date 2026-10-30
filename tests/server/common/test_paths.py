@@ -3,12 +3,10 @@
 import os
 from pathlib import Path
 
-import common.core.paths as M
 from common.core.paths import (
     APP_ROOT,
     CRITERIA_FILE,
     DEPLOY_ROOT,
-    E2E_ROOT,
     GLOSSARY_ROOT,
     LOCAL_RUN,
     PKG_ROOT,
@@ -31,12 +29,6 @@ def _demo():
 
     from common.config.settings import COMMON
 
-    with COMMON.env(EVAL_SETS_DIR=None):
-        assert M.__getattr__("EVAL_SETS_DIR") == PROJ_ROOT / "valid_env" / "unstructured"
-    with COMMON.env(EVAL_SETS_DIR=""):
-        assert M.__getattr__("EVAL_SETS_DIR") == PROJ_ROOT / "valid_env" / "unstructured"  # 빈 값 = 기본(옛 `or`)
-    with COMMON.env(EVAL_SETS_DIR="x/sets"):
-        assert M.__getattr__("EVAL_SETS_DIR") == Path("x/sets")
     assert DEPLOY_ROOT == (PROJ_ROOT if LOCAL_RUN else PROJ_ROOT / "deploy") and PKG_ROOT == DEPLOY_ROOT / "common"
     assert APP_ROOT == PROJ_ROOT
     env = child_env({"X_DEMO": "1"})
@@ -83,12 +75,8 @@ def _demo():
     # S2 — resources/prompts/는 모든 이미지에 폴더째 있으므로 앱별 묶음도 이미지 구분 없이 확인
     # (research_judge는 검색 전용이지만 agent_prompts·adk.py selftest가 모든 이미지에서 씀 — D-019 ④로 mcp/)
     assert resolve_agent_dir("research_judge") == RES_ROOT / "prompts" / "mcp" / "research_judge"
-    assert resolve_agent_dir("value_choice") == RES_ROOT / "prompts" / "common" / "value_choice"
-    assert resolve_agent_dir("query_decompose") == RES_ROOT / "prompts" / "mcp" / "query_decompose"  # S11 — research_check 삭제(D-025)
-    assert resolve_agent_dir("parse_agent") == RES_ROOT / "prompts" / "pipeline" / "parse_agent"
-    assert resolve_agent_dir("wiki_term_draft") == RES_ROOT / "prompts" / "pipeline" / "wiki_term_draft"
-    if E2E_ROOT.is_dir():  # S6a — PC 전용 validation/e2e/(이미지에는 없음 — D-019 ③)
-        assert resolve_agent_dir("triple_extract") == E2E_ROOT / "triple_extract"
+    assert resolve_agent_dir("doc_summary") == RES_ROOT / "prompts" / "common" / "doc_summary"
+    assert resolve_agent_dir("agg_llm_route") == RES_ROOT / "prompts" / "mcp" / "agg_llm_route"  # S11 — research_check 삭제(D-025)
     assert (RES_ROOT / "prompts" / "common" / "_common" / "tail.md").is_file() and CRITERIA_FILE.is_file() and TEMPLATES_DIR.is_dir()
     assert STACK_FILE.is_file() and (GLOSSARY_ROOT / "domain_terms.csv").is_file()
     if (PROJ_ROOT / "dev_tools").is_dir():  # 저장소 체크아웃에서만(이미지엔 dev_tools 없음)

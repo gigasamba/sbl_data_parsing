@@ -7,8 +7,7 @@
 - **비용 관문(2026-10, OpenRouter 85% 소진 이후)**: LLM_FAKE=1이면 네트워크 호출 없이 모의 응답(마지막 user 메시지 앞 200자+"[FAKE]") —
   캐시에 안 쓰고 usage()에 fake_calls·prompt_chars만 쌈(추정기가 이걸로 호출 수·글자 수를 모음). 실호출은 LLM_BUDGET_USD로 상한.
 - **외부 전송 가드(DONT 13, 여기 한 곳에서 강제)**: LLM_BASE_URL이 내부 주소(사설 IP·localhost·.local/.internal/.corp·단일 이름)가 아니면
-  `allow_external=True` **그리고** 환경변수 LLM_SYNTHETIC_TRUTH가 가상 코퍼스 정답(dev_tools/synthetic_data_gen/make_corpus.py가 만든 truth.json — "_meta" 표식)을
-  가리킬 때만 호출한다. 도구는 --truth를 받으면 이 변수를 설정한다. 서버(실데이터)에서는 정답 파일이 없으므로 외부 호출이 불가능하다.
+  `allow_external=True` **그리고** RUN_ENV=local일 때만 호출한다(서버 dev·prd는 외부 호출 불가).
 - 호출·토큰 수는 usage()로 — 도구가 결과 파일에 함께 남긴다.
 - **빈 응답 안전망(RV12, 2026-10-09 재순위 실측 — glm-5.2가 생각에 max_tokens를 다 써 ~45% 빈 응답)**: 응답이 비어 있고(공백만
   포함) 토큰을 썼다면(completion_tokens>0 — 생각이 출력 상한을 다 썼다는 신호, finish_reason을 3개 전송 경로 모두에서
@@ -54,13 +53,11 @@ def configured():
     return bool(cfg().models.llm.base_url and cfg().models.llm.model)
 
 
-from common.ai.guard import is_internal, require_internal, run_env_block, synthetic_ok  # noqa: E402,F401 — 내부망 확인은 common 한 곳
-
-_synthetic_ok = synthetic_ok  # 두 번째 잠금은 common/guard 한 곳
+from common.ai.guard import external_ok, fake_llm, is_internal, require_internal, run_env_block  # noqa: E402,F401 — 내부망 확인은 common 한 곳
 
 # CT1(10-16) — models.py 병합(역할별 모델 프로필 조회, agent_platform.config.ModelProfile 재사용 — 사용자 결정 2026-10-06).
-# 설정 객체에서만 읽음(S7b — 호출 시점 cfg(), 전환 기간엔 env로 만든 객체라 테스트가 env를 바꾸면 반영). 기존 LLM_BASE_URL·VLM_BASE_URL·VLM_MODEL_ALT·EMBED_* 등은 그대로 하위 호환.
-_ROLE_PREFIX = {"llm": "LLM", "vlm": "VLM", "ocrvlm": "OCRVLM", "embed": "EMBED"}
+# 설정 객체에서만 읽음(S7b — 호출 시점 cfg(), 전환 기간엔 env로 만든 객체라 테스트가 env를 바꾸면 반영). 기존 LLM_BASE_URL·VLM_BASE_URL·EMBED_* 등은 그대로 하위 호환.
+_ROLE_PREFIX = {"llm": "LLM", "vlm": "VLM", "embed": "EMBED"}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -85,8 +82,7 @@ class ModelProfile:
 
 
 def profile(role):
-    """역할 → ModelProfile. vlm_judge는 VLM_MODEL_ALT가 있으면 그 모델, 주소·키는 VLM_*
-    (AD22 전제 — 지금은 judge용 다른 VLM 서버를 못 씀, 없으면 VLM_MODEL과 같음).
+    """역할 → ModelProfile. vlm_judge는 VLM_MODEL·VLM_*(판정 전용 모델 칸 VLM_MODEL_ALT는 10-30 지움 — pl-31).
     agent_platform import는 여기서 늦게(지연) — structure·retrieval 이미지는 agent_platform 없이도 이 모듈을
     import할 수 있어야 한다(profile()을 실제로 부르는 경로만 agent_platform이 필요, MOD 10-14)."""
     # TODO: 리팩토링 후 구현 필요
@@ -99,7 +95,7 @@ def profile(role):
     if role == "vlm_judge":
         prefix = "VLM"
         v = cfg().models.vlm
-        base, model, key = v.base_url, v.model_alt or v.model, reveal(v.api_key)
+        base, model, key = v.base_url, v.model, reveal(v.api_key)
     else:
         prefix = _ROLE_PREFIX[role]
         base, model = by_env(f"{prefix}_BASE_URL"), by_env(f"{prefix}_MODEL")  # key_env는 env 이름 글자 그대로(아래)
@@ -307,7 +303,7 @@ def chat(messages, temperature=0.0, max_tokens=1024, json_mode=False, allow_exte
     cli/check_modules.py 정적 검사). 캐시 열쇠(messages·temperature 등)는 agent와 무관 — 요청 본문만 바뀐다.
     빈 응답 안전망(RV12, 기본 켬·LLM_EMPTY_RETRY=0으로 끔) — _empty_truncated()면 max_tokens×4(LLM_EMPTY_RETRY_MAX
     상한, 기본 8000)로 딱 한 번 재요청, 두 호출 다 공유 장부(_do_call)를 거쳐 예산·호출 수에 그대로 반영된다."""
-    if cfg().dev.llm_fake:
+    if fake_llm():
         last_user = next((m.get("content") or "" for m in reversed(messages) if m.get("role") == "user"), "")
         pc = sum(len(m.get("content") or "") for m in messages)
         record_fake_call(pc)
@@ -315,10 +311,11 @@ def chat(messages, temperature=0.0, max_tokens=1024, json_mode=False, allow_exte
     base, model = cfg().models.llm.base_url, cfg().models.llm.model
     if not (base and model):
         raise LLMUnavailable("LLM_BASE_URL·LLM_MODEL 미설정(.env)")
-    if not is_internal(base) and not (allow_external and _synthetic_ok()):
+    if not is_internal(base) and not external_ok(allow_external):
+        why = run_env_block()
         raise LLMUnavailable(
             f"외부 LLM 주소({urllib.parse.urlparse(base).hostname}) — 회사 문서는 내부망 LLM만(DONT 13). "
-            "개발 PC 가상 문서 실험이면 도구의 --allow-external" + (f" ({run_env_block()})" if run_env_block() else "")
+            "개발 PC 가상 문서 실험이면 도구의 --allow-external" + (f" ({why})" if why else "")
         )
     key = cache_key(model, messages, temperature, max_tokens, json_mode)
     cp = _cache_path(key)

@@ -31,7 +31,6 @@ parts.embed=="bge-m3"·parts.dataset(또는 pool=true)로 가장 최근 것을 �
       --pool --url ... --store-root <...>     # 풀 묶음을 가리키는 서버에 여러 세트를 한 번에(문서 이름은 자동 치환)
   python cli/mcp_eval.py --set synth-4clients --negative-from synth-terms-hard --min-score none,0,0.02,0.05,0.1 \
       --url ... --store-root <...>            # (서버는 SEARCH_EVIDENCE_GATE=1로 — 로컬 묶음 score는 게이트 켤 때만 응답에 실림) R3 문턱 보정표 + negative 정탐·오탐 + synth-4clients 집계 문항 hit
-  python cli/mcp_eval.py --selftest                                                              # 채점 재사용 스텁(서버 없이)
 """
 
 import argparse
@@ -192,8 +191,6 @@ METHODS = ["vector", "bm25", "id"]  # 범위 축소(그래프·image·openviking
 # 확인. 공유 settings.yaml(서버와 같은 파일 — run_tool mcp_eval)에 적힌 값은 서버도 읽으므로 넣지 않는다(VS7e2 R-11).
 SERVER_ONLY_ENV = (
     "MCP_METHODS",
-    "MCP_DECOMPOSE",
-    "SEARCH_RERANK",
     "SEARCH_RECENCY",
     "QUERY_EXPAND",
     "SEARCH_EVIDENCE_GATE",
@@ -933,7 +930,7 @@ def main():
     if sets and a.questions:
         ap.error("--set과 --questions는 동시 사용 금지(둘 중 하나)")
     if not sets and not a.questions:
-        ap.error("--set 또는 --questions 필요(또는 --selftest)")
+        ap.error("--set 또는 --questions 필요")
     if a.show_bundle:
         if not sets:
             ap.error("--show-bundle은 --set과 함께만")

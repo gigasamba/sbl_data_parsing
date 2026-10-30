@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from common.core.fingerprint import EXCLUDED_FILES, HANDOFF_FILES, _unclassified, fingerprint
+from common.core.fingerprint import EXCLUDED_FILES, HANDOFF_FILES, _unclassified, fingerprint, pipeline_version
 
 
 def selftest():
@@ -52,3 +52,30 @@ def selftest():
 
 def test_main():  # 옛 `if __name__ == "__main__":` 의 --selftest 갈래
     selftest()
+
+
+def test_version_file():
+    """저장소 루트 VERSION(이미지 /app/deploy/VERSION) — 두 이미지 공통 SemVer(D-036). pipeline_version()이 그 값을 낸다."""
+    root = Path(__file__).resolve().parents[3]
+    v = (root / "VERSION").read_text(encoding="utf-8").strip()
+    parts = v.split(".")
+    assert len(parts) == 3 and all(p.isdigit() for p in parts), v
+    if not (root / "common" / "PATCH_VERSION").exists():  # 오버레이 패치가 올라가 있으면 그 버전이 더 높을 수 있음
+        assert pipeline_version() == v
+
+
+def test_pipeline_version_picks_higher():
+    """VERSION과 PATCH_VERSION 중 높은 버전 — 오버레이 패치(0.1.1)는 이미지(0.1.0)를 이기고, 새 이미지(0.2.0) 뒤 남은 옛 패치는 지지 않는다."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        common = Path(td) / "common"
+        common.mkdir()
+        (Path(td) / "VERSION").write_text("0.1.0\n", encoding="utf-8")
+        assert pipeline_version(common) == "0.1.0"
+        (common / "PATCH_VERSION").write_text("0.1.1\n", encoding="utf-8")
+        assert pipeline_version(common) == "0.1.1"
+        (Path(td) / "VERSION").write_text("0.2.0\n", encoding="utf-8")
+        assert pipeline_version(common) == "0.2.0"
+        (common / "PATCH_VERSION").write_text("20261016-e305b14+patch-abc1234\n", encoding="utf-8")  # 옛 꼴은 무시
+        assert pipeline_version(common) == "0.2.0"

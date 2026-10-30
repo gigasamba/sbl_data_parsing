@@ -35,11 +35,11 @@ from pipeline.transform.figures.vlm_page import (
 
 
 def _selftest_scan_wide():
-    """AD31(남은 것, 10-08) — ocr_gt_text·rotated·vectors 세 새 이유: page_signals·rotation_info를 흉내 내
+    """AD31(남은 것, 10-08) — rotated·vectors 이유(ocr_gt_text는 pl-34 10-30에 지움 — 옛 캐시의 ocr_chars는 안 봄): page_signals·rotation_info를 흉내 내
     결정 로직만 확인(실 PDF 렌더·OCR 불필요, 빠름 — 그 둘의 실제 계산은 위 selftest의 다른 블록이 이미 확인)."""
     orig_ps, orig_rot = M.page_signals, M.rotation_info
     try:
-        sig = [  # 1쪽 보통 글자(아무 이유도 안 걸림) · 2쪽 렌더 OCR≫글자층 · 3쪽 회전됨 · 4쪽 벡터 도형 군집 많음
+        sig = [  # 1쪽 보통 글자(아무 이유도 안 걸림) · 2쪽 옛 캐시의 렌더 OCR≫글자층(이제 안 걸림) · 3쪽 회전됨 · 4쪽 벡터 도형 군집 많음
             {
                 "page": 1,
                 "chars": 500,
@@ -88,15 +88,13 @@ def _selftest_scan_wide():
         M.page_signals = lambda p: sig  # selftest 흉내(아래서 원래 함수로 되돌림)
         M.rotation_info = lambda p: {3: {"angle": 90, "orig_sha256": "x"}}
         got = scan_pages_detail("fake.pdf")
-        assert got == {2: "ocr_gt_text", 3: "rotated", 4: "vectors"}, got
+        assert got == {3: "rotated", 4: "vectors"}, got  # pl-34 — 옛 캐시에 ocr_chars가 남아 있어도 ocr_gt_text 없음
 
-        with pc.PIPE.env(
-            PARSE_OCR_GT_MAX="0", PARSE_ROTATED_MAX="0", PARSE_VECTORS_MAX="0"
-        ):  # 끔 — 셋 다 조건 자체를 안 봄(S7c — 설정 객체만 바꿔 끼움)
+        with pc.PIPE.env(PARSE_ROTATED_MAX="0", PARSE_VECTORS_MAX="0"):  # 끔 — 둘 다 조건 자체를 안 봄(S7c — 설정 객체만 바꿔 끼움)
             assert scan_pages_detail("fake.pdf") == {}
     finally:
         M.page_signals, M.rotation_info = orig_ps, orig_rot
-    print("[selftest] AD31(남은 것) — ocr_gt_text·rotated·vectors 세 새 이유 + 상한 env=0으로 끔(바이트 동일) 통과")
+    print("[selftest] AD31(남은 것) — rotated·vectors 이유 + 상한 env=0으로 끔(바이트 동일) · 옛 ocr_chars 무시 통과")
 
 
 def selftest():
@@ -193,7 +191,7 @@ def selftest():
             assert sig[0]["chars"] >= PAGE_SCAN_CHARS and sig[0]["image_area_ratio"] == 0.0
             assert sig[1]["chars"] < PAGE_SCAN_CHARS and sig[1]["image_area_ratio"] >= PAGE_SCAN_AREA, sig[1]  # 2쪽 = 스캔 신호
             assert sig[2]["chars"] >= PAGE_SCAN_CHARS
-            assert all(r["ocr_chars"] is None for r in sig)  # PARSE_SIGNAL_OCR 기본 꺼짐 — 비용 큰 렌더 OCR 생략
+            assert all("ocr_chars" not in r for r in sig)  # 렌더 OCR 신호는 pl-34에 지움
             assert _signals_path(sha(mixed.read_bytes())).exists()  # 한 번 계산해 캐시 — D2·D4·D6이 다시 읽음
             assert scan_pages(mixed) == [2]
             assert not is_scan(mixed)  # 문서 전체는 스캔 아님(1·3쪽 글자 있음, 기존 is_scan 그대로)
@@ -274,7 +272,7 @@ def selftest():
             assert sig[0]["hidden_ratio"] < PAGE_HIDDEN_RATIO and sig[0]["image_area_ratio"] < PAGE_HIDDEN_AREA  # 쪽 전체 비율로는 못 잡음
             assert sig[0]["hidden_over_image"] is True, sig[0]  # 국소 겹침만 잡음
             assert scan_pages_detail(mismatch_doc) == {1: "hidden_overlap"}
-            assert scan_pages(mismatch_doc) == [1]  # _ocr_fallback_needed(run_all.py)가 그대로 재사용
+            assert scan_pages(mismatch_doc) == [1]  # 쪽 VLM 대상(page_targets)이 그대로 재사용
             with pc.PIPE.env(PARSE_HIDDEN_OVERLAP_MAX="0"):  # 끔 — 이전과 바이트 동일(이 조건 자체를 안 봄)
                 assert scan_pages_detail(mismatch_doc) == {}
         finally:
@@ -299,6 +297,17 @@ def selftest():
     assert (
         PAGE_SIGNALS_VERSION == "v3"
     )  # 캐시 버전 — 판정 바뀜(AD31·AD47, 이유 추가는 버전 영향 없음) · 10-08 세 새 이유는 기존 필드만 다시 읽어 버전 영향 없음
+
+
+def test_pick_pages():
+    """10-29 — 쪽 VLM 대상 쪽(순수 함수): 전체 스캔이면 전부, 글자 PDF면 스캔 신호 쪽만, cap으로 앞에서 자름."""
+    from pipeline.transform.figures.vlm_page import pick_pages
+
+    assert pick_pages(3, True, [], None) == {1, 2, 3}
+    assert pick_pages(3, True, [], 2) == {1, 2}
+    assert pick_pages(0, False, [2, 5], None) == {2, 5}
+    assert pick_pages(0, False, [5, 2, 7], 2) == {5, 2}  # 신호 순서대로 자름
+    assert pick_pages(0, False, [], None) == set()  # 스캔 쪽 없음 — 쪽 VLM 호출 없음
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

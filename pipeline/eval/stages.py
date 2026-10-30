@@ -162,7 +162,7 @@ def tfidf_vectors(texts):
 # 여기에는 모드 등록표만 — graph_mode_ready()가 처음 쓸 때 그 모듈을 importlib로 불러 등록한다(정적 import 없음 — pipeline은
 # validation을 import하지 않음, check_modules). 서버 이미지에는 validation/이 없어 "llm"은 ValueError(그 밖 모드는 그대로).
 GRAPH_MODES: dict = {}  # 모드 이름 → fn(G, chunks) → 지표 추가분(dict) — 등록 모듈이 채움
-_PC_MODES = {"llm": "validation.e2e.graph_llm"}  # PC 전용 모드 → 등록 모듈
+_PC_MODES: dict = {}  # PC 전용 모드 → 등록 모듈 · "llm"(validation/e2e/graph_llm.py)은 10-30 지움(e2-18 — 사용자 grill 11차)
 
 
 def graph_mode_ready(mode):

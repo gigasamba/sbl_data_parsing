@@ -4,7 +4,6 @@
 
 사용: python cli/check_env.py
   VLM_BASE_URL(OpenAI 호환 내부망 주소)·VLM_MODEL을 설정하면 /models 응답과 모델 이름도 확인.
-      python cli/check_env.py --selftest   → requirements 대조 로직만 가짜 파일로 점검
 """
 
 import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settings.pin_env)를 첫 줄에서(S7e2 — 옛 옵션 카탈로그 채우기 자리)
@@ -213,11 +212,10 @@ def main():
     print("\n== 시스템 도구 ==")
     for tool, why in [
         ("java", "OpenDataLoader"),
-        ("tesseract", "Tesseract OCR·unstructured hi_res"),
-        ("pdftoppm", "poppler — unstructured hi_res"),
+        ("tesseract", "Tesseract OCR"),
         ("soffice", "LibreOffice — doc/ppt/hwp 변환"),
         ("gs", "Ghostscript — camelot 선택"),
-        ((pc.cfg().paths.mineru_bin or "mineru"), "MinerU CLI"),
+        ("mineru", "MinerU CLI"),
         ("nvidia-smi", "GPU(선택)"),
     ]:
         line(bool(shutil.which(tool)), tool, why)
@@ -233,7 +231,7 @@ def main():
     else:
         ok_n = 0
         for stack, m in registry.stacks().items():
-            tools = [(pc.cfg().paths.mineru_bin or "mineru") if t == "$MINERU_BIN" else t for t in m.REQUIRES["tools"]]
+            tools = ["mineru" if t == "$MINERU_BIN" else t for t in m.REQUIRES["tools"]]  # MINERU_BIN 칸은 지움(엔진 구성에서 뺀 엔진)
             miss = [x for x in m.REQUIRES["modules"] if importlib.util.find_spec(x) is None] + [t for t in tools if not shutil.which(t)]
             for e in m.ENGINES:
                 miss += [f"{e}: ${v}" for v in registry.missing_env(e)]
@@ -265,13 +263,8 @@ def main():
         ("HF multilingual-e5-small", hf / "models--intfloat--multilingual-e5-small"),
         ("HF multilingual-e5-base", hf / "models--intfloat--multilingual-e5-base"),
         ("HF bge-reranker-v2-m3", hf / "models--BAAI--bge-reranker-v2-m3"),
-        ("HF docling layout", hf / "models--docling-project--docling-layout-heron"),
-        ("docling 모델", home / ".cache" / "docling"),
-        ("marker/surya", home / ".cache" / "datalab"),
         ("EasyOCR ko+en", home / ".EasyOCR"),
         ("PaddleX (PaddleOCR 한국어)", home / ".paddlex"),
-        ("unstructured yolox", hf / "models--unstructuredio--yolo_x_layout"),
-        ("unstructured 표 구조", hf / "models--microsoft--table-transformer-structure-recognition"),
     ]:
         line(p.exists() and any(p.iterdir()), label, str(p))
     line(
@@ -289,11 +282,11 @@ def main():
     )
 
     print(f"\n디스크 여유 {shutil.disk_usage(ROOT).free / 1e9:.0f}GB")
-    print("\n== VLM (qwen_vlm · docling_vlm · marker_llm) ==")
+    print("\n== VLM (qwen_vlm) ==")
     vlm = C.cfg().models.vlm  # S7c — 설정 객체(VLM_BASE_URL·VLM_MODEL·VLM_API_KEY)
     url = vlm.base_url
     if not url:
-        line(False, "VLM_BASE_URL", "미설정 — VLM 엔진 3종은 건너뜀")
+        line(False, "VLM_BASE_URL", "미설정 — VLM 엔진(qwen_vlm)은 건너뜀")
     else:
         try:
             req = urllib.request.Request(url.rstrip("/") + "/models")

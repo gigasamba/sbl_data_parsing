@@ -18,14 +18,14 @@ apply()의 판 이력(doc_registry_seen)·재파싱(OP9 nightly_plan)·변경 �
 어디에도 들어가지 않는다(대장의 마지막 본 날·EDW 상태 열 날짜만 갱신 — apply()의 공용 upsert 경로로 이미 됨).
 
 scan(out_dir) → {doc_key: snapshot}(파일만 읽음, DB 없음) · diff_against(db, observed) → new/changed/touched/
-unchanged/deleted · apply(db, observed, diff, build_id) → upsert(new·changed만 history 추가, deleted는 색인 행
-삭제 없이 status='deleted' + 자동 hide()) · build() = 위 셋 + commit. 결정적: 같은 out_dir 내용이면 같은
+unchanged/deleted · apply(db, observed, diff, build_id) → upsert(new·changed만 history 추가, deleted는 쓰지 않음 —
+pl-12 사용자 10-30, 옛 status='deleted'·자동 hide() 없앰) · build() = 위 셋 + commit. 결정적: 같은 out_dir 내용이면 같은
 observed(딕셔너리 순서·세트 정렬 무관) · 멱등: 다시 build해도 스냅숏이 그대로면 doc_registry_seen에 새 행이
 안 늘어남(last_seen·last_build만 갱신).
 
 OP1(원천 변경·삭제 탐지, 조치는 사람) — hide(db, doc_key, by, reason)·unhide(...)·hidden_set(db) = 검색 제외 집합
-(common/structdb.py REGISTRY_SCHEMA의 doc_hidden, 이력 없이 지금 상태만·감사 필드 by·reason·at). deleted는 apply()가
-자동으로 hide(by="registry:diff") — unhide는 사람(cli/registry.py unhide 또는 직접 호출)만. changed는 hide하지 않음
+(common/structdb.py REGISTRY_SCHEMA의 doc_hidden, 이력 없이 지금 상태만·감사 필드 by·reason·at). 숨김·되살리기는 모두
+사람(pl-12 — 자동 hide 없앰) — unhide는 사람(cli/registry.py unhide 또는 직접 호출)만. changed는 hide하지 않음
 (검색은 그대로, 사람이 재파싱 전까지 옛 내용 서빙 — OP1).
 OP9(야간 증분) — nightly_plan(db, observed, reparse_keys=None) = diff_against 결과를 파싱 대상 결정으로: new(처음
 보는 doc_key) + unchanged인데 아직 성공 못한(status != 'parsed', 반복 실패·'seen' 포함) doc_key는 **매일 다시**
@@ -34,16 +34,8 @@ unchanged이고 이미 성공(status=='parsed')한 doc_key는 뺌(다시 할 필
 doc_key만(기본은 전부 빠짐 — 사람 조치 전까지 자동 재파싱 안 함, OP1) · deleted는 observed에 없어 자동으로 빠짐.
 try_open_db(db_path=None) = 호출자(검색·파싱)가 best-effort로 문서 대장을 열 때 공용 — DOC_REGISTRY=0이거나 연결이
 안 되면 None(필터 없이 전과 동일).
-DET1 Fix2(10-12, 독립 검토 MEDIUM → BLOCK 2차 반영) — 위 "매일 다시"가 끝없이 실패하는 문서를 영원히 재시도하는
-문제: doc_registry.fail_count(apply()가 매 build 갱신 — 파싱 성공 또는 원본 변경이면 0, **실제로 시도됐고(이번
-build의 index.json에 올라옴) 모델 서버 장애가 아닌** 실패만 +1)가 REGISTRY_RETRY_MAX(retry_max(), 새 기능 기본
-켬 — 기본 7일, `=0`이면 무제한=이전 동작)를 넘으면 nightly_plan()이 그 doc_key를 재시도 대상에서 빼고 반환의
-"retry_stopped" 목록에 넣는다(cli/registry.py가 "재시도 중단(n회 실패)"로 보여줌) — changed(원본이 바뀜)는
-fail_count와 무관하게 늘 그대로 재시도(reparse_keys 조건은 그대로). 독립 검토 BLOCK(10-12 2차) — 처음 구현은
-status != 'parsed'이면 무조건 +1 했는데, 그러면 ① PARSE_MAX_NEW로 아직 시도조차 안 된 문서('seen')가 7일 안에
-재시도 중단되고 ② 모델 서버 장애(RV24 vlm_down 등)가 며칠 가면 정상 문서가 대량으로 멈춘다 — status=='failed'
-(scan()이 그 build의 index.json에서 직접 봄)일 때만, 그리고 _is_infra_failure()(index.json "tried"의 엔진별
-error 문자열에 ModelUnavailable·*_down·LLM_MAX_CALLS·연결·시간 초과 신호가 없을 때만 올리도록 고쳤다.
+재시도 횟수 상한(옛 DET1 Fix2 — fail_count·REGISTRY_RETRY_MAX)은 지웠다(사용자 10-30, pl-32): 실패 문서는 성공 기록이
+없으므로 다음 실행에서 늘 다시 시도한다. 실패 이유는 로컬 로그와 EDW ParsingMeta(실패 엔진 칸 — pl-25 D-3)에 남는다.
 
 사용(라이브러리): from common.store import registry as REG ; REG.build(out_dir, db) — CLI는 mcp_server/cli/registry_cli.py(VS3 R-6 — S3 전부터 틀린 import 글자).
 DOC_REGISTRY(기본 켬, =0으로 끔) 게이트는 호출자(cli/registry.py·try_open_db) 몫 — build()·apply()·hide() 자체는
@@ -92,50 +84,10 @@ def _s(v):
     return None if v is None else str(v)
 
 
-# DET1 Fix2 독립 검토 BLOCK 2차(10-12) — "ModelUnavailable" 전체를 신호로 쓰면 common/adk.py가 모델 호출 실패를
-# 전부(미설정·400대 오류·리다이렉트 거부까지) ModelUnavailable로 감싸 던지기 때문에 거의 모든 실패가 "인프라"로
-# 잡혀버린다(과대 포함). 서킷 브레이커·재시도 소진·호출 상한, 이 세 가지 **구체적인 문구**만 인프라로 본다 —
-# 미설정("미설정")·400대·리다이렉트 거부는 일부러 안 건다(문서·설정 문제로 그대로 침).
-_INFRA_DOWN_RE = re.compile(r"_down\)")  # common/adk.py: f"모델 다운({role}_down) — …" (서킷 브레이커)
-_INFRA_RETRY_EXHAUSTED_RE = re.compile(r"모델 호출 실패\(재시도")  # common/adk.py: f"모델 호출 실패(재시도 {n}회): {내부 예외}"
-_INFRA_INNER_ERR_RE = re.compile(
-    r"Connection|Timeout|RateLimit|429|5\d\d", re.I
-)  # 그 안에 감싸인 내부 예외 — 연결·시간 초과·호출 한도(429)·5xx만
-_INFRA_MAX_CALLS_RE = re.compile(r"LLM_MAX_CALLS\s*도달")
-
-
-def _is_infra_error_str(err):
-    """하나의 엔진 시도 error 문자열이 인프라(모델 서버 쪽) 신호인지 — 위 세 구체적 문구만. "ModelUnavailable"
-    타입 이름 자체는 보지 않는다(거의 모든 실패가 그 타입으로 온다 — 과대 포함, 독립 검토 BLOCK). 미설정·400대
-    HTTPError·리다이렉트 거부 메시지는 이 셋 중 어느 것과도 안 겹치므로 그대로 False(= 문서·설정 탓)."""
-    if not err:
-        return False
-    if _INFRA_DOWN_RE.search(err) or _INFRA_MAX_CALLS_RE.search(err):
-        return True
-    return bool(_INFRA_RETRY_EXHAUSTED_RE.search(err) and _INFRA_INNER_ERR_RE.search(err))
-
-
-def _is_infra_failure(tried):
-    """DET1 Fix2 독립 검토 BLOCK(RV24 vlm_down 등 모델 서버 장애 — 며칠 이어지면 정상 문서가 대량으로 재시도
-    중단되던 결함) — 그 문서의 엔진별 시도 기록(index.json "tried", `modules/parse/represent.py tried_of()`가
-    runs.jsonl의 error 문자열을 그대로 옮긴 것) 중 **실패한(error 있는) 엔진 전부**가 _is_infra_error_str()이면
-    True(그 밤의 실패는 문서 내용 문제가 아니므로 apply()가 fail_count를 안 올림) — 독립 검토 BLOCK 2차: 하나라도
-    인프라면 전체를 면제(OR)하던 걸 **전부 인프라일 때만** 면제(AND)로 좁힘(엔진 하나가 진짜 내용 문제로 실패하면
-    그 문서는 세야 함). 실패한 엔진이 하나도 없으면(tried가 비었거나 error가 전부 빈 문자열 — 신호 없음) False
-    — 신호가 없을 땐 전과 같이 보수적으로 증가(이 쪽이 "재시도를 못 멈추는 쪽" 실수라 "며칠째 멈추지 않음"이
-    "영문도 모르고 멈춤"보다 안전, docs/backlog.md DET1 참고)."""
-    failed_errs = [t.get("error") for t in (tried or {}).values() if t.get("error")]
-    if not failed_errs:
-        return False
-    return all(_is_infra_error_str(e) for e in failed_errs)
-
-
 def scan(out_dir):
     """out_dir(기본 RAG_OUT·dev/out) 아래 기존 산출물을 읽어 {doc_key: snapshot} — DB·네트워크 없음.
     snapshot = {names(정렬 목록), source_keys(정렬 목록 — AD17② 재료, 아래), size, mtime, etag,
-    status(seen·parsed·failed·deleted), source(local·s3·rdb), doc_id, version,
-    infra_failure(DET1 Fix2 — status=='failed'일 때만 의미, _is_infra_failure() 참고. _SNAP_COLS에는 없음 — doc_registry에
-    저장하지 않고 apply()가 그 build 안에서만 fail_count 계산에 씀, classify()의 변경 판정과는 무관)}.
+    status(seen·parsed·failed·deleted), source(local·s3·rdb), doc_id, version}.
     우선순위: ① dedup/fingerprints.jsonl(로컬·RDB·S3 전부 — cli/pipeline.py가 받은 폴더에 dedup을 돌림, name↔doc_key의
     가장 넓은 근거) → doc_key 기본 틀 ② sources.jsonl(대표 파싱 성공) → status=parsed ③ index.json(실패 문서도 포함,
     engine 없으면 failed) ④ manifest.jsonl(RDB·S3 메타 — etag·size·doc_id·version·is_deleted) + processed*.jsonl(SI41
@@ -166,10 +118,8 @@ def scan(out_dir):
                 "source": None,
                 "doc_id": None,
                 "version": None,
-                "infra_failure": False,
             },
-        )  # DET1 Fix2 독립 검토 BLOCK — _SNAP_COLS에 없음(doc_registry에
-        # 저장 안 함, apply()가 그 build에서만 씀 — classify()의 변경 판정에 안 섞임)
+        )
 
     name_to_key = {}
 
@@ -212,7 +162,6 @@ def scan(out_dir):
             d["names"].add(r["doc"])
             if not r.get("engine") and d["status"] != "parsed":
                 d["status"] = "failed"
-                d["infra_failure"] = _is_infra_failure(r.get("tried"))  # DET1 Fix2 독립 검토 BLOCK — 모델 다운 등은 문서 탓 아님
 
     src_dir = out_dir / "parse" / "_source"
     man_f = src_dir / "manifest.jsonl"
@@ -243,9 +192,8 @@ def scan(out_dir):
         )  # rdb: 질의(AD44)만 manifest에 doc_id를 적음(source.py _rdb_rows) — 그 밖 Object Storage는 s3
         # SI39 겹침 키(source_system, source_key)와 같은 모양 — manifest가 가장 구체적인 원본 전체 키(경로 포함) 정보
         d["source_keys"].add(f"{r.get('source_system') or d['source']}::{r.get('key') or name}")
-        if r.get("is_deleted"):
-            d["status"] = "deleted"
-        elif d["status"] == "seen" and r.get("key") in done_object_keys:
+        # pl-12(사용자 10-30) — 원천의 is_deleted도 status='deleted'로 바꾸지 않음(문서 대장은 deleted를 쓰지 않음 · 검색은 manifest is_deleted로 거름)
+        if d["status"] == "seen" and r.get("key") in done_object_keys:
             d["status"] = "parsed"  # 대표 결과 산출물이 이미 지워졌어도(X2) 처리 완료 기록으로 보강
 
     for d in observed.values():
@@ -255,10 +203,6 @@ def scan(out_dir):
 
 
 _SNAP_COLS = ("size", "mtime", "etag", "status", "source", "doc_id", "version")
-
-_FAILCOUNT_CONTENT_COLS = ("size", "etag", "source", "doc_id", "version")  # DET1 Fix2 독립 검토 BLOCK 2차 —
-# _SNAP_COLS에서 status·mtime 제외(apply()의 fail_count 계산 전용 — "changed"가 status만 달라져서 난 것인지
-# 구분하는 재료, off-by-one 수정)
 
 _MD5_ETAG_RE = re.compile(r"^[0-9a-f]{32}$", re.I)
 
@@ -342,54 +286,29 @@ def apply(db, observed, diff, build_id, seen_at=None):
     """diff에 따라 doc_registry를 upsert하고(모든 관측 doc_key), new·changed만 doc_registry_seen에 한 행 추가
     (판 이력 — 바뀔 때만). unchanged·touched(AD17① — 원본 바이트는 같고 날짜만 바뀜)는 last_seen·last_build·
     mtime만 갱신, 이력 행은 안 늘어남(멱등 — touched는 새 판·변경 보고 대상이 아니라 changed_keys에 안 들어감).
-    OP1 — diff["deleted"]는 doc_registry 행 삭제 대신 status='deleted'로만 표시하고(색인 행 삭제 0, 기존 동작) 자동으로
-    hide()(by="registry:diff" — 사람이 unhide()로 되돌릴 수 있음, 그 밖 자동 unhide 없음).
-    DET1 Fix2(독립 검토 BLOCK 반영, 10-12) — fail_count(연속 야간 "진짜 파싱 시도" 실패 횟수): status=='parsed'면
-    0(성공했으니 리셋) · diff["changed"]인데 **실제 내용 칸도 바뀜**이면 0(원본이 바뀌었으니 옛 실패 횟수를 들고
-    가지 않음 — "changed는 counter와 무관하게 다시 시도") · status=='failed'(이번 build의 index.json에 그 문서가
-    실제로 올라와 **시도됐지만** 엔진이 전부 실패 — scan() 참고)이고 infra_failure가 아니면(모델 서버 장애가
-    아니라 문서 자체 문제) +1 · 그 밖(건드리지 않음, 그대로 유지 — 올리지도 내리지도 않음)은: status=='seen'
-    (이번 build의 index.json에 아예 없음 — 처음부터 시도가 안 됨, 예: PARSE_MAX_NEW로 밀린 문서·아직 질의도
-    안 된 문서) · status=='failed'인데 infra_failure(RV24 vlm_down 같은 모델 서버 장애 — 문서 탓이 아니라 올리면
-    장애가 며칠 가면 정상 문서가 대량으로 재시도 중단된다, 독립 검토 BLOCK) · diff["changed"]인데 **실제 내용
-    칸은 안 바뀜**(독립 검토 BLOCK 2차 off-by-one — seen→failed 전환은 status만 달라져도 classify()가 "changed"로
-    분류한다. 그걸 그대로 0으로 리셋하면 "시도됐지만 실패"라는 밤이 통째로 안 셈 — 다음 밤에야 1이 되어 하루
-    늦게 센다. _FAILCOUNT_CONTENT_COLS(size·etag·source·doc_id·version, status 제외)가 전과 같으면 "상태만 바뀜"
-    으로 보고 아래 status=='failed' 분기로 넘겨 그 밤부터 바로 센다). nightly_plan()이 이 값을 REGISTRY_RETRY_MAX
-    와 비교해 재시도를 멈춘다."""
+    pl-12(사용자 10-30) — diff["deleted"]는 쓰지 않는다(옛 OP1의 status='deleted'·자동 hide() 없앰 — 숨김은 사람이 hide()로만).
+    status는 관측 그대로(seen·parsed·failed) — 성공(parsed)만 "끝남"이라 실패 문서는 nightly_plan()이 늘 다시 고른다
+    (재시도 횟수 칸 fail_count는 쓰지 않음 — 사용자 10-30, pl-32 · 칸 자체는 0.1.0 마이그레이션이 지움)."""
     seen_at = seen_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     changed_keys = set(diff["new"]) | set(diff["changed"])
-    changed_set = set(diff["changed"])
     for key in sorted(observed):
         snap = observed[key]
         names_json = json.dumps(snap["names"], ensure_ascii=False)
         source_keys_json = json.dumps(snap.get("source_keys") or [], ensure_ascii=False)  # AD17② engine-qa MAJOR — names와
         # 같은 관측 칸(매 build 그대로 씀, 보존 불필요)
         prev = db.query(
-            "SELECT first_seen, rep_sha, rep_pairs, edition_of, content_group, value_changes, fail_count, "
-            "size, etag, source, doc_id, version FROM doc_registry WHERE doc_key=?",
+            "SELECT first_seen, rep_sha, rep_pairs, edition_of, content_group, value_changes FROM doc_registry WHERE doc_key=?",
             (key,),
         )
         first_seen = prev[0]["first_seen"] if prev else seen_at
         keep = prev[0] if prev else {}  # AD17②·AD15 — INSERT OR REPLACE는 열 목록 밖 칸을 지운다(SQLite는 행째
         # 바꿔치기) — update_rep_fingerprints()·link_editions()·content_groups()가
         # 이 build에서 바뀐 doc_key만 새로 덮어쓸 때까지 기존 값을 그대로 들고 간다.
-        prev_fail = keep.get("fail_count") or 0
-        # DET1 Fix2 독립 검토 BLOCK 2차 — "changed"가 status만 바뀐 것(예: seen→failed, 내용은 그대로)이면
-        # fail_count 계산에서는 "안 바뀜"으로 본다(off-by-one — 최소 변경: 이 분기만, doc_registry_seen 이력·
-        # diff["changed"] 자체는 그대로).
-        content_changed = any(keep.get(c) != snap.get(c) for c in _FAILCOUNT_CONTENT_COLS)
-        if snap["status"] == "parsed" or (key in changed_set and content_changed):
-            fail_count = 0
-        elif snap["status"] == "failed" and not snap.get("infra_failure"):
-            fail_count = prev_fail + 1  # 실제로 시도됐고 모델 탓도 아닌 실패만 — 독립 검토 BLOCK(DET1 Fix2)
-        else:
-            fail_count = prev_fail  # 'seen'(시도 안 함) 또는 infra_failure(모델 서버 장애) — 건드리지 않음
         db.execute(
             """INSERT OR REPLACE INTO doc_registry
                       (doc_key, names, size, mtime, etag, status, source, doc_id, version, first_seen, last_seen, last_build,
-                       rep_sha, rep_pairs, edition_of, content_group, value_changes, source_keys, fail_count)
-                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                       rep_sha, rep_pairs, edition_of, content_group, value_changes, source_keys)
+                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 key,
                 names_json,
@@ -409,7 +328,6 @@ def apply(db, observed, diff, build_id, seen_at=None):
                 keep.get("content_group"),
                 keep.get("value_changes"),
                 source_keys_json,
-                fail_count,
             ),
         )
         if key in changed_keys:
@@ -418,14 +336,8 @@ def apply(db, observed, diff, build_id, seen_at=None):
                           VALUES (?,?,?,?,?,?,?,?,?)""",
                 (key, build_id, names_json, snap["size"], snap["mtime"], snap["etag"], snap["status"], snap["source"], seen_at),
             )
-    for key in diff["deleted"]:
-        db.execute("UPDATE doc_registry SET status='deleted', last_seen=?, last_build=? WHERE doc_key=?", (seen_at, build_id, key))
-        db.execute(
-            """INSERT INTO doc_registry_seen (doc_key, build_id, names, size, mtime, etag, status, source, seen_at)
-                      SELECT doc_key, ?, names, size, mtime, etag, 'deleted', source, ? FROM doc_registry WHERE doc_key=?""",
-            (build_id, seen_at, key),
-        )
-        hide(db, key, by="registry:diff", reason="원천에서 사라짐(자동 탐지)", at=seen_at)
+    # pl-12(사용자 10-30): diff["deleted"](이번 관측에 없음)는 쓰지 않는다 — status='deleted'·자동 hide() 길 없앰
+    # (관측이 일부만 보여도 다른 문서를 지우던 위험). diff["deleted"]는 판 잇기(link_editions)용 정보로만 남는다.
 
 
 # ── AD17②·AD15(10-08, 파싱 뒤 '판 비교') — 모듈 docstring 참고 ───────────────
@@ -671,18 +583,17 @@ def try_open_db(db_path=None):
     연결이 안 되면 None(호출자는 필터 없이 그대로 — 바이트 동일, 검색·파싱을 막지 않음)."""
     if not cfg().store.doc_registry:  # S7b — 설정 객체(켜기 칸, 기본 켬)
         return None
-    try:
-        from common.store.structdb import open_backend
+    from common.config.settings import guard_run_env
+    from common.store.structdb import StructDBError, open_backend
 
+    try:
         return open_backend(db_path)
+    except StructDBError:
+        if guard_run_env() not in (None, "local"):
+            raise  # pl-12 — 서버의 거부(SQLite 대체 금지)는 삼키지 않음
+        return None
     except Exception:
         return None
-
-
-def retry_max():
-    """DET1 Fix2 — REGISTRY_RETRY_MAX(새 기능, OP11 기본 켬: 기본값 7일, `=0`이면 끔=무제한 재시도, 전과 동일).
-    값이 숫자가 아니면 기본값(7)으로(설정 실수로 재시도가 조용히 무제한이 되는 것보다 안전 쪽)."""
-    return max(0, cfg().store.registry_retry_max)  # S7b — 설정 객체(int 칸 — 형식이 틀리면 경고 뒤 기본 7)
 
 
 def nightly_plan(db, observed, reparse_keys=None, fetch_sha256=None):
@@ -693,21 +604,16 @@ def nightly_plan(db, observed, reparse_keys=None, fetch_sha256=None):
     **뺀 것** = changed인데 reparse_keys에 없는 doc_key(사람 조치 전까지 옛 내용 그대로 서빙, 자동 재파싱 안 함,
     OP1) · unchanged·touched이고 이미 성공한(status=='parsed') doc_key(다시 할 필요 없음 — touched는 원본
     바이트가 안 바뀌었으니 성공했으면 재파싱 자체가 대상에서 빠짐) · deleted(observed에 아예 없어 자동으로 빠짐)
-    · DET1 Fix2 — ②(재시도 후보) 중 doc_registry.fail_count가 REGISTRY_RETRY_MAX(retry_max()) 이상인 doc_key
-    (changed는 fail_count와 무관하게 늘 다시 시도되므로 그대로, retry_max()==0이면 이 컷 자체가 꺼짐).
-    읽기만(apply()를 안 부름 — 문서 대장 쓰기는 build()/apply() 쪽 몫, 이 함수는 결정만). 반환에 "retry_stopped"
-    (재시도 중단된 doc_key 정렬 목록, 보고용 — cli/registry.py가 "재시도 중단(n회 실패)"로 보여줌) 추가.
+    실패 문서는 횟수 상한 없이 늘 다시(사용자 10-30, pl-32 — 옛 REGISTRY_RETRY_MAX 컷·"retry_stopped" 지움).
+    읽기만(apply()를 안 부름 — 문서 대장 쓰기는 build()/apply() 쪽 몫, 이 함수는 결정만).
     reparse_keys(선택) = 사람이 명시적으로 승인한 재파싱 대상 doc_key 집합(없으면 changed는 전부 빠짐 — 전과 동일)."""
     diff = diff_against(db, observed, fetch_sha256=fetch_sha256)
     reparse_keys = set(reparse_keys or ())
     current = {r["doc_key"]: r for r in db.query("SELECT * FROM doc_registry")}
-    candidates = {k for k in diff["unchanged"] + diff["touched"] if (current.get(k) or {}).get("status") != "parsed"}
-    cap = retry_max()
-    stopped = {k for k in candidates if cap and ((current.get(k) or {}).get("fail_count") or 0) >= cap}
-    retry = candidates - stopped
+    retry = {k for k in diff["unchanged"] + diff["touched"] if (current.get(k) or {}).get("status") != "parsed"}
     parse_keys = set(diff["new"]) | retry | (set(diff["changed"]) & reparse_keys)
     parse_names = sorted({n for k in parse_keys for n in observed[k]["names"]})
-    return {"parse_names": parse_names, "retry_stopped": sorted(stopped), **diff}
+    return {"parse_names": parse_names, **diff}
 
 
 def build(out_dir, db, build_id=None, seen_at=None, fetch_sha256=None):

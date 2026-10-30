@@ -35,8 +35,8 @@ keep.txt에서 빠짐) · not_parsed(이번 파싱 대상 아님) · skipped_dis
 
 쓰기 대상(전부 PM1 결정 대기 — 사람):
   PM_TABLE(기본 AI.ParsingMeta) · PM_BUCKET(업로드 버킷, "file://<폴더>"면 로컬 폴더를 가짜 Object Storage로 — L2 시험) ·
-  PM_PREFIX(버킷 안 경로 접두, 선택) · PM_DB_HOST·PM_DB_PORT(1433)·PM_DB_DATABASE·PM_DB_USER·PM_DB_PASSWORD
-  (EDW 쓰기 전용 계정 — RDB_* 읽기 계정과 분리) · PM_DB_SQLITE(설정하면 SQLite를 가짜 EDW로 — L2 시험, PM_DB_* 안 봄).
+  PM_PREFIX(버킷 안 경로 접두, 선택) · common.connections.rdb 쓰기 계정(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_WRITE_USER·RDB_WRITE_PASSWORD
+  — 사용자 10-29 ops.md#op-03) · RDB_SQLITE(설정하면 SQLite를 가짜 EDW로 — L2 시험, 접속 칸 안 봄).
 업로드 접속은 Object Storage 읽기와 같은 env(OS_ENDPOINT·OS_ACCESS_KEY·OS_SECRET_KEY·OS_REGION·OS_VERIFY_TLS —
 modules/parse/source.py·cli/os_put.py와 같음).
 
@@ -89,7 +89,7 @@ sha256_of = file_hash  # RV6 — common/ids.file_sha256과 중복 구현이던 �
 
 
 def pipeline_version():
-    """판 — common.pipeline_version()(git → PIPELINE_VERSION → common/PATCH_VERSION, 실행판과 같은 규칙 한 곳)."""
+    """버전 — common.pipeline_version()(저장소 루트 VERSION·오버레이 패치 PATCH_VERSION 중 높은 것 — D-036, 실행 보드와 같은 규칙 한 곳)."""
     from common import pipeline_version as _pv
 
     return _pv()
@@ -214,11 +214,6 @@ def _local_md_name(row):
     return f"tmp_{row.get('source_key', '')[:0]}{_hash10(row.get('source_key', ''))}_{row.get('parse_date', '')}.md"
 
 
-def _local_sidecar_name(row):
-    """apply()가 sidecar(source.json)를 올리기 전 잠깐 쓰는 로컬 파일 이름 — _local_md_name과 같은 규칙."""
-    return f"tmp_{_hash10(row.get('source_key', ''))}_{row.get('parse_date', '')}.source.json"
-
-
 def status_of(name, rep_by_doc, summary, skipped=None, keep=None):
     """문서 하나의 파싱 상태 — skipped(이름→drm_*·encrypted_* 사유, modules/parse/prepare.py의 skipped.jsonl)·
     keep(dedup keep.txt에 있는 이름 집합, None = dedup 정보 없음 → 전부 포함) 순서로 먼저 걸러진 뒤 대표 결과(rep)를 본다."""
@@ -318,14 +313,14 @@ _OCR_ENGINE_NAMES = {"rapidocr_ko"}  # PM2 — role='ocr'로 구분할 알려진
 
 def _vlm_model(model, env_fallback):
     """PM2 — rep.post.vlm_models에 모델 이름이 있으면 그대로, 없으면(env_fallback=True일 때만) 지금 프로세스의
-    VLM_MODEL·VLM_MODEL_ALT로 대신한다(옛 rep·게시가 파싱과 다른 env로 돌 때의 마지막 대체 경로일 뿐 — rep가
+    VLM_MODEL로 대신한다(옛 rep·게시가 파싱과 다른 env로 돌 때의 마지막 대체 경로일 뿐 — rep가
     1차). 둘째 반환값 True = 대체를 썼다는 표시(engines_used()가 그 항목에 "source":"env_fallback"을 남김)."""
     if model:
         return model, False
     if not env_fallback:
         return None, False
     vlm = C.cfg().models.vlm
-    fb = vlm.model or vlm.model_alt
+    fb = vlm.model
     return fb, bool(fb)
 
 
@@ -333,14 +328,14 @@ def engines_used(rep_json, env_fallback=True):
     """PM2 요건(b) — 문서 하나의 대표 결과(`_rep/<문서>.json` 전체, status_of()가 쓰는 index.json 요약이 아님)
     에서 실제로 쓰인 엔진 전부(VLM·OCR 포함) → (engines_used 목록, 한 줄 요약) — EDW `engines_used`·
     `engines_summary` 두 열의 값. 순수 함수(rep_json만 읽음) — 단 env_fallback=True(기본)이면 rep에 VLM 모델
-    이름이 없을 때만 현재 프로세스의 VLM_MODEL·VLM_MODEL_ALT를 대신 읽는다(그 항목에 "source":"env_fallback"
+    이름이 없을 때만 현재 프로세스의 VLM_MODEL을 대신 읽는다(그 항목에 "source":"env_fallback"
     표시 — publish는 파싱과 다른 실행·env일 수 있어 rep를 1차로, env는 rep에 없을 때만의 대체).
 
     보는 자리(설계):
       rep.rep.engine(대표로 뽑힌 엔진) → role='rep' · rep.rep.tried(시도한 엔진 전부, rapidocr_ko·qwen_vlm 포함) 중
       대표가 아닌 것 → role='ocr'(_OCR_ENGINE_NAMES) 또는 'candidate'(그 밖 텍스트 엔진) · rep.post.vlm_page_calls
       (+모델 rep.post.vlm_models.page) → role='vlm_page' · rep.post.figures(+모델 rep.post.vlm_models.figure) →
-      role='vlm_figure' · rep.fused.reread(좌표 재판독 OCR) → role='reread' · rep.agent(AG11 판단, 있으면) →
+      role='vlm_figure' · rep.agent(AG11 판단, 있으면) →
       role='agent'. 항목 = {"engine","role","status","version_or_model","calls"}.
     rep_json이 비었으면([], None)."""
     if not rep_json:
@@ -373,11 +368,6 @@ def engines_used(rep_json, env_fallback=True):
         if fig_fb:
             row["source"] = "env_fallback"
         out.append(row)
-    reread = (rep_json.get("fused") or {}).get("reread") or {}
-    if reread:
-        out.append(
-            {"engine": "reread_ocr", "role": "reread", "status": "ok", "version_or_model": None, "calls": reread.get("attempted") or 0}
-        )
     agent = rep_json.get("agent") or {}
     if agent:
         out.append(
@@ -391,8 +381,6 @@ def engines_used(rep_json, env_fallback=True):
     vlm_bits = ([f"page×{page_calls}"] if page_calls else []) + ([f"fig×{fig_calls}"] if fig_calls else [])
     if vlm_bits:
         parts.append(f"vlm={page_model or fig_model or '모델?'} " + " ".join(vlm_bits))
-    if reread.get("attempted"):
-        parts.append(f"reread×{reread['attempted']}")
     if agent:
         parts.append(f"agent={agent.get('agent') or 'agent'}")
     summary = "; ".join(parts) or None
@@ -760,8 +748,8 @@ def apply_registry_status(db, registry_diff):
     독립 검토 10-08 반영: 그 틈에 다른 쓰기가 changed·deleted로 바꿨으면 0행 — 건너뜀, 옛 값으로 덮어쓰지 않음).
     새 표·열 없이 기존 status 열 그대로(STATUS_VALUES 불변, status 열에 'touched'라는 값을 넣지 않는다).
     반환: {"changed": 적용 행 수, "deleted": 적용 행 수, "touched": 적용 행 수(경합으로 0행 된 건 제외), "skipped": EDW에 없어 건너뛴 doc_key 수}."""
-    counts = {"changed": 0, "deleted": 0, "touched": 0, "skipped": 0}
-    for status in ("changed", "deleted"):
+    counts = {"changed": 0, "deleted": 0, "touched": 0, "skipped": 0}  # "deleted"는 늘 0(모양 유지)
+    for status in ("changed",):  # pl-12(사용자 10-30) — EDW에 'deleted'를 쓰는 길 없앰(관측에 없다고 지우지 않음)
         for doc_key in registry_diff.get(status) or []:
             rows = db.find_by_doc_key(doc_key)
             if not rows:

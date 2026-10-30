@@ -3,7 +3,7 @@
 
 도구(G2):
   search(question, k=8, methods=[vector,bm25,id], decompose=false, client=None)  근거 목록 — BM25는 용어 사전으로 확장(X3, notes에 표시) ·
-    methods에 graph·image·openviking·concept 추가 가능(G3·X4). client(AD38): 고객 명시(SEARCH_CLIENT_HARD=1이면 저장소 질의
+    methods는 vector·bm25·id만(graph·image·openviking·concept·decompose는 10-29에 지움 — 입력은 받고 무시). client(AD38): 고객 명시(SEARCH_CLIENT_HARD=1이면 저장소 질의
     단계에서 다른 고객 제외, 기본 꺼짐). 기본 켬(AD42, R3·R1 — =0으로 끔): SEARCH_EVIDENCE_GATE이면 응답에
     evidence_status(found/weak/none)·근거별 low_score(SEARCH_MIN_SCORE 문턱) 표시만(근거는 안 줄임) · SEARCH_AGG_ROUTE이면
     집계 질문을 aggregate.detect()로 가려 집계 결과(기존 정해진 함수만, 자유 SQL 없음)를 근거 맨 앞에 via="aggregate"로 —
@@ -13,8 +13,6 @@
     더 찾아 진짜 환율 패턴일 때만 집계 근거 text 끝에 붙인다(단일 통화면 영향 없음).
     근거마다 doc_type·version·supersedes_doc_id·is_deleted·contract_id·updated_at·company는 RDB 문서 위치 메타(AD44
     manifest)에 그 문서가 있을 때만(없으면 칸 자체가 없음).
-    SEARCH_RERANK가 켜져 있을 때만(기본 꺼짐, G8): SEARCH_RERANK_WHEN=cond(기본 always)면 점수차·문서흩어짐·비교/최신
-    질문 신호가 있을 때만 재순위(AD4, 지연 절감) — 응답에 rerank: {applied, reason[, ms]}.
   (2026-10-20 사용자 결정·같은 날 통합 · 10-21 파싱 도구 추가) MCP 노출 도구는 search·query_edw·parse_document·edw_meta — 문서 목록(list_documents)·문서 단건
     (get_document)·그림(get_image)·근거 이미지(get_evidence_image)·집계 질의(aggregate)·요건별 연구(research)·용어(lookup_term)·
     개념(related)·describe_edw는 노출에서 뺐다. 내부 구현(do_*)은 search 안쪽 경로·셀프테스트만 남아 있고 MCP로는 호출 불가.
@@ -53,7 +51,7 @@
 보안(G5): MCP_HOST(기본 127.0.0.1 · auto = 컨테이너 자기 사설 IP)는 내부망 주소만 · 루프백이 아니면 MCP_TOKEN 필수(Authorization: Bearer) ·
   루프백이 아니면 DNS 리바인딩 보호도 기본 켬(L8 — SDK TransportSecuritySettings, MCP_HOST[+포트]만 자동 허용 · 어긋난
   Host는 421·Origin은 403 · MCP_ALLOWED_HOSTS(쉼표 목록)로 추가 호스트) ·
-  호출자(X-MCP-Client 머리글)는 PostgreSQL qa_log.asked_by에 'mcp:<호출자>'로 · 결과 크기 상한 MCP_MAX_CHARS(기본 20000자)·MCP_MAX_IMAGE_PX(1600).
+  호출자(X-MCP-Client 머리글)는 질의 기록(qa_log.jsonl)의 asked_by에 'mcp:<호출자>'로 · 결과 크기 상한 MCP_MAX_CHARS(기본 20000자).
 질의 기록(OP6): 호출자·질문·근거 chunk_id·rank·via·지연을 output/qa_log/qa_log.jsonl에 기록(PG 없는 로컬 묶음도, common/qa_log.py) —
   기본 켬, MCP_QUERY_LOG=0으로 끔. 90일 지난 줄은 기동 때 또는 마지막 정리 이후 24시간 지나면 지운다. 토큰·원문은 안 남김.
 동시 접속(S12): 도구는 스레드로 돌림(MCP_MAX_CONCURRENCY 기본 8) · PG는 연결 풀(PG_POOL_MAX 기본 8) · GET /health(토큰 없이, 프로세스·준비 여부·적재 버전 ·
@@ -65,7 +63,6 @@
   각각 =0이면 그 상한 없음(이전 동작). 호출자별 상한은 안 둠(토큰이 서버 전체 하나뿐이라 호출자 구분이 신뢰 경계가 아님).
 실행: python -m mcp_server.main               → HTTP(streamable) http://MCP_HOST:MCP_PORT/mcp (기본 127.0.0.1:8765)
       python -m mcp_server.main --stdio       → 같은 서버의 클라이언트가 프로세스로 띄울 때
-      python -m mcp_server.main --selftest
 파일 배치(S5 10-26, refactor_plan 5-1 — FastMCP 그대로): 이 파일은 앱 조립·토큰·서버 시작만 · 도구 등록 routers/ · 실제 일 services/
 (검색 services/search/search_svc.py) · 출력 모양 schemas/ · 시작 때 읽는 설정 config.py(CFG). 위 설명의 함수 이름은 그대로다.
 """
@@ -179,8 +176,9 @@ def serve_http(host, port, token):
 
 if __name__ == "__main__":
     utf8_stdout()
-    from common.config.settings import require_run_env
+    from common.config.settings import edw_read_only, require_run_env
 
+    edw_read_only()  # 검색 MCP는 EDW 읽기 계정만 — 공용 설정 파일의 쓰기 계정 칸은 이 프로세스에서 비움(사용자 10-29, ops.md#op-03)
     require_run_env("mcp_server.main", sections=("mcp",))  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
     if mc.cfg().server.query_cache:  # S7e2 — 검색 MCP 전용 질의 임베딩 캐시(옛 compose EMBED_QUERY_CACHE 자리, 사용자 10-28)
         from common.config import settings as _S

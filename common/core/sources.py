@@ -1,6 +1,6 @@
 """SI41 — 원천 표 목록(비밀 없음, git) — `.env`는 접속 정보(RDB_HOST 등)·크리덴셜만, **어느 표·어느 열**은 여기.
 
-자리(S8b — D-031, 사용자 10-28): 서버(RUN_ENV dev·stage·prd · 이미지 배치)는 판 표 `struct.source_version`의 활성 판(common.store.db.cfgtables —
+자리(S8b — D-031, 사용자 10-28): 서버(RUN_ENV dev·prd · 이미지 배치)는 판 표 `struct.source_version`의 활성 판(common.store.db.cfgtables —
 못 읽으면 시작 거부, 종료 4), PC(paths.LOCAL_RUN)는 파일 `common.paths.sources_file`(비우면 `resources/mappings/sources.json`). 옛 서버 덮어쓰기
 `$SERVER_ENV_DIR/sources.json`(호스트 python만 봄)은 없앰 — 그 내용은 `set-sources --file`로 판을 넣는다(refactor.md C-12).
 

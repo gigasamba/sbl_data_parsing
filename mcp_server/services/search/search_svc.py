@@ -1,159 +1,25 @@
-"""검색 서비스 — do_search(하이브리드 근거 검색·하드 필터·집계 근거·그림·OpenViking·질의 기록).
+"""검색 서비스 — do_search(하이브리드 근거 검색·하드 필터·집계 근거·질의 기록).
 S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/main.py(옛 data_retrieval/mcp_server.py)에서 옮김 — 내용 그대로
 (설정 상수만 mcp_server/config.py의 CFG로).
 """
 
-import json
 import time
-from pathlib import Path
 
-from common.config import settings as C  # common 설정 객체(S7d)
 from mcp_server import config as mc  # mcp 설정 객체(S7d)
 from mcp_server.config import CFG
-from mcp_server.services.search.internal_docs import _images_index, _manifest_by_name, do_aggregate, do_filter_documents
+from mcp_server.services.search.internal_docs import _manifest_by_name, do_aggregate, do_filter_documents
 from mcp_server.services.search.server_state import _STATE, CALLER, _index_retriever, _retriever
 from mcp_server.services.search.shaping import _evidence, cap, evidence_status
 
 
-def _image_hits(question, k, client=None):
-    """그림 기록 검색(G3 image) — 요약·그림 속 글자·글자층·종류에 질문 토큰이 겹치는 정도(그림 임베딩은 그림 파싱 F8 이후).
-    OP1(독립 검토 BLOCK 반영) — 숨김 문서(R.hidden_names())의 그림은 후보에서 뺌(do_get_image와 같은 기준).
-    BR50(G) — client 인자 + SEARCH_CLIENT_HARD=1이면 다른 고객 문서의 그림은 뺌(R.client_map(), clientscope 공용 규칙)."""
-    from common.core.text import tokens
-    from mcp_server.services.search import clientscope as CS
-
-    recs, p = _images_index()
-    if recs is None:
-        return [], f"그림 기록 없음({p}) — 그림 파싱(백로그 F1~F4) 결과가 있어야 image 검색이 됨"
-    R = _retriever()
-    hidden_names = R.hidden_names()
-    allowed, strict, hard = CS.client_scope(question, client, R.clients())
-    client_by_name = R.client_map() if hard else {}
-    q = set(tokens(question))
-    scored = []
-    for r in recs:
-        if r.get("doc") in hidden_names:
-            continue
-        if hard and not CS.allows(client_by_name.get(r.get("doc")), allowed, strict):
-            continue
-        v = r.get("vlm") or {}
-        toks = set(
-            tokens(" ".join(str(x) for x in (v.get("summary"), v.get("text"), r.get("text_layer"), r.get("kind"), r.get("doc")) if x))
-        )
-        if q & toks:
-            scored.append((len(q & toks) / len(q), r))
-    scored.sort(key=lambda x: -x[0])
-    return [
-        {
-            "image_id": r["image_id"],
-            "doc": r.get("doc"),
-            "page": r.get("page"),
-            "bbox": r.get("bbox"),
-            "kind": r.get("kind"),
-            "summary": (r.get("vlm") or {}).get("summary"),
-            "png": r.get("png"),
-            "score": round(s, 3),
-            "via": "image",
-        }
-        for s, r in scored[:k]
-    ], None
-
-
-def _openviking_hits(question, k, client=None):
-    """OpenViking 검색(G3 openviking) — OV_URL + OV_SEARCH_PATH(기본 /api/v1/search/find). 응답 형식은 서버에서 확인 필요 —
-    결과의 uri 마지막 이름을 묶음 문서 이름에 맞춰 문서 단위 근거(요약)로. 실패해도 다른 방법은 계속.
-    XS8: OV_FEATURES에 search가 없으면 OV_URL이 있어도 건너뜀(OV_URL 없을 때와 동일 출력) — methods에 openviking을 직접 줘도 같다.
-    BR50(H) — client 인자 + SEARCH_CLIENT_HARD=1이면 다른 고객 문서로 매칭된 결과는 뺌(clientscope 공용 규칙,
-    이 외부 서비스가 돌려준 결과가 묶음 문서 어디로 연결되는지는 이미 아는 d['client']로 그대로 판정)."""
-    import urllib.parse
-    import urllib.request
-
-    from common.store import services
-    from mcp_server.services.search import clientscope as CS
-
-    if not services.ov_enabled("search"):
-        return [], "OpenViking 연결 없음(OV_URL)"
-    url = C.cfg().connections.openviking.url
-    if not url:
-        return [], "OpenViking 연결 없음(OV_URL)"
-    try:
-        q = urllib.parse.urlencode({"query": question, "limit": k})
-        with urllib.request.urlopen(f"{url.rstrip('/')}{mc.cfg().search.ov_search_path}?{q}", timeout=20) as r:
-            body = json.loads(r.read())
-        res = body.get("result", body)
-        items = res.get("resources", res.get("items", res)) if isinstance(res, dict) else res
-        from common.core.contract import openviking_key as _key  # 이름 대조 규칙(구조화 요약과 같게)
-
-        R = _STATE["R"]
-        docs = R.local.docs
-        by = {_key(d["file_name"]): (i, d) for i, d in enumerate(docs)}
-        allowed, strict, hard = CS.client_scope(question, client, R.clients())
-        out = []
-        for it in items or []:
-            uri = it.get("uri") if isinstance(it, dict) else str(it)
-            hit = by.get(_key(str(uri).rstrip("/").rsplit("/", 1)[-1])) if uri else None
-            if hit:
-                i, d = hit
-                if hard and not CS.allows(d.get("client"), allowed, strict):
-                    continue
-                out.append(
-                    {
-                        "doc_id": i,
-                        "file_path": d["file_path"],
-                        "file_name": d["file_name"],
-                        "doc_summary": d.get("summary"),
-                        "uri": uri,
-                        "score": it.get("score") if isinstance(it, dict) else None,
-                        "via": "openviking",
-                    }
-                )
-        return out[:k], None
-    except Exception as ex:
-        return [], f"OpenViking 검색 실패 — 응답 형식·경로 확인(OV_SEARCH_PATH): {type(ex).__name__}: {str(ex)[:100]}"
-
-
 def _log(question, evidence, ms):
+    """질의 기록 — qa_log.jsonl 파일만(mc-13, 사용자 10-30: PG qa_log 표는 만들지 않음 — 그 INSERT는 늘 실패해 삼켜졌음)."""
     from mcp_server.services.search import qa_log
 
     try:  # engine-qa BLOCK 1 — qa_log.append 안에서도 쓰기 실패를 잡지만, do_search를 절대 죽이지 않게 여기서도 한 번 더
         qa_log.append(question, evidence, ms, CALLER.get(), stack_name=_STATE.get("stack", {}).get("name"))  # OP6
     except Exception:
         pass
-    R = _STATE.get("R")
-    if R is None or not R.pg:
-        return
-    try:
-        R.pg.q(
-            f"INSERT INTO {R.pg.schema}.qa_log(question, stack_name, k, hits, answer, search_ms, asked_by) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-            (
-                question,
-                _STATE.get("stack", {}).get("name"),
-                len(evidence),
-                json.dumps([{"chunk_id": e.get("chunk_id"), "rank": e.get("rank"), "via": e.get("via")} for e in evidence]),
-                None,
-                round(ms, 1),
-                CALLER.get(),
-            ),
-        )
-    except Exception:
-        pass  # 기록 실패가 검색을 막으면 안 됨
-
-
-def _graph_hits_for_client(R, hits, question, client):
-    """GH1-12 — R.graph()는 저장소 질의 단계(local.py search의 client 거르기, AD38 SEARCH_CLIENT_HARD)를 거치지
-    않고 메모리에서 이웃을 더해 고객 제한을 비켜 간다. retriever.py·local.py·pgsearch.py는 안 건드리고 여기서
-    같은 규칙(BR50 — clientscope.allows, local.py·pgsearch.py·retriever.py와 공용)으로 graph 결과만 다시 거른다.
-    SEARCH_CLIENT_HARD=0(기본)·cl이 비면 그대로 반환 — 스위치 꺼짐 기본값은 바이트 동일.
-    BR52: file_path → client 맵은 R.client_path_map()(Retriever 인스턴스당 캐시, PG는 doc 표 재질의 없음) — 전엔
-    이 함수가 매 호출마다 doc 표를 통째로 읽었다(client_map()이 같은 요청 안에서 또 읽는 경우도 있어 N배)."""
-    g = R.graph(hits[:3])
-    from mcp_server.services.search import clientscope as CS
-
-    allowed, strict, hard = CS.client_scope(question, client, R.clients())
-    if not hard or allowed is None:
-        return g
-    client_by_path = R.client_path_map()
-    return [n for n in g if CS.allows(client_by_path.get(n["file_path"]), allowed, strict)]
 
 
 def _hard_filter_scope(hard):
@@ -189,6 +55,19 @@ def _hard_filter_scope(hard):
     where = " WHERE " + " AND ".join(conds)
     rows = R.pg.q(f"SELECT DISTINCT file_path FROM {R.pg.schema}.v_chunk_source{where}", tuple(vals))
     return {r["file_path"] for r in rows}, len(rows)
+
+
+def _gather(question, subs, search, base, per):
+    """원 질문은 search(q, base), 하위 검색(고객별)은 search(q, per)로 찾아 라운드로빈으로 합친다(중복 제거) — 원 질문 근거
+    개수는 그대로, 어느 하위 검색도 0개로 밀려나지 않게. 반환: [(키, 출처 번호 0=원 질문)]. 옛 decompose.gather(10-29 이동)."""
+    lists = [search(question, base)] + [search(q, per) for q in subs]
+    out, seen = [], set()
+    for rank in range(max(base, per)):
+        for qi, lst in enumerate(lists):
+            if rank < len(lst) and lst[rank] not in seen:
+                seen.add(lst[rank])
+                out.append((lst[rank], qi))
+    return out
 
 
 def do_search(
@@ -262,8 +141,7 @@ def do_search(
         if scope:  # 범위 필터 뒤에도 근거 k개가 남게 — 풀을 넉넉히(상한 MAX_K)
             k = min(CFG.MAX_K, max(user_k * 3, 30))
     methods = [m.lower() for m in (methods or CFG.DEFAULT_METHODS)]
-    asked, decompose = decompose is not None, CFG.DEFAULT_DECOMPOSE if decompose is None else decompose
-    unknown = [m for m in methods if m not in CFG.CORE + ("graph", "image", "openviking", "concept")]
+    unknown = [m for m in methods if m not in CFG.CORE]  # graph·concept·image·openviking은 10-29에 지움
     if index_id:  # AD41 — 이름 있는 색인(없으면 기본 색인, 응답도 전과 같음)
         R, err, warn = _index_retriever(index_id)
         if err:
@@ -276,17 +154,7 @@ def do_search(
     if unknown:
         notes.append(f"모르는 방법 무시: {unknown}")
     core = [m for m in methods if m in CFG.CORE]
-    subs = []
-    if decompose:
-        from common.ai import llm as L
-        from mcp_server.services.search import decompose as DC
-
-        if L.configured():
-            subs, _ = DC.split_question(
-                question, lambda p: L.chat([{"role": "user", "content": p}], temperature=0.0, max_tokens=400, agent="query_decompose")
-            )
-        elif asked:  # 기본값으로 켜진 경우엔 조용히(LLM 없는 곳에서 매번 알리지 않음)
-            notes.append("decompose 요청 — LLM 미설정이라 원 질문만")
+    subs = []  # 응답 모양 유지(질문 분해는 10-29에 지움 — 늘 빈 목록)
     sc = mc.cfg().search  # 한 번 묶음(S7d — 이 요청의 검색 스위치들이 같은 판 값)
     agg, agg_ex_note = None, None
     if sc.agg.route:  # BR23 — 집계로 갈 질문인지 먼저 판별(아래 엔티티 분해 게이트용) ·
@@ -300,26 +168,7 @@ def do_search(
         hits, _, r_notes = R.search_ex(
             question, k, core, client=client, scope=scope
         )  # S12: search_ex — note류를 반환값으로(공유 R을 여러 스레드가 써도 안 섞임)
-        if subs:
-            from mcp_server.services.search import decompose as DC
-
-            pool = {h["chunk_ref"]: h for h in hits}
-
-            def srch(q, n):
-                nonlocal r_notes
-                if q == question:
-                    return [h["chunk_ref"] for h in hits[:n]]
-                hs, _, r_notes = R.search_ex(q, n, core, client=client, scope=scope)
-                for h in hs:
-                    pool.setdefault(h["chunk_ref"], h)
-                return [h["chunk_ref"] for h in hs]
-
-            items = DC.gather(question, subs, srch, base=k, per=max(3, k // 2))
-            hits = [
-                {**pool[c], "rank": i + 1, "via": (pool[c].get("via") or "") + ("" if qi == 0 else f"·sub{qi}")}
-                for i, (c, qi) in enumerate(items)
-            ]
-        elif not agg_hit and sc.entity_split:  # BR23 — 비교 질문(고객 2명 이상 동시 언급)이
+        if not agg_hit and sc.entity_split:  # BR23 — 비교 질문(고객 2명 이상 동시 언급)이
             from common.core.terms import match_clients  # 한쪽 고객에 몰려 슬롯을 뺏기는 문제. R2-c 요건③(client+ID_LIKE)은
 
             ents = match_clients(question, R.clients())[:4]  # 94/115건 과다발동 p95+511ms로 기각됨 — 여기선 trigger를 "고객명
@@ -327,8 +176,6 @@ def do_search(
                 # agg_hit 제외 — 집계 비교(계약 건수·합계)는 구조화 집계가
                 # 답을 내고 전문 검색 근거는 참고용이라 분해해도 doc_hit·evid_cov
                 # 효과가 없다(synth-4clients-cmp 실측, [:4]는 호출 수 상한).
-                from mcp_server.services.search import decompose as DC
-
                 pool = {h["chunk_ref"]: h for h in hits}
 
                 def srch(q, n):
@@ -342,7 +189,7 @@ def do_search(
                         pool.setdefault(h["chunk_ref"], h)
                     return [h["chunk_ref"] for h in hs]
 
-                items = DC.gather(question, ents, srch, base=k, per=max(3, k // 2))
+                items = _gather(question, ents, srch, base=k, per=max(3, k // 2))
                 hits = [
                     {**pool[c], "rank": i + 1, "via": (pool[c].get("via") or "") + ("" if qi == 0 else f"·ent{qi}")}
                     for i, (c, qi) in enumerate(items)
@@ -418,54 +265,9 @@ def do_search(
     exn = r_notes.get("expand_notes")  # X3 — BM25 질의 확장(용어 사전)이 적용됐으면 표시
     if exn:
         notes.append("용어 확장: " + "; ".join(exn))
-    ri = r_notes.get("rerank_info")  # 재순위(G8·AD4) — 꺼짐(backend=off)이면 알리지 않음
-    rerank_out = {}
-    if ri and ri.get("backend") != "off":
-        if ri.get("applied") is False:  # AD4 SEARCH_RERANK_WHEN=cond — 효과 없을 신호라 건너뜀
-            notes.append(f"재순위: {ri['backend']} · 건너뜀({ri.get('reason')})")
-            rerank_out = {"rerank": {"applied": False, "reason": ri.get("reason")}}
-        else:
-            notes.append(
-                f"재순위: {ri['backend']}"
-                + (f" fallback({ri['fallback']})" if ri.get("fallback") else f" · {ri['n']}개 · {ri['ms']:.0f}ms")
-            )
-            rerank_out = {"rerank": {"applied": True, "reason": ri.get("reason"), "ms": ri.get("ms")}}
     if r_notes.get("recency_note"):  # L3-1 — 같은 문서군 최신성 순위가 적용됐으면 표시
         notes.append(r_notes["recency_note"])
-    if "graph" in methods and hits:
-        for g in _graph_hits_for_client(R, hits, question, client):
-            evidence.append(
-                {
-                    "file_path": g["file_path"],
-                    "file_name": Path(g["file_path"]).name,
-                    "page": g["page"],
-                    "line": g["line"],
-                    "text": g["text"],
-                    "via": f"graph({g['via']})",
-                }
-            )
-    if "concept" in methods:  # X4 — 질문 속 개념의 관련 청크를 후보로(선택)
-        for g in R.concept_hits(question, k=3, client=client):  # BR50 F
-            evidence.append(
-                {
-                    "file_path": g["file_path"],
-                    "file_name": g["file_name"],
-                    "page": g["page"],
-                    "line": g["line"],
-                    "text": g["text"],
-                    "via": g["via"],
-                }
-            )
-    images = []
-    if "image" in methods:
-        images, note = _image_hits(question, k, client=client)  # BR50 G
-        if note:
-            notes.append(note)
-    if "openviking" in methods:
-        ov, note = _openviking_hits(question, k, client=client)  # BR50 H
-        evidence += ov
-        if note:
-            notes.append(note)
+    images = []  # 응답 모양 유지(그림 검색 image는 10-29에 지움)
     if hard and scope:  # (2026-10-20 통합) 하드 필터 범위 안 문서만 남기고 다시 1..n 순위 — 요청한 k개로
         kept_agg = evidence[0] if evidence and evidence[0].get("via") in ("aggregate", "aggregate_llm") else None
         scoped = [e for e in evidence if e is not kept_agg and (e.get("file_path") or "") in scope]
@@ -496,7 +298,6 @@ def do_search(
             "notes": notes,
             "ms": round(ms, 1),
             **gate,
-            **rerank_out,
             **({"index_id": index_id} if index_id else {}),
             **({"filter": hard, "scope_docs": scope_docs} if hard else {}),
         }

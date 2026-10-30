@@ -41,13 +41,13 @@ import urllib.request
 import uuid
 from pathlib import Path as _Path
 
-from common.ai.guard import precheck, require_internal
+from common.ai.guard import fake_llm, precheck, require_internal
 from common.ai.guard import urlopen as _g_urlopen
 from common.ai.llm import profile
 from common.config.settings import by_env, cfg, checked, reveal  # S7b — 설정 객체(호출 때마다 cfg() — 옛 env 읽기와 같은 시점 값)
 from common.core.paths import resolve_agent_dir
 
-_ROLE_GUARD_PREFIX = {"llm": "LLM", "vlm": "VLM", "vlm_judge": "VLM", "ocrvlm": "OCRVLM", "embed": "EMBED"}
+_ROLE_GUARD_PREFIX = {"llm": "LLM", "vlm": "VLM", "vlm_judge": "VLM", "embed": "EMBED"}
 
 
 class ModelUnavailable(RuntimeError):
@@ -226,7 +226,7 @@ def _append_retry_note(messages, note):
 # 평가·RuntimeSession·ModelGuardPlugin은 옮기지 않음). 함수 이름 앞에 _를 붙인 것 말고는 동작·문구·지문 계산이 같다 —
 # google.adk·litellm·pydantic은 전처럼 함수 안에서 지연 import(S7b부터 설정 객체 — common.config.settings — 때문에 pydantic은 import 때 들어옴).
 _PIPE_LOG = logging.getLogger("common.ai.adk")
-_PIPELINE_MODEL_ROLES = frozenset({"llm", "vlm", "vlm_judge", "ocrvlm"})
+_PIPELINE_MODEL_ROLES = frozenset({"llm", "vlm", "vlm_judge"})
 
 
 class PlatformError(Exception):
@@ -769,8 +769,8 @@ _client_cache_lock = threading.Lock()
 
 
 def _redirect_ok(loc, prefix):
-    """리다이렉트 대상(loc)을 따라가도 되나 — common.guard와 같은 두 겹 규칙(내부 주소 또는 <prefix>_ALLOW_EXTERNAL=1
-    + 합성 정답 파일). 순수 함수로 빼서 네트워크 없이 단위 시험 가능(_guarded_client 후킹의 판단 로직 그대로)."""
+    """리다이렉트 대상(loc)을 따라가도 되나 — common.guard와 같은 규칙(내부 주소 또는 <prefix>_ALLOW_EXTERNAL=1
+    + RUN_ENV=local). 순수 함수로 빼서 네트워크 없이 단위 시험 가능(_guarded_client 후킹의 판단 로직 그대로)."""
     from common.ai.guard import external_allowed, is_internal
 
     return is_internal(loc) or external_allowed(prefix)
@@ -871,7 +871,7 @@ def _to_contents(messages):
     return ("\n".join(system_parts) if system_parts else None), contents
 
 
-_EXTRA_ENV_KEY = {"llm": "LLM_EXTRA_BODY", "vlm": "VLM_EXTRA_BODY", "vlm_judge": "VLM_EXTRA_BODY", "ocrvlm": "VLM_EXTRA_BODY"}
+_EXTRA_ENV_KEY = {"llm": "LLM_EXTRA_BODY", "vlm": "VLM_EXTRA_BODY", "vlm_judge": "VLM_EXTRA_BODY"}
 
 
 def _env_extra_body(role):
@@ -880,7 +880,7 @@ def _env_extra_body(role):
     메커니즘으로 보낸다. 여기 한 곳(complete())에서 role별로 읽어 호출자의 extra=와 합치므로 common/llm.py chat()
     (agent= 경유라 extra= 없이 호출)과 VLM 직접 호출부(figures.py·vlm_page.py·agent_step.py·reread_stage3.py 등) 둘 다
     같은 env로 적용된다 — 호출부마다 손대지 않음. 형식이 틀리면 바로 실패(기존 env JSON 관례 — RDB_CONNECT_KWARGS·
-    PM_DB_CONNECT_KWARGS와 같게 조용히 무시하지 않음)."""
+    RDB_CONNECT_KWARGS와 같게 조용히 무시하지 않음)."""
     import copy
 
     key = _EXTRA_ENV_KEY.get(role)
@@ -1235,7 +1235,7 @@ def run_agent(
                 "ADK가 도구를 등록하는 이름과 달라 모델이 같은 이름으로 못 찾음"
             )
 
-    if role in ("llm", "vlm") and cfg().dev.llm_fake and fake_policy is not None:
+    if role in ("llm", "vlm") and fake_policy is not None and fake_llm():
         # AG11 2단계 — 가짜 정책 모델로(3단계: vlm 역할 판단 세션 parse_decide_vlm도 같은 시험 경로 — AG6 M2) run_agentic(실제 콜백: 허용 도구·도구/모델 호출·토큰 예산·궤적)을 끝까지(네트워크 0)
         # TODO: 리팩토링 후 구현 필요
         # from agent_platform.pipeline import run_agentic
@@ -1267,7 +1267,7 @@ def run_agent(
             )
         )
 
-    if role == "llm" and cfg().dev.llm_fake:
+    if role == "llm" and fake_llm():
         from common.ai import llm as _L
 
         text_in = "".join(p.text or "" for p in (contents.parts or []) if p.text)
@@ -1448,7 +1448,7 @@ def complete(
     agent=None,
     call_reserved=False,
 ):
-    """역할(llm·vlm·vlm_judge·ocrvlm — 임베딩은 common/embed.py 유지, GA6) → (응답 글자, usage_dict).
+    """역할(llm·vlm·vlm_judge — 임베딩은 common/embed.py 유지, GA6) → (응답 글자, usage_dict).
     agent=dev/agents/<agent_id> — gamma 에이전트 패키지 경유(_complete_agent, GA2 설계 §1). 업무 호출부(modules/·cli/·eval/)는
     전부 이걸 넘겨야 한다(cli/check_modules.py 정적 검사) — 패키지의 model_role이 role과 달라도 이 자리에서 바로 막힌다.
     agent=None은 옛 직접 모델 경로(이 파일 자신의 selftest·cli/ping_models.py의 연결 확인처럼 업무 프롬프트가 없는 호출용).

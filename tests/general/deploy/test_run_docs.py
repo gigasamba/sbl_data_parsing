@@ -24,9 +24,9 @@ RD = _load()
 
 GOLDEN = {
     "warm": "docker exec data-pipeline-parse bash -c 'mkdir -p /app/output/_warm && cd /app && PYTHONPATH=/app/deploy python -m pipeline.extract.source --set SOURCE_WARM=/app/output/_warm warm --csv /app/output/docflow/9/batch.csv'",
-    "parse_light": "docker exec data-pipeline-parse bash -c 'cd /app && echo [envcheck] gate=9 채널=light; RUN_DOCS_DOC=/app/output/docflow/7 FIG_OCR_BUDGET=0 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/docflow/7 --set DOC_DIR_PREPARED=/app/output/docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/docflow/7/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_MERGE_PAGES=1 --set FUSE_REREAD_MAX=3 --set FUSE_REREAD_DPI=120 --set PARSE_FUSE_REREAD_P3=0 --set PARSE_PHASES=2,3r --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --source rdb:csv:/app/output/docflow/7/batch.csv'",
-    "parse_vlm_scan": "docker exec data-pipeline-parse bash -c 'cd /app && echo [envcheck] gate=1.3 채널=vlm; RUN_DOCS_DOC=/app/output/docflow/9 FIG_OCR_BUDGET=0 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/docflow/9 --set DOC_DIR_PREPARED=/app/output/docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/docflow/9/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_MERGE_PAGES=1 --set FUSE_REREAD_MAX=3 --set FUSE_REREAD_DPI=120 --set PARSE_FUSE_REREAD_P3=0 --set PARSE_PHASES=2,3r --set PARSE_QA_LIGHT=1 --set VLM_GLOBAL_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set FIGURES_VLM_PARALLEL=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set VLM_PAGE_SLOW=45 --set PREPARE_ROTATE=0 --set CPU_MAX_LOAD=1.3 parse --source rdb:csv:/app/output/docflow/9/batch.csv --engines anydoc,docx2python,html_stdlib,hwpx,kreuzberg,markitdown,mhtml,msg_extract,office,plaintext,pymupdf,pymupdf4llm,qwen_vlm'",
-    "struct": "docker exec data-pipeline-structure bash -c 'cd /app && SERVICE_MASTER_CSV=/app/config/service_master.csv DIVISION_MASTER_CSV=/app/config/division_master.csv PROD_MASTER_CSV=/app/config/prod_master.csv PYTHONPATH=/app/deploy S=$(python -m pipeline.stackcfg --path /app/output/docflow/9) && python -m pipeline.transform.structure.build_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --set FILE_META_PATH=/app/output/file_meta_new.jsonl --parse-dir /app/output/docflow/9/parse --stack \"$S\" --out /app/output/docflow/9/bundle && python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --set FILE_META_PATH=/app/output/file_meta_new.jsonl load --bundle /app/output/docflow/9/bundle >> /app/output/docflow/9/structure.log 2>&1'",
+    "parse_light": "docker exec data-pipeline-parse bash -c 'cd /app && echo [envcheck] gate=9 채널=light; RUN_DOCS_DOC=/app/output/docflow/7 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/docflow/7 --set DOC_DIR_PREPARED=/app/output/docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/docflow/7/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_MERGE_PAGES=1 --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --source rdb:csv:/app/output/docflow/7/batch.csv'",
+    "parse_vlm_scan": "docker exec data-pipeline-parse bash -c 'cd /app && echo [envcheck] gate=1.3 채널=vlm; RUN_DOCS_DOC=/app/output/docflow/9 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/docflow/9 --set DOC_DIR_PREPARED=/app/output/docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/docflow/9/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_MERGE_PAGES=1 --set PARSE_QA_LIGHT=1 --set VLM_GLOBAL_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set FIGURES_VLM_PARALLEL=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set VLM_PAGE_SLOW=45 --set PREPARE_ROTATE=0 --set CPU_MAX_LOAD=1.3 parse --source rdb:csv:/app/output/docflow/9/batch.csv --engines anydoc,docx2python,html_stdlib,hwpx,kreuzberg,markitdown,mhtml,msg_extract,office,plaintext,pymupdf,pymupdf4llm,qwen_vlm'",
+    "struct": "docker exec data-pipeline-structure bash -c 'cd /app && PYTHONPATH=/app/deploy python -m pipeline.transform.structure.build_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --set FILE_META_PATH=/app/output/file_meta_new.jsonl --parse-dir /app/output/docflow/9/parse --out /app/output/docflow/9/bundle && python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --set FILE_META_PATH=/app/output/file_meta_new.jsonl load --bundle /app/output/docflow/9/bundle >> /app/output/docflow/9/structure.log 2>&1'",
     "publish": "docker exec data-pipeline-parse bash -c 'cd /app && PYTHONPATH=/app/deploy python -m pipeline.load.publish_parse_result --set PM_BUCKET_SKIP_OVERLAP_CHECK=1 --out /app/output/docflow/9 --source-system FileStorageMap --apply >> /app/output/docflow/9/publish.log 2>&1'",
     "sweep": "docker exec data-pipeline-parse bash -c \"for p in /proc/[0-9]*; do grep -aqzx 'RUN_DOCS_DOC=/app/output/docflow/9' \\$p/environ 2>/dev/null && kill \\${p##*/} 2>/dev/null; done\"",
 }
@@ -55,24 +55,19 @@ def _inner(cmd):
 
 def test_settings_only_via_set():
     """컨테이너 안 python에 설정 칸 이름을 env(`X=값 python`·`X=값 … && python`)로 주지 않는다 — 모두 --set(VS8b U-1: S7e2부터 env의 옛 이름은
-    안 읽음). env로 남는 것은 라이브러리(PYTHON*)·읽는 코드 없는 이름·문서 표지(RUN_DOCS_DOC)·셸 변수 S뿐."""
+    안 읽음). env로 남는 것은 라이브러리(PYTHON*)·문서 표지(RUN_DOCS_DOC)뿐."""
     known = setarg._fields()
     allowed = {
         "PYTHONPATH",
         "PYTHONDONTWRITEBYTECODE",
         "PYTHONPYCACHEPREFIX",
         RD.DOC_MARK,
-        "S",
-        "FIG_OCR_BUDGET",
-        "SERVICE_MASTER_CSV",
-        "DIVISION_MASTER_CSV",
-        "PROD_MASTER_CSV",
     }
     for name, cmd in _built().items():
         inner = _inner(cmd)
         env_words = set(re.findall(r"(?:^|[\s;&(])([A-Z][A-Z0-9_]+)=", re.sub(r"--set [^ ']+", "", inner)))
         assert env_words <= allowed, (name, sorted(env_words - allowed))
-        assert not (env_words - {"S"}) & set(known), (name, sorted((env_words - {"S"}) & set(known)))
+        assert not env_words & set(known), (name, sorted(env_words & set(known)))
 
 
 def test_set_names_accepted():
@@ -99,3 +94,69 @@ def test_sweep_marker_matches_parse():
     """고아 정리가 찾는 표지 env가 파싱 명령이 주는 표지와 같다(옛 PIPE_OUT_ROOT env 자리)."""
     mark = f"{RD.DOC_MARK}=/app/output/docflow/9"
     assert mark in _inner(GOLDEN["parse_vlm_scan"]) and mark in GOLDEN["sweep"]
+
+
+# ── 레인·대기열 정책(사용자 10-29 — docs/prd/runner.md rn-01·rn-02) ──
+# (자기 레인, 공유 워커?, 대기 길이 light/medium/vlm, 진행 중 vlm, vlm 상한) → 꺼낼 레인
+PICK_CASES = [
+    ("light", False, (2, 5, 5), 0, 2, "light"),  # 자기 레인 먼저
+    ("light", False, (0, 5, 5), 0, 2, None),  # 전담 — 다른 레인이 차 있어도 안 가져옴
+    ("light", True, (0, 5, 3), 0, 2, "medium"),  # 공유 — 비었으면 가장 긴 다른 레인
+    ("light", True, (1, 5, 9), 0, 2, "light"),  # 공유도 자기 레인이 있으면 steal 안 함
+    ("medium", True, (0, 0, 4), 2, 2, None),  # vlm 상한이면 vlm 문서 건너뜀
+    ("medium", True, (1, 0, 4), 2, 2, "light"),  # 상한일 때 다음 레인으로
+    ("vlm", False, (0, 0, 4), 2, 2, None),  # 전담 vlm도 상한을 지킴
+    ("vlm", False, (0, 0, 4), 1, 2, "vlm"),
+]
+
+
+def test_pick_lane_table():
+    for own, shared, (nl, nm, nv), vlm_run, cap, want in PICK_CASES:
+        queues = {"light": [0] * nl, "medium": [0] * nm, "vlm": [0] * nv}
+        got = RD.pick_lane(own, shared, queues, {"light": 0, "medium": 0, "vlm": vlm_run}, cap)
+        assert got == want, (own, shared, (nl, nm, nv), vlm_run, got, want)
+
+
+def test_policy_from_settings():
+    vals, probs = RD.run_docs_policy({})
+    assert vals == RD.RUN_DOCS_DEFAULTS and probs == []
+    doc = {"pipeline": {"host": {"run_docs": {"warm": "30", "struct_backlog": "0", "vlm_shared": "", "light_dedicated": "2"}}}}
+    vals, probs = RD.run_docs_policy(doc)  # BaseLoader — 글자로 들어옴
+    assert (vals["warm"], vals["struct_backlog"], vals["vlm_shared"], vals["light_dedicated"]) == (30, 0, 1, 2) and probs == []
+    _, probs = RD.run_docs_policy({"pipeline": {"host": {"run_docs": {"warm": "-1", "vlm_cap": "x"}}}})
+    assert len(probs) == 2 and all("형식 오류" in p for p in probs), probs
+    no_shared = {f"{c}_shared": "0" for c in RD.LANES}
+    # 배치가 끝나지 않는 설정(PR #7 리뷰) → 문제 있음 / 경계 바로 안쪽 → 문제 없음
+    for sec, bad in [
+        ({f"{c}_{k}": "0" for c in RD.LANES for k in ("dedicated", "shared")}, True),
+        ({"vlm_cap": "0"}, True),
+        ({"warm": "0"}, True),
+        ({**no_shared, "vlm_dedicated": "0"}, True),
+        ({**no_shared}, False),
+        ({"vlm_dedicated": "0"}, False),  # 공유 워커가 vlm을 가져감
+        ({"vlm_cap": "1", "warm": "1"}, False),
+    ]:
+        probs = RD.run_docs_policy({"pipeline": {"host": {"run_docs": sec}}})[1]
+        assert bool(probs) == bad, (sec, probs)
+
+
+def test_defaults_match_settings_model():
+    """러너 기본값 = 설정 모델 기본값(호스트 python은 모델을 import하지 않아 두 곳에 있음)."""
+    from pipeline.config import PipelineHostRunDocs
+
+    assert RD.RUN_DOCS_DEFAULTS == {k: f.default for k, f in PipelineHostRunDocs.model_fields.items()}
+
+
+def test_stack_version_passed_once():
+    """엔진 구성 판 번호(main()이 시작 때 한 번 — STACK_VER)가 파싱(--set STACK_VERSION)·구조화(--stack-version)에 같이 간다(pl-32 — 사본 파일 없음).
+    빈 글자(PC 파일)면 둘 다 인자 없음(위 고정 명령)."""
+    keep = RD.STACK_VER
+    try:
+        RD.STACK_VER = "7"
+        assert RD.parse_cmd(7, "light", False, "9").endswith(
+            "--set CPU_MAX_LOAD=9 --set STACK_VERSION=7 parse --source rdb:csv:/app/output/docflow/7/batch.csv'"
+        )
+        assert " --parse-dir /app/output/docflow/9/parse --stack-version 7 --out " in RD.struct_cmd(9)
+        assert "stackcfg" not in RD.struct_cmd(9)
+    finally:
+        RD.STACK_VER = keep

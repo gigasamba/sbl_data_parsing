@@ -1,9 +1,8 @@
 """스택 폴더 자동 등록 + 도구(tool) 진입점.
 
 스택 추가 = tools/engines/<스택>/parser.py 하나 추가 (ENGINES · FORMATS · REQUIRES · PROFILED · UNVERIFIED 정의, 필요 시 REQUIRES_ENV).
-사용: from data_parsing.engines import registry; registry.run("docling", "x.pdf")
-
-LLM 도구 호출이 필요하면 TOOL_SPECS(OpenAI 호환 function 스키마)와 call_tool()을 그대로 쓴다.
+사용: from pipeline.extract.engines import registry; registry.run("pymupdf", "x.pdf")
+(LLM 도구 API TOOL_SPECS·call_tool은 10-30 지움 — pl-31, 부르는 곳 없음.)
 """
 import importlib
 import importlib.util
@@ -33,16 +32,16 @@ def engines():
 # 핵심 평가 엔진(기본 실행 대상, 2026-09-29 사용자 확정) — 타입별 담당·실측 성능·라이선스로 추림. 나머지는 --engines all이거나 이름을 명시할 때만.
 # 제외(사용자 10-07, 스택에서 뺌 — backlog DP6): paddleocr · docling_ocr(EasyOCR 내장).
 # openviking_import·cognee_import 엔진 어댑터는 삭제됨(SI33, 10-07) — OpenViking은 서버의 기존 컨테이너를 직접 쓰고(구조화 요약 fallback은 OV_DOC_ROOT), Cognee는 스택에서 제외(DP6).
-CORE = {"pdfplumber", "pymupdf", "docling", "kreuzberg",                       # 텍스트 PDF(+ kreuzberg는 doc·html·eml 등 폭넓게)
-        "rapidocr_ko", "qwen_vlm", "ocr_vlm",                                   # 이미지·스캔(ocr_vlm = PaddleOCR-VL·GLM-OCR을 vLLM으로)
+CORE = {"pdfplumber", "pymupdf", "kreuzberg",                                  # 텍스트 PDF(+ kreuzberg는 doc·html·eml 등 폭넓게)
+        "rapidocr_ko", "qwen_vlm",                                              # 이미지·스캔(ocr_vlm은 10-30 지움 — pl-31)
         "office", "calamine", "pptx", "plaintext", "mhtml", "html_stdlib", "msg_extract", "markitdown", "hwpx",   # 오피스·웹·메일
-        "anydoc", "pypdf", "unstructured_auto"}   # 올인원 내부 파서 단독 — OpenViking 오피스(anydoc) · Cognee 기본 PDF(pypdf)·unstructured 로더
-                                                  # (OpenViking PDF = pdfplumber, Cognee docling 로더 = docling은 위에 있음) — 올인원 결과가 파서 탓인지 요약·추출 탓인지 가르기
+        "anydoc", "pypdf"}   # 올인원 내부 파서 단독 — OpenViking 오피스(anydoc) · Cognee 기본 PDF(pypdf) — 올인원 결과가 파서 탓인지 요약·추출 탓인지 가르기
+# 10-30(pl-31) 엔진 지움: docling·docling_ocr·docling_vlm·unstructured·unstructured_auto·unstructured_ocr·rapidocr(1.x)·kreuzberg_ocr·marker_llm(이름만 남아 있던 것).
 
 
 def missing_deps(engine):
     """엔진의 REQUIRES(모듈 import·PATH 도구)가 지금 환경에 없는 것 — check_env.py의 스택별 점검과 같은 판정(AD48, 중복 금지로 여기 한 곳).
-    한 스택 파일에 엔진이 여러 개면 보통 REQUIRES를 같이 쓰지만, 엔진마다 쓰는 패키지가 서로 다르면(예: rapidocr·rapidocr_ko)
+    한 스택 파일에 엔진이 여러 개면 보통 REQUIRES를 같이 쓰지만, 엔진마다 쓰는 패키지가 서로 다르면(옛 예: rapidocr 1.x·rapidocr_ko — 1.x는 10-30 지움, 지금 쓰는 엔진 없음)
     REQUIRES_ENGINE = {엔진: {"modules": [...], "tools": [...]}}로 엔진별로 따로 적고 여기서 그걸 먼저 본다(없으면 REQUIRES로).
     REQUIRES_ENV(모델 서빙 주소 등 설정값)는 설치 여부와 다른 문제라 missing_env()가 따로 본다."""
     _, m = engines()[engine]
@@ -58,7 +57,7 @@ def installed(engine):
 
 def select(spec=""):
     """--engines 값 → 대상 엔진 집합. ""=핵심(CORE 중 설치된 것만, cognee_<조합>은 제외 — 사용자 10-07) ·
-    "all"=설치된 전부(AD48 — docling·unstructured_auto 등 이미지·PC에 없는 패키지는 all에서 빠짐, 미설치 엔진은 시도 자체가 안 됨) ·
+    "all"=설치된 전부(AD48 — 이미지·PC에 없는 패키지의 엔진은 all에서 빠짐, 미설치 엔진은 시도 자체가 안 됨) ·
     "a,b"=그것만(엔진 이름을 직접 줄 때는 미설치여도 그대로 — 사용자가 알고 선택한 것, ImportError로 바로 알려준다)."""
     if spec == "all":
         return {e for e in engines() if installed(e)}
@@ -86,23 +85,3 @@ def run(engine, path, profile="default", fields="normalized"):
     out.setdefault("trace", {})["stack"] = stack
     return out
 
-
-TOOL_SPECS = [
-    {"type": "function", "function": {
-        "name": "list_parsers", "description": "문서 확장자에 쓸 수 있는 파서 엔진 목록",
-        "parameters": {"type": "object", "properties": {"ext": {"type": "string", "description": ".pdf .docx .xlsx .pptx .png"}},
-                       "required": ["ext"]}}},
-    {"type": "function", "function": {
-        "name": "parse_document", "description": "파서 엔진으로 문서 1건을 파싱해 텍스트·표·facts·fields를 돌려준다",
-        "parameters": {"type": "object", "properties": {
-            "engine": {"type": "string"}, "path": {"type": "string"},
-            "profile": {"type": "string", "enum": ["default", "tuned"]}}, "required": ["engine", "path"]}}},
-]
-
-
-def call_tool(name, args):
-    if name == "list_parsers":
-        return engines_for(args["ext"])
-    if name == "parse_document":
-        return run(args["engine"], args["path"], args.get("profile", "default"))
-    raise KeyError(name)

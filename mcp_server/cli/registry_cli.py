@@ -14,7 +14,6 @@ PG_*(공용 PostgreSQL). 표는 doc_contract_link·doc_location과 같은 PG_SCH
       python cli/registry.py unhide <doc_key> --by <누가> [--reason <왜>]   (복구 — deleted는 build()가 자동 hide, 그 밖엔 사람이 명시)
       python cli/registry.py report --since YYYY-MM-DD [--until YYYY-MM-DD] [--plain-names] [--out <md 경로>]
                                                                              (DET1 Fix3 — 날짜별 변경 보고, 읽기만)
-      python cli/registry.py --selftest
 """
 
 import argparse
@@ -61,21 +60,8 @@ def _print_diff(diff):
         )
 
 
-def _print_retry_stopped(db, stopped):
-    """DET1 Fix2 — nightly_plan()의 retry_stopped(REGISTRY_RETRY_MAX 넘어 재시도를 멈춘 doc_key)를 fail_count와
-    같이 "재시도 중단(n회 실패)"로. 0건이면 아무것도 안 찍음(조용함 — 평소엔 안 볼 줄)."""
-    if not stopped:
-        return
-    counts = {r["doc_key"]: r["fail_count"] for r in db.query("SELECT doc_key, fail_count FROM doc_registry")}
-    print(f"[registry] 재시도 중단 {len(stopped)}건(REGISTRY_RETRY_MAX={REG.retry_max()})")
-    for k in stopped[:20]:
-        print(f"  retry_stopped: {k[:16]}… 재시도 중단({counts.get(k) or 0}회 실패)")
-    if len(stopped) > 20:
-        print(f"  … retry_stopped {len(stopped) - 20}건 더")
-
-
 def _doc_label(d, plain):
-    """§3 공통 규칙(run_board.py·qa_report.py와 같은 해시 — doc-xxxxxxxx) — 기본은 이름(names, 없으면 doc_key
+    """§3 공통 규칙(run_board.py와 같은 해시 — doc-xxxxxxxx) — 기본은 이름(names, 없으면 doc_key
     앞 16자) 해시, --plain-names면 원래 이름 그대로."""
     names = d.get("names") or []
     label = ",".join(names) if names else d["doc_key"][:16] + "…"
@@ -86,12 +72,10 @@ def _print_report(rep, plain=False):
     print(
         f"[registry] 보고 {rep['since']}~{rep['until']} — 새 {rep['new']} · 바뀜 {rep['changed']} · "
         f"날짜만 바뀜(touched) {rep['touched']}(과거 이력 추적 대상 아님 — registry.py report_by_date 참고) · "
-        f"사라짐 {rep['deleted']} · 재시도 중단 {rep['retry_stopped']}(지금 기준, REGISTRY_RETRY_MAX={REG.retry_max()})"
+        f"사라짐 {rep['deleted']}"
     )
     for d in rep["docs"]:
         print(f"  {d['event']}: {_doc_label(d, plain)} ({d['seen_at']})")
-    for d in rep["retry_stopped_docs"]:
-        print(f"  retry_stopped: {_doc_label(d, plain)} ({d['fail_count']}회 실패)")
 
 
 def _render_report_md(rep, plain=False):
@@ -99,17 +83,13 @@ def _render_report_md(rep, plain=False):
         f"# 문서 대장 변경 보고 — {rep['since']}~{rep['until']}",
         "",
         f"- 새 {rep['new']} · 바뀜 {rep['changed']} · 날짜만 바뀜(touched) {rep['touched']}(과거 이력 추적 대상 아님) · "
-        f"사라짐 {rep['deleted']} · 재시도 중단 {rep['retry_stopped']}(지금 기준, REGISTRY_RETRY_MAX={REG.retry_max()})",
+        f"사라짐 {rep['deleted']}",
         "",
         "| 문서 | 사건 | 날짜 |",
         "|---|---|---|",
     ]
     for d in rep["docs"]:
         lines.append(f"| {_doc_label(d, plain)} | {d['event']} | {d['seen_at']} |")
-    if rep["retry_stopped_docs"]:
-        lines += ["", "| 재시도 중단 문서 | 실패 횟수 |", "|---|---|"]
-        for d in rep["retry_stopped_docs"]:
-            lines.append(f"| {_doc_label(d, plain)} | {d['fail_count']} |")
     return "\n".join(lines) + "\n"
 
 
@@ -159,9 +139,7 @@ def main(argv=None):
                 print(json.dumps(s, ensure_ascii=False))
         elif a.cmd == "diff":
             observed = REG.scan(out_dir)
-            plan = REG.nightly_plan(db, observed)  # DET1 Fix2 — diff_against() 결과 + retry_stopped(재시도 중단 목록)
-            _print_diff(plan)
-            _print_retry_stopped(db, plan.get("retry_stopped") or [])
+            _print_diff(REG.nightly_plan(db, observed))  # diff_against() 결과(+ 이번 밤 파싱 대상)
         elif a.cmd == "report":
             if not a.since:
                 raise SystemExit("report에는 --since YYYY-MM-DD 필요")

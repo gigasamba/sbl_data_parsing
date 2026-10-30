@@ -1,0 +1,30 @@
+[SYNTHETIC TEST DOCUMENT — invented content, no real company data or correspondence]
+
+업무 메모 — Korvexa ADC 2차 공급원 RFP 입찰 여부(Go/No-go)
+
+작성: 이재민 (사업개발팀 책임) | 수신: 최민호 실장 | 작성일: 2026-11-13
+관련: Korvexa Life Sciences RFP KVX-RFP-2026-05 (제안서 마감 2026-12-15), Pfizar Biopharma RFP PFZ-RFP-2026-04
+요청 결정: 11/18(수) 영업회의에서 (1) 입찰 Go/No-go, (2) 2공장 2,000L 2호기 2027년 4분기 우선순위
+
+1. 요약
+- Korvexa는 일본 1차 공급원이 있고, 우리는 2차(백업) 공급원 후보. 수주 가능성은 30% 정도로 봄.
+- 범위: mAb 중간체(2,000L) + 접합(OEB 5) + ADC DS 충전. DP는 범위 밖.
+- 10/29 의향서(서명본) 제출 완료 — 구속력 없음.
+
+2. 판단 근거
+- 장점: 고객 첫 거래(Prospect), ADC 레퍼런스 확보, 2029년 이후 연 2~4kg 수준(2차 공급원 몫 약 30%) 물량.
+- 위험 1: OEB 5 접합 스위트(C동) 가동이 2027년 3분기 예정 — 지연되면 ENG-C1 일정 못 맞춤.
+- 위험 2: Korvexa가 mAb 중간체 PPQ 3배치를 2027년 4분기에 요구 → Pfizar Biopharma ENG-01(2027년 10월 18일 주, 2호기)과 같은 설비.
+  Pfizar 건이 먼저이고 규모도 큼. Korvexa PPQ를 2호기에 넣으면 11~12월로 밀려야 함.
+- 위험 3: 링커-약물은 고객 공급 — 배치 실패 시 재공급 상한(cap) 협상 필요.
+
+3. 제안
+- 조건부 Go: 제안서는 제출하되, mAb 중간체 PPQ는 2028년 1분기 또는 1호기로 제안.
+- 2호기 2027년 4분기는 Pfizar 우선으로 확정 요청.
+- 11/16 슬롯 회의 결과(박소연 팀장) 반영해서 18일 회의 자료 업데이트 예정.
+
+4. 할 일
+- 이재민: 링커-약물 SDS·OEL 자료 요청(11/12 메일 발송 완료), 제안서 초안 12/4까지
+- 한지우(MSAT): 접합 스위트 가동 일정 확인, 11/17까지
+
+[SYNTHETIC TEST DOCUMENT — invented content, no real company data or correspondence]

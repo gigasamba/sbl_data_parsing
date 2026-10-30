@@ -5,8 +5,8 @@ post-process — no summarization or calculation happens here.
 
 Security boundary (independent review follows the urgent overlay that adds this file):
  - read-only by construction: exactly one SELECT/WITH statement, no DML/DDL/exec keywords anywhere
-   (see `validate()`), run through a separate low-privilege connection (EDW_QUERY_* env, never the
-   write/load account in common/store/edwdb.py).
+   (see `validate()`), run through the EDW **read** account (common.connections.rdb.read — the search
+   MCP never gets the write account; user 10-29, docs/prd/ops.md#op-03).
  - table allowlist: only `schema.table` names in EDW_QUERY_TABLES (or DEFAULT_TABLES) may appear in a
    FROM/JOIN; system catalogs are always rejected even if somehow listed.
  - limits: row count (EDW_QUERY_MAX_ROWS), wall-clock timeout (EDW_QUERY_TIMEOUT_SEC), response size
@@ -47,13 +47,12 @@ import time
 from datetime import date, datetime
 from datetime import time as dt_time
 from decimal import Decimal
-from pathlib import Path
 
-from common.config import settings as C  # 비밀 칸(EDW_QUERY_PASSWORD) 꺼내기(S7d — 설정 객체)
+from common.config import settings as C  # common 칸(connections.rdb — 접속·sqlite 대역)
 from mcp_server import config as mc  # 설정 객체(S7d — 호출마다 cfg())
 from mcp_server.schemas.edw_result import ColumnMeta, QueryResult  # noqa: F401 — S5: 출력 모양은 schemas/로(내용 그대로)
 
-DEFAULT_TABLES = "AI.client,AI.contract,AI.batch,AI.quote"
+DEFAULT_TABLES = "AI.FileStorageMap,AI.ParsingMeta,CRMS.RM_MAS_CLIENT,CRMS.RM_MAS_CLIENT_GENERAL,LAS.DIVISION_MAS,LAS.PROD_MAS,LAS.SERVICE_MAS,SFDC.Account,SFDC.Opportunity"  # PC stand-in tables (valid_env/edw — ops.md#op-03)
 _CELL_MAX = 2000
 _TRUNC_MARK = " …(truncated)"
 _SYSTEM_SCHEMAS = ("sys", "information_schema")
@@ -144,41 +143,34 @@ def allowed_tables(kind=None):
 
 
 def _mssql_conf():
-    """EDW_QUERY_* connection settings (mirrors common/store/edwdb.py.conf()'s file+env merge,
-    but under its own prefix so this read-only tool can never pick up the write/load account).
+    """EDW read-account connection args (common.connections.rdb + .read — never the write account).
     Returns None (not SystemExit) when required keys are missing — the caller turns that into a
     clean `not_configured` response instead of crashing the server."""
-    c = {}
-    f = mc.cfg().edw_query.conn_file
-    if f and Path(f).exists():
-        for ln in Path(f).read_text(encoding="utf-8").splitlines():
-            if "=" in ln and not ln.strip().startswith("#"):
-                k, v = ln.split("=", 1)
-                c[k.strip()] = v.strip()
-    for k in ("EDW_QUERY_SERVER", "EDW_QUERY_PORT", "EDW_QUERY_DATABASE", "EDW_QUERY_USER", "EDW_QUERY_PASSWORD"):
-        v = mc.given(k)  # 준 값만 접속 파일 값을 덮음(S7d — 비밀·포트는 글자로)
-        if v is not None:
-            c[k] = str(C.reveal(v))
-    c.setdefault("EDW_QUERY_PORT", "1433")
-    if not (c.get("EDW_QUERY_SERVER") and c.get("EDW_QUERY_DATABASE") and c.get("EDW_QUERY_PASSWORD")):
+    from common.store import mssql
+
+    if not C.cfg().connections.rdb.host:
         return None
-    return c
+    try:
+        kw, miss = mssql.login("read")
+    except ValueError:  # malformed port — same clean not_configured instead of a crash
+        return None
+    return None if miss else kw
 
 
 def backend():
-    """Backend selection order (spec): EDW_QUERY=0 disables outright; then EDW_QUERY_SQLITE; then
-    EDW_QUERY_SERVER/EDW_QUERY_CONN_FILE (pymssql); otherwise not configured.
+    """Backend selection order (spec): EDW_QUERY=0 disables outright; then RDB_SQLITE (the one PC stand-in);
+    then the EDW read account (common.connections.rdb, pymssql); otherwise not configured.
     Returns ("sqlite", path) | ("mssql", conf_dict) | (None, None)."""
     if not enabled():
         return None, None
-    q = mc.cfg().edw_query
-    sqlite_path = q.sqlite
+    from common.store import mssql
+
+    sqlite_path = mssql.standin_path()
     if sqlite_path:
         return "sqlite", sqlite_path
-    if q.server or q.conn_file:
-        conf = _mssql_conf()
-        if conf is not None:
-            return "mssql", conf
+    conf = _mssql_conf()
+    if conf is not None:
+        return "mssql", conf
     return None, None
 
 
@@ -252,32 +244,6 @@ def _scan(sql):
 
 def _normalize_ref(raw):
     return re.sub(r"\s*\.\s*", ".", raw).replace("[", "").replace("]", "").lower()
-
-
-def _scan_paren(text, pos):
-    """pos is the index of '(' — returns the index just past its matching ')' (quote-aware, so a ')'
-    inside a string literal doesn't end the match early). Unterminated is not an error here: `_scan()`
-    already rejected unterminated strings/comments before `validate()` gets this far, and an unbalanced
-    paren in otherwise-valid SQL would fail at the database anyway — we just stop at end of text."""
-    n = len(text)
-    depth = 0
-    i = pos
-    while i < n:
-        c = text[i]
-        if c == "'":
-            i += 1
-            while i < n and text[i] != "'":
-                i += 1
-            i += 1
-            continue
-        if c == "(":
-            depth += 1
-        elif c == ")":
-            depth -= 1
-            if depth == 0:
-                return i + 1
-        i += 1
-    return n
 
 
 def _scan_from_list(text, pos):
@@ -568,9 +534,11 @@ def _connect_sqlite(path, timeout):
     ATTACH/PRAGMA are already blocked keywords for user-supplied SQL (see `_BLOCKED_RE`) — this is
     about the connection's OWN internal self-attach (used so `AI.client` resolves exactly like it
     would in T-SQL), which now goes through the same read-only URI so that path can't write either."""
-    uri = f"file:{Path(path).resolve().as_posix()}?mode=ro"
-    conn = sqlite3.connect(uri, uri=True, timeout=min(timeout, 5))
-    conn.execute("ATTACH DATABASE ? AS AI", (uri,))  # same read-only file, alias "AI" — AI.client works like T-SQL
+    from common.store import mssql
+
+    conn = mssql.standin(
+        path, readonly=True, timeout=min(timeout, 5)
+    )  # one stand-in file ATTACHed per schema (AI·CRMS·LAS·SFDC), all ?mode=ro
     deadline = time.monotonic() + timeout
     conn.set_progress_handler(lambda: time.monotonic() > deadline, 1000)
     return conn
@@ -580,17 +548,8 @@ def _connect_mssql(conf, timeout):
     """S8b(5-4) — SQLAlchemy가 연 DBAPI 연결(접속 인자 그대로). 질의 코드는 SQLite 대역과 같은 DBAPI 커서 꼴이라 그대로(도구 출력 같음)."""
     from common.store import mssql
 
-    mc.checked("EDW_QUERY_PORT")  # 접속 포트 — 형식 틀린 값은 옛 int("…")처럼 여기서 실패(connect_failed로 처리, S7d)
-    return mssql.raw(
-        server=conf["EDW_QUERY_SERVER"],
-        port=int(conf["EDW_QUERY_PORT"]),
-        user=conf.get("EDW_QUERY_USER"),
-        password=conf["EDW_QUERY_PASSWORD"],
-        database=conf["EDW_QUERY_DATABASE"],
-        timeout=timeout,
-        login_timeout=min(timeout, 10),
-        charset="UTF-8",
-    )
+    # conf = mssql.login("read") — 포트 형식은 거기서 이미 검사(_mssql_conf) · 시간 상한·문자셋은 이 도구 값이 이김
+    return mssql.raw(**{**conf, "port": int(conf["port"]), "timeout": timeout, "login_timeout": min(timeout, 10), "charset": "UTF-8"})
 
 
 def _connect(kind, conf, timeout):

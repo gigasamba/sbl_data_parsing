@@ -94,7 +94,7 @@ def selftest():
     )
     dec2 = build_decisions(rep4, dd2, stack2, frozenset(), pdf)
     by_step = {x["step"]: x for x in dec2}
-    assert by_step["ocr_fallback"]["choice"] is True  # 2쪽이 스캔 쪽이라 OCR 엔진을 합침
+    assert by_step["ocr_fallback"]["choice"] is True  # 2쪽이 스캔 쪽(10-29 — 쪽 VLM이 그 쪽을 채움)
     assert by_step["page_scan"]["choice"] == "1쪽" and by_step["page_scan"]["inputs"]["pages"] == [2]
     print("[selftest] 쪽 신호 — 실 PDF(스캔 쪽 1장) page_signals·scan_pages_detail 연결·ocr_fallback·page_scan 결정 통과")
 

@@ -25,8 +25,11 @@ def app_selftest(app_cls, top):
     check(f"{top}: 앱 칸의 옛 env 이름 겹침 없음(호스트 절 빼고)", len(envs) == len(set(envs)))
     check(f"{top}: 읽는 절은 common + {top}뿐", set(app_cls.model_fields) == {"common", top})
     if sample.OUT.is_file():
-        st = S.load(app_cls, file=sample.OUT, environ={}, strict=False)  # sample은 값이 없음(run_env 포함)
-        check(f"{top}: settings.sample.yaml이 이 모델로 검증됨(빈 칸 = 기본값)", not any(S._is_set(st, p) for p, _, _ in rows))
+        st = S.load(app_cls, file=sample.OUT, environ={}, strict=False)  # sample의 run_env는 빈 칸
+        check(
+            f"{top}: settings.sample.yaml이 이 모델로 검증됨(적힌 값 = 코드 기본값 — op-05)",
+            all(S._get(st, p) == f.get_default(call_default_factory=True) for p, f, _ in rows if S._is_set(st, p)),
+        )
     secret = "tok-" + "y" * 10
     with tempfile.TemporaryDirectory() as td:
         f = Path(td) / "s.yaml"

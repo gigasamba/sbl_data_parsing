@@ -5,6 +5,7 @@ from pathlib import Path
 
 from common.config.settings import COMMON
 from common.store.registry import build, classify, diff_against, nightly_plan, scan
+from common.store.registry import hide as REG_hide
 
 
 def selftest():
@@ -129,20 +130,19 @@ def selftest():
     diff2, b2 = build(out, db, build_id="b2")
     assert diff2["new"] == ["c" * 64] and diff2["changed"] == [sb] and diff2["unchanged"] == [sa] and diff2["deleted"] == [sd], diff2
     row_d, seen_d = _row(db, sd)
-    assert row_d["status"] == "deleted" and seen_d[-1]["status"] == "deleted"
+    # pl-12(사용자 10-30) — 관측에 없는 문서(d)는 아무것도 안 씀: status 그대로·이력 안 늘어남·숨김 없음
+    assert row_d["status"] != "deleted" and seen_d[-1]["status"] != "deleted" and len(seen_d) == 1, (row_d, seen_d)
     row_b2, seen_b = _row(db, sb)
     assert row_b2["status"] == "parsed" and len(seen_b) == 2  # b1(failed)·b2(parsed) — 바뀔 때만 늘어남
 
-    # OP1 — apply()가 deleted(d)를 자동 hide(색인 행 삭제 없이, doc_registry 행도 그대로) — unhide·hidden_set은
-    # mcp_server.services.search.registry로 옮김(10-14, R만 씀) — 이 시험은 hide() 자체(공통에 남음)와 doc_hidden 상태만 확인,
-    # unhide 복구 왕복은 mcp_server.services.search.registry.selftest()가 맡음
-    assert _hidden(db) == {sd}, _hidden(db)
-    row_d_hidden, _ = _row(db, sd)
-    assert row_d_hidden is not None and row_d_hidden["status"] == "deleted"  # doc_registry 행 삭제 없음(그대로 조회됨)
+    # pl-12 — 자동 hide 없음(숨김은 사람이 hide()로만 — unhide 왕복은 mcp_server.services.search.registry 시험)
+    assert _hidden(db) == set(), _hidden(db)
+    REG_hide(db, sd, by="tester", reason="사람 숨김(시험)")
+    assert _hidden(db) == {sd}
 
     # build 3 — 아무것도 안 바뀜 → 전부 unchanged, 이력 행이 안 늘어남(멱등)
     diff3, b3 = build(out, db, build_id="b3")
-    assert diff3["new"] == [] and diff3["changed"] == [] and diff3["deleted"] == []
+    assert diff3["new"] == [] and diff3["changed"] == [] and diff3["deleted"] == [sd]  # pl-12 — 안 써서 계속 "관측 없음"으로만 보임
     assert sorted(diff3["unchanged"]) == sorted([sa, sb, "c" * 64])
     _, seen_a3 = _row(db, sa)
     assert len(seen_a3) == 1  # b1 그대로 — b3가 새 이력을 안 더함
@@ -306,8 +306,8 @@ def selftest():
     assert "e.pdf" not in plan5["parse_names"] and "f.pdf" not in plan5["parse_names"] and "g.pdf" not in plan5["parse_names"], plan5
     db.close()
     print(
-        "[selftest] AD16/OP1/OP9 — scan·diff(new/changed/deleted)·build 멱등 · 자동 hide(색인 행 "
-        "삭제 없음, unhide·history·hidden_set은 mcp_server.services.search.registry 몫)·nightly_plan(new만 파싱) 통과"
+        "[selftest] AD16/OP1/OP9 — scan·diff(new/changed/deleted)·build 멱등 · 자동 hide 없음(pl-12 — "
+        "사람만, unhide·history·hidden_set은 mcp_server.services.search.registry 몫)·nightly_plan(new만 파싱) 통과"
     )
     print(
         "[selftest] AD17① — 원본 바이트 비교: touched(ETag·크기 같음/멀티파트 ETag+sha256 같음) vs "

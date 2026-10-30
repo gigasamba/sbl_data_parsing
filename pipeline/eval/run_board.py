@@ -12,7 +12,6 @@
 사용: python cli/run_board.py [--out out] [--gold-score output/eval/gold_score/score.json] [--plain-names]
       [--digest <폴더>] — 날짜·판 폴더(<폴더>/<YYYY-MM-DD>__<판>/)에 run_board.html + summary.json(phase별·전체 요약)을 두고
       <폴더>/INDEX.md에 한 줄 덧붙임 — 수집 서버 파싱이 끝나면 돌리고, 개발 서버가 그 폴더를 가져가 날짜·판으로 쌓음(사용자 10-08).
-      python cli/run_board.py --selftest
 """
 
 import argparse
@@ -618,7 +617,7 @@ def render(d, a, out_label, plain=False, gold_min=GOLD_MIN):
         )
         + "</section>",
     ]
-    if a["phases"]:
+    if set(a["phases"]) - {"phase -"}:  # 10-29 phase 없앰 — 옛 phase 기록이 있을 때만(새 기록은 전부 'phase -')
         p.append(
             '<section class="panel"><h2>phase별 — 문서×엔진 시도 결과 · 소요 시간</h2><div class="fig">'
             + svg_engines(a["phases"], keep_order=True)
@@ -841,7 +840,7 @@ def key_block(a, name):
 
 
 def version():
-    """판 — common.pipeline_version()(git → PIPELINE_VERSION → common/PATCH_VERSION)."""
+    """버전 — common.pipeline_version()(저장소 루트 VERSION·오버레이 패치 PATCH_VERSION 중 높은 것 — D-036)."""
     from common import pipeline_version
 
     return pipeline_version()

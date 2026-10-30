@@ -2,11 +2,10 @@
 # 모듈 트리거(1회 실행) — docs/architecture.md. 개발 서버 시험·나중의 새벽 배치(deploy/host/systemd/)가 같은 스크립트를 부름.
 #   bash deploy/host/scripts/trigger.sh parse|structure|load|publish|all|night [모듈 인자…]   (코드 폴더 루트에서 — S6b, 옛 docker/trigger.sh)
 #   publish(SI39) = 대표 결과(.md) Object Storage 업로드 + EDW 메타(cli/publish_parse.py --apply) — "all"에 포함(파싱 직후)
-#   night(OP13) = 자정 배치 순서(NIGHTLY_MODULES, 기본 "parse publish structure load") — ENABLED와 무관하게 요청하면 바로 돎
-#     (스케줄 ON/OFF 게이트는 이 스크립트가 아니라 deploy/host/systemd/data-pipeline-nightly.service의 NIGHTLY_ENABLED 확인 몫 — §env-guide 1-3)
+#   night(OP13) = 자정 배치 순서(NIGHTLY_MODULES, 기본 "parse publish structure load") — 시각과 무관하게 요청하면 바로 돎
+#   scheduled = 타이머용 — NIGHTLY_TIME 시각(5분 창)에만 night(아래 — §env-guide 1-3)
 #     NIGHTLY_PUBLISH=1(기본)이면 publish 실행 · parse 단계는 PARSE_DEADLINE 있으면 전달, 새 문서 상한은 NIGHTLY_MAX_NEW(기본 2000)
-#     OV 적재는 pipeline.py night()에서 pgvector_load 후 자동 실행(OV_FEATURES에 ingest 필요) — trigger.sh에서는 별도 module 없음
-#     이 night(컨테이너별 모듈 트리거, OP13 정본)과 cli/pipeline.py의 night()(한 프로세스 안 phase 단위 마감 예산)은
+#     이 night(컨테이너별 모듈 트리거, OP13 정본)과 cli/pipeline.py의 night()(한 프로세스 안 단계별 마감 예산)은
 #     서로 다른 배포 모양(compose 여러 컨테이너 ↔ 단일 컨테이너·Docker 밖 직접 실행, AGENTS.md 45행)을 각자 맡음 —
 #     RV5(10-09) 점검: pipeline.py night은 호출처 있음(AGENTS.md 지시표·entrypoint.sh night/full·requirements.md S8
 #     cron 예시) → 강제 병합 대신, 건너뜀 사유는 이 스크립트의 echo(아래 publish·75) → cron 리다이렉션으로
@@ -21,10 +20,27 @@ set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트(S6b)
 # 서버 설정은 코드 폴더 밖 $SERVER_ENV_DIR/settings.yaml(전체 덮어쓰기에 안 지워짐, env-guide.md) — compose 치환 값은 셸 env로(--env-file 없음)
 . deploy/host/scripts/settings_env.sh && load_settings || exit $?   # S7e1 — 컨테이너는 같은 파일을 붙여 읽음(compose x-settings)
+mod=${1:?parse|structure|load|all|night|scheduled}; shift || true
+# scheduled(pl-32, 사용자 10-30) = systemd 타이머가 5분마다 부름 — settings.yaml pipeline.host.nightly.time(NIGHTLY_TIME, HH:MM)이
+# 비면 조용히 끝(새벽 배치 없음), 지금이 그 시각부터 5분 안이면 night로 이어감(이미지 확인 전 — 5분마다 도는 몫을 가볍게). 켬/끔과 시각은 이 칸 하나(옛 NIGHTLY_ENABLED·고정 01:00 대신).
+if [ "$mod" = "scheduled" ]; then
+  t=$(printf '%s' "${NIGHTLY_TIME:-}" | tr -d '[:space:]')   # 공백만이면 비움과 같음(설정 모델과 같게)
+  [ -z "$t" ] && exit 0
+  case "$t" in
+    [01][0-9]:[0-5][0-9] | 2[0-3]:[0-5][0-9]) ;;
+    *) echo "[trigger] NIGHTLY_TIME 형식 오류(HH:MM이어야 함) — 새벽 배치 안 돎" >&2; exit 2 ;;
+  esac
+  now=$(date +%H:%M)
+  d=$(( (10#${now%%:*} * 60 + 10#${now#*:}) - (10#${t%%:*} * 60 + 10#${t#*:}) ))
+  d=$(( (d + 1440) % 1440 ))   # 자정을 넘는 창(23:58 → 00:02)
+  if [ "$d" -ge 5 ]; then exit 0; fi
+  mod=night
+fi
 . deploy/host/scripts/image_vars.sh   # S6b — compose.pipeline.yml은 두 이미지 변수를 다 치환하므로 둘 다 확인(옛 변수만 있으면 종료 코드 2)
 need_image pipeline || exit 2; need_image mcp || exit 2
-DC="docker compose -f deploy/host/compose/compose.pipeline.yml"
-mod=${1:?parse|structure|load|all|night}; shift || true
+code_dir_default DATA_PIPELINE_IMAGE   # op-06 — 실행 이미지면 이 코드 폴더 루트를 /app/deploy에(CODE_DIR 없을 때)
+DC="${DOCKER:-docker} compose -f deploy/host/compose/compose.pipeline.yml"   # DOCKER(settings common.host.docker) — podman이면 podman compose(사용자 10-30 검토 B4)
+[ -n "${CODE_DIR:-}" ] && DC="$DC -f deploy/host/compose/compose.code.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 /app/deploy에
 run() {
   echo "[trigger] $(date '+%F %T') $1 시작"
   $DC run --rm "$1" "$1" "${@:2}"; rc=$?          # compose run의 인자는 command를 덮음 → 모듈 이름을 다시 줌

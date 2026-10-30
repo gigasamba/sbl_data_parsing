@@ -4,7 +4,7 @@
 중복 제외(pipeline.eval.anchors.content_groups 재사용 — 앵커와 같은 사본 묶음 규칙). 정답 계산이 모호하면 만들지 않는다.
 
 사용: python cli/make_questions.py [--truth output/corpus/truth.json] [--out output/eval/questions.jsonl]
-      [--per-category 8] [--seed 0] [--selftest]
+      [--per-category 8] [--seed 0]
 """
 
 import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settings.pin_env)를 첫 줄에서(S7e2 — 옛 옵션 카탈로그 채우기 자리)

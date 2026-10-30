@@ -28,7 +28,7 @@ def test_check():
 
 
 def test_server_needs_file():  # VS9 R-1 — 서버에서 SETTINGS_FILE 없이 --set을 주면 base 없는 덮기 파일로 "설정 파일 필수" 관문을 지나가던 것
-    for run in ("dev", "stage", "prd"):
+    for run in ("dev", "prd"):
         try:
             setarg.child({"PIPE_PROCS": "2"}, environ={"RUN_ENV": run})  # env 남김 — 시험: --set 이름 사전(child가 덮기 파일로 넘김)
             raise AssertionError(f"{run}: 설정 파일 없이 통과함")

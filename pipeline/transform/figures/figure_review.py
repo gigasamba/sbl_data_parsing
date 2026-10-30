@@ -4,12 +4,11 @@
 흐름: extract(독립 추출, 우리 기록 안 보여줌) → compare(결정적 대조, 코드) → judge(VLM, 다른 지시문) → fix면 되돌이(최대 REVIEW_MAX_ROUNDS회).
 원칙: 규칙·키워드는 샘플별로 만들지 않는다(일반 스키마 + 판정자). 고치지 못한 충돌은 사람 확인(human_queue)로 — 값을 임의로 바꾸지 않음.
 
-VLM 연결: VLM_BASE_URL·VLM_MODEL(추출, role="vlm")·VLM_MODEL_ALT(판정, 없으면 VLM_MODEL, role="vlm_judge")·VLM_API_KEY·VLM_DEADLINE(기본 360초).
+VLM 연결: VLM_BASE_URL·VLM_MODEL(추출 role="vlm"·판정 role="vlm_judge" — 판정 전용 VLM_MODEL_ALT는 10-30 지움, pl-31)·VLM_API_KEY·VLM_DEADLINE(기본 360초).
 내부망 가드·재시도: common/adk.py complete()가 함(합성 데이터 실험만 VLM_ALLOW_EXTERNAL=1). 응답 캐시: output/parse/_review/_cache/.
 VLM 없으면 verdict="skipped"(실패 아님) — 결정적 대조도 할 수 없으므로 기록만 남긴다.
 
 CLI: python modules/parse/review/figure_review.py --figures <*.figures.json 폴더 또는 index.jsonl> --images <그림 폴더> --out output/parse/_review
-     python modules/parse/review/figure_review.py --selftest   (네트워크 없이 — compare()·stub VLM review() 점검)
 """
 
 import argparse
@@ -70,11 +69,11 @@ def _cache_dir():
 
 
 def _vlm_call(image_bytes, prompt, which="extract"):
-    """VLM 1회 호출 → 응답 텍스트. judge는 VLM_MODEL_ALT(없으면 VLM_MODEL, role="vlm_judge"). 캐시·내부망 가드·재시도(429·5xx)는
+    """VLM 1회 호출 → 응답 텍스트. judge도 VLM_MODEL(role="vlm_judge"). 캐시·내부망 가드·재시도(429·5xx)는
     common/adk.py complete()가 함(role 자체가 model·주소 선택을 담당 — AD22 전제, 다른 VLM 서버는 아직 못 씀)."""
     _vm = ccfg().models.vlm  # S7c — 설정 객체
     base = _vm.base_url
-    model = (_vm.model_alt if which == "judge" else None) or _vm.model
+    model = _vm.model
     if not (base and model):
         raise VLMUnavailable("VLM_BASE_URL·VLM_MODEL 미설정 — 검토 건너뜀")
     png = _downscale(image_bytes)
@@ -411,7 +410,7 @@ def review(image_bytes, record, context=None, max_rounds=None):
             return _skipped(str(e))
         issues_all += jres.get("issues") or []
         _vm = ccfg().models.vlm  # S7c — 설정 객체(한 번 읽어 묶음 — VS7c2 R-10)
-        prov = {"model": _vm.model, "judge_model": _vm.model_alt or _vm.model, "ms": round((time.perf_counter() - t0) * 1000)}
+        prov = {"model": _vm.model, "judge_model": _vm.model, "ms": round((time.perf_counter() - t0) * 1000)}
         if jres["verdict"] == "pass":
             return {
                 "verdict": "pass",

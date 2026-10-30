@@ -1,44 +1,11 @@
-"""mcp_server.main 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.main --selftest`."""
+"""mcp_server.main 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.main --selftest`.
+10-29 정리 — 다른 시험 파일의 _selftest_* 28개를 다시 부르던 줄을 뺐다(각 파일 test_main이 이미 돎 — 중복). 여기는 main 자신의 점검만."""
 
 import json
 
 from mcp_server import config as mc
 from mcp_server.main import _DEFAULT_MCP_INSTRUCTIONS, _mcp_instructions, build, check_bind
 from mcp_server.services.search.shaping import cap
-from tests.server.mcp.test_dispatch import _selftest_concurrency, _selftest_overload
-from tests.server.mcp.test_internal_docs import (
-    _selftest_aggregate_struct_fail,
-    _selftest_evidence_image_fetch,
-    _selftest_evidence_image_local_folder,
-    _selftest_evidence_image_office_and_bbox,
-    _selftest_list_documents,
-    _selftest_list_documents_latest_only_doc_id,
-    _selftest_lookup_term,
-)
-from tests.server.mcp.test_search_svc import (
-    _selftest_agg_fx,
-    _selftest_agg_route,
-    _selftest_agg_table_text,
-    _selftest_br50_client_scope,
-    _selftest_copy_group,
-    _selftest_copy_group_rep_text,
-    _selftest_entity_split,
-    _selftest_evidence_gate,
-    _selftest_evidence_rdb_meta,
-    _selftest_evidence_rep_path,
-    _selftest_graph_client_restrict,
-    _selftest_index_id,
-    _selftest_query_log,
-    _selftest_rerank_cond,
-    _selftest_search_client_arg,
-    _selftest_search_notes_no_race,
-)
-from tests.server.mcp.test_server_state import (
-    _selftest_reload,
-    _selftest_warmup_bg_failure_keeps_server_up,
-    _selftest_warmup_health,
-)
-from tests.server.mcp.test_shaping import _selftest_cap_fuzz, _selftest_cap_ranked
 
 
 def _selftest_transport_security():
@@ -58,16 +25,8 @@ def _selftest_transport_security():
 
 
 def selftest():
-    from common.core.paths import STACK_FILE
-    from common.store.db import cfgtables
-
-    cfgtables._CACHE.setdefault(
-        "stack", cfgtables.read_file("stack", STACK_FILE)
-    )  # S8b — 시험은 판 표 대신 파일(이미지 selftest엔 PG가 없음)
     o = {"evidence": [{"text": "가" * 5000}, {"text": "나" * 5000}]}
     assert len(json.dumps(cap(o, 3000), ensure_ascii=False)) <= 3000 and o["truncated"]
-    _selftest_cap_ranked()
-    _selftest_cap_fuzz()
     for bad in ("0.0.0.0", "8.8.8.8"):
         try:
             check_bind(bad, "t")
@@ -88,34 +47,6 @@ def selftest():
         assert _mcp_instructions() == "가짜회사 반도체 설비 문서 검색"
     assert _mcp_instructions() == _DEFAULT_MCP_INSTRUCTIONS
     print("[selftest] MCP_INSTRUCTIONS — 미설정 바이트 동일·가짜 회사 예시 반영 통과(DT1 c1)")
-    _selftest_aggregate_struct_fail()
-    _selftest_lookup_term()
-    _selftest_concurrency()
-    _selftest_overload()
-    _selftest_reload()
-    _selftest_search_notes_no_race()
-    _selftest_evidence_gate()
-    _selftest_agg_route()
-    _selftest_agg_table_text()
-    _selftest_agg_fx()
-    _selftest_search_client_arg()
-    _selftest_entity_split()
-    _selftest_graph_client_restrict()
-    _selftest_br50_client_scope()
-    _selftest_list_documents()
-    _selftest_list_documents_latest_only_doc_id()
-    _selftest_evidence_rdb_meta()
-    _selftest_rerank_cond()
-    _selftest_query_log()
-    _selftest_evidence_rep_path()
-    _selftest_evidence_image_fetch()
-    _selftest_index_id()
-    _selftest_evidence_image_local_folder()
-    _selftest_evidence_image_office_and_bbox()
-    _selftest_copy_group()
-    _selftest_copy_group_rep_text()
-    _selftest_warmup_health()
-    _selftest_warmup_bg_failure_keeps_server_up()
 
 
 def test_main():  # 옛 `--selftest` 갈래(`selftest()` 뒤 `sys.exit(0)`)

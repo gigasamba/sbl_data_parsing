@@ -4,7 +4,7 @@
 EDW 접속 정보·열 이름(기밀)은 서버 전용(/srv/rag/env/)에서만 채우고, 이 코드는 어떤 매핑이든 그대로 돈다.
 
 시험은 --source csv:<경로>로(합성 EDW 추출본, 실제 RDB·네트워크 없이 — modules/parse/source.py의 csv:<경로>
-시험 모드와 같은 관례). --source rdb:<표>(RDB_ENGINE=mssql 기본·pg, env RDB_HOST 등 — source.py와 같은 접속
+시험 모드와 같은 관례). --source rdb:<표>(RDB_ENGINE=mssql 기본·pg, 접속은 common.connections.rdb 읽기 계정 — source.py와 같은 접속
 스위치)는 실제 EDW 접속이 있는 서버에서만 — 이 PC에는 접속 정보가 없어 시험 대상이 아니다(selftest는 csv:만).
 
 mapping.json(필수 name, 선택 aliases·category): {"name": "<열 이름>", "aliases": "<열 이름>", "category": "<열 이름>"}
@@ -72,7 +72,7 @@ def rows_from_csv(path):
 
 
 def rows_from_rdb(table, select_cols):
-    """실제 EDW 표 — modules/parse/source.py와 같은 엔진 스위치(RDB_ENGINE 기본 mssql·pg, env RDB_HOST 등).
+    """실제 EDW 표 — modules/parse/source.py와 같은 엔진 스위치(RDB_ENGINE 기본 mssql·pg, 접속은 common.connections.rdb 읽기 계정).
     열 이름은 호출부(main)가 이미 COL_ID_RE로 검증한 것만 들어온다(SQL 삽입 방지, source.py와 같은 원칙)."""
     if not TABLE_ID_RE.match(table):
         raise ValueError(f"[gen_roster] 표 이름이 올바르지 않음(영문·숫자·_, 스키마.표만): {table!r}")
@@ -128,7 +128,7 @@ def build_client_extra(rows, mapping):
 
 
 def write_client_roster(roster, out_path, extra=None, source=""):
-    """CLIENT_ROSTER CSV in the new roster format (ROSTER_COLS — the same header as client_roster.example.csv,
+    """CLIENT_ROSTER CSV in the new roster format (ROSTER_COLS — the same header as resources/vocab/glossary/client_roster.csv,
     aliases joined with |). extra = build_client_extra() result; source = where it came from (--source)."""
     extra = extra or {}
     with open(out_path, "w", encoding="utf-8", newline="") as f:
@@ -176,7 +176,7 @@ def check_roster(path):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--kind", choices=["client", "product"])
-    ap.add_argument("--source", help="csv:<경로> 또는 rdb:<표>(서버 전용, RDB_ENGINE·RDB_HOST 등 env)")
+    ap.add_argument("--source", help="csv:<경로> 또는 rdb:<표>(서버 전용, RDB_ENGINE · 접속은 common.connections.rdb)")
     ap.add_argument("--mapping", help="매핑 JSON 경로({name, aliases?, category?})")
     ap.add_argument(
         "--out",
@@ -194,7 +194,7 @@ def main(argv=None):
             print(f"  경고: {m}", flush=True)
         return 1 if errs else 0
     if not (a.kind and a.source and a.mapping):
-        ap.error("--kind·--source·--mapping 필요(또는 --selftest)")
+        ap.error("--kind·--source·--mapping 필요")
     mapping = load_mapping(a.mapping)
     if a.source.startswith("csv:"):
         rows = rows_from_csv(a.source[4:])

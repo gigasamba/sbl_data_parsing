@@ -25,6 +25,7 @@
 *.env       text eol=lf
 *.mako      text eol=lf
 Dockerfile  text eol=lf
+Dockerfile.bake  text eol=lf
 deploy/docker/IMAGE_BASE   text eol=lf
 .gitignore      text eol=lf
 .dockerignore   text eol=lf
@@ -32,8 +33,6 @@ deploy/docker/IMAGE_BASE   text eol=lf
 .gitkeep        text eol=lf
 # 지시서 패키지(S2 — 옛 common_tools/prompts·data_etl/agent·data_retrieval/prompts) — 확장자와 무관하게 폴더째 LF(지시문 지문·_package_digest)
 resources/prompts/**   text eol=lf
-# S6a — triple_extract 지시서(PC 전용 validation/e2e/, D-019 ③)
-validation/e2e/triple_extract/**   text eol=lf
 
 # 바이너리 — 줄끝 변환·diff·merge 없음
 *.png   binary
@@ -69,7 +68,10 @@ validation/e2e/triple_extract/**   text eol=lf
 *.whl       binary
 *.parquet   binary
 
-# 시험 문서 묶음(valid_env/unstructured/<묶음>/ 아래 전부) — 바이트 그대로(문서 sha256이 시험 기준).
-# cp949·utf8sig .txt, CRLF 헤더·LF 본문이 섞인 .eml(synth-eml-charset — 의도적) 등이 있어 변환하지 않는다.
-# 바로 아래 목록 파일(list-*.txt·catalog.jsonl·README.md 등)은 위 확장자 규칙(LF)을 따른다.
-valid_env/unstructured/*/** -text
+# 시험 문서(valid_env/object_storage/<원천>/<uuid>/ 아래 전부 — PwC_Structure에서 10-29) — 바이트 그대로(문서 sha256이 시험 기준).
+# cp949·CRLF가 섞인 .eml·.txt, 손상·암호 파일이 의도적으로 있어 변환하지 않는다.
+valid_env/object_storage/** -text
+valid_env/object_storage/test_doc_purpose.md text eol=lf
+DEPS_HASH   text eol=lf
+# op-06 — git archive·GitHub zip 받기가 CODE_COMMIT을 "<커밋> <짧은 커밋>"으로 채움(clone에는 틀 그대로)
+CODE_COMMIT text eol=lf export-subst

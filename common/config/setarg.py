@@ -8,7 +8,7 @@
     같은 이름이 여러 번 나오면 뒤 값이 이긴다(옛 bash `A=1 … A=2`와 같음). 인자 자리는 어디든 된다(하위 명령 앞뒤).
   · 모르는 이름·호스트 칸(compose·셸 값)·비밀 칸은 모든 환경에서 거부한다(이름만 찍고 종료 2). 비밀 칸을 막는 이유: 명령 줄은 ps·로그·
     진행 기록에 남는다 — 비밀은 settings.yaml에만.
-  · 값 형식 오류는 덮기 파일과 같은 규칙: 서버(dev·stage·prd)는 거부(종료 2 — 칸 이름만), local은 경고 뒤 그 칸만 기본값.
+  · 값 형식 오류는 덮기 파일과 같은 규칙: 서버(dev·prd)는 거부(종료 2 — 칸 이름만), local은 경고 뒤 그 칸만 기본값.
   · 적용: settings.child_env로 덮기 파일(지금 설정 파일을 base로 — 비밀 복사 없음)을 만들고 같은 모듈을 새 프로세스로 다시 띄운다(import 때
     읽는 값까지 새 값으로 — 그 뒤 자식 프로세스도 SETTINGS_FILE로 같은 값을 받음). 엔진·인계 칸은 env에도(영구 다리 — put과 같음).
 쓰는 법: 진입 모듈의 `if __name__ == "__main__":` 첫 줄에서 `setarg.apply()`. `--set`이 없으면 아무것도 안 한다."""
@@ -105,10 +105,17 @@ def child(names, environ=None):
     return env
 
 
+_OWNED = "SETARG_OWNS_SETTINGS"  # 내부 신호 env 이름(설정 칸 아님 — pl-27)
+
+
 def apply(argv=None, module=None):
     """__main__ 첫 줄 — argv(기본 sys.argv[1:])에 --set이 있으면 덮기 파일 env로 같은 모듈을 다시 띄우고 그 종료 코드로 끝낸다.
     없으면 그대로 돌아온다. 틀리면 안내(이름만) 뒤 종료 2."""
     argv = sys.argv[1:] if argv is None else list(argv)
+    if os.environ.pop(_OWNED, None):  # env 남김 — 내부 신호: execve로 다시 뜬 이 프로세스가 --set 덮기 파일을 맡음(pl-27 — 끝날 때 지움)
+        from common.core import exitclean
+
+        exitclean.remove_at_exit(os.environ["SETTINGS_FILE"])  # env 남김 — 설정 파일 자리 신호
     if not any(a == FLAG or a.startswith(FLAG + "=") for a in argv):
         return
     try:
@@ -124,5 +131,6 @@ def apply(argv=None, module=None):
     sys.stdout.flush()
     sys.stderr.flush()
     if os.name == "posix":
+        env[_OWNED] = "1"  # env 남김 — 내부 신호: exec 뒤에는 atexit가 안 돌아 새 프로세스가 덮기 파일을 맡음(pl-27)
         os.execve(sys.executable, cmd, env)  # 같은 PID — docker exec·고아 정리(run_docs)가 보는 프로세스 그대로
     raise SystemExit(subprocess.call(cmd, env=env))  # Windows(PC) — exec가 새 프로세스라 기다려 종료 코드를 넘김

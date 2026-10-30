@@ -434,15 +434,14 @@ def _build_bundle_host(config, baseline_info, out_dir, embed_arg):
 
 def _docker_parse_cmd(config, env_file, doc_src, rag_out, truth):
     """새 데이터셋 최초 parse(스펙 ip_build.sh 패턴) — 이 세션은 구성만, 실행 안 함(비용).
-    외부 모델 가드 두 겹(e5cc5f4, 10-02) — VLM·임베딩도 *_ALLOW_EXTERNAL=1 **+** LLM_SYNTHETIC_TRUTH(가상 코퍼스 "_meta" 정답
-    파일)가 둘 다 있어야 외부(OpenRouter) 호출이 열린다. 그래서 parse 전에 truth.json을 RAG_OUT/corpus/에 복사하고
-    설정 파일에 LLM_SYNTHETIC_TRUTH=/app/output/corpus/truth.json(컨테이너 경로)을 넣어야 한다 — 둘 다 compose.test.yml의
+    외부 모델 가드 — VLM·임베딩은 *_ALLOW_EXTERNAL=1 + RUN_ENV=local이어야 외부(OpenRouter) 호출이 열린다(합성 문서 선언 잠금은
+    사용자 10-29에 삭제). 정답 truth.json은 채점용으로 RAG_OUT/corpus/에 복사한다 — 설정은 compose.test.yml의
     parse·structure job 안에서 요구(VLM 파싱·API 임베딩이 거기서 바로 호출됨). S7e1 — compose.test.yml은 env 파일 대신 설정 파일(SMOKE_SETTINGS)을
     붙여 읽으므로 env 파일 사본(위 세 줄 포함)을 migrate로 settings.yaml로 옮긴다 — 키가 든 파일이라 RAG_OUT(결과 폴더) 밖 임시 폴더에 600으로
     (migrate --out이 600으로 씀, VS7e1 R-6). Linux Docker면 컨테이너 사용자(UID 10001)가 읽게 주인을 10001로(Docker Desktop은 그대로 읽음)."""
     return (
-        f"cp {truth} {rag_out}/corpus/truth.json  # 가상 코퍼스 정답(두 번째 잠금) — RAG_OUT/corpus/ 먼저 만들 것\n"
-        f"# env 파일 사본에 LLM_SYNTHETIC_TRUTH=/app/output/corpus/truth.json · VLM_ALLOW_EXTERNAL=1 · EMBED_ALLOW_EXTERNAL=1 · RUN_ENV=local을 더한 뒤:\n"
+        f"cp {truth} {rag_out}/corpus/truth.json  # 가상 코퍼스 정답(채점용) — RAG_OUT/corpus/ 먼저 만들 것\n"
+        f"# env 파일 사본에 VLM_ALLOW_EXTERNAL=1 · EMBED_ALLOW_EXTERNAL=1 · RUN_ENV=local을 더한 뒤:\n"
         f'S=$(mktemp -d)/smoke_settings.yaml && python -m common.config.migrate {env_file} --out "$S"   # 600 · RAG_OUT 밖(R-6)\n'
         f'export SMOKE_SETTINGS="$S" SMOKE_PG_PASSWORD=<시험용 PG 비밀번호> DATA_PIPELINE_IMAGE=data-pipeline:test '  # S6b — 저장소 루트에서, 합친 파이프라인 이미지
         f"MCP_SERVER_IMAGE=mcp-server:test DOC_SRC={doc_src} RAG_OUT={rag_out}\n"
@@ -730,7 +729,6 @@ def cmd_run_ofat(config, a):
         env.setdefault(
             "EMBED_ALLOW_EXTERNAL", setting("EMBED_ALLOW_EXTERNAL") or "1"
         )  # S7e2 — 원본 설정에 준 값이 있으면 그것(옛 env setdefault)
-        env["LLM_SYNTHETIC_TRUTH"] = bi.get("truth") or _any_truth(config) or ""
         if bi.get("roster"):
             env["CLIENT_ROSTER"] = bi["roster"]
         env["LLM_CACHE_DIR"] = str(run_dir / "llm_cache" / combo["name"])
@@ -771,7 +769,6 @@ def _combo_work_env(config, base_env, run_dir, combo, ds):
     env.setdefault(
         "EMBED_ALLOW_EXTERNAL", setting("EMBED_ALLOW_EXTERNAL") or "1"
     )  # S7e2 — 원본 설정에 준 값이 있으면 그것(옛 env setdefault)
-    env["LLM_SYNTHETIC_TRUTH"] = bi.get("truth") or _any_truth(config) or ""
     if bi.get("roster"):
         env["CLIENT_ROSTER"] = bi["roster"]
     return env, bi
@@ -826,7 +823,6 @@ def cmd_run_staged(config, a):
     stage2_limit = a.limit if a.limit is not None else config["stage2_limit"]
     figure_limit = a.limit if a.limit is not None else config["figure_review_limit"]
     repeats = config["repeats"]
-    judge_cross = config.get("judge_cross", False)
     _, vlm_cands = usable_candidates(config, "vlm")
     from common.ai.guard import check_scope  # AD43 — 2단계 조합(llm×vlm) 2개 이상 + 외부 주소는 거부
 
@@ -838,10 +834,6 @@ def cmd_run_staged(config, a):
             return {"combo": combo["name"], "dataset": ds, "repeat": rep, "status": "skipped", "reason": "묶음 없음"}
         # repeats: research()가 온도 0.0 고정 호출(modules/** 밖 — 못 바꿈) → 캐시만 반복마다 새로 둬 재호출되게(cache-bypass, plan 참고)
         env["LLM_CACHE_DIR"] = str(run_dir / "llm_cache" / combo["name"] / f"rep{rep}")
-        if judge_cross:
-            other = next((c["model"] for cid, c in vlm_cands.items() if cid != combo["vlm"]), None)
-            if other:
-                env["VLM_MODEL_ALT"] = other  # figure_review judge()가 이 모델로 판정(모듈 수정 없이 이미 있는 env 훅)
         out_base = run_dir / "raw" / "stage2" / combo["name"] / ds / f"rep{rep}"
         result = {"combo": combo["name"], "dataset": ds, "repeat": rep}
         do_r, do_f = stage2_parts(config, combo)

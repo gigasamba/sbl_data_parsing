@@ -4,7 +4,7 @@ import socket
 
 import common.store.services as M
 from common.ai.guard import require_internal
-from common.config.settings import COMMON, cfg, isolated
+from common.config.settings import cfg, isolated
 from common.store.services import (
     PG_FALLBACK_PORTS,
     PORT_RE,
@@ -12,35 +12,21 @@ from common.store.services import (
     _pg_capable,
     _probe_pg_port,
     _tcp_open,
-    detect_ov,
     detect_pg,
-    ov_enabled,
 )
 
 
 def selftest():
-    # XS8 — 기본(미설정) 전부 꺼짐 · 명시해야 켜짐 · 'none'·오타는 꺼짐
-    with COMMON.env(OV_FEATURES=None):
-        assert ov_enabled("summary") is False and ov_enabled("search") is False and ov_enabled("parse") is False
-    with COMMON.env(OV_FEATURES="none"):
-        assert ov_enabled("summary") is False
-    with COMMON.env(OV_FEATURES="summary, search"):
-        assert ov_enabled("summary") is True and ov_enabled("search") is True and ov_enabled("parse") is False
-    print("[selftest] XS8 — OV_FEATURES 기본 꺼짐·명시 스위치 통과")
-
     rows = [
         ("gitea-db", "postgres:16", [("127.0.0.1", "5432", "5432")]),  # 확장 없는 다른 PostgreSQL — 잡으면 안 됨
         ("rag-postgres", "pgvector/pgvector:pg16", [("127.0.0.1", "15432", "5432")]),
-        ("ov", "ghcr.io/x/openviking:latest", [("127.0.0.1", "1933", "1933")]),
     ]
     assert _find(rows, "pgvector", "5432") == ("rag-postgres", "127.0.0.1", "15432")  # 이름이 아니라 이미지로 찾음
-    assert _find(rows, "openviking") == ("ov", "127.0.0.1", "1933") and _find(rows, "redis") is None
+    assert _find(rows, "redis") is None
     assert PORT_RE.findall("0.0.0.0:1933->1933/tcp, [::]:1933->1933/tcp")[0] == ("0.0.0.0", "1933", "1933")
     for u in ("http://10.0.0.5:8000/v1", "http://localhost:8765/v1", "http://127.0.0.1:8000/v1"):
         require_internal(u, "EMBED")
-    with isolated(
-        EMBED_ALLOW_EXTERNAL=None, LLM_SYNTHETIC_TRUTH=None
-    ):  # 기본(잠금 없음) 고정 — PC 루트 settings.yaml에 두 잠금이 있어도(D-035)
+    with isolated(EMBED_ALLOW_EXTERNAL=None):  # 기본(허용 없음) 고정 — PC 루트 settings.yaml에 허용이 있어도(D-035)
         try:
             require_internal("https://api.openai.com/v1", "EMBED")
             raise AssertionError("외부 주소가 통과됨")
@@ -56,9 +42,9 @@ def selftest():
     srv.close()
     assert _tcp_open("127.0.0.1", open_port) is False  # 닫은 직후라 응답 없음(best-effort 전제와 일치)
 
-    # S7e2 — detect_pg·detect_ov가 설정에 쓰는 값(put — 덮기 파일)을 확인. 시험 설정(isolated)은 끝나면 되돌림
-    saved_probe, saved_get = M._probe_pg_port, M._get
-    blank = dict(PG_HOST=None, PG_PORT=None, PG_PASSWORD=None, PG_CONN_FILE=None, OV_URL=None, OV_HOST=None)
+    # S7e2 — detect_pg가 설정에 쓰는 값(put — 덮기 파일)을 확인. 시험 설정(isolated)은 끝나면 되돌림
+    saved_probe = M._probe_pg_port
+    blank = dict(PG_HOST=None, PG_PORT=None, PG_PASSWORD=None, PG_CONN_FILE=None)
     try:
         with isolated(**blank):
             M._probe_pg_port = lambda host, ports=PG_FALLBACK_PORTS: "15432"
@@ -71,19 +57,8 @@ def selftest():
             assert not ok and "응답 없음" in why
             ok, why = detect_pg(docker=(rows, None))  # docker 정상 → 기존 경로(컨테이너 hit)
             assert not ok and why.startswith("docker rag-postgres")  # PG_PASSWORD 없어 접속은 실패해도 경로는 docker
-        with isolated(**blank):
-            M._get = lambda url, timeout=3: 200
-            ok, why = detect_ov(docker=([], "denied"))  # docker 권한 오류 → 포트 대체 탐지
-            assert ok and why.startswith("포트 탐지") and cfg().connections.openviking.url == "http://127.0.0.1:1933"
-        with isolated(**blank):
-            ok, why = detect_ov(docker=(rows, None))  # docker 정상 → 기존 경로(컨테이너 hit)
-            assert ok and why.startswith("docker ov")
-            M._get = lambda url, timeout=3: None
-        with isolated(**blank):
-            ok, why = detect_ov(docker=([], "missing"))  # docker 없고 포트도 응답 없음 → 실패
-            assert not ok and "응답 없음" in why
     finally:
-        M._probe_pg_port, M._get = saved_probe, saved_get
+        M._probe_pg_port = saved_probe
 
     print("[selftest] Docker 서비스 찾기·포트 대체 탐지(SI26)·내부망 가드 통과")
 

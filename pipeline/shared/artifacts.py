@@ -2,7 +2,6 @@
 """pipeline 전용 아티팩트 계약(10-14 함수별 분리 — common/core/artifacts.py에서 이전, 로직 바이트 동일).
 P0 원본 캐시 경로·지시문 id·엔진 버전·중간 캐시 정리 — 파싱 쪽(S6b 전 data-parsing 이미지, 지금 data-pipeline)에서만 쓴다(다른 이미지는 호출하지
 않음, common.core.artifacts에는 둘 이상의 이미지가 쓰는 code_fp·key·manifest·is_stale·sha8만 남는다).
-사용: python -m pipeline.shared.artifacts --selftest
 """
 
 import importlib.metadata
@@ -59,7 +58,7 @@ def engine_version(engine):
 # C7: "KEEP_RAW_LAYER=1(기본)이면 남음")와 **_images**(그림 조각 PNG + index.jsonl, C7: "남음" — get_image가 읽는
 # 정본 색인이라 파일만 지우면 참조가 깨짐)는 서버가 원본을 즉시 지워 재생성 경로가 없으므로 **정리 대상이 아니다**(안 지움).
 # 정리 대상은 재판독 중간 캐시 3종뿐 — 전부 "없으면 다시 OCR·VLM 호출만 더 들 뿐"이라 영구 보관 결정이 없는 것들:
-#   _reread_p3/_vlm_cache(P3 재판독 VLM 크롭·후보 캐시) · _agent/_vlm_cache(판단 세션 재판독 VLM 캐시) · signals(page_signals 쪽 신호).
+#   _reread_p3/_vlm_cache(옛 P3 재판독 캐시 — pl-34에 기능을 지웠지만 서버에 남은 폴더를 정리하려고 둠) · _agent/_vlm_cache(판단 세션 재판독 VLM 캐시) · signals(page_signals 쪽 신호).
 # 엔진 원문 P0(output/parse/<엔진>/<문서>.json, p0_key)·대표 결과(_rep)·판단 세션 결정 기록(_agent/decisions)도 당연히 안 지움.
 PURGE_CACHE_DIRS = ("_reread_p3/_vlm_cache", "_agent/_vlm_cache", "signals")
 

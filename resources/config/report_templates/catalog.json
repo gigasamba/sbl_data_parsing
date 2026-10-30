@@ -225,59 +225,6 @@
      "candidate": "후보"
     },
     {
-     "name": "Docling",
-     "adopted": false,
-     "engines": [
-      "docling"
-     ],
-     "strengths": "레이아웃 모델 + 표 구조 복원 · 이미지 입력·OCR·VLM 파이프라인",
-     "weaknesses": "괘선 없는 표 미검출 · OCR \"auto\"가 설치 패키지에 따라 바뀜",
-     "perf": "CPU 문서당 15 s · 계약서 순서 P3 0.667 · 가격 필드 0.448",
-     "note": "MIT",
-     "evidence": "실측(합성)",
-     "license": "MIT",
-     "license_status": "사용 가능",
-     "license_reason": "허용적 라이선스",
-     "bench": [
-      {
-       "bench": "BizDocBench v1.0",
-       "lang": "en",
-       "metric": "종합",
-       "value": 0.704,
-       "kind": "독립",
-       "source": "tech-stack-report v20 (docs/reviews/2026-09-27) public-bench"
-      },
-      {
-       "bench": "opendataloader-bench",
-       "lang": "en",
-       "metric": "종합(PDF 200건)",
-       "value": 0.882,
-       "kind": "독립",
-       "source": "tech-stack-report v20 (docs/reviews/2026-09-27) public-bench"
-      },
-      {
-       "bench": "ParseBench",
-       "lang": "en",
-       "metric": "종합",
-       "value": 50.6,
-       "kind": "독립",
-       "source": "tech-stack-report v20 (docs/reviews/2026-09-27) parse-vlm(LlamaIndex 발행, 자사 아님)"
-      },
-      {
-       "bench": "OmniDocBench v1.0",
-       "lang": "en",
-       "metric": "전체 편집거리(구버전 2.14)",
-       "value": 0.589,
-       "kind": "독립",
-       "source": "tech-stack-report v20 (docs/reviews/2026-09-27) parse-vlm"
-      }
-     ],
-     "dummy": "괘선 없는 표 미검출 · OCR \"auto\"가 설치 패키지에 따라 바뀜",
-     "tuning": "해당 없음",
-     "tuning_left": "",
-     "candidate": "후보"
-    },
-    {
      "name": "Marker",
      "adopted": false,
      "engines": [
@@ -326,60 +273,6 @@
       }
      ],
      "dummy": "PDF → 마크다운 · 표·수식 · 내부망 LLM으로 표 보정 옵션",
-     "tuning": "해당 없음",
-     "tuning_left": "",
-     "candidate": "후보"
-    },
-    {
-     "name": "Unstructured",
-     "adopted": false,
-     "engines": [
-      "unstructured",
-      "unstructured_auto"
-     ],
-     "strengths": "형식 폭 넓음 · 형식별 partition · hi_res(레이아웃+OCR+표)",
-     "weaknesses": "fast 모드는 표 구조 없음 · 자동 형식 판별은 Windows에서 충돌",
-     "perf": "",
-     "note": "Apache-2.0 · hi_res는 Tesseract·poppler 필요(이 PC 미실측)",
-     "evidence": "실측(합성)",
-     "license": "Apache-2.0",
-     "license_status": "사용 가능",
-     "license_reason": "허용적 라이선스",
-     "bench": [
-      {
-       "bench": "BizDocBench v1.0",
-       "lang": "en",
-       "metric": "종합",
-       "value": 0.58,
-       "kind": "독립",
-       "source": "tech-stack-report v20 (docs/reviews/2026-09-27) public-bench"
-      },
-      {
-       "bench": "opendataloader-bench",
-       "lang": "en",
-       "metric": "종합 hi_res/fast",
-       "value": "0.841/0.686",
-       "kind": "독립",
-       "source": "tech-stack-report v20 (docs/reviews/2026-09-27) public-bench"
-      },
-      {
-       "bench": "DP-Bench",
-       "lang": "en",
-       "metric": "표 TEDS",
-       "value": 80.26,
-       "kind": "독립",
-       "source": "tech-stack-report v20 (docs/reviews/2026-09-27) parse-vlm(Upstage 발행, 자사 아님)"
-      },
-      {
-       "bench": "OmniDocBench v1.0",
-       "lang": "en",
-       "metric": "전체 편집거리",
-       "value": 0.586,
-       "kind": "독립",
-       "source": "tech-stack-report v20 (docs/reviews/2026-09-27) parse-vlm"
-      }
-     ],
-     "dummy": "fast 모드는 표 구조 없음 · 자동 형식 판별은 Windows에서 충돌",
      "tuning": "해당 없음",
      "tuning_left": "",
      "candidate": "후보"
@@ -805,26 +698,6 @@
      "candidate": "후보"
     },
     {
-     "name": "RapidOCR 기본 (1.4)",
-     "adopted": false,
-     "engines": [
-      "rapidocr"
-     ],
-     "strengths": "빠름",
-     "weaknesses": "",
-     "perf": "숫자·영문 ID는 읽음(계약서 41/56) · 기본 모델이 중국어 — 한글이 한자처럼 깨짐(메일 23/70)",
-     "note": "Apache-2.0",
-     "evidence": "실측(합성)",
-     "license": "Apache-2.0",
-     "license_status": "사용 가능",
-     "license_reason": "허용적 라이선스",
-     "bench": [],
-     "dummy": "숫자·영문 ID는 읽음(계약서 41/56) · 기본 모델이 중국어 — 한글이 한자처럼 깨짐(메일 23/70)",
-     "tuning": "미튜닝",
-     "tuning_left": "한국어 모델(rapidocr_ko)로 교체하면 해소 — 기본 모델 자체는 미수정",
-     "candidate": "후보"
-    },
-    {
      "name": "EasyOCR (ko+en)",
      "adopted": false,
      "engines": [
@@ -863,66 +736,6 @@
      "tuning": "미튜닝",
      "tuning_left": "표준(best) 한국어 데이터로 재시험 후보(현재 fast 데이터)",
      "candidate": "후보"
-    },
-    {
-     "name": "Docling OCR (EasyOCR 한국어 지정)",
-     "adopted": false,
-     "engines": [
-      "docling_ocr"
-     ],
-     "strengths": "OCR + 레이아웃·표 구조를 함께",
-     "weaknesses": "기본 \"auto\"는 한글이 깨짐",
-     "perf": "계약서 45/56 · 느림(쪽당 9.9 s) · 메일 17/70",
-     "note": "MIT (Docling) · 제외(사용자 10-07, backlog DP6 — Docling 모델 캐시는 기본 prefetch·registry CORE에서 뺌, 실험 전용)",
-     "evidence": "실측(합성)",
-     "license": "MIT(Docling)",
-     "license_status": "사용 가능",
-     "license_reason": "허용적 라이선스",
-     "bench": [],
-     "dummy": "기본 \"auto\"는 한글이 깨짐",
-     "tuning": "충분",
-     "tuning_left": "",
-     "candidate": "후보"
-    },
-    {
-     "name": "kreuzberg_ocr (Kreuzberg OCR 강제 모드)",
-     "adopted": false,
-     "engines": [
-      "kreuzberg_ocr"
-     ],
-     "strengths": "Tesseract 기반 OCR 강제 모드로 스캔 문서도 처리",
-     "weaknesses": "",
-     "perf": "",
-     "note": "MIT(Rust 코어) · Tesseract 필요 — 개발 PC 미실측 · 카탈로그 외 — 보고서 다른 절에서",
-     "evidence": "주장",
-     "license": "MIT(Rust 코어) · Tesseract 의존(Apache-2.0)",
-     "license_status": "사용 가능",
-     "license_reason": "허용적 라이선스",
-     "bench": [],
-     "dummy": "",
-     "tuning": "미튜닝",
-     "tuning_left": "Tesseract 설치 후 이 PC 실측 필요",
-     "candidate": "참고"
-    },
-    {
-     "name": "unstructured_ocr (Unstructured hi_res OCR 모드)",
-     "adopted": false,
-     "engines": [
-      "unstructured_ocr"
-     ],
-     "strengths": "hi_res 파이프라인(레이아웃+OCR+표)의 OCR 경로",
-     "weaknesses": "",
-     "perf": "",
-     "note": "Apache-2.0 · Tesseract·poppler 필요 — 개발 PC 미실측 · 카탈로그 외 — 보고서 다른 절에서",
-     "evidence": "주장",
-     "license": "Apache-2.0",
-     "license_status": "사용 가능",
-     "license_reason": "허용적 라이선스",
-     "bench": [],
-     "dummy": "",
-     "tuning": "미튜닝",
-     "tuning_left": "Tesseract·poppler 설치 후 이 PC 실측 필요",
-     "candidate": "참고"
     }
    ]
   },
@@ -985,46 +798,6 @@
      "candidate": "참고"
     },
     {
-     "name": "Docling VLM",
-     "adopted": false,
-     "engines": [
-      "docling_vlm"
-     ],
-     "strengths": "Docling 파이프라인에 VLM 연결 · 문서 구조 유지",
-     "weaknesses": "VLM 단점 동일",
-     "perf": "",
-     "note": "미실측",
-     "evidence": "주장",
-     "license": "MIT(Docling) · 연결 VLM 라이선스는 선택 모델에 따름",
-     "license_status": "사용 가능",
-     "license_reason": "허용적 라이선스(선택 VLM 별도 확인)",
-     "bench": [],
-     "dummy": "",
-     "tuning": "해당 없음",
-     "tuning_left": "",
-     "candidate": "참고"
-    },
-    {
-     "name": "Marker + LLM",
-     "adopted": false,
-     "engines": [
-      "marker_llm"
-     ],
-     "strengths": "Marker 결과를 VLM으로 표·수식 보정",
-     "weaknesses": "",
-     "perf": "",
-     "note": "VLM 서버의 JSON 스키마 응답 지원 필요 · 미실측",
-     "evidence": "주장",
-     "license": "코드 Apache-2.0(v2.0.0, 2026-07부터 · 이전 GPL-3.0) · 모델 가중치 수정 OpenRAIL-M(매출·투자 한도 초과 시 유료)",
-     "license_status": "조건부",
-     "license_reason": "가중치 상용 한도 초과 시 유료",
-     "bench": [],
-     "dummy": "",
-     "tuning": "해당 없음",
-     "tuning_left": "",
-     "candidate": "참고"
-    },
-    {
      "name": "OpenViking + VLM",
      "adopted": false,
      "engines": [],
@@ -1036,26 +809,6 @@
      "license": "AGPL-3.0(OpenViking)",
      "license_status": "사용 가능",
      "license_reason": "AGPL/GPL — 라이선스 명시만(사내 사용, 외부 배포 없음). 코드 공개가 실제 문제될 때만 재검토",
-     "bench": [],
-     "dummy": "",
-     "tuning": "해당 없음",
-     "tuning_left": "",
-     "candidate": "참고"
-    },
-    {
-     "name": "ocr_vlm (OCR 전용 소형 VLM 엔드포인트 — GLM-OCR·PaddleOCR-VL 등)",
-     "adopted": false,
-     "engines": [
-      "ocr_vlm"
-     ],
-     "strengths": "0.9B급 OCR 전용 소형 VLM을 vLLM 등으로 띄워 OpenAI 호환 엔드포인트로 호출 · 모델 카드 권장 프롬프트 지정 가능",
-     "weaknesses": "",
-     "perf": "",
-     "note": "모의 서버로 요청 형식만 확인 — 실제 응답은 서버 첫 실행 때 확인 · 카탈로그 외 — 보고서 다른 절에서",
-     "evidence": "주장",
-     "license": "엔드포인트별 확인(예: GLM-OCR MIT · PaddleOCR-VL Apache-2.0)",
-     "license_status": "사용 가능",
-     "license_reason": "대표 후보 모두 허용적 라이선스(모델별 재확인)",
      "bench": [],
      "dummy": "",
      "tuning": "해당 없음",
@@ -1122,7 +875,7 @@
      "bench": [],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1140,7 +893,7 @@
      "bench": [],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1167,19 +920,17 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
      "name": "GLM-OCR",
      "adopted": false,
-     "engines": [
-      "ocr_vlm"
-     ],
+     "engines": [],
      "strengths": "OCR 전용 소형 VLM",
      "weaknesses": "",
      "perf": "",
-     "note": "파라미터 0.9B(가중치 합계 약 1.33B) · 언어 태그 ko · 한국어·영어 단독 공개 점수 없음 — ocr_vlm 엔진으로 서버 실측 대상 · 추가(2026-09-29, 기존 보고서 OCR VLM 표)",
+     "note": "파라미터 0.9B(가중치 합계 약 1.33B) · 언어 태그 ko · 한국어·영어 단독 공개 점수 없음 — 엔진 없음(ocr_vlm 10-30 지움) 대상 · 추가(2026-09-29, 기존 보고서 OCR VLM 표)",
      "evidence": "주장",
      "license": "MIT",
      "license_status": "사용 가능",
@@ -1187,7 +938,7 @@
      "bench": [],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "후보"
     },
     {
@@ -1248,7 +999,7 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1289,9 +1040,7 @@
     {
      "name": "Nanonets-OCR2",
      "adopted": false,
-     "engines": [
-      "ocr_vlm"
-     ],
+     "engines": [],
      "strengths": "OCR 전용 소형 VLM",
      "weaknesses": "",
      "perf": "",
@@ -1312,15 +1061,13 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
      "name": "DeepSeek-OCR · OCR-2",
      "adopted": false,
-     "engines": [
-      "ocr_vlm"
-     ],
+     "engines": [],
      "strengths": "OCR 전용 소형 VLM",
      "weaknesses": "",
      "perf": "",
@@ -1341,7 +1088,7 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1376,15 +1123,13 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
      "name": "Chandra 2 · 1",
      "adopted": false,
-     "engines": [
-      "ocr_vlm"
-     ],
+     "engines": [],
      "strengths": "OCR 전용 소형 VLM",
      "weaknesses": "",
      "perf": "",
@@ -1413,15 +1158,13 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "후보"
     },
     {
      "name": "olmOCR 2",
      "adopted": false,
-     "engines": [
-      "ocr_vlm"
-     ],
+     "engines": [],
      "strengths": "OCR 전용 소형 VLM",
      "weaknesses": "",
      "perf": "",
@@ -1442,7 +1185,7 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1469,7 +1212,7 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1520,7 +1263,7 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1555,7 +1298,7 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1573,7 +1316,7 @@
      "bench": [],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1591,7 +1334,7 @@
      "bench": [],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     }
    ]

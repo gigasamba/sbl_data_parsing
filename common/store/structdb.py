@@ -16,7 +16,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from common.config.settings import cfg
+from common.config.settings import cfg, guard_run_env
 from common.core.paths import LOCAL_RUN
 
 HERE = Path(__file__).resolve().parent
@@ -308,11 +308,11 @@ class PgBackend:
 
 
 class TsqlBackend:
-    """T-SQL(EDW) 백엔드 스텁 — common/edwdb.py의 DB·conf()를 재사용해 연결하고 SCHEMA를 T-SQL 문법으로 바꾸면 된다
+    """T-SQL(EDW) 백엔드 스텁 — common.store.mssql로 연결하고 SCHEMA를 T-SQL 문법으로 바꾸면 된다
     (서버에 EDW 추출본이 연결되는 시점에 구현). 지금은 미구현 — sqlite만 지원."""
 
     def __init__(self, *a, **k):
-        raise NotImplementedError("STRUCT_BACKEND=tsql 미구현 — common/edwdb.py 재사용 예정(서버 EDW 연결 시)")
+        raise NotImplementedError("STRUCT_BACKEND=tsql 미구현 — common.store.mssql 재사용 예정(서버 EDW 연결 시)")
 
 
 MIGRATE_HINT = (
@@ -430,7 +430,7 @@ def find_table_cells(db, text, limit=20):
 
 class StructDBError(RuntimeError):
     """정형 저장소 연결 실패 — SystemExit과 달리 서버 프로세스(mcp_server 등 장수 프로세스)를 죽이지 않는다(X1b 리뷰).
-    CLI(structured.py --selftest 아닌 load·link 등)만 이걸 받아 종료 코드로 바꾼다."""
+    CLI(structured.py의 load·link 등)만 이걸 받아 종료 코드로 바꾼다."""
 
 
 def open_backend(db_path=None):
@@ -439,6 +439,11 @@ def open_backend(db_path=None):
     단 RUN_MODE=prod(cli/pipeline.py와 같은 환경변수)면 대체하지 않고 StructDBError로 알린다(운영에서 조용히 SQLite로
     떨어지면 안 됨 — SystemExit이 아닌 이유는 mcp_server 같은 장수 프로세스를 호출자가 죽이지 않고 잡아 처리할 수 있어야 해서)."""
     st = cfg().store  # S7b — 설정 객체
+    if guard_run_env() not in (None, "local") and (st.run_mode != "prod" or st.struct_backend == "sqlite"):
+        # pl-12(사용자 10-30) — 서버는 SQLite 문서 대장·정형 저장소를 쓰지 않는다(조용한 대체로 다른 문서를 잘못 처리하던 길)
+        raise StructDBError(
+            f"RUN_ENV={guard_run_env()} — common.store.run_mode: prod·struct_backend: pg(또는 tsql) 필수(SQLite 대체 금지, pl-12)"
+        )
     backend = st.struct_backend  # 옛 get("STRUCT_BACKEND", "pg") — 칸 기본 'pg', ''이면 ''(blank keep — 알 수 없음 오류, VS7b R-11)
     if backend == "sqlite":
         return SqliteBackend(db_path)

@@ -16,11 +16,14 @@
 #   NOTES_ONLY=1 이면 파일·매니페스트·브랜치 커밋 없이 설명서(NOTES_NAME, 기본 PATCH_NOTES.md)와 app/deploy/common/PATCH_VERSION만 — 전체 덮어쓰기
 #     묶음(release-and-patch.md §4)용: NOTES_ONLY=1 NOTES_NAME=RELEASE_NOTES.md make_patch.sh <직전 반입 커밋> <출력> …
 #   '재파싱 필요?'는 경로가 아니라 **값**으로 정한다(S6b, VS3 R-2): 시작점·HEAD 코드를 임시 폴더에 풀어 인계 지문(common.FINGERPRINT —
-#     다르면 다음 모듈이 옛 결과를 거부)·엔진 지문 27개(pipeline.extract.run_all.engine_code_fp — 다르면 그 엔진 원문 재파싱)·code_fp 5개(참고)를
+#     다르면 다음 모듈이 옛 결과를 거부)·엔진 지문 18개(pipeline.extract.run_all.engine_code_fp — 다르면 그 엔진 원문 재파싱)·code_fp 5개(참고)를
 #     각각 계산해 비교한다. 계산에 PY(기본: 저장소 .venv/bin/python, 없으면 python3 — 이미지와 같은 패키지 필요)를 쓰고, 계산이 실패하면 '판정 불가'로 적는다.
 #   env-guide.md '이번 판에서 바뀐 env' 절의 새 줄도 자동으로 넣음.
 #   IMAGE_BASE·IMAGE_TAG — 의존성(requirements*·Dockerfile·wheels)이 이미지 기준판 뒤 바뀌었으면 종료 코드 3(새 이미지 판 필요).
 #     기본값은 env로 주지 않으면 deploy/docker/IMAGE_BASE 파일(한 줄 "<커밋 7자> <이미지 태그>" — 새 이미지 판을 반입할 때 그 릴리스 절차가 씀)을 읽는다.
+#   버전(D-036, 사용자 10-29): 묶음의 app/deploy/common/PATCH_VERSION = HEAD의 저장소 루트 VERSION(SemVer). 오버레이 패치는 VERSION의 PATCH 자리를
+#     올린 뒤 만든다 — 이미지 태그(IMAGE_TAG — 0.1.0 꼴)와 같으면 종료 코드 2(서버 버전 표기가 이미지와 구분되지 않음). MAJOR·MINOR가 다르면 경고만
+#     (MINOR = 새 이미지 버전 — D-009).
 #   옛 배치 거부(종료 코드 3): 기준판·시작점이 이 배치가 아니면(S6b 전 docker/ 배치·upstream deploy/ 배치 — 이미지 COPY·compose 마운트·호스트 스크립트
 #     자리가 다름) 파일 교체·삭제만으로는 맞지 않으므로 묶음을 만들지 않는다 — 새 이미지 판 + 전체 덮어쓰기(release-and-patch.md §4·§5).
 set -euo pipefail
@@ -96,10 +99,17 @@ fi
 MCH=(); MDEL=()   # 매니페스트 줄(live 경로)
 for f in ${CHANGED[@]+"${CHANGED[@]}"}; do for lp in $(live_paths "$f"); do MCH+=("$lp"); done; done
 for f in ${DELETED[@]+"${DELETED[@]}"}; do for lp in $(live_paths "$f"); do MDEL+=("$lp"); done; done
-# 판 표기 파일(git 밖, 묶음에만) — 서버엔 git이 없어 publish의 pipeline_version이 'unknown'이던 것(샘플 세션 10-08). common/은 덧씌우기 연결 폴더
+# 버전 표기 파일(git 밖, 묶음에만 — D-036) — 이미지의 /app/deploy/VERSION은 오버레이로 못 바꿔서, 코드 버전을 오버레이 연결 폴더 common/에 둔다.
+#   common.pipeline_version()이 VERSION·PATCH_VERSION 중 높은 버전을 쓴다(새 이미지 뒤 남은 옛 PATCH_VERSION은 지지 않음).
+APP_VER=$(git show HEAD:VERSION 2>/dev/null | tr -d ' \t\r\n' || true)
+printf '%s\n' "$APP_VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "[make_patch] HEAD의 저장소 루트 VERSION이 없거나 MAJOR.MINOR.PATCH 꼴이 아님(D-036)"; exit 2; }
+if [ "$NOTES_ONLY" != 1 ]; then
+  [ "$APP_VER" != "$IMAGE_TAG" ] || { echo "[make_patch] VERSION($APP_VER)이 이미지 태그와 같음 — 오버레이 패치는 VERSION의 PATCH 자리를 올린 뒤 만든다(D-009·D-036)"; exit 2; }
+  [ "${APP_VER%.*}" = "${IMAGE_TAG%.*}" ] || echo "[make_patch] 경고: VERSION($APP_VER)의 MAJOR.MINOR가 이미지 태그($IMAGE_TAG)와 다름 — MINOR는 새 이미지 버전(D-009)"
+fi
 mkdir -p "$OUT/app/deploy/common"
-if [ "$NOTES_ONLY" = 1 ]; then echo "main-$HEAD_C" > "$OUT/app/deploy/common/PATCH_VERSION"   # 전체 덮어쓰기 = 코드 커밋 그대로
-else echo "$IMAGE_TAG+patch-$HEAD_C" > "$OUT/app/deploy/common/PATCH_VERSION"; MCH+=("app/deploy/common/PATCH_VERSION"); fi
+echo "$APP_VER" > "$OUT/app/deploy/common/PATCH_VERSION"
+[ "$NOTES_ONLY" = 1 ] || MCH+=("app/deploy/common/PATCH_VERSION")
 
 # 재파싱 필요? — 값 비교(VS3 R-2). 판마다 코드를 임시 폴더에 풀어(git archive) 같은 python으로 계산한다.
 PY=${PY:-}; [ -n "$PY" ] || { [ -x "$REPO/.venv/bin/python" ] && PY="$REPO/.venv/bin/python" || PY=python3; }
