@@ -114,7 +114,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 ├─ pipeline/            데이터 파이프라인 앱(data-pipeline 이미지)
 │  ├─ cli.py            실행기 — parse, structure, load, publish, night, full, selftest, set-stack 등
 │  ├─ config.py         pipeline 섹션 설정 모델
-│  ├─ extract/          원천 읽기 · dedup · prepare · 엔진별 파싱(engines/ — 엔진 27개, 바이트가 캐시 키라 건드리지 않음)
+│  ├─ extract/          원천 읽기 · dedup · prepare · 엔진별 파싱(engines/ — 엔진 26개, 바이트가 캐시 키라 건드리지 않음)
 │  ├─ transform/        represent(대표 결과) · figures(그림) · structure(청킹·임베딩·번들)
 │  ├─ load/             pgvector 적재 · publish · 회사 DB 메타데이터 · 인덱스 빌더
 │  ├─ shared/ · tools/  단계 공용 모듈 · 운영 도구

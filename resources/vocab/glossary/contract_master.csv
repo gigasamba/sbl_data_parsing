@@ -1,0 +1,5 @@
+contract_id,company,company_id,product_code,modality,site,line_id,batches_contracted,contract_value_usd,currency,term_months,signed_on,start_date,end_date,status
+CT-2026-0101,Argen Biopharma,C0101,ABX-101,mAb,Plant 1,L1,3,2500000,USD,18,2026-03-15,2026-04-01,2027-09-30,active
+CT-2026-0102,Argen Biopharma,C0101,ARB-305,ADC,Plant 2,L3,2,1800000,USD,12,2026-06-10,2026-07-01,2027-06-30,active
+CT-2026-0201,Luminexis Therapeutics,C0102,LXT-204,mAb,Plant 1,L2,4,3200000,USD,24,2026-02-20,2026-03-01,2028-02-29,active
+CT-2025-0003,Mirae Therapeutics,C0003,MTX-ADC-01,ADC,Plant 2,L3,2,1500000,USD,12,2025-08-01,2025-09-01,2026-08-31,closed

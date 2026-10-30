@@ -65,7 +65,7 @@ def redact(s):
     return _QUOTED.sub(lambda m: m.group(1) + "…[가림]…" + m.group(1), s or "")
 
 
-VLM_ENGINES = {"qwen_vlm", "ocr_vlm", "docling_vlm", "marker_llm"}
+VLM_ENGINES = {"qwen_vlm", "docling_vlm", "marker_llm"}
 # 사용자 10-29 — OCR 엔진은 기본으로 안 돌림(ocr_engine 설정, 기본 끔). 엔진 코드는 남김(나중에 쪽 회전 판정에 씀) · stack 표는 그대로
 OCR_ENGINES = {"rapidocr", "rapidocr_ko"}
 

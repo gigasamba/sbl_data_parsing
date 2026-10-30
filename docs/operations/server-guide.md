@@ -189,9 +189,10 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 
 ### 5-1. 고객 명부·용어집 작성법 (예제 파일을 복사해서 고쳐 쓰기)
 
-예제(가상 회사·가상 제품)는 그대로 두면 아무 데도 반영되지 않는다. 로더는 `common.paths.client_roster`로 지정한 파일과 `common.paths.glossary_dir` 폴더의 `domain_terms.csv`만 읽는다(옛 env `CLIENT_ROSTER`·`GLOSSARY_DIR`은 읽지 않음).
-- `app/deploy/resources/vocab/glossary/client_roster.example.csv` — 고객 명부(고객·잠재 고객, 빈칸·비활성 행 예시 포함)
-- `app/deploy/resources/vocab/glossary/domain_terms.example.csv` — 용어집(항목 설명용 + 빈칸 허용 행 예시)
+샘플(가상 회사·가상 제품 — 사용자 10-30, git·이미지에 들어감)은 경로를 설정하지 않으면 아무 데도 반영되지 않는다. 로더는 `common.paths.client_roster`로 지정한 파일과 `common.paths.glossary_dir` 폴더의 `domain_terms.csv`만 읽는다(옛 env `CLIENT_ROSTER`·`GLOSSARY_DIR`은 읽지 않음).
+- `app/deploy/resources/vocab/glossary/client_roster.csv` — 고객 명부 샘플(고객·잠재 고객, 빈칸·비활성 행 예시 포함 + 한빛 샘플 문서의 고객 Argen Biopharma·Luminexis Therapeutics)
+- `app/deploy/resources/vocab/glossary/domain_terms.csv` — 용어집 샘플
+- `app/deploy/resources/vocab/glossary/contract_master.csv`·`client_master.csv` — 계약·고객 마스터 샘플(머리글은 `docs/architecture/db_schema.md` §5)
 
 > ⚠️ **지금 compose에는 `/srv/rag/env/`(명부 `client_roster.csv`, 용어집 `glossary/`)를 컨테이너에 붙이는 줄이 없다**(`refactor.md` C-21). settings.yaml에 호스트 경로를 그대로 적으면 파일 없음 오류가 난다 — 경로는 **컨테이너 안에서 보이는** 경로로 적는다. 마운트를 더할지 정하기 전에는 이미지 안 예제 폴더를 쓴다.
 

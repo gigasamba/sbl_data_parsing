@@ -7,3 +7,5 @@ P0001,Northwind Bio,노스윈드바이오,Northwind Biotech,prospect,mRNA,US,,ac
 P0002,,그린셀랩,GreenCell Lab,prospect,,KR,,active,,영업 리스트,
 P0003,Aurora Vaccines,,,prospect,vaccine,,,active,,,
 C0005,Old Partner Bio,구파트너바이오,,customer,,KR,,inactive,거래 종료(검색 제외),SFDC,2026-09-01
+C0101,Argen Biopharma,아르젠바이오파마,Argen|Argen Bio|아르젠|ARG,customer,antibody,US,,active,ABX-101·ARB-305 위탁개발(한빛 샘플 문서),SFDC,2026-10-30
+C0102,Luminexis Therapeutics,루미넥시스테라퓨틱스,Luminexis|Luminexis Tx|루미넥시스|LMX,customer,biologics,US,,active,LXT-204 분석 개발(한빛 샘플 문서),CRMS,2026-10-30

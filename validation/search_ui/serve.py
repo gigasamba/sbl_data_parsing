@@ -101,7 +101,7 @@ def health():
             "PG_SCHEMA": _PG.db_schema,
             "NO_PAID_CALLS": "1" if cfg().models.guard.no_paid_calls else None,
         },
-        "vlm_configured": bool(cfg().models.vlm.base_url or cfg().models.ocrvlm.base_url),
+        "vlm_configured": bool(cfg().models.vlm.base_url),
         "llm_configured": bool(cfg().models.llm.base_url),
     }
     try:
