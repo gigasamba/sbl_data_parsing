@@ -38,14 +38,16 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 여기서 안 함: `settings.sample.yaml`도 옮기라고 했지만 `common/config/sample.py`가 루트에 쓰고 `appcheck`, `setarg`, `migrate`, env-guide, CLAUDE.md가 그 경로를 읽는다 — settings-cleanup 작업·사용자 몫. 옮기면 code_fp가 바뀔 수 있다(CLAUDE.md §4).
 - 기다림: feature/test-parallel과 feature/settings-cleanup 병합(둘 다 refactor.md와 CLAUDE.md를 고침).
 - 수용 기준: 깨진 링크 없음(옛 경로 `grep` = 0), `selftest` 그대로.
-- Status: todo
+- 끝남 10-30(`feature/do01-docs-batch`): `git mv refactor.md docs/refactoring/refactor.md`(옮기기만 하는 커밋) → 링크 고치는 커밋(CLAUDE.md, README, docs/index.md, release-and-patch, prd/test.md, history/refactor_c_items.md, 옮긴 파일 안의 상대 링크). 코드 주석의 `refactor.md C-xx`는 이름만 가리키므로 고치지 않음(code_fp). 저장소 전체 링크 점검 0건.
+- Status: done
 
 <a id="op-04"></a>
 ## op-04 · 첫 릴리스 태그 `v0.1.0`과 릴리스 노트
 - 이유: `VERSION`과 이미지 태그는 있지만 태그나 릴리스 노트를 만든 적이 없다.
 - 무엇: `release/0.1.0`에서 `main`에 태그, `RELEASE_NOTES`(변경, 채울 설정, 핑거프린트 변경, refactor.md "최종"의 서버 할 일)를 쓴다.
 - 릴리스 노트 후보: MCP `search` 근거 출력의 `file_path` 키 — 제거 대상(사용자 10-30), 시기·버전 처리는 나중([etl.md#pl-25](etl.md#pl-25), [mcp.md#mc-01](mcp.md#mc-01)).
-- Status: todo — 시점은 사용자가 정한다(10-30에 물음: 지금은 아님).
+- 끝남 10-30: `main` 7910257에 태그 `v0.1.0`을 만들었다. 릴리스 노트는 GitHub release v0.1.0.
+- Status: done
 
 <a id="op-06"></a>
 ## op-06 · 실행 이미지(코드 없음) — 개발 서버는 코드 폴더를 마운트
