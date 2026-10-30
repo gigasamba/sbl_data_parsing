@@ -1,6 +1,6 @@
 # PC 시험 문서 목적 안내
 
-`valid_env/object_storage/`는 서버 Object Storage 버킷을 PC에서 흉내 낸 폴더다. 문서 1건 = `<원천>/<uuid>/<파일>` 객체 하나다(`CRMS/<uuid>/...`는 hard_cases 세트, `SFDC/<uuid>/...`는 rfp 세트). `Parsing-Result/`는 파이프라인이 실행 중 쓰는 결과 폴더로 git에 없다. 이 파일(`test_doc_purpose.md`)은 시험 문서가 아니라 안내문이다 — `validation_catalog.py`·동기화 점검 둘 다 이 파일 이름을 예외로 둔다.
+`valid_env/object_storage/`는 서버 Object Storage 버킷을 PC에서 흉내 낸 폴더다. 문서 1건 = `<원천>/<uuid>/<파일>` 객체 하나다(`CRMS/<uuid>/...`는 hard_cases 세트, `SFDC/<uuid>/...`는 rfp 세트, 이름이 `arg_`·`lmx_`로 시작하는 문서는 두 버킷 모두 한빛 업무 문서). `Parsing-Result/`는 파이프라인이 실행 중 쓰는 결과 폴더로 git에 없다. 이 파일(`test_doc_purpose.md`)은 시험 문서가 아니라 안내문이다 — `validation_catalog.py`·동기화 점검 둘 다 이 파일 이름을 예외로 둔다.
 
 정답·목록 세트(`valid_env/eval_sets/` — rfp·hard_cases 정답, `object_keys.csv`, `doc_catalog.jsonl`)는 10-30 지웠다(사용자 — e2-10). 필요하면 git 이력에서 되살린다.
 
@@ -50,6 +50,66 @@
 | `SFDC/1f450a85-3272-42a9-8664-893cff5bb22c/kvx_scan_copy.pdf` | pdf(스캔) | rfp | Korvexa·P2026047 서명 입찰 의향 회신(표지+팩스 양식) — 글자층 없음, 서명·인감·손글씨 | `rfp/gold/kvx_scan_copy.pdf.json` | partial | - |
 | `SFDC/f55fa16f-bde6-4cab-831b-878c96c079f9/kvx_qa_thread_en.eml` | eml | rfp | Korvexa·P2026047 Q&A 메일 스레드 3통(DAR 범위 등) | `rfp/gold/kvx_qa_thread_en.eml.json` | partial | - |
 | `SFDC/23213095-ea73-4db0-8107-f03a28ff3b78/kvx_internal_note.txt` | txt | rfp | Korvexa 주 + Pfizar 언급 한글 Go/No-go 메모 — 고객 필터 교차 시험 | `rfp/gold/kvx_internal_note.txt.json` | partial | SV15(열림 아님 — 3자 영문 별칭 PFZ/ANB/KVX이 의도적으로 걸러짐, spec.json `known_gap_sv15`) |
+
+## 한빛 업무 문서 (46건 — 10-30 추가)
+
+가상 CDMO "한빛 바이오솔루션"의 고객 Argen Biopharma(ABX-101·ARB-305)·Luminexis Therapeutics(LXT-204) 업무 문서다. 같은 내용을 한글(`_ko`)·영문(`_en`)과 형식별(docx·pptx·xlsx·pdf·png)로 둬서 형식·언어별 파싱과 검색을 비교한다. 영업 단계(제안·예산·견적·계약 검토안·고객 메일)는 SFDC, 수행 단계(분석·품질·안정성·기술이전·위험·운송·시험·시료)는 CRMS에 뒀다. gold는 아직 없고, Argen·Luminexis는 SFDC Opportunity에 없어 `sf_op_id`는 비어 있다(NULL).
+
+### SFDC (10건)
+
+| 파일 (s3_key) | 형식 | 내용 |
+|---|---|---|
+| `SFDC/6c52362c-2bd4-4320-8ef0-d581b2791caa/arg_abx101_proposal_ko.docx` | docx | Argen Biopharma·ABX-101 사업 제안서 (KO) |
+| `SFDC/2ff751c2-3d5a-4456-a9f8-92c7da1b885e/arg_abx101_proposal_en.docx` | docx | Argen Biopharma·ABX-101 사업 제안서 (EN) |
+| `SFDC/17ba4467-4820-4209-90d5-b5eb0d3f3632/arg_abx101_proposal_deck_ko.pptx` | pptx | Argen Biopharma·ABX-101 사업 제안 발표 자료 (KO) |
+| `SFDC/8e479f2b-b35b-4e8d-bd4a-d1bc9a453072/arg_abx101_proposal_deck_en.pptx` | pptx | Argen Biopharma·ABX-101 사업 제안 발표 자료 (EN) |
+| `SFDC/9aaae4d7-1442-43a0-8fde-10f95da3028a/arg_abx101_budget_ko.xlsx` | xlsx | Argen Biopharma·ABX-101 예산·집행표(수식 셀) (KO) |
+| `SFDC/3de17d1c-4df3-4082-944d-31c7020401b4/arg_abx101_budget_en.xlsx` | xlsx | Argen Biopharma·ABX-101 예산·집행표(수식 셀) (EN) |
+| `SFDC/54f7b5bd-1094-4b41-83e8-6b65d7b2a01a/arg_abx101_sow_cost_ko.pdf` | pdf | Argen Biopharma·ABX-101 개발 제안 비용·일정(SOW) (KO) |
+| `SFDC/cbfcc6ad-2ed6-490d-a6cc-de943ea69ac2/arg_abx101_sow_cost_en.pdf` | pdf | Argen Biopharma·ABX-101 개발 제안 비용·일정(SOW) (EN) |
+| `SFDC/b40eea44-d26a-450f-81c3-280caab7102f/arg_abx101_review_mail_ko.png` | png | Argen Biopharma·ABX-101 고객 자료 검토 요청 메일 캡처 (KO) |
+| `SFDC/c344d2ee-e914-446f-9ced-9720397cda3e/arg_abx101_contract_draft_scan.png` | png | Argen Biopharma·ABX-101 위탁개발 계약서 서명 전 검토안 스캔(직인) |
+
+### CRMS (36건)
+
+| 파일 (s3_key) | 형식 | 내용 |
+|---|---|---|
+| `CRMS/775b466f-1615-527f-a17e-779818631db8/lmx_lxt204_analytical_plan_ko.docx` | docx | Luminexis Therapeutics·LXT-204 분석 개발 계획서 (KO) |
+| `CRMS/fb6c50d3-d3d0-55be-8d66-dbb24b53d948/lmx_lxt204_analytical_plan_en.docx` | docx | Luminexis Therapeutics·LXT-204 분석 개발 계획서 (EN) |
+| `CRMS/758e1ccf-4ae0-5db7-b57b-dd5ab0420054/arg_arb305_quality_stability_ko.docx` | docx | Argen Biopharma·ARB-305 품질·안정성 평가서 (KO) |
+| `CRMS/a37fb1a1-e6f5-541c-b95f-57cffc099eb3/arg_arb305_quality_stability_en.docx` | docx | Argen Biopharma·ARB-305 품질·안정성 평가서 (EN) |
+| `CRMS/5ed11a71-734b-5847-8c8d-ddcc71e175f3/arg_abx101_tech_transfer_plan_ko.docx` | docx | Argen Biopharma·ABX-101 기술이전 준비 계획서 (KO) |
+| `CRMS/04e732cf-3493-54be-9ad5-930a6a79a594/arg_abx101_tech_transfer_plan_en.docx` | docx | Argen Biopharma·ABX-101 기술이전 준비 계획서 (EN) |
+| `CRMS/01623e94-6221-5842-85c0-8bb117fe4bab/lmx_lxt204_process_risk_ko.docx` | docx | Luminexis Therapeutics·LXT-204 공정 개발·위험 관리 보고서 (KO) |
+| `CRMS/40cb4df8-5ce1-564a-b6e8-539579122a8d/lmx_lxt204_process_risk_en.docx` | docx | Luminexis Therapeutics·LXT-204 공정 개발·위험 관리 보고서 (EN) |
+| `CRMS/8d54ccca-cb70-5bec-b8d7-d1c21255aca5/lmx_lxt204_analytical_deck_ko.pptx` | pptx | Luminexis Therapeutics·LXT-204 분석 개발 발표 자료 (KO) |
+| `CRMS/4d58683d-39cd-5397-8392-554fe8371380/lmx_lxt204_analytical_deck_en.pptx` | pptx | Luminexis Therapeutics·LXT-204 분석 개발 발표 자료 (EN) |
+| `CRMS/7f224a5e-cb37-5e5a-b1cb-8bbd6897c60a/arg_arb305_quality_deck_ko.pptx` | pptx | Argen Biopharma·ARB-305 품질·안정성 발표 자료 (KO) |
+| `CRMS/89caca4f-511d-5a4d-997d-2a11a9a83600/arg_arb305_quality_deck_en.pptx` | pptx | Argen Biopharma·ARB-305 품질·안정성 발표 자료 (EN) |
+| `CRMS/59e05167-180f-5a35-b546-d4344491ca3b/arg_abx101_tech_transfer_deck_ko.pptx` | pptx | Argen Biopharma·ABX-101 기술이전 발표 자료 (KO) |
+| `CRMS/8ea49c70-bb68-564d-b294-969cc208ca92/arg_abx101_tech_transfer_deck_en.pptx` | pptx | Argen Biopharma·ABX-101 기술이전 발표 자료 (EN) |
+| `CRMS/3f09f2fe-6734-5c79-b2bd-9059854a52b3/lmx_lxt204_process_risk_deck_ko.pptx` | pptx | Luminexis Therapeutics·LXT-204 공정·위험 발표 자료 (KO) |
+| `CRMS/8d94da26-88e9-5ed8-9491-ade1902a7be0/lmx_lxt204_process_risk_deck_en.pptx` | pptx | Luminexis Therapeutics·LXT-204 공정·위험 발표 자료 (EN) |
+| `CRMS/fd13ded9-428f-5ea8-958f-f2bc32190c22/lmx_lxt204_qc_results_ko.xlsx` | xlsx | Luminexis Therapeutics·LXT-204 시험 결과 검토표 (KO) |
+| `CRMS/b442533c-714c-5e81-a5a8-e42afd84f392/lmx_lxt204_qc_results_en.xlsx` | xlsx | Luminexis Therapeutics·LXT-204 시험 결과 검토표 (EN) |
+| `CRMS/0386dd56-1b0d-56f5-9185-33fd6cc2cc54/arg_abx101_stability_trend_ko.xlsx` | xlsx | Argen Biopharma·ABX-101 안정성 추세표 (KO) |
+| `CRMS/13f5ae03-9dc7-507d-9264-cb0abf371bd6/arg_abx101_stability_trend_en.xlsx` | xlsx | Argen Biopharma·ABX-101 안정성 추세표 (EN) |
+| `CRMS/7d4fca0e-768c-5846-8d60-facf71830a84/lmx_lxt204_shipping_log_ko.xlsx` | xlsx | Luminexis Therapeutics·LXT-204 운송 온도·인수표 (KO) |
+| `CRMS/b178799c-512f-58af-9cc8-e4e8bbcf7c72/lmx_lxt204_shipping_log_en.xlsx` | xlsx | Luminexis Therapeutics·LXT-204 운송 온도·인수표 (EN) |
+| `CRMS/19432730-d249-5fbe-90d4-c8e342866870/arg_abx101_risk_actions_ko.xlsx` | xlsx | Argen Biopharma·ABX-101 위험·조치 현황표 (KO) |
+| `CRMS/bfa18b73-0394-529c-8a71-7580c0354cc0/arg_abx101_risk_actions_en.xlsx` | xlsx | Argen Biopharma·ABX-101 위험·조치 현황표 (EN) |
+| `CRMS/20286fa3-68d0-5a0c-bd84-7240b923343a/arg_abx101_analytical_report_ko.pdf` | pdf | Argen Biopharma·ABX-101 품질 분석 보고서 (KO) |
+| `CRMS/0f02d780-bebe-5d28-8c68-33620e54e7ee/arg_abx101_analytical_report_en.pdf` | pdf | Argen Biopharma·ABX-101 품질 분석 보고서 (EN) |
+| `CRMS/edd2e62f-2156-51af-a108-62bb13d40814/lmx_lxt204_stability_report_ko.pdf` | pdf | Luminexis Therapeutics·LXT-204 안정성 추세 보고서 (KO) |
+| `CRMS/70ca1c93-831d-5532-abff-a219cf2693bf/lmx_lxt204_stability_report_en.pdf` | pdf | Luminexis Therapeutics·LXT-204 안정성 추세 보고서 (EN) |
+| `CRMS/aa7294c0-e22f-5dda-a42f-4c694a6ad2a1/arg_abx101_tt_workflow_ko.pdf` | pdf | Argen Biopharma·ABX-101 기술이전 의사결정 흐름도 (KO) |
+| `CRMS/d0c5fe0c-eca3-512f-a60f-08c7d23ffb4c/arg_abx101_tt_workflow_en.pdf` | pdf | Argen Biopharma·ABX-101 기술이전 의사결정 흐름도 (EN) |
+| `CRMS/63255c9f-856e-5d65-92c3-b09b881c7b96/lmx_lxt204_shipping_record_ko.pdf` | pdf | Luminexis Therapeutics·LXT-204 시료 운송·인수 기록(쪽 넘는 표) (KO) |
+| `CRMS/2995b35a-e08b-5288-9c0d-25f3008cef64/lmx_lxt204_shipping_record_en.pdf` | pdf | Luminexis Therapeutics·LXT-204 시료 운송·인수 기록(쪽 넘는 표) (EN) |
+| `CRMS/dbf26861-3224-5759-926e-511574ff1d3d/lmx_lxt204_shipment_mail_en.png` | png | Luminexis Therapeutics·LXT-204 시료 발송 메일 캡처 (EN) |
+| `CRMS/58ee9e22-34a3-5004-9104-924c49e3e287/arg_abx101_test_report_scan.png` | png | Argen Biopharma·ABX-101 시험 결과 보고서 스캔(손글씨 표시) |
+| `CRMS/c6532711-6031-5a69-a504-985dd8a86fb1/lmx_lxt204_sample_receipt_photo.png` | png | Luminexis Therapeutics·LXT-204 시료 접수 양식 사진(손글씨·기울어짐) |
+| `CRMS/ad0831fc-55a6-5a3d-8161-fcd3ab418236/arg_arb305_lims_stability_capture.png` | png | Argen Biopharma·ARB-305 LIMS 안정성 화면 캡처(그래프·표) |
 
 ## 알려진 이슈 요약 (백로그 기준, 이 문서들에 닿는 것만)
 
