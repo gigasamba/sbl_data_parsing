@@ -238,7 +238,7 @@ PYTHONPATH=app/deploy python -m common.config.migrate /srv/rag/env/pipeline.env 
 # ② settings.sample.yaml의 [서버 옛 값: …] 항목(옛 options.conf가 채우던 값 — run_mode: prod·engine_scope: all·parse_post: all·max_rows: 1000 등, C-39·C-43
 #    + 옛 compose 기본값 chain_structure_url·mcp.server.store: pg — C-47) 중 pipeline.env에 같은 이름이 없던 것만 settings.yaml에 옮겨 적는다 ·
 #    특히 common.store.run_mode: prod — 빠뜨리면 PG 연결 실패 때 문서 레지스트리가 SQLite로 조용히 대체돼 run_docs 문서별 publish가 그 전 문서를 deleted·숨김으로 만든다(C-54) ·
-#    EDW를 쓰면 common.connections.edw.user(필수 — C-47 ④) · run_docs.py를 쓰면 C-45 ③의 항목도
+#    EDW를 쓰면 common.connections.rdb의 read·write 계정(필수 — C-67, 옛 common.connections.edw는 없앰) · run_docs.py를 쓰면 C-45 ③의 항목도
 # ③ 대조 — 옛 실효 값(옛 카탈로그 값 + pipeline.env) ↔ 새 파일, 값은 안 찍음. "다름 0 · 옛에만 0 · 확인 필요 0"(종료 코드 0)일 때까지 ②를 고침
 PYTHONPATH=app/deploy python -m common.config.migrate --compare /srv/rag/env/pipeline.env --settings /srv/rag/env/settings.yaml
 # ④ 권한(C-09): 컨테이너 사용자 UID 10001이 읽어야 함

@@ -35,13 +35,17 @@ settings_export() {   # settings_export <env|sh> [--image <이미지>] <절>... 
     return
   fi
   image=${image:-${SETTINGS_IMAGE:-${DATA_PIPELINE_IMAGE:-}}}
+  # 이미지 이름은 settings.yaml 안에 있어 아직 모름 → 코드 폴더 VERSION의 실행 이미지(태그 = 버전, D-036 — zip 배치 개발 서버, 사용자 10-30 검토 B2)
+  if [ -z "$image" ] && [ -f "$_SETTINGS_CODE/VERSION" ]; then image=data-pipeline-runtime:$(tr -d ' \t\r\n' < "$_SETTINGS_CODE/VERSION"); fi
   [ -n "$image" ] || { echo "[settings_env] 호스트 python에 pydantic·PyYAML이 없음 — SETTINGS_IMAGE=<data-pipeline:태그>(또는 --image)로 이미지 안에서 돌림" >&2; return 2; }
+  local code=()                             # 실행 이미지(코드 없음)면 이 코드 폴더를 붙여 export 모듈을 읽게(op-06)
+  case "$image" in *-runtime:*) code=(-v "$_SETTINGS_CODE:/app/deploy:ro,z" -e PYTHONPATH=/app/deploy) ;; esac
   [ -n "${SETTINGS_FILE:-}" ] && [ -f "$SETTINGS_FILE" ] || { echo "[settings_env] 이미지로 돌릴 때는 SETTINGS_FILE(설정 파일 경로)이 있어야 함" >&2; return 2; }
   local run_env=()                          # 호출자 RUN_ENV를 컨테이너에도 — 호스트 python 경로와 같게(env > 파일 common.run_env, VS7a2 R-b)
   [ -z "${RUN_ENV:-}" ] || run_env=(-e "RUN_ENV=$RUN_ENV")
   # 표준 입력을 컨테이너 안 임시 파일로 먼저 옮긴다 — SETTINGS_FILE=/dev/stdin이면 import common의 다리가 먼저 읽어 export가 빈 파일을 봄(S7e1 리뷰)
   # shellcheck disable=SC2016,SC2086 — DOCKER는 낱말 나눔(sudo podman)
-  ${DOCKER:-docker} run --rm -i --network none --entrypoint bash ${run_env[@]+"${run_env[@]}"} "$image" \
+  ${DOCKER:-docker} run --rm -i --network none --entrypoint bash ${run_env[@]+"${run_env[@]}"} ${code[@]+"${code[@]}"} "$image" \
     -c 'umask 077 && cat > /tmp/settings.yaml && SETTINGS_FILE=/tmp/settings.yaml exec python -m common.config.export "$@"' _ \
     --format "$fmt" "${args[@]}" < "$SETTINGS_FILE"
 }
