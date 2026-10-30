@@ -82,10 +82,10 @@ RUN if [ "$APT" = "1" ]; then \
         libreoffice-core libreoffice-writer libreoffice-impress libreoffice-calc fonts-noto-cjk \
       && rm -rf /var/lib/apt/lists/*; fi
 
-# ── 검색 MCP 실행 이미지(mcp-server-runtime — op-07, 코드 없음) ──
+# ── 검색 MCP 실행 이미지(mcp-server-runtime — op-06, 코드 없음) ──
 FROM base AS mcp-runtime
 WORKDIR /app
-# op-07(10-30, 사용자) — 실행 이미지(*-runtime): 코드 없음. 서버 코드 폴더(저장소 트리 그대로)를 /app/deploy에 읽기 전용으로 붙여 띄운다.
+# op-06(10-30, 사용자) — 실행 이미지(*-runtime): 코드 없음. 서버 코드 폴더(저장소 트리 그대로)를 /app/deploy에 읽기 전용으로 붙여 띄운다.
 # 시작 스크립트 runtime_entry.sh가 코드 폴더·의존성 지문(deps_hash ↔ 코드 deploy/docker/DEPS_HASH)을 보고 코드의 entrypoint로 넘김.
 # 코드가 든 이미지(아래 mcp·pipeline 타깃)는 이 단계 + 코드 COPY라 두 갈래의 바탕·의존성이 어긋나지 않는다.
 COPY deploy/docker/runtime_entry.sh /app/docker/runtime_entry.sh
@@ -98,7 +98,7 @@ ENV TZ=Asia/Seoul LANG=C.UTF-8 PYTHONUTF8=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBU
 RUN env > /app/docker/image_env.txt   # S7e2 — 이미지 ENV 기록(entrypoint가 lib_env와 견줘 사용자 env와 가름 — 비밀 없음)
 ARG APP_VERSION=
 ARG VCS_REF=
-RUN echo "mcp-server-runtime ${APP_VERSION:-?} ${VCS_REF:-?}" > /app/docker/image_ref   # op-07 — 실행 기록에 남길 이미지 판
+RUN echo "mcp-server-runtime ${APP_VERSION:-?} ${VCS_REF:-?}" > /app/docker/image_ref   # op-06 — 실행 기록에 남길 이미지 판
 LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=mcp-server-runtime
 USER rag
 VOLUME ["/app/output"]
@@ -130,10 +130,10 @@ USER rag
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["help"]
 
-# ── 파이프라인 실행 이미지(data-pipeline-runtime — op-07, 코드 없음) — RapidOCR 모델·LibreOffice는 이 단계에 ──
+# ── 파이프라인 실행 이미지(data-pipeline-runtime — op-06, 코드 없음) — RapidOCR 모델·LibreOffice는 이 단계에 ──
 FROM parse-deps AS pipeline-runtime
 WORKDIR /app
-# op-07(10-30, 사용자) — 실행 이미지(*-runtime): 코드 없음. 서버 코드 폴더(저장소 트리 그대로)를 /app/deploy에 읽기 전용으로 붙여 띄운다.
+# op-06(10-30, 사용자) — 실행 이미지(*-runtime): 코드 없음. 서버 코드 폴더(저장소 트리 그대로)를 /app/deploy에 읽기 전용으로 붙여 띄운다.
 # 시작 스크립트 runtime_entry.sh가 코드 폴더·의존성 지문(deps_hash ↔ 코드 deploy/docker/DEPS_HASH)을 보고 코드의 entrypoint로 넘김.
 # 코드가 든 이미지(아래 mcp·pipeline 타깃)는 이 단계 + 코드 COPY라 두 갈래의 바탕·의존성이 어긋나지 않는다.
 COPY --from=src /src/assets/ /app/assets/
@@ -163,7 +163,7 @@ ENV TZ=Asia/Seoul LANG=C.UTF-8 PYTHONUTF8=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBU
 RUN env > /app/docker/image_env.txt   # S7e2 — 이미지 ENV 기록(entrypoint가 lib_env와 견줘 사용자 env와 가름 — 비밀 없음)
 ARG APP_VERSION=
 ARG VCS_REF=
-RUN echo "data-pipeline-runtime ${APP_VERSION:-?} ${VCS_REF:-?}" > /app/docker/image_ref   # op-07 — 실행 기록에 남길 이미지 판
+RUN echo "data-pipeline-runtime ${APP_VERSION:-?} ${VCS_REF:-?}" > /app/docker/image_ref   # op-06 — 실행 기록에 남길 이미지 판
 LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=data-pipeline-runtime
 USER rag
 VOLUME ["/app/output"]

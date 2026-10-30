@@ -676,7 +676,7 @@ def code_layout_problems(code=None, containers=(PARSE_C, STRUCT_C)):
     probs = []
     if code.is_dir():
         deploy = code / "app" / "deploy"
-        if not deploy.is_dir():  # op-07(10-30) — 개발 서버 코드 폴더는 저장소 트리 그대로(실행 이미지가 /app/deploy에 붙임)
+        if not deploy.is_dir():  # op-06(10-30) — 개발 서버 코드 폴더는 저장소 트리 그대로(실행 이미지가 /app/deploy에 붙임)
             deploy = code
         if not (deploy / CODE_MARKER).is_file():
             probs.append(

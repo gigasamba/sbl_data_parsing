@@ -19,7 +19,7 @@ BUILD_ONLY=${BUILD_ONLY:-0}
 [ "$BUILD_ONLY" = 1 ] || TARGET=${TARGET:?TARGET=user@수집서버 를 지정(빌드만 하려면 BUILD_ONLY=1)}
 IMAGE_TARGET=${IMAGE_TARGET:-pipeline}
 case "$IMAGE_TARGET" in
-  pipeline|mcp|pipeline-runtime|mcp-runtime) ;;   # *-runtime = 코드 없는 실행 이미지(op-07 — 개발 서버, 코드 폴더를 /app/deploy에 마운트)
+  pipeline|mcp|pipeline-runtime|mcp-runtime) ;;   # *-runtime = 코드 없는 실행 이미지(op-06 — 개발 서버, 코드 폴더를 /app/deploy에 마운트)
   parse|structure|retrieval) echo "[오류] IMAGE_TARGET=$IMAGE_TARGET 는 S6b에 없어졌다(D-020) — 파이프라인은 IMAGE_TARGET=pipeline, 검색 MCP는 IMAGE_TARGET=mcp" >&2; exit 2 ;;
   *) echo "[오류] 모르는 IMAGE_TARGET: $IMAGE_TARGET (pipeline·mcp·pipeline-runtime·mcp-runtime)" >&2; exit 2 ;;
 esac
@@ -34,7 +34,7 @@ DOCKER=${DOCKER:-docker}
 REMOTE_DOCKER=${REMOTE_DOCKER:-docker}
 OUT=${OUT:-/var/tmp/$(echo "$TAG" | tr ':/' '__').tar.gz}
 RUNTIME=0; case "$IMAGE_TARGET" in *-runtime) RUNTIME=1 ;; esac
-# op-07 — 실행 이미지면 코드 폴더 묶음(이 커밋의 git 추적 파일 + CODE_COMMIT, valid_env/·validation/ 뺌)도 이미지 옆에 만든다.
+# op-06 — 실행 이미지면 코드 폴더 묶음(이 커밋의 git 추적 파일 + CODE_COMMIT, valid_env/·validation/ 뺌)도 이미지 옆에 만든다.
 CODE_OUT=${CODE_OUT:-$(dirname "$OUT")/code-$APP_VERSION-$VCS_REF.tar.gz}
 
 echo "== 0. 사전 점검"
@@ -69,14 +69,14 @@ echo "== 1. 빌드 $TAG (버전 $APP_VERSION · 커밋 $VCS_REF)"
 $DOCKER build ${BUILD_ARGS:-} $SYNTAX_ARG --build-arg APP_VERSION="$APP_VERSION" --build-arg VCS_REF="$VCS_REF" -f deploy/docker/Dockerfile --target "$IMAGE_TARGET" -t "$TAG" .
 RUN_ARGS=""
 if [ "$RUNTIME" = 1 ]; then
-  # op-07 — 코드 없이 띄우면 바로 멈춰야 함(runtime_entry.sh)
+  # op-06 — 코드 없이 띄우면 바로 멈춰야 함(runtime_entry.sh)
   if MSYS_NO_PATHCONV=1 $DOCKER run --rm "$TAG" help >/dev/null 2>&1; then echo "[오류] 코드 마운트 없이 실행 이미지가 떴음"; exit 1; fi
   # 판정·묶음은 이 커밋의 코드 트리(git archive — 커밋 안 한 변경은 안 들어감) + CODE_COMMIT
   CODE_DIR=$(mktemp -d); trap 'rm -rf "$CODE_DIR"' EXIT
   git archive HEAD -- . ':(exclude)valid_env' ':(exclude)validation' | tar -x -C "$CODE_DIR"
   echo "$(git rev-parse HEAD 2>/dev/null || echo unknown) $VCS_REF $APP_VERSION" > "$CODE_DIR/CODE_COMMIT"
-  tar -czf "$CODE_OUT" -C "$CODE_DIR" .
-  echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버에서 새 판 폴더로 풀고 live 링크를 옮김(release-and-patch.md — op-07)"
+  tar -czf - -C "$CODE_DIR" . > "$CODE_OUT"   # 표준 출력으로(Windows 경로 C:/…를 tar가 원격 호스트로 읽지 않게)
+  echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버에서 새 판 폴더로 풀고 live 링크를 옮김(release-and-patch.md — op-06)"
   export MSYS_NO_PATHCONV=1   # Windows Git Bash가 -v 인자를 바꾸지 않게
   RUN_ARGS="-v $(cygpath -m "$CODE_DIR" 2>/dev/null || echo "$CODE_DIR"):/app/deploy:ro"
 fi
@@ -102,7 +102,7 @@ ssh "$TARGET" "cd $REMOTE_DIR && echo '$SUM  $(basename "$OUT")' | sha256sum -c 
 
 echo "== 4. 원격 점검"
 R_ARGS=""
-if [ "$RUNTIME" = 1 ]; then   # op-07 — 판정용 코드 폴더를 같이 보내 붙임
+if [ "$RUNTIME" = 1 ]; then   # op-06 — 판정용 코드 폴더를 같이 보내 붙임
   rsync --partial "$CODE_OUT" "$TARGET:$REMOTE_DIR/" 2>/dev/null || scp "$CODE_OUT" "$TARGET:$REMOTE_DIR/"
   RCODE="$REMOTE_DIR/code-$APP_VERSION-$VCS_REF"
   ssh "$TARGET" "rm -rf $RCODE && mkdir -p $RCODE && tar -xzf $REMOTE_DIR/$(basename "$CODE_OUT") -C $RCODE"

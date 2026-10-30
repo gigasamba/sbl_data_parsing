@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 실행 이미지(*-runtime — op-07, 사용자 10-30)의 ENTRYPOINT. 이미지에는 코드가 없다 — 서버 코드 폴더(저장소 트리 그대로)를 /app/deploy에
+# 실행 이미지(*-runtime — op-06, 사용자 10-30)의 ENTRYPOINT. 이미지에는 코드가 없다 — 서버 코드 폴더(저장소 트리 그대로)를 /app/deploy에
 # 읽기 전용으로 붙여 띄운다. 여기서 세 가지를 보고 코드 폴더의 entrypoint(deploy/docker/entrypoint.sh)로 넘긴다:
 #   ① 코드 폴더가 붙었나(없으면 종료 2) ② 이미지의 의존성 지문(/app/docker/deps_hash — 빌드 때 계산)과 코드가 선언한 지문
 #   (deploy/docker/DEPS_HASH — deploy/release/deps_hash.sh)이 같은가(다르면 종료 2 — 나중에 ImportError로 조용히 깨지지 않게)
@@ -8,13 +8,13 @@
 set -u
 CODE=/app/deploy
 if [ ! -f "$CODE/deploy/docker/entrypoint.sh" ]; then
-  echo "[image] 코드 폴더가 마운트되지 않음 — 서버 코드 폴더를 -v <코드 폴더>:/app/deploy:ro,z 로 붙여 띄울 것(이 실행 이미지에는 코드가 없음 — op-07)" >&2
+  echo "[image] 코드 폴더가 마운트되지 않음 — 서버 코드 폴더를 -v <코드 폴더>:/app/deploy:ro,z 로 붙여 띄울 것(이 실행 이미지에는 코드가 없음 — op-06)" >&2
   exit 2
 fi
 img=$(tr -d '\r\n' < /app/docker/deps_hash 2>/dev/null)
 want=$(tr -d '\r\n' < "$CODE/deploy/docker/DEPS_HASH" 2>/dev/null)
 if [ -z "$want" ] || [ "$img" != "$want" ]; then
-  echo "[image] 의존성 지문이 다름 — 이미지 ${img:-없음} · 코드 ${want:-없음}(deploy/docker/DEPS_HASH). 코드의 requirements가 바뀌었으면 새 실행 이미지가 필요함(op-07)" >&2
+  echo "[image] 의존성 지문이 다름 — 이미지 ${img:-없음} · 코드 ${want:-없음}(deploy/docker/DEPS_HASH). 코드의 requirements가 바뀌었으면 새 실행 이미지가 필요함(op-06)" >&2
   exit 2
 fi
 echo "[image] 이미지 $(cat /app/docker/image_ref 2>/dev/null || echo '?') · 코드 $(tr -d '\r\n' < "$CODE/CODE_COMMIT" 2>/dev/null || echo '커밋 표시 없음') · 의존성 $img" >&2

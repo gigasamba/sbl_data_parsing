@@ -119,3 +119,4 @@
 | `refactor.md`를 병합과 맞춤 | done | 낡은 줄 · PRD 링크 · 검토자 | [do-03](prd/doc.md#do-03) |
 | `refactor.md`를 `docs/refactoring/`으로 | todo | 옮기기 · 링크 | [do-01](prd/doc.md#do-01) |
 | 첫 릴리스 태그 `v0.1.0` | todo | 태그 · 릴리스 노트 | [op-04](prd/doc.md#op-04) |
+| 실행 이미지(코드 없음) · 코드 폴더 마운트 | done | 개발 서버 · 의존성 지문 · 코드 커밋 표시 | [op-06](prd/doc.md#op-06) |
