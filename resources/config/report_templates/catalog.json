@@ -1043,26 +1043,6 @@
      "candidate": "참고"
     },
     {
-     "name": "ocr_vlm (OCR 전용 소형 VLM 엔드포인트 — GLM-OCR·PaddleOCR-VL 등)",
-     "adopted": false,
-     "engines": [
-      "ocr_vlm"
-     ],
-     "strengths": "0.9B급 OCR 전용 소형 VLM을 vLLM 등으로 띄워 OpenAI 호환 엔드포인트로 호출 · 모델 카드 권장 프롬프트 지정 가능",
-     "weaknesses": "",
-     "perf": "",
-     "note": "모의 서버로 요청 형식만 확인 — 실제 응답은 서버 첫 실행 때 확인 · 카탈로그 외 — 보고서 다른 절에서",
-     "evidence": "주장",
-     "license": "엔드포인트별 확인(예: GLM-OCR MIT · PaddleOCR-VL Apache-2.0)",
-     "license_status": "사용 가능",
-     "license_reason": "대표 후보 모두 허용적 라이선스(모델별 재확인)",
-     "bench": [],
-     "dummy": "",
-     "tuning": "해당 없음",
-     "tuning_left": "",
-     "candidate": "참고"
-    },
-    {
      "name": "PaddleOCR-VL (0.9B)",
      "adopted": false,
      "engines": [
@@ -1122,7 +1102,7 @@
      "bench": [],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1140,7 +1120,7 @@
      "bench": [],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1167,19 +1147,17 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
      "name": "GLM-OCR",
      "adopted": false,
-     "engines": [
-      "ocr_vlm"
-     ],
+     "engines": [],
      "strengths": "OCR 전용 소형 VLM",
      "weaknesses": "",
      "perf": "",
-     "note": "파라미터 0.9B(가중치 합계 약 1.33B) · 언어 태그 ko · 한국어·영어 단독 공개 점수 없음 — ocr_vlm 엔진으로 서버 실측 대상 · 추가(2026-09-29, 기존 보고서 OCR VLM 표)",
+     "note": "파라미터 0.9B(가중치 합계 약 1.33B) · 언어 태그 ko · 한국어·영어 단독 공개 점수 없음 — 엔진 없음(ocr_vlm 10-30 지움) 대상 · 추가(2026-09-29, 기존 보고서 OCR VLM 표)",
      "evidence": "주장",
      "license": "MIT",
      "license_status": "사용 가능",
@@ -1187,7 +1165,7 @@
      "bench": [],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "후보"
     },
     {
@@ -1248,7 +1226,7 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1289,9 +1267,7 @@
     {
      "name": "Nanonets-OCR2",
      "adopted": false,
-     "engines": [
-      "ocr_vlm"
-     ],
+     "engines": [],
      "strengths": "OCR 전용 소형 VLM",
      "weaknesses": "",
      "perf": "",
@@ -1312,15 +1288,13 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
      "name": "DeepSeek-OCR · OCR-2",
      "adopted": false,
-     "engines": [
-      "ocr_vlm"
-     ],
+     "engines": [],
      "strengths": "OCR 전용 소형 VLM",
      "weaknesses": "",
      "perf": "",
@@ -1341,7 +1315,7 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1376,15 +1350,13 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
      "name": "Chandra 2 · 1",
      "adopted": false,
-     "engines": [
-      "ocr_vlm"
-     ],
+     "engines": [],
      "strengths": "OCR 전용 소형 VLM",
      "weaknesses": "",
      "perf": "",
@@ -1413,15 +1385,13 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "후보"
     },
     {
      "name": "olmOCR 2",
      "adopted": false,
-     "engines": [
-      "ocr_vlm"
-     ],
+     "engines": [],
      "strengths": "OCR 전용 소형 VLM",
      "weaknesses": "",
      "perf": "",
@@ -1442,7 +1412,7 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1469,7 +1439,7 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1520,7 +1490,7 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1555,7 +1525,7 @@
      ],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1573,7 +1543,7 @@
      "bench": [],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     },
     {
@@ -1591,7 +1561,7 @@
      "bench": [],
      "dummy": "",
      "tuning": "미튜닝",
-     "tuning_left": "서버 vLLM 서빙 후 ocr_vlm 엔진으로 실측",
+     "tuning_left": "엔진 없음(ocr_vlm 10-30 지움 — pl-31)",
      "candidate": "참고"
     }
    ]

@@ -166,9 +166,9 @@
 - Status: todo — 논의 대상(지금 2).
 
 <a id="rn-04"></a>
-## rn-04 · run_docs 작은 수정·레인 테스트(0.1.0)
+## rn-04 · run_docs 작은 수정·레인 테스트
 - 결정(사용자 10-30, C-59 ⓑ): MCP 감시 루프의 5초마다 `jobs_dir` 전체 `rglob`·`stat` → 최근 작업 폴더만 또는 심장 박동 파일 · 효과 없는 `--workers`를 시작 로그에서 뺌 · 남은 빈 분기 정리 · 흐름 테스트에 medium·vlm 레인·MCP 양보 길.
-- 파일: `deploy/host/scripts/run_docs.py`, `tests/general/deploy/test_docs_flow.py`.
+- 파일: `run_docs.py`, `tests/general/deploy/test_docs_flow.py`.
 - Status: todo — 0.1.0.
 
 <a id="pl-25"></a>
@@ -185,7 +185,7 @@
   - `struct`: 문서에서 나온 표 `doc_location`, `doc_contract_link`, `doc_table`, `doc_cell`과 그 쓰기·읽기 코드(structured link/tables, `load_tables_db`, `find_table_cells`, 집계 `doc_link_list`/`table_cell_list`/`doc_location_list`, `AG.struct` 서버 길)를 지운다 — 그 내용은 청크 글에만 있다. `stack_version`/`source_version`은 남긴다(MCP 시작 때 읽음).
   - 마스터 성격 자료(용어집, 고객 명부(C-21), `contract_master`, `client_master`)는 모두 **CSV 파일**로 둔다(사용자 10-30 — grill 9~10차 "마스터 PG"를 뒤집음). 별도 마스터 Postgres도, 용어집용 SQLite도 없다. CSV(샘플 데이터)는 git `resources/vocab/glossary/`(지금 폴더)에 두어 이미지에 함께 들어간다 — 서버 폴더·마운트 없음. 파일·머리글은 `db_schema.md` §5.
   - `pipeline_version`(C-62)은 ParsingMeta가 아니라 gold `doc`의 칸(`db_schema.md`).
-  - 후속 구현(todo): `.example` 파일을 샘플 CSV로 바꿈 · `common.paths.glossary_dir`를 이미지 경로 `resources/vocab/glossary`로 · 마스터를 PG에 적재하는 코드가 있으면 지움(`structured load --csv-dir`의 `contract_master`·`client_master` 적재, struct 마스터 표 — 고객 별칭은 CSV에서 읽음).
+  - 후속 구현: `.example`을 샘플 CSV로(10-30 끝 — `client_roster`·`client_master`·`contract_master.csv`). 결정(사용자 10-30): `glossary_dir`·`client_roster`는 기본값 없는 선택 settings.yaml 키 그대로(코드 기본값 안 바꿈). PG 마스터 표·`structured load --csv-dir` 지우기는 이 행 구현·설계 검토(grill 중) 때(todo).
   - git의 CSV는 샘플 데이터(사용자 10-30) — server-guide §5 기밀 규칙과 충돌 없음.
   - EDW 벡터 표(`chunk_vec`, `edw_insert`, `edw_search`)는 PR #5가 지운다.
 - 결정(사용자 10-30 — 고객 칸): 문서당 고객 하나는 EDW 조인 사슬에서 온다(값 하나). 문서 글에서 찾은 고객은 별도 목록. MCP 고객 거르기는 EDW 고객**만** 쓰고, EDW 고객이 없는 문서는 고객 거르기를 걸면 빠진다. 글에서 찾은 고객을 거르기에 쓰는 것은 나중([pl-28](#pl-28)). 지금은 둘이 `clients[]`에 섞여 있고(`build_bundle.infer_clients`) `chunk.clients`가 하드 거르기를 이끈다 — 이 행과 함께 고친다.

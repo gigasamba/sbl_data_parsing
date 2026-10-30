@@ -123,12 +123,11 @@ mcp:
 #   common.text.search_en_stem:  # 검색 토큰의 영어 복수→단수 정규화(G16, 가산만) — =0이면 끔 · 기본 true · 값: true·false · env=SEARCH_EN_STEM [인계 지문] [끔: 0만]
 #   common.text.token_num_norm:  # 검색 토큰의 숫자·단위 정규화(T1) — =0이면 끄고 이전 동작 · 기본 true · 값: true·false · env=TOKEN_NUM_NORM [인계 지문] [끔: ''·0·none·false]
 
-# ─── 2-2. 모델 — LLM·VLM·임베딩·재순위·비용 가드 (38칸) ───
+# ─── 2-2. 모델 — LLM·VLM·임베딩·재순위·비용 가드 (34칸) ───
 #  [기능 켬/끔]
 #   common.models.embed.allow_external:  # 임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만) · 기본 false · 값: true·false · env=EMBED_ALLOW_EXTERNAL [켬: 1만]
 #   common.models.llm.allow_external:  # LLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · 기본 false · 값: true·false · env=LLM_ALLOW_EXTERNAL [켬: 1만]
 #   common.models.llm.empty_retry:  # 빈 응답(생각이 토큰 소진) 안전망 — =0이면 끔, 그 밖이면 max_tokens×4로 1회 재요청 · 기본 true · 값: true·false · env=LLM_EMPTY_RETRY [끔: 0만]
-#   common.models.ocrvlm.allow_external:  # OCR 전용 VLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · 기본 false · 값: true·false · env=OCRVLM_ALLOW_EXTERNAL [켬: 1만]
 #   common.models.vlm.allow_external:  # VLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · 기본 false · 값: true·false · env=VLM_ALLOW_EXTERNAL [켬: 1만]
 #  [운영값(동시성·시간·용량·경로·접속)]
 #   common.models.embed.dim:  # ping_models 점검에서 기대하는 임베딩 차원 수 · 기본 4096 · 값: 0 이상 정수 · env=EMBED_DIM
@@ -151,9 +150,6 @@ mcp:
 #   common.models.llm.price_out:  # LLM 출력 단가($/백만 토큰) — 내장 가격표보다 우선 · 기본 없음 · 값: 0 이상 · env=LLM_PRICE_OUT
 #   common.models.llm.rpm:  # LLM 분당 호출 상한(건) — 0이면 무제한 · 기본 0 · 값: 0 이상 정수 (0 = 무제한) · env=LLM_RPM
 #   common.models.llm.timeout:  # LLM 호출 제한 시간(초) — 호출자가 timeout을 주면 그 값이 우선 · 기본 120.0 · 값: 0 이상 초 · env=LLM_TIMEOUT
-#   common.models.ocrvlm.api_key:  # OCR 전용 VLM 엔드포인트 API 키(있을 때만) · 값: 비밀 글자 · env=OCRVLM_API_KEY [비밀]
-#   common.models.ocrvlm.base_url:  # OCR 전용 VLM 엔드포인트 주소(OpenAI 호환 …/v1) · 기본 없음 · 값: URL · env=OCRVLM_BASE_URL
-#   common.models.ocrvlm.est_usd:  # OCR 전용 VLM 호출 1건당 예상 비용($) — 예산 선차감용 · 기본 0.01 · 값: 0 이상 · env=OCRVLM_EST_USD
 #   common.models.transport.connect_timeout:  # 모델 서버 연결(connect) 전용 제한 시간(초) — 0 이하면 끔 · 기본 10.0 · 값: 0 이상 초 (0 = 끔) · env=MODEL_CONNECT_TIMEOUT
 #   common.models.transport.down_after:  # 연속 연결 실패 몇 번이면 그 주소를 '다운'으로 보는가(회) · 기본 3 · 값: 0 이상 정수 · env=MODEL_DOWN_AFTER
 #   common.models.transport.down_cooldown:  # '다운' 판정 뒤 네트워크를 보내지 않고 즉시 거부하는 시간(초) · 기본 300.0 · 값: 0 이상 초 · env=MODEL_DOWN_COOLDOWN
@@ -503,11 +499,10 @@ mcp:
 # 3. 파라미터 — 결과를 바꾸는 값(영역별). 줄 모양·넣는 법은 2와 같다.
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 
-# ─── 3-1. 모델 — LLM·VLM·임베딩·재순위·비용 가드 (4칸) ───
+# ─── 3-1. 모델 — LLM·VLM·임베딩·재순위·비용 가드 (3칸) ───
 #   common.models.embed.query_prefix:  # 질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …/nQuery: ') · 기본 없음 · 값: 글자 · env=EMBED_QUERY_PREFIX
 #   common.models.llm.extra_body:  # LLM 요청 본문에 합칠 JSON 객체(예: 생각 끄기 {'reasoning':{'enabled':false}}) · 기본 없음 · 값: JSON 객체 · env=LLM_EXTRA_BODY
-#   common.models.ocrvlm.model:  # OCR 전용 VLM 모델 이름(0.9B급 GLM-OCR·PaddleOCR-VL 등) · 기본 없음 · 값: 글자 · env=OCRVLM_MODEL [엔진 지문]
-#   common.models.vlm.extra_body:  # VLM(·OCRVLM) 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기) · 기본 없음 · 값: JSON 객체 · env=VLM_EXTRA_BODY
+#   common.models.vlm.extra_body:  # VLM 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기) · 기본 없음 · 값: JSON 객체 · env=VLM_EXTRA_BODY
 
 # ─── 3-2. extract — 원천·준비·파싱 (15칸) ───
 #   pipeline.extract.engine_scope:  # 문서마다 돌릴 엔진 범위(stack = 형식별 stack.json 목록만 / all = 등록 엔진 전부) · 기본 없음 · 값: stack·all 중 하나 · env=PARSE_ENGINE_SCOPE [서버 옛 값: all]
@@ -526,9 +521,8 @@ mcp:
 #   pipeline.extract.prepare.rotate_probe_fast:  # 빠른 회전 검토의 축소 점검 이미지 크기(px) · 기본 480 · 값: 0 이상 정수 · env=PREPARE_ROTATE_PROBE_FAST
 #   pipeline.extract.prepare.rotate_s0_min:  # 빠른 회전 검토에서 힌트 각도를 믿는 최소 OCR 점수 · 기본 150.0 · 값: 0 이상 · env=PREPARE_ROTATE_S0_MIN
 
-# ─── 3-3. transform — 대표 결과·그림·구조화(청킹·임베딩) (30칸) ───
+# ─── 3-3. transform — 대표 결과·그림·구조화(청킹·임베딩) (29칸) ───
 #   pipeline.transform.figures.ocr_fallback_min_chars:  # OCR 대체 사용 최소 의미 글자 수(미만이면 로고·워터마크로 보고 버림) · 기본 10 · 값: 0 이상 정수 · env=FIG_OCR_FALLBACK_MIN_CHARS
-#   pipeline.transform.figures.ocrvlm_prompt:  # OCR 전용 소형 VLM 엔진(ocr_vlm)에 보낼 지시문(모델 카드 권장값) · 기본 없음 · 값: 글자 · env=OCRVLM_PROMPT [엔진 지문]
 #   pipeline.transform.figures.pptx_render_max:  # 문서당 렌더·VLM 호출할 슬라이드·도형 쪽 수 상한 · 기본 10 · 값: 0 이상 정수 · env=PARSE_PPTX_RENDER_MAX
 #   pipeline.transform.figures.pptx_shapes_max:  # 연결선 없는 도형 배치 슬라이드 후보 수 상한(0이면 이 사유는 안 봄) · 기본 20 · 값: 0 이상 정수 (0 = 이 사유는 안 봄) · env=PARSE_PPTX_SHAPES_MAX
 #   pipeline.transform.figures.pptx_smartart_max:  # SmartArt 슬라이드 후보 수 상한(0이면 이 사유는 안 봄) · 기본 20 · 값: 0 이상 정수 (0 = 이 사유는 안 봄) · env=PARSE_PPTX_SMARTART_MAX

@@ -976,7 +976,7 @@ def case_env(mod):
     fake = mod in _FAKE_LLM_CASES
     own = not C.IN_IMAGE and mod not in _PC_SETTINGS_CASES  # PC 시험은 시험 전용 바탕 설정(아래 _case_settings)
     if (fake, own) not in _CASE_ENVS:
-        blank = dict.fromkeys(("LLM_BASE_URL", "VLM_BASE_URL", "OCRVLM_BASE_URL", "EMBED_BASE_URL", "LLM_BUDGET_USD"))
+        blank = dict.fromkeys(("LLM_BASE_URL", "VLM_BASE_URL", "EMBED_BASE_URL", "LLM_BUDGET_USD"))
         base = child_env({"PYTHONUTF8": "1"})
         if own:  # PC — 개발자 루트 settings.yaml(실 PG·모델 키) 대신 시험 전용 최소 설정 위에 덮음(10-29 — 시험 격리)
             base["SETTINGS_FILE"] = _case_settings()

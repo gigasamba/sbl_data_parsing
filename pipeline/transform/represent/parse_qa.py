@@ -797,7 +797,7 @@ def summary_md(ps):
     return md
 
 
-VLM_ENV = ("VLM_", "OCRVLM_", "LLM_")  # 서버 모델 연결 설정 — 개발 PC에서 비어 있어 못 돈 엔진은 '문제'가 아니라 '서버에서 추가'
+VLM_ENV = ("VLM_", "LLM_")  # 서버 모델 연결 설정 — 개발 PC에서 비어 있어 못 돈 엔진은 '문제'가 아니라 '서버에서 추가'
 
 
 def select_final(qa, per_type=3, target=10, tol=0.05):

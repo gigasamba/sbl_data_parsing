@@ -34,7 +34,7 @@ def engines():
 # 제외(사용자 10-07, 스택에서 뺌 — backlog DP6): paddleocr · docling_ocr(EasyOCR 내장).
 # openviking_import·cognee_import 엔진 어댑터는 삭제됨(SI33, 10-07) — OpenViking은 서버의 기존 컨테이너를 직접 쓰고(구조화 요약 fallback은 OV_DOC_ROOT), Cognee는 스택에서 제외(DP6).
 CORE = {"pdfplumber", "pymupdf", "docling", "kreuzberg",                       # 텍스트 PDF(+ kreuzberg는 doc·html·eml 등 폭넓게)
-        "rapidocr_ko", "qwen_vlm", "ocr_vlm",                                   # 이미지·스캔(ocr_vlm = PaddleOCR-VL·GLM-OCR을 vLLM으로)
+        "rapidocr_ko", "qwen_vlm",                                              # 이미지·스캔(ocr_vlm은 10-30 지움 — pl-31)
         "office", "calamine", "pptx", "plaintext", "mhtml", "html_stdlib", "msg_extract", "markitdown", "hwpx",   # 오피스·웹·메일
         "anydoc", "pypdf", "unstructured_auto"}   # 올인원 내부 파서 단독 — OpenViking 오피스(anydoc) · Cognee 기본 PDF(pypdf)·unstructured 로더
                                                   # (OpenViking PDF = pdfplumber, Cognee docling 로더 = docling은 위에 있음) — 올인원 결과가 파서 탓인지 요약·추출 탓인지 가르기

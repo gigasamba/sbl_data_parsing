@@ -103,7 +103,7 @@ def external_allowed(prefix):
 
 
 def require_internal(url, prefix):
-    """모델 엔드포인트(VLM·OCRVLM·EMBED) 외부 전송 가드 — 내부망만(DONT 13). 개발 PC 실험이면 <prefix>_ALLOW_EXTERNAL=1(RUN_ENV=local)."""
+    """모델 엔드포인트(VLM·EMBED) 외부 전송 가드 — 내부망만(DONT 13). 개발 PC 실험이면 <prefix>_ALLOW_EXTERNAL=1(RUN_ENV=local)."""
     if url and not is_internal(url) and not external_allowed(prefix):
         host = urllib.parse.urlparse(url).hostname or url
         why = run_env_block()

@@ -1,11 +1,10 @@
 """내부망 VLM API — 쪽 이미지를 VLM에 보내 마크다운(표 포함)으로 받는다.
-  qwen_vlm = 범용 VLM(서버의 Qwen VLM) · ocr_vlm = OCR 전용 소형 VLM(GLM-OCR · PaddleOCR-VL 등을 vLLM으로 띄운 것)
+  qwen_vlm = 범용 VLM(서버의 Qwen VLM). (OCR 전용 소형 VLM 엔진 ocr_vlm은 10-30 지움 — pl-31)
 
 도구(tool) 인터페이스: ENGINES[이름](경로) → 공통 출력 계약(tools/engines/_common/contract.py).
 단독 실행: python -m data_parsing.parse_one --engine qwen_vlm <문서> <out.json>
 쪽은 병렬로 호출(VLM_CONCURRENCY, 기본 4) · 쪽당 제한 VLM_TIMEOUT(기본 180초) · 시간 초과·연결 오류는 1번 재시도(VLM_RETRY).
 설정(환경변수): VLM_BASE_URL(OpenAI 호환, 예 http://10.0.0.5:8000/v1) · VLM_MODEL · VLM_API_KEY(있을 때만)
-  ocr_vlm은 OCRVLM_BASE_URL · OCRVLM_MODEL · OCRVLM_API_KEY · OCRVLM_PROMPT(모델 카드의 권장 지시문, 없으면 PROMPT)
 **외부 API 주소 금지 — 내부망 엔드포인트만.**
 """
 import base64
@@ -75,18 +74,9 @@ def parse_qwen_vlm(path):
     return out
 
 
-def parse_ocr_vlm(path):
-    """OCR 전용 소형 VLM(0.9B급 GLM-OCR·PaddleOCR-VL 등)을 vLLM 등으로 띄운 OpenAI 호환 엔드포인트. 지시문은 모델 카드 권장값을 OCRVLM_PROMPT로."""
-    pages = _pages_md(path, "OCRVLM", os.environ.get("OCRVLM_PROMPT") or PROMPT)
-    md = "\n\n".join(pages)
-    out = _with_tables(md, _md_tables(md), "ocr_vlm")
-    out["trace"].update({"model": os.environ.get("OCRVLM_MODEL"), "pages": len(pages)})
-    return out
-
-
-ENGINES = {"qwen_vlm": parse_qwen_vlm, "ocr_vlm": parse_ocr_vlm}
-FORMATS = {"qwen_vlm": ('.pdf', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp'), "ocr_vlm": ('.pdf', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp')}
+ENGINES = {"qwen_vlm": parse_qwen_vlm}
+FORMATS = {"qwen_vlm": ('.pdf', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp')}
 REQUIRES = {"modules": ['pypdfium2'], "tools": []}
-REQUIRES_ENV = {"qwen_vlm": ['VLM_BASE_URL', 'VLM_MODEL'], "ocr_vlm": ['OCRVLM_BASE_URL', 'OCRVLM_MODEL']}
+REQUIRES_ENV = {"qwen_vlm": ['VLM_BASE_URL', 'VLM_MODEL']}
 PROFILED = set()
 UNVERIFIED = set(ENGINES)   # 모의 서버로 요청 형식만 확인 — 실제 Qwen VLM 응답은 서버에서 첫 실행 때 확인
