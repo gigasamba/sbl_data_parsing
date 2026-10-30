@@ -605,24 +605,6 @@ def ratio_place(ticks, items):
     return out
 
 
-def raster_chart_values(img_bytes, call_fn, prompt=None):
-    """래스터 차트 단계식 추출 — call_fn(prompt_text, enlarged_png_bytes) -> 모델 글자(JSON). 실제로는 항상
-    가짜/스텁 call_fn만 써야 한다(OpenRouter 규칙 — 실 호출 없음, 운영 배선 전). 반환: (values, raw_json|None)."""
-    import json
-
-    big = enlarge(img_bytes)
-    text = call_fn(prompt or RASTER_PROMPT, big)
-    try:
-        data = json.loads(text)
-    except (ValueError, TypeError):
-        return [], None
-    ticks = data.get("y_ticks") or []
-    items = data.get("items") or []
-    if len(ticks) < 2 or not items:
-        return [], data
-    return ratio_place(ticks, items), data
-
-
 try:
     from common.ai.agent_prompts import load as _load_prompt
 
