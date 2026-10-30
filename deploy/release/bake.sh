@@ -23,7 +23,7 @@ TAG="${TAG:-$(app_version)}"
 [ "$TAG" = "$(app_version)" ] || [ "${BAKE_TEST:-}" = 1 ] \
   || { echo "[bake] TAG($TAG) ≠ 코드 VERSION($(app_version)) — 태그 = 버전(D-036). 다시 구우려면 VERSION을 올린 코드로" >&2; exit 2; }
 want=$(tr -d '\r\n' < deploy/docker/DEPS_HASH)
-commit=$(cut -d' ' -f1 CODE_COMMIT 2>/dev/null || git rev-parse HEAD 2>/dev/null || echo unknown)
+commit=$(cut -d' ' -f1 CODE_COMMIT 2>/dev/null); case "$commit" in ''|'$Format'*) commit=$(git rev-parse HEAD 2>/dev/null || echo unknown) ;; esac   # clone이면 틀 그대로
 # 운영 서버 호스트 스크립트(deploy/host/ — trigger.sh·compose·systemd)도 이미지와 같은 코드로 — 시험한 코드 폴더 그대로 묶음
 BUNDLE="$OUT/code-$TAG-$(echo "$commit" | cut -c1-7).tar.gz"
 tar -czf - --exclude=./output -C "$CODE_DIR" . > "$BUNDLE"
