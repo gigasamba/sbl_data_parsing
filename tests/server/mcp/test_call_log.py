@@ -321,3 +321,133 @@ build().run(transport="stdio")
                 print("stdio child:", remaining.decode(), errors.decode())
 
     asyncio.run(run())
+
+
+def test_setting_audit():
+    from common.config import settings
+
+    rows = []
+    secret = "DEMO_SECRET_VALUE"
+    with (
+        settings.isolated(PG_PASSWORD=secret),
+        mc.senv(MCP_TOKEN="mcp-secret-value"),
+        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)),
+    ):
+        call = audit.start(lambda query: None, ({"nested": [secret, "mcp-secret-value"]},))
+        call.finish({"nested": [secret, "mcp-secret-value"]}, err=secret)
+        assert secret not in json.dumps(rows) and "mcp-secret-value" not in json.dumps(rows)
+        assert audit._body({"query": secret}, 1000)[0] == '{"query": "***"}'
+
+
+def test_audit_off_loop():
+    rows, seen = [], []
+    entered, output_entered = threading.Event(), threading.Event()
+    original_input, original_body = audit._input, audit._body
+    loop_thread = threading.get_ident()
+    encoded = base64.b64encode(b"a" * (8 * 1024 * 1024)).decode()
+
+    def observed_input(tool, args):
+        assert threading.get_ident() != loop_thread
+        seen.append(dispatch._INFLIGHT)
+        entered.set()
+        time.sleep(0.1)  # 파일 해시가 느린 경우에도 health는 바로 응답한다.
+        return original_input(tool, args)
+
+    def observed_body(*args):
+        assert threading.get_ident() != loop_thread
+        if isinstance(args[0], dict) and "text" in args[0]:
+            output_entered.set()
+            time.sleep(0.1)
+        return original_body(*args)
+
+    def do_parse_document(content_b64):
+        return {"text": "result" * 1000000, "job_id": "j"}
+
+    async def health(scope, receive, send):
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    class FakeMcp:
+        def streamable_http_app(self):
+            return health
+
+    async def ready(event):
+        async with asyncio.timeout(5):
+            while not event.is_set():
+                await asyncio.sleep(0.001)
+
+    async def run():
+        with patch.object(main, "build", return_value=FakeMcp()), patch.object(main.health, "register"):
+            app = main.build_guarded_app("127.0.0.1", 8765, "")
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            dispatch._LIMITER, dispatch._INFLIGHT = None, 2
+            with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1"):
+                task = asyncio.create_task(dispatch._bg_long(do_parse_document, 1, encoded))
+                await ready(entered)
+                started = time.monotonic()
+                assert (await client.get("/health")).status_code == 200
+                assert time.monotonic() - started < 0.1
+                assert await task == {"error": "busy"}
+                assert seen == [2]  # busy 판정/거부 뒤에만 입력 처리, 업무 함수는 안 돌림.
+            entered.clear()
+            dispatch._INFLIGHT = 0
+            task = asyncio.create_task(dispatch._bg(do_parse_document, encoded))
+            for event in (entered, output_entered):
+                await ready(event)
+                started = time.monotonic()
+                assert (await client.get("/health")).status_code == 200
+                assert time.monotonic() - started < 0.1
+            result = await task
+            assert result["job_id"] == "j" and rows[-1]["result_truncated"]
+            args = json.loads(rows[-1]["args"])["content_b64"]
+            assert args["bytes"] == 8 * 1024 * 1024
+            assert args["sha256"] == hashlib.sha256(b"a" * args["bytes"]).hexdigest()
+
+    with (
+        patch.object(audit, "_input", side_effect=observed_input),
+        patch.object(audit, "_body", side_effect=observed_body),
+        patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)),
+    ):
+        try:
+            asyncio.run(run())
+        finally:
+            dispatch._LIMITER, dispatch._INFLIGHT = None, 0
+
+
+def test_bounded_receive():
+    messages = [
+        {"type": "http.request", "body": b"x" * 600000, "more_body": True},
+        {"type": "http.request", "body": b"y" * 600000, "more_body": False},
+    ]
+    consumed = []
+
+    async def inner(scope, receive, send):
+        assert not consumed  # wrapper가 먼저 수신 완료까지 기다리지 않음.
+        for expected in messages:
+            message = await receive()
+            assert message is expected  # 바이트와 more_body를 그대로 SDK에 전달.
+            consumed.append(message)
+        assert audit._REQUEST.get()["user_id"] == "header-user"
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    class FakeMcp:
+        def streamable_http_app(self):
+            return inner
+
+    async def run():
+        with patch.object(main, "build", return_value=FakeMcp()), patch.object(main.health, "register"):
+            app = main.build_guarded_app("127.0.0.1", 8765, "")
+        iterator = iter(messages)
+
+        async def receive():
+            return next(iterator)
+
+        async def send(message):
+            pass
+
+        # oversized 본문은 JSON 파싱을 시도하지 않는다.
+        with patch.object(main.json, "loads", side_effect=AssertionError("audit parsed oversized body")):
+            await app({"type": "http", "method": "POST", "path": "/mcp", "headers": [(b"x-mcp-user", b"header-user")]}, receive, send)
+
+    asyncio.run(run())

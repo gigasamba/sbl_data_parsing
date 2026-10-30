@@ -16,6 +16,8 @@ import time
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+import anyio
+
 from common import pipeline_version
 from common.core import jsonlog
 from common.store import logsink
@@ -54,27 +56,44 @@ def configure_stdio():
         pass
 
 
-def _json(value):
-    return json.dumps(value, ensure_ascii=False, default=str).encode("utf-8")
-
-
 def _body(value, limit):
-    original = _json(value)
-    safe = _json(jsonlog.masked(value))
-    saved = safe[:limit].decode("utf-8", errors="ignore")
-    return saved, len(original), len(safe) > limit, hashlib.sha256(original).hexdigest()
+    encoder = json.JSONEncoder(ensure_ascii=False, default=str)
+    digest, size = hashlib.sha256(), 0
+    for chunk in encoder.iterencode(value):
+        for offset in range(0, len(chunk), 65536):
+            raw = chunk[offset : offset + 65536].encode("utf-8")
+            digest.update(raw)
+            size += len(raw)
+    saved, safe_size = bytearray(), 0
+    for chunk in encoder.iterencode(jsonlog.masked(value)):
+        for offset in range(0, len(chunk), 65536):
+            raw = chunk[offset : offset + 65536].encode("utf-8")
+            saved.extend(raw[: max(0, limit - len(saved))])
+            safe_size += len(raw)
+    return saved.decode("utf-8", errors="ignore"), size, safe_size > limit, digest.hexdigest()
 
 
 def _input(tool, args):
     args = dict(args)
     if tool == "parse_document" and args.get("content_b64") is not None:
-        encoded = str(args["content_b64"]).encode("utf-8")
+        encoded = str(args["content_b64"])
+        digest, size = hashlib.sha256(), 0
         try:
-            raw = base64.b64decode(encoded, validate=True)
+            for offset in range(0, len(encoded), 65536):
+                chunk = encoded[offset : offset + 65536]
+                if "=" in chunk and offset + len(chunk) < len(encoded):
+                    raise ValueError("non-final padding")
+                raw = base64.b64decode(chunk, validate=True)
+                digest.update(raw)
+                size += len(raw)
             kind = "decoded"
         except ValueError:
-            raw, kind = encoded, "encoded_invalid"
-        args["content_b64"] = {"sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw), "representation": kind}
+            digest, size, kind = hashlib.sha256(), 0, "encoded_invalid"
+            for offset in range(0, len(encoded), 65536):
+                raw = encoded[offset : offset + 65536].encode("utf-8")
+                digest.update(raw)
+                size += len(raw)
+        args["content_b64"] = {"sha256": digest.hexdigest(), "bytes": size, "representation": kind}
     return args
 
 
@@ -140,6 +159,26 @@ def request_context(headers, scope, payload=None, client_info=None):
         "session_id": headers.get("mcp-session-id"),
         "client_info": client_info,
     }
+    update_request(data, payload)
+    token = _REQUEST.set(data)
+    caller_token = CALLER.set("mcp:" + data["agent"])
+    try:
+        with jsonlog.context(request_id=request_id):
+            yield data
+    finally:
+        CALLER.reset(caller_token)
+        _REQUEST.reset(token)
+
+
+def update_request(data, payload):
+    """상한 안에서 수신한 JSON의 감사 메타데이터만 현재 요청 dict에 반영."""
+    if not isinstance(payload, dict):
+        return
+    params = payload.get("params")
+    params = params if isinstance(params, dict) else {}
+    meta = params.get("_meta")
+    if not data.get("user_id") and isinstance(meta, dict):
+        data["user_id"] = meta.get("user")
     if payload.get("method") == "initialize":
         data.update(
             tool="initialize",
@@ -151,14 +190,6 @@ def request_context(headers, scope, payload=None, client_info=None):
         )
     if payload.get("method") == "tools/call":
         data.update(tool=params.get("name"), arguments=params.get("arguments") or {})
-    token = _REQUEST.set(data)
-    caller_token = CALLER.set("mcp:" + data["agent"])
-    try:
-        with jsonlog.context(request_id=request_id):
-            yield data
-    finally:
-        CALLER.reset(caller_token)
-        _REQUEST.reset(token)
 
 
 class Call:
@@ -179,8 +210,18 @@ class Call:
         self.row = {"request_id": request_id, "agent": CALLER.get().removeprefix("mcp:"), **context, "tool": tool}
         conf = mc.cfg().audit
         self.output_limit = conf.max_output_bytes
-        text, size, truncated, _ = _body(_input(tool, arguments), conf.max_input_bytes)
-        self.row.update(args=text, args_bytes=size, args_truncated=truncated)
+        self.input_limit = conf.max_input_bytes
+        self.arguments = arguments
+        self.prepared = False
+
+    def _prepare(self):
+        if not self.prepared:
+            try:
+                text, size, truncated, _ = _body(_input(self.row["tool"], self.arguments), self.input_limit)
+                self.row.update(args=text, args_bytes=size, args_truncated=truncated)
+            except Exception:
+                _debug("mcp.audit.failed", tool=self.row.get("tool"))
+            self.prepared = True
 
     def run(self, fn, *args, **kwargs):
         """실제 스레드 시작 시각으로 큐 대기를 측정, 취소 후 종료는 DEBUG만."""
@@ -201,6 +242,7 @@ class Call:
                     return
                 self.done = True
                 now = time.perf_counter()
+                self._prepare()
                 if status == "timeout":
                     self.abandoned = self.thread_started is not None and self.thread_ended is None
                     _debug("mcp.thread.abandoned", request_id=self.row["request_id"], running=self.abandoned, ended_at=self.thread_ended)
@@ -230,6 +272,9 @@ class Call:
 
 
 class _NoLog:
+    def _prepare(self):
+        pass
+
     def run(self, fn, *args, **kwargs):
         return fn(*args, **kwargs)
 
@@ -243,6 +288,19 @@ def start(fn, args=(), kwargs=None):
     except Exception:
         _debug("mcp.audit.failed")
         return _NoLog()
+
+
+async def finish(call, *args, **kwargs):
+    """직렬화/해시/저장을 스레드로 격리. 취소 중에도 원래 업무 예외를 보존한다."""
+    from functools import partial
+
+    with anyio.CancelScope(shield=True):
+        await anyio.to_thread.run_sync(partial(call.finish, *args, **kwargs))
+
+
+async def prepare(call):
+    """입력 감사는 busy 판정 뒤·기존 도구 timeout 시작 전에 스레드에서 수행."""
+    await anyio.to_thread.run_sync(call._prepare)
 
 
 def unauthorized():

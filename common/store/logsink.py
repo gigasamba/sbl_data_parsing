@@ -22,6 +22,7 @@ import os
 import queue
 import sys
 import threading
+import time
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,6 +35,7 @@ _SINGLETON = None
 _SINGLE_LOCK = threading.Lock()
 _WARN_LOCK = threading.Lock()
 _WARNED = False
+_DROP_WARNED = False
 
 
 def _warn_once():
@@ -44,6 +46,15 @@ def _warn_once():
         _WARNED = True
     # 예외 글자는 DSN/행 값을 포함할 수 있으므로 찍지 않음. logging 재귀도 피한다.
     print("[applog] DB 기록 실패/지연 — jsonl 대체 기록(이 프로세스에서 한 번 알림)", file=sys.stderr)
+
+
+def _warn_dropped(count):
+    global _DROP_WARNED
+    with _WARN_LOCK:
+        if _DROP_WARNED:
+            return
+        _DROP_WARNED = True
+    print(f"[applog] 종료 flush 기한 초과 — 미완료 {count}행 dropped 집계(한 번 알림)", file=sys.stderr)
 
 
 def _write_db(batch, schema="applog"):
@@ -94,8 +105,12 @@ class Sink:
         self._state = threading.Lock()
         self._file_lock = threading.Lock()
         self._active: list = []
+        self._fallback_active = False
+        self._closing_batch: list = []
+        self._deadline = None
         self._counts = dict.fromkeys(("accepted", "dropped", "written", "fallback", "fallback_errors"), 0)
         self._closed = False
+        self._draining = True
         self._thread = threading.Thread(target=self._run, name="applog", daemon=True)
         exitclean.on_exit(self.close)
         self._thread.start()
@@ -129,19 +144,34 @@ class Sink:
         _warn_once()
         try:
             with self._file_lock:
+                if self._deadline is not None and time.monotonic() >= self._deadline:
+                    return
                 self.directory.mkdir(parents=True, exist_ok=True)
                 path = self.directory / f"{datetime.now(UTC):%Y-%m-%d}_{os.getpid()}.jsonl"
                 with path.open("a", encoding="utf-8") as fh:
                     for table, row in batch:
+                        if self._deadline is not None and time.monotonic() >= self._deadline:
+                            return
                         fh.write(json.dumps({"table": table, "row": row}, ensure_ascii=False) + "\n")
-            with self._state:
-                self._counts["fallback"] += len(batch)
+            self._complete(batch, "fallback")
         except OSError:
-            with self._state:
-                self._counts["fallback_errors"] += len(batch)
+            self._complete(batch, "fallback_errors")
+
+    def _complete(self, batch, kind):
+        with self._state:
+            if self._active is batch:
+                self._active = []
+                self._fallback_active = False
+            elif self._closing_batch is batch:
+                self._closing_batch = []
+            else:
+                return  # deadline 뒤 끝난 I/O는 dropped와 중복 집계하지 않는다.
+            self._counts[kind] += len(batch)
 
     def _take(self):
         with self._state:
+            if not self._draining:
+                return []
             batch = []
             while len(batch) < self.batch_size:
                 try:
@@ -164,36 +194,59 @@ class Sink:
                 with self._state:
                     # close가 소유권을 가져갔으면 파일 기록은 close가 맡는다.
                     owned = self._active is batch
-                    if owned:
-                        self._active = []
-                        if not failed:
-                            self._counts["written"] += len(batch)
+                    if owned and failed:
+                        self._fallback_active = True
                 if owned and failed:
                     self._fallback(batch)
-            if self._stop.is_set() and self.queue.empty():
+                elif owned:
+                    self._complete(batch, "written")
+            if self._stop.is_set() and (self.queue.empty() or not self._draining):
                 return
 
     def close(self):
-        """신규 기록을 막고 제한 시간까지 drain, 남는 큐/진행 배치는 파일로."""
+        """join + 대체 파일 I/O 전체에 단일 deadline; 미완료 행은 dropped.
+
+        막힌 OS 파일 쓰기는 취소할 수 없으므로 데몬에서만 실행한다. 늦게 끝난
+        I/O는 집계하지 않으며 종료가 파일 잠금/파일 시스템을 기다리지 않는다.
+        """
+        deadline = time.monotonic() + self.shutdown_sec
         # SIGTERM이 주 스레드의 emit 잠금 안에서 끼어들 수 있다. 그때는 atexit가 재시도.
-        if not self._state.acquire(timeout=0.1):
+        if not self._state.acquire(timeout=min(0.1, max(0, deadline - time.monotonic()))):
             return False
         try:
             if self._closed:
                 return True
             self._closed = True
+            self._deadline = deadline
             self._stop.set()
         finally:
             self._state.release()
-        self._thread.join(timeout=self.shutdown_sec)
+        # 정상 drain도 데몬에서 실행한다. DB 대기는 절반까지만, 파일 기록 예산을 남긴다.
+        self._thread.join(timeout=max(0, (deadline - time.monotonic()) / 2))
         with self._state:
-            batch, self._active = list(self._active), []
+            self._draining = False
+            batch = []
+            if not self._fallback_active:
+                batch, self._active = list(self._active), []
             while True:
                 try:
                     batch.append(self.queue.get_nowait())
                 except queue.Empty:
                     break
-        self._fallback(batch)
+            self._closing_batch = batch
+        closer = None
+        if batch:
+            closer = threading.Thread(target=self._fallback, args=(batch,), name="applog-close", daemon=True)
+            closer.start()
+        for worker in (self._thread, closer):
+            if worker is not None:
+                worker.join(timeout=max(0, deadline - time.monotonic()))
+        with self._state:
+            dropped = len(self._active) + len(self._closing_batch)
+            self._counts["dropped"] += dropped
+            self._active, self._closing_batch = [], []
+        if dropped:
+            _warn_dropped(dropped)
         return True
 
 

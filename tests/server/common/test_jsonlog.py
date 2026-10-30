@@ -99,3 +99,58 @@ def test_stream_preserved():
             for handler in log.handlers[:]:
                 log.removeHandler(handler)
                 handler.close()
+
+
+def test_setting_secrets():
+    from urllib.parse import quote
+
+    secret = 'DEMO_SECRET_VALUE한글"\\tail'
+    dsn_password = "dsn-secret-value"
+    dsn = f"postgresql://user:{dsn_password}@localhost/db"
+    with (
+        tempfile.TemporaryDirectory() as directory,
+        settings.isolated(PG_PASSWORD=secret, RDB_CONNECT_KWARGS=dsn, LLM_API_KEY="abc", APPLOG_DIR=directory, APPLOG_DB_ENABLED="0"),
+    ):
+        source = {"nested": [{"value": secret}], "argv": ["--key", secret], secret: quote(secret, safe="")}
+        safe = json.dumps(jsonlog.masked(source), ensure_ascii=False)
+        assert secret not in safe and quote(secret, safe="") not in safe
+        assert jsonlog.masked(dsn_password) == "***"
+        assert jsonlog.masked("abc") == "abc"  # 4자 미만은 값 기반 대조만 생략.
+        assert source["nested"][0]["value"] == secret
+        log = jsonlog.setup("testvalues")
+        try:
+            raise ValueError(secret)
+        except ValueError:
+            log.exception("argv %s %s", "--key", secret)
+        for handler in log.handlers[:]:
+            log.removeHandler(handler)
+            handler.close()
+        content = (Path(directory) / "testvalues.jsonl").read_text(encoding="utf-8")
+        assert "DEMO_SECRET_VALUE" not in content and "ValueError" in content
+
+
+def test_mask_linear():
+    import re
+    import time
+
+    from common.core.runlog import _SECRET_PATTERNS, _mask
+
+    original_dsn = re.compile(r"(?i)[a-z][a-z0-9+.\-]*://[^:/@\s]+:(?P<val>[^@\s]+)@")
+    examples = [
+        "completion_tokens=18 max_tokens=20 token_budget=100 ev_tokens5=3 tokens()",
+        "token=hidden password='with space' api_key=one AWS_SECRET_ACCESS_KEY=two",
+        '{"Authorization": "Bearer abc", "password": "quoted secret"}',
+        "postgresql://user:secret@host/db",
+        "1+.-postgresql://user:secret@host/db -https://u:pwd@host",
+        "a://user:secret@host a://missing/user a://user:missing",
+    ]
+    for value in examples:
+        old = value
+        for pattern in (*_SECRET_PATTERNS[:-1], original_dsn):
+            old = pattern.sub(lambda m: m.group(0)[: m.start("val") - m.start()] + "***" + m.group(0)[m.end("val") - m.start() :], old)
+        assert _mask(value) == old
+    for size in (1024 * 1024, 2 * 1024 * 1024):
+        value = "a" * size
+        started = time.monotonic()
+        assert _mask(value) == value
+        assert time.monotonic() - started < 1.5  # 기존 제곱 시간 패턴은 1MiB에서도 멎는다.

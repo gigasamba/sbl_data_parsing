@@ -19,8 +19,9 @@ import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import quote, quote_plus, unquote, urlsplit
 
-from common.config.settings import cfg
+from common.config.settings import cfg, secret_values
 from common.core import paths
 from common.core.runlog import _mask
 
@@ -61,22 +62,69 @@ def context(**ids):
         reset_context(token)
 
 
+def _secret_variants():
+    values = secret_values()
+    for value in tuple(values):
+        # 비밀 칸이 JSON 연결 옵션이면 개별 문자열 값도 비밀이다.
+        if value.startswith(("{", "[")):
+            try:
+                pending = [json.loads(value)]
+                while pending:
+                    item = pending.pop()
+                    if isinstance(item, dict):
+                        pending.extend(item.values())
+                    elif isinstance(item, list):
+                        pending.extend(item)
+                    elif isinstance(item, str):
+                        values.add(item)
+            except (ValueError, TypeError):
+                pass
+        # 비밀 DSN 전체뿐 아니라 URL/ODBC 안 비밀번호가 따로 인용된 경우도 보호한다.
+        if "://" in value:
+            try:
+                password = urlsplit(value).password
+                if password:
+                    values.add(unquote(password))
+            except ValueError:
+                pass
+        values.update(m.group(1).strip("\"'{}") for m in re.finditer(r"(?i)(?:password|pwd)\s*=\s*([^;]+)", value))
+    variants = set()
+    for value in values:
+        if len(value) >= 4:
+            variants.update((value, quote(value, safe=""), quote_plus(value)))
+            variants.update(json.dumps(value, ensure_ascii=ascii_only)[1:-1] for ascii_only in (False, True))
+    return sorted(variants, key=len, reverse=True)
+
+
 def masked(value):
-    """문자열/중첩 JSON 값을 기존 runlog._mask로 가린 사본(원본은 그대로)."""
+    """중첩 JSON/문자열의 패턴 및 현재 settings 비밀 칸 값을 가린 사본.
+
+    값 대조는 오탐 방지를 위해 4자 이상만 한다(짧은 값도 라벨 패턴은 적용).
+    DSN 비밀번호와 URL/JSON 이스케이프 표기도 포함하며 원본은 바꾸지 않는다.
+    CLI의 분리된 인자, 라벨 없는 오류/traceback도 같은 API를 사용한다.
+    """
+    return _masked(value, _secret_variants())
+
+
+def _masked(value, secrets):
     if isinstance(value, dict):
         result = {}
         for key, item in value.items():
             probe = f"{key}=applog_secret_probe"
             auth_probe = f"{key}: Bearer applog_secret_probe"
-            result[str(key)] = "***" if _mask(probe) != probe or _mask(auth_probe) != auth_probe else masked(item)
+            result[_masked(str(key), secrets)] = (
+                "***" if _mask(probe) != probe or _mask(auth_probe) != auth_probe else _masked(item, secrets)
+            )
         return result
     if isinstance(value, (list, tuple)):
-        return [masked(item) for item in value]
+        return [_masked(item, secrets) for item in value]
     if isinstance(value, str):
-        return _mask(value)
+        for secret in secrets:
+            value = value.replace(secret, "***")
+        return _mask(value) if ":" in value or "=" in value else value
     if value is None or isinstance(value, (int, float, bool)):
         return value
-    return _mask(str(value))
+    return _masked(str(value), secrets)
 
 
 class JsonFormatter(logging.Formatter):

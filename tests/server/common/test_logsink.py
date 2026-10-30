@@ -8,6 +8,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from unittest.mock import patch
 
 from common.config import settings
 from common.store import logsink
@@ -98,3 +99,65 @@ if sys.argv[2] == "term":
             _, err = proc.communicate(timeout=15)
             assert proc.returncode == (0 if mode == "ok" else 143), err
             assert len(_rows(directory)) == 1
+
+
+def test_setting_rows():
+    secret = "DEMO_SECRET_VALUE"
+    received = []
+    with tempfile.TemporaryDirectory() as directory, settings.isolated(PG_PASSWORD=secret):
+        sink = logsink.Sink(writer=received.extend, fallback_dir=directory, flush_sec=60)
+        assert sink.emit("pipe_run", {"args": ["--key", secret], "err": secret})
+        sink.close()
+        assert len(received) == 1 and secret not in json.dumps(received)
+
+        def failed(batch):
+            raise RuntimeError("offline")
+
+        sink = logsink.Sink(writer=failed, fallback_dir=directory, flush_sec=60)
+        assert sink.emit("mcp_call", {"args": json.dumps({"nested": [secret]}), "result": secret, "err": secret})
+        sink.close()
+        assert len(_rows(directory)) == 1 and secret not in json.dumps(_rows(directory))
+
+
+def test_blocked_fallback():
+    # 잠금을 쥔 기존 fallback과 종료 때 처음 시작한 파일 쓰기 양쪽을 재현한다.
+    for mode in ("lock", "write"):
+        entered, release = threading.Event(), threading.Event()
+
+        def failed(batch):
+            raise RuntimeError("offline")
+
+        class BlockedFile:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+            def write(self, text, entered=entered, release=release):
+                entered.set()
+                release.wait(3)
+
+        with tempfile.TemporaryDirectory() as directory:
+            sink = logsink.Sink(writer=failed, fallback_dir=directory, flush_sec=0.01, shutdown_sec=0.08)
+            if mode == "lock":
+                sink._file_lock.acquire()
+            try:
+                with patch.object(Path, "open", return_value=BlockedFile()) if mode == "write" else patch.object(logsink, "_warn_once"):
+                    assert sink.emit("pipe_event", {"seq": 1})
+                    if mode == "write":
+                        assert entered.wait(2)
+                    else:
+                        time.sleep(0.03)
+                    started = time.monotonic()
+                    assert sink.close()
+                    assert time.monotonic() - started < 0.25
+                    assert sink.stats()["dropped"] == 1
+                    sink.close()
+                    assert sink.stats()["dropped"] == 1
+            finally:
+                release.set()
+                if mode == "lock":
+                    sink._file_lock.release()
+                sink._thread.join(timeout=2)
+            assert sink.stats()["fallback"] == 0  # 늦은 완료를 중복 집계하지 않음.

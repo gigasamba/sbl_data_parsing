@@ -73,6 +73,8 @@ import json
 import sys
 import threading
 
+import anyio
+
 from common.core.console import utf8_stdout
 from mcp_server import config as mc  # 설정 객체(S7d)
 from mcp_server.routers import edw_tools, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
@@ -161,32 +163,37 @@ def build_guarded_app(host, port, token):
             (hdr.get("authorization") or "").encode(), f"Bearer {token}".encode()
         ):  # 인증 실패는 본문 수신을 기다리지 않고 바로 거부한다.
             with call_log.request_context(hdr, scope) as context:
-                call_log.unauthorized()
+                await anyio.to_thread.run_sync(call_log.unauthorized)
                 return await JSONResponse({"error": "unauthorized"}, status_code=401, headers={"X-Request-Id": context["request_id"]})(
                     scope, receive, send
                 )
-        messages, payload = [], None
-        if scope.get("method") == "POST":
-            body = bytearray()
-            while True:
-                message = await receive()
-                messages.append(message)
-                if message["type"] != "http.request":
-                    break
-                body.extend(message.get("body", b""))
-                if not message.get("more_body", False):
-                    break
-            try:
-                payload = json.loads(body)
-            except (ValueError, UnicodeError):
-                pass  # 잘못된 JSON의 기존 MCP 오류 응답은 inner가 만든다.
-
-        async def replay():
-            return messages.pop(0) if messages else await receive()
-
-        with call_log.request_context(hdr, scope, payload) as context:
-            init_call = call_log.initialize_call(payload)
+        with call_log.request_context(hdr, scope) as context:
+            # SDK가 받는 ASGI 청크를 즉시 그대로 전달한다. 감사용 사본은 최대 1MiB.
+            # 큰 요청은 _meta/initialize 추출만 생략하며 도구 입력/제한은 바꾸지 않는다.
+            metadata_limit = 1024 * 1024
+            body, body_size = bytearray(), 0
+            init_call = None
             response_body, response_status = bytearray(), 200
+
+            async def observed_receive():
+                nonlocal body_size, init_call
+                message = await receive()
+                if scope.get("method") == "POST" and message["type"] == "http.request":
+                    chunk = message.get("body", b"")
+                    body_size += len(chunk)
+                    if body_size <= metadata_limit:
+                        body.extend(chunk)
+                        if not message.get("more_body", False):
+                            try:
+                                payload = await anyio.to_thread.run_sync(json.loads, body)
+                            except (ValueError, UnicodeError):
+                                payload = None  # 기존 MCP 오류는 SDK가 처리한다.
+                            call_log.update_request(context, payload)
+                            init_call = call_log.initialize_call(payload)
+                            body.clear()
+                    else:
+                        body.clear()
+                return message
 
             async def correlated_send(message):
                 nonlocal response_status
@@ -194,18 +201,18 @@ def build_guarded_app(host, port, token):
                     response_status = message["status"]
                     message = {**message, "headers": [*message.get("headers", []), (b"x-request-id", context["request_id"].encode())]}
                 elif init_call is not None and message["type"] == "http.response.body":
-                    response_body.extend(message.get("body", b""))
+                    response_body.extend(message.get("body", b"")[: max(0, metadata_limit - len(response_body))])
                 await send(message)
 
             try:
-                await inner(scope, replay, correlated_send)
+                await inner(scope, observed_receive, correlated_send)
             except BaseException as exc:
                 if init_call is not None:
-                    init_call.finish(status="error", err=str(exc))
+                    await call_log.finish(init_call, status="error", err=str(exc))
                 raise
             finally:
                 if init_call is not None:
-                    call_log.finish_initialize(init_call, response_body, response_status)
+                    await anyio.to_thread.run_sync(call_log.finish_initialize, init_call, response_body, response_status)
 
     return guarded
 

@@ -31,6 +31,7 @@ import functools
 import json
 import os
 import sys
+import weakref
 from pathlib import Path
 from typing import Annotated, ClassVar, Literal, get_args, get_origin
 
@@ -1180,12 +1181,15 @@ class Cache:
     """앱 설정 캐시 — get()은 처음 한 번 읽고, 신호(SETTINGS_FILE·RUN_ENV)가 바뀌거나 put()이 부르면 다시 읽는다. override()·env()는
     시험 동안만 바꿔 끼운다(os.environ은 건드리지 않음)."""
 
+    _instances: weakref.WeakSet = weakref.WeakSet()
+
     def __init__(self, app_cls):
         self.app_cls = app_cls
         self._value = None
         self._key = None
         self._fixed = False
         self._names = None
+        self._instances.add(self)
 
     def get(self):
         if self._fixed:
@@ -1235,6 +1239,26 @@ class Cache:
                 yield st
         finally:
             self._names = saved
+
+
+@functools.cache
+def _secret_paths(model_cls):
+    return tuple(path for path, field, _ in walk(model_cls) if is_secret(field))
+
+
+def secret_values():
+    """로깅 마스킹 전용: 등록된 설정 객체의 비밀 칸 값. 반환값은 출력/저장하지 않는다.
+
+    앱을 import하지 않으며 Cache.get()으로 덮기/시험 설정 변경도 반영한다.
+    """
+    values = set()
+    for cache in list(Cache._instances):
+        model = cache.get()
+        for path in _secret_paths(cache.app_cls):
+            value = _get(model, path)
+            if isinstance(value, SecretStr):
+                values.add(value.get_secret_value())
+    return values
 
 
 # ── common 절 모델 ─────────────────────────────────────────────────────────────────────────
@@ -1635,7 +1659,7 @@ class CommonLog(Section):
     batch_size: int = F(200, "APPLOG_BATCH_SIZE", "DB INSERT 배치 최대 행 수", ge=1)
     flush_sec: float = F(1.0, "APPLOG_FLUSH_SEC", "DB 배치 기록 간격(초)", gt=0)
     db_timeout_sec: int = F(2, "APPLOG_DB_TIMEOUT_SEC", "로그 DB 연결/문장 제한(초)", ge=1)
-    shutdown_sec: float = F(5.0, "APPLOG_SHUTDOWN_SEC", "종료 시 DB 작업 대기 상한(초), 남은 큐는 파일 기록", ge=0)
+    shutdown_sec: float = F(5.0, "APPLOG_SHUTDOWN_SEC", "종료 flush 전체 상한(초) — DB 대기+파일 기록, 초과 행은 dropped", ge=0)
 
 
 class CommonSettings(Section):

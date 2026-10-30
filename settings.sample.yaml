@@ -156,7 +156,7 @@ common:
     batch_size: 200  # DB INSERT 배치 최대 행 수 · 기본 200 · 값: 0 이상 정수 · env=APPLOG_BATCH_SIZE
     flush_sec: 1.0  # DB 배치 기록 간격(초) · 기본 1.0 · 값: 0 이상 초 · env=APPLOG_FLUSH_SEC
     db_timeout_sec: 2  # 로그 DB 연결/문장 제한(초) · 기본 2 · 값: 0 이상 정수(초) · env=APPLOG_DB_TIMEOUT_SEC
-    shutdown_sec: 5.0  # 종료 시 DB 작업 대기 상한(초), 남은 큐는 파일 기록 · 기본 5.0 · 값: 0 이상 초 · env=APPLOG_SHUTDOWN_SEC
+    shutdown_sec: 5.0  # 종료 flush 전체 상한(초) — DB 대기+파일 기록, 초과 행은 dropped · 기본 5.0 · 값: 0 이상 초 · env=APPLOG_SHUTDOWN_SEC
   runtime:
     cpu_max_load:  # 새 하위 프로세스를 띄우는 CPU 부하 상한(1분 부하 평균 ÷ 코어 수) · 기본 0.9 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=CPU_MAX_LOAD [auto = 비움]
     draft_terms_lock_timeout:  # 용어 초안 CSV 쓰기 잠금 대기 시간(초) — 못 얻으면 이번엔 포기 · 기본 5.0 · 값: 0 이상 초 · env=DRAFT_TERMS_LOCK_TIMEOUT [인계 지문]
