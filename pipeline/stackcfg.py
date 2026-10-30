@@ -1,14 +1,11 @@
-"""엔진 구성 — 활성 판 → 검사 → 사본 파일(S8b, D-031 — 사용자 10-28 Q3·Q7·Q8·Q10 a).
+"""엔진 구성 — 활성 판 → 검사 → 판 번호를 자식에 넘김(S8b, D-031 · pl-32 사용자 10-30: 사본 파일 `_stack/stack-v*.json`·STACK_SNAPSHOT 없앰).
 진입점(pipeline.cli·stream·parse_parallel·mcp_parse_service·load.index)이 부른다: common.store.db.cfgtables.active("stack")(서버 = DB 활성 판,
-PC = 파일) → 이미지에 없는 엔진 거부(등록부 + 설치 — parse ∪ candidates) → 결과 폴더 `_stack/stack-v<판>-<sha8>.json`(body + name +
-version_id + body_sha)을 쓰고 설정 칸 STACK_SNAPSHOT(pipeline.paths.stack_snapshot)으로 넘긴다(put — 자식 프로세스도 받음).
-층 파일(run_all·attachments)은 그 칸만 읽고, represent·build_bundle은 지금처럼 `--stack <사본>`을 받는다 — 판 표를 읽는 코드는 층의
-의존이 아니다(code_fp). 같은 구성이면 같은 사본 바이트(색인 재빌드 판정 index_cfg.inputs도 같음)."""
+PC = 파일) → 이미지에 없는 엔진 거부(등록부 + 설치 — parse ∪ candidates) → 판 번호를 설정 칸 STACK_VERSION(pipeline.paths.stack_version)으로
+넘긴다(put — 자식 프로세스도 받음). 자식·층(run_all·attachments·represent·build_bundle)은 pipeline.config.stack()으로 그 판을 판 표에서 읽는다 —
+실행 중 활성 판이 바뀌어도 한 실행은 한 판. 호스트 스크립트(run_docs)는 `--version`으로 판 번호를 한 번 받아 파싱·구조화에 --set으로 준다."""
 
 import json
-import os
 import sys
-from pathlib import Path
 
 from common.core.console import utf8_stdout
 
@@ -57,61 +54,32 @@ def snapshot_bytes(a):
     )  # 키 정렬 — DB(JSONB)·파일 키 순서와 무관
 
 
-def write_snapshot(a, out_root):
-    """사본 파일(같은 판·body면 같은 이름·바이트 — 있어도 바꿔 써 mtime이 새로 됨, S9b). 반환: 경로."""
-    d = Path(out_root) / "_stack"
-    d.mkdir(parents=True, exist_ok=True)
-    p = d / f"stack-v{a.version_id if a.version_id is not None else 'file'}-{a.body_sha[:8]}.json"
-    data = snapshot_bytes(a)
-    # VS9 R-2 — 같은 바이트여도 늘 새로 씀: 이번에 쓴 사본이 가장 새 것(reuse()가 mtime으로 고름 — v1 → v2 → v1 되돌리기).
-    # utime 대신 바꿔 쓰기 — 다른 UID가 쓴 파일이어도 폴더 쓰기 권한만 있으면 됨(S9b 리뷰)
-    tmp = p.with_name(f".{p.name}.{os.getpid()}.tmp")
-    tmp.write_bytes(data)
-    os.replace(tmp, p)
-    return p
-
-
-def resolve(out_root, refresh=False, publish=True):
-    """활성 판 → 엔진 검사 → 사본 → (publish면) STACK_SNAPSHOT 칸으로 넘김. 반환: (사본 경로, 사본 dict). 서버에서 판 표를 못 읽으면 종료 4,
-    없는 엔진이면 종료 2(시작하지 않음)."""
+def resolve(refresh=False, publish=True):
+    """활성 판 → 엔진 검사 → (publish면) 판 번호를 STACK_VERSION 칸으로 넘김(PC 파일은 번호가 없어 안 넘김 — 자식도 파일을 읽음).
+    반환: cfgtables.Active. 서버에서 판 표를 못 읽으면 종료 4, 없는 엔진이면 종료 2(시작하지 않음)."""
     from common.config import settings as C
     from common.store.db import cfgtables
 
     a = cfgtables.active("stack", refresh=refresh)
     require_engines(a.body, a.label())
-    p = write_snapshot(a, out_root)
-    if publish:
-        C.put(STACK_SNAPSHOT=str(p))
-    print(f"[엔진 구성] {a.label()} → {p.name}", file=sys.stderr, flush=True)
-    return p, json.loads(p.read_text(encoding="utf-8"))
+    if publish and a.version_id is not None:
+        C.put(STACK_VERSION=str(a.version_id))
+    print(f"[엔진 구성] {a.label()}", file=sys.stderr, flush=True)
+    return a
 
 
-def current(out_root):
-    """이미 넘겨받은 사본(STACK_SNAPSHOT — 진입점이 만듦, 자식 프로세스)이 있으면 그것, 없으면 resolve(out_root) — 함수로도 불리고
-    단독으로도 도는 모듈(stream·parse_parallel·load.index)이 쓴다."""
+def current():
+    """이미 넘겨받은 판(STACK_VERSION — 부모 진입점이 정함)이 있으면 그 판, 없으면 resolve() — 함수로도 불리고 단독으로도 도는
+    모듈(stream·parse_parallel·load.index)이 쓴다. 반환: cfgtables.Active."""
+    from common.store.db import cfgtables
     from pipeline import config as pc
 
-    snap = pc.cfg().paths.stack_snapshot
-    if snap and Path(snap).is_file():
-        return Path(snap), json.loads(Path(snap).read_text(encoding="utf-8"))
-    return resolve(out_root)
-
-
-def reuse(out_root):
-    """결과 폴더에 이미 쓴 사본(파싱이 만든 것 — `_stack/stack-v*.json`, 여럿이면 가장 새 것)이 있으면 (경로, dict), 없으면 None.
-    호스트 run_docs.py 구조화가 문서별 폴더로 부른다(`--path`) — 파싱과 구조화 사이에 판이 바뀌어도 한 문서는 파싱한 판으로(VS8b R-1·C-50)."""
-    snaps = sorted((Path(out_root) / "_stack").glob("stack-v*.json"), key=lambda p: (p.stat().st_mtime, p.name))
-    if not snaps:
-        return None
-    p = snaps[-1]
-    body = json.loads(p.read_text(encoding="utf-8"))
-    require_engines(body, p.name)
-    print(
-        f"[엔진 구성] 이 결과 폴더의 사본 다시 씀 → {p.name}" + (f"(사본 {len(snaps)}개 중 가장 새 것)" if len(snaps) > 1 else ""),
-        file=sys.stderr,
-        flush=True,
-    )
-    return p, body
+    v = pc.cfg().paths.stack_version
+    if v is None:
+        return resolve()
+    a = cfgtables.active("stack", version_id=v)
+    require_engines(a.body, a.label())
+    return a
 
 
 if __name__ == "__main__":
@@ -119,11 +87,8 @@ if __name__ == "__main__":
 
     setarg.apply()  # --set 이름=값(S9 Step A)
     utf8_stdout()
-    if (
-        len(sys.argv) == 3 and sys.argv[1] == "--path"
-    ):  # 셸용(호스트 run_docs.py 구조화) — 사본 경로만 stdout(안내는 stderr), 못 읽으면 종료 4·없는 엔진 2
-        print(
-            (reuse(sys.argv[2]) or current(sys.argv[2]))[0]
-        )  # 그 폴더에 파싱이 쓴 사본이 있으면 그것(VS8b R-1), 없으면 넘겨받은 사본·활성 판
+    if sys.argv[1:] == ["--version"]:  # 셸용(호스트 run_docs.py) — 활성 판 번호만 stdout(PC 파일이면 빈 줄), 못 읽으면 종료 4·없는 엔진 2
+        v = resolve(publish=False).version_id
+        print("" if v is None else v)
         raise SystemExit(0)
-    raise SystemExit("사용: python -m pipeline.stackcfg --path <결과 폴더>")  # 자기 점검은 tests/server/pipeline/test_stackcfg.py(S9)
+    raise SystemExit("사용: python -m pipeline.stackcfg --version")  # 자기 점검은 tests/server/pipeline/test_stackcfg.py(S9)

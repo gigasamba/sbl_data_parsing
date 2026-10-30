@@ -44,13 +44,20 @@ _STACK: dict = {}
 
 
 def _stack():
-    """엔진 구성 활성 판의 사본 (경로, dict) — 프로세스마다 한 번(S8b — pipeline/stackcfg.py: 서버 = 판 표 활성 판·PC = 파일 → 이미지에 없는
-    엔진 거부 → OUT/_stack/ 사본 → STACK_SNAPSHOT 칸으로 자식에 넘김). 서버에서 판 표를 못 읽으면 종료 4, 없는 엔진이면 종료 2."""
+    """엔진 구성(사전) — 프로세스마다 한 번(pipeline/stackcfg.py: 서버 = 판 표 활성 판·PC = 파일 → 이미지에 없는 엔진 거부 → 판 번호를
+    STACK_VERSION 칸으로 자식에 넘김 — 이미 받았으면 그 판, pl-32). 서버에서 판 표를 못 읽으면 종료 4, 없는 엔진이면 종료 2."""
     if "v" not in _STACK:
         from pipeline import stackcfg
 
-        _STACK["v"] = stackcfg.resolve(OUT)
+        stackcfg.current()
+        _STACK["v"] = pc.stack()
     return _STACK["v"]
+
+
+def _stack_arg():
+    """represent·build_bundle에 넘길 판 번호 인자(PC 파일이면 없음 — 자식도 파일을 읽음)."""
+    v = _stack().get("version_id")
+    return [] if v is None else ["--stack-version", str(v)]
 
 
 def sh(module, *args, check=True):
@@ -114,7 +121,7 @@ def night(a):
     RV5(10-09): deploy/host/scripts/trigger.sh night(OP13 정본, compose 여러 컨테이너용)와는 배포 모양이 달라 따로 둠 — 이 함수는
     단일 컨테이너·Docker 밖 직접 실행(AGENTS.md 지시표·requirements.md S8 cron 예시)에서 쓰임, 호출처 있음(삭제 대상 아님)."""
     connect(a)
-    st = _stack()[1]
+    st = _stack()
     engines = a.engines or ",".join(_engines_of(st))
     _set_engine_scope_default(a.engines)  # PE1 — night도 생산 경로(서버 entrypoint full)라 같은 기본
     from common.core import resources as RS
@@ -158,7 +165,7 @@ def night(a):
     if not a.no_structure and not stopped:
         for args in (
             ["pipeline.transform.represent.parse_qa", "--src", a.src],
-            ["pipeline.transform.represent.represent", "--stack", _stack()[0], "--src", a.src],
+            ["pipeline.transform.represent.represent", *_stack_arg(), "--src", a.src],
         ):
             left = _until(a.deadline)
             rc = _run_until(args, env, left - 60) if left > 120 else None
@@ -185,8 +192,7 @@ def night(a):
                 a.src,
                 "--embed",
                 pc.cfg().transform.structure.embed or st.get("embed", "api"),
-                "--stack",
-                _stack()[0],
+                *_stack_arg(),
                 "--summary",
                 "auto",
             ]
@@ -228,7 +234,7 @@ def night(a):
 def compare_parse(a):
     engines = a.engines
     if engines == "candidates":  # 스택의 선정 엔진 + 사용자 후보 목록(stack.json candidates)
-        st = _stack()[1]
+        st = _stack()
         engines = ",".join(_engines_of(st))
         print(f"비교 엔진: {engines}")
     if not a.skip_parse:
@@ -621,7 +627,7 @@ def parse_module(a):
     os.environ["PARSE_RUN_ID"] = (
         run_id  # env 남김 — 하위 프로세스·엔진에 넘김 · 이후 모든 하위 호출(dedup·prepare·run_all·streaming)이 os.environ 상속으로 받음
     )
-    st = _stack()[1]
+    st = _stack()
     engines = a.engines or ",".join(_engines_of(st))
     _set_engine_scope_default(a.engines)  # PE1(2026-10-07) — 생산 기본 stack(무거움 해소), 명시 --engines·실험 경로는 영향 없음
     parallel = bool(a.source) and pc.cfg().extract.parallel.pipeline  # OP26 — 문서 단위 받기→파싱→게시→삭제를 N명이 동시에
@@ -707,7 +713,7 @@ def parse_module(a):
         _tstep("t_parse")
         for args in (
             ["pipeline.transform.represent.parse_qa", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
-            ["pipeline.transform.represent.represent", "--stack", _stack()[0], "--src", a.src, "--parse-dir", OUT / "parse"],
+            ["pipeline.transform.represent.represent", *_stack_arg(), "--src", a.src, "--parse-dir", OUT / "parse"],
         ):
             rc = _run_until(args, env, _left(a) - 60)
             _tstep("t_" + args[0].rsplit(".", 1)[-1])  # 2026-10-22 — qa·represent 분리 계측(docflow 기타 분해)
@@ -779,9 +785,7 @@ def _structure_pg_indexed(a, index_conf):
         OUT / "parse",
         "--src",
         a.src,
-        "--stack",
-        _stack()[0],
-        "--pg",
+        "--pg",  # 엔진 구성 판은 넘겨받은 STACK_VERSION 칸으로(index는 --stack-version 인자가 없음 — pl-32 리뷰)
         *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
         check=False,
     )
@@ -795,7 +799,7 @@ def structure_module(a):
     index_conf = pc.cfg().paths.index_conf
     if index_conf:
         return _structure_pg_indexed(a, index_conf)
-    st = _stack()[1]
+    st = _stack()
     embed = pc.cfg().transform.structure.embed or st.get("embed", "api")
     m = need("parse", "structure", a.force, extra=_structure_extra(embed))
     if not m:
@@ -826,8 +830,7 @@ def structure_module(a):
         a.src,
         "--embed",
         embed,
-        "--stack",
-        _stack()[0],
+        *_stack_arg(),
         "--summary",
         "auto",
         *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
@@ -905,20 +908,19 @@ def load_module(a):
 
 def run_stack(a):
     connect(a)
-    st = _stack()[1]
+    st = _stack()
     engines = ",".join(sorted({e for es in st["parse"].values() for e in es}))
     if not a.skip_parse:
         parse_docs(a.src, engines, a.procs)  # 이미 파싱된 문서×엔진은 다시 안 함(sha)
     sh("pipeline.transform.represent.parse_qa", "--src", a.src)  # 대표 고르기용 정확도(교차 재현율)
-    sh("pipeline.transform.represent.represent", "--stack", _stack()[0], "--src", a.src)
+    sh("pipeline.transform.represent.represent", *_stack_arg(), "--src", a.src)
     sh(
         "pipeline.transform.structure.build_bundle",
         "--src",
         a.src,
         "--embed",
         pc.cfg().transform.structure.embed or st["embed"],
-        "--stack",
-        _stack()[0],
+        *_stack_arg(),
         *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
     )
     load_tables_db()
