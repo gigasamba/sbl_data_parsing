@@ -195,7 +195,7 @@
 - 이름 규칙(사용자 10-30): EDW와 문서 파싱 양쪽에서 올 수 있는 칸은 출처를 이름에 넣어 두 칸으로 둔다(예: `client_edw`, `clients_doc`). 정확한 접미어는 `db_schema.md`가 정한다.
 - 나누는 시점(사용자 10-30): B — 지금은 표 한 벌. 원천별 나누기는 [pl-28](#pl-28).
 - 결정(사용자 10-30 grill 7차): `db_schema.md` U-1..U-6은 초안대로. U-7: `s3_key`당 `doc` 행 하나, `doc_alias` 없음 — `build_bundle`의 같은 파일 내용 해시 합치기(첫 키로 모음, `aliases`)를 지운다. 같은 내용이 두 키에 있으면 문서 둘(임베딩 캐시가 벡터를 재사용). D-2: EDW 고객 조인은 파이프라인이 직접 만든다 → [pl-29](#pl-29).
-- 결정(사용자 10-30 grill — ParsingMeta 단계별, 성공 때만 씀 — 등급 A, DB 담당자 D-3): 위 "읽는 칸만"에 칸을 다시 더한다 — ① `stack_version`(파싱 엔진 스택 판, 엔진이 모두 실패하면 NULL) ② 성공한 엔진만(이름 + 판) ③ 문서마다 대표 silver 엔진 + 판 ④ gold 모듈·파이프라인 판(gold가 끝나기 전에는 NULL) ⑤ `gold_status`(앞의 결정 그대로). 저장 구조는 [pl-32](#pl-32).
+- 결정(사용자 10-30 grill — ParsingMeta 단계별, 성공 때만 씀 — 등급 A, DB 담당자 D-3): 위 "읽는 칸만"에 칸을 다시 더한다 — ① `stack_version`(파싱 엔진 스택 판, 엔진이 모두 실패하면 NULL) ② 성공한 엔진만(이름 + 판) ③ 문서마다 대표 silver 엔진 + 판 ④ gold 모듈·파이프라인 판(gold가 끝나기 전에는 NULL) ⑤ `gold_status`(앞의 결정 그대로) ⑥ 실패한 엔진(이름·이유·걸린 시간 — 사용자 10-30 "EDW에도"). 저장 구조는 [pl-32](#pl-32).
 - 결정(사용자 10-30 grill — 검토):
   - 0.1.0에 Alembic 마이그레이션 하나로 gold 변경과 struct 지우기(마스터·문서 파생 표·`prod_master`)를 함께 — DB 담당자 승인 한 번.
   - gold `doc.file_path`는 지운다. 보여 줄 때는 `s3_key` + 새 원본 파일 이름 칸(`FileStorageMap.original_filename`에서). 고칠 곳: `mcp_server/services/search/{pgsearch,retriever,search_svc,shaping,local,aggregate}.py`, `mcp_server/schemas/evidence.py`(`search` 근거 출력의 `file_path` 키), `mcp_server/cli/ask.py`, `common/store/db/models/search_tables.py`(칸·`VIEWS_EXPECTED`·뷰 SQL), `common/store/db/schemas/search_rows.py`, 뷰 `v_chunk_source`(`common/store/db/migrations/versions/0001_search_base.py`), `pipeline/load/pgvector_load.py`·`pipeline/transform/structure/build_bundle.py`(적재가 `file_path`를 건너뛰기 키로 씀 → `s3_key`가 대신함), `validation/search_ui/serve.py`.
@@ -215,7 +215,16 @@
 - [pl-12](#pl-12)("대장은 고쳐서 남김")와 맞춤: PG `doc_registry`는 남고, 로컬 SQLite 대체만 없앤다.
 - 새벽 배치 계획(사용자 10-30 "새벽 배치 계획은 parameter로 하면 될 것 같아. null 이면 새벽 배치 안하고, 입력되어있으면 작동"): settings.yaml 키 하나(op-05 — settings.yaml 하나). 값이 null이면 새벽 배치를 하지 않고, 값이 있으면 돈다([pl-23](#pl-23)).
 - 실패 횟수 없앰(사용자 10-30 "fail count 는 제거하자. 그냥 현재 상태에만 성공하면 업데이트"): 재시도 횟수를 어디에도 두지 않는다 — `doc_registry.fail_count`와 `common.store.registry_retry_max`(`REGISTRY_RETRY_MAX`) 설정을 지운다(todo). ParsingMeta는 성공했을 때만 갱신.
-- 실패한 엔진(사용자 확인 대기 — 허브 추천안): 실패한 엔진(이름·이유·걸린 시간)은 로컬 로그에만, EDW에는 성공한 엔진만.
+- 실패한 엔진(사용자 10-30 "EDW에도"): 실패한 엔진(이름·이유·걸린 시간)을 로컬 로그와 EDW ParsingMeta 실패 엔진 칸에 함께 남긴다([pl-25](#pl-25), D-3).
+- 구현 결정(허브 — 사용자 결정 안에서, 10-30):
+  - 새벽 배치 파라미터 = 새벽 실행 시각을 담는 settings.yaml 키 하나, null이면 새벽 배치 없음. 대상 고르기 `nightly_plan()`(새 문서 + 바뀐 문서)은 그대로.
+  - 실패한 문서는 성공 행이 없어 다음 실행에서 다시 시도된다. 실패 정보는 로컬 로그와 ParsingMeta 실패 엔진 칸으로.
+  - `doc_registry.fail_count` 칸은 PR 3a 마이그레이션이 지운다.
+  - `STACK_SNAPSHOT` 파일 → 부모가 `STACK_VERSION=N`을 넘기고 자식은 `struct.stack_version` 행을 읽는다(PC: `stack_file`), 인자 `--stack-version N`.
+  - 레이어 핸드오프 `_DONE.json`은 남는다 — 문서마다 지우는 작업 폴더 안에 있고 FINGERPRINT도 그대로. 없애는 것은 실행을 넘어 남던 완료 표시(`run_all`, `figures_resume`, 색인 건너뛰기).
+  - `runs.jsonl`: 재사용 역할만 없애고 작업 폴더 안 실행별 기록으로 남긴다.
+  - `StandinPG`·structdb SQLite는 시험과 이미지 관문에만 — dev/prd 실행 중 조용히 대신하는 일은 없다.
+- 0.1.0 구현 PR 순서(사용자 10-30, PR 1은 3a에 합침): 2a ∥ 2b → 2c → (DB 담당자 D-1~D-7) → 3a + 3b 연달아 병합 ∥ 4 → 2d → 5(SFDC 먼저, CRMS·LAS는 D-2 전까지 Other) → 6.
 - 구조화 입력: 같은 실행 안에서는 로컬 작업 폴더를 읽고, 나중에 gold만 다시 만들 때는 Object Storage uuid 폴더에서 silver를 받는다.
 - PC도 서버와 같은 흐름 — 대역만 다름(OS 폴더, EDW SQLite, PC pgvector), 따로 생기는 로컬 파일 없음.
 - 파일: `pipeline/load/{publish_parse_result,parsing_meta}.py`, `pipeline/extract/run_all.py`(`runs.jsonl`·`_DONE`), `pipeline/stackcfg.py`·`pipeline/config.py`(`STACK_SNAPSHOT`), `pipeline/cli.py`(`nightly_plan`), `common/store/{registry,structdb}.py`(SQLite 대체), `deploy/host/scripts/run_docs.py`, `docs/architecture/db_schema.md`.
