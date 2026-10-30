@@ -95,7 +95,7 @@ tail -5 test_space/batch_progress/cpu_mem_trend.csv
 
 # 조정 노브
 --cpu-gate 1.1        # 게이트 조정값
---workers 5           # 총 워커 수
+# 레인 워커 수는 settings.yaml pipeline.host.run_docs(light/medium/vlm 전담·공유) — --workers는 받기만 하고 안 씀(rn-04)
 --seqs "141,237"      # 특정 문서만
 --limit 20            # 시험용
 ```

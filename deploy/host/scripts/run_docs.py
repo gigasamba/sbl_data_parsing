@@ -291,7 +291,7 @@ WARM_TARGET, STRUCT_WORKERS, VLM_CAP = RUN_DOCS_DEFAULTS["warm"], RUN_DOCS_DEFAU
 LANE_WORKERS = {c: (RUN_DOCS_DEFAULTS[f"{c}_dedicated"], RUN_DOCS_DEFAULTS[f"{c}_shared"]) for c in LANES}  # 레인 → (전담, 공유)
 _BACKLOG_SETTING = RUN_DOCS_DEFAULTS["struct_backlog"]  # main()이 STRUCT_BACKLOG로 풂(구조화 워커 수 인자가 덮은 뒤)
 STRUCT_BACKLOG = 0
-PARSE_WORKERS, NO_CLEANUP = 4, False  # PARSE_WORKERS — 옛 --workers(지금은 레인 워커 수가 정함, 인자만 받음)
+NO_CLEANUP = False
 CPU_GATE = 1.3  # 2026-10-23 사용자 지정 — 파이프라인 게이트 기본 · 조정 시 --cpu-gate 1.1
 _class: dict = {}  # seq → "light"/"medium"/"vlm"(warm 시점 분류)
 _scan: set = set()  # seq — 스캔 판정된 PDF(vlm_page 대상)만 담음(2026-10-23 사용자 지정)
@@ -681,14 +681,24 @@ def code_layout_problems(code=None, containers=(PARSE_C, STRUCT_C)):
 
 
 def mcp_busy():
-    """MCP 업로드 처리 중이면 True(공유 볼륨 mcp_parse/jobs/<id>의 파일 mtime이 30초 내 갱신)."""
+    """MCP 업로드 처리 중이면 True(공유 볼륨 mcp_parse/jobs/<id>의 파일 mtime이 30초 내 갱신).
+    5초마다 불리므로 작업 폴더 전체가 아니라 이름 날짜(<YYYYMMDD>-…, mcp_parse_service)가 어제·오늘·내일인 폴더만 본다(rn-04 —
+    지난 날의 끝난 작업 파일까지 stat하지 않게, 호스트·컨테이너 시간대가 달라도 걸리게 앞뒤 하루)."""
+    # ponytail: 날짜 이름 거르기 — 하루 넘게 도는 MCP 작업은 놓침(작업은 분 단위), 필요하면 작업 서비스가 심장 박동 파일을 씀
     if not MCP_JOBS_DIR.exists():
         return False
-    recent = time.time() - 30
+    now = time.time()
+    recent, days = now - 30, {time.strftime("%Y%m%d", time.localtime(now + d * 86400)) for d in (-1, 0, 1)}
     try:
-        for p in MCP_JOBS_DIR.rglob("*"):
-            if p.is_file() and p.stat().st_mtime > recent:
-                return True
+        for job in MCP_JOBS_DIR.iterdir():
+            if job.name[:8] not in days:
+                continue
+            for p in job.rglob("*"):
+                try:
+                    if p.is_file() and p.stat().st_mtime > recent:
+                        return True
+                except OSError:  # 훑는 사이 지워진 파일(_purge_old) — 그 파일만 건너뜀(나머지 작업 폴더는 계속 봄)
+                    continue
     except OSError:
         pass
     return False
@@ -716,10 +726,15 @@ def _safe_cleanup(seq, row):
 
 
 def main():
-    global WARM_TARGET, PARSE_WORKERS, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE, STRUCT_BACKLOG
+    global WARM_TARGET, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE, STRUCT_BACKLOG
     ap = argparse.ArgumentParser()
     ap.add_argument("--start-offset", type=int, default=1072)
-    ap.add_argument("--workers", type=int, default=4, help="쓰지 않음(옛 인자) — 레인 워커 수는 settings.yaml pipeline.host.run_docs")
+    ap.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        help="쓰지 않음(옛 인자 — 옛 호출이 깨지지 않게 받기만 함, rn-04) — 레인 워커 수는 settings.yaml pipeline.host.run_docs",
+    )
     ap.add_argument(
         "--warm", type=int, default=None, help="진입 대기열(미리 받을 문서 수) — 기본 settings.yaml pipeline.host.run_docs.warm(20)"
     )
@@ -739,7 +754,7 @@ def main():
         for msg in bad:
             print(f"[중단] {msg}", flush=True)
         raise SystemExit(2)
-    PARSE_WORKERS, NO_CLEANUP, CPU_GATE = a.workers, a.no_cleanup, a.cpu_gate
+    NO_CLEANUP, CPU_GATE = a.no_cleanup, a.cpu_gate
     if a.warm is not None:
         WARM_TARGET = a.warm
     if a.struct_workers is not None:
