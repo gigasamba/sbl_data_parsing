@@ -202,8 +202,8 @@ def test_mcp_busy_yields_medium_own_worker():
             M._mcp_pause = True  # 감시 스레드의 첫 판정 전에 레인이 뽑지 않게(감시도 같은 값을 냄)
 
         M = _run_main(work, rows, parse_one, lambda seq, row, enq_t=None: True, lambda seq, row: None, setup)
-        assert len(seen) == 4 and "lane-medium-own" not in seen, seen
-        assert "lane-medium-shared" in seen, seen
+        # medium 전담 워커는 안 뽑음 — 공유 워커(어느 레인이든)가 처리(어느 공유 워커가 먼저 뜨는지는 스레드 순서라 묻지 않음)
+        assert len(seen) == 4 and all(t.endswith("-shared") for t in seen), seen
         assert M._lane_inflight == {"light": 0, "medium": 0, "vlm": 0}
 
 

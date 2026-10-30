@@ -694,8 +694,11 @@ def mcp_busy():
             if job.name[:8] not in days:
                 continue
             for p in job.rglob("*"):
-                if p.is_file() and p.stat().st_mtime > recent:
-                    return True
+                try:
+                    if p.is_file() and p.stat().st_mtime > recent:
+                        return True
+                except OSError:  # 훑는 사이 지워진 파일(_purge_old) — 그 파일만 건너뜀(나머지 작업 폴더는 계속 봄)
+                    continue
     except OSError:
         pass
     return False
