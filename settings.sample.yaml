@@ -239,7 +239,6 @@ pipeline:
       password:  # 암호 걸린 문서를 여는 암호 1개(secure_docs decrypt에서 시도) · 값: 비밀 글자 · env=SECURE_DOC_PASSWORD [비밀]
       passwords_file:  # 암호 걸린 문서용 암호 목록 파일 경로(한 줄에 암호 하나) · 기본 없음 · 값: 경로 · env=SECURE_DOC_PASSWORDS_FILE
   extract:
-    dedup_scan: false  # 스캔 쪽의 OCR 본문과 쪽 VLM 전사 중복을 쪽마다 하나로 정리할지 · 기본 false · 값: true·false · env=PARSE_DEDUP_SCAN [끔: ''·0·none·false]
     disk_free_warn_gb: 10.0  # 디스크 남은 용량이 이 값(GB)보다 작으면 보관 용량 경고 출력 · 기본 10.0 · 값: 0 이상 · env=DISK_FREE_WARN_GB
     doc_parallel: 1  # 대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개) · 기본 1 · 값: 0 이상 정수 · env=PARSE_DOC_PARALLEL
     engine_cache_warn_gb: 20.0  # 엔진별 중간 결과 합계가 이 값(GB)을 넘으면 보관 용량 경고 출력 · 기본 20.0 · 값: 0 이상 · env=ENGINE_CACHE_WARN_GB
@@ -255,13 +254,11 @@ pipeline:
     max_new: 0  # 이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음) · env=PARSE_MAX_NEW
     merge_pages: true  # 엔진 간 쪽·문단 단위 보정(쪽 합치기)을 켤지(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_MERGE_PAGES [끔: 0만]
     ocr_engine: false  # [파라미터] OCR 엔진(rapidocr·rapidocr_ko)을 파싱 엔진으로 돌릴지(=1 켬) — 끄면 이미지·스캔 문서는 VLM 엔진만 · 기본 false · 값: true·false · env=PARSE_OCR_ENGINE [켬: 1만]
-    ocr_gt_max: 20  # [파라미터] 'OCR 글자 수가 글자층의 3배 이상'인 쪽을 쪽 VLM 후보로 올릴 상한(쪽, 0=끔) · 기본 20 · 값: 0 이상 정수 (0 = 끔) · env=PARSE_OCR_GT_MAX
     page_scan: true  # 글자 PDF 안의 스캔 쪽을 신호로 찾아 쪽 VLM에 보낼지(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_PAGE_SCAN [끔: 0만]
     prefetch_workers: 2  # 미리받기(warm) 명령의 동시 다운로드 스레드 수(개) · 기본 2 · 값: 0 이상 정수 · env=PREFETCH_WORKERS
     rapidocr_page_workers:  # rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개) · 기본 1 · 값: 0 이상 정수 · env=RAPIDOCR_PAGE_WORKERS [엔진 지문]
     rotated_max: 20  # [파라미터] 쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) — 0이면 rotation.csv를 안 읽음 · 기본 20 · 값: 0 이상 정수 (0 = rotation.csv를 안 읽음) · env=PARSE_ROTATED_MAX
     scan_fill: true  # 스캔 쪽을 OCR로 채우는 대표 결과 보정 켬/끔 — 0이면 이전 동작과 바이트 동일 · 기본 true · 값: true·false · env=PARSE_SCAN_FILL [끔: ''·0·none·false]
-    signal_ocr: false  # 쪽 신호 계산에 렌더 OCR 글자 수를 채울지 — 1이면 켬(비용 큼) · 기본 false · 값: true·false · env=PARSE_SIGNAL_OCR [켬: 1만]
     skipped_log:  # 건너뛴 문서(암호 PDF 등) 기록 jsonl 경로 · 기본 없음 · 값: 경로 · env=PARSE_SKIPPED_LOG
     source_limit: 0  # 원본에서 처리할 문서 건수 상한(0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음) · env=PARSE_SOURCE_LIMIT
     text_page_sec: 10.0  # 글자 엔진(VLM 아님) 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더 · 기본 10.0 · 값: 0 이상 초 · env=PARSE_TEXT_PAGE_SEC
@@ -327,7 +324,6 @@ pipeline:
       context: true  # 문서·쪽 신호 맥락(rep.context·decisions) 기록(=0이면 안 남김) · 기본 true · 값: true·false · env=PARSE_CONTEXT [끔: ''·0·none·false]
       fuse: true  # 엔진별 결과 조각 투표(융합 P1) 사용(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_FUSE [끔: ''·0·none·false]
       fuse_reread: true  # 융합 뒤 근소·미확인 자리를 다시 읽는 재판독(P2) 사용(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_FUSE_REREAD [끔: ''·0·none·false]
-      fuse_reread_p3: true  # 재판독 3단계(그림 경계 OCR·VLM 선택형) 사용(=0이면 끔) · 기본 true · 값: true·false · env=PARSE_FUSE_REREAD_P3 [끔: ''·0·none·false]
       fuse_signals: true  # 융합 점수에 사전·명부·교차 언급 신호를 반영(=0이면 기본 점수만) · 기본 true · 값: true·false · env=PARSE_FUSE_SIGNALS [끔: ''·0·none·false]
       post:  # [파라미터] 후보정 기능 선택: all(전부)|none(끔)|콤마 목록(vlm_page,supsub,charts,figures,context,attachments) — 없으면 자리마다 다름(파이프라인 all · parse MCP 서비스 supsub), 빈 값은 끔(옛 get(X, 'all')의 '' — blank keep) · 쓴 글자 그대로 rep.post.config에 남음(YAML 목록은 쉼표로 이음 — S7c2) · 기본 없음 · 값: all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments) · env=PARSE_POST [빈 글자 유지] [서버 옛 값: all]
       qa_carry_forward: true  # parse_qa가 지워진 문서 결과를 이전 qa.json에서 가져옴(=0이면 안 가져옴) · 기본 true · 값: true·false · env=PARSE_QA_CARRY_FORWARD [끔: 0만]
@@ -345,10 +341,7 @@ pipeline:
         dpi: 400  # [파라미터] 융합 재판독(P2)용 크롭 재렌더 해상도(dpi) · 기본 400 · 값: 0 이상 정수 · env=FUSE_REREAD_DPI
         margin: 1.5  # [파라미터] 승자와 최선 패자 점수차가 이 값 이하면 '근소'로 보고 재판독 · 기본 1.5 · 값: 0 이상 · env=FUSE_REREAD_MARGIN
         max: 20  # [파라미터] 문서당 융합 재판독(P2) 횟수 상한(0이면 재판독 안 함) · 기본 20 · 값: 0 이상 정수 (0 = 재판독 안 함) · env=FUSE_REREAD_MAX
-        p3_img_max: 2  # [파라미터] 재판독 3단계에서 조각 하나당 다시 볼 그림 상한(가까운 순) · 기본 2 · 값: 0 이상 정수 · env=FUSE_REREAD_P3_IMG_MAX
         pad_pt: 40.0  # [파라미터] 재판독 때 bbox 둘레에 더할 여백(pt) · 기본 40.0 · 값: 0 이상 · env=FUSE_REREAD_PAD_PT
-        vlm_max: 5  # [파라미터] 문서당 재판독 3단계 VLM 호출 상한(비용 가드) · 기본 5 · 값: 0 이상 정수 · env=FUSE_VLM_MAX
-        vlm_max_tokens: 400  # [파라미터] 재판독·맥락 판독 VLM 응답 최대 토큰 수 · 기본 400 · 값: 0 이상 정수 · env=FUSE_VLM_MAX_TOKENS
     structure:
       bundle_keep_empty_fig: false  # =1이면 내용이 빈 VLM 그림도 청크로 색인(되돌리기), 기본 0은 빈 그림 청크 안 만듦 · 기본 false · 값: true·false · env=BUNDLE_KEEP_EMPTY_FIG [켬: 1만]
       chunk_head: true  # 청크 앞에 [문서명·고객·절 제목] 머리말을 붙임(=0이면 안 붙임) · 기본 true · 값: true·false · env=CHUNK_HEAD [끔: 0만]

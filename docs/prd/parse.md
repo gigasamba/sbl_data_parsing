@@ -71,8 +71,15 @@
 ## pl-34 · 파싱 p1 묶음 — 재판독 P3·scan_dedup·렌더 OCR 신호 지우기
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P2·P5·T10): 재판독 P3(`reread_stage3.py`, 프롬프트 `value_choice`)를 코드에서 지우고, 같은 p1 묶음에서 scan_dedup(`scan_dedup.py`)과 렌더 OCR 신호(`figures/vlm_page.py`의 신호 부분)도 지운다. `_page_texts`는 `fill_scan_pages`가 쓰므로 남긴다. [pl-04](#pl-04)(represent)의 일부를 걷어냄.
 - code_fp p1이 바뀜 — 0.1.0 핑거프린트 묶음, 검토 등급 A.
-- 파일: `pipeline/transform/represent/{reread_stage3,scan_dedup}.py`, `pipeline/transform/figures/vlm_page.py`, `resources/prompts/pipeline/value_choice`.
-- Status: todo — 0.1.0.
+- 한 것(10-30 `feature/pl34-p1-cleanup`):
+  - 지움: `reread_stage3.py`(재판독 P3 — 그림 경계 OCR·VLM 선택형) · `scan_dedup.py`(스캔 쪽 OCR/VLM 중복 제거) · 프롬프트 `resources/prompts/common/value_choice` · `vlm_page.py`의 렌더 OCR 신호(`_render_ocr_chars`·`ocr_chars` 칸·이유 `ocr_gt_text`). `_page_texts`(+ `_doc_page_count`)는 `represent.py`로 옮김(로직 그대로 — `fill_scan_pages`·`_ocr_pages`가 씀).
+  - 설정 칸 지움(옛 설정 파일에 남아 있으면 경고만 — `REMOVED`): `pipeline.extract.{dedup_scan,signal_ocr,ocr_gt_max}`, `pipeline.transform.represent.fuse_reread_p3`, `pipeline.transform.represent.reread.{p3_img_max,vlm_max,vlm_max_tokens}`.
+  - 같이 고침: `run_docs.py`·`mcp_parse_service.py`가 넘기던 `PARSE_FUSE_REREAD_P3=0`(칸이 없어져 `--set`이 거부할 것이라 지움) · 측정 도구 `server_checks ar1`의 P3 설정·`--run-vlm`·P3 호출 추정, `ar6`의 P3 충돌 추정.
+  - 바뀐 동작: P3(기본 켬)이 P2가 미확인으로 남긴 자리를 그림 OCR·VLM으로 고르던 것이 없어짐 — 그 자리는 미확인 그대로. 렌더 OCR 신호·dedup은 기본 꺼짐이라 기본 동작 그대로. 쪽 신호 캐시(`page_signals@v3`)는 그대로 씀(옛 캐시의 `ocr_chars` 칸은 안 봄).
+  - 핑거프린트: p1 `660fa1588e57` → `ca87ef714d14`(서버 문서 후보정 다시 — 0.1.0 묶음). FINGERPRINT·p0·r·s·엔진 키 그대로.
+  - 안 한 것: `common/ai/{adk,agent_prompts}.py` 주석의 `reread_stage3`·`value_choice` 언급은 그대로(공용 파일 — 고치면 다른 층 지문이 바뀜). 옛 캐시 폴더 `_reread_p3/_vlm_cache`는 `purge_caches` 목록에 남겨 정리되게.
+- 파일: `pipeline/transform/represent/{represent,fuse}.py`, `pipeline/transform/figures/vlm_page.py`, `pipeline/config.py`, `common/core/artifacts.py`(LAYER_CODE p1 목록), `common/config/sample.py`, `pipeline/{mcp_parse_service,eval/server_checks}.py`, `deploy/host/scripts/run_docs.py`, 시험(`test_vlm_page`·`test_server_checks`·`test_agent_prompts`·`test_paths`·`test_represent`·`test_run_docs`).
+- Status: done (10-30 `feature/pl34-p1-cleanup`, 등급 A)
 
 <a id="pl-35"></a>
 ## pl-35 · 핑거프린트 영향 없는 잔재 지우기
@@ -123,7 +130,6 @@
 | 기능 | 스위치 = 기본값 | 필요한 것 |
 |---|---|---|
 | VLM 엔진, 그림, 쪽 VLM | 켜짐(OCR 엔진은 꺼짐 — `PARSE_OCR_ENGINE=0`, pl-22) | VLM 주소. 슬라이드·도형은 soffice(`SOFFICE_BIN`) |
-| 스캔 OCR/VLM 중복 제거 · 렌더 OCR 신호 · 바뀐 문서 자동 재파싱 | `PARSE_DEDUP_SCAN=0` · `PARSE_SIGNAL_OCR=0` · (`AUTO_REPARSE_CHANGED`는 10-30 지움 — pl-35) | — |
 | 그림자 모드 | `PARSE_SHADOW=0` | LLM, 수동 CLI |
 
 ### 10-29에 지운 기능(사용자 결정)

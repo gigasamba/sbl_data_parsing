@@ -14,9 +14,9 @@ PARSE_SCAN_FILL(환경변수, 기본 켬) — PE1 후속(2026-10-07, 정답률 1
   (pipeline.transform.figures.vlm_page.scan_pages_detail — reason chars/hidden/garbage/hidden_overlap, AD31·AD47)이 있고 그 쪽의 OCR 엔진
   (.pdf_image 계열, stack.json 순서) 결과가 있으면 그 쪽만 대표 본문을 OCR 쪽 글로 채운다(글자층 쪽은 그대로) —
   기존 한계(대표가 .pdf_text 엔진이면 스캔 쪽 값이 아예 안 들어가던 것, backlog PE1 "후속 과제"). 쪽 경계는
-  scan_dedup._page_texts 재사용(boxes 있으면 그걸로, 없으면 \f 개수가 문서 실제 쪽 수와 맞을 때만) — 쪽 번호를
+  _page_texts(boxes 있으면 그걸로, 없으면 \f 개수가 문서 실제 쪽 수와 맞을 때만) — 쪽 번호를
   확정할 수 없으면 건너뜀(rep.rep.scan_fill.skip에 기록, 바이트 불변). 그 쪽 OCR 글이 깨져 있으면(garbage_ratio
-  > 0.1, scan_dedup.pick과 같은 기준) 그 쪽도 안 덮고 건너뜀 · reason='hidden'(검색 가능 스캔 PDF 포함)은 원래
+  > 0.1, 즉 OCR 신뢰도 0.9 미만) 그 쪽도 안 덮고 건너뜀 · reason='hidden'(검색 가능 스캔 PDF 포함)은 원래
   글(숨은 글자층)과 OCR 글의 일치도(HIDDEN_AGREE_MIN)가 높으면 원래 글을 유지(독립 검토 MAJOR, AD31) — 모두
   rep.rep.scan_fill.page_skip에 기록. 끄면(0) fill_scan_pages를 안 불러 이전 동작과 바이트 동일.
 PARSE_CONTEXT(환경변수, 기본 켬, =0으로 끔) — PA0(2026-10-08): 켜지면(기본) 이미 계산된 문서·쪽 신호
@@ -27,12 +27,6 @@ PARSE_FUSE_REREAD(환경변수, 기본 켬, =0으로 끔, PARSE_FUSE 전제) —
   보고, 확인되면 승자를 바꾼다(AD19 "확인되면 채택") — 아무 것도 안 맞으면 값은 그대로 두고 unverified만 표시.
   doc_path가 PDF가 아니면 전부 건너뜀(이 단계는 OCR·PDF 글자층 전용, rep.fused.reread.skip_reason). 문서당 재판독
   횟수 상한 FUSE_REREAD_MAX(기본 20). 꺼지면(=0) 안 불러 rep["fused"]가 PARSE_FUSE만 켰을 때와 바이트 동일.
-PARSE_FUSE_REREAD_P3(환경변수, 기본 켬, =0으로 끔, PARSE_FUSE_REREAD 전제) — AD29 P3: P2가 "unverified"로 남긴 자리만
-  pipeline.transform.represent.reread_stage3가 더 본다 — ① 그 쪽에 박힌 그림(삽입 이미지) 중 자리에 가장 가까운 것만 다시
-  OCR(모델 호출 0) ② 그래도 못 맞추면 그 크롭 + 후보 목록을 내부 VLM(dev/agents/value_choice)에 보여 후보 중
-  하나를 고르게 한다(문서당 FUSE_VLM_MAX로 호출 상한, NONE·후보 밖 답은 그대로 unverified — 값을 지어내지
-  않음, VLM_BASE_URL·VLM_MODEL 미설정이면 조용히 NONE 취급 — 외부 호출 없음). 꺼지면(=0, 또는 PARSE_FUSE_REREAD가
-  =0이면) 안 불러 rep["fused"]가 P2까지만 켰을 때와 바이트 동일.
 PARSE_TABLE_INLINE(환경변수, 기본 켬, =0으로 끔) — TA1(사용자 10-15): 대표 엔진 하나의 표만 쓰던 것을, 이 문서를
   표로 인식한 엔진 전부(대표 + other_docs)의 그리드를 모아(pipeline.transform.represent.table_inline) 표 자리마다
   가장 구조가 완전한(칸 채움 비율·다른 엔진과의 칸 글자 일치도) 것 하나를 고르고, 대표 본문(rep["text"]) 안
@@ -505,15 +499,57 @@ def _numbers_conflict(hidden_text, ocr_text):
     return h != o
 
 
+def _doc_page_count(doc_path):
+    """문서의 실제 쪽 수 — \\f(쪽 경계) 개수가 이것과 다르면 중간에 글자 0개(빈) 쪽이 있어 \\f로 나눈 쪽 번호를
+    못 믿는다(독립 검토 MAJOR-1: `_ocr_out`은 박스가 있는 쪽 사이에서만 \\f를 찍어, 빈 쪽이 있으면 뒤 쪽 번호가 밀림).
+    이미지 파일은 항상 1쪽. 못 세면(손상 등) None — 호출부가 안전하게(쪽 번호 확정 불가) 처리.
+    (pl-34 10-30 — scan_dedup.py를 지우며 이리로 옮김, 로직 그대로)"""
+    p = Path(doc_path)
+    if p.suffix.lower() != ".pdf":
+        return 1
+    try:
+        import pypdfium2 as pdfium
+
+        return len(pdfium.PdfDocument(str(p)))
+    except Exception:
+        return None
+
+
+def _page_texts(base, doc_path, boxes):
+    """base를 실제 쪽 번호별 글로 나눈다 — 독립 검토 MAJOR-1 반영:
+    1) boxes(엔진 출력의 rep["boxes"] — OCR 엔진만, 박스마다 실제 "page" 번호) 있으면 그걸로 그룹화한다.
+       글자 0개(박스 없는) 빈 쪽은 그냥 키가 없을 뿐이라 뒤 쪽 번호가 안 밀린다(\\f 세는 방식과 다름 — 이게 고친 점).
+    2) boxes가 없으면(OCR 아닌 엔진) \\f로 나누되, \\f 개수가 문서의 실제 쪽 수와 같을 때만 믿는다(빈 쪽이 없다는
+       뜻). 다르면 쪽 번호를 확정할 수 없음 → None(호출부가 그 문서는 건너뛴다 — 틀린 쪽끼리 비교·치환하는
+       것보다 안전한 쪽). (pl-34 10-30 — scan_dedup.py를 지우며 이리로 옮김, 로직 그대로)"""
+    if boxes:
+        pages = {}
+        for b in boxes:
+            p = b.get("page")
+            if p is None:
+                continue
+            pages.setdefault(p, []).append(b.get("text") or "")
+        return {p: "\n".join(ts) for p, ts in pages.items()}
+    if not base:
+        return {}
+    parts = base.split("\f")
+    if len(parts) == 1:
+        return {1: base}
+    n_pages = _doc_page_count(doc_path)
+    if n_pages is not None and len(parts) != n_pages:
+        return None  # 쪽 번호 확정 불가 — 건너뜀(MAJOR-1)
+    return {i + 1: p for i, p in enumerate(parts)}
+
+
 def fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=None):
     """PE1 후속(2026-10-07) — .pdf_text 대표 문서(rep) 안 스캔 쪽만 그 쪽의 OCR 엔진(.pdf_image 계열, stack 순서로
     정확도 가장 높은 성공 후보) 결과로 채운다(글자층 쪽은 그대로 — 쪽 전체를 OCR 글로 바꾸지 않음).
     사용자 10-29 — page_vlm(쪽 VLM 함수, vlm_page.page_text_pages — 스캔 신호 쪽만 병렬 호출)을 주면 그 쪽 글을 먼저 쓴다
     (기록 엔진 이름 "vlm_page" — OCR 엔진은 기본으로 안 돌고 .pdf_text 문서에 .pdf_image 엔진도 안 합침). 쪽 VLM 글이 하나도
     없을 때만 옛 OCR 엔진 결과로. 쪽 VLM은 글자 상자(boxes)가 없어 'hidden_overlap' 쪽의 국소 확인은 늘 '원래 글 유지'.
-    쪽 경계는 pipeline.transform.represent.scan_dedup._page_texts 재사용(boxes 있으면 그걸로, 없으면 \f 개수가 문서의 실제
+    쪽 경계는 _page_texts(boxes 있으면 그걸로, 없으면 \f 개수가 문서의 실제
     쪽 수와 같을 때만) — 대표·OCR 어느 쪽이든 쪽 번호를 확정할 수 없으면 건너뛴다(틀린 쪽끼리 바꿔치기하는 것보다 안전).
-    쪽 단위 품질 검사(독립 검토 보강) — 그 쪽 OCR 글의 garbage_ratio가 scan_dedup.pick과 같은 기준(OCR 신뢰도
+    쪽 단위 품질 검사(독립 검토 보강) — 그 쪽 OCR 글의 garbage_ratio가 기준(OCR 신뢰도
     0.9, 즉 garbage_ratio ≤ 0.1)을 넘으면 깨진 OCR 글로 덮지 않고 건너뛴다(원래 글 유지) — page_skip에 기록.
     AD31 reason='hidden'(독립 검토 MAJOR, 10-07 2차) — 그림과 같은 내용을 옮긴 양질의 숨은 글자층('검색 가능
     스캔 PDF')은 scan_pages_detail이 reason='chars'인 쪽과 똑같이 스캔 후보에 들어오지만, 원래 글(숨은 층)이
@@ -536,7 +572,6 @@ def fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=None):
         return None
     from pipeline.transform.figures.vlm_page import scan_pages_detail
     from pipeline.transform.represent.parse_qa import garbage_ratio
-    from pipeline.transform.represent.scan_dedup import _page_texts
 
     pages_detail = scan_pages_detail(doc_path)
     pages = list(pages_detail.keys())
@@ -558,7 +593,7 @@ def fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=None):
         text = ocr_pages.get(p, "")
         if not text.strip():
             continue
-        if garbage_ratio(text) > 0.1:  # scan_dedup.pick의 "OCR 신뢰도 0.9"와 같은 기준 — 깨진 OCR 글로 덮지 않음
+        if garbage_ratio(text) > 0.1:  # "OCR 신뢰도 0.9" 기준 — 깨진 OCR 글로 덮지 않음
             page_skip[p] = "OCR 글 품질 낮음(garbage_ratio > 0.1) — 원래 글 유지"
             continue
         if pages_detail.get(p) == "hidden":
@@ -595,7 +630,6 @@ def fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=None):
 def _ocr_pages(doc, dd, stack, pd, doc_path):
     """옛 경로 — .pdf_image 계열 OCR 엔진 중 정확도 가장 높은 성공 후보의 쪽별 글. 반환: (엔진, {쪽: 글}, boxes) 또는 건너뜀 dict."""
     from pipeline.transform.represent.repfmt import doc_accuracy
-    from pipeline.transform.represent.scan_dedup import _page_texts
 
     ocr_list = stack["parse"].get(".pdf_image", [])
     ocr_cands = [
@@ -670,7 +704,6 @@ from common.core.contract import source_record  # noqa: E402 — 문서 ID·원�
 from pipeline.shared import postprocess as post_cfg  # noqa: E402 — PARSE_POST 해석(W1~W3·W9·W11 후보정 패키지)
 from pipeline.transform.represent import fuse as fuse_mod  # noqa: E402 — AD29 P1 조각 단위 융합(fuse_mod.on() = PARSE_FUSE, 기본 켬)
 from pipeline.transform.represent import reread as reread_mod  # noqa: E402 — AD29 P2 좌표 재판독(reread_mod.on() = PARSE_FUSE_REREAD, 기본 켬)
-from pipeline.transform.represent import reread_stage3 as reread_p3_mod  # noqa: E402 — AD29 P3 그림 경계 OCR·VLM 선택형(on() = PARSE_FUSE_REREAD_P3, 기본 켬)
 from pipeline.transform.represent import (  # noqa: E402 — 모듈 중간 import(기존 배치 그대로 — 위 함수 정의 뒤)
     table_inline,  # TA1(사용자 10-15) 엔진별 표 그리드를 모아 본문 제자리에 GFM 표(PARSE_TABLE_INLINE, 기본 켬)
     table_std,  # AD23·SI20③ 표 표준 형식(PARSE_TABLE_STD, 기본 켬)
@@ -684,8 +717,6 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     features, code_fp, supsub(첨자 표기본 전체 — 색인에는 안 들어가고 여기만)}를 남긴다.
     프로토타입(eval_hard_parse) 설정 F_context의 쌓는 순서(base, vtext, 그림 기록(+근처 본문), 차트)를 그대로 따름.
     PARSE_POST=none(feats 빔) → rep["text"] 불변(이전 동작과 바이트 동일, W10 설계대로 원본 층은 손대지 않음).
-    PARSE_DEDUP_SCAN(환경변수, 기본 꺼짐) — AD39: 스캔 쪽에서 OCR 본문(base)과 쪽 VLM 전사가 같은 쪽을 둘 다 담아
-    두 번 색인되던 것을 쪽마다 하나만 남기고(pipeline.transform.represent.scan_dedup) 다른 하나는 rep.post.page_alt로.
     out_images — 그림 PNG·index.jsonl·capped.jsonl이 쓰일 폴더(AG11 2단계 착수 조건, 10-08: 전엔 호출자가
     PARSE_IMAGES_ROOT 환경변수를 바꿔 치환해야 했던 것을 인자로 — 기본값 None이면 fig_mod.images_root()를 써
     이전과 바이트 동일, 운영 배치는 그대로 안 넘겨 기본 경로를 그대로 쓴다).
@@ -707,7 +738,6 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
         "attachments_cached": 0,
     }
     _pt = {
-        "dedup": 0.0,
         "vlm_page": 0.0,
         "figures": 0.0,
         "charts": 0.0,
@@ -720,32 +750,21 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     from pipeline.transform.figures import charts
     from pipeline.transform.figures import figures as fig_mod
     from pipeline.transform.figures import vlm_page as vp_mod
-    from pipeline.transform.represent import scan_dedup, supsub
+    from pipeline.transform.represent import supsub
 
     base = rep.get("text") or ""
     blocks = []
     doc_text = base  # 그림 근처 본문 언급(link_context) 검색 대상 — 쪽 VLM 옮기기 글자도 포함(스캔은 OCR 본문이 부실할 수 있어)
     if "vlm_page" in feats:
-        if scan_dedup.on():
-            base, page_alt, provs, n_dedup, dedup_skip = scan_dedup.dedup(base, doc_path, rep.get("boxes"), pages=vp_pages)
-            if page_alt:
-                info["page_alt"] = page_alt
-            info["dedup_scan"] = n_dedup
-            if dedup_skip:
-                info["dedup_scan_skipped"] = dedup_skip  # MAJOR-1 — 쪽 번호를 확정할 수 없어 건너뜀(기록만, 바이트는 안 바꿈)
-            _pt["dedup"] += time.time() - _pt0
-            _pt0 = time.time()  # 2026-10-22 — dedup 완료
-            doc_text = base
-        else:
-            # 10-29 — scan_fill이 쪽 VLM 글로 이미 채운 쪽은 덧붙이지 않음(같은 쪽이 본문에 두 번 — 호출은 캐시라 다시 안 감)
-            sf = ((rep.get("rep") or {}).get("scan_fill") or {}).get("filled") or {}
-            if vp_pages is None:
-                vp_pages = vp_mod.page_text_pages(doc_path)
-            vt = "\n".join(t for i, t, _ in vp_pages if t and sf.get(str(i)) != "vlm_page")
-            provs = [pv for _, _, pv in vp_pages]
-            if vt.strip():
-                blocks.append(vt)
-                doc_text = base + "\n" + vt
+        # 10-29 — scan_fill이 쪽 VLM 글로 이미 채운 쪽은 덧붙이지 않음(같은 쪽이 본문에 두 번 — 호출은 캐시라 다시 안 감)
+        sf = ((rep.get("rep") or {}).get("scan_fill") or {}).get("filled") or {}
+        if vp_pages is None:
+            vp_pages = vp_mod.page_text_pages(doc_path)
+        vt = "\n".join(t for i, t, _ in vp_pages if t and sf.get(str(i)) != "vlm_page")
+        provs = [pv for _, _, pv in vp_pages]
+        if vt.strip():
+            blocks.append(vt)
+            doc_text = base + "\n" + vt
         info["vlm_page_calls"] = len(provs)
         info["vlm_page_cached"] = sum(1 for pv in provs if pv.get("cached"))
         from pipeline.transform.figures.pptx_render import pptx_slide_vlm  # AD20(남은 것): pptx 아니면 즉시 []( 바이트 영향 0)
@@ -1016,10 +1035,8 @@ def represent(stack, parse_dir, src=None):
                     _engine_out_rank(pd, doc, list(engine_docs)) if pc.cfg().transform.represent.reread_fallback_best else None
                 )  # 2026-10-22 사용자 지정 — P2도 못 가리면 산출 정확도 최고 엔진 후보로
                 reread_mod.rereview_facts(engine_docs, rep["fused"], best["engine"], rr_doc_path, engine_rank=_rank)
-                if reread_p3_mod.on():  # AD29 P3 — P2가 unverified로 남긴 자리만 그림 경계 OCR·VLM 선택형(기본 켬, PARSE_FUSE_REREAD 전제)
-                    reread_p3_mod.rereview_facts_p3(engine_docs, rep["fused"], best["engine"], rr_doc_path)
                 _t["reread"] = time.time() - _t0
-                _t0 = time.time()  # 2026-10-22 — reread P2+P3 시간
+                _t0 = time.time()  # 2026-10-22 — reread P2 시간
         source = rep["rep"]["source"]
         doc_path = Path(source["path"]) if source else None
         # 10-29 — 쪽 VLM은 PARSE_POST에 vlm_page가 있을 때만(run_docs light 레인·parse MCP의 supsub만 존중 — P1-1), 문서당 한 번만(M4).
@@ -1058,7 +1075,7 @@ def represent(stack, parse_dir, src=None):
         _pdt = (rep.get("post") or {}).get("post_times") or {}
         _pdetail = (
             " | post["
-            + " ".join(f"{k}={_pdt[k]:.1f}s" for k in ("dedup", "vlm_page", "figures", "charts", "attachments", "supsub") if k in _pdt)
+            + " ".join(f"{k}={_pdt[k]:.1f}s" for k in ("vlm_page", "figures", "charts", "attachments", "supsub") if k in _pdt)
             + "]"
             if _pdt
             else ""

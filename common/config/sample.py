@@ -128,7 +128,6 @@ HYPER = {  # 이름 규칙으로는 운영값이지만 결과(파싱·청크·�
     "pipeline.transform.represent.reread.dpi",
     "pipeline.transform.structure.page_chunk_max",
     "pipeline.transform.vlm.fig_photo_max_tokens",
-    "pipeline.transform.represent.reread.vlm_max_tokens",
     "mcp.search.ocr_dpi",
     "mcp.search.struct_context_max",
 }

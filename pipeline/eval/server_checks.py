@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """서버 측정 묶음(server measurement pack) — 서버 대기 중인 파싱·색인 측정(AR1·AR6·T1)을 각각
 한 명령으로 돌려 간단한 markdown/JSON 표를 낸다. 전부 읽기 전용(서버 데이터를 바꾸지 않음) · 결과는 output/ 아래에만
-씀 · 새 유료 호출 없음(서버 내부 모델이 평소 돌던 경로 — 검색의 임베딩 호출 등 — 는 정상 동작이라 허용, VLM은
-ar1만 --run-vlm 없이는 안 부름, 자세한 사유는 각 서브커맨드 설명 참고).
+씀 · 새 유료 호출 없음(서버 내부 모델이 평소 돌던 경로 — 검색의 임베딩 호출 등 — 는 정상 동작이라 허용, 자세한 사유는
+각 서브커맨드 설명 참고).
 S5(10-26, T-15 — D-021 ④) — 검색 측정 br54·l8·gh114는 mcp_server/cli/search_checks.py로 옮김(파이프라인 도구가 검색 코드를
 import하지 않게 — 결과 폴더 output/server_checks/<이름>은 그대로).
 
 서브커맨드:
-  ar1    조각 투표 계열(PARSE_FUSE·_SIGNALS·_REREAD·_REREAD_P3) 끄고 켬 — 사람 정답(GOLD_DIR) 기준 재채점.
-         기존 엔진 결과(--parse-dir)를 복사해 다시 represent만 돈다(엔진 재실행 없음). P3는 그림 영역 VLM을 실제로
-         부르므로 --run-vlm 없이는 그 VLM 호출 수 추정치만 찍고 baseline·PARSE_FUSE_SIGNALS_off는 건너뜀.
+  ar1    조각 투표 계열(PARSE_FUSE·_SIGNALS·_REREAD) 끄고 켬 — 사람 정답(GOLD_DIR) 기준 재채점.
+         기존 엔진 결과(--parse-dir)를 복사해 다시 represent만 돈다(엔진 재실행 없음). (재판독 P3·--run-vlm은 pl-34 10-30에 지움)
   ar6    기존 파싱 결과(_images/index.jsonl)에서 그림 종류별·문서 형식별 VLM 호출 수를 센다. 새 VLM 호출 없음.
          --ocr을 주면(선택, 로컬 OCR — VLM 아님) OCR 게이트(글자 수≥N·숫자 비율<0.30) 후보 비율도 같이 잰다.
   t1     PG 표본 청크의 chunk_term을 common.core.text.tokens로 다시 계산해 저장된 값과 비교(재색인 필요 여부).
@@ -17,7 +16,7 @@ import하지 않게 — 결과 폴더 output/server_checks/<이름>은 그대로
          head를 재구성 — CHUNK_HEAD 끔이면 머리말 없음).
 
 사용:
-  python -m pipeline.eval.server_checks ar1 --gold /srv/rag/answer-key --parse-dir output/parse --src output/prepared [--max-docs 5] [--run-vlm]
+  python -m pipeline.eval.server_checks ar1 --gold /srv/rag/answer-key --parse-dir output/parse --src output/prepared [--max-docs 5]
   python -m pipeline.eval.server_checks ar6 --parse-dir output/parse --src output/prepared [--ocr]
   python -m pipeline.eval.server_checks t1 [--sample 200] [--bundle output/edw/bundle] [--pool]
 """
@@ -52,15 +51,13 @@ def _out_dir(name, override=None):
 
 
 # ───────────────────────── AR1 — 조각 투표 계열 끄고 켬(사람 정답 재채점) ─────────────────────────
-AR1_SWITCH_KEYS = ("PARSE_FUSE", "PARSE_FUSE_SIGNALS", "PARSE_FUSE_REREAD", "PARSE_FUSE_REREAD_P3")
+AR1_SWITCH_KEYS = ("PARSE_FUSE", "PARSE_FUSE_SIGNALS", "PARSE_FUSE_REREAD")
 AR1_CONFIGS = [
     ("baseline", {}),
     ("PARSE_FUSE_off", {"PARSE_FUSE": "0"}),
     ("PARSE_FUSE_SIGNALS_off", {"PARSE_FUSE_SIGNALS": "0"}),
     ("PARSE_FUSE_REREAD_off", {"PARSE_FUSE_REREAD": "0"}),
-    ("PARSE_FUSE_REREAD_P3_off", {"PARSE_FUSE_REREAD_P3": "0"}),
 ]
-AR1_NO_P3_VLM = {"PARSE_FUSE_off", "PARSE_FUSE_REREAD_off", "PARSE_FUSE_REREAD_P3_off"}  # 이 설정들은 P3가 안 돎(실호출 없음)
 
 
 def _build_engine_base(parse_dir, dest, max_docs=None):
@@ -133,34 +130,9 @@ def _run_score_gold(dev_root, gold_dir, parse_dir, src_dir, out_dir, env):
     return json.loads((out_dir / "score.json").read_text(encoding="utf-8"))
 
 
-def _dry_p3_conflict_count(dev_root, stack_path, engine_base, src_dir, out_dir, represent_fn=_run_represent):
-    """VLM_BASE_URL·VLM_MODEL을 잠깐 비우고 represent 1회(네트워크 호출 0, vlmgate.md 확인된 단락회로) —
-    _rep/conflicts.jsonl 개수 = P3가 실제로 부를 그림 VLM 호출 수의 상한 추정(과대추정 쪽 — P2가 먼저 푸는 충돌도 셈)."""
-    env = C.child_env(VLM_BASE_URL=None, VLM_MODEL=None)  # 하위 프로세스(represent) — 덮기 파일(S7e2, VLM_*는 엔진 키라 env에서도 지움)
-    env["PYTHONUTF8"] = "1"
-    dry_dir = out_dir / "_dry"
-    if dry_dir.exists():
-        shutil.rmtree(dry_dir)
-    shutil.copytree(engine_base, dry_dir)
-    try:
-        represent_fn(dev_root, stack_path, dry_dir, src_dir, env)
-        conf = dry_dir / "_rep" / "conflicts.jsonl"
-        n = 0
-        if conf.exists():
-            for ln in conf.read_text(encoding="utf-8").splitlines():
-                if ln.strip():
-                    n += len(json.loads(ln).get("conflicts") or [])
-        return n
-    finally:
-        shutil.rmtree(dry_dir, ignore_errors=True)
-
-
-def _ar1_markdown(results, n_conflict_est, ran_vlm):
+def _ar1_markdown(results):
     L = [
         "# AR1 — 조각 투표 계열 끄고 켬(사람 정답 기준)",
-        "",
-        f"P3 VLM 호출 추정(드라이런, 네트워크 0회, 과대추정 쪽) ≈ **{n_conflict_est}건**"
-        + ("" if ran_vlm else " · --run-vlm 없음 — P3 실호출 포함 설정(baseline·PARSE_FUSE_SIGNALS_off)은 건너뜀"),
         "",
         "| 설정 | value_recall | char_acc_post | table_cell_recall | num_halluc | represent 초 |",
         "|---|---|---|---|---|---|",
@@ -195,20 +167,13 @@ def _run_ar1(
     out_dir,
     stack_path,
     max_docs,
-    run_vlm,
     represent_fn=_run_represent,
     score_fn=_run_score_gold,
-    conflict_fn=_dry_p3_conflict_count,
 ):
     docs = _build_engine_base(Path(parse_dir), out_dir / "engine_base", max_docs)
     print(f"[ar1] 대상 문서 {len(docs)}건(max_docs={max_docs or '전체'})")
-    n_conflict = conflict_fn(DEV, stack_path, out_dir / "engine_base", src_dir, out_dir, represent_fn)
-    print(f"[ar1] 예상 P3 VLM 호출 수(상한 추정) ≈ {n_conflict}건")
-    configs = AR1_CONFIGS if run_vlm else [c for c in AR1_CONFIGS if c[0] in AR1_NO_P3_VLM]
-    if not run_vlm:
-        print("[ar1] --run-vlm 없음 — baseline·PARSE_FUSE_SIGNALS_off(P3 실호출 포함)는 건너뜀")
     results = {}
-    for name, overrides in configs:
+    for name, overrides in AR1_CONFIGS:
         cfg_dir = out_dir / f"cfg_{name}"
         if cfg_dir.exists():
             shutil.rmtree(cfg_dir)
@@ -226,7 +191,7 @@ def _run_ar1(
         print(f"[ar1] {name}: {results[name]['rep']} · {sec:.1f}s")
         shutil.rmtree(cfg_dir, ignore_errors=True)
     (out_dir / "ablation_results.json").write_text(json.dumps(results, ensure_ascii=False, indent=1), encoding="utf-8")
-    md = _ar1_markdown(results, n_conflict, run_vlm)
+    md = _ar1_markdown(results)
     (out_dir / "ablation_report.md").write_text(md, encoding="utf-8")
     return results, md
 
@@ -243,7 +208,7 @@ def cmd_ar1(args):
         from pipeline import stackcfg
 
         stack_path = stackcfg.current().version_id
-    _results, md = _run_ar1(Path(args.parse_dir), Path(args.src), Path(gold), out_dir, stack_path, args.max_docs, args.run_vlm)
+    _results, md = _run_ar1(Path(args.parse_dir), Path(args.src), Path(gold), out_dir, stack_path, args.max_docs)
     print(md)
     return 0
 
@@ -322,23 +287,12 @@ def _ar6_page_counts(src_dir, docs):
     return out
 
 
-def _ar6_p3_counts(parse_dir):
-    p = Path(parse_dir) / "_rep" / "conflicts.jsonl"
-    if not p.exists():
-        return None
-    n = 0
-    for ln in p.read_text(encoding="utf-8").splitlines():
-        if ln.strip():
-            n += len(json.loads(ln).get("conflicts") or [])
-    return n
-
-
 def _ar6_markdown(report):
     L = [
         "# AR6 — VLM 호출 수(기존 파싱 결과 기준, 새 VLM 호출 없음)",
         "",
         f"그림 VLM 시도(실제 보낸 것만) {report['figure_attempts']}건 · 보내기 전 걸러짐(작음·중복·상한) {report['pre_vlm_skipped']}건 · "
-        f"쪽 VLM 대상 쪽 {report.get('page_vlm_total', '—')}건 · P3 충돌(그림 영역 VLM 선택형) 추정 {report.get('p3_conflicts_estimate', '없음(사전 _rep 없음)')}건",
+        f"쪽 VLM 대상 쪽 {report.get('page_vlm_total', '—')}건",
         "",
         "## 그림 종류별",
         "",
@@ -373,7 +327,6 @@ def cmd_ar6(args):
     if args.src:
         page = _ar6_page_counts(Path(args.src), report["docs"])
         report["page_vlm_by_doc"], report["page_vlm_total"] = page, sum(page.values())
-    report["p3_conflicts_estimate"] = _ar6_p3_counts(args.parse_dir)
     out_dir = _out_dir("ar6", args.out)
     (out_dir / "ar6_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     md = _ar6_markdown(report)
@@ -466,7 +419,6 @@ def build_parser():
     p.add_argument("--gold", default=pc.gold_dir())  # S7c — 설정 객체(S7e2 — 이미지 안 /data/gold 마운트 기본)
     p.add_argument("--stack", default=None)
     p.add_argument("--max-docs", type=int, default=None)
-    p.add_argument("--run-vlm", action="store_true", help="P3 실 VLM 호출 포함 설정(baseline·PARSE_FUSE_SIGNALS_off)까지 실행")
 
     p = sub.add_parser("ar6", help="기존 파싱 결과의 그림 VLM 호출 수·OCR 게이트")
     _add_common(p, "ar6")

@@ -37,8 +37,6 @@ LAYER_CODE = {
             "context",
             "fuse",
             "reread",
-            "reread_stage3",
-            "scan_dedup",
             "shadow",
             "supsub",
             "table_inline",

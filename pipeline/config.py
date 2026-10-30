@@ -50,13 +50,13 @@ class PipelineConnectionsRdbColumns(Section):
 
 
 class PipelineTransformRepresentReread(Section):
+    REMOVED = frozenset(
+        {"p3_img_max", "vlm_max", "vlm_max_tokens"}
+    )  # pl-34(10-30) — 재판독 P3·scan_dedup·렌더 OCR 신호를 지움(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     dpi: int | None = F(400, "FUSE_REREAD_DPI", "융합 재판독(P2)용 크롭 재렌더 해상도(dpi)")
     margin: float | None = F(1.5, "FUSE_REREAD_MARGIN", "승자와 최선 패자 점수차가 이 값 이하면 '근소'로 보고 재판독")
     max: int | None = F(20, "FUSE_REREAD_MAX", "문서당 융합 재판독(P2) 횟수 상한(0이면 재판독 안 함)")
-    p3_img_max: int | None = F(2, "FUSE_REREAD_P3_IMG_MAX", "재판독 3단계에서 조각 하나당 다시 볼 그림 상한(가까운 순)")
     pad_pt: float | None = F(40.0, "FUSE_REREAD_PAD_PT", "재판독 때 bbox 둘레에 더할 여백(pt)")
-    vlm_max: int | None = F(5, "FUSE_VLM_MAX", "문서당 재판독 3단계 VLM 호출 상한(비용 가드)")
-    vlm_max_tokens: int | None = F(400, "FUSE_VLM_MAX_TOKENS", "재판독·맥락 판독 VLM 응답 최대 토큰 수")
 
 
 class PipelineConnectionsRdb(Section):
@@ -286,6 +286,9 @@ class PipelineTransformFigures(Section):
 
 
 class PipelineTransformRepresent(Section):
+    REMOVED = frozenset(
+        {"fuse_reread_p3"}
+    )  # pl-34(10-30) — 재판독 P3·scan_dedup·렌더 OCR 신호를 지움(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     context: bool | None = F(
         True, "PARSE_CONTEXT", "문서·쪽 신호 맥락(rep.context·decisions) 기록(=0이면 안 남김)", off=("", "0", "none", "false"), fold="lower"
     )
@@ -298,9 +301,6 @@ class PipelineTransformRepresent(Section):
         "융합 뒤 근소·미확인 자리를 다시 읽는 재판독(P2) 사용(=0이면 끔)",
         off=("", "0", "none", "false"),
         fold="lower",
-    )
-    fuse_reread_p3: bool | None = F(
-        True, "PARSE_FUSE_REREAD_P3", "재판독 3단계(그림 경계 OCR·VLM 선택형) 사용(=0이면 끔)", off=("", "0", "none", "false"), fold="lower"
     )
     fuse_signals: bool | None = F(
         True,
@@ -448,15 +448,8 @@ class PipelineEval(Section):
 
 class PipelineExtract(Section):
     REMOVED = frozenset(
-        {"phases", "phase_sec", "auto_reparse_changed", "parallel"}
-    )  # 사용자 10-29 — phase 없앰 · 10-30 auto_reparse_changed·parallel 지움(pl-35)(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    dedup_scan: bool | None = F(
-        False,
-        "PARSE_DEDUP_SCAN",
-        "스캔 쪽의 OCR 본문과 쪽 VLM 전사 중복을 쪽마다 하나로 정리할지",
-        off=("", "0", "none", "false"),
-        fold="lower",
-    )
+        {"phases", "phase_sec", "auto_reparse_changed", "parallel", "dedup_scan", "ocr_gt_max", "signal_ocr"}
+    )  # 사용자 10-29 — phase 없앰 · 10-30 auto_reparse_changed·parallel 지움(pl-35) · dedup_scan·ocr_gt_max·signal_ocr 지움(pl-34)(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     disk_free_warn_gb: float | None = F(10.0, "DISK_FREE_WARN_GB", "디스크 남은 용량이 이 값(GB)보다 작으면 보관 용량 경고 출력")
     doc_parallel: int | None = F(1, "PARSE_DOC_PARALLEL", "대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개)")
     engine_cache_warn_gb: float | None = F(20.0, "ENGINE_CACHE_WARN_GB", "엔진별 중간 결과 합계가 이 값(GB)을 넘으면 보관 용량 경고 출력")
@@ -488,7 +481,6 @@ class PipelineExtract(Section):
         "OCR 엔진(rapidocr·rapidocr_ko)을 파싱 엔진으로 돌릴지(=1 켬) — 끄면 이미지·스캔 문서는 VLM 엔진만",
         on=("1",),
     )
-    ocr_gt_max: int | None = F(20, "PARSE_OCR_GT_MAX", "'OCR 글자 수가 글자층의 3배 이상'인 쪽을 쪽 VLM 후보로 올릴 상한(쪽, 0=끔)")
     page_scan: bool | None = F(True, "PARSE_PAGE_SCAN", "글자 PDF 안의 스캔 쪽을 신호로 찾아 쪽 VLM에 보낼지(=0이면 끔)", off=("0",))
     prefetch_workers: int | None = F(2, "PREFETCH_WORKERS", "미리받기(warm) 명령의 동시 다운로드 스레드 수(개)")
     rapidocr_page_workers: int | None = F(
@@ -502,7 +494,6 @@ class PipelineExtract(Section):
         off=("", "0", "none", "false"),
         fold="lower",
     )
-    signal_ocr: bool | None = F(False, "PARSE_SIGNAL_OCR", "쪽 신호 계산에 렌더 OCR 글자 수를 채울지 — 1이면 켬(비용 큼)", on=("1",))
     skipped_log: str | None = F(None, "PARSE_SKIPPED_LOG", "건너뛴 문서(암호 PDF 등) 기록 jsonl 경로")
     source_limit: int | None = F(0, "PARSE_SOURCE_LIMIT", "원본에서 처리할 문서 건수 상한(0=제한 없음)")
     text_page_sec: float | None = F(
