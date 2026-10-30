@@ -398,6 +398,40 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 - 의존성(`requirements*`·휠·Dockerfile·assets)이 바뀌면 ①에서 새 실행 이미지가 필요하다(코드의 `deploy/docker/DEPS_HASH`와 이미지 지문이 다르면 시작·굽기 모두 거부).
 - PC에서 `IMAGE_TARGET=pipeline`·`mcp`로 코드가 든 이미지를 직접 빌드하는 길은 PC 시험(이미지 관문)·비상용으로만 남긴다 — 운영 반입은 ②(개발에서 시험한 그대로). 오버레이 패치(§5-8)도 운영 서버 비상 수정용.
 
+#### 개발 서버 폴더 구조 — 이미지와 코드 폴더를 한 반입 폴더에 같이(①)
+
+PC가 보내는 반입 묶음은 **폴더 하나**다 — 실행 이미지(조각)와 코드 폴더 묶음이 같은 판 폴더 안에 같이 들어 있다. 받은 그대로 서버에 옮긴다.
+
+```
+0.1.0-rc0/                                ← 반입 폴더 하나(PC output/ship/dev/<판>/ — 이 폴더째 옮김)
+├── data-pipeline-runtime/                 ← 파이프라인 실행 이미지(코드 없음) 조각
+│   ├── data-pipeline-runtime.tar.gz.part000 … part008
+│   └── data-pipeline-runtime.sha256
+├── mcp-server-runtime/                    ← 검색 MCP 실행 이미지(코드 없음) 조각
+│   ├── mcp-server-runtime.tar.gz.part000 … part003
+│   └── mcp-server-runtime.sha256
+├── code-0.1.0-<커밋>.tar.gz               ← 코드 폴더 묶음(저장소 트리 그대로)
+└── code-0.1.0-<커밋>.sha256
+```
+
+서버에 설치한 뒤 모양 — 이미지는 `docker load`(podman load)로 컨테이너 도구 안에 들어가고, 코드 묶음은 판 폴더로 푼다. 컨테이너는 `live`가 가리키는 판 폴더 **하나**를 `/app/deploy`에 읽기 전용으로 붙여, 그 아래 `common/`·`pipeline/`·`mcp_server/`·`resources/`를 그대로 쓴다(하위 폴더를 따로 지정하지 않음 — 이미지의 `PYTHONPATH=/app/deploy`).
+
+```
+/srv/rag/
+├── env/settings.yaml                      ← $SERVER_ENV_DIR (image: data-pipeline-runtime:<판> · mcp-server-runtime:<판>)
+└── code/
+    ├── 0.1.0-<커밋>/                       ← 코드 묶음을 푼 판 폴더 = 저장소 트리 그대로(주인 10001 또는 모두 읽기)
+    │   ├── common/   pipeline/   mcp_server/   resources/
+    │   ├── deploy/   (docker/ · host/ · release/)   ← 호스트 스크립트도 여기 것을 씀(deploy/host/scripts/…)
+    │   ├── tests/server/   VERSION   CODE_COMMIT
+    │   └── deploy/docker/DEPS_HASH        ← 실행 이미지 지문과 같아야 시작
+    ├── 0.1.0-<앞 커밋>/                    ← 되돌리기용으로 남김(최근 2개 이상)
+    └── live -> 0.1.0-<커밋>                ← 지금 쓰는 판 · CODE_DIR=/srv/rag/code/live
+```
+
+- 코드만 바뀐 판은 반입 폴더에 코드 묶음만 온다(이미지는 그대로 — `DEPS_HASH`가 같을 때). 새 판 폴더에 풀고 `live`를 옮긴 뒤 다시 띄운다.
+- 스크립트는 `live` 아래 것으로 실행한다(`bash /srv/rag/code/live/deploy/host/scripts/trigger.sh …`) — 컨테이너가 보는 코드와 호스트 스크립트가 같은 판이 되게.
+
 개발 서버 순서: 실행 이미지 적재(아래 5-2와 같은 `docker load`) → `/srv/rag/code/<버전>-<커밋>/`에 코드 폴더 묶음 풀기(`tar -xzf … --no-same-owner` 뒤 `chown -R 10001:10001` 또는 `chmod -R a+rX` — 컨테이너 사용자 10001이 읽어야 함) → `ln -sfn <그 폴더> /srv/rag/code/live` → settings.yaml `pipeline.host.image`·`mcp.host.image`를 실행 이미지 태그로 → systemd unit·셸에 `CODE_DIR=/srv/rag/code/live` → `trigger.sh`·`mcp_up.sh`. 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`으로 어느 판이 도는지 확인. 되돌리기는 `release-and-patch.md` §1-1.
 
 ### 5-1. 버전 올리기
