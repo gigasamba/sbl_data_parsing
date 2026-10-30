@@ -57,7 +57,7 @@ from common.ai.guard import external_ok, fake_llm, is_internal, require_internal
 
 # CT1(10-16) — models.py 병합(역할별 모델 프로필 조회, agent_platform.config.ModelProfile 재사용 — 사용자 결정 2026-10-06).
 # 설정 객체에서만 읽음(S7b — 호출 시점 cfg(), 전환 기간엔 env로 만든 객체라 테스트가 env를 바꾸면 반영). 기존 LLM_BASE_URL·VLM_BASE_URL·EMBED_* 등은 그대로 하위 호환.
-_ROLE_PREFIX = {"llm": "LLM", "vlm": "VLM", "ocrvlm": "OCRVLM", "embed": "EMBED"}
+_ROLE_PREFIX = {"llm": "LLM", "vlm": "VLM", "embed": "EMBED"}
 
 
 @dataclasses.dataclass(frozen=True)

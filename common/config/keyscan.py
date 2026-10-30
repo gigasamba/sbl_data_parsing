@@ -1,7 +1,7 @@
 """코드·스크립트가 읽는 환경변수 이름 모으기 — 설정 분류표(refactor_plan 부록 D)와 설정 모델이 빠진 키 없이 맞는지 본다(S7a, D-015).
 모으는 규칙은 refactor_plan 9-4 그대로다(git 추적 파일 — valid_env/·.claude/·docs/ 제외):
   파이썬 — os.environ.get·os.getenv·environ.get·setdefault·os.environ["X"](대입 제외)·"X" in os.environ·지역 도우미
-           (_f·_cap·g·_list·_case·_flag·base_env.get·env.get·c.get·conf.get)·동적 이름 f"{prefix}_X"(LLM·VLM·OCRVLM·EMBED·RERANK)
+           (_f·_cap·g·_list·_case·_flag·base_env.get·env.get·c.get·conf.get)·동적 이름 f"{prefix}_X"(LLM·VLM·EMBED·RERANK)
   셸 — ${X:-…}(그 파일에서 대입해도 입력) · ${X}·$X 중 그 파일에서 대입하지 않은 것 · compose·systemd — ${X} 전부
   (valid_env/ 중 PC 시험 Docker valid_env/docker/는 넣음 — 5-3 C)
 이름 목록을 돌며 읽는 키(for k in ("PG_HOST", …))처럼 규칙으로 못 잡는 것은 NAME_LIST에 적는다.
@@ -27,7 +27,7 @@ _SKIP = (
     "deploy/release/lint_changed.sh",
 )  # 마지막 — PC 개발 점검 스크립트(FIX 등 셸 스위치는 설정 키가 아님, S12)
 _KEEP = ("valid_env/docker/",)  # PC 시험 Docker(compose·smoke_test.sh — S6b에 docker/에서 옮김, 5-3 C)
-PREFIXES = ("LLM", "VLM", "OCRVLM", "EMBED")
+PREFIXES = ("LLM", "VLM", "EMBED")
 
 # 규칙(아래 정규식)으로 못 잡는 읽기 — 이름 목록·동적 이름(9-4 "이름 목록") · S7a에 다시 모으며 찾음
 NAME_LIST = {

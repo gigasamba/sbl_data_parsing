@@ -398,13 +398,13 @@ def selftest():
             blocked and srv_child,
         )
         (d / "ovb.yaml").write_text(
-            f"base: {tf}\noverrides:\n  NO_PAID_CALLS: true\n  EMBED_TIMEOUT: 9\n  LLM_MODEL: true\n  OCRVLM_MODEL: 1.10\n  PM_PREFIX: 0123\n",
+            f"base: {tf}\noverrides:\n  NO_PAID_CALLS: true\n  EMBED_TIMEOUT: 9\n  LLM_MODEL: true\n  VLM_MODEL: 1.10\n  PM_PREFIX: 0123\n",
             encoding="utf-8",
         )
         ovb = load(CommonAppSettings, file=d / "ovb.yaml", environ={})
         ovb_flat = load(CommonAppSettings, file=overlay_file({"LLM_TIMEOUT": "5"}, base=d / "ovb.yaml"), environ={})
         same_rule = [
-            (o.common.models.guard.no_paid_calls, o.common.models.embed.timeout, o.common.models.llm.model, o.common.models.ocrvlm.model)
+            (o.common.models.guard.no_paid_calls, o.common.models.embed.timeout, o.common.models.llm.model, o.common.models.vlm.model)
             for o in (ovb, ovb_flat)
         ]
         (d / "ovy.yaml").write_text(f"base: {tf}\noverrides:\n  NO_PAID_CALLS: yes\n", encoding="utf-8")
@@ -445,8 +445,7 @@ def selftest():
         )
         check(
             "overridden()(R-11): 지금 덮기 파일의 overrides 이름만(공유 settings.yaml 값은 아님)",
-            overridden({"SETTINGS_FILE": str(d / "ovb.yaml")})
-            == {"NO_PAID_CALLS", "EMBED_TIMEOUT", "LLM_MODEL", "OCRVLM_MODEL", "PM_PREFIX"}
+            overridden({"SETTINGS_FILE": str(d / "ovb.yaml")}) == {"NO_PAID_CALLS", "EMBED_TIMEOUT", "LLM_MODEL", "VLM_MODEL", "PM_PREFIX"}
             and overridden({"SETTINGS_FILE": str(tf)}) == frozenset(),
         )
         check(

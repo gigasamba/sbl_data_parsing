@@ -29,7 +29,6 @@ FAMILY = {
     "rapidocr": "paddle",
     "rapidocr_ko": "paddle",
     "paddleocr_vl": "paddle-vl",
-    "ocr_vlm": "ocr-vlm",
     "ppstructure": "paddle",
     "mineru": "paddle",  # RapidOCR = Paddle 모델 ONNX
     "tesseract": "tesseract",

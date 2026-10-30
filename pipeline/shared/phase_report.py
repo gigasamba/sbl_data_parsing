@@ -25,7 +25,7 @@ from common.core.paths import (
 from pipeline.shared.progress import doc_types, status
 from pipeline.shared.summarize import nums
 
-VLM = {"qwen_vlm", "ocr_vlm", "docling_vlm", "marker_llm"}  # 값을 지어낼 수 있는 계열
+VLM = {"qwen_vlm", "docling_vlm", "marker_llm"}  # 값을 지어낼 수 있는 계열
 # 연결 안 되는 엔진 → 조치 (SETUP.md 기준)
 FIX = {
     "tesseract": "dnf(EPEL 9): tesseract + TESSDATA_PREFIX=<dev>/assets/tessdata",
@@ -41,7 +41,6 @@ FIX = {
     "qwen_vlm": ".env VLM_BASE_URL · VLM_MODEL(내부망)",
     "docling_vlm": ".env VLM_BASE_URL · VLM_MODEL",
     "marker_llm": ".env VLM_BASE_URL · VLM_MODEL",
-    "ocr_vlm": ".env OCRVLM_BASE_URL · OCRVLM_MODEL(vLLM으로 PaddleOCR-VL·GLM-OCR)",
     "msg_extract": "pip extract-msg",
 }
 

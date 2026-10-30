@@ -8,7 +8,7 @@
              → 접속 시험(PG_PASSWORD 또는 PG_CONN_FILE 필요 — 비밀번호는 컨테이너에서 읽지 않음) → 되면 pgvector, 안 되면 로컬 묶음
              docker 명령이 권한 오류·없음이면(SI26) 듣는 포트로 대체 탐지: 127.0.0.1(PG_HOST가 있으면 그 주소)의 5432·15432를
              TCP로 확인 + 자격 증명이 있으면 psycopg로 SELECT 1까지. 비밀값은 로그에 안 찍고 '포트 탐지'로만 표시.
-모델 엔드포인트(접두어 LLM·VLM·OCRVLM·EMBED): <접두어>_BASE_URL(…/v1) · <접두어>_MODEL · <접두어>_API_KEY(선택).
+모델 엔드포인트(접두어 LLM·VLM·EMBED): <접두어>_BASE_URL(…/v1) · <접두어>_MODEL · <접두어>_API_KEY(선택).
   외부 주소는 거부 — 개발 PC 실험에서만 <접두어>_ALLOW_EXTERNAL=1(RUN_ENV=local일 때만 — common/ai/guard.py).
 사용: python common/services.py        → 연결 상태 표(비밀값은 출력 안 함)
 """
@@ -206,7 +206,7 @@ def status():
         ok, why = f(docker)
         print(f"| {label} | {'✓ ' if ok else '✗ '}{why} |")
     print("\n| 모델 | 주소 구분 | 모델 | 상태 |", "|---|---|---|---|", sep="\n")
-    for p, label in (("LLM", "LLM(답변·분해·그래프)"), ("VLM", "VLM(이미지 파싱)"), ("OCRVLM", "OCR 전용 VLM"), ("EMBED", "임베딩")):
+    for p, label in (("LLM", "LLM(답변·분해·그래프)"), ("VLM", "VLM(이미지 파싱)"), ("EMBED", "임베딩")):
         print(f"| {label} | " + " | ".join(model_status(p)) + " |")
 
 
