@@ -14,7 +14,6 @@ LLM_BASE_URL·LLM_MODEL 미설정이면 chat()이 LLMUnavailable을 올리고 sh
 parse/_shadow(출력) — 하드코딩 금지.
 
 사용: python cli/parse_shadow.py [--rep-dir 폴더] [--out 폴더] [--mode llm|rules] [--max N] [--force]
-      python cli/parse_shadow.py --selftest
 """
 
 import argparse

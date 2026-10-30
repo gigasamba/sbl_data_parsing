@@ -8,7 +8,6 @@ ThreadingHTTPServer) — 새 패키지 없음. 이미지당 하나(parse 전용 
 실행:
   PYTHONPATH=<repo>/deploy python -m pipeline.trigger_server --module parse
   PYTHONPATH=<repo>/deploy python -m pipeline.trigger_server --module structure
-  (자기 점검) python -m pipeline.trigger_server --selftest
 
   (운영자 셸 — curl 인용 없이) stdlib 클라이언트, 토큰은 env TRIGGER_TOKEN:
     python -m pipeline.trigger_server client --url http://127.0.0.1:8770 submit --source s3://bucket/key.pdf

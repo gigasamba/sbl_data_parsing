@@ -11,7 +11,6 @@ artifacts.py 캐시 정리·embed.py 질의 캐시처럼 인계 내용과 무관
 거부해(종료 코드 3) 서버가 멀쩡한 결과를 다시 파싱해야 했다(10-09 실측). 이제는 HANDOFF_FILES(아래, 선정
 기준 주석 포함)만 본다 — 새 common/**/*.py(S4부터 하위 폴더 포함)를 추가하면 HANDOFF_FILES나 EXCLUDED_FILES 둘 중
 하나에 넣어야 한다(안 넣으면 import 때 바로 거부 — _unclassified()).
-사용: python -m common.__init__ --selftest(이 파일 selftest — 직접 -m으로 돌리면 패키지가 먼저 import해 runpy 경고가 남)
 """
 
 import hashlib

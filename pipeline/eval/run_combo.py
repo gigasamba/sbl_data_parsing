@@ -9,7 +9,7 @@
 사용:
   python cli/run_combo.py --parse-dir output/parse --src output/corpus/docs [--truth output/corpus/truth.json]
     [--parse route,route2] [--chunk ...] [--embed ...] [--graph ...] [--retrieve ...] [--beam 2] [--full]
-    [--out output/eval] [--rerank] [--force] [--selftest]
+    [--out output/eval] [--rerank] [--force]
 
 실행 조건(SI4) — parse_qa.py가 먼저 끝나 있어야 함(output/parse/route.json). 옵션으로 막아 둔 것(의도 — 코드로 그대로 유지):
   - `--embed`에 none 아닌 실제 모델(e5-small·e5-base·bge-m3)을 쓰려면 모델이 준비돼 있어야 함

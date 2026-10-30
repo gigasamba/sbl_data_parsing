@@ -22,7 +22,6 @@ gold_draft(쪽 옮겨 적기)와는 다른 지시문(prompts/qa_draft)·캐시 �
   유료 외부 모델이면 LLM_MAX_CALLS·LLM_BUDGET_USD를 함께(개발 중엔 문서 몇 건으로 기능 시험만).
 사용: python -m pipeline.eval.qa_draft --src <원본 폴더> [--out output/qa_draft]
       python -m pipeline.eval.qa_draft --finalize output/qa_draft
-      python -m pipeline.eval.qa_draft --selftest   (VLM 대역 — 네트워크·캐시 없음)
 """
 
 import argparse

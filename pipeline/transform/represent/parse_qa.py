@@ -10,7 +10,6 @@ tables[].grid — 행×열, 선택 칸 — 가 있으면 본문 줄과 함께 �
 
 사용: python modules/parse/parse_qa.py [--parse output/parse] [--src <원본 문서 폴더>]   (--src 생략 시 DOC_DIR env 필수)
       [--truth output/corpus/truth.json] [--answer-key answer_key] [--out output/parse]
-자기점검: python modules/parse/parse_qa.py --selftest
 """
 
 import argparse

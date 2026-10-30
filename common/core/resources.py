@@ -28,7 +28,6 @@ CPU 문(gated_popen이 메모리 문 다음에 같이 거침 — os.getloadavg()
   VLM_MAX_CONCURRENCY  VLM 서버 동시 요청 상한(기본 8) — cli/pipeline.py가 --workers(문서) 기준으로 쪽 동시 수를 줄여 지킴
 사용: python common/resources.py           → 감지값·결정 표
       python common/resources.py --env     → export 줄(셸에서 eval)
-      python common/resources.py --selftest
 """
 
 import math

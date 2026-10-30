@@ -4,7 +4,7 @@ pipeline 코드가 읽는 객체는 설정 파일 기반 캐시 PIPE다(S7e2 —
   `pc.by_env(f"{p}_X")` · 시험 `with pc.PIPE.env(PARSE_TMP=…, KEEP_RAW_LAYER=None):`(설정 위에 옛 env 이름으로 덮음 — os.environ 안 건드림).
   common 칸은 `common.config.settings.cfg()`로(COMMON). 값을 바꿔 자식에 넘길 때는 `settings.put()`·`settings.child_env()`(덮기 파일).
 SETTINGS(common + pipeline 절)는 확인 명령(python -m pipeline.config)·시험용. 칸 표는 refactor_plan 부록 D.
-사용: python -m pipeline.config [--file 경로]   # 읽어서 요약(비밀 가림) · export --section pipeline.host … · --selftest
+사용: python -m pipeline.config [--file 경로]   # 읽어서 요약(비밀 가림) · export --section pipeline.host …
 """
 
 import sys

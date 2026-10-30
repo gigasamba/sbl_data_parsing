@@ -12,7 +12,6 @@
 사용: python cli/run_board.py [--out out] [--gold-score output/eval/gold_score/score.json] [--plain-names]
       [--digest <폴더>] — 날짜·판 폴더(<폴더>/<YYYY-MM-DD>__<판>/)에 run_board.html + summary.json(phase별·전체 요약)을 두고
       <폴더>/INDEX.md에 한 줄 덧붙임 — 수집 서버 파싱이 끝나면 돌리고, 개발 서버가 그 폴더를 가져가 날짜·판으로 쌓음(사용자 10-08).
-      python cli/run_board.py --selftest
 """
 
 import argparse

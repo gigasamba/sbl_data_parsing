@@ -55,7 +55,7 @@ S7e3(10-28, VS7e2 B-1·R-10): ⑩이 os 별칭(`import os as _os`)·`from os imp
 (os.environ·그 사본·child_env 결과·subprocess 류 env= 값)에 설정 칸 이름(호스트 칸 빼고 — 영구 다리 칸은 빼기만)을 넣거나 빼는 자리(AST —
 dict 리터럴·dict(…, X=)·env[X] =·del·pop·setdefault·update, for 상수 이름 포함)는 위반이다(자식은 env의 설정 이름을 안 읽음 — settings.child_env(
 base, X=…)·put). 같은 이름의 env를 읽는 라이브러리·시험·호스트 도구는 분류 주석(ENV_NAME_OK_KINDS)으로 둔다.
-사용: python -m common.check.check_modules [--selftest](판정 변환 시험 뒤 같은 점검) [--env-report]
+사용: python -m common.check.check_modules [--env-report]
 """
 
 import ast

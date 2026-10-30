@@ -2,7 +2,7 @@
 services.py가 /models 존재만 보는 것과 달리 실제 /chat/completions·/embeddings를 부른다. 보내는 내용은 "ping"과 코드로 만든 1×1 PNG뿐(회사 데이터 없음).
 가드: 접두어마다 guard.require_internal → guard.urlopen(외부 주소·NO_PAID_CALLS 차단 그대로). 키는 출력하지 않는다.
   set -a; . $ENV_FILE; set +a; python cli/ping_models.py        # 실패가 하나라도 있으면 종료 코드 1
-  자기 점검은 tests/server/common/test_ping_models.py(S9 — 옛 `--selftest` 인자는 없어짐, 주면 실호출 없이 안내 뒤 종료 1 · VS9 R-5)
+  자기 점검은 tests/server/common/test_ping_models.py.
 """
 
 import base64
@@ -134,8 +134,4 @@ def main():
 
 
 if __name__ == "__main__":
-    if "--selftest" in sys.argv[1:]:  # S9b 리뷰 — 옛 자기 점검 인자가 실호출로 넘어가지 않게(옛 명령이 문서·기록에 남아 있음)
-        raise SystemExit(
-            "옛 --selftest는 없어짐 — 자기 점검은 tests/server/common/test_ping_models.py(pipeline.cli selftest --only ping_models). 인자 없이 부르면 실호출"
-        )
     main()

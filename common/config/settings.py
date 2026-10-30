@@ -23,7 +23,7 @@ RUN_ENV: env RUN_ENV > YAML common.run_env. local·dev·prd. 없거나 dev·prd�
 설정 파일을 못 읽거나 그 앱 절 검증에 실패해도 이유(칸 경로·오류 종류만)를 찍고 종료 2(VS7e1 U-1 — 사용자 10-28). 틀린 파일은 import common 때도
 서버면 바로 실패(pin_env — STRICT, S7b c안), local이면 경고 뒤 기본값.
 비밀 칸은 SecretStr — 출력·로그·검증 오류에 값이 나오지 않는다.
-사용: python -m common.config.settings [--file 경로] [--app pipeline|mcp]   # 읽어서 요약(비밀 가림) · --selftest
+사용: python -m common.config.settings [--file 경로] [--app pipeline|mcp]   # 읽어서 요약(비밀 가림)
 """
 
 import contextlib

@@ -4,7 +4,6 @@ parse·structure·load·search(옛 modules/)는 import하지 않는다(계약 �
 "같은 입력 + 같은 코드 지문 = 같은 열쇠" — 층 코드가 바뀌면 지문이 바뀌어 저장본이 자동으로 낡음이 된다.
 10-14 함수별 분리(사용자) — data-parsing 이미지에서만 쓰는 prompt_id·raw_engine_path·raw_vlm_path·engine_version·
 purge_caches는 pipeline/shared/artifacts.py로 옮김(로직 바이트 동일) — 여기는 2개 이상 이미지가 쓰는 계약만.
-사용: python -m common.core.artifacts --selftest
 """
 
 import hashlib

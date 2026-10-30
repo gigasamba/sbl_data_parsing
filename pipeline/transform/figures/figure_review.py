@@ -9,7 +9,6 @@ VLM 연결: VLM_BASE_URL·VLM_MODEL(추출, role="vlm")·VLM_MODEL_ALT(판정, �
 VLM 없으면 verdict="skipped"(실패 아님) — 결정적 대조도 할 수 없으므로 기록만 남긴다.
 
 CLI: python modules/parse/review/figure_review.py --figures <*.figures.json 폴더 또는 index.jsonl> --images <그림 폴더> --out output/parse/_review
-     python modules/parse/review/figure_review.py --selftest   (네트워크 없이 — compare()·stub VLM review() 점검)
 """
 
 import argparse

@@ -9,7 +9,6 @@ source_uri = 원본 위치(file:/// · 나중 s3://). 파싱(만듦)·구조화(
 묶음을 점검하고 어긋나면 종료 코드 3으로 멈춘다(조용히 품질이 떨어지지 않게).
 사용: python -m common.core.contract parse output/parse/_rep ·
       python -m common.core.contract structure output/edw/bundle ·
-      python -m common.core.contract --selftest (dev/에서)
 """
 import csv
 import hashlib

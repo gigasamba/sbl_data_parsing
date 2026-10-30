@@ -11,13 +11,10 @@ ar1·ar6·t1은 그 파일에 남음). 전부 읽기 전용(서버 데이터를 
          환경변수 MCP_TOKEN에서 읽고 절대 출력하지 않음).
   gh114  PG 모드에서 벡터 질의 스코프(SET LOCAL + 같은 트랜잭션) 안에서 SHOW hnsw.ef_search로 GH1-14 반영 확인.
 
-공통: 서브커맨드마다 --selftest(서버 없이 가짜 데이터로 돌아감). 전체 선택: `python -m mcp_server.cli.search_checks --selftest`.
-
 사용(이미지 안은 `tool search_checks …` — retrieval 이미지):
   python -m mcp_server.cli.search_checks br54 --questions <질문.json> [--k 8] [--threshold 0.3]
   python -m mcp_server.cli.search_checks l8 --url http://<호스트>:8765/mcp
   python -m mcp_server.cli.search_checks gh114 [--ef-search 150] [--pool]
-  python -m mcp_server.cli.search_checks --selftest   (또는 각 서브커맨드 뒤에 --selftest)
 """
 
 import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settings.pin_env)를 첫 줄에서(S7e2 — 옛 옵션 카탈로그 채우기 자리)

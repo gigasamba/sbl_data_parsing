@@ -194,7 +194,7 @@ def main(argv=None):
             print(f"  경고: {m}", flush=True)
         return 1 if errs else 0
     if not (a.kind and a.source and a.mapping):
-        ap.error("--kind·--source·--mapping 필요(또는 --selftest)")
+        ap.error("--kind·--source·--mapping 필요")
     mapping = load_mapping(a.mapping)
     if a.source.startswith("csv:"):
         rows = rows_from_csv(a.source[4:])

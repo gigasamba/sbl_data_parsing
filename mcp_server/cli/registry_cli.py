@@ -14,7 +14,6 @@ PG_*(공용 PostgreSQL). 표는 doc_contract_link·doc_location과 같은 PG_SCH
       python cli/registry.py unhide <doc_key> --by <누가> [--reason <왜>]   (복구 — deleted는 build()가 자동 hide, 그 밖엔 사람이 명시)
       python cli/registry.py report --since YYYY-MM-DD [--until YYYY-MM-DD] [--plain-names] [--out <md 경로>]
                                                                              (DET1 Fix3 — 날짜별 변경 보고, 읽기만)
-      python cli/registry.py --selftest
 """
 
 import argparse

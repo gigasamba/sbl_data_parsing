@@ -18,7 +18,7 @@ archive — 이 질문 세트를 쓰는 답변 평가는 dev_tools/perform_test/
 이 질문 세트 자체는 그대로(dev_tools/perform_test/answer_stage/run.py가 --set로 직접 읾을 수 있음).
 
 사용: python cli/auto_questions.py [--parse-dir output/parse] [--src output/prepared] [--out output/eval/questions.jsonl]
-        [--per-category 20] [--min-fams 2] [--rfi <jsonl>] [--check-truth output/corpus/truth.json] [--selftest]
+        [--per-category 20] [--min-fams 2] [--rfi <jsonl>] [--check-truth output/corpus/truth.json]
 """
 
 import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settings.pin_env)를 첫 줄에서(S7e2 — 옛 옵션 카탈로그 채우기 자리)
