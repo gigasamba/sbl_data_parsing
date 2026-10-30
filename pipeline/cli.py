@@ -580,8 +580,7 @@ def _registry_new_names(out_dir, names):
     바뀜)인데 아직 성공 못한 doc_key(status != 'parsed' — 반복 실패·'seen' 모두 매일 재시도) · 성공해서 안 바뀐
     문서는 뺌(다시 할 필요 없음, touched도 포함 — 원본 바이트가 안 바뀌었으니 재파싱 대상이 아님) · changed는
     기본 전부 빠짐(자동 재파싱 안 함, OP1) · deleted는 observed에 없어 자동으로 빠짐).
-    OP14 — env `AUTO_REPARSE_CHANGED=1`이면 changed 전체를 REG.nightly_plan의 reparse_keys로 넘겨 다음 배치
-    대상에 포함(새 run_id로 재파싱 — 결과는 run_id별로 쌓여 옛 결과·이력이 그대로 남음). 기본(0)은 전과 동일(탐지·보고만).
+    (옛 OP14 AUTO_REPARSE_CHANGED — changed 자동 재파싱 — 는 10-30 지움(pl-35, pl-23 증분만).)
     문서 대장을 못 열면 _no_registry()(서버 run_mode prod = 종료 4, 그 밖 = None — 필터 없음, pl-32 10-30)."""
     from common.store import registry as REG
 
@@ -590,9 +589,7 @@ def _registry_new_names(out_dir, names):
         return _no_registry()
     try:
         observed = REG.scan(out_dir)
-        auto_reparse = pc.cfg().extract.auto_reparse_changed
-        reparse_keys = set(REG.diff_against(db, observed)["changed"]) if auto_reparse else None
-        new_names = set(REG.nightly_plan(db, observed, reparse_keys=reparse_keys)["parse_names"])
+        new_names = set(REG.nightly_plan(db, observed)["parse_names"])
     except Exception:
         return None
     finally:
@@ -667,14 +664,10 @@ def parse_module(a):
     st = _stack()
     engines = a.engines or ",".join(_engines_of(st))
     _set_engine_scope_default(a.engines)  # PE1(2026-10-07) — 생산 기본 stack(무거움 해소), 명시 --engines·실험 경로는 영향 없음
-    parallel = bool(a.source) and pc.cfg().extract.parallel.pipeline  # OP26 — 문서 단위 받기→파싱→게시→삭제를 N명이 동시에
-    streaming = bool(a.source) and not parallel and pc.cfg().extract.stream.stream  # 백로그 X2 — 묶음(기본 1건)씩 받아 처리 후 즉시 지움
+    # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) — 아래 갈래는 스트리밍·일괄만
+    streaming = bool(a.source) and pc.cfg().extract.stream.stream  # 백로그 X2 — 묶음(기본 1건)씩 받아 처리 후 즉시 지움
     lim, src_info = [], None
-    if parallel:
-        from pipeline import parse_parallel as PARALLEL
-
-        PARALLEL.run(a, engines)  # 원본·중간 결과는 문서마다 이미 지움(try/finally) · 게시도 문서마다 이미 끝남
-    elif streaming:
+    if streaming:
         from pipeline import stream as STREAM
 
         STREAM.run(a, engines)  # 원본·사본·엔진별 중간 결과는 묶음마다 이미 지움(try/finally)
@@ -707,7 +700,7 @@ def parse_module(a):
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)
         lim = ["--docs-from", only]
-    if not streaming and not parallel:
+    if not streaming:
         from common.core import resources as RS
 
         vlm_conc = RS.vlm_page_concurrency(a.workers, a.vlm_concurrency)  # 문서 동시 수 × 쪽 동시 수가 VLM_MAX_CONCURRENCY를 넘지 않게
@@ -790,7 +783,7 @@ def parse_module(a):
         rep_ok=sum(1 for r in idx if r.get("engine")),
         run_id=run_id,
     )
-    if not streaming and not parallel and src_info:  # 스트리밍·병렬은 문서/묶음마다 이미 지웠음(SRC.mark_done)
+    if not streaming and src_info:  # 스트리밍은 묶음마다 이미 지웠음(SRC.mark_done)
         from pipeline.extract import source as SRC
 
         if SRC.is_remote(a.source):
@@ -1034,14 +1027,13 @@ def _case_settings():
     return _CASE_ENVS["file"]
 
 
-# 단계 4 도구 16개(S4 — 옛 공용 cli/·evaluation/에서 pipeline/로 옮김). S9 전에는 "공용" 사례였고 mcp 이미지에서는 모듈이 없어 SKIP이었다 —
+# 단계 4 도구 15개(10-30 parse_parallel 지움 — pl-35)(S4 — 옛 공용 cli/·evaluation/에서 pipeline/로 옮김). S9 전에는 "공용" 사례였고 mcp 이미지에서는 모듈이 없어 SKIP이었다 —
 # S9부터 그 시험은 tests/server/pipeline(mcp 이미지에서 "다른 이미지 사례" SKIP — 결과 같음). 여기서는 두 손 목록 확인만(check_modules.MOVED_TOOLS).
-# S6a — 목록은 전에 경계 점검의 LEGACY_TOOLS(파일 경로 → 옛 자리)에서 읽었다. 경계 판정에 더 안 쓰여 그 표를 지우고 여기 둔다(같은 16개).
+# S6a — 목록은 전에 경계 점검의 LEGACY_TOOLS(파일 경로 → 옛 자리)에서 읽었다. 경계 판정에 더 안 쓰여 그 표를 지우고 여기 둔다(같은 15개).
 _STAGE4_TOOLS = frozenset(
     {
         "pipeline.cli",
         "pipeline.check_env",
-        "pipeline.parse_parallel",
         "pipeline.trigger_server",
         "pipeline.extract.rdb_discover",
         "pipeline.transform.structure.gen_roster",

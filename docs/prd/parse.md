@@ -78,7 +78,7 @@
 ## pl-35 · 핑거프린트 영향 없는 잔재 지우기
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P4·P6·T12): (registry 도구 API·`marker_llm` — pl-31로 옮겨 10-30 지움) `pipeline/parse_parallel.py`, `figures/figures_resume.py`, `shared/phase_report.py`, 고아 프롬프트 `parse_agent`·`parse_decide`·`parse_decide_vlm`, `AUTO_REPARSE_CHANGED`(pl-23 — 증분만)를 지운다.
 - 파일: `pipeline/extract/engines/registry.py`, `pipeline/extract/run_all.py`, 위 모듈들, `resources/prompts/pipeline/`, `pipeline/config.py`.
-- Status: todo — `figures/figures_resume.py`(+ 시험)는 10-30 `feature/no-cross-run-done`(pl-32 2c)에서 지움(나머지는 그대로 todo). 남은 흔적: 층 파일 `figures.py`·`represent.py`의 주석과 `figures_max` 인자·`capped.jsonl` 쓰기(지우면 p1 핑거프린트가 바뀌어 이 행 범위 밖 — 다음 핑거프린트 묶음에서).
+- Status: done (10-30 `feature/pl35-leftovers`, 허브) — `pipeline/parse_parallel.py`(OP26 문서 단위 병렬)와 그 갈래·설정 절 `pipeline.extract.parallel`·`dev.parallel_test_crash` 지움(옛 칸은 경고만) · `AUTO_REPARSE_CHANGED`(`pipeline.extract.auto_reparse_changed`) 지움(pl-23 — 증분만) · `figures/figures_resume.py`는 pl-32 2c(#49)에서 지움 · 고아 프롬프트 `parse_agent`·`parse_decide`·`parse_decide_vlm`은 이미 폴더가 없음(주석에만 이름이 남음 — 공용·층 파일이라 핑거프린트 때문에 그대로) · `shared/phase_report.py`는 남김(운영 도구 `eval/run_board.py`가 `FIX`·`kind`를 씀 — 허브 규칙) · registry 도구 API·`marker_llm`은 엔진 핑거프린트 변경이라 [pl-31](#pl-31) 남은 일로 옮김. · figures_resume 남은 흔적: 층 파일 `figures.py`·`represent.py`의 주석과 `figures_max` 인자·`capped.jsonl` 쓰기(지우면 p1 핑거프린트가 바뀌어 이 행 범위 밖 — 다음 핑거프린트 묶음에서).
 
 <a id="pl-36"></a>
 ## pl-36 · 메일 첨부 파싱
@@ -123,7 +123,7 @@
 | 기능 | 스위치 = 기본값 | 필요한 것 |
 |---|---|---|
 | VLM 엔진, 그림, 쪽 VLM | 켜짐(OCR 엔진은 꺼짐 — `PARSE_OCR_ENGINE=0`, pl-22) | VLM 주소. 슬라이드·도형은 soffice(`SOFFICE_BIN`) |
-| 스캔 OCR/VLM 중복 제거 · 렌더 OCR 신호 · 바뀐 문서 자동 재파싱 | `PARSE_DEDUP_SCAN=0` · `PARSE_SIGNAL_OCR=0` · `AUTO_REPARSE_CHANGED=0` | — |
+| 스캔 OCR/VLM 중복 제거 · 렌더 OCR 신호 · 바뀐 문서 자동 재파싱 | `PARSE_DEDUP_SCAN=0` · `PARSE_SIGNAL_OCR=0` · (`AUTO_REPARSE_CHANGED`는 10-30 지움 — pl-35) | — |
 | 그림자 모드 | `PARSE_SHADOW=0` | LLM, 수동 CLI |
 
 ### 10-29에 지운 기능(사용자 결정)

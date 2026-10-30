@@ -119,7 +119,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  ├─ load/             pgvector 적재 · publish · 회사 DB 메타데이터 · 인덱스 빌더
 │  ├─ shared/ · tools/  단계 공용 모듈 · 운영 도구
 │  ├─ eval/             채점 · 실행 보드(score_gold, run_board 등)
-│  └─ trigger_server.py · mcp_parse_service.py · stream.py · parse_parallel.py   상주 트리거 · MCP 파싱 작업 · 스트리밍
+│  └─ trigger_server.py · mcp_parse_service.py · stream.py                     상주 트리거 · MCP 파싱 작업 · 스트리밍
 ├─ mcp_server/          검색 MCP 앱(mcp-server 이미지, FastMCP)
 │  ├─ main.py           진입점(앱 조립 · 토큰 · 서버 시작)
 │  ├─ config.py         mcp 섹션 설정 모델

@@ -105,7 +105,7 @@ case "$cmd" in
     # (pipeline 단계 모듈 run_all·dedup·stream 등을 preflight·잠금 없이 부르지 않게).
     # 이름은 sys.argv로 전달(소스 문자열에 끼워 넣지 않음). 찾기는 python 한 번에(VS3 R-7 — 전에는 패키지마다 프로세스 하나).
     [ "$name" = pipeline ] && name=cli
-    TOOL_PKGS="common.check pipeline:check_env,cli,parse_parallel,trigger_server pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest pipeline.transform.figures:figure_review pipeline.load:index pipeline.eval mcp_server.cli:mcp_eval,search_checks"
+    TOOL_PKGS="common.check pipeline:check_env,cli,trigger_server pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest pipeline.transform.figures:figure_review pipeline.load:index pipeline.eval mcp_server.cli:mcp_eval,search_checks"
     # shellcheck disable=SC2086
     mod=$(python -c "
 import importlib.util, sys
