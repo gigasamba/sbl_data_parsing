@@ -78,9 +78,9 @@ if [ "$RUNTIME" = 1 ]; then
   # mktemp -d는 0700 — 그대로 묶으면 서버에서 푼 판 폴더를 컨테이너 사용자 10001이 못 읽음. 모두가 읽게(폴더 755·파일 644, 실행 비트는 유지)
   chmod -R u=rwX,go=rX "$CODE_DIR"
   tar -czf - -C "$CODE_DIR" . > "$CODE_OUT"   # 표준 출력으로(Windows 경로 C:/…를 tar가 원격 호스트로 읽지 않게)
-  bad=$(tar -tvzf - < "$CODE_OUT" | awk '$1 !~ /^.r..r..r/' | head -3)
-  [ -z "$bad" ] || { echo "[오류] 코드 폴더 묶음에 모두가 읽을 수 없는 항목: $bad"; exit 1; }
-  tar -tvzf - < "$CODE_OUT" | head -1 | grep -q '^drwxr-xr-x' || { echo "[오류] 코드 폴더 묶음 맨 위 폴더가 755가 아님"; exit 1; }
+  # 맨 위 폴더 755 + 모든 항목 모두가 읽기(head로 자르지 않음 — pipefail에서 tar가 SIGPIPE로 실패함)
+  bad=$(tar -tvzf - < "$CODE_OUT" | awk 'NR==1 && $1 != "drwxr-xr-x" {print "맨위폴더 " $1} $1 !~ /^.r..r..r/ {print $NF}')
+  [ -z "$bad" ] || { echo "[오류] 코드 폴더 묶음 권한 — 컨테이너 사용자 10001이 못 읽음: $bad"; exit 1; }
   echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버에서 새 판 폴더로 풀고 live 링크를 옮김(release-and-patch.md — op-06)"
   export MSYS_NO_PATHCONV=1   # Windows Git Bash가 -v 인자를 바꾸지 않게
   RUN_ARGS="-v $(cygpath -m "$CODE_DIR" 2>/dev/null || echo "$CODE_DIR"):/app/deploy:ro"
