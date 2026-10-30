@@ -5,6 +5,7 @@
 image_name_of() {
   case "$1" in
     pipeline) echo data-pipeline ;; mcp) echo mcp-server ;;
+    pipeline-runtime) echo data-pipeline-runtime ;; mcp-runtime) echo mcp-server-runtime ;;   # op-07 — 코드 없는 실행 이미지(개발 서버, 코드 폴더 마운트)
   esac
 }
 

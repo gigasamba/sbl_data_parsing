@@ -14,6 +14,7 @@ DOCKER=${DOCKER:-docker}
 . deploy/host/scripts/image_vars.sh; need_image mcp || exit 2   # S6b — compose.mcp.yml은 MCP_SERVER_IMAGE만 봄(옛 DATA_RETRIEVAL_IMAGE·RAG_IMAGE만 있으면 종료 코드 2)
 PATCH_CODE=${PATCH_CODE:-/srv/rag/code/live}
 files="-f deploy/host/compose/compose.mcp.yml"
+[ -n "${CODE_DIR:-}" ] && files="$files -f deploy/host/compose/compose.code.mcp.yml"   # op-07 — 개발 서버(실행 이미지): 코드 폴더를 /app/deploy에
 [ -d "$PATCH_CODE/app" ] && files="$files -f deploy/host/compose/compose.patch.mcp.yml"
 DC="$DOCKER compose $files"
 URL="http://${MCP_HOST:-127.0.0.1}:${MCP_PORT:-8765}/health"
