@@ -146,6 +146,17 @@ common:
     sources_file:  # PC(RUN_ENV=local) 원천 목록 파일 경로(비우면 resources/mappings/sources.json) — 서버는 판 표 struct.source_version 활성 판(S8b) · 기본 없음 · 값: 경로 · env=SOURCES_FILE
     stack_file:  # PC(RUN_ENV=local) 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json) — 서버는 판 표 struct.stack_version 활성 판(S8b) · 기본 없음 · 값: 경로 · env=PIPELINE_STACK_FILE
   # ─── 8. 실행 자원·상주 서비스·새벽 배치 ───
+  log:
+    level: INFO  # JSON 사건 기록 최소 수준 · 기본 INFO · 값: 0 이상 · env=LOG_LEVEL
+    dir:  # JSON 로그 폴더 — 비우면 PC logs/, 서버 stdout · 기본 없음 · 값: 경로 · env=APPLOG_DIR
+    db_enabled: false  # applog DB 비동기 기록(마이그레이션 적용 후 켬) · 기본 false · 값: true·false · env=APPLOG_DB_ENABLED
+    fallback_dir: output/applog  # DB 실패 시 JSON Lines 대체 기록 폴더 · 기본 output/applog · 값: 경로 · env=APPLOG_FALLBACK_DIR
+    retention_days: 90  # 월 파티션 보존 일수(월 끝이 만료된 파티션만 DROP) · 기본 90 · 값: 0 이상 정수 · env=APPLOG_RETENTION_DAYS
+    queue_size: 10000  # DB 기록 대기 큐 상한 — 넘으면 드롭 집계 · 기본 10000 · 값: 0 이상 정수 · env=APPLOG_QUEUE_SIZE
+    batch_size: 200  # DB INSERT 배치 최대 행 수 · 기본 200 · 값: 0 이상 정수 · env=APPLOG_BATCH_SIZE
+    flush_sec: 1.0  # DB 배치 기록 간격(초) · 기본 1.0 · 값: 0 이상 초 · env=APPLOG_FLUSH_SEC
+    db_timeout_sec: 2  # 로그 DB 연결/문장 제한(초) · 기본 2 · 값: 0 이상 정수(초) · env=APPLOG_DB_TIMEOUT_SEC
+    shutdown_sec: 5.0  # 종료 시 DB 작업 대기 상한(초), 남은 큐는 파일 기록 · 기본 5.0 · 값: 0 이상 초 · env=APPLOG_SHUTDOWN_SEC
   runtime:
     cpu_max_load:  # 새 하위 프로세스를 띄우는 CPU 부하 상한(1분 부하 평균 ÷ 코어 수) · 기본 0.9 · 값: 0 이상 · auto 또는 비우면 자동 계산 · env=CPU_MAX_LOAD [auto = 비움]
     draft_terms_lock_timeout:  # 용어 초안 CSV 쓰기 잠금 대기 시간(초) — 못 얻으면 이번엔 포기 · 기본 5.0 · 값: 0 이상 초 · env=DRAFT_TERMS_LOCK_TIMEOUT [인계 지문]
@@ -488,6 +499,9 @@ pipeline:
 
 mcp:
   # ─── 7. mcp — 검색 서버·검색 동작 ───
+  audit:
+    max_input_bytes: 16384  # [파라미터] 감사 로그 입력 원문 UTF-8 바이트 상한 · 기본 16384 · 값: 0 이상 정수 · env=MCP_AUDIT_MAX_INPUT_BYTES
+    max_output_bytes: 65536  # [파라미터] 감사 로그 출력 원문 UTF-8 바이트 상한 · 기본 65536 · 값: 0 이상 정수 · env=MCP_AUDIT_MAX_OUTPUT_BYTES
   edw_meta:
     dir:  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · 기본 없음 · 값: 경로 · env=EDW_META_DIR
     max_bytes: 200000  # edw_meta 응답 크기 상한(바이트) — 넘으면 목록 꼬리를 자름 · 기본 200000 · 값: 0 이상 정수 · env=EDW_META_MAX_BYTES

@@ -55,7 +55,7 @@ _LABEL = (
     r"|pwd"
 )
 _SECRET_PATTERNS = (
-    re.compile(r"(?i)authorization\s*:\s*bearer\s+(?P<val>\S+)"),
+    re.compile(r"(?i)[\"']?authorization[\"']?\s*:\s*[\"']?bearer\s+(?P<val>[^\"'\s,;}]+)"),
     # 따옴표로 감싼 값은 닫는 따옴표까지 통째로("p@ss w"처럼 공백이 있어도) — 아래 따옴표 없는 패턴보다 먼저
     re.compile(r"(?i)[\"']?(?:" + _LABEL + r")[\"']?\s*[=:]\s*\"(?P<val>[^\"]*)\""),
     re.compile(r"(?i)[\"']?(?:" + _LABEL + r")[\"']?\s*[=:]\s*'(?P<val>[^']*)'"),

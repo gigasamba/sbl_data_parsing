@@ -14,6 +14,14 @@
 | PC(개발) | 저장소 루트 `settings.yaml`(git 밖, 권한 600). 구조·설명은 루트 `settings.sample.yaml`. 옛 `.env.local`은 `python -m common.config.migrate .env.local --out settings.yaml`로 옮김. 임베딩 키(`EMBED_*`)도 여기(CLAUDE.md §7) | `RUN_ENV`가 없거나 `local`이면 코드가 이 파일을 찾음(파일 안 `common.run_env: local`). 한 번 실행에 몇 항목만 바꿀 때는 오버레이 설정 파일: `SETTINGS_FILE=$(python -m common.config.overrides PIPE_OUT_ROOT=… EMBED_ALLOW_EXTERNAL=1 …)`(**PC 전용**) | 내부망 또는 OpenRouter(기능 테스트만) |
 | 수집·개발 서버 | `$SERVER_ENV_DIR/settings.yaml` = `/srv/rag/env/settings.yaml`(코드 폴더 밖). **주인 UID 10001(컨테이너 사용자)·그룹 운영 계정 그룹·권한 640**(운영 계정 UID가 10001이면 600 — `refactor.md` C-09) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다(비밀은 `docker inspect`에 안 나옴). **값을 바꿀 때는 이 파일을 직접 고친다**(오버레이 설정 파일 도구는 서버에서 막힘). 셸·systemd: `deploy/host/scripts/settings_env.sh`의 `load_settings`가 호스트 항목(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다(`--env-file` 없음) | 내부망만 |
 
+### 0-0. JSON 사건·DB 감사/성능 기록(op-01)
+
+`common.log.level`은 DEBUG/INFO/WARNING/ERROR/CRITICAL(기본 INFO), `common.log.dir`을 비우면 PC는 `logs/<앱>.jsonl`, 서버는 stdout이다. 상대 경로는 `paths.PROJ_ROOT` 기준이다. `common.log.db_enabled: true`로 DB 기록을 켠다(기본 false). DB 접속은 기존 `common.connections.pg`를 사용하며, 먼저 DBA가 `python -m common.store.db.dbtool up --target applog`와 `check --target applog`를 적용한다. PC 시험은 `--schema test_<이름>`으로 분리한다.
+
+`mcp.audit.max_input_bytes`(16384)·`max_output_bytes`(65536)는 감사 원문 저장 상한, `common.log.retention_days`는 기본 90일이다. `python -m common.store.db.dbtool maintain --target applog`를 **매일 예약**한다. 이 명령만 Alembic 작업 안에서 현재+앞으로 2개월 파티션을 준비하고, 월 끝까지 보존 기한을 지난 파티션을 DROP한다(월 중간 데이터는 다음 정리까지 최대 한 달 더 남음). 작은 `pipe_run`은 ended_at/started_at 기준 DELETE한다. 앱의 INSERT 경로에서는 DDL을 하지 않는다.
+
+DB 장애/문장 시간 초과(기본 2초)는 앱 호출을 기다리게 하지 않고 `common.log.fallback_dir`(기본 `output/applog`)에 마스킹된 `{table,row}` JSON Lines로 남는다. 경고는 프로세스당 한 번이며, `logsink.stats()`의 `dropped`·`fallback_errors`를 운영 점검에 포함한다. 파일 재적재는 자동으로 하지 않는다. 큐 상한 10000, 배치 200/1초이며 종료는 5초 대기 후 남은 배치를 파일에 쓴다. 종료 중 결과가 불명확한 DB 커밋과 대체 파일은 중복될 수 있어 request_id/run_id/span_id로 대조한다. 대체 파일/PC 로그는 삭제하지 않으므로 디스크 회수·접근 권한·보관 정책도 운영에서 정한다(C-68). 내부 신호 `APPLOG_CONTEXT`는 settings.child_env가 ID만 전달하며 사용자 설정 env가 아니다.
+
 ### 0-1. 읽는 규칙
 - **옛 `pipeline.env`는 읽지 않는다.** settings.yaml 없이 `pipeline.env`만 있으면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·새벽 배치가 "설정 이관 필요"로 종료 코드 2. 옮기기·대조는 [release-and-patch.md](release-and-patch.md) §5-4.
 - **크리덴셜**(비밀번호·키·토큰)과 **접속 정보**(주소·포트·DB 이름)는 전부 이 파일 하나에만 둔다. 각 컨테이너는 common + 자기 앱 절(pipeline·mcp)만 읽는다(`RAG_MODULE`). 엔진·핸드오프 파일이 env로 읽는 항목(`VLM_API_KEY` 등 — 핑거프린트 때문에 고치지 않는 파일, D-028 ⑤, 영구 다리)은 컨테이너 **안 프로세스 env**에는 들어간다(`docker inspect`에는 안 나옴 — 사용자가 받아들임).

@@ -1137,6 +1137,9 @@ def child_env(base=None, **names):
         known = _check_names(names)
         env["SETTINGS_FILE"] = str(exitclean.remove_at_exit(overlay_file(names, environ=env)))  # pl-27 — 이 프로세스가 끝날 때 지움
         _pin_names(env, names, known)
+    from common.core.jsonlog import get_context
+
+    env["APPLOG_CONTEXT"] = json.dumps(get_context())  # env 남김 — 내부 신호(상관 ID, 설정 아님)
     return env
 
 
@@ -1622,6 +1625,19 @@ class CommonModels(Section):
     vlm: CommonModelsVlm = Field(default_factory=CommonModelsVlm)
 
 
+class CommonLog(Section):
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = F("INFO", "LOG_LEVEL", "JSON 사건 기록 최소 수준")
+    dir: str | None = F(None, "APPLOG_DIR", "JSON 로그 폴더 — 비우면 PC logs/, 서버 stdout")
+    db_enabled: bool = F(False, "APPLOG_DB_ENABLED", "applog DB 비동기 기록(마이그레이션 적용 후 켬)")
+    fallback_dir: str = F("output/applog", "APPLOG_FALLBACK_DIR", "DB 실패 시 JSON Lines 대체 기록 폴더")
+    retention_days: int = F(90, "APPLOG_RETENTION_DAYS", "월 파티션 보존 일수(월 끝이 만료된 파티션만 DROP)", ge=1)
+    queue_size: int = F(10000, "APPLOG_QUEUE_SIZE", "DB 기록 대기 큐 상한 — 넘으면 드롭 집계", ge=1)
+    batch_size: int = F(200, "APPLOG_BATCH_SIZE", "DB INSERT 배치 최대 행 수", ge=1)
+    flush_sec: float = F(1.0, "APPLOG_FLUSH_SEC", "DB 배치 기록 간격(초)", gt=0)
+    db_timeout_sec: int = F(2, "APPLOG_DB_TIMEOUT_SEC", "로그 DB 연결/문장 제한(초)", ge=1)
+    shutdown_sec: float = F(5.0, "APPLOG_SHUTDOWN_SEC", "종료 시 DB 작업 대기 상한(초), 남은 큐는 파일 기록", ge=0)
+
+
 class CommonSettings(Section):
     run_env: Literal["local", "dev", "prd"] | None = F(
         None, "RUN_ENV", "실행 환경 — local(PC·valid_env 기준)·dev·prd(서버, 외부 모델 거부). env RUN_ENV가 이 값을 이김"
@@ -1630,6 +1646,7 @@ class CommonSettings(Section):
     dev: CommonDev = Field(default_factory=CommonDev)
     host: CommonHost = Field(default_factory=CommonHost)
     models: CommonModels = Field(default_factory=CommonModels)
+    log: CommonLog = Field(default_factory=CommonLog)
     paths: CommonPaths = Field(default_factory=CommonPaths)
     runtime: CommonRuntime = Field(default_factory=CommonRuntime)
     store: CommonStore = Field(default_factory=CommonStore)

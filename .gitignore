@@ -39,3 +39,7 @@ output/
 # 설정 파일(S7a, D-015) — 값·비밀이 들어감. git에는 settings.sample.yaml만
 settings.yaml
 valid_env/local/
+
+# op-01 application logs
+logs/
+output/applog/

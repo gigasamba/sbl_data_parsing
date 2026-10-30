@@ -40,6 +40,10 @@ def db_dim(conn, schema):
 
 def expected(target, schema, dim=None):
     """(표 정의 MetaData, 색인 {이름: 정의}, 뷰 {이름: (칸들, 정의 글자)}) — `{S}` 자리표시 그대로."""
+    if target == "applog":
+        from common.store.db.models.log_tables import index_defs, log_metadata
+
+        return log_metadata(schema), index_defs(), {}
     if target == "search":
         return ST.search_metadata(schema, dim), ST.index_defs(dim), ST.VIEWS_EXPECTED
     return SS.struct_metadata(schema), {**SS.INDEX_DEFS, **SS.CONFIG_INDEX_DEFS}, {}
@@ -102,6 +106,17 @@ def _compare(conn, target, schema, dim, ext):
             dim = 0  # chunk 표가 없음 — 차원과 무관한 차이만 봄(표 없음으로 나옴)
     md, idx_want, view_want = expected(target, schema, dim or 1)
     rep = Report()
+    partitions = (
+        {
+            r["name"]
+            for r in _rows(
+                conn,
+                f"SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='{schema}' AND c.relispartition",
+            )
+        }
+        if target == "applog"
+        else set()
+    )
 
     def include_object(obj, name, type_, reflected, compare_to):
         if type_ == "table" and name == VERSION_TABLE:
@@ -114,7 +129,9 @@ def _compare(conn, target, schema, dim, ext):
             "compare_type": True,
             "compare_server_default": True,
             "include_schemas": True,
-            "include_name": lambda name, type_, parent: name == schema if type_ == "schema" else True,
+            "include_name": lambda name, type_, parent: (
+                name == schema if type_ == "schema" else name not in partitions if type_ == "table" else True
+            ),
             "include_object": include_object,
         },
     )
@@ -160,10 +177,12 @@ def _compare(conn, target, schema, dim, ext):
             f"""
         SELECT i.relname AS name, pg_get_indexdef(i.oid) AS def FROM pg_index x
         JOIN pg_class i ON i.oid = x.indexrelid JOIN pg_class t ON t.oid = x.indrelid JOIN pg_namespace n ON n.oid = t.relnamespace
-        WHERE n.nspname = '{schema}' AND NOT x.indisprimary AND t.relname <> '{VERSION_TABLE}'""",
+        WHERE n.nspname = '{schema}' {"AND NOT t.relispartition" if target == "applog" else ""} AND NOT x.indisprimary AND t.relname <> '{VERSION_TABLE}'""",
         )
     }
-    idx_have = {_norm(schema, k): _norm(schema, v, ext) for k, v in idx_have.items()}
+    idx_have = {
+        _norm(schema, k): _norm(schema, v.replace("ON ONLY ", "ON ") if target == "applog" else v, ext) for k, v in idx_have.items()
+    }
     for name, want in idx_want.items():
         if dim == 0 and "_chunk_emb" in name:
             continue  # chunk 표가 없으면 벡터 색인 종류를 모름(표 없음으로 이미 나옴)

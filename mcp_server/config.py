@@ -180,7 +180,13 @@ class McpServer(Section):
     warmup: bool | None = F(True, "MCP_WARMUP", "기동 때 검색 1회로 예열 — 0이면 끔", off=("0",))
 
 
+class McpAudit(Section):
+    max_input_bytes: int = F(16384, "MCP_AUDIT_MAX_INPUT_BYTES", "감사 로그 입력 원문 UTF-8 바이트 상한", ge=0)
+    max_output_bytes: int = F(65536, "MCP_AUDIT_MAX_OUTPUT_BYTES", "감사 로그 출력 원문 UTF-8 바이트 상한", ge=0)
+
+
 class McpSettings(Section):
+    audit: McpAudit = Field(default_factory=McpAudit)
     dev: McpDev = Field(default_factory=McpDev)
     edw_meta: McpEdwMeta = Field(default_factory=McpEdwMeta)
     edw_query: McpEdwQuery = Field(default_factory=McpEdwQuery)

@@ -104,9 +104,9 @@ GROUPS = [
     ("load — 적재·게시", ("pipeline.load",)),
     (
         "mcp — 검색 서버·검색 동작",
-        ("mcp.server", "mcp.search", "mcp.output", "mcp.edw_meta", "mcp.edw_query", "mcp.parse_proxy", "mcp.query_log"),
+        ("mcp.server", "mcp.search", "mcp.output", "mcp.edw_meta", "mcp.edw_query", "mcp.parse_proxy", "mcp.query_log", "mcp.audit"),
     ),
-    ("실행 자원·상주 서비스·새벽 배치", ("common.runtime", "pipeline.service", "pipeline.night")),
+    ("실행 자원·상주 서비스·새벽 배치", ("common.runtime", "common.log", "pipeline.service", "pipeline.night")),
     ("호스트(compose·systemd·셸이 읽음)", ("common.host", "pipeline.host", "mcp.host")),
     ("e2e·시험·평가(PC 전용)", ("common.dev", "pipeline.dev", "pipeline.eval", "mcp.dev")),
 ]

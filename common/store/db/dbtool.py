@@ -5,6 +5,7 @@
   python -m common.store.db.dbtool current --target …   — 지금 판·코드의 끝 판
   python -m common.store.db.dbtool check   --target …   — 표 정의 ↔ 실제 DB 비교(차이·판이 끝이 아니면 종료 코드 1)
   python -m common.store.db.dbtool --pg-cases orca_<이름>  — PC 전용 PG 시험(새 시험 DB — 기본 스키마·vector 확장 자리, VS8a B-1·R-9)
+  python -m common.store.db.dbtool maintain --target applog  — 현재+2개월 파티션 생성/만료 기록 정리(매일 예약)
   이미지: `migrate up --target all --bundle …`(entrypoint — pipeline 이미지, load와 같은 잠금).
 · 갈래 search = 검색 스키마(PG_SCHEMA — index --pg 스키마는 --schema), struct = 이름 고정. 판 기록 표는 스키마마다 <스키마>.alembic_version.
 · up: 판 기록이 없는데 표가 있는 스키마(옛 코드가 만든 DB)는 먼저 비교 — 차이가 기준판이 고치는 것(표·색인·뷰 없음, 뷰 칸 다름)뿐이면 고치고
@@ -26,7 +27,7 @@ from common.core.console import utf8_stdout
 
 HERE = Path(__file__).resolve().parent
 MIGRATIONS = HERE / "migrations"
-TARGETS = ("search", "struct")
+TARGETS = ("search", "struct", "applog")
 STRUCT = "struct"  # common/store/structdb.py STRUCT_SCHEMA와 같음(selftest가 확인 — structdb는 이 패키지를 import 안 함)
 _SCHEMA_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}")  # common/store/pg.conf()의 PG_SCHEMA 규칙(그 함수 안 정규식)과 같음
 _SCRIPTS: dict = {}
@@ -69,6 +70,11 @@ def known(target):
 
 # ── 판 상태 — q는 SQL 글자 → [dict] 함수(psycopg PG.q·structdb PgBackend.query·SQLAlchemy 연결 둘레) ───────────────────
 def schema_of(target, schema=None):
+    if target == "applog":
+        schema = schema or "applog"
+        if not _SCHEMA_RE.fullmatch(schema) or schema in (STRUCT, "public"):
+            raise DbToolError("applog 스키마 이름이 틀림")
+        return schema
     if target == STRUCT:
         return STRUCT
     if schema is None:
@@ -248,7 +254,29 @@ def upgrade(target, schema, dim=None, conn=None):
                 file=sys.stderr,
             )
     command.upgrade(_config(conn, target=target, schema=schema, dim=dim, create_schema=True), f"{target}@head")
+    if target == "applog":
+        maintain_applog(schema, conn=conn, prune=False)
     return before
+
+
+def maintain_applog(schema="applog", *, conn=None, prune=True, now=None):
+    """명시적 Alembic 유지 관리: 현재+2개월 생성, 만료 월 DROP/pipe_run DELETE. sink에서는 호출 금지."""
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from common.config.settings import cfg
+    from common.store.db.migrations import applog_parts
+
+    schema = schema_of("applog", schema)
+    if conn is None:
+        with engine().begin() as c:
+            return maintain_applog(schema, conn=c, prune=prune, now=now)
+    if status(_q(conn), "applog", schema)[0] != "끝":
+        raise DbToolError("applog up --target applog 먼저 적용 필요")
+    with Operations.context(MigrationContext.configure(conn)) as op:
+        if prune:
+            return applog_parts.maintain(op, schema, cfg().log.retention_days, now)
+        return applog_parts.ensure_partitions(op, schema, now)
 
 
 def stamp(target, schema, dim=None, conn=None):
@@ -326,7 +354,7 @@ def _targets(a):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    ap.add_argument("cmd", nargs="?", choices=["up", "stamp", "current", "check"])
+    ap.add_argument("cmd", nargs="?", choices=["up", "stamp", "current", "check", "maintain"])
     ap.add_argument("--target", choices=[*TARGETS, "all"], default="all")
     ap.add_argument("--schema", help="검색 스키마(기본 settings PG_SCHEMA — index --pg 스키마는 <PG_SCHEMA>_<index_id>)")
     ap.add_argument("--dim", type=int, help="임베딩 차원(새 검색 스키마 — 있는 스키마는 DB 차원)")
@@ -340,6 +368,8 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.pg_cases:
         return 1 if pg_cases(a.pg_cases) else 0
+    if a.cmd == "maintain" and a.target != "applog":
+        ap.error("maintain은 --target applog만 지원")
     if not a.cmd:
         ap.error("명령: up·stamp·current·check")
     from common.store.pg import has_conn
@@ -349,7 +379,9 @@ def main(argv=None):
     dim, rc = _dim_arg(a), 0
     for target in _targets(a):
         schema = schema_of(target, a.schema)
-        if a.cmd == "up":
+        if a.cmd == "maintain":
+            print(maintain_applog(schema))
+        elif a.cmd == "up":
             if target == "search":
                 with engine().begin() as conn:
                     precheck_search(_q(conn), schema, dim, a.create_extension)

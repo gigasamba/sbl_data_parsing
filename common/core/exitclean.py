@@ -17,7 +17,15 @@ GRACE = 10  # SIGTERM 뒤 SIGKILL까지(초) — 옛 kill_group과 같음
 _LOCK = threading.Lock()
 _FILES: set[str] = set()
 _PROCS: list[tuple[subprocess.Popen, bool]] = []  # (자식, 묶음째 끝낼지)
+_FLUSHERS: list = []
 _CLOSING = threading.Event()  # 정리를 시작한 뒤 띄운 자식은 바로 끝냄(데몬 작업 스레드가 정리 중에 새 자식을 띄우는 경우)
+
+
+def on_exit(callback):
+    """종료 전에 호출할 멱등 flush 함수 등록(함수 안에서 대기 상한을 지킬 것, False 반환은 atexit 재시도)."""
+    with _LOCK:
+        if callback not in _FLUSHERS:
+            _FLUSHERS.append(callback)
 
 
 def remove_at_exit(path):
@@ -83,16 +91,23 @@ def _cleanup(lock_timeout=-1):
     if not _LOCK.acquire(timeout=lock_timeout):
         return False
     try:
-        procs, files = list(_PROCS), sorted(_FILES)
+        procs, files, flushers = list(_PROCS), sorted(_FILES), list(_FLUSHERS)
+        _FLUSHERS.clear()
         _PROCS.clear()
         _FILES.clear()
     finally:
         _LOCK.release()
     live = [(p, g) for p, g in procs if p.poll() is None]
+    end = time.monotonic() + GRACE
     for p, g in live:
         _send(p, signal.SIGTERM, g)
+    for flush in flushers:
+        try:
+            if flush() is False:  # SIGTERM이 호출자의 잠금 안에 끼어들면 atexit에서 재시도
+                on_exit(flush)
+        except Exception:
+            pass  # 종료 정리 하나의 실패가 나머지를 막지 않음
     if os.name != "nt":
-        end = time.monotonic() + GRACE
         for p, _ in live:
             _wait(p, end - time.monotonic())
         for p, g in live:

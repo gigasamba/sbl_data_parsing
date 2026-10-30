@@ -68,13 +68,17 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 
 <a id="op-01"></a>
 ## op-01 · JSON Lines 사건 기록(두 앱)
-- 이유: 지금 `common/core/runlog.py`는 실행마다 요약 하나(`output/runlog.jsonl`)와 날 콘솔 기록(`output/logs/*.log`, `_mask()`로 가림)을 쓰고, 러너는 `doc_stats.jsonl`, MCP 서버는 질의 jsonl을 쓴다. 공통 사건 줄(level, request id, duration)도 로그 수준 설정도 없다.
-- 단계: (1) 표준 `logging` + `common/core/`에 작은 JSON 포매터 하나 — 키 `time, level, msg, request_id, duration_ms, err`, `_mask()` 재사용(새 패키지 없음). (2) 로그 수준은 **settings.yaml** 항목(검토의 `LOG_LEVEL` env는 CLAUDE.md §3과 충돌 — 옛 env 이름은 별칭으로만). (3) PC는 `logs/<앱>.jsonl`(git 제외), 서버는 stdout. (4) 비밀값과 개인정보를 가린다.
-- 위험: `common/`을 고침 → code_fp가 바뀔 수 있음(서버 재처리). 설계 때 사용자에게 알리고 핑거프린트 전후를 커밋에. 검토 등급 A(비밀값 처리).
-- 수용 기준: 줄마다 필수 키가 있는 JSON으로 읽힘, 예시 비밀 문자열이 가려짐, 수준 설정이 줄을 거름.
-- 파일: `common/core/`(새 포매터), `common/config/settings.py`, `mcp_server/main.py`, `pipeline/cli.py`, `.gitignore`.
+- 이유: 기존 runlog·runs.jsonl·MCP 질의 기록을 유지하면서 두 앱의 사건·감사·성능 기록을 같은 형식으로 남긴다.
+- 공통 구현(10-30, T0): `common/core/jsonlog.py`의 `setup(app)`은 표준 logging으로 `time, level, app, event, msg, request_id, run_id, span_id, duration_ms, err` JSON 한 줄을 쓴다. `_mask()` 재사용, PC 기본 `logs/<앱>.jsonl`, 서버 stdout. `common.log.level/dir`로 제어하며 contextvars ID는 `settings.child_env()`의 내부 신호로 자식에 전파된다.
+- DB: `common/store/logsink.py`의 `emit(table,row)`/Handler → 제한 큐 → 백그라운드 배치 INSERT. DB 실패 시 `common.log.fallback_dir`(기본 `output/applog`) jsonl로 대체, 프로세스당 경고 한 번. 큐 포화는 즉시 드롭하고 `stats().dropped`로 집계한다. 종료는 exitclean에서 제한 시간까지 flush하고 남는 배치를 파일로 쓴다. 종료 시 커밋 결과가 불명확하면 DB/파일에 중복될 수 있다(상관 ID 대조).
+- 스키마: Alembic `0001_applog` / `dbtool up --target applog`. `mcp_call(ts)`·`pipe_event(ts_start)`는 월 파티션(복합 PK에 월 키 포함), `pipe_run`은 일반 테이블(run_id PK, 시작 running/종료 UPSERT). up/maintain은 현재 달+앞으로 2개월을 준비한다. `dbtool maintain --target applog`를 매일 예약해 다음 월 준비·90일 보존 정리(월 끝이 만료된 파티션 DROP, pipe_run DELETE). sink는 DDL을 실행하지 않는다.
+- 설정: `common.log.db_enabled` 기본 false — 마이그레이션 후 true로 켬. `retention_days=90`, `queue_size=10000`, `batch_size=200`, `flush_sec=1`, `db_timeout_sec=2`, `shutdown_sec=5`. `mcp.audit.max_input_bytes=16384/max_output_bytes=65536` 제공(설정은 YAML만).
+- 수용 기준: JSON 필수 키·비밀 마스킹·수준 필터·컨텍스트 격리/자식 전파·DB 실패 파일 기록·큐 드롭 집계·정상/SIGTERM 종료 flush, PC 임시 PG 스키마 up/check·UPSERT·파티션 보존 정리 시험.
+- 검증(10-30 T0): 새 서버 시험 2개·PC PG 시험 1개 통과, lint/mypy·모듈 경계·sample/keyscan 통과. 전체 selftest 94/96, pytest 148 passed·3 xfailed·1 failed — 새 실패 없음; 기존 publish_guard와 HEAD 538067a의 ParsingMeta 명세 불일치(test_db_schema, rep_engine/engines_used)를 coordinator 확인대로 유지.
+- 위험: 공용 의존 변경으로 code_fp 변경(이번 판 pl-25와 묶음), 핸드오프/엔진 바이트 유지. 검토 등급 A(비밀값·DB 스키마). 서버 DBA 협의·마이그레이션·maintain 예약은 refactor.md C-68.
+- 파일: `common/core/{jsonlog,exitclean}.py`, `common/store/logsink.py`, `common/store/db/`, 설정 모델/sample, `tests/server/common/test_{jsonlog,logsink}.py`, `tests/general/common/test_applog_pg.py`.
 - 결정(사용자 10-30 grill): gold DB 변경([etl.md#pl-25](etl.md#pl-25))과 같은 판에 싣는다 — 재처리 한 번.
-- Status: todo
+- Status: partly done (10-30) — 공통 토대·DB 마이그레이션 구현, MCP 감사 호출 계측(T1)·파이프라인 span/성능 분석(T2)은 후속 작업.
 
 <a id="pl-21"></a>
 ## pl-21 · 미룬 설정 지우기(핑거프린트)
