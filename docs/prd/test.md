@@ -11,9 +11,9 @@
 - 무엇: `tests/server/`(이미지 반입 관문, `pipeline.cli selftest`가 `tests/runner.py`로 실행), `tests/general/`(PC 전용: PG, Docker, 느린 것). 알려진 실패는 목록에 두고, XPASS면 지우라고 경고.
 - 파일: `tests/runner.py`, `tests/conftest.py`, `deploy/release/known_fail.txt`.
 - 기준선(CLAUDE.md §4·§6-3에서 옮김, 10-30):
-  - `selftest`는 **85개 중 84개 통과**다(10-29 `feature/test-cleanup` — 중복 `test_common_init` 삭제 뒤). 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
-  - `pytest tests/`는 **138 passed · 5 xfailed**다(10-29 `feature/test-cleanup` — 루트 `settings.yaml`이 있든 없든 같다). 위 1개와 일반 테스트 4개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — C-54 ①, C-58)이며, 모두 리팩토링 전부터 있던 실패다.
-  - 핑거프린트 10-29 값(`feature/settings-cleanup` — 설정 정리·기능 삭제·`feature/test-parallel` 병합 뒤, 엔진 핑거프린트 27개 그대로): `FINGERPRINT ffa201eed4aed21a` · a `e3b0c44298fc` · p0 `93ec91af2426` · p1 `95884df63474` · r `5942c410d895` · s `932af9fc8548`. 리팩토링 중 값이 바뀐 과정과 되돌리는 방법은 [refactor.md](../../refactor.md) 부록 1~3에 있다.
+  - `selftest`는 **93개 중 92개 통과**다(10-30 `feature/fp-batch` — 0.1.0 정리 뒤). 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
+  - `pytest tests/`는 **145 passed · 3 xfailed**다(10-30 `feature/fp-batch` — 루트 `settings.yaml`이 있든 없든 같다). 위 1개와 일반 테스트 2개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — `test_run_combo`·`test_pub_registry`(C-54 ①))이며, 모두 리팩토링 전부터 있던 실패다.
+  - 핑거프린트 10-30 값(`feature/fp-batch` — 0.1.0 지문 배치 뒤, 엔진 파일은 그대로): `FINGERPRINT abe9b7b0799ceaae` · a `e3b0c44298fc` · p0 `840199fcacb6` · p1 `08cd37047cbd` · r `b706f28ce48e` · s `eb0597ed7f7b`. 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다(CLAUDE.md §4).
   - PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕 설정(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`에 넣는다(지금 `test_pub_registry`).
   - Mac의 부하가 높으면 `test_trigger_server`가 시간 초과로 실패할 수 있다(환경 문제).
 - Status: done
