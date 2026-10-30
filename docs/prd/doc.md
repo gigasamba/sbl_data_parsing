@@ -59,3 +59,14 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 하지 않은 것: 설정 칸 추가 없음(공용 설정 파일을 고치면 code_fp가 바뀜 — `CODE_DIR`은 호스트 셸 env) · `pipeline_version()`은 그대로(코드 커밋은 시작 줄·`CODE_COMMIT`으로 남김 — 공용 파일을 고치면 핑거프린트가 바뀜).
 - 파일: `deploy/docker/{Dockerfile,runtime_entry.sh,DEPS_HASH}`, `deploy/release/{build_ship.sh,image_names.sh,deps_hash.sh}`, `deploy/host/compose/compose.code{,.mcp}.yml`, `deploy/host/scripts/{trigger.sh,run_tool.sh,mcp_up.sh,run_docs.py}`, `tests/server/common/test_deps_hash.py`, README §5, `docs/operations/release-and-patch.md` §1-1.
 - Status: done (10-30 `feature/code-free-image`)
+
+<a id="op-07"></a>
+## op-07 · 개발 → 운영 굽기 — 개발 서버에서 시험한 실행 이미지 + 코드 폴더 그대로
+- 결정(사용자 10-30): 두 단계 — 로컬 → 개발은 실행 이미지 + 코드 폴더([op-06](#op-06)), 개발 → 운영은 폐쇄망 개발 서버에서 **개발에서 쓴 실행 이미지 그 판**과 **시험한 코드 폴더 그대로**를 운영용 이미지(코드 폴더 없이 뜸)로 굽는다. Dockerfile의 `pipeline`·`mcp` 타깃은 의존성 단계부터 다시 빌드(휠·apt 필요)라 이 용도에 안 맞음.
+- 무엇:
+  - `deploy/docker/Dockerfile.bake`: `ARG RUNTIME_IMAGE` → `FROM ${RUNTIME_IMAGE}` + 코드 COPY(Dockerfile의 `pipeline`·`mcp` 타깃과 같은 줄 — 같은 파일이 같은 자리에), ENTRYPOINT `/app/docker/entrypoint.sh`(마운트 확인 없음), 라벨 코드 커밋(`revision`)·실행 이미지 ID(`base.digest`). 패키지 설치·네트워크 없음(`--network=none`).
+  - `deploy/release/bake.sh <실행 이미지 판> [pipeline mcp]`(개발 서버, podman 또는 docker): 코드 `DEPS_HASH` = 실행 이미지 지문 확인 → 빌드(문맥 = 코드 폴더) → `selftest_gate.sh`(`[판정] 통과`) → `ship_stage.sh`로 저장·gzip·95m 분할·sha256.
+  - 같은지 확인: PC에서 실행 이미지로 구운 이미지와 Dockerfile `pipeline`·`mcp` 타깃의 `/app/deploy`·`/app/docker` 파일 목록·sha256 비교(10-30 — 같음).
+- 하지 않은 것: 설정 칸·코드 변경 없음(핑거프린트 그대로) · 운영 서버 반입 자동화 없음(조각 옮기기·load는 사람).
+- 파일: `deploy/docker/Dockerfile.bake`, `deploy/release/bake.sh`, `.gitattributes`, README §5-0, `docs/operations/release-and-patch.md` §1-2.
+- Status: done (10-30 `feature/bake-image`)

@@ -395,6 +395,8 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 개발 서버 순서: 실행 이미지 적재(아래 5-2와 같은 `docker load`) → `/srv/rag/code/<버전>-<커밋>/`에 코드 폴더 묶음 풀기(`tar -xzf … --no-same-owner` 뒤 `chown -R 10001:10001` 또는 `chmod -R a+rX` — 컨테이너 사용자 10001이 읽어야 함) → `ln -sfn <그 폴더> /srv/rag/code/live` → settings.yaml `pipeline.host.image`·`mcp.host.image`를 실행 이미지 태그로 → systemd unit·셸에 `CODE_DIR=/srv/rag/code/live` → `trigger.sh`·`mcp_up.sh`. 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`으로 어느 판이 도는지 확인. 되돌리기는 `release-and-patch.md` §1-1.
 
+개발 → 운영(op-07): 운영 이미지는 개발 서버에서 쓰던 실행 이미지 그 판 + 시험한 코드 폴더를 그대로 묶어 만든다 — 개발 서버에서 `bash /srv/rag/code/live/deploy/release/bake.sh <실행 이미지 판>`(지문 확인 → `Dockerfile.bake` 빌드 → 반입 판정 → 저장·분할). 자세히는 `release-and-patch.md` §1-2.
+
 ### 5-1. 버전 올리기
 
 - `release/<버전>` 브랜치에서 `VERSION`을 고치고, main 머지 커밋에 git 태그 `v<버전>`(annotated)을 붙인다. 이미지 태그는 `v` 없이 버전만 쓴다.

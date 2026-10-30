@@ -34,6 +34,15 @@ Answer Agent 이미지는 없다(10-14 결정 — 개발 서버 네이티브, MC
 4. 확인 — 컨테이너 로그 첫 줄 `[image] 이미지 <이름 버전 커밋> · 코드 <커밋> · 의존성 <지문>`. `의존성 지문이 다름`으로 멈추면 그 코드는 새 실행 이미지가 필요하다(requirements·휠·Dockerfile·assets가 바뀜).
 5. 되돌리기 — 바로 앞 판 폴더를 지우지 않고 두었다가 `ln -sfn /srv/rag/code/<앞 판> /srv/rag/code/live` → 다시 띄움. 판 폴더는 최근 2개 이상 남긴다.
 
+### 1-2. 개발 → 운영 — 개발 서버에서 시험한 그대로 굽기(op-07, 사용자 10-30)
+
+운영 이미지는 PC에서 다시 빌드하지 않는다. 개발 서버에서 쓰던 **실행 이미지 그 판**과 **시험한 코드 폴더 그대로**를 묶어 코드가 든 이미지를 만든다(`deploy/docker/Dockerfile.bake` — 실행 이미지 위에 코드 COPY만, 패키지 설치·네트워크 없음). 만든 이미지는 코드 폴더 없이 뜬다(`/app/deploy`·`/app/docker`가 Dockerfile의 `pipeline`·`mcp` 타깃과 같은 파일).
+
+1. 개발 서버에서: `bash /srv/rag/code/live/deploy/release/bake.sh <실행 이미지 판>`(예 `0.1.0` — `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0`, 대상 하나만이면 뒤에 `pipeline` 또는 `mcp`). 코드 폴더는 스크립트가 든 폴더(다른 폴더면 `CODE_DIR=`), 새 태그는 코드 `VERSION`(`TAG=`로 바꿈), 컨테이너 도구는 podman(없으면 docker — `DOCKER=`).
+2. 스크립트가 차례로: ① 코드 `deploy/docker/DEPS_HASH` = 실행 이미지 의존성 지문(다르면 멈춤) ② 빌드 — 라벨 `org.opencontainers.image.revision`(코드 커밋 `CODE_COMMIT`)·`org.opencontainers.image.base.digest`(실행 이미지 ID) ③ 반입 판정 `selftest_gate.sh`(코드 폴더 마운트 없이 — `[판정] 통과`가 아니면 멈춤) ④ 저장·gzip·95m 분할·sha256(`ship_stage.sh`) → `./output/bake/<저장소>/images/<태그>/<이미지>/`(`OUT=`로 바꿈).
+3. 운영 서버: 조각을 옮겨 `sha256sum -c <대상>.sha256`(조각마다) → `cat <대상>.tar.gz.part* | gunzip | docker load` → 태그 확인 → §5-2처럼 띄움(코드 폴더·`CODE_DIR` 없음).
+4. 어느 판이 운영에 있는지: `docker image inspect <태그> --format '{{json .Config.Labels}}'` — 코드 커밋·실행 이미지 ID.
+
 수집 서버(코드가 든 이미지)는 아래 §2~§5 그대로(오버레이 패치·새 이미지).
 
 ## 2. 코드를 고칠 때 지킬 것 (오버레이 패치로 전달 가능하게)
