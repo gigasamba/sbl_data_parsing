@@ -23,26 +23,26 @@ PROMPT = ("이 문서 쪽을 마크다운으로 옮겨라. 표는 마크다운 �
 # 정답셋 생성 경로일 때만 — 이 파싱 엔진 프롬프트는 안 건드림, 채점 대상 산출 바뀌는 변경은 범위 밖).
 
 
-def _chat(img, pre="VLM", prompt=PROMPT):
+def _chat(img):
     buf = io.BytesIO()
     img.save(buf, "PNG")
-    body = {"model": os.environ[pre + "_MODEL"], "temperature": 0,
+    body = {"model": os.environ["VLM_MODEL"], "temperature": 0,
             "messages": [{"role": "user", "content": [
-                {"type": "text", "text": prompt},
+                {"type": "text", "text": PROMPT},
                 {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()}}]}]}
     from common.ai.guard import require_internal, urlopen as _g_urlopen   # 원래 위치에서 직접(eval/llm.py 모듈 바꿔치기 shim은 스레드 import 경합으로 가끔 ImportError — light-hard 시험 10-08)
-    require_internal(os.environ[pre + "_BASE_URL"], pre)            # 문서 쪽 이미지가 나가므로 내부망만(DONT 13)
-    req = urllib.request.Request(os.environ[pre + "_BASE_URL"].rstrip("/") + "/chat/completions",
+    require_internal(os.environ["VLM_BASE_URL"], "VLM")            # 문서 쪽 이미지가 나가므로 내부망만(DONT 13)
+    req = urllib.request.Request(os.environ["VLM_BASE_URL"].rstrip("/") + "/chat/completions",
                                  data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
-    if os.environ.get(pre + "_API_KEY"):
-        req.add_header("Authorization", "Bearer " + os.environ[pre + "_API_KEY"])
+    if os.environ.get("VLM_API_KEY"):
+        req.add_header("Authorization", "Bearer " + os.environ["VLM_API_KEY"])
     # 리다이렉트도 같은 내부망 가드로 재확인(L7) — raw urllib.request.urlopen은 리다이렉트 대상을 다시 검사하지 않음
     from pipeline.transform.figures.vgate import slot as _vgate_slot   # 전역 VLM in-flight 게이트(합 VLM_GLOBAL_CONCURRENCY — 2026-10-22)
-    with _vgate_slot(), _g_urlopen(req, int(os.environ.get("VLM_TIMEOUT") or 180), pre) as r:
+    with _vgate_slot(), _g_urlopen(req, int(os.environ.get("VLM_TIMEOUT") or 180), "VLM") as r:
         return json.load(r)["choices"][0]["message"]["content"]
 
 
-def _pages_md(path, pre="VLM", prompt=PROMPT):
+def _pages_md(path):
     """쪽 이미지를 병렬로 VLM에 보내 쪽 순서대로 마크다운(코드펜스 제거). 다중 쪽 PDF가 쪽 수 × 응답 시간만큼 늘어지지 않게."""
     from concurrent.futures import ThreadPoolExecutor
     retry = int(os.environ.get("VLM_RETRY") or 1)
@@ -50,7 +50,7 @@ def _pages_md(path, pre="VLM", prompt=PROMPT):
     def one(im):
         for i in range(retry + 1):
             try:
-                return _chat(im, pre, prompt).strip().removeprefix("```markdown").removeprefix("```").removesuffix("```").strip()
+                return _chat(im).strip().removeprefix("```markdown").removeprefix("```").removesuffix("```").strip()
             except (TimeoutError, OSError):          # urllib 시간 초과·연결 오류 — HTTP 4xx/5xx 응답(HTTPError)도 OSError 계열
                 if i == retry:
                     raise

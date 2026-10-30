@@ -89,9 +89,9 @@ def on_signals(config=None):
 
 # 출처 신뢰도(AD26 (a)) — 원문 추출(텍스트 레이어·오피스 XML) > VLM > OCR. FAMILY(summarize.py)는 엔진 이름 →
 # 인식 계열(모델)이고, 여기 집합에 없는 계열(=텍스트 레이어·오피스 XML 추출기, pdfplumber·pymupdf·office 등)은
-# 기본값 "text"(가장 신뢰 — 원문 그대로). ocr-vlm(PaddleOCR-VL류)은 글자 단위 인식이라 OCR 쪽에 둔다(AD26 — VLM은
+# 기본값 "text"(가장 신뢰 — 원문 그대로). paddle-vl(PaddleOCR-VL류)은 글자 단위 인식이라 OCR 쪽에 둔다(AD26 — VLM은
 # '그럴듯하게 고쳐 쓰는' 생성형만, 문자 인식형은 OCR과 같은 오류 모양).
-_OCR_FAMS = {"paddle", "paddle-vl", "ocr-vlm", "tesseract", "easyocr", "surya"}
+_OCR_FAMS = {"paddle", "paddle-vl", "tesseract", "easyocr", "surya"}  # ocr-vlm은 엔진과 함께 지움(pl-31)
 _VLM_FAMS = {"qwen", "cognee"}
 TRUST = {"text": 3.0, "vlm": 2.0, "ocr": 1.0}
 

@@ -1091,7 +1091,9 @@ def sec_model_parse(ctx):
             "<p class='muted'>'참고' = 벤치 버전·지표·하네스가 우리 모델 발표값과 달라 직접 비교 불가 — 순위 감만 볼 것. "
             "최고 3위는 공식 리더보드 우선, 없으면 집계 사이트(자체 보고 포함).</p>"
         )
-    prefixes = ("qwen_vlm", "docling_vlm", "marker_llm")
+    from pipeline.extract.run_all import VLM_ENGINES  # 한 곳(pl-31 뒤 사본 정리)
+
+    prefixes = tuple(sorted(VLM_ENGINES))
     rows = []
     if qa:
         for engine, groups_ in sorted(qa.get("engines", {}).items()):

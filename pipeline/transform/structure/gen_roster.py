@@ -128,7 +128,7 @@ def build_client_extra(rows, mapping):
 
 
 def write_client_roster(roster, out_path, extra=None, source=""):
-    """CLIENT_ROSTER CSV in the new roster format (ROSTER_COLS — the same header as client_roster.example.csv,
+    """CLIENT_ROSTER CSV in the new roster format (ROSTER_COLS — the same header as resources/vocab/glossary/client_roster.csv,
     aliases joined with |). extra = build_client_extra() result; source = where it came from (--source)."""
     extra = extra or {}
     with open(out_path, "w", encoding="utf-8", newline="") as f:

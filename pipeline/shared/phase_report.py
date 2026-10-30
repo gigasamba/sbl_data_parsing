@@ -22,10 +22,11 @@ from common.core.paths import (
     APP_ROOT,  # 폴더 재편 뒤 이 상수만 바뀌면 됨
     atomic_write_text,  # RV6, tmp+os.replace 공용
 )
+from pipeline.extract.run_all import VLM_ENGINES
 from pipeline.shared.progress import doc_types, status
 from pipeline.shared.summarize import nums
 
-VLM = {"qwen_vlm", "docling_vlm", "marker_llm"}  # 값을 지어낼 수 있는 계열
+VLM = VLM_ENGINES  # 값을 지어낼 수 있는 계열(run_all 한 곳 — pl-31 뒤 사본 정리)
 # 연결 안 되는 엔진 → 조치 (SETUP.md 기준)
 FIX = {
     "tesseract": "dnf(EPEL 9): tesseract + TESSDATA_PREFIX=<dev>/assets/tessdata",
