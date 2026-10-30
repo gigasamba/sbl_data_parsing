@@ -18,6 +18,7 @@ patch_given=${PATCH_CODE:-}             # 부른 쪽이 준 PATCH_CODE만(아래
 . deploy/host/scripts/settings_env.sh && load_settings || exit $?   # S7e1 — settings.yaml 호스트 칸 → 셸 env(trigger.sh와 같음)
 . deploy/host/scripts/image_vars.sh   # S6b — need_image(아래 — compose.pipeline.yml이 두 변수를 다 치환하므로 둘 다)
 DC="docker compose -f deploy/host/compose/compose.pipeline.yml"
+[ -n "${CODE_DIR:-}" ] && DC="$DC -f deploy/host/compose/compose.code.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 /app/deploy에
 [ -n "$patch_given" ] && [ -f deploy/host/compose/compose.patch.yml ] && DC="$DC -f deploy/host/compose/compose.patch.yml"
 
 tool=${1:?도구 이름 — 예: score_gold·run_board·mcp_eval·rdb_discover·check_env}; shift || true

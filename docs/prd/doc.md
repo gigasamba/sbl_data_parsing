@@ -46,3 +46,16 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 무엇: `release/0.1.0`에서 `main`에 태그, `RELEASE_NOTES`(변경, 채울 설정, 핑거프린트 변경, refactor.md "최종"의 서버 할 일)를 쓴다.
 - 릴리스 노트 후보: MCP `search` 근거 출력의 `file_path` 키 — 제거 대상(사용자 10-30), 시기·버전 처리는 나중([etl.md#pl-25](etl.md#pl-25), [mcp.md#mc-01](mcp.md#mc-01)).
 - Status: todo — 시점은 사용자가 정한다(10-30에 물음: 지금은 아님).
+
+<a id="op-06"></a>
+## op-06 · 실행 이미지(코드 없음) — 개발 서버는 코드 폴더를 마운트
+- 결정(사용자 10-30): "이미지는 따로 만들어두고, 이미지 안에는 코드가 같이 묶여있으면 안돼. 코드는 지금 폴더 구조 그대로 넣어둘거야." 보완(10-30): 한 Dockerfile에서 두 갈래 — 개발 서버(폐쇄망)는 코드 없는 **실행 이미지**에 코드 폴더를 마운트, 수집 서버는 지금처럼 **코드가 든 이미지**.
+- 무엇:
+  - Dockerfile 타깃 `pipeline-runtime`·`mcp-runtime`(이미지 `data-pipeline-runtime`·`mcp-server-runtime`) = OS 패키지·LibreOffice·휠·assets/rapidocr 모델·사용자 10001·ENV만. 코드가 든 `pipeline`·`mcp`는 그 위에 코드 COPY만 얹음(`FROM <실행 이미지>` — 바탕·의존성이 어긋나지 않음).
+  - 실행 이미지의 시작 스크립트 `deploy/docker/runtime_entry.sh`(이미지 안 `/app/docker/`): ① `/app/deploy`에 코드 폴더가 없으면 종료 2 ② 이미지 의존성 지문(`/app/docker/deps_hash`)과 코드가 선언한 `deploy/docker/DEPS_HASH`(`deploy/release/deps_hash.sh` — requirements-core·image의 sha256)가 다르면 종료 2 ③ 이미지 판(`/app/docker/image_ref`)·코드 커밋(`CODE_COMMIT`)을 한 줄 남기고 코드 폴더의 `deploy/docker/entrypoint.sh`로 넘김.
+  - 코드 폴더 = 저장소 트리 그대로(`build_ship.sh`가 실행 이미지를 만들 때 이 커밋의 git 추적 파일 + `CODE_COMMIT`, `valid_env/`·`validation/` 뺌 — `code-<버전>-<커밋>.tar.gz`). `/app/deploy`에 읽기 전용(`:ro,z`)으로 — 이미지 안 경로·`common/core/paths.py`·핑거프린트는 그대로.
+  - compose: 개발 서버는 `compose.pipeline.yml` + `compose.code.yml`(`compose.mcp.yml` + `compose.code.mcp.yml`) — 셸에 `CODE_DIR`가 있으면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`가 덧붙인다. 빠뜨리면 ①로 바로 멈춤. 수집 서버(코드가 든 이미지)는 지금 그대로.
+  - 이미지 관문: 실행 이미지는 이 커밋의 코드 트리를 붙여 `selftest`(`[판정]`)·코드 없이 띄우면 멈추는지까지 본다. 시험 `tests/server/common/test_deps_hash.py`(DEPS_HASH ↔ requirements).
+- 하지 않은 것: 설정 칸 추가 없음(공용 설정 파일을 고치면 code_fp가 바뀜 — `CODE_DIR`은 호스트 셸 env) · `pipeline_version()`은 그대로(코드 커밋은 시작 줄·`CODE_COMMIT`으로 남김 — 공용 파일을 고치면 핑거프린트가 바뀜).
+- 파일: `deploy/docker/{Dockerfile,runtime_entry.sh,DEPS_HASH}`, `deploy/release/{build_ship.sh,image_names.sh,deps_hash.sh}`, `deploy/host/compose/compose.code{,.mcp}.yml`, `deploy/host/scripts/{trigger.sh,run_tool.sh,mcp_up.sh,run_docs.py}`, `tests/server/common/test_deps_hash.py`, README §5, `docs/operations/release-and-patch.md` §1-1.
+- Status: done (10-30 `feature/code-free-image`)

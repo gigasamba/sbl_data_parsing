@@ -676,6 +676,8 @@ def code_layout_problems(code=None, containers=(PARSE_C, STRUCT_C)):
     probs = []
     if code.is_dir():
         deploy = code / "app" / "deploy"
+        if not deploy.is_dir():  # op-06(10-30) — 개발 서버 코드 폴더는 저장소 트리 그대로(실행 이미지가 /app/deploy에 붙임)
+            deploy = code
         if not (deploy / CODE_MARKER).is_file():
             probs.append(
                 f"코드 폴더 {deploy}에 {CODE_MARKER.as_posix()} 없음 — 새 이미지 판(S4 pipeline)과 코드 폴더를 같은 때에 반입했는지 확인"

@@ -114,7 +114,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 ├─ pipeline/            데이터 파이프라인 앱(data-pipeline 이미지)
 │  ├─ cli.py            실행기 — parse, structure, load, publish, night, full, selftest, set-stack 등
 │  ├─ config.py         pipeline 섹션 설정 모델
-│  ├─ extract/          원천 읽기 · dedup · prepare · 엔진별 파싱(engines/ — 엔진 26개, 바이트가 캐시 키라 건드리지 않음)
+│  ├─ extract/          원천 읽기 · dedup · prepare · 엔진별 파싱(engines/ — 엔진 18개, 바이트가 캐시 키라 건드리지 않음)
 │  ├─ transform/        represent(대표 결과) · figures(그림) · structure(청킹·임베딩·번들)
 │  ├─ load/             pgvector 적재 · publish · 회사 DB 메타데이터 · 인덱스 빌더
 │  ├─ shared/ · tools/  단계 공용 모듈 · 운영 도구
@@ -385,6 +385,15 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 서버는 **이미지 2개 · 코드 폴더**(`/srv/rag/code/live`) **· 설정 파일**(`/srv/rag/env/settings.yaml`) **· 결과 폴더**(`RAG_OUT`, 예: `/srv/rag/output`)로 동작한다. 서버 명령은 모두 코드 폴더 루트에서 실행한다.
 
 > **이번 리팩토링 버전(0.1.0 — 첫 배포)은 [refactor.md](refactor.md) 맨 앞 "최종 — 사람이 할 일"의 순서(①검토 → ②배포 전 → ③배포 때 → ④배포 후)를 그대로 따른다.** 핑거프린트가 모두 바뀌어 서버 문서 전체를 다시 파싱해야 하고(재파싱 시간 산정 C-08이 먼저), 설정 이관 · DB 버전 기록 · 옛 컨테이너와 systemd 정리가 함께 필요하다.
+
+### 5-0. 두 갈래 — 개발 서버와 수집 서버(op-06, 사용자 10-30)
+
+| 서버 | 이미지 | 코드 | 바꾸는 법 |
+|---|---|---|---|
+| **개발 서버**(폐쇄망) | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`(코드 없음 — `IMAGE_TARGET=pipeline-runtime`·`mcp-runtime`) | 코드 폴더(저장소 트리 그대로 — `build_ship.sh`가 만든 `code-<버전>-<커밋>.tar.gz`를 판 폴더로 풀고 `live` 링크로 가리킴)를 `/app/deploy`에 읽기 전용 마운트 — 셸에 `CODE_DIR=<live 링크>` | 기능 = 새 코드 폴더 + `live` 링크 옮김 + 다시 띄움 · 의존성(`requirements*`·휠·Dockerfile·assets)이 바뀌면 새 실행 이미지(코드의 `deploy/docker/DEPS_HASH`와 이미지 지문이 다르면 시작 거부) |
+| **수집 서버** | 코드가 든 이미지 `data-pipeline`·`mcp-server`(지금 그대로) | 이미지 안 | 새 이미지 또는 오버레이 패치(§5-8) |
+
+개발 서버 순서: 실행 이미지 적재(아래 5-2와 같은 `docker load`) → `/srv/rag/code/<버전>-<커밋>/`에 코드 폴더 묶음 풀기(`tar -xzf … --no-same-owner` 뒤 `chown -R 10001:10001` 또는 `chmod -R a+rX` — 컨테이너 사용자 10001이 읽어야 함) → `ln -sfn <그 폴더> /srv/rag/code/live` → settings.yaml `pipeline.host.image`·`mcp.host.image`를 실행 이미지 태그로 → systemd unit·셸에 `CODE_DIR=/srv/rag/code/live` → `trigger.sh`·`mcp_up.sh`. 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`으로 어느 판이 도는지 확인. 되돌리기는 `release-and-patch.md` §1-1.
 
 ### 5-1. 버전 올리기
 

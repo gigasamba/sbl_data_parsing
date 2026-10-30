@@ -212,8 +212,7 @@ def main():
     print("\n== 시스템 도구 ==")
     for tool, why in [
         ("java", "OpenDataLoader"),
-        ("tesseract", "Tesseract OCR·unstructured hi_res"),
-        ("pdftoppm", "poppler — unstructured hi_res"),
+        ("tesseract", "Tesseract OCR"),
         ("soffice", "LibreOffice — doc/ppt/hwp 변환"),
         ("gs", "Ghostscript — camelot 선택"),
         ("mineru", "MinerU CLI"),
@@ -264,13 +263,8 @@ def main():
         ("HF multilingual-e5-small", hf / "models--intfloat--multilingual-e5-small"),
         ("HF multilingual-e5-base", hf / "models--intfloat--multilingual-e5-base"),
         ("HF bge-reranker-v2-m3", hf / "models--BAAI--bge-reranker-v2-m3"),
-        ("HF docling layout", hf / "models--docling-project--docling-layout-heron"),
-        ("docling 모델", home / ".cache" / "docling"),
-        ("marker/surya", home / ".cache" / "datalab"),
         ("EasyOCR ko+en", home / ".EasyOCR"),
         ("PaddleX (PaddleOCR 한국어)", home / ".paddlex"),
-        ("unstructured yolox", hf / "models--unstructuredio--yolo_x_layout"),
-        ("unstructured 표 구조", hf / "models--microsoft--table-transformer-structure-recognition"),
     ]:
         line(p.exists() and any(p.iterdir()), label, str(p))
     line(
@@ -288,11 +282,11 @@ def main():
     )
 
     print(f"\n디스크 여유 {shutil.disk_usage(ROOT).free / 1e9:.0f}GB")
-    print("\n== VLM (qwen_vlm · docling_vlm · marker_llm) ==")
+    print("\n== VLM (qwen_vlm) ==")
     vlm = C.cfg().models.vlm  # S7c — 설정 객체(VLM_BASE_URL·VLM_MODEL·VLM_API_KEY)
     url = vlm.base_url
     if not url:
-        line(False, "VLM_BASE_URL", "미설정 — VLM 엔진 3종은 건너뜀")
+        line(False, "VLM_BASE_URL", "미설정 — VLM 엔진(qwen_vlm)은 건너뜀")
     else:
         try:
             req = urllib.request.Request(url.rstrip("/") + "/models")

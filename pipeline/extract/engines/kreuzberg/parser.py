@@ -60,23 +60,7 @@ def parse_kreuzberg(path):
 
 
 ENGINES = {"kreuzberg": parse_kreuzberg}
-def parse_kreuzberg_ocr(path):
-    """Kreuzberg OCR 강제 — 이미지·이미지 PDF. 백엔드는 kreuzberg 기본(Tesseract), 언어 kor+eng."""
-    from kreuzberg import extract_file_sync, ExtractionConfig, OcrConfig
-    r = extract_file_sync(str(path), config=ExtractionConfig(force_ocr=True, ocr=OcrConfig(backend="tesseract", language="kor+eng")))
-    groups = []
-    for t in getattr(r, "tables", None) or []:
-        cells = getattr(t, "cells", None)
-        if cells:
-            groups += split_tables([[str(c) for c in row] for row in cells])
-        else:
-            for tb in _md_tables(getattr(t, "markdown", "") or ""):
-                groups += split_tables(tb)
-    return _with_split_tables(r.content, groups, "kreuzberg[ocr]")
-
-
-ENGINES["kreuzberg_ocr"] = parse_kreuzberg_ocr
-FORMATS = {"kreuzberg": ('.pdf', '.docx', '.xlsx', '.pptx', '.ppt', '.xls', '.txt', '.mht', '.mhtml', '.doc', '.html', '.htm', '.eml', '.msg', '.xlsm'), "kreuzberg_ocr": ('.pdf', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp')}
+FORMATS = {"kreuzberg": ('.pdf', '.docx', '.xlsx', '.pptx', '.ppt', '.xls', '.txt', '.mht', '.mhtml', '.doc', '.html', '.htm', '.eml', '.msg', '.xlsm')}
 REQUIRES = {"modules": ['kreuzberg'], "tools": []}
 PROFILED = set()
-UNVERIFIED = {"kreuzberg_ocr"}   # Tesseract 필요 — 개발 PC 미실측
+UNVERIFIED = set()   # kreuzberg_ocr(Tesseract)는 10-30 지움 — pl-31
