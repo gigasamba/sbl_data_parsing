@@ -1,7 +1,9 @@
-"""settings.sample.yaml 만들기·대조 — 앱 설정 모델(common + pipeline + mcp 절)의 모든 칸을 코드 기본값과 함께 settings.yaml 꼴로 낸다(op-05 —
-카테고리 순서, 필수·비밀 칸은 비움). 칸마다 줄 끝 주석: 설명 · 옛 env 이름 · 형식 · 기본값(비밀은 적지 않음) · 지문 고정. 칸을 더하거나 바꾸면 다시 만든다.
+"""settings.sample.yaml 만들기·대조 — 앱 설정 모델의 모든 칸을 새 배치(op-08 ② — common.config.layout)로 코드 기본값과 함께 낸다.
+맨 위 required(운영자가 채울 값 — 카테고리마다 쓰는 곳 표시 한 번) → 역할 절(common·extract·transform·load·search·ops·dev — 세부 카테고리 제목) →
+tuning(코드 상수 후보). 칸마다 한 줄 주석: 설명 · 기본값 · 넣을 수 있는 값. 칸을 더하거나 바꾸면 다시 만든다.
 사용: python -m common.config.sample            # 저장소 루트 settings.sample.yaml에 씀
       python -m common.config.sample --check    # 파일이 모델과 같은지(다르면 rc 1)
+      python -m common.config.sample --where PG_HOST [이름…]   # 옛 env 이름 → 파일 자리·모델 경로·내부 표시(판정 꼴·지문 등 — sample에서 뺀 것)
 """
 
 import re
@@ -9,25 +11,20 @@ import sys
 
 import yaml
 
+from common.config import layout as L
 from common.config import settings as S
 from common.core.console import utf8_stdout
 
 OUT = S.REPO_ROOT / "settings.sample.yaml"
-HEAD = """\
-# settings.sample.yaml — 설정 파일 구조와 설명(값 없음). 생성: python -m common.config.sample (손으로 고치지 않음)
-# 실제 파일은 이 파일을 복사해 값을 채운다 — PC: 저장소 루트 settings.yaml(RUN_ENV=local, 권한 600) · 서버: SETTINGS_FILE이 가리키는 자리
-# ($SERVER_ENV_DIR/settings.yaml — 주인 UID 10001·권한 640, 컨테이너 사용자가 읽게: docs/operations/release-and-patch.md §5-4 · refactor.md C-09).
-# 비운 칸(값 없음)·빈 글자 ''은 코드 기본값을 쓴다(기본값이 없는 글자 칸·[빈 글자 유지] 칸만 ''이 빈 글자 — 옛 env `X=`과 같게). 글자 칸에 쓴 yes·no·1·0은 쓴 글자 그대로.
-# 켜기 칸은 true·false. 판정 꼴 표시([켬: 1만]·[끔: 0만]·[끔: ''·0·none·false])가 있는 칸은 YAML에 true·false·0·1만 — yes·on 등은
-# 검증 오류(덮기 파일 overrides로 줄 때만 옛 env 판정 꼴 그대로). [auto = 비움] 칸은 auto가 "계산"(코드 기본).
-# 각 앱은 common + 자기 절(pipeline 또는 mcp)만 읽는다. 비밀 칸은 출력·로그·오류 메시지에 나오지 않는다.
-# 주석: 설명 · env=옛 환경변수 이름(덮기 파일 overrides·migrate가 씀 — S7e2부터 env로 준 값은 읽지 않음) · 형식 · 기본값 · [엔진 지문]/[인계 지문] =
-#       그 칸을 읽는 파일이 지문에 들어가 env로도 계속 내준다(영구 다리) · [호스트] = compose·systemd·셸이 `python -m common.config.export`로 꺼내 씀.
-# 덮기 파일(S7e2): 최상위 base(원본 설정 파일 경로)·overrides({옛 env 이름: 글자})만 든 yaml — 한 번 실행에 몇 칸만 바꿀 때(python -m common.config.overrides).
-# 분류표: docs/refactoring/refactor_plan.md 부록 D
-# [서버 옛 값: …] = 옛 옵션 카탈로그(options.conf — S7e2에 지움)·옛 서버 compose environment 기본값이 서버 컨테이너에 주던 값 — 코드 기본값과 결과가
-#       다른 칸(C-39·C-45, 사용자 10-27·10-28). 서버(·PC) 설정 파일로 옮길 때 지금 동작을 지키려면 이 값을 적는다(run_mode: prod는 모든 환경 — C-43 · 빠뜨리면 PG 연결 실패 때 문서 대장·정형 저장소가 SQLite로 조용히 대체됨 — C-54).
-#       ''는 빈 글자로 적어야 결과가 같은 칸(빈 글자 유지 칸·이미지 기본값이 있는 칸 — VS7e1 R-4). 옮긴 뒤 `python -m common.config.migrate --compare`로 확인.
+HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: python -m common.config.sample (손으로 고치지 않음)
+# 복사해 required 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: $SERVER_ENV_DIR/settings.yaml(UID 10001·권한 640, SETTINGS_FILE).
+# 순서: required(운영자가 채울 값) → 역할 절 common·extract·transform·load·search·ops·dev → tuning(코드 상수 후보 — 보통 비워 둠).
+#   빈 칸 = 코드 기본값. 적힌 값은 코드 기본값보다 이긴다(나중에 코드 기본값이 바뀌어도 이 파일을 고치지 않으면 반영 안 됨).
+#   [PC·서버]·[서버만]·[PC만] = 그 카테고리를 채워야 하는 곳. 서버만 칸을 PC에서 비우면 그 기능(EDW·Object Storage·게시 등)만 꺼진다.
+#   [비밀] = settings.yaml에만 둠(출력·로그에 안 나옴). [파라미터] = 결과(파싱·청크·검색 순위)를 바꾸는 값.
+#   각 앱은 자기 칸만 읽는다(pipeline: required·common·extract·transform·load·ops · mcp: required·common·search·ops).
+#   같은 최상위 절을 두 번 쓰지 않는다(YAML은 뒤 절이 앞 절을 덮음). 옛 배치(최상위 common·pipeline·mcp) → python -m common.config.migrate.
+#   한 번만 몇 칸 바꿀 때: 덮기 파일(base·overrides — python -m common.config.overrides). 옛 env 이름·판정 꼴: docs/operations/env-guide.md.
 """
 # C-39(사용자 10-27 S7e1 Q6 a) — options.conf(옛 카탈로그 — S7e2에 지움)가 env에 채우던 값 중 설정 모델 기본값과 결과가 다른 칸(값에 비밀 없음).
 # output/orca/S7e1/base_calc.py로 뽑음(예외 줄 빼고 · 표기만 다른 5.0/5 빼고 · 모델 칸 없는 env 이름 빼고). sample 주석으로만 낸다(모델 기본값은 코드 기본값 그대로).
@@ -69,49 +66,80 @@ for _k in ("DOC_DIR", "DOC_DIR_PREPARED", "PIPE_EMBED", "SOFFICE_BIN"):
     CATALOG_VALUES.pop(_k)
 
 
-# 사용자 10-29 — 입력이 필수인 칸은 맨 위에 settings.yaml 꼴로, 기본값이 있는 칸은 영역별 선택 목록으로(YAML은 같은 절을 두 번 못 써서 선택 칸은 주석 목록).
-# 필수 = 비우면 시작을 거부하거나 그 기능이 꺼지는 접속·비밀·모델 주소·원천·게시 위치, 그리고 서버에서 꼭 적어야 동작이 지켜지는 칸(run_mode·mcp store — C-43·C-54).
-# 칸 → 어디서 필수인가: 공통(PC·서버) · 서버(dev·prd) · PC(RUN_ENV=local). 사용자 10-29 — settings.yaml에 쓰는 칸 중 필수를 구분.
-REQUIRED = {
-    "common.run_env": "공통",
-    **{f"common.connections.pg.{k}": "공통" for k in ("host", "port", "db", "user", "password", "db_schema")},
-    "common.store.run_mode": "공통",
-    **{f"common.models.embed.{k}": "공통" for k in ("base_url", "model", "api_key")},
-    "common.models.guard.no_paid_calls": "PC",
-    **{f"common.connections.object_storage.{k}": "서버" for k in ("endpoint", "access_key", "secret_key")},
-    **{f"common.connections.rdb.{k}": "서버" for k in ("host", "database", "read.user", "read.password", "write.user", "write.password")},
-    **{f"common.models.{r}.{k}": "서버" for r in ("llm", "vlm") for k in ("base_url", "model", "api_key")},
-    "common.paths.doc_dir": "서버",
-    "common.text.source_uri_prefix": "서버",
-    "pipeline.extract.input_source": "서버",
-    "pipeline.load.publish.bucket": "서버",
-    "pipeline.load.publish.prefix": "서버",
-    "pipeline.service.trigger.token": "서버",
-    "pipeline.service.parse_mcp.token": "서버",
-    "pipeline.host.image": "서버",
-    **{f"mcp.server.{k}": "서버" for k in ("host", "store", "token")},
-    "mcp.parse_proxy.token": "서버",
-    "mcp.host.image": "서버",
-}
-# 선택 칸 묶음 — 앞에서부터 처음 맞는 접두어. 어느 묶음에도 안 드는 칸이 있으면 build가 멈춘다(새 절을 더하면 여기도).
-GROUPS = [
-    ("공통 — 접속·저장소·글자 처리", ("common.run_env", "common.connections", "common.store", "common.text")),
-    ("모델 — LLM·VLM·임베딩·재순위·비용 가드", ("common.models",)),
-    ("경로", ("common.paths", "pipeline.paths")),
-    ("extract — 원천·준비·파싱", ("pipeline.extract", "pipeline.connections.rdb", "pipeline.connections.secure_doc")),
-    ("transform — 대표 결과·그림·구조화(청킹·임베딩)", ("pipeline.transform",)),
-    ("load — 적재·게시", ("pipeline.load",)),
-    (
-        "mcp — 검색 서버·검색 동작",
-        ("mcp.server", "mcp.search", "mcp.output", "mcp.edw_meta", "mcp.edw_query", "mcp.parse_proxy", "mcp.query_log"),
+# 역할 절 안 세부 카테고리 — (제목, 파일 자리 접두어들). 앞에서부터 처음 맞는 것. 안 드는 칸이 있으면 build가 멈춘다(새 칸이면 여기도).
+CATEGORIES = {
+    "common": (
+        ("접속 — PostgreSQL·EDW·Object Storage 세부", ("common.connections",)),
+        ("모델 호출 — 임베딩·LLM·VLM·전송", ("common.models.embed", "common.models.llm", "common.models.vlm", "common.models.transport")),
+        ("비용·외부 가드", ("common.models.guard",)),
+        ("저장소 — 문서 대장·정형 저장소", ("common.store",)),
+        ("검색 토큰 정규화", ("common.text",)),
     ),
-    ("실행 자원·상주 서비스·새벽 배치", ("common.runtime", "pipeline.service", "pipeline.night")),
-    ("호스트(compose·systemd·셸이 읽음)", ("common.host", "pipeline.host", "mcp.host")),
-    ("e2e·시험·평가(PC 전용)", ("common.dev", "pipeline.dev", "pipeline.eval", "mcp.dev")),
-]
-SPLIT = {
-    GROUPS[i][0] for i in (1, 3, 4, 5, 6)
-}  # [파라미터] 표시를 다는 카테고리(결과를 바꾸는 값 — _kind 0) — 모델·extract·transform·load·mcp
+    "extract": (
+        ("원천 목록 DB(EDW 표·열 이름)", ("extract.connections.rdb",)),
+        ("보안 문서", ("extract.connections.secure_doc",)),
+        (
+            "원천 받기·처리 상한",
+            (
+                "extract.source",
+                "extract.prefetch_workers",
+                "extract.source_limit",
+                "extract.max_new",
+                "extract.max_file_mb",
+                "extract.skipped_log",
+            ),
+        ),
+        ("회전 준비(prepare)", ("extract.prepare",)),
+        (
+            "파싱 엔진·쪽 처리",
+            (
+                "extract.engine_scope",
+                "extract.fill_merged",
+                "extract.kreuzberg_prose_filter",
+                "extract.hidden_overlap_max",
+                "extract.low_priority",
+                "extract.doc_parallel",
+                "extract.rotated_max",
+                "extract.text_page_sec",
+                "extract.vlm_page_sec",
+                "extract.warmup_sec",
+            ),
+        ),
+        ("OCR·표", ("extract.ocr", "extract.ocr_engine", "extract.rapidocr_page_workers", "extract.table_grid_max_rows")),
+        ("첨부·중복", ("extract.attach", "extract.dedup")),
+    ),
+    "transform": (
+        ("대표 결과", ("transform.represent",)),
+        ("그림", ("transform.figures",)),
+        ("VLM 호출", ("transform.vlm",)),
+        ("청크·임베딩", ("transform.structure",)),
+    ),
+    "load": (("게시(publish)", ("load.publish", "load.edw_path_prefix")), ("적재", ("load",))),
+    "search": (
+        ("MCP 서버", ("search.server",)),
+        ("검색 순위·방식", ("search.methods", "search.min_score", "search.weights", "search.pg", "search.struct_context_max")),
+        ("고객 범위", ("search.client",)),
+        ("집계", ("search.agg_today", "search.agg_vocab_file", "search.data_catalog")),
+        ("EDW 도구", ("search.edw_meta", "search.edw_query")),
+        ("출력·기록·파싱 프록시", ("search.output", "search.query_log", "search.parse_proxy")),
+    ),
+    "ops": (
+        ("실행 자원 — 비우면 CPU·메모리로 자동", ("ops.runtime",)),
+        ("경로", ("ops.paths", "ops.pipeline_paths")),
+        ("호스트 — 컨테이너 도구·패치·정리", ("ops.host",)),
+        ("서버 컨테이너 — CPU·메모리 한도·폴더", ("ops.pipeline_host", "ops.mcp_host")),
+        ("상주 서비스 — 트리거·parse MCP", ("ops.services",)),
+        ("새벽 배치", ("ops.nightly", "ops.nightly_run")),
+        ("run_docs 레인", ("ops.run_docs",)),
+    ),
+    "dev": (
+        ("가짜 LLM·시험 하네스", ("dev.llm_fake", "dev.pipeline")),
+        ("평가", ("dev.eval", "dev.mcp")),
+        ("PC 시험 Docker", ("dev.docker",)),
+    ),
+    "tuning": tuple((f"{sec}의 조정값", (f"tuning.{sec}",)) for sec in ("common", "extract", "transform", "load", "search", "ops")),
+}
+SPLIT = {"common", "extract", "transform", "load", "search"}  # [파라미터] 표시를 다는 절(결과를 바꾸는 값 — _kind 0)
 _OPS = re.compile(
     r"concurrency|parallel|workers|procs|threads|timeout|_sec$|^sec$|deadline|retry|batch$|cache|_gb$|warn|port$|dir$|root|path|"
     r"file$|_bin$|url$|host$|queue|lock|log|^keep_|fetch|warm|slow|rpm|max_calls|budget|est_usd|price|token$|_mb$|max_bytes|max_chars|"
@@ -147,24 +175,11 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "pipeline.extract.prepare.link",
     "pipeline.load.publish.path_map",
     "pipeline.load.publish.upload_statuses",
-    "pipeline.transform.represent.shadow_max",
     "pipeline.transform.structure.embed_max_chars",
     "pipeline.transform.vlm.page_min_concurrency",
     "mcp.search.pg.filter_exact_max",
     "mcp.search.pg.vector_search",
 }
-REQ_HEAD = """\
-
-# ══════════════════════════════════════════════════════════════════════════════════════════════
-# 이 파일을 settings.yaml로 복사해 [필수] 칸과 [비밀] 칸만 채우면 시작된다(사용자 10-30 — op-05). 칸마다 [필수: 공통](PC·서버) · [필수: 서버] · [필수: PC].
-#    서버 필수 칸을 PC에서 비우면 그 기능(EDW·Object Storage·RDB·게시 등)만 꺼진다. 비밀 칸은 settings.yaml에만.
-# 모든 칸이 코드 기본값과 함께 들어 있다(절 common·pipeline·mcp 아래, 카테고리 제목 ─── N. … ─── 로 묶음).
-#    값이 빈 칸(`칸:`) = 코드 기본값을 쓴다 — 기본값이 없거나, 비밀이거나, 이미지·PC마다 기본값이 다른 칸(DOC_DIR 등).
-#    적힌 값은 코드 기본값보다 이긴다 — 나중에 코드 기본값이 바뀌어도 이 파일을 고치지(또는 sample을 다시 복사하지) 않으면 반영되지 않는다.
-#    [파라미터] = 결과(파싱·청크·검색 순위)를 바꾸는 값 — 바꾸면 같은 문서에서도 결과가 달라진다(평가로 확인 뒤 바꿈). 설정 값은 code_fp에 안 들어간다.
-#    줄 끝 주석: 설명 · 기본 <값> · 값: <입력 가능한 값> · env=<옛 이름> [표시]. 숫자 범위는 안내이고 코드가 막지는 않는다.
-#    같은 최상위 절을 두 번 쓰지 않는다 — YAML은 뒤의 절이 앞의 절을 통째로 덮는다.
-# ══════════════════════════════════════════════════════════════════════════════════════════════"""
 
 
 def blank_matters(field):
@@ -175,10 +190,8 @@ def blank_matters(field):
 
 def _fmt_default(f):
     d = f.default
-    if S.is_secret(f):
+    if S.is_secret(f) or d is None:
         return ""
-    if d is None:
-        return " · 기본 없음"
     if isinstance(d, bool):
         d = "true" if d else "false"
     elif isinstance(d, list):
@@ -188,39 +201,79 @@ def _fmt_default(f):
 
 def build(classes=None):
     classes = classes or S.app_classes()
-    tops = {"common": None, "pipeline": None, "mcp": None}
+    rows = {}
     for cls in classes.values():
-        for top in tops:
-            if top in cls.model_fields and tops[top] is None:
-                tops[top] = S._section_type(cls.model_fields[top].annotation)
-    tops = {t: m for t, m in tops.items() if m is not None}
-    rows = [(p, f) for top, model in tops.items() for p, f in _leaves(model, top)]
-    known = {p for p, _ in rows}
-    req = set(REQUIRED)
-    if req - known and set(tops) == {"common", "pipeline", "mcp"}:  # 시험이 절 일부로 부를 때는 대조 안 함
-        raise SystemExit(f"sample: REQUIRED에 모델에 없는 칸 {sorted(req - known)}")
-    if set(VALUES) - known and set(tops) == {"common", "pipeline", "mcp"}:
-        raise SystemExit(f"sample: VALUES에 모델에 없는 칸 {sorted(set(VALUES) - known)}")
-    gidx = {}
-    for p, _ in rows:
-        g = next((i for i, (_, pre) in enumerate(GROUPS) if any(p == x or p.startswith(x + ".") for x in pre)), None)
-        if g is None:
-            raise SystemExit(f"sample: 카테고리(GROUPS)에 안 드는 칸 {p} — GROUPS에 접두어를 더함")
-        gidx[p] = g
-    lines = [HEAD, REQ_HEAD]
-    for top, model in tops.items():
-        lines.append(f"\n{top}:")
-        _emit(model, 1, top, lines, gidx, [None])
+        for p, f, _ in S.walk(cls):
+            rows.setdefault(p, f)
+    tree = {}
+    for p, f in rows.items():
+        cur, parts = tree, L.to_yaml(p).split(".")
+        for q in parts[:-1]:
+            cur = cur.setdefault(q, {})
+        cur[parts[-1]] = (p, f)
+    if {"pipeline", "mcp"} <= set(classes):  # 시험이 앱 일부로 부를 때는 대조 안 함
+        unknown = (set(L.REQUIRED) | L.TUNING | set(VALUES)) - set(rows)
+        if unknown:
+            raise SystemExit(f"sample: layout·VALUES에 모델에 없는 칸 {sorted(unknown)}")
+    lines = [HEAD]
+    for sec in L.SECTIONS:
+        if sec not in tree:
+            continue
+        lines.append(f"\n# {'═' * 94}" if sec in ("common", "tuning") else "")
+        if sec == "tuning":
+            lines.append(
+                "# tuning — 코드 상수 후보(사용자 10-30 op-08): 기본값 말고 쓴 흔적이 없는 내부 조정값·자원 세부값. 보통 비워 둔다."
+            )
+            lines.append(f"# {'═' * 94}")
+        lines.append(f"{sec}:")
+        _emit(tree[sec], 1, sec, lines, [None])
     return "\n".join(lines) + "\n"
 
 
-def _leaves(model, path):
-    for name, f in model.model_fields.items():
-        sub = S._section_type(f.annotation)
-        if sub is None:
-            yield f"{path}.{name}", f
-        else:
-            yield from _leaves(sub, f"{path}.{name}")
+def _cat(y):
+    """파일 자리 → (카테고리 번호, 제목). required는 REQUIRED_GROUPS 순서, 그 밖은 CATEGORIES."""
+    sec = y.split(".", 1)[0]
+    if sec == "required":
+        g = y.split(".")[1]
+        i, (_k, title, where, _r) = next((i, r) for i, r in enumerate(L.REQUIRED_GROUPS) if r[0] == g)
+        return i, f"{title} [{where}]"
+    for i, (title, pre) in enumerate(CATEGORIES[sec]):
+        if any(y == x or y.startswith(x + ".") for x in pre):
+            return i, title
+    raise SystemExit(f"sample: 세부 카테고리(CATEGORIES)에 안 드는 칸 {y} — CATEGORIES에 접두어를 더함")
+
+
+def _emit(node, depth, path, lines, last):
+    """절 안 칸을 settings.yaml 꼴로 — 세부 카테고리 순서로 놓고, 카테고리가 바뀌는 자리에 제목 주석."""
+    pad = "  " * depth
+
+    def first(y, v):
+        return _cat(y)[0] if isinstance(v, tuple) else min(first(f"{y}.{k}", x) for k, x in v.items())
+
+    order = list(L.REQUIRED.values())  # required는 표 순서, 그 밖은 카테고리 안 모델 순서(안정 정렬)
+    kids = sorted(
+        ((first(f"{path}.{k}", v), k, v) for k, v in node.items()),
+        key=lambda r: (r[0], order.index(f"{path}.{r[1]}") if f"{path}.{r[1]}" in order else 0),
+    )
+    for i, name, v in kids:
+        y = f"{path}.{name}"
+        if last[0] != (path.split(".")[0], i):
+            last[0] = (path.split(".")[0], i)
+            lines.append(f"{pad}# ─── {_cat(y if isinstance(v, tuple) else _first_leaf(y, v))[1]} ───")
+        if not isinstance(v, tuple):
+            lines.append(f"{pad}{name}:")
+            _emit(v, depth + 1, y, lines, last)
+            continue
+        p, f = v
+        sec = y.split(".", 1)[0]
+        tag = "[파라미터] " if sec in SPLIT and _kind(p, f) == 0 else "(자원) " if p in L.TUNING_RESOURCE else ""
+        val = _value(p, f)
+        lines.append(f"{pad}{name}:{' ' + val if val else ''}  # {tag}{_note(p, f)}")
+
+
+def _first_leaf(y, node):
+    k, v = min(node.items(), key=lambda kv: _cat(f"{y}.{kv[0]}" if isinstance(kv[1], tuple) else _first_leaf(f"{y}.{kv[0]}", kv[1]))[0])
+    return f"{y}.{k}" if isinstance(v, tuple) else _first_leaf(f"{y}.{k}", v)
 
 
 def _kind(path, f):
@@ -235,32 +288,10 @@ def _kind(path, f):
     return 0
 
 
-def _emit(model, depth, path, lines, gidx, last):
-    """절 안 칸을 settings.yaml 꼴로 — 카테고리(GROUPS) 순서로 놓고, 카테고리가 바뀌는 자리에 제목 주석(op-05)."""
-    pad = "  " * depth
-    kids = []
-    for name, f in model.model_fields.items():
-        p = f"{path}.{name}"
-        sub = S._section_type(f.annotation)
-        g = gidx[p] if sub is None else min(v for k, v in gidx.items() if k.startswith(p + "."))
-        kids.append((g, name, p, f, sub))
-    for g, name, p, f, sub in sorted(kids, key=lambda k: k[0]):  # sorted는 안정 — 같은 카테고리 안은 모델 순서
-        if last[0] != g:
-            last[0] = g
-            lines.append(f"{pad}# ─── {g + 1}. {GROUPS[g][0]} ───")
-        if sub is not None:
-            lines.append(f"{pad}{name}:")
-            _emit(sub, depth + 1, p, lines, gidx, last)
-            continue
-        tag = f"[필수: {REQUIRED[p]}] " if p in REQUIRED else "[파라미터] " if GROUPS[g][0] in SPLIT and _kind(p, f) == 0 else ""
-        val = _value(p, f)
-        lines.append(f"{pad}{name}:{' ' + val if val else ''}  # {tag}{_note(p, f)}")
-
-
 def _value(p, f):
     """칸에 적을 기본값(YAML 한 줄) — 비우는 칸: 필수·비밀·기본 없음·빈 글자·이미지 기본값 칸·적었는지로 동작이 갈리는 칸(SET_MATTERS·pinned)·저장소 경로가 든 기본값(만든 PC마다 달라짐)."""
     d = f.get_default(call_default_factory=True)
-    if p in REQUIRED or S.is_secret(f) or d is None or d == "" or S.env_name(f) in _IMAGE_ENVS | SET_MATTERS:
+    if p in L.REQUIRED or S.is_secret(f) or d is None or d == "" or S.env_name(f) in _IMAGE_ENVS | SET_MATTERS:
         return ""
     if (f.json_schema_extra or {}).get("pinned"):  # pin_env가 적힌 칸만 env로 냄 — 적으면 자식 프로세스의 자기 설정 값을 덮음
         return ""
@@ -303,31 +334,14 @@ SET_MATTERS = {
 
 
 def _note(p, f):
-    """칸 주석 — 설명 · env · 형식 · 기본값 · 표시(옛 _emit 본문 그대로)."""
-    tags = []
-    extra = f.json_schema_extra or {}
-    if extra.get("pinned"):
-        tags.append("[엔진 지문]" if extra["pinned"] == "engine" else "[인계 지문]")
-    if S.is_host(p):
-        tags.append("[호스트]")
-    if S.is_secret(f):
-        tags.append("[비밀]")
-    if S.keeps_blank(f):
-        tags.append("[빈 글자 유지]")
-    truth = extra.get("truth")
-    if truth:
-        words = "·".join(repr(x) if x == "" else x for x in (truth["on"] or truth["off"]))
-        tags.append(f"[{'켬' if truth['on'] else '끔'}: {words}{'' if len(truth['on'] or truth['off']) > 1 else '만'}]")
-    if extra.get("unset") == ["auto"]:
-        tags.append("[auto = 비움]")
-    elif extra.get("unset") == "nondigit":
-        tags.append("[숫자 아니면 비움]")
-    env = S.env_name(f)
-    if env in CATALOG_VALUES and (CATALOG_VALUES[env] or blank_matters(f)):
-        v = CATALOG_VALUES[env]
-        tags.append(f"[서버 옛 값: {v if v else repr('')}]")
-    note = f"{' '.join((f.description or '').split())}{_fmt_default(f)} · 값: {_values(p, f)} · env={env}"
-    return f"{note}{(' ' + ' '.join(tags)) if tags else ''}"
+    """칸 주석 한 줄 — 설명(첫 마디) · 기본값 · 넣을 수 있는 값 · [비밀]. 옛 env 이름·판정 꼴은 docs/operations/env-guide.md에."""
+    desc, parts = "", " ".join((f.description or "").split()).split(" — ")
+    for part in parts:  # 첫 마디 — 괄호 안의 ' — '에서는 자르지 않음
+        desc = f"{desc} — {part}" if desc else part
+        if desc.count("(") <= desc.count(")"):
+            break
+    note = f"{desc}{_fmt_default(f)} · 값: {_values(p, f)}"
+    return note + (" [비밀]" if S.is_secret(f) else "")
 
 
 _CHOICES = re.compile(r"(?<![\w/.<])([a-z][a-z0-9_]*(?: ?\| ?[a-z][a-z0-9_:]*)+)(?![\w/])")
@@ -354,6 +368,10 @@ VALUES = {
     "mcp.server.host": "127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부",
     "mcp.server.store": "pg·local 중 하나 또는 비움(자동 탐지)",
     "mcp.search.pg.vector_search": "exact 또는 비움(HNSW 근사)",
+    "common.connections.pg.db": "글자",
+    "common.host.doc_src": "경로",
+    "common.host.output_root": "경로",
+    "common.host.pg_container": "글자(컨테이너 이름)",
 }
 
 
@@ -409,8 +427,45 @@ def _values(p, f):
     return rng
 
 
+def marks(f):
+    """sample 주석에서 뺀 내부 표시(op-08 ②) — 지문 고정·빈 글자 유지·켜기 판정 꼴·auto."""
+    extra = f.json_schema_extra or {}
+    out = []
+    if extra.get("pinned"):
+        out.append("[엔진 지문]" if extra["pinned"] == "engine" else "[인계 지문]")
+    if S.keeps_blank(f):
+        out.append("[빈 글자 유지]")
+    truth = extra.get("truth")
+    if truth:
+        words = "·".join(repr(x) if x == "" else x for x in (truth["on"] or truth["off"]))
+        out.append(f"[{'켬' if truth['on'] else '끔'}: {words}{'' if len(truth['on'] or truth['off']) > 1 else '만'}]")
+    if extra.get("unset") == ["auto"]:
+        out.append("[auto = 비움]")
+    elif extra.get("unset") == "nondigit":
+        out.append("[숫자 아니면 비움]")
+    return out
+
+
+def where(names):
+    """옛 env 이름 → (이름, 파일 자리, 모델 경로, 표시) — 모르는 이름은 자리 None."""
+    rows = {}
+    for cls in S.app_classes().values():
+        for p, f, _ in S.walk(cls):
+            rows.setdefault(S.env_name(f), (p, f))
+    out = []
+    for n in names:
+        p, f = rows.get(n, (None, None))
+        out.append((n, L.to_yaml(p) if p else None, p, marks(f) if f is not None else []))
+    return out
+
+
 def main(argv):
     utf8_stdout()
+    if "--where" in argv:
+        found = where(argv[argv.index("--where") + 1 :])
+        for n, y, p, m in found:
+            print(f"{n}\t{y or '(설정 칸 없음)'}" + (f"\t(모델 {p}) {' '.join(m)}".rstrip() if p else ""))
+        return 0 if all(y for _, y, _, _ in found) else 1
     text = build()
     if "--check" in argv:
         cur = OUT.read_text(encoding="utf-8") if OUT.is_file() else ""

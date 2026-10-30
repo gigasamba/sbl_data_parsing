@@ -160,3 +160,15 @@ def test_stack_version_passed_once():
         assert "stackcfg" not in RD.struct_cmd(9)
     finally:
         RD.STACK_VER = keep
+
+
+def test_read_settings_new_layout(tmp_path):
+    """op-08 ② — 러너는 새 배치 파일을 모델 배치로 바꿔 읽고(글자 그대로), 옛 배치는 migrate 안내로 거부."""
+    f = tmp_path / "settings.yaml"
+    f.write_text("required:\n  env: {run_env: dev}\n  edw: {read_password: '0123'}\nops:\n  run_docs: {warm: '30'}\n", encoding="utf-8")
+    doc, err = RD.read_settings(f)
+    assert err is None and doc["common"]["run_env"] == "dev" and doc["common"]["connections"]["rdb"]["read"]["password"] == "0123"
+    assert RD.run_docs_policy(doc)[0]["warm"] == 30
+    f.write_text("common:\n  run_env: dev\n", encoding="utf-8")
+    doc, err = RD.read_settings(f)
+    assert doc == {} and "common.config.migrate" in err

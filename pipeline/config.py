@@ -77,15 +77,11 @@ class PipelineExtractAttach(Section):
 
 class PipelineExtractCache(Section):
     REMOVED = frozenset(
-        {"keep_local_originals", "keep_engine_cache", "keep_raw_layer"}
+        {"keep_local_originals", "keep_engine_cache", "keep_raw_layer", "parse_keep_max_gb", "parse_tmp_max_gb"}
     )  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     parse_cache_max_gb: float | None = F(
         5.0, "PARSE_CACHE_MAX_GB", "재판독 중간 캐시 3종 합계 용량 상한(GB, 넘으면 오래된 것부터 삭제, 0=끔)"
     )
-    parse_keep_max_gb: float | None = F(
-        None, "PARSE_KEEP_MAX_GB", "보존 폴더(KEEP_LOCAL_ORIGINALS=1) 용량 상한(GB, 넘으면 보존 포기·즉시 삭제)"
-    )
-    parse_tmp_max_gb: float | None = F(0.0, "PARSE_TMP_MAX_GB", "PARSE_TMP 사용량 상한(GB, 넘으면 다음 묶음 받기 전 대기, 0=제한 없음)")
 
 
 class PipelineExtractDedup(Section):
@@ -259,6 +255,7 @@ class PipelineTransformRepresent(Section):
             "fuse_reread",
             "reread_fallback_best",
             "reread",
+            "shadow_max",
         }
     )  # pl-34(10-30) — 재판독 P2·P3를 모두 지움(사용자 10-30, 옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     post: CsvText | None = F(
@@ -269,7 +266,6 @@ class PipelineTransformRepresent(Section):
     )
     qa_light: bool | None = F(False, "PARSE_QA_LIGHT", "=1이면 native 대비 풀문서 CER·순서 비교를 생략(경량화)", on=("1",))
     rep_select: str | None = F(None, "PARSE_REP_SELECT", "대표 엔진 선택 방식: first(첫 성공 엔진)|acc(정확도만)|그 외 best(정확도+풍부도)")
-    shadow_max: int | None = F(50, "PARSE_SHADOW_MAX", "그림자 모드 한 번에 훑는 문서 수 상한")
 
 
 class PipelineTransformStructure(Section):
@@ -360,11 +356,11 @@ class PipelineExtract(Section):
             "dedup_scan",
             "ocr_gt_max",
             "signal_ocr",
+            "disk_free_warn_gb",
+            "engine_cache_warn_gb",
         }
     )  # 사용자 10-29 — phase 없앰 · 10-30 auto_reparse_changed·parallel 지움(pl-35) · dedup_scan·ocr_gt_max·signal_ocr 지움(pl-34)(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    disk_free_warn_gb: float | None = F(10.0, "DISK_FREE_WARN_GB", "디스크 남은 용량이 이 값(GB)보다 작으면 보관 용량 경고 출력")
     doc_parallel: int | None = F(1, "PARSE_DOC_PARALLEL", "대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개)")
-    engine_cache_warn_gb: float | None = F(20.0, "ENGINE_CACHE_WARN_GB", "엔진별 중간 결과 합계가 이 값(GB)을 넘으면 보관 용량 경고 출력")
     engine_retry: int | None = F(1, "PARSE_ENGINE_RETRY", "엔진 별도 프로세스가 비정상 종료했을 때 바로 다시 시도할 횟수(회)")
     engine_scope: str | None = F(
         None, "PARSE_ENGINE_SCOPE", "문서마다 돌릴 엔진 범위(stack = 형식별 stack.json 목록만 / all = 등록 엔진 전부)"

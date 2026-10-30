@@ -1,4 +1,7 @@
-"""옛 env 파일 → settings.yaml 옮기기(S7a, refactor_plan 5-2 · D-015). 서버 pipeline.env·etl.env·retrieval.env, PC .env.local·validation.env 등.
+"""settings.yaml 옮기기 — ① 옛 배치 settings.yaml(최상위 common·pipeline·mcp — op-08 전) → 새 배치(required·역할 절·tuning, common.config.layout),
+② 옛 env 파일 → settings.yaml(S7a, refactor_plan 5-2 · D-015 — 결과는 새 배치). 서버 pipeline.env·etl.env·retrieval.env, PC .env.local·validation.env 등.
+  · ①(파일 하나, .yaml·.yml): 값은 쓴 글자 그대로 옮긴다(1.10·0123·yes가 바뀌지 않게). 지운 칸(모델 REMOVED — op-08 등)은 "삭제됨",
+    모델에 없는 칸은 "모름"으로 이름(옛 자리)만 알리고 새 파일에 넣지 않는다. 덮기 파일의 base·overrides는 그대로 둔다.
   · 여러 파일을 주면 뒤 파일이 앞 파일 값을 덮는다(지금 셸 `. a; . b`와 같음) — 단 틀의 자리표시는 앞 파일의 실제 값을 덮지 않는다(VS7a2 R-e).
   · 옛 env 이름 → YAML 경로는 앱 설정 모델의 칸 표(settings.walk)로 찾는다. LOCAL_RUN=1은 common.run_env: local로.
   · 같은 env 이름이 앱 칸과 호스트 칸 둘에 있으면(RAG_OUT·GOLD_DIR — T-21) 둘 다에 넣고 보고에 "확인" 표시. 단 HOST_ONLY 이름(GOLD_DIR)은
@@ -9,7 +12,8 @@
   · 틀의 자리표시 값(`<여기에 기입>`처럼 값 전체가 한글 설명이 든 <…>)은 비운 칸으로 보고 "자리표시"로 이름만 보고한다(빈 틀).
   · 빈 값(`X=`)·형식 변환은 앱 설정 모델 규칙 그대로(settings.Section._normalize — 기본값 있는 칸의 빈 값 = 설정 안 함).
   · 화면 출력은 비밀 칸을 "<가림>"으로 바꾼 YAML. --out으로 파일에 쓸 때만 실제 값이 들어가고 권한은 600(있으면 --force).
-사용: python -m common.config.migrate <env 파일>... [--out settings.yaml [--force]] [--summary]
+사용: python -m common.config.migrate <옛 settings.yaml> [--out <새 파일> [--force]] [--summary]
+      python -m common.config.migrate <env 파일>... [--out settings.yaml [--force]] [--summary]
       python -m common.config.migrate --compare <옛 env 파일>... --settings <settings.yaml> [--no-catalog]
   · --compare(S7e1 — 서버 이관 확인, 사용자 10-27 Q7): 옛 실효 값(options.conf 카탈로그 setdefault — 예외 줄 빼고 + env 파일, 뒤 파일이 이김)과
     새 settings.yaml을 설정 모델로 칸마다 견줘 `같음·다름·옛에만·새에만`과 env 이름만 찍는다(값·비밀은 찍지 않음). 옛 값이 모델 기본값과 같고
@@ -23,6 +27,7 @@ import re
 import sys
 from pathlib import Path
 
+from common.config import layout as L
 from common.config import settings as S
 from common.config.keyscan import NOT_SETTINGS
 from common.core.console import utf8_stdout
@@ -240,6 +245,85 @@ def convert(env, classes, holders=()):
     return doc, report
 
 
+def _removed(model, prefix=""):
+    """지운 칸(Section.REMOVED)의 모델 경로 — 옛 파일에 남아 있으면 "삭제됨"으로 알린다."""
+    out = {prefix + n for n in getattr(model, "REMOVED", ())}
+    for name, f in model.model_fields.items():
+        sub = S._section_type(f.annotation)
+        if sub is not None:
+            out |= _removed(sub, f"{prefix}{name}.")
+    return out
+
+
+def _raw(v):
+    """YAML 값을 쓴 글자·꼴 그대로 다시 쓰게(settings._Raw) — 글자는 글자로, 숫자·켜기·날짜는 쓴 표기 그대로."""
+    if isinstance(v, S.YamlScalar):
+        return str(v) if isinstance(v.value, str) else S._Raw.of(v)
+    if isinstance(v, dict):
+        return {str(k): _raw(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_raw(x) for x in v]
+    return v
+
+
+def convert_yaml(path, classes, secrets=True):
+    """옛 배치 settings.yaml → (새 배치 사전, 보고 {"삭제됨": [옛 자리], "모름": [옛 자리], "칸": n}). secrets=False면 비밀 값은 MASK."""
+    raw = S.read_yaml(path)
+    extra = {k: raw.pop(k) for k in S.OVERLAY_KEYS if k in raw}
+    if raw and not L.is_old(raw):
+        raise S.SettingsError(f"이미 새 배치(또는 옛 배치가 아님): {path}")
+    leaves, removed = {}, set()
+    for cls in classes.values():
+        leaves.update({p: f for p, f, _ in S.walk(cls)})
+        removed |= _removed(cls)
+    doc, report = {}, {"삭제됨": [], "모름": [], "칸": 0}
+
+    def walk(d, prefix):
+        for k, v in d.items():
+            p = f"{prefix}{k}"
+            if p in leaves:
+                if v is not None:
+                    S._set_path(doc, p, v if secrets or not S.is_secret(leaves[p]) else MASK)
+                    report["칸"] += 1
+            elif p in removed:
+                report["삭제됨"].append(p)
+            elif isinstance(v, dict) and any(x.startswith(p + ".") for x in leaves):
+                walk(v, p + ".")
+            elif v is not None:
+                report["모름"].append(p)
+
+    walk(raw, "")
+    return {**_raw(extra), **L.to_file(_raw(doc))}, report
+
+
+def dump_yaml(doc):
+    import yaml
+
+    head = "# settings.yaml — common.config.migrate가 옛 배치에서 새 배치(op-08 ②)로 바꿈. 칸 설명은 저장소 settings.sample.yaml\n"
+    return head + yaml.dump(doc, Dumper=S._raw_dumper(), allow_unicode=True, sort_keys=False, default_flow_style=False)
+
+
+def run_yaml(a, classes):
+    if not {"pipeline", "mcp"} <= set(classes):  # 이미지 하나엔 다른 앱 모델이 없어 그 칸을 "모름"으로 버림 — 코드 폴더(두 앱 다)에서만
+        print("[migrate] pipeline·mcp 설정 모델이 다 있는 코드에서 실행(저장소·코드 폴더 — 이미지 하나 안에서는 안 됨)", file=sys.stderr)
+        return 2
+    try:
+        doc, report = convert_yaml(a.files[0], classes, secrets=bool(a.out))
+    except S.SettingsError as e:
+        print(f"[migrate] {e}", file=sys.stderr)
+        return 2
+    print(f"[migrate] 옛 배치 → 새 배치(op-08 ②): 옮긴 칸 {report['칸']}개", file=sys.stderr)
+    for kind in ("삭제됨", "모름"):
+        if report[kind]:
+            print(f"  {kind} {len(report[kind])}(새 파일에 넣지 않음): {' '.join(report[kind])}", file=sys.stderr)
+    if a.out:
+        write_private(a.out, dump_yaml(doc), a.force)
+        print(f"[migrate] 씀: {a.out} (권한 600)", file=sys.stderr)
+    elif not a.summary:
+        print(dump_yaml(doc), end="")
+    return 0
+
+
 def typed(doc, classes):
     """글자 값을 모델로 검증해 형식 있는 값으로(숫자·켜기·목록) — 각 앱 뿌리로 따로 검증하고 합친다. 비밀은 SecretStr 그대로."""
     out = {}
@@ -265,8 +349,8 @@ def plain(doc, secrets):
 def dump(doc):
     import yaml
 
-    head = "# settings.yaml — common.config.migrate가 옛 env 파일에서 만듦. 칸 설명은 저장소 settings.sample.yaml\n"
-    return head + yaml.safe_dump(doc, allow_unicode=True, sort_keys=False, default_flow_style=False)
+    head = "# settings.yaml — common.config.migrate가 옛 env 파일에서 만듦(새 배치 — op-08 ②). 칸 설명은 저장소 settings.sample.yaml\n"
+    return head + yaml.safe_dump(L.to_file(doc), allow_unicode=True, sort_keys=False, default_flow_style=False)
 
 
 def write_private(path, text, force=False):
@@ -398,9 +482,11 @@ def main(argv=None):
         if not a.settings:
             ap.error("--compare에는 --settings <settings.yaml>")
         return run_compare(a, S.app_classes())
+    classes = S.app_classes()
+    if len(a.files) == 1 and a.files[0].endswith((".yaml", ".yml")):
+        return run_yaml(a, classes)
     notes = {}
     env, holders = read_files(a.files, notes)
-    classes = S.app_classes()
     doc, report = convert(env, classes, holders)
     try:
         doc = typed(doc, classes)
@@ -409,7 +495,7 @@ def main(argv=None):
         return 2
     print(f"[migrate] 읽은 키 {len(env)}개 — 앱 모델 {'·'.join(classes) or '없음'}", file=sys.stderr)
     if not (doc.get("common") or {}).get("run_env"):
-        print("  [주의] RUN_ENV 없음 — 만든 파일의 common.run_env에 local·dev·prd를 적어야 앱이 시작함(D-028 ②)", file=sys.stderr)
+        print("  [주의] RUN_ENV 없음 — 만든 파일의 required.env.run_env에 local·dev·prd를 적어야 앱이 시작함(D-028 ②)", file=sys.stderr)
     for kind, names in report.items():
         if names:
             shown = "" if kind == "yaml" else ": " + " ".join(names)

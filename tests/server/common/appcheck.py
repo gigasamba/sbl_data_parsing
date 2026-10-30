@@ -2,6 +2,7 @@
 
 from common.config import export as E
 from common.config import settings as S
+from common.config.layout import to_file
 from common.config.show import main, summary
 
 
@@ -41,7 +42,7 @@ def app_selftest(app_cls, top):
         S._set_path(doc, "common.run_env", "dev")
         import yaml
 
-        f.write_text(yaml.safe_dump(doc), encoding="utf-8")
+        f.write_text(yaml.safe_dump(to_file(doc)), encoding="utf-8")
         st = S.load(app_cls, file=f, environ={})
         out = E.lines(st, [f"{top}.host"]) + E.lines(st, [top])
         env_host = S.env_name(dict((p, fi) for p, fi, _ in rows)[host_leaf])
@@ -86,7 +87,7 @@ def app_selftest(app_cls, top):
         doc = {}
         S._set_path(doc, app_leaf, "file-v")
         S._set_path(doc, "common.run_env", "local")
-        g.write_text(yaml.safe_dump(doc), encoding="utf-8")
+        g.write_text(yaml.safe_dump(to_file(doc)), encoding="utf-8")
         mod = {"pipeline": "pipeline.config", "mcp": "mcp_server.config"}[top]
         env = {k: v for k, v in __import__("os").environ.items() if k not in (env_app, "RUN_ENV")}
         env["SETTINGS_FILE"] = str(g)

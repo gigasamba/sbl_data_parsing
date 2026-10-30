@@ -8,8 +8,8 @@ from pathlib import Path
 
 import yaml
 
-from common.config import sample
-from common.config.settings import CommonAppSettings, _is_set, _section_type, app_classes, env_map, load
+from common.config import layout, sample
+from common.config.settings import CommonAppSettings, _is_set, app_classes, env_map, load, walk
 from common.core.paths import DEPLOY_ROOT
 
 _SET_READ = re.compile(r"\b(?:given|_given|_f|own|setting)\(\s*[\"']([A-Z][A-Z0-9_]+)[\"']")
@@ -17,7 +17,7 @@ _SET_READ = re.compile(r"\b(?:given|_given|_f|own|setting)\(\s*[\"']([A-Z][A-Z0-
 
 def _get(obj, path):
     for part in path.split("."):
-        obj = obj.get(part) if isinstance(obj, dict) else getattr(obj, part)
+        obj = (obj or {}).get(part) if isinstance(obj, dict) or obj is None else getattr(obj, part)
     return obj
 
 
@@ -32,9 +32,9 @@ def _set_read_names():
 
 
 def test_copied_sample_starts_with_defaults():
-    text = sample.build().replace("\n  run_env:  #", "\n  run_env: dev  #", 1)
+    text = sample.build().replace("\n    run_env:  #", "\n    run_env: dev  #", 1)
     tree = yaml.safe_load(text)
-    assert tree["common"]["run_env"] == "dev"
+    assert tree["required"]["env"]["run_env"] == "dev"
     names = _set_read_names()
     assert "STRUCT_BACKEND" in names  # 검색이 코드를 실제로 찾았는지
     with tempfile.TemporaryDirectory() as d:
@@ -43,8 +43,8 @@ def test_copied_sample_starts_with_defaults():
         for cls in (CommonAppSettings, *app_classes().values()):
             st = load(cls, file=y, environ={})  # STRICT — 모르는 칸·틀린 값이면 SettingsError
             for top in cls.model_fields:
-                for p, f in sample._leaves(_section_type(cls.model_fields[top].annotation), top):
-                    v = _get(tree, p)
+                for p, f in ((p, f) for p, f, _ in walk(cls) if p.split(".")[0] == top):
+                    v = _get(tree, layout.to_yaml(p))
                     if v is not None and p != "common.run_env":
                         assert _get(st, p) == v, (p, _get(st, p), v)
                         assert not (f.json_schema_extra or {}).get("pinned"), (p, "pinned 칸은 적으면 env로 나감")

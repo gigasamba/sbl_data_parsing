@@ -34,9 +34,8 @@ from common.config.settings import (  # noqa: F401 — token_text: 토큰 규칙
 
 class McpSearchAgg(Section):
     REMOVED = frozenset(
-        {"llm", "llm_timeout", "fx", "route"}
+        {"llm", "llm_timeout", "fx", "route", "llm_min"}
     )  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    llm_min: float | None = F(0.6, "SEARCH_AGG_LLM_MIN", "집계 LLM 분류 확신도 하한(0~1) — 미달이면 검색으로 폴백")
     text_max_rows: int | None = F(30, "SEARCH_AGG_TEXT_MAX_ROWS", "집계 근거 text에 붙이는 표 행 상한(개)")
     text_max_src_rows: int | None = F(40, "SEARCH_AGG_TEXT_MAX_SRC_ROWS", "계약별 근거 행 상한(개)")
 

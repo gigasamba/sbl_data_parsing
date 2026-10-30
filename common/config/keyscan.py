@@ -239,6 +239,17 @@ NOT_SETTINGS = {
             "KEEP_LOCAL_ORIGINALS",
         )
     },
+    **{
+        n: ("삭제 후보", "삭제됨(op-08 ②, 사용자 10-30) — 읽는 곳이 없어진 칸(① 기능 삭제 뒤)")
+        for n in (
+            "PARSE_TMP_MAX_GB",
+            "DISK_FREE_WARN_GB",
+            "ENGINE_CACHE_WARN_GB",
+            "PARSE_SHADOW_MAX",
+            "SEARCH_AGG_LLM_MIN",
+            "PARSE_KEEP_MAX_GB",
+        )
+    },
 }
 # 모은 키가 아닌 것(셸 문법·Dockerfile ARG·selftest 가짜 이름)
 IGNORE = {"BASE", "X_ALLOW_EXTERNAL"}

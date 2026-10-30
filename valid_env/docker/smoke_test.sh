@@ -23,7 +23,7 @@ DC="docker compose -f valid_env/docker/compose.test.yml"
 PY=${PY:-python}
 : "${SMOKE_SETTINGS:?SMOKE_SETTINGS=<settings.yaml> 필요(S7e1)}"
 case "$SMOKE_SETTINGS" in /*) ;; *) SMOKE_SETTINGS=$PWD/$SMOKE_SETTINGS ;; esac; export SMOKE_SETTINGS   # compose 마운트 원본은 절대 경로
-setting() {   # setting <칸 경로> — 설정 파일 값(없으면 빈 글자, 값은 출력하지 않고 부른 쪽 변수로만 — 쓴 글자 그대로, VS7e1 R-5)
+setting() {   # setting <파일 자리(op-08 ② 새 배치)> — 설정 파일 값(없으면 빈 글자, 값은 출력하지 않고 부른 쪽 변수로만 — 쓴 글자 그대로, VS7e1 R-5)
   $PY -c 'import sys, yaml
 d = yaml.load(open(sys.argv[1], encoding="utf-8"), Loader=yaml.BaseLoader) or {}
 for k in sys.argv[2].split("."):
@@ -58,7 +58,7 @@ NIGHT=${SMOKE_NIGHTLY:-0}
 step "시험용 PostgreSQL" $DC up -d --wait pg               # S8b — 파싱도 판 표(엔진 구성·원천 목록)를 읽음(못 읽으면 종료 4)
 step "⓪ struct 판(판 표 2개 + 시드 — S8b)" $DC run --rm load migrate up --target struct
 if [[ "${SMOKE_SOURCE:-}" == s3://* ]]; then             # Object Storage 시험: minio 띄우고 DOC_SRC를 올림(이미 있으면 덮어씀)
-  OS_ACCESS_KEY=$(setting common.connections.object_storage.access_key); OS_SECRET_KEY=$(setting common.connections.object_storage.secret_key)
+  OS_ACCESS_KEY=$(setting required.object_storage.access_key); OS_SECRET_KEY=$(setting required.object_storage.secret_key)
   export OS_ACCESS_KEY OS_SECRET_KEY                     # minio 계정 = 파싱 컨테이너 접속 키(설정 파일 — S7e1)
   step "모의 Object Storage(minio)" $DC --profile os up -d --wait minio
   # os_put은 설정 객체를 읽음 — 호스트에서 minio 주소는 덮기 파일로(env OS_ENDPOINT는 안 읽음 — VS7e2 R-7). PC 시험이라 RUN_ENV=local(덮기 파일 도구는 PC 전용)
@@ -88,7 +88,7 @@ step "③-0 검색 판(migrate — 묶음 차원·vector 확장)" $DC run --rm l
 step "③ 적재(data-pipeline → pg — pgvector_load load)" $DC run --rm --entrypoint python load -m pipeline.load.pgvector_load load --bundle /app/output/edw/bundle
 step "④ 검색 MCP 띄우기" $DC up -d mcp
 for i in $(seq 1 30); do $DC logs mcp 2>/dev/null | grep -q "검색 MCP http" && break; sleep 1; done
-TOKEN=$(setting mcp.server.token)   # S7e1 — 설정 파일(옛 SMOKE_ENV의 MCP_TOKEN)
+TOKEN=$(setting required.tokens.mcp)   # S7e1 — 설정 파일(옛 SMOKE_ENV의 MCP_TOKEN)
 step "⑤ 밖에서 MCP 호출" $PY -m mcp_server.cli.mcp_smoke --url "http://127.0.0.1:${MCP_PUBLISH_PORT:-18765}/mcp" --token "$TOKEN" --q "$Q"
 fi
 if [[ "${SMOKE_SOURCE:-}" == s3://* ]]; then             # ⑥ 결과 게시(SI39) — 맨 마지막 별도 단계, 트리거로만

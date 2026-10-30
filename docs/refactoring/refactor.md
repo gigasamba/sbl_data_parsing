@@ -301,7 +301,6 @@ S9·S9b는 엔진·핸드오프 파일 안 자기 점검 블록을 `tests/`로 �
 | `pipeline.eval.diagram_edges_score` | 없음 | `tests/general/pipeline/test_diagram_score.py` |
 | `pipeline.eval.kg_external` | 없음 | `tests/general/pipeline/test_kg_external.py` |
 | `pipeline.eval.make_questions` | 없음 | `tests/general/pipeline/test_make_questions.py` |
-| `pipeline.eval.parse_shadow` | 없음 | `tests/general/pipeline/test_parse_shadow.py` |
 | `pipeline.eval.qa_draft` | 없음 | `tests/general/pipeline/test_qa_draft.py` |
 | `pipeline.eval.report` | 없음 | `tests/general/pipeline/test_report.py` |
 | `pipeline.eval.run_board` | 없음 | `tests/general/pipeline/test_run_board.py` |
@@ -313,7 +312,6 @@ S9·S9b는 엔진·핸드오프 파일 안 자기 점검 블록을 `tests/`로 �
 | `pipeline.load.structured` | 없음 | `tests/general/pipeline/test_structured.py` |
 | `pipeline.shared.meaning` | 없음 | `tests/general/pipeline/test_shared_meaning.py` |
 | `pipeline.shared.postprocess` | 없음 | `tests/general/pipeline/test_postprocess.py` |
-| `pipeline.tools.check_residue` | 없음 | `tests/general/pipeline/test_check_residue.py` |
 | `pipeline.transform.figures.charts` | 없음 | `tests/general/pipeline/test_charts.py` |
 | `pipeline.transform.figures.mermaid` | 없음 | `tests/general/pipeline/test_mermaid.py` |
 | `pipeline.transform.figures.vector` | 없음 | `tests/general/pipeline/test_vector.py` |
@@ -399,7 +397,6 @@ S9·S9b는 엔진·핸드오프 파일 안 자기 점검 블록을 `tests/`로 �
 | `pipeline.transform.represent.reread` | 없음 | (pl-34 10-30 — 모듈·시험 지움) |
 | `pipeline.transform.represent.reread_stage3` | 없음 | (pl-34 10-30 — 모듈·시험 지움) |
 | `pipeline.transform.represent.scan_dedup` | 없음 | `tests/server/pipeline/test_scan_dedup.py` |
-| `pipeline.transform.represent.shadow` | 없음 | `tests/server/pipeline/test_shadow.py` |
 | `pipeline.transform.represent.supsub` | 없음 | `tests/server/pipeline/test_supsub.py` |
 | `pipeline.transform.represent.table_inline` | 없음 | `tests/server/pipeline/test_table_inline.py` |
 | `pipeline.transform.represent.table_std` | 없음 | `tests/server/pipeline/test_table_std.py` |

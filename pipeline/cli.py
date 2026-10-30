@@ -971,7 +971,7 @@ def _case_settings():
         import tempfile
 
         fd, path = tempfile.mkstemp(prefix="case_settings_", suffix=".yaml")
-        os.write(fd, b"common:\n  run_env: local\n")
+        os.write(fd, b"required:\n  env:\n    run_env: local\n")
         os.close(fd)
         _CASE_ENVS["file"] = path
     return _CASE_ENVS["file"]

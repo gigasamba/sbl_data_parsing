@@ -1,4 +1,5 @@
-"""설정 읽기 — settings.yaml 하나(최상위 절 common·pipeline·mcp)를 pydantic 모델로 읽는다(S7a, refactor_plan 5-2 · D-015).
+"""설정 읽기 — settings.yaml 하나를 pydantic 모델(최상위 절 common·pipeline·mcp)로 읽는다(S7a, refactor_plan 5-2 · D-015). 파일 배치
+(required·역할 절·tuning — op-08 ②)는 common.config.layout이 모델 배치로 바꾼다(read_settings — 이 모듈 아래 설명의 "절"은 모델 배치).
 앱은 자기 설정 객체 하나를 프로세스 시작 때 한 번 읽어 캐시한다 — pipeline/config.py(common + pipeline 절),
 mcp_server/config.py(common + mcp 절). 이 파일은 common 절 모델과 두 앱이 함께 쓰는 읽기 함수를 둔다.
 
@@ -18,7 +19,7 @@ mcp_server/config.py(common + mcp 절). 이 파일은 common 절 모델과 두 �
   · 글자 칸에 쓴 YAML 스칼라(yes·no·true·on·1·0·숫자)는 쓴 글자 그대로 글자로 받는다 — 옛 env 줄에 같은 글자를 쓴 것과 같게(VS7a R-3).
     숫자·켜기·JSON 칸은 YAML이 푼 값 그대로.
 파일 찾기: SETTINGS_FILE(env) > RUN_ENV가 없거나 local이면 저장소 루트 settings.yaml(있을 때만 — settings.sample.yaml 옆).
-RUN_ENV: env RUN_ENV > YAML common.run_env. local·dev·prd. 없거나 dev·prd인데 파일이 없으면 거부(D-028 ②).
+RUN_ENV: env RUN_ENV > YAML required.env.run_env. local·dev·prd. 없거나 dev·prd인데 파일이 없으면 거부(D-028 ②).
 앱 시작 관문 require_run_env() — pipeline.cli(selftest 빼고)·mcp_server.main·trigger_server·mcp_parse_service가 맨 먼저 부른다. 서버(dev·prd)면
 설정 파일을 못 읽거나 그 앱 절 검증에 실패해도 이유(칸 경로·오류 종류만)를 찍고 종료 2(VS7e1 U-1 — 사용자 10-28). 틀린 파일은 import common 때도
 서버면 바로 실패(pin_env — STRICT, S7b c안), local이면 경고 뒤 기본값.
@@ -586,18 +587,22 @@ def read_yaml(path):
     if doc is None:
         return {}
     if not isinstance(doc, dict):
-        raise SettingsError(f"설정 파일 맨 위는 절(common·pipeline·mcp) 사전이어야 함: {p}")
-    unknown = sorted(set(doc) - set(SECTIONS) - set(OVERLAY_KEYS))
-    if unknown:
-        raise SettingsError(f"설정 파일에 모르는 최상위 절 {unknown} — common·pipeline·mcp만(덮기 파일은 base·overrides): {p}")
+        raise SettingsError(f"설정 파일 맨 위는 절(required·common·extract … tuning) 사전이어야 함: {p}")
     return doc
 
 
 def read_settings(path, _depth=0):
-    """설정 파일 → (절 사전, overrides {옛 env 이름: 글자|None}). 덮기 파일이면 base를 먼저 읽고 그 위에 이 파일의 절·overrides를 겹친다
-    (위 모듈 설명 — base는 상대 경로면 이 파일 폴더 기준, 5단까지)."""
+    """설정 파일 → (모델 배치 절 사전 {common·pipeline·mcp}, overrides {옛 env 이름: 글자|None}). 파일은 새 배치(op-08 ② — common.config.layout)
+    이고 여기서 모델 배치로 바꾼다(옛 배치는 migrate 안내와 함께 거부). 덮기 파일이면 base를 먼저 읽고 그 위에 이 파일의 절·overrides를
+    겹친다(위 모듈 설명 — base는 상대 경로면 이 파일 폴더 기준, 5단까지)."""
+    from common.config import layout
+
     doc = read_yaml(path)
     base, over = doc.pop("base", None), doc.pop("overrides", None)
+    try:
+        doc = layout.to_model(doc, str(path))
+    except layout.LayoutError as e:
+        raise SettingsError(str(e)) from None
     names = {}
     if base is not None:
         if _depth >= 5:
@@ -642,9 +647,16 @@ def find_file(environ, run_env):
 
 def _format_errors(err, source):
     """칸 경로·오류 종류만 — 입력값은 찍지 않는다(비밀 칸 이름을 틀리면 비밀 칸으로 알아볼 수 없음 — VS7a R-1)."""
-    lines = [
-        f"  {'.'.join(str(x) for x in e['loc'])}: {e['msg']} [{e['type']}]" for e in err.errors(include_url=False, include_input=False)
-    ]
+    from common.config import layout
+
+    def where(loc):  # 모델 경로 → 파일 자리(op-08 ②)
+        p = ".".join(str(x) for x in loc)
+        try:
+            return layout.to_yaml(p)
+        except layout.LayoutError:
+            return p
+
+    lines = [f"  {where(e['loc'])}: {e['msg']} [{e['type']}]" for e in err.errors(include_url=False, include_input=False)]
     return f"설정 검증 실패({source}) — {len(lines)}건\n" + "\n".join(lines)
 
 
@@ -767,7 +779,7 @@ def load(
     if run_env in SERVER_ENVS and path is None and require_file:
         raise SettingsError(f"RUN_ENV={run_env} — 서버는 설정 파일이 있어야 함(SETTINGS_FILE)")
     if run_env is None and strict:
-        raise SettingsError("RUN_ENV 없음 — local·dev·prd 중 하나를 env RUN_ENV나 settings.yaml common.run_env로")
+        raise SettingsError("RUN_ENV 없음 — local·dev·prd 중 하나를 env RUN_ENV나 settings.yaml required.env.run_env로")
     settings._source = str(path) if path else ""
     return settings
 
@@ -801,7 +813,7 @@ def require_run_env(app="", environ=None, sections=None):
         raise SystemExit(2) from None
     if value is None:
         print(
-            f"{tag}RUN_ENV 없음 — local(PC)·dev·prd 중 하나를 env RUN_ENV로 주거나 settings.yaml common.run_env에 적음"
+            f"{tag}RUN_ENV 없음 — local(PC)·dev·prd 중 하나를 env RUN_ENV로 주거나 settings.yaml required.env.run_env에 적음"
             "(PC: 저장소 루트 settings.yaml · 서버: settings.yaml — refactor.md C-34)",
             file=sys.stderr,
         )
@@ -814,7 +826,7 @@ def require_run_env(app="", environ=None, sections=None):
             print(f"{tag}서버(RUN_ENV={value}) — 설정을 읽지 못해 시작하지 않음: {e}", file=sys.stderr)
             raise SystemExit(2) from None
         if st.common.dev.llm_fake:  # op-02(사용자 10-29) — 가짜 LLM 응답은 local에서만, 서버는 시작 거부
-            print(f"{tag}서버(RUN_ENV={value}) — common.dev.llm_fake가 켜져 있어 시작하지 않음(local 전용)", file=sys.stderr)
+            print(f"{tag}서버(RUN_ENV={value}) — dev.llm_fake가 켜져 있어 시작하지 않음(local 전용)", file=sys.stderr)
             raise SystemExit(2)
     return value
 

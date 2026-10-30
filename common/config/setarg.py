@@ -71,7 +71,7 @@ def check(names):
             probs.append(
                 f"{name}: 설정 칸이 없는 이름(settings.sample.yaml의 env= 이름)"
                 if name != "RUN_ENV"
-                else "RUN_ENV: 실행 환경은 --set으로 바꾸지 않음(env RUN_ENV·settings.yaml common.run_env)"
+                else "RUN_ENV: 실행 환경은 --set으로 바꾸지 않음(env RUN_ENV·settings.yaml required.env.run_env)"
             )
         elif S.is_host(path):
             probs.append(f"{name}: 호스트 칸({path}) — 컨테이너 안 앱이 읽지 않음(settings.yaml·셸 env)")
