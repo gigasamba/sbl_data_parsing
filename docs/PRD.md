@@ -4,9 +4,6 @@
 행 = 묶음 하나(끝난 것 포함). 상태: todo · dev · done(그 밖에 partly done). ID는 그대로 두고 카테고리 파일이 자리를 정한다. 상세는 ID 링크.
 
 ## 지금 진행 중
-- pl-13 적재가 지우지 않음 — dev, `feature/load-no-prune` 병합됨(#17) → 상태 정리.
-- pl-22 파싱 phase 없애기 — dev, `feature/r2-phase` 병합됨 → 서버 확인(refactor.md C-65), VLM 동시 수 손잡이는 후속.
-- pl-27 프로세스 종료 정리 — dev, `feature/exit-cleanup` 병합됨 → code_fp 모든 레이어 바뀜(다음 반입에서 재처리).
 - pl-25 DB 스키마 명세 — dev, `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인.
 
 ## ETL — 수집·퍼블리시·적재·DB (etl)
@@ -18,7 +15,7 @@
 | structure/load 계약이 새 묶음 거부 | todo | `DOC_KEYS` 고침(사람 검토) | [pl-15](prd/etl.md#pl-15) |
 | `PIPE_EMBED=none`이면 `vector(0)` | todo | 차원 0 처리 | [pl-16](prd/etl.md#pl-16) |
 | pgvector 적재 | done | Alembic 표 · 건너뛰기 · 색인 | [pl-07](prd/etl.md#pl-07) |
-| 적재는 지우지 않음(`--prune` 없앰) | dev | prune 길 없앰 · 시험 | [pl-13](prd/etl.md#pl-13) |
+| 적재는 지우지 않음(`--prune` 없앰) | done | prune 길 없앰 · 시험 | [pl-13](prd/etl.md#pl-13) |
 | 배포 backfill이 `doc.clients`만 읽음 | done | backfill 고침 · 시험 | [pl-14](prd/etl.md#pl-14) |
 | compose `index_a`/`index_b` 실패 | todo | 원인 · 고침 | [pl-19](prd/etl.md#pl-19) |
 | 정형 DB와 문서 대장 | done | 마스터 · 연결 · 대장 | [pl-08](prd/etl.md#pl-08) |
@@ -47,7 +44,8 @@
 |---|---|---|---|
 | 준비 | done | 중복 · 회전 · DRM 감지 | [pl-02](prd/parse.md#pl-02) |
 | 엔진 스택 파싱 | done | 형식별 엔진 · 격리 · 스택 판 | [pl-03](prd/parse.md#pl-03) |
-| 파싱 phase 없애기 · OCR 엔진 끔 | dev | 병렬 엔진 · 제한 · 쪽 VLM · 서버 확인 | [pl-22](prd/parse.md#pl-22) |
+| 파싱 phase 없애기 · OCR 엔진 끔 | done | 병렬 엔진 · 제한 · 쪽 VLM · 서버 확인 | [pl-22](prd/parse.md#pl-22) |
+| VLM 동시 수 손잡이 | todo | pl-22 후속 | [pl-43](prd/parse.md#pl-43) |
 | ocr_vlm·vlm.model_alt 삭제 | done | 0.1.0 · 엔진 핑거프린트 바뀜(등급 A) | [pl-31](prd/parse.md#pl-31) |
 | 파싱 p1 묶음 — 재판독(P2·P3)·scan_dedup·렌더 OCR 신호 | done | 0.1.0 · p1 바뀜(등급 A) | [pl-34](prd/parse.md#pl-34) |
 | 핑거프린트 영향 없는 잔재 지우기 | done | parse_parallel · AUTO_REPARSE_CHANGED · figures_resume(pl-32) · phase_report 남김 | [pl-35](prd/parse.md#pl-35) |
@@ -84,7 +82,8 @@
 | RUN_ENV 셋 · LLM_FAKE는 local만 | done | `stage` 거부 · 시작 관문 | [op-02](prd/settings.md#op-02) |
 | 모델 호출·비용·외부 전송 가드 | done | 역할 · 외부 거부 · 예산 | [pl-11](prd/settings.md#pl-11) |
 | EDW 접속 하나·계정 둘 | done | `common.connections.rdb` · 읽기·쓰기 · sqlite 대역 | [op-03](prd/settings.md#op-03) |
-| 프로세스 종료 정리 | dev | 덮기 파일 지움 · 자식 회수 · SIGTERM | [pl-27](prd/settings.md#pl-27) |
+| 프로세스 종료 정리 | done | 덮기 파일 지움 · 자식 회수 · SIGTERM | [pl-27](prd/settings.md#pl-27) |
+| 강제 종료로 남은 임시 설정 파일 정리 | todo | 다음 시작 때 주인 없는 파일 지움 | [pl-44](prd/settings.md#pl-44) |
 | JSON Lines 사건 기록 | todo | 포매터 · 수준 설정 · 가림 | [op-01](prd/settings.md#op-01) |
 | settings.yaml 하나 · sample에 모든 키·기본값 | done | 주석 해제 · 카테고리 묶음 · 생성기 · 0.1.0 | [op-05](prd/settings.md#op-05) |
 | 미룬 설정 지우기 | done | `korean_font` · `eval_sets_dir`(fp-batch) | [pl-21](prd/settings.md#pl-21) |
@@ -95,7 +94,7 @@
 |---|---|---|---|
 | 시험 층 | done | server · general · 알려진 실패 | [e2-02](prd/test.md#e2-02) |
 | 이미지 빌드·반입 관문 | done | build_ship · `[판정]` · 오버레이 | [e2-08](prd/test.md#e2-08) |
-| 반입 시험이 이미지 안에만 | todo | 오버레이로 시험 갱신(C-53) | [e2-14](prd/test.md#e2-14) |
+| 반입 시험이 이미지 안에만 | done | 오버레이로 시험 갱신(C-53) | [e2-14](prd/test.md#e2-14) |
 | PC 일반 시험 알려진 실패 | partly done | 공용 PG 3개 고침 · 남은 4개 | [e2-11](prd/test.md#e2-11) |
 | 에이전트 시험 패키지 경로 | todo | `resolve_agent_dir`(code_fp) | [e2-15](prd/test.md#e2-15) |
 | PC 스모크 | done | 파싱 → 검색 2~3건 | [e2-01](prd/test.md#e2-01) |

@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나. 수집([etl.md](etl.md)) 다음, 구조화 앞 단계: 준비 → 엔진 스택 파싱 → represent(대표 결과 고르기·고치기) → 그림.
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서(주제별): 준비 pl-02 → 엔진 스택 pl-03·pl-22·pl-31·pl-20·pl-17 → represent·그림 pl-34·pl-04·pl-05·pl-36·pl-37 → 잔재 pl-35 → 코드와 다른 점.
+순서(주제별): 준비 pl-02 → 엔진 스택 pl-03·pl-22·pl-43·pl-31·pl-20·pl-17 → represent·그림 pl-34·pl-04·pl-05·pl-36·pl-37 → 잔재 pl-35 → 코드와 다른 점.
 
 <a id="pl-02"></a>
 ## pl-02 · 준비
@@ -38,7 +38,13 @@
 - 열린 것: 글자 엔진은 쪽으로 나누지 않는다(문서×엔진마다 자식 하나, 쪽 병렬은 VLM 엔진 안에서만 `VLM_CONCURRENCY`로).
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P7·P8): 그대로 둠 — 그림자 모드·스트리밍(e2-18 남김), 복호화(수동 CLI 요건), figure_review(e2-10에서 판단), rapidocr_ko(다른 단계가 씀). 실행 구성(D-2~14)은 pl-22·rn-01·rn-02·mc-08 결정대로, 워커 6은 서버 실측(C-65) 뒤 조정.
 - 결정(사용자 10-30 PRD grill): S1 — done으로 닫는다. 서버 확인은 refactor.md C 항목, 후속(VLM 동시 수 손잡이)은 새 todo 행으로.
-- Status: dev — 브랜치 `feature/r2-phase`, 서버 확인 대기(refactor.md C-65). VLM 동시 수 손잡이는 병합 안 됨(따로 후속).
+- Status: done — `feature/r2-phase` 병합. 서버 확인은 refactor.md C-65·C-68, VLM 동시 수 손잡이는 [pl-43](#pl-43).
+
+<a id="pl-43"></a>
+## pl-43 · VLM 동시 수 손잡이
+- 이유: pl-22(파싱 phase 없애기)에서 VLM 동시 수 손잡이는 병합하지 않고 후속으로 남겼다(사용자 10-30 PRD grill S1 — pl-22는 done으로 닫음).
+- 무엇: VLM 엔진·쪽 VLM·그림 VLM이 함께 쓰는 동시 호출 수를 조정하는 설정(지금은 `VLM_CONCURRENCY`·전체 VLM 관문 기본 12 — [pl-05](#pl-05)).
+- Status: todo
 
 <a id="pl-31"></a>
 ## pl-31 · ocr_vlm·vlm.model_alt 삭제
