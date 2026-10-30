@@ -134,4 +134,8 @@ def main():
 
 
 if __name__ == "__main__":
+    if sys.argv[
+        1:
+    ]:  # 인자를 받지 않음 — 옛 `--selftest` 같은 인자가 실호출로 넘어가지 않게(자기 점검은 tests/server/common/test_ping_models.py)
+        raise SystemExit("인자 없음 — 인자 없이 부르면 모델 실호출. 자기 점검은 pipeline.cli selftest --only ping_models")
     main()

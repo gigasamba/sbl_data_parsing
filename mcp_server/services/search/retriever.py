@@ -59,7 +59,6 @@ class Retriever:
             # pg_schema(AD41) — 이름 있는 색인은 자기 스키마(<PG_SCHEMA>_<index_id>, common.index_cfg가 검증), 없으면 PG_SCHEMA 그대로.
             self.pgmod, self.pg = pgsearch, PGM.connect_pool(pg_schema=pg_schema)
         self._g = None
-        self._cc = None  # 개념→청크 역색인(X4, concept_chunk.jsonl) — 처음 쓸 때 한 번 읽음
         self.hidden = set()
         if hidden_db is not None:  # OP1 — 숨김 집합(비면 전과 바이트 동일, _search_ex가 hidden=None으로 건넴)
             from mcp_server.services.search import registry as RREG  # 10-14 — hidden_set은 common.store.registry에서 옮김(R만 씀)
@@ -90,11 +89,6 @@ class Retriever:
         finally:
             if owns:
                 db.close()
-
-    def _chunk_key_hidden(self, chunk_key):
-        """OP1 — chunk_key(file_sha256:seq) 앞부분이 self.hidden에 있는지(그래프 이웃·개념 검색처럼 chunk_key로만
-        들고 있는 결과를 거를 때 공용으로 씀 — doc 조회 없이 문자열만 비교, 추가 질의 없음)."""
-        return bool(self.hidden) and chunk_key.split(":", 1)[0] in self.hidden
 
     def search(self, q, k, methods=None, client=None):
         """methods ⊂ {vector, bm25, id}(없으면 retrieve 설정대로) — 검색 MCP가 방법을 골라 씀(G3).
