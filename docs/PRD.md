@@ -42,6 +42,7 @@
 | 준비 | done | 중복 · 회전 · DRM 감지 | [pl-02](prd/parse.md#pl-02) |
 | 엔진 스택 파싱 | done | 형식별 엔진 · 격리 · 스택 판 | [pl-03](prd/parse.md#pl-03) |
 | 파싱 phase 없애기 · OCR 엔진 끔 | dev | 병렬 엔진 · 제한 · 쪽 VLM · 서버 확인 | [pl-22](prd/parse.md#pl-22) |
+| ocr_vlm·vlm.model_alt 삭제 | todo | 0.1.0 · 엔진 핑거프린트 바뀜(등급 A) | [pl-31](prd/parse.md#pl-31) |
 | 엔진 스택 사본 파일 검토 | todo | 방식 검토(C-50) | [pl-20](prd/parse.md#pl-20) |
 | 파싱 단계를 `transform/parse/`로 | todo | 옮기기 · 이름 바꾸기 · code_fp | [pl-17](prd/parse.md#pl-17) |
 | represent — 고르고 고치기 | done | 대표 · 합치기 · 다시 읽기 · 표 | [pl-04](prd/parse.md#pl-04) |
