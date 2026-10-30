@@ -179,8 +179,10 @@
   - `load_run`과 Alembic 판 표는 gold에 남고, 나눈 뒤에도 공용. `chunk`는 `source_system`과 `clients[]`를 유지(고객 격리, 원천 거르기).
   - `AI.ParsingMeta`는 읽는 칸만 남긴다: `source_system`, `source_key`(s3_key), `parse_date`, `parse_status`, `status`, `status_at`, `rep_bucket`, `rep_key`, 새 `gold_status` + 이유([pl-24](#pl-24)). `doc_key`와 안 읽는 칸 14개는 없앤다.
   - `struct`: 문서에서 나온 표 `doc_location`, `doc_contract_link`, `doc_table`, `doc_cell`과 그 쓰기·읽기 코드(structured link/tables, `load_tables_db`, `find_table_cells`, 집계 `doc_link_list`/`table_cell_list`/`doc_location_list`, `AG.struct` 서버 길)를 지운다 — 그 내용은 청크 글에만 있다. `stack_version`/`source_version`은 남긴다(MCP 시작 때 읽음).
-  - 마스터 `contract_master`, `client_master`는 **따로** Postgres로 옮긴다(검색 PG가 아닌 자기 접속 설정). 사람이 CSV로 채운다(`structured load` 방식). 읽는 코드 `gen_roster`(client_master)와 `terms.py`(contract_master)는 새 접속을 쓴다.
-  - (사용자 10-30 grill 9~10차) 용어집과 고객 목록(C-21)도 그 마스터 Postgres의 표가 된다 — 폴더 마운트 없음. CSV 원본은 git 밖 서버 폴더에 두고(회사 자료) 적재 명령이 그 경로를 받는다. PC는 SQLite 대역. `pipeline_version`(C-62)은 ParsingMeta가 아니라 gold `doc`의 칸. 둘 다 `db_schema.md`에 있다.
+  - 마스터 성격 자료(용어집, 고객 명부(C-21), `contract_master`, `client_master`)는 모두 **CSV 파일**로 둔다(사용자 10-30 — grill 9~10차의 "마스터 Postgres + PC SQLite 대역"을 뒤집음). 별도 마스터 Postgres도, 용어집용 SQLite도 없다. 회사 실제 CSV는 git `resources/vocab/glossary/`(지금 폴더)에 두어 이미지에 함께 들어간다 — 서버 폴더·마운트 없음. 파일·머리글은 `db_schema.md` §5.
+  - `pipeline_version`(C-62)은 ParsingMeta가 아니라 gold `doc`의 칸(`db_schema.md`).
+  - 후속 구현(todo): 실제 CSV가 `*.example.*`를 대신함 · `common.paths.glossary_dir`를 이미지 경로 `resources/vocab/glossary`로 · 마스터를 PG에 적재하는 코드가 있으면 지움(`structured load --csv-dir`의 `contract_master`·`client_master` 적재, struct 마스터 표 — 고객 별칭은 CSV에서 읽음).
+  - ⚠️ 확인 필요(구현 전): [server-guide §5](../operations/server-guide.md)의 "기밀(실고객·실제품·계약 값)은 git·PC·외부 모델로 보내지 않는다"와 충돌 — 원격이 GitHub(외부망)라 실제 CSV를 git에 넣으면 회사 자료가 밖으로 나간다. 사용자 결정 전에는 실제 CSV를 커밋하지 않는다.
   - EDW 벡터 표(`chunk_vec`, `edw_insert`, `edw_search`)는 PR #5가 지운다.
 - 결정(사용자 10-30 — 고객 칸): 문서당 고객 하나는 EDW 조인 사슬에서 온다(값 하나). 문서 글에서 찾은 고객은 별도 목록. MCP 고객 거르기는 EDW 고객**만** 쓰고, EDW 고객이 없는 문서는 고객 거르기를 걸면 빠진다. 글에서 찾은 고객을 거르기에 쓰는 것은 나중([pl-28](#pl-28)). 지금은 둘이 `clients[]`에 섞여 있고(`build_bundle.infer_clients`) `chunk.clients`가 하드 거르기를 이끈다 — 이 행과 함께 고친다.
 - 이름 규칙(사용자 10-30): EDW와 문서 파싱 양쪽에서 올 수 있는 칸은 출처를 이름에 넣어 두 칸으로 둔다(예: `client_edw`, `clients_doc`). 정확한 접미어는 `db_schema.md`가 정한다.

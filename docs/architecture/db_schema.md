@@ -107,7 +107,7 @@
 
 ## 3. struct — 정형 저장소 (PostgreSQL `struct`, PC는 SQLite 대체)
 
-판: `0001_struct_base.py`·`0002_struct_config.py` · 모델: `common/store/db/models/struct_tables.py` · SQLite 대체: `common/store/structdb.py`. 문서에서 뽑은 내용을 담던 표(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`)는 지운다 — 그 내용은 청크 본문에만 둔다. 지우면 함께 가는 코드: `pipeline/load/structured.py`(`link`·`tables` 명령, `load_tables_docs`), `pipeline/cli.py` `load_tables_db`, `common/store/structdb.py` `find_table_cells`, `mcp_server/services/search/structdb.py` `find_table_row`, `aggregate.py`(`struct`, `struct_context`, `doc_link_list`, `doc_location_list`, `table_cell_list`, `_table_cell_scope_docs`)와 호출부(`internal_docs.py`, `cli/ask.py`). 마스터(`contract_master`·`client_master`)는 별도 PostgreSQL로 옮긴다(§5).
+판: `0001_struct_base.py`·`0002_struct_config.py` · 모델: `common/store/db/models/struct_tables.py` · SQLite 대체: `common/store/structdb.py`. 문서에서 뽑은 내용을 담던 표(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`)는 지운다 — 그 내용은 청크 본문에만 둔다. 지우면 함께 가는 코드: `pipeline/load/structured.py`(`link`·`tables` 명령, `load_tables_docs`), `pipeline/cli.py` `load_tables_db`, `common/store/structdb.py` `find_table_cells`, `mcp_server/services/search/structdb.py` `find_table_row`, `aggregate.py`(`struct`, `struct_context`, `doc_link_list`, `doc_location_list`, `table_cell_list`, `_table_cell_scope_docs`)와 호출부(`internal_docs.py`, `cli/ask.py`). 마스터(`contract_master`·`client_master`)는 DB 표가 아니라 CSV 파일로 둔다(§5, 사용자 10-30).
 
 ### struct.contract_master
 
@@ -129,7 +129,7 @@
 | end_date | TEXT | 종료일 | 〃 | 〃 | 삭제 |
 | status | TEXT | 상태 | 〃 | 〃 | 삭제 |
 
-(struct에서는 지우고 같은 칸으로 `master.contract_master`에 새로 만든다.)
+(struct에서는 지우고 같은 칸을 CSV `contract_master.csv`로 둔다 — §5.)
 
 ### struct.client_master
 
@@ -139,7 +139,7 @@
 | company | TEXT | 고객사 이름 | 〃 | 〃 | 삭제 |
 | aliases | TEXT | 별칭(`\|` 구분) | 〃 | 〃 | 삭제 |
 
-(struct에서는 지우고 `master.client_master`로 옮긴다.)
+(struct에서는 지우고 CSV `client_master.csv`로 둔다 — §5.)
 
 ### struct.prod_master
 
@@ -348,71 +348,19 @@
 | gold_status | NVARCHAR(32) | gold(검색 DB) 적재 상태 | (pl-24 — run_docs·적재) | (pl-24 재시도·건너뜀) | 새로 |
 | gold_reason | NVARCHAR(2000) | gold 상태 이유(실패 원인 등) | (pl-24) | (운영자) | 새로 |
 
-## 5. master — 마스터 PostgreSQL (새 DB, 10-30 결정)
+## 5. master — CSV 파일 (`resources/vocab/glossary/`, 사용자 10-30)
 
-검색 PG와 다른 별도 PostgreSQL(접속 설정 따로 — 아직 없음). 사람이 CSV로 채운다(지금 `structured load --csv-dir`와 같은 방식). 칸은 지금 `struct`의 같은 이름 표 그대로 옮긴다.
+마스터 성격 자료(용어집, 고객 명부, `contract_master`, `client_master`)는 **DB가 아니라 CSV 파일**이다. 별도 마스터 PostgreSQL도, 용어집용 SQLite 대역도 없다(10-30 grill 9~10차의 "마스터 PG + PC SQLite 대역" 결정을 뒤집음). 회사 실제 CSV는 git의 `resources/vocab/glossary/`(지금 폴더)에 두어 이미지에 함께 들어간다 — 서버 폴더·마운트 없음, `glossary_dir`는 이미지 경로. 지금 있는 `*.example.*` 파일은 실제 CSV로 바꾼다([pl-25](../prd/etl.md#pl-25) 후속). ⚠️ server-guide §5 "기밀은 git에 두지 않음" 규칙과 충돌 — 실제 CSV 커밋 전에 사용자 확인(pl-25).
 
-### master.contract_master
+| 파일 | 무엇 | 머리글 | 읽는 곳 |
+|---|---|---|---|
+| `domain_terms.csv` | 용어 사전(C-21) | `concept_id,canonical,category,synonyms,abbreviations,weak_synonyms,broader,related,context_required,case_sensitive,definition_ko,definition_en,source,owner,status,updated` (`status`는 approved·draft) | `common.core.terms` |
+| `client_roster.csv` | 고객 명부(C-21, 새 형식) | `client_id,canonical_name,name_ko,aliases,client_type,segment,country,parent_client_id,status,description,source,updated` — 읽는 칸: `canonical_name`(비면 `name_ko`), `aliases`(`;`·`\|` 구분), `status`(inactive·deleted면 건너뜀) | `common.core.terms` 고객 별칭(초안은 `gen_roster`) |
+| `contract_master.csv` | 계약 마스터 | `contract_id,company,company_id,product_code,modality,site,line_id,batches_contracted,contract_value_usd,currency,term_months,signed_on,start_date,end_date,status` (§3 `struct.contract_master`와 같은 칸) | 계약 연결·고객 별칭 |
+| `client_master.csv` | 고객 마스터 | `company_id,company,aliases`(별칭 `\|` 구분 — §3 `struct.client_master`와 같은 칸) | 고객 별칭(aggregate `_struct_client_aliases` 자리) |
 
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| contract_id | TEXT PK | 계약 id | (CSV 적재 — 사람) | (계약 연결·고객 별칭) | 새로 |
-| company | TEXT | 고객사 이름 | 〃 | 〃 | 새로 |
-| company_id | TEXT | 고객사 id | 〃 | 〃 | 새로 |
-| product_code | TEXT | 제품 코드 | 〃 | 〃 | 새로 |
-| modality | TEXT | 모달리티 | 〃 | 〃 | 새로 |
-| site | TEXT | 생산지 | 〃 | 〃 | 새로 |
-| line_id | TEXT | 라인 | 〃 | 〃 | 새로 |
-| batches_contracted | INTEGER | 계약 배치 수 | 〃 | 〃 | 새로 |
-| contract_value_usd | INTEGER | 계약 금액(USD) | 〃 | 〃 | 새로 |
-| currency | TEXT | 통화 | 〃 | 〃 | 새로 |
-| term_months | INTEGER | 기간(개월) | 〃 | 〃 | 새로 |
-| signed_on | TEXT | 서명일 | 〃 | 〃 | 새로 |
-| start_date | TEXT | 시작일 | 〃 | 〃 | 새로 |
-| end_date | TEXT | 종료일 | 〃 | 〃 | 새로 |
-| status | TEXT | 상태 | 〃 | 〃 | 새로 |
-
-### master.client_master
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| company_id | TEXT PK | 고객사 id | (CSV 적재 — 사람) | (고객 별칭 — aggregate `_struct_client_aliases` 자리) | 새로 |
-| company | TEXT | 고객사 이름 | 〃 | 〃 | 새로 |
-| aliases | TEXT | 별칭(`\|` 구분) | 〃 | 〃 | 새로 |
-
-### master.glossary
-
-용어 사전(지금 `GLOSSARY_DIR`의 `domain_terms.csv` — C-21 사용자 10-30: 폴더 마운트 대신 마스터 PG 표). CSV 원본은 git 밖 서버 폴더(회사 데이터), 적재 명령이 경로를 받음. PC는 SQLite 대역. 칸 = 지금 CSV 머리글 그대로.
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| concept_id | TEXT PK | 개념 id | (CSV 적재 — 사람) | (common.core.terms) | 새로 |
-| canonical | TEXT | 정식 표기 | 〃 | 〃 | 새로 |
-| category | TEXT | 분류(org_client 등) | 〃 | 〃 | 새로 |
-| synonyms | TEXT | 동의어(구분자 목록) | 〃 | 〃 | 새로 |
-| abbreviations | TEXT | 약어 | 〃 | 〃 | 새로 |
-| weak_synonyms | TEXT | 약한 동의어(문맥 조건) | 〃 | 〃 | 새로 |
-| broader | TEXT | 상위 개념 | 〃 | 〃 | 새로 |
-| related | TEXT | 관련 개념 | 〃 | 〃 | 새로 |
-| context_required | TEXT | 문맥 필요 여부 | 〃 | 〃 | 새로 |
-| case_sensitive | TEXT | 대소문자 구분 여부 | 〃 | 〃 | 새로 |
-| definition_ko | TEXT | 정의(한국어) | 〃 | 〃 | 새로 |
-| definition_en | TEXT | 정의(영어) | 〃 | 〃 | 새로 |
-| source | TEXT | 출처 | 〃 | 〃 | 새로 |
-| owner | TEXT | 담당 | 〃 | 〃 | 새로 |
-| status | TEXT | approved·draft | 〃 | 〃 | 새로 |
-| updated | TEXT | 고친 때 | 〃 | 〃 | 새로 |
-
-### master.client_roster
-
-고객 명부(지금 `CLIENT_ROSTER` CSV 새 형식 — C-21 사용자 10-30: 마스터 PG 표). 원본·적재·PC 대역은 `master.glossary`와 같음. 칸 = 지금 CSV 새 형식 머리글(`common/core/terms.py` 명부 읽기).
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| canonical_name | TEXT PK | 고객 정식 이름 | (CSV 적재 — 사람, `gen_roster` 초안) | (common.core.terms 고객 별칭) | 새로 |
-| name_ko | TEXT | 한국어 이름(정식 이름이 비면 이것) | 〃 | 〃 | 새로 |
-| aliases | TEXT | 별칭(`;` 또는 `\|` 구분) | 〃 | 〃 | 새로 |
-| status | TEXT | inactive·deleted면 건너뜀 | 〃 | 〃 | 새로 |
+- `client_master.example.csv`(머리글 `Account_Id,Account_Name,Account_Name_KR,Alias_List,Account_Type,Billing_Country,Parent_Id,Account_Status`)는 EDW 모양 원본 — `gen_roster --kind client --source csv:client_master.csv --mapping …`이 명부 초안을 만들 때 읽는다.
+- 같이 있는 `id_patterns.csv`·`units.csv`·`client_roster_seed.json`·`client_master_map.example.json`은 그대로.
 
 ## 6. DB 담당자 확인 필요
 
@@ -422,9 +370,9 @@
 | D-2 | 문서당 EDW 고객 하나(`client_edw`)를 얻는 조인 경로 — 원천별(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account.Name`로 보임, CRMS·LAS는?) | 지금은 외부에서 뽑은 `file_meta_new.jsonl`을 읽고, 그 파일을 만드는 코드가 저장소에 없음 → **결정(사용자 10-30):** 파이프라인이 EDW 읽기 계정으로 조인을 직접 만든다(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account`) — `file_meta_new.jsonl`을 대신함, [pl-29](../prd/etl.md#pl-29). CRMS·LAS 경로는 여전히 확인 필요 |
 | D-3 | `AI.ParsingMeta` 칸 15개 삭제·`gold_status`·`gold_reason` 추가(ALTER) — 권한, 기존 행, 다른 사용처 | 이 프로젝트 밖에서 그 칸을 읽는 곳이 있는지 모름 |
 | D-4 | `ParsingMeta.doc_key` 삭제 때 `UQ_ParsingMeta_dockey`·`IX_ParsingMeta_doc_key` 색인 처리 · `source_key`를 필수(NOT NULL)로 | 지금 `source_key`가 비면 `doc_key`가 겹침 키 |
-| D-5 | 마스터 PostgreSQL 자리·계정·백업 | 새 DB(검색 PG와 분리) |
+| D-5 | (없어짐 — 사용자 10-30: 마스터는 CSV 파일, 마스터 PostgreSQL 없음) | — |
 | D-6 | gold 스키마 변경(`s3_key`·`client_edw`·`clients_doc` 추가, `clients` 삭제)은 Alembic 새 판 — 뷰 `v_chunk_source`를 지우고 다시 만듦(`doc.clients`에 걸려 있음), 기존 서버 데이터는 다시 적재 | 첫 적재가 전체 e2e([pl-23](../prd/etl.md#pl-23))와 함께 |
-| D-7 | struct 표 지우기(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`·`prod_master`, 마스터 2개 이동) 전 백업 | 되돌릴 수 없는 삭제 |
+| D-7 | struct 표 지우기(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`·`prod_master`, 마스터 2개는 CSV로) 전 백업 | 되돌릴 수 없는 삭제 |
 
 ## 7. 사용자 결정 (10-30 grill 7차)
 
@@ -435,7 +383,7 @@ U-1~U-6은 이 문서의 안대로, U-7은 아래 결정대로 한다.
 | U-1 | `chunk.clients[]`(지금 고객 거르기 키, GIN) — 10-30 결정 "청크는 `clients[]` 유지"와 "거르기는 EDW 고객만"이 겹침 | `chunk.clients` 삭제 → `chunk.client_edw` 새로(거르기 키) |
 | U-2 | `struct.prod_master` — 쓰기만 하고 읽는 코드가 없음 | 삭제 |
 | U-3 | `doc_contract_link` — pl-25에 "s3_key로 다시 키"와 "문서 파생 표 삭제"가 함께 있음 | 삭제 |
-| U-4 | 마스터 읽는 곳 — pl-25는 `gen_roster`·`terms.py`라 했지만 실제로 DB를 읽는 곳은 `aggregate`(`_struct_client_aliases`, 지울 `struct_context`·`_table_cell_scope_docs`·`doc_location_list`)와 `structured._client_aliases`(`gen_roster`는 CSV·EDW 표, `terms.py`는 안 읽음) | 남는 읽는 곳은 고객 별칭뿐 — 마스터 PG에서 읽음 |
+| U-4 | 마스터 읽는 곳 — pl-25는 `gen_roster`·`terms.py`라 했지만 실제로 DB를 읽는 곳은 `aggregate`(`_struct_client_aliases`, 지울 `struct_context`·`_table_cell_scope_docs`·`doc_location_list`)와 `structured._client_aliases`(`gen_roster`는 CSV·EDW 표, `terms.py`는 안 읽음) | 남는 읽는 곳은 고객 별칭뿐 — CSV(`resources/vocab/glossary/`)에서 읽음(10-30 바뀜: 마스터 PG 없음) |
 | U-5 | 출처 표시 이름을 붙일 값 — 지금은 고객만. 계약 id(`contract_id`)·제품 이름은 EDW에서만 옴 | 고객만 `_edw`·`_doc`로 나눔, 나머지는 그대로 |
 | U-6 | `ParsingMeta.status_at`은 SELECT하는 코드가 없음(운영자가 봄) · `parse_meta_id`·`source_key_hash`는 DB 키 | 셋 다 유지 |
 | U-7 | 같은 내용이 여러 `s3_key`로 들어온 문서 — 지금은 첫 키만 `doc` 행, 나머지는 `aliases`(묶음 안). 키가 하나뿐인 설계라 둘째 키는 숨김·ParsingMeta 조회가 안 맞음 | `s3_key`마다 `doc` 행 하나 — `doc_alias` 없음. `build_bundle`의 내용 해시 합치기(첫 키로 `aliases`)를 없앰 — 같은 내용이 두 키면 문서 둘(임베딩은 캐시가 다시 씀) |
