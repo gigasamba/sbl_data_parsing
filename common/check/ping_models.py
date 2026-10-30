@@ -1,4 +1,4 @@
-"""모델 연결 실호출 시험(서버 첫 단계) — LLM·VLM·OCRVLM·EMBED에 최소 요청 1건씩 보내 OK/FAIL·지연·응답 모델·(임베딩 차원) 출력.
+"""모델 연결 실호출 시험(서버 첫 단계) — LLM·VLM·EMBED에 최소 요청 1건씩 보내 OK/FAIL·지연·응답 모델·(임베딩 차원) 출력.
 services.py가 /models 존재만 보는 것과 달리 실제 /chat/completions·/embeddings를 부른다. 보내는 내용은 "ping"과 코드로 만든 1×1 PNG뿐(회사 데이터 없음).
 가드: 접두어마다 guard.require_internal → guard.urlopen(외부 주소·NO_PAID_CALLS 차단 그대로). 키는 출력하지 않는다.
   set -a; . $ENV_FILE; set +a; python cli/ping_models.py        # 실패가 하나라도 있으면 종료 코드 1
@@ -34,7 +34,7 @@ def payload(prefix, model):
     if prefix == "EMBED":
         return "/embeddings", {"model": model, "input": ["ping"]}
     content = "ping"
-    if prefix in ("VLM", "OCRVLM"):
+    if prefix == "VLM":
         url = "data:image/png;base64," + base64.b64encode(png_1x1()).decode()
         content = [{"type": "text", "text": "ping"}, {"type": "image_url", "image_url": {"url": url}}]
     return "/chat/completions", {"model": model, "messages": [{"role": "user", "content": content}], "max_tokens": 1}
@@ -73,7 +73,7 @@ def ping(prefix):
     base, model = by_env(f"{prefix}_BASE_URL"), by_env(f"{prefix}_MODEL")
     if not base:
         return None
-    if prefix in ("LLM", "VLM", "OCRVLM"):  # common/adk.py complete() 경유(가드·재시도 공용) — EMBED은 GA6로 adk 역할 없음
+    if prefix in ("LLM", "VLM"):  # common/adk.py complete() 경유(가드·재시도 공용) — EMBED은 GA6로 adk 역할 없음
         try:
             _, body = payload(prefix, model)
             t = time.perf_counter()
@@ -103,17 +103,14 @@ def ping(prefix):
         return False, 0, model or "", f"{type(e).__name__}: {str(e)[:120]}"
 
 
-OPTIONAL = {"OCRVLM"}  # SI46 — 스택에 쓰는 엔진 없음(설정 안 해도 됨)
-
-
 def main():
     fail = 0
     print("| 접두어 | 결과 | ms | 응답 모델 | 비고 |", "|---|---|---|---|---|", sep="\n")
     not_found = []
-    for p in ("LLM", "VLM", "OCRVLM", "EMBED"):
+    for p in ("LLM", "VLM", "EMBED"):
         r = ping(p)
-        if r is None:  # SI46 — OCRVLM은 지금 스택에 쓰는 엔진이 없어 선택(env-guide '선택')
-            print(f"| {p} | 미설정{'(선택)' if p in OPTIONAL else ''} | | | |")
+        if r is None:
+            print(f"| {p} | 미설정 | | | |")
             continue
         ok, ms, m, extra = r
         fail += not ok

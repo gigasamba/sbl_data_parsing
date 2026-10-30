@@ -350,7 +350,7 @@
 
 ## 5. master — CSV 파일 (`resources/vocab/glossary/`, 사용자 10-30)
 
-마스터 성격 자료(용어집, 고객 명부, `contract_master`, `client_master`)는 **DB가 아니라 CSV 파일**이다. 별도 마스터 PostgreSQL도, 용어집용 SQLite 대역도 없다(10-30 grill 9~10차의 "마스터 PG + PC SQLite 대역" 결정을 뒤집음). CSV(샘플 데이터)는 git의 `resources/vocab/glossary/`(지금 폴더)에 두어 이미지에 함께 들어간다 — 서버 폴더·마운트 없음, `glossary_dir`는 이미지 경로. 지금 있는 `.example` 파일은 샘플 CSV로 바꾼다([pl-25](../prd/etl.md#pl-25) 후속). git의 CSV는 샘플 데이터(사용자 10-30) — server-guide §5 기밀 규칙과 충돌 없음.
+마스터 성격 자료(용어집, 고객 명부, `contract_master`, `client_master`)는 **DB가 아니라 CSV 파일**이다. 별도 마스터 PostgreSQL도, 용어집용 SQLite 대역도 없다(10-30 grill 9~10차의 "마스터 PG + PC SQLite 대역" 결정을 뒤집음). CSV(샘플 데이터)는 git의 `resources/vocab/glossary/`(지금 폴더)에 두어 이미지에 함께 들어간다 — 서버 폴더·마운트 없음, `glossary_dir`는 이미지 경로. 샘플 CSV 넷이 들어 있다(10-30 — `client_roster.example.csv`·`domain_terms.example.csv`를 대신함, 한빛 샘플 문서의 고객·제품 포함). git의 CSV는 샘플 데이터(사용자 10-30) — server-guide §5 기밀 규칙과 충돌 없음.
 
 | 파일 | 무엇 | 머리글 | 읽는 곳 |
 |---|---|---|---|

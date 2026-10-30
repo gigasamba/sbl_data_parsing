@@ -1,4 +1,4 @@
-"""0.1.0 지문 배치(pl-21) — 지운 설정 칸이 남은 옛 서버 settings.yaml도 시작은 된다(Section.REMOVED — 경고만, 한 판 동안).
+"""0.1.0 지문 배치(pl-21·pl-31) — 지운 설정 칸이 남은 옛 서버 settings.yaml도 시작은 된다(Section.REMOVED — 경고만, 한 판 동안).
 서버(run_env: dev)는 모르는 칸이면 시작 거부(STRICT)라, REMOVED 이름에 오타가 있으면 여기서 실패한다. 외부 접속 없음, 임시 폴더만."""
 
 import tempfile
@@ -13,10 +13,13 @@ COMMON_OLD = """common:
   runtime: {exp_max_workers: 4, exp_proc_gb_answer: 1, exp_proc_gb_build: 1, exp_proc_gb_run: 1, exp_reserve_gb: 4}
   models:
     llm: {max_concurrency: 8}
+    vlm: {model_alt: m}
+    ocrvlm: {base_url: http://x/v1, model: m}
 """
 PIPELINE_OLD = """pipeline:
   transform:
     structure: {wiki_domain_phrase: x}
+    figures: {ocrvlm_prompt: p}
   eval: {diagram_raster_vlm: false}
 """
 

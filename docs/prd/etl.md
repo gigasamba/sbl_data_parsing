@@ -1,9 +1,8 @@
 # ETL — 수집·퍼블리시·적재·DB
 
-[PRD.md](../PRD.md)의 카테고리 하나. 흐름: 수집(원천 → 준비) → 파싱([parse.md](parse.md)) → 구조화 → 적재(pgvector · 정형 DB) · 게시(silver). 서버 문서별 실행기(`run_docs.py`)의 레인·대기열도 여기 둔다.
-항목마다 무엇·왜·파일, 열린 항목은 `Status:`에 진행 상황.
+[PRD.md](../PRD.md) 카테고리. 수집 → 파싱([parse.md](parse.md)) → 구조화 → 적재(pgvector·정형 DB)·게시(silver), 서버 러너(`run_docs.py`) 레인·대기열.
 
-순서(주제별): 수집 pl-01·pl-29 → 구조화 pl-06·pl-15·pl-16 → 적재 pl-07·pl-13·pl-14·pl-19 → 정형 DB·문서 대장 pl-08·pl-12 → 게시 pl-09·pl-26 → 실행·흐름 러너 pl-10·pl-18·pl-23·pl-24·rn-01·rn-02·rn-03 → DB 스키마 pl-25·pl-28 → 코드와 다른 점.
+순서(주제별): 수집 pl-01·pl-29 → 구조화 pl-06·pl-15·pl-16 → 적재 pl-07·pl-13·pl-14·pl-19 → 정형 DB·문서 대장 pl-08·pl-12 → 게시 pl-09·pl-26 → 실행·흐름 러너 pl-10·pl-18·pl-23·pl-24·rn-01·rn-02·rn-03·rn-04 → DB 스키마 pl-25·pl-28 → 코드와 다른 점.
 
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
@@ -107,7 +106,7 @@
   - VLM 동시 12(figure·vlm_page 포함), 문서 병렬 4, 문서당 VLM 4·OCR 1, vlm_page 끔, OCR dpi 150. 구조화+적재도 문서 단위 — 임베딩 묶음 호출(32 → 12)·문서당 병렬 4, BM25 병렬 4, 단계별 시간 기록.
   - 튜닝: `PIPE_PROCS=3`, CPU 75~85%, `RAPIDOCR_PAGE_WORKERS`·OCR threads 3(→ 2 검토), CPU 게이트 1.15 → 1.3/1.1.
   - 3클래스: warm에서 무게 평가(과거 소요 시간 규칙), vlm_page는 스캔 PDF처럼 꼭 필요한 문서만, 1/2/1 + 빈 레인 가져가기, light 1개 강하게 점유, 전담 분류 먼저, light 전용 executor. MCP 업로드가 오면 medium 전담 1개를 멈추고 먼저.
-  - 속도: phase 1 건너뛰기(→ pl-22), 끝난 문서 건너뛰기, parse_qa 가볍게, 10-23 OCR 끔. SSH가 끊겨도 서버 작업은 계속(nohup 확인).
+  - 속도: phase 1 건너뛰기(→ pl-22), 끝난 문서 건너뛰기, parse_qa 가볍게, 10-23 OCR 끔. SSH가 끊겨도 작업은 계속(nohup 확인).
 - 파일: `pipeline/cli.py`, `deploy/host/scripts/run_docs.py`(서버 전용 — PC에서 실행 금지), `pipeline/trigger_server.py`, `pipeline/parse_parallel.py`, `docs/history/run_docs_req.md`, `docs/architecture/run_docs_design.md`.
 - Status: done
 
@@ -158,14 +157,19 @@
 
 <a id="rn-03"></a>
 ## rn-03 · MCP `parse_document`에 CPU 먼저 주기
-- 이유: 일괄 파싱이 CPU를 다 쓰면 검색 MCP의 `parse_document`(사람이 기다리는 요청)가 느려진다. 지금은 일괄 엔진 자식을 nice +10으로 낮추지만(`pipeline.extract.low_priority`, [parse.md#pl-22](parse.md#pl-22)) nice는 한 세션·autogroup 안에서만 효과가 있고 컨테이너끼리는 cgroup CPU 가중치가 정한다(refactor.md C-65 ⑥).
-- 지금 결정(사용자 10-30): 선택지 2 — 같은 컨테이너(`data-pipeline-parse`) 안에서 우선순위로(nice).
+- 이유: 일괄 파싱이 CPU를 다 쓰면 `parse_document`(사람이 기다리는 요청)가 느려진다. 일괄 엔진 자식은 nice +10(`pipeline.extract.low_priority`, [parse.md#pl-22](parse.md#pl-22))이지만 nice는 한 세션·autogroup 안에서만 듣고, 컨테이너끼리는 cgroup CPU 가중치가 정한다(refactor.md C-65 ⑥).
 - 선택지:
-  1. 같은 이미지로 컨테이너를 따로 띄우고 cgroup `cpu.weight`로 나눈다(허브 추천). 장점: 컨테이너끼리도 확실히 먼저 받음, 서버에서 숫자로 조정. 단점: 컨테이너·compose·systemd가 하나 늘고 메모리를 더 씀, 서버 설정 일.
-  2. 같은 컨테이너 안에서 nice로(지금 결정). 장점: 구성 변경 없음, 이미 있는 `low_priority`를 씀. 단점: 다른 컨테이너·세션과는 nice로 겨루지 않음(`sched_autogroup_enabled=1`이면 효과가 세션 안에만), 효과를 서버에서 재 봐야 앎.
-- 서버 확인: C-65 ⑥ — 일괄 파싱만 / 일괄 파싱 + `parse_document` 동시에서 서비스 응답 시간 비교. 효과가 없으면 선택지 1로.
+  1. 같은 이미지로 컨테이너를 따로 띄우고 cgroup `cpu.weight`로 나눔(허브 추천). 장점: 컨테이너끼리도 확실히 먼저, 서버에서 숫자로 조정. 단점: 컨테이너·compose·systemd 하나 더, 메모리 더, 서버 설정 일.
+  2. 같은 컨테이너(`data-pipeline-parse`) 안에서 nice(지금 결정 — 사용자 10-30). 장점: 구성 변경 없음, `low_priority` 재사용. 단점: 다른 컨테이너·세션과는 안 겨룸(`sched_autogroup_enabled=1`), 효과는 서버에서 재 봐야 앎.
+- 서버 확인(C-65 ⑥): 일괄 파싱만 / + `parse_document` 동시의 응답 시간 비교 — 효과 없으면 선택지 1.
 - 파일: `deploy/host/compose/`, `pipeline/mcp_parse_service.py`, `common/core/resources.py`.
-- Status: todo — 논의 대상(지금은 선택지 2).
+- Status: todo — 논의 대상(지금 2).
+
+<a id="rn-04"></a>
+## rn-04 · run_docs 작은 수정·레인 테스트
+- 결정(사용자 10-30, C-59 ⓑ): MCP 감시 루프의 5초마다 `jobs_dir` 전체 `rglob`·`stat` → 최근 작업 폴더만 또는 심장 박동 파일 · 효과 없는 `--workers`를 시작 로그에서 뺌 · 남은 빈 분기 정리 · 흐름 테스트에 medium·vlm 레인·MCP 양보 길.
+- 파일: `run_docs.py`, `tests/general/deploy/test_docs_flow.py`.
+- Status: todo — 0.1.0.
 
 <a id="pl-25"></a>
 ## pl-25 · DB 스키마 명세 — pl-26·pl-23·pl-24를 만들기 전에 먼저
@@ -179,9 +183,9 @@
   - `load_run`과 Alembic 판 표는 gold에 남고, 나눈 뒤에도 공용. `chunk`는 `source_system`과 `clients[]`를 유지(고객 격리, 원천 거르기).
   - `AI.ParsingMeta`는 읽는 칸만 남긴다: `source_system`, `source_key`(s3_key), `parse_date`, `parse_status`, `status`, `status_at`, `rep_bucket`, `rep_key`, 새 `gold_status` + 이유([pl-24](#pl-24)). `doc_key`와 안 읽는 칸 14개는 없앤다.
   - `struct`: 문서에서 나온 표 `doc_location`, `doc_contract_link`, `doc_table`, `doc_cell`과 그 쓰기·읽기 코드(structured link/tables, `load_tables_db`, `find_table_cells`, 집계 `doc_link_list`/`table_cell_list`/`doc_location_list`, `AG.struct` 서버 길)를 지운다 — 그 내용은 청크 글에만 있다. `stack_version`/`source_version`은 남긴다(MCP 시작 때 읽음).
-  - 마스터 성격 자료(용어집, 고객 명부(C-21), `contract_master`, `client_master`)는 모두 **CSV 파일**로 둔다(사용자 10-30 — grill 9~10차의 "마스터 Postgres + PC SQLite 대역"을 뒤집음). 별도 마스터 Postgres도, 용어집용 SQLite도 없다. CSV(샘플 데이터)는 git `resources/vocab/glossary/`(지금 폴더)에 두어 이미지에 함께 들어간다 — 서버 폴더·마운트 없음. 파일·머리글은 `db_schema.md` §5.
+  - 마스터 성격 자료(용어집, 고객 명부(C-21), `contract_master`, `client_master`)는 모두 **CSV 파일**로 둔다(사용자 10-30 — grill 9~10차 "마스터 PG"를 뒤집음). 별도 마스터 Postgres도, 용어집용 SQLite도 없다. CSV(샘플 데이터)는 git `resources/vocab/glossary/`(지금 폴더)에 두어 이미지에 함께 들어간다 — 서버 폴더·마운트 없음. 파일·머리글은 `db_schema.md` §5.
   - `pipeline_version`(C-62)은 ParsingMeta가 아니라 gold `doc`의 칸(`db_schema.md`).
-  - 후속 구현(todo): `.example` 파일을 샘플 CSV로 바꿈 · `common.paths.glossary_dir`를 이미지 경로 `resources/vocab/glossary`로 · 마스터를 PG에 적재하는 코드가 있으면 지움(`structured load --csv-dir`의 `contract_master`·`client_master` 적재, struct 마스터 표 — 고객 별칭은 CSV에서 읽음).
+  - 후속 구현: `.example`을 샘플 CSV로(10-30 끝 — `client_roster`·`client_master`·`contract_master.csv`). 결정(사용자 10-30): `glossary_dir`·`client_roster`는 기본값 없는 선택 settings.yaml 키 그대로(코드 기본값 안 바꿈). PG 마스터 표·`structured load --csv-dir` 지우기는 이 행 구현·설계 검토(grill 중) 때(todo).
   - git의 CSV는 샘플 데이터(사용자 10-30) — server-guide §5 기밀 규칙과 충돌 없음.
   - EDW 벡터 표(`chunk_vec`, `edw_insert`, `edw_search`)는 PR #5가 지운다.
 - 결정(사용자 10-30 — 고객 칸): 문서당 고객 하나는 EDW 조인 사슬에서 온다(값 하나). 문서 글에서 찾은 고객은 별도 목록. MCP 고객 거르기는 EDW 고객**만** 쓰고, EDW 고객이 없는 문서는 고객 거르기를 걸면 빠진다. 글에서 찾은 고객을 거르기에 쓰는 것은 나중([pl-28](#pl-28)). 지금은 둘이 `clients[]`에 섞여 있고(`build_bundle.infer_clients`) `chunk.clients`가 하드 거르기를 이끈다 — 이 행과 함께 고친다.

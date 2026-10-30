@@ -1395,14 +1395,6 @@ class CommonModelsLlm(Section):
     timeout: float | None = F(120.0, "LLM_TIMEOUT", "LLM 호출 제한 시간(초) — 호출자가 timeout을 주면 그 값이 우선")
 
 
-class CommonModelsOcrvlm(Section):
-    allow_external: bool | None = F(False, "OCRVLM_ALLOW_EXTERNAL", "OCR 전용 VLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
-    api_key: SecretStr | None = F(None, "OCRVLM_API_KEY", "OCR 전용 VLM 엔드포인트 API 키(있을 때만)")
-    base_url: str | None = F(None, "OCRVLM_BASE_URL", "OCR 전용 VLM 엔드포인트 주소(OpenAI 호환 …/v1)")
-    est_usd: float | None = F(0.01, "OCRVLM_EST_USD", "OCR 전용 VLM 호출 1건당 예상 비용($) — 예산 선차감용")
-    model: str | None = F(None, "OCRVLM_MODEL", "OCR 전용 VLM 모델 이름(0.9B급 GLM-OCR·PaddleOCR-VL 등)", pinned="engine")
-
-
 class CommonModelsTransport(Section):
     connect_timeout: float | None = F(10.0, "MODEL_CONNECT_TIMEOUT", "모델 서버 연결(connect) 전용 제한 시간(초) — 0 이하면 끔")
     down_after: int | None = F(3, "MODEL_DOWN_AFTER", "연속 연결 실패 몇 번이면 그 주소를 '다운'으로 보는가(회)")
@@ -1420,9 +1412,7 @@ class CommonModelsVlm(Section):
     base_url: str | None = F(None, "VLM_BASE_URL", "VLM 엔드포인트 주소(OpenAI 호환 …/v1)", pinned="engine")
     concurrency: int | None = F(4, "VLM_CONCURRENCY", "한 문서의 쪽(그림) VLM 동시 요청 수(개)", pinned="engine")
     est_usd: float | None = F(0.02, "VLM_EST_USD", "VLM 호출 1건당 예상 비용($) — 예산 선차감용")
-    extra_body: JsonValue | None = F(
-        None, "VLM_EXTRA_BODY", "VLM(·OCRVLM) 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기)"
-    )
+    extra_body: JsonValue | None = F(None, "VLM_EXTRA_BODY", "VLM 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기)")
     max_concurrency: float | None = F(
         8, "VLM_MAX_CONCURRENCY", "공유 VLM 서버 동시 요청 총량 상한(문서 동시 수 × 쪽 동시 수가 이 값을 못 넘게 줄임)", unset=("auto",)
     )
@@ -1622,11 +1612,12 @@ class CommonConnections(Section):
 
 
 class CommonModels(Section):
-    REMOVED = frozenset({"rerank"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset(
+        {"ocrvlm", "rerank"}
+    )  # 사용자 10-29 · ocrvlm 10-30(pl-31) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     embed: CommonModelsEmbed = Field(default_factory=CommonModelsEmbed)
     guard: CommonModelsGuard = Field(default_factory=CommonModelsGuard)
     llm: CommonModelsLlm = Field(default_factory=CommonModelsLlm)
-    ocrvlm: CommonModelsOcrvlm = Field(default_factory=CommonModelsOcrvlm)
     transport: CommonModelsTransport = Field(default_factory=CommonModelsTransport)
     vlm: CommonModelsVlm = Field(default_factory=CommonModelsVlm)
 

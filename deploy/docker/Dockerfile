@@ -6,7 +6,7 @@
 #   COPY 원본 경로에서 `deploy/`를 뺐다. 이미지 안 경로(/app/deploy/<폴더>·/app/docker)는 그대로.
 #   assets/(rapidocr 모델, git 밖)는 parse 타깃만 쓰며 저장소 루트에 둔다.
 # I5(10-26, D-013) — agent_platform/ 삭제(사용자 결정)로 세 타깃의 agent_platform COPY를 뺐다. 그래서 이미지 안
-#   LLM·VLM·임베딩 호출은 I6(10-26)부터 common/ai/adk.py·llm.py의 임시 대체 구현으로 env 설정(LLM_·VLM_·OCRVLM_·
+#   LLM·VLM·임베딩 호출은 I6(10-26)부터 common/ai/adk.py·llm.py의 임시 대체 구현으로 env 설정(LLM_·VLM_·
 #   EMBED_ + _BASE_URL·_MODEL·_API_KEY, OpenAI 호환) 모델을 부른다(TODO 주석은 그대로). 정식 자리는 리팩토링 때 정한다(D-013).
 #   code_fp a·p1·r·s가 바뀌는 새 이미지 판이라 서버 반입은 검토 등급 A 뒤 사용자가 정한다.
 # S2(10-26, refactor_plan 4-1·D-011) — 코드가 읽는 데이터(지시서·채점 기준·보고서 틀·엔진 구성·원천 표·어휘·용어집)가
