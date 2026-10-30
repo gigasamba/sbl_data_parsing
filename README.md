@@ -2,7 +2,7 @@
 
 사내 문서(PDF, Office, HWPX, 이미지, 메일 등)를 파싱하고, 청킹·임베딩해 PostgreSQL(pgvector)에 적재한 뒤, **검색 MCP 서버**로 근거를 찾아 주는 파이프라인이다. 개발은 macOS·Windows PC에서 하고, 실행은 내부망(폐쇄망) RHEL 서버의 Docker/podman 이미지 2개로 한다.
 
-> 이 저장소는 서버 코드 사본을 리팩토링한 결과다(10-26~~10-29, 단계 S0~~S12). 무엇이 왜 바뀌었는지는 [docs/refactoring/refactor_plan.md](docs/refactoring/refactor_plan.md)에, **서버에 처음 배포하기 전에 사람이 할 일**은 [refactor.md](refactor.md) 맨 앞 "최종 — 사람이 할 일"에 있다.
+> 이 저장소는 서버 코드 사본을 리팩토링한 결과다(10-26~~10-29, 단계 S0~~S12). 무엇이 왜 바뀌었는지는 [docs/history/refactor_plan.md](docs/history/refactor_plan.md)에, **서버에 처음 배포하기 전에 사람이 할 일**은 [refactor.md](refactor.md) 맨 앞 "최종 — 사람이 할 일"에 있다.
 
 **목차**
 
@@ -140,7 +140,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 ├─ tests/               server/(이미지에 포함, 배포 판정) · general/(PC 전용) · runner.py
 ├─ validation/          PC 전용 검증 도구 — search_ui/(검증 페이지) · e2e/(평가·비교, answer_gen)
 ├─ valid_env/           PC 전용 데이터 — object_storage/(합성 테스트 문서, 버킷 모양) · edw/(합성 EDW sqlite) · answer_test/(답변 점검 agent) · docker/(PC 테스트 Docker)
-├─ docs/                문서(지도: docs/index.md) — operations/ · architecture/ · requirements/ · refactoring/
+├─ docs/                문서(지도: docs/index.md) — PRD.md·prd/ · operations/ · architecture/ · history/
 ├─ VERSION              두 이미지 공통 버전(SemVer)
 ├─ settings.sample.yaml 모든 설정 항목의 구조와 설명(자동 생성 — 손으로 고치지 않음)
 ├─ settings.yaml        PC 로컬 설정(git 제외 · 권한 600 — 직접 만듦)
@@ -591,7 +591,7 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 | [docs/operations/release-and-patch.md](docs/operations/release-and-patch.md) | 버전 · 빌드 · 전송 · 오버레이 패치 · DB 버전 관리(migrate) · 배포 판정                     |
 | [docs/operations/env-guide.md](docs/operations/env-guide.md)                 | 설정 항목 작성 가이드                                                           |
 | [docs/architecture/](docs/architecture/)                                     | 프롬프트 패키지(prompts.md) · 엔진 구성 버전 테이블(pipeline\_stack.md) · run\_docs 설계 |
-| [docs/refactoring/refactor\_plan.md](docs/refactoring/refactor_plan.md)      | 리팩토링 가이드 · 결정 기록(D-xxx) · 파일 이동표                                       |
+| [docs/history/refactor\_plan.md](docs/history/refactor_plan.md)      | 리팩토링 가이드 · 결정 기록(D-xxx) · 파일 이동표                                       |
 
 
 **알려진 문제·미개발 항목** — [docs/PRD.md](docs/PRD.md) 표(축소 스키마 일부 반영 `mc-10`·`mc-11` · 테스트 알려진 실패 `e2-11` 등).

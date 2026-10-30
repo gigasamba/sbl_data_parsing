@@ -10,6 +10,12 @@
 - 이유: 반입 판정은 네트워크 없이 이미지 안에서 돌아야 한다.
 - 무엇: `tests/server/`(이미지 반입 관문, `pipeline.cli selftest`가 `tests/runner.py`로 실행), `tests/general/`(PC 전용: PG, Docker, 느린 것). 알려진 실패는 목록에 두고, XPASS면 지우라고 경고.
 - 파일: `tests/runner.py`, `tests/conftest.py`, `deploy/release/known_fail.txt`.
+- 기준선(CLAUDE.md §4·§6-3에서 옮김, 10-30):
+  - `selftest`는 **85개 중 84개 통과**다(10-29 `feature/test-cleanup` — 중복 `test_common_init` 삭제 뒤). 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
+  - `pytest tests/`는 **138 passed · 5 xfailed**다(10-29 `feature/test-cleanup` — 루트 `settings.yaml`이 있든 없든 같다). 위 1개와 일반 테스트 4개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — C-54 ①, C-58)이며, 모두 리팩토링 전부터 있던 실패다.
+  - 핑거프린트 10-29 값(`feature/settings-cleanup` — 설정 정리·기능 삭제·`feature/test-parallel` 병합 뒤, 엔진 핑거프린트 27개 그대로): `FINGERPRINT ffa201eed4aed21a` · a `e3b0c44298fc` · p0 `93ec91af2426` · p1 `95884df63474` · r `5942c410d895` · s `932af9fc8548`. 리팩토링 중 값이 바뀐 과정과 되돌리는 방법은 [refactor.md](../../refactor.md) 부록 1~3에 있다.
+  - PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕 설정(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`에 넣는다(지금 `test_pub_registry`).
+  - Mac의 부하가 높으면 `test_trigger_server`가 시간 초과로 실패할 수 있다(환경 문제).
 - Status: done
 
 <a id="e2-08"></a>
@@ -58,6 +64,7 @@
 - 이유: PwC는 시험 자료를 서버처럼 배치한다 — 문서는 `object_storage/<시스템>/<uuid>/<파일>`, 정답·실행 목록은 `eval_sets/`, 합성 EDW sqlite는 `edw/`. 이 저장소에는 EDW 대역이 없었다.
 - 무엇(10-29): `valid_env/unstructured/` 삭제(파일 781개, 40 MB). PwC HEAD에서 `git archive`로 `edw/`(sql + sqlite), `eval_sets/`, `object_storage/{CRMS,SFDC}` + `test_doc_purpose.md`를 가져옴(문서 33건, `object_keys.csv`와 sha256 일치). 서버 시험 셋이 읽어서 `unstructured/synth-meta-rdb/meta/`는 `edw/meta_rdb/`로 옮김.
 - 파일: `valid_env/README.md`, `.gitattributes`, `tests/server/mcp/test_internal_docs.py`, `tests/server/mcp/test_search_svc.py`, `tests/server/pipeline/test_source.py`, README §4-4.
+- `tests/fixtures/`는 10-29에 지움(refactor.md C-63) — 서버 배포 테스트는 데이터를 임시 폴더에 만든다.
 - 남은 것: `EVAL_SETS_DIR` 기본값 → [settings.md#pl-21](settings.md#pl-21). 옛 묶음을 이름으로 부르는 PC 도구 → [e2-10](#e2-10).
 - Status: done
 

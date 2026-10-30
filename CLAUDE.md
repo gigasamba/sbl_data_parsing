@@ -1,6 +1,6 @@
 # sbl_data_parsing — 개발 규칙(Claude·개발자 공통)
 
-문서 파싱 → 구조화(청킹·임베딩) → 적재(pgvector) → 근거 검색(MCP)으로 이어지는 파이프라인이다. 프로젝트 소개, 폴더 구조, 실행 방법은 [README.md](README.md)에, 문서 지도는 [docs/index.md](docs/index.md)에 있다. **이 파일은 코드를 고칠 때 지킬 규칙과 하네스(점검 도구·명령)만 다룬다.** 코드를 고치기 전에 이 파일을 읽는다.
+문서 파싱 → 구조화(청킹·임베딩) → 적재(pgvector) → 근거 검색(MCP)으로 이어지는 파이프라인이다. 프로젝트 소개, 폴더 구조, 실행 방법은 [README.md](README.md)에, 문서 지도·용어집(약어, 옛 용어, 옛 절 번호)은 [docs/index.md](docs/index.md)에 있다. **이 파일은 코드를 고칠 때 지킬 규칙과 하네스(점검 도구·명령)만 다룬다.** 코드를 고치기 전에 이 파일을 읽는다.
 
 개발은 외부망 PC(macOS, Windows)에서 하고, 결과물은 **내부망(폐쇄망) RHEL 서버**에서 Docker/podman 이미지 2개(`data-pipeline`, `mcp-server`)로 실행된다. 그래서 "내 PC에서 된다"는 기준이 될 수 없다. **서버의 리눅스 컨테이너에서 같은 결과가 나와야 한다.**
 
@@ -22,7 +22,7 @@
 | `tests/` | 테스트 — `server/`(이미지 안에서 배포 판정에 쓰는 테스트, 외부 접속 없이 실행됨), `general/`(PC 전용 — PG·Docker가 필요하거나 느린 테스트), `runner.py` | 앱 코드 | `server/`만 |
 | `validation/` | PC 전용 **검증 도구 코드** — `search_ui/`(검증 페이지), `e2e/`(평가·비교·answer_gen) | 서버에서 실행되는 코드, 데이터 번들 | 아니요 |
 | `valid_env/` | PC 전용 **데이터** — 외부 시스템 대역: 테스트 문서(`object_storage/` — 버킷 모양), 정답·질문·목록(`eval_sets/`), 합성 EDW·회사 DB 표(`edw/`), 답변 점검 agent(`answer_test/`), PC 테스트 Docker(`docker/`) | 코드 로직, 비밀값, 운영 데이터 | 아니요 |
-| `docs/` | 사람이 읽는 문서(`operations/`, `architecture/`, `requirements/`, `refactoring/`) | 코드 | 아니요 |
+| `docs/` | 사람이 읽는 문서 — `PRD.md`·`prd/`(요건), `operations/`, `architecture/`, `history/`(지난 기록) | 코드 | 아니요 |
 
 **모듈 경계(자동 점검 — `python -m common.check.check_modules`):**
 - `pipeline`과 `mcp_server`는 서로 import하지 않는다. 함께 쓸 코드는 `common`으로 올린다.
@@ -80,7 +80,7 @@
 ```bash
 PYTHONPATH=. .venv/bin/python -c "import common as c; from common.core import artifacts as a; print(c.FINGERPRINT, {l: a.code_fp(l) for l in sorted(a.LAYER_CODE)})"
 ```
-현재 값(10-29 `feature/settings-cleanup` — 설정 정리·기능 삭제·`feature/test-parallel` 병합 뒤, 엔진 핑거프린트 27개 그대로): `FINGERPRINT ffa201eed4aed21a` · a `e3b0c44298fc` · p0 `93ec91af2426` · p1 `95884df63474` · r `5942c410d895` · s `932af9fc8548`. 리팩토링 중 값이 바뀐 과정과 되돌리는 방법은 [refactor.md](refactor.md) 부록 1~3에 있다.
+지금 기준값은 PRD [e2-02](docs/prd/test.md#e2-02)에 있다(바뀐 과정과 되돌리는 방법은 [refactor.md](refactor.md) 부록 1~3).
 
 **운영 접속 가드(필수):**
 - `deploy/host/scripts/run_docs.py`는 **PC에서 실행하지 않는다**(운영 EDW와 Object Storage에 접속한다). PC에서는 문법 확인, `--help`, `configure()`까지만 확인한다.
@@ -101,7 +101,7 @@ FIX=1 bash deploy/release/lint_changed.sh    # ruff 자동 수정·포맷(핑거
 git config core.hooksPath .githooks          # 처음 한 번 — 커밋할 때 위 점검이 자동으로 실행됨(.githooks/pre-commit)
 .venv/bin/ruff check . && .venv/bin/ruff format --check . && PYTHONPATH=. .venv/bin/mypy   # 저장소 전체(push 전, 버전을 만들기 전) — 셋 다 0
 ```
-- **ruff와 mypy는 저장소 전체에서 경고 0이다**(S12, 10-29 — 핑거프린트 보호 파일 제외, mypy 범위는 pyproject의 `files`). 바꾼 파일만 보는 점검(`lint_changed.sh`, 커밋 hook)도 0이어야 커밋할 수 있다 — 새 경고를 만들지 않는다.
+- **ruff와 mypy는 저장소 전체에서 경고 0이다**(핑거프린트 보호 파일 제외, mypy 범위는 pyproject의 `files`). 바꾼 파일만 보는 점검(`lint_changed.sh`, 커밋 hook)도 0이어야 커밋할 수 있다 — 새 경고를 만들지 않는다.
 - 고치지 않을 경고는 줄 단위로 `# noqa: <코드> — <이유>` 또는 `# type: ignore[<코드>]  # <이유>`를 붙인다. 규칙을 저장소 전체에서 끄는 것은 `pyproject.toml`의 `ignore`에 이유 주석과 함께 적되, 고쳐도 동작은 같고 경고 표시만 늘어나는 규칙에만 쓴다(현재 E501, E731, B905). 끌 때는 사람에게 알린다.
 - 쓸모없어진 `noqa`는 RUF100이 잡는다. RUF100의 자동 수정은 이유 설명까지 지우므로 꺼 두었다 — 코드만 지우고 이유는 일반 주석으로 남긴다.
 - 포맷 변경과 기능 변경은 다른 커밋으로 나눈다. 포맷·린트 일괄 정리는 code_fp를 바꾸므로(서버 재처리) 사람 승인을 받아 버전 단위로 한다.
@@ -145,19 +145,17 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 .venv/bin/python -m common.store.db.dbtool check --target all   # 테이블 정의 ↔ 실제 DB(차이가 있거나 최신 버전이 아니면 종료 코드 1)
 ```
 
-### 6-3. 테스트 기준선(10-29)과 알려진 실패
-- `selftest`는 **85개 중 84개 통과**다(10-29 `feature/test-cleanup` — 중복 `test_common_init` 삭제 뒤). 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
-- `pytest tests/`는 **138 passed · 5 xfailed**다(10-29 `feature/test-cleanup` — 루트 `settings.yaml`이 있든 없든 같다). 위 1개와 일반 테스트 4개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — C-54 ①, C-58)이며, 모두 리팩토링 전부터 있던 실패다.
-- PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕 설정(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`에 넣는다(지금 `test_pub_registry`).
+### 6-3. 테스트 기준선과 알려진 실패
+- 지금 기준선(selftest·pytest 개수, 알려진 실패 목록)은 PRD [e2-02](docs/prd/test.md#e2-02)에 있다. 바꾼 뒤 결과가 기준선보다 나빠지면 안 된다.
+- 알려진 실패 목록: 배포 판정은 `deploy/release/known_fail.txt`, PC 일반 테스트는 `tests/conftest.py`의 `GENERAL_KNOWN_FAIL`. 실 PG가 있어야 판정되는 PC 사례만 `_PC_SETTINGS_CASES`에 넣는다.
 - 알려진 실패가 통과하면 "XPASS — 목록에서 지울 수 있음" 경고가 나온다. 그때는 목록에서 지운다. **새 실패를 알려진 실패 목록에 추가하는 것은 고장을 숨기는 일이다** — 원인과 결정을 refactor.md에 적고 사람의 승인을 받은 뒤에만 추가한다.
-- Mac의 부하가 높으면 `test_trigger_server`가 시간 초과로 실패할 수 있다(환경 문제).
 
 ### 6-4. 테스트 작성
 - 서버 이미지 안에서 외부 접속 없이 실행되고 배포 판정에 쓰는 테스트는 `tests/server/<common|pipeline|mcp>/`에, PC 전용(PG·Docker·외부 모델이 필요하거나 느린 것) 테스트는 `tests/general/<…>/`에 둔다. 파일 이름은 `test_<모듈>.py`다(20자 규칙 — 길면 줄인다).
 - 테스트는 pytest 형식(`test_*` 함수 + `assert`)으로 쓴다. 이미지에서는 `pipeline.cli selftest`(`tests/runner.py`)가, PC에서는 pytest가 실행한다. 이미지에는 pytest가 없다.
 - 테스트는 **멱등**하게 만든다. 공용 개발 PG에 흔적을 남기지 말고 임시 SQLite나 임시 스키마(`orca_*`, `test_*`)를 쓰며, 이름을 다시 확인한 뒤 정리한다. 설정은 `with pc.PIPE.env(X=…)`, `settings.isolated()` 같은 테스트 도우미로 덮어쓴다(os.environ을 건드리지 않는다). 함수를 바꿔 끼울 때는 `unittest.mock.patch.object`를 쓴다.
 - 앱 모듈 안에 `selftest()`나 `if __name__ == "__main__":` 점검 코드를 새로 두지 않는다. 테스트는 `tests/`에 둔다.
-- 고정 데이터: 외부 시스템을 흉내 내는 데이터(문서·정답·EDW 대역)는 `valid_env/`에 둔다(10-29 PwC_Structure 배치 — `docs/prd/test.md#e2-09`). 서버 반입 테스트는 `valid_env`가 없는 이미지에서도 돌게 데이터를 임시 폴더에 만들어 쓴다(`tests/fixtures/`는 10-29에 지움 — refactor.md C-63).
+- 고정 데이터: 외부 시스템을 흉내 내는 데이터(문서·정답·EDW 대역)는 `valid_env/`에 둔다([e2-09](docs/prd/test.md#e2-09)). 서버 배포 테스트는 `valid_env`가 없는 이미지에서도 돌게 데이터를 임시 폴더에 만들어 쓴다.
 
 ### 6-5. 스모크 테스트 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
 README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. 실행마다 다른 값은 `--set`(파이프라인 진입점)이나 오버레이 설정 파일(`mcp_server.main`, `ask`처럼 `--set`을 받지 않는 명령)로 준다. 테스트 문서는 `valid_env/unstructured/`(목록 `list-smoke10.txt`)에 있고, 임베딩 캐시는 `output/edw/embed_cache.sqlite`다(같은 청크는 다시 호출하지 않는다 — 실제 호출을 확인하려면 `EMBED_CACHE=<빈 sqlite>`).
@@ -171,8 +169,8 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 ## 7. 외부 모델(OpenRouter 등 유료) — 비용 규칙
 
 - 기본값은 유료 호출 차단(`no_paid_calls: true`)이다. 개발 중에는 **기능 확인만** 한다(문서 2~3건, 질문 몇 개).
-- 실행할 때마다 상한을 건다 — `LLM_BUDGET_USD`, `LLM_MAX_CALLS`, `LLM_SPEND_FILE`(비용 장부). 외부 전송은 `<PREFIX>_ALLOW_EXTERNAL`(예 `EMBED_ALLOW_EXTERNAL`)이 켜지고 `RUN_ENV=local`일 때만 된다(합성 문서 선언 `LLM_SYNTHETIC_TRUTH` 잠금은 사용자 10-29에 삭제).
-- 외부 허용은 루트 settings.yaml에 둬도 된다(사용자 10-29 — 설정 창구는 하나). 그때는 `no_paid_calls: true`를 기본으로 두고, 외부 호출이 필요한 동안만 `false`로 바꾼 뒤 되돌린다(평소 테스트가 외부를 호출하지 않도록). 한 번만 풀 때는 `--set`을 쓴다.
+- 실행할 때마다 상한을 건다 — `LLM_BUDGET_USD`, `LLM_MAX_CALLS`, `LLM_SPEND_FILE`(비용 장부). 외부 전송은 `<PREFIX>_ALLOW_EXTERNAL`(예 `EMBED_ALLOW_EXTERNAL`)이 켜지고 `RUN_ENV=local`일 때만 된다.
+- 외부 허용은 루트 settings.yaml에 둬도 된다. 그때는 `no_paid_calls: true`를 기본으로 두고, 외부 호출이 필요한 동안만 `false`로 바꾼 뒤 되돌린다(평소 테스트가 외부를 호출하지 않도록). 한 번만 풀 때는 `--set`을 쓴다.
 - `role=llm`을 `adk.complete`로 직접 호출하면 예산 장부를 거치지 않는다. 실제 호출은 `llm.chat`이나 `run_agent(per_turn_admit=True)`로 한다.
 - 기술 스택 비교처럼 호출이 많은 작업은 예상 비용(호출 수 × 평균 토큰 × 단가)을 먼저 보고하고 승인을 받는다. 서버는 내부망 모델만 쓴다(외부 모델은 거부).
 
@@ -183,7 +181,7 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 - 기능 요건·미개발 항목은 [docs/PRD.md](docs/PRD.md)와 `docs/prd/<카테고리>.md`에 있다(§10).
 - 문서 지도는 [docs/index.md](docs/index.md)다. 문서를 추가하거나 옮기면 같은 커밋에서 이 지도를 고친다. 새 문서는 꼭 필요할 때만 만들고, 먼저 기존 문서의 섹션으로 넣을 수 있는지 본다.
 - 서버나 사람이 확인해야 하는 일(저장소 안에서 끝낼 수 없는 것)은 [refactor.md](refactor.md)에 `C-xx`로 추가하고, 배포 순서는 그 파일의 "최종 — 사람이 할 일"에 둔다.
-- 결정 사항은 [docs/refactoring/refactor_plan.md](docs/refactoring/refactor_plan.md) 7절에 `D-xxx`로, 미정 사항은 8절에 둔다. 운영 절차는 `docs/operations/`(서버 가이드, 릴리스, 설정 가이드)에 있다.
+- 결정 사항(`D-xxx`)·미정 사항은 PRD 행과 refactor.md에 둔다(옛 결정 장부는 [docs/history/refactor_plan.md](docs/history/refactor_plan.md) 7·8절). 지난 기록은 `docs/history/`에 둔다. 운영 절차는 `docs/operations/`(서버 가이드, 릴리스, 설정 가이드)에 있다.
 
 ## 9. Claude로 작업할 때
 
@@ -192,18 +190,8 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 - 되돌리기 어려운 일(push, 서버 배포, DB 변경, 파일 삭제)은 하기 전에 확인을 받는다. 지울 때는 대상을 먼저 확인한다.
 - 결과는 있는 그대로 보고한다. 테스트가 실패하면 출력과 함께 알리고, 건너뛴 단계는 건너뛰었다고 밝힌다.
 
-## 10. 기능 요건과 알려진 문제 — `docs/PRD.md`
+## 10. 기능 요건 — `docs/PRD.md`
 
-기능 요건(무엇·왜·관련 코드 파일)과 아직 개발되지 않았거나 고장 난 항목(진행 상황)은 이 파일에 두지 않고 요건 문서에 둔다(10-29).
-- [docs/PRD.md](docs/PRD.md) — 카테고리별 묶음 표(끝난 것 포함, ID·상태·단계·상세 링크)와 "지금 진행 중". 작업 전에 이 표에서 맡은 행을 찾는다.
-- 카테고리 파일 [etl](docs/prd/etl.md)(수집·게시·적재·DB·러너) · [parse](docs/prd/parse.md)(파싱 실행) · [mcp](docs/prd/mcp.md)(검색 MCP) · [settings](docs/prd/settings.md)(설정·운영) · [test](docs/prd/test.md)(테스트·평가) · [doc](docs/prd/doc.md)(문서·릴리스) — ID(`mc-xx`·`pl-xx`·`e2-xx`·`rn-xx`·`op-xx`·`do-xx`)는 그대로, 항목마다 `<a id>` + `## ID · 한글 이름`(무엇·왜·관련 파일, 미개발이면 `Status:`에 진행 상황). 파일 끝 "코드와 다른 점 · 지울 코드"에 요건과 다른 코드 · 요건 없는 코드 · 기본 꺼짐 기능 · 10-29에 지운 기능(옛 gaps.md).
-- 옛 §10 알려진 문제(10-20 축소 스키마 일부 반영 등)는 `mc-10`·`mc-11`·`pl-12`~`pl-16`·`e2-13`·`e2-16`으로 옮겼다.
-- 기능을 더하거나 고치면 같은 커밋에서 해당 앵커를 고친다. 끝난 항목도 PRD 표에 남기고 상태를 done으로, 앵커에 `- Status: done`을 남긴다(do-04 10-30).
-
----
-
-### 옛 절 번호(10-29 이전 버전 CLAUDE.md) — 코드 주석이나 기록 문서의 옛 참조를 찾을 때
-옛 1절(저장소·이름 대응) → README·refactor_plan 9절 · 옛 2절(문서) → §8 · 옛 3절(지켜야 할 규칙) → §2(배포 환경)·§3(설정)·§4(핑거프린트·계약·운영 가드) · 옛 4절(작업 절차) → §5·§9 · 옛 5절(OpenRouter) → §7 · 옛 6절(로컬 하네스) → §6 · 옛 7절(알려진 문제) → §10 · 옛 8절(사용자 결정 대기) → refactor.md "최종" ⑤·refactor_plan 8절. 코드 주석 속 옛 번호는 일부러 고치지 않았다(공용·레이어 파일은 고치면 code_fp가 바뀌고, 그 밖의 파일은 주석 한 줄 때문에 옛 린트 경고까지 정리해야 해서 — §5-2).
-
-### 용어 대응
-옛 문서·코드 주석의 표현과 약어는 [docs/index.md](docs/index.md#glossary) `## Glossary`에 있다(do-02).
+- 기능 요건(무엇·왜·관련 파일)과 미개발·고장 항목(진행 상황)은 이 파일이 아니라 [docs/PRD.md](docs/PRD.md)와 `docs/prd/<카테고리>.md`에 둔다. 작업 전에 PRD 표에서 맡은 행을 찾는다.
+- 항목마다 `<a id>` + `## ID · 한글 이름`과 `- Status:` 줄. ID는 바꾸지 않는다.
+- 기능을 더하거나 고치면 같은 커밋에서 해당 앵커를 고친다. 끝난 항목도 PRD 표에 남기고 상태를 done으로, 앵커에 `- Status: done`을 남긴다.

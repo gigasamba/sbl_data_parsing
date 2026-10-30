@@ -1,6 +1,6 @@
 # 긴급 패치 이력
 
-> 자동 생성 — 손으로 고치지 말 것. 원본: [`docs/operations/release-and-patch.md`](release-and-patch.md) §9 · 만드는 곳: upstream `dev_tools/repo_maintain/backlog_xlsx.py`(main에서 실행, xlsx '긴급 패치' 시트와 같은 행 — 이 저장소에는 없음. S1에서 `runbooks/` → `docs/operations/`로 옮기며 원본 경로만 고침).
+> 자동 생성 — 손으로 고치지 말 것. 원본: [`docs/history/release_history.md`](release_history.md) §9(10-30 do-04에 release-and-patch.md §9에서 옮김) · 만드는 곳: upstream `dev_tools/repo_maintain/backlog_xlsx.py`(main에서 실행, xlsx '긴급 패치' 시트와 같은 행 — 이 저장소에는 없음. S1에서 `runbooks/` → `docs/operations/`, 10-30에 `docs/history/`로 옮기며 원본 경로만 고침). 행의 "§8 단계 6"은 release_history.md §8.
 > 날짜·시각 = 반영 항목은 병합 커밋 시각, 보류 항목은 브랜치 끝 커밋 시각(없으면 결정일).
 
 | ID | 항목 | 상태 | 날짜·시각 | 커밋·브랜치 | 바뀐 파일(이미지) | 서버에서 할 일 / 남은 일 |

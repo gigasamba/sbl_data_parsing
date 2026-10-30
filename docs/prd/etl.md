@@ -1,7 +1,7 @@
 # ETL — 수집·퍼블리시·적재·DB
 
 [PRD.md](../PRD.md)의 카테고리 하나. 흐름: 수집(원천 → 준비) → 파싱([parse.md](parse.md)) → 구조화 → 적재(pgvector · 정형 DB) · 게시(silver). 서버 문서별 실행기(`run_docs.py`)의 레인·대기열도 여기 둔다.
-항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
+항목마다 무엇·왜·파일, 열린 항목은 `Status:`에 진행 상황.
 
 순서(주제별): 수집 pl-01·pl-29 → 구조화 pl-06·pl-15·pl-16 → 적재 pl-07·pl-13·pl-14·pl-19 → 정형 DB·문서 대장 pl-08·pl-12 → 게시 pl-09·pl-26 → 실행·흐름 러너 pl-10·pl-18·pl-23·pl-24·rn-01·rn-02·rn-03 → DB 스키마 pl-25·pl-28 → 코드와 다른 점.
 
@@ -102,7 +102,13 @@
 ## pl-10 · 실행 관리(오케스트레이션)
 - 이유: 서버는 문서 수천 건을 사람 없이 돌린다.
 - 무엇: CLI `parse`·`structure`·`load`·`night`(마감 시각, 다음 밤에 이어서)·`run-stack`·`compare-parse`·`compare-all`·`set-stack`·`show-stack`·`set-sources`·`show-sources`·`smoke`·`selftest`. 이미지 entrypoint가 `dedup`·`prepare`·`publish`·`full`·`serve-trigger`·`migrate`·`check`를 더한다(`deploy/docker/entrypoint.sh`). 서버 flow 러너(EDW 목록, 12개 미리 받기, light/medium/vlm 레인, 문서마다 컨테이너, `parse_document` 작업에 양보). trigger 서버(`/jobs`, `/upload`, Bearer). 문서별 병렬 파싱.
-- 파일: `pipeline/cli.py`, `deploy/host/scripts/run_docs.py`(서버 전용 — PC에서 실행 금지), `pipeline/trigger_server.py`, `pipeline/parse_parallel.py`, `docs/requirements/run_docs_req.md`, `docs/architecture/run_docs_design.md`.
+- 서버 flow 러너 요구(사용자 10-22·10-23 — 원문 [../history/run_docs_req.md](../history/run_docs_req.md), 바뀐 값은 rn-01·rn-02·[parse.md#pl-22](parse.md#pl-22)):
+  - 문서별 flow(배치 장벽 없음) · warm 12(진행 중 제외, 끝나면 tmp 지움 — 10-29부터 20) · 컨테이너 하나에 worker 4.
+  - VLM 동시 12(figure·vlm_page 포함), 문서 병렬 4, 문서당 VLM 4·OCR 1, vlm_page 끔, OCR dpi 150. 구조화+적재도 문서 단위 — 임베딩 묶음 호출(32 → 12)·문서당 병렬 4, BM25 병렬 4, 단계별 시간 기록.
+  - 튜닝: `PIPE_PROCS=3`, CPU 75~85%, `RAPIDOCR_PAGE_WORKERS`·OCR threads 3(→ 2 검토), CPU 게이트 1.15 → 1.3/1.1.
+  - 3클래스: warm에서 무게 평가(과거 소요 시간 규칙), vlm_page는 스캔 PDF처럼 꼭 필요한 문서만, 1/2/1 + 빈 레인 가져가기, light 1개 강하게 점유, 전담 분류 먼저, light 전용 executor. MCP 업로드가 오면 medium 전담 1개를 멈추고 먼저.
+  - 속도: phase 1 건너뛰기(→ pl-22), 끝난 문서 건너뛰기, parse_qa 가볍게, 10-23 OCR 끔. SSH가 끊겨도 서버 작업은 계속(nohup 확인).
+- 파일: `pipeline/cli.py`, `deploy/host/scripts/run_docs.py`(서버 전용 — PC에서 실행 금지), `pipeline/trigger_server.py`, `pipeline/parse_parallel.py`, `docs/history/run_docs_req.md`, `docs/architecture/run_docs_design.md`.
 - Status: done
 
 <a id="pl-18"></a>
@@ -132,26 +138,21 @@
 
 <a id="rn-01"></a>
 ## rn-01 · 레인 정책을 표 하나로 — 담당 레인 먼저, 허용한 레인만 가져오기
-- 범위: `deploy/host/scripts/run_docs.py`(서버 호스트에서 이미지 밖으로 실행 — 핑거프린트 영향 없음). 설계 [../architecture/run_docs_design.md](../architecture/run_docs_design.md), 발화 기록 [../requirements/run_docs_req.md](../requirements/run_docs_req.md).
+- 범위: `deploy/host/scripts/run_docs.py`(서버 호스트에서 이미지 밖으로 실행 — 핑거프린트 영향 없음). 설계 [../architecture/run_docs_design.md](../architecture/run_docs_design.md), 발화 기록 [../history/run_docs_req.md](../history/run_docs_req.md).
 - 사용자 10-29: "data-pipeline 하는데 3개 lane으로 해서, light/medium/vlm 구분해서 배분하고, 특정 lane은 담당, 일부 lane은 steal 허용하는 대신 우선순위는 담당 lane으로 지정. queue 관리해서 진입 시점 개수와 중간 개수 등을 관리."
-- 이미 있던 것(행 없음):
-  - 3레인 나누기: `classify_doc()`이 미리 받은 문서를 light/medium/vlm으로 가른다. 워커 `LANE_N` light 1 / medium 2 / vlm 1, 워커는 자기 레인부터 비운다([pl-10](#pl-10) 서버 flow 러너).
-  - 진입 대기열: `WARM_TARGET`개를 미리 받는다(10-29부터 20 — `pipeline.host.run_docs.warm`, `--warm`). 진행 중 문서는 세지 않고, 문서가 끝나면 임시 파일을 지운다.
-  - MCP 우선: `mcp_parse/jobs`가 움직이는 동안 `_mcp_pause_monitor()`가 medium 레인의 새 문서 받기를 멈춘다(서버 측정은 아직 — 설계 문서).
+- rn-01 전 러너(3레인 1/2/1·warm·MCP 멈춤): [../history/run_docs_history.md](../history/run_docs_history.md) 끝.
 - 이유: 규칙이 `lane_worker()`에 하드코딩돼 있었다(light/vlm은 medium을 안 가져감, 가장 긴 다른 대기열 먼저, vlm은 `VLM_CAP` 상한) — 죽은 분기도 있고 워커 수가 상수라 조정하려면 코드를 고쳐야 했다.
-- 단계: (1) 레인마다 정책 표 하나: `workers`, `steal_from`(비면 전담 레인). 기본값 = 지금 동작. (2) 자기 대기열이 빌 때만 가져오고, 허용된 레인 중 가장 긴 것부터, `VLM_CAP`은 그대로. (3) 입력: 러너 인자 `--lanes`(호스트 스크립트 — settings.yaml 절이 필요한지는 설계 때 결정, env는 금지 — CLAUDE.md §3). (4) 죽은 분기를 지운다.
-- 수용 기준: `tests/general/deploy/test_run_docs.py`의 표 행 — (대기열, 정책) → 고른 문서. 전담 레인은 다른 문서가 기다려도 가져가지 않음, 자기 대기열이 차 있으면 가져오지 않음, 상한을 넘은 vlm은 건너뜀, 기본 정책은 지금과 같은 문서를 고름.
 - 파일: `deploy/host/scripts/run_docs.py`, `tests/general/deploy/test_run_docs.py`, `docs/architecture/run_docs_design.md`.
 - 겹침: 파싱 phase 없애기([parse.md#pl-22](parse.md#pl-22), `feature/r2-phase`)는 러너에서 `PARSE_PHASES` `--set`만 뺐고 레인은 건드리지 않았다.
+- 처음 계획(단계·수용 기준): [../history/run_docs_history.md](../history/run_docs_history.md) 끝.
 - 끝남 10-29(사용자 grill): settings.yaml `pipeline.host.run_docs` — 레인마다 `<레인>_dedicated`(자기 레인만)와 `<레인>_shared`(자기 레인 먼저, 비면 가장 긴 다른 레인), 기본 각 1 + 1(워커 6개). `vlm_cap` 2는 전담 워커에도 적용. 배치가 끝나지 않을 설정은 시작 때 거부(`warm`이나 `vlm_cap`이 1 미만, 또는 전담·공유 워커가 하나도 없는 레인). MCP 멈춤은 medium 전담 워커를 잡아 둔다. `pick_lane()`은 순수 함수이고 표 시험이 있다. 죽은 상수는 지웠고 `--workers`는 받기만 하고 쓰지 않는다.
 - Status: done
 
 <a id="rn-02"></a>
 ## rn-02 · 중간 대기열 상한(파싱 끝 → 구조화 대기)과 대기열 길이 기록
 - 이유: `struct_q`에 상한이 없어 구조화가 느리면 파싱 결과가 쌓인다(디스크, 대기 시간). 10-22 질문 "queue 더 쌓이면 구조화 대기가 더 오래 걸리는지"에 답할 길이 자료가 없다 — `doc_stats.jsonl`의 문서별 `queue_wait`뿐.
-- 단계: (1) `--struct-backlog N`: 구조화를 기다리는 문서가 N개면 레인 워커가 새 문서를 받지 않는다(`struct_q.put`이 아니라 `lane_worker`의 고르는 시점에서 막음 — 파싱 워커가 끝난 결과를 들고 있지 않게). 0 = 상한 없음(지금). (2) `mark()` 사건마다 한 줄 `{t, warm, lanes: {light: [대기, 실행], ...}, struct_wait}`을 진행 폴더에 쓴다(op-01이 먼저 들어오면 그 줄 형식을 따름).
-- 수용 기준: 구조화를 멈춘 가짜로 돌려도 구조화 대기가 N을 넘지 않음, N=0이면 지금과 같음, 길이 줄은 JSON으로 읽히고 본 문서 수와 맞음.
 - 파일: `deploy/host/scripts/run_docs.py`, `tests/general/deploy/test_run_docs.py`.
+- 처음 계획(단계·수용 기준): [../history/run_docs_history.md](../history/run_docs_history.md) 끝.
 - 끝남 10-29(사용자 grill): `pipeline.host.run_docs.warm` 20(진입), `struct_workers` 2, `struct_backlog` 기본 = struct_workers × 2(0 = 끔). 레인 워커는 고르는 시점에서 상한을 본다(`test_struct_backlog_holds_new_parses`). `batch_progress/queue_depth.jsonl`에 dispatch / pick / parse_end / struct_put / struct_get마다 한 줄.
 - Status: done
 
