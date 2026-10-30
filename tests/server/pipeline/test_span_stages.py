@@ -1,0 +1,171 @@
+"""op-01: 임베딩·적재 단계의 span 지표 — 외부 접속 없이(임베딩 호출은 patch.object, 적재는 가짜 DB 커서). 운영 경로엔 가짜 코드 없음."""
+
+import json
+import tempfile
+import time
+import uuid
+from pathlib import Path
+from unittest import mock
+
+import numpy as np
+
+from common.ai import embed
+from common.config import settings
+from common.core import jsonlog, span
+from pipeline.load import pgvector_load
+from pipeline.transform.structure import build_bundle
+
+
+def _capture():
+    rows = []
+    return rows, mock.patch.object(span, "_emit", lambda row, level=None: rows.append(row))
+
+
+def test_embed_span_cache_batches_retries():
+    calls = []
+
+    def fake_api(texts, kind="passage"):
+        calls.append(len(texts))
+        if len(calls) == 2:  # 두 번째 호출은 서버 일시 오류 — 다시 보낸다
+            raise OSError("busy")
+        return np.tile(np.arange(1, 5, dtype=np.float32), (len(texts), 1))
+
+    texts = [f"청크 본문 {i}" for i in range(5)]
+    rows, patched = _capture()
+    with tempfile.TemporaryDirectory() as tmp, patched, jsonlog.context(run_id=str(uuid.uuid4())):
+        cache = str(Path(tmp) / "cache.sqlite")
+        with settings.isolated(EMBED_BASE_URL="http://127.0.0.1:9/v1", EMBED_MODEL="m", NO_PAID_CALLS="1"):
+            with mock.patch.object(embed, "_embed_api", fake_api), mock.patch.object(time, "sleep", lambda s: None):
+                with span.span("embed.bundle", "embed", model="api") as sp:
+                    first = build_bundle.embed_all("api", texts, batch=2, cache=cache)
+                    sp.add(chunks=len(texts))
+                with span.span("embed.bundle", "embed", model="api"):
+                    second = build_bundle.embed_all("api", texts, batch=2, cache=cache)
+    assert first.shape == second.shape == (5, 4) and np.allclose(first, second)
+    cold, warm = rows[0]["metrics"], rows[1]["metrics"]
+    assert (cold["cache_hit"], cold["cache_miss"], cold["batches"], cold["embed_retries"]) == (0, 5, 3, 1)
+    assert cold["embed_calls"] == 3 and cold["embed_call_ms_n"] == 3 and cold["chunks"] == 5  # 실패한 호출은 지연에 안 셈
+    assert rows[0]["ext_call_ms"] >= 0 and rows[0]["model"] == "api" and rows[0]["layer"] == "embed"
+    assert (warm["cache_hit"], warm["cache_miss"], warm["batches"]) == (5, 0, 0) and "embed_calls" not in warm  # 두 번째는 전부 캐시
+
+
+def test_embed_hook_is_free_without_span():
+    rows, patched = _capture()
+    with patched, mock.patch.object(embed, "_embed_api", lambda texts, kind="passage": np.ones((len(texts), 2), dtype=np.float32)):
+        assert embed._embed_uncached("api", ["a"], "passage").shape == (1, 2)
+    assert rows == []
+
+
+class _Cur:
+    def __init__(self, log):
+        self.log, self.n, self.last = log, 0, ""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def execute(self, sql, params=None):
+        self.last = " ".join(sql.split())
+        self.log.append(self.last)
+
+    def fetchone(self):
+        self.n += 1
+        return (True,) if "NOT EXISTS" in self.last else (self.n,)
+
+    def fetchall(self):
+        return []
+
+    def copy(self, sql):
+        return _Copy(self.log)
+
+
+class _Copy:
+    def __init__(self, log):
+        self.log = log
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def write_row(self, row):
+        self.log.append("ROW")
+
+
+class _Tx:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+class _DB:
+    schema = "t"
+    is_standin = False
+
+    def __init__(self):
+        self.log = []
+        self.cn = self
+
+    def transaction(self):
+        return _Tx()
+
+    def cursor(self):
+        return _Cur(self.log)
+
+
+def test_load_table_spans():
+    with tempfile.TemporaryDirectory() as tmp:
+        bundle = Path(tmp)
+        docs = [{"file_path": "a.txt", "summary": "s"}, {"file_path": "b.txt", "summary": "s"}]
+        chunks = [
+            {
+                "doc": 0,
+                "seq": 0,
+                "page": 1,
+                "line_start": 1,
+                "line_end": 1,
+                "char_start": 0,
+                "char_end": 5,
+                "bbox": None,
+                "section": None,
+                "chunk_text": "alpha beta",
+                "n_chars": 10,
+                "n_terms": 2,
+            },
+            {
+                "doc": 1,
+                "seq": 0,
+                "page": 1,
+                "line_start": 1,
+                "line_end": 1,
+                "char_start": 0,
+                "char_end": 5,
+                "bbox": None,
+                "section": None,
+                "chunk_text": "gamma",
+                "n_chars": 5,
+                "n_terms": 1,
+            },
+        ]
+        (bundle / "docs.jsonl").write_text("\n".join(json.dumps(d) for d in docs), encoding="utf-8")
+        (bundle / "chunks.jsonl").write_text("\n".join(json.dumps(c) for c in chunks), encoding="utf-8")
+        (bundle / "meta.json").write_text(json.dumps({"dim": 3, "embed_model": "m"}), encoding="utf-8")
+        np.save(bundle / "vectors.npy", np.ones((2, 3), dtype=np.float32))
+        rows, patched = _capture()
+        db = _DB()
+        with patched, jsonlog.context(run_id=str(uuid.uuid4())):
+            with span.span("load.pgvector", "load") as top:
+                counts = pgvector_load.load(db, bundle)
+    assert counts["docs"] == 2 and counts["chunks"] == 2
+    by_stage = {r["stage"]: r for r in rows}
+    assert set(by_stage) == {"load.doc", "load.chunk", "load.chunk_term", "load.stats", "load.pgvector"}
+    assert by_stage["load.doc"]["metrics"]["rows"] == 2 and by_stage["load.doc"]["metrics"]["rows_per_sec"] > 0
+    assert by_stage["load.chunk"]["metrics"]["rows"] == 2 and by_stage["load.chunk"]["metrics"]["chars"] == 15
+    assert by_stage["load.chunk_term"]["metrics"]["rows"] == 3  # alpha·beta·gamma
+    assert all(by_stage[s]["parent_id"] == top.span_id for s in ("load.doc", "load.chunk", "load.chunk_term", "load.stats"))
+    assert all(r["layer"] == "load" and r["status"] == "ok" for r in rows)

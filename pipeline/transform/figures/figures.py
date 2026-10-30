@@ -17,6 +17,7 @@ from pathlib import Path
 from common.ai import adk as A
 from common.ai.agent_prompts import load as _load_prompt
 from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
+from common.core import span as SP  # op-01 성능 span(풀 스레드 컨텍스트 전달·OCR 지표)
 from common.core.paths import (
     APP_ROOT,  # 폴더 재편 뒤 이 상수만 바뀌면 됨
     atomic_write_text,  # RV6, tmp+os.replace 공용
@@ -1051,10 +1052,13 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
 
     def _ocr_one(fi):
         f = figs[fi]
+        t_ocr = time.monotonic()
         try:
             f["ocr_text"] = (ocr_fn or _crop_ocr)(f["bytes"])
             f["ocr_chars"] = len(re.sub(r"\s+", "", f["ocr_text"]))
+            SP.observe_current("ocr_ms", (time.monotonic() - t_ocr) * 1000)  # op-01 — OCR 호출 수·지연
         except Exception as e:
+            SP.add_current(ocr_fail=1)
             f["ocr_text"], f["ocr_chars"] = "", None
             f["ocr_error"] = str(type(e).__name__) + ": " + str(e)[:200]
 
@@ -1062,7 +1066,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
         _op = pc.cfg().transform.figures.ocr_parallel  # S7c — 설정 객체(옛 int(get(X) or 3))
         _ocr_par = max(1, min(int(_op if _op is not None else 3), len(_use_ocr)))
         with _fig_cf.ThreadPoolExecutor(max_workers=_ocr_par) as _ex_a:
-            list(_ex_a.map(_ocr_one, _use_ocr))
+            list(_ex_a.map(SP.carry(_ocr_one), _use_ocr))  # op-01 — 풀 스레드에 run/span ID를 실음(VLM·OCR 지표가 이 문서 span에 쌓이게)
     _kinds = {}
     for i in sorted(send):
         _kinds[i] = classify_figure_kind(figs[i]) if kind_on else None
@@ -1090,7 +1094,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
     _vlm_dict = {}
     if _vlm_set:
         with _fig_cf.ThreadPoolExecutor(max_workers=_vlm_par) as _ex_b:
-            for fi, t, pv in _ex_b.map(_vlm_one, _vlm_set):
+            for fi, t, pv in _ex_b.map(SP.carry(_vlm_one), _vlm_set):
                 _vlm_dict[fi] = (t, pv)
     for i, f in enumerate(figs):
         if i in skip_reason:

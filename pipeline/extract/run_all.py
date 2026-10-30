@@ -27,9 +27,9 @@
 """
 
 import argparse
+import contextlib
 import json
 import os
-import re
 import sys
 import threading
 import time
@@ -39,6 +39,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from common.config import settings as C  # S7c: 설정 객체(common 칸 — VLM_*·PIPE_THREADS·RUN_MODE)
+from common.core import span as SP  # op-01 — 문서×엔진 span(run_id 없으면 아무 일도 안 함)
 from common.core.console import utf8_stdout
 from common.core.paths import (  # 폴더 재편 뒤 이 두 상수만 바뀌면 됨
     APP_ROOT,
@@ -49,6 +50,7 @@ from common.core.paths import (  # 폴더 재편 뒤 이 두 상수만 바뀌면
 from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
 from pipeline.extract.engines import registry
 from pipeline.shared import artifacts as P0  # P0 열쇠(엔진 버전·코드 지문)로 재사용 판단(실험 저장소 계약과 같은 규칙)
+from pipeline.shared import runtrace
 from pipeline.shared.progress import (  # output/parse/PROGRESS.md 갱신 · 문서→형식 키(.pdf_text/.pdf_image, _types.json 캐시) · SI44③ 암호 오류 단서(한 곳)
     doc_types,
     is_encrypted_error,
@@ -56,13 +58,11 @@ from pipeline.shared.progress import (  # output/parse/PROGRESS.md 갱신 · 문
 )
 from pipeline.stackcfg import MAX_PER_TYPE, over_limit  # 사용자 10-29 — 형식당 엔진 2개 상한(진입점 검사와 같은 함수)
 
-_QUOTED = re.compile(r"""(['"])((?:(?!\1).){30,})\1""", re.S)
-
 
 def redact(s):
     """오류 글자에 섞여 나올 수 있는 문서 내용(인용부호로 감싼 긴 조각)을 가림(백로그 X2 ⑤ — 로그·runs.jsonl에 본문 금지).
-    ponytail: 완벽하지 않음(인용부호 없는 echo는 못 잡음) — 더 필요하면 강화."""
-    return _QUOTED.sub(lambda m: m.group(1) + "…[가림]…" + m.group(1), s or "")
+    구현은 span.redact_text 한 곳(op-01 — 성능 기록의 오류 글자도 같은 규칙)."""
+    return SP.redact_text(s)
 
 
 VLM_ENGINES = {"qwen_vlm", "docling_vlm", "marker_llm"}
@@ -256,6 +256,10 @@ def main():
                 if not r.get("error") and r.get("sha"):
                     ok_by_sha[(r["engine"], r["sha"])] = r["doc"]
     jobs, skip, reuse, planned, deferred = [], Counter(), [], {}, []
+    plan_stack = (
+        contextlib.ExitStack()
+    )  # op-01 — 계획 단계(sha·재사용 판단) 시간과 결정 요약을 span 1행으로(문서×엔진마다 행을 만들지 않음)
+    plan_sp = plan_stack.enter_context(SP.span("extract.plan", docs=len(docs)))
     scope = pc.cfg().extract.engine_scope  # S7c — 설정 객체(옛 `get(X, "all")`: 없음 → all, 빈 글자는 그대로)
     scope = scope if scope is not None else "all"  # PE1 — stack: 문서 형식별 stack.json 목록만(생산 기본), all(기본): 지금 동작 그대로
     stack_parse = {}
@@ -358,6 +362,8 @@ def main():
             jobs.append((doc, eng, dst, sha))
     if deferred:
         skip["같은 내용 사본(1번만 파싱 후 복사)"] += len(deferred)
+    plan_sp.add(jobs=len(jobs), skipped=dict(skip), deferred=len(deferred), reuse_records=len(reuse))
+    plan_stack.close()
     if skip:
         print("건너뜀: " + " · ".join(f"{k} {v}" for k, v in skip.items()), flush=True)
     out.mkdir(parents=True, exist_ok=True)
@@ -380,6 +386,14 @@ def main():
     # ponytail: 프로세스 간 공유가 필요해지면(--procs가 같은 엔진을 여러 조각으로 쪼갤 때) 파일 기반 공유로 올림)
 
     def run_job(job):
+        """문서×엔진 1건 = extract.parse span 1행(op-01 — 대기·재시도·자식 자원 사용은 metrics/열로)."""
+        doc, eng = job[0], job[1]
+        with SP.span(
+            "extract.parse", doc_id=doc.name, engine=eng, ext=doc.suffix.lower(), file_bytes=doc.stat().st_size, total=len(jobs)
+        ) as sp:
+            run_job_body(job, sp)
+
+    def run_job_body(job, sp):
         doc, eng, dst, sha = job
         with lock:
             first_fail = env_failed.get(eng)
@@ -397,10 +411,12 @@ def main():
                 },
                 run_id,
             )
+            sp.result("skip", "env", rec["error"])
             with lock:
                 log.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 log.flush()
                 done[0] += 1
+                sp.set(seq=done[0])
                 tally["환경"] += 1
                 print(f"SKIP {eng:18s} {rec['sec']:>7}s  {doc.name}  건너뜀(환경 — 첫 실패 {first_fail})", flush=True)
                 print(
@@ -419,12 +435,20 @@ def main():
         with lock:
             first = eng not in warmed
             warmed.add(eng)
-        tmo = page_timeout(eng, n_pages(doc), first)
+        pages = n_pages(doc)
+        tmo = page_timeout(eng, pages, first)
+        sp.add(pages=pages, limit_s=tmo, first_of_engine=first)
         if eng in VLM_ENGINES:
             err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, vlm_env)
         else:
+            t_slot = time.monotonic()
             with text_sem:
+                sp.add(wait_slot_ms=int((time.monotonic() - t_slot) * 1000))  # 글자 엔진 동시 수 상한(text_sem) 대기 — 작업 시간과 분리
                 err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, None)
+        if err:
+            sp.result(
+                "timeout" if "Timeout" in err else "fail", "timeout" if "Timeout" in err else "env" if _env_error(err) else "doc", err
+            )
         ever = P0.engine_version(eng)
         pkey = p0_key(eng, sha, ever)  # P0 열쇠(다음 실행의 재사용 판단용) — p0_status와 같은 함수
         if not err and dst.exists():
@@ -458,6 +482,7 @@ def main():
             log.write(json.dumps(rec, ensure_ascii=False) + "\n")
             log.flush()
             done[0] += 1
+            sp.set(seq=done[0])
             tally["시간 초과" if err and "Timeout" in err else "환경" if err and _env_error(err) else "실패" if err else "성공"] += 1
             tag = "FAIL " if err else "ok   "
             print(tag + f"{eng:18s} {rec['sec']:>7}s  {doc.name}" + (f"  {err[:120]}" if err else ""), flush=True)
@@ -474,7 +499,8 @@ def main():
             except Exception as ex:  # 현황 파일 실패가 파싱을 멈추면 안 됨
                 print(f"(PROGRESS.md 갱신 실패: {type(ex).__name__}: {ex})", flush=True)
 
-    _run_docs(jobs, run_job, a.workers)
+    with runtrace.Progress(total=len(jobs), done=lambda: done[0], unit="doc_engine"):  # op-01 — 60초마다 run.progress
+        _run_docs(jobs, run_job, a.workers)
     for doc, eng, dst, sha, first in deferred:  # 사본: 먼저 돈 결과가 성공이면 복사, 아니면 사본은 기록 안 함(다음 실행에서 다시 판단)
         if first.exists():
             dst.write_bytes(first.read_bytes())
@@ -531,12 +557,15 @@ def run_procs(a, docs):
 
     def one(i):
         # 하위는 항상 --procs 1(PIPE_PROCS 설정으로 하위가 또 프로세스를 띄우는 연쇄 방지)
-        rc = resources.gated_popen(base + ["--shard", f"{i}/{k}", "--procs", "1"], env=env).wait()
-        if rc != 0:
-            print(f"조각 {i}/{k} 비정상 종료({rc}) — 끝낸 문서×엔진은 runs.jsonl에 남아 다음 실행에서 건너뜀", flush=True)
+        with SP.span("extract.shard", seq=i, total=k) as sp:  # op-01 — 조각 프로세스 1개(자식의 span이 이 밑에 붙음)
+            rc = resources.gated_popen(base + ["--shard", f"{i}/{k}", "--procs", "1"], env=env).wait()
+            sp.add(rc=rc)
+            if rc != 0:
+                sp.result("fail", None, f"종료 코드 {rc}")
+                print(f"조각 {i}/{k} 비정상 종료({rc}) — 끝낸 문서×엔진은 runs.jsonl에 남아 다음 실행에서 건너뜀", flush=True)
 
     with ThreadPoolExecutor(max_workers=k) as ex:
-        list(ex.map(one, range(k)))
+        list(ex.map(SP.carry(one), range(k)))
     write_progress(Path(a.src), Path(a.out), a.engines)
 
 
@@ -546,6 +575,7 @@ def _run_docs(jobs, run_job, workers):
     by_doc = {}
     for job in jobs:
         by_doc.setdefault(job[0], []).append(job)
+    run_job = SP.carry(run_job)  # op-01 — 풀 스레드는 contextvars를 안 물려받으므로 run/span ID를 실어 보냄
 
     def run_doc(doc_jobs):
         if len(doc_jobs) == 1:
@@ -554,7 +584,7 @@ def _run_docs(jobs, run_job, workers):
             list(pool.map(run_job, doc_jobs))
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        list(pool.map(run_doc, by_doc.values()))
+        list(pool.map(SP.carry(run_doc), by_doc.values()))
 
 
 def _run_with_retry(eng, doc, dst, profile, tmo, unset, env):
@@ -574,6 +604,7 @@ def _run_with_retry(eng, doc, dst, profile, tmo, unset, env):
         if attempt or not (err and "Timeout" in err):
             break
         tmo = round(tmo * 2, 2)
+        SP.add_current(timeout_retries=1)
         print(f"RETRY {eng:18s} {doc.name}  시간 초과 — 제한 {tmo}초로 한 번 더", flush=True)
     return err, tmo
 
@@ -708,6 +739,7 @@ def _isolated(eng, doc, dst, profile, tmo, py=None, env=None):
         except RuntimeError:
             if attempt == retries:
                 raise
+            SP.add_current(proc_retries=1)
 
 
 def _isolated_once(eng, doc, dst, profile, tmo, py, env=None):
@@ -731,12 +763,15 @@ def _isolated_once(eng, doc, dst, profile, tmo, py, env=None):
     )
     PR.renice_low(pr.pid, low)
     try:
-        _, err = pr.communicate(timeout=tmo)
+        out, err = pr.communicate(timeout=tmo)
     except subprocess.TimeoutExpired as tmo_err:
         pr.kill()
         pr.communicate()
         dst.unlink(missing_ok=True)  # 쓰다 만 결과를 남기지 않음
         raise TimeoutError(f"문서×엔진 시간 제한 초과({tmo}초)") from tmo_err
+    sp = SP.current()  # op-01 — 자식(parse_one)이 stdout 끝에 남긴 자원 사용(cpu·최대 메모리)을 이 문서×엔진 span에
+    if sp is not None:
+        sp.set(**SP.read_usage(out))
     if pr.returncode != 0:
         dst.unlink(missing_ok=True)
         last = (err.strip().splitlines() or [f"exit {pr.returncode}"])[-1]
@@ -751,5 +786,5 @@ if __name__ == "__main__":
     utf8_stdout()
     from common.core.runlog import session
 
-    with session("run_all"):
+    with session("run_all"), runtrace.run("run_all", sys.argv[1:]):  # op-01 — 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
         main()

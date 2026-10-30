@@ -27,6 +27,7 @@ LLM_EXTRA_BODY·VLM_EXTRA_BODY(.env, JSON 객체, RV12) — complete() 한 곳�
 import base64
 import contextlib
 import contextvars
+import functools
 import hashlib
 import json
 import logging
@@ -45,6 +46,7 @@ from common.ai.guard import fake_llm, precheck, require_internal
 from common.ai.guard import urlopen as _g_urlopen
 from common.ai.llm import profile
 from common.config.settings import by_env, cfg, checked, reveal  # S7b — 설정 객체(호출 때마다 cfg() — 옛 env 읽기와 같은 시점 값)
+from common.core import span as _span
 from common.core.paths import resolve_agent_dir
 
 _ROLE_GUARD_PREFIX = {"llm": "LLM", "vlm": "VLM", "vlm_judge": "VLM", "embed": "EMBED"}
@@ -1559,6 +1561,7 @@ def complete(
         except _Retryable as ex:
             last_err = ex.inner
             last_attempt_elapsed = time.monotonic() - attempt_t0
+            _span.add_current(**{f"{role}_retries": 1})  # op-01 — 열린 span(문서×단계)에 재시도 수(span 없으면 no-op)
             if attempt < retries - 1:
                 time.sleep(ex.retry_after if ex.retry_after else 2**attempt * 2)
     # 재검토 CONCERN(a) — 문턱을 이 호출의 deadline에도 묶는다: deadline이 문턱 이하로 짧으면(빠른 분류용 짧은 호출 등)
@@ -1579,3 +1582,34 @@ def complete(
         # 잦은 경로에서 실측된 6배 과대 집계(장부 $0.193 vs 토큰 기준 실비 $0.031, 49호출)의 원인 — 이 공용 지점 한
         # 곳만 고치면 role=vlm인 모든 직접 호출자(nested.py·figures.py 등)에 똑같이 적용된다(중복 구현 없음).
     raise ModelUnavailable(f"모델 호출 실패(재시도 {retries}회): {type(last_err).__name__}: {str(last_err)[:200]}") from last_err
+
+
+def _traced(fn):
+    """op-01 — 열린 span(문서×단계)이 있으면 모델 호출 수·지연·토큰·실패를 그 span의 metrics에 쌓는다(개별 호출 기록은 DEBUG만).
+    span이 없으면(MCP 검색 등) 원래 함수를 그대로 부른다."""
+
+    @functools.wraps(fn)
+    def wrapper(role, messages, **kwargs):
+        sp = _span.current()
+        if sp is None:
+            return fn(role, messages, **kwargs)
+        t0 = time.monotonic()
+        try:
+            text, usage = fn(role, messages, **kwargs)
+        except Exception:
+            ms = (time.monotonic() - t0) * 1000
+            sp.add(**{f"{role}_calls": 1, f"{role}_fail": 1}).observe(f"{role}_ms", ms).ext_call(ms)
+            raise
+        ms = (time.monotonic() - t0) * 1000
+        sp.add(**{f"{role}_calls": 1}).observe(f"{role}_ms", ms).ext_call(ms)
+        usage = usage or {}
+        sp.add(**{f"{role}_tok_in": usage.get("prompt_tokens") or 0, f"{role}_tok_out": usage.get("completion_tokens") or 0})
+        _span.debug_event(
+            f"model.{role}", role=role, ms=round(ms), tokens_in=usage.get("prompt_tokens"), tokens_out=usage.get("completion_tokens")
+        )
+        return text, usage
+
+    return wrapper
+
+
+complete = _traced(complete)
