@@ -206,14 +206,15 @@ S11(10-28)에 VS10 배포 준비 목록(`output/orca/VS10-verify.md` 끝 절)을
 | 10-29 `feature/settings-cleanup` — 안 쓰는 설정 칸·파싱 판단 에이전트·재순위·질문 분해·검색 방식 graph/concept/image/openviking·OpenViking 삭제 — s는 `settings.py`·`services.py`·`build_bundle.py`, 엔진 27 그대로 · `feature/test-parallel`(합성 문서 잠금 삭제·병렬 시험) 병합 포함 | `ffa201eed4aed21a` | `e3b0c44298fc` | `93ec91af2426` | `95884df63474` | `5942c410d895` | `932af9fc8548` |
 | develop `e8e062e`(10-30) | `ffa201eed4aed21a` | `e3b0c44298fc` | `5079ca066605` | `b9449353d848` | `f42d47226663` | `cc1ab18b7634` |
 | 0.1.0 지문 배치(#27 `feature/fp-batch` — 10-30, 핸드오프 파일 포함) | `abe9b7b0799ceaae` | `e3b0c44298fc` | `840199fcacb6` | `08cd37047cbd` | `b706f28ce48e` | `eb0597ed7f7b` |
-| **HEAD — 지금 값**(`feature/drop-ocrvlm` — 10-30, pl-31 ocr_vlm 지움) | `abe9b7b0799ceaae` | `e3b0c44298fc` | `2a828b0470c1` | `deb6efc4a5f0` | `0d4fcc7a4cbc` | `bd154d04467a` |
+| `feature/drop-ocrvlm`(#30 — 10-30, pl-31 ocr_vlm 지움) | `abe9b7b0799ceaae` | `e3b0c44298fc` | `2a828b0470c1` | `deb6efc4a5f0` | `0d4fcc7a4cbc` | `bd154d04467a` |
+| **HEAD — 지금 값**(`feature/ocrvlm-leftovers` — 10-30, pl-31 남은 정리: fuse `ocr-vlm` 계열) | `abe9b7b0799ceaae` | `e3b0c44298fc` | `2a828b0470c1` | `9ee173300a82` | `0d4fcc7a4cbc` | `bd154d04467a` |
 | `d65e1cd`에 부록 3 ③(핸드오프 파일 3개)만 넣은 트리(code_fp는 그 트리 기준 — 지금 HEAD에서 하면 p1·r·s가 다르고 FINGERPRINT는 같음) | `87588ce7c88d70ee` | `e3b0c44298fc` | `57cc6d1d1d69` | `5f63791e5d23` | `60bf07f7948c` | `8438496dc10d` |
 
 - code_fp는 되돌려도 옛 값으로 돌아가지 않는다(레이어 파일·공용 의존이 S2~S9에 많이 바뀜) — 레이어 캐시는 어느 쪽이든 다시 계산된다. 되돌리기의 뜻은 엔진 핑거프린트(P0 파싱 재사용)·FINGERPRINT(핸드오프 버전 확인)를 옛 값으로 되돌리는 것이다.
 
 ### 부록 2. 엔진 핑거프린트 27개(엔진별)
 
-- 10-30 pl-31(`feature/drop-ocrvlm`, 0.1.0): `ocr_vlm` 엔진 지움(27 → 26 — 아래 표의 `ocr_vlm` 줄은 기록) · `qwen_vlm` `52ca47bc4c6e` → `7381bf2b79d2` · 나머지 25개 그대로.
+- 10-30 pl-31(`feature/drop-ocrvlm`, 0.1.0): `ocr_vlm` 엔진 지움(27 → 26 — 아래 표의 `ocr_vlm` 줄은 기록) · `qwen_vlm` `52ca47bc4c6e` → `7381bf2b79d2` · 나머지 25개 그대로. 이어 `feature/ocrvlm-leftovers`(qwen_vlm 파서의 안 쓰는 인자 지움): `qwen_vlm` `7381bf2b79d2` → `06f937fcc39e`, 나머지 25개 그대로.
 
 | 엔진 | 기준선 = S9 전(S8b) | S9 엔진 커밋 뒤(`0c23f06`) | S9b 엔진 커밋 뒤(`64af4a8`) = HEAD |
 |---|---|---|---|
