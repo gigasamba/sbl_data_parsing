@@ -152,7 +152,7 @@ def resolve_agent_dir(agent_id):
 
 
 def resolve_run_dir(run_root, run_dir=None, *, new=True, label=None, rel_hint=None):
-    """실행(run) 폴더 — 쓰기용(만들거나 재사용). RV6(10-09) — cli/model_matrix.py·cli/stack_matrix.py에 따로 있던
+    """실행(run) 폴더 — 쓰기용(만들거나 재사용). RV6(10-09) — cli/model_matrix.py·옛 cli/stack_matrix.py에 따로 있던
     같은 이름 함수를 하나로(차이는 인자로): run_dir이 있으면 그 경로 그대로 · 없고 new=True(기본)면 run_root 아래
     오늘 시각(`%Y%m%d-%H%M%S`) 새 폴더 · 없고 new=False면 run_root 아래 가장 최근(이름 정렬 — 시각 폴더라 사전식
     정렬 = 시간 순) 폴더, 하나도 없으면 SystemExit(label·rel_hint로 기존 문구 그대로 재현). 둘 다 mkdir(parents=True,

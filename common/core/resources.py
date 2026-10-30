@@ -12,7 +12,7 @@ CPU = min(호스트 코어, CPU 친화도(sched_getaffinity), cgroup 한도(cpu.
   PIPE_RESERVE_CPUS 1 · PIPE_RESERVE_GB 4(PostgreSQL·OS·다른 컨테이너 몫) · PIPE_PROC_GB 3(OCR 모델 + 쪽 이미지 여유) · PIPE_MAX_PROCS 8
 
 메모리 문(새 하위 프로세스를 띄우기 전 — plan()의 처음 개수 결정과는 별개, 띄우는 시점만 늦춤):
-  MEM_START_PCT  wait_mem() 기본 상한(90 — 사용자 10-07, 전에는 78) — 실험 도구(stack_matrix)가 씀, 여유를 넉넉히 두고 느리게
+  MEM_START_PCT  wait_mem() 기본 상한(90 — 사용자 10-07, 전에는 78) — 실험 도구가 씀, 여유를 넉넉히 두고 느리게
   MEM_MAX_PCT    gated_popen() 상한(90 — 사용자 10-07, 전에는 85) — 생산 파싱(run_all·stream·pipeline)이 씀, 가능한 병렬로 돌리다 이 선만 넘지 않게
   MEM_SETTLE_SEC gated_popen() 뒤 settle(기본 2초) — 사용률이 MEM_MAX_PCT−MEM_SETTLE_MARGIN(기본 5, 상한 90 − 5 = 85% 이상)보다 가까울 때만 쉼
                  (여유 있으면 매번 안 쉼 — 문서×엔진 수천 건 실행에서 매번 쉬면 전체가 크게 느려짐, 성능 회귀 10-04.
@@ -188,14 +188,14 @@ _LAUNCH = threading.Lock()
 
 
 def gated_popen(args, settle=None, log=print, **kwargs):
-    """생산 파싱 경로(run_all·stream·cli/pipeline)의 하위 프로세스 공용 launcher — stack_matrix._sub와 같은 패턴을 공유 함수로.
+    """생산 파싱 경로(run_all·stream·cli/pipeline)의 하위 프로세스 공용 launcher(옛 stack_matrix._sub 패턴을 공유 함수로).
     한 번에 하나씩: 메모리 문(사용률 < MEM_MAX_PCT, 기본 90 — 실험 도구 MEM_START_PCT와 같은 90) →
     CPU 문(부하 ÷ cpus() < CPU_MAX_LOAD, 기본 1.0 — Windows는 측정 못 해 바로 통과) 통과
     → subprocess.Popen(args, **kwargs) → (여유 있으면 바로 잠금 해제, 상한 가까이면만 settle초 쉬고 해제).
     settle은 사용률이 MEM_MAX_PCT − MEM_SETTLE_MARGIN(기본 5) 이상일 때만 적용 — 여유 있을 때 매번 쉬면 문서×엔진이
     많은 실행(예 200×16=3200건)에서 launch가 초당 1/settle로 묶여 전체가 크게 느려짐(코디네이터 10-04 성능 회귀 지적).
     측정 못 하면(None) settle 안 함. 실행 중인 프로세스는 절대 안 건드림(죽이지 않음) — 새로 띄우는 것만 늦춤.
-    communicate·wait는 호출자가 잠금 밖에서(여기선 Popen만, stack_matrix._sub와 같은 이유 — 느린 프로세스가 다음 launcher를 막지 않게)."""
+    communicate·wait는 호출자가 잠금 밖에서(여기선 Popen만 — 느린 프로세스가 다음 launcher를 막지 않게)."""
     import subprocess
     import time
 

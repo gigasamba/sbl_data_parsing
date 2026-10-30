@@ -19,8 +19,8 @@ def no_digit_boundary_hit(key, haystack):
     """key(이미 정규화된 비교 문자열 — 쉼표·공백 지움, 소문자)가 haystack 안에 있는지 — W20b(금지 값 거짓 양성):
     key가 숫자·점으로만 되어 있으면 양옆에 숫자(또는 소수점 뒤 숫자) 이어짐이 없을 때만 '있음'으로 친다
     (예: "3,360"이 "3,360,000"·"13,360" 안에 끼어 있는 걸 거짓 양성으로 안 셈 · "3,360원"·문장 끝 "3,360."은 그대로 맞음).
-    글자 값(숫자·점 아닌 글자가 하나라도 있으면)은 경계 없이 그대로 부분 문자열 — score_gold.must_not_hits·
-    stack_matrix._must_not_violations 공용(둘 다 같은 함수를 거쳐야 같은 결과 — enforcement §2)."""
+    글자 값(숫자·점 아닌 글자가 하나라도 있으면)은 경계 없이 그대로 부분 문자열 — score_gold.must_not_hits가 이 함수를
+    쓴다(같은 함수를 거쳐야 같은 결과 — enforcement §2)."""
     if not key:
         return False
     if not _NUM_ONLY.fullmatch(key):

@@ -41,7 +41,7 @@ S5(10-26, refactor_plan 9-1·9-2) — data_retrieval/ → mcp_server/(앱 이름
 server_checks.py의 검색 측정(br54·l8·gh114)은 mcp_server/cli/search_checks.py로 옮겨 단계 4 도구 16개 중 검색을 import하는 것이 없어졌다
 → 16개 모두 etl 규칙(S4의 옛 cli·evaluation 예외를 풂). LEGACY_TOOLS 표는 경계 판정에 더 쓰지 않고 pipeline/cli.py selftest의 이미지
 배정(옮긴 단계 4 도구를 옛처럼 "공용"으로 읽음)에만 남는다. common_tools에서 mcp_server/cli/로 옮긴 mcp_eval·qa_report도 search 규칙
-(mcp_eval이 쓰던 stack_matrix·model_matrix의 문항 로더를 mcp_eval로 옮겨 의존을 끊음 — 코디네이터 답 Q4 c).
+(mcp_eval이 쓰던 model_matrix의 문항 로더를 mcp_eval로 옮겨 의존을 끊음 — 코디네이터 답 Q4 c · stack_matrix는 10-30 지움).
 S6a(10-26) — common_tools/가 없어짐: 옛 영역 이름표(PKG_AREA·_canon)에서 common_tools 줄을 빼고, PC 전용 평가 도구 자리
 validation/e2e/를 옛 evaluation 영역으로 읽는다(⑧ agent= · ⑨ etl·search top-level 동시 금지 그대로 — triple_extract/agent.py는
 prompts 영역 ⑦). 옛 이름 import(`import common_tools…`)는 그 자체로 위반(남은 실행 코드 0 유지). LEGACY_TOOLS(옮긴 단계 4 도구 표)는
