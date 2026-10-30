@@ -122,7 +122,7 @@ def verify(answer_json, pool):
     except (TypeError, ValueError):  # JSON으로 못 바꾸는 값(VS11b CR-5 — TypeError로 질문이 멈추지 않게)
         return {"ok": False, "problems": ["answer_json must hold JSON values only"], "format_error": True}
     out = _verify(text, pool)
-    cites = data.get("citations")
+    cites = json.loads(text).get("citations")  # 패키지가 본 것과 같은 값(튜플 등도 목록으로)
     bad = [c for c in cites if not isinstance(c, dict)] if isinstance(cites, list) else []
     if bad:
         out = {**out, "ok": False, "problems": [*out.get("problems", []), f"citations 항목은 객체여야 함: {len(bad)}개"]}
@@ -149,10 +149,8 @@ def make_tools(call, contracts, pool, k_default):
     async def query_edw(sql: str, max_rows: int = 200) -> dict:
         return await call("query_edw", {"sql": sql, "max_rows": max_rows})
 
-    def verify_citations(answer_json: str = "", answer: str = "", status: str = "", citations: list | None = None) -> dict:
-        # 모델이 answer_json 대신 답 칸을 펼쳐 넘겨도 서명 TypeError 없이 같은 검사(VS11b CR-7)
-        if not answer_json and (answer or status or citations is not None):
-            return verify({"answer": answer, "status": status, "citations": citations}, pool)
+    # 인자를 펼쳐 넘기면 ADK FunctionTool이 "answer_json 필수" 오류를 모델에 돌려줌(VS11b CR-7 뒷부분 — TypeError 아님)
+    def verify_citations(answer_json: str) -> dict:
         return verify(answer_json, pool)
 
     verify_citations.__doc__ = _verify.__doc__
