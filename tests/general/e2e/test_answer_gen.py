@@ -38,6 +38,16 @@ def test_tools_and_pool():
     assert tools["verify_citations"](bad)["ok"] is False
     assert AG.verify(None, pool)["problems"] == ["answer_json must be a JSON object"]
     assert AG.verify(json.dumps(ok).encode(), pool)["ok"] is True  # bytes는 옛처럼 json.loads로
+    for arg, problem in (  # 모양 오류 — 질문을 멈추지 않고 problems로, format_error 표시(VS11 CR-2 · VS11b CR-5·CR-6)
+        ("[1, 2]", "answer_json must be a JSON object"),  # 패키지 assert는 python -O에서 빠짐 — answer_gen이 먼저 거름
+        ('"글자"', "answer_json must be a JSON object"),
+        ({"answer": "a", "status": "found", "citations": [], "x": object()}, "answer_json must hold JSON values only"),
+        ({"answer": "a", "status": "found", "citations": "c"}, "citations must be a list"),
+    ):
+        out = AG.verify(arg, pool)
+        assert out["ok"] is False and out["problems"] == [problem] and out["format_error"] is True, (arg, out)
+    assert AG.verify(bad, pool)["format_error"] is False  # 근거 대조 실패는 모양 오류 아님
+    assert AG.verify(ok, pool)["format_error"] is False
 
 
 def test_mcp_error_to_model():  # 연결 실패도 도구 오류 {"error"}로(질문 전체를 멈추지 않게 — S10 리뷰)
@@ -102,6 +112,8 @@ def test_ask_one_bad_citations():  # VS10 M-2 — citations가 글자 목록이�
     assert row["run_status"] == "ok" and row["citations"] == ["지어낸 인용"] and "error" not in row, row
     assert row["verify"]["ok"] is False and any(p.startswith("citations 항목") for p in row["verify"]["problems"]), row
     assert "verify_note" not in row, row  # 형식 오류는 EDW 탓으로 적지 않음
+    row = _ask_with(json.dumps({"answer": "규격 충족", "status": "found", "citations": "c"}, ensure_ascii=False), ["query_edw"])
+    assert row["verify"]["format_error"] is True and "verify_note" not in row, row  # 목록 아닌 citations도(VS11 CR-2)
 
 
 def test_ask_one_edw_note():  # VS10 M-1 — query_edw 값 답의 verify 실패 이유(C-56)
