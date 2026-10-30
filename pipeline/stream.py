@@ -434,10 +434,11 @@ def _run_batches(a, engines, tmp, SRC):
             _run("pipeline.transform.represent.parse_qa", ["--parse", out_parse, "--src", prep_dir], env)
             from pipeline import stackcfg
 
-            stack_file, stack = stackcfg.current(out_parse.parent)  # S8b — 엔진 구성 활성 판의 사본(진입점이 만든 것 — 없으면 여기서)
-            if not stack.get("parse"):
+            st = stackcfg.current()  # pl-32 — 엔진 구성 판(진입점이 정해 넘긴 것 — 없으면 여기서)
+            if not st.body.get("parse"):
                 raise SystemExit("[stream] 엔진 구성이 비어 있음 — 먼저 set-stack")
-            _run("pipeline.transform.represent.represent", ["--stack", stack_file, "--parse-dir", out_parse, "--src", prep_dir], env)
+            sv = [] if st.version_id is None else ["--stack-version", str(st.version_id)]
+            _run("pipeline.transform.represent.represent", [*sv, "--parse-dir", out_parse, "--src", prep_dir], env)
             idx = json.loads((out_parse / "_rep" / "index.json").read_text(encoding="utf-8"))["docs"]
             ok_now = {r["doc"] for r in idx if r["doc"] in batch_ok and r.get("engine")}
             # 독립 검토(10-14 재검토) — 지문은 ok_now(= mark_done 대상, 대표 결과가 실제로 나온 문서)에만

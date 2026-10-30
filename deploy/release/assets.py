@@ -8,13 +8,13 @@
   rapidocr/*.onnx                       RapidOCR 한국어 PP-OCRv5 인식 + 검출·방향 — rapidocr_ko(최종 추천 엔진, 패키지 폴더 안)
   (PostgreSQL 16 + pgvector Docker 이미지는 여기 없음 — 별도 브랜치 dev_server_pgvector를 ZIP으로 받아 docker load, 2026-10-01)
   wheels/psycopg*·typing_extensions·tzdata  PostgreSQL 드라이버(psycopg 3, Linux x86_64 · Python 3.12)
-용량 때문에 뺀 것(2026-09-30, 브랜치 ZIP 축소): docling 모델(약 530 MB) · EasyOCR 모델(99 MB) · RapidOCR 중국어 인식(21 MB, 기본 rapidocr 엔진용) — 모두 최종 추천 10개 밖 — docling·docling_ocr은 SETUP 7절 모델 번들로. GitHub 파일 한도(100 MB) 때문에 90 MB 넘는 파일은 .partNN으로 나눠 담고 설치할 때 합친다(sha256 확인). 목록·해시 = assets/MANIFEST.json.
+용량 때문에 뺀 것(2026-09-30, 브랜치 ZIP 축소): docling 모델(약 530 MB) · EasyOCR 모델(99 MB) · RapidOCR 중국어 인식(21 MB, 기본 rapidocr 엔진용) — 모두 최종 추천 10개 밖 — docling·docling_ocr 모델은 이 도구에 없음. GitHub 파일 한도(100 MB) 때문에 90 MB 넘는 파일은 .partNN으로 나눠 담고 설치할 때 합친다(sha256 확인). 목록·해시 = assets/MANIFEST.json.
 
 사용:
   (개발 PC) PYTHONPATH=. python deploy/release/assets.py pack           → assets/ 채움(아래 SOURCES 경로에서) + MANIFEST.json
   (서버)    python /app/docker/assets.py install [--python <venv python>]  → 합치기·해시 확인·제자리 복사·휠 설치, .env에 넣을 줄 출력
             PYTHONPATH=. python deploy/release/assets.py check → 설치 상태만 표로(저장소 자리 — S6b, 옛 docker/)
-paddle·mineru·임베딩(bge-m3 등)은 크기·venv가 달라 여기 없음 — SETUP.md 7절 번들.
+paddle·mineru·임베딩(bge-m3 등)은 크기·venv가 달라 여기 없음. 준비 가이드: docs/operations/release-and-patch.md §5-6.
 """
 
 import argparse
@@ -59,7 +59,7 @@ def sources():
                 out[f"rapidocr/{f.name}"] = f
     for f in sorted((scratch / "dl" / "wheels_pg").glob("*.whl")):  # psycopg 드라이버
         out[f"wheels/{f.name}"] = f
-    # docling 모델(HF 캐시, 약 530 MB)은 용량 때문에 제외(사용자 2026-09-30) — 필요하면 SETUP 7절 모델 번들(.cache/huggingface)
+    # docling 모델(HF 캐시, 약 530 MB)은 용량 때문에 제외(사용자 2026-09-30)
     return out
 
 

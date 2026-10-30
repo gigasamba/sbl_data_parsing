@@ -49,6 +49,7 @@ def _run_main(work, rows, parse_one, structure_one, cleanup_doc, setup=None):
     M.code_layout_problems = lambda: []
     M.edw_list = lambda keywords: rows
     M.write_envfile = lambda: 0
+    M.stack_version = lambda: ""  # 판 번호(docker exec) 대신 — PC 파일(pl-32)
     M.warm_one = lambda seq, row: True
     M.parse_one, M.structure_one, M.cleanup_doc = parse_one, structure_one, cleanup_doc
     M.pg_count = lambda: (0, 0)

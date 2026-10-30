@@ -3,7 +3,8 @@
   없으면 시작 거부(종료 코드 4 — Q7). PC(paths.LOCAL_RUN): 파일(common.paths.stack_file·sources_file — 비우면 resources/ 아래).
 · 판 행은 고치지 않는다 — 바꾸기 = 새 행 + 활성 옮기기(한 트랜잭션, put), 같은 body면 그 판을 다시 활성(activate). 활성 옮김은 activated_at·_by에.
 · body_sha = 정규 JSON(키 정렬·공백 없음·UTF-8)의 sha256 — 같은 구성이면 서버·PC 같은 값.
-· 층 파일은 이 모듈을 import하지 않는다(code_fp — D-030 ⑦·Q10): 진입점이 사본 파일을 만들어 넘긴다(pipeline/stackcfg.py).
+· 층 파일은 이 모듈을 import하지 않는다(code_fp — D-030 ⑦·Q10): 진입점이 활성 판 번호를 정해 자식에 넘긴다(STACK_VERSION — pipeline/stackcfg.py,
+  사본 파일 없음 — pl-32 사용자 10-30), 층은 pipeline.config.stack()으로 그 판을 읽는다.
 · 값·비밀은 찍지 않는다(판 번호·이름·sha만 — 엔진 이름·원천 표 이름은 설정이라 찍음)."""
 
 import hashlib
@@ -116,10 +117,16 @@ def _table(conn, kind):
     return t
 
 
-def read_db(kind, conn):
+def read_db(kind, conn, version_id=None):
+    """활성 판(version_id=None) 또는 그 번호의 판 → Active(body_sha·모양 검사)."""
     t = _table(conn, kind)
-    r = _rows(conn, f"SELECT version_id, name, body, body_sha FROM {t} WHERE is_active")
+    if version_id is None:
+        r = _rows(conn, f"SELECT version_id, name, body, body_sha FROM {t} WHERE is_active")
+    else:
+        r = _rows(conn, f"SELECT version_id, name, body, body_sha FROM {t} WHERE version_id = %(v)s", {"v": int(version_id)})
     if not r:
+        if version_id is not None:
+            raise ConfigUnavailable(f"{t}에 판 {version_id} 없음")
         raise ConfigUnavailable(f"{t}에 활성 판 없음 — set-{'stack' if kind == 'stack' else 'sources'} --activate <판 번호>")
     r = r[0]
     body = r["body"] if not isinstance(r["body"], str) else json.loads(r["body"])
@@ -150,12 +157,14 @@ def connect():
     return conn
 
 
-def active(kind, refresh=False):
-    """지금 쓸 판 — PC는 파일, 서버는 DB 활성 판(프로세스마다 한 번 — refresh=True면 다시 읽음: 작업마다 읽는 서비스)."""
+def active(kind, refresh=False, version_id=None):
+    """지금 쓸 판 — PC는 파일, 서버는 DB 활성 판(프로세스마다 한 번 — refresh=True면 다시 읽음: 작업마다 읽는 서비스).
+    version_id = 서버에서 그 번호의 판(부모가 정해 넘긴 판 — 한 실행 안에서 한 판, pl-32). PC는 파일 하나라 무시."""
     from common.core import paths
 
-    if kind in _CACHE and not refresh:
-        return _CACHE[kind]
+    key = kind if version_id is None or paths.LOCAL_RUN else (kind, int(version_id))  # 활성 판은 옛 열쇠 그대로(시험이 _CACHE[kind]로 넣음)
+    if key in _CACHE and not refresh:
+        return _CACHE[key]
     if paths.LOCAL_RUN:
         try:
             a = read_file(kind)
@@ -165,19 +174,19 @@ def active(kind, refresh=False):
     else:
         with connect() as conn:
             try:
-                a = read_db(kind, conn)
+                a = read_db(kind, conn, version_id)
             except SystemExit:
                 raise
             except Exception as e:  # 모양 검사 실패(ValueError)·권한 없음 등 DB 오류도 시작 거부(Q7 — 종료 4)
                 raise ConfigUnavailable(
-                    f"{SCHEMA}.{KINDS[kind]} 활성 판을 쓰지 못함 — {type(e).__name__}: {str(e).splitlines()[0][:200]}"
+                    f"{SCHEMA}.{KINDS[kind]} {'활성 판' if version_id is None else f'판 {version_id}'}을 쓰지 못함 — {type(e).__name__}: {str(e).splitlines()[0][:200]}"
                 ) from None
             finally:
                 try:
                     conn.rollback()
                 except Exception:  # 끊긴 연결 — rollback 오류가 위 종료 4(ConfigUnavailable)를 덮지 않게(VS8b R-5)
                     pass
-    _CACHE[kind] = a
+    _CACHE[key] = a
     return a
 
 

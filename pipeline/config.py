@@ -603,8 +603,8 @@ class PipelineNight(Section):
 
 class PipelinePaths(Section):
     REMOVED = frozenset(
-        {"mineru_bin", "paddle_python", "soffice_candidates"}
-    )  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+        {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot"}
+    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32 — 사본 파일 대신 판 번호) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     file_meta_path: str | None = F(None, "FILE_META_PATH", "EDW 파일 메타 JSONL 경로(s3_key → 메타)")
     gold_dir: str | None = F(
         None,
@@ -622,8 +622,8 @@ class PipelinePaths(Section):
         "SOFFICE_BIN",
         "LibreOffice soffice 실행 파일 경로 — PATH·흔한 경로보다 먼저 봄(pipeline 이미지 안 기본 /usr/bin/soffice — 옛 Dockerfile ENV, B-2)",
     )
-    stack_snapshot: str | None = F(
-        None, "STACK_SNAPSHOT", "엔진 구성 사본 파일(내부 신호 — 진입점이 활성 판에서 만들어 자식에 넘김, 사람이 쓰지 않음 · S8b)"
+    stack_version: int | None = F(
+        None, "STACK_VERSION", "엔진 구성 판 번호(내부 신호 — 진입점이 활성 판 번호를 정해 자식에 넘김, 사람이 쓰지 않음 · pl-32)"
     )
 
 
@@ -700,27 +700,25 @@ def gold_dir():
     return v
 
 
-def stack_path():
-    """엔진 구성 파일(S8b — D-031 Q10 a): 진입점(pipeline/stackcfg.py)이 활성 판에서 만든 사본(STACK_SNAPSHOT). 없으면 PC(paths.LOCAL_RUN)는
-    PC 파일(common.paths.stack_file — 비우면 resources/config/pipeline_stack.json), 서버는 거부(종료 2 — git 기본 파일로 넘어가지 않게, Q7).
+def stack(version=None):
+    """엔진 구성(사전 — name·version_id·body_sha + body, pl-32 사용자 10-30: 사본 파일 없음). 서버는 진입점(pipeline/stackcfg.py)이 정해
+    넘긴 판 번호(STACK_VERSION)의 판을 판 표에서, PC(paths.LOCAL_RUN)는 PC 파일(common.paths.stack_file — 비우면
+    resources/config/pipeline_stack.json). 서버에서 판 번호가 없으면 거부(종료 2 — 실행 중 활성 판이 바뀌어도 한 실행은 한 판, Q7).
     층 파일(run_all·attachments)이 이것만 부른다 — 이 모듈은 층의 code_fp 의존이 아니다(common 아래만 셈)."""
-    snap = cfg().paths.stack_snapshot
-    if snap:
-        return Path(snap)
     from common.core import paths
+    from common.store.db import cfgtables  # 판 표 읽기 한 곳(이 모듈은 층의 code_fp 의존이 아님)
 
-    if paths.LOCAL_RUN:
-        from common.store.db import cfgtables  # PC 파일 자리 규칙 한 곳(이 모듈은 층의 code_fp 의존이 아님)
-
-        return cfgtables.pc_file("stack")
-    print(
-        "[엔진 구성] 사본 없음(STACK_SNAPSHOT) — 서버는 진입점(pipeline.cli·stream·parse_parallel·mcp_parse_service·load.index)으로 "
-        "실행해야 판 표 활성 판의 사본을 만든다. 도구를 따로 돌릴 때는 사본을 먼저 만들어 넘긴다: "
-        "S=$(python -m pipeline.stackcfg --path <결과 폴더>) 뒤 represent·build_bundle은 --stack $S, 그 밖은 --set을 받는 진입점(pipeline.cli 등 — D-032)에 --set STACK_SNAPSHOT=$S(VS8b R-4)",
-        file=sys.stderr,
-        flush=True,
-    )
-    raise SystemExit(2)
+    v = version if version is not None else cfg().paths.stack_version  # 인자(--stack-version) > 넘겨받은 칸
+    if v is None and not paths.LOCAL_RUN:
+        print(
+            "[엔진 구성] 판 번호 없음(STACK_VERSION) — 서버는 진입점(pipeline.cli·stream·parse_parallel·mcp_parse_service·load.index)으로 "
+            "실행해야 활성 판 번호를 정해 넘긴다. 도구를 따로 돌릴 때는 --set STACK_VERSION=$(python -m pipeline.stackcfg --version)",
+            file=sys.stderr,
+            flush=True,
+        )
+        raise SystemExit(2)
+    a = cfgtables.active("stack", version_id=v)
+    return {"name": a.name, "version_id": a.version_id, "body_sha": a.body_sha, **a.body}
 
 
 if __name__ == "__main__":

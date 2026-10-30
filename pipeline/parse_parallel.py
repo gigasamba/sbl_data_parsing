@@ -275,8 +275,9 @@ def _process_one(
             _run("pipeline.transform.represent.parse_qa", ["--parse", parse_dir, "--src", prep_dir], env_base)
             from pipeline import stackcfg
 
-            stack_path = stackcfg.current(out_parse_shared.parent)[0]  # S8b — 엔진 구성 활성 판의 사본(진입점이 만든 것)
-            _run("pipeline.transform.represent.represent", ["--stack", stack_path, "--parse-dir", parse_dir, "--src", prep_dir], env_base)
+            v = stackcfg.current().version_id  # pl-32 — 엔진 구성 판(진입점이 정해 넘긴 것 — 없으면 여기서)
+            sv = [] if v is None else ["--stack-version", str(v)]
+            _run("pipeline.transform.represent.represent", [*sv, "--parse-dir", parse_dir, "--src", prep_dir], env_base)
         rep_entry = _rep_entry_of(parse_dir / "_rep", name)
         if rep_entry is None:
             return False, "represent 결과 없음(알 수 없는 오류)"
