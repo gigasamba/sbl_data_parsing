@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from common.config import settings as C
-from common.core.paths import APP_ROOT
+from common.core.paths import APP_ROOT, STACK_FILE
 from pipeline import config as pc
 from pipeline.extract.engines import registry
 from pipeline.extract.run_all import (
@@ -72,7 +72,6 @@ def selftest():
     assert over_limit({"parse": {".pdf_text": ["pymupdf", "kreuzberg"], ".png": ["qwen_vlm"]}}) == []
     bad = over_limit({"parse": {".docx": ["office", "anydoc", "kreuzberg"]}})
     assert len(bad) == 1 and ".docx" in bad[0], bad
-    from common.core.paths import STACK_FILE
 
     stack_file = json.loads(STACK_FILE.read_text(encoding="utf-8"))
     assert over_limit(stack_file) == [], "PC 기본 stack 표가 형식당 2개를 넘음"
@@ -125,7 +124,19 @@ def selftest():
     # '첫 실패' 기억을 서로 안 나눠 이 시험 전제가 깨짐(순차 동작만 확인)
     env = C.child_env(VLM_BASE_URL=None, VLM_MODEL=None, PIPE_PROCS="1")
     r = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir), "--out", str(odir), "--engines", "qwen_vlm"],
+        [
+            sys.executable,
+            "-m",
+            "pipeline.extract.run_all",
+            "--src",
+            str(sdir),
+            "--out",
+            str(odir),
+            "--engines",
+            "qwen_vlm",
+            "--stack",
+            str(STACK_FILE),
+        ],
         capture_output=True,
         text=True,
         env=env,
@@ -148,7 +159,19 @@ def selftest():
     env3 = C.child_env(VLM_BASE_URL=None, VLM_MODEL=None)  # 하위 프로세스(시험) 설정 — 덮기 파일(S7e2)
     env3["PARSE_RUN_ID"] = "20261007-999999"  # env 남김 — 내부 신호(5-3 H)
     r3 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir3), "--out", str(odir3), "--engines", "qwen_vlm"],
+        [
+            sys.executable,
+            "-m",
+            "pipeline.extract.run_all",
+            "--src",
+            str(sdir3),
+            "--out",
+            str(odir3),
+            "--engines",
+            "qwen_vlm",
+            "--stack",
+            str(STACK_FILE),
+        ],
         capture_output=True,
         text=True,
         env=env3,
@@ -160,7 +183,19 @@ def selftest():
     assert len(recs3) == 1 and recs3[0]["run_id"] == "20261007-999999", recs3
     env3.pop("PARSE_RUN_ID")
     r4 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir3), "--out", str(odir3), "--engines", "qwen_vlm"],
+        [
+            sys.executable,
+            "-m",
+            "pipeline.extract.run_all",
+            "--src",
+            str(sdir3),
+            "--out",
+            str(odir3),
+            "--engines",
+            "qwen_vlm",
+            "--stack",
+            str(STACK_FILE),
+        ],
         capture_output=True,
         text=True,
         env=env3,
@@ -185,7 +220,7 @@ def selftest():
                 json.dumps({"doc": doc5.name, "engine": e, "sha": sha5, "sec": 1, "error": "ValueError: document is encrypted"}) + chr(10)
             )
     r5 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir5), "--out", str(odir5)],
+        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir5), "--out", str(odir5), "--stack", str(STACK_FILE)],
         capture_output=True,
         text=True,
         env=C.child_env(PIPE_PROCS="1"),
@@ -205,7 +240,19 @@ def selftest():
     seed6 = {"doc": doc6.name, "engine": "plaintext", "sha": _sha(doc6), "sec": 1, "error": None}
     (odir6 / "runs.jsonl").write_text(json.dumps(seed6) + chr(10), encoding="utf-8")
     r7 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir6), "--out", str(odir6), "--engines", "plaintext"],
+        [
+            sys.executable,
+            "-m",
+            "pipeline.extract.run_all",
+            "--src",
+            str(sdir6),
+            "--out",
+            str(odir6),
+            "--engines",
+            "plaintext",
+            "--stack",
+            str(STACK_FILE),
+        ],
         capture_output=True,
         text=True,
         env=C.child_env(PIPE_PROCS="1"),

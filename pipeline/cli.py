@@ -1266,7 +1266,11 @@ def main(argv=None):
         p.add_argument("--procs", default=_default_procs(), help="CPU 엔진 프로세스 수 · auto = CPU·메모리(cgroup) 기준")
         p.add_argument("--skip-parse", action="store_true", help="파싱은 이미 했으면 건너뜀")
         if name != "run-stack":
-            p.add_argument("--engines", default="", help="비우면 핵심 엔진(registry.CORE) · all = 전부 · candidates = stack.json 선정+후보")
+            p.add_argument(
+                "--engines",
+                default="",
+                help="비우면 핵심 엔진(registry.CORE) — 늘 stack.json 형식별 목록 안에서만 돎(pl-03: 범위는 stack 하나 · stack에 없는 후보를 비교하려면 stack json을 고침)",
+            )
             p.add_argument("--top", default="4")
         else:
             p.add_argument("--pg", action="store_true", help="pgvector에 배포·적재까지(지정 없어도 Docker pgvector가 떠 있으면 기본)")

@@ -178,6 +178,11 @@ def main():
         help="문서를 N조각으로 나눠 프로세스 N개로 동시에 · auto = CPU·메모리(cgroup) 기준(common/resources.py)",
     )
     ap.add_argument("--shard", default="", help="i/k — 문서 목록의 i번째 조각만(--procs가 씀)")
+    ap.add_argument(
+        "--stack",
+        default=None,
+        help="엔진 구성 파일(PC 실험·시험용 — 비우면 판: STACK_VERSION > PC 파일, pl-32 · pl-03 represent·build_bundle과 같음)",
+    )
     a = ap.parse_args()
     from common.core import resources
     from pipeline.extract import resources as presources  # 10-14 — resolve_procs·thread_env는 common.core.resources에서 옮김(P만 씀)
@@ -235,7 +240,9 @@ def main():
     # 같은 실행 안의 같은 내용 사본은 한 번만 파싱 후 복사(planned·deferred).
     jobs, skip, planned, deferred = [], Counter(), {}, []
     # pl-03(사용자 10-30) — 엔진 범위는 stack 하나: 문서 형식별 stack.json 목록만
-    stack = pc.stack()  # pl-32 — 진입점이 정한 판(판 번호 STACK_VERSION — PC는 파일)
+    stack = (
+        json.loads(Path(a.stack).read_text(encoding="utf-8")) if a.stack else pc.stack()
+    )  # pl-32 — 진입점이 정한 판(PC는 파일) · --stack은 시험·실험용 파일
     stack_parse = stack.get("parse") or {}
     bad = over_limit({"parse": stack_parse})  # 사용자 10-29 — 형식당 엔진 2개 넘으면 설정 오류(진입점 resolve도 같은 검사)
     if bad:
@@ -257,6 +264,10 @@ def main():
             jobs.append((doc, eng, dst, sha))
     if deferred:
         skip["같은 내용 사본(1번만 파싱 후 복사)"] += len(deferred)
+    # pl-03 — 범위는 stack 하나: 명시 --engines 중 stack 형식별 목록 밖(또는 이 문서들 형식에 없음)은 안 돎 — 조용히 빠지지 않게 1줄
+    idle = sorted(set(want or ()) - {e for _, e, _, _ in jobs} - {e for _, e, _, _, _ in deferred})
+    if idle:
+        print(f"[engine-scope] stack 목록 밖이라 안 돎(비교하려면 stack json을 고침): {', '.join(idle)}", flush=True)
     if skip:
         print("건너뜀: " + " · ".join(f"{k} {v}" for k, v in skip.items()), flush=True)
     out.mkdir(parents=True, exist_ok=True)
