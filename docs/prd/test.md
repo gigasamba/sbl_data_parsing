@@ -12,9 +12,10 @@
 - 파일: `tests/runner.py`, `tests/conftest.py`, `deploy/release/known_fail.txt`.
 - 기준선(CLAUDE.md §4·§6-3에서 옮김, 10-30):
   - `selftest`는 **94개 중 93개 통과**다(10-30 `feature/pl12-no-deleted` — #58이 시험 3개를 지우고 `test_no_deleted` 1개를 더한 뒤). 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
-  - `pytest tests/`는 **147 passed · 3 xfailed**다(10-30 `feature/pl12-no-deleted` — 루트 `settings.yaml`에 전용 PG가 있을 때. 없으면 `test_pl14_deploy`가 건너뛰어 146 passed · 1 skipped). 위 1개와 일반 테스트 2개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — `test_run_combo`·`test_pub_registry`(C-54 ①))이며, 모두 리팩토링 전부터 있던 실패다.
+  - `pytest tests/`는 **148 passed · 3 xfailed**다(10-30 `release/0.1.0` E2E — 루트 `settings.yaml`에 전용 PG가 있을 때. 없으면 `test_pl14_deploy`가 건너뛰어 146 passed · 1 skipped). 위 1개와 일반 테스트 2개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — `test_run_combo`·`test_pub_registry`(C-54 ①))이며, 모두 리팩토링 전부터 있던 실패다.
   - 핑거프린트 10-30 값(`feature/pl12-no-deleted` — 공용 `settings.py`·`pg.py`·`structdb.py`가 바뀌어 p0·p1·r·s 모두 바뀜. 그 전 `feature/pl34-p1-cleanup` 값: p0 `2b4ad090d25e` · p1 `81cfe39fd09e` · r `7901ef34500b` · s `bcac3fe53d14`): `FINGERPRINT abe9b7b0799ceaae` · a `e3b0c44298fc` · p0 `0e6a5bc155b1` · p1 `1df0ba57214b` · r `bce50575a881` · s `10f13083e536`. 엔진 18개(재파싱 키 `run_all.engine_code_fp` — `qwen_vlm` `06f937fcc39e` · `kreuzberg` `7e7c9ac44287` · `rapidocr_ko` `990ebae04429`, 나머지는 refactor.md 부록 2). 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다(CLAUDE.md §4).
   - PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕 설정(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`에 넣는다(지금 `test_pub_registry`).
+  - 0.1.0 반입 판정(10-30, develop `0ef807f` 코드를 실행 이미지에 붙여 실행): `data-pipeline-runtime:0.1.0` **75개 중 74개 통과**(SKIP 19, 알려진 실패 1) · `mcp-server-runtime:0.1.0` **47개 모두 통과** · 의존성 지문 `f0fcc30bd067bc2f` 일치.
   - Mac의 부하가 높으면 `test_trigger_server`가 시간 초과로 실패할 수 있다(환경 문제).
 - Status: done
 
