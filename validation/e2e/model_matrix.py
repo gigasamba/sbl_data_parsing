@@ -823,7 +823,6 @@ def cmd_run_staged(config, a):
     stage2_limit = a.limit if a.limit is not None else config["stage2_limit"]
     figure_limit = a.limit if a.limit is not None else config["figure_review_limit"]
     repeats = config["repeats"]
-    judge_cross = config.get("judge_cross", False)
     _, vlm_cands = usable_candidates(config, "vlm")
     from common.ai.guard import check_scope  # AD43 — 2단계 조합(llm×vlm) 2개 이상 + 외부 주소는 거부
 
@@ -835,10 +834,6 @@ def cmd_run_staged(config, a):
             return {"combo": combo["name"], "dataset": ds, "repeat": rep, "status": "skipped", "reason": "묶음 없음"}
         # repeats: research()가 온도 0.0 고정 호출(modules/** 밖 — 못 바꿈) → 캐시만 반복마다 새로 둬 재호출되게(cache-bypass, plan 참고)
         env["LLM_CACHE_DIR"] = str(run_dir / "llm_cache" / combo["name"] / f"rep{rep}")
-        if judge_cross:
-            other = next((c["model"] for cid, c in vlm_cands.items() if cid != combo["vlm"]), None)
-            if other:
-                env["VLM_MODEL_ALT"] = other  # figure_review judge()가 이 모델로 판정(모듈 수정 없이 이미 있는 env 훅)
         out_base = run_dir / "raw" / "stage2" / combo["name"] / ds / f"rep{rep}"
         result = {"combo": combo["name"], "dataset": ds, "repeat": rep}
         do_r, do_f = stage2_parts(config, combo)

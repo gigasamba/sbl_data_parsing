@@ -503,12 +503,11 @@ mcp:
 # 3. 파라미터 — 결과를 바꾸는 값(영역별). 줄 모양·넣는 법은 2와 같다.
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 
-# ─── 3-1. 모델 — LLM·VLM·임베딩·재순위·비용 가드 (5칸) ───
+# ─── 3-1. 모델 — LLM·VLM·임베딩·재순위·비용 가드 (4칸) ───
 #   common.models.embed.query_prefix:  # 질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …/nQuery: ') · 기본 없음 · 값: 글자 · env=EMBED_QUERY_PREFIX
 #   common.models.llm.extra_body:  # LLM 요청 본문에 합칠 JSON 객체(예: 생각 끄기 {'reasoning':{'enabled':false}}) · 기본 없음 · 값: JSON 객체 · env=LLM_EXTRA_BODY
 #   common.models.ocrvlm.model:  # OCR 전용 VLM 모델 이름(0.9B급 GLM-OCR·PaddleOCR-VL 등) · 기본 없음 · 값: 글자 · env=OCRVLM_MODEL [엔진 지문]
 #   common.models.vlm.extra_body:  # VLM(·OCRVLM) 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기) · 기본 없음 · 값: JSON 객체 · env=VLM_EXTRA_BODY
-#   common.models.vlm.model_alt:  # 그림 검토 판정용 VLM 모델 이름(없으면 VLM_MODEL과 같음) · 기본 없음 · 값: 글자 · env=VLM_MODEL_ALT
 
 # ─── 3-2. extract — 원천·준비·파싱 (15칸) ───
 #   pipeline.extract.engine_scope:  # 문서마다 돌릴 엔진 범위(stack = 형식별 stack.json 목록만 / all = 등록 엔진 전부) · 기본 없음 · 값: stack·all 중 하나 · env=PARSE_ENGINE_SCOPE [서버 옛 값: all]

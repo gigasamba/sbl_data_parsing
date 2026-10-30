@@ -1412,6 +1412,9 @@ class CommonModelsTransport(Section):
 
 
 class CommonModelsVlm(Section):
+    REMOVED = frozenset(
+        {"model_alt"}
+    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     allow_external: bool | None = F(False, "VLM_ALLOW_EXTERNAL", "VLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "VLM_API_KEY", "VLM 엔드포인트 API 키(있을 때만)", pinned="engine")
     base_url: str | None = F(None, "VLM_BASE_URL", "VLM 엔드포인트 주소(OpenAI 호환 …/v1)", pinned="engine")
@@ -1424,7 +1427,6 @@ class CommonModelsVlm(Section):
         8, "VLM_MAX_CONCURRENCY", "공유 VLM 서버 동시 요청 총량 상한(문서 동시 수 × 쪽 동시 수가 이 값을 못 넘게 줄임)", unset=("auto",)
     )
     model: str | None = F(None, "VLM_MODEL", "VLM 모델 이름", pinned="engine")
-    model_alt: str | None = F(None, "VLM_MODEL_ALT", "그림 검토 판정용 VLM 모델 이름(없으면 VLM_MODEL과 같음)")
     retry: int | None = F(1, "VLM_RETRY", "VLM 쪽 호출 시간 초과·연결 오류 때 재시도 횟수(회)", pinned="engine")
     timeout: int | None = F(180, "VLM_TIMEOUT", "VLM 쪽당 호출 제한 시간(초)", pinned="engine")
 
