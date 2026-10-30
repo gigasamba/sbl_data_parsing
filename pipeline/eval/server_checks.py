@@ -86,13 +86,19 @@ def _build_engine_base(parse_dir, dest, max_docs=None):
     return docs
 
 
+def _stack_args(stack):
+    """represent 인자 — 파일 경로면 --stack(PC·시험), 판 번호면 --stack-version, None이면 없음(PC 파일 — pl-32)."""
+    if stack is None:
+        return []
+    return ["--stack-version", str(stack)] if isinstance(stack, int) else ["--stack", str(stack)]
+
+
 def _run_represent(dev_root, stack_path, parse_dir, src_dir, env):
     cmd = [
         sys.executable,
         "-m",
         "pipeline.transform.represent.represent",
-        "--stack",
-        str(stack_path),
+        *_stack_args(stack_path),
         "--parse-dir",
         str(parse_dir),
         "--src",
@@ -233,10 +239,10 @@ def cmd_ar1(args):
         return 2
     if args.stack:
         stack_path = Path(args.stack)
-    else:  # S8b — 엔진 구성 활성 판의 사본(서버 = 판 표, PC = 파일)
+    else:  # pl-32 — 엔진 구성 판 번호(서버 = 판 표, PC = 파일이면 None)
         from pipeline import stackcfg
 
-        stack_path = stackcfg.current(out_dir)[0]
+        stack_path = stackcfg.current().version_id
     _results, md = _run_ar1(Path(args.parse_dir), Path(args.src), Path(gold), out_dir, stack_path, args.max_docs, args.run_vlm)
     print(md)
     return 0

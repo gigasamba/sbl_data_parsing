@@ -61,7 +61,6 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[0]
 from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.paths import STACK_FILE  # noqa: E402 — 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
 from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
 
 
@@ -1148,11 +1147,14 @@ def represent(stack, parse_dir, src=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--stack", default=str(STACK_FILE))
+    ap.add_argument(
+        "--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 판: --stack-version > STACK_VERSION > PC 파일, pl-32)"
+    )
+    ap.add_argument("--stack-version", type=int, default=None, help="엔진 구성 판 번호(진입점이 넘김)")
     ap.add_argument("--parse-dir", default="output/parse")
     ap.add_argument("--src", default=None, help="파싱한 문서 폴더(원본 경로·sha256을 대표 결과에 남김 — 구조화 모듈이 원본 없이 돌 때 씀)")
     a = ap.parse_args(argv)
-    idx = represent(load_stack(a.stack), a.parse_dir, a.src)
+    idx = represent(load_stack(a.stack) if a.stack else pc.stack(a.stack_version), a.parse_dir, a.src)
     done = [r for r in idx if r["engine"]]
     from collections import Counter
 

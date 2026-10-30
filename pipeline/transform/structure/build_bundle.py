@@ -35,7 +35,7 @@ from common.core.contract import (  # noqa: E402 — 문서 ID(doc_key) 규칙(G
     original_file_hash,
 )
 from common.core.meaning import strip_page_numbers  # noqa: E402
-from common.core.paths import APP_ROOT, STACK_FILE  # noqa: E402 — 폴더 재편 뒤 이 두 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
+from common.core.paths import APP_ROOT  # noqa: E402 — 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
 from common.core.text import (  # noqa: E402 — 색인 본문·토큰 규칙(모듈 계약)
     index_text,
     normalize_value,
@@ -715,12 +715,15 @@ def main(argv=None):
         "--summary", default="auto", choices=["auto", "llm", "lead"], help="auto = EDW_SUMMARY_LLM이면 LLM 요약, 아니면 앞부분 발췌"
     )
     ap.add_argument("--chunk", default=None, help="기본 = stack.json chunk(없으면 structure)")
-    ap.add_argument("--stack", default=str(STACK_FILE))
+    ap.add_argument(
+        "--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 판: --stack-version > STACK_VERSION > PC 파일, pl-32)"
+    )
+    ap.add_argument("--stack-version", type=int, default=None, help="엔진 구성 판 번호(진입점이 넘김)")
     ap.add_argument("--no-rep", action="store_true", help="대표 파싱(output/parse/_rep) 대신 선정 엔진을 문서마다 고름(단계 1 실험용)")
     ap.add_argument("--images-dir", default=None, help="그림 기록 index.jsonl 폴더(L1, 기본 = --parse-dir/_images) — 없으면 그림 청크 0건")
     ap.add_argument("--out", default="output/edw/bundle")
     a = ap.parse_args(argv)
-    stack = json.loads(Path(a.stack).read_text(encoding="utf-8")) if Path(a.stack).exists() else {}
+    stack = json.loads(Path(a.stack).read_text(encoding="utf-8")) if a.stack else pc.stack(a.stack_version)
     a.chunk = a.chunk or stack.get("chunk") or "structure"
     t0 = time.time()
     pd = Path(a.parse_dir)
