@@ -35,9 +35,9 @@
 | MCP `parse_document`에 CPU 먼저 | todo | 지금 nice(같은 컨테이너) · 논의: 컨테이너 분리 | [rn-03](prd/etl.md#rn-03) |
 | run_docs 작은 수정·레인 테스트 | done | 감시 루프 · 로그 · 흐름 테스트 · 0.1.0 | [rn-04](prd/etl.md#rn-04) |
 | DB 스키마 명세 | dev | `db_schema.md` · 시험 · 승인 | [pl-25](prd/etl.md#pl-25) |
-| 저장 구조 — silver OS uuid 폴더 · 메타 EDW · gold pgvector | todo | uuid5 폴더 · 최신 행만 · 로컬 상태 지움 · 0.1.0 | [pl-32](prd/etl.md#pl-32) |
+| 저장 구조 — silver OS uuid 폴더 · 메타 EDW · gold pgvector | todo | uuid5 폴더 · 최신 행만 · 로컬 상태 지움 · 0.2.0 | [pl-32](prd/etl.md#pl-32) |
 | 분류 단계 — silver 뒤, gold 앞 | todo | SFDC·LAS 라벨 · sha256 묶음 전파 · `doc_class` | [pl-33](prd/etl.md#pl-33) |
-| FAQ 원천 — 질의응답 엑셀 행 단위 | todo | 시트 = FAQ_group · 행 = 청크 · FileStorageMap FAQ · 0.1.0 | [pl-39](prd/etl.md#pl-39) |
+| FAQ 원천 — 질의응답 엑셀 행 단위 | todo | 시트 = FAQ_group · 행 = 청크 · FileStorageMap FAQ · 0.2.0 | [pl-39](prd/etl.md#pl-39) |
 | FAQ 다시 올리기 — 행 단위 비교 | todo | 같은 그룹·질문 · 최신 답만 · pl-13 FAQ 예외(등급 A) | [pl-41](prd/etl.md#pl-41) |
 | 수동 갱신 명령 — 분류·시스템 메타 따로 | todo | LLM 갈래(NULL 기본) · 메타 갈래(전체) · UPDATE만 | [pl-40](prd/etl.md#pl-40) |
 | 원천별 gold 표(나중) | todo | 원천 4벌 · `search` 원천 필수 | [pl-28](prd/etl.md#pl-28) |

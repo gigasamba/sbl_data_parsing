@@ -110,7 +110,7 @@ git config core.hooksPath .githooks          # 처음 한 번 — 커밋할 때 
 - 공용·레이어 파일을 고쳤으면 핑거프린트를 확인하고(§4) 커밋 메시지에 변경 전후 값을 적는다.
 - 문서는 기능을 바꾼 **같은 커밋에서** 고친다.
 - 커밋 메시지에 서버 배포 영향을 적는다: **'오버레이 패치 가능'**(코드 폴더만 바꾸면 됨) 또는 **'새 이미지 버전 필요'**(`deploy/docker/`의 의존성, Dockerfile, 마운트 경로, `PYTHONPATH`가 바뀜).
-- **버전은 저장소 루트 `VERSION` 하나**(SemVer — 두 이미지 `data-pipeline`, `mcp-server`가 함께 씀, D-036). 이미지 태그(`<이미지>:<버전>`)와 DB의 버전 표기(`common.pipeline_version()`)가 이 값을 쓴다. feature 브랜치에서는 고치지 않고 `release/<버전>` 브랜치에서 올린다: MAJOR(MCP 도구 계약·DB 스키마·핸드오프 형식이 깨질 때), MINOR(새 이미지 버전), PATCH(오버레이 패치 — `make_patch.sh`는 이미지 태그와 같은 버전이면 멈춘다).
+- **버전은 저장소 루트 `VERSION` 하나**(SemVer — 두 이미지 `data-pipeline`, `mcp-server`가 함께 씀, D-036). 이미지 태그(`<이미지>:<버전>`)와 DB의 버전 표기(`common.pipeline_version()`)가 이 값을 쓴다. feature 브랜치에서는 고치지 않고 `release/<버전>` 브랜치에서 올린다: MAJOR(MCP 도구 계약·DB 스키마·핸드오프 형식이 깨질 때), MINOR(새 이미지 버전), PATCH(오버레이 패치 — `make_patch.sh`는 이미지 태그와 같은 버전이면 멈춘다). 1.0.0 전에는 MCP 도구 계약·DB 스키마가 깨져도 MINOR로 올린다(사용자 10-30 — SemVer 0.x 관례, 운영이 안정되면 1.0.0).
 - 새 외부 패키지는 **사용자 승인을 받은 뒤에만** 도입한다. 서버 이미지용은 `deploy/docker/requirements*`(+ 폐쇄망 휠 `wheels/`), PC 개발 도구는 `requirements-dev.txt`에 넣는다.
 
 ### 5-3. push 전(적극 권장)
