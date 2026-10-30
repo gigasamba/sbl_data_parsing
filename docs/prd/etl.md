@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. 수집 → 파싱([parse.md](parse.md)) → 구조화 → 적재(pgvector·정형 DB)·게시(silver), 서버 러너(`run_docs.py`) 레인·대기열.
 
-순서(주제별): 수집 pl-01·pl-29 → 구조화 pl-06·pl-15·pl-16 → 적재 pl-07·pl-13·pl-14·pl-19 → 정형 DB·문서 대장 pl-08·pl-38·pl-12 → 게시 pl-09·pl-26 → 실행·흐름 러너 pl-10·pl-18·pl-23·pl-24·rn-01·rn-02·rn-03·rn-04 → DB 스키마·저장 구조·분류·FAQ pl-25·pl-32·pl-33·pl-39·pl-28 → 코드와 다른 점.
+순서(주제별): 수집 pl-01·pl-29 → 구조화 pl-06·pl-15·pl-16 → 적재 pl-07·pl-13·pl-14·pl-19 → 정형 DB·문서 대장 pl-08·pl-38·pl-12 → 게시 pl-09·pl-26 → 실행·흐름 러너 pl-10·pl-18·pl-23·pl-24·rn-01·rn-02·rn-03·rn-04 → DB 스키마·저장 구조·분류·FAQ·수동 갱신 pl-25·pl-32·pl-33·pl-39·pl-41·pl-40·pl-28 → 코드와 다른 점.
 
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
@@ -21,6 +21,7 @@
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) C6·T7): 고객 연결은 운영 4단계를 따른다 — 출발점 `FileStorageMap`, 순서 기회 직접 > `Task.WhatId` > `Event.WhatId` > Quote 스냅샷, 계정 직접 연결도 포함. 결과는 pgvector doc에만. 같은 sha256 묶음에도 고객은 전파하지 않는다(C3).
 - 열린 점: Quote 단계는 레플리카에 Quote 표가 없어 SFDC REST 스냅샷에 기댄다 — 서버에서 스냅샷을 어떻게 공급할지 정해야 함.
 - 결정(G2·T16 — 2차 grill(사용자 10-30, 원본은 git 밖)): `client_edw`(문서당 고객 하나)는 SFDC(4단계 연결)와 **CRMS**(`FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST` — DB 담당자 확인, D-2)에서 채운다. LAS는 상대사 출처가 정해질 때까지 비워 둔다. FAQ는 고객 연결 없음([pl-39](#pl-39)).
+- 결정(G11 — 3차 grill(사용자 10-30, 원본은 git 밖)): 적재 뒤 바뀐 SFDC 연결(고객·`sf_op_id` 등)은 자동으로 갱신하지 않는다. 수동 요청 때 전체 문서를 갱신한다([pl-40](#pl-40)).
 - Status: todo
 
 <a id="pl-06"></a>
@@ -264,6 +265,7 @@
   - 원본 등록표나 Object Storage를 지우는 동작(운영 `purge_delete_targets.py` 같은 것)은 옮겨 오지 않는다.
 - 파일: `pipeline/transform/structure/`(새 파일), `resources/prompts/pipeline/`(새 프롬프트), `pipeline/load/`.
 - 결정(G1·G8 — 2차 grill(사용자 10-30, 원본은 git 밖)): `doc_class`는 gold `doc`과 EDW `ParsingMeta` 양쪽에 쓴다. FAQ는 분류하지 않는다([pl-39](#pl-39)).
+- 결정(G10 — 3차 grill(사용자 10-30, 원본은 git 밖)): 분류에 실패한 문서(`doc_class` NULL — LLM 실패나 라벨 밖 값)는 자동으로 다시 하지 않는다. 수동 명령으로만 다시 분류한다([pl-40](#pl-40), [pl-23](#pl-23) 증분 원칙 그대로).
 - Status: todo — 0.1.0, 순서는 허브가 정함([pl-32](#pl-32)).
 
 <a id="pl-39"></a>
@@ -277,6 +279,24 @@
 - 파일: `pipeline/extract/`(행 단위 엑셀 처리), `pipeline/transform/structure/`(청크 메타), `mcp_server/services/search/`(필터).
 - 선행: PR 3a(gold 칸) 뒤([pl-32](#pl-32)).
 - Status: todo — 0.1.0.
+
+<a id="pl-40"></a>
+## pl-40 · 수동 갱신 명령 — 분류·시스템 메타를 따로
+- 결정(G10·G11·G12·T17 — 3차 grill(사용자 10-30, 원본은 git 밖)): 수동 갱신 명령은 두 갈래를 **각각 따로** 고른다(한 번에 둘을 같이 고치는 길은 없음).
+  - ① LLM 갈래: 분류(`doc_class`) — 기본 대상은 `doc_class`가 NULL인 문서(G10).
+  - ② 시스템 메타 갈래: EDW에서 오는 고객·`sf_op_id`·`created_at` 등 — 요청하면 전체 문서(G11).
+  - 재파싱·재임베딩은 하지 않는다. gold `doc`과 EDW `ParsingMeta` 칸만 UPDATE한다.
+- 관련: [pl-33](#pl-33)(분류), [pl-29](#pl-29)(고객 연결), [pl-25](#pl-25)(칸).
+- Status: todo
+
+<a id="pl-41"></a>
+## pl-41 · FAQ 다시 올리기 — 행 단위 비교 적재
+- 결정(G13·T18 — 3차 grill(사용자 10-30, 원본은 git 밖)): FAQ를 고쳐 새 `s3_key`로 올리면 기존 FAQ 청크와 **행(청크) 단위로** 비교한다.
+  - 같은 항목 = `FAQ_group`과 질문 글이 같음.
+  - 가장 최신 답만 남긴다 — `last modified date`, 없으면 새 파일. 예전 행은 gold에서 지우고 새 행을 더한다. 같은 질문이 없는 새 행은 더한다.
+  - [pl-13](#pl-13)("적재는 지우지 않음")의 **FAQ 한정 예외** — 검토 등급 A(서버 적재 동작).
+- 관련: [pl-39](#pl-39)(FAQ 원천).
+- Status: todo
 
 <a id="pl-28"></a>
 ## pl-28 · 원천별 gold 표(설계는 pl-25, 만들기는 나중)
