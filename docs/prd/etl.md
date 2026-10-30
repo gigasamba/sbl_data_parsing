@@ -259,4 +259,4 @@
 | `--prune`, `vector` 확장 만들기 | 선택 · `PG_CREATE_EXTENSION=0` | — |
 | trigger 서버 | — | `TRIGGER_TOKEN`(없으면 시작 거부) |
 
-10-29 요청 "EDW와 Object Storage 적재를 기본으로 켬": 게시(Object Storage + `AI.ParsingMeta`)는 `PM_BUCKET`과 EDW 쓰기 계정만 있으면 이미 기본으로 돈다. 꺼져 있는 것은 밤 일정(`NIGHTLY_ENABLED=0`) — 아직 안 바꿈, 사용자 선택 필요. EDW 벡터 적재는 10-29에 지웠다(벡터는 pgvector에만 — [settings.md#op-03](settings.md#op-03)).
+10-29 요청 "EDW와 Object Storage 적재를 기본으로 켬": 게시(Object Storage + `AI.ParsingMeta`)는 `PM_BUCKET`과 EDW 쓰기 계정만 있으면 이미 기본으로 돈다. 꺼져 있는 것은 밤 일정(`NIGHTLY_TIME` 비움 — 10-30 pl-32, 켤 때 시각을 적음). EDW 벡터 적재는 10-29에 지웠다(벡터는 pgvector에만 — [settings.md#op-03](settings.md#op-03)).

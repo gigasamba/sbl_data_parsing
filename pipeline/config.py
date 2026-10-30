@@ -163,6 +163,7 @@ class PipelineHostNightly(Section):
         None,
         "NIGHTLY_TIME",
         "새벽 배치 시작 시각(HH:MM, 서버 시간) — 비우면 새벽 배치 없음. 타이머가 5분마다 깨워 이 시각부터 5분 안이면 시작(trigger.sh scheduled)",
+        pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$",  # 틀린 꼴은 설정을 읽을 때 거부(타이머가 5분마다 실패로 남기지 않게)
     )
     max_new: int | None = F(2000, "NIGHTLY_MAX_NEW", "새벽 배치 parse가 밤당 처음 파싱할 문서 수 상한(건)")
     modules: WordList | None = F(

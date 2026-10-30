@@ -20,12 +20,9 @@ set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트(S6b)
 # 서버 설정은 코드 폴더 밖 $SERVER_ENV_DIR/settings.yaml(전체 덮어쓰기에 안 지워짐, env-guide.md) — compose 치환 값은 셸 env로(--env-file 없음)
 . deploy/host/scripts/settings_env.sh && load_settings || exit $?   # S7e1 — 컨테이너는 같은 파일을 붙여 읽음(compose x-settings)
-. deploy/host/scripts/image_vars.sh   # S6b — compose.pipeline.yml은 두 이미지 변수를 다 치환하므로 둘 다 확인(옛 변수만 있으면 종료 코드 2)
-need_image pipeline || exit 2; need_image mcp || exit 2
-DC="docker compose -f deploy/host/compose/compose.pipeline.yml"
 mod=${1:?parse|structure|load|all|night|scheduled}; shift || true
 # scheduled(pl-32, 사용자 10-30) = systemd 타이머가 5분마다 부름 — settings.yaml pipeline.host.nightly.time(NIGHTLY_TIME, HH:MM)이
-# 비면 조용히 끝(새벽 배치 없음), 지금이 그 시각부터 5분 안이면 night로 이어감. 켬/끔과 시각은 이 칸 하나(옛 NIGHTLY_ENABLED·고정 01:00 대신).
+# 비면 조용히 끝(새벽 배치 없음), 지금이 그 시각부터 5분 안이면 night로 이어감(이미지 확인 전 — 5분마다 도는 몫을 가볍게). 켬/끔과 시각은 이 칸 하나(옛 NIGHTLY_ENABLED·고정 01:00 대신).
 if [ "$mod" = "scheduled" ]; then
   t=${NIGHTLY_TIME:-}
   [ -z "$t" ] && exit 0
@@ -35,9 +32,13 @@ if [ "$mod" = "scheduled" ]; then
   esac
   now=$(date +%H:%M)
   d=$(( (10#${now%%:*} * 60 + 10#${now#*:}) - (10#${t%%:*} * 60 + 10#${t#*:}) ))
-  if [ "$d" -lt 0 ] || [ "$d" -ge 5 ]; then exit 0; fi
+  d=$(( (d + 1440) % 1440 ))   # 자정을 넘는 창(23:58 → 00:02)
+  if [ "$d" -ge 5 ]; then exit 0; fi
   mod=night
 fi
+. deploy/host/scripts/image_vars.sh   # S6b — compose.pipeline.yml은 두 이미지 변수를 다 치환하므로 둘 다 확인(옛 변수만 있으면 종료 코드 2)
+need_image pipeline || exit 2; need_image mcp || exit 2
+DC="docker compose -f deploy/host/compose/compose.pipeline.yml"
 run() {
   echo "[trigger] $(date '+%F %T') $1 시작"
   $DC run --rm "$1" "$1" "${@:2}"; rc=$?          # compose run의 인자는 command를 덮음 → 모듈 이름을 다시 줌

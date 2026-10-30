@@ -15,12 +15,15 @@ COMMON_OLD = """common:
     llm: {max_concurrency: 8}
     vlm: {model_alt: m}
     ocrvlm: {base_url: http://x/v1, model: m}
+  store: {registry_retry_max: 7}
 """
 PIPELINE_OLD = """pipeline:
   transform:
     structure: {wiki_domain_phrase: x}
     figures: {ocrvlm_prompt: p}
   eval: {diagram_raster_vlm: false}
+  host:
+    nightly: {enabled: true}
 """
 
 
