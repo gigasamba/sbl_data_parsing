@@ -45,7 +45,7 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 ## op-04 · 첫 릴리스 태그 `v0.1.0`과 릴리스 노트
 - 이유: `VERSION`과 이미지 태그는 있지만 태그나 릴리스 노트를 만든 적이 없다.
 - 무엇: `release/0.1.0`에서 `main`에 태그, `RELEASE_NOTES`(변경, 채울 설정, 핑거프린트 변경, refactor.md "최종"의 서버 할 일)를 쓴다.
-- 릴리스 노트 후보: MCP `search` 근거 출력의 `file_path` 키 — 제거 대상(사용자 10-30), 시기·버전 처리는 나중([etl.md#pl-25](etl.md#pl-25), [mcp.md#mc-01](mcp.md#mc-01)).
+- 릴리스 노트 후보: MCP `search` 근거 출력의 `file_path` 키 제거 — [mcp.md#mc-16](mcp.md#mc-16)(사용자 10-30 PRD grill D1).
 - 끝남 10-30: `main` 7910257에 태그 `v0.1.0`을 만들었다. 릴리스 노트는 GitHub release v0.1.0.
 - Status: done
 
