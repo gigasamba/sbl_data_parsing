@@ -44,7 +44,7 @@ async def _mcp(fn):
     from mcp import ClientSession
     from mcp.client.streamable_http import streamablehttp_client
 
-    hdr = {"X-MCP-Client": "validation-ui"}
+    hdr = {"X-MCP-Client": "test", "X-MCP-User": "test"}
     token = mc.token_text(mc.cfg().server.token)
     if token:
         hdr["Authorization"] = "Bearer " + token

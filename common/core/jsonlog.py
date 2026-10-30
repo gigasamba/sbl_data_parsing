@@ -33,6 +33,7 @@ if not isinstance(_inherited, dict):
     _inherited = {}
 _CONTEXT: contextvars.ContextVar[dict | None] = contextvars.ContextVar("applog_context", default=None)
 _LOGGERS: dict[str, logging.Logger] = {}
+_STREAMS: dict = {}
 
 
 def get_context():
@@ -103,12 +104,14 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(masked(row), ensure_ascii=False)
 
 
-def setup(app):
-    """앱 logger 반환; common.log.level/dir/db_enabled를 읽는다. 재호출 시 설정 반영."""
+def setup(app, *, stream=None):
+    """앱 logger 반환; common.log 설정 반영. stream 지정은 앱별 보존(stdio stderr)."""
     if not re.fullmatch(r"[A-Za-z0-9_-]+", app):
         raise ValueError("app must be a filename-safe name")
     from common.store import logsink
 
+    if stream is not None:
+        _STREAMS[app] = stream
     log = logging.getLogger(app)
     for handler in log.handlers[:]:
         log.removeHandler(handler)
@@ -123,7 +126,7 @@ def setup(app):
         directory.mkdir(parents=True, exist_ok=True)
         handler = logging.FileHandler(directory / f"{app}.jsonl", encoding="utf-8")
     else:
-        handler = logging.StreamHandler(sys.stdout)
+        handler = logging.StreamHandler(_STREAMS.get(app, sys.stdout))
     handler.setFormatter(JsonFormatter(app))
     log.addHandler(handler)
     if conf.db_enabled:

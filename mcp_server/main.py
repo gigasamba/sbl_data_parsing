@@ -69,13 +69,15 @@
 
 import hmac
 import ipaddress
+import json
 import sys
 import threading
 
 from common.core.console import utf8_stdout
 from mcp_server import config as mc  # 설정 객체(S7d)
 from mcp_server.routers import edw_tools, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
-from mcp_server.services.search.server_state import CALLER, _warmup_bg
+from mcp_server.services import call_log
+from mcp_server.services.search.server_state import _warmup_bg
 
 _DEFAULT_MCP_INSTRUCTIONS = (
     "CDMO 문서 검색 — search로 근거를 찾는다(하드 필터 조건을 함께 주면 그 범위 안에서 검색, "
@@ -152,16 +154,58 @@ def build_guarded_app(host, port, token):
     inner = app
 
     async def guarded(scope, receive, send):
-        if scope["type"] == "http":
-            if scope.get("path") == "/health":
-                return await inner(scope, receive, send)
-            hdr = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
-            if token and not hmac.compare_digest(
-                (hdr.get("authorization") or "").encode(), f"Bearer {token}".encode()
-            ):  # 상수 시간 비교(보안 검토 10-02)
-                return await JSONResponse({"error": "unauthorized"}, status_code=401)(scope, receive, send)
-            CALLER.set("mcp:" + (hdr.get("x-mcp-client") or "http")[:60])
-        await inner(scope, receive, send)
+        if scope["type"] != "http" or scope.get("path") == "/health":
+            return await inner(scope, receive, send)
+        hdr = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
+        if token and not hmac.compare_digest(
+            (hdr.get("authorization") or "").encode(), f"Bearer {token}".encode()
+        ):  # 인증 실패는 본문 수신을 기다리지 않고 바로 거부한다.
+            with call_log.request_context(hdr, scope) as context:
+                call_log.unauthorized()
+                return await JSONResponse({"error": "unauthorized"}, status_code=401, headers={"X-Request-Id": context["request_id"]})(
+                    scope, receive, send
+                )
+        messages, payload = [], None
+        if scope.get("method") == "POST":
+            body = bytearray()
+            while True:
+                message = await receive()
+                messages.append(message)
+                if message["type"] != "http.request":
+                    break
+                body.extend(message.get("body", b""))
+                if not message.get("more_body", False):
+                    break
+            try:
+                payload = json.loads(body)
+            except (ValueError, UnicodeError):
+                pass  # 잘못된 JSON의 기존 MCP 오류 응답은 inner가 만든다.
+
+        async def replay():
+            return messages.pop(0) if messages else await receive()
+
+        with call_log.request_context(hdr, scope, payload) as context:
+            init_call = call_log.initialize_call(payload)
+            response_body, response_status = bytearray(), 200
+
+            async def correlated_send(message):
+                nonlocal response_status
+                if message["type"] == "http.response.start":
+                    response_status = message["status"]
+                    message = {**message, "headers": [*message.get("headers", []), (b"x-request-id", context["request_id"].encode())]}
+                elif init_call is not None and message["type"] == "http.response.body":
+                    response_body.extend(message.get("body", b""))
+                await send(message)
+
+            try:
+                await inner(scope, replay, correlated_send)
+            except BaseException as exc:
+                if init_call is not None:
+                    init_call.finish(status="error", err=str(exc))
+                raise
+            finally:
+                if init_call is not None:
+                    call_log.finish_initialize(init_call, response_body, response_status)
 
     return guarded
 
@@ -176,6 +220,8 @@ def serve_http(host, port, token):
 
 if __name__ == "__main__":
     utf8_stdout()
+    if "--stdio" in sys.argv:
+        call_log.configure_stdio()
     from common.config.settings import edw_read_only, require_run_env
 
     edw_read_only()  # 검색 MCP는 EDW 읽기 계정만 — 공용 설정 파일의 쓰기 계정 칸은 이 프로세스에서 비움(사용자 10-29, ops.md#op-03)

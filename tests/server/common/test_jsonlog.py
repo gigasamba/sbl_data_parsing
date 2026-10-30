@@ -74,3 +74,28 @@ def test_context_ids():
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         assert list(pool.map(worker, ("one", "two"))) == ["one", "two"]
     assert jsonlog.get_context() == original
+
+
+def test_stream_preserved():
+    import contextlib
+    import io
+    from unittest.mock import patch
+
+    from common.core import paths
+
+    stream, stdout = io.StringIO(), io.StringIO()
+    with settings.isolated(APPLOG_DIR="", APPLOG_DB_ENABLED="0", LOG_LEVEL="INFO"), patch.object(paths, "LOCAL_RUN", False):
+        with contextlib.redirect_stdout(stdout):
+            log = jsonlog.setup("teststream", stream=stream)
+            log.info("first")
+            jsonlog.setup("teststream")  # 재설정에도 명시 스트림을 유지한다.
+            logging.getLogger("teststream.sdk").info("child")  # 부모 logger Filter에 기대지 않는다.
+            assert not stdout.getvalue()
+            jsonlog.setup("testdefault").info("default")
+        assert [json.loads(line)["msg"] for line in stream.getvalue().splitlines()] == ["first", "child"]
+        assert json.loads(stdout.getvalue())["msg"] == "default"
+        for name in ("teststream", "testdefault"):
+            log = logging.getLogger(name)
+            for handler in log.handlers[:]:
+                log.removeHandler(handler)
+                handler.close()

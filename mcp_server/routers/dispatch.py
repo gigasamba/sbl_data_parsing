@@ -7,6 +7,7 @@ from functools import partial
 import anyio
 
 from mcp_server import config as mc  # 설정 객체(S7d — 요청마다 읽는 값은 호출 때 cfg())
+from mcp_server.services import call_log
 
 _LIMITER = None
 
@@ -39,22 +40,32 @@ async def _bg(fn, *a, **kw):
     호출자별 동시 상한은 안 둠 — MCP_TOKEN이 서버 전체에 하나뿐이라 X-MCP-Client 머리글(자기 신고값,
     검증 없음)로 자원을 나누면 신뢰 경계가 아닌 값으로 과설계만 늘어남."""
     global _INFLIGHT
+    audit = call_log.start(fn, a, kw)
     limiter = _limiter()
     queue_cap = _queue_cap(limiter)
     budget = limiter.total_tokens + queue_cap if queue_cap else None
     if budget is not None and _INFLIGHT >= budget:
+        audit.finish({"error": "busy"})
         return {"error": "busy"}
     timeout = float(mc.cfg().server.tool_timeout_sec)  # 기본 30(모델) — 요청마다
-    call = partial(fn, *a, **kw)
+    call = partial(audit.run, fn, *a, **kw)
     _INFLIGHT += 1
     try:
         if not timeout:
-            return await anyio.to_thread.run_sync(call, limiter=limiter)
+            result = await anyio.to_thread.run_sync(call, limiter=limiter)
+            audit.finish(result)
+            return result
         try:
             with anyio.fail_after(timeout):
-                return await anyio.to_thread.run_sync(call, limiter=limiter, abandon_on_cancel=True)
+                result = await anyio.to_thread.run_sync(call, limiter=limiter, abandon_on_cancel=True)
+            audit.finish(result)
+            return result
         except TimeoutError:
+            audit.finish({"error": "timeout"}, status="timeout")
             return {"error": "timeout"}
+    except BaseException as exc:
+        audit.finish(status="error", err=str(exc))
+        raise
     finally:
         _INFLIGHT -= 1
 
@@ -64,18 +75,26 @@ async def _bg_long(fn, budget, *a, **kw):
     budget(+10초 여유)으로 기다린다. 대기열·동시 상한·busy 판정은 _bg와 같은 규칙(S12·MC2) — 파싱은 서버 부하에 따라
     60초를 넘길 수 있어서 사용자가 준 time_out_threshold 예산 안에서 한 자리에서 끝내는 게 이 도구의 계약."""
     global _INFLIGHT
+    audit = call_log.start(fn, a, kw)
     limiter = _limiter()
     queue_cap = _queue_cap(limiter)
     bq = limiter.total_tokens + queue_cap if queue_cap else None
     if bq is not None and _INFLIGHT >= bq:
+        audit.finish({"error": "busy"})
         return {"error": "busy"}
     timeout = float(budget) + 10.0
-    call = partial(fn, *a, **kw)
+    call = partial(audit.run, fn, *a, **kw)
     _INFLIGHT += 1
     try:
         with anyio.fail_after(timeout):
-            return await anyio.to_thread.run_sync(call, limiter=limiter, abandon_on_cancel=True)
+            result = await anyio.to_thread.run_sync(call, limiter=limiter, abandon_on_cancel=True)
+        audit.finish(result)
+        return result
     except TimeoutError:
+        audit.finish({"error": "timeout"}, status="timeout")
         return {"error": "timeout"}
+    except BaseException as exc:
+        audit.finish(status="error", err=str(exc))
+        raise
     finally:
         _INFLIGHT -= 1

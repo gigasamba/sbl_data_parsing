@@ -22,6 +22,10 @@
 
 DB 장애/문장 시간 초과(기본 2초)는 앱 호출을 기다리게 하지 않고 `common.log.fallback_dir`(기본 `output/applog`)에 마스킹된 `{table,row}` JSON Lines로 남는다. 경고는 프로세스당 한 번이며, `logsink.stats()`의 `dropped`·`fallback_errors`를 운영 점검에 포함한다. 파일 재적재는 자동으로 하지 않는다. 큐 상한 10000, 배치 200/1초이며 종료는 5초 대기 후 남은 배치를 파일에 쓴다. 종료 중 결과가 불명확한 DB 커밋과 대체 파일은 중복될 수 있어 request_id/run_id/span_id로 대조한다. 대체 파일/PC 로그는 삭제하지 않으므로 디스크 회수·접근 권한·보관 정책도 운영에서 정한다(C-68). 내부 신호 `APPLOG_CONTEXT`는 settings.child_env가 ID만 전달하며 사용자 설정 env가 아니다.
 
+MCP `--stdio` 모드에서는 콘솔 로그를 stderr로 보낸다(stdout은 JSON-RPC 전용, 명시 파일 로그는 유지). MCP는 호출당 `applog.mcp_call` 한 행(상태 ok/error/busy/timeout/unauthorized)을 남긴다. `X-MCP-Client`는 agent, `X-MCP-User`는 user_id(없으면 tools/call의 `_meta.user`)이며 자기신고 값이므로 인증 권한으로 쓰지 않는다. 유효한 UUID `X-Request-Id`를 보내면 로그와 응답 헤더에 전달되고, 없거나 형식이 다르면 서버가 UUID를 만든다. stateless HTTP의 clientInfo는 initialize 행에만 있으며 다음 호출에 추정해서 붙이지 않는다. session_id도 요청 헤더가 없으면 null이다. 401은 본문 수신 없이 tool=http 행에 남긴다. DEBUG 수준에서 시간 초과 뒤 남은 스레드의 abandoned·실제 종료 시각을 볼 수 있다.
+
+MCP args/result는 문서 원문을 포함할 수 있다. 비밀값 마스킹 후 앞부분만 저장하며, 잘린 TEXT는 JSON 파싱이 안 될 수 있다(`*_truncated` 확인). `result_sha256`와 `*_bytes`는 전체 원본 JSON 기준, result_keys는 자르지 않는다. parse_document의 content_b64는 파일 해시·크기로 치환한다. 이 감사 테이블/대체 파일에는 문서 접근 권한을 적용한다(C-68). 기존 qa_log.jsonl 기록·설정은 별개로 유지한다. 검증 UI는 `X-MCP-Client: test`·`X-MCP-User: test`를 보낸다.
+
 ### 0-1. 읽는 규칙
 - **옛 `pipeline.env`는 읽지 않는다.** settings.yaml 없이 `pipeline.env`만 있으면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·새벽 배치가 "설정 이관 필요"로 종료 코드 2. 옮기기·대조는 [release-and-patch.md](release-and-patch.md) §5-4.
 - **크리덴셜**(비밀번호·키·토큰)과 **접속 정보**(주소·포트·DB 이름)는 전부 이 파일 하나에만 둔다. 각 컨테이너는 common + 자기 앱 절(pipeline·mcp)만 읽는다(`RAG_MODULE`). 엔진·핸드오프 파일이 env로 읽는 항목(`VLM_API_KEY` 등 — 핑거프린트 때문에 고치지 않는 파일, D-028 ⑤, 영구 다리)은 컨테이너 **안 프로세스 env**에는 들어간다(`docker inspect`에는 안 나옴 — 사용자가 받아들임).
