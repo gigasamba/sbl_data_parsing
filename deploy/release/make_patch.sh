@@ -16,7 +16,7 @@
 #   NOTES_ONLY=1 이면 파일·매니페스트·브랜치 커밋 없이 설명서(NOTES_NAME, 기본 PATCH_NOTES.md)와 app/deploy/common/PATCH_VERSION만 — 전체 덮어쓰기
 #     묶음(release-and-patch.md §4)용: NOTES_ONLY=1 NOTES_NAME=RELEASE_NOTES.md make_patch.sh <직전 반입 커밋> <출력> …
 #   '재파싱 필요?'는 경로가 아니라 **값**으로 정한다(S6b, VS3 R-2): 시작점·HEAD 코드를 임시 폴더에 풀어 인계 지문(common.FINGERPRINT —
-#     다르면 다음 모듈이 옛 결과를 거부)·엔진 지문 27개(pipeline.extract.run_all.engine_code_fp — 다르면 그 엔진 원문 재파싱)·code_fp 5개(참고)를
+#     다르면 다음 모듈이 옛 결과를 거부)·엔진 지문 26개(pipeline.extract.run_all.engine_code_fp — 다르면 그 엔진 원문 재파싱)·code_fp 5개(참고)를
 #     각각 계산해 비교한다. 계산에 PY(기본: 저장소 .venv/bin/python, 없으면 python3 — 이미지와 같은 패키지 필요)를 쓰고, 계산이 실패하면 '판정 불가'로 적는다.
 #   env-guide.md '이번 판에서 바뀐 env' 절의 새 줄도 자동으로 넣음.
 #   IMAGE_BASE·IMAGE_TAG — 의존성(requirements*·Dockerfile·wheels)이 이미지 기준판 뒤 바뀌었으면 종료 코드 3(새 이미지 판 필요).

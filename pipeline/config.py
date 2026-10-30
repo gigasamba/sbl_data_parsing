@@ -246,7 +246,7 @@ class PipelineServiceTrigger(Section):
 class PipelineTransformFigures(Section):
     REMOVED = frozenset(
         {"ocrvlm_prompt"}
-    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    )  # 사용자 10-30(pl-31 — ocr_vlm 엔진과 함께 지움) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     chart_values_det: bool | None = F(
         True, "CHART_VALUES_DET", "차트 값을 결정적(규칙) 추출로 보정(=0이면 VLM 눈대중 값만 사용)", off=("0",)
     )
