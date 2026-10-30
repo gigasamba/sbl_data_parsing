@@ -34,9 +34,6 @@ NAME_LIST = {
     "TRIGGER_SHUTDOWN_TIMEOUT_SEC": "pipeline/trigger_server.py(_serve 인자 기본값)",
     "E2E_QA_SET": "pipeline/check_env.py(경로 점검 표)",
     "E2E_QUESTIONS": "pipeline/check_env.py(경로 점검 표)",
-    "EXP_PROC_GB_BUILD": "common/core/resources.py(이름 목록)",
-    "EXP_PROC_GB_RUN": "common/core/resources.py(이름 목록)",
-    "EXP_PROC_GB_ANSWER": "common/core/resources.py(EXP_PROC_GB_<cmd> 이름 짓기)",
     "VLM_EXTRA_BODY": "common/ai/adk.py(_EXTRA_ENV_KEY 표)",
     **{
         f"RDB_COL_{f}": 'pipeline/extract/source.py(f"RDB_COL_{k.upper()}")'
