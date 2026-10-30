@@ -1543,6 +1543,7 @@ class CommonRuntime(Section):
 
 
 class CommonStore(Section):
+    REMOVED = frozenset({"registry_retry_max"})  # 사용자 10-30(pl-32 — 재시도 횟수 없음, 실패 문서는 늘 다시) — 옛 파일에 남아도 경고만
     doc_registry: bool | None = F(
         True, "DOC_REGISTRY", "문서 대장(doc_registry) 사용 — =0이면 끄고 필터 없이 동작", off=("", "0", "none", "false"), fold="lower"
     )
@@ -1560,7 +1561,6 @@ class CommonStore(Section):
         off=("", "0", "none", "false"),
         fold="lower",
     )
-    registry_retry_max: int | None = F(7, "REGISTRY_RETRY_MAX", "실패 문서 재시도 허용 기간(일) — 0이면 무제한")
     run_mode: str | None = F(
         None, "RUN_MODE", "실행 모드 prod|test — pipeline --mode 기본, prod이면 PG 실패 시 SQLite 대체 금지·VLM 시간 완화"
     )
