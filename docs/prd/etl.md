@@ -219,7 +219,7 @@
   - (G19로 뒤집힘 — 아래) G1(2차 grill(사용자 10-30, 원본은 git 밖) — C2를 고침): EDW `ParsingMeta`에 `doc_class`·`sf_op_id`·`parsed_at`·`rep_engine`·`created_at` 5칸은 **남긴다**(`created_at` — G9, 원천 등록 시각을 `FileStorageMap.created_at`에서 옮김, KST) — 파이프라인이 쓰고 `list_doc_fulltext`([mcp.md#mc-17](mcp.md#mc-17))가 목록으로 읽는다(운영 계약 그대로). 나머지 운영 고객 칸(`sf_acc_name` 등)은 0.1.0에서 지운다. `doc_class`는 ParsingMeta와 pgvector `doc` 양쪽에 쓴다. T8 범위는 이만큼 줄어든다.
   - G4(2차 grill(사용자 10-30, 원본은 git 밖)): `source_system` 값은 `SFDC`·`CRMS`·`LAS`·`FAQ`로 통일(T9와 함께) — MCP 두 도구에서 `-test`가 붙은 입력(`SFDC-test` 등)도 같은 뜻으로 받는다([mcp.md#mc-16](mcp.md#mc-16)).
   - T9: `source_system`·`parse_status` 값 정리(`pipeline/extract/source.py`, `pipeline/transform/structure/build_bundle.py`).
-- 결정(G19 — 4차 grill(사용자 10-30), G1·G9를 뒤집음): EDW `AI.ParsingMeta`에는 **파싱 정보만** 적재한다 — 원천 키·파싱 상태·silver 위치·단계별 칸(`stack_version`·엔진·`rep_engine`·`parsed_at`·`gold_status` 등). **파일 메타**(`doc_class`·`sf_op_id`·`created_at`·고객 등)는 ParsingMeta에 쓰지 않고, 파이프라인이 EDW(`FileStorageMap` 등)에서 읽어 **pgvector 시스템별 `doc`에만** 매핑해 적재한다(중복 적재 없음). 운영이 ParsingMeta에 더한 분류·고객 칸은 모두 0.1.0에 지운다(T8 범위가 다시 원래대로, DB 담당자 D-3). MCP 원문 도구는 EDW를 읽지 않는다([mcp.md#mc-17](mcp.md#mc-17)). 원천별 스키마는 [pl-28](#pl-28).
+- 결정(G19 — 4차 grill(사용자 10-30), G1·G9를 뒤집음): EDW `AI.ParsingMeta`에는 **파싱 정보만** 적재한다 — 원천 키·파싱 상태·silver 위치·단계별 칸(`stack_version`·엔진·`rep_engine`·`parsed_at`·`gold_status` 등). **파일 메타**(`doc_class`·`sf_op_id`·`created_at`·고객 등)는 ParsingMeta에 쓰지 않고, 파이프라인이 EDW(`FileStorageMap` 등)에서 읽어 **pgvector 시스템별 `doc`에만** 매핑해 적재한다(중복 적재 없음). 운영이 ParsingMeta에 더한 분류·고객 칸은 모두 0.2.0에 지운다(사용자 10-30: 지금 코드가 0.1.0, DB·저장 작업은 0.2.0 — T8 범위가 다시 원래대로, DB 담당자 D-3). MCP 원문 도구는 EDW를 읽지 않는다([mcp.md#mc-17](mcp.md#mc-17)). 원천별 스키마는 [pl-28](#pl-28).
 - Status: dev — `docs/architecture/db_schema.md` 설계안 + 시험 `tests/server/common/test_db_schema.py`(`feature/db-schema-spec`) — 사용자·DB 담당자 승인 대기(코드·스키마 변경 없음).
 
 <a id="pl-32"></a>
@@ -300,16 +300,16 @@
 - Status: todo
 
 <a id="pl-28"></a>
-## pl-28 · 원천 시스템별 gold 스키마 — 0.1.0에 만든다
+## pl-28 · 원천 시스템별 gold 스키마 — 0.2.0에 만든다
 - 이유: SFDC · CRMS · LAS · FAQ · Other는 메타데이터가 다르다. 원천마다 표 하나면 칸이 깔끔하다.
 - 무엇(사용자 10-30): gold 표 묶음 — `doc`, `chunk`, BM25 표(`chunk_term`, `term_stat`, `corpus_stat`) — 이 원천마다 한 벌씩(4벌). 원천마다 칸이 다를 수 있다(SFDC 전용 `sf_*`, `project_code__c`는 SFDC doc 표로). `load_run`과 Alembic 판 표는 공용. 그때 MCP `search`가 원천을 필수로 받는다 — 계약 변경 한 번, 새 판, 검토 등급 A. 또 나중에: 글에서 찾은 고객(`clients_doc`)도 고객 거르기에 허용.
-- 결정(4차 grill(사용자 10-30) — 위 "나중"을 뒤집음, 0.1.0에 만든다):
+- 결정(4차 grill(사용자 10-30) — 위 "나중"을 뒤집음, 0.2.0에 만든다 — 지금 코드가 0.1.0):
   - 나누는 방식: 원천 시스템마다 **PG 스키마 하나**(예: `sfdc`, `crms`, `las`, `faq`, `other`). 스키마마다 같은 표 구성 `doc`, `chunk`, `chunk_term`, `term_stat`, `corpus_stat` + 그 시스템 전용 메타 칸. BM25 통계도 시스템별. Alembic은 한 모델을 스키마마다 적용한다. `load_run`과 Alembic 판 표는 공용.
   - 파일 메타(고객 `client_edw`, `sf_*`, `doc_class`, `created_at`, `contract_id` 등)는 **`doc`에만** 둔다. `chunk`는 문서 키(`s3_key` — `doc_id`)만 갖고 메타를 복사하지 않는다. `doc` 표는 문서 단위 조회(`list_doc_fulltext`, 수동 갱신 [pl-40](#pl-40))에 쓰이므로 남긴다.
   - 거르기: 먼저 `doc`에서 문서 범위를 고르고 그 안의 `chunk`만 찾는다(지금 "저장소 단계 범위 제한"과 같은 방식). 메타 갱신은 `doc` 행 UPDATE 한 번으로 끝난다(chunk 값이 어긋날 일 없음).
-  - MCP: `source_system`이 **필수, 값 하나** — 그 시스템 스키마만 찾는다. 여러 시스템은 클라이언트가 여러 번 부른다(시스템별 BM25 통계라 점수를 섞지 않음). [mcp.md#mc-16](mcp.md#mc-16), [mcp.md#mc-17](mcp.md#mc-17). 계약 변경 — 등급 A, 0.1.0에 함께(G7).
+  - MCP: `source_system`이 **필수, 값 하나** — 그 시스템 스키마만 찾는다. 여러 시스템은 클라이언트가 여러 번 부른다(시스템별 BM25 통계라 점수를 섞지 않음). [mcp.md#mc-16](mcp.md#mc-16), [mcp.md#mc-17](mcp.md#mc-17). 계약 변경 — 등급 A, 0.2.0에 함께(지금 코드가 0.1.0이므로 G7의 "0.1.0에 함께" 대신).
   - 위 `chunk`의 `source_system`·`clients[]` 유지([pl-25](#pl-25))는 스키마가 원천을 정하므로 필요 없어진다 — `db_schema.md`를 이에 맞게 고친다.
-- Status: todo — 0.1.0, 전체 다시 적재 필요. 설계 반영(`db_schema.md`)과 DB 담당자 협의 먼저(등급 A).
+- Status: todo — 0.2.0, 전체 다시 적재 필요. 설계 반영(`db_schema.md`)과 DB 담당자 협의 먼저(등급 A).
 
 ## 코드와 다른 점 · 지울 코드
 

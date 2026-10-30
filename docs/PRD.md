@@ -41,7 +41,7 @@
 | FAQ 원천 — 질의응답 엑셀 행 단위 | todo | 시트 = FAQ_group · 행 = 청크 · FileStorageMap FAQ · 0.1.0 | [pl-39](prd/etl.md#pl-39) |
 | FAQ 다시 올리기 — 행 단위 비교 | todo | 같은 그룹·질문 · 최신 답만 · pl-13 FAQ 예외(등급 A) | [pl-41](prd/etl.md#pl-41) |
 | 수동 갱신 명령 — 분류·시스템 메타 따로 | todo | LLM 갈래(NULL 기본) · 메타 갈래(전체) · UPDATE만 | [pl-40](prd/etl.md#pl-40) |
-| 원천 시스템별 gold 스키마(0.1.0) | todo | 시스템별 PG 스키마 · 메타는 `doc`에만 · `source_system` 필수 하나 · ParsingMeta는 파싱 정보만 | [pl-28](prd/etl.md#pl-28) |
+| 원천 시스템별 gold 스키마(0.2.0) | todo | 시스템별 PG 스키마 · 메타는 `doc`에만 · `source_system` 필수 하나 · ParsingMeta는 파싱 정보만 | [pl-28](prd/etl.md#pl-28) |
 
 ## 파싱 실행 — 엔진·스택·represent (parse)
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
