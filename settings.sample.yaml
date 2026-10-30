@@ -64,7 +64,7 @@ common:
     doc_registry: true  # 문서 대장(doc_registry) 사용 — =0이면 끄고 필터 없이 동작 · 기본 true · 값: true·false · env=DOC_REGISTRY [끔: ''·0·none·false]
     registry_editions: true  # 대장 '판 비교'(지문 기록·판 연결·내용 그룹) — =0이면 끄고 이전 동작 · 기본 true · 값: true·false · env=REGISTRY_EDITIONS [끔: ''·0·none·false]
     registry_etag_md5: true  # ETag가 MD5 형식이면 그것만으로 '날짜만 바뀜'으로 확정 — =0이면 항상 원본 바이트 대조 · 기본 true · 값: true·false · env=REGISTRY_ETAG_MD5 [끔: ''·0·none·false]
-    run_mode:  # [필수: 공통] 실행 모드 prod|test — pipeline --mode 기본, prod이면 PG 실패 시 SQLite 대체 금지·VLM 시간 완화 · 기본 없음 · 값: prod·test 중 하나 · env=RUN_MODE [서버 옛 값: prod]
+    run_mode:  # [필수: 공통] 실행 모드 prod|test — pipeline --mode 기본, prod이면 PG 실패 시 SQLite 대체 금지·VLM 시간 완화. dev·prd 서버는 prod 필수(pl-12 — 아니면 정형 저장소가 시작 거부) · 기본 없음 · 값: prod·test 중 하나 · env=RUN_MODE [서버 옛 값: prod]
     struct_backend:  # 정형 저장소 종류 pg|sqlite|tsql · 기본 pg · 값: pg·sqlite·tsql 중 하나 · env=STRUCT_BACKEND [빈 글자 유지]
     struct_db:  # 정형 저장소 SQLite 파일 경로(STRUCT_BACKEND=sqlite일 때·PG 대체 시) · 기본 없음 · 값: 경로 · env=STRUCT_DB
   text:

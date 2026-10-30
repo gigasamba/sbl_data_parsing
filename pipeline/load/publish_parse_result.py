@@ -165,8 +165,8 @@ def run(a):
 
 
 def _apply_registry_status(out_dir, db):
-    """OP1/OP9 — publish --apply에서만: 문서 대장을 갱신(scan·diff·apply — deleted는 apply()가 자동 hide, OP1)하고
-    changed·deleted·touched(AD17①) doc_key의 EDW status UPDATE(PM.apply_registry_status, update_status()만 씀 —
+    """OP1/OP9 — publish --apply에서만: 문서 대장을 갱신(scan·diff·apply — 이번 관측에 없는 문서는 기록만, 숨기거나 deleted로 쓰지 않음, pl-12)하고
+    changed·touched(AD17①) doc_key의 EDW status UPDATE(PM.apply_registry_status, update_status()만 씀 —
     touched는 status 값은 그대로, status_at만). changed는 report.md로만(재파싱 안 함, OP1) — output/registry/report.md에
     이번 build의 new/touched/changed/deleted 요약(touched는 건수만, 목록 없음).
     문서 대장을 못 열면(DOC_REGISTRY=0·DB 없음·그 밖 오류) 조용히 건너뜀(게시 자체는 막지 않음 — 전과 동일)."""
@@ -189,7 +189,7 @@ def _apply_registry_status(out_dir, db):
             f"# 문서 대장 build {build_id}\n\n"
             f"- 새 문서 {len(diff['new'])}건 · **날짜만 바뀜(touched, 원본 바이트는 같음 — 재파싱·새 판·변경 보고 제외) "
             f"{len(diff.get('touched') or [])}건** · **바뀜(보고만, 재파싱 안 함) {len(diff['changed'])}건** · "
-            f"**삭제(검색에서 숨김) {len(diff['deleted'])}건** · 그대로 {len(diff['unchanged'])}건\n\n"
+            f"이번 관측에 없음 {len(diff['deleted'])}건(기록만, 숨기지 않음) · 그대로 {len(diff['unchanged'])}건\n\n"
             + (
                 "## 바뀜(changed) — 사람 조치 뒤 재파싱 전까지 옛 내용 그대로 서빙\n"
                 + "\n".join(f"- {k}" for k in diff["changed"])
@@ -198,7 +198,7 @@ def _apply_registry_status(out_dir, db):
                 else ""
             )
             + (
-                "## 삭제(deleted) — 검색에서 숨김(색인 행 삭제 아님, cli/registry.py unhide로 되돌릴 수 있음)\n"
+                "## 이번 관측에 없음 — 기록만(숨기지 않음·deleted로 쓰지 않음, pl-12)\n"
                 + "\n".join(f"- {k}" for k in diff["deleted"])
                 + "\n"
                 if diff["deleted"]

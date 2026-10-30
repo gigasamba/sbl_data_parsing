@@ -18,14 +18,14 @@ apply()의 판 이력(doc_registry_seen)·재파싱(OP9 nightly_plan)·변경 �
 어디에도 들어가지 않는다(대장의 마지막 본 날·EDW 상태 열 날짜만 갱신 — apply()의 공용 upsert 경로로 이미 됨).
 
 scan(out_dir) → {doc_key: snapshot}(파일만 읽음, DB 없음) · diff_against(db, observed) → new/changed/touched/
-unchanged/deleted · apply(db, observed, diff, build_id) → upsert(new·changed만 history 추가, deleted는 색인 행
-삭제 없이 status='deleted' + 자동 hide()) · build() = 위 셋 + commit. 결정적: 같은 out_dir 내용이면 같은
+unchanged/deleted · apply(db, observed, diff, build_id) → upsert(new·changed만 history 추가, deleted는 쓰지 않음 —
+pl-12 사용자 10-30, 옛 status='deleted'·자동 hide() 없앰) · build() = 위 셋 + commit. 결정적: 같은 out_dir 내용이면 같은
 observed(딕셔너리 순서·세트 정렬 무관) · 멱등: 다시 build해도 스냅숏이 그대로면 doc_registry_seen에 새 행이
 안 늘어남(last_seen·last_build만 갱신).
 
 OP1(원천 변경·삭제 탐지, 조치는 사람) — hide(db, doc_key, by, reason)·unhide(...)·hidden_set(db) = 검색 제외 집합
-(common/structdb.py REGISTRY_SCHEMA의 doc_hidden, 이력 없이 지금 상태만·감사 필드 by·reason·at). deleted는 apply()가
-자동으로 hide(by="registry:diff") — unhide는 사람(cli/registry.py unhide 또는 직접 호출)만. changed는 hide하지 않음
+(common/structdb.py REGISTRY_SCHEMA의 doc_hidden, 이력 없이 지금 상태만·감사 필드 by·reason·at). 숨김·되살리기는 모두
+사람(pl-12 — 자동 hide 없앰) — unhide는 사람(cli/registry.py unhide 또는 직접 호출)만. changed는 hide하지 않음
 (검색은 그대로, 사람이 재파싱 전까지 옛 내용 서빙 — OP1).
 OP9(야간 증분) — nightly_plan(db, observed, reparse_keys=None) = diff_against 결과를 파싱 대상 결정으로: new(처음
 보는 doc_key) + unchanged인데 아직 성공 못한(status != 'parsed', 반복 실패·'seen' 포함) doc_key는 **매일 다시**
@@ -192,9 +192,8 @@ def scan(out_dir):
         )  # rdb: 질의(AD44)만 manifest에 doc_id를 적음(source.py _rdb_rows) — 그 밖 Object Storage는 s3
         # SI39 겹침 키(source_system, source_key)와 같은 모양 — manifest가 가장 구체적인 원본 전체 키(경로 포함) 정보
         d["source_keys"].add(f"{r.get('source_system') or d['source']}::{r.get('key') or name}")
-        if r.get("is_deleted"):
-            d["status"] = "deleted"
-        elif d["status"] == "seen" and r.get("key") in done_object_keys:
+        # pl-12(사용자 10-30) — 원천의 is_deleted도 status='deleted'로 바꾸지 않음(문서 대장은 deleted를 쓰지 않음 · 검색은 manifest is_deleted로 거름)
+        if d["status"] == "seen" and r.get("key") in done_object_keys:
             d["status"] = "parsed"  # 대표 결과 산출물이 이미 지워졌어도(X2) 처리 완료 기록으로 보강
 
     for d in observed.values():
@@ -287,8 +286,7 @@ def apply(db, observed, diff, build_id, seen_at=None):
     """diff에 따라 doc_registry를 upsert하고(모든 관측 doc_key), new·changed만 doc_registry_seen에 한 행 추가
     (판 이력 — 바뀔 때만). unchanged·touched(AD17① — 원본 바이트는 같고 날짜만 바뀜)는 last_seen·last_build·
     mtime만 갱신, 이력 행은 안 늘어남(멱등 — touched는 새 판·변경 보고 대상이 아니라 changed_keys에 안 들어감).
-    OP1 — diff["deleted"]는 doc_registry 행 삭제 대신 status='deleted'로만 표시하고(색인 행 삭제 0, 기존 동작) 자동으로
-    hide()(by="registry:diff" — 사람이 unhide()로 되돌릴 수 있음, 그 밖 자동 unhide 없음).
+    pl-12(사용자 10-30) — diff["deleted"]는 쓰지 않는다(옛 OP1의 status='deleted'·자동 hide() 없앰 — 숨김은 사람이 hide()로만).
     status는 관측 그대로(seen·parsed·failed) — 성공(parsed)만 "끝남"이라 실패 문서는 nightly_plan()이 늘 다시 고른다
     (재시도 횟수 칸 fail_count는 쓰지 않음 — 사용자 10-30, pl-32 · 칸 자체는 0.1.0 마이그레이션이 지움)."""
     seen_at = seen_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -338,14 +336,8 @@ def apply(db, observed, diff, build_id, seen_at=None):
                           VALUES (?,?,?,?,?,?,?,?,?)""",
                 (key, build_id, names_json, snap["size"], snap["mtime"], snap["etag"], snap["status"], snap["source"], seen_at),
             )
-    for key in diff["deleted"]:
-        db.execute("UPDATE doc_registry SET status='deleted', last_seen=?, last_build=? WHERE doc_key=?", (seen_at, build_id, key))
-        db.execute(
-            """INSERT INTO doc_registry_seen (doc_key, build_id, names, size, mtime, etag, status, source, seen_at)
-                      SELECT doc_key, ?, names, size, mtime, etag, 'deleted', source, ? FROM doc_registry WHERE doc_key=?""",
-            (build_id, seen_at, key),
-        )
-        hide(db, key, by="registry:diff", reason="원천에서 사라짐(자동 탐지)", at=seen_at)
+    # pl-12(사용자 10-30): diff["deleted"](이번 관측에 없음)는 쓰지 않는다 — status='deleted'·자동 hide() 길 없앰
+    # (관측이 일부만 보여도 다른 문서를 지우던 위험). diff["deleted"]는 판 잇기(link_editions)용 정보로만 남는다.
 
 
 # ── AD17②·AD15(10-08, 파싱 뒤 '판 비교') — 모듈 docstring 참고 ───────────────
@@ -591,10 +583,15 @@ def try_open_db(db_path=None):
     연결이 안 되면 None(호출자는 필터 없이 그대로 — 바이트 동일, 검색·파싱을 막지 않음)."""
     if not cfg().store.doc_registry:  # S7b — 설정 객체(켜기 칸, 기본 켬)
         return None
-    try:
-        from common.store.structdb import open_backend
+    from common.config.settings import guard_run_env
+    from common.store.structdb import StructDBError, open_backend
 
+    try:
         return open_backend(db_path)
+    except StructDBError:
+        if guard_run_env() not in (None, "local"):
+            raise  # pl-12 — 서버의 거부(SQLite 대체 금지)는 삼키지 않음
+        return None
     except Exception:
         return None
 
