@@ -3,7 +3,7 @@
 
 담는 것(서버에서 못 받던 것, 2026-09-30 사용자 목록 — 난이도 높은 Tika docker·Cognee는 제외):
   wheels/en_core_web_sm-3.8.0-…whl      spaCy 영어 모델 — unstructured 토큰화(unstructured/nlp/tokenize.py)
-  tessdata/{kor,eng,osd}.traineddata    Tesseract 한국어·영어(tessdata_best)·방향 — tesseract·kreuzberg_ocr (TESSDATA_PREFIX)
+  tessdata/{kor,eng,osd}.traineddata    Tesseract 한국어·영어(tessdata_best)·방향 — tesseract(kreuzberg_ocr 엔진은 10-30 지움 — pl-31, 지금 이 자산을 쓰는 엔진 없음) (TESSDATA_PREFIX)
   fonts/GoNotoCurrent-Regular.ttf       marker 렌더링 글꼴(marker settings.FONT_PATH — 없으면 첫 실행 때 인터넷에서 받으려다 실패)
   rapidocr/*.onnx                       RapidOCR 한국어 PP-OCRv5 인식 + 검출·방향 — rapidocr_ko(최종 추천 엔진, 패키지 폴더 안)
   (PostgreSQL 16 + pgvector Docker 이미지는 여기 없음 — 별도 브랜치 dev_server_pgvector를 ZIP으로 받아 docker load, 2026-10-01)

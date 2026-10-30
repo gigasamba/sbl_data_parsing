@@ -30,7 +30,7 @@
     "문서 파싱/OCR 전용 벤치마크(olmOCR-Bench, OCRBench, DocVQA 등) 수치는 검색 범위 내에서 발견하지 못함 — 공개 없음"
    ],
    "notes": "사용자가 적은 'qwen 3.8-flash-next-nvfp4'는 오타가 아니라 실제 존재하는 정확한 모델명(Qwen3.8-Flash-Next)의 NVFP4 양자화 빌드로 확인됨. 다만 이 모델은 Qwen3.x 정식 라인이 아니라 차세대(Qwen4) 아키텍처의 '프리뷰' 모델이므로, 운영 파이프라인에 쓰기엔 성숙도가 낮을 수 있음에 유의.",
-   "pipeline_role": "이미지·이미지 PDF 파싱 1차(qwen_vlm·docling_vlm·marker_llm·Cognee 이미지 전사) — 활성 6B라 대량 처리용. 프리뷰 모델이라 결과 대조 필수"
+   "pipeline_role": "이미지·이미지 PDF 파싱 1차(qwen_vlm·Cognee 이미지 전사) — 활성 6B라 대량 처리용. 프리뷰 모델이라 결과 대조 필수"
   },
   {
    "as_written": "qwen3.5-397b-a17b-nvfp4-v2",

@@ -1,7 +1,7 @@
 """RapidOCR (Apache-2.0, ONNX)
 
 도구(tool) 인터페이스: ENGINES[이름](경로) → 공통 출력 계약(tools/engines/_common/contract.py).
-단독 실행: python -m data_parsing.parse_one --engine rapidocr <문서> <out.json>
+단독 실행: python -m data_parsing.parse_one --engine rapidocr_ko <문서> <out.json> (rapidocr 1.x 엔진 rapidocr은 10-30 지움 — pl-31)
 
 2026-10-22 — 쪽별 OCR 병렬(RAPIDOCR_PAGE_WORKERS, 기본 1=기존 순차): onnx 추론은 GIL을 놓아주므로 스레드로 실속.
 쪽 렌더(_pages)는 메인 스레드가 한 쪽씩 계속 공급(한꺼번에 메모리에 안 올림)하고, 워커 스레드마다 RapidOCR 인스턴스를
@@ -37,15 +37,6 @@ def _page_workers():
     """RAPIDOCR_PAGE_WORKERS — 문서 안 쪽별 OCR 병렬 수(기본 1=기존 순차). 숫자가 아니면 1로 침(엔진이 죽지 않게)."""
     v = (os.environ.get("RAPIDOCR_PAGE_WORKERS") or "1").strip()
     return max(1, int(v)) if v.isdigit() else 1
-
-
-def _legacy_engine():
-    """rapidocr 1.x(중국어·영어) — 워커 스레드마다 인스턴스 따로."""
-    e = getattr(_TL, "rapid", None)
-    if e is None:
-        from rapidocr_onnxruntime import RapidOCR
-        e = _TL.rapid = RapidOCR()
-    return e
 
 
 def _ko_engine():
@@ -87,18 +78,6 @@ def _run_pages(ocr_page, path):
             f.cancel()
 
 
-def parse_rapidocr(path):
-    """RapidOCR(Apache-2.0, ONNX) 기본 모델."""
-    def _pg(im):
-        arr, back = _resized(im)
-        res, _ = _legacy_engine()(arr)
-        return [{"text": r[1], "bbox": _quad([[p[0] * back, p[1] * back] for p in r[0]])} for r in (res or [])]
-    boxes = []
-    for pno, items in _run_pages(_pg, path):
-        boxes += [{"page": pno, "text": it["text"], "bbox": it["bbox"]} for it in items]
-    return _ocr_out(boxes, "rapidocr")
-
-
 def ocr_threads():
     """onnxruntime 스레드 수(OC1, 사용자 10-15). rapidocr 기본(intra_op=-1)은 OMP_NUM_THREADS를 무시하고 호스트 코어 수만큼
     스레드를 띄워, 컨테이너 CPU 한도(cpus: 3) 안에서 병렬 프로세스마다 코어 전부를 쓰려다 서로 밀림(서버 쪽당 4.5초+).
@@ -137,11 +116,8 @@ def parse_rapidocr_ko(path):
     return _ocr_out(boxes, "rapidocr[ko]")
 
 
-ENGINES = {"rapidocr": parse_rapidocr, "rapidocr_ko": parse_rapidocr_ko}
-FORMATS = {"rapidocr": ('.pdf', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp'), "rapidocr_ko": ('.pdf', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp')}
-REQUIRES = {"modules": ['rapidocr_onnxruntime', 'rapidocr', 'pypdfium2'], "tools": []}   # rapidocr_ko = rapidocr 3.x — check_env.py 스택 표시용(두 엔진 모듈 합집합)
-# AD48 — registry.select("all")은 엔진별로 정확히 봐야 한다: rapidocr은 rapidocr_onnxruntime(1.x)만, rapidocr_ko는 rapidocr(3.x)만 쓴다(둘 다 없어도 서로 무관).
-# 위 REQUIRES만 보면 "rapidocr_onnxruntime 없음"으로 rapidocr_ko까지 미설치로 오판(이미지·PC 둘 다 3.x만 있음) — registry.missing_deps가 이 쪽을 먼저 본다.
-REQUIRES_ENGINE = {"rapidocr": {"modules": ["rapidocr_onnxruntime", "pypdfium2"]}, "rapidocr_ko": {"modules": ["rapidocr", "pypdfium2"]}}
+ENGINES = {"rapidocr_ko": parse_rapidocr_ko}
+FORMATS = {"rapidocr_ko": ('.pdf', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp')}
+REQUIRES = {"modules": ['rapidocr', 'pypdfium2'], "tools": []}   # rapidocr_ko = rapidocr 3.x
 PROFILED = set()
 UNVERIFIED = set()
