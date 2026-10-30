@@ -121,7 +121,7 @@
 | 문서 재구성 · 한국어 | dev | 1부 PRD 카테고리 · 2부 CLAUDE.md | [do-04](prd/doc.md#do-04) |
 | `docs/index.md` 용어집 | done | 용어 대응 옮김 · 링크 한 줄 | [do-02](prd/doc.md#do-02) |
 | `refactor.md`를 병합과 맞춤 | done | 낡은 줄 · PRD 링크 · 검토자 | [do-03](prd/doc.md#do-03) |
-| `refactor.md`를 `docs/refactoring/`으로 | todo | 옮기기 · 링크 | [do-01](prd/doc.md#do-01) |
-| 첫 릴리스 태그 `v0.1.0` | todo | 태그 · 릴리스 노트 | [op-04](prd/doc.md#op-04) |
+| `refactor.md`를 `docs/refactoring/`으로 | done | 옮기기 · 링크 | [do-01](prd/doc.md#do-01) |
+| 첫 릴리스 태그 `v0.1.0` | done | 태그 · 릴리스 노트 | [op-04](prd/doc.md#op-04) |
 | 실행 이미지(코드 없음) · 코드 폴더 마운트 | done | 개발 서버 · 의존성 지문 · 코드 커밋 표시 | [op-06](prd/doc.md#op-06) |
 | 개발 → 운영 굽기(실행 이미지 + 시험한 코드) | done | `Dockerfile.bake` · `bake.sh` · 반입 판정 · 저장·분할 | [op-07](prd/doc.md#op-07) |
