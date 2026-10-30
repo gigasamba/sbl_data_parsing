@@ -80,7 +80,7 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 이유: 안 쓰거나 은퇴한 설정인데 지우면 핑거프린트가 바뀌어 다음 이미지 판을 기다린다: `common.paths.korean_font`(settings.py → 모든 레이어 code_fp).
 - 또(사용자 10-29 grill): `common.paths.eval_sets_dir` / `paths.EVAL_SETS_DIR`(과 `tests/server/common/test_paths.py`의 사례)을 지운다 — 읽는 곳은 `validation/e2e/stack_matrix.py`뿐(옛 묶음, [test.md#e2-10](test.md#e2-10)). 폴더 `valid_env/eval_sets/`는 그 문서 참조와 함께 [doc.md#do-03](doc.md#do-03)에서 지운다(그 파일을 읽는 코드 없음). 평가 자료는 나중에 `tests/` 아래로 돌아올 수 있다.
 - 파일: `common/config/settings.py`, `pipeline/config.py`, `pipeline/extract/run_all.py`, `common/core/paths.py`.
-- Status: todo — 다음 핑거프린트가 바뀌는 릴리스에 묶는다.
+- Status: todo — 다음 핑거프린트가 바뀌는 릴리스에 묶는다. · 10-30: `valid_env/eval_sets/`는 지웠다(`feature/drop-unused`) — 상수 `EVAL_SETS_DIR`·설정 `common.paths.eval_sets_dir`는 code_fp 때문에 이 판까지 남아 지운 폴더(기본값은 옛 `valid_env/unstructured`)를 가리킴.
 
 <a id="pl-30"></a>
 ## pl-30 · 아무도 안 읽는 env 이름 4개 지우기

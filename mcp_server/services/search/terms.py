@@ -1,4 +1,4 @@
-"""검색 전용 용어 사전·질의 확장 — match_concepts(X4)·expand_query(BM25 질의 확장, X3+SI43)·lookup_term(X4)·
+"""검색 전용 용어 사전·질의 확장 — match_concepts(X4)·expand_query(BM25 질의 확장, X3+SI43)·
 vector_alias_text(SI43⑤ 벡터 질의 임베딩 별칭). 공용 로더(load_glossary·load_draft_glossary·_aliases)·공용 규칙
 (_name_pat·_name_hit·split_terms·norm·related_concepts, 구조화 bundle.py와 같은 규칙)은 common.core.terms에서
 그대로 가져다 쓴다(캐시·명부는 공용 쪽 한 곳 — 복제 금지)."""
@@ -11,8 +11,6 @@ from common.core.terms import (
     _name_pat,
     load_draft_glossary,
     load_glossary,
-    norm,
-    related_concepts,
     split_terms,
 )
 from common.core.text import tokens
@@ -79,7 +77,7 @@ def _entry_hit(q, r):
 
 
 def match_concepts(q, glossary=None):
-    """질문에 나온 개념 ID 목록(X4 — lookup_term·search methods=concept)."""
+    """질문에 나온 개념 ID 목록(X4 — search methods=concept)."""
     glossary = load_glossary() if glossary is None else glossary
     return [cid for cid, r in glossary.items() if _entry_hit(q, r)]
 
@@ -154,40 +152,6 @@ def expand_query(q, glossary=None, aliases=None, draft_glossary=None):
             if added or hit != canon:
                 notes.append(f"{hit}→{canon}({cid}, draft)")
     return terms, notes
-
-
-def lookup_term(term, glossary=None):
-    """표기(정식명·동의어·약어) → 개념 정의·별칭·관련 개념(X4 lookup_term). 없으면 None."""
-    glossary = load_glossary() if glossary is None else glossary
-    tn = norm(term)
-    hit = next(
-        (
-            item
-            for item in glossary.items()
-            if any(
-                norm(s) == tn
-                for s in [item[1].get("canonical")] + split_terms(item[1].get("synonyms")) + split_terms(item[1].get("abbreviations"))
-                if s
-            )
-        ),
-        None,
-    )
-    if hit is None:
-        return None
-    cid, r = hit
-    aliases = set(split_terms(r.get("synonyms"))) | set(
-        _aliases().get(r["canonical"], [])
-    )  # SI43⑥ — 고객이면 명부(stack.json·CLIENT_ROSTER) 별칭도(비 고객 항목은 명부에 canonical이 없어 그대로)
-    return {
-        "concept_id": cid,
-        "canonical": r["canonical"],
-        "category": r.get("category"),
-        "definition_ko": r.get("definition_ko"),
-        "definition_en": r.get("definition_en"),
-        "aliases": sorted(aliases),
-        "abbreviations": split_terms(r.get("abbreviations")),
-        "related": related_concepts(cid, glossary),
-    }
 
 
 _HANGUL_RE = re.compile(r"[가-힣]")

@@ -43,7 +43,7 @@
 ## e2-01 · PC 스모크 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
 - 이유: 릴리스 전에 문서 2~3건으로 사슬 전체를 증명한다.
 - 무엇: README §4-4 단계, 실행마다 다른 값은 `--set`, 임베딩 캐시 `output/edw/embed_cache.sqlite`.
-- 파일: `pipeline/cli.py`(`smoke`), `mcp_server/cli/ask.py`, `valid_env/eval_sets/list-smoke10.txt`.
+- 파일: `pipeline/cli.py`(`smoke`), `mcp_server/cli/ask.py`, `valid_env/object_storage/`(시험 문서 — 목록 `list-smoke10.txt`는 10-30 `eval_sets/`와 함께 지움).
 - Status: done
 
 <a id="e2-13"></a>
@@ -72,7 +72,7 @@
 ## e2-04 · 검색 평가
 - 이유: 찾기를 바꿔도 적중률이 떨어지면 안 된다.
 - 무엇: hit@1/5/k, value_in_evidence, p50/p95 지연, `via` 구성. 도구 4개의 스모크, HTML/xlsx 보고서.
-- 파일: `mcp_server/cli/mcp_eval.py`, `mcp_server/cli/mcp_smoke.py`, `mcp_server/cli/qa_report.py`, `mcp_server/cli/search_checks.py`.
+- 파일: `mcp_server/cli/mcp_eval.py`, `mcp_server/cli/mcp_smoke.py`, `mcp_server/cli/search_checks.py`(`qa_report.py`는 10-30 지움 — 사용자).
 - Status: done
 
 <a id="e2-05"></a>
@@ -94,7 +94,7 @@
 ## e2-06 · 스택·모델 비교
 - 이유: 엔진과 모델을 측정 결과와 비용으로 고른다.
 - 무엇: 스택 행렬·모델 행렬 실행과 예상 비용. 유료 호출은 승인 필요(CLAUDE.md §7).
-- 파일: `validation/e2e/stack_matrix.py`, `validation/e2e/model_matrix.py`.
+- 파일: `validation/e2e/model_matrix.py`(`stack_matrix.py`·`stack_matrix.json`·보고서 `pipeline/eval/stack_report.py`는 10-30 지움 — [e2-18](#e2-18)).
 - Status: done
 
 <a id="e2-07"></a>
@@ -122,7 +122,7 @@
 - 10-29에 지움(호출부 없음, 핑거프린트 그대로): `parse_env_file`(`common/config/migrate.py`), `_lane_push`(`deploy/host/scripts/run_docs.py`), `_bg_img`(`mcp_server/routers/dispatch.py`), `_scan_paren`(`mcp_server/services/edw_query.py`), `_local_sidecar_name`(`pipeline/load/parsing_meta.py`), 모듈 `pipeline/tools/check_runlog.py`(한 번 쓴 runs.jsonl 잠금 점검 — 필요하면 git에서 되살림).
 - 남음: `fields_table`(`common/config/settings.py`) — 다음 핑거프린트 릴리스를 기다림(`checklist`는 `decompose.py`와 함께 갔음, 10-29). 시험만 부르는 것 — `do_evidence_image`, `do_related`(`internal_docs.py`), `eval_labels`(`qtype.py`), `availability_note`(`stack_report.py`), `raster_chart_values`(`chart_values.py`, 레이어 p1), `pool_distractor_files`(`stack_matrix.py`).
 - 결정(사용자 10-30 grill): 시험만 부르는 것도 그 시험과 함께 지운다([e2-18](#e2-18)).
-- Status: todo
+- Status: done (10-30, `feature/drop-unused`) — 지움: `do_evidence_image`·`do_related`(`internal_docs.py`), `availability_note`(`stack_report.py`), `pool_distractor_files`(`stack_matrix.py`) + 그 시험 줄. `eval_labels`는 앱 코드(`qtype.py`)에서 지우고 시험(`test_qtype.py`)으로 옮김 — 유형 라우터 정확도 점검은 남김. 남김(지문 보호 — 사람 결정 필요): `raster_chart_values`(`chart_values.py`, 레이어 p1), `fields_table`(`common/config/settings.py`, 모든 레이어) — 지문을 바꾸는 판에서.
 
 <a id="e2-18"></a>
 ## e2-18 · 요건 없는 코드 지우기
@@ -130,7 +130,7 @@
 - 지움: `internal_docs.py` 숨김 문서 함수(6개, 지운 doc 칸을 아직 SELECT하는 문서 조회·목록 포함), 위키 도구, 외부 KG 어댑터, 시험만 부르는 함수([e2-17](#e2-17)), 지운 평가 묶음용 채점기([e2-10](#e2-10)).
 - 남김: `PARSE_STREAM`, 그림자 모드, `MCP_EVIDENCE_PATHS`, `SEARCH_TIE_BREAK`, SQLite 대체, 문서 대장 CLI, 메일 첨부, 용어집·고객 목록 도구, 밤 타이머, `os_put`, 서버 점검.
 - 규칙: MCP 도구 이름과 입출력은 그대로. 하나라도 바뀌면 멈추고 묻는다.
-- Status: todo
+- Status: done (10-30, `feature/drop-unused`, 사용자 grill 11차 포함) — 지움: `internal_docs.py`의 `do_get_document`·`do_get_image`·`do_evidence_image`·`do_lookup_term`·`do_related`·`do_list_documents`와 그것만 쓰던 도우미(MCP 도구 아님 — 도구 이름·입출력 그대로), `objectstore_access.py`, 위키 도구(`structure/wiki.py`·`wiki_draft.py` + 지시서 `wiki_term_draft`), 외부 KG 어댑터(`eval/kg_external.py`)·LLM 그래프 모드(`validation/e2e/graph_llm.py` + 지시서 `triple_extract`), 채점기 `chart_values_score.py`·`diagram_edges_score.py`(`score_gold`의 mermaid 재현율은 같은 규칙으로 그 안에), `search/terms.lookup_term`, `valid_env/eval_sets/`와 그것만 읽던 `validation/e2e/stack_matrix.py`(+ `stack_matrix.json`·보고서 `pipeline/eval/stack_report.py`), Q&A 보고서 `mcp_server/cli/qa_report.py`(사용자 10-30), 시험만 쓰던 함수(e2-17), 각 시험, 설정 칸 7개(`MCP_EVID_*`·`MCP_IMAGES`·`MCP_MAX_IMAGE_PX`)와 절 `pipeline.connections.graphiti`(경고만 — env-guide). 지문 그대로. 지문 배치로 미룸(검토 등급 A): `raster_chart_values`(p1), `fields_table`, `retriever._concept_top`·`hidden_names`·`client_map`(r), 상수 `EVAL_SETS_DIR`([settings.md#pl-21](settings.md#pl-21)).
 
 ## 코드와 다른 점 · 지울 코드
 

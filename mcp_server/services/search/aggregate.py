@@ -45,7 +45,7 @@ from common.core.terms import ID_LIKE, _aliases, match_clients, modalities, norm
 from common.store import structdb as SDB  # noqa: E402 — 로컬 정형 저장소 연결(X1, modules/load는 import 안 함 — 연결만 common 공용)
 from mcp_server import config as mc  # noqa: E402 — 설정 객체(mcp 칸 — S7d)
 from mcp_server.services.search import clientscope as CS  # noqa: E402 — BR50(D) 고객 범위 단일 규칙(local.py·pgsearch.py·retriever.py·mcp_server.py와 공용)
-from mcp_server.services.search import supersede as SS  # noqa: E402 — AR4② 대체판 판정 단일 규칙(mcp_server.do_list_documents와 공용)
+from mcp_server.services.search import supersede as SS  # noqa: E402 — AR4② 대체판 판정 단일 규칙
 from mcp_server.services.search.structdb import find_table_row  # noqa: E402 — 10-14 함수별 분리로 이전
 
 _AGG_LLM_PROMPT = _load_prompt("agg_llm_route", "classify")  # 글자: dev/agents/agg_llm_route/prompts/classify.md
@@ -880,7 +880,7 @@ def doc_location_list(db, question):
             "evidence": [],
             "note": "doc_location 없음 — modules/load/structured.py load(doc_location.csv) 먼저",
         }
-    superseded = SS.superseded_set(rows)  # AR4② — mcp_server.do_list_documents와 공용 규칙(modules/search/supersede.py)
+    superseded = SS.superseded_set(rows)  # AR4② — 대체판 규칙(supersede.py)
     rows = [r for r in rows if not r.get("is_deleted") and not SS.is_superseded(r["doc_id"], superseded)]
 
     cids = {r["contract_id"] for r in rows if r.get("contract_id")}

@@ -75,7 +75,7 @@ def _print_retry_stopped(db, stopped):
 
 
 def _doc_label(d, plain):
-    """§3 공통 규칙(run_board.py·qa_report.py와 같은 해시 — doc-xxxxxxxx) — 기본은 이름(names, 없으면 doc_key
+    """§3 공통 규칙(run_board.py와 같은 해시 — doc-xxxxxxxx) — 기본은 이름(names, 없으면 doc_key
     앞 16자) 해시, --plain-names면 원래 이름 그대로."""
     names = d.get("names") or []
     label = ",".join(names) if names else d["doc_key"][:16] + "…"
