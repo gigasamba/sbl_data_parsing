@@ -14,11 +14,11 @@ def selftest():
     free = load("doc_summary", "summary")  # common_tail: "free_text" — 3번째 줄(JSON 형식) 빠짐
     assert "코드블록 없이" not in free and "[규칙 — 끝까지 지킴]" in free, free[-200:]
 
-    # 문자열 이어붙이기 호출부(value_choice 등)용 짝 함수 — template()에는 꼬리가 없고, tail()을 맨 끝에 붙이면
+    # 문자열 이어붙이기 호출부(mermaid_check·gold_draft 등)용 짝 함수 — template()에는 꼬리가 없고, tail()을 맨 끝에 붙이면
     # load()와 같은 글자가 된다(이 prompt_id는 .format() 자리표시가 없어 load() == template()+tail() 그대로).
-    t, tl = template("value_choice", "choose"), tail("value_choice")
+    t, tl = template("mermaid_check", "check"), tail("mermaid_check")
     assert tl and not t.endswith(tl)
-    assert t + tl == load("value_choice", "choose")
+    assert t + tl == load("mermaid_check", "check")
     print("[selftest] agent_prompts.load() — 파일 읽기·프로세스 캐시·공용 꼬리(ADK14 P1, 기본·free_text·template/tail 짝) 통과")
 
 

@@ -49,10 +49,8 @@ PAGE_HIDDEN_AREA = 0.3  # 숨은 글자층 쪽의 완화된 이미지 면적 기
 # 비율로는 못 잡으니 국소 겹침(숨은 글자 상자 하나가 그림 bbox와 겹치는지)을 따로 본다. 문서당 상한
 # PARSE_HIDDEN_OVERLAP_MAX(env, 기본 20) — 0이면 꺼짐(이 신호를 안 봄, scan_pages_detail이 이전과 바이트 동일).
 PARSE_HIDDEN_OVERLAP_MAX_DEFAULT = "20"
-# AD31(남은 것, 10-08) — 렌더 OCR≫글자층·회전·벡터 도형 신호(규칙만, VLM 예/아니오 판단은 AG11 몫). 셋 다
+# AD31(남은 것, 10-08) — 회전·벡터 도형 신호(규칙만, VLM 예/아니오 판단은 AG11 몫, 렌더 OCR≫글자층 신호는 pl-34 10-30에 지움). 둘 다
 # 문서당 상한 env(0=꺼짐, 이 신호를 안 봄 — scan_pages_detail이 그 조건 자체를 안 보므로 바이트 동일)로 기본 켬(OP11).
-PAGE_OCR_GT_RATIO = 3.0  # 렌더 OCR 글자 수가 글자층의 이 배수 이상 — 글자층이 실제 내용을 못 담음(PARSE_SIGNAL_OCR=1일 때만 ocr_chars가 채워짐, 꺼져 있으면 이 조건 자체가 조용히 안 걸림)
-PARSE_OCR_GT_MAX_DEFAULT = "20"
 PAGE_VECTORS_MIN = 3  # 쪽 안 벡터 도식 군집 수(post.vector.vector_regions) "많음" — 복잡한 도형·SmartArt류 페이지 후보
 PARSE_VECTORS_MAX_DEFAULT = "20"
 PARSE_ROTATED_MAX_DEFAULT = "20"  # prepare.py가 돌린(각도≠0) 쪽 — 회전 전 OCR 품질이 낮았을 수 있어 쪽 VLM 후보
@@ -95,20 +93,6 @@ def _signals_path(file_sha256):
     `<name>@<version>` 관례는 pipeline.shared.artifacts.raw_engine_path·raw_vlm_path와 같음 — 기존 VLM 캐시 원칙 그대로.
     tools/parse_agent_tools.inspect_document도 이걸 읽고/채운다, AD46 '한 번 계산해 저장, 판단들이 읽음')."""
     return Path(raw_root()) / "signals" / f"page_signals@{PAGE_SIGNALS_VERSION}" / f"{file_sha256[:16]}.json"
-
-
-def _render_ocr_chars(pg):
-    """렌더 OCR 글자 수 — page_signals가 PARSE_SIGNAL_OCR=1일 때만 부른다(렌더+OCR은 비용이 커서 기본 꺼짐).
-    pipeline.extract.prepare._ocr_lines 재사용(회전 점수와 같은 OCR 엔진)."""
-    import numpy as np
-
-    from pipeline.extract import prepare as P
-
-    pix = pg.get_pixmap(dpi=DPI)
-    arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
-    if pix.n >= 4:
-        arr = arr[:, :, :3]
-    return sum(len(t) for _box, t, _c in P._ocr_lines(arr))
 
 
 def _is_hidden_span(sp):
@@ -200,18 +184,15 @@ def page_signals(path):
     """AD12·AD46(D2 글자층·D4 이미지 섞임·D6 쪽 VLM이 같은 표를 읽음) — PDF 쪽마다
     [{page, chars(글자층 글자 수), image_area_ratio(삽입 이미지 면적 ÷ 쪽 면적), figures(삽입 그림 수),
     vectors(벡터 도형 군집 수 — post.vector.vector_regions), garbage_ratio, hidden_ratio(AD31 — 보이지 않는 글자 비율),
-    hidden_over_image(AD47 — 보이지 않는 글자 상자 하나가 그림과 겹치는지, 국소 신호), ocr_chars}].
-    ocr_chars는 PARSE_SIGNAL_OCR=1일 때만 채움(그 외엔 None — 렌더+OCR 비용 큼). PDF가 아니면 [].
+    hidden_over_image(AD47 — 보이지 않는 글자 상자 하나가 그림과 겹치는지, 국소 신호)}]. PDF가 아니면 [].
+    (렌더 OCR 글자 수 ocr_chars는 pl-34 10-30에 지움 — 옛 캐시에 남은 ocr_chars 칸은 읽지 않음)
     원본 파일 sha256로 한 번 계산해 _signals_path 캐시에 저장 — 다시 부르면 그 파일을 읽어 같은 쪽을 다시 안 연다."""
     p = Path(path)
     if p.suffix.lower() != ".pdf":
         return []
-    want_ocr = pc.cfg().extract.signal_ocr  # S7c — 설정 객체(on=("1",) = 옛 =="1")
     cache = _signals_path(sha(p.read_bytes()))
     if cache.exists():
-        cached = json.loads(cache.read_text(encoding="utf-8"))
-        if not want_ocr or all(r.get("ocr_chars") is not None for r in cached):
-            return cached
+        return json.loads(cache.read_text(encoding="utf-8"))
     import fitz
 
     from pipeline.transform.represent.parse_qa import garbage_ratio
@@ -241,7 +222,6 @@ def page_signals(path):
             "garbage_ratio": garbage_ratio(text),
             "hidden_ratio": _hidden_ratio(pg),
             "hidden_over_image": _hidden_image_overlap(pg, img_rects),
-            "ocr_chars": _render_ocr_chars(pg) if want_ocr else None,
         }
         out.append(rec)
     cache.parent.mkdir(parents=True, exist_ok=True)
@@ -266,10 +246,6 @@ def scan_pages_detail(path):
                보이는 값이 쉼표/마침표만 다르면(430.000 vs 430,000) _page_agreement의 정규화가 그 차이를 지워
                버려 "일치"로 오판(원래 틀린 글을 유지)하기 때문(synth-mixedpdf textlayer_mismatch.pdf로 확인). 문서당
                상한 PARSE_HIDDEN_OVERLAP_MAX(env, 기본 20, 0=꺼짐 — 이 조건 자체를 안 봐 이전과 바이트 동일).
-    'ocr_gt_text' = AD31(10-08) — 렌더 쪽 OCR 글자 수가 글자층의 PAGE_OCR_GT_RATIO배 이상(기본 3배) — 글자층이
-               쪽 실제 내용(그림 속 글자·이미지 표 등)을 못 담고 있다는 신호. ocr_chars는 PARSE_SIGNAL_OCR=1일
-               때만 채워지므로(렌더+OCR 비용 큼, 기본 꺼짐) 꺼져 있으면 이 조건은 조용히 안 걸림(바이트 동일).
-               상한 PARSE_OCR_GT_MAX(env, 기본 20, 0=꺼짐).
     'rotated' = AD31(10-08) — prepare.py가 돌린 쪽(rotation.csv의 angle≠0, rotation_info 재사용) — 회전 전
                OCR 점수로 방향을 골랐어도 회전 자체가 쪽의 글자층 추출 신뢰도를 낮출 수 있어 쪽 VLM 후보로 넓힌다.
                상한 PARSE_ROTATED_MAX(env, 기본 20, 0=꺼짐 — rotation.csv를 안 읽음).
@@ -278,13 +254,12 @@ def scan_pages_detail(path):
                PARSE_VECTORS_MAX(env, 기본 20, 0=꺼짐). (규칙 신호만 — VLM에 보일지 말지의 '가벼운 판단'은 AG11 몫)
     문서 전체가 스캔(is_scan)이면 page_text가 이 함수를 안 부른다(전체 쪽 경로 그대로)."""
     cap = _hidden_overlap_cap()
-    ocr_cap, vec_cap, rot_cap = (
-        _cap("PARSE_OCR_GT_MAX", PARSE_OCR_GT_MAX_DEFAULT),
+    vec_cap, rot_cap = (
         _cap("PARSE_VECTORS_MAX", PARSE_VECTORS_MAX_DEFAULT),
         _cap("PARSE_ROTATED_MAX", PARSE_ROTATED_MAX_DEFAULT),
     )
     rot = rotation_info(path) if rot_cap else {}  # rot_cap==0이면 rotation.csv를 안 읽음(이전과 바이트 동일)
-    n_overlap = n_ocr = n_rot = n_vec = 0
+    n_overlap = n_rot = n_vec = 0
     out = {}
     for r in page_signals(path):
         area = r["image_area_ratio"]
@@ -297,9 +272,6 @@ def scan_pages_detail(path):
             n_overlap += 1
         elif r.get("garbage_ratio", 0.0) >= PAGE_SCAN_GARBAGE and area >= PAGE_SCAN_AREA:
             out[r["page"]] = "garbage"
-        elif r.get("ocr_chars") is not None and r["ocr_chars"] >= PAGE_OCR_GT_RATIO * max(r["chars"], 1) and n_ocr < ocr_cap:
-            out[r["page"]] = "ocr_gt_text"
-            n_ocr += 1
         elif (rot.get(r["page"], {}).get("angle") or 0) != 0 and n_rot < rot_cap:
             out[r["page"]] = "rotated"
             n_rot += 1
@@ -547,7 +519,7 @@ def pick_pages(n_pages, whole_scan, scan, cap):
 
 def page_text_pages(doc_path):
     """문서 전체(또는 AD12·AD31 — 글자 PDF 안의 스캔 쪽만, `PARSE_PAGE_SCAN=0`이 아닌 한 기본 켬) 쪽 VLM 옮기기 —
-    쪽 단위로 [(쪽 번호, 글, provenance), ...] (AD39 — 쪽별 중복 제거(scan_dedup)가 OCR 쪽과 맞춰야 해서 page_text처럼
+    쪽 단위로 [(쪽 번호, 글, provenance), ...] (scan_fill이 그 쪽만 채우려면 page_text처럼
     합친 글이 아니라 쪽 번호가 필요). 대상 쪽 계산은 page_targets()(단일 진본, figures.py와 공유) — 여기선 그
     번호로 실제 렌더·VLM 호출만 한다."""
     # 2026-10-22 — 쪽 전사를 순차→병렬로: 15쪽 × 26초 순차=390초 wall → 병렬(min(N,병렬)배치=wall 최소화), 품질 무변

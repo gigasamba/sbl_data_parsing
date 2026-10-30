@@ -396,8 +396,8 @@ S9·S9b는 엔진·핸드오프 파일 안 자기 점검 블록을 `tests/`로 �
 | `pipeline.transform.represent.agent_tools` | --selftest | `tests/server/pipeline/test_agent_tools.py` |
 | `pipeline.transform.represent.fuse` | 없음 | `tests/server/pipeline/test_fuse.py` |
 | `pipeline.transform.represent.parse_agent` | --selftest | `tests/server/pipeline/test_parse_agent.py` |
-| `pipeline.transform.represent.reread` | 없음 | `tests/server/pipeline/test_reread.py` |
-| `pipeline.transform.represent.reread_stage3` | 없음 | `tests/server/pipeline/test_reread_stage3.py` |
+| `pipeline.transform.represent.reread` | 없음 | (pl-34 10-30 — 모듈·시험 지움) |
+| `pipeline.transform.represent.reread_stage3` | 없음 | (pl-34 10-30 — 모듈·시험 지움) |
 | `pipeline.transform.represent.scan_dedup` | 없음 | `tests/server/pipeline/test_scan_dedup.py` |
 | `pipeline.transform.represent.shadow` | 없음 | `tests/server/pipeline/test_shadow.py` |
 | `pipeline.transform.represent.supsub` | 없음 | `tests/server/pipeline/test_supsub.py` |

@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나 — 변경을 어떻게 증명하나: 스모크 실행, 시험 층, 품질 평가, 답변 점검, 시험 자료, 이미지 반입 판정(PC + 반입 관문).
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서(주제별): 시험 층·반입 e2-02·e2-08·e2-14·e2-11·e2-15 → 스모크·시험 자료 e2-01·e2-13·e2-09 → 평가·점검 e2-03·e2-04·e2-05·e2-12·e2-19·e2-06·e2-07·e2-16 → 정리 e2-10·e2-17·e2-18 → 코드와 다른 점.
+순서(주제별): 시험 층·반입 e2-02·e2-08·e2-14·e2-11·e2-15 → 스모크·시험 자료 e2-01·e2-13·e2-09 → 평가·점검 e2-03·e2-04·e2-05·e2-12·e2-19·e2-20·e2-06·e2-07·e2-16 → 정리 e2-10·e2-17·e2-18 → 코드와 다른 점.
 
 <a id="e2-02"></a>
 ## e2-02 · 시험 층
@@ -13,7 +13,7 @@
 - 기준선(CLAUDE.md §4·§6-3에서 옮김, 10-30):
   - `selftest`는 **94개 중 93개 통과**다(10-30 `feature/ocrvlm-leftovers` — #30·#31·#34 병합 뒤). 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
   - `pytest tests/`는 **146 passed · 3 xfailed**다(10-30 `feature/ocrvlm-leftovers` — 루트 `settings.yaml`에 전용 PG가 있을 때. 없으면 `test_pl14_deploy`가 건너뛰어 145 passed · 1 skipped). 위 1개와 일반 테스트 2개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — `test_run_combo`·`test_pub_registry`(C-54 ①))이며, 모두 리팩토링 전부터 있던 실패다.
-  - 핑거프린트 10-30 값(`feature/pl31-engines` — 0.1.0 엔진 정리 뒤): `FINGERPRINT abe9b7b0799ceaae` · a `e3b0c44298fc` · p0 `c4d9b84d4f0e` · p1 `660fa1588e57` · r `7901ef34500b` · s `bcac3fe53d14`. 엔진 18개(재파싱 키 `run_all.engine_code_fp` — `qwen_vlm` `06f937fcc39e` · `kreuzberg` `7e7c9ac44287` · `rapidocr_ko` `990ebae04429`, 나머지는 refactor.md 부록 2). 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다(CLAUDE.md §4).
+  - 핑거프린트 10-30 값(`feature/pl34-p1-cleanup` — 0.1.0 엔진·p1 정리 뒤): `FINGERPRINT abe9b7b0799ceaae` · a `e3b0c44298fc` · p0 `2b4ad090d25e` · p1 `81cfe39fd09e` · r `7901ef34500b` · s `bcac3fe53d14`. 엔진 18개(재파싱 키 `run_all.engine_code_fp` — `qwen_vlm` `06f937fcc39e` · `kreuzberg` `7e7c9ac44287` · `rapidocr_ko` `990ebae04429`, 나머지는 refactor.md 부록 2). 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다(CLAUDE.md §4).
   - PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕 설정(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`에 넣는다(지금 `test_pub_registry`).
   - Mac의 부하가 높으면 `test_trigger_server`가 시간 초과로 실패할 수 있다(환경 문제).
 - Status: done
@@ -105,6 +105,15 @@
   - CR-6: `python -O`이면 `verify_citations.py`의 `assert`가 빠진다.
   - CR-7: dict를 직렬화했다가 다시 읽어, 인자를 펼쳐 넘기는 모델이면 시그니처 TypeError(실제로는 드묾).
 - 파일: `validation/e2e/answer_gen.py`, `valid_env/answer_test/rag_qa/`.
+- Status: todo
+
+<a id="e2-20"></a>
+## e2-20 · 분류 수용 보고서
+- 결정(G14·T19 — 3차 grill(사용자 10-30, 원본은 git 밖)):
+  - local에는 기준을 두지 않는다.
+  - dev: 사람이 단 정답 샘플과 대조한 보고서만 — 원천별·라벨별 일치율과 혼동표. 통과 기준은 첫 결과를 본 뒤 정한다.
+- 열린 점: 정답 샘플의 자리와 형식 — 사용자 확인.
+- 관련: [etl.md#pl-33](etl.md#pl-33)(분류 단계).
 - Status: todo
 
 <a id="e2-06"></a>

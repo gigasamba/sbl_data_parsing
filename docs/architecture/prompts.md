@@ -33,7 +33,6 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 | `doc_summary` | `common/` | llm | 문서 본문을 한국어 3문장 이내로 요약 | 지시문(시스템) + 문서 본문 앞부분(사용자) → 요약 글자 | `pipeline/transform/structure/build_bundle.py` `llm_summary()` · `pipeline/transform/represent/agent_tools.py` `summarize_document()` | free · 없음 |
 | `figure_describe` | `common/` | vlm | 그림 1장 → 검색용 기록(종류·요약·글자·값·연결·표) | 그림 PNG(data: URL) + 지시문(사용자, 생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figures.py` `vlm_fig()`(`P_FIGJ`) | 기본 · 있음 |
 | `page_transcribe` | `common/` | vlm | 스캔·이미지 쪽 1장 → 마크다운(OCR 교차 확인용) | 쪽 PNG + 지시문(사용자, 출력 상한 없음) → 마크다운 | `pipeline/transform/figures/vlm_page.py` `vlm_page()`(`P_PAGE`) | free · 없음 |
-| `value_choice` | `common/` | vlm | 조각 재판독 후보 중 이미지에 보이는 값 하나 고르기(AD29 P3) | 크롭 PNG + 지시문(후보 목록 포함) → `{"answer": "<후보 하나 또는 NONE>"}` | `pipeline/transform/represent/reread_stage3.py` `_default_vlm_call()` | template+tail · 있음 |
 | `research_judge` | `mcp/` | llm | 근거 조각이 하위 질문에 답하는지 판정 | 하위 질문 + 번호 붙은 근거 조각 → status/answer/cite JSON | 시험만 — `tests/server/common/test_adk.py`·`test_agent_prompts.py`·`test_paths.py`(S9 전 각 모듈 selftest · 호출부 `research.py`는 S5a 삭제 — D-025) | 기본 · 있음 |
 | `rag_qa` | (`valid_env/answer_test/` — PC 전용, S10에 `validation/e2e/`로 옮겼다가 10-29 되돌림) | llm | 검색 MCP 도구(`search`·`edw_meta`·`query_edw`)를 스스로 골라 근거를 찾고 숫자마다 인용을 붙여 답함(agentic — `max_turns` 12, 로컬 도구 `verify_citations`: 답의 숫자가 인용 `quote`에 있고 그 quote가 이번 질문의 검색 근거에 있는지) | 질문(사용자) → `{answer, status: found\|partial\|not_found, citations}` | `validation/e2e/answer_gen.py`(`common.ai.adk.run_agent(per_turn_admit=True)` — 도구 함수·근거 pool은 호출자, 지시문 `instructions.md` + 출력 스키마, 옛 패키지 README는 S10에 지움) | 없음(instruction에 지시문) · 있음 |
 | `figure_extract` | `pipeline/` | vlm | 그림만 보고 독립 재추출(검토 루프 — 원본 기록은 안 보여 줌) | 그림 PNG + 지시문 + 근처 맥락·이전 지적 → figure-v1 JSON | `pipeline/transform/figures/figure_review.py` `extract()`·`_vlm_call(which="extract")`(`P_EXTRACT`) | template+tail · 있음 |
@@ -51,7 +50,6 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 
 ## 4. 패키지별 메모 (옛 README에서 표에 안 들어간 것)
 
-- **`value_choice`** — 답이 후보 목록 밖이거나 `NONE`이면 호출부가 미확인으로 둔다(값을 지어내지 않음, AD19 "지우지 않음"과 같은 원칙).
 - **`figure_overlay`** — 출력 스키마는 `figure_describe`와 같고(kind/summary/text/values/edges/table_md), 지시문이 "위 개체는 아래 그림을 설명할 수 있다"는 관계를 읽게 한다. 캐시 이름 `figoverlay` — 같은 그림이라도 `figure_describe`와 다른 열쇠.
 - **`gold_draft`** — `page_transcribe`와 별도 지시문·캐시 열쇠라 이 패키지를 바꿔도 파싱 VLM 캐시·동작은 그대로다.
 - **`mermaid_check`** — 옮긴 화살표 목록은 보여 주지 않고 단계 이름만 준다(앵커링 방지) → 단계별 '나가는 화살표' 답과 Mermaid를 코드로 대조. 흐름도가 아닌 그림이면 `is_flowchart=false` → Mermaid 블록을 뺀다.
