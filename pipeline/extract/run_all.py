@@ -61,7 +61,7 @@ from pipeline.stackcfg import MAX_PER_TYPE, over_limit  # 사용자 10-29 — �
 
 def redact(s):
     """오류 글자에 섞여 나올 수 있는 문서 내용(인용부호로 감싼 긴 조각)을 가림(백로그 X2 ⑤ — 로그·runs.jsonl에 본문 금지).
-    구현은 span.redact_text 한 곳(op-01 — 성능 기록의 오류 글자도 같은 규칙)."""
+    구현은 span.redact_text 한 곳. 성능 기록(pipe_event.err)은 이 함수가 아니라 span.safe_err(allowlist)를 쓴다(op-01)."""
     return SP.redact_text(s)
 
 
@@ -411,7 +411,7 @@ def main():
                 },
                 run_id,
             )
-            sp.result("skip", "env", rec["error"])
+            sp.result("skip", "env", SP.safe(rec["error"]))
             with lock:
                 log.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 log.flush()
@@ -561,7 +561,7 @@ def run_procs(a, docs):
             rc = resources.gated_popen(base + ["--shard", f"{i}/{k}", "--procs", "1"], env=env).wait()
             sp.add(rc=rc)
             if rc != 0:
-                sp.result("fail", None, f"종료 코드 {rc}")
+                sp.result("fail", None, SP.safe(f"종료 코드 {rc}"))
                 print(f"조각 {i}/{k} 비정상 종료({rc}) — 끝낸 문서×엔진은 runs.jsonl에 남아 다음 실행에서 건너뜀", flush=True)
 
     with ThreadPoolExecutor(max_workers=k) as ex:

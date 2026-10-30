@@ -1095,9 +1095,9 @@ def represent(stack, parse_dir, src=None):
         with SP.span("transform.represent", doc_id=_doc, ext=Path(_doc).suffix.lower(), cpu=_par == 1) as _sp:
             _r = _doc_one(_pair)
             if _r is None:
-                _sp.result("skip", None, "대표 결과 없음")
+                _sp.result("skip", None, SP.safe("대표 결과 없음"))
             elif not _r.get("engine"):
-                _sp.result("fail", "doc", _r.get("reason"))
+                _sp.result("fail", "doc", SP.safe(_r.get("reason")))
             _sp.add(pages=_dd.get("pages"), format=_dd.get("format"))
             _done[0] += 1
             return _r

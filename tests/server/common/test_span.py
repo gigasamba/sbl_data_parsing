@@ -109,7 +109,7 @@ def test_error_status_and_kind():
     for row, (_, status, kind) in zip(rows, cases):
         assert (row["status"], row["err_kind"]) == (status, kind), row
         assert row["err"] and row["ts_end"] >= row["ts_start"]
-    assert "가림" in rows[6]["err"] and body not in rows[6]["err"]  # 문서 본문 조각은 오류 글자에 안 남음
+    assert rows[6]["err"] == "ValueError"  # 예외 메시지 원문(문서 본문 조각)은 저장하지 않음 — 타입 이름만
     assert (rows[7]["status"], rows[7]["err_kind"]) == ("skip", "env") and rows[8]["status"] == "reused"
 
 
