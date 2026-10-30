@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pipeline.transform.structure.build_bundle as M
 from common.core import docmeta as DM
+from common.core.paths import STACK_FILE
 from common.core.text import tokens
 from pipeline import config as pc
 from pipeline.transform.structure.build_bundle import (
@@ -302,7 +303,9 @@ def selftest():
         pd, sd, out = _ad21_fixture(mid_empty)
         # S7c — 설정 객체(env 안 건드림) · CHUNK_HEAD: G9 머리말·n_terms 재계산은 AD21과 무관 — 끄고 figure_chunk() 그대로 비교(MINOR③④)
         with pc.PIPE.env(BUNDLE_KEEP_EMPTY_FIG="1" if env_keep else "0", CHUNK_HEAD="1" if chunk_head else "0"):
-            main(["--parse-dir", str(pd), "--src", str(sd), "--embed", "none", "--out", str(out)])
+            # 엔진 구성은 파일로 명시(시험 전용 덮기 — 2b 전 기본값과 같은 git 파일). 서버 모드 이미지(RUN_ENV≠local)에서 판 번호 없이
+            # pc.stack()이 거부(종료 2)하던 것 — 이미지 관문 10-30
+            main(["--parse-dir", str(pd), "--src", str(sd), "--embed", "none", "--stack", str(STACK_FILE), "--out", str(out)])
         m = json.loads((out / "meta.json").read_text(encoding="utf-8"))
         cs = [json.loads(ln) for ln in (out / "chunks.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
         return m, cs, out
