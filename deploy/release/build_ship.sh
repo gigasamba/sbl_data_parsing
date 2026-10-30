@@ -35,7 +35,7 @@ REMOTE_DOCKER=${REMOTE_DOCKER:-docker}
 OUT=${OUT:-/var/tmp/$(echo "$TAG" | tr ':/' '__').tar.gz}
 RUNTIME=0; case "$IMAGE_TARGET" in *-runtime) RUNTIME=1 ;; esac
 # op-06 — 실행 이미지면 코드 폴더 묶음(이 커밋의 git 추적 파일 + CODE_COMMIT, valid_env/·validation/ 뺌)도 이미지 옆에 만든다.
-CODE_OUT=${CODE_OUT:-$(dirname "$OUT")/code-$APP_VERSION-$VCS_REF.tar.gz}
+CODE_OUT=${CODE_OUT:-output/ship/code-$APP_VERSION-$VCS_REF.tar.gz}   # 저장소 안(OUT의 /var/tmp는 Windows Git Bash에 없음)
 
 echo "== 0. 사전 점검"
 if [ "$BUILD_ONLY" != 1 ]; then
@@ -77,6 +77,7 @@ if [ "$RUNTIME" = 1 ]; then
   echo "$(git rev-parse HEAD 2>/dev/null || echo unknown) $VCS_REF $APP_VERSION" > "$CODE_DIR/CODE_COMMIT"
   # mktemp -d는 0700 — 그대로 묶으면 서버에서 푼 판 폴더를 컨테이너 사용자 10001이 못 읽음. 모두가 읽게(폴더 755·파일 644, 실행 비트는 유지)
   chmod -R u=rwX,go=rX "$CODE_DIR"
+  mkdir -p "$(dirname "$CODE_OUT")"
   tar -czf - -C "$CODE_DIR" . > "$CODE_OUT"   # 표준 출력으로(Windows 경로 C:/…를 tar가 원격 호스트로 읽지 않게)
   # 맨 위 폴더 755 + 모든 항목 모두가 읽기(head로 자르지 않음 — pipefail에서 tar가 SIGPIPE로 실패함)
   bad=$(tar -tvzf - < "$CODE_OUT" | awk 'NR==1 && $1 != "drwxr-xr-x" {print "맨위폴더 " $1} $1 !~ /^.r..r..r/ {print $NF}')
