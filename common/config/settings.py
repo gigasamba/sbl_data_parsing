@@ -1561,8 +1561,10 @@ class CommonStore(Section):
         off=("", "0", "none", "false"),
         fold="lower",
     )
-    run_mode: str | None = F(
-        None, "RUN_MODE", "실행 모드 prod|test — pipeline --mode 기본, prod이면 PG 실패 시 SQLite 대체 금지·VLM 시간 완화"
+    run_mode: Literal["prod", "test"] | None = F(
+        None,
+        "RUN_MODE",
+        "실행 모드 prod|test — pipeline --mode 기본, prod이면 PG 실패 시 SQLite 대체 금지·VLM 시간 완화. dev·prd 서버는 prod 필수(pl-12 — 아니면 정형 저장소가 시작 거부)",
     )
     struct_backend: str | None = F("pg", "STRUCT_BACKEND", "정형 저장소 종류 pg|sqlite|tsql", blank="keep")
     struct_db: str | None = F(None, "STRUCT_DB", "정형 저장소 SQLite 파일 경로(STRUCT_BACKEND=sqlite일 때·PG 대체 시)")

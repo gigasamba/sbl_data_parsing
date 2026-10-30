@@ -24,7 +24,7 @@
 | compose `index_a`/`index_b` 실패 | todo | 원인 · 고침 | [pl-19](prd/etl.md#pl-19) |
 | 정형 DB와 문서 대장 | done | 마스터 · 연결 · 대장 | [pl-08](prd/etl.md#pl-08) |
 | 마스터 CSV 활용 방안 설계 | todo | 후순위 · 사용자와 grill · 0.1.0 아님 | [pl-38](prd/etl.md#pl-38) |
-| 문서 대장 upsert·게시 가드 | todo | PG 번역 · ParsingMeta 가드 | [pl-12](prd/etl.md#pl-12) |
+| 문서 대장 upsert·게시 가드 | partly done | deleted 길 없앰·서버 대체 금지 ✓ · PG 번역 · ParsingMeta 가드 | [pl-12](prd/etl.md#pl-12) |
 | 파싱 결과 게시 | done | Object Storage · ParsingMeta | [pl-09](prd/etl.md#pl-09) |
 | `full`은 늘 게시, 대상 필수 | todo | `--no-publish` 없앰 · 시작 거부 | [pl-26](prd/etl.md#pl-26) |
 | 실행 관리(오케스트레이션) | done | CLI · entrypoint · flow 러너 · trigger | [pl-10](prd/etl.md#pl-10) |

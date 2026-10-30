@@ -19,7 +19,7 @@ S11(10-28)에 VS10 배포 준비 목록(`output/orca/VS10-verify.md` 끝 절)을
 | struct 버전 테이블 2개(`stack_version`·`source_version` + 색인) 소유·권한·백업 · 파싱도 PG 필요(못 읽으면 종료 4)를 받아들일지 | DB 담당·사용자 | 배포 전 | C-49 ①② |
 | 회사 DB 연결이 SQLAlchemy로 바뀜 — 첫 연결 카탈로그 질의가 읽기 전용 계정에서 되는지 | DB 담당·EDW 담당·서버 운영 | 배포 전 확인 · 배포 때 한 번 실행 | C-49 ⑤ |
 | ~~회사 DB `AI.ParsingMeta.pipeline_version` 값 형식이 git 짧은 커밋(`e305b14`) → 버전(`0.1.0`)으로 바뀜 — 이 컬럼을 읽는 다른 서비스·보고가 있는지, 길이·형식 제약이 있는지~~ **결정(사용자 10-30) — PRD [pl-25](docs/prd/etl.md#pl-25): `pipeline_version`은 ParsingMeta가 아니라 gold `doc` 칸으로 기록**(ParsingMeta 칸 정리는 DB 담당 협의) | DB 담당·EDW 담당·사용자 | 배포 전(협의) | C-62 (D-036) |
-| **결정(사용자 10-30) — PRD [pl-12](docs/prd/etl.md#pl-12): deleted 처리 길 없앰** · 서버 확인은 그대로 — 문서 레지스트리(서버가 SQLite 레지스트리로 동작하며 지금도 이전 문서를 deleted·숨김으로 만드는지) — 서버 `struct_backend`·`run_mode` · SQLite 레지스트리 파일 · `doc_registry` deleted 수·`doc_hidden` · 운영 EDW `status='deleted'` 수(ⓐ~ⓓ). 그랬으면 사람이 되돌림 | 서버 운영·DB 담당·EDW 담당·사용자 | **배포 전(지금 서버)** · 배포 후 다시 | C-54 |
+| **결정(사용자 10-30) — PRD [pl-12](docs/prd/etl.md#pl-12): deleted 처리 길 없앰 — 코드 반영(10-30, B1: 서버는 SQLite·스탠드인 대체 없이 멈춤, `run_mode: prod` 필수)** · 새 판에서는 더 늘지 않음 — 서버 확인은 그대로 — 문서 레지스트리(서버가 SQLite 레지스트리로 동작하며 지금도 이전 문서를 deleted·숨김으로 만드는지) — 서버 `struct_backend`·`run_mode` · SQLite 레지스트리 파일 · `doc_registry` deleted 수·`doc_hidden` · 운영 EDW `status='deleted'` 수(ⓐ~ⓓ). 그랬으면 사람이 되돌림 | 서버 운영·DB 담당·EDW 담당·사용자 | **배포 전(지금 서버)** · 배포 후 다시 | C-54 |
 
 ### ② 배포 전
 
