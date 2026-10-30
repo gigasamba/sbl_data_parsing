@@ -308,7 +308,9 @@ def _selftest_evidence_rep_path():
     db.close()
 
     _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), RDB_SQLITE=str(pm_path))  # 설정 객체 덮기(S7d)
+    _env = mc.senv(
+        MCP_STORE="local", MCP_BUNDLE=str(d), RDB_SQLITE=str(pm_path), RUN_ENV="local"
+    )  # 설정 객체 덮기(S7d) · 가짜 EDW(RDB_SQLITE)는 local 전용 — 이미지에서도 시험 안에서만 local(이미지 관문 10-30)
     try:
         on = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
         by_name = {e["file_name"]: e for e in on["evidence"]}
