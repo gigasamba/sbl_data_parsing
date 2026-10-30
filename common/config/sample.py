@@ -1,11 +1,14 @@
-"""settings.sample.yaml 만들기·대조 — 앱 설정 모델(common + pipeline + mcp 절)에서 절·칸 구조와 설명만 뽑는다(값은 비움, S7a · D-015).
-칸마다 주석: 설명 · 옛 env 이름 · 형식 · 기본값(비밀은 적지 않음) · 지문 고정. 칸을 더하거나 바꾸면 다시 만든다.
+"""settings.sample.yaml 만들기·대조 — 앱 설정 모델(common + pipeline + mcp 절)의 모든 칸을 코드 기본값과 함께 settings.yaml 꼴로 낸다(op-05 —
+카테고리 순서, 필수·비밀 칸은 비움). 칸마다 줄 끝 주석: 설명 · 옛 env 이름 · 형식 · 기본값(비밀은 적지 않음) · 지문 고정. 칸을 더하거나 바꾸면 다시 만든다.
 사용: python -m common.config.sample            # 저장소 루트 settings.sample.yaml에 씀
       python -m common.config.sample --check    # 파일이 모델과 같은지(다르면 rc 1)
 """
 
 import re
 import sys
+from pathlib import Path
+
+import yaml
 
 from common.config import settings as S
 from common.core.console import utf8_stdout
@@ -108,8 +111,9 @@ GROUPS = [
     ("호스트(compose·systemd·셸이 읽음)", ("common.host", "pipeline.host", "mcp.host")),
     ("e2e·시험·평가(PC 전용)", ("common.dev", "pipeline.dev", "pipeline.eval", "mcp.dev")),
 ]
-SPLIT = {GROUPS[i][0] for i in (1, 3, 4, 5, 6)}  # 종류(KINDS)로 한 번 더 나누는 묶음 — 모델·extract·transform·load·mcp
-KINDS = ("결과를 바꾸는 값(하이퍼파라미터)", "기능 켬/끔", "운영값(동시성·시간·용량·경로·접속)")
+SPLIT = {
+    GROUPS[i][0] for i in (1, 3, 4, 5, 6)
+}  # [파라미터] 표시를 다는 카테고리(결과를 바꾸는 값 — _kind 0) — 모델·extract·transform·load·mcp
 _OPS = re.compile(
     r"concurrency|parallel|workers|procs|threads|timeout|_sec$|^sec$|deadline|retry|batch$|cache|_gb$|warn|port$|dir$|root|path|"
     r"file$|_bin$|url$|host$|queue|lock|log|^keep_|fetch|warm|slow|rpm|max_calls|budget|est_usd|price|token$|_mb$|max_bytes|max_chars|"
@@ -158,31 +162,21 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
 REQ_HEAD = """\
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
-# 1. 필수 입력 — 이 블록을 settings.yaml로 복사해 값을 채운다. 칸마다 [필수: 공통](PC·서버) · [필수: 서버] · [필수: PC].
+# 이 파일을 settings.yaml로 복사해 [필수] 칸과 [비밀] 칸만 채우면 시작된다(사용자 10-30 — op-05). 칸마다 [필수: 공통](PC·서버) · [필수: 서버] · [필수: PC].
 #    서버 필수 칸을 PC에서 비우면 그 기능(EDW·Object Storage·RDB·게시 등)만 꺼진다. 비밀 칸은 settings.yaml에만.
-# ══════════════════════════════════════════════════════════════════════════════════════════════"""
-OPT_HEAD = """\
-
-# ══════════════════════════════════════════════════════════════════════════════════════════════
-# 2. 옵션(설정) — 기능 켬/끔 · 선택값 · 경로 · 접속 · 운영값(동시성·시간·용량). 기본값이 있어 비워 두면 된다.
-# 3. 파라미터 — 결과(파싱·청크·검색 순위)를 바꾸는 값. 바꾸면 같은 문서에서도 결과가 달라진다(평가로 확인 뒤 바꿈).
-#    줄 모양: 칸 경로:  # 설명 · 기본 <값> · 값: <입력 가능한 값> · env=<옛 이름> [표시].
-#    값: = 형식(코드가 검증 — true·false·정수·포트 등)과 설명에서 뽑은 범위·선택지. 숫자 범위는 안내이고 코드가 막지는 않는다.
-#    바꿀 칸만 위 1의 같은 절(common·pipeline·mcp) 아래 같은 자리에 넣는다
-#    (예: pipeline.transform.structure.chunk_size → pipeline: / transform: / structure: / chunk_size: 900).
+# 모든 칸이 코드 기본값과 함께 들어 있다(절 common·pipeline·mcp 아래, 카테고리 제목 ─── N. … ─── 로 묶음).
+#    값이 빈 칸(`칸:`) = 코드 기본값을 쓴다 — 기본값이 없거나, 비밀이거나, 이미지·PC마다 기본값이 다른 칸(DOC_DIR 등).
+#    적힌 값은 코드 기본값보다 이긴다 — 나중에 코드 기본값이 바뀌어도 이 파일을 고치지(또는 sample을 다시 복사하지) 않으면 반영되지 않는다.
+#    [파라미터] = 결과(파싱·청크·검색 순위)를 바꾸는 값 — 바꾸면 같은 문서에서도 결과가 달라진다(평가로 확인 뒤 바꿈). 설정 값은 code_fp에 안 들어간다.
+#    줄 끝 주석: 설명 · 기본 <값> · 값: <입력 가능한 값> · env=<옛 이름> [표시]. 숫자 범위는 안내이고 코드가 막지는 않는다.
 #    같은 최상위 절을 두 번 쓰지 않는다 — YAML은 뒤의 절이 앞의 절을 통째로 덮는다.
-# ══════════════════════════════════════════════════════════════════════════════════════════════"""
-PARAM_HEAD = """\
-
-# ══════════════════════════════════════════════════════════════════════════════════════════════
-# 3. 파라미터 — 결과를 바꾸는 값(영역별). 줄 모양·넣는 법은 2와 같다.
 # ══════════════════════════════════════════════════════════════════════════════════════════════"""
 
 
 def blank_matters(field):
     """빈 글자 ''를 적어야 결과가 같은 칸인가(VS7e1 R-4) — 빈 글자 유지 칸(keep)이거나, 이미지 기본값이 있어 비우면 그 기본값이 걸리는 칸(DOC_DIR 등 —
     B-2). 그 밖 칸의 ''는 비운 칸과 같은 결과라 sample 표시·migrate --compare에서 같게 본다."""
-    return S.keeps_blank(field) or S.env_name(field) in {k for d in S._IMAGE_DEFAULTS.values() for k in d}
+    return S.keeps_blank(field) or S.env_name(field) in _IMAGE_ENVS
 
 
 def _fmt_default(f):
@@ -213,44 +207,16 @@ def build(classes=None):
         raise SystemExit(f"sample: REQUIRED에 모델에 없는 칸 {sorted(req - known)}")
     if set(VALUES) - known and set(tops) == {"common", "pipeline", "mcp"}:
         raise SystemExit(f"sample: VALUES에 모델에 없는 칸 {sorted(set(VALUES) - known)}")
+    gidx = {}
+    for p, _ in rows:
+        g = next((i for i, (_, pre) in enumerate(GROUPS) if any(p == x or p.startswith(x + ".") for x in pre)), None)
+        if g is None:
+            raise SystemExit(f"sample: 카테고리(GROUPS)에 안 드는 칸 {p} — GROUPS에 접두어를 더함")
+        gidx[p] = g
     lines = [HEAD, REQ_HEAD]
     for top, model in tops.items():
-        if any(p.startswith(top + ".") for p in req & known):
-            lines.append(f"\n{top}:")
-            _emit(model, 1, top, lines)
-    groups = {name: [] for name, _ in GROUPS}
-    for p, f in rows:
-        if p in req:
-            continue
-        g = next((name for name, pre in GROUPS if any(p == x or p.startswith(x + ".") for x in pre)), None)
-        if g is None:
-            raise SystemExit(f"sample: 선택 묶음(GROUPS)에 안 드는 칸 {p} — GROUPS에 접두어를 더함")
-        groups[g].append((p, f))
-    is_param = lambda name, p, f: name in SPLIT and _kind(p, f) == 0  # 파라미터 = 결과를 바꾸는 값(묶음 안)
-    lines.append(OPT_HEAD)
-    i = 0
-    for name, items in groups.items():
-        opts = [(p, f) for p, f in items if not is_param(name, p, f)]
-        if not opts:
-            continue
-        i += 1
-        lines.append(f"\n# ─── 2-{i}. {name} ({len(opts)}칸) ───")
-        if name not in SPLIT:
-            lines += [f"#   {p}:  # {_note(p, f)}" for p, f in opts]
-            continue
-        for k, label in ((1, KINDS[1]), (2, KINDS[2])):
-            part = [(p, f) for p, f in opts if _kind(p, f) == k]
-            if part:
-                lines.append(f"#  [{label}]")
-                lines += [f"#   {p}:  # {_note(p, f)}" for p, f in part]
-    lines.append(PARAM_HEAD)
-    i = 0
-    for name, items in groups.items():
-        params = [(p, f) for p, f in items if is_param(name, p, f)]
-        if params:
-            i += 1
-            lines.append(f"\n# ─── 3-{i}. {name} ({len(params)}칸) ───")
-            lines += [f"#   {p}:  # {_note(p, f)}" for p, f in params]
+        lines.append(f"\n{top}:")
+        _emit(model, 1, top, lines, gidx, [None])
     return "\n".join(lines) + "\n"
 
 
@@ -275,18 +241,39 @@ def _kind(path, f):
     return 0
 
 
-def _emit(model, depth, path, lines):
-    """필수 칸만 settings.yaml 꼴(절 안 칸)로 — 필수 칸이 없는 절은 건너뜀."""
+def _emit(model, depth, path, lines, gidx, last):
+    """절 안 칸을 settings.yaml 꼴로 — 카테고리(GROUPS) 순서로 놓고, 카테고리가 바뀌는 자리에 제목 주석(op-05)."""
     pad = "  " * depth
+    kids = []
     for name, f in model.model_fields.items():
         p = f"{path}.{name}"
         sub = S._section_type(f.annotation)
-        if sub is None:
-            if p in REQUIRED:
-                lines.append(f"{pad}{name}:  # [필수: {REQUIRED[p]}] {_note(p, f)}")
-        elif any(r.startswith(p + ".") for r in REQUIRED):
+        g = gidx[p] if sub is None else min(v for k, v in gidx.items() if k.startswith(p + "."))
+        kids.append((g, name, p, f, sub))
+    for g, name, p, f, sub in sorted(kids, key=lambda k: k[0]):  # sorted는 안정 — 같은 카테고리 안은 모델 순서
+        if last[0] != g:
+            last[0] = g
+            lines.append(f"{pad}# ─── {g + 1}. {GROUPS[g][0]} ───")
+        if sub is not None:
             lines.append(f"{pad}{name}:")
-            _emit(sub, depth + 1, p, lines)
+            _emit(sub, depth + 1, p, lines, gidx, last)
+            continue
+        tag = f"[필수: {REQUIRED[p]}] " if p in REQUIRED else "[파라미터] " if GROUPS[g][0] in SPLIT and _kind(p, f) == 0 else ""
+        val = _value(p, f)
+        lines.append(f"{pad}{name}:{' ' + val if val else ''}  # {tag}{_note(p, f)}")
+
+
+def _value(p, f):
+    """칸에 적을 기본값(YAML 한 줄) — 비우는 칸: 필수·비밀·기본 없음·빈 글자·이미지 기본값 칸·PC 경로가 든 기본값(만든 PC마다 달라짐)."""
+    d = f.get_default(call_default_factory=True)
+    if p in REQUIRED or S.is_secret(f) or d is None or d == "" or S.env_name(f) in _IMAGE_ENVS:
+        return ""
+    if isinstance(d, str) and (str(S.REPO_ROOT) in d or str(Path.home()) in d):
+        return ""
+    return yaml.safe_dump(d, default_flow_style=True, allow_unicode=True, width=10**9).removesuffix("\n").removesuffix("\n...")
+
+
+_IMAGE_ENVS = {k for d in S._IMAGE_DEFAULTS.values() for k in d}
 
 
 def _note(p, f):

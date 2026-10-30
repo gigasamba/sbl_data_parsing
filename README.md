@@ -142,7 +142,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 ├─ valid_env/           PC 전용 데이터 — object_storage/(합성 테스트 문서, 버킷 모양) · edw/(합성 EDW sqlite) · answer_test/(답변 점검 agent) · docker/(PC 테스트 Docker)
 ├─ docs/                문서(지도: docs/index.md) — PRD.md·prd/ · operations/ · architecture/ · history/
 ├─ VERSION              두 이미지 공통 버전(SemVer)
-├─ settings.sample.yaml 모든 설정 항목의 구조와 설명(자동 생성 — 손으로 고치지 않음)
+├─ settings.sample.yaml 모든 설정 항목·코드 기본값·설명 — 복사해 settings.yaml로(자동 생성 — 손으로 고치지 않음)
 ├─ settings.yaml        PC 로컬 설정(git 제외 · 권한 600 — 직접 만듦)
 ├─ pyproject.toml · requirements-dev.txt · .githooks/   PC 개발 도구(ruff, mypy, pytest)와 커밋 전 점검 hook
 ├─ refactor.md          서버·사람이 확인할 사항(C-xx) · "최종 — 사람이 할 일"
@@ -165,7 +165,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 | 쓰는 법   | **기본값과 다르게 쓸 항목만** 적는다. 비워 둔 항목은 코드 기본값을 쓴다                                                                                                                 |
 | 필수     | `common.run_env` — `local`(PC) · `dev` · `prd`(서버 — 외부 모델 호출과 가짜 LLM(`llm_fake`)을 거부하고, 설정 파일을 못 읽으면 시작하지 않는다)                                                        |
 | 항목별 안내 | [docs/operations/env-guide.md](docs/operations/env-guide.md)                                                                                                |
-| **서버 반입** | `settings.yaml`은 **git에 올리지 않는다**(`.gitignore` — 비밀값·서버마다 다른 값). 반입 때 **사람이 서버용으로 직접 작성**한다: `settings.sample.yaml`의 「1. 필수 입력」 블록에서 `[필수: 공통]`·`[필수: 서버]` 칸을 모두 확인해 채우고 `python -m pipeline.config --file <파일>`로 확인. **PC 파일을 그대로 복사하지 않는다** — PC의 `run_env: local`·`*_allow_external: true`가 서버에서 외부 모델 호출을 연다(알려진 위험, 사용자 10-29 수용) |
+| **서버 반입** | `settings.yaml`은 **git에 올리지 않는다**(`.gitignore` — 비밀값·서버마다 다른 값). 반입 때 **사람이 서버용으로 직접 작성**한다: `settings.sample.yaml`을 복사해 `[필수: 공통]`·`[필수: 서버]`·`[비밀]` 칸을 채우고(그 밖 칸은 코드 기본값이 적혀 있음 — op-05) `python -m pipeline.config --file <파일>`로 확인. **PC 파일을 그대로 복사하지 않는다** — PC의 `run_env: local`·`*_allow_external: true`가 서버에서 외부 모델 호출을 연다(알려진 위험, 사용자 10-29 수용) |
 
 
 **실행할 때 값을 넘기는 방법 3가지**
