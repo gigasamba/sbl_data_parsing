@@ -52,9 +52,9 @@
 
 ---
 
-## 3. 설정 — `settings.yaml` + 파라미터 파일 3개
+## 3. 설정 — `settings.yaml` 하나
 
-- 설정은 두 곳에 둔다: **settings.yaml**(필수값·비밀값·서버마다 다른 값·모델 연결 정보(모델별 값 포함))과 **`resources/config` 파라미터 파일 3개**(parsing·structure·mcp — git·이미지에 들어가고 기본값을 들고 있어 따로 채우지 않음). 키는 정확히 한 곳에만 있고, 파라미터를 바꾸려면 커밋과 릴리스다(PRD op-05 — 옮기기 전까지는 지금 settings.yaml 그대로).
+- 설정은 settings.yaml 하나에 둔다. `settings.sample.yaml`에는 모든 키가 기본값과 함께 카테고리별로 들어 있다 — 복사해서 필수값·비밀값을 채운다(PRD op-05).
 - **비밀값(DB 접속 정보, 비밀번호, API 키, 토큰)은 settings.yaml에만** 둔다. PC는 저장소 루트의 `settings.yaml`(git 제외, 권한 600), 서버는 `$SERVER_ENV_DIR/settings.yaml`(UID 10001, 권한 640)이다. 구조와 설명은 `settings.sample.yaml`(자동 생성 파일)에 있다.
 - 코드는 설정 객체로 값을 읽는다 — 공용은 `common.config.settings.cfg()`, 파이프라인은 `pipeline.config.cfg()`, 검색은 `mcp_server.config.cfg()`. **`os.environ`이나 `os.getenv`로 설정을 읽지 않는다**(남은 env 줄은 라이브러리용, 하위 프로세스용, 내부 신호용뿐이며 분류 주석이 필수다 — check_modules ⑩).
 - **새 설정 항목을 추가할 때:** 해당 섹션의 모델(`common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`)에 항목·설명·기본값·옛 env 이름(alias)을 넣는다 → `python -m common.config.sample`로 sample을 다시 만든다 → `python -m common.config.keyscan --check`를 실행한다 → 운영에 영향이 있으면 [docs/operations/env-guide.md](docs/operations/env-guide.md)와 `refactor.md`에 적는다.
