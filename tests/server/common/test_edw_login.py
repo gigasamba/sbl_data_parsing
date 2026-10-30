@@ -121,7 +121,7 @@ def test_mcp_paths_use_read_account_only():
 def test_publish_uses_write_and_sqlite_wins():
     with COMMON.env(**FULL), mock.patch.object(PM, "MssqlStore", lambda table, role: ("store", table, role)):
         assert PM.make_db("write") == ("store", "AI.ParsingMeta", "write")
-    with COMMON.env(RDB_SQLITE=":memory:"):
+    with COMMON.env(RDB_SQLITE=":memory:", RUN_ENV="local"):  # 가짜 EDW는 local 전용 — 이미지에서도 시험 안에서만(이미지 관문 10-30)
         db = PM.make_db("write")
         assert isinstance(db, PM.SqliteStore)
         db.close()

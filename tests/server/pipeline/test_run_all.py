@@ -356,10 +356,20 @@ def test_kill_group_reaps_grandchild():
     gpid = int(p.stdout.readline())
     PR.kill_group(p)
     assert p.returncode is not None
-    for _ in range(50):  # 손자는 init이 거둠 — 잠깐 기다림
+
+    def alive(pid):
+        """살아 있나 — 좀비(죽었고 거둘 부모만 없음: init 없는 컨테이너의 PID 1 — `docker run` without --init)는 죽은 것으로(이미지 관문 10-30)."""
         try:
-            os.kill(gpid, 0)
+            os.kill(pid, 0)
         except ProcessLookupError:
+            return False
+        try:
+            return Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()[0] != "Z"
+        except OSError:
+            return True  # /proc 없음(macOS) — kill(0)이 됐으니 살아 있음
+
+    for _ in range(50):  # 손자는 init이 거둠 — 잠깐 기다림
+        if not alive(gpid):
             break
         time.sleep(0.1)
     else:

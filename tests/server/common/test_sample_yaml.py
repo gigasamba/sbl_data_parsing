@@ -10,7 +10,7 @@ import yaml
 
 from common.config import sample
 from common.config.settings import CommonAppSettings, _is_set, _section_type, app_classes, env_map, load
-from common.core.paths import PROJ_ROOT
+from common.core.paths import DEPLOY_ROOT
 
 _SET_READ = re.compile(r"\b(?:given|_given|_f|own|setting)\(\s*[\"']([A-Z][A-Z0-9_]+)[\"']")
 
@@ -22,10 +22,11 @@ def _get(obj, path):
 
 
 def _set_read_names():
-    """코드에서 '준 값만' 읽는 이름(given("X")·resources._f("X")·model_matrix.own("X") 등) — 이 이미지에 있는 폴더만."""
+    """코드에서 '준 값만' 읽는 이름(given("X")·resources._f("X")·model_matrix.own("X") 등) — 이 이미지에 있는 폴더만.
+    코드 루트는 DEPLOY_ROOT(PC = 저장소 루트, 이미지 = /app/deploy — PROJ_ROOT는 이미지에서 /app이라 코드가 없음, 이미지 관문 10-30)."""
     out = set()
     for top in ("common", "pipeline", "mcp_server", "validation"):
-        for f in (PROJ_ROOT / top).rglob("*.py") if (PROJ_ROOT / top).is_dir() else ():
+        for f in (DEPLOY_ROOT / top).rglob("*.py") if (DEPLOY_ROOT / top).is_dir() else ():
             out |= set(_SET_READ.findall(f.read_text(encoding="utf-8")))
     return out
 
