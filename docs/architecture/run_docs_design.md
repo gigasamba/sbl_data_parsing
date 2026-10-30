@@ -66,7 +66,7 @@
 | | PARSE_REP_SELECT | first | 첫 성공 엔진 사용 |
 | | PARSE_MERGE_PAGES | 1 | 페이지 병합 |
 | | PIPE_PROCS | 4 (기본) | light 엔진 병렬 |
-| | FUSE_REREAD | MAX=3, DPI=120, P3=0 | reread 위치 재판독 |
+| | (FUSE_REREAD) | — | 재판독은 pl-34(10-30)에 지움 |
 | **구조화** | EMBED_BATCH / CONCURRENCY | 32 / 6 | 문서별 병렬 호출 |
 | | BM25_THREADS | 3 | term 병렬 선계산 |
 | | 구조화 워커 | 1 스레드 | 문서 경계 없이 연속 |

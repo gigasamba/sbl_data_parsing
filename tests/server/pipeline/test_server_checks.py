@@ -8,7 +8,6 @@ from pathlib import Path
 from common.core.paths import STACK_FILE
 from pipeline.eval.server_checks import (
     AR1_CONFIGS,
-    AR1_NO_P3_VLM,
     _ar6_counts,
     _ar6_markdown,
     _index_text_from_pg_row,
@@ -21,7 +20,7 @@ from pipeline.eval.server_checks import (
 
 def selftest_ar1():
     """represent.py·score_gold.py는 가짜로 주입(서버 없이) — 내 오케스트레이션(문서 수 제한·설정별 env 격리·
-    --run-vlm 게이트·마크다운)만 검증."""
+    마크다운)만 검증."""
     import tempfile
 
     with tempfile.TemporaryDirectory() as td:
@@ -55,37 +54,21 @@ def selftest_ar1():
                 "docs": {"a.pdf": {"rep": {"value_recall": vr}}},
             }
 
-        # --run-vlm 없음 — P3 실호출 포함 설정은 빠지고, conflict_fn은 fake_represent를 한 번 더 써서 더미 카운트
-        results, md = _run_ar1(
-            parse_dir,
-            d / "src",
-            d / "gold",
-            out_dir,
-            STACK_FILE,
-            max_docs=2,
-            run_vlm=False,
-            represent_fn=fake_represent,
-            score_fn=fake_score,
-        )
-        assert set(results) == AR1_NO_P3_VLM, results
-        assert "PARSE_FUSE_SIGNALS_off는 건너뜀" not in md or True  # 메시지는 cmd_ar1 쪽 print — 여기선 결과 집합만
-        assert "예상 P3 VLM 호출" in md or "P3 VLM 호출" in md
-
         results2, md2 = _run_ar1(
             parse_dir,
             d / "src",
             d / "gold",
             out_dir,
             STACK_FILE,
-            max_docs=None,
-            run_vlm=True,
+            max_docs=2,
             represent_fn=fake_represent,
             score_fn=fake_score,
         )
         assert set(results2) == {c[0] for c in AR1_CONFIGS}, results2
         assert results2["PARSE_FUSE_off"]["rep"]["value_recall"] == 0.5
         assert results2["baseline"]["rep"]["value_recall"] == 0.5
-    print("[selftest] ar1 — --max-docs 제한·--run-vlm 게이트(P3 실호출 설정 건너뜀/포함)·결과 집계 통과")
+        assert len(list((out_dir / "engine_base" / "pymupdf").glob("*.json"))) == 2  # --max-docs 제한
+    print("[selftest] ar1 — --max-docs 제한·설정 전부 실행·결과 집계 통과(재판독 P3·--run-vlm은 pl-34에 지움)")
 
 
 def selftest_ar6():

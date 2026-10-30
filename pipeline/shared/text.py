@@ -1,6 +1,6 @@
 """기호 정규화·산출 표준화(파싱 전용) — canon_symbols(Symbol 글꼴 PUA·대시·특수 공백·전각→반각)·standardize_text
 (대표 결과 본문·facts·표 칸 표준화, 텍스트 파싱 직후·융합 전). score_gold.py 채점(canon())·represent.py·
-postprocess/{diagram_edges,scan_dedup,table_std}.py가 공용 — 각자 맵을 두면 또 벌어짐(SI20·AD25, 서버 실측 10-06).
+postprocess/{diagram_edges,table_std}.py가 공용(옛 scan_dedup은 pl-34에 지움) — 각자 맵을 두면 또 벌어짐(SI20·AD25, 서버 실측 10-06).
 첨자 표기(supsub_mark)는 common.core.text 쪽(파싱·검색 공용, parse_qa·synth_score도 씀)에 그대로 둔다."""
 
 import re

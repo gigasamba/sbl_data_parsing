@@ -34,7 +34,6 @@ SERVICE_DIR = APP_ROOT / "output" / "mcp_parse"  # 이미지 안 /app/output/mcp
 _JOB_ENVS: dict = {}  # (PARSE_POST, 판 번호, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
 _JOB_KEYS = (
     "SETTINGS_FILE",
-    "PARSE_FUSE_REREAD_P3",
     "PARSE_POST",
 )  # 얹을 몫에 늘 넣는 이름(VS8a R-5) — STACK_VERSION은 env가 아니라 덮기 파일로만 감(VS8b R-8)
 
@@ -51,7 +50,7 @@ def _job_stack():
 
 
 def _job_env(post, stack=None):
-    """작업 자식 env — 덮기 파일(PARSE_FUSE_REREAD_P3=0·PARSE_POST)을 서비스 설정 파일·후보정 값마다 한 번만 만든다(임시 파일이 작업 수만큼
+    """작업 자식 env — 덮기 파일(PARSE_POST 등)을 서비스 설정 파일·후보정 값마다 한 번만 만든다(임시 파일이 작업 수만큼
     쌓이지 않게 — refactor.md C-46). 만든 파일은 서비스가 끝날 때 지운다(pl-27 — child_env가 exitclean에 맡김). OS 임시 폴더 정리(tmpwatch·systemd-tmpfiles·macOS periodic)가 오래 도는 서비스의 그 파일을 지웠으면
     다시 만든다(리뷰 S7e3 — 지워진 파일을 가리키면 서버 자식은 시작 거부, PC는 기본 후보정 all로 돎). 캐시는 덮기 파일이 얹는 몫만 — env는
     작업마다 지금 os.environ에서 새로 만든다(VS7e3 R-6 — 오래 도는 서비스의 라이브러리 env가 바뀌어도 작업 자식에 감). 반환은 새 dict."""
@@ -62,7 +61,6 @@ def _job_env(post, stack=None):
         # 10-29 — 파이프라인과 같은 규칙(쪽당 제한 + 두 배로 한 번 더)을 서비스 값으로 · 첫 시도 하한은 서비스 칸 warmup_sec(작업마다 새 run_all이라
         # 늘 '첫 문서' — 파이프라인 warmup 60초면 쪽당 제한이 무의미, 콜드 시작 여유는 이 칸) · 엔진 자식은 보통 우선순위(일괄 파싱보다 CPU 먼저)
         made = settings_env(
-            PARSE_FUSE_REREAD_P3="0",
             PARSE_POST=post,
             PARSE_TEXT_PAGE_SEC=str(pm.text_page_sec),
             PARSE_VLM_PAGE_SEC=str(pm.vlm_page_sec),

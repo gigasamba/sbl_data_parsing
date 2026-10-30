@@ -1,5 +1,5 @@
 """pipeline 전용 유의미 텍스트 보조(10-14 함수별 분리 — common/core/meaning.py에서 이전, 로직 바이트 동일).
-canon_num_key는 parse_qa.build_token_consensus·postprocess/reread.py만 쓴다(common.core.meaning.tokens는
+canon_num_key는 parse_qa.build_token_consensus만 쓴다(옛 reread.py는 pl-34에 지움)(common.core.meaning.tokens는
 check_modules.py의 CONTRACT_FUNCS라 공통에 그대로 남아 있음 — 거기서 쓰는 값과 섞이지 않게 여기서 순수 함수로)."""
 
 import re

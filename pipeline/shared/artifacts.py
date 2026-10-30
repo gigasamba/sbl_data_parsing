@@ -58,7 +58,7 @@ def engine_version(engine):
 # C7: "KEEP_RAW_LAYER=1(기본)이면 남음")와 **_images**(그림 조각 PNG + index.jsonl, C7: "남음" — get_image가 읽는
 # 정본 색인이라 파일만 지우면 참조가 깨짐)는 서버가 원본을 즉시 지워 재생성 경로가 없으므로 **정리 대상이 아니다**(안 지움).
 # 정리 대상은 재판독 중간 캐시 3종뿐 — 전부 "없으면 다시 OCR·VLM 호출만 더 들 뿐"이라 영구 보관 결정이 없는 것들:
-#   _reread_p3/_vlm_cache(P3 재판독 VLM 크롭·후보 캐시) · _agent/_vlm_cache(판단 세션 재판독 VLM 캐시) · signals(page_signals 쪽 신호).
+#   _reread_p3/_vlm_cache(옛 P3 재판독 캐시 — pl-34에 기능을 지웠지만 서버에 남은 폴더를 정리하려고 둠) · _agent/_vlm_cache(판단 세션 재판독 VLM 캐시) · signals(page_signals 쪽 신호).
 # 엔진 원문 P0(output/parse/<엔진>/<문서>.json, p0_key)·대표 결과(_rep)·판단 세션 결정 기록(_agent/decisions)도 당연히 안 지움.
 PURGE_CACHE_DIRS = ("_reread_p3/_vlm_cache", "_agent/_vlm_cache", "signals")
 

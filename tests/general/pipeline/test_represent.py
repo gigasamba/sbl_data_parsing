@@ -6,7 +6,6 @@ from pathlib import Path
 from common.config.settings import COMMON
 from common.core.contract import source_record
 from pipeline import config as pc
-from pipeline.transform.represent import reread_stage3 as reread_p3_mod
 from pipeline.transform.represent import trace as trace_mod
 from pipeline.transform.represent.represent import (
     _number_fixes,
@@ -99,32 +98,18 @@ def selftest():
     assert info2["vlm_page_calls"] == 1 and info2["vlm_page_cached"] == 0 and rep2["text"] == "OCR 본문"  # VLM 미설정 → 빈 답, 본문 불변
     print("[selftest] vlm_page — VLM 미설정 시 본문 불변·호출 집계 통과")
 
-    # AD39 — PARSE_DEDUP_SCAN(기본 꺼짐): 같은 쪽 OCR 본문 + 쪽 VLM 전사가 둘 다 rep.text에 들어가던 것을
-    # 하나만 남기고 다른 하나는 rep.post.page_alt로. 끄면(기본) 위 vlm_page 경로와 바이트 동일.
+    # 쪽 VLM 전사는 OCR 본문 뒤에 덧붙임(AD39 PARSE_DEDUP_SCAN·scan_dedup은 pl-34 10-30에 지움).
     from pipeline.transform.figures import vlm_page as _vp_mod
 
     _orig_vlm_page = _vp_mod.vlm_page
     try:
         _vp_mod.vlm_page = lambda img, det=None: ("쪽 VLM 전사 D-2024-999", {"cached": False})
         rep3 = {"text": "OCR 본문 저품질", "rep": {"source": None}}
-        info3 = apply_post(rep3, "scan.png", png, {"vlm_page"})  # 기본 꺼짐 — 이전 동작(덧붙이기)과 같음
+        info3 = apply_post(rep3, "scan.png", png, {"vlm_page"})  # 덧붙이기
         assert "page_alt" not in info3 and rep3["text"] == "OCR 본문 저품질\n\n쪽 VLM 전사 D-2024-999"
-        with pc.PIPE.env(PARSE_DEDUP_SCAN="1"):  # S7c — 설정 객체만 바꿔 끼움
-            rep4 = {"text": "OCR 본문 저품질", "rep": {"source": None}}
-            info4 = apply_post(rep4, "scan.png", png, {"vlm_page"})  # 켜면 — 하나만 본문, 다른 하나는 page_alt
-        assert rep4["text"].startswith("쪽 VLM 전사") and "쪽 VLM 전사" in rep4["text"]
-        assert "OCR 본문 저품질" not in rep4["text"]  # 중복 제거됨 — 본문에 두 번 안 들어감
-        assert info4["page_alt"][1] == {"from": "ocr", "text": "OCR 본문 저품질"}
-        assert info4["dedup_scan"] == 1
-        # 한쪽(OCR)에만 있던 ID는 이긴 쪽(VLM) 글 끝에 남아 값 재현율이 지켜진다
-        rep5 = {"text": "계약 D-2024-123 금액 500,000", "rep": {"source": None}}
-        _vp_mod.vlm_page = lambda img, det=None: ("정돈된 쪽 전사 금액 500,000", {"cached": False})
-        with pc.PIPE.env(PARSE_DEDUP_SCAN="1"):
-            apply_post(rep5, "scan.png", png, {"vlm_page"})
-        assert "d-2024-123" in rep5["text"].lower()
     finally:
         _vp_mod.vlm_page = _orig_vlm_page
-    print("[selftest] AD39 — PARSE_DEDUP_SCAN 끔=이전과 동일(덧붙임)·켬=쪽마다 하나만(page_alt 보존)·한쪽에만 있는 ID 보존 통과")
+    print("[selftest] vlm_page — 쪽 VLM 전사를 OCR 본문 뒤에 덧붙임(page_alt 없음) 통과")
 
     # X2(원본 즉시 삭제 — 스트리밍) + 독립 보안 검토 MAJOR 3: 엔진별 중간 결과를 지운 뒤 다시 돌리면 sha가 같을 때만
     # 기존 대표 결과를 보존하고(이미 만든 결과를 "성공한 엔진 없음"으로 덮지 않음), sha가 다르면(같은 이름의 다른
@@ -500,28 +485,25 @@ def selftest():
         _vp.scan_pages_detail = orig_scan_pages_detail
     print("[selftest] PE1 후속 — represent(): PARSE_SCAN_FILL 끔=rep 바이트 동일 · 켬=스캔 쪽만 채움(rep.rep.scan_fill 기록) 통과")
 
-    # 독립 검토 보강 — PARSE_SCAN_FILL(기본 켬) × PARSE_DEDUP_SCAN=1(AD39) 동시 켜짐: 스캔 쪽을 OCR로 채운 뒤
-    # apply_post의 쪽 VLM 중복 제거가 같은 쪽을 다시 봐도 쪽 번호가 안 섞이고 값이 안 없어진다(한쪽에만 있는 ID는
-    # scan_dedup._extra_values가 보존).
+    # 독립 검토 보강 — PARSE_SCAN_FILL(기본 켬) × 쪽 VLM(vlm_page): 스캔 쪽을 채운 뒤 apply_post가 같은 쪽을 다시 봐도
+    # 쪽 번호가 안 섞이고 값이 안 없어진다(옛 PARSE_DEDUP_SCAN 조합 시험 — dedup은 pl-34 10-30에 지움).
     orig_vlm_page = _vp.vlm_page
     try:
         _vp.scan_pages_detail = lambda p: {2: "chars"}
         _vp.vlm_page = lambda img, det=None: ("정돈된 VLM 글 설명(OCR과 다른 표현)", {"cached": False})
         # PARSE_PAGE_SCAN=1: page_text_pages가 스캔 쪽(2쪽)만 VLM 호출 · PARSE_POST=vlm_page: vlm_page 기능만(supsub 등 다른 후보정이 \f를 흔드는 것과 분리)
-        with pc.PIPE.env(
-            PARSE_PAGE_SCAN="1", PARSE_DEDUP_SCAN="1", PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"
-        ):  # S7c — 설정 객체만 바꿔 끼움
+        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"):  # S7c — 설정 객체만 바꿔 끼움
             represent(stack4, pd4, src=d4)
         combo = json.loads((pd4 / "_rep" / f"{doc4}.json").read_text(encoding="utf-8"))
         assert combo["rep"]["scan_fill"] == {"filled": {"2": "vlm_page"}, "skip": None}  # 10-29 — 쪽 VLM 글이 있으면 그것으로 채움
         parts = combo["text"].split("\f")
         assert len(parts) == 3 and parts[0] == "1쪽 글자" and parts[2] == "3쪽 글자"  # 쪽 번호 안 섞임(1·3쪽 그대로)
         assert "OCR 2쪽 스캔 글" in combo["text"] or "정돈된 VLM 글" in combo["text"]  # 2쪽 글 중 하나는 남음(값 손실 없음)
-        assert combo["post"].get("dedup_scan_skipped") is None  # 쪽 번호 확정돼 dedup 정상 수행
+        assert "page_alt" not in combo["post"]
     finally:
         _vp.scan_pages_detail = orig_scan_pages_detail
         _vp.vlm_page = orig_vlm_page
-    print("[selftest] PE1 후속 — PARSE_SCAN_FILL × PARSE_DEDUP_SCAN=1 동시 켜짐: 쪽 번호 안 섞임·값 손실 없음 통과")
+    print("[selftest] PE1 후속 — PARSE_SCAN_FILL × 쪽 VLM: 쪽 번호 안 섞임·값 손실 없음 통과")
 
     # 10-29 — 스캔 쪽은 쪽 VLM 글로 채움(OCR 엔진 결과보다 먼저) · VLM 글이 비면 옛 OCR 경로 · apply_post는 채운 쪽을 다시 안 덧붙임
     try:
@@ -534,7 +516,7 @@ def selftest():
         fill_e = fill_scan_pages(rep_e, doc4, dd4, stack4, pd4, pdf4, page_vlm=lambda p: [(2, "", {})])
         assert fill_e == {"filled": {"2": "rapidocr_ko"}, "skip": None}, fill_e
         _vp.vlm_page = lambda img, det=None: ("VLM 2쪽 스캔 글", {"cached": True})
-        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_DEDUP_SCAN="0", PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"):
+        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"):
             represent(stack4, pd4, src=d4)
         v_out = json.loads((pd4 / "_rep" / f"{doc4}.json").read_text(encoding="utf-8"))
         assert v_out["rep"]["scan_fill"]["filled"] == {"2": "vlm_page"}
@@ -549,10 +531,10 @@ def selftest():
     try:
         _vp.scan_pages_detail = lambda p: {2: "chars"}
         _vp.vlm_page = lambda img, det=None: (calls.append(1), ("", {"error": "가짜 실패", "cached": False}))[1]
-        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_DEDUP_SCAN="0", PARSE_POST="supsub", PARSE_SCAN_FILL="1"):
+        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_POST="supsub", PARSE_SCAN_FILL="1"):
             represent(stack4, pd4, src=d4)
         assert calls == [], "쪽 VLM이 꺼져 있는데(supsub만) VLM을 부름"
-        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_DEDUP_SCAN="0", PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"):
+        with pc.PIPE.env(PARSE_PAGE_SCAN="1", PARSE_POST="vlm_page", PARSE_SCAN_FILL="1"):
             represent(stack4, pd4, src=d4)
         assert len(calls) == 1, calls  # 스캔 쪽 1장 — scan_fill과 apply_post가 같은 결과를 씀(실패해도 다시 안 부름)
     finally:
@@ -655,20 +637,19 @@ def selftest():
         encoding="utf-8",
     )
     stack5 = {"name": "t5", "parse": {".txt": ["pdfplumber", "pymupdf", "rapidocr_ko"]}}
-    FUSE_FAM = ("PARSE_FUSE", "PARSE_FUSE_REREAD", "PARSE_FUSE_REREAD_P3")
+    FUSE_FAM = ("PARSE_FUSE",)  # 재판독 P2·P3는 pl-34 10-30에 지움
     ALL_OFF = FUSE_FAM + ("PARSE_CONTEXT",)  # 아래 off5·off6가 같은 "전부 =0" 바탕이게(PARSE_CONTEXT도 기본 켬이라 같이 꺼야 함)
     with pc.PIPE.env(**{k: "0" for k in ALL_OFF}):  # S7c — 설정 객체만 바꿔 끼움
         represent(stack5, pd5)  # =0 — 전부 꺼짐
     off5 = json.loads((pd5 / "_rep" / f"{doc5}.json").read_text(encoding="utf-8"))
     assert "fused" not in off5 and off5["text"] == "본문" and "context" not in off5
-    with pc.PIPE.env(PARSE_FUSE_REREAD="0"):  # P1만 보려고 REREAD는 꺼둠(PARSE_FUSE는 기본 켬 그대로)
-        represent(stack5, pd5)
+    represent(stack5, pd5)  # 기본 — PARSE_FUSE 켬
     on5 = json.loads((pd5 / "_rep" / f"{doc5}.json").read_text(encoding="utf-8"))
     assert on5["text"] == off5["text"] and on5["facts"] == off5["facts"]  # 켜도 본문·기존 facts는 그대로
     by5 = {f["context"][0]: f for f in on5["fused"]["facts"]}
     assert by5["금액"]["value"] == "430,000" and set(by5["금액"]["engines"]) == {"pdfplumber", "pymupdf"}
     assert on5["fused"]["conflicts"][0]["losers"][0]["engines"] == ["rapidocr_ko"]
-    assert "reread" not in on5["fused"]  # REREAD=0이라 재판독 칸 없음
+    assert "reread" not in on5["fused"]  # 재판독 칸 없음(pl-34에 지움)
     print(
         "[selftest] AD29 P1 — PARSE_FUSE =0=rep 바이트 동일(fused 키 없음) · 기본 켬=라벨:값 조각 투표(신뢰도 높은 쪽 승, 본문·기존 facts 불변) 통과"
     )
@@ -689,40 +670,6 @@ def selftest():
     assert on6["context"]["format"] == ".txt" and set(on6["context"]["engines"]) == {"pdfplumber", "pymupdf", "rapidocr_ko"}
     assert [x["step"] for x in on6["decisions"]][:2] == ["engine_scope", "representative"]
     print("[selftest] PA0 — PARSE_CONTEXT =0=rep 바이트 동일(context·decisions 키 없음) · 기본 켬=문서·엔진 신호 + 규칙 결정 기록 통과")
-
-    # AD29 P2 — PARSE_FUSE_REREAD(기본 켬, =0으로 끔, PARSE_FUSE 전제): =0이면(또는 PARSE_FUSE가 =0이면) rep["fused"]에
-    # "reread" 칸 자체가 안 생겨 바이트 동일 · 켜져도 이 문서(doc5="e.txt")는 source 경로가 없어(합성 selftest라
-    # 실제 파일이 없음) 전부 건너뛰고 reason만 남긴다 — 실제 PDF로 좌표를 찾아 뒤집는 전 과정은 reread.py 자체
-    # selftest(합성 PDF + 주입 OCR)와 cli/eval_fuse_conflicts.py --reread(실제 judge-conflicts 문서)가 맡는다
-    # (무거운 OCR 모델을 매번 represent 선택 검사에서 불러오지 않으려는 의도, 결정적·가벼움 우선).
-    with pc.PIPE.env(PARSE_FUSE="0"):  # PARSE_FUSE_REREAD는 기본 켬 그대로 — PARSE_FUSE 꺼짐이 우선인지 확인
-        represent(stack5, pd5)
-    off_rr = json.loads((pd5 / "_rep" / f"{doc5}.json").read_text(encoding="utf-8"))
-    assert "fused" not in off_rr  # PARSE_FUSE 꺼짐이 우선 — PARSE_FUSE_REREAD가 켜져 있어도 아무 효과 없음
-    with pc.PIPE.env(PARSE_FUSE_REREAD_P3="0"):  # P2만 보려고 P3는 꺼둠(PARSE_FUSE·PARSE_FUSE_REREAD는 기본 켬 그대로)
-        represent(stack5, pd5)
-    on_rr = json.loads((pd5 / "_rep" / f"{doc5}.json").read_text(encoding="utf-8"))
-    assert on_rr["fused"]["facts"] == on5["fused"]["facts"]  # source 없음(doc_path None) — 재판독이 값을 안 건드림
-    assert on_rr["fused"]["reread"]["skip_reason"] == "no_pdf"
-    assert "p3" not in on_rr["fused"]["reread"]  # P3는 이 블록에서 꺼둠
-    print(
-        "[selftest] AD29 P2 — PARSE_FUSE_REREAD =0(또는 PARSE_FUSE =0)=rep 바이트 동일 · 기본 켬 + PDF 없는 문서는 건너뛰고 이유만 기록 통과"
-    )
-
-    # AD29 P3 — PARSE_FUSE_REREAD_P3(기본 켬, =0으로 끔, PARSE_FUSE_REREAD 전제): =0이면(위 on_rr과) rep["fused"]가
-    # 바이트 동일(P3 모듈을 아예 안 부름) · 기본(켬)이어도 doc5는 source 경로가 없어(합성 selftest) 전부 건너뛰고
-    # reason만 남긴다 — 실제 PDF로 그림을 찾아 뒤집는 전 과정은 reread_stage3.py 자체 selftest와
-    # cli/eval_fuse_conflicts.py --reread --p3(실제 judge-conflicts 문서)가 맡는다(결정적·가벼움 우선, P2와 같은 설계).
-    assert reread_p3_mod.on() is True and reread_p3_mod.on("0") is False
-    with pc.PIPE.env(PARSE_FUSE_REREAD_P3="0"):
-        represent(stack5, pd5)
-    off_p3 = json.loads((pd5 / "_rep" / f"{doc5}.json").read_text(encoding="utf-8"))
-    assert _no_times(off_p3) == _no_times(on_rr)  # PARSE_FUSE_REREAD_P3 =0 — 위 P2-켬 결과와 같음(소요 초 칸 빼고 — S11)
-    represent(stack5, pd5)  # 기본(미설정) = 전부 켬
-    on_p3 = json.loads((pd5 / "_rep" / f"{doc5}.json").read_text(encoding="utf-8"))
-    assert on_p3["fused"]["facts"] == on_rr["fused"]["facts"]  # source 없음(doc_path None) — P3도 값을 안 건드림
-    assert on_p3["fused"]["reread"]["p3"]["skip_reason"] == "no_pdf"
-    print("[selftest] AD29 P3 — PARSE_FUSE_REREAD_P3 =0(또는 P2 =0)=rep 바이트 동일 · 기본 켬 + PDF 없는 문서는 건너뛰고 이유만 기록 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

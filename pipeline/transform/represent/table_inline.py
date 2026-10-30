@@ -158,7 +158,7 @@ def _page_slice(text, page):
     """Narrow `text` to its 1-based `page` (split on \\f, same page-break convention as the rest of
     represent.py) when the page number is known and in range — otherwise search the whole text (unknown page,
     or a page count that doesn't line up with the \\f breaks; same "don't guess boundaries" posture as
-    scan_dedup._page_texts, just without needing boxes here). Returns (offset, slice)."""
+    represent._page_texts, just without needing boxes here). Returns (offset, slice)."""
     if page is None:
         return 0, text
     pages = text.split("\f")

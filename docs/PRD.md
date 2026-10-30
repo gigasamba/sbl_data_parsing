@@ -39,6 +39,8 @@
 | 저장 구조 — silver OS uuid 폴더 · 메타 EDW · gold pgvector | todo | uuid5 폴더 · 최신 행만 · 로컬 상태 지움 · 0.1.0 | [pl-32](prd/etl.md#pl-32) |
 | 분류 단계 — silver 뒤, gold 앞 | todo | SFDC·LAS 라벨 · sha256 묶음 전파 · `doc_class` | [pl-33](prd/etl.md#pl-33) |
 | FAQ 원천 — 질의응답 엑셀 행 단위 | todo | 시트 = FAQ_group · 행 = 청크 · FileStorageMap FAQ · 0.1.0 | [pl-39](prd/etl.md#pl-39) |
+| FAQ 다시 올리기 — 행 단위 비교 | todo | 같은 그룹·질문 · 최신 답만 · pl-13 FAQ 예외(등급 A) | [pl-41](prd/etl.md#pl-41) |
+| 수동 갱신 명령 — 분류·시스템 메타 따로 | todo | LLM 갈래(NULL 기본) · 메타 갈래(전체) · UPDATE만 | [pl-40](prd/etl.md#pl-40) |
 | 원천별 gold 표(나중) | todo | 원천 4벌 · `search` 원천 필수 | [pl-28](prd/etl.md#pl-28) |
 
 ## 파싱 실행 — 엔진·스택·represent (parse)
@@ -49,7 +51,7 @@
 | 지원 확장자 더하기 — .jpeg·.tif·.tiff·.bmp·.mhtml | todo | 스택 표 · 확장자마다 시험(임시 샘플) · .hwpx 시험 | [pl-42](prd/parse.md#pl-42) |
 | 파싱 phase 없애기 · OCR 엔진 끔 | dev | 병렬 엔진 · 제한 · 쪽 VLM · 서버 확인 | [pl-22](prd/parse.md#pl-22) |
 | ocr_vlm·vlm.model_alt 삭제 | done | 0.1.0 · 엔진 핑거프린트 바뀜(등급 A) | [pl-31](prd/parse.md#pl-31) |
-| 파싱 p1 묶음 — 재판독 전부·scan_dedup·렌더 OCR 신호 | todo | 0.1.0 · p1 바뀜(등급 A) | [pl-34](prd/parse.md#pl-34) |
+| 파싱 p1 묶음 — 재판독(P2·P3)·scan_dedup·렌더 OCR 신호 | done | 0.1.0 · p1 바뀜(등급 A) | [pl-34](prd/parse.md#pl-34) |
 | 핑거프린트 영향 없는 잔재 지우기 | done | parse_parallel · AUTO_REPARSE_CHANGED · figures_resume(pl-32) · phase_report 남김 | [pl-35](prd/parse.md#pl-35) |
 | 메일 첨부 파싱 | done | 재귀 · 상한 · 인용 단락화 | [pl-36](prd/parse.md#pl-36) |
 | 그림 근처 맥락 기록 | done | 캡션 · 본문 언급 · 값 확인 | [pl-37](prd/parse.md#pl-37) |
@@ -106,6 +108,7 @@
 | 답변 점검 | done | `rag_qa` · 인용 점검 | [e2-05](prd/test.md#e2-05) |
 | EDW 값 답변 인용 실패 | done | 그대로 둠(결정) | [e2-12](prd/test.md#e2-12) |
 | answer_gen 인용 버그 | todo | L-2 · P-2 · CR-2~7 | [e2-19](prd/test.md#e2-19) |
+| 분류 수용 보고서 | todo | dev 정답 샘플 대조 · 일치율 · 혼동표 | [e2-20](prd/test.md#e2-20) |
 | 스택·모델 비교 | done | 행렬 · 예상 비용 | [e2-06](prd/test.md#e2-06) |
 | 검색 점검 페이지 | done | 로컬 페이지 · 포트 | [e2-07](prd/test.md#e2-07) |
 | 검색 페이지 고정 글 | todo | 실제 개수 표시 | [e2-16](prd/test.md#e2-16) |
