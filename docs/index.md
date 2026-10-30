@@ -7,15 +7,13 @@
 | [README.md](../README.md) | 프로젝트 소개 — 처리 흐름·실행 단위(모듈 4개·완료 표시)·이미지와 버전·폴더 구조·설정(settings.yaml)·PC 실행 단계(①~⑥)·서버 배포와 실행 방법 비교(trigger 하나씩·all·night·run_docs)(상세는 아래 운영 문서로 연결 — 10-29) | 처음 볼 때, 실행 방법을 찾을 때 |
 | [PRD.md](PRD.md) · [prd/etl.md](prd/etl.md) · [prd/parse.md](prd/parse.md) · [prd/mcp.md](prd/mcp.md) · [prd/settings.md](prd/settings.md) · [prd/test.md](prd/test.md) · [prd/doc.md](prd/doc.md) | 기능 요건 — 카테고리 6개: ETL(수집·게시·적재·DB·서버 러너 레인·대기열), 파싱 실행(엔진·스택·represent), 검색 MCP, 설정·운영(settings.yaml·RUN_ENV·계정·로그), 테스트·평가, 문서·릴리스. ID(`mc`·`pl`·`e2`·`rn`·`op`·`do`)는 그대로이고 항목마다 한글 이름. PRD.md는 카테고리별 묶음 표(끝난 것 포함)와 지금 진행 중. 카테고리 파일 끝에 요건과 다른 코드·요건 없는 코드·기본 꺼짐 기능·10-29 삭제 목록(옛 gaps.md, 10-30) | 기능을 고치거나 더하기 전에, 할 일을 고를 때 |
 | [CLAUDE.md](../CLAUDE.md) | 작업 규칙 — 지문·계약·운영 가드, 경계·이름, 배포 환경 규칙, 로컬 하네스·점검 명령 | 작업을 시작하기 전에 늘 |
-| [refactoring/refactor_plan.md](refactoring/refactor_plan.md) | 리팩토링 가이드·결정 장부 — 원칙·목표 구조·단계(6-1 S0~S11)·결정(7절 D)·미정(8절 P·T)·이동표(9-1 — pre-refactor 파일의 이동 기록) | 작업 전에 0~3절, 맡은 단계의 절·9절 |
 | [../refactor.md](../refactor.md) | 서버·사람이 확인해야 할 사항(C-xx) — 저장소 안에서 끝낼 수 없는 확인·협의 · 머리의 **"최종 — 사람이 할 일"**(사람 할 일의 정본 — 검토 등급 A·반입 전·때·뒤·다음 판, 누가·언제·C) | 단계를 끝낼 때(새 확인 사항 덧붙임), 반입 준비·반입 때 |
 | [operations/server-guide.md](operations/server-guide.md) | 서버 가이드 — 이미지 역할, 설치·첫 실행, 일상 실행, 결과 확인, 검색 MCP·EDW 질의 도구, 회사 맞춤, 문제 해결, 개발자에게 보고하는 법 | 서버를 설치·운영할 때 |
 | [operations/env-guide.md](operations/env-guide.md) | 설정 작성 가이드 — 서버·PC `settings.yaml`(S7e1 — 옛 `pipeline.env`)의 자리·권한·키(옛 env 이름)·기본값, 판마다 바뀐 설정 | 설정 값을 채우거나 바꿀 때, 새 판 반입 때 |
 | [operations/release-and-patch.md](operations/release-and-patch.md) | 릴리스·패치 — 이미지 기준판과 덧씌우기 만들기·적용·확인, selftest 반입 판정 | 새 이미지 판이나 덧씌우기를 만들거나 서버에 넣을 때 |
 | [history/refactor_c_items.md](history/refactor_c_items.md) | 끝난·옛 확인 항목 이력(refactor.md에서 10-30 옮김 — do-04): C-05·06·13·14·15·18·20·22~26·28·30·35·38·40·57·63, C-41 합성 정답 부분, PRD로 옮긴 C-31·32·33·50·53의 옛 글 | 옛 확인 항목의 결정·경위를 찾을 때 |
-| [operations/patch-history.md](operations/patch-history.md) | 긴급 패치 이력(생성물 — 원본은 release-and-patch §9) | 서버에 무엇이 들어간 판인지 볼 때 |
 | [operations/parsing_meta_mssql.sql](operations/parsing_meta_mssql.sql) | 회사 DB `AI.ParsingMeta` DDL — DBA가 1회 실행(코드는 표를 만들지 않음) | 첫 결과 게시(`publish --apply`) 전, DB 담당과 표를 맞출 때 |
-| [requirements/run_docs_req.md](requirements/run_docs_req.md) | 문서별 flow 러너(`deploy/host/scripts/run_docs.py`) 요구사항 — 사용자 발화 기록 | flow 러너를 고치기 전에 |
+| [history/](history/) | 지난 기록(do-04, 10-30) — [refactor_plan.md](history/refactor_plan.md)(리팩토링 가이드·결정 장부 D·미정 P·T·이동표 9-1·부록 D — `docs/refactoring/refactor_plan.md`는 안내만 남김) · [refactor_c_items.md](history/refactor_c_items.md)(닫은 C 항목) · [run_docs_req.md](history/run_docs_req.md)(flow 러너 사용자 발화 기록) · [run_docs_history.md](history/run_docs_history.md)(러너 버그·속도 이력) · [patch-history.md](history/patch-history.md)(긴급 패치 이력) · [release_history.md](history/release_history.md)(릴리스 §8–9) · 설정·서버 가이드에서 옮긴 이력([env_guide_history.md](history/env_guide_history.md)·[server_guide_history.md](history/server_guide_history.md)) | 옛 결정·이력을 찾을 때 |
 | [architecture/run_docs_design.md](architecture/run_docs_design.md) | 문서별 flow 러너 설계·파라미터·변경 이력 | flow 러너 구조를 보거나 고칠 때 |
 | [architecture/db_schema.md](architecture/db_schema.md) | DB 스키마 명세(pl-25 — 설계안, 사용자·DB 담당자 승인 전): gold(pgvector 검색)·struct·EDW(`AI.FileStorageMap`·`AI.ParsingMeta`)·마스터 PG 표마다 칸·타입·뜻·쓰는 코드·읽는 코드·유지/삭제/새로 + DB 담당자·사용자 확인 목록. 시험 `tests/server/common/test_db_schema.py`가 지금 칸을 판·SQL과 대조 | DB 표·칸을 바꾸거나 DB 담당자와 협의할 때 |
 | [architecture/pipeline_stack.md](architecture/pipeline_stack.md) | 엔진 구성·원천 목록 판 표(`struct.stack_version`·`source_version` — S8b) — 서버 DB·PC 파일·바꾸기·되돌리기 명령·엔진 거부·사본 파일 + 옛 `pipeline_stack.json` 메모 칸(D-017) | 엔진 구성·원천 목록을 바꾸거나 판을 되돌릴 때 |
@@ -56,3 +54,7 @@
 
 **옛 용어 대응**(옛 문서와 코드 주석에는 리팩토링 중에 쓰던 말이 남아 있다)
 시험=테스트 · 반입=(폐쇄망) 배포 · 칸=항목/컬럼 · 판=버전 · 지문=핑거프린트 · 열쇠=키 · 층=레이어 · 묶음=번들 · 대장=레지스트리 · 인계=핸드오프 · 덧씌우기=오버레이 패치 · 덮기 파일=오버레이 설정 파일 · 게시=퍼블리시 · 지시서/지시문=프롬프트.
+
+**옛 CLAUDE.md 절 번호**(코드 주석이나 기록 문서의 옛 참조를 찾을 때 — CLAUDE.md에서 옮김, 10-30)
+옛 1절(저장소·이름 대응) → README·refactor_plan 9절 · 옛 2절(문서) → §8 · 옛 3절(지켜야 할 규칙) → §2(배포 환경)·§3(설정)·§4(핑거프린트·계약·운영 가드) · 옛 4절(작업 절차) → §5·§9 · 옛 5절(OpenRouter) → §7 · 옛 6절(로컬 하네스) → §6 · 옛 7절(알려진 문제) → §10 · 옛 8절(사용자 결정 대기) → refactor.md "최종" ⑤·refactor_plan 8절. 코드 주석 속 옛 번호는 일부러 고치지 않았다(공용·레이어 파일은 고치면 code_fp가 바뀌고, 그 밖의 파일은 주석 한 줄 때문에 옛 린트 경고까지 정리해야 해서 — §5-2).
+옛 §10 알려진 문제(10-20 축소 스키마 일부 반영 등)는 `mc-10`·`mc-11`·`pl-12`~`pl-16`·`e2-13`·`e2-16`으로 옮겼다.

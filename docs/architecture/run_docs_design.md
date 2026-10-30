@@ -75,40 +75,8 @@
 
 ---
 
-## 4. 버그 수정 이력
-
-| 날짜 | 버그 | 원인 | 수정 |
-|---|---|---|---|
-| 10-22 19:11 | 파싱 전건 실패 | glossary/client_roster.csv 미마운트 | 마운트 추가 |
-| 10-22 20:55 | figures index.jsonl 경합 크래시 (JSONDecodeError) | images_root()가 PIPE_OUT_ROOT 무시→공유 경로→4워커 read-modify-write 경합 | figures.py: PIPE_OUT_ROOT 따르게 수정 + PARSE_IMAGES_ROOT per-doc |
-| 10-22 22:2x | 6시+ 실패 120건 폭증 | 위 경합 (원장 부풀며 악화) | 위 수정으로 해결 |
-| 10-23 09:55 | docx 외부 링크 이미지 crash (ValueError) | python-docx _Relationship.target_part external 접근 | figures.py: is_external skip |
-| 10-23 10:20 | probe stdout 경고 오염 | pymupdf fitz deprecated 경고가 stdout에 → 분류기 항상 heavy 폴백 | docflow_probe.py: pymupdf 직접 import + 마지막 줄만 판독 |
-| 10-23 10:30 | light 슬롯 대기 오폭 | executor while 안에 shutdown 라인 (IndentationError) | for/shutdown을 while 밖으로 |
-| 10-23 10:45 | dedup 36s | 게이트 0.9가 기본값 (env 미주입 세대) | --cpu-gate 노브 추가, 1.15→1.5→1.3 |
-| 10-23 (I2) | 이미지 배치가 `data_etl/`로 바뀜 | 리팩토링 I2(`data_parsing`·`data_structure` → `data_etl`) | `docker exec … python -m data_etl.…`로 명령 이름만 바꿈 — 새 이미지 판과 같은 때에 교체([`docs/operations/release-and-patch.md`](../operations/release-and-patch.md) §5-2) |
-| 10-26 (I3) | 옛 이미지·코드 폴더로 돌면 중간에 실패 | 이미지·코드 폴더·러너 판이 어긋날 수 있음 | 시작할 때(EDW 접속 전) 코드 폴더·컨테이너 배치 확인 → 어긋나면 종료 코드 2 |
-| 10-26 (I4) | 코드 폴더 확인이 쓰이지 않던 `patch_code/app/deploy`를 봄 · MCP 작업 폴더가 서버 절대 경로로 박힘 | `DEPLOY`·`IMAGE`는 처음부터 미사용 상수 · 경로 하드코딩 | 확인은 env `PATCH_CODE`(기본 `/srv/rag/code/live`, compose와 같음) — 호스트에서 안 보이면 건너뛰고 컨테이너 확인만 · `DEPLOY`·`IMAGE` 지움 · env `MCP_JOBS_DIR`(기본 `test_space/rfp_all_output/mcp_parse/jobs`, 이 파일 기준) |
-| 10-26 (I4b) | 코드 폴더가 없어도 컨테이너 확인이 통과할 수 있음(V4 R2) | docker는 bind 마운트 원본이 없으면 빈 폴더를 만들어 붙여 `test -d /app/deploy/data_etl`이 통과 | 확인을 파일로 — 컨테이너 `test -f /app/deploy/data_etl/extract/run_all.py`, 코드 폴더도 같은 파일(`CODE_MARKER`) · 빈 폴더면 종료 코드 2 |
-| 10-26 (S4) | 이미지 배치가 `pipeline/`으로 바뀜 · 컨테이너 안 `docflow_probe.py` 자리 | 리팩토링 S4(`data_etl/` → `pipeline/`, `docflow_probe.py`는 저장소 루트 → `pipeline/extract/` — 이미지에 함께 들어감, T-14) | `python -m pipeline.…`·`pipeline.cli`로 명령 이름만 바꿈 · `CODE_MARKER` = `pipeline/extract/run_all.py` · 무게 판별은 `python3 /app/deploy/pipeline/extract/docflow_probe.py` — 새 이미지 판과 같은 때에 교체(`refactor.md` C-23) |
-| 10-27 (S6b) | 러너 자리·컨테이너 이름이 바뀜 | 리팩토링 S6b(D-020·D-026 — 파이프라인 이미지 합침 `data-pipeline`, 이름 사용자 10-27) | 저장소 자리 `run_script/run_docs.py` → `deploy/host/scripts/run_docs.py`(`test_space/`는 스크립트 옆 그대로) · docker exec·inspect 대상 `data-parsing`·`data-structure` → `data-pipeline-parse`·`data-pipeline-structure`(상수 `PARSE_C`·`STRUCT_C`) — 새 이미지 판과 같은 때에 교체(`refactor.md` C-29) |
-| 10-28 (S9 Step A) | 문서별 결과 폴더(`PIPE_OUT_ROOT` 등)·채널별 VLM 동시 수·후보정·CPU 게이트가 효과 없음 — 문서별 파싱이 공용 `/app/output`에 쓰고 구조화가 그 결과를 못 찾음(VS8b U-1) | S7e2부터 앱이 env의 옛 설정 이름을 읽지 않는데 러너는 `docker exec … bash -c 'X=값 python …'` env로 줬음(VS7e3 셸 스캔은 `.sh`·compose만 보고 Python 문자열 안 셸 명령은 안 봄 — 로컬 실행 금지라 실행 확인도 없었음) | 설정 칸은 명령 인자 `--set 이름=값`(`common.config.setarg` — 사용자 10-28, 비밀·호스트 칸은 거부)으로 · 명령 줄은 함수(`warm_cmd`·`parse_cmd`·`struct_cmd`·`publish_cmd`·`sweep_cmd`)로 떼어 `tests/general/deploy/test_run_docs.py`가 글자를 고정 · 고아 정리 표지는 env `RUN_DOCS_DOC`(설정 칸 아님) · 구조화는 파싱이 그 문서 폴더에 쓴 엔진 구성 사본을 다시 씀(`stackcfg --path` — VS8b R-1) · `[envcheck]` 줄은 컨테이너 env 대신 준 게이트 값 · 읽는 코드 없는 env 4개(`FIG_OCR_BUDGET`·`*_MASTER_CSV`)는 그대로 |
-| 10-29 (rn-01·rn-02) | 레인 배분·steal이 코드에 고정(1/2/1, 죽은 분기) · 구조화 대기열 상한 없음 · 대기 길이 기록 없음 | 사용자 10-29 — "lane은 담당, 일부 steal 허용, 우선순위는 담당 lane · 진입·중간 개수 관리" | settings.yaml `pipeline.host.run_docs`(레인마다 전담·공유 워커 수, warm 20, struct_workers 2, struct_backlog = 구조화×2, vlm_cap 2) · `pick_lane()`(자기 레인 먼저, 공유 워커만 가장 긴 다른 레인) · 상한에서 레인 워커 대기 · `queue_depth.jsonl` · 옛 상수(HEAVY_*·LIGHT_MAX·LANE_N) 지움 · `--workers`는 받기만 |
-
----
-
-## 5. 속도 개선 성과
-
-| 시대 | 완료/시간 | CPU 평균 | 주요 변경 |
-|---|---:|---:|---|
-| 어젯밤(배치, 게이트 0.9) | 57~76 | 57% | 8건 배치, phase 1+2, OCR 1쪽 |
-| 오늘 오전(docflow, 게이트 1.15) | 106~137 | 86% | 12건 배치→개별, phase skip, OCR 2×2 |
-| **현재(3클래스, 게이트 1.3)** | **~110** | **68%** | 3클래스 레인, steal, MCP 우선, OCR 제거 |
-
-**문서당 중간 wall** (10:15 세션 대비):
-- light: 149s → **81s** (-46%)
-- scan/VLM: 9.13분 → **222s** (queueing 별도)  
-- 전체 파이프라인 오버헤드: dedup 36s→1s, prepare ≈4s, phase2 ≈1s, qa ≈6s
+## 4·5. 버그 수정 이력 · 속도 개선 성과
+[../history/run_docs_history.md](../history/run_docs_history.md)로 옮김(10-30, do-04).
 
 ---
 

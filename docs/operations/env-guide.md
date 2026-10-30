@@ -1,35 +1,62 @@
 # 설정 작성 가이드 — `settings.yaml`(서버·PC)
 
-↑ [server-guide.md](server-guide.md) · [release-and-patch.md](release-and-patch.md)
+↑ [server-guide.md](server-guide.md) · [release-and-patch.md](release-and-patch.md) · 옛 동작 기록: [env_guide_history.md](../history/env_guide_history.md)
 
-**원칙**: 코드는 이미지+패치로 관리하고, 서버에서 손대는 것은 **설정 파일 하나**(`settings.yaml` — S7e1, D-015·D-028)뿐이다. 값은 문서·채팅·로그에 쓰지 않는다 — 이 문서는 **이름만**. 코드에 기본값이 있는 설정은 적지 않는다(적으면 코드 기본값이 바뀌어도 서버만 옛 값에 묶인다) — 단 `settings.sample.yaml`에 `[서버 옛 값: …]`이 붙은 칸은 그 값을 적는다(옛 옵션 카탈로그가 서버에 채우던 값 — 지금 동작을 지킴, `refactor.md` C-39·C-43).
+**원칙**
+- 코드는 이미지+패치로 관리하고, 서버에서 손대는 것은 **설정 파일 하나**(`settings.yaml` — D-015·D-028)뿐이다.
+- 값은 문서·채팅·로그에 쓰지 않는다 — 이 문서는 **이름만** 적는다.
+- 코드에 기본값이 있는 설정은 settings.yaml에 적지 않는다(적으면 코드 기본값이 바뀌어도 서버만 옛 값에 묶인다). 단 `settings.sample.yaml`에 `[서버 옛 값: …]`이 붙은 항목은 그 값을 적는다(지금 동작을 지킴 — `refactor.md` C-39·C-43).
 
 ## 0. 파일 위치 · 적용 방법
 
 | 기계 | 파일 | 적용 | 모델 엔드포인트 |
 |---|---|---|---|
-| PC(개발) | 저장소 루트 `settings.yaml`(git 밖, 권한 600 — 10-29에 `valid_env/local/`에서 옮김 — 구조·설명은 저장소 루트 `settings.sample.yaml`, 옛 `.env.local`에서 `python -m common.config.migrate .env.local --out settings.yaml`) — 임베딩 키(`EMBED_*`)도 여기(CLAUDE.md §7 — 사용자 10-28) | `RUN_ENV`가 없거나 `local`이면 코드가 이 파일을 찾음(파일 안 `common.run_env: local`) · 한 번 실행에 몇 칸만 바꿀 때는 덮기 파일: `SETTINGS_FILE=$(python -m common.config.overrides PIPE_OUT_ROOT=… EMBED_ALLOW_EXTERNAL=1 …)`(**PC 전용** — S7e3) | 내부망 또는 OpenRouter(기능 시험만) |
-| 수집·개발 서버 | `$SERVER_ENV_DIR/settings.yaml` = `/srv/rag/env/settings.yaml`(코드 폴더 밖) — **주인 UID 10001(컨테이너 사용자)·그룹 운영 계정 그룹·권한 640**(운영 계정 UID가 10001이면 600 — `refactor.md` C-09) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만(비밀은 `docker inspect`에 안 나옴) · **값을 바꿀 때는 이 파일을 직접 고친다**(덮기 파일 도구는 서버에서 막힘 — S7e3, 사용자 10-28) · 셸·systemd: `deploy/host/scripts/settings_env.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 → compose 치환(`--env-file` 없음) | 내부망만 |
+| PC(개발) | 저장소 루트 `settings.yaml`(git 밖, 권한 600). 구조·설명은 루트 `settings.sample.yaml`. 옛 `.env.local`은 `python -m common.config.migrate .env.local --out settings.yaml`로 옮김. 임베딩 키(`EMBED_*`)도 여기(CLAUDE.md §7) | `RUN_ENV`가 없거나 `local`이면 코드가 이 파일을 찾음(파일 안 `common.run_env: local`). 한 번 실행에 몇 항목만 바꿀 때는 오버레이 설정 파일: `SETTINGS_FILE=$(python -m common.config.overrides PIPE_OUT_ROOT=… EMBED_ALLOW_EXTERNAL=1 …)`(**PC 전용**) | 내부망 또는 OpenRouter(기능 테스트만) |
+| 수집·개발 서버 | `$SERVER_ENV_DIR/settings.yaml` = `/srv/rag/env/settings.yaml`(코드 폴더 밖). **주인 UID 10001(컨테이너 사용자)·그룹 운영 계정 그룹·권한 640**(운영 계정 UID가 10001이면 600 — `refactor.md` C-09) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다(비밀은 `docker inspect`에 안 나옴). **값을 바꿀 때는 이 파일을 직접 고친다**(오버레이 설정 파일 도구는 서버에서 막힘). 셸·systemd: `deploy/host/scripts/settings_env.sh`의 `load_settings`가 호스트 항목(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다(`--env-file` 없음) | 내부망만 |
 
-- **옛 `pipeline.env`는 S7e1 판부터 읽지 않는다.** settings.yaml이 없고 `pipeline.env`만 있으면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·새벽 배치가 "설정 이관 필요"로 종료 코드 2 — 옮기기·대조는 [release-and-patch.md](release-and-patch.md) §5-4.
-- **크리덴셜**(비밀번호·키·토큰)과 **접속 정보**(주소·포트·DB 이름)는 전부 이 파일 하나에만 둔다. 각 컨테이너는 common + 자기 앱 절(pipeline·mcp)만 읽는다(`RAG_MODULE` — U-a). 엔진·인계 파일이 env로 읽는 칸(`VLM_API_KEY` 등 — 지문 때문에 바꾸지 않는 파일, D-028 ⑤ — 영구 다리)은 컨테이너 **안 프로세스 env**에는 들어간다(`docker inspect`에는 안 나옴 — 사용자 10-27 받아들임).
-- 아래 표의 이름은 **옛 env 이름**이다 — settings.yaml 칸은 `settings.sample.yaml`에서 `env=<이름>` 표시로 찾는다(예 `PG_HOST` → `common.connections.pg.host`). **S7e2부터 env로 준 값은 읽지 않는다**(셸·compose·systemd·`docker exec -e`의 `X=값` 덮기는 효과 없음 — 시작 때 이름만 경고). **서버(dev·prd)는 바꿀 값이 있으면 `settings.yaml`을 직접 고친다**(사용자 10-28 — S7e3. 한 번만 다르게 돌릴 값도 고쳐 돌린 뒤 되돌림, 고친 뒤 상주 컨테이너는 다시 띄움). 덮기 파일 도구(`python -m common.config.overrides 이름=값 …` — 원본을 `base`로 가리키고 바뀐 칸만 든 임시 yaml)는 **PC 전용**이다 — 서버에서는 안내 뒤 종료 2(compose는 그 파일만 컨테이너에 붙여 `base`가 컨테이너 안에 없음 — VS7e2 B-2). 코드가 컨테이너 안에서 자식 프로세스에 값을 넘기는 덮기 파일(`settings.put`·`child_env` — 컨테이너 `/tmp`)은 그대로 쓰인다(`refactor.md` C-46).
-- 서버(dev·prd)에서 설정 파일을 못 읽거나(권한) 그 이미지 절이 틀리면 컨테이너가 이유(칸 경로·오류 종류만)를 찍고 **시작하지 않는다**(종료 2 — S7e2, 옛 판은 기본값으로 떴음 · VS7e1 U-1).
-- 호스트 칸만 꺼내 보기(비밀 없음): `bash deploy/host/scripts/settings_env.sh pipeline.host common.host` · 호스트 python에 pydantic·PyYAML이 없으면 `SETTINGS_IMAGE=data-pipeline:<태그>`(이미지 안에서 — C-36).
-- `deploy/host/scripts/run_docs.py`(문서별 flow 러너 — 서버 전용)도 같은 파일을 읽는다(호스트 python에 PyYAML 필요): 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2 — 목록은 `refactor.md` C-45 ③.
-- **한 번 실행에만 다른 값 — 명령 인자 `--set 이름=값`(S9 Step A, 사용자 10-28 — 서버 포함):** `python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/x --set PARSE_POST=supsub parse …`처럼 진입 모듈(`pipeline.cli`·`pipeline.extract.source`·`pipeline.stackcfg`·`pipeline.transform.structure.build_bundle`·`pipeline.load.pgvector_load`·`pipeline.load.publish_parse_result`)에 여러 번 준다(같은 이름은 뒤 값). 그 프로세스가 덮기 파일(설정 파일을 `base`로 — 비밀 복사 없음)을 만들어 자기와 자식에 넘긴다(`common.config.setarg`). 모르는 이름·호스트 칸·**비밀 칸**(명령 줄은 ps·로그에 남음)은 모든 환경에서 종료 2, 값 형식 오류는 서버 종료 2·local 경고(이름만) · 서버(dev·prd)에서 설정 파일(`SETTINGS_FILE`)이 없으면 종료 2(S9b — VS9 R-1: 전에는 원본 없는 덮기 파일이 "설정 파일 필수" 관문을 지나감). `run_docs.py`가 문서별 결과 폴더·동시 수를 이렇게 넘긴다(S7e2~S8b 판에서는 `bash -c 'X=값 python …'` env라 효과가 없었음 — VS8b U-1).
-- 라이브러리가 읽는 env(`TZ`·`OMP_NUM_THREADS`·`HF_HUB_OFFLINE`·`TESSDATA_PREFIX`·`PIPELINE_VERSION` 등 — 허용 목록 `common.config.settings.LIB_ENV_NAMES`, 비밀 아님)는 `common.runtime.lib_env` 사전에 적는다 — 컨테이너 entrypoint가 시작 때 env로 낸다(이미지 ENV 값은 덮고 `docker run -e`로 준 값은 안 덮음 — S7e2, `refactor.md` C-47 ③). 목록 밖 이름은 검증 오류(이름만).
+### 0-1. 읽는 규칙
+- **옛 `pipeline.env`는 읽지 않는다.** settings.yaml 없이 `pipeline.env`만 있으면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·새벽 배치가 "설정 이관 필요"로 종료 코드 2. 옮기기·대조는 [release-and-patch.md](release-and-patch.md) §5-4.
+- **크리덴셜**(비밀번호·키·토큰)과 **접속 정보**(주소·포트·DB 이름)는 전부 이 파일 하나에만 둔다. 각 컨테이너는 common + 자기 앱 절(pipeline·mcp)만 읽는다(`RAG_MODULE`). 엔진·핸드오프 파일이 env로 읽는 항목(`VLM_API_KEY` 등 — 핑거프린트 때문에 고치지 않는 파일, D-028 ⑤, 영구 다리)은 컨테이너 **안 프로세스 env**에는 들어간다(`docker inspect`에는 안 나옴 — 사용자가 받아들임).
+- 아래 표의 이름은 **옛 env 이름**이다. settings.yaml 항목은 `settings.sample.yaml`에서 `env=<이름>` 표시로 찾는다(예 `PG_HOST` → `common.connections.pg.host`).
+- **env로 준 값은 읽지 않는다** — 셸·compose·systemd·`docker exec -e`의 `X=값`은 효과가 없고 시작 때 이름만 경고한다.
+- **서버(dev·prd)는 바꿀 값이 있으면 `settings.yaml`을 직접 고친다.** 한 번만 다르게 돌릴 값도 고쳐 돌린 뒤 되돌리고, 고친 뒤 상주 컨테이너는 다시 띄운다(또는 아래 `--set`).
+- 오버레이 설정 파일 도구(`python -m common.config.overrides 이름=값 …` — 원본을 `base`로 가리키고 바뀐 항목만 든 임시 yaml)는 **PC 전용**이다. 서버에서는 안내 뒤 종료 2(compose는 그 파일만 컨테이너에 붙여 `base`가 컨테이너 안에 없음). 코드가 컨테이너 안에서 자식 프로세스에 값을 넘기는 오버레이 설정 파일(`settings.put`·`child_env` — 컨테이너 `/tmp`)은 그대로 쓰인다(`refactor.md` C-46).
+- 서버(dev·prd)에서 설정 파일을 못 읽거나(권한) 그 이미지 절이 틀리면 컨테이너가 이유(항목 경로·오류 종류만)를 찍고 **시작하지 않는다**(종료 2).
+- 호스트 항목만 꺼내 보기(비밀 없음): `bash deploy/host/scripts/settings_env.sh pipeline.host common.host`. 호스트 python에 pydantic·PyYAML이 없으면 `SETTINGS_IMAGE=data-pipeline:<태그>`(이미지 안에서 — C-36).
+- `deploy/host/scripts/run_docs.py`(문서별 flow 러너 — 서버 전용)도 같은 파일을 읽는다(호스트 python에 PyYAML 필요). 필요한 항목이 없으면 항목 경로만 찍고 종료 코드 2 — 목록은 `refactor.md` C-45 ③.
+- 라이브러리가 읽는 env(`TZ`·`OMP_NUM_THREADS`·`HF_HUB_OFFLINE`·`TESSDATA_PREFIX`·`PIPELINE_VERSION` 등 — 허용 목록 `common.config.settings.LIB_ENV_NAMES`, 비밀 아님)는 `common.runtime.lib_env` 사전에 적는다. 컨테이너 entrypoint가 시작 때 env로 낸다(이미지 ENV 값은 덮고 `docker run -e`로 준 값은 안 덮음 — `refactor.md` C-47 ③). 목록 밖 이름은 검증 오류(이름만).
 
-새 서버(**PC의 settings.yaml을 복사하지 않는다** — PC의 `run_env: local`·`*_allow_external`이 서버에서 외부 모델을 연다 · settings.yaml은 git에 올리지 않는다): `cp <저장소 ZIP>/settings.sample.yaml /srv/rag/env/settings.yaml` → 권한(위) → sample 맨 위 「1. 필수 입력」 블록과 아래 1절만 채움(선택 칸은 sample 「2. 선택」에 영역별 목록 — `[서버 옛 값]` 칸 포함) → `python -m pipeline.check_env`로 확인.
+### 0-2. 한 번 실행에만 다른 값 — `--set 이름=값`(서버 포함)
+- `python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/x --set PARSE_POST=supsub parse …`처럼 진입 모듈(`pipeline.cli`·`pipeline.extract.source`·`pipeline.stackcfg`·`pipeline.transform.structure.build_bundle`·`pipeline.load.pgvector_load`·`pipeline.load.publish_parse_result`)에 여러 번 준다(같은 이름은 뒤 값).
+- 그 프로세스가 오버레이 설정 파일(설정 파일을 `base`로 — 비밀 복사 없음)을 만들어 자기와 자식에 넘긴다(`common.config.setarg`).
+- 모르는 이름·호스트 항목·**비밀 항목**(명령 줄은 ps·로그에 남음)은 모든 환경에서 종료 2. 값 형식 오류는 서버 종료 2·local 경고(이름만). 서버(dev·prd)에서 설정 파일(`SETTINGS_FILE`)이 없으면 종료 2.
+- `run_docs.py`가 문서별 결과 폴더·동시 수를 이렇게 넘긴다.
+
+### 0-3. 새 서버 설정 절차
+**PC의 settings.yaml을 복사하지 않는다** — PC의 `run_env: local`·`*_allow_external`이 서버에서 외부 모델을 연다. settings.yaml은 git에 올리지 않는다.
+1. `cp <저장소 ZIP>/settings.sample.yaml /srv/rag/env/settings.yaml`
+2. 권한을 맞춘다(위 표 — 주인 10001·640).
+3. sample 맨 위 「1. 필수 입력」 블록과 아래 1절만 채운다(선택 항목은 sample 「2. 선택」에 영역별 목록 — `[서버 옛 값]` 항목 포함).
+4. `python -m pipeline.check_env`로 확인한다.
 
 ## 1. 꼭 채울 것 (영역별)
 
-### 실행 환경 (필수 — S7a, refactor_plan D-028)
+### 실행 환경 (필수 — D-028)
 | 이름 | 뜻 | 기본 | 필수? |
 |---|---|---|---|
-| `RUN_ENV` | 실행 환경 — 서버 `dev`·`prd`(내부망 전용 · 가짜 LLM 거부), PC `local` | 없음 | **필수** — 없으면 compose가 멈추고(`${RUN_ENV:?…}`) 앱 명령(`pipeline.cli`·`mcp_server.main`·트리거·이미지 entrypoint 앱 명령)이 종료 코드 2로 거부. `selftest`·`check`·`help`·`tool check_env`는 없어도 돎(`tool ping_models`는 외부 모델을 부르므로 필요). env 대신 `SETTINGS_FILE`이 가리키는 settings.yaml의 `common.run_env`로 줘도 됨(파이썬·entrypoint 같은 규칙 — S7a2) |
+| `RUN_ENV` | 실행 환경 — 서버 `dev`·`prd`(내부망 전용 · 가짜 LLM 거부), PC `local` | 없음 | **필수** — 없으면 compose가 멈추고(`${RUN_ENV:?…}`) 앱 명령(`pipeline.cli`·`mcp_server.main`·트리거·이미지 entrypoint 앱 명령)이 종료 코드 2로 거부. `selftest`·`check`·`help`·`tool check_env`는 없어도 돎(`tool ping_models`는 외부 모델을 부르므로 필요). env 대신 `SETTINGS_FILE`이 가리키는 settings.yaml의 `common.run_env`로 줘도 됨(파이썬·entrypoint 같은 규칙) |
 
-설정은 `settings.yaml` 하나다(구조·설명은 저장소 루트 `settings.sample.yaml`, 옮기기 `python -m common.config.migrate <env 파일>… --out <settings.yaml>` — 화면에는 비밀을 가림, 대조 `--compare` — release-and-patch.md §5-4). 서버 compose·셸·systemd는 S7e1부터 이 파일만 읽는다(`refactor.md` C-34·C-45). settings.yaml 작성 규칙(S7a2): 비운 칸·빈 글자 `''`은 코드 기본값(기본값이 없는 글자 칸과 sample에 `[빈 글자 유지]`로 표시된 칸만 `''`이 빈 글자 — 옛 env `X=`과 같게) · 글자 칸에 쓴 `yes`·`no`·`1`·`0`은 쓴 글자 그대로(옛 env 줄과 같음) · 켜기 칸은 YAML `true`·`false` — sample에 `[켬: …]`·`[끔: …]` 표시가 있는 칸(S7b — 코드가 설정 객체로 읽는 칸)은 `0`·`1`도 되고 `yes`·`on`·`off` 등은 검증 오류(칸 이름만 찍음). env로 줄 때는 키마다 옛 판정 꼴 그대로(예 `NO_PAID_CALLS`는 `1`만 켬, `LLM_EMPTY_RETRY`는 `0`만 끔) · `pipe_procs`·`pipe_threads`는 숫자(소수 가능) 또는 `auto`(= 비움, 계산) · `pipeline.host.nightly.modules`는 공백 목록(`parse publish structure load`) 또는 YAML 목록 · 검증 오류 메시지는 칸 경로·오류 종류만 찍는다(값은 안 찍음). 빈 틀의 자리표시 값(`<여기에 기입>`)은 migrate가 비운 칸으로 옮긴다. `pipeline.transform.represent.parse_post`(`PARSE_POST`)에 `''`·`[]`를 쓰면 **끔**(env `PARSE_POST=`과 같음) — 기본(`all`)을 원하면 칸을 비우지 말고 지운다(VS7c2 R-1). 다리는 컨테이너마다 common + 자기 앱 절만 env로 내준다(`RAG_MODULE` — pipeline 이미지 = common·pipeline, mcp 이미지 = common·mcp, PC(없음) = 셋, 그 밖 글자 = 아무것도 안 냄 — S7d): settings.yaml은 서버에 한 파일 그대로 두고, 다른 앱 절은 그 컨테이너에서 읽지도 검증하지도 않는다.
+**settings.yaml 하나** — 구조·설명은 루트 `settings.sample.yaml`. 옮기기 `python -m common.config.migrate <env 파일>… --out <settings.yaml>`(화면에는 비밀을 가림), 대조 `--compare`(release-and-patch.md §5-4). 서버 compose·셸·systemd는 이 파일만 읽는다(`refactor.md` C-34·C-45).
+
+**작성 규칙**
+- 비운 항목·빈 글자 `''`은 코드 기본값이다. 예외: 기본값이 없는 글자 항목과 sample에 `[빈 글자 유지]`로 표시된 항목만 `''`이 빈 글자(옛 env `X=`과 같게).
+- 글자 항목에 쓴 `yes`·`no`·`1`·`0`은 쓴 글자 그대로다(옛 env 줄과 같음).
+- 켜기 항목은 YAML `true`·`false`. sample에 `[켬: …]`·`[끔: …]` 표시가 있는 항목(코드가 설정 객체로 읽는 항목)은 `0`·`1`도 되고 `yes`·`on`·`off` 등은 검증 오류(항목 이름만 찍음). env로 줄 때는 키마다 옛 판정 꼴 그대로(예 `NO_PAID_CALLS`는 `1`만 켬, `LLM_EMPTY_RETRY`는 `0`만 끔).
+- `pipe_procs`·`pipe_threads`는 숫자(소수 가능) 또는 `auto`(= 비움, 계산).
+- `pipeline.host.nightly.modules`는 공백 목록(`parse publish structure load`) 또는 YAML 목록.
+- 검증 오류 메시지는 항목 경로·오류 종류만 찍는다(값은 안 찍음). 빈 틀의 자리표시 값(`<여기에 기입>`)은 migrate가 비운 항목으로 옮긴다.
+- ⚠ `pipeline.transform.represent.parse_post`(`PARSE_POST`)에 `''`·`[]`를 쓰면 **끔**(env `PARSE_POST=`과 같음). 기본(`all`)을 원하면 항목을 비우지 말고 지운다.
+- 다리는 컨테이너마다 common + 자기 앱 절만 env로 내준다(`RAG_MODULE` — pipeline 이미지 = common·pipeline, mcp 이미지 = common·mcp, PC(없음) = 셋, 그 밖 글자 = 아무것도 안 냄). settings.yaml은 서버에 한 파일 그대로 두고, 다른 앱 절은 그 컨테이너에서 읽지도 검증하지도 않는다.
 
 ### 사내망 판정
 | 이름 | 뜻 | 기본 | 필수? |
@@ -45,6 +72,8 @@
 | `EMBED_BASE_URL`·`EMBED_MODEL`·`EMBED_API_KEY` | 임베딩(차원은 첫 응답에서 자동) — 운영 임베딩·재순위는 **API로만**(이미지에 로컬 추론 패키지 없음) | 수집 서버 ✓ |
 | `OCRVLM_BASE_URL`·`OCRVLM_MODEL`·`OCRVLM_API_KEY` | OCR 전용 소형 VLM | 선택 — 없으면 비움(오류 아님) |
 
+모델 주소·이름·키는 이 네 묶음(`LLM_`·`VLM_`·`OCRVLM_`·`EMBED_` + `_BASE_URL`·`_MODEL`·`_API_KEY`)으로만 받는다(`common/ai/adk.py`·`llm.py`). Agent Platform 설정(`PLATFORM_CONFIG`·`PLATFORM_STATE_DIR`)은 읽지 않으니 settings.yaml에 적지 않는다(D-013 — 지운 경위는 [env_guide_history.md](../history/env_guide_history.md)).
+
 ### 저장소 (PostgreSQL + pgvector, 기존 컨테이너에 접속만)
 | 이름 | 기본 | 메모 |
 |---|---|---|
@@ -56,20 +85,21 @@
 ### 근거 MCP(상주)
 | 이름 | 기본 | 메모 |
 |---|---|---|
-| `MCP_SERVER_IMAGE` | — | `mcp-server:<태그>`(S6b — 옛 `DATA_RETRIEVAL_IMAGE`·`RAG_IMAGE`는 읽지 않음, 남아 있으면 스크립트가 멈춤) |
+| `MCP_SERVER_IMAGE` | — | `mcp-server:<태그>`(옛 `DATA_RETRIEVAL_IMAGE`·`RAG_IMAGE`는 읽지 않음, 남아 있으면 스크립트가 멈춤) |
 | `RAG_OUT` | — | 결과 폴더(모든 모듈 공용) |
 | `MCP_HOST` | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부 |
-| `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 호출부 env에만 · 공백만인 토큰은 없음과 같음(S7d) · `MCP_PORT` 형식이 틀리면 시작 실패(값은 안 찍음) |
-| `PARSE_SERVICE_TOKEN` | 비움(→ `MCP_TOKEN`) | `parse_document`가 parse 작업 서비스를 부를 때 쓰는 토큰 — data-pipeline-parse의 `PARSE_MCP_TOKEN`과 같은 값. 이것도 `MCP_TOKEN`도 없으면(공백만 포함) `parse_document`가 "parse 서비스 토큰 없음" 오류를 돌려줌(S7d — 코드 대체 토큰 삭제, `refactor.md` C-44) |
-| `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음(graph·concept·image·openviking은 10-29에 지움) |
+| `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 호출부 env에만 · 공백만인 토큰은 없음과 같음 · `MCP_PORT` 형식이 틀리면 시작 실패(값은 안 찍음) |
+| `PARSE_SERVICE_TOKEN` | 비움(→ `MCP_TOKEN`) | `parse_document`가 parse 작업 서비스를 부를 때 쓰는 토큰 — data-pipeline-parse의 `PARSE_MCP_TOKEN`과 같은 값. 이것도 `MCP_TOKEN`도 없으면(공백만 포함) `parse_document`가 "parse 서비스 토큰 없음" 오류를 돌려줌(코드 대체 토큰 없음 — `refactor.md` C-44) |
+| `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음 |
 | `MCP_ALLOWED_HOSTS` | 비움 | `MCP_HOST`가 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |
 
-### EDW 쿼리 도구(EQ1, `describe_edw`·`query_edw` — 읽기 전용 SQL, 근거 MCP의 별도 도구 2개)
-접속은 `common.connections.rdb`의 **읽기 계정**(`RDB_READ_*`)만 쓴다 — 검색 MCP에는 쓰기 계정을 주지 않는다(사용자 10-29, [settings.md#op-03](../prd/settings.md#op-03)). 이 읽기 계정은 파이프라인의 원천 조회와 함께 쓴다. 서버 설정 절차는 [server-guide.md](server-guide.md) "EDW 쿼리 도구" 참고.
+### EDW 쿼리 도구(`describe_edw`·`query_edw` — 읽기 전용 SQL, 근거 MCP의 별도 도구 2개)
+접속은 `common.connections.rdb`의 **읽기 계정**(`RDB_READ_*`)만 쓴다 — 검색 MCP에는 쓰기 계정을 주지 않는다([settings.md#op-03](../prd/settings.md#op-03)). 이 읽기 계정은 파이프라인의 원천 조회와 함께 쓴다. 서버 설정 절차는 [server-guide.md](server-guide.md) "EDW 쿼리 도구" 참고.
+
 | 이름 | 기본 | 메모 |
 |---|---|---|
 | `EDW_QUERY` | `1`(켬) | `=0`이면 두 도구 모두 `not_configured`로 강제 꺼짐(기동엔 영향 없음) |
-| `RDB_SQLITE` | 비움 | PC 시험용 SQLite 대역 파일 하나(모든 표 — `valid_env/edw/edw.sqlite`, `python -m validation.e2e.edw_standin`으로 다시 만듦) — 설정돼 있으면 원천 조회·게시·`query_edw` 모두 이게 먼저 |
+| `RDB_SQLITE` | 비움 | PC 테스트용 SQLite 대역 파일 하나(모든 표 — `valid_env/edw/edw.sqlite`, `python -m validation.e2e.edw_standin`으로 다시 만듦) — 설정돼 있으면 원천 조회·퍼블리시·`query_edw` 모두 이게 먼저 |
 | `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_READ_USER`·`RDB_READ_PASSWORD` | 비움·`1433`·비움·비움·비움 | 서버 EDW 접속(pymssql) — `common.connections.rdb` |
 | `EDW_QUERY_TABLES` | 비움(PC 대역은 그 안의 표 9개) | 읽기 허용 `schema.table` 쉼표 목록 — 서버는 실제 EDW 표 이름으로 반드시 바꿔 적음 |
 | `EDW_QUERY_MAX_ROWS` | `2000` | `query_edw(max_rows=)` 호출값의 상한 |
@@ -79,66 +109,69 @@
 ### 이미지 태그 (compose 치환용)
 | 이름 | 메모 |
 |---|---|
-| `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE` | `data-pipeline:<태그>`·`mcp-server:<태그>`(S6b D-020 — 이미지 2개, 이름 사용자 10-27) · 옛 `DATA_PARSING_IMAGE`·`DATA_STRUCTURE_IMAGE`·`DATA_RETRIEVAL_IMAGE`(·`RAG_PARSE_IMAGE`·`RAG_STRUCTURE_IMAGE`·`RAG_RETRIEVAL_IMAGE`·`RAG_IMAGE`)는 별칭으로 읽지 않는다 — 새 이름 없이 옛 이름만 있으면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`가 "새 이미지 판 필요"로 멈춘다(종료 코드 2) |
+| `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE` | `data-pipeline:<태그>`·`mcp-server:<태그>`(D-020 — 이미지 2개). 옛 이름 `DATA_PARSING_IMAGE`·`DATA_STRUCTURE_IMAGE`·`DATA_RETRIEVAL_IMAGE`·`RAG_PARSE_IMAGE`·`RAG_STRUCTURE_IMAGE`·`RAG_RETRIEVAL_IMAGE`·`RAG_IMAGE`는 별칭으로 읽지 않는다 — 새 이름 없이 옛 이름만 있으면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`가 "새 이미지 버전 필요"로 멈춘다(종료 코드 2) |
 | `DOC_SRC` | 원본 문서 폴더(호스트 경로, `compose.pipeline.yml`이 `/data/docs:ro`로 연결) |
 
 ### 원천·경로 묶음 (도구가 기본으로 읽음 — 명령에 경로를 따로 안 줘도 됨)
+코드 주석의 "env-guide 1-2"가 이 절이다.
+
 | 이름 | 무엇 | 형식 |
 |---|---|---|
 | `DOC_DIR` | 원본 문서 폴더 | 하드코딩 기본값 없음 — 비우면 실행 때 안내 후 종료(legacy 별칭 `DOC_SRC`도 받음) |
 | `PARSE_SOURCE` | 이번에 읽을 원천 | 폴더 · `s3://버킷/접두` · `rdb:*`(등록 전부) · `rdb:<이름>` |
-| `SOURCES_FILE` | 원천 표·열 목록 | **S8b 판부터 PC(`RUN_ENV=local`) 파일 경로만**(`common.paths.sources_file`, 비우면 `resources/mappings/sources.json`) — 서버는 판 표 `struct.source_version` 활성 판(`set-sources`, [docs/architecture/pipeline_stack.md](../architecture/pipeline_stack.md)), `$SERVER_ENV_DIR/sources.json` 덮어쓰기는 없앰. 엔진 구성 PC 파일은 `PIPELINE_STACK_FILE`(`common.paths.stack_file`) |
-| `SERVER_ENV_DIR` | 서버 설정 폴더(코드 폴더 밖) | 서버 기본 배치 `/srv/rag/env` — `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd가 이 값으로 넘김(I4, 전에는 코드·스크립트에 박혀 있었음). 컨테이너는 이 폴더를 마운트하지 않는다 · S8b 판부터 `$SERVER_ENV_DIR/sources.json`은 읽지 않는다(원천 목록은 판 표 — I4~S8a 판은 호스트 python이 이 값이 있을 때만 그 파일을 봤음). 운영 계정 `~/.bashrc` 등에 영구로 export([server-guide.md](server-guide.md) §1-2) |
-| `GOLD_DIR` | 사람 정답 폴더 | `<원본 파일 이름>.txt`(원문에 있는 글자만) · 서버는 호스트 칸 `pipeline.host.gold_dir`에만 적는다 — `run_tool.sh`가 컨테이너 `/data/gold`로 붙이고 앱은 앱 칸 `pipeline.paths.gold_dir`가 비었으면 그 자리를 읽음(앱 칸에 호스트 경로를 적으면 컨테이너 안에 없는 자리를 봄 — migrate도 서버 env 파일의 `GOLD_DIR`를 호스트 칸에만 옮김, S7e3 B-3) |
-| `CLIENT_ROSTER` | 고객 명부(고객·잠재 고객, 100개 이상 가능) | **권장 CSV(10-15)** 머리글 `client_id,canonical_name,name_ko,aliases,client_type,segment,country,parent_client_id,status,description,source,updated` — 필수는 `canonical_name` 또는 `name_ko` 하나뿐(나머지 전부 빈칸 가능) · `aliases`는 `\|` 또는 `;` 구분 · `client_type` = customer·prospect(지금은 참고용 — 잠재 고객도 고객 인식·태그·필터에 똑같이 쓰임) · `status`가 `inactive`·`deleted`면 제외(대소문자 무관 — SFDC `Inactive`도, 빈칸 = 사용) · UTF-8 또는 Excel cp949 · 영문 3자 이하 별칭은 오탐 방지로 무시 · 옛 형식 CSV `이름,"별칭\|별칭"`·JSON `{"이름": [별칭]}`도 그대로 읽음 · 예시 `resources/vocab/glossary/client_roster.example.csv`(이미지 안 `/app/deploy/resources/…` — 작성법 server-guide §5-1) · 고객 마스터 내보내기에서 자동 생성 `gen_roster --kind client`(예시 `client_master.example.csv`·`client_master_map.example.json`, server-guide §5-1) |
-| `GLOSSARY_DIR` | 용어집 폴더 | `domain_terms.csv`(머리글 `concept_id,canonical,category,synonyms,abbreviations,weak_synonyms,broader,related,context_required,case_sensitive,definition_ko,definition_en,source,owner,status,updated`)·`id_patterns.csv`·`units.csv` — **빈칸 허용(10-15)**: `status` 빈칸 = approved(빼고 싶은 행은 `draft`라고 적음) · `concept_id` 빈칸 = `AUTO.<canonical>` 자동(같은 정식 이름이 ID 없이 또 나오면 뒤 줄은 건너뜀·알림 한 줄) · 설명·카테고리 등 나머지 빈칸 그대로 · 없는 열도 됨 · UTF-8 또는 cp949 · 단 명시한 ID 중복·없는 ID를 가리키는 broader/related·깨진 정규식은 적재 오류(조용히 넘기지 않음) · 고객은 `category`에 `org_client`를 넣으면 고객 명부에도 합쳐짐 · 예시 `resources/vocab/glossary/domain_terms.example.csv`(이미지 안 `/app/deploy/resources/…` — 작성법 server-guide §5-1) |
-| `PG_FILTER_EXACT_MAX` · `OV_TAGS` | 고객 필터 검색(10-15 GL2) | 적재(`structure`·`load`) 한 번이면 `chunk.clients`(고객 라벨 배열)·GIN 색인·옛 행 채우기가 자동 — **그 뒤 검색 MCP를 재시작**(빠른 경로 사용 여부를 프로세스마다 한 번만 확인) · 고객으로 좁힌 청크가 `PG_FILTER_EXACT_MAX`(기본 20000) 이하면 정확 검색(HNSW 거르기로 결과가 빠지지 않게) · `OV_TAGS=0`이면 OpenViking에 올리는 문서 앞 `clients`·`keywords` 머리말을 끔(기본 켬) |
-| `AGG_VOCAB_FILE` | 집계 지표 단서어 | 기본 `resources/vocab/agg_vocab.json`(S2 판부터 — 전에는 `data_retrieval/agg_vocab.json`) |
-| `REPORT_DIGEST_DIR` | 날짜·판 요약 폴더 | 예 `/srv/rag/reports/parse_digest` |
+| `SOURCES_FILE` | 원천 표·열 목록 | **PC(`RUN_ENV=local`) 파일 경로만**(`common.paths.sources_file`, 비우면 `resources/mappings/sources.json`). 서버는 버전 표 `struct.source_version`의 활성 버전(`set-sources`, [docs/architecture/pipeline_stack.md](../architecture/pipeline_stack.md))을 쓰고 `$SERVER_ENV_DIR/sources.json`은 읽지 않는다. 엔진 구성 PC 파일은 `PIPELINE_STACK_FILE`(`common.paths.stack_file`) |
+| `SERVER_ENV_DIR` | 서버 설정 폴더(코드 폴더 밖) | 서버 기본 배치 `/srv/rag/env` — `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd가 이 값으로 넘김. 컨테이너는 이 폴더를 마운트하지 않는다. 운영 계정 `~/.bashrc` 등에 영구로 export([server-guide.md](server-guide.md) §1-2) |
+| `GOLD_DIR` | 사람 정답 폴더 | `<원본 파일 이름>.txt`(원문에 있는 글자만). ⚠ 서버는 호스트 항목 `pipeline.host.gold_dir`에만 적는다 — `run_tool.sh`가 컨테이너 `/data/gold`로 붙이고, 앱은 앱 항목 `pipeline.paths.gold_dir`가 비었으면 그 자리를 읽음(앱 항목에 호스트 경로를 적으면 컨테이너 안에 없는 자리를 봄. migrate도 서버 env 파일의 `GOLD_DIR`를 호스트 항목에만 옮김) |
+| `CLIENT_ROSTER` | 고객 명부(고객·잠재 고객, 100개 이상 가능) | **권장 CSV** 머리글 `client_id,canonical_name,name_ko,aliases,client_type,segment,country,parent_client_id,status,description,source,updated` — 필수는 `canonical_name` 또는 `name_ko` 하나뿐(나머지 전부 빈칸 가능) · `aliases`는 `\|` 또는 `;` 구분 · `client_type` = customer·prospect(지금은 참고용 — 잠재 고객도 고객 인식·태그·필터에 똑같이 쓰임) · `status`가 `inactive`·`deleted`면 제외(대소문자 무관 — SFDC `Inactive`도, 빈칸 = 사용) · UTF-8 또는 Excel cp949 · 영문 3자 이하 별칭은 오탐 방지로 무시 · 옛 형식 CSV `이름,"별칭\|별칭"`·JSON `{"이름": [별칭]}`도 그대로 읽음 · 예시 `resources/vocab/glossary/client_roster.example.csv`(이미지 안 `/app/deploy/resources/…` — 작성법 server-guide §5-1) · 고객 마스터 내보내기에서 자동 생성 `gen_roster --kind client`(예시 `client_master.example.csv`·`client_master_map.example.json`, server-guide §5-1) |
+| `GLOSSARY_DIR` | 용어집 폴더 | `domain_terms.csv`(머리글 `concept_id,canonical,category,synonyms,abbreviations,weak_synonyms,broader,related,context_required,case_sensitive,definition_ko,definition_en,source,owner,status,updated`)·`id_patterns.csv`·`units.csv` — **빈칸 허용**: `status` 빈칸 = approved(빼고 싶은 행은 `draft`라고 적음) · `concept_id` 빈칸 = `AUTO.<canonical>` 자동(같은 정식 이름이 ID 없이 또 나오면 뒤 줄은 건너뜀·알림 한 줄) · 설명·카테고리 등 나머지 빈칸 그대로 · 없는 열도 됨 · UTF-8 또는 cp949 · 단 명시한 ID 중복·없는 ID를 가리키는 broader/related·깨진 정규식은 적재 오류(조용히 넘기지 않음) · 고객은 `category`에 `org_client`를 넣으면 고객 명부에도 합쳐짐 · 예시 `resources/vocab/glossary/domain_terms.example.csv`(이미지 안 `/app/deploy/resources/…` — 작성법 server-guide §5-1) |
+| `PG_FILTER_EXACT_MAX` | 고객 필터 검색 | 적재(`structure`·`load`) 한 번이면 `chunk.clients`(고객 라벨 배열)·GIN 색인·옛 행 채우기가 자동 — **그 뒤 검색 MCP를 재시작**(빠른 경로 사용 여부를 프로세스마다 한 번만 확인) · 고객으로 좁힌 청크가 `PG_FILTER_EXACT_MAX`(기본 20000) 이하면 정확 검색(HNSW 거르기로 결과가 빠지지 않게). `OV_TAGS`는 OpenViking과 함께 지워져 읽지 않는다(§5 10-29 줄) |
+| `AGG_VOCAB_FILE` | 집계 지표 단서어 | 기본 `resources/vocab/agg_vocab.json` |
+| `REPORT_DIGEST_DIR` | 날짜·버전 요약 폴더 | 예 `/srv/rag/reports/parse_digest` |
 | 변경 뒤 확인 | — | `python -m pipeline.check_env`(경로 존재까지 점검, 값은 안 찍힘) |
 
 ### 원천 Object Storage·EDW (선택, 승인 뒤)
 | 이름 | 메모 |
 |---|---|
 | `OS_ENDPOINT`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | 읽기 전용 — 사내 CA면 `OS_VERIFY_TLS=<CA 파일>` |
-| `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_CONNECT_KWARGS` | EDW 접속 하나(`common.connections.rdb` — 사용자 10-29, [settings.md#op-03](../prd/settings.md#op-03)). 원천 목록·FileStorageMap·ParsingMeta 조회·`query_edw`는 같은 서버·DB(어느 표·열은 `SOURCES_FILE`) |
+| `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_CONNECT_KWARGS` | EDW 접속 하나(`common.connections.rdb` — [settings.md#op-03](../prd/settings.md#op-03)). 원천 목록·FileStorageMap·ParsingMeta 조회·`query_edw`는 같은 서버·DB(어느 표·열은 `SOURCES_FILE`) |
 | `RDB_READ_USER`·`RDB_READ_PASSWORD` | 읽기 계정 — 원천 조회·호스트 러너 조회·검색 MCP(근거 경로·`query_edw`) |
-| `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD` | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만 |
+| `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD` | 쓰기 계정 — ParsingMeta 퍼블리시(INSERT·UPDATE)만, 파이프라인 이미지에만 |
 | `PM_PATH_MAP` | 결과 키 앞부분 바꾸기 `이전 앞부분=새 앞부분`(쉼표 목록, 짝 없으면 `source_system/원본 폴더`) — 문서 폴더 = `<PM_PREFIX>/<새 앞부분>/<나머지 폴더>/<원본파일명>/`(EDW rep_key) · 대표 결과 `<파일명>_<YYYY-MM-DD_HHMMSS>.md`·엔진별 원본 `engine/` · 예 `SFDC=Parsing-Result/SFDC`면 `.../SFDC/<UUID>/a.pdf` → `.../Parsing-Result/SFDC/<UUID>/a.pdf/` |
-| `PM_BUCKET`·`PM_PREFIX` | 결과 게시(쓰기, 마지막 단계) — EDW는 위 쓰기 계정. 폴더 저장소로 먼저 시험: `PM_BUCKET=file://…` · **첫 게시 전 EDW 표를 DBA가 1회 생성**: [`docs/operations/parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(S1부터 저장소 문서 자리 — 코드 폴더·덧씌우기 묶음에는 없음 · PM2, 10-15 — DBA가 아직 한 번도 실행 안 함, 이 최신 판을 그대로 1회·코드는 표를 만들지 않음, 없으면 첫 INSERT에서 실패) · 필수 열은 `doc_key`(원본 sha256) 하나뿐, `source_system`·`source_key`·`parse_date`는 비어도 됨(비면 각각 'unknown'·NULL·처리 시각) · `parse_date`는 글자 `YYYY-MM-DD_HHMMSS`, `rep_key`는 문서 폴더(끝 `/`) · `engines_used`(JSON 배열)·`engines_summary`(한 줄) — 이 문서에 쓰인 엔진 전부(VLM·OCR 포함, `pipeline/load/parsing_meta.py`의 `engines_used()`) |
+| `PM_BUCKET`·`PM_PREFIX` | 결과 퍼블리시(쓰기, 마지막 단계) — EDW는 위 쓰기 계정. 폴더 저장소로 먼저 테스트: `PM_BUCKET=file://…` · ⚠ **첫 퍼블리시 전 EDW 표를 DBA가 1회 생성**: [`docs/operations/parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(저장소 문서 자리 — 코드 폴더·오버레이 패치 번들에는 없음. DBA가 아직 한 번도 실행 안 함 — 이 최신 버전을 그대로 1회. 코드는 표를 만들지 않으며 없으면 첫 INSERT에서 실패) · 필수 열은 `doc_key`(원본 sha256) 하나뿐, `source_system`·`source_key`·`parse_date`는 비어도 됨(비면 각각 'unknown'·NULL·처리 시각) · `parse_date`는 글자 `YYYY-MM-DD_HHMMSS`, `rep_key`는 문서 폴더(끝 `/`) · `engines_used`(JSON 배열)·`engines_summary`(한 줄) — 이 문서에 쓰인 엔진 전부(VLM·OCR 포함, `pipeline/load/parsing_meta.py`의 `engines_used()`) |
 
-### 상주 트리거 서버 (선택, 10-14~)
+### 상주 트리거 서버 (선택)
 | 이름 | 메모 |
 |---|---|
 | `TRIGGER_TOKEN` | `/jobs` 호출 인증 |
-| `TRIGGER_HOST`·`TRIGGER_PARSE_PORT`·`TRIGGER_STRUCTURE_PORT` | 기본 `127.0.0.1`·`8770`·`8771` — S7e2부터 앱 칸(`pipeline.service.trigger.host`·`parse_port`·`structure_port`, 상주 서버가 `--module`로 고름 — compose가 env로 주지 않음). 공통 `TRIGGER_PORT`(`pipeline.service.trigger.port`)는 상주 컨테이너에서 쓰지 않는다(옛 compose가 서비스마다 덮던 것과 같음 — 적혀 있으면 한 줄 알림, S7e3 R-1) |
-| `CHAIN_STRUCTURE_URL` | parse 완료 뒤 structure를 자동 호출할 주소 — **서버는 `http://127.0.0.1:8771`을 적음**(옛 compose 기본 — S7e2부터 compose가 안 줌, sample `[서버 옛 값]`) |
+| `TRIGGER_HOST`·`TRIGGER_PARSE_PORT`·`TRIGGER_STRUCTURE_PORT` | 기본 `127.0.0.1`·`8770`·`8771` — 앱 항목(`pipeline.service.trigger.host`·`parse_port`·`structure_port`). 상주 서버가 `--module`로 고르고 compose가 env로 주지 않는다. 공통 `TRIGGER_PORT`(`pipeline.service.trigger.port`)는 상주 컨테이너에서 쓰지 않는다(적혀 있으면 한 줄 알림) |
+| `CHAIN_STRUCTURE_URL` | parse 완료 뒤 structure를 자동 호출할 주소 — ⚠ **서버는 `http://127.0.0.1:8771`을 적는다**(compose가 주지 않음, sample `[서버 옛 값]`) |
 
-### 새벽 배치 (systemd `data-pipeline-nightly` — S6b 전 `rag-nightly`)
+### 새벽 배치 (systemd `data-pipeline-nightly`)
+코드 주석의 "env-guide 1-3"이 이 절이다(스케줄 ON/OFF는 `NIGHTLY_ENABLED`).
+
 | 이름 | 켜면 | 기본 |
 |---|---|---|
 | `NIGHTLY_ENABLED` | 타이머가 실제로 돎 | 0 |
 | `NIGHTLY_MODULES` | 배치 순서 | `parse structure load publish` |
-| `NIGHTLY_PUBLISH` | 마지막 게시 단계 실행 | 0 |
+| `NIGHTLY_PUBLISH` | 마지막 퍼블리시 단계 실행 | 0 |
 | `PARSE_DEADLINE` | 파싱 마감 시각(HH:MM) | 비움 |
 | `NIGHTLY_MAX_NEW` | 밤당 새 문서 상한 | 2000 |
-
-### Agent Platform — 없음(10-26 삭제, D-013)
-`agent_platform/`을 지워(I5) `PLATFORM_CONFIG`·`PLATFORM_STATE_DIR`은 더는 읽히지 않는다(S7e1 판부터 `pipeline.env` 자체를 읽지 않음 — 옮길 때 settings.yaml에 적지 않는다). 모델 주소·이름·키는 위 모델 절의 `LLM_`·`VLM_`·`OCRVLM_`·`EMBED_` + `_BASE_URL`·`_MODEL`·`_API_KEY`로만 받는다(I6 임시 대체 구현 — `common/ai/adk.py`·`llm.py`).
 
 ### 회사 맞춤 문구 (선택 — [server-guide.md](server-guide.md) §5)
 | 이름 | 메모 |
 |---|---|
 | `MCP_INSTRUCTIONS` | MCP 안내 문구 |
-| `WIKI_DOMAIN_PHRASE` | 용어 초안 지시문의 업종 문구(기본 "바이오 CDMO") |
+| `WIKI_DOMAIN_PHRASE` | 용어 초안 프롬프트의 업종 문구(기본 "바이오 CDMO") |
 
 ## 2. 자원·병렬 (보통 안 건드림 — 버거울 때만 낮춤)
 
-`PIPE_PROCS`(기본 `auto` — CPU·메모리로 자동)·`PIPE_WORKERS`·`VLM_CONCURRENCY`·`OCR_DPI`·`OCR_MAX_PAGES`·`MAX_FILE_MB`·`MEM_MAX_PCT`(90)·`CPU_MAX_LOAD`(0.9)·`EMBED_BATCH`·`EMBED_TIMEOUT`·`VLM_TIMEOUT` — 전체 설명·기본값은 저장소 루트 `settings.sample.yaml`(칸을 비워 두면 코드 기본값과 동일).
+`PIPE_PROCS`(기본 `auto` — CPU·메모리로 자동)·`PIPE_WORKERS`·`VLM_CONCURRENCY`·`OCR_DPI`·`OCR_MAX_PAGES`·`MAX_FILE_MB`·`MEM_MAX_PCT`(90)·`CPU_MAX_LOAD`(0.9)·`EMBED_BATCH`·`EMBED_TIMEOUT`·`VLM_TIMEOUT` — 전체 설명·기본값은 루트 `settings.sample.yaml`(항목을 비워 두면 코드 기본값과 같음).
 
 ## 3. 새 기능 스위치 — 기본 켬, 끌 때만 `=0`
 
-새 기능은 기본 켬 정책이다. 자주 끄는 것: `PARSE_FUSE`류(조각 융합)·`PARSE_TABLE_STD`·`SEARCH_TYPE_WEIGHTS`·`SEARCH_EVIDENCE_GATE`·`SEARCH_COPY_GROUP`·`MCP_QUERY_LOG`·`FIG_OCR_FALLBACK`·`LLM_EMPTY_RETRY`. **전체 목록은 `settings.sample.yaml`**(생성 `python -m common.config.sample` — 칸마다 설명·옛 env 이름·기본값·켜기 판정 꼴) — 서버에서 바꿀 옵션이 있으면 그 칸을 settings.yaml에 적는다. 옛 `common/config/options.conf`(옵션 카탈로그)는 S7e2에 지웠다 — 코드 기본값과 다르게 채우던 값은 sample의 `[서버 옛 값: …]`(C-39). 읽는 순서(S7e2부터): 시험 값 > 덮기 파일 `overrides` > settings.yaml > 코드 기본값(env의 옛 이름은 읽지 않음 — 이름만 경고).
+- 새 기능은 기본 켬이다. 자주 끄는 것: `PARSE_FUSE`류(조각 융합)·`PARSE_TABLE_STD`·`SEARCH_TYPE_WEIGHTS`·`SEARCH_EVIDENCE_GATE`·`SEARCH_COPY_GROUP`·`MCP_QUERY_LOG`·`FIG_OCR_FALLBACK`·`LLM_EMPTY_RETRY`. `REGISTRY_ETAG_MD5`는 SSE-KMS·SSE-C 암호화 버킷처럼 ETag가 MD5가 아닐 수 있는 원천에서 끈다(§5 10-08 AD17① 줄).
+- **전체 목록은 `settings.sample.yaml`**(생성 `python -m common.config.sample` — 항목마다 설명·옛 env 이름·기본값·켜기 판정 꼴). 서버에서 바꿀 옵션이 있으면 그 항목을 settings.yaml에 적는다. 코드 기본값과 다르게 채우던 서버 값은 sample의 `[서버 옛 값: …]`(C-39).
+- 읽는 순서: 테스트 값 > 오버레이 설정 파일 `overrides` > settings.yaml > 코드 기본값(env의 옛 이름은 읽지 않음 — 이름만 경고).
 
 ## 4. 확인
 
@@ -146,8 +179,8 @@
 python -m pipeline.check_env     # 빠진 필수 값·사내망 판정·경로 존재(값은 안 찍음)
 python -m common.check.ping_models   # LLM·VLM·EMBED 실호출(OK/FAIL·지연·응답 모델) — 실패 있으면 종료 코드 1
 ```
-덮어쓰기 뒤 설정 파일이 그대로인지: `ls -l /srv/rag/env/settings.yaml`(수정 시각이 덮어쓰기 전인지 · 주인 10001·권한 640 — C-09).
-옛 `pipeline.env`에서 옮긴 직후: `python -m common.config.migrate --compare /srv/rag/env/pipeline.env --settings /srv/rag/env/settings.yaml` — `다름 0 · 옛에만 0`(종료 코드 0)이어야 한다(값은 안 찍음, release-and-patch.md §5-4).
+- 덮어쓰기 뒤 설정 파일이 그대로인지: `ls -l /srv/rag/env/settings.yaml`(수정 시각이 덮어쓰기 전인지 · 주인 10001·권한 640 — C-09).
+- 옛 `pipeline.env`에서 옮긴 직후: `python -m common.config.migrate --compare /srv/rag/env/pipeline.env --settings /srv/rag/env/settings.yaml` — `다름 0 · 옛에만 0`(종료 코드 0)이어야 한다(값은 안 찍음, release-and-patch.md §5-4).
 
 ## 5. 이번 판에서 바뀐 env (판마다 위에 한 줄씩 추가 — `deploy/release/make_patch.sh`가 이 표의 새 줄을 PATCH_NOTES에 옮김)
 
@@ -173,7 +206,7 @@ python -m common.check.ping_models   # LLM·VLM·EMBED 실호출(OK/FAIL·지연
 | S6b 이미지 합침·`deploy/` 재배치(10-27, D-020 — S2~S9와 같은 새 이미지 판) | ① 이미지 변수 `DATA_PIPELINE_IMAGE`(data-pipeline)·`MCP_SERVER_IMAGE`(mcp-server) 새로 — 옛 `DATA_PARSING_IMAGE`·`DATA_STRUCTURE_IMAGE`·`DATA_RETRIEVAL_IMAGE`·`RAG_*_IMAGE`·`RAG_IMAGE`는 읽지 않음(남아 있고 새 줄이 없으면 스크립트가 종료 코드 2) ② 상주 트리거는 compose가 `TRIGGER_MODULE=parse`·`structure`를 줌(`pipeline.env`에 적지 않음) ③ 이미지 `RAG_MODULE` 값이 `pipeline`·`mcp`(Dockerfile ENV — `pipeline.env`에 적었다면 지움) ④ 호스트 스크립트·compose·systemd 자리 `live/deploy/host/`(옛 `live/app/docker/`) ⑤ 컨테이너 이름 `data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`(옛 `data-parsing`·`data-structure`·`data-retrieval`), systemd `data-pipeline-nightly`·`mcp-server-keepalive`(옛 `rag-nightly`·`data-retrieval-keepalive`) | `pipeline.env`에 새 두 줄 추가·옛 줄 삭제 · 옛 컨테이너 정리 · 옛 systemd unit disable·삭제 뒤 새 unit 설치(`daemon-reload`) · `refactor.md` C-04·C-29 |
 | I5·I6 `agent_platform` 삭제(10-26, D-013 — I2와 같은 새 이미지 판) | `PLATFORM_CONFIG`·`PLATFORM_STATE_DIR`을 더는 읽지 않음. LLM·VLM·임베딩은 `LLM_`·`VLM_`·`OCRVLM_`·`EMBED_` + `_BASE_URL`·`_MODEL`·`_API_KEY`로 부름(I6, OpenAI 호환) | 없음(두 키는 남아도 무해) · 반입 여부는 검토 등급 A 뒤 사용자가 정함 |
 | I4 경로 정리(10-26, I2 `data_etl`과 같은 새 이미지 판) | ① 새 `SERVER_ENV_DIR`(서버 설정 폴더, 기본 배치 `/srv/rag/env`) — 셸 3개·systemd unit이 넘김. **호스트 python은 이 값이 없으면 `$SERVER_ENV_DIR/sources.json`을 안 본다**(전에는 `/srv/rag/env/sources.json`이 있으면 늘 우선) ② `run_docs.py`가 env `PATCH_CODE`(기본 `/srv/rag/code/live`)·`MCP_JOBS_DIR`(기본 `<운영자 작업 폴더>/test_space/rfp_all_output/mcp_parse/jobs`)을 받음 ③ systemd unit 2개에 `Environment=SERVER_ENV_DIR`, keepalive `ExecStart`가 `${PATCH_CODE}` — keepalive의 `Environment=ENV_FILE`은 지움(I4b, `mcp_up.sh`가 `$SERVER_ENV_DIR/pipeline.env`로 같은 값을 정함) | `pipeline.env` 수정 없음 · 운영 계정 셸 설정에 `export SERVER_ENV_DIR=/srv/rag/env`(호스트 python을 직접 돌릴 때) · systemd unit 2개 다시 복사 → `daemon-reload` · `pipeline.env`가 `/srv/rag/env` 밖에 있으면 keepalive unit에 `Environment=ENV_FILE=<파일>`을 다시 더함 · 반입 조건·확인은 [release-and-patch.md](release-and-patch.md) §5-2 |
-| 10-16 이미지 판(폴더 분리·output) | ① 코드 폴더를 이미지 단위로 나눔(`deploy/data_parsing`·`data_structure`·`data_retrieval`·`common_tools`) — 명령 이름이 `python -m common_tools.cli.pipeline …`·`data_parsing.run_all` 등으로 바뀜 ② **결과 폴더 이름 `out` → `output`** — 컨테이너 안 `/app/out` → `/app/output`, 서버 기본 `/srv/rag/out` → `/srv/rag/output` | **새 이미지 적재 전에** 배치·MCP 컨테이너를 멈추고 `sudo mv /srv/rag/out /srv/rag/output`(같은 디스크라 즉시, 복사 아님) · `pipeline.env`의 `RAG_OUT`(및 결과 경로를 적어 둔 다른 값)을 `/srv/rag/output`으로 · systemd 유닛·cron에 `/srv/rag/out`을 직접 적어 뒀다면 같이 고침 · 폴더 이름 변경만으로는 파싱 안 다시 함(인계 지문 그대로) — 다만 같은 판의 TB6가 엔진 지문을 바꿔 **전체 재파싱 1회**는 일어남(아래 10-16 TB6 행), 구조화도 한 번 다시 돎 · 설치 순서 전체는 [release-and-patch.md](release-and-patch.md) §8 |
+| 10-16 이미지 판(폴더 분리·output) | ① 코드 폴더를 이미지 단위로 나눔(`deploy/data_parsing`·`data_structure`·`data_retrieval`·`common_tools`) — 명령 이름이 `python -m common_tools.cli.pipeline …`·`data_parsing.run_all` 등으로 바뀜 ② **결과 폴더 이름 `out` → `output`** — 컨테이너 안 `/app/out` → `/app/output`, 서버 기본 `/srv/rag/out` → `/srv/rag/output` | **새 이미지 적재 전에** 배치·MCP 컨테이너를 멈추고 `sudo mv /srv/rag/out /srv/rag/output`(같은 디스크라 즉시, 복사 아님) · `pipeline.env`의 `RAG_OUT`(및 결과 경로를 적어 둔 다른 값)을 `/srv/rag/output`으로 · systemd 유닛·cron에 `/srv/rag/out`을 직접 적어 뒀다면 같이 고침 · 폴더 이름 변경만으로는 파싱 안 다시 함(인계 지문 그대로) — 다만 같은 판의 TB6가 엔진 지문을 바꿔 **전체 재파싱 1회**는 일어남(아래 10-16 TB6 행), 구조화도 한 번 다시 돎 · 설치 순서 전체는 [release_history.md](../history/release_history.md) §8 |
 | 10-13 env-min | 서버 설정 파일을 `pipeline.env` 한 개로 모음(사용자 결정) — ① systemd `rag-nightly.service`의 `EnvironmentFile`을 옛 `/srv/rag/batch.env`에서 `/srv/rag/env/pipeline.env`로(그 파일은 삭제, `NIGHTLY_ENABLED`·`NIGHTLY_MODULES`·`NIGHTLY_PUBLISH`·`PARSE_DEADLINE`을 이 파일로 fold, 밤당 상한은 새 이름 `NIGHTLY_MAX_NEW`로 분리해 코드 기본값 2000) ② `deploy/agent_platform/config.py`가 config JSON에서 `${VAR}`/`${VAR:-기본값}`을 치환하도록 — `config.server.example.json`의 모델 주소·MCP 주소·state_dir이 전부 이 치환식이 됨(비밀값은 여전히 `credential_refs`/`token_env` 이름만, 값은 안 들어감) ③ `agent-platform` CLI `--config` 기본값이 `PLATFORM_CONFIG` env를 따름(안 쓰면 PC 그대로 `config.example.json`) | 수집 서버: `/srv/rag/batch.env` 삭제해도 됨(안 지워도 무해 — 더는 안 읽힘) · `pipeline.env`에 `NIGHTLY_*`·`PARSE_DEADLINE` 옮겨 적음(1절) · 개발 서버: `uv run agent-platform` 전에 `pipeline.env`를 source하고 `PLATFORM_CONFIG=deploy/agent_platform/config.server.example.json`만 두면 옛 `cp config.server.example.json config.server.json` 수기 편집 단계 불필요 · **10-26(I5) `agent_platform` 삭제로 ②③은 더는 해당 없음** |
 | 10-12 OP25 | **옵션 전체 목록을 `options.conf`로**(코드 바뀜 없음, 생성기 `dev_tools/repo_maintain/gen_options_catalog.py`만 신설 — 모든 옵션의 현재 코드 기본값을 그대로 다시 적어 둔 것, 동작 바이트 동일) — 접속·크리덴셜(1절)은 그대로 `pipeline.env`만 | `.env`에 안 적어도 됨(바뀐 기본값 없음) · 서버에서 옵션을 바꾸려면 `options.conf`에서 그 줄을 찾아 `pipeline.env`에 옮겨 적음(옵션 카탈로그 파일 자체는 고치지 않음) |
 | 10-12 동기화(이슈 #1 · AD31·AD20·BR49·BR56 · 검색 T1·AR5·BR23·BR41·BR50·BR52) — **.env 수정 없음**(새 스위치는 모두 코드 기본값) | 새 기본 켬: `TOKEN_NUM_NORM`(T1 검색 토큰 숫자·단위 정규화) · `CAP_RANKED`(AR5 순위 기준 응답 자르기) · `KREUZBERG_PROSE_FILTER`(BR49) · `SEARCH_ENTITY_SPLIT`(BR23) · `SEARCH_TIE_BREAK`(BR41) · 기본 바뀜: MCP `search` 근거 수 10→8 · MCP 기본 방법에서 그래프 뺌(`MCP_METHODS`로 다시 넣을 수 있음) · `SEARCH_AGG_LLM` 끔 | ① **PG 다시 적재 필수**(T1): `chunk_term`은 적재 때 토큰을 고정 저장하고, 기존 문서는 `--replace` 없이는 건너뜀 → `BM25_STAT_REBUILD=1 python -m common_tools.cli.pipeline load --replace`(임베딩은 묶음에 있는 값 재사용 — 모델 호출 없음). 못 하면 `.env`에 `TOKEN_NUM_NORM=0` ② 회전 문서만 doc_key 바뀜(GH1-04) → 그 문서만 structure 다시(파싱 결과 재사용) ③ `.env`에 `MCP_METHODS`·`SEARCH_AGG_LLM=1`을 적어 뒀다면 의도한 값인지 확인 |
