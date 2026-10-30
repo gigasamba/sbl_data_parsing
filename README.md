@@ -391,7 +391,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | 단계 | 어디서 → 어디로 | run_env | 만드는 곳·스크립트 | 이미지 | 코드 | 컨테이너 구성 |
 |---|---|---|---|---|---|---|
 | ① 개발 반입 | PC → 개발 서버(폐쇄망) | `local` → `dev` | PC: `IMAGE_TARGET=pipeline-runtime`·`mcp-runtime bash deploy/release/build_ship.sh` | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`(코드 없음) | PC git 커밋 → 코드 폴더 묶음 `output/ship/code-<버전>-<커밋>.tar.gz`(`CODE_COMMIT`) | `/srv/rag/code/<버전>-<커밋>` → `live` 링크를 `/app/deploy`에 읽기 전용 마운트(`CODE_DIR`). 코드만 바꿀 때 = 새 코드 폴더 + 다시 띄움 |
-| ② 운영 반입 | 개발 서버 → 운영(수집) 서버 | `dev` → `prd` | 개발 서버: `bash /srv/rag/code/live/deploy/release/bake.sh <실행 이미지 판>` | 코드가 든 이미지 `data-pipeline`·`mcp-server`(개발에서 쓴 실행 이미지 그 판 + 코드) | 개발 서버에서 시험한 `live` 폴더(코드 커밋은 이미지 라벨 `org.opencontainers.image.revision`) | 코드 폴더 없음. 바꿀 때 = 새로 구운 이미지 |
+| ② 운영 반입 | 개발 서버 → 운영(수집) 서버 | `dev` → `prd` | 개발 서버: `bash /srv/rag/code/live/deploy/release/bake.sh <실행 이미지 판>` | 코드가 든 이미지 `data-pipeline`·`mcp-server`(개발에서 쓴 실행 이미지 그 판 + 코드) | 개발 서버에서 시험한 `live` 폴더(코드 커밋은 이미지 라벨 `org.opencontainers.image.revision`) | 컨테이너에 코드 폴더 마운트 없음(`CODE_DIR` 두지 않음) — 호스트 스크립트(`deploy/host/`)만 같이 온 코드 묶음에서. 바꿀 때 = 새로 구운 이미지 |
 
 - run_env는 `local`(PC)·`dev`(개발 서버)·`prd`(운영 서버) 셋뿐(`stage`는 10-29에 없앰).
 - 어느 코드인가: ①은 PC의 git 커밋(묶음 안 `CODE_COMMIT`, 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`), ②는 개발 서버 `live` 폴더 그대로(구운 이미지 라벨에 커밋·실행 이미지 ID).

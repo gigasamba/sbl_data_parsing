@@ -40,7 +40,9 @@ stage_one() {
   mkdir -p "$dir"
   rm -f "$dir/$target.tar.gz.part"* "$dir/$target.sha256"   # 재실행 시 옛 조각 수와 안 섞이게
   echo "[ship_stage] $tag 저장·분할 → $dir"
-  $DOCKER save "$tag" | gzip -1 | split -b "$CHUNK" -d -a 3 - "$dir/$target.tar.gz.part"
+  # `if stage_one`에서는 set -e가 꺼짐 — 저장 실패(디스크 부족 등)를 직접 실패로(잘린 조각에 sha256을 만들지 않게)
+  $DOCKER save "$tag" | gzip -1 | split -b "$CHUNK" -d -a 3 - "$dir/$target.tar.gz.part" \
+    || { echo "[ship_stage] 저장 실패: $tag"; rm -f "$dir/$target.tar.gz.part"*; return 1; }
   ( cd "$dir" && sha256sum "$target".tar.gz.part* > "$target.sha256" )
   n=$(ls "$dir/$target".tar.gz.part* | wc -l)
   echo "[ship_stage] $target → $repo: 조각 ${n}개 · 합계 $(du -ch "$dir/$target".tar.gz.part* 2>/dev/null | tail -1 | cut -f1)"

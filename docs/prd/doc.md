@@ -68,6 +68,7 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
   - `deploy/release/bake.sh <실행 이미지 판> [pipeline mcp]`(개발 서버, podman 또는 docker): 코드 `DEPS_HASH` = 실행 이미지 지문 확인 → 빌드(문맥 = 코드 폴더) → `selftest_gate.sh`(`[판정] 통과`) → `ship_stage.sh`로 저장·gzip·95m 분할·sha256.
   - 같은지 확인: PC에서 실행 이미지로 구운 이미지와 Dockerfile `pipeline`·`mcp` 타깃의 `/app/deploy`·`/app/docker` 파일 목록·sha256 비교(10-30 — 같음: pipeline 352개·mcp 237개).
 - 하지 않은 것: 설정 칸·코드 변경 없음(핑거프린트 그대로) · 운영 서버 반입 자동화 없음(조각 옮기기·load는 사람).
+- 검토 반영(10-30): `ship_stage.sh` 저장 실패를 실패로(전에는 `if stage_one` 안이라 잘린 조각에 sha256을 만들고 성공으로 끝남) · 태그 = 코드 VERSION만(D-036) · 저장 기본 `/var/tmp/bake`(코드 폴더 밖) · 운영 서버 호스트 스크립트용으로 시험한 코드 폴더 묶음도 같이 저장(컨테이너엔 마운트 안 함).
 - 같이 고친 것(허브 10-30): `build_ship.sh` 코드 묶음 기본 위치 `output/ship/`(옛 `/var/tmp`는 Windows Git Bash에 없음) · `ship_stage.sh`가 실행 이미지(`pipeline-runtime`·`mcp-runtime`)와 `CODE_BUNDLE`(코드 묶음 + sha256)도 받음 · README §5-0 배포 단계 표(사용자 10-30).
 - 파일: `deploy/docker/Dockerfile.bake`, `deploy/release/{bake.sh,build_ship.sh,ship_stage.sh}`, `.gitattributes`, README §5-0, `docs/operations/release-and-patch.md` §1-1·§1-2, `docs/operations/server-guide.md` §0-1.
 - Status: done (10-30 `feature/bake-image`)
