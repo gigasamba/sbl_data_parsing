@@ -393,7 +393,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | **개발 서버**(폐쇄망) | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`(코드 없음 — `IMAGE_TARGET=pipeline-runtime`·`mcp-runtime`) | 코드 폴더(저장소 트리 그대로 — `build_ship.sh`가 만든 `code-<버전>-<커밋>.tar.gz`를 판 폴더로 풀고 `live` 링크로 가리킴)를 `/app/deploy`에 읽기 전용 마운트 — 셸에 `CODE_DIR=<live 링크>` | 기능 = 새 코드 폴더 + `live` 링크 옮김 + 다시 띄움 · 의존성(`requirements*`·휠·Dockerfile·assets)이 바뀌면 새 실행 이미지(코드의 `deploy/docker/DEPS_HASH`와 이미지 지문이 다르면 시작 거부) |
 | **수집 서버** | 코드가 든 이미지 `data-pipeline`·`mcp-server`(지금 그대로) | 이미지 안 | 새 이미지 또는 오버레이 패치(§5-8) |
 
-개발 서버 순서: 실행 이미지 적재(아래 5-2와 같은 `docker load`) → `/srv/rag/code/<버전>-<커밋>/`에 코드 폴더 묶음 풀기 → `ln -sfn <그 폴더> /srv/rag/code/live` → settings.yaml `pipeline.host.image`·`mcp.host.image`를 실행 이미지 태그로 → systemd unit·셸에 `CODE_DIR=/srv/rag/code/live` → `trigger.sh`·`mcp_up.sh`. 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`으로 어느 판이 도는지 확인. 되돌리기는 `release-and-patch.md` §1-1.
+개발 서버 순서: 실행 이미지 적재(아래 5-2와 같은 `docker load`) → `/srv/rag/code/<버전>-<커밋>/`에 코드 폴더 묶음 풀기(`tar -xzf … --no-same-owner` 뒤 `chown -R 10001:10001` 또는 `chmod -R a+rX` — 컨테이너 사용자 10001이 읽어야 함) → `ln -sfn <그 폴더> /srv/rag/code/live` → settings.yaml `pipeline.host.image`·`mcp.host.image`를 실행 이미지 태그로 → systemd unit·셸에 `CODE_DIR=/srv/rag/code/live` → `trigger.sh`·`mcp_up.sh`. 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`으로 어느 판이 도는지 확인. 되돌리기는 `release-and-patch.md` §1-1.
 
 ### 5-1. 버전 올리기
 

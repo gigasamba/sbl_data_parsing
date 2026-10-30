@@ -7,6 +7,10 @@
 # 코드가 든 이미지(data-pipeline·mcp-server)는 이 파일을 쓰지 않는다(ENTRYPOINT /app/docker/entrypoint.sh 그대로).
 set -u
 CODE=/app/deploy
+if [ -d "$CODE" ] && { [ ! -r "$CODE" ] || [ ! -x "$CODE" ] || { [ -e "$CODE/deploy/docker/entrypoint.sh" ] && [ ! -r "$CODE/deploy/docker/entrypoint.sh" ]; }; }; then
+  echo "[image] 코드 폴더는 붙었지만 사용자 $(id -u)가 읽을 수 없음(권한) — 서버의 판 폴더를 chown -R 10001:10001 또는 chmod -R a+rX 로 고칠 것(op-06)" >&2
+  exit 2
+fi
 if [ ! -f "$CODE/deploy/docker/entrypoint.sh" ]; then
   echo "[image] 코드 폴더가 마운트되지 않음 — 서버 코드 폴더를 -v <코드 폴더>:/app/deploy:ro,z 로 붙여 띄울 것(이 실행 이미지에는 코드가 없음 — op-06)" >&2
   exit 2

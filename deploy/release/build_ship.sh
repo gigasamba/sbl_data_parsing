@@ -75,7 +75,12 @@ if [ "$RUNTIME" = 1 ]; then
   CODE_DIR=$(mktemp -d); trap 'rm -rf "$CODE_DIR"' EXIT
   git archive HEAD -- . ':(exclude)valid_env' ':(exclude)validation' | tar -x -C "$CODE_DIR"
   echo "$(git rev-parse HEAD 2>/dev/null || echo unknown) $VCS_REF $APP_VERSION" > "$CODE_DIR/CODE_COMMIT"
+  # mktemp -d는 0700 — 그대로 묶으면 서버에서 푼 판 폴더를 컨테이너 사용자 10001이 못 읽음. 모두가 읽게(폴더 755·파일 644, 실행 비트는 유지)
+  chmod -R u=rwX,go=rX "$CODE_DIR"
   tar -czf - -C "$CODE_DIR" . > "$CODE_OUT"   # 표준 출력으로(Windows 경로 C:/…를 tar가 원격 호스트로 읽지 않게)
+  bad=$(tar -tvzf - < "$CODE_OUT" | awk '$1 !~ /^.r..r..r/' | head -3)
+  [ -z "$bad" ] || { echo "[오류] 코드 폴더 묶음에 모두가 읽을 수 없는 항목: $bad"; exit 1; }
+  tar -tvzf - < "$CODE_OUT" | head -1 | grep -q '^drwxr-xr-x' || { echo "[오류] 코드 폴더 묶음 맨 위 폴더가 755가 아님"; exit 1; }
   echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버에서 새 판 폴더로 풀고 live 링크를 옮김(release-and-patch.md — op-06)"
   export MSYS_NO_PATHCONV=1   # Windows Git Bash가 -v 인자를 바꾸지 않게
   RUN_ARGS="-v $(cygpath -m "$CODE_DIR" 2>/dev/null || echo "$CODE_DIR"):/app/deploy:ro"
@@ -105,7 +110,7 @@ R_ARGS=""
 if [ "$RUNTIME" = 1 ]; then   # op-06 — 판정용 코드 폴더를 같이 보내 붙임
   rsync --partial "$CODE_OUT" "$TARGET:$REMOTE_DIR/" 2>/dev/null || scp "$CODE_OUT" "$TARGET:$REMOTE_DIR/"
   RCODE="$REMOTE_DIR/code-$APP_VERSION-$VCS_REF"
-  ssh "$TARGET" "rm -rf $RCODE && mkdir -p $RCODE && tar -xzf $REMOTE_DIR/$(basename "$CODE_OUT") -C $RCODE"
+  ssh "$TARGET" "rm -rf $RCODE && mkdir -p $RCODE && tar -xzf $REMOTE_DIR/$(basename "$CODE_OUT") --no-same-owner -C $RCODE"
   R_ARGS="-v $RCODE:/app/deploy:ro,z"
 fi
 ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_ARGS $TAG resources"
