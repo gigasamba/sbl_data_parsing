@@ -45,10 +45,11 @@
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
 |---|---|---|---|
 | 준비 | done | 중복 · 회전 · DRM 감지 | [pl-02](prd/parse.md#pl-02) |
-| 엔진 스택 파싱 | done | 형식별 엔진 · 격리 · 스택 판 | [pl-03](prd/parse.md#pl-03) |
+| 엔진 스택 파싱 | todo | 형식별 엔진 · 격리 · 스택 판 · `all` 길 지우기 | [pl-03](prd/parse.md#pl-03) |
+| 지원 확장자 더하기 — .jpeg·.tif·.tiff·.bmp·.mhtml | todo | 스택 표 · 확장자마다 시험(임시 샘플) · .hwpx 시험 | [pl-42](prd/parse.md#pl-42) |
 | 파싱 phase 없애기 · OCR 엔진 끔 | dev | 병렬 엔진 · 제한 · 쪽 VLM · 서버 확인 | [pl-22](prd/parse.md#pl-22) |
 | ocr_vlm·vlm.model_alt 삭제 | done | 0.1.0 · 엔진 핑거프린트 바뀜(등급 A) | [pl-31](prd/parse.md#pl-31) |
-| 파싱 p1 묶음 — 재판독 P3·scan_dedup·렌더 OCR 신호 | todo | 0.1.0 · p1 바뀜(등급 A) | [pl-34](prd/parse.md#pl-34) |
+| 파싱 p1 묶음 — 재판독 전부·scan_dedup·렌더 OCR 신호 | todo | 0.1.0 · p1 바뀜(등급 A) | [pl-34](prd/parse.md#pl-34) |
 | 핑거프린트 영향 없는 잔재 지우기 | done | parse_parallel · AUTO_REPARSE_CHANGED · figures_resume(pl-32) · phase_report 남김 | [pl-35](prd/parse.md#pl-35) |
 | 메일 첨부 파싱 | done | 재귀 · 상한 · 인용 단락화 | [pl-36](prd/parse.md#pl-36) |
 | 그림 근처 맥락 기록 | done | 캡션 · 본문 언급 · 값 확인 | [pl-37](prd/parse.md#pl-37) |
