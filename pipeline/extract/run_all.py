@@ -45,7 +45,7 @@ from common.core.paths import (  # 폴더 재편 뒤 이 두 상수만 바뀌면
 )
 from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
 from pipeline.extract.engines import registry
-from pipeline.shared import artifacts as P0  # P0 열쇠(엔진 버전·코드 지문)로 재사용 판단(실험 저장소 계약과 같은 규칙)
+from pipeline.shared import artifacts as P0  # P0 열쇠(엔진 버전·코드 지문) — 결과 출처 기록(실험 저장소 계약과 같은 규칙)
 from pipeline.shared.progress import (  # output/parse/PROGRESS.md 갱신 · 문서→형식 키(.pdf_text/.pdf_image, _types.json 캐시) · SI44③ 암호 오류 단서(한 곳)
     doc_types,
     write_progress,
@@ -437,7 +437,7 @@ def run_procs(a, docs):
         # 하위는 항상 --procs 1(PIPE_PROCS 설정으로 하위가 또 프로세스를 띄우는 연쇄 방지)
         rc = resources.gated_popen(base + ["--shard", f"{i}/{k}", "--procs", "1"], env=env).wait()
         if rc != 0:
-            print(f"조각 {i}/{k} 비정상 종료({rc}) — 끝낸 문서×엔진은 runs.jsonl에 남아 다음 실행에서 건너뜀", flush=True)
+            print(f"조각 {i}/{k} 비정상 종료({rc}) — 이 조각은 다시 돌려야 함(앞 실행 결과를 건너뛰지 않음 — pl-32)", flush=True)
 
     with ThreadPoolExecutor(max_workers=k) as ex:
         list(ex.map(one, range(k)))

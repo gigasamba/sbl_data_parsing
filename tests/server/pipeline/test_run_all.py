@@ -200,7 +200,26 @@ def selftest():
     recs5 = [json.loads(ln) for ln in (odir5 / "runs.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
     assert len(recs5) > len(cand5), "앞 실행 기록이 있어도 다시 시도해야 함 — " + str(recs5)
     assert not (sdir5 / "skipped.jsonl").exists(), "앞 실행 기록으로 건너뜀(encrypted_detected)을 적지 않음"
-    print("[selftest] pl-32 — 앞 실행 runs.jsonl로 건너뛰지 않음(늘 다시 돎) 통과")
+    # 앞 실행에서 성공했고 결과 파일도 있어도(같은 내용 sha) 다시 돈다 — 옛 "이미 성공 → 건너뜀"이 돌아오면 여기서 걸림
+    sdir6, odir6 = Path(_tf.mkdtemp()), Path(_tf.mkdtemp())
+    doc6 = sdir6 / "ok.txt"
+    doc6.write_text("본문 한 줄", encoding="utf-8")
+    (odir6 / "plaintext").mkdir(parents=True)
+    (odir6 / "plaintext" / "ok.txt.json").write_text("{}", encoding="utf-8")
+    seed6 = {"doc": doc6.name, "engine": "plaintext", "sha": _sha(doc6), "sec": 1, "error": None}
+    (odir6 / "runs.jsonl").write_text(json.dumps(seed6) + chr(10), encoding="utf-8")
+    r7 = subprocess.run(
+        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir6), "--out", str(odir6), "--engines", "plaintext"],
+        capture_output=True,
+        text=True,
+        env=C.child_env(PIPE_PROCS="1"),
+        cwd=str(APP_ROOT),
+        timeout=60,
+    )  # 하위 프로세스(시험) — 덮기 파일(S7e2)
+    assert r7.returncode == 0, r7.stderr[-2000:]
+    recs6 = [json.loads(ln) for ln in (odir6 / "runs.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
+    assert len(recs6) == 2 and recs6[-1]["engine"] == "plaintext" and "reused_from" not in recs6[-1], recs6
+    print("[selftest] pl-32 — 앞 실행 runs.jsonl로 건너뛰지 않음(실패·성공 모두 늘 다시 돎) 통과")
 
 
 def test_main():  # 옛 `if "--selftest" in sys.argv:` 갈래
