@@ -24,6 +24,18 @@ Answer Agent 이미지는 없다(10-14 결정 — 개발 서버 네이티브, MC
 
 **오버레이 패치로 못 바꾸는 것**(바꾸면 새 이미지 버전) — `deploy/docker/requirements*.txt`·`Dockerfile`·`wheels/`·시스템 패키지·`assets/` 모델 파일·**서버 배포 테스트 `tests/server`**(이미지 안 `/app/deploy/tests`에만 있고 compose.patch*.yml이 붙이지 않는다 — 앱 코드만 패치하면 이미지 안 테스트는 옛 버전이므로, 테스트가 바뀐 번들은 새 이미지 버전으로, `refactor.md` C-53). S6b 전 배치(옛 `docker/`·upstream `deploy/<폴더>`)에서 이 배치로 넘어가는 패치 번들은 만들지 않는다(§3-1).
 
+### 1-1. 개발 서버 — 실행 이미지 + 코드 폴더(op-06, 사용자 10-30)
+
+개발 서버는 코드 없는 실행 이미지(`data-pipeline-runtime`·`mcp-server-runtime`)에 코드 폴더를 읽기 전용으로 붙여 쓴다. 코드 바꾸기 = 코드 폴더 바꾸기.
+
+1. PC: `IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh`(mcp는 `mcp-runtime`) — 이미지 관문은 이 커밋의 코드 트리를 붙여 돌고, 이미지 옆에 코드 폴더 묶음 `code-<버전>-<커밋>.tar.gz`(git 추적 파일 + `CODE_COMMIT`, `valid_env/`·`validation/` 없음)을 만든다. 코드만 바뀐 판은 이미지를 다시 보낼 필요가 없다 — 묶음만 보낸다(같은 커밋의 `deploy/docker/DEPS_HASH`가 서버 이미지와 같아야 함).
+2. 서버: 판 폴더로 풀기 — `mkdir -p /srv/rag/code/<버전>-<커밋> && tar -xzf code-….tar.gz --no-same-owner -C /srv/rag/code/<버전>-<커밋>` → `chown -R 10001:10001 /srv/rag/code/<버전>-<커밋>`(root 권한이 없으면 `chmod -R a+rX`로 모두가 읽게). 컨테이너 사용자 10001이 읽지 못하면 실행 이미지가 "읽을 수 없음(권한)"으로 멈춘다(종료 2).
+3. 바꾸기 — `ln -sfn /srv/rag/code/<버전>-<커밋> /srv/rag/code/live` → 상주 서비스 다시 띄움(`mcp_up.sh`, 트리거 상주 컨테이너 `docker compose … up -d --force-recreate`). 셸·unit에는 `CODE_DIR=/srv/rag/code/live`.
+4. 확인 — 컨테이너 로그 첫 줄 `[image] 이미지 <이름 버전 커밋> · 코드 <커밋> · 의존성 <지문>`. `의존성 지문이 다름`으로 멈추면 그 코드는 새 실행 이미지가 필요하다(requirements·휠·Dockerfile·assets가 바뀜).
+5. 되돌리기 — 바로 앞 판 폴더를 지우지 않고 두었다가 `ln -sfn /srv/rag/code/<앞 판> /srv/rag/code/live` → 다시 띄움. 판 폴더는 최근 2개 이상 남긴다.
+
+수집 서버(코드가 든 이미지)는 아래 §2~§5 그대로(오버레이 패치·새 이미지).
+
 ## 2. 코드를 고칠 때 지킬 것 (오버레이 패치로 전달 가능하게)
 
 | # | 규칙 |

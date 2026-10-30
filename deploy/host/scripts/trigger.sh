@@ -39,6 +39,7 @@ fi
 . deploy/host/scripts/image_vars.sh   # S6b — compose.pipeline.yml은 두 이미지 변수를 다 치환하므로 둘 다 확인(옛 변수만 있으면 종료 코드 2)
 need_image pipeline || exit 2; need_image mcp || exit 2
 DC="docker compose -f deploy/host/compose/compose.pipeline.yml"
+[ -n "${CODE_DIR:-}" ] && DC="$DC -f deploy/host/compose/compose.code.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 /app/deploy에
 run() {
   echo "[trigger] $(date '+%F %T') $1 시작"
   $DC run --rm "$1" "$1" "${@:2}"; rc=$?          # compose run의 인자는 command를 덮음 → 모듈 이름을 다시 줌
