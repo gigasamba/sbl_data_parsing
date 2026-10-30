@@ -458,18 +458,6 @@ def type_label(annotation):
     return " | ".join(names)
 
 
-def fields_table(model_cls):
-    """[{path, env, type, default, desc, secret}] — sample·부록 D·keyscan 대조용."""
-    rows = []
-    for path, f, _ in walk(model_cls):
-        rows.append(
-            dict(
-                path=path, env=env_name(f), type=type_label(f.annotation), default=f.default, desc=f.description or "", secret=is_secret(f)
-            )
-        )
-    return rows
-
-
 def env_map(model_cls, *, hosts=False):
     """옛 env 이름 → 경로(호스트 절은 hosts=True일 때만 — 같은 env 이름이 앱·호스트 두 칸에 있음, T-21). 사본을 돌려준다."""
     return dict(_env_map(model_cls, hosts))
