@@ -8,7 +8,6 @@
 - pl-22 파싱 phase 없애기 — dev, `feature/r2-phase` 병합됨 → 서버 확인(refactor.md C-65), VLM 동시 수 손잡이는 후속.
 - pl-27 프로세스 종료 정리 — dev, `feature/exit-cleanup` 병합됨 → code_fp 모든 레이어 바뀜(다음 반입에서 재처리).
 - pl-25 DB 스키마 명세 — dev, `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인.
-- do-04 문서 재구성 2부 — `feature/doc-cleanup-2` → PR(1부는 PR #21로 병합).
 
 ## ETL — 수집·퍼블리시·적재·DB (etl)
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
@@ -107,7 +106,7 @@
 | 검색 평가 | done | hit@k · 지연 · 보고서 | [e2-04](prd/test.md#e2-04) |
 | 답변 점검 | done | `rag_qa` · 인용 점검 | [e2-05](prd/test.md#e2-05) |
 | EDW 값 답변 인용 실패 | done | 그대로 둠(결정) | [e2-12](prd/test.md#e2-12) |
-| answer_gen 인용 버그 | todo | L-2 · P-2 · CR-2~7 | [e2-19](prd/test.md#e2-19) |
+| answer_gen 인용 버그 | done | L-2 · P-2 · CR-2~7 | [e2-19](prd/test.md#e2-19) |
 | 분류 수용 보고서 | todo | dev 정답 샘플 대조 · 일치율 · 혼동표 | [e2-20](prd/test.md#e2-20) |
 | 스택·모델 비교 | done | 행렬 · 예상 비용 | [e2-06](prd/test.md#e2-06) |
 | 검색 점검 페이지 | done | 로컬 페이지 · 포트 | [e2-07](prd/test.md#e2-07) |
@@ -122,7 +121,7 @@
 | 문서 재구성 · 한국어 | dev | 1부 PRD 카테고리 · 2부 CLAUDE.md | [do-04](prd/doc.md#do-04) |
 | `docs/index.md` 용어집 | done | 용어 대응 옮김 · 링크 한 줄 | [do-02](prd/doc.md#do-02) |
 | `refactor.md`를 병합과 맞춤 | done | 낡은 줄 · PRD 링크 · 검토자 | [do-03](prd/doc.md#do-03) |
-| `refactor.md`를 `docs/refactoring/`으로 | todo | 옮기기 · 링크 | [do-01](prd/doc.md#do-01) |
-| 첫 릴리스 태그 `v0.1.0` | todo | 태그 · 릴리스 노트 | [op-04](prd/doc.md#op-04) |
+| `refactor.md`를 `docs/refactoring/`으로 | done | 옮기기 · 링크 | [do-01](prd/doc.md#do-01) |
+| 첫 릴리스 태그 `v0.1.0` | done | 태그 · 릴리스 노트 | [op-04](prd/doc.md#op-04) |
 | 실행 이미지(코드 없음) · 코드 폴더 마운트 | done | 개발 서버 · 의존성 지문 · 코드 커밋 표시 | [op-06](prd/doc.md#op-06) |
 | 개발 → 운영 굽기(실행 이미지 + 시험한 코드) | done | `Dockerfile.bake` · `bake.sh` · 반입 판정 · 저장·분할 | [op-07](prd/doc.md#op-07) |
