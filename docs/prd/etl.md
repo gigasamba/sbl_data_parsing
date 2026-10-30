@@ -169,7 +169,7 @@
 ## rn-04 · run_docs 작은 수정·레인 테스트
 - 결정(사용자 10-30, C-59 ⓑ): MCP 감시 루프의 5초마다 `jobs_dir` 전체 `rglob`·`stat` → 최근 작업 폴더만 또는 심장 박동 파일 · 효과 없는 `--workers`를 시작 로그에서 뺌 · 남은 빈 분기 정리 · 흐름 테스트에 medium·vlm 레인·MCP 양보 길.
 - 파일: `run_docs.py`, `tests/general/deploy/test_docs_flow.py`.
-- Status: todo — 0.1.0.
+- Status: done (10-30, `feature/rundocs-fixes`) — ① `mcp_busy`는 이름 날짜(`<YYYYMMDD>-…`)가 어제·오늘·내일인 작업 폴더만 본다(지난 날의 끝난 작업 파일은 stat 안 함 · 하루 넘게 도는 작업은 놓침 — 작업은 분 단위) ② 안 쓰는 `PARSE_WORKERS` 지움 — `--workers`는 옛 호출이 깨지지 않게 받기만(시작 로그에는 이미 안 찍힘) ③ `lane_worker`의 빈 분기 2개는 rn-01(`pick_lane`)에서 이미 없어짐 ④ 테스트: medium·vlm 레인과 vlm 동시 상한, MCP 양보(medium 전담 워커 쉼), `mcp_busy` 표.
 
 <a id="pl-25"></a>
 ## pl-25 · DB 스키마 명세 — pl-26·pl-23·pl-24를 만들기 전에 먼저

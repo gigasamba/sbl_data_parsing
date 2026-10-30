@@ -139,3 +139,93 @@ def test_struct_backlog_holds_new_parses():
         assert max(x["struct_wait"] for x in lines) >= 1  # 실제로 쌓였다가 막힘(시험이 헛돌지 않음)
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
         assert "문서별 flow 끝: 8건(완료 8" in log and "light 1/1 medium 1/1 vlm 1/1" in log, log
+
+
+def _lanes_by_name(M):  # 분류(docker probe)를 가짜로 — 파일 이름 앞부분이 레인(rn-04)
+    def classify_doc(seq, row, cache=None):
+        M._class[seq] = row["original_filename"].split("_", 1)[0]
+        return M._class[seq]
+
+    M.classify_doc = classify_doc
+
+
+def test_medium_vlm_lanes_and_vlm_cap():
+    """medium·vlm 레인도 끝까지 돌고, vlm 문서 동시 파싱은 vlm_cap을 넘지 않는다(rn-04 — 전에는 light만 시험)."""
+    lanes = ["light", "medium", "vlm"] * 3
+    rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"{c}_{i}.bin", "file_size": 10} for i, c in enumerate(lanes)]
+    seen, live, peak, lock = [], {"vlm": 0}, {"vlm": 0}, threading.Lock()
+    with tempfile.TemporaryDirectory(prefix="orca_rn04_") as tmp:
+        work = Path(tmp)
+
+        def parse_one(seq, row):
+            lane = lanes[seq]
+            with lock:
+                seen.append((seq, lane, threading.current_thread().name))
+                live[lane] = live.get(lane, 0) + 1
+                peak["vlm"] = max(peak["vlm"], live["vlm"])
+            time.sleep(0.1)
+            with lock:
+                live[lane] -= 1
+            return True, work / f"{seq}"
+
+        def setup(M):
+            _lanes_by_name(M)
+            M.VLM_CAP = 1
+
+        M = _run_main(work, rows, parse_one, lambda seq, row, enq_t=None: True, lambda seq, row: None, setup)
+        assert sorted(s for s, _, _ in seen) == list(range(9)), seen
+        assert {M._class[s] for s, _, _ in seen} == {"light", "medium", "vlm"}, M._class
+        assert peak["vlm"] <= 1, peak  # vlm_cap 1 — 전담·공유 워커가 함께 있어도
+        assert any(t == "lane-medium-own" and lane == "medium" for _, lane, t in seen), seen  # medium 전담 워커가 실제로 일함
+        assert M._lane_inflight == {"light": 0, "medium": 0, "vlm": 0}
+        log = (M.PROG / "progress.log").read_text(encoding="utf-8")
+        assert "문서별 flow 끝: 9건(완료 9" in log, log
+
+
+def test_mcp_busy_yields_medium_own_worker():
+    """MCP 업로드 처리 중(_mcp_pause)이면 medium 전담 워커는 새 문서를 안 뽑고, medium 문서는 공유 워커가 처리한다(10-23 양보 길 — rn-04)."""
+    rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"medium_{i}.bin", "file_size": 10} for i in range(4)]
+    seen = []
+    with tempfile.TemporaryDirectory(prefix="orca_rn04_") as tmp:
+        work = Path(tmp)
+        job = work / "jobs" / (time.strftime("%Y%m%d") + "-abc")
+        job.mkdir(parents=True)
+
+        def parse_one(seq, row):
+            (job / "status").write_text("running", encoding="utf-8")  # 작업 파일이 계속 갱신됨 — 감시가 계속 '처리 중'으로 봄
+            seen.append(threading.current_thread().name)
+            return True, work / f"{seq}"
+
+        def setup(M):
+            _lanes_by_name(M)
+            (job / "status").write_text("running", encoding="utf-8")
+            M._mcp_pause = True  # 감시 스레드의 첫 판정 전에 레인이 뽑지 않게(감시도 같은 값을 냄)
+
+        M = _run_main(work, rows, parse_one, lambda seq, row, enq_t=None: True, lambda seq, row: None, setup)
+        assert len(seen) == 4 and "lane-medium-own" not in seen, seen
+        assert "lane-medium-shared" in seen, seen
+        assert M._lane_inflight == {"light": 0, "medium": 0, "vlm": 0}
+
+
+def test_mcp_busy_scans_recent_job_folders_only():
+    """mcp_busy는 이름 날짜가 어제·오늘·내일인 작업 폴더에서 30초 안에 바뀐 파일만 본다(rn-04 — 5초마다 jobs 전체 rglob 대신)."""
+    import os
+
+    M = _load()
+    today = time.strftime("%Y%m%d")
+    cases = [  # (작업 폴더 이름, 파일 나이(초), 기대)
+        (f"{today}-new", 0, True),
+        (f"{today}-old", 120, False),
+        ("20000101-stale", 0, False),  # 지난 날 작업은 파일이 새로 바뀌어도 안 봄
+        (None, 0, False),  # 작업 폴더 없음
+    ]
+    for name, age, want in cases:
+        with tempfile.TemporaryDirectory(prefix="orca_rn04_") as tmp:
+            M.MCP_JOBS_DIR = Path(tmp) / "jobs"
+            if name:
+                f = M.MCP_JOBS_DIR / name / "out" / "x.json"
+                f.parent.mkdir(parents=True)
+                f.write_text("{}", encoding="utf-8")
+                t = time.time() - age
+                os.utime(f, (t, t))
+            assert M.mcp_busy() is want, (name, age, want)

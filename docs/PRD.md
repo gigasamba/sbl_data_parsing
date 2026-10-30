@@ -33,7 +33,7 @@
 | 레인 정책 — 담당 먼저, 허용 레인만 | done | 전담·공유 워커 · `pick_lane` | [rn-01](prd/etl.md#rn-01) |
 | 중간 대기열 상한·길이 기록 | done | `struct_backlog` · `queue_depth.jsonl` | [rn-02](prd/etl.md#rn-02) |
 | MCP `parse_document`에 CPU 먼저 | todo | 지금 nice(같은 컨테이너) · 논의: 컨테이너 분리 | [rn-03](prd/etl.md#rn-03) |
-| run_docs 작은 수정·레인 테스트 | todo | 감시 루프 · 로그 · 흐름 테스트 · 0.1.0 | [rn-04](prd/etl.md#rn-04) |
+| run_docs 작은 수정·레인 테스트 | done | 감시 루프 · 로그 · 흐름 테스트 · 0.1.0 | [rn-04](prd/etl.md#rn-04) |
 | DB 스키마 명세 | dev | `db_schema.md` · 시험 · 승인 | [pl-25](prd/etl.md#pl-25) |
 | 원천별 gold 표(나중) | todo | 원천 4벌 · `search` 원천 필수 | [pl-28](prd/etl.md#pl-28) |
 
