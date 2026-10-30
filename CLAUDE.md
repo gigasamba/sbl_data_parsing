@@ -173,6 +173,7 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 - 외부 허용은 루트 settings.yaml에 둬도 된다. 그때는 `no_paid_calls: true`를 기본으로 두고, 외부 호출이 필요한 동안만 `false`로 바꾼 뒤 되돌린다(평소 테스트가 외부를 호출하지 않도록). 한 번만 풀 때는 `--set`을 쓴다.
 - `role=llm`을 `adk.complete`로 직접 호출하면 예산 장부를 거치지 않는다. 실제 호출은 `llm.chat`이나 `run_agent(per_turn_admit=True)`로 한다.
 - 기술 스택 비교처럼 호출이 많은 작업은 예상 비용(호출 수 × 평균 토큰 × 단가)을 먼저 보고하고 승인을 받는다. 서버는 내부망 모델만 쓴다(외부 모델은 거부).
+- (바뀐 과정: [pl-11](docs/prd/settings.md#pl-11))
 
 ---
 
@@ -195,3 +196,8 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 - 기능 요건(무엇·왜·관련 파일)과 미개발·고장 항목(진행 상황)은 이 파일이 아니라 [docs/PRD.md](docs/PRD.md)와 `docs/prd/<카테고리>.md`에 둔다. 작업 전에 PRD 표에서 맡은 행을 찾는다.
 - 항목마다 `<a id>` + `## ID · 한글 이름`과 `- Status:` 줄. ID는 바꾸지 않는다.
 - 기능을 더하거나 고치면 같은 커밋에서 해당 앵커를 고친다. 끝난 항목도 PRD 표에 남기고 상태를 done으로, 앵커에 `- Status: done`을 남긴다.
+- (카테고리 설명·옛 §10 알려진 문제가 옮겨 간 ID: [docs/index.md](docs/index.md) 문서 지도·Glossary)
+
+---
+
+옛 절 번호·용어 대응은 [docs/index.md](docs/index.md#glossary) Glossary로 옮겼다.
