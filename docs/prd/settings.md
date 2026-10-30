@@ -114,7 +114,12 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
   - 설명은 짧게(한 줄) — 옛 env 이름·판정 꼴 같은 내부 표시는 sample에서 뺀다(필요하면 env-guide).
   - 사용처가 없는 칸·뜻이 겹치는 칸은 코드에서 지운다(고정값이면 코드 상수로). 지울 목록은 지우기 전에 사용자 확인.
   - 시점: 0.2.0에 함께 — 설정 모델 파일은 모든 레이어의 code_fp에 들어가 서버 전체 재처리가 생기므로, 전체 재적재가 있는 gold 원천별 스키마(pl-28)와 한 번에 묶는다.
-- 열린 질문: 칸별 분류표(사용처 조사 결과)와 지울 목록 확인 · 서버 settings.yaml 옮기기 방법(`common.config.migrate`로 새 경로 변환).
+- 조사(10-30, 칸 443개): 필수 42(PC·서버 11, 서버만 31) · 파라미터 281 · 경로 49 · PC·시험 전용 61 · 사용처 없음 8 · 중복 2.
+- 결정(사용자 10-30 2차):
+  - 지운다(10개): `common.paths.criteria_file`(코드 상수 사용) · `pipeline.load.publish.source_system`(코드 고정값) · `mcp.search.ocr_dpi`(읽는 곳 없음) · `common.paths.config_dir`(셸은 `$SERVER_ENV_DIR`) · `pipeline.eval.e2e_qa_set`·`e2e_questions`(형식 점검만) · `common.dev.docker.postgres_db`·`postgres_user`(compose는 `PG_DB`·`PG_USER`) · 중복 `mcp.server.query_cache` → `common.models.embed.query_cache`, `pipeline.transform.structure.edw_embed` → `structure.embed`로 합침.
+  - 켜기·끄기 스위치(약 40개)는 세분 카테고리로 모아 목록으로 보여 준다 — 기능이 없어진 스위치는 지운다. 파라미터 절의 카테고리는 더 세분해도 된다.
+  - 운영 값(대기 시간·작업자 수·자원 한도·상한 등)은 파라미터로 두되, 기본값 말고 다른 값을 쓴 흔적이 없는 것을 "코드 상수 후보"로 추려 보여 준다.
+- 열린 질문: 스위치 목록·코드 상수 후보 확인 · 서버 settings.yaml 옮기기 방법(`common.config.migrate`로 새 경로 변환).
 - 파일: `common/config/{settings,sample,keyscan,migrate,export}.py`, `pipeline/config.py`, `mcp_server/config.py`, `settings.sample.yaml`, `deploy/host/`(설정 꺼내 쓰는 셸), `docs/operations/env-guide.md`.
 - Status: todo
 
