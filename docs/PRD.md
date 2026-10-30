@@ -106,7 +106,7 @@
 | 검색 평가 | done | hit@k · 지연 · 보고서 | [e2-04](prd/test.md#e2-04) |
 | 답변 점검 | done | `rag_qa` · 인용 점검 | [e2-05](prd/test.md#e2-05) |
 | EDW 값 답변 인용 실패 | done | 그대로 둠(결정) | [e2-12](prd/test.md#e2-12) |
-| answer_gen 인용 버그 | todo | L-2 · P-2 · CR-2~7 | [e2-19](prd/test.md#e2-19) |
+| answer_gen 인용 버그 | done | L-2 · P-2 · CR-2~7 | [e2-19](prd/test.md#e2-19) |
 | 분류 수용 보고서 | todo | dev 정답 샘플 대조 · 일치율 · 혼동표 | [e2-20](prd/test.md#e2-20) |
 | 스택·모델 비교 | done | 행렬 · 예상 비용 | [e2-06](prd/test.md#e2-06) |
 | 검색 점검 페이지 | done | 로컬 페이지 · 포트 | [e2-07](prd/test.md#e2-07) |

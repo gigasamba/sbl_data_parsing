@@ -106,7 +106,8 @@
   - CR-6: `python -O`이면 `verify_citations.py`의 `assert`가 빠진다.
   - CR-7: dict를 직렬화했다가 다시 읽어, 인자를 펼쳐 넘기는 모델이면 시그니처 TypeError(실제로는 드묾).
 - 파일: `validation/e2e/answer_gen.py`, `valid_env/answer_test/rag_qa/`.
-- Status: todo
+- 반영(10-30 `7b0c3c6`·`89d7862`): `verify_note`는 글 머리 대신 `format_error`로 가른다(L-2·P-2·CR-2~4). JSON으로 못 바꾸는 값은 problems로 돌린다(CR-5). 객체가 아닌 답은 answer_gen이 먼저 거른다(CR-6 — `-O`와 무관, 잠긴 `verify_citations.py`는 그대로). 객체 인자는 다시 직렬화하지 않는다(CR-7). 테스트: `tests/general/e2e/test_answer_gen.py`.
+- Status: done
 
 <a id="e2-20"></a>
 ## e2-20 · 분류 수용 보고서
