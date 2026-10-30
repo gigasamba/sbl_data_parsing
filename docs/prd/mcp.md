@@ -28,6 +28,7 @@
 - 무엇: 부드러운/하드 고객 범위, 숨김 문서 제외, 최신을 묻는 질문에서는 새 판을 옛 판보다 위로(`SEARCH_RECENCY=1` 기본, `2` = 늘. 옛 판은 남기고 `superseded` 표시), 사본 묶음이 이름 바뀐 사본을 합친다.
 - 파일: `mcp_server/services/search/clientscope.py`, `supersede.py`, `common/core/docmeta.py`.
 - 고칠 것(reference 비교(사용자 grill 10-30, 원본은 git 밖) M3·T2 — 버그): `client` 판정을 운영 10-28 방식으로 — 별칭 그룹으로 정확히 일치, `sf_acc_name`이 비었을 때만 라벨로 판정, 목록은 OR로 받는다. 파일: `mcp_server/services/search/search_svc.py`, `clientscope.py`.
+- 결정(사용자 10-30 PRD grill): C6 — 검색의 고객 거르기는 EDW에서 조인한 고객(`client_edw`)만 쓴다. 본문에서 찾은 고객(`clients_doc`)은 참고용으로만 둔다. LAS는 EDW 고객이 비어 고객 거르기에서 늘 빠진다(원천별 스키마라 LAS는 따로 검색됨).
 - Status: todo — client 판정 고침(T2). 나머지는 done.
 
 <a id="mc-04"></a>

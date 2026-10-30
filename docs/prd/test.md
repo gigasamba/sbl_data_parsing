@@ -143,6 +143,7 @@
 - 이유: 설정 약 50개가 PC 시험·실험에만 있다(`common.dev.*`, `pipeline.dev.*`, `pipeline.eval.*`, `mcp.dev.*`, `runtime.exp_*`, `graphiti.*`).
 - 파일: `validation/e2e/`, `pipeline/eval/`, `mcp_server/cli/`, `common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`.
 - 결정(사용자 10-30 grill): `validation/search_ui`(검색 점검 페이지)와 `valid_env/answer_test`(답변 점검)**만** 남긴다. 스택 비교, 자동 질문 만들기, 지운 묶음용 채점기(예: `chart_values_score.py`)와 그 설정은 지운다.
+- 결정(사용자 10-30 PRD grill): C7 — PC 평가 도구는 이 행대로 둘만 남긴다. 스택·모델 비교 도구(`model_matrix`·`score_gold`·`mcp_eval`)를 전제로 한 다른 행(e2-03·e2-04·e2-06·pl-31·pl-32·pl-03)은 '비교는 필요할 때 다시 만든다'로 고치고, e2-11의 `test_run_combo`는 도구와 함께 지운다.
 - Status: todo
 
 <a id="e2-17"></a>
