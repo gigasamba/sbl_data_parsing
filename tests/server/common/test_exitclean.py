@@ -111,6 +111,36 @@ with exitclean._LOCK:  # 주 스레드가 목록 잠금을 쥔 채 SIGTERM을 �
 """
 
 
+_ATEXIT_TERM = """
+import os, sys, time
+from common.config import settings as C
+from common.core import resources as RS
+p = C.child_env(None, PIPE_PROCS="1")["SETTINGS_FILE"]
+code = "import signal, time\\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\\nopen(__import__('sys').argv[1], 'w').close()\\ntime.sleep(120)"
+child = RS.gated_popen([sys.executable, "-c", code, sys.argv[1]])
+while not os.path.exists(sys.argv[1]):
+    time.sleep(0.05)
+print(p, child.pid, flush=True)
+"""  # 정상 종료 — atexit 정리가 SIGTERM을 무시하는 자식을 기다리는(최대 10초) 동안 SIGTERM을 받음
+
+
+def _term_during_atexit():
+    """POSIX — PR #14 리뷰 P2: 정상 종료의 atexit 정리 도중 SIGTERM이 와도 정리가 끊기지 않는다(자식 SIGKILL·회수, 덮기 파일 지움)."""
+    ready = Path(tempfile.mkdtemp()) / "ready"
+    m = subprocess.Popen(
+        [sys.executable, "-c", _ATEXIT_TERM, str(ready)], env=child_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    assert m.stdout is not None
+    overlay, child_pid = m.stdout.readline().split()
+    time.sleep(1.0)  # atexit 정리가 자식(SIGTERM 무시)을 기다리는 중
+    m.terminate()
+    _, err = m.communicate(timeout=60)
+    assert m.returncode == 0, (m.returncode, err[-500:])  # 정상 종료 그대로(정리 중 SIGTERM은 무시)
+    assert not Path(overlay).exists(), f"덮기 파일이 남음 {overlay}"
+    assert _gone(int(child_pid)), f"자식 PID {child_pid}가 남음"
+    print("[시험] atexit 정리 중 SIGTERM — 정리 끝까지(자식 회수·덮기 파일 지움)")
+
+
 def _term_while_locked():
     """POSIX — PR #14 리뷰 P1: 잠금을 쥔 주 스레드가 SIGTERM을 받아도 교착 없이 끝나고(143) atexit가 덮기 파일을 지운다."""
     m = subprocess.Popen([sys.executable, "-c", _HELD], env=child_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -136,3 +166,4 @@ def test_exit_cleanup():
         _case("term")
         _setarg_exec()
         _term_while_locked()
+        _term_during_atexit()
