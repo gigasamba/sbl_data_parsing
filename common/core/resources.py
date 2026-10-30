@@ -21,10 +21,7 @@ CPU = min(호스트 코어, CPU 친화도(sched_getaffinity), cgroup 한도(cpu.
 CPU 문(gated_popen이 메모리 문 다음에 같이 거침 — os.getloadavg() 없는 Windows는 측정 못 해 바로 통과):
   CPU_MAX_LOAD   wait_cpu() 상한(기본 0.9 = 90%, 사용자 10-07) — 1분 부하 평균 ÷ cpus() 가 이 값 이상이면 새 프로세스를 늦춤(실행 중인 건 안 건드림)
 
-실험 도구(stack_matrix) 병렬 수 — plan_experiment(cmd)가 CPU·메모리로 자동(명시 숫자가 있으면 그 값 우선):
-  EXP_RESERVE_GB     meta 4(PostgreSQL·OS·MCP 몫, plan()의 PIPE_RESERVE_GB와 별도 상한)
-  EXP_PROC_GB_BUILD  1.5(파싱·임베딩 준비) · EXP_PROC_GB_RUN·EXP_PROC_GB_ANSWER 0.5(API 대기 위주) — 측정 10-05
-  LLM_MAX_CONCURRENCY  LLM 서버 동시 요청 상한(기본 8) — answer의 inner-workers auto = max(1, 상한 ÷ workers)
+모델 서버 동시 요청 상한(실험 도구 stack_matrix의 병렬 수 plan_experiment·LLM_MAX_CONCURRENCY는 10-30 지움 — pl-21):
   VLM_MAX_CONCURRENCY  VLM 서버 동시 요청 상한(기본 8) — cli/pipeline.py가 --workers(문서) 기준으로 쪽 동시 수를 줄여 지킴
 사용: python common/resources.py           → 감지값·결정 표
       python common/resources.py --env     → export 줄(셸에서 eval)
@@ -246,40 +243,6 @@ def plan(cpu=None, mem=None):
         else f"CPU {cpu} − 예비 → {by_cpu} · 메모리 {mem} GB → {by_mem} · 상한 {int(_f('PIPE_MAX_PROCS', 8))}"
     )
     return {"cpus": cpu, "mem_gb": mem, "procs": max(1, procs), "threads": max(1, threads), "workers": max(1, workers), "why": why}
-
-
-def plan_experiment(cmd, cpu=None, mem=None):
-    """실험 도구(stack_matrix) 병렬 수 자동 결정 — → {workers, inner_workers(cmd=='answer'만), why}.
-    plan()의 PIPE_PROCS(생산 파싱용)와 다른 용도라 별도 상한 — CPU 코어 전부가 아니라 1개는 호출 측(이 파이썬 프로세스·OS)에 남김.
-    cmd별 PER_PROC_GB(측정 10-05): build(파싱·임베딩 준비, 로컬 모델 조합은 _heavy로 이미 직렬화)는 1.5GB · run·answer(주로 API 대기)는 0.5GB."""
-    cpu = cpus() if cpu is None else cpu
-    mem = mem_gb() if mem is None else mem
-    per_proc = _f(f"EXP_PROC_GB_{cmd.upper()}", 1.5 if cmd == "build" else 0.5)
-    reserve = _f("EXP_RESERVE_GB", 4)
-    by_cpu = max(1, cpu - 1)
-    by_mem = max(1, math.floor((mem - reserve) / per_proc)) if mem else by_cpu
-    cap = int(_f("EXP_MAX_WORKERS", 8))  # 큰 PC(32코어)에서 31개까지 뜨지 않게 상한(10-05 — 파싱 PIPE_MAX_PROCS와 같은 이유)
-    workers = max(1, min(by_cpu, by_mem, cap))
-    why = f"CPU {cpu}−1 → {by_cpu} · 메모리 {mem} GB − 예비 {reserve} ÷ {per_proc} → {by_mem} · 상한 {cap}"
-    out = {"workers": workers, "why": why}
-    if cmd == "answer":
-        cap = int(_f("LLM_MAX_CONCURRENCY", 8))
-        out["inner_workers"] = max(1, cap // workers)
-    return out
-
-
-def resolve_workers(cmd, v):
-    """명령 인자 --workers 값('auto'·숫자) → 정수(plan_experiment 기준)."""
-    return plan_experiment(cmd)["workers"] if str(v).strip().lower() in ("", "auto", "0") else max(1, int(v))
-
-
-def resolve_inner_workers(v, workers):
-    """명령 인자 --inner-workers 값('auto'·숫자) → 정수 — auto면 LLM_MAX_CONCURRENCY(기본 8) ÷ workers(내림, 최소 1)로
-    workers × inner_workers(총 동시 LLM 요청)가 상한을 넘지 않게."""
-    if str(v).strip().lower() not in ("", "auto", "0"):
-        return max(1, int(v))
-    cap = int(_f("LLM_MAX_CONCURRENCY", 8))
-    return max(1, cap // max(1, workers))
 
 
 def vlm_page_concurrency(doc_workers, requested):

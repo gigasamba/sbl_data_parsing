@@ -1373,6 +1373,9 @@ class CommonModelsGuard(Section):
 
 
 class CommonModelsLlm(Section):
+    REMOVED = frozenset(
+        {"max_concurrency"}
+    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     allow_external: bool | None = F(False, "LLM_ALLOW_EXTERNAL", "LLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "LLM_API_KEY", "LLM 엔드포인트 API 키(있을 때만 사용)")
     base_url: str | None = F(None, "LLM_BASE_URL", "LLM 엔드포인트 주소(OpenAI 호환 …/v1)")
@@ -1384,9 +1387,6 @@ class CommonModelsLlm(Section):
     est_usd: float | None = F(0.01, "LLM_EST_USD", "LLM 한 턴(run_agent)당 예상 비용($) — 예산 선차감용")
     extra_body: JsonValue | None = F(
         None, "LLM_EXTRA_BODY", "LLM 요청 본문에 합칠 JSON 객체(예: 생각 끄기 {'reasoning':{'enabled':false}})"
-    )
-    max_concurrency: float | None = F(
-        8, "LLM_MAX_CONCURRENCY", "LLM 동시 요청 총량(실험 도구 answer의 workers×inner_workers 상한)", unset=("auto",)
     )
     model: str | None = F(None, "LLM_MODEL", "LLM 모델 이름")
     price_in: float | None = F(None, "LLM_PRICE_IN", "LLM 입력 단가($/백만 토큰) — 내장 가격표보다 우선")
@@ -1430,11 +1430,10 @@ class CommonModelsVlm(Section):
 
 
 class CommonDev(Section):
-    exp_store: str | None = F(None, "EXP_STORE", "PC 평가(stack_matrix) 결과 저장소 폴더")
-    llm_est_in_tokens: int | None = F(1500, "LLM_EST_IN_TOKENS", "stack_matrix 비용 추정에서 질문당 입력 토큰 가정")
-    llm_est_out_tokens: int | None = F(None, "LLM_EST_OUT_TOKENS", "stack_matrix 비용 추정에서 질문당 출력 토큰 가정")
+    REMOVED = frozenset(
+        {"exp_store", "llm_est_in_tokens", "llm_est_out_tokens", "min_gold_coverage"}
+    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     llm_fake: bool | None = F(False, "LLM_FAKE", "1이면 LLM 호출을 네트워크·캐시 없는 모의 응답으로 대체(시험·비용 추정용)", on=("1",))
-    min_gold_coverage: float | None = F(0.95, "MIN_GOLD_COVERAGE", "stack_matrix에서 정답 문서 포함률이 이 값 이상이어야 valid")
     docker: CommonDevDocker = Field(default_factory=CommonDevDocker)
 
 
@@ -1459,6 +1458,9 @@ class CommonHost(Section):
 
 
 class CommonPaths(Section):
+    REMOVED = frozenset(
+        {"eval_sets_dir", "korean_font"}
+    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     client_roster: str | None = F(
         None, "CLIENT_ROSTER", "고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) — 용어·별칭에 합침", pinned="handoff"
     )
@@ -1480,10 +1482,8 @@ class CommonPaths(Section):
         "준비(dedup·회전) 끝난 문서 폴더 — 파싱의 --src 기본값(pipeline 이미지 안 기본 /app/output/prepared — 옛 Dockerfile ENV, B-2)",
     )
     draft_terms_out: str | None = F(None, "DRAFT_TERMS_OUT", "용어 자동 초안 CSV 경로", pinned="handoff")
-    eval_sets_dir: str | None = F(None, "EVAL_SETS_DIR", "평가 세트(합성 E2E·정답률 측정) 저장소 폴더")
     glossary_dir: str | None = F(None, "GLOSSARY_DIR", "용어 사전 폴더(domain_terms.csv·id_patterns.csv 등)", pinned="handoff")
     index_root: str | None = F(None, "INDEX_ROOT", "이름 있는 색인 폴더 루트(<index_id>/bundle)")
-    korean_font: str | None = F(None, "KOREAN_FONT", "한글 글꼴 파일 경로(그림 렌더·점검용)")
     mcp_bundle: str | None = F(
         None,
         "MCP_BUNDLE",
@@ -1511,20 +1511,13 @@ class CommonPaths(Section):
 
 
 class CommonRuntime(Section):
+    REMOVED = frozenset(
+        {"exp_max_workers", "exp_proc_gb_answer", "exp_proc_gb_build", "exp_proc_gb_run", "exp_reserve_gb"}
+    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     cpu_max_load: float | None = F(0.9, "CPU_MAX_LOAD", "새 하위 프로세스를 띄우는 CPU 부하 상한(1분 부하 평균 ÷ 코어 수)", unset=("auto",))
     draft_terms_lock_timeout: float | None = F(
         5.0, "DRAFT_TERMS_LOCK_TIMEOUT", "용어 초안 CSV 쓰기 잠금 대기 시간(초) — 못 얻으면 이번엔 포기", pinned="handoff"
     )
-    exp_max_workers: float | None = F(8, "EXP_MAX_WORKERS", "실험 도구(stack_matrix) 병렬 작업 수 상한(개)", unset=("auto",))
-    exp_proc_gb_answer: float | None = F(
-        0.5,
-        "EXP_PROC_GB_ANSWER",
-        "실험 answer 작업 1개당 메모리 가정(GB)(S7b — resources.plan_experiment가 cmd로 이름을 지어 읽음)",
-        unset=("auto",),
-    )
-    exp_proc_gb_build: float | None = F(1.5, "EXP_PROC_GB_BUILD", "실험 build 작업 1개당 메모리 가정(GB)", unset=("auto",))
-    exp_proc_gb_run: float | None = F(0.5, "EXP_PROC_GB_RUN", "실험 run(·answer) 작업 1개당 메모리 가정(GB)", unset=("auto",))
-    exp_reserve_gb: float | None = F(4.0, "EXP_RESERVE_GB", "실험 병렬 수를 정할 때 남겨 둘 메모리(GB)", unset=("auto",))
     lib_env: LibEnv | None = F(
         {},
         "LIB_ENV",

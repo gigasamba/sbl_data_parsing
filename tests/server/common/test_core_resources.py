@@ -1,6 +1,5 @@
 """common.core.resources 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.core.resources --selftest`."""
 
-import math
 import sys
 from pathlib import Path
 from unittest import mock
@@ -12,9 +11,6 @@ from common.core.resources import (
     mem_gb,
     mem_used_pct,
     plan,
-    plan_experiment,
-    resolve_inner_workers,
-    resolve_workers,
     wait_cpu,
     wait_mem,
 )
@@ -132,20 +128,6 @@ def selftest():
         M._loadavg1 = corig
     print("[selftest] CPU 문(가짜 부하 수열) — 포화 중 새 작업 대기·로그 1번·하락 뒤 통과")
 
-    # plan_experiment — 4 vCPU·32 GB(개발 서버) → CPU가 제한(4−1=3) · 32 GB·62 GB(이 PC류) → min(CPU−1, 메모리 식) 그대로
-    _env.enter_context(COMMON.env(EXP_PROC_GB_RUN=None, EXP_PROC_GB_BUILD=None, EXP_RESERVE_GB=None, LLM_MAX_CONCURRENCY=None))
-    p = plan_experiment("run", cpu=4, mem=32)
-    assert p["workers"] == 3, p  # CPU 4−1=3 · 메모리 (32−4)÷0.5=56 → CPU가 제한
-    p = plan_experiment("build", cpu=32, mem=62)
-    assert p["workers"] == min(31, math.floor((62 - 4) / 1.5), 8), p  # 공식(CPU·메모리 중 작은 쪽) + 상한 EXP_MAX_WORKERS 8
-    for workers in (1, 2, 3, 8):  # workers ≤ LLM_MAX_CONCURRENCY(기본 8)면 총 동시 요청이 상한 안
-        p = plan_experiment("answer", cpu=workers + 1, mem=32)
-        assert p["workers"] == workers and p["workers"] * p["inner_workers"] <= 8, p
-    p = plan_experiment("answer", cpu=21, mem=32)  # CPU로는 20이지만 상한 EXP_MAX_WORKERS 8 → 8×inner 1 = 8 ≤ LLM 상한 8
-    assert p["workers"] == 8 and p["inner_workers"] == 1, p
-    assert resolve_workers("run", "auto") == plan_experiment("run")["workers"] and resolve_workers("run", "5") == 5
-    assert resolve_inner_workers("auto", 3) == max(1, 8 // 3) and resolve_inner_workers("2", 3) == 2
-    print("[selftest] plan_experiment — CPU·메모리 기준 workers(서버 4vCPU→3) · inner-workers auto가 LLM_MAX_CONCURRENCY 안 통과")
     _env.close()
 
 

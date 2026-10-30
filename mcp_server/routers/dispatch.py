@@ -12,7 +12,7 @@ _LIMITER = None
 
 
 def _limiter():
-    """동시 도구 실행 상한(MCP_MAX_CONCURRENCY, 기본 8 — LLM_MAX_CONCURRENCY·VLM_MAX_CONCURRENCY와 같은 기본값)."""
+    """동시 도구 실행 상한(MCP_MAX_CONCURRENCY, 기본 8 — VLM_MAX_CONCURRENCY와 같은 기본값)."""
     global _LIMITER
     if _LIMITER is None:
         _LIMITER = anyio.CapacityLimiter(int(mc.cfg().server.max_concurrency))  # 기본 8(모델) — 한 번 만들어 둠

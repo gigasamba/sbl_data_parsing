@@ -351,6 +351,9 @@ class PipelineTransformRepresent(Section):
 
 
 class PipelineTransformStructure(Section):
+    REMOVED = frozenset(
+        {"wiki_domain_phrase"}
+    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     bundle_keep_empty_fig: bool | None = F(
         False, "BUNDLE_KEEP_EMPTY_FIG", "=1이면 내용이 빈 VLM 그림도 청크로 색인(되돌리기), 기본 0은 빈 그림 청크 안 만듦", on=("1",)
     )
@@ -378,9 +381,6 @@ class PipelineTransformStructure(Section):
     embed_max_chars: int | None = F(8000, "EMBED_MAX_CHARS", "임베딩 입력 청크 최대 글자 수(넘으면 자름, 400 오류 방지 안전망)")
     embed_retry: int | None = F(2, "EMBED_RETRY", "임베딩 API 실패 시 재시도 횟수")
     page_chunk_max: int | None = F(None, "PAGE_CHUNK_MAX", "쪽 청크 최대 글자 수(임베딩 입력 한도 초과 방지)")
-    wiki_domain_phrase: str | None = F(
-        "바이오 CDMO", "WIKI_DOMAIN_PHRASE", "위키 초안 지시문의 도메인 예시 문구(기본 '바이오 CDMO')를 바꿈"
-    )
 
 
 class PipelineTransformVlm(Section):
@@ -423,10 +423,9 @@ class PipelineDev(Section):
 
 
 class PipelineEval(Section):
-    REMOVED = frozenset({"phase_report_legacy"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    diagram_raster_vlm: bool | None = F(
-        False, "DIAGRAM_RASTER_VLM", "도식 간선 채점에서 raster 케이스에 실제 VLM을 부를지(=1 실호출 / 그 외 가짜)", on=("1",)
-    )
+    REMOVED = frozenset(
+        {"diagram_raster_vlm", "phase_report_legacy"}
+    )  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     e2e_qa_set: str | None = F(None, "E2E_QA_SET", "e2e 시험 질문 묶음 이름(valid_env/unstructured/<이름>/qa.json)")
     e2e_questions: str | None = F(None, "E2E_QUESTIONS", "e2e 질문 파일 경로(또는 auto = 그 자리에서 생성)")
     gold_draft_max_pages: int | None = F(30, "GOLD_DRAFT_MAX_PAGES", "정답 초안 생성(gold_draft)에서 문서당 처리할 쪽 수 상한(쪽)")

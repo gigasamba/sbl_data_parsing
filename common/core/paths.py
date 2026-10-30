@@ -78,16 +78,6 @@ GLOSSARY_ROOT = RES_ROOT / "vocab" / "glossary"  # 용어집·명부 예시·고
 APP_ROOT = PROJ_ROOT  # 런타임 루트(output/·assets/·docker/가 있는 곳) — PC=저장소 루트, 이미지=/app(둘 다 PROJ_ROOT와 같음, 위 설명)
 
 
-def __getattr__(name):
-    """EVAL_SETS_DIR — 평가 세트(합성 E2E·정답률 측정) 저장소. PC 기본값은 valid_env/unstructured, 서버는 설정(EVAL_SETS_DIR)으로.
-    S7b — 설정 객체에서 읽으므로 import 때가 아니라 처음 쓸 때 읽는다(이 파일은 거의 모든 프로세스가 import — pydantic을 늦게)."""
-    if name == "EVAL_SETS_DIR":
-        from common.config.settings import cfg
-
-        return Path(cfg().paths.eval_sets_dir or (PROJ_ROOT / "valid_env" / "unstructured"))
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 def child_env(extra=None):
     """하위 프로세스(python -m common.x.y·pipeline.x·validation.e2e.x 등 또는 스크립트 실행)가 파이프라인 패키지를 import하게 할
     env — PYTHONPATH를 세팅하는 유일한 자리(다른 곳은 여기를 거친다). os.environ을 베이스로 PKG_ROOT.parent

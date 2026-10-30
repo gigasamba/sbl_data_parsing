@@ -324,7 +324,7 @@ def object_reads():
 
 def check(found=None):
     """(빠진 키, 모델에만 있는 칸) — 빠진 키: 코드가 읽는데 모델 칸·NOT_SETTINGS 어디에도 없음(0이어야 함).
-    모델에만 있는 칸: 새 칸(KOREAN_FONT 등 아직 안 읽는 것)이나 지운 읽기 — 알리기만(설정 객체로 읽는 칸은 읽는 것으로 침 — S7b)."""
+    모델에만 있는 칸: 새 칸(아직 안 읽는 것)이나 지운 읽기 — 알리기만(설정 객체로 읽는 칸은 읽는 것으로 침 — S7b)."""
     from common.config import settings as S
 
     found = scan() if found is None else found
