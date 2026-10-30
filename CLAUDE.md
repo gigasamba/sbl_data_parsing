@@ -98,7 +98,7 @@ PYTHONPATH=. .venv/bin/python -c "import common as c; from common.core import ar
 ```bash
 bash deploy/release/lint_changed.sh          # 바꾼 .py만: ruff check · ruff format --check · mypy + 모듈 경계 — "[점검] 통과"가 나와야 커밋
 FIX=1 bash deploy/release/lint_changed.sh    # ruff 자동 수정·포맷(핑거프린트 보호 파일은 항상 제외)
-git config core.hooksPath .githooks          # 처음 한 번 — 커밋할 때 위 점검이 자동으로 실행됨(.githooks/pre-commit)
+git config core.hooksPath .githooks          # 처음 한 번 — 커밋할 때 위 점검(.githooks/pre-commit), push할 때 저장소 전체 ruff·mypy·모듈 경계 + selftest 판정(.githooks/pre-push — 걸리면 push 멈춤, GitHub Actions는 쓰지 않음, 사용자 10-30)
 .venv/bin/ruff check . && .venv/bin/ruff format --check . && PYTHONPATH=. .venv/bin/mypy   # 저장소 전체(push 전, 버전을 만들기 전) — 셋 다 0
 ```
 - **ruff와 mypy는 저장소 전체에서 경고 0이다**(핑거프린트 보호 파일 제외, mypy 범위는 pyproject의 `files`). 바꾼 파일만 보는 점검(`lint_changed.sh`, 커밋 hook)도 0이어야 커밋할 수 있다 — 새 경고를 만들지 않는다.

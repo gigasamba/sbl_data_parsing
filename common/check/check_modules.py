@@ -390,7 +390,7 @@ ENV_KINDS = (
     "호스트 도구",
 )
 _ENV_MARK = re.compile(r"env 남김 — (" + "|".join(ENV_KINDS) + ")")
-_ENV_SKIP = ("output/", ".venv/", "valid_env/", ".claude/", "docs/")
+_ENV_SKIP = ("output/", ".venv/", "valid_env/", ".claude/", "docs/", "reference/")  # reference/ — git 밖 참고 자료(PC 전용, 사용자 10-30)
 
 
 _ENV_ATTRS = ("environ", "getenv", "environb", "putenv", "unsetenv")  # putenv·unsetenv — VS7e3 R-4(⑩·⑪ 둘 다)
