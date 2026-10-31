@@ -87,7 +87,7 @@
 - 운영 계약(사용자 10-30 PRD grill A9 — 사용자 로컬 reference의 MCP 규약 최신판에서 필터 이름·뜻·출력 칸만 옮김):
   - 입력: `question` 필수(비면 오류 — 거르기만 하는 방식은 없음) · `k` 기본 8, 상한 50(넘으면 50으로 줄임).
   - 거르기(모두 AND, 같은 거르기의 목록은 OR, 맞는 값이 없으면 오류가 아니라 빈 결과, 모르는 인자는 무시):
-    - `source_system` — `SFDC`·`CRMS`·`LAS`·`FAQ`(G4 — `-test` 별칭도 받음).
+    - `source_system` — **필수, 값 하나**(G20 — 그 시스템의 gold 스키마만 찾음, 여러 시스템은 여러 번 부름) · `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`(A2) · `-test` 별칭도 받음(G4).
     - `client` — 고객 이름 하나 또는 목록(OR). 우리 결정은 EDW에서 조인한 고객(`client_edw`)만 본다([mc-05](#mc-05), C6 — 운영처럼 본문 라벨로 대신하지 않음). `client_like`(`true`) — `client`와 함께 쓰는 유일한 부분 일치.
     - `project_id` — SFDC 프로젝트 코드.
     - `division` — `CD`·`DS`·`DP`.
