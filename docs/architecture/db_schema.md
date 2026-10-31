@@ -20,7 +20,7 @@
 | ParsingMeta = 파싱 정보만 | EDW `AI.ParsingMeta`에는 원천 키·파싱 상태·silver 위치·단계별 칸만 쓴다(G19). 예외: 같은 내용 묶기용 원본 지문 `sha256`은 남긴다(C5). 파일 메타는 쓰지 않는다. 파싱이 통째로 실패한 문서는 행을 쓰지 않는다(C3 — 다음 실행에서 다시 후보). |
 | 판 표기 둘 | 두 곳 모두 이름은 `pipeline_version` — ParsingMeta `pipeline_version` = 이 문서를 gold에 올린 판(다시 올릴지 판단) · gold `doc.pipeline_version` = 이 행을 만든 코드 판(검색 쪽 확인). 뜻은 C9대로 나누고 이름만 맞춘다(사용자 10-31 grill — C9 고침, ParsingMeta `gold_version` 안은 없앰). |
 | 근거 주소 `rep_uri` | 검색 중 EDW에 접속하지 않는다 — 적재 때 ParsingMeta의 `rep_key`를 gold `doc.rep_key`로 복사하고, `rep_uri`(`s3://<버킷>/<rep_key>`)는 그 값으로 만든다(C8 — mc-15·mc-17). |
-| 가장 늦은 행 | 같은 `s3_key`가 `AI.FileStorageMap`에 여러 행이면 `created_at`이 가장 큰 행을 기준으로 삼는다(A4). 나중에 같은 `s3_key`의 더 새 행이 오면 **같은 `doc_id`를 유지하고 다시 파싱하지 않는다**(같은 내용) — 저장된 기준·메타만 새 행으로 고치고, 밀려난 행은 EDW 예외 이력 표(§4 `edw.SupersededRow`, 새로 — D-9)에 남긴다(사용자 10-31 grill, A4 고침). |
+| 가장 늦은 행 | 같은 `s3_key`가 `AI.FileStorageMap`에 여러 행이면 `created_at`이 가장 큰 행을 기준으로 삼는다(A4). 나중에 같은 `s3_key`의 더 새 행이 오면 **같은 `doc_id`를 유지한다** — `sha256`이 같으면 다시 파싱하지 않고 저장된 기준·메타만 새 행으로 고치며, `sha256`이 다르면 같은 `doc_id`로 다시 파싱·다시 적재한다(사용자 10-31). 밀려난 행은 EDW 예외 이력 표(§4 `edw.SupersededRow`, 새로 — D-9)에 남긴다(사용자 10-31 grill, A4 고침). |
 | 근거 키 | `doc.file_path`는 지운다. MCP 근거의 `chunk_key`는 `<doc_id>:<순번>` — `doc_id`는 gold `doc.doc_id`(자동 번호), 청크는 `doc_id`만 갖는다(FK, 청크에 `s3_key` 없음). 스키마 5벌이 **시퀀스 하나를 함께 써서** `doc_id`가 스키마끼리 겹치지 않는다(허브가 정함 — 사용자 확인 필요). 적재는 `s3_key`로 upsert하고 다시 넣지 않으므로 `doc_id`가 바뀌지 않는다. `make_chunk_key`·sha256 `doc_key`는 0.2.0에 없어진다(사용자 10-31 grill — mc-16의 `<doc_key>:<순번>`을 뒤집음). |
 | 원본 주소 | `source_uri`는 gold `doc.s3_key`로 만들고, 근거 주소 `rep_uri`는 `doc.rep_key`로 만든다(C8) — `s3_key`는 `doc`에만 둔다(사용자 10-31 grill). |
 | 원천 id 칸 | 원천 시스템의 id(영업 기회 id 등)는 스키마마다 그 EDW 원본 표의 칸 이름 그대로 둔다(예: `crms.doc`은 CRMS 원본 칸 이름) — `sf_op_id` 같은 한 이름을 함께 쓰지 않는다. 아직 모르는 이름은 "EDW 원본 칸 이름 — D-1 확인"(사용자 10-31 grill). |
@@ -208,7 +208,7 @@
 | size | INTEGER | 크기 | 〃 | 〃 | 유지 |
 | mtime | TEXT | 고친 때 | 〃 | 〃 | 유지 |
 | etag | TEXT | etag | 〃 | 〃 | 유지 |
-| status | TEXT | 상태(parsed·failed·deleted…) | 〃 | 〃 | 유지 |
+| status | TEXT | 상태 — 성공(`parsed`)일 때만 씀(실패는 로그만, `deleted` 길은 10-30에 없앰 — pl-12) | 〃 | 〃 | 유지 |
 | source | TEXT | 원천 종류 | 〃 | 〃 | 유지 |
 | doc_id | TEXT | RDB 문서 id | 〃 | 〃 | 유지 |
 | version | TEXT | 판 | 〃 | 〃 | 유지 |
@@ -325,7 +325,7 @@
 | file_size | (EDW) | 크기 | EDW | source, run_docs | 유지 |
 | content_version_id | (EDW) | 판 id | EDW | source `_rdb_rows` | 유지 |
 | source_system | (EDW) | 원천(SFDC·CRMS·LAS — 아니면 Other) — 이미 있는 칸, 코드가 아직 직접 안 읽음(지금은 외부 추출 file_meta JSONL로만) → 읽기 시작 | EDW | (source `_rdb_rows`) | 유지 |
-| created_at | (EDW) | 원천 등록 시각 — 같은 `s3_key`의 여러 행 중 가장 큰 값의 행이 기준(A4). 더 새 행이 오면 같은 `doc_id`를 유지하고 다시 파싱하지 않으며 기준·메타만 고친다(사용자 10-31 grill). gold `doc.created_at`으로 복사(KST). PC 대역에 칸이 있음, 실제 EDW는 D-1 | EDW | (source — 기준 행 고르기, 적재) | 유지 |
+| created_at | (EDW) | 원천 등록 시각 — 같은 `s3_key`의 여러 행 중 가장 큰 값의 행이 기준(A4). 더 새 행이 오면 같은 `doc_id`를 유지하고, `sha256`이 같으면 기준·메타만 고치고 다르면 다시 파싱·적재한다(사용자 10-31). gold `doc.created_at`으로 복사(KST). PC 대역에 칸이 있음, 실제 EDW는 D-1 | EDW | (source — 기준 행 고르기, 적재) | 유지 |
 | last_modified_time | (EDW, 가정) | 원본 고친 때(10-29 가정 — 있는 칸으로 보고 실제 이름 확인 필요, D-1) → 읽기 시작 | EDW | (변경 감지) | 유지 |
 
 ### edw.SupersededRow
@@ -377,7 +377,7 @@ PC 대역 예시 — [pl-29](../prd/etl.md#pl-29) 10-31. 고객 연결 4단계�
 | pipeline_version | NVARCHAR(64) | 이 문서를 gold에 올린 판 — 다시 올릴지 판단. 지금은 파싱 때 쓰는 파이프라인 판이었으나 0.2.0에는 gold 성공 때 쓰고 gold가 끝나기 전에는 NULL(C9 — gold `doc.pipeline_version`은 행을 만든 코드 판, 이름 같고 뜻 다름 — 사용자 10-31 grill: `gold_version` 새 칸 대신 이 칸 이름을 씀) | parsing_meta `plan` → (gold 성공 때) | (운영자·재처리 판정) | 유지 |
 | status | NVARCHAR(16) | active·changed·deleted | 〃, `apply_registry_status` | find·`find_rep_path`·상태 UPDATE 조건 | 유지 |
 | status_at | NVARCHAR(32) | 상태 바뀐 때(UTC) | `apply_registry_status` | 없음(SELECT 안 함 — 운영자가 봄) | 유지 |
-| engines_used | NVARCHAR(MAX) | 쓰인 엔진 전부(JSON) — 0.1.0: 성공한 엔진만(이름 + 판, 사용자 10-30 grill) | parsing_meta `plan` | 없음 | 유지 |
+| engines_used | NVARCHAR(MAX) | 쓰인 엔진 전부(JSON) — 0.2.0: 성공한 엔진만(이름 + 판, 사용자 10-30 grill) | parsing_meta `plan` | 없음 | 유지 |
 | engines_summary | NVARCHAR(512) | 엔진 한 줄 요약 | 〃 | 없음 | 삭제 |
 | parsed_at | DATETIME2(0) | 넣은 때(기본 SYSUTCDATETIME) — 파싱 정보라 남김(G19), gold `doc.parsed_at`으로 복사 | DB 기본값 | (적재 — gold `doc` 복사) | 유지 |
 | source_key_hash | BINARY(32) 계산 칸 | `source_key` sha256 — 유일 색인 키(1700바이트 상한 우회) | DB | 유일 색인 | 유지 |
@@ -416,7 +416,7 @@ PC 대역 예시 — [pl-29](../prd/etl.md#pl-29) 10-31. 고객 연결 4단계�
 | D-6 | 0.2.0 Alembic 마이그레이션 하나 — 원천별 gold 스키마 5벌(`sfdc`·`crms`·`las`·`faq`·`other`) 만들기 — `doc_id`는 스키마 5벌이 함께 쓰는 시퀀스 하나(허브가 정함)(칸: `s3_key`·`original_filename`·`client_edw`·`clients_doc`·`doc_class`·`created_at`·`rep_key`·`rep_engine`·`parsed_at`·`pipeline_version` 추가, `file_path`·`clients`·`doc.source_system`·`chunk.source_system` 삭제, 청크는 `doc_id`만(청크 `s3_key` 없음), `faq.chunk.faq_group`) + struct 지우기(D-7)를 함께, 뷰 `v_chunk_source`는 스키마마다 다시 만듦 — 기존 서버 데이터는 다시 적재 | DB 담당자 승인 한 번([pl-25](../prd/etl.md#pl-25)) · 첫 적재가 전체 e2e([pl-23](../prd/etl.md#pl-23))와 함께 |
 | D-7 | struct 표 지우기(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`·`prod_master`, 마스터 2개는 CSV로) 전 백업 | 되돌릴 수 없는 삭제 |
 | D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 `source_system='FAQ'`로 등록(G3, 사용자 10-30 — [pl-39](../prd/etl.md#pl-39)) | EDW 담당자 협의 필요 — FAQ 행을 누가 어떻게 넣나 |
-| D-9 | 밀려난 `FileStorageMap` 행의 예외 이력 표(새 EDW 표 — §4 `edw.SupersededRow` 안) — 표 이름·칸·누가 쓰나 | 사용자 10-31 grill: 같은 `s3_key`의 더 새 행이 오면 다시 파싱하지 않고 옛 행을 이력에 남김 |
+| D-9 | 밀려난 `FileStorageMap` 행의 예외 이력 표(새 EDW 표 — §4 `edw.SupersededRow` 안) — 표 이름·칸·누가 쓰나 | 사용자 10-31: 같은 `s3_key`의 더 새 행이 오면 같은 `doc_id`(`sha256`이 다를 때만 다시 파싱)이고 옛 행을 이력에 남김 |
 
 ## 7. 사용자 결정 (10-30 grill 7차)
 

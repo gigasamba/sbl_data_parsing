@@ -165,6 +165,7 @@
 - 지움: `internal_docs.py` 숨김 문서 함수(6개, 지운 doc 칸을 아직 SELECT하는 문서 조회·목록 포함), 위키 도구, 외부 KG 어댑터, 시험만 부르는 함수([e2-17](#e2-17)), 지운 평가 묶음용 채점기([e2-10](#e2-10)).
 - 남김: `PARSE_STREAM`, 그림자 모드, `MCP_EVIDENCE_PATHS`, `SEARCH_TIE_BREAK`, SQLite 대체, 문서 대장 CLI, 메일 첨부, 용어집·고객 목록 도구, 밤 타이머, `os_put`, 서버 점검.
 - 규칙: MCP 도구 이름과 입출력은 그대로. 하나라도 바뀌면 멈추고 묻는다.
+- 남김 목록 고침(허브 10-31): `PARSE_STREAM`·그림자 모드는 op-08 브랜치(`feature/op08-settings-layout`)에서 지웠다 — 병합되면 남김에서 빠진다. 카테고리 파일 끝 '요건 없는 코드' 목록에서 이미 지운 것(이 행·fp-batch)을 뺐다(mcp·etl·test, 10-31).
 - Status: done (10-30, `feature/drop-unused`, 사용자 grill 11차 포함) — 지움: `internal_docs.py`의 `do_get_document`·`do_get_image`·`do_evidence_image`·`do_lookup_term`·`do_related`·`do_list_documents`와 그것만 쓰던 도우미(MCP 도구 아님 — 도구 이름·입출력 그대로), `objectstore_access.py`, 위키 도구(`structure/wiki.py`·`wiki_draft.py` + 지시서 `wiki_term_draft`), 외부 KG 어댑터(`eval/kg_external.py`)·LLM 그래프 모드(`validation/e2e/graph_llm.py` + 지시서 `triple_extract`), 채점기 `chart_values_score.py`·`diagram_edges_score.py`(`score_gold`의 mermaid 재현율은 같은 규칙으로 그 안에), `search/terms.lookup_term`, `valid_env/eval_sets/`와 그것만 읽던 `validation/e2e/stack_matrix.py`(+ `stack_matrix.json`·보고서 `pipeline/eval/stack_report.py`), Q&A 보고서 `mcp_server/cli/qa_report.py`(사용자 10-30), 시험만 쓰던 함수(e2-17), 각 시험, 설정 칸 7개(`MCP_EVID_*`·`MCP_IMAGES`·`MCP_MAX_IMAGE_PX`)와 절 `pipeline.connections.graphiti`(경고만 — env-guide). 지문 그대로._concept_top`·`hidden_names`·`client_map`(r), 상수 `EVAL_SETS_DIR`([settings.md#pl-21](settings.md#pl-21)). · 0.1.0 지문 배치(`feature/fp-batch`)에서 나머지도 지움: `fields_table`, `raster_chart_values`(+ `enlarge`·`ratio_place`·지시서 `figure_chart_raster`), `retriever._concept_top`·`hidden_names`·`client_map`·`_client_rows`·`_chunk_key_hidden`, 상수 `EVAL_SETS_DIR`, 고아 지시서 `diagram_arrows`.
 
 ## 코드와 다른 점 · 지울 코드
@@ -179,12 +180,10 @@
 | 검색 페이지가 실제 개수를 보임 | 고정 글 "10 documents (20 chunks)" | `validation/search_ui/index.html` | e2-16 |
 
 ### 요건 없는 코드 — 남길지 지울지([e2-10](#e2-10)과 함께 결정, [e2-18](#e2-18))
-- 외부 지식 그래프 어댑터(LightRAG, Cognee, Graphiti/Neo4j). `pipeline/eval/kg_external.py`, `validation/e2e/graph_llm.py`.
 - 정답·질문 초안. `pipeline/eval/gold_draft.py`, `qa_draft.py`, `make_questions.py`.
-- `valid_env/unstructured`와 함께 지운 묶음용 채점기. `pipeline/eval/diagram_edges_score.py`, `chart_values_score.py`.
 - 탐색 HTML, 서버 측정 팩, 조합 보고서. `pipeline/eval/explorer.py`, `server_checks.py`, `report.py`.
-- 지운 묶음(`synth-4clients` …)을 이름으로 부르는 스택·모델 행렬. `validation/e2e/stack_matrix.py`, `model_matrix.py`, `mcp_server/cli/mcp_eval.py`, `pipeline/eval/stack_report.py`.
-- 시험만 부르는 함수: `eval_labels`(`qtype.py`), `availability_note`(`stack_report.py`), `raster_chart_values`(`chart_values.py`), `pool_distractor_files`(`stack_matrix.py`). 안 쓰는 `fields_table`(`settings.py`).
+- 지운 묶음(`synth-4clients` …)을 이름으로 부르는 모델 행렬. `validation/e2e/model_matrix.py`, `mcp_server/cli/mcp_eval.py`.
+- 시험만 부르는 함수: `eval_labels`(`qtype.py`). (외부 KG 어댑터·묶음 채점기·스택 행렬·나머지 시험 전용 함수는 10-30에 지움 — [e2-18](#e2-18).)
 
 ### 기본 꺼짐·설정 필요
 | 기능 | 스위치 = 기본값 | 필요한 것 |
