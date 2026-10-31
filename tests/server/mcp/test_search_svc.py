@@ -8,7 +8,6 @@ from pathlib import Path
 from mcp_server import config as mc
 from mcp_server.schemas.evidence import _EVIDENCE_BASE_KEYS, _MANIFEST_EXTRA_KEYS
 from mcp_server.services.search import search_svc as M
-from mcp_server.services.search.internal_docs import do_aggregate
 from mcp_server.services.search.search_svc import do_search
 from mcp_server.services.search.server_state import _STATE, CALLER
 from mcp_server.services.search.shaping import evidence_status
@@ -445,194 +444,6 @@ def _selftest_index_id():
     print("[selftest] AD41 index_id — 색인별 검색·캐시·없음/미완료/형식 오류·모델 불일치 거부·사전 차이 경고·기본 색인 불변 통과")
 
 
-def _selftest_agg_route():
-    """R1(AD42) — 집계 질문은 aggregate.detect() 경로(기존 정해진 함수만)의 결과가 근거 맨 앞에
-    via="aggregate"로 붙고, 비집계 질문은 영향 없음."""
-    docs = [
-        {
-            "file_path": "c1.txt",
-            "file_name": "c1.txt",
-            "file_sha256": "1" * 64,
-            "doc_format": ".txt",
-            "client": "Acme Co",
-            "contract_no": "C-001",
-            "meta_confirmed": True,
-            "contract": {"amount": 1000, "currency": "USD"},
-        },
-        {
-            "file_path": "c2.txt",
-            "file_name": "c2.txt",
-            "file_sha256": "2" * 64,
-            "doc_format": ".txt",
-            "client": "Acme Co",
-            "contract_no": "C-002",
-            "meta_confirmed": True,
-            "contract": {"amount": 2000, "currency": "USD"},
-        },
-    ]
-    chunks = [
-        {
-            "doc": i,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "Acme Co 계약 안내",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        }
-        for i in range(2)
-    ]
-    d = _mk_bundle(docs, chunks)
-    _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
-    try:
-        on = do_search("Acme Co의 계약 건수는 몇 건인가?", k=5, methods=["bm25"], decompose=False)
-        assert on["evidence"][0]["via"] == "aggregate" and on["evidence"][0]["answer"] == 2, on["evidence"][0]
-
-        plain = do_search("단가는 얼마인가?", k=5, methods=["bm25"], decompose=False)  # 비집계 질문 — 집계 경로 영향 없음
-        assert not any(e.get("via") == "aggregate" for e in plain["evidence"]), plain["evidence"]
-    finally:
-        _env.close()
-        _STATE.clear()
-    print("[selftest] R1 집계 경로 — 집계 질문 aggregate 근거 맨 앞 · 비집계 질문 영향 없음 통과")
-
-
-def _selftest_agg_table_text():
-    """RV-aggtext(검토 1-B F1) — 집계 근거 evidence["text"]에 합계 한 줄뿐이던 결함: 고객별·제품 종류별 '표'가
-    나오는 질문(group)은 text에도 행(고객명·값)이 들어가야 한다(답변 모델이 text만 보고도 비교할 수 있게,
-    기존 rows/columns 칸은 그대로 — 소비자가 바뀌지 않아도 더 보임)."""
-    docs = [
-        {
-            "file_path": "c1.txt",
-            "file_name": "c1.txt",
-            "file_sha256": "1" * 64,
-            "doc_format": ".txt",
-            "client": "Acme Co",
-            "contract_no": "C-001",
-            "meta_confirmed": True,
-            "contract": {"amount": 1000, "currency": "USD"},
-        },
-        {
-            "file_path": "c3.txt",
-            "file_name": "c3.txt",
-            "file_sha256": "3" * 64,
-            "doc_format": ".txt",
-            "client": "Beta Inc",
-            "contract_no": "C-003",
-            "meta_confirmed": True,
-            "contract": {"amount": 500, "currency": "USD"},
-        },
-    ]
-    chunks = [
-        {
-            "doc": i,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "계약 안내",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        }
-        for i in range(2)
-    ]
-    d = _mk_bundle(docs, chunks)
-    _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
-    try:
-        r = do_search("Acme Co와 Beta Inc의 계약 건수는 각각 몇 건인가?", k=5, methods=["bm25"], decompose=False)
-        ev0 = r["evidence"][0]
-        assert ev0["via"] == "aggregate" and ev0.get("rows"), ev0
-        for name in ("Acme Co", "Beta Inc"):
-            assert name in ev0["text"], ev0["text"]  # 결함 전엔 합계 한 줄만이라 고객명이 text에 없었음
-    finally:
-        _env.close()
-        _STATE.clear()
-    print("[selftest] RV-aggtext — 집계 근거 text에 고객별 표 행 포함(합계 한 줄만이던 결함 해소) 통과")
-
-
-def _selftest_agg_fx():
-    """BR43 — 집계 결과 통화가 2개 이상 섞이면(비교 질문) 환율 근거를 집계 text 끝에 붙이고,
-    통화가 하나뿐이면(no-op) 영향이 없다 · =0이면 섞여도 안 붙는다."""
-    docs = [
-        {
-            "file_path": "c1.txt",
-            "file_name": "c1.txt",
-            "file_sha256": "1" * 64,
-            "doc_format": ".txt",
-            "client": "Acme Co",
-            "contract_no": "C-001",
-            "meta_confirmed": True,
-            "contract": {"amount": 1000, "currency": "USD"},
-        },
-        {
-            "file_path": "c3.txt",
-            "file_name": "c3.txt",
-            "file_sha256": "3" * 64,
-            "doc_format": ".txt",
-            "client": "Beta Inc",
-            "contract_no": "C-003",
-            "meta_confirmed": True,
-            "contract": {"amount": 500000, "currency": "KRW"},
-        },
-        {"file_path": "fx.txt", "file_name": "fx.txt", "file_sha256": "4" * 64, "doc_format": ".txt"},
-    ]
-    chunks = [
-        {
-            "doc": 0,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "Acme Co 계약 안내",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        },
-        {
-            "doc": 1,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "Beta Inc 계약 안내",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        },
-        {
-            "doc": 2,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "환율 exchange rate: 1 USD = 1,350 KRW",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        },
-    ]
-    d = _mk_bundle(docs, chunks)
-    _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
-    try:
-        mixed = do_search("Acme Co와 Beta Inc 중 전체 계약 금액 합계가 더 큰 곳은?", k=5, methods=["bm25"], decompose=False)
-        ev0 = mixed["evidence"][0]
-        assert ev0["via"] == "aggregate", ev0
-        assert "환율 근거:" in ev0["text"] and "fx.txt" in ev0["text"], ev0["text"]  # 섞인 통화 → 환율 근거 붙음
-        assert any("환율 근거 추가" in n for n in mixed["notes"]), mixed["notes"]
-
-        single = do_search("Acme Co의 계약 건수는 몇 건인가?", k=5, methods=["bm25"], decompose=False)  # no-op — 통화 1개
-        assert "환율 근거:" not in single["evidence"][0]["text"], single["evidence"][0]["text"]
-    finally:
-        _env.close()
-        _STATE.clear()
-    print("[selftest] BR43 — 통화 2개 이상 섞인 집계만 환율 근거 추가 · 단일 통화 영향 없음 통과")
-
-
 def _selftest_search_client_arg():
     """AD38 — do_search(client=...)가 Retriever.search_ex로 그대로 전달되는지(MCP 계층 통합 확인).
     꺼짐(기본)이면 바이트 동일(둘 다 나옴, 앞으로만) · SEARCH_CLIENT_HARD=1이면 다른 고객은 근거에서 완전히 빠짐."""
@@ -817,11 +628,6 @@ def _selftest_br50_client_scope():
                 "updated": "",
             }
         )
-    # BR50 D — 질문 자체엔 고객 이름이 없고 계약ID(C-B01, Beta Inc 소유)만 적힘: client="Acme Co"로 범위를 좁히면
-    # docs가 route() 전에 걸려 detect()의 contracts 후보에 C-B01이 없어져 "집계 아님"으로 빠진다(질문에 고객명을
-    # 적어 넓히는 기존 search 쪽 동작 — retriever.py AD38·BR23 — 과는 다른 축: 여긴 "클라이언트가 모르는 남의
-    # 계약ID를 넣어 캐 보는" 경로라 client_scope의 질문-기반 자동 인식과 안 겹침)
-    q_contract = "계약 C-B01의 금액은?"
 
     _STATE.clear()
     # 설정 객체 덮기(S7d) — GLOSSARY_DIR는 인계 파일이 env로 읽어 senv가 os.environ에도 쓰고 되돌림 · SEARCH_CLIENT_HARD=None은 옛 pop
@@ -832,28 +638,19 @@ def _selftest_br50_client_scope():
         off = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False, client="Acme Co")
         assert {e.get("file_name") for e in off["evidence"] if e.get("file_name")} >= {"a.txt", "b.txt"}, off["evidence"]
 
-        agg_off = do_aggregate(q_contract)  # client 없음 — 바이트 동일(남의 계약ID라도 그대로 찾아짐)
-        assert agg_off.get("answer") == "500 USD", agg_off
-        agg_off_cl = do_aggregate(q_contract, client="Acme Co")  # HARD 꺼짐인데 client만 줌 — 영향 없음(바이트 동일)
-        assert agg_off_cl.get("answer") == "500 USD", agg_off_cl
-
         # 켬 — SEARCH_CLIENT_HARD=1 + client="Acme Co" 명시
         _hard = mc.senv(SEARCH_CLIENT_HARD="1")
         on = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False, client="Acme Co")
         assert "b.txt" not in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # core·concept 둘 다 빠짐(F)
         assert "a.txt" in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # 자기 고객 근거는 그대로
 
-        agg_on = do_aggregate(q_contract, client="Acme Co")  # D — Beta Inc 계약ID를 적어도 범위 밖이라 "집계 아님"으로 빠짐
-        dump_on = json.dumps(agg_on, ensure_ascii=False)
-        assert "500" not in dump_on and "C-B01" not in dump_on and "Beta Inc" not in dump_on, agg_on
-        assert agg_on.get("answer") is None and "note" in agg_on, agg_on  # route()가 None → do_aggregate의 기본 note
     finally:
         if _hard is not None:
             _hard.close()
         _env.close()
         _STATE.clear()
     print(
-        "[selftest] BR50 — clientscope 종단 점검: 꺼짐(client만 줘도) 바이트 동일(core·concept·image·aggregate·"
+        "[selftest] BR50 — clientscope 종단 점검: 꺼짐(client만 줘도) 바이트 동일(core·concept·image·"
         "get_document·get_image·lookup_term) · SEARCH_CLIENT_HARD=1+client 명시면 다른 고객 근거·그림·구조화 집계 "
         "전부 제외, 키 조회는 거부 · client 안 주면(I류) 알려진 한계로 그대로 통과"
     )
@@ -946,9 +743,6 @@ def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) 
     )  # test_mcp_main과 같은 준비(S8b — 이미지 selftest엔 PG가 없어 판 표 대신 파일, S9 따로 사례가 되며 더함)
     _selftest_search_notes_no_race()
     _selftest_evidence_gate()
-    _selftest_agg_route()
-    _selftest_agg_table_text()
-    _selftest_agg_fx()
     _selftest_search_client_arg()
     _selftest_entity_split()
     _selftest_br50_client_scope()

@@ -32,12 +32,6 @@ from common.config.settings import (  # noqa: F401 — token_text: 토큰 규칙
 # ── settings.yaml mcp 절 모델(S7a) — 칸 표는 refactor_plan 부록 D ─────────────────────────────
 
 
-class McpSearchAgg(Section):
-    REMOVED = frozenset({"llm", "llm_timeout", "fx", "route", "llm_min"})  # 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
-    text_max_rows: int | None = F(30, "SEARCH_AGG_TEXT_MAX_ROWS", "집계 근거 text에 붙이는 표 행 상한(개)")
-    text_max_src_rows: int | None = F(40, "SEARCH_AGG_TEXT_MAX_SRC_ROWS", "계약별 근거 행 상한(개)")
-
-
 class McpSearchClient(Section):
     REMOVED = frozenset({"filter"})  # 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
     hard: bool | None = F(False, "SEARCH_CLIENT_HARD", "고객 범위를 하드 격리(다른 고객 문서 제외) — 1이면 켬", on=("1",))
@@ -140,15 +134,15 @@ class McpSearch(Section):
             "ov_search_path",
             "rerank",
             "ocr_dpi",
+            "agg",
+            "agg_today",
+            "data_catalog",
+            "struct_context_max",
         }
-    )  # 사용자 10-29 · ocr_dpi 10-30(op-08) — 지운 칸·절(남으면 경고만)
-    agg_today: str | None = F(None, "AGG_TODAY", "집계 질문의 '오늘' 기준일(YYYY-MM-DD) 고정 — 비우면 실제 오늘")
-    agg_vocab_file: str | None = F(None, "AGG_VOCAB_FILE", "집계 지표 단서어 사전(agg_vocab.json)을 다른 경로로 지정")
-    data_catalog: str | None = F(None, "DATA_CATALOG", "데이터 카탈로그(표·열 설명) JSON 경로 — 없으면 카탈로그 없이 동작")
+    )  # 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) — 지운 칸·절(남으면 경고만)
+    agg_vocab_file: str | None = F(None, "AGG_VOCAB_FILE", "질문 유형 단서어 사전(agg_vocab.json — 건수·합계 단서)을 다른 경로로 지정")
     methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서)")
     min_score: float | None = F(None, "SEARCH_MIN_SCORE", "근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak")
-    struct_context_max: int | None = F(200, "STRUCT_CONTEXT_MAX", "집계 질문에서 계약 마스터 전체를 표로 넘길 때 계약 수 상한(개)")
-    agg: McpSearchAgg = Field(default_factory=McpSearchAgg)
     client: McpSearchClient = Field(default_factory=McpSearchClient)
     pg: McpSearchPg = Field(default_factory=McpSearchPg)
     weights: McpSearchWeights = Field(default_factory=McpSearchWeights)

@@ -29,9 +29,7 @@ HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: pyt
 # C-39(사용자 10-27 S7e1 Q6 a) — options.conf(옛 카탈로그 — S7e2에 지움)가 env에 채우던 값 중 설정 모델 기본값과 결과가 다른 칸(값에 비밀 없음).
 # output/orca/S7e1/base_calc.py로 뽑음(예외 줄 빼고 · 표기만 다른 5.0/5 빼고 · 모델 칸 없는 env 이름 빼고). sample 주석으로만 낸다(모델 기본값은 코드 기본값 그대로).
 CATALOG_VALUES = {
-    "AGG_TODAY": "",
     "CHUNK_TABLE": "",
-    "DATA_CATALOG": "",
     "DOC_DIR": "",
     "DOC_DIR_PREPARED": "output/prepared",
     "EDW_PATH_PREFIX": "",
@@ -117,9 +115,9 @@ CATEGORIES = {
     "load": (("게시(publish)", ("load.publish", "load.edw_path_prefix")), ("적재", ("load",))),
     "search": (
         ("MCP 서버", ("search.server",)),
-        ("검색 순위·방식", ("search.methods", "search.min_score", "search.weights", "search.pg", "search.struct_context_max")),
+        ("검색 순위·방식", ("search.methods", "search.min_score", "search.weights", "search.pg")),
         ("고객 범위", ("search.client",)),
-        ("집계", ("search.agg_today", "search.agg_vocab_file", "search.data_catalog")),
+        ("질문 유형", ("search.agg_vocab_file",)),
         ("EDW 도구", ("search.edw_meta", "search.edw_query")),
         ("출력·기록·파싱 프록시", ("search.output", "search.query_log", "search.parse_proxy")),
     ),
@@ -154,7 +152,6 @@ HYPER = {  # 이름 규칙으로는 운영값이지만 결과(파싱·청크·�
     "pipeline.extract.ocr.dpi",
     "pipeline.transform.structure.page_chunk_max",
     "pipeline.transform.vlm.fig_photo_max_tokens",
-    "mcp.search.struct_context_max",
 }
 OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "common.models.llm.empty_retry_max",

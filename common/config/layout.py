@@ -152,8 +152,6 @@ TUNING_INTERNAL = (  # 내부 조정값 — 재시도·내부 대기·묶음 크
     "mcp.edw_query.max_bytes",
     "mcp.edw_query.timeout_sec",
     "mcp.search.pg.filter_exact_max",
-    "mcp.search.agg.text_max_rows",
-    "mcp.search.agg.text_max_src_rows",
     "mcp.output.max_chars",
 )
 TUNING_RESOURCE = (  # 자원·대기·병렬 세부값 — 자동 계산 내부 계수와 호출 제한 시간·병렬

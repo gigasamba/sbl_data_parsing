@@ -74,5 +74,5 @@ def test_old_layout_rejected_and_migrated():
         if "pipeline" in classes:
             gone |= {"pipeline.extract.cache.parse_tmp_max_gb", "pipeline.extract.disk_free_warn_gb"}
         if "mcp" in classes:
-            gone.add("mcp.search.agg.llm_min")
+            gone.add("mcp.search.agg")  # mc-04(11-01) — 절째 지움(옛 llm_min 칸 대신 절 이름으로 보고)
         assert gone <= set(report["삭제됨"]), report

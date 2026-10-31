@@ -28,8 +28,47 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+import json  # noqa: E402
+
 from common.core.docmeta import RE_LATEST_QUESTION  # noqa: E402 — 최신판 질문 단서(L3-1과 같은 규칙)
-from mcp_server.services.search.aggregate import COUNT_RE, LIST_RE, MAXMIN_RE, SUM_RE  # noqa: E402 — 집계·목록 단서 재사용
+from common.core.paths import RES_ROOT  # noqa: E402
+from mcp_server import config as mc  # noqa: E402 — 설정 객체(mcp 칸)
+
+# 집계·목록 단서(mc-04 10-31 — 집계 답 aggregate.py를 지우며 이 판별에 쓰던 정규식만 이리로, 글자 그대로)
+_AGG_VOCAB_DEFAULT = {  # DT1 c1 — 지표 판별 단서어(CDMO 예제: 건수·합계·수량·금액·단가·배치) 코드 기본값
+    "count": ["건수", r"몇\s*건", "개수", r"몇\s*개(?!월)", r"how\s+many", r"number\s+of", r"\bcount\b"],
+    # ↑ "몇\s*개(?!월)" — RV-singlelookup: "계약 기간은 몇 개월"(몇 개월 = how many months, 집계 아님)이 "몇 개"
+    #   부분 문자열로 걸려 건수 질문으로 오판되던 것(뒤에 "월"이 오면 안 걸리게, DT1 c1 커스텀 vocab에도 같게 적용)
+    "sum": ["합계", "합", "총", "전체", r"모두\s*더", "total", "sum"],
+    "qty": ["수량", "용량", "qty", "quantity", "capacity", "volume"],
+    "amount": ["금액", "규모", r"contract\s*value", r"\bvalue\b", "amount"],
+    "unit_price": ["단가", r"unit\s*price"],
+    "batch": ["배치", "batch"],
+}
+
+
+def _load_agg_vocab():
+    """단서어 사전 — `resources/vocab/agg_vocab.json`(기본) 또는 설정 `search.agg_vocab_file`. 파일 없음·깨짐·빈 목록이면 그 키는 코드 기본값."""
+    default = dict(_AGG_VOCAB_DEFAULT)
+    p = Path(mc.cfg().search.agg_vocab_file or (RES_ROOT / "vocab" / "agg_vocab.json"))
+    if not p.exists():
+        return default
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return default
+    out = dict(default)
+    for k, v in (data or {}).items():
+        if k in default and isinstance(v, list) and v:
+            out[k] = v
+    return out
+
+
+_AGG_VOCAB = _load_agg_vocab()
+COUNT_RE = re.compile("|".join(_AGG_VOCAB["count"]), re.I)
+SUM_RE = re.compile("|".join(_AGG_VOCAB["sum"]), re.I)
+LIST_RE = re.compile(r"각\s*계약|계약별|계약마다|of\s+each|each\s+contract|목록|\blist\b", re.I)
+MAXMIN_RE = re.compile(r"가장\s*(많은|적은|큰|작은)|최대|최소|\bmax\b|\bmin\b|\bmost\b|\bleast\b", re.I)
 
 _AVG_RE = re.compile(r"평균|average|\bavg\b", re.I)  # AD1 aggregate(평균)은 기존 조각에 없어 새로 둠
 _FIGURE_RE = re.compile(r"그림|그래프|도식|차트|흐름도|순서도|막대|flowchart|diagram|\bgraph\b|\bchart\b|\bfigure\b", re.I)

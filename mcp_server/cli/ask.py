@@ -60,15 +60,6 @@ def Retriever(*args, **kw):
     return R(*args, **kw)
 
 
-def table_md(g):
-    """표 집계 결과 → 마크다운 표(+ 합계 줄)."""
-    rows = ["| " + " | ".join(g["columns"]) + " |", "|" + "---|" * len(g["columns"])]
-    rows += ["| " + " | ".join("—" if c is None else str(c) for c in r) + " |" for r in g["rows"]]
-    if g.get("totals"):
-        rows.append("합계: " + " · ".join(f"{k} {v}" for k, v in g["totals"].items()))
-    return "\n".join(rows)
-
-
 def connect(a):
     """연결 기본값(백로그 E6 · 사용자 2026-10-01): --pg·--local 지정이 없으면 Docker에 떠 있는 pgvector에 연결,
     없으면 로컬 묶음. → common/services.py"""
@@ -106,11 +97,7 @@ def _ask_mcp(a):
     for n in res.get("notes") or []:
         print(f"  note: {n}")
     for e in res.get("evidence") or []:
-        if e.get("kind"):  # 집계(aggregate·aggregate_llm) — AG.table_text가 표·합계를 text에 이미 붙여 둠
-            print(f"\n집계({e['kind']}): {e.get('answer')} {e.get('unit') or ''}".rstrip())
-            print(e.get("text") or "")
-            print()
-        else:
+        if True:
             rank = f"[{e['rank']}]" if e.get("rank") is not None else "   "
             print(
                 f"{rank} {e.get('file_path')}  p.{e.get('page')} L.{e.get('line')}"
@@ -130,18 +117,10 @@ def _ask_cosine(a):
     R = Retriever(a.bundle, a.retrieve or st.get("retrieve", "hybrid"), a.pg)
     k = a.k or st.get("k", 8)
     hits, ms = R.search(a.q, k)
-    from mcp_server.services.search import aggregate as AG
-
-    agg_of = lambda q: (
-        AG.struct(q) or (None if R.pg else AG.local(a.bundle, q))
-    )  # 정형 저장소 질문 먼저(X1, MCP와 같은 규칙) · PG는 문서 집계 없음(mc-12)
-    agg = agg_of(a.q)  # 건수·합계 질문이면 SQL 집계(검색 결과는 함께 보여 줌)
-    subs, sub_aggs = [], []  # 질문 분해는 10-29에 지움(응답 칸은 유지)
+    subs = []  # 질문 분해는 10-29에 지움(응답 칸은 유지)
     res = {
         "question": a.q,
         "subs": subs,
-        "aggregate": agg,
-        "sub_aggregates": sub_aggs,
         "source": "pgvector" if a.pg else "local",
         "retrieve": R.retrieve,
         "ms": round(ms, 1),
@@ -153,22 +132,6 @@ def _ask_cosine(a):
     print(f"질문: {a.q}  ({res['source']} · {R.retrieve}, 검색 {ms:.1f} ms)")
     for i, s in enumerate(subs, 1):
         print(f"  하위 질문 {i}: {s}")
-    for g in [agg] + sub_aggs if agg else sub_aggs:
-        print(
-            f"\n집계({g['kind']} · {g['target']}"
-            + (f" · 하위 질문 {g['sub']}" if g.get("sub") else "")
-            + f"): {g['answer']} {g['unit']}"
-            + (f"  ※ {g['note']}" if g["note"] else "")
-        )
-        if g.get("columns"):
-            print(table_md(g))
-        for e in g["evidence"]:
-            print(
-                f"  - {e['contract_no']}: {e['file_path']}"
-                + (f" p.{e['page']} L.{e['line']}" if e.get("line") else "")
-                + (f" · 표 행 {e['items']}" if e.get("items") else "")
-            )
-        print()
     for h in hits:
         print(
             f"[{h['rank']}] {h['file_path']}  p.{h['page']} L.{h['line']}"
@@ -195,22 +158,7 @@ def test_stack(a):
         ms.append(t)
         gold = S.normalize_value(str(q.get("answer", "")))
         ev = {(Path(e.get("file", "")).name, e.get("page")) for e in q.get("gold_evidence") or []}
-        agg_ok = None
-        if q.get("category") in ("count", "sum") and not R.pg:  # PG는 문서 집계 없음(mc-12) — 집계 정답 칸에서 뺌(—)
-            from mcp_server.services.search import aggregate as AG
-
-            ag = AG.local(a.bundle, q["question"])
-            try:
-                g = float(q.get("answer"))
-                agg_ok = bool(ag) and abs(float(ag["answer"]) - g) <= max(1e-9, abs(g) * (q.get("tolerance") or 0))
-            except (TypeError, ValueError):
-                agg_ok = False
-            # 건수·합계의 답은 문서에 그대로 적혀 있지 않음 → 근거 문서(gold_evidence 파일)를 상위 k가 전부 가져왔나
-            files = {f for f, _ in ev}
-            ranks = {Path(h["file_path"]).name: h["rank"] for h in reversed(hits)}
-            hit = {"rank": max(ranks[f] for f in files)} if files and files <= set(ranks) else None
-        else:
-            hit = next((h for h in hits if gold and gold in S.normalize_value(h["text"])), None)
+        hit = next((h for h in hits if gold and gold in S.normalize_value(h["text"])), None)
         src_ok = (
             any(Path(h["file_path"]).name == f and (p is None or h["page"] is None or p == h["page"]) for h in hits for f, p in ev)
             if ev
@@ -225,7 +173,6 @@ def test_stack(a):
                 "found": bool(hit),
                 "rank": hit["rank"] if hit else None,
                 "source_match": src_ok,
-                "agg_ok": agg_ok,
                 "top": [{k: h[k] for k in ("file_path", "page", "line", "bbox")} for h in hits[:3]],
                 "ms": round(t, 1),
             }
@@ -241,20 +188,18 @@ def test_stack(a):
         "",
         f"문항 {len(rows)} · 상위 k={a.k} · 검색 p50 {pct(ms, 0.5):.1f} ms · p95 {pct(ms, 0.95):.1f} ms(질의 임베딩 제외)",
         "",
-        "| 유형 | 문항 | 정답 근거 찾음(값: 상위 k에 정답 값 · 건수·합계: 근거 문서 전부 상위 k) | 평균 순위 | 출처(파일·쪽) 일치 | 집계(SQL) 정답 |",
-        "|---|---|---|---|---|---|",
+        "| 유형 | 문항 | 정답 근거 찾음(값: 상위 k에 정답 값 · 건수·합계: 근거 문서 전부 상위 k) | 평균 순위 | 출처(파일·쪽) 일치 |",
+        "|---|---|---|---|---|",
     ]
     for cat, rs in sorted(by.items(), key=lambda x: str(x[0])):
         f = [r for r in rs if r["found"]]
         sm = [r for r in rs if r["source_match"] is not None]
-        ag = [r for r in rs if r.get("agg_ok") is not None]
-        agc = f"{sum(r['agg_ok'] for r in ag)}/{len(ag)}" if ag else "—"
         lines.append(
             f"| {cat} | {len(rs)} | {len(f)}/{len(rs)} | {statistics.mean(r['rank'] for r in f):.1f} | "
             + (f"{sum(r['source_match'] for r in sm)}/{len(sm)}" if sm else "—")
-            + f" | {agc} |"
+            + " |"
             if f
-            else f"| {cat} | {len(rs)} | 0/{len(rs)} | — | — | {agc} |"
+            else f"| {cat} | {len(rs)} | 0/{len(rs)} | — | — |"
         )
     miss = [r for r in rows if not r["found"]][:15]
     if miss:
