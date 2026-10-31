@@ -29,7 +29,7 @@ import json
 import re
 from pathlib import Path
 
-from common.core.console import utf8_stdout  # 옆 import들과 같은 자리(앞 코드 뒤)
+from common.core.console import utf8_stdout
 from common.core.terms import _aliases, match_clients, modalities  # 고객 명부·모달리티(검색과 같은 규칙, DT1 c1: 용어집 modality_code 우선)
 from common.store import structdb as SDB
 

@@ -18,7 +18,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from common.core.console import utf8_stdout  # 옆 import들과 같은 자리(앞 코드 뒤)
+from common.core.console import utf8_stdout
 from common.core.contract import jl  # 묶음 읽기
 from common.core.text import index_text, tokens  # 색인·토큰 규칙(모듈 계약)
 from common.store.pg import HNSW_MAX, PG, conf, has_conn, vec  # noqa: F401

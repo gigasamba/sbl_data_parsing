@@ -380,7 +380,7 @@ def object_reads():
     역할 접두로 짓는 이름(`{prefix}_BASE_URL` 꼴 — PREFIXES)의 꼬리가 나오면 읽는 것으로 친다."""
     from common.config import settings as S
 
-    root = DEPLOY_ROOT
+    root = ROOT
 
     def texts(folder, skip):
         return (

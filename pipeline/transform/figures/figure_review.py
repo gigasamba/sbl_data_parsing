@@ -27,7 +27,7 @@ from common.ai.agent_prompts import tail as _tail_prompt
 from common.ai.agent_prompts import template as _load_template
 from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
 from common.core.console import utf8_stdout
-from common.core.paths import APP_ROOT  # 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
+from common.core.paths import APP_ROOT  # 폴더 재편 뒤 이 상수만 바뀌면 됨
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 
 ROOT = APP_ROOT

@@ -26,13 +26,13 @@ from common.config import settings as C  # S7c: 설정 객체(common 칸 EMBED_M
 from common.core import docmeta as DM  # 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
 from common.core import repfmt as AQ  # 대표 결과 형식 읽기(라벨 어휘·키-값 쌍·표 행)
 from common.core import terms as T  # 고객 명부·이름 정규화·ID 모양(검색과 같은 규칙)
-from common.core.console import utf8_stdout  # 옆 import들과 같은 자리(앞 코드 뒤)
+from common.core.console import utf8_stdout
 from common.core.contract import (  # 문서 ID(doc_key) 규칙(GH1-04: orig_sha256으로 parse와 같은 값)
     file_hash,
     original_file_hash,
 )
 from common.core.meaning import strip_page_numbers
-from common.core.paths import APP_ROOT  # 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
+from common.core.paths import APP_ROOT  # 폴더 재편 뒤 이 상수만 바뀌면 됨
 from common.core.text import (  # 색인 본문·토큰 규칙(모듈 계약)
     index_text,
     normalize_value,

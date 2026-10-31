@@ -11,9 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from common.core.paths import DEPLOY_ROOT
-
-ROOT = DEPLOY_ROOT  # 저장소 루트(op-09 — paths 상수)
+ROOT = Path(__file__).resolve().parents[1]
 # 알려진 FAIL(옮기기 전 모듈 자기 점검에서도 같은 단언으로 실패하던 것) — 실패하면 xfail, 통과하면 PASS + 경고 요약의 "XPASS …"로 알림(목록에서 지울 수 있음).
 #   판정은 파일 단위(자식 프로세스 하나) — 알려진 FAIL 파일 안의 새 실패도 xfail로 가려진다(옛 모듈 단위 판정·이미지 selftest_gate와 같음, VS9 R-4).
 #   서버 반입 시험은 반입 판정 목록 deploy/release/known_fail.txt를 그대로 읽는다. 일반 시험은 여기(이유와 함께 — 새 줄은 리팩토링 전부터 있던 것만).

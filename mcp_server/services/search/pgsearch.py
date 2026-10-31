@@ -8,7 +8,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from common.core.console import utf8_stdout  # 옆 import들과 같은 자리(앞 코드 뒤)
+from common.core.console import utf8_stdout
 from common.core.text import id_terms, normalize_value, tokens  # 토큰 규칙(모듈 계약)
 from common.store.pg import HNSW_MAX, PG, conf, vec
 from mcp_server import config as mc  # 설정 객체(S7d)

@@ -69,7 +69,7 @@ from pathlib import Path
 
 from common.config import settings as C  # S7c: 설정 객체(common 칸 SOURCE_MANIFEST·비밀 꺼내기)
 from common.core import sources as SRC_CFG  # SI41 원천 목록(common/sources.json, git) · 같은 공용 common/ 이라 이미지 경계 위반 아님
-from common.core.console import utf8_stdout  # 옆 import들과 같은 자리(앞 코드 뒤)
+from common.core.console import utf8_stdout
 from common.core.contract import jl
 from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
 

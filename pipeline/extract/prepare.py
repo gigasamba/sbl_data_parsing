@@ -34,9 +34,9 @@ import struct
 import time
 from pathlib import Path
 
-from common.core.console import utf8_stdout  # 옆 import들과 같은 자리(앞 코드 뒤)
+from common.core.console import utf8_stdout
 from common.core.contract import file_hash
-from common.core.paths import (  # 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
+from common.core.paths import (  # 폴더 재편 뒤 이 상수만 바뀌면 됨
     APP_ROOT,
     doc_dir,
     tmp_path_for,  # GH1-01, tmp+os.replace 공용(RV6과 같은 원칙) · place()가 하드링크한 dst를 그 자리에서 save()하면 원본 inode까지 덮어씀

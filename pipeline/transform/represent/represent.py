@@ -46,7 +46,7 @@ import json
 import time
 from pathlib import Path
 
-from common.core.console import utf8_stdout  # 옆 import들과 같은 자리(앞 코드 뒤)
+from common.core.console import utf8_stdout
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 
 

@@ -38,7 +38,7 @@ import sys
 from pathlib import Path
 
 from common.config import settings as S  # S7e2: 설정은 settings.yaml(자식 실행에는 덮기 파일 — child_env)
-from common.core.console import utf8_stdout  # 옆 import들과 같은 자리(앞 코드 뒤)
+from common.core.console import utf8_stdout
 from common.core.paths import APP_ROOT, E2E_ROOT, PKG_ROOT, PROJ_ROOT, STACK_FILE  # 폴더 재편 뒤 이 상수들만 바뀌면 됨
 
 DEV = PKG_ROOT  # deploy/common/ (S6a — 옛 deploy/common_tools/와 같은 깊이 · 옛 dev/)

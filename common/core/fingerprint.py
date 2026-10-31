@@ -16,11 +16,9 @@ artifacts.py 캐시 정리·embed.py 질의 캐시처럼 인계 내용과 무관
 import hashlib
 from pathlib import Path
 
-from common.core.paths import PKG_ROOT
-
 CONTRACT = 2  # 인계 파일 형식 버전 — 형식이 바뀌면 올림(지문은 코드가 바뀌면 자동으로 바뀜)
 
-_ROOT = PKG_ROOT  # 공용 패키지 루트(common/ — op-09 paths 상수) — HANDOFF_FILES·_unclassified·PATCH_VERSION 기준
+_ROOT = Path(__file__).resolve().parent.parent  # 공용 패키지 루트(common/) — HANDOFF_FILES·_unclassified·PATCH_VERSION 기준
 
 # 선정 기준(RV10) — parse→structure·structure→load 두 경계 양쪽이 **같은 값을 각자 계산해서 맞춰야 하는** 파일만.
 # 한쪽 모듈만 내부적으로 쓰거나(결과를 다른 쪽이 다시 계산해 맞출 필요가 없음) 연결·캐시·로그 같은 운영 코드는
