@@ -142,9 +142,7 @@ def connect():
     from common.store.pg import has_conn
 
     if not has_conn():
-        raise ConfigUnavailable(
-            "PostgreSQL 접속 정보 없음(settings.yaml common.connections.pg) — 서버는 판 표에서 엔진 구성·원천 목록을 읽음"
-        )
+        raise ConfigUnavailable("PostgreSQL 접속 정보 없음(settings.yaml required.pg) — 서버는 판 표에서 엔진 구성·원천 목록을 읽음")
     try:
         from common.store.pg import conf
 

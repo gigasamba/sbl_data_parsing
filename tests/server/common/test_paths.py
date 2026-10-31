@@ -71,7 +71,7 @@ def _demo():
             doc_dir()
             raise AssertionError("DOC_DIR 없으면 SystemExit이어야 함")
         except SystemExit as e:
-            assert "DOC_DIR" in str(e)
+            assert "ops.paths.doc_dir" in str(e)
     # S2 — resources/prompts/는 모든 이미지에 폴더째 있으므로 앱별 묶음도 이미지 구분 없이 확인
     # (research_judge는 검색 전용이지만 agent_prompts·adk.py selftest가 모든 이미지에서 씀 — D-019 ④로 mcp/)
     assert resolve_agent_dir("research_judge") == RES_ROOT / "prompts" / "mcp" / "research_judge"
