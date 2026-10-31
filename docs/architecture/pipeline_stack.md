@@ -29,7 +29,7 @@
 | `activated_at`·`activated_by` | TIMESTAMPTZ · TEXT | 마지막으로 활성이 된 때·사람(되돌리기 기록) |
 
 - 시드: 판 `0002_struct`(Alembic — `common/store/db/migrations/versions/0002_struct_config.py`)가 표를 만들며 판 1을 활성으로 넣는다 — 판 번호 붙인 사본 `resources/sql/0002_stack_seed.json`·`0002_sources_seed.json`(그때의 PC 파일 설정 칸 — 정규화 JSON 같음, 한 번 배포하면 고치지 않음). PC 파일은 그 뒤에도 고칠 수 있다.
-- SQLite 대체(structdb)에는 이 표가 없다(PC는 파일).
+- PC는 이 표 대신 파일을 읽는다(SQLite 대체 없음).
 
 ## 3. 바꾸기·되돌리기·보기
 

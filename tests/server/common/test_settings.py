@@ -592,14 +592,14 @@ def selftest():
             + (" 실패: " + " ".join(bad_b) if bad_b else ""),
             not bad_b,
         )
-        with COMMON.env(LLM_TIMEOUT="90.5", STRUCT_BACKEND=None):
+        with COMMON.env(LLM_TIMEOUT="90.5", SEARCH_RECENCY=None):
             tm = cfg().models.llm.timeout
-            sb = cfg().store.struct_backend
-        with COMMON.env(STRUCT_BACKEND=""):
-            sb_blank = cfg().store.struct_backend
+            sb = cfg().text.search_recency
+        with COMMON.env(SEARCH_RECENCY=""):
+            sb_blank = cfg().text.search_recency
         check(
-            "LLM_TIMEOUT float(R-1 — 옛 float()): '90.5' → 90.5 · STRUCT_BACKEND 기본 'pg', ''은 ''(R-11 blank keep)",
-            tm == 90.5 and sb == "pg" and sb_blank == "",
+            "LLM_TIMEOUT float(R-1 — 옛 float()): '90.5' → 90.5 · SEARCH_RECENCY 기본 '1', ''은 ''(R-11 blank keep)",
+            tm == 90.5 and sb == "1" and sb_blank == "",
         )
         with COMMON.env(RUN_ENV="prod"):
             unk = guard_run_env()

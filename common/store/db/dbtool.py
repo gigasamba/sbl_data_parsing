@@ -13,7 +13,7 @@
   vector 확장(없으면 멈춤, --create-extension = 옛 PG_CREATE_EXTENSION=1 옵트인)·남의 스키마 거부(load_run 없음)·차원(DB와 다르면 새 PG_SCHEMA).
 · 차원은 --dim 또는 --bundle <묶음>/meta.json, 있는 스키마는 DB 차원(새 설정 칸 없음 — Q4).
 · 적재 전 판 확인(require_current — Q5): 판 기록 없음 = 경고 뒤 계속(기준판 = 지금 스키마), 끝보다 낮거나 모르는 판 = 거부. MCP(읽기)는 안 봄.
-· SQLite 대체(pg_standin·structdb SQLite)는 판 관리 밖 — 표 정의에서 바로 만든다(standin_script). 접속 값은 settings.yaml(common.store.pg.conf).
+· SQLite 대체(pg_standin)는 판 관리 밖 — 표 정의에서 바로 만든다(standin_script). 접속 값은 settings.yaml(common.store.pg.conf).
 · 비밀값·행 값은 찍지 않는다(카탈로그·판 번호만)."""
 
 import argparse
@@ -27,7 +27,7 @@ from common.core.console import utf8_stdout
 HERE = Path(__file__).resolve().parent
 MIGRATIONS = HERE / "migrations"
 TARGETS = ("search", "struct")
-STRUCT = "struct"  # common/store/structdb.py STRUCT_SCHEMA와 같음(selftest가 확인 — structdb는 이 패키지를 import 안 함)
+STRUCT = "struct"  # struct 갈래 스키마 이름(고정 — models/struct_tables.SCHEMA와 같음, selftest가 확인)
 _SCHEMA_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}")  # common/store/pg.conf()의 PG_SCHEMA 규칙(그 함수 안 정규식)과 같음
 _SCRIPTS: dict = {}
 
@@ -67,7 +67,7 @@ def known(target):
     return [r.revision for r in _script().iterate_revisions(f"{target}@head", "base")]
 
 
-# ── 판 상태 — q는 SQL 글자 → [dict] 함수(psycopg PG.q·structdb PgBackend.query·SQLAlchemy 연결 둘레) ───────────────────
+# ── 판 상태 — q는 SQL 글자 → [dict] 함수(psycopg PG.q·SQLAlchemy 연결 둘레) ───────────────────
 def schema_of(target, schema=None):
     if target == STRUCT:
         return STRUCT
@@ -98,9 +98,8 @@ def status(q, target, schema):
     return ("끝" if head(target) in have else "낮음"), have
 
 
-def require_current(q, target, schema, error=None):
-    """적재·쓰기 전 판 확인(Q5) — 판 기록 없음: 경고 뒤 계속 · 끝보다 낮거나 모르는 판: error(글자)를 던짐(기본 DbToolError — 종료 2).
-    struct 쓰기는 error=structdb.StructDBError(호출자의 지금 실패 처리 그대로 — publish는 문서 대장만 건너뜀)."""
+def require_current(q, target, schema):
+    """적재·쓰기 전 판 확인(Q5) — 판 기록 없음: 경고 뒤 계속 · 끝보다 낮거나 모르는 판: DbToolError(종료 2)."""
     st, have = status(q, target, schema)
     if st == "끝":
         return st
@@ -122,18 +121,7 @@ def require_current(q, target, schema, error=None):
             f"{schema} 판 {have} — 이 코드가 모르는 판(DB가 코드보다 새 판이거나 남의 판 표): 이미지·코드 판을 DB와 맞춘 뒤 다시"
             f"(코드의 끝 판 {head(target)})"
         )
-    if error is None:
-        raise DbToolError(msg)
-    raise error(msg)
-
-
-def require_struct(db):
-    """struct 쓰기 전 판 확인 — PostgreSQL 백엔드(structdb.PgBackend)만, SQLite 대체는 판 관리 밖. 거부는 StructDBError."""
-    from common.store import structdb as SDB
-
-    if isinstance(db, SDB.PgBackend):
-        require_current(db.query, STRUCT, STRUCT, SDB.StructDBError)
-    return db
+    raise DbToolError(msg)
 
 
 # ── 연결 ─────────────────────────────────────────────────────────────
@@ -443,8 +431,8 @@ def pg_cases(name):
             )
             if target == "search"
             else (
-                f"DROP TABLE {schema}.{VERSION_TABLE}; ALTER TABLE {schema}.doc_registry ADD COLUMN x_extra TEXT; "
-                f"ALTER TABLE {schema}.doc_registry ALTER COLUMN first_seen TYPE VARCHAR(40)"
+                f"DROP TABLE {schema}.{VERSION_TABLE}; ALTER TABLE {schema}.stack_version ADD COLUMN x_extra TEXT; "
+                f"ALTER TABLE {schema}.stack_version ALTER COLUMN created_by TYPE VARCHAR(40)"
             )
         )
         run(name, bad, opts)

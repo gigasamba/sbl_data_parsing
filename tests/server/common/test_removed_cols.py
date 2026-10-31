@@ -14,7 +14,7 @@ common:
     llm: {max_concurrency: 8}
     vlm: {model_alt: m}
     ocrvlm: {base_url: http://x/v1, model: m}
-  store: {registry_retry_max: 7, doc_registry: false, registry_etag_md5: true}
+  store: {registry_retry_max: 7, doc_registry: false, registry_etag_md5: true, struct_backend: pg, struct_db: /x.sqlite}
 ops:
   paths: {korean_font: /f.ttf, eval_sets_dir: /x}
   runtime: {exp_max_workers: 4, exp_proc_gb_answer: 1, exp_proc_gb_build: 1, exp_proc_gb_run: 1, exp_reserve_gb: 4}

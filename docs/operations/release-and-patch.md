@@ -259,7 +259,7 @@ sudo mv /srv/rag/env/pipeline.env /srv/rag/env/pipeline.env.before-s7e1
 
 S8a(사용자 10-28, D-030) 버전부터 pgvector의 우리 스키마 두 개(검색 `PG_SCHEMA` — 색인 빌더 `index --pg`의 `<PG_SCHEMA>_<index_id>` 포함, `struct`)의 표·색인·뷰는 **Alembic 리비전**으로 만든다. 실행 중 자동 DDL은 없다.
 - `pgvector_load deploy`(= `trigger.sh load`·`night`가 load 앞에 부름): 새 스키마면 만들고 버전 기록, 버전 기록 있는 스키마면 버전 올리기(migrate up — 끝이면 그대로), **버전 기록 없는 기존 스키마면 비교·DDL 없이 경고만 찍고 적재를 계속**한다(빠진 표·색인은 ②의 check가 보여 주고 ③-b의 up이 만듦 — D-030 ④).
-- struct는 표가 없으면 만들지 않고 "migrate로 만든다"고 알린다(문서 레지스트리·표 항목 적재가 그 자리에서 실패 — 호출자 처리 그대로).
+- struct에 남는 표는 버전 표 2개(`stack_version`·`source_version`)뿐이다 — `0003_struct`(pl-08)가 0001의 표 10개를 지운다. 판 기록이 없는 옛 struct 스키마에 그 10개가 있으면 ②의 check가 "남는 표"로 보이고 ③-b의 up이 거부한다 — 백업 뒤 DB 담당과 정한다.
 - 버전 기록 표는 스키마마다 `<스키마>.alembic_version`(DB 담당 협의 — `refactor.md` C-48).
 - 새 이미지(SQLAlchemy·alembic — 폐쇄망 휠, §5-1)를 적재한 뒤, 다음 적재(새벽 배치) 전에 한다. 값·비밀은 찍지 않는다(카탈로그·버전 번호만).
 ```bash
@@ -277,12 +277,13 @@ $DC run --rm load migrate stamp --target search
 $DC run --rm load migrate up --target struct          # 검색 스키마도 ②에서 이런 차이뿐이면 up --target search(③-a stamp 대신) — refactor.md "최종" ③-7과 같은 꼴
 # ③-c 컬럼 이름·형식·NULL·기본값·키가 다르거나 남는 표·컬럼·색인 → stamp·up 모두 거부(종료 2) — 멈추고 출력(이름만)을 DB 담당과 협의
 # ④ 색인 빌더 스키마(index_a·index_b)도 스키마마다: migrate check|stamp|up --target search --schema <PG_SCHEMA>_<index_id>
-# ⑤ 확인 — "판 끝 ['0001_search'] · 코드의 끝 판 0001_search … 비교: 차이 없음"·"판 끝 ['0002_struct'] · 코드의 끝 판 0002_struct … 비교: 차이 없음"(S8a 버전은 '0001_struct')
+# ⑤ 확인 — "판 끝 ['0001_search'] · 코드의 끝 판 0001_search … 비교: 차이 없음"·"판 끝 ['0003_struct'] · 코드의 끝 판 0003_struct … 비교: 차이 없음"(S8a 버전은 '0001_struct', S8b는 '0002_struct')
 $DC run --rm load migrate check --target all
 ```
 - **버전 기록 전에 적재가 돌면:** `pgvector_load deploy`·`load`(trigger load·night·run_docs)는 "판 기록 없음" 경고를 찍고 계속한다(기준 리비전 = 지금 스키마 — 결과 같음). 코드보다 낮은 버전이면 적재 전에 `migrate up`을 하라고 종료 2, DB가 코드보다 새 버전(모르는 리비전)이면 이미지·코드 버전을 맞추라고 종료 2(D-030 ⑤). 검색 MCP(읽기)는 버전을 보지 않는다.
 - **새 검색 스키마(차원이 바뀜 — 새 `PG_SCHEMA`):** `migrate up --target search --schema <새 스키마> --bundle <번들>`(차원은 번들 meta.json — 또는 `--dim N`). vector 확장이 없으면 관리자 설치(공유 PG에서 `--create-extension`·`PG_CREATE_EXTENSION`을 켜지 않음).
 - **버전이 바뀌는 릴리스:** 패치 노트의 "DB 판" 줄을 보고 적재 전에 `migrate up --target <갈래>` — 표·컬럼을 바꾸는 리비전은 데이터 계약 변경(검토 등급 A·DB 담당 협의 — D-008).
+- **pl-08 리비전(struct `0003_struct` — 표 10개 지움, 🔒 검토 등급 A · db_schema.md D-7):** 행이 함께 사라지고 되돌리는 리비전이 없다 — `migrate up --target struct` 전에 struct 스키마를 백업한다(예: `pg_dump -n struct`).
 - **S8b 리비전(struct `0002_struct` — 버전 표 2개, D-031 · 🔒 검토 등급 A · `refactor.md` C-49):** struct에 엔진 구성 `stack_version`·원천 목록 `source_version`이 새로 생기고 버전 1(시드 — `resources/sql/0002_*_seed.json`, 그때의 git 파일 설정 항목)이 활성으로 들어간다. **새 이미지의 컨테이너(파싱·구조화·검색 MCP·파싱 MCP 서비스·트리거)는 이 버전 표를 못 읽으면 시작하지 않는다(종료 코드 4 — 사용자 10-28 Q7) — 파싱도 이제 PostgreSQL이 필요하다.** 그래서 새 이미지를 적재한 뒤 **컨테이너를 새 이미지로 띄우기 전에** 이 절의 ①~⑤를 끝낸다(struct는 ②에서 "표 없음: stack_version·source_version"·"색인 없음" 4개가 보이고 버전 기록 전이면 stamp가 거부 → ③-b `up`, 0001 기록이 있으면 `up`이 0002만 돈다).
   ```bash
   $DC run --rm load migrate up --target struct          # 0002 — 표 2개 + 버전 1(시드) 활성
@@ -340,7 +341,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
    1. 서버 자체 개발 기록 읽기(§3-2).
    2. 새 이미지 버전이면 §5-2 배포 전 확인(`docker inspect <파싱 상주 컨테이너>` 마운트 원본 = `PATCH_CODE`).
    3. 적용(필요하면 서버 변경 다시 얹기·검토) → `check-modules`.
-   4. DB 버전: `migrate check --target all` — 버전 기록 전이면 §5-5 처음 한 번, 버전이 바뀌는 릴리스면 `migrate up`. **selftest 앞에** 한다(selftest의 struct 사례가 settings.yaml PG의 struct 표를 씀 — 표가 없으면 "migrate로 만든다"로 FAIL). S8b부터는 **컨테이너를 새 이미지로 띄우기 전에**(버전 표 2개가 없으면 시작 거부 — 종료 4).
+   4. DB 버전: `migrate check --target all` — 버전 기록 전이면 §5-5 처음 한 번, 버전이 바뀌는 릴리스면 `migrate up`. **selftest 앞에** 한다. S8b부터는 **컨테이너를 새 이미지로 띄우기 전에**(버전 표 2개가 없으면 시작 거부 — 종료 4).
    5. `selftest` 1개(`selftest_gate.sh` 판정 — 알려진 FAIL 밖 0, §3-3) → 실행 보드(`run_board`) 확인.
 4. `/srv/rag/reports/versions.md`에 버전 기록 한 줄 · 새 이미지 버전이면 `deploy/docker/IMAGE_BASE`를 그 버전의 커밋·태그로(§5).
 5. 문제가 있으면 [server-guide.md](server-guide.md) §7 형식으로 이슈 기록 → PC가 수정 → 다음 패치로.

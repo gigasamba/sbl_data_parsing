@@ -76,6 +76,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 | `0001_search` | 검색 스키마(`required.pg.db_schema`, 예: `ai`) — `--target search` | `doc` · `chunk` · `chunk_term` · `term_stat` · `corpus_stat` · `load_run` 테이블, 색인, 뷰 `v_chunk_source`(벡터 차원은 번들 `meta.json` 또는 `--dim`) | 없음 |
 | `0001_struct` | `struct`(이름 고정) — `--target struct` | 정형 저장소 테이블 10개(`doc_registry` · `doc_hidden` · `doc_location` · `contract_master` · `client_master` · `prod_master` · `doc_contract_link` · `doc_registry_seen` · `doc_table` · `doc_cell`) | 없음 |
 | `0002_struct` | `struct` | 버전 테이블 `stack_version`(엔진 구성) · `source_version`(원천 목록) | **있음** — `resources/sql/0002_stack_seed.json`(엔진 구성 버전 1 `dev-v1`) · `0002_sources_seed.json`(원천 목록 버전 1)을 읽어 **활성 행**으로 넣음 |
+| `0003_struct` | `struct` | `0001_struct`의 테이블 10개를 지운다(pl-08 — 남는 것은 버전 테이블 둘). 행이 함께 사라지므로 서버는 실행 전에 백업 | 없음 |
 
 - **시드는 따로 넣는 명령이 없다.** `up`이 `0002_struct`를 실행할 때 함께 들어간다. 테이블이 이미 있으면 실패하므로 시드가 두 번 들어가지 않는다.
 - **시드 JSON은 고치지 않는다**(버전 1의 사본). 엔진 구성·원천 목록을 바꾸려면 `set-stack`, `set-sources`로 DB에 새 버전을 넣는다(5-7). PC는 버전 테이블 대신 `resources/config/pipeline_stack.json`, `resources/mappings/sources.json` 파일을 읽는다.
@@ -107,7 +108,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 ├─ common/              공용 코드 — 두 앱(pipeline, mcp_server)이 함께 쓰는 것만
 │  ├─ core/             경로 · 핑거프린트(FINGERPRINT, code_fp) · 핸드오프 계약 · 문자열 처리 · 실행 기록 · 버전 표기
 │  ├─ ai/               LLM·VLM·임베딩 호출(OpenAI 호환) · 예산 장부 · 외부 전송 가드
-│  ├─ store/            PostgreSQL · 정형 저장소(struct) · 회사 DB(SQL Server) · Object Storage
+│  ├─ store/            PostgreSQL(검색·struct 버전 테이블) · 회사 DB(SQL Server) · Object Storage
 │  │  └─ db/            SQLAlchemy 테이블 정의 · Alembic 마이그레이션 · dbtool(migrate 명령)
 │  ├─ config/           설정 모델(settings.yaml 읽기) · 샘플 생성 · 옛 env 이관 · 오버레이 설정 파일 · --set
 │  └─ check/            모듈 경계 점검(check_modules) · 모델 연결 확인
@@ -287,13 +288,13 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 
 ```bash
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle output/demo/bundle --create-extension
-.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0001_search · struct 0002_struct
+.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0001_search · struct 0003_struct
 .venv/bin/python -m common.store.db.dbtool check --target all      # 기대: 차이 없음
 # 시드 확인(선택) — struct 버전 테이블에 버전 1이 활성으로 들어갔는지
 docker exec sbl-mcp-pg psql -U rag -d rag -c "SELECT version_id, name, is_active FROM struct.stack_version"
 ```
 
-- 이 한 번으로 검색 테이블(`0001_search`), struct 테이블(`0001_struct`), 버전 테이블과 시드(`0002_struct`)가 모두 만들어진다.
+- 이 한 번으로 검색 테이블(`0001_search`), 버전 테이블과 시드(`0002_struct`)가 만들어진다(`0001_struct`가 만든 테이블은 `0003_struct`가 다시 지움).
 - `--bundle`은 벡터 차원을 `meta.json`에서 읽기 위해 준다. `--create-extension`은 새 PG일 때만 필요하다.
 - 결과는 파일이 아니라 DB 안에 남는다(테이블 + `<스키마>.alembic_version`).
 - PC의 파이프라인은 엔진 구성·원천 목록을 파일에서 읽으므로 시드 행을 쓰지 않는다. 서버와 같은 DB 상태를 맞춰 두기 위한 단계다.

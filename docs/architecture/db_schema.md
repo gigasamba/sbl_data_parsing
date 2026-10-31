@@ -11,7 +11,7 @@
 
 | 규칙 | 내용 |
 |---|---|
-| 문서 키 | `s3_key`(Object Storage 원본 전체 키)만 문서 키로 쓴다. sha256 `doc_key`는 없앤다. 문서 대장(`doc_registry`·`doc_registry_seen`)과 숨김(`doc_hidden`)은 `s3_key`로 다시 키를 잡는다. 검색 `doc`이 `s3_key`를 든다(청크는 `doc_id`만 — 10-31). 같은 내용이 여러 `s3_key`로 들어오면 문서도 여러 개다 — `s3_key`마다 `doc` 행 하나(U-7 결정, `doc_alias` 없음). `build_bundle`의 내용 해시로 첫 키에 합치기(`aliases`)는 없앤다. 임베딩은 캐시가 다시 씀. |
+| 문서 키 | `s3_key`(Object Storage 원본 전체 키)만 문서 키로 쓴다. sha256 `doc_key`는 없앤다. 문서 대장(`doc_registry`·`doc_registry_seen`)과 숨김(`doc_hidden`)은 지웠다(pl-12 C10 — 판 0003). 검색 `doc`이 `s3_key`를 든다(청크는 `doc_id`만 — 10-31). 같은 내용이 여러 `s3_key`로 들어오면 문서도 여러 개다 — `s3_key`마다 `doc` 행 하나(U-7 결정, `doc_alias` 없음). `build_bundle`의 내용 해시로 첫 키에 합치기(`aliases`)는 없앤다. 임베딩은 캐시가 다시 씀. |
 | 출처 표시 이름 | EDW에서도, 문서 파싱에서도 나올 수 있는 값은 칸을 둘로 나누고 이름 끝에 출처를 붙인다 — EDW `_edw`, 문서 본문 `_doc`. 지금 해당하는 값: 고객(`client_edw`·`clients_doc`). |
 | 고객 거르기 | MCP의 고객 거르기는 EDW 고객(`doc.client_edw`, 문서당 하나)만 쓴다(C6). EDW 고객이 없는 문서(LAS 등)는 고객 거르기를 걸면 빠진다. 본문에서 찾은 고객(`clients_doc`)은 참고용. |
 | 원천 | `source_system` = `AI.FileStorageMap.source_system`(SFDC·CRMS·LAS·FAQ). 비었거나 그 밖의 값이면 `Other`. `s3_key` 접두와 다르면 경고만 남김. |
@@ -118,162 +118,9 @@
 
 뷰 `v_chunk_source`는 `chunk`↔`doc`을 이은 읽기 전용 뷰다(지금은 파일 이름을 `file_path`에서 계산). 0.2.0에는 스키마마다 다시 만든다 — 지금 `d.clients`·`d.file_path`를 고르므로 먼저 `DROP VIEW` 하고 새 칸(`s3_key`·`original_filename`·`client_edw`·`clients_doc`·`rep_key` 등)으로 다시 만든다(`CREATE OR REPLACE VIEW`로는 칸을 뺄 수 없음). 모델의 `VIEWS_EXPECTED`도 같이 고친다.
 
-## 3. struct — 정형 저장소 (PostgreSQL `struct`, PC는 SQLite 대체)
+## 3. struct — 버전 테이블 (PostgreSQL `struct`)
 
-판: `0001_struct_base.py`·`0002_struct_config.py` · 모델: `common/store/db/models/struct_tables.py` · SQLite 대체: `common/store/structdb.py`. 문서에서 뽑은 내용을 담던 표(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`)는 지운다 — 그 내용은 청크 본문에만 둔다. 지우면 함께 가는 코드: `pipeline/load/structured.py`(`link`·`tables` 명령, `load_tables_docs`), `pipeline/cli.py` `load_tables_db`, `common/store/structdb.py` `find_table_cells`, `mcp_server/services/search/structdb.py` `find_table_row`, `aggregate.py`(`struct`, `struct_context`, `doc_link_list`, `doc_location_list`, `table_cell_list`, `_table_cell_scope_docs`)와 호출부(`internal_docs.py`, `cli/ask.py`). 마스터(`contract_master`·`client_master`)는 DB 표가 아니라 CSV 파일로 둔다(§5, 사용자 10-30).
-
-### struct.contract_master
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| contract_id | TEXT PK | 계약 id | structured `load_csv`(CSV — 사람) | structured `link_docs`, aggregate | 삭제 |
-| company | TEXT | 고객사 이름 | 〃 | 〃 | 삭제 |
-| company_id | TEXT | 고객사 id | 〃 | 〃 | 삭제 |
-| product_code | TEXT | 제품 코드 | 〃 | 〃 | 삭제 |
-| modality | TEXT | 모달리티 | 〃 | 〃 | 삭제 |
-| site | TEXT | 생산지 | 〃 | 〃 | 삭제 |
-| line_id | TEXT | 라인 | 〃 | 〃 | 삭제 |
-| batches_contracted | INTEGER | 계약 배치 수 | 〃 | 〃 | 삭제 |
-| contract_value_usd | INTEGER | 계약 금액(USD) | 〃 | 〃 | 삭제 |
-| currency | TEXT | 통화 | 〃 | 〃 | 삭제 |
-| term_months | INTEGER | 기간(개월) | 〃 | 〃 | 삭제 |
-| signed_on | TEXT | 서명일 | 〃 | 〃 | 삭제 |
-| start_date | TEXT | 시작일 | 〃 | 〃 | 삭제 |
-| end_date | TEXT | 종료일 | 〃 | 〃 | 삭제 |
-| status | TEXT | 상태 | 〃 | 〃 | 삭제 |
-
-(struct에서는 지우고 같은 칸을 CSV `contract_master.csv`로 둔다 — §5.)
-
-### struct.client_master
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| company_id | TEXT PK | 고객사 id | structured `load_csv`(CSV — 사람) | aggregate `_struct_client_aliases`, structured `_client_aliases` | 삭제 |
-| company | TEXT | 고객사 이름 | 〃 | 〃 | 삭제 |
-| aliases | TEXT | 별칭(`\|` 구분) | 〃 | 〃 | 삭제 |
-
-(struct에서는 지우고 CSV `client_master.csv`로 둔다 — §5.)
-
-### struct.prod_master
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| prod_code | TEXT | 제품 코드 | structured `load_csv`(파일 있을 때만) | 없음 | 삭제 |
-| division | TEXT | 사업부 | 〃 | 없음 | 삭제 |
-| prod_name | TEXT | 제품 이름 | 〃 | 없음 | 삭제 |
-| pjt_name | TEXT | 프로젝트 이름 | 〃 | 없음 | 삭제 |
-| client_code | TEXT | 고객 코드 | 〃 | 없음 | 삭제 |
-
-(읽는 코드가 없음 — 지우는 안. 확인 목록 U-2.)
-
-### struct.doc_contract_link
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| doc_key | TEXT PK | 문서(sha256) | structured `link_docs` | aggregate `doc_link_list` | 삭제 |
-| contract_id | TEXT | 이어진 계약 | 〃 | 〃 | 삭제 |
-| score | INTEGER | 점수 | 〃 | 〃 | 삭제 |
-| how | TEXT | 이은 방법 | 〃 | 〃 | 삭제 |
-| status | TEXT | 상태 | 〃 | 〃 | 삭제 |
-| evidence_chunk_keys | TEXT | 근거 청크(늘 `[]`) | 〃 | 〃 | 삭제 |
-| created_at | TEXT | 만든 때 | 〃 | 〃 | 삭제 |
-
-### struct.doc_location
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| doc_id | TEXT PK | RDB 문서 id | structured `load_csv`(파일 있을 때만) | structured `_doc_locations`, aggregate `doc_location_list` | 삭제 |
-| bucket | TEXT | 버킷 | 〃 | 〃 | 삭제 |
-| object_key | TEXT | 객체 키 | 〃 | 〃 | 삭제 |
-| etag | TEXT | etag | 〃 | 〃 | 삭제 |
-| size_bytes | INTEGER | 크기 | 〃 | 〃 | 삭제 |
-| content_type | TEXT | 형식 | 〃 | 〃 | 삭제 |
-| company_id | TEXT | 고객사 id | 〃 | 〃 | 삭제 |
-| doc_type | TEXT | 문서 종류 | 〃 | 〃 | 삭제 |
-| contract_id | TEXT | 계약 id | 〃 | 〃 | 삭제 |
-| version | INTEGER | 판 | 〃 | 〃 | 삭제 |
-| supersedes_doc_id | TEXT | 대체한 문서 | 〃 | 〃 | 삭제 |
-| language | TEXT | 언어 | 〃 | 〃 | 삭제 |
-| received_at | TEXT | 받은 때 | 〃 | 〃 | 삭제 |
-| updated_at | TEXT | 고친 때 | 〃 | 〃 | 삭제 |
-| is_deleted | INTEGER | 삭제 표시 | 〃 | 〃 | 삭제 |
-
-### struct.doc_registry
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| doc_key | TEXT PK | 문서(원본 sha256) | registry `apply` | registry `diff_against`·`nightly_plan`, search/registry | 삭제 |
-| s3_key | TEXT PK | 문서 키(원본 전체 키 — 매니페스트 `key`) | (registry `apply`) | (registry, search/registry) | 새로 |
-| names | TEXT | 파일 이름 목록(JSON) | registry `apply` | registry `classify` | 유지 |
-| size | INTEGER | 크기 | 〃 | 〃 | 유지 |
-| mtime | TEXT | 고친 때 | 〃 | 〃 | 유지 |
-| etag | TEXT | etag | 〃 | 〃 | 유지 |
-| status | TEXT | 상태 — 성공(`parsed`)일 때만 씀(실패는 로그만, `deleted` 길은 10-30에 없앰 — pl-12) | 〃 | 〃 | 유지 |
-| source | TEXT | 원천 종류 | 〃 | 〃 | 유지 |
-| doc_id | TEXT | RDB 문서 id | 〃 | 〃 | 유지 |
-| version | TEXT | 판 | 〃 | 〃 | 유지 |
-| first_seen | TEXT | 처음 본 때 | 〃 | search/registry `history` | 유지 |
-| last_seen | TEXT | 마지막 본 때 | 〃 | 〃 | 유지 |
-| last_build | TEXT | 마지막 build_id | 〃 | 〃 | 유지 |
-| rep_sha | TEXT | 대표 본문 sha256(전 판 비교) | registry `update_rep_fingerprints` | registry `link_editions` | 유지 |
-| rep_pairs | TEXT | (라벨,값,쪽) 목록(JSON) | 〃 | 〃 | 유지 |
-| edition_of | TEXT | 전 판의 문서 키 | registry `link_editions` | search/registry | 유지 |
-| content_group | TEXT | 같은 글 묶음 id | registry `content_groups` | 〃 | 유지 |
-| value_changes | TEXT | 바뀐 값 목록(JSON) | registry `link_editions` | 〃 | 유지 |
-| source_keys | TEXT | `원천::원본 키` 목록(JSON — 지금 sha256↔원본 키 다리) | registry `apply` | registry `link_editions` | 유지 |
-| fail_count | INTEGER | 연속 파싱 실패 수 — 사용자 10-30 — 실패 횟수 없앰, 성공했을 때만 갱신 · `registry_retry_max` 설정도 지움, [pl-32](../prd/etl.md#pl-32) | (없음 — 10-30 코드가 안 씀) | (없음) | 삭제 |
-
-### struct.doc_registry_seen
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| doc_key | TEXT PK | 문서(sha256) | registry `apply` | search/registry `history`·`report_by_date` | 삭제 |
-| s3_key | TEXT PK | 문서 키 | (registry `apply`) | (search/registry) | 새로 |
-| build_id | TEXT PK | build 한 번 | registry `apply` | search/registry | 유지 |
-| names | TEXT | 파일 이름 목록 | 〃 | 〃 | 유지 |
-| size | INTEGER | 크기 | 〃 | 〃 | 유지 |
-| mtime | TEXT | 고친 때 | 〃 | 〃 | 유지 |
-| etag | TEXT | etag | 〃 | 〃 | 유지 |
-| status | TEXT | 상태 | 〃 | 〃 | 유지 |
-| source | TEXT | 원천 종류 | 〃 | 〃 | 유지 |
-| seen_at | TEXT | 본 때 | 〃 | 〃 | 유지 |
-
-### struct.doc_hidden
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| doc_key | TEXT PK | 숨긴 문서(sha256 — 검색 키 `file_path`와 안 맞아 지금 숨김이 안 먹음, mc-14) | registry `hide`(자동 — 원천에서 삭제), registry_cli `hide`·`unhide` | search/registry `hidden_set` → retriever | 삭제 |
-| s3_key | TEXT PK | 숨긴 문서 키(검색 `doc.s3_key`와 같은 값 — 청크에는 없음) | (registry `hide`, registry_cli) | (retriever, pgsearch) | 새로 |
-| hidden | INTEGER | 1=숨김·0=복구 | registry `hide`·`unhide` | search/registry | 유지 |
-| reason | TEXT | 왜 | 〃 | 〃 | 유지 |
-| by | TEXT | 누가 | 〃 | 〃 | 유지 |
-| at | TEXT | 언제(UTC) | 〃 | 〃 | 유지 |
-
-### struct.doc_table
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| table_key | TEXT PK | 문서 키:표 id | structured `load_tables_docs` | structdb `find_table_cells` | 삭제 |
-| doc_key | TEXT | 문서(sha256) | 〃 | 〃 | 삭제 |
-| table_id | TEXT | 표 id | 〃 | 〃 | 삭제 |
-| page | INTEGER | 쪽 | 〃 | 〃 | 삭제 |
-| source_engine | TEXT | 뽑은 엔진 | 〃 | 〃 | 삭제 |
-| n_rows | INTEGER | 줄 수 | 〃 | 〃 | 삭제 |
-| n_cols | INTEGER | 칸 수 | 〃 | 〃 | 삭제 |
-| header_json | TEXT | 머리글 | 〃 | 〃 | 삭제 |
-| merged_json | TEXT | 병합 칸 | 〃 | 〃 | 삭제 |
-| created_at | TEXT | 만든 때 | 〃 | 〃 | 삭제 |
-
-### struct.doc_cell
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| table_key | TEXT | 표 | structured `load_tables_docs` | structdb `find_table_cells`, search/structdb `find_table_row` | 삭제 |
-| row_idx | INTEGER | 줄 | 〃 | 〃 | 삭제 |
-| col_idx | INTEGER | 칸 | 〃 | 〃 | 삭제 |
-| col_label | TEXT | 칸 이름 | 〃 | 〃 | 삭제 |
-| value | TEXT | 값 | 〃 | 〃 | 삭제 |
-| value_norm | TEXT | 정규화 값 | 〃 | 〃 | 삭제 |
+판: `0001_struct_base.py`·`0002_struct_config.py`·`0003_struct_drop.py` · 모델: `common/store/db/models/struct_tables.py`. 0001이 만든 표 10개(`contract_master`·`client_master`·`prod_master`·`doc_contract_link`·`doc_location`·`doc_registry`·`doc_registry_seen`·`doc_hidden`·`doc_table`·`doc_cell`)는 판 `0003_struct`가 지운다(pl-08·pl-12 C10 — 사용자 10-31, 마이그레이션 11-01 승인). 그 표를 쓰고 읽던 코드(`pipeline/load/structured.py`, `common/store/structdb.py`, 문서 대장·숨김, 집계)는 먼저 지웠고, SQLite 대체도 없다. 마스터(`contract_master`·`client_master`)는 CSV 파일로 둔다(§5). 남는 표는 아래 버전 테이블 둘과 판 기록 `struct.alembic_version`이다.
 
 ### struct.stack_version
 
@@ -398,8 +245,8 @@ PC 대역 예시 — [pl-29](../prd/etl.md#pl-29) 10-31. 고객 연결 4단계�
 |---|---|---|---|
 | `domain_terms.csv` | 용어 사전(C-21) | `concept_id,canonical,category,synonyms,abbreviations,weak_synonyms,broader,related,context_required,case_sensitive,definition_ko,definition_en,source,owner,status,updated` (`status`는 approved·draft) | `common.core.terms` |
 | `client_roster.csv` | 고객 명부(C-21, 새 형식) | `client_id,canonical_name,name_ko,aliases,client_type,segment,country,parent_client_id,status,description,source,updated` — 읽는 칸: `canonical_name`(비면 `name_ko`), `aliases`(`;`·`\|` 구분), `status`(inactive·deleted면 건너뜀) | `common.core.terms` 고객 별칭(초안은 `gen_roster`) |
-| `contract_master.csv` | 계약 마스터 | `contract_id,company,company_id,product_code,modality,site,line_id,batches_contracted,contract_value_usd,currency,term_months,signed_on,start_date,end_date,status` (§3 `struct.contract_master`와 같은 칸) | 계약 연결·고객 별칭 |
-| `client_master.csv` | 고객 마스터 | `company_id,company,aliases`(별칭 `\|` 구분 — §3 `struct.client_master`와 같은 칸) | 고객 별칭(aggregate `_struct_client_aliases` 자리) |
+| `contract_master.csv` | 계약 마스터 | `contract_id,company,company_id,product_code,modality,site,line_id,batches_contracted,contract_value_usd,currency,term_months,signed_on,start_date,end_date,status` (판 0003이 지운 옛 `struct.contract_master`와 같은 칸) | 계약 연결·고객 별칭 |
+| `client_master.csv` | 고객 마스터 | `company_id,company,aliases`(별칭 `\|` 구분 — 옛 `struct.client_master`와 같은 칸) | 고객 별칭(aggregate `_struct_client_aliases` 자리) |
 
 - `client_master.example.csv`(머리글 `Account_Id,Account_Name,Account_Name_KR,Alias_List,Account_Type,Billing_Country,Parent_Id,Account_Status`)는 EDW 모양 원본 — `gen_roster --kind client --source csv:client_master.csv --mapping …`이 명부 초안을 만들 때 읽는다.
 - 같이 있는 `id_patterns.csv`·`units.csv`·`client_roster_seed.json`·`client_master_map.example.json`은 그대로.
@@ -413,8 +260,8 @@ PC 대역 예시 — [pl-29](../prd/etl.md#pl-29) 10-31. 고객 연결 4단계�
 | D-3 | `AI.ParsingMeta` 칸 정리(ALTER) — 안 읽는 칸 삭제, `gold_status`·`gold_reason`·단계별 칸(`stack_version`·`engines_failed`) 추가, `pipeline_version` 뜻 바꿈(gold에 올린 판 — gold 성공 때 씀, 10-31: 새 칸 `gold_version` 대신), `engines_used`·`rep_engine` 뜻 바꿈 — 권한, 기존 행, 다른 사용처 | 이 프로젝트 밖에서 그 칸을 읽는 곳이 있는지 모름 · **G19·C5(0.2.0):** 파싱 정보만 — 운영이 더한 분류·고객 칸(`doc_class`·`sf_op_id`·`created_at`·`sf_acc_name` 등)은 모두 지움, `sha256`은 남김 · 운영 분류 스크립트가 멈춤 |
 | D-4 | `ParsingMeta.doc_key` 삭제 때 `UQ_ParsingMeta_dockey`·`IX_ParsingMeta_doc_key` 색인 처리 · `source_key`를 필수(NOT NULL)로 | 지금 `source_key`가 비면 `doc_key`가 겹침 키 |
 | D-5 | (없어짐 — 사용자 10-30: 마스터는 CSV 파일, 마스터 PostgreSQL 없음) | — |
-| D-6 | 0.2.0 Alembic 마이그레이션 하나 — 원천별 gold 스키마 5벌(`sfdc`·`crms`·`las`·`faq`·`other`) 만들기 — `doc_id`는 스키마 5벌이 함께 쓰는 시퀀스 하나(허브가 정함)(칸: `s3_key`·`original_filename`·`client_edw`·`clients_doc`·`doc_class`·`created_at`·`rep_key`·`rep_engine`·`parsed_at`·`pipeline_version` 추가, `file_path`·`clients`·`doc.source_system`·`chunk.source_system` 삭제, 청크는 `doc_id`만(청크 `s3_key` 없음), `faq.chunk.faq_group`) + struct 지우기(D-7)를 함께, 뷰 `v_chunk_source`는 스키마마다 다시 만듦 — 기존 서버 데이터는 다시 적재 | DB 담당자 승인 한 번([pl-25](../prd/etl.md#pl-25)) · 첫 적재가 전체 e2e([pl-23](../prd/etl.md#pl-23))와 함께 |
-| D-7 | struct 표 지우기(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`·`prod_master`, 마스터 2개는 CSV로) 전 백업 | 되돌릴 수 없는 삭제 |
+| D-6 | 0.2.0 Alembic 마이그레이션 하나 — 원천별 gold 스키마 5벌(`sfdc`·`crms`·`las`·`faq`·`other`) 만들기 — `doc_id`는 스키마 5벌이 함께 쓰는 시퀀스 하나(허브가 정함)(칸: `s3_key`·`original_filename`·`client_edw`·`clients_doc`·`doc_class`·`created_at`·`rep_key`·`rep_engine`·`parsed_at`·`pipeline_version` 추가, `file_path`·`clients`·`doc.source_system`·`chunk.source_system` 삭제, 청크는 `doc_id`만(청크 `s3_key` 없음), `faq.chunk.faq_group`) — struct 지우기는 판 `0003_struct`로 따로(D-7), 뷰 `v_chunk_source`는 스키마마다 다시 만듦 — 기존 서버 데이터는 다시 적재 | DB 담당자 승인 한 번([pl-25](../prd/etl.md#pl-25)) · 첫 적재가 전체 e2e([pl-23](../prd/etl.md#pl-23))와 함께 |
+| D-7 | struct 표 10개 지우기(판 `0003_struct` — 정형 표·문서 대장·표 칸, 마스터 2개는 CSV로) 전 백업 | 되돌릴 수 없는 삭제(0003 downgrade 없음) |
 | D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 `source_system='FAQ'`로 등록(G3, 사용자 10-30 — [pl-39](../prd/etl.md#pl-39)) | EDW 담당자 협의 필요 — FAQ 행을 누가 어떻게 넣나 |
 | D-9 | 밀려난 `FileStorageMap` 행의 예외 이력 표(새 EDW 표 — §4 `edw.SupersededRow` 안) — 표 이름·칸·누가 쓰나 | 사용자 10-31: 같은 `s3_key`의 더 새 행이 오면 같은 `doc_id`(`file_size`가 다를 때만 다시 파싱)이고 옛 행을 이력에 남김 |
 

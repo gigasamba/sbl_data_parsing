@@ -51,7 +51,6 @@ CATALOG_VALUES = {
     "SOFFICE_BIN": "",
     "SOURCE_MANIFEST": "",
     "SOURCE_URI_PREFIX": "",
-    "STRUCT_DB": "",
     "VLM_MODEL": "",
     # S7e2(사용자 10-28) — 옛 서버 compose environment 기본값(이제 settings.yaml 칸 — compose가 env로 덮지 않음). MCP_STORE는 compose가 pg로 덮었음
     "CHAIN_STRUCTURE_URL": "http://127.0.0.1:8771",
@@ -68,7 +67,7 @@ CATEGORIES = {
         ("접속 — PostgreSQL·EDW·Object Storage 세부", ("common.connections",)),
         ("모델 호출 — 임베딩·LLM·VLM·전송", ("common.models.embed", "common.models.llm", "common.models.vlm", "common.models.transport")),
         ("비용·외부 가드", ("common.models.guard",)),
-        ("저장소 — 정형 저장소", ("common.store",)),
+        ("저장소 — 실행 모드", ("common.store",)),
         ("검색 토큰 정규화", ("common.text",)),
     ),
     "extract": (
@@ -294,7 +293,7 @@ def _value(p, f):
 
 _IMAGE_ENVS = {k for d in S._IMAGE_DEFAULTS.values() for k in d}
 # 적었는지(기본값과 구별 — given()·resources._f·model_matrix.own)로 동작이 갈리는 칸 — 기본값을 적으면 기능이 켜지거나 읽는 쪽 기본값이 밀림
-# (op-05 리뷰: STRUCT_BACKEND=pg → 정형 저장소 켬 · 모듈 포트 → 공통 포트 무시 · RDB 목록 [] → 빈 필터). 비워 둔다.
+# (op-05 리뷰: 모듈 포트 → 공통 포트 무시 · RDB 목록 [] → 빈 필터). 비워 둔다.
 # 시험 test_sample_yaml이 코드의 given("X")·_f("X")·own("X") 이름이 여기(또는 비우는 칸)에 다 있는지 본다.
 SET_MATTERS = {
     "CPU_MAX_LOAD",
@@ -312,8 +311,6 @@ SET_MATTERS = {
     "PIPE_THREADS",
     "PIPE_WORKERS",
     "PM_BUCKET",
-    "STRUCT_BACKEND",
-    "STRUCT_DB",
     "TRIGGER_PARSE_PORT",
     "TRIGGER_STRUCTURE_PORT",
     "VLM_MAX_CONCURRENCY",
@@ -344,7 +341,6 @@ _PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|
 VALUES = {
     "common.run_env": "local·dev·prd 중 하나",
     "common.store.run_mode": "prod·test 중 하나",
-    "common.store.struct_backend": "pg·sqlite·tsql 중 하나",
     "common.text.search_recency": "0(끔)·1(최신을 묻는 질문만)·2(항상) 중 하나",
     "common.connections.object_storage.verify_tls": "1(검증)·0(끔)·CA 파일 경로",
     "common.models.guard.external_scope": "func·e2e 중 하나",

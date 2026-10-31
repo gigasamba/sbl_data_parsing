@@ -42,7 +42,7 @@ def expected(target, schema, dim=None):
     """(표 정의 MetaData, 색인 {이름: 정의}, 뷰 {이름: (칸들, 정의 글자)}) — `{S}` 자리표시 그대로."""
     if target == "search":
         return ST.search_metadata(schema, dim), ST.index_defs(dim), ST.VIEWS_EXPECTED
-    return SS.struct_metadata(schema), {**SS.INDEX_DEFS, **SS.CONFIG_INDEX_DEFS}, {}
+    return SS.struct_metadata(schema), SS.CONFIG_INDEX_DEFS, {}
 
 
 def _norm(schema, s, ext=()):

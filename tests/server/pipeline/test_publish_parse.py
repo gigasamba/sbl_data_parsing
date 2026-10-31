@@ -1,8 +1,7 @@
 """pipeline.load.publish_parse_result 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.load.publish_parse_result --selftest`.
 S9b(C-54 ②, 사용자 10-28 — 기록만): 기대값을 지금 서버 동작에 맞춤 — 업로드 폴더에 `<stem>_<date>_meta.json`·`source.json`이 없음
 (pre-refactor 서버 사본이 일부러 뺌 — `_meta.json`은 EDW에, `source.json`은 내부용). source.json에 기대던 방어선(재실행 업로드 건너뜀
-`skip_exists`·키 충돌 거부 `error_key_collision`)은 `test_publish_guard.py`(알려진 FAIL — 이유 C-54)로 뺌. 산출물 만들기는 `make_fixture()`로.
-S10(VS9b R-4): 문서 대장이 SQLite로 대체될 때(PG 없음 — 이미지·PG 꺼진 PC) 개발자 기본 대장이 아닌 시험 폴더 STRUCT_DB에 쓰게."""
+`skip_exists`·키 충돌 거부 `error_key_collision`)은 `test_publish_guard.py`(알려진 FAIL — 이유 C-54)로 뺌. 산출물 만들기는 `make_fixture()`로."""
 
 import json
 from pathlib import Path
@@ -109,7 +108,7 @@ def selftest():
     os_dir, db_path = d / "os", d / "edw.sqlite"
     with (
         pc.PIPE.env(PM_BUCKET=f"file://{os_dir}"),
-        COMMON.env(RDB_SQLITE=str(db_path), STRUCT_DB=str(d / "struct.sqlite"), RUN_ENV="local"),
+        COMMON.env(RDB_SQLITE=str(db_path), RUN_ENV="local"),
     ):  # S7c — 시험하는 코드가 객체만 읽음(os.environ 안 건드림) · 가짜 EDW(RDB_SQLITE)는 local 전용 — 이미지(서버 RUN_ENV)에서도 시험 안에서만 local(이미지 관문 10-30)
         a.apply = True
         r1 = run(a)

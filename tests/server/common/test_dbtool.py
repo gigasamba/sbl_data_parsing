@@ -5,9 +5,7 @@ from common.store.db.dbtool import MIGRATIONS, STRUCT, head, index_kind, known, 
 
 def selftest():
     import importlib.util
-    import sqlite3
 
-    from common.store import structdb as SDB
     from common.store.db.models import search_tables as ST
     from common.store.db.models import struct_tables as SS
     from common.store.db.schemas import search_rows as SR
@@ -16,9 +14,9 @@ def selftest():
     sp = importlib.util.spec_from_file_location("s8a_base", MIGRATIONS / "versions" / "0001_search_base.py")
     base = importlib.util.module_from_spec(sp)
     sp.loader.exec_module(base)
-    assert STRUCT == SDB.STRUCT_SCHEMA == SS.SCHEMA and base.HNSW_MAX == ST.HNSW_MAX  # 판 파일이 굳혀 둔 숫자 = 지금 pg.HNSW_MAX
-    assert head("search") == "0001_search" and head("struct") == "0002_struct", (head("search"), head("struct"))
-    assert known("search") == ["0001_search"] and known("struct") == ["0002_struct", "0001_struct"]
+    assert STRUCT == SS.SCHEMA and base.HNSW_MAX == ST.HNSW_MAX  # 판 파일이 굳혀 둔 숫자 = 지금 pg.HNSW_MAX
+    assert head("search") == "0001_search" and head("struct") == "0003_struct", (head("search"), head("struct"))
+    assert known("search") == ["0001_search"] and known("struct") == ["0003_struct", "0002_struct", "0001_struct"]
     sp2 = importlib.util.spec_from_file_location("s8b_cfg", MIGRATIONS / "versions" / "0002_struct_config.py")
     v2 = importlib.util.module_from_spec(sp2)
     sp2.loader.exec_module(v2)
@@ -28,7 +26,7 @@ def selftest():
         name, reason, body = cfgtables.seed(kind)  # 시드 모양 검사(pydantic) 통과
         assert table == cfgtables.KINDS[kind] and seed_file == f"0002_{kind}_seed.json" and v2._sha(body) == cfgtables.sha(body)
     print(
-        "[selftest] dbtool — 판 폴더 갈래 2개(search·struct)·끝 판(struct 0002 — 판 표 S8b)·이름 상수(struct·HNSW 2000)·시드 모양·sha 규칙 같음 통과"
+        "[selftest] dbtool — 판 폴더 갈래 2개(search·struct)·끝 판(struct 0003 — 판 표만 남김)·이름 상수(struct·HNSW 2000)·시드 모양·sha 규칙 같음 통과"
     )
     # pydantic 행 모델 칸 = SQLAlchemy 표 칸(이름·순서·필수 여부)
     pairs = [(ST.search_metadata("ai", 8), SR.ROWS), (SS.struct_metadata(), SRW.ROWS)]
@@ -46,45 +44,11 @@ def selftest():
                 assert fields[c.name].is_required() == need, (t.name, c.name, fields[c.name].is_required(), need)
             n += 1
     print(f"[selftest] dbtool — pydantic 행 모델 칸 = SQLAlchemy 표 칸(표 {n}개 — 이름·순서·필수 여부) 통과")
-    # struct 표 정의 = structdb의 SQLite DDL 글자(Q7 — structdb는 이 패키지를 import 안 함, 여기서 고정)
-    cn = sqlite3.connect(":memory:")
-    for stmt in SDB.SCHEMA + SDB.TABLE_SCHEMA:
-        cn.execute(stmt)
-    md = SS.struct_metadata()
-    # pl-12 C10(10-31) — 문서 대장 묶음(registry)은 코드에서 지웠고 표 정의·판은 다음 마이그레이션(0003)이 지운다 — 그때까지 SQLite DDL 비교에서 뺀다
-    gone = set(SS.GROUPS["registry"])
-    sqlite_tables = [
-        t for t in md.sorted_tables if t.name not in SS.CONFIG_TABLES and t.name not in gone
-    ]  # 판 표(S8b)는 PostgreSQL에만 — PC는 파일
-    assert (
-        {r[0] for r in cn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        == set(SS.TABLES) - gone
-        == {t.name for t in sqlite_tables}
+    assert {t.name for t in SS.struct_metadata().sorted_tables} == set(SS.CONFIG_TABLES) == set(SRW.ROWS)
+    assert {i.name for t in SS.struct_metadata().sorted_tables for i in t.indexes} | {f"{t}_body_sha_key" for t in SS.CONFIG_TABLES} == set(
+        SS.CONFIG_INDEX_DEFS
     )
-    assert {t.name for t in md.sorted_tables} == set(SS.TABLES) | set(SS.CONFIG_TABLES)
-    for t in sqlite_tables:
-        info = [(r[1], r[2].upper(), bool(r[3]), r[5]) for r in cn.execute(f"PRAGMA table_info({t.name})")]
-        want = [
-            (
-                c.name,
-                "INTEGER" if c.type.python_type is int else "TEXT",
-                not c.nullable and not (c.primary_key and len(t.primary_key.columns) == 1),
-                [p.name for p in t.primary_key.columns].index(c.name) + 1 if c.primary_key else 0,
-            )
-            for c in t.columns
-        ]
-        assert info == want, (t.name, info, want)
-    idx = {r[0]: r[1] for r in cn.execute("SELECT name, sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL")}
-    assert set(idx) == set(SS.INDEX_DEFS) == {i.name for t in sqlite_tables for i in t.indexes}, idx
-    assert {i.name for t in md.sorted_tables if t.name in SS.CONFIG_TABLES for i in t.indexes} | {
-        f"{t}_body_sha_key" for t in SS.CONFIG_TABLES
-    } == set(SS.CONFIG_INDEX_DEFS)
-    assert {g: SS.GROUPS[g] for g in SS.GROUPS} == {
-        "base": tuple(SDB._ddl_tables(SDB.SCHEMA)),
-        "registry": ("doc_registry", "doc_registry_seen", "doc_hidden"),  # C10 — 0003이 지울 때 이 묶음도 같이
-        "cells": tuple(SDB._ddl_tables(SDB.TABLE_SCHEMA)),
-    }
-    print("[selftest] dbtool — struct 표 정의 = structdb SQLite DDL(표 10·칸·형식·NOT NULL·기본 키·색인 2·묶음 3) 통과")
+    print("[selftest] dbtool — struct 표 정의 = 판 표 2개(stack_version·source_version)·색인 4 통과")
     # 검색 스키마 SQLite 대역 — 표 정의에서 만든 DDL을 pg_standin이 받음(칸 순서·차원 글자 vector(n) 그대로)
     import tempfile
 
@@ -126,3 +90,40 @@ def selftest():
 
 def test_main():  # 옛 `--selftest` 갈래(`if a.selftest: return selftest()`)
     selftest()
+
+
+def _load(name):
+    import importlib.util
+
+    sp = importlib.util.spec_from_file_location(name, MIGRATIONS / "versions" / f"{name}.py")
+    mod = importlib.util.module_from_spec(sp)
+    sp.loader.exec_module(mod)
+    return mod
+
+
+def test_struct_0003_drops():
+    """pl-08 — 판 0003 upgrade가 0001의 표 10개를 지우고 판 표만 남기는지(임시 SQLite — 0001 DDL 글자로 만든 표, 두 번 돌려도 같음)."""
+    import sqlite3
+    from types import SimpleNamespace
+
+    from common.store.db.models import struct_tables as SS
+
+    v1, v3 = _load("0001_struct_base"), _load("0003_struct_drop")
+    cn = sqlite3.connect(":memory:")
+    for stmt in v1.SCHEMA + v1.REGISTRY_SCHEMA + v1.TABLE_SCHEMA:
+        cn.execute(stmt)
+    for t in SS.CONFIG_TABLES:  # 판 표 자리(모양은 PostgreSQL 전용 — 남는지만 봄)
+        cn.execute(f"CREATE TABLE {t} (version_id INTEGER PRIMARY KEY)")
+    tables = lambda: {r[0] for r in cn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert tables() - set(SS.CONFIG_TABLES) == set(v3.DROPPED), tables()
+    v3.context = SimpleNamespace(config=SimpleNamespace(attributes={"schema": "main"}))
+    v3.op = SimpleNamespace(get_bind=lambda: SimpleNamespace(exec_driver_sql=lambda sql: cn.execute(sql)))
+    for _ in range(2):  # IF EXISTS — 이미 지운 표는 건너뜀
+        v3.upgrade()
+        assert tables() == set(SS.CONFIG_TABLES), tables()
+    assert not {r[0] for r in cn.execute("SELECT name FROM sqlite_master WHERE type='index' AND sql IS NOT NULL")}
+    try:
+        v3.downgrade()
+        raise AssertionError("0003 downgrade가 거부되지 않음")
+    except NotImplementedError:
+        pass

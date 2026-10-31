@@ -15,7 +15,7 @@ from mcp_server.services.search.server_state import _retriever
 
 def _manifest_by_name():
     """AD44 rdb 수집 manifest(output/parse/_source/manifest.jsonl) — doc_type·version·대체 문서·삭제 여부(RDB doc_location 메타)의
-    가장 가까운 출처(AD45 완료 전까지 structdb에는 doc_location이 없음). 없으면 빈 dict — search 근거의 그 칸들은 None."""
+    가장 가까운 출처. 없으면 빈 dict — search 근거의 그 칸들은 None."""
     from common.core.contract import jl
 
     p = Path(mc.cfg().server.manifest or APP_ROOT / "output" / "parse" / "_source" / "manifest.jsonl")  # S7d — 설정 객체

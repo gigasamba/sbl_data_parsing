@@ -36,7 +36,7 @@ from pathlib import Path
 # LOCAL_RUN(로컬 배치) — sbl_mcp 저장소는 패키지가 저장소 바로 아래(deploy/ 단 없음)라 parents[2]가 루트. 아니면 서버·이미지 그대로.
 # S7b(D-028 · 코디네이터 답 1a) — 옛 env LOCAL_RUN=1 대신 RUN_ENV=local이고 코드가 이미지 배치(/app/deploy/<패키지>)가 아닐 때 —
 # PC 시험 Docker 컨테이너(RUN_ENV=local)는 이미지 배치라 서버와 같게. RUN_ENV는 env 신호 > 설정 파일 common.run_env(S7e2 — 다리가 없어져
-# settings.resolve_run_env로 — 못 읽거나 모르는 값이면 로컬 아님). structdb.REPO_ROOT·mcp_server retriever도 이 값을 쓴다.
+# settings.resolve_run_env로 — 못 읽거나 모르는 값이면 로컬 아님). mcp_server retriever도 이 값을 쓴다.
 # 판정 한계(VS7b R-8): 이미지 배치는 폴더 이름(parents[2] == "deploy")으로만 가른다 — PC에서 저장소 폴더 이름이 deploy면 로컬 배치가 꺼진다.
 _HERE = Path(__file__).resolve()
 

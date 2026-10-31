@@ -82,8 +82,9 @@
 ## pl-08 · 정형 DB와 문서 대장
 - 이유: 계약·고객·문서 판이 정형 질문에 답하고 증분 실행을 이끈다.
 - 무엇: `contract_master`·`client_master`·`prod_master`·`doc_contract_link`(점수 매기는 연결기)·`doc_location`·`doc_registry`·`doc_hidden`·`doc_table`·`doc_cell`. PG 또는 SQLite.
-- 파일: `pipeline/load/structured.py`, `common/store/structdb.py`.
+- 파일: (지움) `pipeline/load/structured.py`, `common/store/structdb.py` · 판 `common/store/db/migrations/versions/0003_struct_drop.py`.
 - 결정(허브 10-31, 최신 결정 우선): 지울 표 저장소(`doc_table`·`doc_cell` — [pl-25](#pl-25) `struct`)를 읽는 검색 쪽 코드는 죽은 코드다 — `mcp_server/services/search/aggregate.py`의 `table_cell_list`·`find_table_cells`·`struct()`, `common/store/structdb.py:406`. 0.2.0에 표를 지우는 마이그레이션과 함께 지운다.
+- 한 것(11-01 — 사용자 10-31 결정, 마이그레이션 11-01 승인): 위 표 10개(+ `doc_registry_seen`)와 그 코드를 지웠다 — 연결기·CSV 적재(`structured.py`), 연결·SQLite 대체(`structdb.py`), 설정 `common.store.struct_backend`·`struct_db`(경고만). struct 판 `0003_struct`가 표를 지우고(IF EXISTS, downgrade 없음) 남는 표는 판 표 `stack_version`·`source_version`. 서버는 올리기 전에 백업([db_schema.md](../architecture/db_schema.md) D-7).
 - Status: done
 
 <a id="pl-38"></a>
