@@ -29,9 +29,9 @@
 <a id="pl-06"></a>
 ## pl-06 · 구조화 — 청크·메타데이터·임베딩
 - 이유: 검색에는 출처가 달린 청크와 메타데이터가 필요하다.
-- 무엇: 청크 나누기 structure(기본, 800자, 제목, 표는 통째) / fixed 512+64 / sentence / page, 큰 표는 25행씩. 요약(앞부분 발췌 — OpenViking 요약은 10-29, LLM 요약은 op-08에 지움). 사실(제품, 모달리티, 날짜, 단가, 금액, 통화, 배치). 고객·계약은 교차 확인된 것만 남긴다. 규칙 기반 지식 그래프(묶음에는 만들지만 PG에는 더 적재하지 않음 — [mcp.md#mc-12](mcp.md#mc-12)). 임베딩은 로컬(e5, bge-m3) 또는 내부 `api`.
+- 무엇: 청크 나누기 structure(기본, 800자, 제목, 표는 통째) / fixed 512+64 / sentence / page, 큰 표는 25행씩. 요약(앞부분 발췌 — OpenViking 요약은 10-29, LLM 요약은 op-08에 지움). 고객·계약은 교차 확인된 것만 남긴다. (묶음의 지식 그래프·개념 청크·그림 행·집계 사실은 11-01에 지움 — 아래 Status. 사실 추출 `facts.py`는 `parse_document`가 돌려주므로 남김.) 임베딩은 로컬(e5, bge-m3) 또는 내부 `api`.
 - 파일: `pipeline/transform/structure/build_bundle.py`, `chunking.py`, `facts.py`, `draft_terms.py`, `common/ai/embed.py`.
-- Status: done
+- Status: done — 11-01(`feature/scope-cut-pipeline`) `build_bundle.py`가 `kg_nodes`·`kg_edges`(그래프)·`concept_chunk.jsonl`(개념 청크)·`images.jsonl`(그림 행)·`facts.jsonl`(doc_facts)을 더 만들지 않는다(`build_graph`·`build_concept_chunk`·`image_record`·`doc_facts` 지움). 그림 청크와 청크의 `image_ids`는 남김(검색 근거가 읽음). `kg_nodes.jsonl`·`kg_edges.jsonl`은 **빈 파일**로만 쓴다 — 묶음 계약 `common/core/contract.py` `check_bundle`의 파일 목록이 요구하고, 그 파일은 핸드오프 지문 파일이라 이번에 고치지 않음(0.2.0 배치에서 목록과 빈 파일을 함께 지움 — 허브에 넘김). 구조화 code_fp `s` 72dfe4177e78 → 8004f660c5b2.
 
 <a id="pl-15"></a>
 ## pl-15 · structure/load 계약 점검이 새 묶음을 거부
@@ -355,7 +355,6 @@
 | 중간에 멈추면 보임 | 중간에 멈춰도 `night`/`full` 종료 코드 0 | `pipeline/cli.py`, `entrypoint.sh` | pl-18 |
 | compose `index_a`/`index_b`가 끝까지 돎 | 실패 | `deploy/host/` | pl-19 |
 | 적재는 안 바뀐 문서만 건너뜀 | `file_path`로 건너뜀(sha 칸 없음) — 같은 경로에서 내용이 바뀌어도 `--replace` 없이는 건너뜀 | `pgvector_load.py` | pl-07 |
-| 지식 그래프 검색 가능 | 묶음에는 만들지만 PG에 적재하지 않고 지금 읽는 검색 방법도 없음 | `build_bundle.py` | pl-06 |
 
 ### 요건 없는 코드 — 남길지(앵커를 씀) 지울지([test.md#e2-18](test.md#e2-18))
 - 메일 첨부: `.eml`/`.msg` 첨부를 재귀 파싱(깊이 1, 20 MB, 10개)하고 인용 스레드 접기(`ATTACH_*`). `represent/attachments.py`.
