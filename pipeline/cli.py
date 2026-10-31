@@ -956,7 +956,6 @@ _STAGE4_TOOLS = frozenset(
     {
         "pipeline.cli",
         "pipeline.check_env",
-        "pipeline.trigger_server",
         "pipeline.extract.rdb_discover",
         "pipeline.transform.structure.gen_roster",
         "pipeline.transform.structure.glossary_suggest",

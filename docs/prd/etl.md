@@ -124,15 +124,15 @@
 <a id="pl-10"></a>
 ## pl-10 · 실행 관리(오케스트레이션)
 - 이유: 서버는 문서 수천 건을 사람 없이 돌린다.
-- 무엇: CLI `parse`·`structure`·`load`·`night`(마감 시각, 다음 밤에 이어서)·`run-stack`·`compare-parse`·`compare-all`·`set-stack`·`show-stack`·`set-sources`·`show-sources`·`smoke`·`selftest`. 이미지 entrypoint가 `dedup`·`prepare`·`publish`·`full`·`serve-trigger`·`migrate`·`check`를 더한다(`deploy/docker/entrypoint.sh`). 서버 flow 러너(EDW 목록, 12개 미리 받기, light/medium/vlm 레인, 문서마다 컨테이너, `parse_document` 작업에 양보). trigger 서버(`/jobs`, `/upload`, Bearer). (문서별 병렬 파싱 `parse_parallel.py`는 10-30에 지움 — [parse.md#pl-35](parse.md#pl-35).)
+- 무엇: CLI `parse`·`structure`·`load`·`night`(마감 시각, 다음 밤에 이어서)·`run-stack`·`set-stack`·`show-stack`·`set-sources`·`show-sources`·`smoke`·`selftest`. 이미지 entrypoint가 `dedup`·`prepare`·`publish`·`full`·`idle`(상주 컨테이너가 떠 있기만 — run_docs가 docker exec)·`migrate`·`check`를 더한다(`deploy/docker/entrypoint.sh`). 서버 flow 러너(EDW 목록, 12개 미리 받기, light/medium/vlm 레인, 문서마다 컨테이너, `parse_document` 작업에 양보). (trigger 서버 `/jobs`·`/upload`·`serve-trigger`·`CHAIN_STRUCTURE_URL`은 11-01에 지움 · `compare-parse`·`compare-all`은 11-01에 지움 — [test.md#e2-10](test.md#e2-10).) (문서별 병렬 파싱 `parse_parallel.py`는 10-30에 지움 — [parse.md#pl-35](parse.md#pl-35).)
 - 서버 flow 러너 요구(사용자 10-22·10-23 — 원문 [../history/run_docs_req.md](../history/run_docs_req.md), 바뀐 값은 rn-01·rn-02·[parse.md#pl-22](parse.md#pl-22)):
   - 문서별 flow(배치 장벽 없음) · warm 12(진행 중 제외, 끝나면 tmp 지움 — 10-29부터 20) · 컨테이너 하나에 worker 4.
   - VLM 동시 12(figure·vlm_page 포함), 문서 병렬 4, 문서당 VLM 4·OCR 1, vlm_page 끔, OCR dpi 150. 구조화+적재도 문서 단위 — 임베딩 묶음 호출(32 → 12)·문서당 병렬 4, BM25 병렬 4, 단계별 시간 기록.
   - 튜닝: `PIPE_PROCS=3`, CPU 75~85%, `RAPIDOCR_PAGE_WORKERS`·OCR threads 3(→ 2 검토), CPU 게이트 1.15 → 1.3/1.1.
   - 3클래스: warm에서 무게 평가(과거 소요 시간 규칙), vlm_page는 스캔 PDF처럼 꼭 필요한 문서만, 1/2/1 + 빈 레인 가져가기, light 1개 강하게 점유, 전담 분류 먼저, light 전용 executor. MCP 업로드가 오면 medium 전담 1개를 멈추고 먼저.
   - 속도: phase 1 건너뛰기(→ pl-22), 끝난 문서 건너뛰기, parse_qa 가볍게, 10-23 OCR 끔. SSH가 끊겨도 작업은 계속(nohup 확인).
-- 파일: `pipeline/cli.py`, `deploy/host/scripts/run_docs.py`(서버 전용 — PC에서 실행 금지), `pipeline/trigger_server.py`, `docs/history/run_docs_req.md`, `docs/architecture/run_docs_design.md`.
-- Status: done
+- 파일: `pipeline/cli.py`, `deploy/host/scripts/run_docs.py`(서버 전용 — PC에서 실행 금지), `docs/history/run_docs_req.md`, `docs/architecture/run_docs_design.md`.
+- Status: done — trigger 서버 지움 11-01(`feature/scope-cut-pipeline`): `pipeline/trigger_server.py`·시험 `test_trigger_server`, entrypoint `serve-trigger`(→ `idle` — 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`는 run_docs의 docker exec 대상이라 남기고 떠 있기만), compose의 `TRIGGER_MODULE`·`/health` 검사, `deploy/host/scripts/parse_trigger_test.py`, 설정 절 `pipeline.service.trigger`(`required.tokens.trigger` 포함 — 남으면 경고만: `common/config/layout.py`의 자리는 옛 settings.yaml이 거부되지 않게 남기고 sample 대조에서만 뺌(`sample.LAYOUT_GONE`) — layout.py는 code_fp에 들어가 손대지 않음), `settings_env.sh`의 trigger 포트. `common/core/exitclean.py`의 SIGTERM 처리는 모든 프로세스가 쓰는 일반 처리라 그대로(주석의 trigger_server 예시만 남음 — 고치면 code_fp가 바뀜).
 
 <a id="pl-18"></a>
 ## pl-18 · 중간에 멈춰도 `night`/`full`이 종료 코드 0
@@ -360,7 +360,7 @@
 ### 요건 없는 코드 — 남길지(앵커를 씀) 지울지([test.md#e2-18](test.md#e2-18))
 - 메일 첨부: `.eml`/`.msg` 첨부를 재귀 파싱(깊이 1, 20 MB, 10개)하고 인용 스레드 접기(`ATTACH_*`). `represent/attachments.py`.
 - 용어집 도구(약어 제안, EDW 마스터로 만드는 고객 목록). `transform/structure/glossary_suggest.py`, `gen_roster.py`. (위키 도구는 10-30에 지움 — [test.md#e2-18](test.md#e2-18).)
-- 밤 호스트 타이머와 trigger 연결(`NIGHTLY_*`, `CHAIN_STRUCTURE_URL`). `deploy/host/`, `pipeline/trigger_server.py`.
+- 밤 호스트 타이머(`NIGHTLY_*`). `deploy/host/`. (trigger 연결은 11-01에 지움 — [pl-10](#pl-10).)
 - Object Storage 시험 업로드(MinIO). `common/check/os_put.py`.
 - 공용 도구 — 설정 CLI `common/config/`, DB 도구 `common/store/db/`, 점검 `pipeline/check_env.py`, `common/check/`.
 
@@ -374,6 +374,5 @@
 | Object Storage + `AI.ParsingMeta` 게시 | `night`, run_docs, 이미지 `publish` 단계에서 기본 실행(모두 `--apply`, `NIGHTLY_PUBLISH=1`) | `PM_BUCKET`, `common.connections.rdb` 쓰기 계정(`PM_BUCKET` 없으면 종료) |
 | 밤 일정 | `NIGHTLY_TIME` 비움 | 시각(HH:MM) |
 | `vector` 확장 만들기 | `PG_CREATE_EXTENSION=0` | — |
-| trigger 서버 | — | `TRIGGER_TOKEN`(없으면 시작 거부) |
 
 10-29 요청 "EDW와 Object Storage 적재를 기본으로 켬": 게시(Object Storage + `AI.ParsingMeta`)는 `PM_BUCKET`과 EDW 쓰기 계정만 있으면 이미 기본으로 돈다. 꺼져 있는 것은 밤 일정(`NIGHTLY_TIME` 비움 — 10-30 pl-32, 켤 때 시각을 적음). EDW 벡터 적재는 10-29에 지웠다(벡터는 pgvector에만 — [settings.md#op-03](settings.md#op-03)).

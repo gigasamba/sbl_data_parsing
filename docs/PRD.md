@@ -25,7 +25,7 @@
 | 문서 대장 upsert·게시 가드 | partly done | deleted 길 없앰·서버 대체 금지 ✓ · PG 번역 · ParsingMeta 가드 | [pl-12](prd/etl.md#pl-12) |
 | 파싱 결과 게시 | done | Object Storage · ParsingMeta | [pl-09](prd/etl.md#pl-09) |
 | `full`은 늘 게시, 대상 필수 | todo | `--no-publish` 없앰 · 시작 거부 | [pl-26](prd/etl.md#pl-26) |
-| 실행 관리(오케스트레이션) | done | CLI · entrypoint · flow 러너 · trigger | [pl-10](prd/etl.md#pl-10) |
+| 실행 관리(오케스트레이션) | done | CLI · entrypoint · flow 러너 · trigger 지움(11-01) | [pl-10](prd/etl.md#pl-10) |
 | 중간 멈춤에도 종료 코드 0 | todo | `night` · `full` 종료 코드 | [pl-18](prd/etl.md#pl-18) |
 | 증분만, 전체 재파싱은 전체 e2e | todo | 새 문서 = s3_key · 밤 배치 끔 | [pl-23](prd/etl.md#pl-23) |
 | `run_docs` 순서: silver → 원본 삭제 → gold | todo | 순서 · `gold_status` · 임시 폴더 | [pl-24](prd/etl.md#pl-24) |

@@ -56,9 +56,7 @@ CATALOG_VALUES = {
     "SOURCE_URI_PREFIX": "",
     "STRUCT_DB": "",
     "VLM_MODEL": "",
-    # S7e2(사용자 10-28) — 옛 서버 compose environment 기본값(이제 settings.yaml 칸 — compose가 env로 덮지 않음). MCP_STORE는 compose가 pg로 덮었음
-    "CHAIN_STRUCTURE_URL": "http://127.0.0.1:8771",
-}
+}  # 옛 CHAIN_STRUCTURE_URL 기본값은 11-01에 지움(pl-10 — trigger 서버)
 CATALOG_VALUES["MCP_STORE"] = "pg"
 # S7e2(VS7e1 B-2) — 옛 이미지 ENV로 굽던 칸(DOC_DIR·DOC_DIR_PREPARED·PIPE_EMBED·SOFFICE_BIN)은 컨테이너에서 options.conf 값이 걸린 적이 없음(이미지 ENV가
 # 먼저 있어 카탈로그 setdefault가 건너뜀) — 지금은 이미지 안 모델 기본값이 같은 값이라 표에서 뺀다(env 파일에 적은 값은 migrate가 옮김).
@@ -199,6 +197,19 @@ def _fmt_default(f):
     return f" · 기본 {d}"
 
 
+# 지운 칸(모델 REMOVED — 남으면 경고만)인데 layout 표에 자리를 남긴 것 — 옛 settings.yaml(sample 복사본)이 "모르는 칸"·"자리가 다른 칸"으로
+# 시작을 거부당하지 않게(11-01 pl-10 trigger 서버 — layout.py는 code_fp에 들어가 손대지 않음). 모델에 없는 칸 대조에서만 뺀다.
+LAYOUT_GONE = frozenset(
+    {
+        "pipeline.service.trigger.token",
+        "pipeline.service.trigger.client_timeout",
+        "pipeline.service.trigger.queue_max",
+        "pipeline.service.trigger.shutdown_timeout_sec",
+        "pipeline.service.trigger.socket_timeout_sec",
+    }
+)
+
+
 def build(classes=None):
     classes = classes or S.app_classes()
     rows = {}
@@ -209,7 +220,7 @@ def build(classes=None):
     for p, f in rows.items():
         L.set_path(tree, L.to_yaml(p), (p, f))
     if {"pipeline", "mcp"} <= set(classes):  # 시험이 앱 일부로 부를 때는 대조 안 함
-        unknown = (set(L.REQUIRED) | L.TUNING | set(VALUES)) - set(rows)
+        unknown = (set(L.REQUIRED) | L.TUNING | set(VALUES)) - set(rows) - LAYOUT_GONE
         if unknown:
             raise SystemExit(f"sample: layout·VALUES에 모델에 없는 칸 {sorted(unknown)}")
     lines = [HEAD]
@@ -319,8 +330,6 @@ SET_MATTERS = {
     "PM_BUCKET",
     "STRUCT_BACKEND",
     "STRUCT_DB",
-    "TRIGGER_PARSE_PORT",
-    "TRIGGER_STRUCTURE_PORT",
     "VLM_MAX_CONCURRENCY",
     "RDB_COMPANY",
     "RDB_DOC_TYPE",

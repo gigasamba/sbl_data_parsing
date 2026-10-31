@@ -31,7 +31,6 @@ PREFIXES = ("LLM", "VLM", "EMBED")
 
 # 규칙(아래 정규식)으로 못 잡는 읽기 — 이름 목록·동적 이름(9-4 "이름 목록") · S7a에 다시 모으며 찾음
 NAME_LIST = {
-    "TRIGGER_SHUTDOWN_TIMEOUT_SEC": "pipeline/trigger_server.py(_serve 인자 기본값)",
     "VLM_EXTRA_BODY": "common/ai/adk.py(_EXTRA_ENV_KEY 표)",
     **{
         f"RDB_COL_{f}": 'pipeline/extract/source.py(f"RDB_COL_{k.upper()}")'
@@ -95,7 +94,6 @@ NOT_SETTINGS = {
     "SCARF_NO_ANALYTICS": ("env로 남김", "외부 라이브러리 원격 측정 끄기 — Dockerfile ENV(U-1, S7a2) · settings·빈 틀에서만 뺌(S7e)"),
     "TESSDATA_PREFIX": ("env로 남김", "라이브러리(tesseract)가 읽음"),
     "TRANSFORMERS_OFFLINE": ("env로 남김", "라이브러리가 읽음"),
-    "TRIGGER_MODULE": ("env로 남김", "compose 서비스별 신호"),
     "TZ": ("env로 남김", "OS·이미지 ENV"),
     "USER": ("env로 남김", "OS 사용자 이름(OS가 줌)"),
     "USERNAME": ("env로 남김", "OS 사용자 이름(Windows)"),

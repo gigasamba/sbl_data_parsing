@@ -11,7 +11,7 @@
 
 | 이미지 | 역할 | `RAG_MODULE` | 돌리는 서비스(`deploy/host/compose/compose.pipeline.yml`) |
 |---|---|---|---|
-| `data-pipeline` | 파싱(dedup→prepare→파싱→대표 결과)·구조화(청킹·임베딩)·적재(PostgreSQL)·퍼블리시 | `pipeline` | 1회: `parse`·`structure`·`load`·`publish`·`index_a`·`index_b` · 상주 트리거 컨테이너(선택, 같은 이미지): `data-pipeline-parse`(`TRIGGER_MODULE=parse`)·`data-pipeline-structure`(`TRIGGER_MODULE=structure`) |
+| `data-pipeline` | 파싱(dedup→prepare→파싱→대표 결과)·구조화(청킹·임베딩)·적재(PostgreSQL)·퍼블리시 | `pipeline` | 1회: `parse`·`structure`·`load`·`publish`·`index_a`·`index_b` · 상주 컨테이너(같은 이미지, 일 없이 떠 있음 — `run_docs.py`가 docker exec): `data-pipeline-parse`·`data-pipeline-structure` |
 | `mcp-server` | 검색 MCP(상주) | `mcp` | `mcp`(상주, 컨테이너 이름 `mcp-server`) — 도구 job `retrieval`·`mcp_eval`은 11-01에 지움(e2-10) |
 
 옛 이름: `data-parsing`·`data-structure` → `data-pipeline`(컨테이너 `data-pipeline-parse`·`data-pipeline-structure`), `data-retrieval` → `mcp-server`.
@@ -98,16 +98,14 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 - 스케줄은 settings.yaml `pipeline.host.nightly.time`(env 이름 `NIGHTLY_TIME`, HH:MM — 기본 비움 = 새벽 배치 없음, pl-32). 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 그 시각부터 5분 안일 때만 배치를 시작한다(그 밖에는 말없이 끝). 옛 `nightly.enabled`는 지움(남아 있으면 경고만).
 - 꺼진 채로도 `bash deploy/host/scripts/trigger.sh night`는 요청하면 바로 돈다.
 
-### 2-3. 상주 트리거 서버(선택)
-웹 업로드가 "파싱 시작"을 직접 호출하게 하려면 `data-pipeline-parse`·`data-pipeline-structure` 컨테이너를 `serve-trigger`로 상주시킨다(`compose.pipeline.yml`의 같은 이름 서비스 — 둘 다 data-pipeline 이미지에 `TRIGGER_MODULE=parse`·`structure`):
+### 2-3. 상주 컨테이너
+`data-pipeline-parse`·`data-pipeline-structure`는 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업을 돌리고, MCP `parse_document` 작업 서비스도 `data-pipeline-parse` 안에서 돈다. 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/etl.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
 ```bash
 docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-parse data-pipeline-structure
 ```
-`/health`(토큰 불필요)·`/jobs`(Bearer `TRIGGER_TOKEN`). parse가 끝나면 `CHAIN_STRUCTURE_URL`로 structure를 자동 호출한다. 1회 트리거(`trigger.sh`)와 병행할 수 있다.
 
 ### 2-4. 테스트 실행 스크립트(코드 폴더에서 네이티브, 이미지 밖)
 - 네이티브 실행 전 셸에 `SERVER_ENV_DIR`(settings.yaml 위치)이 있는지 본다: `echo "$SERVER_ENV_DIR"`(§1-2).
-- 파싱 시작: `python deploy/host/scripts/parse_trigger_test.py --source <서버 샘플 폴더>` · `--source s3://버킷/접두 --limit 5 [--chain]`(trigger.sh 1회 job) · `--url http://127.0.0.1:8770`(상주 트리거 서버, s3://·rdb:만).
 - 답변 생성: `PYTHONPATH=. python -m validation.e2e.answer_gen --url http://<검색 MCP>:8765/mcp --q "<질문>"`.
   - 코드 폴더(저장소 배치 — `validation/`은 이미지 밖)에서 검색 MCP로 호출. `--concurrency N` 병렬. 결과(답·인용·인용 검증·지연)는 `output/eval/answer_gen/`.
   - Answer Agent(`valid_env/answer_test/rag_qa/` — PC 전용 데이터)는 컨테이너 없이 이것으로만 점검한다.

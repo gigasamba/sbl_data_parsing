@@ -59,8 +59,8 @@ MCP 도구 4개의 이름과 입출력은 외부 클라이언트와의 계약이
 
 | 이미지             | 역할                                 | 컨테이너                                                                                                             |
 | --------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `data-pipeline` | parse · structure · load · publish | 1회 실행 job(`parse`, `structure`, `load`, `publish`) · 상주 트리거(선택) `data-pipeline-parse`, `data-pipeline-structure` |
-| `mcp-server`    | 검색 MCP(상주) + 검색 도구                 | 상주 `mcp-server` · 도구 job `retrieval`                                                                             |
+| `data-pipeline` | parse · structure · load · publish | 1회 실행 job(`parse`, `structure`, `load`, `publish`) · 상주(일 없이 떠 있음 — `run_docs.py`가 docker exec) `data-pipeline-parse`, `data-pipeline-structure` |
+| `mcp-server`    | 검색 MCP(상주)                         | 상주 `mcp-server`                                                                                                  |
 
 
 - **버전은 저장소 루트 `VERSION` 하나**(SemVer, 지금 `0.1.0`)이고 두 이미지가 함께 쓴다(D-036).
@@ -118,7 +118,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  ├─ transform/        represent(대표 결과) · figures(그림) · structure(청킹·임베딩·번들)
 │  ├─ load/             pgvector 적재 · publish · 회사 DB 메타데이터 · 인덱스 빌더
 │  ├─ shared/ · tools/  단계 공용 모듈 · 운영 도구
-│  └─ trigger_server.py · mcp_parse_service.py                                상주 트리거 · MCP 파싱 작업
+│  └─ mcp_parse_service.py                                                     MCP 파싱 작업
 ├─ mcp_server/          검색 MCP 앱(mcp-server 이미지, FastMCP)
 │  ├─ main.py           진입점(앱 조립 · 토큰 · 서버 시작)
 │  ├─ config.py         mcp 섹션 설정 모델
@@ -588,7 +588,7 @@ bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서를 지금
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 검색 MCP 상주 확인                                       | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_up.sh`                                                                                             |
 | 새벽 배치                                              | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.time: "HH:MM"`(그 시각부터 5분 안에 시작 — 비우면 새벽 배치 없음, 기본 비움 · pl-32) |
-| 상주 트리거 서버(선택 — 웹 업로드에서 파싱 직접 호출, `run_docs.py`가 씀) | `docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-parse data-pipeline-structure`                                                |
+| 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음, 11-01 trigger 서버 지움) | `docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-parse data-pipeline-structure`                                                |
 | MCP `parse_document` 작업 서비스                        | compose가 띄우지 않으므로 파싱 컨테이너가 다시 시작될 때마다: `docker exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service`                                           |
 
 

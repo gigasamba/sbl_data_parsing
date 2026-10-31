@@ -178,39 +178,6 @@ class PipelineServiceParseMcp(Section):
     )
 
 
-class PipelineServiceTrigger(Section):
-    allow_no_token: bool | None = F(
-        False, "TRIGGER_ALLOW_NO_TOKEN", "TRIGGER_TOKEN 없이 무인증 시작 허용 — 1이면 허용(PC 전용, 경고)", on=("1",)
-    )
-    chain_structure_url: CsvList | None = F(
-        [],
-        "CHAIN_STRUCTURE_URL",
-        "parse 성공 뒤 structure 작업을 올릴 트리거 서버 URL(쉼표로 여러 개) — 비면 이어 올리지 않음(서버 compose는 http://127.0.0.1:8771을 줌)",
-    )
-    client_timeout: float | None = F(10.0, "TRIGGER_CLIENT_TIMEOUT", "트리거 서버 CLI 클라이언트 HTTP 제한 시간(초)")
-    host: str | None = F(
-        "127.0.0.1", "TRIGGER_HOST", "트리거 서버 바인딩 주소 — 비우면 127.0.0.1(모든 인터페이스는 0.0.0.0을 명시 — C-37, 사용자 10-27)"
-    )
-    parse_port: Port | None = F(
-        8770,
-        "TRIGGER_PARSE_PORT",
-        "parse 상주 트리거 서버 포트(--module parse — port 칸이 비었을 때, S7e2: 옛 compose가 TRIGGER_PORT로 넘기던 호스트 칸을 앱 칸으로)",
-    )
-    port: Port | None = F(
-        None,
-        "TRIGGER_PORT",
-        "트리거 서버 포트 — 모듈 칸(parse_port·structure_port)을 따로 주지 않았을 때 두 모듈 모두 이 포트(PC 직접 실행만 — 이미지 안 상주 서버는 이 칸을 쓰지 않고 모듈 칸, VS7e2 R-1)",
-    )
-    structure_port: Port | None = F(
-        8771, "TRIGGER_STRUCTURE_PORT", "structure 상주 트리거 서버 포트(--module structure — port 칸이 비었을 때, S7e2)"
-    )
-    queue_max: int | None = F(100, "TRIGGER_QUEUE_MAX", "트리거 서버 대기 작업 상한(건) — 넘으면 429")
-    shutdown_timeout_sec: float | None = F(300.0, "TRIGGER_SHUTDOWN_TIMEOUT_SEC", "SIGTERM 뒤 실행 중 작업을 기다리는 한도(초)")
-    socket_timeout_sec: int | None = F(30, "TRIGGER_SOCKET_TIMEOUT_SEC", "연결당 소켓 read 제한(초) — 느린 클라이언트 차단")
-    token: SecretStr | None = F(None, "TRIGGER_TOKEN", "트리거 서버 Bearer 토큰 — 필수(없으면 시작 거부)")
-    upload_max_mb: int | None = F(50, "TRIGGER_UPLOAD_MAX_MB", "트리거 서버 /upload 본문 크기 상한(MB)")
-
-
 class PipelineTransformFigures(Section):
     REMOVED = frozenset(
         {
@@ -507,8 +474,8 @@ class PipelineConnections(Section):
 
 
 class PipelineService(Section):
+    REMOVED = frozenset({"trigger"})  # 11-01(pl-10 — trigger 서버 지움) — 지운 절(남으면 경고만)
     parse_mcp: PipelineServiceParseMcp = Field(default_factory=PipelineServiceParseMcp)
-    trigger: PipelineServiceTrigger = Field(default_factory=PipelineServiceTrigger)
 
 
 class PipelineTransform(Section):

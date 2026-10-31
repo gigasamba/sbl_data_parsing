@@ -77,7 +77,6 @@ MOVED_TOOLS = {
     "etl": {
         "pipeline",
         "check_env",
-        "trigger_server",
         "rdb_discover",
         "gen_roster",
         "glossary_suggest",

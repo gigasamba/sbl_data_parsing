@@ -739,7 +739,7 @@ def selftest():
             f = d / "s.yaml"
             f.write_text(
                 _new(
-                    "common:\n  run_env: dev\npipeline:\n  host:\n    image: 'p:1'\n  service:\n    trigger:\n      host: 10.1.1.1\n"
+                    "common:\n  run_env: dev\npipeline:\n  host:\n    image: 'p:1'\n"
                     "mcp:\n  host:\n    image: 'm:$x'\n  server:\n    host: 10.2.2.2\n    max_concurrency: abc\n    token: dummy-s7e1\n"
                 ),
                 encoding="utf-8",
@@ -757,8 +757,6 @@ def selftest():
                 "--section",
                 "pipeline.host",
                 "--section",
-                "pipeline.service.trigger.host",
-                "--section",
                 "mcp.server.host",
                 "--section",
                 "common.run_env",
@@ -766,10 +764,9 @@ def selftest():
             rc2, o2, e2 = run("--section", "mcp.host")
             rc3, _, e3 = run("--section", "mcp.server")
             check(
-                "export(S7e1): 잎 칸 이름이 host인 앱 칸(TRIGGER_HOST·MCP_HOST)도 냄 · 고른 칸만 검증(mcp 절 오타가 다른 칸을 막지 않음) · "
+                "export(S7e1): 잎 칸 이름이 host인 앱 칸(MCP_HOST)도 냄 · 고른 칸만 검증(mcp 절 오타가 다른 칸을 막지 않음) · "
                 "env 꼴은 $ 값 거부(이름만) · 고른 절이 틀리면 거부 · 비밀 없음",
                 rc1 == 0
-                and "export TRIGGER_HOST='10.1.1.1'" in o1
                 and "export MCP_HOST='10.2.2.2'" in o1
                 and "export RUN_ENV='dev'" in o1
                 and rc2 == 2

@@ -14,7 +14,6 @@
 |---|---|---|
 | `RUN_MODE` | `required.env.run_mode` | `prod`(모든 환경 — 빠뜨리면 PG 연결 실패 때 SQLite로 조용히 대체) |
 | `MCP_STORE` | `required.deploy.mcp_store` | `pg` |
-| `CHAIN_STRUCTURE_URL` | `ops.services.trigger.chain_structure_url` | `http://127.0.0.1:8771` |
 | `PARSE_ENGINE_SCOPE` | `extract.engine_scope` | `all` |
 | `PARSE_POST` | `transform.represent.post` | `all` |
 | `EDW_QUERY_MAX_ROWS` | `search.edw_query.max_rows` | `1000` |
@@ -151,12 +150,7 @@
 | `PM_PATH_MAP` | 결과 키 앞부분 바꾸기 `이전 앞부분=새 앞부분`(쉼표 목록, 짝 없으면 `source_system/원본 폴더`) — 문서 폴더 = `<PM_PREFIX>/<새 앞부분>/<나머지 폴더>/<원본파일명>/`(EDW rep_key) · 대표 결과 `<파일명>_<YYYY-MM-DD_HHMMSS>.md`·엔진별 원본 `engine/` · 예 `SFDC=Parsing-Result/SFDC`면 `.../SFDC/<UUID>/a.pdf` → `.../Parsing-Result/SFDC/<UUID>/a.pdf/` |
 | `PM_BUCKET`·`PM_PREFIX` | 결과 퍼블리시(쓰기, 마지막 단계) — EDW는 위 쓰기 계정. 폴더 저장소로 먼저 테스트: `PM_BUCKET=file://…` · ⚠ **첫 퍼블리시 전 EDW 표를 DBA가 1회 생성**: [`docs/operations/parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(저장소 문서 자리 — 코드 폴더·오버레이 패치 번들에는 없음. DBA가 아직 한 번도 실행 안 함 — 이 최신 버전을 그대로 1회. 코드는 표를 만들지 않으며 없으면 첫 INSERT에서 실패) · 필수 열은 `doc_key`(원본 sha256) 하나뿐, `source_system`·`source_key`·`parse_date`는 비어도 됨(비면 각각 'unknown'·NULL·처리 시각) · `parse_date`는 글자 `YYYY-MM-DD_HHMMSS`, `rep_key`는 문서 폴더(끝 `/`) · `engines_used`(JSON 배열)·`engines_summary`(한 줄) — 이 문서에 쓰인 엔진 전부(VLM·OCR 포함, `pipeline/load/parsing_meta.py`의 `engines_used()`) |
 
-### 상주 트리거 서버 (선택)
-| 이름 | 메모 |
-|---|---|
-| `TRIGGER_TOKEN` | `/jobs` 호출 인증 |
-| `TRIGGER_HOST`·`TRIGGER_PARSE_PORT`·`TRIGGER_STRUCTURE_PORT` | 기본 `127.0.0.1`·`8770`·`8771` — 앱 항목(`ops.services.trigger.host`·`parse_port`·`structure_port`). 상주 서버가 `--module`로 고르고 compose가 env로 주지 않는다. 공통 `TRIGGER_PORT`(`ops.services.trigger.port`)는 상주 컨테이너에서 쓰지 않는다(적혀 있으면 한 줄 알림) |
-| `CHAIN_STRUCTURE_URL` | parse 완료 뒤 structure를 자동 호출할 주소 — ⚠ **서버는 `http://127.0.0.1:8771`을 적는다**(compose가 주지 않음 — 위 "옛 서버 값" 표) |
+(상주 트리거 서버의 `TRIGGER_*`·`CHAIN_STRUCTURE_URL`은 11-01에 지움 — PRD pl-10. 옛 서버 settings.yaml의 `ops.services.trigger` 절은 남아 있으면 경고만.)
 
 ### 새벽 배치 (systemd `data-pipeline-nightly`)
 코드 주석의 "env-guide 1-3"이 이 절이다(스케줄은 `NIGHTLY_TIME` 하나 — 비우면 없음, pl-32 10-30).
