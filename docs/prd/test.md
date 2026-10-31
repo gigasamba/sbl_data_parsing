@@ -31,20 +31,22 @@
 - 이유: 오버레이 패치로 시험을 고칠 수 없다(C-53).
 - 결정(사용자 10-30 grill): 시험을 바꾸는 변경은 새 이미지 판이 필요하다(초안 규칙 채택).
 - 파일: `deploy/docker/Dockerfile`, `tests/server/`.
-- Status: todo
+- 결정(사용자 10-30 PRD grill): S3 — 시험이 코드 폴더에서 돌므로(op-06 실행 이미지 + 코드 마운트) '시험을 바꾸면 새 이미지'가 필요 없어졌다 — 해소로 닫는다.
+- Status: done — 해소(사용자 10-30 PRD grill S3: 시험이 코드 폴더에서 돌아 새 이미지가 필요 없음).
 
 <a id="e2-11"></a>
 ## e2-11 · PC 일반 시험의 알려진 실패
 - 이유: 일반 시험 7개가 리팩토링 전부터 실패한다(C-54 ①, C-58): 3개는 공용 개발 PG를 읽음(임시 SQLite·스키마를 쓸 것), 2개는 없는 패키지·모듈이 필요(건너뜀 표시 또는 고침), 1개는 EDW 필요, 1개는 `test_structured`의 `find_table_cells` 단언.
 - 파일: `tests/conftest.py`(`GENERAL_KNOWN_FAIL`), `tests/general/`.
 - 진행 10-29(`feature/test-cleanup`): 공용 개발 PG 실패 3개를 고쳤다 — PC 시험 자식 프로세스가 더는 개발 루트 `settings.yaml`을 읽지 않음(`pipeline/cli.py` `case_env`가 시험 전용 바탕 `run_env: local`을 줌). `test_structured`, `test_structdb`, `test_aggregate`를 목록에서 뺐다. 남음: `test_kg_external`, `test_run_combo`, `test_edwdb`, `test_pub_registry`(일부러 실 PG, C-54 ①).
+- 결정(사용자 10-30 PRD grill): S4 — 이미 지운 모듈의 시험(`test_kg_external`, `test_edwdb`)은 목록과 함께 지운다. `test_run_combo`는 C7(e2-10, 평가 도구 둘만)에 따라 도구와 함께 지운다.
 - Status: partly done
 
 <a id="e2-15"></a>
 ## e2-15 · 에이전트 시험 패키지 경로가 상류를 가리킴
 - 이유: `resolve_agent_dir`가 `example_agentic`을 `dev_tools/unit_test/fixtures/`(이 저장소에 없음)에서 찾아 `test_adk`의 `run_agent` 묶음이 건너뛰어지고, `test_paths`가 그 경로를 단언한다.
 - 파일: `common/core/paths.py`(모든 레이어 의존 → code_fp), `tests/server/common/test_adk.py`, `tests/server/common/test_paths.py`.
-- Status: todo — 다음 핑거프린트가 바뀌는 릴리스와 함께 고친다.
+- Status: todo — 0.2.0(사용자 10-30 PRD grill C1 — 다음 핑거프린트가 바뀌는 릴리스).
 
 <a id="e2-01"></a>
 ## e2-01 · PC 스모크 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
@@ -74,6 +76,7 @@
 - 이유: 엔진·스택을 바꿔도 파싱 정확도가 떨어지면 안 된다.
 - 무엇: CER, `criteria.json`과 사람 정답에 대한 값·표 재현율, 교차 확인된 값으로 자동 질문, 스택 빔 탐색, 단계 보드와 스택 보고서.
 - 파일: `pipeline/eval/score_gold.py`, `auto_questions.py`, `run_combo.py`, `run_board.py`, `stack_report.py`, `pipeline/transform/represent/parse_qa.py`, `resources/config/criteria.json`.
+- C7(사용자 10-30 PRD grill): 비교 도구(`model_matrix`·`score_gold`·`mcp_eval` 등)는 두지 않는다([e2-10](#e2-10)) — 비교는 필요할 때 다시 만든다. 이 행의 도구(`score_gold`·`run_combo`·`stack_report` 등)는 e2-10에 따라 지운다.
 - Status: done
 
 <a id="e2-04"></a>
@@ -81,6 +84,7 @@
 - 이유: 찾기를 바꿔도 적중률이 떨어지면 안 된다.
 - 무엇: hit@1/5/k, value_in_evidence, p50/p95 지연, `via` 구성. 도구 4개의 스모크, HTML/xlsx 보고서.
 - 파일: `mcp_server/cli/mcp_eval.py`, `mcp_server/cli/mcp_smoke.py`, `mcp_server/cli/search_checks.py`(`qa_report.py`는 10-30 지움 — 사용자).
+- C7(사용자 10-30 PRD grill): 비교 도구(`model_matrix`·`score_gold`·`mcp_eval` 등)는 두지 않는다([e2-10](#e2-10)) — 비교는 필요할 때 다시 만든다. `mcp_eval`·`mcp_smoke`·`search_checks`는 e2-10에 따라 지운다.
 - Status: done
 
 <a id="e2-05"></a>
@@ -116,6 +120,7 @@
   - dev: 사람이 단 정답 샘플과 대조한 보고서만 — 원천별·라벨별 일치율과 혼동표. 통과 기준은 첫 결과를 본 뒤 정한다.
 - 열린 점: 정답 샘플의 자리와 형식 — 사용자 확인.
 - 관련: [etl.md#pl-33](etl.md#pl-33)(분류 단계).
+- 결정(사용자 10-30 PRD grill): A8 — 분류 정답 샘플은 회사 데이터라 git에 넣지 않고 개발 서버 폴더에 CSV로 둔다(칸: `s3_key`, 정답 분류).
 - Status: todo
 
 <a id="e2-06"></a>
@@ -123,6 +128,7 @@
 - 이유: 엔진과 모델을 측정 결과와 비용으로 고른다.
 - 무엇: 스택 행렬·모델 행렬 실행과 예상 비용. 유료 호출은 승인 필요(CLAUDE.md §7).
 - 파일: `validation/e2e/model_matrix.py`(`stack_matrix.py`·`stack_matrix.json`·보고서 `pipeline/eval/stack_report.py`는 10-30 지움 — [e2-18](#e2-18)).
+- C7(사용자 10-30 PRD grill): 비교 도구(`model_matrix`·`score_gold`·`mcp_eval` 등)는 두지 않는다([e2-10](#e2-10)) — 비교는 필요할 때 다시 만든다. `model_matrix`는 e2-10에 따라 지운다.
 - Status: done
 
 <a id="e2-07"></a>
@@ -142,6 +148,7 @@
 - 이유: 설정 약 50개가 PC 시험·실험에만 있다(`common.dev.*`, `pipeline.dev.*`, `pipeline.eval.*`, `mcp.dev.*`, `runtime.exp_*`, `graphiti.*`).
 - 파일: `validation/e2e/`, `pipeline/eval/`, `mcp_server/cli/`, `common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`.
 - 결정(사용자 10-30 grill): `validation/search_ui`(검색 점검 페이지)와 `valid_env/answer_test`(답변 점검)**만** 남긴다. 스택 비교, 자동 질문 만들기, 지운 묶음용 채점기(예: `chart_values_score.py`)와 그 설정은 지운다.
+- 결정(사용자 10-30 PRD grill): C7 — PC 평가 도구는 이 행대로 둘만 남긴다. 스택·모델 비교 도구(`model_matrix`·`score_gold`·`mcp_eval`)를 전제로 한 다른 행(e2-03·e2-04·e2-06·pl-31·pl-32·pl-03)은 '비교는 필요할 때 다시 만든다'로 고치고, e2-11의 `test_run_combo`는 도구와 함께 지운다.
 - Status: todo
 
 <a id="e2-17"></a>

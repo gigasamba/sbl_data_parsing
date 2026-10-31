@@ -140,7 +140,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 ├─ tests/               server/(이미지에 포함, 배포 판정) · general/(PC 전용) · runner.py
 ├─ validation/          PC 전용 검증 도구 — search_ui/(검증 페이지) · e2e/(평가·비교, answer_gen)
 ├─ valid_env/           PC 전용 데이터 — object_storage/(합성 테스트 문서, 버킷 모양) · edw/(합성 EDW sqlite) · answer_test/(답변 점검 agent) · docker/(PC 테스트 Docker)
-├─ docs/                문서(지도: docs/index.md) — PRD.md·prd/ · operations/ · architecture/ · refactoring/(refactor.md — 서버·사람 확인 사항 C-xx · "최종 — 사람이 할 일") · history/
+├─ docs/                문서(지도: docs/INDEX.md) — PRD.md·prd/ · operations/ · architecture/ · refactoring/(refactor.md — 서버·사람 확인 사항 C-xx · "최종 — 사람이 할 일") · history/
 ├─ VERSION              두 이미지 공통 버전(SemVer)
 ├─ settings.sample.yaml 모든 설정 항목·코드 기본값·설명 — 복사해 settings.yaml로(자동 생성 — 손으로 고치지 않음)
 ├─ settings.yaml        PC 로컬 설정(git 제외 · 권한 600 — 직접 만듦)
@@ -652,7 +652,7 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 | 문서                                                                           | 내용                                                                     |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | [docs/PRD.md](docs/PRD.md) · [docs/prd/](docs/prd/)                          | **기능 요건** — 카테고리 6개(etl·parse·mcp·settings·test·doc)의 기능·목적·관련 파일, 카테고리별 묶음 표(끝난 것 포함) · 파일 끝에 요건과 다른 코드·안 쓰는 코드·꺼진 기능 |
-| [docs/index.md](docs/index.md)                                               | 문서 지도                                                                  |
+| [docs/INDEX.md](docs/INDEX.md)                                               | 문서 지도                                                                  |
 | [CLAUDE.md](CLAUDE.md)                                                       | 개발 규칙 · 로컬 하네스 · 점검 명령 · 핑거프린트 기준값                                     |
 | [refactor.md](docs/refactoring/refactor.md)                                                   | 서버·사람이 확인할 사항(C-xx) · **"최종 — 사람이 할 일"**(첫 배포 순서)                      |
 | [docs/operations/server-guide.md](docs/operations/server-guide.md)           | 서버 설치 · 운영 · 문제 해결                                                     |
