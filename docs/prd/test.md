@@ -141,11 +141,13 @@
 
 <a id="e2-16"></a>
 ## e2-16 · 검색 점검 페이지가 고정 글 "10 documents (20 chunks)"를 보임
+- 결정(사용자 10-31 범위 축소 grill): 검색 확인 페이지 고정 글 수정은 **뺀다**.
 - 파일: `validation/search_ui/index.html`.
 - Status: todo
 
 <a id="e2-10"></a>
 ## e2-10 · PC 평가 도구를 줄이고 그 설정을 남길지 지울지
+- 결정(사용자 10-31 범위 축소 grill): 남길 것 외의 PC 평가 도구(pipeline/eval·model_matrix·mcp_eval·search_checks·synth_score와 그 설정 칸)를 **지금 지운다** — 검색 확인 페이지와 답변 점검만 남김.
 - 이유: 설정 약 50개가 PC 시험·실험에만 있다(`common.dev.*`, `pipeline.dev.*`, `pipeline.eval.*`, `mcp.dev.*`, `runtime.exp_*`, `graphiti.*`).
 - 파일: `validation/e2e/`, `pipeline/eval/`, `mcp_server/cli/`, `common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`.
 - 결정(사용자 10-30 grill): `validation/search_ui`(검색 점검 페이지)와 `valid_env/answer_test`(답변 점검)**만** 남긴다. 스택 비교, 자동 질문 만들기, 지운 묶음용 채점기(예: `chart_values_score.py`)와 그 설정은 지운다.

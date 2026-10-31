@@ -7,6 +7,7 @@
 
 <a id="pl-02"></a>
 ## pl-02 · 준비
+- 결정(사용자 10-31 범위 축소 grill): 비슷한 문서 묶기(이름·내용 유사도, dhash·shingle)를 **지운다**. 완전히 같은 파일(sha256)은 **파싱만 한 번**(결과 재사용)하고 문서는 S3 키마다 따로 둔다(U-7 유지 — 메타가 키마다 다름). 이 경우는 별도로 적어 둔다(같은 sha256 다른 키 → 파싱 재사용 기록).
 - 이유: 비싼 파싱 전에 쓸모없는 것을 거른다.
 - 무엇: sha256 중복 제거 + 이름·내용이 비슷한 후보, RapidOCR 점수로 스캔 쪽 회전, DRM·암호 감지(msoffcrypto/pikepdf 복호화는 수동 CLI — `python -m pipeline.extract.secure_docs decrypt`, prepare·stream에 들어 있지 않음), 압축 파일은 미지원 표시.
 - 파일: `pipeline/extract/prepare.py`, `pipeline/extract/dedup.py`, `pipeline/extract/secure_docs.py`.
@@ -73,6 +74,7 @@
 
 <a id="pl-17"></a>
 ## pl-17 · 파싱 단계 위치 — `extract` 또는 `transform`
+- 결정(사용자 10-31 범위 축소 grill): 파싱 단계를 transform/parse/로 옮기기를 **하지 않는다**(속도·품질 영향 없음). 행 닫음.
 - 이유: 옮기면 code_fp p0가 바뀐다. 첫 배포 전이 가장 싸다(C-61).
 - 결정(사용자 10-29 grill): `pipeline/extract/{engines/,run_all.py,parse_one.py}` → `pipeline/transform/parse/`로 옮긴다. `run_all.py` → `run_parse.py`로 이름을 바꾼다(문서 × 엔진 파싱만 함 — "run all"은 e2e로 읽힘). `extract/`에는 source · rdb_discover · dedup · prepare가 남는다. 옮기는 커밋과 이름 바꾸는 커밋을 나눈다(CLAUDE.md §1). 엔진 핑거프린트는 `_LEGACY_NAMES`로 유지. code_fp p0는 바뀌지만 첫 적재가 전체 e2e라 지금은 공짜([etl.md#pl-23](etl.md#pl-23)).
 - 파일: `pipeline/extract/`, `pipeline/transform/`, `common/core/artifacts.py`(`LAYER_CODE`), `pipeline/cli.py`, 문서와 명령 표.
@@ -133,6 +135,7 @@
 
 <a id="pl-05"></a>
 ## pl-05 · 그림
+- 결정(사용자 10-31 범위 축소 grill): 그림 부가 기능(도표 화살표·겹침 묶음·중첩 그림·pptx 도형 연결·도형 감지·Mermaid 따로 만들기)을 **줄인다**: 그림마다 VLM 한 번에 종류별 출력 지시를 함께 보냄 — 도표 → Mermaid, 표 → HTML 표, 차트 → 세부 값. 차트 XML·벡터 값(chart_values)과 스캔 쪽 VLM은 유지. p1 code_fp — 0.2.0 배치.
 - 이유: 차트·도식·이미지에는 글자 추출이 놓치는 값이 있다.
 - 무엇: 이미지 VLM 설명(pdf, docx, xlsx, pptx, eml), VLM 없이 원본 차트 XML과 벡터 차트 값, 규칙 기반 도식 연결선, Mermaid 출력, 겹친 그룹, 중첩 그림, 스캔은 쪽 전체 VLM, 도형·슬라이드는 soffice 렌더, 전체 VLM 관문(기본 12).
 - 파일: `pipeline/transform/figures/figures.py`, `charts.py`, `pptx_render.py`, `vgate.py`, `resources/prompts/pipeline/`.
