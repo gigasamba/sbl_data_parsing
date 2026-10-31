@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 """PostgreSQL(pgvector) 검색(검색 모듈) — 코사인(HNSW·4096차원은 이진 양자화+재정렬) + BM25 + 드문 ID → RRF.
-명령: search --q · bench(로컬 vs pgvector). 적재·배포는 modules/load/pgstore.py."""
+명령: search --q(옛 bench — 로컬 대 pgvector 비교는 mc-01 11-01에 지움). 적재·배포는 modules/load/pgstore.py."""
 
 import argparse
 import json
-import time
 from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.text import id_terms, normalize_value, tokens  # noqa: E402 — 토큰 규칙(모듈 계약)
+from common.core.text import id_terms, tokens  # noqa: E402 — 토큰 규칙(모듈 계약)
 from common.store.pg import HNSW_MAX, PG, conf, vec  # noqa: E402
 from mcp_server import config as mc  # noqa: E402 — 설정 객체(S7d)
 from mcp_server.services.search import clientscope as CS  # noqa: E402 — BR50 고객 범위 단일 규칙(SQL 조각, local.py와 같은 규칙)
-from mcp_server.services.search.local import ID_MAX_DF, Local, embed_query, tie_break, weights  # noqa: E402 — BR41 동점 깨기(local과 공용)
+from mcp_server.services.search.local import ID_MAX_DF, embed_query, tie_break, weights  # noqa: E402 — BR41 동점 깨기(local과 공용)
 from mcp_server.services.search.text import term_weights  # noqa: E402 — X3(10-16 검색 전용으로 분리)
 
 RERANK = 200  # 이진 양자화 후보 수 → 원 벡터 코사인으로 재정렬
@@ -236,66 +235,20 @@ def search(
     return [{**rows[c], "rrf": round(rrf[c], 5), "via": via[c]} for c in top]
 
 
-def bench(db, bundle, questions, k=10, limit=50, out="output/edw"):
-    meta = json.loads((Path(bundle) / "meta.json").read_text(encoding="utf-8"))
-    L = Local(bundle)
-    qs = [json.loads(x) for x in Path(questions).read_text(encoding="utf-8").splitlines() if x.strip()][:limit]
-    res = {m: [] for m in ("local:cosine", "local:hybrid", "pg:cosine", "pg:hybrid")}
-    hit, overlap = Counter(), []
-    for q in qs:
-        text = q.get("query") or q["question"]
-        qv, terms = embed_query(meta, text), tokens(text)
-        gold = normalize_value(str(q.get("answer", "")))
-        for r in ("cosine", "hybrid"):
-            t0 = time.perf_counter()
-            lo, _, _ = L.search(qv, terms, k, retrieve=r)
-            res[f"local:{r}"].append(time.perf_counter() - t0)
-            hit[f"local:{r}"] += bool(gold) and any(gold in normalize_value(L.chunks[i]["chunk_text"]) for i in lo)
-            t0 = time.perf_counter()
-            rows = search(db, qv, terms, k, retrieve=r)
-            res[f"pg:{r}"].append(time.perf_counter() - t0)
-            hit[f"pg:{r}"] += bool(gold) and any(gold in normalize_value(x["chunk_text"]) for x in rows)
-        ex = set(vector_top(db, vec(qv), k, exact=True))  # 근사 색인 재현율 = 근사 상위 k ∩ 정확 상위 k
-        overlap.append(len(ex & set(vector_top(db, vec(qv), k, exact=False))) / max(1, len(ex)))
-    pct = lambda xs, p: sorted(xs)[min(len(xs) - 1, int(p * len(xs)))] * 1000
-    lines = [
-        f"# 검색 속도 — 로컬 vs 개발 서버 pgvector ({time.strftime('%Y-%m-%d %H:%M')})",
-        "",
-        f"질의 {len(qs)} · k={k} · 청크 {L.n} · 차원 {meta['dim']} (질의 임베딩 제외)",
-        "",
-        "| 방식 | p50 ms | p95 ms | 정답 값 포함 |",
-        "|---|---|---|---|",
-    ]
-    lines += [f"| {m} | {pct(ts, 0.5):.1f} | {pct(ts, 0.95):.1f} | {hit[m]}/{len(qs)} |" for m, ts in res.items()]
-    lines += [
-        "",
-        f"근사 색인 재현율(정확 검색 상위 {k} 대비, 차원 {dim_of(db)} → "
-        f"{'HNSW' if dim_of(db) <= HNSW_MAX else '이진 양자화+재정렬'}): 평균 {sum(overlap) / max(1, len(overlap)):.3f}",
-    ]
-    Path(out).mkdir(parents=True, exist_ok=True)
-    (Path(out) / "bench_pg.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print("\n".join(lines))
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["search", "bench"])
+    ap.add_argument("cmd", choices=["search"])
     ap.add_argument("--bundle", default="output/edw/bundle")
     ap.add_argument("--q")
     ap.add_argument("--k", type=int, default=10)
     ap.add_argument("--retrieve", default="cosine", choices=["cosine", "hybrid"])
-    ap.add_argument("--questions", default="output/eval/questions.jsonl")
-    ap.add_argument("--limit", type=int, default=50)
     a = ap.parse_args(argv)
     db = PG(conf())
     meta = json.loads((Path(a.bundle) / "meta.json").read_text(encoding="utf-8"))
-    if a.cmd == "search":
-        for r in search(db, embed_query(meta, a.q), tokens(a.q), a.k, retrieve=a.retrieve):
-            print(
-                f"[{r['rrf']:.4f} {r['via']}] {r['file_path']} p.{r['page']} L.{r['line_start']} bbox={r['bbox']} · {r['chunk_text'][:120]!r}"
-            )
-    else:
-        bench(db, a.bundle, a.questions, a.k, a.limit)
+    for r in search(db, embed_query(meta, a.q), tokens(a.q), a.k, retrieve=a.retrieve):
+        print(
+            f"[{r['rrf']:.4f} {r['via']}] {r['file_path']} p.{r['page']} L.{r['line_start']} bbox={r['bbox']} · {r['chunk_text'][:120]!r}"
+        )
 
 
 if __name__ == "__main__":

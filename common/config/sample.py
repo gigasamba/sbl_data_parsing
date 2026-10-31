@@ -42,7 +42,6 @@ CATALOG_VALUES = {
     "LLM_MODEL": "",
     "LLM_SPEND_FILE": "",
     "MCP_BUNDLE": "",
-    "MCP_STORE": "",
     "PARSE_ENGINE_SCOPE": "all",
     "PARSE_POST": "all",
     "PIPE_EMBED": "",
@@ -57,7 +56,6 @@ CATALOG_VALUES = {
     # S7e2(사용자 10-28) — 옛 서버 compose environment 기본값(이제 settings.yaml 칸 — compose가 env로 덮지 않음). MCP_STORE는 compose가 pg로 덮었음
     "CHAIN_STRUCTURE_URL": "http://127.0.0.1:8771",
 }
-CATALOG_VALUES["MCP_STORE"] = "pg"
 # S7e2(VS7e1 B-2) — 옛 이미지 ENV로 굽던 칸(DOC_DIR·DOC_DIR_PREPARED·PIPE_EMBED·SOFFICE_BIN)은 컨테이너에서 options.conf 값이 걸린 적이 없음(이미지 ENV가
 # 먼저 있어 카탈로그 setdefault가 건너뜀) — 지금은 이미지 안 모델 기본값이 같은 값이라 표에서 뺀다(env 파일에 적은 값은 migrate가 옮김).
 for _k in ("DOC_DIR", "DOC_DIR_PREPARED", "PIPE_EMBED", "SOFFICE_BIN"):
@@ -360,7 +358,6 @@ VALUES = {
     "pipeline.transform.structure.embed": "api·bge-m3·e5-small·e5-base·none 중 하나",
     "pipeline.transform.structure.chunk_table": "rows 또는 비움(표 통째로)",
     "mcp.server.host": "127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부",
-    "mcp.server.store": "pg·local 중 하나 또는 비움(자동 탐지)",
     "mcp.search.pg.vector_search": "exact 또는 비움(HNSW 근사)",
     "common.connections.pg.db": "글자",
     "common.host.doc_src": "경로",

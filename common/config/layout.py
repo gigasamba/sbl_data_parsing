@@ -79,7 +79,6 @@ REQUIRED_GROUPS = (
             ("doc_src", "common.host.doc_src"),
             ("output_root", "common.host.output_root"),
             ("pg_container", "common.host.pg_container"),
-            ("mcp_store", "mcp.server.store"),
         ),
     ),
 )

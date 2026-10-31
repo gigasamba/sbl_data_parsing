@@ -55,15 +55,14 @@ def _build_retriever():
     from mcp_server.services.search import retriever as RT
 
     old = _STATE.get("R")
-    sv = mc.cfg().server  # 한 번 묶음(S7d — 두 칸이 같은 판 값)
-    a = types.SimpleNamespace(pg=sv.store == "pg", local=sv.store == "local", edw=False, edw_client=False)
-    services.connect(a)
+    a = types.SimpleNamespace(pg=False, local=False, edw=False, edw_client=False)
+    services.connect(a)  # PC — Docker pgvector 주소 찾기(못 찾으면 SQLite 대역 — 검색은 PG 하나, mc-01)
     from common.store.db import cfgtables
 
     cur = cfgtables.active("stack")  # S8b — 엔진 구성 활성 판(서버 = 판 표 — 프로세스 시작 때 읽은 것, PC = 파일)
     st = cur.named()
     bundle = C.cfg().paths.mcp_bundle or str(APP_ROOT / "output" / "edw" / "bundle")  # S7e1 — common 칸(옛 mcp.server.bundle)
-    R = RT.Retriever(bundle, st.get("retrieve", "hybrid"), a.pg, REG.try_open_db())  # OP1 — 숨김 집합(best-effort, 없으면 바이트 동일)
+    R = RT.Retriever(bundle, st.get("retrieve", "hybrid"), REG.try_open_db())  # OP1 — 숨김 집합(best-effort, 없으면 바이트 동일)
     _STATE["R"], _STATE["bundle"], _STATE["stack"] = R, bundle, st
     _STATE["version"], _STATE["checked_at"] = _version_of(R.pg, bundle), time.time()
     if old is not None and old.pg is not None and old.pg is not R.pg:
@@ -142,13 +141,11 @@ def _index_retriever(index_id):
         from common.store import registry as REG
         from mcp_server.services.search import retriever as RT
 
-        pg = base.pg is not None
         R = RT.Retriever(
             bundle,
             (_STATE.get("stack") or {}).get("retrieve", "hybrid"),
-            pg,
             REG.try_open_db(),
-            pg_schema=info["pg_schema"] if pg else None,
+            pg_schema=info["pg_schema"],
         )
         if ent and ent["R"].pg is not None:
             _close_pool_later(ent["R"].pg)
@@ -197,7 +194,7 @@ def _health():
     out = {
         "ok": True,
         "ready": bool(R is not None and done),
-        "store": ("pgvector" if R.pg else "local") if R else None,
+        "store": "pgvector" if R else None,
         "data_version": _STATE.get("version"),
     }
     if R is not None and R.pg:

@@ -41,7 +41,7 @@ job = {"PG_HOST": "pg", "PG_PORT": "5432", "PG_PASSWORD": e["SMOKE_PG_PASSWORD"]
        "PM_BUCKET": e.get("SMOKE_PM_BUCKET") or "rag-publish", "PM_PREFIX": "smoke", "RDB_SQLITE": "/app/output/pm_test/edw.sqlite"}
 files = {"job": {"base": "/etc/rag/base.yaml", "overrides": job},
          "load": {"base": "/etc/rag/smoke/job.yaml", "overrides": {"PG_CREATE_EXTENSION": "1"}},
-         "mcp": {"base": "/etc/rag/smoke/job.yaml", "overrides": {"MCP_STORE": "pg", "MCP_HOST": "auto", "MCP_PORT": "8765",
+         "mcp": {"base": "/etc/rag/smoke/job.yaml", "overrides": {"MCP_HOST": "auto", "MCP_PORT": "8765",
                                                                    # S9(C-38) — 비루프백 바인드(auto)라 DNS 리바인딩 보호가 켜짐: 호스트 게시 주소로 부르는 ⑤를 허용(옛 421)
                                                                    "MCP_ALLOWED_HOSTS": "127.0.0.1:*,localhost:*"}}}
 for name, doc in files.items():

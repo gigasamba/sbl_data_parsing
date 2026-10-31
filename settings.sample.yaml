@@ -68,7 +68,6 @@ required:
     doc_src:  # 원본 문서 폴더(DOC_DIR의 옛 별칭) · 값: 경로
     output_root:  # 호스트의 결과(output) 폴더(서버 경로) · 값: 경로
     pg_container:  # 호스트에서 psql을 docker exec할 PostgreSQL(pgvector) 컨테이너 이름 · 값: 글자(컨테이너 이름)
-    mcp_store:  # 검색 저장소 종류 · 값: pg·local 중 하나 또는 비움(자동 탐지)
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 common:

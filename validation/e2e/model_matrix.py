@@ -717,7 +717,7 @@ def cmd_run_ofat(config, a):
         if not bi:
             return {"combo": combo["name"], "dataset": ds, "status": "skipped", "reason": "묶음 없음 — prepare 먼저"}
         env = combo_env(config, base_env, combo)
-        env["MCP_BUNDLE"], env["MCP_STORE"] = bi["bundle"], config.get("mcp_store", "local")
+        env["MCP_BUNDLE"] = bi["bundle"]  # mc-01 — 저장소는 PG 하나(옛 mcp_store 칸 없음)
         if bi.get("cache"):
             env["EMBED_CACHE"] = bi["cache"]
         env.setdefault(
@@ -761,7 +761,7 @@ def _combo_work_env(config, base_env, run_dir, combo, ds):
     if not bi:
         return None, None
     env = combo_env(config, base_env, combo)
-    env["MCP_BUNDLE"], env["MCP_STORE"] = bi["bundle"], config.get("mcp_store", "local")
+    env["MCP_BUNDLE"] = bi["bundle"]  # mc-01 — 저장소는 PG 하나
     if bi.get("cache"):
         env["EMBED_CACHE"] = bi["cache"]
     env.setdefault("LLM_ALLOW_EXTERNAL", setting("LLM_ALLOW_EXTERNAL") or "1")  # S7e2 — 원본 설정에 준 값이 있으면 그것(옛 env setdefault)

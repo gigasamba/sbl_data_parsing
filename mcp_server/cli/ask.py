@@ -82,7 +82,7 @@ def _ask_mcp(a):
     (mcp_server._build_retriever가 이 둘로 저장소를 고름 — modules/search/mcp_server.py ~L105-130). 질의 기록은
     do_search() 안 _log()가 이미 함(qa_log.append — 파일만, mc-13) — 여기서 다시 넣지 않음(중복 기록 방지)."""
     st = _stack()
-    C.put(MCP_STORE="local" if a.local else ("pg" if a.pg else ""), MCP_BUNDLE=str(a.bundle))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스)
+    C.put(MCP_BUNDLE=str(a.bundle))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스)
     from mcp_server.services.search import search_svc as MCP
 
     k = a.k or st.get("k", 8)
@@ -114,7 +114,7 @@ def _ask_cosine(a):
     """예전 경로(그대로) — --retrieve cosine만(do_search에 없음)."""
     connect(a)
     st = _stack()
-    R = Retriever(a.bundle, a.retrieve or st.get("retrieve", "hybrid"), a.pg)
+    R = Retriever(a.bundle, a.retrieve or st.get("retrieve", "hybrid"))
     k = a.k or st.get("k", 8)
     hits, ms = R.search(a.q, k)
     subs = []  # 질문 분해는 10-29에 지움(응답 칸은 유지)
@@ -151,7 +151,7 @@ def test_stack(a):
         sh("pipeline.eval.auto_questions", "--src", a.src, "--out", qpath)
     qs = [json.loads(x) for x in qpath.read_text(encoding="utf-8").splitlines() if x.strip()][: a.limit]
     st0 = _stack()
-    R = Retriever(a.bundle, a.retrieve or st0.get("retrieve", "hybrid"), a.pg)
+    R = Retriever(a.bundle, a.retrieve or st0.get("retrieve", "hybrid"))
     rows, ms = [], []
     for q in qs:
         hits, t = R.search(q.get("query") or q["question"], a.k)
@@ -223,7 +223,7 @@ def main(argv=None):
         p = sub.add_parser(name)
         p.add_argument("--bundle", default="output/edw/bundle")
         p.add_argument("--pg", action="store_true", help="pgvector에서 검색(지정 없어도 Docker pgvector가 떠 있으면 기본)")
-        p.add_argument("--local", action="store_true", help="로컬 묶음(output/edw/bundle)에서 검색 — PG 설정이 있어도")
+        p.add_argument("--local", action="store_true", help=argparse.SUPPRESS)  # mc-01 — 로컬 묶음 검색 지움(받기만)
         p.add_argument("--retrieve", choices=["cosine", "hybrid"], help="기본 = stack.json retrieve(없으면 hybrid)")
         p.add_argument("--k", type=int, default=8, help="근거 수 — MCP search 기본과 같게 8(AR5 측정: k=8이 k=10과 같거나 나음, 잘림 적음)")
         if name == "ask":
