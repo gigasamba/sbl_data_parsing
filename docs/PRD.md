@@ -1,11 +1,11 @@
 # sbl_data_parsing — PRD
 
 목표: 폐쇄망 회사 문서에서 출처 달린 근거를 찾는다 — 파싱 → 구조화 → 적재(pgvector) → 검색 MCP, 서버와 PC에서 같게.
-행 = 묶음 하나(끝난 것 포함). 상태: todo · dev · done(그 밖에 partly done). ID는 그대로 두고 카테고리 파일이 자리를 정한다. 상세는 ID 링크.
+행 = 묶음 하나(끝난 것 포함). 상태: todo · dev · done(그 밖에 partly done) · dropped(요건에서 뺌 — 행은 남김, 사용자 10-31 범위 축소). ID는 그대로 두고 카테고리 파일이 자리를 정한다. 상세는 ID 링크.
 
 ## 지금 진행 중
 - pl-25 DB 스키마 명세 — dev, `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인.
-- op-08 설정 구조 재편 — dev, `feature/op08-settings-layout`(열린 PR — 병합되면 settings 표에 행이 생김).
+- 범위 축소(사용자 10-31 grill) — `feature/scope-cut`: 지울 기능 7개 행(mc-04·pl-08·pl-10·pl-12·mc-01·pl-06·e2-10)은 todo(지움), 뺀 요건 7개는 dropped. 결정은 각 앵커의 "결정(사용자 10-31 범위 축소 grill)" 줄.
 - do-04 문서 재구성 — dev, 3부 카테고리 재편은 열린 문서 브랜치 병합 뒤 한 PR.
 
 ## ETL — 수집·퍼블리시·적재·DB (etl)
@@ -13,8 +13,8 @@
 |---|---|---|---|
 | 원천과 가져오기 | done | 폴더·S3·RDB · 증분 · warm | [pl-01](prd/etl.md#pl-01) |
 | EDW 고객 매핑을 파이프라인이 만듦 | todo | FileStorageMap 조인 · `file_meta` 대체 | [pl-29](prd/etl.md#pl-29) |
-| 구조화 — 청크·메타·임베딩 | done | 청크 · 요약 · 사실 · 임베딩 | [pl-06](prd/etl.md#pl-06) |
-| structure/load 계약이 새 묶음 거부 | todo | `DOC_KEYS` 고침(사람 검토) | [pl-15](prd/etl.md#pl-15) |
+| 구조화 — 청크·메타·임베딩 | todo | **일부 지움**(kg·개념 청크·이미지·doc_facts — 사용자 10-31) · 청크 · 요약 · 사실 · 임베딩 | [pl-06](prd/etl.md#pl-06) |
+| structure/load 계약이 새 묶음 거부 | dropped | `DOC_KEYS` 고침(사람 검토) | [pl-15](prd/etl.md#pl-15) |
 | `PIPE_EMBED=none`이면 `vector(0)` | todo | 차원 0 처리 | [pl-16](prd/etl.md#pl-16) |
 | pgvector 적재 | done | Alembic 표 · 건너뛰기 · 색인 | [pl-07](prd/etl.md#pl-07) |
 | 적재는 지우지 않음(`--prune` 없앰) | done | prune 길 없앰 · 시험 | [pl-13](prd/etl.md#pl-13) |
@@ -22,10 +22,10 @@
 | compose `index_a`/`index_b` 실패 | todo | 원인 · 고침 | [pl-19](prd/etl.md#pl-19) |
 | 정형 DB와 문서 대장 | done | 표 10개·코드 지움(struct 판 0003) | [pl-08](prd/etl.md#pl-08) |
 | 마스터 CSV 활용 방안 설계 | todo | 고객 별칭 CSV 0.2.0 · 나머지 후순위 · grill | [pl-38](prd/etl.md#pl-38) |
-| 문서 대장 upsert·게시 가드 | partly done | deleted 길 없앰·서버 대체 금지 ✓ · PG 번역 · ParsingMeta 가드 | [pl-12](prd/etl.md#pl-12) |
+| 문서 대장 upsert·게시 가드 | done | **지움**(사용자 10-31) · deleted 길 없앰·서버 대체 금지 ✓ · PG 번역 · ParsingMeta 가드 | [pl-12](prd/etl.md#pl-12) |
 | 파싱 결과 게시 | done | Object Storage · ParsingMeta | [pl-09](prd/etl.md#pl-09) |
 | `full`은 늘 게시, 대상 필수 | todo | `--no-publish` 없앰 · 시작 거부 | [pl-26](prd/etl.md#pl-26) |
-| 실행 관리(오케스트레이션) | done | CLI · entrypoint · flow 러너 · trigger | [pl-10](prd/etl.md#pl-10) |
+| 실행 관리(오케스트레이션) | todo | **일부 지움**(trigger 서버 — 사용자 10-31) · CLI · entrypoint · flow 러너 · trigger | [pl-10](prd/etl.md#pl-10) |
 | 중간 멈춤에도 종료 코드 0 | todo | `night` · `full` 종료 코드 | [pl-18](prd/etl.md#pl-18) |
 | 증분만, 전체 재파싱은 전체 e2e | todo | 새 문서 = s3_key · 밤 배치 끔 | [pl-23](prd/etl.md#pl-23) |
 | `run_docs` 순서: silver → 원본 삭제 → gold | todo | 순서 · `gold_status` · 임시 폴더 | [pl-24](prd/etl.md#pl-24) |
@@ -38,7 +38,7 @@
 | 분류 단계 — silver 뒤, gold 앞 | todo | SFDC·LAS 라벨 · sha256 묶음 전파 · `doc_class` | [pl-33](prd/etl.md#pl-33) |
 | FAQ 원천 — 질의응답 엑셀 행 단위 | todo | 시트 = FAQ_group · 행 = 청크 · FileStorageMap FAQ · 0.2.0 | [pl-39](prd/etl.md#pl-39) |
 | FAQ 다시 올리기 — 행 단위 비교 | todo | 같은 그룹·질문 · 최신 답만 · pl-13 FAQ 예외(등급 A) | [pl-41](prd/etl.md#pl-41) |
-| 수동 갱신 명령 — 분류·시스템 메타 따로 | todo | LLM 갈래(NULL 기본) · 메타 갈래(전체) · UPDATE만 | [pl-40](prd/etl.md#pl-40) |
+| 수동 갱신 명령 — 분류·시스템 메타 따로 | dropped | LLM 갈래(NULL 기본) · 메타 갈래(전체) · UPDATE만 | [pl-40](prd/etl.md#pl-40) |
 | 원천 시스템별 gold 스키마(0.2.0) | todo | 시스템별 PG 스키마 · 메타는 `doc`에만 · `source_system` 필수 하나 · ParsingMeta는 파싱 정보만 | [pl-28](prd/etl.md#pl-28) |
 
 ## 파싱 실행 — 엔진·스택·represent (parse)
@@ -55,25 +55,26 @@
 | 메일 첨부 파싱 | done | 재귀 · 상한 · 인용 단락화 | [pl-36](prd/parse.md#pl-36) |
 | 그림 근처 맥락 기록 | done | 캡션 · 본문 언급 · 값 확인 | [pl-37](prd/parse.md#pl-37) |
 | 엔진 스택 사본 파일 검토 | done | 대체됨 → pl-32 | [pl-20](prd/parse.md#pl-20) |
-| 파싱 단계를 `transform/parse/`로 | todo | 옮기기 · 이름 바꾸기 · code_fp | [pl-17](prd/parse.md#pl-17) |
+| 파싱 단계를 `transform/parse/`로 | dropped | 옮기기 · 이름 바꾸기 · code_fp | [pl-17](prd/parse.md#pl-17) |
 | represent — 고르고 고치기 | done | 대표 · 합치기 · 다시 읽기 · 표 | [pl-04](prd/parse.md#pl-04) |
 | 그림 | done | VLM 설명 · 차트 값 · 도식 | [pl-05](prd/parse.md#pl-05) |
 
 ## 검색 MCP (mcp)
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
 |---|---|---|---|
-| `search` 도구 | done | 세 방식 · 혼합 찾기 · 근거 출력 | [mc-01](prd/mcp.md#mc-01) |
+| `search` 도구 | done | **일부 지움**(PC 묶음 검색·PG 대역 — 사용자 10-31) · 세 방식 · 혼합 찾기 · 근거 출력 | [mc-01](prd/mcp.md#mc-01) |
 | 질문 넓히기 | done | 용어집 · 고객별 나누기 · 질문 유형 | [mc-02](prd/mcp.md#mc-02) |
 | 고객 범위·판·중복 | todo | 고객 범위 · 숨김 · 최신 판 | [mc-05](prd/mcp.md#mc-05) |
-| 집계 답 | done | 규칙 집계 · 통화 · LLM 라우터 | [mc-04](prd/mcp.md#mc-04) |
+| 집계 답 | done | **지움**(사용자 10-31) · 규칙 집계 · 통화 · LLM 라우터 | [mc-04](prd/mcp.md#mc-04) |
 | 집계 길이 지운 칸을 고름 | done | `aggregate.pg()` 지움(mc-12와 함께) | [mc-11](prd/mcp.md#mc-11) |
 | 사실 집계가 지운 `doc_fact` 질의 | done | PG 집계 길 지움 · 숫자는 `query_edw` | [mc-12](prd/mcp.md#mc-12) |
 | retriever가 지운 칸을 읽음 | done | 묶음 `doc_key` · PG 열 | [mc-10](prd/mcp.md#mc-10) |
 | 질의 기록은 jsonl만 | done | PG `qa_log` INSERT 지움 | [mc-13](prd/mcp.md#mc-13) |
-| 숨김 문서가 검색에서 안 빠짐 | todo | pl-25 대기 · `s3_key`로 비교 | [mc-14](prd/mcp.md#mc-14) |
+| 숨김 문서가 검색에서 안 빠짐 | dropped | pl-25 대기 · `s3_key`로 비교 | [mc-14](prd/mcp.md#mc-14) |
 | 근거의 `rep_uri`가 늘 빔 | todo | pl-25 대기 · `source_key` 조회 | [mc-15](prd/mcp.md#mc-15) |
 | `search` 운영 계약 구현 | todo | question 필수 · 필터 11종 · 출력 축소(등급 A) | [mc-16](prd/mcp.md#mc-16) |
 | 원문 전송 도구 2개 | todo | `list_doc_fulltext` · `get_doc_fulltext`(등급 A) | [mc-17](prd/mcp.md#mc-17) |
+| 검색 — PG만, 실행 중 묶음 없음 | todo | 문서 메타·임베딩 정보 PG에서 · 검색 동작 바뀜(자기 PR + 평가) | [mc-19](prd/mcp.md#mc-19) |
 | `query_edw` 도구 | done | SELECT만 · 허용 목록 · 상한 | [mc-06](prd/mcp.md#mc-06) |
 | `edw_meta` 도구 | done | 스키마 → 표 → 칸 | [mc-07](prd/mcp.md#mc-07) |
 | `parse_document` 도구 | done | 파싱 서비스 전달 · `job_id` | [mc-08](prd/mcp.md#mc-08) |
@@ -86,8 +87,8 @@
 | 모델 호출·비용·외부 전송 가드 | done | 역할 · 외부 거부 · 예산 | [pl-11](prd/settings.md#pl-11) |
 | EDW 접속 하나·계정 둘 | done | `common.connections.rdb` · 읽기·쓰기 · sqlite 대역 | [op-03](prd/settings.md#op-03) |
 | 프로세스 종료 정리 | done | 덮기 파일 지움 · 자식 회수 · SIGTERM | [pl-27](prd/settings.md#pl-27) |
-| 강제 종료로 남은 임시 설정 파일 정리 | todo | 다음 시작 때 주인 없는 파일 지움 | [pl-44](prd/settings.md#pl-44) |
-| JSON Lines 사건 기록 | todo | 포매터 · 수준 설정 · 가림 | [op-01](prd/settings.md#op-01) |
+| 강제 종료로 남은 임시 설정 파일 정리 | dropped | 다음 시작 때 주인 없는 파일 지움 | [pl-44](prd/settings.md#pl-44) |
+| JSON Lines 사건 기록 | dropped | 포매터 · 수준 설정 · 가림 | [op-01](prd/settings.md#op-01) |
 | settings.yaml 하나 · sample에 모든 키·기본값 | done | 주석 해제 · 카테고리 묶음 · 생성기 · 0.1.0 · op-08로 대체 | [op-05](prd/settings.md#op-05) |
 | 설정 구조 재편 — 필수 묶음 + 역할별 파라미터 | todo | `required` 맨 위 · 7개 역할 절 · 죽은 칸 삭제 · 0.2.0 | [op-08](prd/settings.md#op-08) |
 | 하드코딩 0 | todo | 서버 경로·PG·MCP 주소 한 곳 · 지문 파일 env 읽기 · PG 자동 찾기 없앰 · 0.2.0 | [op-09](prd/settings.md#op-09) |
@@ -113,8 +114,8 @@
 | 분류 수용 보고서 | todo | dev 정답 샘플 대조 · 일치율 · 혼동표 | [e2-20](prd/test.md#e2-20) |
 | 스택·모델 비교 | done | 행렬 · 예상 비용 | [e2-06](prd/test.md#e2-06) |
 | 검색 점검 페이지 | done | 로컬 페이지 · 포트 | [e2-07](prd/test.md#e2-07) |
-| 검색 페이지 고정 글 | todo | 실제 개수 표시 | [e2-16](prd/test.md#e2-16) |
-| PC 평가 도구 줄이기 | todo | 둘만 남김 · 설정 지움 | [e2-10](prd/test.md#e2-10) |
+| 검색 페이지 고정 글 | dropped | 실제 개수 표시 | [e2-16](prd/test.md#e2-16) |
+| PC 평가 도구 줄이기 | todo | **지움**(사용자 10-31) · 둘만 남김 · 설정 지움 | [e2-10](prd/test.md#e2-10) |
 | 안 쓰는 함수 지우기 | done | 시험만 부르는 것도(drop-unused) | [e2-17](prd/test.md#e2-17) |
 | 요건 없는 코드 지우기 | done | 지움 · 남김 목록(drop-unused) | [e2-18](prd/test.md#e2-18) |
 
