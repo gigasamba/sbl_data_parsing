@@ -85,6 +85,9 @@ def page_timeout(eng, pages, first=False):
     return round(tmo + float(x.isolate_overhead), 2)
 
 
+IDLE_MARK = "[engine-scope] stack 목록 밖이라 안 돎"  # 명시 --engines가 하나도 못 돎 — mcp_parse_service가 이 줄로 스캔 PDF를 가름(pl-03)
+
+
 def engines_for_doc(doc, stack_parse, types, logged_missing):
     """문서 하나에 돌릴 엔진 후보(이후 --engines want로 더 좁혀짐) — PE1(2026-10-07) · pl-03(10-30, stack 하나). doc은 Path.
     문서 형식 키(.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록으로 좁힌다.
@@ -267,7 +270,7 @@ def main():
     # pl-03 — 범위는 stack 하나: 명시 --engines 중 stack 형식별 목록 밖(또는 이 문서들 형식에 없음)은 안 돎 — 조용히 빠지지 않게 1줄
     idle = sorted(set(want or ()) - {e for _, e, _, _ in jobs} - {e for _, e, _, _, _ in deferred})
     if idle:
-        print(f"[engine-scope] stack 목록 밖이라 안 돎(비교하려면 stack json을 고침): {', '.join(idle)}", flush=True)
+        print(f"{IDLE_MARK}(비교하려면 stack json을 고침): {', '.join(idle)}", flush=True)
     if skip:
         print("건너뜀: " + " · ".join(f"{k} {v}" for k, v in skip.items()), flush=True)
     out.mkdir(parents=True, exist_ok=True)

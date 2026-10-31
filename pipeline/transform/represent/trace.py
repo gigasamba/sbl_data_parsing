@@ -6,8 +6,6 @@ represent()가 만드는 rep에 `rep["context"]`(신호)·`rep["decisions"]`(결
 from collections import Counter
 from pathlib import Path
 
-from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
-
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]  # dev/
 

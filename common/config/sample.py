@@ -92,7 +92,6 @@ CATEGORIES = {
         (
             "파싱 엔진·쪽 처리",
             (
-                "extract.engine_scope",
                 "extract.fill_merged",
                 "extract.kreuzberg_prose_filter",
                 "extract.hidden_overlap_max",

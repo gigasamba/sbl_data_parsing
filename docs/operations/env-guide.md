@@ -15,7 +15,6 @@
 | `RUN_MODE` | `required.env.run_mode` | `prod`(모든 환경 — 빠뜨리면 PG 연결 실패 때 SQLite로 조용히 대체) |
 | `MCP_STORE` | `required.deploy.mcp_store` | `pg` |
 | `CHAIN_STRUCTURE_URL` | `ops.services.trigger.chain_structure_url` | `http://127.0.0.1:8771` |
-| `PARSE_ENGINE_SCOPE` | `extract.engine_scope` | `all` |
 | `PARSE_POST` | `transform.represent.post` | `all` |
 | `EDW_QUERY_MAX_ROWS` | `search.edw_query.max_rows` | `1000` |
 | `EDW_QUERY_TABLES` · `EMBED_QUERY_CACHE` | `search.edw_query.tables` · `common.models.embed.query_cache` | `''`(빈 글자 — 비운 칸과 결과가 다름) |

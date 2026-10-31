@@ -126,6 +126,14 @@
 - 결정(사용자 10-30 PRD grill): C8 — 원문 전송 도구도 gold `doc.rep_key`를 읽는다(mc-15와 같음). C2 — 0.2.0.
 - Status: todo — 순서는 허브가 정함.
 
+<a id="mc-18"></a>
+## mc-18 · `parse_document` 스캔 PDF 다시 지원
+- 결정(사용자 10-31): 지금은 스캔 PDF를 건너뛰고 안내만 보내지만 추후 다시 살린다. 이 행이 그 기억이다.
+- 지금(11-01 — [pl-03](parse.md#pl-03)): 엔진 범위가 stack 하나라 `.pdf_image`(OCR·VLM 엔진뿐)는 이 서비스(OCR·VLM 안 돎)에서 돌 엔진이 없다 — `pipeline/mcp_parse_service.py` `skip_note`(글자층 표본 < 20자)·`empty_note`(run_all `IDLE_MARK`)가 빈 결과 + 임시 안내를 돌려준다.
+- 할 일(정할 것): 스캔 PDF에 어떤 엔진을 돌릴지(OCR·VLM — 응답 시간·자원, [rn-03](etl.md#rn-03) CPU 우선과 함께) · 안내 문구 지우기 · MCP 출력 계약(등급 A).
+- 파일: `pipeline/mcp_parse_service.py`, `tests/server/pipeline/test_parse_svc.py`.
+- Status: todo
+
 <a id="mc-06"></a>
 ## mc-06 · `query_edw` 도구 — 읽기 전용 EDW SQL
 - 이유: 정형 질문은 회사 EDW에서 답한다.
@@ -147,6 +155,7 @@
 - 이유: 클라이언트가 아직 적재되지 않은 파일을 묻는다.
 - 무엇: 경로(inbox 루트 아래) 또는 base64 내용을 127.0.0.1:8766의 파싱 서비스에 Bearer 토큰으로 넘긴다. 글, 표준 표, 사실, 엔진, 시간을 돌려주고 시간 초과면 `job_id`.
 - 파일: `mcp_server/services/parse_proxy.py`, `pipeline/mcp_parse_service.py`.
+- 스캔 PDF(11-01 — [pl-03](parse.md#pl-03) stack 하나): 파이프라인 없이 빈 결과 + 안내 "스캔 PDF — 지금은 text 파싱 결과 없음(OCR·VLM 미실행, 추후 지원 예정)" — 다시 지원은 [mc-18](#mc-18).
 - Status: done
 
 <a id="mc-09"></a>
