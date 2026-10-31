@@ -1,25 +1,33 @@
 # DB 스키마 명세 (pl-25)
 
-이 프로젝트가 쓰는 DB 표와 칸을 한곳에 모은 문서다. 표마다 칸, 타입, 뜻, 그 칸을 쓰는 코드, 읽는 코드, 그리고 10-29·10-30 사용자 결정에 따른 앞으로의 처리(유지·삭제·새로)를 적는다. 요건과 결정의 원문은 [prd/etl.md#pl-25](../prd/etl.md#pl-25)에 있다.
+이 프로젝트가 쓰는 DB 표와 칸을 한곳에 모은 문서다. 표마다 칸, 타입, 뜻, 그 칸을 쓰는 코드, 읽는 코드, 그리고 10-29~10-31 사용자 결정에 따른 0.2.0의 처리(유지·삭제·새로)를 적는다. 요건과 결정의 원문은 [prd/etl.md#pl-25](../prd/etl.md#pl-25)에 있다.
 
 - **이 문서는 설계안이다.** 사용자와 DB 담당자가 승인한 뒤 구현한다. 이 문서를 고치는 브랜치는 코드·스키마·마이그레이션을 바꾸지 않는다.
 - **결정 칸:** `유지` = 지금 있고 남김 · `삭제` = 지금 있고 없앰 · `새로` = 지금 없고 만듦. 지금 상태 = `유지`+`삭제`, 목표 상태 = `유지`+`새로`.
 - **시험:** `tests/server/common/test_db_schema.py`가 이 문서의 gold·struct 표를 Alembic 판(모델 `common/store/db/models/` — 기존 시험이 판과 같은지 본다)과, ParsingMeta를 [`docs/operations/parsing_meta_mssql.sql`](../operations/parsing_meta_mssql.sql)과 비교한다. 지금 상태가 다르면 실패하고, 목표 상태와의 차이(새로·삭제)는 목록으로 찍기만 한다.
-- **쓰는 곳·읽는 곳**은 10-30 develop 기준 코드다. 경로는 저장소 기준이고 함수 이름만 적는다.
+- **쓰는 곳·읽는 곳**은 10-31 develop 기준 코드다(괄호 안은 0.2.0에 생길 곳). 경로는 저장소 기준이고 함수 이름만 적는다.
 
-## 1. 공통 규칙 (10-30 결정)
+## 1. 공통 규칙 (10-30·10-31 결정 — 0.2.0)
 
 | 규칙 | 내용 |
 |---|---|
-| 문서 키 | `s3_key`(Object Storage 원본 전체 키)만 문서 키로 쓴다. sha256 `doc_key`는 없앤다. 문서 대장(`doc_registry`·`doc_registry_seen`)과 숨김(`doc_hidden`)은 `s3_key`로 다시 키를 잡는다. 검색 `doc`·`chunk`도 `s3_key`를 든다. 같은 내용이 여러 `s3_key`로 들어오면 문서도 여러 개다 — `s3_key`마다 `doc` 행 하나(U-7 결정, `doc_alias` 없음). `build_bundle`의 내용 해시로 첫 키에 합치기(`aliases`)는 없앤다. 임베딩은 캐시가 다시 씀. |
+| 문서 키 | `s3_key`(Object Storage 원본 전체 키)만 문서 키로 쓴다. sha256 `doc_key`는 없앤다. 문서 대장(`doc_registry`·`doc_registry_seen`)과 숨김(`doc_hidden`)은 `s3_key`로 다시 키를 잡는다. 검색 `doc`이 `s3_key`를 든다(청크는 `doc_id`만 — 10-31). 같은 내용이 여러 `s3_key`로 들어오면 문서도 여러 개다 — `s3_key`마다 `doc` 행 하나(U-7 결정, `doc_alias` 없음). `build_bundle`의 내용 해시로 첫 키에 합치기(`aliases`)는 없앤다. 임베딩은 캐시가 다시 씀. |
 | 출처 표시 이름 | EDW에서도, 문서 파싱에서도 나올 수 있는 값은 칸을 둘로 나누고 이름 끝에 출처를 붙인다 — EDW `_edw`, 문서 본문 `_doc`. 지금 해당하는 값: 고객(`client_edw`·`clients_doc`). |
-| 고객 거르기 | MCP의 고객 거르기는 EDW 고객(`client_edw`, 문서당 하나)만 쓴다. EDW 고객이 없는 문서는 고객 거르기를 걸면 빠진다. 본문에서 찾은 고객(`clients_doc`)으로 거르는 것은 나중([pl-28](../prd/etl.md#pl-28)). |
-| 원천 | `source_system` = `AI.FileStorageMap.source_system`. 비었거나 SFDC·CRMS·LAS가 아니면 `Other`. `s3_key` 접두와 다르면 경고만 남김. |
-| 표 나누기 시점 | B — 지금은 gold 표 한 벌. 원천별(SFDC·CRMS·LAS·Other) 표 나누기와 MCP `search`의 원천 필수 입력은 [pl-28](../prd/etl.md#pl-28)(MCP 계약 변경 — 검토 등급 A). |
+| 고객 거르기 | MCP의 고객 거르기는 EDW 고객(`doc.client_edw`, 문서당 하나)만 쓴다(C6). EDW 고객이 없는 문서(LAS 등)는 고객 거르기를 걸면 빠진다. 본문에서 찾은 고객(`clients_doc`)은 참고용. |
+| 원천 | `source_system` = `AI.FileStorageMap.source_system`(SFDC·CRMS·LAS·FAQ). 비었거나 그 밖의 값이면 `Other`. `s3_key` 접두와 다르면 경고만 남김. |
+| 원천별 gold 스키마 | 0.2.0에 원천 시스템마다 PG 스키마 하나 — `sfdc`·`crms`·`las`·`faq`·`other` 5벌([pl-28](../prd/etl.md#pl-28), A2). 스키마마다 같은 표 `doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat`(BM25 통계도 시스템별) — 아래 §2의 `gold.<표>`가 그 틀이다. `load_run`과 Alembic 판 표는 공용 하나. Alembic은 한 모델을 스키마마다 적용한다. 칸 차이: `faq` 스키마만 `chunk.faq_group`(C4), SFDC 전용 칸(`sf_*`·`project_code__c`)은 `sfdc.doc`에만. MCP `search`는 `source_system`을 필수·값 하나로 받아 그 스키마만 찾는다(G20, MCP 계약 변경 — 등급 A). |
+| 파일 메타는 `doc`에만 | 고객·`sf_*`·`doc_class`·`created_at`·`contract_id` 같은 파일 메타는 시스템별 `doc`에만 둔다. `chunk`는 문서 키만 갖고 메타를 복사하지 않는다(예외 `faq.chunk.faq_group`). 거르기는 `doc`에서 문서 범위를 고른 뒤 그 안의 `chunk`만 찾는다([pl-28](../prd/etl.md#pl-28)). |
+| ParsingMeta = 파싱 정보만 | EDW `AI.ParsingMeta`에는 원천 키·파싱 상태·silver 위치·단계별 칸만 쓴다(G19). 예외: 같은 내용 묶기용 원본 지문 `sha256`은 남긴다(C5). 파일 메타는 쓰지 않는다. 파싱이 통째로 실패한 문서는 행을 쓰지 않는다(C3 — 다음 실행에서 다시 후보). |
+| 판 표기 둘 | 두 곳 모두 이름은 `pipeline_version` — ParsingMeta `pipeline_version` = 이 문서를 gold에 올린 판(다시 올릴지 판단) · gold `doc.pipeline_version` = 이 행을 만든 코드 판(검색 쪽 확인). 뜻은 C9대로 나누고 이름만 맞춘다(사용자 10-31 grill — C9 고침, ParsingMeta `gold_version` 안은 없앰). |
+| 근거 주소 `rep_uri` | 검색 중 EDW에 접속하지 않는다 — 적재 때 ParsingMeta의 `rep_key`를 gold `doc.rep_key`로 복사하고, `rep_uri`(`s3://<버킷>/<rep_key>`)는 그 값으로 만든다(C8 — mc-15·mc-17). |
+| 가장 늦은 행 | 같은 `s3_key`가 `AI.FileStorageMap`에 여러 행이면 `created_at`이 가장 큰 행을 기준으로 삼는다(A4). 나중에 같은 `s3_key`의 더 새 행이 오면 **같은 `doc_id`를 유지하고 다시 파싱하지 않는다**(같은 내용) — 저장된 기준·메타만 새 행으로 고치고, 밀려난 행은 EDW 예외 이력 표(§4 `edw.SupersededRow`, 새로 — D-9)에 남긴다(사용자 10-31 grill, A4 고침). |
+| 근거 키 | `doc.file_path`는 지운다. MCP 근거의 `chunk_key`는 `<doc_id>:<순번>` — `doc_id`는 gold `doc.doc_id`(자동 번호), 청크는 `doc_id`만 갖는다(FK, 청크에 `s3_key` 없음). 스키마 5벌이 **시퀀스 하나를 함께 써서** `doc_id`가 스키마끼리 겹치지 않는다(허브가 정함 — 사용자 확인 필요). 적재는 `s3_key`로 upsert하고 다시 넣지 않으므로 `doc_id`가 바뀌지 않는다. `make_chunk_key`·sha256 `doc_key`는 0.2.0에 없어진다(사용자 10-31 grill — mc-16의 `<doc_key>:<순번>`을 뒤집음). |
+| 원본 주소 | `source_uri`는 gold `doc.s3_key`로 만들고, 근거 주소 `rep_uri`는 `doc.rep_key`로 만든다(C8) — `s3_key`는 `doc`에만 둔다(사용자 10-31 grill). |
+| 원천 id 칸 | 원천 시스템의 id(영업 기회 id 등)는 스키마마다 그 EDW 원본 표의 칸 이름 그대로 둔다(예: `crms.doc`은 CRMS 원본 칸 이름) — `sf_op_id` 같은 한 이름을 함께 쓰지 않는다. 아직 모르는 이름은 "EDW 원본 칸 이름 — D-1 확인"(사용자 10-31 grill). |
 
-## 2. gold — 검색 스키마 (pgvector, `PG_SCHEMA`)
+## 2. gold — 검색 스키마 (pgvector — 0.2.0에 원천별 스키마 5벌, 아래는 그 틀)
 
-판: `common/store/db/migrations/versions/0001_search_base.py` · 모델: `common/store/db/models/search_tables.py` · 적재: `pipeline/load/pgvector_load.py`(`load`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`). `load_run`과 Alembic 판 표는 나눈 뒤에도 gold에 하나로 둔다.
+판: `common/store/db/migrations/versions/0001_search_base.py` · 모델: `common/store/db/models/search_tables.py` · 적재: `pipeline/load/pgvector_load.py`(`load`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`). 아래 `gold.<표>`는 지금 표 한 벌(`PG_SCHEMA`)의 칸과 0.2.0 목표다 — 0.2.0에는 이 틀을 `sfdc`·`crms`·`las`·`faq`·`other` 스키마마다 만든다(§1). `load_run`과 Alembic 판 표는 나눈 뒤에도 하나로 둔다.
 
 ### gold.load_run
 
@@ -35,37 +43,39 @@
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
-| doc_id | SERIAL PK | 문서 행 번호(내부) | pgvector_load `load` | pgsearch, 뷰 `v_chunk_source` | 유지 |
-| file_path | TEXT | 개발 서버 기준 원본 경로(파일 이름은 여기서 뽑음) — 0.1.0 삭제(사용자 10-30 grill): 보여 줄 때는 `s3_key` + `original_filename` · MCP 출력의 `file_path`는 제거 대상 — 시기·버전 처리는 나중, 등급 A, [pl-25](../prd/etl.md#pl-25) | build_bundle `main` | pgsearch, retriever, search_svc, shaping, local, aggregate, `schemas/evidence.py`(MCP `search` 출력 키), `cli/ask.py`, `models/search_tables.py`(칸·`VIEWS_EXPECTED`·뷰 SQL), `schemas/search_rows.py`, 뷰, pgvector_load·build_bundle(건너뛰기 키 → `s3_key`), `validation/search_ui/serve.py` | 삭제 |
+| doc_id | SERIAL PK | 문서 행 번호(내부) — MCP `chunk_key`의 앞부분. 0.2.0: 스키마 5벌이 시퀀스 하나를 함께 씀(겹치지 않음 — 허브가 정함), `s3_key`로 upsert해 번호가 바뀌지 않음(사용자 10-31 grill) | pgvector_load `load` | pgsearch, 뷰 `v_chunk_source` | 유지 |
+| file_path | TEXT | 개발 서버 기준 원본 경로 — 0.2.0에 지움(보여 줄 때는 `s3_key` + `original_filename`, MCP 출력에서도 뺌 — mc-16, 등급 A) | build_bundle `main` | pgsearch, retriever, search_svc, shaping, local, aggregate, `schemas/evidence.py`(MCP `search` 출력 키), `cli/ask.py`, `models/search_tables.py`(칸·`VIEWS_EXPECTED`·뷰 SQL), `schemas/search_rows.py`, 뷰, pgvector_load·build_bundle(건너뛰기 키 → `s3_key`), `validation/search_ui/serve.py` | 삭제 |
 | original_filename | TEXT | 원본 파일 이름(보여 주기용) | (파이프라인 — `AI.FileStorageMap.original_filename`) | (pgsearch, retriever, search_svc, shaping, 뷰) | 새로 |
-| s3_key | TEXT | 문서 키 — Object Storage 원본 전체 키(`AI.FileStorageMap.s3_key`) | (build_bundle가 이미 `_s3_key`로 알지만 묶음에 안 넣음) | (대장·숨김·ParsingMeta 조회) | 새로 |
+| s3_key | TEXT | 문서 키 — Object Storage 원본 전체 키(`AI.FileStorageMap.s3_key`). 적재 upsert 키, `source_uri`를 만듦. `doc`에만 둔다(청크에는 없음 — 사용자 10-31 grill) | (build_bundle가 이미 `_s3_key`로 알지만 묶음에 안 넣음) | (대장·숨김·ParsingMeta 조회) | 새로 |
 | clients | TEXT(JSON) | 고객 목록 — 지금은 본문에서 찾은 이름(`infer_clients`)과 섞여 있음 | build_bundle `infer_clients` | pgsearch `_client_restrict`, retriever, internal_docs, search_svc | 삭제 |
 | client_edw | TEXT | EDW 조인으로 얻은 고객 하나 — MCP 고객 거르기의 유일한 키 | (파이프라인이 EDW 읽기 계정으로 직접 조인 — [pl-29](../prd/etl.md#pl-29)) | (pgsearch 고객 거르기) | 새로 |
 | clients_doc | TEXT(JSON) | 문서 본문에서 찾은 고객 목록(참고용 — 거르기에 안 씀) | (build_bundle `infer_clients`) | (근거 표시) | 새로 |
 | summary | TEXT | 요약(검색 결과용) | build_bundle | 뷰 → retriever → shaping | 유지 |
-| source_system | VARCHAR(20) | SFDC·CRMS·LAS·Other | build_bundle(`s3_key` 접두, 없으면 file_meta) | 뷰 → search_svc, internal_docs | 유지 |
-| sf_acc_name | TEXT | SFDC 고객사 이름(SFDC 문서만 — 다른 원천은 빔, pl-28에 SFDC 표로) | build_bundle(file_meta JSONL → EDW 직접 — [pl-29](../prd/etl.md#pl-29)) | 뷰 → search_svc, internal_docs | 유지 |
-| sf_op_id | TEXT | SFDC 영업 기회 id(SFDC만) | build_bundle(file_meta → EDW 직접) | 뷰 → internal_docs(그대로 내보냄) | 유지 |
-| sf_op_name | TEXT | SFDC 영업 기회 이름(SFDC만) | build_bundle(file_meta → EDW 직접) | 뷰 → internal_docs | 유지 |
-| project_code__c | TEXT | SFDC 프로젝트 코드(SFDC만) | build_bundle(file_meta → EDW 직접) | 뷰 → search_svc, internal_docs(거르기) | 유지 |
+| source_system | VARCHAR(20) | SFDC·CRMS·LAS·Other — 0.2.0에는 스키마가 원천을 정하므로 지운다(사용자 10-31 grill) | build_bundle(`s3_key` 접두, 없으면 file_meta) | 뷰 → search_svc, internal_docs | 삭제 |
+| sf_acc_name | TEXT | SFDC 고객사 이름 — 0.2.0: 스키마마다 그 EDW 원본 표의 칸 이름으로 둔다(`sfdc.doc`은 SFDC 원본 칸 이름, 다른 스키마는 그 원본 칸 이름 — EDW 원본 칸 이름 — D-1 확인, 사용자 10-31 grill) | build_bundle(file_meta JSONL → EDW 직접 — [pl-29](../prd/etl.md#pl-29)) | 뷰 → search_svc, internal_docs | 유지 |
+| sf_op_id | TEXT | SFDC 영업 기회 id — 0.2.0: 스키마마다 그 EDW 원본 표의 칸 이름으로 둔다(`sfdc.doc`은 SFDC 원본 칸 이름, 다른 스키마는 그 원본 칸 이름 — EDW 원본 칸 이름 — D-1 확인, 사용자 10-31 grill) | build_bundle(file_meta → EDW 직접) | 뷰 → internal_docs(그대로 내보냄) | 유지 |
+| sf_op_name | TEXT | SFDC 영업 기회 이름 — 0.2.0: 스키마마다 그 EDW 원본 표의 칸 이름으로 둔다(`sfdc.doc`은 SFDC 원본 칸 이름, 다른 스키마는 그 원본 칸 이름 — EDW 원본 칸 이름 — D-1 확인, 사용자 10-31 grill) | build_bundle(file_meta → EDW 직접) | 뷰 → internal_docs | 유지 |
+| project_code__c | TEXT | SFDC 프로젝트 코드 — 0.2.0: 스키마마다 그 EDW 원본 표의 칸 이름으로 둔다(`sfdc.doc`은 SFDC 원본 칸 이름, 다른 스키마는 그 원본 칸 이름 — EDW 원본 칸 이름 — D-1 확인, 사용자 10-31 grill) | build_bundle(file_meta → EDW 직접) | 뷰 → search_svc, internal_docs(거르기) | 유지 |
 | contract_id | TEXT | 계약 id | build_bundle(file_meta → EDW 직접) | 뷰 → internal_docs | 유지 |
 | contract_date | DATE | 계약일 | build_bundle(file_meta → EDW 직접) | 뷰 → internal_docs | 유지 |
 | prod_name | TEXT | 제품 이름 | build_bundle(file_meta → EDW 직접) | 뷰 → internal_docs | 유지 |
 | division | VARCHAR(20) | 사업부(DS/DP/CD/CM/AD/AS) | build_bundle(file_meta → EDW 직접) | 뷰 → search_svc, internal_docs(거르기) | 유지 |
 | service_type | VARCHAR(20) | 서비스 종류(CMO DS 등) | build_bundle(file_meta → EDW 직접) | 뷰 → search_svc, internal_docs(거르기) | 유지 |
 | run_id | INT | 이 행을 넣은 적재(`load_run`) | pgvector_load `load` | 없음 | 유지 |
-| pipeline_version | TEXT | 이 문서를 만든 파이프라인 판(`VERSION` — ParsingMeta가 아니라 여기, C-62 사용자 10-30) | (pgvector_load `load`) | (운영자·재처리 판정) | 새로 |
-| doc_class | TEXT | 문서 분류 라벨 하나(SFDC: RFI/RFP/RFI+RFP/Proposal/Other, LAS: MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other, 다른 원천 NULL) — low_conf·모델·시각은 두지 않음 — reference 비교 10-30, D-6 | (분류 단계 → 적재 — [pl-33](../prd/etl.md#pl-33)) | (MCP `search` 필터 — mc-16) | 새로 |
-| created_at | TIMESTAMPTZ | 원천 등록 시각 — 출처는 `AI.FileStorageMap.created_at`(시간대 없는 값은 KST로 읽음, ParsingMeta `created_at`과 같은 값 — G9). `search`의 `created_since`/`created_until` 거르기에 씀 — reference 비교 10-30, D-6 | (적재 — FileStorageMap 등록 시각) | (MCP `search` 필터 — mc-16) | 새로 |
+| pipeline_version | TEXT | 이 행을 만든 코드 판(`VERSION`) — ParsingMeta `pipeline_version`(gold에 올린 판)과 이름은 같고 뜻은 다르다(C9, 사용자 10-31 grill) | (pgvector_load `load`) | (검색 쪽 확인·운영자) | 새로 |
+| doc_class | TEXT | 문서 분류 라벨 하나(SFDC: RFI/RFP/RFI+RFP/Proposal/Other, LAS: MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other, 다른 원천 NULL) — low_conf·모델·시각은 두지 않음. ParsingMeta에는 두지 않는다(G19) — D-6 | (분류 단계 → 적재 — [pl-33](../prd/etl.md#pl-33)) | (MCP `search`·`list_doc_fulltext` 거르기 — mc-16, mc-17) | 새로 |
+| created_at | TIMESTAMPTZ | 원천 등록 시각 — 출처는 `AI.FileStorageMap.created_at`(시간대 없는 값은 KST로 읽음). ParsingMeta에는 두지 않는다(G19). `search`의 `created_since`/`created_until` 거르기, `list_doc_fulltext` 거르기·출력, `get_doc_fulltext` 등록 시각 가드에 씀 — D-6 | (적재 — FileStorageMap) | (MCP 거르기 — mc-16, mc-17) | 새로 |
+| rep_key | TEXT | 대표 파싱 결과(silver) 위치 — 적재 때 ParsingMeta `rep_key`에서 복사. `rep_uri`는 이 값으로 만든다(C8) | (적재) | (shaping `rep_uri`, mc-17 원문 도구) | 새로 |
+| rep_engine | TEXT | 대표 silver 엔진 + 판 — 적재 때 ParsingMeta에서 복사(G19 — 원문 도구가 EDW를 읽지 않게) | (적재) | (mc-17 `list_doc_fulltext` 출력) | 새로 |
+| parsed_at | TIMESTAMPTZ | 파싱한 때 — 적재 때 ParsingMeta `parsed_at`에서 복사(G19) | (적재) | (mc-17 `list_doc_fulltext` 출력) | 새로 |
 
 ### gold.chunk
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
 | chunk_id | SERIAL PK | 청크 행 번호 | pgvector_load `load` | pgsearch, 뷰, server_checks | 유지 |
-| doc_id | INT FK→doc | 문서 | pgvector_load `load` | 조인 전부 | 유지 |
-| s3_key | TEXT | 문서 키(문서와 같은 값 — 청크만으로 대장·숨김 조회) | (pgvector_load) | (pgsearch 숨김 거르기) | 새로 |
-| seq | INT | 문서 안 순번(`chunk_key` = 문서 키:seq) | pgvector_load | 뷰 → retriever, internal_docs | 유지 |
+| doc_id | INT FK→doc | 문서 — 청크가 갖는 문서 키는 이것뿐(`s3_key`는 `doc`에만, 사용자 10-31 grill) | pgvector_load `load` | 조인 전부 | 유지 |
+| seq | INT | 문서 안 순번 — MCP `chunk_key` = `<doc_id>:<seq>`(사용자 10-31 grill) | pgvector_load | 뷰 → retriever, internal_docs | 유지 |
 | page | INT | 쪽 | pgvector_load | 뷰 → retriever, internal_docs | 유지 |
 | line_start | INT | 시작 줄 | pgvector_load | 뷰 → retriever | 유지 |
 | line_end | INT | 끝 줄 | pgvector_load | 뷰 → retriever | 유지 |
@@ -78,9 +88,9 @@
 | n_terms | INT | 토큰 수(BM25 길이) | pgvector_load | pgsearch `search` | 유지 |
 | embed_model | VARCHAR(100) | 임베딩 모델 이름 | pgvector_load | 검증 페이지만 | 유지 |
 | embedding | vector(차원) | L2 정규화 벡터 | pgvector_load | pgsearch `vector_top`, dbtool | 유지 |
-| clients | TEXT[] | 고객 라벨(GIN — 지금 고객 거르기 키, `doc.clients`에서 복사) | pgvector_load `_chunk_clients`, `backfill_chunk_clients` | pgsearch `_client_restrict` | 삭제 |
-| client_edw | TEXT | 고객 거르기 키(문서의 `client_edw` 복사 — 색인) | (pgvector_load) | (pgsearch 고객 거르기) | 새로 |
-| source_system | VARCHAR(20) | 원천(거르기용 — 문서와 같은 값) | pgvector_load | 뷰 → search_svc, internal_docs | 유지 |
+| clients | TEXT[] | 고객 라벨(GIN — 지금 고객 거르기 키, `doc.clients`에서 복사) — 0.2.0: 청크에 고객 칸 없음, `doc.client_edw`로 범위를 고름(pl-28) | pgvector_load `_chunk_clients`, `backfill_chunk_clients` | pgsearch `_client_restrict` | 삭제 |
+| source_system | VARCHAR(20) | 원천(거르기용 — 문서와 같은 값) — 0.2.0에는 스키마가 원천을 정하므로 지운다(pl-28) | pgvector_load | 뷰 → search_svc, internal_docs | 삭제 |
+| faq_group | TEXT | FAQ 시트 이름(`FAQ_group`) — `faq.chunk`에만(C4, [pl-39](../prd/etl.md#pl-39)) | (FAQ 적재) | (MCP `search` `FAQ_group` 거르기) | 새로 |
 
 ### gold.chunk_term
 
@@ -106,7 +116,7 @@
 | avg_len | DOUBLE PRECISION | 평균 길이 | pgvector_load | pgsearch BM25 | 유지 |
 | dim | INT | 임베딩 차원 | pgvector_load | 없음(차원은 `pg_attribute`에서 읽음) | 유지 |
 
-뷰 `v_chunk_source`는 `chunk`↔`doc`을 이은 읽기 전용 뷰다(파일 이름은 `file_path`에서 계산). 지금 `d.clients`를 고르므로 `doc.clients`를 지우는 판은 뷰를 먼저 `DROP VIEW` 하고 다시 만들어야 한다(`CREATE OR REPLACE VIEW`로는 칸을 뺄 수 없음) — 모델의 `VIEWS_EXPECTED`도 같이 고친다. 새 칸(`s3_key`·`client_edw`·`clients_doc`)도 그때 넣는다.
+뷰 `v_chunk_source`는 `chunk`↔`doc`을 이은 읽기 전용 뷰다(지금은 파일 이름을 `file_path`에서 계산). 0.2.0에는 스키마마다 다시 만든다 — 지금 `d.clients`·`d.file_path`를 고르므로 먼저 `DROP VIEW` 하고 새 칸(`s3_key`·`original_filename`·`client_edw`·`clients_doc`·`rep_key` 등)으로 다시 만든다(`CREATE OR REPLACE VIEW`로는 칸을 뺄 수 없음). 모델의 `VIEWS_EXPECTED`도 같이 고친다.
 
 ## 3. struct — 정형 저장소 (PostgreSQL `struct`, PC는 SQLite 대체)
 
@@ -233,7 +243,7 @@
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
 | doc_key | TEXT PK | 숨긴 문서(sha256 — 검색 키 `file_path`와 안 맞아 지금 숨김이 안 먹음, mc-14) | registry `hide`(자동 — 원천에서 삭제), registry_cli `hide`·`unhide` | search/registry `hidden_set` → retriever | 삭제 |
-| s3_key | TEXT PK | 숨긴 문서 키(검색 `doc`·`chunk.s3_key`와 같은 값) | (registry `hide`, registry_cli) | (retriever, pgsearch) | 새로 |
+| s3_key | TEXT PK | 숨긴 문서 키(검색 `doc.s3_key`와 같은 값 — 청크에는 없음) | (registry `hide`, registry_cli) | (retriever, pgsearch) | 새로 |
 | hidden | INTEGER | 1=숨김·0=복구 | registry `hide`·`unhide` | search/registry | 유지 |
 | reason | TEXT | 왜 | 〃 | 〃 | 유지 |
 | by | TEXT | 누가 | 〃 | 〃 | 유지 |
@@ -315,11 +325,34 @@
 | file_size | (EDW) | 크기 | EDW | source, run_docs | 유지 |
 | content_version_id | (EDW) | 판 id | EDW | source `_rdb_rows` | 유지 |
 | source_system | (EDW) | 원천(SFDC·CRMS·LAS — 아니면 Other) — 이미 있는 칸, 코드가 아직 직접 안 읽음(지금은 외부 추출 file_meta JSONL로만) → 읽기 시작 | EDW | (source `_rdb_rows`) | 유지 |
+| created_at | (EDW) | 원천 등록 시각 — 같은 `s3_key`의 여러 행 중 가장 큰 값의 행이 기준(A4). 더 새 행이 오면 같은 `doc_id`를 유지하고 다시 파싱하지 않으며 기준·메타만 고친다(사용자 10-31 grill). gold `doc.created_at`으로 복사(KST). PC 대역에 칸이 있음, 실제 EDW는 D-1 | EDW | (source — 기준 행 고르기, 적재) | 유지 |
 | last_modified_time | (EDW, 가정) | 원본 고친 때(10-29 가정 — 있는 칸으로 보고 실제 이름 확인 필요, D-1) → 읽기 시작 | EDW | (변경 감지) | 유지 |
+
+### edw.SupersededRow
+
+같은 `s3_key`의 더 새 `FileStorageMap` 행 때문에 밀려난 행의 **예외 이력**(새 EDW 표 — 사용자 10-31 grill). 어느 행이 어느 문서와 겹쳤는지, "파싱 대상 아님"을 남긴다. 표 이름과 칸은 DB 담당자가 정한다(D-9) — 아래는 안이다. 시험 비교 대상이 아니다.
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| file_storage_map_id | (EDW, 안) | 밀려난 `FileStorageMap` 행 id | (파이프라인 — 기준 행 고를 때) | (운영자) | 새로 |
+| s3_key | (EDW, 안) | 겹친 문서의 원본 키 | 〃 | 〃 | 새로 |
+| kept_file_storage_map_id | (EDW, 안) | 기준으로 남은 행 id | 〃 | 〃 | 새로 |
+| reason | (EDW, 안) | "파싱 대상 아님 — 같은 s3_key의 더 새 행" | 〃 | 〃 | 새로 |
+| recorded_at | (EDW, 안) | 기록한 때 | 〃 | 〃 | 새로 |
+
+### edw.Quote
+
+PC 대역 예시 — [pl-29](../prd/etl.md#pl-29) 10-31. 고객 연결 4단계의 마지막(Quote)을 PC에서 구현·시험하려고 PC 대역 EDW(`valid_env/edw`)에 SFDC Quote 표를 **예시 칸**으로 새로 만든다(A3). 서버 레플리카에는 Quote 표가 없다 — Quote는 `OpportunityId`로 파일과 이어진다고 가정한다(사용자 10-31 grill). 실제 표·칸 이름은 DB 담당자 답(D-1)으로 맞춘다. 시험 비교 대상이 아니다.
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| Id | (예시) | Quote id | (PC 대역 시드) | (고객 연결 4단계) | 새로 |
+| OpportunityId | (예시) | 연결된 영업 기회 | 〃 | 〃 | 새로 |
+| AccountId | (예시) | 연결된 고객 계정 — 고객 이름은 `SFDC.Account` | 〃 | 〃 | 새로 |
 
 ### edw.ParsingMeta
 
-`AI.ParsingMeta` — 파싱 결과(silver) 게시 기록. 정의: `docs/operations/parsing_meta_mssql.sql`. 쓰는 곳: `pipeline/load/parsing_meta.py`(`plan`·`apply` — 행 만들기, `apply_registry_status` — 상태 UPDATE), `common/store/parsing_meta_db.py`(`insert_new`, `update_status`). 10-30 결정: 읽는 칸만 남기고 `gold_status`·`gold_reason`을 더한다([pl-24](../prd/etl.md#pl-24)).
+`AI.ParsingMeta` — 파싱 결과(silver) 게시 기록. 정의: `docs/operations/parsing_meta_mssql.sql`. 쓰는 곳: `pipeline/load/parsing_meta.py`(`plan`·`apply` — 행 만들기, `apply_registry_status` — 상태 UPDATE), `common/store/parsing_meta_db.py`(`insert_new`, `update_status`). 0.2.0 결정: **파싱 정보만** 둔다(G19) — 원천 키·파싱 상태·silver 위치·단계별 칸, 예외로 원본 지문 `sha256`(C5). 파일 메타(`doc_class`·`sf_op_id`·`created_at`·고객)는 쓰지 않고 시스템별 gold `doc`에만 둔다. 파싱이 통째로 실패하면 행을 쓰지 않는다(C3). `gold_status`·`gold_reason`을 더한다([pl-24](../prd/etl.md#pl-24)).
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
@@ -330,36 +363,32 @@
 | original_filename | NVARCHAR(512) | 원본 파일 이름 | 〃 | 없음 | 삭제 |
 | file_format | NVARCHAR(32) | 형식 | 〃 | 없음 | 삭제 |
 | file_size | BIGINT | 크기 | 〃 | 없음 | 삭제 |
-| sha256 | NVARCHAR(64) | 원본 sha256 | 〃 | 없음 | 삭제 |
-| rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | 〃 | parsing_meta_db `find_rep_path` → shaping `rep_uri` | 유지 |
-| rep_key | NVARCHAR(2048) | 대표 결과 폴더 | parsing_meta `apply` | 〃 | 유지 |
+| sha256 | NVARCHAR(64) | 원본 sha256 — 같은 내용 묶기에 씀(C5 — G19 "파싱 정보만"의 예외, 파싱한 원본의 지문) | parsing_meta `plan` | (분류 단계 같은 내용 묶음 — [pl-33](../prd/etl.md#pl-33)) | 유지 |
+| rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | parsing_meta `plan` | parsing_meta_db `find_rep_path` → shaping `rep_uri`(0.2.0에는 이 조회 길을 없애고 적재 때 gold `doc.rep_key`로 복사 — C8) | 유지 |
+| rep_key | NVARCHAR(2048) | 대표 결과 폴더 | parsing_meta `apply` | 〃 → (적재가 gold `doc.rep_key`로 복사 — C8) | 유지 |
 | rep_etag | NVARCHAR(128) | 대표 결과 etag | 〃 | 없음 | 삭제 |
 | parse_status | NVARCHAR(32) | ok·partial | parsing_meta `plan` | run_docs `edw_done_keys` | 유지 |
 | status_reason | NVARCHAR(2000) | 상태 이유 | 〃 | 없음 | 삭제 |
-| rep_engine | NVARCHAR(128) | 대표 엔진 — 0.1.0: 대표 silver 엔진 + 판(사용자 10-30 grill — 아래 단계별 칸) | 〃 | 없음 | 유지 |
-| doc_class | NVARCHAR(64) | 문서 분류 라벨(gold `doc.doc_class`와 같은 값 — 운영이 더한 칸, G1로 남김) | (분류 단계 — [pl-33](../prd/etl.md#pl-33)) | (mc-17 `list_doc_fulltext`) | 새로 |
-| sf_op_id | NVARCHAR(64) | SFDC 영업 기회 id(운영이 더한 칸, G1로 남김 — 나머지 고객 칸 `sf_acc_name` 등은 지움) | (고객 연결 — [pl-29](../prd/etl.md#pl-29)) | (mc-17 `list_doc_fulltext`) | 새로 |
+| rep_engine | NVARCHAR(128) | 대표 엔진 — 0.2.0: 대표 silver 엔진 + 판(아래 단계별 칸). gold `doc.rep_engine`으로 복사(G19) | parsing_meta `plan` | (적재 — gold `doc` 복사) | 유지 |
 | rep_acc | FLOAT | 대표 정확도 | 〃 | 없음 | 삭제 |
 | page_count | INT | 쪽 수 | 〃 | 없음 | 삭제 |
 | doc_key | NVARCHAR(64) | 원본 sha256(지금 유일한 필수 칸 — 검색 키와 안 맞아 `rep_uri`가 늘 빔, mc-15) | 〃 | parsing_meta_db `find_by_doc_key` | 삭제 |
 | parse_date | NVARCHAR(32) | 파싱 시각 글자(`YYYY-MM-DD_HHMMSS`) | parsing_meta `apply` | find·상태 UPDATE 조건 | 유지 |
-| pipeline_version | NVARCHAR(64) | 파이프라인 판 | parsing_meta `plan` | 없음 | 삭제 |
+| pipeline_version | NVARCHAR(64) | 이 문서를 gold에 올린 판 — 다시 올릴지 판단. 지금은 파싱 때 쓰는 파이프라인 판이었으나 0.2.0에는 gold 성공 때 쓰고 gold가 끝나기 전에는 NULL(C9 — gold `doc.pipeline_version`은 행을 만든 코드 판, 이름 같고 뜻 다름 — 사용자 10-31 grill: `gold_version` 새 칸 대신 이 칸 이름을 씀) | parsing_meta `plan` → (gold 성공 때) | (운영자·재처리 판정) | 유지 |
 | status | NVARCHAR(16) | active·changed·deleted | 〃, `apply_registry_status` | find·`find_rep_path`·상태 UPDATE 조건 | 유지 |
 | status_at | NVARCHAR(32) | 상태 바뀐 때(UTC) | `apply_registry_status` | 없음(SELECT 안 함 — 운영자가 봄) | 유지 |
 | engines_used | NVARCHAR(MAX) | 쓰인 엔진 전부(JSON) — 0.1.0: 성공한 엔진만(이름 + 판, 사용자 10-30 grill) | parsing_meta `plan` | 없음 | 유지 |
 | engines_summary | NVARCHAR(512) | 엔진 한 줄 요약 | 〃 | 없음 | 삭제 |
-| parsed_at | DATETIME2(0) | 넣은 때(기본 SYSUTCDATETIME) — 남김(G1, 사용자 10-30 2차 grill: `list_doc_fulltext`가 읽음) | DB 기본값 | (mc-17 `list_doc_fulltext`) | 유지 |
-| created_at | DATETIME2(0) | 원천 파일이 등록된 때 — silver를 만들 때 `AI.FileStorageMap.created_at`에서 옮김(시간대 없는 값은 KST로 읽음). 파싱 시각이 아님(그건 `parsed_at`) — 운영이 더한 칸, G9로 남김(사용자 10-30) | (silver 만들 때) | MCP `list_doc_fulltext`의 `created_since`/`created_until` 거르기·`created_at` 출력, `get_doc_fulltext`의 생성 범위 가드 | 새로 |
+| parsed_at | DATETIME2(0) | 넣은 때(기본 SYSUTCDATETIME) — 파싱 정보라 남김(G19), gold `doc.parsed_at`으로 복사 | DB 기본값 | (적재 — gold `doc` 복사) | 유지 |
 | source_key_hash | BINARY(32) 계산 칸 | `source_key` sha256 — 유일 색인 키(1700바이트 상한 우회) | DB | 유일 색인 | 유지 |
 | gold_status | NVARCHAR(32) | gold(검색 DB) 적재 상태 | (pl-24 — run_docs·적재) | (pl-24 재시도·건너뜀) | 새로 |
 | gold_reason | NVARCHAR(2000) | gold 상태 이유(실패 원인 등) | (pl-24) | (운영자) | 새로 |
-| stack_version | INT | 파싱 엔진 스택 판(`struct.stack_version`) — 엔진이 모두 실패하면 NULL | (파싱 단계 성공 때) | (운영자·재처리 판정) | 새로 |
-| gold_version | NVARCHAR(64) | gold 모듈·파이프라인 판 — gold가 끝나기 전에는 NULL | (gold 성공 때) | (운영자·재처리 판정) | 새로 |
+| stack_version | INT | 파싱 엔진 스택 판(`struct.stack_version`) — 파싱이 통째로 실패하면 행 자체를 쓰지 않는다(C3) | (파싱 단계 성공 때) | (운영자·재처리 판정) | 새로 |
 | engines_failed | NVARCHAR(MAX) | 실패한 엔진(JSON — 이름·이유·걸린 시간), 없으면 NULL | (파싱 단계 — 사용자 10-30 "EDW에도") | (운영자·재시도 판단) | 새로 |
 
-**운영이 더한 분류·고객 칸(reference 비교 10-30, C2 — 2차 grill G1로 고침):** `doc_class`·`sf_op_id`·`created_at`은 남기고(위 표), 나머지 운영 분류·고객 칸은 0.1.0과 동시에 지운다(DB 담당자 D-3, 등급 A) — 분류·고객 결과는 gold에만([pl-33](../prd/etl.md#pl-33), [pl-29](../prd/etl.md#pl-29)). 그때 운영 분류 스크립트가 멈추므로 운영 담당자에게 알린다.
+**운영이 더한 분류·고객 칸(G19 — 4차 grill, G1·G9를 뒤집음):** 운영이 ParsingMeta에 더한 분류·고객 칸(`doc_class`·`sf_op_id`·`created_at`·`sf_acc_name` 등 — 이 저장소의 DDL에는 없음)은 0.2.0에 모두 지운다(DB 담당자 D-3, 등급 A). 분류·고객·등록 시각은 시스템별 gold `doc`에만 둔다([pl-33](../prd/etl.md#pl-33), [pl-29](../prd/etl.md#pl-29)). 그때 운영 분류 스크립트가 멈추므로 운영 담당자에게 알린다.
 
-**단계별 기록(사용자 10-30 grill — 등급 A, DB 담당자 D-3):** 단계마다 성공했을 때만 쓴다 — 파싱: `stack_version`·성공한 엔진(`engines_used`)·실패한 엔진(`engines_failed`)·대표 silver 엔진 + 판(`rep_engine`) · gold: `gold_version`·`gold_status`. 3차의 "읽는 칸만" 안에 칸을 다시 더한 것이다. 저장 구조(silver = Object Storage uuid5 폴더 · gold = pgvector)는 [pl-32](../prd/etl.md#pl-32).
+**단계별 기록(사용자 10-30 grill — 등급 A, DB 담당자 D-3):** 단계마다 성공했을 때만 쓴다(파싱이 통째로 실패하면 행 없음 — C3) — 파싱: `stack_version`·성공한 엔진(`engines_used`)·실패한 엔진(`engines_failed`)·대표 silver 엔진 + 판(`rep_engine`) · gold: `pipeline_version`·`gold_status`. 3차의 "읽는 칸만" 안에 칸을 다시 더한 것이다. 저장 구조(silver = Object Storage uuid5 폴더 · gold = pgvector)는 [pl-32](../prd/etl.md#pl-32).
 
 ## 5. master — CSV 파일 (`resources/vocab/glossary/`, 사용자 10-30)
 
@@ -379,14 +408,15 @@
 
 | # | 무엇 | 왜 |
 |---|---|---|
-| D-1 | `AI.FileStorageMap`의 실제 정의 — 특히 고친 때 칸 이름(`last_modified_time` 가정)과 `source_system` 값 목록 | 저장소에는 PC 대역(`valid_env/edw/ai.sql` — `created_at`만)뿐 · **G9(사용자 10-30) 확인:** 지금 운영 `ParsingMeta.created_at`은 원천별 표에서 온다(SFDC `ContentVersion_dump.CreatedDate`, CRMS `RM_CM_DOCU.INIT_DTTM`, LAS `FileManager.CreateDate`) — `FileStorageMap.created_at`이 같은 값을 갖는지 |
+| D-1 | `AI.FileStorageMap`의 실제 정의 — 특히 고친 때 칸 이름(`last_modified_time` 가정)과 `source_system` 값 목록 | 저장소에는 PC 대역(`valid_env/edw/ai.sql` — `created_at`만)뿐 · **G9(사용자 10-30) 확인:** 지금 운영 `ParsingMeta.created_at`은 원천별 표에서 온다(SFDC `ContentVersion_dump.CreatedDate`, CRMS `RM_CM_DOCU.INIT_DTTM`, LAS `FileManager.CreateDate`) — `FileStorageMap.created_at`이 같은 값을 갖는지 · **0.2.0(A4·A3):** `FileStorageMap.created_at`이 실제로 있는지(같은 `s3_key` 중 가장 늦은 행을 이 칸으로 고름) · SFDC Quote 표의 실제 이름·칸(PC 대역은 예시 칸 — §4 `edw.Quote`) · **사용자 10-31 grill:** 원천 id 칸(영업 기회 id 등)의 원천별 실제 칸 이름 · Quote가 `OpportunityId`로 파일과 이어지는지 |
 | D-2 | 문서당 EDW 고객 하나(`client_edw`)를 얻는 조인 경로 — 원천별(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account.Name`로 보임, CRMS·LAS는?) | 지금은 외부에서 뽑은 `file_meta_new.jsonl`을 읽고, 그 파일을 만드는 코드가 저장소에 없음 → **결정(사용자 10-30):** 파이프라인이 EDW 읽기 계정으로 조인을 직접 만든다(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account`) — `file_meta_new.jsonl`을 대신함, [pl-29](../prd/etl.md#pl-29). CRMS·LAS 경로는 여전히 확인 필요 · **2차 grill(사용자 10-30, G2):** CRMS는 `FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST`로 채움(DB 담당자 확인) · LAS는 상대사 출처가 정해질 때까지 비움 |
-| D-3 | `AI.ParsingMeta` 칸 삭제·`gold_status`·`gold_reason`·단계별 칸(`stack_version`·`gold_version`·`engines_failed`, `engines_used`·`rep_engine` 뜻 바꿈 — 사용자 10-30) 추가(ALTER) — 권한, 기존 행, 다른 사용처 | 이 프로젝트 밖에서 그 칸을 읽는 곳이 있는지 모름 · **G1·G9(10-30):** `doc_class`·`sf_op_id`·`parsed_at`·`rep_engine`·`created_at` 5칸은 남김(`list_doc_fulltext`가 읽음), 나머지 운영 고객 칸은 지움 |
+| D-3 | `AI.ParsingMeta` 칸 정리(ALTER) — 안 읽는 칸 삭제, `gold_status`·`gold_reason`·단계별 칸(`stack_version`·`engines_failed`) 추가, `pipeline_version` 뜻 바꿈(gold에 올린 판 — gold 성공 때 씀, 10-31: 새 칸 `gold_version` 대신), `engines_used`·`rep_engine` 뜻 바꿈 — 권한, 기존 행, 다른 사용처 | 이 프로젝트 밖에서 그 칸을 읽는 곳이 있는지 모름 · **G19·C5(0.2.0):** 파싱 정보만 — 운영이 더한 분류·고객 칸(`doc_class`·`sf_op_id`·`created_at`·`sf_acc_name` 등)은 모두 지움, `sha256`은 남김 · 운영 분류 스크립트가 멈춤 |
 | D-4 | `ParsingMeta.doc_key` 삭제 때 `UQ_ParsingMeta_dockey`·`IX_ParsingMeta_doc_key` 색인 처리 · `source_key`를 필수(NOT NULL)로 | 지금 `source_key`가 비면 `doc_key`가 겹침 키 |
 | D-5 | (없어짐 — 사용자 10-30: 마스터는 CSV 파일, 마스터 PostgreSQL 없음) | — |
-| D-6 | gold 스키마 변경(`s3_key`·`client_edw`·`clients_doc` 추가, `clients` 삭제)은 Alembic 새 판 — 뷰 `v_chunk_source`를 지우고 다시 만듦(`doc.clients`에 걸려 있음), 기존 서버 데이터는 다시 적재 | 첫 적재가 전체 e2e([pl-23](../prd/etl.md#pl-23))와 함께 |
+| D-6 | 0.2.0 Alembic 마이그레이션 하나 — 원천별 gold 스키마 5벌(`sfdc`·`crms`·`las`·`faq`·`other`) 만들기 — `doc_id`는 스키마 5벌이 함께 쓰는 시퀀스 하나(허브가 정함)(칸: `s3_key`·`original_filename`·`client_edw`·`clients_doc`·`doc_class`·`created_at`·`rep_key`·`rep_engine`·`parsed_at`·`pipeline_version` 추가, `file_path`·`clients`·`doc.source_system`·`chunk.source_system` 삭제, 청크는 `doc_id`만(청크 `s3_key` 없음), `faq.chunk.faq_group`) + struct 지우기(D-7)를 함께, 뷰 `v_chunk_source`는 스키마마다 다시 만듦 — 기존 서버 데이터는 다시 적재 | DB 담당자 승인 한 번([pl-25](../prd/etl.md#pl-25)) · 첫 적재가 전체 e2e([pl-23](../prd/etl.md#pl-23))와 함께 |
 | D-7 | struct 표 지우기(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`·`prod_master`, 마스터 2개는 CSV로) 전 백업 | 되돌릴 수 없는 삭제 |
 | D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 `source_system='FAQ'`로 등록(G3, 사용자 10-30 — [pl-39](../prd/etl.md#pl-39)) | EDW 담당자 협의 필요 — FAQ 행을 누가 어떻게 넣나 |
+| D-9 | 밀려난 `FileStorageMap` 행의 예외 이력 표(새 EDW 표 — §4 `edw.SupersededRow` 안) — 표 이름·칸·누가 쓰나 | 사용자 10-31 grill: 같은 `s3_key`의 더 새 행이 오면 다시 파싱하지 않고 옛 행을 이력에 남김 |
 
 ## 7. 사용자 결정 (10-30 grill 7차)
 
@@ -394,7 +424,7 @@ U-1~U-6은 이 문서의 안대로, U-7은 아래 결정대로 한다.
 
 | # | 무엇 | 결정 |
 |---|---|---|
-| U-1 | `chunk.clients[]`(지금 고객 거르기 키, GIN) — 10-30 결정 "청크는 `clients[]` 유지"와 "거르기는 EDW 고객만"이 겹침 | `chunk.clients` 삭제 → `chunk.client_edw` 새로(거르기 키) |
+| U-1 | `chunk.clients[]`(지금 고객 거르기 키, GIN) — 10-30 결정 "청크는 `clients[]` 유지"와 "거르기는 EDW 고객만"이 겹침 | `chunk.clients` 삭제 → `chunk.client_edw` 새로(거르기 키) → **10-30 4차 grill(pl-28)로 바뀜:** 청크에는 고객 칸을 두지 않고 `doc.client_edw`로 문서 범위를 고른다 |
 | U-2 | `struct.prod_master` — 쓰기만 하고 읽는 코드가 없음 | 삭제 |
 | U-3 | `doc_contract_link` — pl-25에 "s3_key로 다시 키"와 "문서 파생 표 삭제"가 함께 있음 | 삭제 |
 | U-4 | 마스터 읽는 곳 — pl-25는 `gen_roster`·`terms.py`라 했지만 실제로 DB를 읽는 곳은 `aggregate`(`_struct_client_aliases`, 지울 `struct_context`·`_table_cell_scope_docs`·`doc_location_list`)와 `structured._client_aliases`(`gen_roster`는 CSV·EDW 표, `terms.py`는 안 읽음) | 남는 읽는 곳은 고객 별칭뿐 — CSV(`resources/vocab/glossary/`)에서 읽음(10-30 바뀜: 마스터 PG 없음) |
