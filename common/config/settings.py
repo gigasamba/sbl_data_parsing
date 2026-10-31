@@ -24,7 +24,7 @@ RUN_ENV: env RUN_ENV > YAML required.env.run_env. local·dev·prd. 없거나 dev
 설정 파일을 못 읽거나 그 앱 절 검증에 실패해도 이유(칸 경로·오류 종류만)를 찍고 종료 2(VS7e1 U-1 — 사용자 10-28). 틀린 파일은 import common 때도
 서버면 바로 실패(pin_env — STRICT, S7b c안), local이면 경고 뒤 기본값.
 비밀 칸은 SecretStr — 출력·로그·검증 오류에 값이 나오지 않는다.
-사용: python -m common.config.settings [--file 경로] [--app pipeline|mcp]   # 읽어서 요약(비밀 가림)
+사용: python -m common.config.settings [--file 경로]   # 읽어서 요약(비밀 가림) — 앱별 요약은 python -m pipeline.config · mcp_server.config
 """
 
 import contextlib
@@ -290,6 +290,17 @@ def _yaml_loader():
         ("str", C.construct_yaml_str),
     ):  # 글자도 — env 글자와 가름(S7b, judge)
         Loader.add_constructor("tag:yaml.org,2002:" + tag, keep(base))
+
+    def no_dup(loader, node):  # 같은 절·칸을 두 번 쓰면 앞 것이 조용히 사라지므로 거부(값은 안 찍음)
+        seen = set()
+        for k, _ in node.value:
+            key = loader.construct_object(k)
+            if key in seen:
+                raise yaml.constructor.ConstructorError(None, None, f"같은 칸 두 번: {key}", k.start_mark)
+            seen.add(key)
+        return C.construct_mapping(loader, node)
+
+    Loader.add_constructor("tag:yaml.org,2002:map", no_dup)
     return Loader
 
 
@@ -582,7 +593,9 @@ def read_yaml(path):
     except yaml.YAMLError as e:
         mark = getattr(e, "problem_mark", None)
         where = f" {mark.line + 1}행" if mark else ""
-        raise SettingsError(f"설정 파일 YAML 형식 오류: {p}{where}") from None
+        dup = getattr(e, "problem", "") or ""
+        what = f" — {dup}" if dup.startswith("같은 칸 두 번") else ""  # 우리 메시지만(다른 problem은 값 글자를 담을 수 있음)
+        raise SettingsError(f"설정 파일 YAML 형식 오류: {p}{where}{what}") from None
     if doc is None:
         return {}
     if not isinstance(doc, dict):

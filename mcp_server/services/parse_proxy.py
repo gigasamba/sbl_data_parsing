@@ -10,7 +10,7 @@ from mcp_server import config as mc
 from mcp_server.config import CFG
 
 _NO_TOKEN = (
-    "parse 서비스 토큰 없음 — PARSE_SERVICE_TOKEN(settings.yaml mcp.parse_proxy.token) 또는 MCP_TOKEN을 설정"
+    "parse 서비스 토큰 없음 — settings.yaml required.tokens.parse_proxy 또는 MCP_TOKEN을 설정"
     "(data-pipeline-parse의 PARSE_MCP_TOKEN과 같은 값, refactor.md C-44)"
 )
 

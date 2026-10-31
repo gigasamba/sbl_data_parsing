@@ -479,7 +479,7 @@ if __name__ == "__main__":
     )  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
     if not TOKEN:  # D-028 ⑨(S7c) — 옛 코드 기본 토큰 없앰: 설정에 없으면 시작 거부(값은 찍지 않음)
         print(
-            "[설정] mcp_parse_service: 토큰 없음 — settings.yaml pipeline.service.parse_mcp.token(PARSE_MCP_TOKEN)에 검색 MCP의 MCP_TOKEN과 "
+            "[설정] mcp_parse_service: 토큰 없음 — settings.yaml required.tokens.parse_mcp에 검색 MCP의 MCP_TOKEN과 "
             "같은 값을 적음(env로 준 값은 읽지 않음 — S7e2 · 코드 기본 토큰은 없앰 — refactor.md C-42)",
             file=sys.stderr,
         )

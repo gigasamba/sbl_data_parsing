@@ -104,7 +104,7 @@ def doc_dir(required=True):
         return Path(v)
     if not required:
         return None
-    raise SystemExit("원본 문서 폴더가 없음 — settings.yaml common.paths.doc_dir(DOC_DIR)에 경로를 넣거나 --src로 지정")
+    raise SystemExit("원본 문서 폴더가 없음 — settings.yaml ops.paths.doc_dir에 경로를 넣거나 --src로 지정")
 
 
 def resolve_agent_dir(agent_id):

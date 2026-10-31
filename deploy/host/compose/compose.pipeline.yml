@@ -27,7 +27,7 @@ x-settings: &settings "${SETTINGS_FILE:?SETTINGS_FILE=<settings.yaml 절대 경�
 x-job: &job
   network_mode: host                       # PostgreSQL·모델 API에 서버 주소 그대로(NETWORK_HOST=1)
   init: true
-  environment: {NETWORK_HOST: "1", SETTINGS_FILE: /etc/rag/settings.yaml, RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml common.run_env(load_settings가 export — refactor.md C-34, D-028)}"}
+  environment: {NETWORK_HOST: "1", SETTINGS_FILE: /etc/rag/settings.yaml, RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"}
   profiles: ["job"]                        # `up`으로는 안 뜸 — run --rm(트리거)로만
   pids_limit: 2048
   logging:
@@ -60,7 +60,7 @@ services:
     init: true
     environment:
       SETTINGS_FILE: /etc/rag/settings.yaml      # S7e1 — 붙인 설정 파일(x-settings)
-      RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml common.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
+      RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
       TRIGGER_MODULE: parse                      # S6b — 합친 이미지에서 이 상주 서버가 맡을 모듈(entrypoint serve-trigger)
       # S7e2(사용자 10-28) — 바인드 주소·포트·이어 올리기 URL은 settings.yaml에서(pipeline.service.trigger.host·parse_port·chain_structure_url —
       #   옛 TRIGGER_HOST·TRIGGER_PORT·CHAIN_STRUCTURE_URL env). 서버 yaml에 chain_structure_url: [http://127.0.0.1:8771]을 적어야 parse 성공 뒤 structure를 이어 올림(C-45)
@@ -144,7 +144,7 @@ services:
     init: true
     environment:
       SETTINGS_FILE: /etc/rag/settings.yaml      # S7e1 — 붙인 설정 파일(x-settings)
-      RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml common.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
+      RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
       TRIGGER_MODULE: structure                  # S6b — structure+load(trigger_server _MODULE_STAGES) · 주소·포트는 settings.yaml(structure_port — S7e2)
     volumes:
       - *settings
@@ -193,7 +193,7 @@ services:
     init: true
     environment:
       SETTINGS_FILE: /etc/rag/settings.yaml      # S7e1 — 붙인 설정 파일(x-settings)
-      RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml common.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
+      RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
       # S7e2(사용자 10-28) — 바인드·포트·저장소·질의 캐시는 settings.yaml mcp.server.host·port·store · common.models.embed.query_cache(op-08)(옛 env MCP_HOST·MCP_PORT·MCP_STORE·
       #   EMBED_QUERY_CACHE — 질의 캐시는 이미지 안 기본 /tmp/mcp_query_cache.sqlite). 서버 yaml에 store: pg를 적음(없으면 자동 탐지 — C-45)
     volumes:

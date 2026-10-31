@@ -137,3 +137,14 @@ def test_misplaced_and_unknown_keys():
         assert _raises(lambda: read_settings(f), "모르는 칸", "required.pg.hots")
         f.write_text("required:\n  env: {run_env: local}\nextract:\n", encoding="utf-8")
         assert read_settings(f)[0] == {"common": {"run_env": "local"}}  # 빈 절 머리는 괜찮음
+
+
+def test_duplicate_key_rejected():
+    with tempfile.TemporaryDirectory() as d:
+        f = Path(d) / "s.yaml"
+        f.write_text(
+            "search:\n  server: {port: 1}\nrequired:\n  env: {run_env: local}\nsearch:\n  output: {max_chars: 2}\n", encoding="utf-8"
+        )
+        assert _raises(lambda: read_settings(f), "같은 칸 두 번: search", "5행")
+        f.write_text("required:\n  env: {run_env: local, run_env: dev}\n", encoding="utf-8")
+        assert _raises(lambda: read_settings(f), "같은 칸 두 번: run_env")

@@ -345,7 +345,7 @@ def main(argv=None):
     from common.store.pg import has_conn
 
     if not has_conn():
-        raise DbToolError("PG 접속 정보 없음(settings.yaml common.connections.pg) — SQLite 대역은 판 관리 밖(표 정의에서 바로 만듦)")
+        raise DbToolError("PG 접속 정보 없음(settings.yaml required.pg) — SQLite 대역은 판 관리 밖(표 정의에서 바로 만듦)")
     dim, rc = _dim_arg(a), 0
     for target in _targets(a):
         schema = schema_of(target, a.schema)
