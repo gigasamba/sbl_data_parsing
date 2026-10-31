@@ -10,9 +10,10 @@ import shutil
 from functools import lru_cache
 from pathlib import Path
 
+from common.core.paths import PARSING_ROOT
 from pipeline.extract.engines._common.contract import _fields
 
-HERE = Path(__file__).resolve().parent
+HERE = PARSING_ROOT / "engines"
 
 
 @lru_cache(maxsize=1)

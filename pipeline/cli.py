@@ -30,7 +30,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from common.config import settings as C  # common 칸(S7c — 설정 객체 · cfg()·given()·render())
-from common.core.paths import APP_ROOT, PKG_ROOT  # output/ 등 런타임 경로용(옛 dev/)
+from common.core.paths import APP_ROOT, DEPLOY_ROOT, PKG_ROOT  # output/ 등 런타임 경로용(옛 dev/)
 from pipeline import config as pc  # pipeline 칸(S7c — 설정 객체 · cfg()·given())
 
 ROOT = PKG_ROOT  # common/(S6a — 옛 common_tools/와 같은 깊이) — 하위 프로세스 cwd·저장소 문서 찾기용(ROOT.parent = deploy/)
@@ -920,7 +920,7 @@ def connect(a):
 # known_fail.txt, 사례 이름 = 시험 모듈 이름). 폴더가 곧 이미지: common = 두 이미지 · pipeline = data-pipeline · mcp = mcp-server(RAG_MODULE).
 # PC 일반 시험(tests/general — PC 전용·느린 것·PG·Docker)은 pytest로만(`python -m pytest tests/` — tests/conftest.py가 같은 자식 프로세스·같은 env로).
 # 옛 사례 이름(모듈 이름) → 새 시험 모듈 대응표는 output/orca/S9-impl.md.
-TESTS_ROOT = Path(__file__).resolve().parents[1] / "tests"  # 저장소 루트 tests/ · 이미지 /app/deploy/tests(PYTHONPATH와 같은 뿌리)
+TESTS_ROOT = DEPLOY_ROOT / "tests"  # 저장소 루트 tests/ · 이미지 /app/deploy/tests(PYTHONPATH와 같은 뿌리)
 IMAGE_DIRS = {"common": None, "pipeline": "pipeline", "mcp": "mcp"}  # tests/server/<폴더> → 도는 이미지(None = 둘 다)
 _FAKE_LLM_CASES = frozenset({"tests.server.mcp.test_mcp_main"})  # LLM_FAKE를 켜는 사례(질문 분해 — 옛 mcp_server.main 사례)
 # PC에서 개발자 루트 settings.yaml(실 PG)을 그대로 읽어야 판정되는 사례(실 PG에서만 C-54 ① 재현) — 그 밖 PC 사례는 시험 전용 바탕 설정(case_env, 10-29)

@@ -14,11 +14,11 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
-from pathlib import Path
 
 from common.core.console import utf8_stdout
+from common.core.paths import DEPLOY_ROOT
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = DEPLOY_ROOT  # 저장소 루트(PC) — git ls-files 기준
 _SKIP = (
     "valid_env/",
     ".claude/",
@@ -380,7 +380,7 @@ def object_reads():
     역할 접두로 짓는 이름(`{prefix}_BASE_URL` 꼴 — PREFIXES)의 꼬리가 나오면 읽는 것으로 친다."""
     from common.config import settings as S
 
-    root = Path(__file__).resolve().parents[2]
+    root = DEPLOY_ROOT
 
     def texts(folder, skip):
         return (

@@ -4,12 +4,12 @@ ParsingMeta는 docs/operations/parsing_meta_mssql.sql과 같아야 한다(다르
 목록으로 찍기만 한다. 문서가 없는 이미지(docs/ 미포함)에서는 건너뜀."""
 
 import re
-from pathlib import Path
 
+from common.core.paths import DEPLOY_ROOT
 from common.store import parsing_meta_db as PM
 from common.store.db import dbcompare
 
-ROOT = Path(__file__).resolve().parents[3]  # 저장소 루트(tests/server/common/ 위)
+ROOT = DEPLOY_ROOT  # 저장소 루트(PC) · 이미지 /app/deploy — op-09 paths 상수
 DOC = ROOT / "docs" / "architecture" / "db_schema.md"
 PM_SQL = ROOT / "docs" / "operations" / "parsing_meta_mssql.sql"
 DECISIONS = ("유지", "삭제", "새로")
