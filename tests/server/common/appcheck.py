@@ -1,6 +1,7 @@
 """common.config.show의 app_selftest — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 시험 도우미(test_ 함수 없음 — pipeline.config·mcp_server.config 시험이 `from tests.server.common.appcheck import app_selftest`로 부름). 옛 부르는 곳: 두 config 모듈의 자기 점검."""
 
 from common.config import export as E
+from common.config import layout as L
 from common.config import settings as S
 from common.config.layout import to_file
 from common.config.show import main, summary
@@ -37,9 +38,9 @@ def app_selftest(app_cls, top):
         host_leaf = next(p for p, fi, _ in rows if p.startswith(top + ".host.") and S.type_label(fi.annotation) == "str")
         sec_leaf = next(p for p, fi, _ in rows if p.startswith(top + ".") and S.is_secret(fi))
         doc = {}
-        S._set_path(doc, host_leaf, "v1")
-        S._set_path(doc, sec_leaf, secret)
-        S._set_path(doc, "common.run_env", "dev")
+        L.set_path(doc, host_leaf, "v1")
+        L.set_path(doc, sec_leaf, secret)
+        L.set_path(doc, "common.run_env", "dev")
         import yaml
 
         f.write_text(yaml.safe_dump(to_file(doc)), encoding="utf-8")
@@ -85,8 +86,8 @@ def app_selftest(app_cls, top):
         env_app = S.env_name(dict((p, fi) for p, fi, _ in rows)[app_leaf])
         g = Path(td) / "app.yaml"
         doc = {}
-        S._set_path(doc, app_leaf, "file-v")
-        S._set_path(doc, "common.run_env", "local")
+        L.set_path(doc, app_leaf, "file-v")
+        L.set_path(doc, "common.run_env", "local")
         g.write_text(yaml.safe_dump(to_file(doc)), encoding="utf-8")
         mod = {"pipeline": "pipeline.config", "mcp": "mcp_server.config"}[top]
         env = {k: v for k, v in __import__("os").environ.items() if k not in (env_app, "RUN_ENV")}

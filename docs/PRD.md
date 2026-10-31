@@ -45,7 +45,8 @@
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
 |---|---|---|---|
 | 준비 | done | 중복 · 회전 · DRM 감지 | [pl-02](prd/parse.md#pl-02) |
-| 엔진 스택 파싱 | done | 형식별 엔진 · 격리 · 스택 판 | [pl-03](prd/parse.md#pl-03) |
+| 엔진 스택 파싱 | todo | 형식별 엔진 · 격리 · 스택 판 · `all` 길 지우기 | [pl-03](prd/parse.md#pl-03) |
+| 지원 확장자 더하기 — .jpeg·.tif·.tiff·.bmp·.mhtml | done | 스택 표 · 확장자마다 시험(임시 샘플) · .hwpx 시험 | [pl-42](prd/parse.md#pl-42) |
 | 파싱 phase 없애기 · OCR 엔진 끔 | done | 병렬 엔진 · 제한 · 쪽 VLM · 서버 확인 | [pl-22](prd/parse.md#pl-22) |
 | VLM 동시 수 손잡이 | done | `tuning` 키 하나로 닫음 | [pl-43](prd/parse.md#pl-43) |
 | ocr_vlm·vlm.model_alt 삭제 | done | 0.1.0 · 엔진 핑거프린트 바뀜(등급 A) | [pl-31](prd/parse.md#pl-31) |
@@ -127,4 +128,4 @@
 | 첫 릴리스 태그 `v0.1.0` | done | 태그 · 릴리스 노트 | [op-04](prd/doc.md#op-04) |
 | 실행 이미지(코드 없음) · 코드 폴더 마운트 | done | 개발 서버 · 의존성 지문 · 코드 커밋 표시 | [op-06](prd/doc.md#op-06) |
 | 개발 → 운영 굽기(실행 이미지 + 시험한 코드) | done | `Dockerfile.bake` · `bake.sh` · 반입 판정 · 저장·분할 | [op-07](prd/doc.md#op-07) |
-| 서버 설치·업그레이드 절차 | todo | 설치 길 하나 · podman 기본 · 0.2.0 업그레이드·되돌리기 | [op-10](prd/doc.md#op-10) |
+| 서버 설치·업그레이드 절차 | done | 설치 길 하나 · podman 기본 · 0.2.0 업그레이드·되돌리기 | [op-10](prd/doc.md#op-10) |

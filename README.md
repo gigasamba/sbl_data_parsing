@@ -424,6 +424,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 - 일반 사용자 셸에서 실행할 때는 `DOCKER="sudo podman"`을 앞에 붙인다.
 - 이미지를 불러온 저장소와 컨테이너를 띄우는 저장소가 같아야 한다. 일반 사용자 podman(rootless)과 root podman은 이미지를 따로 보관하므로, 섞으면 이미지가 보이지 않는다.
 - compose 실행기(`podman-compose`나 `docker-compose` 플러그인)가 깔려 있어야 한다. `podman compose version`으로 확인한다.
+  - 폐쇄망에서 없으면: 사내 RHEL 저장소에 있으면 `dnf install podman-compose`. 없으면 인터넷 PC에서 서버와 같은 python 판으로 `pip download podman-compose -d pc-wheels`(의존 휠 `python-dotenv`·`PyYAML` 포함)로 휠을 받아 옮긴 뒤 서버에서 `python3 -m pip install --no-index --find-links pc-wheels podman-compose` → `podman compose version`으로 확인.
 
 설치 순서(처음 한 번):
 1. 두 zip을 같은 폴더에 푼다.

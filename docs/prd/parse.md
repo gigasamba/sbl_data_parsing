@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나. 수집([etl.md](etl.md)) 다음, 구조화 앞 단계: 준비 → 엔진 스택 파싱 → represent(대표 결과 고르기·고치기) → 그림.
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서(주제별): 준비 pl-02 → 엔진 스택 pl-03·pl-22·pl-43·pl-31·pl-20·pl-17 → represent·그림 pl-34·pl-04·pl-05·pl-36·pl-37 → 잔재 pl-35 → 코드와 다른 점.
+순서(주제별): 준비 pl-02 → 엔진 스택 pl-03·pl-22·pl-43·pl-31·pl-20·pl-17 → 확장자 pl-42 → represent·그림 pl-34·pl-04·pl-05·pl-36·pl-37 → 잔재 pl-35 → 코드와 다른 점.
 
 <a id="pl-02"></a>
 ## pl-02 · 준비
@@ -19,7 +19,8 @@
 - 파일: `pipeline/extract/run_all.py`, `pipeline/extract/engines/`(엔진 핑거프린트 — 바꾸려면 사람 검토), `resources/config/pipeline_stack.json`, `docs/architecture/pipeline_stack.md`.
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P1): 엔진 범위는 `stack` 그대로(형식당 2개) — 서버 settings.yaml에 `all`을 적지 않는다.
 - C7(사용자 10-30 PRD grill): 비교 도구(`model_matrix`·`score_gold`·`mcp_eval` 등)는 두지 않는다([test.md#e2-10](test.md#e2-10)) — 비교는 필요할 때 다시 만든다. 엔진 비교 실험은 그때 stack json을 고쳐서 한다.
-- Status: done
+- 결정(사용자 10-30(-c5 전달)): 엔진 범위는 `stack` 하나 — 유일한 방식이자 기본. 형식별 엔진은 `resources/config/pipeline_stack.json`에 명시한다. `PARSE_ENGINE_SCOPE` `all`과 `--engines all` 길을 지운다(`pipeline/cli.py` `_set_engine_scope_default`, `pipeline.extract.engine_scope`, `common/config/sample.py`의 옛 값). 비교 실험은 stack json을 고쳐서 한다. 참고: 운영 reference 서버는 `all`로 돌았지만 사용자는 stack만 골랐다.
+- Status: todo — `all` 길 지우기(10-30). 엔진 스택 파싱 자체는 done.
 
 <a id="pl-22"></a>
 ## pl-22 · 파싱 phase 없애기 · 문서마다 엔진 병렬 · OCR 엔진 끔
@@ -112,6 +113,16 @@
 - 무엇: 그림 근처 본문 후보정 — 캡션 연결, 본문 언급, 값 일치·충돌 표시 — 와 그림 기록을 본문 청크 한 덩어리로 렌더.
 - 파일: `pipeline/transform/represent/context.py`.
 - Status: done
+
+<a id="pl-42"></a>
+## pl-42 · 지원 확장자 더하기 — .jpeg·.tif·.tiff·.bmp·.mhtml(+ .hwpx 시험)
+- 결정(사용자 10-30(-c5 전달)): `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.mhtml`을 지원 형식에 더하고 시험한다. `.hwpx`도 시험에 넣는다.
+- 확장자마다 `tests/server`에 파싱 시험 하나 — `valid_env`에 그 형식 파일이 없으므로 시험이 임시 폴더에 샘플을 만든다(CLAUDE.md §6-4).
+- 형식별 엔진은 `resources/config/pipeline_stack.json`에 명시([pl-03](#pl-03) — stack 하나). 스택 표 변경은 `struct.stack_version` 새 판(`set-stack`).
+- 한 것(10-31): PC 파일 `pipeline_stack.json`에 `.jpeg`·`.tif`·`.tiff`·`.bmp` = `rapidocr_ko`·`qwen_vlm`(`.jpg`와 같음 — OCR은 `ocr_engine` 켤 때만), `.mhtml` = `mhtml`·`kreuzberg`(`.mht`와 같음). 엔진 코드·형식 판별 코드는 그대로(다섯 형식 모두 엔진 `FORMATS`와 represent·그림 목록에 이미 있음). 시험 `tests/server/pipeline/test_ext_formats.py` — 형식마다 임시 견본을 만들어 파싱(이미지는 VLM 호출만 가짜), 엔진 구성 목록·형식당 2개·고르는 엔진 확인. 배포한 판 1 시드(`resources/sql/0002_stack_seed.json`)는 고치지 않음.
+- 사람이 할 일(서버, refactor.md C-69): 새 판 넣기 — `dc run --rm load set-stack --parse ".jpeg=rapidocr_ko,qwen_vlm;.tif=rapidocr_ko,qwen_vlm;.tiff=rapidocr_ko,qwen_vlm;.bmp=rapidocr_ko,qwen_vlm;.mhtml=mhtml,kreuzberg" --reason "pl-42 확장자 추가"` → `dc run --rm load show-stack --history 3`(되돌리기 `set-stack --activate <앞 판> --reason …`). 넣기 전에는 이 형식들이 핵심 엔진 합집합으로 돈다.
+- 파일: `resources/config/pipeline_stack.json`, `tests/server/pipeline/test_ext_formats.py`, `docs/architecture/pipeline_stack.md` §3-1.
+- Status: done (10-31, feature/pl42-more-ext)
 
 <a id="pl-04"></a>
 ## pl-04 · represent — 가장 좋은 결과를 고르고 고치기

@@ -182,3 +182,6 @@ def test_read_settings_new_layout(tmp_path):
     f.write_text("common:\n  run_env: dev\n", encoding="utf-8")
     doc, err = RD.read_settings(f)
     assert doc == {} and "common.config.migrate" in err
+    f.write_text("required:\n  env: {run_env: dev}\nops:\n  host: {docker: podman}\nops:\n  nightly: {time: '01:00'}\n", encoding="utf-8")
+    doc, err = RD.read_settings(f)
+    assert doc == {} and "같은 칸 두 번: ops" in err  # 앱 settings와 같은 거부(layout.reject_dup_keys)

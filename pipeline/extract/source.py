@@ -799,9 +799,9 @@ def _rdb_resolve_spec(spec, state, limit, mode):
 
 def _rdb_plan(table, state, limit=0, mode="prod", cols=None, default_bucket=None, source_name=None):
     """RDB(표 또는 csv:)에서 대상 행을 질의 → (names, fetch_one(name,dest)→Path, state). plan()·resolve() 공용(AD44) —
-    resolve()는 이걸 부른 뒤 모든 이름을 즉시 받고, 스트리밍은 이름만 고정해 두고 fetch_one을 묶음마다 부른다.
+    resolve()는 이걸 부른 뒤 모든 이름을 즉시 받는다.
     받기 전 대조는 ETag가 있으면 ETag(head_object), 없으면 크기(ContentLength)로 — 불일치면 거부·기록하고 받지
-    않는다(그 문서만 건너뛰고 나머지는 계속, 독립 검토 BLOCK 1 — 호출부 resolve()·stream.py가 fetch_one 전체를
+    않는다(그 문서만 건너뛰고 나머지는 계속, 독립 검토 BLOCK 1 — 호출부 resolve()가 fetch_one 전체를
     try로 안 감싸면 크래시한다). cols·default_bucket·source_name(SI41) — sources.json 원천 하나를 가리키면 그
     columns·bucket·처리 기록(이름별 processed__<이름>.jsonl)을 쓰고, 여러 원천은 `_rdb_resolve_spec`이 이 함수를
     원천마다 불러 합친다(이름 충돌은 그쪽에서 구분).

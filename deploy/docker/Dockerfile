@@ -37,7 +37,7 @@
 # 원칙: 비밀값·원본 문서·결과는 이미지에 넣지 않는다(실행 시 설정 파일 마운트·볼륨) · 바꿀 값은 모두 settings.yaml(settings.sample.yaml — S7e1·S7e2,
 #   옛 --env-file pipeline.env 대신). S7e2(VS7e1 B-2, 사용자 10-28) — 설정 칸이 있는 값(PIPE_EMBED·PIPE_PROCS·DOC_DIR·DOC_DIR_PREPARED·SOFFICE_BIN)은
 #   이미지 ENV로 굽지 않고 이미지 안 설정 모델 기본값으로(settings.yaml이 늘 이김 — 옛 ENV는 settings.yaml이 못 덮었음). ENV에는 이미지 바탕·
-#   라이브러리 값만 남기고, 그 값을 /app/docker/image_env.txt에 적어 entrypoint가 settings.yaml common.runtime.lib_env로 덮을 수 있게 한다.
+#   라이브러리 값만 남기고, 그 값을 /app/docker/image_env.txt에 적어 entrypoint가 settings.yaml ops.runtime.lib_env로 덮을 수 있게 한다.
 # 폐쇄망: 기반 이미지(BASE)·시스템 패키지·휠을 미리 준비 — docs/specs/docker-collect.md 「빌드」.
 # requirements 분할은 안 함(10-16 코디네이터 결정) — 두 이미지가 같은 base 층(requirements-core.txt)을 공유해 캐시로 한 번만 설치된다.
 ARG BASE=python:3.12-slim-bookworm
@@ -151,7 +151,7 @@ COPY deploy/docker/runtime_entry.sh /app/docker/runtime_entry.sh
 RUN mkdir -p /app/output /app/assets /app/deploy /data/docs && chown -R rag /app/output /data \
     && sed -i 's/\r$//' /app/docker/runtime_entry.sh && chmod +x /app/docker/runtime_entry.sh \
     && cat /tmp/requirements-core.txt /tmp/requirements-image.txt | tr -d '\r' | sha256sum | cut -c1-16 > /app/docker/deps_hash
-# 실행 환경 기본값 — 시간대는 새벽 마감(NIGHT_DEADLINE) 계산에 쓰임(UTC면 9시간 어긋남). 바꾸려면 settings.yaml common.runtime.lib_env(S7e2 — 옛 --env-file)
+# 실행 환경 기본값 — 시간대는 새벽 마감(NIGHT_DEADLINE) 계산에 쓰임(UTC면 9시간 어긋남). 바꾸려면 settings.yaml ops.runtime.lib_env(S7e2 — 옛 --env-file)
 # SOFFICE_BIN(/usr/bin/soffice — soffice_bin()이 PATH보다 먼저 보는 명시 경로, AD20)·DOC_DIR·DOC_DIR_PREPARED·PIPE_EMBED·PIPE_PROCS는 S7e2부터
 # 이미지 안 설정 모델 기본값(common.config.settings._IMAGE_DEFAULTS — B-2).
 # HOME=/tmp: LibreOffice 자체 UserInstallation은 pptx_render.py가 output/ 아래 임시 폴더로 따로 주지만(프로필 잠금 분리),

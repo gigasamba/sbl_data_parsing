@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""폴더 → Object Storage(S3 호환) 올리기 — 시험용(개발 서버 MinIO 모의 저장소 · 백로그 O6). 접속 값·비밀은 settings.yaml common.connections.object_storage.
+"""폴더 → Object Storage(S3 호환) 올리기 — 시험용(개발 서버 MinIO 모의 저장소 · 백로그 O6). 접속 값·비밀은 settings.yaml required.object_storage.
 사용(저장소·이미지 루트에서 — S7b부터 설정 객체를 읽어 PYTHONPATH와 pydantic이 있어야 함, VS7b R-10 · S7e2부터 env OS_*는 읽지 않음):
   SETTINGS_FILE=$(python -m common.config.overrides --base <settings.yaml> OS_ENDPOINT=http://127.0.0.1:19000) PYTHONPATH=. \
     python -m common.check.os_put <폴더> s3://버킷/접두        (PC — 덮기 파일 도구는 PC 전용, valid_env/docker/smoke_test.sh — VS7e2 R-7)"""

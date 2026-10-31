@@ -22,8 +22,8 @@ HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: pyt
 #   빈 칸 = 코드 기본값. 적힌 값은 코드 기본값보다 이긴다(나중에 코드 기본값이 바뀌어도 이 파일을 고치지 않으면 반영 안 됨).
 #   [PC·서버]·[서버만]·[PC만] = 그 카테고리를 채워야 하는 곳. 서버만 칸을 PC에서 비우면 그 기능(EDW·Object Storage·게시 등)만 꺼진다.
 #   [비밀] = settings.yaml에만 둠(출력·로그에 안 나옴). [파라미터] = 결과(파싱·청크·검색 순위)를 바꾸는 값.
-#   각 앱은 자기 칸만 읽는다(pipeline: required·common·extract·transform·load·ops · mcp: required·common·search·ops).
-#   같은 최상위 절을 두 번 쓰지 않는다(YAML은 뒤 절이 앞 절을 덮음). 옛 배치(최상위 common·pipeline·mcp) → python -m common.config.migrate.
+#   각 앱은 자기 칸만 읽는다(pipeline: required·common·extract·transform·load·ops·dev · mcp: required·common·search·ops·dev — tuning은 둘 다).
+#   같은 절·칸을 두 번 쓰면 시작 거부(앞 것이 조용히 사라지지 않게). 옛 배치(최상위 common·pipeline·mcp) → python -m common.config.migrate.
 #   한 번만 몇 칸 바꿀 때: 덮기 파일(base·overrides — python -m common.config.overrides). 옛 env 이름·판정 꼴: docs/operations/env-guide.md.
 """
 # C-39(사용자 10-27 S7e1 Q6 a) — options.conf(옛 카탈로그 — S7e2에 지움)가 env에 채우던 값 중 설정 모델 기본값과 결과가 다른 칸(값에 비밀 없음).
@@ -207,10 +207,7 @@ def build(classes=None):
             rows.setdefault(p, f)
     tree = {}
     for p, f in rows.items():
-        cur, parts = tree, L.to_yaml(p).split(".")
-        for q in parts[:-1]:
-            cur = cur.setdefault(q, {})
-        cur[parts[-1]] = (p, f)
+        L.set_path(tree, L.to_yaml(p), (p, f))
     if {"pipeline", "mcp"} <= set(classes):  # 시험이 앱 일부로 부를 때는 대조 안 함
         unknown = (set(L.REQUIRED) | L.TUNING | set(VALUES)) - set(rows)
         if unknown:
@@ -448,13 +445,14 @@ def marks(f):
 
 def where(names):
     """옛 env 이름 → (이름, 파일 자리, 모델 경로, 표시) — 모르는 이름은 자리 None."""
-    rows = {}
-    for cls in S.app_classes().values():
-        for p, f, _ in S.walk(cls):
-            rows.setdefault(S.env_name(f), (p, f))
+    from common.config.setarg import _fields  # 같은 이름이 호스트 칸·앱 칸 둘 다면 앱 칸(--set과 같은 규칙)
+
+    paths = _fields()
+    rows = {p: f for cls in (S.CommonAppSettings, *S.app_classes().values()) for p, f, _ in S.walk(cls)}
     out = []
     for n in names:
-        p, f = rows.get(n, (None, None))
+        p = paths.get(n, (None,))[0]
+        f = rows.get(p)
         out.append((n, L.to_yaml(p) if p else None, p, marks(f) if f is not None else []))
     return out
 

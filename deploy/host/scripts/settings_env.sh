@@ -43,7 +43,7 @@ settings_export() {   # settings_export <env|sh> [--image <이미지>] <절>... 
   local code=()                             # 실행 이미지(코드 없음)면 이 코드 폴더를 붙여 export 모듈을 읽게(op-06)
   case "$image" in *-runtime:*) code=(-v "$_SETTINGS_CODE:/app/deploy:ro,z" -e PYTHONPATH=/app/deploy) ;; esac
   [ -n "${SETTINGS_FILE:-}" ] && [ -f "$SETTINGS_FILE" ] || { echo "[settings_env] 이미지로 돌릴 때는 SETTINGS_FILE(설정 파일 경로)이 있어야 함" >&2; return 2; }
-  local run_env=()                          # 호출자 RUN_ENV를 컨테이너에도 — 호스트 python 경로와 같게(env > 파일 common.run_env, VS7a2 R-b)
+  local run_env=()                          # 호출자 RUN_ENV를 컨테이너에도 — 호스트 python 경로와 같게(env > 파일 required.env.run_env, VS7a2 R-b)
   [ -z "${RUN_ENV:-}" ] || run_env=(-e "RUN_ENV=$RUN_ENV")
   # 표준 입력을 컨테이너 안 임시 파일로 먼저 옮긴다 — SETTINGS_FILE=/dev/stdin이면 import common의 다리가 먼저 읽어 export가 빈 파일을 봄(S7e1 리뷰)
   # shellcheck disable=SC2016,SC2086 — DOCKER는 낱말 나눔(sudo podman)

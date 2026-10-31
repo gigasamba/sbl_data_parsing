@@ -219,17 +219,17 @@ def convert(env, classes, holders=()):
         if key in S.LIB_ENV_NAMES:  # C-45 ⑤ — 라이브러리 env는 common.runtime.lib_env 사전으로(컨테이너 entrypoint가 env로 냄)
             lib = S._peek(doc, "common.runtime.lib_env") or {}
             lib[key] = val
-            S._set_path(doc, "common.runtime.lib_env", lib)
+            L.set_path(doc, "common.runtime.lib_env", lib)
             report["라이브러리 env"].append(key)
             continue
         if key == "LOCAL_RUN":
             if val == "1":
-                S._set_path(doc, "common.run_env", "local")
+                L.set_path(doc, "common.run_env", "local")
             report["env로 남김"].append(key + "(→ common.run_env)")
             continue
         if key in HOST_ONLY and server_file and host_map.get(key):
             for p in sorted(host_map[key]):
-                S._set_path(doc, p, val)
+                L.set_path(doc, p, val)
             report["호스트 칸만"].append(key)
             continue
         paths = sorted(app_map.get(key, set()) | host_map.get(key, set()))
@@ -237,7 +237,7 @@ def convert(env, classes, holders=()):
             report[NO_RUN_ENV].append(key)  # VS7e3 R-3 — 서버 파일인지 모름(RUN_ENV를 셸·systemd로만 준 서버면 호스트 칸만이어야 함)
         if paths:
             for p in paths:
-                S._set_path(doc, p, val)
+                L.set_path(doc, p, val)
             report["확인(앱·호스트 두 칸)" if len(paths) > 1 else "yaml"].append(key)
             continue
         kind = NOT_SETTINGS.get(key, ("모름", ""))[0]
@@ -283,7 +283,7 @@ def convert_yaml(path, classes, secrets=True):
             p = f"{prefix}{k}"
             if p in leaves:
                 if v is not None:
-                    S._set_path(doc, p, v if secrets or not S.is_secret(leaves[p]) else MASK)
+                    L.set_path(doc, p, v if secrets or not S.is_secret(leaves[p]) else MASK)
                     report["칸"] += 1
             elif p in removed:
                 report["삭제됨"].append(p)
@@ -296,10 +296,10 @@ def convert_yaml(path, classes, secrets=True):
     return {**_raw(extra), **L.to_file(_raw(doc))}, report
 
 
-def dump_yaml(doc):
+def dump_yaml(doc, origin="옛 배치에서 새 배치(op-08 ②)로 바꿈"):
     import yaml
 
-    head = "# settings.yaml — common.config.migrate가 옛 배치에서 새 배치(op-08 ②)로 바꿈. 칸 설명은 저장소 settings.sample.yaml\n"
+    head = f"# settings.yaml — common.config.migrate가 {origin}. 칸 설명은 저장소 settings.sample.yaml\n"
     return head + yaml.dump(doc, Dumper=S._raw_dumper(), allow_unicode=True, sort_keys=False, default_flow_style=False)
 
 
@@ -332,7 +332,7 @@ def typed(doc, classes):
         st = S.load(cls, file=os.devnull, data=part, environ={}, strict=False)
         for path, _f, _ in S.walk(cls):
             if path.split(".", 1)[0] in part and S._is_set(st, path):
-                S._set_path(out, path, S._get(st, path))
+                L.set_path(out, path, S._get(st, path))
     return out
 
 
@@ -347,10 +347,7 @@ def plain(doc, secrets):
 
 
 def dump(doc):
-    import yaml
-
-    head = "# settings.yaml — common.config.migrate가 옛 env 파일에서 만듦(새 배치 — op-08 ②). 칸 설명은 저장소 settings.sample.yaml\n"
-    return head + yaml.safe_dump(L.to_file(doc), allow_unicode=True, sort_keys=False, default_flow_style=False)
+    return dump_yaml(L.to_file(doc), "옛 env 파일에서 만듦(새 배치 — op-08 ②)")
 
 
 def write_private(path, text, force=False):

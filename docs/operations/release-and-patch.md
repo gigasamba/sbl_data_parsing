@@ -328,6 +328,8 @@ dc run --rm load migrate up --target all        # 새 판 마이그레이션(없
 dc run --rm load migrate check --target all     # "차이 없음"
 ```
 
+**4-1. 엔진 구성 새 판(pl-42 — refactor.md C-69)** — 판 1 시드는 고치지 않으므로 새 형식(`.jpeg`·`.tif`·`.tiff`·`.bmp`·`.mhtml`)은 새 판으로: `dc run --rm load set-stack --parse ".jpeg=rapidocr_ko,qwen_vlm;.tif=rapidocr_ko,qwen_vlm;.tiff=rapidocr_ko,qwen_vlm;.bmp=rapidocr_ko,qwen_vlm;.mhtml=mhtml,kreuzberg" --reason "pl-42 확장자 추가"` → `dc run --rm load show-stack --history 3`. 되돌릴 때는 `set-stack --activate <앞 판> --reason …`(DB를 백업으로 되돌렸으면 필요 없음).
+
 **5. 띄우기·확인** — README §5-3 ④ 연결 점검 · ⑤ 이미지 점검 → `mcp_up.sh` · 상주 트리거 `dc up -d …`(§5-5) → 시작 로그 첫 줄 `[image] … · 코드 <커밋> …`이 새 판인지 → 새벽 배치 다시 켬(`systemctl start data-pipeline-nightly.timer`).
 
 **되돌리기(0.2.0 → 0.1.0)**

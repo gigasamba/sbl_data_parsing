@@ -12,7 +12,7 @@
   python deploy/host/scripts/parse_trigger_test.py --source s3://버킷/접두 --limit 5 [--chain]     # Object Storage 몇 건
   TRIGGER_TOKEN=… python deploy/host/scripts/parse_trigger_test.py --source s3://버킷/접두 --url http://127.0.0.1:8770
 설정: DATA_PIPELINE_IMAGE·RAG_OUT 등은 trigger.sh와 같음(settings.yaml — S7e1, 옛 /srv/rag/env/pipeline.env). TRIGGER_TOKEN(--url 길)은 부르는 사람이 env로 준다
-      (호스트 클라이언트 — 서버 쪽 토큰은 settings.yaml pipeline.service.trigger.token).
+      (호스트 클라이언트 — 서버 쪽 토큰은 settings.yaml required.tokens.trigger).
 """
 
 import argparse

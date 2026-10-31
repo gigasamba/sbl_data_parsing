@@ -25,7 +25,7 @@ services:
     environment:
       SETTINGS_FILE: /etc/rag/settings.yaml      # S7e1 — 붙인 설정 파일(x-settings)
       RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
-      # S7e2(사용자 10-28) — 바인드·포트·저장소·질의 캐시는 settings.yaml mcp.server.host·port·store · common.models.embed.query_cache(op-08)(옛 env MCP_HOST·MCP_PORT·MCP_STORE·
+      # S7e2(사용자 10-28) — 바인드·포트·저장소·질의 캐시는 settings.yaml search.server.host·port · required.deploy.mcp_store · common.models.embed.query_cache(op-08)(옛 env MCP_HOST·MCP_PORT·MCP_STORE·
       #   EMBED_QUERY_CACHE — 질의 캐시는 이미지 안 기본 /tmp/mcp_query_cache.sqlite). 서버 yaml에 store: pg를 적음(없으면 자동 탐지 — C-45)
     volumes:
       - *settings
