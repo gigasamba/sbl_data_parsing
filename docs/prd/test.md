@@ -11,6 +11,7 @@
 - 무엇: `tests/server/`(이미지 반입 관문, `pipeline.cli selftest`가 `tests/runner.py`로 실행), `tests/general/`(PC 전용: PG, Docker, 느린 것). 알려진 실패는 목록에 두고, XPASS면 지우라고 경고.
 - 파일: `tests/runner.py`, `tests/conftest.py`, `deploy/release/known_fail.txt`.
 - 기준선(CLAUDE.md §4·§6-3에서 옮김, 10-30):
+  - (10-31 `feature/op09-no-hardcode` — op-08 병합 뒤 develop을 합친 상태) `selftest` **94개 중 93개 통과**(알려진 실패 `test_publish_guard`) · `pytest tests/` **146 passed · 1 skipped(PG 설정 없는 작업 폴더 — `test_pl14_deploy`) · 3 xfailed** · 핑거프린트 `FINGERPRINT` `2f1da6a1567d24a8` · p0 `d7367309a2a8` · p1 `131b90a90659` · r `060344a6f429` · s `5db77013648f` · a `e3b0c44298fc`(엔진 18개 지문도 2a에서 바뀜 — 0.2.0 전체 재처리)
   - (10-31 `feature/op08-settings-layout` — op-08이 스트리밍·그림자·실험 기능과 그 시험을 지운 뒤) `selftest` **93개 중 92개 통과** · `pytest tests/` **146 passed · 3 xfailed**(작업 폴더 `settings.yaml`에 전용 PG) · 핑거프린트 `FINGERPRINT abe9b7b0799ceaae`(그대로) · a `e3b0c44298fc` · p0 `35df8d19cba6` · p1 `068c126e7a83` · r `8bfca1b178e8` · s `72dfe4177e78`(공용 `settings.py`·`paths.py` 등이 바뀜 — 0.2.0 전체 재처리). 아래는 그 전(10-30) 값.
   - `selftest`는 **94개 중 93개 통과**다(10-30 `feature/pl12-no-deleted` — #58이 시험 3개를 지우고 `test_no_deleted` 1개를 더한 뒤). 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
   - `pytest tests/`는 **148 passed · 3 xfailed**다(10-30 `release/0.1.0` E2E — 루트 `settings.yaml`에 전용 PG가 있을 때. 없으면 `test_pl14_deploy`가 건너뛰어 146 passed · 1 skipped). 위 1개와 일반 테스트 2개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — `test_run_combo`·`test_pub_registry`(C-54 ①))이며, 모두 리팩토링 전부터 있던 실패다.
