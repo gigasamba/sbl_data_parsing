@@ -10,9 +10,8 @@
                                       이름이 등록돼 있지 않으면 레거시(표 이름·csv:<경로> 직접 지정, env RDB_COL_*·RDB_BUCKET)로 그대로 동작
   --mode test                        시험 모드: 대상이 TEST_MIN_DOCS(기본 50)건 이상이면 파일 형식별 TEST_PER_TYPE(기본 5)건만(이름 해시 순 — 늘 같은 표본)
 
-Object Storage 원본 처리(백로그 O2 일부): 대표 결과가 나온 문서의 내려받은 원본은 parse 뒤 지움(KEEP_LOCAL_ORIGINALS=1이면 남김 — 샘플 작업,
-PARSE_KEEP_ORIGINALS=1이면 같은 이유로 안 지우되 PM3 `cli/publish_parse.py`가 Object Storage에 올리고 EDW `AI.ParsingMeta`에 행을 쓴
-뒤 따로 지움 — docs/architecture.md. PARSE_KEEP_MAX_GB(선택)로 보존 폴더 크기 상한 — 넘으면 경고 뒤 그 배치는 그냥 지움).
+Object Storage 원본 처리(백로그 O2 일부): 대표 결과가 나온 문서의 내려받은 원본은 parse 뒤 바로 지움(보존 스위치
+KEEP_LOCAL_ORIGINALS·상한 PARSE_KEEP_MAX_GB는 op-08에 지움).
 처리한 객체(ETag 또는 키만)는 output/parse/_source/processed.jsonl에 기록 → 다음 실행에서 다시 받지 않음. 실패한 문서는 남겨 다음 실행이 다시 시도.
 검색 결과의 원본 위치(source_uri) = s3://버킷/키(SOURCE_MANIFEST로 common/ids.source_uri가 읽음).
 접속: OS_ENDPOINT · OS_ACCESS_KEY · OS_SECRET_KEY · OS_REGION(기본 us-east-1) · OS_VERIFY_TLS(기본 1, 사내 CA면 경로) — 비밀값은 env 파일에만.
@@ -51,8 +50,8 @@ DB 엔진(RDB_ENGINE, 기본 mssql — 2026-10-07 EDW=Azure SQL Database(PaaS)=S
 Object Storage의 실제 값이 RDB가 적은 값과 다르면 받지 않고 거부·기록(output/parse/_source/rejected.jsonl) — 그 문서
 하나만 건너뛰고 나머지는 계속 받는다(크래시 안 함), 다음 실행이 다시 시도.
 
-스트리밍(백로그 X2, PARSE_STREAM=1): plan()은 대상 이름만 정하고(표본·제한 적용) 받지 않는다 — modules/parse/stream.py가
-fetch_one(name, dest)으로 한 건(또는 작은 묶음)씩 받아 처리한 뒤 바로 지운다. 묶음마다 다시 표본을 뽑으면(남은 것 중 top-N)
+plan()은 대상 이름만 정하고(표본·제한 적용) 받지 않는다 — fetch_one(name, dest)으로 한 건씩 받는다(스트리밍 파싱 호출부는
+op-08에 지움 — 지금은 시험만 부름). 묶음마다 다시 표본을 뽑으면(남은 것 중 top-N)
 표본이 흔들리므로(처리될수록 "남은 것"이 바뀜) 반드시 한 번만 호출해 이름 목록을 고정한다.
 """
 
@@ -800,9 +799,9 @@ def _rdb_resolve_spec(spec, state, limit, mode):
 
 def _rdb_plan(table, state, limit=0, mode="prod", cols=None, default_bucket=None, source_name=None):
     """RDB(표 또는 csv:)에서 대상 행을 질의 → (names, fetch_one(name,dest)→Path, state). plan()·resolve() 공용(AD44) —
-    resolve()는 이걸 부른 뒤 모든 이름을 즉시 받고, 스트리밍은 이름만 고정해 두고 fetch_one을 묶음마다 부른다.
+    resolve()는 이걸 부른 뒤 모든 이름을 즉시 받는다.
     받기 전 대조는 ETag가 있으면 ETag(head_object), 없으면 크기(ContentLength)로 — 불일치면 거부·기록하고 받지
-    않는다(그 문서만 건너뛰고 나머지는 계속, 독립 검토 BLOCK 1 — 호출부 resolve()·stream.py가 fetch_one 전체를
+    않는다(그 문서만 건너뛰고 나머지는 계속, 독립 검토 BLOCK 1 — 호출부 resolve()가 fetch_one 전체를
     try로 안 감싸면 크래시한다). cols·default_bucket·source_name(SI41) — sources.json 원천 하나를 가리키면 그
     columns·bucket·처리 기록(이름별 processed__<이름>.jsonl)을 쓰고, 여러 원천은 `_rdb_resolve_spec`이 이 함수를
     원천마다 불러 합친다(이름 충돌은 그쪽에서 구분).
@@ -1067,10 +1066,6 @@ def resolve(source, out, limit=0, mode="prod"):
     return src, names, state
 
 
-def _dir_size_bytes(p):
-    return sum(f.stat().st_size for f in Path(p).rglob("*") if f.is_file())
-
-
 def _record_sha_before_delete(state, local, done, field="sha256"):
     """지우기 전에 sha256을 manifest.jsonl에 남겨 둠(SI39 요건⑧ — 원본을 즉시 지워도 publish_parse(`modules/load/
     parsing_meta.py`)가 로컬 없이도 EDW 행을 쓸 수 있게). 못 읽으면(파일이 이미 없는 등) 그 문서만 건너뜀."""
@@ -1089,23 +1084,12 @@ def _record_sha_before_delete(state, local, done, field="sha256"):
         man_f.write_text("".join(json.dumps(v, ensure_ascii=False) + "\n" for v in man.values()), encoding="utf-8")
 
 
-def _mark_disk_cap(state, local, done):
-    """PARSE_KEEP_MAX_GB 상한에 걸려 보존을 포기하고 바로 지울 파일 — disk_cap_sha256 필드로 구분해서 남김(일반
-    sha256 필드와 달리 publish_parse가 이걸 보면 parse_status를 skipped_disk_cap으로 강제한다, 독립 보안 검토
-    MINOR 10-07)."""
-    _record_sha_before_delete(state, local, done, field="disk_cap_sha256")
-
-
 def finish(state, local, rep_index):
     """Object Storage에서 받은 원본: 대표 결과가 나온 문서는 처리 완료로 기록하고 로컬 원본·사본을 **바로** 지움
     (SI39 요건⑧, 2026-10-08 — publish_parse가 더는 원본을 올리지 않으므로 그걸 기다릴 이유가 없다. 옛
-    PARSE_KEEP_ORIGINALS(publish 전까지 보존)는 폐지). KEEP_LOCAL_ORIGINALS=1(디버그·샘플 작업 전용)만 영구 보존.
+    PARSE_KEEP_ORIGINALS(publish 전까지 보존)는 폐지 · 디버그 보존 KEEP_LOCAL_ORIGINALS는 op-08에 지움).
     지우기 전에 항상 sha256을 manifest에 남긴다(`_record_sha_before_delete`) — publish_parse(modules/load/
-    parsing_meta.py `plan()`)가 로컬 원본 없이도 이 값으로 EDW 행을 쓸 수 있게.
-    PARSE_KEEP_MAX_GB(선택, KEEP_LOCAL_ORIGINALS=1 전용 — 독립 보안 검토 MINOR 10-07, 디스크 보호): 보존 폴더
-    (`local`) 크기가 이 값(GB) 이상이면 경고하고 **이번 배치는 보존을 포기하고 그대로 지움**(ponytail: 이미 쌓인
-    옛 보존분을 되돌아가 비우지는 않음) — disk_cap_sha256으로 구분해 남긴다(publish_parse가 skipped_disk_cap으로
-    강제)."""
+    parsing_meta.py `plan()`)가 로컬 원본 없이도 이 값으로 EDW 행을 쓸 수 있게."""
     man_f = state / "manifest.jsonl"
     if not man_f.exists():
         return
@@ -1123,31 +1107,7 @@ def finish(state, local, rep_index):
         with _processed_path(state, src_name).open("a", encoding="utf-8") as f:
             for r in rs:
                 f.write(json.dumps({"key": r["key"], "etag": r["etag"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
-    keep_debug = pc.cfg().extract.cache.keep_local_originals  # S7c — 설정 객체(켜기 칸 on=("1",) — 옛 `== "1"`)
-    if keep_debug:
-        pc.checked(
-            "PARSE_KEEP_MAX_GB"
-        )  # 디스크 보호 상한 — 형식 틀리면 옛 float()처럼 실패(보존할 때만 읽던 옛 자리 그대로 · 조용히 꺼지지 않게 — S7c1 리뷰)
-    cap_gb = (
-        pc.cfg().extract.cache.parse_keep_max_gb
-    )  # S7c — 설정 객체(float, 없음·빈 글자 = None — 옛 글자 truthy: "0"도 상한 0으로 켜짐 → `is not None`)
-    disk_capped = False
-    if keep_debug and cap_gb is not None:
-        size_gb = _dir_size_bytes(local) / 1e9
-        if size_gb >= float(cap_gb):
-            print(
-                f"[source] 경고 — 보존 폴더 {local} {size_gb:.2f}GB ≥ 상한 PARSE_KEEP_MAX_GB={C.render(cap_gb)}GB "
-                "— 이번 배치는 보존 안 하고 그대로 지움(디스크 보호)",
-                flush=True,
-            )
-            _mark_disk_cap(state, local, done)
-            keep_debug = False
-            disk_capped = True
-    if keep_debug:
-        print(f"[source] 처리 완료 {len(done)}개 기록 · 원본 남김(KEEP_LOCAL_ORIGINALS=1, 디버그·샘플 작업 전용)", flush=True)
-        return
-    if not disk_capped:
-        _record_sha_before_delete(state, local, done)
+    _record_sha_before_delete(state, local, done)
     gone = 0
     for r in done:
         for p in (Path(local) / r["file_name"], Path(local).parent / "prepared" / r["file_name"]):
@@ -1186,8 +1146,7 @@ def plan(source, out, limit=0, mode="prod"):
 
         def fetch_one(name, dest):
             # GH1-02b — fetch_s3와 같은 패턴: ETag가 그대로면 생략, 받을 땐 임시 파일+os.replace(원자적, 실패 시
-            # 임시 파일 지움, _s3_download). 스트리밍은 묶음마다 dest(raw_dir)를 통째로 지우므로(stream.py
-            # _run_batches) 실제로는 매번 새로 받지만, 받다가 끊겨 반쪽 파일이 남는 일은 여기서도 똑같이 막아야 한다.
+            # 임시 파일 지움, _s3_download). 받다가 끊겨 반쪽 파일이 남는 일은 여기서도 똑같이 막아야 한다.
             o = by_name[name]
             etag = o["ETag"].strip('"')
             source_id = f"s3://{bucket}/{o['Key']}"

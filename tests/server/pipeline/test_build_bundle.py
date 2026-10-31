@@ -77,7 +77,7 @@ def selftest():
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
             warn_if_no_client_roster([{"client": None}, {"client": ""}])
-        assert "GLOSSARY_DIR" in buf.getvalue() and "WARNING" in buf.getvalue(), buf.getvalue()
+        assert "ops.paths.glossary_dir" in buf.getvalue() and "WARNING" in buf.getvalue(), buf.getvalue()
 
         buf = io.StringIO()  # 명부 없어도 client가 하나라도 있으면 경고 안 함
         with contextlib.redirect_stderr(buf):
@@ -208,8 +208,7 @@ def selftest():
     print("[selftest] 독립 검토 MINOR② fig_host(같은 쪽 → 가까운 쪽 → 첫 청크) 통과")
 
     # 독립 검토 MAJOR① · MINOR③·④ — main()의 실제 분기를 거쳐 확인: 빠진 그림도 seq를 소비해 그 뒤 청크의 seq(=chunk_key)가
-    # 어느 그림이 비었는지와 무관하게 고정 · image_ids는 같은 쪽 청크에 · 꺼짐(BUNDLE_KEEP_EMPTY_FIG=1)은 바이트 동일(복제 로직 없이
-    # figure_chunk()를 그대로 호출한 것과 일치) · meta.json의 figure_chunks_dropped는 켜졌을 때만.
+    # 어느 그림이 비었는지와 무관하게 고정 · image_ids는 같은 쪽 청크에 · meta.json에 figure_chunks_dropped.
     import tempfile
 
     def _ad21_fixture(mid_empty):
@@ -299,19 +298,17 @@ def selftest():
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
         return pd, sd, root / "output" / "bundle"
 
-    def _run(mid_empty, env_keep, chunk_head=True):
+    def _run(mid_empty):
         pd, sd, out = _ad21_fixture(mid_empty)
-        # S7c — 설정 객체(env 안 건드림) · CHUNK_HEAD: G9 머리말·n_terms 재계산은 AD21과 무관 — 끄고 figure_chunk() 그대로 비교(MINOR③④)
-        with pc.PIPE.env(BUNDLE_KEEP_EMPTY_FIG="1" if env_keep else "0", CHUNK_HEAD="1" if chunk_head else "0"):
-            # 엔진 구성은 파일로 명시(시험 전용 덮기 — 2b 전 기본값과 같은 git 파일). 서버 모드 이미지(RUN_ENV≠local)에서 판 번호 없이
-            # pc.stack()이 거부(종료 2)하던 것 — 이미지 관문 10-30
-            main(["--parse-dir", str(pd), "--src", str(sd), "--embed", "none", "--stack", str(STACK_FILE), "--out", str(out)])
+        # 엔진 구성은 파일로 명시(시험 전용 덮기 — 2b 전 기본값과 같은 git 파일). 서버 모드 이미지(RUN_ENV≠local)에서 판 번호 없이
+        # pc.stack()이 거부(종료 2)하던 것 — 이미지 관문 10-30
+        main(["--parse-dir", str(pd), "--src", str(sd), "--embed", "none", "--stack", str(STACK_FILE), "--out", str(out)])
         m = json.loads((out / "meta.json").read_text(encoding="utf-8"))
         cs = [json.loads(ln) for ln in (out / "chunks.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
         return m, cs, out
 
-    m_empty, cs_empty, out_empty = _run(mid_empty=True, env_keep=False)
-    m_full, cs_full, out_full = _run(mid_empty=False, env_keep=False)
+    m_empty, cs_empty, out_empty = _run(mid_empty=True)
+    m_full, cs_full, out_full = _run(mid_empty=False)
     text_n_empty = sum(1 for c in cs_empty if c.get("image_id") is None)
     text_n_full = sum(1 for c in cs_full if c.get("image_id") is None)
     assert text_n_empty == text_n_full  # 텍스트 청크 수는 그림 유무와 무관(두 run 입력 본문이 같음)
@@ -323,7 +320,7 @@ def selftest():
         fig_c_empty["seq"] == fig_c_full["seq"] == text_n_full + 2
     )  # MAJOR① — 가운데 그림 B가 비든 안 비든 C의 seq(=chunk_key)는 같음(A·B·C 중 3번째)
     assert len(cs_empty) == text_n_empty + 2 and len(cs_full) == text_n_full + 3  # B는 빠지고(기본) 안 비면 3개 다 들어감
-    assert m_empty["figure_chunks_dropped"] == 1 and m_full["figure_chunks_dropped"] == 0  # 둘 다 켜짐(기본) — 실제로 뺀 그림 수만 다름
+    assert m_empty["figure_chunks_dropped"] == 1 and m_full["figure_chunks_dropped"] == 0  # 실제로 뺀 그림 수
     hosts = [c for c in cs_empty if c.get("image_ids")]
     assert len(hosts) == 1 and hosts[0]["image_ids"] == [
         "d.pdf#p2#iB"
@@ -340,25 +337,8 @@ def selftest():
     assert cs_empty[by_id["d.pdf#p2#iC"]["chunk"]]["image_id"] == "d.pdf#p2#iC"
     assert cs_empty[by_id["d.pdf#p2#iB"]["chunk"]]["image_ids"] == ["d.pdf#p2#iB"]  # 빈 그림 B → host 텍스트 청크(hosts[0]과 같은 것)
     imgs_full = [json.loads(ln) for ln in (out_full / "images.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
-    assert all(r["rel"] == "figure_chunk" for r in imgs_full)  # BUNDLE_KEEP_EMPTY_FIG 없이도 안 빈 그림은 전부 자신의 청크
+    assert all(r["rel"] == "figure_chunk" for r in imgs_full)  # 안 빈 그림은 전부 자신의 청크
     print("[selftest] F8 — images.jsonl(doc_image·chunk_image 적재 원본) 생성·chunk/rel 연결 통과")
-
-    m_keep, cs_keep, out_keep = _run(mid_empty=True, env_keep=True, chunk_head=False)  # MINOR③④ — BUNDLE_KEEP_EMPTY_FIG=1(꺼짐)
-    assert "figure_chunks_dropped" not in m_keep  # 꺼짐 — meta.json에 새 키를 안 넣음(독립 검토 MINOR④)
-    text_n = sum(1 for c in cs_keep if c.get("image_id") is None)
-    expected = [
-        figure_chunk(0, text_n + i, r)
-        for i, r in enumerate(
-            [
-                json.loads(ln)
-                for ln in (out_keep.parent.parent / "parse" / "_images" / "index.jsonl").read_text(encoding="utf-8").splitlines()
-            ]
-        )
-    ]
-    assert [
-        c for c in cs_keep if c.get("image_id") is not None
-    ] == expected  # 복제 로직 없이 figure_chunk()를 그대로 쓴 것과 일치(바이트 동일)
-    print("[selftest] 독립 검토 MINOR③④ — BUNDLE_KEEP_EMPTY_FIG=1은 figure_chunk() 그대로(바이트 동일)·meta 새 키 없음 통과")
 
     docs2 = [
         {"doc_key": "c" * 64}

@@ -11,7 +11,6 @@ from common.core.contract import (
     make_chunk_key,
     uri_from_path,  # 원본 위치 규칙(모듈 계약)
 )
-from mcp_server import config as mc  # 설정 객체(mcp 칸 — S7d)
 from mcp_server.services.search import (
     clientscope as CS,  # BR50 고객 범위 단일 규칙(client_scope·allows, local.py·pgsearch.py·mcp_server.py와 공용)
 )
@@ -20,12 +19,6 @@ from mcp_server.services.search.terms import (  # 용어 사전(X3·X4, 구조�
     expand_query,
     vector_alias_text,
 )
-
-
-def evidence_gate_on():
-    """R3(AD42) SEARCH_EVIDENCE_GATE(기본 켬, =0으로 끔) — 단일 읽기 지점(mcp_server.py do_search도 이 함수를 씀).
-    켜지면 hits에 score 칸이 실리고(mcp_server.evidence_status의 근거), 꺼지면(=0) 예전처럼 score 없음(바이트 동일)."""
-    return mc.cfg().search.evidence_gate  # S7d — 설정 객체(켜기 칸 off=("0",) = 옛 != "0")
 
 
 class Retriever:
@@ -108,11 +101,11 @@ class Retriever:
         섞이는 것을 막음(S12). recency: 이 질의 1건만 docmeta.recency_rerank 모드를 강제(None이면 env, AG1 engine-qa
         보완 — 전역 env를 바꾸면 동시에 도는 다른 질의가 섞임, S12와 같은 원칙).
         client(AD38 — MCP search의 client 인자) = 질문에서 못 잡아도 강제로 더할 고객(이름 또는 이름 목록) — 용어 사전으로
-        잡힌 고객(SEARCH_CLIENT_FILTER)과 합쳐진다(BR50 — 범위 계산은 clientscope.client_scope 한 곳, local.py·pgsearch.py·
+        잡힌 고객과 합쳐진다(BR50 — 범위 계산은 clientscope.client_scope 한 곳, local.py·pgsearch.py·
         mcp_server.py와 공용). SEARCH_CLIENT_HARD=1이면 저장소 질의 단계에서 그 고객 문서만(고객 미상은 기본 포함 —
         SEARCH_CLIENT_STRICT=1이면 미상도 뺌) · 꺼짐(기본)이면 예전처럼 후보를 넓혀 앞으로만 올림(client 인자를 안 주면
         바이트 동일).
-        client_only(BR23, 기본 False — 안 쓰면 바이트 동일) = True면 q에서 자동 잡히는 고객(SEARCH_CLIENT_FILTER)을
+        client_only(BR23, 기본 False — 안 쓰면 바이트 동일) = True면 q에서 자동 잡히는 고객을
         무시하고 client 인자만으로 고객 집합을 정함 — 질문에 고객 2명이 같이 나올 때(비교) 한 쪽만 따로 떠서 돌리는
         하위 검색용(mcp_server.do_search BR23 엔티티 분해). SEARCH_CLIENT_HARD 꺼짐(기본)의 "후보 넓혀 앞으로만" 방식은
         q 전문이 여전히 다른 고객 이름까지 포함해 그 고객 후보가 넓힌 풀(n*5)에도 하나도 안 들면 그대로 못 잡으므로(실측
@@ -242,9 +235,9 @@ class Retriever:
                         "clients": CS.doc_clients(d.get("client"), d.get("clients")),
                         "contract_no": d.get("contract_no"),
                         "via": via.get(ci),
-                        **({"score": score.get(ci)} if evidence_gate_on() else {}),
+                        "score": score.get(ci),
                     }
-                )  # 꺼짐(=0)이면 예전처럼 score 없음(AD42 검토)
+                )
         return hits, (time.perf_counter() - t0) * 1000, {"expand_notes": expand_notes, "note": note}
 
     def clients(self):

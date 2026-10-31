@@ -7,8 +7,8 @@
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
 - 이유: 문서는 폴더, Object Storage, 회사 RDB 목록에서 온다.
-- 무엇: `input_source` = 폴더 · `s3://버킷/접두` · `rdb:csv:<경로>` · `rdb:<표>`. RDB 열 대응(`RDB_COL_*`), since/watermark 증분, 스트리밍(한 묶음 받기 → 파싱 → 지우기), 미리 받기(warm), 서버 원천 목록은 `struct.source_version`에 판으로 둔다.
-- 파일: `pipeline/extract/source.py`, `pipeline/extract/rdb_discover.py`, `pipeline/stream.py`, `resources/mappings/sources.json`.
+- 무엇: `input_source` = 폴더 · `s3://버킷/접두` · `rdb:csv:<경로>` · `rdb:<표>`. RDB 열 대응(`RDB_COL_*`), since/watermark 증분, 미리 받기(warm), 서버 원천 목록은 `struct.source_version`에 판으로 둔다.
+- 파일: `pipeline/extract/source.py`, `pipeline/extract/rdb_discover.py`, `resources/mappings/sources.json`.
 - Status: done
 
 <a id="pl-29"></a>
@@ -29,7 +29,7 @@
 <a id="pl-06"></a>
 ## pl-06 · 구조화 — 청크·메타데이터·임베딩
 - 이유: 검색에는 출처가 달린 청크와 메타데이터가 필요하다.
-- 무엇: 청크 나누기 structure(기본, 800자, 제목, 표는 통째) / fixed 512+64 / sentence / page, 큰 표는 25행씩. 요약(`EDW_SUMMARY_LLM=1`이면 LLM, 아니면 앞부분 — OpenViking 요약은 10-29에 지움). 사실(제품, 모달리티, 날짜, 단가, 금액, 통화, 배치). 고객·계약은 교차 확인된 것만 남긴다. 규칙 기반 지식 그래프(묶음에는 만들지만 PG에는 더 적재하지 않음 — [mcp.md#mc-12](mcp.md#mc-12)). 임베딩은 로컬(e5, bge-m3) 또는 내부 `api`.
+- 무엇: 청크 나누기 structure(기본, 800자, 제목, 표는 통째) / fixed 512+64 / sentence / page, 큰 표는 25행씩. 요약(앞부분 발췌 — OpenViking 요약은 10-29, LLM 요약은 op-08에 지움). 사실(제품, 모달리티, 날짜, 단가, 금액, 통화, 배치). 고객·계약은 교차 확인된 것만 남긴다. 규칙 기반 지식 그래프(묶음에는 만들지만 PG에는 더 적재하지 않음 — [mcp.md#mc-12](mcp.md#mc-12)). 임베딩은 로컬(e5, bge-m3) 또는 내부 `api`.
 - 파일: `pipeline/transform/structure/build_bundle.py`, `chunking.py`, `facts.py`, `draft_terms.py`, `common/ai/embed.py`.
 - Status: done
 
@@ -359,7 +359,6 @@
 
 ### 요건 없는 코드 — 남길지(앵커를 씀) 지울지([test.md#e2-18](test.md#e2-18))
 - 메일 첨부: `.eml`/`.msg` 첨부를 재귀 파싱(깊이 1, 20 MB, 10개)하고 인용 스레드 접기(`ATTACH_*`). `represent/attachments.py`.
-- 스트리밍 파싱 — 작은 묶음을 받아 파싱하고 원본을 바로 지움(`PARSE_STREAM=0` — 켜는 곳 없음, run_docs는 안 씀). `pipeline/stream.py`. op-08 브랜치(`feature/op08-settings-layout`)에서 지움 — 병합되면 이 줄을 뺀다.
 - 용어집 도구(약어 제안, EDW 마스터로 만드는 고객 목록). `transform/structure/glossary_suggest.py`, `gen_roster.py`. (위키 도구는 10-30에 지움 — [test.md#e2-18](test.md#e2-18).)
 - 밤 호스트 타이머와 trigger 연결(`NIGHTLY_*`, `CHAIN_STRUCTURE_URL`). `deploy/host/`, `pipeline/trigger_server.py`.
 - Object Storage 시험 업로드(MinIO). `common/check/os_put.py`.
@@ -370,9 +369,7 @@
 
 | 기능 | 스위치 = 기본값 | 필요한 것 |
 |---|---|---|
-| 스트리밍 파싱 | `PARSE_STREAM=0` | — (op-08 브랜치에서 지움 · 문서별 병렬 파이프라인 `PARSE_PARALLEL_PIPELINE`은 10-30 지움 — pl-35) |
 | 큰 표를 행으로 나누기 | `CHUNK_TABLE` 비움(표는 통째) | — |
-| LLM 요약 | `EDW_SUMMARY_LLM=0`(앞부분) | LLM |
 | 임베딩 | 이미지 기본 `PIPE_EMBED=api` | `EMBED_BASE_URL`, `EMBED_MODEL` |
 | Object Storage + `AI.ParsingMeta` 게시 | `night`, run_docs, 이미지 `publish` 단계에서 기본 실행(모두 `--apply`, `NIGHTLY_PUBLISH=1`) | `PM_BUCKET`, `common.connections.rdb` 쓰기 계정(`PM_BUCKET` 없으면 종료) |
 | 밤 일정 | `NIGHTLY_TIME` 비움 | 시각(HH:MM) |

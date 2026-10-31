@@ -10,6 +10,7 @@ import socket
 import urllib.parse
 import urllib.request
 
+from common.config import layout as L
 from common.config.settings import by_env, cfg, checked, external_models_allowed, guard_run_env
 
 _SUFFIX = (".local", ".internal", ".corp", ".lan")
@@ -87,7 +88,7 @@ def fake_llm():
         return False
     run = guard_run_env()
     if run is not None and run != "local":
-        raise RuntimeError(f"RUN_ENV={run} — 가짜 LLM 응답(common.dev.llm_fake)은 local 전용(서버에서 끔)")
+        raise RuntimeError(f"RUN_ENV={run} — 가짜 LLM 응답(settings.yaml {L.to_yaml('common.dev.llm_fake')})은 local 전용(서버에서 끔)")
     return True
 
 

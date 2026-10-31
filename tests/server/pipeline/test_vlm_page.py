@@ -198,11 +198,9 @@ def selftest():
 
             t2, provs2 = page_text(mixed)  # AD31 — 기본 켬: 2쪽(스캔 쪽)만 대상 — 1·3쪽은 안 부름
             assert t2 == "" and len(provs2) == 1 and provs2[0].get("error"), (t2, provs2)
-            with pc.PIPE.env(PARSE_PAGE_SCAN="0"):
-                assert page_text(mixed) == ("", [])  # 끄면(=0) 이전(기본 꺼짐 시절) 동작 — scan_pages 호출 0
         finally:
             _e1.__exit__(None, None, None)
-        print("[selftest] AD12·AD31 — page_signals·scan_pages·PARSE_PAGE_SCAN 기본 켬=스캔 쪽만 쪽 VLM 대상·0으로 끔=바이트 동일 통과")
+        print("[selftest] AD12·AD31 — page_signals·scan_pages·스캔 쪽만 쪽 VLM 대상 통과")
 
         # AD31 — 숨은 글자층(render_mode=3) 쪽: 시각은 정상 그림인데 그림과 무관한 보이지 않는 글자가 깔려 글자 수는
         # 차 있음(기존 ①chars<20 조건만으로는 스캔으로 못 잡음) → hidden_ratio 신호로 스캔 판정. 정상 글자 쪽은 그대로 아님.

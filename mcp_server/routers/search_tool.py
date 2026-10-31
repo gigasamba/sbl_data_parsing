@@ -26,7 +26,7 @@ def register(m):
     ) -> dict:
         """자연어 검색 + 하드 필터 통합(2026-10-20) — 세 가지 쓰임:
         · question만: 하이브리드 근거 검색(원문·원본 경로·쪽·줄·bbox·요약·고객·계약 번호·점수·via). methods: vector·bm25·id 중에서(기본 셋 다 —
-          그 밖의 값은 무시하고 notes에 표시). BM25는 용어 사전으로 질문을 확장(X3, QUERY_EXPAND=0이면 끔) — 적용되면 notes에 표시.
+          그 밖의 값은 무시하고 notes에 표시). BM25는 용어 사전으로 질문을 확장(X3) — 적용되면 notes에 표시.
         · 하드 필터만(question 없이 조건만): 조건에 정확히 맞는 문서 전부와 그 청크 전부를 점수 계산 없이 돌려준다 —
           {total_docs, total_chunks, truncated, docs:[{doc_id, file_name, sf_acc_name, division, service_type, project_code__c,
           chunks:[{chunk_id, page, seq, section, chunk_text, ...}]}]} · 문서 수 상한 limit(기본 100, 0이면 무제한 — 넘으면 잘리고
@@ -39,8 +39,7 @@ def register(m):
         question도 조건도 주지 않으면 {"error": ...}.
         그 외(기존 search 그대로) — decompose: 옛 입력(받기만 하고 무시 — 응답 subs는 늘 빈 목록) ·
         client(AD38): 하드 필터로도 쓰이고, SEARCH_CLIENT_HARD=1(기본 꺼짐)이면 저장소 질의 단계에서도 다른 고객을 뺌.
-        기본 켬(env, AD42, =0으로 끔): SEARCH_EVIDENCE_GATE → evidence_status(found/weak/none)·low_score 표시만 ·
-        SEARCH_AGG_ROUTE → 집계 질문이면 집계 결과를 근거 맨 앞에(via="aggregate") · SEARCH_AGG_LLM(기본 끔) 등 기존 동일.
+        evidence_status(found/weak/none)·low_score 표시만(AD42) · 집계 질문이면 집계 결과를 근거 맨 앞에(via="aggregate").
         근거마다 doc_type·version·supersedes_doc_id·is_deleted·contract_id·updated_at·company: RDB 문서 위치 메타(AD44)에
         그 문서가 있을 때만. index_id(AD41): 설정이 다른 색인 중 하나를 고름 — 없으면 기본 색인, 모르는 id면 {"error", "indexes"}."""
         return await _bg(

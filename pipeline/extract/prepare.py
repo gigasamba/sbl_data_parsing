@@ -13,7 +13,7 @@
 
 작은 기울기(1~5도) 보정은 하지 않는다 — 필요하면 튜닝 항목(AGENTS.md C11).
 
-AD18 — 방향 보정 빠르게(기본 켬, PREPARE_ROTATE_FAST=0으로 끄면 아래 없이 기존처럼 매 쪽 4방향 전부 계산):
+AD18 — 방향 보정 빠르게(늘 켬):
 쪽마다 먼저 "기대 각도"(문서 맨 앞 PREPARE_ROTATE_LEAD쪽이 전부 같은 각도로 정해지면 그 각도, 그 전엔 0도)와
 **그 반대(기대 각도+180도)** 두 방향만 축소 크기(PREPARE_ROTATE_PROBE_FAST, 기본 480px)로 점수를 재, 기대
 각도 쪽이 PREPARE_ROTATE_S0_MIN(기본 150) 이상이고 **반대보다 min_gain(기본 1.3)배 이상 앞설 때만** 그 각도로
@@ -270,10 +270,6 @@ def score(im, probe):
     return total
 
 
-def _rotate_fast():
-    return bool(pc.cfg().extract.prepare.rotate_fast)  # S7c — 설정 객체(켜기 칸 off=("0",) — 옛 `!= "0"`)
-
-
 def _rotate_lead():
     return max(1, pc.cfg().extract.prepare.rotate_lead)  # S7c — 설정 객체(기본 3 — 틀린 값은 옛 except처럼 기본값)
 
@@ -297,15 +293,13 @@ def best_angle(im, probe, min_gain, hint=0):
     경우(0 vs 180)만 가로 글상자로 오인될 수 있고, 90·270도는 가로·세로가 바뀌어 글줄이 세로 상자가
     되므로 그 필터에 거의 안 걸려(실측상 0 가까운 값) hint가 0·180 중 하나여도 90·270과 혼동될 위험은
     낮다 — hint가 90·270이어도 마찬가지로 그 반대(270·90)만 보면 된다. 그래도 확신 없으면(문턱 또는 반대
-    비교 중 하나라도 실패) 기존과 완전히 같은 4방향 전체 계산으로 떨어진다(정확도 불변, 속도만 다름).
-    PREPARE_ROTATE_FAST=0이면 이 지름길 자체를 안 써 바이트까지 기존과 동일."""
-    if _rotate_fast():
-        fp = min(probe, _rotate_probe_fast())
-        opp = (hint + 180) % 360
-        s_hint = score(im.rotate(hint, expand=True) if hint else im, fp)
-        s_opp = score(im.rotate(opp, expand=True), fp)
-        if s_hint >= _rotate_s0_min() and s_hint >= s_opp * min_gain:
-            return hint, {hint: s_hint, opp: s_opp}
+    비교 중 하나라도 실패) 기존과 완전히 같은 4방향 전체 계산으로 떨어진다(정확도 불변, 속도만 다름)."""
+    fp = min(probe, _rotate_probe_fast())
+    opp = (hint + 180) % 360
+    s_hint = score(im.rotate(hint, expand=True) if hint else im, fp)
+    s_opp = score(im.rotate(opp, expand=True), fp)
+    if s_hint >= _rotate_s0_min() and s_hint >= s_opp * min_gain:
+        return hint, {hint: s_hint, opp: s_opp}
     s = {a: score(im.rotate(a, expand=True), probe) for a in (0, 90, 180, 270)}
     a = max(s, key=s.get)
     return (a if s[a] >= s[0] * min_gain and s[a] > 0 else 0), s
@@ -385,9 +379,7 @@ def main():
     if out.resolve() == src.resolve():  # out은 만들어 내는 폴더(지우고 다시 씀) — 원본 폴더면 원본이 지워짐
         raise SystemExit("--out이 원본 폴더와 같음 — 다른 폴더를 지정")
     out.mkdir(parents=True, exist_ok=True)
-    skipped_log = Path(
-        pc.cfg().extract.skipped_log or (out / "skipped.jsonl")
-    )  # S7c — 설정 객체   # D4 — 스트리밍은 stream.py가 output/parse/_source로 돌림(--out이 지워지는 임시 폴더라)
+    skipped_log = Path(pc.cfg().extract.skipped_log or (out / "skipped.jsonl"))  # S7c — 설정 객체
     only = {x.strip() for x in Path(a.only).read_text(encoding="utf-8").splitlines() if x.strip()} if a.only else None
     files = sorted(p for p in src.iterdir() if p.is_file() and p.name != ".gitkeep" and (only is None or p.name in only))
     old = {}

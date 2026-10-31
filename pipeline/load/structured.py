@@ -17,18 +17,9 @@
       doc_location.csv(있을 때만 — AD45①·④, 열은 valid_env/unstructured/synth-meta-rdb·synth-edw doc_location.csv와 같음) ·
       문서 쪼갠 텍스트 = 구조화 묶음 docs.jsonl(full_text) 또는 파싱 인계 폴더 _rep/<문서>.json(text).
 
-AD23 — 표 전 칸 DB 적재(doc_table·doc_cell, common/structdb.py TABLE_SCHEMA·ensure_table_schema()만 생성, load·link가
-쓰는 ensure_schema()와는 분리 — AD16 BLOCK 이력과 같은 게이트): `tables --rep <_rep 폴더>`가 각 문서의
-rep["tables_std"](modules/parse/post/table_std.py, PARSE_TABLE_STD 기본 켬)를 읽어 표 1개 = doc_table 1행 +
-칸(머리글 포함)마다 doc_cell 1행으로 적재한다(값은 common.core.text.normalize_value로 정규화한 열도 함께 — 공백·대소문자
-무시 조회용). 근거 MCP가 표 칸 질문에 쓸 조회는 `common/structdb.py`의 `find_table_cells()`·`find_table_row()`
-(모듈 경계상 modules/load·modules/search 둘 다 쓸 수 있는 곳 — 여기선 호환용 재노출만) · 검색 쪽 라우팅은
-`modules/search/aggregate.py`의 `table_cell_question()`·`table_cell_list()`(AD23 leftover).
-
 명령:
   load --csv-dir <폴더> [--db <경로>]            contract_master·client_master 적재(같은 키는 덮어씀 — 재실행 안전)
   link (--bundle <묶음> | --rep <_rep 폴더>) [--db <경로>]   문서↔계약 연결 → doc_contract_link
-  tables --rep <_rep 폴더> [--db <경로>]         AD23 — tables_std → doc_table·doc_cell(같은 table_key는 다시 지우고 적재 — 재실행 안전)
 """
 
 import argparse
@@ -42,7 +33,6 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[0]  # dev/
 from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
 from common.core.terms import _aliases, match_clients, modalities  # noqa: E402 — 고객 명부·모달리티(검색과 같은 규칙, DT1 c1: 용어집 modality_code 우선)
-from common.core.text import normalize_value  # noqa: E402 — AD23 표 칸 값 정규화(검색·사실 추출과 같은 규칙, 기존 정규화 함수 재사용)
 from common.store import structdb as SDB  # noqa: E402
 
 CONTRACT_COLS = [
@@ -241,8 +231,7 @@ def docs_from_bundle(bundle_dir):
 
 
 def docs_from_rep(rep_dir):
-    """파싱 인계 폴더 _rep/<문서>.json → [{doc_key, text, file_name, tables_std}](구조화 전에도 연결·표 적재 가능).
-    tables_std(AD23)는 top-level 칸(modules/parse/represent.py가 `rep["tables_std"] = ...`로 둠) — 없으면 빈 목록."""
+    """파싱 인계 폴더 _rep/<문서>.json → [{doc_key, text, file_name}](구조화 전에도 연결 가능)."""
     out = []
     for f in sorted(Path(rep_dir).glob("*.json")):
         if f.name == "index.json":
@@ -254,58 +243,9 @@ def docs_from_rep(rep_dir):
                 "doc_key": src.get("doc_key") or f.stem,
                 "text": j.get("text") or "",
                 "file_name": f.stem,
-                "tables_std": j.get("tables_std") or [],
             }
         )
     return out
-
-
-# ── AD23: tables_std → doc_table·doc_cell ──────────────────────────
-def load_tables_docs(db, docs):
-    """tables_std(rep.tables_std, table_std.build_tables 형식: id·page·source_engine·header·rows·merged)를
-    doc_table 1행(표마다) + doc_cell(머리글 포함, 칸마다) 행으로 적재한다. db는 SDB.ensure_table_schema(db)가
-    이미 돈 연결(이 함수는 게이트를 안 침 — AD16 BLOCK과 같은 이유로 _main_cmd의 `tables` 명령에서만 호출).
-    재실행 안전: 같은 table_key(doc_key:표id)의 doc_cell을 먼저 지우고 다시 쓴다(doc_table은 INSERT OR REPLACE).
-    칸 값은 common.core.text.normalize_value로 정규화한 열(value_norm)도 같이 넣어 공백·대소문자 무시 조회가 되게 한다."""
-    now = dt.datetime.now().isoformat(timespec="seconds")
-    n_tables = n_cells = 0
-    for d in docs:
-        for t in d.get("tables_std") or []:
-            table_key = f"{d['doc_key']}:{t['id']}"
-            header, rows = t.get("header") or [], t.get("rows") or []
-            db.execute("DELETE FROM doc_cell WHERE table_key=?", (table_key,))
-            db.execute(
-                "INSERT OR REPLACE INTO doc_table "
-                "(table_key, doc_key, table_id, page, source_engine, n_rows, n_cols, header_json, merged_json, created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (
-                    table_key,
-                    d["doc_key"],
-                    t["id"],
-                    t.get("page"),
-                    t.get("source_engine"),
-                    len(rows),
-                    len(header),
-                    json.dumps(header, ensure_ascii=False),
-                    json.dumps(t.get("merged") or [], ensure_ascii=False),
-                    now,
-                ),
-            )
-            cells = [(table_key, 0, ci, h, h, normalize_value(h)) for ci, h in enumerate(header)]
-            for ri, row in enumerate(rows, start=1):
-                for ci, v in enumerate(row):
-                    label = header[ci] if ci < len(header) else None
-                    cells.append((table_key, ri, ci, label, v, normalize_value(v)))
-            db.executemany("INSERT INTO doc_cell (table_key, row_idx, col_idx, col_label, value, value_norm) VALUES (?,?,?,?,?,?)", cells)
-            n_tables += 1
-            n_cells += len(cells)
-    db.commit()
-    return {"tables": n_tables, "cells": n_cells}
-
-
-# AD23 leftover — find_table_cells()는 모듈 경계상 modules/search(aggregate.py)도 써야 해서 common/structdb.py로
-# 옮겼다(적재·집계 둘 다 common만 보는 기존 구조, ①모듈 경계). 여기서는 호환용 재노출만.
-find_table_cells = SDB.find_table_cells
 
 
 def link_docs(db, docs):
@@ -333,7 +273,7 @@ def link_docs(db, docs):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", nargs="?", choices=["load", "link", "tables"])
+    ap.add_argument("cmd", nargs="?", choices=["load", "link"])
     ap.add_argument("--csv-dir")
     ap.add_argument("--bundle")
     ap.add_argument("--rep")
@@ -380,18 +320,8 @@ def _main_cmd(a):
             out["notes"] = db.notes
         print(json.dumps(out, ensure_ascii=False))
         db.close()
-    elif a.cmd == "tables":
-        if not a.rep:
-            raise SystemExit("--rep 필요")
-        db = _open(a.db)
-        SDB.ensure_table_schema(db)  # AD23 — load·link의 ensure_schema()와 분리된 게이트(AD16 BLOCK 이력)
-        out = load_tables_docs(db, docs_from_rep(a.rep))
-        if db.notes:
-            out = {**out, "notes": db.notes}
-        print(json.dumps(out, ensure_ascii=False))
-        db.close()
     else:
-        raise SystemExit("cmd 필요: load|link|tables")
+        raise SystemExit("cmd 필요: load|link")
 
 
 if __name__ == "__main__":

@@ -129,9 +129,7 @@ def night(a):
     vlm_conc = RS.vlm_page_concurrency(a.workers, a.vlm_concurrency)  # 문서 동시 수 × 쪽 동시 수가 VLM_MAX_CONCURRENCY를 넘지 않게
     from common.core.paths import child_env
 
-    night_names = dict(
-        VLM_CONCURRENCY=str(vlm_conc), EDW_SUMMARY_LLM="0", LLM_BASE_URL=None
-    )  # 야간 배치에서는 LLM 호출 차단(그래프·요약·답변 모두)
+    night_names = dict(VLM_CONCURRENCY=str(vlm_conc), LLM_BASE_URL=None)  # 야간 배치에서는 LLM 호출 차단(그래프·답변 모두)
     env = C.child_env(child_env(), **night_names)  # 설정 이름은 덮기 파일로(S7e3 B-1 — env dict의 설정 이름은 자식이 안 읽음)
     log, t0 = [], time.time()
     stopped = None
@@ -203,7 +201,6 @@ def night(a):
             else:
                 pm = read_mark("parse") or {}
                 write_mark("structure", from_run=pm.get("run_id"), by="night")
-                load_tables_db(env)
         targets = [("pipeline.load.pgvector_load", "deploy"), ("pipeline.load.pgvector_load", "load")] if a.pg else []
         if targets and not stopped:
             for args in map(list, targets):
@@ -507,39 +504,6 @@ def write_mark(name, **kw):
     print(f"[{name}] 끝 표시 → {MARK[name]} (run_id {m['run_id']})", flush=True)
 
 
-def load_tables_db(env=None):
-    """AD23 leftover — 구조화 뒤 _rep의 tables_std를 doc_table·doc_cell로(modules/load/structured.py tables 명령,
-    find_table_cells·aggregate.table_cell_list가 쓸 데이터). X1(로컬 정형 저장소) 옵트인이라 STRUCT_BACKEND·
-    STRUCT_DB 둘 다 없으면 건너뜀(기존과 바이트 동일 — 그 둘을 안 쓰면 do_aggregate().struct()도 안 돌아 표 칸
-    질문 라우팅 자체가 꺼져 있음). PARSE_TABLE_DB=0이면 꺼짐(기본 켬, OP11). _rep가 아직 없으면 건너뜀.
-    재실행 안전(structured.py load_tables_docs가 같은 table_key를 지우고 다시 씀) — 보조 기능(X1처럼, 서버
-    runbook의 load·link와 같은 결합도)이라 실패해도 로그만 남기고 삼킨다(engine-qa BLOCK① — structure·night·
-    run-stack 전체를 절대 막지 않음, 값은 안 돌려줌)."""
-    if not pc.cfg().transform.represent.table_db or not (
-        C.given("STRUCT_BACKEND") or C.given("STRUCT_DB")
-    ):  # S7c — given: 준 값만(STRUCT_BACKEND 기본 pg는 준 값이 아님)
-        return
-    rep = OUT / "parse" / "_rep"
-    if not rep.exists():
-        return
-    try:
-        from common.core import resources as RS
-        from common.core.paths import child_env
-
-        rc = RS.gated_popen(
-            [PY, "-m", "pipeline.load.structured", "tables", "--rep", str(rep)], cwd=APP_ROOT, env=env or child_env()
-        ).wait()  # child_env() — PYTHONPATH(deploy/) 보장(env=None 기본 호출 포함) · cwd=APP_ROOT — 위 sh()와 같은 이유
-        print(
-            f"[tables] doc_table·doc_cell 적재(AD23) — 종료 코드 {rc}" + ("" if rc == 0 else " (집계·검색은 그대로, 표 칸 질문만 영향)"),
-            flush=True,
-        )
-    except Exception as e:
-        print(
-            f"[tables] doc_table·doc_cell 적재 실패(무시 — 집계·검색·structure·night·run-stack은 계속) {type(e).__name__}: {e}", flush=True
-        )
-    return
-
-
 def need(prev, name, force, extra=None):
     """앞 모듈 끝 표시 확인 → 이번 모듈이 할 일이 있는지. 없으면 종료 코드 3(앞 모듈 먼저), 이미 처리했으면 None(건너뜀).
     extra(GH1-06) — 대상·설정 지문(host:port/db/schema·code_fp 등, 비밀값은 안 들어감): run_id가 같아도
@@ -659,19 +623,14 @@ def parse_module(a):
         "%Y%m%d-%H%M%S"
     )  # env 남김 — 내부 신호(5-3 H) · SI23 — run_all·_DONE.json이 같은 id를 쓰게(run_board가 이번 실행만 거르는 기준)
     os.environ["PARSE_RUN_ID"] = (
-        run_id  # env 남김 — 하위 프로세스·엔진에 넘김 · 이후 모든 하위 호출(dedup·prepare·run_all·streaming)이 os.environ 상속으로 받음
+        run_id  # env 남김 — 하위 프로세스·엔진에 넘김 · 이후 모든 하위 호출(dedup·prepare·run_all)이 os.environ 상속으로 받음
     )
     st = _stack()
     engines = a.engines or ",".join(_engines_of(st))
     _set_engine_scope_default(a.engines)  # PE1(2026-10-07) — 생산 기본 stack(무거움 해소), 명시 --engines·실험 경로는 영향 없음
-    # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) — 아래 갈래는 스트리밍·일괄만
-    streaming = bool(a.source) and pc.cfg().extract.stream.stream  # 백로그 X2 — 묶음(기본 1건)씩 받아 처리 후 즉시 지움
+    # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) · 스트리밍 파싱은 op-08에 지움
     lim, src_info = [], None
-    if streaming:
-        from pipeline import stream as STREAM
-
-        STREAM.run(a, engines)  # 원본·사본·엔진별 중간 결과는 묶음마다 이미 지움(try/finally)
-    elif a.source:  # 문서 위치: 같은 서버 폴더 → Object Storage 몇 건 → 전체(사용자 10-02)
+    if a.source:  # 문서 위치: 같은 서버 폴더 → Object Storage 몇 건 → 전체(사용자 10-02)
         from pipeline.extract import source as SRC
 
         local, names, state = SRC.resolve(a.source, OUT, a.source_limit, a.mode)
@@ -700,54 +659,49 @@ def parse_module(a):
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)
         lim = ["--docs-from", only]
-    if not streaming:
-        from common.core import resources as RS
+    from common.core import resources as RS
 
-        vlm_conc = RS.vlm_page_concurrency(a.workers, a.vlm_concurrency)  # 문서 동시 수 × 쪽 동시 수가 VLM_MAX_CONCURRENCY를 넘지 않게
-        from common.core.paths import child_env
+    vlm_conc = RS.vlm_page_concurrency(a.workers, a.vlm_concurrency)  # 문서 동시 수 × 쪽 동시 수가 VLM_MAX_CONCURRENCY를 넘지 않게
+    from common.core.paths import child_env
 
-        env = C.child_env(
-            child_env(), VLM_CONCURRENCY=str(vlm_conc), LLM_BASE_URL=None
-        )  # 파싱 모듈은 LLM을 부르지 않음 — 덮기 파일(S7e3 B-1)
-        if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
-            names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
-            new = _registry_unparsed(names)  # pl-32 — 문서 대장에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
-            pick = new[: a.max_new]
-            f = OUT / "parse" / "_batch_docs.txt"
-            f.parent.mkdir(parents=True, exist_ok=True)
-            if lim:  # --source 선택과 겹치는 것만
-                sel_names = set(Path(lim[1]).read_text(encoding="utf-8").splitlines())
-                pick = [n for n in pick if n in sel_names]
-            f.write_text("\n".join(pick) + "\n", encoding="utf-8")
-            lim = ["--docs-from", f]
-            print(
-                f"[parse] 새·실패 문서 {min(len(new), a.max_new)}/{len(new)}개(PARSE_MAX_NEW {a.max_new}) — 나머지는 다음 실행", flush=True
-            )
-        args = [
-            "pipeline.extract.run_all",
-            "--src",
-            a.src,
-            "--out",
-            OUT / "parse",
-            "--procs",
-            a.procs,
-            "--workers",
-            a.workers,
-            "--engines",
-            engines,
-            *lim,
-        ]
-        if _run_until(args, env, _left(a) - 120) is None:
-            raise SystemExit(75)  # 마감 — 끝 표시 안 바꿈, 다음 실행이 이어 감
-        _tstep("t_parse")
-        for args in (
-            ["pipeline.transform.represent.parse_qa", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
-            ["pipeline.transform.represent.represent", *_stack_arg(), "--src", a.src, "--parse-dir", OUT / "parse"],
-        ):
-            rc = _run_until(args, env, _left(a) - 60)
-            _tstep("t_" + args[0].rsplit(".", 1)[-1])  # 2026-10-22 — qa·represent 분리 계측(docflow 기타 분해)
-            if rc != 0:
-                raise SystemExit(75 if rc is None else rc)
+    env = C.child_env(child_env(), VLM_CONCURRENCY=str(vlm_conc), LLM_BASE_URL=None)  # 파싱 모듈은 LLM을 부르지 않음 — 덮기 파일(S7e3 B-1)
+    if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
+        names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
+        new = _registry_unparsed(names)  # pl-32 — 문서 대장에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
+        pick = new[: a.max_new]
+        f = OUT / "parse" / "_batch_docs.txt"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        if lim:  # --source 선택과 겹치는 것만
+            sel_names = set(Path(lim[1]).read_text(encoding="utf-8").splitlines())
+            pick = [n for n in pick if n in sel_names]
+        f.write_text("\n".join(pick) + "\n", encoding="utf-8")
+        lim = ["--docs-from", f]
+        print(f"[parse] 새·실패 문서 {min(len(new), a.max_new)}/{len(new)}개(PARSE_MAX_NEW {a.max_new}) — 나머지는 다음 실행", flush=True)
+    args = [
+        "pipeline.extract.run_all",
+        "--src",
+        a.src,
+        "--out",
+        OUT / "parse",
+        "--procs",
+        a.procs,
+        "--workers",
+        a.workers,
+        "--engines",
+        engines,
+        *lim,
+    ]
+    if _run_until(args, env, _left(a) - 120) is None:
+        raise SystemExit(75)  # 마감 — 끝 표시 안 바꿈, 다음 실행이 이어 감
+    _tstep("t_parse")
+    for args in (
+        ["pipeline.transform.represent.parse_qa", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
+        ["pipeline.transform.represent.represent", *_stack_arg(), "--src", a.src, "--parse-dir", OUT / "parse"],
+    ):
+        rc = _run_until(args, env, _left(a) - 60)
+        _tstep("t_" + args[0].rsplit(".", 1)[-1])  # 2026-10-22 — qa·represent 분리 계측(docflow 기타 분해)
+        if rc != 0:
+            raise SystemExit(75 if rc is None else rc)
     import hashlib
 
     print(f"[docflow-step] {_tdone()}", flush=True)  # 2026-10-22 — resolve~represent까지 docflow 기타 분해 로그
@@ -783,7 +737,7 @@ def parse_module(a):
         rep_ok=sum(1 for r in idx if r.get("engine")),
         run_id=run_id,
     )
-    if not streaming and src_info:  # 스트리밍은 묶음마다 이미 지웠음(SRC.mark_done)
+    if src_info:
         from pipeline.extract import source as SRC
 
         if SRC.is_remote(a.source):
@@ -850,9 +804,7 @@ def structure_module(a):
         raise SystemExit(3)
     from common.core.paths import child_env
 
-    env = C.child_env(
-        child_env(), **({"EDW_SUMMARY_LLM": "0"} if a.deadline else {})
-    )  # 새벽 배치(마감 지정)면 LLM 요약 안 함 — night와 같게(덮기 파일 — S7e3 B-1)
+    env = child_env()
     args = [
         "pipeline.transform.structure.build_bundle",
         "--src",
@@ -877,7 +829,6 @@ def structure_module(a):
         embed_model=meta.get("embed_model"),
         extra=_structure_extra(embed),
     )
-    load_tables_db(env)
 
 
 def _pg_dest_fp():
@@ -952,7 +903,6 @@ def run_stack(a):
         *_stack_arg(),
         *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
     )
-    load_tables_db()
     if a.pg:
         sh("pipeline.load.pgvector_load", "deploy")
         sh("pipeline.load.pgvector_load", "load", *(["--replace"] if a.replace else []))  # 더하고 고치기만(pl-13 — 지우지 않음)
@@ -1021,7 +971,7 @@ def _case_settings():
         import tempfile
 
         fd, path = tempfile.mkstemp(prefix="case_settings_", suffix=".yaml")
-        os.write(fd, b"common:\n  run_env: local\n")
+        os.write(fd, b"required:\n  env:\n    run_env: local\n")
         os.close(fd)
         _CASE_ENVS["file"] = path
     return _CASE_ENVS["file"]

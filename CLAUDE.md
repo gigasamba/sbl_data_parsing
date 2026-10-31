@@ -60,7 +60,7 @@
 - **새 설정 항목을 추가할 때:** 해당 섹션의 모델(`common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`)에 항목·설명·기본값·옛 env 이름(alias)을 넣는다 → `python -m common.config.sample`로 sample을 다시 만든다 → `python -m common.config.keyscan --check`를 실행한다 → 운영에 영향이 있으면 [docs/operations/env-guide.md](docs/operations/env-guide.md)와 `refactor.md`에 적는다.
 - 기본값은 코드에, 환경마다 다른 값은 settings.yaml에 둔다. 비워 둔 항목은 코드 기본값을 쓴다.
 - 자식 프로세스에 값을 넘길 때는 env dict가 아니라 `settings.child_env(base, X=…)`(그 자식에게만) 또는 `settings.put(X=…)`(현재 프로세스와 이후 자식 모두)를 쓴다. 한 번만 다른 값으로 실행할 때는 명령 인자 `--set 이름=값`을 쓴다(진입 모듈에서 `setarg.apply()`). PC에서는 오버레이 설정 파일 `python -m common.config.overrides`도 쓸 수 있다.
-- `RUN_ENV`(`common.run_env`)는 `local`, `dev`, `prd` 중 하나다(`stage`는 10-29에 없앰 — 입력하면 시작 거부). 서버(dev, prd)는 외부 모델 호출을 거부하고, `common.dev.llm_fake`(가짜 LLM 응답)가 켜져 있으면 시작하지 않으며, 설정 파일을 읽지 못하면 시작하지 않는다. 외부 모델·가짜 LLM은 `local`에서만 쓴다. PC 전용 분기는 `paths.LOCAL_RUN` 하나로만 가른다.
+- `RUN_ENV`(`required.env.run_env`)는 `local`, `dev`, `prd` 중 하나다(`stage`는 10-29에 없앰 — 입력하면 시작 거부). 서버(dev, prd)는 외부 모델 호출을 거부하고, `dev.llm_fake`(가짜 LLM 응답)가 켜져 있으면 시작하지 않으며, 설정 파일을 읽지 못하면 시작하지 않는다. 외부 모델·가짜 LLM은 `local`에서만 쓴다. PC 전용 분기는 `paths.LOCAL_RUN` 하나로만 가른다.
 - 비밀값은 문서, 로그, 커밋, 채팅, 오류 메시지에 쓰지 않는다. 화면에 키를 출력하지 않는다.
 
 ---
@@ -130,7 +130,7 @@ uv pip install --python .venv/bin/python -r deploy/docker/requirements-core.txt 
 export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자식 프로세스가 다른 폴더에서 실행될 때도 찾도록 절대 경로)
 .venv/bin/python -m pipeline.config   # 어느 settings.yaml을 읽는지와 요약(비밀값은 가림)
 ```
-- 루트 `settings.yaml`에는 `common.run_env: local`, 전용 PG 접속 정보, `no_paid_calls: true`, 임베딩 모델과 키, `store.run_mode: prod`, (부하가 높은 PC라면) `runtime.cpu_max_load`를 둔다. 예시는 README §4-2에 있다.
+- 루트 `settings.yaml`에는 `required.env.run_env: local`·`required.env.run_mode: prod`, 전용 PG 접속 정보(`required.pg`), 임베딩 모델과 키(`required.embed`), `no_paid_calls: true`, (부하가 높은 PC라면) `tuning.ops.runtime.cpu_max_load`를 둔다. 예시는 README §4-2에 있다.
 - 전용 pgvector 컨테이너(PG 16 + pgvector, 예: `127.0.0.1:55433`)를 쓴다. ⚠️ PG 접속 항목을 비워 두면 코드가 `docker ps`로 찾은 아무 pgvector에나 연결한다. 항상 적어 둔다. 다른 작업의 DB와 포트를 쓰지 않는다.
 - 백그라운드 프로세스는 PID를 파일에 남기고 **PID로만** 종료한다(`pkill -f` 패턴 금지).
 - 새 PG라면 처음 한 번 `python -m common.store.db.dbtool up --target struct`를 실행한다(테이블은 마이그레이션이 만든다).
@@ -161,7 +161,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. 실행마다 다른 값은 `--set`(파이프라인 진입점)이나 오버레이 설정 파일(`mcp_server.main`, `ask`처럼 `--set`을 받지 않는 명령)로 준다. 테스트 문서는 `valid_env/object_storage/{SFDC,CRMS}/`에 있고(문서 목록은 README §4-4), 임베딩 캐시는 `output/edw/embed_cache.sqlite`다(같은 청크는 다시 호출하지 않는다 — 실제 호출을 확인하려면 `EMBED_CACHE=<빈 sqlite>`).
 
 ### 6-6. 검증 페이지와 이미지 빌드
-- 검증 페이지: `validation/search_ui/start_mcp.sh`와 `start_ui.sh`로 띄운다(설정은 루트 `settings.yaml` 하나 — `mcp` 섹션, `common.paths.mcp_bundle`, 외부 임베딩 스위치 `no_paid_calls`). 주소는 http://127.0.0.1:8791 이다. 자세한 내용은 README §4-6.
+- 검증 페이지: `validation/search_ui/start_mcp.sh`와 `start_ui.sh`로 띄운다(설정은 루트 `settings.yaml` 하나 — `search.server`, `dev.mcp`, `ops.paths.mcp_bundle`, 외부 임베딩 스위치 `no_paid_calls` — README §4-2 예시). 주소는 http://127.0.0.1:8791 이다. 자세한 내용은 README §4-6.
 - 서버에 올릴 이미지를 빌드하기 전에 `assets/`를 채운다(`PYTHONPATH=. python deploy/release/assets.py pack` — [release-and-patch §5-6](docs/operations/release-and-patch.md#5-6-반입-자산assets-준비--이미지-빌드-전)).
 - 이미지: `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh` → `bash deploy/release/selftest_gate.sh docker run --rm data-pipeline:<태그> selftest`(판정은 종료 코드가 아니라 `[판정]` 줄로 한다). PC 시험 빌드는 태그를 작업마다 새로 붙인다(TAG를 빼면 `data-pipeline:<VERSION>` — 배포용 버전 태그이고, 이미 있으면 `build_ship.sh`가 멈춘다). push와 서버 배포는 사람이 한다.
 - **배포 단계마다 이미지와 코드의 구성이 다르다**(README §5-0). ① PC(local) → 개발 서버(dev): 코드가 없는 실행 이미지(`IMAGE_TARGET=pipeline-runtime|mcp-runtime`) + PC 커밋의 코드 묶음을 개발 서버 코드 폴더(`CODE_DIR`/`live`)로 마운트한다. ② 개발 서버 → 운영 서버(prd): 개발 서버에서 `deploy/release/bake.sh`로 같은 실행 이미지 + 시험한 코드 폴더를 묶어 코드가 든 이미지를 만든다(코드 폴더 없이 실행). Dockerfile의 코드 포함 타깃(`pipeline`·`mcp`)은 PC 시험과 비상용이다.

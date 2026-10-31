@@ -23,7 +23,7 @@ DEFAULTS = {
     "summary": "auto",
 }
 EMBEDS = ("bge-m3", "e5-small", "e5-base", "api", "none")
-SUMMARIES = ("auto", "lead", "llm")
+SUMMARIES = ("auto", "lead")  # llm은 op-08에 지움
 
 
 def normalize(conf):

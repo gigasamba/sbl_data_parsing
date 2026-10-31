@@ -51,6 +51,7 @@ EXCLUDED_FILES = (
     "config/boot.py",  # 컨테이너 시작 설정(S7e2 — entrypoint의 RUN_ENV 관문·셸 칸·라이브러리 env) — 운영 도구
     "config/overrides.py",  # 덮기 파일 만들기(S7e2 — PC 한 번 실행) — 운영 도구
     "config/setarg.py",  # 명령 인자 --set 이름=값(S9 Step A — 한 번 실행 덮기, 서버 포함) — 운영 설정, 인계 내용과 무관
+    "config/layout.py",  # settings.yaml 칸 자리 ↔ 모델 경로(op-08 ②) — 운영 설정, 인계 내용과 무관
     "config/keyscan.py",  # 설정 키 모으기(S7a) — 개발 점검 도구, 인계 내용과 무관
     "config/settings.py",  # settings.yaml 읽기·common 절 모델(S7a, D-015) — 운영 설정, 인계 내용과 무관
     "config/export.py",  # 설정 절 → KEY=VALUE(셸·compose 다리, S7a) — 운영 도구

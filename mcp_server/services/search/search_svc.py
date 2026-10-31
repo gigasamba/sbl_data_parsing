@@ -121,8 +121,6 @@ def do_search(
     if hard:
         scope, scope_docs = _hard_filter_scope(hard)
         if scope_docs == 0:  # 조건에 맞는 문서가 없음 — 검색할 범위 자체가 없다(빠른 반환)
-            from mcp_server.services.search.retriever import evidence_gate_on
-
             ms = (time.perf_counter() - t0) * 1000
             return cap(
                 {
@@ -134,7 +132,7 @@ def do_search(
                     "evidence": [],
                     "images": [],
                     "notes": ["하드 필터에 맞는 문서 0건 — 근거 없음"],
-                    **({"evidence_status": "none"} if evidence_gate_on() else {}),
+                    "evidence_status": "none",
                     "ms": round(ms, 1),
                 }
             )
@@ -155,20 +153,19 @@ def do_search(
         notes.append(f"모르는 방법 무시: {unknown}")
     core = [m for m in methods if m in CFG.CORE]
     subs = []  # 응답 모양 유지(질문 분해는 10-29에 지움 — 늘 빈 목록)
-    sc = mc.cfg().search  # 한 번 묶음(S7d — 이 요청의 검색 스위치들이 같은 판 값)
     agg, agg_ex_note = None, None
-    if sc.agg.route:  # BR23 — 집계로 갈 질문인지 먼저 판별(아래 엔티티 분해 게이트용) ·
-        try:  # do_aggregate는 여기서 한 번만 부르고 결과를 재사용(§ 아래 재사용, DB 중복 질의 없음)
-            agg = do_aggregate(question, client=client)  # BR50 D — 집계도 같은 client 범위(하드 격리면 다른 고객 구조화 행이 안 섞임)
-        except Exception as ex:  # do_aggregate 자체가 올리는 StructDBError 등 — search는 계속
-            agg, agg_ex_note = None, f"집계 경로 오류 — 검색만: {type(ex).__name__}: {str(ex)[:120]}"
+    # BR23 — 집계로 갈 질문인지 먼저 판별(아래 엔티티 분해 게이트용) ·
+    try:  # do_aggregate는 여기서 한 번만 부르고 결과를 재사용(§ 아래 재사용, DB 중복 질의 없음)
+        agg = do_aggregate(question, client=client)  # BR50 D — 집계도 같은 client 범위(하드 격리면 다른 고객 구조화 행이 안 섞임)
+    except Exception as ex:  # do_aggregate 자체가 올리는 StructDBError 등 — search는 계속
+        agg, agg_ex_note = None, f"집계 경로 오류 — 검색만: {type(ex).__name__}: {str(ex)[:120]}"
     agg_hit = agg is not None and "kind" in agg  # kind 있음 = aggregate.detect()(또는 struct() 연결 판별)가 집계로 판별
     hits, r_notes = [], {}
     if core:
         hits, _, r_notes = R.search_ex(
             question, k, core, client=client, scope=scope
         )  # S12: search_ex — note류를 반환값으로(공유 R을 여러 스레드가 써도 안 섞임)
-        if not agg_hit and sc.entity_split:  # BR23 — 비교 질문(고객 2명 이상 동시 언급)이
+        if not agg_hit:  # BR23 — 비교 질문(고객 2명 이상 동시 언급)이
             from common.core.terms import match_clients  # 한쪽 고객에 몰려 슬롯을 뺏기는 문제. R2-c 요건③(client+ID_LIKE)은
 
             ents = match_clients(question, R.clients())[:4]  # 94/115건 과다발동 p95+511ms로 기각됨 — 여기선 trigger를 "고객명
@@ -198,7 +195,7 @@ def do_search(
     man = _manifest_by_name()  # AD44 — 있을 때만 근거에 RDB 문서 메타(doc_type 등) 더 붙음
     rep_cache = {}  # OP21(S78) — 이 요청 안에서 문서별 AI.ParsingMeta 조회 1회만
     evidence = [_evidence(h, man, rep_cache) for h in hits]
-    if sc.copy_group and evidence:  # R2-c 요건① — 같은 사건의 사본(형식·재명명)이 슬롯을 독점하는 문제
+    if evidence:  # R2-c 요건① — 같은 사건의 사본(형식·재명명)이 슬롯을 독점하는 문제
         from common.core.docmeta import copy_groups, copy_representative
 
         groups = copy_groups([{"file_name": e.get("file_name"), "text": e.get("text")} for e in evidence])
@@ -219,47 +216,42 @@ def do_search(
                 drop |= set(members_i) - {rep_i}
             evidence = [e for i, e in enumerate(evidence) if i not in drop]
             notes.append(f"사본 그룹 {len(groups)}개 묶음({sum(len(v) for v in groups.values())}건)")
-    if sc.agg.route:  # R1(AD42) — 집계 질문이면 집계 결과(기존 정해진 함수만)를 맨 앞에(기본 켬, =0으로 끔)
-        if agg_ex_note:  # BR23 — agg는 위(엔티티 분해 게이트용)에서 이미 한 번 구해둔 값 재사용(DB 중복 질의 없음)
-            notes.append(agg_ex_note)
-        if agg_hit and hard:  # (2026-10-20 통합) 집계 근거는 전체 구조화 집계라 하드 필터 범위와 안 맞음 — 생략
-            notes.append("집계 경로 감지 — 하드 필터 범위 밖 집계라 근거 삽입 생략")
-        if not hard and agg_hit:  # kind 있음 = aggregate.detect()(또는 struct() 연결 판별)가 집계로 판별
-            via = agg.get("via") or "aggregate"  # R1(AD42·AD45②) — LLM 경로만 aggregate.route()가 via="aggregate_llm"을 심음
-            from mcp_server.services.search import (
-                aggregate as AG,
-            )  # RV-aggtext — table_text(합계 뒤에 고객별·제품 종류별 표 행을 text에 붙임)
+    # R1(AD42) — 집계 질문이면 집계 결과(기존 정해진 함수만)를 맨 앞에
+    if agg_ex_note:  # BR23 — agg는 위(엔티티 분해 게이트용)에서 이미 한 번 구해둔 값 재사용(DB 중복 질의 없음)
+        notes.append(agg_ex_note)
+    if agg_hit and hard:  # (2026-10-20 통합) 집계 근거는 전체 구조화 집계라 하드 필터 범위와 안 맞음 — 생략
+        notes.append("집계 경로 감지 — 하드 필터 범위 밖 집계라 근거 삽입 생략")
+    if not hard and agg_hit:  # kind 있음 = aggregate.detect()(또는 struct() 연결 판별)가 집계로 판별
+        from mcp_server.services.search import (
+            aggregate as AG,
+        )  # RV-aggtext — table_text(합계 뒤에 고객별·제품 종류별 표 행을 text에 붙임)
 
-            text = f"[집계] {agg.get('answer')}" + (f" {agg['unit']}" if agg.get("unit") else "")
-            rows_text = AG.table_text(agg)
-            if rows_text:
-                text += "\n" + rows_text
-            if sc.agg.fx and AG.mixed_currencies(agg):  # BR43 — 통화 2개 이상 섞인 집계만
-                # BR50 E — client=None이던 것을 호출 범위(client)로(하드 격리면 다른 고객 전용 청크가 안 섞임) ·
-                # client_strict=False로 강제(일반 환율표는 고객 미상이 보통이라 항상 포함, clientscope 공용 규칙)
-                fx_hits, _, _ = R.search_ex(AG.FX_QUERY, 1, ["bm25", "id"], recency=None, client=client, client_strict=False)
-                fx_text = AG.fx_evidence_text(_evidence(fx_hits[0], man, rep_cache)) if fx_hits else None
-                if fx_text:
-                    text += "\n" + fx_text
-                    notes.append("환율 근거 추가(SEARCH_AGG_FX)")
-            evidence.insert(
-                0,
-                {
-                    "via": via,
-                    "text": text,
-                    "answer": agg.get("answer"),
-                    "unit": agg.get("unit"),
-                    "kind": agg.get("kind"),
-                    "columns": agg.get("columns"),
-                    "rows": agg.get("rows"),
-                    "totals": agg.get("totals"),
-                },
-            )
-            notes.append(
-                "집계 경로 사용(SEARCH_AGG_ROUTE)"
-                + (" · R1 LLM 경계 분류" if via == "aggregate_llm" else "")
-                + (f" · {agg['note']}" if agg.get("note") else "")
-            )
+        text = f"[집계] {agg.get('answer')}" + (f" {agg['unit']}" if agg.get("unit") else "")
+        rows_text = AG.table_text(agg)
+        if rows_text:
+            text += "\n" + rows_text
+        if AG.mixed_currencies(agg):  # BR43 — 통화 2개 이상 섞인 집계만
+            # BR50 E — client=None이던 것을 호출 범위(client)로(하드 격리면 다른 고객 전용 청크가 안 섞임) ·
+            # client_strict=False로 강제(일반 환율표는 고객 미상이 보통이라 항상 포함, clientscope 공용 규칙)
+            fx_hits, _, _ = R.search_ex(AG.FX_QUERY, 1, ["bm25", "id"], recency=None, client=client, client_strict=False)
+            fx_text = AG.fx_evidence_text(_evidence(fx_hits[0], man, rep_cache)) if fx_hits else None
+            if fx_text:
+                text += "\n" + fx_text
+                notes.append("환율 근거 추가(SEARCH_AGG_FX)")
+        evidence.insert(
+            0,
+            {
+                "via": "aggregate",
+                "text": text,
+                "answer": agg.get("answer"),
+                "unit": agg.get("unit"),
+                "kind": agg.get("kind"),
+                "columns": agg.get("columns"),
+                "rows": agg.get("rows"),
+                "totals": agg.get("totals"),
+            },
+        )
+        notes.append("집계 경로 사용(SEARCH_AGG_ROUTE)" + (f" · {agg['note']}" if agg.get("note") else ""))
     if r_notes.get("note"):  # 질의 임베딩 장애·임베딩 없는 묶음 → 키워드·ID만(G11)
         notes.append(r_notes["note"])
     exn = r_notes.get("expand_notes")  # X3 — BM25 질의 확장(용어 사전)이 적용됐으면 표시
@@ -269,22 +261,19 @@ def do_search(
         notes.append(r_notes["recency_note"])
     images = []  # 응답 모양 유지(그림 검색 image는 10-29에 지움)
     if hard and scope:  # (2026-10-20 통합) 하드 필터 범위 안 문서만 남기고 다시 1..n 순위 — 요청한 k개로
-        kept_agg = evidence[0] if evidence and evidence[0].get("via") in ("aggregate", "aggregate_llm") else None
+        kept_agg = evidence[0] if evidence and evidence[0].get("via") == "aggregate" else None
         scoped = [e for e in evidence if e is not kept_agg and (e.get("file_path") or "") in scope]
         for i, e in enumerate(scoped):
             e["rank"] = i + 1
         evidence = ([kept_agg] if kept_agg else []) + scoped[:user_k]
         notes.append(f"하드 필터 — 조건에 정확히 맞는 {scope_docs}문서 범위에서 검색")
-    gate = {}
-    from mcp_server.services.search.retriever import evidence_gate_on  # 단일 읽기 지점(retriever.py와 공용, SEARCH_EVIDENCE_GATE 기본 켬)
-
-    if evidence_gate_on():  # R3(AD42) — 근거가 있나(표시만, 근거 목록은 안 줄임)
-        min_score = sc.min_score  # 옛 `float(raw) if raw else None`(형식 틀림·빈 글자 = None) — 칸이 같게 처리(S7d)
-        status, low = evidence_status(question, evidence, min_score)
-        for e, lv in zip(evidence, low):
-            if lv is not None:
-                e["low_score"] = lv
-        gate = {"evidence_status": status}
+    # R3(AD42) — 근거가 있나(표시만, 근거 목록은 안 줄임)
+    min_score = mc.cfg().search.min_score  # 옛 `float(raw) if raw else None`(형식 틀림·빈 글자 = None) — 칸이 같게 처리(S7d)
+    status, low = evidence_status(question, evidence, min_score)
+    for e, lv in zip(evidence, low):
+        if lv is not None:
+            e["low_score"] = lv
+    gate = {"evidence_status": status}
     ms = (time.perf_counter() - t0) * 1000
     _log(question, evidence, ms)
     return cap(

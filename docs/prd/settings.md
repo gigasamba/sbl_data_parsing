@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나. 두 앱이 함께 쓰는 설정, 실행 환경(`RUN_ENV`), EDW 계정, 로그, 외부 모델 호출 가드.
 op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 표준).
 
-순서(주제별): 실행 환경·외부 모델 op-02·pl-11 → 계정 op-03 → 종료 정리 pl-27·pl-44 → 로그 op-01 → 미룬 설정 정리 pl-21·pl-30 → settings.yaml 하나 op-05 → 하드코딩 0 op-09 → 코드와 다른 점.
+순서(주제별): 실행 환경·외부 모델 op-02·pl-11 → 계정 op-03 → 종료 정리 pl-27·pl-44 → 로그 op-01 → 미룬 설정 정리 pl-21·pl-30 → settings.yaml 하나 op-05 → 설정 구조 재편 op-08 → 하드코딩 0 op-09 → 코드와 다른 점.
 
 <a id="op-02"></a>
 ## op-02 · RUN_ENV는 `local`·`dev`·`prd` 셋(`stage` 없앰) · LLM_FAKE는 `local`에서만
@@ -111,7 +111,7 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 핑거프린트: 설정 값은 code_fp에 들어가지 않는다 — 값을 바꿔도 자동 재처리는 없고, 필요하면 사람이 재처리한다(10-30 결정 그대로).
 - 대체됨(10-30): 앞서 정한 "파라미터 파일 3개(parsing·structure·mcp)로 분리, settings.yaml은 필수·비밀·서버값만, settings.yaml에 파라미터 키가 있으면 거부"는 이 결정으로 없앤다.
 - 파일: `common/config/sample.py`(생성기), `settings.sample.yaml`, `common/config/{settings,keyscan}.py`, `pipeline/config.py`, `mcp_server/config.py`, `docs/operations/env-guide.md`.
-- Status: done (10-30) — `python -m common.config.sample`이 모든 칸을 코드 기본값과 함께 `common`·`pipeline`·`mcp` 아래 카테고리 순서(제목 주석 `─── N. … ───`)로 낸다. 비우는 칸: 필수·비밀·기본 없음·빈 글자·이미지 기본값 칸(DOC_DIR 등 — 이미지·PC 값이 다름)·적었는지로 동작이 갈리는 칸(`sample.SET_MATTERS` — `given()`·`resources._f`·`model_matrix.own`이 읽는 이름, 예 `STRUCT_BACKEND`를 적으면 정형 저장소가 켜짐)·핑거프린트 칸(pinned — 적으면 `pin_env`가 env로 내어 자식 프로세스 설정을 덮음). 결과를 바꾸는 칸은 `[파라미터]` 표시. 시험: `tests/server/common/test_sample_yaml.py`(복사한 sample로 서버 STRICT 시작 · 적힌 값 = 코드 기본값), `appcheck`(sample 파일 대조). op-08(`feature/op08-settings-layout`, 열린 PR)이 병합되면 그 구조(`required` + 역할별 파라미터 절)가 이 행을 대신한다.
+- Status: done (10-30 · 파일 배치는 [op-08](#op-08)로 대체 — 10-31) — `python -m common.config.sample`이 모든 칸을 코드 기본값과 함께 `common`·`pipeline`·`mcp` 아래 카테고리 순서(제목 주석 `─── N. … ───`)로 낸다. 비우는 칸: 필수·비밀·기본 없음·빈 글자·이미지 기본값 칸(DOC_DIR 등 — 이미지·PC 값이 다름)·적었는지로 동작이 갈리는 칸(`sample.SET_MATTERS` — `given()`·`resources._f`·`model_matrix.own`이 읽는 이름, 예 `STRUCT_BACKEND`를 적으면 정형 저장소가 켜짐)·핑거프린트 칸(pinned — 적으면 `pin_env`가 env로 내어 자식 프로세스 설정을 덮음). 결과를 바꾸는 칸은 `[파라미터]` 표시. 시험: `tests/server/common/test_sample_yaml.py`(복사한 sample로 서버 STRICT 시작 · 적힌 값 = 코드 기본값), `appcheck`(sample 파일 대조). op-08(`feature/op08-settings-layout`, 열린 PR)이 병합되면 그 구조(`required` + 역할별 파라미터 절)가 이 행을 대신한다.
 
 <a id="op-09"></a>
 ## op-09 · 하드코딩 0 — 설정 값은 settings.yaml 또는 이미지 기본값 표 하나에서만
@@ -134,6 +134,45 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
   - systemd `User=root` — 그대로 둘지 확인.
 - 파일: 위 목록, `common/config/settings.py`(이미지 기본값 표), `common/config/keyscan.py`, `deploy/host/`, `pipeline/extract/engines/`(등급 A), `common/core/`.
 - Status: todo — 0.2.0.
+
+<a id="op-08"></a>
+## op-08 · 설정 구조 재편 — 필수 묶음 + 역할별 파라미터
+- 이유(사용자 10-30): `settings.sample.yaml`(칸 약 443개)과 실제 쓰는 settings.yaml(필수만 모은 40여 줄)의 차이가 너무 크다. 필수 입력은 맨 위에 카테고리별로 모으고, 나머지는 역할별 파라미터로 나누고, 칸 수도 줄인다.
+- 결정(사용자 10-30 grill):
+  - 칸 경로를 바꾼다(보기만 정리하지 않음) — YAML은 같은 절을 두 번 쓰면 뒤가 앞을 덮으므로, 필수 묶음은 별도 최상위 절 `required`로 둔다.
+  - 구조: 맨 위 `required`(필수 입력만 — 실행 환경 · PG(gold) · EDW · Object Storage · 모델 연결·키 · 서버 이미지 등, 카테고리마다 구분선과 `[PC·서버]`·`[서버만]`·`[PC만]` 표시를 칸마다가 아니라 카테고리 제목에 한 번) → 구분선 → 파라미터 절 7개 `common`·`extract`·`transform`·`load`·`search`(MCP 검색)·`ops`(실행 자원·스케줄·서비스·서버 컨테이너·경로)·`dev`(PC·시험·평가 전용).
+  - 필수 = 운영자가 꼭 넣어야 하는 값(기본값이 쓸 수 없는 연결 주소·계정·비밀·이미지 태그). 기본값이 있으면 필수가 아니라 파라미터(예: EDW 포트 1433, Object Storage 리전).
+  - 설명은 짧게(한 줄) — 옛 env 이름·판정 꼴 같은 내부 표시는 sample에서 뺀다(필요하면 env-guide).
+  - 사용처가 없는 칸·뜻이 겹치는 칸은 코드에서 지운다(고정값이면 코드 상수로). 지울 목록은 지우기 전에 사용자 확인.
+  - 시점: 0.2.0에 함께 — 설정 모델 파일은 모든 레이어의 code_fp에 들어가 서버 전체 재처리가 생기므로, 전체 재적재가 있는 gold 원천별 스키마(pl-28)와 한 번에 묶는다.
+- 조사(10-30, 칸 443개): 필수 42(PC·서버 11, 서버만 31) · 파라미터 281 · 경로 49 · PC·시험 전용 61 · 사용처 없음 8 · 중복 2.
+- 결정(사용자 10-30 2차):
+  - 지운다(10개): `common.paths.criteria_file`(코드 상수 사용) · `pipeline.load.publish.source_system`(코드 고정값) · `mcp.search.ocr_dpi`(읽는 곳 없음) · `common.paths.config_dir`(셸은 `$SERVER_ENV_DIR`) · `pipeline.eval.e2e_qa_set`·`e2e_questions`(형식 점검만) · `common.dev.docker.postgres_db`·`postgres_user`(compose는 `PG_DB`·`PG_USER`) · 중복 `mcp.server.query_cache` → `common.models.embed.query_cache`, `pipeline.transform.structure.edw_embed` → `structure.embed`로 합침.
+  - 켜기·끄기 스위치(약 40개)는 세분 카테고리로 모아 목록으로 보여 준다 — 기능이 없어진 스위치는 지운다. 파라미터 절의 카테고리는 더 세분해도 된다.
+  - 운영 값(대기 시간·작업자 수·자원 한도·상한 등)은 파라미터로 두되, 기본값 말고 다른 값을 쓴 흔적이 없는 것을 "코드 상수 후보"로 추려 보여 준다.
+- 조사(10-30, 켜기·끄기 스위치 91개): 기능 없어짐 0 · 되돌리기 전용(기본 켬, 끄면 옛 동작) 51 · 실험·기본 끔 27 · 양쪽 다 쓰임 13. 운영 값 254개 중 기본값 외 값을 쓴 흔적 없음 = 코드 상수 후보 103.
+- 결정(사용자 10-30 3차):
+  - 되돌리기 전용 스위치는 스위치와 옛 동작 코드를 지우고 항상 켠다. 단 엔진·핸드오프 지문 파일 안의 5개(`pipeline.extract.fill_merged`·`kreuzberg_prose_filter`·`ocr.table_grid`, `common.text.search_en_stem`·`token_num_norm`)는 재파싱을 피하려고 남기고 다음 엔진 개정 때 정리한다.
+  - 스트리밍 파싱(`pipeline/stream.py`)은 기능째 지운다 — 스위치 `stream.stream`·`stream.fingerprint`·`cache.keep_raw_layer`·`cache.keep_engine_cache`·`dev.stream_test_crash`도 함께.
+  - 쓰지 않는 실험 기능(기본 끔)은 기능째 지운다 — 목록은 지우기 전에 확인. 운영·보안 선택(고객 하드 격리, 표 허용 목록, 외부 허용, 가짜 LLM 등)과 run_docs가 실제로 켜는 칸(`qa_light`, `bucket_skip_overlap_check`)은 파라미터로 남긴다.
+- 결정(사용자 10-30 4차):
+  - 실험 기능 6개를 기능째 지운다: 그림자 모드(`transform.represent.shadow` + 평가 도구 `parse_shadow`) · 집계 LLM 분류(`mcp.search.agg.llm`·`llm_timeout`) · LLM 묶음 요약(`structure.edw_summary_llm`) · 글자 이미지 VLM 생략(`vlm.fig_text_skip`) · 키워드 통계 전체 재계산(`load.bm25_stat_rebuild`) · 원본 보관(`cache.keep_local_originals`). 남김: OCR 엔진, `qa_light`·`bucket_skip_overlap_check`(run_docs가 켬), `pg_create_extension`·`score_table_judge`(→ `dev`).
+  - `common.models.embed.dim`은 지운다 — 적재·검색은 모델이 준 벡터 길이를 쓰고, 이 칸은 `ping_models`의 기대값 비교에만 쓰였다(점검은 받은 차원을 보여 주기만).
+  - 코드 상수 후보는 바로 지우지 않고 sample 맨 아래 별도 절(구분선)에 모은다 — 내부 조정값 32개(재시도·내부 대기·묶음 크기·출력 상한 등)와 자원·대기·병렬 세부값 약 20개(자동 계산 내부 계수 `mem_*`·`pipe_max_procs`·`pipe_proc_gb`·`pipe_reserve_*`·`pipe_threads`·`cpu_max_load`, `llm.timeout`·`embed.timeout`·`attach.timeout`·`vlm.deadline`, `vlm.page_concurrency`·`page_min_concurrency`·`figures.vlm_parallel`·`night.vlm_concurrency`·`night.workers`·`parse_mcp.procs`). 상수로 내릴지는 그 절을 보고 나중에 정한다.
+  - 프로세스 수·메모리는 필수 입력이 아니다 — 비우면 CPU·메모리로 자동 계산. 역할 절에 남기는 자원 칸: `pipe_procs`·`pipe_workers`·`vlm.max_concurrency`·`llm.rpm`, 새벽 배치 시각·마감, run_docs 레인 워커 수, 컨테이너 CPU·메모리 한도, 내부망 주소 범위.
+  - 엔진 지문 파일이 읽는 `vlm.retry`·`vlm.timeout`도 다음 엔진 개정 때 정리한다.
+  - 서버 settings.yaml은 `python -m common.config.migrate`가 옛 경로 → 새 경로로 바꿔 준다(지운 칸은 "삭제됨"으로 알림).
+- 결정(사용자 10-30 5차 — 설계 확인): 지울 칸 68개 목록대로 진행(A 사용처 없음·중복 10 · B 되돌리기 스위치 45 · C 스트리밍 6 · D 실험 7 · E `embed.dim` 1). `represent.table_db`는 "항상 켬"이 아니라 기능째 지운다(정형 저장소 `doc_table`·`doc_cell`은 D-7로 0.2.0에 없어짐). 원칙: 스위치를 지울 때 그 스위치가 고르던 다른 길(옛 동작·옵션 기능) 코드도 함께 지운다 — 나중에 켜기·끄기가 필요하면 새 기능으로 다시 넣는다.
+- 열린 질문: 없음.
+- 진행: ① 칸·기능 삭제 커밋 → ② 경로 재편(`required`·역할 절·`tuning`) + migrate 변환 + sample 생성기 → ③ 문서(env-guide, README 설정 예시).
+  - ①-1(10-30): A 10 + E 1 지움 — 옛 설정 파일의 지운 칸은 경고만(`REMOVED`), 옛 env 이름은 migrate가 "삭제 후보(삭제됨 op-08)"로 알림. 검색 MCP 질의 캐시 기본(`/tmp/mcp_query_cache.sqlite`)은 mcp 이미지의 `common.models.embed.query_cache` 기본값으로 옮김.
+  - ①-2(10-30): B 되돌리기 스위치 45 지움 — 동작은 늘 기본값(켬), 옛 동작 코드·끔 경로 시험도 지움. `represent.table_db`는 표 정형 적재(`load_tables_db`·`structured tables`)째 지움 — 검색 쪽 `doc_table`·`doc_cell` 읽기 코드와 표 정의는 pl-28(D-7)에서. 빈 절 `mcp.search.query_expand`도 지움. 평가 도구 AR1(융합 켬/끔 비교)도 지움.
+  - ①-3(10-30): C 스트리밍 6 지움 — `pipeline/stream.py`·`pipeline/tools/check_residue.py`·`dedup.record_fingerprint`와 그 시험, 빈 절 `pipeline.extract.stream`. 첨부 임시 폴더 `attach_dir`는 `represent/attachments.py`로 옮김(자리 그대로 — PARSE_TMP의 형제 `attach/`).
+  - ①-4(10-30): D 실험 7 지움 — 그림자 모드(`represent/shadow.py`·`eval/parse_shadow.py`), 집계 LLM 분류(`aggregate.llm_plan`·`route`의 LLM 갈래), LLM 묶음 요약(`build_bundle --summary llm`·색인 설정 `summary: llm`), 글자 이미지 VLM 생략, 키워드 통계 전체 재계산 스위치, 원본 보관(보존 상한 경로 포함)과 그 시험. 쓰는 곳이 없어진 칸(`shadow_max`·`agg.llm_min`·`cache.parse_keep_max_gb`, C의 `parse_tmp_max_gb`·`disk_free_warn_gb`·`engine_cache_warn_gb`)은 ②에서 지움. 지시문 묶음 `parse_shadow`·`agg_llm_route`·`doc_summary`는 시험이 읽어 남김.
+  - ②(10-31): 칸 자리 재편 — 새 모듈 `common/config/layout.py`(파일 자리 ↔ 모델 경로 표: `required` 41칸 · 역할 절 접두어 규칙 · `tuning` 58칸 = 내부 조정값 38 + 자원·대기·병렬 20). 설정 모델 경로(`common.*`·`pipeline.*`·`mcp.*`)는 그대로 두고 `read_settings`가 파일을 모델 배치로 바꿔 읽음(`export --section`·`data=`는 모델 경로). 옛 배치는 시작 거부 + migrate 안내, 자리가 다른 칸은 "자리가 다른 칸 … → 새 자리"로 거부. `migrate <옛 settings.yaml> --out <새 파일>` = 새 배치로 변환(값은 쓴 글자 그대로, 지운 칸은 "삭제됨"). 쓰는 곳 없는 6칸 지움(`parse_tmp_max_gb`·`parse_keep_max_gb`·`disk_free_warn_gb`·`engine_cache_warn_gb`·`shadow_max`·`agg.llm_min` — `REMOVED` 경고만). sample 주석 한 줄(설명·기본값·값) — 옛 env 이름·판정 꼴은 `python -m common.config.sample --where 이름`. 호스트 `run_docs.py`도 새 배치를 읽음. 칸 수 374 → 368(required 41 · common 44 · extract 54 · transform 26 · load 7 · search 30 · ops 73 · dev 35 · tuning 58). 문서(③): env-guide·README §4-2·서버 가이드 갱신(옛 서버 값 표는 env-guide로).
+- 파일: `common/config/{layout,settings,sample,keyscan,migrate,export}.py`, `pipeline/config.py`, `mcp_server/config.py`, `settings.sample.yaml`, `deploy/host/`(설정 꺼내 쓰는 셸), `docs/operations/env-guide.md`.
+- 결정(사용자 10-31 grill): tuning 절은 지금대로 — 운영 정책 값 6개(prepare.link·publish.upload_statuses·load.edw_path_prefix·mcp.server.instructions·search.pg.vector_search·trigger.upload_max_mb)는 역할 절, 내부 제한 시간·대기열 13개는 tuning. 옛 배치는 계속 거부한다. PC 루트 settings.yaml은 10-31에 `settings.yaml.bak-20261031`로 백업했고 op-08 병합 직후 migrate로 새 배치로 바꾼다. 서버 2곳 변환은 0.2.0 배포 절차(refactor.md)에 넣는다.
+- Status: todo
 
 ## 코드와 다른 점 · 지울 코드
 

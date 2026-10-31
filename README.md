@@ -73,7 +73,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 
 | 마이그레이션 | 스키마(갈래) | 만드는 것 | 시드 데이터 |
 |---|---|---|---|
-| `0001_search` | 검색 스키마(`common.connections.pg.db_schema`, 예: `ai`) — `--target search` | `doc` · `chunk` · `chunk_term` · `term_stat` · `corpus_stat` · `load_run` 테이블, 색인, 뷰 `v_chunk_source`(벡터 차원은 번들 `meta.json` 또는 `--dim`) | 없음 |
+| `0001_search` | 검색 스키마(`required.pg.db_schema`, 예: `ai`) — `--target search` | `doc` · `chunk` · `chunk_term` · `term_stat` · `corpus_stat` · `load_run` 테이블, 색인, 뷰 `v_chunk_source`(벡터 차원은 번들 `meta.json` 또는 `--dim`) | 없음 |
 | `0001_struct` | `struct`(이름 고정) — `--target struct` | 정형 저장소 테이블 10개(`doc_registry` · `doc_hidden` · `doc_location` · `contract_master` · `client_master` · `prod_master` · `doc_contract_link` · `doc_registry_seen` · `doc_table` · `doc_cell`) | 없음 |
 | `0002_struct` | `struct` | 버전 테이블 `stack_version`(엔진 구성) · `source_version`(원천 목록) | **있음** — `resources/sql/0002_stack_seed.json`(엔진 구성 버전 1 `dev-v1`) · `0002_sources_seed.json`(원천 목록 버전 1)을 읽어 **활성 행**으로 넣음 |
 
@@ -119,7 +119,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  ├─ load/             pgvector 적재 · publish · 회사 DB 메타데이터 · 인덱스 빌더
 │  ├─ shared/ · tools/  단계 공용 모듈 · 운영 도구
 │  ├─ eval/             채점 · 실행 보드(score_gold, run_board 등)
-│  └─ trigger_server.py · mcp_parse_service.py · stream.py                     상주 트리거 · MCP 파싱 작업 · 스트리밍
+│  └─ trigger_server.py · mcp_parse_service.py                                상주 트리거 · MCP 파싱 작업
 ├─ mcp_server/          검색 MCP 앱(mcp-server 이미지, FastMCP)
 │  ├─ main.py           진입점(앱 조립 · 토큰 · 서버 시작)
 │  ├─ config.py         mcp 섹션 설정 모델
@@ -160,11 +160,11 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 | 항목     | 내용                                                                                                                                                          |
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 위치     | PC: 저장소 루트 `settings.yaml`(git 제외, 권한 600) · 서버: `$SERVER_ENV_DIR/settings.yaml`(기본 `/srv/rag/env`, 소유자 UID 10001, 권한 640) · 다른 파일은 env `SETTINGS_FILE`로 지정 |
-| 구조     | 최상위 섹션 `common`(공용) · `pipeline` · `mcp`. 각 앱은 `common`과 자기 섹션만 읽는다. 항목 설명과 기본값은 [settings.sample.yaml](settings.sample.yaml)                               |
+| 구조     | 맨 위 `required`(필수 접속·입력 — 묶음별 [PC·서버]·[서버만]) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops`·`dev` → 맨 아래 `tuning`(거의 안 바꾸는 값). 같은 절·칸을 두 번 쓰면 거부한다. 칸 자리 찾기: `python -m common.config.sample --where <옛 이름>`. 항목 설명과 기본값은 [settings.sample.yaml](settings.sample.yaml)                               |
 | 쓰는 법   | **기본값과 다르게 쓸 항목만** 적는다. 비워 둔 항목은 코드 기본값을 쓴다                                                                                                                 |
-| 필수     | `common.run_env` — `local`(PC) · `dev` · `prd`(서버 — 외부 모델 호출과 가짜 LLM(`llm_fake`)을 거부하고, 설정 파일을 못 읽으면 시작하지 않는다)                                                        |
+| 필수     | `required.env.run_env` — `local`(PC) · `dev` · `prd`(서버 — 외부 모델 호출과 가짜 LLM(`llm_fake`)을 거부하고, 설정 파일을 못 읽으면 시작하지 않는다)                                                        |
 | 항목별 안내 | [docs/operations/env-guide.md](docs/operations/env-guide.md)                                                                                                |
-| **서버 반입** | `settings.yaml`은 **git에 올리지 않는다**(`.gitignore` — 비밀값·서버마다 다른 값). 반입 때 **사람이 서버용으로 직접 작성**한다: `settings.sample.yaml`을 복사해 `[필수: 공통]`·`[필수: 서버]`·`[비밀]` 칸을 채우고(그 밖 칸은 코드 기본값이 적혀 있음 — op-05) `python -m pipeline.config --file <파일>`로 확인. **PC 파일을 그대로 복사하지 않는다** — PC의 `run_env: local`·`*_allow_external: true`가 서버에서 외부 모델 호출을 연다(알려진 위험, 사용자 10-29 수용) |
+| **서버 반입** | `settings.yaml`은 **git에 올리지 않는다**(`.gitignore` — 비밀값·서버마다 다른 값). 반입 때 **사람이 서버용으로 직접 작성**한다: `settings.sample.yaml`을 복사해 맨 위 `required` 절(서버는 [서버만] 묶음까지)을 채우고(그 밖 칸은 코드 기본값이 적혀 있음 — op-05) `python -m pipeline.config --file <파일>`로 확인. **PC 파일을 그대로 복사하지 않는다** — PC의 `run_env: local`·`*_allow_external: true`가 서버에서 외부 모델 호출을 연다(알려진 위험, 사용자 10-29 수용) |
 
 
 **실행할 때 값을 넘기는 방법 3가지**
@@ -173,7 +173,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 | 방법                          | 언제                                                          | 받는 명령                                                                                                 |
 | --------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | **A. settings.yaml에 직접 적기** | 가장 간단. 계속 쓸 값                                               | 모든 명령                                                                                                 |
-| **B. 명령 인자 `--set 이름=값`**   | 이번 실행에만 다른 값(파일은 그대로). 이름은 sample의 `env=` 이름. 비밀·호스트 항목은 거부 | `pipeline.cli`, `build_bundle`, `pgvector_load` 등 파이프라인 진입점                                           |
+| **B. 명령 인자 `--set 이름=값`**   | 이번 실행에만 다른 값(파일은 그대로). 이름은 옛 env 이름([env-guide](docs/operations/env-guide.md)). 비밀·호스트 항목은 거부 | `pipeline.cli`, `build_bundle`, `pgvector_load` 등 파이프라인 진입점                                           |
 | **C. 오버레이 설정 파일**(PC 전용)    | `--set`을 받지 않는 명령에 이번 실행만 다른 값                              | `mcp_server.main`, `mcp_server.cli.ask` — `SETTINGS_FILE=$(python -m common.config.overrides 이름=값 …)` |
 
 
@@ -202,29 +202,37 @@ docker run -d --name sbl-mcp-pg -p 127.0.0.1:55433:5432 -v sbl_mcp_pgdata:/var/l
 
 ### 4-2. settings.yaml 작성
 
-저장소 루트에 `settings.yaml`을 만들고 `chmod 600`한다. 아래는 **방법 A**(파일에 모두 적기) 예시다.
+저장소 루트에 `settings.yaml`을 만들고 `chmod 600`한다. 칸 배치는 `settings.sample.yaml`과 같다 — 맨 위 `required`(꼭 채울 값), 그 아래 역할 절(`common`·`extract`·`transform`·`load`·`search`·`ops`·`dev`), 맨 아래 `tuning`(보통 비워 둠). 아래는 **방법 A**(파일에 모두 적기) 예시다.
 
 ```yaml
+required:
+  env: {run_env: local, run_mode: prod}
+  pg: {host: 127.0.0.1, port: 55433, db: rag, user: rag, password: <비밀번호>, db_schema: demo}   # 적재·검색할 스키마
+  embed: {base_url: <OpenAI 호환 주소>, model: <임베딩 모델>, api_key: <키>}
+  deploy: {mcp_store: pg}                       # 검색 저장소 — PC도 꼭 적는다
 common:
-  run_env: local
-  connections:
-    pg: {host: 127.0.0.1, port: 55433, db: rag, user: rag, password: <비밀번호>, db_schema: demo}   # 적재·검색할 스키마
   models:
-    embed: {base_url: [[ORCA_RICH_MD:0896ceca59eeaa02d79aaf879fa2674c:inline-html:%3COpenAI%20%ED%98%B8%ED%99%98%20%EC%A3%BC%EC%86%8C%3E]], model: <임베딩 모델>, api_key: <키>, allow_external: true}
+    embed: {allow_external: true}
     guard:
       no_paid_calls: true                        # 평소에는 true(외부 호출 차단) — 임베딩이 필요한 실행 동안만 false
       budget_usd: 0.1                            # 비용 상한
       max_calls: 40
       spend_file: output/spend-ledger.json
-  paths: {mcp_bundle: output/demo/bundle}        # MCP가 읽을 번들
-  store: {run_mode: prod}
-  runtime: {cpu_max_load: 5}                     # 부하가 높은 PC라면(기본 0.9에서는 계속 대기함)
-pipeline:
-  paths: {out_root: output/demo}                 # 파이프라인 결과 폴더
-mcp:
-  server: {host: 127.0.0.1, port: 18769, store: pg}
+ops:
+  paths: {mcp_bundle: output/demo/bundle}        # MCP가 읽을 번들(검증 페이지 §4-6도 이 값)
+  pipeline_paths: {out_root: output/demo}        # 파이프라인 결과 폴더
+search:
+  server: {host: 127.0.0.1, port: 18769, warmup: false}
+dev:
+  mcp: {mcp_url: "http://127.0.0.1:18769/mcp", ui_port: 8791}   # 검증 페이지(§4-6)·점검 도구가 붙을 주소
+tuning:
+  ops:
+    runtime: {cpu_max_load: 5}                   # 부하가 높은 PC라면(기본 0.9에서는 계속 대기함)
 ```
 
+- 옛 배치(최상위 `common`·`pipeline`·`mcp` — op-08 전) 파일은 읽지 않는다. `python -m common.config.migrate settings.yaml --out settings.new.yaml`로 바꾼 뒤 새 파일로 바꿔 넣는다(지운 칸은 "삭제됨"으로 이름만 알림).
+- 검색 저장소 종류(`required.deploy.mcp_store`)와 PG 접속값은 PC·서버 모두 채운다 — 자동 탐지는 없앤다(사용자 10-31, op-09).
+- 같은 절(`search:` 등)이나 같은 칸을 두 번 쓰면 시작을 거부한다 — 칸을 더할 때는 이미 있는 절 안에 넣는다.
 - **외부 임베딩은 세 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `run_env: local` · `no_paid_calls: false`. 하나라도 빠지면 호출하지 않는다(서버 dev·prd는 늘 거부).
 - ⚠️ PG 접속 항목을 비워 두면 코드가 `docker ps`로 찾은 아무 pgvector에나 연결한다. 전용 PG 접속 정보를 항상 적는다.
 
@@ -235,8 +243,8 @@ export PYTHONPATH=$PWD                                   # 명령은 저장소 �
 .venv/bin/python -m pipeline.config                      # 어느 settings.yaml을 읽는지와 요약(비밀은 가림)
 .venv/bin/python -m common.check.check_modules           # "모듈 경계 통과"
 .venv/bin/python -m common.config.keyscan --check        # "빠진 키 0개"
-.venv/bin/python -m pipeline.cli selftest                # 서버 배포 테스트 — 89개 중 88개 통과(알려진 실패 1개)
-.venv/bin/python -m pytest -q tests/                      # 전체 테스트 — 142 passed · 8 xfailed(알려진 실패)
+.venv/bin/python -m pipeline.cli selftest                # 서버 배포 테스트 — 93개 중 92개 통과(알려진 실패 1개 — 기준선 PRD e2-02)
+.venv/bin/python -m pytest -q tests/                      # 전체 테스트 — 146 passed · 3 xfailed(알려진 실패)
 ```
 
 알려진 실패는 모두 리팩토링 전부터 있던 것이다(이유: refactor.md C-54·C-58 · 목록: `deploy/release/known_fail.txt`, `tests/conftest.py`).
@@ -273,7 +281,7 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 
 - 결과: `output/demo/bundle/`(docs.jsonl · chunks.jsonl · vectors.npy · kg\_*.jsonl · meta.json)
 - 같은 청크는 임베딩 캐시(`output/edw/embed_cache.sqlite`) 덕분에 다시 호출하지 않는다.
-- `pipeline.cli structure`가 아니라 `build_bundle`을 직접 부른다. 서버의 실제 경로와 같고, `pipeline.cli structure`에는 축소 스키마 번들을 거부하는 알려진 문제가 있다(CLAUDE.md §10).
+- `pipeline.cli structure`가 아니라 `build_bundle`을 직접 부른다. 서버의 실제 경로와 같고, `pipeline.cli structure`에는 축소 스키마 번들을 거부하는 알려진 문제가 있다([docs/PRD.md](docs/PRD.md) 표).
 
 **④ DB 테이블과 시드 — Alembic 마이그레이션(스키마마다 처음 한 번 — 1-4)**
 
@@ -319,7 +327,7 @@ SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
 .venv/bin/python -m pipeline.cli "${SETS[@]}" parse --src $SRC
 .venv/bin/python -m pipeline.transform.structure.build_bundle "${SETS[@]}" \
     --parse-dir $O/parse --src $SRC --embed api --summary lead --out $O/bundle
-.venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle $O/bundle
+.venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle $O/bundle --create-extension
 .venv/bin/python -m pipeline.load.pgvector_load "${SETS[@]}" load --bundle $O/bundle
 
 # ask·MCP는 --set을 받지 않으므로 오버레이 설정 파일(방법 C)로 같은 값을 넘긴다
@@ -340,19 +348,11 @@ kill $(cat output/demo/mcp.pid)              # 끄기 — PID로만(pkill -f 금
 ```
 
 - 엔드포인트: `http://127.0.0.1:18769/mcp`(streamable HTTP) — 도구 `search`, `query_edw`, `parse_document`, `edw_meta`
-- 루프백(`127.0.0.1`)으로 띄우면 토큰 없이 접속된다. 다른 주소로 열면 `mcp.server.token`이 필요하고, `0.0.0.0`은 거부된다.
+- 루프백(`127.0.0.1`)으로 띄우면 토큰 없이 접속된다. 다른 주소로 열면 `required.tokens.mcp`가 필요하고, `0.0.0.0`은 거부된다.
 
 ### 4-6. 검증 페이지(브라우저로 검색 확인)
 
-검색 MCP와 pgvector를 브라우저로 보여 주는 PC 전용 페이지다. 설정은 루트 `settings.yaml` 하나이고(전용 설정 파일 없음), 페이지가 쓰는 항목을 추가한다.
-
-```yaml
-common:
-  paths: {mcp_bundle: output/validation/bundle}
-mcp:
-  dev: {mcp_url: "http://127.0.0.1:18767/mcp", ui_port: 8791}
-  server: {host: 127.0.0.1, port: 18767, store: pg, warmup: false}
-```
+검색 MCP와 pgvector를 브라우저로 보여 주는 PC 전용 페이지다. 설정은 루트 `settings.yaml` 하나이고(전용 설정 파일 없음), §4-2 예시의 `required.deploy.mcp_store`·`ops.paths.mcp_bundle`·`search.server`·`dev.mcp`를 그대로 쓴다(따로 더할 절 없음 — 다른 번들을 보려면 그 칸 값만 바꾼다).
 
 ```bash
 nohup bash validation/search_ui/start_mcp.sh > output/validation/mcp.log 2>&1 & echo $! > output/validation/mcp.pid
@@ -362,14 +362,14 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 ```
 
 - `no_paid_calls: true`면 질의 임베딩도 막혀 키워드·ID 검색만 된다(근거의 via에 `v`가 없음). 벡터 검색까지 보려면 `false`로 바꾸고 MCP를 다시 띄우고, 끝나면 되돌린다.
-- 다른 번들을 보려면 `common.paths.mcp_bundle`(스키마가 다르면 `common.connections.pg.db_schema`도)을 바꾸고 다시 띄운다.
+- 다른 번들을 보려면 `ops.paths.mcp_bundle`(스키마가 다르면 `required.pg.db_schema`도)을 바꾸고 다시 띄운다.
 
 ### 4-7. 그 밖
 
 
 | 하고 싶은 것                  | 명령                                                                                                                                                                    |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 답변 생성 점검(LLM 설정·예산 필요)   | `.venv/bin/python -m validation.e2e.answer_gen --url http://127.0.0.1:18767/mcp --q "<질문>"`                                                                           |
+| 답변 생성 점검(LLM 설정·예산 필요)   | `.venv/bin/python -m validation.e2e.answer_gen --url http://127.0.0.1:18769/mcp --q "<질문>"`                                                                           |
 | 이미지 배치 그대로 PC Docker 테스트 | `bash valid_env/docker/smoke_test.sh`                                                                                                                                 |
 | 이미지 로컬 빌드(시험 태그)         | `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh` — TAG를 빼면 `data-pipeline:<VERSION>`(배포용 태그라 남겨 둔다) |
 | 커밋 전 점검                  | `bash deploy/release/lint_changed.sh`(바꾼 .py만 ruff·mypy·모듈 경계 — `FIX=1`이면 자동 수정)                                                                                      |
@@ -420,7 +420,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 **컨테이너 도구는 root podman 하나로 쓴다.**
 - 서버 명령은 모두 root 셸(`sudo -i`)에서 실행한다.
-- settings.yaml에 `common.host.docker: podman`을 적는다.
+- settings.yaml에 `ops.host.docker: podman`을 적는다.
 - 일반 사용자 셸에서 실행할 때는 `DOCKER="sudo podman"`을 앞에 붙인다.
 - 이미지를 불러온 저장소와 컨테이너를 띄우는 저장소가 같아야 한다. 일반 사용자 podman(rootless)과 root podman은 이미지를 따로 보관하므로, 섞으면 이미지가 보이지 않는다.
 - compose 실행기(`podman-compose`나 `docker-compose` 플러그인)가 깔려 있어야 한다. `podman compose version`으로 확인한다.
@@ -431,7 +431,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
    - 컨테이너 사용자(UID 10001)가 읽을 수 있게 한다: `chmod -R a+rX sbl_data_parsing-<판>`
    - 지금 쓰는 판을 링크로 건다: `ln -sfn /srv/rag/sbl_data_parsing-<판> /srv/rag/code/live`. systemd unit과 아래 명령은 이 경로를 쓴다.
 3. 이미지를 불러온다: `DOCKER=podman bash sbl_images-main/load.sh <판>`
-4. 설정을 채운다(§5-3 ②). `pipeline.host.image`·`mcp.host.image`에는 실행 이미지 태그(`data-pipeline-runtime:<판>`, `mcp-server-runtime:<판>`)를 적는다.
+4. 설정을 채운다(§5-3 ②). `required.deploy.pipeline_image`·`required.deploy.mcp_image`에는 실행 이미지 태그(`data-pipeline-runtime:<판>`, `mcp-server-runtime:<판>`)를 적는다.
 5. DB를 만들고, 연결을 점검하고, 이미지를 점검한다(§5-3 ③~⑤).
 6. 실행한다: `bash /srv/rag/code/live/deploy/host/scripts/mcp_up.sh`, `… trigger.sh parse` 등.
    - 이미지 태그가 `*-runtime`이면 스크립트가 자기 코드 폴더 루트를 `/app/deploy`에 붙인다(`image_vars.sh`의 `code_dir_default`).
@@ -492,16 +492,16 @@ mkdir -p /srv/rag/output && chown 10001 /srv/rag/output              # 컨테이
 
 | 항목 | 이유 |
 |---|---|
-| `common.run_env` | `dev`·`prd` — 없으면 앱·entrypoint·compose가 거부(`stage`는 없앰 — `prd`로 바꿈) |
-| `common.store.run_mode: prod` | ⚠️ 빠지거나 오타가 나면 PG 장애 때 SQLite로 조용히 대체되고, publish가 다른 문서를 deleted로 만들 수 있다(PRD pl-12 — 고치기 전까지 꼭 확인) |
-| `common.host.docker: podman` | 호스트 스크립트의 컨테이너 도구(위 root podman) |
-| `common.host.output_root` · `common.host.doc_src` | 결과 폴더(`/srv/rag/output`)·원천 문서 폴더 — 비면 compose가 `:?` 안내로 멈춤 |
-| PG · EDW(`common.connections.rdb.read`·`.write`) · Object Storage 접속 항목 | 운영 접속 |
-| 토큰 `mcp.server.token` · `mcp.parse_proxy.token` · `pipeline.service.parse_mcp.token` · `pipeline.service.trigger.token` | 코드 기본 토큰 없음 |
-| 이미지 `pipeline.host.image` · `mcp.host.image` | 예: `data-pipeline-runtime:0.1.0`, `mcp-server-runtime:0.1.0`(개발 서버) · 운영 서버는 `data-pipeline:0.1.0`, `mcp-server:0.1.0` |
-| sample에 `[서버 옛 값: …]`으로 표시된 항목 | 옛 서버 동작 유지 |
+| `required.env.run_env` | `dev`·`prd` — 없으면 앱·entrypoint·compose가 거부(`stage`는 없앰 — `prd`로 바꿈) |
+| `required.env.run_mode: prod` | ⚠️ 빠지거나 오타가 나면 PG 장애 때 SQLite로 조용히 대체된다(PRD pl-12 — 고치기 전까지 꼭 확인) |
+| `ops.host.docker: podman` | 호스트 스크립트의 컨테이너 도구(위 root podman) |
+| `required.deploy.output_root` · `required.deploy.doc_src` | 결과 폴더(`/srv/rag/output`)·원천 문서 폴더 — 비면 compose가 `:?` 안내로 멈춤 |
+| PG · EDW(`required.edw` — 읽기·쓰기 계정) · Object Storage 접속 항목 | 운영 접속 |
+| 토큰 `required.tokens`(`mcp` · `parse_proxy` · `parse_mcp` · `trigger`) | 코드 기본 토큰 없음 |
+| 이미지 `required.deploy.pipeline_image` · `required.deploy.mcp_image` | 예: `data-pipeline-runtime:0.1.0`, `mcp-server-runtime:0.1.0`(개발 서버) · 운영 서버는 `data-pipeline:0.1.0`, `mcp-server:0.1.0` |
+| [env-guide](docs/operations/env-guide.md) "옛 서버 값" 표의 항목 | 옛 서버 동작 유지 |
 
-모델 주소는 모두 내부망 주소여야 한다(서버는 외부 모델 호출을 거부). 옛 `pipeline.env`가 있으면 이관 도구를 쓴다: `python -m common.config.migrate <옛 env> --out <yaml>` → `--compare`로 대조(release-and-patch §5-4).
+모델 주소는 모두 내부망 주소여야 한다(서버는 외부 모델 호출을 거부). 옛 `pipeline.env`가 있으면 이관 도구를 쓴다: `python -m common.config.migrate <옛 env> --out <yaml>` → `--compare`로 대조(release-and-patch §5-4). 옛 배치 settings.yaml(op-08 전)은 `python -m common.config.migrate <옛 settings.yaml> --out <새 파일>`로 바꾼다.
 
 **③ DB 마이그레이션과 시드** — 컨테이너를 띄우고 selftest를 하기 전에 끝낸다.
 
@@ -562,7 +562,7 @@ bash deploy/host/scripts/mcp_up.sh     # 여러 번 실행해도 안전 — 꺼�
 | ------ | ----------------------------------------- | ---------------------------------------------------------------- | ------------------------- | --------------- | ------------------------------- |
 | 모듈 하나씩 | `trigger.sh parse` → `structure` → `load` | 사람이 차례로                                                          | 따로 `trigger.sh publish`   | 그 모듈만 끝남        | **E→T→L만 하고 싶을 때(권장)** · 단계별 확인 |
 | 한 번에   | `trigger.sh all`                          | parse → publish → structure → load                               | ⚠️ **항상 실행**              | 거기서 멈춤          | publish 대상(버킷·EDW 쓰기 계정)이 준비된 뒤 |
-| 새벽 배치  | `trigger.sh night`(systemd — `nightly.time` 시각)         | `pipeline.host.nightly.modules`(기본 parse publish structure load) | `nightly.publish`가 켜졌을 때만 | 건너뛰고 다음 모듈로     | 정기 운영                           |
+| 새벽 배치  | `trigger.sh night`(systemd — `nightly.time` 시각)         | `ops.nightly.modules`(기본 parse publish structure load) | `nightly.publish`가 켜졌을 때만 | 건너뛰고 다음 모듈로     | 정기 운영                           |
 | 문서별 흐름 | `run_docs.py`                             | 문서마다 파싱 → 구조화 → 적재 → publish(스트리밍)                               | 포함                        | —               | 대량 처리                           |
 
 
@@ -588,7 +588,7 @@ bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서를 지금
 | 무엇                                                 | 방법                                                                                                                                                            |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 검색 MCP 상주 확인                                       | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_up.sh`                                                                                             |
-| 새벽 배치                                              | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `pipeline.host.nightly.time: "HH:MM"`(그 시각부터 5분 안에 시작 — 비우면 새벽 배치 없음, 기본 비움 · pl-32) |
+| 새벽 배치                                              | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.time: "HH:MM"`(그 시각부터 5분 안에 시작 — 비우면 새벽 배치 없음, 기본 비움 · pl-32) |
 | 상주 트리거 서버(선택 — 웹 업로드에서 파싱 직접 호출, `run_docs.py`가 씀) | `docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-parse data-pipeline-structure`                                                |
 | MCP `parse_document` 작업 서비스                        | compose가 띄우지 않으므로 파싱 컨테이너가 다시 시작될 때마다: `docker exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service`                                           |
 

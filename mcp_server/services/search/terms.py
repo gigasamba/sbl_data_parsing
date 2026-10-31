@@ -14,7 +14,6 @@ from common.core.terms import (
     split_terms,
 )
 from common.core.text import tokens
-from mcp_server import config as mc  # 설정 객체(S7d)
 
 GLOSSARY_WEIGHTS = {"synonym": 1.0, "abbreviation": 0.8, "weak": 0.3}  # X3 — BM25 확장 가중치
 ALIAS_EXPAND_MAX = 20  # SI43 — 질문 1건당 명부(roster)만 있는 별칭으로 추가하는 토큰 상한(명부가 커져도 확장이 폭주하지 않게)
@@ -30,12 +29,9 @@ ALIAS_EXPAND_MAX = 20  # SI43 — 질문 1건당 명부(roster)만 있는 별칭
 # XL012·XL014가 그 한국지사 문서에 밀려 새로 미스가 됐다, 되돌림). 그래서 문자열을 건드리지 않고 토큰화 뒤
 # 결과만 거른다: 숫자가 아닌 한 글자 토큰만 뺀다(한 글자 한글/영문은 BM25에서 거의 항상 잡음, 2자 이상은 안 건드림).
 def _exp_tokens(s):
-    """glossary 문자열(canonical·synonym·alias) → BM25 확장 토큰 — QUERY_EXPAND_SHORTTOK(기본 켬, =0으로 끔)이면
-    숫자가 아닌 한 글자 토큰(법인 표기 괄호에서 끊겨 나온 "주" 류)을 뺀다. expand_query 두 호출부 공용."""
-    toks = tokens(s)
-    if not mc.cfg().search.query_expand.shorttok:
-        return toks
-    return [t for t in toks if len(t) > 1 or t.isdigit()]
+    """glossary 문자열(canonical·synonym·alias) → BM25 확장 토큰 — 숫자가 아닌 한 글자 토큰(법인 표기 괄호에서
+    끊겨 나온 "주" 류)을 뺀다. expand_query 두 호출부 공용."""
+    return [t for t in tokens(s) if len(t) > 1 or t.isdigit()]
 
 
 def _entry_hit(q, r):
@@ -84,7 +80,7 @@ def match_concepts(q, glossary=None):
 
 def expand_query(q, glossary=None, aliases=None, draft_glossary=None):
     """BM25 질의 확장(X3 용어 사전 + SI43 명부 별칭) — 벡터 질의는 바꾸지 않음(호출부가 원문 q를 따로 임베딩).
-    {토큰: 가중치}, 적용 노트 목록. QUERY_EXPAND=0이면 원 토큰(가중치 1.0)만 — 끔 스위치(둘 다 끔).
+    {토큰: 가중치}, 적용 노트 목록.
     SI43(XL008): 용어집에 없는 순수 명부(roster, stack.json client_aliases·CLIENT_ROSTER) 전용 별칭도 — 질문에
     한쪽 표기가 나오면(SI43⑦ 조사 규칙 포함, _name_hit) 같은 고객의 다른 표기를 가중치 1.0으로(용어집 쪽은 위
     루프가 이미 처리, 겹치면 추가 토큰 없음 → 중복 note 없음) — ALIAS_EXPAND_MAX로 토큰 수 상한, 결정적 순서
@@ -92,11 +88,9 @@ def expand_query(q, glossary=None, aliases=None, draft_glossary=None):
     SI43④ draft_glossary(기본 None → load_draft_glossary(), 즉 output/ 자동 draft CSV의 status=draft 행 — GLOSSARY_DIR/
     domain_terms.csv가 아님, 독립 검토 BLOCK 1) — 사람 승인 없이 쌓인 새 이름 후보도 BM25에 weak(0.3)로만(승격
     전엔 approved 취급 안 함 — match_clients·하드 필터에는 안 들어간다, _aliases()는 GLOSSARY_DIR approved
-    org_client만 봄) · QUERY_EXPAND_DRAFT=0이면 draft 확장을 끔."""
+    org_client만 봄)."""
     terms = {t: 1.0 for t in tokens(q)}
     notes = []
-    if not mc.cfg().search.query_expand.enabled:
-        return terms, notes
     glossary = load_glossary() if glossary is None else glossary
     for cid, r in glossary.items():
         hit = _entry_hit(q, r)
@@ -136,21 +130,20 @@ def expand_query(q, glossary=None, aliases=None, draft_glossary=None):
             terms[t] = 1.0
         notes.append(f"{hit}→{canon}(alias)")
         budget -= len(new_tokens)
-    if mc.cfg().search.query_expand.draft:
-        draft_glossary = load_draft_glossary() if draft_glossary is None else draft_glossary
-        for cid, r in sorted(draft_glossary.items()):  # 결정적 순서(concept_id 오름)
-            hit = _entry_hit(q, r)
-            if hit is None:
-                continue
-            canon = r.get("canonical") or ""
-            weak = GLOSSARY_WEIGHTS["weak"]
-            added = False
-            for t in _exp_tokens(canon):
-                if terms.get(t, 0.0) < weak:
-                    terms[t] = weak
-                    added = True
-            if added or hit != canon:
-                notes.append(f"{hit}→{canon}({cid}, draft)")
+    draft_glossary = load_draft_glossary() if draft_glossary is None else draft_glossary
+    for cid, r in sorted(draft_glossary.items()):  # 결정적 순서(concept_id 오름)
+        hit = _entry_hit(q, r)
+        if hit is None:
+            continue
+        canon = r.get("canonical") or ""
+        weak = GLOSSARY_WEIGHTS["weak"]
+        added = False
+        for t in _exp_tokens(canon):
+            if terms.get(t, 0.0) < weak:
+                terms[t] = weak
+                added = True
+        if added or hit != canon:
+            notes.append(f"{hit}→{canon}({cid}, draft)")
     return terms, notes
 
 
@@ -180,9 +173,7 @@ def vector_alias_text(q, aliases=None):
     언어'로 걸려 덧붙는다 — 같은 체계 별칭(화이자 본사·미르하 등)만 빠지고 회귀의 주 원인은 그대로 남음.
     synth-xling 이득(gold_top1 0.409→0.591)이 4clients 손실(doc_hit5 −0.009·gold_top1 −0.002·noise5 +0.012,
     noise5만 문턱 0.01을 0.002 넘김)보다 커서 **사용자 결정(10-14)으로 기본 켬** — 규칙 예외, 10-16 서버 실문서로
-    켬/끔 재확인. SEARCH_VECTOR_ALIAS_EXPAND=0이면 끔(q 그대로, 바이트 동일)."""
-    if not mc.cfg().search.vector_alias_expand:
-        return q
+    켬/끔 재확인."""
     aliases = _aliases() if aliases is None else aliases
     extra = []
     for canon in sorted(aliases):  # 결정적 순서(이름 오름차순)

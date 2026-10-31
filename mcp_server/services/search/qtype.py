@@ -17,7 +17,7 @@ clients·contracts를 받아 단일 계약 속성 조회 제외·존재/진행 �
 docstring 참고). 그래서 두 결과가 같은 질문에서 어긋날 수 있다(의도된 차이) — 집계 경로를 실제로 탈지는
 항상 detect()만 본다.
 
-호출자: modules/search/local.py weights()(G14 SEARCH_TYPE_WEIGHTS — bm25 가중 조정) · modules/search/rerank.py
+호출자: modules/search/local.py weights()(G14 — bm25 가중 조정) · modules/search/rerank.py
 (비교·최신 유형이면 재순위 게이트). 옛 호출자 research.py(RESEARCH_PLANNER=typed)·do_search의 notes 표시는 S5a·S5(10-26, D-025)에 지움.
 정확도 점검: tests/server/mcp/test_qtype.py(resources/vocab/qtype_labels.json)
 """

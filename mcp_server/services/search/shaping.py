@@ -120,7 +120,7 @@ def _key_terms(question):
 
 def evidence_status(question, evidence, min_score=None):
     """R3(AD42) — 근거가 있나? 0건 → none · 질문 핵심어(ID·숫자·용어 사전)가 근거 원문에 하나도 없거나 근거 중
-    최고 점수가 min_score 미달이면 weak · 그 외 found. 근거 목록은 바꾸지 않음(표시만) — do_search(SEARCH_EVIDENCE_GATE=1)와
+    최고 점수가 min_score 미달이면 weak · 그 외 found. 근거 목록은 바꾸지 않음(표시만) — do_search와
     cli/mcp_eval.py(문턱 보정, 서버 호출 없이 같은 응답으로 재계산)가 같이 쓴다.
     반환: (status, [근거마다 low_score(min_score 없거나 그 근거에 score가 없으면 None) ...])."""
     if not evidence:
@@ -197,12 +197,12 @@ def cap(obj, limit=None):
     """결과 크기 상한 — JSON 전체가 limit바이트(UTF-8 인코딩 기준) 이하가 되게(잘렸으면 truncated 표시).
     GH1-13: 글자 수 대신 UTF-8 바이트로 셈(멀티바이트 텍스트가 글자 수 상한을 통과해도 실제 전송 바이트는 넘기던 문제) —
     MCP_MAX_CHARS 이름·기본값(20000)은 그대로 두고 단위만 바이트로 바꿈(SDK 봉투까지 포함한 실측·재조정은 서버에서).
-    AR5(k-sweep): CAP_RANKED(기본 켬, =0이면 예전 동작·바이트 동일) — 예전엔 목록에서 가장 긴 text부터 반씩 잘랐기 때문에
+    AR5(k-sweep) — 예전엔 목록에서 가장 긴 text부터 반씩 잘랐기 때문에
     1위 근거·집계 근거(via=aggregate, 늘 index 0)가 먼저 깎였다(synth-r2 k=10 80% 잘림). 이제는 순위(index, 0이 1위) 기준
     **가장 낮은 순위부터** 줄인다 — index 0과 via=aggregate 항목은 그것들만 남을 때까지 보호. 한 항목씩: (1) 글자수가
     _CAP_FLOOR(300) 넘는 가장 낮은 순위 항목을 반으로(질문 토큰 주변 창 유지, 비싸지 않으면, text가 str 아니면 str()로) ·
     (2) 더 줄일 게 없으면 가장 낮은 순위 항목을 통째로 뺌. 잘렸으면 truncated=True + truncation:{trimmed, dropped}(몇
-    건 줄였는지/뺐는지 — CAP_RANKED=0이면 이 필드 자체가 안 붙음, 바이트 동일 유지).
+    건 줄였는지/뺐는지).
     독립 검토 BLOCK 수정(10-12) — truncation 칸을 루프가 끝난 뒤에 덧붙이면 그 칸 자체의 바이트가 limit 비교에
     안 들어가 최종 결과가 limit을 넘길 수 있었다(예: {"question":"q","evidence":[{"text":12345},{"text":"y"*500}]},
     limit=100 → 예전엔 111바이트). 이제 루프 시작 전에 trimmed=0,dropped=0으로 넣어 매 비교에 포함하고, 끝났는데도
@@ -211,18 +211,6 @@ def cap(obj, limit=None):
     라운드로빈) — AR7(research()의 요건별 근거 그룹·answer 마지막 수단)에서 온 틀이고, S5(10-26, D-025)부터 그룹은 최상위
     evidence 하나뿐이라 AR5와 같은 단일 목록 동작이다(search 응답 바이트 그대로)."""
     limit = limit or CFG.MAX_CHARS
-    items = obj.get("evidence", [])
-    if not mc.cfg().output.cap_ranked:  # 예전 동작 그대로 — 바이트 동일(GH1-13 집행 그대로 유지)
-        while len(json.dumps(obj, ensure_ascii=False).encode("utf-8")) > limit and items:
-            e = max(items, key=lambda x: len(x.get("text") or ""))
-            t = e.get("text") or ""
-            if len(t) <= 80:
-                items.pop()  # 더 줄일 본문이 없으면 뒤 근거부터 뺌
-                obj["truncated"] = True
-                continue
-            e["text"] = t[: len(t) // 2] + " …(잘림)"
-            obj["truncated"] = True
-        return obj
     question = obj.get("question")
     obj["truncation"] = {"trimmed": 0, "dropped": 0}  # BLOCK 수정 — limit 비교에 이 칸 바이트도 매번 들어가게 먼저 넣음
     trimmed_ids = set()

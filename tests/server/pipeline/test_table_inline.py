@@ -1,13 +1,12 @@
 """pipeline.transform.represent.table_inline 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.table_inline`."""
 
-from pipeline import config as pc
-from pipeline.transform.represent.table_inline import inline_tables, on
+from pipeline.transform.represent.table_inline import inline_tables
 
 
 def selftest():
     # (1) one-cell-per-line body + a grid -> span replaced by a markdown table, neighbors untouched
     rep = {"text": "앞 문단\nA\nB\n1\n2\n뒤 문단", "tables": [{"grid": [["A", "B"], ["1", "2"]], "page": None}]}
-    info = inline_tables(rep, "eng1", {}, False)
+    info = inline_tables(rep, "eng1", {})
     assert info == {"on": True, "groups": 1, "inlined": 1, "unmatched": 0, "sources": {"eng1": 1}, "residue": 0}, info
     assert rep["text"] == "앞 문단\n| A | B |\n|---|---|\n| 1 | 2 |\n뒤 문단", rep["text"]
     assert rep["tables_std"] == [
@@ -18,14 +17,14 @@ def selftest():
     # (2) two engines' grids for the same table -> the more complete one wins and is recorded
     rep2 = {"text": "A\nB\n1\n2", "tables": [{"grid": [["A", "B"], ["1", ""]], "page": 1}]}  # winner's own grid has a hole
     other2 = {"eng2": {"tables": [{"grid": [["A", "B"], ["1", "2"]], "page": 1}]}}  # another engine saw it whole
-    info2 = inline_tables(rep2, "eng1", other2, False)
+    info2 = inline_tables(rep2, "eng1", other2)
     assert info2["sources"] == {"eng2": 1} and info2["inlined"] == 1, info2
     assert rep2["tables_std"][0]["source_engine"] == "eng2" and rep2["tables_std"][0]["rows"] == [["1", "2"]], rep2["tables_std"]
     print("[selftest] choose_grid — more complete grid (no hole) wins over the winning engine's own weaker one 통과")
 
     # (3) no confident span -> text unchanged, recorded as unmatched
     rep3 = {"text": "표와 전혀 무관한 본문", "tables": [{"grid": [["X", "Y", "Z"], ["1", "2", "3"]], "page": None}]}
-    info3 = inline_tables(rep3, "eng1", {}, False)
+    info3 = inline_tables(rep3, "eng1", {})
     assert info3 == {"on": True, "groups": 1, "inlined": 0, "unmatched": 1, "sources": {"eng1": 1}, "residue": 0}, info3
     assert rep3["text"] == "표와 전혀 무관한 본문"
     assert rep3["tables_std"][0]["inline"] is False
@@ -33,15 +32,9 @@ def selftest():
 
     # (4) cells containing '|' are escaped
     rep4 = {"text": "A|B\n1\n2", "tables": [{"grid": [["A|B"], ["1"], ["2"]], "page": None}]}
-    info4 = inline_tables(rep4, "eng1", {}, False)
+    info4 = inline_tables(rep4, "eng1", {})
     assert info4["inlined"] == 1 and "| A\\|B |" in rep4["text"], rep4["text"]
     print("[selftest] to_markdown 재사용 — 칸 안 '|' escape 통과")
-
-    # (5) PARSE_TABLE_INLINE=0 -> byte-identical rep text and tables_std (represent.py gate, checked at that layer)
-    assert on("1") is True and on("0") is False and on() in (True, False)
-    with pc.PIPE.env(PARSE_TABLE_INLINE="0"):  # S7c — 설정 객체만 바꿔 끼움
-        assert on() is False
-    print("[selftest] PARSE_TABLE_INLINE=0 — on() 꺼짐(represent.py가 이 모듈을 안 부름, 바이트 동일) 통과")
 
     # (6) render_md does not duplicate an inline table but still appends an unmatched one — see
     # pipeline/load/parsing_meta.py render_md()'s own test (TA1 adds the `inline` skip there);
@@ -53,7 +46,7 @@ def selftest():
     # time); reading_order_cells must still find the table span correctly despite the filled duplicates.
     filled_grid = [["배치", "배치", "품목"], ["1", "1", "사과"]]  # colspan-merged header (dup in row0) + a real 3rd col
     rep7 = {"text": "머리말\n배치\n품목\n1\n사과\n꼬리말", "tables": [{"grid": filled_grid, "page": None}]}
-    info7 = inline_tables(rep7, "eng1", {}, False)
+    info7 = inline_tables(rep7, "eng1", {})
     assert info7["inlined"] == 1, info7
     assert rep7["tables_std"][0]["rows"] == [["1", "1", "사과"]], rep7["tables_std"]  # merge-filled duplicate kept in the rendered grid
     assert "| 배치 | 배치 | 품목 |" in rep7["text"], rep7["text"]
@@ -63,7 +56,7 @@ def selftest():
     # 교체 영역에 함께 들어가는) 지워지지 않고 표 바로 뒤에 원래 순서대로 남는다.
     footnote = "※측정오차있음"  # 9자 — GAP_MAX_CHARS(20) 안
     rep8 = {"text": f"머리말\nA\nB\n1\n{footnote}\n2\n꼬리말", "tables": [{"grid": [["A", "B"], ["1", "2"]], "page": None}]}
-    info8 = inline_tables(rep8, "eng1", {}, False)
+    info8 = inline_tables(rep8, "eng1", {})
     assert info8["inlined"] == 1 and info8["residue"] == 1, info8
     assert footnote in rep8["text"] and "꼬리말" in rep8["text"] and "머리말" in rep8["text"], rep8["text"]
     # 각주는 표 뒤에, 표 자체 칸 값은 안 바뀜

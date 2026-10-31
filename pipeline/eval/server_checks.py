@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""서버 측정 묶음(server measurement pack) — 서버 대기 중인 파싱·색인 측정(AR1·AR6·T1)을 각각
+"""서버 측정 묶음(server measurement pack) — 서버 대기 중인 파싱·색인 측정(AR6·T1)을 각각
 한 명령으로 돌려 간단한 markdown/JSON 표를 낸다. 전부 읽기 전용(서버 데이터를 바꾸지 않음) · 결과는 output/ 아래에만
 씀 · 새 유료 호출 없음(서버 내부 모델이 평소 돌던 경로 — 검색의 임베딩 호출 등 — 는 정상 동작이라 허용, 자세한 사유는
 각 서브커맨드 설명 참고).
@@ -7,16 +7,13 @@ S5(10-26, T-15 — D-021 ④) — 검색 측정 br54·l8·gh114는 mcp_server/cl
 import하지 않게 — 결과 폴더 output/server_checks/<이름>은 그대로).
 
 서브커맨드:
-  ar1    조각 투표 계열(PARSE_FUSE·_SIGNALS) 끄고 켬 — 사람 정답(GOLD_DIR) 기준 재채점.
-         기존 엔진 결과(--parse-dir)를 복사해 다시 represent만 돈다(엔진 재실행 없음). (재판독 P2·P3·--run-vlm은 pl-34 10-30에 지움)
   ar6    기존 파싱 결과(_images/index.jsonl)에서 그림 종류별·문서 형식별 VLM 호출 수를 센다. 새 VLM 호출 없음.
          --ocr을 주면(선택, 로컬 OCR — VLM 아님) OCR 게이트(글자 수≥N·숫자 비율<0.30) 후보 비율도 같이 잰다.
   t1     PG 표본 청크의 chunk_term을 common.core.text.tokens로 다시 계산해 저장된 값과 비교(재색인 필요 여부).
          --bundle을 주면 그 번들의 head 포함 원문으로 더 정확히 비교(없으면 PG의 doc.file_name·client·chunk.section으로
-         head를 재구성 — CHUNK_HEAD 끔이면 머리말 없음).
+         head를 재구성).
 
 사용:
-  python -m pipeline.eval.server_checks ar1 --gold /srv/rag/answer-key --parse-dir output/parse --src output/prepared [--max-docs 5]
   python -m pipeline.eval.server_checks ar6 --parse-dir output/parse --src output/prepared [--ocr]
   python -m pipeline.eval.server_checks t1 [--sample 200] [--bundle output/edw/bundle] [--pool]
 """
@@ -27,16 +24,12 @@ from common.core.console import utf8_stdout
 # isort: split
 import argparse
 import json
-import shutil
-import subprocess
 import sys
-import time
 from collections import Counter
 from pathlib import Path
 
 from common.config import settings as C  # common 칸(S7e1 — MCP_BUNDLE)
 from common.core.paths import APP_ROOT, PKG_ROOT  # 런타임 output/(패키지 폴더 DEV 아님, v4 leftover 수정) · 엔진 구성(S2)
-from pipeline import config as pc  # S7c — 설정 객체(pipeline 칸: GOLD_DIR·CHUNK_HEAD)
 
 HERE = Path(__file__).resolve().parent  # deploy/pipeline/eval(S4 — 옛 deploy/common_tools/cli)
 DEV = PKG_ROOT  # 하위 프로세스 cwd — deploy/common/(S6a — 옛 deploy/common_tools/와 같은 깊이)
@@ -48,168 +41,6 @@ def _out_dir(name, override=None):
     d = Path(override) if override else (OUT_BASE / name)
     d.mkdir(parents=True, exist_ok=True)
     return d
-
-
-# ───────────────────────── AR1 — 조각 투표 계열 끄고 켬(사람 정답 재채점) ─────────────────────────
-AR1_SWITCH_KEYS = ("PARSE_FUSE", "PARSE_FUSE_SIGNALS")
-AR1_CONFIGS = [
-    ("baseline", {}),
-    ("PARSE_FUSE_off", {"PARSE_FUSE": "0"}),
-    ("PARSE_FUSE_SIGNALS_off", {"PARSE_FUSE_SIGNALS": "0"}),
-]
-
-
-def _build_engine_base(parse_dir, dest, max_docs=None):
-    """parse_dir(엔진 원본 결과)에서 _rep·_images 등을 뺀 엔진별 결과만 dest에 복사 — --max-docs면 문서 수를 줄여 복사.
-    반환: 복사한 문서 이름 목록(정렬)."""
-    parse_dir = Path(parse_dir)
-    runs = [json.loads(ln) for ln in (parse_dir / "runs.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
-    docs = sorted({r["doc"] for r in runs})
-    if max_docs:
-        docs = docs[: int(max_docs)]
-    docset = set(docs)
-    if dest.exists():
-        shutil.rmtree(dest)
-    dest.mkdir(parents=True, exist_ok=True)
-    (dest / "runs.jsonl").write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in runs if r["doc"] in docset), encoding="utf-8")
-    for eng_dir in parse_dir.iterdir():
-        if not eng_dir.is_dir() or eng_dir.name.startswith("_") or eng_dir.name == "raw":
-            continue
-        for f in eng_dir.glob("*.json"):
-            if f.stem in docset:
-                (dest / eng_dir.name).mkdir(parents=True, exist_ok=True)
-                shutil.copy2(f, dest / eng_dir.name / f.name)
-    return docs
-
-
-def _stack_args(stack):
-    """represent 인자 — 파일 경로면 --stack(PC·시험), 판 번호면 --stack-version, None이면 없음(PC 파일 — pl-32)."""
-    if stack is None:
-        return []
-    return ["--stack-version", str(stack)] if isinstance(stack, int) else ["--stack", str(stack)]
-
-
-def _run_represent(dev_root, stack_path, parse_dir, src_dir, env):
-    cmd = [
-        sys.executable,
-        "-m",
-        "pipeline.transform.represent.represent",
-        *_stack_args(stack_path),
-        "--parse-dir",
-        str(parse_dir),
-        "--src",
-        str(src_dir),
-    ]
-    t0 = time.perf_counter()
-    r = subprocess.run(cmd, cwd=str(dev_root), env=env, capture_output=True, text=True)
-    sec = time.perf_counter() - t0
-    if r.returncode != 0:
-        raise RuntimeError(f"represent.py 실패(rc={r.returncode}):\n{r.stdout[-2000:]}\n{r.stderr[-2000:]}")
-    return sec
-
-
-def _run_score_gold(dev_root, gold_dir, parse_dir, src_dir, out_dir, env):
-    cmd = [
-        sys.executable,
-        "-m",
-        "pipeline.eval.score_gold",
-        "--gold",
-        str(gold_dir),
-        "--parse",
-        str(parse_dir),
-        "--src",
-        str(src_dir),
-        "--out",
-        str(out_dir),
-        "--plain-names",
-    ]
-    r = subprocess.run(cmd, cwd=str(dev_root), env=env, capture_output=True, text=True)
-    if r.returncode != 0:
-        raise RuntimeError(f"score_gold.py 실패(rc={r.returncode}):\n{r.stdout[-2000:]}\n{r.stderr[-2000:]}")
-    return json.loads((out_dir / "score.json").read_text(encoding="utf-8"))
-
-
-def _ar1_markdown(results):
-    L = [
-        "# AR1 — 조각 투표 계열 끄고 켬(사람 정답 기준)",
-        "",
-        "| 설정 | value_recall | char_acc_post | table_cell_recall | num_halluc | represent 초 |",
-        "|---|---|---|---|---|---|",
-    ]
-    base = (results.get("baseline") or {}).get("rep") or {}
-    for name, r in results.items():
-        rep = r.get("rep") or {}
-        L.append(
-            f"| {name} | {rep.get('value_recall', '—')} | {rep.get('char_acc_post', '—')} | "
-            f"{rep.get('table_cell_recall', '—')} | {rep.get('num_halluc', '—')} | {r.get('represent_sec', '—')} |"
-        )
-    if base:
-        L += ["", "## baseline 대비 문서별 value_recall 변화", "", "| 설정 | 문서 | baseline | 이 설정 | Δ |", "|---|---|---|---|---|"]
-        base_docs = (results.get("baseline") or {}).get("docs") or {}
-        for name, r in results.items():
-            if name == "baseline":
-                continue
-            for doc, v in (r.get("docs") or {}).items():
-                bv = base_docs.get(doc)
-                if bv is None or v is None:
-                    continue
-                d = round(v - bv, 4)
-                if d:
-                    L.append(f"| {name} | {doc} | {bv} | {v} | {d:+.4f} |")
-    return "\n".join(L) + "\n"
-
-
-def _run_ar1(
-    parse_dir,
-    src_dir,
-    gold_dir,
-    out_dir,
-    stack_path,
-    max_docs,
-    represent_fn=_run_represent,
-    score_fn=_run_score_gold,
-):
-    docs = _build_engine_base(Path(parse_dir), out_dir / "engine_base", max_docs)
-    print(f"[ar1] 대상 문서 {len(docs)}건(max_docs={max_docs or '전체'})")
-    results = {}
-    for name, overrides in AR1_CONFIGS:
-        cfg_dir = out_dir / f"cfg_{name}"
-        if cfg_dir.exists():
-            shutil.rmtree(cfg_dir)
-        shutil.copytree(out_dir / "engine_base", cfg_dir)
-        names = {**{k: None for k in AR1_SWITCH_KEYS}, **overrides, "PARSE_IMAGES_ROOT": str(cfg_dir / "_images")}
-        env = C.child_env(**names)  # 하위 프로세스(represent·score_gold) — 덮기 파일(S7e2 — 옛 env 사본에 스위치 지움·덮기)
-        env["PYTHONUTF8"] = "1"
-        sec = represent_fn(DEV, stack_path, cfg_dir, src_dir, env)
-        score_out = out_dir / f"gold_score_{name}"
-        if score_out.exists():
-            shutil.rmtree(score_out)
-        score = score_fn(DEV, gold_dir, cfg_dir, src_dir, score_out, env)
-        docs_rec = {doc: (d.get("rep") or {}).get("value_recall") for doc, d in score["docs"].items()}
-        results[name] = {"rep": score.get("rep") or {}, "docs": docs_rec, "represent_sec": round(sec, 2)}
-        print(f"[ar1] {name}: {results[name]['rep']} · {sec:.1f}s")
-        shutil.rmtree(cfg_dir, ignore_errors=True)
-    (out_dir / "ablation_results.json").write_text(json.dumps(results, ensure_ascii=False, indent=1), encoding="utf-8")
-    md = _ar1_markdown(results)
-    (out_dir / "ablation_report.md").write_text(md, encoding="utf-8")
-    return results, md
-
-
-def cmd_ar1(args):
-    out_dir = _out_dir("ar1", args.out)
-    gold = args.gold or pc.gold_dir()  # S7c — 설정 객체(S7e2 — 이미지 안 /data/gold 마운트 기본)
-    if not gold:
-        print("[ar1] --gold 필요(또는 환경변수 GOLD_DIR)", file=sys.stderr)
-        return 2
-    if args.stack:
-        stack_path = Path(args.stack)
-    else:  # pl-32 — 엔진 구성 판 번호(서버 = 판 표, PC = 파일이면 None)
-        from pipeline import stackcfg
-
-        stack_path = stackcfg.current().version_id
-    _results, md = _run_ar1(Path(args.parse_dir), Path(args.src), Path(gold), out_dir, stack_path, args.max_docs)
-    print(md)
-    return 0
 
 
 # ───────────────────────── AR6 — 기존 파싱 결과에서 VLM 호출 수·OCR 게이트 ─────────────────────────
@@ -342,8 +173,6 @@ def _crop_ocr_lazy():
 
 # ───────────────────────── T1 — 재색인 검증 ─────────────────────────
 def _reconstruct_head(file_name, client, section):
-    if not pc.cfg().transform.structure.chunk_head:  # S7c — 설정 객체(옛 env == "0"이면 끔)
-        return ""
     parts = [x for x in (Path(file_name).stem, client, section) if x]
     return "[" + " · ".join(parts) + "]" if parts else ""
 
@@ -389,7 +218,7 @@ def cmd_t1(args, db_factory=None):
     rate = round(mism / checked, 4) if checked else None
     print(f"[t1] 표본 {checked}건(번들 대조 {bundle_hits}건) · 불일치 {mism}건 · 불일치율 {rate}")
     if mism:
-        print("[t1] 불일치 > 0 — BM25_STAT_REBUILD=1 python cli/pipeline.py load --replace 아직 필요(T1 백로그)")
+        print("[t1] 불일치 > 0 — term_stat을 비우고 load --replace로 다시 셈(T1 백로그)")
     out_dir = _out_dir("t1", args.out)
     (out_dir / "t1_report.json").write_text(
         json.dumps(
@@ -411,14 +240,6 @@ def build_parser():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
     sub = ap.add_subparsers(dest="cmd")
 
-    p = sub.add_parser("ar1", help="조각 투표 계열 끄고 켬 — 사람 정답 재채점")
-    _add_common(p, "ar1")
-    p.add_argument("--parse-dir", default=str(APP_ROOT / "output" / "parse"))
-    p.add_argument("--src", default=str(APP_ROOT / "output" / "prepared"))
-    p.add_argument("--gold", default=pc.gold_dir())  # S7c — 설정 객체(S7e2 — 이미지 안 /data/gold 마운트 기본)
-    p.add_argument("--stack", default=None)
-    p.add_argument("--max-docs", type=int, default=None)
-
     p = sub.add_parser("ar6", help="기존 파싱 결과의 그림 VLM 호출 수·OCR 게이트")
     _add_common(p, "ar6")
     p.add_argument("--parse-dir", default=str(APP_ROOT / "output" / "parse"))
@@ -437,7 +258,6 @@ def build_parser():
 
 
 SUBCOMMANDS = {
-    "ar1": cmd_ar1,
     "ar6": cmd_ar6,
     "t1": cmd_t1,
 }

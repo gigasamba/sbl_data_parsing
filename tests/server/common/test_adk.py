@@ -319,7 +319,7 @@ def selftest():
     # 빈 응답 안전망 밖이었다. page_transcribe(output_schema 없음, vlm_page.py가 실제로 쓰는 패키지)로: ① 1차가 빈
     # 응답(토큰 소모)→4배 max_tokens로 딱 한 번 재요청→성공(요청 2회·공유 장부 2건=counted) ② 재요청도 빈 응답이면
     # 그대로 반환(요청 2회에서 끝 — 무한 재시도 없음) ③ call_reserved=True(chat()이 이미 자기 안전망을 가진 모양)는
-    # 여기서 또 재요청하지 않는다(두 안전망이 겹치면 최대 4회까지 늘어나는 것을 막음) ④ LLM_EMPTY_RETRY=0(끔) 존중.
+    # 여기서 또 재요청하지 않는다(두 안전망이 겹치면 최대 4회까지 늘어나는 것을 막음).
     def _rv16_server(bodies):
         hits = []
 
@@ -375,17 +375,9 @@ def selftest():
             assert text == "" and len(hitsF) == 1, (text, hitsF)
     finally:
         srvF.shutdown()
-
-    srvG, hitsG = _rv16_server([("", 50), ("실제 답", 60)])
-    try:  # LLM_EMPTY_RETRY=0 — 끔(기존 env 스위치 그대로 존중)
-        with COMMON.env(VLM_BASE_URL=f"http://127.0.0.1:{srvG.server_address[1]}/v1", VLM_MODEL="mock", LLM_EMPTY_RETRY="0"):
-            text, u = complete("vlm", [{"role": "user", "content": "x"}], max_tokens=500, agent="page_transcribe")
-            assert text == "" and len(hitsG) == 1, (text, hitsG)
-    finally:
-        srvG.shutdown()
     print(
         "[selftest] RV16 — 직접 호출자(agent=) 빈 응답 1회 재요청(4배 max_tokens)·공유 장부 집계(counted) · "
-        "재요청도 빈 응답이면 그대로 · call_reserved=True(chat() 자기 안전망)는 안 겹침 · LLM_EMPTY_RETRY=0 끔 통과"
+        "재요청도 빈 응답이면 그대로 · call_reserved=True(chat() 자기 안전망)는 안 겹침 통과"
     )
 
     # agent= — 리다이렉트 차단(DONT 13). _redirect_block 상자(1차 신호)로 판정해 ① 실제 연결 0(8.8.8.8에 안 닿음·짧은 시간)

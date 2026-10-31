@@ -87,7 +87,7 @@ def test_old_connection_fields_only_warn():
     with tempfile.TemporaryDirectory() as d:
         y = Path(d) / "old.yaml"
         y.write_text(
-            "common:\n  run_env: dev\n  connections:\n"
+            "required:\n  env: {run_env: dev}\ncommon:\n  connections:\n"
             "    edw: {server: s, user: u, password: p, conn_file: f}\n"
             "    parsing_meta: {host: h, user: u, password: p, database: d, port: 1433, sqlite: x, connect_kwargs: '{}', table: AI.ParsingMeta}\n",
             encoding="utf-8",

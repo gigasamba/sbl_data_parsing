@@ -5,19 +5,19 @@
 #   S6b(D-020) 이미지 2개 — score_gold·run_board → parse 서비스 · rdb_discover·check_env → load 서비스(둘 다 data-pipeline·DATA_PIPELINE_IMAGE —
 #   서비스는 자원 한도만 다름, 옛 data-parsing·data-structure 배정 그대로) · mcp_eval → retrieval 서비스(mcp-server·MCP_SERVER_IMAGE,
 #   S5부터 mcp_server/cli/ — 검색 코드를 top-level import)
-#   GOLD_DIR(settings.yaml pipeline.host.gold_dir)에 해당하는 서버 폴더가 있으면 자동으로 /data/gold:ro 읽기 전용 연결 — 컨테이너 안 앱은 앱 칸
+#   GOLD_DIR(settings.yaml ops.pipeline_host.gold_dir)에 해당하는 서버 폴더가 있으면 자동으로 /data/gold:ro 읽기 전용 연결 — 컨테이너 안 앱은 앱 칸
 #   pipeline.paths.gold_dir가 비었으면 /data/gold를 읽음(pipeline.config.gold_dir — 옛 `-e GOLD_DIR=/data/gold` 자리, S7e2·S7e3 B-3: migrate는 서버 env의
 #   GOLD_DIR를 호스트 칸에만 옮김. 서버 settings.yaml에 앱 칸을 적으면 그 값이 이김 — 비워 둠)
 #   (server-run-plan.md 2단계 명령을 이걸로 바꿔도 됨: PY_PARSE="run_tool.sh score_gold" 같은 식)
 # 설정: settings.yaml 호스트 칸(trigger.sh와 같음 — settings_env.sh load_settings, S7e1) · DATA_PIPELINE_IMAGE · MCP_SERVER_IMAGE(image_vars.sh — 옛 이미지 변수만 있으면 멈춤)
-#   · PATCH_CODE(셸 env에 있으면 compose.patch.yml도 덧붙임, image-patch-process §2-1 — 옛처럼 부른 쪽 셸 env만 — settings.yaml common.host.patch_code는 compose 마운트 원본으로만)
+#   · PATCH_CODE(셸 env에 있으면 compose.patch.yml도 덧붙임, image-patch-process §2-1 — 옛처럼 부른 쪽 셸 env만 — settings.yaml ops.host.patch_code는 compose 마운트 원본으로만)
 #   · 도구가 읽는 앱 설정 값을 바꿀 때는 settings.yaml을 직접 고친다(`X=값 run_tool.sh …`의 옛 env 이름은 앱이 안 읽음 · 덮기 파일 도구는 PC 전용 — S7e3, 사용자 10-28)
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트(S6b)
 patch_given=${PATCH_CODE:-}             # 부른 쪽이 준 PATCH_CODE만(아래 load_settings 전 — 옛 동작 그대로)
 . deploy/host/scripts/settings_env.sh && load_settings || exit $?   # S7e1 — settings.yaml 호스트 칸 → 셸 env(trigger.sh와 같음)
 . deploy/host/scripts/image_vars.sh; code_dir_default DATA_PIPELINE_IMAGE   # op-06 — 실행 이미지면 코드 폴더 루트 · S6b — need_image(아래 — compose.pipeline.yml이 두 변수를 다 치환하므로 둘 다)
-DC="${DOCKER:-docker} compose -f deploy/host/compose/compose.pipeline.yml"   # DOCKER(settings common.host.docker) — podman이면 podman compose(사용자 10-30 검토 B4)
+DC="${DOCKER:-docker} compose -f deploy/host/compose/compose.pipeline.yml"   # DOCKER(settings ops.host.docker) — podman이면 podman compose(사용자 10-30 검토 B4)
 [ -n "${CODE_DIR:-}" ] && DC="$DC -f deploy/host/compose/compose.code.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 /app/deploy에
 [ -n "$patch_given" ] && [ -f deploy/host/compose/compose.patch.yml ] && DC="$DC -f deploy/host/compose/compose.patch.yml"
 

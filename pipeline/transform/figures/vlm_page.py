@@ -34,8 +34,7 @@ PID_PAGE = prompt_id("page", "v1", P_PAGE)  # 프로토타입과 같은 글자 �
 DPI, MAX_SIDE = 150, 2000  # pages_of()·_png() 렌더 매개변수 — 결정적 열쇠에 들어감(바뀌면 새 열쇠)
 
 # AD12·AD46(D2·D4·D6 공용 문서 검사 표) — 글자 PDF 안의 스캔 쪽 판정 기준값. 문서 단위 is_scan의 20자와 같은 값으로 보수적으로
-# 맞춤. AD31(10-11) — PARSE_PAGE_SCAN 기본 켬(OP11, "새 기능 기본 켬") · PARSE_PAGE_SCAN=0으로 끄면 scan_pages를
-# 아예 안 불러 이전(기본 꺼짐 시절) 동작과 바이트 동일.
+# 맞춤(AD31 — 글자 PDF 안의 스캔 쪽 신호는 늘 봄).
 PAGE_SCAN_CHARS = 20  # 글자층 "거의 없음"
 PAGE_SCAN_AREA = 0.6  # 이미지 면적 비율(쪽 면적 대비) "큼"
 # AD31 — 쓰레기·숨은 글자층 신호(garbage_ratio는 AD12부터 신호 표에 있었고, hidden_ratio는 이번에 추가). 이미지 면적
@@ -489,7 +488,6 @@ def page_targets(doc_path):
         독립 검토가 지적한 원래 버그: figures.py가 scan_pages()만 보고 이 조건을 몰라, 쪽 VLM이 안 도는데도 그림을 건너뛰어 내용 손실)
       - VLM_PAGE_MAX=='0'(비용·시간 가드로 꺼짐)
       - PDF도 아니고 문서 전체 스캔(is_scan)도 아님 — 쪽 VLM 대상 자체가 없음
-      - 글자 PDF인데 PARSE_PAGE_SCAN=0 — 쪽 신호 자체를 안 봄
       - 글자 PDF인데 스캔 신호 쪽이 하나도 없음(scan_pages 빈 목록)
     남는 경우: 문서 전체가 스캔(이미지 파일 또는 스캔 PDF)이면 전체 쪽, 아니면 scan_pages() 결과 — 거기에
     VLM_PAGE_MAX(cap) 절단까지 적용한 뒤 집합으로(독립 검토가 지적한 둘째 버그: cap으로 잘려 실제로 안 불릴
@@ -504,7 +502,7 @@ def page_targets(doc_path):
     p = Path(doc_path)
     if is_scan(p):
         return pick_pages(len(pages_of(p)), True, [], cap)
-    if not pc.cfg().extract.page_scan or p.suffix.lower() != ".pdf":
+    if p.suffix.lower() != ".pdf":
         return set()
     # AD12·AD31 — 글자 PDF 안의 스캔 쪽만(쓰레기·숨은 글자층·OCR≫글자층·회전·벡터 도식 신호 — scan_pages_detail 참고)
     return pick_pages(0, False, scan_pages(p), cap)
@@ -518,7 +516,7 @@ def pick_pages(n_pages, whole_scan, scan, cap):
 
 
 def page_text_pages(doc_path):
-    """문서 전체(또는 AD12·AD31 — 글자 PDF 안의 스캔 쪽만, `PARSE_PAGE_SCAN=0`이 아닌 한 기본 켬) 쪽 VLM 옮기기 —
+    """문서 전체(또는 AD12·AD31 — 글자 PDF 안의 스캔 쪽만) 쪽 VLM 옮기기 —
     쪽 단위로 [(쪽 번호, 글, provenance), ...] (scan_fill이 그 쪽만 채우려면 page_text처럼
     합친 글이 아니라 쪽 번호가 필요). 대상 쪽 계산은 page_targets()(단일 진본, figures.py와 공유) — 여기선 그
     번호로 실제 렌더·VLM 호출만 한다."""
@@ -582,10 +580,8 @@ def page_text_pages(doc_path):
 
 
 def page_text(doc_path):
-    """문서 전체(또는 AD12·AD31 — 글자 PDF 안의 스캔 쪽만, 기본 켬) 쪽 VLM 옮기기 — 둘 다 아니면 빈 문자열
+    """문서 전체(또는 AD12·AD31 — 글자 PDF 안의 스캔 쪽만) 쪽 VLM 옮기기 — 둘 다 아니면 빈 문자열
     (호출 0) · VLM_PAGE_MAX=0이면 꺼짐. 반환: (쪽마다 옮긴 글자를 합친 것, [쪽별 provenance]). 결정적 열쇠(det)는
-    rotation.csv의 orig_sha256·angle로 — 없으면 렌더 바이트 sha로 대체(옛 rotation.csv·목록에 없는 문서).
-    AD31(10-11) — PARSE_PAGE_SCAN 기본 켬(신호 대상 쪽만 쪽 VLM 실제 호출, 비용·쪽 상한은 그대로) ·
-    `PARSE_PAGE_SCAN=0`이면 scan_pages를 안 부르고 이전(기본 꺼짐 시절) 동작과 바이트 동일."""
+    rotation.csv의 orig_sha256·angle로 — 없으면 렌더 바이트 sha로 대체(옛 rotation.csv·목록에 없는 문서)."""
     pages = page_text_pages(doc_path)
     return "\n".join(t for _, t, _ in pages if t), [pv for _, _, pv in pages]

@@ -18,7 +18,7 @@
 <a id="mc-02"></a>
 ## mc-02 · 질문 이해 — 넓히기
 - 이유: 사용자는 동의어, 약어, 여러 고객을 한꺼번에 넣어 묻는다.
-- 무엇: BM25용 용어집 넓히기(동의어 1.0 / 약어 0.8 / 약한 것 0.3, 고객 목록 별칭, 최대 20), vector 질의에 별칭 글 붙이기, 비교 질문은 고객별로 나눠 찾기(`SEARCH_ENTITY_SPLIT`, 번갈아 합치기 `search_svc._gather`), 가중치용 규칙 기반 질문 유형. LLM 질문 분해는 10-29에 지움(`decompose` 입력은 받고 무시, `subs`는 늘 `[]`).
+- 무엇: BM25용 용어집 넓히기(동의어 1.0 / 약어 0.8 / 약한 것 0.3, 고객 목록 별칭, 최대 20), vector 질의에 별칭 글 붙이기, 비교 질문은 고객별로 나눠 찾기(번갈아 합치기 `search_svc._gather`), 가중치용 규칙 기반 질문 유형. LLM 질문 분해는 10-29에 지움(`decompose` 입력은 받고 무시, `subs`는 늘 `[]`).
 - 파일: `mcp_server/services/search/terms.py`, `qtype.py`, `search_svc.py`.
 - Status: done
 
@@ -169,7 +169,7 @@
 
 ### 요건 없는 코드 — 남길지(앵커를 씀) 지울지([test.md#e2-18](test.md#e2-18))
 - `AI.ParsingMeta`에서 근거의 파싱 결과 경로(`MCP_EVIDENCE_PATHS`, 켜짐). `shaping.py`. 0.2.0에 ParsingMeta 조회 길을 없앤다(C8 — [mc-15](#mc-15)).
-- 질문 개체로 동점 가르기(`SEARCH_TIE_BREAK`, 켜짐). `search_svc.py`.
+- 질문 개체로 동점 가르기(늘 켬 — 스위치는 op-08에 지움). `search_svc.py`.
 - PG 대역(PG 설정이 없으면 SQLite — PC). `common/store/pg_standin.py`.
 - 문서 대장 CLI. `mcp_server/cli/registry_cli.py`.
 
@@ -178,7 +178,6 @@
 |---|---|---|
 | 하드 고객 격리 | `SEARCH_CLIENT_HARD=0`, `SEARCH_CLIENT_STRICT=0` | — |
 | 늘 새 판 먼저 | `SEARCH_RECENCY=1`("최신" 질문만, `2` = 늘) | — |
-| 애매한 집계용 LLM 라우터 | `SEARCH_AGG_LLM=0` | LLM |
 | `query_edw` | `EDW_QUERY=1` | `common.connections.rdb` + 읽기 계정, 또는 `RDB_SQLITE` |
 | `edw_meta` | — | `EDW_META_DIR`의 자료(기본 `/app/config/edw_meta`) |
 | `parse_document` | `PARSE_OCR_ENGINE=0`(OCR/VLM 엔진 없음 — `PARSE_MCP_OCR`은 10-29에 합침) · 제한 글자 쪽당 1초, VLM 쪽당 60초 | `mcp_parse_service` 실행 + `PARSE_SERVICE_TOKEN` |

@@ -7,7 +7,7 @@
    다른 레인에서 가져옴) — 기본 레인마다 1·1(사용자 10-29, docs/prd/runner.md rn-01). vlm 문서는 동시 VLM_CAP(2)까지.
    구조화 대기 문서가 STRUCT_BACKLOG(기본 구조화 워커 × 2)개 이상이면 새 파싱을 시작하지 않고 기다림(rn-02).
    레인·대기 길이는 상태가 바뀔 때마다 batch_progress/queue_depth.jsonl에 한 줄(rn-02).
-   값은 settings.yaml pipeline.host.run_docs(비우면 아래 RUN_DOCS_DEFAULTS) — --warm·--struct-workers 인자가 그 위를 덮음.
+   값은 settings.yaml ops.run_docs(비우면 아래 RUN_DOCS_DEFAULTS) — --warm·--struct-workers 인자가 그 위를 덮음.
 3) 구조화+적재 — 문서 경계 없이: 파싱이 끝난 문서부터 곧바로 build_bundle(EMBED_BATCH=32·EMBED_CONCURRENCY=6,
    문서당 제약 없이 구조화 스트림 안에서 적용) → pgvector_load(BM25_THREADS=2) → publish(OS+EDW) → 임시 삭제.
    STRUCT_WORKERS(기본 2)개 스레드가 문서를 연속으로 처리 — 배치 장벽 없이 파싱 끝나는 순서대로 흐름.
@@ -20,6 +20,7 @@
 import argparse
 import csv
 import datetime
+import functools
 import hashlib
 import json
 import os
@@ -34,10 +35,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 # S7e1(사용자 10-27 Q8 · D-028 ⑨ · C-29 ⑨) — 운영 접속 값·비밀·운영 고정값을 코드에서 지우고 서버 settings.yaml에서 읽는다(configure() — 시작 때 한 번).
 #   파일: --settings 또는 SETTINGS_FILE, 없으면 $SERVER_ENV_DIR/settings.yaml(기본 배치 /srv/rag/env). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
-#   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). common.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
+#   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). required.env.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
 #   docker exec로 부르는 컨테이너(data-pipeline-parse·structure)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
-#   작업 폴더(진행 기록 batch_progress/·batches/)는 pipeline.host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더(옛 test_space/rfp_all_output)는
-#   common.host.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로, C-29 ⓑ를 코드로 보장 — 사용자 Q8 ⑤).
+#   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.pipeline_host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더(옛 test_space/rfp_all_output)는
+#   required.deploy.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로, C-29 ⓑ를 코드로 보장 — 사용자 Q8 ⑤).
 TEST = PROG = DOCSPACE = DOCFLOW = WARM = ENVFILE = PATCH_CODE = None  # configure()가 채움
 _EDW: dict = {}  # parsing-meta EDW 접속(호스트 pymssql — edw_list·edw_done_keys)
 WARM_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # warm 파일 이름의 원천 버킷 · 문서 수 세기(psql)
@@ -68,28 +69,54 @@ def _yget(doc, path):
     return doc
 
 
+@functools.cache
+def _layout():
+    """설정 배치 모듈(common/config/layout.py — 표준 라이브러리만)을 파일로 읽음 — 호스트 python은 pydantic이 없어 common 패키지를 import하지 않는다."""
+    import importlib.util
+
+    # 저장소 배치(<루트>/common) · 서버 코드 폴더 배치(<루트>/app/deploy/common — make_patch 오버레이)
+    path = next(
+        (p for p in (ROOT.parents[2] / "common", ROOT.parents[2] / "app" / "deploy" / "common") if (p / "config" / "layout.py").is_file()),
+        None,
+    )
+    if path is None:
+        sys.exit("run_docs: common/config/layout.py 없음 — 코드 폴더(저장소 또는 app/deploy)에서 실행")
+    spec = importlib.util.spec_from_file_location("settings_layout", path / "config" / "layout.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def read_settings(settings_file=None):
     """(사전, 문제) — 서버 settings.yaml을 쓴 글자 그대로 읽는다(BaseLoader — 스칼라는 모두 글자: `password: 0123`·`user: no`가 83·False로
-    바뀌지 않게, 앱 설정 모델의 글자 칸 규칙과 같음 — S7e1 리뷰). 파일: settings_file > SETTINGS_FILE > $SERVER_ENV_DIR/settings.yaml. 값은 찍지 않는다."""
+    바뀌지 않게, 앱 설정 모델의 글자 칸 규칙과 같음 — S7e1 리뷰). 파일: settings_file > SETTINGS_FILE > $SERVER_ENV_DIR/settings.yaml. 값은 찍지 않는다.
+    파일 배치(required·역할 절 — op-08 ②)를 모델 배치(common·pipeline·mcp)로 바꿔 돌려준다 — 이 모듈의 칸 경로는 모델 경로."""
     env_dir = os.environ.get("SERVER_ENV_DIR") or "/srv/rag/env"  # env 남김 — 호스트 도구(settings_env.sh와 같음)
     path = Path(settings_file or os.environ.get("SETTINGS_FILE") or Path(env_dir) / "settings.yaml")  # env 남김 — 설정 파일 자리 신호(5-2)
     try:
         import yaml
     except ImportError:
         return {}, "호스트 python에 PyYAML이 없음 — pip install pyyaml(refactor.md C-09)"
+    lay = _layout()
     try:
-        doc = yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader) or {}  # BaseLoader(글자만, 객체 생성 없음)
+        # BaseLoader(글자만, 객체 생성 없음) + 같은 칸 두 번 거부(앱과 같게)
+        loader = lay.reject_dup_keys(type("Loader", (yaml.BaseLoader,), {}))
+        doc = yaml.load(path.read_text(encoding="utf-8"), Loader=loader) or {}
     except OSError as e:
         return {}, f"설정 파일을 읽지 못함: {path} ({e.strerror}) — --settings 또는 SETTINGS_FILE·$SERVER_ENV_DIR/settings.yaml"
-    except yaml.YAMLError:
-        return {}, f"설정 파일 YAML 형식 오류: {path}"
+    except yaml.YAMLError as e:
+        dup = getattr(e, "problem", "") or ""
+        return {}, f"설정 파일 YAML 형식 오류: {path}" + (f" — {dup}" if dup.startswith(lay.DUP_KEY) else "")
     if not isinstance(doc, dict):
-        return {}, f"설정 파일 맨 위는 절(common·pipeline·mcp) 사전이어야 함: {path}"
-    return doc, None
+        return {}, f"설정 파일 맨 위는 절(required·common·… tuning) 사전이어야 함: {path}"
+    try:
+        return lay.to_model(doc, str(path)), None
+    except lay.LayoutError as e:
+        return {}, str(e)
 
 
 def work_dir(doc):
-    """작업 폴더(진행 기록 batch_progress/·batches/) — pipeline.host.run_docs_dir, 비우면 이 스크립트 옆 test_space/(옛 자리). analyze_docflow.py도 씀."""
+    """작업 폴더(진행 기록 batch_progress/·batches/) — settings.yaml ops.pipeline_host.run_docs_dir(모델 pipeline.host.run_docs_dir), 비우면 이 스크립트 옆 test_space/(옛 자리). analyze_docflow.py도 씀."""
     work = _yget(doc, "pipeline.host.run_docs_dir")
     return Path(work) if work else ROOT / "test_space"
 
@@ -100,10 +127,10 @@ def configure(settings_file=None):
     doc, err = read_settings(settings_file)
     if err:
         return [err]
-    probs = [f"설정 필요: {p} — {why}" for p, why in SETTINGS_REQUIRED if _yget(doc, p) in (None, "")]
+    probs = [f"설정 필요: {_layout().to_yaml(p)} — {why}" for p, why in SETTINGS_REQUIRED if _yget(doc, p) in (None, "")]
     run_env = _yget(doc, "common.run_env")
     if run_env not in (None, "") and run_env not in ("dev", "prd"):
-        probs.append("common.run_env가 dev·prd가 아님 — 서버 전용 러너(로컬 실행 금지, CLAUDE.md 3절)")
+        probs.append("required.env.run_env가 dev·prd가 아님 — 서버 전용 러너(로컬 실행 금지, CLAUDE.md 3절)")
     policy, bad = run_docs_policy(doc)
     probs += bad
     if probs:
@@ -115,7 +142,7 @@ def configure(settings_file=None):
     DOCSPACE = Path(_yget(doc, "common.host.output_root"))  # 컨테이너 /app/output 공유 볼륨
     DOCFLOW = DOCSPACE / "docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     WARM = DOCSPACE / "_warm"  # SOURCE_WARM 대기열 저장소
-    # 컨테이너가 마운트하는 코드 폴더 — compose.patch*.yml·systemd·mcp_up.sh와 같은 칸(common.host.patch_code — 기본 배치 /srv/rag/code/live).
+    # 컨테이너가 마운트하는 코드 폴더 — compose.patch*.yml·systemd·mcp_up.sh와 같은 칸(ops.host.patch_code — 기본 배치 /srv/rag/code/live).
     PATCH_CODE = Path(_yget(doc, "common.host.patch_code") or "/srv/rag/code/live")
     jobs = _yget(doc, "mcp.host.jobs_dir")
     MCP_JOBS_DIR = Path(jobs) if jobs else DOCSPACE / "mcp_parse" / "jobs"
@@ -163,7 +190,6 @@ PARSE_SET = (
     "SOURCE_WARM=/app/output/_warm",
     "SOURCE_FETCH_WORKERS=2",
     "PARSE_REP_SELECT=first",
-    "PARSE_MERGE_PAGES=1",
     "PARSE_QA_LIGHT=1",
 )
 LIB_ENV = "PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache"  # env 남김 — 라이브러리(파이썬 자체 env, 설정 칸 아님)
@@ -271,7 +297,7 @@ def sweep_cmd(seq):
     )
 
 
-# ── 레인·대기열 정책(사용자 10-29 — docs/prd/runner.md rn-01·rn-02) — settings.yaml pipeline.host.run_docs(configure()가 읽음).
+# ── 레인·대기열 정책(사용자 10-29 — docs/prd/runner.md rn-01·rn-02) — settings.yaml ops.run_docs(configure()가 읽음).
 # 기본값은 설정 모델 pipeline.config.PipelineHostRunDocs와 같다(이 스크립트는 호스트 python이라 모델을 import하지 않음 — 시험이 둘을 대조).
 RUN_DOCS_DEFAULTS = {
     "warm": 20,  # 진입 대기열 — 미리 받아 둘 문서 수(진행 중 제외)
@@ -351,7 +377,7 @@ def pick_lane(own, shared, queues, inflight, vlm_cap):
 
 
 def run_docs_policy(doc):
-    """settings.yaml pipeline.host.run_docs → (값, 문제 목록). 비운 칸은 RUN_DOCS_DEFAULTS. 글자 그대로 읽으므로(BaseLoader) 정수로 바꿈."""
+    """settings.yaml ops.run_docs(모델 pipeline.host.run_docs) → (값, 문제 목록). 비운 칸은 RUN_DOCS_DEFAULTS. 글자 그대로 읽으므로(BaseLoader) 정수로 바꿈."""
     sec = _yget(doc, "pipeline.host.run_docs")
     sec = sec if isinstance(sec, dict) else {}
     vals, probs = {}, []
@@ -746,14 +772,10 @@ def main():
         "--workers",
         type=int,
         default=4,
-        help="쓰지 않음(옛 인자 — 옛 호출이 깨지지 않게 받기만 함, rn-04) — 레인 워커 수는 settings.yaml pipeline.host.run_docs",
+        help="쓰지 않음(옛 인자 — 옛 호출이 깨지지 않게 받기만 함, rn-04) — 레인 워커 수는 settings.yaml ops.run_docs",
     )
-    ap.add_argument(
-        "--warm", type=int, default=None, help="진입 대기열(미리 받을 문서 수) — 기본 settings.yaml pipeline.host.run_docs.warm(20)"
-    )
-    ap.add_argument(
-        "--struct-workers", type=int, default=None, help="구조화 스레드 수 — 기본 settings.yaml pipeline.host.run_docs.struct_workers(2)"
-    )
+    ap.add_argument("--warm", type=int, default=None, help="진입 대기열(미리 받을 문서 수) — 기본 settings.yaml ops.run_docs.warm(20)")
+    ap.add_argument("--struct-workers", type=int, default=None, help="구조화 스레드 수 — 기본 settings.yaml ops.run_docs.struct_workers(2)")
     ap.add_argument("--filter", default="RFP,proposal")
     ap.add_argument("--limit", type=int, default=0, help="시험 — 이 개수만 처리")
     ap.add_argument("--seqs", default="", help="임의 문서 집합(쉼표 seq 목록) — 지정 시 연속 범위 대신 이 목록만 처리")
@@ -778,7 +800,7 @@ def main():
     probs = code_layout_problems()
     if not MCP_JOBS_DIR.is_dir():
         log(
-            f"[안내] MCP 업로드 작업 폴더 {MCP_JOBS_DIR} 없음 — MCP 업로드 감지(medium 레인 양보) 꺼짐, 다른 자리면 settings.yaml mcp.host.jobs_dir"
+            f"[안내] MCP 업로드 작업 폴더 {MCP_JOBS_DIR} 없음 — MCP 업로드 감지(medium 레인 양보) 꺼짐, 다른 자리면 settings.yaml ops.mcp_host.jobs_dir"
         )
     if probs:
         for msg in probs:

@@ -1,10 +1,9 @@
 """pipeline.load.structured 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.load.structured --selftest`."""
 
-import json
 from pathlib import Path
 
 from common.store import structdb as SDB
-from pipeline.load.structured import CONFIRM_TH, _norm_code, find_table_cells, link_docs, load_csv, load_tables_docs
+from pipeline.load.structured import CONFIRM_TH, _norm_code, link_docs, load_csv
 
 
 # ── 자체 검증 ────────────────────────────────────────────────────
@@ -110,43 +109,6 @@ def selftest():
         "[selftest] AD45④(V21) — doc_location이 문서를 알면 우선(계약 있음=확정·명시 NULL=연결 안 함) · 모르는 문서는 본문 규칙 그대로"
         " · contract_master에 없는 RDB contract_id는 확정 아님(후보로 강등, 독립 검토 MAJOR) 통과"
     )
-
-    # AD23 — tables_std → doc_table·doc_cell(재실행 안전) + find_table_cells() 조회
-    d3 = Path(tempfile.mkdtemp())
-    db3 = SDB.open_backend(str(d3 / "t3.sqlite"))
-    SDB.ensure_table_schema(db3)  # load·link가 쓰는 ensure_schema()와 분리된 게이트(AD16 BLOCK 이력과 같은 패턴)
-    tables_std = [
-        {
-            "id": "t0",
-            "page": 2,
-            "source_engine": "office",
-            "header": ["배치", "순도"],
-            "rows": [["B-21", "95%"], ["B-22", "91%"]],
-            "merged": [],
-        }
-    ]
-    docs3 = [{"doc_key": "docA", "tables_std": tables_std, "file_name": "a.pdf"}]
-    out3 = load_tables_docs(db3, docs3)
-    assert out3 == {"tables": 1, "cells": 6}, out3  # 머리글 2 + 본문 행 2×2
-    t_row = db3.query("SELECT * FROM doc_table WHERE table_key='docA:t0'")[0]
-    assert t_row["n_rows"] == 2 and t_row["n_cols"] == 2 and json.loads(t_row["header_json"]) == ["배치", "순도"]
-    hits = find_table_cells(db3, "95%")
-    assert len(hits) == 1 and hits[0]["doc_key"] == "docA" and hits[0]["row_idx"] == 1 and hits[0]["col_label"] == "순도", hits
-    hits_header = find_table_cells(db3, "순도")  # 머리글 자체도 조회됨(row_idx=0)
-    assert any(h["row_idx"] == 0 for h in hits_header), hits_header
-    assert find_table_cells(db3, "없는값") == []
-    # 재실행 안전 — 같은 문서를 다시 적재하면 doc_cell이 늘지 않고 그대로
-    out3b = load_tables_docs(db3, docs3)
-    assert out3b == out3
-    assert len(db3.query("SELECT * FROM doc_cell WHERE table_key='docA:t0'")) == 6
-    db3.close()
-    # ensure_table_schema()가 없으면(SCHEMA만 적용) find_table_cells는 빈 목록(에러 아님, 다른 없음 패턴과 같음)
-    d4 = Path(tempfile.mkdtemp())
-    db4 = SDB.open_backend(str(d4 / "t4.sqlite"))
-    SDB.ensure_schema(db4)  # doc_table·doc_cell 없음(AD23 게이트)
-    assert find_table_cells(db4, "95%") == []
-    db4.close()
-    print("[selftest] AD23 — tables_std → doc_table·doc_cell 적재(재실행 안전)·find_table_cells 조회(머리글 포함·없으면 빈 목록) 통과")
 
 
 def test_main():  # 옛 main()의 `if a.selftest:` 갈래

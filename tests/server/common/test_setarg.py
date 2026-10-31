@@ -39,7 +39,7 @@ def test_server_needs_file():  # VS9 R-1 — 서버에서 SETTINGS_FILE 없이 -
 def test_local_overlay():
     d = Path(tempfile.mkdtemp())
     base = d / "settings.yaml"
-    base.write_text("common:\n  run_env: local\n", encoding="utf-8")
+    base.write_text("required:\n  env: {run_env: local}\n", encoding="utf-8")
     env = setarg.child(
         {"PIPE_PROCS": "2"}, environ={"SETTINGS_FILE": str(base)}
     )  # env 남김 — 시험: --set 이름 사전(child가 덮기 파일로 넘김)

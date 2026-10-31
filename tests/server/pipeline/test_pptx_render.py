@@ -22,10 +22,8 @@ def selftest():
 
     from tests.server.pipeline.test_pptx_edges import _add_smartart
 
-    with pc.PIPE.env(PARSE_PPTX_SLIDE_VLM="0"):  # S7c — 설정 객체만 바꿔 끼움
-        assert pptx_slide_vlm("whatever.pptx") == []
     assert pptx_slide_vlm("x.docx") == []
-    print("[selftest] PARSE_PPTX_SLIDE_VLM=0·pptx 아님 — 둘 다 즉시 빈 목록 통과")
+    print("[selftest] pptx 아님 — 즉시 빈 목록 통과")
 
     prs = Presentation()
     s1 = prs.slides.add_slide(prs.slide_layouts[6])  # 1쪽 — 도형 5개, 연결선 없음(shapes_no_connector)
@@ -129,11 +127,9 @@ def selftest():
         subprocess.Popen, M.soffice_bin = orig_popen, orig_soffice3
     print("[selftest] 변환 타임아웃 — 자식 프로세스만 종료(kill)하고 None(빈 결과), 고아 없음 통과")
 
-    # AD14 — shape_render_pages(): 꺼짐·확장자 아님·shape_detect 문턱 미달(soffice 호출 자체를 안 함)·soffice 없음
+    # AD14 — shape_render_pages(): 확장자 아님·shape_detect 문턱 미달(soffice 호출 자체를 안 함)·soffice 없음
     assert shape_render_pages("x.pptx") == {}  # pptx는 이 함수 대상 아님(render_slides가 따로 담당)
-    with pc.PIPE.env(PARSE_DOC_SHAPE_FIGURE="0"):  # S7c — 설정 객체만 바꿔 끼움
-        assert shape_render_pages("x.docx") == {}
-    print("[selftest] AD14 — pptx 대상 아님·PARSE_DOC_SHAPE_FIGURE=0 → 빈 묶음 통과")
+    print("[selftest] AD14 — pptx 대상 아님 → 빈 묶음 통과")
 
     def _boom_soffice():
         raise AssertionError("shape_detect가 False인데 soffice_bin()이 불렸다")

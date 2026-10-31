@@ -4,12 +4,10 @@
 도구(G2):
   search(question, k=8, methods=[vector,bm25,id], decompose=false, client=None)  근거 목록 — BM25는 용어 사전으로 확장(X3, notes에 표시) ·
     methods는 vector·bm25·id만(graph·image·openviking·concept·decompose는 10-29에 지움 — 입력은 받고 무시). client(AD38): 고객 명시(SEARCH_CLIENT_HARD=1이면 저장소 질의
-    단계에서 다른 고객 제외, 기본 꺼짐). 기본 켬(AD42, R3·R1 — =0으로 끔): SEARCH_EVIDENCE_GATE이면 응답에
-    evidence_status(found/weak/none)·근거별 low_score(SEARCH_MIN_SCORE 문턱) 표시만(근거는 안 줄임) · SEARCH_AGG_ROUTE이면
-    집계 질문을 aggregate.detect()로 가려 집계 결과(기존 정해진 함수만, 자유 SQL 없음)를 근거 맨 앞에 via="aggregate"로 —
-    detect()가 못 걸렀을 때 SEARCH_AGG_LLM(기본 끔, =1로 켬 — AR3 10-12)이면 LLM 1회로 경계 분류·인자 추출을 한 번 더 시도(R1, AD42·
-    AD45② — 기존 집계 틀에만 대입, 자유 SQL 없음), 잡히면 via="aggregate_llm". 집계 결과 통화가 2개 이상 섞이면(비교
-    질문 등) SEARCH_AGG_FX(기본 켬, =0으로 끔, BR43)가 고정 질의("환율 exchange rate USD KRW", bm25+id)로 1위 근거를
+    단계에서 다른 고객 제외, 기본 꺼짐). AD42(R3·R1): 응답에
+    evidence_status(found/weak/none)·근거별 low_score(SEARCH_MIN_SCORE 문턱) 표시만(근거는 안 줄임) · 늘
+    집계 질문을 aggregate.detect()로 가려 집계 결과(기존 정해진 함수만, 자유 SQL 없음)를 근거 맨 앞에 via="aggregate"로 · 집계 결과 통화가 2개 이상 섞이면(비교
+    질문 등) 고정 질의(BR43)("환율 exchange rate USD KRW", bm25+id)로 1위 근거를
     더 찾아 진짜 환율 패턴일 때만 집계 근거 text 끝에 붙인다(단일 통화면 영향 없음).
     근거마다 doc_type·version·supersedes_doc_id·is_deleted·contract_id·updated_at·company는 RDB 문서 위치 메타(AD44
     manifest)에 그 문서가 있을 때만(없으면 칸 자체가 없음).
@@ -34,7 +32,7 @@
     calling agent does its own post-processing. See mcp_server/services/edw_query.py for the full guard.
   (2026-10-21 사용자 요청·같은 날 단일화) parse_document(path, content_b64, filename, time_out_threshold=300, max_chars=200000) —
     비정형 파일 1건의 text 파싱 대표 결과: data-pipeline-parse 컨테이너(S6b — 옛 data-parsing)의 작업 서비스(PARSE_URL, 기본 http://127.0.0.1:8766 ·
-    docker exec -d data-pipeline-parse python -m pipeline.mcp_parse_service — 토큰은 그 컨테이너 settings.yaml pipeline.service.parse_mcp.token)가
+    docker exec -d data-pipeline-parse python -m pipeline.mcp_parse_service — 토큰은 그 컨테이너 settings.yaml required.tokens.parse_mcp)가
     prepare → run_all( phase 1·2만 — 그림[VLM] 파싱은 phase 3이라 실행 안 됨, 표 인식 유지) → parse_qa → represent(대표 결과)만
     수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/mcp_parse/inbox) 하위만(jail) · content_b64 상한 100MB ·
     time_out_threshold(기본 300초) 안에 끝나야 결과를 돌려주고 못 끝내면 {"error": "시간 안에 수행 못했습니다", "job_id": …}만 반환 —
@@ -180,10 +178,6 @@ if __name__ == "__main__":
 
     edw_read_only()  # 검색 MCP는 EDW 읽기 계정만 — 공용 설정 파일의 쓰기 계정 칸은 이 프로세스에서 비움(사용자 10-29, ops.md#op-03)
     require_run_env("mcp_server.main", sections=("mcp",))  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
-    if mc.cfg().server.query_cache:  # S7e2 — 검색 MCP 전용 질의 임베딩 캐시(옛 compose EMBED_QUERY_CACHE 자리, 사용자 10-28)
-        from common.config import settings as _S
-
-        _S.put(EMBED_QUERY_CACHE=mc.cfg().server.query_cache)
     from common.store.db import cfgtables
 
     print(

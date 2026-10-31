@@ -56,7 +56,7 @@ def selftest():
 
     assert load_sources(d / "없음.json") == {}  # 파일 없으면 빈 dict(레거시 그대로 동작)
 
-    with COMMON.env(SOURCES_FILE=None, SERVER_ENV_DIR=str(d)):
+    with COMMON.env(SOURCES_FILE=None):
         assert sources_path() == DEFAULT_FILE  # S8b — 서버 덮어쓰기($SERVER_ENV_DIR/sources.json) 없앰
 
     body = json.loads(p.read_text(encoding="utf-8"))  # S8b — 서버 길: 판 표 활성 판(가짜 캐시로 — DB 없이)

@@ -6,7 +6,7 @@
 [패치 2026-10-22] ① 기본 time_out_threshold 300초 ② 큐 대기 순번을 제출 응답과 시작 시점에 표시(지연 원인 파악)
   ③ 서비스 PID 로그 파일 남김(docker exec -d 로그 없음 문제) ④ _purge_old에서 방금 만든 작업 보호(버그 수정)
 실행: docker exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service
-  토큰은 설정 필수(컨테이너에 붙인 settings.yaml pipeline.service.parse_mcp.token — 검색 MCP의 MCP_TOKEN과 같은 값, 없으면 시작 거부, D-028 ⑨ · S7c ·
+  토큰은 설정 필수(컨테이너에 붙인 settings.yaml required.tokens.parse_mcp — 검색 MCP의 MCP_TOKEN과 같은 값, 없으면 시작 거부, D-028 ⑨ · S7c ·
   S7e2부터 env PARSE_MCP_TOKEN은 읽지 않음 — `docker exec -e PARSE_MCP_TOKEN=…`은 효과 없음, VS7e2 R-6)
 API(127.0.0.1:8766 · Bearer):  POST /jobs {content_b64+filename} → 202 {job_id, queue_position}
   GET /health  → {ok, ready, running, queued} · GET /jobs/<id> → {status, result, elapsed_ms}"""
@@ -479,7 +479,7 @@ if __name__ == "__main__":
     )  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
     if not TOKEN:  # D-028 ⑨(S7c) — 옛 코드 기본 토큰 없앰: 설정에 없으면 시작 거부(값은 찍지 않음)
         print(
-            "[설정] mcp_parse_service: 토큰 없음 — settings.yaml pipeline.service.parse_mcp.token(PARSE_MCP_TOKEN)에 검색 MCP의 MCP_TOKEN과 "
+            "[설정] mcp_parse_service: 토큰 없음 — settings.yaml required.tokens.parse_mcp에 검색 MCP의 MCP_TOKEN과 "
             "같은 값을 적음(env로 준 값은 읽지 않음 — S7e2 · 코드 기본 토큰은 없앰 — refactor.md C-42)",
             file=sys.stderr,
         )

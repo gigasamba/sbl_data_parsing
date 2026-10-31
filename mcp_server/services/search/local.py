@@ -23,11 +23,6 @@ ID_MAX_DF = 5  # ID 우선 검색에 쓰는 ID: 이 수 이하의 "문서"에만
 TIE_EPS_REL = 1e-3  # BR41 — 동점으로 볼 상대 오차(기본, SEARCH_TIE_EPS로 조정)
 
 
-def tie_break_on():
-    """BR41 SEARCH_TIE_BREAK(기본 켬, =0으로 끔) — 단일 읽기 지점(local.py·pgsearch.py 공용, 새 기능 기본 켬 규칙)."""
-    return mc.cfg().search.tie_break
-
-
 def entity_hints(question, client_candidates):
     """BR41 — 질문에 나온 엔티티(동점 깨기용): 후보 문서들의 고객(client_candidates, 전체 명부 질의 없이 이
     질의의 후보에 실제 있는 고객만 — common.core.terms.match_clients) + 계약번호·제품코드(용어 사전 id_patterns.csv,
@@ -57,12 +52,10 @@ def tie_break(ordered, scores, docmeta, question, eps=None):
     (구간 1위 대비) 상대 오차 eps(기본 TIE_EPS_REL, SEARCH_TIE_EPS로 조정) 안이면 — 그 구간만 질문에 나온
     엔티티(고객명·별칭 — 기존 용어 사전 확장, 계약번호, 제품코드 — 구조화 메타 필드의 정확 일치만)가 맞는
     후보를 앞으로(안 맞으면 그대로, 안정 정렬 — 같은 문서 청크끼리는 맞는지 여부가 같아 순서 안 바뀜).
-    SEARCH_TIE_BREAK=0이거나 질문에 엔티티가 없거나 구간 안에 맞는 후보가 하나도 없으면 바이트 동일(그대로 반환).
+    질문에 엔티티가 없거나 구간 안에 맞는 후보가 하나도 없으면 바이트 동일(그대로 반환).
     ordered: 현재 순위의 키 목록 · scores: {키: 융합 점수} · docmeta: {키: (file_name, client, contract_no, product_code)}
     (file_name은 entity_hints의 client 매칭엔 안 쓰지만 다른 호출자 호환을 위해 자리만 유지).
     local.py·pgsearch.py 공용(같은 함수 — 저장소 갈라지지 않음, enforcement §2)."""
-    if not tie_break_on():
-        return list(ordered)
     eps = TIE_EPS_REL if eps is None else eps
     matched_clients, matched_ids = entity_hints(question, (docmeta.get(k, (None, None, None, None))[1] for k in ordered))
     if not matched_clients and not matched_ids:
@@ -90,14 +83,14 @@ def weights(question=None):
     BR58(10-12)에서 SEARCH_W_BM25 기본 1.3을 시도했다가 되돌림 — 상위5 적중은 올랐지만(합본 terms-hard .70→.80)
     1위 정답이 여러 세트에서 떨어짐(hard64 .772→.719·r2 .85→.80·distractors 1.0→.944, 답변 단계 QA095 미스) —
     근접 중복 문서 구분은 재정렬(BR54) 쪽에서. 측정: dev_tools/perform_test/retrieval/measure.py --pooled·--hard-core-manifest.
-    G14 — SEARCH_TYPE_WEIGHTS(기본 켬, =0으로 끔)이고 question이 주어지고 질문 유형 라우터(mcp_server.services.search.qtype.classify,
+    G14 — question이 주어지고 질문 유형 라우터(mcp_server.services.search.qtype.classify,
     새 분류기 안 만듦)가 "aggregate"(건수·합계·최대/최소·평균)로 보면 SEARCH_W_BM25 대신 SEARCH_W_BM25_TABLE을
     bm25 가중으로 쓴다 — 표 집계 질문은 같은 양식의 다른 고객·연도 표가 키워드로 같이 올라와 BM25가 벡터 1위 근거를
     끌어내리는 문제(dev/docs/backlog/search.md G14). local.py·pgsearch.py 둘 다 이 함수 하나만 써서 가중치가
     갈라지지 않는다(pgsearch.py가 이 함수를 import)."""
     s = mc.cfg().search  # 한 번 묶음(S7d — 가중치 칸들이 같은 판 값)
     w = {"vector": s.weights.vector, "bm25": s.weights.bm25, "id": s.weights.id}
-    if question is not None and s.type_weights:
+    if question is not None:
         from mcp_server.services.search.qtype import classify
 
         if classify(question)[0] == "aggregate":
@@ -181,10 +174,10 @@ class Local:
         None(기본)이면 제한 없음 — 전과 바이트 동일.
         hidden(OP1) = 검색에서 뺄 doc_key(file_sha256) 집합 — client와 달리 항상 완전 제외(소프트 없음, 사람이 unhide
         하기 전까지). None·빈 집합이면 전과 바이트 동일.
-        question(G14, SEARCH_TYPE_WEIGHTS 기본 켬) = 원문 질문 글자(weights()에 그대로 건넴 — 안 주면 전과 바이트 동일,
+        question(G14) = 원문 질문 글자(weights()에 그대로 건넴 — 안 주면 전과 바이트 동일,
         BR41 tie_break에도 그대로 건넴).
         BR41 — 하이브리드(RRF) 경로에서 최종 순위(order, 멤버십 불변)를 tie_break()로 한 번 더(동점·질문 엔티티
-        맞으면 앞으로, SEARCH_TIE_BREAK=0이면 바이트 동일) — vector만 쓰는 경로(위 m == {"vector"})는 안 거침."""
+        맞으면 앞으로) — vector만 쓰는 경로(위 m == {"vector"})는 안 거침."""
         import numpy as np
 
         restrict = None

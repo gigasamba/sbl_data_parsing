@@ -19,7 +19,7 @@ WorkingDirectory=/srv/rag/code/live
 # (옛 <PATCH_CODE>/app/docker/), 컨테이너 마운트 원본 <PATCH_CODE>/app/deploy/…·app/docker는 그대로.
 # 설정 파일은 적지 않음 — mcp_up.sh가 settings_env.sh load_settings로 $SERVER_ENV_DIR/settings.yaml을 읽는다(S7e1, 사용자 10-27 Q4 — 옛 pipeline.env 대신).
 #   설정 폴더를 옮기면 SERVER_ENV_DIR 한 줄만 바꾼다. settings.yaml이 다른 자리에 따로 있을 때만 Environment=SETTINGS_FILE=<파일>을 더한다.
-#   RUN_ENV는 settings.yaml common.run_env에만 적는다. 호스트 python에 pydantic·PyYAML이 없으면 Environment=SETTINGS_IMAGE=data-pipeline:<태그>(C-36).
+#   RUN_ENV는 settings.yaml required.env.run_env에만 적는다. 호스트 python에 pydantic·PyYAML이 없으면 Environment=SETTINGS_IMAGE=data-pipeline:<태그>(C-36).
 Environment=SERVER_ENV_DIR=/srv/rag/env
 Environment=PATCH_CODE=/srv/rag/code/live
 Environment=DOCKER=podman

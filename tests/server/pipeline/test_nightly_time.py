@@ -25,7 +25,7 @@ def test_nightly_time():
     with tempfile.TemporaryDirectory() as d:
         y = Path(d) / "settings.yaml"
         for raw, want in CASES:
-            y.write_text(f"common:\n  run_env: dev\npipeline:\n  host:\n    nightly:\n      time: {raw}\n", encoding="utf-8")
+            y.write_text(f"required:\n  env: {{run_env: dev}}\nops:\n  nightly:\n    time: {raw}\n", encoding="utf-8")
             if want is SettingsError:
                 try:
                     load(pipe, file=y, environ={})

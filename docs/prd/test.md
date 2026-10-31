@@ -11,6 +11,7 @@
 - 무엇: `tests/server/`(이미지 반입 관문, `pipeline.cli selftest`가 `tests/runner.py`로 실행), `tests/general/`(PC 전용: PG, Docker, 느린 것). 알려진 실패는 목록에 두고, XPASS면 지우라고 경고.
 - 파일: `tests/runner.py`, `tests/conftest.py`, `deploy/release/known_fail.txt`.
 - 기준선(CLAUDE.md §4·§6-3에서 옮김, 10-30):
+  - (10-31 `feature/op08-settings-layout` — op-08이 스트리밍·그림자·실험 기능과 그 시험을 지운 뒤) `selftest` **93개 중 92개 통과** · `pytest tests/` **146 passed · 3 xfailed**(작업 폴더 `settings.yaml`에 전용 PG) · 핑거프린트 `FINGERPRINT abe9b7b0799ceaae`(그대로) · a `e3b0c44298fc` · p0 `35df8d19cba6` · p1 `068c126e7a83` · r `8bfca1b178e8` · s `72dfe4177e78`(공용 `settings.py`·`paths.py` 등이 바뀜 — 0.2.0 전체 재처리). 아래는 그 전(10-30) 값.
   - `selftest`는 **94개 중 93개 통과**다(10-30 `feature/pl12-no-deleted` — #58이 시험 3개를 지우고 `test_no_deleted` 1개를 더한 뒤). 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
   - `pytest tests/`는 **148 passed · 3 xfailed**다(10-30 `release/0.1.0` E2E — 루트 `settings.yaml`에 전용 PG가 있을 때. 없으면 `test_pl14_deploy`가 건너뛰어 146 passed · 1 skipped). 위 1개와 일반 테스트 2개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — `test_run_combo`·`test_pub_registry`(C-54 ①))이며, 모두 리팩토링 전부터 있던 실패다.
   - 핑거프린트 10-30 값(`feature/pl12-no-deleted` — 공용 `settings.py`·`pg.py`·`structdb.py`가 바뀌어 p0·p1·r·s 모두 바뀜. 그 전 `feature/pl34-p1-cleanup` 값: p0 `2b4ad090d25e` · p1 `81cfe39fd09e` · r `7901ef34500b` · s `bcac3fe53d14`): `FINGERPRINT abe9b7b0799ceaae` · a `e3b0c44298fc` · p0 `0e6a5bc155b1` · p1 `1df0ba57214b` · r `bce50575a881` · s `10f13083e536`. 엔진 18개(재파싱 키 `run_all.engine_code_fp` — `qwen_vlm` `06f937fcc39e` · `kreuzberg` `7e7c9ac44287` · `rapidocr_ko` `990ebae04429`, 나머지는 refactor.md 부록 2). 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다(CLAUDE.md §4).
@@ -163,9 +164,9 @@
 ## e2-18 · 요건 없는 코드 지우기
 - 이유(사용자 10-30 grill): 안 쓰는 길이 아직 지운 칸을 읽고 관리 비용을 든다. 대상은 각 카테고리 파일 끝 "요건 없는 코드"(옛 gaps §2).
 - 지움: `internal_docs.py` 숨김 문서 함수(6개, 지운 doc 칸을 아직 SELECT하는 문서 조회·목록 포함), 위키 도구, 외부 KG 어댑터, 시험만 부르는 함수([e2-17](#e2-17)), 지운 평가 묶음용 채점기([e2-10](#e2-10)).
-- 남김: `PARSE_STREAM`, 그림자 모드, `MCP_EVIDENCE_PATHS`, `SEARCH_TIE_BREAK`, SQLite 대체, 문서 대장 CLI, 메일 첨부, 용어집·고객 목록 도구, 밤 타이머, `os_put`, 서버 점검.
+- 남김: `MCP_EVIDENCE_PATHS`, SQLite 대체, 문서 대장 CLI, 메일 첨부, 용어집·고객 목록 도구, 밤 타이머, `os_put`, 서버 점검.
 - 규칙: MCP 도구 이름과 입출력은 그대로. 하나라도 바뀌면 멈추고 묻는다.
-- 남김 목록 고침(허브 10-31): `PARSE_STREAM`·그림자 모드는 op-08 브랜치(`feature/op08-settings-layout`)에서 지웠다 — 병합되면 남김에서 빠진다. 카테고리 파일 끝 '요건 없는 코드' 목록에서 이미 지운 것(이 행·fp-batch)을 뺐다(mcp·etl·test, 10-31).
+- 남김 목록 고침(허브 10-31): `PARSE_STREAM`·그림자 모드·`SEARCH_TIE_BREAK` 스위치는 op-08에서 지워 남김에서 뺐다. 카테고리 파일 끝 '요건 없는 코드' 목록에서 이미 지운 것(이 행·fp-batch)을 뺐다(mcp·etl·test, 10-31).
 - Status: done (10-30, `feature/drop-unused`, 사용자 grill 11차 포함) — 지움: `internal_docs.py`의 `do_get_document`·`do_get_image`·`do_evidence_image`·`do_lookup_term`·`do_related`·`do_list_documents`와 그것만 쓰던 도우미(MCP 도구 아님 — 도구 이름·입출력 그대로), `objectstore_access.py`, 위키 도구(`structure/wiki.py`·`wiki_draft.py` + 지시서 `wiki_term_draft`), 외부 KG 어댑터(`eval/kg_external.py`)·LLM 그래프 모드(`validation/e2e/graph_llm.py` + 지시서 `triple_extract`), 채점기 `chart_values_score.py`·`diagram_edges_score.py`(`score_gold`의 mermaid 재현율은 같은 규칙으로 그 안에), `search/terms.lookup_term`, `valid_env/eval_sets/`와 그것만 읽던 `validation/e2e/stack_matrix.py`(+ `stack_matrix.json`·보고서 `pipeline/eval/stack_report.py`), Q&A 보고서 `mcp_server/cli/qa_report.py`(사용자 10-30), 시험만 쓰던 함수(e2-17), 각 시험, 설정 칸 7개(`MCP_EVID_*`·`MCP_IMAGES`·`MCP_MAX_IMAGE_PX`)와 절 `pipeline.connections.graphiti`(경고만 — env-guide). 지문 그대로._concept_top`·`hidden_names`·`client_map`(r), 상수 `EVAL_SETS_DIR`([settings.md#pl-21](settings.md#pl-21)). · 0.1.0 지문 배치(`feature/fp-batch`)에서 나머지도 지움: `fields_table`, `raster_chart_values`(+ `enlarge`·`ratio_place`·지시서 `figure_chart_raster`), `retriever._concept_top`·`hidden_names`·`client_map`·`_client_rows`·`_chunk_key_hidden`, 상수 `EVAL_SETS_DIR`, 고아 지시서 `diagram_arrows`.
 
 ## 코드와 다른 점 · 지울 코드

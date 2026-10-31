@@ -1,9 +1,7 @@
 """PA0 — 맥락 기록만(LLM 0회). 지금 규칙 기반 흐름이 이미 계산한 문서·쪽 신호와 규칙 결정(이유)을
 represent()가 만드는 rep에 `rep["context"]`(신호)·`rep["decisions"]`(결정 목록)로 남긴다 — 나중 파싱
 에이전트(PA2 그림자 모드)·보고서 표시의 바탕(docs/architecture.md §3·§7 PA0).
-새 엔진 실행·VLM 호출 없음 — 이미 계산·캐시된 값만 읽어 모은다(원문 전체는 안 담음, 신호·요약만).
-PARSE_CONTEXT(환경변수, 기본 켬, =0으로 끔 — OP11 2026-10-08) — 켜지면(기본) rep에 context·decisions 두 키가
-새로 생긴다(다른 키·바이트는 불변). 꺼지면(=0) represent()가 이 모듈을 안 부르므로 지금 동작과 완전히 같다."""
+새 엔진 실행·VLM 호출 없음 — 이미 계산·캐시된 값만 읽어 모은다(원문 전체는 안 담음, 신호·요약만)."""
 
 from collections import Counter
 from pathlib import Path
@@ -14,13 +12,6 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]  # dev/
 
 MAX_PAGES = 200  # 쪽 신호 상한(쪽이 아주 많은 문서에서 rep 크기 과도 증가 방지) — 넘으면 앞 MAX_PAGES쪽만, truncated 표시
-
-
-def on(config=None):
-    config = (
-        pc.cfg().transform.represent.context if config is None else config
-    )  # S7c — 설정 객체(bool 칸 → "true"/"false"로 아래 판정이 옛 글자 판정과 같음)
-    return str(config).strip().lower() not in ("", "0", "none", "false")
 
 
 def _page_signals(doc_path):
@@ -95,9 +86,6 @@ def _ocr_fallback(doc_path, dd, stack):
 def build_decisions(rep, dd, stack, feats, doc_path):
     """규칙 결정 + 이유 — represent()가 이미 계산한 값만 읽어 짧은 문장으로(원문 없음, 결정마다 하나,
     해당 없는 결정 지점은 안 넣어 목록이 자연히 짧게 유지됨)."""
-    from pipeline.transform.represent import fuse as fuse_mod
-    from pipeline.transform.represent import table_std as table_std_mod
-
     r = rep.get("rep") or {}
     d = []
 
@@ -178,19 +166,18 @@ def build_decisions(rep, dd, stack, feats, doc_path):
     d.append(
         {
             "step": "standardize",
-            "choice": "on" if std.get("on") else "off",
-            "reason": f"기호·첨자 표준화 {std.get('changed', 0)}건(SI20·AD46⑤)" if std.get("on") else "PARSE_STANDARDIZE=0(꺼짐)",
+            "choice": "on",
+            "reason": f"기호·첨자 표준화 {std.get('changed', 0)}건(SI20·AD46⑤)",
             "inputs": {"changed": std.get("changed", 0)},
         }
     )
 
-    ts_on = table_std_mod.on()
     d.append(
         {
             "step": "table_std",
-            "choice": "on" if ts_on else "off",
-            "reason": "표 표준 형식(AD23·SI20③)" if ts_on else "PARSE_TABLE_STD 꺼짐",
-            "inputs": {"tables": len(rep.get("tables_std") or [])} if ts_on else {},
+            "choice": "on",
+            "reason": "표 표준 형식(AD23·SI20③)",
+            "inputs": {"tables": len(rep.get("tables_std") or [])},
         }
     )
 
@@ -205,14 +192,13 @@ def build_decisions(rep, dd, stack, feats, doc_path):
             }
         )  # SI30 unconvertible 등
 
-    f_on = fuse_mod.on()
     fused = rep.get("fused") or {}
     d.append(
         {
             "step": "fuse",
-            "choice": "on" if f_on else "off",
-            "reason": "조각 단위 융합(AD29 P1)" if f_on else "PARSE_FUSE=0(꺼짐)",
-            "inputs": {"facts": len(fused.get("facts") or []), "conflicts": len(fused.get("conflicts") or [])} if f_on else {},
+            "choice": "on",
+            "reason": "조각 단위 융합(AD29 P1)",
+            "inputs": {"facts": len(fused.get("facts") or []), "conflicts": len(fused.get("conflicts") or [])},
         }
     )
 
@@ -220,6 +206,6 @@ def build_decisions(rep, dd, stack, feats, doc_path):
 
 
 def attach(rep, dd, cands, stack, feats, doc_path):
-    """represent()에서 부르는 진입점 — rep["context"]·rep["decisions"]를 채운다(PARSE_CONTEXT 켰을 때만 호출됨)."""
+    """represent()에서 부르는 진입점 — rep["context"]·rep["decisions"]를 채운다."""
     rep["context"] = build_context(doc_path, dd, cands, rep)
     rep["decisions"] = build_decisions(rep, dd, stack, feats, doc_path)

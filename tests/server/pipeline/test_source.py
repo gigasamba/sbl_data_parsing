@@ -454,56 +454,25 @@ def _selftest_mssql():
 
 
 def _selftest_finish_keep():
-    """SI39 요건⑧(2026-10-08) — 즉시 삭제가 기본(원본 업로드가 없어져 publish_parse가 기다릴 이유가 없음,
-    PARSE_KEEP_ORIGINALS 폐지). KEEP_LOCAL_ORIGINALS=1(디버그·샘플 작업 전용)만 보존. 지우기 전에 sha256을 항상
-    manifest에 남겨(generic 'sha256' 필드 — PARSE_KEEP_MAX_GB 전용 'disk_cap_sha256'와 별개) publish_parse가 로컬
-    없이도 EDW 행을 쓸 수 있게 한다."""
+    """SI39 요건⑧(2026-10-08) — 파싱이 끝나면 원본을 즉시 지운다(보존 스위치 KEEP_LOCAL_ORIGINALS는 op-08에 지움).
+    지우기 전에 sha256을 manifest에 남겨 publish_parse가 로컬 없이도 EDW 행을 쓸 수 있게 한다."""
     import tempfile
 
-    from common.core.contract import file_hash
-
-    def _case(env_name):
-        d = Path(tempfile.mkdtemp())
-        state, local = d / "state", d / "local"
-        state.mkdir()
-        local.mkdir()
-        (local / "a.txt").write_text("x", encoding="utf-8")
-        (state / "manifest.jsonl").write_text(
-            json.dumps({"file_name": "a.txt", "key": "k1", "etag": "e1", "updated_at": None}) + chr(10), encoding="utf-8"
-        )
-        rep = d / "index.json"
-        rep.write_text(json.dumps({"docs": [{"doc": "a.txt", "engine": "eng1"}]}), encoding="utf-8")
-        with pc.PIPE.env(**({env_name: "1"} if env_name else {})):  # S7c — finish()가 설정 객체로 읽으므로 env 대신 객체를 덮어씀
-            finish(state, local, rep)
-        man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")}
-        return local / "a.txt", man["a.txt"]
-
-    p, _man = _case("KEEP_LOCAL_ORIGINALS")
-    assert p.exists(), "KEEP_LOCAL_ORIGINALS=1인데 원본이 지워짐"
-
-    p2, man2 = _case(None)
-    assert not p2.exists(), "SI39 요건⑧ — 기본인데 원본이 즉시 지워지지 않음"
-    assert man2.get("sha256"), "지우기 전에 sha256을 manifest에 안 남김(publish_parse가 로컬 없이 EDW 행을 못 씀)"
-    print("[selftest] SI39 요건⑧ — KEEP_LOCAL_ORIGINALS=1만 보존(디버그 전용)·기본은 파싱 끝나면 즉시 삭제 + sha256 기록 통과")
-
-    # PARSE_KEEP_MAX_GB 상한 — KEEP_LOCAL_ORIGINALS=1(보존)인데 폴더가 상한을 넘으면 경고 뒤 보존 포기·즉시 삭제
     d = Path(tempfile.mkdtemp())
     state, local = d / "state", d / "local"
     state.mkdir()
     local.mkdir()
-    (local / "a.txt").write_text("x" * 1024, encoding="utf-8")  # 1KB — 상한을 거의 0으로 두면 바로 넘음
+    (local / "a.txt").write_text("x", encoding="utf-8")
     (state / "manifest.jsonl").write_text(
         json.dumps({"file_name": "a.txt", "key": "k1", "etag": "e1", "updated_at": None}) + chr(10), encoding="utf-8"
     )
     rep = d / "index.json"
     rep.write_text(json.dumps({"docs": [{"doc": "a.txt", "engine": "eng1"}]}), encoding="utf-8")
-    expect_sha = file_hash(local / "a.txt")
-    with pc.PIPE.env(KEEP_LOCAL_ORIGINALS="1", PARSE_KEEP_MAX_GB="0.0000001"):  # S7c — 설정 객체 덮어쓰기(1KB보다 작은 상한 — 바로 넘음)
-        finish(state, local, rep)
-    assert not (local / "a.txt").exists(), "PARSE_KEEP_MAX_GB 넘었는데 그대로 보존됨(디스크 보호 안 됨)"
+    finish(state, local, rep)
     man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")}
-    assert man["a.txt"].get("disk_cap_sha256") == expect_sha, "상한으로 지우기 전에 sha256을 manifest에 안 남김(publish_parse가 행을 못 씀)"
-    print("[selftest] PARSE_KEEP_MAX_GB — KEEP_LOCAL_ORIGINALS=1이어도 상한 넘으면 보존 포기·즉시 삭제 + sha256 기록(disk_cap_sha256) 통과")
+    assert not (local / "a.txt").exists(), "SI39 요건⑧ — 원본이 즉시 지워지지 않음"
+    assert man["a.txt"].get("sha256"), "지우기 전에 sha256을 manifest에 안 남김(publish_parse가 로컬 없이 EDW 행을 못 씀)"
+    print("[selftest] SI39 요건⑧ — 파싱 끝나면 원본 즉시 삭제 + sha256 기록 통과")
 
 
 def test_main():  # 옛 `if "--selftest" in sys.argv:` 갈래

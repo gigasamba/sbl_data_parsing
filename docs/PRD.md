@@ -11,7 +11,7 @@
 ## ETL — 수집·퍼블리시·적재·DB (etl)
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
 |---|---|---|---|
-| 원천과 가져오기 | done | 폴더·S3·RDB · 증분 · 스트리밍 · warm | [pl-01](prd/etl.md#pl-01) |
+| 원천과 가져오기 | done | 폴더·S3·RDB · 증분 · warm | [pl-01](prd/etl.md#pl-01) |
 | EDW 고객 매핑을 파이프라인이 만듦 | todo | FileStorageMap 조인 · `file_meta` 대체 | [pl-29](prd/etl.md#pl-29) |
 | 구조화 — 청크·메타·임베딩 | done | 청크 · 요약 · 사실 · 임베딩 | [pl-06](prd/etl.md#pl-06) |
 | structure/load 계약이 새 묶음 거부 | todo | `DOC_KEYS` 고침(사람 검토) | [pl-15](prd/etl.md#pl-15) |
@@ -88,7 +88,8 @@
 | 프로세스 종료 정리 | done | 덮기 파일 지움 · 자식 회수 · SIGTERM | [pl-27](prd/settings.md#pl-27) |
 | 강제 종료로 남은 임시 설정 파일 정리 | todo | 다음 시작 때 주인 없는 파일 지움 | [pl-44](prd/settings.md#pl-44) |
 | JSON Lines 사건 기록 | todo | 포매터 · 수준 설정 · 가림 | [op-01](prd/settings.md#op-01) |
-| settings.yaml 하나 · sample에 모든 키·기본값 | done | 주석 해제 · 카테고리 묶음 · 생성기 · 0.1.0 · op-08 병합 때 대체 | [op-05](prd/settings.md#op-05) |
+| settings.yaml 하나 · sample에 모든 키·기본값 | done | 주석 해제 · 카테고리 묶음 · 생성기 · 0.1.0 · op-08로 대체 | [op-05](prd/settings.md#op-05) |
+| 설정 구조 재편 — 필수 묶음 + 역할별 파라미터 | todo | `required` 맨 위 · 7개 역할 절 · 죽은 칸 삭제 · 0.2.0 | [op-08](prd/settings.md#op-08) |
 | 하드코딩 0 | todo | 서버 경로·PG·MCP 주소 한 곳 · 지문 파일 env 읽기 · PG 자동 찾기 없앰 · 0.2.0 | [op-09](prd/settings.md#op-09) |
 | 미룬 설정 지우기 | done | `korean_font` · `eval_sets_dir`(fp-batch) | [pl-21](prd/settings.md#pl-21) |
 | 안 읽는 env 이름 4개 지우기 | done | run_docs의 안 읽는 env 4개(fp-batch) | [pl-30](prd/settings.md#pl-30) |

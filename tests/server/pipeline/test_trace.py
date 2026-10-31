@@ -2,15 +2,11 @@
 
 from pathlib import Path
 
-from pipeline import config as pc
-from pipeline.transform.represent.trace import attach, build_context, build_decisions, on
+from pipeline.transform.represent.trace import attach, build_context, build_decisions
 
 
 def selftest():
     import tempfile
-
-    with pc.PIPE.env(PARSE_CONTEXT=None):  # S7c — 설정 객체만 바꿔 끼움(on()이 객체로 읽음)
-        assert on() is True and on("1") is True and on("0") is False
 
     # build_context — PDF 없는 간단 문서: 엔진 요약만, page 키 없음
     dd = {"format": ".txt", "pages": None, "engines": {"eng1": {"ok": True, "chars": 10, "cross_recall": 0.9}}}
@@ -50,7 +46,7 @@ def selftest():
     assert dec[1]["choice"] == "eng1" and dec[1]["reason"] == "최고 정확도"
     print("[selftest] build_decisions — 해당 없는 결정 지점(ocr_fallback·page_scan·scan_fill·figures)은 빠짐·고정 구조 통과")
 
-    # attach — PARSE_CONTEXT 켰을 때만 represent()가 부르는 진입점(통합) — rep에 두 키가 생김
+    # attach — represent()가 부르는 진입점(통합) — rep에 두 키가 생김
     rep3 = dict(rep2)
     attach(rep3, dd, cands, stack, frozenset(), None)
     assert "context" in rep3 and "decisions" in rep3

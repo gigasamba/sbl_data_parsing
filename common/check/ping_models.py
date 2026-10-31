@@ -94,10 +94,7 @@ def ping(prefix):
         ms = int((time.perf_counter() - t) * 1000)
         extra = ""
         if prefix == "EMBED":
-            dim, want = len(d["data"][0]["embedding"]), cfg().models.embed.dim
-            extra = f"dim {dim}" + ("" if dim == want else f" ≠ 기대 {want}")
-            if dim != want:
-                return False, ms, d.get("model", model), extra
+            extra = f"dim {len(d['data'][0]['embedding'])}"  # 기대값 비교 없음(op-08 — 적재·검색은 받은 벡터 길이를 씀)
         return True, ms, d.get("model", model), extra
     except Exception as e:  # 오류 본문에 키가 섞일 수 있어 유형·짧은 메시지만
         return False, 0, model or "", f"{type(e).__name__}: {str(e)[:120]}"
