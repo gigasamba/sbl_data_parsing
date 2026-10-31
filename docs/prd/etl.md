@@ -230,8 +230,13 @@
   - T9: `source_system`·`parse_status` 값 정리(`pipeline/extract/source.py`, `pipeline/transform/structure/build_bundle.py`).
 - 결정(G19 — 4차 grill(사용자 10-30), G1·G9를 뒤집음): EDW `AI.ParsingMeta`에는 **파싱 정보만** 적재한다 — 원천 키·파싱 상태·silver 위치·단계별 칸(`stack_version`·엔진·`rep_engine`·`parsed_at`·`gold_status` 등). **파일 메타**(`doc_class`·`sf_op_id`·`created_at`·고객 등)는 ParsingMeta에 쓰지 않고, 파이프라인이 EDW(`FileStorageMap` 등)에서 읽어 **pgvector 시스템별 `doc`에만** 매핑해 적재한다(중복 적재 없음 — 예외: 원본 지문 `sha256`은 ParsingMeta에 남김, C5 아래). 운영이 ParsingMeta에 더한 분류·고객 칸은 모두 0.2.0에 지운다(사용자 10-30: 지금 코드가 0.1.0, DB·저장 작업은 0.2.0 — T8 범위가 다시 원래대로, DB 담당자 D-3). MCP 원문 도구는 EDW를 읽지 않는다([mcp.md#mc-17](mcp.md#mc-17)). 원천별 스키마는 [pl-28](#pl-28).
 - 결정(사용자 10-30 PRD grill): C1 — 0.1.0에 싣기로 했던 행(pl-25·pl-32·pl-33·pl-39·mc-16·mc-17·op-01·pl-17·e2-15)은 0.1.0(10-30 릴리스)에 들어가지 않았다. op-08·pl-28과 함께 0.2.0 한 판에 싣고 서버 재처리·재적재는 한 번. C3 — 파싱이 통째로 실패한 문서는 ParsingMeta에 행을 쓰지 않는다(pl-24 따름 — `stack_version` NULL 문구는 '일부 엔진 실패' 기록용이 아님, 지움). C5 — 같은 내용 묶기용 `sha256`은 ParsingMeta에 남긴다(삭제 목록에서 뺌 — G19 '파싱 정보만'의 예외: 파싱한 원본의 지문).
-- 결정(사용자 10-30 PRD grill): C9 — 판 표기는 둘 다 두고 뜻을 나눈다: ParsingMeta `gold_version` = 이 문서를 gold에 올린 판(다시 올릴지 판단), gold `doc`의 판 = 이 행을 만든 코드 판(검색 쪽 확인).
+- (10-31 고침 — 이름은 둘 다 `pipeline_version`, 아래) 결정(사용자 10-30 PRD grill): C9 — 판 표기는 둘 다 두고 뜻을 나눈다: ParsingMeta `gold_version` = 이 문서를 gold에 올린 판(다시 올릴지 판단), gold `doc`의 판 = 이 행을 만든 코드 판(검색 쪽 확인).
 - 결정(사용자 10-30 PRD grill): A1 — db_schema.md는 gold-per-system 병합 뒤 오늘 결정(C3·C4·C5·C8·C9·A2)까지 반영해 다시 쓰고, 사용자·DB 담당자 승인을 한 번에 받는다.
+- 결정(사용자 10-31 grill, db_schema 질문 답):
+  - 판 이름: 두 곳 모두 `pipeline_version` — ParsingMeta `gold_version` 안은 없애고 그 칸 이름을 쓴다(ParsingMeta = gold에 올린 판, gold `doc` = 행을 만든 코드 판 — C9 뜻 그대로, DB 담당자 D-3).
+  - `doc.source_system`도 지운다(스키마가 원천을 정함 — 청크와 같음).
+  - `s3_key`는 gold `doc`에만(청크에는 없음). `source_uri`는 `doc.s3_key`로, `rep_uri`는 `doc.rep_key`로(C8).
+  - 원천 id(영업 기회 id 등)는 스키마마다 그 EDW 원본 표의 칸 이름 그대로 — 한 이름(`sf_op_id`)을 함께 쓰지 않음. 모르는 이름은 D-1 확인.
 - Status: dev — `docs/architecture/db_schema.md` 설계안 + 시험 `tests/server/common/test_db_schema.py`(`feature/db-schema-spec`) — 사용자·DB 담당자 승인 대기(코드·스키마 변경 없음).
 
 <a id="pl-32"></a>
@@ -264,7 +269,8 @@
 - 구조화 입력: 같은 실행 안에서는 로컬 작업 폴더를 읽고, 나중에 gold만 다시 만들 때는 Object Storage uuid 폴더에서 silver를 받는다.
 - PC도 서버와 같은 흐름 — 대역만 다름(OS 폴더, EDW SQLite, PC pgvector), 따로 생기는 로컬 파일 없음.
 - 파일: `pipeline/load/{publish_parse_result,parsing_meta}.py`, `pipeline/extract/run_all.py`(`runs.jsonl`·`_DONE`), `pipeline/stackcfg.py`·`pipeline/config.py`(`STACK_SNAPSHOT`), `pipeline/cli.py`(`nightly_plan`), `common/store/{registry,structdb}.py`(SQLite 대체), `deploy/host/scripts/run_docs.py`, `docs/architecture/db_schema.md`.
-- 결정(사용자 10-30 PRD grill): A4 — 같은 `s3_key`의 여러 행 중 가장 늦은 행은 `FileStorageMap.created_at`이 가장 큰 행으로 고른다. PC 대역 EDW(`valid_env/edw`)의 FileStorageMap에 `created_at` 칸을 새로 만들고 값은 임의로 채운다. 실제 EDW에 이 칸이 있는지는 DB 담당자 답(D-1)으로 확인한다. 0.2.0.
+- (10-31 고침 — 더 새 행은 같은 doc_id·다시 파싱 안 함, 아래) 결정(사용자 10-30 PRD grill): A4 — 같은 `s3_key`의 여러 행 중 가장 늦은 행은 `FileStorageMap.created_at`이 가장 큰 행으로 고른다. PC 대역 EDW(`valid_env/edw`)의 FileStorageMap에 `created_at` 칸을 새로 만들고 값은 임의로 채운다. 실제 EDW에 이 칸이 있는지는 DB 담당자 답(D-1)으로 확인한다. 0.2.0.
+- 결정(사용자 10-31 grill, A4 고침): 같은 `s3_key`의 기준은 `created_at`이 가장 늦은 `FileStorageMap` 행 그대로. 더 새 행이 오면 같은 `doc_id`를 유지하고 **다시 파싱하지 않는다**(같은 내용) — 저장된 기준·메타만 새 행으로 고친다. 밀려난 행은 새 EDW 예외 이력 표에 남긴다(어느 행이 어느 문서와 겹쳤는지, "파싱 대상 아님" — 표 이름·칸은 DB 담당자 D-9, `db_schema.md` §4).
 - Status: todo — 0.2.0.
 
 <a id="pl-33"></a>
@@ -325,6 +331,7 @@
   - MCP: `source_system`이 **필수, 값 하나** — 그 시스템 스키마만 찾는다. 여러 시스템은 클라이언트가 여러 번 부른다(시스템별 BM25 통계라 점수를 섞지 않음). [mcp.md#mc-16](mcp.md#mc-16), [mcp.md#mc-17](mcp.md#mc-17). 계약 변경 — 등급 A, 0.2.0에 함께(지금 코드가 0.1.0이므로 G7의 "0.1.0에 함께" 대신).
   - 위 `chunk`의 `source_system`·`clients[]` 유지([pl-25](#pl-25))는 스키마가 원천을 정하므로 필요 없어진다 — `db_schema.md`를 이에 맞게 고친다.
 - 결정(사용자 10-30 PRD grill): C2 — MCP 계약이 바뀌어도 0.2.0(버전 규칙에 '1.0 전에는 MINOR에서도 계약·스키마를 깰 수 있음'을 더함 — 운영이 안정되면 1.0.0). C4 — 원천 스키마마다 칸 구조가 다를 수 있다: `faq` 스키마만 `chunk`에 `faq_group` 칸을 두고, 다른 원천은 '파일 메타는 `doc`에만' 그대로. A2 — 스키마 5벌(`sfdc`·`crms`·`las`·`faq`·`other`), MCP `source_system`은 `other`도 받는다.
+- 결정(사용자 10-31 grill): `chunk_key` = `<doc_id>:<seq>`(gold `doc.doc_id` 자동 번호), 청크는 `doc_id`만(FK). 스키마 5벌이 **시퀀스 하나를 함께 써서** `doc_id`가 겹치지 않는다 — 이 부분은 허브가 정함(사용자 확인 필요). 적재는 `s3_key`로 upsert해 `doc_id`가 바뀌지 않는다. `doc.source_system`도 지운다. 원천 id 칸은 스키마마다 EDW 원본 칸 이름.
 - Status: todo — 0.2.0, 전체 다시 적재 필요. 설계 반영(`db_schema.md`)과 DB 담당자 협의 먼저(등급 A).
 
 ## 코드와 다른 점 · 지울 코드
