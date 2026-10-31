@@ -278,8 +278,9 @@
 - 파일: `pipeline/load/{publish_parse_result,parsing_meta}.py`, `pipeline/extract/run_all.py`(`runs.jsonl`·`_DONE`), `pipeline/stackcfg.py`·`pipeline/config.py`(`STACK_SNAPSHOT`), `pipeline/cli.py`(`nightly_plan`), `common/store/{registry,structdb}.py`(SQLite 대체), `deploy/host/scripts/run_docs.py`, `docs/architecture/db_schema.md`.
 - (10-31 고침 — 더 새 행은 같은 doc_id, sha256으로 가름, 아래) 결정(사용자 10-30 PRD grill): A4 — 같은 `s3_key`의 여러 행 중 가장 늦은 행은 `FileStorageMap.created_at`이 가장 큰 행으로 고른다. PC 대역 EDW(`valid_env/edw`)의 FileStorageMap에 `created_at` 칸을 새로 만들고 값은 임의로 채운다. 실제 EDW에 이 칸이 있는지는 DB 담당자 답(D-1)으로 확인한다. 0.2.0.
 - (사용자 10-31 다시 고침 — sha256, 아래) 결정(사용자 10-31 grill, A4 고침): 같은 `s3_key`의 기준은 `created_at`이 가장 늦은 `FileStorageMap` 행 그대로. 더 새 행이 오면 같은 `doc_id`를 유지하고 **다시 파싱하지 않는다**(같은 내용) — 저장된 기준·메타만 새 행으로 고친다. 밀려난 행은 새 EDW 예외 이력 표에 남긴다(어느 행이 어느 문서와 겹쳤는지, "파싱 대상 아님" — 표 이름·칸은 DB 담당자 D-9, `db_schema.md` §4).
-- 결정(사용자 10-31, A4 다시 고침): 같은 `s3_key`의 더 새 행은 같은 `doc_id`를 유지한다. `sha256`이 같으면 건너뛴다(기준·메타만 새 행으로). `sha256`이 다르면 같은 `doc_id`로 다시 파싱·다시 적재한다. 밀려난 행은 위처럼 EDW 이력 표에.
-- 결정(허브 10-31, 최신 결정 우선): 새 문서 = C10 — 모든 입구(run_docs·`night`·`parse --max-new`·`--source`)에서 EDW `FileStorageMap`에 있고 `ParsingMeta`에 없는 것([pl-23](#pl-23)). 위의 `nightly_plan()`(새 + 바뀐 문서)과 '문서 대장 성공 행으로 고르기'(허브 B — 2c)는 이 규칙으로 바꾼다. 문서 대장은 숨김·판 관리에만. 이미 ParsingMeta에 있는 `s3_key`를 다시 처리하는 길은 위 A4(`sha256`이 다른 더 새 행)와 사람이 시작하는 전체 e2e뿐.
+- (10-31 다시 고침 — sha256 대신 file_size, 아래) 결정(사용자 10-31, A4 다시 고침): 같은 `s3_key`의 더 새 행은 같은 `doc_id`를 유지한다. `sha256`이 같으면 건너뛴다(기준·메타만 새 행으로). `sha256`이 다르면 같은 `doc_id`로 다시 파싱·다시 적재한다. 밀려난 행은 위처럼 EDW 이력 표에.
+- 결정(사용자 10-31, A4 세 번째 — 최종): 원본을 내려받아 sha256을 비교하지 않는다. 같은 `s3_key`의 더 새 행은 `FileStorageMap.file_size`만 본다 — 크기가 같으면 같은 `doc_id`로 건너뛰고(기준·메타만 새 행으로), 크기가 조금이라도 다르면 같은 `doc_id`로 다시 파싱·다시 적재한다(EDW에 이미 있는 칸이라 내려받기 없음). 같은 키에 같은 크기로 덮어쓰는 드문 경우는 놓친다(받아들임).
+- 결정(허브 10-31, 최신 결정 우선): 새 문서 = C10 — 모든 입구(run_docs·`night`·`parse --max-new`·`--source`)에서 EDW `FileStorageMap`에 있고 `ParsingMeta`에 없는 것([pl-23](#pl-23)). 위의 `nightly_plan()`(새 + 바뀐 문서)과 '문서 대장 성공 행으로 고르기'(허브 B — 2c)는 이 규칙으로 바꾼다. 문서 대장은 숨김·판 관리에만. 이미 ParsingMeta에 있는 `s3_key`를 다시 처리하는 길은 위 A4(`file_size`가 다른 더 새 행 — 10-31 최종)와 사람이 시작하는 전체 e2e뿐.
 - Status: todo — 0.2.0.
 
 <a id="pl-33"></a>
