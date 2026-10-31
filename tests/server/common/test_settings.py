@@ -234,7 +234,7 @@ def selftest():
             (bk.common.connections.object_storage.verify_tls, bk.common.models.guard.external_scope) == ("", ""),
         )
         check(
-            "PG_HOST·PG_PORT 기본값 None(둘 다 없으면 docker 자동 탐지 — services.detect_pg)",
+            "PG_HOST·PG_PORT 기본값 None(필수 칸 — 비면 pg.conf가 거부, op-09)",
             bl.common.connections.pg.port is None and CommonConnectionsPg().host is None,
         )
         # R-2 — int | "auto"

@@ -101,7 +101,7 @@ def _transport_security(host):
 
 
 # ── MCP 서버 ─────────────────────────────────────────────────────
-def build(host="127.0.0.1", port=8765):
+def build(host, port):
     from mcp.server.fastmcp import FastMCP
 
     loop = host in ("127.0.0.1", "localhost", "::1")
@@ -183,14 +183,17 @@ if __name__ == "__main__":
     print(
         f"[엔진 구성] {cfgtables.active('stack').label()}", file=sys.stderr, flush=True
     )  # stderr — --stdio면 stdout은 JSON-RPC 채널   # S8b(Q3·Q7) — 시작 때 한 번(서버 = 판 표 — 못 읽으면 시작 거부, 종료 4)
+    from mcp_server.services.search.server_state import check_store
+
+    check_store()  # op-09 — 저장소 종류·PG 접속 칸이 비면 시작 거부
     if "--stdio" in sys.argv:
-        build().run(transport="stdio")
+        build("127.0.0.1", int(mc.cfg().server.port)).run(transport="stdio")  # stdio는 바인드 안 함 — 늘 루프백 규칙
     else:
         mc.checked("MCP_PORT")  # 접속 포트 — 형식 틀리면 옛처럼 시작 실패(S7d, 값은 안 찍음)
         _c = mc.cfg().server
         host, port, token = (
-            _c.host or "127.0.0.1",
-            int(_c.port if _c.port is not None else 8765),
+            _c.host,  # op-09 — 기본값은 설정 모델 한 곳
+            int(_c.port),
             mc.token_text(_c.token),
         )  # 공백뿐인 토큰 = 토큰 없음(사용자 결정 10-27)
         if host == "auto":  # 브리지 네트워크 컨테이너: 자기 사설 IP(포트 게시로 밖에서 부름) — 토큰 필수

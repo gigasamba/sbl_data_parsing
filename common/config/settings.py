@@ -11,7 +11,7 @@ mcp_server/config.py(common + mcp 절). 이 파일은 common 절 모델과 두 �
     복사하지 않음 — 원본은 base로 가리킴). overrides 값은 옛 env 글자 꼴로 판정한다(켜기 칸 '1'·'0' 등).
   · 모델 기본값은 지금 코드의 `os.environ.get(X) or 기본값`과 같은 값이다 — 목록 칸도(PARSE_PHASES 1,2,3r 등, 코드가 빈 목록이면 []).
     None은 "읽는 코드가 정함"이다: 코드가 계산하는 기본값(경로·CPU 수 등) · 자리마다 다른 기본값 · 있고 없음을 코드가 가르는
-    칸(PG_HOST·PG_PORT — 둘 다 없으면 docker 자동 탐지) · JSON 칸(없으면 안 붙임). 대조표는 refactor_plan 부록 D.
+    칸 · JSON 칸(없으면 안 붙임). 대조표는 refactor_plan 부록 D.
   · 비운 칸(YAML null·옛 env `X=`)은 "설정 안 함"(모델 기본값). 빈 글자 ""도 기본값이 있는 칸(숫자·켜기·목록, 기본값 있는 글자)에서는
     "설정 안 함"이다 — 옛 `os.environ.get(X) or 기본값`과 같음. 기본값이 None인 글자 칸, 그리고 옛 코드가 `os.environ.get(X, 기본값)`
     (or 없음)으로 읽어 `X=`이 ''였던 글자 칸(F(..., blank="keep") — 17칸, S7a2)에서만 ""이 빈 글자로 남는다.
@@ -56,13 +56,15 @@ IN_IMAGE = REPO_ROOT.name == "deploy"  # 코드가 이미지 배치(/app/deploy/
 IMAGE_PATHS = {
     "gold_mount": "/data/gold",  # run_tool.sh가 사람 정답 폴더를 붙이는 자리(pipeline.config.gold_dir — 옛 `-e GOLD_DIR=/data/gold`)
     "image_env": "/app/docker/image_env.txt",  # 빌드 때 이미지 ENV를 적어 둔 파일(common.config.boot — 라이브러리 env가 이미지 값만 덮게)
+    "docs_mount": "/data/docs",  # 원본 폴더를 읽기 전용으로 붙이는 자리(compose DOC_SRC → 이 자리 · pipeline DOC_DIR 기본값)
+    "prepared_out": "/app/output/prepared",  # 원본 사본(prepare) 자리(pipeline DOC_DIR_PREPARED 기본값)
 }
 # VS7e1 B-2(사용자 10-28 ①) — 옛 Dockerfile ENV로 굽던 값은 이미지 안 모델 기본값으로(규칙은 "settings.yaml > 코드 기본값" 하나 — 옛 ENV는
 # 다리가 사용자 env로 봐 settings.yaml이 못 덮었음). 이미지 신호 RAG_MODULE(5-3 H)로 그 이미지가 굽던 것만. PC·시험 하위 프로세스(RAG_MODULE 없음)는 PC 기본값.
 _IMAGE_DEFAULTS = {
     "pipeline": {
-        "DOC_DIR": "/data/docs",
-        "DOC_DIR_PREPARED": "/app/output/prepared",
+        "DOC_DIR": IMAGE_PATHS["docs_mount"],
+        "DOC_DIR_PREPARED": IMAGE_PATHS["prepared_out"],
         "PIPE_EMBED": "api",
         "PIPE_PROCS": "auto",
         "SOFFICE_BIN": "/usr/bin/soffice",
@@ -1302,18 +1304,14 @@ class CommonConnectionsRdb(Section):
 class CommonConnectionsPg(Section):
     conn_file: str | None = F(None, "PG_CONN_FILE", "PostgreSQL 접속 정보를 KEY=VALUE로 담은 파일 경로(환경변수가 덮음)")
     connect_timeout: int | None = F(10, "PG_CONNECT_TIMEOUT", "PostgreSQL 연결 시도 제한 시간")
-    db: str | None = F("rag", "PG_DB", "PostgreSQL 데이터베이스 이름")
-    host: str | None = F(
-        None,
-        "PG_HOST",
-        "PostgreSQL 서버 주소 — PG_HOST·PG_PORT·PG_CONN_FILE이 모두 비면 docker ps로 pgvector를 자동 탐지, 그래도 없으면 127.0.0.1(common/store/pg.py)",
-    )
+    db: str | None = F(None, "PG_DB", "PostgreSQL 데이터베이스 이름(필수 — op-09)")
+    host: str | None = F(None, "PG_HOST", "PostgreSQL 서버 호스트 — 필수(자동 탐지·코드 기본값 없음, op-09)")
     password: SecretStr | None = F(None, "PG_PASSWORD", "PostgreSQL 비밀번호")
     pool_max: int | None = F(8, "PG_POOL_MAX", "검색 MCP PostgreSQL 연결 풀 최대 연결 수")
-    port: Port | None = F(None, "PG_PORT", "PostgreSQL 포트 — 비면 자동 탐지(PG_HOST 설명), 그래도 없으면 5432")
-    db_schema: str | None = F(None, "PG_SCHEMA", "pgvector 기본 스키마 이름(소문자·숫자·_)")
+    port: Port | None = F(None, "PG_PORT", "PostgreSQL 포트(필수 — op-09)")
+    db_schema: str | None = F(None, "PG_SCHEMA", "pgvector 기본 스키마 이름(소문자·숫자·_ — 필수, op-09)")
     standin_dir: str | None = F(None, "PG_STANDIN_DIR", "PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더")
-    user: str | None = F("rag", "PG_USER", "PostgreSQL 접속 계정 이름")
+    user: str | None = F(None, "PG_USER", "PostgreSQL 접속 계정 이름(필수 — op-09)")
 
 
 class CommonDevDocker(Section):
@@ -1346,7 +1344,7 @@ class CommonDevDocker(Section):
         None, "SMOKE_PG_PASSWORD", "시험 PostgreSQL 비밀번호(compose.test.yml이 컨테이너 PG_PASSWORD로 넘김 — S7e1)"
     )
     smoke_pm_bucket: str | None = F("rag-publish", "SMOKE_PM_BUCKET", "시험 결과 게시용 minio 버킷 이름")
-    smoke_source: str | None = F("/data/docs", "SMOKE_SOURCE", "시험 원천 위치(/data/docs 또는 s3://버킷/접두)")
+    smoke_source: str | None = F(IMAGE_PATHS["docs_mount"], "SMOKE_SOURCE", "시험 원천 위치(원본 폴더 자리 또는 s3://버킷/접두)")
 
 
 class CommonModelsEmbed(Section):

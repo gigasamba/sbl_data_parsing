@@ -27,7 +27,7 @@ preflight() {
   echo "[점검] $(date '+%F %T %Z') · 시간대 ${TZ:-?} · 사용자 $(id -un)"
   python -m common.core.resources
   [ -w /app/output ] || { echo "[오류] /app/output 쓰기 불가 — -v <결과폴더>:/app/output 와 그 폴더 소유자(UID 10001) 확인"; exit 2; }
-  [ -d "${DOC_DIR:-/data/docs}" ] || echo "[경고] 원본 폴더 ${DOC_DIR:-/data/docs} 없음 — -v <원본>:/data/docs:ro"
+  [ -z "${DOC_DIR:-}" ] || [ -d "$DOC_DIR" ] || echo "[경고] 원본 폴더 ${DOC_DIR} 없음 — -v <원본>:${DOC_DIR}:ro"   # mcp 이미지는 DOC_DIR 없음
   if [ -n "${PG_HOST:-}" ] && { [ "$PG_HOST" = "127.0.0.1" ] || [ "$PG_HOST" = "localhost" ]; } && [ "${NETWORK_HOST:-0}" != "1" ]; then
     echo "[경고] 컨테이너 안의 PG_HOST=$PG_HOST 는 컨테이너 자신 — 호스트의 PostgreSQL이면 --network host(+NETWORK_HOST=1) 또는 PG_HOST=<서버 IP>/host.docker.internal"
   fi
@@ -62,7 +62,7 @@ esac
 # 정해 compose environment로 줌 — refactor.md C-34). 시험·점검 명령(help·selftest·check·check-modules·resources·services·tool check_env)은 뺀다
 # (tool ping_models는 외부 모델을 부르므로 빼지 않음 — RUN_ENV가 외부 모델 허용을 정함, S7a2).
 # S7e2(VS7e1 R-9·U-1·C-45 ⑤, 사용자 10-28) — python 한 번(common.config.boot)으로: ① 관문(--gate — 서버면 설정 파일을 못 읽거나 이 이미지 절
-# 검증에 실패해도 이유만 찍고 종료 2) ② 이 셸이 쓰는 칸(DOC_DIR·DOC_DIR_PREPARED·PARSE_SOURCE·PG_HOST — settings.yaml, 없으면 아래 기본값) ③ 라이브러리 env
+# 검증에 실패해도 이유만 찍고 종료 2) ② 이 셸이 쓰는 칸(DOC_DIR·DOC_DIR_PREPARED·PARSE_SOURCE·PG_HOST — settings.yaml, 비면 이미지 기본값(common/config/settings.py IMAGE_PATHS — op-09: 셸에는 기본값 없음)) ③ 라이브러리 env
 # (settings.yaml common.runtime.lib_env — 사용자 env는 안 덮고 이미지 ENV 값(/app/docker/image_env.txt)은 덮음). 값은 출력하지 않는다(eval만).
 gate=1
 case "$cmd" in
@@ -124,14 +124,14 @@ for entry in sys.argv[2:]:
     [ -n "$mod" ] && exec python -m "$mod" "$@"
     echo "[tool] 모르는 도구: $name (${TOOL_PKGS// /·} 어디에도 없음)" >&2; exit 2;;
   mcp)        exec python -m mcp_server.main "$@";;        # 검색 MCP(deploy/host/compose/compose.mcp.yml) — 잠금 없음(읽기 전용)
-  dedup)      preflight; exec python -m pipeline.extract.dedup --src "${DOC_DIR:-/data/docs}" "$@";;
-  prepare)    preflight; exec python -m pipeline.extract.prepare --src "${DOC_DIR:-/data/docs}" --out "${DOC_DIR_PREPARED:-/app/output/prepared}" "$@";;
+  dedup)      preflight; exec python -m pipeline.extract.dedup --src "${DOC_DIR:?}" "$@";;
+  prepare)    preflight; exec python -m pipeline.extract.prepare --src "${DOC_DIR:?}" --out "${DOC_DIR_PREPARED:?}" "$@";;
   night|run-stack)
     preflight; locked python -m pipeline.cli "$cmd" "$@";;
   # 모듈(트리거 1회 실행 — docs/architecture.md). 종료 코드: 0 끝남·건너뜀 · 3 앞 모듈 결과 없음 · 4 PostgreSQL 없음 · 75 실행 중·마감
   parse)
     preflight
-    locked python -m pipeline.cli parse --source "${PARSE_SOURCE:-${DOC_DIR:-/data/docs}}" --src "${DOC_DIR_PREPARED:-/app/output/prepared}" "$@";;
+    locked python -m pipeline.cli parse --source "${PARSE_SOURCE:-${DOC_DIR:?}}" --src "${DOC_DIR_PREPARED:?}" "$@";;
   structure|load)
     preflight; locked python -m pipeline.cli "$cmd" "$@";;
   migrate)    # S8a(5-4, 사용자 10-28 Q4) — pgvector 판 관리. up·stamp는 적재와 겹치지 않게 같은 잠금, 읽기만 하는 current·check는 잠금·
@@ -159,7 +159,7 @@ for entry in sys.argv[2:]:
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
   full)
     preflight
-    locked bash -c 'python -m pipeline.extract.dedup --src "${DOC_DIR:-/data/docs}"       && python -m pipeline.extract.prepare --src "${DOC_DIR:-/data/docs}" --out "${DOC_DIR_PREPARED:-/app/output/prepared}" --only /app/output/dedup/keep.txt       && python -m pipeline.cli night "$@"' full "$@";;
+    locked bash -c 'd=$1 p=$2; shift 2; python -m pipeline.extract.dedup --src "$d"       && python -m pipeline.extract.prepare --src "$d" --out "$p" --only /app/output/dedup/keep.txt       && python -m pipeline.cli night "$@"' full "${DOC_DIR:?}" "${DOC_DIR_PREPARED:?}" "$@";;
   # 10-14 — 상주 트리거 서버(웹 업로드 → "파싱 시작" 호출). S6b(D-020) — 이미지가 하나라 맡을 모듈은 TRIGGER_MODULE(parse|structure)로
   # 고른다(전에는 RAG_MODULE=parse·structure 이미지가 곧 모듈). compose.pipeline.yml의 상주 서비스 data-pipeline-parse(parse, 8770)·
   # data-pipeline-structure(structure+load, 8771 — 옛 컨테이너 data-parsing·data-structure)가 같은 data-pipeline 이미지에 TRIGGER_MODULE만 달리 준다.

@@ -37,9 +37,6 @@ from pipeline.transform.structure.chunking import (  # noqa: F401
     load_parse_doc,
 )  # 청킹은 구조화 모듈 — 조합 실험도 같은 것
 
-RERANK_MODEL = "BAAI/bge-reranker-v2-m3"
-
-
 # ── 정규화·토큰화 (§3 공통) ──────────────────────────────────
 
 _WORD = re.compile(r"[A-Za-z0-9가-힣]{2,}")
@@ -380,10 +377,13 @@ def _get_reranker():
     if _RERANKER is None:
         from sentence_transformers import CrossEncoder
 
+        from pipeline import config as pc
+
+        name = pc.cfg().eval.rerank_model  # op-09 — 설정 칸(기본값은 설정 모델)
         try:
-            _RERANKER = CrossEncoder(RERANK_MODEL, device="cpu")
+            _RERANKER = CrossEncoder(name, device="cpu")
         except Exception as e:
-            raise RuntimeError(f"재순위 모델({RERANK_MODEL}) 로드 실패 — 폐쇄망 로컬 캐시에 없음: {e}") from e
+            raise RuntimeError(f"재순위 모델({name}) 로드 실패 — 폐쇄망 로컬 캐시에 없음: {e}") from e
     return _RERANKER
 
 

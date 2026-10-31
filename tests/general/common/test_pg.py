@@ -115,7 +115,9 @@ def _selftest_conf():
     import tempfile
 
     f = Path(tempfile.mkdtemp()) / "pg.conn"
-    f.write_text("PG_HOST=h\nPG_PASSWORD=from-file\n", encoding="utf-8")
+    f.write_text(
+        "PG_HOST=h\nPG_PORT=5432\nPG_DB=d\nPG_USER=u\nPG_SCHEMA=ai\nPG_PASSWORD=from-file\n", encoding="utf-8"
+    )  # op-09 — 접속 칸 모두 필수
     with COMMON.env(PG_CONN_FILE=str(f), PG_PASSWORD="", PG_HOST=None, PG_PORT=None):
         assert conf()["PG_PASSWORD"] == "from-file"
     with COMMON.env(PG_CONN_FILE=str(f), PG_PASSWORD="x2", PG_HOST=None, PG_PORT=None):

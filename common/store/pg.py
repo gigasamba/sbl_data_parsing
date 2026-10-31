@@ -1,5 +1,5 @@
 """PostgreSQL(pgvector) 연결 — 적재(modules/load)·검색(modules/search)·서비스 탐색 공통. 비밀번호는 파일·환경변수에만.
-접속: PG_CONN_FILE=<KEY=VALUE 파일> 또는 PG_HOST(127.0.0.1) · PG_PORT(5432) · PG_DB(rag) · PG_USER(rag) · PG_PASSWORD · PG_SCHEMA(ai).
+접속: PG_CONN_FILE=<KEY=VALUE 파일> 또는 PG_HOST · PG_PORT · PG_DB · PG_USER · PG_PASSWORD · PG_SCHEMA — 모두 필수, 코드 기본값 없음(op-09).
 PG_CONNECT_TIMEOUT(기본 10초) — 공유 PG가 방화벽·주소 문제로 안 보일 때 수십 초씩 매달리지 않게(XS4).
 PG_POOL_MAX(기본 8, PGPool) — 공유 PG의 max_connections 여유 안에서 잡을 것(다른 팀 서비스도 같은 PG를 씀).
 10-14 함수별 분리(사용자) — connect()는 pipeline(load, 단일 연결)에서만, connect_pool()은 검색 MCP
@@ -15,6 +15,7 @@ from pathlib import Path
 
 from common.config.settings import cfg, checked, given, guard_run_env, reveal
 
+_PG_KEYS = {"PG_HOST": "host", "PG_PORT": "port", "PG_DB": "db", "PG_USER": "user", "PG_PASSWORD": "password", "PG_SCHEMA": "db_schema"}
 HNSW_MAX = 2000  # pgvector HNSW 차원 상한(vector) — 적재(색인 종류)와 검색(질의 방식)이 같은 기준
 
 
@@ -30,17 +31,16 @@ def conf():
     # 옛 `if os.environ.get(k): c[k] = os.environ[k]` — env로 실제 준(비지 않은) 값만 파일 값을 덮음. 기본값 있는 칸(db·user)이
     # 기본값으로 덮지 않게 given()(준 값만 — 빈 값·기본값은 None). 값은 옛처럼 글자(포트도 str)
     checked("PG_PORT")  # 형식 틀린 포트는 옛처럼 실패(VS7b R-7 — 파일·기본 포트로 조용히 붙지 않게)
-    for k in ("PG_HOST", "PG_PORT", "PG_DB", "PG_USER", "PG_PASSWORD", "PG_SCHEMA"):
+    for k in _PG_KEYS:
         v = given(k)
         if v is not None:
             c[k] = str(reveal(v))
-    c.setdefault("PG_HOST", "127.0.0.1")
-    c.setdefault("PG_PORT", "5432")
-    c.setdefault("PG_DB", "rag")
-    c.setdefault("PG_USER", "rag")
-    c.setdefault("PG_SCHEMA", "ai")
-    if not c.get("PG_PASSWORD"):
-        raise SystemExit("PG_PASSWORD 없음 — PG_CONN_FILE 또는 환경변수(modules/load/README.md 'PostgreSQL')")
+    missing = [k for k in _PG_KEYS if not c.get(k)]  # op-09 — 코드 기본값(127.0.0.1·5432·rag·ai) 없음, 빈 칸이면 거부
+    if missing:
+        from common.config.layout import to_yaml
+
+        where = ", ".join(to_yaml(f"common.connections.pg.{_PG_KEYS[k]}") for k in missing)
+        raise SystemExit(f"PG 접속 정보 없음 — settings.yaml {where}(또는 {to_yaml('common.connections.pg.conn_file')} 파일)를 채움")
     if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", c["PG_SCHEMA"]):
         raise SystemExit("PG_SCHEMA는 소문자·숫자·_ 만")
     return c

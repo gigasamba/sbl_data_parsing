@@ -893,7 +893,7 @@ def main():
         "gold_docs=gold_evidence[].file · 값=answer/value · count 유형·미확인 문서는 채점 제외",
     )
     ap.add_argument("--pool", action="store_true", help="서버가 풀(synth-distractors-v2 묶음)을 가리킴 — gold_docs를 rename_map으로 치환")
-    ap.add_argument("--url", default="http://127.0.0.1:18765/mcp")
+    ap.add_argument("--url", default=mc.cfg().dev.mcp_url)
     ap.add_argument("--token", default="")
     ap.add_argument("--store-root", default="", help="메인 체크아웃 output/store(읍 전용) — 묶음 탐색·stack_matrix 비교용")
     ap.add_argument("--index-id", default="", help="AD41 — 고를 색인(cli/index.py가 만든 index_id) · 비우면 기본 색인")

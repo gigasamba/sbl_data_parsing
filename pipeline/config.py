@@ -338,6 +338,9 @@ class PipelineEval(Section):
     )
     qa_draft_max_pages: int | None = F(20, "QA_DRAFT_MAX_PAGES", "질문 초안 생성(qa_draft)에서 문서당 처리할 쪽 수 상한(쪽)")
     qa_draft_per_page: int | None = F(5, "QA_DRAFT_PER_PAGE", "질문 초안 생성에서 쪽당 질문 수 상한(개)")
+    rerank_model: str | None = F(
+        "BAAI/bge-reranker-v2-m3", "RERANK_MODEL", "검색 단계 실험(pipeline.eval.stages)의 재순위 모델 이름 — 폐쇄망 로컬 캐시에 있어야 함"
+    )
     review_max_rounds: int | None = F(2, "REVIEW_MAX_ROUNDS", "도식 검토 루프의 최대 재추출 횟수(회)")
     score_table_judge: str | None = F("0", "SCORE_TABLE_JUDGE", "표 구조 채점의 경계 표 판정자(0 없음 | llm 경계 표만 LLM 판정)")
 
