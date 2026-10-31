@@ -14,7 +14,7 @@
 - 출력: 근거 항목(`chunk_id`, `source_uri`, `page`, `bbox`, `section`, `text`, `score`, `via`, `rank`, …), `evidence_status` found/weak/none(라벨만, 빼는 것 없음), `notes`.
 - `file_path` 키 제거는 [mc-16](#mc-16)에서 다룬다(사용자 10-30 PRD grill D1).
 - 파일: `mcp_server/routers/`, `mcp_server/services/search/search_svc.py`, `retriever.py`, `pgsearch.py`, `local.py`, `shaping.py`, `mcp_server/schemas/evidence.py`.
-- Status: done
+- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
 
 <a id="mc-02"></a>
 ## mc-02 · 질문 이해 — 넓히기
@@ -40,7 +40,7 @@
 - 이유: 건수·합계 질문에는 청크가 아니라 계산한 값이 필요하다.
 - 무엇: 고객·계약·기간·모달리티별 규칙 기반 건수·금액·배치·표 합계. 다른 통화는 절대 더하지 않음. 집계 항목에 환율 글을 붙임. 결과는 `via="aggregate"`로 맨 앞. 애매한 질문은 선택적 LLM 라우터.
 - 파일: `mcp_server/services/search/aggregate.py`, `resources/prompts/mcp/agg_llm_route/`.
-- Status: done
+- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
 
 <a id="mc-11"></a>
 ## mc-11 · 집계 길이 지운 칸을 고름
@@ -75,7 +75,7 @@
 - 조사(10-30): 스키마 변경 없이 잇는 길이 없다. 검색 `doc` 표에는 sha256도 원본 키(`s3_key`)도 없고(`file_path` = `edw_path_prefix` + 파일 이름 또는 PC 경로), 문서 대장의 `source_keys`(`local::<경로>`·`<출처>::<원본 키>`)는 모양이 달라 정확히 맞출 수 없다. 파일 이름으로 맞추면 다른 폴더·고객의 같은 이름 문서가 잘못 숨겨진다(engine-qa 10-08이 이름 짝짓기를 금지한 이유와 같음).
 - 결정(사용자 10-30): 모든 문서 키를 `s3_key`로 바꾸고 문서 대장·숨김 표를 DB 명세로 다시 키를 잡는다(pl-25, 스키마 변경 — Alembic·DB 담당자). 그때 이 비교를 같은 키로 고친다.
 - 파일: `mcp_server/services/search/pgsearch.py`(`_not_hidden_restrict`), `mcp_server/services/search/local.py`, `mcp_server/services/search/retriever.py`, `common/store/registry.py`.
-- Status: todo — pl-25 대기(코드 수정 없음 — 키 설계는 [db_schema.md](../architecture/db_schema.md) §1·§3).
+- Status: dropped (사용자 10-31 범위 축소)
 
 <a id="mc-15"></a>
 ## mc-15 · 검색 근거의 `rep_uri`(대표 파싱 결과 경로)가 늘 비어 있다

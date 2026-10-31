@@ -74,7 +74,7 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 이유: pl-27은 정상·오류·SIGTERM 종료 때 덮기 설정 임시 파일을 지우지만, SIGKILL·OOM으로 끝나면 남는다(사용자 10-30 PRD grill S1 — pl-27은 done으로 닫음).
 - 결정(사용자 10-30 grill 12~13차 — refactor.md C-46): 다음 시작 때, 만든 프로세스가 더는 없는 임시 설정 파일(`settings-*.yaml`)을 지운다.
 - 파일: `common/core/exitclean.py`, `common/config/settings.py`.
-- Status: todo
+- Status: dropped (사용자 10-31 범위 축소)
 
 <a id="op-01"></a>
 ## op-01 · JSON Lines 사건 기록(두 앱)
@@ -85,7 +85,7 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 수용 기준: 줄마다 필수 키가 있는 JSON으로 읽힘, 예시 비밀 문자열이 가려짐, 수준 설정이 줄을 거름.
 - 파일: `common/core/`(새 포매터), `common/config/settings.py`, `mcp_server/main.py`, `pipeline/cli.py`, `.gitignore`.
 - 결정(사용자 10-30 grill): gold DB 변경([etl.md#pl-25](etl.md#pl-25))과 같은 판에 싣는다 — 재처리 한 번.
-- Status: todo — 0.2.0(사용자 10-30 PRD grill C1).
+- Status: dropped (사용자 10-31 범위 축소)
 
 <a id="pl-21"></a>
 ## pl-21 · 미룬 설정 지우기(핑거프린트)

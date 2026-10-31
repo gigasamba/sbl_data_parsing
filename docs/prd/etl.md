@@ -33,7 +33,7 @@
 - 이유: 검색에는 출처가 달린 청크와 메타데이터가 필요하다.
 - 무엇: 청크 나누기 structure(기본, 800자, 제목, 표는 통째) / fixed 512+64 / sentence / page, 큰 표는 25행씩. 요약(앞부분 발췌 — OpenViking 요약은 10-29, LLM 요약은 op-08에 지움). 사실(제품, 모달리티, 날짜, 단가, 금액, 통화, 배치). 고객·계약은 교차 확인된 것만 남긴다. 규칙 기반 지식 그래프(묶음에는 만들지만 PG에는 더 적재하지 않음 — [mcp.md#mc-12](mcp.md#mc-12)). 임베딩은 로컬(e5, bge-m3) 또는 내부 `api`.
 - 파일: `pipeline/transform/structure/build_bundle.py`, `chunking.py`, `facts.py`, `draft_terms.py`, `common/ai/embed.py`.
-- Status: done
+- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
 
 <a id="pl-15"></a>
 ## pl-15 · structure/load 계약 점검이 새 묶음을 거부
@@ -41,7 +41,7 @@
 - 이유: `contract.py`의 `DOC_KEYS`가 지운 키를 아직 기대한다(서버는 이 모듈을 쓰지 않음).
 - 파일: `common/core/contract.py`(핸드오프 핑거프린트 — 사람 검토), `pipeline/cli.py`.
 - 결정(사용자 10-30 PRD grill): A5 — 구조화·적재 계약 `DOC_KEYS`를 새 묶음 키에 맞게 고친다. 핸드오프 지문 파일이라 등급 A(사람 검토)이고 0.2.0 재처리에 함께 싣는다.
-- Status: todo
+- Status: dropped (사용자 10-31 범위 축소)
 
 <a id="pl-16"></a>
 ## pl-16 · `PIPE_EMBED=none`이면 `vector(0)`을 만든다
@@ -88,7 +88,7 @@
 - 무엇: `contract_master`·`client_master`·`prod_master`·`doc_contract_link`(점수 매기는 연결기)·`doc_location`·`doc_registry`·`doc_hidden`·`doc_table`·`doc_cell`. PG 또는 SQLite.
 - 파일: `pipeline/load/structured.py`, `common/store/structdb.py`.
 - 결정(허브 10-31, 최신 결정 우선): 지울 표 저장소(`doc_table`·`doc_cell` — [pl-25](#pl-25) `struct`)를 읽는 검색 쪽 코드는 죽은 코드다 — `mcp_server/services/search/aggregate.py`의 `table_cell_list`·`find_table_cells`·`struct()`, `common/store/structdb.py:406`. 0.2.0에 표를 지우는 마이그레이션과 함께 지운다.
-- Status: done
+- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
 
 <a id="pl-38"></a>
 ## pl-38 · 마스터 CSV 활용 방안 설계(후순위)
@@ -110,7 +110,7 @@
 - 결정(사용자 10-30 grill 12~13차): 원천에서 사라진 문서(deleted) 처리 길은 통째로 없앤다 — 지우기·숨기기·EDW `deleted` 표시 모두 없음, 로컬 기록만(refactor.md C-54).
 - 10-30 [pl-32](#pl-32): PG `doc_registry`는 남고 로컬 SQLite 대체는 없앤다. 실패 횟수(`fail_count`)·재시도 설정(`registry_retry_max`)은 없앤다 — 성공했을 때만 갱신(사용자 10-30).
 - 한 것(10-30, B1 — 개발 서버 반입 전 검토): deleted 길 없앰 — `registry.apply`가 관측에 없는 문서에 `status='deleted'`·자동 숨김을 쓰지 않고, `parsing_meta.apply_registry_status`가 EDW에 `deleted`를 쓰지 않는다(`diff["deleted"]`는 판 잇기 정보로만). 서버(dev·prd)는 SQLite·PG 스탠드인으로 대체하지 않고 멈춘다(`structdb.open_backend` — `run_mode: prod`·`struct_backend` pg/tsql 필수, `pg._warn_standin`). `common.store.run_mode`는 `prod`·`test`만. 시험 `tests/server/common/test_no_deleted.py`. code_fp p0·p1·r·s 바뀜(공용 `settings.py`·`pg.py`·`structdb.py`).
-- Status: partly done — deleted 길·서버 대체 금지 끝(10-30). 남음: ① upsert PG 번역 · ② ParsingMeta 게시 가드([pl-25](#pl-25) 뒤).
+- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
 
 <a id="pl-09"></a>
 ## pl-09 · 파싱 결과 게시
@@ -140,7 +140,7 @@
   - 3클래스: warm에서 무게 평가(과거 소요 시간 규칙), vlm_page는 스캔 PDF처럼 꼭 필요한 문서만, 1/2/1 + 빈 레인 가져가기, light 1개 강하게 점유, 전담 분류 먼저, light 전용 executor. MCP 업로드가 오면 medium 전담 1개를 멈추고 먼저.
   - 속도: phase 1 건너뛰기(→ pl-22), 끝난 문서 건너뛰기, parse_qa 가볍게, 10-23 OCR 끔. SSH가 끊겨도 작업은 계속(nohup 확인).
 - 파일: `pipeline/cli.py`, `deploy/host/scripts/run_docs.py`(서버 전용 — PC에서 실행 금지), `pipeline/trigger_server.py`, `docs/history/run_docs_req.md`, `docs/architecture/run_docs_design.md`.
-- Status: done
+- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
 
 <a id="pl-18"></a>
 ## pl-18 · 중간에 멈춰도 `night`/`full`이 종료 코드 0
@@ -333,7 +333,7 @@
   - ② 시스템 메타 갈래: EDW에서 오는 고객·`sf_op_id`·`created_at` 등 — 요청하면 전체 문서(G11).
   - 재파싱·재임베딩은 하지 않는다. 시스템별 gold `doc` 칸만 UPDATE한다(G19 — 파일 메타는 ParsingMeta에 없음).
 - 관련: [pl-33](#pl-33)(분류), [pl-29](#pl-29)(고객 연결), [pl-25](#pl-25)(칸).
-- Status: todo
+- Status: dropped (사용자 10-31 범위 축소)
 
 <a id="pl-41"></a>
 ## pl-41 · FAQ 다시 올리기 — 행 단위 비교 적재

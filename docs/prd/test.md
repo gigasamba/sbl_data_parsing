@@ -143,7 +143,7 @@
 ## e2-16 · 검색 점검 페이지가 고정 글 "10 documents (20 chunks)"를 보임
 - 결정(사용자 10-31 범위 축소 grill): 검색 확인 페이지 고정 글 수정은 **뺀다**.
 - 파일: `validation/search_ui/index.html`.
-- Status: todo
+- Status: dropped (사용자 10-31 범위 축소)
 
 <a id="e2-10"></a>
 ## e2-10 · PC 평가 도구를 줄이고 그 설정을 남길지 지울지
@@ -152,7 +152,7 @@
 - 파일: `validation/e2e/`, `pipeline/eval/`, `mcp_server/cli/`, `common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`.
 - 결정(사용자 10-30 grill): `validation/search_ui`(검색 점검 페이지)와 `valid_env/answer_test`(답변 점검)**만** 남긴다. 스택 비교, 자동 질문 만들기, 지운 묶음용 채점기(예: `chart_values_score.py`)와 그 설정은 지운다.
 - 결정(사용자 10-30 PRD grill): C7 — PC 평가 도구는 이 행대로 둘만 남긴다. 스택·모델 비교 도구(`model_matrix`·`score_gold`·`mcp_eval`)를 전제로 한 다른 행(e2-03·e2-04·e2-06·pl-31·pl-32·pl-03)은 '비교는 필요할 때 다시 만든다'로 고치고, e2-11의 `test_run_combo`는 도구와 함께 지운다.
-- Status: todo
+- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
 
 <a id="e2-17"></a>
 ## e2-17 · 10-29 감사에서 찾은 안 쓰는 함수 지우기

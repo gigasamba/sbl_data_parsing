@@ -79,7 +79,7 @@
 - 결정(사용자 10-29 grill): `pipeline/extract/{engines/,run_all.py,parse_one.py}` → `pipeline/transform/parse/`로 옮긴다. `run_all.py` → `run_parse.py`로 이름을 바꾼다(문서 × 엔진 파싱만 함 — "run all"은 e2e로 읽힘). `extract/`에는 source · rdb_discover · dedup · prepare가 남는다. 옮기는 커밋과 이름 바꾸는 커밋을 나눈다(CLAUDE.md §1). 엔진 핑거프린트는 `_LEGACY_NAMES`로 유지. code_fp p0는 바뀌지만 첫 적재가 전체 e2e라 지금은 공짜([etl.md#pl-23](etl.md#pl-23)).
 - 파일: `pipeline/extract/`, `pipeline/transform/`, `common/core/artifacts.py`(`LAYER_CODE`), `pipeline/cli.py`, 문서와 명령 표.
 - 결정(사용자 10-30 PRD grill): S6 — 0.2.0에 함께(전체 재처리라 추가 비용 없음). 파일 이동이 많아 0.2.0 작업의 마지막에 한다.
-- Status: todo — 0.2.0(사용자 10-30 PRD grill C1·S6), 검토 등급 A(핑거프린트).
+- Status: dropped (사용자 10-31 범위 축소)
 
 <a id="pl-34"></a>
 ## pl-34 · 파싱 p1 묶음 — 재판독(P2·P3)·scan_dedup·렌더 OCR 신호 지우기
