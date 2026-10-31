@@ -5,7 +5,7 @@ mcp_server/config.py(common + mcp 절). 이 파일은 common 절 모델과 두 �
 
 읽는 순서(높은 쪽이 이김): 시험이 넘긴 값(data=·Cache.env) > 덮기 파일의 overrides(put·child_env·overlay 도구 — 아래) > YAML > 모델 기본값.
   · env에서 읽는 것은 신호 둘(RUN_ENV·SETTINGS_FILE)뿐이다(S7e2 — 전환 다리 없앰, D-028 ④). 옛 env 이름으로 준 값은 읽지 않는다(시작 때 이름만
-    한 번 경고). 엔진·인계 파일이 env로 읽는 28키(pinned)만 import common 때 pin_env()가 env로 내준다(영구 다리 — D-028 ⑤).
+    한 번 경고). 엔진·인계 파일도 설정 객체로 읽는다(op-09 — 영구 다리 없앰, D-028 ⑤를 뒤집음).
   · 덮기 파일(S7e2, 사용자 10-28): 최상위 `base:`(다른 설정 파일 경로 — 먼저 읽음)와 `overrides:`({옛 env 이름: 글자|null}, null = 그 칸 비움)만 든
     작은 yaml. 프로세스 안 put()·자식용 child_env()·PC 한 번 실행용 `python -m common.config.overrides`가 만들고 SETTINGS_FILE로 가리킨다(원본 비밀을
     복사하지 않음 — 원본은 base로 가리킴). overrides 값은 옛 env 글자 꼴로 판정한다(켜기 칸 '1'·'0' 등).
@@ -108,9 +108,8 @@ class SettingsError(RuntimeError):
     """설정 파일을 못 찾거나 형식이 틀림 — 메시지에 비밀 값은 넣지 않는다."""
 
 
-def F(default, env, desc, *, pinned="", blank="", on=(), off=(), fold="", unset=(), **kw):
+def F(default, env, desc, *, blank="", on=(), off=(), fold="", unset=(), **kw):
     """설정 칸 하나 — env: 옛 환경변수 이름(옮기기·전환 다리·keyscan 대조에 씀), desc: sample·문서에 나가는 설명,
-    pinned: 지문이 걸린 파일이 읽는 칸("engine" 엔진 파일·"handoff" 인계 파일 — 그 파일은 env를 그대로 읽어 다리가 늘 내줌),
     blank="keep": 기본값이 있어도 빈 값을 그대로 둠 — 옛 코드가 `os.environ.get(X, 기본값)`(or 없음)으로 읽어 `X=`이 ''였던
     글자 칸(S7a2 — 코디네이터 10-27 (b), 동작 불변)·목록 칸(빈 목록 — VS7a2 R-a).
     켜기 칸의 옛 판정 꼴(VS7a2 R-c — 코디네이터: 키마다 옛 꼴 그대로): on=("1",) — 글자가 그중 하나일 때만 켜짐(옛 `== "1"`),
@@ -120,8 +119,6 @@ def F(default, env, desc, *, pinned="", blank="", on=(), off=(), fold="", unset=
     unset: 이 글자면 "설정 안 함"(모델 기본값 — 읽는 코드가 계산) — ("auto",)는 옛 `v not in (None, "", "auto")`(resources._f),
     "nondigit"는 옛 `v.strip().isdigit()`가 아니면 무시(OCR_THREADS)."""
     extra = {"env": env}
-    if pinned:
-        extra["pinned"] = pinned
     if blank:
         extra["blank"] = blank
     if fold not in ("", "lower", "strip"):
@@ -699,7 +696,7 @@ def load(
     names={옛 env 이름: 글자|None} — 시험(Cache.env)이 옛 env 이름으로 덮는 값(None = 그 칸 비움). 덮기 파일의 overrides 위에 얹는다.
     names·overrides 값의 형식이 틀리면 그 칸만 버리고 경고(이름만 — dropped()·checked()가 읽는 자리에서 알림). environ에서는 신호
     RUN_ENV·SETTINGS_FILE만 본다. lenient_run_env=True면 모르는 RUN_ENV 글자를 경고 뒤 없음으로(거부는 앱 시작 관문 — 가드는 서버로 봄).
-    _read=(절 사전, overrides) — 이미 읽은 파일 내용(pin_env)."""
+    _read=(절 사전, overrides) — 이미 읽은 파일 내용."""
     environ = os.environ if environ is None else environ  # env 남김 — RUN_ENV 신호
     strict = STRICT if strict is None else strict
     env_run = environ.get("RUN_ENV") or None
@@ -720,9 +717,6 @@ def load(
     merged = {k: v for k, v in doc.items() if k in wanted}
     from_names, before = {}, {}
     emap = _env_map(app_cls, False)
-    pinned_env = {
-        n: environ[n] for n in _pinned_names(app_cls) if n in environ
-    }  # 영구 다리 칸은 env가 산 값(엔진·인계 파일과 같은 값 — pin_env·put이 맞춰 씀)
     file_run = env_run if env_run is not None else _peek(doc, "common.run_env")
     server = (
         unknown_run_env is not None or (str(file_run) if file_run is not None else None) in SERVER_ENVS
@@ -735,8 +729,8 @@ def load(
         if server:
             raise SettingsError(f"{msg} — {path}")
         _warn_once(f"[settings] {msg} — 무시(local)")
-    from_file = set()  # 덮기 파일 overrides 값이 마지막으로 얹힌 칸(시험 names·영구 다리 env가 덮으면 빠짐)
-    for name, value in {**over, **pinned_env, **(names or {})}.items():
+    from_file = set()  # 덮기 파일 overrides 값이 마지막으로 얹힌 칸(시험 names가 덮으면 빠짐)
+    for name, value in {**over, **(names or {})}.items():
         p = emap.get(name)
         if p is None or name == "RUN_ENV":
             continue
@@ -748,7 +742,7 @@ def load(
             _set_path(merged, p, value)
         from_names[p] = name
         from_file.discard(p)
-        if name in over and name not in pinned_env and name not in (names or {}):
+        if name in over and name not in (names or {}):
             from_file.add(p)
     if env_run is not None:
         _set_path(merged, "common.run_env", env_run)
@@ -875,79 +869,37 @@ def _server_env(environ, path):
     return run in SERVER_ENVS
 
 
-def _pinned(cls):
-    """{경로: env 이름} — 엔진·인계 파일이 env로 읽는 칸(pinned)."""
-    return {p: env_name(f) for p, f, _ in walk(cls) if _extra(f, "pinned")}
-
-
-@functools.cache
-def _pinned_names(cls):
-    return tuple(_pinned(cls).values())
-
-
 def pin_env(environ=None):
-    """영구 다리(D-028 ⑤ — import common 때 한 번, common/__init__.py가 부름): 엔진·인계 파일이 env로 읽는 칸(pinned 28키)을 설정 파일 값
-    (+ 이 이미지 기본값 — B-2)으로 env에 낸다. env에 이미 있는 이름은 그대로(부모 프로세스·put()이 넘긴 값). 이 이미지 절만(U-a), pinned
-    칸만 검증한다(다른 칸 오타는 그 앱 설정 객체·시작 관문이 알림 — 호스트 export가 다른 앱 절 오타로 멈추지 않게). 파일을 못 읽거나 pinned
-    칸이 틀리면 서버(dev·prd)는 SettingsError(시작 실패 — STRICT, S7b c안), local은 경고 뒤 계속. 옛 env 이름(설정 칸 — pinned·호스트
-    칸 빼고)이 env에 있으면 읽지 않고 이름만 한 번 알린다. 반환: 낸 이름 수."""
+    """import common 때 한 번(common/__init__.py가 부름): 설정 파일을 읽어 본다 — 서버(dev·prd)에서 못 읽거나 형식이 틀리면
+    SettingsError(시작 실패 — STRICT, S7b c안), local은 경고 뒤 계속. 옛 env 이름(설정 칸 — 호스트 칸 빼고)이 env에 있으면 읽지 않고 이름만
+    한 번 알린다. op-09 — env로 내주던 영구 다리(엔진·인계 칸)는 없앴다(그 파일들도 설정 객체로 읽음). 반환: 0(옛 호출 호환)."""
     environ = os.environ if environ is None else environ  # env 남김 — RUN_ENV 신호
     allowed = image_sections(environ)
     run = environ.get("RUN_ENV") or None
     path = find_file(environ, run if run in RUN_ENVS else None)
     if not allowed:
         if path is not None:
-            _warn_once("[설정] RAG_MODULE 모름(pipeline·mcp가 아님 — 이미지 안 빈 글자 포함) — 영구 다리 건너뜀(env로 아무 값도 안 냄)")
+            _warn_once("[설정] RAG_MODULE 모름(pipeline·mcp가 아님 — 이미지 안 빈 글자 포함) — 설정 파일 점검 건너뜀")
         return 0
     cls, _ = section_class(allowed)
-    pins = _pinned(cls)
-    legacy = sorted(n for n in _env_map(cls, False) if n in environ and n not in pins.values() and n != "RUN_ENV") if environ else []
+    legacy = sorted(n for n in _env_map(cls, False) if n in environ and n != "RUN_ENV") if environ else []
     legacy = [
         n for n in legacy if n not in _env_map(cls, True)
     ]  # 호스트 칸 이름(load_settings가 셸에 냄)은 빼고 — 이 이미지 절만(다른 앱 설정 모듈 import 안 함, U-a)
     if legacy:
         _warn_once(f"[설정] env의 옛 설정 이름은 읽지 않음(S7e2 — settings.yaml 칸·덮기 파일로): {' '.join(legacy)}")
-    st = None
     if path is not None:
         try:
-            doc, over = read_settings(path)
-            sub = {}
-            for p in pins:
-                v = _peek(doc, p)
-                if v is not None:
-                    _set_path(sub, p, v)
-            run = _peek(
-                doc, "common.run_env"
-            )  # VS7e3 R-2 — 파일에만 run_env를 둔 서버도 덮기 파일 pinned 값 형식 오류를 거부하게(load()의 서버 판정)
-            if run is not None and str(run) in RUN_ENVS:  # 모르는 글자는 넣지 않음(전처럼 — 앱 설정 객체·시작 관문이 거부)
-                _set_path(sub, "common.run_env", run)
-            over = {k: v for k, v in over.items() if k in pins.values()}
-            st = load(cls, file=path, environ=environ, strict=False, require_file=False, lenient_run_env=True, _read=(sub, over))
+            read_settings(path)  # 파일을 읽을 수 있는지만(칸 검증은 앱 설정 객체·시작 관문 — 호스트 export가 다른 앱 절 오타로 멈추지 않게)
         except SettingsError as e:
             if (
                 _server_env(environ, path) and environ.get("SETTINGS_LENIENT") != "1"
             ):  # 내부 신호 — entrypoint가 점검 명령(check·selftest 등)에만 줌
                 raise
-            _warn_once(f"[설정] 영구 다리 건너뜀(엔진·인계 칸은 기본값 — local 또는 점검 명령) — {e}")
-            st = None
-    fields = {p: f for p, f, _ in walk(cls)}
-    n = 0
-    for p, name in pins.items():
-        if name in environ:
-            continue
-        v = _get(st, p) if st is not None and _is_set(st, p) else None
-        if v is None:
-            v = IMAGE_DEFAULTS.get(name)
-        s = render(v, secrets=True, sep=list_sep(fields[p]))
-        if s is not None:
-            environ[name] = s  # env 남김 — 영구 다리(엔진·인계 파일이 env로 읽음, D-028 ⑤)
-            if environ is os.environ:  # env 남김 — 영구 다리
-                PINNED.add(name)
-            n += 1
-    return n
+            _warn_once(f"[설정] 설정 파일을 쓰지 않음(local 또는 점검 명령 — 기본값으로) — {e}")
+    return 0
 
 
-PINNED: set = set()  # 이 프로세스에서 pin_env가 env에 낸 이름(사용자 env와 가름 — common.config.boot)
 # 호스트 셸이 늘 export하는 설정 이름(settings_env.sh load_settings·systemd Environment=) — 앱 설정 칸과 이름이 같지만 셸 자신이 쓰는 값이라
 # "env의 옛 설정 이름" 경고에서 뺀다(VS7e2 R-5 — 운영자에게 매번 거짓 경고). 앱은 그 칸도 settings.yaml에서만 읽는다.
 
@@ -1003,7 +955,7 @@ def edw_read_only(on=True):
 
 
 def _all_names():
-    """{옛 env 이름: pinned 여부} — common + 이 이미지에 있는 앱 칸(호스트 칸 빼고). 앱 모듈 묶음마다 한 번만 걷는다(리뷰 S7e2)."""
+    """{옛 env 이름} — common + 이 이미지에 있는 앱 칸(호스트 칸 빼고). 앱 모듈 묶음마다 한 번만 걷는다(리뷰 S7e2)."""
     classes = app_classes()
     key = tuple(sorted(classes))
     if key not in _ALL_NAMES:
@@ -1015,13 +967,7 @@ _ALL_NAMES: dict = {}
 
 
 def _walk_names(classes):
-    out = {}
-    for cls in classes:
-        for p, f, _ in walk(cls):
-            e = env_name(f)
-            if e and not is_host(p):
-                out[e] = out.get(e, False) or bool(_extra(f, "pinned"))
-    return out
+    return frozenset(env_name(f) for cls in classes for p, f, _ in walk(cls) if env_name(f) and not is_host(p))
 
 
 def _check_names(names):
@@ -1121,54 +1067,43 @@ def _raw_dumper():
     return Dumper
 
 
-def _pin_names(env, names, known):
-    for k, v in names.items():
-        if known.get(k):  # 엔진·인계 칸 — 그 파일들은 env를 읽음(영구 다리)
-            if v is None:
-                env.pop(k, None)
-            else:
-                env[k] = _env_text(v)
-
-
 def put(**names):
     """이 프로세스의 설정 값을 바꾼다(옛 `os.environ[X] = v` 자리 — S7e2): 덮기 파일을 만들어 SETTINGS_FILE을 그것으로 바꾸고(뒤에 띄우는
-    자식도 같은 값을 받음), 모든 설정 캐시가 다음 읽기에서 다시 읽게 한다. 엔진·인계 칸은 env에도 쓴다. None = 그 칸 비움(기본값).
+    자식도 같은 값을 받음), 모든 설정 캐시가 다음 읽기에서 다시 읽게 한다. None = 그 칸 비움(기본값).
     칸이 없는 이름은 KeyError. 반환: 덮기 파일 경로."""
-    known = _check_names(names)
+    _check_names(names)
     p = exitclean.remove_at_exit(overlay_file(names))  # pl-27 — 이 프로세스가 끝날 때 지움
     os.environ["SETTINGS_FILE"] = str(p)  # env 남김 — 설정 파일 자리 신호(5-2)
-    _pin_names(os.environ, names, known)  # env 남김 — 영구 다리
     _GEN[0] += 1
     return p
 
 
 def child_env(base=None, **names):
     """자식 프로세스에 줄 env(옛 `dict(os.environ, X=v)` 자리 — S7e2): base env(없으면 os.environ) 사본에, names를 덮은 덮기 파일을
-    SETTINGS_FILE로 넣는다(부모 값은 그대로). 엔진·인계 칸은 env에도. names가 없으면 사본만."""
+    SETTINGS_FILE로 넣는다(부모 값은 그대로). names가 없으면 사본만."""
     env = dict(os.environ if base is None else base)  # env 남김 — 하위 프로세스
     if names:
-        known = _check_names(names)
+        _check_names(names)
         env["SETTINGS_FILE"] = str(exitclean.remove_at_exit(overlay_file(names, environ=env)))  # pl-27 — 이 프로세스가 끝날 때 지움
-        _pin_names(env, names, known)
     return env
 
 
 @contextlib.contextmanager
 def isolated(**names):
-    """시험용 — 지금 설정 위에 names를 덮은 덮기 파일로 바꿔 끼우고(그 안에서 부른 put()까지 그 동안만), 끝나면 SETTINGS_FILE·엔진/인계 env를
+    """시험용 — 지금 설정 위에 names를 덮은 덮기 파일로 바꿔 끼우고(그 안에서 부른 put()까지 그 동안만), 끝나면 SETTINGS_FILE을
     되돌린다(옛 시험의 os.environ 저장·복원 자리 — S7e2). None = 그 칸 비움."""
-    known = _check_names(names)
-    keep = {k: os.environ.get(k) for k in ("SETTINGS_FILE", *(n for n, pin in known.items() if pin))}  # env 남김 — 시험
+    _check_names(names)
+    keep = os.environ.get("SETTINGS_FILE")  # env 남김 — 시험
     p = overlay_file(names)
     os.environ["SETTINGS_FILE"] = str(p)  # env 남김 — 설정 파일 자리 신호(시험 — 끝나면 되돌림)
-    _pin_names(os.environ, names, known)  # env 남김 — 영구 다리
     _GEN[0] += 1
     try:
         yield
     finally:
         p.unlink(missing_ok=True)  # pl-27 — 블록 안에서만 쓰는 파일
-        for k, v in keep.items():
-            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)  # env 남김 — 시험: 신호·엔진/인계 env 되돌림
+        os.environ.pop("SETTINGS_FILE", None) if keep is None else os.environ.__setitem__(
+            "SETTINGS_FILE", keep
+        )  # env 남김 — 시험: 신호 되돌림
         _GEN[0] += 1
 
 
@@ -1204,8 +1139,7 @@ class Cache:
             os.environ.get("SETTINGS_FILE"),
             os.environ.get("RUN_ENV"),
             _GEN[0],  # env 남김 — 설정 파일 자리 신호 · 신호(5-2)
-            tuple(os.environ.get(n) for n in _pinned_names(self.app_cls)),
-        )  # env 남김 — 영구 다리(엔진·인계 칸 env가 바뀌면 다시 읽음)
+        )
         if self._value is None or key != self._key:
             self._value, self._key = _load_app(self.app_cls), key
         return self._value
@@ -1420,17 +1354,17 @@ class CommonModelsVlm(Section):
         {"model_alt"}
     )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     allow_external: bool | None = F(False, "VLM_ALLOW_EXTERNAL", "VLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
-    api_key: SecretStr | None = F(None, "VLM_API_KEY", "VLM 엔드포인트 API 키(있을 때만)", pinned="engine")
-    base_url: str | None = F(None, "VLM_BASE_URL", "VLM 엔드포인트 주소(OpenAI 호환 …/v1)", pinned="engine")
-    concurrency: int | None = F(4, "VLM_CONCURRENCY", "한 문서의 쪽(그림) VLM 동시 요청 수(개)", pinned="engine")
+    api_key: SecretStr | None = F(None, "VLM_API_KEY", "VLM 엔드포인트 API 키(있을 때만)")
+    base_url: str | None = F(None, "VLM_BASE_URL", "VLM 엔드포인트 주소(OpenAI 호환 …/v1)")
+    concurrency: int | None = F(4, "VLM_CONCURRENCY", "한 문서의 쪽(그림) VLM 동시 요청 수(개)")
     est_usd: float | None = F(0.02, "VLM_EST_USD", "VLM 호출 1건당 예상 비용($) — 예산 선차감용")
     extra_body: JsonValue | None = F(None, "VLM_EXTRA_BODY", "VLM 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기)")
     max_concurrency: float | None = F(
         8, "VLM_MAX_CONCURRENCY", "공유 VLM 서버 동시 요청 총량 상한(문서 동시 수 × 쪽 동시 수가 이 값을 못 넘게 줄임)", unset=("auto",)
     )
-    model: str | None = F(None, "VLM_MODEL", "VLM 모델 이름", pinned="engine")
-    retry: int | None = F(1, "VLM_RETRY", "VLM 쪽 호출 시간 초과·연결 오류 때 재시도 횟수(회)", pinned="engine")
-    timeout: int | None = F(180, "VLM_TIMEOUT", "VLM 쪽당 호출 제한 시간(초)", pinned="engine")
+    model: str | None = F(None, "VLM_MODEL", "VLM 모델 이름")
+    retry: int | None = F(1, "VLM_RETRY", "VLM 쪽 호출 시간 초과·연결 오류 때 재시도 횟수(회)")
+    timeout: int | None = F(180, "VLM_TIMEOUT", "VLM 쪽당 호출 제한 시간(초)")
 
 
 class CommonDev(Section):
@@ -1465,22 +1399,19 @@ class CommonPaths(Section):
     REMOVED = frozenset(
         {"eval_sets_dir", "korean_font", "config_dir", "criteria_file"}
     )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치 · op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    client_roster: str | None = F(
-        None, "CLIENT_ROSTER", "고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) — 용어·별칭에 합침", pinned="handoff"
-    )
+    client_roster: str | None = F(None, "CLIENT_ROSTER", "고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) — 용어·별칭에 합침")
     doc_dir: str | None = F(
         image_default("DOC_DIR"),
         "DOC_DIR",
         "원본 문서 폴더 — 원본 위치 주소·파싱 입력의 기준(pipeline 이미지 안 기본 /data/docs — 옛 Dockerfile ENV, B-2)",
-        pinned="handoff",
     )
     doc_dir_prepared: str | None = F(
         image_default("DOC_DIR_PREPARED"),
         "DOC_DIR_PREPARED",
         "준비(dedup·회전) 끝난 문서 폴더 — 파싱의 --src 기본값(pipeline 이미지 안 기본 /app/output/prepared — 옛 Dockerfile ENV, B-2)",
     )
-    draft_terms_out: str | None = F(None, "DRAFT_TERMS_OUT", "용어 자동 초안 CSV 경로", pinned="handoff")
-    glossary_dir: str | None = F(None, "GLOSSARY_DIR", "용어 사전 폴더(domain_terms.csv·id_patterns.csv 등)", pinned="handoff")
+    draft_terms_out: str | None = F(None, "DRAFT_TERMS_OUT", "용어 자동 초안 CSV 경로")
+    glossary_dir: str | None = F(None, "GLOSSARY_DIR", "용어 사전 폴더(domain_terms.csv·id_patterns.csv 등)")
     index_root: str | None = F(None, "INDEX_ROOT", "이름 있는 색인 폴더 루트(<index_id>/bundle)")
     mcp_bundle: str | None = F(
         None,
@@ -1493,9 +1424,7 @@ class CommonPaths(Section):
         "결과(output) 폴더 — 코드가 이 아래를 읽고 씀(컨테이너 안 경로 — 서버는 /app/output, 비우면 코드 기본. 마운트 원본은 common.host.output_root — T-21)",
     )
     runlog_dir: str | None = F(None, "RUNLOG_DIR", "실행 기록(output/logs) 루트 폴더")
-    source_manifest: str | None = F(
-        None, "SOURCE_MANIFEST", "원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응)", pinned="handoff"
-    )
+    source_manifest: str | None = F(None, "SOURCE_MANIFEST", "원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응)")
     sources_file: str | None = F(
         None,
         "SOURCES_FILE",
@@ -1514,7 +1443,7 @@ class CommonRuntime(Section):
     )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
     cpu_max_load: float | None = F(0.9, "CPU_MAX_LOAD", "새 하위 프로세스를 띄우는 CPU 부하 상한(1분 부하 평균 ÷ 코어 수)", unset=("auto",))
     draft_terms_lock_timeout: float | None = F(
-        5.0, "DRAFT_TERMS_LOCK_TIMEOUT", "용어 초안 CSV 쓰기 잠금 대기 시간(초) — 못 얻으면 이번엔 포기", pinned="handoff"
+        5.0, "DRAFT_TERMS_LOCK_TIMEOUT", "용어 초안 CSV 쓰기 잠금 대기 시간(초) — 못 얻으면 이번엔 포기"
     )
     lib_env: LibEnv | None = F(
         {},
@@ -1573,26 +1502,19 @@ class CommonStore(Section):
 
 class CommonText(Section):
     REMOVED = frozenset({"parse_token_norm"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
-    draft_terms_max: int | None = F(
-        500, "DRAFT_TERMS_MAX", "용어 자동 초안 파일 행 수 상한(개) — 넘으면 가장 빈번한 것만 유지", pinned="handoff"
-    )
+    draft_terms_max: int | None = F(500, "DRAFT_TERMS_MAX", "용어 자동 초안 파일 행 수 상한(개) — 넘으면 가장 빈번한 것만 유지")
     search_recency: str | None = F(
         "1",
         "SEARCH_RECENCY",
         "같은 문서군의 최신 판 우선 모드 — 0 끔·1 최신을 묻는 질문에서만·2 항상(common/core/docmeta.py — S7b에 mcp.search에서 옮김)",
         blank="keep",
     )
-    search_en_stem: bool | None = F(
-        True, "SEARCH_EN_STEM", "검색 토큰의 영어 복수→단수 정규화(G16, 가산만) — =0이면 끔", pinned="handoff", off=("0",)
-    )
-    source_uri_prefix: str | None = F(
-        None, "SOURCE_URI_PREFIX", "원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///srv/rag/docs)", pinned="handoff"
-    )
+    search_en_stem: bool | None = F(True, "SEARCH_EN_STEM", "검색 토큰의 영어 복수→단수 정규화(G16, 가산만) — =0이면 끔", off=("0",))
+    source_uri_prefix: str | None = F(None, "SOURCE_URI_PREFIX", "원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///srv/rag/docs)")
     token_num_norm: bool | None = F(
         True,
         "TOKEN_NUM_NORM",
         "검색 토큰의 숫자·단위 정규화(T1) — =0이면 끄고 이전 동작",
-        pinned="handoff",
         off=("", "0", "none", "false"),
         fold="lower",
     )

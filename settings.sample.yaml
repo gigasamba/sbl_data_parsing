@@ -108,11 +108,11 @@ common:
       transport: adk  # 모델 호출 전송 방식 · 기본 adk · 값: adk·http 중 하나
     vlm:
       allow_external:  # VLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · 기본 false · 값: true·false
-      concurrency:  # 한 문서의 쪽(그림) VLM 동시 요청 수(개) · 기본 4 · 값: 0 이상 정수
+      concurrency: 4  # 한 문서의 쪽(그림) VLM 동시 요청 수(개) · 기본 4 · 값: 0 이상 정수
       est_usd: 0.02  # VLM 호출 1건당 예상 비용($) · 기본 0.02 · 값: 0 이상
       extra_body:  # [파라미터] VLM 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기) · 값: JSON 객체
       max_concurrency:  # 공유 VLM 서버 동시 요청 총량 상한(문서 동시 수 × 쪽 동시 수가 이 값을 못 넘게 줄임) · 기본 8 · 값: 0 이상 · auto 또는 비우면 자동 계산
-      timeout:  # VLM 쪽당 호출 제한 시간(초) · 기본 180 · 값: 0 이상 정수(초)
+      timeout: 180  # VLM 쪽당 호출 제한 시간(초) · 기본 180 · 값: 0 이상 정수(초)
     # ─── 비용·외부 가드 ───
     guard:
       budget_usd:  # 유료(외부) 모델 호출 누적 비용 상한($) · 값: 0 이상
@@ -133,8 +133,8 @@ common:
   # ─── 검색 토큰 정규화 ───
   text:
     search_recency: '1'  # [파라미터] 같은 문서군의 최신 판 우선 모드 · 기본 1 · 값: 0(끔)·1(최신을 묻는 질문만)·2(항상) 중 하나
-    search_en_stem:  # 검색 토큰의 영어 복수→단수 정규화(G16, 가산만) · 기본 true · 값: true·false
-    token_num_norm:  # 검색 토큰의 숫자·단위 정규화(T1) · 기본 true · 값: true·false
+    search_en_stem: true  # 검색 토큰의 영어 복수→단수 정규화(G16, 가산만) · 기본 true · 값: true·false
+    token_num_norm: true  # 검색 토큰의 숫자·단위 정규화(T1) · 기본 true · 값: true·false
 
 extract:
   # ─── 원천 목록 DB(EDW 표·열 이름) ───
@@ -184,9 +184,9 @@ extract:
   # ─── 파싱 엔진·쪽 처리 ───
   doc_parallel: 1  # 대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개) · 기본 1 · 값: 0 이상 정수
   engine_scope:  # [파라미터] 문서마다 돌릴 엔진 범위(stack = 형식별 stack.json 목록만 / all = 등록 엔진 전부) · 값: stack·all 중 하나
-  fill_merged:  # 표에서 병합 셀이 덮은 빈 칸을 원본 칸 값으로 채울지 · 기본 true · 값: true·false
+  fill_merged: true  # 표에서 병합 셀이 덮은 빈 칸을 원본 칸 값으로 채울지 · 기본 true · 값: true·false
   hidden_overlap_max: 20  # [파라미터] '숨은 글자-그림 겹침' 신호로 쪽 VLM 후보에 올릴 쪽 수 상한(쪽, 0=끔) · 기본 20 · 값: 0 이상 정수 (0 = 끔)
-  kreuzberg_prose_filter:  # kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔) · 기본 true · 값: true·false
+  kreuzberg_prose_filter: true  # kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔) · 기본 true · 값: true·false
   low_priority: true  # 엔진 자식 프로세스를 낮은 우선순위로(POSIX nice +10 · Windows BELOW_NORMAL) · 기본 true · 값: true·false
   rotated_max: 20  # [파라미터] 쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) · 기본 20 · 값: 0 이상 정수 (0 = rotation.csv를 안 읽음)
   text_page_sec: 10.0  # 글자 엔진(VLM 아님) 문서×엔진 1건의 쪽당 제한 시간(초) · 기본 10.0 · 값: 0 이상 초
@@ -194,12 +194,12 @@ extract:
   warmup_sec: 60.0  # 엔진 첫 문서의 제한 시간 하한(초) · 기본 60.0 · 값: 0 이상 초
   # ─── OCR·표 ───
   ocr_engine: false  # [파라미터] OCR 엔진(rapidocr·rapidocr_ko)을 파싱 엔진으로 돌릴지(=1 켬) · 기본 false · 값: true·false
-  rapidocr_page_workers:  # rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개) · 기본 1 · 값: 0 이상 정수
-  table_grid_max_rows:  # [파라미터] 표 grid JSON에 담는 최대 행 수(개) · 기본 2000 · 값: 0 이상 정수
+  rapidocr_page_workers: 1  # rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개) · 기본 1 · 값: 0 이상 정수
+  table_grid_max_rows: 2000  # [파라미터] 표 grid JSON에 담는 최대 행 수(개) · 기본 2000 · 값: 0 이상 정수
   ocr:
-    dpi:  # [파라미터] 쪽 이미지 렌더링 해상도(DPI) · 기본 200 · 값: 0 이상 정수
-    max_pages:  # [파라미터] 문서당 OCR·VLM 쪽 수 상한(쪽, 0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음)
-    table_grid:  # OCR 박스 좌표로 표 격자를 추정할지(=0이면 끔) · 기본 true · 값: true·false
+    dpi: 200  # [파라미터] 쪽 이미지 렌더링 해상도(DPI) · 기본 200 · 값: 0 이상 정수
+    max_pages: 0  # [파라미터] 문서당 OCR·VLM 쪽 수 상한(쪽, 0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음)
+    table_grid: true  # OCR 박스 좌표로 표 격자를 추정할지(=0이면 끔) · 기본 true · 값: true·false
     threads:  # rapidocr onnxruntime 스레드 수(0=onnxruntime 자동, 비우거나 숫자(0~9만) 아니면(auto 등) OMP_NUM_THREADS·CPU 몫) · 값: 0 이상 정수 (0 = onnxruntime 자동)
   # ─── 첨부·중복 ───
   attach:
@@ -461,9 +461,9 @@ tuning:
         down_cooldown: 300.0  # '다운' 판정 뒤 네트워크를 보내지 않고 즉시 거부하는 시간(초) · 기본 300.0 · 값: 0 이상 초
         ping_timeout: 60  # ping_models 점검의 호출 제한 시간(초) · 기본 60 · 값: 0 이상 정수(초)
       vlm:
-        retry:  # VLM 쪽 호출 시간 초과·연결 오류 때 재시도 횟수(회) · 기본 1 · 값: 0 이상 정수
+        retry: 1  # VLM 쪽 호출 시간 초과·연결 오류 때 재시도 횟수(회) · 기본 1 · 값: 0 이상 정수
     text:
-      draft_terms_max:  # 용어 자동 초안 파일 행 수 상한(개) · 기본 500 · 값: 0 이상 정수
+      draft_terms_max: 500  # 용어 자동 초안 파일 행 수 상한(개) · 기본 500 · 값: 0 이상 정수
   # ─── extract의 조정값 ───
   extract:
     engine_retry: 1  # 엔진 별도 프로세스가 비정상 종료했을 때 바로 다시 시도할 횟수(회) · 기본 1 · 값: 0 이상 정수
@@ -513,7 +513,7 @@ tuning:
   ops:
     runtime:
       cpu_max_load:  # (자원) 새 하위 프로세스를 띄우는 CPU 부하 상한(1분 부하 평균 ÷ 코어 수) · 기본 0.9 · 값: 0 이상 · auto 또는 비우면 자동 계산
-      draft_terms_lock_timeout:  # 용어 초안 CSV 쓰기 잠금 대기 시간(초) · 기본 5.0 · 값: 0 이상 초
+      draft_terms_lock_timeout: 5.0  # 용어 초안 CSV 쓰기 잠금 대기 시간(초) · 기본 5.0 · 값: 0 이상 초
       mem_max_pct:  # (자원) 생산 파싱이 새 프로세스를 띄우는 메모리 사용률 상한(%) · 기본 90.0 · 값: 0~100 · auto 또는 비우면 자동 계산
       mem_settle_margin:  # (자원) 상한(MEM_MAX_PCT) 이만큼(%p) 아래부터 프로세스 띄운 뒤 잠깐 쉼 · 기본 5.0 · 값: 0~100 · auto 또는 비우면 자동 계산
       mem_settle_sec:  # (자원) 메모리가 상한 근처일 때 프로세스 띄운 뒤 쉬는 시간(초) · 기본 2.0 · 값: 0 이상 초 · auto 또는 비우면 자동 계산

@@ -48,8 +48,8 @@ prompts 영역 ⑦). 옛 이름 import(`import common_tools…`)는 그 자체�
 경계 판정에 안 쓰여 pipeline/cli.py의 이미지 배정 표로 옮겼고, ⑨의 TOOL_IMAGE·IMAGE_AREAS 규칙은 S5부터 걸릴 도구가 없어 뺐다(VS5 R-4).
 맨 이름 import 판정표(MOVED_TOOLS·flat)에 S5 새 도구 ask·search_checks와 validation/e2e 도구를 더함(VS5 R-5 — 같은 앱 안은 허용).
 S7e2(10-28, D-028 ④⑤ — 전환 다리 제거): ⑩ "os.environ 0" — 코드가 os.environ·os.getenv·os.environb를 직접 쓰는 줄(토큰 기준 — 주석·문자열 빼고)은
-예외 자리(ENV_EXEMPT — 영구 다리 28키를 읽는 엔진·인계 파일 등)이거나, 그 문장(또는 바로 위 주석 줄)에 분류 주석
-`env 남김 — <분류>`(ENV_KINDS — 라이브러리·하위 프로세스·내부 신호·이미지 신호·설정 파일 자리 신호·RUN_ENV 신호·영구 다리·시험·OS 값·호스트 도구)가
+예외 자리(ENV_EXEMPT — op-09부터 비었음: 엔진·인계 파일도 설정 객체로 읽음)이거나, 그 문장(또는 바로 위 주석 줄)에 분류 주석
+`env 남김 — <분류>`(ENV_KINDS — 라이브러리·하위 프로세스·내부 신호·이미지 신호·설정 파일 자리 신호·RUN_ENV 신호·시험·OS 값·호스트 도구)가
 있어야 한다. 설정 값은 settings.yaml(설정 객체 cfg()·덮기 파일 put·child_env)로만 읽고 넘긴다. --env-report: 남은 줄을 분류별로 찍음.
 S7e3(10-28, VS7e2 B-1·R-10): ⑩이 os 별칭(`import os as _os`)·`from os import environ` 이름도 잡는다. ⑪ "자식 env의 설정 이름 0" — 자식 env
 (os.environ·그 사본·child_env 결과·subprocess 류 env= 값)에 설정 칸 이름(호스트 칸 빼고 — 영구 다리 칸은 빼기만)을 넣거나 빼는 자리(AST —
@@ -365,18 +365,7 @@ def check():
 
 
 # ⑩ "os.environ 0"(S7e2) — 예외 자리(파일·폴더 접두, 저장소 루트 기준)와 줄마다 다는 분류 주석
-ENV_EXEMPT = {
-    "pipeline/extract/engines/": "영구 다리 — 엔진 파일(엔진 지문 — 바이트 그대로, D-028 ⑤ 18키)",
-    "common/core/contract.py": "영구 다리 — 인계 파일(FINGERPRINT, D-028 ⑤ 10키)",
-    "common/core/repfmt.py": "영구 다리 — 인계 파일(FINGERPRINT)",
-    "common/core/terms.py": "영구 다리 — 인계 파일(FINGERPRINT)",
-    "common/core/text.py": "영구 다리 — 인계 파일(FINGERPRINT)",
-    # S9(D-018) — 인계 파일 자기 점검을 옮긴 시험: 그 파일이 env로 읽는 영구 다리 칸을 env로 바꿔 본다(옮기기 전과 같은 줄)
-    "tests/server/common/test_core_text.py": "시험 — 인계 파일 text.py가 env로 읽는 칸(영구 다리)을 바꿔 봄",
-    "tests/server/common/test_core_terms.py": "시험 — 인계 파일 terms.py가 env로 읽는 칸(영구 다리)을 바꿔 봄",
-    # S9b(VS9 B-1) — 엔진 파일 rapidocr/parser.py `__main__` 자기 점검을 옮긴 시험: 엔진이 env로 읽는 OCR_THREADS(영구 다리)·OMP_NUM_THREADS를 바꿔 봄
-    "tests/general/pipeline/test_rapidocr_parser.py": "시험 — 엔진 파일 rapidocr가 env로 읽는 칸(영구 다리)을 바꿔 봄",
-}
+ENV_EXEMPT: dict[str, str] = {}  # op-09 — 엔진·인계 파일도 설정 객체로 읽어 예외 자리 없음(영구 다리 없앰)
 ENV_KINDS = (
     "라이브러리",
     "하위 프로세스",
@@ -384,7 +373,6 @@ ENV_KINDS = (
     "이미지 신호",
     "설정 파일 자리 신호",
     "RUN_ENV 신호",
-    "영구 다리",
     "시험",
     "OS 값",
     "호스트 도구",
@@ -480,14 +468,10 @@ ENV_NAME_OK_KINDS = ("라이브러리", "시험", "호스트 도구")
 
 def _setting_names():
     """(자식 env에 넣거나 빼도 효과가 없는 설정 이름, 빼도 효과가 없는 영구 다리 이름) — common + 이 이미지의 앱 칸 env 이름(호스트 칸 빼고).
-    영구 다리(pinned) 칸은 env 값을 읽으므로 넣기는 되지만, 빼면 자식의 pin_env가 설정 파일 값으로 다시 채운다(비우기는 child_env(X=None))."""
+    op-09 — 영구 다리 칸이 없어져 둘째 묶음은 늘 빈 것(검사 틀은 그대로)."""
     from common.config import settings as S
 
-    known = S._all_names()
-    return (
-        frozenset(n for n, pinned in known.items() if not pinned) - {"RUN_ENV", "SETTINGS_FILE"},
-        frozenset(n for n, pinned in known.items() if pinned),
-    )
+    return S._all_names() - {"RUN_ENV", "SETTINGS_FILE"}, frozenset()  # op-09 — 영구 다리 없음(둘째 묶음은 빈 것)
 
 
 _SPAWN = (

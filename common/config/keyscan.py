@@ -76,10 +76,6 @@ NOT_SETTINGS = {
         "삭제 후보",
         "S7b에 RUN_ENV=local로 대체 — 코드가 더 읽지 않음(migrate는 옛 env 파일의 LOCAL_RUN=1을 common.run_env: local로)",
     ),
-    "MINERU_BIN": (
-        "env로 남김",
-        "엔진 파일 registry.py가 env를 직접 읽음(기본 mineru — 엔진 지문 파일이라 그대로) · 설정 칸은 10-29에 지움(엔진 구성에서 뺀 엔진)",
-    ),
     "NETWORK_HOST": ("env로 남김", "entrypoint 신호(compose)"),
     "OMP_NUM_THREADS": ("env로 남김", "라이브러리(OpenMP)가 읽음"),
     "PARSE_RUN_ID": ("env로 남김", "부모 → 자식 프로세스 신호"),

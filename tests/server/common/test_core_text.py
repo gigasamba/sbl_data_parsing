@@ -1,8 +1,7 @@
 """common.core.text(인계 파일 — FINGERPRINT) 자기 점검 — S9(D-018)에 모듈 `__main__`에서 옮김(줄 글자 그대로). 옛 사례 `python -m common.core.text`.
 ⚠️ 이 옮기기는 인계 지문(FINGERPRINT)을 바꾼다(사용자 10-28 — 인계 파일 옮기기 커밋 하나, 되돌리기는 그 커밋 revert · refactor.md C-52)."""
 
-import os
-
+from common.config.settings import COMMON
 from common.core.text import _en_singular, supsub_mark, tokens
 
 
@@ -24,12 +23,9 @@ def test_main():  # 옛 `if __name__ == "__main__":   # 자기점검: 첨자 토
     tg3 = tokens("current status of the business process")  # -us·-ss류는 단수형이 더해지지 않음(오탐 방지)
     assert "statu" not in tg3 and "busines" not in tg3 and "proces" not in tg3, tg3
     assert tokens("batch 1") == tokens("batch 1")  # 결정성(같은 입력 같은 출력)
-    os.environ["SEARCH_EN_STEM"] = "0"
-    try:
+    with COMMON.env(SEARCH_EN_STEM="0"):  # op-09 — 인계 파일도 설정 객체로 읽음
         tg4 = tokens("12 batches")
         assert "batch" not in tg4 and "batches" in tg4, tg4  # 끔 스위치 — 옛 동작과 바이트 동일
-    finally:
-        del os.environ["SEARCH_EN_STEM"]
     print("[selftest] G16 — 영어 단·복수 정규화(SEARCH_EN_STEM, =0이면 바이트 동일) 통과")
 
     # engine-qa BLOCK 4 — 낱말 열거 대신 접미사 규칙(-us·-sis·-ss·-ics): census·radius·surplus(-us)·hypothesis·emphasis(-sis)는
@@ -82,12 +78,9 @@ def test_main():  # 옛 `if __name__ == "__main__":   # 자기점검: 첨자 토
     assert "d-2024-190" in tokens("D-2024-190") and "d-2024-190" not in t_l
     print("[selftest] T1(d) number+unit split (additive) OK")
 
-    os.environ["TOKEN_NUM_NORM"] = "0"
-    try:
+    with COMMON.env(TOKEN_NUM_NORM="0"):
         t_off = tokens("2,000")
         assert "2000" not in t_off and set(t_off) == {"2", "000"}, t_off
         assert tokens("35℃") != tokens("35°C")
         assert tokens("10ppm") == ["10ppm"]
-    finally:
-        os.environ.pop("TOKEN_NUM_NORM", None)
     print("[selftest] T1 TOKEN_NUM_NORM=0 byte-identical OK")

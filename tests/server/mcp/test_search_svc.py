@@ -421,7 +421,7 @@ def _selftest_index_id():
     (api / "bundle" / "meta.json").write_text(json.dumps({"dim": 4, "embed": "api", "embed_model": "m-a"}), encoding="utf-8")
     (api / "index.json").write_text(json.dumps({"index_id": "0000dddd", "pg_schema": None}), encoding="utf-8")
     _STATE.clear()
-    # 설정 객체 덮기(S7d) — GLOSSARY_DIR·CLIENT_ROSTER는 인계 파일(common.core.terms)이 env로 읽어 senv가 os.environ에도 쓰고 되돌림
+    # 설정 객체 덮기(S7d) — GLOSSARY_DIR·CLIENT_ROSTER도 설정 객체(op-09 — 인계 파일 common.core.terms도 cfg())
     _env = mc.senv(GLOSSARY_DIR=None, CLIENT_ROSTER=None, MCP_STORE="local", MCP_BUNDLE=str(base), INDEX_ROOT=str(root), EMBED_MODEL="m-b")
     try:
         d0 = do_search("단가는?", k=3, methods=["bm25"], decompose=False)
@@ -824,7 +824,7 @@ def _selftest_br50_client_scope():
     q_contract = "계약 C-B01의 금액은?"
 
     _STATE.clear()
-    # 설정 객체 덮기(S7d) — GLOSSARY_DIR는 인계 파일이 env로 읽어 senv가 os.environ에도 쓰고 되돌림 · SEARCH_CLIENT_HARD=None은 옛 pop
+    # 설정 객체 덮기(S7d) — GLOSSARY_DIR도 설정 객체(op-09) · SEARCH_CLIENT_HARD=None은 옛 pop
     _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), GLOSSARY_DIR=str(gdir), SEARCH_CLIENT_HARD=None)
     _hard = None
     try:

@@ -43,11 +43,10 @@ def test_copied_sample_starts_with_defaults():
         for cls in (CommonAppSettings, *app_classes().values()):
             st = load(cls, file=y, environ={})  # STRICT — 모르는 칸·틀린 값이면 SettingsError
             for top in cls.model_fields:
-                for p, f in ((p, f) for p, f, _ in walk(cls) if p.split(".")[0] == top):
+                for p in (p for p, _, _ in walk(cls) if p.split(".")[0] == top):
                     v = _get(tree, layout.to_yaml(p))
                     if v is not None and p != "common.run_env":
                         assert _get(st, p) == v, (p, _get(st, p), v)
-                        assert not (f.json_schema_extra or {}).get("pinned"), (p, "pinned 칸은 적으면 env로 나감")
             for name, p in env_map(cls).items():
                 if name in names and p != "common.run_env":
                     assert not _is_set(st, p), (name, p, "적었는지로 동작이 갈리는 칸 — sample.SET_MATTERS에 더함")

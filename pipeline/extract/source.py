@@ -1023,7 +1023,9 @@ def resolve(source, out, limit=0, mode="prod"):
     if str(source).startswith("s3://"):
         local = Path(out) / "_source_files"
         names = fetch_s3(source, local, state, limit, mode)
-        C.put(SOURCE_MANIFEST=str(state / "manifest.jsonl"))  # S7e2 — 덮기 파일 + 인계 키 env · 원본 위치 = s3://버킷/키
+        C.put(
+            SOURCE_MANIFEST=str(state / "manifest.jsonl")
+        )  # S7e2 — 덮기 파일(op-09 — 인계 파일도 설정 객체로 읽음) · 원본 위치 = s3://버킷/키
         return local, names, state
     if str(source).startswith("rdb:"):
         local = Path(out) / "_source_files"
