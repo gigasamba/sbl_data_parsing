@@ -185,6 +185,26 @@ class LayoutError(ValueError):
     """파일 배치 오류 — 메시지에는 칸 자리만(값 없음)."""
 
 
+DUP_KEY = "같은 칸 두 번"
+
+
+def reject_dup_keys(loader_cls):
+    """YAML Loader 클래스가 같은 절·칸을 두 번 쓴 파일을 거부하게(앞 것이 조용히 사라지므로 — 값은 안 찍음). 앱(settings)·호스트(run_docs)가 같이 쓴다."""
+    import yaml
+
+    def no_dup(loader, node):  # 글자 열쇠만 견줌(병합 `<<`·사전 열쇠는 construct_mapping이 처리 — 못 쓰는 열쇠도 YAML 오류로)
+        seen = set()
+        for k, _ in node.value:
+            if isinstance(k, yaml.ScalarNode) and k.tag != "tag:yaml.org,2002:merge":
+                if k.value in seen:
+                    raise yaml.constructor.ConstructorError(None, None, f"{DUP_KEY}: {k.value}", k.start_mark)
+                seen.add(k.value)
+        return loader.construct_mapping(node)
+
+    loader_cls.add_constructor("tag:yaml.org,2002:map", no_dup)
+    return loader_cls
+
+
 def _role(model_path):
     for m, y in ROLES:
         if model_path.startswith(m):
@@ -215,6 +235,18 @@ def to_model_path(yaml_path):
         if rest.startswith(y):
             return m + rest[len(y) :]
     return None
+
+
+def set_path(doc, path, value):
+    """점 경로 자리에 값을 넣는다(중간 사전은 만들고, 사전이 아닌 값은 사전으로 바꿈)."""
+    parts = path.split(".")
+    cur = doc
+    for p in parts[:-1]:
+        nxt = cur.get(p)
+        if not isinstance(nxt, dict):
+            nxt = cur[p] = {}
+        cur = nxt
+    cur[parts[-1]] = value
 
 
 def _leaves(doc, prefix=""):
@@ -258,14 +290,7 @@ def to_model(doc, source=""):
         if want != y:
             moved.append(f"{y} → {want}")
             continue
-        cur = out
-        parts = m.split(".")
-        for p in parts[:-1]:
-            nxt = cur.get(p)
-            if not isinstance(nxt, dict):
-                nxt = cur[p] = {}
-            cur = nxt
-        cur[parts[-1]] = v
+        set_path(out, m, v)
     if moved:
         raise LayoutError(f"자리가 다른 칸 {len(moved)}개: {', '.join(moved)} — 옛 배치면 {MIGRATE_HINT}{where}")
     if bad:
@@ -276,18 +301,6 @@ def to_model(doc, source=""):
 def to_file(model_doc):
     """모델 배치 사전 → 파일 사전(새 배치, SECTIONS 순서). migrate·시험이 쓴다."""
     out = {}
-
-    def walk(d, prefix):
-        for k, v in d.items():
-            p = f"{prefix}{k}"
-            if isinstance(v, dict) and v:
-                walk(v, p + ".")
-                continue
-            cur = out
-            parts = to_yaml(p).split(".")
-            for q in parts[:-1]:
-                cur = cur.setdefault(q, {})
-            cur[parts[-1]] = v
-
-    walk(model_doc or {}, "")
+    for p, v in _leaves(model_doc or {}):
+        set_path(out, to_yaml(p), v)
     return {s: out[s] for s in SECTIONS if s in out}

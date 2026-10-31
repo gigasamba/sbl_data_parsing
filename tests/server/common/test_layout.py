@@ -148,3 +148,7 @@ def test_duplicate_key_rejected():
         assert _raises(lambda: read_settings(f), "같은 칸 두 번: search", "5행")
         f.write_text("required:\n  env: {run_env: local, run_env: dev}\n", encoding="utf-8")
         assert _raises(lambda: read_settings(f), "같은 칸 두 번: run_env")
+        f.write_text("required:\n  env: {run_env: local}\ndev:\n  mcp:\n    <<: {ui_port: 1}\n", encoding="utf-8")
+        assert read_settings(f)[0]["mcp"]["dev"]["ui_port"] == "1"  # 병합 열쇠는 거부하지 않음
+        f.write_text("required:\n  env: {run_env: local}\n? [a]\n: 1\n", encoding="utf-8")
+        assert _raises(lambda: read_settings(f), "YAML 형식 오류")  # 못 쓰는 열쇠도 TypeError가 아닌 설정 오류

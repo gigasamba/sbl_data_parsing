@@ -1,4 +1,4 @@
-"""trigger.sh scheduled 시각 게이트(pl-32, 사용자 10-30) — settings.yaml pipeline.host.nightly.time(NIGHTLY_TIME)이 비면 조용히 끝, 그 시각부터
+"""trigger.sh scheduled 시각 게이트(pl-32, 사용자 10-30) — settings.yaml ops.nightly.time(NIGHTLY_TIME)이 비면 조용히 끝, 그 시각부터
 5분 안이면 night, 꼴이 틀리면 종료 2. trigger.sh에서 게이트 블록만 떼어 bash로 돌린다(date는 셸 함수로 바꿔 끼움 — 설정·docker 없음, PC 전용)."""
 
 import os

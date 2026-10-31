@@ -100,6 +100,11 @@ NOT_SETTINGS = {
     "USER": ("env로 남김", "OS 사용자 이름(OS가 줌)"),
     "USERNAME": ("env로 남김", "OS 사용자 이름(Windows)"),
     "ALLOW_NO_ASSETS": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
+    **{
+        n: ("인자", "빌드·굽기 스크립트 변수(build_ship.sh·bake.sh·ship_stage.sh — op-06·op-07)")
+        for n in ("APP_VERSION", "VCS_REF", "BAKE_TEST", "CODE_BUNDLE", "CODE_DIR", "CODE_OUT")
+    },
+    "NF": ("인자", "awk 내장 변수($NF — build_ship.sh tar 권한 점검), 설정 아님"),
     "SMOKE_OVERLAY_DIR": ("인자", "PC 시험 Docker 덮기 파일 폴더 — smoke_test.sh가 mktemp로 만들어 compose에 넘김(S7e2)"),
     "ASSET_SRC": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "BUILDKIT_SYNTAX": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
