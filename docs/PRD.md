@@ -13,7 +13,7 @@
 |---|---|---|---|
 | 원천과 가져오기 | done | 폴더·S3·RDB · 증분 · warm | [pl-01](prd/etl.md#pl-01) |
 | EDW 고객 매핑을 파이프라인이 만듦 | todo | FileStorageMap 조인 · `file_meta` 대체 | [pl-29](prd/etl.md#pl-29) |
-| 구조화 — 청크·메타·임베딩 | done | 청크 · 요약 · 임베딩 · 그래프·개념·그림 행·사실 지움(11-01) | [pl-06](prd/etl.md#pl-06) |
+| 구조화 — 청크·메타·임베딩 | done | 청크 · 요약 · 임베딩 · 그래프·개념·그림 행 지움(11-01) · 사실은 mc-04와 함께 | [pl-06](prd/etl.md#pl-06) |
 | structure/load 계약이 새 묶음 거부 | todo | `DOC_KEYS` 고침(사람 검토) | [pl-15](prd/etl.md#pl-15) |
 | `PIPE_EMBED=none`이면 `vector(0)` | todo | 차원 0 처리 | [pl-16](prd/etl.md#pl-16) |
 | pgvector 적재 | done | Alembic 표 · 건너뛰기 · 색인 | [pl-07](prd/etl.md#pl-07) |
