@@ -29,7 +29,8 @@
 - 파일: `mcp_server/services/search/clientscope.py`, `supersede.py`, `common/core/docmeta.py`.
 - 고칠 것(reference 비교(사용자 grill 10-30, 원본은 git 밖) M3·T2 — 버그): `client` 판정을 운영 10-28 방식으로 — 별칭 그룹으로 정확히 일치, `sf_acc_name`이 비었을 때만 라벨로 판정, 목록은 OR로 받는다. 파일: `mcp_server/services/search/search_svc.py`, `clientscope.py`.
 - 결정(사용자 10-30 PRD grill): C6 — 검색의 고객 거르기는 EDW에서 조인한 고객(`client_edw`)만 쓴다. 본문에서 찾은 고객(`clients_doc`)은 참고용으로만 둔다. LAS는 EDW 고객이 비어 고객 거르기에서 늘 빠진다(원천별 스키마라 LAS는 따로 검색됨).
-- Status: todo — client 판정 고침(T2). 나머지는 done.
+- 결정(허브 10-31, 최신 결정 우선): C6이 이긴다 — 고객 거르기는 `client_edw`만. 위 T2의 '`sf_acc_name`이 비었을 때만 라벨로 판정'은 없앤다(별칭 그룹 정확 일치·목록 OR은 남김 — 별칭 CSV는 [etl.md#pl-38](etl.md#pl-38) 0.2.0 몫). 근거의 `client` = `client_edw`, `clients_doc`은 따로 둔 참고 칸.
+- Status: todo — client 판정 고침(T2, 라벨 대체 없이 — C6). 나머지는 done.
 
 <a id="mc-04"></a>
 ## mc-04 · 집계 답
@@ -90,7 +91,7 @@
     - `source_system` — **필수, 값 하나**(G20 — 그 시스템의 gold 스키마만 찾음, 여러 시스템은 여러 번 부름) · `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`(A2) · `-test` 별칭도 받음(G4).
     - `client` — 고객 이름 하나 또는 목록(OR). 우리 결정은 EDW에서 조인한 고객(`client_edw`)만 본다([mc-05](#mc-05), C6 — 운영처럼 본문 라벨로 대신하지 않음). `client_like`(`true`) — `client`와 함께 쓰는 유일한 부분 일치.
     - `project_id` — SFDC 프로젝트 코드.
-    - `division` — `CD`·`DS`·`DP`.
+    - `division` — EDW에 실제 있는 값을 그대로 받는다(`CD`·`DS`·`DP`는 예 — 허브 10-31).
     - `service_type` — `CDO`·`CMO DS`·`CMO DP`·`ADC`·`mRNA`·`New Platform`·`CMO DS (MTOP Shared)`.
     - `FAQ_group` — FAQ 시트 값(DP·FMD·Study·Facility·Regulatory·Analytical·DS·CLD·Others) — FAQ만([etl.md#pl-39](etl.md#pl-39)).
     - `doc_class` — `source_system`과 함께(SFDC 또는 LAS 분류값 — [etl.md#pl-33](etl.md#pl-33)).
@@ -100,7 +101,8 @@
   - "하드 거르기 최소 1개"는 권고만(G5).
   - 출력 맨 위: `question` · `evidence[]`(길이 k) · `evidence_status`(`found`·`weak`·`none`) · `filter`(정규화한 거르기 메아리) · `scope_docs`(맞은 문서 수, 0도 정상).
   - `evidence[]` 항목: `text` · `file_name`(`list_doc_fulltext`로 잇는 다리 — [mc-17](#mc-17)) · `page` · `line` · `section` · `client` · `contract_no` · `doc_date` · `version` · `superseded` · `chunk_key`. 운영에는 `file_path`도 있으나 뺀다(아래).
-  - `file_path` 키 제거(사용자 10-30 "mcp 기능에서 제거될 것이니 pass" · "reference 기준으로 하면 file_path 관련 부분 뺄거라 제거 대상으로 간주만 하고 일단 pass", D1 — 이 행에서만 다룸): gold `doc.file_path` 삭제([etl.md#pl-25](etl.md#pl-25))와 함께 0.2.0(C1·C2), 계약 변경이라 등급 A. 열린 점: 운영 `chunk_key`는 `<file_path>:<순번>` 꼴 — `file_path`를 빼면 키 바탕(`s3_key` 등)을 정해야 함 → 해소(10-31 결정 — `<doc_key>:<순번>`, 아래).
+  - `file_path` 키 제거(사용자 10-30 "mcp 기능에서 제거될 것이니 pass" · "reference 기준으로 하면 file_path 관련 부분 뺄거라 제거 대상으로 간주만 하고 일단 pass", D1 — 이 행에서만 다룸): gold `doc.file_path` 삭제([etl.md#pl-25](etl.md#pl-25))와 함께 0.2.0(C1·C2), 계약 변경이라 등급 A. 열린 점: 운영 `chunk_key`는 `<file_path>:<순번>` 꼴 — `file_path`를 빼면 키 바탕(`s3_key` 등)을 정해야 함 → 해소(10-31 결정 — `<doc_id>:<seq>`, 아래).
+- 결정(허브 10-31, 최신 결정 우선): 거르기 이름은 위 그대로 고정(계약). 스키마마다 거르기 이름 → 그 EDW 원본 칸 이름(D-1) 대응표를 코드에 하나씩 둔다. 근거 `client` = `client_edw`, `clients_doc`은 따로 참고 칸([mc-05](#mc-05)). 목록 값(`division` 등)은 예 — EDW에 있는 값을 받는다.
 - 필터용 칸 `doc_class`·`created_at`은 gold `doc`에 Alembic으로 더한다(M4 — [etl.md#pl-25](etl.md#pl-25)).
 - 남은 확인: 운영 MCP 서버 소스는 없음 — 명세 기준으로 새로 구현, 구하면 대조.
 - 파일: `mcp_server/routers/`, `mcp_server/schemas/`, `mcp_server/services/search/`.
@@ -166,8 +168,7 @@
 | 모든 저장소에서 하드 거르기 | PG 저장소만. 로컬 묶음: 거르기만이면 오류, 질문 + 거르기면 거르지 않고 검색 | `search_svc.py` | mc-01 |
 
 ### 요건 없는 코드 — 남길지(앵커를 씀) 지울지([test.md#e2-18](test.md#e2-18))
-- `AI.ParsingMeta`에서 근거의 파싱 결과 경로(`MCP_EVIDENCE_PATHS`, 켜짐). `shaping.py`.
-- 도구로 노출되지 않은 근거 이미지 자르기와 내부 조회: `do_evidence_image`, `do_get_image`, `do_related`(시험만), `do_lookup_term`, `do_get_document`, `do_list_documents`. `internal_docs.py`.
+- `AI.ParsingMeta`에서 근거의 파싱 결과 경로(`MCP_EVIDENCE_PATHS`, 켜짐). `shaping.py`. 0.2.0에 ParsingMeta 조회 길을 없앤다(C8 — [mc-15](#mc-15)).
 - 질문 개체로 동점 가르기(`SEARCH_TIE_BREAK`, 켜짐). `search_svc.py`.
 - PG 대역(PG 설정이 없으면 SQLite — PC). `common/store/pg_standin.py`.
 - 문서 대장 CLI. `mcp_server/cli/registry_cli.py`.

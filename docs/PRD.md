@@ -5,6 +5,8 @@
 
 ## 지금 진행 중
 - pl-25 DB 스키마 명세 — dev, `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인.
+- op-08 설정 구조 재편 — dev, `feature/op08-settings-layout`(열린 PR — 병합되면 settings 표에 행이 생김).
+- do-04 문서 재구성 — dev, 3부 카테고리 재편은 열린 문서 브랜치 병합 뒤 한 PR.
 
 ## ETL — 수집·퍼블리시·적재·DB (etl)
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
@@ -19,7 +21,7 @@
 | 배포 backfill이 `doc.clients`만 읽음 | done | backfill 고침 · 시험 | [pl-14](prd/etl.md#pl-14) |
 | compose `index_a`/`index_b` 실패 | todo | 원인 · 고침 | [pl-19](prd/etl.md#pl-19) |
 | 정형 DB와 문서 대장 | done | 마스터 · 연결 · 대장 | [pl-08](prd/etl.md#pl-08) |
-| 마스터 CSV 활용 방안 설계 | todo | 후순위 · 사용자와 grill · 0.1.0 아님 | [pl-38](prd/etl.md#pl-38) |
+| 마스터 CSV 활용 방안 설계 | todo | 고객 별칭 CSV 0.2.0 · 나머지 후순위 · grill | [pl-38](prd/etl.md#pl-38) |
 | 문서 대장 upsert·게시 가드 | partly done | deleted 길 없앰·서버 대체 금지 ✓ · PG 번역 · ParsingMeta 가드 | [pl-12](prd/etl.md#pl-12) |
 | 파싱 결과 게시 | done | Object Storage · ParsingMeta | [pl-09](prd/etl.md#pl-09) |
 | `full`은 늘 게시, 대상 필수 | todo | `--no-publish` 없앰 · 시작 거부 | [pl-26](prd/etl.md#pl-26) |
@@ -45,7 +47,7 @@
 | 준비 | done | 중복 · 회전 · DRM 감지 | [pl-02](prd/parse.md#pl-02) |
 | 엔진 스택 파싱 | done | 형식별 엔진 · 격리 · 스택 판 | [pl-03](prd/parse.md#pl-03) |
 | 파싱 phase 없애기 · OCR 엔진 끔 | done | 병렬 엔진 · 제한 · 쪽 VLM · 서버 확인 | [pl-22](prd/parse.md#pl-22) |
-| VLM 동시 수 손잡이 | todo | pl-22 후속 | [pl-43](prd/parse.md#pl-43) |
+| VLM 동시 수 손잡이 | done | `tuning` 키 하나로 닫음 | [pl-43](prd/parse.md#pl-43) |
 | ocr_vlm·vlm.model_alt 삭제 | done | 0.1.0 · 엔진 핑거프린트 바뀜(등급 A) | [pl-31](prd/parse.md#pl-31) |
 | 파싱 p1 묶음 — 재판독(P2·P3)·scan_dedup·렌더 OCR 신호 | done | 0.1.0 · p1 바뀜(등급 A) | [pl-34](prd/parse.md#pl-34) |
 | 핑거프린트 영향 없는 잔재 지우기 | done | parse_parallel · AUTO_REPARSE_CHANGED · figures_resume(pl-32) · phase_report 남김 | [pl-35](prd/parse.md#pl-35) |
@@ -85,7 +87,8 @@
 | 프로세스 종료 정리 | done | 덮기 파일 지움 · 자식 회수 · SIGTERM | [pl-27](prd/settings.md#pl-27) |
 | 강제 종료로 남은 임시 설정 파일 정리 | todo | 다음 시작 때 주인 없는 파일 지움 | [pl-44](prd/settings.md#pl-44) |
 | JSON Lines 사건 기록 | todo | 포매터 · 수준 설정 · 가림 | [op-01](prd/settings.md#op-01) |
-| settings.yaml 하나 · sample에 모든 키·기본값 | done | 주석 해제 · 카테고리 묶음 · 생성기 · 0.1.0 | [op-05](prd/settings.md#op-05) |
+| settings.yaml 하나 · sample에 모든 키·기본값 | done | 주석 해제 · 카테고리 묶음 · 생성기 · 0.1.0 · op-08 병합 때 대체 | [op-05](prd/settings.md#op-05) |
+| 하드코딩 0 | todo | 서버 경로·PG·MCP 주소 한 곳 · 지문 파일 env 읽기 · PG 자동 찾기 없앰 · 0.2.0 | [op-09](prd/settings.md#op-09) |
 | 미룬 설정 지우기 | done | `korean_font` · `eval_sets_dir`(fp-batch) | [pl-21](prd/settings.md#pl-21) |
 | 안 읽는 env 이름 4개 지우기 | done | run_docs의 안 읽는 env 4개(fp-batch) | [pl-30](prd/settings.md#pl-30) |
 
@@ -123,3 +126,4 @@
 | 첫 릴리스 태그 `v0.1.0` | done | 태그 · 릴리스 노트 | [op-04](prd/doc.md#op-04) |
 | 실행 이미지(코드 없음) · 코드 폴더 마운트 | done | 개발 서버 · 의존성 지문 · 코드 커밋 표시 | [op-06](prd/doc.md#op-06) |
 | 개발 → 운영 굽기(실행 이미지 + 시험한 코드) | done | `Dockerfile.bake` · `bake.sh` · 반입 판정 · 저장·분할 | [op-07](prd/doc.md#op-07) |
+| 서버 설치·업그레이드 절차 | todo | 설치 길 하나 · podman 기본 · 0.2.0 업그레이드·되돌리기 | [op-10](prd/doc.md#op-10) |
