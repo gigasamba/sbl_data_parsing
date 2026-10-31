@@ -85,7 +85,8 @@ def page_timeout(eng, pages, first=False):
     return round(tmo + float(x.isolate_overhead), 2)
 
 
-IDLE_MARK = "[engine-scope] stack 목록 밖이라 안 돎"  # 명시 --engines가 하나도 못 돎 — mcp_parse_service가 이 줄로 스캔 PDF를 가름(pl-03)
+IDLE_MARK = "[engine-scope] stack 목록 밖이라 안 돎"  # 명시 --engines 중 일부가 안 돎(알림 — 거의 매 실행)
+NO_JOB_MARK = "[engine-scope] 돌 엔진 없음"  # 명시 --engines가 하나도 못 돎 — mcp_parse_service가 이 줄로 스캔 PDF를 가름(pl-03)
 
 
 def engines_for_doc(doc, stack_parse, types, logged_missing):
@@ -271,6 +272,8 @@ def main():
     idle = sorted(set(want or ()) - {e for _, e, _, _ in jobs} - {e for _, e, _, _, _ in deferred})
     if idle:
         print(f"{IDLE_MARK}(비교하려면 stack json을 고침): {', '.join(idle)}", flush=True)
+    if want and not jobs and not deferred:
+        print(NO_JOB_MARK, flush=True)
     if skip:
         print("건너뜀: " + " · ".join(f"{k} {v}" for k, v in skip.items()), flush=True)
     out.mkdir(parents=True, exist_ok=True)

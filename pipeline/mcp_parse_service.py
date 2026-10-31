@@ -200,11 +200,11 @@ def skip_note(fname, pdf_text_chars):
 
 
 def empty_note(run_log):
-    """run_all이 결과를 하나도 안 남겼을 때(runs.jsonl 없음)의 안내 — 돌 엔진이 없었으면(run_all의 [engine-scope] 줄 — 표본보다 스캔으로
+    """run_all이 결과를 하나도 안 남겼을 때(runs.jsonl 없음)의 안내 — 돌 엔진이 하나도 없었으면(run_all의 NO_JOB_MARK 줄 — 표본보다 스캔으로
     분류된 PDF) 스캔 안내, 엔진이 돌다 다 실패했으면 DRM 추정."""
-    from pipeline.extract.run_all import IDLE_MARK
+    from pipeline.extract.run_all import NO_JOB_MARK
 
-    return SCAN_NOTE if IDLE_MARK in (run_log or "") else DRM_NOTE
+    return SCAN_NOTE if NO_JOB_MARK in (run_log or "") else DRM_NOTE
 
 
 def _submit(source):
