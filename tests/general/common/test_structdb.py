@@ -5,7 +5,6 @@ from pathlib import Path
 from common.config.settings import COMMON, cfg
 from common.store.structdb import (
     PROD_DBS,
-    REGISTRY_SCHEMA,
     SCHEMA,
     TABLE_SCHEMA,
     SqliteBackend,
@@ -21,21 +20,13 @@ from common.store.structdb import (
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통
     import tempfile
 
-    # AD16 독립 검토 BLOCK(10-08) — doc_registry·doc_registry_seen은 SCHEMA(ensure_schema가 아무 게이트 없이 돎,
-    # modules/load/structured.py의 load·link가 부름)가 아니라 REGISTRY_SCHEMA(ensure_registry_schema 전용)에만
-    # 있어야 한다 — 섞이면 STRUCT_BACKEND=pg 기본값(운영과 같은 PostgreSQL)에서 흔한 적재만으로 조용히 표가 생김.
-    assert not any("doc_registry" in stmt or "doc_hidden" in stmt for stmt in SCHEMA), (
-        "doc_registry·doc_hidden류가 SCHEMA에 섞임 — REGISTRY_SCHEMA로"
-    )
+    # pl-12 C10(10-31) — 문서 대장·숨김(doc_registry·doc_hidden)은 코드째 지움 — 다시 생기지 않는다.
+    assert not any("doc_registry" in stmt or "doc_hidden" in stmt for stmt in SCHEMA + TABLE_SCHEMA), "doc_registry·doc_hidden이 되살아남"
 
     # AD23 — 같은 패턴: doc_table·doc_cell은 SCHEMA가 아니라 TABLE_SCHEMA(ensure_table_schema 전용)에만.
     assert not any("doc_table" in stmt or "doc_cell" in stmt for stmt in SCHEMA), "doc_table·doc_cell이 SCHEMA에 섞임 — TABLE_SCHEMA로"
     assert any("doc_table" in stmt for stmt in TABLE_SCHEMA) and any("doc_cell" in stmt for stmt in TABLE_SCHEMA)
     print("[selftest] AD23 — doc_table·doc_cell은 SCHEMA가 아닌 TABLE_SCHEMA에만(ensure_schema 무영향) 통과")
-    assert (
-        any("doc_registry" in stmt for stmt in REGISTRY_SCHEMA) and len(REGISTRY_SCHEMA) == 3
-    )  # doc_registry·doc_registry_seen·doc_hidden(OP1)
-    print("[selftest] AD16/OP1 — doc_registry·doc_registry_seen·doc_hidden은 SCHEMA가 아닌 REGISTRY_SCHEMA에만(ensure_schema 무영향) 통과")
 
     # _pg_sql() 문자열 번역(? → %s · INSERT OR REPLACE → ON CONFLICT · % 이스케이프) — PG 없이도 도는 오프라인 검증(X1b 리뷰)
     assert _pg_sql("SELECT * FROM doc_contract_link WHERE how != ?") == "SELECT * FROM doc_contract_link WHERE how != %s"
@@ -62,11 +53,8 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통
     db = open_backend(str(tmp))  # 기본 STRUCT_BACKEND=pg — PG 없으면 여기서 자동 SQLite 대체(X1b)
     requested_pg = cfg().store.struct_backend == "pg"
     ensure_schema(db)
-    if isinstance(
-        db, SqliteBackend
-    ):  # AD16/OP1 — 실제로 ensure_schema()가 doc_registry·doc_hidden을 안 만드는지(정적 assert 위에 더해 행동으로)
+    if isinstance(db, SqliteBackend):
         tables = {r["name"] for r in db.query("SELECT name FROM sqlite_master WHERE type='table'")}
-        assert "doc_registry" not in tables and "doc_registry_seen" not in tables and "doc_hidden" not in tables, tables
         assert "doc_table" not in tables and "doc_cell" not in tables, tables  # AD23 — 같은 게이트(ensure_table_schema 전용)
         ensure_table_schema(db)
         tables2 = {r["name"] for r in db.query("SELECT name FROM sqlite_master WHERE type='table'")}

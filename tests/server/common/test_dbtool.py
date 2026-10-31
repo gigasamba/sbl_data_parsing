@@ -48,12 +48,18 @@ def selftest():
     print(f"[selftest] dbtool — pydantic 행 모델 칸 = SQLAlchemy 표 칸(표 {n}개 — 이름·순서·필수 여부) 통과")
     # struct 표 정의 = structdb의 SQLite DDL 글자(Q7 — structdb는 이 패키지를 import 안 함, 여기서 고정)
     cn = sqlite3.connect(":memory:")
-    for stmt in SDB.SCHEMA + SDB.REGISTRY_SCHEMA + SDB.TABLE_SCHEMA:
+    for stmt in SDB.SCHEMA + SDB.TABLE_SCHEMA:
         cn.execute(stmt)
     md = SS.struct_metadata()
-    sqlite_tables = [t for t in md.sorted_tables if t.name not in SS.CONFIG_TABLES]  # 판 표(S8b)는 PostgreSQL에만 — PC는 파일
+    # pl-12 C10(10-31) — 문서 대장 묶음(registry)은 코드에서 지웠고 표 정의·판은 다음 마이그레이션(0003)이 지운다 — 그때까지 SQLite DDL 비교에서 뺀다
+    gone = set(SS.GROUPS["registry"])
+    sqlite_tables = [
+        t for t in md.sorted_tables if t.name not in SS.CONFIG_TABLES and t.name not in gone
+    ]  # 판 표(S8b)는 PostgreSQL에만 — PC는 파일
     assert (
-        {r[0] for r in cn.execute("SELECT name FROM sqlite_master WHERE type='table'")} == set(SS.TABLES) == {t.name for t in sqlite_tables}
+        {r[0] for r in cn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        == set(SS.TABLES) - gone
+        == {t.name for t in sqlite_tables}
     )
     assert {t.name for t in md.sorted_tables} == set(SS.TABLES) | set(SS.CONFIG_TABLES)
     for t in sqlite_tables:
@@ -75,7 +81,7 @@ def selftest():
     } == set(SS.CONFIG_INDEX_DEFS)
     assert {g: SS.GROUPS[g] for g in SS.GROUPS} == {
         "base": tuple(SDB._ddl_tables(SDB.SCHEMA)),
-        "registry": tuple(SDB._ddl_tables(SDB.REGISTRY_SCHEMA)),
+        "registry": ("doc_registry", "doc_registry_seen", "doc_hidden"),  # C10 — 0003이 지울 때 이 묶음도 같이
         "cells": tuple(SDB._ddl_tables(SDB.TABLE_SCHEMA)),
     }
     print("[selftest] dbtool — struct 표 정의 = structdb SQLite DDL(표 10·칸·형식·NOT NULL·기본 키·색인 2·묶음 3) 통과")

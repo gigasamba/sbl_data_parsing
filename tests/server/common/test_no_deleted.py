@@ -1,7 +1,7 @@
-"""pl-12(사용자 10-30) — 서버(dev·prd·모르는 RUN_ENV)는 SQLite·스탠드인으로 조용히 대체하지 않고(거부는 삼키지 않음),
-문서 대장과 publish는 'deleted'를 쓰지 않는다."""
+"""pl-12(사용자 10-30) — 서버(dev·prd·모르는 RUN_ENV)는 SQLite·스탠드인으로 조용히 대체하지 않고,
+publish는 EDW에 'deleted'를 쓰지 않는다(C10 10-31 — 문서 대장과 상태 열 UPDATE 길을 통째로 지움)."""
 
-import json
+import inspect
 import tempfile
 from pathlib import Path
 
@@ -39,17 +39,6 @@ def test_backend_no_fallback():
             assert got == ("SqliteBackend" if want == "sqlite" else "refuse"), (run_env, names, got)
 
 
-def test_refusal_not_swallowed():
-    from common.store.registry import try_open_db
-
-    with COMMON.env(RUN_ENV="dev", RUN_MODE="", STRUCT_BACKEND="pg"):
-        try:
-            try_open_db()
-        except StructDBError:
-            return
-    raise AssertionError("dev에서 문서 대장 거부가 try_open_db에 삼켜짐")
-
-
 def test_pg_standin_refused_on_server():
     from common.store.pg import _warn_standin
 
@@ -71,39 +60,7 @@ def test_run_mode_values():
     raise AssertionError("run_mode='production'이 받아들여짐")
 
 
-def test_registry_never_deleted():
-    from common.store.registry import scan
+def test_publish_never_updates():
+    from common.store import parsing_meta_db
 
-    with tempfile.TemporaryDirectory() as tmp:
-        out = Path(tmp)
-        (out / "parse" / "_rep").mkdir(parents=True)
-        (out / "parse" / "_source").mkdir(parents=True)
-        (out / "parse" / "_rep" / "sources.jsonl").write_text(
-            json.dumps({"doc_key": "K1", "uri": "s3://b/x.pdf", "file_name": "x.pdf"}) + "\n", encoding="utf-8"
-        )
-        (out / "parse" / "_source" / "manifest.jsonl").write_text(
-            json.dumps({"file_name": "x.pdf", "key": "k/x.pdf", "is_deleted": True}) + "\n", encoding="utf-8"
-        )
-        status = scan(out)["K1"]["status"]
-    assert status != "deleted", status  # 원천의 is_deleted도 문서 대장에 deleted로 쓰지 않음
-
-
-def test_publish_never_marks_deleted():
-    from pipeline.load.parsing_meta import apply_registry_status
-
-    class FakeEDW:
-        def __init__(self):
-            self.updates = []
-
-        def find_by_doc_key(self, key):
-            return [{"source_system": "S", "source_key": key, "parse_date": "d", "status": "active"}]
-
-        def update_status(self, *a):
-            self.updates.append(a)
-
-        def update_status_at(self, *a):
-            return 1
-
-    db = FakeEDW()
-    counts = apply_registry_status(db, {"changed": ["c"], "deleted": ["gone1", "gone2"], "touched": []})
-    assert counts["deleted"] == 0 and [a[1] for a in db.updates] == ["c"], (counts, db.updates)
+    assert "UPDATE {" not in inspect.getsource(parsing_meta_db)  # EDW는 INSERT만 — status를 deleted·changed로 바꾸는 길 없음

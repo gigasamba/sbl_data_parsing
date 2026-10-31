@@ -286,8 +286,8 @@ def selftest():
                 {"1": True, "yes": False, "true": False, "on": False, "": False, "0": False, " 1": False},
             ),
             (
-                "DOC_REGISTRY",
-                "store.doc_registry",
+                "TOKEN_NUM_NORM",
+                "text.token_num_norm",
                 {"0": False, " False ": False, "none": False, "": False, "no": True, "off": True, "1": True},
             ),
         ]

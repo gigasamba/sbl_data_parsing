@@ -15,6 +15,7 @@ set -uo pipefail
 if [ -n "${SETTINGS_FILE:-}" ] || [ -f "${SERVER_ENV_DIR:-/srv/rag/env}/settings.yaml" ]; then
   . "$(dirname "$0")/settings_env.sh" && load_settings || echo "[prune_old] 설정 파일을 읽지 못함 — 셸 env·기본값으로 계속" >&2
 fi
+DOCKER=${DOCKER:-docker}   # settings ops.host.docker — podman이면 podman(`sudo podman`처럼 두 낱말도 — 아래는 따옴표 없이 펼침, 다른 호스트 스크립트와 같음)
 
 APPLY=0
 STAGE_DIR=${IMAGE_STAGE_DIR:-}
@@ -35,7 +36,8 @@ OLD_REPOS="data-parsing data-structure data-retrieval rag-parse rag-structure ra
 prune_repos() {   # prune_repos <남길 수> <이름들> — 이름마다 최신부터 <남길 수>개 유지, 나머지 지움(--apply일 때만)
   local keep=$1 repo rows row tag i; shift
   for repo in "$@"; do
-    rows=$(docker images "$repo" --format '{{.CreatedAt}}|{{.Repository}}:{{.Tag}}' 2>/dev/null | sort -r)
+    # shellcheck disable=SC2086
+    rows=$($DOCKER images "$repo" --format '{{.CreatedAt}}|{{.Repository}}:{{.Tag}}' 2>/dev/null | sort -r)
     [ -z "$rows" ] && continue
     i=0
     while IFS= read -r row; do
@@ -45,7 +47,7 @@ prune_repos() {   # prune_repos <남길 수> <이름들> — 이름마다 최신
         echo "  유지: $tag"
       else
         echo "  지움: $tag"
-        [ "$APPLY" = 1 ] && docker rmi "$tag"
+        [ "$APPLY" = 1 ] && $DOCKER rmi "$tag"
       fi
     done <<< "$rows"
   done
@@ -69,8 +71,8 @@ if [ -n "$STAGE_DIR" ] && [ -d "$STAGE_DIR" ]; then
 fi
 
 if [ "$APPLY" = 1 ]; then
-  echo "== docker image prune -f (이름 없는 층만 — system prune·-a 아님) =="
-  docker image prune -f
+  echo "== $DOCKER image prune -f (이름 없는 층만 — system prune·-a 아님) =="
+  $DOCKER image prune -f
 else
   echo "(dry-run — 실제로 지우려면 --apply · 조각·tar 정리는 --stage-dir 또는 env IMAGE_STAGE_DIR)"
 fi

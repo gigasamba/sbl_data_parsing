@@ -1538,18 +1538,8 @@ class CommonRuntime(Section):
 
 class CommonStore(Section):
     REMOVED = frozenset(
-        {"registry_editions", "registry_retry_max"}
-    )  # 사용자 10-30(pl-32 — 재시도 횟수 없음, 실패 문서는 늘 다시) — 옛 파일에 남아도 경고만
-    doc_registry: bool | None = F(
-        True, "DOC_REGISTRY", "문서 대장(doc_registry) 사용 — =0이면 끄고 필터 없이 동작", off=("", "0", "none", "false"), fold="lower"
-    )
-    registry_etag_md5: bool | None = F(
-        True,
-        "REGISTRY_ETAG_MD5",
-        "ETag가 MD5 형식이면 그것만으로 '날짜만 바뀜'으로 확정 — =0이면 항상 원본 바이트 대조",
-        off=("", "0", "none", "false"),
-        fold="lower",
-    )
+        {"registry_editions", "registry_retry_max", "doc_registry", "registry_etag_md5"}
+    )  # 사용자 10-30(pl-32 — 재시도 횟수 없음) · 10-31(pl-12 C10 — 문서 대장·숨김 통째로 지움) — 옛 파일에 남아도 경고만
     run_mode: Annotated[Literal["prod", "test"] | None, BeforeValidator(lambda v: v or None)] = F(  # "" = 설정 안 함(옛 str 칸과 같게)
         None,
         "RUN_MODE",

@@ -1,9 +1,7 @@
 """로컬 정형 저장소(RDB) 연결 — EDW 대신 개발 PC·개발 서버에서 계약 연결 검토(X1/X1b, 요건 S37).
 표: contract_master · client_master(열 이름 valid_env/unstructured/synth-edw/edw/edw_schema.sql과 동일) ·
-   doc_contract_link(doc_key, contract_id, score, how, status 후보|확정, evidence_chunk_keys, created_at) ·
-   doc_registry·doc_registry_seen(AD16 — 문서 대장. doc_key별 경로·이름·크기·수정 시각·ETag·처음/마지막 본 날·
-   처리 상태·판 이력. common/registry.py가 기존 산출물(중복 확인 캐시·원본 위치 manifest·대표 결과 색인)을
-   읽기만 해서 채운다 — 쓰기는 거기서만, 이 파일은 표만 선언).
+   doc_contract_link(doc_key, contract_id, score, how, status 후보|확정, evidence_chunk_keys, created_at).
+   (문서 대장 doc_registry·doc_registry_seen·doc_hidden은 pl-12 C10(사용자 10-31)에 코드째 지움 — PG 표는 다음 마이그레이션이 지움.)
 접속: STRUCT_BACKEND=pg(기본 — 운영과 같은 PostgreSQL+pgvector 안 별도 스키마 struct, common/pg.py 재사용)
       |sqlite(PG 연결 안 되면 자동 대체, STRUCT_DB 기본 output/structured/edw_local.sqlite)
       |tsql(스텁 — 서버 EDW 추출본 연결 시 구현).
@@ -106,65 +104,7 @@ SCHEMA = (
        )""",  # AD45①·④ — RDB 문서 위치 메타(valid_env/unstructured/synth-meta-rdb·synth-edw doc_location.csv와 같은 열)
 )
 
-# AD16 — 문서 대장. SCHEMA(위)와 일부러 분리: modules/load/structured.py의 load·link(와 그 selftest)가
-# ensure_schema(SCHEMA)를 아무 게이트 없이 돈다 — 독립 검토 BLOCK(10-08) 지적대로, 거기 두면 STRUCT_BACKEND=pg
-# 기본값(운영과 같은 PostgreSQL, 별도 struct 스키마)에서 흔한 적재 작업만으로 이 표 2개가 승인 없이 조용히
-# 생긴다. doc_registry·doc_registry_seen은 ensure_registry_schema()로만 만들어지고, 그건 common/registry.py·
-# DOC_REGISTRY(기본 켬, =0으로 끔)으로 게이트된 cli/registry.py에서만 부른다(아래 selftest가 SCHEMA에 이 표가 안 섞였는지 확인).
-REGISTRY_SCHEMA = (
-    """CREATE TABLE IF NOT EXISTS doc_registry (
-         doc_key      TEXT PRIMARY KEY,                        -- 원본 내용 sha256(common/ids.py doc_key)
-         names         TEXT,                                    -- 이 doc_key로 관측된 경로·파일명 전부(JSON 배열, 정렬)
-         size           INTEGER,
-         mtime          TEXT,                                    -- 원본 수정 시각(로컬 mtime) 또는 LastModified/updated_at(RDB·S3) — 그대로 문자열 보존
-         etag           TEXT,
-         status         TEXT,                                    -- seen(관측만) · parsed · failed · deleted — 가장 최근 build의 판정(AD17 전 — 파싱 결정에는 안 씀)
-         source         TEXT,                                    -- local(dedup만 돈 원본) · rdb(manifest.jsonl에 doc_id 있음) · s3(그 밖 Object Storage)
-         doc_id         TEXT,                                    -- RDB 원천 키(예: FileStorageMap.id), 있으면
-         version        TEXT,                                    -- RDB 판(version · content_version_id), 있으면
-         first_seen     TEXT NOT NULL,
-         last_seen      TEXT NOT NULL,
-         last_build     TEXT NOT NULL,                           -- 마지막으로 이 행을 손댄 build_id(doc_registry_seen과 연결)
-         rep_sha        TEXT,                                    -- AD17②·AD15(10-08) — 대표 결과 본문(정규화, common.core.text.normalize_value) sha256.
-                                                                    -- _rep 파일이 나중에(재파싱으로) 덮여도 '이전 판' 비교 재료로 남게 common/registry.py가 보존
-         rep_pairs      TEXT,                                    -- AD17② — 그 판의 (라벨,값,쪽) 목록(JSON) — 숫자만 바뀐 판의 '바뀐 값' 재료(위와 같은 이유로 보존)
-         edition_of     TEXT,                                    -- AD17② — 이 doc_key가 바이트는 다르지만 대표 글이 같거나(same) 숫자만 다른(changed_values)
-                                                                    -- 전 판일 때 그 전 doc_key(NULL=독립 문서 또는 글 자체가 다른 새 판)
-         content_group  TEXT,                                    -- AD15 — 대표 글이 같은(형식만 다른 .eml↔.msg·PDF↔Word 포함) doc_key 묶음 id(그룹 안 최초 문서의
-                                                                    -- doc_key, NULL=미묶음) — 지우지 않음, 검색 중복 줄이기 표시용
-         value_changes  TEXT,                                    -- AD17② — edition_of가 changed_values일 때 바뀐 값 목록(JSON [{label,before,after,page}])
-         source_keys    TEXT,                                    -- AD17②(engine-qa MAJOR 10-08) — "names"(파일 이름만)와 달리 원본 전체 키·경로를
-                                                                    -- 담은 JSON 배열("source_system::원본 전체 키", SI39 겹침 키와 같은 모양) —
-                                                                    -- link_editions()가 전 판을 찾을 때 이름이 아니라 이 칸만 본다(다른 고객·폴더의
-                                                                    -- 같은 이름 파일이 엉뚱하게 이어지는 것 방지)
-         fail_count     INTEGER                                  -- DET1 Fix2 — 연속으로 파싱 실패한 야간 재시도 횟수(apply()가 매 build 갱신:
-                                                                    -- status='parsed'면 0, changed면 새 시작으로 0, 그 밖(파싱 안 됨)이면 +1) —
-                                                                    -- nightly_plan()이 REGISTRY_RETRY_MAX를 넘으면 그 doc_key를 재시도 대상에서 뺌
-       )""",  # AD16 — 문서 대장(읽기 집계만, common/registry.py)
-    """CREATE TABLE IF NOT EXISTS doc_registry_seen (
-         doc_key   TEXT NOT NULL,
-         build_id  TEXT NOT NULL,
-         names      TEXT,
-         size       INTEGER,
-         mtime      TEXT,
-         etag       TEXT,
-         status     TEXT,
-         source     TEXT,
-         seen_at    TEXT NOT NULL,
-         PRIMARY KEY (doc_key, build_id)
-       )""",  # AD16 — doc_registry 판 이력(스냅숏이 전 build와 달랐을 때만 한 행 — "그 doc_key 역사" 조회용)
-    """CREATE TABLE IF NOT EXISTS doc_hidden (
-         doc_key   TEXT PRIMARY KEY,                           -- OP1 — 지금 숨김 상태만(이력은 안 쌓음 — ponytail: 여러 번 숨김/복구가
-                                                                 -- 쌓이는 이력이 필요해지면 doc_registry_seen처럼 로그 표로 바꾸는 게 다음 단계)
-         hidden     INTEGER NOT NULL,                           -- 1=숨김(검색 제외) · 0=복구
-         reason     TEXT,                                       -- 왜(예: '원천에서 사라짐(자동 탐지)' · 사람이 적은 메모)
-         by         TEXT,                                       -- 누가(예: 'registry:diff' · 사람 아이디) — 감사 기록
-         at         TEXT NOT NULL                                -- 마지막 처리 시각(UTC)
-       )""",  # OP1 — 숨김·복구(common/registry.py hide·unhide·hidden_set), 색인 행 삭제 없이 되돌릴 수 있게
-)
-
-
-# AD23 — 표 전 칸 DB 적재(doc_table·doc_cell). SCHEMA(위)와 일부러 분리 — REGISTRY_SCHEMA와 같은 이유(AD16 BLOCK
+# AD23 — 표 전 칸 DB 적재(doc_table·doc_cell). SCHEMA(위)와 일부러 분리(AD16 BLOCK
 # 10-08 이력): modules/load/structured.py의 load·link(와 그 selftest)가 ensure_schema(SCHEMA)를 아무 게이트 없이
 # 돈다 — 거기 두면 STRUCT_BACKEND=pg 기본값에서 흔한 적재 작업만으로 이 표 2개가 승인 없이 조용히 생긴다.
 # ensure_table_schema()로만 만들어지고, 그건 modules/load/structured.py의 `tables` 명령(새 표 전용, load·link와
@@ -230,11 +170,9 @@ TABLE_PK = {
     "client_master": "company_id",
     "doc_contract_link": "doc_key",
     "doc_location": "doc_id",
-    "doc_registry": "doc_key",
-    "doc_hidden": "doc_key",
     "doc_table": "table_key",
 }
-# doc_registry_seen·doc_cell은 복합키(또는 키 없음) — INSERT OR REPLACE를 안 씀(doc_cell은 DELETE 뒤 평범한 INSERT, modules/load/structured.py)
+# doc_cell은 키 없음 — INSERT OR REPLACE를 안 씀(doc_cell은 DELETE 뒤 평범한 INSERT, modules/load/structured.py)
 _REPLACE_RE = re.compile(r"^INSERT OR REPLACE INTO (\w+) \(([^)]+)\)")
 
 
@@ -344,56 +282,8 @@ def ensure_schema(db):
     db.commit()
 
 
-_REGISTRY_NEW_COLS = (
-    ("rep_sha", "TEXT"),
-    ("rep_pairs", "TEXT"),
-    ("edition_of", "TEXT"),
-    ("content_group", "TEXT"),
-    ("value_changes", "TEXT"),
-    ("source_keys", "TEXT"),
-    ("fail_count", "INTEGER"),
-)  # AD17②·AD15(10-08) · source_keys는
-# engine-qa MAJOR 반영(10-08 2차) · fail_count는 DET1 Fix2(10-12) — 기존 doc_registry(이미
-# 있는 DB 파일)엔 CREATE TABLE이 안 돌아 없으므로 ALTER TABLE로 보강
-
-
-def _registry_has_col(db, col):
-    """ALTER TABLE 전 열이 이미 있는지 먼저 물어보기만(ALTER를 실행해 예외로 판단하지 않음) — PG는 실패한 ALTER가
-    트랜잭션을 abort 상태로 만들어 그 뒤 commit()까지 모든 execute가 깨진다(SQLite는 영향 없지만 PG 기준으로 안전한
-    쪽을 고름). 조회 자체가 실패하면(권한 등) False — 그 열을 추가하려다 실패해도 ensure_registry_schema()는 멈추지 않음."""
-    try:
-        if isinstance(db, SqliteBackend):
-            return any(r["name"] == col for r in db.query("PRAGMA table_info(doc_registry)"))
-        return bool(db.query(f"SELECT column_name FROM information_schema.columns WHERE table_name='doc_registry' AND column_name='{col}'"))
-    except Exception:
-        return False
-
-
-def ensure_registry_schema(db):
-    """AD16/OP1 — doc_registry·doc_registry_seen·doc_hidden만. ensure_schema()와 따로 불러야 함(독립 검토 BLOCK
-    10-08) — 호출자는 common/registry.py(build())·DOC_REGISTRY(기본 켬, =0으로 끔)으로 게이트된 cli/registry.py
-    (hide·unhide·build·show·diff)·cli/publish_parse.py(--apply에서 registry.build() 전에)뿐, modules/load/
-    structured.py는 안 부름.
-    AD17②·AD15(10-08) — rep_sha·rep_pairs·edition_of·content_group·value_changes·source_keys는 CREATE TABLE(위)에
-    이미 있지만, 이 기능 전에 만들어진 기존 doc_registry(이미 존재하는 DB 파일)엔 없다 — 먼저 있는지 물어보고
-    없는 것만 ALTER TABLE로 보강(_registry_has_col — 실패한 ALTER로 판단하면 PG 트랜잭션이 깨짐).
-    S8a(사용자 10-28 Q6) — PostgreSQL은 표가 있는지만 본다(만들기·칸 보강은 migrate 기준판 — 7칸은 CREATE TABLE에 이미 있음). ALTER 보강은
-    SQLite 옛 파일에만 남는다."""
-    if isinstance(db, PgBackend):
-        return _require_tables(db, REGISTRY_SCHEMA)
-    for stmt in REGISTRY_SCHEMA:
-        db.execute(stmt)
-    for col, typ in _REGISTRY_NEW_COLS:
-        if not _registry_has_col(db, col):
-            try:
-                db.execute(f"ALTER TABLE doc_registry ADD COLUMN {col} {typ}")
-            except Exception:
-                pass
-    db.commit()
-
-
 def ensure_table_schema(db):
-    """AD23 — doc_table·doc_cell만(REGISTRY_SCHEMA와 같은 패턴). ensure_schema()와 따로 불러야 함 —
+    """AD23 — doc_table·doc_cell만. ensure_schema()와 따로 불러야 함 —
     호출자는 modules/load/structured.py의 `tables` 명령뿐, load·link는 안 부름(아래 selftest가 SCHEMA에
     이 표가 안 섞였는지 확인). S8a — PostgreSQL은 표가 있는지만(만들기는 migrate)."""
     if isinstance(db, PgBackend):
@@ -440,7 +330,7 @@ def open_backend(db_path=None):
     떨어지면 안 됨 — SystemExit이 아닌 이유는 mcp_server 같은 장수 프로세스를 호출자가 죽이지 않고 잡아 처리할 수 있어야 해서)."""
     st = cfg().store  # S7b — 설정 객체
     if guard_run_env() not in (None, "local") and (st.run_mode != "prod" or st.struct_backend == "sqlite"):
-        # pl-12(사용자 10-30) — 서버는 SQLite 문서 대장·정형 저장소를 쓰지 않는다(조용한 대체로 다른 문서를 잘못 처리하던 길)
+        # pl-12(사용자 10-30) — 서버는 SQLite 정형 저장소를 쓰지 않는다(조용한 대체로 다른 문서를 잘못 처리하던 길)
         raise StructDBError(
             f"RUN_ENV={guard_run_env()} — common.store.run_mode: prod·struct_backend: pg(또는 tsql) 필수(SQLite 대체 금지, pl-12)"
         )

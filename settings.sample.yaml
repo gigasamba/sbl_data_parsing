@@ -122,10 +122,8 @@ common:
       max_calls: 0  # LLM 호출 수 상한(개) · 기본 0 · 값: 0 이상 정수 (0 = 무제한)
       no_paid_calls: false  # =1이면 외부(유료) 주소 호출 자체를 거부 · 기본 false · 값: true·false
       spend_file:  # 지출 장부 파일 경로(호출마다 금액 한 줄 — 프로세스·실행 전체가 공유) · 값: 경로
-  # ─── 저장소 — 문서 대장·정형 저장소 ───
+  # ─── 저장소 — 정형 저장소 ───
   store:
-    doc_registry: true  # 문서 대장(doc_registry) 사용 · 기본 true · 값: true·false
-    registry_etag_md5: true  # ETag가 MD5 형식이면 그것만으로 '날짜만 바뀜'으로 확정 · 기본 true · 값: true·false
     struct_backend:  # [파라미터] 정형 저장소 종류 pg|sqlite|tsql · 기본 pg · 값: pg·sqlite·tsql 중 하나
     struct_db:  # [파라미터] 정형 저장소 SQLite 파일 경로(STRUCT_BACKEND=sqlite일 때·PG 대체 시) · 값: 경로
   # ─── 검색 토큰 정규화 ───

@@ -126,7 +126,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  ├─ routers/          도구 4개와 /health 등록(이름·시그니처 고정)
 │  ├─ schemas/          출력 구조
 │  ├─ services/         EDW 질의 · 파싱 중계 · 메타데이터 · search/(하이브리드 검색 · 근거 정리 · 재순위)
-│  └─ cli/              ask(질의 테스트) · mcp_smoke · mcp_eval · registry_cli
+│  └─ cli/              ask(질의 테스트) · mcp_smoke · mcp_eval
 ├─ resources/           코드가 읽는 데이터(이미지에 포함)
 │  ├─ prompts/          AI 프롬프트 패키지 {common,pipeline,mcp}
 │  ├─ config/           엔진 구성 pipeline_stack.json(PC용 — 서버는 DB 버전 테이블) · 채점 기준 · 보고서 템플릿

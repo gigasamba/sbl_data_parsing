@@ -538,60 +538,34 @@ def _left(a):
     return _until(a.deadline) if getattr(a, "deadline", None) else 10**7
 
 
-def _registry_new_names(out_dir, names):
-    """OP9 — 문서 대장(이미 있는 doc_registry, 지난 build 결과)과 비교해 이번 밤 파싱할 이름만(REG.nightly_plan —
-    독립 검토 BLOCK 반영 10-08: new(처음 보는 doc_key) + unchanged·touched(AD17① — 원본 바이트는 같고 날짜만
-    바뀜)인데 아직 성공 못한 doc_key(status != 'parsed' — 반복 실패·'seen' 모두 매일 재시도) · 성공해서 안 바뀐
-    문서는 뺌(다시 할 필요 없음, touched도 포함 — 원본 바이트가 안 바뀌었으니 재파싱 대상이 아님) · changed는
-    기본 전부 빠짐(자동 재파싱 안 함, OP1) · deleted는 observed에 없어 자동으로 빠짐).
-    (옛 OP14 AUTO_REPARSE_CHANGED — changed 자동 재파싱 — 는 10-30 지움(pl-35, pl-23 증분만).)
-    문서 대장을 못 열면 _no_registry()(서버 run_mode prod = 종료 4, 그 밖 = None — 필터 없음, pl-32 10-30)."""
-    from common.store import registry as REG
+def _unparsed(names):
+    """C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = EDW FileStorageMap ∖ ParsingMeta. FileStorageMap 쪽은 이미 받은 이름 목록
+    (`--source rdb:`가 FileStorageMap을 읽어 만든 것 — 이름 ↔ 원본 키 s3_key 대응은 source.py가 쓴 manifest.jsonl), ParsingMeta 쪽은
+    여기서 **EDW를 한 번 읽는다**(파싱 입구의 EDW 읽기 — 읽기 계정, PC는 EDW 대역 sqlite `RDB_SQLITE`): parse_status가 ok·partial인
+    행의 source_key 집합(`done_source_keys`). 통째 실패는 ParsingMeta에 안 쓰므로(C3) 실패한 문서는 행이 없어 다음 실행이 다시 고른다.
+    키 = manifest의 "key"(없으면 이름 그대로 — publish의 source_key와 같은 규칙, parsing_meta.plan).
+    순서: 받은 이름 순서 그대로(문서 대장이 없어져 시도 이력이 없음 — 실패 문서를 뒤로 미루지 않는다).
+    EDW를 못 읽으면: 서버(run_mode prod 또는 RUN_ENV dev·prd·모르는 값)는 종료 4(전체 재파싱 안 함), PC는 받은 목록 그대로 + 로그 한 줄."""
+    from common.core.contract import jl
+    from common.store import parsing_meta_db as PMDB
 
-    db = REG.try_open_db()
-    if db is None:
-        return _no_registry()
     try:
-        observed = REG.scan(out_dir)
-        new_names = set(REG.nightly_plan(db, observed)["parse_names"])
-    except Exception:
-        return None
-    finally:
-        db.close()
-    return {n for n in names if n in new_names}
-
-
-def _no_registry():
-    """문서 대장을 못 열 때(pl-32 사용자 10-30 — 실행을 넘는 문서 고르기는 문서 대장 하나만): run_mode prod(서버)는 종료 4(인프라 없음 —
-    전체를 다시 파싱하지 않음), 그 밖(PC·DOC_REGISTRY=0)은 이력 없이 받은 목록 그대로(None) + 로그 한 줄."""
-    if C.cfg().store.run_mode == "prod" or C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)도
-        print("[parse] 문서 대장(doc_registry)을 열지 못함 — run_mode prod는 멈춤(종료 4, 전체 재파싱 안 함)", file=sys.stderr, flush=True)
-        raise SystemExit(4)
-    print("[parse] 문서 대장 없음(DOC_REGISTRY=0 또는 연결 안 됨) — 이력 없이 받은 목록 그대로 처리", flush=True)
-    return None
-
-
-def _registry_unparsed(names):
-    """문서 대장에 파싱 성공 행(status parsed)이 없는 이름만 — 순서: 대장에 없거나 아직 시도 전(seen)인 문서(이름순) 먼저, 그다음 실패 문서
-    (마지막 시도가 오래된 것부터). --max-new로 앞에서 자르므로 늘 실패하는 문서가 새 문서 자리를 막지 않는다(PR #49 리뷰) — 실패 문서도
-    자리가 남으면 매번 다시(pl-32). 대장을 못 열면 _no_registry()대로(None이면 받은 목록 그대로). 앞 실행 runs.jsonl은 보지 않는다."""
-    from common.store import registry as REG
-
-    db = REG.try_open_db()
-    if db is None:
-        _no_registry()
+        db = PMDB.make_db("read")
+        try:
+            done = db.done_source_keys()
+        finally:
+            db.close()
+    except (Exception, SystemExit) as ex:  # make_db는 접속 정보가 없으면 SystemExit
+        if C.cfg().store.run_mode == "prod" or C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)
+            print(
+                f"[parse] EDW ParsingMeta를 읽지 못함 — 멈춤(종료 4, 전체 재파싱 안 함): {type(ex).__name__}", file=sys.stderr, flush=True
+            )
+            raise SystemExit(4) from None
+        print(f"[parse] EDW ParsingMeta 못 읽음({type(ex).__name__}) — 이력 없이 받은 목록 그대로 처리", flush=True)
         return list(names)
-    try:
-        rows = db.query("SELECT names, status, last_seen FROM doc_registry")
-    finally:
-        db.close()
-    state = {}  # 이름 → (status, last_seen)
-    for r in rows:
-        for n in json.loads(r["names"] or "[]"):
-            state[n] = (r["status"], r["last_seen"] or "")
-    fresh = [n for n in names if state.get(n, ("seen", ""))[0] == "seen"]
-    failed = sorted((n for n in names if state.get(n, ("seen", ""))[0] not in ("seen", "parsed")), key=lambda n: (state[n][1], n))
-    return fresh + failed
+    man = OUT / "parse" / "_source" / "manifest.jsonl"
+    key_of = {r["file_name"]: r.get("key") for r in jl(man)} if man.exists() else {}
+    return [n for n in names if (key_of.get(n) or n) not in done]
 
 
 _T_STEP: dict = {}
@@ -647,11 +621,7 @@ def parse_module(a):
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)
         keep = set((OUT / "dedup" / "keep.txt").read_text(encoding="utf-8").splitlines())
-        reg_new = _registry_new_names(
-            OUT, names
-        )  # OP9 — 문서 대장이 있으면 새 doc_key만(changed·deleted는 빠짐) · 없으면 None(필터 없음, 전과 동일)
-        if reg_new is not None:
-            keep &= reg_new
+        keep &= set(_unparsed(names))  # C10 — ParsingMeta에 성공 행이 있는 문서는 다시 파싱 안 함
         only = OUT / "parse" / "_source" / "only.txt"
         only.write_text("\n".join(n for n in names if n in keep) + "\n", encoding="utf-8")
         rc = _run_until(["pipeline.extract.prepare", "--src", local, "--out", a.src, "--only", only], child_env(), _left(a) - 120)
@@ -667,7 +637,7 @@ def parse_module(a):
     env = C.child_env(child_env(), VLM_CONCURRENCY=str(vlm_conc), LLM_BASE_URL=None)  # 파싱 모듈은 LLM을 부르지 않음 — 덮기 파일(S7e3 B-1)
     if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
         names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
-        new = _registry_unparsed(names)  # pl-32 — 문서 대장에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
+        new = _unparsed(names)  # C10 — ParsingMeta에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
         pick = new[: a.max_new]
         f = OUT / "parse" / "_batch_docs.txt"
         f.parent.mkdir(parents=True, exist_ok=True)
@@ -934,8 +904,9 @@ def connect(a):
 TESTS_ROOT = Path(__file__).resolve().parents[1] / "tests"  # 저장소 루트 tests/ · 이미지 /app/deploy/tests(PYTHONPATH와 같은 뿌리)
 IMAGE_DIRS = {"common": None, "pipeline": "pipeline", "mcp": "mcp"}  # tests/server/<폴더> → 도는 이미지(None = 둘 다)
 _FAKE_LLM_CASES = frozenset({"tests.server.mcp.test_mcp_main"})  # LLM_FAKE를 켜는 사례(질문 분해 — 옛 mcp_server.main 사례)
-# PC에서 개발자 루트 settings.yaml(실 PG)을 그대로 읽어야 판정되는 사례(실 PG에서만 C-54 ① 재현) — 그 밖 PC 사례는 시험 전용 바탕 설정(case_env, 10-29)
-_PC_SETTINGS_CASES = frozenset({"tests.general.pipeline.test_pub_registry"})
+# PC에서 개발자 루트 settings.yaml(실 PG)을 그대로 읽어야 판정되는 사례 — 그 밖 PC 사례는 시험 전용 바탕 설정(case_env, 10-29)
+# (유일한 사례 test_pub_registry는 C10 10-31에 문서 대장과 함께 지움 — 지금 비어 있음)
+_PC_SETTINGS_CASES: frozenset[str] = frozenset()
 
 
 def server_cases():

@@ -68,7 +68,7 @@ CATEGORIES = {
         ("접속 — PostgreSQL·EDW·Object Storage 세부", ("common.connections",)),
         ("모델 호출 — 임베딩·LLM·VLM·전송", ("common.models.embed", "common.models.llm", "common.models.vlm", "common.models.transport")),
         ("비용·외부 가드", ("common.models.guard",)),
-        ("저장소 — 문서 대장·정형 저장소", ("common.store",)),
+        ("저장소 — 정형 저장소", ("common.store",)),
         ("검색 토큰 정규화", ("common.text",)),
     ),
     "extract": (

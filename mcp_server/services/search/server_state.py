@@ -50,7 +50,6 @@ def _close_pool_later(pool, delay=5):
 
 
 def _build_retriever():
-    from common.store import registry as REG
     from common.store import services
     from mcp_server.services.search import retriever as RT
 
@@ -62,7 +61,7 @@ def _build_retriever():
     cur = cfgtables.active("stack")  # S8b — 엔진 구성 활성 판(서버 = 판 표 — 프로세스 시작 때 읽은 것, PC = 파일)
     st = cur.named()
     bundle = C.cfg().paths.mcp_bundle or str(APP_ROOT / "output" / "edw" / "bundle")  # S7e1 — common 칸(옛 mcp.server.bundle)
-    R = RT.Retriever(bundle, st.get("retrieve", "hybrid"), REG.try_open_db())  # OP1 — 숨김 집합(best-effort, 없으면 바이트 동일)
+    R = RT.Retriever(bundle, st.get("retrieve", "hybrid"))
     _STATE["R"], _STATE["bundle"], _STATE["stack"] = R, bundle, st
     _STATE["version"], _STATE["checked_at"] = _version_of(R.pg, bundle), time.time()
     if old is not None and old.pg is not None and old.pg is not R.pg:
@@ -72,8 +71,6 @@ def _build_retriever():
 def _retriever():
     """저장소 연결(Docker PostgreSQL → 없으면 로컬 묶음)·Retriever — 처음엔 만들고, 이후엔 최소 MCP_RELOAD_CHECK_SEC(기본 30초)
     간격으로 적재 버전이 바뀌었는지만 확인해 바뀌었으면 다시 만든다(S12, load 재실행 뒤 새 데이터가 안 보이던 문제).
-    버전이 안 바뀌어도 같은 간격에 숨김 집합만 다시 읽는다(OP1, 독립 검토 BLOCK 반영 — 전체 재적재 없이 hide·unhide가
-    MCP_RELOAD_CHECK_SEC 안에 반영되게, Retriever.refresh_hidden).
     재생성 중인 동시 요청은 기다리지 않고 기존 객체로 바로 응답(비차단 잠금)."""
     if "R" not in _STATE:
         with _RELOAD_LOCK:
@@ -88,8 +85,6 @@ def _retriever():
             _STATE["checked_at"] = time.time()
             if _version_of(_STATE["R"].pg, _STATE["bundle"]) != _STATE.get("version"):
                 _build_retriever()
-            else:
-                _STATE["R"].refresh_hidden()  # OP1 — 전체 재적재 없이 숨김 집합만(같은 비차단 잠금 안, 추가 부담 없음)
         finally:
             _RELOAD_LOCK.release()
     return _STATE["R"]
@@ -138,15 +133,9 @@ def _index_retriever(index_id):
         if ent and ver == ent["version"]:
             ent["checked_at"] = now
             return ent["R"], None, ent["warn"]
-        from common.store import registry as REG
         from mcp_server.services.search import retriever as RT
 
-        R = RT.Retriever(
-            bundle,
-            (_STATE.get("stack") or {}).get("retrieve", "hybrid"),
-            REG.try_open_db(),
-            pg_schema=info["pg_schema"],
-        )
+        R = RT.Retriever(bundle, (_STATE.get("stack") or {}).get("retrieve", "hybrid"), pg_schema=info["pg_schema"])
         if ent and ent["R"].pg is not None:
             _close_pool_later(ent["R"].pg)
         warn = ICR.input_drift(info)  # 사전·명부 해시는 Retriever를 (다시) 만들 때만 계산 — 질의마다 파일을 안 읽음

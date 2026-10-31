@@ -98,15 +98,3 @@ def test_id_doc_level():
     with pgfix.retriever(d, GLOSSARY_DIR=None) as R:
         hits, _ = R.search("mail-x-01", 5, methods=["id"])
         assert hits and hits[0]["via"] == "i", hits
-
-
-def test_hidden():
-    """OP1 — 숨김 doc_key(file_path) 문서의 청크는 저장소 질의 단계에서 완전 제외 · 빈 집합이면 그대로."""
-    d = pgfix.mk_bundle([{"file_path": "a.txt"}, {"file_path": "b.txt"}], _ranked(2))
-    with pgfix.retriever(d, GLOSSARY_DIR=None) as R:
-        names = lambda: [h["file_name"] for h in R.search("단가는?", 5, methods=["bm25"])[0]]
-        assert names() == ["a.txt", "b.txt"]
-        R.hidden = {"a.txt"}
-        assert names() == ["b.txt"]  # a(숨김) 완전 제외(소프트 아님)
-        R.hidden = set()
-        assert names() == ["a.txt", "b.txt"]  # 빈 집합 — 그대로

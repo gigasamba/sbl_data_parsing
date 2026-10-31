@@ -25,10 +25,7 @@ class Retriever:
     """같은 질의 → 본문·출처 저장소(pgvector 또는 로컬 묶음)에서 하이브리드(벡터 + BM25 + 드문 ID → RRF).
     벡터는 pgvector에만 둔다(사용자 10-29 — EDW 벡터 경로 삭제, docs/prd/ops.md#op-03)."""
 
-    def __init__(self, bundle, retrieve="cosine", hidden_db=None, pg_schema=None):
-        """hidden_db(OP1, 기본 None — 안 주면 전과 바이트 동일) = 문서 대장 연결(common.store.registry.try_open_db()) —
-        주어지면 지금 숨김 상태인 doc_key 집합을 한 번 읽어 self.hidden에 캐시하고 바로 닫는다(연결을 오래 들고
-        있지 않음 — pg=False인 로컬 검색도 이 연결은 pg 인자와 무관하게 독립적으로 받는다, 문서 대장은 다른 스키마)."""
+    def __init__(self, bundle, retrieve="cosine", pg_schema=None):
         self.bundle, self.retrieve = Path(bundle), retrieve
         self.meta = json.loads((self.bundle / "meta.json").read_text(encoding="utf-8"))
         self.local = BundleDocs(bundle)  # 문서·청크 목록만(검색은 PG — mc-01 11-01)
@@ -50,36 +47,6 @@ class Retriever:
 
         self.pgmod, self.pg = pgsearch, PGM.connect_pool(pg_schema=pg_schema)
         self._g = None
-        self.hidden = set()
-        if hidden_db is not None:  # OP1 — 숨김 집합(비면 전과 바이트 동일, _search_ex가 hidden=None으로 건넴)
-            from mcp_server.services.search import registry as RREG  # 10-14 — hidden_set은 common.store.registry에서 옮김(R만 씀)
-
-            try:
-                self.hidden = RREG.hidden_set(hidden_db)
-            finally:
-                hidden_db.close()
-
-    def refresh_hidden(self, db=None):
-        """OP1(독립 검토 BLOCK 반영, 10-08) — 전체 재적재(Retriever 새로 만들기) 없이 숨김 집합만 다시 읽는다 —
-        mcp_server._retriever()가 MCP_RELOAD_CHECK_SEC 간격으로 호출(적재 버전은 안 바뀌어도 hide·unhide는 그
-        간격 안에 반영되게, 같은 비차단 잠금 안에서 — 추가 전체 재적재 없음).
-        db를 직접 주면 그 연결을 그대로 쓰고 안 닫는다(시험용 — 호출자 책임) · 안 주면 common.store.registry.try_open_db()
-        로 best-effort(문서 대장을 못 열면 조용히 그대로 — 바뀐 적 없음으로 봄, 호출을 막지 않음)."""
-        from common.store import registry as REG
-        from mcp_server.services.search import registry as RREG  # 10-14 — hidden_set은 common.store.registry에서 옮김(R만 씀)
-
-        owns = db is None
-        if owns:
-            db = REG.try_open_db()
-            if db is None:
-                return
-        try:
-            self.hidden = RREG.hidden_set(db)
-        except Exception:
-            pass
-        finally:
-            if owns:
-                db.close()
 
     def search(self, q, k, methods=None, client=None):
         """methods ⊂ {vector, bm25, id}(없으면 retrieve 설정대로) — 검색 MCP가 방법을 골라 씀(G3).
@@ -171,7 +138,6 @@ class Retriever:
                 client=client,
                 client_strict=client_strict,
                 question=q,
-                hidden=self.hidden or None,
                 scope=scope,
             )
             # 2026-10-20 축소 스키마 — v_chunk_source에 file_sha256·source_uri·client가 없음: clients(JSON)에서 파싱, URI는 file_path에서 유도

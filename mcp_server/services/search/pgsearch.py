@@ -72,21 +72,9 @@ def _has_chunk_clients(db):
     return _CHUNK_CLIENTS[s]
 
 
-def _not_hidden_restrict(db, hidden):
-    """OP1 — 숨김(원천에서 삭제) 문서의 chunk_id를 전부 뺀 허용 집합(저장소 질의 단계에서, client와 같은 방식 —
-    색인 행은 안 지움, 이 질의만 걸러서 본다). hidden = 숨길 doc_key(file_path) 집합(비어있으면 호출 안 함).
-    2026-10-20 축소 스키마 — doc_key가 file_path."""
-    s = db.schema
-    rows = db.q(
-        f"SELECT c.chunk_id FROM {s}.chunk c JOIN {s}.doc d ON d.doc_id = c.doc_id WHERE NOT (d.file_path = ANY(%s))", (sorted(hidden),)
-    )
-    return {r["chunk_id"] for r in rows}
-
-
 def _scope_restrict(db, scope):
-    """(2026-10-20 통합 search) 하드 필터 범위에 **포함될** 문서(file_path 집합)의 chunk_id 허용 집합 — _not_hidden_restrict와
-    같은 방식을 반대 방향으로(제외가 아니라 허용만 남김). question+하드 필터 검색이 저장소 질의 단계부터 그 문서들 안에서만
-    돌게 한다 — 후치 필터로는 좁은 범위가 전역 상위 풀에 못 들어 근거가 0건이 되는 문제(실측: E29H 1문서)를 고침."""
+    """(2026-10-20 통합 search) 하드 필터 범위에 **포함될** 문서(file_path 집합)의 chunk_id 허용 집합.
+    question+하드 필터 검색이 저장소 질의 단계부터 그 문서들 안에서만 돌게 한다 — 후치 필터로는 좁은 범위가 전역 상위 풀에 못 들어 근거가 0건이 되는 문제(실측: E29H 1문서)를 고침."""
     s = db.schema
     rows = db.q(f"SELECT c.chunk_id FROM {s}.chunk c JOIN {s}.doc d ON d.doc_id = c.doc_id WHERE d.file_path = ANY(%s)", (sorted(scope),))
     return {r["chunk_id"] for r in rows}
@@ -142,7 +130,6 @@ def search(
     client=None,
     client_strict=False,
     question=None,
-    hidden=None,
     scope=None,
 ):
     """코사인(기본) 또는 하이브리드(코사인 + BM25 + 드문 ID → RRF). 결과 = v_chunk_source 행 + rrf·via.
@@ -151,8 +138,6 @@ def search(
     local.py와 같은 함수를 import해 씀, 가중치가 두 저장소에서 갈라지지 않음).
     client(AD38 SEARCH_CLIENT_HARD) = 허용할 고객 이름 집합 — 주어지면 저장소 질의 단계에서 그 고객 문서(고객 미상은 기본
     포함, client_strict=True면 미상도 뺌)만 후보로. None(기본)이면 제한 없음 — 전과 바이트 동일.
-    hidden(OP1) = 검색에서 뺄 doc_key(file_sha256) 집합 — _not_hidden_restrict로 저장소 질의 단계에서 완전 제외(소프트
-    없음). None·빈 집합이면 전과 바이트 동일.
     scope(2026-10-20 통합 search) = 하드 필터 범위 **안** 문서 file_path 집합 — _scope_restrict로 저장소 질의 단계부터
     그 문서의 청크만 후보로(vector·bm25·ID 전부). None이면 전과 바이트 동일.
     question(G14) = 원문 질문 글자(weights()에 그대로 건넴 — 안 주면 전과 바이트 동일, BR41 tie_break에도 그대로 건넴).
@@ -163,10 +148,7 @@ def search(
     m = set(methods) if methods else ({"vector"} if retrieve == "cosine" else {"vector", "bm25", "id"})
     w = weights(question)
     restrict = _client_restrict(db, client, client_strict) if client else None
-    if hidden:
-        not_hidden = _not_hidden_restrict(db, hidden)
-        restrict = (restrict & not_hidden) if restrict is not None else not_hidden
-    if scope:  # 2026-10-20 통합 search — 하드 필터 범위 안 문서만(제외 hidden과 반대 방향)
+    if scope:  # 2026-10-20 통합 search — 하드 필터 범위 안 문서만
         in_scope = _scope_restrict(db, scope)
         restrict = (restrict & in_scope) if restrict is not None else in_scope
     lists = []

@@ -74,7 +74,6 @@ EXCLUDED_FILES = (
     "core/paths.py",  # cli 평가 도구 경로 기본값 + 원자적 파일 쓰기 헬퍼(CT1 — 옛 atomic.py 병합, 쓰는 방식만·내용은 안 바꿈)
     "store/pg.py",  # PostgreSQL 연결 설정
     "store/pg_standin.py",  # AD41 — pg.py의 연결 정보 없을 때 스탠드인(sqlite) — 연결 방법만, 핸드오프 내용과 무관(pg.py가 shared라 같이 있음)
-    "store/registry.py",  # 문서 대장(doc_registry) — 기존 산출물을 읽기만, 핸드오프 스키마를 바꾸지 않음
     "core/resources.py",  # 실행 자원(CPU·메모리) 판단 — 병렬 수 결정만
     "core/runlog.py",  # 실행 로그(output/RUNLOG.md 등)
     "store/services.py",  # 외부 서비스 탐색(Docker pgvector 등) — 연결 방법만
