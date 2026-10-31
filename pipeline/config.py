@@ -324,20 +324,19 @@ class PipelineDev(Section):
 
 class PipelineEval(Section):
     REMOVED = frozenset(
-        {"diagram_raster_vlm", "phase_report_legacy", "e2e_qa_set", "e2e_questions"}
-    )  # 사용자 10-29 · e2e_* 10-30(op-08) — 지운 칸·절(남으면 경고만)
-    gold_draft_max_pages: int | None = F(30, "GOLD_DRAFT_MAX_PAGES", "정답 초안 생성(gold_draft)에서 문서당 처리할 쪽 수 상한(쪽)")
-    gold_draft_mermaid_check: bool | None = F(
-        True,
-        "GOLD_DRAFT_MERMAID_CHECK",
-        "정답 초안의 Mermaid 블록 2차 점검을 켤지(0/false/no면 끔)",
-        off=("0", "false", "no"),
-        fold="strip",
-    )
-    qa_draft_max_pages: int | None = F(20, "QA_DRAFT_MAX_PAGES", "질문 초안 생성(qa_draft)에서 문서당 처리할 쪽 수 상한(쪽)")
-    qa_draft_per_page: int | None = F(5, "QA_DRAFT_PER_PAGE", "질문 초안 생성에서 쪽당 질문 수 상한(개)")
+        {
+            "diagram_raster_vlm",
+            "phase_report_legacy",
+            "e2e_qa_set",
+            "e2e_questions",
+            "gold_draft_max_pages",
+            "gold_draft_mermaid_check",
+            "qa_draft_max_pages",
+            "qa_draft_per_page",
+            "score_table_judge",
+        }
+    )  # 사용자 10-29 · e2e_* 10-30(op-08) · 정답·질문 초안·표 채점 11-01(e2-10 — PC 평가 도구 지움) — 지운 칸·절(남으면 경고만)
     review_max_rounds: int | None = F(2, "REVIEW_MAX_ROUNDS", "도식 검토 루프의 최대 재추출 횟수(회)")
-    score_table_judge: str | None = F("0", "SCORE_TABLE_JUDGE", "표 구조 채점의 경계 표 판정자(0 없음 | llm 경계 표만 LLM 판정)")
 
 
 class PipelineExtract(Section):
@@ -476,8 +475,8 @@ class PipelineNight(Section):
 
 class PipelinePaths(Section):
     REMOVED = frozenset(
-        {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot"}
-    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32 — 사본 파일 대신 판 번호) — 지운 칸·절(남으면 경고만)
+        {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot", "report_digest_dir"}
+    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32 — 사본 파일 대신 판 번호) · report_digest_dir 11-01(e2-10 — run_board 지움) — 지운 칸·절(남으면 경고만)
     file_meta_path: str | None = F(None, "FILE_META_PATH", "EDW 파일 메타 JSONL 경로(s3_key → 메타)")
     gold_dir: str | None = F(
         None,
@@ -489,7 +488,6 @@ class PipelinePaths(Section):
     out_root: str | None = F(None, "PIPE_OUT_ROOT", "파이프라인 출력 루트(output)")
     parse_tmp: str | None = F(None, "PARSE_TMP", "임시 폴더(첨부 임시 파일은 형제 attach/) — output 아래 2단 이상 하위만 허용")
     raw_root: str | None = F(None, "PARSE_RAW_ROOT", "P0 원본 층(raw/VLM) 캐시 저장소 루트")
-    report_digest_dir: str | None = F(None, "REPORT_DIGEST_DIR", "run_board 날짜·판 요약 폴더 루트(비우면 요약 안 만듦)")
     soffice_bin: str | None = F(
         image_default("SOFFICE_BIN"),
         "SOFFICE_BIN",

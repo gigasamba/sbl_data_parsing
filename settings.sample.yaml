@@ -331,7 +331,6 @@ ops:
     out_root:  # 파이프라인 출력 루트(output) · 값: 경로
     parse_tmp:  # 임시 폴더(첨부 임시 파일은 형제 attach/) · 값: 경로
     raw_root:  # P0 원본 층(raw/VLM) 캐시 저장소 루트 · 값: 경로
-    report_digest_dir:  # run_board 날짜·판 요약 폴더 루트(비우면 요약 안 만듦) · 값: 경로
     soffice_bin:  # LibreOffice soffice 실행 파일 경로 · 값: 경로
     stack_version:  # 엔진 구성 판 번호(내부 신호 — 진입점이 활성 판 번호를 정해 자식에 넘김, 사람이 쓰지 않음 · pl-32) · 값: 0 이상 정수
   # ─── 호스트 — 컨테이너 도구·패치·정리 ───
@@ -357,8 +356,6 @@ ops:
     cpus: 1.0  # mcp-server 컨테이너 CPU 한도(compose cpus) · 기본 1.0 · 값: 0 이상
     jobs_dir:  # MCP parse_document 업로드 작업 폴더(공유 볼륨) · 값: 경로
     mem_limit: 4g  # mcp-server 컨테이너 메모리 한도(compose mem_limit) · 기본 4g · 값: 글자
-    tool_cpus: 1.0  # 검색 도구 실행 컨테이너(run_tool) CPU 한도 · 기본 1.0 · 값: 0 이상
-    tool_mem_limit: 2g  # 검색 도구 실행 컨테이너(run_tool) 메모리 한도 · 기본 2g · 값: 글자
   # ─── 상주 서비스 — 트리거·parse MCP ───
   services:
     parse_mcp:
@@ -406,14 +403,8 @@ dev:
     test_per_type: 5  # 시험 모드 표본에서 확장자별로 고르는 문서 수(개) · 기본 5 · 값: 0 이상 정수
   # ─── 평가 ───
   eval:
-    gold_draft_max_pages: 30  # 정답 초안 생성(gold_draft)에서 문서당 처리할 쪽 수 상한(쪽) · 기본 30 · 값: 0 이상 정수
-    gold_draft_mermaid_check: true  # 정답 초안의 Mermaid 블록 2차 점검을 켤지(0/false/no면 끔) · 기본 true · 값: true·false
-    qa_draft_max_pages: 20  # 질문 초안 생성(qa_draft)에서 문서당 처리할 쪽 수 상한(쪽) · 기본 20 · 값: 0 이상 정수
-    qa_draft_per_page: 5  # 질문 초안 생성에서 쪽당 질문 수 상한(개) · 기본 5 · 값: 0 이상 정수
     review_max_rounds: 2  # 도식 검토 루프의 최대 재추출 횟수(회) · 기본 2 · 값: 0 이상 정수
-    score_table_judge: '0'  # 표 구조 채점의 경계 표 판정자(0 없음 | llm 경계 표만 LLM 판정) · 기본 0 · 값: 글자
   mcp:
-    eval_s_parts:  # 검색 평가가 고를 S 묶음 설정(JSON, 예 {'chunk_size':256}) · 값: JSON 객체
     mcp_url: http://127.0.0.1:18765/mcp  # 검증 페이지가 붙을 MCP 서버 URL · 기본 http://127.0.0.1:18765/mcp · 값: URL
     ui_port: 8790  # 검증 페이지(validation/search_ui) 서버 포트 · 기본 8790 · 값: 1~65535
   # ─── PC 시험 Docker ───

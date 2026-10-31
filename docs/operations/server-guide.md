@@ -12,7 +12,7 @@
 | 이미지 | 역할 | `RAG_MODULE` | 돌리는 서비스(`deploy/host/compose/compose.pipeline.yml`) |
 |---|---|---|---|
 | `data-pipeline` | 파싱(dedup→prepare→파싱→대표 결과)·구조화(청킹·임베딩)·적재(PostgreSQL)·퍼블리시 | `pipeline` | 1회: `parse`·`structure`·`load`·`publish`·`index_a`·`index_b` · 상주 트리거 컨테이너(선택, 같은 이미지): `data-pipeline-parse`(`TRIGGER_MODULE=parse`)·`data-pipeline-structure`(`TRIGGER_MODULE=structure`) |
-| `mcp-server` | 검색 MCP(상주) + 도구(`mcp_eval` 등) | `mcp` | `mcp`(상주, 컨테이너 이름 `mcp-server`) · `retrieval`(도구 job) |
+| `mcp-server` | 검색 MCP(상주) | `mcp` | `mcp`(상주, 컨테이너 이름 `mcp-server`) — 도구 job `retrieval`·`mcp_eval`은 11-01에 지움(e2-10) |
 
 옛 이름: `data-parsing`·`data-structure` → `data-pipeline`(컨테이너 `data-pipeline-parse`·`data-pipeline-structure`), `data-retrieval` → `mcp-server`.
 
@@ -81,12 +81,11 @@ bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서(NIGHTLY_M
 - `night`는 각 단계의 75(마감·잠금)를 실패로 치지 않고 다음 단계로 넘어간다. `NIGHTLY_PUBLISH=0`(기본)이면 publish는 건너뛴다.
 - 우선순위 낮추기(`pipeline.extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 **같은 세션·autogroup 안에서만** 효과가 있다. Linux가 `sched_autogroup_enabled=1`이면 CPU를 autogroup끼리 먼저 나누므로 다른 컨테이너·세션의 parse MCP 서비스와는 nice로 겨루지 않고, 컨테이너끼리는 cgroup CPU 가중치(`cpu.weight`)가 정한다. 확인: `cat /proc/sys/kernel/sched_autogroup_enabled`, 일괄 파싱과 `parse_document`를 동시에 걸어 응답 시간 비교(refactor.md C-65 ⑥).
 
-특정 도구만 따로 돌릴 때(`score_gold`·`run_board`·`rdb_discover`·`check_env`는 data-pipeline 이미지, `mcp_eval`은 mcp-server 이미지):
+특정 도구만 따로 돌릴 때(`rdb_discover`·`check_env`·`ping_models` — data-pipeline 이미지):
 ```bash
-bash deploy/host/scripts/run_tool.sh score_gold --gold /srv/rag/gold
-bash deploy/host/scripts/run_tool.sh run_board --out /app/output
-bash deploy/host/scripts/run_tool.sh mcp_eval --set <세트>
+bash deploy/host/scripts/run_tool.sh check_env
 ```
+평가 도구(`score_gold`·`run_board`·`mcp_eval`)는 11-01에 지웠다(PRD [e2-10](../prd/test.md#e2-10)).
 
 ### 2-1. 검색 MCP는 늘 켜 둠
 ```bash
@@ -116,36 +115,7 @@ docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-p
 
 ## 3. 결과 확인
 
-모든 단계 뒤 실행판을 다시 만든다:
-```bash
-docker run --rm -v "$RAG_OUT:/app/output:ro" data-pipeline:<태그> tool run_board --out /app/output
-```
-→ `output/report/run_board.html` — 단계 지도(정상·정확도 문제·개발 문제·실행 안 함·막힌 곳)·문서 깔때기·엔진별 결과·근거 반환 평가. 문서 이름은 기본 해시다(`--plain-names` 금지 — 본문·원본 경로·고객명은 서버 밖으로 나가지 않음).
-
-### 3-1. 파싱 정답률 (`score_gold`, 사람 정답 있을 때)
-`summary.html`의 "대표 결과" 표 — 주요 지표만:
-
-| 지표 | 뜻 | 낮을 때 |
-|---|---|---|
-| `value_recall` | 정답 숫자·ID·고객명이 대표 결과에 있나(정규화 후) | `raw_value_recall`과 차이 크면 표기 문제 / 둘 다 낮으면 진짜 누락 |
-| `num_halluc` | 정답에 없는 숫자를 만들어 냈나 | 0보다 크면 해당 문서의 VLM·OCR 결과 확인 |
-| `table_cell_recall` / `_token_recall` | 표 셀 값(엄격/느슨) | 엄격만 낮으면 셀 경계·병합 문제, 둘 다 낮으면 표를 못 읽음 |
-| `char_acc` | 대표 엔진 본문 글자 정확도 | 낮으면 읽기 순서·다단·줄바꿈 |
-| `rep_len_ratio` | 대표 본문 길이 ÷ 정답 길이 | 1.5↑ 중복, 0.7↓ 누락 |
-| `selection_match` | 대표 엔진 선정이 맞았나 | 낮으면 대표 선정 규칙 확인 |
-
-### 3-2. 검색 근거 (`mcp_eval`)
-`output/eval/mcp_eval/<시각>.html`:
-
-| 지표 | 뜻 | 낮을 때 |
-|---|---|---|
-| `errors` | 호출 실패 수 | 0이 아니면 다른 숫자는 보지 말고 연결·토큰·`/health`부터 |
-| `hit@1`/`hit@5`/`hit@k` | 정답 문서가 근거 상위 안에 있나 | `hit@k`는 높은데 `hit@1`이 낮으면 순서 문제, 둘 다 낮으면 검색 자체 실패(`via_*` 확인) |
-| `value_in_evidence` | 정답 값이 근거 원문에 있나 | `hit`는 높은데 낮으면 청킹·근거 자르기 문제 |
-| `vector_used_rate` | 벡터 검색이 실제로 쓰였나 | 1.0 미만이면 질의 임베딩 연결 확인 |
-| `ms_p50`/`ms_p95` | 지연 | 원격 호출이 로컬보다 크게 느리면 동시 상한 확인 |
-
-**파싱×검색 함께**: 파싱 `value_recall` 낮음 + 검색 `hit@k` 높음 + `value_in_evidence` 낮음 → 파싱 누락이 검색까지 이어짐(3-1부터) · 둘 다 높음 → 정상.
+실행 보드(`run_board`)·파싱 정답률(`score_gold`)·검색 평가(`mcp_eval`)는 11-01에 지웠다(PC 평가 도구 삭제 — PRD [e2-10](../prd/test.md#e2-10)). 서버 결과는 단계별 종료 코드·로그와 EDW `AI.ParsingMeta`로 본다. 검색 결과는 PC의 검증 페이지(`validation/search_ui`)와 답변 점검(`valid_env/answer_test`)으로 본다.
 
 ## 4. 검색 MCP 사용
 
@@ -316,8 +286,5 @@ PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys;
 
 ### 날짜·버전 요약
 파싱이 끝날 때마다 수집 서버가 요약을 만들고 개발 서버가 가져간다:
-```bash
-docker run --rm -v "$RAG_OUT:/app/output:ro" data-pipeline:<태그> tool run_board --out /app/output --digest /srv/rag/reports/parse_digest
-rsync -a <수집 서버>:/srv/rag/reports/parse_digest/ /srv/rag/reports/collect/
-```
-보고서(`/srv/rag/reports/<날짜>.md`)에는 버전(`versions.md` 줄)·단계·종료 코드·핵심 숫자(정답률·시간·건수)·실행판 판정 한 줄·막힌 곳·멈춤 사유와 로그 마지막 20줄(비밀값 가림)을 적는다. 본문·숫자 표를 그대로 복사하지 말고 `run_board.html` 링크로.
+(실행 보드 요약 `run_board --digest`는 11-01에 지웠다 — e2-10. 아래 보고서는 로그·종료 코드로 직접 쓴다.)
+보고서(`/srv/rag/reports/<날짜>.md`)에는 버전(`versions.md` 줄)·단계·종료 코드·핵심 숫자(정답률·시간·건수)·실행판 판정 한 줄·막힌 곳·멈춤 사유와 로그 마지막 20줄(비밀값 가림)을 적는다. 본문·숫자 표를 그대로 복사하지 않는다.

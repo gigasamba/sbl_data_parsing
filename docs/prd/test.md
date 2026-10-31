@@ -150,7 +150,7 @@
 - 파일: `validation/e2e/`, `pipeline/eval/`, `mcp_server/cli/`, `common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`.
 - 결정(사용자 10-30 grill): `validation/search_ui`(검색 점검 페이지)와 `valid_env/answer_test`(답변 점검)**만** 남긴다. 스택 비교, 자동 질문 만들기, 지운 묶음용 채점기(예: `chart_values_score.py`)와 그 설정은 지운다.
 - 결정(사용자 10-30 PRD grill): C7 — PC 평가 도구는 이 행대로 둘만 남긴다. 스택·모델 비교 도구(`model_matrix`·`score_gold`·`mcp_eval`)를 전제로 한 다른 행(e2-03·e2-04·e2-06·pl-31·pl-32·pl-03)은 '비교는 필요할 때 다시 만든다'로 고치고, e2-11의 `test_run_combo`는 도구와 함께 지운다.
-- Status: todo
+- Status: done (11-01, `feature/scope-cut-pipeline`) — 지움: `pipeline/eval/` 전부(report·run_board·score_gold·auto_questions·gold_draft·qa_draft·make_questions·run_combo·stages·anchors·explorer·server_checks), `pipeline/shared/phase_report.py`, `validation/e2e/model_matrix.{py,json}`, `mcp_server/cli/{mcp_eval,search_checks}.py`, `mcp_server/services/search/synth_score.py`, 그것만 쓰던 지시서 `gold_draft`·`qa_draft`·`table_struct_judge`, `pipeline.cli`의 `compare-parse`·`compare-all`, 이미지 `tool` 목록(`entrypoint.sh` TOOL_PKGS)·`run_tool.sh`의 평가 도구, 검색 도구 job 서비스 `retrieval`(compose), 시험 12개(`GENERAL_KNOWN_FAIL`의 `test_run_combo` 포함). 설정 칸(남으면 경고만): `pipeline.eval`의 정답·질문 초안·표 채점 5칸, `pipeline.paths.report_digest_dir`, `mcp.dev.eval_s_parts`, `mcp.host.tool_cpus`·`tool_mem_limit`. 남김: `validation/search_ui`, `valid_env/answer_test`, `validation/e2e/answer_gen`, `pipeline.eval.review_max_rounds`(그림 검토 `figure_review`가 읽음), 지시서 `mermaid_check`(`test_agent_prompts`의 예시), `mcp_server/cli/mcp_smoke.py`(10-31 결정 목록 밖), `check_env`의 `GOLD_DIR` 점검. `mcp_server/cli/ask.py test-stack`은 질문 파일이 없으면 멈춘다(자동 질문 생성 지움).
 
 <a id="e2-17"></a>
 ## e2-17 · 10-29 감사에서 찾은 안 쓰는 함수 지우기

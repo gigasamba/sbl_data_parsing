@@ -194,8 +194,6 @@ def _planted_selftest():
 
     bad_cases = {  # 경로 → 내용(모두 위반이어야 함)
         "pipeline/v_ask.py": "import ask\n",  # etl → 검색 도구 맨 이름(S5 새 도구)
-        "pipeline/v_sc.py": "import search_checks\n",
-        "common/v_sc.py": "import search_checks\n",  # common → 검색 도구 맨 이름
         "common/v_ask.py": "from ask import main\n",
         "pipeline/v_e2e_flat.py": "import stack_matrix\n",  # etl → PC 평가 도구 맨 이름
         "pipeline/v_e2e.py": "from validation.e2e import graph_llm\n",  # etl → validation 정적 import
@@ -210,7 +208,7 @@ def _planted_selftest():
         "validation/e2e/v_both.py": "import pipeline.eval.stages\nimport mcp_server.main\n",  # ⑨
     }
     ok_cases = {  # 위반이 아니어야 함
-        "mcp_server/cli/ok_ask.py": "import ask\nimport search_checks\n",  # 같은 앱 안 맨 이름
+        "mcp_server/cli/ok_ask.py": "import ask\n",  # 같은 앱 안 맨 이름
         "pipeline/eval/ok_stages.py": "import stages\n",
         "validation/e2e/ok_etl.py": "import pipeline.eval.stages\n\ndef f():\n    import mcp_server.main\n",
         "pipeline/eval/ok_dyn.py": "import importlib\nimportlib.import_module('validation.e2e.graph_llm')\n",  # 문자열 — 정적 점검 밖(T-02)
@@ -236,7 +234,7 @@ def _planted_selftest():
     wrong = [r for r in ok_cases if virt[r] in hit]
     assert not missed and not wrong, (missed, wrong, errs)
     print(
-        f"[selftest] check_modules — 심은 위반 {len(bad_cases)}건 모두 잡힘 · 허용 {len(ok_cases)}건 통과(맨 이름 ask·search_checks·"
+        f"[selftest] check_modules — 심은 위반 {len(bad_cases)}건 모두 잡힘 · 허용 {len(ok_cases)}건 통과(맨 이름 ask·"
         "validation/e2e·옛 common_tools 이름)"
     )
 

@@ -118,7 +118,6 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  ├─ transform/        represent(대표 결과) · figures(그림) · structure(청킹·임베딩·번들)
 │  ├─ load/             pgvector 적재 · publish · 회사 DB 메타데이터 · 인덱스 빌더
 │  ├─ shared/ · tools/  단계 공용 모듈 · 운영 도구
-│  ├─ eval/             채점 · 실행 보드(score_gold, run_board 등)
 │  └─ trigger_server.py · mcp_parse_service.py                                상주 트리거 · MCP 파싱 작업
 ├─ mcp_server/          검색 MCP 앱(mcp-server 이미지, FastMCP)
 │  ├─ main.py           진입점(앱 조립 · 토큰 · 서버 시작)
@@ -126,7 +125,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  ├─ routers/          도구 4개와 /health 등록(이름·시그니처 고정)
 │  ├─ schemas/          출력 구조
 │  ├─ services/         EDW 질의 · 파싱 중계 · 메타데이터 · search/(하이브리드 검색 · 근거 정리 · 재순위)
-│  └─ cli/              ask(질의 테스트) · mcp_smoke · mcp_eval · registry_cli
+│  └─ cli/              ask(질의 테스트) · mcp_smoke · registry_cli
 ├─ resources/           코드가 읽는 데이터(이미지에 포함)
 │  ├─ prompts/          AI 프롬프트 패키지 {common,pipeline,mcp}
 │  ├─ config/           엔진 구성 pipeline_stack.json(PC용 — 서버는 DB 버전 테이블) · 채점 기준 · 보고서 템플릿
@@ -605,9 +604,8 @@ sudo systemctl enable --now data-pipeline-nightly.timer      # 새벽 배치를 
 ### 5-6. 서버 — 결과 확인과 도구
 
 ```bash
-docker run --rm -v "$RAG_OUT:/app/output:ro" data-pipeline:<버전> tool run_board --out /app/output   # 실행 보드 → output/report/run_board.html
-bash deploy/host/scripts/run_tool.sh mcp_eval --set <세트>                                           # 검색 근거 평가
-bash deploy/host/scripts/run_tool.sh <도구> [인자]                                                    # score_gold · rdb_discover · check_env 등
+bash deploy/host/scripts/run_tool.sh <도구> [인자]                                                    # rdb_discover · check_env · ping_models
+# 실행 보드(run_board)·정답률(score_gold)·검색 평가(mcp_eval)는 11-01에 지움(PRD e2-10)
 ```
 
 ### 5-7. 서버 — 값 바꾸기

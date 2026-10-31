@@ -6,7 +6,7 @@
 #     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>   (S7e1·S7e2 — 옛 --env-file pipeline.env 대신 설정 파일 하나)
 # 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp · dedup · prepare ·
 #       night [인자] · run-stack [인자] · ask --q … · test-stack · full(data-pipeline만 — dedup → prepare → night)
-#   tool <이름> = cli/<이름>.py 하나를 바로 돌림(score_gold·run_board·mcp_eval·rdb_discover·check_env·index 등 — run_tool.sh가 쓰는 자리)
+#   tool <이름> = cli/<이름>.py 하나를 바로 돌림(rdb_discover·check_env·index 등 — run_tool.sh가 쓰는 자리)
 #     옛 형태 `tool cli/<이름>.py`도 이번 판까지는 받아 줌(경고 후 번역) — 다음 판부터 이름만.
 #   모듈(트리거 1회): parse(= 가져오기(폴더·s3://, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과, RUN_MODE=test면 형식별 표본) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타, SI39 — cli/publish_parse.py --apply) — docs/architecture.md
 #   full = dedup → prepare(중복 제외 목록만) → night(파싱 → 대표 파싱·구조화·임베딩 → PostgreSQL 적재, EDW 적재 없음) — data-pipeline 이미지만(S6c)
@@ -91,21 +91,21 @@ case "$cmd" in
   services)      python -m common.store.services "$@";;
   check-modules) exec python -m common.check.check_modules "$@";;
   tool)
-    name=$(legacy_tool_name "${1:?도구 이름(예: score_gold·run_board·mcp_eval·rdb_discover·check_env)}"); shift || true
+    name=$(legacy_tool_name "${1:?도구 이름(예: rdb_discover·check_env)}"); shift || true
     # C3(독립 검토 10-13) — 이름을 python -c 소스 문자열에 그대로 끼워 넣으면 코드 주입 경로가 됨. 모듈 이름 문법만 허용.
     [[ "$name" =~ ^[a-z_][a-z0-9_]*$ ]] || { echo "bad tool name"; exit 64; }
     # ping_models·os_put·check_modules는 common/check/(S3 — 옛 common_tools/cli/) — common.check를 맨 먼저(덧씌우기 live에 옛 사본이 남아도 새 것이 이김), 그다음 이 순서로 시도.
     # S4 — 단계 4 도구는 pipeline/로: check_env·parse_parallel·trigger_server는 pipeline/, rdb_discover는 pipeline/extract/,
-    # gen_roster·glossary_suggest는 pipeline/transform/structure/, figure_review는 pipeline/transform/figures/, score_gold·run_board·
-    # report·run_combo·server_checks·stages 등은 pipeline/eval/(옛 data_etl/eval_tools·common_tools/cli·evaluation) ·
+    # gen_roster·glossary_suggest는 pipeline/transform/structure/, figure_review는 pipeline/transform/figures/ ·
+    # (pipeline/eval/의 평가 도구와 mcp_server/cli/의 mcp_eval·search_checks는 11-01에 지움 — e2-10) ·
     # S6c(사용자 10-27, C-30 ①) — index(AD41 색인 빌더 — compose.pipeline.yml index_a·index_b의 `tool index build`)는 pipeline/load/(옛 data_structure/ —
     #   pre-refactor부터 찾는 목록에 없어 "모르는 도구"였음).
-    # S5 — mcp_eval·search_checks(옛 server_checks의 br54·l8·gh114 — T-15)는 mcp_server/cli/(mcp 이미지 — S6b 전 retrieval) · S6a — model_matrix·stack_matrix는 validation/e2e/(PC 전용 — 이미지에 없음, T-15), assets는 /app/docker/assets.py(파일로 실행 — `python /app/docker/assets.py install`, 저장소 자리 deploy/release/ — S6b), eval_research는 S5a 삭제.
+    # assets는 /app/docker/assets.py(파일로 실행 — `python /app/docker/assets.py install`, 저장소 자리 deploy/release/ — S6b), eval_research는 S5a 삭제.
     # 옛 `tool pipeline`(common_tools.cli.pipeline)은 pipeline.cli로. `패키지:이름,…`은 그 이름만 — S4 전에 tool로 부를 수 있던 것만
     # (pipeline 단계 모듈 run_all·dedup·stream 등을 preflight·잠금 없이 부르지 않게).
     # 이름은 sys.argv로 전달(소스 문자열에 끼워 넣지 않음). 찾기는 python 한 번에(VS3 R-7 — 전에는 패키지마다 프로세스 하나).
     [ "$name" = pipeline ] && name=cli
-    TOOL_PKGS="common.check pipeline:check_env,cli,trigger_server pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest pipeline.transform.figures:figure_review pipeline.load:index pipeline.eval mcp_server.cli:mcp_eval,search_checks"
+    TOOL_PKGS="common.check pipeline:check_env,cli,trigger_server pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest pipeline.transform.figures:figure_review pipeline.load:index"
     # shellcheck disable=SC2086
     mod=$(python -c "
 import importlib.util, sys

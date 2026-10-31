@@ -38,12 +38,9 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 | `figure_extract` | `pipeline/` | vlm | 그림만 보고 독립 재추출(검토 루프 — 원본 기록은 안 보여 줌) | 그림 PNG + 지시문 + 근처 맥락·이전 지적 → figure-v1 JSON | `pipeline/transform/figures/figure_review.py` `extract()`·`_vlm_call(which="extract")`(`P_EXTRACT`) | template+tail · 있음 |
 | `figure_judge` | `pipeline/` | vlm_judge | 독립 추출과 우리 기록의 자동 diff 감사(검토 루프 판정자) | 그림 PNG + 지시문 + 우리 기록·대조 결과·맥락 → items/verdict JSON | `pipeline/transform/figures/figure_review.py` `_vlm_call(which="judge")`(`P_JUDGE`) | template+tail · 있음 |
 | `figure_overlay` | `pipeline/` | vlm | 겹친 개체 묶음(그림 + 글상자·화살표·도형) 1장 → 검색용 기록(F12) | 묶음 union bbox 크롭 + 지시문(생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figures.py` `vlm_fig_overlay()`(`P_FIGOVERLAY`) | 기본 · 있음 |
-| `gold_draft` | `pipeline/` | vlm | 쪽 이미지 + 파싱 참고 글 → 정답 초안 마크다운(GS2) | 쪽 PNG + `template()` + 참고 글 + `tail()` → 마크다운(병합 칸 채움·흐름도는 Mermaid) | `pipeline/eval/gold_draft.py` `_vlm_gold()` | free(template+tail) · 없음 |
-| `mermaid_check` | `pipeline/` | vlm | `gold_draft`가 옮긴 흐름도를 원본 이미지에 블라인드 질문으로 2차 확인 | 쪽 PNG + `template()` + 단계 이름 목록 + `tail()` → `{"is_flowchart", "next"}` | `pipeline/eval/gold_draft.py` `_vlm_check_mermaid()`(끄기 `GOLD_DRAFT_MERMAID_CHECK=0`) | 기본(template+tail) · 없음 |
+| `mermaid_check` | `pipeline/` | vlm | (부르는 코드는 11-01에 지움 — e2-10, 지시서 시험 `test_agent_prompts`의 예시로만 남음) `gold_draft`가 옮긴 흐름도를 원본 이미지에 블라인드 질문으로 2차 확인 | 쪽 PNG + `template()` + 단계 이름 목록 + `tail()` → `{"is_flowchart", "next"}` | `pipeline/eval/gold_draft.py` `_vlm_check_mermaid()`(끄기 `GOLD_DRAFT_MERMAID_CHECK=0`) | 기본(template+tail) · 없음 |
 | `nested_figure` | `pipeline/` | vlm | 쪽 전체 그림 안의 자식 그림 bbox 찾기(F7) | 쪽 그림 + 지시문 → `{"regions": [{bbox, kind, …}]}` | `pipeline/transform/figures/nested.py` `bbox_regions()`(`P_BBOX`) | 기본 · 있음 |
 | `parse_shadow` | `pipeline/` | llm | PA2 그림자 모드 — 규칙이 내린 결정 지점마다 "다음 행동" 제안만(기록만) | PA0 context·decisions 줄인 JSON → `{"proposals": [{step, action, reason, confidence}]}` | `pipeline/eval/parse_shadow.py` `_default_llm_complete()` ← `pipeline/transform/represent/shadow.py` `propose_llm()`(끄기 `PARSE_SHADOW=0`) | 기본 · 있음 |
-| `qa_draft` | `pipeline/` | vlm | 쪽 이미지 → 표·그래프·흐름도 구조를 읽어야 맞출 수 있는 질문-답변 초안(QA1) | 쪽 PNG + `template()`(`{max_items}`) + `tail()` → `{"items": [...]}` | `pipeline/eval/qa_draft.py` `_vlm_qa()` | 기본(template+tail) · 없음 |
-| `table_struct_judge` | `pipeline/` | llm | 표 구조 채점(TS1) 경계 표를 한 번 더 봐서 승격만 하는 보조 판정자 | 정답 표 + 출력 표(`{gold_table}`·`{out_table}`) → `{"pass", "reason"}` | `pipeline/eval/score_gold.py` `_table_judge_fn()._judge()`(켜기 `SCORE_TABLE_JUDGE=llm`) | 기본 · 있음 |
 | `agg_llm_route` | `mcp/` | llm | 집계(SQL 틀) 질문인지 검색 질문인지 분류 + 인자(고객·기간·지표·모양) 추출 | 분류 지시문 + 질문 → JSON(`aggregate.llm_plan`이 검증) | `mcp_server/services/search/aggregate.py` `llm_plan()`(`_AGG_LLM_PROMPT`) ← `mcp_server/services/search/internal_docs.py` `_agg_llm_complete()`(`SEARCH_AGG_LLM=1`, `detect()` 정규식이 못 걸렸을 때만) | 기본 · 있음 |
 
 시험 고정물(`example_agentic`·`example_agentic_vlm_sub` — `tests/server/common/test_adk.py`(S9 전 `adk.py` selftest)의 `run_agent` 묶음)은 upstream `dev_tools/unit_test/fixtures/`에 있고 이 저장소에는 없다. 없으면 시험이 그 묶음을 건너뛴다.
@@ -51,9 +48,7 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 ## 4. 패키지별 메모 (옛 README에서 표에 안 들어간 것)
 
 - **`figure_overlay`** — 출력 스키마는 `figure_describe`와 같고(kind/summary/text/values/edges/table_md), 지시문이 "위 개체는 아래 그림을 설명할 수 있다"는 관계를 읽게 한다. 캐시 이름 `figoverlay` — 같은 그림이라도 `figure_describe`와 다른 열쇠.
-- **`gold_draft`** — `page_transcribe`와 별도 지시문·캐시 열쇠라 이 패키지를 바꿔도 파싱 VLM 캐시·동작은 그대로다.
 - **`mermaid_check`** — 옮긴 화살표 목록은 보여 주지 않고 단계 이름만 준다(앵커링 방지) → 단계별 '나가는 화살표' 답과 Mermaid를 코드로 대조. 흐름도가 아닌 그림이면 `is_flowchart=false` → Mermaid 블록을 뺀다.
-- **`qa_draft`** — 유형: table_cell(행×열 칸) · chart_value(x → y, 어림이면 범위 + confidence low) · flow_next · flow_input · flow_order.
 - **`table_struct_judge`** — 결정적 결과를 먼저 계산하고 판정자는 **승격만**(0 → 1) 한다. 가드(`NO_PAID_CALLS`·`LLM_FAKE`·내부망 전용)는 `common.ai.llm.chat()`이 집행(`allow_external`을 주지 않아 내부망 LLM만). 판정자 호출 실패는 조용히 "승격 안 함". `vlm` 모드는 아직 TODO.
 - **`parse_shadow`** — 제안은 저장·집계만 되고 파싱 결과·점수에는 손대지 않는다. `action`은 step마다 고정된 행동 목록(`shadow.STEP_ACTIONS`, "keep" = 규칙 그대로) 중 하나만 유효하고, 목록 밖이거나 decisions에 없는 step은 `shadow.parse_proposals`가 버린다. `shadow.py`는 adk를 모르고 `llm_complete` 콜백만 받는다(CLI가 `llm.chat(..., agent="parse_shadow")`를 주입). 캐시는 `llm.chat()`의 (모델·메시지·온도) 해시 그대로. `--mode rules`는 LLM 없이 규칙 결정을 "keep"으로 echo(배선 시험용).
 - **`agg_llm_route`** — 인자는 기존 집계 틀(`aggregate._apply`)에만 대입하고 자유 SQL은 만들지 않는다(R1, AD42·AD45②). 거부(→ None, 검색 폴백): 확신 미달(`SEARCH_AGG_LLM_MIN`) · 모르는 고객/계약/모달리티 · window 날짜 형식 오류 · 지표 전부 거짓 · 고객·계약 둘 다 없음 · JSON 깨짐 · SQL처럼 보이는 글자(`_SQLISH_RE`) · route="search".

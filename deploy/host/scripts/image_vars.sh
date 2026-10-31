@@ -7,7 +7,7 @@
 #   S7e1 — 새 이름은 settings.yaml(pipeline.host.image·mcp.host.image)에서 settings_env.sh load_settings가 셸 env로 낸다. 부르기 전에 load_settings.
 #   (옛 env 파일(ENV_FILE=pipeline.env)은 더 읽지 않는다 — 옛 이름은 settings.yaml 칸이 아니라 migrate가 "삭제 후보"로만 보고함)
 #   need_image pipeline   — 파이프라인 이미지(compose.pipeline.yml의 parse~publish·상주 트리거)
-#   need_image mcp        — 검색 MCP 이미지(compose.mcp.yml·compose.pipeline.yml의 mcp·retrieval 서비스)
+#   need_image mcp        — 검색 MCP 이미지(compose.mcp.yml·compose.pipeline.yml의 mcp 서비스)
 _set_somewhere() {   # _set_somewhere <이름들> — 셸 env에 값이 있으면 0
   local n
   for n in $1; do [ -n "${!n:-}" ] && return 0; done

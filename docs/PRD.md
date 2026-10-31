@@ -114,7 +114,7 @@
 | 스택·모델 비교 | done | 행렬 · 예상 비용 | [e2-06](prd/test.md#e2-06) |
 | 검색 점검 페이지 | done | 로컬 페이지 · 포트 | [e2-07](prd/test.md#e2-07) |
 | 검색 페이지 고정 글 | todo | 실제 개수 표시 | [e2-16](prd/test.md#e2-16) |
-| PC 평가 도구 줄이기 | todo | 둘만 남김 · 설정 지움 | [e2-10](prd/test.md#e2-10) |
+| PC 평가 도구 줄이기 | done | 둘만 남김 · 설정 지움 · 11-01 | [e2-10](prd/test.md#e2-10) |
 | 안 쓰는 함수 지우기 | done | 시험만 부르는 것도(drop-unused) | [e2-17](prd/test.md#e2-17) |
 | 요건 없는 코드 지우기 | done | 지움 · 남김 목록(drop-unused) | [e2-18](prd/test.md#e2-18) |
 

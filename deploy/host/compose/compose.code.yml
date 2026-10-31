@@ -13,7 +13,6 @@ services:
   load: {volumes: *code}
   publish: {volumes: *code}
   mcp: {volumes: *code}
-  retrieval: {volumes: *code}
   index_a: {volumes: *code}
   index_b: {volumes: *code}
   data-pipeline-parse: {volumes: *code}

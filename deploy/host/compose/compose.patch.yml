@@ -19,7 +19,6 @@ services:
   load: {volumes: *code, entrypoint: *entry}
   publish: {volumes: *code, entrypoint: *entry}
   mcp: {volumes: *code, entrypoint: *entry}
-  retrieval: {volumes: *code, entrypoint: *entry}   # 10-16 — mcp_eval 등 도구 전용 job 서비스
   index_a: {volumes: *code, entrypoint: *entry}     # 10-16 — AD41 2개 설정 예시(compose.pipeline.yml)
   index_b: {volumes: *code, entrypoint: *entry}
   data-pipeline-parse: {volumes: *code, entrypoint: *entry}       # 10-14 — 상주 트리거 서버(S6b — 옛 data-parsing·data-structure, 둘 다 data-pipeline 이미지)

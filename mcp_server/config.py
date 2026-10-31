@@ -22,7 +22,6 @@ from common.config.settings import (  # noqa: F401 — token_text: 토큰 규칙
     CsvList,
     EnvView,
     F,
-    JsonValue,
     Port,
     Section,
     image_default,
@@ -57,7 +56,7 @@ class McpSearchWeights(Section):
 
 
 class McpDev(Section):
-    eval_s_parts: JsonValue | None = F(None, "EVAL_S_PARTS", "검색 평가가 고를 S 묶음 설정(JSON, 예 {'chunk_size':256})")
+    REMOVED = frozenset({"eval_s_parts"})  # 11-01(e2-10 — mcp_eval 지움) — 지운 칸(남으면 경고만)
     mcp_url: str | None = F("http://127.0.0.1:18765/mcp", "MCP_URL", "검증 페이지가 붙을 MCP 서버 URL", blank="keep")
     ui_port: Port | None = F(8790, "UI_PORT", "검증 페이지(validation/search_ui) 서버 포트")
 
@@ -87,12 +86,13 @@ class McpEdwQuery(Section):
 
 
 class McpHost(Section):
+    REMOVED = frozenset(
+        {"tool_cpus", "tool_mem_limit"}
+    )  # 11-01(e2-10 — 검색 도구 컨테이너 retrieval·mcp_eval 지움) — 지운 칸(남으면 경고만)
     cpus: float | None = F(1.0, "MCP_CPUS", "mcp-server 컨테이너 CPU 한도(compose cpus)")
     image: str | None = F(None, "MCP_SERVER_IMAGE", "mcp-server 컨테이너 이미지 이름:태그")
     jobs_dir: str | None = F(None, "MCP_JOBS_DIR", "MCP parse_document 업로드 작업 폴더(공유 볼륨) — medium 레인 양보 감지용")
     mem_limit: str | None = F("4g", "MCP_MEM_LIMIT", "mcp-server 컨테이너 메모리 한도(compose mem_limit)")
-    tool_cpus: float | None = F(1.0, "RETRIEVAL_TOOL_CPUS", "검색 도구 실행 컨테이너(run_tool) CPU 한도")
-    tool_mem_limit: str | None = F("2g", "RETRIEVAL_TOOL_MEM_LIMIT", "검색 도구 실행 컨테이너(run_tool) 메모리 한도")
 
 
 class McpOutput(Section):

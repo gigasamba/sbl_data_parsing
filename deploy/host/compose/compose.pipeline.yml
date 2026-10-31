@@ -174,16 +174,6 @@ services:
     memswap_limit: ${PUBLISH_MEM_LIMIT:-2g}
     cpus: ${PUBLISH_CPUS:-1}
 
-  retrieval:                               # 도구 전용(job, mcp-server 이미지) — mcp_eval처럼 mcp_server(검색)가 필요한 cli 도구(run_tool.sh). 상주 mcp와는 별개.
-    <<: *job
-    image: ${MCP_SERVER_IMAGE:?MCP_SERVER_IMAGE=mcp-server:<태그> 필요 — 옛 DATA_RETRIEVAL_IMAGE·RAG_IMAGE는 S6b에 바뀜(refactor.md C-29)}
-    command: ["help"]
-    volumes:
-      - *settings
-      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
-    mem_limit: ${RETRIEVAL_TOOL_MEM_LIMIT:-2g}
-    cpus: ${RETRIEVAL_TOOL_CPUS:-1}
-
   mcp:                                     # ④ 검색 MCP(상주) — compose.mcp.yml과 같음 · S6b: 이미지·컨테이너 mcp-server
     image: ${MCP_SERVER_IMAGE:?MCP_SERVER_IMAGE=mcp-server:<태그> 필요 — 옛 DATA_RETRIEVAL_IMAGE·RAG_IMAGE는 S6b에 바뀜(refactor.md C-29)}
     container_name: mcp-server             # S6b(사용자 10-27) — 옛 data-retrieval(그 전 rag-mcp)
