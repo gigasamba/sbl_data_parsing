@@ -10,15 +10,15 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 이유(사용자 10-29/10-30): 겹치는 문서가 너무 많고 요건이 PRD 밖에 흩어져 있다.
 - 무엇: 문서를 줄이고 짧게, 결정과 요건은 남김. 긴 문서는 소제목을 둔다. 사람이 읽는 문서는 한국어. `docs/history/`에 이력(refactor_plan, refactor.md의 낡은 C 항목 — C-35, C-41 합성 부분, C-63, C-05/06, C-18/20/22/23/24/26/28, C-25/30 — run_docs 버그·속도 이력, 패치 이력, 릴리스 §8–9)을 둔다. `docs/requirements/*`는 PRD로 옮긴다. CLAUDE.md에서 규칙이 아닌 내용은 PRD/README/INDEX로 옮긴다. PRD와 겹치는 C 항목(C-31/32/33/50/53/58)은 "PRD xx-nn으로 옮김" 한 줄과 남은 서버 확인만 남긴다. 크기 상한은 안내일 뿐.
 - 1부(10-30): PRD를 카테고리로 — ID는 그대로, ID마다 한글 이름(`<a id>` + `## pl-24 · 이름`), `docs/PRD.md`와 `docs/prd/`를 카테고리 파일 6개(etl, parse, mcp, settings, test, doc)로 나누고 gaps.md는 각 파일 끝 "코드와 다른 점 · 지울 코드"로 흩음.
-- 2부(10-30, `feature/doc-cleanup-2`): CLAUDE.md는 규칙·하네스 명령만(기준선·핑거프린트 값 → [test.md#e2-02](test.md#e2-02), 옛 절 번호 → `docs/index.md` Glossary, 지난 기록 → `docs/history/`). `docs/requirements/run_docs_req.md` → [etl.md#pl-10](etl.md#pl-10) 요약 + `docs/history/run_docs_req.md` 원문. `docs/operations/*` 압축(절 번호 유지 — 코드 주석이 가리킴). `refactor_plan.md`·run_docs 버그·속도 이력·patch-history·release §8–9 → `docs/history/`.
+- 2부(10-30, `feature/doc-cleanup-2`): CLAUDE.md는 규칙·하네스 명령만(기준선·핑거프린트 값 → [test.md#e2-02](test.md#e2-02), 옛 절 번호 → `docs/INDEX.md` Glossary, 지난 기록 → `docs/history/`). `docs/requirements/run_docs_req.md` → [etl.md#pl-10](etl.md#pl-10) 요약 + `docs/history/run_docs_req.md` 원문. `docs/operations/*` 압축(절 번호 유지 — 코드 주석이 가리킴). `refactor_plan.md`·run_docs 버그·속도 이력·patch-history·release §8–9 → `docs/history/`.
 - Status: dev — 1부 병합(PR #21). 2부는 `feature/doc-cleanup-2`. CLAUDE.md §6-5(`list-smoke10`)는 사용자 확인 대기로 그대로.
 
 <a id="do-02"></a>
-## do-02 · `docs/index.md`의 `## Glossary`
+## do-02 · `docs/INDEX.md`의 `## Glossary`
 - 이유: 옛 용어(지문, 판, 칸 …)가 주석과 기록에 아직 나온다. 한곳에서 찾게 한다.
-- 단계: CLAUDE.md의 "용어 대응" 블록을 `docs/index.md` `## Glossary`로 옮기고, CLAUDE.md에는 링크 한 줄만 남긴다.
+- 단계: CLAUDE.md의 "용어 대응" 블록을 `docs/INDEX.md` `## Glossary`로 옮기고, CLAUDE.md에는 링크 한 줄만 남긴다.
 - 수용 기준: 옛 블록의 용어가 용어집에 한 번씩 나온다.
-- 끝남 10-30(do-04 1부와 함께): `docs/index.md` `## Glossary` — 약어·프로젝트 용어 + 옛 용어 대응. CLAUDE.md는 링크 한 줄.
+- 끝남 10-30(do-04 1부와 함께): `docs/INDEX.md` `## Glossary` — 약어·프로젝트 용어 + 옛 용어 대응. CLAUDE.md는 링크 한 줄.
 - Status: done
 
 <a id="do-03"></a>
@@ -34,7 +34,7 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 <a id="do-01"></a>
 ## do-01 · 루트 `refactor.md`(184 KB)를 `docs/refactoring/`으로 옮기기
 - 이유: 저장소 루트에는 입구 파일만 둬야 하고 검토가 요청했다.
-- 단계: 사용자와 설계 확인 → 옮기기만 하는 커밋 하나 → 링크를 고치는 커밋 하나(`grep -rn "refactor.md"`: CLAUDE.md, README, docs/index.md, 코드 주석).
+- 단계: 사용자와 설계 확인 → 옮기기만 하는 커밋 하나 → 링크를 고치는 커밋 하나(`grep -rn "refactor.md"`: CLAUDE.md, README, docs/INDEX.md, 코드 주석).
 - 여기서 안 함: `settings.sample.yaml`도 옮기라고 했지만 `common/config/sample.py`가 루트에 쓰고 `appcheck`, `setarg`, `migrate`, env-guide, CLAUDE.md가 그 경로를 읽는다 — settings-cleanup 작업·사용자 몫. 옮기면 code_fp가 바뀔 수 있다(CLAUDE.md §4).
 - 기다림: feature/test-parallel과 feature/settings-cleanup 병합(둘 다 refactor.md와 CLAUDE.md를 고침).
 - 수용 기준: 깨진 링크 없음(옛 경로 `grep` = 0), `selftest` 그대로.
@@ -45,7 +45,7 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 ## op-04 · 첫 릴리스 태그 `v0.1.0`과 릴리스 노트
 - 이유: `VERSION`과 이미지 태그는 있지만 태그나 릴리스 노트를 만든 적이 없다.
 - 무엇: `release/0.1.0`에서 `main`에 태그, `RELEASE_NOTES`(변경, 채울 설정, 핑거프린트 변경, refactor.md "최종"의 서버 할 일)를 쓴다.
-- 릴리스 노트 후보: MCP `search` 근거 출력의 `file_path` 키 — 제거 대상(사용자 10-30), 시기·버전 처리는 나중([etl.md#pl-25](etl.md#pl-25), [mcp.md#mc-01](mcp.md#mc-01)).
+- 릴리스 노트 후보: MCP `search` 근거 출력의 `file_path` 키 제거 — [mcp.md#mc-16](mcp.md#mc-16)(사용자 10-30 PRD grill D1).
 - 끝남 10-30: `main` 7910257에 태그 `v0.1.0`을 만들었다. 릴리스 노트는 GitHub release v0.1.0.
 - Status: done
 
