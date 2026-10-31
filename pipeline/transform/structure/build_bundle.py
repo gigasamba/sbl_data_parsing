@@ -24,6 +24,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[0]
 from common.ai.embed import embed_texts  # noqa: E402
+from common.config import layout as L  # noqa: E402 — 안내 메시지의 settings.yaml 자리
 from common.config import settings as C  # noqa: E402 — S7c: 설정 객체(common 칸 EMBED_MODEL·EMBED_BASE_URL·LLM_ALLOW_EXTERNAL·GLOSSARY_DIR·OV_URL)
 from common.core import docmeta as DM  # noqa: E402 — 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
 from common.core import repfmt as AQ  # noqa: E402 — 대표 결과 형식 읽기(라벨 어휘·키-값 쌍·표 행)
@@ -429,7 +430,12 @@ def warn_if_no_client_roster(docs):
         return
     if T._aliases():
         return  # 명부는 있는데 이 묶음 문서들이 그냥 다 안 걸렸을 뿐 — 경고 대상 아님
-    print("WARNING: 고객 명부 없음 — client 메타가 비어 고객 필터·비교 분할이 동작 안 함 (GLOSSARY_DIR 확인)", file=sys.stderr, flush=True)
+    print(
+        "WARNING: 고객 명부 없음 — client 메타가 비어 고객 필터·비교 분할이 동작 안 함"
+        f" (settings.yaml {L.to_yaml('common.paths.glossary_dir')}·{L.to_yaml('common.paths.client_roster')} 확인)",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def collect_draft_terms(docs, glossary_dir=None):
