@@ -29,7 +29,6 @@ from common.core.paths import PKG_ROOT  # 공용 자산 루트(10-14 이미지 �
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.load import index_cfg as ICS  # normalize·load·index_id·env_for·inputs·pg_schema(빌더 전용, 10-14 이전)
 
-HERE = Path(__file__).resolve().parent
 ROOT = PKG_ROOT  # 하위 프로세스 cwd(공용 패키지 루트) — 10-14 분리 전엔 HERE.parent(data_pipeline/)
 
 PY = sys.executable

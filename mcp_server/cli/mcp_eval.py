@@ -50,7 +50,6 @@ from mcp_server.services.search import shaping as M  # evidence_status(R3, 서�
 from mcp_server.services.search.synth_score import score as synth_score  # answer_keywords·forbid_keywords 채점(재사용)
 from mcp_server.services.search.synth_score import score_table as synth_score_table
 
-HERE = Path(__file__).resolve().parent  # deploy/mcp_server/cli(S5 — 옛 deploy/common_tools/evaluation)
 DEV = APP_ROOT  # output/ 등 런타임 경로용(오늘은 dev/, 단계 5·7 전)
 PROJ = PROJ_ROOT
 

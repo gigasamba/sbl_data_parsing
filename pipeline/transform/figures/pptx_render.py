@@ -28,13 +28,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]  # dev/
-from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
-from pipeline.shared.postprocess import raw_root  # noqa: E402
-from pipeline.transform.figures import shape_detect  # noqa: E402 — AD14
-from pipeline.transform.figures.pptx_edges import candidate_slides  # noqa: E402
-from pipeline.transform.figures.vlm_page import DPI, sha, vlm_page  # noqa: E402
+from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.shared.postprocess import raw_root
+from pipeline.transform.figures import shape_detect  # AD14
+from pipeline.transform.figures.pptx_edges import candidate_slides
+from pipeline.transform.figures.vlm_page import DPI, sha, vlm_page
 
 
 def _cap(name, default):

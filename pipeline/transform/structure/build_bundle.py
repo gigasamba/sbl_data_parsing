@@ -21,29 +21,27 @@ import sys
 import time
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[0]
-from common.ai.embed import embed_texts  # noqa: E402
-from common.config import settings as C  # noqa: E402 — S7c: 설정 객체(common 칸 EMBED_MODEL·EMBED_BASE_URL·LLM_ALLOW_EXTERNAL·GLOSSARY_DIR·OV_URL)
-from common.core import docmeta as DM  # noqa: E402 — 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
-from common.core import repfmt as AQ  # noqa: E402 — 대표 결과 형식 읽기(라벨 어휘·키-값 쌍·표 행)
-from common.core import terms as T  # noqa: E402 — 고객 명부·이름 정규화·ID 모양(검색과 같은 규칙)
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.contract import (  # noqa: E402 — 문서 ID(doc_key) 규칙(GH1-04: orig_sha256으로 parse와 같은 값)
+from common.ai.embed import embed_texts
+from common.config import settings as C  # S7c: 설정 객체(common 칸 EMBED_MODEL·EMBED_BASE_URL·LLM_ALLOW_EXTERNAL·GLOSSARY_DIR·OV_URL)
+from common.core import docmeta as DM  # 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
+from common.core import repfmt as AQ  # 대표 결과 형식 읽기(라벨 어휘·키-값 쌍·표 행)
+from common.core import terms as T  # 고객 명부·이름 정규화·ID 모양(검색과 같은 규칙)
+from common.core.console import utf8_stdout  # 옆 import들과 같은 자리(앞 코드 뒤)
+from common.core.contract import (  # 문서 ID(doc_key) 규칙(GH1-04: orig_sha256으로 parse와 같은 값)
     file_hash,
     original_file_hash,
 )
-from common.core.meaning import strip_page_numbers  # noqa: E402
-from common.core.paths import APP_ROOT  # noqa: E402 — 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
-from common.core.text import (  # noqa: E402 — 색인 본문·토큰 규칙(모듈 계약)
+from common.core.meaning import strip_page_numbers
+from common.core.paths import APP_ROOT  # 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
+from common.core.text import (  # 색인 본문·토큰 규칙(모듈 계약)
     index_text,
     normalize_value,
     tokens,
 )
-from pipeline import config as pc  # noqa: E402 — S7c: 설정 객체(pipeline 칸)
-from pipeline.transform.structure import chunking as S  # noqa: E402 — 청킹·개체 정규식(구조화 모듈)
-from pipeline.transform.structure import facts as AG  # noqa: E402 — 계약 사실 추출(contract_facts)·제품 코드
-from pipeline.transform.structure import terms as ST  # noqa: E402 — name_hits·seed_roster(구조화 전용, 10-16 분리)
+from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
+from pipeline.transform.structure import chunking as S  # 청킹·개체 정규식(구조화 모듈)
+from pipeline.transform.structure import facts as AG  # 계약 사실 추출(contract_facts)·제품 코드
+from pipeline.transform.structure import terms as ST  # name_hits·seed_roster(구조화 전용, 10-16 분리)
 
 RE_ENTITY = (S.RE_ID, S.RE_EMAIL, S.RE_DATE)
 

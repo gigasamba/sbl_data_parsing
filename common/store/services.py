@@ -10,14 +10,11 @@
 import json
 import urllib.error
 import urllib.request
-from pathlib import Path
 
 from common.ai.guard import external_allowed, is_internal, require_internal  # noqa: F401 — 내부망 가드는 common/guard.py 한 곳
 from common.ai.guard import urlopen as guard_urlopen
 from common.config.settings import by_env, reveal  # S7b 설정 객체
 from common.core.console import utf8_stdout
-
-HERE = Path(__file__).resolve().parent
 
 
 def _pg_capable(c):

@@ -18,14 +18,12 @@ import time
 from collections import Counter
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[0]
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.contract import jl  # noqa: E402 — 묶음 읽기
-from common.core.text import index_text, tokens  # noqa: E402 — 색인·토큰 규칙(모듈 계약)
-from common.store.pg import HNSW_MAX, PG, conf, has_conn, vec  # noqa: E402,F401
-from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
-from pipeline.load.pg_load_connect import connect as pg_connect  # noqa: E402
+from common.core.console import utf8_stdout  # 옆 import들과 같은 자리(앞 코드 뒤)
+from common.core.contract import jl  # 묶음 읽기
+from common.core.text import index_text, tokens  # 색인·토큰 규칙(모듈 계약)
+from common.store.pg import HNSW_MAX, PG, conf, has_conn, vec  # noqa: F401
+from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.load.pg_load_connect import connect as pg_connect
 
 # DROP/TRUNCATE/DELETE 대상 식별자 화이트리스트(XS3) — 우리 스키마의 우리 표만. 스키마명 자체는 common/pg.conf()가 이미 정규식으로 검증.
 _OUR_TABLES = {"load_run", "doc", "chunk", "chunk_term", "term_stat", "corpus_stat"}  # 2026-10-20 축소 — 검색(chunk+BM25)에 필요한 표만

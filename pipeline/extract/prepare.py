@@ -34,16 +34,15 @@ import struct
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.contract import file_hash  # noqa: E402
-from common.core.paths import (  # noqa: E402 — 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
+from common.core.console import utf8_stdout  # 옆 import들과 같은 자리(앞 코드 뒤)
+from common.core.contract import file_hash
+from common.core.paths import (  # 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
     APP_ROOT,
     doc_dir,
     tmp_path_for,  # GH1-01, tmp+os.replace 공용(RV6과 같은 원칙) · place()가 하드링크한 dst를 그 자리에서 save()하면 원본 inode까지 덮어씀
 )
-from pipeline import config as pc  # noqa: E402 — S7c: 설정 객체(옛 os.environ 읽기)
-from pipeline.extract.engines import registry  # noqa: E402 — SI44 '처리 엔진 없는 확장자' 판정(engines_for) 공용
+from pipeline import config as pc  # S7c: 설정 객체(옛 os.environ 읽기)
+from pipeline.extract.engines import registry  # SI44 '처리 엔진 없는 확장자' 판정(engines_for) 공용
 
 IMG = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 _OCR: list = []

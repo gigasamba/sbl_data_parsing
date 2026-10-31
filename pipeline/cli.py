@@ -33,8 +33,6 @@ from common.config import settings as C  # common 칸(S7c — 설정 객체 · c
 from common.core.paths import APP_ROOT, PKG_ROOT  # output/ 등 런타임 경로용(옛 dev/)
 from pipeline import config as pc  # pipeline 칸(S7c — 설정 객체 · cfg()·given())
 
-HERE = Path(__file__).resolve().parent
-
 ROOT = PKG_ROOT  # common/(S6a — 옛 common_tools/와 같은 깊이) — 하위 프로세스 cwd·저장소 문서 찾기용(ROOT.parent = deploy/)
 OUT = Path(
     pc.cfg().paths.out_root or (APP_ROOT / "output")
