@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나 — 문서 배치와 릴리스 표시.
 do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 표준 — `agent-ops/docs/project-review.md#s_bio_data_parsing`).
 
-순서(주제별): 문서 정리 do-04·do-02·do-03·do-01 → 릴리스 op-04.
+순서(주제별): 문서 정리 do-04·do-02·do-03·do-01 → 릴리스 op-04 → 이미지 op-06·op-07 → 서버 설치·업그레이드 op-10.
 
 <a id="do-04"></a>
 ## do-04 · 문서 재구성 · `docs/history/` · 한국어
@@ -76,3 +76,24 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 같이 고친 것(허브 10-30): `build_ship.sh` 코드 묶음 기본 위치 `output/ship/`(옛 `/var/tmp`는 Windows Git Bash에 없음) · `ship_stage.sh`가 실행 이미지(`pipeline-runtime`·`mcp-runtime`)와 `CODE_BUNDLE`(코드 묶음 + sha256)도 받음 · README §5-0 배포 단계 표(사용자 10-30).
 - 파일: `deploy/docker/Dockerfile.bake`, `deploy/release/{bake.sh,build_ship.sh,ship_stage.sh}`, `.gitattributes`, README §5-0, `docs/operations/release-and-patch.md` §1-1·§1-2, `docs/operations/server-guide.md` §0-1.
 - Status: done (10-30 `feature/bake-image`)
+
+<a id="op-10"></a>
+## op-10 · 서버 설치·업그레이드 절차 — 길 하나, podman 기본, 0.2.0 업그레이드·되돌리기
+- 이유(허브 전체 점검, 사용자 10-31): 설치 절차가 여러 문서에 흩어져 서로 다르고, 스크립트는 settings를 읽기 전에 docker를 기본으로 잡는다. 0.2.0은 DB·EDW·전체 재처리가 함께 바뀌는데 업그레이드·되돌리기 절차가 없다.
+- 무엇:
+  - 설치 길은 하나 — README §5-0·§5-3에만 쓰고, 다른 문서(server-guide·env-guide·release)는 거기로 링크한다.
+  - 컨테이너 도구 기본은 podman(서버 기본 — CLAUDE.md §2).
+  - 0.2.0 업그레이드·되돌리기 절차를 쓴다.
+- 고칠 곳(허브 점검 10-31 — 줄 번호는 그날 기준):
+  - settings를 읽기 전에 `DOCKER=docker`로 잡는 스크립트 5개 — `deploy/host/scripts/settings_env.sh:48`, `mcp_up.sh:12`, `run_tool.sh:20`, `trigger.sh:42`, `deploy/release/ship_stage.sh:21` → `$(command -v podman || echo docker)`.
+  - `run_docs.py`에 `--code <dir>` 인자와 `DOCKER` 설정이 필요(지금은 맨 `docker exec`).
+  - `deploy/host/compose/compose.pipeline.yml`의 `${INDEX_CONF_DIR:?}`가 모든 podman-compose 실행을 깨뜨림 — `index_a`/`index_b` 정리는 [etl.md#pl-19](etl.md#pl-19)와 함께.
+  - `load.sh`가 저장소에 없고, `ship_stage.sh`의 저장소 이름·폴더 구조가 README와 다름.
+  - README:439 앞에 `mkdir -p /srv/rag/code`가 필요.
+  - env-guide의 check_env 명령 → `run_tool.sh`로.
+  - `NIGHTLY_PUBLISH` 0/1 어긋남 — [etl.md#pl-26](etl.md#pl-26)이 이 칸을 지운다(링크만).
+  - 재부팅 대비 `podman-restart.service`, parse 서비스 keepalive.
+  - podman-compose 폐쇄망 설치가 문서에 없음.
+- 0.2.0 업그레이드에 넣을 것: 이미지 안 `migrate` + `chown 10001`·권한 640(settings.yaml), 되돌리기는 `settings.yaml.0.1.0` 복원, DB 백업 → `migrate check` → `up`, 전체 재처리 시간·디스크 계획, 그동안 밤 타이머 멈춤.
+- 파일: `README.md` §5, `docs/operations/{server-guide,env-guide}.md`, `deploy/host/scripts/`, `deploy/host/compose/`, `deploy/host/systemd/`, `deploy/release/ship_stage.sh`.
+- Status: todo — 0.2.0.
