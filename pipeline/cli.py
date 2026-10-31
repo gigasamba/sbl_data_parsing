@@ -600,7 +600,7 @@ def _registry_new_names(out_dir, names):
 def _no_registry():
     """문서 대장을 못 열 때(pl-32 사용자 10-30 — 실행을 넘는 문서 고르기는 문서 대장 하나만): run_mode prod(서버)는 종료 4(인프라 없음 —
     전체를 다시 파싱하지 않음), 그 밖(PC·DOC_REGISTRY=0)은 이력 없이 받은 목록 그대로(None) + 로그 한 줄."""
-    if C.cfg().store.run_mode == "prod":
+    if C.cfg().store.run_mode == "prod" or C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)도
         print("[parse] 문서 대장(doc_registry)을 열지 못함 — run_mode prod는 멈춤(종료 4, 전체 재파싱 안 함)", file=sys.stderr, flush=True)
         raise SystemExit(4)
     print("[parse] 문서 대장 없음(DOC_REGISTRY=0 또는 연결 안 됨) — 이력 없이 받은 목록 그대로 처리", flush=True)

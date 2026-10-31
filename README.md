@@ -2,7 +2,7 @@
 
 사내 문서(PDF, Office, HWPX, 이미지, 메일 등)를 파싱하고, 청킹·임베딩해 PostgreSQL(pgvector)에 적재한 뒤, **검색 MCP 서버**로 근거를 찾아 주는 파이프라인이다. 개발은 macOS·Windows PC에서 하고, 실행은 내부망(폐쇄망) RHEL 서버의 Docker/podman 이미지 2개로 한다.
 
-> 이 저장소는 서버 코드 사본을 리팩토링한 결과다(10-26~~10-29, 단계 S0~~S12). 무엇이 왜 바뀌었는지는 [docs/history/refactor_plan.md](docs/history/refactor_plan.md)에, **서버에 처음 배포하기 전에 사람이 할 일**은 [refactor.md](refactor.md) 맨 앞 "최종 — 사람이 할 일"에 있다.
+> 이 저장소는 서버 코드 사본을 리팩토링한 결과다(10-26~~10-29, 단계 S0~~S12). 무엇이 왜 바뀌었는지는 [docs/history/refactor_plan.md](docs/history/refactor_plan.md)에, **서버에 처음 배포하기 전에 사람이 할 일**은 [refactor.md](docs/refactoring/refactor.md) 맨 앞 "최종 — 사람이 할 일"에 있다.
 
 **목차**
 
@@ -140,12 +140,11 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 ├─ tests/               server/(이미지에 포함, 배포 판정) · general/(PC 전용) · runner.py
 ├─ validation/          PC 전용 검증 도구 — search_ui/(검증 페이지) · e2e/(평가·비교, answer_gen)
 ├─ valid_env/           PC 전용 데이터 — object_storage/(합성 테스트 문서, 버킷 모양) · edw/(합성 EDW sqlite) · answer_test/(답변 점검 agent) · docker/(PC 테스트 Docker)
-├─ docs/                문서(지도: docs/index.md) — PRD.md·prd/ · operations/ · architecture/ · history/
+├─ docs/                문서(지도: docs/INDEX.md) — PRD.md·prd/ · operations/ · architecture/ · refactoring/(refactor.md — 서버·사람 확인 사항 C-xx · "최종 — 사람이 할 일") · history/
 ├─ VERSION              두 이미지 공통 버전(SemVer)
 ├─ settings.sample.yaml 모든 설정 항목·코드 기본값·설명 — 복사해 settings.yaml로(자동 생성 — 손으로 고치지 않음)
 ├─ settings.yaml        PC 로컬 설정(git 제외 · 권한 600 — 직접 만듦)
 ├─ pyproject.toml · requirements-dev.txt · .githooks/   PC 개발 도구(ruff, mypy, pytest)와 커밋 전 점검 hook
-├─ refactor.md          서버·사람이 확인할 사항(C-xx) · "최종 — 사람이 할 일"
 └─ CLAUDE.md            개발 규칙(폴더 배치 · 경로 · 설정 · 핑거프린트 · 커밋 전 점검)
 ```
 
@@ -384,7 +383,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 서버는 **이미지 2개 · 코드 폴더**(`/srv/rag/code/live`) **· 설정 파일**(`/srv/rag/env/settings.yaml`) **· 결과 폴더**(`RAG_OUT`, 예: `/srv/rag/output`)로 동작한다. 서버 명령은 모두 코드 폴더 루트에서 실행한다.
 
-> **이번 리팩토링 버전(0.1.0 — 첫 배포)은 [refactor.md](refactor.md) 맨 앞 "최종 — 사람이 할 일"의 순서(①검토 → ②배포 전 → ③배포 때 → ④배포 후)를 그대로 따른다.** 핑거프린트가 모두 바뀌어 서버 문서 전체를 다시 파싱해야 하고(재파싱 시간 산정 C-08이 먼저), 설정 이관 · DB 버전 기록 · 옛 컨테이너와 systemd 정리가 함께 필요하다.
+> **이번 리팩토링 버전(0.1.0 — 첫 배포)은 [refactor.md](docs/refactoring/refactor.md) 맨 앞 "최종 — 사람이 할 일"의 순서(①검토 → ②배포 전 → ③배포 때 → ④배포 후)를 그대로 따른다.** 핑거프린트가 모두 바뀌어 서버 문서 전체를 다시 파싱해야 하고(재파싱 시간 산정 C-08이 먼저), 설정 이관 · DB 버전 기록 · 옛 컨테이너와 systemd 정리가 함께 필요하다.
 
 ### 5-0. 배포 단계 — 어디서 어디로, 어떤 이미지·코드로(op-06·op-07, 사용자 10-30)
 
@@ -653,9 +652,9 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 | 문서                                                                           | 내용                                                                     |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | [docs/PRD.md](docs/PRD.md) · [docs/prd/](docs/prd/)                          | **기능 요건** — 카테고리 6개(etl·parse·mcp·settings·test·doc)의 기능·목적·관련 파일, 카테고리별 묶음 표(끝난 것 포함) · 파일 끝에 요건과 다른 코드·안 쓰는 코드·꺼진 기능 |
-| [docs/index.md](docs/index.md)                                               | 문서 지도                                                                  |
+| [docs/INDEX.md](docs/INDEX.md)                                               | 문서 지도                                                                  |
 | [CLAUDE.md](CLAUDE.md)                                                       | 개발 규칙 · 로컬 하네스 · 점검 명령 · 핑거프린트 기준값                                     |
-| [refactor.md](refactor.md)                                                   | 서버·사람이 확인할 사항(C-xx) · **"최종 — 사람이 할 일"**(첫 배포 순서)                      |
+| [refactor.md](docs/refactoring/refactor.md)                                                   | 서버·사람이 확인할 사항(C-xx) · **"최종 — 사람이 할 일"**(첫 배포 순서)                      |
 | [docs/operations/server-guide.md](docs/operations/server-guide.md)           | 서버 설치 · 운영 · 문제 해결                                                     |
 | [docs/operations/release-and-patch.md](docs/operations/release-and-patch.md) | 버전 · 빌드 · 전송 · 오버레이 패치 · DB 버전 관리(migrate) · 배포 판정                     |
 | [docs/operations/env-guide.md](docs/operations/env-guide.md)                 | 설정 항목 작성 가이드                                                           |

@@ -748,8 +748,8 @@ def apply_registry_status(db, registry_diff):
     독립 검토 10-08 반영: 그 틈에 다른 쓰기가 changed·deleted로 바꿨으면 0행 — 건너뜀, 옛 값으로 덮어쓰지 않음).
     새 표·열 없이 기존 status 열 그대로(STATUS_VALUES 불변, status 열에 'touched'라는 값을 넣지 않는다).
     반환: {"changed": 적용 행 수, "deleted": 적용 행 수, "touched": 적용 행 수(경합으로 0행 된 건 제외), "skipped": EDW에 없어 건너뛴 doc_key 수}."""
-    counts = {"changed": 0, "deleted": 0, "touched": 0, "skipped": 0}
-    for status in ("changed", "deleted"):
+    counts = {"changed": 0, "deleted": 0, "touched": 0, "skipped": 0}  # "deleted"는 늘 0(모양 유지)
+    for status in ("changed",):  # pl-12(사용자 10-30) — EDW에 'deleted'를 쓰는 길 없앰(관측에 없다고 지우지 않음)
         for doc_key in registry_diff.get(status) or []:
             rows = db.find_by_doc_key(doc_key)
             if not rows:
