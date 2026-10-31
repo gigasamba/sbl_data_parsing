@@ -108,6 +108,7 @@
   - G4: `source_system` 값은 `SFDC`·`CRMS`·`LAS`·`FAQ`로 통일, `-test`가 붙은 입력(`SFDC-test` 등)도 같은 뜻으로 받는다(두 도구 모두).
   - G5: "하드 필터 최소 1개"는 권고만 — 강제하지 않는다.
   - G6: `search` 속도 목표는 두지 않는다.
+  - G20(4차 grill(사용자 10-30)): `source_system`은 **필수, 값 하나** — 그 시스템의 gold 스키마만 찾는다([etl.md#pl-28](etl.md#pl-28)). 여러 시스템은 클라이언트가 여러 번 부른다.
   - G7 → 사용자 10-30 PRD grill C1·C2로 바뀜: 0.1.0(10-30 릴리스)에는 들어가지 않았고 0.2.0에 싣는다. 1.0 전에는 MINOR에서도 계약·스키마를 깰 수 있다(버전 규칙 — 운영이 안정되면 1.0.0).
 - 결정(사용자 10-30 PRD grill): A9 — 필터·출력 축소 기준은 사용자 로컬 `reference/`(git 밖, 비밀값 포함 — 커밋·인용 금지)의 MCP 규약 문서를 보고 운영 최신판으로 이 행에 옮겨 적는다(필터 이름·뜻·출력 칸만, 접속 정보·회사 데이터 없이). D1 — MCP 근거의 `file_path` 없애기는 이 행 하나로 합친다(mc-01·pl-25·op-04에는 이 행 링크만).
 - Status: todo — 순서는 허브가 정함([etl.md#pl-32](etl.md#pl-32)).
@@ -117,6 +118,7 @@
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) M2·T3): 두 도구를 더한다(운영 명세 `05_mcp_tools_schema.md` §6). 새 도구 — 계약 추가라 검토 등급 A.
 - 파일: `mcp_server/routers/`, `mcp_server/services/`(새 파일).
 - 결정(2차 grill(사용자 10-30, 원본은 git 밖)): G1 — 목록은 EDW `ParsingMeta`의 `doc_class`·`sf_op_id`·`parsed_at`·`rep_engine`·`created_at`(G9 — `created_since`/`created_until` 거르기·출력, `get_doc_fulltext` 생성 범위 가드)을 읽는다(운영 계약 그대로, [etl.md#pl-25](etl.md#pl-25)). G4 — `source_system` 통일·`-test` 별칭. G7 — 0.1.0에 함께 싣고 따로 MAJOR 없음.
+- 결정(G19·G20 — 4차 grill(사용자 10-30), 위 G1 부분을 뒤집음): 두 도구는 EDW `ParsingMeta`를 읽지 않는다. 목록·거르기(`doc_class`·`sf_op_id`·`created_since/until`)·출력은 **시스템별 gold `doc`**에서 읽는다 — `doc`에 `rep_key`(silver 위치)와 `parsed_at`·`rep_engine`을 복사해 둔다. `get_doc_fulltext`의 등록 시각 가드도 `doc.created_at`. `source_system`은 필수, 값 하나([etl.md#pl-28](etl.md#pl-28)). EDW 장애가 원문 도구에 영향을 주지 않는다.
 - 결정(사용자 10-30 PRD grill): C8 — 원문 전송 도구도 gold `doc.rep_key`를 읽는다(mc-15와 같음). C2 — 0.2.0.
 - Status: todo — 순서는 허브가 정함.
 
