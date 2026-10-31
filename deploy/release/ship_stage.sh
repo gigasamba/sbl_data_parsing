@@ -18,7 +18,7 @@ esac
 if [ "$#" -gt 0 ]; then TARGETS=("$@"); else TARGETS=(pipeline mcp); fi
 OUT="${OUT:-output/ship}"
 CHUNK="${CHUNK:-95m}"
-DOCKER="${DOCKER:-docker}"
+DOCKER="${DOCKER:-$(command -v podman >/dev/null 2>&1 && echo podman || echo docker)}"   # op-10 — podman 우선(bake.sh와 같음)
 
 repo_of() {    # 사용자 10-14: 이미지 저장소는 하나(mono repo) — 대상 검사만 하고 같은 저장소 이름을 돌려준다
   case "$1" in

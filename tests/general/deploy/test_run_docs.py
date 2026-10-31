@@ -53,6 +53,16 @@ def _inner(cmd):
     return shlex.split(cmd)[-1]
 
 
+def test_container_command_from_setting():
+    """op-10 — 컨테이너 명령은 DOCKER(설정 ops.host.docker, 없으면 podman·docker)에서 — 고정 docker 글자가 남지 않음."""
+    old = RD.DOCKER
+    try:
+        RD.DOCKER = "podman"
+        assert all(v.startswith("podman exec ") for v in _built().values()), _built()
+    finally:
+        RD.DOCKER = old
+
+
 def test_settings_only_via_set():
     """컨테이너 안 python에 설정 칸 이름을 env(`X=값 python`·`X=값 … && python`)로 주지 않는다 — 모두 --set(VS8b U-1: S7e2부터 env의 옛 이름은
     안 읽음). env로 남는 것은 라이브러리(PYTHON*)·문서 표지(RUN_DOCS_DOC)뿐."""

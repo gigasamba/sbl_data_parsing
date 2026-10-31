@@ -39,6 +39,9 @@ ROOT = Path(__file__).resolve().parent
 #   작업 폴더(진행 기록 batch_progress/·batches/)는 pipeline.host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더(옛 test_space/rfp_all_output)는
 #   common.host.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로, C-29 ⓑ를 코드로 보장 — 사용자 Q8 ⑤).
 TEST = PROG = DOCSPACE = DOCFLOW = WARM = ENVFILE = PATCH_CODE = None  # configure()가 채움
+DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.docker(없으면 podman, 그것도 없으면 docker — op-10)로 채움
+CODE_DIR = None  # --code(설정 배치 모듈 layout.py를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, op-10)
+DEFAULT_CODE = Path("/srv/rag/code/live")  # 코드 폴더 기본 배치(common.host.patch_code 기본값과 같음)
 _EDW: dict = {}  # parsing-meta EDW 접속(호스트 pymssql — edw_list·edw_done_keys)
 WARM_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # warm 파일 이름의 원천 버킷 · 문서 수 세기(psql)
 SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거부
@@ -72,13 +75,15 @@ def _layout():
     """설정 배치 모듈(common/config/layout.py — 표준 라이브러리만)을 파일로 읽음 — 호스트 python은 pydantic이 없어 common 패키지를 import하지 않는다."""
     import importlib.util
 
-    # 저장소 배치(<루트>/common) · 서버 코드 폴더 배치(<루트>/app/deploy/common — make_patch 오버레이)
+    # 찾는 순서(op-10): --code 폴더 > 이 스크립트가 든 코드 폴더 > 기본 배치 /srv/rag/code/live — 각각 저장소 배치(<루트>/common)·
+    # 서버 코드 폴더 배치(<루트>/app/deploy/common — make_patch 오버레이)
+    roots = [r for r in (CODE_DIR, ROOT.parents[2], DEFAULT_CODE) if r is not None]
     path = next(
-        (p for p in (ROOT.parents[2] / "common", ROOT.parents[2] / "app" / "deploy" / "common") if (p / "config" / "layout.py").is_file()),
+        (p for r in roots for p in (Path(r) / "common", Path(r) / "app" / "deploy" / "common") if (p / "config" / "layout.py").is_file()),
         None,
     )
     if path is None:
-        sys.exit("run_docs: common/config/layout.py 없음 — 코드 폴더(저장소 또는 app/deploy)에서 실행")
+        sys.exit("run_docs: common/config/layout.py 없음 — --code <코드 폴더>(기본 /srv/rag/code/live)로 코드 폴더를 알려 줄 것")
     spec = importlib.util.spec_from_file_location("settings_layout", path / "config" / "layout.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -119,6 +124,7 @@ def work_dir(doc):
 def configure(settings_file=None):
     """서버 settings.yaml을 한 번 읽어 모듈 값(경로·접속)을 채운다 — 문제 목록(빈 목록이면 통과). 값은 찍지 않는다."""
     global TEST, PROG, DOCSPACE, DOCFLOW, WARM, ENVFILE, PATCH_CODE, MCP_JOBS_DIR, WARM_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA
+    global DOCKER
     doc, err = read_settings(settings_file)
     if err:
         return [err]
@@ -138,7 +144,10 @@ def configure(settings_file=None):
     DOCFLOW = DOCSPACE / "docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     WARM = DOCSPACE / "_warm"  # SOURCE_WARM 대기열 저장소
     # 컨테이너가 마운트하는 코드 폴더 — compose.patch*.yml·systemd·mcp_up.sh와 같은 칸(common.host.patch_code — 기본 배치 /srv/rag/code/live).
-    PATCH_CODE = Path(_yget(doc, "common.host.patch_code") or "/srv/rag/code/live")
+    PATCH_CODE = Path(_yget(doc, "common.host.patch_code") or DEFAULT_CODE)
+    DOCKER = _yget(doc, "common.host.docker") or (
+        "podman" if shutil.which("podman") else "docker"
+    )  # op-10 — 셸 스크립트와 같은 순서(env 대신 설정)
     jobs = _yget(doc, "mcp.host.jobs_dir")
     MCP_JOBS_DIR = Path(jobs) if jobs else DOCSPACE / "mcp_parse" / "jobs"
     rdb = _yget(doc, "common.connections.rdb")  # 조회만 — 읽기 계정(사용자 10-29 ops.md#op-03)
@@ -200,7 +209,7 @@ def sets(*pairs):
 def warm_cmd(seq):
     """문서 1개 warm(프리페치) — 파싱 컨테이너 안 source warm."""
     return (
-        f"docker exec {PARSE_C} bash -c 'mkdir -p /app/output/_warm && cd /app && "
+        f"{DOCKER} exec {PARSE_C} bash -c 'mkdir -p /app/output/_warm && cd /app && "
         f"PYTHONPATH=/app/deploy "
         f"python -m pipeline.extract.source{sets('SOURCE_WARM=/app/output/_warm')} warm --csv /app/output/docflow/{seq}/batch.csv'"
     )
@@ -246,7 +255,7 @@ def parse_cmd(seq, chan, scan, gate):
         *((f"STACK_VERSION={STACK_VER}",) if STACK_VER else ()),
     )
     return (
-        f"docker exec {PARSE_C} bash -c 'cd /app && "
+        f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && "
         f"echo [envcheck] gate={gate} 채널={chan}; "
         f"{DOC_MARK}={inside} {LIB_ENV} "
         f"python -m pipeline.cli{doc} parse --source rdb:csv:{inside}/batch.csv{scan_eng}'"
@@ -261,7 +270,7 @@ def struct_cmd(seq):
         *EMBED_SET, "FILE_META_PATH=/app/output/file_meta_new.jsonl"
     )  # 묶음·적재 python에(stackcfg는 이 칸을 안 읽어 뺌 — 덮기 파일 하나 덜, 리뷰 S9)
     return (
-        f"docker exec {STRUCT_C} bash -c 'cd /app && "
+        f"{DOCKER} exec {STRUCT_C} bash -c 'cd /app && "
         f"PYTHONPATH=/app/deploy "
         f"python -m pipeline.transform.structure.build_bundle{st} --parse-dir {inside}/parse"
         f"{f' --stack-version {STACK_VER}' if STACK_VER else ''} --out {inside}/bundle && "
@@ -274,7 +283,7 @@ def publish_cmd(seq):
     """문서 1개 publish(OS + EDW — 파싱 컨테이너)."""
     inside = f"/app/output/docflow/{seq}"
     return (
-        f"docker exec {PARSE_C} bash -c 'cd /app && "
+        f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && "
         "PYTHONPATH=/app/deploy python -m pipeline.load.publish_parse_result"
         f"{sets('PM_BUCKET_SKIP_OVERLAP_CHECK=1')} "  # 실행 방침(접속 값 아님) — 버킷·접두·표·EDW·Object Storage는 컨테이너가 설정 파일에서(S7e1 Q8)
         f"--out {inside} --source-system FileStorageMap --apply "
@@ -287,7 +296,7 @@ def sweep_cmd(seq):
     통째로 같을 때만(-zx — 리뷰 S9: 앞부분만 맞추면 doc 1 정리가 doc 10~19·100…까지 끔, 옛 PIPE_OUT_ROOT 때부터)."""
     inside = f"/app/output/docflow/{seq}"
     return (
-        f'docker exec {PARSE_C} bash -c "for p in /proc/[0-9]*; do '
+        f'{DOCKER} exec {PARSE_C} bash -c "for p in /proc/[0-9]*; do '
         f"grep -aqzx '{DOC_MARK}={inside}' \\$p/environ 2>/dev/null && kill \\${{p##*/}} 2>/dev/null; done\""
     )
 
@@ -411,7 +420,7 @@ def stack_version():
     """엔진 구성 활성 판 번호 — 시작 때 한 번(이 실행의 파싱·구조화가 모두 이 판, pl-32). 파싱 컨테이너 안 판 표에서(PC 파일이면 빈 글자).
     못 읽으면(판 표 없음 — 종료 4, 없는 엔진 — 종료 2) 시작하지 않는다."""
     rc, out, err = sh(
-        f"docker exec {PARSE_C} bash -c 'cd /app && PYTHONPATH=/app/deploy python -m pipeline.stackcfg --version'", timeout=120
+        f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && PYTHONPATH=/app/deploy python -m pipeline.stackcfg --version'", timeout=120
     )
     last = next((ln.strip() for ln in reversed((out or "").splitlines()) if ln.strip()), "")
     if rc != 0 or (last and not last.isdigit()):
@@ -479,7 +488,7 @@ def write_envfile():
     """data-pipeline-parse 컨테이너(S6b — 옛 data-parsing) env → docker run용 --env-file. 여러 줄 값(PM_PATH_MAP)·HOSTNAME 제외 —
     파싱 컨테이너는 publish를 안 돌고, publish는 docker exec(compose env 그대로)로 돌리므로 문제없음."""
     rc, out, _ = sh(
-        "docker inspect " + PARSE_C + " --format '{{json .Config.Env}}'", timeout=30
+        f"{DOCKER} inspect " + PARSE_C + " --format '{{json .Config.Env}}'", timeout=30
     )  # docker 템플릿 {{…}} 그대로(f-string 아님)
     envs = json.loads(out.strip())
     ENVFILE.parent.mkdir(parents=True, exist_ok=True)
@@ -547,7 +556,7 @@ def classify_doc(seq, row, cache=None):
     elif ext in probe_ext:
         bin_name = hashlib.sha1(f"{WARM_BUCKET}|{row['s3_key']}".encode()).hexdigest() + ".bin"
         rc, out, _ = sh(
-            f"docker exec {PARSE_C} python3 /app/deploy/pipeline/extract/docflow_probe.py /app/output/_warm/{bin_name}", timeout=60
+            f"{DOCKER} exec {PARSE_C} python3 /app/deploy/pipeline/extract/docflow_probe.py /app/output/_warm/{bin_name}", timeout=60
         )
         probe = next((ln.strip() for ln in reversed((out or "").splitlines()) if ln.strip() in ("heavy", "light")), "heavy")
         if ext == ".pdf" and probe == "heavy":
@@ -664,14 +673,14 @@ def cleanup_doc(seq, row):
     if NO_CLEANUP:
         return
     bin_name = hashlib.sha1(f"{WARM_BUCKET}|{row['s3_key']}".encode()).hexdigest() + ".bin"
-    sh(f"docker exec {PARSE_C} bash -c 'rm -rf /app/output/docflow/{seq} ; rm -f /app/output/_warm/{bin_name}'", timeout=60)
+    sh(f"{DOCKER} exec {PARSE_C} bash -c 'rm -rf /app/output/docflow/{seq} ; rm -f /app/output/_warm/{bin_name}'", timeout=60)
     shutil.rmtree(DOCFLOW / f"{seq}", ignore_errors=True)
     (WARM / bin_name).unlink(missing_ok=True)
 
 
 def pg_count():
     rc, out, _ = sh(
-        f"docker exec {PG_CONTAINER} psql -U {PG_USER} -d {PG_DB} -Atc "
+        f"{DOCKER} exec {PG_CONTAINER} psql -U {PG_USER} -d {PG_DB} -Atc "
         f"'SELECT (SELECT count(*) FROM {PG_SCHEMA}.doc), (SELECT count(*) FROM {PG_SCHEMA}.chunk)'",
         timeout=60,
     )  # S7e1 — 설정 칸(옛 고정 postgres·pgvector·category)
@@ -706,7 +715,7 @@ def code_layout_problems(code=None, containers=(PARSE_C, STRUCT_C)):
     else:
         log(f"[안내] 코드 폴더 {code}(PATCH_CODE)를 이 호스트에서 볼 수 없음 — 폴더 확인은 건너뛰고 컨테이너 확인만")
     for c in containers:
-        rc, _, _ = sh(f"docker exec {c} test -f /app/deploy/{CODE_MARKER.as_posix()}", timeout=60)
+        rc, _, _ = sh(f"{DOCKER} exec {c} test -f /app/deploy/{CODE_MARKER.as_posix()}", timeout=60)
         if rc != 0:
             probs.append(
                 f"컨테이너 {c}에 /app/deploy/{CODE_MARKER.as_posix()} 없음(rc {rc}) — 새 이미지·compose.patch.yml 마운트로 다시 띄웠는지 확인"
@@ -760,7 +769,7 @@ def _safe_cleanup(seq, row):
 
 
 def main():
-    global WARM_TARGET, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE, STRUCT_BACKLOG, STACK_VER
+    global WARM_TARGET, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE, STRUCT_BACKLOG, STACK_VER, CODE_DIR
     ap = argparse.ArgumentParser()
     ap.add_argument("--start-offset", type=int, default=1072)
     ap.add_argument(
@@ -778,7 +787,13 @@ def main():
     ap.add_argument("--skip-done", action="store_true", help="EDW ParsingMeta에 ok·partial로 이미 끝난 문서는 건너뜀(재실행 시간 절약)")
     ap.add_argument("--no-cleanup", action="store_true")
     ap.add_argument("--settings", default=None, help="서버 settings.yaml(기본 SETTINGS_FILE 또는 $SERVER_ENV_DIR/settings.yaml — S7e1)")
+    ap.add_argument(
+        "--code",
+        default=None,
+        help="코드 폴더(설정 배치 모듈을 찾음 — 기본: 이 스크립트가 든 코드 폴더, 없으면 /srv/rag/code/live · op-10)",
+    )
     a = ap.parse_args()
+    CODE_DIR = Path(a.code) if a.code else None
     bad = configure(a.settings)
     if bad:
         for msg in bad:
