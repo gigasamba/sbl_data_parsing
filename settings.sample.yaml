@@ -84,6 +84,7 @@ common:
       connect_timeout: 10  # PostgreSQL 연결 시도 제한 시간 · 기본 10 · 값: 0 이상 정수(초)
       pool_max: 8  # 검색 MCP PostgreSQL 연결 풀 최대 연결 수 · 기본 8 · 값: 0 이상 정수
       standin_dir:  # PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더 · 값: 경로
+      standin_schema: ai  # 로컬 대체 DB(sqlite)의 스키마 이름 · 기본 ai · 값: 글자
     rdb:
       connect_kwargs:  # EDW pymssql 연결에 더할 추가 인자(JSON 객체 — TLS·로그인 시간 등) · 값: 비밀 글자 [비밀]
       port: 1433  # EDW 포트 · 기본 1433 · 값: 1~65535

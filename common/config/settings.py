@@ -1311,6 +1311,7 @@ class CommonConnectionsPg(Section):
     port: Port | None = F(None, "PG_PORT", "PostgreSQL 포트(필수 — op-09)")
     db_schema: str | None = F(None, "PG_SCHEMA", "pgvector 기본 스키마 이름(소문자·숫자·_ — 필수, op-09)")
     standin_dir: str | None = F(None, "PG_STANDIN_DIR", "PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더")
+    standin_schema: str | None = F("ai", "PG_STANDIN_SCHEMA", "로컬 대체 DB(sqlite)의 스키마 이름 — PG_SCHEMA가 비었을 때(PC 전용, op-09)")
     user: str | None = F(None, "PG_USER", "PostgreSQL 접속 계정 이름(필수 — op-09)")
 
 

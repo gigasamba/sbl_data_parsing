@@ -57,7 +57,8 @@ def has_conn():
 
 
 def _standin_schema(pg_schema=None):
-    s = pg_schema or cfg().connections.pg.db_schema or "ai"
+    st = cfg().connections.pg
+    s = pg_schema or st.db_schema or st.standin_schema  # op-09 — 기본값은 설정 모델
     if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", s):
         raise SystemExit("PG_SCHEMA는 소문자·숫자·_ 만")
     return s
