@@ -11,6 +11,7 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 무엇: 문서를 줄이고 짧게, 결정과 요건은 남김. 긴 문서는 소제목을 둔다. 사람이 읽는 문서는 한국어. `docs/history/`에 이력(refactor_plan, refactor.md의 낡은 C 항목 — C-35, C-41 합성 부분, C-63, C-05/06, C-18/20/22/23/24/26/28, C-25/30 — run_docs 버그·속도 이력, 패치 이력, 릴리스 §8–9)을 둔다. `docs/requirements/*`는 PRD로 옮긴다. CLAUDE.md에서 규칙이 아닌 내용은 PRD/README/INDEX로 옮긴다. PRD와 겹치는 C 항목(C-31/32/33/50/53/58)은 "PRD xx-nn으로 옮김" 한 줄과 남은 서버 확인만 남긴다. 크기 상한은 안내일 뿐.
 - 1부(10-30): PRD를 카테고리로 — ID는 그대로, ID마다 한글 이름(`<a id>` + `## pl-24 · 이름`), `docs/PRD.md`와 `docs/prd/`를 카테고리 파일 6개(etl, parse, mcp, settings, test, doc)로 나누고 gaps.md는 각 파일 끝 "코드와 다른 점 · 지울 코드"로 흩음.
 - 2부(10-30, `feature/doc-cleanup-2`): CLAUDE.md는 규칙·하네스 명령만(기준선·핑거프린트 값 → [test.md#e2-02](test.md#e2-02), 옛 절 번호 → `docs/INDEX.md` Glossary, 지난 기록 → `docs/history/`). `docs/requirements/run_docs_req.md` → [etl.md#pl-10](etl.md#pl-10) 요약 + `docs/history/run_docs_req.md` 원문. `docs/operations/*` 압축(절 번호 유지 — 코드 주석이 가리킴). `refactor_plan.md`·run_docs 버그·속도 이력·patch-history·release §8–9 → `docs/history/`.
+- 결정(사용자 10-31 grill): 3부 카테고리 재편(etl·parse → extract·transform·load, settings·실행 관리 → ops — ID 그대로, 위치·링크만)은 열린 문서 브랜치(op-08, prd-grill-1031, gold-per-system)가 develop에 들어간 직후 한 PR로 한다. 새 행(op-08, pl-42·43·44)도 그때 배정한다. -3a의 pl-03은 그 뒤 rebase. CLAUDE.md §6-5 스모크 경로는 S5(10-30)로 이미 고침 — 확인 대기 아님.
 - Status: dev — 1부 병합(PR #21). 2부는 `feature/doc-cleanup-2`. CLAUDE.md §6-5(`list-smoke10`)는 사용자 확인 대기로 그대로.
 
 <a id="do-02"></a>
