@@ -75,7 +75,7 @@ def selftest():
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
             warn_if_no_client_roster([{"client": None}, {"client": ""}])
-        assert "GLOSSARY_DIR" in buf.getvalue() and "WARNING" in buf.getvalue(), buf.getvalue()
+        assert "ops.paths.glossary_dir" in buf.getvalue() and "WARNING" in buf.getvalue(), buf.getvalue()
 
         buf = io.StringIO()  # 명부 없어도 client가 하나라도 있으면 경고 안 함
         with contextlib.redirect_stderr(buf):

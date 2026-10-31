@@ -32,15 +32,13 @@ from common.config.settings import (  # noqa: F401 — token_text: 토큰 규칙
 
 
 class McpSearchAgg(Section):
-    REMOVED = frozenset(
-        {"llm", "llm_timeout", "fx", "route", "llm_min"}
-    )  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset({"llm", "llm_timeout", "fx", "route", "llm_min"})  # 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
     text_max_rows: int | None = F(30, "SEARCH_AGG_TEXT_MAX_ROWS", "집계 근거 text에 붙이는 표 행 상한(개)")
     text_max_src_rows: int | None = F(40, "SEARCH_AGG_TEXT_MAX_SRC_ROWS", "계약별 근거 행 상한(개)")
 
 
 class McpSearchClient(Section):
-    REMOVED = frozenset({"filter"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset({"filter"})  # 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
     hard: bool | None = F(False, "SEARCH_CLIENT_HARD", "고객 범위를 하드 격리(다른 고객 문서 제외) — 1이면 켬", on=("1",))
     strict: bool | None = F(False, "SEARCH_CLIENT_STRICT", "하드 격리에서 고객 미상 문서도 제외 — 1이면 켬", on=("1",))
 
@@ -108,7 +106,7 @@ class McpOutput(Section):
             "images",
             "max_image_px",
         }
-    )  # 사용자 10-29·10-30(e2-18 — 근거 이미지·그림 조회 지움) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    )  # 사용자 10-29·10-30(e2-18 — 근거 이미지·그림 조회 지움) — 지운 칸·절(남으면 경고만)
     evidence_paths: bool | None = F(
         True, "MCP_EVIDENCE_PATHS", "근거의 '파싱 결과 경로' 조회(AI.ParsingMeta) 스위치 — 0이면 시도 안 함", off=("0",)
     )
@@ -142,7 +140,7 @@ class McpSearch(Section):
             "rerank",
             "ocr_dpi",
         }
-    )  # 사용자 10-29 · ocr_dpi 10-30(op-08) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    )  # 사용자 10-29 · ocr_dpi 10-30(op-08) — 지운 칸·절(남으면 경고만)
     agg_today: str | None = F(None, "AGG_TODAY", "집계 질문의 '오늘' 기준일(YYYY-MM-DD) 고정 — 비우면 실제 오늘")
     agg_vocab_file: str | None = F(None, "AGG_VOCAB_FILE", "집계 지표 단서어 사전(agg_vocab.json)을 다른 경로로 지정")
     data_catalog: str | None = F(None, "DATA_CATALOG", "데이터 카탈로그(표·열 설명) JSON 경로 — 없으면 카탈로그 없이 동작")

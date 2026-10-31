@@ -10,6 +10,7 @@ import re
 import sqlite3
 import sys
 
+from common.config import layout as L
 from common.config.settings import cfg
 
 DEFAULT_TABLE = "AI.ParsingMeta"
@@ -317,5 +318,7 @@ def make_db(role):
     table = cfg().connections.parsing_meta.table  # 기본 'AI.ParsingMeta'(DEFAULT_TABLE과 같음) · 빈 값 그대로(blank=keep)
     _, miss = mssql.login(role, extra=False)
     if miss:
-        raise SystemExit(f"[parsing_meta] EDW 접속 정보 없음: {', '.join(miss)}(common.connections.rdb) 또는 RDB_SQLITE(시험)")
+        raise SystemExit(
+            f"[parsing_meta] EDW 접속 정보 없음: {', '.join(miss)}(settings.yaml {L.to_yaml('common.connections.rdb.host').rsplit('.', 1)[0]}.*) 또는 RDB_SQLITE(시험)"
+        )
     return MssqlStore(table, role)

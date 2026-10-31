@@ -46,6 +46,13 @@
 - **누가:** 서버에서는 `--by <사람>`을 늘 준다(없으면 컨테이너 안 이미지 계정 이름이 남음). 같은 body로 되돌리면(`set-stack` 결과가 옛 판과 같음) 새 행 없이 그 판을 활성으로 — 판 행의 이름·이유는 그대로, 이번 이유는 실행 기록(`runlog`)에만.
 - **판 번호로 넘김(code_fp — Q10 · pl-32 사용자 10-30, 사본 파일 `_stack/stack-v*.json`·`STACK_SNAPSHOT` 없앰):** 파이프라인 진입점(`pipeline.cli`·`mcp_parse_service`·`load.index`·`eval.server_checks`)이 활성 판을 읽어 엔진을 검사하고 판 번호를 설정 칸 `STACK_VERSION`으로 자식에 넘긴다(이미 받았으면 그 판). 층 파일 `run_all`·`attachments`와 `represent`·`build_bundle`은 `pipeline.config.stack()`으로 그 판을 판 표에서 읽는다(`represent`·`build_bundle`은 `--stack-version N`도 받음) — 서버에서 판 번호 없이 읽으면 거부(종료 2), PC는 파일. 판 표를 읽는 코드(`cfgtables`)는 층의 의존이 아니라 판을 더하거나 고쳐도 code_fp가 그대로다. `--stack <파일>`은 PC 실험(`validation/e2e/model_matrix`)·시험 전용으로 남고 생산 경로는 주지 않는다(둘 다 주면 종료 2). 색인 재빌드 지문은 판의 정규 바이트(`stackcfg.snapshot_bytes` — 옛 사본과 같은 바이트, 키 정렬). 판 번호·sha는 묶음 `meta.json`의 `stack_conf`에 남는다. `pipeline_version()`(회사 DB `AI.ParsingMeta.pipeline_version` 칸)은 그대로 git 커밋 — 판 번호를 붙이지 않는다. 다시 볼 것은 `refactor.md` C-50.
 
+### 3-1. 지원 형식 더하기(pl-42, 사용자 10-30)
+
+- PC 파일 `resources/config/pipeline_stack.json`에 `.jpeg`·`.tif`·`.tiff`·`.bmp`(`.png`·`.jpg`와 같은 `rapidocr_ko`·`qwen_vlm` — OCR 엔진은 `pipeline.extract.ocr_engine`을 켤 때만)·`.mhtml`(`.mht`와 같은 `mhtml`·`kreuzberg`)을 더했다. `.hwpx`(`hwpx`)는 원래 있었다. 엔진 코드는 바꾸지 않았다(다섯 형식 모두 엔진이 이미 읽음).
+- 판 1 시드(`resources/sql/0002_stack_seed.json`)는 고치지 않는다(배포한 판). 서버는 새 판으로 반영한다:
+  `dc run --rm load set-stack --parse ".jpeg=rapidocr_ko,qwen_vlm;.tif=rapidocr_ko,qwen_vlm;.tiff=rapidocr_ko,qwen_vlm;.bmp=rapidocr_ko,qwen_vlm;.mhtml=mhtml,kreuzberg" --reason "pl-42 확장자 추가"` → `show-stack --history 3`으로 확인(되돌리기 `set-stack --activate <앞 판> --reason …`).
+- 판에 없는 형식은 지금처럼 핵심 엔진 합집합으로 대체돼 돌기는 한다(+형식별 1회 로그) — 새 판을 넣어야 형식당 엔진 2개 규칙대로 돈다.
+
 ## 4. 메모 — 옛 `pipeline_stack.json` 메모 칸
 
 S8b 전 `resources/config/pipeline_stack.json`(10-07 `dev-v1`)에 있던 글자 그대로. 경로·이름은 그때 것이다(예: `deploy/data_parsing/engines/` → 지금 `pipeline/extract/engines/`).

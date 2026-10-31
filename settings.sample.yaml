@@ -4,8 +4,8 @@
 #   빈 칸 = 코드 기본값. 적힌 값은 코드 기본값보다 이긴다(나중에 코드 기본값이 바뀌어도 이 파일을 고치지 않으면 반영 안 됨).
 #   [PC·서버]·[서버만]·[PC만] = 그 카테고리를 채워야 하는 곳. 서버만 칸을 PC에서 비우면 그 기능(EDW·Object Storage·게시 등)만 꺼진다.
 #   [비밀] = settings.yaml에만 둠(출력·로그에 안 나옴). [파라미터] = 결과(파싱·청크·검색 순위)를 바꾸는 값.
-#   각 앱은 자기 칸만 읽는다(pipeline: required·common·extract·transform·load·ops · mcp: required·common·search·ops).
-#   같은 최상위 절을 두 번 쓰지 않는다(YAML은 뒤 절이 앞 절을 덮음). 옛 배치(최상위 common·pipeline·mcp) → python -m common.config.migrate.
+#   각 앱은 자기 칸만 읽는다(pipeline: required·common·extract·transform·load·ops·dev · mcp: required·common·search·ops·dev — tuning은 둘 다).
+#   같은 절·칸을 두 번 쓰면 시작 거부(앞 것이 조용히 사라지지 않게). 옛 배치(최상위 common·pipeline·mcp) → python -m common.config.migrate.
 #   한 번만 몇 칸 바꿀 때: 덮기 파일(base·overrides — python -m common.config.overrides). 옛 env 이름·판정 꼴: docs/operations/env-guide.md.
 
 

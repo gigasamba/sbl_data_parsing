@@ -78,7 +78,7 @@ class PipelineExtractAttach(Section):
 class PipelineExtractCache(Section):
     REMOVED = frozenset(
         {"keep_local_originals", "keep_engine_cache", "keep_raw_layer", "parse_keep_max_gb", "parse_tmp_max_gb"}
-    )  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    )  # 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
     parse_cache_max_gb: float | None = F(
         5.0, "PARSE_CACHE_MAX_GB", "재판독 중간 캐시 3종 합계 용량 상한(GB, 넘으면 오래된 것부터 삭제, 0=끔)"
     )
@@ -102,7 +102,7 @@ class PipelineExtractOcr(Section):
 
 
 class PipelineExtractPrepare(Section):
-    REMOVED = frozenset({"rotate_fast"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset({"rotate_fast"})  # 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
     link: str | None = F("auto", "PREPARE_LINK", "회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy")
     ocr: str | None = F("auto", "PREPARE_OCR", "회전 검토용 OCR 엔진 선택: auto|v1|v3(v3=rapidocr 3.x 강제)", blank="keep")
     rotate: bool | None = F(True, "PREPARE_ROTATE", "스캔 PDF 회전 검토(OCR 점수) 켬/끔 — 0이면 생략하고 그대로 복사", off=("0",))
@@ -139,7 +139,7 @@ class PipelineHostNightly(Section):
 
 
 class PipelineLoadPublish(Section):
-    REMOVED = frozenset({"upload_raw", "source_system"})  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset({"upload_raw", "source_system"})  # 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
     bucket: str | None = F(None, "PM_BUCKET", "publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소)")
     bucket_skip_overlap_check: bool | None = F(
         False, "PM_BUCKET_SKIP_OVERLAP_CHECK", "PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 — 1이면 생략", on=("1",)
@@ -153,7 +153,7 @@ class PipelineLoadPublish(Section):
 
 
 class PipelineServiceParseMcp(Section):
-    REMOVED = frozenset({"ocr"})  # 사용자 10-29 — PARSE_MCP_OCR를 pipeline.extract.ocr_engine으로 합침(남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset({"ocr"})  # 사용자 10-29 — PARSE_MCP_OCR를 pipeline.extract.ocr_engine으로 합침(남으면 경고만)
     job_timeout_sec: float | None = F(600.0, "PARSE_MCP_JOB_TIMEOUT_SEC", "parse MCP 서비스 작업 1건 제한 시간(초)")
     jobs_dir: str | None = F(None, "PARSE_MCP_JOBS_DIR", "parse MCP 서비스 작업 기록 폴더")
     max_mb: float | None = F(64.0, "PARSE_MCP_MAX_MB", "parse MCP 서비스가 받는 파일 크기 상한(MB)")
@@ -224,7 +224,7 @@ class PipelineTransformFigures(Section):
             "vector_box_diagram",
             "ocrvlm_prompt",
         }
-    )  # 사용자 10-30(pl-31 — ocr_vlm 엔진과 함께 지움) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    )  # 사용자 10-30(pl-31 — ocr_vlm 엔진과 함께 지움) — 지운 칸(남으면 경고만)
     ocr_fallback_min_chars: int | None = F(
         10, "FIG_OCR_FALLBACK_MIN_CHARS", "OCR 대체 사용 최소 의미 글자 수(미만이면 로고·워터마크로 보고 버림)"
     )
@@ -256,7 +256,7 @@ class PipelineTransformRepresent(Section):
             "reread",
             "shadow_max",
         }
-    )  # pl-34(10-30) — 재판독 P2·P3를 모두 지움(사용자 10-30, 옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    )  # pl-34(10-30) — 재판독 P2·P3를 모두 지움(사용자 10-30, 남으면 경고만)
     post: CsvText | None = F(
         None,
         "PARSE_POST",
@@ -270,7 +270,7 @@ class PipelineTransformRepresent(Section):
 class PipelineTransformStructure(Section):
     REMOVED = frozenset(
         {"edw_summary_llm", "bundle_keep_empty_fig", "chunk_head", "client_roster_seed", "draft_terms", "wiki_domain_phrase", "edw_embed"}
-    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐 · op-08 edw_embed → embed로 합침) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐 · op-08 edw_embed → embed로 합침) — 지운 칸(남으면 경고만)
     chunk_overlap: int | None = F(64, "CHUNK_OVERLAP", "고정 길이 청커(chunk_fixed512)의 청크 간 겹침 글자 수")
     chunk_size: int | None = F(None, "CHUNK_SIZE", "청크 목표 길이(글자) — 청커별 기본이 다름")
     chunk_table: str | None = F(None, "CHUNK_TABLE", "'rows'이면 큰 표를 행 묶음 단위로 쪼갬(그 외 값·미설정은 표를 통째로 둠)")
@@ -289,9 +289,7 @@ class PipelineTransformStructure(Section):
 
 
 class PipelineTransformVlm(Section):
-    REMOVED = frozenset(
-        {"fig_text_skip", "fig_kind", "fig_select"}
-    )  # 사용자 10-30(op-08) — 지운 칸(옛 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset({"fig_text_skip", "fig_kind", "fig_select"})  # 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
     deadline: float | None = F(360.0, "VLM_DEADLINE", "VLM 호출 1건 제한 시간(초)")
     fig_min_px: int | None = F(64, "VLM_FIG_MIN_PX", "이 값보다 짧은 변의 그림은 VLM 대상에서 제외(픽셀)")
     fig_ocr_max: int | None = F(8, "VLM_FIG_OCR_MAX", "문서당 그림 crop OCR 횟수 상한(비용 가드)")
@@ -312,7 +310,7 @@ class PipelineTransformVlm(Section):
 class PipelineDev(Section):
     REMOVED = frozenset(
         {"stream_test_crash", "parse_agent_fake", "parallel_test_crash"}
-    )  # 사용자 10-29 · parallel_test_crash 10-30(pl-35) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    )  # 사용자 10-29 · parallel_test_crash 10-30(pl-35) — 지운 칸·절(남으면 경고만)
     allow_common_mismatch: bool | None = F(
         False, "ALLOW_COMMON_MISMATCH", "앞 모듈 결과의 공통 코드 지문이 달라도 계속 진행할지(=1 계속 / 그 외 중단)", on=("1",)
     )
@@ -326,7 +324,7 @@ class PipelineDev(Section):
 class PipelineEval(Section):
     REMOVED = frozenset(
         {"diagram_raster_vlm", "phase_report_legacy", "e2e_qa_set", "e2e_questions"}
-    )  # 사용자 10-29 · e2e_* 10-30(op-08) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    )  # 사용자 10-29 · e2e_* 10-30(op-08) — 지운 칸·절(남으면 경고만)
     gold_draft_max_pages: int | None = F(30, "GOLD_DRAFT_MAX_PAGES", "정답 초안 생성(gold_draft)에서 문서당 처리할 쪽 수 상한(쪽)")
     gold_draft_mermaid_check: bool | None = F(
         True,
@@ -361,7 +359,7 @@ class PipelineExtract(Section):
             "disk_free_warn_gb",
             "engine_cache_warn_gb",
         }
-    )  # 사용자 10-29 — phase 없앰 · 10-30 auto_reparse_changed·parallel 지움(pl-35) · dedup_scan·ocr_gt_max·signal_ocr 지움(pl-34)(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    )  # 사용자 10-29 — phase 없앰 · 10-30 auto_reparse_changed·parallel 지움(pl-35) · dedup_scan·ocr_gt_max·signal_ocr 지움(pl-34)(남으면 경고만)
     doc_parallel: int | None = F(1, "PARSE_DOC_PARALLEL", "대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개)")
     engine_retry: int | None = F(1, "PARSE_ENGINE_RETRY", "엔진 별도 프로세스가 비정상 종료했을 때 바로 다시 시도할 횟수(회)")
     engine_scope: str | None = F(
@@ -457,7 +455,7 @@ class PipelineHost(Section):
 class PipelineLoad(Section):
     REMOVED = frozenset(
         {"bm25_stat_rebuild", "structure_target", "edw_load", "prune_force", "prune_min_ratio"}
-    )  # 사용자 10-29(prune_* — 적재가 안 지움, pl-13 · edw_load — EDW 벡터 경로 삭제, ops.md#op-03) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    )  # 사용자 10-29(prune_* — 적재가 안 지움, pl-13 · edw_load — EDW 벡터 경로 삭제, ops.md#op-03) — 지운 칸·절(남으면 경고만)
     bm25_threads: int | None = F(4, "BM25_THREADS", "BM25 항목(term,tf) 계산 병렬 스레드 수(개)")
     edw_path_prefix: str | None = F(None, "EDW_PATH_PREFIX", "저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치)")
     index_lock_stale_sec: float | None = F(21600.0, "INDEX_LOCK_STALE_SEC", "색인 빌드 잠금 파일을 죽은 빌드로 보고 회수하는 경과 시간(초)")
@@ -477,7 +475,7 @@ class PipelineNight(Section):
 class PipelinePaths(Section):
     REMOVED = frozenset(
         {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot"}
-    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32 — 사본 파일 대신 판 번호) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32 — 사본 파일 대신 판 번호) — 지운 칸·절(남으면 경고만)
     file_meta_path: str | None = F(None, "FILE_META_PATH", "EDW 파일 메타 JSONL 경로(s3_key → 메타)")
     gold_dir: str | None = F(
         None,
@@ -503,7 +501,7 @@ class PipelinePaths(Section):
 class PipelineConnections(Section):
     REMOVED = frozenset(
         {"openviking", "graphiti"}
-    )  # 사용자 10-29 · graphiti 10-30(e2-18 — 외부 KG 어댑터 지움) — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    )  # 사용자 10-29 · graphiti 10-30(e2-18 — 외부 KG 어댑터 지움) — 지운 칸·절(남으면 경고만)
     rdb: PipelineConnectionsRdb = Field(default_factory=PipelineConnectionsRdb)
     secure_doc: PipelineConnectionsSecureDoc = Field(default_factory=PipelineConnectionsSecureDoc)
 
@@ -514,7 +512,7 @@ class PipelineService(Section):
 
 
 class PipelineTransform(Section):
-    REMOVED = frozenset({"agent"})  # 사용자 10-29 — 지운 칸·절(옛 서버 설정 파일에 남아 있어도 경고만 — 한 판 동안)
+    REMOVED = frozenset({"agent"})  # 사용자 10-29 — 지운 칸·절(남으면 경고만)
     figures: PipelineTransformFigures = Field(default_factory=PipelineTransformFigures)
     represent: PipelineTransformRepresent = Field(default_factory=PipelineTransformRepresent)
     structure: PipelineTransformStructure = Field(default_factory=PipelineTransformStructure)

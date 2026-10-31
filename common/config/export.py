@@ -12,6 +12,7 @@
 import argparse
 import sys
 
+from common.config import layout as L
 from common.config import settings as S
 from common.core.console import utf8_stdout
 
@@ -79,7 +80,7 @@ def _requested(file, sections):
     for sec in [*sections, "common.run_env"]:
         v = S._peek(full, sec)
         if v is not None:
-            S._set_path(doc, sec, v)
+            L.set_path(doc, sec, v)
     return doc, path, over
 
 

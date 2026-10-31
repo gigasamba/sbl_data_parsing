@@ -20,6 +20,7 @@
 import argparse
 import csv
 import datetime
+import functools
 import hashlib
 import json
 import os
@@ -34,10 +35,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 # S7e1(사용자 10-27 Q8 · D-028 ⑨ · C-29 ⑨) — 운영 접속 값·비밀·운영 고정값을 코드에서 지우고 서버 settings.yaml에서 읽는다(configure() — 시작 때 한 번).
 #   파일: --settings 또는 SETTINGS_FILE, 없으면 $SERVER_ENV_DIR/settings.yaml(기본 배치 /srv/rag/env). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
-#   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). common.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
+#   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). required.env.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
 #   docker exec로 부르는 컨테이너(data-pipeline-parse·structure)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
-#   작업 폴더(진행 기록 batch_progress/·batches/)는 pipeline.host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더(옛 test_space/rfp_all_output)는
-#   common.host.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로, C-29 ⓑ를 코드로 보장 — 사용자 Q8 ⑤).
+#   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.pipeline_host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더(옛 test_space/rfp_all_output)는
+#   required.deploy.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로, C-29 ⓑ를 코드로 보장 — 사용자 Q8 ⑤).
 TEST = PROG = DOCSPACE = DOCFLOW = WARM = ENVFILE = PATCH_CODE = None  # configure()가 채움
 _EDW: dict = {}  # parsing-meta EDW 접속(호스트 pymssql — edw_list·edw_done_keys)
 WARM_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # warm 파일 이름의 원천 버킷 · 문서 수 세기(psql)
@@ -68,6 +69,7 @@ def _yget(doc, path):
     return doc
 
 
+@functools.cache
 def _layout():
     """설정 배치 모듈(common/config/layout.py — 표준 라이브러리만)을 파일로 읽음 — 호스트 python은 pydantic이 없어 common 패키지를 import하지 않는다."""
     import importlib.util
@@ -95,15 +97,18 @@ def read_settings(settings_file=None):
         import yaml
     except ImportError:
         return {}, "호스트 python에 PyYAML이 없음 — pip install pyyaml(refactor.md C-09)"
+    lay = _layout()
     try:
-        doc = yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader) or {}  # BaseLoader(글자만, 객체 생성 없음)
+        # BaseLoader(글자만, 객체 생성 없음) + 같은 칸 두 번 거부(앱과 같게)
+        loader = lay.reject_dup_keys(type("Loader", (yaml.BaseLoader,), {}))
+        doc = yaml.load(path.read_text(encoding="utf-8"), Loader=loader) or {}
     except OSError as e:
         return {}, f"설정 파일을 읽지 못함: {path} ({e.strerror}) — --settings 또는 SETTINGS_FILE·$SERVER_ENV_DIR/settings.yaml"
-    except yaml.YAMLError:
-        return {}, f"설정 파일 YAML 형식 오류: {path}"
+    except yaml.YAMLError as e:
+        dup = getattr(e, "problem", "") or ""
+        return {}, f"설정 파일 YAML 형식 오류: {path}" + (f" — {dup}" if dup.startswith(lay.DUP_KEY) else "")
     if not isinstance(doc, dict):
         return {}, f"설정 파일 맨 위는 절(required·common·… tuning) 사전이어야 함: {path}"
-    lay = _layout()
     try:
         return lay.to_model(doc, str(path)), None
     except lay.LayoutError as e:
@@ -111,7 +116,7 @@ def read_settings(settings_file=None):
 
 
 def work_dir(doc):
-    """작업 폴더(진행 기록 batch_progress/·batches/) — pipeline.host.run_docs_dir, 비우면 이 스크립트 옆 test_space/(옛 자리). analyze_docflow.py도 씀."""
+    """작업 폴더(진행 기록 batch_progress/·batches/) — settings.yaml ops.pipeline_host.run_docs_dir(모델 pipeline.host.run_docs_dir), 비우면 이 스크립트 옆 test_space/(옛 자리). analyze_docflow.py도 씀."""
     work = _yget(doc, "pipeline.host.run_docs_dir")
     return Path(work) if work else ROOT / "test_space"
 
@@ -137,7 +142,7 @@ def configure(settings_file=None):
     DOCSPACE = Path(_yget(doc, "common.host.output_root"))  # 컨테이너 /app/output 공유 볼륨
     DOCFLOW = DOCSPACE / "docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     WARM = DOCSPACE / "_warm"  # SOURCE_WARM 대기열 저장소
-    # 컨테이너가 마운트하는 코드 폴더 — compose.patch*.yml·systemd·mcp_up.sh와 같은 칸(common.host.patch_code — 기본 배치 /srv/rag/code/live).
+    # 컨테이너가 마운트하는 코드 폴더 — compose.patch*.yml·systemd·mcp_up.sh와 같은 칸(ops.host.patch_code — 기본 배치 /srv/rag/code/live).
     PATCH_CODE = Path(_yget(doc, "common.host.patch_code") or "/srv/rag/code/live")
     jobs = _yget(doc, "mcp.host.jobs_dir")
     MCP_JOBS_DIR = Path(jobs) if jobs else DOCSPACE / "mcp_parse" / "jobs"
