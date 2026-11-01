@@ -4,8 +4,8 @@ PG_CONNECT_TIMEOUT(기본 10초) — 공유 PG가 방화벽·주소 문제로 �
 PG_POOL_MAX(기본 8, PGPool) — 공유 PG의 max_connections 여유 안에서 잡을 것(다른 팀 서비스도 같은 PG를 씀).
 10-14 함수별 분리(사용자) — connect()는 pipeline(load, 단일 연결)에서만, connect_pool()은 검색 MCP
 (상주 Retriever)에서만 써서 각각 pipeline/load/pg_load_connect.py·mcp_server/services/search/pg_mcp_connect.py(옛 data_retrieval/tools/pg.py)로 옮김(로직
-바이트 동일). has_conn·conf·_standin_schema·_warn_standin·PG·PGPool·vec은 두 전환점이 같이 쓰고 common/store/
-structdb.py·cli/server_checks.py 등 공통 쪽도 PG·conf를 직접 쓰므로 여기(공용)에 남는다."""
+바이트 동일). has_conn·conf·_standin_schema·_warn_standin·PG·PGPool·vec은 두 전환점이 같이 쓰고
+cli/server_checks.py 등 공통 쪽도 PG·conf를 직접 쓰므로 여기(공용)에 남는다."""
 
 import os
 import re
@@ -125,7 +125,7 @@ class PG:
 class PGPool:
     """PG와 같은 인터페이스(schema·q) — 여러 스레드가 동시에 같은 객체를 쓸 때만(검색 MCP의 상주 Retriever.pg, S12).
     연결 1개를 공유하면 스레드끼리 같은 커서를 동시에 건드려 깨짐 — psycopg_pool로 호출마다 빈 연결을 꺼내 쓰고 돌려줌.
-    한 연결을 트랜잭션으로 묶어 쓰는 쪽(modules/load/pgstore.py·common/structdb.py)은 PG를 그대로 쓴다(단일 호출자·명시적 커밋)."""
+    한 연결을 트랜잭션으로 묶어 쓰는 쪽(modules/load/pgstore.py)은 PG를 그대로 쓴다(단일 호출자·명시적 커밋)."""
 
     def __init__(self, c, max_size=None):
         from psycopg_pool import ConnectionPool

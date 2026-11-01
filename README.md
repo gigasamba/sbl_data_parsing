@@ -6,7 +6,7 @@
 
 **목차**
 
-1. [한눈에 보기](#1-한눈에-보기) — 처리 흐름 · 실행 단위 · 이미지와 버전 · DB 마이그레이션과 시드
+1. [한눈에 보기](#1-한눈에-보기) — 처리 흐름 · 실행 단위 · 이미지와 버전 · DB 마이그레이션
 2. [폴더 구조](#2-폴더-구조)
 3. [설정](#3-설정)
 4. [PC에서 실행하기](#4-pc에서-실행하기) — 준비 → 파이프라인 → MCP 서버 → 검증 페이지
@@ -67,23 +67,20 @@ MCP 도구 4개의 이름과 입출력은 외부 클라이언트와의 계약이
 - 이미지 태그 = 버전(`data-pipeline:0.1.0`, `mcp-server:0.1.0`). 빌드한 커밋은 이미지 라벨 `org.opencontainers.image.revision`에 남는다.
 - 회사 DB `AI.ParsingMeta.pipeline_version`과 실행 보드에도 이 버전이 기록된다(옛 값은 git 커밋 — DB 담당 협의 필요, refactor.md C-62).
 
-### 1-4. DB — Alembic 마이그레이션과 시드 데이터
+### 1-4. DB — Alembic 마이그레이션
 
-pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는다.** 모두 Alembic 마이그레이션(`common/store/db/migrations/versions/`)으로 만들고, 명령은 `dbtool`(PC: `python -m common.store.db.dbtool`, 서버: `compose run --rm load migrate`) 하나다. 스키마는 두 갈래다.
+pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는다.** 모두 Alembic 마이그레이션(`common/store/db/migrations/versions/`)으로 만들고, 명령은 `dbtool`(PC: `python -m common.store.db.dbtool`, 서버: `compose run --rm load migrate`) 하나다. 스키마는 검색 스키마 하나다(`struct` 스키마는 사용자 11-01 결정으로 코드에서 없앴다 — pl-08).
 
-| 마이그레이션 | 스키마(갈래) | 만드는 것 | 시드 데이터 |
-|---|---|---|---|
-| `0001_search` | 검색 스키마(`required.pg.db_schema`, 예: `ai`) — `--target search` | `doc` · `chunk` · `chunk_term` · `term_stat` · `corpus_stat` · `load_run` 테이블, 색인, 뷰 `v_chunk_source`(벡터 차원은 번들 `meta.json` 또는 `--dim`) | 없음 |
-| `0001_struct` | `struct`(이름 고정) — `--target struct` | 정형 저장소 테이블 10개(`doc_registry` · `doc_hidden` · `doc_location` · `contract_master` · `client_master` · `prod_master` · `doc_contract_link` · `doc_registry_seen` · `doc_table` · `doc_cell`) | 없음 |
-| `0002_struct` | `struct` | 버전 테이블 `stack_version`(엔진 구성) · `source_version`(원천 목록) | **있음** — `resources/sql/0002_stack_seed.json`(엔진 구성 버전 1 `dev-v1`) · `0002_sources_seed.json`(원천 목록 버전 1)을 읽어 **활성 행**으로 넣음 |
+| 마이그레이션 | 스키마 | 만드는 것 |
+|---|---|---|
+| `0001_search` | 검색 스키마(`required.pg.db_schema`, 예: `ai`) — `--target search` | `doc` · `chunk` · `chunk_term` · `term_stat` · `corpus_stat` · `load_run` 테이블, 색인, 뷰 `v_chunk_source`(벡터 차원은 번들 `meta.json` 또는 `--dim`) |
 
-- **시드는 따로 넣는 명령이 없다.** `up`이 `0002_struct`를 실행할 때 함께 들어간다. 테이블이 이미 있으면 실패하므로 시드가 두 번 들어가지 않는다.
-- **시드 JSON은 고치지 않는다**(버전 1의 사본). 엔진 구성·원천 목록을 바꾸려면 `set-stack`, `set-sources`로 DB에 새 버전을 넣는다(5-7). PC는 버전 테이블 대신 `resources/config/pipeline_stack.json`, `resources/mappings/sources.json` 파일을 읽는다.
+- **엔진 구성·원천 목록은 DB가 아니라 파일이다** — 서버·PC 모두 `resources/config/pipeline_stack.json`, `resources/mappings/sources.json`을 읽는다(5-7). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다(그대로 두거나 DB 담당자가 지움).
 - **실행 기록은 파일이 아니라 DB에 남는다** — 스키마마다 `<스키마>.alembic_version`.
 
 | 명령 | 하는 일 |
 |---|---|
-| `up --target search\|struct\|all` | 끝 버전까지 실행(테이블 생성 + 시드). 옛 코드가 만든 기존 스키마는 먼저 비교해, 빠진 테이블·색인만 만들고 기록(컬럼 이름·형식이 다르면 거부) |
+| `up --target search\|all` | 끝 버전까지 실행(테이블 생성). 옛 코드가 만든 기존 스키마는 먼저 비교해, 빠진 테이블·색인만 만들고 기록(컬럼 이름·형식이 다르면 거부) |
 | `stamp --target …` | 이미 있는 DB에 **실행 없이 버전만 기록**(비교 차이 0일 때만) |
 | `current --target …` | 지금 DB 버전과 코드의 끝 버전 |
 | `check --target …` | 테이블 정의 ↔ 실제 DB 비교(읽기만 — 차이가 있거나 끝 버전이 아니면 종료 코드 1) |
@@ -95,7 +92,6 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 
 **자동으로 되는 것과 아닌 것**
 - 검색 스키마: 적재(`pgvector_load deploy` — `trigger.sh load`·`night`가 load 앞에서 부름)가 새 스키마면 만들고 기록하며, 기록이 있으면 `up`한다. 기록이 없는 기존 스키마면 경고만 하고 적재를 계속한다.
-- **struct 버전 테이블(0002)은 자동이 아니다.** 서버의 새 이미지 컨테이너(파싱·구조화·검색 MCP·트리거)는 이 테이블을 못 읽으면 시작하지 않으므로(종료 코드 4), **컨테이너를 띄우기 전에** `migrate up --target struct`를 끝낸다.
 - DB 버전이 코드보다 낮으면 적재가 종료 코드 2로 멈추고 `up`을 하라고 안내한다. DB가 코드보다 새 버전이면(이미지를 옛 버전으로 되돌린 뒤 등) 적재·`up`·`stamp` 모두 멈춘다.
 
 ---
@@ -107,12 +103,12 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 ├─ common/              공용 코드 — 두 앱(pipeline, mcp_server)이 함께 쓰는 것만
 │  ├─ core/             경로 · 핑거프린트(FINGERPRINT, code_fp) · 핸드오프 계약 · 문자열 처리 · 실행 기록 · 버전 표기
 │  ├─ ai/               LLM·VLM·임베딩 호출(OpenAI 호환) · 예산 장부 · 외부 전송 가드
-│  ├─ store/            PostgreSQL · 정형 저장소(struct) · 회사 DB(SQL Server) · Object Storage
+│  ├─ store/            PostgreSQL(검색) · 회사 DB(SQL Server) · Object Storage
 │  │  └─ db/            SQLAlchemy 테이블 정의 · Alembic 마이그레이션 · dbtool(migrate 명령)
 │  ├─ config/           설정 모델(settings.yaml 읽기) · 샘플 생성 · 옛 env 이관 · 오버레이 설정 파일 · --set
 │  └─ check/            모듈 경계 점검(check_modules) · 모델 연결 확인
 ├─ pipeline/            데이터 파이프라인 앱(data-pipeline 이미지)
-│  ├─ cli.py            실행기 — parse, structure, load, publish, night, full, selftest, set-stack 등
+│  ├─ cli.py            실행기 — parse, structure, load, publish, night, full, selftest, show-stack 등
 │  ├─ config.py         pipeline 섹션 설정 모델
 │  ├─ extract/          원천 읽기 · dedup · prepare · 엔진별 파싱(engines/ — 엔진 18개, 바이트가 캐시 키라 건드리지 않음)
 │  ├─ transform/        represent(대표 결과) · figures(그림) · structure(청킹·임베딩·번들)
@@ -125,13 +121,12 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  ├─ routers/          도구 4개와 /health 등록(이름·시그니처 고정)
 │  ├─ schemas/          출력 구조
 │  ├─ services/         EDW 질의 · 파싱 중계 · 메타데이터 · search/(하이브리드 검색 · 근거 정리 · 재순위)
-│  └─ cli/              ask(질의 테스트) · mcp_smoke · registry_cli
+│  └─ cli/              ask(질의 테스트) · mcp_smoke
 ├─ resources/           코드가 읽는 데이터(이미지에 포함)
 │  ├─ prompts/          AI 프롬프트 패키지 {common,pipeline,mcp}
-│  ├─ config/           엔진 구성 pipeline_stack.json(PC용 — 서버는 DB 버전 테이블) · 채점 기준 · 보고서 템플릿
-│  ├─ mappings/         원천 목록 sources.json(PC용 — 서버는 DB 버전 테이블) · 문서 메타데이터 매핑
-│  ├─ vocab/            집계 어휘 · 질문 유형 · 용어집
-│  └─ sql/              DB 시드(마이그레이션 0002가 읽는 버전 1 사본 — 한 번 배포하면 고치지 않음)
+│  ├─ config/           엔진 구성 pipeline_stack.json(서버·PC 같음) · 채점 기준 · 보고서 템플릿
+│  ├─ mappings/         원천 목록 sources.json(서버·PC 같음) · 문서 메타데이터 매핑
+│  └─ vocab/            집계 어휘 · 질문 유형 · 용어집
 ├─ deploy/              배포
 │  ├─ docker/           Dockerfile(타깃 pipeline, mcp) · requirements · entrypoint.sh · IMAGE_BASE · wheels/(폐쇄망용 휠)
 │  ├─ release/          빌드·전송(build_ship, ship_stage) · 오버레이 패치 번들(make_patch) · 배포 판정(selftest_gate, known_fail.txt) · 커밋 전 점검(lint_changed.sh)
@@ -208,7 +203,6 @@ required:
   env: {run_env: local, run_mode: prod}
   pg: {host: 127.0.0.1, port: 55433, db: rag, user: rag, password: <비밀번호>, db_schema: demo}   # 적재·검색할 스키마
   embed: {base_url: <OpenAI 호환 주소>, model: <임베딩 모델>, api_key: <키>}
-  deploy: {mcp_store: pg}                       # 검색 저장소 — PC도 꼭 적는다
 common:
   models:
     embed: {allow_external: true}
@@ -230,7 +224,7 @@ tuning:
 ```
 
 - 옛 배치(최상위 `common`·`pipeline`·`mcp` — op-08 전) 파일은 읽지 않는다. `python -m common.config.migrate settings.yaml --out settings.new.yaml`로 바꾼 뒤 새 파일로 바꿔 넣는다(지운 칸은 "삭제됨"으로 이름만 알림).
-- 검색 저장소 종류(`required.deploy.mcp_store` — `pg`·`local`)와 PG 접속값은 PC·서버 모두 채운다 — 비우면 시작을 거부한다(사용자 10-31, op-09 — 자동 탐지 없음).
+- PG 접속값은 서버에서 꼭 채운다 — 비우면 시작을 거부한다(사용자 10-31, op-09 — 자동 탐지 없음). PC는 비우면 SQLite 대역으로 돈다. 검색 저장소는 PG 하나라 종류 칸은 없다(옛 `required.deploy.mcp_store`가 남아 있으면 경고만 — mc-01, 11-01).
 - 같은 절(`search:` 등)이나 같은 칸을 두 번 쓰면 시작을 거부한다 — 칸을 더할 때는 이미 있는 절 안에 넣는다.
 - **외부 임베딩은 세 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `run_env: local` · `no_paid_calls: false`. 하나라도 빠지면 호출하지 않는다(서버 dev·prd는 늘 거부).
 - PG 접속 항목(`required.pg`의 host·port·db·user·password·db_schema)은 모두 필수다 — 비우면 채울 자리를 알려 주고 멈춘다(op-09, `docker ps` 자동 탐지와 코드 기본값은 없앰). 로컬 묶음만 쓸 때는 명령에 `--local`.
@@ -282,20 +276,17 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 - 같은 청크는 임베딩 캐시(`output/edw/embed_cache.sqlite`) 덕분에 다시 호출하지 않는다.
 - `pipeline.cli structure`가 아니라 `build_bundle`을 직접 부른다. 서버의 실제 경로와 같고, `pipeline.cli structure`에는 축소 스키마 번들을 거부하는 알려진 문제가 있다([docs/PRD.md](docs/PRD.md) 표).
 
-**④ DB 테이블과 시드 — Alembic 마이그레이션(스키마마다 처음 한 번 — 1-4)**
+**④ DB 테이블 — Alembic 마이그레이션(스키마마다 처음 한 번 — 1-4)**
 
 ```bash
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle output/demo/bundle --create-extension
-.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0001_search · struct 0002_struct
+.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0001_search
 .venv/bin/python -m common.store.db.dbtool check --target all      # 기대: 차이 없음
-# 시드 확인(선택) — struct 버전 테이블에 버전 1이 활성으로 들어갔는지
-docker exec sbl-mcp-pg psql -U rag -d rag -c "SELECT version_id, name, is_active FROM struct.stack_version"
 ```
 
-- 이 한 번으로 검색 테이블(`0001_search`), struct 테이블(`0001_struct`), 버전 테이블과 시드(`0002_struct`)가 모두 만들어진다.
+- 이 한 번으로 검색 테이블(`0001_search`)이 만들어진다.
 - `--bundle`은 벡터 차원을 `meta.json`에서 읽기 위해 준다. `--create-extension`은 새 PG일 때만 필요하다.
 - 결과는 파일이 아니라 DB 안에 남는다(테이블 + `<스키마>.alembic_version`).
-- PC의 파이프라인은 엔진 구성·원천 목록을 파일에서 읽으므로 시드 행을 쓰지 않는다. 서버와 같은 DB 상태를 맞춰 두기 위한 단계다.
 
 **⑤ 적재 — 번들 → pgvector**
 
@@ -331,7 +322,7 @@ SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
 
 # ask·MCP는 --set을 받지 않으므로 오버레이 설정 파일(방법 C)로 같은 값을 넘긴다
 SF=$(.venv/bin/python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 \
-     NO_PAID_CALLS=0 LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_STORE=pg MCP_BUNDLE=$O/bundle MCP_PORT=18769)
+     NO_PAID_CALLS=0 LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_BUNDLE=$O/bundle MCP_PORT=18769)
 SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.ask ask --pg --bundle $O/bundle --k 3 --q "<질문>"
 SETTINGS_FILE=$SF nohup .venv/bin/python -m mcp_server.main > $O/mcp.log 2>&1 & echo $! > $O/mcp.pid
 ```
@@ -351,7 +342,7 @@ kill $(cat output/demo/mcp.pid)              # 끄기 — PID로만(pkill -f 금
 
 ### 4-6. 검증 페이지(브라우저로 검색 확인)
 
-검색 MCP와 pgvector를 브라우저로 보여 주는 PC 전용 페이지다. 설정은 루트 `settings.yaml` 하나이고(전용 설정 파일 없음), §4-2 예시의 `required.deploy.mcp_store`·`ops.paths.mcp_bundle`·`search.server`·`dev.mcp`를 그대로 쓴다(따로 더할 절 없음 — 다른 번들을 보려면 그 칸 값만 바꾼다).
+검색 MCP와 pgvector를 브라우저로 보여 주는 PC 전용 페이지다. 설정은 루트 `settings.yaml` 하나이고(전용 설정 파일 없음), §4-2 예시의 `ops.paths.mcp_bundle`·`search.server`·`dev.mcp`를 그대로 쓴다(따로 더할 절 없음 — 다른 번들을 보려면 그 칸 값만 바꾼다).
 
 ```bash
 nohup bash validation/search_ui/start_mcp.sh > output/validation/mcp.log 2>&1 & echo $! > output/validation/mcp.pid
@@ -504,7 +495,7 @@ mkdir -p /srv/rag/output && chown 10001 /srv/rag/output              # 컨테이
 
 모델 주소는 모두 내부망 주소여야 한다(서버는 외부 모델 호출을 거부). 옛 `pipeline.env`가 있으면 이관 도구를 쓴다: `python -m common.config.migrate <옛 env> --out <yaml>` → `--compare`로 대조(release-and-patch §5-4). 옛 배치 settings.yaml(op-08 전)은 `python -m common.config.migrate <옛 settings.yaml> --out <새 파일>`로 바꾼다.
 
-**③ DB 마이그레이션과 시드** — 컨테이너를 띄우고 selftest를 하기 전에 끝낸다.
+**③ DB 마이그레이션** — 적재·검색을 하기 전에 끝낸다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다).
 
 ```bash
 dc run --rm load migrate current
@@ -512,16 +503,14 @@ dc run --rm load migrate check --target all                # a. 지금 버전과
 
 # b. 검색 스키마 — 옛 코드가 만든 스키마가 있고 차이가 0이면 실행 없이 기록만, 없거나 빠진 것만 있으면 up
 #      dc run --rm load migrate stamp --target search     또는     dc run --rm load migrate up --target search
-# c. struct — 테이블 + 버전 테이블 + 시드(엔진 구성·원천 목록 버전 1 활성)
-#      dc run --rm load migrate up --target struct
-# d. 확인 — 둘 다 "차이 없음", 시드가 활성 버전으로 보이는지
+# c. 확인 — "차이 없음", 엔진 구성·원천 목록 파일이 읽히는지
 #      dc run --rm load migrate check --target all
-#      dc run --rm load show-stack --history 5             # 엔진 구성 버전 1(dev-v1)이 활성이면 정상
-#      dc run --rm load show-sources --history 5
+#      dc run --rm load show-stack                          # 엔진 구성 파일(이름·sha·경로)이 보이면 정상
+#      dc run --rm load show-sources
 ```
 
 - 컬럼 이름·형식·NULL·키가 다르거나 남는 테이블이 있으면 `stamp`·`up` 모두 거부된다(종료 코드 2). 멈추고 출력(이름만)을 DB 담당자와 협의한다.
-- 서버에만 따로 쓰던 원천 목록 파일이 있으면 시드 다음 버전으로 넣는다(`set-sources --file …` — release-and-patch §5-5).
+- 서버에만 따로 쓰던 원천 목록 파일이 있으면 코드 폴더의 `resources/mappings/sources.json`에 반영해 오버레이 패치로 보낸다(또는 `ops.paths.sources_file`로 그 파일을 가리킨다).
 - 색인 빌더 스키마(`index_a`·`index_b` — `deploy/host/compose/compose.index.yml`, 쓸 때만 덧붙임)를 쓰면 스키마마다 `migrate check|stamp|up --target search --schema <스키마>_<index_id>`.
 
 **④ 연결 점검** — 파이프라인을 돌리기 전에 접속을 하나씩 확인한다.
@@ -619,7 +608,7 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 설정 값                     | settings.yaml을 직접 고치고 상주 컨테이너(`data-pipeline-parse`, `data-pipeline-structure`, `mcp-server`)를 다시 띄운다                                                                      |
 | 이번 실행만 다른 값              | `--set 이름=값`(오버레이 설정 파일 도구는 PC 전용 — 서버에서는 종료 코드 2)                                                                                                                         |
-| 엔진 구성 · 원천 목록(DB 버전 테이블) | `set-stack`, `set-stack --activate <버전>`(되돌리기), `show-stack` · `set-sources`, `show-sources` — [docs/architecture/pipeline\_stack.md](docs/architecture/pipeline_stack.md) |
+| 엔진 구성 · 원천 목록(파일) | 코드 폴더의 `resources/config/pipeline_stack.json`·`resources/mappings/sources.json`을 고쳐 오버레이 패치(5-8) — 되돌리기는 git, 확인은 `show-stack`·`show-sources` — [docs/architecture/pipeline\_stack.md](docs/architecture/pipeline_stack.md) |
 
 
 ### 5-8. 코드만 고쳤을 때 — 오버레이 패치
@@ -660,7 +649,7 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 | [docs/operations/server-guide.md](docs/operations/server-guide.md)           | 서버 설치 · 운영 · 문제 해결                                                     |
 | [docs/operations/release-and-patch.md](docs/operations/release-and-patch.md) | 버전 · 빌드 · 전송 · 오버레이 패치 · DB 버전 관리(migrate) · 배포 판정                     |
 | [docs/operations/env-guide.md](docs/operations/env-guide.md)                 | 설정 항목 작성 가이드                                                           |
-| [docs/architecture/](docs/architecture/)                                     | 프롬프트 패키지(prompts.md) · 엔진 구성 버전 테이블(pipeline\_stack.md) · run\_docs 설계 |
+| [docs/architecture/](docs/architecture/)                                     | 프롬프트 패키지(prompts.md) · 엔진 구성 파일(pipeline\_stack.md) · run\_docs 설계 |
 | [docs/history/refactor\_plan.md](docs/history/refactor_plan.md)      | 리팩토링 가이드 · 결정 기록(D-xxx) · 파일 이동표                                       |
 
 

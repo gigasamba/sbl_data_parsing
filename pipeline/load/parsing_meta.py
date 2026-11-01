@@ -18,10 +18,8 @@
    같이 쓰는 sidecar(`source.json`, `_sidecar_key()`)로 "이미 있는 키가 정말 같은 문서인가"를 대조해 다르면(또는
    sidecar가 없으면) 조용히 건너뛰지 않고 그 문서만 에러로 거부한다(`apply()`의 `error_key_collision`).
 ④ EDW = INSERT만(이름 아니라 KEY가 이미 있으면 건너뜀, 재파싱 행은 예외 · 업로드가 거부된(`error_key_collision`)
-   문서는 저장이 안 됐으므로 EDW에도 안 들어감 — "저장 안 됐는데 성공"을 EDW가 보고하면 안 된다) + **상태 열
-   (status·status_at)만 UPDATE 허용**(active·changed·deleted, `update_status()` — OP1이 호출할 유일한 쓰기 경로,
-   그 밖 UPDATE 없음). AD17① touched(원본 바이트는 같고 날짜만 바뀜)는 `update_status_at()` — status 열은 안
-   쓰고 status_at만, SELECT로 읽은 status 값이 그대로일 때만(경합 시 0행 — 다른 쓰기가 이김, 조용히 건너뜀).
+   문서는 저장이 안 됐으므로 EDW에도 안 들어감 — "저장 안 됐는데 성공"을 EDW가 보고하면 안 된다). UPDATE 없음
+   (상태 열 UPDATE 길은 C10 10-31에 문서 대장과 함께 지움).
 ⑤ `check_bucket_overlap()` — PM_BUCKET이 원천 원본이 실제로 있는 버킷과 같으면 거부. `file://`(로컬 가짜 Object
    Storage, 시험 전용)는 이 검사를 건너뛴다. manifest에 s3 URI가 하나도 없으면(예: 폴더 전용 소스 등) 비교할
    근거가 없어 **열려 있음(fail-open, 검사를 건너뜀)** — PM1이 버킷을 정할 때 이 경계도 함께 결정해야 한다.
@@ -70,7 +68,6 @@ from common.store.parsing_meta_db import (  # noqa: E402,F401
     COLUMNS,
     DEFAULT_TABLE,
     KEY,
-    STATUS_VALUES,
     TABLE_ID_RE,
     MssqlStore,
     SqliteStore,
@@ -732,36 +729,6 @@ def make_storage():
     if bucket.startswith("file://"):
         return LocalFolderStore(bucket[len("file://") :])
     return S3Store(bucket)
-
-
-def apply_registry_status(db, registry_diff):
-    """OP1/OP9 — 문서 대장 diff(changed·deleted·touched doc_key)에 따라 그 doc_key의 EDW 행만 status·status_at
-    UPDATE(update_status()만 씀 — SI39④ 유일한 쓰기 경로). doc_key가 EDW에 아직 없으면(업로드 전) 건너뜀
-    (skipped로 셈). registry_diff = common.store.registry.diff_against()·build()의 반환값(또는 그와 같은 모양의 dict).
-    changed·deleted = status 열 자체를 그 값으로 바꿈(기존 동작) · touched(AD17① — 원본 바이트는 같고 날짜만
-    바뀜, 파싱 결과 비교·새 판은 범위 밖·다음 단계)는 **status 열은 쓰지 않고 status_at만** 새로 찍음
-    (`db.update_status_at()` — SELECT로 읽은 status 값이 UPDATE 때까지 그대로일 때만 성공하는 조건부 UPDATE,
-    독립 검토 10-08 반영: 그 틈에 다른 쓰기가 changed·deleted로 바꿨으면 0행 — 건너뜀, 옛 값으로 덮어쓰지 않음).
-    새 표·열 없이 기존 status 열 그대로(STATUS_VALUES 불변, status 열에 'touched'라는 값을 넣지 않는다).
-    반환: {"changed": 적용 행 수, "deleted": 적용 행 수, "touched": 적용 행 수(경합으로 0행 된 건 제외), "skipped": EDW에 없어 건너뛴 doc_key 수}."""
-    counts = {"changed": 0, "deleted": 0, "touched": 0, "skipped": 0}  # "deleted"는 늘 0(모양 유지)
-    for status in ("changed",):  # pl-12(사용자 10-30) — EDW에 'deleted'를 쓰는 길 없앰(관측에 없다고 지우지 않음)
-        for doc_key in registry_diff.get(status) or []:
-            rows = db.find_by_doc_key(doc_key)
-            if not rows:
-                counts["skipped"] += 1
-                continue
-            for r in rows:
-                db.update_status(r["source_system"], r["source_key"], r["parse_date"], status)
-            counts[status] += len(rows)
-    for doc_key in registry_diff.get("touched") or []:
-        rows = db.find_by_doc_key(doc_key)
-        if not rows:
-            counts["skipped"] += 1
-            continue
-        for r in rows:
-            counts["touched"] += db.update_status_at(r["source_system"], r["source_key"], r["parse_date"], r["status"])
-    return counts
 
 
 if __name__ == "__main__":

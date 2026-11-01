@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 """PostgreSQL(pgvector) 검색(검색 모듈) — 코사인(HNSW·4096차원은 이진 양자화+재정렬) + BM25 + 드문 ID → RRF.
-명령: search --q · bench(로컬 vs pgvector). 적재·배포는 modules/load/pgstore.py."""
+명령: search --q(옛 bench — 로컬 대 pgvector 비교는 mc-01 11-01에 지움). 적재·배포는 modules/load/pgstore.py."""
 
 import argparse
 import json
-import time
 from collections import Counter
 from pathlib import Path
 
 from common.core.console import utf8_stdout
-from common.core.text import id_terms, normalize_value, tokens  # 토큰 규칙(모듈 계약)
+from common.core.text import id_terms, tokens  # 토큰 규칙(모듈 계약)
 from common.store.pg import HNSW_MAX, PG, conf, vec
 from mcp_server import config as mc  # 설정 객체(S7d)
 from mcp_server.services.search import clientscope as CS  # BR50 고객 범위 단일 규칙(SQL 조각, local.py와 같은 규칙)
-from mcp_server.services.search.local import ID_MAX_DF, Local, embed_query, tie_break, weights  # BR41 동점 깨기(local과 공용)
+from mcp_server.services.search.local import ID_MAX_DF, embed_query, tie_break, weights  # BR41 동점 깨기(local과 공용)
 from mcp_server.services.search.text import term_weights  # X3(10-16 검색 전용으로 분리)
 
 RERANK = 200  # 이진 양자화 후보 수 → 원 벡터 코사인으로 재정렬
@@ -72,21 +71,9 @@ def _has_chunk_clients(db):
     return _CHUNK_CLIENTS[s]
 
 
-def _not_hidden_restrict(db, hidden):
-    """OP1 — 숨김(원천에서 삭제) 문서의 chunk_id를 전부 뺀 허용 집합(저장소 질의 단계에서, client와 같은 방식 —
-    색인 행은 안 지움, 이 질의만 걸러서 본다). hidden = 숨길 doc_key(file_path) 집합(비어있으면 호출 안 함).
-    2026-10-20 축소 스키마 — doc_key가 file_path."""
-    s = db.schema
-    rows = db.q(
-        f"SELECT c.chunk_id FROM {s}.chunk c JOIN {s}.doc d ON d.doc_id = c.doc_id WHERE NOT (d.file_path = ANY(%s))", (sorted(hidden),)
-    )
-    return {r["chunk_id"] for r in rows}
-
-
 def _scope_restrict(db, scope):
-    """(2026-10-20 통합 search) 하드 필터 범위에 **포함될** 문서(file_path 집합)의 chunk_id 허용 집합 — _not_hidden_restrict와
-    같은 방식을 반대 방향으로(제외가 아니라 허용만 남김). question+하드 필터 검색이 저장소 질의 단계부터 그 문서들 안에서만
-    돌게 한다 — 후치 필터로는 좁은 범위가 전역 상위 풀에 못 들어 근거가 0건이 되는 문제(실측: E29H 1문서)를 고침."""
+    """(2026-10-20 통합 search) 하드 필터 범위에 **포함될** 문서(file_path 집합)의 chunk_id 허용 집합.
+    question+하드 필터 검색이 저장소 질의 단계부터 그 문서들 안에서만 돌게 한다 — 후치 필터로는 좁은 범위가 전역 상위 풀에 못 들어 근거가 0건이 되는 문제(실측: E29H 1문서)를 고침."""
     s = db.schema
     rows = db.q(f"SELECT c.chunk_id FROM {s}.chunk c JOIN {s}.doc d ON d.doc_id = c.doc_id WHERE d.file_path = ANY(%s)", (sorted(scope),))
     return {r["chunk_id"] for r in rows}
@@ -142,7 +129,6 @@ def search(
     client=None,
     client_strict=False,
     question=None,
-    hidden=None,
     scope=None,
 ):
     """코사인(기본) 또는 하이브리드(코사인 + BM25 + 드문 ID → RRF). 결과 = v_chunk_source 행 + rrf·via.
@@ -151,8 +137,6 @@ def search(
     local.py와 같은 함수를 import해 씀, 가중치가 두 저장소에서 갈라지지 않음).
     client(AD38 SEARCH_CLIENT_HARD) = 허용할 고객 이름 집합 — 주어지면 저장소 질의 단계에서 그 고객 문서(고객 미상은 기본
     포함, client_strict=True면 미상도 뺌)만 후보로. None(기본)이면 제한 없음 — 전과 바이트 동일.
-    hidden(OP1) = 검색에서 뺄 doc_key(file_sha256) 집합 — _not_hidden_restrict로 저장소 질의 단계에서 완전 제외(소프트
-    없음). None·빈 집합이면 전과 바이트 동일.
     scope(2026-10-20 통합 search) = 하드 필터 범위 **안** 문서 file_path 집합 — _scope_restrict로 저장소 질의 단계부터
     그 문서의 청크만 후보로(vector·bm25·ID 전부). None이면 전과 바이트 동일.
     question(G14) = 원문 질문 글자(weights()에 그대로 건넴 — 안 주면 전과 바이트 동일, BR41 tie_break에도 그대로 건넴).
@@ -163,10 +147,7 @@ def search(
     m = set(methods) if methods else ({"vector"} if retrieve == "cosine" else {"vector", "bm25", "id"})
     w = weights(question)
     restrict = _client_restrict(db, client, client_strict) if client else None
-    if hidden:
-        not_hidden = _not_hidden_restrict(db, hidden)
-        restrict = (restrict & not_hidden) if restrict is not None else not_hidden
-    if scope:  # 2026-10-20 통합 search — 하드 필터 범위 안 문서만(제외 hidden과 반대 방향)
+    if scope:  # 2026-10-20 통합 search — 하드 필터 범위 안 문서만
         in_scope = _scope_restrict(db, scope)
         restrict = (restrict & in_scope) if restrict is not None else in_scope
     lists = []
@@ -235,66 +216,20 @@ def search(
     return [{**rows[c], "rrf": round(rrf[c], 5), "via": via[c]} for c in top]
 
 
-def bench(db, bundle, questions, k=10, limit=50, out="output/edw"):
-    meta = json.loads((Path(bundle) / "meta.json").read_text(encoding="utf-8"))
-    L = Local(bundle)
-    qs = [json.loads(x) for x in Path(questions).read_text(encoding="utf-8").splitlines() if x.strip()][:limit]
-    res = {m: [] for m in ("local:cosine", "local:hybrid", "pg:cosine", "pg:hybrid")}
-    hit, overlap = Counter(), []
-    for q in qs:
-        text = q.get("query") or q["question"]
-        qv, terms = embed_query(meta, text), tokens(text)
-        gold = normalize_value(str(q.get("answer", "")))
-        for r in ("cosine", "hybrid"):
-            t0 = time.perf_counter()
-            lo, _, _ = L.search(qv, terms, k, retrieve=r)
-            res[f"local:{r}"].append(time.perf_counter() - t0)
-            hit[f"local:{r}"] += bool(gold) and any(gold in normalize_value(L.chunks[i]["chunk_text"]) for i in lo)
-            t0 = time.perf_counter()
-            rows = search(db, qv, terms, k, retrieve=r)
-            res[f"pg:{r}"].append(time.perf_counter() - t0)
-            hit[f"pg:{r}"] += bool(gold) and any(gold in normalize_value(x["chunk_text"]) for x in rows)
-        ex = set(vector_top(db, vec(qv), k, exact=True))  # 근사 색인 재현율 = 근사 상위 k ∩ 정확 상위 k
-        overlap.append(len(ex & set(vector_top(db, vec(qv), k, exact=False))) / max(1, len(ex)))
-    pct = lambda xs, p: sorted(xs)[min(len(xs) - 1, int(p * len(xs)))] * 1000
-    lines = [
-        f"# 검색 속도 — 로컬 vs 개발 서버 pgvector ({time.strftime('%Y-%m-%d %H:%M')})",
-        "",
-        f"질의 {len(qs)} · k={k} · 청크 {L.n} · 차원 {meta['dim']} (질의 임베딩 제외)",
-        "",
-        "| 방식 | p50 ms | p95 ms | 정답 값 포함 |",
-        "|---|---|---|---|",
-    ]
-    lines += [f"| {m} | {pct(ts, 0.5):.1f} | {pct(ts, 0.95):.1f} | {hit[m]}/{len(qs)} |" for m, ts in res.items()]
-    lines += [
-        "",
-        f"근사 색인 재현율(정확 검색 상위 {k} 대비, 차원 {dim_of(db)} → "
-        f"{'HNSW' if dim_of(db) <= HNSW_MAX else '이진 양자화+재정렬'}): 평균 {sum(overlap) / max(1, len(overlap)):.3f}",
-    ]
-    Path(out).mkdir(parents=True, exist_ok=True)
-    (Path(out) / "bench_pg.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print("\n".join(lines))
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["search", "bench"])
+    ap.add_argument("cmd", choices=["search"])
     ap.add_argument("--bundle", default="output/edw/bundle")
     ap.add_argument("--q")
     ap.add_argument("--k", type=int, default=10)
     ap.add_argument("--retrieve", default="cosine", choices=["cosine", "hybrid"])
-    ap.add_argument("--questions", default="output/eval/questions.jsonl")
-    ap.add_argument("--limit", type=int, default=50)
     a = ap.parse_args(argv)
     db = PG(conf())
     meta = json.loads((Path(a.bundle) / "meta.json").read_text(encoding="utf-8"))
-    if a.cmd == "search":
-        for r in search(db, embed_query(meta, a.q), tokens(a.q), a.k, retrieve=a.retrieve):
-            print(
-                f"[{r['rrf']:.4f} {r['via']}] {r['file_path']} p.{r['page']} L.{r['line_start']} bbox={r['bbox']} · {r['chunk_text'][:120]!r}"
-            )
-    else:
-        bench(db, a.bundle, a.questions, a.k, a.limit)
+    for r in search(db, embed_query(meta, a.q), tokens(a.q), a.k, retrieve=a.retrieve):
+        print(
+            f"[{r['rrf']:.4f} {r['via']}] {r['file_path']} p.{r['page']} L.{r['line_start']} bbox={r['bbox']} · {r['chunk_text'][:120]!r}"
+        )
 
 
 if __name__ == "__main__":

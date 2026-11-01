@@ -8,8 +8,7 @@ from pipeline.stackcfg import EXIT_BAD_ENGINE, engine_problems, engines_of, requ
 
 def selftest():
 
-    from common.store.db import cfgtables
-    from common.store.db.schemas import config_body as CB
+    from common.store.db import cfgfile
 
     body = {
         "parse": {".txt": ["plaintext"]},
@@ -29,45 +28,31 @@ def selftest():
         raise AssertionError("없는 엔진인데 거부 안 됨")
     except SystemExit as e:
         assert e.code == EXIT_BAD_ENGINE
-    a = cfgtables.Active("stack", 3, "t", body, cfgtables.sha(body), "시험")
-    b = cfgtables.Active("stack", 3, "t", dict(reversed(list(body.items()))), a.body_sha, "시험")
+    a = cfgfile.Active("stack", "t", body, cfgfile.sha(body), "시험")
+    b = cfgfile.Active("stack", "t", dict(reversed(list(body.items()))), a.body_sha, "시험")
     assert snapshot_bytes(a) == snapshot_bytes(b)  # 키 순서 달라도 같은 바이트(색인 재빌드 지문 index_cfg.inputs가 씀)
     snap = json.loads(snapshot_bytes(a))
-    assert snap["version_id"] == 3 and snap["parse"] == body["parse"] and snap["body_sha"] == a.body_sha
-    # 시드 판(0002 — 한 번 배포하면 고치지 않음)이 모양 검사를 지나고 엔진 이름이 모두 등록부에 있음. PC 파일(resources/config/pipeline_stack.json)과
-    # 같은지는 보지 않는다 — PC 기본값을 고친 패치가 반입 관문에서 막히지 않게(VS8b R-2, 시드 = 924a51b 파일은 VS8b ⑤에서 확인)
+    assert "version_id" not in snap and snap["parse"] == body["parse"] and snap["body_sha"] == a.body_sha
+    # 사용자 11-01 — 서버도 저장소 파일(resources/config/pipeline_stack.json)을 읽는다: 그 파일이 모양 검사를 지나고 엔진 이름이 모두 등록부에 있음
+    from common.core import paths
+    from common.core.paths import STACK_FILE
+    from pipeline import config as pc
     from pipeline.extract.engines import registry
 
-    name, reason, seed = cfgtables.seed("stack")
-    assert set(seed) <= set(CB.STACK_BODY_KEYS) and name and reason
-    unknown = [e for e in engines_of(seed) if e not in registry.engines()]
-    assert not unknown, f"시드 판에 등록부에 없는 엔진: {unknown}"
-    # pl-32 — 사본 파일 대신 판 번호: 서버는 넘겨받은 판(STACK_VERSION)을 판 표에서, 번호가 없으면 거부(종료 2), PC는 파일
-    from common.core import paths
-    from pipeline import config as pc
-
-    v5 = cfgtables.Active("stack", 5, "v5", {**body, "k": 5}, cfgtables.sha({**body, "k": 5}), "db 시험")
-    keep = dict(cfgtables._CACHE)
+    shipped = cfgfile.read_file("stack", STACK_FILE)
+    unknown = [e for e in engines_of(shipped.body) if e not in registry.engines()]
+    assert not unknown, f"엔진 구성 파일에 등록부에 없는 엔진: {unknown}"
+    keep = dict(cfgfile._CACHE)
     try:
-        cfgtables._CACHE[("stack", 5)] = v5  # 판 5(넘겨받은 판) — 활성 판(_CACHE["stack"])과 다름
-        cfgtables._CACHE["stack"] = a
-        with mock.patch.object(paths, "LOCAL_RUN", False):
-            assert pc.stack(5)["version_id"] == 5 and pc.stack(5)["k"] == 5
-            with pc.PIPE.env(STACK_VERSION="5"):
-                assert pc.stack()["name"] == "v5"  # 인자 없으면 넘겨받은 칸
-            with pc.PIPE.env(STACK_VERSION=None):
-                try:
-                    pc.stack()
-                    raise AssertionError("서버에서 판 번호 없이 엔진 구성을 읽음")
-                except SystemExit as e:
-                    assert e.code == 2
-        with mock.patch.object(paths, "LOCAL_RUN", True):
-            assert pc.stack(5)["version_id"] == 3  # PC는 판 번호를 무시하고 활성 자리(파일 — 여기서는 캐시에 넣은 a)
+        cfgfile._CACHE.pop("stack", None)
+        with mock.patch.object(paths, "LOCAL_RUN", False):  # 서버 길 = PC와 같은 파일(판 번호 없음)
+            got = pc.stack()
+        assert got["body_sha"] == shipped.body_sha and "version_id" not in got, got.get("name")
     finally:
-        cfgtables._CACHE.clear()
-        cfgtables._CACHE.update(keep)
+        cfgfile._CACHE.clear()
+        cfgfile._CACHE.update(keep)
     print(
-        "[selftest] stackcfg — 엔진 집합(parse ∪ candidates)·없는 엔진 거부(종료 2)·같은 body → 같은 바이트·시드 모양·엔진·판 번호(넘겨받은 판·서버 거부·PC 파일) 통과"
+        "[selftest] stackcfg — 엔진 집합(parse ∪ candidates)·없는 엔진 거부(종료 2)·같은 body → 같은 바이트·저장소 파일 모양·엔진·서버도 같은 파일 통과"
     )
     return 0
 
@@ -76,22 +61,9 @@ def test_main():  # 옛 `if "--selftest" in sys.argv:` 갈래
     raise SystemExit(selftest())
 
 
-def test_stack_file_and_version_refused_together():
-    """--stack(파일 — PC 실험·시험 전용)과 --stack-version(생산 경로)을 같이 주면 거부(종료 2 — 코디네이터 10-30, pl-32)."""
-    from pipeline.transform.represent import represent
-    from pipeline.transform.structure import build_bundle
-
-    for main in (represent.main, build_bundle.main):
-        try:
-            main(["--stack", "x.json", "--stack-version", "3"])
-            raise AssertionError(f"{main.__module__}: 둘 다 줬는데 거부 안 됨")
-        except SystemExit as e:
-            assert e.code == 2, (main.__module__, e.code)
-
-
 def test_cli_child_args_accepted():
-    """서버(판 번호 있음)에서 pipeline.cli가 색인 빌드에 넘기는 인자를 index의 인자 해석기가 받는다 — --stack-version을 index에
-    넘겨 종료 2가 나던 것(pl-32 리뷰). 자식은 띄우지 않고 인자만 잡는다."""
+    """pipeline.cli가 색인 빌드에 넘기는 인자를 index의 인자 해석기가 받는다(옛 --stack-version 종료 2 — pl-32 리뷰, 판 번호는 11-01에 없앰).
+    자식은 띄우지 않고 인자만 잡는다."""
     from types import SimpleNamespace
 
     from pipeline import cli
@@ -100,7 +72,7 @@ def test_cli_child_args_accepted():
     calls = []
     keep = dict(cli._STACK)
     try:
-        cli._STACK["v"] = {"name": "t", "version_id": 7, "body_sha": "x", "parse": {}}  # 서버 판 7을 이미 정함
+        cli._STACK["v"] = {"name": "t", "body_sha": "x", "parse": {}}
         with mock.patch.object(cli, "sh", side_effect=lambda module, *args, check=True: calls.append((module, args)) or 0):
             cli._structure_pg_indexed(SimpleNamespace(src="src", path_prefix=None), "conf.json")
     finally:
@@ -111,4 +83,4 @@ def test_cli_child_args_accepted():
     built = []
     with mock.patch.object(index, "build_one", side_effect=lambda c, a: built.append(a)):
         index.main([str(x) for x in args])  # 모르는 인자면 argparse가 종료 2
-    assert built and built[0].stack is None  # 판은 인자가 아니라 넘겨받은 STACK_VERSION 칸으로
+    assert built and built[0].stack is None and "--stack-version" not in args  # 엔진 구성은 파일(인자 없음)

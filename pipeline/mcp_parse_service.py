@@ -31,30 +31,29 @@ from common.core.paths import APP_ROOT  # I4 — 컨테이너 경로(/app/…) �
 from pipeline import config as pc
 
 SERVICE_DIR = APP_ROOT / "output" / "mcp_parse"  # 이미지 안 /app/output/mcp_parse
-_JOB_ENVS: dict = {}  # (PARSE_POST, 판 번호, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
+_JOB_ENVS: dict = {}  # (PARSE_POST, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
 _JOB_KEYS = (
     "SETTINGS_FILE",
     "PARSE_POST",
-)  # 얹을 몫에 늘 넣는 이름(VS8a R-5) — STACK_VERSION은 env가 아니라 덮기 파일로만 감(VS8b R-8)
+)  # 얹을 몫에 늘 넣는 이름(VS8a R-5)
 
 
 def _job_stack():
-    """작업마다 엔진 구성 활성 판을 다시 읽어 그 판 번호를(S8b — 사용자 10-28 Q3 a · pl-32 사본 파일 없음 — PC 파일이면 None). 판 표를 못
-    읽거나(종료 4) 없는 엔진이면(종료 2) 그 작업만 실패(서비스 스레드는 계속)."""
+    """작업마다 엔진 구성 파일을 다시 읽어 검사(S8b — 사용자 10-28 Q3 a). 못 읽거나 없는 엔진이면(종료 2) 그 작업만 실패(서비스 스레드는 계속)."""
     from pipeline import stackcfg
 
     try:
-        return stackcfg.resolve(refresh=True, publish=False).version_id
+        stackcfg.resolve(refresh=True)
     except SystemExit as e:
-        raise RuntimeError(f"엔진 구성(판 표)을 쓰지 못함 — 종료 코드 {e.code}") from None
+        raise RuntimeError(f"엔진 구성 파일을 쓰지 못함 — 종료 코드 {e.code}") from None
 
 
-def _job_env(post, stack=None):
+def _job_env(post):
     """작업 자식 env — 덮기 파일(PARSE_POST 등)을 서비스 설정 파일·후보정 값마다 한 번만 만든다(임시 파일이 작업 수만큼
     쌓이지 않게 — refactor.md C-46). 만든 파일은 서비스가 끝날 때 지운다(pl-27 — child_env가 exitclean에 맡김). OS 임시 폴더 정리(tmpwatch·systemd-tmpfiles·macOS periodic)가 오래 도는 서비스의 그 파일을 지웠으면
     다시 만든다(리뷰 S7e3 — 지워진 파일을 가리키면 서버 자식은 시작 거부, PC는 기본 후보정 all로 돎). 캐시는 덮기 파일이 얹는 몫만 — env는
     작업마다 지금 os.environ에서 새로 만든다(VS7e3 R-6 — 오래 도는 서비스의 라이브러리 env가 바뀌어도 작업 자식에 감). 반환은 새 dict."""
-    key = (post, str(stack), os.environ.get("SETTINGS_FILE"))  # env 남김 — 설정 파일 자리 신호
+    key = (post, os.environ.get("SETTINGS_FILE"))  # env 남김 — 설정 파일 자리 신호
     extra = _JOB_ENVS.get(key)
     if extra is None or not Path(extra["SETTINGS_FILE"]).is_file():
         pm = pc.cfg().service.parse_mcp
@@ -66,7 +65,6 @@ def _job_env(post, stack=None):
             PARSE_VLM_PAGE_SEC=str(pm.vlm_page_sec),
             PARSE_WARMUP_SEC=str(pm.warmup_sec),
             PARSE_LOW_PRIORITY="0",
-            **({"STACK_VERSION": str(stack)} if stack is not None else {}),
         )
         # 덮기 파일이 얹은 몫만 — 넘긴 칸(SETTINGS_FILE·영구 다리로 env에 든 칸)은 지금 env와 같아도 늘 넣음(뒤에 env가 바뀌어도 자식 env와
         # 덮기 파일이 어긋나지 않게 — VS8a R-5)
@@ -314,10 +312,8 @@ def _worker():
                 log = open(ws / "run.log", "w", encoding="utf-8")
                 left = JOB_TIMEOUT
                 post = pc.cfg().transform.represent.post  # S7c — 옛 get(X) or "supsub"(없음·빈 값 → supsub)
-                stack = (
-                    _job_stack()
-                )  # S8b·pl-32 — 작업마다 활성 판 번호(run_all·attachments는 STACK_VERSION 칸, represent는 --stack-version)
-                job_env = _job_env(post or "supsub", stack)  # 하위 프로세스 — 덮기 파일(S7e2), 같은 값이면 한 번 만든 것 재사용(VS7e2 R-4)
+                _job_stack()  # S8b — 작업마다 엔진 구성 파일 다시 검사
+                job_env = _job_env(post or "supsub")  # 하위 프로세스 — 덮기 파일(S7e2), 같은 값이면 한 번 만든 것 재사용(VS7e2 R-4)
                 # 2026-10-22 병목 해소: post 기본 all→supsub — RapidOCR·figures·vlm_page·context·attachments를 끔
                 # 교차재현율(③)·table_inline(⑦)은 0.0초로 병목이 아니었으므로 그대로 유지 — 실측 47→~0.3초
                 _run = lambda cmd: _run_group(cmd, left, job_env)  # noqa: B023 — 같은 반복 안에서만 부름
@@ -378,7 +374,6 @@ def _worker():
                         ],
                         [
                             "pipeline.transform.represent.represent",
-                            *([] if stack is None else ["--stack-version", str(stack)]),
                             "--src",
                             str(ws / "prep"),
                             "--parse-dir",
@@ -510,7 +505,7 @@ if __name__ == "__main__":
     SERVICE_DIR.mkdir(parents=True, exist_ok=True)  # service.json 자리 — ROOTS·JOBS_DIR를 env로 다른 곳에 둬도
     from pipeline import stackcfg
 
-    stackcfg.resolve(publish=False)  # S8b(Q7) — 서버에서 판 표를 못 읽으면 시작 거부(종료 4), 없는 엔진이면 종료 2
+    stackcfg.resolve()  # S8b(Q7) — 엔진 구성 파일을 못 읽거나 없는 엔진이면 시작 거부(종료 2)
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
     for r in ROOTS:
         Path(r).mkdir(parents=True, exist_ok=True)

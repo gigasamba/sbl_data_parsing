@@ -3,10 +3,8 @@
 
 (단계 1 비교 명령 compare-parse·compare-all은 11-01에 지움 — PC 평가 도구 삭제, PRD e2-10)
 단계 2 · 고정 스택(정해진 기술로 실제 파이프라인 + 기본 테스트)
-  set-stack       엔진 구성 바꾸기(--from-selection = 단계 1 선정 결과 그대로 · --parse ".pdf_text=pymupdf,pdfplumber;.docx=office" 직접 ·
-                  --activate N 되돌리기) — 서버 = 판 표 struct.stack_version 새 판·활성(--reason 필수), PC = 파일(S8b — docs/architecture/pipeline_stack.md)
-  show-stack      지금 엔진 구성(서버 = 활성 판 + 최근 판)
-  set-sources · show-sources  원천 목록(서버 = 판 표 struct.source_version, PC = 파일) — --file·--activate·--check-columns
+  show-stack · show-sources  지금 엔진 구성·원천 목록(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01 —
+                  docs/architecture/pipeline_stack.md)
   run-stack       스택 엔진만 파싱 → 대표 파싱(문서마다 하나, modules/parse/represent.py) → 구조화·벡터화·그래프(modules/structure/build_bundle.py)
   parse · structure · load  모듈 1회 실행(트리거) — 앞 모듈 끝 표시(_DONE.json)를 보고 이어 받음, 새 입력 없으면 건너뜀(docs/architecture.md)
   (ask · test-stack — 검색 명령은 S5(10-26, T-15)에 python -m mcp_server.cli.ask로 옮김: 파이프라인 CLI가 검색 코드를 import하지 않게)
@@ -39,20 +37,14 @@ _STACK: dict = {}
 
 
 def _stack():
-    """엔진 구성(사전) — 프로세스마다 한 번(pipeline/stackcfg.py: 서버 = 판 표 활성 판·PC = 파일 → 이미지에 없는 엔진 거부 → 판 번호를
-    STACK_VERSION 칸으로 자식에 넘김 — 이미 받았으면 그 판, pl-32). 서버에서 판 표를 못 읽으면 종료 4, 없는 엔진이면 종료 2."""
+    """엔진 구성(사전) — 프로세스마다 한 번(pipeline/stackcfg.py: 파일 → 이미지에 없는 엔진 거부 — 서버·PC 같은 파일, 사용자 11-01).
+    파일을 못 읽거나 없는 엔진이면 종료 2."""
     if "v" not in _STACK:
         from pipeline import stackcfg
 
-        stackcfg.current()
+        stackcfg.resolve()
         _STACK["v"] = pc.stack()
     return _STACK["v"]
-
-
-def _stack_arg():
-    """represent·build_bundle에 넘길 판 번호 인자(PC 파일이면 없음 — 자식도 파일을 읽음)."""
-    v = _stack().get("version_id")
-    return [] if v is None else ["--stack-version", str(v)]
 
 
 def sh(module, *args, check=True):
@@ -153,7 +145,7 @@ def night(a):
     if not a.no_structure and not stopped:
         for args in (
             ["pipeline.transform.represent.parse_qa", "--src", a.src],
-            ["pipeline.transform.represent.represent", *_stack_arg(), "--src", a.src],
+            ["pipeline.transform.represent.represent", "--src", a.src],
         ):
             left = _until(a.deadline)
             rc = _run_until(args, env, left - 60) if left > 120 else None
@@ -180,7 +172,6 @@ def night(a):
                 a.src,
                 "--embed",
                 pc.cfg().transform.structure.embed or st.get("embed", "api"),
-                *_stack_arg(),
                 "--summary",
                 "auto",
             ]
@@ -222,19 +213,6 @@ def night(a):
 
 
 # ── 단계 2 ───────────────────────────────────────────────────
-def _server():
-    from common.core import paths
-
-    return not paths.LOCAL_RUN
-
-
-def _by(a):
-    """누가 — --by(서버 절차는 늘 줌 — 컨테이너 안 OS 사용자는 이미지 계정이라 사람을 가리지 못함)."""
-    import getpass
-
-    return a.by or getpass.getuser()
-
-
 def _engines_of(st):
     """parse ∪ candidates 엔진(정렬) — stackcfg.engines_of 하나로(VS8b R-8)."""
     from pipeline.stackcfg import engines_of
@@ -242,139 +220,11 @@ def _engines_of(st):
     return engines_of(st)
 
 
-def _need_reason(a):
-    if not a.reason:
-        raise SystemExit("[판 표] 서버에서 판을 바꿀 때는 --reason <이유> 필수(판 행에 남음 — 누가는 --by, 없으면 OS 사용자)")
-
-
-def _put_or_activate(kind, a, name=None, body=None, check=None, based_on=None):
-    """서버: 새 판 + 활성(같은 body면 그 판) 또는 --activate N — 한 트랜잭션. check(body)는 활성으로 만들기 전 검사(엔진·열).
-    based_on — body를 만들 때 읽은 활성 판 번호(set-stack은 지금 판을 고쳐 새 판을 만듦): 쓰기 트랜잭션에서 활성 판을 잠그고 다시 봐서 그사이
-    다른 사람이 판을 바꿨으면 덮지 않고 종료 2(VS8b R-1 — 읽기-고치기-쓰기). 동시에 넣다 진 쪽(활성 하나·같은 body 제약)도 같은 안내로 종료 2."""
-    from sqlalchemy.exc import IntegrityError
-
-    from common.store.db import cfgtables as CT
-
-    _need_reason(a)
-    race = (
-        f"[판 표] 다른 사람이 방금 {CT.KINDS[kind]} 판을 바꿈 — 이번 변경은 넣지 않음. "
-        f"show-{'stack' if kind == 'stack' else 'sources'}로 지금 판을 본 뒤 다시"
-    )
-    try:
-        with CT.connect() as conn:
-            with conn.begin():
-                if based_on is not None and CT.lock_active(kind, conn) != based_on:
-                    print(race, file=sys.stderr, flush=True)
-                    raise SystemExit(2)
-                if a.activate is not None:
-                    body = CT.version_body(kind, a.activate, conn)
-                    if body is None:
-                        raise SystemExit(f"[판 표] {CT.KINDS[kind]}에 판 {a.activate} 없음")
-                    if check:
-                        check(body)
-                    v, new = CT.activate(kind, a.activate, _by(a), conn), False
-                else:
-                    v, new = CT.put(kind, name, body, _by(a), a.reason, conn)
-    except IntegrityError as e:
-        if not any(
-            c in str(e.orig) for c in ("_active", "body_sha")
-        ):  # 활성 하나·같은 body 제약만 동시 변경(리뷰 S9) — 그 밖 제약은 원래 오류
-            raise
-        print(race, file=sys.stderr, flush=True)
-        raise SystemExit(2) from None
-    msg = (
-        f"[판 표] {CT.KINDS[kind]} 판 {v} 활성"
-        + (" (새 판)" if new else " (있던 판 — 같은 body: 판 행의 이름·이유는 그대로, 이번 이유는 실행 기록에만)")
-        + f" · {_by(a)} · 이유: {a.reason}"
-    )
-    print(msg)
-    from common.core.runlog import note
-
-    note(msg)  # 활성 옮김 이유는 실행 기록에(판 행은 고치지 않음 — activated_at·_by만)
-
-
-def set_stack(a):
-    """엔진 구성 바꾸기(S8b — D-031): 서버 = 판 표 struct.stack_version에 새 판 + 활성(같은 body면 그 판을 활성으로, 한 트랜잭션 — --reason
-    필수) · --activate N = 그 판을 다시 활성(되돌리기) · PC = 파일(common.paths.stack_file — 지금처럼). 이미지에 없는 엔진은 거부(종료 2)."""
-    import importlib.util
-
-    from common.store.db import cfgtables as CT
-
-    if importlib.util.find_spec("pipeline.extract.engines") is None:
-        raise SystemExit(
-            "[set-stack] 이 이미지에는 엔진 등록부가 없어 엔진을 검사할 수 없음 — data-pipeline 이미지에서(이 이미지는 show-stack만)"
-        )
-    from pipeline import stackcfg
-
-    if a.activate is not None:
-        if not _server():
-            raise SystemExit("[set-stack] PC는 파일 — 판 번호 없음(되돌리기는 git으로)")
-        _put_or_activate("stack", a, check=lambda body: stackcfg.require_engines(body, f"판 {a.activate}"))
-        return show_stack(a)
-    if _server() or CT.pc_file("stack").exists():
-        cur = CT.active("stack")
-        st, name = dict(cur.body), a.name or cur.name
-    else:  # PC 파일이 아직 없음 — 옛처럼 새로 만듦
-        st, name = {}, a.name or time.strftime("stack-%Y%m%d")
-    if a.from_selection:
-        sel = json.loads((OUT / "parse" / "selection.json").read_text(encoding="utf-8"))
-        st["parse"] = {f: es for f, es in (sel.get("final") or {}).items() if es}
-        st["source"] = "selection.json(단계 1 최종 엔진 조합)"
-    if a.parse:
-        st["parse"] = dict(st.get("parse") or {})
-        for part in a.parse.split(";"):
-            if "=" in part:
-                f, es = part.split("=", 1)
-                st["parse"][f.strip()] = [e.strip() for e in es.split(",") if e.strip()]
-        st["source"] = "직접 지정"
-    for k in ("chunk", "embed", "graph", "retrieve"):
-        if getattr(a, k):
-            st[k] = getattr(a, k)
-    if a.k:
-        st["k"] = a.k
-    st.setdefault("chunk", "structure")
-    st.setdefault("embed", "api" if C.cfg().models.embed.base_url else "bge-m3")
-    st.setdefault("graph", "table+entity")
-    st.setdefault("retrieve", "hybrid")  # 기본 하이브리드(코사인 + BM25 + 드문 ID, 사용자 결정 2026-10-01 — 코사인만은 수치·ID 질문에 약함)
-    st.setdefault("k", 10)
-    if not st.get("parse"):
-        raise SystemExit("파싱 엔진이 비어 있음 — --from-selection 또는 --parse 지정")
-    try:
-        CT.check_body("stack", st)
-    except ValueError as e:
-        raise SystemExit(f"[set-stack] {e}") from None
-    stackcfg.require_engines(st, "set-stack")
-    if _server():
-        _put_or_activate("stack", a, name, st, based_on=cur.version_id)  # VS8b R-1 — 읽은 판 위에서만 바꿈
-    else:
-        f = CT.pc_file("stack")
-        doc = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
-        doc = {**{k: v for k, v in doc.items() if k not in st}, **st, "name": name, "updated": time.strftime("%Y-%m-%d %H:%M")}
-        f.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
-        CT._CACHE.pop("stack", None)
-    show_stack(a)
-
-
-def _history(kind, n):
-    from common.store.db import cfgtables as CT
-
-    with CT.connect() as conn:
-        rows = CT.history(kind, conn, n)
-        conn.rollback()
-    print(f"-- 최근 판 {len(rows)}개(판 · 활성 · 이름 · sha · 넣은 때·사람 · 이유 · 마지막 활성 때·사람) --")
-    for r in rows:
-        made = f"{r['created_at']:%Y-%m-%d %H:%M} {r['created_by'] or ''}"
-        act = f"{r['activated_at']:%Y-%m-%d %H:%M} {r['activated_by'] or ''}" if r["activated_at"] else ""
-        print(
-            f"  {r['version_id']} {'*' if r['is_active'] else ' '} {r['name']} · {r['body_sha'][:12]} · {made} · {r['reason'] or ''} · {act}"
-        )
-
-
 def show_stack(a=None):
-    """지금 엔진 구성 — 서버 = 판 표 활성 판(+ 최근 판 --history N), PC = 파일. mcp-server 이미지에서도 됨(등록부 안 씀)."""
-    from common.store.db import cfgtables as CT
+    """지금 엔진 구성(파일 — 서버·PC 같음). mcp-server 이미지에서도 됨(등록부 안 씀)."""
+    from common.store.db import cfgfile
 
-    cur = CT.active("stack", refresh=True)
+    cur = cfgfile.active("stack", refresh=True)
     st = cur.body
     print(f"스택 {cur.name} ({st.get('source', '')}) · {cur.label()}")
     print("| 형식 | 파싱 엔진(우선순위) |\n|---|---|")
@@ -384,57 +234,15 @@ def show_stack(a=None):
         f"청킹 {st['chunk']} · 임베딩 {st['embed']} · 그래프 {st['graph']} · 검색 {st['retrieve']} · 상위 k {st['k']}"
         + (f" · 비교 후보 {', '.join(st['candidates'])}" if st.get("candidates") else "")
     )
-    if _server() and getattr(a, "history", 0):
-        _history("stack", a.history)
-
-
-def set_sources(a):
-    """원천 목록 바꾸기(S8b — D-031): --file <json>(목록 — 모양은 sources.py 검사 그대로) → 서버 = 판 표 struct.source_version 새 판 + 활성
-    (--reason 필수) · PC = 파일(common.paths.sources_file) · --activate N 되돌리기 · --check-columns = 회사 DB INFORMATION_SCHEMA로 표·열 이름이
-    있는지(값 안 읽음 — 선택, Q9)."""
-    from common.store.db import cfgtables as CT
-
-    check = None
-    if a.check_columns:
-        from pipeline.extract import rdb_discover
-
-        def check(body):
-            bad = rdb_discover.column_problems(body)
-            if bad:
-                raise SystemExit("[set-sources] 원천 표·열 확인 실패: " + " · ".join(bad))
-            print(f"[set-sources] 원천 표·열 확인 — {len(body)}개 원천 모두 있음")
-
-    if a.activate is not None:
-        if not _server():
-            raise SystemExit("[set-sources] PC는 파일 — 판 번호 없음")
-        _put_or_activate("sources", a, check=check)
-        return show_sources(a)
-    if not a.file:
-        raise SystemExit("[set-sources] --file <원천 목록 json> 또는 --activate <판 번호>")
-    body = json.loads(Path(a.file).read_text(encoding="utf-8"))
-    try:
-        CT.check_body("sources", body)
-    except ValueError as e:
-        raise SystemExit(f"[set-sources] {e}") from None
-    if check:
-        check(body)
-    if _server():
-        _put_or_activate("sources", a, a.name or Path(a.file).stem, body)
-    else:
-        CT.pc_file("sources").write_text(json.dumps(body, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-        CT._CACHE.pop("sources", None)
-    show_sources(a)
 
 
 def show_sources(a=None):
-    from common.store.db import cfgtables as CT
+    from common.store.db import cfgfile
 
-    cur = CT.active("sources", refresh=True)
+    cur = cfgfile.active("sources", refresh=True)
     print(f"원천 목록 {cur.label()}")
     for e in cur.body:
         print(f"  {'켜짐' if e.get('enabled', True) else '꺼짐'} {e['name']} · {e['table']} · 열 {len(e['columns'])}개")
-    if _server() and getattr(a, "history", 0):
-        _history("sources", a.history)
 
 
 # ── 모듈(트리거 실행 — docs/architecture.md) ──────────────────────
@@ -503,60 +311,34 @@ def _left(a):
     return _until(a.deadline) if getattr(a, "deadline", None) else 10**7
 
 
-def _registry_new_names(out_dir, names):
-    """OP9 — 문서 대장(이미 있는 doc_registry, 지난 build 결과)과 비교해 이번 밤 파싱할 이름만(REG.nightly_plan —
-    독립 검토 BLOCK 반영 10-08: new(처음 보는 doc_key) + unchanged·touched(AD17① — 원본 바이트는 같고 날짜만
-    바뀜)인데 아직 성공 못한 doc_key(status != 'parsed' — 반복 실패·'seen' 모두 매일 재시도) · 성공해서 안 바뀐
-    문서는 뺌(다시 할 필요 없음, touched도 포함 — 원본 바이트가 안 바뀌었으니 재파싱 대상이 아님) · changed는
-    기본 전부 빠짐(자동 재파싱 안 함, OP1) · deleted는 observed에 없어 자동으로 빠짐).
-    (옛 OP14 AUTO_REPARSE_CHANGED — changed 자동 재파싱 — 는 10-30 지움(pl-35, pl-23 증분만).)
-    문서 대장을 못 열면 _no_registry()(서버 run_mode prod = 종료 4, 그 밖 = None — 필터 없음, pl-32 10-30)."""
-    from common.store import registry as REG
+def _unparsed(names):
+    """C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = EDW FileStorageMap ∖ ParsingMeta. FileStorageMap 쪽은 이미 받은 이름 목록
+    (`--source rdb:`가 FileStorageMap을 읽어 만든 것 — 이름 ↔ 원본 키 s3_key 대응은 source.py가 쓴 manifest.jsonl), ParsingMeta 쪽은
+    여기서 **EDW를 한 번 읽는다**(파싱 입구의 EDW 읽기 — 읽기 계정, PC는 EDW 대역 sqlite `RDB_SQLITE`): parse_status가 ok·partial인
+    행의 source_key 집합(`done_source_keys`). 통째 실패는 ParsingMeta에 안 쓰므로(C3) 실패한 문서는 행이 없어 다음 실행이 다시 고른다.
+    키 = manifest의 "key"(없으면 이름 그대로 — publish의 source_key와 같은 규칙, parsing_meta.plan).
+    순서: 받은 이름 순서 그대로(문서 대장이 없어져 시도 이력이 없음 — 실패 문서를 뒤로 미루지 않는다).
+    EDW를 못 읽으면: 서버(run_mode prod 또는 RUN_ENV dev·prd·모르는 값)는 종료 4(전체 재파싱 안 함), PC는 받은 목록 그대로 + 로그 한 줄."""
+    from common.core.contract import jl
+    from common.store import parsing_meta_db as PMDB
 
-    db = REG.try_open_db()
-    if db is None:
-        return _no_registry()
     try:
-        observed = REG.scan(out_dir)
-        new_names = set(REG.nightly_plan(db, observed)["parse_names"])
-    except Exception:
-        return None
-    finally:
-        db.close()
-    return {n for n in names if n in new_names}
-
-
-def _no_registry():
-    """문서 대장을 못 열 때(pl-32 사용자 10-30 — 실행을 넘는 문서 고르기는 문서 대장 하나만): run_mode prod(서버)는 종료 4(인프라 없음 —
-    전체를 다시 파싱하지 않음), 그 밖(PC·DOC_REGISTRY=0)은 이력 없이 받은 목록 그대로(None) + 로그 한 줄."""
-    if C.cfg().store.run_mode == "prod" or C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)도
-        print("[parse] 문서 대장(doc_registry)을 열지 못함 — run_mode prod는 멈춤(종료 4, 전체 재파싱 안 함)", file=sys.stderr, flush=True)
-        raise SystemExit(4)
-    print("[parse] 문서 대장 없음(DOC_REGISTRY=0 또는 연결 안 됨) — 이력 없이 받은 목록 그대로 처리", flush=True)
-    return None
-
-
-def _registry_unparsed(names):
-    """문서 대장에 파싱 성공 행(status parsed)이 없는 이름만 — 순서: 대장에 없거나 아직 시도 전(seen)인 문서(이름순) 먼저, 그다음 실패 문서
-    (마지막 시도가 오래된 것부터). --max-new로 앞에서 자르므로 늘 실패하는 문서가 새 문서 자리를 막지 않는다(PR #49 리뷰) — 실패 문서도
-    자리가 남으면 매번 다시(pl-32). 대장을 못 열면 _no_registry()대로(None이면 받은 목록 그대로). 앞 실행 runs.jsonl은 보지 않는다."""
-    from common.store import registry as REG
-
-    db = REG.try_open_db()
-    if db is None:
-        _no_registry()
+        db = PMDB.make_db("read")
+        try:
+            done = db.done_source_keys()
+        finally:
+            db.close()
+    except (Exception, SystemExit) as ex:  # make_db는 접속 정보가 없으면 SystemExit
+        if C.cfg().store.run_mode == "prod" or C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)
+            print(
+                f"[parse] EDW ParsingMeta를 읽지 못함 — 멈춤(종료 4, 전체 재파싱 안 함): {type(ex).__name__}", file=sys.stderr, flush=True
+            )
+            raise SystemExit(4) from None
+        print(f"[parse] EDW ParsingMeta 못 읽음({type(ex).__name__}) — 이력 없이 받은 목록 그대로 처리", flush=True)
         return list(names)
-    try:
-        rows = db.query("SELECT names, status, last_seen FROM doc_registry")
-    finally:
-        db.close()
-    state = {}  # 이름 → (status, last_seen)
-    for r in rows:
-        for n in json.loads(r["names"] or "[]"):
-            state[n] = (r["status"], r["last_seen"] or "")
-    fresh = [n for n in names if state.get(n, ("seen", ""))[0] == "seen"]
-    failed = sorted((n for n in names if state.get(n, ("seen", ""))[0] not in ("seen", "parsed")), key=lambda n: (state[n][1], n))
-    return fresh + failed
+    man = OUT / "parse" / "_source" / "manifest.jsonl"
+    key_of = {r["file_name"]: r.get("key") for r in jl(man)} if man.exists() else {}
+    return [n for n in names if (key_of.get(n) or n) not in done]
 
 
 _T_STEP: dict = {}
@@ -611,11 +393,7 @@ def parse_module(a):
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)
         keep = set((OUT / "dedup" / "keep.txt").read_text(encoding="utf-8").splitlines())
-        reg_new = _registry_new_names(
-            OUT, names
-        )  # OP9 — 문서 대장이 있으면 새 doc_key만(changed·deleted는 빠짐) · 없으면 None(필터 없음, 전과 동일)
-        if reg_new is not None:
-            keep &= reg_new
+        keep &= set(_unparsed(names))  # C10 — ParsingMeta에 성공 행이 있는 문서는 다시 파싱 안 함
         only = OUT / "parse" / "_source" / "only.txt"
         only.write_text("\n".join(n for n in names if n in keep) + "\n", encoding="utf-8")
         rc = _run_until(["pipeline.extract.prepare", "--src", local, "--out", a.src, "--only", only], child_env(), _left(a) - 120)
@@ -631,7 +409,7 @@ def parse_module(a):
     env = C.child_env(child_env(), VLM_CONCURRENCY=str(vlm_conc), LLM_BASE_URL=None)  # 파싱 모듈은 LLM을 부르지 않음 — 덮기 파일(S7e3 B-1)
     if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
         names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
-        new = _registry_unparsed(names)  # pl-32 — 문서 대장에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
+        new = _unparsed(names)  # C10 — ParsingMeta에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
         pick = new[: a.max_new]
         f = OUT / "parse" / "_batch_docs.txt"
         f.parent.mkdir(parents=True, exist_ok=True)
@@ -660,7 +438,7 @@ def parse_module(a):
     _tstep("t_parse")
     for args in (
         ["pipeline.transform.represent.parse_qa", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
-        ["pipeline.transform.represent.represent", *_stack_arg(), "--src", a.src, "--parse-dir", OUT / "parse"],
+        ["pipeline.transform.represent.represent", "--src", a.src, "--parse-dir", OUT / "parse"],
     ):
         rc = _run_until(args, env, _left(a) - 60)
         _tstep("t_" + args[0].rsplit(".", 1)[-1])  # 2026-10-22 — qa·represent 분리 계측(docflow 기타 분해)
@@ -732,7 +510,7 @@ def _structure_pg_indexed(a, index_conf):
         OUT / "parse",
         "--src",
         a.src,
-        "--pg",  # 엔진 구성 판은 넘겨받은 STACK_VERSION 칸으로(index는 --stack-version 인자가 없음 — pl-32 리뷰)
+        "--pg",
         *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
         check=False,
     )
@@ -775,7 +553,6 @@ def structure_module(a):
         a.src,
         "--embed",
         embed,
-        *_stack_arg(),
         "--summary",
         "auto",
         *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
@@ -846,14 +623,13 @@ def run_stack(a):
     if not a.skip_parse:
         parse_docs(a.src, engines, a.procs)  # 이미 파싱된 문서×엔진은 다시 안 함(sha)
     sh("pipeline.transform.represent.parse_qa", "--src", a.src)  # 대표 고르기용 정확도(교차 재현율)
-    sh("pipeline.transform.represent.represent", *_stack_arg(), "--src", a.src)
+    sh("pipeline.transform.represent.represent", "--src", a.src)
     sh(
         "pipeline.transform.structure.build_bundle",
         "--src",
         a.src,
         "--embed",
         pc.cfg().transform.structure.embed or st["embed"],
-        *_stack_arg(),
         *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
     )
     if a.pg:
@@ -886,8 +662,9 @@ def connect(a):
 TESTS_ROOT = DEPLOY_ROOT / "tests"  # 저장소 루트 tests/ · 이미지 /app/deploy/tests(PYTHONPATH와 같은 뿌리)
 IMAGE_DIRS = {"common": None, "pipeline": "pipeline", "mcp": "mcp"}  # tests/server/<폴더> → 도는 이미지(None = 둘 다)
 _FAKE_LLM_CASES = frozenset({"tests.server.mcp.test_mcp_main"})  # LLM_FAKE를 켜는 사례(질문 분해 — 옛 mcp_server.main 사례)
-# PC에서 개발자 루트 settings.yaml(실 PG)을 그대로 읽어야 판정되는 사례(실 PG에서만 C-54 ① 재현) — 그 밖 PC 사례는 시험 전용 바탕 설정(case_env, 10-29)
-_PC_SETTINGS_CASES = frozenset({"tests.general.pipeline.test_pub_registry"})
+# PC에서 개발자 루트 settings.yaml(실 PG)을 그대로 읽어야 판정되는 사례 — 그 밖 PC 사례는 시험 전용 바탕 설정(case_env, 10-29)
+# (유일한 사례 test_pub_registry는 C10 10-31에 문서 대장과 함께 지움 — 지금 비어 있음)
+_PC_SETTINGS_CASES: frozenset[str] = frozenset()
 
 
 def server_cases():
@@ -1279,26 +1056,8 @@ def main(argv=None):
         if name == "load":
             p.add_argument("--replace", action="store_true")
             p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
-    p = sub.add_parser("set-stack")
-    p.add_argument("--from-selection", action="store_true")
-    p.add_argument("--parse", help='".pdf_text=pymupdf,pdfplumber;.docx=office;…"')
-    for k in ("name", "chunk", "embed", "graph", "retrieve"):
-        p.add_argument(f"--{k}")
-    p.add_argument("--k", type=int)
-    p.add_argument("--activate", type=int, metavar="N", help="서버 — 판 N을 다시 활성으로(되돌리기)")
-    p.add_argument("--reason", help="서버 — 바꾸는 이유(필수, 판 행·실행 기록에 남음)")
-    p.add_argument("--by", help="서버 — 누가(없으면 OS 사용자)")
-    p = sub.add_parser("show-stack")
-    p.add_argument("--history", type=int, default=5, metavar="N", help="서버 — 최근 판 N개(0 = 안 보임)")
-    p = sub.add_parser("set-sources", help="원천 목록 바꾸기 — 서버 = 판 표 struct.source_version 새 판·활성, PC = 파일(S8b)")
-    p.add_argument("--file", help="원천 목록 json(목록 — resources/mappings/sources.json 모양)")
-    p.add_argument("--name", help="서버 — 판 이름(없으면 파일 이름)")
-    p.add_argument("--activate", type=int, metavar="N", help="서버 — 판 N을 다시 활성으로(되돌리기)")
-    p.add_argument("--check-columns", action="store_true", help="회사 DB INFORMATION_SCHEMA로 표·열 이름이 있는지(값 안 읽음 — 선택)")
-    p.add_argument("--reason", help="서버 — 바꾸는 이유(필수)")
-    p.add_argument("--by", help="서버 — 누가(없으면 OS 사용자)")
-    p = sub.add_parser("show-sources")
-    p.add_argument("--history", type=int, default=5, metavar="N", help="서버 — 최근 판 N개(0 = 안 보임)")
+    sub.add_parser("show-stack")
+    sub.add_parser("show-sources")
     p = sub.add_parser(
         "selftest", help="서버 반입 시험(tests/server — 이 이미지 폴더 + common)을 파일마다 — PASS/FAIL 표, 실패 있으면 종료 코드 1"
     )
@@ -1319,9 +1078,7 @@ def main(argv=None):
 
         require_run_env("pipeline.cli", sections=("pipeline",))  # 서버면 설정 검증 실패도 거부(S7e2 U-1)
     {
-        "set-stack": set_stack,
         "show-stack": show_stack,
-        "set-sources": set_sources,
         "show-sources": show_sources,
         "night": night,
         "run-stack": run_stack,

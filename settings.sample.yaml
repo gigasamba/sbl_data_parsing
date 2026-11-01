@@ -67,7 +67,6 @@ required:
     doc_src:  # 원본 문서 폴더(DOC_DIR의 옛 별칭) · 값: 경로
     output_root:  # 호스트의 결과(output) 폴더(서버 경로) · 값: 경로
     pg_container:  # 호스트에서 psql을 docker exec할 PostgreSQL(pgvector) 컨테이너 이름 · 값: 글자(컨테이너 이름)
-    mcp_store:  # 검색 저장소 종류 · 값: pg·local 중 하나 또는 비움(자동 탐지)
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 common:
@@ -123,12 +122,6 @@ common:
       max_calls: 0  # LLM 호출 수 상한(개) · 기본 0 · 값: 0 이상 정수 (0 = 무제한)
       no_paid_calls: false  # =1이면 외부(유료) 주소 호출 자체를 거부 · 기본 false · 값: true·false
       spend_file:  # 지출 장부 파일 경로(호출마다 금액 한 줄 — 프로세스·실행 전체가 공유) · 값: 경로
-  # ─── 저장소 — 문서 대장·정형 저장소 ───
-  store:
-    doc_registry: true  # 문서 대장(doc_registry) 사용 · 기본 true · 값: true·false
-    registry_etag_md5: true  # ETag가 MD5 형식이면 그것만으로 '날짜만 바뀜'으로 확정 · 기본 true · 값: true·false
-    struct_backend:  # [파라미터] 정형 저장소 종류 pg|sqlite|tsql · 기본 pg · 값: pg·sqlite·tsql 중 하나
-    struct_db:  # [파라미터] 정형 저장소 SQLite 파일 경로(STRUCT_BACKEND=sqlite일 때·PG 대체 시) · 값: 경로
   # ─── 검색 토큰 정규화 ───
   text:
     search_recency: '1'  # [파라미터] 같은 문서군의 최신 판 우선 모드 · 기본 1 · 값: 0(끔)·1(최신을 묻는 질문만)·2(항상) 중 하나
@@ -268,7 +261,6 @@ search:
   # ─── 검색 순위·방식 ───
   methods:  # [파라미터] search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서) · 기본 vector,bm25,id · 값: 쉼표 목록 또는 YAML 목록
   min_score:  # [파라미터] 근거 점수 하한 · 값: 0 이상
-  struct_context_max: 200  # [파라미터] 집계 질문에서 계약 마스터 전체를 표로 넘길 때 계약 수 상한(개) · 기본 200 · 값: 0 이상 정수
   pg:
     vector_search:  # 벡터 검색 방식 · 값: exact 또는 비움(HNSW 근사)
   weights:
@@ -280,10 +272,8 @@ search:
   client:
     hard: false  # 고객 범위를 하드 격리(다른 고객 문서 제외) · 기본 false · 값: true·false
     strict: false  # 하드 격리에서 고객 미상 문서도 제외 · 기본 false · 값: true·false
-  # ─── 집계 ───
-  agg_today:  # 집계 질문의 '오늘' 기준일(YYYY-MM-DD) 고정 · 값: YYYY-MM-DD
-  agg_vocab_file:  # 집계 지표 단서어 사전(agg_vocab.json)을 다른 경로로 지정 · 값: 경로
-  data_catalog:  # 데이터 카탈로그(표·열 설명) JSON 경로 · 값: 경로
+  # ─── 질문 유형 ───
+  agg_vocab_file:  # 질문 유형 단서어 사전(agg_vocab.json — 건수·합계 단서)을 다른 경로로 지정 · 값: 경로
   # ─── EDW 도구 ───
   edw_meta:
     dir:  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · 값: 경로
@@ -320,8 +310,8 @@ ops:
     output_root:  # 결과(output) 폴더 · 값: 경로
     runlog_dir:  # 실행 기록(output/logs) 루트 폴더 · 값: 경로
     source_manifest:  # 원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응) · 값: 경로
-    sources_file:  # PC(RUN_ENV=local) 원천 목록 파일 경로(비우면 resources/mappings/sources.json) · 값: 경로
-    stack_file:  # PC(RUN_ENV=local) 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json) · 값: 경로
+    sources_file:  # 원천 목록 파일 경로(비우면 resources/mappings/sources.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
+    stack_file:  # 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
   pipeline_paths:
     file_meta_path:  # EDW 파일 메타 JSONL 경로(s3_key → 메타) · 값: 경로
     gold_dir:  # 사람 정답(gold) 폴더 · 값: 경로
@@ -331,7 +321,6 @@ ops:
     parse_tmp:  # 임시 폴더(첨부 임시 파일은 형제 attach/) · 값: 경로
     raw_root:  # P0 원본 층(raw/VLM) 캐시 저장소 루트 · 값: 경로
     soffice_bin:  # LibreOffice soffice 실행 파일 경로 · 값: 경로
-    stack_version:  # 엔진 구성 판 번호(내부 신호 — 진입점이 활성 판 번호를 정해 자식에 넘김, 사람이 쓰지 않음 · pl-32) · 값: 0 이상 정수
   # ─── 호스트 — 컨테이너 도구·패치·정리 ───
   host:
     docker: docker  # 호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등) · 기본 docker · 값: docker·podman 중 하나
@@ -481,9 +470,6 @@ tuning:
       timeout_sec: 20.0  # query_edw 질의 시간 상한(초) · 기본 20.0 · 값: 0 이상 초
     output:
       max_chars: 20000  # search 응답 크기 상한(JSON UTF-8 바이트) · 기본 20000 · 값: 0 이상 정수
-    agg:
-      text_max_rows: 30  # 집계 근거 text에 붙이는 표 행 상한(개) · 기본 30 · 값: 0 이상 정수
-      text_max_src_rows: 40  # 계약별 근거 행 상한(개) · 기본 40 · 값: 0 이상 정수
     pg:
       filter_exact_max: 20000  # 고객 필터 허용 집합이 이 크기 이하면 벡터 정확 검색으로 전환(청크 수) · 기본 20000 · 값: 0 이상 정수
     server:

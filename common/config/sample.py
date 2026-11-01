@@ -29,9 +29,7 @@ HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: pyt
 # C-39(사용자 10-27 S7e1 Q6 a) — options.conf(옛 카탈로그 — S7e2에 지움)가 env에 채우던 값 중 설정 모델 기본값과 결과가 다른 칸(값에 비밀 없음).
 # output/orca/S7e1/base_calc.py로 뽑음(예외 줄 빼고 · 표기만 다른 5.0/5 빼고 · 모델 칸 없는 env 이름 빼고). sample 주석으로만 낸다(모델 기본값은 코드 기본값 그대로).
 CATALOG_VALUES = {
-    "AGG_TODAY": "",
     "CHUNK_TABLE": "",
-    "DATA_CATALOG": "",
     "DOC_DIR": "",
     "DOC_DIR_PREPARED": "output/prepared",
     "EDW_PATH_PREFIX": "",
@@ -44,7 +42,6 @@ CATALOG_VALUES = {
     "LLM_MODEL": "",
     "LLM_SPEND_FILE": "",
     "MCP_BUNDLE": "",
-    "MCP_STORE": "",
     "PARSE_POST": "all",
     "PIPE_EMBED": "",
     "RUNLOG_FILE": "",
@@ -53,7 +50,6 @@ CATALOG_VALUES = {
     "SOFFICE_BIN": "",
     "SOURCE_MANIFEST": "",
     "SOURCE_URI_PREFIX": "",
-    "STRUCT_DB": "",
     "VLM_MODEL": "",
 }  # 옛 CHAIN_STRUCTURE_URL 기본값은 11-01에 지움(pl-10 — trigger 서버)
 CATALOG_VALUES["MCP_STORE"] = "pg"
@@ -69,7 +65,7 @@ CATEGORIES = {
         ("접속 — PostgreSQL·EDW·Object Storage 세부", ("common.connections",)),
         ("모델 호출 — 임베딩·LLM·VLM·전송", ("common.models.embed", "common.models.llm", "common.models.vlm", "common.models.transport")),
         ("비용·외부 가드", ("common.models.guard",)),
-        ("저장소 — 문서 대장·정형 저장소", ("common.store",)),
+        ("저장소 — 실행 모드", ("common.store",)),
         ("검색 토큰 정규화", ("common.text",)),
     ),
     "extract": (
@@ -113,9 +109,9 @@ CATEGORIES = {
     "load": (("게시(publish)", ("load.publish", "load.edw_path_prefix")), ("적재", ("load",))),
     "search": (
         ("MCP 서버", ("search.server",)),
-        ("검색 순위·방식", ("search.methods", "search.min_score", "search.weights", "search.pg", "search.struct_context_max")),
+        ("검색 순위·방식", ("search.methods", "search.min_score", "search.weights", "search.pg")),
         ("고객 범위", ("search.client",)),
-        ("집계", ("search.agg_today", "search.agg_vocab_file", "search.data_catalog")),
+        ("질문 유형", ("search.agg_vocab_file",)),
         ("EDW 도구", ("search.edw_meta", "search.edw_query")),
         ("출력·기록·파싱 프록시", ("search.output", "search.query_log", "search.parse_proxy")),
     ),
@@ -150,7 +146,6 @@ HYPER = {  # 이름 규칙으로는 운영값이지만 결과(파싱·청크·�
     "pipeline.extract.ocr.dpi",
     "pipeline.transform.structure.page_chunk_max",
     "pipeline.transform.vlm.fig_photo_max_tokens",
-    "mcp.search.struct_context_max",
 }
 OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "common.models.llm.empty_retry_max",
@@ -306,7 +301,7 @@ def _value(p, f):
 
 _IMAGE_ENVS = {k for d in S._IMAGE_DEFAULTS.values() for k in d}
 # 적었는지(기본값과 구별 — given()·resources._f·model_matrix.own)로 동작이 갈리는 칸 — 기본값을 적으면 기능이 켜지거나 읽는 쪽 기본값이 밀림
-# (op-05 리뷰: STRUCT_BACKEND=pg → 정형 저장소 켬 · 모듈 포트 → 공통 포트 무시 · RDB 목록 [] → 빈 필터). 비워 둔다.
+# (op-05 리뷰: 모듈 포트 → 공통 포트 무시 · RDB 목록 [] → 빈 필터). 비워 둔다.
 # 시험 test_sample_yaml이 코드의 given("X")·_f("X")·own("X") 이름이 여기(또는 비우는 칸)에 다 있는지 본다.
 SET_MATTERS = {
     "CPU_MAX_LOAD",
@@ -324,8 +319,6 @@ SET_MATTERS = {
     "PIPE_THREADS",
     "PIPE_WORKERS",
     "PM_BUCKET",
-    "STRUCT_BACKEND",
-    "STRUCT_DB",
     "VLM_MAX_CONCURRENCY",
     "RDB_COMPANY",
     "RDB_DOC_TYPE",
@@ -354,7 +347,6 @@ _PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|
 VALUES = {
     "common.run_env": "local·dev·prd 중 하나",
     "common.store.run_mode": "prod·test 중 하나",
-    "common.store.struct_backend": "pg·sqlite·tsql 중 하나",
     "common.text.search_recency": "0(끔)·1(최신을 묻는 질문만)·2(항상) 중 하나",
     "common.connections.object_storage.verify_tls": "1(검증)·0(끔)·CA 파일 경로",
     "common.models.guard.external_scope": "func·e2e 중 하나",
@@ -367,7 +359,6 @@ VALUES = {
     "pipeline.transform.structure.embed": "api·bge-m3·e5-small·e5-base·none 중 하나",
     "pipeline.transform.structure.chunk_table": "rows 또는 비움(표 통째로)",
     "mcp.server.host": "127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부",
-    "mcp.server.store": "pg·local 중 하나 또는 비움(자동 탐지)",
     "mcp.search.pg.vector_search": "exact 또는 비움(HNSW 근사)",
     "common.connections.pg.db": "글자",
     "common.host.doc_src": "경로",

@@ -1413,12 +1413,12 @@ class CommonPaths(Section):
     sources_file: str | None = F(
         None,
         "SOURCES_FILE",
-        "PC(RUN_ENV=local) 원천 목록 파일 경로(비우면 resources/mappings/sources.json) — 서버는 판 표 struct.source_version 활성 판(S8b)",
+        "원천 목록 파일 경로(비우면 resources/mappings/sources.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰)",
     )
     stack_file: str | None = F(
         None,
         "PIPELINE_STACK_FILE",
-        "PC(RUN_ENV=local) 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json) — 서버는 판 표 struct.stack_version 활성 판(S8b)",
+        "엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰)",
     )
 
 
@@ -1464,25 +1464,13 @@ class CommonRuntime(Section):
 
 class CommonStore(Section):
     REMOVED = frozenset(
-        {"registry_editions", "registry_retry_max"}
-    )  # 사용자 10-30(pl-32 — 재시도 횟수 없음, 실패 문서는 늘 다시) — 옛 파일에 남아도 경고만
-    doc_registry: bool | None = F(
-        True, "DOC_REGISTRY", "문서 대장(doc_registry) 사용 — =0이면 끄고 필터 없이 동작", off=("", "0", "none", "false"), fold="lower"
-    )
-    registry_etag_md5: bool | None = F(
-        True,
-        "REGISTRY_ETAG_MD5",
-        "ETag가 MD5 형식이면 그것만으로 '날짜만 바뀜'으로 확정 — =0이면 항상 원본 바이트 대조",
-        off=("", "0", "none", "false"),
-        fold="lower",
-    )
+        {"registry_editions", "registry_retry_max", "doc_registry", "registry_etag_md5", "struct_backend", "struct_db"}
+    )  # 사용자 10-30(pl-32 — 재시도 횟수 없음) · 10-31(pl-12 C10 — 문서 대장·숨김 통째로 지움 · pl-08 — 정형 저장소 통째로 지움) — 옛 파일에 남아도 경고만
     run_mode: Annotated[Literal["prod", "test"] | None, BeforeValidator(lambda v: v or None)] = F(  # "" = 설정 안 함(옛 str 칸과 같게)
         None,
         "RUN_MODE",
-        "실행 모드 prod|test — pipeline --mode 기본, prod이면 PG 실패 시 SQLite 대체 금지·VLM 시간 완화. dev·prd 서버는 prod 필수(pl-12 — 아니면 정형 저장소가 시작 거부)",
+        "실행 모드 prod|test — pipeline --mode 기본, prod이면 EDW를 못 읽을 때 종료 4·VLM 시간 완화. dev·prd 서버는 prod(pl-12)",
     )
-    struct_backend: str | None = F("pg", "STRUCT_BACKEND", "정형 저장소 종류 pg|sqlite|tsql", blank="keep")
-    struct_db: str | None = F(None, "STRUCT_DB", "정형 저장소 SQLite 파일 경로(STRUCT_BACKEND=sqlite일 때·PG 대체 시)")
 
 
 class CommonText(Section):

@@ -20,9 +20,9 @@
 | 적재는 지우지 않음(`--prune` 없앰) | done | prune 길 없앰 · 시험 | [pl-13](prd/etl.md#pl-13) |
 | 배포 backfill이 `doc.clients`만 읽음 | done | backfill 고침 · 시험 | [pl-14](prd/etl.md#pl-14) |
 | compose `index_a`/`index_b` 실패 | todo | 원인 · 고침 | [pl-19](prd/etl.md#pl-19) |
-| 정형 DB와 문서 대장 | todo | **지움**(파생·마스터 표·대장 — stack_version 남김, 사용자 10-31) · 마스터 · 연결 · 대장 | [pl-08](prd/etl.md#pl-08) |
+| 정형 DB와 문서 대장 | done | struct 스키마를 코드에서 모두 없앰 — 파일만(11-01) | [pl-08](prd/etl.md#pl-08) |
 | 마스터 CSV 활용 방안 설계 | todo | 고객 별칭 CSV 0.2.0 · 나머지 후순위 · grill | [pl-38](prd/etl.md#pl-38) |
-| 문서 대장 upsert·게시 가드 | todo | **지움**(사용자 10-31) · deleted 길 없앰·서버 대체 금지 ✓ · PG 번역 · ParsingMeta 가드 | [pl-12](prd/etl.md#pl-12) |
+| 문서 대장 upsert·게시 가드 | done | **지움**(사용자 10-31) · deleted 길 없앰·서버 대체 금지 ✓ · PG 번역 · ParsingMeta 가드 | [pl-12](prd/etl.md#pl-12) |
 | 파싱 결과 게시 | done | Object Storage · ParsingMeta | [pl-09](prd/etl.md#pl-09) |
 | `full`은 늘 게시, 대상 필수 | todo | `--no-publish` 없앰 · 시작 거부 | [pl-26](prd/etl.md#pl-26) |
 | 실행 관리(오케스트레이션) | done | CLI · entrypoint · flow 러너 · trigger 서버 지움(사용자 10-31, 11-01) | [pl-10](prd/etl.md#pl-10) |
@@ -62,10 +62,10 @@
 ## 검색 MCP (mcp)
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
 |---|---|---|---|
-| `search` 도구 | todo | **일부 지움**(PC 묶음 검색·PG 대역 — 사용자 10-31) · 세 방식 · 혼합 찾기 · 근거 출력 | [mc-01](prd/mcp.md#mc-01) |
+| `search` 도구 | done | **일부 지움**(PC 묶음 검색·PG 대역 — 사용자 10-31) · 세 방식 · 혼합 찾기 · 근거 출력 | [mc-01](prd/mcp.md#mc-01) |
 | 질문 넓히기 | done | 용어집 · 고객별 나누기 · 질문 유형 | [mc-02](prd/mcp.md#mc-02) |
 | 고객 범위·판·중복 | todo | 고객 범위 · 숨김 · 최신 판 | [mc-05](prd/mcp.md#mc-05) |
-| 집계 답 | todo | **지움**(사용자 10-31) · 규칙 집계 · 통화 · LLM 라우터 | [mc-04](prd/mcp.md#mc-04) |
+| 집계 답 | done | **지움**(사용자 10-31) · 규칙 집계 · 통화 · LLM 라우터 | [mc-04](prd/mcp.md#mc-04) |
 | 집계 길이 지운 칸을 고름 | done | `aggregate.pg()` 지움(mc-12와 함께) | [mc-11](prd/mcp.md#mc-11) |
 | 사실 집계가 지운 `doc_fact` 질의 | done | PG 집계 길 지움 · 숫자는 `query_edw` | [mc-12](prd/mcp.md#mc-12) |
 | retriever가 지운 칸을 읽음 | done | 묶음 `doc_key` · PG 열 | [mc-10](prd/mcp.md#mc-10) |
@@ -74,6 +74,7 @@
 | 근거의 `rep_uri`가 늘 빔 | todo | pl-25 대기 · `source_key` 조회 | [mc-15](prd/mcp.md#mc-15) |
 | `search` 운영 계약 구현 | todo | question 필수 · 필터 11종 · 출력 축소(등급 A) | [mc-16](prd/mcp.md#mc-16) |
 | 원문 전송 도구 2개 | todo | `list_doc_fulltext` · `get_doc_fulltext`(등급 A) | [mc-17](prd/mcp.md#mc-17) |
+| 검색 — PG만, 실행 중 묶음 없음 | todo | 문서 메타·임베딩 정보 PG에서 · 검색 동작 바뀜(자기 PR + 평가) | [mc-19](prd/mcp.md#mc-19) |
 | `parse_document` 스캔 PDF 다시 지원 | todo | 지금은 건너뜀 + 안내 · 엔진·응답 시간 정하기(등급 A) | [mc-18](prd/mcp.md#mc-18) |
 | `query_edw` 도구 | done | SELECT만 · 허용 목록 · 상한 | [mc-06](prd/mcp.md#mc-06) |
 | `edw_meta` 도구 | done | 스키마 → 표 → 칸 | [mc-07](prd/mcp.md#mc-07) |

@@ -14,7 +14,7 @@ common:
     llm: {max_concurrency: 8}
     vlm: {model_alt: m}
     ocrvlm: {base_url: http://x/v1, model: m}
-  store: {registry_retry_max: 7}
+  store: {registry_retry_max: 7, doc_registry: false, registry_etag_md5: true, struct_backend: pg, struct_db: /x.sqlite}
 ops:
   paths: {korean_font: /f.ttf, eval_sets_dir: /x}
   runtime: {exp_max_workers: 4, exp_proc_gb_answer: 1, exp_proc_gb_build: 1, exp_proc_gb_run: 1, exp_reserve_gb: 4}
@@ -74,5 +74,5 @@ def test_old_layout_rejected_and_migrated():
         if "pipeline" in classes:
             gone |= {"pipeline.extract.cache.parse_tmp_max_gb", "pipeline.extract.disk_free_warn_gb"}
         if "mcp" in classes:
-            gone.add("mcp.search.agg.llm_min")
+            gone.add("mcp.search.agg")  # mc-04(11-01) — 절째 지움(옛 llm_min 칸 대신 절 이름으로 보고)
         assert gone <= set(report["삭제됨"]), report

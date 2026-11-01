@@ -461,17 +461,11 @@ def main(argv=None):
     )  # S7c — 설정 객체
     ap.add_argument("--summary", default="auto", choices=["auto", "lead"], help="둘 다 앞부분 발췌(옛 호출·색인 설정 호환)")
     ap.add_argument("--chunk", default=None, help="기본 = stack.json chunk(없으면 structure)")
-    sg = ap.add_mutually_exclusive_group()  # 둘 다 주면 거부(종료 2) — 파일은 PC 실험·시험 전용, 생산 경로는 판 번호만(pl-32)
-    sg.add_argument(
-        "--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 판: --stack-version > STACK_VERSION > PC 파일, pl-32)"
-    )
-    sg.add_argument("--stack-version", type=int, default=None, help="엔진 구성 판 번호(진입점이 넘김)")
+    ap.add_argument("--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file)")
     ap.add_argument("--no-rep", action="store_true", help="대표 파싱(output/parse/_rep) 대신 선정 엔진을 문서마다 고름(단계 1 실험용)")
     ap.add_argument("--images-dir", default=None, help="그림 기록 index.jsonl 폴더(L1, 기본 = --parse-dir/_images) — 없으면 그림 청크 0건")
     ap.add_argument("--out", default="output/edw/bundle")
     a = ap.parse_args(argv)
-    if a.stack_version is not None:  # 같은 프로세스·자식도 이 판을(pl-32 리뷰 — represent와 같게)
-        C.put(STACK_VERSION=str(a.stack_version))
     stack = json.loads(Path(a.stack).read_text(encoding="utf-8")) if a.stack else pc.stack()
     a.chunk = a.chunk or stack.get("chunk") or "structure"
     t0 = time.time()

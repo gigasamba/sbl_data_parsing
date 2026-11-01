@@ -1,31 +1,13 @@
 """mcp_server.services.search.local 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.local`."""
 
-from collections import Counter
-from pathlib import Path
-
 from common.core.paths import GLOSSARY_ROOT
 from mcp_server import config as mc
-from mcp_server.services.search.local import IndexMismatch, Local, embed_query, entity_hints, tie_break, weights
+from mcp_server.services.search.local import IndexMismatch, embed_query, entity_hints, tie_break, weights
 
 
 def selftest():
-    """BM25 가중 질의어(X3) — Local 인스턴스 없이 bm25()만(self 자리에 필요한 속성만 둔 가짜 객체)."""
-    import types
-
-    fake = types.SimpleNamespace(
-        n=3,
-        avg=3.0,
-        chunks=[{"n_terms": 3}, {"n_terms": 4}, {"n_terms": 2}],
-        tf=[Counter({"a": 1, "b": 1}), Counter({"a": 2}), Counter({"b": 1})],
-        df=Counter({"a": 2, "b": 2}),
-    )
-    r_list = Local.bm25(fake, ["a", "b"], 3)
-    r_dict1 = Local.bm25(fake, {"a": 1.0, "b": 1.0}, 3)
-    assert r_list == r_dict1 == [0, 1, 2], r_list  # 확장 없음(리스트=전부 1.0) — 기존 동작과 동일
-    r_w = Local.bm25(fake, {"a": 1.0, "b": 10.0}, 3)
-    assert r_w == [2, 0, 1] and r_w != r_list  # b 가중치를 올리면 b만 있는 청크(2)가 1위로(가중이 실제로 반영됨)
-    print("[selftest] BM25 가중 질의어(확장 없으면 동일 · 가중 반영) 통과")
-
+    """local.py의 남은 도우미(weights·tie_break·entity_hints·embed_query) — Local 검색 엔진은 mc-01(11-01)에 지움
+    (그 BM25 가중·BR32 ID 문턱·OP1 숨김 시험은 PG 경로로 test_retriever에 옮김)."""
     # G14 — weights(question) 질문 유형별 가중치(SEARCH_W_BM25_TABLE)
     with mc.senv(SEARCH_W_BM25_TABLE=None, SEARCH_W_BM25=None):  # 설정 객체 덮기(S7d — 끝나면 되돌림)
         w0 = weights()
@@ -38,13 +20,12 @@ def selftest():
             assert weights("몇 건입니까?")["bm25"] == 0.05  # env로 값 바꿈
     print("[selftest] G14 weights(question) 질문 유형별 가중치(SEARCH_W_BM25_TABLE) 통과")
 
-    _selftest_id_doc_level()
-    _selftest_hidden()
     _selftest_tie_break()
+    _selftest_index_mismatch()
 
 
 def _selftest_tie_break():
-    """BR41 — tie_break()·entity_hints() 단위 점검(DB·Local 인스턴스 없이, 순수 함수).
+    """BR41 — tie_break()·entity_hints() 단위 점검(DB 없이, 순수 함수).
     동점 구간(상대 오차 TIE_EPS_REL 안) + 질문에 나온 고객 엔티티가 한쪽 문서(B)에만 맞으면 B가 앞으로(A는
     동점이 아닌 C는 그대로 — 안정 정렬, 구간 밖은 안 건드림) · 질문에 엔티티 없음·동점 아님
     이면 셋 다 바이트 동일(그대로)."""
@@ -98,83 +79,6 @@ def _selftest_tie_break():
         "[selftest] BR41 tie_break·entity_hints — 동점 구간만·질문 엔티티 맞는 문서 앞으로·동점 아니면 안 건드림·"
         "구조화 필드 정확 일치만(파일명 부분 일치 없음, QA093·R2Q005 회귀 재현 방지) 통과"
     )
-
-
-def _selftest_id_doc_level():
-    """BR32 — id 우선 검색의 ID_MAX_DF 문턱이 문서 단위인지(청크 단위면 한 문서가 여러 청크로 쪼개질 때 억울하게
-    걸림 — 실측 QA074: 메일 스크린샷 OCR이 4조각으로 쪼개져 메일 ID가 청크 6개에 나타나 청크 기준 문턱(5)을 넘음).
-    문서 1개가 청크 6개로 쪼개져도(ID_MAX_DF=5보다 많은 청크) 문서 기준 df=1 ≤ 5면 id 방법이 그 청크를 찾아야 함."""
-    import json
-    import tempfile
-
-    import numpy as np
-
-    d = Path(tempfile.mkdtemp())
-    docs = [{"file_path": "mail-x-01.msg", "file_name": "mail-x-01.msg", "file_sha256": "3" * 64, "doc_format": ".msg"}]
-    chunks = [
-        {
-            "doc": 0,
-            "seq": i,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "mail-x-01 단가 협상",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        }
-        for i in range(6)
-    ]  # 한 문서, 청크 6개(> ID_MAX_DF)
-    (d / "chunks.jsonl").write_text("\n".join(json.dumps(x, ensure_ascii=False) for x in chunks) + "\n", encoding="utf-8")
-    (d / "docs.jsonl").write_text("\n".join(json.dumps(x, ensure_ascii=False) for x in docs) + "\n", encoding="utf-8")
-    np.save(d / "vectors.npy", np.zeros((6, 0), dtype="float32"))
-    L = Local(d)
-    assert L.df["mail-x-01"] == 6  # 청크 기준 df는 문턱(5)을 넘음
-    assert L.doc_df["mail-x-01"] == 1  # 문서 기준 df는 1(문서 1개)
-    order, via, _ = L.search(None, ["mail-x-01"], 5, methods=["id"])
-    assert order and via[order[0]] == "i", (order, via)  # id 방법이 실제로 찾음(청크 기준이면 못 찾았을 것)
-    print("[selftest] BR32 — ID_MAX_DF 문턱이 문서 단위(한 문서가 청크 여러 개로 쪼개져도 안 걸림) 통과")
-
-
-def _selftest_hidden():
-    """OP1 — hidden(doc_key 집합)이 그 문서의 청크를 전부 뺀다(client와 같은 restrict 방식) · None·빈 집합이면
-    전과 바이트 동일(기존 client_hard 선례와 같은 확인)."""
-    import json
-    import tempfile
-
-    import numpy as np
-
-    d = Path(tempfile.mkdtemp())
-    docs = [
-        {"file_path": "a.txt", "file_name": "a.txt", "file_sha256": "1" * 64, "doc_format": ".txt"},
-        {"file_path": "b.txt", "file_name": "b.txt", "file_sha256": "2" * 64, "doc_format": ".txt"},
-    ]
-    chunks = [
-        {
-            "doc": i,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "단가는 100 USD",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        }
-        for i in range(2)
-    ]
-    (d / "chunks.jsonl").write_text("\n".join(json.dumps(x, ensure_ascii=False) for x in chunks) + "\n", encoding="utf-8")
-    (d / "docs.jsonl").write_text("\n".join(json.dumps(x, ensure_ascii=False) for x in docs) + "\n", encoding="utf-8")
-    np.save(d / "vectors.npy", np.zeros((2, 0), dtype="float32"))
-    L = Local(d)
-    order, _, _ = L.search(None, ["단가"], 5, methods=["bm25"])
-    assert order == [0, 1]  # hidden 없음 — 전과 동일
-    hidden_order, _, _ = L.search(None, ["단가"], 5, methods=["bm25"], hidden={"1" * 64})
-    assert hidden_order == [1], hidden_order  # a(숨김) 완전 제외 — b만 남음(소프트 아님)
-    none_order, _, _ = L.search(None, ["단가"], 5, methods=["bm25"], hidden=set())
-    assert none_order == order  # 빈 집합 — 바이트 동일
-    print("[selftest] OP1 — hidden 집합이 그 문서의 청크를 저장소 질의 단계에서 완전 제외(소프트 아님) · 없으면 바이트 동일 통과")
-    _selftest_index_mismatch()
 
 
 def _selftest_index_mismatch():

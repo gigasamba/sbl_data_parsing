@@ -10,12 +10,12 @@
 #     옛 형태 `tool cli/<이름>.py`도 이번 판까지는 받아 줌(경고 후 번역) — 다음 판부터 이름만.
 #   모듈(트리거 1회): parse(= 가져오기(폴더·s3://, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과, RUN_MODE=test면 형식별 표본) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타, SI39 — cli/publish_parse.py --apply) — docs/architecture.md
 #   full = dedup → prepare(중복 제외 목록만) → night(파싱 → 대표 파싱·구조화·임베딩 → PostgreSQL 적재, EDW 적재 없음) — data-pipeline 이미지만(S6c)
-#   migrate up|stamp|current|check [--target search|struct|all] [--schema S] [--dim N|--bundle B] = pgvector 우리 스키마 판 관리(S8a — Alembic,
+#   migrate up|stamp|current|check [--target search|all] [--schema S] [--dim N|--bundle B] = pgvector 우리 스키마 판 관리(S8a — Alembic,
 #     common.store.db.dbtool) — data-pipeline 이미지만, up·stamp는 load와 같은 잠금(current·check는 읽기만 — 잠금 없음). 서버 절차 docs/operations/release-and-patch.md §5-5
-#   set-stack·show-stack·set-sources·show-sources = 엔진 구성·원천 목록 판 표(S8b — struct.stack_version·source_version, 서버는 --reason 필수,
-#     --activate N 되돌리기) — set-stack·*-sources는 data-pipeline만(엔진 등록부로 검사), show-stack은 두 이미지. docs/architecture/pipeline_stack.md
+#   show-stack·show-sources = 지금 엔진 구성·원천 목록(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01: 판 표·set-stack·
+#     set-sources 없앰) — show-sources는 data-pipeline만, show-stack은 두 이미지. docs/architecture/pipeline_stack.md
 #   S6b(D-020) — 이미지 2개: RAG_MODULE마다 쓸 수 있는 명령이 다름(아래 case가 거름):
-#     pipeline(data-pipeline — 옛 data-parsing+data-structure, 두 이미지가 받던 명령의 합 + full(S6c))=parse·dedup·prepare·structure·load·publish·night·full·run-stack·show-stack·set-stack·set-sources·show-sources·migrate·idle ·
+#     pipeline(data-pipeline — 옛 data-parsing+data-structure, 두 이미지가 받던 명령의 합 + full(S6c))=parse·dedup·prepare·structure·load·publish·night·full·run-stack·show-stack·show-sources·idle·migrate ·
 #     mcp(mcp-server — 옛 data-retrieval)=mcp·ask·test-stack·show-stack · 공통(모든 이미지) = help·check·resources·services·
 #     check-modules·tool·selftest(S9 — 서버 반입 시험 /app/deploy/tests/server를 파일마다, 다른 이미지(RAG_MODULE) 폴더 사례·다른 이미지 패키지가 없어서만 실패한 사례는 SKIP,
 #     서드파티 패키지가 없으면 FAIL(I2c) — 반입 판정은 /app/docker/selftest_gate.sh)·smoke(10-14 — --src(기본 DOC_DIR) 실문서 폴더를
@@ -54,9 +54,9 @@ case "${RAG_MODULE:-}:$cmd" in
   # 옛 parse·structure 이미지가 거르던 명령의 교집합만 거른다(합친 이미지 = 두 이미지가 받던 명령의 합). full은 10-14부터 두 이미지 모두
   # 거부했으나(dedup·prepare·night가 서로 다른 이미지에 있었음) 합친 이미지에는 셋이 다 있어 S6c(사용자 10-27, C-30 ④)부터 data-pipeline에서 허용
   pipeline:mcp|pipeline:ask|pipeline:test-stack)
-    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask·test-stack)은 mcp-server. 이 이미지는 parse·dedup·prepare·structure·load·publish·night·full·run-stack·show-stack·set-stack·set-sources·show-sources·migrate·idle"; exit 64;;
-  mcp:parse|mcp:dedup|mcp:prepare|mcp:full|mcp:structure|mcp:load|mcp:publish|mcp:night|mcp:run-stack|mcp:idle|mcp:migrate|mcp:set-stack|mcp:set-sources|mcp:show-sources)
-    echo "[오류] '$cmd'는 이 이미지(mcp-server)에 없음 — 파싱·구조화·적재·판 관리(migrate·set-stack·*-sources — 엔진 등록부로 검사)는 data-pipeline. 이 이미지는 mcp·ask·test-stack·show-stack만"; exit 64;;
+    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask·test-stack)은 mcp-server. 이 이미지는 parse·dedup·prepare·structure·load·publish·night·full·run-stack·show-stack·show-sources·idle·migrate"; exit 64;;
+  mcp:parse|mcp:dedup|mcp:prepare|mcp:full|mcp:structure|mcp:load|mcp:publish|mcp:night|mcp:run-stack|mcp:idle|mcp:migrate|mcp:show-sources)
+    echo "[오류] '$cmd'는 이 이미지(mcp-server)에 없음 — 파싱·구조화·적재·판 관리(migrate)·show-sources는 data-pipeline. 이 이미지는 mcp·ask·test-stack·show-stack만"; exit 64;;
 esac
 # S7a(D-028 ②, 사용자 10-27) — 실행 환경(RUN_ENV) 없이는 앱 명령을 시작하지 않음. 이미지 ENV에는 넣지 않는다(서버가 dev·prd를
 # 정해 compose environment로 줌 — refactor.md C-34). 시험·점검 명령(help·selftest·check·check-modules·resources·services·tool check_env)은 뺀다
@@ -71,7 +71,7 @@ case "$cmd" in
 esac
 shell_names=""
 case "$cmd" in
-  parse|dedup|prepare|full|night|run-stack|structure|load|publish|check|smoke|idle|migrate|set-stack|show-stack|set-sources|show-sources)
+  parse|dedup|prepare|full|night|run-stack|structure|load|publish|check|smoke|idle|migrate|show-stack|show-sources)
     shell_names="DOC_DIR DOC_DIR_PREPARED PARSE_SOURCE PG_HOST";;
 esac
 # 점검 명령(관문 면제)은 설정 파일이 틀려도 돌아 원인을 보이게 — 내부 신호 SETTINGS_LENIENT=1(영구 다리가 서버에서도 경고만, 앱 명령은 안 줌)
@@ -155,7 +155,7 @@ for entry in sys.argv[2:]:
     preflight; locked python -m pipeline.load.publish_parse_result --apply "$@";;
   ask|test-stack)   # S5(T-15) — 검색 명령은 mcp_server/cli/ask.py(옛 pipeline.cli ask·test-stack)
     preflight; exec python -m mcp_server.cli.ask "$cmd" "$@";;
-  show-stack|set-stack|set-sources|show-sources|selftest|smoke)   # 실행 기록을 /app/output/logs에 씀 — mcp-server(/app/output:ro)에서는 안 됨(VS8b R-9 — data-pipeline 컨테이너에서)
+  show-stack|show-sources|selftest|smoke)   # 실행 기록을 /app/output/logs에 씀 — mcp-server(/app/output:ro)에서는 안 됨(VS8b R-9 — data-pipeline 컨테이너에서)
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
   full)
     preflight

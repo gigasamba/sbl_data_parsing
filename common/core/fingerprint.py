@@ -74,12 +74,10 @@ EXCLUDED_FILES = (
     "core/paths.py",  # cli 평가 도구 경로 기본값 + 원자적 파일 쓰기 헬퍼(CT1 — 옛 atomic.py 병합, 쓰는 방식만·내용은 안 바꿈)
     "store/pg.py",  # PostgreSQL 연결 설정
     "store/pg_standin.py",  # AD41 — pg.py의 연결 정보 없을 때 스탠드인(sqlite) — 연결 방법만, 핸드오프 내용과 무관(pg.py가 shared라 같이 있음)
-    "store/registry.py",  # 문서 대장(doc_registry) — 기존 산출물을 읽기만, 핸드오프 스키마를 바꾸지 않음
     "core/resources.py",  # 실행 자원(CPU·메모리) 판단 — 병렬 수 결정만
     "core/runlog.py",  # 실행 로그(output/RUNLOG.md 등)
     "store/services.py",  # 외부 서비스 탐색(Docker pgvector 등) — 연결 방법만
     "core/sources.py",  # 수집(ingest) 원천 표 목록 — parse 이전 단계(수집 서버), 모듈 핸드오프 밖
-    "store/structdb.py",  # 로컬 정형 저장소(EDW 시뮬레이션) 스키마 — _rep/bundle/색인과 별도인 표
     "store/db/",  # S8a — pgvector 표 정의·행 모양·Alembic 판·migrate 명령(폴더째 — "/"로 끝나면 그 아래 전부). DB 표 모양만,
     # _rep/bundle 내용과 무관 · 판을 더할 때마다 이 파일을 고치지 않게(이 파일은 모든 층의 공용 의존 — code_fp)
 )

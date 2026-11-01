@@ -14,7 +14,7 @@ from common.core.contract import (
 from mcp_server.services.search import (
     clientscope as CS,  # BR50 고객 범위 단일 규칙(client_scope·allows, local.py·pgsearch.py·mcp_server.py와 공용)
 )
-from mcp_server.services.search.local import Local, embed_query
+from mcp_server.services.search.local import BundleDocs, embed_query
 from mcp_server.services.search.terms import (  # 용어 사전(X3·X4, 구조화와 같은 규칙) · SI43⑤ 벡터 질의 별칭 덧붙이기(10-16 검색 전용으로 분리)
     expand_query,
     vector_alias_text,
@@ -25,13 +25,10 @@ class Retriever:
     """같은 질의 → 본문·출처 저장소(pgvector 또는 로컬 묶음)에서 하이브리드(벡터 + BM25 + 드문 ID → RRF).
     벡터는 pgvector에만 둔다(사용자 10-29 — EDW 벡터 경로 삭제, docs/prd/ops.md#op-03)."""
 
-    def __init__(self, bundle, retrieve="cosine", pg=False, hidden_db=None, pg_schema=None):
-        """hidden_db(OP1, 기본 None — 안 주면 전과 바이트 동일) = 문서 대장 연결(common.store.registry.try_open_db()) —
-        주어지면 지금 숨김 상태인 doc_key 집합을 한 번 읽어 self.hidden에 캐시하고 바로 닫는다(연결을 오래 들고
-        있지 않음 — pg=False인 로컬 검색도 이 연결은 pg 인자와 무관하게 독립적으로 받는다, 문서 대장은 다른 스키마)."""
+    def __init__(self, bundle, retrieve="cosine", pg_schema=None):
         self.bundle, self.retrieve = Path(bundle), retrieve
         self.meta = json.loads((self.bundle / "meta.json").read_text(encoding="utf-8"))
-        self.local = Local(bundle)
+        self.local = BundleDocs(bundle)  # 문서·청크 목록만(검색은 PG — mc-01 11-01)
         self.key_local = {make_chunk_key(self.local.docs[c["doc"]]["doc_key"], c["seq"]): i for i, c in enumerate(self.local.chunks)}
         self.doc_meta = {
             d["doc_key"]: {
@@ -42,46 +39,14 @@ class Retriever:
             }
             for d in self.local.docs
         }  # L3-1: pgvector 저장소도 이 로컬 묶음 문서 메타로 최신성 순위(항상 로드됨)
-        self.pg = None
-        if pg:  # 개발 서버 PostgreSQL + pgvector(기본 저장소)
-            from mcp_server.services.search import pg_mcp_connect as PGM
-            from mcp_server.services.search import pgsearch
+        # 저장소는 PostgreSQL + pgvector 하나(mc-01 11-01 — PC 전용 로컬 묶음 검색 지움). AD41 단일 전환점(PGM.connect_pool) —
+        # PG_PASSWORD·PG_CONN_FILE 있으면 PGPool(실 PG), 없으면 SQLite 대역(PC·시험 — 서버는 대역 거부, test_no_deleted).
+        # pg_schema(AD41) — 이름 있는 색인은 자기 스키마(<PG_SCHEMA>_<index_id>), 없으면 PG_SCHEMA 그대로.
+        from mcp_server.services.search import pg_mcp_connect as PGM
+        from mcp_server.services.search import pgsearch
 
-            # AD41 단일 전환점(PGM.connect_pool) — PG_PASSWORD·PG_CONN_FILE 있으면 PGPool(실 PG, S12 풀),
-            # 없으면 스탠드인(sqlite, common/pg_standin.py) — 서버는 pipeline.env만 채우면 코드 변경 없이 실 PG로.
-            # pg_schema(AD41) — 이름 있는 색인은 자기 스키마(<PG_SCHEMA>_<index_id>, common.index_cfg가 검증), 없으면 PG_SCHEMA 그대로.
-            self.pgmod, self.pg = pgsearch, PGM.connect_pool(pg_schema=pg_schema)
+        self.pgmod, self.pg = pgsearch, PGM.connect_pool(pg_schema=pg_schema)
         self._g = None
-        self.hidden = set()
-        if hidden_db is not None:  # OP1 — 숨김 집합(비면 전과 바이트 동일, _search_ex가 hidden=None으로 건넴)
-            from mcp_server.services.search import registry as RREG  # 10-14 — hidden_set은 common.store.registry에서 옮김(R만 씀)
-
-            try:
-                self.hidden = RREG.hidden_set(hidden_db)
-            finally:
-                hidden_db.close()
-
-    def refresh_hidden(self, db=None):
-        """OP1(독립 검토 BLOCK 반영, 10-08) — 전체 재적재(Retriever 새로 만들기) 없이 숨김 집합만 다시 읽는다 —
-        mcp_server._retriever()가 MCP_RELOAD_CHECK_SEC 간격으로 호출(적재 버전은 안 바뀌어도 hide·unhide는 그
-        간격 안에 반영되게, 같은 비차단 잠금 안에서 — 추가 전체 재적재 없음).
-        db를 직접 주면 그 연결을 그대로 쓰고 안 닫는다(시험용 — 호출자 책임) · 안 주면 common.store.registry.try_open_db()
-        로 best-effort(문서 대장을 못 열면 조용히 그대로 — 바뀐 적 없음으로 봄, 호출을 막지 않음)."""
-        from common.store import registry as REG
-        from mcp_server.services.search import registry as RREG  # 10-14 — hidden_set은 common.store.registry에서 옮김(R만 씀)
-
-        owns = db is None
-        if owns:
-            db = REG.try_open_db()
-            if db is None:
-                return
-        try:
-            self.hidden = RREG.hidden_set(db)
-        except Exception:
-            pass
-        finally:
-            if owns:
-                db.close()
 
     def search(self, q, k, methods=None, client=None):
         """methods ⊂ {vector, bm25, id}(없으면 retrieve 설정대로) — 검색 MCP가 방법을 골라 씀(G3).
@@ -162,7 +127,7 @@ class Retriever:
             want = set(methods) if methods else ({"vector"} if self.retrieve == "cosine" else {"vector", "bm25", "id"})
             methods = sorted(want - {"vector"}) or ["bm25", "id"]
         t0 = time.perf_counter()
-        if self.pg:
+        if True:  # PG 하나(mc-01)
             rows = self.pgmod.search(
                 self.pg,
                 qv,
@@ -173,7 +138,6 @@ class Retriever:
                 client=client,
                 client_strict=client_strict,
                 question=q,
-                hidden=self.hidden or None,
                 scope=scope,
             )
             # 2026-10-20 축소 스키마 — v_chunk_source에 file_sha256·source_uri·client가 없음: clients(JSON)에서 파싱, URI는 file_path에서 유도
@@ -199,45 +163,6 @@ class Retriever:
                 }
                 for i, r in enumerate(rows)
             ]
-        else:
-            L = self.local
-            order, via, score = L.search(
-                qv,
-                terms,
-                k,
-                retrieve=self.retrieve,
-                methods=methods,
-                client=client,
-                client_strict=client_strict,
-                question=q,
-                hidden=self.hidden or None,
-            )
-            hits = []
-            for i, ci in enumerate(order):
-                c, d = L.chunks[ci], L.docs[L.chunks[ci]["doc"]]
-                hits.append(
-                    {
-                        "rank": i + 1,
-                        "file_path": d["file_path"],
-                        "page": c["page"],
-                        "line": f"{c['line_start']}-{c['line_end']}",
-                        "bbox": c["bbox"],
-                        "section": c["section"],
-                        "summary": d.get("summary"),
-                        "text": c["chunk_text"],
-                        "chunk_ref": ci,
-                        "chunk_key": make_chunk_key(d["doc_key"], c["seq"]),
-                        "doc_key": d["doc_key"],
-                        "doc_id": c["doc"],
-                        "file_name": d["file_name"],
-                        "source_uri": d.get("source_uri") or uri_from_path(d["file_path"]),
-                        "client": d.get("client"),
-                        "clients": CS.doc_clients(d.get("client"), d.get("clients")),
-                        "contract_no": d.get("contract_no"),
-                        "via": via.get(ci),
-                        "score": score.get(ci),
-                    }
-                )
         return hits, (time.perf_counter() - t0) * 1000, {"expand_notes": expand_notes, "note": note}
 
     def clients(self):
@@ -248,4 +173,4 @@ class Retriever:
             for r in self.pg.q(f"SELECT clients FROM {self.pg.schema}.doc WHERE clients IS NOT NULL"):
                 out.update(CS.doc_clients(None, r["clients"]))
             return sorted(out)
-        return sorted({d["client"] for d in self.local.docs if d.get("client")})
+        return []

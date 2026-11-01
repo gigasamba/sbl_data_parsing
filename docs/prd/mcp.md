@@ -14,7 +14,8 @@
 - 출력: 근거 항목(`chunk_id`, `source_uri`, `page`, `bbox`, `section`, `text`, `score`, `via`, `rank`, …), `evidence_status` found/weak/none(라벨만, 빼는 것 없음), `notes`.
 - `file_path` 키 제거는 [mc-16](#mc-16)에서 다룬다(사용자 10-30 PRD grill D1).
 - 파일: `mcp_server/routers/`, `mcp_server/services/search/search_svc.py`, `retriever.py`, `pgsearch.py`, `local.py`, `shaping.py`, `mcp_server/schemas/evidence.py`.
-- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
+- 한 것(11-01 `feature/scope-cut-search` — A안, 허브·사용자 11-01): PC 전용 로컬 묶음 검색(`Local` 검색·`ask --local`·저장소 칸 `mcp.server.store`·`pgsearch bench`) 지움 — 검색은 PG 하나, PC는 SQLite 대역(`pg_standin` — 이미지 selftest도 씀, 남김). 대역이 PG 검색 SQL·작업 스레드를 받도록 고침(`regexp_replace`·`ln`·VALUES 별칭·스레드 잠금). 묶음은 아직 실행 중에 읽음(`BundleDocs` — 문서 메타·청크 키) — 없애는 것은 [mc-19](#mc-19). 시험은 대역으로 옮김(`tests/server/mcp/pgfix.py`).
+- Status: done — A안(11-01 `feature/scope-cut-search`) · B안은 [mc-19](#mc-19)
 
 <a id="mc-02"></a>
 ## mc-02 · 질문 이해 — 넓히기
@@ -40,7 +41,8 @@
 - 이유: 건수·합계 질문에는 청크가 아니라 계산한 값이 필요하다.
 - 무엇: 고객·계약·기간·모달리티별 규칙 기반 건수·금액·배치·표 합계. 다른 통화는 절대 더하지 않음. 집계 항목에 환율 글을 붙임. 결과는 `via="aggregate"`로 맨 앞. 애매한 질문은 선택적 LLM 라우터.
 - 파일: `mcp_server/services/search/aggregate.py`, `resources/prompts/mcp/agg_llm_route/`.
-- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
+- 한 것(11-01 `feature/scope-cut-search`): `aggregate.py`·`supersede.py`·검색 `structdb.py`·`internal_docs.do_aggregate`·`search_svc`의 집계·환율 갈래·`ask`의 집계 지움. 질문 유형 단서(COUNT·SUM·LIST·MAXMIN)는 `qtype.py`로. 설정 `search.agg` 절·`agg_today`·`data_catalog`·`struct_context_max` 지움(남으면 경고). 프롬프트 `agg_llm_route`는 바이트 그대로(호출부 없음). MCP 도구 계약 그대로 — 근거에 `via=aggregate`가 안 나올 뿐.
+- Status: done (11-01 `feature/scope-cut-search`)
 
 <a id="mc-11"></a>
 ## mc-11 · 집계 길이 지운 칸을 고름
@@ -131,6 +133,13 @@
 - 결정(G19·G20 — 4차 grill(사용자 10-30), 위 G1 부분을 뒤집음): 두 도구는 EDW `ParsingMeta`를 읽지 않는다. 목록·거르기(`doc_class`·`sf_op_id`·`created_since/until`)·출력은 **시스템별 gold `doc`**에서 읽는다 — `doc`에 `rep_key`(silver 위치)와 `parsed_at`·`rep_engine`을 복사해 둔다. `get_doc_fulltext`의 등록 시각 가드도 `doc.created_at`. `source_system`은 필수, 값 하나([etl.md#pl-28](etl.md#pl-28)). EDW 장애가 원문 도구에 영향을 주지 않는다.
 - 결정(사용자 10-30 PRD grill): C8 — 원문 전송 도구도 gold `doc.rep_key`를 읽는다(mc-15와 같음). C2 — 0.2.0.
 - Status: todo — 순서는 허브가 정함.
+
+<a id="mc-19"></a>
+## mc-19 · 검색 — PG만, 실행 중 묶음 없음
+- 결정(허브·사용자 11-01, [mc-01](#mc-01) B안): 서버 검색 MCP가 묶음 파일(`docs.jsonl`·`chunks.jsonl`·`meta.json`)을 실행 중에 읽지 않게 — 문서 메타(최신성 순위 L3-1)·임베딩 정보·청크 키를 PG에서 읽는다.
+- 왜 따로: 검색 동작이 바뀌는 일(r 층) — 자기 PR + 평가(e2e)로.
+- 파일: `mcp_server/services/search/{retriever,local,pgsearch,server_state}.py`.
+- Status: todo
 
 <a id="mc-18"></a>
 ## mc-18 · `parse_document` 스캔 PDF 다시 지원

@@ -46,9 +46,8 @@ def selftest():
 
     from common.config.settings import COMMON  # S7b — 시험이 env 대신 설정 객체를 덮어씀
     from common.core import paths
-    from common.store.db import cfgtables
 
-    keep_local, keep_cache = paths.LOCAL_RUN, dict(cfgtables._CACHE)
+    keep_local = paths.LOCAL_RUN
     paths.LOCAL_RUN = True  # PC 길(이미지 selftest에서도 — S8b)
     with COMMON.env(SOURCES_FILE=str(p)):
         assert sources_path() == p
@@ -59,16 +58,12 @@ def selftest():
     with COMMON.env(SOURCES_FILE=None):
         assert sources_path() == DEFAULT_FILE  # S8b — 서버 덮어쓰기($SERVER_ENV_DIR/sources.json) 없앰
 
-    body = json.loads(p.read_text(encoding="utf-8"))  # S8b — 서버 길: 판 표 활성 판(가짜 캐시로 — DB 없이)
-    try:
+    try:  # 사용자 11-01 — 서버 길도 같은 파일(판 표 없음)
         paths.LOCAL_RUN = False
-        cfgtables._CACHE["sources"] = cfgtables.Active("sources", 2, "t", body, cfgtables.sha(body), "db struct.source_version")
-        assert set(enabled_sources()) == {"FileStorageMap"} and sources_origin() == "struct.source_version 활성 판"
-        assert set(load_sources(p)) == {"FileStorageMap", "FileStorageMap_CRMS"}  # 경로를 주면 서버에서도 그 파일
+        with COMMON.env(SOURCES_FILE=str(p)):
+            assert set(enabled_sources()) == {"FileStorageMap"} and sources_origin() == str(p)
     finally:
         paths.LOCAL_RUN = keep_local
-        cfgtables._CACHE.clear()
-        cfgtables._CACHE.update(keep_cache)
 
     p2 = d / "nobucket.json"
     p2.write_text(

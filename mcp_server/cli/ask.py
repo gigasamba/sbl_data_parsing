@@ -32,10 +32,10 @@ PY = sys.executable
 
 
 def _stack():
-    """엔진 구성 활성 판(S8b — 서버 = 판 표 struct.stack_version, PC = 파일) → body + name(옛 stack.json 꼴)."""
-    from common.store.db import cfgtables
+    """엔진 구성 파일(서버·PC 같음 — 사용자 11-01) → body + name(옛 stack.json 꼴)."""
+    from common.store.db import cfgfile
 
-    cur = cfgtables.active("stack")
+    cur = cfgfile.active("stack")
     return cur.named()
 
 
@@ -60,15 +60,6 @@ def Retriever(*args, **kw):
     return R(*args, **kw)
 
 
-def table_md(g):
-    """표 집계 결과 → 마크다운 표(+ 합계 줄)."""
-    rows = ["| " + " | ".join(g["columns"]) + " |", "|" + "---|" * len(g["columns"])]
-    rows += ["| " + " | ".join("—" if c is None else str(c) for c in r) + " |" for r in g["rows"]]
-    if g.get("totals"):
-        rows.append("합계: " + " · ".join(f"{k} {v}" for k, v in g["totals"].items()))
-    return "\n".join(rows)
-
-
 def connect(a):
     """저장소: --local이면 로컬 묶음, 아니면 PostgreSQL 필수(op-09 — 자동 탐지·로컬로 빠지기 없음). → common/store/services.py"""
     from common.store import services
@@ -86,11 +77,11 @@ def ask(a):
 
 
 def _ask_mcp(a):
-    """기본 경로 — MCP_STORE·MCP_BUNDLE만 ask()의 --pg/--local/--bundle에 맞춰 세팅하고 do_search()를 그대로 부름
+    """기본 경로 — MCP_BUNDLE만 ask()의 --bundle에 맞춰 세팅하고 do_search()를 그대로 부름
     (mcp_server._build_retriever가 이 둘로 저장소를 고름 — modules/search/mcp_server.py ~L105-130). 질의 기록은
     do_search() 안 _log()가 이미 함(qa_log.append — 파일만, mc-13) — 여기서 다시 넣지 않음(중복 기록 방지)."""
     st = _stack()
-    C.put(MCP_STORE="local" if a.local else "pg", MCP_BUNDLE=str(a.bundle))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스)
+    C.put(MCP_BUNDLE=str(a.bundle))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스)
     from mcp_server.services.search import search_svc as MCP
 
     k = a.k or st.get("k", 8)
@@ -105,11 +96,7 @@ def _ask_mcp(a):
     for n in res.get("notes") or []:
         print(f"  note: {n}")
     for e in res.get("evidence") or []:
-        if e.get("kind"):  # 집계(aggregate·aggregate_llm) — AG.table_text가 표·합계를 text에 이미 붙여 둠
-            print(f"\n집계({e['kind']}): {e.get('answer')} {e.get('unit') or ''}".rstrip())
-            print(e.get("text") or "")
-            print()
-        else:
+        if True:
             rank = f"[{e['rank']}]" if e.get("rank") is not None else "   "
             print(
                 f"{rank} {e.get('file_path')}  p.{e.get('page')} L.{e.get('line')}"
@@ -126,21 +113,13 @@ def _ask_cosine(a):
     """예전 경로(그대로) — --retrieve cosine만(do_search에 없음)."""
     connect(a)
     st = _stack()
-    R = Retriever(a.bundle, a.retrieve or st.get("retrieve", "hybrid"), a.pg)
+    R = Retriever(a.bundle, a.retrieve or st.get("retrieve", "hybrid"))
     k = a.k or st.get("k", 8)
     hits, ms = R.search(a.q, k)
-    from mcp_server.services.search import aggregate as AG
-
-    agg_of = lambda q: (
-        AG.struct(q) or (None if R.pg else AG.local(a.bundle, q))
-    )  # 정형 저장소 질문 먼저(X1, MCP와 같은 규칙) · PG는 문서 집계 없음(mc-12)
-    agg = agg_of(a.q)  # 건수·합계 질문이면 SQL 집계(검색 결과는 함께 보여 줌)
-    subs, sub_aggs = [], []  # 질문 분해는 10-29에 지움(응답 칸은 유지)
+    subs = []  # 질문 분해는 10-29에 지움(응답 칸은 유지)
     res = {
         "question": a.q,
         "subs": subs,
-        "aggregate": agg,
-        "sub_aggregates": sub_aggs,
         "source": "pgvector" if a.pg else "local",
         "retrieve": R.retrieve,
         "ms": round(ms, 1),
@@ -152,22 +131,6 @@ def _ask_cosine(a):
     print(f"질문: {a.q}  ({res['source']} · {R.retrieve}, 검색 {ms:.1f} ms)")
     for i, s in enumerate(subs, 1):
         print(f"  하위 질문 {i}: {s}")
-    for g in [agg] + sub_aggs if agg else sub_aggs:
-        print(
-            f"\n집계({g['kind']} · {g['target']}"
-            + (f" · 하위 질문 {g['sub']}" if g.get("sub") else "")
-            + f"): {g['answer']} {g['unit']}"
-            + (f"  ※ {g['note']}" if g["note"] else "")
-        )
-        if g.get("columns"):
-            print(table_md(g))
-        for e in g["evidence"]:
-            print(
-                f"  - {e['contract_no']}: {e['file_path']}"
-                + (f" p.{e['page']} L.{e['line']}" if e.get("line") else "")
-                + (f" · 표 행 {e['items']}" if e.get("items") else "")
-            )
-        print()
     for h in hits:
         print(
             f"[{h['rank']}] {h['file_path']}  p.{h['page']} L.{h['line']}"
@@ -187,29 +150,14 @@ def test_stack(a):
         raise SystemExit(f"[test-stack] 질문 파일 없음: {qpath}")
     qs = [json.loads(x) for x in qpath.read_text(encoding="utf-8").splitlines() if x.strip()][: a.limit]
     st0 = _stack()
-    R = Retriever(a.bundle, a.retrieve or st0.get("retrieve", "hybrid"), a.pg)
+    R = Retriever(a.bundle, a.retrieve or st0.get("retrieve", "hybrid"))
     rows, ms = [], []
     for q in qs:
         hits, t = R.search(q.get("query") or q["question"], a.k)
         ms.append(t)
         gold = S.normalize_value(str(q.get("answer", "")))
         ev = {(Path(e.get("file", "")).name, e.get("page")) for e in q.get("gold_evidence") or []}
-        agg_ok = None
-        if q.get("category") in ("count", "sum") and not R.pg:  # PG는 문서 집계 없음(mc-12) — 집계 정답 칸에서 뺌(—)
-            from mcp_server.services.search import aggregate as AG
-
-            ag = AG.local(a.bundle, q["question"])
-            try:
-                g = float(q.get("answer"))
-                agg_ok = bool(ag) and abs(float(ag["answer"]) - g) <= max(1e-9, abs(g) * (q.get("tolerance") or 0))
-            except (TypeError, ValueError):
-                agg_ok = False
-            # 건수·합계의 답은 문서에 그대로 적혀 있지 않음 → 근거 문서(gold_evidence 파일)를 상위 k가 전부 가져왔나
-            files = {f for f, _ in ev}
-            ranks = {Path(h["file_path"]).name: h["rank"] for h in reversed(hits)}
-            hit = {"rank": max(ranks[f] for f in files)} if files and files <= set(ranks) else None
-        else:
-            hit = next((h for h in hits if gold and gold in S.normalize_value(h["text"])), None)
+        hit = next((h for h in hits if gold and gold in S.normalize_value(h["text"])), None)
         src_ok = (
             any(Path(h["file_path"]).name == f and (p is None or h["page"] is None or p == h["page"]) for h in hits for f, p in ev)
             if ev
@@ -224,7 +172,6 @@ def test_stack(a):
                 "found": bool(hit),
                 "rank": hit["rank"] if hit else None,
                 "source_match": src_ok,
-                "agg_ok": agg_ok,
                 "top": [{k: h[k] for k in ("file_path", "page", "line", "bbox")} for h in hits[:3]],
                 "ms": round(t, 1),
             }
@@ -240,20 +187,18 @@ def test_stack(a):
         "",
         f"문항 {len(rows)} · 상위 k={a.k} · 검색 p50 {pct(ms, 0.5):.1f} ms · p95 {pct(ms, 0.95):.1f} ms(질의 임베딩 제외)",
         "",
-        "| 유형 | 문항 | 정답 근거 찾음(값: 상위 k에 정답 값 · 건수·합계: 근거 문서 전부 상위 k) | 평균 순위 | 출처(파일·쪽) 일치 | 집계(SQL) 정답 |",
-        "|---|---|---|---|---|---|",
+        "| 유형 | 문항 | 정답 근거 찾음(값: 상위 k에 정답 값 · 건수·합계: 근거 문서 전부 상위 k) | 평균 순위 | 출처(파일·쪽) 일치 |",
+        "|---|---|---|---|---|",
     ]
     for cat, rs in sorted(by.items(), key=lambda x: str(x[0])):
         f = [r for r in rs if r["found"]]
         sm = [r for r in rs if r["source_match"] is not None]
-        ag = [r for r in rs if r.get("agg_ok") is not None]
-        agc = f"{sum(r['agg_ok'] for r in ag)}/{len(ag)}" if ag else "—"
         lines.append(
             f"| {cat} | {len(rs)} | {len(f)}/{len(rs)} | {statistics.mean(r['rank'] for r in f):.1f} | "
             + (f"{sum(r['source_match'] for r in sm)}/{len(sm)}" if sm else "—")
-            + f" | {agc} |"
+            + " |"
             if f
-            else f"| {cat} | {len(rs)} | 0/{len(rs)} | — | — | {agc} |"
+            else f"| {cat} | {len(rs)} | 0/{len(rs)} | — | — |"
         )
     miss = [r for r in rows if not r["found"]][:15]
     if miss:
@@ -276,8 +221,8 @@ def main(argv=None):
     for name in ("ask", "test-stack"):
         p = sub.add_parser(name)
         p.add_argument("--bundle", default="output/edw/bundle")
-        p.add_argument("--pg", action="store_true", help="pgvector에서 검색(기본 — 접속 칸 필수, op-09)")
-        p.add_argument("--local", action="store_true", help="로컬 묶음(output/edw/bundle)에서 검색 — PG 설정이 있어도")
+        p.add_argument("--pg", action="store_true", help="pgvector에서 검색(지정 없어도 Docker pgvector가 떠 있으면 기본)")
+        p.add_argument("--local", action="store_true", help=argparse.SUPPRESS)  # mc-01 — 로컬 묶음 검색 지움(받기만)
         p.add_argument("--retrieve", choices=["cosine", "hybrid"], help="기본 = stack.json retrieve(없으면 hybrid)")
         p.add_argument("--k", type=int, default=8, help="근거 수 — MCP search 기본과 같게 8(AR5 측정: k=8이 k=10과 같거나 나음, 잘림 적음)")
         if name == "ask":
