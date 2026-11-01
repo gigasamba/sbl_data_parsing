@@ -140,7 +140,7 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 | 집계 지표 단서어 | 코드 기본값(`mcp_server/services/search/qtype.py` `_AGG_VOCAB_DEFAULT`) — 11-01 사전 파일 `agg_vocab.json`·설정 `search.agg_vocab_file`은 지움(내용이 기본값과 같았음) |
 | MCP 안내 문구 | settings.yaml `mcp.server.instructions`(옛 env `MCP_INSTRUCTIONS`) |
 
-기밀(실고객·실제품·계약 값)은 **서버 폴더에만** 둔다 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤에는 같은 질문 세트로 `score_gold`·`mcp_eval` 전/후를 비교한다.
+기밀(실고객·실제품·계약 값)은 **서버 폴더에만** 둔다 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤에는 같은 질문 세트로 검색 결과를 전/후 비교한다(PC 검증 페이지 `validation/search_ui`·답변 점검 `valid_env/answer_test` — `score_gold`·`mcp_eval`은 11-01에 지움).
 
 ### 5-1. 고객 명부·용어집 작성법 (예제 파일을 복사해서 고쳐 쓰기)
 
@@ -213,7 +213,7 @@ PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --check 
 - 적재 오류(조용히 넘기지 않음): 명시한 `concept_id` 중복 · 없는 ID를 가리키는 `broader`/`related` · `id_patterns.csv`의 깨진 정규식.
 - 서버: 폴더째 `/srv/rag/env/glossary/`(같은 폴더에 `id_patterns.csv`·`units.csv`도 — 예제는 `app/deploy/resources/vocab/glossary/`의 같은 이름 파일)에 두고 settings.yaml `common.paths.glossary_dir`에 **컨테이너 안에서 보이는** 그 폴더 경로를 적는다(위 ⚠️).
 - 자동 초안: `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`는 `output/` 아래 draft만 만든다. 사람이 확인해 `domain_terms.csv`로 옮긴다(`status`를 비우거나 `approved`).
-- 실명(실고객·실제품)은 서버 폴더에만 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤 같은 질문 세트로 `mcp_eval` 전/후 비교.
+- 실명(실고객·실제품)은 서버 폴더에만 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤 같은 질문 세트로 검색 결과 전/후 비교(검증 페이지 — `mcp_eval`은 11-01에 지움).
 
 #### 점검(반영 전)
 서버가 읽는 로더를 그대로 쓴다(cp949·빈칸·AUTO ID·건너뜀 알림까지 같음).
