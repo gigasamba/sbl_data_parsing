@@ -114,7 +114,7 @@ def _run(module, args, env):
         rc = RS.gated_popen(cmd, cwd=ROOT, env=env).wait()
         sp.add(rc=rc)
         if rc:
-            sp.result("fail", None, f"종료 코드 {rc}")
+            sp.result("fail", None, SP.safe(f"종료 코드 {rc}"))
     if rc:
         raise RuntimeError(f"[parallel] 실패({rc}): {' '.join(cmd)}")
 

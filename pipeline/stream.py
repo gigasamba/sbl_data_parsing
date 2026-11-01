@@ -200,13 +200,13 @@ def _run(module, args, env=None):
     from common.core.paths import child_env
 
     cmd = [PY, "-m", module, *map(str, args)]
-    from common.core.span import span
+    from common.core.span import safe, span
 
     with span("proc.run", "run", module=module) as sp:  # op-01 — 하위 프로세스 1개(자식 span의 부모, 메모리·CPU 문 대기)
         rc = RS.gated_popen(cmd, cwd=ROOT, env=env or child_env()).wait()  # child_env() — PYTHONPATH(deploy/) 보장(env=None 기본 호출 포함)
         sp.add(rc=rc)
         if rc:
-            sp.result("fail", None, f"종료 코드 {rc}")
+            sp.result("fail", None, safe(f"종료 코드 {rc}"))
     if rc:
         raise SystemExit(f"[stream] 실패({rc}): {' '.join(cmd)}")
 

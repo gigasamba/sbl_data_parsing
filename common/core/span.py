@@ -12,15 +12,23 @@ APPLOG_CONTEXT 내부 신호로 현재 ID를 이어준다(with_context). 스레�
 carry(fn)로 감싼다. 행은 INFO 로그의 log_table/log_row extra로 내보내 T0 logsink가 DB에 쓴다.
 개별 호출은 DEBUG 로그만(debug_event) — span.metrics에 요약.
 cpu_ms·rss_peak_mb는 span(cpu=True)처럼 프로세스에서 하나만 도는 span만 잰다(스레드로 겹치면 섞이므로 기본 끔).
-문서 본문은 넣지 않는다: 오류 글자는 redact_text(인용부호로 감싼 긴 조각을 가림)를 거친다.
+cpu_ms 범위: 이 프로세스(RUSAGE_SELF) + 그 사이에 끝나 회수된(wait) 자식 프로세스(RUSAGE_CHILDREN)의 CPU 시간 합 —
+subprocess 작업도 들어간다. 같은 프로세스에서 cpu=True span이 겹쳐 돌면(서로 조상이 아닌 경우) 어느 쪽 몫인지 가를 수 없어 둘 다 NULL.
+Windows(resource 없음)·측정 실패도 NULL — 0으로 채우지 않는다. 아직 안 끝난 자식·손자 프로세스의 CPU는 들어가지 않는다.
+문서 본문은 넣지 않는다: err는 예외 타입 이름(+errno 이름)과 safe()로 표시한 우리 코드의 고정 문구만 저장한다(allowlist).
+외부 라이브러리·파서 예외 문자열 원문은 저장하지 않는다.
+계측은 fail-soft: 측정·기록의 어떤 예외도 업무 코드에 전파되지 않고(업무 예외는 원래 그대로 다시 던짐) soft_fail이 프로세스당 1회
+stderr 경고 + failure_count()로만 남긴다.
 """
 
 import contextlib
+import errno
 import functools
 import json
 import logging
 import os
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -57,14 +65,108 @@ _SAMPLES = 512  # observe가 p50 계산용으로 들고 있는 표본 상한(n·
 _QUOTED = re.compile(r"""(['"])((?:(?!\1).){30,})\1""", re.S)
 
 _OPEN: dict[str, "Span"] = {}
+_CPU_OPEN: dict[str, "Span"] = {}  # cpu=True로 열린 span — 서로 겹치면 cpu_ms를 NULL로
 _LOCK = threading.Lock()
-_STATE: dict = {"log": None, "version": None, "cpus": None}
+_STATE: dict = {"log": None, "version": None, "cpus": None, "retry_at": 0.0}
+_RETRY_SEC = 30  # 로그 설정(디렉터리 권한·디스크)이 실패하면 이 시간 동안은 다시 열어 보지 않음
+_FAIL: dict = {"count": 0, "warned": False}
+_FAIL_LOCK = threading.Lock()
+_LEAD = re.compile(r"^([A-Za-z_][A-Za-z0-9_.]{0,80}(?:Error|Exception|Timeout|Expired|Exit|Interrupt|Unavailable|Exceeded|Exists))\b")
+
+
+class Safe(str):
+    """우리 코드가 직접 쓴 고정 문구(문서·외부 라이브러리 글자 없음) 표시 — result()가 이것만 그대로 저장한다."""
+
+
+def safe(text):
+    """고정 문구를 Safe로(비면 None). 변수는 정수·열거값처럼 안전한 것만 f-string에 넣을 것."""
+    return Safe(text) if text else None
+
+
+def soft_fail(where, ex):
+    """계측 안의 예외 처리 — 삼키고 카운트, 프로세스당 1회만 stderr 경고. 예외 글자는 쓰지 않는다(타입·errno만)."""
+    try:
+        with _FAIL_LOCK:
+            _FAIL["count"] += 1
+            first, _FAIL["warned"] = not _FAIL["warned"], True
+        if first:
+            sys.stderr.write(f"[applog] 계측 실패(무시하고 계속 · 이 경고는 1회): {where}: {exc_label(ex)}\n")
+    except Exception:  # stderr까지 막혀도 업무 코드를 건드리지 않음
+        pass
+
+
+def failure_count():
+    """이 프로세스에서 삼킨 계측 실패 수."""
+    return _FAIL["count"]
+
+
+def _soft_method(fn):
+    """Span 메서드 — 예외를 삼키고 self를 돌려줌(체인 호출 `sp.add(..).observe(..)`이 안 끊기게)."""
+
+    @functools.wraps(fn)
+    def inner(self, *args, **kwargs):
+        try:
+            return fn(self, *args, **kwargs)
+        except Exception as ex:
+            soft_fail(fn.__qualname__, ex)
+            return self
+
+    return inner
+
+
+def _soft_fn(fn):
+    """모듈 함수 — 예외를 삼키고 None."""
+
+    @functools.wraps(fn)
+    def inner(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as ex:
+            soft_fail(fn.__qualname__, ex)
+            return None
+
+    return inner
+
+
+def _try(where, fn, *args):
+    try:
+        return fn(*args)
+    except Exception as ex:
+        soft_fail(where, ex)
+        return None
 
 
 def redact_text(s):
-    """오류 글자에 섞여 나올 수 있는 문서 내용(인용부호로 감싼 긴 조각)을 가림 — run_all.redact가 이 함수를 쓴다.
-    ponytail: 완벽하지 않음(인용부호 없는 echo는 못 잡음)."""
+    """오류 글자에 섞여 나올 수 있는 문서 내용(인용부호로 감싼 긴 조각)을 가림 — run_all.redact(runs.jsonl용)가 쓴다.
+    ponytail: 완벽하지 않음(인용부호 없는 echo는 못 잡음) — 그래서 span/pipe_event의 err는 이 함수가 아니라 safe_err(allowlist)를 쓴다."""
     return _QUOTED.sub(lambda m: m.group(1) + "…[가림]…" + m.group(1), s or "")
+
+
+def exc_label(ex):
+    """예외 → 저장해도 되는 짧은 글자: 타입 이름 + (OSError면 errno 이름 · CalledProcessError면 종료 코드 · SystemExit면 코드).
+    예외 메시지 원문은 문서 내용을 echo할 수 있어 쓰지 않는다."""
+    name = type(ex).__name__
+    detail = None
+    if isinstance(ex, OSError) and ex.errno in errno.errorcode:
+        detail = errno.errorcode[ex.errno]
+    elif isinstance(ex, subprocess.CalledProcessError) and isinstance(ex.returncode, int):
+        detail = f"rc={ex.returncode}"
+    elif isinstance(ex, SystemExit) and isinstance(ex.code, int):
+        detail = f"code={ex.code}"
+    return f"{name}[{detail}]" if detail else name
+
+
+def safe_err(err):
+    """result()·instant()의 err 인자 → 저장할 글자 또는 None(allowlist).
+    Safe(우리 고정 문구)만 그대로(200자까지), 예외 객체는 exc_label, 그 밖의 글자는 맨 앞의 예외 클래스 이름만 남김(없으면 None)."""
+    if not err:
+        return None
+    if isinstance(err, BaseException):
+        return exc_label(err)
+    if isinstance(err, Safe):
+        return str(err)[:200]
+    m = _LEAD.match(str(err))
+    return m.group(1) if m else None
 
 
 def classify(ex):
@@ -110,17 +212,19 @@ def _mem_pct():
 
 
 def proc_usage():
-    """이 프로세스(자식 제외)의 {cpu_ms, rss_peak_mb} — resource가 없으면 빈 사전."""
+    """{cpu_ms, rss_peak_mb} — cpu_ms는 이 프로세스 + 이미 끝나 회수된 자식들의 CPU 시간 합(RUSAGE_SELF+CHILDREN, 누적값),
+    rss_peak_mb는 이 프로세스의 최대 상주 메모리. resource가 없으면 빈 사전."""
     if resource is None:
         return {}
-    ru = resource.getrusage(resource.RUSAGE_SELF)
-    rss = ru.ru_maxrss / (1024 * 1024 if sys.platform == "darwin" else 1024)  # macOS는 바이트, Linux는 KB
-    return {"cpu_ms": int((ru.ru_utime + ru.ru_stime) * 1000), "rss_peak_mb": round(rss, 1)}
+    me, kids = resource.getrusage(resource.RUSAGE_SELF), resource.getrusage(resource.RUSAGE_CHILDREN)
+    rss = me.ru_maxrss / (1024 * 1024 if sys.platform == "darwin" else 1024)  # macOS는 바이트, Linux는 KB
+    cpu = me.ru_utime + me.ru_stime + kids.ru_utime + kids.ru_stime
+    return {"cpu_ms": int(cpu * 1000), "rss_peak_mb": round(rss, 1)}
 
 
 def usage_line():
-    """parse_one가 끝에 찍는 한 줄 — 부모가 read_usage로 자기 span(extract.parse)에 옮김."""
-    return USAGE_PREFIX + json.dumps(proc_usage())
+    """parse_one가 끝에 찍는 한 줄 — 부모가 read_usage로 자기 span(extract.parse)에 옮김. 측정 실패면 빈 사전."""
+    return USAGE_PREFIX + json.dumps(_try("proc_usage", proc_usage) or {})
 
 
 def read_usage(text):
@@ -136,24 +240,35 @@ def read_usage(text):
 
 
 def _logger():
+    """앱 logger — 열기에 실패하면(로그 디렉터리 권한·디스크) None을 돌려주고 _RETRY_SEC 뒤에 다시 시도."""
     log = _STATE["log"]
-    if log is None:
-        with _LOCK:
-            if _STATE["log"] is None:
+    if log is not None:
+        return log
+    with _LOCK:
+        if _STATE["log"] is None:
+            now = time.monotonic()
+            if now < _STATE["retry_at"]:
+                return None
+            try:
                 _STATE["log"] = jsonlog.setup("pipeline")  # 자식 프로세스도 첫 span에서 스스로 sink를 연다
-            log = _STATE["log"]
-    return log
+            except Exception as ex:
+                _STATE["retry_at"] = now + _RETRY_SEC
+                soft_fail("logger.setup", ex)
+                return None
+        return _STATE["log"]
 
 
 def _emit(row, level=logging.INFO):
-    err = row.get("err")
-    _logger().log(
+    log = _logger()
+    if log is None:
+        return
+    log.log(
         level,
         f"{row['stage']} {row['status']}" + (f" {row['doc_id']}" if row.get("doc_id") else ""),
         extra={
             "event": row["stage"],
             "duration_ms": row.get("duration_ms"),
-            "err": err,
+            "err": row.get("err"),
             "log_table": "pipe_event",
             "log_row": row,
             "log_context": {"run_id": row["run_id"], "span_id": row["span_id"]},
@@ -161,6 +276,7 @@ def _emit(row, level=logging.INFO):
     )
 
 
+@_soft_fn
 def debug_event(event, msg="", **fields):
     """개별 호출 기록 — DEBUG에서만(INFO에선 span.metrics 요약만). DB에는 안 감."""
     log = _logger() if jsonlog.get_context().get("run_id") else None
@@ -212,8 +328,10 @@ class Span:
         self._status, self._err_kind, self._err = "ok", None, None
         self._lock = threading.Lock()
         self._cpu = cpu
+        self.cpu_overlap = False  # cpu=True span끼리 겹쳤으면 True → cpu_ms NULL
         self.set(**cols)
 
+    @_soft_method
     def set(self, **cols):
         for key, value in cols.items():
             if key in COLUMNS and key not in _ADD_COLUMNS and key != "rss_peak_mb":
@@ -226,10 +344,12 @@ class Span:
                 self.add(**{key: value})
         return self
 
+    @_soft_method
     def add_col(self, key, value):
         with self._lock:
             self.cols[key] = (self.cols.get(key) or 0) + int(value)
 
+    @_soft_method
     def add(self, **metrics):
         with self._lock:
             for key, value in metrics.items():
@@ -240,6 +360,7 @@ class Span:
                     self.metrics[key] = value
         return self
 
+    @_soft_method
     def observe(self, name, value):
         with self._lock:
             entry = self._obs.setdefault(name, [0, 0.0, 0.0, []])
@@ -250,6 +371,7 @@ class Span:
                 entry[3].append(value)
         return self
 
+    @_soft_method
     def rows(self, count, nbytes=None):
         """적재·내보내기 처리량 — rows·rows_per_sec(span 시작부터)·bytes."""
         elapsed = max(1e-6, time.monotonic() - self._t0)
@@ -258,12 +380,14 @@ class Span:
             self.add(bytes=nbytes)
         return self
 
+    @_soft_method
     def add_wait(self, mem_ms=0, cpu_ms=0):
         """gated_popen의 메모리 문·CPU 문 대기(ms) — 작업 시간과 분리해 쌓음."""
         self.add_col("wait_mem_ms", mem_ms)  # 0도 기록 — NULL은 '재지 않음', 0은 '기다릴 일 없었음'
         self.add_col("wait_cpu_ms", cpu_ms)
         return self
 
+    @_soft_method
     def ext_call(self, ms):
         """외부 호출(모델·HTTP·DB) 대기 합(ms) → ext_call_ms 열."""
         self.add_col("ext_call_ms", ms)
@@ -273,7 +397,7 @@ class Span:
         if status not in STATUSES or (err_kind is not None and err_kind not in ERR_KINDS):
             raise ValueError("pipe_event status/err_kind")
         self._status, self._err_kind = status, err_kind
-        self._err = redact_text(str(err))[:500] if err else None
+        self._err = safe_err(err)
         return self
 
     def _finish_metrics(self):
@@ -289,39 +413,93 @@ class Span:
 
 @contextlib.contextmanager
 def span(stage, layer=None, *, cpu=False, **cols):
-    """문서×단계 span. layer 기본은 stage의 앞 토큰(extract.parse → extract). 예외는 기록한 뒤 그대로 던진다."""
+    """문서×단계 span. layer 기본은 stage의 앞 토큰(extract.parse → extract). 업무 예외는 기록한 뒤 원래 그대로 던진다.
+    계측(시작 측정·종료 기록)의 예외는 모두 안에서 삼킨다 — 정상 결과를 바꾸지 않고 업무 예외를 덮지 않는다."""
     if not jsonlog.get_context().get("run_id"):
         yield NULL
         return
-    sp = Span(stage, layer or stage.split(".", 1)[0], cols, cpu)
-    start_wall, start_mono = datetime.now(UTC), time.monotonic()
-    usage0 = proc_usage() if cpu else {}
-    load0 = _load1_per_cpu()
-    with _LOCK:
-        sp.inflight = 1 + sum(1 for s in _OPEN.values() if s.stage == stage)
-        _OPEN[sp.span_id] = sp
-    token = jsonlog.set_context(span_id=sp.span_id)
+    began = _begin(stage, layer, cols, cpu)
+    if began is None:  # 시작 계측 실패 — 가짜 span으로 업무만 진행
+        yield NULL
+        return
+    sp, token, start_wall, start_mono, usage0, load0 = began
     try:
         yield sp
     except BaseException as ex:
-        status, kind = classify(ex)
-        if sp._status == "ok" and not (isinstance(ex, SystemExit) and ex.code in (0, None)):  # 안에서 이미 result()를 정했으면 그대로
-            sp._status, sp._err_kind = status, kind
-            sp._err = redact_text(f"{type(ex).__name__}: {ex}")[:500]
+        _note_exception(sp, ex)
         raise
     finally:
-        jsonlog.reset_context(token)
+        _end(sp, token, start_wall, start_mono, usage0, load0)
+
+
+def _begin(stage, layer, cols, cpu):
+    sp = token = None
+    try:
+        sp = Span(stage, layer or stage.split(".", 1)[0], cols, cpu)
+        start_wall, start_mono = datetime.now(UTC), time.monotonic()
+        usage0 = (_try("proc_usage", proc_usage) or {}) if cpu else {}
+        load0 = _try("load1", _load1_per_cpu)
+        with _LOCK:
+            sp.inflight = 1 + sum(1 for s in _OPEN.values() if s.stage == stage)
+            _OPEN[sp.span_id] = sp
+            if cpu:
+                _register_cpu(sp)
+        token = jsonlog.set_context(span_id=sp.span_id)
+        return sp, token, start_wall, start_mono, usage0, load0
+    except Exception as ex:
+        soft_fail("span.begin", ex)
+        _unregister(sp)
+        if token is not None:
+            _try("context.reset", jsonlog.reset_context, token)
+        return None
+
+
+def _register_cpu(sp):
+    """_LOCK 안에서. 열려 있는 다른 cpu span(내 조상 제외)과 겹치면 서로 cpu_ms를 못 가르므로 둘 다 표시."""
+    ancestors, cur = set(), sp.parent_id
+    while cur and cur in _OPEN and cur not in ancestors:
+        ancestors.add(cur)
+        cur = _OPEN[cur].parent_id
+    for other_id, other in _CPU_OPEN.items():
+        if other_id not in ancestors:
+            other.cpu_overlap = sp.cpu_overlap = True
+    _CPU_OPEN[sp.span_id] = sp
+
+
+def _unregister(sp):
+    if sp is not None:
         with _LOCK:
             _OPEN.pop(sp.span_id, None)
+            _CPU_OPEN.pop(sp.span_id, None)
+
+
+def _note_exception(sp, ex):
+    try:
+        status, kind = classify(ex)
+        if sp._status == "ok" and not (isinstance(ex, SystemExit) and ex.code in (0, None)):  # 안에서 이미 result()를 정했으면 그대로
+            sp._status, sp._err_kind, sp._err = status, kind, exc_label(ex)
+    except Exception as ex2:
+        soft_fail("span.note_exception", ex2)
+
+
+def _end(sp, token, start_wall, start_mono, usage0, load0):
+    try:
+        _try("context.reset", jsonlog.reset_context, token)
+        _unregister(sp)
         _finish(sp, start_wall, start_mono, usage0, load0)
+    except Exception as ex:
+        soft_fail("span.end", ex)
 
 
 def _finish(sp, start_wall, start_mono, usage0, load0):
     cols = sp.cols
-    if sp._cpu and usage0:
-        now = proc_usage()
-        cols["cpu_ms"] = now["cpu_ms"] - usage0["cpu_ms"]
-        cols["rss_peak_mb"] = now["rss_peak_mb"]
+    if sp._cpu:
+        now = _try("proc_usage", proc_usage) if usage0 else None
+        if now:
+            cols["cpu_ms"] = None if sp.cpu_overlap else now["cpu_ms"] - usage0["cpu_ms"]  # 겹침은 NULL(0으로 오해하지 않게)
+            cols["rss_peak_mb"] = now["rss_peak_mb"]
+        else:
+            cols["cpu_ms"] = None
     row = {
         "ts_start": start_wall,
         "ts_end": datetime.now(UTC),
@@ -332,26 +510,28 @@ def _finish(sp, start_wall, start_mono, usage0, load0):
         "stage": sp.stage,
         "duration_ms": int((time.monotonic() - start_mono) * 1000),
         "load1_per_cpu_start": load0,
-        "load1_per_cpu_end": _load1_per_cpu(),
-        "mem_used_pct": _mem_pct(),
+        "load1_per_cpu_end": _try("load1", _load1_per_cpu),
+        "mem_used_pct": _try("mem_pct", _mem_pct),
         "inflight": sp.inflight,
-        "metrics": sp._finish_metrics() or None,
+        "metrics": jsonlog.masked(_try("metrics", sp._finish_metrics) or {}) or None,
         "status": sp._status,
         "err_kind": sp._err_kind,
-        "err": sp._err,
-        "app_version": _app_version(),
+        "err": jsonlog.masked(sp._err),
+        "app_version": _try("app_version", _app_version),
     }
     for key in COLUMNS:
         row[key] = cols.get(key)
     _emit(row)
 
 
+@_soft_fn
 def instant(stage, status, layer=None, err_kind=None, err=None, **cols):
     """시간이 안 드는 결정 하나(reused·skip) — 시작=끝인 span 1행. run_id 없으면 아무것도 안 함."""
     with span(stage, layer, **cols) as sp:
         sp.result(status, err_kind, err)
 
 
+@_soft_fn
 def current():
     """지금 컨텍스트의 열린 span(없으면 None) — common/ai·resources가 지표를 더할 때 씀."""
     if not _OPEN:
@@ -359,18 +539,21 @@ def current():
     return _OPEN.get(jsonlog.get_context().get("span_id"))
 
 
+@_soft_fn
 def result_current(status, err_kind=None, err=None):
     sp = current()
     if sp is not None:
         sp.result(status, err_kind, err)
 
 
+@_soft_fn
 def add_current(**metrics):
     sp = current()
     if sp is not None:
         sp.add(**metrics)
 
 
+@_soft_fn
 def observe_current(name, value):
     sp = current()
     if sp is not None:
@@ -399,10 +582,14 @@ def carry(fn):
 
 
 def with_context(kwargs):
-    """Popen kwargs에 현재 run/span ID(내부 신호 APPLOG_CONTEXT)를 env로 이어 붙인 사본 — run_id 없으면 그대로."""
-    ids = jsonlog.get_context()
-    if not ids.get("run_id"):
+    """Popen kwargs에 현재 run/span ID(내부 신호 APPLOG_CONTEXT)를 env로 이어 붙인 사본 — run_id 없으면 그대로. 실패하면 원래 kwargs."""
+    try:
+        ids = jsonlog.get_context()
+        if not ids.get("run_id"):
+            return kwargs
+        env = dict(kwargs.get("env") or os.environ)  # env 남김 — 하위 프로세스용(상관 ID 전달, 설정 아님)
+        env["APPLOG_CONTEXT"] = json.dumps(ids)  # env 남김 — 내부 신호(상관 ID, 설정 아님)
+        return {**kwargs, "env": env}
+    except Exception as ex:
+        soft_fail("with_context", ex)
         return kwargs
-    env = dict(kwargs.get("env") or os.environ)  # env 남김 — 하위 프로세스용(상관 ID 전달, 설정 아님)
-    env["APPLOG_CONTEXT"] = json.dumps(ids)  # env 남김 — 내부 신호(상관 ID, 설정 아님)
-    return {**kwargs, "env": env}

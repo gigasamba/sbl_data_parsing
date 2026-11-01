@@ -28,11 +28,14 @@ _STATE: dict = {"info": {}, "docs": {}}
 
 
 def _log():
-    return span._logger()  # 같은 logger를 두 번 setup하지 않게(핸들러를 지우고 다시 달기 때문) — span과 한 곳에서
+    return span._logger()  # 같은 logger를 두 번 setup하지 않게(핸들러를 지우고 다시 달기 때문) — span과 한 곳에서. 열기 실패면 None
 
 
 def _emit_run(row, event, level=logging.INFO):
-    _log().log(
+    log = _log()
+    if log is None:
+        return
+    log.log(
         level,
         f"{event} {row.get('command', '')} {row.get('status', '')}".strip(),
         extra={
@@ -45,11 +48,13 @@ def _emit_run(row, event, level=logging.INFO):
     )
 
 
+@span._soft_fn
 def info(**values):
     """종료 행에 보탤 값(stack·workers …) — 실행 중 알게 된 것."""
     _STATE["info"].update({k: v for k, v in values.items() if v is not None})
 
 
+@span._soft_fn
 def docs(**counts):
     """문서 수(total·ok·fail·reused) — 단계마다 알려주면 마지막 값이 종료 행에 들어감."""
     _STATE["docs"].update({f"docs_{k}": int(v) for k, v in counts.items() if v is not None})
@@ -76,7 +81,7 @@ def _start_row(run_id, command, argv):
     return {
         "run_id": run_id,
         "command": command,
-        "args": " ".join(argv),
+        "args": " ".join(jsonlog.masked([str(a) for a in argv])),  # 인자별로 가린 뒤 잇는다(분리된 비밀값도 값 기반 마스킹이 잡도록)
         "started_at": datetime.now(UTC),
         "status": "running",
         "host": socket.gethostname(),
@@ -112,8 +117,8 @@ def run(command, argv=()):
         try:
             _emit_run(_start_row(run_id, command, list(argv)), "run.start")
             started = True
-        except Exception:  # 추적 실패가 파이프라인을 멈추면 안 됨
-            logging.getLogger(__name__).debug("pipe_run start failed", exc_info=True)
+        except Exception as ex:  # 추적 실패가 파이프라인을 멈추면 안 됨 — 예외 글자는 남기지 않음(타입만 경고 1회)
+            span.soft_fail("run.start", ex)
         failure = None
         try:
             yield run_id
@@ -122,16 +127,18 @@ def run(command, argv=()):
             raise
         finally:
             if started:
-                row = {
-                    "run_id": run_id,
-                    "ended_at": datetime.now(UTC),
-                    "duration_ms": int((time.monotonic() - t0) * 1000),
-                    "status": _status_of(failure),
-                    **_STATE["info"],
-                    **_STATE["docs"],
-                }
-                with contextlib.suppress(Exception):
+                try:
+                    row = {
+                        "run_id": run_id,
+                        "ended_at": datetime.now(UTC),
+                        "duration_ms": int((time.monotonic() - t0) * 1000),
+                        "status": _status_of(failure),
+                        **_STATE["info"],
+                        **_STATE["docs"],
+                    }
                     _emit_run(row, "run.end")
+                except Exception as ex:  # 업무 예외(failure)를 덮지 않음
+                    span.soft_fail("run.end", ex)
 
 
 class Progress:
@@ -148,30 +155,44 @@ class Progress:
         self._thread = None
 
     def __enter__(self):
-        if jsonlog.get_context().get("run_id"):
-            self._thread = threading.Thread(
-                target=span.carry(self._loop), name="run-progress", daemon=True
-            )  # 풀·새 스레드는 컨텍스트를 안 물려받음
-            self._thread.start()
+        try:
+            if jsonlog.get_context().get("run_id"):
+                self._thread = threading.Thread(
+                    target=span.carry(self._loop), name="run-progress", daemon=True
+                )  # 풀·새 스레드는 컨텍스트를 안 물려받음
+                self._thread.start()
+        except Exception as ex:  # 스레드를 못 만들어도 업무는 진행
+            self._thread = None
+            span.soft_fail("progress.start", ex)
         return self
 
     def __exit__(self, *exc):
-        self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=2)
-            self.emit()  # 마지막 상태 1행
+        try:
+            self._stop.set()
+            if self._thread is not None:
+                self._thread.join(timeout=2)
+                self.emit()  # 마지막 상태 1행
+        except Exception as ex:
+            span.soft_fail("progress.stop", ex)
 
     def _loop(self):
         while not self._stop.wait(self.every):
-            self.emit()
+            self.emit()  # emit이 예외를 삼키므로 스레드가 죽지 않음
 
     def emit(self):
-        done, total = int(self.done()), self.total
-        elapsed = max(1e-6, time.monotonic() - self._t0)
-        rate = done / elapsed * 60
-        eta = (total - done) / (done / elapsed) if total and done else None
-        open_now = span.open_counts()
-        with span.span("run.progress", "run", seq=done, total=total) as sp:
-            sp.add(
-                unit=self.unit, per_min=round(rate, 2), eta_sec=None if eta is None else int(eta), elapsed_sec=int(elapsed), open=open_now
-            )
+        try:
+            done, total = int(self.done()), self.total
+            elapsed = max(1e-6, time.monotonic() - self._t0)
+            rate = done / elapsed * 60
+            eta = (total - done) / (done / elapsed) if total and done else None
+            open_now = span.open_counts()
+            with span.span("run.progress", "run", seq=done, total=total) as sp:
+                sp.add(
+                    unit=self.unit,
+                    per_min=round(rate, 2),
+                    eta_sec=None if eta is None else int(eta),
+                    elapsed_sec=int(elapsed),
+                    open=open_now,
+                )
+        except Exception as ex:  # done() 등 진행 계산 실패 — 다음 주기에 다시
+            span.soft_fail("progress.emit", ex)

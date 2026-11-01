@@ -68,15 +68,15 @@ TRACED_COMMANDS = (
 def _traced(module, call):
     """하위 프로세스 1개 = proc.run span(op-01) — 자식이 이어받는 parent span이 되고, 메모리·CPU 문 대기가 이 span에 쌓임.
     call()은 종료 코드(마감으로 끝냈으면 None)를 돌려준다."""
-    from common.core.span import span
+    from common.core.span import safe, span
 
     with span("proc.run", "run", module=module) as sp:
         rc = call()
         sp.add(rc=-1 if rc is None else rc)
         if rc is None:
-            sp.result("timeout", "timeout", "마감 시각 도달")
+            sp.result("timeout", "timeout", safe("마감 시각 도달"))
         elif rc:
-            sp.result("fail", None, f"종료 코드 {rc}")
+            sp.result("fail", None, safe(f"종료 코드 {rc}"))
         return rc
 
 
