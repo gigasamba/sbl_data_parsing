@@ -1,5 +1,5 @@
 """trigger.sh scheduled 시각 게이트(pl-32, 사용자 10-30) — settings.yaml ops.nightly.time(NIGHTLY_TIME)이 비면 조용히 끝, 그 시각부터
-5분 안이면 night, 꼴이 틀리면 종료 2. trigger.sh에서 게이트 블록만 떼어 bash로 돌린다(date는 셸 함수로 바꿔 끼움 — 설정·docker 없음, PC 전용)."""
+5분 안이면 run_docs.py(11-01 — 새벽 배치 = run_docs, 사용자 10-31), 꼴이 틀리면 종료 2. trigger.sh에서 게이트 블록만 떼어 bash로 돌린다(date·python3은 셸 함수로 바꿔 끼움 — run_docs는 돌지 않음, 설정·docker 없음, PC 전용)."""
 
 import os
 import re
@@ -11,7 +11,7 @@ from common.core.paths import DEPLOY_ROOT
 
 ROOT = DEPLOY_ROOT  # 저장소 루트(op-09 — paths 상수)
 
-CASES = [  # (NIGHTLY_TIME, 지금, 종료 코드, night로 넘어감?)
+CASES = [  # (NIGHTLY_TIME, 지금, 종료 코드, run_docs를 부름?)
     ("", "01:00", 0, False),  # 비움 = 새벽 배치 없음
     ("  ", "01:00", 0, False),  # 공백만 = 비움
     ("01:00", "01:00", 0, True),
@@ -48,7 +48,7 @@ def test_scheduled_gate():
         return
     gate = _gate()
     for t, now, rc, runs in CASES:
-        script = f'date() {{ echo "{now}"; }}\nmod=scheduled\n{gate}echo "mod=$mod"\n'
+        script = f'date() {{ echo "{now}"; }}\npython3() {{ echo "RUN_DOCS $*"; }}\nmod=scheduled\n{gate}echo "mod=$mod"\n'
         r = subprocess.run(
             [bash, "-c", script],
             env={**os.environ, "NIGHTLY_TIME": t},  # env 남김 — 하위 프로세스(호스트 셸이 load_settings로 받는 이름 — 시험)
@@ -59,4 +59,4 @@ def test_scheduled_gate():
             timeout=30,
         )
         assert r.returncode == rc, (t, now, r.returncode, r.stderr)
-        assert ("mod=night" in r.stdout) is runs, (t, now, r.stdout)
+        assert ("RUN_DOCS deploy/host/scripts/run_docs.py --start-offset 0 --skip-done" in r.stdout) is runs, (t, now, r.stdout)

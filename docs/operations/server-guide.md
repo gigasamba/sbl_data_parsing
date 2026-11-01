@@ -17,7 +17,7 @@
 옛 이름: `data-parsing`·`data-structure` → `data-pipeline`(컨테이너 `data-pipeline-parse`·`data-pipeline-structure`), `data-retrieval` → `mcp-server`.
 
 - 각 이미지의 `entrypoint.sh`는 받은 명령을 `RAG_MODULE`로 거른다. 다른 이미지의 명령이면 종료 코드 64(오류 메시지에 맞는 이미지를 알려 줌).
-- `full`(dedup → prepare → night를 한 컨테이너에서)은 data-pipeline만 받고 mcp-server는 거부한다. 서버 새벽 배치의 정본은 `trigger.sh night`(모듈별 컨테이너)다.
+- 서버 입구는 `run_docs.py` 하나다(사용자 10-31). 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`는 11-01에 지웠다.
 - `tool index`(AD41 색인 빌더 — `index_a`·`index_b`)도 data-pipeline에서 돈다.
 - 공통 명령(어느 이미지에서나): `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`·`smoke [--src <폴더>]`.
 
@@ -55,19 +55,14 @@ export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.
 ### 1-3. 기동 확인
 README §5-3 ④ 연결 점검(`run_tool.sh ping_models`·`check_env`, `dc run --rm parse check`)과 ⑤ 이미지 점검(`check-modules`·`selftest_gate.sh` — 실행 이미지는 코드 폴더를 `-v`로 붙여)을 차례로 한다. `check`는 자원·쓰기 권한·`PG_HOST`가 컨테이너 자신(127.0.0.1)인지·디스크 여유를 본다. 통과하면 2절로.
 
-## 2. 일상 실행 — parse → structure → load → publish
+## 2. 일상 실행 — run_docs(문서별 흐름)
 
-순서대로 실행한다. **앞 모듈이 끝 표시를 남겨야 다음이 시작**(없으면 종료 코드 3). 모듈은 한 결과 폴더(`RAG_OUT`)로 파일을 주고받고, 서로 직접 부르지 않는다.
+서버 입구는 `deploy/host/scripts/run_docs.py` 하나다(사용자 10-31) — 문서마다 파싱 → 구조화 → 적재 → publish를 상주 컨테이너 안에서 `docker exec`로 돌린다(설계 `docs/architecture/run_docs_design.md`). 옛 1회 job 배치(`trigger.sh structure`·`load`·`all`·`night`)는 11-01에 지웠다. 파싱·게시만 따로 볼 때:
 ```bash
 bash deploy/host/scripts/trigger.sh parse       # dedup→prepare→파싱→채점→대표 결과(_rep). 임베딩·DB 없음
-bash deploy/host/scripts/trigger.sh structure   # 대표 결과→청킹·사실·임베딩 번들
-bash deploy/host/scripts/trigger.sh load        # 번들→PostgreSQL(pgvector). PG 없으면 종료 코드 4
-bash deploy/host/scripts/trigger.sh publish     # 대표 결과(.md) Object Storage 업로드 + EDW 메타 — 스케줄 없음, 트리거만
-bash deploy/host/scripts/trigger.sh all         # parse→publish→structure→load(publish 포함 — 빼려면 모듈을 하나씩)
-bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서(NIGHTLY_MODULES, 기본 "parse publish structure load" — publish는 NIGHTLY_PUBLISH≠1이면 건너뜀)
+bash deploy/host/scripts/trigger.sh publish     # 대표 결과(.md) Object Storage 업로드 + EDW 메타
 ```
 - 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock` 때문에 뒤쪽이 즉시 종료 코드 75(실행 중). 재시도는 다음 트리거에서.
-- `night`는 각 단계의 75(마감·잠금)를 실패로 치지 않고 다음 단계로 넘어간다. `NIGHTLY_PUBLISH=0`(기본)이면 publish는 건너뛴다.
 - 우선순위 낮추기(`pipeline.extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 **같은 세션·autogroup 안에서만** 효과가 있다. Linux가 `sched_autogroup_enabled=1`이면 CPU를 autogroup끼리 먼저 나누므로 다른 컨테이너·세션의 parse MCP 서비스와는 nice로 겨루지 않고, 컨테이너끼리는 cgroup CPU 가중치(`cpu.weight`)가 정한다. 확인: `cat /proc/sys/kernel/sched_autogroup_enabled`, 일괄 파싱과 `parse_document`를 동시에 걸어 응답 시간 비교(refactor.md C-65 ⑥).
 
 특정 도구만 따로 돌릴 때(`rdb_discover`·`check_env`·`ping_models` — data-pipeline 이미지):
@@ -84,8 +79,8 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 
 ### 2-2. 새벽 배치(선택)
 `sudo cp deploy/host/systemd/data-pipeline-nightly.* /etc/systemd/system/ && sudo systemctl enable --now data-pipeline-nightly.timer`. 옛 `rag-nightly.*`가 있으면 disable 뒤 지운다.
-- 스케줄은 settings.yaml `pipeline.host.nightly.time`(env 이름 `NIGHTLY_TIME`, HH:MM — 기본 비움 = 새벽 배치 없음, pl-32). 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 그 시각부터 5분 안일 때만 배치를 시작한다(그 밖에는 말없이 끝). 옛 `nightly.enabled`는 지움(남아 있으면 경고만).
-- 꺼진 채로도 `bash deploy/host/scripts/trigger.sh night`는 요청하면 바로 돈다.
+- 스케줄은 settings.yaml `pipeline.host.nightly.time`(env 이름 `NIGHTLY_TIME`, HH:MM — 기본 비움 = 새벽 배치 없음, pl-32). 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 그 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done`을 부른다(그 밖에는 말없이 끝 — 11-01부터 새벽 배치 = run_docs, 사용자 10-31). 옛 `nightly.enabled`는 지움(남아 있으면 경고만).
+- 지금 바로 돌리려면 run_docs를 직접 부른다(옛 `trigger.sh night`는 11-01에 지움).
 
 ### 2-3. 상주 컨테이너
 `data-pipeline-parse`·`data-pipeline-structure`는 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업을 돌리고, MCP `parse_document` 작업 서비스도 `data-pipeline-parse` 안에서 돈다. 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/etl.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.

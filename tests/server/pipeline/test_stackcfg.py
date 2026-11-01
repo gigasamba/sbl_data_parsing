@@ -59,28 +59,3 @@ def selftest():
 
 def test_main():  # 옛 `if "--selftest" in sys.argv:` 갈래
     raise SystemExit(selftest())
-
-
-def test_cli_child_args_accepted():
-    """pipeline.cli가 색인 빌드에 넘기는 인자를 index의 인자 해석기가 받는다(옛 --stack-version 종료 2 — pl-32 리뷰, 판 번호는 11-01에 없앰).
-    자식은 띄우지 않고 인자만 잡는다."""
-    from types import SimpleNamespace
-
-    from pipeline import cli
-    from pipeline.load import index
-
-    calls = []
-    keep = dict(cli._STACK)
-    try:
-        cli._STACK["v"] = {"name": "t", "body_sha": "x", "parse": {}}
-        with mock.patch.object(cli, "sh", side_effect=lambda module, *args, check=True: calls.append((module, args)) or 0):
-            cli._structure_pg_indexed(SimpleNamespace(src="src", path_prefix=None), "conf.json")
-    finally:
-        cli._STACK.clear()
-        cli._STACK.update(keep)
-    (module, args), *_ = calls
-    assert module == "pipeline.load.index", module
-    built = []
-    with mock.patch.object(index, "build_one", side_effect=lambda c, a: built.append(a)):
-        index.main([str(x) for x in args])  # 모르는 인자면 argparse가 종료 2
-    assert built and built[0].stack is None and "--stack-version" not in args  # 엔진 구성은 파일(인자 없음)

@@ -154,11 +154,9 @@
 
 | 이름 | 켜면 | 기본 |
 |---|---|---|
-| `NIGHTLY_TIME` | 그 시각(HH:MM, 서버 시간)에 새벽 배치 시작 — 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시각을 봄 | 비움(새벽 배치 없음) |
-| `NIGHTLY_MODULES` | 배치 순서 | `parse publish structure load` |
-| `NIGHTLY_PUBLISH` | 배치에서 publish 단계 실행 | true(1) |
-| `PARSE_DEADLINE` | 파싱 마감 시각(HH:MM) | 비움 |
-| `NIGHTLY_MAX_NEW` | 밤당 새 문서 상한 | 2000 |
+| `NIGHTLY_TIME` | 그 시각(HH:MM, 서버 시간)에 새벽 배치(`run_docs.py --start-offset 0 --skip-done`) 시작 — 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시각을 봄 | 비움(새벽 배치 없음) |
+
+(11-01 지움 — 남아 있으면 경고만: `NIGHTLY_MODULES`·`NIGHTLY_PUBLISH`·`NIGHTLY_MAX_NEW`(`ops.nightly.*`)·`NIGHT_DEADLINE`·`PARSE_DEADLINE`(`ops.nightly_run.*`)·`ALLOW_COMMON_MISMATCH` — night 모듈 배치·structure·load 모듈과 함께.)
 
 ### 회사 맞춤 문구 (선택 — [server-guide.md](server-guide.md) §5)
 | 이름 | 메모 |

@@ -18,7 +18,7 @@
 #   (settings.yaml 없이 pipeline.env만 있으면 "설정 이관 필요"). 설정 파일을 다른 자리에 두면 Environment=SETTINGS_FILE=<파일>을 더한다.
 #   호스트 python에 pydantic·PyYAML이 없으면 Environment=SETTINGS_IMAGE=data-pipeline:<태그>(이미지 안에서 꺼냄 — refactor.md C-36).
 [Unit]
-Description=RAG 새벽 배치 — 이 서버의 모듈(NIGHTLY_MODULES)을 차례로(NIGHTLY_TIME 시각에만 — trigger.sh scheduled)
+Description=RAG 새벽 배치 — run_docs.py(문서별 flow)를 NIGHTLY_TIME 시각에만(trigger.sh scheduled)
 Wants=network-online.target
 After=network-online.target docker.service
 

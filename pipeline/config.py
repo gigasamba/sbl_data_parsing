@@ -24,7 +24,6 @@ from common.config.settings import (
     F,
     Port,
     Section,
-    WordList,
     image_default,
 )
 
@@ -117,25 +116,21 @@ class PipelineExtractSource(Section):
 
 
 class PipelineHostNightly(Section):
-    REMOVED = frozenset({"enabled"})  # 사용자 10-30(pl-32) — 켬/끔은 time 하나로(비우면 새벽 배치 없음)
+    REMOVED = frozenset(
+        {"enabled", "max_new", "modules", "publish"}
+    )  # 사용자 10-30(pl-32) — 켬/끔은 time 하나로 · max_new·modules·publish 11-01(night 모듈 배치 지움 — 새벽 배치는 run_docs)
     time: str | None = F(
         None,
         "NIGHTLY_TIME",
         "새벽 배치 시작 시각(HH:MM, 서버 시간) — 비우면 새벽 배치 없음. 타이머가 5분마다 깨워 이 시각부터 5분 안이면 시작(trigger.sh scheduled)",
         pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$",  # 틀린 꼴은 설정을 읽을 때 거부(타이머가 5분마다 실패로 남기지 않게)
     )
-    max_new: int | None = F(2000, "NIGHTLY_MAX_NEW", "새벽 배치 parse가 밤당 처음 파싱할 문서 수 상한(건)")
 
     @field_validator("time", mode="before")
     @classmethod
     def _blank_is_off(cls, v):
         """빈 글자·공백만 = 새벽 배치 없음(None) — sample·손으로 쓴 settings.yaml의 `time: ""`가 꼴 검사에 걸려 시작을 막지 않게(PR #44 리뷰)."""
         return None if isinstance(v, str) and not v.strip() else v
-
-    modules: WordList | None = F(
-        ["parse", "publish", "structure", "load"], "NIGHTLY_MODULES", "새벽 배치가 차례로 돌릴 모듈(공백 구분 목록 — trigger.sh 기본)"
-    )
-    publish: bool | None = F(True, "NIGHTLY_PUBLISH", "새벽 배치에서 publish 단계 실행 여부 — 1이면 실행")
 
 
 class PipelineLoadPublish(Section):
@@ -276,11 +271,8 @@ class PipelineTransformVlm(Section):
 
 class PipelineDev(Section):
     REMOVED = frozenset(
-        {"stream_test_crash", "parse_agent_fake", "parallel_test_crash"}
-    )  # 사용자 10-29 · parallel_test_crash 10-30(pl-35) — 지운 칸·절(남으면 경고만)
-    allow_common_mismatch: bool | None = F(
-        False, "ALLOW_COMMON_MISMATCH", "앞 모듈 결과의 공통 코드 지문이 달라도 계속 진행할지(=1 계속 / 그 외 중단)", on=("1",)
-    )
+        {"stream_test_crash", "parse_agent_fake", "parallel_test_crash", "allow_common_mismatch"}
+    )  # 사용자 10-29 · parallel_test_crash 10-30(pl-35) · allow_common_mismatch 11-01(structure·load 모듈의 끝 표시 확인 지움) — 지운 칸·절(남으면 경고만)
     check_env_any_py: bool | None = F(
         False, "CHECK_ENV_ANY_PY", "check_env가 시스템 python에서도 멈추지 않고 계속할지(=1 계속 / 그 외 중단)", on=("1",)
     )
@@ -428,8 +420,7 @@ class PipelineLoad(Section):
 
 
 class PipelineNight(Section):
-    deadline: str | None = F("06:30", "NIGHT_DEADLINE", "새벽 파싱 배치 마감 시각(HH:MM, 컨테이너 TZ 기준)", blank="keep")
-    parse_deadline: str | None = F(None, "PARSE_DEADLINE", "새벽 배치 parse 단계 마감 시각(HH:MM) — 비우면 무제한")
+    REMOVED = frozenset({"deadline", "parse_deadline"})  # 11-01(night·trigger.sh night 지움) — 지운 칸(남으면 경고만)
     vlm_concurrency: int | None = F(8, "NIGHT_VLM_CONCURRENCY", "새벽 배치: 문서 하나의 쪽 VLM 동시 요청 수(개)")
     workers: int | None = F(4, "NIGHT_WORKERS", "새벽 배치: 동시 처리 문서 수(개)")
 

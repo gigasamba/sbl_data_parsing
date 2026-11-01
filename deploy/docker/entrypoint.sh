@@ -5,17 +5,16 @@
 #   docker run --rm --init -v <settings.yaml>:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=<dev|prd> \
 #     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>   (S7e1·S7e2 — 옛 --env-file pipeline.env 대신 설정 파일 하나)
 # 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp · dedup · prepare ·
-#       night [인자] · run-stack [인자] · ask --q … · test-stack · full(data-pipeline만 — dedup → prepare → night)
+#       ask --q … · test-stack  (night·run-stack·full·structure·load는 11-01에 지움 — 서버 입구는 run_docs 하나, 사용자 10-31)
 #   tool <이름> = cli/<이름>.py 하나를 바로 돌림(rdb_discover·check_env·index 등 — run_tool.sh가 쓰는 자리)
 #     옛 형태 `tool cli/<이름>.py`도 이번 판까지는 받아 줌(경고 후 번역) — 다음 판부터 이름만.
 #   모듈(트리거 1회): parse(= 가져오기(폴더·s3://, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과, RUN_MODE=test면 형식별 표본) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타, SI39 — cli/publish_parse.py --apply) — docs/architecture.md
-#   full = dedup → prepare(중복 제외 목록만) → night(파싱 → 대표 파싱·구조화·임베딩 → PostgreSQL 적재, EDW 적재 없음) — data-pipeline 이미지만(S6c)
 #   migrate up|stamp|current|check [--target search|all] [--schema S] [--dim N|--bundle B] = pgvector 우리 스키마 판 관리(S8a — Alembic,
 #     common.store.db.dbtool) — data-pipeline 이미지만, up·stamp는 load와 같은 잠금(current·check는 읽기만 — 잠금 없음). 서버 절차 docs/operations/release-and-patch.md §5-5
 #   show-stack·show-sources = 지금 엔진 구성·원천 목록(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01: 판 표·set-stack·
 #     set-sources 없앰) — show-sources는 data-pipeline만, show-stack은 두 이미지. docs/architecture/pipeline_stack.md
 #   S6b(D-020) — 이미지 2개: RAG_MODULE마다 쓸 수 있는 명령이 다름(아래 case가 거름):
-#     pipeline(data-pipeline — 옛 data-parsing+data-structure, 두 이미지가 받던 명령의 합 + full(S6c))=parse·dedup·prepare·structure·load·publish·night·full·run-stack·show-stack·show-sources·idle·migrate ·
+#     pipeline(data-pipeline — 옛 data-parsing+data-structure, 두 이미지가 받던 명령의 합 + full(S6c))=parse·dedup·prepare·publish·show-stack·show-sources·idle·migrate ·
 #     mcp(mcp-server — 옛 data-retrieval)=mcp·ask·test-stack·show-stack · 공통(모든 이미지) = help·check·resources·services·
 #     check-modules·tool·selftest(S9 — 서버 반입 시험 /app/deploy/tests/server를 파일마다, 다른 이미지(RAG_MODULE) 폴더 사례·다른 이미지 패키지가 없어서만 실패한 사례는 SKIP,
 #     서드파티 패키지가 없으면 FAIL(I2c) — 반입 판정은 /app/docker/selftest_gate.sh)·smoke(10-14 — --src(기본 DOC_DIR) 실문서 폴더를
@@ -54,8 +53,8 @@ case "${RAG_MODULE:-}:$cmd" in
   # 옛 parse·structure 이미지가 거르던 명령의 교집합만 거른다(합친 이미지 = 두 이미지가 받던 명령의 합). full은 10-14부터 두 이미지 모두
   # 거부했으나(dedup·prepare·night가 서로 다른 이미지에 있었음) 합친 이미지에는 셋이 다 있어 S6c(사용자 10-27, C-30 ④)부터 data-pipeline에서 허용
   pipeline:mcp|pipeline:ask|pipeline:test-stack)
-    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask·test-stack)은 mcp-server. 이 이미지는 parse·dedup·prepare·structure·load·publish·night·full·run-stack·show-stack·show-sources·idle·migrate"; exit 64;;
-  mcp:parse|mcp:dedup|mcp:prepare|mcp:full|mcp:structure|mcp:load|mcp:publish|mcp:night|mcp:run-stack|mcp:idle|mcp:migrate|mcp:show-sources)
+    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask·test-stack)은 mcp-server. 이 이미지는 parse·dedup·prepare·publish·show-stack·show-sources·idle·migrate"; exit 64;;
+  mcp:parse|mcp:dedup|mcp:prepare|mcp:publish|mcp:idle|mcp:migrate|mcp:show-sources)
     echo "[오류] '$cmd'는 이 이미지(mcp-server)에 없음 — 파싱·구조화·적재·판 관리(migrate)·show-sources는 data-pipeline. 이 이미지는 mcp·ask·test-stack·show-stack만"; exit 64;;
 esac
 # S7a(D-028 ②, 사용자 10-27) — 실행 환경(RUN_ENV) 없이는 앱 명령을 시작하지 않음. 이미지 ENV에는 넣지 않는다(서버가 dev·prd를
@@ -71,7 +70,7 @@ case "$cmd" in
 esac
 shell_names=""
 case "$cmd" in
-  parse|dedup|prepare|full|night|run-stack|structure|load|publish|check|smoke|idle|migrate|show-stack|show-sources)
+  parse|dedup|prepare|publish|check|smoke|idle|migrate|show-stack|show-sources)
     shell_names="DOC_DIR DOC_DIR_PREPARED PARSE_SOURCE PG_HOST";;
 esac
 # 점검 명령(관문 면제)은 설정 파일이 틀려도 돌아 원인을 보이게 — 내부 신호 SETTINGS_LENIENT=1(영구 다리가 서버에서도 경고만, 앱 명령은 안 줌)
@@ -126,14 +125,10 @@ for entry in sys.argv[2:]:
   mcp)        exec python -m mcp_server.main "$@";;        # 검색 MCP(deploy/host/compose/compose.mcp.yml) — 잠금 없음(읽기 전용)
   dedup)      preflight; exec python -m pipeline.extract.dedup --src "${DOC_DIR:?}" "$@";;
   prepare)    preflight; exec python -m pipeline.extract.prepare --src "${DOC_DIR:?}" --out "${DOC_DIR_PREPARED:?}" "$@";;
-  night|run-stack)
-    preflight; locked python -m pipeline.cli "$cmd" "$@";;
   # 모듈(트리거 1회 실행 — docs/architecture.md). 종료 코드: 0 끝남·건너뜀 · 3 앞 모듈 결과 없음 · 4 PostgreSQL 없음 · 75 실행 중·마감
   parse)
     preflight
     locked python -m pipeline.cli parse --source "${PARSE_SOURCE:-${DOC_DIR:?}}" --src "${DOC_DIR_PREPARED:?}" "$@";;
-  structure|load)
-    preflight; locked python -m pipeline.cli "$cmd" "$@";;
   migrate)    # S8a(5-4, 사용자 10-28 Q4) — pgvector 판 관리. up·stamp는 적재와 겹치지 않게 같은 잠금, 읽기만 하는 current·check는 잠금·
     # 쓰기 확인(preflight) 없이. 명령 낱말은 인자 어디에 있어도 찾는다(옵션 값은 건너뜀 — VS8a R-6: `migrate --target x check`)
     verb=""; skip=0
@@ -157,9 +152,6 @@ for entry in sys.argv[2:]:
     preflight; exec python -m mcp_server.cli.ask "$cmd" "$@";;
   show-stack|show-sources|selftest|smoke)   # 실행 기록을 /app/output/logs에 씀 — mcp-server(/app/output:ro)에서는 안 됨(VS8b R-9 — data-pipeline 컨테이너에서)
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
-  full)
-    preflight
-    locked bash -c 'd=$1 p=$2; shift 2; python -m pipeline.extract.dedup --src "$d"       && python -m pipeline.extract.prepare --src "$d" --out "$p" --only /app/output/dedup/keep.txt       && python -m pipeline.cli night "$@"' full "${DOC_DIR:?}" "${DOC_DIR_PREPARED:?}" "$@";;
   # 11-01(pl-10 — trigger 서버 serve-trigger 지움) — 상주 컨테이너 data-pipeline-parse·data-pipeline-structure는 일을 하지 않고 떠 있기만 한다.
   # run_docs.py가 그 안에서 docker exec로 문서별 작업을 돌리고, MCP parse_document 작업 서비스(mcp_parse_service)도 그 안에 띄운다.
   idle)

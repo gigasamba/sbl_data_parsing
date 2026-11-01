@@ -80,7 +80,7 @@ sys.exit(1 if left or not done else 0)
 EOF
 fi
 if [ "$NIGHT" != 1 ]; then
-step "② 구조화(data-pipeline)" $DC run --rm structure structure
+step "② 구조화(data-pipeline — run_docs와 같은 build_bundle)" $DC run --rm --entrypoint python structure -m pipeline.transform.structure.build_bundle --parse-dir /app/output/parse --out /app/output/edw/bundle
 # S9(C-38 — 사용자 10-28 a): 적재는 서버 실제 길(run_docs.py와 같은 pgvector_load load — `pipeline.cli load`는 축소 스키마 묶음을 인계 계약
 #   DOC_KEYS로 거부하는 알려진 문제, CLAUDE.md §10). 표·vector 확장은 migrate가 먼저(S8a — 실행 중 DDL 없음, 차원은 묶음 meta.json).
 step "③-0 검색 판(migrate — 묶음 차원·vector 확장)" $DC run --rm load migrate up --target search --bundle /app/output/edw/bundle --create-extension
