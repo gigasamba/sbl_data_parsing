@@ -86,3 +86,22 @@ def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) 
     _selftest_reload()
     _selftest_warmup_health()
     _selftest_warmup_bg_failure_keeps_server_up()
+
+
+def test_check_store_server_guard():
+    """op-09 — 서버(dev·prd)는 PG 접속 칸이 비면 시작 거부(대역으로 빠지지 않음), PC는 통과(대역)."""
+    from unittest import mock
+
+    from common.core import paths
+    from mcp_server import config as mc
+    from mcp_server.services.search.server_state import check_store
+
+    with mc.senv(PG_HOST=None, PG_PASSWORD=None, PG_CONN_FILE=None):
+        with mock.patch.object(paths, "LOCAL_RUN", False):
+            try:
+                check_store()
+                raise AssertionError("서버에서 빈 PG 접속인데 거부 안 함")
+            except SystemExit as e:
+                assert "PG 접속 정보 없음" in str(e), e
+        with mock.patch.object(paths, "LOCAL_RUN", True):
+            check_store()  # PC — 대역으로 돎
