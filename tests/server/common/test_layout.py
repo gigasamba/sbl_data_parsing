@@ -137,6 +137,8 @@ def test_misplaced_and_unknown_keys():
         assert _raises(lambda: read_settings(f), "모르는 칸", "required.pg.hots")
         f.write_text("required:\n  env: {run_env: local}\nextract:\n", encoding="utf-8")
         assert read_settings(f)[0] == {"common": {"run_env": "local"}}  # 빈 절 머리는 괜찮음
+        f.write_text("required:\n  env: {run_env: local}\n  deploy: {mcp_store: pg}\n", encoding="utf-8")
+        assert read_settings(f)[0] == {"common": {"run_env": "local"}}  # 지운 자리(RETIRED — mc-01 11-01)는 경고만, 거부 안 함
 
 
 def test_duplicate_key_rejected():

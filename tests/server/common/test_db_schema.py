@@ -40,10 +40,10 @@ def _pm_columns():
 
 
 def _actual():
-    """gold·struct = dbcompare.expected(판 비교 시험과 같은 모델 — 차원은 칸 이름과 무관) · ParsingMeta = DDL 파일."""
+    """gold = dbcompare.expected(판 비교 시험과 같은 모델 — 차원은 칸 이름과 무관) · ParsingMeta = DDL 파일."""
     cols = {
         f"{db}.{t.name}": {c.name for c in t.columns}
-        for db, tgt in (("gold", "search"), ("struct", "struct"))
+        for db, tgt in (("gold", "search"),)
         for t in dbcompare.expected(tgt, "ai", 1024)[0].tables.values()
     }
     cols["edw.ParsingMeta"] = _pm_columns()

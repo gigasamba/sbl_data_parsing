@@ -100,12 +100,11 @@ def _build_locked(conf, iid, a):
         if not Path(a.stack).is_file():
             raise SystemExit(f"[index] --stack 파일 없음: {a.stack}")
         stack_bytes = Path(a.stack).read_bytes()
-    else:  # pl-32 — 넘겨받은 판(STACK_VERSION), 없으면 여기서(서버 판 표·PC 파일)
+    else:  # 엔진 구성 파일(서버·PC 같음 — 사용자 11-01)
         from pipeline import stackcfg
 
-        st = stackcfg.current()
-        stack_bytes = stackcfg.snapshot_bytes(st)
-        stack_args = [] if st.version_id is None else ["--stack-version", str(st.version_id)]
+        stack_bytes = stackcfg.snapshot_bytes(stackcfg.resolve())
+        stack_args = []
     inputs = ICS.inputs(rep, stack_bytes)  # 재빌드 판정용 입력 지문(_rep·사전·명부·stack·common·구조화 코드) — index_id와 별개
     done = IC.info(iid)
     if done and done.get("inputs") == inputs and bool(done.get("pg_schema")) == a.pg and not a.force:

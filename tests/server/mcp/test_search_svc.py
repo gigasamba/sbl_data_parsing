@@ -8,11 +8,10 @@ from pathlib import Path
 from mcp_server import config as mc
 from mcp_server.schemas.evidence import _EVIDENCE_BASE_KEYS, _MANIFEST_EXTRA_KEYS
 from mcp_server.services.search import search_svc as M
-from mcp_server.services.search.internal_docs import do_aggregate
 from mcp_server.services.search.search_svc import do_search
 from mcp_server.services.search.server_state import _STATE, CALLER
 from mcp_server.services.search.shaping import evidence_status
-from tests.server.mcp.test_server_state import _mk_bundle  # 옛 server_state._mk_bundle(자기 점검 공용 — S9에 server_state 시험 파일로 옮김)
+from tests.server.mcp import pgfix  # mc-01(11-01) — 검색은 PG 하나: 묶음을 SQLite 대역에 적재(임시 폴더, 실 PG 안 닿음)
 
 ROOT = (
     Path(M.__file__).resolve().parents[3]
@@ -23,36 +22,24 @@ def _selftest_search_notes_no_race():
     """be-qa 리뷰(S12) — do_search가 공유 Retriever의 note(임베딩 실패·확장·재순위·최신성)를 self 속성이 아니라
     search_ex() 반환값으로 읽는지(동시 요청에서 A의 note가 B 응답에 섞이면 안 됨). embed_query를 질문별로 다르게(절반은
     느린 실패) 만들어 섞일 여지를 늘려 놓고 다수 스레드로 동시 호출 — 각 응답의 note가 자기 질문 것인지 확인."""
-    import tempfile
     import threading
 
     import numpy as np
 
     from mcp_server.services.search import retriever as RT
 
-    d = Path(tempfile.mkdtemp())
-    (d / "meta.json").write_text(json.dumps({"dim": 4, "embed": "api"}), encoding="utf-8")
-    (d / "docs.jsonl").write_text(
-        json.dumps({"file_path": "x.txt", "file_name": "x.txt", "file_sha256": "f" * 64, "doc_format": ".txt"}) + "\n", encoding="utf-8"
-    )
-    (d / "chunks.jsonl").write_text(
-        json.dumps(
-            {
-                "doc": 0,
-                "seq": 0,
-                "page": 1,
-                "line_start": 1,
-                "line_end": 1,
-                "chunk_text": "단가 100 USD",
-                "n_terms": 2,
-                "bbox": None,
-                "section": None,
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    np.save(d / "vectors.npy", np.zeros((1, 4), dtype="float32"))
+    c = {
+        "doc": 0,
+        "seq": 0,
+        "page": 1,
+        "line_start": 1,
+        "line_end": 1,
+        "chunk_text": "단가 100 USD",
+        "n_terms": 2,
+        "bbox": None,
+        "section": None,
+    }
+    d = pgfix.mk_bundle([{"file_path": "x.txt"}], [c], meta={"dim": 4, "embed": "api"}, vectors=np.zeros((1, 4)))
 
     n_threads = 80
     barrier = threading.Barrier(n_threads)
@@ -69,9 +56,9 @@ def _selftest_search_notes_no_race():
     RT.embed_query = fake_embed  # retriever.py가 이 전역 이름으로 부름(모듈 내 교체)
     sys.setswitchinterval(0.0001)  # GIL을 자주 넘겨 스레드 전환을 늘림(레이스 노출 확률 ↑)
     old = {k: _STATE.get(k) for k in ("R", "bundle", "checked_at")}
-    bad = []
-    # PC 루트 settings.yaml(mcp.server.store: pg 등)이 새지 않게 — 30초 뒤 재적재가 실제 PG로 가면 한 스레드가 죽어 barrier가 멈췄음(10-29)
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), MCP_QUERY_LOG_DIR=str(d / "qa_log"))
+    bad, done = [], []
+    # 늘 대역(pgfix.use) — PC 루트 settings.yaml의 실 PG가 새지 않게(30초 뒤 재적재가 실제 PG로 가면 한 스레드가 죽어 barrier가 멈췄음, 10-29)
+    _env = pgfix.use(d, MCP_BUNDLE=str(d), MCP_QUERY_LOG_DIR=str(d / "qa_log"))
     try:
         R = RT.Retriever(d)
         _STATE["R"], _STATE["bundle"], _STATE["checked_at"] = R, d, time.time()
@@ -84,12 +71,14 @@ def _selftest_search_notes_no_race():
             has_note = any("임베딩 실패" in n for n in out.get("notes", []))
             if has_note != (i % 2 == 0):
                 bad.append((q, out.get("notes")))
+            done.append(i)  # 스레드가 예외로 죽으면 bad에 안 남아 헛통과 — 끝난 수를 따로 셈
 
         ths = [threading.Thread(target=worker, args=(i,)) for i in range(n_threads)]
         for t in ths:
             t.start()
         for t in ths:
             t.join()
+        assert len(done) == n_threads, f"끝난 요청 {len(done)}/{n_threads} — 나머지는 스레드가 예외로 죽음"
         assert not bad, f"note가 다른 요청과 섞임: {bad[:5]}"
     finally:
         _env.close()
@@ -126,8 +115,9 @@ def _selftest_copy_group():
             "section": None,
         },
     ]
-    d = _mk_bundle(docs, chunks)
+    d = pgfix.mk_bundle(docs, chunks)
     old = {k: _STATE.get(k) for k in ("R", "bundle", "checked_at")}
+    _env = pgfix.use(d)
     try:
         _STATE["R"], _STATE["bundle"], _STATE["checked_at"] = RT.Retriever(d), d, time.time()
         out = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
@@ -135,6 +125,7 @@ def _selftest_copy_group():
         assert out["evidence"][0]["variants"] == ["MAIL-X.msg"], out["evidence"][0]
         assert any("사본 그룹" in n for n in out["notes"]), out["notes"]
     finally:
+        _env.close()
         _STATE.clear()
         _STATE.update({k: v for k, v in old.items() if v is not None})
     print("[selftest] R2-c 사본 그룹 — 한 슬롯 + variants 통과")
@@ -192,8 +183,9 @@ def _selftest_copy_group_rep_text():
             "section": None,
         },
     ]
-    d = _mk_bundle(docs, chunks)
+    d = pgfix.mk_bundle(docs, chunks)
     old = {k: _STATE.get(k) for k in ("R", "bundle", "checked_at")}
+    _env = pgfix.use(d)
     try:
         _STATE["R"], _STATE["bundle"], _STATE["checked_at"] = RT.Retriever(d), d, time.time()
         out = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
@@ -202,6 +194,7 @@ def _selftest_copy_group_rep_text():
         assert "배치" in rep["text"], rep["text"]  # ① 이미지에만 없던 문장이 대표 텍스트에 있음
         assert rep["file_name"] not in rep["variants"] and "mailshot_MAIL-X.png" in rep["variants"]  # ② 대표 자신은 variants에 없음
     finally:
+        _env.close()
         _STATE.clear()
         _STATE.update({k: v for k, v in old.items() if v is not None})
     print("[selftest] R2-c 사본 대표 텍스트 — 형식 우선(QA066 재발 방지)·대표 자신 variants 제외 통과")
@@ -214,7 +207,7 @@ def _selftest_query_log():
 
     from mcp_server.services.search import qa_log
 
-    d = _mk_bundle(
+    d = pgfix.mk_bundle(
         [{"file_path": "x.txt", "file_name": "x.txt", "file_sha256": "8" * 64, "doc_format": ".txt"}],
         [
             {
@@ -232,7 +225,7 @@ def _selftest_query_log():
     )
     logdir = Path(tempfile.mkdtemp())
     _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), MCP_QUERY_LOG_DIR=str(logdir))  # 설정 객체 덮기(S7d)
+    _env = pgfix.use(d, MCP_BUNDLE=str(d), MCP_QUERY_LOG_DIR=str(logdir))  # 설정 객체 덮기(S7d)
     tok = CALLER.set("mcp:selftest")
     try:
         do_search("단가는?", k=3, methods=["bm25"], decompose=False)
@@ -259,11 +252,12 @@ def _selftest_evidence_rep_path():
     값 그대로 rep_key를 이음(find_rep_path)."""
     import tempfile
 
+    from common.core.contract import uri_from_path
     from common.store import parsing_meta_db as PM
 
-    doc_key = "a" * 64
+    doc_key = "x.txt"  # PG 근거의 doc_key = file_path(mc-01 — 저장소는 PG 하나)
     docs = [
-        {"file_path": "x.txt", "file_name": "x.txt", "file_sha256": doc_key, "doc_format": ".txt", "source_uri": "s3://src-bkt/orig/x.txt"},
+        {"file_path": "x.txt", "file_name": "x.txt", "doc_format": ".txt"},
         {"file_path": "y.txt", "file_name": "y.txt", "file_sha256": "b" * 64, "doc_format": ".txt"},
     ]
     chunks = [
@@ -280,7 +274,7 @@ def _selftest_evidence_rep_path():
         }
         for i in range(2)
     ]
-    d = _mk_bundle(docs, chunks)
+    d = pgfix.mk_bundle(docs, chunks)
 
     pm_path = Path(tempfile.mkdtemp()) / "edw.sqlite"
     db = PM.SqliteStore(str(pm_path))
@@ -301,14 +295,14 @@ def _selftest_evidence_rep_path():
     db.close()
 
     _STATE.clear()
-    _env = mc.senv(
-        MCP_STORE="local", MCP_BUNDLE=str(d), RDB_SQLITE=str(pm_path), RUN_ENV="local"
+    _env = pgfix.use(
+        d, MCP_BUNDLE=str(d), RDB_SQLITE=str(pm_path), RUN_ENV="local"
     )  # 설정 객체 덮기(S7d) · 가짜 EDW(RDB_SQLITE)는 local 전용 — 이미지에서도 시험 안에서만 local(이미지 관문 10-30)
     try:
         on = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
         by_name = {e["file_name"]: e for e in on["evidence"]}
         assert by_name["x.txt"]["rep_uri"] == "s3://rep-bkt/Parsing-Result/FSM/k/x.txt/", by_name["x.txt"]
-        assert by_name["x.txt"]["source_uri"] == "s3://src-bkt/orig/x.txt", by_name["x.txt"]  # 원본 경로 칸 불변
+        assert by_name["x.txt"]["source_uri"] == uri_from_path("x.txt"), by_name["x.txt"]  # 원본 경로 칸 불변(PG — file_path에서)
         assert "rep_uri" not in by_name["y.txt"], by_name["y.txt"]  # ParsingMeta에 없는 문서 — 새 칸 없음
 
         _STATE.clear()
@@ -365,7 +359,7 @@ def _selftest_evidence_gate():
     assert evidence_status("아무 질문", ev_found, min_score=None) == ("found", [None])  # 문턱 없으면 low_score 안 매김
 
     sha = "9" * 64
-    d = _mk_bundle(
+    d = pgfix.mk_bundle(
         [{"file_path": "x.txt", "file_name": "x.txt", "file_sha256": sha, "doc_format": ".txt"}],
         [
             {
@@ -382,7 +376,7 @@ def _selftest_evidence_gate():
         ],
     )
     _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
+    _env = pgfix.use(d, MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
     try:
         none = do_search("색인에 없는 XYZ999-계약은?", k=3, methods=["bm25"], decompose=False)  # BM25 0건
         assert none["evidence_status"] == "none", none
@@ -405,24 +399,32 @@ def _selftest_index_id():
     root = Path(tempfile.mkdtemp())
     docs = [{"file_path": "x.txt", "file_name": "x.txt", "file_sha256": "7" * 64, "doc_format": ".txt"}]
     row = {"doc": 0, "page": 1, "line_start": 1, "line_end": 1, "n_terms": 3, "bbox": None, "section": None}
-    base = _mk_bundle(docs, [{**row, "seq": 0, "chunk_text": "기본 색인 단가는 100 USD"}])
+    base = pgfix.mk_bundle(docs, [{**row, "seq": 0, "chunk_text": "기본 색인 단가는 100 USD"}])
     ids = {"0000aaaa": "작은 청크 단가는 200 USD", "0000bbbb": "큰 청크 단가는 300 USD"}
+    schema = lambda iid: f"{pgfix.SCHEMA}_{iid}"  # 이름 있는 색인 = 기본 대역 폴더 안 자기 스키마(<PG_SCHEMA>_<id>)
     for iid, txt in ids.items():
-        shutil.copytree(_mk_bundle(docs, [{**row, "seq": 0, "chunk_text": txt}]), root / iid / "bundle")
+        (root / iid).mkdir()
+        shutil.move(pgfix.mk_bundle(docs, [{**row, "seq": 0, "chunk_text": txt}], load_pg=False), root / iid / "bundle")
+        pgfix.load(root / iid / "bundle", schema(iid), pgfix.standin_of(base))
         (root / iid / "index.json").write_text(
             json.dumps(
-                {"index_id": iid, "pg_schema": None, "inputs": {"glossary": "0badf00d" if iid == "0000bbbb" else "none", "roster": "none"}}
+                {
+                    "index_id": iid,
+                    "pg_schema": schema(iid),
+                    "inputs": {"glossary": "0badf00d" if iid == "0000bbbb" else "none", "roster": "none"},
+                }
             ),
             encoding="utf-8",
         )
     (root / "0000cccc" / "bundle").mkdir(parents=True)  # 만드는 중(완료 표시 없음)
     api = root / "0000dddd"
-    shutil.copytree(_mk_bundle(docs, [{**row, "seq": 0, "chunk_text": "api 색인"}]), api / "bundle")
+    api.mkdir()
+    shutil.move(pgfix.mk_bundle(docs, [{**row, "seq": 0, "chunk_text": "api 색인"}], load_pg=False), api / "bundle")
     (api / "bundle" / "meta.json").write_text(json.dumps({"dim": 4, "embed": "api", "embed_model": "m-a"}), encoding="utf-8")
-    (api / "index.json").write_text(json.dumps({"index_id": "0000dddd", "pg_schema": None}), encoding="utf-8")
+    (api / "index.json").write_text(json.dumps({"index_id": "0000dddd", "pg_schema": schema("0000dddd")}), encoding="utf-8")
     _STATE.clear()
     # 설정 객체 덮기(S7d) — GLOSSARY_DIR·CLIENT_ROSTER도 설정 객체(op-09 — 인계 파일 common.core.terms도 cfg())
-    _env = mc.senv(GLOSSARY_DIR=None, CLIENT_ROSTER=None, MCP_STORE="local", MCP_BUNDLE=str(base), INDEX_ROOT=str(root), EMBED_MODEL="m-b")
+    _env = pgfix.use(base, GLOSSARY_DIR=None, CLIENT_ROSTER=None, MCP_BUNDLE=str(base), INDEX_ROOT=str(root), EMBED_MODEL="m-b")
     try:
         d0 = do_search("단가는?", k=3, methods=["bm25"], decompose=False)
         assert "index_id" not in d0 and "100 USD" in d0["evidence"][0]["text"], d0
@@ -442,200 +444,14 @@ def _selftest_index_id():
     finally:
         _env.close()
         _STATE.clear()
+        shutil.rmtree(root, ignore_errors=True)
     print("[selftest] AD41 index_id — 색인별 검색·캐시·없음/미완료/형식 오류·모델 불일치 거부·사전 차이 경고·기본 색인 불변 통과")
 
 
-def _selftest_agg_route():
-    """R1(AD42) — 집계 질문은 aggregate.detect() 경로(기존 정해진 함수만)의 결과가 근거 맨 앞에
-    via="aggregate"로 붙고, 비집계 질문은 영향 없음."""
-    docs = [
-        {
-            "file_path": "c1.txt",
-            "file_name": "c1.txt",
-            "file_sha256": "1" * 64,
-            "doc_format": ".txt",
-            "client": "Acme Co",
-            "contract_no": "C-001",
-            "meta_confirmed": True,
-            "contract": {"amount": 1000, "currency": "USD"},
-        },
-        {
-            "file_path": "c2.txt",
-            "file_name": "c2.txt",
-            "file_sha256": "2" * 64,
-            "doc_format": ".txt",
-            "client": "Acme Co",
-            "contract_no": "C-002",
-            "meta_confirmed": True,
-            "contract": {"amount": 2000, "currency": "USD"},
-        },
-    ]
-    chunks = [
-        {
-            "doc": i,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "Acme Co 계약 안내",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        }
-        for i in range(2)
-    ]
-    d = _mk_bundle(docs, chunks)
-    _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
-    try:
-        on = do_search("Acme Co의 계약 건수는 몇 건인가?", k=5, methods=["bm25"], decompose=False)
-        assert on["evidence"][0]["via"] == "aggregate" and on["evidence"][0]["answer"] == 2, on["evidence"][0]
-
-        plain = do_search("단가는 얼마인가?", k=5, methods=["bm25"], decompose=False)  # 비집계 질문 — 집계 경로 영향 없음
-        assert not any(e.get("via") == "aggregate" for e in plain["evidence"]), plain["evidence"]
-    finally:
-        _env.close()
-        _STATE.clear()
-    print("[selftest] R1 집계 경로 — 집계 질문 aggregate 근거 맨 앞 · 비집계 질문 영향 없음 통과")
-
-
-def _selftest_agg_table_text():
-    """RV-aggtext(검토 1-B F1) — 집계 근거 evidence["text"]에 합계 한 줄뿐이던 결함: 고객별·제품 종류별 '표'가
-    나오는 질문(group)은 text에도 행(고객명·값)이 들어가야 한다(답변 모델이 text만 보고도 비교할 수 있게,
-    기존 rows/columns 칸은 그대로 — 소비자가 바뀌지 않아도 더 보임)."""
-    docs = [
-        {
-            "file_path": "c1.txt",
-            "file_name": "c1.txt",
-            "file_sha256": "1" * 64,
-            "doc_format": ".txt",
-            "client": "Acme Co",
-            "contract_no": "C-001",
-            "meta_confirmed": True,
-            "contract": {"amount": 1000, "currency": "USD"},
-        },
-        {
-            "file_path": "c3.txt",
-            "file_name": "c3.txt",
-            "file_sha256": "3" * 64,
-            "doc_format": ".txt",
-            "client": "Beta Inc",
-            "contract_no": "C-003",
-            "meta_confirmed": True,
-            "contract": {"amount": 500, "currency": "USD"},
-        },
-    ]
-    chunks = [
-        {
-            "doc": i,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "계약 안내",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        }
-        for i in range(2)
-    ]
-    d = _mk_bundle(docs, chunks)
-    _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
-    try:
-        r = do_search("Acme Co와 Beta Inc의 계약 건수는 각각 몇 건인가?", k=5, methods=["bm25"], decompose=False)
-        ev0 = r["evidence"][0]
-        assert ev0["via"] == "aggregate" and ev0.get("rows"), ev0
-        for name in ("Acme Co", "Beta Inc"):
-            assert name in ev0["text"], ev0["text"]  # 결함 전엔 합계 한 줄만이라 고객명이 text에 없었음
-    finally:
-        _env.close()
-        _STATE.clear()
-    print("[selftest] RV-aggtext — 집계 근거 text에 고객별 표 행 포함(합계 한 줄만이던 결함 해소) 통과")
-
-
-def _selftest_agg_fx():
-    """BR43 — 집계 결과 통화가 2개 이상 섞이면(비교 질문) 환율 근거를 집계 text 끝에 붙이고,
-    통화가 하나뿐이면(no-op) 영향이 없다 · =0이면 섞여도 안 붙는다."""
-    docs = [
-        {
-            "file_path": "c1.txt",
-            "file_name": "c1.txt",
-            "file_sha256": "1" * 64,
-            "doc_format": ".txt",
-            "client": "Acme Co",
-            "contract_no": "C-001",
-            "meta_confirmed": True,
-            "contract": {"amount": 1000, "currency": "USD"},
-        },
-        {
-            "file_path": "c3.txt",
-            "file_name": "c3.txt",
-            "file_sha256": "3" * 64,
-            "doc_format": ".txt",
-            "client": "Beta Inc",
-            "contract_no": "C-003",
-            "meta_confirmed": True,
-            "contract": {"amount": 500000, "currency": "KRW"},
-        },
-        {"file_path": "fx.txt", "file_name": "fx.txt", "file_sha256": "4" * 64, "doc_format": ".txt"},
-    ]
-    chunks = [
-        {
-            "doc": 0,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "Acme Co 계약 안내",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        },
-        {
-            "doc": 1,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "Beta Inc 계약 안내",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        },
-        {
-            "doc": 2,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "환율 exchange rate: 1 USD = 1,350 KRW",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        },
-    ]
-    d = _mk_bundle(docs, chunks)
-    _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
-    try:
-        mixed = do_search("Acme Co와 Beta Inc 중 전체 계약 금액 합계가 더 큰 곳은?", k=5, methods=["bm25"], decompose=False)
-        ev0 = mixed["evidence"][0]
-        assert ev0["via"] == "aggregate", ev0
-        assert "환율 근거:" in ev0["text"] and "fx.txt" in ev0["text"], ev0["text"]  # 섞인 통화 → 환율 근거 붙음
-        assert any("환율 근거 추가" in n for n in mixed["notes"]), mixed["notes"]
-
-        single = do_search("Acme Co의 계약 건수는 몇 건인가?", k=5, methods=["bm25"], decompose=False)  # no-op — 통화 1개
-        assert "환율 근거:" not in single["evidence"][0]["text"], single["evidence"][0]["text"]
-    finally:
-        _env.close()
-        _STATE.clear()
-    print("[selftest] BR43 — 통화 2개 이상 섞인 집계만 환율 근거 추가 · 단일 통화 영향 없음 통과")
-
-
 def _selftest_search_client_arg():
-    """AD38 — do_search(client=...)가 Retriever.search_ex로 그대로 전달되는지(MCP 계층 통합 확인).
-    꺼짐(기본)이면 바이트 동일(둘 다 나옴, 앞으로만) · SEARCH_CLIENT_HARD=1이면 다른 고객은 근거에서 완전히 빠짐."""
+    """AD38 — do_search(client=...)가 검색에 전달되는지(MCP 계층 통합 확인). PG 저장소(mc-01 — 저장소는 PG 하나)에서
+    client는 하드 필터 범위(2026-10-20 통합 search, _hard_filter_scope)라 SEARCH_CLIENT_HARD와 무관하게 다른 고객은 근거에서
+    완전히 빠진다(옛 '꺼짐이면 둘 다 나옴'은 범위를 못 정하던 로컬 묶음 저장소만의 동작)."""
     docs = [
         {"file_path": "a.txt", "file_name": "a.txt", "file_sha256": "a" * 64, "doc_format": ".txt", "client": "Acme Co"},
         {"file_path": "b.txt", "file_name": "b.txt", "file_sha256": "b" * 64, "doc_format": ".txt", "client": "Other Co"},
@@ -654,13 +470,14 @@ def _selftest_search_client_arg():
         }
         for i in range(2)
     ]
-    d = _mk_bundle(docs, chunks)
+    d = pgfix.mk_bundle(docs, chunks)
     _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
+    _env = pgfix.use(d, MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
     try:
         with mc.senv(SEARCH_CLIENT_HARD=None):
             off = do_search("단가는?", k=5, methods=["bm25"], decompose=False, client="Acme Co")
-            assert {e["file_name"] for e in off["evidence"]} == {"a.txt", "b.txt"}, off["evidence"]  # 꺼짐 — 둘 다(앞으로만, 안 빠짐)
+            assert {e["file_name"] for e in off["evidence"]} == {"a.txt"}, off["evidence"]  # 꺼짐도 하드 필터 범위(PG)
+            assert off["filter"] == {"client": "Acme Co"} and off["scope_docs"] == 1, off
 
         with mc.senv(SEARCH_CLIENT_HARD="1"):
             on = do_search("단가는?", k=5, methods=["bm25"], decompose=False, client="Acme Co")
@@ -668,7 +485,7 @@ def _selftest_search_client_arg():
     finally:
         _env.close()
         _STATE.clear()
-    print("[selftest] AD38 do_search(client=) — MCP 계층에서도 SEARCH_CLIENT_HARD 꺼짐/켬 전달 통과")
+    print("[selftest] AD38 do_search(client=) — PG 하드 필터 범위로 다른 고객 제외(SEARCH_CLIENT_HARD 꺼짐/켬 둘 다) 통과")
 
 
 def _selftest_entity_split():
@@ -693,10 +510,10 @@ def _selftest_entity_split():
         }
         for i in range(1, 4)
     ] + [{"doc": 3, "seq": 0, "page": 1, "line_start": 1, "line_end": 1, "chunk_text": "단가", "n_terms": 1, "bbox": None, "section": None}]
-    d = _mk_bundle(docs, chunks)
+    d = pgfix.mk_bundle(docs, chunks)
     q = "Acme Co와 Beta Inc 중 단가 비교 안내 문서를 찾아줘."  # '문서를 찾아'(FIND_DOC_RE) — 집계 경로로 안 새게(aggregate.py 기존 규칙)
     _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
+    _env = pgfix.use(d, MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
     try:
         on = do_search(q, k=2, methods=["bm25"], decompose=False)
         assert "b1.txt" in {e["file_name"] for e in on["evidence"]}, on["evidence"]  # Beta Inc 근거가 끌려옴
@@ -762,7 +579,7 @@ def _selftest_br50_client_scope():
             "section": None,
         },
     ]
-    d = _mk_bundle(docs, chunks)
+    d = pgfix.mk_bundle(docs, chunks)
     (d / "concept_chunk.jsonl").write_text(
         "\n".join(
             json.dumps(x)
@@ -817,25 +634,17 @@ def _selftest_br50_client_scope():
                 "updated": "",
             }
         )
-    # BR50 D — 질문 자체엔 고객 이름이 없고 계약ID(C-B01, Beta Inc 소유)만 적힘: client="Acme Co"로 범위를 좁히면
-    # docs가 route() 전에 걸려 detect()의 contracts 후보에 C-B01이 없어져 "집계 아님"으로 빠진다(질문에 고객명을
-    # 적어 넓히는 기존 search 쪽 동작 — retriever.py AD38·BR23 — 과는 다른 축: 여긴 "클라이언트가 모르는 남의
-    # 계약ID를 넣어 캐 보는" 경로라 client_scope의 질문-기반 자동 인식과 안 겹침)
-    q_contract = "계약 C-B01의 금액은?"
 
     _STATE.clear()
     # 설정 객체 덮기(S7d) — GLOSSARY_DIR도 설정 객체(op-09) · SEARCH_CLIENT_HARD=None은 옛 pop
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), GLOSSARY_DIR=str(gdir), SEARCH_CLIENT_HARD=None)
+    _env = pgfix.use(d, MCP_BUNDLE=str(d), GLOSSARY_DIR=str(gdir), SEARCH_CLIENT_HARD=None)
     _hard = None
     try:
-        # 꺼짐(기본) — client를 줘도 전과 바이트 동일
+        # client 없음 — 두 고객 근거 다 나옴 · client 명시는 PG에서 하드 필터 범위(꺼짐이어도 Beta Inc 빠짐 — 2026-10-20 통합 search)
+        both = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False)
+        assert {e.get("file_name") for e in both["evidence"] if e.get("file_name")} >= {"a.txt", "b.txt"}, both["evidence"]
         off = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False, client="Acme Co")
-        assert {e.get("file_name") for e in off["evidence"] if e.get("file_name")} >= {"a.txt", "b.txt"}, off["evidence"]
-
-        agg_off = do_aggregate(q_contract)  # client 없음 — 바이트 동일(남의 계약ID라도 그대로 찾아짐)
-        assert agg_off.get("answer") == "500 USD", agg_off
-        agg_off_cl = do_aggregate(q_contract, client="Acme Co")  # HARD 꺼짐인데 client만 줌 — 영향 없음(바이트 동일)
-        assert agg_off_cl.get("answer") == "500 USD", agg_off_cl
+        assert {e.get("file_name") for e in off["evidence"] if e.get("file_name")} == {"a.txt"}, off["evidence"]
 
         # 켬 — SEARCH_CLIENT_HARD=1 + client="Acme Co" 명시
         _hard = mc.senv(SEARCH_CLIENT_HARD="1")
@@ -843,17 +652,13 @@ def _selftest_br50_client_scope():
         assert "b.txt" not in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # core·concept 둘 다 빠짐(F)
         assert "a.txt" in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # 자기 고객 근거는 그대로
 
-        agg_on = do_aggregate(q_contract, client="Acme Co")  # D — Beta Inc 계약ID를 적어도 범위 밖이라 "집계 아님"으로 빠짐
-        dump_on = json.dumps(agg_on, ensure_ascii=False)
-        assert "500" not in dump_on and "C-B01" not in dump_on and "Beta Inc" not in dump_on, agg_on
-        assert agg_on.get("answer") is None and "note" in agg_on, agg_on  # route()가 None → do_aggregate의 기본 note
     finally:
         if _hard is not None:
             _hard.close()
         _env.close()
         _STATE.clear()
     print(
-        "[selftest] BR50 — clientscope 종단 점검: 꺼짐(client만 줘도) 바이트 동일(core·concept·image·aggregate·"
+        "[selftest] BR50 — clientscope 종단 점검: 꺼짐(client만 줘도) 바이트 동일(core·concept·image·"
         "get_document·get_image·lookup_term) · SEARCH_CLIENT_HARD=1+client 명시면 다른 고객 근거·그림·구조화 집계 "
         "전부 제외, 키 조회는 거부 · client 안 주면(I류) 알려진 한계로 그대로 통과"
     )
@@ -875,9 +680,9 @@ def _selftest_evidence_rdb_meta():
     man_doc = "contract_sjm_mab_2025"
     other_doc = "no_manifest_doc"
     docs = [
-        {"file_path": f"{man_doc}.txt", "file_name": man_doc, "file_sha256": "c" * 64, "doc_format": ".txt"},
-        {"file_path": f"{other_doc}.txt", "file_name": other_doc, "file_sha256": "d" * 64, "doc_format": ".txt"},
-    ]
+        {"file_path": man_doc, "file_name": man_doc, "file_sha256": "c" * 64, "doc_format": ".txt"},
+        {"file_path": other_doc, "file_name": other_doc, "file_sha256": "d" * 64, "doc_format": ".txt"},
+    ]  # PG 근거의 file_name은 file_path의 마지막 조각(v_chunk_source) — manifest 키(file_name)와 맞게 확장자 없이
     chunks = [
         {
             "doc": i,
@@ -892,7 +697,7 @@ def _selftest_evidence_rdb_meta():
         }
         for i in range(2)
     ]
-    d = _mk_bundle(docs, chunks)
+    d = pgfix.mk_bundle(docs, chunks)
 
     man_path = d / "manifest.jsonl"
     man_path.write_text(
@@ -914,7 +719,7 @@ def _selftest_evidence_rdb_meta():
     )
 
     _STATE.clear()
-    _env = mc.senv(MCP_STORE="local", MCP_BUNDLE=str(d), MCP_MANIFEST=str(man_path))  # 설정 객체 덮기(S7d)
+    _env = pgfix.use(d, MCP_BUNDLE=str(d), MCP_MANIFEST=str(man_path))  # 설정 객체 덮기(S7d)
     try:
         on = do_search("계약기준금액은?", k=5, methods=["bm25"], decompose=False)
         by_name = {e["file_name"]: e for e in on["evidence"]}
@@ -939,16 +744,13 @@ def _selftest_evidence_rdb_meta():
 
 def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) — search_svc.py엔 __main__이 없었음
     from common.core.paths import STACK_FILE
-    from common.store.db import cfgtables
+    from common.store.db import cfgfile
 
-    cfgtables._CACHE.setdefault(
-        "stack", cfgtables.read_file("stack", STACK_FILE)
+    cfgfile._CACHE.setdefault(
+        "stack", cfgfile.read_file("stack", STACK_FILE)
     )  # test_mcp_main과 같은 준비(S8b — 이미지 selftest엔 PG가 없어 판 표 대신 파일, S9 따로 사례가 되며 더함)
     _selftest_search_notes_no_race()
     _selftest_evidence_gate()
-    _selftest_agg_route()
-    _selftest_agg_table_text()
-    _selftest_agg_fx()
     _selftest_search_client_arg()
     _selftest_entity_split()
     _selftest_br50_client_scope()

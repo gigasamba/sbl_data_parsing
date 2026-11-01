@@ -36,7 +36,7 @@ def test_copied_sample_starts_with_defaults():
     tree = yaml.safe_load(text)
     assert tree["required"]["env"]["run_env"] == "dev"
     names = _set_read_names()
-    assert "STRUCT_BACKEND" in names  # 검색이 코드를 실제로 찾았는지
+    assert "PIPE_RESERVE_GB" in names  # 검색이 코드를 실제로 찾았는지(common/core/resources.py — 두 이미지 다 있음)
     with tempfile.TemporaryDirectory() as d:
         y = Path(d) / "settings.yaml"
         y.write_text(text, encoding="utf-8")

@@ -1,67 +1,61 @@
-"""pl-32(사용자 10-30) — 실행을 넘는 문서 고르기는 문서 대장 하나만: 파싱 성공 행(status parsed)이 있으면 안 고름, 실패·새 문서는 고름,
-대장을 못 열면 run_mode prod는 종료 4(전체 재파싱 안 함)·그 밖은 받은 목록 그대로. 앞 실행 runs.jsonl은 보지 않는다. 외부 접속 없음."""
+"""C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = FileStorageMap ∖ ParsingMeta: ParsingMeta에 ok·partial·skipped_dup 행이(사용자 11-01) 있는 원본 키는 안 고르고,
+행이 없거나(새 문서·통째 실패) 다른 상태(not_parsed·skipped_disk_cap 등)면 고른다. 이름 ↔ 원본 키는 manifest.jsonl(없으면 이름 그대로). 받은 순서 그대로.
+EDW를 못 읽으면 서버(run_mode prod·RUN_ENV dev)는 종료 4, PC는 받은 목록 그대로. 임시 SQLite EDW 대역만 — 외부 접속 없음."""
 
 import json
+import tempfile
+from pathlib import Path
 from unittest import mock
 
 from common.config.settings import COMMON
-from common.store import registry as REG
+from common.store.parsing_meta_db import SqliteStore
 from pipeline import cli
 
-
-class _FakeDB:
-    def __init__(self, rows):
-        self.rows = rows
-
-    def query(self, sql, params=None):
-        return [{"names": json.dumps(r["names"]), "status": r["status"], "last_seen": r.get("last_seen")} for r in self.rows]
-
-    def close(self):
-        pass
-
-
-ROWS = [
-    {"names": ["ok.pdf"], "status": "parsed"},  # 앞 실행 성공 — 안 고름
-    {"names": ["bad.pdf"], "status": "failed"},  # 실패 — 다시 고름
-    {"names": ["seen.pdf"], "status": "seen"},  # 아직 시도 전 — 고름
+# (이름, manifest 원본 키 | None, ParsingMeta parse_status | None, 고름?)
+DOCS = [
+    ("z_ok.pdf", "SFDC/a/z_ok.pdf", "ok", False),  # 성공 — 안 고름
+    ("part.pdf", "SFDC/a/part.pdf", "partial", False),  # 부분 성공도 끝난 것
+    ("new.pdf", "SFDC/a/new.pdf", None, True),  # ParsingMeta에 없음(새 문서 또는 통째 실패) — 고름
+    ("np.pdf", "SFDC/a/np.pdf", "not_parsed", True),  # 행은 있지만 성공 아님 — 고름
+    ("dup.pdf", "SFDC/a/dup.pdf", "skipped_dup", False),  # 완전 중복 — 끝난 것(사용자 11-01)
+    ("cap.pdf", "SFDC/a/cap.pdf", "skipped_disk_cap", True),  # 디스크 상한으로 건너뜀 — 다시 고름
+    ("same.pdf", "SFDC/b/same.pdf", None, True),  # 같은 이름이 다른 키(SFDC/a/same.pdf)로 성공 — 키로 보므로 고름
+    ("folder.pdf", None, "ok", False),  # manifest 없음(폴더 소스) — 이름이 곧 키
 ]
-CASES = [  # (대장 행, run_mode, 기대 — 이름 목록 또는 종료 코드)
-    (ROWS, "prod", ["new.pdf", "seen.pdf", "bad.pdf"]),  # 새·시도 전 먼저, 실패는 뒤
-    (ROWS, None, ["new.pdf", "seen.pdf", "bad.pdf"]),
-    (None, None, ["bad.pdf", "new.pdf", "ok.pdf", "seen.pdf"]),  # 대장 없음(PC·DOC_REGISTRY=0) — 받은 목록 그대로
-    (None, "prod", 4),  # 대장 없음(서버) — 멈춤
+EXTRA_ROWS = [("SFDC/a/same.pdf", "ok")]
+# (RUN_ENV, RUN_MODE, EDW 대역 있음, 기대 — 이름 목록 또는 종료 코드)
+CASES = [
+    ("local", None, True, [n for n, _, _, pick in DOCS if pick]),
+    ("local", "prod", True, [n for n, _, _, pick in DOCS if pick]),
+    ("local", None, False, [n for n, *_ in DOCS]),  # PC — EDW 못 읽음: 받은 목록 그대로
+    ("local", "prod", False, 4),  # run_mode prod — 멈춤
+    ("dev", None, True, 4),  # 서버 — 대역은 거부되고(RDB_SQLITE는 PC 전용) 멈춤
 ]
 
 
-def test_registry_pick():
-    names = ["bad.pdf", "new.pdf", "ok.pdf", "seen.pdf"]
-    for rows, mode, want in CASES:
-        db = None if rows is None else _FakeDB(rows)
-        with COMMON.env(RUN_MODE=mode), mock.patch.object(REG, "try_open_db", return_value=db):
-            if isinstance(want, int):
-                try:
-                    cli._registry_unparsed(names)
-                    raise AssertionError(f"대장 없음 + run_mode {mode} — 멈추지 않음")
-                except SystemExit as e:
-                    assert e.code == want, (mode, e.code)
-                try:
-                    cli._registry_new_names(cli.OUT, names)  # --source 길도 같은 규칙
-                    raise AssertionError("--source 길: 대장 없음 + prod인데 멈추지 않음")
-                except SystemExit as e:
-                    assert e.code == want
-            else:
-                assert cli._registry_unparsed(names) == want, (rows is None, mode)
+def _fixture(tmp):
+    out = Path(tmp) / "out"
+    (out / "parse" / "_source").mkdir(parents=True)
+    (out / "parse" / "_source" / "manifest.jsonl").write_text(
+        "".join(json.dumps({"file_name": n, "key": k}) + "\n" for n, k, _, _ in DOCS if k), encoding="utf-8"
+    )
+    edw = Path(tmp) / "edw.sqlite"
+    rows = [(k or n, st) for n, k, st, _ in DOCS if st] + EXTRA_ROWS
+    db = SqliteStore(str(edw))
+    db.insert_new([{"source_system": "SFDC", "source_key": k, "doc_key": f"d{i}", "parse_status": st} for i, (k, st) in enumerate(rows)])
+    db.close()
+    return out, edw
 
 
-def test_failed_docs_do_not_starve_new():
-    """PR #49 리뷰 — 늘 실패하는 문서가 이름순으로 앞서도 --max-new 자리를 막지 않는다: 새 문서 먼저, 실패는 마지막 시도가 오래된 것부터."""
-    rows = [
-        {"names": ["a1.pdf"], "status": "failed", "last_seen": "2026-10-03T00:00:00Z"},
-        {"names": ["a2.pdf"], "status": "failed", "last_seen": "2026-10-01T00:00:00Z"},
-        {"names": ["a3.pdf"], "status": "failed", "last_seen": "2026-10-02T00:00:00Z"},
-    ]
-    names = ["a1.pdf", "a2.pdf", "a3.pdf", "z_new.pdf"]
-    with COMMON.env(RUN_MODE="prod"), mock.patch.object(REG, "try_open_db", return_value=_FakeDB(rows)):
-        pick = cli._registry_unparsed(names)
-    assert pick == ["z_new.pdf", "a2.pdf", "a3.pdf", "a1.pdf"], pick
-    assert pick[:2] == ["z_new.pdf", "a2.pdf"]  # max_new=2 — 새 문서가 들고 실패 중 가장 오래된 것 하나
+def test_c10_pick():
+    names = [n for n, *_ in DOCS]
+    with tempfile.TemporaryDirectory() as tmp:
+        out, edw = _fixture(tmp)
+        for run_env, mode, has_edw, want in CASES:
+            path = str(edw if has_edw else Path(tmp) / "none" / "edw.sqlite")
+            with COMMON.env(RUN_ENV=run_env, RUN_MODE=mode, RDB_SQLITE=path), mock.patch.object(cli, "OUT", out):
+                try:
+                    got = cli._unparsed(names)
+                except SystemExit as e:
+                    got = e.code
+            assert got == want, (run_env, mode, has_edw, got)

@@ -34,16 +34,6 @@ def _demo():
     env = child_env({"X_DEMO": "1"})
     assert env["X_DEMO"] == "1" and str(PKG_ROOT.parent) in env["PYTHONPATH"].split(os.pathsep)
     assert env is not os.environ  # env 남김 — 시험 · 원본 os.environ을 안 바꿈
-    # 운영 DB 가드(structdb.PROD_DBS)가 이 상수를 들여놓아도 그대로 같은 절대경로를 가리키는지 —
-    # 이 모듈은 structdb.py를 고치지 않았으므로 바뀔 리 없지만, 단계 4 이동이 그 경로를 흔들지 않았다는 증거로 남긴다.
-    from common.store import structdb  # deploy/common/store/structdb.py — `-m common.core.paths`로 이미 deploy/가 sys.path에 있어 바로 찾음
-
-    expect = {
-        (PROJ_ROOT / "valid_env" / "structured" / "sales.sqlite").resolve(),
-        (PROJ_ROOT / "valid_env" / "sim" / "structured" / "sales.sqlite").resolve(),
-        (PROJ_ROOT / "data" / "structured" / "sales.sqlite").resolve(),
-    }
-    assert structdb.PROD_DBS == expect, (structdb.PROD_DBS, expect)
     with tempfile.TemporaryDirectory() as t:
         root = Path(t)
         d1 = resolve_run_dir(root, None, new=True)

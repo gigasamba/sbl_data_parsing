@@ -185,7 +185,6 @@ PARSE_C, STRUCT_C = "data-pipeline-parse", "data-pipeline-structure"  # docker i
 # 그 python이 덮기 파일로 자기와 자식에게 넘김). 전에는 `bash -c 'X=값 python …'` env로 줬는데 S7e2부터 앱이 env의 옛 이름을 읽지 않아
 # 문서별 결과 폴더(PIPE_OUT_ROOT 등)·동시 수·후보정·CPU 게이트가 효과가 없었다. 비밀 칸은 --set이 거부한다(명령 줄은 ps·로그에 남음).
 EMBED_SET = ("EMBED_CONCURRENCY=6", "EMBED_BATCH=32", "BM25_THREADS=3")
-STACK_VER = ""  # 엔진 구성 판 번호 — main()이 한 번 정함(stack_version — 이 실행의 모든 문서가 같은 판, pl-32). 빈 글자 = PC 파일
 PARSE_SET = (
     "VLM_GLOBAL_CONCURRENCY=8",
     "VLM_CONCURRENCY=8",
@@ -257,7 +256,6 @@ def parse_cmd(seq, chan, scan, gate):
         *heavy_on,
         *scan_set,
         f"CPU_MAX_LOAD={gate}",
-        *((f"STACK_VERSION={STACK_VER}",) if STACK_VER else ()),
     )
     return (
         f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && "
@@ -268,8 +266,7 @@ def parse_cmd(seq, chan, scan, gate):
 
 
 def struct_cmd(seq):
-    """문서 1개 구조화 + 적재(구조화 컨테이너). 엔진 구성은 이 실행이 시작 때 정한 판 번호(STACK_VER — 파싱과 같은 판, pl-32: 사본 파일 없음 ·
-    VS8b R-1: 파싱과 구조화 사이에 set-stack이 있어도 한 문서는 한 판으로)."""
+    """문서 1개 구조화 + 적재(구조화 컨테이너). 엔진 구성은 파싱과 같은 파일(코드 폴더 — 사용자 11-01: 판 번호 없음, 실행 중에는 안 바뀜)."""
     inside = f"/app/output/docflow/{seq}"
     st = sets(
         *EMBED_SET, "FILE_META_PATH=/app/output/file_meta_new.jsonl"
@@ -278,7 +275,7 @@ def struct_cmd(seq):
         f"{DOCKER} exec {STRUCT_C} bash -c 'cd /app && "
         f"PYTHONPATH=/app/deploy "
         f"python -m pipeline.transform.structure.build_bundle{st} --parse-dir {inside}/parse"
-        f"{f' --stack-version {STACK_VER}' if STACK_VER else ''} --out {inside}/bundle && "
+        f" --out {inside}/bundle && "
         f"python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle "
         f">> /app/output/docflow/{seq}/structure.log 2>&1'"
     )
@@ -421,16 +418,12 @@ def apply_policy(vals):
     _BACKLOG_SETTING = vals["struct_backlog"]
 
 
-def stack_version():
-    """엔진 구성 활성 판 번호 — 시작 때 한 번(이 실행의 파싱·구조화가 모두 이 판, pl-32). 파싱 컨테이너 안 판 표에서(PC 파일이면 빈 글자).
-    못 읽으면(판 표 없음 — 종료 4, 없는 엔진 — 종료 2) 시작하지 않는다."""
-    rc, out, err = sh(
-        f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && PYTHONPATH=/app/deploy python -m pipeline.stackcfg --version'", timeout=120
-    )
-    last = next((ln.strip() for ln in reversed((out or "").splitlines()) if ln.strip()), "")
-    if rc != 0 or (last and not last.isdigit()):
-        raise SystemExit(f"[run_docs] 엔진 구성 판을 읽지 못함(종료 코드 {rc}) — {(err or '').strip()[-200:]}")
-    return last
+def stack_check():
+    """엔진 구성 파일 확인 — 시작 때 한 번(파싱 컨테이너 안 show-stack — 파일을 못 읽거나 모양이 틀리면 종료 2, 시작하지 않음).
+    없는 엔진은 파싱 입구가 거부한다(stackcfg.resolve)."""
+    rc, _, err = sh(f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && PYTHONPATH=/app/deploy python -m pipeline.cli show-stack'", timeout=120)
+    if rc != 0:
+        raise SystemExit(f"[run_docs] 엔진 구성 파일을 읽지 못함(종료 코드 {rc}) — {(err or '').strip()[-200:]}")
 
 
 def sh(cmd, timeout=1800, log=None):
@@ -774,7 +767,7 @@ def _safe_cleanup(seq, row):
 
 
 def main():
-    global WARM_TARGET, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE, STRUCT_BACKLOG, STACK_VER, CODE_DIR
+    global WARM_TARGET, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE, STRUCT_BACKLOG, CODE_DIR
     ap = argparse.ArgumentParser()
     ap.add_argument("--start-offset", type=int, default=1072)
     ap.add_argument(
@@ -826,7 +819,7 @@ def main():
     DOCFLOW.mkdir(mode=0o777, parents=True, exist_ok=True)
     rows = edw_list([k.strip() for k in a.filter.split(",") if k.strip()])
     n_env = write_envfile()
-    STACK_VER = stack_version()
+    stack_check()
     start = a.start_offset
     if start >= len(rows):
         log(f"start-offset {start} ≥ 대상 {len(rows)}건 — 종료")

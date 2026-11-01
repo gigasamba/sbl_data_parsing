@@ -1,7 +1,7 @@
 """검색 MCP 설정 — settings.yaml의 common + mcp 절(S7a 모델, refactor_plan 5-2 · D-015). 칸 표는 refactor_plan 부록 D.
 mcp_server 코드가 읽는 객체는 설정 파일 기반 캐시 MCP다(S7e2 — 전환 다리 없앰: env의 옛 이름은 읽지 않음, 신호 SETTINGS_FILE·RUN_ENV만):
   `from mcp_server import config as mc` → `mc.cfg().search.methods`(mcp 절) · `mc.given("MCP_METHODS")`(준 값만) · `mc.checked(X)` ·
-  시험 `with mc.senv(SEARCH_CLIENT_HARD="1", MCP_STORE=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
+  시험 `with mc.senv(SEARCH_CLIENT_HARD="1", MCP_BUNDLE=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
   env로 읽는 칸만 env에 씀). common 칸은 `common.config.settings.cfg()`로(COMMON).
 요청마다 읽던 값(MCP_TOOL_TIMEOUT_SEC·SEARCH_* 등)은 쓰는 자리에서 요청마다 cfg()로 읽고, 시작 때 한 번 읽던 상수는 CFG(아래)에
 모은다(S5 — 이름·기본값은 옛 mcp_server.py 모듈 상수 그대로, 읽는 시점도 같음 — 이 모듈 import 때).
@@ -29,12 +29,6 @@ from common.config.settings import (  # noqa: F401 — token_text: 토큰 규칙
 )
 
 # ── settings.yaml mcp 절 모델(S7a) — 칸 표는 refactor_plan 부록 D ─────────────────────────────
-
-
-class McpSearchAgg(Section):
-    REMOVED = frozenset({"llm", "llm_timeout", "fx", "route", "llm_min"})  # 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
-    text_max_rows: int | None = F(30, "SEARCH_AGG_TEXT_MAX_ROWS", "집계 근거 text에 붙이는 표 행 상한(개)")
-    text_max_src_rows: int | None = F(40, "SEARCH_AGG_TEXT_MAX_SRC_ROWS", "계약별 근거 행 상한(개)")
 
 
 class McpSearchClient(Section):
@@ -139,15 +133,15 @@ class McpSearch(Section):
             "ov_search_path",
             "rerank",
             "ocr_dpi",
+            "agg",
+            "agg_today",
+            "data_catalog",
+            "struct_context_max",
         }
-    )  # 사용자 10-29 · ocr_dpi 10-30(op-08) — 지운 칸·절(남으면 경고만)
-    agg_today: str | None = F(None, "AGG_TODAY", "집계 질문의 '오늘' 기준일(YYYY-MM-DD) 고정 — 비우면 실제 오늘")
-    agg_vocab_file: str | None = F(None, "AGG_VOCAB_FILE", "집계 지표 단서어 사전(agg_vocab.json)을 다른 경로로 지정")
-    data_catalog: str | None = F(None, "DATA_CATALOG", "데이터 카탈로그(표·열 설명) JSON 경로 — 없으면 카탈로그 없이 동작")
+    )  # 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) — 지운 칸·절(남으면 경고만)
+    agg_vocab_file: str | None = F(None, "AGG_VOCAB_FILE", "질문 유형 단서어 사전(agg_vocab.json — 건수·합계 단서)을 다른 경로로 지정")
     methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서)")
     min_score: float | None = F(None, "SEARCH_MIN_SCORE", "근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak")
-    struct_context_max: int | None = F(200, "STRUCT_CONTEXT_MAX", "집계 질문에서 계약 마스터 전체를 표로 넘길 때 계약 수 상한(개)")
-    agg: McpSearchAgg = Field(default_factory=McpSearchAgg)
     client: McpSearchClient = Field(default_factory=McpSearchClient)
     pg: McpSearchPg = Field(default_factory=McpSearchPg)
     weights: McpSearchWeights = Field(default_factory=McpSearchWeights)
@@ -155,8 +149,8 @@ class McpSearch(Section):
 
 class McpServer(Section):
     REMOVED = frozenset(
-        {"query_cache"}
-    )  # 사용자 10-30(op-08) — common.models.embed.query_cache로 합침(mcp 이미지 기본은 그 칸에) — 옛 설정 파일에 남아도 경고만
+        {"query_cache", "store"}
+    )  # store 11-01(mc-01 — 검색 저장소는 PG 하나) · 사용자 10-30(op-08) — common.models.embed.query_cache로 합침(mcp 이미지 기본은 그 칸에) — 옛 설정 파일에 남아도 경고만
     allowed_hosts: CsvList | None = F([], "MCP_ALLOWED_HOSTS", "비루프백 바인드 때 추가로 허용할 Host(쉼표 목록, 리버스 프록시 이름 등)")
     host: str | None = F("127.0.0.1", "MCP_HOST", "MCP 서버 바인드 주소 — auto면 컨테이너 자기 사설 IP")
     instructions: str | None = F(None, "MCP_INSTRUCTIONS", "MCP 서버 instructions 글자(도구 안내문) 교체")
@@ -165,7 +159,6 @@ class McpServer(Section):
     max_queue: int | None = F(None, "MCP_MAX_QUEUE", "도구 대기열 상한(개) — 넘으면 즉시 busy 응답, 0이면 무제한")
     port: Port | None = F(8765, "MCP_PORT", "MCP 서버 포트")
     reload_check_sec: float | None = F(30.0, "MCP_RELOAD_CHECK_SEC", "적재 버전 변경 확인 간격(초) — 바뀌면 검색기·edw_meta 다시 읽음")
-    store: str | None = F(None, "MCP_STORE", "검색 저장소 종류 — pg 또는 local(필수 — 비우면 시작 거부, op-09)")
     token: SecretStr | None = F(None, "MCP_TOKEN", "MCP 서버 Bearer 토큰(비루프백 바인드면 필수)")
     tool_timeout_sec: float | None = F(30.0, "MCP_TOOL_TIMEOUT_SEC", "도구 1회 실행 시간 상한(초) — 넘으면 timeout 응답, 0이면 무제한")
     warmup: bool | None = F(True, "MCP_WARMUP", "기동 때 검색 1회로 예열 — 0이면 끔", off=("0",))

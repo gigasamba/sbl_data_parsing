@@ -1,4 +1,4 @@
-"""MCP에 노출하지 않는 내부 조회 — 집계·하드 필터 문서 덤프(search 안쪽 경로). 문서 단건·그림·근거 이미지·용어·개념·문서 목록은
+"""MCP에 노출하지 않는 내부 조회 — 하드 필터 문서 덤프(집계는 mc-04 10-31에 지움)(search 안쪽 경로). 문서 단건·그림·근거 이미지·용어·개념·문서 목록은
 10-30 지움(요건 없음 — e2-18, 사용자 10-30).
 S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/main.py(옛 data_retrieval/mcp_server.py)에서 옮김 — 내용 그대로
 (설정 상수만 mcp_server/config.py의 CFG로).
@@ -10,37 +10,12 @@ from pathlib import Path
 from common.core.paths import APP_ROOT
 from mcp_server import config as mc  # 설정 객체(mcp 칸 — S7d)
 from mcp_server.config import CFG
-from mcp_server.services.search.server_state import _STATE, _retriever
-
-
-def do_aggregate(question, client=None):
-    """client(BR50 D) — do_search의 client 인자와 같은 범위: SEARCH_CLIENT_HARD=1이면 route() 전에 다른 고객
-    문서를 뺀다(clientscope 공용 규칙, aggregate.local()에서 — 집계가 '최상위 근거'로 다른 고객
-    구조화 행을 돌려주던 구멍). client를 안 주면(기존 호출부 전부) 전과 바이트 동일.
-    struct()(doc_link_list 등, X1/X1b 옵트인) 경로는 이번 범위 밖 — 남은 한계로 보고에 적음."""
-    from mcp_server.services.search import aggregate as AG
-
-    # OP1(독립 검토 BLOCK 반영) — 이미 떠 있는 Retriever가 있으면만 hidden을 건넴(_retriever()를 새로 만들지 않음 —
-    # AG.struct()는 원래 Retriever·검색 묶음과 독립적으로 동작(정형 저장소 연결만 필요)이라 여기서 강제로 만들면
-    # 묶음이 없는 상태(기동 직후·시험)에서도 쓸데없이 묶음 로딩을 시도해 죽는다, _selftest_aggregate_struct_fail).
-    hidden = _STATE["R"].hidden if _STATE.get("R") is not None else None
-    st = AG.struct(question, hidden=hidden)  # 정형 저장소 질문(X1/X1b) — ask·평가와 같은 한 곳(OP1 — hidden 적용, doc_link_list만)
-    if st is not None:
-        return st
-    R = _retriever()
-    if R.pg:  # PG 저장소는 문서·표 사실 집계 없음(doc_fact 미적재 — 10-30 지움, 숫자 질문은 query_edw — docs/prd/mcp.md#mc-12)
-        return {"note": "PG 저장소는 문서 집계(건수·합계·표) 없음 — 숫자 질문은 query_edw를 쓰세요"}
-    from mcp_server.services.search import clientscope as CS
-
-    allowed, strict, hard = CS.client_scope(question, client, R.clients())
-    cl_kw = {"client": allowed, "client_strict": strict} if hard else {}
-    r = AG.local(_STATE["bundle"], question, hidden=R.hidden, **cl_kw)  # OP1 — 숨김 문서는 집계(건수·합계·표)에서도 제외
-    return r or {"note": "집계 질문으로 판별되지 않음(건수·합계·표) — search를 쓰세요"}
+from mcp_server.services.search.server_state import _retriever
 
 
 def _manifest_by_name():
     """AD44 rdb 수집 manifest(output/parse/_source/manifest.jsonl) — doc_type·version·대체 문서·삭제 여부(RDB doc_location 메타)의
-    가장 가까운 출처(AD45 완료 전까지 structdb에는 doc_location이 없음). 없으면 빈 dict — search 근거의 그 칸들은 None."""
+    가장 가까운 출처. 없으면 빈 dict — search 근거의 그 칸들은 None."""
     from common.core.contract import jl
 
     p = Path(mc.cfg().server.manifest or APP_ROOT / "output" / "parse" / "_source" / "manifest.jsonl")  # S7d — 설정 객체

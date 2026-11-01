@@ -12,10 +12,10 @@
 
 | 폴더 | 두는 것 | 두지 않는 것 | 서버 이미지 |
 |---|---|---|---|
-| `common/` | 두 앱이 **함께** 쓰는 것만 — `core/`(경로, 핑거프린트, 계약, 문자열 처리, 실행 기록), `ai/`(모델 호출, 예산, 외부 전송 가드), `store/`(PG, struct, 회사 DB, Object Storage — `db/`는 SQLAlchemy·pydantic·Alembic), `config/`(설정 모델과 도구), `check/`(점검) | 한 앱만 쓰는 코드, 앱 import | 둘 다 |
+| `common/` | 두 앱이 **함께** 쓰는 것만 — `core/`(경로, 핑거프린트, 계약, 문자열 처리, 실행 기록), `ai/`(모델 호출, 예산, 외부 전송 가드), `store/`(PG, 회사 DB, Object Storage — `db/`는 SQLAlchemy·pydantic·Alembic), `config/`(설정 모델과 도구), `check/`(점검) | 한 앱만 쓰는 코드, 앱 import | 둘 다 |
 | `pipeline/` | 파이프라인 앱 — `extract/`(원천 읽기·파싱, `engines/`는 엔진) → `transform/`(represent, figures, structure) → `load/`(적재·퍼블리시), `shared/`, `tools/`, `eval/`, 실행기 `cli.py`, 설정 `config.py` | `mcp_server` import, 검색 서빙 코드 | data-pipeline |
 | `mcp_server/` | 검색 MCP 앱 — `main.py`(앱 조립), `routers/`(도구 등록 — 이름·시그니처 고정), `schemas/`(출력 구조), `services/`(업무 로직, `search/`), `cli/`(MCP 도구 명령), 설정 `config.py` | `pipeline` import, 파싱 코드 | mcp-server |
-| `resources/` | 코드가 **읽는 데이터** — 프롬프트 `prompts/{common,pipeline,mcp}`, `config/`, `mappings/`, `vocab/`, `sql/`(DB 시드) | 코드(.py 로직), 비밀값, 서버마다 다른 값 | 둘 다 |
+| `resources/` | 코드가 **읽는 데이터** — 프롬프트 `prompts/{common,pipeline,mcp}`, `config/`, `mappings/`, `vocab/` | 코드(.py 로직), 비밀값, 서버마다 다른 값 | 둘 다 |
 | `deploy/docker/` | Dockerfile, requirements, entrypoint, `wheels/` | 앱 로직 | (빌드 원본) |
 | `deploy/release/` | 빌드·전송·오버레이 패치·배포 판정 스크립트, `known_fail.txt`, `lint_changed.sh` | 앱 로직 | 일부(배포 판정 파일) |
 | `deploy/host/` | **서버 호스트**에서 실행하는 compose, systemd, 셸 스크립트, `run_docs.py` | 컨테이너 안에서 실행되는 코드 | 아니요 |
@@ -74,7 +74,7 @@
 | **레이어 코드 핑거프린트(code_fp)** — 레이어 파일과 그 파일이 import하는 `common` 모듈(`settings.py`, `paths.py` 등 모든 레이어의 공용 의존 포함) | 레이어 캐시 키 — 공용 의존 파일을 한 줄만 바꿔도 서버 문서 전체가 다시 처리된다 | 공용 의존 파일을 고칠 때는 사람에게 먼저 알리고, 커밋 메시지에 변경 전후 값을 적는다 |
 | **프롬프트** `resources/prompts/**`(+ `validation/e2e/triple_extract`, `valid_env/answer_test/rag_qa`) | 프롬프트 핑거프린트와 LLM 캐시 키 | 바이트 그대로 두고 줄바꿈은 LF |
 | **MCP 도구 계약** — `search`, `query_edw`, `parse_document`, `edw_meta`의 이름과 입출력 | 외부 클라이언트와의 계약 | 바꾸지 않는다(바꾸려면 협의 후 새 버전으로) |
-| **DB 스키마** — pgvector 검색 스키마와 `struct`, 회사 DB `AI.ParsingMeta` | 다른 서비스·담당자와 함께 쓰는 계약 | 테이블·컬럼은 **Alembic 마이그레이션으로만** 바꾸고(`common/store/db/migrations` — 실행 중 DDL 금지), DB 담당자와 협의한다 |
+| **DB 스키마** — pgvector 검색 스키마와 회사 DB `AI.ParsingMeta` | 다른 서비스·담당자와 함께 쓰는 계약 | 테이블·컬럼은 **Alembic 마이그레이션으로만** 바꾸고(`common/store/db/migrations` — 실행 중 DDL 금지), DB 담당자와 협의한다 |
 
 핑거프린트 확인(공용·레이어 파일을 고친 커밋의 전후에 실행):
 ```bash
@@ -84,7 +84,6 @@ PYTHONPATH=. .venv/bin/python -c "import common as c; from common.core import ar
 
 **운영 접속 가드(필수):**
 - `deploy/host/scripts/run_docs.py`는 **PC에서 실행하지 않는다**(운영 EDW와 Object Storage에 접속한다). PC에서는 문법 확인, `--help`, `configure()`까지만 확인한다.
-- 운영 정형 DB(`valid_env/structured/sales.sqlite`)는 승인 없이 열지 않는다(`common/store/structdb.py`의 `PROD_DBS`가 막는다).
 - PC에서 운영 DB나 운영 EDW에 접속하지 않는다.
 
 ---
@@ -133,7 +132,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 - 루트 `settings.yaml`에는 `required.env.run_env: local`·`required.env.run_mode: prod`, 전용 PG 접속 정보(`required.pg`), 임베딩 모델과 키(`required.embed`), `no_paid_calls: true`, (부하가 높은 PC라면) `tuning.ops.runtime.cpu_max_load`를 둔다. 예시는 README §4-2에 있다.
 - 전용 pgvector 컨테이너(PG 16 + pgvector, 예: `127.0.0.1:55433`)를 쓴다. PG 접속 항목(`required.pg`)과 `required.deploy.mcp_store`는 필수다 — 비워 두면 시작을 거부한다(op-09 — 자동 탐색 없음). 다른 작업의 DB와 포트를 쓰지 않는다.
 - 백그라운드 프로세스는 PID를 파일에 남기고 **PID로만** 종료한다(`pkill -f` 패턴 금지).
-- 새 PG라면 처음 한 번 `python -m common.store.db.dbtool up --target struct`를 실행한다(테이블은 마이그레이션이 만든다).
+- 검색 스키마 테이블은 마이그레이션이 만든다(`dbtool up --target all --schema <이름> --bundle <묶음>` — README §4-4).
 
 ### 6-2. 점검 명령
 ```bash

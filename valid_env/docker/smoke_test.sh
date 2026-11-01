@@ -41,7 +41,7 @@ job = {"PG_HOST": "pg", "PG_PORT": "5432", "PG_PASSWORD": e["SMOKE_PG_PASSWORD"]
        "PM_BUCKET": e.get("SMOKE_PM_BUCKET") or "rag-publish", "PM_PREFIX": "smoke", "RDB_SQLITE": "/app/output/pm_test/edw.sqlite"}
 files = {"job": {"base": "/etc/rag/base.yaml", "overrides": job},
          "load": {"base": "/etc/rag/smoke/job.yaml", "overrides": {"PG_CREATE_EXTENSION": "1"}},
-         "mcp": {"base": "/etc/rag/smoke/job.yaml", "overrides": {"MCP_STORE": "pg", "MCP_HOST": "auto", "MCP_PORT": "8765",
+         "mcp": {"base": "/etc/rag/smoke/job.yaml", "overrides": {"MCP_HOST": "auto", "MCP_PORT": "8765",
                                                                    # S9(C-38) — 비루프백 바인드(auto)라 DNS 리바인딩 보호가 켜짐: 호스트 게시 주소로 부르는 ⑤를 허용(옛 421)
                                                                    "MCP_ALLOWED_HOSTS": "127.0.0.1:*,localhost:*"}}}
 for name, doc in files.items():
@@ -55,8 +55,7 @@ cleanup() { [ "${SMOKE_KEEP:-0}" = 1 ] || $DC --profile job --profile os down -v
 trap cleanup EXIT
 step() { echo "== $1"; shift; "$@"; rc=$?; [ $rc -eq 0 ] || { echo "[실패] 종료 코드 $rc"; exit $rc; }; }
 NIGHT=${SMOKE_NIGHTLY:-0}
-step "시험용 PostgreSQL" $DC up -d --wait pg               # S8b — 파싱도 판 표(엔진 구성·원천 목록)를 읽음(못 읽으면 종료 4)
-step "⓪ struct 판(판 표 2개 + 시드 — S8b)" $DC run --rm load migrate up --target struct
+step "시험용 PostgreSQL" $DC up -d --wait pg               # 적재(load)·검색이 씀(엔진 구성·원천 목록은 파일 — 사용자 11-01)
 if [[ "${SMOKE_SOURCE:-}" == s3://* ]]; then             # Object Storage 시험: minio 띄우고 DOC_SRC를 올림(이미 있으면 덮어씀)
   OS_ACCESS_KEY=$(setting required.object_storage.access_key); OS_SECRET_KEY=$(setting required.object_storage.secret_key)
   export OS_ACCESS_KEY OS_SECRET_KEY                     # minio 계정 = 파싱 컨테이너 접속 키(설정 파일 — S7e1)

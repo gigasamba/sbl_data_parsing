@@ -472,8 +472,8 @@ class PipelineNight(Section):
 
 class PipelinePaths(Section):
     REMOVED = frozenset(
-        {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot"}
-    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32 — 사본 파일 대신 판 번호) — 지운 칸·절(남으면 경고만)
+        {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot", "stack_version"}
+    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) — 지운 칸·절(남으면 경고만)
     file_meta_path: str | None = F(None, "FILE_META_PATH", "EDW 파일 메타 JSONL 경로(s3_key → 메타)")
     gold_dir: str | None = F(
         None,
@@ -490,9 +490,6 @@ class PipelinePaths(Section):
         image_default("SOFFICE_BIN"),
         "SOFFICE_BIN",
         "LibreOffice soffice 실행 파일 경로 — PATH·흔한 경로보다 먼저 봄(pipeline 이미지 안 기본 /usr/bin/soffice — 옛 Dockerfile ENV, B-2)",
-    )
-    stack_version: int | None = F(
-        None, "STACK_VERSION", "엔진 구성 판 번호(내부 신호 — 진입점이 활성 판 번호를 정해 자식에 넘김, 사람이 쓰지 않음 · pl-32)"
     )
 
 
@@ -569,25 +566,13 @@ def gold_dir():
     return v
 
 
-def stack(version=None):
-    """엔진 구성(사전 — name·version_id·body_sha + body, pl-32 사용자 10-30: 사본 파일 없음). 서버는 진입점(pipeline/stackcfg.py)이 정해
-    넘긴 판 번호(STACK_VERSION)의 판을 판 표에서, PC(paths.LOCAL_RUN)는 PC 파일(common.paths.stack_file — 비우면
-    resources/config/pipeline_stack.json). 서버에서 판 번호가 없으면 거부(종료 2 — 실행 중 활성 판이 바뀌어도 한 실행은 한 판, Q7).
-    층 파일(run_all·attachments)이 이것만 부른다 — 이 모듈은 층의 code_fp 의존이 아니다(common 아래만 셈)."""
-    from common.core import paths
-    from common.store.db import cfgtables  # 판 표 읽기 한 곳(이 모듈은 층의 code_fp 의존이 아님)
+def stack():
+    """엔진 구성(사전 — name·body_sha + body). 서버·PC 같은 파일(common.paths.stack_file — 비우면 resources/config/pipeline_stack.json,
+    사용자 11-01: 판 표 없음). 층 파일(run_all·attachments)이 이것만 부른다 — 이 모듈은 층의 code_fp 의존이 아니다(common 아래만 셈)."""
+    from common.store.db import cfgfile  # 파일 읽기 한 곳(이 모듈은 층의 code_fp 의존이 아님)
 
-    v = version if version is not None else cfg().paths.stack_version  # 인자(--stack-version) > 넘겨받은 칸
-    if v is None and not paths.LOCAL_RUN:
-        print(
-            "[엔진 구성] 판 번호 없음(STACK_VERSION) — 서버는 진입점(pipeline.cli·mcp_parse_service·load.index)으로 "
-            "실행해야 활성 판 번호를 정해 넘긴다. 도구를 따로 돌릴 때는 --set STACK_VERSION=$(python -m pipeline.stackcfg --version)",
-            file=sys.stderr,
-            flush=True,
-        )
-        raise SystemExit(2)
-    a = cfgtables.active("stack", version_id=v)
-    return {"name": a.name, "version_id": a.version_id, "body_sha": a.body_sha, **a.body}
+    a = cfgfile.active("stack")
+    return {"name": a.name, "body_sha": a.body_sha, **a.body}
 
 
 if __name__ == "__main__":

@@ -185,7 +185,7 @@ def main():
     ap.add_argument(
         "--stack",
         default=None,
-        help="엔진 구성 파일(PC 실험·시험용 — 비우면 판: STACK_VERSION > PC 파일, pl-32 · pl-03 represent·build_bundle과 같음)",
+        help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file · pl-03 represent·build_bundle과 같음)",
     )
     a = ap.parse_args()
     from common.core import resources
@@ -246,11 +246,11 @@ def main():
     # pl-03(사용자 10-30) — 엔진 범위는 stack 하나: 문서 형식별 stack.json 목록만
     stack = (
         json.loads(Path(a.stack).read_text(encoding="utf-8")) if a.stack else pc.stack()
-    )  # pl-32 — 진입점이 정한 판(PC는 파일) · --stack은 시험·실험용 파일
+    )  # 엔진 구성 파일(서버·PC 같음 — 사용자 11-01) · --stack은 시험·실험용 파일
     stack_parse = stack.get("parse") or {}
     bad = over_limit({"parse": stack_parse})  # 사용자 10-29 — 형식당 엔진 2개 넘으면 설정 오류(진입점 resolve도 같은 검사)
     if bad:
-        raise SystemExit(f"[엔진 구성] 판 {stack.get('version_id') or '파일'} — " + " · ".join(bad))
+        raise SystemExit(f"[엔진 구성] {stack.get('name')} — " + " · ".join(bad))
     types = doc_types(docs, out) if stack_parse else {}
     logged_missing = set()
     for doc in docs:
