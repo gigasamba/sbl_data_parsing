@@ -230,10 +230,10 @@ tuning:
 ```
 
 - 옛 배치(최상위 `common`·`pipeline`·`mcp` — op-08 전) 파일은 읽지 않는다. `python -m common.config.migrate settings.yaml --out settings.new.yaml`로 바꾼 뒤 새 파일로 바꿔 넣는다(지운 칸은 "삭제됨"으로 이름만 알림).
-- 검색 저장소 종류(`required.deploy.mcp_store`)와 PG 접속값은 PC·서버 모두 채운다 — 자동 탐지는 없앤다(사용자 10-31, op-09).
+- 검색 저장소 종류(`required.deploy.mcp_store` — `pg`·`local`)와 PG 접속값은 PC·서버 모두 채운다 — 비우면 시작을 거부한다(사용자 10-31, op-09 — 자동 탐지 없음).
 - 같은 절(`search:` 등)이나 같은 칸을 두 번 쓰면 시작을 거부한다 — 칸을 더할 때는 이미 있는 절 안에 넣는다.
 - **외부 임베딩은 세 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `run_env: local` · `no_paid_calls: false`. 하나라도 빠지면 호출하지 않는다(서버 dev·prd는 늘 거부).
-- ⚠️ PG 접속 항목을 비워 두면 코드가 `docker ps`로 찾은 아무 pgvector에나 연결한다. 전용 PG 접속 정보를 항상 적는다.
+- PG 접속 항목(`required.pg`의 host·port·db·user·password·db_schema)은 모두 필수다 — 비우면 채울 자리를 알려 주고 멈춘다(op-09, `docker ps` 자동 탐지와 코드 기본값은 없앰). 로컬 묶음만 쓸 때는 명령에 `--local`.
 
 ### 4-3. 점검
 
@@ -423,13 +423,14 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 - 일반 사용자 셸에서 실행할 때는 `DOCKER="sudo podman"`을 앞에 붙인다.
 - 이미지를 불러온 저장소와 컨테이너를 띄우는 저장소가 같아야 한다. 일반 사용자 podman(rootless)과 root podman은 이미지를 따로 보관하므로, 섞으면 이미지가 보이지 않는다.
 - compose 실행기(`podman-compose`나 `docker-compose` 플러그인)가 깔려 있어야 한다. `podman compose version`으로 확인한다.
+  - 폐쇄망에서 없으면: 사내 RHEL 저장소에 있으면 `dnf install podman-compose`. 없으면 인터넷 PC에서 서버와 같은 python 판으로 `pip download podman-compose -d pc-wheels`(의존 휠 `python-dotenv`·`PyYAML` 포함)로 휠을 받아 옮긴 뒤 서버에서 `python3 -m pip install --no-index --find-links pc-wheels podman-compose` → `podman compose version`으로 확인.
 
 설치 순서(처음 한 번):
 1. 두 zip을 같은 폴더에 푼다.
 2. 코드 폴더를 준비한다.
    - 컨테이너 사용자(UID 10001)가 읽을 수 있게 한다: `chmod -R a+rX sbl_data_parsing-<판>`
-   - 지금 쓰는 판을 링크로 건다: `ln -sfn /srv/rag/sbl_data_parsing-<판> /srv/rag/code/live`. systemd unit과 아래 명령은 이 경로를 쓴다.
-3. 이미지를 불러온다: `DOCKER=podman bash sbl_images-main/load.sh <판>`
+   - 지금 쓰는 판을 링크로 건다: `mkdir -p /srv/rag/code && ln -sfn /srv/rag/sbl_data_parsing-<판> /srv/rag/code/live`. systemd unit과 아래 명령은 이 경로를 쓴다.
+3. 이미지를 불러온다: `DOCKER=podman bash sbl_images-main/load.sh <판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH)를 보여 준다.
 4. 설정을 채운다(§5-3 ②). `required.deploy.pipeline_image`·`required.deploy.mcp_image`에는 실행 이미지 태그(`data-pipeline-runtime:<판>`, `mcp-server-runtime:<판>`)를 적는다.
 5. DB를 만들고, 연결을 점검하고, 이미지를 점검한다(§5-3 ③~⑤).
 6. 실행한다: `bash /srv/rag/code/live/deploy/host/scripts/mcp_up.sh`, `… trigger.sh parse` 등.
@@ -449,22 +450,23 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 - **MAJOR** — MCP 도구 계약 · DB 스키마 · 핸드오프 형식이 깨질 때 / **MINOR** — 새 이미지 버전(의존성·Dockerfile·마운트 경로) 또는 큰 기능 / **PATCH** — 오버레이 패치(코드만 교체)
 - 자세한 규칙: [release-and-patch.md](docs/operations/release-and-patch.md) §5
 
-### 5-2. PC에서 — 빌드와 전송
+### 5-2. PC에서 — 이미지 만들기와 이미지 저장소에 올리기
+
+서버 설치는 §5-0 "개발 서버 설치" 하나로 한다(op-10). PC가 하는 일은 실행 이미지 두 개를 만들어 이미지 git(`sbl_images`)에 조각으로 올리는 것뿐이다.
 
 ```bash
 # 폐쇄망 빌드라면 먼저 deploy/docker/wheels/에 휠(linux/amd64, py3.12), 저장소 루트 assets/rapidocr/에 *.onnx를 둔다
 #   (assets/ 준비: docs/operations/release-and-patch.md §5-6 — assets.py pack)
-
-# 방법 1) 빌드만 → 따로 저장·전송
-BUILD_ONLY=1 IMAGE_TARGET=pipeline bash deploy/release/build_ship.sh   # data-pipeline:<VERSION> 빌드 → selftest 판정 → 비밀값 흔적 점검
-BUILD_ONLY=1 IMAGE_TARGET=mcp      bash deploy/release/build_ship.sh   # mcp-server:<VERSION>
-bash deploy/release/ship_stage.sh pipeline mcp                         # 95MB 조각 + sha256으로 저장(태그 = VERSION)
-
-# 방법 2) 한 번에 — 빌드 → 점검 → 저장 → SSH 전송 → 서버에 적재 → 원격 점검
-TARGET=user@서버 IMAGE_TARGET=pipeline bash deploy/release/build_ship.sh
+BUILD_ONLY=1 IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh   # data-pipeline-runtime:<VERSION> 빌드 → 이 커밋 코드를 붙여 selftest 판정
+BUILD_ONLY=1 IMAGE_TARGET=mcp-runtime      bash deploy/release/build_ship.sh   # mcp-server-runtime:<VERSION>
+bash deploy/release/ship_stage.sh pipeline-runtime mcp-runtime                 # output/ship/sbl_images/ — load.sh · <판>/BUILD.txt · <판>/<이미지>/ 45MB 조각 + sha256
 ```
 
-같은 태그의 이미지가 이미 있으면 `build_ship.sh`가 멈춘다(버전을 올리거나, 꼭 다시 만들어야 하면 `FORCE_TAG=1`).
+`output/ship/sbl_images/`를 이미지 git에 그대로 올린다(push는 사람). 코드는 코드 git의 같은 판(태그)을 쓴다 — 이미지에 코드가 없다.
+
+- 같은 태그의 이미지가 이미 있으면 `build_ship.sh`가 멈춘다(버전을 올리거나, 꼭 다시 만들어야 하면 `FORCE_TAG=1`).
+- 코드만 바뀐 판은 이미지를 다시 만들지 않는다(`deploy/docker/DEPS_HASH`가 같으면 — 서버는 새 코드 zip만 받는다).
+- 운영 서버 이미지(코드가 든 이미지)는 PC에서 만들지 않는다 — 개발 서버에서 굽는다(§5-0 ②, release-and-patch §1-2). PC의 `IMAGE_TARGET=pipeline`·`mcp`는 PC 시험·비상용.
 
 ### 5-3. 서버 — 처음 설치
 
@@ -520,7 +522,7 @@ dc run --rm load migrate check --target all                # a. 지금 버전과
 
 - 컬럼 이름·형식·NULL·키가 다르거나 남는 테이블이 있으면 `stamp`·`up` 모두 거부된다(종료 코드 2). 멈추고 출력(이름만)을 DB 담당자와 협의한다.
 - 서버에만 따로 쓰던 원천 목록 파일이 있으면 시드 다음 버전으로 넣는다(`set-sources --file …` — release-and-patch §5-5).
-- 색인 빌더 스키마(`index_a`·`index_b`)를 쓰면 스키마마다 `migrate check|stamp|up --target search --schema <스키마>_<index_id>`.
+- 색인 빌더 스키마(`index_a`·`index_b` — `deploy/host/compose/compose.index.yml`, 쓸 때만 덧붙임)를 쓰면 스키마마다 `migrate check|stamp|up --target search --schema <스키마>_<index_id>`.
 
 **④ 연결 점검** — 파이프라인을 돌리기 전에 접속을 하나씩 확인한다.
 
@@ -579,7 +581,7 @@ bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서를 지금
 
 - 앞 모듈의 완료 표시가 없으면 다음 모듈은 종료 코드 3으로 멈춘다(1-2). 새 입력이 없으면 건너뛴다.
 - ⚠️ `all`은 publish를 **무조건** 실행해 Object Storage와 회사 DB에 쓴다. 테스트로 돌릴 때나 publish 대상이 정해지기 전에는 모듈 하나씩 실행한다.
-- **문서별 흐름 `run_docs.py`** 는 `<운영자 작업 폴더>/run_docs.py`에 두고 실행한다(코드 폴더 안의 사본이 아니다). 서버 settings.yaml의 운영 접속 항목을 읽고, 문서별 값은 상주 컨테이너에 `--set`으로 넘긴다 — 설계: [docs/architecture/run_docs_design.md](docs/architecture/run_docs_design.md). **PC에서는 실행하지 않는다**(운영 EDW·Object Storage에 접속).
+- **문서별 흐름 `run_docs.py`** 는 `<운영자 작업 폴더>/run_docs.py`에 두고 실행한다(코드 폴더 안의 사본이 아니다). 설정 배치 모듈을 찾을 코드 폴더는 `--code`(기본 `/srv/rag/code/live`), 컨테이너 명령은 settings.yaml `ops.host.docker`(없으면 podman). 서버 settings.yaml의 운영 접속 항목을 읽고, 문서별 값은 상주 컨테이너에 `--set`으로 넘긴다 — 설계: [docs/architecture/run_docs_design.md](docs/architecture/run_docs_design.md). **PC에서는 실행하지 않는다**(운영 EDW·Object Storage에 접속).
 
 ### 5-5. 서버 — 상주 서비스와 자동 실행
 
@@ -588,8 +590,9 @@ bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서를 지금
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 검색 MCP 상주 확인                                       | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_up.sh`                                                                                             |
 | 새벽 배치                                              | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.time: "HH:MM"`(그 시각부터 5분 안에 시작 — 비우면 새벽 배치 없음, 기본 비움 · pl-32) |
-| 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음, 11-01 trigger 서버 지움) | `docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-parse data-pipeline-structure`                                                |
-| MCP `parse_document` 작업 서비스                        | compose가 띄우지 않으므로 파싱 컨테이너가 다시 시작될 때마다: `docker exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service`                                           |
+| 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음, 11-01 trigger 서버 지움) | `dc up -d data-pipeline-parse data-pipeline-structure`(§5-3의 `dc` — 실행 이미지면 코드 폴더를 붙임). 여러 번 불러도 안전 — 꺼진 것만 띄움 |
+| MCP `parse_document` 작업 서비스                        | compose가 띄우지 않으므로 파싱 컨테이너가 다시 시작될 때마다: `$DOCKER exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service` |
+| 재부팅 뒤 되살리기(podman)                                | `systemctl enable --now podman-restart` — podman은 docker처럼 데몬이 없어 `restart: unless-stopped` 컨테이너(검색 MCP·상주 컨테이너)를 부팅 때 다시 띄우지 않는다. 이 서비스가 그 컨테이너들을 되살린다. 검색 MCP는 keepalive 타이머가 한 번 더 본다. 상주 트리거는 keepalive 타이머가 없으니, 재부팅 뒤 `$DOCKER ps`로 `data-pipeline-parse`·`data-pipeline-structure`가 떠 있는지 보고, 없으면 위 `dc up -d …`를 다시 실행한 뒤 `parse_document` 작업 서비스도 다시 띄운다 |
 
 
 systemd 설치(한 번 — DB 버전과 컨테이너를 확인한 뒤):
@@ -597,6 +600,7 @@ systemd 설치(한 번 — DB 버전과 컨테이너를 확인한 뒤):
 ```bash
 sudo cp deploy/host/systemd/{mcp-server-keepalive,data-pipeline-nightly}.* /etc/systemd/system/
 sudo systemctl daemon-reload
+sudo systemctl enable --now podman-restart                   # 재부팅 뒤 restart 정책 컨테이너 되살리기(podman)
 sudo systemctl enable --now mcp-server-keepalive.timer
 sudo systemctl enable --now data-pipeline-nightly.timer      # 새벽 배치를 쓸 때(settings.yaml 스위치도 켬)
 ```

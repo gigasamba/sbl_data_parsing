@@ -27,10 +27,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from common.config import settings as C  # common 칸(S7c — 설정 객체 · cfg()·given()·render())
-from common.core.paths import APP_ROOT, PKG_ROOT  # output/ 등 런타임 경로용(옛 dev/)
+from common.core.paths import APP_ROOT, DEPLOY_ROOT, PKG_ROOT  # output/ 등 런타임 경로용(옛 dev/)
 from pipeline import config as pc  # pipeline 칸(S7c — 설정 객체 · cfg()·given())
-
-HERE = Path(__file__).resolve().parent
 
 ROOT = PKG_ROOT  # common/(S6a — 옛 common_tools/와 같은 깊이) — 하위 프로세스 cwd·저장소 문서 찾기용(ROOT.parent = deploy/)
 OUT = Path(
@@ -117,7 +115,10 @@ def night(a):
     GPU 모델은 API로만(VLM_*·EMBED_*), LLM(LLM_*)은 부르지 않는다 — 요약은 발췌만. 마감(--deadline)을 넘으면 멈춤 — 다음 밤은 문서 대장 기준(성공 행 없는 문서)으로 다시 고름(pl-32).
     RV5(10-09): deploy/host/scripts/trigger.sh night(OP13 정본, compose 여러 컨테이너용)와는 배포 모양이 달라 따로 둠 — 이 함수는
     단일 컨테이너·Docker 밖 직접 실행(AGENTS.md 지시표·requirements.md S8 cron 예시)에서 쓰임, 호출처 있음(삭제 대상 아님)."""
-    connect(a)
+    if a.no_structure:  # 파싱+publish만 — PG를 안 씀(op-09: 접속 칸 없이도 돎)
+        a.pg = False
+    else:
+        connect(a)
     st = _stack()
     engines = a.engines or ",".join(_engines_of(st))
     _set_engine_scope_default(a.engines)  # PE1 — night도 생산 경로(서버 entrypoint full)라 같은 기본
@@ -805,45 +806,34 @@ def structure_module(a):
 
 def _pg_dest_fp():
     """GH1-06 — host:port/db/schema(비밀값·사용자명 제외) 지문. 바뀌면 같은 parse·structure run_id라도 다시
-    적재한다(조용히 다른 대상에 빈 적재가 되는 일 방지) — common/pg.conf()가 PG_CONN_FILE·env·기본값을 이미 합친 값.
-    GH1-06b — 라이브 연결 없이 **설정만**으로 계산(need()를 connect() 앞에 두려고, 건너뛰는 경우엔 접속 자체가
-    필요 없게). PG_HOST·PG_PORT·PG_CONN_FILE이 전부 비어 있으면(Docker 자동탐지에 맡기는 경우) conf()의 기본값
-    (127.0.0.1:5432)을 쓰지 않는다 — 그 기본값을 그대로 지문에 넣으면 실제 자동탐지된 host(예: 컨테이너 IP)와
-    달라서 같은 대상인데도 매번 '대상이 바뀜'으로 오판해 다시 적재하게 된다.
-    GH1-06c — 'auto-discovered' 상수로 고정하면 반대 방향 결함이 생긴다: Docker 재기동으로 컨테이너 IP가 실제로
-    바뀌어도 상수는 안 바뀌어 대상 변경을 못 잡는다. common/services.docker_ps()(docker ps 파싱만, PG 접속·TCP
-    확인 없음 — 06b가 지키는 "건너뛰는 경로엔 라이브 연결 없음"을 그대로 유지)로 pgvector 컨테이너의 실제
-    host:port를 찾아 지문에 넣는다 — Docker를 못 쓰면(권한·미설치) 그 식별(여기선 reason)만 상수 대신 넣어
-    GH1-06 이전보다 나빠지지 않는 선에서 구분한다(서버는 PG_HOST를 명시하므로 이 자동탐지 분기 자체를 안 탐)."""
+    적재한다(조용히 다른 대상에 빈 적재가 되는 일 방지) — common/pg.conf()가 PG_CONN_FILE·설정을 합친 값.
+    GH1-06b — 라이브 연결 없이 **설정만**으로 계산(need()를 connect() 앞에 두려고). op-09 — 자동 탐지 없음(접속 칸은 필수)."""
     from common.store.pg import conf
 
-    auto = all(C.given(k) is None for k in ("PG_HOST", "PG_PORT", "PG_CONN_FILE"))  # S7c — 준 값이 하나도 없을 때(옛 "있고 없음" 판정)
     c = conf()
-    if auto:
-        from common.store import services
+    return f"{c['PG_HOST']}:{c['PG_PORT']}/{c['PG_DB']}/{c['PG_SCHEMA']}"
 
-        rows, reason = services.docker_ps()  # 라이브 PG 연결 없음 — docker ps만(06b 유지)
-        hit = services._find(rows, "pgvector", "5432")
-        host, port = (hit[1], hit[2]) if hit else ("auto-discovered", reason or "no-container")
-    else:
-        host, port = c["PG_HOST"], c["PG_PORT"]
-    return f"{host}:{port}/{c['PG_DB']}/{c['PG_SCHEMA']}"
+
+def _no_pg_exit4(fn):
+    """PG 접속 칸 빔·못 붙음(SystemExit 글자)을 종료 코드 4로 — load의 'PostgreSQL 없음' 약속 그대로(op-09)."""
+    try:
+        return fn()
+    except SystemExit as e:
+        print(f"[load] {e}", flush=True)
+        raise SystemExit(4) from None
 
 
 def load_module(a):
     """적재 모듈: 묶음 → PostgreSQL(pgvector) 배포·적재(옛 기록 정리) → 끝 표시. PostgreSQL을 못 찾으면 종료 코드 4.
     GH1-06b — need()를 먼저 확인하고(설정만으로 만든 지문, 라이브 연결 없이), 할 일이 있을 때만 connect()로
-    실제 접속을 확인한다 — 건너뛰는 경우(PG가 잠깐 내려가 있어도) Docker 탐지·PG 접속 시도 없이 조용히 끝남
+    실제 접속을 확인한다 — 건너뛰는 경우(PG가 잠깐 내려가 있어도) PG 접속 시도 없이 조용히 끝남
     (수정 전엔 connect()가 need() 앞에 있어 건너뛰는 경우에도 접속을 시도해 PG가 내려가 있으면 SystemExit(4))."""
-    dest_fp = _pg_dest_fp()
+    dest_fp = _no_pg_exit4(_pg_dest_fp)
     m = need("structure", "load", a.force, extra=dest_fp)
     if not m:
         return
-    a.pg, a.local = True, False  # 적재 모듈은 PostgreSQL 필수 — 못 붙으면 services.connect가 거부
-    connect(a)
-    if not a.pg:
-        print("[load] PostgreSQL(pgvector)을 찾지 못함 — PG_HOST·PG_PORT·PG_PASSWORD 또는 Docker pgvector", flush=True)
-        raise SystemExit(4)
+    a.pg, a.local = True, False  # 적재 모듈은 PostgreSQL 필수
+    _no_pg_exit4(lambda: connect(a))
     from common.core import contract
 
     bad = contract.check_bundle(OUT / "edw" / "bundle")
@@ -890,8 +880,7 @@ def run_stack(a):
 
 
 def connect(a):
-    """연결 기본값(백로그 E6 · 사용자 2026-10-01): --pg·--local 지정이 없으면 Docker에 떠 있는 pgvector에 연결,
-    없으면 로컬 묶음. → common/services.py"""
+    """저장소: --local이면 로컬 묶음, 아니면 PostgreSQL 필수(op-09 — 자동 탐지·로컬로 빠지기 없음). → common/store/services.py"""
     from common.store import services
 
     services.connect(a)
@@ -903,7 +892,7 @@ def connect(a):
 # known_fail.txt, 사례 이름 = 시험 모듈 이름). 폴더가 곧 이미지: common = 두 이미지 · pipeline = data-pipeline · mcp = mcp-server(RAG_MODULE).
 # PC 일반 시험(tests/general — PC 전용·느린 것·PG·Docker)은 pytest로만(`python -m pytest tests/` — tests/conftest.py가 같은 자식 프로세스·같은 env로).
 # 옛 사례 이름(모듈 이름) → 새 시험 모듈 대응표는 output/orca/S9-impl.md.
-TESTS_ROOT = Path(__file__).resolve().parents[1] / "tests"  # 저장소 루트 tests/ · 이미지 /app/deploy/tests(PYTHONPATH와 같은 뿌리)
+TESTS_ROOT = DEPLOY_ROOT / "tests"  # 저장소 루트 tests/ · 이미지 /app/deploy/tests(PYTHONPATH와 같은 뿌리)
 IMAGE_DIRS = {"common": None, "pipeline": "pipeline", "mcp": "mcp"}  # tests/server/<폴더> → 도는 이미지(None = 둘 다)
 _FAKE_LLM_CASES = frozenset({"tests.server.mcp.test_mcp_main"})  # LLM_FAKE를 켜는 사례(질문 분해 — 옛 mcp_server.main 사례)
 # PC에서 개발자 루트 settings.yaml(실 PG)을 그대로 읽어야 판정되는 사례(실 PG에서만 C-54 ① 재현) — 그 밖 PC 사례는 시험 전용 바탕 설정(case_env, 10-29)
@@ -1232,8 +1221,8 @@ def main(argv=None):
     p.add_argument("--src", default=src)
     p.add_argument("--procs", default=_default_procs(), help="CPU 엔진 프로세스 수 · auto = CPU·메모리(cgroup) 기준")
     p.add_argument("--skip-parse", action="store_true", help="파싱은 이미 했으면 건너뜀")
-    p.add_argument("--pg", action="store_true", help="pgvector에 배포·적재까지(지정 없어도 Docker pgvector가 떠 있으면 기본)")
-    p.add_argument("--local", action="store_true", help="pgvector가 떠 있어도 로컬 묶음까지만")
+    p.add_argument("--pg", action="store_true", help="pgvector에 배포·적재까지(기본 — 접속 칸 필수, op-09)")
+    p.add_argument("--local", action="store_true", help="PostgreSQL 없이 로컬 묶음까지만")
     p.add_argument("--replace", action="store_true")
     p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
     p.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
@@ -1257,8 +1246,8 @@ def main(argv=None):
         help="파싱+publish만(기본은 파싱 뒤 대표 파싱·publish·구조화·임베딩(API) → PostgreSQL 적재까지)",
     )
     p.add_argument("--no-publish", action="store_true", help="OS+EDW publish 건너뜀 (기본: 대표 파싱 직후 실행)")
-    p.add_argument("--pg", action="store_true", help="구조화 뒤 pgvector 적재까지(지정 없어도 Docker pgvector가 떠 있으면 기본)")
-    p.add_argument("--local", action="store_true", help="pgvector가 떠 있어도 로컬 묶음까지만")
+    p.add_argument("--pg", action="store_true", help="구조화 뒤 pgvector 적재까지(기본 — 접속 칸 필수, op-09)")
+    p.add_argument("--local", action="store_true", help="PostgreSQL 없이 로컬 묶음까지만")
     p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
     for name, hlp in (
         ("parse", "파싱 모듈 1회(트리거): 파싱 → 채점 → 대표 결과 → 끝 표시 · 임베딩·DB 없음"),

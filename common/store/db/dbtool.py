@@ -23,9 +23,9 @@ import sys
 from pathlib import Path
 
 from common.core.console import utf8_stdout
+from common.core.paths import PKG_ROOT
 
-HERE = Path(__file__).resolve().parent
-MIGRATIONS = HERE / "migrations"
+MIGRATIONS = PKG_ROOT / "store" / "db" / "migrations"  # op-09 — paths 상수 기준
 TARGETS = ("search", "struct")
 STRUCT = "struct"  # common/store/structdb.py STRUCT_SCHEMA와 같음(selftest가 확인 — structdb는 이 패키지를 import 안 함)
 _SCHEMA_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}")  # common/store/pg.conf()의 PG_SCHEMA 규칙(그 함수 안 정규식)과 같음

@@ -1,7 +1,7 @@
 # 파이프라인 컨테이너(docs/operations/server-guide.md §0) — 수집 서버. S6b(10-27, D-020 — 옛 compose.modules.yml): 파이프라인 이미지를
 #   하나로 합쳐 서버 이미지는 2개 — data-pipeline(파싱·구조화·적재·게시, 옛 data-parsing+data-structure) · mcp-server(검색 MCP, 옛 data-retrieval).
-#   파싱·구조화·적재·게시는 트리거(1회 실행 후 종료), 검색 MCP만 상주. job 서비스 이름(parse·structure·load·publish·index_a·index_b·
-#   mcp)은 그대로, 상주 컨테이너 이름은 새 이름(사용자 10-27): data-pipeline-parse·data-pipeline-structure(옛 data-parsing·
+#   파싱·구조화·적재·게시는 트리거(1회 실행 후 종료), 검색 MCP만 상주. job 서비스 이름(parse·structure·load·publish·
+#   mcp)은 그대로(색인 비교용 index_a·index_b는 op-10에 compose.index.yml로 — 그 파일을 덧붙일 때만 INDEX_CONF_DIR 필요), 상주 컨테이너 이름은 새 이름(사용자 10-27): data-pipeline-parse·data-pipeline-structure(옛 data-parsing·
 #   data-structure — 같은 data-pipeline 이미지(11-01부터 둘 다 `idle` — trigger 서버 지움, pl-10), run_docs.py의 docker exec 대상) · mcp-server(옛 data-retrieval).
 #   준비(저장소 루트에서): docker build -f deploy/docker/Dockerfile --target pipeline -t data-pipeline:<태그> . ·
 #                          --target mcp -t mcp-server:<태그> .
@@ -80,32 +80,6 @@ services:
       - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
     mem_limit: ${STRUCTURE_MEM_LIMIT:-8g}
     memswap_limit: ${STRUCTURE_MEM_LIMIT:-8g}
-    cpus: ${STRUCTURE_CPUS:-2}
-
-  # AD41 — 같은 data-pipeline 이미지(S6b — 옛 data-structure)로 설정이 다른 색인을 나란히(예: 청크 크기) 띄우는 예시. index_a·index_b는
-  # 기본 structure·load 트리거 대신 pipeline/load/index.py(entrypoint의 범용 `tool index` 경유 — S6c에 찾는 목록에 더함, 그 전엔 "모르는 도구")로 색인을 짓는다 — index_id(설정
-  # 지문)가 달라지므로 같은 PG에 스키마 <PG_SCHEMA>_<index_id>로 나란히 쌓인다(서로 안 덮음). 평소엔 안 씀 —
-  # 여러 설정을 비교·운영할 때만 `docker compose run --rm index_a`처럼 따로 불러서(트리거 순서 밖, profiles: job).
-  index_a:
-    <<: *job
-    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
-    command: ["tool", "index", "build", "--conf", "/app/output/index-conf/a.json", "--pg"]
-    volumes:
-      - *settings
-      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
-      - ${INDEX_CONF_DIR:?INDEX_CONF_DIR=<색인 설정 json 폴더 — a.json·b.json>}:/app/output/index-conf:ro,z
-    mem_limit: ${STRUCTURE_MEM_LIMIT:-8g}
-    cpus: ${STRUCTURE_CPUS:-2}
-
-  index_b:                                 # index_a와 같은 이미지·다른 설정 파일(청크 크기 등) — "2개 이상 인스턴스" 예시
-    <<: *job
-    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
-    command: ["tool", "index", "build", "--conf", "/app/output/index-conf/b.json", "--pg"]
-    volumes:
-      - *settings
-      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
-      - ${INDEX_CONF_DIR:?INDEX_CONF_DIR=<색인 설정 json 폴더 — a.json·b.json>}:/app/output/index-conf:ro,z
-    mem_limit: ${STRUCTURE_MEM_LIMIT:-8g}
     cpus: ${STRUCTURE_CPUS:-2}
 
   load:                                    # ③ 적재(1회 job): 묶음 → PostgreSQL(pgvector), 옛 기록 정리 · PG 없으면 종료 코드 4 · S6b: data-pipeline(옛 data-structure)

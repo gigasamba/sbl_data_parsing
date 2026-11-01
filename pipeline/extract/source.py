@@ -67,12 +67,11 @@ from collections import defaultdict
 from contextlib import contextmanager
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-from common.config import settings as C  # noqa: E402 — S7c: 설정 객체(common 칸 SOURCE_MANIFEST·비밀 꺼내기)
-from common.core import sources as SRC_CFG  # noqa: E402 — SI41 원천 목록(common/sources.json, git) · 같은 공용 common/ 이라 이미지 경계 위반 아님
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.contract import jl  # noqa: E402
-from pipeline import config as pc  # noqa: E402 — S7c: 설정 객체(pipeline 칸)
+from common.config import settings as C  # S7c: 설정 객체(common 칸 SOURCE_MANIFEST·비밀 꺼내기)
+from common.core import sources as SRC_CFG  # SI41 원천 목록(common/sources.json, git) · 같은 공용 common/ 이라 이미지 경계 위반 아님
+from common.core.console import utf8_stdout
+from common.core.contract import jl
+from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
 
 TABLE_ID_RE = (
     SRC_CFG.TABLE_ID_RE
@@ -1023,7 +1022,9 @@ def resolve(source, out, limit=0, mode="prod"):
     if str(source).startswith("s3://"):
         local = Path(out) / "_source_files"
         names = fetch_s3(source, local, state, limit, mode)
-        C.put(SOURCE_MANIFEST=str(state / "manifest.jsonl"))  # S7e2 — 덮기 파일 + 인계 키 env · 원본 위치 = s3://버킷/키
+        C.put(
+            SOURCE_MANIFEST=str(state / "manifest.jsonl")
+        )  # S7e2 — 덮기 파일(op-09 — 인계 파일도 설정 객체로 읽음) · 원본 위치 = s3://버킷/키
         return local, names, state
     if str(source).startswith("rdb:"):
         local = Path(out) / "_source_files"

@@ -1,17 +1,16 @@
 """pipeline.transform.structure.build_bundle 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.structure.build_bundle --selftest`."""
 
 import json
-import os
 from pathlib import Path
 
 import pipeline.transform.structure.build_bundle as M
+from common.config.settings import COMMON
 from common.core import docmeta as DM
 from common.core.paths import STACK_FILE
 from common.core.text import tokens
 from pipeline import config as pc
 from pipeline.transform.structure.build_bundle import (
     canon_clients,
-    doc_facts,
     embed_all,
     fig_empty,
     fig_host,
@@ -67,9 +66,7 @@ def selftest():
     import contextlib
     import io
 
-    old_gdir = os.environ.pop("GLOSSARY_DIR", None)  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음
-    old_roster = os.environ.pop("CLIENT_ROSTER", None)  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음
-    try:
+    with COMMON.env(GLOSSARY_DIR=None, CLIENT_ROSTER=None):  # op-09 — 인계 파일(terms.py)도 설정 객체로 읽음
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
             warn_if_no_client_roster([{"client": None}, {"client": ""}])
@@ -84,44 +81,8 @@ def selftest():
         with contextlib.redirect_stderr(buf):
             warn_if_no_client_roster([])
         assert buf.getvalue() == ""
-    finally:
-        if old_gdir is not None:
-            os.environ["GLOSSARY_DIR"] = old_gdir  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음(복원)
-        if old_roster is not None:
-            os.environ["CLIENT_ROSTER"] = old_roster  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음(복원)
     print("[selftest] BR57 — warn_if_no_client_roster: 명부 없음+client 전부 빔일 때만 경고, 동작(docs)은 안 바뀜 통과")
-    raw = {
-        "text": "",
-        "facts": [
-            {"context": ["항목"], "cells": ["단가", "수량(L)"]},
-            {"context": ["A-1"], "cells": ["USD 1", "1,000"]},
-            {"context": ["A-1 "], "cells": ["USD 1", "1000"]},
-            {"context": [" a-1"], "cells": ["USD 1", "1 000"]},
-        ],
-    }
-    assert [f["num"] for f in doc_facts(0, raw, [])] == [1000.0]  # E2: 쉼표·공백·대소문자 변형 같은 A-1 행 3개 → 사실 1개·SUM 1,000
     print("[selftest] 고객사 이름 보정 통과")
-
-    # AD24④ — 그림 속 표(table_md)의 첫 열이 단계 번호(1,2,3… 연속 일련번호)일 때 식별 열(장비 이름)을 item으로,
-    # 값의 단위를 채움(꼬리의 첫 토큰만 — review 1차④, "20 L 유리병" → "L")
-    fig_table = {
-        "text": (
-            "| 단계 | 장비/용기 | 용량 | 기간 |\n|---|---|---|---|\n"
-            "| 1 | 20 L 플라스크 | 20 L | Day 0-4 |\n| 2 | SB-0201 | 200 L | Day 4-8 |\n"
-            "| 3 | BR-2001 | 2,000 L 스테인리스 | Day 8-22 |"
-        ),
-        "facts": [],
-    }
-    ff = doc_facts(0, fig_table, [])
-    assert [f["item"] for f in ff] == ["20 L 플라스크", "SB-0201", "BR-2001"], ff  # 번호 열 "1/2/3"이 아니라 장비 이름
-    assert [f["unit"] for f in ff] == ["L", "L", "L"], ff  # "2,000 L 스테인리스"도 단위는 "L"만(꼬리 첫 토큰)
-    print("[selftest] 집계 사실 item=식별 열·단위 채움(AD24④) 통과")
-
-    # review 1차③ — 행 라벨이 숫자이기만 하고 연속 일련번호가 아니면(품목 코드) item을 그대로 둠
-    code_table = {"text": "| 코드 | 품목 | 수량 |\n|---|---|---|\n| 1001 | 위젯 | 5 개 |\n| 2050 | 가젯 | 3 개 |", "facts": []}
-    cf = doc_facts(0, code_table, [])
-    assert [f["item"] for f in cf] == ["1001", "2050"], cf  # 연속 아님 → 품목 코드 그대로(장비 이름으로 안 바꿈)
-    print("[selftest] 연속 아닌 숫자 행 라벨(품목 코드) 보존(review 1차③) 통과")
 
     rec = {
         "image_id": "d.pdf#p2#i1",
@@ -324,11 +285,11 @@ def selftest():
     print("[selftest] 독립 검토 MAJOR① — 빠진 그림도 seq 소비(결정성) · image_ids 텍스트 청크 연결 통과")
 
     # pl-06(11-01) — 그림 행·사실·개념 파일은 안 만들고, kg 파일은 묶음 계약용 빈 파일만
-    for gone in ("images.jsonl", "concept_chunk.jsonl"):
+    for gone in ("images.jsonl", "facts.jsonl", "concept_chunk.jsonl"):
         assert not (out_empty / gone).exists(), gone
     assert (out_empty / "kg_nodes.jsonl").read_text(encoding="utf-8") == ""
     assert (out_empty / "kg_edges.jsonl").read_text(encoding="utf-8") == ""
-    print("[selftest] pl-06 — 그래프·개념·그림 행 파일 없음(kg 파일은 빈 파일) 통과")
+    print("[selftest] pl-06 — 그래프·개념·그림 행·사실 파일 없음(kg 파일은 빈 파일) 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

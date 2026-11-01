@@ -8,9 +8,6 @@ from pathlib import Path
 
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]  # dev/
-
 MAX_PAGES = 200  # 쪽 신호 상한(쪽이 아주 많은 문서에서 rep 크기 과도 증가 방지) — 넘으면 앞 MAX_PAGES쪽만, truncated 표시
 
 

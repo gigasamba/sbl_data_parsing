@@ -63,11 +63,8 @@ def selftest():
 
 
 def _child_env_selftest():
-    """⑪(S7e3 — VS7e2 B-1 다섯 갈래 꼴) — 심은 자리는 잡히고, 덮기 파일·영구 다리 넣기·설정 밖 이름·설정 칸 사전·연결 사전·분류 주석은 통과."""
-    names = (
-        frozenset({"PG_SCHEMA", "EDW_SUMMARY_LLM", "LLM_BASE_URL", "NO_PAID_CALLS", "LLM_FAKE", "PARSE_SKIPPED_LOG"}),
-        frozenset({"VLM_BASE_URL", "VLM_CONCURRENCY"}),
-    )
+    """⑪(S7e3 — VS7e2 B-1 다섯 갈래 꼴) — 심은 자리는 잡히고, 덮기 파일·설정 밖 이름·설정 칸 사전·연결 사전·분류 주석은 통과."""
+    names = frozenset({"PG_SCHEMA", "EDW_SUMMARY_LLM", "LLM_BASE_URL", "NO_PAID_CALLS", "LLM_FAKE", "PARSE_SKIPPED_LOG"})
     src = """import os
 import os as _o
 import subprocess
@@ -83,12 +80,12 @@ def env_for(conf):
 
 
 def night(vlm):
-    env = {**child_env(), "VLM_CONCURRENCY": vlm, "EDW_SUMMARY_LLM": "0"}  # 14 bad EDW_SUMMARY_LLM(영구 다리 VLM_CONCURRENCY 넣기는 됨)
+    env = {**child_env(), "VLM_CONCURRENCY": vlm, "EDW_SUMMARY_LLM": "0"}  # 14 bad EDW_SUMMARY_LLM(설정 밖 이름 VLM_CONCURRENCY는 통과)
     env.pop("LLM_BASE_URL", None)                                          # 15 bad
     penv = {**env_for({}), "PG_SCHEMA": "idx"}                              # 16 bad(저장소 함수 env_for — 별칭 settings_env 사슬)
     e2 = child_env({"PYTHONUTF8": "1", "NO_PAID_CALLS": "1"})               # 17 bad(위치 인자 dict)
     for k in ("LLM_BASE_URL", "VLM_BASE_URL", "OTHER"):
-        e2.pop(k, None)                                                    # 19 bad LLM_BASE_URL·VLM_BASE_URL(영구 다리 빼기)
+        e2.pop(k, None)                                                    # 19 bad LLM_BASE_URL(설정 밖 이름 VLM_BASE_URL은 통과)
     e2["PARSE_SKIPPED_LOG"] = "x"                                          # 20 bad
     subprocess.run(["x"], env=dict(os.environ, LLM_FAKE="1"))              # 21 bad
     _o.environ["PG_SCHEMA"] = "x"                                          # 22 bad(os 별칭)
@@ -167,7 +164,6 @@ def use_cached():
         (16, "PG_SCHEMA"),
         (17, "NO_PAID_CALLS"),
         (19, "LLM_BASE_URL"),
-        (19, "VLM_BASE_URL"),
         (20, "PARSE_SKIPPED_LOG"),
         (21, "LLM_FAKE"),
         (22, "PG_SCHEMA"),
@@ -179,12 +175,12 @@ def use_cached():
     lines = src.splitlines()
     for i, line in enumerate(lines, 1):  # more() — "# bad" 줄의 이름(글자 상수)
         if "# bad" in line and i > 40:
-            want |= {(i, n) for n in re.findall(r'"([A-Z_]+)"', line.split("#")[0]) if n in names[0]}
+            want |= {(i, n) for n in re.findall(r'"([A-Z_]+)"', line.split("#")[0]) if n in names}
     assert got == want, (sorted(got - want), sorted(want - got))
     print(
         f"[selftest] check_modules ⑪ — 자식 env의 설정 이름 심은 {len(want)}곳 모두 잡힘(dict·pop·for 상수·위치 인자·dict(…, X=)·os 별칭·"
         "from os import environ·del·매개변수·저장소 env 함수 사슬·튜플 대상·|=·형 주석 대입·subprocess 별칭·람다 몸통·캐시 감싸개·"
-        "매개변수 {**base}·child_env(extra=)·겹친 **{…}·os.putenv — VS7e3 R-4) · 덮기 파일·영구 다리 넣기·설정 칸 사전(Names)·연결 사전·분류 주석 통과"
+        "매개변수 {**base}·child_env(extra=)·겹친 **{…}·os.putenv — VS7e3 R-4) · 덮기 파일·설정 밖 이름·설정 칸 사전(Names)·연결 사전·분류 주석 통과"
     )
 
 

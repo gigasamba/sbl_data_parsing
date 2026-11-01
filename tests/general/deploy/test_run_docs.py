@@ -5,11 +5,11 @@ PC 일반 시험: `PYTHONPATH=$PWD .venv/bin/python -m pytest tests/general`(S9 
 import importlib.util
 import re
 import shlex
-from pathlib import Path
 
 from common.config import setarg
+from common.core.paths import DEPLOY_ROOT
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = DEPLOY_ROOT  # 저장소 루트(op-09 — paths 상수)
 INPROCESS = True  # 상태를 바꾸지 않는 시험 — pytest가 함수마다 그대로 모음(tests/conftest.py)
 
 
@@ -51,6 +51,16 @@ def test_command_lines_fixed():
 def _inner(cmd):
     """docker exec <컨테이너> bash -c '<안>'의 <안>."""
     return shlex.split(cmd)[-1]
+
+
+def test_container_command_from_setting():
+    """op-10 — 컨테이너 명령은 DOCKER(설정 ops.host.docker, 없으면 podman·docker)에서 — 고정 docker 글자가 남지 않음."""
+    old = RD.DOCKER
+    try:
+        RD.DOCKER = "podman"
+        assert all(v.startswith("podman exec ") for v in _built().values()), _built()
+    finally:
+        RD.DOCKER = old
 
 
 def test_settings_only_via_set():

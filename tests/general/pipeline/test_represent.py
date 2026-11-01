@@ -40,16 +40,15 @@ def selftest():
     assert row_key({"context": ["B-2"], "cells": ["1,000"]}) not in keys
     assert status({"error": None}) == "성공" and status({"error": "TimeoutError: x"}) == "시간 초과"
     assert status({"error": "ImportError: x (미설치)"}) == "환경" and status({"error": "ValueError: x"}) == "실패"
-    import os
     import tempfile
 
     d = Path(tempfile.mkdtemp())
     (d / "a.pdf").write_bytes(b"x")
-    os.environ["SOURCE_URI_PREFIX"] = "s3://bucket/raw/"  # env 남김 — 시험: 인계 파일(contract.py)이 env로 읽음
-    s = source_record(d, "a.pdf")
+    with COMMON.env(SOURCE_URI_PREFIX="s3://bucket/raw/", SOURCE_MANIFEST=None):  # op-09 — 인계 파일(contract.py)도 설정 객체로 읽음
+        s = source_record(d, "a.pdf")
     assert s["uri"] == "s3://bucket/raw/a.pdf" and s["doc_key"] == s["sha256"] and len(s["doc_key"]) == 64  # 원본 위치(나중 Object Storage)
-    del os.environ["SOURCE_URI_PREFIX"]  # env 남김 — 시험: 인계 파일(contract.py)이 env로 읽음
-    assert source_record(d, "a.pdf")["uri"].startswith("file:///")
+    with COMMON.env(SOURCE_URI_PREFIX=None, SOURCE_MANIFEST=None):
+        assert source_record(d, "a.pdf")["uri"].startswith("file:///")
     print("[selftest] 표 머리글 보정 · 시도 상태 분류 · 원본 위치 주소 통과")
 
     rep0 = {"text": "본문"}

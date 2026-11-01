@@ -7,9 +7,9 @@
   요약   : 앞부분 발췌(LLM 요약은 op-08에 지움 — --summary auto·lead 둘 다 발췌)
   메타   : 고객사·계약 번호 — 파싱 모듈 교차 확인 값(_rep rep.meta)(서로 다른 계열 파서 2개+)만
   임베딩 : --embed api(EMBED_BASE_URL·EMBED_MODEL — 서버 임베딩 전용 모델) · bge-m3 · e5-small … (L2 정규화 저장, 차원은 첫 응답에서)
-  (지식 그래프 kg_nodes·kg_edges · 개념→청크 concept_chunk · 그림 행 images.jsonl은 11-01에 지움 — PRD pl-06: 아무도 적재·조회하지 않음.
-   집계 사실 facts.jsonl은 검색 쪽 PC 집계(aggregate.local)가 아직 읽어 mc-04(집계 지움)까지 남김. kg_nodes.jsonl·kg_edges.jsonl은 빈 파일로만 씀 — 묶음 계약 common/core/contract.py가 파일을 요구, 그 목록은 핸드오프 지문 파일이라 0.2.0 배치에서 고침)
-산출: docs.jsonl · chunks.jsonl · vectors.npy(float32, chunks 순서) · meta.json · facts.jsonl · kg_nodes.jsonl·kg_edges.jsonl(빈 파일)
+  (지식 그래프 kg_nodes·kg_edges · 개념→청크 concept_chunk · 그림 행 images.jsonl · 집계 사실 facts.jsonl은 11-01에 지움 — PRD pl-06:
+   아무도 적재·조회하지 않음(facts.jsonl을 읽던 검색 쪽 집계는 mc-04에서 지움). kg_nodes.jsonl·kg_edges.jsonl은 빈 파일로만 씀 — 묶음 계약 common/core/contract.py가 파일을 요구, 그 목록은 핸드오프 지문 파일이라 0.2.0 배치에서 고침)
+산출: docs.jsonl · chunks.jsonl · vectors.npy(float32, chunks 순서) · meta.json · kg_nodes.jsonl·kg_edges.jsonl(빈 파일)
 사용: python -m pipeline.transform.structure.build_bundle [--parse-dir output/parse] [--src output/prepared] [--embed api|bge-m3] [--summary auto|lead] [--out output/edw/bundle]
 """
 
@@ -20,30 +20,28 @@ import sys
 import time
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[0]
-from common.ai.embed import embed_texts  # noqa: E402
-from common.config import layout as L  # noqa: E402 — 안내 메시지의 settings.yaml 자리
-from common.config import settings as C  # noqa: E402 — S7c: 설정 객체(common 칸 EMBED_MODEL·EMBED_BASE_URL·LLM_ALLOW_EXTERNAL·GLOSSARY_DIR·OV_URL)
-from common.core import docmeta as DM  # noqa: E402 — 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
-from common.core import repfmt as AQ  # noqa: E402 — 대표 결과 형식 읽기(라벨 어휘·키-값 쌍·표 행)
-from common.core import terms as T  # noqa: E402 — 고객 명부·이름 정규화·ID 모양(검색과 같은 규칙)
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.contract import (  # noqa: E402 — 문서 ID(doc_key) 규칙(GH1-04: orig_sha256으로 parse와 같은 값)
+from common.ai.embed import embed_texts
+from common.config import layout as L  # 안내 메시지의 settings.yaml 자리
+from common.config import settings as C  # S7c: 설정 객체(common 칸 EMBED_MODEL·EMBED_BASE_URL·LLM_ALLOW_EXTERNAL·GLOSSARY_DIR·OV_URL)
+from common.core import docmeta as DM  # 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
+from common.core import repfmt as AQ  # 대표 결과 형식 읽기(라벨 어휘·키-값 쌍·표 행)
+from common.core import terms as T  # 고객 명부·이름 정규화·ID 모양(검색과 같은 규칙)
+from common.core.console import utf8_stdout
+from common.core.contract import (  # 문서 ID(doc_key) 규칙(GH1-04: orig_sha256으로 parse와 같은 값)
     file_hash,
     original_file_hash,
 )
-from common.core.meaning import strip_page_numbers  # noqa: E402
-from common.core.paths import APP_ROOT  # noqa: E402 — 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
-from common.core.text import (  # noqa: E402 — 색인 본문·토큰 규칙(모듈 계약)
+from common.core.meaning import strip_page_numbers
+from common.core.paths import APP_ROOT  # 폴더 재편 뒤 이 상수만 바뀌면 됨
+from common.core.text import (  # 색인 본문·토큰 규칙(모듈 계약)
     index_text,
     normalize_value,
     tokens,
 )
-from pipeline import config as pc  # noqa: E402 — S7c: 설정 객체(pipeline 칸)
-from pipeline.transform.structure import chunking as S  # noqa: E402 — 청킹·개체 정규식(구조화 모듈)
-from pipeline.transform.structure import facts as AG  # noqa: E402 — 제품 코드(PRODUCT_CODE_RE — 용어 draft)
-from pipeline.transform.structure import terms as ST  # noqa: E402 — name_hits·seed_roster(구조화 전용, 10-16 분리)
+from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
+from pipeline.transform.structure import chunking as S  # 청킹·개체 정규식(구조화 모듈)
+from pipeline.transform.structure import facts as AG  # 제품 코드(PRODUCT_CODE_RE — 용어 draft)
+from pipeline.transform.structure import terms as ST  # name_hits·seed_roster(구조화 전용, 10-16 분리)
 
 
 def pick_engine(doc, dd, sel, route):
@@ -449,48 +447,6 @@ def fig_host(doc_chunks, page):
     return doc_chunks[0]
 
 
-def doc_facts(di, raw, chunks_of_doc):
-    """(pl-06 — 검색 쪽 PC 집계 aggregate.local이 facts.jsonl을 읽는 동안만 남김 · mc-04에서 집계와 함께 지움)
-    대표 파싱의 표에서 수량·용량 열 값 → 집계용 사실 [{doc, item, attr, value, num, unit, chunk}] (건수·합계 질문의 SQL 경로)."""
-    table_rows, QTY_RE, NUM_RE, num = AQ.table_rows, AQ.QTY_RE, AQ.NUM_RE, AQ.num
-    out, seen = [], set()
-    rows = table_rows({"text": raw.get("text") or "", "facts": raw.get("facts") or []})
-    # 같은 머리글(=같은 표)의 행 라벨이 1,2,3…처럼 연속 일련번호일 때만 "번호 열"로 본다(review 1차③) —
-    # 품목 코드(1001·2050류)는 숫자이기만 하고 연속이 아니라 그대로 item으로 남아야 함.
-    by_header = {}
-    for row, header, _ in rows:
-        by_header.setdefault(tuple(header), []).append(row.strip())
-    serial_headers = set()
-    for h, labels in by_header.items():
-        if len(labels) >= 2 and all(lb.isdigit() for lb in labels):
-            start = int(labels[0])
-            if [int(lb) for lb in labels] == list(range(start, start + len(labels))):
-                serial_headers.add(h)
-    for row, header, cells in rows:
-        item = row.strip()
-        if tuple(header) in serial_headers and item.isdigit():  # 번호 열 — 식별 열(이름)을 대신 item으로(AD24④, 그림 속 표)
-            ident = next(
-                (c2.strip() for h2, c2 in zip(header, cells) if c2.strip() and not QTY_RE.search(h2) and not NUM_RE.fullmatch(c2.strip())),
-                None,
-            )
-            item = ident or item
-        for h, c in zip(header, cells):
-            vn, rn = normalize_value(c), normalize_value(item)
-            key = (rn, normalize_value(h))  # 같은 행·열은 한 번만(먼저 = 대표 엔진 값) — 표기 차이로 합계 중복 방지(E2)
-            if not QTY_RE.search(h) or num(c) is None or key in seen:
-                continue
-            seen.add(key)
-            ci = next(
-                (i for i, ch in chunks_of_doc if vn in normalize_value(ch["chunk_text"]) and rn in normalize_value(ch["chunk_text"])), None
-            )
-            m = NUM_RE.search(c)
-            tail = c[m.end() :].strip() if m else ""
-            unit = (re.search(r"\(([^)]+)\)", h) or [None, None])[1] or (tail.split()[0] if tail else None)
-            # ponytail: 단위는 꼬리의 첫 토큰만("20 L 유리병" → "L") — 여러 단어로 된 단위 표기는 못 잡음, 필요해지면 업그레이드
-            out.append({"doc": di, "item": item, "attr": h.strip(), "value": c.strip(), "num": num(c), "unit": unit, "chunk": ci})
-    return out
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--parse-dir", default="output/parse")
@@ -564,7 +520,7 @@ def main(argv=None):
                 r = json.loads(line)
                 if r.get("file_name") and r.get("key"):
                     _manifest_keys[r["file_name"]] = r["key"]
-    docs, chunks, n_sum, seen_sha, facts = [], [], {"llm": 0, "lead": 0}, {}, []
+    docs, chunks, n_sum, seen_sha = [], [], {"llm": 0, "lead": 0}, {}
     alias = {}  # 견적·주문 번호 → 같은 문서의 (교차 확인된) 계약 번호
     for md in meta_docs.values():
         con = AQ.pick(md["pairs"], AQ.CONTRACT_FIRST)
@@ -705,7 +661,6 @@ def main(argv=None):
                 }
             )
             seq += 1
-        facts += doc_facts(di, raw, [(i, chunks[i]) for i in range(first, len(chunks))])
         doc_text_chunks = chunks[first : len(chunks)]  # 이 문서의 텍스트 청크(그림 청크 추가 전) — 빈 그림의 image_id를 붙일 자리
         page_vlm_ids = {r["image_id"] for r in fig_by_doc.get(doc, []) if r.get("skipped") == "page_vlm"}
         for rec in fig_by_doc.get(doc, []):  # L1: 그림 1개 = 청크 1개(자르지 않음) — 텍스트 청크 뒤 이어서
@@ -740,7 +695,7 @@ def main(argv=None):
     dim = int(vecs.shape[1]) if len(vecs) else 0
     del vecs  # memmap 닫기(Windows는 열린 파일을 옮길 수 없음)
     # ponytail: kg_nodes·kg_edges는 빈 파일 — 묶음 계약(contract.check_bundle 파일 목록, 핸드오프 지문 파일)이 요구해서만 씀. 0.2.0 배치에서 목록과 함께 지움(pl-06)
-    for name, rows in (("docs", docs), ("chunks", chunks), ("facts", facts), ("kg_nodes", []), ("kg_edges", [])):
+    for name, rows in (("docs", docs), ("chunks", chunks), ("kg_nodes", []), ("kg_edges", [])):
         with open(out / f"{name}.jsonl", "w", encoding="utf-8") as f:
             for r in rows:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")

@@ -4,14 +4,13 @@ import math
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-from common.ai.embed import embed_texts, query_model_mismatch  # noqa: E402
-from common.core.contract import jl  # noqa: E402
-from common.core.terms import load_id_patterns_typed, match_clients  # noqa: E402 — BR41 tie-break 엔티티(고객 명부·ID 모양)
-from common.core.text import id_terms, index_text, tokens  # noqa: E402 — 색인·토큰 규칙(모듈 계약)
-from mcp_server import config as mc  # noqa: E402 — 설정 객체(S7d)
-from mcp_server.services.search import clientscope as CS  # noqa: E402 — BR50 고객 범위 단일 규칙(allows(), pgsearch.py와 공용)
-from mcp_server.services.search.text import term_weights  # noqa: E402 — X3(10-16 검색 전용으로 분리)
+from common.ai.embed import embed_texts, query_model_mismatch
+from common.core.contract import jl
+from common.core.terms import load_id_patterns_typed, match_clients  # BR41 tie-break 엔티티(고객 명부·ID 모양)
+from common.core.text import id_terms, index_text, tokens  # 색인·토큰 규칙(모듈 계약)
+from mcp_server import config as mc  # 설정 객체(S7d)
+from mcp_server.services.search import clientscope as CS  # BR50 고객 범위 단일 규칙(allows(), pgsearch.py와 공용)
+from mcp_server.services.search.text import term_weights  # X3(10-16 검색 전용으로 분리)
 
 ID_MAX_DF = 5  # ID 우선 검색에 쓰는 ID: 이 수 이하의 "문서"에만 나오는 것(로컬·pgvector 같은 값).
 # BR32 — 청크 수가 아니라 문서 수로 센다(원래 의도 "여러 문서에 흔한 제품 코드는 문서를 특정 못 함"은 문서 단위

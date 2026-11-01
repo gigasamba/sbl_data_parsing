@@ -51,10 +51,14 @@ async def run(url, token, q):
 def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser()
-    ap.add_argument("--url", default="http://127.0.0.1:18765/mcp")
+    ap.add_argument("--url", help="MCP 주소 — 비우면 설정 mcp.dev.mcp_url")
     ap.add_argument("--token", default="")
     ap.add_argument("--q", default="계약 단가")
     a = ap.parse_args()
+    if not a.url:  # 주소를 주면 설정 파일 없이도(호스트·다른 서버에서 부름)
+        from mcp_server import config as mc
+
+        a.url = mc.cfg().dev.mcp_url
     bad = asyncio.run(run(a.url, a.token, a.q))
     print("MCP 바깥 호출 통과" if not bad else "실패: " + " · ".join(bad))
     sys.exit(1 if bad else 0)

@@ -4,8 +4,8 @@ store(pgvector·S3·회사 DB 연결·문서 대장) · check(경계·모델 연
 함께 쓴다(refactor_plan 4-3).
 S3(10-26, D-001) — 옛 common_tools/__init__.py를 쪼갬: 인계 지문·옛 이름 대응표·판 표기는 core/fingerprint.py. 여기는 그것을 부르고
 쓰던 이름만 다시 내보낸다.
-S7e2(D-028 ④⑤) — 옵션 카탈로그(options.conf)·전환 다리(env_files)를 지웠다. import 때 영구 다리(settings.pin_env — 엔진·인계 파일이 env로
-읽는 28키를 settings.yaml 값으로 env에)만 한 번 부른다 — 다른 common 모듈이 env를 읽기 전에.
+S7e2(D-028 ④⑤) — 옵션 카탈로그(options.conf)·전환 다리(env_files)를 지웠다. import 때 settings.pin_env(설정 파일 점검·옛 env 이름 경고)만
+한 번 부른다 — op-09에 영구 다리(엔진·인계 칸을 env로 내주기)는 없앰(그 파일들도 설정 객체로 읽음).
 """
 
 import os as _os
@@ -13,8 +13,8 @@ from pathlib import Path as _Path
 
 
 def _pin():
-    """영구 다리 — 설정 파일이 없고 이미지 배치도 아니면(호스트 python·파일 없는 PC) pydantic도 import하지 않고 돌아온다(이미지는 파일이 없어도
-    이미지 기본값 DOC_DIR 등을 냄 — B-2). 서버에서 파일이 틀리면 SettingsError로 시작 실패(STRICT), local은 경고 뒤 계속(settings.pin_env)."""
+    """설정 파일 점검 — 설정 파일이 없고 이미지 배치도 아니면(호스트 python·파일 없는 PC) pydantic도 import하지 않고 돌아온다.
+    서버에서 파일이 틀리면 SettingsError로 시작 실패(STRICT), local은 경고 뒤 계속(settings.pin_env)."""
     root = _Path(__file__).resolve().parents[1]  # PC = 저장소 루트 · 이미지 = /app/deploy
     run = _os.environ.get("RUN_ENV") or None  # env 남김 — RUN_ENV 신호
     local = root / "settings.yaml"  # settings.LOCAL_FILE과 같은 자리(저장소 루트)

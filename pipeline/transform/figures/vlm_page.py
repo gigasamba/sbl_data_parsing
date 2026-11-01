@@ -17,15 +17,13 @@ import time
 import urllib.parse
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]  # dev/
-from common.ai import adk as A  # noqa: E402
-from common.ai.agent_prompts import load as _load_prompt  # noqa: E402
-from common.config.settings import cfg as ccfg  # noqa: E402 — common 칸 설정 객체(S7c)
-from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
-from pipeline.shared.artifacts import prompt_id, raw_vlm_path  # noqa: E402
-from pipeline.shared.postprocess import raw_root  # noqa: E402 — PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
-from pipeline.transform.figures.vector import vector_regions  # noqa: E402 — 쪽 벡터 도형 군집 수(page_signals)
+from common.ai import adk as A
+from common.ai.agent_prompts import load as _load_prompt
+from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
+from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.shared.artifacts import prompt_id, raw_vlm_path
+from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
+from pipeline.transform.figures.vector import vector_regions  # 쪽 벡터 도형 군집 수(page_signals)
 
 NOW = time.strftime("%Y-%m-%dT%H:%M:%S")
 

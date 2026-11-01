@@ -103,7 +103,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통
 
     f = Path(tempfile.mkdtemp()) / "roster.csv"
     f.write_text("name,aliases\n미르하제약(주),미르하;MIRHA\n", encoding="utf-8")
-    with mc.senv(CLIENT_ROSTER=str(f)):  # 인계 키 — senv가 os.environ에도 씀(terms.py가 env로 읽음)
+    with mc.senv(CLIENT_ROSTER=str(f)):  # 인계 파일(terms.py)도 설정 객체로 읽음(op-09)
         assert _aliases()["미르하제약(주)"] == ["MIRHA", "미르하"]  # 고객 명부 파일(CSV) 병합
     with mc.senv(GLOSSARY_DIR=str(GLOSSARY_ROOT)):
         al = _aliases()

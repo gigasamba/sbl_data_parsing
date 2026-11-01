@@ -14,7 +14,7 @@ cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트(
 patch_given=${PATCH_CODE:-}             # 부른 쪽이 준 PATCH_CODE만(아래 load_settings 전 — 옛 동작 그대로)
 . deploy/host/scripts/settings_env.sh && load_settings || exit $?   # S7e1 — settings.yaml 호스트 칸 → 셸 env(trigger.sh와 같음)
 . deploy/host/scripts/image_vars.sh; code_dir_default DATA_PIPELINE_IMAGE   # op-06 — 실행 이미지면 코드 폴더 루트 · S6b — need_image(아래 — compose.pipeline.yml이 두 변수를 다 치환하므로 둘 다)
-DC="${DOCKER:-docker} compose -f deploy/host/compose/compose.pipeline.yml"   # DOCKER(settings ops.host.docker) — podman이면 podman compose(사용자 10-30 검토 B4)
+DC="$DOCKER compose -f deploy/host/compose/compose.pipeline.yml"   # DOCKER — load_settings가 정함(셸 env > ops.host.docker > podman, 없으면 docker — op-10)
 [ -n "${CODE_DIR:-}" ] && DC="$DC -f deploy/host/compose/compose.code.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 /app/deploy에
 [ -n "$patch_given" ] && [ -f deploy/host/compose/compose.patch.yml ] && DC="$DC -f deploy/host/compose/compose.patch.yml"
 

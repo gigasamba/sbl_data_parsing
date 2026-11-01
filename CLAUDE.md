@@ -131,7 +131,7 @@ export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자�
 .venv/bin/python -m pipeline.config   # 어느 settings.yaml을 읽는지와 요약(비밀값은 가림)
 ```
 - 루트 `settings.yaml`에는 `required.env.run_env: local`·`required.env.run_mode: prod`, 전용 PG 접속 정보(`required.pg`), 임베딩 모델과 키(`required.embed`), `no_paid_calls: true`, (부하가 높은 PC라면) `tuning.ops.runtime.cpu_max_load`를 둔다. 예시는 README §4-2에 있다.
-- 전용 pgvector 컨테이너(PG 16 + pgvector, 예: `127.0.0.1:55433`)를 쓴다. ⚠️ PG 접속 항목을 비워 두면 코드가 `docker ps`로 찾은 아무 pgvector에나 연결한다. 항상 적어 둔다. 다른 작업의 DB와 포트를 쓰지 않는다.
+- 전용 pgvector 컨테이너(PG 16 + pgvector, 예: `127.0.0.1:55433`)를 쓴다. PG 접속 항목(`required.pg`)과 `required.deploy.mcp_store`는 필수다 — 비워 두면 시작을 거부한다(op-09 — 자동 탐색 없음). 다른 작업의 DB와 포트를 쓰지 않는다.
 - 백그라운드 프로세스는 PID를 파일에 남기고 **PID로만** 종료한다(`pkill -f` 패턴 금지).
 - 새 PG라면 처음 한 번 `python -m common.store.db.dbtool up --target struct`를 실행한다(테이블은 마이그레이션이 만든다).
 

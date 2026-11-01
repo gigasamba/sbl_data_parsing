@@ -10,7 +10,6 @@ SETTINGS(common + mcp 절)는 확인 명령(python -m mcp_server.config)·시험
 """
 
 import contextlib
-import os
 import sys
 
 from pydantic import Field, SecretStr  # 칸 형식
@@ -166,7 +165,7 @@ class McpServer(Section):
     max_queue: int | None = F(None, "MCP_MAX_QUEUE", "도구 대기열 상한(개) — 넘으면 즉시 busy 응답, 0이면 무제한")
     port: Port | None = F(8765, "MCP_PORT", "MCP 서버 포트")
     reload_check_sec: float | None = F(30.0, "MCP_RELOAD_CHECK_SEC", "적재 버전 변경 확인 간격(초) — 바뀌면 검색기·edw_meta 다시 읽음")
-    store: str | None = F(None, "MCP_STORE", "검색 저장소 종류 — pg 또는 local, 비우면 자동 탐지(Docker pgvector → 없으면 로컬 묶음)")
+    store: str | None = F(None, "MCP_STORE", "검색 저장소 종류 — pg 또는 local(필수 — 비우면 시작 거부, op-09)")
     token: SecretStr | None = F(None, "MCP_TOKEN", "MCP 서버 Bearer 토큰(비루프백 바인드면 필수)")
     tool_timeout_sec: float | None = F(30.0, "MCP_TOOL_TIMEOUT_SEC", "도구 1회 실행 시간 상한(초) — 넘으면 timeout 응답, 0이면 무제한")
     warmup: bool | None = F(True, "MCP_WARMUP", "기동 때 검색 1회로 예열 — 0이면 끔", off=("0",))
@@ -212,22 +211,15 @@ by_env, given, dropped, checked = _VIEW.by_env, _VIEW.given, _VIEW.dropped, _VIE
 
 def senv(**names):
     """selftest용(S7d) — 옛 os.environ 쓰기·지움을 설정 객체 덮기로 대신. None = 지움. 칸 이름으로 가름: common 칸 → COMMON.env,
-    mcp 칸 → MCP.env, 인계 파일이 env로 읽는 칸(pinned="handoff" — GLOSSARY_DIR·CLIENT_ROSTER)은 os.environ에도 씀(끝나면 되돌림 —
-    terms.py 등 인계 파일은 env를 그대로 읽음). 칸이 없는 이름은 거부(잘못된 이름으로 시험이 헛돌지 않게 — VS7c2 R-8).
+    mcp 칸 → MCP.env. 칸이 없는 이름은 거부(잘못된 이름으로 시험이 헛돌지 않게 — VS7c2 R-8).
     with로 쓰거나 변수에 받아 .close()(겹쳐 쓰면 안쪽부터 되돌림)."""
-    from common.config.settings import COMMON, CommonAppSettings, env_map, env_name, walk
+    from common.config.settings import COMMON, CommonAppSettings, env_map
 
     common_keys, mcp_keys = env_map(CommonAppSettings), env_map(McpEnvSettings)
     unknown = sorted(set(names) - set(common_keys) - set(mcp_keys))
     if unknown:
         raise KeyError(f"senv: 설정 칸이 없는 이름 {unknown}")
-    handoff = {env_name(f) for _, f, _ in walk(CommonAppSettings) if (f.json_schema_extra or {}).get("pinned") == "handoff"}
     st = contextlib.ExitStack()
-    raw = {k: v for k, v in names.items() if k in handoff}
-    if raw:
-        saved = {k: os.environ.get(k) for k in raw}  # env 남김 — 시험: 인계 파일 env(아래에서 되돌림)
-        _put_env(raw)
-        st.callback(_put_env, saved)
     cn = {k: v for k, v in names.items() if k in common_keys}
     mn = {k: v for k, v in names.items() if k in mcp_keys and k not in common_keys}
     if cn:  # 준 칸이 있는 객체만 덮음(덮는 동안 그 객체는 os.environ 쓰기를 못 봄 — 필요 없는 객체까지 고정하지 않게)
@@ -235,12 +227,6 @@ def senv(**names):
     if mn:
         st.enter_context(MCP.env(**mn))
     return st
-
-
-def _put_env(values):
-    """시험 — 인계 파일이 env로 읽는 칸을 os.environ에 씀(None = 지움, senv가 씀)."""
-    for k, v in values.items():
-        os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, str(v))  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음
 
 
 class MCPConfig:

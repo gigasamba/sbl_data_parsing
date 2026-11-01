@@ -8,7 +8,7 @@
 #   OUT       저장 폴더(기본 /var/tmp/bake — 코드 폴더 밖) · DOCKER(기본 podman, 없으면 docker)
 #   한 대상만 실패했으면 그 대상만 다시: bash bake.sh <판> mcp(이미 구운 대상은 "이미 있는 태그"로 멈춤)
 # 순서(대상마다): ① 코드 DEPS_HASH = 실행 이미지 deps_hash ② Dockerfile.bake 빌드(문맥 = 코드 폴더) ③ selftest_gate [판정] 통과
-#   ④ ship_stage.sh로 저장·gzip·분할·sha256 → $OUT/<repo>/images/<TAG>/<이미지>/ (재조립은 ship_stage.sh 머리말)
+#   ④ ship_stage.sh로 저장·gzip·분할·sha256 → $OUT/sbl_images/<TAG>/<이미지>/ + load.sh·BUILD.txt(op-10 — 개발 서버와 같은 배치, 서버에서 load.sh <TAG>)
 #   + 시험한 코드 폴더 묶음(code-<판>-<커밋>.tar.gz — 운영 서버 호스트 스크립트 deploy/host/·compose용, 이미지와 같은 커밋)
 set -euo pipefail
 [ $# -ge 1 ] || { echo "사용: bash bake.sh <실행 이미지 태그 판> [pipeline mcp]" >&2; exit 2; }
