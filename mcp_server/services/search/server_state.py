@@ -49,6 +49,20 @@ def _close_pool_later(pool, delay=5):
     threading.Thread(target=_close, daemon=True).start()
 
 
+def check_store():
+    """op-09 — 저장소 종류(mcp.server.store)가 pg·local이 아니거나, pg인데 접속 칸이 비면 SystemExit(채울 자리를 적음).
+    main이 시작 때 부른다(예열 스레드·요청 안에서는 SystemExit가 조용히 스레드만 죽이므로 — 리뷰 10-31)."""
+    store = mc.cfg().server.store
+    if store not in ("pg", "local"):
+        from common.config.layout import to_yaml
+
+        raise SystemExit(f"검색 저장소 종류 없음 — settings.yaml {to_yaml('mcp.server.store')}를 pg 또는 local로 채움")
+    if store == "pg":
+        from common.store.pg import conf
+
+        conf()
+
+
 def _build_retriever():
     from common.store import registry as REG
     from common.store import services
@@ -56,6 +70,10 @@ def _build_retriever():
 
     old = _STATE.get("R")
     sv = mc.cfg().server  # 한 번 묶음(S7d — 두 칸이 같은 판 값)
+    try:
+        check_store()  # 시작 때 이미 확인(main) — 설정이 그 뒤 바뀐 경우만 여기서 걸림
+    except SystemExit as e:  # 스레드·요청 안에서는 오류로(조용히 스레드만 죽지 않게)
+        raise RuntimeError(str(e)) from None
     a = types.SimpleNamespace(pg=sv.store == "pg", local=sv.store == "local", edw=False, edw_client=False)
     services.connect(a)
     from common.store.db import cfgtables
@@ -71,7 +89,7 @@ def _build_retriever():
 
 
 def _retriever():
-    """저장소 연결(Docker PostgreSQL → 없으면 로컬 묶음)·Retriever — 처음엔 만들고, 이후엔 최소 MCP_RELOAD_CHECK_SEC(기본 30초)
+    """저장소 연결(설정 mcp.server.store — pg·local)·Retriever — 처음엔 만들고, 이후엔 최소 MCP_RELOAD_CHECK_SEC(기본 30초)
     간격으로 적재 버전이 바뀌었는지만 확인해 바뀌었으면 다시 만든다(S12, load 재실행 뒤 새 데이터가 안 보이던 문제).
     버전이 안 바뀌어도 같은 간격에 숨김 집합만 다시 읽는다(OP1, 독립 검토 BLOCK 반영 — 전체 재적재 없이 hide·unhide가
     MCP_RELOAD_CHECK_SEC 안에 반영되게, Retriever.refresh_hidden).

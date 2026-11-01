@@ -11,10 +11,11 @@
   (AD23·SI20③ table_std가 쓰던 것) — C3: data_parsing.parse_qa의 P3(표 행 재현율)도 있으면 본문 줄과 함께 이걸로
   판정(엔진마다 새로 "cells" 채울 필요 없음 — 이미 모든 _mk_table 기반 엔진이 채움)."""
 
-import os
 import re
 import sys
 from html.parser import HTMLParser as _PyHTMLParser
+
+from pipeline import config as _pc   # op-09 — 설정 객체(옛 env 다리)
 
 
 _NUMVAL = re.compile(r"^[±~<>≥≤+\-]?\s*\d[\d,]*(?:\.\d+)?")
@@ -22,14 +23,15 @@ _NUMVAL = re.compile(r"^[±~<>≥≤+\-]?\s*\d[\d,]*(?:\.\d+)?")
 # 수치 중심 셀: 숫자 1개 이상 + 한글 없음 (단위·기호·영문 약어 허용)
 _NUMERIC_CELL = re.compile(r"^[^가-힣]*\d[^가-힣]*$")
 
-OCR_DPI = int(os.environ.get("OCR_DPI") or 200)            # 쪽 이미지 해상도 — A4 200 DPI ≈ 11.6 MB/쪽(RGB)
-OCR_MAX_PAGES = int(os.environ.get("OCR_MAX_PAGES") or 0)  # 문서당 OCR·VLM 쪽 수 상한(0 = 제한 없음) — 수백 쪽 스캔 문서의 시간·메모리 상한
+OCR_DPI = int(_pc.cfg().extract.ocr.dpi)                  # 쪽 이미지 해상도 — A4 200 DPI ≈ 11.6 MB/쪽(RGB)
+OCR_MAX_PAGES = int(_pc.cfg().extract.ocr.max_pages)      # 문서당 OCR·VLM 쪽 수 상한(0 = 제한 없음) — 수백 쪽 스캔 문서의 시간·메모리 상한
 
 
 def fill_merged_on(config=None):
-    """TB6 — PARSE_FILL_MERGED(환경변수, 기본 켬). 끄면 _fill_merged를 안 불러 바이트 동일(병합 덮인 칸이
+    """TB6 — 설정 fill_merged(PARSE_FILL_MERGED, 기본 켬). 끄면 _fill_merged를 안 불러 바이트 동일(병합 덮인 칸이
     빈칸으로 남는 옛 동작)."""
-    config = os.environ.get("PARSE_FILL_MERGED", "1") if config is None else config
+    if config is None:
+        return bool(_pc.cfg().extract.fill_merged)
     return str(config).strip().lower() not in ("", "0", "none", "false")
 
 
@@ -130,7 +132,7 @@ def split_tables(rows):
         groups.append((cap, cur))
     return groups or ([(None, rows)] if rows else [])
 
-TABLE_GRID_MAX_ROWS = int(os.environ.get("TABLE_GRID_MAX_ROWS") or 2000)   # AD23 독립 검토 — 큰 엑셀 grid JSON 폭주 방지
+TABLE_GRID_MAX_ROWS = int(_pc.cfg().extract.table_grid_max_rows)   # AD23 독립 검토 — 큰 엑셀 grid JSON 폭주 방지
 
 def _mk_table(rows):
     """rows·cols·text는 그대로(기존 호출부 전부 바이트 동일) + grid(2D 칸 — AD23·SI20③ data_parsing.postprocess.table_std
@@ -355,7 +357,7 @@ def _ocr_tables(boxes):
     """TB3 — OCR 박스 좌표로 최소 격자 추정: 같은 높이 박스 = 한 행, 짧은 칸(30자↓) 2개+ 행이 3줄 이상 이어지면 표(2열은 숫자 행 절반↑),
     열은 행들의 왼쪽 x 군집. 본문 text는 그대로(표만 추가). OCR_TABLE_GRID=0이면 옛 동작(tables=[]).
     ponytail: 선 없는 왼쪽 정렬 가정 — 오른쪽 정렬 숫자 열·병합 칸은 근사(병합 칸은 한 칸에만 들어감)."""
-    if os.environ.get("OCR_TABLE_GRID", "1") == "0" or not boxes:
+    if not _pc.cfg().extract.ocr.table_grid or not boxes:
         return []
     tables = []
     for page in dict.fromkeys(b.get("page") for b in boxes):

@@ -51,14 +51,13 @@ import json
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
 # safe_name·safe_join은 common/ids.py(독립 검토 MAJOR-1) — modules/load가 modules/parse를 import하면 이미지 경계
 # 위반이라 공용 위치는 common/(source.py도 같은 함수를 씀, dev/modules/parse/source.py 참고).
-from common.config import settings as C  # noqa: E402 — common 칸(VLM_MODEL·OS_*) · 비밀 꺼내기(S7c)
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.contract import file_hash, safe_filename, safe_path_join  # noqa: E402
-from common.core.paths import CRITERIA_FILE  # noqa: E402
-from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
+from common.config import settings as C  # common 칸(VLM_MODEL·OS_*) · 비밀 꺼내기(S7c)
+from common.core.console import utf8_stdout
+from common.core.contract import file_hash, safe_filename, safe_path_join
+from common.core.paths import CRITERIA_FILE
+from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 
 _CROSS_ACC_FULL = json.loads(CRITERIA_FILE.read_text(encoding="utf-8"))["run"][
     "cross_acc_full"

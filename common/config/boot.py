@@ -44,7 +44,7 @@ def lines(names, image_env=None, environ=None):
             continue  # 이 이미지 절에 없는 칸 — 셸 기본값(리뷰 S7e2)
         if S.is_secret(fields[p]):
             raise SystemExit(f"[boot] 비밀 칸은 셸 칸으로 내지 않음: {name}")
-        if name in environ and name not in S.PINNED:  # 사용자 env(영구 다리가 이 프로세스에서 낸 값은 아님)
+        if name in environ:  # 사용자 env
             continue
         s = S.render(S._get(st, p), sep=S.list_sep(fields[p]))
         if s is not None:

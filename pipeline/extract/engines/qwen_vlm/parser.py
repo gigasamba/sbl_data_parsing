@@ -4,14 +4,15 @@
 도구(tool) 인터페이스: ENGINES[이름](경로) → 공통 출력 계약(tools/engines/_common/contract.py).
 단독 실행: python -m data_parsing.parse_one --engine qwen_vlm <문서> <out.json>
 쪽은 병렬로 호출(VLM_CONCURRENCY, 기본 4) · 쪽당 제한 VLM_TIMEOUT(기본 180초) · 시간 초과·연결 오류는 1번 재시도(VLM_RETRY).
-설정(환경변수): VLM_BASE_URL(OpenAI 호환, 예 http://10.0.0.5:8000/v1) · VLM_MODEL · VLM_API_KEY(있을 때만)
+설정(common.models.vlm — op-09, 옛 env 다리): VLM_BASE_URL(OpenAI 호환, 예 http://10.0.0.5:8000/v1) · VLM_MODEL · VLM_API_KEY(있을 때만)
 **외부 API 주소 금지 — 내부망 엔드포인트만.**
 """
 import base64
 import io
 import json
-import os
 import urllib.request
+
+from common.config.settings import cfg as _cfg, reveal as _reveal
 
 from pipeline.extract.engines._common.contract import _pages, _with_tables, _md_tables
 
@@ -26,26 +27,27 @@ PROMPT = ("이 문서 쪽을 마크다운으로 옮겨라. 표는 마크다운 �
 def _chat(img):
     buf = io.BytesIO()
     img.save(buf, "PNG")
-    body = {"model": os.environ["VLM_MODEL"], "temperature": 0,
+    v = _cfg().models.vlm
+    body = {"model": v.model, "temperature": 0,
             "messages": [{"role": "user", "content": [
                 {"type": "text", "text": PROMPT},
                 {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()}}]}]}
     from common.ai.guard import require_internal, urlopen as _g_urlopen   # 원래 위치에서 직접(eval/llm.py 모듈 바꿔치기 shim은 스레드 import 경합으로 가끔 ImportError — light-hard 시험 10-08)
-    require_internal(os.environ["VLM_BASE_URL"], "VLM")            # 문서 쪽 이미지가 나가므로 내부망만(DONT 13)
-    req = urllib.request.Request(os.environ["VLM_BASE_URL"].rstrip("/") + "/chat/completions",
+    require_internal(v.base_url, "VLM")            # 문서 쪽 이미지가 나가므로 내부망만(DONT 13)
+    req = urllib.request.Request(v.base_url.rstrip("/") + "/chat/completions",
                                  data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
-    if os.environ.get("VLM_API_KEY"):
-        req.add_header("Authorization", "Bearer " + os.environ["VLM_API_KEY"])
+    if _reveal(v.api_key):
+        req.add_header("Authorization", "Bearer " + _reveal(v.api_key))
     # 리다이렉트도 같은 내부망 가드로 재확인(L7) — raw urllib.request.urlopen은 리다이렉트 대상을 다시 검사하지 않음
     from pipeline.transform.figures.vgate import slot as _vgate_slot   # 전역 VLM in-flight 게이트(합 VLM_GLOBAL_CONCURRENCY — 2026-10-22)
-    with _vgate_slot(), _g_urlopen(req, int(os.environ.get("VLM_TIMEOUT") or 180), "VLM") as r:
+    with _vgate_slot(), _g_urlopen(req, int(v.timeout), "VLM") as r:
         return json.load(r)["choices"][0]["message"]["content"]
 
 
 def _pages_md(path):
     """쪽 이미지를 병렬로 VLM에 보내 쪽 순서대로 마크다운(코드펜스 제거). 다중 쪽 PDF가 쪽 수 × 응답 시간만큼 늘어지지 않게."""
     from concurrent.futures import ThreadPoolExecutor
-    retry = int(os.environ.get("VLM_RETRY") or 1)
+    retry = int(_cfg().models.vlm.retry)
 
     def one(im):
         for i in range(retry + 1):
@@ -55,7 +57,7 @@ def _pages_md(path):
                 if i == retry:
                     raise
     from itertools import islice
-    n = max(1, int(os.environ.get("VLM_CONCURRENCY") or 4))
+    n = max(1, int(_cfg().models.vlm.concurrency))
     pages, out = _pages(path), []
     with ThreadPoolExecutor(max_workers=n) as ex:           # n쪽씩 묶어서 — 메모리에는 동시 요청 수만큼의 쪽 이미지만
         while True:
@@ -70,7 +72,7 @@ def parse_qwen_vlm(path):
     pages = _pages_md(path)
     md = "\n\n".join(pages)
     out = _with_tables(md, _md_tables(md), "qwen_vlm")
-    out["trace"].update({"model": os.environ.get("VLM_MODEL"), "pages": len(pages)})
+    out["trace"].update({"model": _cfg().models.vlm.model, "pages": len(pages)})
     return out
 
 

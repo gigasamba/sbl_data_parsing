@@ -2,7 +2,7 @@
 LibreOffice headless로 PDF 변환 → 그 쪽만 이미지 렌더 → 기존 쪽 VLM 경로(vlm_page.vlm_page, 같은 캐시·상한·가드)로 옮긴다.
 candidate_slides() 자체는 어디서도 안 불리던 상태(바이트 영향 0)였는데 이 모듈이 그 유일한 호출자다.
 
-SOFFICE_BIN(env) → PATH의 soffice/soffice.exe → 흔한 설치 경로(_common_soffice_paths) 순으로 찾고, 다 없으면 조용히
+설정 soffice_bin(SOFFICE_BIN) → PATH의 soffice/soffice.exe 순으로 찾고(op-09 — 설치 경로 추측 없음), 다 없으면 조용히
 건너뜀(이전 동작과 바이트 동일) — 못 찾으면 이 프로세스에서 1번만 stderr 경고(독립 검토 10-13, 매 문서 반복 아님).
 PARSE_PPTX_RENDER_MAX(env, 기본 10) — 문서당 실제 렌더·VLM 호출할 슬라이드 상한(candidate_slides 자체 상한 20+20과 별개 안전판
 — LibreOffice 변환은 슬라이드 수와 무관하게 문서 1번이지만 VLM 호출은 쪽마다라 비용이 큼).
@@ -28,13 +28,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]  # dev/
-from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
-from pipeline.shared.postprocess import raw_root  # noqa: E402
-from pipeline.transform.figures import shape_detect  # noqa: E402 — AD14
-from pipeline.transform.figures.pptx_edges import candidate_slides  # noqa: E402
-from pipeline.transform.figures.vlm_page import DPI, sha, vlm_page  # noqa: E402
+from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.shared.postprocess import raw_root
+from pipeline.transform.figures import shape_detect  # AD14
+from pipeline.transform.figures.pptx_edges import candidate_slides
+from pipeline.transform.figures.vlm_page import DPI, sha, vlm_page
 
 
 def _cap(name, default):
@@ -54,39 +52,20 @@ _soffice_warned = [False]  # 독립 검토(10-13) — soffice_bin()이 끝까지
 # 경고를 공유(중복 구현 없음).
 
 
-def _common_soffice_paths():
-    """PATH에 없어도 실제로 깔린 흔한 설치 자리(이 PC: LibreOffice를 설치했지만 PATH에 안 넣는 경우가 보통,
-    실측 10-13) — Windows Program Files(64·32비트)·Linux 배포판 패키지·수동 설치(/opt/libreoffice<버전>) 순.
-    glob은 버전 디렉터리 이름이 배포마다 다름(libreoffice7.6 등)."""
-    import glob
-
-    cands = [
-        r"C:\Program Files\LibreOffice\program\soffice.exe",
-        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-        "/usr/bin/soffice",
-        "/usr/lib/libreoffice/program/soffice",
-    ]
-    cands += sorted(glob.glob("/opt/libreoffice*/program/soffice"))
-    return cands
-
-
 def soffice_bin():
-    """SOFFICE_BIN env(파일로 존재해야 유효) → PATH의 soffice·soffice.exe → 흔한 설치 경로(_common_soffice_paths,
-    독립 검토 10-13 — PATH에 없어도 설치돼 있으면 찾음) — 다 없으면 None, 이 프로세스에서 처음 한 번만 stderr
-    경고(_soffice_warned — 조용한 건너뜀이 배치 로그에서 안 보이던 문제, 매 문서 반복 대신 1회)."""
+    """설정 soffice_bin(파일로 존재해야 유효) → PATH의 soffice·soffice.exe — 다 없으면 None, 이 프로세스에서 처음 한 번만
+    stderr 경고(_soffice_warned — 조용한 건너뜀이 배치 로그에서 안 보이던 문제, 매 문서 반복 대신 1회). op-09 — 흔한 설치
+    경로(Program Files·/usr/lib·/opt) 추측은 지움: PATH에 없으면 settings.yaml soffice_bin을 채운다(이미지는 /usr/bin/soffice 기본값)."""
     v = pc.cfg().paths.soffice_bin  # S7c — 설정 객체
     if v:
         return v if Path(v).exists() else None
     found = shutil.which("soffice") or shutil.which("soffice.exe")
     if found:
         return found
-    for cand in _common_soffice_paths():
-        if Path(cand).exists():
-            return cand
     if not _soffice_warned[0]:
         _soffice_warned[0] = True
         print(
-            "[pptx_render] soffice를 못 찾음(SOFFICE_BIN·PATH·흔한 설치 경로 다 없음) — pptx 슬라이드 렌더 기능 전부 건너뜀"
+            "[pptx_render] soffice를 못 찾음(설정 soffice_bin·PATH 다 없음) — pptx 슬라이드 렌더 기능 전부 건너뜀"
             "(이 프로세스 동안 이 경고는 1번만)",
             file=sys.stderr,
         )

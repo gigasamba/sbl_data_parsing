@@ -6,14 +6,14 @@
 """
 import importlib
 import importlib.util
-import os
 import shutil
 from functools import lru_cache
 from pathlib import Path
 
+from common.core.paths import PARSING_ROOT
 from pipeline.extract.engines._common.contract import _fields
 
-HERE = Path(__file__).resolve().parent
+HERE = PARSING_ROOT / "engines"
 
 
 @lru_cache(maxsize=1)
@@ -46,7 +46,7 @@ def missing_deps(engine):
     REQUIRES_ENV(모델 서빙 주소 등 설정값)는 설치 여부와 다른 문제라 missing_env()가 따로 본다."""
     _, m = engines()[engine]
     req = getattr(m, "REQUIRES_ENGINE", {}).get(engine) or getattr(m, "REQUIRES", {"modules": [], "tools": []})
-    tools = [(os.environ.get("MINERU_BIN") or "mineru") if t == "$MINERU_BIN" else t for t in req.get("tools", [])]
+    tools = req.get("tools", [])
     return [x for x in req.get("modules", []) if importlib.util.find_spec(x) is None] + [t for t in tools if not shutil.which(t)]
 
 
@@ -72,9 +72,12 @@ def engines_for(ext):
 
 
 def missing_env(engine):
-    """엔진이 요구하는 환경변수 중 비어 있는 것 (parser.py의 REQUIRES_ENV = {엔진: [변수]}, "A|B"는 둘 중 하나)."""
+    """엔진이 요구하는 설정 칸(옛 env 이름) 중 비어 있는 것 (parser.py의 REQUIRES_ENV = {엔진: [이름]}, "A|B"는 둘 중 하나).
+    op-09 — env가 아니라 설정 객체(common 칸 — by_env)로 본다."""
+    from common.config.settings import by_env
+
     _, m = engines()[engine]
-    return [v for v in getattr(m, "REQUIRES_ENV", {}).get(engine, []) if not any(os.environ.get(x) for x in v.split("|"))]
+    return [v for v in getattr(m, "REQUIRES_ENV", {}).get(engine, []) if not any(by_env(x) for x in v.split("|"))]
 
 
 def run(engine, path, profile="default", fields="normalized"):

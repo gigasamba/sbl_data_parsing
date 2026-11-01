@@ -135,7 +135,7 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
   - `keyscan` 빠진 키 7개 — `APP_VERSION`·`BAKE_TEST`·`CODE_BUNDLE`·`CODE_DIR`·`CODE_OUT`·`VCS_REF`는 빌드 인자 → 빌드 인자로 표시, `NF`는 awk 오탐.
   - systemd `User=root` — 그대로 둘지 확인.
 - 파일: 위 목록, `common/config/settings.py`(이미지 기본값 표), `common/config/keyscan.py`, `deploy/host/`, `pipeline/extract/engines/`(등급 A), `common/core/`.
-- Status: todo — 0.2.0.
+- Status: dev — `feature/op09-no-hardcode`(stage 1·2a·2b 끝 — PR). 남은 고칠 곳 중 지울 도구(`mcp_eval`·`pipeline/eval/stages.py`·`parse_trigger_test.py`)에 걸린 것은 범위 축소(10-31) 삭제로 사라짐.
 
 <a id="op-08"></a>
 ## op-08 · 설정 구조 재편 — 필수 묶음 + 역할별 파라미터

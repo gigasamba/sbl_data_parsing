@@ -3,10 +3,8 @@
 표 집계 질의(검색 modules/search/aggregate.py)는 이 결과(PostgreSQL doc.contract)를 읽기만 함."""
 
 import re
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-from common.core.terms import modalities, norm  # noqa: E402 — 이름 정규화·모달리티 어휘(검색과 같은 규칙, DT1 c1: 용어집 modality_code 우선)
+from common.core.terms import modalities, norm  # 이름 정규화·모달리티 어휘(검색과 같은 규칙, DT1 c1: 용어집 modality_code 우선)
 
 CODE_MOD = {"ADC": "ADC", "MAB": "mAb", "BSA": "bispecific", "BIS": "bispecific", "BSP": "bispecific", "VAC": "vaccine"}
 

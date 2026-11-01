@@ -17,13 +17,9 @@ import sys
 from pathlib import Path
 
 from common.config.settings import cfg, guard_run_env
-from common.core.paths import LOCAL_RUN
+from common.core.paths import PROJ_ROOT
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent  # deploy/common/(S3 — 옛 deploy/common_tools/, 깊이 같음) — CT1(10-16) store/ 한 단 더 깊어져 HERE.parent로(10-14 분리 — 옛 HERE.parent=deploy/data_pipeline/)
-REPO_ROOT = (
-    ROOT.parent if LOCAL_RUN else ROOT.parent.parent
-)  # 저장소 루트(운영 DB 가드용) — 로컬 배치(paths.LOCAL_RUN — RUN_ENV=local, S7b 전 env LOCAL_RUN=1 · deploy/ 단 없음)면 한 단 덜 올라감
+REPO_ROOT = PROJ_ROOT  # 저장소 루트(운영 DB 가드용 — PC=저장소 루트, 이미지=/app · op-09 paths 상수)
 # FS5(10-08): data/ -> valid_env/sim — 다른 파이프라인의 운영 정본, 둘 다 열지도 쓰지도 않음(전환기 동안 구 경로도 같이 막음).
 # 10-13: valid_env/sim/ -> valid_env/ (sim/ 단계 제거) — 새 위치 추가, 옛 두 경로도 계속 막음.
 PROD_DBS = {

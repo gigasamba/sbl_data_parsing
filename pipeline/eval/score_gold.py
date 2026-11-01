@@ -41,7 +41,6 @@ from pipeline.shared.text import DASH_CHARS as _DASH
 from pipeline.shared.text import SPACE_CHARS as _SPACE
 from pipeline.shared.text import SYMBOL_PUA  # 기호 정규화 맵(10-16 파싱 전용으로 분리)
 
-HERE = Path(__file__).resolve().parent
 ROOT = APP_ROOT  # output/ 등 런타임 경로용(옛 dev/)
 from pipeline.transform.represent import parse_qa as Q  # noqa: E402 — 채점 함수 재사용(규칙 한 곳)
 
