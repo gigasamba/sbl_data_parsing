@@ -245,7 +245,7 @@ def selftest():
         srv5.shutdown()
     print("[selftest] agent= — 응답·usage가 비-agent 경로와 같음(parity) · model_role 불일치 거부 통과")
 
-    # output_schema — 형식 검사·1회 재요청(AD33 ⓑ). research_judge(output_schema 있음, 필수 "status")로:
+    # output_schema — 형식 검사·1회 재요청(AD33 ⓑ). nested_figure(output_schema 있음, 필수 "regions" — 11-01 research_judge 지움)로:
     # ① 1차 깨진 JSON → 2차 정상 → 정상 반환·요청 2회·invalid+1·retry_ok+1 ② 둘 다 깨짐 → 마지막(2차) 응답 그대로·
     # 요청 2회·invalid+1·retry_failed+1(호출부가 그 뒤 기본값 처리) ③ 1차부터 정상 → 요청 1회·통계 불변(재요청 없음).
     def _schema_server(bodies):
@@ -276,12 +276,12 @@ def selftest():
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         return srv, hits
 
-    valid = json.dumps({"status": "found", "answer": "X", "cite": [1], "near_miss": [], "follow_up": None})
+    valid = json.dumps({"regions": []})
     srvA, hitsA = _schema_server(["이건 JSON이 아님", valid])
     try:
-        with COMMON.env(LLM_BASE_URL=f"http://127.0.0.1:{srvA.server_address[1]}/v1", LLM_MODEL="mock"):
+        with COMMON.env(VLM_BASE_URL=f"http://127.0.0.1:{srvA.server_address[1]}/v1", VLM_MODEL="mock"):
             before = schema_stats()
-            text, _u = complete("llm", [{"role": "user", "content": "x"}], agent="research_judge")
+            text, _u = complete("vlm", [{"role": "user", "content": "x"}], agent="nested_figure")
             assert text == valid and len(hitsA) == 2, (text, hitsA)
             assert _u.get("prompt_tokens") == 2 and _u.get("completion_tokens") == 2 and _u.get("calls") == 2, (
                 _u
@@ -293,9 +293,9 @@ def selftest():
 
     srvB, hitsB = _schema_server(["여전히 JSON 아님"])
     try:
-        with COMMON.env(LLM_BASE_URL=f"http://127.0.0.1:{srvB.server_address[1]}/v1", LLM_MODEL="mock"):
+        with COMMON.env(VLM_BASE_URL=f"http://127.0.0.1:{srvB.server_address[1]}/v1", VLM_MODEL="mock"):
             before = schema_stats()
-            text, _u = complete("llm", [{"role": "user", "content": "x"}], agent="research_judge")
+            text, _u = complete("vlm", [{"role": "user", "content": "x"}], agent="nested_figure")
             assert text == "여전히 JSON 아님" and len(hitsB) == 2, (text, hitsB)  # 재요청 1회(2차도 깨짐) — 그대로 반환(호출부 기본값 처리)
             after = schema_stats()
             assert after["invalid"] == before["invalid"] + 1 and after["retry_failed"] == before["retry_failed"] + 1
@@ -304,9 +304,9 @@ def selftest():
 
     srvC, hitsC = _schema_server([valid])
     try:
-        with COMMON.env(LLM_BASE_URL=f"http://127.0.0.1:{srvC.server_address[1]}/v1", LLM_MODEL="mock"):
+        with COMMON.env(VLM_BASE_URL=f"http://127.0.0.1:{srvC.server_address[1]}/v1", VLM_MODEL="mock"):
             before = schema_stats()
-            text, _u = complete("llm", [{"role": "user", "content": "x"}], agent="research_judge")
+            text, _u = complete("vlm", [{"role": "user", "content": "x"}], agent="nested_figure")
             assert text == valid and len(hitsC) == 1, (text, hitsC)  # 1차부터 정상 — 재요청 없음(호출 1회)
             assert schema_stats() == before
     finally:

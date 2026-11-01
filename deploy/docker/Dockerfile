@@ -11,7 +11,7 @@
 #   code_fp a·p1·r·s가 바뀌는 새 이미지 판이라 서버 반입은 검토 등급 A 뒤 사용자가 정한다.
 # S2(10-26, refactor_plan 4-1·D-011) — 코드가 읽는 데이터(지시서·채점 기준·보고서 틀·엔진 구성·원천 표·어휘·용어집)가
 #   패키지 폴더에서 저장소 루트 resources/로 옮겨, 세 타깃 모두 resources/를 폴더째 /app/deploy/resources로 COPY한다
-#   (코드는 paths.RES_ROOT = /app/deploy/resources로 찾음 — 앱별로 나누지 않음: 작고, research_judge 등을 모든 이미지 selftest가 씀).
+#   (코드는 paths.RES_ROOT = /app/deploy/resources로 찾음 — 앱별로 나누지 않음: 작고, 지시서 시험을 모든 이미지 selftest가 씀).
 # S3(10-26, refactor_plan 9-1·D-014) — 공용 코드가 common_tools/에서 common/{core,ai,store,check}로 옮겨, 세 타깃 모두
 #   common/을 /app/deploy/common으로 COPY한다. 단계 3 밖 파일(cli/·evaluation/·옛 options.conf·prompts/triple_extract)은 S4~S7까지
 #   common_tools/에 남아 그 COPY도 그대로 둔다. ENV PYTHONPATH(/app/deploy)는 그대로 — import 기준이 저장소 루트와 같음.
