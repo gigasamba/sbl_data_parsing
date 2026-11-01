@@ -83,7 +83,7 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 - 지금 바로 돌리려면 run_docs를 직접 부른다(옛 `trigger.sh night`는 11-01에 지움).
 
 ### 2-3. 상주 컨테이너
-`data-pipeline-parse`·`data-pipeline-structure`는 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업을 돌리고, MCP `parse_document` 작업 서비스도 `data-pipeline-parse` 안에서 돈다. 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/etl.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
+`data-pipeline-parse`·`data-pipeline-structure`는 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업을 돌리고, MCP `parse_document` 작업 서비스도 `data-pipeline-parse` 안에서 돈다. 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/ops.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
 ```bash
 docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-parse data-pipeline-structure
 ```
@@ -115,7 +115,7 @@ docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-p
 ### 4-1. EDW 쿼리 도구(EQ1) 설정 — `describe_edw`·`query_edw`
 LLM 에이전트가 직접 SELECT를 보내 EDW(SQL Server)를 읽는 도구 2개. 집계·가공은 에이전트 몫이고, 이 도구는 원본 행만 돌려준다. 보안 경계(읽기 전용·표 허용 목록·상한)는 코드([mcp_server/services/edw_query.py](../../mcp_server/services/edw_query.py))가 강제하지만, **운영자가 아래를 준비해야 실제로 안전**하다.
 
-1. **EDW 읽기 계정**(`common.connections.rdb.read` — [settings.md#op-03](../prd/settings.md#op-03)) — 파이프라인 원천 조회(원천 목록·`AI.FileStorageMap`·`AI.ParsingMeta`)와 함께 쓰는 계정.
+1. **EDW 읽기 계정**(`common.connections.rdb.read` — [ops.md#op-03](../prd/ops.md#op-03)) — 파이프라인 원천 조회(원천 목록·`AI.FileStorageMap`·`AI.ParsingMeta`)와 함께 쓰는 계정.
    - `SELECT` 권한만 준다. 그 밖의 권한은 주지 않는다(DDL·DML·`EXEC`·시스템 프로시저 전부 거부).
    - 검색 MCP 프로세스는 시작할 때 쓰기 계정 항목(`common.connections.rdb.write`)을 설정 객체에서 비운다(`edw_read_only()` — 공용 settings.yaml에 있어도 쓰지 않음). 파일 자체는 컨테이너가 읽을 수 있으므로, 완전히 떼려면 mcp-server에 쓰기 항목이 없는 설정 파일을 따로 붙인다.
    - ⚠️ 같은 계정이라 `query_edw`도 파이프라인이 읽는 표(`AI.FileStorageMap`·`AI.ParsingMeta`)를 읽을 수 있다. 막으려면 `EDW_QUERY_TABLES_STRICT=1`과 `EDW_QUERY_TABLES`로 좁힌다.

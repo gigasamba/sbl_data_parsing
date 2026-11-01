@@ -32,7 +32,7 @@
 - 파일: `mcp_server/services/search/clientscope.py`, `supersede.py`, `common/core/docmeta.py`.
 - 고칠 것(reference 비교(사용자 grill 10-30, 원본은 git 밖) M3·T2 — 버그): `client` 판정을 운영 10-28 방식으로 — 별칭 그룹으로 정확히 일치, `sf_acc_name`이 비었을 때만 라벨로 판정, 목록은 OR로 받는다. 파일: `mcp_server/services/search/search_svc.py`, `clientscope.py`.
 - 결정(사용자 10-30 PRD grill): C6 — 검색의 고객 거르기는 EDW에서 조인한 고객(`client_edw`)만 쓴다. 본문에서 찾은 고객(`clients_doc`)은 참고용으로만 둔다. LAS는 EDW 고객이 비어 고객 거르기에서 늘 빠진다(원천별 스키마라 LAS는 따로 검색됨).
-- 결정(허브 10-31, 최신 결정 우선): C6이 이긴다 — 고객 거르기는 `client_edw`만. 위 T2의 '`sf_acc_name`이 비었을 때만 라벨로 판정'은 없앤다(별칭 그룹 정확 일치·목록 OR은 남김 — 별칭 CSV는 [etl.md#pl-38](etl.md#pl-38) 0.2.0 몫). 근거의 `client` = `client_edw`, `clients_doc`은 따로 둔 참고 칸.
+- 결정(허브 10-31, 최신 결정 우선): C6이 이긴다 — 고객 거르기는 `client_edw`만. 위 T2의 '`sf_acc_name`이 비었을 때만 라벨로 판정'은 없앤다(별칭 그룹 정확 일치·목록 OR은 남김 — 별칭 CSV는 [load.md#pl-38](load.md#pl-38) 0.2.0 몫). 근거의 `client` = `client_edw`, `clients_doc`은 따로 둔 참고 칸.
 - Status: todo — client 판정 고침(T2, 라벨 대체 없이 — C6). 나머지는 done.
 
 <a id="mc-04"></a>
@@ -100,38 +100,38 @@
     - `project_id` — SFDC 프로젝트 코드.
     - `division` — EDW에 실제 있는 값을 그대로 받는다(`CD`·`DS`·`DP`는 예 — 허브 10-31).
     - `service_type` — `CDO`·`CMO DS`·`CMO DP`·`ADC`·`mRNA`·`New Platform`·`CMO DS (MTOP Shared)`.
-    - `FAQ_group` — FAQ 시트 값(DP·FMD·Study·Facility·Regulatory·Analytical·DS·CLD·Others) — FAQ만([etl.md#pl-39](etl.md#pl-39)).
-    - `doc_class` — `source_system`과 함께(SFDC 또는 LAS 분류값 — [etl.md#pl-33](etl.md#pl-33)).
+    - `FAQ_group` — FAQ 시트 값(DP·FMD·Study·Facility·Regulatory·Analytical·DS·CLD·Others) — FAQ만([extract.md#pl-39](extract.md#pl-39)).
+    - `doc_class` — `source_system`과 함께(SFDC 또는 LAS 분류값 — [transform.md#pl-33](transform.md#pl-33)).
     - `sf_op_id`·`sf_op_name` — SFDC 영업 기회 id(18자 `006…`)·이름.
     - `contract_id` — 계약 번호(CRMS 계약 코드, LAS 관리 번호).
     - `created_since`·`created_until` — 원천 등록 시각(시간대 없으면 KST). `created_at`이 없는 문서는 빠진다.
   - "하드 거르기 최소 1개"는 권고만(G5).
   - 출력 맨 위: `question` · `evidence[]`(길이 k) · `evidence_status`(`found`·`weak`·`none`) · `filter`(정규화한 거르기 메아리) · `scope_docs`(맞은 문서 수, 0도 정상).
   - `evidence[]` 항목: `text` · `file_name`(`list_doc_fulltext`로 잇는 다리 — [mc-17](#mc-17)) · `page` · `line` · `section` · `client` · `contract_no` · `doc_date` · `version` · `superseded` · `chunk_key`. 운영에는 `file_path`도 있으나 뺀다(아래).
-  - `file_path` 키 제거(사용자 10-30 "mcp 기능에서 제거될 것이니 pass" · "reference 기준으로 하면 file_path 관련 부분 뺄거라 제거 대상으로 간주만 하고 일단 pass", D1 — 이 행에서만 다룸): gold `doc.file_path` 삭제([etl.md#pl-25](etl.md#pl-25))와 함께 0.2.0(C1·C2), 계약 변경이라 등급 A. 열린 점: 운영 `chunk_key`는 `<file_path>:<순번>` 꼴 — `file_path`를 빼면 키 바탕(`s3_key` 등)을 정해야 함 → 해소(10-31 결정 — `<doc_id>:<seq>`, 아래).
+  - `file_path` 키 제거(사용자 10-30 "mcp 기능에서 제거될 것이니 pass" · "reference 기준으로 하면 file_path 관련 부분 뺄거라 제거 대상으로 간주만 하고 일단 pass", D1 — 이 행에서만 다룸): gold `doc.file_path` 삭제([load-schema.md#pl-25](load-schema.md#pl-25))와 함께 0.2.0(C1·C2), 계약 변경이라 등급 A. 열린 점: 운영 `chunk_key`는 `<file_path>:<순번>` 꼴 — `file_path`를 빼면 키 바탕(`s3_key` 등)을 정해야 함 → 해소(10-31 결정 — `<doc_id>:<seq>`, 아래).
 - 결정(허브 10-31, 최신 결정 우선): 거르기 이름은 위 그대로 고정(계약). 스키마마다 거르기 이름 → 그 EDW 원본 칸 이름(D-1) 대응표를 코드에 하나씩 둔다. 근거 `client` = `client_edw`, `clients_doc`은 따로 참고 칸([mc-05](#mc-05)). 목록 값(`division` 등)은 예 — EDW에 있는 값을 받는다.
-- 필터용 칸 `doc_class`·`created_at`은 gold `doc`에 Alembic으로 더한다(M4 — [etl.md#pl-25](etl.md#pl-25)).
+- 필터용 칸 `doc_class`·`created_at`은 gold `doc`에 Alembic으로 더한다(M4 — [load-schema.md#pl-25](load-schema.md#pl-25)).
 - 남은 확인: 운영 MCP 서버 소스는 없음 — 명세 기준으로 새로 구현, 구하면 대조.
 - 파일: `mcp_server/routers/`, `mcp_server/schemas/`, `mcp_server/services/search/`.
 - 결정(2차 grill(사용자 10-30, 원본은 git 밖)):
   - G4: `source_system` 값은 `SFDC`·`CRMS`·`LAS`·`FAQ`로 통일, `-test`가 붙은 입력(`SFDC-test` 등)도 같은 뜻으로 받는다(두 도구 모두).
   - G5: "하드 필터 최소 1개"는 권고만 — 강제하지 않는다.
   - G6: `search` 속도 목표는 두지 않는다.
-  - G20(4차 grill(사용자 10-30)): `source_system`은 **필수, 값 하나** — 그 시스템의 gold 스키마만 찾는다([etl.md#pl-28](etl.md#pl-28)). 여러 시스템은 클라이언트가 여러 번 부른다.
+  - G20(4차 grill(사용자 10-30)): `source_system`은 **필수, 값 하나** — 그 시스템의 gold 스키마만 찾는다([load-schema.md#pl-28](load-schema.md#pl-28)). 여러 시스템은 클라이언트가 여러 번 부른다.
   - G7 → 사용자 10-30 PRD grill C1·C2로 바뀜: 0.1.0(10-30 릴리스)에는 들어가지 않았고 0.2.0에 싣는다. 1.0 전에는 MINOR에서도 계약·스키마를 깰 수 있다(버전 규칙 — 운영이 안정되면 1.0.0).
 - 결정(사용자 10-30 PRD grill): A9 — 필터·출력 축소 기준은 사용자 로컬 `reference/`(git 밖, 비밀값 포함 — 커밋·인용 금지)의 MCP 규약 문서를 보고 운영 최신판으로 이 행에 옮겨 적는다(필터 이름·뜻·출력 칸만, 접속 정보·회사 데이터 없이). D1 — MCP 근거의 `file_path` 없애기는 이 행 하나로 합친다(mc-01·pl-25·op-04에는 이 행 링크만).
 - (10-31 뒤집힘 — `<doc_id>:<seq>`, 아래) 결정(사용자 10-31 grill): 근거 `chunk_key`는 `<doc_key>:<순번>`(doc_key = 원본 내용 sha256, 계약 함수 `make_chunk_key`)으로 바꾼다 — 운영의 `<file_path>:<순번>`을 대신하며 file_path 제거와 함께 0.2.0, 등급 A.
 - 결정(사용자 10-31 grill): 근거 `chunk_key`는 `<doc_id>:<seq>`(gold `doc.doc_id` 자동 번호 — 위 `<doc_key>:<순번>`을 뒤집음). 스키마 5벌이 시퀀스 하나를 함께 써서 겹치지 않는다(허브 제안 — 사용자 확인 11-01). `make_chunk_key`·sha256 `doc_key`는 0.2.0에 없어진다.
 - 결정(사용자 11-01, reference ↔ 저장소 비교 — 0.2.0, 등급 A): 이 행에서 함께 지운다 — 이름 붙은 색인(`index_id`·AD41 코드·`deploy/host/compose/compose.index.yml`), 질문 없는 덤프 방식, 옛 입력 `methods`·`decompose`·`limit`, 옛 출력 `subs`·`store`·`images`·`notes`·`ms`와 근거 칸(운영 계약 밖).
-- Status: todo — 순서는 허브가 정함([etl.md#pl-32](etl.md#pl-32)).
+- Status: todo — 순서는 허브가 정함([load.md#pl-32](load.md#pl-32)).
 
 <a id="mc-17"></a>
 ## mc-17 · 원문 전송 도구 `list_doc_fulltext`·`get_doc_fulltext`
 - 결정(사용자 10-31 범위 축소 grill): 원문 도구 2개는 0.2.0에 **유지**(미루지 않음 — 사용자 선택 안 함).
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) M2·T3): 두 도구를 더한다(운영 명세 `05_mcp_tools_schema.md` §6). 새 도구 — 계약 추가라 검토 등급 A.
 - 파일: `mcp_server/routers/`, `mcp_server/services/`(새 파일).
-- 결정(2차 grill(사용자 10-30, 원본은 git 밖)): G1 — 목록은 EDW `ParsingMeta`의 `doc_class`·`sf_op_id`·`parsed_at`·`rep_engine`·`created_at`(G9 — `created_since`/`created_until` 거르기·출력, `get_doc_fulltext` 생성 범위 가드)을 읽는다(운영 계약 그대로, [etl.md#pl-25](etl.md#pl-25)). G4 — `source_system` 통일·`-test` 별칭. G7 — 0.1.0에 함께 싣고 따로 MAJOR 없음.
-- 결정(G19·G20 — 4차 grill(사용자 10-30), 위 G1 부분을 뒤집음): 두 도구는 EDW `ParsingMeta`를 읽지 않는다. 목록·거르기(`doc_class`·`sf_op_id`·`created_since/until`)·출력은 **시스템별 gold `doc`**에서 읽는다 — `doc`에 `rep_key`(silver 위치)와 `parsed_at`·`rep_engine`을 복사해 둔다. `get_doc_fulltext`의 등록 시각 가드도 `doc.created_at`. `source_system`은 필수, 값 하나([etl.md#pl-28](etl.md#pl-28)). EDW 장애가 원문 도구에 영향을 주지 않는다.
+- 결정(2차 grill(사용자 10-30, 원본은 git 밖)): G1 — 목록은 EDW `ParsingMeta`의 `doc_class`·`sf_op_id`·`parsed_at`·`rep_engine`·`created_at`(G9 — `created_since`/`created_until` 거르기·출력, `get_doc_fulltext` 생성 범위 가드)을 읽는다(운영 계약 그대로, [load-schema.md#pl-25](load-schema.md#pl-25)). G4 — `source_system` 통일·`-test` 별칭. G7 — 0.1.0에 함께 싣고 따로 MAJOR 없음.
+- 결정(G19·G20 — 4차 grill(사용자 10-30), 위 G1 부분을 뒤집음): 두 도구는 EDW `ParsingMeta`를 읽지 않는다. 목록·거르기(`doc_class`·`sf_op_id`·`created_since/until`)·출력은 **시스템별 gold `doc`**에서 읽는다 — `doc`에 `rep_key`(silver 위치)와 `parsed_at`·`rep_engine`을 복사해 둔다. `get_doc_fulltext`의 등록 시각 가드도 `doc.created_at`. `source_system`은 필수, 값 하나([load-schema.md#pl-28](load-schema.md#pl-28)). EDW 장애가 원문 도구에 영향을 주지 않는다.
 - 결정(사용자 10-30 PRD grill): C8 — 원문 전송 도구도 gold `doc.rep_key`를 읽는다(mc-15와 같음). C2 — 0.2.0.
 - Status: todo — 순서는 허브가 정함.
 
@@ -145,8 +145,8 @@
 <a id="mc-18"></a>
 ## mc-18 · `parse_document` 스캔 PDF 다시 지원
 - 결정(사용자 10-31): 지금은 스캔 PDF를 건너뛰고 안내만 보내지만 추후 다시 살린다. 이 행이 그 기억이다.
-- 지금(11-01 — [pl-03](parse.md#pl-03)): 엔진 범위가 stack 하나라 `.pdf_image`(OCR·VLM 엔진뿐)는 이 서비스(OCR·VLM 안 돎)에서 돌 엔진이 없다 — `pipeline/mcp_parse_service.py` `skip_note`(글자층 표본 < 20자)·`empty_note`(run_all `NO_JOB_MARK`)가 빈 결과 + 임시 안내를 돌려준다.
-- 할 일(정할 것): 스캔 PDF에 어떤 엔진을 돌릴지(OCR·VLM — 응답 시간·자원, [rn-03](etl.md#rn-03) CPU 우선과 함께) · 안내 문구 지우기 · MCP 출력 계약(등급 A).
+- 지금(11-01 — [pl-03](transform.md#pl-03)): 엔진 범위가 stack 하나라 `.pdf_image`(OCR·VLM 엔진뿐)는 이 서비스(OCR·VLM 안 돎)에서 돌 엔진이 없다 — `pipeline/mcp_parse_service.py` `skip_note`(글자층 표본 < 20자)·`empty_note`(run_all `NO_JOB_MARK`)가 빈 결과 + 임시 안내를 돌려준다.
+- 할 일(정할 것): 스캔 PDF에 어떤 엔진을 돌릴지(OCR·VLM — 응답 시간·자원, [rn-03](ops.md#rn-03) CPU 우선과 함께) · 안내 문구 지우기 · MCP 출력 계약(등급 A).
 - 파일: `pipeline/mcp_parse_service.py`, `tests/server/pipeline/test_parse_svc.py`.
 - Status: todo
 
@@ -171,7 +171,7 @@
 - 이유: 클라이언트가 아직 적재되지 않은 파일을 묻는다.
 - 무엇: 경로(inbox 루트 아래) 또는 base64 내용을 127.0.0.1:8766의 파싱 서비스에 Bearer 토큰으로 넘긴다. 글, 표준 표, 사실, 엔진, 시간을 돌려주고 시간 초과면 `job_id`.
 - 파일: `mcp_server/services/parse_proxy.py`, `pipeline/mcp_parse_service.py`.
-- 스캔 PDF(11-01 — [pl-03](parse.md#pl-03) stack 하나): 파이프라인 없이 빈 결과 + 안내 "스캔 PDF — 지금은 text 파싱 결과 없음(OCR·VLM 미실행, 추후 지원 예정)" — 다시 지원은 [mc-18](#mc-18).
+- 스캔 PDF(11-01 — [pl-03](transform.md#pl-03) stack 하나): 파이프라인 없이 빈 결과 + 안내 "스캔 PDF — 지금은 text 파싱 결과 없음(OCR·VLM 미실행, 추후 지원 예정)" — 다시 지원은 [mc-18](#mc-18).
 - Status: done
 
 <a id="mc-09"></a>

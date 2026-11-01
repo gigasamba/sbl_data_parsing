@@ -10,9 +10,9 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 이유(사용자 10-29/10-30): 겹치는 문서가 너무 많고 요건이 PRD 밖에 흩어져 있다.
 - 무엇: 문서를 줄이고 짧게, 결정과 요건은 남김. 긴 문서는 소제목을 둔다. 사람이 읽는 문서는 한국어. `docs/history/`에 이력(refactor_plan, refactor.md의 낡은 C 항목 — C-35, C-41 합성 부분, C-63, C-05/06, C-18/20/22/23/24/26/28, C-25/30 — run_docs 버그·속도 이력, 패치 이력, 릴리스 §8–9)을 둔다. `docs/requirements/*`는 PRD로 옮긴다. CLAUDE.md에서 규칙이 아닌 내용은 PRD/README/INDEX로 옮긴다. PRD와 겹치는 C 항목(C-31/32/33/50/53/58)은 "PRD xx-nn으로 옮김" 한 줄과 남은 서버 확인만 남긴다. 크기 상한은 안내일 뿐.
 - 1부(10-30): PRD를 카테고리로 — ID는 그대로, ID마다 한글 이름(`<a id>` + `## pl-24 · 이름`), `docs/PRD.md`와 `docs/prd/`를 카테고리 파일 6개(etl, parse, mcp, settings, test, doc)로 나누고 gaps.md는 각 파일 끝 "코드와 다른 점 · 지울 코드"로 흩음.
-- 2부(10-30, `feature/doc-cleanup-2`): CLAUDE.md는 규칙·하네스 명령만(기준선·핑거프린트 값 → [test.md#e2-02](test.md#e2-02), 옛 절 번호 → `docs/INDEX.md` Glossary, 지난 기록 → `docs/history/`). `docs/requirements/run_docs_req.md` → [etl.md#pl-10](etl.md#pl-10) 요약 + `docs/history/run_docs_req.md` 원문. `docs/operations/*` 압축(절 번호 유지 — 코드 주석이 가리킴). `refactor_plan.md`·run_docs 버그·속도 이력·patch-history·release §8–9 → `docs/history/`.
+- 2부(10-30, `feature/doc-cleanup-2`): CLAUDE.md는 규칙·하네스 명령만(기준선·핑거프린트 값 → [test.md#e2-02](test.md#e2-02), 옛 절 번호 → `docs/INDEX.md` Glossary, 지난 기록 → `docs/history/`). `docs/requirements/run_docs_req.md` → [ops.md#pl-10](ops.md#pl-10) 요약 + `docs/history/run_docs_req.md` 원문. `docs/operations/*` 압축(절 번호 유지 — 코드 주석이 가리킴). `refactor_plan.md`·run_docs 버그·속도 이력·patch-history·release §8–9 → `docs/history/`.
 - 결정(사용자 10-31 grill): 3부 카테고리 재편(etl·parse → extract·transform·load, settings·실행 관리 → ops — ID 그대로, 위치·링크만)은 열린 문서 브랜치(op-08, prd-grill-1031, gold-per-system)가 develop에 들어간 직후 한 PR로 한다. 새 행(op-08, pl-42·43·44)도 그때 배정한다. -3a의 pl-03은 그 뒤 rebase. CLAUDE.md §6-5 스모크 경로는 S5(10-30)로 이미 고침 — 확인 대기 아님.
-- Status: dev — 1부 병합(PR #21). 2부는 `feature/doc-cleanup-2`. CLAUDE.md §6-5(`list-smoke10`)는 사용자 확인 대기로 그대로.
+- Status: dev — 1부 병합(PR #21). 2부는 `feature/doc-cleanup-2`. 3부(카테고리 재편) 11-01 `feature/do04-reorg` — etl·parse·settings → extract·transform(+ transform-cleanup)·load(+ load-schema)·ops(+ ops-settings), ID 그대로. CLAUDE.md §6-5(`list-smoke10`)는 사용자 확인 대기로 그대로.
 
 <a id="do-02"></a>
 ## do-02 · `docs/INDEX.md`의 `## Glossary`
@@ -27,7 +27,7 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 이유: PR #4 교차 확인에서 낡은 줄이 나왔다.
 - 고칠 것: C-35/C-39/C-41이 지운 `SYNTHETIC_TRUTH`/`PADDLE_PYTHON`/`PHASE_REPORT_LEGACY`를 아직 부름("10-29 지움, 옮기지 않음" 표시). "CLAUDE.md 3절" 링크 9개 → §4. 부록 1 HEAD 행 = CLAUDE.md §4 값. C 항목이 PRD 행을 가리키게(C-31 pl-26, C-52 pl-23, C-54 pl-12, C-60 pl-13, C-61 pl-17, C-56 e2-12, C-53 e2-14, C-33 pl-18, C-32 pl-19, C-50 pl-20). pl-21에서 `paddle_python`/`phase_report_legacy`를 뺌(8d211bf에서 이미 지움).
 - 검토자 역할(사용자 10-29 grill): "engine-qa / be-qa"는 사람이 없는 역할 이름이었다. 등급 A 검토 = 사용자, Claude가 변경을 설명하는 grill-me 세션으로. refactor.md(8줄과 C 행)의 역할 이름을 바꾸고 CLAUDE.md §5-3에 그렇게 적는다.
-- `valid_env/eval_sets/` 지움([settings.md#pl-21](settings.md#pl-21)) — CLAUDE.md §6-5(`list-smoke10.txt`), `valid_env/README.md`, `docs/prd/test.md`의 참조를 고친다.
+- `valid_env/eval_sets/` 지움([ops-settings.md#pl-21](ops-settings.md#pl-21)) — CLAUDE.md §6-5(`list-smoke10.txt`), `valid_env/README.md`, `docs/prd/test.md`의 참조를 고친다.
 - 또: CLAUDE.md §6-3 기준선을 다시 잰다(selftest 89/88, pytest 142/8 — 10-29에 시험 파일을 지움).
 - 끝남 10-30(`feature/refactor-sync`, PR #20 병합): refactor.md 동기화(do-04의 refactor.md 몫 포함 — 옛 항목은 `docs/history/refactor_c_items.md`로). CLAUDE.md 몫(§5-3 검토자 줄·§6-3 기준선·§4 지문 줄·§6-5 `list-smoke10.txt`)은 사용자 확인 뒤 따로(다른 세션 요청만으로 CLAUDE.md를 고치지 않음).
 - Status: done
@@ -87,11 +87,11 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 고칠 곳(허브 점검 10-31 — 줄 번호는 그날 기준):
   - settings를 읽기 전에 `DOCKER=docker`로 잡는 스크립트 5개 — `deploy/host/scripts/settings_env.sh:48`, `mcp_up.sh:12`, `run_tool.sh:20`, `trigger.sh:42`, `deploy/release/ship_stage.sh:21` → `$(command -v podman || echo docker)`.
   - `run_docs.py`에 `--code <dir>` 인자와 `DOCKER` 설정이 필요(지금은 맨 `docker exec`).
-  - `deploy/host/compose/compose.pipeline.yml`의 `${INDEX_CONF_DIR:?}`가 모든 podman-compose 실행을 깨뜨림 — `index_a`/`index_b` 정리는 [etl.md#pl-19](etl.md#pl-19)와 함께.
+  - `deploy/host/compose/compose.pipeline.yml`의 `${INDEX_CONF_DIR:?}`가 모든 podman-compose 실행을 깨뜨림 — `index_a`/`index_b` 정리는 [load.md#pl-19](load.md#pl-19)와 함께.
   - `load.sh`가 저장소에 없고, `ship_stage.sh`의 저장소 이름·폴더 구조가 README와 다름.
   - README:439 앞에 `mkdir -p /srv/rag/code`가 필요.
   - env-guide의 check_env 명령 → `run_tool.sh`로.
-  - `NIGHTLY_PUBLISH` 0/1 어긋남 — [etl.md#pl-26](etl.md#pl-26)이 이 칸을 지운다(링크만).
+  - `NIGHTLY_PUBLISH` 0/1 어긋남 — [load.md#pl-26](load.md#pl-26)이 이 칸을 지운다(링크만).
   - 재부팅 대비 `podman-restart.service`, parse 서비스 keepalive.
   - podman-compose 폐쇄망 설치가 문서에 없음.
 - 0.2.0 업그레이드에 넣을 것: 이미지 안 `migrate` + `chown 10001`·권한 640(settings.yaml), 되돌리기는 `settings.yaml.0.1.0` 복원, DB 백업 → `migrate check` → `up`, 전체 재처리 시간·디스크 계획, 그동안 밤 타이머 멈춤.
@@ -99,8 +99,8 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 한 것(10-31·11-01 `feature/op10-server-install`):
   - `DOCKER`: 셸 env > settings.yaml `ops.host.docker` > podman > docker(`settings_env.sh` `docker_default` — 설정을 읽은 뒤 정함). `mcp_up.sh`가 설정 전에 docker로 못 박던 것 지움. `ship_stage.sh`·`load.sh`도 podman 우선.
   - `run_docs.py`: `--code <dir>`(설정 배치 모듈 찾기 — 기본 이 스크립트의 코드 폴더, 없으면 `/srv/rag/code/live`) · `docker exec`·`inspect` 12곳이 `ops.host.docker`를 따름.
-  - `index_a`·`index_b` → `deploy/host/compose/compose.index.yml`(쓸 때만 덧붙임 — [pl-19](etl.md#pl-19)에서 지움) — `INDEX_CONF_DIR` 없이 compose가 돎.
+  - `index_a`·`index_b` → `deploy/host/compose/compose.index.yml`(쓸 때만 덧붙임 — [pl-19](load.md#pl-19)에서 지움) — `INDEX_CONF_DIR` 없이 compose가 돎.
   - `deploy/release/load.sh` 커밋 · `ship_stage.sh`가 이미지 저장소 배치 하나(`sbl_images/load.sh` · `<판>/BUILD.txt` · `<판>/<이미지>/` 45MB 조각) — 개발·운영(bake) 같은 배치.
   - 문서: README §5-0·§5-2·§5-3·§5-5(설치 길 하나 · `mkdir -p /srv/rag/code` · podman-compose 폐쇄망 설치 · `podman-restart` · 상주 트리거 재부팅 뒤 확인), server-guide·env-guide·release-and-patch는 링크, release-and-patch §5-7 0.2.0 올리기·되돌리기(이미지 안 migrate 표준 입력·출력 — PC에서 확인), refactor.md C-71.
-  - 남김: 상주 파싱 서비스 전용 keepalive 타이머는 만들지 않음(재부팅은 `podman-restart`, 그 뒤 확인 절차만) · `NIGHTLY_PUBLISH`는 [pl-26](etl.md#pl-26) 몫.
+  - 남김: 상주 파싱 서비스 전용 keepalive 타이머는 만들지 않음(재부팅은 `podman-restart`, 그 뒤 확인 절차만) · `NIGHTLY_PUBLISH`는 [pl-26](load.md#pl-26) 몫.
 - Status: done (11-01, feature/op10-server-install)
