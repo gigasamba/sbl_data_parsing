@@ -1495,12 +1495,16 @@ if __name__ == "__main__":
     setarg.apply()  # --set 이름=값(S9 Step A — 한 번 실행 덮기, 서버 포함 · 호스트 run_docs.py 문서별 파싱이 결과 폴더 등을 넘김)
     utf8_stdout()
     from common.core.runlog import session
-    from pipeline.shared import runtrace
 
     subcommand = next((x for x in sys.argv[1:] if not x.startswith("-")), "")
     traced = subcommand in TRACED_COMMANDS  # 점검·설정 명령은 추적하지 않음(시작 0.5초 절약)
+    trace: contextlib.AbstractContextManager = contextlib.nullcontext()
+    if traced:  # MCP 이미지는 cli.py·config.py만 포함 — 문서 처리 명령에서만 단계 코드를 import
+        from pipeline.shared import runtrace
+
+        trace = runtrace.run(subcommand, sys.argv[1:])
     with (
         session("pipeline"),
-        runtrace.run(subcommand, sys.argv[1:]) if traced else contextlib.nullcontext(),
+        trace,
     ):  # op-01 — run_id 생성·pipe_run, 하위 프로세스가 이어받음
         main()

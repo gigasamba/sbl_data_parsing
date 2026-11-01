@@ -35,7 +35,7 @@ _META_TEXT_LIMIT = 2048
 
 
 def _estimate(value, limit):
-    """보관 추정: 문자열은 UTF-8 최대 4바이트/글자, 노드당 64바이트. 초과 즉시 종료.
+    """보관 추정: 문자열은 UTF-8 최대 4바이트/글자, 정수는 실제 크기, 다른 노드는 64바이트.
 
     입력 복사/인코딩 없이 반복자로 순회한다. 순환·다량의 작은 요소·미지원 객체도
     상한에서 생략한다. 실제 RSS나 SDK 입력 크기의 상한은 아니다.
@@ -51,7 +51,7 @@ def _estimate(value, limit):
         nodes += 1
         if nodes > _ESTIMATE_MAX_NODES:
             return None
-        size += 64
+        size += sys.getsizeof(item) if isinstance(item, int) and not isinstance(item, bool) else 64
         if isinstance(item, str):
             size += 4 * len(item)
         elif isinstance(item, bytes):

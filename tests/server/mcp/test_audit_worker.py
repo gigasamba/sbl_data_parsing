@@ -248,6 +248,41 @@ def test_byte_budget():
     assert processing_bytes == [size, size]
 
 
+def test_large_integer_byte_budget():
+    huge = int("9" * 4000)
+    actual = sys.getsizeof(huge)
+    assert actual > 1024
+    for value in (0, 1, -1, huge, -huge):
+        size = sys.getsizeof(value)
+        assert audit._estimate(value, size) == size
+        assert audit._estimate(value, size - 1) is None
+    for value in (None, False, True, 1.5):
+        assert audit._estimate(value, 64) == 64
+
+    rows = []
+    worker = audit.Worker(max_queue_bytes=1024)
+    with (
+        patch.object(audit, "_WORKER", worker),
+        patch.object(audit.Call, "_write") as write,
+        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)),
+    ):
+        try:
+            # 입력·결과 각각의 큰 정수를 큐나 활성 처리에 보관하지 않고 메타로 보낸다.
+            audit.start(lambda query: None, (huge,)).finish(None)
+            audit.start(lambda: None).finish(huge)
+            assert worker.stats()["body_omitted"] == 2
+            assert worker.stats()["pending_bytes"] == 0 and worker.stats()["queued"] == 0
+            assert worker.pending == 0 and worker.queue.empty()
+            write.assert_not_called()
+        finally:
+            worker.close()
+    assert not worker.thread.is_alive() and len(rows) == 2
+    for row in rows:
+        assert row["args"] is None and row["result"] is None
+        assert row["result_keys"] == {"audit_body_omitted": "queue_full"}
+        assert row["err"] == "audit_queue_full"
+
+
 def test_estimate_bound():
     class CountingList(list):
         visited = 0

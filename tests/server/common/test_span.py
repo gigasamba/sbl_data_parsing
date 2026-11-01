@@ -145,24 +145,37 @@ def test_observe_rows_and_carry():
 
 def test_gated_popen_wait_split_and_child_context():
     rows, patched = _capture()
+    clock = mock.Mock(return_value=0.0)
 
     def slow_mem(**kw):
-        time.sleep(0.06)
+        clock.return_value += 0.125
         return 10.0
 
     def slow_cpu(**kw):
-        time.sleep(0.03)
+        clock.return_value += 0.25
         return 0.1
 
     run_id = str(uuid.uuid4())
-    with patched, jsonlog.context(run_id=run_id), mock.patch.object(RS, "wait_mem", slow_mem), mock.patch.object(RS, "wait_cpu", slow_cpu):
+    with patched, jsonlog.context(run_id=run_id):
         with span.span("extract.parse", doc_id="a.pdf") as sp:
             code = "import json; from common.core import jsonlog; print(json.dumps(jsonlog.get_context()))"
-            proc = RS.gated_popen([sys.executable, "-c", code], cwd=paths.PROJ_ROOT, stdout=subprocess.PIPE, text=True)
-            out, _ = proc.communicate(timeout=60)
+            # launcher 안의 두 문만 가상 시각으로 측정한다. span·자식 대기 제한은 실제 시각을 쓴다.
+            with (
+                mock.patch.object(time, "monotonic", clock),
+                mock.patch.object(RS, "wait_mem", slow_mem),
+                mock.patch.object(RS, "wait_cpu", slow_cpu),
+            ):
+                proc = RS.gated_popen([sys.executable, "-c", code], cwd=paths.PROJ_ROOT, stdout=subprocess.PIPE, text=True)
+            try:
+                out, _ = proc.communicate(timeout=60)
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.communicate(timeout=10)
+            assert proc.returncode == 0
             outer_id = sp.span_id
     row = rows[0]
-    assert row["wait_mem_ms"] >= 55 and 25 <= row["wait_cpu_ms"] < 55, row  # 두 문의 대기가 따로 쌓임
+    assert (row["wait_mem_ms"], row["wait_cpu_ms"]) == (125, 250), row  # 합계 375가 아니라 두 문의 대기가 따로 쌓임
     assert row["metrics"]["launches"] == 1 and "wait_launch_ms" in row["metrics"] and "settle_ms" in row["metrics"]
     child = json.loads(out.strip().splitlines()[-1])
     assert child["run_id"] == run_id and child["span_id"] == outer_id  # 자식이 run_id와 부모 span을 이어받음

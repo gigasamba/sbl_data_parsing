@@ -233,9 +233,21 @@ def test_cpu_ms_includes_child_process_work():
 def test_cpu_ms_via_gated_popen_child():
     """P2-6: gated_popen으로 띄운 자식 작업도 포함(실제 프로덕션 경로)."""
     rows, patched = _capture()
-    with patched, jsonlog.context(run_id=str(uuid.uuid4())):
+    with (
+        patched,
+        jsonlog.context(run_id=str(uuid.uuid4())),
+        mock.patch.object(RS, "wait_mem", return_value=None),
+        mock.patch.object(RS, "wait_cpu", return_value=None),
+    ):
         with span.span("load.pgvector", "load", cpu=True):
-            RS.gated_popen([sys.executable, "-c", _BUSY]).wait()
+            # CPU 계측 시험은 머신 부하와 분리하고 실제 자식의 CPU 사용은 그대로 잰다.
+            proc = RS.gated_popen([sys.executable, "-c", _BUSY])
+            try:
+                assert proc.wait(timeout=60) == 0
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait(timeout=10)
     cpu = rows[0]["cpu_ms"]
     assert cpu is None or cpu >= 150, cpu
 
