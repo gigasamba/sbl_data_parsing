@@ -115,7 +115,7 @@ def test_setting_secrets():
         safe = json.dumps(jsonlog.masked(source), ensure_ascii=False)
         assert secret not in safe and quote(secret, safe="") not in safe
         assert jsonlog.masked(dsn_password) == "***"
-        assert jsonlog.masked("abc") == "abc"  # 4자 미만은 값 기반 대조만 생략.
+        assert jsonlog.masked("abc") == "***"  # 짧은 값은 토큰 경계에서 보호.
         assert source["nested"][0]["value"] == secret
         log = jsonlog.setup("testvalues")
         try:
@@ -154,3 +154,36 @@ def test_mask_linear():
         started = time.monotonic()
         assert _mask(value) == value
         assert time.monotonic() - started < 1.5  # 기존 제곱 시간 패턴은 1MiB에서도 멎는다.
+
+
+def test_short_and_json_options():
+    import contextlib
+    import io
+    from unittest.mock import patch
+
+    options = '{"driver":"ODBC Driver 18 for SQL Server","host":"localhost","token_budget":"visible-budget","password":"option-password","nested":{"api_key":"nested-key"},"items":["unlabelled-value",{"pwd":"xy"}]}'
+    warning = io.StringIO()
+    with settings.isolated(PG_PASSWORD="abc", RDB_CONNECT_KWARGS=options), patch.object(jsonlog, "_SHORT_WARNED", False):
+        with contextlib.redirect_stderr(warning):
+            source = {"query": "abc", "argv": ["--query", "abc"], "text": "x=abc; _abc_ abc1 1abc 한abc abc한", "long": "abcd"}
+            safe = jsonlog.masked(source)
+            assert safe["query"] == "***" and safe["argv"] == ["--query", "***"]
+            assert safe["text"] == "x=***; _***_ abc1 1abc 한abc abc한" and safe["long"] == "abcd"
+            assert source["query"] == "abc"
+            values = [
+                "ODBC Driver 18 for SQL Server",
+                "localhost",
+                "option-password",
+                "nested-key",
+                "unlabelled-value",
+                "xy",
+                "visible-budget",
+            ]
+            assert jsonlog.masked(values) == [values[0], values[1], "***", "***", values[4], "***", "visible-budget"]
+            jsonlog.masked("abc")
+        notice = warning.getvalue()
+        assert len(notice.splitlines()) == 1 and "connections.pg.password" in notice
+        assert all(secret not in notice for secret in ("abc", "xy", "option-password", "nested-key"))
+    for secret in ("a", "ab"):
+        with settings.isolated(PG_PASSWORD=secret):
+            assert jsonlog.masked([secret, "x=" + secret + ";", secret + "d"]) == ["***", "x=***;", secret + "d"]

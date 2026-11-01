@@ -35,7 +35,9 @@ def test_payload():
     with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
         call = audit.start(do_parse_document, kwargs=source)
         call.finish(result)
+        assert audit.drain()
         call.finish(result)
+        assert audit.drain()
     assert len(rows) == 1
     row = rows[0]
     args = json.loads(row["args"])
@@ -56,6 +58,7 @@ def test_payload():
     with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
         call = audit.start(do_search, ("한" * 9000,))
         call.finish({"error": "token=do-not-store"})
+        assert audit.drain()
     assert rows[-1]["args_truncated"] and len(rows[-1]["args"].encode()) <= 16384
     assert rows[-1]["args_bytes"] == len(_encoded({"question": "한" * 9000}))
     assert rows[-1]["status"] == "error" and "do-not-store" not in rows[-1]["err"]
@@ -69,6 +72,7 @@ def test_result_keys():
     with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
         with audit.request_context({}, {}, {"method": "tools/call", "params": {"name": "search"}}):
             audit.start(lambda: None).finish(result)
+            assert audit.drain()
     keys = rows[0]["result_keys"]
     assert keys["chunk_ids"] == [h["chunk_id"] for h in hits]
     assert keys["rank"] == list(range(2000)) and keys["total_chunks"] == 2000
@@ -102,14 +106,17 @@ def test_dispatch_audit():
             assert out.count({"error": "timeout"}) == 2
             await asyncio.sleep(0.12)  # abandoned가 끝나도 감사 행은 늘지 않는다.
         assert stopped.is_set()
+        assert audit.drain()
         assert len(rows) == 4
         assert any(e == "mcp.thread.finished" for e in events)
         assert all(r["queue_wait_ms"] >= 0 for r in rows)
         dispatch._LIMITER = None
         with mc.senv(MCP_TOOL_TIMEOUT_SEC="0"):
             assert await dispatch._bg(lambda: {"answer": 2}) == {"answer": 2}
+        assert audit.drain()
         assert rows[-1]["status"] == "ok"
         assert await dispatch._bg_long(lambda: {"engine": "x"}, 1) == {"engine": "x"}
+        assert audit.drain()
         assert rows[-1]["status"] == "ok"
         dispatch._LIMITER = None
         dispatch._INFLIGHT = 2
@@ -118,6 +125,7 @@ def test_dispatch_audit():
         dispatch._INFLIGHT = 0
         assert await dispatch._bg_long(slow, -9.99) == {"error": "timeout"}
         await asyncio.sleep(0.1)
+        assert audit.drain()
         assert rows[-1]["status"] == "timeout"
 
         def broken():
@@ -129,6 +137,7 @@ def test_dispatch_audit():
             pass
         else:
             raise AssertionError("tool exception swallowed")
+        assert audit.drain()
         assert rows[-1]["status"] == "error" and "do-not-store" not in rows[-1]["err"]
         with patch.object(audit.logsink, "emit", side_effect=RuntimeError("sink failed")):
             assert await dispatch._bg(lambda: 42) == 42
@@ -174,10 +183,12 @@ def test_http_context():
             params = {"name": "query_edw", "arguments": {"sql": "select 1"}, "_meta": {"user": "meta-user"}}
             payload = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": params}
             r = await client.post("/mcp", json=payload)
+            assert audit.drain()
             assert r.status_code == 401 and rows[-1]["status"] == "unauthorized"
             hdr = {"Authorization": "Bearer secret", "X-MCP-Client": "test", "X-MCP-User": "header-user", "X-Request-Id": request_id}
             r = await client.post("/mcp", json=payload, headers=hdr)
             assert r.status_code == 200 and r.headers["x-request-id"] == request_id
+            assert audit.drain()
             assert rows[-1]["request_id"] == request_id and rows[-1]["user_id"] == "header-user"
             assert rows[-1]["agent"] == "test" and rows[-1]["tool"] == "query_edw"
             assert json.loads(rows[-1]["args"]) == {"sql": "select 1"}
@@ -185,6 +196,7 @@ def test_http_context():
             assert observations[-1][2] == "mcp:test"
             del hdr["X-MCP-User"]
             r = await client.post("/mcp", json=payload, headers=hdr)
+            assert audit.drain()
             assert r.status_code == 200 and rows[-1]["user_id"] == "meta-user"
             assert rows[-1]["remote_addr"] == "127.0.0.1"
         assert CALLER.get() == original and audit._REQUEST.get() is None
@@ -229,6 +241,7 @@ def test_initialize_contract():
             }
             response = await client.post("/mcp", json=payload)
             assert response.status_code == 200, response.text
+            assert audit.drain()
             assert len(rows) == 1 and rows[0]["tool"] == "initialize"
             assert rows[0]["client_info"] == {"name": "audit-test", "version": "1", "protocolVersion": LATEST_PROTOCOL_VERSION}
             assert "serverInfo" in json.loads(rows[0]["result"])
@@ -236,6 +249,7 @@ def test_initialize_contract():
                 response = await client.post(
                     "/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "edw_meta", "arguments": {}}}
                 )
+            assert audit.drain()
             assert response.status_code == 200 and len(rows) == 2
             assert rows[-1]["tool"] == "edw_meta" and rows[-1]["status"] == "ok"
             assert rows[-1]["client_info"] is None and rows[-1]["session_id"] is None
@@ -335,6 +349,7 @@ def test_setting_audit():
     ):
         call = audit.start(lambda query: None, ({"nested": [secret, "mcp-secret-value"]},))
         call.finish({"nested": [secret, "mcp-secret-value"]}, err=secret)
+        assert audit.drain()
         assert secret not in json.dumps(rows) and "mcp-secret-value" not in json.dumps(rows)
         assert audit._body({"query": secret}, 1000)[0] == '{"query": "***"}'
 
@@ -388,6 +403,7 @@ def test_audit_off_loop():
                 assert (await client.get("/health")).status_code == 200
                 assert time.monotonic() - started < 0.1
                 assert await task == {"error": "busy"}
+                assert audit.drain()
                 assert seen == [2]  # busy 판정/거부 뒤에만 입력 처리, 업무 함수는 안 돌림.
             entered.clear()
             dispatch._INFLIGHT = 0
@@ -398,6 +414,7 @@ def test_audit_off_loop():
                 assert (await client.get("/health")).status_code == 200
                 assert time.monotonic() - started < 0.1
             result = await task
+            assert audit.drain()
             assert result["job_id"] == "j" and rows[-1]["result_truncated"]
             args = json.loads(rows[-1]["args"])["content_b64"]
             assert args["bytes"] == 8 * 1024 * 1024

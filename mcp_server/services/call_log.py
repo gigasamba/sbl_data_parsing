@@ -10,16 +10,15 @@ import contextvars
 import hashlib
 import inspect
 import json
+import queue
 import sys
 import threading
 import time
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-import anyio
-
 from common import pipeline_version
-from common.core import jsonlog
+from common.core import exitclean, jsonlog
 from common.store import logsink
 from mcp_server import config as mc
 from mcp_server.services.search.server_state import CALLER
@@ -27,6 +26,8 @@ from mcp_server.services.search.server_state import CALLER
 _REQUEST: contextvars.ContextVar[dict | None] = contextvars.ContextVar("mcp_audit", default=None)
 _LOG = None
 _LOG_LOCK = threading.Lock()
+_WORKER = None
+_WORKER_LOCK = threading.Lock()
 
 
 def _debug(event, **fields):
@@ -236,39 +237,171 @@ class Call:
                     _debug("mcp.thread.finished", request_id=self.row["request_id"], ended_at=self.thread_ended)
 
     def finish(self, result=None, *, status=None, err=None):
+        """시각/상태를 호출 시 확정하고 본문 처리를 전용 워커에 맡긴다(대기 없음)."""
         try:
             with self.lock:
                 if self.done:
                     return
                 self.done = True
                 now = time.perf_counter()
-                self._prepare()
-                if status == "timeout":
-                    self.abandoned = self.thread_started is not None and self.thread_ended is None
-                    _debug("mcp.thread.abandoned", request_id=self.row["request_id"], running=self.abandoned, ended_at=self.thread_ended)
-            inferred, inferred_err = _status(result)
+                inferred, inferred_err = _status(result)
+                self.abandoned = status == "timeout" and self.thread_started is not None and self.thread_ended is None
+                row = {
+                    **self.row,
+                    "ts": self.ts,
+                    "status": status or inferred,
+                    "err": err or inferred_err,
+                    "duration_ms": round((now - self.started) * 1000),
+                    "queue_wait_ms": round(((self.thread_started or now) - self.started) * 1000),
+                    "app_version": pipeline_version(),
+                }
+            _worker().submit(self, result, row)
+        except Exception:
+            # 기록 실패는 업무 응답/예외에 전파하지 않는다.
+            pass
+
+    def _write(self, result, row, emit):
+        try:
+            self._prepare()
             text, size, truncated, digest = _body(result, self.output_limit)
-            row = {
-                **self.row,
-                "ts": self.ts,
-                "result": text,
-                "result_bytes": size,
-                "result_truncated": truncated,
-                "result_sha256": digest,
-                "result_keys": jsonlog.masked(result_keys(self.row["tool"], result)),
-                "status": status or inferred,
-                "err": jsonlog.masked(err or inferred_err),
-                "duration_ms": round((now - self.started) * 1000),
-                "queue_wait_ms": round(((self.thread_started or now) - self.started) * 1000),
-                "app_version": pipeline_version(),
-            }
-            # 공통 sink가 DB/장애 시 파일을 맡는다. Handler로 중복 기록하지 않는다.
-            logsink.emit("mcp_call", jsonlog.masked(row))
+            row.update(
+                **{k: self.row[k] for k in ("args", "args_bytes", "args_truncated") if k in self.row},
+                result=text,
+                result_bytes=size,
+                result_truncated=truncated,
+                result_sha256=digest,
+                result_keys=result_keys(self.row["tool"], result),
+            )
+            # 원본 args/result는 읽기만 한다. 공통 sink가 DB/대체 파일을 맡는다.
+            emit(jsonlog.masked(row))
+            if row["status"] == "timeout":
+                _debug("mcp.thread.abandoned", request_id=row["request_id"], running=self.abandoned, ended_at=self.thread_ended)
             with jsonlog.context(request_id=row["request_id"]):
                 _logger().info("%s %s", row["tool"], row["status"], extra={"event": "mcp.call", "duration_ms": row["duration_ms"]})
         except Exception:
-            # 기록 실패로 본래 응답·예외를 바꾸지 않는다. 예외 본문은 비밀을 포함할 수 있다.
             _debug("mcp.audit.failed", tool=self.row.get("tool"))
+
+
+class Worker:
+    """전용 데몬 하나, 본문 대기 최대 64건. 포화 시 본문 없는 메타만 비차단 sink로."""
+
+    def __init__(self, capacity=64):
+        self.queue = queue.Queue(maxsize=capacity)
+        self.condition = threading.Condition()
+        self.pending = 0
+        self.omitted = 0
+        self.dropped = 0
+        self.closed = False
+        self.expired = False
+        self.active = False
+        self.thread = threading.Thread(target=self._run, name="mcp-audit", daemon=True)
+        exitclean.on_exit(self._close_at_exit, timeout=jsonlog.cfg().log.shutdown_sec, priority=-10)
+        self.thread.start()
+
+    def submit(self, call, result, row):
+        with self.condition:
+            try:
+                if self.closed:
+                    raise queue.Full
+                self.queue.put_nowait((call, result, row))
+                self.pending += 1
+                self.condition.notify_all()
+                return
+            except queue.Full:
+                self.omitted += 1
+        # 포화 시 본문을 붙잡지 않는다. sink 자체 포화는 기존 dropped 집계.
+        row.update(
+            args=None,
+            result=None,
+            args_truncated=True,
+            result_truncated=True,
+            result_keys={"audit_body_omitted": "queue_full"},
+            err="audit_queue_full",
+        )
+        logsink.emit("mcp_call", jsonlog.masked(row))
+
+    def _run(self):
+        while True:
+            with self.condition:
+                while not self.pending and not self.closed:
+                    self.condition.wait()
+                if self.closed and not self.pending:
+                    return
+                item = self.queue.get_nowait()
+                self.active = True
+            try:
+                call, result, row = item
+                call._write(result, row, self._emit)
+            finally:
+                # 다음 대기 중 큰 응답의 참조를 유지하지 않는다.
+                del item, call, result, row
+                with self.condition:
+                    self.pending -= 1
+                    self.active = False
+                    self.condition.notify_all()
+
+    def drain(self, *, deadline=None):
+        deadline = deadline if deadline is not None else time.monotonic() + jsonlog.cfg().log.shutdown_sec
+        with self.condition:
+            while self.pending:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                self.condition.wait(remaining)
+        return True
+
+    def close(self, *, deadline=None):
+        deadline = min(deadline if deadline is not None else float("inf"), time.monotonic() + jsonlog.cfg().log.shutdown_sec)
+        if not self.condition.acquire(timeout=max(0, deadline - time.monotonic())):
+            return False
+        try:
+            self.closed = True
+            self.condition.notify_all()
+        finally:
+            self.condition.release()
+        self.thread.join(timeout=max(0, deadline - time.monotonic()))
+        with self.condition:
+            if self.active and not self.expired:
+                self.dropped += 1
+                self.expired = True
+            while not self.queue.empty():
+                self.queue.get_nowait()
+                self.pending -= 1
+                self.dropped += 1
+        return True
+
+    def _emit(self, row):
+        with self.condition:
+            if self.expired:
+                return
+        logsink.emit("mcp_call", row)
+
+    def _close_at_exit(self, *, deadline):
+        if self.close(deadline=deadline) is False:
+            return False
+        # drain 도중 처음 생성된 sink도 같은 deadline에 비운다.
+        return logsink.shutdown(deadline=deadline)
+
+    def stats(self):
+        with self.condition:
+            return {"pending": self.pending, "queued": self.queue.qsize(), "body_omitted": self.omitted, "dropped": self.dropped}
+
+
+def _worker():
+    global _WORKER
+    with _WORKER_LOCK:
+        if _WORKER is None:
+            _WORKER = Worker()
+        return _WORKER
+
+
+def drain(*, deadline=None):
+    """시험/명시 flush 전용. 도구 응답 경로에서는 호출하지 않는다."""
+    return _WORKER.drain(deadline=deadline) if _WORKER else True
+
+
+def stats():
+    return _WORKER.stats() if _WORKER else {"pending": 0, "queued": 0, "body_omitted": 0, "dropped": 0}
 
 
 class _NoLog:
@@ -290,17 +423,9 @@ def start(fn, args=(), kwargs=None):
         return _NoLog()
 
 
-async def finish(call, *args, **kwargs):
-    """직렬화/해시/저장을 스레드로 격리. 취소 중에도 원래 업무 예외를 보존한다."""
-    from functools import partial
-
-    with anyio.CancelScope(shield=True):
-        await anyio.to_thread.run_sync(partial(call.finish, *args, **kwargs))
-
-
-async def prepare(call):
-    """입력 감사는 busy 판정 뒤·기존 도구 timeout 시작 전에 스레드에서 수행."""
-    await anyio.to_thread.run_sync(call._prepare)
+def finish(call, *args, **kwargs):
+    """감사 처리를 대기하지 않고 전용 워커에 제출한다(anyio limiter와 독립)."""
+    call.finish(*args, **kwargs)
 
 
 def unauthorized():

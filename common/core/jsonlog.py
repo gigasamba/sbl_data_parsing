@@ -17,13 +17,14 @@ import logging
 import os
 import re
 import sys
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote, quote_plus, unquote, urlsplit
 
 from common.config.settings import cfg, secret_values
 from common.core import paths
-from common.core.runlog import _mask
+from common.core.runlog import _LABEL, _mask
 
 _IDS = ("request_id", "run_id", "span_id")
 try:
@@ -35,6 +36,9 @@ if not isinstance(_inherited, dict):
 _CONTEXT: contextvars.ContextVar[dict | None] = contextvars.ContextVar("applog_context", default=None)
 _LOGGERS: dict[str, logging.Logger] = {}
 _STREAMS: dict = {}
+_SHORT_WARNED = False
+_SECRET_LOCK = threading.Lock()
+_SECRET_LABEL = re.compile(r"(?:" + _LABEL + r")$", re.IGNORECASE)
 
 
 def get_context():
@@ -63,43 +67,62 @@ def context(**ids):
 
 
 def _secret_variants():
-    values = secret_values()
-    for value in tuple(values):
-        # 비밀 칸이 JSON 연결 옵션이면 개별 문자열 값도 비밀이다.
+    global _SHORT_WARNED
+    fields = secret_values(named=True)
+    values = set(fields.values())
+    short_fields = set()
+    for name, value in fields.items():
+        extracted = {value}
+        # JSON 옵션은 비밀 라벨의 문자열 값만 수집(라벨 없는 리스트 제외).
         if value.startswith(("{", "[")):
             try:
                 pending = [json.loads(value)]
                 while pending:
                     item = pending.pop()
                     if isinstance(item, dict):
-                        pending.extend(item.values())
+                        for key, child in item.items():
+                            if isinstance(child, str) and _SECRET_LABEL.search(key):
+                                extracted.add(child)
+                            elif isinstance(child, (dict, list)):
+                                pending.append(child)
                     elif isinstance(item, list):
-                        pending.extend(item)
-                    elif isinstance(item, str):
-                        values.add(item)
+                        pending.extend(child for child in item if isinstance(child, (dict, list)))
             except (ValueError, TypeError):
                 pass
-        # 비밀 DSN 전체뿐 아니라 URL/ODBC 안 비밀번호가 따로 인용된 경우도 보호한다.
         if "://" in value:
             try:
                 password = urlsplit(value).password
                 if password:
-                    values.add(unquote(password))
+                    extracted.add(unquote(password))
             except ValueError:
                 pass
-        values.update(m.group(1).strip("\"'{}") for m in re.finditer(r"(?i)(?:password|pwd)\s*=\s*([^;]+)", value))
-    variants = set()
+        extracted.update(m.group(1).strip("\"'{}") for m in re.finditer(r"(?i)(?:password|pwd)\s*=\s*([^;]+)", value))
+        values.update(extracted)
+        if any(0 < len(item) < 4 for item in extracted):
+            short_fields.add(name)
+    if short_fields:
+        with _SECRET_LOCK:
+            warn = not _SHORT_WARNED
+            _SHORT_WARNED = True
+        if warn:
+            print("[applog] 비밀 설정은 토큰 경계에서만 마스킹: " + ", ".join(sorted(short_fields)), file=sys.stderr)
+    variants = {}
     for value in values:
-        if len(value) >= 4:
-            variants.update((value, quote(value, safe=""), quote_plus(value)))
-            variants.update(json.dumps(value, ensure_ascii=ascii_only)[1:-1] for ascii_only in (False, True))
-    return sorted(variants, key=len, reverse=True)
+        if value:
+            forms = {value, quote(value, safe=""), quote_plus(value)}
+            forms.update(json.dumps(value, ensure_ascii=ascii_only)[1:-1] for ascii_only in (False, True))
+            for form in forms:
+                # 길이가 늘어난 이스케이프 표기도 원래 비밀값의 경계 정책 유지.
+                variants[form] = variants.get(form, True) and len(value) < 4
+    return sorted(variants.items(), key=lambda item: len(item[0]), reverse=True)
 
 
 def masked(value):
     """중첩 JSON/문자열의 패턴 및 현재 settings 비밀 칸 값을 가린 사본.
 
-    값 대조는 오탐 방지를 위해 4자 이상만 한다(짧은 값도 라벨 패턴은 적용).
+    4자 이상은 부분 문자열, 1~3자는 앞뒤가 문자·숫자가 아닌 토큰 경계에서만
+    가린다. 짧은 비밀값이 다른 문자·숫자에 붙으면 값 대조로 가려지지 않는다.
+    설정 시작은 거부하지 않으며 해당 설정 칸만 프로세스당 한 번 stderr로 알린다.
     DSN 비밀번호와 URL/JSON 이스케이프 표기도 포함하며 원본은 바꾸지 않는다.
     CLI의 분리된 인자, 라벨 없는 오류/traceback도 같은 API를 사용한다.
     """
@@ -119,8 +142,11 @@ def _masked(value, secrets):
     if isinstance(value, (list, tuple)):
         return [_masked(item, secrets) for item in value]
     if isinstance(value, str):
-        for secret in secrets:
-            value = value.replace(secret, "***")
+        for secret, bounded in secrets:
+            if bounded:
+                value = re.sub(r"(?<![^\W_])" + re.escape(secret) + r"(?![^\W_])", lambda _: "***", value)
+            else:
+                value = value.replace(secret, "***")
         return _mask(value) if ":" in value or "=" in value else value
     if value is None or isinstance(value, (int, float, bool)):
         return value

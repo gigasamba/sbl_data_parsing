@@ -44,28 +44,27 @@ async def _bg(fn, *a, **kw):
     queue_cap = _queue_cap(limiter)
     budget = limiter.total_tokens + queue_cap if queue_cap else None
     if budget is not None and _INFLIGHT >= budget:
-        await call_log.finish(call_log.start(fn, a, kw), {"error": "busy"})
+        call_log.finish(call_log.start(fn, a, kw), {"error": "busy"})
         return {"error": "busy"}
     timeout = float(mc.cfg().server.tool_timeout_sec)  # 기본 30(모델) — 요청마다
     _INFLIGHT += 1
     audit = call_log.start(fn, a, kw)
     call = partial(audit.run, fn, *a, **kw)
     try:
-        await call_log.prepare(audit)
         if not timeout:
             result = await anyio.to_thread.run_sync(call, limiter=limiter)
-            await call_log.finish(audit, result)
+            call_log.finish(audit, result)
             return result
         try:
             with anyio.fail_after(timeout):
                 result = await anyio.to_thread.run_sync(call, limiter=limiter, abandon_on_cancel=True)
-            await call_log.finish(audit, result)
+            call_log.finish(audit, result)
             return result
         except TimeoutError:
-            await call_log.finish(audit, {"error": "timeout"}, status="timeout")
+            call_log.finish(audit, {"error": "timeout"}, status="timeout")
             return {"error": "timeout"}
     except BaseException as exc:
-        await call_log.finish(audit, status="error", err=str(exc))
+        call_log.finish(audit, status="error", err=str(exc))
         raise
     finally:
         _INFLIGHT -= 1
@@ -80,23 +79,22 @@ async def _bg_long(fn, budget, *a, **kw):
     queue_cap = _queue_cap(limiter)
     bq = limiter.total_tokens + queue_cap if queue_cap else None
     if bq is not None and _INFLIGHT >= bq:
-        await call_log.finish(call_log.start(fn, a, kw), {"error": "busy"})
+        call_log.finish(call_log.start(fn, a, kw), {"error": "busy"})
         return {"error": "busy"}
     timeout = float(budget) + 10.0
     _INFLIGHT += 1
     audit = call_log.start(fn, a, kw)
     call = partial(audit.run, fn, *a, **kw)
     try:
-        await call_log.prepare(audit)
         with anyio.fail_after(timeout):
             result = await anyio.to_thread.run_sync(call, limiter=limiter, abandon_on_cancel=True)
-        await call_log.finish(audit, result)
+        call_log.finish(audit, result)
         return result
     except TimeoutError:
-        await call_log.finish(audit, {"error": "timeout"}, status="timeout")
+        call_log.finish(audit, {"error": "timeout"}, status="timeout")
         return {"error": "timeout"}
     except BaseException as exc:
-        await call_log.finish(audit, status="error", err=str(exc))
+        call_log.finish(audit, status="error", err=str(exc))
         raise
     finally:
         _INFLIGHT -= 1

@@ -112,7 +112,7 @@ class Sink:
         self._closed = False
         self._draining = True
         self._thread = threading.Thread(target=self._run, name="applog", daemon=True)
-        exitclean.on_exit(self.close)
+        exitclean.on_exit(self.close, timeout=self.shutdown_sec)
         self._thread.start()
 
     def emit(self, table, row):
@@ -203,13 +203,13 @@ class Sink:
             if self._stop.is_set() and (self.queue.empty() or not self._draining):
                 return
 
-    def close(self):
+    def close(self, *, deadline=None):
         """join + 대체 파일 I/O 전체에 단일 deadline; 미완료 행은 dropped.
 
         막힌 OS 파일 쓰기는 취소할 수 없으므로 데몬에서만 실행한다. 늦게 끝난
         I/O는 집계하지 않으며 종료가 파일 잠금/파일 시스템을 기다리지 않는다.
         """
-        deadline = time.monotonic() + self.shutdown_sec
+        deadline = min(deadline if deadline is not None else float("inf"), time.monotonic() + self.shutdown_sec)
         # SIGTERM이 주 스레드의 emit 잠금 안에서 끼어들 수 있다. 그때는 atexit가 재시도.
         if not self._state.acquire(timeout=min(0.1, max(0, deadline - time.monotonic()))):
             return False
@@ -271,12 +271,17 @@ def stats():
     )
 
 
-def shutdown():
+def shutdown(*, deadline=None):
     global _SINGLETON
-    with _SINGLE_LOCK:
-        sink, _SINGLETON = _SINGLETON, None
-    if sink:
-        sink.close()
+    if not _SINGLE_LOCK.acquire(timeout=-1 if deadline is None else max(0, deadline - time.monotonic())):
+        return False
+    try:
+        sink = _SINGLETON
+        if deadline is None:
+            _SINGLETON = None
+    finally:
+        _SINGLE_LOCK.release()
+    return sink.close(deadline=deadline) if sink else True
 
 
 class Handler(logging.Handler):

@@ -21,11 +21,11 @@ _FLUSHERS: list = []
 _CLOSING = threading.Event()  # 정리를 시작한 뒤 띄운 자식은 바로 끝냄(데몬 작업 스레드가 정리 중에 새 자식을 띄우는 경우)
 
 
-def on_exit(callback):
-    """종료 전에 호출할 멱등 flush 함수 등록(함수 안에서 대기 상한을 지킬 것, False 반환은 atexit 재시도)."""
+def on_exit(callback, *, timeout=None, priority=0):
+    """멱등 flush 등록. timeout 지정 함수는 공유 deadline을 받으며 낮은 priority부터 실행."""
     with _LOCK:
-        if callback not in _FLUSHERS:
-            _FLUSHERS.append(callback)
+        if not any(item[0] == callback for item in _FLUSHERS):
+            _FLUSHERS.append((callback, timeout, priority))
 
 
 def remove_at_exit(path):
@@ -101,10 +101,14 @@ def _cleanup(lock_timeout=-1):
     end = time.monotonic() + GRACE
     for p, g in live:
         _send(p, signal.SIGTERM, g)
-    for flush in flushers:
+    budgets = [timeout for _, timeout, _ in flushers if timeout is not None]
+    flush_deadline = min(end, time.monotonic() + min(budgets)) if budgets else end
+    for flush, timeout, priority in sorted(flushers, key=lambda item: item[2]):
         try:
-            if flush() is False:  # SIGTERM이 호출자의 잠금 안에 끼어들면 atexit에서 재시도
-                on_exit(flush)
+            if (
+                flush(deadline=flush_deadline) if timeout is not None else flush()
+            ) is False:  # SIGTERM이 호출자의 잠금 안에 끼어들면 atexit에서 재시도
+                on_exit(flush, timeout=timeout, priority=priority)
         except Exception:
             pass  # 종료 정리 하나의 실패가 나머지를 막지 않음
     if os.name != "nt":

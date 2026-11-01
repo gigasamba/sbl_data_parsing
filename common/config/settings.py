@@ -1246,19 +1246,22 @@ def _secret_paths(model_cls):
     return tuple(path for path, field, _ in walk(model_cls) if is_secret(field))
 
 
-def secret_values():
+def secret_values(*, named=False):
     """로깅 마스킹 전용: 등록된 설정 객체의 비밀 칸 값. 반환값은 출력/저장하지 않는다.
 
     앱을 import하지 않으며 Cache.get()으로 덮기/시험 설정 변경도 반영한다.
+    named=True는 경고용 설정 경로→값 사전이며 값은 출력하지 않는다.
     """
-    values = set()
+    values, names = set(), {}
     for cache in list(Cache._instances):
         model = cache.get()
         for path in _secret_paths(cache.app_cls):
             value = _get(model, path)
             if isinstance(value, SecretStr):
-                values.add(value.get_secret_value())
-    return values
+                raw = value.get_secret_value()
+                values.add(raw)
+                names[f"{cache.app_cls.__module__}.{path}"] = raw
+    return names if named else values
 
 
 # ── common 절 모델 ─────────────────────────────────────────────────────────────────────────
