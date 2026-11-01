@@ -178,7 +178,7 @@ with settings.isolated(APPLOG_SHUTDOWN_SEC="1", APPLOG_DB_ENABLED="1"):
         worker.thread.join(30)
         sink._thread.join(30)
         assert not worker.thread.is_alive() and not sink._thread.is_alive()
-        print(json.dumps({"elapsed":elapsed,"rows":len(rows)}))
+        print("AUDIT_TEST_RESULT:" + json.dumps({"elapsed":elapsed,"rows":len(rows)}))
 """
     proc = subprocess.Popen(
         [sys.executable, "-c", program], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=settings.child_env()
@@ -190,7 +190,9 @@ with settings.isolated(APPLOG_SHUTDOWN_SEC="1", APPLOG_DB_ENABLED="1"):
         proc.communicate()
         raise
     assert proc.returncode == 0, stdout + stderr
-    assert json.loads(stdout)["rows"] == 1
+    # 서버 이미지는 JSON 로그도 stdout에 쓴다. 시험 결과 줄만 읽어 로그와 섞이지 않게 한다.
+    results = [json.loads(line.removeprefix("AUDIT_TEST_RESULT:")) for line in stdout.splitlines() if line.startswith("AUDIT_TEST_RESULT:")]
+    assert len(results) == 1 and results[0]["rows"] == 1
 
 
 def test_short_secrets_sink():
