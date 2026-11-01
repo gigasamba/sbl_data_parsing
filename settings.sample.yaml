@@ -183,7 +183,6 @@ extract:
     rotate_s0_min: 150.0  # [파라미터] 빠른 회전 검토에서 힌트 각도를 믿는 최소 OCR 점수 · 기본 150.0 · 값: 0 이상
   # ─── 파싱 엔진·쪽 처리 ───
   doc_parallel: 1  # 대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개) · 기본 1 · 값: 0 이상 정수
-  engine_scope:  # [파라미터] 문서마다 돌릴 엔진 범위(stack = 형식별 stack.json 목록만 / all = 등록 엔진 전부) · 값: stack·all 중 하나
   fill_merged: true  # 표에서 병합 셀이 덮은 빈 칸을 원본 칸 값으로 채울지 · 기본 true · 값: true·false
   hidden_overlap_max: 20  # [파라미터] '숨은 글자-그림 겹침' 신호로 쪽 VLM 후보에 올릴 쪽 수 상한(쪽, 0=끔) · 기본 20 · 값: 0 이상 정수 (0 = 끔)
   kreuzberg_prose_filter: true  # kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔) · 기본 true · 값: true·false

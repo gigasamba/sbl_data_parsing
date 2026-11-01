@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from common.config import settings as C
-from common.core.paths import APP_ROOT
+from common.core.paths import APP_ROOT, STACK_FILE
 from pipeline import config as pc
 from pipeline.extract.engines import registry
 from pipeline.extract.run_all import (
@@ -35,39 +35,35 @@ def selftest():
             got[raw] = _default_procs()
     assert got == want, got
     print("[selftest] S7c1 — --procs 기본(PIPE_PROCS: auto → auto · 없음·빈 값 → 1 · 숫자 그대로) 옛 판정과 같음 통과")
-    # PE1(2026-10-07) — PARSE_ENGINE_SCOPE: stack이면 문서 형식 키(stack.json과 같은 키)의 parse 목록으로만 좁힘
+    # PE1(2026-10-07) · pl-03(10-30, stack 하나) — 문서 형식 키(stack.json과 같은 키)의 parse 목록으로만 좁힘
     pdf_cands, doc_cands = ([e for e in registry.engines_for(x) if e not in OCR_ENGINES] for x in (".pdf", ".doc"))  # OCR 기본 끔(10-29)
     assert "pymupdf" in pdf_cands and "kreuzberg" in pdf_cands and len(pdf_cands) > 2  # 좁혀짐을 보려면 전체가 2개보다 많아야
     stack_parse = {".pdf_text": ["pymupdf", "kreuzberg"]}
     missing = set()
     a_pdf = Path("a.pdf")
-    assert engines_for_doc(a_pdf, "stack", stack_parse, {"a.pdf": ".pdf_text"}, missing) == [
-        e for e in pdf_cands if e in stack_parse[".pdf_text"]
-    ]
+    assert engines_for_doc(a_pdf, stack_parse, {"a.pdf": ".pdf_text"}, missing) == [e for e in pdf_cands if e in stack_parse[".pdf_text"]]
     assert missing == set()  # 키 있음 — 로그 없음
     # 키 없는 형식(.doc 등) — 지금처럼 그대로(핵심 엔진 합집합 대체, 누락 방지) + 형식별 1회만 로그
-    assert engines_for_doc(Path("b.doc"), "stack", stack_parse, {"b.doc": ".doc"}, missing) == doc_cands
+    assert engines_for_doc(Path("b.doc"), stack_parse, {"b.doc": ".doc"}, missing) == doc_cands
     assert missing == {".doc"}
     assert (
-        engines_for_doc(Path("c.doc"), "stack", stack_parse, {"c.doc": ".doc"}, missing) == doc_cands
+        engines_for_doc(Path("c.doc"), stack_parse, {"c.doc": ".doc"}, missing) == doc_cands
     )  # 두 번째도 그대로(로그는 1회만, missing 그대로)
     assert missing == {".doc"}
-    # all(기본) — stack.json 내용과 무관하게 지금 동작 그대로(실험 경로·명시 --engines 호출이 이 env를 안 건드리므로 영향 없음)
-    assert engines_for_doc(a_pdf, "all", stack_parse, {"a.pdf": ".pdf_text"}, set()) == pdf_cands
-    print("[selftest] PE1 — PARSE_ENGINE_SCOPE=stack 형식별 좁히기(키 없으면 그대로+1회 로그) · all=이전과 동일 통과")
+    print("[selftest] PE1·pl-03 — stack 형식별 좁히기(키 없으면 핵심 엔진 합집합+1회 로그, all 길 없음) 통과")
 
     # 사용자 10-29 — .pdf_text 안 스캔 쪽 때문에 .pdf_image 엔진을 합치지 않음(대표 결과의 쪽 VLM이 그 쪽만 채움)
     stack_pi = {".pdf_text": ["pymupdf"], ".pdf_image": ["rapidocr_ko", "qwen_vlm"]}
-    assert engines_for_doc(Path("mixed.pdf"), "stack", stack_pi, {"mixed.pdf": ".pdf_text"}, set()) == ["pymupdf"]
+    assert engines_for_doc(Path("mixed.pdf"), stack_pi, {"mixed.pdf": ".pdf_text"}, set()) == ["pymupdf"]
     print("[selftest] 10-29 — .pdf_text 문서에 .pdf_image 엔진을 합치지 않음 통과")
 
     # 사용자 10-29 — OCR 엔진은 ocr_engine(PARSE_OCR_ENGINE) 켤 때만 · 기본은 이미지·스캔 문서도 VLM 엔진만
     png_stack = {".png": ["rapidocr_ko", "qwen_vlm"]}
     assert OCR_ENGINES == {"rapidocr_ko"}  # rapidocr(1.x) 10-30 지움 — pl-31
-    assert engines_for_doc(Path("x.png"), "stack", png_stack, {"x.png": ".png"}, set()) == ["qwen_vlm"]
-    assert not OCR_ENGINES & set(engines_for_doc(Path("x.png"), "all", {}, {}, set()))
+    assert engines_for_doc(Path("x.png"), png_stack, {"x.png": ".png"}, set()) == ["qwen_vlm"]
+    assert not OCR_ENGINES & set(engines_for_doc(Path("x.png"), {}, {}, set()))  # stack에 키 없음(합집합 대체)에도 OCR 기본 끔
     with pc.PIPE.env(PARSE_OCR_ENGINE="1"):
-        assert set(engines_for_doc(Path("x.png"), "stack", png_stack, {"x.png": ".png"}, set())) == {"rapidocr_ko", "qwen_vlm"}
+        assert set(engines_for_doc(Path("x.png"), png_stack, {"x.png": ".png"}, set())) == {"rapidocr_ko", "qwen_vlm"}
     print("[selftest] 10-29 — OCR 엔진 기본 끔(켜면 포함) 통과")
 
     # 사용자 10-29 — 형식당 엔진 2개 넘으면 설정 오류(진입점 resolve·run_all 같은 검사)
@@ -76,7 +72,6 @@ def selftest():
     assert over_limit({"parse": {".pdf_text": ["pymupdf", "kreuzberg"], ".png": ["qwen_vlm"]}}) == []
     bad = over_limit({"parse": {".docx": ["office", "anydoc", "kreuzberg"]}})
     assert len(bad) == 1 and ".docx" in bad[0], bad
-    from common.core.paths import STACK_FILE
 
     stack_file = json.loads(STACK_FILE.read_text(encoding="utf-8"))
     assert over_limit(stack_file) == [], "PC 기본 stack 표가 형식당 2개를 넘음"
@@ -129,7 +124,19 @@ def selftest():
     # '첫 실패' 기억을 서로 안 나눠 이 시험 전제가 깨짐(순차 동작만 확인)
     env = C.child_env(VLM_BASE_URL=None, VLM_MODEL=None, PIPE_PROCS="1")
     r = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir), "--out", str(odir), "--engines", "qwen_vlm"],
+        [
+            sys.executable,
+            "-m",
+            "pipeline.extract.run_all",
+            "--src",
+            str(sdir),
+            "--out",
+            str(odir),
+            "--engines",
+            "qwen_vlm",
+            "--stack",
+            str(STACK_FILE),
+        ],
         capture_output=True,
         text=True,
         env=env,
@@ -152,7 +159,19 @@ def selftest():
     env3 = C.child_env(VLM_BASE_URL=None, VLM_MODEL=None)  # 하위 프로세스(시험) 설정 — 덮기 파일(S7e2)
     env3["PARSE_RUN_ID"] = "20261007-999999"  # env 남김 — 내부 신호(5-3 H)
     r3 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir3), "--out", str(odir3), "--engines", "qwen_vlm"],
+        [
+            sys.executable,
+            "-m",
+            "pipeline.extract.run_all",
+            "--src",
+            str(sdir3),
+            "--out",
+            str(odir3),
+            "--engines",
+            "qwen_vlm",
+            "--stack",
+            str(STACK_FILE),
+        ],
         capture_output=True,
         text=True,
         env=env3,
@@ -164,7 +183,19 @@ def selftest():
     assert len(recs3) == 1 and recs3[0]["run_id"] == "20261007-999999", recs3
     env3.pop("PARSE_RUN_ID")
     r4 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir3), "--out", str(odir3), "--engines", "qwen_vlm"],
+        [
+            sys.executable,
+            "-m",
+            "pipeline.extract.run_all",
+            "--src",
+            str(sdir3),
+            "--out",
+            str(odir3),
+            "--engines",
+            "qwen_vlm",
+            "--stack",
+            str(STACK_FILE),
+        ],
         capture_output=True,
         text=True,
         env=env3,
@@ -189,7 +220,7 @@ def selftest():
                 json.dumps({"doc": doc5.name, "engine": e, "sha": sha5, "sec": 1, "error": "ValueError: document is encrypted"}) + chr(10)
             )
     r5 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir5), "--out", str(odir5)],
+        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir5), "--out", str(odir5), "--stack", str(STACK_FILE)],
         capture_output=True,
         text=True,
         env=C.child_env(PIPE_PROCS="1"),
@@ -209,7 +240,19 @@ def selftest():
     seed6 = {"doc": doc6.name, "engine": "plaintext", "sha": _sha(doc6), "sec": 1, "error": None}
     (odir6 / "runs.jsonl").write_text(json.dumps(seed6) + chr(10), encoding="utf-8")
     r7 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir6), "--out", str(odir6), "--engines", "plaintext"],
+        [
+            sys.executable,
+            "-m",
+            "pipeline.extract.run_all",
+            "--src",
+            str(sdir6),
+            "--out",
+            str(odir6),
+            "--engines",
+            "plaintext",
+            "--stack",
+            str(STACK_FILE),
+        ],
         capture_output=True,
         text=True,
         env=C.child_env(PIPE_PROCS="1"),

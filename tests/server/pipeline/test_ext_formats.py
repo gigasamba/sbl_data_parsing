@@ -30,10 +30,10 @@ def test_stack_lists_new_formats():
         assert sp[ext] and set(sp[ext]) <= set(registry.engines_for(ext)), (ext, sp[ext], registry.engines_for(ext))
     for ext in IMAGES:  # 이미지는 .jpg와 같은 엔진 — OCR 엔진은 ocr_engine 켤 때만이라 기본은 VLM 하나
         assert sp[ext] == sp[".jpg"], ext
-        assert engines_for_doc(Path("x" + ext), "stack", sp, {}, set()) == ["qwen_vlm"], ext
+        assert engines_for_doc(Path("x" + ext), sp, {}, set()) == ["qwen_vlm"], ext
     assert sp[".mhtml"] == sp[".mht"]
-    assert set(engines_for_doc(Path("x.mhtml"), "stack", sp, {}, set())) == {"mhtml", "kreuzberg"}
-    assert engines_for_doc(Path("x.hwpx"), "stack", sp, {}, set()) == ["hwpx"]
+    assert set(engines_for_doc(Path("x.mhtml"), sp, {}, set())) == {"mhtml", "kreuzberg"}
+    assert engines_for_doc(Path("x.hwpx"), sp, {}, set()) == ["hwpx"]
 
 
 def test_images_parse():
