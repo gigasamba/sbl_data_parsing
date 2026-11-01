@@ -239,14 +239,7 @@ def parse_cmd(seq, chan, scan, gate):
         else ()
     )
     scan_set = ("PREPARE_ROTATE=0",) if scan else ()  # 2026-10-23 B2 — 스캔 회전검토(OCR) 생략(스캔은 heavy → heavy_on과 병행)
-    scan_eng = (
-        (
-            " --engines anydoc,docx2python,html_stdlib,hwpx,kreuzberg,markitdown,mhtml,msg_extract,"
-            "office,plaintext,pymupdf,pymupdf4llm,qwen_vlm"
-        )
-        if scan
-        else ""
-    )  # rapidocr_ko 제외 — qwen_vlm이 rep 뼈대
+    # 11-01 — 스캔용 엔진 목록(scan_eng, rapidocr_ko 제외)은 지움: 스캔(.pdf_image)은 엔진 구성 파일이 qwen_vlm 하나만 줌(같은 동작)
     doc = sets(
         f"PIPE_OUT_ROOT={inside}",
         f"DOC_DIR_PREPARED={inside}/prepared",
@@ -261,7 +254,7 @@ def parse_cmd(seq, chan, scan, gate):
         f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && "
         f"echo [envcheck] gate={gate} 채널={chan}; "
         f"{DOC_MARK}={inside} {LIB_ENV} "
-        f"python -m pipeline.cli{doc} parse --source rdb:csv:{inside}/batch.csv{scan_eng}'"
+        f"python -m pipeline.cli{doc} parse --source rdb:csv:{inside}/batch.csv'"
     )
 
 

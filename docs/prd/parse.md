@@ -21,6 +21,7 @@
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P1): 엔진 범위는 `stack` 그대로(형식당 2개) — 서버 settings.yaml에 `all`을 적지 않는다.
 - C7(사용자 10-30 PRD grill): 비교 도구(`model_matrix`·`score_gold`·`mcp_eval` 등)는 두지 않는다([test.md#e2-10](test.md#e2-10)) — 비교는 필요할 때 다시 만든다. 엔진 비교 실험은 그때 stack json을 고쳐서 한다.
 - 결정(사용자 10-30(-c5 전달)): 엔진 범위는 `stack` 하나 — 유일한 방식이자 기본. 형식별 엔진은 `resources/config/pipeline_stack.json`에 명시한다. `PARSE_ENGINE_SCOPE` `all`과 `--engines all` 길을 지운다(`pipeline/cli.py` `_set_engine_scope_default`, `pipeline.extract.engine_scope`, `common/config/sample.py`의 옛 값). 비교 실험은 stack json을 고쳐서 한다. 참고: 운영 reference 서버는 `all`로 돌았지만 사용자는 stack만 골랐다.
+- 11-01(`feature/scope-cut-unused`, 허브 지시): `run_docs.py`의 스캔용 엔진 목록(`scan_eng` — `--engines …`로 rapidocr_ko를 뺀 목록)을 지우고 `pipeline_stack.json`의 `.pdf_image`를 `["qwen_vlm"]` 하나로 — 같은 동작(스캔은 VLM만, `extract.ocr_engine` 기본 꺼짐이라 OCR 엔진은 원래 걸러짐). 서버는 코드 폴더의 같은 파일을 읽어(11-01 struct 판 표 없앰) 오버레이 패치로 반영. 이미지 확장자 행(`rapidocr_ko`·`qwen_vlm`)은 그대로 — 0.2.0에서 `ocr_engine` 스위치를 없앨 때 같이 바꾼다.
 - Status: done — `all` 길 지움(11-01 `feature/pl03-stack-only`)
 
 <a id="pl-22"></a>
