@@ -100,9 +100,8 @@ class PipelineExtractOcr(Section):
 
 
 class PipelineExtractPrepare(Section):
-    REMOVED = frozenset({"rotate_fast"})  # 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
+    REMOVED = frozenset({"rotate_fast", "ocr"})  # 사용자 10-30(op-08) · ocr 11-01(rapidocr 1.x 길 지움 — 늘 3.x) — 지운 칸(남으면 경고만)
     link: str | None = F("auto", "PREPARE_LINK", "회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy")
-    ocr: str | None = F("auto", "PREPARE_OCR", "회전 검토용 OCR 엔진 선택: auto|v1|v3(v3=rapidocr 3.x 강제)", blank="keep")
     rotate: bool | None = F(True, "PREPARE_ROTATE", "스캔 PDF 회전 검토(OCR 점수) 켬/끔 — 0이면 생략하고 그대로 복사", off=("0",))
     rotate_lead: int | None = F(3, "PREPARE_ROTATE_LEAD", "빠른 회전 검토에서 기대 각도를 정하는 문서 맨 앞 쪽 수(개)")
     rotate_probe_fast: int | None = F(480, "PREPARE_ROTATE_PROBE_FAST", "빠른 회전 검토의 축소 점검 이미지 크기(px)")

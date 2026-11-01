@@ -352,7 +352,6 @@ VALUES = {
     "common.models.transport.transport": "adk·http 중 하나",
     "common.runtime.pipe_procs": "1 이상 정수 · auto 또는 비우면 자동 계산",
     "pipeline.connections.rdb.engine": "mssql·pg 중 하나",
-    "pipeline.extract.prepare.ocr": "auto·v1·v3 중 하나",
     "pipeline.transform.represent.post": "all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments)",
     "pipeline.transform.represent.rep_select": "first·acc·best 중 하나(그 밖 값 = best)",
     "pipeline.transform.structure.embed": "api·bge-m3·e5-small·e5-base·none 중 하나",

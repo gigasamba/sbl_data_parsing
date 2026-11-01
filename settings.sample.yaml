@@ -168,7 +168,6 @@ extract:
   # ─── 회전 준비(prepare) ───
   prepare:
     link: auto  # 회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy · 기본 auto · 값: auto·hardlink·symlink·copy 중 하나
-    ocr: auto  # [파라미터] 회전 검토용 OCR 엔진 선택: auto|v1|v3(v3=rapidocr 3.x 강제) · 기본 auto · 값: auto·v1·v3 중 하나
     rotate: true  # 스캔 PDF 회전 검토(OCR 점수) 켬/끔 · 기본 true · 값: true·false
     rotate_lead: 3  # [파라미터] 빠른 회전 검토에서 기대 각도를 정하는 문서 맨 앞 쪽 수(개) · 기본 3 · 값: 0 이상 정수
     rotate_probe_fast: 480  # [파라미터] 빠른 회전 검토의 축소 점검 이미지 크기(px) · 기본 480 · 값: 0 이상 정수

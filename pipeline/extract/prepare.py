@@ -228,29 +228,15 @@ def _drm_reason(p):
 
 
 def _ocr_lines(arr):
-    """글상자 [(box, text, conf)] — rapidocr_onnxruntime(1.x, 개발 PC 실측 기준)이 있으면 그것, 없으면 rapidocr 3.x 한국어 모델
-    (Docker 이미지 — rapidocr_ko와 같은 패키지·모델이라 이미지가 작아짐). PREPARE_OCR=v1|v3로 강제."""
+    """글상자 [(box, text, conf)] — rapidocr 3.x 한국어 모델(rapidocr_ko 엔진과 같은 패키지·모델).
+    (11-01 — 옛 rapidocr_onnxruntime 1.x 길과 설정 extract.prepare.ocr(auto|v1|v3)는 지움: 서버 이미지에는 1.x가 없어 늘 3.x였음.)"""
     if not _OCR:
-        want = pc.cfg().extract.prepare.ocr  # S7c — 설정 객체(blank keep: 옛 `get(X, "auto")` — `PREPARE_OCR=`은 '' 유지)
-        try:
-            if want == "v3":
-                raise ImportError
-            from rapidocr_onnxruntime import RapidOCR
+        from rapidocr import RapidOCR
 
-            _OCR.append(("v1", RapidOCR()))
-        except ImportError:
-            from rapidocr import RapidOCR
+        from pipeline.extract.engines.rapidocr.parser import ko_params  # OC1 — 엔진과 같은 설정·스레드 상한(병렬 prepare도 코어 다툼 없게)
 
-            from pipeline.extract.engines.rapidocr.parser import (
-                ko_params,
-            )  # OC1 — 엔진과 같은 설정·스레드 상한(병렬 prepare도 코어 다툼 없게)
-
-            _OCR.append(("v3", RapidOCR(params=ko_params())))
-    kind, eng = _OCR[0]
-    if kind == "v1":
-        res, _ = eng(arr, use_cls=False)
-        return list(res or [])
-    r = eng(arr, use_cls=False)
+        _OCR.append(RapidOCR(params=ko_params()))
+    r = _OCR[0](arr, use_cls=False)
     return list(zip(r.boxes.tolist(), r.txts, r.scores)) if r.boxes is not None else []
 
 
