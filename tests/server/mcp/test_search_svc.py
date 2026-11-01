@@ -486,7 +486,10 @@ def _selftest_evidence_rdb_meta():
         on = do_search("계약기준금액은?", k=5)
         by_name = {e["file_name"]: e for e in on["evidence"]}
         assert set(by_name) == {man_doc, other_doc}, by_name
-        assert by_name[man_doc]["version"] == row["version"], by_name  # manifest version이 우선(AD44)
+        assert by_name[man_doc]["version"] == row["version"], by_name  # version은 manifest 값만(AD44)
+        assert by_name[other_doc]["version"] is None and all(e["superseded"] is None for e in on["evidence"]), (
+            by_name
+        )  # mc-05 — 본문 추정값은 안 나감
         for e in on["evidence"]:
             assert tuple(e) == EVIDENCE_KEYS, e  # 근거는 12칸만(mc-16 — manifest의 다른 칸은 계약 밖)
     finally:

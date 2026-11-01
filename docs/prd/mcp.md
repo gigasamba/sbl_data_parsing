@@ -33,7 +33,8 @@
 - 고칠 것(reference 비교(사용자 grill 10-30, 원본은 git 밖) M3·T2 — 버그): `client` 판정을 운영 10-28 방식으로 — 별칭 그룹으로 정확히 일치, `sf_acc_name`이 비었을 때만 라벨로 판정, 목록은 OR로 받는다. 파일: `mcp_server/services/search/search_svc.py`, `clientscope.py`.
 - 결정(사용자 10-30 PRD grill): C6 — 검색의 고객 거르기는 EDW에서 조인한 고객(`client_edw`)만 쓴다. 본문에서 찾은 고객(`clients_doc`)은 참고용으로만 둔다. LAS는 EDW 고객이 비어 고객 거르기에서 늘 빠진다(원천별 스키마라 LAS는 따로 검색됨).
 - 결정(허브 10-31, 최신 결정 우선): C6이 이긴다 — 고객 거르기는 `client_edw`만. 위 T2의 '`sf_acc_name`이 비었을 때만 라벨로 판정'은 없앤다(별칭 그룹 정확 일치·목록 OR은 남김 — 별칭 CSV는 [etl.md#pl-38](etl.md#pl-38) 0.2.0 몫). 근거의 `client` = `client_edw`, `clients_doc`은 따로 둔 참고 칸.
-- Status: todo — client 판정 고침(T2, 라벨 대체 없이 — C6). 나머지는 done.
+- 구현(11-01 `feature/mcp-ops-parity`, 허브 지시 "운영이 version/superseded를 아직 내면 칸은 두고 추정만 멈춤"): 운영 계약(05 §2.4)에 `version`·`superseded`·`doc_date`가 남아 있어 칸은 둔다. 운영 예시 값은 모두 null이라 운영도 본문 추정을 하지 않는 것으로 본다 → `search` 근거의 `version`은 수집 manifest 값만(없으면 null), `superseded`는 늘 null(`shaping._evidence`). `doc_date`는 이 결정 밖이라 그대로. 본문 추정값(`common/core/docmeta.py`)은 안쪽 최신성 순위(L3-1)에만 남는다 — 순위를 EDW `created_at`으로 바꾸는 일은 남음. 시험: `test_search_svc` `_selftest_evidence_rdb_meta`.
+- Status: todo — client 판정 고침(T2, 라벨 대체 없이 — C6)·최신성 순위를 `created_at`으로. version·superseded 출력은 done(11-01).
 
 <a id="mc-04"></a>
 ## mc-04 · 집계 답
