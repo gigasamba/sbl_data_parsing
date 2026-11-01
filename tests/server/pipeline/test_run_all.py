@@ -399,11 +399,13 @@ def test_kill_group_reaps_grandchild():
 
 def test_vlm_child_env_caps_timeout():
     """10-29 M3 — VLM 엔진 자식의 VLM_TIMEOUT = min(models.vlm.timeout, vlm_page_sec) · 쪽당 제한이 더 길면 덮지 않음(None)."""
-    from common.config.settings import COMMON
+    from common.config.settings import COMMON, read_settings
     from pipeline.extract.run_all import _vlm_child_env
 
     with COMMON.env(VLM_TIMEOUT="180"), pc.PIPE.env(PARSE_VLM_PAGE_SEC="60"):
         env = _vlm_child_env()
-        assert env is not None and env["VLM_TIMEOUT"] == "60", env and env.get("VLM_TIMEOUT")
+        assert env is not None  # op-09 — 값은 env가 아니라 자식의 덮기 파일(SETTINGS_FILE overrides)로
+        over = read_settings(env["SETTINGS_FILE"])[1]
+        assert over.get("VLM_TIMEOUT") == "60", over
     with COMMON.env(VLM_TIMEOUT="100"), pc.PIPE.env(PARSE_VLM_PAGE_SEC="120"):
         assert _vlm_child_env() is None

@@ -34,15 +34,22 @@ import json
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-from common.config import settings as C  # noqa: E402 — 설정 객체(common 칸 — STRUCT_BACKEND·STRUCT_DB, S7d)
-from common.core.paths import RES_ROOT  # noqa: E402 — 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
-from common.core.terms import ID_LIKE, _aliases, match_clients, modalities, norm  # noqa: E402 — 고객·어휘 규칙(구조화와 같게, DT1 c1: 용어집 modality_code 우선)
-from common.store import structdb as SDB  # noqa: E402 — 로컬 정형 저장소 연결(X1, modules/load는 import 안 함 — 연결만 common 공용)
-from mcp_server import config as mc  # noqa: E402 — 설정 객체(mcp 칸 — S7d)
-from mcp_server.services.search import clientscope as CS  # noqa: E402 — BR50(D) 고객 범위 단일 규칙(local.py·pgsearch.py·retriever.py·mcp_server.py와 공용)
-from mcp_server.services.search import supersede as SS  # noqa: E402 — AR4② 대체판 판정 단일 규칙
-from mcp_server.services.search.structdb import find_table_row  # noqa: E402 — 10-14 함수별 분리로 이전
+from common.config import settings as C  # 설정 객체(common 칸 — STRUCT_BACKEND·STRUCT_DB, S7d)
+from common.core.paths import RES_ROOT  # 폴더 재편 뒤 이 상수만 바뀌면 됨
+from common.core.terms import (  # 고객·어휘 규칙(구조화와 같게, DT1 c1: 용어집 modality_code 우선)
+    ID_LIKE,
+    _aliases,
+    match_clients,
+    modalities,
+    norm,
+)
+from common.store import structdb as SDB  # 로컬 정형 저장소 연결(X1, modules/load는 import 안 함 — 연결만 common 공용)
+from mcp_server import config as mc  # 설정 객체(mcp 칸 — S7d)
+from mcp_server.services.search import (
+    clientscope as CS,  # BR50(D) 고객 범위 단일 규칙(local.py·pgsearch.py·retriever.py·mcp_server.py와 공용)
+)
+from mcp_server.services.search import supersede as SS  # AR4② 대체판 판정 단일 규칙
+from mcp_server.services.search.structdb import find_table_row  # 10-14 함수별 분리로 이전
 
 NOID_RE = re.compile(r"계약\s*(id|아이디|번호)(?=[^.?!]{0,20}(없|안\s|않))|no\s+contract\s+id", re.I)
 # ↑ '계약 ID가 없는' 뿐 아니라 '계약 ID가 적혀 있지 않은'·'계약 번호를 안 적은'처럼 부정어가 뒤에 떨어져 나오는 표현도 잡음(AD45③, 창 20자) — 그 안에 '없/안 /않'이 없으면 안 걸림(오탐 방지)

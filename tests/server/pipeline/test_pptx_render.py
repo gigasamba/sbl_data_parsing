@@ -202,31 +202,29 @@ def selftest():
 
 
 def selftest_soffice_resolution():
-    """독립 검토(10-13) — PATH에 soffice가 없어도(이 PC가 실측 사례: LibreOffice가 깔려 있지만 PATH엔 없음)
-    흔한 설치 경로(가짜 목록으로 시험)에서 찾는지 · 다 없으면 None + 경고가 이 프로세스에서 1번만(반복 호출해도
-    추가 안 됨)인지."""
+    """op-09 — 설정 soffice_bin이 비면 PATH에서만 찾음(설치 경로 추측 없음) · 다 없으면 None + 경고가 이 프로세스에서 1번만
+    (반복 호출해도 추가 안 됨)."""
     import io
     import tempfile
 
-    orig_which, orig_common = shutil.which, M._common_soffice_paths
+    orig_which = shutil.which
 
-    # ① PATH에 없어도 흔한 설치 경로(가짜 목록)에서 찾음
+    # ① 설정이 비면 PATH(가짜 which)에서 찾음 · 설정 값이 있으면 그 파일
     d = Path(tempfile.mkdtemp())
-    fake_soffice = d / "fake_program_files" / "soffice.exe"
-    fake_soffice.parent.mkdir(parents=True, exist_ok=True)
+    fake_soffice = d / "soffice.exe"
     fake_soffice.write_text("fake", encoding="utf-8")
-    shutil.which = lambda name: None  # PATH에는 없는 척
-    M._common_soffice_paths = lambda: [str(d / "nope" / "soffice"), str(fake_soffice)]
+    shutil.which = lambda name: str(fake_soffice) if name == "soffice" else None
     try:
         with pc.PIPE.env(SOFFICE_BIN=""):  # S7c — 설정 객체에서만 비움(S7e2 — 빈 글자: 이미지 기본값 /usr/bin/soffice도 안 씀)
             assert M.soffice_bin() == str(fake_soffice)
+        with pc.PIPE.env(SOFFICE_BIN=str(fake_soffice)):
+            assert M.soffice_bin() == str(fake_soffice)
     finally:
-        shutil.which, M._common_soffice_paths = orig_which, orig_common
-    print("[selftest] soffice_bin() — PATH에 없어도 흔한 설치 경로(가짜 목록)에서 찾음 통과")
+        shutil.which = orig_which
+    print("[selftest] soffice_bin() — 설정·PATH에서만 찾음 통과")
 
     # ② 다 없으면 None + 경고 1번만(stderr) — 반복 호출해도 추가 안 됨
     shutil.which = lambda name: None
-    M._common_soffice_paths = lambda: []
     _soffice_warned[0] = False
     captured, orig_stderr = io.StringIO(), sys.stderr
     sys.stderr = captured
@@ -236,7 +234,7 @@ def selftest_soffice_resolution():
             assert M.soffice_bin() is None  # 두 번째 호출 — 경고 추가 안 됨
     finally:
         sys.stderr = orig_stderr
-        shutil.which, M._common_soffice_paths = orig_which, orig_common
+        shutil.which = orig_which
         _soffice_warned[0] = False
     msg = captured.getvalue()
     assert msg.count("[pptx_render] soffice를 못 찾음") == 1, msg

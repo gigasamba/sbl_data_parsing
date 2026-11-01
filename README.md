@@ -231,10 +231,10 @@ tuning:
 ```
 
 - 옛 배치(최상위 `common`·`pipeline`·`mcp` — op-08 전) 파일은 읽지 않는다. `python -m common.config.migrate settings.yaml --out settings.new.yaml`로 바꾼 뒤 새 파일로 바꿔 넣는다(지운 칸은 "삭제됨"으로 이름만 알림).
-- 검색 저장소 종류(`required.deploy.mcp_store`)와 PG 접속값은 PC·서버 모두 채운다 — 자동 탐지는 없앤다(사용자 10-31, op-09).
+- 검색 저장소 종류(`required.deploy.mcp_store` — `pg`·`local`)와 PG 접속값은 PC·서버 모두 채운다 — 비우면 시작을 거부한다(사용자 10-31, op-09 — 자동 탐지 없음).
 - 같은 절(`search:` 등)이나 같은 칸을 두 번 쓰면 시작을 거부한다 — 칸을 더할 때는 이미 있는 절 안에 넣는다.
 - **외부 임베딩은 세 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `run_env: local` · `no_paid_calls: false`. 하나라도 빠지면 호출하지 않는다(서버 dev·prd는 늘 거부).
-- ⚠️ PG 접속 항목을 비워 두면 코드가 `docker ps`로 찾은 아무 pgvector에나 연결한다. 전용 PG 접속 정보를 항상 적는다.
+- PG 접속 항목(`required.pg`의 host·port·db·user·password·db_schema)은 모두 필수다 — 비우면 채울 자리를 알려 주고 멈춘다(op-09, `docker ps` 자동 탐지와 코드 기본값은 없앰). 로컬 묶음만 쓸 때는 명령에 `--local`.
 
 ### 4-3. 점검
 

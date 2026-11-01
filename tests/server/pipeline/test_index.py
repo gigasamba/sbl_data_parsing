@@ -94,7 +94,7 @@ def selftest():
             r5 = subprocess.run(
                 base + ["--conf", str(confs[0])],
                 cwd=ROOT,
-                env={**env, "GLOSSARY_DIR": str(t / "g")},
+                env=settings_env(env, GLOSSARY_DIR=str(t / "g")),  # op-09 — 자식은 덮기 파일로
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -109,7 +109,7 @@ def selftest():
             r6 = subprocess.run(
                 base + ["--conf", str(confs[0])],
                 cwd=ROOT,
-                env={**env, "GLOSSARY_DIR": str(t / "g")},
+                env=settings_env(env, GLOSSARY_DIR=str(t / "g")),  # op-09 — 자식은 덮기 파일로
                 capture_output=True,
                 text=True,
                 encoding="utf-8",

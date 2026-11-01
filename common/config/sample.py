@@ -284,11 +284,9 @@ def _kind(path, f):
 
 
 def _value(p, f):
-    """칸에 적을 기본값(YAML 한 줄) — 비우는 칸: 필수·비밀·기본 없음·빈 글자·이미지 기본값 칸·적었는지로 동작이 갈리는 칸(SET_MATTERS·pinned)·저장소 경로가 든 기본값(만든 PC마다 달라짐)."""
+    """칸에 적을 기본값(YAML 한 줄) — 비우는 칸: 필수·비밀·기본 없음·빈 글자·이미지 기본값 칸·적었는지로 동작이 갈리는 칸(SET_MATTERS)·저장소 경로가 든 기본값(만든 PC마다 달라짐)."""
     d = f.get_default(call_default_factory=True)
     if p in L.REQUIRED or S.is_secret(f) or d is None or d == "" or S.env_name(f) in _IMAGE_ENVS | SET_MATTERS:
-        return ""
-    if (f.json_schema_extra or {}).get("pinned"):  # pin_env가 적힌 칸만 env로 냄 — 적으면 자식 프로세스의 자기 설정 값을 덮음
         return ""
     if isinstance(d, str) and str(S.REPO_ROOT) in d:
         return ""
@@ -425,8 +423,6 @@ def marks(f):
     """sample 주석에서 뺀 내부 표시(op-08 ②) — 지문 고정·빈 글자 유지·켜기 판정 꼴·auto."""
     extra = f.json_schema_extra or {}
     out = []
-    if extra.get("pinned"):
-        out.append("[엔진 지문]" if extra["pinned"] == "engine" else "[인계 지문]")
     if S.keeps_blank(f):
         out.append("[빈 글자 유지]")
     truth = extra.get("truth")

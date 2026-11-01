@@ -37,15 +37,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent  # validation/e2e(S6a — 옛 deploy/common_tools/evaluation)
-from common.config import settings as S  # noqa: E402 — S7e2: 설정은 settings.yaml(자식 실행에는 덮기 파일 — child_env)
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.paths import APP_ROOT, PKG_ROOT, PROJ_ROOT, STACK_FILE  # noqa: E402 — 폴더 재편 뒤 이 상수들만 바뀌면 됨
+from common.config import settings as S  # S7e2: 설정은 settings.yaml(자식 실행에는 덮기 파일 — child_env)
+from common.core.console import utf8_stdout
+from common.core.paths import APP_ROOT, E2E_ROOT, PKG_ROOT, PROJ_ROOT, STACK_FILE  # 폴더 재편 뒤 이 상수들만 바뀌면 됨
 
 DEV = PKG_ROOT  # deploy/common/ (S6a — 옛 deploy/common_tools/와 같은 깊이 · 옛 dev/)
 ROOT = PROJ_ROOT  # 저장소 루트
 VALID = ROOT / "valid_env" / "unstructured"
-CONFIG_PATH = HERE / "model_matrix.json"  # eval/ -> evaluation/ 이동 뒤 이 파일과 같은 폴더
+CONFIG_PATH = E2E_ROOT / "model_matrix.json"  # eval/ -> evaluation/ 이동 뒤 이 파일과 같은 폴더
 RUN_ROOT = APP_ROOT / "output" / "eval" / "model_matrix"
 NON_DOC_FILES = {"qa.json", "qa_rephrase.json", "spec.json", "rfi_spec.json", "manifest.json", "README.md"}
 PY = sys.executable

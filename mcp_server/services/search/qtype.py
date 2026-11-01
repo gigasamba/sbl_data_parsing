@@ -24,12 +24,9 @@ docstring 참고). 그래서 두 결과가 같은 질문에서 어긋날 수 있
 
 import copy
 import re
-from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
-from common.core.docmeta import RE_LATEST_QUESTION  # noqa: E402 — 최신판 질문 단서(L3-1과 같은 규칙)
-from mcp_server.services.search.aggregate import COUNT_RE, LIST_RE, MAXMIN_RE, SUM_RE  # noqa: E402 — 집계·목록 단서 재사용
+from common.core.docmeta import RE_LATEST_QUESTION  # 최신판 질문 단서(L3-1과 같은 규칙)
+from mcp_server.services.search.aggregate import COUNT_RE, LIST_RE, MAXMIN_RE, SUM_RE  # 집계·목록 단서 재사용
 
 _AVG_RE = re.compile(r"평균|average|\bavg\b", re.I)  # AD1 aggregate(평균)은 기존 조각에 없어 새로 둠
 _FIGURE_RE = re.compile(r"그림|그래프|도식|차트|흐름도|순서도|막대|flowchart|diagram|\bgraph\b|\bchart\b|\bfigure\b", re.I)

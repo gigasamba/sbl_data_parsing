@@ -1,10 +1,10 @@
 """pipeline.transform.structure.build_bundle 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.structure.build_bundle --selftest`."""
 
 import json
-import os
 from pathlib import Path
 
 import pipeline.transform.structure.build_bundle as M
+from common.config.settings import COMMON
 from common.core import docmeta as DM
 from common.core.paths import STACK_FILE
 from common.core.text import tokens
@@ -71,9 +71,7 @@ def selftest():
     import contextlib
     import io
 
-    old_gdir = os.environ.pop("GLOSSARY_DIR", None)  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음
-    old_roster = os.environ.pop("CLIENT_ROSTER", None)  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음
-    try:
+    with COMMON.env(GLOSSARY_DIR=None, CLIENT_ROSTER=None):  # op-09 — 인계 파일(terms.py)도 설정 객체로 읽음
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
             warn_if_no_client_roster([{"client": None}, {"client": ""}])
@@ -88,11 +86,6 @@ def selftest():
         with contextlib.redirect_stderr(buf):
             warn_if_no_client_roster([])
         assert buf.getvalue() == ""
-    finally:
-        if old_gdir is not None:
-            os.environ["GLOSSARY_DIR"] = old_gdir  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음(복원)
-        if old_roster is not None:
-            os.environ["CLIENT_ROSTER"] = old_roster  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음(복원)
     print("[selftest] BR57 — warn_if_no_client_roster: 명부 없음+client 전부 빔일 때만 경고, 동작(docs)은 안 바뀜 통과")
     raw = {
         "text": "",
@@ -379,10 +372,7 @@ def _selftest_build_graph():
         "case_sensitive,definition_ko,definition_en,status\n",
         encoding="utf-8",
     )
-    os.environ["GLOSSARY_DIR"] = str(
-        gdir
-    )  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음 · id_patterns.csv(contract_no·lot_no)만 — load_id_patterns_typed용
-    try:
+    with COMMON.env(GLOSSARY_DIR=str(gdir)):  # op-09 — 설정 객체 · id_patterns.csv(contract_no·lot_no)만 — load_id_patterns_typed용
         sha = "a" * 64
         docs = [
             {
@@ -434,8 +424,6 @@ def _selftest_build_graph():
         rel_set_m = {(nodes_m[e["src"]]["kind"], nodes_m[e["dst"]]["kind"], e["rel"]) for e in edges_m}
         assert not any(r in BIZ_REL for _, _, r in rel_set_m), rel_set_m
         print("[selftest] AD28② engine-qa MAJOR — meta_confirmed=False(또는 없음) 문서는 관계 간선 0, mentions만 유지 통과")
-    finally:
-        os.environ.pop("GLOSSARY_DIR", None)  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음(복원)
     print("[selftest] AD28② build_graph 업무 개체(client·contract·product·modality·batch)·관계(doc-links-contract 등) 통과")
 
     # AD28③ — 개념 노드 + broader·related(둘 다 실제 멘션됐을 때만) + 멘션 안 된 형제 개념은 노드 자체가 안 생김

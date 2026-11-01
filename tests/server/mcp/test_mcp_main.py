@@ -12,13 +12,13 @@ def _selftest_transport_security():
     """L8 — 루프백은 FastMCP 자체 기본값(바이트 동일, 안 건드림) · 비루프백은 기본 ON(전엔 명시적으로 꺼둠) ·
     MCP_ALLOWED_HOSTS로 추가 호스트(리버스 프록시 등)를 더할 수 있음. 실제 421/403 거부는 dev_tools/unit_test/pipeline/
     test_mcp_server_transport_security.py(ASGI in-process 호출)가 확인."""
-    ts_loop = build(host="127.0.0.1").settings.transport_security
+    ts_loop = build(host="127.0.0.1", port=8765).settings.transport_security
     assert ts_loop.allowed_hosts == ["127.0.0.1:*", "localhost:*", "[::1]:*"], ts_loop.allowed_hosts
-    ts_non = build(host="10.0.0.5").settings.transport_security
+    ts_non = build(host="10.0.0.5", port=8765).settings.transport_security
     assert ts_non.enable_dns_rebinding_protection is True
     assert ts_non.allowed_hosts == ["10.0.0.5:*"] and "http://10.0.0.5:*" in ts_non.allowed_origins, ts_non
     with mc.senv(MCP_ALLOWED_HOSTS="proxy.local:9999, gw.local:*"):
-        ts2 = build(host="10.0.0.5").settings.transport_security
+        ts2 = build(host="10.0.0.5", port=8765).settings.transport_security
         assert "proxy.local:9999" in ts2.allowed_hosts and "gw.local:*" in ts2.allowed_hosts, ts2.allowed_hosts
         assert "http://proxy.local:9999" in ts2.allowed_origins and "https://gw.local:*" in ts2.allowed_origins, ts2.allowed_origins
     print("[selftest] L8 — 루프백 바이트 동일·비루프백 DNS 리바인딩 보호 기본 ON·MCP_ALLOWED_HOSTS 추가 반영 통과")

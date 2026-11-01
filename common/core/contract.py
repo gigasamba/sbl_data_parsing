@@ -13,7 +13,6 @@ source_uri = 원본 위치(file:/// · 나중 s3://). 파싱(만듦)·구조화(
 import csv
 import hashlib
 import json
-import os
 import re
 import sys
 import unicodedata
@@ -70,15 +69,17 @@ def safe_path_join(dest, name):
 def make_source_uri(doc, path):
     """원본 위치 주소 — SOURCE_URI_PREFIX(예: s3://버킷/접두 · file:///srv/rag/docs)가 있으면 그 아래 이름, 없으면 원본 폴더(DOC_DIR)의
     같은 이름 파일, 그것도 없으면 파싱한 파일의 file:// 주소. 검색(MCP)이 결과와 함께 돌려줌 — 나중에 Object Storage면 s3:// 그대로."""
-    man = os.environ.get("SOURCE_MANIFEST")                # Object Storage에서 받은 문서 → s3://버킷/키(modules/parse/source.py)
+    from common.config.settings import cfg   # op-09 — 설정 객체(옛 env 다리)
+    c = cfg()
+    man = c.paths.source_manifest                          # Object Storage에서 받은 문서 → s3://버킷/키(modules/parse/source.py)
     if man and Path(man).exists():
         for ln in Path(man).read_text(encoding="utf-8").splitlines():
             if ln.strip() and json.loads(ln)["file_name"] == doc:
                 return json.loads(ln)["uri"]
-    pre = os.environ.get("SOURCE_URI_PREFIX")
+    pre = c.text.source_uri_prefix
     if pre:
         return pre.rstrip("/") + "/" + doc
-    d = os.environ.get("DOC_DIR")
+    d = c.paths.doc_dir
     if d and (Path(d) / doc).is_file():
         return (Path(d) / doc).resolve().as_uri()
     return Path(path).resolve().as_uri()

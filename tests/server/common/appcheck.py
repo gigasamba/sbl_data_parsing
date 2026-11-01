@@ -77,11 +77,7 @@ def app_selftest(app_cls, top):
         app_leaf = next(
             p
             for p, fi, _ in rows
-            if p.startswith(top + ".")
-            and not S.is_host(p)
-            and S.type_label(fi.annotation) == "str"
-            and not S.is_secret(fi)
-            and not S._extra(fi, "pinned")
+            if p.startswith(top + ".") and not S.is_host(p) and S.type_label(fi.annotation) == "str" and not S.is_secret(fi)
         )
         env_app = S.env_name(dict((p, fi) for p, fi, _ in rows)[app_leaf])
         g = Path(td) / "app.yaml"
