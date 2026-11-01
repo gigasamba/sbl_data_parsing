@@ -50,7 +50,7 @@
 1. `cp <저장소 ZIP>/settings.sample.yaml /srv/rag/env/settings.yaml`
 2. 권한을 맞춘다(위 표 — 주인 10001·640).
 3. `required` 절(`[서버만]` 카테고리 포함)과 아래 1절만 채운다(그 밖 항목은 코드 기본값이 적혀 있음 — 바꿀 것만 고침, 위 "옛 서버 값" 표 포함).
-4. `python -m pipeline.check_env`로 확인한다.
+4. `bash deploy/host/scripts/run_tool.sh check_env`로 확인한다(코드 폴더 루트에서 — 컨테이너 안에서 돈다).
 
 ## 1. 꼭 채울 것 (영역별)
 
