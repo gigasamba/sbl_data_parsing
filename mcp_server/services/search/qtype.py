@@ -23,16 +23,13 @@ docstring 참고). 그래서 두 결과가 같은 질문에서 어긋날 수 있
 """
 
 import copy
+import json
 import re
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
-import json  # noqa: E402
-
-from common.core.docmeta import RE_LATEST_QUESTION  # noqa: E402 — 최신판 질문 단서(L3-1과 같은 규칙)
-from common.core.paths import RES_ROOT  # noqa: E402
-from mcp_server import config as mc  # noqa: E402 — 설정 객체(mcp 칸)
+from common.core.docmeta import RE_LATEST_QUESTION  # 최신판 질문 단서(L3-1과 같은 규칙)
+from common.core.paths import RES_ROOT
+from mcp_server import config as mc  # 설정 객체(mcp 칸)
 
 # 집계·목록 단서(mc-04 10-31 — 집계 답 aggregate.py를 지우며 이 판별에 쓰던 정규식만 이리로, 글자 그대로)
 _AGG_VOCAB_DEFAULT = {  # DT1 c1 — 지표 판별 단서어(CDMO 예제: 건수·합계·수량·금액·단가·배치) 코드 기본값

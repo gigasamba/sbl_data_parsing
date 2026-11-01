@@ -24,9 +24,9 @@ import sys
 from pathlib import Path
 
 from common.core.console import utf8_stdout
+from common.core.paths import PKG_ROOT
 
-HERE = Path(__file__).resolve().parent
-MIGRATIONS = HERE / "migrations"
+MIGRATIONS = PKG_ROOT / "store" / "db" / "migrations"  # op-09 — paths 상수 기준
 TARGETS = ("search",)  # struct 갈래는 사용자 11-01에 없앰(서버에 남은 struct 스키마는 코드가 읽지 않음 — DB 담당자가 두거나 지움)
 _SCHEMA_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}")  # common/store/pg.conf()의 PG_SCHEMA 규칙(그 함수 안 정규식)과 같음
 _SCRIPTS: dict = {}

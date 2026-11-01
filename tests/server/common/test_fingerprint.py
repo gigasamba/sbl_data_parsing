@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from common.core.fingerprint import EXCLUDED_FILES, HANDOFF_FILES, _unclassified, fingerprint, pipeline_version
+from common.core.paths import DEPLOY_ROOT
 
 
 def selftest():
@@ -56,7 +57,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 의 --selftest 갈래
 
 def test_version_file():
     """저장소 루트 VERSION(이미지 /app/deploy/VERSION) — 두 이미지 공통 SemVer(D-036). pipeline_version()이 그 값을 낸다."""
-    root = Path(__file__).resolve().parents[3]
+    root = DEPLOY_ROOT
     v = (root / "VERSION").read_text(encoding="utf-8").strip()
     parts = v.split(".")
     assert len(parts) == 3 and all(p.isdigit() for p in parts), v

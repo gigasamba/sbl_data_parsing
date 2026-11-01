@@ -29,7 +29,7 @@
 
 ### 0-1. 읽는 규칙
 - **옛 `pipeline.env`는 읽지 않는다.** settings.yaml 없이 `pipeline.env`만 있으면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·새벽 배치가 "설정 이관 필요"로 종료 코드 2. 옮기기·대조는 [release-and-patch.md](release-and-patch.md) §5-4.
-- **크리덴셜**(비밀번호·키·토큰)과 **접속 정보**(주소·포트·DB 이름)는 전부 이 파일 하나에만 둔다. 각 컨테이너는 common + 자기 앱 절(pipeline·mcp)만 읽는다(`RAG_MODULE`). 엔진·핸드오프 파일이 env로 읽는 항목(`VLM_API_KEY` 등 — 핑거프린트 때문에 고치지 않는 파일, D-028 ⑤, 영구 다리)은 컨테이너 **안 프로세스 env**에는 들어간다(`docker inspect`에는 안 나옴 — 사용자가 받아들임).
+- **크리덴셜**(비밀번호·키·토큰)과 **접속 정보**(주소·포트·DB 이름)는 전부 이 파일 하나에만 둔다. 각 컨테이너는 common + 자기 앱 절(pipeline·mcp)만 읽는다(`RAG_MODULE`). 엔진·핸드오프 파일도 설정 객체로 읽는다(op-09 2단계 — 옛 영구 다리 `pin_env`가 env로 내주던 28칸은 없앰, 컨테이너 안 프로세스 env에도 안 나옴).
 - 아래 표의 이름은 **옛 env 이름**이다. settings.yaml 자리는 `python -m common.config.sample --where <이름>`으로 찾는다(예 `PG_HOST` → `required.pg.host`). 코드·`export --section`·오류 안의 `common.connections.pg.host` 같은 경로는 **모델 경로**다(파일 자리와 다를 수 있음 — `--where`가 둘 다 보여 줌).
 - **env로 준 값은 읽지 않는다** — 셸·compose·systemd·`docker exec -e`의 `X=값`은 효과가 없고 시작 때 이름만 경고한다.
 - **서버(dev·prd)는 바꿀 값이 있으면 `settings.yaml`을 직접 고친다.** 한 번만 다르게 돌릴 값도 고쳐 돌린 뒤 되돌리고, 고친 뒤 상주 컨테이너는 다시 띄운다(또는 아래 `--set`).
@@ -50,7 +50,7 @@
 1. `cp <저장소 ZIP>/settings.sample.yaml /srv/rag/env/settings.yaml`
 2. 권한을 맞춘다(위 표 — 주인 10001·640).
 3. `required` 절(`[서버만]` 카테고리 포함)과 아래 1절만 채운다(그 밖 항목은 코드 기본값이 적혀 있음 — 바꿀 것만 고침, 위 "옛 서버 값" 표 포함).
-4. `python -m pipeline.check_env`로 확인한다.
+4. `bash deploy/host/scripts/run_tool.sh check_env`로 확인한다(코드 폴더 루트에서 — 컨테이너 안에서 돈다).
 
 ## 1. 꼭 채울 것 (영역별)
 
@@ -89,9 +89,9 @@
 ### 저장소 (PostgreSQL + pgvector, 기존 컨테이너에 접속만)
 | 이름 | 기본 | 메모 |
 |---|---|---|
-| `PG_HOST`·`PG_PORT` | 비움 | 컨테이너 안에서는 `docker ps`로 못 찾음 — 서버 IP 또는 `--network host`+`NETWORK_HOST=1` |
-| `PG_DB`·`PG_USER`·`PG_PASSWORD` | `rag`·`rag`·비움 | 우리 스키마 권한만 있는 계정 |
-| `PG_SCHEMA` | `ai` | 개발 서버 검증대는 `ai_test` 별도 스키마 |
+| `PG_HOST`·`PG_PORT` | 필수 | 서버 IP 또는 `--network host`+`NETWORK_HOST=1`(op-09 — 자동 탐지 없음) |
+| `PG_DB`·`PG_USER`·`PG_PASSWORD` | 필수 | 우리 스키마 권한만 있는 계정 |
+| `PG_SCHEMA` | 필수 | 개발 서버 검증대는 `ai_test` 별도 스키마 |
 
 ### 근거 MCP(상주)
 | 이름 | 기본 | 메모 |
@@ -199,6 +199,8 @@ python -m common.check.ping_models   # LLM·VLM·EMBED 실호출(OK/FAIL·지연
 | struct 스키마 코드에서 모두 없앰 — 엔진 구성·원천 목록은 파일만(사용자 11-01 — pl-08·D-031) | ① Alembic struct 갈래(`0001_struct`·`0002_struct`·`0003_struct`)·시드 `resources/sql/` 지움 — `migrate --target`은 `search`·`all`만 ② 서버도 `resources/config/pipeline_stack.json`·`resources/mappings/sources.json`을 읽음(`ops.paths.stack_file`·`sources_file`로 바꿀 수 있음 — 못 읽거나 모양이 틀리면 종료 2) ③ 명령 `set-stack`·`set-sources` 없앰(`show-stack`·`show-sources`는 파일을 보여 줌) ④ 내부 칸 `pipeline.paths.stack_version`(`STACK_VERSION`)·`represent`·`build_bundle`의 `--stack-version` 지움(`Section.REMOVED` — 남아 있어도 경고만) — `run_docs.py`는 시작 때 `show-stack`으로 확인만 ⑤ 파싱·검색 MCP 컨테이너는 PG 없이 시작(종료 4 "판 표 없음" 없음) | 서버에 남은 `struct` 스키마는 그대로 두거나 DB 담당자가 지움(코드는 읽지 않음) · 엔진 구성·원천 목록을 바꿀 때는 코드 폴더의 파일을 고쳐 오버레이 패치 · settings.yaml에 `stack_version`을 적었으면 지움 |
 | 정형 저장소·struct 표 10개 지움(사용자 10-31 — pl-08, 11-01에 struct 스키마 전체 없앰으로 바뀜 — 위 줄) | ① `pipeline/load/structured.py`(계약 연결 `load`·`link`)·`common/store/structdb.py`(SQLite 대체 포함) 지움 ② struct 표 10개(`contract_master`·`client_master`·`prod_master`·`doc_contract_link`·`doc_location`·`doc_registry`·`doc_registry_seen`·`doc_hidden`·`doc_table`·`doc_cell`)를 쓰는 코드 지움 ③ 칸 지움(`Section.REMOVED` — 남아 있어도 경고만): `common.store.struct_backend`(`STRUCT_BACKEND`)·`common.store.struct_db`(`STRUCT_DB`) | settings.yaml에서 두 칸을 지움(안 지워도 경고만) · struct 마이그레이션은 없음(위 줄) |
 | 문서 대장·숨김 지움(사용자 10-31 — pl-12 C10) | ① 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·`registry_cli`(hide·unhide) 지움 — 검색은 숨김 필터 없음, publish는 EDW에 INSERT만(status UPDATE 없음) ② 파싱 `--max-new`·`--source` 고르기 = FileStorageMap ∖ ParsingMeta(ok·partial 행이 있는 원본 키는 안 고름) — 파싱 입구가 EDW ParsingMeta를 읽기 계정으로 한 번 읽음, 못 읽으면 서버는 종료 4 ③ 칸 지움(`Section.REMOVED` — 남아 있어도 경고만): `common.store.doc_registry`(`DOC_REGISTRY`)·`common.store.registry_etag_md5`(`REGISTRY_ETAG_MD5`) | settings.yaml에서 두 칸을 지움(안 지워도 경고만) · 파싱 컨테이너에 EDW 읽기 계정(`common.connections.rdb` 읽기)이 있어야 함 · PG 표는 다음 마이그레이션(0003)이 지움 |
+| 0.2.0 하드코딩 0 1단계(사용자 10-31 — op-09) | ① PG 자동 탐지 지움(`docker ps`·포트 5432·15432 탐지, 코드 기본값 `127.0.0.1`·`5432`·`rag`·`rag`·`ai`) — `required.pg` 여섯 칸(또는 `conn_file`)이 필수, 비면 채울 자리를 적고 멈춤 ② `required.deploy.mcp_store`(`pg`·`local`) 필수 — 비면 검색 MCP 시작 거부, 로컬 묶음으로 조용히 빠지지 않음 · 파이프라인·`ask` 명령은 `--local`이 아니면 PG 필수 ③ 새 칸 `dev.eval.rerank_model`(`RERANK_MODEL`, 기본 `BAAI/bge-reranker-v2-m3`) ④ 이미지 entrypoint는 `DOC_DIR`·`DOC_DIR_PREPARED` 기본값을 셸에 두지 않음(이미지 기본값은 `common/config/settings.py` `IMAGE_PATHS` 한 곳) ⑤ soffice는 설정 `soffice_bin`(`SOFFICE_BIN`) → PATH만 찾음 — 흔한 설치 경로(Program Files·`/usr/lib/libreoffice`·`/opt/libreoffice*`) 추측을 지움(p1 지문 바뀜) ⑥ 새 칸 `common.connections.pg.standin_schema`(`PG_STANDIN_SCHEMA`, 기본 `ai` — PC 로컬 대체 DB만) | settings.yaml `required.pg` 여섯 칸과 `required.deploy.mcp_store`를 채움(비어 있으면 시작 거부) · **PATH에 soffice가 없는 Windows PC는 `soffice_bin`을 채움**(예: `C:\Program Files\LibreOffice\program\soffice.exe` — 안 채우면 pptx 슬라이드 렌더를 건너뜀) |
+| 0.2.0 하드코딩 0 2단계(사용자 10-31 — op-09, 검토 등급 A) | ① 영구 다리(`pin_env` — 엔진·인계 칸 28개를 import 때 env로 내주던 것) 지움: 엔진 파일(`pipeline/extract/engines/*`)·인계 파일(`common/core/{contract,terms,text}.py`)도 설정 객체(`cfg()`)로 읽음 ② 그 이름(`VLM_*`·`OCR_*`·`GLOSSARY_DIR`·`CLIENT_ROSTER`·`SOURCE_*` 등)을 env로 주면 효과 없음(시작 때 이름만 경고) ③ 남은 env 줄은 라이브러리 `OMP_NUM_THREADS` 하나(rapidocr) ④ 핸드오프 FINGERPRINT·엔진 지문·레이어 code_fp 모두 바뀜(서버 전 문서 다시 처리 — 0.2.0에 함께) | 컨테이너에 `-e VLM_BASE_URL=…`·`OCR_DPI=…`처럼 주던 값은 settings.yaml 칸으로 옮김(`python -m common.config.sample --where <이름>`) |
 | 0.2.0 설정 배치 재편(사용자 10-30 — op-08 ②) | ① settings.yaml 칸 자리가 바뀜: 맨 위 `required`(실행 환경·PG·임베딩 [PC·서버] / EDW·Object Storage·LLM·VLM·원천·게시·토큰·서버 배포 [서버만]) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops`·`dev` → `tuning`(코드 상수 후보 58칸). 옛 배치(최상위 `common`·`pipeline`·`mcp`)는 시작 거부 ② 읽는 곳이 없어진 6칸 지움(`Section.REMOVED` — 경고만): `pipeline.extract.cache.parse_tmp_max_gb`(`PARSE_TMP_MAX_GB`)·`parse_keep_max_gb`(`PARSE_KEEP_MAX_GB`)·`pipeline.extract.disk_free_warn_gb`(`DISK_FREE_WARN_GB`)·`engine_cache_warn_gb`(`ENGINE_CACHE_WARN_GB`)·`pipeline.transform.represent.shadow_max`(`PARSE_SHADOW_MAX`)·`mcp.search.agg.llm_min`(`SEARCH_AGG_LLM_MIN`) ③ sample 주석은 한 줄(설명·기본값·값) — 옛 env 이름·판정 꼴은 `python -m common.config.sample --where` | 코드 폴더에서 `python -m common.config.migrate /srv/rag/env/settings.yaml --out /srv/rag/env/settings.new.yaml` → 보고(옮긴 칸 수·삭제됨·모름 — 이름만) 확인 → 옛 파일을 보관하고 새 파일로 바꿈(주인 10001·권한 640 다시 맞춤) · 호스트 `run_docs.py`·`settings_env.sh`(`export --section`은 모델 경로 그대로)도 새 배치를 읽음 |
 | 0.1.0 ocr_vlm 지움(사용자 10-30 — pl-31) | ① 엔진 `ocr_vlm`(OCR 전용 소형 VLM — 스택에 없어 쓰이지 않던 것) 지움: 엔진 26개 · `qwen_vlm` 엔진 핑거프린트 바뀜(이미지·스캔 문서 재파싱 — 0.1.0 재처리에 포함) · 레이어 code_fp p0·p1·r·s도 바뀜(전후 값 = parse.md#pl-31) ② 칸 지움(`Section.REMOVED` — 남아 있어도 경고만): `common.models.ocrvlm.*`(`OCRVLM_BASE_URL`·`OCRVLM_MODEL`·`OCRVLM_API_KEY`·`OCRVLM_ALLOW_EXTERNAL`·`OCRVLM_EST_USD`)·`pipeline.transform.figures.ocrvlm_prompt`(`OCRVLM_PROMPT`) ③ `ping_models`는 LLM·VLM·EMBED만 | 서버 settings.yaml에서 위 칸을 지움(남아 있으면 경고만) · 옛 env 이름(`OCRVLM_*`)은 읽지 않음 · 덮기 파일 `overrides`·`--set`에 옛 이름을 쓰면 모르는 이름으로 거부 |
 | 0.1.0 엔진 8개 지움(사용자 10-30 — pl-31, 등급 A) | 설치·사용하지 않던 엔진 `docling`·`docling_ocr`·`docling_vlm`·`unstructured`·`unstructured_auto`·`unstructured_ocr`·`rapidocr`(1.x)·`kreuzberg_ocr` 지움(엔진 18개) · `kreuzberg`·`rapidocr_ko` 엔진 핑거프린트 바뀜(그 엔진 결과 재파싱 — 0.1.0 재처리 한 번에 포함) · `check_env`의 docling·unstructured·marker 모델 점검 줄 없음 | settings.yaml·스택 판에 지운 엔진 이름이 있으면 지움(판 표 `set-stack`(11-01에 없앰 — 지금은 파일 읽을 때)이 없는 엔진을 거부) |

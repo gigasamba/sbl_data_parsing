@@ -46,10 +46,8 @@ import json
 import time
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[0]
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
+from common.core.console import utf8_stdout
+from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 
 
 def load_stack(path):

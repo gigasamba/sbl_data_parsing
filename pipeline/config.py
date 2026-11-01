@@ -90,14 +90,13 @@ class PipelineExtractDedup(Section):
 
 
 class PipelineExtractOcr(Section):
-    dpi: int | None = F(200, "OCR_DPI", "쪽 이미지 렌더링 해상도(DPI) — OCR·근거 이미지 좌표 환산에 씀", pinned="engine")
-    max_pages: int | None = F(0, "OCR_MAX_PAGES", "문서당 OCR·VLM 쪽 수 상한(쪽, 0=제한 없음)", pinned="engine")
-    table_grid: bool | None = F(True, "OCR_TABLE_GRID", "OCR 박스 좌표로 표 격자를 추정할지(=0이면 끔)", pinned="engine")
+    dpi: int | None = F(200, "OCR_DPI", "쪽 이미지 렌더링 해상도(DPI) — OCR·근거 이미지 좌표 환산에 씀")
+    max_pages: int | None = F(0, "OCR_MAX_PAGES", "문서당 OCR·VLM 쪽 수 상한(쪽, 0=제한 없음)")
+    table_grid: bool | None = F(True, "OCR_TABLE_GRID", "OCR 박스 좌표로 표 격자를 추정할지(=0이면 끔)")
     threads: int | None = F(
         None,
         "OCR_THREADS",
         "rapidocr onnxruntime 스레드 수(0=onnxruntime 자동, 비우거나 숫자(0~9만) 아니면(auto 등) OMP_NUM_THREADS·CPU 몫)",
-        pinned="engine",
         unset="nondigit",
     )
 
@@ -336,6 +335,9 @@ class PipelineEval(Section):
     )
     qa_draft_max_pages: int | None = F(20, "QA_DRAFT_MAX_PAGES", "질문 초안 생성(qa_draft)에서 문서당 처리할 쪽 수 상한(쪽)")
     qa_draft_per_page: int | None = F(5, "QA_DRAFT_PER_PAGE", "질문 초안 생성에서 쪽당 질문 수 상한(개)")
+    rerank_model: str | None = F(
+        "BAAI/bge-reranker-v2-m3", "RERANK_MODEL", "검색 단계 실험(pipeline.eval.stages)의 재순위 모델 이름 — 폐쇄망 로컬 캐시에 있어야 함"
+    )
     review_max_rounds: int | None = F(2, "REVIEW_MAX_ROUNDS", "도식 검토 루프의 최대 재추출 횟수(회)")
     score_table_judge: str | None = F("0", "SCORE_TABLE_JUDGE", "표 구조 채점의 경계 표 판정자(0 없음 | llm 경계 표만 LLM 판정)")
 
@@ -363,15 +365,13 @@ class PipelineExtract(Section):
     engine_scope: str | None = F(
         None, "PARSE_ENGINE_SCOPE", "문서마다 돌릴 엔진 범위(stack = 형식별 stack.json 목록만 / all = 등록 엔진 전부)"
     )
-    fill_merged: bool | None = F(True, "PARSE_FILL_MERGED", "표에서 병합 셀이 덮은 빈 칸을 원본 칸 값으로 채울지", pinned="engine")
+    fill_merged: bool | None = F(True, "PARSE_FILL_MERGED", "표에서 병합 셀이 덮은 빈 칸을 원본 칸 값으로 채울지")
     hidden_overlap_max: int | None = F(
         20, "PARSE_HIDDEN_OVERLAP_MAX", "'숨은 글자-그림 겹침' 신호로 쪽 VLM 후보에 올릴 쪽 수 상한(쪽, 0=끔)"
     )
     input_source: str | None = F(None, "PARSE_SOURCE", "파싱 원본 위치: 폴더·s3://버킷/접두·rdb:csv:경로·rdb:표")
     isolate_overhead: float | None = F(10.0, "PARSE_ISOLATE_OVERHEAD", "별도 프로세스 실행 시 쪽당 제한 시간에 더해 줄 시작 여유(초)")
-    kreuzberg_prose_filter: bool | None = F(
-        True, "KREUZBERG_PROSE_FILTER", "kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔)", pinned="engine"
-    )
+    kreuzberg_prose_filter: bool | None = F(True, "KREUZBERG_PROSE_FILTER", "kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔)")
     low_priority: bool | None = F(
         True,
         "PARSE_LOW_PRIORITY",
@@ -387,9 +387,7 @@ class PipelineExtract(Section):
         on=("1",),
     )
     prefetch_workers: int | None = F(2, "PREFETCH_WORKERS", "미리받기(warm) 명령의 동시 다운로드 스레드 수(개)")
-    rapidocr_page_workers: int | None = F(
-        1, "RAPIDOCR_PAGE_WORKERS", "rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개)", pinned="engine"
-    )
+    rapidocr_page_workers: int | None = F(1, "RAPIDOCR_PAGE_WORKERS", "rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개)")
     rotated_max: int | None = F(20, "PARSE_ROTATED_MAX", "쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) — 0이면 rotation.csv를 안 읽음")
     skipped_log: str | None = F(None, "PARSE_SKIPPED_LOG", "건너뛴 문서(암호 PDF 등) 기록 jsonl 경로")
     source_limit: int | None = F(0, "PARSE_SOURCE_LIMIT", "원본에서 처리할 문서 건수 상한(0=제한 없음)")
@@ -397,7 +395,7 @@ class PipelineExtract(Section):
         10.0, "PARSE_TEXT_PAGE_SEC", "글자 엔진(VLM 아님) 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
     )
     table_grid_max_rows: int | None = F(
-        2000, "TABLE_GRID_MAX_ROWS", "표 grid JSON에 담는 최대 행 수(개) — 넘으면 앞부분만 자르고 truncated 표시", pinned="engine"
+        2000, "TABLE_GRID_MAX_ROWS", "표 grid JSON에 담는 최대 행 수(개) — 넘으면 앞부분만 자르고 truncated 표시"
     )
     vlm_page_sec: float | None = F(120.0, "PARSE_VLM_PAGE_SEC", "VLM 엔진 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더")
     warmup_sec: float | None = F(60.0, "PARSE_WARMUP_SEC", "엔진 첫 문서의 제한 시간 하한(초) — import·모델 적재 여유")

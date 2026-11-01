@@ -49,11 +49,28 @@ def _close_pool_later(pool, delay=5):
     threading.Thread(target=_close, daemon=True).start()
 
 
+def check_store():
+    """op-09 — 서버(dev·prd)에서 PG 접속 칸이 비면 SystemExit(채울 자리를 적음 — common.store.pg.conf). 검색 저장소는 PG 하나(mc-01 —
+    저장소 종류 칸 mcp.server.store는 11-01에 없앰), PC는 칸이 비면 SQLite 대역. main이 시작 때 부른다(예열 스레드·요청 안에서는
+    SystemExit가 조용히 스레드만 죽이므로 — 리뷰 10-31)."""
+    from common.core import paths
+
+    if paths.LOCAL_RUN:
+        return
+    from common.store.pg import conf
+
+    conf()
+
+
 def _build_retriever():
     from common.store import services
     from mcp_server.services.search import retriever as RT
 
     old = _STATE.get("R")
+    try:
+        check_store()  # 시작 때 이미 확인(main) — 설정이 그 뒤 바뀐 경우만 여기서 걸림
+    except SystemExit as e:  # 스레드·요청 안에서는 오류로(조용히 스레드만 죽지 않게)
+        raise RuntimeError(str(e)) from None
     a = types.SimpleNamespace(pg=False, local=False, edw=False, edw_client=False)
     services.connect(a)  # PC — Docker pgvector 주소 찾기(못 찾으면 SQLite 대역 — 검색은 PG 하나, mc-01)
     from common.store.db import cfgfile
@@ -69,7 +86,7 @@ def _build_retriever():
 
 
 def _retriever():
-    """저장소 연결(Docker PostgreSQL → 없으면 로컬 묶음)·Retriever — 처음엔 만들고, 이후엔 최소 MCP_RELOAD_CHECK_SEC(기본 30초)
+    """저장소 연결(PG 하나 — mc-01)·Retriever — 처음엔 만들고, 이후엔 최소 MCP_RELOAD_CHECK_SEC(기본 30초)
     간격으로 적재 버전이 바뀌었는지만 확인해 바뀌었으면 다시 만든다(S12, load 재실행 뒤 새 데이터가 안 보이던 문제).
     재생성 중인 동시 요청은 기다리지 않고 기존 객체로 바로 응답(비차단 잠금)."""
     if "R" not in _STATE:

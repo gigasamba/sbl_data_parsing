@@ -96,4 +96,11 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
   - podman-compose 폐쇄망 설치가 문서에 없음.
 - 0.2.0 업그레이드에 넣을 것: 이미지 안 `migrate` + `chown 10001`·권한 640(settings.yaml), 되돌리기는 `settings.yaml.0.1.0` 복원, DB 백업 → `migrate check` → `up`, 전체 재처리 시간·디스크 계획, 그동안 밤 타이머 멈춤.
 - 파일: `README.md` §5, `docs/operations/{server-guide,env-guide}.md`, `deploy/host/scripts/`, `deploy/host/compose/`, `deploy/host/systemd/`, `deploy/release/ship_stage.sh`.
-- Status: todo — 0.2.0.
+- 한 것(10-31·11-01 `feature/op10-server-install`):
+  - `DOCKER`: 셸 env > settings.yaml `ops.host.docker` > podman > docker(`settings_env.sh` `docker_default` — 설정을 읽은 뒤 정함). `mcp_up.sh`가 설정 전에 docker로 못 박던 것 지움. `ship_stage.sh`·`load.sh`도 podman 우선.
+  - `run_docs.py`: `--code <dir>`(설정 배치 모듈 찾기 — 기본 이 스크립트의 코드 폴더, 없으면 `/srv/rag/code/live`) · `docker exec`·`inspect` 12곳이 `ops.host.docker`를 따름.
+  - `index_a`·`index_b` → `deploy/host/compose/compose.index.yml`(쓸 때만 덧붙임 — [pl-19](etl.md#pl-19)에서 지움) — `INDEX_CONF_DIR` 없이 compose가 돎.
+  - `deploy/release/load.sh` 커밋 · `ship_stage.sh`가 이미지 저장소 배치 하나(`sbl_images/load.sh` · `<판>/BUILD.txt` · `<판>/<이미지>/` 45MB 조각) — 개발·운영(bake) 같은 배치.
+  - 문서: README §5-0·§5-2·§5-3·§5-5(설치 길 하나 · `mkdir -p /srv/rag/code` · podman-compose 폐쇄망 설치 · `podman-restart` · 상주 트리거 재부팅 뒤 확인), server-guide·env-guide·release-and-patch는 링크, release-and-patch §5-7 0.2.0 올리기·되돌리기(이미지 안 migrate 표준 입력·출력 — PC에서 확인), refactor.md C-71.
+  - 남김: 상주 파싱 서비스 전용 keepalive 타이머는 만들지 않음(재부팅은 `podman-restart`, 그 뒤 확인 절차만) · `NIGHTLY_PUBLISH`는 [pl-26](etl.md#pl-26) 몫.
+- Status: done (11-01, feature/op10-server-install)

@@ -17,12 +17,10 @@ import zipfile
 from email import policy
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]  # dev/
-from common.core.paths import APP_ROOT  # noqa: E402 — output/ 경계(attach_dir)
-from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
-from pipeline.shared import artifacts as P0  # noqa: E402
-from pipeline.shared.postprocess import raw_root  # noqa: E402 — PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
+from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
+from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.shared import artifacts as P0
+from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
 
 
 def attach_dir():

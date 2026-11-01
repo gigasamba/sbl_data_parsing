@@ -14,6 +14,13 @@ from pathlib import Path
 from common.core.paths import PKG_ROOT, RES_ROOT
 from common.core.text import tokens
 
+
+def _cfg():
+    """common 설정 객체(op-09 — 옛 env 다리 GLOSSARY_DIR·CLIENT_ROSTER·DRAFT_TERMS_* 대신). import 순환을 피해 늦게 읽음."""
+    from common.config.settings import cfg
+    return cfg()
+
+
 ROOT = PKG_ROOT
 
 
@@ -80,7 +87,7 @@ def load_id_patterns_typed(dir=None):
     """id_patterns.csv(GLOSSARY_DIR, L4-7) 컴파일 — [(id_type, 정규식), …](대소문자 무시). 사전 없음(dir도 GLOSSARY_DIR도
     없음)·파일 없음이면 빈 목록. load_id_patterns()가 이걸로 구현됨 — AD28② 업무 개체화(modules/structure/build_bundle.py)는
     id_type이 필요해 이쪽을 직접 씀(계약 번호·배치/로트 등 kind 구분), 그 외(docmeta·research)는 정규식만 필요해 기존 함수 그대로."""
-    d = dir or os.environ.get("GLOSSARY_DIR")
+    d = dir or _cfg().paths.glossary_dir
     if not d:
         return []
     p = Path(d) / "id_patterns.csv"
@@ -165,7 +172,7 @@ def _fill_glossary_blanks(rows):
 def load_glossary(dir=None):
     """용어 사전 로더(X3) — dir(없으면 GLOSSARY_DIR)의 domain_terms.csv를 읽어 검증 후 approved만 {concept_id: row}로.
     사전 없음(인자도 GLOSSARY_DIR도 없음)이면 빈 사전(확장 없이 동작 — 사전이 선택 장치임을 보장)."""
-    d = dir or os.environ.get("GLOSSARY_DIR")
+    d = dir or _cfg().paths.glossary_dir
     if not d:
         return {}
     import csv
@@ -180,12 +187,11 @@ DRAFT_TERMS_MAX = 500   # SI43③④ — 자동 draft 파일 행 수 상한 기�
 
 
 def _draft_terms_max():
-    """DRAFT_TERMS_MAX — env로 덮어쓸 수 있음(시험용으로 작게·운영에서 크게). env 없으면 코드 기본값 500.
-    env로 읽는 이유: `python -m common.core.terms`처럼 이 모듈이 `__main__`으로 실행되면 `import
-    common.core.terms`로 만든 또 다른 모듈 객체가 생겨(파이썬의 run-as-script 함정) 모듈 전역을
-    직접 바꿔도 __main__ 쪽 함수는 못 봄 — env는 프로세스 전체에 공유라 이 함정에 안 걸림."""
-    v = os.environ.get("DRAFT_TERMS_MAX")
-    return int(v) if v else DRAFT_TERMS_MAX
+    """DRAFT_TERMS_MAX — 설정 common.text.draft_terms_max(시험용으로 작게·운영에서 크게, 기본 500 — op-09).
+    모듈 전역이 아니라 설정에서 읽는 이유: `python -m common.core.terms`처럼 이 모듈이 `__main__`으로 실행되면 또 다른
+    모듈 객체가 생겨(run-as-script 함정) 모듈 전역을 직접 바꿔도 __main__ 쪽 함수는 못 봄."""
+    v = _cfg().text.draft_terms_max
+    return DRAFT_TERMS_MAX if v is None else int(v)  # 0도 그대로(상한 0)
 _DRAFT_FIELDS = ["concept_id", "canonical", "category", "synonyms", "abbreviations", "weak_synonyms",
                  "broader", "related", "context_required", "case_sensitive", "definition_ko", "definition_en",
                  "source", "owner", "status", "updated"]   # cli/glossary_suggest.py(T6)의 FIELDS와 같은 칸(source에 카운트 저장)
@@ -197,7 +203,7 @@ def draft_terms_path(path=None):
     같은 이유로 draft를 output/에만 쓰고 domain_terms.csv는 사람이 손으로 승격). 기본
     APP_ROOT/output/glossary_draft/domain_terms_draft_auto.csv — DRAFT_TERMS_OUT env 또는 인자로 바꿀 수 있음(시험용)."""
     from common.core.paths import APP_ROOT
-    return Path(path or os.environ.get("DRAFT_TERMS_OUT") or (APP_ROOT / "output" / "glossary_draft" / "domain_terms_draft_auto.csv"))
+    return Path(path or _cfg().paths.draft_terms_out or (APP_ROOT / "output" / "glossary_draft" / "domain_terms_draft_auto.csv"))
 
 
 class _DraftLock:
@@ -283,7 +289,7 @@ def write_draft_terms(names, path=None, category="org_client"):
         return []
     import csv
     p = draft_terms_path(path)
-    lock_timeout = float(os.environ.get("DRAFT_TERMS_LOCK_TIMEOUT") or 5.0)   # 시험용으로 짧게 줄일 수 있음(기본 5초)
+    lock_timeout = float(_cfg().runtime.draft_terms_lock_timeout)   # 시험용으로 짧게 줄일 수 있음(기본 5초 — 설정 모델)
     with _DraftLock(p, timeout=lock_timeout) as lk:
         if not lk.acquired:
             return []                                        # 경합 — 이번엔 포기(다음 실행이 다시 모음, 멱등)
@@ -455,11 +461,11 @@ def _aliases():
         out = dict(json.loads((RES_ROOT / "config" / "pipeline_stack.json").read_text(encoding="utf-8")).get("client_aliases") or {})
     except (OSError, ValueError):
         out = {}
-    f = os.environ.get("CLIENT_ROSTER")
+    f = _cfg().paths.client_roster
     if f:                                                   # 지정했는데 없으면 멈춤(조용히 빈 명부로 돌지 않게)
         for c, al in read_roster(f).items():
             out[c] = sorted(set(out.get(c, [])) | set(al))
-    g = os.environ.get("GLOSSARY_DIR")                      # 용어 사전(T3, docs/architecture.md) — org_*(client 태그)·approved의 동의어·약어(로더는 load_glossary 한 곳)
+    g = _cfg().paths.glossary_dir                           # 용어 사전(T3, docs/architecture.md) — org_*(client 태그)·approved의 동의어·약어(로더는 load_glossary 한 곳)
     if g:
         for r in load_glossary(g).values():
             if "org_client" in split_terms(r.get("category")):   # SI43① category는 `|` 구분 다중 태그 가능(예 org_client|org_cdmo) — 기존 한 칸 값도 그대로 맞음

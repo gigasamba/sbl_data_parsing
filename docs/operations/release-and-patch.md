@@ -39,8 +39,8 @@ Answer Agent 이미지는 없다(10-14 결정 — 개발 서버 네이티브, MC
 운영 이미지는 PC에서 다시 빌드하지 않는다. 개발 서버에서 쓰던 **실행 이미지 그 판**과 **시험한 코드 폴더 그대로**를 묶어 코드가 든 이미지를 만든다(`deploy/docker/Dockerfile.bake` — 실행 이미지 위에 코드 COPY만, 패키지 설치·네트워크 없음). 만든 이미지는 코드 폴더 없이 뜬다(`/app/deploy`·`/app/docker`가 Dockerfile의 `pipeline`·`mcp` 타깃과 같은 파일).
 
 1. 개발 서버에서: `bash /srv/rag/code/live/deploy/release/bake.sh <실행 이미지 판>`(예 `0.1.0` — `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0`, 대상 하나만이면 뒤에 `pipeline` 또는 `mcp`). 코드 폴더는 스크립트가 든 폴더(다른 폴더면 `CODE_DIR=`), 새 태그는 코드 `VERSION`(태그 = 버전 — 다른 `TAG=`는 거부, 다시 구우려면 VERSION을 올린 코드로), 컨테이너 도구는 podman(없으면 docker — `DOCKER=`), 저장 폴더는 `/var/tmp/bake`(`OUT=`). 한 대상만 실패했으면 그 대상만 다시(`… <판> mcp`).
-2. 스크립트가 차례로: ① 코드 `deploy/docker/DEPS_HASH` = 실행 이미지 의존성 지문(다르면 멈춤) ② 빌드 — 라벨 `org.opencontainers.image.revision`(코드 커밋 `CODE_COMMIT`)·`org.opencontainers.image.base.digest`(실행 이미지 ID) ③ 반입 판정 `selftest_gate.sh`(코드 폴더 마운트 없이 — `[판정] 통과`가 아니면 멈춤) ④ 저장·gzip·95m 분할·sha256(`ship_stage.sh`) → `/var/tmp/bake/<저장소>/images/<태그>/<이미지>/` + 같은 태그 폴더에 시험한 코드 폴더 묶음 `code-<태그>-<커밋>.tar.gz`(+ sha256).
-3. 운영 서버: 조각을 옮겨 `sha256sum -c <대상>.sha256`(조각마다) → `cat <대상>.tar.gz.part* | gunzip | docker load` → 태그 확인. 호스트 스크립트(`deploy/host/` — trigger.sh·compose·systemd)는 같이 온 코드 폴더 묶음을 `/srv/rag/code/<버전>-<커밋>`에 풀고 `live` 링크로(§1-1 2·3과 같은 방법 — 이미지와 같은 커밋). 컨테이너에는 코드 폴더를 붙이지 않는다 — 셸·unit에 `CODE_DIR`을 두지 않는다(두면 compose가 코드 폴더를 덮어 붙임). 띄우는 법은 §5-2.
+2. 스크립트가 차례로: ① 코드 `deploy/docker/DEPS_HASH` = 실행 이미지 의존성 지문(다르면 멈춤) ② 빌드 — 라벨 `org.opencontainers.image.revision`(코드 커밋 `CODE_COMMIT`)·`org.opencontainers.image.base.digest`(실행 이미지 ID) ③ 반입 판정 `selftest_gate.sh`(코드 폴더 마운트 없이 — `[판정] 통과`가 아니면 멈춤) ④ 저장·gzip·45m 분할·sha256(`ship_stage.sh`) → `/var/tmp/bake/sbl_images/` — 개발 서버와 같은 배치(`load.sh` · `<태그>/BUILD.txt` · `<태그>/<이미지>/`) + 같은 태그 폴더에 시험한 코드 폴더 묶음 `code-<태그>-<커밋>.tar.gz`(+ sha256).
+3. 운영 서버: `sbl_images/` 폴더째 옮겨 `DOCKER=podman bash sbl_images/load.sh <태그>`(조각 sha256 확인 → 합치기 → load → BUILD.txt) → 태그 확인. 호스트 스크립트(`deploy/host/` — trigger.sh·compose·systemd)는 같이 온 코드 폴더 묶음을 `/srv/rag/code/<버전>-<커밋>`에 풀고 `live` 링크로(§1-1 2·3과 같은 방법 — 이미지와 같은 커밋). 컨테이너에는 코드 폴더를 붙이지 않는다 — 셸·unit에 `CODE_DIR`을 두지 않는다(두면 compose가 코드 폴더를 덮어 붙임). 띄우는 법은 §5-2.
 4. 어느 판이 운영에 있는지: `docker image inspect <태그> --format '{{json .Config.Labels}}'` — 코드 커밋·실행 이미지 ID.
 
 배포 단계 표(어디서 어디로·어떤 이미지·코드)는 README §5-0. 운영(수집) 서버의 새 이미지는 §1-2(개발 서버에서 굽기)가 기본이고, 아래 §2~§5(PC 빌드·오버레이 패치)는 PC 시험·비상 수정용이다.
@@ -169,7 +169,7 @@ BUILD_ONLY=1 IMAGE_TARGET=pipeline bash deploy/release/build_ship.sh            
 # 한 번에(빌드→점검→저장→전송→적재→원격 점검, SSH 쪽으로)
 TARGET=user@수집서버 IMAGE_TARGET=pipeline bash deploy/release/build_ship.sh
 
-# 또는 저장만(95MB 조각 + sha256, 저장소 push는 사람이 따로)
+# 또는 저장만(45MB 조각 + sha256 — output/ship/sbl_images/, 저장소 push는 사람이 따로)
 bash deploy/release/ship_stage.sh pipeline mcp            # 태그 = VERSION(다른 태그면 첫 인자로: ship_stage.sh <태그> pipeline mcp)
 ```
 **로컬 빌드** — 빌드 컨텍스트는 저장소 루트(Dockerfile은 `deploy/docker/Dockerfile` — 이미지 안 경로 `/app/deploy/<폴더>`·`/app/docker`). 루트 `.dockerignore`가 허용 목록이라 `common`·`pipeline`·`mcp_server`·`resources`·`deploy/docker`·`deploy/release`·`assets`만 컨텍스트에 들어간다(`deploy/host`·`.venv`·`output`·`valid_env`·`.env.local`·코드 폴더 안 `output/`은 빠짐).
@@ -178,12 +178,7 @@ bash deploy/release/ship_stage.sh pipeline mcp            # 태그 = VERSION(다
 - pipeline 이미지는 `assets/`(Git 제외, rapidocr 모델 — 준비는 §5-6)를 저장소 루트에 두고 빌드한다 — 새 체크아웃·worktree에서는 비어 있으니 먼저 복사한다. `build_ship.sh`는 pipeline 타깃에서 없으면 실패하고 `ALLOW_NO_ASSETS=1`로만 통과한다 — 그때 빈 `assets/`로 빌드되어 rapidocr 모델을 첫 실행에 받으려 한다(폐쇄망이면 실패). mcp는 assets를 쓰지 않는다.
 
 ### 5-2. 서버에서
-```bash
-# ship_stage.sh 조각(<repo>/images/<태그>/data-pipeline/pipeline.tar.gz.partNNN·pipeline.sha256 — mcp-server/는 mcp.*)이면 그 폴더에서:
-cd <받은 폴더>/images/<태그>/data-pipeline
-sha256sum -c pipeline.sha256 && cat pipeline.tar.gz.part* | gunzip -c | docker load    # mcp-server/에서는 mcp.sha256·mcp.tar.gz.part*
-# build_ship.sh 한 파일(/var/tmp/data-pipeline_<태그>.tar.gz)이면: gunzip -c <그 파일> | docker load (build_ship.sh가 sha256 확인·적재까지 함)
-```
+이미지 불러오기는 README §5-0 "개발 서버 설치"(코드 zip + `sbl_images` zip → `load.sh`) 한 길이다(op-10). 운영 서버(구운 이미지)도 같은 `load.sh`(§1-2). 판을 올릴 때의 순서·되돌리기는 §5-7.
 그 뒤 패치 브랜치를 새 버전 기준으로 비운다(`make_patch.sh <새 기준 커밋>` — 바뀐 파일 0이어야 함).
 
 **이미지·코드 폴더·`run_docs.py`는 같은 때에 바꾼다.** 셋 중 하나만 바꾸면 나머지가 깨진다(이미지의 패키지 배치·`compose.patch.yml`이 마운트하는 `app/deploy/<폴더>`·`run_docs.py`가 부르는 `python -m pipeline.…`가 서로 맞아야 함 — 확인 파일 `pipeline/extract/run_all.py`, `docflow_probe.py`는 이미지 안 `/app/deploy/pipeline/extract/`). 순서: 배치·상주 컨테이너 멈춤 → 이미지 적재 → 코드 폴더 전체 덮어쓰기(§4) → `run_docs.py` 교체 → 컨테이너를 새 이미지 + `compose.patch.yml`로 다시 띄움 — 한 번에 한다. 리팩토링 버전(I2·I4·S2~S11 — 패키지 `data_etl` → `pipeline`, 경로 정리)은 **한 이미지 버전으로만** 배포한다 — 나눠 배포하면 p1 code_fp가 두 번 바뀌어 서버 P1 캐시가 한 번 더 전부 빗나간다(refactor_plan 6-1 — `refactor.md` C-23). I4의 바뀐 설정·systemd 할 일은 [env-guide.md](env-guide.md) §5 I4 줄.
@@ -192,7 +187,7 @@ sha256sum -c pipeline.sha256 && cat pipeline.tar.gz.part* | gunzip -c | docker l
 1. 새 이미지 2개(`data-pipeline`·`mcp-server`) 적재.
 2. 옛 상주 컨테이너(`data-parsing`·`data-structure`·`data-retrieval`) 멈춤·삭제.
 3. 코드 폴더 전체 덮어쓰기(§4 — 호스트 스크립트가 `live/deploy/host/`로).
-4. 이미지 이름을 settings.yaml 항목 `pipeline.host.image`·`mcp.host.image`에 적는다(옛 env `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE`). S7e1 버전부터 `pipeline.env`만 있으면 종료 코드 2, 옛 `DATA_PARSING_IMAGE`·`DATA_STRUCTURE_IMAGE`·`DATA_RETRIEVAL_IMAGE`(·`RAG_*`)는 안내 뒤 종료 코드 2 — 설정 옮기기는 §5-4.
+4. 이미지 이름을 settings.yaml 항목 `required.deploy.pipeline_image`·`required.deploy.mcp_image`(op-08 배치 — 옛 `pipeline.host.image`·`mcp.host.image`)에 적는다(옛 env `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE`). S7e1 버전부터 `pipeline.env`만 있으면 종료 코드 2, 옛 `DATA_PARSING_IMAGE`·`DATA_STRUCTURE_IMAGE`·`DATA_RETRIEVAL_IMAGE`(·`RAG_*`)는 안내 뒤 종료 코드 2 — 설정 옮기기는 §5-4.
 5. systemd: 옛 `rag-nightly`·`data-retrieval-keepalive` unit disable·삭제, 새 `data-pipeline-nightly`·`mcp-server-keepalive` 설치(`daemon-reload`).
 6. 새 compose(`deploy/host/compose/compose.pipeline.yml`·`compose.mcp.yml` + `compose.patch*.yml`)로 새 이름 컨테이너(`data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`)를 띄운다.
 7. MCP `parse_document`의 작업 서비스를 손으로 띄운다: `docker exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service`(`-e` 없이, 토큰은 settings.yaml `pipeline.service.parse_mcp.token`). compose·keepalive가 띄우지 않으므로 `data-pipeline-parse`가 다시 시작될 때마다 다시 띄운다.
@@ -288,6 +283,51 @@ $DC run --rm load show-sources
 - **계정의 기본 스키마가 우리 스키마여도 같음(VS8a B-1):** DB 계정의 `search_path`가 우리 스키마로 정해져 있거나(`ALTER ROLE … SET search_path`), 계정 이름 = 스키마 이름(`"$user"`), `PG_SCHEMA=public`이어도 ②가 표·컬럼을 그대로 비교한다. S8a 버전으로 버전을 기록했다면(그때는 "표 없음"만 보이고 ③-b가 컬럼이 다른 스키마도 기록했음) 지금 버전에서 ②를 다시 돌려 차이 0인지 확인한다.
 - **모르는 리비전:** 버전 표에 코드가 모르는 리비전이 하나라도 있으면(새 이미지 → 옛 이미지로 되돌린 뒤 등) 적재·`up`·`stamp` 모두 종료 2.
 - PC: `python -m common.store.db.dbtool <up|stamp|current|check> --target …`([CLAUDE.md](../../CLAUDE.md) §6 — 전용 PG에 처음 한 번 `up --target search`) · 기본 스키마·vector 확장 자리 사례 `--pg-cases orca_<새 이름>`(새 테스트 DB를 만듦 — PC 전용).
+
+### 5-7. 판 올리기(0.2.0) · 되돌리기 — 서버(op-10)
+
+0.1.0 → 0.2.0처럼 설정 배치가 바뀌는 판(op-08 — `required`·역할 절·`tuning`)은 아래 순서로 한 번에 한다. 명령은 root 셸, 새 코드 폴더 루트(`cd /srv/rag/code/live` — 링크를 옮긴 뒤)에서.
+
+**0. 미리 정할 것**
+- 새벽 배치를 멈춘다: `systemctl stop data-pipeline-nightly.timer`(끝나면 `start`). 진행 중인 배치·`run_docs.py`는 끝날 때까지 기다린다.
+- 전체 재처리 시간·디스크를 잡는다 — 판에 따라 후보정(p1)·구조화(s) 지문이 바뀌면 서버 문서 전부가 다시 처리된다(바뀐 지문은 릴리스 노트·PRD e2-02). 시간은 지난 실행 보드(`run_tool.sh run_board`)의 문서당 시간 × 문서 수, 디스크는 `required.deploy.output_root`의 `parse/_rep`·묶음 크기만큼 여유를 더 둔다(옛 결과는 다 돌 때까지 남김).
+
+**1. 백업(되돌리기용)**
+```bash
+mkdir -p /srv/rag/backup && cp -p /srv/rag/env/settings.yaml /srv/rag/env/settings.yaml.0.1.0   # 옛 설정 — 되돌릴 때 그대로 씀
+$DOCKER exec <required.deploy.pg_container 값> pg_dump -U <required.pg.user 값> -d <required.pg.db 값> -Fc > /srv/rag/backup/pg-0.1.0.dump   # DB(값은 화면에 남기지 않게 셸 변수로)
+```
+옛 코드 폴더(`sbl_data_parsing-0.1.0`)와 옛 이미지(`*-runtime:0.1.0`)는 지우지 않는다.
+
+**2. 새 판 받기** — README §5-0 1~3(새 코드 zip 풀기 · `chmod -R a+rX` · `ln -sfn` 새 폴더 · `load.sh 0.2.0`).
+
+**3. 설정 옮기기(이미지 안에서 — 호스트 python 불필요)** — 옛 파일을 표준 입력으로 넘기고 새 파일을 표준 출력으로 받는다(마운트·권한·SELinux와 무관). 화면(표준 오류)에는 옮긴 칸 수와 지운 칸 이름만 나온다(값은 안 찍음).
+```bash
+podman run --rm -i --network none --entrypoint bash -v "$PWD:/app/deploy:ro,z" -e PYTHONPATH=/app/deploy data-pipeline-runtime:0.2.0 \
+  -c 'umask 077 && cat > /tmp/old.yaml && cd /app/deploy && python -m common.config.migrate /tmp/old.yaml --out /tmp/new.yaml --summary >&2 && cat /tmp/new.yaml' \
+  < /srv/rag/env/settings.yaml.0.1.0 > /srv/rag/env/settings.yaml.new
+chown 10001:<운영 그룹> /srv/rag/env/settings.yaml.new && chmod 640 /srv/rag/env/settings.yaml.new
+mv /srv/rag/env/settings.yaml.new /srv/rag/env/settings.yaml
+```
+- 운영 서버(구운 이미지)는 `-v …`·`-e PYTHONPATH` 없이 `data-pipeline:0.2.0`(코드가 이미지 안 `/app/deploy`).
+- 이미지 칸(`required.deploy.pipeline_image`·`mcp_image`)을 `…:0.2.0`으로 고친다. 새 판에서 생긴 필수 칸이 있으면 채운다(`python -m common.config.sample --where <이름>`으로 자리 확인).
+
+**4. DB** — 버전 차이 확인 → 올리기 → 다시 확인(README §5-3 ③과 같은 `dc`):
+```bash
+dc run --rm load migrate check --target all     # 차이·버전 확인(읽기만)
+dc run --rm load migrate up --target all        # 새 판 마이그레이션(없으면 아무것도 안 함)
+dc run --rm load migrate check --target all     # "차이 없음"
+```
+
+**4-1. 엔진 구성 새 판(pl-42 — refactor.md C-69)** — 판 1 시드는 고치지 않으므로 새 형식(`.jpeg`·`.tif`·`.tiff`·`.bmp`·`.mhtml`)은 새 판으로: `dc run --rm load set-stack --parse ".jpeg=rapidocr_ko,qwen_vlm;.tif=rapidocr_ko,qwen_vlm;.tiff=rapidocr_ko,qwen_vlm;.bmp=rapidocr_ko,qwen_vlm;.mhtml=mhtml,kreuzberg" --reason "pl-42 확장자 추가"` → `dc run --rm load show-stack --history 3`. 되돌릴 때는 `set-stack --activate <앞 판> --reason …`(DB를 백업으로 되돌렸으면 필요 없음).
+
+**5. 띄우기·확인** — README §5-3 ④ 연결 점검 · ⑤ 이미지 점검 → `mcp_up.sh` · 상주 트리거 `dc up -d …`(§5-5) → 시작 로그 첫 줄 `[image] … · 코드 <커밋> …`이 새 판인지 → 새벽 배치 다시 켬(`systemctl start data-pipeline-nightly.timer`).
+
+**되돌리기(0.2.0 → 0.1.0)**
+1. 새벽 배치·상주 컨테이너를 멈춘다(`systemctl stop data-pipeline-nightly.timer`, `$DOCKER stop data-pipeline-parse data-pipeline-structure mcp-server`).
+2. `ln -sfn /srv/rag/sbl_data_parsing-0.1.0 /srv/rag/code/live` · `cp -p /srv/rag/env/settings.yaml.0.1.0 /srv/rag/env/settings.yaml`(이미지 칸이 `…:0.1.0` 그대로).
+3. 4단계 `migrate up`이 무언가를 바꿨으면 DB를 백업으로 되돌린다(`pg_restore --clean -d <db> pg-0.1.0.dump` — DB 담당자와 같이). 되돌림 명령(downgrade)은 없다.
+4. 5단계와 같이 띄우고 시작 로그로 0.1.0인지 확인한다. 0.2.0에서 새로 만든 결과(`output_root` 아래)는 옛 판이 낡음으로 보고 다시 만든다.
 
 ### 5-6. 반입 자산(`assets/`) 준비 — 이미지 빌드 전
 

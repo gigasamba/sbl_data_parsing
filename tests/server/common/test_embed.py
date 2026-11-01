@@ -59,10 +59,11 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: RV
                 embed_texts("e5-small", ["다시"], "query")
                 assert len(calls) == 2, "EMBED_QUERY_CACHE=0이면 캐시 없이 매번 호출"
 
-        default_path = ROOT / "output" / "query_cache.sqlite"
         for label, val in (("미설정", None), ("빈 값", "")):  # D-028 ⑩ — 빈 값도 기본 경로(옛 코드는 sqlite3.connect('') 임시 DB)
-            default_path.unlink(missing_ok=True)
             with COMMON.env(EMBED_QUERY_CACHE=val):
+                # mcp 이미지는 이미지 기본값(/tmp/mcp_query_cache.sqlite)이 미설정을 채움 — 그 밖은 코드 기본 ROOT/output
+                default_path = Path(M.cfg().models.embed.query_cache or ROOT / "output" / "query_cache.sqlite")
+                default_path.unlink(missing_ok=True)
                 default_db = _query_cache()
                 assert default_db is not None
                 assert default_path.exists(), f"{label} 기본값은 {default_path}에 켬(RV1)"

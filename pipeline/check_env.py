@@ -221,7 +221,7 @@ def main():
     else:
         ok_n = 0
         for stack, m in registry.stacks().items():
-            tools = ["mineru" if t == "$MINERU_BIN" else t for t in m.REQUIRES["tools"]]  # MINERU_BIN 칸은 지움(엔진 구성에서 뺀 엔진)
+            tools = m.REQUIRES["tools"]
             miss = [x for x in m.REQUIRES["modules"] if importlib.util.find_spec(x) is None] + [t for t in tools if not shutil.which(t)]
             for e in m.ENGINES:
                 miss += [f"{e}: ${v}" for v in registry.missing_env(e)]

@@ -12,7 +12,9 @@ import time
 from pathlib import Path
 from unittest import mock
 
-ROOT = Path(__file__).resolve().parents[3]
+from common.core.paths import DEPLOY_ROOT
+
+ROOT = DEPLOY_ROOT  # 저장소 루트(op-09 — paths 상수)
 
 
 def _load():

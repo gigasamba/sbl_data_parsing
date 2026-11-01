@@ -31,7 +31,6 @@ from pathlib import Path
 from common.config import settings as C  # common 칸(S7e1 — MCP_BUNDLE)
 from common.core.paths import APP_ROOT, PKG_ROOT  # 런타임 output/(패키지 폴더 DEV 아님, v4 leftover 수정) · 엔진 구성(S2)
 
-HERE = Path(__file__).resolve().parent  # deploy/pipeline/eval(S4 — 옛 deploy/common_tools/cli)
 DEV = PKG_ROOT  # 하위 프로세스 cwd — deploy/common/(S6a — 옛 deploy/common_tools/와 같은 깊이)
 
 OUT_BASE = APP_ROOT / "output" / "server_checks"

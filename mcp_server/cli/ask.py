@@ -61,8 +61,7 @@ def Retriever(*args, **kw):
 
 
 def connect(a):
-    """연결 기본값(백로그 E6 · 사용자 2026-10-01): --pg·--local 지정이 없으면 Docker에 떠 있는 pgvector에 연결,
-    없으면 로컬 묶음. → common/services.py"""
+    """저장소: --local이면 로컬 묶음, 아니면 PostgreSQL 필수(op-09 — 자동 탐지·로컬로 빠지기 없음). → common/store/services.py"""
     from common.store import services
 
     services.connect(a)
@@ -78,7 +77,7 @@ def ask(a):
 
 
 def _ask_mcp(a):
-    """기본 경로 — MCP_STORE·MCP_BUNDLE만 ask()의 --pg/--local/--bundle에 맞춰 세팅하고 do_search()를 그대로 부름
+    """기본 경로 — MCP_BUNDLE만 ask()의 --bundle에 맞춰 세팅하고 do_search()를 그대로 부름
     (mcp_server._build_retriever가 이 둘로 저장소를 고름 — modules/search/mcp_server.py ~L105-130). 질의 기록은
     do_search() 안 _log()가 이미 함(qa_log.append — 파일만, mc-13) — 여기서 다시 넣지 않음(중복 기록 방지)."""
     st = _stack()

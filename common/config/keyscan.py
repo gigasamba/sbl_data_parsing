@@ -14,11 +14,11 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
-from pathlib import Path
 
 from common.core.console import utf8_stdout
+from common.core.paths import DEPLOY_ROOT
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = DEPLOY_ROOT  # 저장소 루트(PC) — git ls-files 기준
 _SKIP = (
     "valid_env/",
     ".claude/",
@@ -76,10 +76,6 @@ NOT_SETTINGS = {
         "삭제 후보",
         "S7b에 RUN_ENV=local로 대체 — 코드가 더 읽지 않음(migrate는 옛 env 파일의 LOCAL_RUN=1을 common.run_env: local로)",
     ),
-    "MINERU_BIN": (
-        "env로 남김",
-        "엔진 파일 registry.py가 env를 직접 읽음(기본 mineru — 엔진 지문 파일이라 그대로) · 설정 칸은 10-29에 지움(엔진 구성에서 뺀 엔진)",
-    ),
     "NETWORK_HOST": ("env로 남김", "entrypoint 신호(compose)"),
     "OMP_NUM_THREADS": ("env로 남김", "라이브러리(OpenMP)가 읽음"),
     "PARSE_RUN_ID": ("env로 남김", "부모 → 자식 프로세스 신호"),
@@ -130,6 +126,15 @@ NOT_SETTINGS = {
     "TAG": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "TARGET": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "WHY": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
+    "APP_VERSION": ("인자", "Dockerfile 빌드 인자 — 이미지에 버전을 새김(build_ship.sh가 VERSION 파일에서, op-09)"),
+    "VCS_REF": ("인자", "Dockerfile 빌드 인자 — 이미지에 커밋을 새김(build_ship.sh, op-09)"),
+    "CODE_OUT": ("인자", "build_ship.sh — 코드 묶음 출력 파일(op-09)"),
+    "CODE_BUNDLE": ("인자", "ship_stage.sh — 실행 이미지와 함께 옮길 코드 묶음 파일(bake.sh가 넘김, op-09)"),
+    "BAKE_TEST": ("인자", "bake.sh — PC 시험 태그면 1(태그가 VERSION과 달라도 멈추지 않음, op-09)"),
+    "CODE_DIR": (
+        "인자",
+        "호스트 스크립트 변수 — 개발 서버 코드 폴더(image_vars.sh가 실행 이미지일 때 pwd로 채움, compose.code*.yml 마운트 — op-09)",
+    ),
     "COGNEE_EXPORT_DIR": ("삭제 후보", "빈 틀에만 — 코드가 안 읽음"),
     "DATA_PARSING_IMAGE": ("삭제 후보", "S6b 옛 이름 — image_vars.sh가 거부 안내만"),
     "ENV_AUTOLOAD": ("삭제 후보", "코드가 읽은 적 없음 — 명령 줄 흔적만(S7a2, VS7a R-8)"),
@@ -257,7 +262,7 @@ NOT_SETTINGS = {
     },
 }
 # 모은 키가 아닌 것(셸 문법·Dockerfile ARG·selftest 가짜 이름)
-IGNORE = {"BASE", "X_ALLOW_EXTERNAL"}
+IGNORE = {"BASE", "X_ALLOW_EXTERNAL", "NF"}  # NF — awk의 `$NF`(마지막 칸)를 셸 변수로 잘못 잡음(op-09)
 
 _K = r"([A-Z][A-Z0-9_]{1,})"
 _PY = [
@@ -380,7 +385,7 @@ def object_reads():
     역할 접두로 짓는 이름(`{prefix}_BASE_URL` 꼴 — PREFIXES)의 꼬리가 나오면 읽는 것으로 친다."""
     from common.config import settings as S
 
-    root = Path(__file__).resolve().parents[2]
+    root = ROOT
 
     def texts(folder, skip):
         return (

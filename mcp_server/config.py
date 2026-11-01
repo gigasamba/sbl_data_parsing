@@ -1,7 +1,7 @@
 """검색 MCP 설정 — settings.yaml의 common + mcp 절(S7a 모델, refactor_plan 5-2 · D-015). 칸 표는 refactor_plan 부록 D.
 mcp_server 코드가 읽는 객체는 설정 파일 기반 캐시 MCP다(S7e2 — 전환 다리 없앰: env의 옛 이름은 읽지 않음, 신호 SETTINGS_FILE·RUN_ENV만):
   `from mcp_server import config as mc` → `mc.cfg().search.methods`(mcp 절) · `mc.given("MCP_METHODS")`(준 값만) · `mc.checked(X)` ·
-  시험 `with mc.senv(SEARCH_CLIENT_HARD="1", MCP_STORE=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
+  시험 `with mc.senv(SEARCH_CLIENT_HARD="1", MCP_BUNDLE=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
   env로 읽는 칸만 env에 씀). common 칸은 `common.config.settings.cfg()`로(COMMON).
 요청마다 읽던 값(MCP_TOOL_TIMEOUT_SEC·SEARCH_* 등)은 쓰는 자리에서 요청마다 cfg()로 읽고, 시작 때 한 번 읽던 상수는 CFG(아래)에
 모은다(S5 — 이름·기본값은 옛 mcp_server.py 모듈 상수 그대로, 읽는 시점도 같음 — 이 모듈 import 때).
@@ -10,7 +10,6 @@ SETTINGS(common + mcp 절)는 확인 명령(python -m mcp_server.config)·시험
 """
 
 import contextlib
-import os
 import sys
 
 from pydantic import Field, SecretStr  # 칸 형식
@@ -205,22 +204,15 @@ by_env, given, dropped, checked = _VIEW.by_env, _VIEW.given, _VIEW.dropped, _VIE
 
 def senv(**names):
     """selftest용(S7d) — 옛 os.environ 쓰기·지움을 설정 객체 덮기로 대신. None = 지움. 칸 이름으로 가름: common 칸 → COMMON.env,
-    mcp 칸 → MCP.env, 인계 파일이 env로 읽는 칸(pinned="handoff" — GLOSSARY_DIR·CLIENT_ROSTER)은 os.environ에도 씀(끝나면 되돌림 —
-    terms.py 등 인계 파일은 env를 그대로 읽음). 칸이 없는 이름은 거부(잘못된 이름으로 시험이 헛돌지 않게 — VS7c2 R-8).
+    mcp 칸 → MCP.env. 칸이 없는 이름은 거부(잘못된 이름으로 시험이 헛돌지 않게 — VS7c2 R-8).
     with로 쓰거나 변수에 받아 .close()(겹쳐 쓰면 안쪽부터 되돌림)."""
-    from common.config.settings import COMMON, CommonAppSettings, env_map, env_name, walk
+    from common.config.settings import COMMON, CommonAppSettings, env_map
 
     common_keys, mcp_keys = env_map(CommonAppSettings), env_map(McpEnvSettings)
     unknown = sorted(set(names) - set(common_keys) - set(mcp_keys))
     if unknown:
         raise KeyError(f"senv: 설정 칸이 없는 이름 {unknown}")
-    handoff = {env_name(f) for _, f, _ in walk(CommonAppSettings) if (f.json_schema_extra or {}).get("pinned") == "handoff"}
     st = contextlib.ExitStack()
-    raw = {k: v for k, v in names.items() if k in handoff}
-    if raw:
-        saved = {k: os.environ.get(k) for k in raw}  # env 남김 — 시험: 인계 파일 env(아래에서 되돌림)
-        _put_env(raw)
-        st.callback(_put_env, saved)
     cn = {k: v for k, v in names.items() if k in common_keys}
     mn = {k: v for k, v in names.items() if k in mcp_keys and k not in common_keys}
     if cn:  # 준 칸이 있는 객체만 덮음(덮는 동안 그 객체는 os.environ 쓰기를 못 봄 — 필요 없는 객체까지 고정하지 않게)
@@ -228,12 +220,6 @@ def senv(**names):
     if mn:
         st.enter_context(MCP.env(**mn))
     return st
-
-
-def _put_env(values):
-    """시험 — 인계 파일이 env로 읽는 칸을 os.environ에 씀(None = 지움, senv가 씀)."""
-    for k, v in values.items():
-        os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, str(v))  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음
 
 
 class MCPConfig:

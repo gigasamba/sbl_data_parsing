@@ -24,15 +24,12 @@
 **코드 폴더 배치(`PATCH_CODE`, 기본 `/srv/rag/code/live`)** — `live/app/`은 컨테이너가 읽기 전용으로 붙이는 코드(`app/deploy/<폴더>`·`app/docker`), `live/deploy/host/`·`live/deploy/release/`는 호스트에서 부르는 스크립트·compose·systemd 파일이다. 아래 명령은 모두 `live`(코드 폴더 루트)에서 실행한다.
 
 ### 0-1. 개발 서버는 실행 이미지 + 코드 폴더(op-06, 사용자 10-30)
-개발 서버(폐쇄망)는 코드 없는 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`을 쓰고, 코드 폴더(저장소 트리 그대로)를 `/app/deploy`에 읽기 전용으로 붙인다 — 셸·systemd에 `CODE_DIR=/srv/rag/code/live`(판 폴더를 가리키는 링크)를 주면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`가 `compose.code.yml`·`compose.code.mcp.yml`을 덧붙인다. settings.yaml `pipeline.host.image`·`mcp.host.image`는 실행 이미지 태그. 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 설치·바꾸기·되돌리기는 README §5-0(배포 단계 표)과 [release-and-patch.md](release-and-patch.md) §1-1. 수집(운영) 서버는 코드가 든 이미지 — 개발 서버에서 `bake.sh`로 구운 것(release-and-patch §1-2), 띄우는 법은 아래 그대로.
+개발 서버(폐쇄망)는 코드 없는 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`을 쓰고, 코드 폴더(저장소 트리 그대로)를 `/app/deploy`에 읽기 전용으로 붙인다 — 셸·systemd에 `CODE_DIR=/srv/rag/code/live`(판 폴더를 가리키는 링크)를 주면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`가 `compose.code.yml`·`compose.code.mcp.yml`을 덧붙인다. settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`는 실행 이미지 태그. 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 설치·바꾸기·되돌리기는 README §5-0(배포 단계 표)과 [release-and-patch.md](release-and-patch.md) §1-1. 수집(운영) 서버는 코드가 든 이미지 — 개발 서버에서 `bake.sh`로 구운 것(release-and-patch §1-2), 띄우는 법은 아래 그대로.
 
 ## 1. 설치 · 첫 실행
 
-### 1-1. 이미지 받기
-```bash
-gunzip -c data-pipeline_<태그>.tar.gz | docker load      # 이미지 2개(data-pipeline·mcp-server) 각각(조각이면 cat part* > 로 합친 뒤)
-```
-PC에서 보낼 때는 `deploy/release/build_ship.sh`(빌드+전송+적재 한 번에, SSH) 또는 `deploy/release/ship_stage.sh`(저장만, 95MB 조각) — 상세는 [release-and-patch.md](release-and-patch.md) §5.
+### 1-1. 이미지와 코드 받기
+설치는 README §5-0 "개발 서버 설치" 한 길로 한다(op-10): 코드 git·이미지 git(`sbl_images`)을 zip으로 받아 한 폴더에 풀고, `DOCKER=podman bash sbl_images-main/load.sh <판>`으로 이미지를 불러온다. 운영 서버(구운 이미지)도 같은 `load.sh`로 불러온다([release-and-patch.md](release-and-patch.md) §1-2).
 
 ### 1-2. 설정 파일
 ```bash
@@ -56,15 +53,7 @@ export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.
 - 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지 태그·자원·포트·호스트 경로)뿐이다 — `load_settings`는 셸에 이미 있는 이름은 덮지 않는다.
 
 ### 1-3. 기동 확인
-```bash
-cd /srv/rag/code/live      # 코드 폴더 루트
-( . deploy/host/scripts/settings_env.sh && load_settings && \
-  docker compose -f deploy/host/compose/compose.pipeline.yml run --rm parse check )   # settings.yaml 호스트 항목을 셸 env로(compose 치환). 하위 셸 ( … )로 — 대화형 셸에 export해 두면 그 뒤 settings.yaml을 고쳐도 그 셸에는 반영되지 않음
-docker run --rm data-pipeline:<태그> check-modules      # 이미지 경계(이름 넘어 import 금지) 점검
-bash deploy/release/selftest_gate.sh docker run --rm data-pipeline:<태그> selftest   # 알려진 FAIL 1개라 selftest 종료 코드는 늘 1, 판정은 [판정] 줄(release-and-patch.md §3-3)
-docker run --rm data-pipeline:<태그> smoke --src <실문서 몇 건 폴더>   # 실문서 투입 전 연결 점검, 사람이 읽는 요약
-```
-`check`는 자원·쓰기 권한·`PG_HOST`가 컨테이너 자신(127.0.0.1)인지·디스크 여유를 본다. 통과하면 2절로.
+README §5-3 ④ 연결 점검(`run_tool.sh ping_models`·`check_env`, `dc run --rm parse check`)과 ⑤ 이미지 점검(`check-modules`·`selftest_gate.sh` — 실행 이미지는 코드 폴더를 `-v`로 붙여)을 차례로 한다. `check`는 자원·쓰기 권한·`PG_HOST`가 컨테이너 자신(127.0.0.1)인지·디스크 여유를 본다. 통과하면 2절로.
 
 ## 2. 일상 실행 — parse → structure → load → publish
 

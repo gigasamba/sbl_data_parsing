@@ -17,8 +17,7 @@ import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-from pipeline.eval.anchors import content_groups  # noqa: E402 — 사본 묶음 로직 재사용(중복 없음)
+from pipeline.eval.anchors import content_groups  # 사본 묶음 로직 재사용(중복 없음)
 
 CLIENT_LABELS = {"고객사/client", "고객사", "client"}
 SUPPLIER_LABELS = {"공급사/supplier", "공급사", "supplier"}

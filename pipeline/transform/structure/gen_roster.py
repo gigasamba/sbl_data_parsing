@@ -30,10 +30,8 @@ import json
 import re
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]  # deploy/(S4 — 한 단 깊어짐, 옛 common_tools/cli의 parents[1]과 같은 값)
-from common.core import terms as T  # noqa: E402
-from pipeline import config as pc  # noqa: E402 — S7c: 설정 객체(pipeline 칸 RDB_*)
+from common.core import terms as T
+from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸 RDB_*)
 
 TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # source.py·common/sources.py와 같은 화이트리스트
 COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")

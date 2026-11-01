@@ -39,9 +39,8 @@ from common.config.settings import cfg  # common 칸(S7c — 설정 객체: LLM_
 os.environ.setdefault("HF_HUB_OFFLINE", "1")  # env 남김 — 라이브러리(5-3 H)
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")  # env 남김 — 라이브러리(5-3 H)
 
-HERE = Path(__file__).resolve().parent
-from pipeline.eval import anchors as A  # noqa: E402
-from pipeline.eval import stages as S  # noqa: E402
+from pipeline.eval import anchors as A
+from pipeline.eval import stages as S
 
 AXES = ["parse", "chunk", "embed", "retrieve", "graph"]
 # 빔 단계: 임베딩×검색은 한 단계(임베딩 없음이면 dense·hybrid가 불가능해 따로 고르면 검색 축이 잘림),

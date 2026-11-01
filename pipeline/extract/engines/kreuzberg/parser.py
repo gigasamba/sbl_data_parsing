@@ -7,7 +7,6 @@
 from pipeline.extract.engines._common.contract import _md_tables, _with_split_tables, split_tables
 
 
-import os
 import re
 
 _SENT_END = re.compile(r"(\.|다\.|음\.|요\.|[.!?。])\s*$")
@@ -17,7 +16,8 @@ def _prose_grid(rows):
     """BR49(10-11) — kreuzberg가 번호 목록 평문을 표로 오인(long_320p.pdf 320쪽 중 221개 '표', 실제로는 한 문장이 칸 4개로
     쪼개진 것). 판정: 행 5개 이상 · 빈칸 없는 행이 대부분 · 행의 마지막 칸이 문장 끝(마침표)으로 끝나는 비율 80% 이상이면 평문.
     실제 표는 행마다 마침표로 끝나는 일이 드묾(값·단위·코드). KREUZBERG_PROSE_FILTER=0이면 끔."""
-    if os.environ.get("KREUZBERG_PROSE_FILTER") == "0":
+    from pipeline import config as pc
+    if not pc.cfg().extract.kreuzberg_prose_filter:
         return False
     body = [[str(c).strip() for c in r] for r in rows if any(str(c).strip() for c in r)]
     if len(body) < 5:
