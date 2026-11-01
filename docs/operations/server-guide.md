@@ -42,7 +42,7 @@ export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.
 ```
 - `export`는 그 셸에서만 유효하다. 운영 계정 셸 설정(예: `~/.bashrc`)에 `export SERVER_ENV_DIR=/srv/rag/env`를 영구로 두거나 명령 앞에 붙인다. `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd unit은 스스로 이 값을 넘긴다. 컨테이너는 이 폴더를 마운트하지 않는다.
 
-> ⚠️ **원천 목록·엔진 구성은 코드 폴더의 파일이다**(`resources/mappings/sources.json`·`resources/config/pipeline_stack.json` — 사용자 11-01, D-031). `$SERVER_ENV_DIR/sources.json` 덮어쓰기는 읽지 않는다. 바꾸려면 코드 폴더의 파일을 고쳐 오버레이 패치로 보낸다(다른 파일을 쓰려면 settings.yaml `ops.paths.sources_file`·`stack_file` — [env-guide.md](env-guide.md) 1절). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다.
+> ⚠️ **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` — 사용자 11-01, D-031). 바꾸려면 코드 폴더의 파일을 고쳐 오버레이 패치로 보낸다(다른 파일을 쓰려면 settings.yaml `ops.paths.stack_file` — [env-guide.md](env-guide.md) 1절). 원천 목록 `sources.json`은 11-01에 지웠다(원천은 폴더·`rdb:csv`만). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다.
 
 #### 값 바꾸기
 - 앱 설정 값은 `settings.yaml`을 직접 고친다. 고친 뒤 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`는 다시 띄운다.
@@ -134,7 +134,7 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 | 용어집(동의어·약어) | `app/deploy/resources/vocab/glossary/domain_terms.csv`(다른 폴더는 settings.yaml `common.paths.glossary_dir` — 옛 env `GLOSSARY_DIR`, 아래 5-1) |
 | 고객 명부 | settings.yaml `common.paths.client_roster`(옛 env `CLIENT_ROSTER` — CSV `이름,별칭\|별칭` 또는 JSON) |
 | 제품 코드 규칙 | `app/deploy/resources/vocab/glossary/id_patterns.csv` |
-| 원천 표·열(문서 위치) | `resources/mappings/sources.json`(서버·PC 같음 · `ops.paths.sources_file` · 확인 `show-sources` — [docs/architecture/pipeline_stack.md](../architecture/pipeline_stack.md)) — `python -m pipeline.extract.rdb_discover`가 초안 |
+| 원천 표·열(문서 위치) | (11-01 원천 목록 `sources.json`·`show-sources` 지움 — 원천은 `run_docs`가 EDW에서 만든 `rdb:csv`. 열 이름이 다른 표는 `RDB_COL_*`) |
 | 엔진 구성 | `resources/config/pipeline_stack.json`(서버·PC 같음 · `ops.paths.stack_file` · 확인 `show-stack`) — 바꾸기 = 파일을 고쳐 오버레이 패치 |
 | 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성) · 서버 정답 폴더(settings.yaml 호스트 항목 `pipeline.host.gold_dir` — `run_tool.sh`가 컨테이너 `/data/gold`로 붙임) |
 | 집계 지표 단서어 | 코드 기본값(`mcp_server/services/search/qtype.py` `_AGG_VOCAB_DEFAULT`) — 11-01 사전 파일 `agg_vocab.json`·설정 `search.agg_vocab_file`은 지움(내용이 기본값과 같았음) |

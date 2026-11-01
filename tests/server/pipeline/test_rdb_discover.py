@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from common.core.sources import TABLE_ID_RE
-from pipeline.extract.rdb_discover import REQUIRED_COLUMNS, _from_csv, column_problems
+from common.store.parsing_meta_db import TABLE_ID_RE
+from pipeline.extract.rdb_discover import REQUIRED_COLUMNS, _from_csv
 
 
 def selftest():
@@ -20,14 +20,7 @@ def selftest():
         "columns"
     ]
     assert "_missing_columns" not in d0, d0  # 필수 열 전부 맞춰짐
-    body = [{**d0, "table": f"csv:{csv_path}"}]  # S8b — set-sources --check-columns(csv 표)
-    assert column_problems(body) == [], column_problems(body)
-    bad = [
-        {**d0, "table": f"csv:{csv_path}", "columns": {**d0["columns"], "size": "no_such_col"}},
-        {**d0, "name": "x", "table": f"csv:{d / 'none.csv'}"},
-    ]
-    probs = column_problems(bad)
-    assert len(probs) == 2 and "size=no_such_col" in probs[0] and "없음" in probs[1], probs
+    # (원천 목록 열 대조 column_problems는 11-01에 sources.json과 함께 지움)
 
     csv2 = d / "FileStorageMap_CRMS.csv"
     csv2.write_text("file_id,object_path,file_name,size_bytes,mod_seq\nR-1,a,a.pdf,4,1\n", encoding="utf-8")

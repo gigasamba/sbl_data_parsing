@@ -7,23 +7,16 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pipeline.extract.source as M
-from common.config.settings import COMMON
 from common.core.contract import jl
 from common.core.paths import DEPLOY_ROOT
 from pipeline import config as pc
 from pipeline.extract.source import (
-    TABLE_ID_RE,
-    _mssql_rows,
-    _rdb_cols,
     _safe_join,
     _safe_name,
     finish,
     mark_done,
     resolve,
 )
-from tests.server.common.test_mssql import (
-    FakeConnection,
-)  # S9 — 옛 `mssql.FakeConnection`(그룹 A가 common.store.mssql에서 시험 파일로 옮김)
 
 
 def selftest():
@@ -53,7 +46,6 @@ def selftest():
     _selftest_rdb_doc_location_fields()
     _selftest_filestoragemap()
     _selftest_same_key_new_version()
-    _selftest_mssql()
     _selftest_finish_keep()
 
 
@@ -281,8 +273,6 @@ def _selftest_filestoragemap():
     # S9 — 옛 `global _s3` → `M._s3`(모듈 전역 대입)
     real_s3 = M._s3
 
-    assert TABLE_ID_RE.match("AI.FileStorageMap")  # 요건 ⑥ — 대소문자 섞인 스키마.표도 화이트리스트 통과
-
     state_root = Path(tempfile.mkdtemp())
     csv_path = state_root / "file_storage_map.csv"
     # 5행 — id=1·4는 같은 original_filename(report.pdf, 이름 충돌 구분 시험)
@@ -381,53 +371,6 @@ def _selftest_same_key_new_version():
         print("[selftest] AD44(c) — 같은 s3_key에 새 id(새 판): 키만으론 영구 누락됐을 것 → 2회차 1건 받음·3회차 0건 통과")
     finally:
         M._s3 = real_s3
-        env.close()
-
-
-def _selftest_mssql():
-    """RDB_ENGINE=mssql(기본, 2026-10-07 EDW=Azure SQL/SQL Server 확정) — 실제 pymssql 연결 없이 pymssql.connect만
-    가짜로 바꿔(monkeypatch) 쿼리 조립(대괄호 식별자·id 증분 WHERE·ORDER BY)과 dict 행 처리만 확인. 실제 설치·
-    접속 시험 아님(사용자 10-07: 로컬 시험은 가짜 연결로)."""
-    import pymssql
-
-    from common.store import mssql  # S8b — 연결이 SQLAlchemy라 가짜 연결도 방언의 첫 연결 카탈로그 질의에 대답(mssql.FakeConnection)
-
-    calls = []
-
-    all_rows = [
-        {"id": 1, "content_version_id": 101, "s3_key": "docs/a.pdf", "original_filename": "a.pdf", "file_size": 4},
-        {"id": 2, "content_version_id": 102, "s3_key": "docs/b.pdf", "original_filename": "b.pdf", "file_size": 4},
-    ]
-    conns = []
-    real_connect = pymssql.connect
-    cols_of = list(all_rows[0])
-    pymssql.connect = lambda **kw: (
-        conns.append(FakeConnection(lambda sql, params: (cols_of, [tuple(r[c] for c in cols_of) for r in all_rows]), calls)) or conns[-1]
-    )
-    mssql.clear()
-    env = contextlib.ExitStack()
-    env.enter_context(
-        COMMON.env(RDB_HOST="h", RDB_READ_USER="u", RDB_READ_PASSWORD="p", RDB_DATABASE="d")
-    )  # 설정 객체 덮어쓰기(os.environ은 안 바뀜) — 원천 읽기는 읽기 계정(ops.md#op-03)
-    try:
-        cols = _rdb_cols()
-        rows = _mssql_rows("AI.FileStorageMap", cols, None, None, "id", None)
-        assert rows == all_rows, rows
-        sql, params = calls[0]
-        assert "[AI].[FileStorageMap]" in sql and "[id]" in sql and "ORDER BY [id]" in sql and "WHERE" not in sql, sql
-        assert not params, params
-        assert conns[0].closed  # 연결은 늘 닫힘(finally)
-
-        calls.clear()
-        _mssql_rows("AI.FileStorageMap", cols, None, None, "id", 1)
-        sql2, params2 = calls[0]
-        assert "WHERE [id] >= %s" in sql2 and params2 == (1,), (sql2, params2)  # DET1 — 엄격한 > 아님
-        print(
-            "[selftest] AD44(c) — RDB_ENGINE=mssql(기본): 대괄호 식별자·id 증분 WHERE·dict 행 처리(가짜 연결 — SQLAlchemy mssql+pymssql, S8b) 통과"
-        )
-    finally:
-        pymssql.connect = real_connect
-        mssql.clear()
         env.close()
 
 

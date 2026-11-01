@@ -7,7 +7,6 @@
 | | 파일(서버·PC 같음 — 두 이미지에 다 들어 있음) | 다른 파일을 쓰려면(설정) |
 |---|---|---|
 | 엔진 구성 | `resources/config/pipeline_stack.json` | `ops.paths.stack_file` |
-| 원천 목록 | `resources/mappings/sources.json` | `ops.paths.sources_file` |
 | 못 읽을 때 | **시작 거부 — 종료 코드 2**(파일 없음·JSON 오류·모양이 틀림 — 한 줄 안내, 값은 찍지 않음) | |
 
 - 읽는 곳은 `common/store/db/cfgfile.py` 한 곳이다. 읽을 때 pydantic으로 모양을 검사한다(`common/store/db/schemas/config_body.py` — 원천 항목은 `common/core/sources.py` `_validate_entry` 한 곳). `body_sha` = 정규 JSON(키 정렬·공백 없음·UTF-8)의 sha256 — 같은 구성이면 서버·PC가 같은 값이다.
@@ -27,7 +26,7 @@
 |---|---|
 | 바꾸기 | 코드 폴더의 파일을 고쳐 커밋 → 서버에는 **오버레이 패치**로 보낸다([release-and-patch.md](../operations/release-and-patch.md)) |
 | 되돌리기 | git으로 이전 파일로 되돌려 다시 패치 |
-| 보기 | `show-stack`·`show-sources`(PC `python -m pipeline.cli …` · 이미지 `docker run … data-pipeline <명령>`) — 이름·sha·파일 경로와 내용 요약 |
+| 보기 | `show-stack`(PC `python -m pipeline.cli …` · 이미지 `docker run … data-pipeline <명령>`) — 이름·sha·파일 경로와 내용 요약 |
 
 - **이미지에 없는 엔진 거부(D-017):** `parse` 목록 ∪ `candidates`의 엔진마다 등록부(`pipeline/extract/engines`)에 있고 설치(REQUIRES 모듈·도구)됐는지 — 파이프라인 진입점(`pipeline.cli`·`mcp_parse_service`·`load.index`)이 시작 때 `pipeline.stackcfg.resolve()`로 검사한다(어긋나면 시작 안 함, 종료 2). REQUIRES_ENV(모델 주소 설정)는 설치 문제가 아니라 보지 않는다. 검색은 `retrieve`·`k`만 쓴다. `show-stack`·`show-sources`는 실행 기록을 `/app/output/logs`에 쓰므로 `/app/output:ro`인 상주 `mcp-server` 컨테이너에서는 entrypoint 쓰기 확인에서 종료 2다 — `data-pipeline` 컨테이너(`trigger.sh`·`run_tool.sh`의 load 등)에서 본다(VS8b R-9).
 - **파싱과 구조화가 같은 구성:** 파일은 오버레이 패치로만 바뀌므로 한 실행 안에서는 그대로다. 호스트 `run_docs.py`는 시작 때 파싱 컨테이너 안에서 `show-stack`을 한 번 돌려 파일이 읽히는지 확인한다(못 읽으면 멈춤).

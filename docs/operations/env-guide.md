@@ -126,8 +126,8 @@
 | 이름 | 무엇 | 형식 |
 |---|---|---|
 | `DOC_DIR` | 원본 문서 폴더 | 하드코딩 기본값 없음 — 비우면 실행 때 안내 후 종료(legacy 별칭 `DOC_SRC`도 받음) |
-| `PARSE_SOURCE` | 이번에 읽을 원천 | 폴더 · `s3://버킷/접두` · `rdb:*`(등록 전부) · `rdb:<이름>` |
-| `SOURCES_FILE` | 원천 표·열 목록 | 파일 경로(`ops.paths.sources_file`, 비우면 `resources/mappings/sources.json`) — **서버·PC 같음**(사용자 11-01, [docs/architecture/pipeline_stack.md](../architecture/pipeline_stack.md)). `$SERVER_ENV_DIR/sources.json`은 읽지 않는다. 엔진 구성 파일은 `PIPELINE_STACK_FILE`(`ops.paths.stack_file`) |
+| `PARSE_SOURCE` | 이번에 읽을 원천 | 폴더 · `rdb:csv:<경로>`(사용자 11-01 — `s3://`·`rdb:*`·`rdb:<이름>`·`rdb:<표>` 지움) |
+| `SOURCES_FILE` | (11-01 지움 — 원천 목록 `sources.json`과 함께. 칸은 남아 있어도 읽지 않음) | 엔진 구성 파일은 `PIPELINE_STACK_FILE`(`ops.paths.stack_file`) |
 | `SERVER_ENV_DIR` | 서버 설정 폴더(코드 폴더 밖) | 서버 기본 배치 `/srv/rag/env` — `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd가 이 값으로 넘김. 컨테이너는 이 폴더를 마운트하지 않는다. 운영 계정 `~/.bashrc` 등에 영구로 export([server-guide.md](server-guide.md) §1-2) |
 | `GOLD_DIR` | 사람 정답 폴더 | `<원본 파일 이름>.txt`(원문에 있는 글자만). ⚠ 서버는 호스트 항목 `ops.pipeline_host.gold_dir`에만 적는다 — `run_tool.sh`가 컨테이너 `/data/gold`로 붙이고, 앱은 앱 항목 `ops.pipeline_paths.gold_dir`가 비었으면 그 자리를 읽음(앱 항목에 호스트 경로를 적으면 컨테이너 안에 없는 자리를 봄. migrate도 서버 env 파일의 `GOLD_DIR`를 호스트 항목에만 옮김) |
 | `CLIENT_ROSTER` | 고객 명부(고객·잠재 고객, 100개 이상 가능) | **권장 CSV** 머리글 `client_id,canonical_name,name_ko,aliases,client_type,segment,country,parent_client_id,status,description,source,updated` — 필수는 `canonical_name` 또는 `name_ko` 하나뿐(나머지 전부 빈칸 가능) · `aliases`는 `\|` 또는 `;` 구분 · `client_type` = customer·prospect(지금은 참고용 — 잠재 고객도 고객 인식·태그·필터에 똑같이 쓰임) · `status`가 `inactive`·`deleted`면 제외(대소문자 무관 — SFDC `Inactive`도, 빈칸 = 사용) · UTF-8 또는 Excel cp949 · 영문 3자 이하 별칭은 오탐 방지로 무시 · 옛 형식 CSV `이름,"별칭\|별칭"`·JSON `{"이름": [별칭]}`도 그대로 읽음 · 예시 `resources/vocab/glossary/client_roster.csv`(시험용 표본 데이터 — #32)(이미지 안 `/app/deploy/resources/…` — 작성법 server-guide §5-1) · 고객 마스터 내보내기에서 자동 생성 `gen_roster --kind client`(예시 `client_master.example.csv`·`client_master_map.example.json`, server-guide §5-1) |

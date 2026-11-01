@@ -1,8 +1,7 @@
-"""엔진 구성·원천 목록 파일 모양(pydantic — S8b, D-031): 엔진 구성(resources/config/pipeline_stack.json)·원천 목록
-(resources/mappings/sources.json). 서버·PC가 파일을 읽을 때(common.store.db.cfgfile) 이 검사를 쓴다(사용자 11-01 — 판 표 없앰). 원천 항목 검사는
-common/core/sources.py `_validate_entry` 한 곳(글자·규칙 그대로) — 여기서는 목록·이름 중복만 더한다."""
+"""엔진 구성 파일 모양(pydantic — S8b, D-031): resources/config/pipeline_stack.json. 서버·PC가 파일을 읽을 때
+(common.store.db.cfgfile) 이 검사를 쓴다(사용자 11-01 — 판 표 없앰 · 원천 목록 sources.json 모양 SourcesBody는 11-01에 지움)."""
 
-from pydantic import BaseModel, ConfigDict, RootModel, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 STACK_BODY_KEYS = ("parse", "source", "embed", "chunk", "graph", "retrieve", "k", "candidates")  # 파일 body 칸(name은 따로, 메모는 docs)
 
@@ -45,22 +44,6 @@ class StackFile(StackBody):
     name: str
     updated: str | None = None
     client_aliases: dict[str, list[str]] | None = None
-
-
-class SourcesBody(RootModel[list[dict]]):
-    """원천 목록 — 항목마다 sources._validate_entry(옛 글자 그대로) + 이름 중복 거부."""
-
-    @model_validator(mode="after")
-    def _entries(self):
-        from common.core.sources import _validate_entry
-
-        seen = set()
-        for i, entry in enumerate(self.root):
-            v = _validate_entry(entry, "body", i)
-            if v["name"] in seen:
-                raise ValueError(f"[sources] body — name 중복: {v['name']}")
-            seen.add(v["name"])
-        return self
 
 
 def stack_body(doc):

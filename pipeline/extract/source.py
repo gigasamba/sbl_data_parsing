@@ -1,64 +1,33 @@
 #!/usr/bin/env python3
-"""파싱 대상 문서 가져오기(파싱 모듈) — 폴더 또는 Object Storage(S3 호환) · 시험 모드 표본 추출.
+"""파싱 대상 문서 가져오기(파싱 모듈) — 폴더 또는 rdb:csv(문서 위치 표 csv → Object Storage에서 받음).
 
   --source /srv/rag/docs            같은 서버 폴더(샘플 데이터) — 그대로 씀
-  --source s3://버킷/접두 [--limit 10]  Object Storage — 접두 아래 객체를 작업 폴더로 내려받음(--limit = 몇 건만 시험)
-  --source rdb:<표>                  RDB 문서 위치 메타(예 AI.FileStorageMap)를 질의해 그 키만 Object Storage에서 받음(AD44) ·
-                                      시험용은 --source rdb:csv:<경로>(합성 표, 실제 RDB·네트워크 없이)
-  --source rdb:*                     SI41 — common/sources.json(git)에 enabled=true인 원천 전부(표마다 처리 기록·watermark 분리)
-  --source rdb:<이름>                 SI41 — sources.json에 등록된 이름 하나(table·columns·bucket을 그 설정에서) ·
-                                      이름이 등록돼 있지 않으면 레거시(표 이름·csv:<경로> 직접 지정, env RDB_COL_*·RDB_BUCKET)로 그대로 동작
-  (--mode test 표본 모드와 스트리밍용 plan()은 11-01에 지움)
+  --source rdb:csv:<경로>            문서 위치 표(csv — run_docs가 EDW FileStorageMap에서 만든 batch.csv)의 키만 Object Storage에서 받음(AD44)
+  (11-01 사용자 지움: s3://버킷/접두 폴더 가져오기 · rdb:*·rdb:<이름>(원천 목록 sources.json) · rdb:<표> 직접 질의(watermark 포함) ·
+   --mode test 표본 · 스트리밍용 plan())
 
-Object Storage 원본 처리(백로그 O2 일부): 대표 결과가 나온 문서의 내려받은 원본은 parse 뒤 바로 지움(보존 스위치
-KEEP_LOCAL_ORIGINALS·상한 PARSE_KEEP_MAX_GB는 op-08에 지움).
-처리한 객체(ETag 또는 키만)는 output/parse/_source/processed.jsonl에 기록 → 다음 실행에서 다시 받지 않음. 실패한 문서는 남겨 다음 실행이 다시 시도.
+Object Storage 원본 처리(백로그 O2 일부): 대표 결과가 나온 문서의 내려받은 원본은 parse 뒤 바로 지움.
+처리한 객체(ETag 또는 (key, 증분값))는 output/parse/_source/processed.jsonl에 기록 → 다음 실행에서 다시 받지 않음. 실패한 문서는 남겨 다음 실행이 다시 시도.
 검색 결과의 원본 위치(source_uri) = s3://버킷/키(SOURCE_MANIFEST로 common/ids.source_uri가 읽음).
-접속: OS_ENDPOINT · OS_ACCESS_KEY · OS_SECRET_KEY · OS_REGION(기본 us-east-1) · OS_VERIFY_TLS(기본 1, 사내 CA면 경로) — 비밀값은 env 파일에만.
+접속: OS_ENDPOINT · OS_ACCESS_KEY · OS_SECRET_KEY · OS_REGION(기본 us-east-1) · OS_VERIFY_TLS(기본 1, 사내 CA면 경로) — 비밀값은 settings.yaml에만.
 
-RDB 표(AD44): 기본 열 매핑은 실 EDW `AI.FileStorageMap`(2026-10-07 사용자 제공)과 같음 — doc_id=id · key=s3_key ·
-size=file_size · filename=original_filename · content_version=content_version_id(같은 파일의 새 판이 새 행/새
-content_version_id로 들어온다는 가정). 이 표에 없는 열(bucket·etag·content_type·company_id·doc_type·contract_id·
-updated_at·version·supersedes·is_deleted)은 전부 선택(기본값 ""=미설정, 없으면 그 값이 없을 뿐 에러 안 남) — 옛 synth
-시험 표(doc_location.csv: doc_id·bucket·object_key·etag·size_bytes·…)처럼 열 이름이 다른 표는 RDB_COL_<필드>로 전부
-맞춘다(열 이름도 식별자 화이트리스트만). 고객·문서 종류 필터(RDB_COMPANY·RDB_DOC_TYPE)는 그 열이 없으면 조용히
-무시하지 않고 경고 출력 뒤 필터 없이 진행.
-버킷 — bucket 열이 있으면 그 값, 없으면 key가 `s3://버킷/…` 꼴이면 그 안의 버킷, 둘 다 아니면 env RDB_BUCKET(이
-저장소에 버킷 전용 env가 따로 없어 새로 둠 — OS_ENDPOINT 등은 접속 정보일 뿐 버킷 이름이 아님).
-받기 전 대조 — etag 열이 있으면 ETag 대조(head_object), 없고 size(=file_size)가 있으면 ContentLength == size로
-대조(불일치 시 둘 다 EtagMismatch — 메시지만 'ETag 불일치'/'크기 불일치'로 구분), 둘 다 없으면 대조 생략.
-증분(since) 기준 — updated_at 열이 있으면 그 값, 없으면 env RDB_INCREMENT_COL(기본 id, 열 이름도 화이트리스트).
-범위(since)는 필터 조합마다 따로 두는 북마크 — 지난 질의에서 나온 행이 전부 처리 기록되면(ETag가 있으면 ETag 일치로,
-없으면 (key, 증분값) 쌍이 기록과 같은지로 — `_rdb_is_done`, 키만 보면 같은 s3_key에 새 id/content_version_id가
-들어온 새 판을 "이미 처리됨"으로 오판해 영영 못 받는다 — 독립 검토 BLOCK) 그 가장 늦은 값으로 전진하고, 하나라도
-안 끝났으면 그 전 since에 그대로 머문다(뒤로 안 가고 건너뛰지도 않음 — output/parse/_source/rdb_watermark.json).
-질의 경계(DET1, 독립 검토 HIGH) — WHERE는 `inc_col >= since`(엄격한 `>` 아님): 같은 since 값(2차 해상도 등)을 가진
-문서가 둘 이상이고 그중 하나만 지난 배치에 들어가 since가 그 값으로 전진하면, 엄격한 `>`는 나머지 문서를
-"그 값보다 크지 않다"는 이유로 영영 다시 조회하지 않는다(파싱 전 단계라 doc_registry도 못 봄). `>=`로 바꿔 그
-경계값 전체를 매번 다시 받아오고, 이미 끝난 행은 `_rdb_is_done`(key·etag 또는 key·증분값 쌍)이 걸러낸다 —
-key가 문서마다 고유하므로(S3 키·전체 경로) 이 dedup만으로 경계 재조회가 충분히 덮인다(같은 키에 새 판이 들어오는
-경우는 위 문단의 별도 함정이고 그건 이미 (key, 증분값) 비교로 막혀 있음). 시간대 — PG·mssql 네이티브 열 비교는
-드라이버가 돌려준 값 그대로(시간대 변환 없음, DB가 UTC면 UTC), csv 시험 엔진은 ISO8601 문자열을 **문자열**로
-비교하므로(`_inc_value`) 모든 행이 같은 형식·같은 오프셋(예: 전부 `Z`)일 때만 올바르게 정렬된다.
-DB 엔진(RDB_ENGINE, 기본 mssql — 2026-10-07 EDW=Azure SQL Database(PaaS)=SQL Server로 확정): mssql은 pymssql
-(대괄호 식별자 `[AI].[FileStorageMap]`, 값은 %s 파라미터, common.connections.rdb 읽기 계정 RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_READ_USER·RDB_READ_PASSWORD +
-그 밖 연결 인자는 RDB_CONNECT_KWARGS(JSON)로 그대로 전달 — TLS·인증 방식 같은 접속 세부는 다루지 않음, 사용자 가이드
-참고). RDB_ENGINE=pg는 common/pg.py(conf()·PG) 재사용 + psycopg `sql.Identifier`로 표 이름만 대소문자 보존(열 이름은
-화이트리스트 문자열 그대로, 값은 파라미터 바인딩 — 자유 SQL 금지).
-문서 이름 — original_filename을 그대로(없으면 doc_id), 같은 이름이 여럿이면 doc_id 접두(`<doc_id>__<이름>`)로
-구분(`_rdb_names`, `_safe_name` 재사용 — 경로 탈출 방어는 `_safe_join`이 마지막 방어선).
-Object Storage의 실제 값이 RDB가 적은 값과 다르면 받지 않고 거부·기록(output/parse/_source/rejected.jsonl) — 그 문서
-하나만 건너뛰고 나머지는 계속 받는다(크래시 안 함), 다음 실행이 다시 시도.
-
-plan()은 대상 이름만 정하고(표본·제한 적용) 받지 않는다 — fetch_one(name, dest)으로 한 건씩 받는다(스트리밍 파싱 호출부는
-op-08에 지움 — 지금은 시험만 부름). 묶음마다 다시 표본을 뽑으면(남은 것 중 top-N)
-표본이 흔들리므로(처리될수록 "남은 것"이 바뀜) 반드시 한 번만 호출해 이름 목록을 고정한다.
+열 매핑(AD44): 기본은 실 EDW `AI.FileStorageMap`과 같음 — doc_id=id · key=s3_key · size=file_size ·
+filename=original_filename · content_version=content_version_id. 이 표에 없는 열(bucket·etag·content_type·company_id·doc_type·
+contract_id·updated_at·version·supersedes·is_deleted)은 선택(기본값 ""=미설정) — 열 이름이 다른 csv는 RDB_COL_<필드>로 맞춘다
+(열 이름은 식별자 화이트리스트만). 고객·문서 종류 필터(RDB_COMPANY·RDB_DOC_TYPE)는 그 열이 없으면 경고 뒤 필터 없이 진행.
+버킷 — bucket 열이 있으면 그 값, 없으면 key가 `s3://버킷/…` 꼴이면 그 안의 버킷, 둘 다 아니면 RDB_BUCKET.
+받기 전 대조 — etag 열이 있으면 ETag 대조(head_object), 없고 size가 있으면 ContentLength와 비교(크기 불일치는 참고 기록만),
+둘 다 없으면 대조 생략. 이미 처리됐는지는 ETag가 있으면 ETag로, 없으면 (key, 증분값) 쌍으로(`_rdb_is_done` — 같은 s3_key의
+새 판을 "이미 처리됨"으로 오판하지 않게). 증분값 = updated_at 열, 없으면 RDB_INCREMENT_COL(기본 id).
+문서 이름 — original_filename을 그대로(없으면 doc_id), 같은 이름이 여럿이면 doc_id 접두(`<doc_id>__<이름>`)로 구분.
+Object Storage의 실제 값이 표가 적은 값과 다르면 받지 않고 거부·기록(output/parse/_source/rejected.jsonl) — 그 문서만 건너뜀.
 """
 
 import csv
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import threading
@@ -68,15 +37,11 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from common.config import settings as C  # S7c: 설정 객체(common 칸 SOURCE_MANIFEST·비밀 꺼내기)
-from common.core import sources as SRC_CFG  # SI41 원천 목록(common/sources.json, git) · 같은 공용 common/ 이라 이미지 경계 위반 아님
 from common.core.console import utf8_stdout
 from common.core.contract import jl
 from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
 
-TABLE_ID_RE = (
-    SRC_CFG.TABLE_ID_RE
-)  # RDB 표 이름 화이트리스트(SQL 삽입 방지) — 대소문자 섞여도 통과(AI.FileStorageMap) · sources.json과 1곳에서 검증
-COL_ID_RE = SRC_CFG.COL_ID_RE  # RDB 열 이름(RDB_COL_*) 화이트리스트 — 같은 이유
+COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")  # csv 열 이름(RDB_COL_*) 화이트리스트(옛 common.core.sources와 같은 규칙)
 
 
 class EtagMismatch(ValueError):
@@ -128,15 +93,14 @@ def _record_duplicate(state, source_id, dup, etag=None, size=None, updated_at=No
 
 
 def is_remote(source):
-    """원본이 다른 서버(Object Storage)에서 오는지 — s3:// 목록이든 rdb:(RDB가 키를 알려줌)든 같은 처리(처리 기록·원본 삭제)."""
-    return str(source).startswith(("s3://", "rdb:"))
+    """원본이 Object Storage에서 오는지 — rdb:csv(표가 키를 알려줌)면 True, 폴더면 False."""
+    return str(source).startswith("rdb:")
 
 
 # _safe_name·_safe_join은 common/ids.py(safe_name·safe_join)로 옮김(독립 검토 MAJOR-1 — modules/load도 같이 씀,
 # modules/load가 modules/parse를 import하면 이미지 경계 위반이라 공용 위치는 common/). 동작은 바이트 동일(이름만 별칭).
 from common.core.contract import safe_filename as _safe_name  # noqa: E402
 from common.core.contract import safe_path_join as _safe_join  # noqa: E402
-from common.core.paths import atomic_write_text, tmp_path_for  # noqa: E402 — GH1-02 받기·메타 모두 임시 파일 + os.replace
 
 
 def _dedupe_names(name_of):
@@ -215,28 +179,21 @@ def _inc_value(row, col):
     return int(v) if isinstance(v, str) and v.lstrip("-").isdigit() else v
 
 
-def _rdb_bucket_and_key(cols, r, default_bucket=None):
-    """버킷·키 — bucket 열이 있으면 그 값, 없으면 key가 `s3://버킷/…` 꼴이면 그 안의 버킷(SI41 — sources.json에
-    등록된 원천이면 설정된 bucket과 다를 때 경고만, 거부는 안 함), 둘 다 아니면 default_bucket(SI41 — sources.json
-    `bucket`, 없으면 레거시 env RDB_BUCKET)."""
+def _rdb_bucket_and_key(cols, r):
+    """버킷·키 — bucket 열이 있으면 그 값, 없으면 key가 `s3://버킷/…` 꼴이면 그 안의 버킷, 둘 다 아니면 RDB_BUCKET."""
     raw_key = r[cols["key"]]
     if cols["bucket"] and r.get(cols["bucket"]):
         return r[cols["bucket"]], raw_key
     if isinstance(raw_key, str) and raw_key.startswith("s3://"):
         bucket, _, key = raw_key[5:].partition("/")
-        if default_bucket and bucket != default_bucket:
-            print(f"[source] 경고 — 키에 포함된 버킷({bucket}) ≠ 원천 설정 버킷({default_bucket}): {raw_key!r}", flush=True)
         return bucket, key
-    bucket = default_bucket or pc.cfg().connections.rdb.bucket  # S7c — 설정 객체
+    bucket = pc.cfg().connections.rdb.bucket  # S7c — 설정 객체
     if not bucket:
-        raise ValueError(
-            f"[source] 버킷을 알 수 없음 — bucket 열 없음·key가 s3://버킷/… 꼴 아님, "
-            f"sources.json bucket 또는 env RDB_BUCKET 필요(key={raw_key!r})"
-        )
+        raise ValueError(f"[source] 버킷을 알 수 없음 — bucket 열 없음·key가 s3://버킷/… 꼴 아님, RDB_BUCKET 필요(key={raw_key!r})")
     return bucket, raw_key
 
 
-def _load_done(state, source_name=None):
+def _load_done(state):
     """DET1 — `_processed_path()`의 처리 기록을 key → 그 key로 지금까지 처리된 **모든** 레코드 목록으로 모은다
     (key당 마지막 한 건만 남기면: `inc_col >= since` 경계 재조회에서 같은 s3_key에 새 판(새 id·content_version_id)이
     들어온 표는 옛 판 행이 다시 조회될 때 "최신 판 기록"과 달라 매번 '미완료'로 오판해 since가 전진하지
@@ -244,7 +201,7 @@ def _load_done(state, source_name=None):
     한 번 읽을 뿐이라 비용은 그대로(기존 — key당 1건)와 같음, 같은 key가 아주 자주(수천 번) 재사용되는 표만
     목록이 길어짐(지금 규모에선 문제 없음)."""
     done = defaultdict(list)
-    p = _processed_path(state, source_name)
+    p = _processed_path(state)
     if p.exists():
         for r in jl(p):
             done[r["key"]].append(r)
@@ -290,123 +247,9 @@ def _rdb_filters():
     return _list("RDB_COMPANY"), _list("RDB_DOC_TYPE")
 
 
-def _filter_sig(company, doc_type):
-    """필터 조합의 고유 서명 — since 북마크를 필터 조합별로 따로 둔다(아래 _rdb_since 설명)."""
-    return json.dumps([sorted(company or []), sorted(doc_type or [])])
-
-
-def _processed_path(state, source_name=None):
-    """SI41 — 표마다(원천 이름) 처리 기록을 따로: `processed__<이름>.jsonl` · 레거시(표 직접 지정·단일 원천)는
-    전과 같은 `processed.jsonl`(이름 없음)."""
-    if not source_name:
-        return state / "processed.jsonl"
-    p = state / f"processed__{source_name}.jsonl"
-    legacy = state / "processed.jsonl"
-    if not p.exists() and legacy.exists():
-        # 레거시(rdb:<표> 단일) → 이름 있는 원천(rdb:<이름>·rdb:*)으로 바꾼 첫 실행: 처리 기록을 한 번 이어받아 전체 재다운로드·
-        # 재파싱을 막음(SI41 재검 CONCERN). 다른 표 기록이 섞여도 키(s3_key)가 달라 안 걸림. watermark는 표마다 증분 열이 달라
-        # 복사하지 않음 → 첫 실행은 다시 질의하되 이미 처리한 행은 _rdb_is_done으로 건너뜀(받지 않음).
-        p.write_bytes(legacy.read_bytes())
-    return p
-
-
-def _rdb_wm_path(state, source_name=None):
-    """SI41 — watermark도 원천 이름별로: `rdb_watermark__<이름>.json` · 레거시는 전과 같은 `rdb_watermark.json`."""
-    return state / (f"rdb_watermark__{source_name}.json" if source_name else "rdb_watermark.json")
-
-
-def _rdb_since(state, table, sig, source_name=None):
-    """이 표·이 필터 조합의 since 북마크 — 지난 질의에서 나온 행이 전부 처리 기록됐으면(_rdb_is_done) 그 가장 늦은
-    증분값으로 전진, 하나라도 안 끝났으면(ETag·크기 불일치·파싱 실패 등 뭐든) 지난 since 그대로 머문다(뒤로 안 가고
-    건너뛰지도 않음 — watermark가 미해결 행을 앞지르면 영영 다시 안 보임, 독립 검토 BLOCK 2).
-    처음 질의(기록 없음)면 None(전체)."""
-    wm_path = _rdb_wm_path(state, source_name)
-    wm = json.loads(wm_path.read_text(encoding="utf-8")) if wm_path.exists() else {}
-    rec = wm.get(f"{table}\x1f{sig}")
-    if not rec:
-        return None
-    pending = rec.get("pending") or []
-    if not pending:  # 지난 질의가 0건이었으면 그때 since가 이미 '다 비움' 증명
-        return rec.get("since")
-    done = _load_done(state, source_name)
-    if all(_rdb_is_done(done, r["key"], r.get("etag"), r.get("updated_at")) for r in pending):
-        vals = [r["updated_at"] for r in pending if r.get("updated_at") is not None]
-        return max(vals) if vals else rec.get("since")
-    return rec.get("since")  # 일부 미해결 — 전진 안 함(그 전 since부터 다시, 건너뛰지 않음)
-
-
-def _rdb_save_since(state, table, sig, rows, since_used, source_name=None):
-    """이번 질의(since_used 기준)로 얻은 전체 행을 다음 _rdb_since 판단 근거로 저장(처리 결과는 여기서 안 봄)."""
-    f = _rdb_wm_path(state, source_name)
-    wm = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
-    wm[f"{table}\x1f{sig}"] = {
-        "since": since_used,
-        "pending": [{"key": r["key"], "etag": r["etag"], "updated_at": r.get("updated_at")} for r in rows],
-    }
-    f.write_text(json.dumps(wm, ensure_ascii=False), encoding="utf-8")
-
-
-def _pg_rows(table, cols, company, doc_type, inc_col, since):
-    """RDB_ENGINE=pg — PostgreSQL(common/pg.py 재사용). 표 이름은 psycopg `sql.Identifier`로 대소문자 보존(`AI.FileStorageMap`
-    처럼 섞인 이름도 따옴표 없인 소문자로 접힘), 열 이름(WHERE)은 위에서 이미 화이트리스트 확인했으므로 문자열 그대로,
-    값은 전부 파라미터 바인딩(자유 SQL 금지)."""
-    from psycopg import sql as pgsql
-
-    from common.store.pg import PG, conf
-
-    where, params = [], []
-    if company:
-        where.append(f"{cols['company']} = ANY(%s)")
-        params.append(company)
-    if doc_type:
-        where.append(f"{cols['doc_type']} = ANY(%s)")
-        params.append(doc_type)
-    if since is not None:
-        where.append(f"{inc_col} >= %s")
-        params.append(since)  # DET1 — 엄격한 > 이 아님(경계 동시값 영구 누락 방지, _rdb_is_done이 중복 제거)
-    ident = pgsql.SQL(".").join(pgsql.Identifier(p) for p in table.split("."))
-    query = pgsql.SQL("SELECT * FROM {}").format(ident)
-    if where:
-        query = pgsql.SQL("{} WHERE {}").format(query, pgsql.SQL(" AND ".join(where)))
-    return PG(conf()).q(query, params or None)
-
-
-def _mssql_rows(table, cols, company, doc_type, inc_col, since):
-    """RDB_ENGINE=mssql(기본 — 2026-10-07 EDW=Azure SQL Database(PaaS)=SQL Server로 확정). pymssql로 최소 연결 —
-    common.connections.rdb 읽기 계정(RDB_HOST·RDB_PORT(기본 1433)·RDB_DATABASE·RDB_READ_USER·RDB_READ_PASSWORD)만 pymssql.connect에 그대로 넘기고, 그 밖
-    인자(TLS·로그인 타임아웃 등 접속 세부)는 RDB_CONNECT_KWARGS(JSON, 선택)로 통째 전달(이 함수는 접속 방식을
-    모른다 — 사용자 가이드가 따로 적음). 식별자는 대괄호(`[AI].[FileStorageMap]`, TABLE_ID_RE로 화이트리스트 통과한
-    이름만 — `]`는 원래 식별자에 못 들어가 안전), 값은 전부 %s 파라미터, 증분은 WHERE [inc_col] >= %s(DET1 — 엄격한
-    > 아님, 모듈 docstring '질의 경계' 참고) ORDER BY [inc_col]. S8b — 연결·질의는 SQLAlchemy(rdb_connect·mssql.rows — SQL 글자 그대로)."""
-    from common.store import mssql
-
-    ident = ".".join(f"[{p}]" for p in table.split("."))
-    select_cols = list(dict.fromkeys([v for v in cols.values() if v] + [inc_col]))
-    where, params = [], []
-    if company:
-        where.append(f"[{cols['company']}] IN ({','.join(['%s'] * len(company))})")
-        params += list(company)
-    if doc_type:
-        where.append(f"[{cols['doc_type']}] IN ({','.join(['%s'] * len(doc_type))})")
-        params += list(doc_type)
-    if since is not None:
-        where.append(f"[{inc_col}] >= %s")
-        params.append(since)  # DET1 — 엄격한 > 이 아님(경계 동시값 영구 누락 방지, _rdb_is_done이 중복 제거)
-    sql = f"SELECT {', '.join('[' + c + ']' for c in select_cols)} FROM {ident}"
-    if where:
-        sql += " WHERE " + " AND ".join(where)
-    sql += f" ORDER BY [{inc_col}]"
-    standin = mssql.standin_path()
-    if standin:  # PC 가짜 EDW(sqlite 하나 — 사용자 10-29 ops.md#op-03): 대괄호 식별자는 SQLite도 받음, %s → ?
-        cn = mssql.standin(standin)
-        try:
-            cur = cn.execute(sql.replace("%s", "?"), params)
-            names = [d[0] for d in cur.description]
-            return [dict(zip(names, r)) for r in cur]
-        finally:
-            cn.close()
-    with rdb_connect() as cn:
-        return mssql.rows(cn, sql, params)
+def _processed_path(state):
+    """처리 기록 파일(11-01 — 원천 이름별 processed__<이름>.jsonl은 rdb:*·rdb:<이름>과 함께 지움)."""
+    return state / "processed.jsonl"
 
 
 def rdb_connect(extra_kwargs=True):
@@ -421,12 +264,13 @@ def rdb_connect(extra_kwargs=True):
     return mssql.connect(**kw)
 
 
-def _rdb_rows(table, state, cols=None, default_bucket=None, source_name=None):
-    """표(또는 시험용 csv:<경로>)에서 문서 위치 메타 행을 공통 꼴로: doc_id·bucket·key·etag·size·filename·
-    content_version·content_type·company_id·doc_type·contract_id·updated_at(증분 비교값)·version·
-    supersedes_doc_id·is_deleted. cols·default_bucket·source_name(SI41) — sources.json 원천 하나를 가리키면
-    그 columns·bucket·이름(watermark·처리 기록 분리), 없으면 레거시(env RDB_COL_*·RDB_BUCKET, 단일 상태 파일)."""
-    cols = cols or _rdb_cols()
+def _rdb_rows(table):
+    """문서 위치 표(csv:<경로>)의 행을 공통 꼴로: doc_id·bucket·key·etag·size·filename·content_version·content_type·
+    company_id·doc_type·contract_id·updated_at(증분값 — 처리 여부 판단)·version·supersedes_doc_id·is_deleted.
+    (11-01 — 표 직접 질의(mssql·pg)·watermark·원천 목록 열 매핑은 지움 — csv만.)"""
+    if not table.startswith("csv:"):
+        raise ValueError(f"[source] rdb:{table} — 원천은 rdb:csv:<경로>만(11-01 사용자: rdb:*·rdb:<이름>·표 직접 질의 지움)")
+    cols = _rdb_cols()
     company, doc_type = _rdb_filters()
     if company and not cols["company"]:
         print("[source] RDB_COMPANY 지정됐지만 이 표에 company 열이 없음(RDB_COL_COMPANY 미설정) — 경고, 필터 없이 진행", flush=True)
@@ -434,31 +278,16 @@ def _rdb_rows(table, state, cols=None, default_bucket=None, source_name=None):
     if doc_type and not cols["doc_type"]:
         print("[source] RDB_DOC_TYPE 지정됐지만 이 표에 doc_type 열이 없음(RDB_COL_DOC_TYPE 미설정) — 경고, 필터 없이 진행", flush=True)
         doc_type = None
-    sig = _filter_sig(company, doc_type)
     inc_col = _rdb_increment_col(cols)
-    since = _rdb_since(state, table, sig, source_name)
-    if table.startswith("csv:"):
-        with open(table[4:], encoding="utf-8-sig", newline="") as f:
-            rows = list(csv.DictReader(f))
+    with open(table[4:], encoding="utf-8-sig", newline="") as f:
         rows = [
             r
-            for r in rows
-            if (not company or r.get(cols["company"]) in company)
-            and (not doc_type or r.get(cols["doc_type"]) in doc_type)
-            and (since is None or ((v := _inc_value(r, inc_col)) is not None and v >= since))
-        ]  # DET1 — 엄격한 > 아님(위 PG·mssql과 동일)
-    else:
-        if not TABLE_ID_RE.match(table):
-            raise ValueError(f"[source] RDB 표 이름이 올바르지 않음(영문·숫자·_, 스키마.표만) — {table!r}")
-        engine = pc.cfg().connections.rdb.engine  # S7c — 설정 객체(blank keep: 옛 `get(X, "mssql")` — `RDB_ENGINE=`은 '' 유지)
-        rows = (
-            _pg_rows(table, cols, company, doc_type, inc_col, since)
-            if engine == "pg"
-            else _mssql_rows(table, cols, company, doc_type, inc_col, since)
-        )
+            for r in csv.DictReader(f)
+            if (not company or r.get(cols["company"]) in company) and (not doc_type or r.get(cols["doc_type"]) in doc_type)
+        ]
     mapped = []
     for r in rows:
-        bucket, key = _rdb_bucket_and_key(cols, r, default_bucket)
+        bucket, key = _rdb_bucket_and_key(cols, r)
         etag = str(r[cols["etag"]]).strip('"') if cols["etag"] and r.get(cols["etag"]) not in (None, "") else None
         size = int(r[cols["size"]]) if r.get(cols["size"]) not in (None, "") else None
         mapped.append(
@@ -481,9 +310,6 @@ def _rdb_rows(table, state, cols=None, default_bucket=None, source_name=None):
                 in ("1", "true", "t"),
             }
         )
-    _rdb_save_since(
-        state, table, sig, mapped, since, source_name
-    )  # 다음 질의의 since 판단 근거(이번에 본 전체 행) — 전진 여부는 _rdb_since가 결정
     return mapped
 
 
@@ -503,72 +329,17 @@ def _filter_unsupported_rows(rows, name_of):
     return kept, skipped
 
 
-def _record_source_skipped(state, skipped, source_name=None):
+def _record_source_skipped(state, skipped):
     """건너뛴 행 기록(state/source_skipped.jsonl, {file,key,reason} — prepare.py skipped.jsonl과 같은 사유 말) +
     다시 받을 길이 없으므로(지원 안 하는 형식) 바로 처리 완료로 표시(watermark가 이 파일 때문에 영영 안 전진하는
     것을 막음 — finish()가 파싱 성공분을 기록하는 것과 같은 자리 `_processed_path`)."""
     with (state / "source_skipped.jsonl").open("a", encoding="utf-8") as f:
         for s in skipped:
             f.write(json.dumps({"file": s["file"], "key": s["row"]["key"], "reason": s["reason"]}, ensure_ascii=False) + "\n")
-    with _processed_path(state, source_name).open("a", encoding="utf-8") as f:
+    with _processed_path(state).open("a", encoding="utf-8") as f:
         for s in skipped:
             r = s["row"]
             f.write(json.dumps({"key": r["key"], "etag": r.get("etag"), "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
-
-
-def _cols_from_source(entry):
-    """SI41 — sources.json columns(doc_id·key·filename·size·increment + 선택)을 _rdb_cols()와 같은 내부 키 모양으로
-    맞춘다. increment는 내부 'updated' 키(증분 기준 열, `_rdb_increment_col`이 그 이름으로 읽음) — 그 밖은 이름 그대로,
-    없는 선택 열은 ""(미설정, 레거시 _rdb_cols()와 같은 관례)."""
-    c = entry["columns"]
-    return {
-        "doc_id": c["doc_id"],
-        "key": c["key"],
-        "size": c["size"],
-        "filename": c["filename"],
-        "content_version": c.get("content_version", ""),
-        "bucket": c.get("bucket", ""),
-        "etag": c.get("etag", ""),
-        "content_type": c.get("content_type", ""),
-        "company": c.get("company", ""),
-        "doc_type": c.get("doc_type", ""),
-        "contract": c.get("contract", ""),
-        "updated": c.get("increment", ""),
-        "version": c.get("version", ""),
-        "supersedes": c.get("supersedes", ""),
-        "is_deleted": c.get("is_deleted", ""),
-    }
-
-
-def _parse_rdb_source(spec):
-    """rdb:<spec> 해석(SI41) — '*' = sources.json의 enabled 전부 · 등록된 이름 하나 · 그 밖은 레거시(표 이름·
-    csv:<경로> 직접 지정, env RDB_COL_*·RDB_BUCKET로 — SI41 이전과 동일 동작). 반환: [(원천 이름 또는 None, 표,
-    cols 또는 None, bucket 또는 None), …] — 이름이 있으면 `_rdb_plan`이 처리 기록·watermark를 그 이름으로 분리."""
-    if spec == "*":
-        srcs = SRC_CFG.enabled_sources()
-        if not srcs:
-            raise ValueError(f"[source] rdb:* — {SRC_CFG.sources_origin()}에 켜진(enabled) 원천이 없음")
-        return [(n, e["table"], _cols_from_source(e), e["bucket"] or None) for n, e in sorted(srcs.items())]
-    srcs = (
-        SRC_CFG.load_sources() if COL_ID_RE.match(spec) else {}
-    )  # S8b — 이름 꼴일 때만 원천 목록을 봄(csv:·스키마.표는 이름이 될 수 없음 — 서버 판 표 질의 안 함)
-    if spec in srcs:
-        e = srcs[spec]
-        if not e["enabled"]:
-            raise ValueError(f"[source] rdb:{spec} — {SRC_CFG.sources_origin()}에서 enabled=false(켜고 다시 시도)")
-        return [(spec, e["table"], _cols_from_source(e), e["bucket"] or None)]
-    return [(None, spec, None, None)]  # 레거시 — 표 이름·csv:<경로> 직접 지정(env RDB_COL_*·RDB_BUCKET)
-
-
-def _rename_manifest_entry(state, orig, final):
-    """SI41 — 서로 다른 원천의 파일 이름이 겹쳐(`_rdb_resolve_spec`) 받은 뒤 이름을 바꿀 때 manifest.jsonl의 키도
-    같이 바꿈(파일 자체는 호출부가 이미 rename)."""
-    man_f = state / "manifest.jsonl"
-    man = {r["file_name"]: r for r in jl(man_f)} if man_f.exists() else {}
-    if orig in man and orig != final:
-        row = {**man.pop(orig), "file_name": final}
-        man[final] = row
-        man_f.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in man.values()), encoding="utf-8")
 
 
 # ── warm 저장소(2026-10-22, 프리페치) ──────────────────────────────────────────────
@@ -744,63 +515,24 @@ def _warm_cmd(argv):
 
 
 def _rdb_resolve_spec(spec, state, limit):
-    """rdb:<spec> 전체(여러 원천 가능, SI41) → (names, fetch_one(name,dest)→Path, state) — resolve()·plan() 공용.
-    여러 원천이면(rdb:*) 상태(처리 기록·watermark)는 이름별로 따로(_processed_path·_rdb_wm_path), manifest·로컬
-    폴더는 공유(기존과 같은 레이아웃) — 서로 다른 원천의 파일 이름이 겹치면(두 표에 같은 파일 이름, 다른 키)
-    `<원천 이름>__<이름>`으로 다시 구분(원천 안 충돌은 이미 doc_id로 구분됨, `_rdb_names`)."""
-    specs = _parse_rdb_source(spec)
-    plans = [
-        (name, *_rdb_plan(table, state, limit, cols=cols, default_bucket=bucket, source_name=name)) for name, table, cols, bucket in specs
-    ]
-    if len(plans) == 1 and plans[0][0] is None:
-        _, names, fetch_one, st = plans[0]
-        return names, fetch_one, st
-    seen = defaultdict(list)
-    for name, names, _, _ in plans:
-        for n in names:
-            seen[n].append(name)
-    collide = {n for n, srcs in seen.items() if len(srcs) > 1}
-    by_final = {}
-    for name, names, fetch_one, _ in plans:
-        for n in names:
-            final = f"{name}__{n}" if n in collide else n
-            by_final[final] = (fetch_one, n)
-    names_all = sorted(by_final)
-
-    def fetch_one_all(final_name, dest):
-        fetch_one, orig = by_final[final_name]
-        got = fetch_one(orig, dest)
-        if orig != final_name:
-            new_path = got.parent / final_name
-            got.rename(new_path)
-            _rename_manifest_entry(state, orig, final_name)
-            got = new_path
-        return got
-
-    return names_all, fetch_one_all, state
+    """rdb:<spec> → (names, fetch_one(name,dest)→Path, state) — resolve()가 부름. 11-01부터 csv:<경로>만."""
+    return _rdb_plan(spec, state, limit)
 
 
-def _rdb_plan(table, state, limit=0, cols=None, default_bucket=None, source_name=None):
-    """RDB(표 또는 csv:)에서 대상 행을 질의 → (names, fetch_one(name,dest)→Path, state). plan()·resolve() 공용(AD44) —
-    resolve()는 이걸 부른 뒤 모든 이름을 즉시 받는다.
+def _rdb_plan(table, state, limit=0):
+    """문서 위치 표(csv:)의 대상 행 → (names, fetch_one(name,dest)→Path, state). resolve()가 부르고 모든 이름을 즉시 받는다(AD44).
     받기 전 대조는 ETag가 있으면 ETag(head_object), 없으면 크기(ContentLength)로 — 불일치면 거부·기록하고 받지
     않는다(그 문서만 건너뛰고 나머지는 계속, 독립 검토 BLOCK 1 — 호출부 resolve()가 fetch_one 전체를
-    try로 안 감싸면 크래시한다). cols·default_bucket·source_name(SI41) — sources.json 원천 하나를 가리키면 그
-    columns·bucket·처리 기록(이름별 processed__<이름>.jsonl)을 쓰고, 여러 원천은 `_rdb_resolve_spec`이 이 함수를
-    원천마다 불러 합친다(이름 충돌은 그쪽에서 구분).
+    try로 안 감싸면 크래시한다).
     O3 재설계(2026-10-14) — ETag 대조가 통과해도(이 원천 안에서는 정상) 받기 전에 다른 원천의 기존 지문과
     완전히 같은 내용인지(비멀티파트 ETag+크기) 한 번 더 보고, 일치하면 `DuplicateContent`를 던져 받지 않는다
     (처리 완료로도 기록 — 다시 안 받음). 멀티파트 ETag는 받은 뒤 sha256으로 같은 확인을 한다."""
-    done = _load_done(state, source_name)
-    rows = [
-        r
-        for r in _rdb_rows(table, state, cols, default_bucket, source_name)
-        if not _rdb_is_done(done, r["key"], r["etag"], r["updated_at"])
-    ]
+    done = _load_done(state)
+    rows = [r for r in _rdb_rows(table) if not _rdb_is_done(done, r["key"], r["etag"], r["updated_at"])]
     name_of = _rdb_names(rows)  # original_filename(또는 doc_id) — 충돌하면 doc_id 접두로 구분
     rows, skipped = _filter_unsupported_rows(rows, name_of)  # SI44(source) — 압축·엔진 없는 확장자는 받기 전에 걸러냄
     if skipped:
-        _record_source_skipped(state, skipped, source_name)
+        _record_source_skipped(state, skipped)
     name_of = {r["key"]: name_of[r["key"]] for r in rows}
     rows = sorted(rows, key=lambda r: r["key"])[: limit or None]
     by_name = {name_of[r["key"]]: r for r in rows}
@@ -841,7 +573,7 @@ def _rdb_plan(table, state, limit=0, cols=None, default_bucket=None, source_name
             if dup:
                 with book:
                     _record_duplicate(state, source_id, dup, etag=actual, size=o["size"], updated_at=o["updated_at"])
-                    with _processed_path(state, source_name).open("a", encoding="utf-8") as f:
+                    with _processed_path(state).open("a", encoding="utf-8") as f:
                         f.write(json.dumps({"key": o["key"], "etag": o.get("etag"), "ver": o.get("updated_at")}, ensure_ascii=False) + "\n")
                 raise DuplicateContent(f"[source] 받기 전 중복(ETag+크기) — {source_id} ≡ {dup.get('source_id')} — 받지 않음")
         elif o["size"] is not None:
@@ -884,7 +616,7 @@ def _rdb_plan(table, state, limit=0, cols=None, default_bucket=None, source_name
         if dup:
             with book:
                 _record_duplicate(state, source_id, dup, etag=o["etag"], size=o["size"], updated_at=o["updated_at"])
-                with _processed_path(state, source_name).open("a", encoding="utf-8") as fh:
+                with _processed_path(state).open("a", encoding="utf-8") as fh:
                     fh.write(json.dumps({"key": o["key"], "etag": o.get("etag"), "ver": o.get("updated_at")}, ensure_ascii=False) + "\n")
             f.unlink(missing_ok=True)
             raise DuplicateContent(f"[source] 받은 뒤 중복(sha256) — {source_id} ≡ {dup.get('source_id')} — 파싱하지 않음")
@@ -908,7 +640,7 @@ def _rdb_plan(table, state, limit=0, cols=None, default_bucket=None, source_name
                 "is_deleted": o.get("is_deleted", False),
                 "original_filename": o.get("filename"),
                 "content_version_id": o.get("content_version"),  # AD44(c) FileStorageMap 고유 칸
-                "source_system": source_name or _derive_source_from_key(o["key"]),
+                "source_system": _derive_source_from_key(o["key"]),
             }  # SI41 — publish_parse가 문서별로 이 값 사용(없으면 --source-system 폴백)
             man_f.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in man.values()), encoding="utf-8")
         return f
@@ -917,97 +649,20 @@ def _rdb_plan(table, state, limit=0, cols=None, default_bucket=None, source_name
     if not man_f.exists():  # fetch_one이 한 번도 안 불려도(대상 0건) 파일이 있어야 — 없으면 ids.source_uri가 조용히 file://로 떨어짐
         man_f.touch()
     C.put(SOURCE_MANIFEST=str(man_f))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스) + 인계 키라 env에도(contract.py)
-    label = f"{source_name}({table})" if source_name else table
+    label = table
     print(f"[source] rdb:{label} · 대상 {len(names)}개(이미 처리 {len(done)}개 제외)", flush=True)
     return names, fetch_one, state
 
 
-def _filter_unsupported_objs(objs, name_of):
-    """SI44(source) — fetch_s3: 압축·엔진 없는 확장자는 받기 전에 걸러낸다(name_of 계산 뒤 sample() 호출 전).
-    같은 사유 말(prepare.py의 skipped.jsonl과 같음, _unsupported_reason 재사용)."""
-    from pipeline.extract.prepare import _unsupported_reason
-
-    kept, skipped = [], []
-    for o in objs:
-        name = name_of[o["Key"]]
-        reason = _unsupported_reason(Path(name)) if Path(name).suffix else None
-        (skipped if reason else kept).append({"obj": o, "file": name, "reason": reason} if reason else o)
-    return kept, skipped
-
-
-def _record_s3_skipped(state, skipped):
-    """fetch_s3용 — _record_source_skipped와 같은 자리(state/source_skipped.jsonl) + processed.jsonl에 바로
-    완료 기록(다시 안 받음, ETag는 이미 있으니 그대로 씀)."""
-    with (state / "source_skipped.jsonl").open("a", encoding="utf-8") as f:
-        for s in skipped:
-            f.write(json.dumps({"file": s["file"], "key": s["obj"]["Key"], "reason": s["reason"]}, ensure_ascii=False) + "\n")
-    with (state / "processed.jsonl").open("a", encoding="utf-8") as f:
-        for s in skipped:
-            o = s["obj"]
-            f.write(json.dumps({"key": o["Key"], "etag": o["ETag"].strip('"'), "ver": None}, ensure_ascii=False) + "\n")
-
-
-def _s3_download(cli, bucket, key, dest_path):
-    """GH1-02 공용 — tmp_path_for + download_file + os.replace(원자적 교체, 받다가 끊겨도 반쪽 파일이 안 남음).
-    GH1-02c — download_file이 실패하면(partial write) 임시 파일을 지우고 다시 던진다(안 지우면 다음 실행이
-    남은 .tmp를 못 치우고 디스크만 쌓인다). fetch_s3(묶음)·plan()의 s3 fetch_one(스트리밍) 둘 다 씀."""
-    tmp = tmp_path_for(dest_path)
-    try:
-        cli.download_file(bucket, key, str(tmp))
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
-    os.replace(tmp, dest_path)
-
-
-def fetch_s3(uri, dest, state, limit=0):
-    """s3://버킷/접두 → dest(평면 폴더). 이미 처리한 객체(같은 ETag)는 건너뜀. → 내려받은 파일 이름 목록."""
-    bucket, _, prefix = uri[5:].partition("/")
-    cli = _s3()
-    done = {r["key"]: r["etag"] for r in jl(state / "processed.jsonl")} if (state / "processed.jsonl").exists() else {}
-    objs = []
-    for page in cli.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
-        objs += [o for o in page.get("Contents", []) if not o["Key"].endswith("/") and done.get(o["Key"]) != o["ETag"].strip('"')]
-    name_of = {o["Key"]: _safe_name(o["Key"], prefix) for o in objs}  # 하위 폴더·윈도 구분자·드라이브 표기는 이름에 __로(평면 폴더 전제)
-    objs, skipped = _filter_unsupported_objs(objs, name_of)  # SI44(source) — 압축·엔진 없는 확장자는 받기 전에 걸러냄
-    if skipped:
-        _record_s3_skipped(state, skipped)
-    name_of = _dedupe_names({o["Key"]: name_of[o["Key"]] for o in objs})  # GH1-02 — 겹치는 안전 이름만 키 해시로 갈라놓음
-    objs = sorted(objs, key=lambda o: o["Key"])[: limit or None]
-    dest.mkdir(parents=True, exist_ok=True)
-    man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")} if (state / "manifest.jsonl").exists() else {}
-    got = []
-    for o in objs:
-        n = name_of[o["Key"]]
-        f = _safe_join(dest, n)
-        etag = o["ETag"].strip('"')
-        prev = man.get(n)
-        if not (f.exists() and prev and prev.get("etag") == etag):  # GH1-02 — 크기 대신 ETag로 생략 판정(같은 크기·다른 내용을 놓치던 문제)
-            _s3_download(cli, bucket, o["Key"], f)
-        man[n] = {"file_name": n, "uri": f"s3://{bucket}/{o['Key']}", "key": o["Key"], "etag": etag, "size": o["Size"]}
-        got.append(n)
-    atomic_write_text(state / "manifest.jsonl", "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in man.values()))
-    print(
-        f"[source] {uri} → {dest} · 새로 처리할 객체 {len(objs)}개(이미 처리 {len(done)}개 건너뜀)",
-        flush=True,
-    )
-    return got
-
-
 def resolve(source, out, limit=0):
-    """→ (로컬 원본 폴더, 대상 파일 이름 목록, 상태 폴더). 폴더면 그대로, s3://면 내려받음, rdb:면 RDB 질의 뒤 내려받음(AD44)."""
+    """→ (로컬 원본 폴더, 대상 파일 이름 목록, 상태 폴더). 폴더면 그대로, rdb:csv면 표의 키를 Object Storage에서 받음(AD44)."""
     state = Path(out) / "parse" / "_source"
     state.mkdir(parents=True, exist_ok=True)
     if str(source).startswith("s3://"):
-        local = Path(out) / "_source_files"
-        names = fetch_s3(source, local, state, limit)
-        C.put(
-            SOURCE_MANIFEST=str(state / "manifest.jsonl")
-        )  # S7e2 — 덮기 파일(op-09 — 인계 파일도 설정 객체로 읽음) · 원본 위치 = s3://버킷/키
-        return local, names, state
+        raise ValueError(f"[source] {source} — s3:// 폴더 가져오기는 11-01에 지움(사용자) — 폴더 또는 rdb:csv:<경로>")
     if str(source).startswith("rdb:"):
         local = Path(out) / "_source_files"
-        names, fetch_one, state = _rdb_resolve_spec(source[len("rdb:") :], state, limit)  # SI41 — rdb:*·rdb:<이름>·레거시 공용
+        names, fetch_one, state = _rdb_resolve_spec(source[len("rdb:") :], state, limit)
         ok = []
         nw = max(
             1, int(pc.cfg().extract.source.fetch_workers)
@@ -1080,13 +735,9 @@ def finish(state, local, rep_index):
         else set()
     )
     done = [man[n] for n in ok if n in man]
-    by_source = defaultdict(list)  # SI41 — 원천별로 처리 기록 분리(manifest 행의 source_system, 레거시는 None=processed.jsonl)
-    for r in done:
-        by_source[r.get("source_system")].append(r)
-    for src_name, rs in by_source.items():
-        with _processed_path(state, src_name).open("a", encoding="utf-8") as f:
-            for r in rs:
-                f.write(json.dumps({"key": r["key"], "etag": r["etag"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
+    with _processed_path(state).open("a", encoding="utf-8") as f:
+        for r in done:
+            f.write(json.dumps({"key": r["key"], "etag": r["etag"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
     _record_sha_before_delete(state, local, done)
     gone = 0
     for r in done:
@@ -1123,15 +774,10 @@ def mark_done(state, done_names, is_s3):
         return
     man_f = state / "manifest.jsonl"
     man = {r["file_name"]: r for r in jl(man_f)} if man_f.exists() else {}
-    by_source = defaultdict(list)  # SI41 — finish()와 같은 분리(원천별 처리 기록)
-    for n in done_names:
-        r = man.get(n)
-        if r:
-            by_source[r.get("source_system")].append(r)
-    for src_name, rs in by_source.items():
-        with _processed_path(state, src_name).open("a", encoding="utf-8") as f:
-            for r in rs:
-                f.write(json.dumps({"key": r["key"], "etag": r["etag"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
+    rs = [man[n] for n in done_names if man.get(n)]
+    with _processed_path(state).open("a", encoding="utf-8") as f:
+        for r in rs:
+            f.write(json.dumps({"key": r["key"], "etag": r["etag"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 
 (단계 1 비교 명령 compare-parse·compare-all은 11-01에 지움 — PC 평가 도구 삭제, PRD e2-10)
 단계 2 · 고정 스택(정해진 기술로 실제 파이프라인 + 기본 테스트)
-  show-stack · show-sources  지금 엔진 구성·원천 목록(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01 —
+  show-stack  지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01 —
                   docs/architecture/pipeline_stack.md)
   parse           파싱 모듈 1회(run_docs가 문서마다 부름) — 끝 표시 _rep/_DONE.json
   (night·run-stack·structure·load는 11-01에 지움 — 서버 입구는 run_docs 하나, 구조화·적재는 run_docs가 모듈을 직접 부름)
@@ -112,15 +112,6 @@ def show_stack(a=None):
         f"청킹 {st['chunk']} · 임베딩 {st['embed']} · 그래프 {st['graph']} · 검색 {st['retrieve']} · 상위 k {st['k']}"
         + (f" · 비교 후보 {', '.join(st['candidates'])}" if st.get("candidates") else "")
     )
-
-
-def show_sources(a=None):
-    from common.store.db import cfgfile
-
-    cur = cfgfile.active("sources", refresh=True)
-    print(f"원천 목록 {cur.label()}")
-    for e in cur.body:
-        print(f"  {'켜짐' if e.get('enabled', True) else '꺼짐'} {e['name']} · {e['table']} · 열 {len(e['columns'])}개")
 
 
 # ── 파싱 모듈(run_docs가 문서마다 부름 — 서버 입구는 run_docs 하나, 사용자 10-31) ──────────
@@ -523,7 +514,7 @@ def main(argv=None):
     p.add_argument(
         "--source",
         default=pc.cfg().extract.input_source or None,
-        help="파싱할 원본 위치 — 폴더(같은 서버 샘플) · s3://버킷/접두(Object Storage) · rdb:<표>(RDB 문서 위치 메타로 질의, AD44) · "
+        help="파싱할 원본 위치 — 폴더(같은 서버 샘플) · rdb:csv:<경로>(문서 위치 표 — run_docs가 만듦, AD44). 주면 가져오기·중복 확인·방향 보정부터 — 11-01 s3://·rdb:*·rdb:<이름>·rdb:<표> 지움"
         "rdb:*(common/sources.json의 enabled 원천 전부, SI41) · rdb:<이름>(sources.json에 등록된 원천 하나). "
         "주면 가져오기·중복 확인·방향 보정부터",
     )
@@ -539,7 +530,6 @@ def main(argv=None):
         help="이번 실행에서 처음 파싱할 문서 수 상한(0 = 제한 없음)",
     )
     sub.add_parser("show-stack")
-    sub.add_parser("show-sources")
     p = sub.add_parser(
         "selftest", help="서버 반입 시험(tests/server — 이 이미지 폴더 + common)을 파일마다 — PASS/FAIL 표, 실패 있으면 종료 코드 1"
     )
@@ -551,7 +541,6 @@ def main(argv=None):
         require_run_env("pipeline.cli", sections=("pipeline",))  # 서버면 설정 검증 실패도 거부(S7e2 U-1)
     {
         "show-stack": show_stack,
-        "show-sources": show_sources,
         "selftest": selftest,
         "parse": parse_module,
     }[a.cmd](a)
