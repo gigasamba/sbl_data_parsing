@@ -11,7 +11,7 @@
 - 이유: 비싼 파싱 전에 쓸모없는 것을 거른다.
 - 무엇: sha256 중복 제거(이름·내용이 비슷한 후보는 11-01에 지움 — 아래), RapidOCR 점수로 스캔 쪽 회전, DRM·암호 감지(msoffcrypto/pikepdf 복호화는 수동 CLI — `python -m pipeline.extract.secure_docs decrypt`, prepare·stream에 들어 있지 않음), 압축 파일은 미지원 표시.
 - 파일: `pipeline/extract/prepare.py`, `pipeline/extract/dedup.py`, `pipeline/extract/secure_docs.py`.
-- 11-01(`feature/scope-cut-unused`, 허브 지시 — 위 10-31 결정의 앞부분): `dedup.py`의 이름·내용 유사 후보(파일명 유사도·텍스트 5-gram Jaccard·이미지 dHash — `candidate_pairs`·`name_ratio`·`dhash`·`shingles`·썸네일 report.html)를 지우고 완전 중복(sha256)만 묶는다. keep.txt는 원래 해시로만 정해져 파싱 대상은 그대로. 설정 `extract.dedup.fuzzy_max`·`common_max`는 지운 칸(남으면 경고만). 남음(0.2.0): 같은 sha256 다른 키는 파싱만 한 번(결과 재사용) + 기록.
+- 11-01(`feature/scope-cut-unused`, 허브 지시 — 위 10-31 결정의 앞부분): `dedup.py`의 이름·내용 유사 후보(파일명 유사도·텍스트 5-gram Jaccard·이미지 dHash — `candidate_pairs`·`name_ratio`·`dhash`·`shingles`·썸네일 report.html)를 지우고 완전 중복(sha256)만 묶는다. keep.txt는 원래 해시로만 정해져 파싱 대상 수는 그대로 — 단, 같은 내용 사본 중 남길 파일은 이제 해시마다 `_rep_select`(사본 표시 없는 이름 → 최신 → 큰 파일)로 고른다. 예전에는 이름이 비슷한 그룹에 다른 해시가 섞이면 대표 아닌 해시는 파일 이름 순 첫 파일이었다 — 그런 드문 경우 남는 파일 이름이 달라질 수 있다(독립 검토 11-01, 받아들임). 설정 `extract.dedup.fuzzy_max`·`common_max`는 지운 칸(남으면 경고만). 남음(0.2.0): 같은 sha256 다른 키는 파싱만 한 번(결과 재사용) + 기록.
 - Status: done
 
 <a id="pl-03"></a>

@@ -50,8 +50,7 @@ legacy_tool_name() {
 cmd="${1:-help}"; shift || true
 # 이미지마다 자기 앱만 들어 있음(S6b D-020 — RAG_MODULE pipeline·mcp, 사용자 10-27) — 없는 앱의 명령은 바로 거부(종료 코드 64)
 case "${RAG_MODULE:-}:$cmd" in
-  # 옛 parse·structure 이미지가 거르던 명령의 교집합만 거른다(합친 이미지 = 두 이미지가 받던 명령의 합). full은 10-14부터 두 이미지 모두
-  # 거부했으나(dedup·prepare·night가 서로 다른 이미지에 있었음) 합친 이미지에는 셋이 다 있어 S6c(사용자 10-27, C-30 ④)부터 data-pipeline에서 허용
+  # 옛 parse·structure 이미지가 거르던 명령의 교집합만 거른다(합친 이미지 = 두 이미지가 받던 명령의 합). full·night·structure·load는 11-01에 지움.
   pipeline:mcp|pipeline:ask|pipeline:test-stack)
     echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask·test-stack)은 mcp-server. 이 이미지는 parse·dedup·prepare·publish·show-stack·show-sources·idle·migrate"; exit 64;;
   mcp:parse|mcp:dedup|mcp:prepare|mcp:publish|mcp:idle|mcp:migrate|mcp:show-sources)
