@@ -147,19 +147,10 @@ def test_defaults_match_settings_model():
     assert RD.RUN_DOCS_DEFAULTS == {k: f.default for k, f in PipelineHostRunDocs.model_fields.items()}
 
 
-def test_stack_version_passed_once():
-    """엔진 구성 판 번호(main()이 시작 때 한 번 — STACK_VER)가 파싱(--set STACK_VERSION)·구조화(--stack-version)에 같이 간다(pl-32 — 사본 파일 없음).
-    빈 글자(PC 파일)면 둘 다 인자 없음(위 고정 명령)."""
-    keep = RD.STACK_VER
-    try:
-        RD.STACK_VER = "7"
-        assert RD.parse_cmd(7, "light", False, "9").endswith(
-            "--set CPU_MAX_LOAD=9 --set STACK_VERSION=7 parse --source rdb:csv:/app/output/docflow/7/batch.csv'"
-        )
-        assert " --parse-dir /app/output/docflow/9/parse --stack-version 7 --out " in RD.struct_cmd(9)
-        assert "stackcfg" not in RD.struct_cmd(9)
-    finally:
-        RD.STACK_VER = keep
+def test_no_stack_version():
+    """사용자 11-01 — 엔진 구성은 파일(판 번호 없음): 파싱·구조화 명령에 STACK_VERSION·--stack-version이 없다."""
+    cmds = RD.parse_cmd(7, "light", False, "9") + RD.struct_cmd(9)
+    assert "STACK_VERSION" not in cmds and "--stack-version" not in cmds and "stackcfg" not in cmds
 
 
 def test_read_settings_new_layout(tmp_path):

@@ -56,9 +56,9 @@ def _build_retriever():
     old = _STATE.get("R")
     a = types.SimpleNamespace(pg=False, local=False, edw=False, edw_client=False)
     services.connect(a)  # PC — Docker pgvector 주소 찾기(못 찾으면 SQLite 대역 — 검색은 PG 하나, mc-01)
-    from common.store.db import cfgtables
+    from common.store.db import cfgfile
 
-    cur = cfgtables.active("stack")  # S8b — 엔진 구성 활성 판(서버 = 판 표 — 프로세스 시작 때 읽은 것, PC = 파일)
+    cur = cfgfile.active("stack")  # 엔진 구성 파일(서버·PC 같음 — 프로세스 시작 때 읽은 것, 사용자 11-01)
     st = cur.named()
     bundle = C.cfg().paths.mcp_bundle or str(APP_ROOT / "output" / "edw" / "bundle")  # S7e1 — common 칸(옛 mcp.server.bundle)
     R = RT.Retriever(bundle, st.get("retrieve", "hybrid"))

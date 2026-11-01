@@ -178,11 +178,11 @@ if __name__ == "__main__":
 
     edw_read_only()  # 검색 MCP는 EDW 읽기 계정만 — 공용 설정 파일의 쓰기 계정 칸은 이 프로세스에서 비움(사용자 10-29, ops.md#op-03)
     require_run_env("mcp_server.main", sections=("mcp",))  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
-    from common.store.db import cfgtables
+    from common.store.db import cfgfile
 
     print(
-        f"[엔진 구성] {cfgtables.active('stack').label()}", file=sys.stderr, flush=True
-    )  # stderr — --stdio면 stdout은 JSON-RPC 채널   # S8b(Q3·Q7) — 시작 때 한 번(서버 = 판 표 — 못 읽으면 시작 거부, 종료 4)
+        f"[엔진 구성] {cfgfile.active('stack').label()}", file=sys.stderr, flush=True
+    )  # stderr — --stdio면 stdout은 JSON-RPC 채널 · 시작 때 한 번(파일 — 못 읽으면 시작 거부, 종료 2)
     if "--stdio" in sys.argv:
         build().run(transport="stdio")
     else:

@@ -7,7 +7,7 @@
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
 - 이유: 문서는 폴더, Object Storage, 회사 RDB 목록에서 온다.
-- 무엇: `input_source` = 폴더 · `s3://버킷/접두` · `rdb:csv:<경로>` · `rdb:<표>`. RDB 열 대응(`RDB_COL_*`), since/watermark 증분, 미리 받기(warm), 서버 원천 목록은 `struct.source_version`에 판으로 둔다.
+- 무엇: `input_source` = 폴더 · `s3://버킷/접두` · `rdb:csv:<경로>` · `rdb:<표>`. RDB 열 대응(`RDB_COL_*`), since/watermark 증분, 미리 받기(warm), 원천 목록은 서버·PC 모두 파일 `resources/mappings/sources.json`이다(사용자 11-01 — [pl-08](#pl-08)).
 - 파일: `pipeline/extract/source.py`, `pipeline/extract/rdb_discover.py`, `resources/mappings/sources.json`.
 - Status: done
 
@@ -83,12 +83,14 @@
 
 <a id="pl-08"></a>
 ## pl-08 · 정형 DB와 문서 대장
-- 결정(사용자 10-31 범위 축소 grill): 정형 DB 파생 표·마스터 표(contract/client/prod master, doc_contract_link, doc_location, doc_table, doc_cell)와 적재 코드를 **지금 지운다**(mc-04와 함께). stack_version·source_version은 남김. 마스터는 따로 둔 마스터 DB로 옮김(pl-38).
+- 결정(사용자 10-31 범위 축소 grill): 정형 DB 파생 표·마스터 표(contract/client/prod master, doc_contract_link, doc_location, doc_table, doc_cell)와 적재 코드를 **지금 지운다**(mc-04와 함께). 마스터는 따로 둔 마스터 DB로 옮김(pl-38).
 - 이유: 계약·고객·문서 판이 정형 질문에 답하고 증분 실행을 이끈다.
 - 무엇: `contract_master`·`client_master`·`prod_master`·`doc_contract_link`(점수 매기는 연결기)·`doc_location`·`doc_registry`·`doc_hidden`·`doc_table`·`doc_cell`. PG 또는 SQLite.
-- 파일: (지움) `pipeline/load/structured.py`, `common/store/structdb.py` · 판 `common/store/db/migrations/versions/0003_struct_drop.py`.
+- 결정(사용자 11-01 — D-031): struct 스키마를 코드에서 모두 없앰, 파일만 — 서버에 남은 쓰이지 않는 struct 스키마는 그대로 두거나 DB 담당자가 지움, 코드는 읽지 않음. 근거: 서버의 struct 스키마는 있지만 쓰이지 않음(`doc_registry` 0행), 운영 코드에서 `stack_version`·`source_version`을 쓴 곳 없음.
+- 파일: (지움) `pipeline/load/structured.py`, `common/store/structdb.py`, struct Alembic 갈래(`0001_struct_base`·`0002_struct_config`·`0003_struct_drop`), `common/store/db/models/struct_tables.py`·`schemas/struct_rows.py`·`cfgtables.py`, `resources/sql/0002_*_seed.json` · (새로) `common/store/db/cfgfile.py`(파일 읽기 + 모양 검사).
 - 결정(허브 10-31, 최신 결정 우선): 지울 표 저장소(`doc_table`·`doc_cell` — [pl-25](#pl-25) `struct`)를 읽는 검색 쪽 코드는 죽은 코드다 — `mcp_server/services/search/aggregate.py`의 `table_cell_list`·`find_table_cells`·`struct()`, `common/store/structdb.py:406`. 0.2.0에 표를 지우는 마이그레이션과 함께 지운다.
-- 한 것(11-01 — 사용자 10-31 결정, 마이그레이션 11-01 승인): 위 표 10개(+ `doc_registry_seen`)와 그 코드를 지웠다 — 연결기·CSV 적재(`structured.py`), 연결·SQLite 대체(`structdb.py`), 설정 `common.store.struct_backend`·`struct_db`(경고만). struct 판 `0003_struct`가 표를 지우고(IF EXISTS, downgrade 없음) 남는 표는 판 표 `stack_version`·`source_version`. 서버는 올리기 전에 백업([db_schema.md](../architecture/db_schema.md) D-7).
+- 한 것(11-01 — 사용자 10-31 결정): 위 표 10개(+ `doc_registry_seen`)와 그 코드를 지웠다 — 연결기·CSV 적재(`structured.py`), 연결·SQLite 대체(`structdb.py`), 설정 `common.store.struct_backend`·`struct_db`(경고만).
+- 한 것(11-01 — 사용자 11-01 결정): struct 스키마를 코드에서 모두 없앴다 — Alembic struct 갈래·표 정의·시드 지움, `dbtool`/`migrate --target`은 `search`·`all`만. 엔진 구성·원천 목록은 서버(dev·prd)·PC 모두 파일 `resources/config/pipeline_stack.json`·`resources/mappings/sources.json`(`ops.paths.stack_file`·`sources_file`)을 `cfgfile`로 읽고 모양을 검사한다(못 읽거나 틀리면 시작 때 종료 2). 바꾸기 = 파일을 고쳐 오버레이 패치, 되돌리기 = git. `set-stack`·`set-sources` 명령과 내부 칸 `STACK_VERSION`·`--stack-version`을 지웠고(`show-stack`·`show-sources`는 파일을 보여 줌), `run_docs.py`는 시작 때 `show-stack`으로 확인만 한다. 파싱·검색 MCP 컨테이너는 PG 없이 시작한다(PG는 적재·검색에만). 설명은 [pipeline_stack.md](../architecture/pipeline_stack.md).
 - Status: done
 
 <a id="pl-38"></a>
@@ -111,7 +113,7 @@
 - 결정(사용자 10-30 grill 12~13차): 원천에서 사라진 문서(deleted) 처리 길은 통째로 없앤다 — 지우기·숨기기·EDW `deleted` 표시 모두 없음, 로컬 기록만(refactor.md C-54).
 - 10-30 [pl-32](#pl-32): PG `doc_registry`는 남고 로컬 SQLite 대체는 없앤다. 실패 횟수(`fail_count`)·재시도 설정(`registry_retry_max`)은 없앤다 — 성공했을 때만 갱신(사용자 10-30).
 - 한 것(10-30, B1 — 개발 서버 반입 전 검토): deleted 길 없앰 — `registry.apply`가 관측에 없는 문서에 `status='deleted'`·자동 숨김을 쓰지 않고, `parsing_meta.apply_registry_status`가 EDW에 `deleted`를 쓰지 않는다(`diff["deleted"]`는 판 잇기 정보로만). 서버(dev·prd)는 SQLite·PG 스탠드인으로 대체하지 않고 멈춘다(`structdb.open_backend` — `run_mode: prod`·`struct_backend` pg/tsql 필수, `pg._warn_standin`). `common.store.run_mode`는 `prod`·`test`만. 시험 `tests/server/common/test_no_deleted.py`. code_fp p0·p1·r·s 바뀜(공용 `settings.py`·`pg.py`·`structdb.py`).
-- 한 것(11-01 `feature/scope-cut-search`): `common/store/registry.py`·`registry_cli`·검색 `registry.py`·숨김 거르기(retriever·pgsearch)·게시의 대장 상태 갱신·ParsingMeta 상태 갱신 길 지움. 표는 struct 판 0003이 지움([pl-08](#pl-08)). 설정 `common.store.doc_registry`·`registry_etag_md5` 지움(남으면 경고).
+- 한 것(11-01 `feature/scope-cut-search`): `common/store/registry.py`·`registry_cli`·검색 `registry.py`·숨김 거르기(retriever·pgsearch)·게시의 대장 상태 갱신·ParsingMeta 상태 갱신 길 지움. 표는 struct 스키마와 함께 코드에서 없앰([pl-08](#pl-08)). 설정 `common.store.doc_registry`·`registry_etag_md5` 지움(남으면 경고).
 - Status: done (11-01 `feature/scope-cut-search`)
 
 <a id="pl-09"></a>
@@ -134,7 +136,7 @@
 ## pl-10 · 실행 관리(오케스트레이션)
 - 결정(사용자 10-31 범위 축소 grill): trigger 서버(/jobs·/upload·CHAIN_STRUCTURE_URL·serve-trigger)를 **지운다** — 새 문서는 run_docs 정기 실행이 FileStorageMap으로 고름(C10). DRM과 무관(DRM 자동 복호화 기능은 없음).
 - 이유: 서버는 문서 수천 건을 사람 없이 돌린다.
-- 무엇: CLI `parse`·`structure`·`load`·`night`(마감 시각, 다음 밤에 이어서)·`run-stack`·`compare-parse`·`compare-all`·`set-stack`·`show-stack`·`set-sources`·`show-sources`·`smoke`·`selftest`. 이미지 entrypoint가 `dedup`·`prepare`·`publish`·`full`·`serve-trigger`·`migrate`·`check`를 더한다(`deploy/docker/entrypoint.sh`). 서버 flow 러너(EDW 목록, 12개 미리 받기, light/medium/vlm 레인, 문서마다 컨테이너, `parse_document` 작업에 양보). trigger 서버(`/jobs`, `/upload`, Bearer). (문서별 병렬 파싱 `parse_parallel.py`는 10-30에 지움 — [parse.md#pl-35](parse.md#pl-35).)
+- 무엇: CLI `parse`·`structure`·`load`·`night`(마감 시각, 다음 밤에 이어서)·`run-stack`·`compare-parse`·`compare-all`·`show-stack`·`show-sources`·`smoke`·`selftest`. 이미지 entrypoint가 `dedup`·`prepare`·`publish`·`full`·`serve-trigger`·`migrate`·`check`를 더한다(`deploy/docker/entrypoint.sh`). 서버 flow 러너(EDW 목록, 12개 미리 받기, light/medium/vlm 레인, 문서마다 컨테이너, `parse_document` 작업에 양보). trigger 서버(`/jobs`, `/upload`, Bearer). (문서별 병렬 파싱 `parse_parallel.py`는 10-30에 지움 — [parse.md#pl-35](parse.md#pl-35).)
 - 서버 flow 러너 요구(사용자 10-22·10-23 — 원문 [../history/run_docs_req.md](../history/run_docs_req.md), 바뀐 값은 rn-01·rn-02·[parse.md#pl-22](parse.md#pl-22)):
   - 문서별 flow(배치 장벽 없음) · warm 12(진행 중 제외, 끝나면 tmp 지움 — 10-29부터 20) · 컨테이너 하나에 worker 4.
   - VLM 동시 12(figure·vlm_page 포함), 문서 병렬 4, 문서당 VLM 4·OCR 1, vlm_page 끔, OCR dpi 150. 구조화+적재도 문서 단위 — 임베딩 묶음 호출(32 → 12)·문서당 병렬 4, BM25 병렬 4, 단계별 시간 기록.
@@ -226,7 +228,7 @@
   - SFDC 전용 칸(`sf_acc_name`, `sf_op_id`, `sf_op_name`, `project_code__c`)은 `doc` 표 하나에 둔다(다른 원천은 빈 값). 나눌 때 SFDC doc 표로 옮긴다.
   - `load_run`과 Alembic 판 표는 gold에 남고, 나눈 뒤에도 공용. (10-31 고침) `chunk`에는 `source_system`도 `clients[]`도 두지 않는다 — 스키마가 원천을 정하고, 고객 거르기는 `doc.client_edw`로 문서 범위를 고른다([pl-28](#pl-28)). 청크는 `doc_id`만.
   - `AI.ParsingMeta`는 읽는 칸만 남긴다: `source_system`, `source_key`(s3_key), `parse_date`, `parse_status`, `status`, `status_at`, `rep_bucket`, `rep_key`, 새 `gold_status` + 이유([pl-24](#pl-24)). `doc_key`와 안 읽는 칸 14개는 없앤다. → 10-30 grill에서 단계별 칸을 다시 더함(아래).
-  - `struct`: 문서에서 나온 표 `doc_location`, `doc_contract_link`, `doc_table`, `doc_cell`과 그 쓰기·읽기 코드(structured link/tables, `load_tables_db`, `find_table_cells`, 집계 `doc_link_list`/`table_cell_list`/`doc_location_list`, `AG.struct` 서버 길)를 지운다 — 그 내용은 청크 글에만 있다. `stack_version`/`source_version`은 남긴다(MCP 시작 때 읽음).
+  - `struct`: 문서에서 나온 표 `doc_location`, `doc_contract_link`, `doc_table`, `doc_cell`과 그 쓰기·읽기 코드(structured link/tables, `load_tables_db`, `find_table_cells`, 집계 `doc_link_list`/`table_cell_list`/`doc_location_list`, `AG.struct` 서버 길)를 지운다 — 그 내용은 청크 글에만 있다. (11-01) struct 스키마 전체를 코드에서 없앰 — 엔진 구성·원천 목록은 파일([pl-08](#pl-08)).
   - 마스터 성격 자료(용어집, 고객 명부(C-21), `contract_master`, `client_master`)는 모두 **CSV 파일**로 둔다(사용자 10-30 — grill 9~10차 "마스터 PG"를 뒤집음). 별도 마스터 Postgres도, 용어집용 SQLite도 없다. CSV(샘플 데이터)는 git `resources/vocab/glossary/`(지금 폴더)에 두어 이미지에 함께 들어간다 — 서버 폴더·마운트 없음. 파일·머리글은 `db_schema.md` §5.
   - (10-31 고침) `pipeline_version`(C-62)은 두 곳 모두에 둔다 — gold `doc.pipeline_version` = 이 행을 만든 코드 판, ParsingMeta `pipeline_version` = 이 문서를 gold에 올린 판(C9 뜻 그대로, 이름만 맞춤 — `db_schema.md`).
   - 후속 구현: `.example`을 샘플 CSV로(10-30 끝 — `client_roster`·`client_master`·`contract_master.csv`). 결정(사용자 10-30): `glossary_dir`·`client_roster`는 기본값 없는 선택 settings.yaml 키 그대로(코드 기본값 안 바꿈). PG 마스터 표·`structured load --csv-dir` 지우기는 이 행 구현·설계 검토(grill 중) 때(todo).
@@ -278,7 +280,7 @@
   - 새벽 배치 파라미터 = 새벽 실행 시각을 담는 settings.yaml 키 하나, null이면 새벽 배치 없음. (허브 10-31 고침 — C10, 아래) 대상 고르기 `nightly_plan()`(새 문서 + 바뀐 문서)은 그대로.
   - 실패한 문서는 성공 행이 없어 다음 실행에서 다시 시도된다. 실패 정보는 로컬 로그와 ParsingMeta 실패 엔진 칸으로.
   - `doc_registry.fail_count` 칸은 PR 3a 마이그레이션이 지운다.
-  - `STACK_SNAPSHOT` 파일 → 부모가 `STACK_VERSION=N`을 넘기고 자식은 `struct.stack_version` 행을 읽는다(PC: `stack_file`), 인자 `--stack-version N`. 구현(10-30 `feature/stack-version`): `pipeline.config.stack()`·`stackcfg.resolve/current`, 호스트 `run_docs.py`는 시작 때 `stackcfg --version`으로 판 번호를 한 번 받아 파싱·구조화에 줌 · 허브 승인 예외: `--stack <파일>`은 PC 실험·시험 전용 명시 덮기로 남김(`model_matrix`는 C7로 지움 — 비교는 필요할 때 다시 만든다, [test.md#e2-10](test.md#e2-10)) — 생산 경로(run_docs·trigger·entrypoint·night/full)는 주지 않고, `--stack`과 `--stack-version`을 같이 주면 거부(종료 2 — 시험 `test_stackcfg`).
+  - `STACK_SNAPSHOT` 사본 파일은 없앴다. (11-01 고침 — [pl-08](#pl-08)) 엔진 구성은 서버·PC 같은 파일 하나라 판 번호를 넘기지 않는다 — 진입점이 `stackcfg.resolve()`로 검사하고 층은 `pipeline.config.stack()`으로 같은 파일을 읽음, 호스트 `run_docs.py`는 시작 때 `show-stack`으로 확인만. `--stack <파일>`은 PC 실험·시험 전용 명시 덮기로 남김(`model_matrix`는 C7로 지움 — [test.md#e2-10](test.md#e2-10)) — 생산 경로(run_docs·trigger·entrypoint·night/full)는 주지 않는다.
   - 레이어 핸드오프 `_DONE.json`은 남는다 — 문서마다 지우는 작업 폴더 안에 있고 FINGERPRINT도 그대로. 없애는 것은 실행을 넘어 남던 완료 표시(`run_all`, `figures_resume`, 색인 건너뛰기).
   - `runs.jsonl`: 재사용 역할만 없애고 작업 폴더 안 실행별 기록으로 남긴다.
   - 구현(10-30 `feature/no-cross-run-done`, 허브): `run_all`은 앞 실행의 `runs.jsonl`로 건너뛰거나 결과를 복사하지 않는다(이미 성공·같은 내용 복사·이전 실패·`encrypted_detected` 건너뜀과 `--force`·`--retry-failed`·`--refresh-unknown` 지움 — 같은 실행 안 같은 내용 사본은 한 번만 파싱) · `figures/figures_resume.py`와 시험 지움(pl-35 그 항목도 끝) · 남김: `pipeline.cli` `need()`(한 실행 안 모듈 사이 인계 — 문서 결과 재사용 아님) · 내용으로 열쇠를 거는 캐시는 남김: 임베딩 캐시, 색인 `index_cfg` 입력 지문(같으면 다시 안 지음).

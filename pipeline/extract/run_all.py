@@ -243,11 +243,11 @@ def main():
     scope = scope if scope is not None else "all"  # PE1 — stack: 문서 형식별 stack.json 목록만(생산 기본), all(기본): 지금 동작 그대로
     stack_parse = {}
     if scope == "stack":
-        stack = pc.stack()  # pl-32 — 진입점이 정한 판(판 번호 STACK_VERSION — PC는 파일)
+        stack = pc.stack()  # 엔진 구성 파일(서버·PC 같음 — 사용자 11-01)
         stack_parse = stack.get("parse") or {}
         bad = over_limit({"parse": stack_parse})  # 사용자 10-29 — 형식당 엔진 2개 넘으면 설정 오류(진입점 resolve도 같은 검사)
         if bad:
-            raise SystemExit(f"[엔진 구성] 판 {stack.get('version_id') or '파일'} — " + " · ".join(bad))
+            raise SystemExit(f"[엔진 구성] {stack.get('name')} — " + " · ".join(bad))
     types = doc_types(docs, out) if stack_parse else {}
     logged_missing = set()
     for doc in docs:

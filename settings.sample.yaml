@@ -311,8 +311,8 @@ ops:
     output_root:  # 결과(output) 폴더 · 값: 경로
     runlog_dir:  # 실행 기록(output/logs) 루트 폴더 · 값: 경로
     source_manifest:  # 원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응) · 값: 경로
-    sources_file:  # PC(RUN_ENV=local) 원천 목록 파일 경로(비우면 resources/mappings/sources.json) · 값: 경로
-    stack_file:  # PC(RUN_ENV=local) 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json) · 값: 경로
+    sources_file:  # 원천 목록 파일 경로(비우면 resources/mappings/sources.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
+    stack_file:  # 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
   pipeline_paths:
     file_meta_path:  # EDW 파일 메타 JSONL 경로(s3_key → 메타) · 값: 경로
     gold_dir:  # 사람 정답(gold) 폴더 · 값: 경로
@@ -323,7 +323,6 @@ ops:
     raw_root:  # P0 원본 층(raw/VLM) 캐시 저장소 루트 · 값: 경로
     report_digest_dir:  # run_board 날짜·판 요약 폴더 루트(비우면 요약 안 만듦) · 값: 경로
     soffice_bin:  # LibreOffice soffice 실행 파일 경로 · 값: 경로
-    stack_version:  # 엔진 구성 판 번호(내부 신호 — 진입점이 활성 판 번호를 정해 자식에 넘김, 사람이 쓰지 않음 · pl-32) · 값: 0 이상 정수
   # ─── 호스트 — 컨테이너 도구·패치·정리 ───
   host:
     docker: docker  # 호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등) · 기본 docker · 값: docker·podman 중 하나

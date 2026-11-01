@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """pgvector 우리 스키마 판 관리 명령(S8a — refactor_plan 5-4, 사용자 10-28 Step 0 답 Q1~Q10 a).
-  python -m common.store.db.dbtool up      --target search|struct|all [--schema S] [--dim N | --bundle B] [--create-extension]
+  python -m common.store.db.dbtool up      --target search|all [--schema S] [--dim N | --bundle B] [--create-extension]
   python -m common.store.db.dbtool stamp   --target …   — 이미 있는 DB에 실행 없이 판만 기록(비교 차이 0일 때만)
   python -m common.store.db.dbtool current --target …   — 지금 판·코드의 끝 판
   python -m common.store.db.dbtool check   --target …   — 표 정의 ↔ 실제 DB 비교(차이·판이 끝이 아니면 종료 코드 1)
   python -m common.store.db.dbtool --pg-cases orca_<이름>  — PC 전용 PG 시험(새 시험 DB — 기본 스키마·vector 확장 자리, VS8a B-1·R-9)
   이미지: `migrate up --target all --bundle …`(entrypoint — pipeline 이미지, load와 같은 잠금).
-· 갈래 search = 검색 스키마(PG_SCHEMA — index --pg 스키마는 --schema), struct = 이름 고정. 판 기록 표는 스키마마다 <스키마>.alembic_version.
+· 갈래 search = 검색 스키마(PG_SCHEMA — index --pg 스키마는 --schema) 하나(struct 갈래는 사용자 11-01에 없앰 — 엔진 구성·원천 목록은 파일).
+  판 기록 표는 스키마마다 <스키마>.alembic_version.
 · up: 판 기록이 없는데 표가 있는 스키마(옛 코드가 만든 DB)는 먼저 비교 — 차이가 기준판이 고치는 것(표·색인·뷰 없음, 뷰 칸 다름)뿐이면 고치고
   판 기록(기준판이 IF NOT EXISTS·뷰는 DROP 뒤 다시 만듦), 칸 이름·형식·NULL·기본값·키가 다르거나 남는 표가 있으면 거부(Q3). 적재 앞 자동 길
   (pgvector_load deploy)은 판 기록 없는 기존 스키마면 비교·DDL 없이 경고만(코디네이터 10-28 a — Q5). 검색 스키마는 지금 deploy와 같은 확인을 먼저 —
@@ -26,8 +27,7 @@ from common.core.console import utf8_stdout
 
 HERE = Path(__file__).resolve().parent
 MIGRATIONS = HERE / "migrations"
-TARGETS = ("search", "struct")
-STRUCT = "struct"  # struct 갈래 스키마 이름(고정 — models/struct_tables.SCHEMA와 같음, selftest가 확인)
+TARGETS = ("search",)  # struct 갈래는 사용자 11-01에 없앰(서버에 남은 struct 스키마는 코드가 읽지 않음 — DB 담당자가 두거나 지움)
 _SCHEMA_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}")  # common/store/pg.conf()의 PG_SCHEMA 규칙(그 함수 안 정규식)과 같음
 _SCRIPTS: dict = {}
 
@@ -69,14 +69,12 @@ def known(target):
 
 # ── 판 상태 — q는 SQL 글자 → [dict] 함수(psycopg PG.q·SQLAlchemy 연결 둘레) ───────────────────
 def schema_of(target, schema=None):
-    if target == STRUCT:
-        return STRUCT
     if schema is None:
         from common.store.pg import conf
 
         schema = conf()["PG_SCHEMA"]
-    if not _SCHEMA_RE.fullmatch(schema) or schema == STRUCT:
-        raise DbToolError(f"검색 스키마 이름이 틀림: {schema!r} — 소문자·숫자·_ 만, struct는 안 됨")
+    if not _SCHEMA_RE.fullmatch(schema):
+        raise DbToolError(f"검색 스키마 이름이 틀림: {schema!r} — 소문자·숫자·_ 만")
     return schema
 
 
@@ -376,7 +374,7 @@ def main(argv=None):
 def pg_cases(name):
     """새 시험 DB `<name>`·`<name>_e1`·`<name>_e2`를 만들어(이미 있으면 거부 — 아무것도 지우지 않음) 확인한다:
     ① 우리 스키마 = 연결의 기본 스키마(current_schema()) 세 꼴 — PG_SCHEMA=public · 역할 이름 = 스키마("$user") · search_path = 스키마
-       (+ struct를 search_path=struct로): up 뒤 check 차이 0, 판 표를 지우고 남는 칸·형식 다름을 넣으면 check가 그 둘을 보이고 up·stamp 거부(B-1)
+       : up 뒤 check 차이 0, 판 표를 지우고 남는 칸·형식 다름을 넣으면 check가 그 둘을 보이고 up·stamp 거부(B-1)
     ② vector 확장이 다른 스키마(e1 — 차원 8·4096)·우리 스키마(e2 — 4096)에 있을 때 up 뒤 check 차이 0(색인 글자 정규화 — R-9).
     PC(RUN_ENV=local)·이름 orca_… 만. 반환: 실패 수."""
     from common.core import paths
@@ -422,18 +420,11 @@ def pg_cases(name):
         return eng, cur
 
     def bad_case(target, schema, opts, label):
-        eng, cur = same(name, target, schema, 8 if target == "search" else None, opts, label)
+        eng, cur = same(name, target, schema, 8, opts, label)
         ok(cur == schema, f"{label}: 기본 스키마가 우리 스키마({cur})")
         bad = (
-            (
-                f"DROP TABLE {schema}.{VERSION_TABLE}; ALTER TABLE {schema}.doc ADD COLUMN file_sha256 CHAR(64); "
-                f"ALTER TABLE {schema}.chunk ALTER COLUMN n_terms TYPE BIGINT"
-            )
-            if target == "search"
-            else (
-                f"DROP TABLE {schema}.{VERSION_TABLE}; ALTER TABLE {schema}.stack_version ADD COLUMN x_extra TEXT; "
-                f"ALTER TABLE {schema}.stack_version ALTER COLUMN created_by TYPE VARCHAR(40)"
-            )
+            f"DROP TABLE {schema}.{VERSION_TABLE}; ALTER TABLE {schema}.doc ADD COLUMN file_sha256 CHAR(64); "
+            f"ALTER TABLE {schema}.chunk ALTER COLUMN n_terms TYPE BIGINT"
         )
         run(name, bad, opts)
         with eng().connect() as c:
@@ -460,7 +451,6 @@ def pg_cases(name):
     run(name, f"CREATE SCHEMA {user}")  # 역할 이름 = 스키마 — "$user"가 고름
     guarded(bad_case, "search", user, None, "역할 이름 = 스키마")
     guarded(bad_case, "search", "orca_sp", "-c search_path=orca_sp,public", "search_path = 스키마(역할 설정 꼴)")
-    guarded(bad_case, "struct", STRUCT, f"-c search_path={STRUCT},public", "struct search_path")
     run(f"{name}_e1", "CREATE SCHEMA ext; CREATE EXTENSION vector SCHEMA ext")
     for dim in (8, 4096):
         guarded(

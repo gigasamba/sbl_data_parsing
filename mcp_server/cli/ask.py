@@ -32,10 +32,10 @@ PY = sys.executable
 
 
 def _stack():
-    """엔진 구성 활성 판(S8b — 서버 = 판 표 struct.stack_version, PC = 파일) → body + name(옛 stack.json 꼴)."""
-    from common.store.db import cfgtables
+    """엔진 구성 파일(서버·PC 같음 — 사용자 11-01) → body + name(옛 stack.json 꼴)."""
+    from common.store.db import cfgfile
 
-    cur = cfgtables.active("stack")
+    cur = cfgfile.active("stack")
     return cur.named()
 
 

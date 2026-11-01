@@ -1,57 +1,43 @@
-# 엔진 구성(pipeline_stack)·원천 목록(sources) — 판 표
+# 엔진 구성(pipeline_stack)·원천 목록(sources) — 파일
 
-엔진 구성(어느 형식을 어느 파싱 엔진 순서로 · 청킹 · 임베딩 · 검색 방식 · 상위 k)과 원천 목록(문서 위치를 읽을 회사 DB 표·열)이 어디에 있고 어떻게 바꾸는지. S8b(10-28 — D-017·D-031)부터 서버는 pgvector의 **판 표**, PC는 파일이다. 옛 파일의 메모 칸(`storage`·`candidates_note`·`embed_note`·`parse_note`)은 이 문서 [§4](#4-메모--옛-pipeline_stackjson-메모-칸)로 옮겼다(D-017 — 읽는 코드 없음).
+엔진 구성(어느 형식을 어느 파싱 엔진 순서로 · 청킹 · 임베딩 · 검색 방식 · 상위 k)과 원천 목록(문서 위치를 읽을 회사 DB 표·열)이 어디에 있고 어떻게 바꾸는지. **서버(dev·prd)와 PC 모두 저장소의 파일을 읽는다**(사용자 11-01: struct 스키마를 코드에서 모두 없앰, 파일만 — D-031·pl-08). 옛 파일의 메모 칸(`storage`·`candidates_note`·`embed_note`·`parse_note`)은 이 문서 [§4](#4-메모--옛-pipeline_stackjson-메모-칸)로 옮겼다(D-017 — 읽는 코드 없음).
 
 ## 1. 어디서 읽나
 
-| | 서버(RUN_ENV dev·prd · 이미지 배치 — PC 시험 Docker 포함) | PC(`RUN_ENV=local` + 저장소 배치 — `paths.LOCAL_RUN`) |
+| | 파일(서버·PC 같음 — 두 이미지에 다 들어 있음) | 다른 파일을 쓰려면(설정) |
 |---|---|---|
-| 엔진 구성 | `struct.stack_version`의 활성 판(`is_active`) | `common.paths.stack_file`(비우면 `resources/config/pipeline_stack.json`) |
-| 원천 목록 | `struct.source_version`의 활성 판 | `common.paths.sources_file`(비우면 `resources/mappings/sources.json`) |
-| 못 읽을 때 | **시작 거부 — 종료 코드 4**(PostgreSQL 없음·판 표 없음(migrate 전)·활성 판 없음·body_sha 어긋남) — git 기본 파일로 넘어가지 않는다(사용자 10-28 Q7) | 파일 오류 그대로 |
+| 엔진 구성 | `resources/config/pipeline_stack.json` | `ops.paths.stack_file` |
+| 원천 목록 | `resources/mappings/sources.json` | `ops.paths.sources_file` |
+| 못 읽을 때 | **시작 거부 — 종료 코드 2**(파일 없음·JSON 오류·모양이 틀림 — 한 줄 안내, 값은 찍지 않음) | |
 
-- 프로세스마다 한 번 읽어 캐시한다(`common.store.db.cfgtables.active`). 오래 도는 것: 검색 MCP 서버는 시작 때만(판을 바꾸면 다시 띄움), 파싱 MCP 서비스(`mcp_parse_service`)는 작업마다 다시 읽는다.
-- 옛 서버 덮어쓰기 `$SERVER_ENV_DIR/sources.json`과 env `SOURCES_FILE` 우선순위는 없앴다(서버는 판 표 — 그 파일이 있으면 `set-sources --file`로 판을 넣음, `refactor.md` C-12).
-- `common/core/terms.py`(인계 파일 — 지문 때문에 고치지 않음)는 `client_aliases`를 `resources/config/pipeline_stack.json` **파일**에서만 읽는다(지금 파일에 그 키가 없음 — 판 표 밖).
+- 읽는 곳은 `common/store/db/cfgfile.py` 한 곳이다. 읽을 때 pydantic으로 모양을 검사한다(`common/store/db/schemas/config_body.py` — 원천 항목은 `common/core/sources.py` `_validate_entry` 한 곳). `body_sha` = 정규 JSON(키 정렬·공백 없음·UTF-8)의 sha256 — 같은 구성이면 서버·PC가 같은 값이다.
+- 프로세스마다 한 번 읽어 캐시한다. 오래 도는 것: 검색 MCP 서버는 시작 때만(파일을 바꾸면 다시 띄움), 파싱 MCP 서비스(`mcp_parse_service`)는 작업마다 다시 읽는다.
+- 파싱·검색 MCP 컨테이너는 엔진 구성을 읽으려고 PostgreSQL에 접속하지 않는다(PG가 없어도 시작한다). PG는 적재·검색에만 필요하다.
+- 서버에 남은 옛 `struct` 스키마(판 표 `stack_version`·`source_version` 등 — 쓰이지 않음)는 코드가 읽지 않는다. 그대로 두거나 DB 담당자가 지운다.
+- `common/core/terms.py`(인계 파일 — 지문 때문에 고치지 않음)는 `client_aliases`를 `resources/config/pipeline_stack.json` 파일에서 읽는다(지금 파일에 그 키가 없음).
 
-## 2. 판 표 (struct 판 `0002_struct` — 🔒 데이터 계약, 검토 등급 A)
+## 2. 파일 모양
 
-두 표(`stack_version`·`source_version`)는 같은 모양이다. 판 행은 고치지 않는다 — 바꾸기 = 새 행 + 활성 옮기기(한 트랜잭션), 되돌리기 = 옛 판을 다시 활성으로(활성 표시·`activated_*`만 바뀜).
-
-| 칸 | 형식 | 뜻 |
-|---|---|---|
-| `version_id` | SERIAL PK | 판 번호 |
-| `name` | TEXT NOT NULL | 판 이름(엔진 구성 `name`, 예 `dev-v1` · 원천 목록 시드는 `seed`) |
-| `body` | JSONB NOT NULL | 설정 전체 — 엔진 구성 = `parse`·`source`·`embed`·`chunk`·`graph`·`retrieve`·`k`·`candidates` · 원천 목록 = 항목 목록(`name`·`table`·`bucket`·`enabled`·`columns`). 모양 검사는 pydantic(`common/store/db/schemas/config_body.py` — 원천 항목은 `common/core/sources.py` `_validate_entry` 한 곳) |
-| `body_sha` | CHAR(64) NOT NULL UNIQUE | 정규 JSON(키 정렬·공백 없음·UTF-8) sha256 — 같은 body는 한 판(다시 넣으면 그 판을 활성으로) |
-| `is_active` | BOOLEAN NOT NULL DEFAULT false | 활성 판 — 표마다 하나(`ux_<표>_active` — `WHERE is_active` 유일 색인) |
-| `created_at`·`created_by`·`reason` | TIMESTAMPTZ DEFAULT now() · TEXT · TEXT | 넣은 때·사람·이유 |
-| `activated_at`·`activated_by` | TIMESTAMPTZ · TEXT | 마지막으로 활성이 된 때·사람(되돌리기 기록) |
-
-- 시드: 판 `0002_struct`(Alembic — `common/store/db/migrations/versions/0002_struct_config.py`)가 표를 만들며 판 1을 활성으로 넣는다 — 판 번호 붙인 사본 `resources/sql/0002_stack_seed.json`·`0002_sources_seed.json`(그때의 PC 파일 설정 칸 — 정규화 JSON 같음, 한 번 배포하면 고치지 않음). PC 파일은 그 뒤에도 고칠 수 있다.
-- PC는 이 표 대신 파일을 읽는다(SQLite 대체 없음).
+- 엔진 구성: `name`(예 `dev-v1`) + `parse`(형식 → 엔진 목록, 형식당 최대 2개)·`source`·`embed`·`chunk`·`graph`·`retrieve`·`k`·`candidates`(+ 선택 `updated`·`client_aliases`).
+- 원천 목록: 항목 목록(`name`·`table`·`bucket`·`enabled`·`columns`).
 
 ## 3. 바꾸기·되돌리기·보기
 
-| 명령(PC `python -m pipeline.cli …` · 이미지 `docker run … data-pipeline <명령>`) | 서버 | PC |
-|---|---|---|
-| `set-stack --parse ".pdf_text=pymupdf,kreuzberg;…"`·`--from-selection`·`--embed`·`--chunk`·`--graph`·`--retrieve`·`--k`·`--name` + **`--reason` 필수**·`--by` | 활성 판에서 시작해 바꾼 body를 새 판으로 넣고 활성으로(같은 body면 그 판을 활성으로) | 파일을 고침(지금처럼) |
-| `set-stack --activate <판 번호> --reason …` | 그 판을 다시 활성으로(되돌리기) | 없음(파일 — git으로) |
-| `show-stack [--history N]` | 활성 판 + 최근 판 목록 | 파일 |
-| `set-sources --file <json> --reason …`·`--activate <판 번호>`·`--check-columns`(선택 — 회사 DB INFORMATION_SCHEMA로 표·열 이름이 있는지, 값은 안 읽음) | 새 판·활성 옮기기 | 파일을 고침 |
-| `show-sources [--history N]` | 활성 판 + 최근 판 | 파일 |
+| 할 일 | 방법 |
+|---|---|
+| 바꾸기 | 코드 폴더의 파일을 고쳐 커밋 → 서버에는 **오버레이 패치**로 보낸다([release-and-patch.md](../operations/release-and-patch.md)) |
+| 되돌리기 | git으로 이전 파일로 되돌려 다시 패치 |
+| 보기 | `show-stack`·`show-sources`(PC `python -m pipeline.cli …` · 이미지 `docker run … data-pipeline <명령>`) — 이름·sha·파일 경로와 내용 요약 |
 
-- **이미지에 없는 엔진 거부(D-017):** `parse` 목록 ∪ `candidates`의 엔진마다 등록부(`pipeline/extract/engines`)에 있고 설치(REQUIRES 모듈·도구)됐는지 — `set-stack` 때(넣지 않음, 종료 2)와 파이프라인 진입점이 판을 읽을 때(시작 안 함, 종료 2) 둘 다. REQUIRES_ENV(모델 주소 설정)는 설치 문제가 아니라 보지 않는다. `mcp-server` 이미지는 등록부가 없어 `set-stack`을 거부하고, 검색은 `retrieve`·`k`만 쓴다. `show-stack`·`show-sources`도 실행 기록을 `/app/output/logs`에 쓰므로 `/app/output:ro`인 상주 `mcp-server` 컨테이너에서는 entrypoint 쓰기 확인에서 종료 2다 — `data-pipeline` 컨테이너(`trigger.sh`·`run_tool.sh`의 load 등)에서 본다(VS8b R-9).
-- **파싱과 구조화가 같은 판(VS8b R-1 · C-50 · pl-32):** 호스트 `run_docs.py`는 시작 때 `python -m pipeline.stackcfg --version`으로 활성 판 번호를 한 번 받아 파싱(`--set STACK_VERSION=N`)·구조화(`--stack-version N`)에 같이 준다 — 그 실행의 모든 문서가 한 판. 동시에 `set-stack`·`set-sources`를 해서 진 쪽과 `set-stack`이 읽은 판이 쓰기 전에 바뀐 쪽은 넣지 않고 종료 2("다른 사람이 방금 판을 바꿈")다.
-- **누가:** 서버에서는 `--by <사람>`을 늘 준다(없으면 컨테이너 안 이미지 계정 이름이 남음). 같은 body로 되돌리면(`set-stack` 결과가 옛 판과 같음) 새 행 없이 그 판을 활성으로 — 판 행의 이름·이유는 그대로, 이번 이유는 실행 기록(`runlog`)에만.
-- **판 번호로 넘김(code_fp — Q10 · pl-32 사용자 10-30, 사본 파일 `_stack/stack-v*.json`·`STACK_SNAPSHOT` 없앰):** 파이프라인 진입점(`pipeline.cli`·`mcp_parse_service`·`load.index`·`eval.server_checks`)이 활성 판을 읽어 엔진을 검사하고 판 번호를 설정 칸 `STACK_VERSION`으로 자식에 넘긴다(이미 받았으면 그 판). 층 파일 `run_all`·`attachments`와 `represent`·`build_bundle`은 `pipeline.config.stack()`으로 그 판을 판 표에서 읽는다(`represent`·`build_bundle`은 `--stack-version N`도 받음) — 서버에서 판 번호 없이 읽으면 거부(종료 2), PC는 파일. 판 표를 읽는 코드(`cfgtables`)는 층의 의존이 아니라 판을 더하거나 고쳐도 code_fp가 그대로다. `--stack <파일>`은 PC 실험(`validation/e2e/model_matrix`)·시험 전용으로 남고 생산 경로는 주지 않는다(둘 다 주면 종료 2). 색인 재빌드 지문은 판의 정규 바이트(`stackcfg.snapshot_bytes` — 옛 사본과 같은 바이트, 키 정렬). 판 번호·sha는 묶음 `meta.json`의 `stack_conf`에 남는다. `pipeline_version()`(회사 DB `AI.ParsingMeta.pipeline_version` 칸)은 그대로 git 커밋 — 판 번호를 붙이지 않는다. 다시 볼 것은 `refactor.md` C-50.
+- **이미지에 없는 엔진 거부(D-017):** `parse` 목록 ∪ `candidates`의 엔진마다 등록부(`pipeline/extract/engines`)에 있고 설치(REQUIRES 모듈·도구)됐는지 — 파이프라인 진입점(`pipeline.cli`·`mcp_parse_service`·`load.index`)이 시작 때 `pipeline.stackcfg.resolve()`로 검사한다(어긋나면 시작 안 함, 종료 2). REQUIRES_ENV(모델 주소 설정)는 설치 문제가 아니라 보지 않는다. 검색은 `retrieve`·`k`만 쓴다. `show-stack`·`show-sources`는 실행 기록을 `/app/output/logs`에 쓰므로 `/app/output:ro`인 상주 `mcp-server` 컨테이너에서는 entrypoint 쓰기 확인에서 종료 2다 — `data-pipeline` 컨테이너(`trigger.sh`·`run_tool.sh`의 load 등)에서 본다(VS8b R-9).
+- **파싱과 구조화가 같은 구성:** 파일은 오버레이 패치로만 바뀌므로 한 실행 안에서는 그대로다. 호스트 `run_docs.py`는 시작 때 파싱 컨테이너 안에서 `show-stack`을 한 번 돌려 파일이 읽히는지 확인한다(못 읽으면 멈춤).
+- **층과 code_fp:** 층 파일 `run_all`·`attachments`·`represent`·`build_bundle`은 `pipeline.config.stack()`으로 같은 파일을 읽는다. 파일 읽기 코드(`cfgfile`)는 층의 의존이 아니라 구성을 바꿔도 code_fp가 그대로다. `--stack <파일>`은 PC 실험(`validation/e2e/model_matrix`)·시험 전용이다. 색인 재빌드 지문은 구성의 정규 바이트(`stackcfg.snapshot_bytes`, 키 정렬)이고, 묶음 `meta.json`의 `stack_conf`에 구성이 남는다. `pipeline_version()`(회사 DB `AI.ParsingMeta.pipeline_version` 칸)은 git 커밋이다.
 
 ### 3-1. 지원 형식 더하기(pl-42, 사용자 10-30)
 
-- PC 파일 `resources/config/pipeline_stack.json`에 `.jpeg`·`.tif`·`.tiff`·`.bmp`(`.png`·`.jpg`와 같은 `rapidocr_ko`·`qwen_vlm` — OCR 엔진은 `pipeline.extract.ocr_engine`을 켤 때만)·`.mhtml`(`.mht`와 같은 `mhtml`·`kreuzberg`)을 더했다. `.hwpx`(`hwpx`)는 원래 있었다. 엔진 코드는 바꾸지 않았다(다섯 형식 모두 엔진이 이미 읽음).
-- 판 1 시드(`resources/sql/0002_stack_seed.json`)는 고치지 않는다(배포한 판). 서버는 새 판으로 반영한다:
-  `dc run --rm load set-stack --parse ".jpeg=rapidocr_ko,qwen_vlm;.tif=rapidocr_ko,qwen_vlm;.tiff=rapidocr_ko,qwen_vlm;.bmp=rapidocr_ko,qwen_vlm;.mhtml=mhtml,kreuzberg" --reason "pl-42 확장자 추가"` → `show-stack --history 3`으로 확인(되돌리기 `set-stack --activate <앞 판> --reason …`).
-- 판에 없는 형식은 지금처럼 핵심 엔진 합집합으로 대체돼 돌기는 한다(+형식별 1회 로그) — 새 판을 넣어야 형식당 엔진 2개 규칙대로 돈다.
+- `resources/config/pipeline_stack.json`에 `.jpeg`·`.tif`·`.tiff`·`.bmp`(`.png`·`.jpg`와 같은 `rapidocr_ko`·`qwen_vlm` — OCR 엔진은 `pipeline.extract.ocr_engine`을 켤 때만)·`.mhtml`(`.mht`와 같은 `mhtml`·`kreuzberg`)을 더했다. `.hwpx`(`hwpx`)는 원래 있었다. 엔진 코드는 바꾸지 않았다(다섯 형식 모두 엔진이 이미 읽음).
+- 서버도 같은 파일을 읽으므로 따로 할 일이 없다(옛 `set-stack` 단계 없음 — `refactor.md` C-69 닫음).
+- 파일에 없는 형식은 핵심 엔진 합집합으로 대체돼 돌기는 한다(+형식별 1회 로그).
 
 ## 4. 메모 — 옛 `pipeline_stack.json` 메모 칸
 

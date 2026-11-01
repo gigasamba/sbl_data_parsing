@@ -4,7 +4,7 @@
 
 - **이 문서는 설계안이다.** 사용자와 DB 담당자가 승인한 뒤 구현한다. 이 문서를 고치는 브랜치는 코드·스키마·마이그레이션을 바꾸지 않는다.
 - **결정 칸:** `유지` = 지금 있고 남김 · `삭제` = 지금 있고 없앰 · `새로` = 지금 없고 만듦. 지금 상태 = `유지`+`삭제`, 목표 상태 = `유지`+`새로`.
-- **시험:** `tests/server/common/test_db_schema.py`가 이 문서의 gold·struct 표를 Alembic 판(모델 `common/store/db/models/` — 기존 시험이 판과 같은지 본다)과, ParsingMeta를 [`docs/operations/parsing_meta_mssql.sql`](../operations/parsing_meta_mssql.sql)과 비교한다. 지금 상태가 다르면 실패하고, 목표 상태와의 차이(새로·삭제)는 목록으로 찍기만 한다.
+- **시험:** `tests/server/common/test_db_schema.py`가 이 문서의 gold 표를 Alembic 판(모델 `common/store/db/models/` — 기존 시험이 판과 같은지 본다)과, ParsingMeta를 [`docs/operations/parsing_meta_mssql.sql`](../operations/parsing_meta_mssql.sql)과 비교한다. 지금 상태가 다르면 실패하고, 목표 상태와의 차이(새로·삭제)는 목록으로 찍기만 한다.
 - **쓰는 곳·읽는 곳**은 10-31 develop 기준 코드다(괄호 안은 0.2.0에 생길 곳). 경로는 저장소 기준이고 함수 이름만 적는다.
 
 ## 1. 공통 규칙 (10-30·10-31 결정 — 0.2.0)
@@ -118,43 +118,9 @@
 
 뷰 `v_chunk_source`는 `chunk`↔`doc`을 이은 읽기 전용 뷰다(지금은 파일 이름을 `file_path`에서 계산). 0.2.0에는 스키마마다 다시 만든다 — 지금 `d.clients`·`d.file_path`를 고르므로 먼저 `DROP VIEW` 하고 새 칸(`s3_key`·`original_filename`·`client_edw`·`clients_doc`·`rep_key` 등)으로 다시 만든다(`CREATE OR REPLACE VIEW`로는 칸을 뺄 수 없음). 모델의 `VIEWS_EXPECTED`도 같이 고친다.
 
-## 3. struct — 버전 테이블 (PostgreSQL `struct`)
+## 3. struct — 없음 (사용자 11-01)
 
-판: `0001_struct_base.py`·`0002_struct_config.py`·`0003_struct_drop.py` · 모델: `common/store/db/models/struct_tables.py`. 0001이 만든 표 10개(`contract_master`·`client_master`·`prod_master`·`doc_contract_link`·`doc_location`·`doc_registry`·`doc_registry_seen`·`doc_hidden`·`doc_table`·`doc_cell`)는 판 `0003_struct`가 지운다(pl-08·pl-12 C10 — 사용자 10-31, 마이그레이션 11-01 승인). 그 표를 쓰고 읽던 코드(`pipeline/load/structured.py`, `common/store/structdb.py`, 문서 대장·숨김, 집계)는 먼저 지웠고, SQLite 대체도 없다. 마스터(`contract_master`·`client_master`)는 CSV 파일로 둔다(§5). 남는 표는 아래 버전 테이블 둘과 판 기록 `struct.alembic_version`이다.
-
-### struct.stack_version
-
-엔진 구성 판 표(검토 등급 A — [architecture/pipeline_stack.md](pipeline_stack.md)). MCP·파이프라인이 시작할 때 활성 판을 읽는다.
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| version_id | SERIAL PK | 판 번호 | 판 0002 시드, cfgtables `put` | cfgtables `active`·`history` | 유지 |
-| name | TEXT | 판 이름(dev-v1 등) | 〃 | 〃 | 유지 |
-| body | JSONB | 설정 전체 | 〃 | cfgtables `active` → server_state, mcp main, stackcfg | 유지 |
-| body_sha | CHAR(64) UNIQUE | body sha256 | 〃 | cfgtables `put`(같은 판 거름) | 유지 |
-| is_active | BOOLEAN | 활성 판(하나) | cfgtables `activate` | cfgtables `active` | 유지 |
-| created_at | TIMESTAMPTZ | 만든 때 | 〃 | cfgtables `history` | 유지 |
-| created_by | TEXT | 만든 사람 | 〃 | 〃 | 유지 |
-| reason | TEXT | 이유 | 〃 | 〃 | 유지 |
-| activated_at | TIMESTAMPTZ | 활성이 된 때 | cfgtables `activate` | 〃 | 유지 |
-| activated_by | TEXT | 활성으로 바꾼 사람 | 〃 | 〃 | 유지 |
-
-### struct.source_version
-
-원천 목록 판 표 — `stack_version`과 같은 모양. 읽는 곳: `common/core/sources.py` `load_sources` → cfgtables `active("sources")`.
-
-| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
-|---|---|---|---|---|---|
-| version_id | SERIAL PK | 판 번호 | 판 0002 시드, cfgtables `put` | cfgtables | 유지 |
-| name | TEXT | 판 이름 | 〃 | 〃 | 유지 |
-| body | JSONB | 원천 목록 전체 | 〃 | sources `load_sources` | 유지 |
-| body_sha | CHAR(64) UNIQUE | body sha256 | 〃 | cfgtables `put` | 유지 |
-| is_active | BOOLEAN | 활성 판 | cfgtables `activate` | cfgtables `active` | 유지 |
-| created_at | TIMESTAMPTZ | 만든 때 | 〃 | cfgtables `history` | 유지 |
-| created_by | TEXT | 만든 사람 | 〃 | 〃 | 유지 |
-| reason | TEXT | 이유 | 〃 | 〃 | 유지 |
-| activated_at | TIMESTAMPTZ | 활성이 된 때 | cfgtables `activate` | 〃 | 유지 |
-| activated_by | TEXT | 활성으로 바꾼 사람 | 〃 | 〃 | 유지 |
+PostgreSQL `struct` 스키마는 코드에서 모두 없앴다(사용자 11-01 — [D-031·pl-08](../prd/etl.md#pl-08)). 정형 표·문서 대장·마스터(판 `0003_struct`로 지우려던 표 10개)와 버전 테이블 `stack_version`·`source_version`, 그 Alembic 판(`0001_struct`~`0003_struct`)이 모두 없다. 엔진 구성은 `resources/config/pipeline_stack.json`, 원천 목록은 `resources/mappings/sources.json` 파일을 서버·PC가 같이 읽는다(바꾸기 = 파일을 고쳐 오버레이 패치). 마스터는 CSV 파일이다(§5). 서버에 남은 struct 스키마(운영 문서 기준 쓰이지 않음 — `doc_registry` 0행)는 코드가 읽지 않는다 — 그대로 두거나 DB 담당자가 지운다(D-7).
 
 ## 4. EDW (MSSQL)
 
@@ -230,7 +196,7 @@ PC 대역 예시 — [pl-29](../prd/etl.md#pl-29) 10-31. 고객 연결 4단계�
 | source_key_hash | BINARY(32) 계산 칸 | `source_key` sha256 — 유일 색인 키(1700바이트 상한 우회) | DB | 유일 색인 | 유지 |
 | gold_status | NVARCHAR(32) | gold(검색 DB) 적재 상태 | (pl-24 — run_docs·적재) | (pl-24 재시도·건너뜀) | 새로 |
 | gold_reason | NVARCHAR(2000) | gold 상태 이유(실패 원인 등) | (pl-24) | (운영자) | 새로 |
-| stack_version | INT | 파싱 엔진 스택 판(`struct.stack_version`) — 파싱이 통째로 실패하면 행 자체를 쓰지 않는다(C3) | (파싱 단계 성공 때) | (운영자·재처리 판정) | 새로 |
+| stack_version | INT | 파싱 엔진 스택 판 — **결정 대기(11-01):** 판 표가 없어져 판 번호가 없다(엔진 구성 파일의 sha·이름으로 바꿀지, 칸을 뺄지). 파싱이 통째로 실패하면 행 자체를 쓰지 않는다(C3) | (파싱 단계 성공 때) | (운영자·재처리 판정) | 새로 |
 | engines_failed | NVARCHAR(MAX) | 실패한 엔진(JSON — 이름·이유·걸린 시간), 없으면 NULL | (파싱 단계 — 사용자 10-30 "EDW에도") | (운영자·재시도 판단) | 새로 |
 
 **운영이 더한 분류·고객 칸(G19 — 4차 grill, G1·G9를 뒤집음):** 운영이 ParsingMeta에 더한 분류·고객 칸(`doc_class`·`sf_op_id`·`created_at`·`sf_acc_name` 등 — 이 저장소의 DDL에는 없음)은 0.2.0에 모두 지운다(DB 담당자 D-3, 등급 A). 분류·고객·등록 시각은 시스템별 gold `doc`에만 둔다([pl-33](../prd/etl.md#pl-33), [pl-29](../prd/etl.md#pl-29)). 그때 운영 분류 스크립트가 멈추므로 운영 담당자에게 알린다.
@@ -245,7 +211,7 @@ PC 대역 예시 — [pl-29](../prd/etl.md#pl-29) 10-31. 고객 연결 4단계�
 |---|---|---|---|
 | `domain_terms.csv` | 용어 사전(C-21) | `concept_id,canonical,category,synonyms,abbreviations,weak_synonyms,broader,related,context_required,case_sensitive,definition_ko,definition_en,source,owner,status,updated` (`status`는 approved·draft) | `common.core.terms` |
 | `client_roster.csv` | 고객 명부(C-21, 새 형식) | `client_id,canonical_name,name_ko,aliases,client_type,segment,country,parent_client_id,status,description,source,updated` — 읽는 칸: `canonical_name`(비면 `name_ko`), `aliases`(`;`·`\|` 구분), `status`(inactive·deleted면 건너뜀) | `common.core.terms` 고객 별칭(초안은 `gen_roster`) |
-| `contract_master.csv` | 계약 마스터 | `contract_id,company,company_id,product_code,modality,site,line_id,batches_contracted,contract_value_usd,currency,term_months,signed_on,start_date,end_date,status` (판 0003이 지운 옛 `struct.contract_master`와 같은 칸) | 계약 연결·고객 별칭 |
+| `contract_master.csv` | 계약 마스터 | `contract_id,company,company_id,product_code,modality,site,line_id,batches_contracted,contract_value_usd,currency,term_months,signed_on,start_date,end_date,status` (옛 `struct.contract_master`와 같은 칸) | 계약 연결·고객 별칭 |
 | `client_master.csv` | 고객 마스터 | `company_id,company,aliases`(별칭 `\|` 구분 — 옛 `struct.client_master`와 같은 칸) | 고객 별칭(aggregate `_struct_client_aliases` 자리) |
 
 - `client_master.example.csv`(머리글 `Account_Id,Account_Name,Account_Name_KR,Alias_List,Account_Type,Billing_Country,Parent_Id,Account_Status`)는 EDW 모양 원본 — `gen_roster --kind client --source csv:client_master.csv --mapping …`이 명부 초안을 만들 때 읽는다.
@@ -260,8 +226,8 @@ PC 대역 예시 — [pl-29](../prd/etl.md#pl-29) 10-31. 고객 연결 4단계�
 | D-3 | `AI.ParsingMeta` 칸 정리(ALTER) — 안 읽는 칸 삭제, `gold_status`·`gold_reason`·단계별 칸(`stack_version`·`engines_failed`) 추가, `pipeline_version` 뜻 바꿈(gold에 올린 판 — gold 성공 때 씀, 10-31: 새 칸 `gold_version` 대신), `engines_used`·`rep_engine` 뜻 바꿈 — 권한, 기존 행, 다른 사용처 | 이 프로젝트 밖에서 그 칸을 읽는 곳이 있는지 모름 · **G19·C5(0.2.0):** 파싱 정보만 — 운영이 더한 분류·고객 칸(`doc_class`·`sf_op_id`·`created_at`·`sf_acc_name` 등)은 모두 지움, `sha256`은 남김 · 운영 분류 스크립트가 멈춤 |
 | D-4 | `ParsingMeta.doc_key` 삭제 때 `UQ_ParsingMeta_dockey`·`IX_ParsingMeta_doc_key` 색인 처리 · `source_key`를 필수(NOT NULL)로 | 지금 `source_key`가 비면 `doc_key`가 겹침 키 |
 | D-5 | (없어짐 — 사용자 10-30: 마스터는 CSV 파일, 마스터 PostgreSQL 없음) | — |
-| D-6 | 0.2.0 Alembic 마이그레이션 하나 — 원천별 gold 스키마 5벌(`sfdc`·`crms`·`las`·`faq`·`other`) 만들기 — `doc_id`는 스키마 5벌이 함께 쓰는 시퀀스 하나(허브가 정함)(칸: `s3_key`·`original_filename`·`client_edw`·`clients_doc`·`doc_class`·`created_at`·`rep_key`·`rep_engine`·`parsed_at`·`pipeline_version` 추가, `file_path`·`clients`·`doc.source_system`·`chunk.source_system` 삭제, 청크는 `doc_id`만(청크 `s3_key` 없음), `faq.chunk.faq_group`) — struct 지우기는 판 `0003_struct`로 따로(D-7), 뷰 `v_chunk_source`는 스키마마다 다시 만듦 — 기존 서버 데이터는 다시 적재 | DB 담당자 승인 한 번([pl-25](../prd/etl.md#pl-25)) · 첫 적재가 전체 e2e([pl-23](../prd/etl.md#pl-23))와 함께 |
-| D-7 | struct 표 10개 지우기(판 `0003_struct` — 정형 표·문서 대장·표 칸, 마스터 2개는 CSV로) 전 백업 | 되돌릴 수 없는 삭제(0003 downgrade 없음) |
+| D-6 | 0.2.0 Alembic 마이그레이션 하나 — 원천별 gold 스키마 5벌(`sfdc`·`crms`·`las`·`faq`·`other`) 만들기 — `doc_id`는 스키마 5벌이 함께 쓰는 시퀀스 하나(허브가 정함)(칸: `s3_key`·`original_filename`·`client_edw`·`clients_doc`·`doc_class`·`created_at`·`rep_key`·`rep_engine`·`parsed_at`·`pipeline_version` 추가, `file_path`·`clients`·`doc.source_system`·`chunk.source_system` 삭제, 청크는 `doc_id`만(청크 `s3_key` 없음), `faq.chunk.faq_group`) — struct는 코드에서 없앰(D-7), 뷰 `v_chunk_source`는 스키마마다 다시 만듦 — 기존 서버 데이터는 다시 적재 | DB 담당자 승인 한 번([pl-25](../prd/etl.md#pl-25)) · 첫 적재가 전체 e2e([pl-23](../prd/etl.md#pl-23))와 함께 |
+| D-7 | 서버에 남은 struct 스키마 — 그대로 둘지 지울지(지운다면 백업 뒤 DB 담당자가 직접 — 코드에는 struct 판이 없음, 사용자 11-01) | 코드가 읽지 않음 · 지우면 되돌릴 수 없음 |
 | D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 `source_system='FAQ'`로 등록(G3, 사용자 10-30 — [pl-39](../prd/etl.md#pl-39)) | EDW 담당자 협의 필요 — FAQ 행을 누가 어떻게 넣나 |
 | D-9 | 밀려난 `FileStorageMap` 행의 예외 이력 표(새 EDW 표 — §4 `edw.SupersededRow` 안) — 표 이름·칸·누가 쓰나 | 사용자 10-31: 같은 `s3_key`의 더 새 행이 오면 같은 `doc_id`(`file_size`가 다를 때만 다시 파싱)이고 옛 행을 이력에 남김 |
 

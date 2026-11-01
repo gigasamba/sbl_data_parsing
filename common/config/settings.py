@@ -1487,12 +1487,12 @@ class CommonPaths(Section):
     sources_file: str | None = F(
         None,
         "SOURCES_FILE",
-        "PC(RUN_ENV=local) 원천 목록 파일 경로(비우면 resources/mappings/sources.json) — 서버는 판 표 struct.source_version 활성 판(S8b)",
+        "원천 목록 파일 경로(비우면 resources/mappings/sources.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰)",
     )
     stack_file: str | None = F(
         None,
         "PIPELINE_STACK_FILE",
-        "PC(RUN_ENV=local) 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json) — 서버는 판 표 struct.stack_version 활성 판(S8b)",
+        "엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰)",
     )
 
 

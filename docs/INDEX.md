@@ -16,7 +16,7 @@
 | [history/](history/) | 지난 기록(do-04, 10-30) — [refactor_plan.md](history/refactor_plan.md)(리팩토링 가이드·결정 장부 D·미정 P·T·이동표 9-1·부록 D — `docs/refactoring/refactor_plan.md`는 안내만 남김) · [refactor_c_items.md](history/refactor_c_items.md)(닫은 C 항목) · [run_docs_req.md](history/run_docs_req.md)(flow 러너 사용자 발화 기록) · [run_docs_history.md](history/run_docs_history.md)(러너 버그·속도 이력) · [patch-history.md](history/patch-history.md)(긴급 패치 이력) · [release_history.md](history/release_history.md)(릴리스 §8–9) · 설정·서버 가이드에서 옮긴 이력([env_guide_history.md](history/env_guide_history.md)·[server_guide_history.md](history/server_guide_history.md)) | 옛 결정·이력을 찾을 때 |
 | [architecture/run_docs_design.md](architecture/run_docs_design.md) | 문서별 flow 러너 설계·파라미터·변경 이력 | flow 러너 구조를 보거나 고칠 때 |
 | [architecture/db_schema.md](architecture/db_schema.md) | DB 스키마 명세(pl-25 — 설계안, 사용자·DB 담당자 승인 전): gold(pgvector 검색)·struct·EDW(`AI.FileStorageMap`·`AI.ParsingMeta`) 표마다 칸·타입·뜻·쓰는 코드·읽는 코드·유지/삭제/새로, 마스터 CSV 파일(`resources/vocab/glossary/` — 사용자 10-30, 마스터 PG 없음)의 머리글 + DB 담당자·사용자 확인 목록. 시험 `tests/server/common/test_db_schema.py`가 지금 칸을 판·SQL과 대조 | DB 표·칸을 바꾸거나 DB 담당자와 협의할 때 |
-| [architecture/pipeline_stack.md](architecture/pipeline_stack.md) | 엔진 구성·원천 목록 판 표(`struct.stack_version`·`source_version` — S8b) — 서버 DB·PC 파일·바꾸기·되돌리기 명령·엔진 거부·사본 파일 + 옛 `pipeline_stack.json` 메모 칸(D-017) | 엔진 구성·원천 목록을 바꾸거나 판을 되돌릴 때 |
+| [architecture/pipeline_stack.md](architecture/pipeline_stack.md) | 엔진 구성·원천 목록 파일(`pipeline_stack.json`·`sources.json` — 서버·PC 같음, 사용자 11-01) — 파일 자리·모양 검사·바꾸기(오버레이 패치)·되돌리기(git)·엔진 거부 + `pipeline_stack.json` 메모 칸(D-017) | 엔진 구성·원천 목록을 바꾸거나 되돌릴 때 |
 | [architecture/prompts.md](architecture/prompts.md) | AI 지시서 패키지 20개(`resources/prompts/` 18 — 10-29에 5개 삭제 + PC 전용 `triple_extract`·답변 점검 agent `rag_qa`(S10 — `valid_env/answer_test/`) — S11에 `research_check` 삭제) — 자리(`resources/prompts/`)·찾는 순서·패키지 구성·캐시 열쇠·패키지마다 무엇·입출력·호출부·모델 역할(옛 패키지 `README.md` 합침, S2) | 지시문·지시서를 고치거나 LLM·VLM 호출부를 볼 때 |
 
 - 설정 작성 가이드(refactor_plan 4-1·6-1 — S7 D-015)는 [operations/env-guide.md](operations/env-guide.md)다(S7에 그 문서를 settings.yaml 기준으로 고침 — 새 문서 없음).
@@ -46,7 +46,7 @@
 |---|---|
 | 묶음(번들) | 구조화 결과 폴더(`docs.jsonl`·청크·벡터) — 로컬 검색과 적재의 입력 |
 | 대역 | PC에서 외부 시스템을 흉내 내는 것(EDW sqlite `valid_env/edw/edw.sqlite`, PG 대역 SQLite) |
-| 스택 | 파일 형식마다 도는 엔진 목록(`struct.stack_version`) |
+| 스택 | 파일 형식마다 도는 엔진 목록(`resources/config/pipeline_stack.json`) |
 | represent | 엔진 결과 중 대표를 고르고 고치는 단계 |
 | flow 러너 | 서버 호스트의 문서별 실행기 `run_docs.py` — 레인 light·medium·vlm, warm(미리 받기) |
 | selftest | 이미지 안 반입 시험(`tests/server/`) — `[판정]` 줄로 판정 |

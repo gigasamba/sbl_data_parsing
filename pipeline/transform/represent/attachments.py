@@ -128,7 +128,7 @@ def extract(doc_path):
 
 # ── 첨부 1건 파싱(+ P0 캐시) ─────────────────────────────────────────────
 def _stack_parse():
-    return pc.stack().get("parse", {})  # pl-32 — 진입점이 정한 판(판 번호 STACK_VERSION — PC는 파일)
+    return pc.stack().get("parse", {})  # 엔진 구성 파일(서버·PC 같음 — 사용자 11-01)
 
 
 def parse_attachment(entry, store=None):

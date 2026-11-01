@@ -1076,18 +1076,10 @@ def represent(stack, parse_dir, src=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    sg = ap.add_mutually_exclusive_group()  # 둘 다 주면 거부(종료 2) — 파일은 PC 실험·시험 전용, 생산 경로는 판 번호만(pl-32)
-    sg.add_argument(
-        "--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 판: --stack-version > STACK_VERSION > PC 파일, pl-32)"
-    )
-    sg.add_argument("--stack-version", type=int, default=None, help="엔진 구성 판 번호(진입점이 넘김)")
+    ap.add_argument("--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file)")
     ap.add_argument("--parse-dir", default="output/parse")
     ap.add_argument("--src", default=None, help="파싱한 문서 폴더(원본 경로·sha256을 대표 결과에 남김 — 구조화 모듈이 원본 없이 돌 때 씀)")
     a = ap.parse_args(argv)
-    if a.stack_version is not None:  # 같은 프로세스의 첨부(attachments — pc.stack())도 이 판을(pl-32 리뷰)
-        from common.config import settings as C
-
-        C.put(STACK_VERSION=str(a.stack_version))
     idx = represent(load_stack(a.stack) if a.stack else pc.stack(), a.parse_dir, a.src)
     done = [r for r in idx if r["engine"]]
     from collections import Counter

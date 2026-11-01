@@ -744,10 +744,10 @@ def _selftest_evidence_rdb_meta():
 
 def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) — search_svc.py엔 __main__이 없었음
     from common.core.paths import STACK_FILE
-    from common.store.db import cfgtables
+    from common.store.db import cfgfile
 
-    cfgtables._CACHE.setdefault(
-        "stack", cfgtables.read_file("stack", STACK_FILE)
+    cfgfile._CACHE.setdefault(
+        "stack", cfgfile.read_file("stack", STACK_FILE)
     )  # test_mcp_main과 같은 준비(S8b — 이미지 selftest엔 PG가 없어 판 표 대신 파일, S9 따로 사례가 되며 더함)
     _selftest_search_notes_no_race()
     _selftest_evidence_gate()
