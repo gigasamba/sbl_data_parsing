@@ -179,8 +179,6 @@ def _pdf_text_chars(raw=None, p=None):
         return -1
 
 
-_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}  # ALLOWED_EXTS에서 뺐으므로 도달 불가 — 참고용(전이해)
-IMAGE_NOTE = "이미지 문서 — text 파싱 결과 없음(OCR·VLM 기본 미실행 · 재가능: pipeline.extract.ocr_engine 켬)"
 # pl-03(사용자 10-31) — 엔진 범위가 stack 하나라 스캔 PDF(.pdf_image = OCR·VLM 엔진뿐)는 이 서비스(OCR·VLM 안 돎)에서 돌 엔진이 없다.
 #   지금은 건너뛰고 안내만 — 다시 지원은 PRD mc-18(todo).
 SCAN_NOTE = "스캔 PDF — 지금은 text 파싱 결과 없음(OCR·VLM 미실행, 추후 지원 예정)"
@@ -188,10 +186,9 @@ DRM_NOTE = "텍스트 추출 실패 — DRM/암호화 문서일 가능성(엔진
 
 
 def skip_note(fname, pdf_text_chars):
-    """파이프라인 없이 바로 빈 결과로 끝낼 문서면 그 안내(이미지 · 글자층이 사실상 없는 PDF), 아니면 None."""
+    """파이프라인 없이 바로 빈 결과로 끝낼 문서면 그 안내(글자층이 사실상 없는 PDF), 아니면 None.
+    (이미지 확장자는 ALLOWED_EXTS에 없어 여기 오지 않음 — 11-01에 도달 불가 갈래 _IMAGE_EXTS·IMAGE_NOTE 지움.)"""
     ext = Path(fname).suffix.lower()
-    if ext in _IMAGE_EXTS:
-        return IMAGE_NOTE
     if ext == ".pdf" and 0 <= (pdf_text_chars if pdf_text_chars is not None else -1) < 20:
         return SCAN_NOTE
     return None

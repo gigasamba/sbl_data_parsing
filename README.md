@@ -91,7 +91,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 - **새 검색 스키마**(임베딩 차원이 바뀌어 새 `db_schema`를 쓸 때) — `up --target search --schema <새 스키마> --bundle <번들>`.
 
 **자동으로 되는 것과 아닌 것**
-- 검색 스키마: 적재(`pgvector_load deploy` — `trigger.sh load`·`night`가 load 앞에서 부름)가 새 스키마면 만들고 기록하며, 기록이 있으면 `up`한다. 기록이 없는 기존 스키마면 경고만 하고 적재를 계속한다.
+- 검색 스키마: 적재(`pgvector_load` — run_docs가 문서마다 부름)가 새 스키마면 만들고 기록하며, 기록이 있으면 `up`한다. 기록이 없는 기존 스키마면 경고만 하고 적재를 계속한다.
 - DB 버전이 코드보다 낮으면 적재가 종료 코드 2로 멈추고 `up`을 하라고 안내한다. DB가 코드보다 새 버전이면(이미지를 옛 버전으로 되돌린 뒤 등) 적재·`up`·`stamp` 모두 멈춘다.
 
 ---
@@ -548,28 +548,19 @@ bash deploy/host/scripts/mcp_up.sh     # 여러 번 실행해도 안전 — 꺼�
 **실행 방법 고르기**
 
 
-| 방법     | 명령                                        | 순서                                                               | publish                   | 종료 코드 75(마감·잠금) | 언제                              |
-| ------ | ----------------------------------------- | ---------------------------------------------------------------- | ------------------------- | --------------- | ------------------------------- |
-| 모듈 하나씩 | `trigger.sh parse` → `structure` → `load` | 사람이 차례로                                                          | 따로 `trigger.sh publish`   | 그 모듈만 끝남        | **E→T→L만 하고 싶을 때(권장)** · 단계별 확인 |
-| 한 번에   | `trigger.sh all`                          | parse → publish → structure → load                               | ⚠️ **항상 실행**              | 거기서 멈춤          | publish 대상(버킷·EDW 쓰기 계정)이 준비된 뒤 |
-| 새벽 배치  | `trigger.sh night`(systemd — `nightly.time` 시각)         | `ops.nightly.modules`(기본 parse publish structure load) | `nightly.publish`가 켜졌을 때만 | 건너뛰고 다음 모듈로     | 정기 운영                           |
-| 문서별 흐름 | `run_docs.py`                             | 문서마다 파싱 → 구조화 → 적재 → publish(스트리밍)                               | 포함                        | —               | 대량 처리                           |
+| 방법     | 명령                                                   | 순서                                             | 언제     |
+| ------ | ---------------------------------------------------- | ---------------------------------------------- | ------ |
+| 문서별 흐름 | `python3 deploy/host/scripts/run_docs.py …`(nohup)   | 문서마다 파싱 → 구조화 → 적재 → publish(스트리밍)             | 대량 처리 |
+| 새벽 배치  | systemd `data-pipeline-nightly.timer` → `trigger.sh scheduled` | `nightly.time` 시각에 `run_docs.py --start-offset 0 --skip-done` | 정기 운영 |
+| 파싱·게시만 | `trigger.sh parse` · `trigger.sh publish`             | 1회 job(파싱 → `_rep` / 대표 결과 게시)                   | 단계 확인 |
 
+서버 입구는 `run_docs` 하나다(사용자 10-31). 옛 1회 job 배치 `trigger.sh structure`·`load`·`all`·`night`와 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`는 11-01에 지웠다 — 구조화·적재는 run_docs가 `build_bundle`·`pgvector_load`를 문서마다 부른다.
 
 ```bash
-# 모듈 하나씩(E → T → L)
-bash deploy/host/scripts/trigger.sh parse       # ① 파싱 → output/parse/_rep
-bash deploy/host/scripts/trigger.sh structure   # ② 청킹·임베딩 → output/edw/bundle
-bash deploy/host/scripts/trigger.sh load        # ③ pgvector 적재(PG가 없으면 종료 코드 4)
-bash deploy/host/scripts/trigger.sh publish     # ④ Object Storage 업로드 + EDW 메타데이터(운영 시스템에 씀)
-
-# 한 번에 / 새벽 배치 순서
-bash deploy/host/scripts/trigger.sh all         # parse → publish → structure → load(publish 항상 포함)
-bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서를 지금 바로(nightly.time과 무관하게 실행)
+bash deploy/host/scripts/trigger.sh parse       # 파싱 → output/parse/_rep(1회 job)
+bash deploy/host/scripts/trigger.sh publish     # Object Storage 업로드 + EDW 메타데이터(운영 시스템에 씀)
 ```
 
-- 앞 모듈의 완료 표시가 없으면 다음 모듈은 종료 코드 3으로 멈춘다(1-2). 새 입력이 없으면 건너뛴다.
-- ⚠️ `all`은 publish를 **무조건** 실행해 Object Storage와 회사 DB에 쓴다. 테스트로 돌릴 때나 publish 대상이 정해지기 전에는 모듈 하나씩 실행한다.
 - **문서별 흐름 `run_docs.py`** 는 `<운영자 작업 폴더>/run_docs.py`에 두고 실행한다(코드 폴더 안의 사본이 아니다). 설정 배치 모듈을 찾을 코드 폴더는 `--code`(기본 `/srv/rag/code/live`), 컨테이너 명령은 settings.yaml `ops.host.docker`(없으면 podman). 서버 settings.yaml의 운영 접속 항목을 읽고, 문서별 값은 상주 컨테이너에 `--set`으로 넘긴다 — 설계: [docs/architecture/run_docs_design.md](docs/architecture/run_docs_design.md). **PC에서는 실행하지 않는다**(운영 EDW·Object Storage에 접속).
 
 ### 5-5. 서버 — 상주 서비스와 자동 실행

@@ -3,14 +3,15 @@
 [PRD.md](../PRD.md)의 카테고리 하나. 수집([etl.md](etl.md)) 다음, 구조화 앞 단계: 준비 → 엔진 스택 파싱 → represent(대표 결과 고르기·고치기) → 그림.
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서(주제별): 준비 pl-02 → 엔진 스택 pl-03·pl-22·pl-43·pl-31·pl-20·pl-17 → 확장자 pl-42 → represent·그림 pl-34·pl-04·pl-05·pl-36·pl-37 → 잔재 pl-35 → 코드와 다른 점.
+순서(주제별): 준비 pl-02 → 엔진 스택 pl-03·pl-22·pl-43·pl-31·pl-20·pl-17 → 확장자 pl-42·pl-45 → represent·그림 pl-34·pl-04·pl-05·pl-36·pl-37 → 잔재 pl-35 → 0.2.0 정리 pl-46·pl-47 → 코드와 다른 점.
 
 <a id="pl-02"></a>
 ## pl-02 · 준비
 - 결정(사용자 10-31 범위 축소 grill): 비슷한 문서 묶기(이름·내용 유사도, dhash·shingle)를 **지운다**. 완전히 같은 파일(sha256)은 **파싱만 한 번**(결과 재사용)하고 문서는 S3 키마다 따로 둔다(U-7 유지 — 메타가 키마다 다름). 이 경우는 별도로 적어 둔다(같은 sha256 다른 키 → 파싱 재사용 기록).
 - 이유: 비싼 파싱 전에 쓸모없는 것을 거른다.
-- 무엇: sha256 중복 제거 + 이름·내용이 비슷한 후보, RapidOCR 점수로 스캔 쪽 회전, DRM·암호 감지(msoffcrypto/pikepdf 복호화는 수동 CLI — `python -m pipeline.extract.secure_docs decrypt`, prepare·stream에 들어 있지 않음), 압축 파일은 미지원 표시.
+- 무엇: sha256 중복 제거(이름·내용이 비슷한 후보는 11-01에 지움 — 아래), RapidOCR 점수로 스캔 쪽 회전, DRM·암호 감지(msoffcrypto/pikepdf 복호화는 수동 CLI — `python -m pipeline.extract.secure_docs decrypt`, prepare·stream에 들어 있지 않음), 압축 파일은 미지원 표시.
 - 파일: `pipeline/extract/prepare.py`, `pipeline/extract/dedup.py`, `pipeline/extract/secure_docs.py`.
+- 11-01(`feature/scope-cut-unused`, 허브 지시 — 위 10-31 결정의 앞부분): `dedup.py`의 이름·내용 유사 후보(파일명 유사도·텍스트 5-gram Jaccard·이미지 dHash — `candidate_pairs`·`name_ratio`·`dhash`·`shingles`·썸네일 report.html)를 지우고 완전 중복(sha256)만 묶는다. keep.txt는 원래 해시로만 정해져 파싱 대상 수는 그대로 — 단, 같은 내용 사본 중 남길 파일은 이제 해시마다 `_rep_select`(사본 표시 없는 이름 → 최신 → 큰 파일)로 고른다. 예전에는 이름이 비슷한 그룹에 다른 해시가 섞이면 대표 아닌 해시는 파일 이름 순 첫 파일이었다 — 그런 드문 경우 남는 파일 이름이 달라질 수 있다(독립 검토 11-01, 받아들임). 설정 `extract.dedup.fuzzy_max`·`common_max`는 지운 칸(남으면 경고만). 남음(0.2.0): 같은 sha256 다른 키는 파싱만 한 번(결과 재사용) + 기록.
 - Status: done
 
 <a id="pl-03"></a>
@@ -21,6 +22,7 @@
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P1): 엔진 범위는 `stack` 그대로(형식당 2개) — 서버 settings.yaml에 `all`을 적지 않는다.
 - C7(사용자 10-30 PRD grill): 비교 도구(`model_matrix`·`score_gold`·`mcp_eval` 등)는 두지 않는다([test.md#e2-10](test.md#e2-10)) — 비교는 필요할 때 다시 만든다. 엔진 비교 실험은 그때 stack json을 고쳐서 한다.
 - 결정(사용자 10-30(-c5 전달)): 엔진 범위는 `stack` 하나 — 유일한 방식이자 기본. 형식별 엔진은 `resources/config/pipeline_stack.json`에 명시한다. `PARSE_ENGINE_SCOPE` `all`과 `--engines all` 길을 지운다(`pipeline/cli.py` `_set_engine_scope_default`, `pipeline.extract.engine_scope`, `common/config/sample.py`의 옛 값). 비교 실험은 stack json을 고쳐서 한다. 참고: 운영 reference 서버는 `all`로 돌았지만 사용자는 stack만 골랐다.
+- 11-01(`feature/scope-cut-unused`, 허브 지시): `run_docs.py`의 스캔용 엔진 목록(`scan_eng` — `--engines …`로 rapidocr_ko를 뺀 목록)을 지우고 `pipeline_stack.json`의 `.pdf_image`를 `["qwen_vlm"]` 하나로 — 같은 동작(스캔은 VLM만, `extract.ocr_engine` 기본 꺼짐이라 OCR 엔진은 원래 걸러짐). 서버는 코드 폴더의 같은 파일을 읽어(11-01 struct 판 표 없앰) 오버레이 패치로 반영. 이미지 확장자 행(`rapidocr_ko`·`qwen_vlm`)은 그대로 — 0.2.0에서 `ocr_engine` 스위치를 없앨 때 같이 바꾼다.
 - Status: done — `all` 길 지움(11-01 `feature/pl03-stack-only`)
 
 <a id="pl-22"></a>
@@ -126,6 +128,34 @@
 - 파일: `resources/config/pipeline_stack.json`, `tests/server/pipeline/test_ext_formats.py`, `docs/architecture/pipeline_stack.md` §3-1.
 - Status: done (10-31, feature/pl42-more-ext)
 
+<a id="pl-45"></a>
+## pl-45 · 지원 확장자 2차 — .hwp·.docm·.pptm·.rtf·.csv·.tsv·.md·오픈문서·서식 파일·.json·.xml·.log
+- 결정(사용자 11-01, 네 묶음 모두): 확장자와 엔진(우선순위 순)
+  - 문서: `.hwp`(kreuzberg만 — 실제 문서 품질 시험 필요) · `.docm`·`.pptm`(kreuzberg, anydoc — **office 아님**: `office_stdlib/parser.py:242`가 `.docx`가 아니면 xlsx로 다룸) · `.rtf`(anydoc, kreuzberg).
+  - 글자 자료: `.csv`(markitdown, kreuzberg) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown).
+  - 오픈문서·서식 파일: `.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.xlsb`(kreuzberg) · `.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg).
+  - 데이터·기록: `.json`·`.xml`·`.log`(markitdown 또는 plaintext, kreuzberg).
+  - 뺀 것: `.gif`·`.webp`(이미지 확장자 목록이 여러 곳에 박혀 있음) · `.heic`(새 패키지 필요) · 압축 파일([pl-02](#pl-02) 결정).
+- 방법: `pipeline/extract/engines/registry.py`에 "엔진별 추가 확장자" 표를 두고 `engines_for()`가 함께 읽는다 — 엔진 `parser.py`의 `FORMATS`와 엔진 지문(p0 code_fp)은 그대로(핑거프린트 명령으로 확인). 그다음 `resources/config/pipeline_stack.json`, `pipeline/mcp_parse_service.py`(`ALLOWED_EXTS`), `tests/.../test_ext_formats`와 시험 표본.
+- 검토 등급 A(엔진 폴더) · 0.2.0 묶음.
+- Status: todo — 0.2.0.
+
+<a id="pl-46"></a>
+## pl-46 · 0.2.0 지문 배치 정리 — 안 쓰는 엔진·묶음 계약·OCR 대체 길
+- 결정(사용자 11-01, reference ↔ 저장소 비교): 0.2.0 지문 배치에서 함께 지운다(코드는 그때 — 지금은 기록만, 검토 등급 A).
+  - 한 번도 안 돈 엔진 `pdfplumber`·`pypdf`·`calamine`·`python_pptx`·`pymupdf4llm`과 `registry` `CORE` 항목, 엔진 구성의 `candidates` 칸. **`docx2python`은 남긴다**(사용자 — 비교용).
+  - 묶음 계약 `common/core/contract.py`의 `DOC_KEYS`·`check_bundle`([etl.md#pl-15](etl.md#pl-15) — 지금 `build_bundle`이 계약용 빈 `kg_nodes.jsonl`·`kg_edges.jsonl`을 씀, [etl.md#pl-06](etl.md#pl-06)), 그림 `capped.jsonl` 잔재.
+  - `extract.ocr_engine` 스위치와 대표 결과의 OCR 대체 길(`represent`의 `_ocr_pages`·`_hidden_overlap_conflict`). `rapidocr` 엔진 파일은 남김(`prepare.py`·`figures.py`가 씀). 이 스위치를 없앨 때 `pipeline_stack.json`의 이미지 확장자 행(지금 `rapidocr_ko`·`qwen_vlm`)도 같은 변경에서 `qwen_vlm` 하나로(11-01 `.pdf_image`는 이미 바꿈 — [pl-03](#pl-03)).
+  - `common/core/paths.py:112` 주석의 `parse_shadow` 언급(11-01 지시서 지움 — 고치면 레이어 code_fp가 바뀌어 미룸), `common/ai/{adk,llm}.py`의 `vlm_judge` 역할 표(11-01 `figure_review` 지움 — 부르는 곳 없음).
+- Status: todo — 0.2.0(엔진·핸드오프·레이어 지문이 바뀜 — 사람 검토).
+
+<a id="pl-47"></a>
+## pl-47 · 엔진 지문(p0) 범위가 다른 이름 폴더의 엔진을 놓치는지 확인
+- 이유(허브 점검 11-01): `common/core/artifacts.py:24` p0 범위는 `pipeline/extract/engines/{engine}/**`다. 엔진 이름과 폴더 이름이 다른 엔진 — `html_stdlib`·`msg_extract`(`mhtml/` 안), `rapidocr_ko`, `office`, `pptx` — 은 그 엔진 파일을 고쳐도 다시 파싱되지 않을 수 있다.
+- 할 일: 엔진마다 실제 파서 파일이 p0 범위에 드는지 확인하고, 빠지면 범위를 고친다(엔진 지문이 바뀜).
+- 검토 등급 A · 0.2.0.
+- Status: todo — 0.2.0.
+
 <a id="pl-04"></a>
 ## pl-04 · represent — 가장 좋은 결과를 고르고 고치기
 - 이유: 엔진마다 결과가 다르다. 핸드오프는 가장 정확한 글이어야 한다.
@@ -139,6 +169,7 @@
 - 이유: 차트·도식·이미지에는 글자 추출이 놓치는 값이 있다.
 - 무엇: 이미지 VLM 설명(pdf, docx, xlsx, pptx, eml), VLM 없이 원본 차트 XML과 벡터 차트 값, 규칙 기반 도식 연결선, Mermaid 출력, 겹친 그룹, 중첩 그림, 스캔은 쪽 전체 VLM, 도형·슬라이드는 soffice 렌더, 전체 VLM 관문(기본 12).
 - 파일: `pipeline/transform/figures/figures.py`, `charts.py`, `pptx_render.py`, `vgate.py`, `resources/prompts/pipeline/`.
+- 11-01(`feature/scope-cut-unused`, 허브 지시): 그림 기록 검토 루프 `pipeline/transform/figures/figure_review.py`(독립 재추출 → 대조 → VLM 판정)와 그것만 쓰던 지시서 `figure_extract`·`figure_judge`, 시험, 이미지 `tool` 목록 자리, 설정 `pipeline.eval.review_max_rounds`(남으면 경고만)를 지움 — 파싱 흐름은 부르지 않던 도구. `common/ai`의 `vlm_judge` 역할 표는 code_fp 파일이라 남김.
 - Status: done
 
 ## 코드와 다른 점 · 지울 코드

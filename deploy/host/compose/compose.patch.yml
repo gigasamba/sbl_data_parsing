@@ -15,7 +15,6 @@ x-entry: &entry ["bash", "/app/docker/entrypoint.sh"]
 
 services:
   parse: {volumes: *code, entrypoint: *entry}
-  structure: {volumes: *code, entrypoint: *entry}
   load: {volumes: *code, entrypoint: *entry}
   publish: {volumes: *code, entrypoint: *entry}
   mcp: {volumes: *code, entrypoint: *entry}

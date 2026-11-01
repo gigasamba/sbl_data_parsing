@@ -35,7 +35,7 @@ services:
   structure:
     <<: *job
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE}
-    command: ["structure"]
+    command: ["help"]  # 11-01 — structure 명령 지움(smoke_test.sh가 build_bundle을 직접 부름)
     volumes: [*settings, *overlay, "${RAG_OUT:?RAG_OUT}:/app/output"]
     depends_on: {}
 
@@ -49,7 +49,7 @@ services:
   load:
     <<: *job
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE}
-    command: ["load"]
+    command: ["help"]  # 11-01 — load 명령 지움(smoke_test.sh가 pgvector_load·migrate를 직접 부름)
     # 이 pg는 매번 새로 뜨는 tmpfs 컨테이너(공유 PG 아님) — pgvector 이미지도 확장을 자동 생성 안 해서 PG_CREATE_EXTENSION=1 필요(XS3).
     # 공유 PG를 쓰는 서버 compose(deploy/host/compose/compose.pipeline.yml)·서버 settings.yaml에는 넣지 않는다.
     environment: {RUN_ENV: local, SETTINGS_FILE: /etc/rag/smoke/load.yaml}   # load.yaml = job.yaml + PG_CREATE_EXTENSION=1(S7e2) · 앵커 사전을 통째로 덮으므로 RUN_ENV도 다시(S7a2 — VS7a B-1)

@@ -9,7 +9,6 @@ x-code: &code
 
 services:
   parse: {volumes: *code}
-  structure: {volumes: *code}
   load: {volumes: *code}
   publish: {volumes: *code}
   mcp: {volumes: *code}

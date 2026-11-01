@@ -41,7 +41,7 @@ def test_scan_pdf_note():
 
     assert S.skip_note("a.pdf", 0) == S.SCAN_NOTE and S.skip_note("a.pdf", 19) == S.SCAN_NOTE
     assert S.skip_note("a.pdf", 20) is None and S.skip_note("a.pdf", -1) is None and S.skip_note("a.pdf", None) is None
-    assert S.skip_note("a.png", None) == S.IMAGE_NOTE and S.skip_note("a.docx", None) is None
+    assert S.skip_note("a.docx", None) is None
     assert "추후 지원 예정" in S.SCAN_NOTE
     assert S.empty_note(f"== run_all\n{IDLE_MARK}(비교하려면 stack json을 고침): docling\n{NO_JOB_MARK}\n") == S.SCAN_NOTE
     assert S.empty_note(f"== run_all\n{IDLE_MARK}(비교하려면 stack json을 고침): docling\n") == S.DRM_NOTE  # 일부만 안 돎

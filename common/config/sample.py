@@ -162,7 +162,6 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "common.models.transport.down_after",
     "pipeline.extract.max_file_mb",
     "pipeline.extract.input_source",
-    "pipeline.extract.dedup.fuzzy_max",
     "pipeline.extract.prepare.link",
     "pipeline.load.publish.path_map",
     "pipeline.load.publish.upload_statuses",
@@ -199,6 +198,7 @@ LAYOUT_GONE = frozenset(
         "pipeline.service.trigger.queue_max",
         "pipeline.service.trigger.shutdown_timeout_sec",
         "pipeline.service.trigger.socket_timeout_sec",
+        "pipeline.extract.dedup.fuzzy_max",  # 11-01(pl-02 — 유사 후보 지움)
     }
 )
 

@@ -5,8 +5,8 @@
 단계 2 · 고정 스택(정해진 기술로 실제 파이프라인 + 기본 테스트)
   show-stack · show-sources  지금 엔진 구성·원천 목록(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01 —
                   docs/architecture/pipeline_stack.md)
-  run-stack       스택 엔진만 파싱 → 대표 파싱(문서마다 하나, modules/parse/represent.py) → 구조화·벡터화·그래프(modules/structure/build_bundle.py)
-  parse · structure · load  모듈 1회 실행(트리거) — 앞 모듈 끝 표시(_DONE.json)를 보고 이어 받음, 새 입력 없으면 건너뜀(docs/architecture.md)
+  parse           파싱 모듈 1회(run_docs가 문서마다 부름) — 끝 표시 _rep/_DONE.json
+  (night·run-stack·structure·load는 11-01에 지움 — 서버 입구는 run_docs 하나, 구조화·적재는 run_docs가 모듈을 직접 부름)
   (ask · test-stack — 검색 명령은 S5(10-26, T-15)에 python -m mcp_server.cli.ask로 옮김: 파이프라인 CLI가 검색 코드를 import하지 않게)
 산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서) · output/stack_test.md · output/RUNLOG.md(명령 요약)
 """
@@ -61,11 +61,7 @@ def sh(module, *args, check=True):
     return rc
 
 
-def parse_docs(src, engines, procs):
-    sh("pipeline.extract.run_all", "--src", src, "--procs", procs, *(["--engines", engines] if engines else []))
-
-
-# ── 야간 배치(새벽 파싱 — GPU가 비는 시간, LLM 호출 없음) ─────────
+# ── 마감 시각(parse --deadline) ─────────
 def _until(deadline):
     """'HH:MM'(오늘, 이미 지났으면 내일) → 남은 초."""
     import datetime as dt
@@ -92,124 +88,6 @@ def _run_until(args, env, sec):
     except subprocess.TimeoutExpired:
         PR.kill_group(p)
         return None
-
-
-def night(a):
-    """새벽 배치: 파싱 → 대표 파싱 → publish(OS+EDW) → 구조화·임베딩 → PG 적재.
-    --no-structure면 파싱+publish만. --no-publish로 OS+EDW publish 건너뜀.
-    GPU 모델은 API로만(VLM_*·EMBED_*), LLM(LLM_*)은 부르지 않는다 — 요약은 발췌만. 마감(--deadline)을 넘으면 멈춤 — 다음 밤은 문서 대장 기준(성공 행 없는 문서)으로 다시 고름(pl-32).
-    RV5(10-09): deploy/host/scripts/trigger.sh night(OP13 정본, compose 여러 컨테이너용)와는 배포 모양이 달라 따로 둠 — 이 함수는
-    단일 컨테이너·Docker 밖 직접 실행(AGENTS.md 지시표·requirements.md S8 cron 예시)에서 쓰임, 호출처 있음(삭제 대상 아님)."""
-    if a.no_structure:  # 파싱+publish만 — PG를 안 씀(op-09: 접속 칸 없이도 돎)
-        a.pg = False
-    else:
-        connect(a)
-    st = _stack()
-    engines = a.engines or ",".join(_engines_of(st))
-    from common.core import resources as RS
-
-    vlm_conc = RS.vlm_page_concurrency(a.workers, a.vlm_concurrency)  # 문서 동시 수 × 쪽 동시 수가 VLM_MAX_CONCURRENCY를 넘지 않게
-    from common.core.paths import child_env
-
-    night_names = dict(VLM_CONCURRENCY=str(vlm_conc), LLM_BASE_URL=None)  # 야간 배치에서는 LLM 호출 차단(그래프·답변 모두)
-    env = C.child_env(child_env(), **night_names)  # 설정 이름은 덮기 파일로(S7e3 B-1 — env dict의 설정 이름은 자식이 안 읽음)
-    log, t0 = [], time.time()
-    stopped = None
-    source = getattr(a, "source", None)
-    if source:
-        from pipeline.extract import source as SRC
-
-        local, names, state = SRC.resolve(source, OUT, getattr(a, "source_limit", 0), getattr(a, "mode", "prod"))
-        env = C.child_env(child_env(), **night_names)  # SOURCE_MANIFEST가 설정된 후 재생성
-        sel = OUT / "parse" / "_source" / "selected.txt"
-        sel.write_text("\n".join(names) + "\n", encoding="utf-8")
-        _run_until(["pipeline.extract.dedup", "--src", local, "--out", OUT / "dedup"], env, _until(a.deadline) - 120)
-        keep = set((OUT / "dedup" / "keep.txt").read_text(encoding="utf-8").splitlines())
-        only = OUT / "parse" / "_source" / "only.txt"
-        only.write_text("\n".join(n for n in names if n in keep) + "\n", encoding="utf-8")
-        _run_until(["pipeline.extract.prepare", "--src", local, "--out", a.src, "--only", only], env, _until(a.deadline) - 120)
-        a.docs_from = only
-    else:
-        a.docs_from = None
-    left = _until(a.deadline)
-    if left < 300:
-        stopped = f"파싱 시작 전 마감 {a.deadline} 도달"
-    else:
-        args = ["pipeline.extract.run_all", "--src", a.src, "--procs", a.procs, "--workers", a.workers, "--engines", engines]
-        if a.docs_from:
-            args += ["--docs-from", str(a.docs_from)]
-        rc = _run_until(args, env, left - 120)
-        log.append("파싱: " + ("완료" if rc == 0 else "마감으로 중단" if rc is None else f"종료 코드 {rc}"))
-        if rc is None:
-            stopped = f"파싱 도중 마감 {a.deadline}"
-    if not a.no_structure and not stopped:
-        for args in (
-            ["pipeline.transform.represent.parse_qa", "--src", a.src],
-            ["pipeline.transform.represent.represent", "--src", a.src],
-        ):
-            left = _until(a.deadline)
-            rc = _run_until(args, env, left - 60) if left > 120 else None
-            log.append(f"{args[0]}: " + ("완료" if rc == 0 else "마감으로 중단" if rc is None else f"종료 코드 {rc}"))
-            if rc != 0:
-                stopped = stopped or f"{args[0]}에서 멈춤"
-                break
-            if args[0] == "pipeline.transform.represent.represent":
-                write_mark("parse", src=str(a.src), engines=engines.split(","), by="night")
-        if source and not stopped:
-            from pipeline.extract import source as SRC
-
-            if SRC.is_remote(source):
-                SRC.finish(state, local, OUT / "parse" / "_rep" / "index.json")
-        if not stopped and not getattr(a, "no_publish", False):
-            left = _until(a.deadline)
-            rc = _run_until(["pipeline.load.publish_parse_result", "--apply", "--out", str(OUT)], env, left - 60) if left > 60 else None
-            log.append("publish: " + ("완료" if rc == 0 else "마감으로 중단" if rc is None else f"종료 코드 {rc} — 구조화는 계속"))
-        if not stopped:
-            left = _until(a.deadline)
-            args = [
-                "pipeline.transform.structure.build_bundle",
-                "--src",
-                a.src,
-                "--embed",
-                pc.cfg().transform.structure.embed or st.get("embed", "api"),
-                "--summary",
-                "auto",
-            ]
-            rc = _run_until(args, env, left - 60) if left > 60 else None
-            log.append("build_bundle: " + ("완료" if rc == 0 else "마감으로 중단" if rc is None else f"종료 코드 {rc}"))
-            if rc != 0:
-                stopped = stopped or "build_bundle에서 멈춤"
-            else:
-                pm = read_mark("parse") or {}
-                write_mark("structure", from_run=pm.get("run_id"), by="night")
-        targets = [("pipeline.load.pgvector_load", "deploy"), ("pipeline.load.pgvector_load", "load")] if a.pg else []
-        if targets and not stopped:
-            for args in map(list, targets):
-                rc = _run_until(args, env, max(60, _until(a.deadline) - 30))
-                log.append(f"{' '.join(args)}: " + ("완료" if rc == 0 else f"멈춤({rc})"))
-                if rc != 0:
-                    break
-    md = [
-        f"# 야간 배치 {time.strftime('%Y-%m-%d %H:%M')} — {(time.time() - t0) / 60:.0f}분",
-        "",
-        f"엔진: {engines}",
-        f"VLM 동시 쪽 {vlm_conc}(요청 {a.vlm_concurrency}) · 동시 문서 {a.workers} · CPU 프로세스 {a.procs} · 마감 {a.deadline} · LLM 호출 없음",
-        "",
-    ]
-    md += [f"- {x}" for x in log] + (
-        [
-            f"- **멈춤: {stopped}** — 다음 밤은 문서 대장에 성공 행이 없는 문서를 다시 고름(PR 4 전에는 이 밤의 문서가 반복될 수 있음 — pl-32)"
-        ]
-        if stopped
-        else ["- 전부 끝남"]
-    )
-    md += ["", "진행·결과: output/parse/PROGRESS.md · output/RUNLOG.md"]
-    Path("output").mkdir(exist_ok=True)
-    Path("output/NIGHT.md").write_text("\n".join(md) + "\n", encoding="utf-8")
-    print("\n".join(md))
-    from common.core.runlog import note
-
-    note("야간 배치: " + " · ".join(log) + (f" · 멈춤: {stopped}" if stopped else " · 전부 끝남"))
 
 
 # ── 단계 2 ───────────────────────────────────────────────────
@@ -245,16 +123,13 @@ def show_sources(a=None):
         print(f"  {'켜짐' if e.get('enabled', True) else '꺼짐'} {e['name']} · {e['table']} · 열 {len(e['columns'])}개")
 
 
-# ── 모듈(트리거 실행 — docs/architecture.md) ──────────────────────
-# 파싱 → 구조화 → 적재를 따로 부른다(각 Docker 컨테이너 1회 실행). 앞 모듈의 끝 표시(_DONE.json)를 보고 시작하고,
-# 앞 결과가 바뀌지 않았으면 아무것도 안 하고 끝낸다(트리거·나중의 새벽 배치가 여러 번 불러도 안전).
-# pl-32(10-30) — 이것은 한 새벽 배치·트리거 실행 안에서 모듈 사이 인계(앞 모듈이 이번에 낸 결과가 있나)이지 문서 결과 재사용이 아니다 — 남김.
+# ── 파싱 모듈(run_docs가 문서마다 부름 — 서버 입구는 run_docs 하나, 사용자 10-31) ──────────
+# 11-01: 옛 배치 입구 night·run-stack·structure·load 모듈과 그 끝 표시 확인(need)은 지움 — 구조화·적재는 run_docs가 build_bundle·pgvector_load를 직접 부름.
+# 파싱 끝 표시(_rep/_DONE.json)는 남김.
 from common import CONTRACT, FINGERPRINT  # noqa: E402 — 인계 형식 버전 · common 코드 지문(이미지 버전 어긋남 확인)
 
 MARK = {
     "parse": OUT / "parse" / "_rep" / "_DONE.json",
-    "structure": OUT / "edw" / "bundle" / "_DONE.json",
-    "load": OUT / "edw" / "_LOADED.json",
 }
 
 
@@ -275,36 +150,6 @@ def write_mark(name, **kw):
     MARK[name].parent.mkdir(parents=True, exist_ok=True)
     MARK[name].write_text(json.dumps(m, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"[{name}] 끝 표시 → {MARK[name]} (run_id {m['run_id']})", flush=True)
-
-
-def need(prev, name, force, extra=None):
-    """앞 모듈 끝 표시 확인 → 이번 모듈이 할 일이 있는지. 없으면 종료 코드 3(앞 모듈 먼저), 이미 처리했으면 None(건너뜀).
-    extra(GH1-06) — 대상·설정 지문(host:port/db/schema·code_fp 등, 비밀값은 안 들어감): run_id가 같아도
-    저장된 값과 다르면 다시 처리한다(조용히 다른 대상에 빈 적재·바뀐 설정을 건너뛰어 성공처럼 보이는 일 방지)."""
-    m = read_mark(prev)
-    if not m:
-        print(f"[{name}] {prev} 결과(끝 표시 {MARK[prev]})가 없음 — {prev} 모듈을 먼저 실행", flush=True)
-        raise SystemExit(3)
-    if m.get("contract") != CONTRACT:
-        print(
-            f"[{name}] {prev} 결과의 계약 버전 {m.get('contract')} ≠ {CONTRACT}(그 결과 run_id {m.get('run_id')}·{m.get('finished_at')}) — "
-            "두 모듈 이미지를 같은 커밋 판으로(SI31: 서버에 옛 판이 남았으면 `podman images | grep rag-`로 태그 확인) 또는 앞 모듈 다시 실행",
-            flush=True,
-        )
-        raise SystemExit(3)
-    if m.get("common") and m["common"] != FINGERPRINT and not pc.cfg().dev.allow_common_mismatch:
-        # 토큰·임베딩 호출·ID 규칙(common/)이 다른 커밋의 이미지 — 색인과 검색 규칙이 조용히 어긋나지 않게 멈춤
-        print(
-            f"[{name}] {prev} 모듈의 공통 코드 지문 {m['common']} ≠ 이 이미지 {FINGERPRINT}(그 결과 run_id {m.get('run_id')}) — 두 이미지를 같은 커밋으로 빌드"
-            "하거나 덧씌우기(compose.patch.yml)를 두 모듈에 같이 연결 · 덧씌우기로 common/이 바뀌었으면 앞 모듈 다시 실행(확실하면 ALLOW_COMMON_MISMATCH=1)",
-            flush=True,
-        )
-        raise SystemExit(3)
-    mine = read_mark(name)
-    if mine and mine.get("from_run") == m["run_id"] and mine.get("extra") == extra and not force:
-        print(f"[{name}] 새 {prev} 결과 없음(run_id {m['run_id']} 이미 처리, 대상·설정도 그대로) — 건너뜀(다시 하려면 --force)", flush=True)
-        return None
-    return m
 
 
 def _left(a):
@@ -484,173 +329,6 @@ def parse_module(a):
 
         if SRC.is_remote(a.source):
             SRC.finish(src_info[0], src_info[1], OUT / "parse" / "_rep" / "index.json")
-
-
-def _structure_extra(embed):
-    """GH1-06 — 구조화 결과를 좌우하는 대상·설정 지문: 임베딩 목적지(EMBED_BASE_URL, 비밀값 아님)·방식 + 구조화 코드
-    지문(common/artifacts.code_fp, 이미 있는 실험 저장소 계약 재사용) — 바뀌면 parse run_id가 같아도 다시 구조화."""
-    from common.core import artifacts as P0
-
-    return {"embed": embed, "embed_url": C.cfg().models.embed.base_url or "", "code": P0.code_fp("s")}
-
-
-def _structure_pg_indexed(a, index_conf):
-    """INDEX_CONF — AD41 색인 모듈(cli/index.py build)로 설정별 색인(pg-a·pg-b, 예 청크
-    크기가 다른 두 설정)을 만든다. index.py가 자기 입력 지문(_rep·사전·명부·stack·코드)으로 재빌드를 판정하고
-    같은 index_id 동시 빌드는 잠금으로 막으므로, 여기서 need()/write_mark로 다시 게이트하지 않는다(이중 판정
-    이 서로 어긋나는 것을 피함) — --pg로 PostgreSQL 스키마 <PG_SCHEMA>_<index_id>까지 적재.
-    index.py의 종료 코드(2 설정 오류·3 계약 위반·5 임베딩·75 빌드 중)를 그대로 돌려준다(sh()의 기본 check=True는
-    원래 코드를 묻고 메시지만 남겨 트리거 서버가 75=재시도를 못 가림)."""
-    rc = sh(
-        "pipeline.load.index",
-        "build",
-        "--conf",
-        index_conf,
-        "--parse-dir",
-        OUT / "parse",
-        "--src",
-        a.src,
-        "--pg",
-        *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
-        check=False,
-    )
-    if rc:
-        raise SystemExit(rc)
-
-
-def structure_module(a):
-    """구조화 모듈: 대표 결과(_rep)만 읽어 청킹·사실·고객·그래프·임베딩(API·캐시) → 묶음(output/edw/bundle) → 끝 표시. 원본이 없어도 됨.
-    INDEX_CONF가 있으면 AD41 색인 빌더로 대신(아래 분기) — 없으면 기본 색인."""
-    index_conf = pc.cfg().paths.index_conf
-    if index_conf:
-        return _structure_pg_indexed(a, index_conf)
-    st = _stack()
-    embed = pc.cfg().transform.structure.embed or st.get("embed", "api")
-    m = need("parse", "structure", a.force, extra=_structure_extra(embed))
-    if not m:
-        return
-    if embed == "api" and not C.cfg().models.embed.base_url:
-        print(
-            "[structure] 임베딩 연결 없음(EMBED_BASE_URL) — 임베딩 서버에 닿는 곳(개발 서버)에서 실행하거나, "
-            "PIPE_EMBED=none(키워드·ID 검색만, PostgreSQL 적재 안 함)",
-            flush=True,
-        )
-        raise SystemExit(5)
-    from common.core import contract
-
-    bad = contract.check_parse(
-        OUT / "parse" / "_rep", sample=500
-    )  # 앞 500건만 열어 봄(대량 폴더 빠르게) — 전체는 python -m common.core.contract
-    if bad:
-        print("[structure] 파싱 인계 폴더가 계약과 다름 — " + " · ".join(bad[:5]), flush=True)
-        raise SystemExit(3)
-    from common.core.paths import child_env
-
-    env = child_env()
-    args = [
-        "pipeline.transform.structure.build_bundle",
-        "--src",
-        a.src,
-        "--embed",
-        embed,
-        "--summary",
-        "auto",
-        *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
-    ]
-    rc = _run_until(args, env, _left(a) - 60)
-    if rc != 0:
-        raise SystemExit(75 if rc is None else rc)
-    meta = json.loads((OUT / "edw" / "bundle" / "meta.json").read_text(encoding="utf-8"))
-    write_mark(
-        "structure",
-        from_run=m["run_id"],
-        docs=meta["docs"],
-        chunks=meta["chunks"],
-        dim=meta["dim"],
-        embed_model=meta.get("embed_model"),
-        extra=_structure_extra(embed),
-    )
-
-
-def _pg_dest_fp():
-    """GH1-06 — host:port/db/schema(비밀값·사용자명 제외) 지문. 바뀌면 같은 parse·structure run_id라도 다시
-    적재한다(조용히 다른 대상에 빈 적재가 되는 일 방지) — common/pg.conf()가 PG_CONN_FILE·설정을 합친 값.
-    GH1-06b — 라이브 연결 없이 **설정만**으로 계산(need()를 connect() 앞에 두려고). op-09 — 자동 탐지 없음(접속 칸은 필수)."""
-    from common.store.pg import conf
-
-    c = conf()
-    return f"{c['PG_HOST']}:{c['PG_PORT']}/{c['PG_DB']}/{c['PG_SCHEMA']}"
-
-
-def _no_pg_exit4(fn):
-    """PG 접속 칸 빔·못 붙음(SystemExit 글자)을 종료 코드 4로 — load의 'PostgreSQL 없음' 약속 그대로(op-09)."""
-    try:
-        return fn()
-    except SystemExit as e:
-        print(f"[load] {e}", flush=True)
-        raise SystemExit(4) from None
-
-
-def load_module(a):
-    """적재 모듈: 묶음 → PostgreSQL(pgvector) 배포·적재(옛 기록 정리) → 끝 표시. PostgreSQL을 못 찾으면 종료 코드 4.
-    GH1-06b — need()를 먼저 확인하고(설정만으로 만든 지문, 라이브 연결 없이), 할 일이 있을 때만 connect()로
-    실제 접속을 확인한다 — 건너뛰는 경우(PG가 잠깐 내려가 있어도) PG 접속 시도 없이 조용히 끝남
-    (수정 전엔 connect()가 need() 앞에 있어 건너뛰는 경우에도 접속을 시도해 PG가 내려가 있으면 SystemExit(4))."""
-    dest_fp = _no_pg_exit4(_pg_dest_fp)
-    m = need("structure", "load", a.force, extra=dest_fp)
-    if not m:
-        return
-    a.pg, a.local = True, False  # 적재 모듈은 PostgreSQL 필수
-    _no_pg_exit4(lambda: connect(a))
-    from common.core import contract
-
-    bad = contract.check_bundle(OUT / "edw" / "bundle")
-    if bad:
-        print("[load] 묶음이 계약과 다름 — " + " · ".join(bad[:5]), flush=True)
-        raise SystemExit(3)
-    if not m.get("dim"):
-        print("[load] 임베딩 없는 묶음(PIPE_EMBED=none) — PostgreSQL에는 적재 안 함(로컬 묶음으로 키워드·ID 검색만)", flush=True)
-        raise SystemExit(5)
-    sh("pipeline.load.pgvector_load", "deploy")
-    sh("pipeline.load.pgvector_load", "load", *(["--replace"] if a.replace else []))  # 더하고 고치기만(pl-13 — 지우지 않음)
-    write_mark("load", from_run=m["run_id"], docs=m.get("docs"), chunks=m.get("chunks"), extra=dest_fp)
-
-
-def run_stack(a):
-    connect(a)
-    st = _stack()
-    engines = ",".join(sorted({e for es in st["parse"].values() for e in es}))
-    if not a.skip_parse:
-        parse_docs(a.src, engines, a.procs)  # 이미 파싱된 문서×엔진은 다시 안 함(sha)
-    sh("pipeline.transform.represent.parse_qa", "--src", a.src)  # 대표 고르기용 정확도(교차 재현율)
-    sh("pipeline.transform.represent.represent", "--src", a.src)
-    sh(
-        "pipeline.transform.structure.build_bundle",
-        "--src",
-        a.src,
-        "--embed",
-        pc.cfg().transform.structure.embed or st["embed"],
-        *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
-    )
-    if a.pg:
-        sh("pipeline.load.pgvector_load", "deploy")
-        sh("pipeline.load.pgvector_load", "load", *(["--replace"] if a.replace else []))  # 더하고 고치기만(pl-13 — 지우지 않음)
-    summ = json.loads((OUT / "edw" / "bundle" / "meta.json").read_text(encoding="utf-8")).get("summary") or {}
-    print(
-        "→ 대표 파싱 output/parse/_rep · 구조화 output/edw/bundle"
-        + (" · pgvector 적재 완료" if a.pg else " · PostgreSQL 없음 — 로컬 묶음만")
-        + " · EDW 적재 안 함"
-        + " · 요약 출처 "
-        + " · ".join(f"{k} {v}" for k, v in summ.items())
-        + " — 이제 ask / test-stack"
-    )
-
-
-def connect(a):
-    """저장소: --local이면 로컬 묶음, 아니면 PostgreSQL 필수(op-09 — 자동 탐지·로컬로 빠지기 없음). → common/store/services.py"""
-    from common.store import services
-
-    services.connect(a)
 
 
 # ── 운영자 자기 점검(selftest) ──────────────────────────────────
@@ -985,77 +663,36 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     src = C.cfg().paths.doc_dir_prepared or "output/prepared"
-    p = sub.add_parser("run-stack")
+    p = sub.add_parser("parse", help="파싱 모듈 1회(run_docs가 문서마다 부름): 파싱 → 채점 → 대표 결과 → 끝 표시 · 임베딩·DB 없음")
     p.add_argument("--src", default=src)
-    p.add_argument("--procs", default=_default_procs(), help="CPU 엔진 프로세스 수 · auto = CPU·메모리(cgroup) 기준")
-    p.add_argument("--skip-parse", action="store_true", help="파싱은 이미 했으면 건너뜀")
-    p.add_argument("--pg", action="store_true", help="pgvector에 배포·적재까지(기본 — 접속 칸 필수, op-09)")
-    p.add_argument("--local", action="store_true", help="PostgreSQL 없이 로컬 묶음까지만")
-    p.add_argument("--replace", action="store_true")
-    p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
-    p.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
-    p = sub.add_parser("night", help="새벽 파싱 배치(GPU 모델 API만, LLM 없음, 마감 시각에 멈춤 — 다음 밤은 문서 대장 기준으로 다시 고름)")
-    p.add_argument("--src", default=src)
+    p.add_argument(
+        "--force", action="store_true", help=argparse.SUPPRESS
+    )  # 11-01 — 옛 호출 호환으로 받기만(끝 표시 확인 need()는 structure·load와 함께 지움)
+    p.add_argument("--deadline", default=None, help="HH:MM — 넘으면 멈춤(종료 코드 75, 다음 실행이 이어 감). 새벽 배치용")
     p.add_argument(
         "--source",
         default=pc.cfg().extract.input_source or None,
-        help="파싱할 원본 위치 — 폴더·s3://버킷/접두·rdb:csv:<경로>·rdb:<표> (parse 모듈과 같음)",
+        help="파싱할 원본 위치 — 폴더(같은 서버 샘플) · s3://버킷/접두(Object Storage) · rdb:<표>(RDB 문서 위치 메타로 질의, AD44) · "
+        "rdb:*(common/sources.json의 enabled 원천 전부, SI41) · rdb:<이름>(sources.json에 등록된 원천 하나). "
+        "주면 가져오기·중복 확인·방향 보정부터",
     )
-    p.add_argument("--source-limit", type=int, default=pc.cfg().extract.source_limit, help="원본 몇 건만")
-    p.add_argument("--mode", default=C.cfg().store.run_mode or "prod", choices=["prod", "test"])
-    p.add_argument("--engines", default="", help="비우면 stack.json 선정 엔진 + 후보(candidates)")
-    p.add_argument("--deadline", default=pc.cfg().night.deadline)
-    p.add_argument("--procs", default=_default_procs(), help="CPU 엔진 프로세스 수 · auto = CPU·메모리(cgroup) 기준(common/resources.py)")
-    p.add_argument("--workers", default=_default_workers(), help="동시 처리 문서 수(문서 안 엔진들은 늘 동시에)")
-    p.add_argument("--vlm-concurrency", type=int, default=pc.cfg().night.vlm_concurrency, help="문서 하나의 쪽 동시 요청 수")
+    p.add_argument("--source-limit", type=int, default=pc.cfg().extract.source_limit, help="원본 몇 건만(Object Storage 시험)")
     p.add_argument(
-        "--no-structure",
-        action="store_true",
-        help="파싱+publish만(기본은 파싱 뒤 대표 파싱·publish·구조화·임베딩(API) → PostgreSQL 적재까지)",
+        "--mode",
+        default=C.cfg().store.run_mode or "prod",
+        choices=["prod", "test"],
+        help="test = 대상이 50건 이상이면 파일 형식별 5건씩만(TEST_MIN_DOCS·TEST_PER_TYPE) · prod = 전부",
     )
-    p.add_argument("--no-publish", action="store_true", help="OS+EDW publish 건너뜀 (기본: 대표 파싱 직후 실행)")
-    p.add_argument("--pg", action="store_true", help="구조화 뒤 pgvector 적재까지(기본 — 접속 칸 필수, op-09)")
-    p.add_argument("--local", action="store_true", help="PostgreSQL 없이 로컬 묶음까지만")
-    p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
-    for name, hlp in (
-        ("parse", "파싱 모듈 1회(트리거): 파싱 → 채점 → 대표 결과 → 끝 표시 · 임베딩·DB 없음"),
-        ("structure", "구조화 모듈 1회(트리거): 대표 결과 → 청킹·임베딩·그래프 묶음 · 새 파싱 결과 없으면 건너뜀"),
-        ("load", "적재 모듈 1회(트리거): 묶음 → PostgreSQL(pgvector) · 새 묶음 없으면 건너뜀"),
-    ):
-        p = sub.add_parser(name, help=hlp)
-        p.add_argument("--src", default=src)
-        p.add_argument("--force", action="store_true", help="앞 모듈 결과가 그대로여도 다시")
-        p.add_argument("--deadline", default=None, help="HH:MM — 넘으면 멈춤(종료 코드 75, 다음 실행이 이어 감). 새벽 배치용")
-        if name == "parse":
-            p.add_argument(
-                "--source",
-                default=pc.cfg().extract.input_source or None,
-                help="파싱할 원본 위치 — 폴더(같은 서버 샘플) · s3://버킷/접두(Object Storage) · rdb:<표>(RDB 문서 위치 메타로 질의, AD44) · "
-                "rdb:*(common/sources.json의 enabled 원천 전부, SI41) · rdb:<이름>(sources.json에 등록된 원천 하나). "
-                "주면 가져오기·중복 확인·방향 보정부터",
-            )
-            p.add_argument("--source-limit", type=int, default=pc.cfg().extract.source_limit, help="원본 몇 건만(Object Storage 시험)")
-            p.add_argument(
-                "--mode",
-                default=C.cfg().store.run_mode or "prod",
-                choices=["prod", "test"],
-                help="test = 대상이 50건 이상이면 파일 형식별 5건씩만(TEST_MIN_DOCS·TEST_PER_TYPE) · prod = 전부",
-            )
-            p.add_argument("--engines", default="")
-            p.add_argument("--procs", default=_default_procs())
-            p.add_argument("--workers", default=_default_workers())
-            p.add_argument("--vlm-concurrency", type=int, default=pc.cfg().night.vlm_concurrency)
-            p.add_argument(
-                "--max-new",
-                type=lambda x: int(x or 0),
-                default=pc.cfg().extract.max_new,
-                help="이번 실행에서 처음 파싱할 문서 수 상한(0 = 제한 없음)",
-            )
-        if name == "structure":
-            p.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
-        if name == "load":
-            p.add_argument("--replace", action="store_true")
-            p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
+    p.add_argument("--engines", default="")
+    p.add_argument("--procs", default=_default_procs())
+    p.add_argument("--workers", default=_default_workers())
+    p.add_argument("--vlm-concurrency", type=int, default=pc.cfg().night.vlm_concurrency)
+    p.add_argument(
+        "--max-new",
+        type=lambda x: int(x or 0),
+        default=pc.cfg().extract.max_new,
+        help="이번 실행에서 처음 파싱할 문서 수 상한(0 = 제한 없음)",
+    )
     sub.add_parser("show-stack")
     sub.add_parser("show-sources")
     p = sub.add_parser(
@@ -1080,13 +717,9 @@ def main(argv=None):
     {
         "show-stack": show_stack,
         "show-sources": show_sources,
-        "night": night,
-        "run-stack": run_stack,
         "selftest": selftest,
         "smoke": smoke,
         "parse": parse_module,
-        "structure": structure_module,
-        "load": load_module,
     }[a.cmd](a)
 
 

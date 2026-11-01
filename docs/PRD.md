@@ -47,6 +47,9 @@
 | 준비 | done | 중복 · 회전 · DRM 감지 | [pl-02](prd/parse.md#pl-02) |
 | 엔진 스택 파싱 | todo | 형식별 엔진 · 격리 · 스택 판 · `all` 길 지우기 | [pl-03](prd/parse.md#pl-03) |
 | 지원 확장자 더하기 — .jpeg·.tif·.tiff·.bmp·.mhtml | done | 스택 표 · 확장자마다 시험(임시 샘플) · .hwpx 시험 | [pl-42](prd/parse.md#pl-42) |
+| 지원 확장자 2차 — .hwp·.docm·.rtf·.csv·오픈문서 등 | todo | registry 추가 확장자 표(엔진 지문 그대로) · 스택 표 · ALLOWED_EXTS · 시험 · 0.2.0(등급 A) | [pl-45](prd/parse.md#pl-45) |
+| 0.2.0 지문 배치 정리 | todo | 안 쓰는 엔진 5개 · 묶음 계약 · OCR 대체 길 · 이미지 행 qwen_vlm(등급 A) | [pl-46](prd/parse.md#pl-46) |
+| 엔진 지문(p0) 범위 확인 | todo | 다른 이름 폴더 엔진(html_stdlib·msg_extract·rapidocr_ko·office·pptx) · 0.2.0(등급 A) | [pl-47](prd/parse.md#pl-47) |
 | 파싱 phase 없애기 · OCR 엔진 끔 | done | 병렬 엔진 · 제한 · 쪽 VLM · 서버 확인 | [pl-22](prd/parse.md#pl-22) |
 | VLM 동시 수 손잡이 | done | `tuning` 키 하나로 닫음 | [pl-43](prd/parse.md#pl-43) |
 | ocr_vlm·vlm.model_alt 삭제 | done | 0.1.0 · 엔진 핑거프린트 바뀜(등급 A) | [pl-31](prd/parse.md#pl-31) |

@@ -1,46 +1,28 @@
 #!/usr/bin/env python3
 """중복 확인 (파싱 전 필수) → output/dedup/groups.csv · keep.txt · report.md
 
-세 단계로 묶고, **삭제·이동은 하지 않는다**(사람이 groups.csv를 보고 확정):
-  1. 완전 중복   — 파일 내용 해시(SHA-256)가 같음 → 자동으로 대표 1개만 keep
-  2. 이름 유사   — 정규화한 파일명이 같거나 유사도 ≥ --name-sim(기본 0.9): "(1)"·"_v2"·"사본"·"최종"·날짜·공백/기호 차이
-  3. 내용 유사   — 형식별 지문: 텍스트(오피스·txt·텍스트 PDF)는 문자 5-gram Jaccard ≥ --text-sim(기본 0.9),
-                   이미지·이미지 PDF는 첫 쪽 차이 해시(dHash 16×16=256비트) 해밍 거리 ≤ --img-dist(기본 20)
-  2·3은 **후보**일 뿐 — 같은 양식의 다른 문서도 이미지 해시가 거의 같다(개발 PC 실측: 다른 계약서 거리 5,
-  같은 문서의 흐린 사본 16). 그래서 keep.txt에서는 **완전 중복만 빼고** 후보는 모두 남긴다.
-  사람이 report.html(그룹별 썸네일)을 보고 groups.csv decision을 '같은 문서'로 바꾼 것만 keep.txt에서 뺀다.
+완전 중복만 묶는다 — 파일 내용 해시(SHA-256)가 같으면 대표 1개만 keep. **삭제·이동은 하지 않는다**.
+(11-01 — 이름·내용 유사 후보(파일명 유사도, 텍스트 5-gram Jaccard, 이미지 dHash)는 지움: 후보는 groups.csv 보고용일 뿐
+keep.txt를 줄이지 않았다 — keep은 늘 해시로만 정해짐. 사용자 10-31 범위 축소 grill, PRD pl-02.)
 
-사용: python modules/parse/dedup.py [--src <원본 문서 폴더>]   (--src 생략 시 DOC_DIR env 필수)
-이후: python modules/parse/run_all.py --only output/dedup/keep.txt   (대표만 파싱)
+사용: python -m pipeline.extract.dedup [--src <원본 문서 폴더>]   (--src 생략 시 DOC_DIR 필수)
+이후: python -m pipeline.extract.run_all --only output/dedup/keep.txt   (대표만 파싱)
 """
 
 import argparse
 import csv
-import difflib
 import hashlib
 import os
 import re
-import unicodedata
-import zipfile
-import zlib
-from collections import Counter
 from pathlib import Path
 
 from common.core.console import utf8_stdout
 from common.core.paths import APP_ROOT, doc_dir  # 폴더 재편 뒤 이 상수만 바뀌면 됨
-from pipeline import config as pc  # S7c: 설정 객체(옛 os.environ 읽기)
 
 ROOT = APP_ROOT
-IMG = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 _NOISE = re.compile(
     r"(\(\d+\)|\[\d+\]|[_\- ]?(copy|사본|복사본|최종|수정|final|rev\d*|v\d+(\.\d+)*)|(19|20)\d{2}[-_.]?\d{2}[-_.]?\d{2}|\d{8})", re.I
 )
-
-
-def norm_name(p):
-    s = unicodedata.normalize("NFKC", p.stem).lower()
-    s = _NOISE.sub("", s)
-    return re.sub(r"[\s_\-.()\[\]]+", "", s)
 
 
 def sha(p):
@@ -51,119 +33,28 @@ def sha(p):
     return h.hexdigest()
 
 
-def text_of(p):
-    """값싼 텍스트 추출(지문용). 실패하면 ''."""
-    ext = p.suffix.lower()
-    try:
-        if ext == ".txt":
-            raw = p.read_bytes()
-            for enc in ("utf-8-sig", "cp949", "utf-16"):
-                try:
-                    return raw.decode(enc)
-                except UnicodeDecodeError:
-                    pass
-            return raw.decode("utf-8", "ignore")
-        if ext in (".docx", ".xlsx", ".pptx"):
-            with zipfile.ZipFile(p) as z:
-                return " ".join(
-                    re.sub(r"<[^>]+>", " ", z.read(n).decode("utf-8", "ignore"))
-                    for n in z.namelist()
-                    if n.endswith(".xml")
-                    and ("word/document" in n or "sharedStrings" in n or "slides/slide" in n or "worksheets/sheet" in n)
-                )
-        if ext == ".pdf":
-            import pypdfium2 as pdfium
-
-            doc = pdfium.PdfDocument(str(p))
-            return " ".join(doc[i].get_textpage().get_text_range() for i in range(min(len(doc), 20)))
-        if ext == ".xls":
-            from python_calamine import CalamineWorkbook
-
-            wb = CalamineWorkbook.from_path(str(p))
-            return " ".join(str(c) for n in wb.sheet_names for r in wb.get_sheet_by_name(n).to_python() for c in r)
-    except Exception:
-        return ""
-    return ""
-
-
-def shingles(t, k=5):
-    t = re.sub(r"\s+", "", unicodedata.normalize("NFKC", t))
-    return {t[i : i + k] for i in range(max(len(t) - k + 1, 0))}
-
-
-def first_page(p):
-    from PIL import Image
-
-    if p.suffix.lower() == ".pdf":
-        import pypdfium2 as pdfium
-
-        return pdfium.PdfDocument(str(p))[0].render(scale=0.5).to_pil()
-    return Image.open(p)
-
-
-def dhash(p, n=16):
-    """첫 쪽(또는 이미지)의 차이 해시 n×n비트 — 이웃 화소보다 밝은지. 실패하면 None."""
-    try:
-        b = first_page(p).convert("L").resize((n + 1, n)).tobytes()
-        return sum(1 << (r * n + c) for r in range(n) for c in range(n) if b[r * (n + 1) + c] > b[r * (n + 1) + c + 1])
-    except Exception:
-        return None
-
-
-def thumb(p):
-    import base64
-    import io
-
-    try:
-        im = first_page(p).convert("RGB")
-        im.thumbnail((360, 480))
-        buf = io.BytesIO()
-        im.save(buf, "JPEG", quality=70)
-        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
-    except Exception:
-        return ""
-
-
-_SH: dict = {}
-
-
-def _shingles_of(p):
-    """텍스트 5-gram 집합(후보 쌍 확인 때만 계산 — 메모리에 전부 들고 있지 않음)."""
-    if p not in _SH:
-        if len(_SH) >= 5000:  # 상한 — 문서가 많으면 전부 들고 있지 않음(필요하면 다시 읽음)
-            _SH.clear()
-        t = text_of(p)
-        _SH[p] = shingles(t) if len(t.strip()) >= 50 else set()
-    return _SH[p]
-
-
 def fingerprint_one(p, source_id=None):
     """파일 하나의 지문(캐시 없이, 1회 계산) — fingerprints()의 캐시 미스 계산과 공유. **폴더 모드
-    (fingerprints()·decide()·run_folder) 전용** — 이름 유사·내용 유사(sketch·ahash) 후보까지 낸다.
+    (fingerprints()·decide()·run_folder) 전용** — 크기·수정 시각·해시(11-01 — 유사 후보용 sketch·ahash·name은 지움).
     source_id — 원천의 진짜 식별자(원격 URI·key, 폴더면 원본 폴더 기준 file:// URI) — load_manifest()가
     이것으로 "같은 문서"를 가린다(독립 검토 #3 재검토: file_name만으로 가리면 서로 다른 경로·접두의 같은
     이름 문서가 하나로 뭉개진다, 아래 load_manifest 참고).
     (스트리밍 파싱과 그 전용 최소 지문 record_fingerprint는 op-08에 지움.)"""
     st = p.stat()
-    t = text_of(p) if p.suffix.lower() not in IMG else ""
-    sh = shingles(t) if len(t.strip()) >= 50 else None
     r = {
         "path": str(p),
         "size": st.st_size,
         "mtime": st.st_mtime,
         "sha": sha(p),
-        "name": norm_name(p),
         "file_name": p.name,  # 독립 검토(10-14) — 사람이 읽는 이름(표시용) · load_manifest의 식별 키는
         # source_id 우선(아래), source_id가 없을 때만 (file_name, sha) 폴백으로 씀
         "source_id": source_id,
-        "sketch": sorted({zlib.crc32(x.encode("utf-8")) for x in sh})[:64] if sh else None,
-        "ahash": dhash(p) if (p.suffix.lower() in IMG or (p.suffix.lower() == ".pdf" and len(t.strip()) < 50)) else None,
     }
     return r
 
 
 def fingerprints(files, cache_path):
-    """파일별 지문 {sha, name, sketch(텍스트 5-gram 해시 중 가장 작은 64개), ahash, size, mtime} — (경로·크기·수정 시각)이 같으면
+    """파일별 지문 {sha, size, mtime} — (경로·크기·수정 시각)이 같으면
     캐시(fingerprints.jsonl) 재사용: 수집 서버처럼 문서가 많을 때 다시 돌려도 새·바뀐 파일만 읽음."""
     import json
 
@@ -176,7 +67,9 @@ def fingerprints(files, cache_path):
     info = []
     for p in files:
         st = p.stat()
-        r = cache.get((str(p), st.st_size, st.st_mtime)) or fingerprint_one(p)
+        r = cache.get((str(p), st.st_size, st.st_mtime))
+        if r is None or "sha" not in r:  # 옛 캐시 줄(sketch·ahash 포함)도 sha만 있으면 그대로 씀
+            r = fingerprint_one(p)
         info.append(r)
     cache_path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in info) + "\n", encoding="utf-8")
     return info
@@ -320,233 +213,57 @@ def _rep_select(members, info):
     return max(members, key=lambda i: (not _NOISE.search(Path(info[i]["path"]).stem), info[i]["mtime"], info[i]["size"]))
 
 
-def decide(info, img_dist, name_sim, text_sim, fuzzy, jaccard_of):
-    """DSU로 완전 중복·이름 유사·내용 유사 그룹을 묶고 keep 목록·groups.csv 행을 만든다 — **폴더 모드
-    (run_folder) 전용**(2026-10-14 재설계로 스트리밍용 decide_from_manifest()는 없앴다 — 스트리밍은 완전
-    중복만 보고, 그 판정은 parse/source.py의 받기 전·받은 뒤 확인(find_duplicate)이 한다. keep 집합 자체는
-    근사 중복 연결 여부와 무관하게 "그룹 안 같은 sha는 대표 1개만"으로만 줄어든다는 사실이 이 설계 변경의
-    근거: by_sha 선택이 항상 sha로만 걸러, 이름·텍스트·이미지 유사 연결은 groups.csv 보고용일 뿐 keep을
-    더 줄이지 않는다)."""
-    n = len(info)
-    for r in info:
-        r["sk"] = set(r["sketch"]) if r["sketch"] else None
-    cand = candidate_pairs(info, img_dist=img_dist, name_sim=name_sim, fuzzy_names=fuzzy)
-    dsu, reasons = DSU(n), {}
-
-    def link(i, j, why):
-        dsu.union(i, j)
-        reasons.setdefault((min(i, j), max(i, j)), []).append(why)
-
-    for i, j in cand["sha"]:
-        if info[i]["sha"] == info[j]["sha"]:
-            link(i, j, "완전 중복(해시)")
-    for i, j in cand["name"]:
-        A, B = info[i]["name"], info[j]["name"]
-        if info[i]["sha"] != info[j]["sha"] and (A == B or (fuzzy and name_ratio(A, B, name_sim) >= name_sim)):
-            link(i, j, f"이름 유사({difflib.SequenceMatcher(None, A, B).ratio():.2f})")
-    for i, j in cand["text"]:
-        A, B = info[i]["sk"], info[j]["sk"]
-        # 최소 해시 64개 중 겹치는 수로 먼저 거름(후보 쌍만 정확 Jaccard 계산) — main()과 같은 1차 필터
-        if info[i]["sha"] != info[j]["sha"] and A and B and len(A & B) >= 0.6 * min(len(A), len(B)):
-            jac = jaccard_of(i, j)
-            if jac >= text_sim:
-                link(i, j, f"내용 유사(텍스트 {jac:.2f})")
-    for i, j in cand["img"]:
-        if info[i]["sha"] != info[j]["sha"]:
-            d = bin(info[i]["ahash"] ^ info[j]["ahash"]).count("1")
-            if d <= img_dist:
-                link(i, j, f"내용 유사(이미지 거리 {d})")
-
+def decide(info):
+    """같은 해시(완전 중복)끼리 묶고 keep 목록·groups.csv 행을 만든다 — 폴더 모드(run_folder) 전용. 스트리밍은
+    parse/source.py의 받기 전·받은 뒤 확인(find_duplicate)이 완전 중복만 본다."""
     groups = {}
-    for i in range(n):
-        groups.setdefault(dsu.find(i), []).append(i)
-    why_of = {}
-    for (x, y), ws in reasons.items():
-        why_of.setdefault(x, set()).update(ws)
-        why_of.setdefault(y, set()).update(ws)
+    for i, r in enumerate(info):
+        groups.setdefault(r["sha"], []).append(i)
     keep, rows, gid = [], [], 0
     for members in groups.values():
         rep = _rep_select(members, info)
-        by_sha = {}
-        for i in sorted(members, key=lambda i: i != rep):  # 해시별 1개(대표 우선) — 후보는 전부 keep
-            by_sha.setdefault(info[i]["sha"], i)
-        keep += [Path(info[i]["path"]).name for i in by_sha.values()]
+        keep.append(Path(info[rep]["path"]).name)
         if len(members) == 1:
             continue
         gid += 1
-        n_sha = Counter(info[m]["sha"] for m in members)
         for i in sorted(members):
-            why = sorted(why_of.get(i, ()))
-            exact = n_sha[info[i]["sha"]] > 1
             rows.append(
                 {
                     "group": gid,
                     "file": Path(info[i]["path"]).name,
                     "representative": "예" if i == rep else "",
-                    "reasons": "; ".join(why),
+                    "reasons": "완전 중복(해시)",
                     "sha256": info[i]["sha"][:12],
                     "size": info[i]["size"],
-                    "decision": ("중복(자동 제외)" if i not in by_sha.values() else "해시 대표") if exact else "확인 필요",
+                    "decision": "해시 대표" if i == rep else "중복(자동 제외)",
                 }
             )
     return keep, rows, gid
 
 
-def name_ratio(x, y, r):
-    """difflib 유사도 — 값싼 상한(real_quick·quick)이 r 미만이면 0(같은 판정, 계산만 줄임)."""
-    sm = difflib.SequenceMatcher(None, x, y)
-    return sm.ratio() if sm.real_quick_ratio() >= r and sm.quick_ratio() >= r else 0.0
-
-
-def candidate_pairs(info, img_bits=256, img_dist=20, name_sim=0.9, sketch_k=8, name_min=0.8, fuzzy_names=True):
-    """후보 쌍(i<j) — 판정 기준을 만족할 수 있는 쌍만:
-    해시 같음 · 이미지 해시를 (거리+1)조각으로 나눠 한 조각이라도 같음(비둘기집 — 거리 ≤ img_dist면 반드시 걸림) ·
-    텍스트 최소 해시 sketch_k개 중 하나라도 같음(Jaccard ≥ 0.9면 거의 확실히 겹침) · 이름은 유사도 하한에서 계산한 3글자 조각 공유 수 이상(짧은 이름은 글자 몇 개 지운 형태가 같음)."""
-    from collections import defaultdict
-
-    out, pairs = {}, set()
-
-    def add_block(keys):
-        idx = defaultdict(list)
-        for i, ks in keys:
-            for k in ks:
-                idx[k].append(i)
-        for members in idx.values():
-            if len(members) > 1:
-                for x in range(len(members)):
-                    for y in range(x + 1, len(members)):
-                        pairs.add((min(members[x], members[y]), max(members[x], members[y])))
-
-    add_block((i, [r["sha"]]) for i, r in enumerate(info))
-    out["sha"], pairs = pairs, set()
-    nb = img_dist + 1
-    w = -(-img_bits // nb)
-    add_block((i, [(b, (r["ahash"] >> (b * w)) & ((1 << w) - 1)) for b in range(nb)]) for i, r in enumerate(info) if r["ahash"] is not None)
-    out["img"], pairs = pairs, set()
-    # 텍스트: 최소 해시 중 '흔한 조각'(문서 DEDUP_COMMON_MAX(기본 max(200, 문서 2%))개 넘게 공통 = 양식·상용구)은 열쇠에서 뺌 —
-    #   상용구 하나로 수천 문서가 한 묶음이 돼 쌍이 폭증(1만 문서 실측 2,800만 쌍). ponytail: 전부 상용구인 문서끼리는 이름·해시로만 걸림
-    df = Counter(x for r in info if r["sketch"] for x in r["sketch"])
-    cap = pc.cfg().extract.dedup.common_max  # S7c — 설정 객체(옛 `int(get or 계산)`: "0"은 0 — 그래서 None일 때만 계산)
-    cap = int(cap) if cap is not None else max(200, len(info) // 50)
-    add_block((i, [x for x in r["sketch"] if df[x] <= cap][:sketch_k]) for i, r in enumerate(info) if r["sketch"])
-    out["text"], pairs = pairs, set()
-    add_block((i, [r["name"]]) for i, r in enumerate(info) if r["name"])
-    # 이름: 유사도 r 이상이면 맞지 않는 글자 U ≤ (1−r)(la+lb) — 글자 하나가 3글자 조각을 최대 3개 깨므로
-    #   공유 조각 ≥ max(la, lb) − 2 − 3U(하한, 길이 합 ≥ 20에서 1 이상).
-    names = {i: r["name"] for i, r in enumerate(info) if r["name"]} if fuzzy_names else {}
-    grams = {i: [nm[k : k + 3] for k in range(max(len(nm) - 2, 1))] for i, nm in names.items()}
-    idx = defaultdict(set)
-    for i, gs in grams.items():
-        for g in set(gs):
-            idx[g].add(i)
-
-    def len_ok(la, lb):
-        return min(la, lb) >= name_min * max(la, lb)  # 유사도 r ≥ 0.9면 짧은 쪽 ≥ 0.818 × 긴 쪽
-
-    # 짧은 쌍(길이 합 < 20)은 하한이 안 서므로: U ≤ d = ⌊(1−r)·19⌋ → 양쪽에서 글자를 d개 이하로 지우면 같은 문자열(공통 부분열)이 됨
-    #   → 이름마다 '글자 d개 이하 지운 형태'를 열쇠로 묶음(r=0.9면 d=1). 같은 열쇠 = 후보.
-    from itertools import combinations
-
-    d = int((1 - name_sim) * 19 + 1e-9)
-    add_block(
-        (i, {"".join(c for k, c in enumerate(nm) if k not in rm) for m in range(d + 1) for rm in combinations(range(len(nm)), m)})
-        for i, nm in names.items()
-        if len(nm) <= 19
-    )
-    for i, gs in grams.items():
-        cnt = defaultdict(int)
-        for g in set(gs):
-            if len(idx[g]) <= 5000:  # 아주 흔한 조각(수천 개 이름에 공통)은 세지 않음 — ponytail: 그런 이름끼리는 놓칠 수 있음
-                for j in idx[g]:
-                    if j > i:
-                        cnt[j] += 1
-        for j, c in cnt.items():
-            la, lb = len(names[i]), len(names[j])
-            u = int((1 - name_sim) * (la + lb) + 1e-9)
-            if len_ok(la, lb) and c >= max(1, max(la, lb) - 2 - 3 * u):
-                pairs.add((i, j))
-    out["name"] = pairs
-    return out
-
-
-class DSU:
-    def __init__(s, n):
-        s.p = list(range(n))
-
-    def find(s, x):
-        while s.p[x] != x:
-            s.p[x] = s.p[s.p[x]]
-            x = s.p[x]
-        return x
-
-    def union(s, a, b):
-        s.p[s.find(a)] = s.find(b)
-
-
-def _write_report(src, out, rows, gid, n, n_keep):
-    """report.md·report.html(그룹별 썸네일) — 폴더 모드만(파일이 있어야 썸네일을 그린다). decide()가 낸
-    rows·keep 개수를 사람이 보는 형태로만 바꾼다(판정 자체는 이미 끝남)."""
-    need = len({r["group"] for r in rows if r["decision"] == "확인 필요"})
-    rep = [
-        f"# 중복 확인 — 파일 {n}개 → 대표 {n_keep}개",
-        "",
-        f"- 중복 그룹 {gid}개 (완전 중복만인 그룹 {gid - need} · **사람 확인 필요 {need}**)",
-        "- 확인 방법: `report.html`에서 썸네일을 보고 `groups.csv` decision을 '같은 문서'/'다른 판본'/'다른 문서'로 기록. '같은 문서'로 확정한 파일만 keep.txt에서 뺀다(후보는 기본으로 모두 keep)",
-        "- 삭제·이동은 하지 않았다.",
-        "",
-    ]
+def _write_report(out, rows, gid, n, n_keep):
+    """report.md — decide()가 낸 rows·keep 개수를 사람이 보는 형태로만(판정은 이미 끝남)."""
+    rep = [f"# 중복 확인 — 파일 {n}개 → 대표 {n_keep}개", "", f"- 완전 중복 그룹 {gid}개", "- 삭제·이동은 하지 않았다.", ""]
     for g in sorted({r["group"] for r in rows}):
         rep.append(f"## 그룹 {g}")
-        rep += [f"- {'★ ' if r['representative'] else ''}{r['file']} — {r['reasons']} [{r['decision']}]" for r in rows if r["group"] == g]
+        rep += [f"- {'★ ' if r['representative'] else ''}{r['file']} [{r['decision']}]" for r in rows if r["group"] == g]
     (out / "report.md").write_text("\n".join(rep) + "\n", encoding="utf-8")
-    import html
-
-    cards = []
-    for g in sorted({r["group"] for r in rows}):
-        items = "".join(
-            f'<figure><img src="{thumb(Path(src) / r["file"])}" alt=""><figcaption>{"★ " if r["representative"] else ""}'
-            f"{html.escape(r['file'])}<br><small>{html.escape(r['reasons'])} · {r['decision']}</small></figcaption></figure>"
-            for r in rows
-            if r["group"] == g
-        )
-        cards.append(f"<section><h2>그룹 {g}</h2><div class=row>{items}</div></section>")
-    head = (
-        '<meta charset="utf-8"><title>중복 후보</title><style>body{font-family:system-ui,sans-serif;margin:16px}'
-        ".row{display:flex;gap:12px;flex-wrap:wrap}figure{margin:0;width:360px}img{max-width:100%;border:1px solid #ccc}"
-        "small{color:#666}</style>"
-    )
-    (out / "report.html").write_text(head + "<br>".join(html.escape(x) for x in rep[:5]) + "".join(cards), encoding="utf-8")
-    print("\n".join(rep[:5]))
+    print("\n".join(rep[:4]))
 
 
-def run_folder(src, out, name_sim=0.9, text_sim=0.9, img_dist=20):
-    """폴더 모드 전체(main()이 부름) — 파일을 직접 읽어 지문을 내고(fingerprints, 캐시) decide()로 판정,
-    keep.txt·groups.csv·report.md·report.html을 쓴다. 테스트가 CLI 없이 바로 부를 수 있게 main()에서
-    분리. 이 동작은 2026-10-14 스트리밍 재설계와 무관(그대로) — 스트리밍은 더 이상 decide()를 쓰지 않고
-    parse/source.py의 완전 중복 확인(find_duplicate)만 쓴다."""
+def run_folder(src, out):
+    """폴더 모드 전체(main()이 부름) — 파일 해시(fingerprints, 캐시)로 decide() 판정, keep.txt·groups.csv·report.md를 쓴다."""
     files = sorted(p for p in Path(src).iterdir() if p.is_file() and p.name != ".gitkeep")
-    n = len(files)
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     info = fingerprints(files, out / "fingerprints.jsonl")
-    fuzzy = n <= int(
-        pc.cfg().extract.dedup.fuzzy_max
-    )  # S7c — 설정 객체(기본 50000) · 아주 많으면 이름은 정규화 이름 일치만(1만 문서 실측: 유사도 포함 13초)
-    if not fuzzy:
-        print(f"[안내] 문서 {n}개 > DEDUP_FUZZY_MAX — 이름은 정규화 이름(사본·버전·날짜 표시 제거) 일치만 비교", flush=True)
-
-    def jaccard_of(i, j):
-        # 최소 해시로 거른 후보만 — 파일에서 전체 5-gram을 다시 읽어 정확한 Jaccard(폴더 모드는 파일이 있음)
-        ta, tb = _shingles_of(files[i]), _shingles_of(files[j])
-        return len(ta & tb) / len(ta | tb) if ta and tb else 0
-
-    keep, rows, gid = decide(info, img_dist=img_dist, name_sim=name_sim, text_sim=text_sim, fuzzy=fuzzy, jaccard_of=jaccard_of)
+    keep, rows, gid = decide(info)
     with (out / "groups.csv").open("w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["group", "file", "representative", "reasons", "sha256", "size", "decision"])
         w.writeheader()
         w.writerows(rows)
     (out / "keep.txt").write_text("\n".join(sorted(keep)) + "\n", encoding="utf-8")
-    _write_report(src, out, rows, gid, n, len(keep))
+    _write_report(out, rows, gid, len(files), len(keep))
     return keep, rows, gid
 
 
@@ -556,12 +273,9 @@ def main():
         "--src", default=None, help="원본 문서 폴더(기본 DOC_DIR env — --help·import 때는 안 풀어야 하므로 여기서는 default=None)"
     )
     ap.add_argument("--out", default=str(ROOT / "output" / "dedup"))
-    ap.add_argument("--name-sim", type=float, default=0.9)
-    ap.add_argument("--text-sim", type=float, default=0.9)
-    ap.add_argument("--img-dist", type=int, default=20)
     a = ap.parse_args()
     src = a.src or str(doc_dir())
-    run_folder(src, a.out, name_sim=a.name_sim, text_sim=a.text_sim, img_dist=a.img_dist)
+    run_folder(src, a.out)
 
 
 if __name__ == "__main__":
