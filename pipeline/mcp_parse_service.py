@@ -167,8 +167,8 @@ _ENGINES_NO_OCR = _engines_no_ocr_arg
 
 def _pdf_text_chars(raw=None, p=None):
     """글자층 샀플(pypdf, 첫 5쪽) — 2026-10-21 사용자: 스캔/이미지 문서도 거부하지 않고 OCR·VLM 없이 그 결과를
-    그대로(≈빈) 돌려준다. 이 값은 두 곳에만 쓴다: ① 글자층이 사실상 없는 PDF(<20자)는 OCR 가능성이 있는
-    엔진(kreuzberg 폴백 포함)까지 빼고 글자층 추출 전용(pymupdf·pdfplumber·pypdf)만 돈다(시간 보장) ② 응답 note.
+    그대로(≈빈) 돌려준다. 이 값은 skip_note에만 쓴다: 글자층이 사실상 없는 PDF(<20자)는 파이프라인 없이 스캔 안내(pl-03 10-31 —
+    엔진 범위가 stack 하나라 그 문서에 돌 엔진이 없음, 옛: 글자층 엔진만 돌려 ≈빈 결과).
     판독 자체에 실패하면 -1(특별 취급 없음 — 파이프라인이 제대로 된 오류를 냄)."""
     try:
         import io
@@ -182,6 +182,29 @@ def _pdf_text_chars(raw=None, p=None):
 
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}  # ALLOWED_EXTS에서 뺐으므로 도달 불가 — 참고용(전이해)
+IMAGE_NOTE = "이미지 문서 — text 파싱 결과 없음(OCR·VLM 기본 미실행 · 재가능: pipeline.extract.ocr_engine 켬)"
+# pl-03(사용자 10-31) — 엔진 범위가 stack 하나라 스캔 PDF(.pdf_image = OCR·VLM 엔진뿐)는 이 서비스(OCR·VLM 안 돎)에서 돌 엔진이 없다.
+#   지금은 건너뛰고 안내만 — 다시 지원은 PRD mc-18(todo).
+SCAN_NOTE = "스캔 PDF — 지금은 text 파싱 결과 없음(OCR·VLM 미실행, 추후 지원 예정)"
+DRM_NOTE = "텍스트 추출 실패 — DRM/암호화 문서일 가능성(엔진 전부 파싱 실패)"
+
+
+def skip_note(fname, pdf_text_chars):
+    """파이프라인 없이 바로 빈 결과로 끝낼 문서면 그 안내(이미지 · 글자층이 사실상 없는 PDF), 아니면 None."""
+    ext = Path(fname).suffix.lower()
+    if ext in _IMAGE_EXTS:
+        return IMAGE_NOTE
+    if ext == ".pdf" and 0 <= (pdf_text_chars if pdf_text_chars is not None else -1) < 20:
+        return SCAN_NOTE
+    return None
+
+
+def empty_note(run_log):
+    """run_all이 결과를 하나도 안 남겼을 때(runs.jsonl 없음)의 안내 — 돌 엔진이 하나도 없었으면(run_all의 NO_JOB_MARK 줄 — 표본보다 스캔으로
+    분류된 PDF) 스캔 안내, 엔진이 돌다 다 실패했으면 DRM 추정."""
+    from pipeline.extract.run_all import NO_JOB_MARK
+
+    return SCAN_NOTE if NO_JOB_MARK in (run_log or "") else DRM_NOTE
 
 
 def _submit(source):
@@ -267,7 +290,8 @@ def _worker():
                 import shutil
 
                 shutil.copy2(Path(j["path"]), ws / "in" / fname)
-            if Path(fname).suffix.lower() in _IMAGE_EXTS:  # 2026-10-21 사용자: 이미지 문서 — OCR·VLM 미실행, 파이프라인 없이 빈 결과 즉시
+            note = skip_note(fname, j.get("pdf_text_chars"))
+            if note:  # 2026-10-21 사용자: 이미지 문서 · pl-03(10-31): 스캔 PDF — OCR·VLM 미실행, 파이프라인 없이 빈 결과 즉시
                 j["result"] = {
                     "job_id": job_id,
                     "filename": fname,
@@ -280,13 +304,11 @@ def _worker():
                     "fields": {},
                     "rep_path": None,
                     "all_keys": [],
-                    "note": "이미지 문서 — text 파싱 결과 없음(OCR·VLM 기본 미실행 · 재가능: pipeline.extract.ocr_engine 켬)",
+                    "note": note,
                 }
                 j["status"] = "done"
             else:
                 engines = _ENGINES_NO_OCR()
-                if Path(fname).suffix.lower() == ".pdf" and 0 <= (j.get("pdf_text_chars") or -1) < 20:
-                    engines = ["--engines", "pymupdf,pdfplumber,pypdf"]
                 only = ws / "only.txt"
                 only.write_text(fname + "\n", encoding="utf-8")
                 log = open(ws / "run.log", "w", encoding="utf-8")
@@ -322,10 +344,11 @@ def _worker():
                     if p.returncode != 0:
                         raise RuntimeError(f"단계 실패({cmd[0]}): {(p.stdout + p.stderr).strip().splitlines()[-1:] or ['?']}")
 
-                # ② 엔진 전부 실패(DRM/암호화)? → runs.jsonl 부재 → 빈 결과
+                # ② 결과 없음 → runs.jsonl 부재 → 빈 결과(돌 엔진이 없었으면 스캔 안내, 다 실패했으면 DRM 추정)
                 runs_file = ws / "parse" / "runs.jsonl"
                 if not runs_file.exists():
-                    _log(f"{job_id} · 엔진 전부 실패 → 빈 결과(DRM 추정)")
+                    note = empty_note((ws / "run.log").read_text(encoding="utf-8", errors="replace"))
+                    _log(f"{job_id} · 결과 없음 → 빈 결과({'스캔' if note == SCAN_NOTE else 'DRM 추정'})")
                     j["result"] = {
                         "job_id": job_id,
                         "filename": fname,
@@ -338,7 +361,7 @@ def _worker():
                         "fields": {},
                         "rep_path": None,
                         "all_keys": [],
-                        "note": "텍스트 추출 실패 — DRM/암호화 문서일 가능성(엔진 전부 파싱 실패)",
+                        "note": note,
                         "ms": round((time.time() - t0) * 1000, 1),
                     }
                 else:

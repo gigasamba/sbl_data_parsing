@@ -39,8 +39,8 @@ def selftest():
         assert set(x) == {"step", "choice", "reason", "inputs"}
     assert dec[0] == {
         "step": "engine_scope",
-        "choice": "all",
-        "reason": "형식별 등록 엔진 전부(제한 없음)",
+        "choice": "stack",
+        "reason": "stack.json 형식별 목록만(PE1 — pl-03 10-30부터 이 하나뿐)",
         "inputs": {"format": ".txt", "stack_pool": ["eng1"]},
     }
     assert dec[1]["choice"] == "eng1" and dec[1]["reason"] == "최고 정확도"

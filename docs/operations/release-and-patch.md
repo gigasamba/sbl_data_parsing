@@ -230,7 +230,7 @@ cd /srv/rag/code/live
 # ① 옮기기 — 화면에는 비밀을 가림, 파일은 실제 값
 PYTHONPATH=app/deploy python -m common.config.migrate /srv/rag/env/pipeline.env --out /srv/rag/env/settings.yaml   # 서버 배치 코드 폴더 live/app/deploy(저장소 배치면 PYTHONPATH=.)
 #   이미지 안: docker run --rm -i --network none --entrypoint bash data-pipeline:<태그> -c 'cat > /tmp/p.env && python -m common.config.migrate /tmp/p.env --out /tmp/s.yaml >&2 && cat /tmp/s.yaml' < /srv/rag/env/pipeline.env > /srv/rag/env/settings.yaml
-# ② env-guide.md "옛 서버 값" 표의 항목(옛 options.conf가 채우던 값 — run_mode: prod·engine_scope: all·parse_post: all·max_rows: 1000 등, C-39·C-43
+# ② env-guide.md "옛 서버 값" 표의 항목(옛 options.conf가 채우던 값 — run_mode: prod·parse_post: all·max_rows: 1000 등, C-39·C-43
 #    + 옛 compose 기본값 chain_structure_url·mcp.server.store: pg — C-47) 중 pipeline.env에 같은 이름이 없던 것만 settings.yaml에 옮겨 적는다 ·
 #    특히 common.store.run_mode: prod — 빠뜨리면 PG 연결 실패 때 문서 레지스트리가 SQLite로 조용히 대체돼 run_docs 문서별 publish가 그 전 문서를 deleted·숨김으로 만든다(C-54) ·
 #    EDW를 쓰면 common.connections.rdb의 read·write 계정(필수 — C-67, 옛 common.connections.edw는 없앰) · run_docs.py를 쓰면 C-45 ③의 항목도
