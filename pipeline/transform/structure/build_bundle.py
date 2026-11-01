@@ -506,7 +506,7 @@ def main(argv=None):
                 if k:
                     _file_meta[k] = d
     # rdb:csv 배치 — prepared 파일명 → 원본 s3_key 매핑 (source.py가 남긴 manifest.jsonl)
-    _manifest_keys = {}
+    _manifest_keys, _manifest_created = {}, {}
     _mf = Path(a.parse_dir) / "_source" / "manifest.jsonl"
     if _mf.exists():
         for line in _mf.read_text(encoding="utf-8").splitlines():
@@ -514,6 +514,8 @@ def main(argv=None):
                 r = json.loads(line)
                 if r.get("file_name") and r.get("key"):
                     _manifest_keys[r["file_name"]] = r["key"]
+                if r.get("file_name") and r.get("created_at"):  # 11-01(mc-16) FileStorageMap 원천 등록 시각(batch.csv에 칸이 있을 때)
+                    _manifest_created[r["file_name"]] = r["created_at"]
     docs, chunks, n_sum, seen_sha = [], [], {"llm": 0, "lead": 0}, {}
     alias = {}  # 견적·주문 번호 → 같은 문서의 (교차 확인된) 계약 번호
     for md in meta_docs.values():
@@ -624,6 +626,8 @@ def main(argv=None):
                 "service_type": _edw.get("service_type"),
                 "division": _edw.get("division"),
                 "prod_name": _edw.get("prod_name"),
+                "doc_class": _edw.get("doc_class"),  # 11-01(mc-16) 분류 라벨 — 분류 단계(pl-33) 전에는 EDW 파일 메타에 있을 때만
+                "created_at": _edw.get("created_at") or _manifest_created.get(doc) or _manifest_created.get(Path(path).name),
                 **DM.doc_meta(doc, text),
             }
         )

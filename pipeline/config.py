@@ -404,11 +404,10 @@ class PipelineHost(Section):
 
 class PipelineLoad(Section):
     REMOVED = frozenset(
-        {"bm25_stat_rebuild", "structure_target", "edw_load", "prune_force", "prune_min_ratio"}
-    )  # 사용자 10-29(prune_* — 적재가 안 지움, pl-13 · edw_load — EDW 벡터 경로 삭제, ops.md#op-03) — 지운 칸·절(남으면 경고만)
+        {"bm25_stat_rebuild", "structure_target", "edw_load", "prune_force", "prune_min_ratio", "index_lock_stale_sec"}
+    )  # 사용자 10-29(prune_* — 적재가 안 지움, pl-13 · edw_load — EDW 벡터 경로 삭제, ops.md#op-03) · index_lock_stale_sec 11-01(mc-16 — 이름 있는 색인 AD41 지움) — 지운 칸·절(남으면 경고만)
     bm25_threads: int | None = F(4, "BM25_THREADS", "BM25 항목(term,tf) 계산 병렬 스레드 수(개)")
     edw_path_prefix: str | None = F(None, "EDW_PATH_PREFIX", "저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치)")
-    index_lock_stale_sec: float | None = F(21600.0, "INDEX_LOCK_STALE_SEC", "색인 빌드 잠금 파일을 죽은 빌드로 보고 회수하는 경과 시간(초)")
     pg_create_extension: bool | None = F(
         False, "PG_CREATE_EXTENSION", "deploy 때 vector 확장 직접 생성 시도 — 1이면 켬(공유 PG에서는 금지)", on=("1",)
     )

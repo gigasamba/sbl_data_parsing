@@ -55,7 +55,7 @@
 ## pl-07 · pgvector 적재
 - 이유: 검색 서버는 PG를 읽는다.
 - 무엇: 표 `load_run`·`doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + 뷰 `v_chunk_source`(Alembic으로만). 이미 적재된 문서는 `file_path`로 건너뛴다(sha 열 없음 — 같은 경로에서 내용이 바뀌어도 `--replace` 없이는 건너뜀). (`--prune`은 10-30에 없앰 — [pl-13](#pl-13).) 이름 붙은 색인(`index_id`). 벡터는 pgvector에만 둔다(EDW 벡터 적재는 10-29에 지움 — [settings.md#op-03](settings.md#op-03)).
-- 파일: `pipeline/load/pgvector_load.py`, `pipeline/load/index.py`, `common/store/db/migrations/`.
+- 파일: `pipeline/load/pgvector_load.py`, `common/store/db/migrations/`.
 - 결정(허브 10-31, 최신 결정 우선): 이름 붙은 색인(`index_id`)은 0.2.0에 없앤다 — 원천(`source_system`)이 gold 스키마를 고르므로 색인 이름이 필요 없다(선택지 줄이기 원칙). 구현은 [pl-28](#pl-28)과 함께.
 - 결정(사용자 10-31): PG 자동 찾기(`docker ps` pgvector·대체 포트·코드 기본 `127.0.0.1`/`5432`/`rag`)를 없애고 PG 접속은 필수 — [settings.md#op-09](settings.md#op-09).
 - Status: done
@@ -80,7 +80,8 @@
 - 이유: C-32.
 - 결정(사용자 10-30 grill): compose `index_a`/`index_b` 예시를 지운다.
 - 파일: `deploy/host/`.
-- Status: todo
+- 11-01(`feature/mcp-ops-parity`, mc-16): 이름 있는 색인(AD41)을 통째로 지우며 `compose.index.yml`·`pipeline/load/index.py`·`index_cfg.py`도 지웠다.
+- Status: done
 
 <a id="pl-08"></a>
 ## pl-08 · 정형 DB와 문서 대장

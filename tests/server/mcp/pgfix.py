@@ -21,6 +21,18 @@ from common.store.db.dbtool import standin_script
 from common.store.pg import vec
 from mcp_server import config as mc
 
+DOC_META = (
+    "source_system",
+    "sf_acc_name",
+    "sf_op_id",
+    "sf_op_name",
+    "project_code__c",
+    "contract_id",
+    "division",
+    "service_type",
+    "doc_class",
+    "created_at",
+)
 SCHEMA = "test_mcp"  # stand-in file <dir>/test_mcp.sqlite — a temp dir per bundle, never a shared one
 
 
@@ -51,9 +63,13 @@ def load(bundle, schema=SCHEMA, standin=None):
             for i, d in enumerate(docs):
                 names = [n for n in (d.get("clients") or ([d["client"]] if d.get("client") else [])) if n]
                 cl = json.dumps(names, ensure_ascii=False) if names else None
+                meta_cols = [
+                    k for k in DOC_META if d.get(k) is not None
+                ]  # 거르기 칸(mc-16) — 준 것만(created_at은 시간대 붙은 ISO 글자로 줌)
                 cur.execute(
-                    f"INSERT INTO {s}.doc(file_path, summary, clients, run_id) VALUES (%s,%s,%s,%s) RETURNING doc_id",
-                    (d["file_path"], d.get("summary"), cl, run),
+                    f"INSERT INTO {s}.doc(file_path, summary, clients, run_id{''.join(', ' + k for k in meta_cols)}) "
+                    f"VALUES (%s,%s,%s,%s{',%s' * len(meta_cols)}) RETURNING doc_id",
+                    (d["file_path"], d.get("summary"), cl, run, *(d[k] for k in meta_cols)),
                 )
                 doc_id[i] = (cur.fetchone()[0], json.dumps(names, ensure_ascii=False))
             for ci, c in enumerate(chunks):

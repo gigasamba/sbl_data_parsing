@@ -13,7 +13,7 @@ def selftest():
     base = importlib.util.module_from_spec(sp)
     sp.loader.exec_module(base)
     assert base.HNSW_MAX == ST.HNSW_MAX  # 판 파일이 굳혀 둔 숫자 = 지금 pg.HNSW_MAX
-    assert TARGETS == ("search",) and head("search") == "0001_search" and known("search") == ["0001_search"]
+    assert TARGETS == ("search",) and head("search") == "0002_search" and known("search") == ["0002_search", "0001_search"]
     assert not list((MIGRATIONS / "versions").glob("*struct*"))  # 사용자 11-01 — struct 갈래 없음(엔진 구성·원천 목록은 파일)
     print("[selftest] dbtool — 판 폴더 갈래 search 하나·끝 판·HNSW 2000 같음 통과")
     # pydantic 행 모델 칸 = SQLAlchemy 표 칸(이름·순서·필수 여부)
@@ -57,7 +57,14 @@ def selftest():
     assert set(ST.index_defs(768)) == {"ix_{S}_chunk_doc", "ix_{S}_chunk_term_chunk", "ix_{S}_chunk_clients", "ix_{S}_chunk_emb"}
     assert "ix_{S}_chunk_embq" in ST.index_defs(4096) and "bit(4096)" in ST.index_defs(4096)["ix_{S}_chunk_embq"]
     # 판 상태 판정(가짜 q)
-    for have, want in ((None, "없음"), ([], "없음"), (["0001_search"], "끝"), (["9999_x"], "모름"), (["0001_search", "9999_x"], "모름")):
+    for have, want in (
+        (None, "없음"),
+        ([], "없음"),
+        (["0002_search"], "끝"),
+        (["0001_search"], "낮음"),
+        (["9999_x"], "모름"),
+        (["0002_search", "9999_x"], "모름"),
+    ):
         fq = (
             lambda h: lambda sql, p=None: ([{"x": 1}] if h is not None else []) if "to_regclass" in sql else [{"version_num": v} for v in h]
         )(have)

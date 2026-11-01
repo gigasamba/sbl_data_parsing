@@ -19,7 +19,7 @@
 | pgvector 적재 | done | Alembic 표 · 건너뛰기 · 색인 | [pl-07](prd/etl.md#pl-07) |
 | 적재는 지우지 않음(`--prune` 없앰) | done | prune 길 없앰 · 시험 | [pl-13](prd/etl.md#pl-13) |
 | 배포 backfill이 `doc.clients`만 읽음 | done | backfill 고침 · 시험 | [pl-14](prd/etl.md#pl-14) |
-| compose `index_a`/`index_b` 실패 | todo | 원인 · 고침 | [pl-19](prd/etl.md#pl-19) |
+| compose `index_a`/`index_b` 실패 | done | 11-01 이름 있는 색인째 지움(mc-16) | [pl-19](prd/etl.md#pl-19) |
 | 정형 DB와 문서 대장 | done | struct 스키마를 코드에서 모두 없앰 — 파일만(11-01) | [pl-08](prd/etl.md#pl-08) |
 | 마스터 CSV 활용 방안 설계 | todo | 고객 별칭 CSV 0.2.0 · 나머지 후순위 · grill | [pl-38](prd/etl.md#pl-38) |
 | 문서 대장 upsert·게시 가드 | done | **지움**(사용자 10-31) · deleted 길 없앰·서버 대체 금지 ✓ · PG 번역 · ParsingMeta 가드 | [pl-12](prd/etl.md#pl-12) |
@@ -75,7 +75,7 @@
 | 질의 기록은 jsonl만 | done | PG `qa_log` INSERT 지움 | [mc-13](prd/mcp.md#mc-13) |
 | 숨김 문서가 검색에서 안 빠짐 | dropped | pl-25 대기 · `s3_key`로 비교 | [mc-14](prd/mcp.md#mc-14) |
 | 근거의 `rep_uri`가 늘 빔 | todo | pl-25 대기 · `source_key` 조회 | [mc-15](prd/mcp.md#mc-15) |
-| `search` 운영 계약 구현 | todo | question 필수 · 필터 11종 · 출력 축소(등급 A) | [mc-16](prd/mcp.md#mc-16) |
+| `search` 운영 계약 구현 | done | question 필수 · 거르기 13칸 · 5칸·근거 12칸 · 판 0002(등급 A) | [mc-16](prd/mcp.md#mc-16) |
 | 원문 전송 도구 2개 | todo | `list_doc_fulltext` · `get_doc_fulltext`(등급 A) | [mc-17](prd/mcp.md#mc-17) |
 | 검색 — PG만, 실행 중 묶음 없음 | todo | 문서 메타·임베딩 정보 PG에서 · 검색 동작 바뀜(자기 PR + 평가) | [mc-19](prd/mcp.md#mc-19) |
 | `parse_document` 스캔 PDF 다시 지원 | todo | 지금은 건너뜀 + 안내 · 엔진·응답 시간 정하기(등급 A) | [mc-18](prd/mcp.md#mc-18) |

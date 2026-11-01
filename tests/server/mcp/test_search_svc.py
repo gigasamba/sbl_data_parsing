@@ -1,12 +1,12 @@
 """mcp_server.services.search.search_svc 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.search_svc`."""
 
 import json
-import sys
 import time
 from pathlib import Path
+from unittest.mock import patch
 
 from mcp_server import config as mc
-from mcp_server.schemas.evidence import _EVIDENCE_BASE_KEYS, _MANIFEST_EXTRA_KEYS
+from mcp_server.schemas.evidence import EVIDENCE_KEYS, SEARCH_TOP_KEYS
 from mcp_server.services.search import search_svc as M
 from mcp_server.services.search.search_svc import do_search
 from mcp_server.services.search.server_state import _STATE, CALLER
@@ -16,79 +16,6 @@ from tests.server.mcp import pgfix  # mc-01(11-01) — 검색은 PG 하나: 묶�
 ROOT = (
     Path(M.__file__).resolve().parents[3]
 )  # 옛 main.py의 ROOT(= mcp_server/의 부모, 저장소 루트)와 같은 값 — selftest만 씀(옛 search_svc.py의 줄 — `__file__`은 모듈 것으로)
-
-
-def _selftest_search_notes_no_race():
-    """be-qa 리뷰(S12) — do_search가 공유 Retriever의 note(임베딩 실패·확장·재순위·최신성)를 self 속성이 아니라
-    search_ex() 반환값으로 읽는지(동시 요청에서 A의 note가 B 응답에 섞이면 안 됨). embed_query를 질문별로 다르게(절반은
-    느린 실패) 만들어 섞일 여지를 늘려 놓고 다수 스레드로 동시 호출 — 각 응답의 note가 자기 질문 것인지 확인."""
-    import threading
-
-    import numpy as np
-
-    from mcp_server.services.search import retriever as RT
-
-    c = {
-        "doc": 0,
-        "seq": 0,
-        "page": 1,
-        "line_start": 1,
-        "line_end": 1,
-        "chunk_text": "단가 100 USD",
-        "n_terms": 2,
-        "bbox": None,
-        "section": None,
-    }
-    d = pgfix.mk_bundle([{"file_path": "x.txt"}], [c], meta={"dim": 4, "embed": "api"}, vectors=np.zeros((1, 4)))
-
-    n_threads = 80
-    barrier = threading.Barrier(n_threads)
-
-    def fake_embed(meta, text):
-        barrier.wait(timeout=30)  # 다 같이 시작 — 겹칠 확률을 최대로(한 스레드가 죽어도 나머지가 영원히 기다리지 않게)
-        if "FAIL" in text:
-            time.sleep(0.03)  # 레이스가 있으면 이 사이에 다른 스레드가 note를 덮어씀(스크래치 시험으로 36/80 재현 확인)
-            raise RuntimeError("가짜 임베딩 장애")
-        time.sleep(0.03)
-        return np.zeros(4, dtype="float32")
-
-    real_embed, real_switch = RT.embed_query, sys.getswitchinterval()
-    RT.embed_query = fake_embed  # retriever.py가 이 전역 이름으로 부름(모듈 내 교체)
-    sys.setswitchinterval(0.0001)  # GIL을 자주 넘겨 스레드 전환을 늘림(레이스 노출 확률 ↑)
-    old = {k: _STATE.get(k) for k in ("R", "bundle", "checked_at")}
-    bad, done = [], []
-    # 늘 대역(pgfix.use) — PC 루트 settings.yaml의 실 PG가 새지 않게(30초 뒤 재적재가 실제 PG로 가면 한 스레드가 죽어 barrier가 멈췄음, 10-29)
-    _env = pgfix.use(d, MCP_BUNDLE=str(d), MCP_QUERY_LOG_DIR=str(d / "qa_log"))
-    try:
-        R = RT.Retriever(d)
-        _STATE["R"], _STATE["bundle"], _STATE["checked_at"] = R, d, time.time()
-
-        def worker(i):
-            q = f"FAIL-{i} 질문" if i % 2 == 0 else f"OK-{i} 질문"
-            out = do_search(
-                q, k=3, methods=["vector", "bm25"], decompose=False
-            )  # vector를 넣어야 질의 임베딩이 불림(S85 — bm25만이면 임베딩 생략)
-            has_note = any("임베딩 실패" in n for n in out.get("notes", []))
-            if has_note != (i % 2 == 0):
-                bad.append((q, out.get("notes")))
-            done.append(i)  # 스레드가 예외로 죽으면 bad에 안 남아 헛통과 — 끝난 수를 따로 셈
-
-        ths = [threading.Thread(target=worker, args=(i,)) for i in range(n_threads)]
-        for t in ths:
-            t.start()
-        for t in ths:
-            t.join()
-        assert len(done) == n_threads, f"끝난 요청 {len(done)}/{n_threads} — 나머지는 스레드가 예외로 죽음"
-        assert not bad, f"note가 다른 요청과 섞임: {bad[:5]}"
-    finally:
-        _env.close()
-        RT.embed_query = real_embed
-        sys.setswitchinterval(real_switch)
-        _STATE.clear()
-        for k, v in old.items():
-            if v is not None:
-                _STATE[k] = v
-    print(f"[selftest] do_search — 동시 {n_threads}건에서 note가 자기 요청 것(안 섞임) 통과")
 
 
 def _selftest_copy_group():
@@ -120,15 +47,13 @@ def _selftest_copy_group():
     _env = pgfix.use(d)
     try:
         _STATE["R"], _STATE["bundle"], _STATE["checked_at"] = RT.Retriever(d), d, time.time()
-        out = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
+        out = do_search("단가는?", k=5)
         assert [e["file_name"] for e in out["evidence"]] == ["MAIL-X.eml"], out["evidence"]
-        assert out["evidence"][0]["variants"] == ["MAIL-X.msg"], out["evidence"][0]
-        assert any("사본 그룹" in n for n in out["notes"]), out["notes"]
     finally:
         _env.close()
         _STATE.clear()
         _STATE.update({k: v for k, v in old.items() if v is not None})
-    print("[selftest] R2-c 사본 그룹 — 한 슬롯 + variants 통과")
+    print("[selftest] R2-c 사본 그룹 — 한 슬롯 통과")
 
 
 def _selftest_copy_group_rep_text():
@@ -188,16 +113,15 @@ def _selftest_copy_group_rep_text():
     _env = pgfix.use(d)
     try:
         _STATE["R"], _STATE["bundle"], _STATE["checked_at"] = RT.Retriever(d), d, time.time()
-        out = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
+        out = do_search("단가는?", k=5)
         rep = out["evidence"][0]
         assert rep["file_name"] in ("MAIL-X.eml", "MAIL-X.msg"), rep  # ① 대표 텍스트는 형식 우선(이미지 아님)
         assert "배치" in rep["text"], rep["text"]  # ① 이미지에만 없던 문장이 대표 텍스트에 있음
-        assert rep["file_name"] not in rep["variants"] and "mailshot_MAIL-X.png" in rep["variants"]  # ② 대표 자신은 variants에 없음
     finally:
         _env.close()
         _STATE.clear()
         _STATE.update({k: v for k, v in old.items() if v is not None})
-    print("[selftest] R2-c 사본 대표 텍스트 — 형식 우선(QA066 재발 방지)·대표 자신 variants 제외 통과")
+    print("[selftest] R2-c 사본 대표 텍스트 — 형식 우선(QA066 재발 방지) 통과")
 
 
 def _selftest_query_log():
@@ -228,13 +152,13 @@ def _selftest_query_log():
     _env = pgfix.use(d, MCP_BUNDLE=str(d), MCP_QUERY_LOG_DIR=str(logdir))  # 설정 객체 덮기(S7d)
     tok = CALLER.set("mcp:selftest")
     try:
-        do_search("단가는?", k=3, methods=["bm25"], decompose=False)
+        do_search("단가는?", k=3)
         recs = [json.loads(x) for x in qa_log.log_path().read_text(encoding="utf-8").splitlines()]
         assert len(recs) == 1 and recs[0]["question"] == "단가는?" and recs[0]["asked_by"] == "mcp:selftest", recs
         assert recs[0]["hits"] and recs[0]["hits"][0]["via"] == "k", recs[0]["hits"]  # 근거 via(검색 방법) 남음
 
         with mc.senv(MCP_QUERY_LOG="0"):
-            do_search("단가는?", k=3, methods=["bm25"], decompose=False)
+            do_search("단가는?", k=3)
             recs2 = qa_log.log_path().read_text(encoding="utf-8").splitlines()
             assert len(recs2) == 1, recs2  # 끔 — 더 안 늘어남(새 줄 없음)
     finally:
@@ -242,109 +166,6 @@ def _selftest_query_log():
         _env.close()
         _STATE.clear()
     print("[selftest] OP6 — 질의 기록(output/qa_log, 호출자·질문·근거 id·지연) · MCP_QUERY_LOG=0이면 기록 없음 통과")
-
-
-def _selftest_evidence_rep_path():
-    """OP21(S78) — do_search 근거에 AI.ParsingMeta의 '파싱 결과 경로'(rep_uri, find_rep_path가 쓴 같은 rep_key) —
-    가짜 EDW(RDB_SQLITE)에 그 문서의 doc_key 행이 있을 때만 붙고(원본 경로는 기존 source_uri 칸 그대로,
-    바이트 동일) · 없는 문서·RDB_SQLITE 미설정(기본 서버)은 칸 자체가 없음(바이트 동일, 새 칸 0개) ·
-    rep_bucket이 "file://<폴더>"(폴더 저장소 환경 시험, 사용자 결정 10-08)면 s3:// 접두를 덧씌우지 않고 그
-    값 그대로 rep_key를 이음(find_rep_path)."""
-    import tempfile
-
-    from common.core.contract import uri_from_path
-    from common.store import parsing_meta_db as PM
-
-    doc_key = "x.txt"  # PG 근거의 doc_key = file_path(mc-01 — 저장소는 PG 하나)
-    docs = [
-        {"file_path": "x.txt", "file_name": "x.txt", "doc_format": ".txt"},
-        {"file_path": "y.txt", "file_name": "y.txt", "file_sha256": "b" * 64, "doc_format": ".txt"},
-    ]
-    chunks = [
-        {
-            "doc": i,
-            "seq": 0,
-            "page": 1,
-            "line_start": 1,
-            "line_end": 1,
-            "chunk_text": "단가는 100 USD",
-            "n_terms": 3,
-            "bbox": None,
-            "section": None,
-        }
-        for i in range(2)
-    ]
-    d = pgfix.mk_bundle(docs, chunks)
-
-    pm_path = Path(tempfile.mkdtemp()) / "edw.sqlite"
-    db = PM.SqliteStore(str(pm_path))
-    row = {
-        **{c: None for c in PM.COLUMNS},
-        "source_system": "FSM",
-        "source_key": "k/x.txt",
-        "doc_key": doc_key,
-        "parse_date": "2026-10-08",
-        "status": "active",
-        "status_at": None,
-        "parse_status": "ok",
-        "rep_bucket": "rep-bkt",
-        "rep_key": "Parsing-Result/FSM/k/x.txt/",
-        "_reparse": False,
-    }
-    db.insert_new([row])
-    db.close()
-
-    _STATE.clear()
-    _env = pgfix.use(
-        d, MCP_BUNDLE=str(d), RDB_SQLITE=str(pm_path), RUN_ENV="local"
-    )  # 설정 객체 덮기(S7d) · 가짜 EDW(RDB_SQLITE)는 local 전용 — 이미지에서도 시험 안에서만 local(이미지 관문 10-30)
-    try:
-        on = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
-        by_name = {e["file_name"]: e for e in on["evidence"]}
-        assert by_name["x.txt"]["rep_uri"] == "s3://rep-bkt/Parsing-Result/FSM/k/x.txt/", by_name["x.txt"]
-        assert by_name["x.txt"]["source_uri"] == uri_from_path("x.txt"), by_name["x.txt"]  # 원본 경로 칸 불변(PG — file_path에서)
-        assert "rep_uri" not in by_name["y.txt"], by_name["y.txt"]  # ParsingMeta에 없는 문서 — 새 칸 없음
-
-        _STATE.clear()
-        with mc.senv(RDB_SQLITE=None):  # 설정 자체가 없음(기본 서버) — 바이트 동일(새 칸 0개)
-            off = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
-            for e in off["evidence"]:
-                assert "rep_uri" not in e, e
-
-        _STATE.clear()
-        with mc.senv(RDB_SQLITE=str(pm_path), MCP_EVIDENCE_PATHS="0"):  # 명시적으로 꺼도 바이트 동일
-            gated = do_search("단가는?", k=5, methods=["bm25"], decompose=False)
-            for e in gated["evidence"]:
-                assert "rep_uri" not in e, e
-
-        # 폴더 저장소 환경 시험(사용자 결정 10-08) — PM_BUCKET=file://<폴더>로 게시된 행은 rep_bucket에 그
-        # "file://..." 값이 그대로 들어감(parsing_meta.plan()) — find_rep_path가 s3:// 접두를 덧씌우지 않아야 함
-        pm_path2 = Path(tempfile.mkdtemp()) / "edw2.sqlite"
-        db2 = PM.SqliteStore(str(pm_path2))
-        doc_key2 = "c" * 64
-        row2 = {
-            **{c: None for c in PM.COLUMNS},
-            "source_system": "FSM",
-            "source_key": "k/z.txt",
-            "doc_key": doc_key2,
-            "parse_date": "2026-10-08",
-            "status": "active",
-            "status_at": None,
-            "parse_status": "ok",
-            "rep_bucket": "file:///srv/rag/publish",
-            "rep_key": "FSM/k/z.txt/2026-10-08/rep.md",
-            "_reparse": False,
-        }
-        db2.insert_new([row2])
-        assert PM.find_rep_path(db2, doc_key2) == "file:///srv/rag/publish/FSM/k/z.txt/2026-10-08/rep.md"
-        db2.close()
-    finally:
-        _env.close()
-        _STATE.clear()
-    print(
-        "[selftest] OP21 — do_search 근거 rep_uri(AI.ParsingMeta, find_rep_path 같은 키) 있을 때만 붙음 · "
-        "원본 경로(source_uri) 불변 · 미설정·MCP_EVIDENCE_PATHS=0은 바이트 동일 통과"
-    )
 
 
 def _selftest_evidence_gate():
@@ -378,74 +199,16 @@ def _selftest_evidence_gate():
     _STATE.clear()
     _env = pgfix.use(d, MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
     try:
-        none = do_search("색인에 없는 XYZ999-계약은?", k=3, methods=["bm25"], decompose=False)  # BM25 0건
+        none = do_search("색인에 없는 XYZ999-계약은?", k=3)  # BM25 0건
         assert none["evidence_status"] == "none", none
 
         with mc.senv(SEARCH_MIN_SCORE="99999"):  # 무조건 문턱 미달
-            weak = do_search("단가는?", k=3, methods=["bm25"], decompose=False)
-            assert weak["evidence_status"] == "weak" and weak["evidence"][0]["low_score"] is True, weak
+            weak = do_search("단가는?", k=3)
+            assert weak["evidence_status"] == "weak", weak
     finally:
         _env.close()
         _STATE.clear()
     print("[selftest] R3 근거 게이트 — found/weak/none·근거별 low_score 통과")
-
-
-def _selftest_index_id():
-    """AD41 — search(index_id): 같은 질문이 색인마다 그 색인의 청크로 답함 · 없음/형식 위반/미완료 → {"error","indexes"} ·
-    index_id 없으면 기본 색인(응답에 index_id 칸 없음 — 전과 같음) · api 색인인데 EMBED_MODEL이 다르면 거부."""
-    import shutil
-    import tempfile
-
-    root = Path(tempfile.mkdtemp())
-    docs = [{"file_path": "x.txt", "file_name": "x.txt", "file_sha256": "7" * 64, "doc_format": ".txt"}]
-    row = {"doc": 0, "page": 1, "line_start": 1, "line_end": 1, "n_terms": 3, "bbox": None, "section": None}
-    base = pgfix.mk_bundle(docs, [{**row, "seq": 0, "chunk_text": "기본 색인 단가는 100 USD"}])
-    ids = {"0000aaaa": "작은 청크 단가는 200 USD", "0000bbbb": "큰 청크 단가는 300 USD"}
-    schema = lambda iid: f"{pgfix.SCHEMA}_{iid}"  # 이름 있는 색인 = 기본 대역 폴더 안 자기 스키마(<PG_SCHEMA>_<id>)
-    for iid, txt in ids.items():
-        (root / iid).mkdir()
-        shutil.move(pgfix.mk_bundle(docs, [{**row, "seq": 0, "chunk_text": txt}], load_pg=False), root / iid / "bundle")
-        pgfix.load(root / iid / "bundle", schema(iid), pgfix.standin_of(base))
-        (root / iid / "index.json").write_text(
-            json.dumps(
-                {
-                    "index_id": iid,
-                    "pg_schema": schema(iid),
-                    "inputs": {"glossary": "0badf00d" if iid == "0000bbbb" else "none", "roster": "none"},
-                }
-            ),
-            encoding="utf-8",
-        )
-    (root / "0000cccc" / "bundle").mkdir(parents=True)  # 만드는 중(완료 표시 없음)
-    api = root / "0000dddd"
-    api.mkdir()
-    shutil.move(pgfix.mk_bundle(docs, [{**row, "seq": 0, "chunk_text": "api 색인"}], load_pg=False), api / "bundle")
-    (api / "bundle" / "meta.json").write_text(json.dumps({"dim": 4, "embed": "api", "embed_model": "m-a"}), encoding="utf-8")
-    (api / "index.json").write_text(json.dumps({"index_id": "0000dddd", "pg_schema": schema("0000dddd")}), encoding="utf-8")
-    _STATE.clear()
-    # 설정 객체 덮기(S7d) — GLOSSARY_DIR·CLIENT_ROSTER도 설정 객체(op-09 — 인계 파일 common.core.terms도 cfg())
-    _env = pgfix.use(base, GLOSSARY_DIR=None, CLIENT_ROSTER=None, MCP_BUNDLE=str(base), INDEX_ROOT=str(root), EMBED_MODEL="m-b")
-    try:
-        d0 = do_search("단가는?", k=3, methods=["bm25"], decompose=False)
-        assert "index_id" not in d0 and "100 USD" in d0["evidence"][0]["text"], d0
-        for iid, txt in ids.items():
-            r = do_search("단가는?", k=3, methods=["bm25"], decompose=False, index_id=iid)
-            assert r["index_id"] == iid and r["evidence"][0]["text"] == txt, r
-            drift = [n for n in r["notes"] if "용어 사전" in n]  # 0000bbbb만 다른 사전으로 만든 색인 → 경고 1줄(거부 아님)
-            assert len(drift) == (1 if iid == "0000bbbb" else 0), (iid, r["notes"])
-        again = do_search("단가는?", k=3, methods=["bm25"], decompose=False, index_id="0000aaaa")
-        assert again["evidence"][0]["text"] == ids["0000aaaa"]  # 캐시된 Retriever 재사용
-        for bad in ("0000ffff", "0000cccc", "../x", "ABCDEF12"):
-            e = do_search("단가는?", k=3, methods=["bm25"], decompose=False, index_id=bad)
-            assert "error" in e and e["indexes"] == ["0000aaaa", "0000bbbb", "0000dddd"], (bad, e)
-        e = do_search("단가는?", k=3, methods=["bm25"], decompose=False, index_id="0000dddd")
-        assert "error" in e and "m-a" in e["error"], e  # 질의·색인 임베딩 모델 불일치 거부
-        assert "100 USD" in do_search("단가는?", k=3, methods=["bm25"], decompose=False)["evidence"][0]["text"]  # 기본 색인은 그대로
-    finally:
-        _env.close()
-        _STATE.clear()
-        shutil.rmtree(root, ignore_errors=True)
-    print("[selftest] AD41 index_id — 색인별 검색·캐시·없음/미완료/형식 오류·모델 불일치 거부·사전 차이 경고·기본 색인 불변 통과")
 
 
 def _selftest_search_client_arg():
@@ -475,12 +238,12 @@ def _selftest_search_client_arg():
     _env = pgfix.use(d, MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
     try:
         with mc.senv(SEARCH_CLIENT_HARD=None):
-            off = do_search("단가는?", k=5, methods=["bm25"], decompose=False, client="Acme Co")
+            off = do_search("단가는?", k=5, client="Acme Co")
             assert {e["file_name"] for e in off["evidence"]} == {"a.txt"}, off["evidence"]  # 꺼짐도 하드 필터 범위(PG)
             assert off["filter"] == {"client": "Acme Co"} and off["scope_docs"] == 1, off
 
         with mc.senv(SEARCH_CLIENT_HARD="1"):
-            on = do_search("단가는?", k=5, methods=["bm25"], decompose=False, client="Acme Co")
+            on = do_search("단가는?", k=5, client="Acme Co")
             assert {e["file_name"] for e in on["evidence"]} == {"a.txt"}, on["evidence"]  # 켬 — Other Co는 완전히 빠짐
     finally:
         _env.close()
@@ -515,9 +278,8 @@ def _selftest_entity_split():
     _STATE.clear()
     _env = pgfix.use(d, MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
     try:
-        on = do_search(q, k=2, methods=["bm25"], decompose=False)
+        on = do_search(q, k=2)
         assert "b1.txt" in {e["file_name"] for e in on["evidence"]}, on["evidence"]  # Beta Inc 근거가 끌려옴
-        assert any("엔티티 분해" in n for n in on["notes"]), on["notes"]
     finally:
         _env.close()
         _STATE.clear()
@@ -641,14 +403,14 @@ def _selftest_br50_client_scope():
     _hard = None
     try:
         # client 없음 — 두 고객 근거 다 나옴 · client 명시는 PG에서 하드 필터 범위(꺼짐이어도 Beta Inc 빠짐 — 2026-10-20 통합 search)
-        both = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False)
+        both = do_search("바이러스 불활화 공정", k=5)
         assert {e.get("file_name") for e in both["evidence"] if e.get("file_name")} >= {"a.txt", "b.txt"}, both["evidence"]
-        off = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False, client="Acme Co")
+        off = do_search("바이러스 불활화 공정", k=5, client="Acme Co")
         assert {e.get("file_name") for e in off["evidence"] if e.get("file_name")} == {"a.txt"}, off["evidence"]
 
         # 켬 — SEARCH_CLIENT_HARD=1 + client="Acme Co" 명시
         _hard = mc.senv(SEARCH_CLIENT_HARD="1")
-        on = do_search("바이러스 불활화 공정", k=5, methods=["bm25"], decompose=False, client="Acme Co")
+        on = do_search("바이러스 불활화 공정", k=5, client="Acme Co")
         assert "b.txt" not in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # core·concept 둘 다 빠짐(F)
         assert "a.txt" in {e.get("file_name") for e in on["evidence"]}, on["evidence"]  # 자기 고객 근거는 그대로
 
@@ -721,25 +483,98 @@ def _selftest_evidence_rdb_meta():
     _STATE.clear()
     _env = pgfix.use(d, MCP_BUNDLE=str(d), MCP_MANIFEST=str(man_path))  # 설정 객체 덮기(S7d)
     try:
-        on = do_search("계약기준금액은?", k=5, methods=["bm25"], decompose=False)
+        on = do_search("계약기준금액은?", k=5)
         by_name = {e["file_name"]: e for e in on["evidence"]}
         assert set(by_name) == {man_doc, other_doc}, by_name
-        m = by_name[man_doc]
-        assert m["doc_type"] == "CONTRACT" and m["version"] == "1" and m["contract_id"] == "C-RDB-2025-005", m
-        assert m["updated_at"] == "2025-05-01T00:00:00Z" and m["company"] == "CL-2002" and m["is_deleted"] is False, m
-        assert not m["supersedes_doc_id"], m
-        o = by_name[other_doc]
-        assert not (_MANIFEST_EXTRA_KEYS & set(o)), o  # manifest에 없는 문서 — 새 칸 0개
-
-        _STATE.clear()
-        with mc.senv(MCP_MANIFEST=str(d / "no_such_manifest.jsonl")):  # manifest 자체가 없음 — 전부 바이트 동일(새 칸 0개)
-            off = do_search("계약기준금액은?", k=5, methods=["bm25"], decompose=False)
-            for e in off["evidence"]:
-                assert set(e) == _EVIDENCE_BASE_KEYS, e
+        assert by_name[man_doc]["version"] == row["version"], by_name  # manifest version이 우선(AD44)
+        for e in on["evidence"]:
+            assert tuple(e) == EVIDENCE_KEYS, e  # 근거는 12칸만(mc-16 — manifest의 다른 칸은 계약 밖)
     finally:
         _STATE.clear()
         _env.close()
-    print("[selftest] AD44 _evidence — RDB manifest 메타 붙음(문서 있을 때만) · manifest 없음/문서 없음은 새 칸 0개 통과")
+    print("[selftest] AD44 _evidence — manifest version 우선 · 근거 12칸 통과")
+
+
+def _selftest_contract():
+    """mc-16 — 운영 search 계약(사례 표 한 곳): question 필수 · k 상한 50 · 맨 위 5칸·근거 12칸 · 거르기(AND, 목록은 OR,
+    -test 별칭, 등록 시각 KST·날짜만이면 그날 전체, FAQ_group은 FAQ 적재 전 늘 0건) · 모르는 인자 무시 · 맞는 것 없으면 빈 결과."""
+    docs = [
+        {
+            "file_path": "s1.txt",
+            "client": "Acme",
+            "source_system": "SFDC",
+            "sf_op_id": "006A",
+            "doc_class": "RFP",
+            "division": "DS",
+            "created_at": "2025-03-01T10:00:00+09:00",
+        },
+        {
+            "file_path": "s2.txt",
+            "source_system": "SFDC",
+            "sf_op_id": "006B",
+            "doc_class": "RFI",
+            "division": "DP",
+            "created_at": "2025-03-02T23:30:00+09:00",
+        },
+        {"file_path": "l1.txt", "source_system": "LAS", "doc_class": "MSA", "division": "DS"},
+    ]
+    chunks = [
+        {
+            "doc": i,
+            "seq": 0,
+            "page": 1,
+            "line_start": 1,
+            "line_end": 2,
+            "chunk_text": "단가는 100 USD",
+            "n_terms": 3,
+            "bbox": None,
+            "section": None,
+        }
+        for i in range(3)
+    ]
+    d = pgfix.mk_bundle(docs, chunks)
+    _STATE.clear()
+    _env = pgfix.use(d, MCP_BUNDLE=str(d))
+    names = lambda o: sorted(e["file_name"] for e in o["evidence"])
+    cases = [  # (거르기, 기대 문서, 기대 scope_docs)
+        ({}, ["l1.txt", "s1.txt", "s2.txt"], None),
+        ({"source_system": "SFDC"}, ["s1.txt", "s2.txt"], 2),
+        ({"source_system": "SFDC-test"}, ["s1.txt", "s2.txt"], 2),  # G4 — -test 별칭
+        ({"sf_op_id": ["006A", "006B"]}, ["s1.txt", "s2.txt"], 2),  # 목록 = OR
+        ({"source_system": "SFDC", "division": "DS"}, ["s1.txt"], 1),  # 다른 거르기 = AND
+        ({"source_system": "LAS", "doc_class": "RFP"}, [], 0),  # 분류는 제 원천 안에서만 — 엇갈리면 0건(오류 아님)
+        ({"doc_class": "MSA"}, ["l1.txt"], 1),
+        ({"division": "D"}, [], 0),  # 부분 값은 0건(정확 일치)
+        ({"created_since": "2025-03-02"}, ["s2.txt"], 1),  # 날짜만 = 그날 00:00 KST부터
+        ({"created_until": "2025-03-01"}, ["s1.txt"], 1),  # 날짜만 until = 그날 전체(created_at 없는 l1은 빠짐)
+        ({"created_since": "2025-03-01T11:00:00+09:00"}, ["s2.txt"], 1),
+        ({"created_since": "2025-03-01T02:00:00Z"}, ["s2.txt"], 1),  # 다른 시간대 = 11:00 KST
+        ({"created_until": "20250301"}, ["s1.txt"], 1),  # 날짜만(기본 꼴) — 그날 전체
+        ({"client": "Acme"}, ["s1.txt"], 1),
+        ({"client": "A_me"}, [], 0),  # _는 와일드카드 아님(정확 일치)
+        ({"client": "cm", "client_like": True}, ["s1.txt"], 1),
+        ({"FAQ_group": "DP"}, [], 0),
+        ({"year": 2025}, ["l1.txt", "s1.txt", "s2.txt"], None),  # 모르는 인자 무시
+    ]
+    try:
+        assert do_search("") == {"error": M.NO_QUESTION} and do_search("  ") == {"error": M.NO_QUESTION} and do_search(None)["error"]
+        assert "error" in do_search("단가는?", created_since="2025/03/01")  # 날짜 형식 틀림
+        for filt, want, scope in cases:
+            o = do_search("단가는?", k=999, **filt)  # k 상한 50으로 줄임(오류 아님)
+            assert names(o) == want, (filt, o)
+            keys = ("question", "evidence", "evidence_status") + (("filter", "scope_docs") if scope is not None else ())
+            assert tuple(o) == keys and set(keys) <= set(SEARCH_TOP_KEYS), (filt, list(o))
+            assert all(tuple(e) == EVIDENCE_KEYS for e in o["evidence"]), (filt, o["evidence"])
+            assert scope is None or o["scope_docs"] == scope, (filt, o)
+            assert want or o["evidence_status"] == "none", (filt, o)
+        o = do_search("단가는?", k=1, source_system="SFDC-test")
+        assert len(o["evidence"]) == 1 and o["filter"] == {"source_system": "SFDC"}, o  # 정규화한 메아리
+        e = o["evidence"][0]
+        assert e["line"] and e["chunk_key"] and e["file_path"].endswith(".txt") and e["text"], e
+    finally:
+        _env.close()
+        _STATE.clear()
+    print(f"[selftest] mc-16 search 계약 — 사례 {len(cases)}개(거르기·빈 결과·모르는 인자)·question 필수·k 상한·5칸·12칸 통과")
 
 
 def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) — search_svc.py엔 __main__이 없었음
@@ -749,14 +584,17 @@ def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) 
     cfgfile._CACHE.setdefault(
         "stack", cfgfile.read_file("stack", STACK_FILE)
     )  # test_mcp_main과 같은 준비(S8b — 이미지 selftest엔 PG가 없어 판 표 대신 파일, S9 따로 사례가 되며 더함)
-    _selftest_search_notes_no_race()
+    with patch.object(M.CFG, "DEFAULT_METHODS", ["bm25"]):  # 검색 길은 서버 설정만(mc-16) — 시험은 임베딩 없이 bm25
+        _cases()
+
+
+def _cases():
+    _selftest_contract()
     _selftest_evidence_gate()
     _selftest_search_client_arg()
     _selftest_entity_split()
     _selftest_br50_client_scope()
     _selftest_evidence_rdb_meta()
     _selftest_query_log()
-    _selftest_evidence_rep_path()
-    _selftest_index_id()
     _selftest_copy_group()
     _selftest_copy_group_rep_text()

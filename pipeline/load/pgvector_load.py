@@ -16,6 +16,7 @@ import json
 import sys
 import time
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from common.core.console import utf8_stdout
@@ -142,6 +143,18 @@ def drop_terms(cur, s, doc_ids):
     cur.execute(f"DELETE FROM {_tbl(s, 'term_stat')} WHERE df <= 0")
 
 
+def _kst(v):
+    """원천 등록 시각 글자 → 시간대 붙은 ISO 글자(시간대 없는 값은 KST — FileStorageMap 값, 운영 계약). 비었거나 형식이 틀리면 None(적재는 계속)."""
+    if not v:
+        return None
+    try:
+        t = datetime.fromisoformat(str(v).strip())
+    except ValueError:
+        print(f"[pgstore] created_at 형식이 아님 — 비워 둠: {v!r}", flush=True)
+        return None
+    return (t if t.tzinfo else t.replace(tzinfo=timezone(timedelta(hours=9)))).isoformat()
+
+
 def load(db, bundle, replace=False):
     """묶음 → 한 트랜잭션. 저장된 문서(file_path 같음)는 건너뜀(replace면 지우고 다시 넣음 — 고치기). 묶음에 없는 저장 문서는 그대로 둠(pl-13)."""
     if replace:
@@ -170,8 +183,8 @@ def load(db, bundle, replace=False):
             cur.execute(
                 f"""INSERT INTO {s}.doc(file_path, summary, clients, run_id, source_system,
                             sf_acc_name, sf_op_id, sf_op_name, project_code__c,
-                            contract_id, contract_date, prod_name, division, service_type)
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING doc_id""",
+                            contract_id, contract_date, prod_name, division, service_type, doc_class, created_at)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING doc_id""",
                 (
                     d["file_path"],
                     d.get("summary"),
@@ -187,6 +200,8 @@ def load(db, bundle, replace=False):
                     d.get("prod_name"),
                     d.get("division"),
                     d.get("service_type"),
+                    d.get("doc_class"),
+                    _kst(d.get("created_at")),
                 ),
             )
             doc_id[i] = cur.fetchone()[0]

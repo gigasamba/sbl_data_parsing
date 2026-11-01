@@ -74,6 +74,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 | 마이그레이션 | 스키마 | 만드는 것 |
 |---|---|---|
 | `0001_search` | 검색 스키마(`required.pg.db_schema`, 예: `ai`) — `--target search` | `doc` · `chunk` · `chunk_term` · `term_stat` · `corpus_stat` · `load_run` 테이블, 색인, 뷰 `v_chunk_source`(벡터 차원은 번들 `meta.json` 또는 `--dim`) |
+| `0002_search` | 같은 검색 스키마(11-01 — mc-16) | `doc`에 `doc_class`·`created_at`·`rep_key` 칸, 뷰 `v_chunk_source` 끝에 같은 칸 |
 
 - **엔진 구성은 DB가 아니라 파일이다** — 서버·PC 모두 `resources/config/pipeline_stack.json`을 읽는다(5-7). 원천 목록 `sources.json`은 11-01에 지웠다(원천은 폴더·`rdb:csv`만). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다(그대로 두거나 DB 담당자가 지움).
 - **실행 기록은 파일이 아니라 DB에 남는다** — 스키마마다 `<스키마>.alembic_version`.
@@ -280,11 +281,11 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 
 ```bash
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle output/demo/bundle --create-extension
-.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0001_search
+.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0002_search
 .venv/bin/python -m common.store.db.dbtool check --target all      # 기대: 차이 없음
 ```
 
-- 이 한 번으로 검색 테이블(`0001_search`)이 만들어진다.
+- 이 한 번으로 검색 테이블(`0001_search` → `0002_search`)이 만들어진다.
 - `--bundle`은 벡터 차원을 `meta.json`에서 읽기 위해 준다. `--create-extension`은 새 PG일 때만 필요하다.
 - 결과는 파일이 아니라 DB 안에 남는다(테이블 + `<스키마>.alembic_version`).
 
@@ -509,7 +510,6 @@ dc run --rm load migrate check --target all                # a. 지금 버전과
 ```
 
 - 컬럼 이름·형식·NULL·키가 다르거나 남는 테이블이 있으면 `stamp`·`up` 모두 거부된다(종료 코드 2). 멈추고 출력(이름만)을 DB 담당자와 협의한다.
-- 색인 빌더 스키마(`index_a`·`index_b` — `deploy/host/compose/compose.index.yml`, 쓸 때만 덧붙임)를 쓰면 스키마마다 `migrate check|stamp|up --target search --schema <스키마>_<index_id>`.
 
 **④ 연결 점검** — 파이프라인을 돌리기 전에 접속을 하나씩 확인한다.
 

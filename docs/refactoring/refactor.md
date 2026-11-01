@@ -191,6 +191,7 @@ S11(10-28)에 VS10 배포 준비 목록(`output/orca/VS10-verify.md` 끝 절)을
 | C-71 | **0.2.0 서버 올리기·되돌리기(op-10 — PRD [op-10](../prd/doc.md#op-10))** — 절차 정본은 [release-and-patch.md](../operations/release-and-patch.md) §5-7: 새벽 배치 멈춤 → 재처리 시간·디스크 산정 → `settings.yaml.0.1.0`·`pg_dump` 백업 → 새 코드·이미지 zip(`load.sh`) → 이미지 안 `common.config.migrate`(표준 입력·출력) → `chown 10001`·`640` → `migrate check`·`up --target all`·`check` → 엔진 구성 새 판(C-69) → 띄우기·확인. 서버 호스트 준비: `systemctl enable --now podman-restart`, compose 실행기(`podman compose version` — 없으면 README §5-0 폐쇄망 설치) | 0.2.0은 설정 배치가 바뀌어(op-08) 옛 settings.yaml로는 시작하지 않고, 판에 따라 서버 문서 재처리가 있음 | 0.2.0 배포 때 | 서버 운영·DB 담당(백업·복원) | release-and-patch §5-7 · README §5-0·§5-5 | 열림 |
 | C-72 | **새벽 배치 = run_docs(PRD [pl-18](../prd/etl.md#pl-18), 사용자 10-31 · 11-01 `feature/scope-cut-unused`)** — systemd `data-pipeline-nightly.timer`가 5분마다 `trigger.sh scheduled`를 부르고, `NIGHTLY_TIME` 시각부터 5분 안이면 호스트 python으로 `run_docs.py --start-offset 0 --skip-done`을 돌린다(PC에서는 문법·시각 게이트 시험만 — run_docs는 PC에서 실행 금지). 서버에서 확인: ① 타이머 설치 뒤 `NIGHTLY_TIME`을 몇 분 뒤로 적고 `journalctl -u data-pipeline-nightly`에 run_docs 시작·끝 줄 ② `--skip-done`이 ParsingMeta 성공 문서를 건너뜀 ③ `--filter` 기본(RFP,proposal)이 정기 운영에 맞는지(대상 고르기 C10은 pl-23·pl-24) ④ `TimeoutStartSec=6h` 안에 끝나는지. 옛 `NIGHTLY_MODULES`·`NIGHTLY_PUBLISH`·`NIGHTLY_MAX_NEW`·`PARSE_DEADLINE`은 settings.yaml에서 지워도 됨(남으면 경고만). | 열림 |
 | C-73 | **배포 전 개발 서버의 원천 칸 확인(PRD [pl-01](../prd/etl.md#pl-01), 사용자 11-01 `feature/scope-cut-unused2`)** — 원천 형식 `s3://버킷/접두`·`rdb:*`·`rdb:<이름>`·`rdb:<표>`(표 직접 질의)와 원천 목록 `sources.json`·`show-sources`를 지웠다. 남은 형식은 폴더와 `rdb:csv:<경로>`(run_docs가 EDW에서 만듦). **사람이 할 일:** 이 판을 올리기 전에 개발 서버 settings.yaml의 `extract.input_source`(`PARSE_SOURCE`)를 본다 — `s3://`·`rdb:*`·`rdb:<이름>`·`rdb:<표>`이면 폴더 또는 `rdb:csv:<경로>`로 바꾼다(그대로면 남겨 둔 1회 파싱 작업 `trigger.sh parse`가 시작 때 "원천은 rdb:csv:<경로>만" 오류로 멈춤). `ops.paths.sources_file`과 `$SERVER_ENV_DIR/sources.json`은 더 읽지 않는다(지워도 됨). | 서버 운영 | 이 판 배포 전 | 열림 |
+| C-74 | **검색 스키마 판 0002 올리기와 원천 등록 시각 출처(PRD [mc-16](../prd/mcp.md#mc-16), 11-01 `feature/mcp-ops-parity` — 등급 A DB 스키마)** — 판 `0002_search`가 `doc`에 `doc_class`·`created_at`·`rep_key` 칸을 더하고 뷰 `v_chunk_source`를 다시 만든다(칸을 끝에만 더함 — 기존 행은 NULL). **사람이 할 일:** ① DB 담당자 승인 뒤 새 판을 올리기 전에 `$DC run --rm load migrate up --target search`(판이 낮으면 적재가 멈춤 — 종료 2). ② `created_at` 거르기가 맞으려면 적재 때 값이 있어야 한다 — 지금은 EDW 파일 메타(`FILE_META_PATH`)나 `rdb:csv` 배치의 `created_at` 칸에서만 읽는다. `run_docs.py`의 FileStorageMap 질의(`edw_list`)는 `id, s3_key, original_filename, file_size`만 고르므로, 실제 EDW에 `created_at`이 있는지(D-1) 확인한 뒤 질의와 batch.csv에 더한다(이 저장소에서는 운영 접속을 못 해 손대지 않음). 기존 문서는 다시 적재해야 값이 찬다. | 서버 운영·DB 담당 | 이 판 배포 전 | 열림 |
 
 옮김(10-30, do-04): C-05·C-06·C-13·C-14·C-15·C-18·C-20·C-22·C-23·C-24·C-25·C-26·C-28·C-30·C-35·C-38·C-40·C-57·C-63(C-41은 합성 정답 부분만) → [docs/history/refactor_c_items.md](../history/refactor_c_items.md) · 지움(10-30, 사용자): C-58, C-47 ⑩
 
@@ -342,7 +343,7 @@ S9·S9b는 엔진·핸드오프 파일 안 자기 점검 블록을 `tests/`로 �
 | `common.check.ping_models` | --selftest | `tests/server/common/test_ping_models.py` |
 | `common.config.settings` | --selftest | `tests/server/common/test_settings.py` |
 | `common.core.artifacts` | --selftest | `tests/server/common/test_core_artifacts.py` |
-| `common.core.index_cfg` | 없음 | `tests/server/common/test_core_index_cfg.py` |
+| `common.core.index_cfg` | 없음 | `tests/server/common/test_core_index_cfg.py` (11-01 지움 — mc-16) |
 | `common.core.paths` | 없음 | `tests/server/common/test_paths.py` |
 | `common.core.resources` | 없음 | `tests/server/common/test_core_resources.py` |
 | `common.core.sources` | --selftest | `tests/server/common/test_sources.py` |
@@ -357,7 +358,7 @@ S9·S9b는 엔진·핸드오프 파일 안 자기 점검 블록을 `tests/`로 �
 | `mcp_server.cli.search_checks` | --selftest | `tests/server/mcp/test_search_checks.py` |
 | `mcp_server.config` | --selftest | `tests/server/mcp/test_mcp_config.py` |
 | `mcp_server.main` | --selftest | `tests/server/mcp/test_mcp_main.py` |
-| `mcp_server.services.search.index_cfg` | 없음 | `tests/server/mcp/test_srch_index_cfg.py` |
+| `mcp_server.services.search.index_cfg` | 없음 | `tests/server/mcp/test_srch_index_cfg.py` (11-01 지움 — mc-16) |
 | `mcp_server.services.search.local` | 없음 | `tests/server/mcp/test_local.py` |
 | `mcp_server.services.search.qa_log` | 없음 | `tests/server/mcp/test_qa_log.py` |
 | `mcp_server.services.search.qtype` | 없음 | `tests/server/mcp/test_qtype.py` |
@@ -376,8 +377,8 @@ S9·S9b는 엔진·핸드오프 파일 안 자기 점검 블록을 `tests/`로 �
 | `pipeline.extract.resources` | 없음 | `tests/server/pipeline/test_ext_resources.py` |
 | `pipeline.extract.run_all` | --selftest | `tests/server/pipeline/test_run_all.py` |
 | `pipeline.extract.source` | --selftest | `tests/server/pipeline/test_source.py` |
-| `pipeline.load.index` | --selftest | `tests/server/pipeline/test_index.py` |
-| `pipeline.load.index_cfg` | 없음 | `tests/server/pipeline/test_load_index_cfg.py` |
+| `pipeline.load.index` | --selftest | `tests/server/pipeline/test_index.py` (11-01 지움 — mc-16) |
+| `pipeline.load.index_cfg` | 없음 | `tests/server/pipeline/test_load_index_cfg.py` (11-01 지움 — mc-16) |
 | `pipeline.load.pgvector_load` | --selftest | `tests/server/pipeline/test_pgvector_load.py` |
 | `pipeline.load.publish_parse_result` | --selftest | `tests/server/pipeline/test_publish_parse.py` |
 | `pipeline.shared.artifacts` | --selftest | `tests/server/pipeline/test_sh_artifacts.py` |

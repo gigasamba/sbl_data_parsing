@@ -31,6 +31,9 @@ class Doc(BaseModel):
     division: str | None = None
     service_type: str | None = None
     run_id: int | None = None
+    doc_class: str | None = None
+    created_at: _dt.datetime | None = None
+    rep_key: str | None = None
 
 
 class Chunk(BaseModel):

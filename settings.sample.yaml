@@ -440,9 +440,6 @@ tuning:
       deadline: 360.0  # (자원) VLM 호출 1건 제한 시간(초) · 기본 360.0 · 값: 0 이상 초
       page_concurrency:  # (자원) 쪽 VLM 병렬 워커 수 최대값 · 값: 0 이상 정수
       page_min_concurrency: 2  # (자원) 쪽 VLM 적응형 병렬에서 느릴 때 줄일 수 있는 최소 워커 수 · 기본 2 · 값: 0 이상 정수
-  # ─── load의 조정값 ───
-  load:
-    index_lock_stale_sec: 21600.0  # 색인 빌드 잠금 파일을 죽은 빌드로 보고 회수하는 경과 시간(초) · 기본 21600.0 · 값: 0 이상 초
   # ─── search의 조정값 ───
   search:
     edw_meta:

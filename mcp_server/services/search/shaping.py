@@ -54,52 +54,32 @@ def _rep_uri(doc_key, cache):
     return v
 
 
-def _evidence(h, man=None, rep_cache=None):
-    """man(AD44 rdb 수집 manifest, _manifest_by_name()): 있고 그 문서(file_name)가 있을 때만 doc_type·supersedes_doc_id·
-    is_deleted·contract_id·updated_at·company 칸을 더 붙인다(없으면 칸 자체가 없음 — 바이트 동일). version은 manifest에
-    있으면 그 값이 우선(RDB가 더 정확) · 없으면 L3-1 추출값(h.get("version"))을 그대로 둔다.
-    rep_cache(dict, 요청 하나당): 있고 AI.ParsingMeta에서 이 문서의 대표 결과 경로가 찾아지면 rep_uri 칸을 더
-    붙인다(OP21·S78 — 원본 경로는 기존 source_uri 칸 그대로, 찾은 게 없으면 칸 자체가 없음 — 바이트 동일)."""
+def _evidence(h, man=None):
+    """검색 결과 한 건 → 근거 dict(안쪽 칸 chunk_id·score·via·rank 포함 — 응답에는 schemas.evidence.EVIDENCE_KEYS 12칸만 나감).
+    man(AD44 rdb 수집 manifest, _manifest_by_name()): 그 문서(file_name)가 있고 version이 있으면 그 값이 우선(RDB가 더 정확) ·
+    없으면 L3-1 추출값(h.get("version")). 11-01(mc-16) — manifest의 다른 칸·rep_uri는 계약 밖이라 붙이지 않는다."""
     out = {
         "chunk_id": h.get("chunk_ref"),
         "chunk_key": h.get("chunk_key"),
-        "doc_key": h.get("doc_key"),
         "doc_id": h.get("doc_id"),
-        "source_uri": h.get("source_uri"),
         "file_path": h.get("file_path"),
         "file_name": h.get("file_name") or Path(h.get("file_path") or "").name,
         "page": h.get("page"),
         "line": h.get("line"),
-        "bbox": h.get("bbox"),
         "section": h.get("section"),
         "text": h.get("text"),
-        "doc_summary": h.get("summary"),
         "client": h.get("client"),
         "contract_no": h.get("contract_no"),
         "score": h.get("score"),
         "via": h.get("via"),
         "rank": h.get("rank"),
-        "image_ids": h.get("image_ids") or [],
         "doc_date": h.get("doc_date"),
         "version": h.get("version"),
         "superseded": h.get("superseded"),
     }  # L3-1
     m = (man or {}).get(out["file_name"])
-    if m:
-        out.update(
-            doc_type=m.get("doc_type"),
-            supersedes_doc_id=m.get("supersedes_doc_id"),
-            is_deleted=m.get("is_deleted"),
-            contract_id=m.get("contract_id"),
-            updated_at=m.get("updated_at"),
-            company=m.get("company_id"),
-        )
-        if m.get("version"):
-            out["version"] = m["version"]
-    if rep_cache is not None:
-        rep_uri = _rep_uri(out["doc_key"], rep_cache)
-        if rep_uri:
-            out["rep_uri"] = rep_uri
+    if m and m.get("version"):
+        out["version"] = m["version"]
     return out
 
 

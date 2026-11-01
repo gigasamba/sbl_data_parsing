@@ -198,6 +198,7 @@ LAYOUT_GONE = frozenset(
         "pipeline.service.trigger.shutdown_timeout_sec",
         "pipeline.service.trigger.socket_timeout_sec",
         "pipeline.extract.dedup.fuzzy_max",  # 11-01(pl-02 — 유사 후보 지움)
+        "pipeline.load.index_lock_stale_sec",  # 11-01(mc-16 — 이름 있는 색인 AD41 지움)
     }
 )
 

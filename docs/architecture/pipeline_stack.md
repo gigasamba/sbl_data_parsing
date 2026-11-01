@@ -28,7 +28,7 @@
 | 되돌리기 | git으로 이전 파일로 되돌려 다시 패치 |
 | 보기 | `show-stack`(PC `python -m pipeline.cli …` · 이미지 `docker run … data-pipeline <명령>`) — 이름·sha·파일 경로와 내용 요약 |
 
-- **이미지에 없는 엔진 거부(D-017):** `parse` 목록 ∪ `candidates`의 엔진마다 등록부(`pipeline/extract/engines`)에 있고 설치(REQUIRES 모듈·도구)됐는지 — 파이프라인 진입점(`pipeline.cli`·`mcp_parse_service`·`load.index`)이 시작 때 `pipeline.stackcfg.resolve()`로 검사한다(어긋나면 시작 안 함, 종료 2). REQUIRES_ENV(모델 주소 설정)는 설치 문제가 아니라 보지 않는다. 검색은 `retrieve`·`k`만 쓴다. `show-stack`·`show-sources`는 실행 기록을 `/app/output/logs`에 쓰므로 `/app/output:ro`인 상주 `mcp-server` 컨테이너에서는 entrypoint 쓰기 확인에서 종료 2다 — `data-pipeline` 컨테이너(`trigger.sh`·`run_tool.sh`의 load 등)에서 본다(VS8b R-9).
+- **이미지에 없는 엔진 거부(D-017):** `parse` 목록 ∪ `candidates`의 엔진마다 등록부(`pipeline/extract/engines`)에 있고 설치(REQUIRES 모듈·도구)됐는지 — 파이프라인 진입점(`pipeline.cli`·`mcp_parse_service`)이 시작 때 `pipeline.stackcfg.resolve()`로 검사한다(어긋나면 시작 안 함, 종료 2). REQUIRES_ENV(모델 주소 설정)는 설치 문제가 아니라 보지 않는다. 검색은 `retrieve`·`k`만 쓴다. `show-stack`·`show-sources`는 실행 기록을 `/app/output/logs`에 쓰므로 `/app/output:ro`인 상주 `mcp-server` 컨테이너에서는 entrypoint 쓰기 확인에서 종료 2다 — `data-pipeline` 컨테이너(`trigger.sh`·`run_tool.sh`의 load 등)에서 본다(VS8b R-9).
 - **파싱과 구조화가 같은 구성:** 파일은 오버레이 패치로만 바뀌므로 한 실행 안에서는 그대로다. 호스트 `run_docs.py`는 시작 때 파싱 컨테이너 안에서 `show-stack`을 한 번 돌려 파일이 읽히는지 확인한다(못 읽으면 멈춤).
 - **층과 code_fp:** 층 파일 `run_all`·`attachments`·`represent`·`build_bundle`은 `pipeline.config.stack()`으로 같은 파일을 읽는다. 파일 읽기 코드(`cfgfile`)는 층의 의존이 아니라 구성을 바꿔도 code_fp가 그대로다. `--stack <파일>`은 PC 실험(`validation/e2e/model_matrix`)·시험 전용이다. 색인 재빌드 지문은 구성의 정규 바이트(`stackcfg.snapshot_bytes`, 키 정렬)이고, 묶음 `meta.json`의 `stack_conf`에 구성이 남는다. `pipeline_version()`(회사 DB `AI.ParsingMeta.pipeline_version` 칸)은 git 커밋이다.
 

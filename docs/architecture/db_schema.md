@@ -27,7 +27,7 @@
 
 ## 2. gold — 검색 스키마 (pgvector — 0.2.0에 원천별 스키마 5벌, 아래는 그 틀)
 
-판: `common/store/db/migrations/versions/0001_search_base.py` · 모델: `common/store/db/models/search_tables.py` · 적재: `pipeline/load/pgvector_load.py`(`load`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`). 아래 `gold.<표>`는 지금 표 한 벌(`PG_SCHEMA`)의 칸과 0.2.0 목표다 — 0.2.0에는 이 틀을 `sfdc`·`crms`·`las`·`faq`·`other` 스키마마다 만든다(§1). `load_run`과 Alembic 판 표는 나눈 뒤에도 하나로 둔다.
+판: `common/store/db/migrations/versions/0001_search_base.py` + `0002_search_doc_meta.py`(11-01 — `doc_class`·`created_at`·`rep_key`, 뷰 끝에 같은 칸) · 모델: `common/store/db/models/search_tables.py` · 적재: `pipeline/load/pgvector_load.py`(`load`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`). 아래 `gold.<표>`는 지금 표 한 벌(`PG_SCHEMA`)의 칸과 0.2.0 목표다 — 0.2.0에는 이 틀을 `sfdc`·`crms`·`las`·`faq`·`other` 스키마마다 만든다(§1). `load_run`과 Alembic 판 표는 나눈 뒤에도 하나로 둔다.
 
 ### gold.load_run
 
@@ -63,9 +63,9 @@
 | service_type | VARCHAR(20) | 서비스 종류(CMO DS 등) | build_bundle(file_meta → EDW 직접) | 뷰 → search_svc, internal_docs(거르기) | 유지 |
 | run_id | INT | 이 행을 넣은 적재(`load_run`) | pgvector_load `load` | 없음 | 유지 |
 | pipeline_version | TEXT | 이 행을 만든 코드 판(`VERSION`) — ParsingMeta `pipeline_version`(gold에 올린 판)과 이름은 같고 뜻은 다르다(C9, 사용자 10-31 grill) | (pgvector_load `load`) | (검색 쪽 확인·운영자) | 새로 |
-| doc_class | TEXT | 문서 분류 라벨 하나(SFDC: RFI/RFP/RFI+RFP/Proposal/Other, LAS: MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other, 다른 원천 NULL) — low_conf·모델·시각은 두지 않음. ParsingMeta에는 두지 않는다(G19) — D-6 | (분류 단계 → 적재 — [pl-33](../prd/etl.md#pl-33)) | (MCP `search`·`list_doc_fulltext` 거르기 — mc-16, mc-17) | 새로 |
-| created_at | TIMESTAMPTZ | 원천 등록 시각 — 출처는 `AI.FileStorageMap.created_at`(시간대 없는 값은 KST로 읽음). ParsingMeta에는 두지 않는다(G19). `search`의 `created_since`/`created_until` 거르기, `list_doc_fulltext` 거르기·출력, `get_doc_fulltext` 등록 시각 가드에 씀 — D-6 | (적재 — FileStorageMap) | (MCP 거르기 — mc-16, mc-17) | 새로 |
-| rep_key | TEXT | 대표 파싱 결과(silver) 위치 — 적재 때 ParsingMeta `rep_key`에서 복사. `rep_uri`는 이 값으로 만든다(C8) | (적재) | (shaping `rep_uri`, mc-17 원문 도구) | 새로 |
+| doc_class | TEXT | (판 0002, 11-01 — mc-16) 문서 분류 라벨 하나(SFDC: RFI/RFP/RFI+RFP/Proposal/Other, LAS: MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other, 다른 원천 NULL) — low_conf·모델·시각은 두지 않음. ParsingMeta에는 두지 않는다(G19) — D-6 | (분류 단계 → 적재 — [pl-33](../prd/etl.md#pl-33)) | (MCP `search`·`list_doc_fulltext` 거르기 — mc-16, mc-17) | 유지 |
+| created_at | TIMESTAMPTZ | (판 0002, 11-01 — mc-16) 원천 등록 시각 — 출처는 `AI.FileStorageMap.created_at`(시간대 없는 값은 KST로 읽음). ParsingMeta에는 두지 않는다(G19). `search`의 `created_since`/`created_until` 거르기, `list_doc_fulltext` 거르기·출력, `get_doc_fulltext` 등록 시각 가드에 씀 — D-6 | (적재 — FileStorageMap) | (MCP 거르기 — mc-16, mc-17) | 유지 |
+| rep_key | TEXT | (판 0002, 11-01) 대표 파싱 결과(silver) 위치 — 적재 때 ParsingMeta `rep_key`에서 복사. `rep_uri`는 이 값으로 만든다(C8) | (적재) | (shaping `rep_uri`, mc-17 원문 도구) | 유지 |
 | parsed_at | TIMESTAMPTZ | 파싱한 때 — 적재 때 ParsingMeta `parsed_at`에서 복사(G19) | (적재) | (mc-17 `list_doc_fulltext` 출력) | 새로 |
 
 ### gold.chunk

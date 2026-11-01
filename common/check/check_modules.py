@@ -709,7 +709,7 @@ class _EnvFile:
 
 
 def _env_funcs(files):
-    """저장소에서 자식 env를 돌려주는 함수 이름(child_env + 그것을 돌려주는 함수 — 몇 단 사슬까지, 예: index_cfg.env_for). files: [_EnvFile]."""
+    """저장소에서 자식 env를 돌려주는 함수 이름(child_env + 그것을 돌려주는 함수 — 몇 단 사슬까지). files: [_EnvFile]."""
     funcs = set(_ENV_FUNCS)
     cands = [
         (f, s, sc)
