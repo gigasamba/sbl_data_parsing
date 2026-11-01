@@ -86,7 +86,8 @@
 - 결정: mc-14와 같이 pl-25(문서 키 `s3_key` 통일 — 검색 `doc`에 원본 키가 들어옴)를 기다린다. 그 뒤 `source_key`로 조회하도록 고친다(ParsingMeta 쪽 스키마 변경은 필요 없음).
 - 파일: `mcp_server/services/search/shaping.py`, `common/store/parsing_meta_db.py`.
 - 결정(사용자 10-30 PRD grill): C8 — 근거의 `rep_uri`(대표 파싱 결과의 전체 주소 `s3://<rep_bucket>/<rep_key>`)는 검색 중 EDW에 접속하지 않고 gold `doc`의 `rep_key`(적재 때 ParsingMeta에서 복사)로 만든다. ParsingMeta 조회 길은 없앤다. 0.2.0.
-- Status: todo — pl-25 대기(코드 수정 없음 — 키 설계는 [db_schema.md](../architecture/db_schema.md) §1·§3).
+- 구현(11-01 `feature/mcp-ops-parity`): C8대로 — 적재(`pgvector_load`)가 문서의 원본 키(`build_bundle`이 넘기는 `s3_key`)로 ParsingMeta(`source_system` + `source_key`, active 중 최신 `parse_date`)를 읽어 gold `doc.rep_bucket`·`rep_key`·`parsed_at`(UTC)에 복사한다. ParsingMeta를 못 열거나 행이 없으면 그 칸만 비우고 적재는 계속. 검색 중 조회 길(`shaping._pm_db`·`_rep_uri`·`parsing_meta_db.find_rep_path`·`find_by_doc_key`)과 설정 `MCP_EVIDENCE_PATHS`를 지웠다. `search` 근거에는 `rep_uri`가 없고(운영 12칸), 결과 위치는 `list_doc_fulltext`의 `rep_uri`로 나간다([mc-17](#mc-17)). 시험: `tests/server/pipeline/test_rep_copy.py`.
+- Status: done(11-01 — 이미 적재된 문서는 다시 적재해야 값이 참, refactor.md C-74·C-75)
 
 <a id="mc-16"></a>
 ## mc-16 · `search` 운영 계약 구현
@@ -138,7 +139,7 @@
 - 결정(사용자 11-01): rep_engine 출력 없음 — 사용자 11-01, 대표 엔진 칸 삭제와 맞춤(운영과 다른 칸 하나).
 - 구현(11-01 `feature/mcp-ops-parity`, 등급 A — MCP 계약 추가·DB 스키마): `mcp_server/routers/fulltext_tool.py`(등록) · `services/fulltext.py`(일) · `schemas/fulltext.py`(모양·한도). 목록은 gold `doc`에서(`rep_key`가 있는 문서만, `doc_id` 순 — `cursor` = 마지막 `doc_id`), 대표 결과 폴더(`rep_bucket`/`rep_key`) 바로 아래 최신 `<이름>_<parse_date>.md`·`.json`만(`engine/`·`source.json` 제외). sfid = `sf1.<base64url(버킷/키)>.<HMAC-SHA256>` — 서명 키 `search.server.fulltext_secret`(settings.yaml 비밀 칸, 비면 두 도구 `not_configured`, 바꾸면 발급된 sfid 전부 `bad_sfid`). 한도: docs 200 · limit 기본 50·상한 200 · get 20개 · 파일 16MB(`too_large`) · 합계 24MB(`batch_full`) · 파일 60초. 등록 시각 가드는 gold `doc.created_at`(EDW 접속 없음 — 대역 DB를 못 읽으면 `registry_unavailable`). 판 0002에 `rep_bucket`·`parsed_at`·`doc_key`(원본 sha256 — `build_bundle`이 `file_sha256`으로 넘김)를 더했다(허브 확인 대기 — 제안대로 구현). 시험: `tests/server/mcp/test_fulltext.py`.
 - 운영과 다른 점: ① `rep_engine` 없음. ② `source_system` 출력은 저장값(`SFDC`) — 운영은 EDW 값(`SFDC-test`), 입력은 둘 다 받음(G4). ③ 시간대 없는 시각은 KST로 읽음(운영은 기본 시간대를 밝히지 않음). ④ 건너뜀 행에 `status` 칸 없음(운영 예시와 같음 — `skip_reason`으로 판단). ⑤ `rep_key`·`rep_bucket`·`parsed_at`은 mc-15 적재 복사 뒤에야 찬다 — 그 전 적재 문서는 목록에 안 나옴. ⑥ `source_system`은 선택(조건 하나 이상이면 됨) — G20 "필수·값 하나"는 스키마 나누기([pl-28](etl.md#pl-28)) 때.
-- Status: partial(11-01) — 도구·시험은 끝, 값 채우기는 [mc-15](#mc-15)(다음 커밋)
+- Status: done(11-01 — 값 채우기는 [mc-15](#mc-15))
 
 <a id="mc-19"></a>
 ## mc-19 · 검색 — PG만, 실행 중 묶음 없음
@@ -198,7 +199,7 @@
 | 모든 저장소에서 하드 거르기 | PG 저장소만. 로컬 묶음: 거르기만이면 오류, 질문 + 거르기면 거르지 않고 검색 | `search_svc.py` | mc-01 |
 
 ### 요건 없는 코드 — 남길지(앵커를 씀) 지울지([test.md#e2-18](test.md#e2-18))
-- `AI.ParsingMeta`에서 근거의 파싱 결과 경로(`MCP_EVIDENCE_PATHS`, 켜짐). `shaping.py`. 0.2.0에 ParsingMeta 조회 길을 없앤다(C8 — [mc-15](#mc-15)).
+- (11-01 지움 — [mc-15](#mc-15)) `AI.ParsingMeta`에서 근거의 파싱 결과 경로(`MCP_EVIDENCE_PATHS`).
 - 질문 개체로 동점 가르기(늘 켬 — 스위치는 op-08에 지움). `search_svc.py`.
 - PG 대역(PG 설정이 없으면 SQLite — PC). `common/store/pg_standin.py`.
 - 문서 대장 CLI. `mcp_server/cli/registry_cli.py`.

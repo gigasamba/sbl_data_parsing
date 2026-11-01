@@ -101,11 +101,13 @@ def _insert_new_rows(cur, table, ph, rows, integrity_error, columns=None):
     return inserted, skipped
 
 
-def _find_by_doc_key_rows(cur, table, ph, doc_key):
-    """doc_key의 EDW 행(source_system·source_key·parse_date·status·rep_bucket·rep_key) — 읽기만(SELECT).
-    OP21 — 검색 MCP 근거 '파싱 결과 경로' 칸(find_rep_path())이 쓴다."""
-    cur.execute(f"SELECT source_system, source_key, parse_date, status, rep_bucket, rep_key FROM {table} WHERE doc_key={ph}", (doc_key,))
-    cols = ["source_system", "source_key", "parse_date", "status", "rep_bucket", "rep_key"]
+def _find_by_source_rows(cur, table, ph, source_key):
+    """원본 키(source_key = 원본 전체 경로)의 EDW 행 — 읽기만(SELECT). 적재가 gold doc에 대표 결과 위치를 복사할 때 쓴다(C8 — mc-15)."""
+    cur.execute(
+        f"SELECT source_system, source_key, parse_date, status, rep_bucket, rep_key, parsed_at FROM {table} WHERE source_key={ph}",
+        (source_key,),
+    )
+    cols = ["source_system", "source_key", "parse_date", "status", "rep_bucket", "rep_key", "parsed_at"]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
@@ -118,25 +120,21 @@ def _done_keys_rows(cur, table):
     return {r[0] for r in cur.fetchall()}
 
 
-def find_rep_path(db, doc_key):
-    """OP21(S78) — doc_key(원본 파일 sha256)로 EDW `AI.ParsingMeta`에서 대표 결과의 Object Storage **문서 폴더** 경로(사용자 10-14 — rep_key = `.../Parsing-Result/<출처>/<UUID>/<원본파일명>/`, 그 안 `<파일명>_<날짜시간>.md`·`engine/`)를 찾는다
-    (find_by_doc_key 재사용, 읽기만) — mcp_server.py 근거의 '파싱 결과 경로' 칸. 같은 doc_key가 재파싱으로 여러
-    parse_date 행이 있으면 status='active'인 것 중(없으면 전체 중) parse_date가 가장 늦은 행을 쓴다.
-    rep_bucket·rep_key가 비어 있으면(업로드 제외 상태 — DRM·실패는 EDW에 안 들어가므로 이 경우는 드묾) None.
-    db 없음(설정 안 됨)·조회 실패는 호출부(mcp_server._pm_db)가 처리 — 이 함수는 조회만, 예외를 삼키지 않는다.
-    rep_bucket이 이미 "file://<폴더>"(parsing_meta.plan()이 PM_BUCKET 값 그대로 저장 — 폴더 저장소 환경 시험,
-    사용자 결정 10-08)로 시작하면 그 값 그대로 rep_key를 이어 붙인다(실제 버킷 이름이면 전처럼 "s3://" 접두)."""
-    rows = db.find_by_doc_key(doc_key)
+def find_rep(db, source_system, source_key):
+    """C8(mc-15, 11-01) — 적재 때 gold doc에 복사할 대표 결과 위치: {rep_bucket, rep_key, parsed_at} 또는 None.
+    연결 키는 source_system + source_key(사용자 11-01). 같은 원본이 재파싱으로 여러 행이면 status='active'인 것 중(없으면 전체 중)
+    parse_date가 가장 늦은 행. source_system이 맞는 행이 없으면 source_key만 맞는 행(게시가 원천 이름을 다르게 적은 옛 행) — ponytail:
+    원천 표기가 하나로 정리되면(pl-28) 이 대체를 뺀다. rep_bucket·rep_key가 비면 None. 조회 예외는 호출부가 처리."""
+    rows = db.find_by_source(source_key)
+    same = [r for r in rows if r.get("source_system") == source_system]
+    rows = same or (rows if len({r.get("source_system") for r in rows}) == 1 else [])  # 다른 원천끼리 이름이 겹치면 대체하지 않음
     if not rows:
         return None
     active = [r for r in rows if r.get("status") == "active"]
     pick = max(active or rows, key=lambda r: r.get("parse_date") or "")
-    bucket, key = pick.get("rep_bucket"), pick.get("rep_key")
-    if not bucket or not key:
+    if not pick.get("rep_bucket") or not pick.get("rep_key"):
         return None
-    if bucket.startswith("file://"):
-        return f"{bucket.rstrip('/')}/{key}"
-    return f"s3://{bucket}/{key}"
+    return {"rep_bucket": pick["rep_bucket"], "rep_key": pick["rep_key"], "parsed_at": pick.get("parsed_at")}
 
 
 class MssqlStore:
@@ -197,9 +195,8 @@ class MssqlStore:
             self.cn.rollback()
             raise
 
-    def find_by_doc_key(self, doc_key):
-        cur = self.cn.cursor()
-        return _find_by_doc_key_rows(cur, self.ident, "%s", doc_key)
+    def find_by_source(self, source_key):
+        return _find_by_source_rows(self.cn.cursor(), self.ident, "%s", source_key)
 
     def done_source_keys(self):
         return _done_keys_rows(self.cn.cursor(), self.ident)
@@ -242,9 +239,8 @@ class SqliteStore:
         self.cn.commit()
         return counts
 
-    def find_by_doc_key(self, doc_key):
-        cur = self.cn.cursor()
-        return _find_by_doc_key_rows(cur, self.table, "?", doc_key)
+    def find_by_source(self, source_key):
+        return _find_by_source_rows(self.cn.cursor(), self.table, "?", source_key)
 
     def done_source_keys(self):
         return _done_keys_rows(self.cn.cursor(), self.table)

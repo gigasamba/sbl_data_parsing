@@ -1,4 +1,4 @@
-"""근거 모양 만들기 — 근거 칸(원본 경로·대표 결과 위치)·근거 상태(evidence_status)·결과 크기 상한(cap).
+"""근거 모양 만들기 — 근거 칸·근거 상태(evidence_status)·결과 크기 상한(cap). 검색 중 ParsingMeta 조회(rep_uri)는 11-01에 지움(mc-15 — 적재 때 gold doc에 복사).
 S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/main.py(옛 data_retrieval/mcp_server.py)에서 옮김 — 내용 그대로
 (설정 상수만 mcp_server/config.py의 CFG로).
 """
@@ -7,51 +7,7 @@ import json
 import re
 from pathlib import Path
 
-from mcp_server import config as mc  # 설정 객체(S7d)
 from mcp_server.config import CFG
-from mcp_server.services.search.server_state import _STATE
-
-
-def _pm_db():
-    """OP21(S78) — EDW `AI.ParsingMeta` 읽기 연결(common/parsing_meta_db.make_db() — modules/load/parsing_meta.py와
-    공용, cli/check_modules.py 경계① 때문에 modules/search는 modules/load를 직접 import 못 해 common/에서 가져옴).
-    연결 정보 없음(common.connections.rdb 읽기 계정·sqlite 둘 다 없음)이거나 접속 실패면 None — 그 뒤로 이 프로세스에서 다시
-    시도하지 않음(근거의 '파싱 결과 경로' 칸이 조용히 빠짐, MCP는 계속 동작). MCP_EVIDENCE_PATHS=0이면 시도
-    자체를 안 함(기본 켬)."""
-    if not mc.cfg().output.evidence_paths:
-        return None
-    if _STATE.get("_pm_db_tried"):
-        return _STATE.get("_pm_db")
-    _STATE["_pm_db_tried"] = True
-    try:
-        from common.store import parsing_meta_db as PM
-
-        _STATE["_pm_db"] = PM.make_db("read")  # 검색 MCP는 읽기 계정만(사용자 10-29 — ops.md#op-03)
-    except (Exception, SystemExit) as e:  # make_db()는 접속 정보 없으면 SystemExit — 기능 꺼짐으로만 처리
-        print(f"[mcp] AI.ParsingMeta 연결 없음(근거의 '파싱 결과 경로' 칸은 빠짐) — {e}", flush=True)
-        _STATE["_pm_db"] = None
-    return _STATE.get("_pm_db")
-
-
-def _rep_uri(doc_key, cache):
-    """OP21(S78) — doc_key로 EDW AI.ParsingMeta의 대표 결과 경로(common.store.parsing_meta_db.find_rep_path, 같은 키
-    함수가 쓴 rep_key 그대로) 조회 — cache(요청 하나당 dict)로 같은 문서를 여러 청크가 가리켜도 한 번만 조회."""
-    if not doc_key:
-        return None
-    if doc_key in cache:
-        return cache[doc_key]
-    db = _pm_db()
-    if db is None:
-        return None
-    try:
-        from common.store import parsing_meta_db as PM
-
-        v = PM.find_rep_path(db, doc_key)
-    except Exception as e:  # 조회 1건 실패(네트워크 등) — 이 근거만 null, 검색은 계속
-        print(f"[mcp] AI.ParsingMeta 조회 실패(이 근거는 '파싱 결과 경로' 없음) — {e}", flush=True)
-        v = None
-    cache[doc_key] = v
-    return v
 
 
 def _evidence(h, man=None):

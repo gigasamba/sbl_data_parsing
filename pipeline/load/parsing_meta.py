@@ -60,7 +60,7 @@ from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 _CROSS_ACC_FULL = json.loads(CRITERIA_FILE.read_text(encoding="utf-8"))["run"][
     "cross_acc_full"
 ]  # RB3 — partial 사유 글자도 같은 정본(판정은 parse_qa가 이미 함)
-# EDW AI.ParsingMeta 저장소 클래스(MssqlStore·SqliteStore)·find_rep_path는 common/parsing_meta_db.py로 승격
+# EDW AI.ParsingMeta 저장소 클래스(MssqlStore·SqliteStore)는 common/parsing_meta_db.py로 승격
 # (OP21 — cli/check_modules.py 경계①: modules/search가 modules/load를 직접 import 못 함, 함께 쓸 것은 common/만).
 # 이 모듈은 그대로 다시 가져와 쓴다(동작 바이트 동일).
 from common.store.parsing_meta_db import (  # noqa: E402,F401
@@ -72,7 +72,6 @@ from common.store.parsing_meta_db import (  # noqa: E402,F401
     MssqlStore,
     SqliteStore,
     _insert_new_rows,
-    find_rep_path,
     make_db,
 )
 

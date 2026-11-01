@@ -16,7 +16,7 @@ import json
 import sys
 import time
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 from common.core.console import utf8_stdout
@@ -143,16 +143,44 @@ def drop_terms(cur, s, doc_ids):
     cur.execute(f"DELETE FROM {_tbl(s, 'term_stat')} WHERE df <= 0")
 
 
-def _kst(v):
-    """원천 등록 시각 글자 → 시간대 붙은 ISO 글자(시간대 없는 값은 KST — FileStorageMap 값, 운영 계약). 비었거나 형식이 틀리면 None(적재는 계속)."""
+def _kst(v, naive_tz=timezone(timedelta(hours=9))):
+    """시각(글자 또는 datetime) → 시간대 붙은 ISO 글자. 시간대 없는 값은 naive_tz(기본 KST — FileStorageMap 값, 운영 계약 ·
+    ParsingMeta parsed_at은 SYSUTCDATETIME이라 UTC로 부름). 비었거나 형식이 틀리면 None(적재는 계속)."""
     if not v:
         return None
     try:
-        t = datetime.fromisoformat(str(v).strip())
+        t = v if isinstance(v, datetime) else datetime.fromisoformat(str(v).strip())
     except ValueError:
-        print(f"[pgstore] created_at 형식이 아님 — 비워 둠: {v!r}", flush=True)
+        print(f"[pgstore] 시각 형식이 아님 — 비워 둠: {v!r}", flush=True)
         return None
-    return (t if t.tzinfo else t.replace(tzinfo=timezone(timedelta(hours=9)))).isoformat()
+    return (t if t.tzinfo else t.replace(tzinfo=naive_tz)).isoformat()
+
+
+def _pm_reader(docs):
+    """C8(mc-15) — 대표 결과 위치를 찾을 ParsingMeta 읽기 연결. 원본 키(s3_key)가 있는 문서가 없거나 연결 정보가 없으면 None
+    (경고 한 줄 — 적재는 계속, rep_key 등은 비움)."""
+    if not any(d.get("s3_key") for d in docs):
+        return None
+    try:
+        from common.store import parsing_meta_db as PM
+
+        return PM.make_db("read")
+    except (Exception, SystemExit) as e:  # make_db는 접속 정보가 없으면 SystemExit
+        print(f"[pgstore] 경고: AI.ParsingMeta를 못 읽음 — 대표 결과 위치(rep_key)는 비워 둠: {type(e).__name__}", flush=True)
+        return None
+
+
+def _rep_of(pm, d):
+    """문서 하나의 {rep_bucket, rep_key, parsed_at} — 없거나 조회 실패면 빈 dict(그 문서만 비움)."""
+    if pm is None or not d.get("s3_key"):
+        return {}
+    from common.store import parsing_meta_db as PM
+
+    try:
+        return PM.find_rep(pm, d.get("source_system"), d["s3_key"]) or {}
+    except Exception as e:
+        print(f"[pgstore] 경고: ParsingMeta 조회 실패 — {d['s3_key']}: {type(e).__name__}", flush=True)
+        return {}
 
 
 def load(db, bundle, replace=False):
@@ -166,6 +194,15 @@ def load(db, bundle, replace=False):
     docs, chunks = _nonul(jl(B / "docs.jsonl")), _nonul(jl(B / "chunks.jsonl"))
     vecs = np.load(B / "vectors.npy", mmap_mode="r")  # 필요한 청크만 읽음(전체를 메모리에 올리지 않음)
     s, t0 = db.schema, time.time()
+    pm = _pm_reader(docs)  # C8 — PG 트랜잭션 밖에서 열고 끝에 늘 닫음
+    try:
+        return _load_tx(db, s, meta, docs, chunks, vecs, replace, pm, t0)
+    finally:
+        if pm is not None:
+            pm.close()
+
+
+def _load_tx(db, s, meta, docs, chunks, vecs, replace, pm, t0):
     with db.cn.transaction(), db.cn.cursor() as cur:  # 한 트랜잭션 — 실패하면 전부 되돌림
         cur.execute(f"INSERT INTO {s}.load_run(params) VALUES (%s) RETURNING run_id", (json.dumps(meta, ensure_ascii=False),))
         run = cur.fetchone()[0]
@@ -179,12 +216,14 @@ def load(db, bundle, replace=False):
             if old:
                 drop_terms(cur, s, [old])
                 cur.execute(f"DELETE FROM {_tbl(s, 'doc')} WHERE doc_id=%s", (old,))  # chunk는 ON DELETE CASCADE
+            rep = _rep_of(pm, d)  # C8 — 검색 중 EDW에 접속하지 않게 대표 결과 위치를 gold doc에 복사
             # 2026-10-20 축소 스키마 — 검색에 필요한 최소 컬럼만 (file_name은 뷰에서 file_path 유도)
             cur.execute(
                 f"""INSERT INTO {s}.doc(file_path, summary, clients, run_id, source_system,
                             sf_acc_name, sf_op_id, sf_op_name, project_code__c,
-                            contract_id, contract_date, prod_name, division, service_type, doc_class, created_at, doc_key)
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING doc_id""",
+                            contract_id, contract_date, prod_name, division, service_type, doc_class, created_at, doc_key,
+                            rep_bucket, rep_key, parsed_at)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING doc_id""",
                 (
                     d["file_path"],
                     d.get("summary"),
@@ -203,6 +242,9 @@ def load(db, bundle, replace=False):
                     d.get("doc_class"),
                     _kst(d.get("created_at")),
                     d.get("file_sha256"),
+                    rep.get("rep_bucket"),
+                    rep.get("rep_key"),
+                    _kst(rep.get("parsed_at"), UTC),
                 ),
             )
             doc_id[i] = cur.fetchone()[0]

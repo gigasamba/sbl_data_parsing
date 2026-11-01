@@ -74,9 +74,9 @@
 | retriever가 지운 칸을 읽음 | done | 묶음 `doc_key` · PG 열 | [mc-10](prd/mcp.md#mc-10) |
 | 질의 기록은 jsonl만 | done | PG `qa_log` INSERT 지움 | [mc-13](prd/mcp.md#mc-13) |
 | 숨김 문서가 검색에서 안 빠짐 | dropped | pl-25 대기 · `s3_key`로 비교 | [mc-14](prd/mcp.md#mc-14) |
-| 근거의 `rep_uri`가 늘 빔 | todo | pl-25 대기 · `source_key` 조회 | [mc-15](prd/mcp.md#mc-15) |
+| 근거의 `rep_uri`가 늘 빔 | done | 적재 때 ParsingMeta → gold doc 복사(C8) | [mc-15](prd/mcp.md#mc-15) |
 | `search` 운영 계약 구현 | done | question 필수 · 거르기 13칸 · 5칸·근거 12칸 · 판 0002(등급 A) | [mc-16](prd/mcp.md#mc-16) |
-| 원문 전송 도구 2개 | partial | `list_doc_fulltext` · `get_doc_fulltext` · gold doc + sfid 서명(등급 A) | [mc-17](prd/mcp.md#mc-17) |
+| 원문 전송 도구 2개 | done | `list_doc_fulltext` · `get_doc_fulltext` · gold doc + sfid 서명(등급 A) | [mc-17](prd/mcp.md#mc-17) |
 | 검색 — PG만, 실행 중 묶음 없음 | todo | 문서 메타·임베딩 정보 PG에서 · 검색 동작 바뀜(자기 PR + 평가) | [mc-19](prd/mcp.md#mc-19) |
 | `parse_document` 스캔 PDF 다시 지원 | todo | 지금은 건너뜀 + 안내 · 엔진·응답 시간 정하기(등급 A) | [mc-18](prd/mcp.md#mc-18) |
 | `query_edw` 도구 | done | SELECT만 · 허용 목록 · 상한 | [mc-06](prd/mcp.md#mc-06) |

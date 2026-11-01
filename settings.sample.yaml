@@ -279,8 +279,6 @@ search:
     tables:  # query_edw 허용 표 목록(쉼표) · 값: 쉼표 목록 또는 YAML 목록
     tables_strict: false  # 1이면 허용 표 목록(EDW_QUERY_TABLES) 검사를 켬 · 기본 false · 값: true·false
   # ─── 출력·기록·파싱 프록시 ───
-  output:
-    evidence_paths: true  # 근거의 '파싱 결과 경로' 조회(AI.ParsingMeta) 스위치 · 기본 true · 값: true·false
   parse_proxy:
     url: http://127.0.0.1:8766  # parse_document가 부르는 작업 서비스 주소 · 기본 http://127.0.0.1:8766 · 값: URL
   query_log:

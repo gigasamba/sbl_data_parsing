@@ -91,6 +91,7 @@ class McpHost(Section):
 class McpOutput(Section):
     REMOVED = frozenset(
         {
+            "evidence_paths",  # 11-01(mc-15 — 검색 중 ParsingMeta 조회 지움, 적재 때 gold doc에 복사)
             "cap_ranked",
             "list_docs_max",
             "evid_local_roots",
@@ -101,9 +102,6 @@ class McpOutput(Section):
             "max_image_px",
         }
     )  # 사용자 10-29·10-30(e2-18 — 근거 이미지·그림 조회 지움) — 지운 칸·절(남으면 경고만)
-    evidence_paths: bool | None = F(
-        True, "MCP_EVIDENCE_PATHS", "근거의 '파싱 결과 경로' 조회(AI.ParsingMeta) 스위치 — 0이면 시도 안 함", off=("0",)
-    )
     max_chars: int | None = F(20000, "MCP_MAX_CHARS", "search 응답 크기 상한(JSON UTF-8 바이트) — 넘으면 근거 본문을 줄임")
 
 

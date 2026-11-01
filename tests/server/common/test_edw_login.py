@@ -97,24 +97,14 @@ def test_old_connection_fields_only_warn():
 
 
 def test_mcp_paths_use_read_account_only():
-    """query_edw 접속과 근거 경로 조회(shaping) — 둘 다 "read"만 부른다(쓰기 계정 비밀이 MCP 프로세스로 안 감)."""
+    """query_edw 접속과 ParsingMeta 조회 — 둘 다 "read"만 부른다(쓰기 계정 비밀이 MCP 프로세스로 안 감). 근거 경로 조회(shaping)는 11-01에 지움(mc-15)."""
     from mcp_server.services import edw_query
-    from mcp_server.services.search import shaping
-    from mcp_server.services.search.server_state import _STATE
 
     roles = []
     real = mssql.login
     with COMMON.env(**FULL), mock.patch.object(mssql, "login", lambda role, extra=True: roles.append(role) or real(role, extra)):
         conf = edw_query._mssql_conf()
         assert conf["user"] == "ru" and conf["password"] == "rp", conf["user"]
-        with mock.patch.object(PM, "MssqlStore", lambda table, role: ("store", role)):
-            saved = dict(_STATE)
-            _STATE.pop("_pm_db_tried", None)
-            try:
-                assert shaping._pm_db() == ("store", "read")
-            finally:
-                _STATE.clear()
-                _STATE.update(saved)
     assert roles and set(roles) == {"read"}, roles
 
 

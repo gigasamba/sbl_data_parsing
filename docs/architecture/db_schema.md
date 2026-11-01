@@ -171,14 +171,14 @@ PC 대역 예시 — [pl-29](../prd/etl.md#pl-29) 10-31. 고객 연결 4단계�
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
 | parse_meta_id | BIGINT IDENTITY PK | 행 번호 | DB | 없음(기본 키) | 유지 |
-| source_system | NVARCHAR(64) | 원천 | parsing_meta `plan` | parsing_meta_db 겹침 확인·`find_by_doc_key`, 상태 UPDATE 조건 | 유지 |
+| source_system | NVARCHAR(64) | 원천 | parsing_meta `plan` | parsing_meta_db 겹침 확인·`find_by_source`(11-01 mc-15), 상태 UPDATE 조건 | 유지 |
 | source_key | NVARCHAR(1024) | 원본 전체 경로 = `AI.FileStorageMap.s3_key` 값(문서 키). 원본과의 연결 키는 `source_system` + `source_key` — 따로 `s3_key` 칸을 두지 않는다(사용자 11-01) | 〃 | 〃, run_docs `edw_done_keys` | 유지 |
 | source_uri | NVARCHAR(2048) | 원본 주소 | 〃 | 없음 | 삭제 |
 | original_filename | NVARCHAR(512) | 원본 파일 이름 | 〃 | 없음 | 삭제 |
 | file_format | NVARCHAR(32) | 형식 | 〃 | 없음 | 삭제 |
 | file_size | BIGINT | 크기 | 〃 | 없음 | 삭제 |
 | sha256 | NVARCHAR(64) | 원본 sha256 — 같은 내용 묶기에 씀(C5 — G19 "파싱 정보만"의 예외, 파싱한 원본의 지문) | parsing_meta `plan` | (분류 단계 같은 내용 묶음 — [pl-33](../prd/etl.md#pl-33)) | 유지 |
-| rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | parsing_meta `plan` | parsing_meta_db `find_rep_path` → shaping `rep_uri`(0.2.0에는 이 조회 길을 없애고 적재 때 gold `doc.rep_key`로 복사 — C8) | 유지 |
+| rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | parsing_meta `plan` | 적재(`pgvector_load` → `parsing_meta_db.find_rep`)가 gold `doc.rep_bucket`으로 복사(C8 — 11-01 mc-15, 검색 중 조회 길은 지움) | 유지 |
 | rep_key | NVARCHAR(2048) | 대표 결과 폴더 | parsing_meta `apply` | 〃 → (적재가 gold `doc.rep_key`로 복사 — C8) | 유지 |
 | rep_etag | NVARCHAR(128) | 대표 결과 etag | 〃 | 없음 | 삭제 |
 | parse_status | NVARCHAR(32) | ok·partial | parsing_meta `plan` | run_docs `edw_done_keys` | 유지 |
@@ -186,10 +186,10 @@ PC 대역 예시 — [pl-29](../prd/etl.md#pl-29) 10-31. 고객 연결 4단계�
 | rep_engine | NVARCHAR(128) | 대표 엔진 — 0.2.0에 지움(gold `doc.rep_engine`도 두지 않음 — 사용자 11-01) | parsing_meta `plan` | 없음 | 삭제 |
 | rep_acc | FLOAT | 대표 정확도 | 〃 | 없음 | 삭제 |
 | page_count | INT | 쪽 수 | 〃 | 없음 | 삭제 |
-| doc_key | NVARCHAR(64) | 원본 sha256(지금 유일한 필수 칸 — 검색 키와 안 맞아 `rep_uri`가 늘 빔, mc-15) | 〃 | parsing_meta_db `find_by_doc_key` | 삭제 |
+| doc_key | NVARCHAR(64) | 원본 sha256(지금 유일한 필수 칸 — 검색 키와 안 맞아 `rep_uri`가 늘 빔, mc-15) | 〃 | 없음(11-01 `find_by_doc_key` 지움 — mc-15) | 삭제 |
 | parse_date | NVARCHAR(32) | 파싱 시각 글자(`YYYY-MM-DD_HHMMSS`) | parsing_meta `apply` | find·상태 UPDATE 조건 | 유지 |
 | pipeline_version | NVARCHAR(64) | 이 문서를 gold에 올린 판 — 다시 올릴지 판단. 지금은 파싱 때 쓰는 파이프라인 판이었으나 0.2.0에는 gold 성공 때 쓰고 gold가 끝나기 전에는 NULL(C9 — gold `doc.pipeline_version`은 행을 만든 코드 판, 이름 같고 뜻 다름 — 사용자 10-31 grill: `gold_version` 새 칸 대신 이 칸 이름을 씀) | parsing_meta `plan` → (gold 성공 때) | (운영자·재처리 판정) | 유지 |
-| status | NVARCHAR(16) | active·changed·deleted | 〃, `apply_registry_status` | find·`find_rep_path`·상태 UPDATE 조건 | 유지 |
+| status | NVARCHAR(16) | active·changed·deleted | 〃, `apply_registry_status` | find·상태 UPDATE 조건(`find_rep_path`는 11-01에 지움 — `find_rep`가 적재 때 읽음) | 유지 |
 | status_at | NVARCHAR(32) | 상태 바뀐 때(UTC) | `apply_registry_status` | 없음(SELECT 안 함 — 운영자가 봄) | 유지 |
 | engines_used | NVARCHAR(MAX) | 쓰인 엔진 전부(JSON) — 0.2.0: 성공한 엔진만(이름 + 판, 사용자 10-30 grill) | parsing_meta `plan` | 없음 | 유지 |
 | engines_summary | NVARCHAR(512) | 엔진 한 줄 요약 | 〃 | 없음 | 삭제 |
