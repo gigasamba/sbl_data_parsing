@@ -5,7 +5,7 @@
 #   docker run --rm --init -v <settings.yaml>:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=<dev|prd> \
 #     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>   (S7e1·S7e2 — 옛 --env-file pipeline.env 대신 설정 파일 하나)
 # 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp · dedup · prepare ·
-#       ask --q … · test-stack  (night·run-stack·full·structure·load는 11-01에 지움 — 서버 입구는 run_docs 하나, 사용자 10-31)
+#       ask --q …  (test-stack·night·run-stack·full·structure·load는 11-01에 지움 — 서버 입구는 run_docs 하나, 사용자 10-31)
 #   tool <이름> = cli/<이름>.py 하나를 바로 돌림(rdb_discover·check_env·index 등 — run_tool.sh가 쓰는 자리)
 #     옛 형태 `tool cli/<이름>.py`도 이번 판까지는 받아 줌(경고 후 번역) — 다음 판부터 이름만.
 #   모듈(트리거 1회): parse(= 가져오기(폴더·s3://, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과, RUN_MODE=test면 형식별 표본) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타, SI39 — cli/publish_parse.py --apply) — docs/architecture.md
@@ -15,7 +15,7 @@
 #     set-sources 없앰) — show-sources는 data-pipeline만, show-stack은 두 이미지. docs/architecture/pipeline_stack.md
 #   S6b(D-020) — 이미지 2개: RAG_MODULE마다 쓸 수 있는 명령이 다름(아래 case가 거름):
 #     pipeline(data-pipeline — 옛 data-parsing+data-structure, 두 이미지가 받던 명령의 합 + full(S6c))=parse·dedup·prepare·publish·show-stack·show-sources·idle·migrate ·
-#     mcp(mcp-server — 옛 data-retrieval)=mcp·ask·test-stack·show-stack · 공통(모든 이미지) = help·check·resources·services·
+#     mcp(mcp-server — 옛 data-retrieval)=mcp·ask·show-stack · 공통(모든 이미지) = help·check·resources·services·
 #     check-modules·tool·selftest(S9 — 서버 반입 시험 /app/deploy/tests/server를 파일마다, 다른 이미지(RAG_MODULE) 폴더 사례·다른 이미지 패키지가 없어서만 실패한 사례는 SKIP,
 #     서드파티 패키지가 없으면 FAIL(I2c) — 반입 판정은 /app/docker/selftest_gate.sh)·smoke(10-14 — --src(기본 DOC_DIR) 실문서 폴더를
 #     이 이미지에 있는 모듈로 실제 돌려 사람이 읽는 요약, 실문서 투입 전 와이어링 점검 — find_spec으로 없는 단계는 자동 SKIP)
@@ -51,10 +51,10 @@ cmd="${1:-help}"; shift || true
 # 이미지마다 자기 앱만 들어 있음(S6b D-020 — RAG_MODULE pipeline·mcp, 사용자 10-27) — 없는 앱의 명령은 바로 거부(종료 코드 64)
 case "${RAG_MODULE:-}:$cmd" in
   # 옛 parse·structure 이미지가 거르던 명령의 교집합만 거른다(합친 이미지 = 두 이미지가 받던 명령의 합). full·night·structure·load는 11-01에 지움.
-  pipeline:mcp|pipeline:ask|pipeline:test-stack)
-    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask·test-stack)은 mcp-server. 이 이미지는 parse·dedup·prepare·publish·show-stack·show-sources·idle·migrate"; exit 64;;
+  pipeline:mcp|pipeline:ask)
+    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask)은 mcp-server. 이 이미지는 parse·dedup·prepare·publish·show-stack·show-sources·idle·migrate"; exit 64;;
   mcp:parse|mcp:dedup|mcp:prepare|mcp:publish|mcp:idle|mcp:migrate|mcp:show-sources)
-    echo "[오류] '$cmd'는 이 이미지(mcp-server)에 없음 — 파싱·구조화·적재·판 관리(migrate)·show-sources는 data-pipeline. 이 이미지는 mcp·ask·test-stack·show-stack만"; exit 64;;
+    echo "[오류] '$cmd'는 이 이미지(mcp-server)에 없음 — 파싱·구조화·적재·판 관리(migrate)·show-sources는 data-pipeline. 이 이미지는 mcp·ask·show-stack만"; exit 64;;
 esac
 # S7a(D-028 ②, 사용자 10-27) — 실행 환경(RUN_ENV) 없이는 앱 명령을 시작하지 않음. 이미지 ENV에는 넣지 않는다(서버가 dev·prd를
 # 정해 compose environment로 줌 — refactor.md C-34). 시험·점검 명령(help·selftest·check·check-modules·resources·services·tool check_env)은 뺀다
@@ -147,8 +147,8 @@ for entry in sys.argv[2:]:
     # publish --dry-run = 무엇을 올리고 쓸지 표만(쓰기 0) — 첫 publish 전에(사용자 10-30 검토 S3). 그 밖은 늘 --apply.
     if [ "${1:-}" = --dry-run ]; then shift; preflight; exec python -m pipeline.load.publish_parse_result "$@"; fi
     preflight; locked python -m pipeline.load.publish_parse_result --apply "$@";;
-  ask|test-stack)   # S5(T-15) — 검색 명령은 mcp_server/cli/ask.py(옛 pipeline.cli ask·test-stack)
-    preflight; exec python -m mcp_server.cli.ask "$cmd" "$@";;
+  ask)   # S5(T-15) — 검색 명령은 mcp_server/cli/ask.py(test-stack은 11-01에 지움)
+    preflight; exec python -m mcp_server.cli.ask ask "$@";;
   show-stack|show-sources|selftest|smoke)   # 실행 기록을 /app/output/logs에 씀 — mcp-server(/app/output:ro)에서는 안 됨(VS8b R-9 — data-pipeline 컨테이너에서)
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
   # 11-01(pl-10 — trigger 서버 serve-trigger 지움) — 상주 컨테이너 data-pipeline-parse·data-pipeline-structure는 일을 하지 않고 떠 있기만 한다.

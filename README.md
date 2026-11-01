@@ -300,7 +300,7 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 **(선택) MCP 없이 검색만 확인**
 
 ```bash
-.venv/bin/python -m mcp_server.cli.ask ask --pg --bundle output/demo/bundle --k 3 --q "<질문>"
+.venv/bin/python -m mcp_server.cli.ask ask --bundle output/demo/bundle --k 3 --q "<질문>"
 ```
 
 **⑥ 정리** — 4-5에서 MCP까지 확인한 뒤 `settings.yaml`의 `no_paid_calls`를 `true`로 되돌린다(평소 테스트가 외부를 호출하지 않게).
@@ -323,7 +323,7 @@ SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
 # ask·MCP는 --set을 받지 않으므로 오버레이 설정 파일(방법 C)로 같은 값을 넘긴다
 SF=$(.venv/bin/python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 \
      NO_PAID_CALLS=0 LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_BUNDLE=$O/bundle MCP_PORT=18769)
-SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.ask ask --pg --bundle $O/bundle --k 3 --q "<질문>"
+SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.ask ask --bundle $O/bundle --k 3 --q "<질문>"
 SETTINGS_FILE=$SF nohup .venv/bin/python -m mcp_server.main > $O/mcp.log 2>&1 & echo $! > $O/mcp.pid
 ```
 실제 임베딩 호출을 확인하려면 `--set EMBED_CACHE=<빈 sqlite 경로>`를 더한다.
