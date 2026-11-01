@@ -514,9 +514,8 @@ def main(argv=None):
     p.add_argument(
         "--source",
         default=pc.cfg().extract.input_source or None,
-        help="파싱할 원본 위치 — 폴더(같은 서버 샘플) · rdb:csv:<경로>(문서 위치 표 — run_docs가 만듦, AD44). 주면 가져오기·중복 확인·방향 보정부터 — 11-01 s3://·rdb:*·rdb:<이름>·rdb:<표> 지움"
-        "rdb:*(common/sources.json의 enabled 원천 전부, SI41) · rdb:<이름>(sources.json에 등록된 원천 하나). "
-        "주면 가져오기·중복 확인·방향 보정부터",
+        help="파싱할 원본 위치 — 폴더(같은 서버 샘플) · rdb:csv:<경로>(문서 위치 표 — run_docs가 만듦, AD44). "
+        "주면 가져오기·중복 확인·방향 보정부터(11-01 s3://·rdb:*·rdb:<이름>·rdb:<표> 지움)",
     )
     p.add_argument("--source-limit", type=int, default=pc.cfg().extract.source_limit, help="원본 몇 건만(Object Storage 시험)")
     p.add_argument("--engines", default="")

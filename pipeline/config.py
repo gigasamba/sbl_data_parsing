@@ -319,7 +319,7 @@ class PipelineExtract(Section):
     hidden_overlap_max: int | None = F(
         20, "PARSE_HIDDEN_OVERLAP_MAX", "'숨은 글자-그림 겹침' 신호로 쪽 VLM 후보에 올릴 쪽 수 상한(쪽, 0=끔)"
     )
-    input_source: str | None = F(None, "PARSE_SOURCE", "파싱 원본 위치: 폴더·s3://버킷/접두·rdb:csv:경로·rdb:표")
+    input_source: str | None = F(None, "PARSE_SOURCE", "파싱 원본 위치: 폴더·rdb:csv:경로(11-01 — s3://·rdb:*·rdb:<이름>·rdb:<표> 지움)")
     isolate_overhead: float | None = F(10.0, "PARSE_ISOLATE_OVERHEAD", "별도 프로세스 실행 시 쪽당 제한 시간에 더해 줄 시작 여유(초)")
     kreuzberg_prose_filter: bool | None = F(True, "KREUZBERG_PROSE_FILTER", "kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔)")
     low_priority: bool | None = F(

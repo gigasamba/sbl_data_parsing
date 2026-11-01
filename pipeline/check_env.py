@@ -90,7 +90,7 @@ def check_critical_imports():
 # OP15(c1) — env-guide 1-2 경로 묶음(서버 LLM이 바꿀 곳). 각 항목: (이름, 값→실제 경로 또는 None(형식 검사만)).
 # 값 없으면 '미설정(선택)'(오류 아님) · 값이 있는데 경로가 없으면 경고만(line(False, …)) — 실패 종료 아님(req_bad에 안 섞음).
 def _parse_source_path(v):
-    return None if v.startswith(("rdb:", "s3://")) else Path(v)  # rdb:*·s3://는 형식만(파일 경로 아님)
+    return None if v.startswith("rdb:") else Path(v)  # rdb:csv는 형식만(파일 경로 아님) · s3://는 11-01에 지움(경로로 보고 없으면 경고)
 
 
 PATH_BUNDLE = [

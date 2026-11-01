@@ -9,7 +9,7 @@
 #   compose를 직접 부를 때(S7e1 — 셸에 설정 값을 먼저 export, 옛 --env-file pipeline.env 대신). 하위 셸 ( … )로 — 대화형 셸에 export해 두면
 #   그 뒤 settings.yaml을 고쳐도 그 셸에는 안 먹음(VS7e1 R-2):
 #     ( . deploy/host/scripts/settings_env.sh && load_settings && docker compose -f deploy/host/compose/compose.pipeline.yml run --rm parse )
-#       (인자를 주면 명령을 덮으므로: run --rm parse parse --max-new 100) · 같은 꼴로 run --rm structure · run --rm load · up -d mcp
+#       (인자를 주면 명령을 덮으므로: run --rm parse parse --max-new 100) · 같은 꼴로 run --rm publish(검색 MCP는 compose.mcp.yml — mcp_up.sh)
 # 결과 폴더(RAG_OUT)를 모든 모듈이 같이 씀 — 모듈 사이 전달은 이 폴더의 파일(+ PostgreSQL)뿐, 서로 직접 부르지 않음.
 # 주의: `docker compose config`는 치환한 값을 그대로 출력함 — 확인은 `config --quiet`만(S7e1부터 비밀은 compose에 없지만 호스트 경로·이름이 나옴).
 # 이미지 변수: DATA_PIPELINE_IMAGE·MCP_SERVER_IMAGE(S6b 새 이름) — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE·DATA_RETRIEVAL_IMAGE·RAG_*_IMAGE·

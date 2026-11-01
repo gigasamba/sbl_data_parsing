@@ -8,7 +8,7 @@
 #       ask --q …  (test-stack·night·run-stack·full·structure·load는 11-01에 지움 — 서버 입구는 run_docs 하나, 사용자 10-31)
 #   tool <이름> = cli/<이름>.py 하나를 바로 돌림(rdb_discover·check_env·index 등 — run_tool.sh가 쓰는 자리)
 #     옛 형태 `tool cli/<이름>.py`도 이번 판까지는 받아 줌(경고 후 번역) — 다음 판부터 이름만.
-#   모듈(트리거 1회): parse(= 가져오기(폴더·s3://, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과, RUN_MODE=test면 형식별 표본) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타, SI39 — cli/publish_parse.py --apply) — docs/architecture.md
+#   모듈(트리거 1회): parse(= 가져오기(폴더·rdb:csv, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타, SI39 — cli/publish_parse.py --apply) — docs/architecture.md
 #   migrate up|stamp|current|check [--target search|all] [--schema S] [--dim N|--bundle B] = pgvector 우리 스키마 판 관리(S8a — Alembic,
 #     common.store.db.dbtool) — data-pipeline 이미지만, up·stamp는 load와 같은 잠금(current·check는 읽기만 — 잠금 없음). 서버 절차 docs/operations/release-and-patch.md §5-5
 #   show-stack = 지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01: 판 표·set-stack 없앰 · 원천 목록 show-sources는 sources.json과 함께 지움) — 두 이미지. docs/architecture/pipeline_stack.md

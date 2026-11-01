@@ -50,7 +50,7 @@ required:
     vlm_api_key:  # VLM 엔드포인트 API 키(있을 때만) · 값: 비밀 글자 [비밀]
   # ─── 원천·게시 위치 [서버만] ───
   source:
-    input_source:  # 파싱 원본 위치: 폴더·s3://버킷/접두·rdb:csv:경로·rdb:표 · 값: 경로
+    input_source:  # 파싱 원본 위치: 폴더·rdb:csv:경로(11-01 — s3://·rdb:*·rdb:<이름>·rdb:<표> 지움) · 값: 경로
     source_bucket:  # RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값) · 값: 글자
     source_uri_prefix:  # 원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///srv/rag/docs) · 값: 글자
     publish_bucket:  # publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소) · 값: 경로
