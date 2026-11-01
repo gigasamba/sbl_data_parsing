@@ -19,6 +19,22 @@
   - H1(11-01): 감사 큐는 bool을 제외한 정수를 `sys.getsizeof`로 센다. 4,000자리 정수의 입력·결과가 각각 1,024바이트 예산에서 큐/활성 처리에 보관되지 않고 본문 없는 메타 행으로 가는 회귀 시험을 추가했다. bool·None·float의 64바이트 추정과 65,536노드 한도는 유지한다. span 대기 분리는 가상 시각으로 메모리 125ms·CPU 250ms를 각각 검증하며, 자식 CPU 계측 시험은 자원 문만 `patch.object`로 모의 처리하고 실제 자식 CPU는 그대로 잰다. CPU 루프 24개(12코어의 두 배, 각 300초 자체 상한)에서 test_span·test_span_soft·test_audit_worker를 순차 실행해 **3 passed / 7.36초**, PID 종료·회수를 확인했다.
   - H1 CLI: MCP 이미지의 pipeline 3파일(`__init__.py`, `cli.py`, `config.py`)만 있는 배치에서 추적 명령에만 runtrace를 import하도록 고쳤다. 새 `test_cli_image`는 최소 배치를 임시 폴더에 만들어 실제 selftest 1/1 진입을 검증하며, 수정 전 CLI를 넣으면 `pipeline.shared` 부재로 실패한다. 이 시험 1개 때문에 기준선 총수가 늘었고 새 실패는 없다. 서버 이미지에서 감사 종료 시험의 stdout에는 JSON 로그도 섞이므로 `AUDIT_TEST_RESULT:` 표식 줄만 읽는다(종료 deadline·행 수 판정은 그대로). `test_call_log`의 sink 실패 모의는 patch 안에서 감사를 drain해 다음 HTTP 시험으로 앞 시험의 결과 42 행이 넘어가지 않게 한다. 제어 지연 재현은 4행 중 첫 request_id가 앞 시험의 것임을 확인했으며, HTTP 3행 단언은 유지한다.
   - H1 PC 검증 조건: 수정 후 selftest 103/105는 코어당 0.9 미만에서 시작한 기본 자원 문으로 확인했다. pytest 기본 실행은 시작 뒤 머신 부하 급증으로 기존 자원 문 시험이 대기해 142초에 PID로 종료했다. coordinator 지시로 저장소 밖 임시 러너가 각 `case_env` 결과에 `settings.child_env(NO_PAID_CALLS=1, CPU_MAX_LOAD=100)`를 적용하고 `pytest -q -n 0 tests/`를 순차 실행해 위 **159 passed·3 xfailed·1 failed / 116.36초**를 확인했다(루트 settings.yaml 수정 없음). 앞선 CLI 수정 전 기본 pytest는 158 passed·3 xfailed·1 failed / 28.83초였다.
+- H1 이미지 검증(11-01): 공식 조건은 `bash deploy/release/selftest_gate.sh docker run --rm --network none <시험 태그> selftest`이며 설정 파일·RUN_ENV를 주지 않는다. 아래는 PC 전체 결과와 별개다. 시험 태그의 코드 커밋은 이미지 revision 라벨과 일치하며 push하지 않았다.
+
+| 측정 | 이미지·코드 커밋 | 통과 | SKIP | FAIL |
+|---|---|---:|---:|---|
+| H1·coordinator | MCP `538067a` | 42/45 | 0 | edw_login·sample_yaml·search_svc |
+| H1·coordinator | MCP `4f91bd2` | 48/52 | 1 | 앞 3개+audit_worker(stdout JSON 혼합) |
+| H1 최종 | MCP `68b4343` | 49/52 | 1 | edw_login·sample_yaml·search_svc |
+| H1 | pipeline `538067a` | 71/74 | 1 | sample_yaml·publish_guard·publish_parse |
+| H1 | pipeline `4f91bd2` | 80/83 | 1 | 같은 3개 |
+| coordinator | pipeline `538067a` | 70/74 | 1 | 앞 3개+run_all |
+| coordinator | pipeline `4f91bd2` | 79/83 | 1 | 같은 4개 |
+
+- 공식 판정은 모든 행에서 **실패**다. 최종 MCP의 판정 줄은 `[판정] 실패 — 알려진 목록 밖 FAIL: tests.server.common.test_edw_login tests.server.common.test_sample_yaml tests.server.mcp.test_search_svc (종료 코드 1)`이다. 세 실패는 로깅 이전 이미지에서도 같다. pipeline은 알려진 publish_guard 외 sample_yaml·publish_parse가 목록 밖 실패다. run_all은 coordinator의 두 이미지 실행에서는 실패하고 H1의 두 실행에서는 통과해 첫 오류·원인이 미확정이다. 기존 실패를 고치거나 known_fail에 추가하지 않았다(C-68).
+- 최종 코드 이미지 `mcp-server:logging-h1-68b4343`에서 test_call_log 전체 모듈을 별도 컨테이너로 순차 20회 실행해 **20회 통과·실패 0**을 확인했다. 제어 지연 재현에서 앞 sink 실패 시험의 결과 42 행이 다음 HTTP 시험에 유입되는 것을 request_id로 확인한 뒤 patch 안에서 drain하도록 고쳤다. `0f6ed15` 공식 실행에서는 audit_worker가 통과한 대신 이 call_log 격리 문제가 한 번 관측됐으며, 최종 공식 실행은 두 시험 모두 통과했다. 각 회차 원본 로그를 보존했다.
+- dev/prd 합성 설정 실측: 두 이미지 모두 7자 비밀값은 종료 2, 8자는 관문 통과다. pipeline `538067a`는 각 70/74·SKIP 1·FAIL 4(exitclean·sample_yaml·publish_guard·publish_parse), CLI 수정 전 로깅 이미지도 각 78/82·SKIP 1·같은 FAIL 4다. MCP의 CLI 수정 전 selftest는 두 환경에서 pipeline.shared 부재로 시작하지 못했으며, 수정 커밋은 공식 selftest 진입과 dev/prd 개별 entrypoint smoke=0·show-stack=4(PG 미설정 거부)·set-stack=64(기존 MCP 이미지 지원 제외)를 확인했다. ModuleNotFoundError는 없었다. 네트워크는 차단했고 합성 설정만 사용했다.
+- `test_db_schema`는 실제 이미지에서 `[시험] 건너뜀 — docs/가 없음(이미지)` 출력 후 PASS를 확인했다. PC 전체 수치는 `4f91bd2`에서 측정했으며 후속 두 변경은 서버 시험의 결과 파싱·격리만 고쳤다. 시험 변경으로 새 이미지 판이 필요하며, 공식 관문의 기존 실패는 배포 전에 별도로 해결해야 한다.
 - Status: done
 
 <a id="e2-08"></a>
