@@ -75,6 +75,7 @@
 | `search` 운영 계약 구현 | todo | question 필수 · 필터 11종 · 출력 축소(등급 A) | [mc-16](prd/mcp.md#mc-16) |
 | 원문 전송 도구 2개 | todo | `list_doc_fulltext` · `get_doc_fulltext`(등급 A) | [mc-17](prd/mcp.md#mc-17) |
 | 검색 — PG만, 실행 중 묶음 없음 | todo | 문서 메타·임베딩 정보 PG에서 · 검색 동작 바뀜(자기 PR + 평가) | [mc-19](prd/mcp.md#mc-19) |
+| `parse_document` 스캔 PDF 다시 지원 | todo | 지금은 건너뜀 + 안내 · 엔진·응답 시간 정하기(등급 A) | [mc-18](prd/mcp.md#mc-18) |
 | `query_edw` 도구 | done | SELECT만 · 허용 목록 · 상한 | [mc-06](prd/mcp.md#mc-06) |
 | `edw_meta` 도구 | done | 스키마 → 표 → 칸 | [mc-07](prd/mcp.md#mc-07) |
 | `parse_document` 도구 | done | 파싱 서비스 전달 · `job_id` | [mc-08](prd/mcp.md#mc-08) |

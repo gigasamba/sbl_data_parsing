@@ -49,7 +49,7 @@ S11(10-28)에 VS10 배포 준비 목록(`output/orca/VS10-verify.md` 끝 절)을
 | `common.run_env` | dev·prd(없으면 앱·entrypoint·compose 거부 · `stage`는 없앰 — C-66) | C-34·C-09·C-66 |
 | **`common.store.run_mode: prod`** | 빠지면 PG 연결 실패 때 문서 레지스트리가 SQLite로 대체 → run_docs 문서별 publish가 그 전 문서를 deleted·숨김(옛 `options.conf`가 늘 막던 길) | C-43·C-47·C-54 |
 | `pipeline.service.trigger.chain_structure_url` · `mcp.server.store: pg` | 옛 compose 기본값 | C-47 ① |
-| `[서버 옛 값]` 항목 | `settings.sample.yaml`의 `[서버 옛 값: …]` 표시 그대로(`engine_scope: all`·`post: all`·`max_rows: 1000` 등) | C-39 |
+| `[서버 옛 값]` 항목 | `settings.sample.yaml`의 `[서버 옛 값: …]` 표시 그대로(`post: all`·`max_rows: 1000` 등) | C-39 |
 | EDW 계정 | `common.connections.rdb`의 `read`·`write` 계정(+ 비밀번호) — EDW를 쓰면 필수(옛 `common.connections.edw`는 없앰 — C-67) | C-47 ④ · C-67 |
 | 토큰 | `pipeline.service.parse_mcp.token` = `mcp.server.token` · `pipeline.service.trigger.token` | C-42·C-44 |
 | run_docs 항목 | 운영 접속·Object Storage·퍼블리시 버킷·PG 컨테이너·출력 루트 항목(없으면 항목 경로만 찍고 종료 2 — 목록은 C-45 ③) | C-45 ③ |

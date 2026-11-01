@@ -6,8 +6,6 @@ represent()가 만드는 rep에 `rep["context"]`(신호)·`rep["decisions"]`(결
 from collections import Counter
 from pathlib import Path
 
-from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
-
 MAX_PAGES = 200  # 쪽 신호 상한(쪽이 아주 많은 문서에서 rep 크기 과도 증가 방지) — 넘으면 앞 MAX_PAGES쪽만, truncated 표시
 
 
@@ -86,14 +84,12 @@ def build_decisions(rep, dd, stack, feats, doc_path):
     r = rep.get("rep") or {}
     d = []
 
-    _v = pc.cfg().extract.engine_scope  # S7c — 설정 객체(기본값 None 글자 칸: 없음 = "all", 빈 글자는 '' 그대로 — 옛 get(X, "all")과 같음)
-    scope = _v if _v is not None else "all"
     want = stack["parse"].get(dd.get("format"), [])
     d.append(
         {
             "step": "engine_scope",
-            "choice": scope,
-            "reason": "stack.json 형식별 목록만(PE1)" if scope == "stack" else "형식별 등록 엔진 전부(제한 없음)",
+            "choice": "stack",
+            "reason": "stack.json 형식별 목록만(PE1 — pl-03 10-30부터 이 하나뿐)",
             "inputs": {"format": dd.get("format"), "stack_pool": want},
         }
     )

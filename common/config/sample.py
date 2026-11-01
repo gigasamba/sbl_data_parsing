@@ -42,7 +42,6 @@ CATALOG_VALUES = {
     "LLM_MODEL": "",
     "LLM_SPEND_FILE": "",
     "MCP_BUNDLE": "",
-    "PARSE_ENGINE_SCOPE": "all",
     "PARSE_POST": "all",
     "PIPE_EMBED": "",
     "RUNLOG_FILE": "",
@@ -88,7 +87,6 @@ CATEGORIES = {
         (
             "파싱 엔진·쪽 처리",
             (
-                "extract.engine_scope",
                 "extract.fill_merged",
                 "extract.kreuzberg_prose_filter",
                 "extract.hidden_overlap_max",
@@ -345,7 +343,6 @@ VALUES = {
     "common.models.transport.transport": "adk·http 중 하나",
     "common.runtime.pipe_procs": "1 이상 정수 · auto 또는 비우면 자동 계산",
     "pipeline.connections.rdb.engine": "mssql·pg 중 하나",
-    "pipeline.extract.engine_scope": "stack·all 중 하나",
     "pipeline.extract.prepare.ocr": "auto·v1·v3 중 하나",
     "pipeline.transform.represent.post": "all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments)",
     "pipeline.transform.represent.rep_select": "first·acc·best 중 하나(그 밖 값 = best)",

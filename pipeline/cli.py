@@ -64,13 +64,6 @@ def sh(module, *args, check=True):
     return rc
 
 
-def _set_engine_scope_default(explicit_engines):
-    """PARSE_ENGINE_SCOPE 기본값 — 이미 설정돼 있으면(사용자) 그대로. 없으면: --engines를 명시했으면 all(명시 엔진
-    존중 — 형식별로 더 좁히지 않음, 독립 검토 BLOCK 2), 비웠으면(생산 기본 트리거) stack(무거움 해소, 2026-10-07)."""
-    if pc.cfg().extract.engine_scope is None:  # S7e2 — 설정에 없을 때만(옛 env setdefault) · put = 덮기 파일(이 프로세스·하위 프로세스)
-        C.put(PARSE_ENGINE_SCOPE="all" if explicit_engines else "stack")
-
-
 def parse_docs(src, engines, procs):
     sh("pipeline.extract.run_all", "--src", src, "--procs", procs, *(["--engines", engines] if engines else []))
 
@@ -116,7 +109,6 @@ def night(a):
         connect(a)
     st = _stack()
     engines = a.engines or ",".join(_engines_of(st))
-    _set_engine_scope_default(a.engines)  # PE1 — night도 생산 경로(서버 entrypoint full)라 같은 기본
     from common.core import resources as RS
 
     vlm_conc = RS.vlm_page_concurrency(a.workers, a.vlm_concurrency)  # 문서 동시 수 × 쪽 동시 수가 VLM_MAX_CONCURRENCY를 넘지 않게
@@ -410,7 +402,6 @@ def parse_module(a):
     )
     st = _stack()
     engines = a.engines or ",".join(_engines_of(st))
-    _set_engine_scope_default(a.engines)  # PE1(2026-10-07) — 생산 기본 stack(무거움 해소), 명시 --engines·실험 경로는 영향 없음
     # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) · 스트리밍 파싱은 op-08에 지움
     lim, src_info = [], None
     if a.source:  # 문서 위치: 같은 서버 폴더 → Object Storage 몇 건 → 전체(사용자 10-02)
@@ -1041,7 +1032,11 @@ def main(argv=None):
         p.add_argument("--procs", default=_default_procs(), help="CPU 엔진 프로세스 수 · auto = CPU·메모리(cgroup) 기준")
         p.add_argument("--skip-parse", action="store_true", help="파싱은 이미 했으면 건너뜀")
         if name != "run-stack":
-            p.add_argument("--engines", default="", help="비우면 핵심 엔진(registry.CORE) · all = 전부 · candidates = stack.json 선정+후보")
+            p.add_argument(
+                "--engines",
+                default="",
+                help="비우면 핵심 엔진(registry.CORE) — 늘 stack.json 형식별 목록 안에서만 돎(pl-03: 범위는 stack 하나 · stack에 없는 후보를 비교하려면 stack json을 고침)",
+            )
             p.add_argument("--top", default="4")
         else:
             p.add_argument("--pg", action="store_true", help="pgvector에 배포·적재까지(기본 — 접속 칸 필수, op-09)")
