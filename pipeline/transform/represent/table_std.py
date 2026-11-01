@@ -4,11 +4,7 @@ header·rows·merged)으로 정규화해 rep["tables_std"]에 둔다(기존 tabl
 입력은 rep["tables"][i]가 이미 들고 있는 grid(2D 칸, pipeline.extract.engines._common.contract._mk_table이 모든 엔진
 공통으로 채움) — 그리드가 없는(과거 캐시) 표는 건너뛴다. 병합 칸 펼침(같은 값 채우기)·범위 기록(merges)은
 엔진이 미리 해 둔다(office_stdlib — docx gridSpan·vMerge, xlsx mergeCells); table_std는 그 결과를
-header(첫 행)·rows(나머지)·merged로 그대로 옮기고, PARSE_STANDARDIZE가 켜졌으면(기존 스위치 따름) 칸 글자에
-common.core.text.standardize_text를 적용한다.
-
-PARSE_TABLE_STD(환경변수, 기본 켬) — 끄면 tables_std 칸 자체가 안 생김(끄면 바이트 동일, 기존 칸 불변이라
-하류 영향 없음).
+header(첫 행)·rows(나머지)·merged로 그대로 옮기고, 칸 글자에 standardize_text(기호 맵·첨자 표기)를 적용한다.
 
 TB5 — 머리글 행 2~3단(병합 머리글, 예 "2026년"→"상반기/하반기"→"1~4분기"): header_depth()가 그리드 맨 위부터
 몇 행이 머리글인지 추정한다 — merges가 맨 위(r==0)부터 닿아 1행을 넘게 덮거나(rowspan>1 또는 colspan>1),
@@ -24,30 +20,13 @@ TB5 — 머리글 행 2~3단(병합 머리글, 예 "2026년"→"상반기/하반
 BR36 — 쪽 경계 표 이어 붙이기: 머리행이 반복되는 여러 쪽 표(예: longtable.pdf — 쪽1 머리글+행, 쪽2 같은
 머리글+나머지 행)가 tables_std에서 쪽마다 별개 표로 쪼개져 있던 것을, 쪽 번호가 이웃(N→N+1)이고 머리행이
 완전히 같은 경우에만 하나로 합치고(뒤 표의 반복 머리행은 버림) build_tables()가 반환하기 직전에 적용한다.
-머리행·칸 수가 다르거나 쪽 번호가 없는(엔진이 page를 안 남김) 표는 안 합친다(오합 방지).
-PARSE_TABLE_STITCH(환경변수, 기본 켬, OP11) — 끄면 쪽마다 쪼개진 그대로(이 기능 이전 동작)."""
+머리행·칸 수가 다르거나 쪽 번호가 없는(엔진이 page를 안 남김) 표는 안 합친다(오합 방지)."""
 
-from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared.text import standardize_text
 
 
-def on(config=None):
-    config = (
-        pc.cfg().transform.represent.table_std if config is None else config
-    )  # S7c — 설정 객체(bool 칸 → "true"/"false"로 아래 판정이 옛 글자 판정과 같음)
-    return str(config).strip().lower() not in ("", "0", "none", "false")
-
-
-def stitch_on(config=None):
-    config = (
-        pc.cfg().transform.represent.table_stitch if config is None else config
-    )  # S7c — 설정 객체(bool 칸 → "true"/"false"로 아래 판정이 옛 글자 판정과 같음)
-    return str(config).strip().lower() not in ("", "0", "none", "false")
-
-
-def _cell(c, std_on):
-    c = str(c if c is not None else "")
-    return standardize_text(c) if std_on else c
+def _cell(c):
+    return standardize_text(str(c if c is not None else ""))
 
 
 def _pad(grid):
@@ -123,11 +102,11 @@ def stitch_tables(entries):
     return out
 
 
-def build_tables(tables, source_engine, std_on):
+def build_tables(tables, source_engine):
     """rep["tables"] → tables_std 목록. 표마다 {id, page, source_engine, header, rows, merged}
     (+ 다단 머리글이면 header_rows, TB5).
     grid 없는 표(그리드를 안 남기는 옛 _rep 캐시 재사용 경로·엔진 오류 등)는 건너뛴다 — 틀린 구조를 만드는 것보다 안전.
-    PARSE_TABLE_STITCH 켬(기본)이면 반환 전에 stitch_tables()로 쪽 경계 표를 이어 붙인다(BR36)."""
+    반환 전에 stitch_tables()로 쪽 경계 표를 이어 붙인다(BR36)."""
     out = []
     for i, t in enumerate(tables or []):
         grid = t.get("grid")
@@ -135,7 +114,7 @@ def build_tables(tables, source_engine, std_on):
             continue
         padded = _pad(grid)
         depth = header_depth(padded, t.get("merges"))
-        rows = [[_cell(c, std_on) for c in row] for row in padded]
+        rows = [[_cell(c) for c in row] for row in padded]
         header_rows = rows[:depth]
         entry = {
             "id": f"t{i}",
@@ -148,7 +127,7 @@ def build_tables(tables, source_engine, std_on):
         if depth > 1:
             entry["header_rows"] = header_rows  # 원본 머리글 행 전부(값 손실 없이) — 평펴 header는 요약용
         out.append(entry)
-    return stitch_tables(out) if stitch_on() else out
+    return stitch_tables(out)
 
 
 def to_markdown(entry):

@@ -23,7 +23,7 @@ DEFAULTS = {
     "summary": "auto",
 }
 EMBEDS = ("bge-m3", "e5-small", "e5-base", "api", "none")
-SUMMARIES = ("auto", "lead", "llm")
+SUMMARIES = ("auto", "lead")  # llm은 op-08에 지움
 
 
 def normalize(conf):
@@ -89,9 +89,10 @@ def env_for(conf, base=None):
     return settings_env(base, **names)
 
 
-def inputs(rep_dir, stack_path, env=None):
+def inputs(rep_dir, stack_bytes, env=None):
     """재빌드 판정용 입력 지문(index_id와 별개 — id는 설정만, 이건 '같은 설정이라도 다시 지어야 하나'):
-    _rep/index.json · 용어 사전 · 고객 명부 · stack.json(client_aliases 등) · common 지문 · 구조화 코드 지문(modules/structure)."""
+    _rep/index.json · 용어 사전 · 고객 명부 · 엔진 구성(stack_bytes = stackcfg.snapshot_bytes — 옛 사본 파일과 같은 바이트라 지문도 같음,
+    pl-32) · common 지문 · 구조화 코드 지문(modules/structure)."""
     from common import FINGERPRINT
     from common.core.artifacts import code_fp
 
@@ -103,7 +104,7 @@ def inputs(rep_dir, stack_path, env=None):
         "rep": fp(Path(rep_dir) / "index.json"),
         "glossary": glossary_fp(env),
         "roster": roster_fp(env),
-        "stack": fp(stack_path),
+        "stack": hashlib.sha256(stack_bytes).hexdigest()[:16] if stack_bytes else "none",
         "common": FINGERPRINT,
         "code": code_fp("s"),
     }

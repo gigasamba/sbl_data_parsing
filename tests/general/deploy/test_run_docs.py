@@ -5,11 +5,11 @@ PC 일반 시험: `PYTHONPATH=$PWD .venv/bin/python -m pytest tests/general`(S9 
 import importlib.util
 import re
 import shlex
-from pathlib import Path
 
 from common.config import setarg
+from common.core.paths import DEPLOY_ROOT
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = DEPLOY_ROOT  # 저장소 루트(op-09 — paths 상수)
 INPROCESS = True  # 상태를 바꾸지 않는 시험 — pytest가 함수마다 그대로 모음(tests/conftest.py)
 
 
@@ -24,9 +24,9 @@ RD = _load()
 
 GOLDEN = {
     "warm": "docker exec data-pipeline-parse bash -c 'mkdir -p /app/output/_warm && cd /app && PYTHONPATH=/app/deploy python -m pipeline.extract.source --set SOURCE_WARM=/app/output/_warm warm --csv /app/output/docflow/9/batch.csv'",
-    "parse_light": "docker exec data-pipeline-parse bash -c 'cd /app && echo [envcheck] gate=9 채널=light; RUN_DOCS_DOC=/app/output/docflow/7 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/docflow/7 --set DOC_DIR_PREPARED=/app/output/docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/docflow/7/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_MERGE_PAGES=1 --set FUSE_REREAD_MAX=3 --set FUSE_REREAD_DPI=120 --set PARSE_FUSE_REREAD_P3=0 --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --source rdb:csv:/app/output/docflow/7/batch.csv'",
-    "parse_vlm_scan": "docker exec data-pipeline-parse bash -c 'cd /app && echo [envcheck] gate=1.3 채널=vlm; RUN_DOCS_DOC=/app/output/docflow/9 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/docflow/9 --set DOC_DIR_PREPARED=/app/output/docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/docflow/9/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_MERGE_PAGES=1 --set FUSE_REREAD_MAX=3 --set FUSE_REREAD_DPI=120 --set PARSE_FUSE_REREAD_P3=0 --set PARSE_QA_LIGHT=1 --set VLM_GLOBAL_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set FIGURES_VLM_PARALLEL=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set VLM_PAGE_SLOW=45 --set PREPARE_ROTATE=0 --set CPU_MAX_LOAD=1.3 parse --source rdb:csv:/app/output/docflow/9/batch.csv --engines anydoc,docx2python,html_stdlib,hwpx,kreuzberg,markitdown,mhtml,msg_extract,office,plaintext,pymupdf,pymupdf4llm,qwen_vlm'",
-    "struct": "docker exec data-pipeline-structure bash -c 'cd /app && PYTHONPATH=/app/deploy S=$(python -m pipeline.stackcfg --path /app/output/docflow/9) && python -m pipeline.transform.structure.build_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --set FILE_META_PATH=/app/output/file_meta_new.jsonl --parse-dir /app/output/docflow/9/parse --stack \"$S\" --out /app/output/docflow/9/bundle && python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --set FILE_META_PATH=/app/output/file_meta_new.jsonl load --bundle /app/output/docflow/9/bundle >> /app/output/docflow/9/structure.log 2>&1'",
+    "parse_light": "docker exec data-pipeline-parse bash -c 'cd /app && echo [envcheck] gate=9 채널=light; RUN_DOCS_DOC=/app/output/docflow/7 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/docflow/7 --set DOC_DIR_PREPARED=/app/output/docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/docflow/7/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --source rdb:csv:/app/output/docflow/7/batch.csv'",
+    "parse_vlm_scan": "docker exec data-pipeline-parse bash -c 'cd /app && echo [envcheck] gate=1.3 채널=vlm; RUN_DOCS_DOC=/app/output/docflow/9 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/docflow/9 --set DOC_DIR_PREPARED=/app/output/docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/docflow/9/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set VLM_GLOBAL_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set FIGURES_VLM_PARALLEL=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set VLM_PAGE_SLOW=45 --set PREPARE_ROTATE=0 --set CPU_MAX_LOAD=1.3 parse --source rdb:csv:/app/output/docflow/9/batch.csv'",
+    "struct": "docker exec data-pipeline-structure bash -c 'cd /app && PYTHONPATH=/app/deploy python -m pipeline.transform.structure.build_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --set FILE_META_PATH=/app/output/file_meta_new.jsonl --parse-dir /app/output/docflow/9/parse --out /app/output/docflow/9/bundle && python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --set FILE_META_PATH=/app/output/file_meta_new.jsonl load --bundle /app/output/docflow/9/bundle >> /app/output/docflow/9/structure.log 2>&1'",
     "publish": "docker exec data-pipeline-parse bash -c 'cd /app && PYTHONPATH=/app/deploy python -m pipeline.load.publish_parse_result --set PM_BUCKET_SKIP_OVERLAP_CHECK=1 --out /app/output/docflow/9 --source-system FileStorageMap --apply >> /app/output/docflow/9/publish.log 2>&1'",
     "sweep": "docker exec data-pipeline-parse bash -c \"for p in /proc/[0-9]*; do grep -aqzx 'RUN_DOCS_DOC=/app/output/docflow/9' \\$p/environ 2>/dev/null && kill \\${p##*/} 2>/dev/null; done\"",
 }
@@ -53,22 +53,31 @@ def _inner(cmd):
     return shlex.split(cmd)[-1]
 
 
+def test_container_command_from_setting():
+    """op-10 — 컨테이너 명령은 DOCKER(설정 ops.host.docker, 없으면 podman·docker)에서 — 고정 docker 글자가 남지 않음."""
+    old = RD.DOCKER
+    try:
+        RD.DOCKER = "podman"
+        assert all(v.startswith("podman exec ") for v in _built().values()), _built()
+    finally:
+        RD.DOCKER = old
+
+
 def test_settings_only_via_set():
     """컨테이너 안 python에 설정 칸 이름을 env(`X=값 python`·`X=값 … && python`)로 주지 않는다 — 모두 --set(VS8b U-1: S7e2부터 env의 옛 이름은
-    안 읽음). env로 남는 것은 라이브러리(PYTHON*)·문서 표지(RUN_DOCS_DOC)·셸 변수 S뿐."""
+    안 읽음). env로 남는 것은 라이브러리(PYTHON*)·문서 표지(RUN_DOCS_DOC)뿐."""
     known = setarg._fields()
     allowed = {
         "PYTHONPATH",
         "PYTHONDONTWRITEBYTECODE",
         "PYTHONPYCACHEPREFIX",
         RD.DOC_MARK,
-        "S",
     }
     for name, cmd in _built().items():
         inner = _inner(cmd)
         env_words = set(re.findall(r"(?:^|[\s;&(])([A-Z][A-Z0-9_]+)=", re.sub(r"--set [^ ']+", "", inner)))
         assert env_words <= allowed, (name, sorted(env_words - allowed))
-        assert not (env_words - {"S"}) & set(known), (name, sorted((env_words - {"S"}) & set(known)))
+        assert not env_words & set(known), (name, sorted(env_words & set(known)))
 
 
 def test_set_names_accepted():
@@ -146,3 +155,24 @@ def test_defaults_match_settings_model():
     from pipeline.config import PipelineHostRunDocs
 
     assert RD.RUN_DOCS_DEFAULTS == {k: f.default for k, f in PipelineHostRunDocs.model_fields.items()}
+
+
+def test_no_stack_version():
+    """사용자 11-01 — 엔진 구성은 파일(판 번호 없음): 파싱·구조화 명령에 STACK_VERSION·--stack-version이 없다."""
+    cmds = RD.parse_cmd(7, "light", False, "9") + RD.struct_cmd(9)
+    assert "STACK_VERSION" not in cmds and "--stack-version" not in cmds and "stackcfg" not in cmds
+
+
+def test_read_settings_new_layout(tmp_path):
+    """op-08 ② — 러너는 새 배치 파일을 모델 배치로 바꿔 읽고(글자 그대로), 옛 배치는 migrate 안내로 거부."""
+    f = tmp_path / "settings.yaml"
+    f.write_text("required:\n  env: {run_env: dev}\n  edw: {read_password: '0123'}\nops:\n  run_docs: {warm: '30'}\n", encoding="utf-8")
+    doc, err = RD.read_settings(f)
+    assert err is None and doc["common"]["run_env"] == "dev" and doc["common"]["connections"]["rdb"]["read"]["password"] == "0123"
+    assert RD.run_docs_policy(doc)[0]["warm"] == 30
+    f.write_text("common:\n  run_env: dev\n", encoding="utf-8")
+    doc, err = RD.read_settings(f)
+    assert doc == {} and "common.config.migrate" in err
+    f.write_text("required:\n  env: {run_env: dev}\nops:\n  host: {docker: podman}\nops:\n  nightly: {time: '01:00'}\n", encoding="utf-8")
+    doc, err = RD.read_settings(f)
+    assert doc == {} and "같은 칸 두 번: ops" in err  # 앱 settings와 같은 거부(layout.reject_dup_keys)

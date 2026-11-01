@@ -11,6 +11,7 @@ import io
 import json
 import re
 import time
+import uuid
 from email import policy
 from pathlib import Path
 
@@ -28,19 +29,13 @@ from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ �
 from pipeline.transform.figures import chart_values as CV  # F14(a)·(c) 벡터 차트 결정적 값·추세
 from pipeline.transform.figures import diagram_edges as diag_edges  # F13, PDF 벡터·텍스트 글자 화살표 결정적 edges
 from pipeline.transform.figures.mermaid import to_mermaid
-from pipeline.transform.figures.nested import (
-    find_children,  # F7, page_render 안의 자식 그림 찾기·자르기(nested_on=PARSE_NESTED_FIGURE 전용 off, 독립 검토 10-13 Major)
-)
-from pipeline.transform.figures.nested import on as nested_on
-from pipeline.transform.figures.overlay import (
+from pipeline.transform.figures.nested import find_children  # F7, page_render 안의 자식 그림 찾기·자르기
+from pipeline.transform.figures.overlay import (  # F12 — 겹친 개체(그림+글상자/도형/화살표) 한 묶음 찾기
     cluster_overlaps,
     docx_float_objects,
     pdf_page_objects,
     pptx_slide_objects,
 )
-from pipeline.transform.figures.overlay import (
-    on as overlay_on,
-)  # F12 — 겹친 개체(그림+글상자/도형/화살표) 한 묶음 찾기(overlay_on=FIG_OVERLAY_CLUSTER 전용 off)
 from pipeline.transform.figures.pptx_edges import PPTX_SHAPES_MIN, picture_arrow_edges, pptx_edges
 from pipeline.transform.figures.vector import vector_regions
 from pipeline.transform.represent import context as C
@@ -89,7 +84,7 @@ def _office_shape_figures(doc_path):
     _pptx_shape_figure)와 같은 방식으로 통째 렌더해 그림 1건씩 기록한다(쪽 전체 = 그림, depth 0 — page_render
     관례와 같은 image_id `<doc>#p<쪽>#page`, soffice가 만든 PDF 쪽 번호 그대로라 docx 쪽 번호·xlsx 시트 번호와
     꼭 같지 않을 수 있음 — ponytail: 백로그가 허용한 근사, 정확한 시트 매핑이 필요해지면 xl/worksheets 관계로
-    승급). cheap 문턱(shape_detect)·스위치(PARSE_DOC_SHAPE_FIGURE)·soffice 없음·변환 실패는 모두
+    승급). cheap 문턱(shape_detect)·soffice 없음·변환 실패는 모두
     shape_render_pages()가 조용히 빈 묶음으로 처리(바이트 영향 0, pptx와 같은 관례)."""
     from pipeline.transform.figures.pptx_render import shape_render_pages
 
@@ -116,11 +111,7 @@ def _nested_children(parent_id, parent_bytes, page, dims):
     find_children의 0~1 비율 bbox를 dims(원본 쪽의 실제 단위 — PDF는 점, PNG는 px)로 곱해 '원본 쪽 좌표'로
     바꾼다(설계 §3 — "항상 원본 쪽 좌표로 환산"). build_records가 loc.parent_image_id·depth를 읽어 기록 필드를
     채우고, 이 함수가 돌려준 그림은 일반 그림과 똑같이 select_figures→vlm_fig를 거친다(내용·값 추출, 중복 방지
-    불필요 — page_vlm 표시가 없는 '새' 그림이라 build_records의 기존 skip 로직과 안 겹침). 독립 검토 Major(10-13)
-    — PARSE_NESTED_FIGURE=0이면 find_children도 빈 목록을 돌려주지만(단일 진본, nested.on()), 여기서 먼저
-    가려 dims 계산·순회 비용 자체를 아낀다(의도를 호출부에도 명시)."""
-    if not nested_on():
-        return []
+    불필요 — page_vlm 표시가 없는 '새' 그림이라 build_records의 기존 skip 로직과 안 겹침)."""
     w, h = dims
     out = []
     for child in find_children(parent_bytes):
@@ -355,7 +346,7 @@ def figures(p, page_covered=False):
                         "area_ratio": (r.width * r.height) / page_area if page_area else None,
                     }
                 )
-            if overlay_on() and page_pics:  # F12 — 그림 위에 글자/도형이 겹치면 한 묶음으로
+            if page_pics:  # F12 — 그림 위에 글자/도형이 겹치면 한 묶음으로
                 out.extend(_pdf_overlay_records(name, pi, pg, page_pics, page_vlm))
     elif ext == ".docx":
         import docx as _docx
@@ -388,7 +379,7 @@ def figures(p, page_covered=False):
                         seq.append(
                             ("i", rels[e], [x for x in rowtxt if x.strip()], e)
                         )  # F12 — 4번째(e, 관계id)로 겹침 묶음이 플로팅 anchor 좌표(rId)와 이음
-        pos_by_rid, text_boxes = docx_float_objects(p) if overlay_on() else ({}, [])  # F12 — 본문 순회 전에 한 번만(비용 적음)
+        pos_by_rid, text_boxes = docx_float_objects(p)  # F12 — 본문 순회 전에 한 번만(비용 적음)
         n, pic_objs = 0, []
         for k, it in enumerate(seq):
             if it[0] != "i":
@@ -478,7 +469,7 @@ def figures(p, page_covered=False):
                 pic_recs.append(rec)
             if not pics and len(list(s.shapes)) >= PPTX_SHAPES_MIN:  # F7 — 삽입 그림 없이 네이티브 도형으로만 그린 슬라이드
                 out.extend(_pptx_shape_figure(p, pr, si, title, texts))  # (qc_workflow.pptx 2쪽류, IQ046) — 쪽 렌더를 그림 1건으로
-            if pics and overlay_on():  # F12 — 그림 위에 글상자/연결선(화살표)이 겹치면 한 묶음으로
+            if pics:  # F12 — 그림 위에 글상자/연결선(화살표)이 겹치면 한 묶음으로
                 out.extend(_pptx_overlay_records(name, p, si, pr, s, pics, pic_recs, page_vlm))
     elif ext in (
         ".png",
@@ -579,8 +570,7 @@ PHOTO_MAX_TOKENS = int(
 )  # 사진류는 "한 줄 요약"만 필요 — 출력 상한을 낮춰 유도
 VLM_FIG_OCR_MAX = int(_FV.fig_ocr_max if _FV.fig_ocr_max is not None else 8)  # crop OCR은 비용 큼(모델 로드·추론) — 문서당 상한
 # OP11(10-11) — 글자 쪽 안에 박힌 그림(스캔 라벨 등)은 그림 경로로만 가는데, VLM 응답이 빈 경우(미설정·오류·빈 응답)
-# 값이 그대로 사라진다(P-ROUTE 실측 2건 — hidden_term.pdf·mixed_pages.pdf). 기본 켬, =0으로 끔(이전 동작 그대로).
-# kind_on·text_skip_on처럼 호출마다 다시 읽음(build_records 안) — 시험이 매 호출 env를 바꿔도 반영되게.
+# 값이 그대로 사라진다(P-ROUTE 실측 2건 — hidden_term.pdf·mixed_pages.pdf) — 같은 crop OCR 글자로 채운다(_ocr_fallback).
 
 
 def classify_figure_kind(fig):
@@ -607,19 +597,35 @@ def classify_figure_kind(fig):
     return "other"
 
 
+_TMP_DIR = (
+    APP_ROOT / "output" / "_reread_tmp"
+)  # 쓰기는 output/만(C4, dev/out = 컨테이너 /app/output 볼륨) — 크롭 PNG를 parser.py 계약(파일 경로)에 맞춰 잠깐 씀
+# (pl-34 10-30 — 재판독 reread.py를 지우며 _default_ocr와 함께 이리로 옮김, 폴더 이름·로직 그대로)
+
+
+def _default_ocr(png_bytes):
+    """크롭 PNG → 글자(공백 join) — tools/engines/rapidocr/parser.py의 운영 OCR 경로(parse_rapidocr_ko, 한국어
+    PP-OCRv5 모델)를 그대로 재사용한다(모델 설정 중복 방지, 결정적 — 같은 PNG면 같은 모델·같은 글자). 그 함수가
+    파일 경로를 전제하는 공용 계약이라 크롭을 output/ 밑 임시 PNG로 한 번 썼다 바로 지운다(C4 — output/ 밖에 안 씀)."""
+    from pipeline.extract.engines.rapidocr.parser import parse_rapidocr_ko
+
+    _TMP_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = _TMP_DIR / f"{uuid.uuid4().hex}.png"
+    tmp.write_bytes(png_bytes)
+    try:
+        out = parse_rapidocr_ko(str(tmp))
+        return (out.get("text") or "").replace("\n", " ").replace("\f", " ").strip()
+    finally:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+
+
 def _crop_ocr(img_bytes):
-    """그림 crop OCR(글자 그대로) — pipeline.transform.represent.reread._default_ocr 재사용(모델 설정 중복 방지,
-    rapidocr_ko, 결정적). 비용 큼(모델 로드·추론) — 호출부(build_records)가 문서당 상한을 건다."""
-    from pipeline.transform.represent.reread import _default_ocr
-
+    """그림 crop OCR(글자 그대로) — _default_ocr(rapidocr_ko, 결정적, 모델 설정 중복 방지).
+    비용 큼(모델 로드·추론) — 호출부(build_records)가 문서당 상한을 건다."""
     return _default_ocr(img_bytes) or ""
-
-
-def _ocr_only_record(f):
-    """AD10 — text_image 분류: VLM을 생략하고 crop OCR 글자만 기록(f['ocr_text'] — classify_figure_kind 직전에
-    한 번 돌린 결과를 그대로 재사용, OCR 재호출 없음). parse_json()이 그대로 읽을 수 있게 같은 JSON 글자 모양."""
-    rec = {"kind": "text_image", "text": f.get("ocr_text") or "", "summary": None, "values": [], "edges": [], "table_md": ""}
-    return json.dumps(rec, ensure_ascii=False), {"model": "ocr:rapidocr_ko", "ocr_chars": f.get("ocr_chars")}
 
 
 FIG_OCR_FALLBACK_MIN_CHARS_DEFAULT = 10  # engine-qa CONCERN(10-11) ① — 로고·워터마크·스크린샷 머리글("# Outlook" 등)
@@ -636,9 +642,9 @@ def _meaningful_chars(s):
 
 
 def _ocr_fallback(f, prov, ocr_fn, ocr_budget):
-    """OP11 — VLM 결과가 빈 경우(미설정·오류·빈 응답)만 호출(기본 켬, FIG_OCR_FALLBACK=0으로 끔). 같은 crop의
+    """OP11 — VLM 결과가 빈 경우(미설정·오류·빈 응답)만 호출. 같은 crop의
     AD10 분류 OCR(build_records가 이미 돌렸으면 f['ocr_text'])을 재사용 — 다시 OCR을 돌리지 않는다. 그 OCR이
-    아직 안 돈 경우(분류 꺼짐 VLM_FIG_KIND=0·벡터 그림·상한 소진)만 여기서 한 번 돌리되, 상한(ocr_budget, AD9
+    아직 안 돈 경우(벡터 그림·상한 소진)만 여기서 한 번 돌리되, 상한(ocr_budget, AD9
     선별로 작은/반복/못 엶은 이미 빠진 그림만 이 함수에 옴)을 같이 쓴다. 글자가 안 나오거나(ocr_text 빈 문자열)
     engine-qa CONCERN(10-11) ① — 의미 있는 글자 수가 문턱(FIG_OCR_FALLBACK_MIN_CHARS, 기본 10) 미만이면(로고·
     워터마크·짧은 머리글 조각) 쓰지 않고 VLM 실패 기록을 그대로 돌려줘 문서는 계속. ② — error는 지우지 않고
@@ -803,7 +809,7 @@ FULL_VERSION = "v2-nothink"  # 기본(전체 출력 상한) 캐시 버전 세그
 
 def vlm_fig(img_bytes, max_tokens=None, prompt_text=None, cache_name=None, agent="figure_describe"):
     """그림 1장 → (JSON 글자, provenance) — P0 캐시(model·prompt_id·그림 sha가 같으면 재사용, 호출 0). 실패·빈 답은 저장 안 함.
-    SI30 — Pillow가 못 여는 그림(select_figures를 끈 VLM_FIG_SELECT=0 경로에서도 여기서 한 번 더 가드)은 VLM을 부르지
+    SI30 — Pillow가 못 여는 그림(select_figures가 거른 뒤에도 여기서 한 번 더 가드)은 VLM을 부르지
     않고 "unconvertible:<형식>"만 돌려준다(그림 1건만 영향, 문서는 계속).
     AD10 — max_tokens(없으면 기본 1500=FULL_VERSION)가 기본과 다르면(예: photo의 300) 캐시 버전 세그먼트에
     `_mt<값>`을 붙여 **별도 캐시 키**를 쓴다(engine-qa BLOCK 10-08 ① 반영 — 잘린 답이 기본 캐시를 오염시키지
@@ -949,18 +955,10 @@ def _pick_edges(ext, page, px_edges, rec_edges):
     return rec_edges, ("vlm" if rec_edges else None)
 
 
-def _diagram_edges_det_on():
-    """VLM_FIG_SELECT·kind_on처럼 호출마다 다시 읽음(build_records 안) — 시험이 매 호출 env를 바꿔도 반영되게."""
-    return (
-        pc.cfg().transform.figures.diagram_edges_det
-    )  # S7c — 설정 객체(off=("0",) = 옛 !="0") · F13 — 기본 켬, =0이면 이전 동작(pptx_xml·vlm만)
-
-
 def _pick_edges_det(ext, page, px_edges, rec_edges, pdf_doc, f):
     """F13 — _pick_edges(위) 결과에 PDF 벡터 도식 그림(loc.origin=="vector")만 vector·glyph 소스를 더해 합친다
     (우선순위 pptx_xml > vector > glyph > vlm — pptx_xml이 이미 있으면 그대로, 벡터 그림이 아니면 손 안 댐).
-    DIAGRAM_EDGES_DET=0이면 옛 _pick_edges만(바이트 동일) — 서버 되돌리기 스위치. pdf_doc=None(끔·벡터 그림
-    없는 문서)이면 이 조건에서 이미 걸러져 추가 비용 없음."""
+    pdf_doc=None(벡터 그림 없는 문서)이면 이 조건에서 이미 걸러져 추가 비용 없음."""
     edges, edges_source = _pick_edges(ext, page, px_edges, rec_edges)
     if pdf_doc is None or (f.get("loc") or {}).get("origin") != "vector" or not f.get("bbox") or not page:
         return edges, edges_source
@@ -976,16 +974,15 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
     """문서 1건의 그림 기록 목록(설계 git 이력 docs/plans/image-parsing-2026-10-01.md(c4874dd0^) §3·§3-0 계약 — modules/search/mcp_server.py가 이 모양으로 읽음)
     + 렌더된 본문 블록(단순·보정) 목록 → (records, plain_blocks, enriched_blocks).
     AD9·AD21 — 작은 그림·반복 이미지는 VLM 후보에서 빼고(skipped: small/duplicate), 남는 그림은 캡션·본문 언급·면적 순으로
-    상한(VLM_FIGURES_MAX) 안을 채운다(VLM_FIG_SELECT=0이면 옛 문서 순서·동작). 상한에 걸려 건너뛴 그림은
+    상한(VLM_FIGURES_MAX) 안을 채운다. 상한에 걸려 건너뛴 그림은
     skipped: "VLM_FIGURES_MAX"로 기록에 남고, 문서 단위로 capped.jsonl에 upsert(record_capped).
     out_images — capped.jsonl이 쓰일 폴더를 직접 고름(AG11 2단계 착수 조건, 10-08: PARSE_IMAGES_ROOT 환경변수 교체
     대신 인자로 — 기본값 None이면 record_capped가 images_root()를 써 이전과 바이트 동일).
-    AD10 — VLM 보낼 그림(send)마다 classify_figure_kind()로 종류를 가늠(모델 호출 없음, VLM_FIG_KIND=1 기본 켬·=0
-    끄면 이전 동작 그대로): text_image는 VLM 생략(crop OCR 글자만), photo는 max_tokens를 낮춰 한 줄 요약 유도,
+    AD10 — VLM 보낼 그림(send)마다 classify_figure_kind()로 종류를 가늠(모델 호출 없음): text_image는 기록만(VLM 그대로), photo는 max_tokens를 낮춰 한 줄 요약 유도,
     chart·flow·other(모름 포함)는 지금처럼 전체 P_FIGJ 호출 — 지시문 글자·prompt_id는 안 바꿔 기존 VLM 캐시 그대로
     재사용한다. ocr_fn — crop OCR 재사용 지점(없으면 _crop_ocr, 테스트는 가짜 OCR 주입).
-    OP11 — VLM 응답이 빈 경우(미설정·오류·빈 응답)만 같은 crop의 OCR 글자로 채운다(_ocr_fallback, FIG_OCR_FALLBACK=1
-    기본 켬). VLM 응답이 있으면(비어 있지 않으면) 지금처럼 그대로 — 끄는 길만 바뀌는 게 아니라 **있는 경우는 무변경**.
+    OP11 — VLM 응답이 빈 경우(미설정·오류·빈 응답)만 같은 crop의 OCR 글자로 채운다(_ocr_fallback). VLM 응답이
+    있으면(비어 있지 않으면) 그대로.
     figures_max — 그림 상한을 이번 호출만 바꿈(None이면 설정 VLM_FIGURES_MAX — figures_resume이 상한을 올려 다시 돌 때, S7c2:
     전엔 env를 잠깐 바꿔 넘김)."""
     ext = Path(doc_path).suffix.lower()
@@ -993,7 +990,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
     px_edges = pptx_edges(doc_path) if ext == ".pptx" else {}  # 슬라이드 XML 연결선 — VLM edges보다 우선(있으면)
     figs = figures(doc_path, page_covered)
     pdf_doc = None  # F13 — PDF 벡터 도식 결정적 edges 추출용 fitz 문서(비PDF·벡터 그림 없는 문서는 안 엶, 비용 0)
-    if _diagram_edges_det_on() and is_pdf and any((f.get("loc") or {}).get("origin") == "vector" for f in figs):
+    if is_pdf and any((f.get("loc") or {}).get("origin") == "vector" for f in figs):
         import fitz as _fitz
 
         pdf_doc = _fitz.open(doc_path)
@@ -1003,18 +1000,11 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
     )  # S7c — 설정 객체(옛 int(get(X) or 20)) · 인자가 이김
     cap = int(_fm if _fm is not None else 20)  # 문서당 VLM에 보낼 그림 상한(야간 배치 비용·시간 가드, 독립 검토 10-03) — 0이면 VLM 안 부름
     ctxs = [C.link_context(f, doc_text) for f in figs]
-    if (
-        not pc.cfg().transform.vlm.fig_select
-    ):  # S7c — 설정 객체(off=("0",) = 옛 =="0") · 끄면 옛 동작(문서 순서로 상한, 작은/반복 구분 없음) — 결정성 비교용
-        order, skip_reason = list(range(len(figs))), {}
-    else:
-        _mp = pc.cfg().transform.vlm.fig_min_px  # S7c — 설정 객체(옛 int(get(X) or 64))
-        min_px = int(_mp if _mp is not None else 64)
-        order, skip_reason = select_figures(figs, ctxs, min_px)
+    _mp = pc.cfg().transform.vlm.fig_min_px  # S7c — 설정 객체(옛 int(get(X) or 64))
+    min_px = int(_mp if _mp is not None else 64)
+    order, skip_reason = select_figures(figs, ctxs, min_px)
     for i, f in enumerate(figs):  # BR56 — 쪽·슬라이드 VLM이 이미 다룬 그림(figures()의 loc.page_vlm)은 기록은 두고
-        if (f.get("loc") or {}).get(
-            "page_vlm"
-        ) and i not in skip_reason:  # 그림 VLM만 생략(select_figures가 꺼져 있어도 이중 호출은 항상 막는다)
+        if (f.get("loc") or {}).get("page_vlm") and i not in skip_reason:  # 그림 VLM만 생략(이중 호출 방지)
             skip_reason[i] = "page_vlm"
         if (f.get("loc") or {}).get(
             "cluster_id"
@@ -1023,16 +1013,9 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
     order = [i for i in order if i not in skip_reason]  # VLM_FIGURES_MAX 상한은 실제로 VLM이 필요한 그림끼리만 다툰다
     send = set(order[:cap])
     capped_ids = []
-    kind_on = pc.cfg().transform.vlm.fig_kind  # S7c — 설정 객체(off=("0",)) · AD10 — 기본 켬, =0으로 끄면 바이트 동일(이전 동작)
-    # engine-qa BLOCK(10-08) ② — text_image의 "VLM 생략"은 실 글자 이미지 표본으로 문턱을 검증하기 전까지 기본 끔
-    # (OP11 예외: 정답률 우선 — 실 표본 검증 전까지 손실 위험 기능은 기본 끔). classify_figure_kind는 그대로 돌려
-    # provenance.fig_kind로 기록만 하고, VLM_FIG_TEXT_SKIP=1일 때만 실제로 VLM을 생략한다.
-    text_skip_on = pc.cfg().transform.vlm.fig_text_skip  # S7c — 설정 객체(옛 !="0" — 칸 판정 꼴 off=("0",))
-    fallback_on = pc.cfg().transform.figures.ocr_fallback  # S7c — 설정 객체(off=("0",)) · OP11 — 기본 켬, =0으로 끔
+    # engine-qa BLOCK(10-08) ② — classify_figure_kind는 provenance.fig_kind로 기록만 하고 text_image도 VLM을 부른다
+    # (글자 이미지 VLM 생략 VLM_FIG_TEXT_SKIP은 op-08에 지움).
     ocr_budget = [VLM_FIG_OCR_MAX]  # 문서당 crop OCR 상한(공유 카운터, 리스트로 함수 밖에서도 줄임)
-    chart_det_on = (
-        pc.cfg().transform.figures.chart_values_det
-    )  # S7c — 설정 객체(off=("0",)) · F14(a) — 기본 켬, =0으로 끄면 VLM 눈대중 값만(이전 동작)
     _fitz_cache = {}
 
     def _chart_page(pn):  # 문서당 fitz.Document 1개만 열어 벡터 그림마다 재사용(쪽 번호로 바로 접근)
@@ -1045,7 +1028,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
     # 2026-10-22 figures parallel: Phase A (OCR classify, parallel) then Phase B (VLM, parallel)
     import concurrent.futures as _fig_cf
 
-    _need_ocr = [i for i in sorted(send) if kind_on and (not (figs[i].get("loc") or {}).get("signals"))]
+    _need_ocr = [i for i in sorted(send) if not (figs[i].get("loc") or {}).get("signals")]
     _use_ocr = _need_ocr[: ocr_budget[0]]
     if _use_ocr:
         ocr_budget[0] -= len(_use_ocr)
@@ -1069,21 +1052,19 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
             list(_ex_a.map(SP.carry(_ocr_one), _use_ocr))  # op-01 — 풀 스레드에 run/span ID를 실음(VLM·OCR 지표가 이 문서 span에 쌓이게)
     _kinds = {}
     for i in sorted(send):
-        _kinds[i] = classify_figure_kind(figs[i]) if kind_on else None
-    _vlm_set = [i for i in sorted(send) if not (_kinds[i] == "text_image" and text_skip_on)]
+        _kinds[i] = classify_figure_kind(figs[i])
+    _vlm_set = sorted(send)
 
     def _vlm_one(fi):
         f = figs[fi]
         kind = _kinds[fi]
         if f.get("overlay"):
             t, pv = vlm_fig_overlay(f["bytes"])
-            if fallback_on and not t.strip():
-                t, pv = _ocr_fallback(f, pv, ocr_fn, ocr_budget)
         else:
             t, pv = vlm_fig(f["bytes"], max_tokens=PHOTO_MAX_TOKENS if kind == "photo" else None)
-            if fallback_on and not t.strip():
-                t, pv = _ocr_fallback(f, pv, ocr_fn, ocr_budget)
-        if kind_on and kind:
+        if not t.strip():
+            t, pv = _ocr_fallback(f, pv, ocr_fn, ocr_budget)
+        if kind:
             pv = dict(pv, fig_kind=kind)
         return (fi, t, pv)
 
@@ -1100,9 +1081,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
         if i in skip_reason:
             text, prov = "", {"skipped": skip_reason[i]}
         elif i in send:
-            if _kinds[i] == "text_image" and text_skip_on:
-                text, prov = _ocr_only_record(f)
-            elif i in _vlm_dict:
+            if i in _vlm_dict:
                 text, prov = _vlm_dict[i]
             else:
                 text, prov = "", {}
@@ -1124,14 +1103,14 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
         )
         edges, edges_source = _pick_edges_det(ext, page, px_edges, rec.get("edges"), pdf_doc, f)
         # F14(a) — PDF 벡터 그림(origin=="vector")만 결정적 값(VLM 없음)을 먼저 구해 같은 (계열, x)는 그 값이 이김
-        # (merge_values) · 그 밖 그림은 content.values가 이전과 같음 · CHART_VALUES_DET=0이면 이전 동작.
+        # (merge_values) · 그 밖 그림은 content.values가 VLM 값 그대로.
         det_values = []
-        if chart_det_on and origin == "vector" and page:
+        if origin == "vector" and page:
             try:
                 det_values, _cv_meta = CV.extract_vector(_chart_page(page), f["bbox"])
             except Exception:  # 결정적 추출 실패 1건이 그림 기록을 막지 않게(기존 VLM 경로 그대로)
                 det_values = []
-        merged_values = CV.merge_values(det_values, rec.get("values")) if (chart_det_on and origin == "vector") else rec.get("values")
+        merged_values = CV.merge_values(det_values, rec.get("values")) if origin == "vector" else rec.get("values")
         rec_out = {
             "image_id": f["image_id"],
             "doc": doc_name,
@@ -1172,8 +1151,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
             },
             "_bytes": f["bytes"],
         }
-        if chart_det_on:  # F14(c) — 끄면 "trend" 키 자체가 없어야 바이트 동일(독립 검토 10-14)
-            rec_out["trend"] = CV.compute_trend(det_values or merged_values) if merged_values else None
+        rec_out["trend"] = CV.compute_trend(det_values or merged_values) if merged_values else None  # F14(c)
         records.append(rec_out)
     if "doc" in _fitz_cache:
         _fitz_cache["doc"].close()

@@ -8,7 +8,7 @@ from pathlib import Path
 from common.ai import adk as A
 from common.config.settings import COMMON
 from pipeline import config as pc
-from pipeline.transform.figures.nested import MAX_CHILDREN_TOTAL, _parse_regions, bbox_regions, child_crops, find_children, on
+from pipeline.transform.figures.nested import MAX_CHILDREN_TOTAL, _parse_regions, bbox_regions, child_crops, find_children
 
 
 def selftest():
@@ -82,9 +82,8 @@ def selftest():
     print("[selftest] nested — 가짜 VLM: bbox 비율대로 자름·P0 캐시 재사용(호출 0)·depth 2까지 재귀 통과")
 
 
-def selftest_off_switch_and_fanout_cap():
-    """독립 검토(10-13) Major·Minor — PARSE_NESTED_FIGURE=0 전용 off(VLM이 설정돼 있어도 호출 0) ·
-    MAX_CHILDREN_TOTAL — 매 호출 MAX_REGIONS(4)개씩 돌려주는 가짜 VLM이라도 쪽 1장(손자 포함) 총합은 멈춘다."""
+def selftest_fanout_cap():
+    """독립 검토(10-13) Minor — MAX_CHILDREN_TOTAL: 매 호출 MAX_REGIONS(4)개씩 돌려주는 가짜 VLM이라도 쪽 1장(손자 포함) 총합은 멈춘다."""
     import tempfile
 
     from PIL import Image
@@ -93,24 +92,7 @@ def selftest_off_switch_and_fanout_cap():
     buf = io.BytesIO()
     Image.new("RGB", (400, 300), "white").save(buf, "PNG")
     page_png = buf.getvalue()
-
-    _env = contextlib.ExitStack()  # S7c — 설정 객체만 바꿔 끼움
-    _env.enter_context(pc.PIPE.env(PARSE_RAW_ROOT=str(d / "store_off"), PARSE_NESTED_FIGURE="0"))
-    _env.enter_context(COMMON.env(VLM_BASE_URL="http://127.0.0.1:0", VLM_MODEL="test/model"))
     real_complete = A.complete
-    calls = []
-    A.complete = lambda role, messages, **kw: (calls.append(1), (json.dumps({"regions": [{"bbox": [0.1, 0.1, 0.9, 0.9]}]}), {}))[1]
-    try:
-        assert not on()
-        assert bbox_regions(page_png) == ([], {"skipped": "off"})
-        assert child_crops(page_png) == ([], {"skipped": "off"})
-        assert find_children(page_png) == []
-        assert calls == []  # VLM이 설정돼 있어도(off 스위치가 그 전에 막음) 호출 0
-    finally:
-        A.complete = real_complete
-        _env.close()
-    print("[selftest] nested — PARSE_NESTED_FIGURE=0: VLM 설정 여부와 무관하게 호출 0, 자식 없음 통과")
-
     calls2 = []
 
     def fake_always_four(role, messages, **kw):
@@ -142,4 +124,4 @@ def selftest_off_switch_and_fanout_cap():
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통
     selftest()
-    selftest_off_switch_and_fanout_cap()
+    selftest_fanout_cap()

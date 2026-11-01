@@ -4,6 +4,7 @@ import contextlib
 import io
 import json
 import tempfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from pipeline.tools import perf
@@ -121,3 +122,21 @@ def test_compare_runs_and_file_loader():
         with contextlib.redirect_stdout(out):
             perf.main([RUN["run_id"], "--file", str(path), "--json"])
         assert json.loads(out.getvalue())["wall_ms"] == 20000
+
+
+def test_since_merges_runs():
+    now = datetime(2026, 11, 2, 12, tzinfo=UTC)
+    rows = [
+        {"run_id": "a", "stage": "extract.parse", "duration_ms": 10, "ts_start": (now - timedelta(hours=1)).isoformat()},
+        {"run_id": "b", "stage": "load.pgvector", "duration_ms": 20, "ts_start": (now - timedelta(hours=2)).isoformat()},
+        {"run_id": "c", "stage": "extract.parse", "duration_ms": 30, "ts_start": (now - timedelta(hours=9)).isoformat()},
+    ]
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "applog.jsonl"
+        lines = [{"table": "pipe_event", "row": r} for r in rows] + [{"table": "pipe_run", "row": {"run_id": "a"}}]
+        path.write_text("\n".join(json.dumps(x) for x in lines) + "\nnot json\n", encoding="utf-8")
+        assert [r["run_id"] for r in perf.load_since_file(3, [path], now=now)] == ["a", "b"]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            assert perf.main(["--since", "100000", "--file", str(path)]) == 0
+        assert "전체 실행" in out.getvalue() and "load.pgvector" in out.getvalue()

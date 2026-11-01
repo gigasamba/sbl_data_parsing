@@ -25,6 +25,7 @@
 *.env       text eol=lf
 *.mako      text eol=lf
 Dockerfile  text eol=lf
+Dockerfile.bake  text eol=lf
 deploy/docker/IMAGE_BASE   text eol=lf
 .gitignore      text eol=lf
 .dockerignore   text eol=lf
@@ -71,3 +72,6 @@ resources/prompts/**   text eol=lf
 # cp949·CRLF가 섞인 .eml·.txt, 손상·암호 파일이 의도적으로 있어 변환하지 않는다.
 valid_env/object_storage/** -text
 valid_env/object_storage/test_doc_purpose.md text eol=lf
+DEPS_HASH   text eol=lf
+# op-06 — git archive·GitHub zip 받기가 CODE_COMMIT을 "<커밋> <짧은 커밋>"으로 채움(clone에는 틀 그대로)
+CODE_COMMIT text eol=lf export-subst

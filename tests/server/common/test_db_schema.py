@@ -4,12 +4,12 @@ ParsingMeta는 docs/operations/parsing_meta_mssql.sql과 같아야 한다(다르
 목록으로 찍기만 한다. 문서가 없는 이미지(docs/ 미포함)에서는 건너뜀."""
 
 import re
-from pathlib import Path
 
+from common.core.paths import DEPLOY_ROOT
 from common.store import parsing_meta_db as PM
 from common.store.db import dbcompare
 
-ROOT = Path(__file__).resolve().parents[3]  # 저장소 루트(tests/server/common/ 위)
+ROOT = DEPLOY_ROOT  # 저장소 루트(PC) · 이미지 /app/deploy — op-09 paths 상수
 DOC = ROOT / "docs" / "architecture" / "db_schema.md"
 PM_SQL = ROOT / "docs" / "operations" / "parsing_meta_mssql.sql"
 DECISIONS = ("유지", "삭제", "새로")
@@ -40,10 +40,10 @@ def _pm_columns():
 
 
 def _actual():
-    """gold·struct = dbcompare.expected(판 비교 시험과 같은 모델 — 차원은 칸 이름과 무관) · ParsingMeta = DDL 파일."""
+    """gold = dbcompare.expected(판 비교 시험과 같은 모델 — 차원은 칸 이름과 무관) · ParsingMeta = DDL 파일."""
     cols = {
         f"{db}.{t.name}": {c.name for c in t.columns}
-        for db, tgt in (("gold", "search"), ("struct", "struct"))
+        for db, tgt in (("gold", "search"),)
         for t in dbcompare.expected(tgt, "ai", 1024)[0].tables.values()
     }
     cols["edw.ParsingMeta"] = _pm_columns()

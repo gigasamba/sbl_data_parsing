@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from common.config.settings import COMMON
 from common.core import terms as T
 from pipeline.transform.structure.gen_roster import (
     ROSTER_COLS,
@@ -41,14 +42,9 @@ def selftest():
     write_client_roster(build_roster(rows2, m2), out2, build_client_extra(rows2, m2), source="csv:master2.csv")
     assert "C-1,Acme Bio,에이크미,,,,,,active,,csv:master2.csv," in out2.read_text(encoding="utf-8")
     assert T.read_roster(out2) == {"Acme Bio": ["에이크미"]}, T.read_roster(out2)  # inactive dropped, name_ko → alias
-    import os as _os
-
-    _os.environ["CLIENT_ROSTER"] = str(out)  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음
-    try:
+    with COMMON.env(CLIENT_ROSTER=str(out)):  # op-09 — 인계 파일(terms.py)도 설정 객체로 읽음
         al = T._aliases()
         assert al.get("Celltrion") and set(al["Celltrion"]) == {"CT Inc", "셀트리온"}, al  # 생성 파일을 terms.py가 그대로 읽음
-    finally:
-        del _os.environ["CLIENT_ROSTER"]  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음(복원)
 
     # E15 — --check: cp949(한국어 Excel) 읽힘·짧은 영문 별칭 무시·별칭 충돌·같은 이름 여러 줄 경고, 빈 명부는 오류
     chk = d / "sfdc_export.csv"

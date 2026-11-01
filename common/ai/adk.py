@@ -1474,7 +1474,7 @@ def complete(
     안 거쳐 RV12 빈 응답 안전망(생각이 max_tokens를 다 써 빈 응답 → 4배로 딱 한 번 재요청) 밖에 있었다 — 호출부마다
     고치는 대신 agent= 경로의 이 공용 지점에서 한 번만: call_reserved가 **원래 False로 들어왔을 때**만(= chat()이
     아닌 직접 호출자 — chat()은 이미 자기 자리에서 같은 안전망을 가짐, 여기서 또 하면 두 안전망이 겹쳐 최대 4번까지
-    늘어난다) LLM_EMPTY_RETRY(기본 켬·=0으로 끔)·LLM_EMPTY_RETRY_MAX(기본 8000)를 그대로 재사용해 같은 재요청을
+    늘어난다) LLM_EMPTY_RETRY_MAX(기본 8000)를 그대로 재사용해 같은 재요청을
     한다. 재요청도 try_reserve_call()로 공유 장부를 거치고(캐시·과금 이중 집계 없음), 재요청이 전송 오류로 못
     끝나면 그 슬롯을 release_call()로 돌려주고 바깥 재시도 루프(429/5xx)에 맡긴다(GH1-08e와 같은 모양).
     RV24 — 전송 전에 base_url별 공유 회로 차단기(_model_down)를 본다: 연속 MODEL_DOWN_AFTER회 연결·타임아웃
@@ -1529,9 +1529,7 @@ def complete(
                 text, u = _complete_http(prof, messages, temperature, max_tokens, json_mode, extra, deadline, guard_prefix)
             elif agent is not None:
                 text, u = _complete_agent(agent, role, prof, messages, temperature, max_tokens, json_mode, extra, deadline, guard_prefix)
-                if (
-                    direct_agent_call and cfg().models.llm.empty_retry and _L._empty_truncated(text, u)
-                ):  # RV16 — RV12와 같은 판정 함수(중복 구현 안 함)
+                if direct_agent_call and _L._empty_truncated(text, u):  # RV16 — RV12와 같은 판정 함수(중복 구현 안 함)
                     cap = cfg().models.llm.empty_retry_max
                     retry_tokens = cap if max_tokens is None else min(max_tokens * 4, cap)
                     if retry_tokens > (max_tokens or 0):

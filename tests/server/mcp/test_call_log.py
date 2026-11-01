@@ -219,11 +219,11 @@ def test_initialize_contract():
     rows = []
 
     async def run():
-        m = main.build()
+        m = main.build("127.0.0.1", 8765)
         wire = ListToolsResult(tools=await m.list_tools()).model_dump_json(by_alias=True, exclude_none=True)
-        # T0 HEAD 2106313와 직렬화 바이트를 비교해 고정. 계약 변경 시 별도 협의 필요.
-        assert len(wire.encode()) == 9330
-        assert hashlib.sha256(wire.encode()).hexdigest() == "6ada3aaa8a6d19ee6926d43ecae2574962b9cc782810625ac77424efb05d32bb"
+        # develop 46327a3과 직렬화 바이트를 비교해 고정(로깅은 도구 계약을 바꾸지 않음). 계약 변경 시 별도 협의 필요.
+        assert len(wire.encode()) == 9170
+        assert hashlib.sha256(wire.encode()).hexdigest() == "7da1e1ca6836c6b1b8f485a77140783399fc3871d62c674f733eadea6db7590c"
         with patch.object(main, "build", return_value=m):
             app = main.build_guarded_app("127.0.0.1", 8765, "")
         headers = {"Accept": "application/json, text/event-stream", "X-MCP-Client": "test", "X-MCP-User": "test"}
@@ -284,7 +284,7 @@ jsonlog.setup("mcp")  # 이후 재설정에도 stdout Handler가 되살아나지
 def do_edw_meta(*args):
     return {"kind": "schemas", "schemas": []}
 edw_tools.do_edw_meta = do_edw_meta
-build().run(transport="stdio")
+build("127.0.0.1", 8765).run(transport="stdio")
 """
 
     async def run():

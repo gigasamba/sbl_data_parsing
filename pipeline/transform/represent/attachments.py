@@ -17,11 +17,26 @@ import zipfile
 from email import policy
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]  # dev/
-from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
-from pipeline.shared import artifacts as P0  # noqa: E402
-from pipeline.shared.postprocess import raw_root  # noqa: E402 — PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
+from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
+from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.shared import artifacts as P0
+from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
+
+
+def attach_dir():
+    """첨부 임시 파일 폴더 — PARSE_TMP의 형제(기본 output/_tmp_parse/attach). 쓰는 쪽이 파일 하나 끝낼 때마다
+    finally로 직접 지운다. APP_ROOT/output 아래 2단 이상만 허용(독립 보안 검토 BLOCKER 1 — 지우는 대상이라 범위를 좁힘,
+    op-08에 지운 pipeline/stream.py에서 옮김)."""
+    tmp = Path(pc.cfg().paths.parse_tmp or (APP_ROOT / "output" / "_tmp_parse" / "stream"))
+    root_out = (APP_ROOT / "output").resolve()
+    rp = (tmp.parent / "attach").resolve()
+    try:
+        rel = rp.relative_to(root_out)
+    except ValueError:
+        rel = None
+    if rel is None or len(rel.parts) < 2:
+        raise SystemExit(f"[attach] 경로 거부 — {rp}는 {root_out} 아래 2단 이상 하위 폴더여야 함(PARSE_TMP 확인)")
+    return rp
 
 
 def _max_depth():
@@ -111,8 +126,7 @@ def extract(doc_path):
 
 # ── 첨부 1건 파싱(+ P0 캐시) ─────────────────────────────────────────────
 def _stack_parse():
-    f = pc.stack_path()  # S8b — 진입점이 만든 판 사본(PC는 파일 — 옛 STACK_FILE)
-    return json.loads(f.read_text(encoding="utf-8")).get("parse", {}) if f.exists() else {}
+    return pc.stack().get("parse", {})  # 엔진 구성 파일(서버·PC 같음 — 사용자 11-01)
 
 
 def parse_attachment(entry, store=None):
@@ -134,9 +148,7 @@ def parse_attachment(entry, store=None):
                 return json.loads(dst.read_text(encoding="utf-8")).get("text") or "", True, eng
             except (OSError, ValueError):
                 pass
-        from pipeline.stream import attach_dir as _attach_dir  # PARSE_TMP 형제 폴더(시스템 tempdir 아님) —
-
-        adir = _attach_dir()  # 강제 종료돼도 check_residue가 잡게(독립 보안
+        adir = attach_dir()  # 강제 종료돼도 남은 파일은 다음 실행이 같은 이름으로 덮음
         adir.mkdir(parents=True, exist_ok=True)  # 검토 MINOR 5) · 스트리밍 시작 청소가 안 건드림(재검토 6번)
         tmp = adir / f"attach-{content_sha[:12]}{ext}"
         out_json = tmp.with_suffix(tmp.suffix + ".json")

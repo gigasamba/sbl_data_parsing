@@ -19,9 +19,9 @@ BUILD_ONLY=${BUILD_ONLY:-0}
 [ "$BUILD_ONLY" = 1 ] || TARGET=${TARGET:?TARGET=user@수집서버 를 지정(빌드만 하려면 BUILD_ONLY=1)}
 IMAGE_TARGET=${IMAGE_TARGET:-pipeline}
 case "$IMAGE_TARGET" in
-  pipeline|mcp) ;;
+  pipeline|mcp|pipeline-runtime|mcp-runtime) ;;   # *-runtime = 코드 없는 실행 이미지(op-06 — 개발 서버, 코드 폴더를 /app/deploy에 마운트)
   parse|structure|retrieval) echo "[오류] IMAGE_TARGET=$IMAGE_TARGET 는 S6b에 없어졌다(D-020) — 파이프라인은 IMAGE_TARGET=pipeline, 검색 MCP는 IMAGE_TARGET=mcp" >&2; exit 2 ;;
-  *) echo "[오류] 모르는 IMAGE_TARGET: $IMAGE_TARGET (pipeline·mcp만)" >&2; exit 2 ;;
+  *) echo "[오류] 모르는 IMAGE_TARGET: $IMAGE_TARGET (pipeline·mcp·pipeline-runtime·mcp-runtime)" >&2; exit 2 ;;
 esac
 . deploy/release/image_names.sh   # image_name_of — 타깃 → 이미지 이름(S6c, ship_stage.sh와 같은 파일)
 APP_VERSION=$(app_version) || exit 2
@@ -33,6 +33,9 @@ REMOTE_DIR=${REMOTE_DIR:-/var/tmp}
 DOCKER=${DOCKER:-docker}
 REMOTE_DOCKER=${REMOTE_DOCKER:-docker}
 OUT=${OUT:-/var/tmp/$(echo "$TAG" | tr ':/' '__').tar.gz}
+RUNTIME=0; case "$IMAGE_TARGET" in *-runtime) RUNTIME=1 ;; esac
+# op-06 — 실행 이미지면 코드 폴더 묶음(이 커밋의 git 추적 파일 + CODE_COMMIT, valid_env/·validation/ 뺌)도 이미지 옆에 만든다.
+CODE_OUT=${CODE_OUT:-output/ship/code-$APP_VERSION-$VCS_REF.tar.gz}   # 저장소 안(OUT의 /var/tmp는 Windows Git Bash에 없음)
 
 echo "== 0. 사전 점검"
 if [ "$BUILD_ONLY" != 1 ]; then
@@ -54,7 +57,7 @@ elif [ "$(basename "$DOCKER")" = docker ]; then
   esac
 fi
 [ "$(basename "$DOCKER")" = docker ] && export DOCKER_BUILDKIT=1
-if [ "$IMAGE_TARGET" = pipeline ] && ! ls assets/rapidocr/*.onnx >/dev/null 2>&1; then   # assets/는 pipeline 이미지만 씀
+if [ "${IMAGE_TARGET%-runtime}" = pipeline ] && ! ls assets/rapidocr/*.onnx >/dev/null 2>&1; then   # assets/는 pipeline 이미지만 씀
   [ "${ALLOW_NO_ASSETS:-0}" = 1 ] && echo "[경고] assets/rapidocr 없음 — ALLOW_NO_ASSETS=1로 계속(rapidocr_ko가 첫 실행에 모델을 받으려다 실패·폐쇄망이면 그대로 실패)" \
     || { echo "[오류] assets/rapidocr/*.onnx 없음 — Git worktree에서 빌드할 때 메인 체크아웃의 assets/를 먼저 복사하세요(Git 제외 자산, image-patch-process.md §4). 계속하려면 ALLOW_NO_ASSETS=1"; exit 2; }
 fi
@@ -64,8 +67,27 @@ if [ "$TAG_DEFAULT" = 1 ] && [ "${FORCE_TAG:-0}" != 1 ] && $DOCKER image inspect
 fi
 echo "== 1. 빌드 $TAG (버전 $APP_VERSION · 커밋 $VCS_REF)"
 $DOCKER build ${BUILD_ARGS:-} $SYNTAX_ARG --build-arg APP_VERSION="$APP_VERSION" --build-arg VCS_REF="$VCS_REF" -f deploy/docker/Dockerfile --target "$IMAGE_TARGET" -t "$TAG" .
-bash deploy/release/selftest_gate.sh $DOCKER run --rm "$TAG" selftest   # 알려진 FAIL 밖 FAIL 0이어야 통과(selftest 종료 코드만 보지 않음)
-$DOCKER run --rm "$TAG" resources
+RUN_ARGS=""
+if [ "$RUNTIME" = 1 ]; then
+  # op-06 — 코드 없이 띄우면 바로 멈춰야 함(runtime_entry.sh)
+  if MSYS_NO_PATHCONV=1 $DOCKER run --rm "$TAG" help >/dev/null 2>&1; then echo "[오류] 코드 마운트 없이 실행 이미지가 떴음"; exit 1; fi
+  # 판정·묶음은 이 커밋의 코드 트리(git archive — 커밋 안 한 변경은 안 들어감) + CODE_COMMIT
+  CODE_DIR=$(mktemp -d); trap 'rm -rf "$CODE_DIR"' EXIT
+  git archive HEAD -- . ':(exclude)valid_env' ':(exclude)validation' | tar -x -C "$CODE_DIR"
+  echo "$(git rev-parse HEAD 2>/dev/null || echo unknown) $VCS_REF $APP_VERSION" > "$CODE_DIR/CODE_COMMIT"
+  # mktemp -d는 0700 — 그대로 묶으면 서버에서 푼 판 폴더를 컨테이너 사용자 10001이 못 읽음. 모두가 읽게(폴더 755·파일 644, 실행 비트는 유지)
+  chmod -R u=rwX,go=rX "$CODE_DIR"
+  mkdir -p "$(dirname "$CODE_OUT")"
+  tar -czf - -C "$CODE_DIR" . > "$CODE_OUT"   # 표준 출력으로(Windows 경로 C:/…를 tar가 원격 호스트로 읽지 않게)
+  # 맨 위 폴더 755 + 모든 항목 모두가 읽기(head로 자르지 않음 — pipefail에서 tar가 SIGPIPE로 실패함)
+  bad=$(tar -tvzf - < "$CODE_OUT" | awk 'NR==1 && $1 != "drwxr-xr-x" {print "맨위폴더 " $1} $1 !~ /^.r..r..r/ {print $NF}')
+  [ -z "$bad" ] || { echo "[오류] 코드 폴더 묶음 권한 — 컨테이너 사용자 10001이 못 읽음: $bad"; exit 1; }
+  echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버에서 새 판 폴더로 풀고 live 링크를 옮김(release-and-patch.md — op-06)"
+  export MSYS_NO_PATHCONV=1   # Windows Git Bash가 -v 인자를 바꾸지 않게
+  RUN_ARGS="-v $(cygpath -m "$CODE_DIR" 2>/dev/null || echo "$CODE_DIR"):/app/deploy:ro"
+fi
+bash deploy/release/selftest_gate.sh $DOCKER run --rm $RUN_ARGS "$TAG" selftest   # 알려진 FAIL 밖 FAIL 0이어야 통과(selftest 종료 코드만 보지 않음)
+$DOCKER run --rm $RUN_ARGS "$TAG" resources
 if $DOCKER history --no-trunc "$TAG" | grep -Eiq 'PASSWORD=[^ $]|API_KEY=[^ $]'; then echo "[오류] 이미지 기록에 비밀값 흔적"; exit 1; fi
 if [ "$BUILD_ONLY" = 1 ]; then echo "완료(빌드만): $TAG — 저장·전송 안 함(BUILD_ONLY=1)"; exit 0; fi
 
@@ -85,8 +107,15 @@ rsync --partial --progress "$OUT" "$TARGET:$REMOTE_DIR/" 2>/dev/null || scp "$OU
 ssh "$TARGET" "cd $REMOTE_DIR && echo '$SUM  $(basename "$OUT")' | sha256sum -c - && gunzip -c $(basename "$OUT") | $REMOTE_DOCKER load"
 
 echo "== 4. 원격 점검"
-ssh "$TARGET" "$REMOTE_DOCKER run --rm $TAG resources"
-bash deploy/release/selftest_gate.sh ssh "$TARGET" "$REMOTE_DOCKER run --rm $TAG selftest"
+R_ARGS=""
+if [ "$RUNTIME" = 1 ]; then   # op-06 — 판정용 코드 폴더를 같이 보내 붙임
+  rsync --partial "$CODE_OUT" "$TARGET:$REMOTE_DIR/" 2>/dev/null || scp "$CODE_OUT" "$TARGET:$REMOTE_DIR/"
+  RCODE="$REMOTE_DIR/code-$APP_VERSION-$VCS_REF"
+  ssh "$TARGET" "rm -rf $RCODE && mkdir -p $RCODE && tar -xzf $REMOTE_DIR/$(basename "$CODE_OUT") --no-same-owner -C $RCODE"
+  R_ARGS="-v $RCODE:/app/deploy:ro,z"
+fi
+ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_ARGS $TAG resources"
+bash deploy/release/selftest_gate.sh ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_ARGS $TAG selftest"
 cat <<EOF
 완료: $TAG
 다음(수집 서버):

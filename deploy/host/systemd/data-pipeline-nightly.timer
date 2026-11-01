@@ -1,9 +1,10 @@
-# 새벽 배치 시각(준비만). 예: 매일 01:00 KST 시작 → 파싱은 PARSE_DEADLINE(03:30)까지 → 구조화·적재. 서버 시간대 KST 확인(timedatectl).
+# 5분마다 깨움(pl-32, 사용자 10-30) — 실제 시작 시각·켬/끔은 settings.yaml ops.nightly.time(NIGHTLY_TIME, HH:MM — 비우면 새벽 배치 없음).
+# trigger.sh scheduled가 그 시각부터 5분 안일 때만 night를 돌린다. 서버 시간대 확인(timedatectl). 배치가 도는 동안은 같은 서비스가 다시 안 뜸(oneshot).
 [Unit]
 Description=RAG 새벽 배치 시작
 
 [Timer]
-OnCalendar=*-*-* 01:00:00
+OnCalendar=*:0/5
 Persistent=false
 
 [Install]

@@ -9,12 +9,13 @@
 # 기본 dry-run(지울 목록만 출력) · --apply일 때만 실제로 지움.
 #   bash deploy/host/scripts/prune_old.sh [--apply] [--stage-dir <조각·tar 폴더>] [--keep N(기본 2 — 새 이름 이미지만)]
 # 환경: IMAGE_STAGE_DIR(= --stage-dir 기본값) · PRUNE_KEEP(= --keep 기본값, 기본 2 = 지금 판+직전 판) — S7e1: 설정 파일(SETTINGS_FILE 또는
-#   $SERVER_ENV_DIR/settings.yaml)이 있으면 common.host.image_stage_dir·prune_keep을 거기서(settings_env.sh load_settings — 셸 env가 이김), 없으면 셸 env·기본값
+#   $SERVER_ENV_DIR/settings.yaml)이 있으면 ops.host.image_stage_dir·prune_keep을 거기서(settings_env.sh load_settings — 셸 env가 이김), 없으면 셸 env·기본값
 set -uo pipefail
 # 부른 자리 그대로(cd 안 함 — 상대 --stage-dir·SETTINGS_FILE은 부른 자리 기준, S7e1 리뷰). 설정 파일을 못 읽어도 멈추지 않는다(옛처럼 셸 env·기본값).
 if [ -n "${SETTINGS_FILE:-}" ] || [ -f "${SERVER_ENV_DIR:-/srv/rag/env}/settings.yaml" ]; then
   . "$(dirname "$0")/settings_env.sh" && load_settings || echo "[prune_old] 설정 파일을 읽지 못함 — 셸 env·기본값으로 계속" >&2
 fi
+DOCKER=${DOCKER:-docker}   # settings ops.host.docker — podman이면 podman(`sudo podman`처럼 두 낱말도 — 아래는 따옴표 없이 펼침, 다른 호스트 스크립트와 같음)
 
 APPLY=0
 STAGE_DIR=${IMAGE_STAGE_DIR:-}
@@ -35,7 +36,8 @@ OLD_REPOS="data-parsing data-structure data-retrieval rag-parse rag-structure ra
 prune_repos() {   # prune_repos <남길 수> <이름들> — 이름마다 최신부터 <남길 수>개 유지, 나머지 지움(--apply일 때만)
   local keep=$1 repo rows row tag i; shift
   for repo in "$@"; do
-    rows=$(docker images "$repo" --format '{{.CreatedAt}}|{{.Repository}}:{{.Tag}}' 2>/dev/null | sort -r)
+    # shellcheck disable=SC2086
+    rows=$($DOCKER images "$repo" --format '{{.CreatedAt}}|{{.Repository}}:{{.Tag}}' 2>/dev/null | sort -r)
     [ -z "$rows" ] && continue
     i=0
     while IFS= read -r row; do
@@ -45,7 +47,7 @@ prune_repos() {   # prune_repos <남길 수> <이름들> — 이름마다 최신
         echo "  유지: $tag"
       else
         echo "  지움: $tag"
-        [ "$APPLY" = 1 ] && docker rmi "$tag"
+        [ "$APPLY" = 1 ] && $DOCKER rmi "$tag"
       fi
     done <<< "$rows"
   done
@@ -69,8 +71,8 @@ if [ -n "$STAGE_DIR" ] && [ -d "$STAGE_DIR" ]; then
 fi
 
 if [ "$APPLY" = 1 ]; then
-  echo "== docker image prune -f (이름 없는 층만 — system prune·-a 아님) =="
-  docker image prune -f
+  echo "== $DOCKER image prune -f (이름 없는 층만 — system prune·-a 아님) =="
+  $DOCKER image prune -f
 else
   echo "(dry-run — 실제로 지우려면 --apply · 조각·tar 정리는 --stage-dir 또는 env IMAGE_STAGE_DIR)"
 fi

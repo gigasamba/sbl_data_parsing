@@ -48,11 +48,11 @@ prompts 영역 ⑦). 옛 이름 import(`import common_tools…`)는 그 자체�
 경계 판정에 안 쓰여 pipeline/cli.py의 이미지 배정 표로 옮겼고, ⑨의 TOOL_IMAGE·IMAGE_AREAS 규칙은 S5부터 걸릴 도구가 없어 뺐다(VS5 R-4).
 맨 이름 import 판정표(MOVED_TOOLS·flat)에 S5 새 도구 ask·search_checks와 validation/e2e 도구를 더함(VS5 R-5 — 같은 앱 안은 허용).
 S7e2(10-28, D-028 ④⑤ — 전환 다리 제거): ⑩ "os.environ 0" — 코드가 os.environ·os.getenv·os.environb를 직접 쓰는 줄(토큰 기준 — 주석·문자열 빼고)은
-예외 자리(ENV_EXEMPT — 영구 다리 28키를 읽는 엔진·인계 파일 등)이거나, 그 문장(또는 바로 위 주석 줄)에 분류 주석
-`env 남김 — <분류>`(ENV_KINDS — 라이브러리·하위 프로세스·내부 신호·이미지 신호·설정 파일 자리 신호·RUN_ENV 신호·영구 다리·시험·OS 값·호스트 도구)가
+그 문장(또는 바로 위 주석 줄)에 분류 주석(op-09 — 예외 자리 없음: 엔진·인계 파일도 설정 객체로 읽음)
+`env 남김 — <분류>`(ENV_KINDS — 라이브러리·하위 프로세스·내부 신호·이미지 신호·설정 파일 자리 신호·RUN_ENV 신호·시험·OS 값·호스트 도구)가
 있어야 한다. 설정 값은 settings.yaml(설정 객체 cfg()·덮기 파일 put·child_env)로만 읽고 넘긴다. --env-report: 남은 줄을 분류별로 찍음.
 S7e3(10-28, VS7e2 B-1·R-10): ⑩이 os 별칭(`import os as _os`)·`from os import environ` 이름도 잡는다. ⑪ "자식 env의 설정 이름 0" — 자식 env
-(os.environ·그 사본·child_env 결과·subprocess 류 env= 값)에 설정 칸 이름(호스트 칸 빼고 — 영구 다리 칸은 빼기만)을 넣거나 빼는 자리(AST —
+(os.environ·그 사본·child_env 결과·subprocess 류 env= 값)에 설정 칸 이름(호스트 칸 빼고)을 넣거나 빼는 자리(AST —
 dict 리터럴·dict(…, X=)·env[X] =·del·pop·setdefault·update, for 상수 이름 포함)는 위반이다(자식은 env의 설정 이름을 안 읽음 — settings.child_env(
 base, X=…)·put). 같은 이름의 env를 읽는 라이브러리·시험·호스트 도구는 분류 주석(ENV_NAME_OK_KINDS)으로 둔다.
 사용: python -m common.check.check_modules [--env-report]
@@ -77,20 +77,11 @@ MOVED_TOOLS = {
     "etl": {
         "pipeline",
         "check_env",
-        "parse_parallel",
-        "trigger_server",
         "rdb_discover",
         "gen_roster",
         "glossary_suggest",
-        "make_questions",
-        "run_combo",
-        "report",
-        "server_checks",
-        "anchors",
-        "auto_questions",
-        "stages",
     },
-    "search": {"mcp_eval", "ask", "search_checks"},
+    "search": {"ask"},  # 11-01 mcp_eval·search_checks 지움(e2-10)
 }
 PKG_AREA = (
     ("data_etl", "etl"),
@@ -365,19 +356,7 @@ def check():
     return bad
 
 
-# ⑩ "os.environ 0"(S7e2) — 예외 자리(파일·폴더 접두, 저장소 루트 기준)와 줄마다 다는 분류 주석
-ENV_EXEMPT = {
-    "pipeline/extract/engines/": "영구 다리 — 엔진 파일(엔진 지문 — 바이트 그대로, D-028 ⑤ 18키)",
-    "common/core/contract.py": "영구 다리 — 인계 파일(FINGERPRINT, D-028 ⑤ 10키)",
-    "common/core/repfmt.py": "영구 다리 — 인계 파일(FINGERPRINT)",
-    "common/core/terms.py": "영구 다리 — 인계 파일(FINGERPRINT)",
-    "common/core/text.py": "영구 다리 — 인계 파일(FINGERPRINT)",
-    # S9(D-018) — 인계 파일 자기 점검을 옮긴 시험: 그 파일이 env로 읽는 영구 다리 칸을 env로 바꿔 본다(옮기기 전과 같은 줄)
-    "tests/server/common/test_core_text.py": "시험 — 인계 파일 text.py가 env로 읽는 칸(영구 다리)을 바꿔 봄",
-    "tests/server/common/test_core_terms.py": "시험 — 인계 파일 terms.py가 env로 읽는 칸(영구 다리)을 바꿔 봄",
-    # S9b(VS9 B-1) — 엔진 파일 rapidocr/parser.py `__main__` 자기 점검을 옮긴 시험: 엔진이 env로 읽는 OCR_THREADS(영구 다리)·OMP_NUM_THREADS를 바꿔 봄
-    "tests/general/pipeline/test_rapidocr_parser.py": "시험 — 엔진 파일 rapidocr가 env로 읽는 칸(영구 다리)을 바꿔 봄",
-}
+# ⑩ "os.environ 0"(S7e2) — 줄마다 다는 분류 주석(op-09부터 예외 자리 없음)
 ENV_KINDS = (
     "라이브러리",
     "하위 프로세스",
@@ -385,13 +364,12 @@ ENV_KINDS = (
     "이미지 신호",
     "설정 파일 자리 신호",
     "RUN_ENV 신호",
-    "영구 다리",
     "시험",
     "OS 값",
     "호스트 도구",
 )
 _ENV_MARK = re.compile(r"env 남김 — (" + "|".join(ENV_KINDS) + ")")
-_ENV_SKIP = ("output/", ".venv/", "valid_env/", ".claude/", "docs/")
+_ENV_SKIP = ("output/", ".venv/", "valid_env/", ".claude/", "docs/", "reference/")  # reference/ — git 밖 참고 자료(PC 전용, 사용자 10-30)
 
 
 _ENV_ATTRS = ("environ", "getenv", "environb", "putenv", "unsetenv")  # putenv·unsetenv — VS7e3 R-4(⑩·⑪ 둘 다)
@@ -473,22 +451,17 @@ def _env_lines(text):
 
 
 # ⑪ 자식 env의 설정 이름(S7e3 — VS7e2 B-1·R-10): S7e2부터 자식은 env의 설정 이름(옛 env 이름)을 읽지 않는다(settings.yaml·덮기 파일만).
-# 자식 env를 만드는 dict(os.environ 사본·paths.child_env·settings.child_env 결과, subprocess 류의 env= 값)에 설정 칸 이름(영구 다리 pinned·
-# 호스트 칸 이름 빼고)을 넣거나(dict 리터럴·dict(…, X=)·env[X] = ·update·setdefault) 빼면(pop·del) 효과가 없다 — settings.child_env(base, X=…)
+# 자식 env를 만드는 dict(os.environ 사본·paths.child_env·settings.child_env 결과, subprocess 류의 env= 값)에 설정 칸 이름(호스트 칸 이름
+# 빼고)을 넣거나(dict 리터럴·dict(…, X=)·env[X] = ·update·setdefault) 빼면(pop·del) 효과가 없다 — settings.child_env(base, X=…)
 # (비우기 X=None)·put(X=…)로. os.environ에 쓰는 것도 같다. 라이브러리가 같은 이름의 env를 읽는 자리·시험·호스트 도구(셸 자식)는 분류 주석으로 둔다.
 ENV_NAME_OK_KINDS = ("라이브러리", "시험", "호스트 도구")
 
 
 def _setting_names():
-    """(자식 env에 넣거나 빼도 효과가 없는 설정 이름, 빼도 효과가 없는 영구 다리 이름) — common + 이 이미지의 앱 칸 env 이름(호스트 칸 빼고).
-    영구 다리(pinned) 칸은 env 값을 읽으므로 넣기는 되지만, 빼면 자식의 pin_env가 설정 파일 값으로 다시 채운다(비우기는 child_env(X=None))."""
+    """자식 env에 넣거나 빼도 효과가 없는 설정 이름 — common + 이 이미지의 앱 칸 env 이름(호스트 칸 빼고)."""
     from common.config import settings as S
 
-    known = S._all_names()
-    return (
-        frozenset(n for n, pinned in known.items() if not pinned) - {"RUN_ENV", "SETTINGS_FILE"},
-        frozenset(n for n, pinned in known.items() if pinned),
-    )
+    return S._all_names() - {"RUN_ENV", "SETTINGS_FILE"}
 
 
 _SPAWN = (
@@ -758,13 +731,12 @@ def _env_funcs(files):
 
 
 def _child_env_names(ef, kind, names):
-    """[(줄, 이름, 꼴)] — 자식 env dict·os.environ에 설정 이름을 넣거나 빼는(영구 다리 이름은 빼는) 자리(분류 주석 ENV_NAME_OK_KINDS 줄 빼고).
-    ef = _EnvFile(_env_funcs를 거친 것), kind = 줄 → 분류 함수를 돌려주는 함수(필요할 때만 토큰화), names = (설정 이름, 영구 다리 이름)."""
-    plain, pinned = names
+    """[(줄, 이름, 꼴)] — 자식 env dict·os.environ에 설정 이름을 넣거나 빼는 자리(분류 주석 ENV_NAME_OK_KINDS 줄 빼고).
+    ef = _EnvFile(_env_funcs를 거친 것), kind = 줄 → 분류 함수를 돌려주는 함수(필요할 때만 토큰화), names = 설정 이름 묶음."""
     hits, kinds = set(), None
     for _, sc in ef.scopes:
         for node, name, how in sc.hits():
-            if not isinstance(name, str) or not (name in plain or (how in ("pop", "del") and name in pinned)):
+            if not isinstance(name, str) or name not in names:
                 continue
             kinds = kinds or kind()
             if kinds(node.lineno) not in ENV_NAME_OK_KINDS:
@@ -792,8 +764,6 @@ def child_env_violations(root=None, names=None):
     _env_funcs([ef for _, _, ef in files])
     bad = []
     for rel, text, ef in files:
-        if any(rel == pre or (pre.endswith("/") and rel.startswith(pre)) for pre in ENV_EXEMPT):
-            continue
         for ln, name, how in _child_env_names(ef, lambda text=text: _comment_kinds(text), names):
             bad.append(
                 f"{rel}:{ln}: 자식 env·os.environ에 설정 이름 {name}({how}) — 자식은 env의 설정 이름을 안 읽음, "
@@ -804,7 +774,7 @@ def child_env_violations(root=None, names=None):
 
 
 def env_reads(root=None):
-    """⑩ — [(경로, 줄, 분류, 예외 자리 이유)] 저장소의 .py 전부(_ENV_SKIP·__pycache__ 빼고)."""
+    """⑩ — [(경로, 줄, 분류)] 저장소의 .py 전부(_ENV_SKIP·__pycache__ 빼고)."""
     root = Path(root) if root else ROOT
     rows = []
     for f in sorted(root.rglob("*.py")):
@@ -818,8 +788,7 @@ def env_reads(root=None):
             found = _env_lines(text)
         except (tokenize.TokenError, IndentationError, SyntaxError):
             continue
-        exempt = next((why for pre, why in ENV_EXEMPT.items() if rel == pre or (pre.endswith("/") and rel.startswith(pre))), None)
-        rows += [(rel, ln, kind, exempt) for ln, kind in found]
+        rows += [(rel, ln, kind) for ln, kind in found]
     return rows
 
 
@@ -827,8 +796,8 @@ def env_violations(root=None):
     return [
         f"{rel}:{ln}: os.environ 직접 사용 — 설정 값은 settings.yaml(cfg()·put·child_env)로, 남겨야 하면 분류 주석 "
         f"`env 남김 — <{'·'.join(ENV_KINDS)}>`(⑩ S7e2)"
-        for rel, ln, kind, exempt in env_reads(root)
-        if kind is None and exempt is None
+        for rel, ln, kind in env_reads(root)
+        if kind is None
     ]
 
 
@@ -836,7 +805,7 @@ def env_report(root=None):
     from collections import Counter
 
     rows = env_reads(root)
-    by = Counter((exempt or kind or "분류 없음") for _, _, kind, exempt in rows)
+    by = Counter((kind or "분류 없음") for _, _, kind in rows)
     out = [f"os.environ 남은 줄 {len(rows)}개(⑩ — 토큰 기준):"]
     out += [f"  {n:4d}  {k}" for k, n in sorted(by.items(), key=lambda kv: -kv[1])]
     return out

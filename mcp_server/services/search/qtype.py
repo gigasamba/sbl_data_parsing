@@ -17,19 +17,34 @@ clients·contracts를 받아 단일 계약 속성 조회 제외·존재/진행 �
 docstring 참고). 그래서 두 결과가 같은 질문에서 어긋날 수 있다(의도된 차이) — 집계 경로를 실제로 탈지는
 항상 detect()만 본다.
 
-호출자: modules/search/local.py weights()(G14 SEARCH_TYPE_WEIGHTS — bm25 가중 조정) · modules/search/rerank.py
+호출자: modules/search/local.py weights()(G14 — bm25 가중 조정) · modules/search/rerank.py
 (비교·최신 유형이면 재순위 게이트). 옛 호출자 research.py(RESEARCH_PLANNER=typed)·do_search의 notes 표시는 S5a·S5(10-26, D-025)에 지움.
 정확도 점검: tests/server/mcp/test_qtype.py(resources/vocab/qtype_labels.json)
 """
 
 import copy
 import re
-from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
-from common.core.docmeta import RE_LATEST_QUESTION  # noqa: E402 — 최신판 질문 단서(L3-1과 같은 규칙)
-from mcp_server.services.search.aggregate import COUNT_RE, LIST_RE, MAXMIN_RE, SUM_RE  # noqa: E402 — 집계·목록 단서 재사용
+from common.core.docmeta import RE_LATEST_QUESTION  # 최신판 질문 단서(L3-1과 같은 규칙)
+
+# 집계·목록 단서(mc-04 10-31 — 집계 답 aggregate.py를 지우며 이 판별에 쓰던 정규식만 이리로, 글자 그대로)
+_AGG_VOCAB_DEFAULT = {  # DT1 c1 — 지표 판별 단서어(CDMO 예제: 건수·합계·수량·금액·단가·배치) 코드 기본값
+    "count": ["건수", r"몇\s*건", "개수", r"몇\s*개(?!월)", r"how\s+many", r"number\s+of", r"\bcount\b"],
+    # ↑ "몇\s*개(?!월)" — RV-singlelookup: "계약 기간은 몇 개월"(몇 개월 = how many months, 집계 아님)이 "몇 개"
+    #   부분 문자열로 걸려 건수 질문으로 오판되던 것(뒤에 "월"이 오면 안 걸리게, DT1 c1 커스텀 vocab에도 같게 적용)
+    "sum": ["합계", "합", "총", "전체", r"모두\s*더", "total", "sum"],
+    "qty": ["수량", "용량", "qty", "quantity", "capacity", "volume"],
+    "amount": ["금액", "규모", r"contract\s*value", r"\bvalue\b", "amount"],
+    "unit_price": ["단가", r"unit\s*price"],
+    "batch": ["배치", "batch"],
+}
+
+
+_AGG_VOCAB = _AGG_VOCAB_DEFAULT  # 11-01 — 사전 파일 agg_vocab.json(코드 기본값과 같았음)·설정 search.agg_vocab_file 지움
+COUNT_RE = re.compile("|".join(_AGG_VOCAB["count"]), re.I)
+SUM_RE = re.compile("|".join(_AGG_VOCAB["sum"]), re.I)
+LIST_RE = re.compile(r"각\s*계약|계약별|계약마다|of\s+each|each\s+contract|목록|\blist\b", re.I)
+MAXMIN_RE = re.compile(r"가장\s*(많은|적은|큰|작은)|최대|최소|\bmax\b|\bmin\b|\bmost\b|\bleast\b", re.I)
 
 _AVG_RE = re.compile(r"평균|average|\bavg\b", re.I)  # AD1 aggregate(평균)은 기존 조각에 없어 새로 둠
 _FIGURE_RE = re.compile(r"그림|그래프|도식|차트|흐름도|순서도|막대|flowchart|diagram|\bgraph\b|\bchart\b|\bfigure\b", re.I)

@@ -7,10 +7,10 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from common.config.layout import to_file
 from common.config.settings import (
     COMMON,
     IMAGE_DEFAULTS,
-    IN_IMAGE,
     REPO_ROOT,
     SECTIONS,
     SERVER_ENVS,
@@ -28,7 +28,7 @@ from common.config.settings import (
     _get,
     _is_set,
     _peek,
-    _pinned,
+    _raw_dumper,
     _TApp,
     _warned,
     _yaml_loader,
@@ -53,9 +53,18 @@ from common.config.settings import (
     render,
     require_run_env,
     resolve_run_env,
-    section_class,
     walk,
 )
+
+
+def _new(text):
+    """옛 배치(모델 경로) YAML 글자 → 새 배치(op-08 ② — layout.to_file) 글자. 쓴 글자·꼴(yes·0123·1.10)은 그대로(migrate._raw)."""
+    import yaml
+
+    from common.config import migrate
+
+    doc = yaml.load(text, Loader=_yaml_loader())
+    return yaml.dump(to_file(migrate._raw(doc)), Dumper=_raw_dumper(), allow_unicode=True, sort_keys=False)
 
 
 def selftest():
@@ -80,9 +89,11 @@ def selftest():
         d = Path(td)
         good = d / "settings.yaml"
         good.write_text(
-            "common:\n  run_env: local\n  connections:\n    pg:\n      host: 127.0.0.1\n      port: '55433'\n"
-            f"      password: {secret}\n  runtime:\n    cpu_max_load: ''\n  paths:\n    glossary_dir: ''\n"
-            "pipeline:\n  anything: 1\n",
+            _new(
+                "common:\n  run_env: local\n  connections:\n    pg:\n      host: 127.0.0.1\n      port: '55433'\n"
+                f"      password: {secret}\n  runtime:\n    cpu_max_load: ''\n  paths:\n    glossary_dir: ''\n"
+                "pipeline:\n  extract:\n    anything: 1\n"
+            ),
             encoding="utf-8",
         )
         st = load(_TApp, file=good, environ={})
@@ -123,14 +134,16 @@ def selftest():
         )
         # 오류 — 메시지에 경로는 있고 비밀 값은 없음
         bad = d / "bad.yaml"
-        bad.write_text(f"common:\n  connections:\n    pg:\n      port: abc\n      password: [{secret}]\n      hots: x\n", encoding="utf-8")
-        ok, msg = raises(lambda: load(_TApp, file=bad, environ={}), "common.connections.pg.port", "common.connections.pg.hots")
+        bad.write_text(
+            _new(f"common:\n  connections:\n    pg:\n      port: abc\n      password: [{secret}]\n      hots: x\n"), encoding="utf-8"
+        )
+        ok, msg = raises(lambda: load(_TApp, file=bad, environ={}), "required.pg.port", "common.connections.pg.hots")
         check("검증 오류: 칸 경로·오타 칸을 알림", ok)
         check("검증 오류: 비밀 칸 값은 메시지에 없음", ok and secret not in msg)
         (d / "empty.yaml").write_text("", encoding="utf-8")
         # R-1 — 입력값은 어떤 칸에서도 찍지 않음: 비밀 칸 이름을 틀린 값(extra_forbidden)·형식 틀린 글자 값
         typo = d / "typo.yaml"
-        typo.write_text(f"common:\n  connections:\n    pg:\n      pasword: {secret}\n      port: wrong-{secret}\n", encoding="utf-8")
+        typo.write_text(_new(f"common:\n  connections:\n    pg:\n      pasword: {secret}\n      port: wrong-{secret}\n"), encoding="utf-8")
         ok, msg = raises(lambda: load(_TApp, file=typo, environ={}), "pg.pasword", "extra_forbidden", "pg.port")
         check(
             "검증 오류(R-1): 비밀 칸 오타·형식 오류에서도 입력값 없음(경로·오류 종류만)", ok and secret not in msg and "wrong-" not in msg
@@ -138,13 +151,15 @@ def selftest():
         # R-3 — YAML 스칼라: 글자 칸은 쓴 글자 그대로, 켜기·숫자·JSON 칸은 YAML이 푼 값
         y = d / "scalars.yaml"
         y.write_text(
-            "common:\n  run_env: local\n  connections:\n"
-            "    object_storage:\n      verify_tls: 1\n      region: yes\n    pg:\n      password: 1234\n      db: True\n      host: no\n"
-            "    rdb:\n      sqlite: 2026-10-27\n"
-            "  models:\n    embed:\n      allow_external: true\n    vlm:\n      allow_external: '1'\n"
-            "    guard:\n      internal_host_suffixes: [corp, 10]\n"
-            "      internal_ip_ranges: 10\n"
-            "    llm:\n      extra_body: {reasoning: {enabled: no}, n: 1}\n  runtime:\n    cpu_max_load: 5\n",
+            _new(
+                "common:\n  run_env: local\n  connections:\n"
+                "    object_storage:\n      verify_tls: 1\n      region: yes\n    pg:\n      password: 1234\n      db: True\n      host: no\n"
+                "    rdb:\n      sqlite: 2026-10-27\n"
+                "  models:\n    embed:\n      allow_external: true\n    vlm:\n      allow_external: '1'\n"
+                "    guard:\n      internal_host_suffixes: [corp, 10]\n"
+                "      internal_ip_ranges: 10\n"
+                "    llm:\n      extra_body: {reasoning: {enabled: no}, n: 1}\n  runtime:\n    cpu_max_load: 5\n"
+            ),
             encoding="utf-8",
         )
         sy = load(_TApp, file=y, environ={})
@@ -172,13 +187,13 @@ def selftest():
         yb = d / "yesno.yaml"
         bad_y = []
         for word in ("yes", "off", "on", "no", "'yes'", "Y"):
-            yb.write_text(f"common:\n  run_env: local\n  models:\n    guard:\n      no_paid_calls: {word}\n", encoding="utf-8")
+            yb.write_text(_new(f"common:\n  run_env: local\n  models:\n    guard:\n      no_paid_calls: {word}\n"), encoding="utf-8")
             ok_y, msg_y = raises(lambda: load(_TApp, file=yb, environ={}), "no_paid_calls", "true·false·0·1")
             if not ok_y or "Value error" not in msg_y and "value_error" not in msg_y:
                 bad_y.append(word)
         good_y = []
         for word, want in (("true", True), ("False", False), ("1", True), ("0", False), ("'1'", True), ('"0"', False)):
-            yb.write_text(f"common:\n  run_env: local\n  models:\n    guard:\n      no_paid_calls: {word}\n", encoding="utf-8")
+            yb.write_text(_new(f"common:\n  run_env: local\n  models:\n    guard:\n      no_paid_calls: {word}\n"), encoding="utf-8")
             good_y.append(load(_TApp, file=yb, environ={}).common.models.guard.no_paid_calls is want)
         check(
             "YAML 판정 꼴 켜기 칸(코디네이터 10-27): yes·on·off·no 등은 검증 오류(칸 이름만) · true·false·0·1('1' 포함)만 받음 · env 글자는 옛 판정"
@@ -216,7 +231,7 @@ def selftest():
             (bk.common.connections.object_storage.verify_tls, bk.common.models.guard.external_scope) == ("", ""),
         )
         check(
-            "PG_HOST·PG_PORT 기본값 None(둘 다 없으면 docker 자동 탐지 — services.detect_pg)",
+            "PG_HOST·PG_PORT 기본값 None(필수 칸 — 비면 pg.conf가 거부, op-09)",
             bl.common.connections.pg.port is None and CommonConnectionsPg().host is None,
         )
         # R-2 — int | "auto"
@@ -267,13 +282,11 @@ def selftest():
                 "models.guard.no_paid_calls",
                 {"1": True, "yes": False, "true": False, "on": False, "": False, "0": False, " 1": False},
             ),
-            ("LLM_EMPTY_RETRY", "models.llm.empty_retry", {"0": False, "no": True, "false": True, "": True, "1": True}),
             (
-                "DOC_REGISTRY",
-                "store.doc_registry",
+                "TOKEN_NUM_NORM",
+                "text.token_num_norm",
                 {"0": False, " False ": False, "none": False, "": False, "no": True, "off": True, "1": True},
             ),
-            ("PARSE_TOKEN_NORM", "text.parse_token_norm", {"NONE": False, "x": True}),
         ]
         bad_j = []
         for env_n, path_n, table in cases:
@@ -314,7 +327,7 @@ def selftest():
         # 설정 캐시(S7e2) — 파일 기반: 신호(SETTINGS_FILE)가 바뀌거나 put()이면 다시 읽음 · env()는 os.environ 안 건드림 · 옛 env 이름은 안 읽음
         cc = Cache(CommonAppSettings)
         tf = d / "cache.yaml"
-        tf.write_text("common:\n  run_env: local\n  models:\n    embed:\n      timeout: 7\n", encoding="utf-8")
+        tf.write_text(_new("common:\n  run_env: local\n  models:\n    embed:\n      timeout: 7\n"), encoding="utf-8")
         saved = {k: os.environ.get(k) for k in ("SETTINGS_FILE", "EMBED_TIMEOUT")}  # env 남김 — 시험
         try:
             os.environ["SETTINGS_FILE"] = str(tf)  # env 남김 — 시험
@@ -373,7 +386,7 @@ def selftest():
 
         srv = d / "srv"
         srv.mkdir()
-        (srv / "settings.yaml").write_text("common:\n  run_env: dev\n  models:\n    embed:\n      timeout: 7\n", encoding="utf-8")
+        (srv / "settings.yaml").write_text(_new("common:\n  run_env: dev\n  models:\n    embed:\n      timeout: 7\n"), encoding="utf-8")
         blocked = (
             OV.server_run_env(environ={"RUN_ENV": "dev"}) == "dev"
             and OV.server_run_env(environ={"SETTINGS_FILE": str(srv / "settings.yaml")}) == "dev"
@@ -381,7 +394,7 @@ def selftest():
             and OV.server_run_env(environ={"RUN_ENV": "local", "SETTINGS_FILE": str(srv / "settings.yaml")}) is None
             and raises(lambda: OV.server_run_env(environ={"RUN_ENV": "prod"}), "RUN_ENV")[0]
         )
-        (srv / "typo.yaml").write_text("common:\n  run_env: prod\n", encoding="utf-8")
+        (srv / "typo.yaml").write_text(_new("common:\n  run_env: prod\n"), encoding="utf-8")
         blocked = (
             blocked and raises(lambda: OV.server_run_env(base=srv / "typo.yaml", environ={}), "RUN_ENV")[0]
         )  # --base도 같은 규칙(리뷰 S7e3)
@@ -466,22 +479,6 @@ def selftest():
             "Cache.env(): 겹쳐 쓰기·None = 비움(기본값)·os.environ 안 건드림·끝나면 파일 기반으로",
             nest == (12, 5) and in_env and after == 9,
         )
-        # 영구 다리(pin_env — D-028 ⑤): 엔진·인계 칸만 env로, env에 이미 있으면 그대로, 그 밖 칸은 안 냄
-        bf = d / "pin.yaml"
-        bf.write_text(
-            "common:\n  run_env: local\n  paths:\n    glossary_dir: /g\n  models:\n    embed:\n      timeout: 11\n    vlm:\n      model: m\n",
-            encoding="utf-8",
-        )
-        env_b = {"SETTINGS_FILE": str(bf), "VLM_MODEL": "user"}
-        n_b = pin_env(env_b)
-        check(
-            "영구 다리: 인계 칸(GLOSSARY_DIR)을 env로 · env에 있던 엔진 칸(VLM_MODEL)은 그대로 · 그 밖 칸(EMBED_TIMEOUT)은 안 냄",
-            env_b.get("GLOSSARY_DIR") == "/g" and env_b["VLM_MODEL"] == "user" and "EMBED_TIMEOUT" not in env_b and n_b >= 1,
-        )
-        check(
-            "영구 다리: 설정 파일 없으면 이미지 기본값만(PC는 아무것도)",
-            pin_env({"RUN_ENV": "dev"}) == len([n for n in IMAGE_DEFAULTS if n in _pinned(section_class(SECTIONS)[0]).values()]),
-        )
         # VS7a2 R-e — migrate 여러 파일: 틀의 자리표시가 앞 파일의 실제 값을 덮지 않음
         from common.config import migrate
 
@@ -515,8 +512,8 @@ def selftest():
             raises(lambda: resolve_run_env({"RUN_ENV": "stage"}), "local·dev·prd")[0],
         )
         # op-02 — LLM_FAKE는 local 전용: 서버(dev·prd)에서 켜져 있으면 시작 관문이 종료 2, 꺼져 있으면 통과
-        (d / "srv_fake.yaml").write_text("common:\n  run_env: dev\n  dev: {llm_fake: true}\n", encoding="utf-8")
-        (d / "srv_ok.yaml").write_text("common:\n  run_env: prd\n", encoding="utf-8")
+        (d / "srv_fake.yaml").write_text(_new("common:\n  run_env: dev\n  dev: {llm_fake: true}\n"), encoding="utf-8")
+        (d / "srv_ok.yaml").write_text(_new("common:\n  run_env: prd\n"), encoding="utf-8")
         try:
             require_run_env("시험", {"SETTINGS_FILE": str(d / "srv_fake.yaml")}, sections=())
             fake_gate = False
@@ -574,14 +571,14 @@ def selftest():
             + (" 실패: " + " ".join(bad_b) if bad_b else ""),
             not bad_b,
         )
-        with COMMON.env(LLM_TIMEOUT="90.5", STRUCT_BACKEND=None):
+        with COMMON.env(LLM_TIMEOUT="90.5", SEARCH_RECENCY=None):
             tm = cfg().models.llm.timeout
-            sb = cfg().store.struct_backend
-        with COMMON.env(STRUCT_BACKEND=""):
-            sb_blank = cfg().store.struct_backend
+            sb = cfg().text.search_recency
+        with COMMON.env(SEARCH_RECENCY=""):
+            sb_blank = cfg().text.search_recency
         check(
-            "LLM_TIMEOUT float(R-1 — 옛 float()): '90.5' → 90.5 · STRUCT_BACKEND 기본 'pg', ''은 ''(R-11 blank keep)",
-            tm == 90.5 and sb == "pg" and sb_blank == "",
+            "LLM_TIMEOUT float(R-1 — 옛 float()): '90.5' → 90.5 · SEARCH_RECENCY 기본 '1', ''은 ''(R-11 blank keep)",
+            tm == 90.5 and sb == "1" and sb_blank == "",
         )
         with COMMON.env(RUN_ENV="prod"):
             unk = guard_run_env()
@@ -617,7 +614,7 @@ def selftest():
         except SystemExit as e:
             gate_u1 = e.code == 2
         gb = d / "gate_bad.yaml"
-        gb.write_text("common:\n  connections:\n    pg:\n      port: abc\n", encoding="utf-8")
+        gb.write_text(_new("common:\n  connections:\n    pg:\n      port: abc\n"), encoding="utf-8")
         try:
             require_run_env("시험", {"RUN_ENV": "dev", "SETTINGS_FILE": str(gb)}, sections=())
             gate_u1b = False
@@ -629,7 +626,7 @@ def selftest():
         )
         if "mcp" in app_classes(("mcp",)):  # VS7d R-1 — import common 먼저여도 mcp CFG(시작 상수)가 settings.yaml 값을 봄(mcp 이미지·PC)
             cf = d / "cfg.yaml"
-            cf.write_text("mcp:\n  output:\n    max_chars: 12345\n", encoding="utf-8")
+            cf.write_text(_new("mcp:\n  output:\n    max_chars: 12345\n"), encoding="utf-8")
             got = [
                 subprocess.run(
                     [sys.executable, "-c", f"{o}; print(CFG.MAX_CHARS)"],
@@ -642,37 +639,15 @@ def selftest():
                 for o in ("import common; from mcp_server.config import CFG", "from mcp_server.config import CFG; import common")
             ]
             check(f"VS7d R-1: import 순서와 무관하게 mcp CFG가 설정 파일 값 {got}", got == [["12345"], ["12345"]])
-        # U-a(사용자 10-27) — 영구 다리는 이미지마다 common + 자기 앱 절의 엔진·인계 칸만(RAG_MODULE), 관계없는 앱 절은 내지도 검증하지도 않음
-        ua = d / "ua.yaml"
-        ua.write_text(
-            "common:\n  paths:\n    glossary_dir: /g\npipeline:\n  extract:\n    ocr:\n      dpi: 150\n  connections:\n    secure_doc:\n      password: dummy-ua\n"
-            "mcp:\n  search:\n    weights:\n      id: 7\n",
-            encoding="utf-8",
-        )
+        # U-a(사용자 10-27) — import 때 점검은 파일 읽기만: mcp 이미지는 틀린 pipeline 절이어도 시작(op-09 — env로 내는 칸 없음)
         ua_bad = d / "ua_bad.yaml"
-        ua_bad.write_text("common:\n  paths:\n    glossary_dir: /g\npipeline:\n  extract:\n    ocr:\n      dpi: abc\n", encoding="utf-8")
-        has_p = "pipeline" in app_classes(("pipeline",))
-        seen = {}
-        for mod, f in (("mcp", ua), ("pipeline", ua), ("", ua), ("mcp", ua_bad), ("parse", ua), (" mcp", ua)):
-            env_e = {"SETTINGS_FILE": str(f), "RAG_MODULE": mod, "RUN_ENV": "dev"}
-            try:
-                pin_env(env_e)
-                seen[(mod, f.name)] = (
-                    env_e.get("GLOSSARY_DIR"),
-                    env_e.get("OCR_DPI"),
-                    "SECURE_DOC_PASSWORD" in env_e or "SEARCH_W_ID" in env_e,
-                )
-            except SettingsError:
-                seen[(mod, f.name)] = "거부"
-        ocr = "150" if has_p else None
+        ua_bad.write_text(
+            _new("common:\n  paths:\n    glossary_dir: /g\npipeline:\n  extract:\n    ocr:\n      dpi: abc\n"), encoding="utf-8"
+        )
+        env_e = {"SETTINGS_FILE": str(ua_bad), "RAG_MODULE": "mcp", "RUN_ENV": "dev"}
         check(
-            f"영구 다리(U-a): mcp 이미지 = common 칸만(pipeline 엔진 칸 OCR_DPI 없음) · pipeline 이미지 = common·pipeline · 비밀·그 밖 칸은 안 냄 · "
-            f"mcp 이미지는 틀린 pipeline 절이어도 성공 · 모르는 RAG_MODULE은 아무것도 안 냄 {seen}",
-            seen[("mcp", "ua.yaml")] == ("/g", None, False)
-            and seen[("pipeline", "ua.yaml")] == ("/g", ocr, False)
-            and seen[("", "ua.yaml")] == ((None, None, False) if IN_IMAGE else ("/g", ocr, False))
-            and seen[("mcp", "ua_bad.yaml")] == ("/g", None, False)
-            and all(seen[(m, "ua.yaml")] == (None, None, False) for m in ("parse", " mcp")),
+            "U-a: pin_env는 env에 아무 칸도 안 냄 · mcp 이미지는 틀린 pipeline 절이어도 성공",
+            pin_env(env_e) == 0 and set(env_e) == {"SETTINGS_FILE", "RAG_MODULE", "RUN_ENV"},
         )
     check(
         "이미지 절(VS7d R-6): RAG_MODULE 없음 = 셋(PC·이미지) · 빈 글자 = PC 셋 / 이미지 안 아무것도 · pipeline·mcp = 자기 절",
@@ -716,8 +691,10 @@ def selftest():
             d = Path(td)
             f = d / "s.yaml"
             f.write_text(
-                "common:\n  run_env: dev\npipeline:\n  host:\n    image: 'p:1'\n  service:\n    trigger:\n      host: 10.1.1.1\n"
-                "mcp:\n  host:\n    image: 'm:$x'\n  server:\n    host: 10.2.2.2\n    max_concurrency: abc\n    token: dummy-s7e1\n",
+                _new(
+                    "common:\n  run_env: dev\npipeline:\n  host:\n    image: 'p:1'\n"
+                    "mcp:\n  host:\n    image: 'm:$x'\n  server:\n    host: 10.2.2.2\n    max_concurrency: abc\n    token: dummy-s7e1\n"
+                ),
                 encoding="utf-8",
             )
 
@@ -733,8 +710,6 @@ def selftest():
                 "--section",
                 "pipeline.host",
                 "--section",
-                "pipeline.service.trigger.host",
-                "--section",
                 "mcp.server.host",
                 "--section",
                 "common.run_env",
@@ -742,10 +717,9 @@ def selftest():
             rc2, o2, e2 = run("--section", "mcp.host")
             rc3, _, e3 = run("--section", "mcp.server")
             check(
-                "export(S7e1): 잎 칸 이름이 host인 앱 칸(TRIGGER_HOST·MCP_HOST)도 냄 · 고른 칸만 검증(mcp 절 오타가 다른 칸을 막지 않음) · "
+                "export(S7e1): 잎 칸 이름이 host인 앱 칸(MCP_HOST)도 냄 · 고른 칸만 검증(mcp 절 오타가 다른 칸을 막지 않음) · "
                 "env 꼴은 $ 값 거부(이름만) · 고른 절이 틀리면 거부 · 비밀 없음",
                 rc1 == 0
-                and "export TRIGGER_HOST='10.1.1.1'" in o1
                 and "export MCP_HOST='10.2.2.2'" in o1
                 and "export RUN_ENV='dev'" in o1
                 and rc2 == 2
@@ -760,7 +734,7 @@ def selftest():
             )
             new = d / "new.yaml"
             new.write_text(
-                "common:\n  run_env: dev\n  connections:\n    pg:\n      password: dummy-b\npipeline:\n  host:\n    image: 'p:1'\n",
+                _new("common:\n  run_env: dev\n  connections:\n    pg:\n      password: dummy-b\npipeline:\n  host:\n    image: 'p:1'\n"),
                 encoding="utf-8",
             )
             old.write_text(
@@ -849,7 +823,7 @@ def selftest():
 
             from common.config import settings as _S
 
-            _of.write_text(_yaml.safe_dump(_old, allow_unicode=True), encoding="utf-8")
+            _of.write_text(_yaml.safe_dump(to_file(_old), allow_unicode=True), encoding="utf-8")
             _loaded = [_S.load(cls, file=_of, environ={}, strict=False) for cls in app_classes().values()]
             check("10-29 지운 칸·절 17개: 옛 설정 파일에 남아도 앱마다 읽힘(경고만)", len(_loaded) == len(app_classes()))
             if (
@@ -866,11 +840,11 @@ def selftest():
                 )
             lb = d / "lib.yaml"
             lb.write_text(
-                "common:\n  runtime:\n    lib_env:\n      TZ: Asia/Seoul\n      HF_HUB_OFFLINE: 1\n      OMP_NUM_THREADS: 02\n",
+                _new("common:\n  runtime:\n    lib_env:\n      TZ: Asia/Seoul\n      HF_HUB_OFFLINE: 1\n      OMP_NUM_THREADS: 02\n"),
                 encoding="utf-8",
             )
             lbad = d / "libbad.yaml"
-            lbad.write_text("common:\n  runtime:\n    lib_env:\n      PG_PASSWORD: dummy-lib\n", encoding="utf-8")
+            lbad.write_text(_new("common:\n  runtime:\n    lib_env:\n      PG_PASSWORD: dummy-lib\n"), encoding="utf-8")
             ok_l, msg_l = raises(lambda: load(_TApp, file=lbad, environ={}, strict=False), "허용 목록 밖", "PG_PASSWORD")
             check(
                 "lib_env(C-45 ⑤): 쓴 글자 그대로(1·02) · 허용 목록 밖 이름은 거부(이름만, 값 없음)",

@@ -16,7 +16,7 @@ import argparse
 import json
 import sys
 from collections import defaultdict
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from common.core.console import utf8_stdout
 
@@ -252,6 +252,32 @@ def load_file(run_id, paths):
     return run, events
 
 
+def load_since_db(hours, schema=None):
+    return _db_rows(
+        "SELECT * FROM {S}.pipe_event WHERE ts_start >= now() - make_interval(secs => %(s)s) ORDER BY ts_start",
+        {"s": float(hours) * 3600},
+        schema,
+    )
+
+
+def load_since_file(hours, paths, now=None):
+    """logsink 대체 기록에서 최근 hours시간의 pipe_event — 실행(run_id)을 가리지 않음."""
+    cutoff = (now or datetime.now(UTC)) - timedelta(hours=float(hours))
+    events = []
+    for path in paths:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                try:
+                    item = json.loads(line)
+                except ValueError:
+                    continue
+                row = item.get("row") or {}
+                ts = _ts(row.get("ts_start"))
+                if item.get("table") == "pipe_event" and ts and ts >= cutoff:
+                    events.append(row)
+    return events
+
+
 def latest_run_id():
     rows = _db_rows("SELECT run_id FROM {S}.pipe_run ORDER BY started_at DESC LIMIT 1", {})
     return str(rows[0]["run_id"]) if rows else None
@@ -404,6 +430,9 @@ def main(argv=None):
     ap.add_argument("--runs", nargs="?", const=10, type=int, metavar="N", help="최근 실행 N개 목록")
     ap.add_argument("--compare", nargs="+", metavar="RUN_ID", help="이 실행과 비교할 다른 run_id들")
     ap.add_argument("--file", nargs="+", help="DB 대신 logsink 대체 기록 JSON Lines 파일")
+    ap.add_argument(
+        "--since", type=float, metavar="HOURS", help="최근 N시간의 모든 실행을 합쳐 분석(run_docs는 문서·단계마다 실행이 따로 생김)"
+    )
     ap.add_argument("--top", type=int, default=10, help="느린 문서 개수")
     ap.add_argument("--json", action="store_true", help="표 대신 JSON")
     a = ap.parse_args(argv)
@@ -428,6 +457,14 @@ def main(argv=None):
                 ],
             )
         )
+        return 0
+    if a.since is not None:
+        events = load_since_file(a.since, a.file) if a.file else load_since_db(a.since)
+        if not events:
+            print(f"최근 {a.since:g}시간의 기록이 없습니다", file=sys.stderr)
+            return 1
+        summary = summarize({"run_id": f"최근 {a.since:g}시간", "command": "전체 실행"}, events, a.top)
+        print(json.dumps(summary, ensure_ascii=False, default=str, indent=1) if a.json else render(summary))
         return 0
     run_id = a.run_id or (None if a.file else latest_run_id())
     if not run_id:

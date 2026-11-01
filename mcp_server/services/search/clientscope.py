@@ -11,7 +11,7 @@ pgsearch.py SQL · retriever.py search_ex의 cl 계산 · mcp_server.py _graph_h
 그중 ANY 하나라도 맞으면 매치(allows() 참고) · 옛 묶음(`clients` 없음)은 단일 `client`로 자동 낙하.
 
 읽는 환경변수(단일 지점):
-  SEARCH_CLIENT_FILTER(기본 켬) — question에서 고객명을 자동으로 잡을지(common.core.terms.match_clients).
+  question의 고객명은 늘 자동으로 잡는다(common.core.terms.match_clients).
   SEARCH_CLIENT_HARD(기본 꺼짐) — 켜지면 저장소 질의 단계에서 진짜 제한(hard) · 꺼지면 후보를 넓혀 앞으로만(soft, 제외 없음).
   SEARCH_CLIENT_STRICT(기본 꺼짐) — hard일 때 고객 미상 문서까지 뺄지(켜지면 미상도 제외)."""
 
@@ -54,7 +54,7 @@ def client_scope(question, client, clients=(), client_only=False, strict_overrid
     SEARCH_CLIENT_STRICT 환경값 그대로(기존 동작과 바이트 동일), True/False를 주면 그 값으로 강제(client_only일
     때는 그 의미가 더 강해 override를 안 받음 — 항상 strict)."""
     sc = mc.cfg().search.client  # S7d — 설정 객체(호출마다 한 번 묶어 읽음)
-    cl = set() if (client_only or not question) else (set(match_clients(question, clients)) if sc.filter else set())
+    cl = set() if (client_only or not question) else set(match_clients(question, clients))
     if client:
         cl |= {client} if isinstance(client, str) else set(client)
     if not cl:

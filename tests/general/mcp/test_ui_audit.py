@@ -7,10 +7,13 @@ from unittest.mock import patch
 import mcp
 from mcp.client import streamable_http
 
-from validation.search_ui import serve
+from common.config import settings
 
 
 def test_ui_headers():
+    with settings.isolated(PG_SCHEMA="ai"):  # serve.py가 import 때 스키마 이름을 요구한다(시험 전용 설정에는 없음)
+        from validation.search_ui import serve
+
     seen = []
 
     @asynccontextmanager

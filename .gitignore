@@ -43,3 +43,7 @@ valid_env/local/
 # op-01 application logs
 logs/
 output/applog/
+# 반입 자산(모델·언어 팩·글꼴·휠) — git 밖(release-and-patch §5-6)
+assets/
+dl/
+tessdata_best/

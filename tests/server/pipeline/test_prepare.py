@@ -5,7 +5,6 @@ import struct
 from pathlib import Path
 
 import pipeline.extract.prepare as M
-from pipeline import config as pc
 from pipeline.extract.prepare import (
     _ENCRYPTED_PACKAGE,
     CFB_SIG,
@@ -169,13 +168,7 @@ def _selftest_rotate_fast():
         ang, s = best_angle(im, 1280, 1.3, hint=0)
         assert ang == 180 and len(calls) == 6, (ang, s, calls)
 
-        calls.clear()  # 4) 꺼짐(PREPARE_ROTATE_FAST=0) — 지름길 자체를 안 써 기존처럼 곧바로 전체 4방향(빠른 1차 호출 없음)
-        M.score = fake([500.0, 0.0, 3.0, 2.0])
-        with pc.PIPE.env(PREPARE_ROTATE_FAST="0"):  # S7c — os.environ 대신 설정 객체를 덮어씀
-            ang, s = best_angle(im, 1280, 1.3, hint=0)
-        assert ang == 0 and len(calls) == 4, (ang, s, calls)
-
-        calls.clear()  # 5) 문서 앞쪽에서 선 공통 각도(0이 아님)도 지름길 대상 — 반대는 hint+180(=270)
+        calls.clear()  # 4) 문서 앞쪽에서 선 공통 각도(0이 아님)도 지름길 대상 — 반대는 hint+180(=270)
         M.score = fake([300.0, 5.0])
         ang, s = best_angle(im, 1280, 1.3, hint=90)
         assert ang == 90 and len(calls) == 2 and s == {90: 300.0, 270: 5.0}, (ang, s, calls)

@@ -11,7 +11,7 @@
 #   code_fp a·p1·r·s가 바뀌는 새 이미지 판이라 서버 반입은 검토 등급 A 뒤 사용자가 정한다.
 # S2(10-26, refactor_plan 4-1·D-011) — 코드가 읽는 데이터(지시서·채점 기준·보고서 틀·엔진 구성·원천 표·어휘·용어집)가
 #   패키지 폴더에서 저장소 루트 resources/로 옮겨, 세 타깃 모두 resources/를 폴더째 /app/deploy/resources로 COPY한다
-#   (코드는 paths.RES_ROOT = /app/deploy/resources로 찾음 — 앱별로 나누지 않음: 작고, research_judge 등을 모든 이미지 selftest가 씀).
+#   (코드는 paths.RES_ROOT = /app/deploy/resources로 찾음 — 앱별로 나누지 않음: 작고, 지시서 시험을 모든 이미지 selftest가 씀).
 # S3(10-26, refactor_plan 9-1·D-014) — 공용 코드가 common_tools/에서 common/{core,ai,store,check}로 옮겨, 세 타깃 모두
 #   common/을 /app/deploy/common으로 COPY한다. 단계 3 밖 파일(cli/·evaluation/·옛 options.conf·prompts/triple_extract)은 S4~S7까지
 #   common_tools/에 남아 그 COPY도 그대로 둔다. ENV PYTHONPATH(/app/deploy)는 그대로 — import 기준이 저장소 루트와 같음.
@@ -37,7 +37,7 @@
 # 원칙: 비밀값·원본 문서·결과는 이미지에 넣지 않는다(실행 시 설정 파일 마운트·볼륨) · 바꿀 값은 모두 settings.yaml(settings.sample.yaml — S7e1·S7e2,
 #   옛 --env-file pipeline.env 대신). S7e2(VS7e1 B-2, 사용자 10-28) — 설정 칸이 있는 값(PIPE_EMBED·PIPE_PROCS·DOC_DIR·DOC_DIR_PREPARED·SOFFICE_BIN)은
 #   이미지 ENV로 굽지 않고 이미지 안 설정 모델 기본값으로(settings.yaml이 늘 이김 — 옛 ENV는 settings.yaml이 못 덮었음). ENV에는 이미지 바탕·
-#   라이브러리 값만 남기고, 그 값을 /app/docker/image_env.txt에 적어 entrypoint가 settings.yaml common.runtime.lib_env로 덮을 수 있게 한다.
+#   라이브러리 값만 남기고, 그 값을 /app/docker/image_env.txt에 적어 entrypoint가 settings.yaml ops.runtime.lib_env로 덮을 수 있게 한다.
 # 폐쇄망: 기반 이미지(BASE)·시스템 패키지·휠을 미리 준비 — docs/specs/docker-collect.md 「빌드」.
 # requirements 분할은 안 함(10-16 코디네이터 결정) — 두 이미지가 같은 base 층(requirements-core.txt)을 공유해 캐시로 한 번만 설치된다.
 ARG BASE=python:3.12-slim-bookworm
@@ -82,59 +82,60 @@ RUN if [ "$APT" = "1" ]; then \
         libreoffice-core libreoffice-writer libreoffice-impress libreoffice-calc fonts-noto-cjk \
       && rm -rf /var/lib/apt/lists/*; fi
 
-# ── 검색 MCP(mcp-server, S6b — 옛 data-retrieval·타깃 retrieval) — mcp_server + common만(파싱·구조화·적재 없음 — 명령용 pipeline/cli.py만, S4) ──
-FROM base AS mcp
+# ── 검색 MCP 실행 이미지(mcp-server-runtime — op-06, 코드 없음) ──
+FROM base AS mcp-runtime
 WORKDIR /app
-COPY --from=src /src/common /app/deploy/common
-COPY --from=src /src/mcp_server /app/deploy/mcp_server
-# S7c1 — cli.py가 pipeline 설정 모델(config.py — 단계 코드 아님, common.config만 import)을 맨 위에서 읽어 함께 넣는다(PIPE_EMBED 등 pipeline 칸)
-COPY --from=src /src/pipeline/__init__.py /src/pipeline/cli.py /src/pipeline/config.py /app/deploy/pipeline/
-COPY --from=src /src/resources /app/deploy/resources
-# 두 이미지 공통 버전(D-036) — common.pipeline_version()이 읽음(COPY 줄 끝에는 주석을 달 수 없음)
-COPY --from=src /src/VERSION /app/deploy/VERSION
-COPY --from=src /src/appdocker /app/docker
-# S9(D-018) — 서버 반입 시험(이미지 명령 selftest가 돌림): 실행기 + 공용·이 이미지 폴더만(tests/server/{common,mcp} — 사례 이름 = 시험 모듈 이름)
-COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/deploy/tests/
-COPY --from=src /src/tests/server/__init__.py /app/deploy/tests/server/
-COPY --from=src /src/tests/server/common /app/deploy/tests/server/common
-COPY --from=src /src/tests/server/mcp /app/deploy/tests/server/mcp
-RUN mkdir -p /app/output /app/assets /data/docs && chown -R rag /app/output /data \
-    && sed -i 's/\r$//' /app/docker/entrypoint.sh && chmod +x /app/docker/entrypoint.sh
+# op-06(10-30, 사용자) — 실행 이미지(*-runtime): 코드 없음. 서버 코드 폴더(저장소 트리 그대로)를 /app/deploy에 읽기 전용으로 붙여 띄운다.
+# 시작 스크립트 runtime_entry.sh가 코드 폴더·의존성 지문(deps_hash ↔ 코드 deploy/docker/DEPS_HASH)을 보고 코드의 entrypoint로 넘김.
+# 코드가 든 이미지(아래 mcp·pipeline 타깃)는 이 단계 + 코드 COPY라 두 갈래의 바탕·의존성이 어긋나지 않는다.
+COPY deploy/docker/runtime_entry.sh /app/docker/runtime_entry.sh
+RUN mkdir -p /app/output /app/assets /app/deploy /data/docs && chown -R rag /app/output /data \
+    && sed -i 's/\r$//' /app/docker/runtime_entry.sh && chmod +x /app/docker/runtime_entry.sh \
+    && cat /tmp/requirements-core.txt /tmp/requirements-image.txt | tr -d '\r' | sha256sum | cut -c1-16 > /app/docker/deps_hash
 ENV TZ=Asia/Seoul LANG=C.UTF-8 PYTHONUTF8=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app/deploy \
     HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 DO_NOT_TRACK=1 SCARF_NO_ANALYTICS=true \
     RAG_MODULE=mcp
 RUN env > /app/docker/image_env.txt   # S7e2 — 이미지 ENV 기록(entrypoint가 lib_env와 견줘 사용자 env와 가름 — 비밀 없음)
-# 버전 라벨(D-036, 사용자 10-29) — build_ship.sh가 APP_VERSION(저장소 루트 VERSION)·VCS_REF(빌드 커밋)를 넘긴다. 직접 빌드하면 빈 값.
-# 넘긴 APP_VERSION이 이미지에 넣은 VERSION과 다르면 빌드를 멈춘다(태그와 이미지 안 버전 표기가 어긋나지 않게).
+ARG APP_VERSION=
+ARG VCS_REF=
+RUN echo "mcp-server-runtime ${APP_VERSION:-?} ${VCS_REF:-?}" > /app/docker/image_ref   # op-06 — 실행 기록에 남길 이미지 판
+LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=mcp-server-runtime
+USER rag
+VOLUME ["/app/output"]
+ENTRYPOINT ["/app/docker/runtime_entry.sh"]
+CMD ["help"]
+
+# ── 검색 MCP(mcp-server, S6b — 옛 data-retrieval·타깃 retrieval) — mcp_server + common만(파싱·구조화·적재 없음 — 명령용 pipeline/cli.py만, S4) ──
+FROM mcp-runtime AS mcp
+USER root
+WORKDIR /app
+COPY --from=src /src/common /app/deploy/common
+COPY --from=src /src/mcp_server /app/deploy/mcp_server
+COPY --from=src /src/pipeline/__init__.py /src/pipeline/cli.py /src/pipeline/config.py /app/deploy/pipeline/
+COPY --from=src /src/resources /app/deploy/resources
+COPY --from=src /src/VERSION /app/deploy/VERSION
+COPY --from=src /src/appdocker /app/docker
+COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/deploy/tests/
+COPY --from=src /src/tests/server/__init__.py /app/deploy/tests/server/
+COPY --from=src /src/tests/server/common /app/deploy/tests/server/common
+COPY --from=src /src/tests/server/mcp /app/deploy/tests/server/mcp
+RUN sed -i 's/\r$//' /app/docker/entrypoint.sh && chmod +x /app/docker/entrypoint.sh   # Windows 사본의 CRLF 줄 끝 제거
+# 버전 라벨(D-036) — 넘긴 APP_VERSION이 이미지에 넣은 VERSION과 다르면 빌드를 멈춘다(태그와 이미지 안 버전 표기가 어긋나지 않게).
 ARG APP_VERSION=
 ARG VCS_REF=
 RUN [ -z "$APP_VERSION" ] || [ "$APP_VERSION" = "$(tr -d ' \r\n' < /app/deploy/VERSION)" ] \
     || { echo "APP_VERSION($APP_VERSION) ≠ VERSION 파일" >&2; exit 1; }
 LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=mcp-server
 USER rag
-VOLUME ["/app/output"]
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["help"]
 
-# ── 파이프라인(data-pipeline, S6b D-020 — 옛 data-parsing+data-structure) — pipeline 전체(엔진·검토 루프·구조화·적재·게시) + common ──
-# 옛 structure 이미지는 이 이미지에서 파싱 엔진 패키지·LibreOffice만 빠진 것이었다(코드 폴더는 I2부터 같음) — 합쳐도 구조화·적재 명령은 그대로 돈다.
-FROM parse-deps AS pipeline
+# ── 파이프라인 실행 이미지(data-pipeline-runtime — op-06, 코드 없음) — RapidOCR 모델·LibreOffice는 이 단계에 ──
+FROM parse-deps AS pipeline-runtime
 WORKDIR /app
-COPY --from=src /src/common /app/deploy/common
-COPY --from=src /src/pipeline /app/deploy/pipeline
-# S7e1 — mcp 설정 모델(config.py — 검색 코드 아님, common.config만 import)도 넣는다: 호스트 python에 pydantic이 없을 때 settings_env.sh --image가
-# 이 이미지 하나로 mcp.host 칸(MCP_SERVER_IMAGE 등)까지 꺼내게(mcp 이미지에 pipeline/config.py를 넣은 S7c1과 같은 꼴 — 다리는 RAG_MODULE대로 pipeline 절만)
-COPY --from=src /src/mcp_server/__init__.py /src/mcp_server/config.py /app/deploy/mcp_server/
-COPY --from=src /src/resources /app/deploy/resources
-# 두 이미지 공통 버전(D-036) — common.pipeline_version()이 읽음(COPY 줄 끝에는 주석을 달 수 없음)
-COPY --from=src /src/VERSION /app/deploy/VERSION
-COPY --from=src /src/appdocker /app/docker
-# S9(D-018) — 서버 반입 시험(이미지 명령 selftest가 돌림): 실행기 + 공용·이 이미지 폴더만(tests/server/{common,pipeline})
-COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/deploy/tests/
-COPY --from=src /src/tests/server/__init__.py /app/deploy/tests/server/
-COPY --from=src /src/tests/server/common /app/deploy/tests/server/common
-COPY --from=src /src/tests/server/pipeline /app/deploy/tests/server/pipeline
-# RapidOCR 한국어 모델(반입 자산, 저장소 루트 assets/ — git 밖) → 패키지 안 models/ — 첫 실행 때 인터넷에서 받으려다 실패하지 않게
+# op-06(10-30, 사용자) — 실행 이미지(*-runtime): 코드 없음. 서버 코드 폴더(저장소 트리 그대로)를 /app/deploy에 읽기 전용으로 붙여 띄운다.
+# 시작 스크립트 runtime_entry.sh가 코드 폴더·의존성 지문(deps_hash ↔ 코드 deploy/docker/DEPS_HASH)을 보고 코드의 entrypoint로 넘김.
+# 코드가 든 이미지(아래 mcp·pipeline 타깃)는 이 단계 + 코드 COPY라 두 갈래의 바탕·의존성이 어긋나지 않는다.
 COPY --from=src /src/assets/ /app/assets/
 RUN python - <<'EOF'
 import glob, os, shutil, rapidocr
@@ -146,9 +147,11 @@ for f in fs:
 print(f"rapidocr 모델 {len(fs)}개 복사" + ("" if fs else " — assets/rapidocr 없음: 첫 실행에 모델을 받음(인터넷 필요 — 폐쇄망은 assets 반입)"))
 os.system(f"chown -R rag {dst}")                      # 실행 사용자(rag)가 모델을 받아 둘 수 있게(없으면 PermissionError로 회전 보정 실패)
 EOF
-RUN mkdir -p /app/output /data/docs && chown -R rag /app/output /data \
-    && sed -i 's/\r$//' /app/docker/entrypoint.sh && chmod +x /app/docker/entrypoint.sh   # Windows 사본의 CRLF 줄 끝 제거
-# 실행 환경 기본값 — 시간대는 새벽 마감(NIGHT_DEADLINE) 계산에 쓰임(UTC면 9시간 어긋남). 바꾸려면 settings.yaml common.runtime.lib_env(S7e2 — 옛 --env-file)
+COPY deploy/docker/runtime_entry.sh /app/docker/runtime_entry.sh
+RUN mkdir -p /app/output /app/assets /app/deploy /data/docs && chown -R rag /app/output /data \
+    && sed -i 's/\r$//' /app/docker/runtime_entry.sh && chmod +x /app/docker/runtime_entry.sh \
+    && cat /tmp/requirements-core.txt /tmp/requirements-image.txt | tr -d '\r' | sha256sum | cut -c1-16 > /app/docker/deps_hash
+# 실행 환경 기본값 — 시간대는 새벽 마감(NIGHT_DEADLINE) 계산에 쓰임(UTC면 9시간 어긋남). 바꾸려면 settings.yaml ops.runtime.lib_env(S7e2 — 옛 --env-file)
 # SOFFICE_BIN(/usr/bin/soffice — soffice_bin()이 PATH보다 먼저 보는 명시 경로, AD20)·DOC_DIR·DOC_DIR_PREPARED·PIPE_EMBED·PIPE_PROCS는 S7e2부터
 # 이미지 안 설정 모델 기본값(common.config.settings._IMAGE_DEFAULTS — B-2).
 # HOME=/tmp: LibreOffice 자체 UserInstallation은 pptx_render.py가 output/ 아래 임시 폴더로 따로 주지만(프로필 잠금 분리),
@@ -158,14 +161,37 @@ ENV TZ=Asia/Seoul LANG=C.UTF-8 PYTHONUTF8=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUNBU
     HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 DO_NOT_TRACK=1 SCARF_NO_ANALYTICS=true \
     RAG_MODULE=pipeline HOME=/tmp
 RUN env > /app/docker/image_env.txt   # S7e2 — 이미지 ENV 기록(entrypoint가 lib_env와 견줘 사용자 env와 가름 — 비밀 없음)
-# 버전 라벨(D-036, 사용자 10-29) — build_ship.sh가 APP_VERSION(저장소 루트 VERSION)·VCS_REF(빌드 커밋)를 넘긴다. 직접 빌드하면 빈 값.
-# 넘긴 APP_VERSION이 이미지에 넣은 VERSION과 다르면 빌드를 멈춘다(태그와 이미지 안 버전 표기가 어긋나지 않게).
+ARG APP_VERSION=
+ARG VCS_REF=
+RUN echo "data-pipeline-runtime ${APP_VERSION:-?} ${VCS_REF:-?}" > /app/docker/image_ref   # op-06 — 실행 기록에 남길 이미지 판
+LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=data-pipeline-runtime
+USER rag
+VOLUME ["/app/output"]
+ENTRYPOINT ["/app/docker/runtime_entry.sh"]
+CMD ["help"]
+
+# ── 파이프라인(data-pipeline, S6b D-020 — 옛 data-parsing+data-structure) — pipeline 전체(엔진·검토 루프·구조화·적재·게시) + common ──
+# 옛 structure 이미지는 이 이미지에서 파싱 엔진 패키지·LibreOffice만 빠진 것이었다(코드 폴더는 I2부터 같음) — 합쳐도 구조화·적재 명령은 그대로 돈다.
+FROM pipeline-runtime AS pipeline
+USER root
+WORKDIR /app
+COPY --from=src /src/common /app/deploy/common
+COPY --from=src /src/pipeline /app/deploy/pipeline
+COPY --from=src /src/mcp_server/__init__.py /src/mcp_server/config.py /app/deploy/mcp_server/
+COPY --from=src /src/resources /app/deploy/resources
+COPY --from=src /src/VERSION /app/deploy/VERSION
+COPY --from=src /src/appdocker /app/docker
+COPY --from=src /src/tests/__init__.py /src/tests/runner.py /app/deploy/tests/
+COPY --from=src /src/tests/server/__init__.py /app/deploy/tests/server/
+COPY --from=src /src/tests/server/common /app/deploy/tests/server/common
+COPY --from=src /src/tests/server/pipeline /app/deploy/tests/server/pipeline
+RUN sed -i 's/\r$//' /app/docker/entrypoint.sh && chmod +x /app/docker/entrypoint.sh   # Windows 사본의 CRLF 줄 끝 제거
+# 버전 라벨(D-036) — 넘긴 APP_VERSION이 이미지에 넣은 VERSION과 다르면 빌드를 멈춘다(태그와 이미지 안 버전 표기가 어긋나지 않게).
 ARG APP_VERSION=
 ARG VCS_REF=
 RUN [ -z "$APP_VERSION" ] || [ "$APP_VERSION" = "$(tr -d ' \r\n' < /app/deploy/VERSION)" ] \
     || { echo "APP_VERSION($APP_VERSION) ≠ VERSION 파일" >&2; exit 1; }
 LABEL org.opencontainers.image.version=$APP_VERSION org.opencontainers.image.revision=$VCS_REF org.opencontainers.image.title=data-pipeline
 USER rag
-VOLUME ["/app/output"]
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["help"]

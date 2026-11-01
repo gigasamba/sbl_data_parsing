@@ -3,7 +3,8 @@
 # 설치(코드 폴더 루트에서): sudo cp deploy/host/systemd/mcp-server-keepalive.* /etc/systemd/system/ && 아래 경로·사용자·DOCKER 수정
 #   && sudo systemctl daemon-reload && sudo systemctl enable --now mcp-server-keepalive.timer
 #   S6b — unit 이름이 바뀜(옛 data-retrieval-keepalive.*): 옛 unit은 `sudo systemctl disable --now data-retrieval-keepalive.timer` 뒤 파일 삭제(refactor.md C-29)
-# podman이면 Environment=DOCKER=podman 이고 User=root(rootless가 안 되는 서버 — SI32). docker 그룹이 있으면 User=rag.
+# 서버 컨테이너 도구 = root podman 하나(Environment=DOCKER=podman · User=root — 사용자 10-30 검토 B4). docker 서버면 DOCKER=docker, docker 그룹이 있으면 User=rag.
+# /srv/rag/code/live = 지금 쓰는 코드 폴더 링크(zip을 푼 폴더 — `sudo ln -sfn <zip 폴더> /srv/rag/code/live`, README §5-0).
 [Unit]
 Description=근거 MCP 상주 확인·기동
 Wants=network-online.target
@@ -18,9 +19,9 @@ WorkingDirectory=/srv/rag/code/live
 # (옛 <PATCH_CODE>/app/docker/), 컨테이너 마운트 원본 <PATCH_CODE>/app/deploy/…·app/docker는 그대로.
 # 설정 파일은 적지 않음 — mcp_up.sh가 settings_env.sh load_settings로 $SERVER_ENV_DIR/settings.yaml을 읽는다(S7e1, 사용자 10-27 Q4 — 옛 pipeline.env 대신).
 #   설정 폴더를 옮기면 SERVER_ENV_DIR 한 줄만 바꾼다. settings.yaml이 다른 자리에 따로 있을 때만 Environment=SETTINGS_FILE=<파일>을 더한다.
-#   RUN_ENV는 settings.yaml common.run_env에만 적는다. 호스트 python에 pydantic·PyYAML이 없으면 Environment=SETTINGS_IMAGE=data-pipeline:<태그>(C-36).
+#   RUN_ENV는 settings.yaml required.env.run_env에만 적는다. 호스트 python에 pydantic·PyYAML이 없으면 Environment=SETTINGS_IMAGE=data-pipeline:<태그>(C-36).
 Environment=SERVER_ENV_DIR=/srv/rag/env
 Environment=PATCH_CODE=/srv/rag/code/live
-Environment=DOCKER=docker
+Environment=DOCKER=podman
 ExecStart=/bin/bash ${PATCH_CODE}/deploy/host/scripts/mcp_up.sh
 TimeoutStartSec=5min

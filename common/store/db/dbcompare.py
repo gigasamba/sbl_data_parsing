@@ -8,7 +8,6 @@ import re
 from dataclasses import dataclass, field
 
 from common.store.db.models import search_tables as ST
-from common.store.db.models import struct_tables as SS
 
 UP_FIXES = ("표 없음", "색인 없음", "뷰 없음", "뷰 칸 다름")  # up이 고치는 차이
 VERSION_TABLE = "alembic_version"
@@ -44,9 +43,7 @@ def expected(target, schema, dim=None):
         from common.store.db.models.log_tables import index_defs, log_metadata
 
         return log_metadata(schema), index_defs(), {}
-    if target == "search":
-        return ST.search_metadata(schema, dim), ST.index_defs(dim), ST.VIEWS_EXPECTED
-    return SS.struct_metadata(schema), {**SS.INDEX_DEFS, **SS.CONFIG_INDEX_DEFS}, {}
+    return ST.search_metadata(schema, dim), ST.index_defs(dim), ST.VIEWS_EXPECTED  # 갈래는 search 하나(struct는 사용자 11-01에 없앰)
 
 
 def _norm(schema, s, ext=()):

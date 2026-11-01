@@ -21,6 +21,34 @@ def _capture():
     return rows, mock.patch.object(span, "_emit", lambda row, level=None: rows.append(row))
 
 
+def test_warm_span_counts():
+    from pipeline.extract import source
+
+    class Client:
+        def head_object(self, **kw):
+            return {"ContentLength": 1}
+
+        def download_file(self, bucket, key, dest):
+            if key.endswith("bad"):
+                raise OSError("down")
+            Path(dest).write_bytes(b"x")
+
+    rows, patched = _capture()
+    with tempfile.TemporaryDirectory() as tmp, patched, jsonlog.context(run_id=str(uuid.uuid4())):
+        batch = Path(tmp) / "batch.csv"
+        cols = {"size": "size", "filename": "name"}
+        batch.write_text("size,name,key\n1,a,ok\n1,b,bad\n", encoding="utf-8")
+        with (
+            mock.patch.object(source, "_warm_dir", lambda: Path(tmp)),
+            mock.patch.object(source, "_rdb_cols", lambda: cols),
+            mock.patch.object(source, "_rdb_bucket_and_key", lambda c, r: ("b", r["key"])),
+            mock.patch.object(source, "_s3", Client),
+        ):
+            assert source._warm_cmd(["--csv", str(batch), "--workers", "1"]) == 0
+    row = next(r for r in rows if r["stage"] == "extract.warm")
+    assert row["layer"] == "extract" and row["total"] == 2 and row["metrics"] == {"done": 1, "failed": 1}
+
+
 def test_embed_span_cache_batches_retries():
     calls = []
 

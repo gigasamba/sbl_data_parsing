@@ -12,7 +12,7 @@
 - **빈 응답 안전망(RV12, 2026-10-09 재순위 실측 — glm-5.2가 생각에 max_tokens를 다 써 ~45% 빈 응답)**: 응답이 비어 있고(공백만
   포함) 토큰을 썼다면(completion_tokens>0 — 생각이 출력 상한을 다 썼다는 신호, finish_reason을 3개 전송 경로 모두에서
   따로 끌어오지 않고 이미 있는 값으로 판정) `max_tokens`를 4배(`LLM_EMPTY_RETRY_MAX` 상한, 기본 8000)로 올려 **딱 한 번**
-  재요청한다 — `LLM_EMPTY_RETRY=0`으로 끔(기본 켬). 재요청도 공유 장부(LLM_BUDGET_USD·LLM_MAX_CALLS)를 그대로 거친다.
+  재요청한다. 재요청도 공유 장부(LLM_BUDGET_USD·LLM_MAX_CALLS)를 그대로 거친다.
   빈 응답(재요청 뒤에도 빈 경우 포함)은 캐시에 쓰지 않는다 — 전에는 빈 응답이 캐시에 고착돼 다음 호출도 계속 빈 응답을 받았음.
 - **생각 끄기(RV12)**: env `LLM_EXTRA_BODY`(JSON 객체)가 OpenRouter·vLLM 요청 본문에 그대로 섞여 들어간다 — 실제 머지는
   `common/adk.py complete()`(VLM도 `VLM_EXTRA_BODY`로 같은 메커니즘, 역할별 분리) 한 곳.
@@ -303,7 +303,7 @@ def chat(messages, temperature=0.0, max_tokens=1024, json_mode=False, allow_exte
     LLM_FAKE=1이면 그 무엇도 거치지 않고 네트워크 없는 모의 응답(캐시에 안 씀) — 비용 추정·preflight 전용.
     agent=dev/agents/<agent_id> — gamma 에이전트 패키지 경유로 그대로 adk.complete에 전달(GA2, 호출부는 agent= 필수 —
     cli/check_modules.py 정적 검사). 캐시 열쇠(messages·temperature 등)는 agent와 무관 — 요청 본문만 바뀐다.
-    빈 응답 안전망(RV12, 기본 켬·LLM_EMPTY_RETRY=0으로 끔) — _empty_truncated()면 max_tokens×4(LLM_EMPTY_RETRY_MAX
+    빈 응답 안전망(RV12) — _empty_truncated()면 max_tokens×4(LLM_EMPTY_RETRY_MAX
     상한, 기본 8000)로 딱 한 번 재요청, 두 호출 다 공유 장부(_do_call)를 거쳐 예산·호출 수에 그대로 반영된다."""
     if fake_llm():
         last_user = next((m.get("content") or "" for m in reversed(messages) if m.get("role") == "user"), "")
@@ -327,7 +327,7 @@ def chat(messages, temperature=0.0, max_tokens=1024, json_mode=False, allow_exte
         _span.add_current(llm_cache_hit=1)  # op-01 — 열린 span(문서×단계)에 응답 캐시 적중 수
         return json.loads(cp.read_text(encoding="utf-8"))["text"]
     text, u = _do_call(messages, temperature, max_tokens, json_mode, base, model, agent, timeout)
-    if cfg().models.llm.empty_retry and _empty_truncated(text, u):
+    if _empty_truncated(text, u):
         retry_tokens = min(max_tokens * 4, cfg().models.llm.empty_retry_max)
         if retry_tokens > max_tokens:
             text, u = _do_call(messages, temperature, retry_tokens, json_mode, base, model, agent, timeout)

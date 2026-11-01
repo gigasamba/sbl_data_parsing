@@ -17,16 +17,14 @@ import time
 import urllib.parse
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]  # dev/
-from common.ai import adk as A  # noqa: E402
-from common.ai.agent_prompts import load as _load_prompt  # noqa: E402
-from common.config.settings import cfg as ccfg  # noqa: E402 — common 칸 설정 객체(S7c)
-from common.core import span as SP  # noqa: E402 — op-01 성능 span(풀 스레드 컨텍스트 전달)
-from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
-from pipeline.shared.artifacts import prompt_id, raw_vlm_path  # noqa: E402
-from pipeline.shared.postprocess import raw_root  # noqa: E402 — PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
-from pipeline.transform.figures.vector import vector_regions  # noqa: E402 — 쪽 벡터 도형 군집 수(page_signals)
+from common.ai import adk as A
+from common.ai.agent_prompts import load as _load_prompt
+from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
+from common.core import span as SP  # op-01 성능 span(풀 스레드 컨텍스트 전달)
+from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.shared.artifacts import prompt_id, raw_vlm_path
+from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
+from pipeline.transform.figures.vector import vector_regions  # 쪽 벡터 도형 군집 수(page_signals)
 
 NOW = time.strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -35,8 +33,7 @@ PID_PAGE = prompt_id("page", "v1", P_PAGE)  # 프로토타입과 같은 글자 �
 DPI, MAX_SIDE = 150, 2000  # pages_of()·_png() 렌더 매개변수 — 결정적 열쇠에 들어감(바뀌면 새 열쇠)
 
 # AD12·AD46(D2·D4·D6 공용 문서 검사 표) — 글자 PDF 안의 스캔 쪽 판정 기준값. 문서 단위 is_scan의 20자와 같은 값으로 보수적으로
-# 맞춤. AD31(10-11) — PARSE_PAGE_SCAN 기본 켬(OP11, "새 기능 기본 켬") · PARSE_PAGE_SCAN=0으로 끄면 scan_pages를
-# 아예 안 불러 이전(기본 꺼짐 시절) 동작과 바이트 동일.
+# 맞춤(AD31 — 글자 PDF 안의 스캔 쪽 신호는 늘 봄).
 PAGE_SCAN_CHARS = 20  # 글자층 "거의 없음"
 PAGE_SCAN_AREA = 0.6  # 이미지 면적 비율(쪽 면적 대비) "큼"
 # AD31 — 쓰레기·숨은 글자층 신호(garbage_ratio는 AD12부터 신호 표에 있었고, hidden_ratio는 이번에 추가). 이미지 면적
@@ -50,10 +47,8 @@ PAGE_HIDDEN_AREA = 0.3  # 숨은 글자층 쪽의 완화된 이미지 면적 기
 # 비율로는 못 잡으니 국소 겹침(숨은 글자 상자 하나가 그림 bbox와 겹치는지)을 따로 본다. 문서당 상한
 # PARSE_HIDDEN_OVERLAP_MAX(env, 기본 20) — 0이면 꺼짐(이 신호를 안 봄, scan_pages_detail이 이전과 바이트 동일).
 PARSE_HIDDEN_OVERLAP_MAX_DEFAULT = "20"
-# AD31(남은 것, 10-08) — 렌더 OCR≫글자층·회전·벡터 도형 신호(규칙만, VLM 예/아니오 판단은 AG11 몫). 셋 다
+# AD31(남은 것, 10-08) — 회전·벡터 도형 신호(규칙만, VLM 예/아니오 판단은 AG11 몫, 렌더 OCR≫글자층 신호는 pl-34 10-30에 지움). 둘 다
 # 문서당 상한 env(0=꺼짐, 이 신호를 안 봄 — scan_pages_detail이 그 조건 자체를 안 보므로 바이트 동일)로 기본 켬(OP11).
-PAGE_OCR_GT_RATIO = 3.0  # 렌더 OCR 글자 수가 글자층의 이 배수 이상 — 글자층이 실제 내용을 못 담음(PARSE_SIGNAL_OCR=1일 때만 ocr_chars가 채워짐, 꺼져 있으면 이 조건 자체가 조용히 안 걸림)
-PARSE_OCR_GT_MAX_DEFAULT = "20"
 PAGE_VECTORS_MIN = 3  # 쪽 안 벡터 도식 군집 수(post.vector.vector_regions) "많음" — 복잡한 도형·SmartArt류 페이지 후보
 PARSE_VECTORS_MAX_DEFAULT = "20"
 PARSE_ROTATED_MAX_DEFAULT = "20"  # prepare.py가 돌린(각도≠0) 쪽 — 회전 전 OCR 품질이 낮았을 수 있어 쪽 VLM 후보
@@ -96,20 +91,6 @@ def _signals_path(file_sha256):
     `<name>@<version>` 관례는 pipeline.shared.artifacts.raw_engine_path·raw_vlm_path와 같음 — 기존 VLM 캐시 원칙 그대로.
     tools/parse_agent_tools.inspect_document도 이걸 읽고/채운다, AD46 '한 번 계산해 저장, 판단들이 읽음')."""
     return Path(raw_root()) / "signals" / f"page_signals@{PAGE_SIGNALS_VERSION}" / f"{file_sha256[:16]}.json"
-
-
-def _render_ocr_chars(pg):
-    """렌더 OCR 글자 수 — page_signals가 PARSE_SIGNAL_OCR=1일 때만 부른다(렌더+OCR은 비용이 커서 기본 꺼짐).
-    pipeline.extract.prepare._ocr_lines 재사용(회전 점수와 같은 OCR 엔진)."""
-    import numpy as np
-
-    from pipeline.extract import prepare as P
-
-    pix = pg.get_pixmap(dpi=DPI)
-    arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
-    if pix.n >= 4:
-        arr = arr[:, :, :3]
-    return sum(len(t) for _box, t, _c in P._ocr_lines(arr))
 
 
 def _is_hidden_span(sp):
@@ -201,18 +182,15 @@ def page_signals(path):
     """AD12·AD46(D2 글자층·D4 이미지 섞임·D6 쪽 VLM이 같은 표를 읽음) — PDF 쪽마다
     [{page, chars(글자층 글자 수), image_area_ratio(삽입 이미지 면적 ÷ 쪽 면적), figures(삽입 그림 수),
     vectors(벡터 도형 군집 수 — post.vector.vector_regions), garbage_ratio, hidden_ratio(AD31 — 보이지 않는 글자 비율),
-    hidden_over_image(AD47 — 보이지 않는 글자 상자 하나가 그림과 겹치는지, 국소 신호), ocr_chars}].
-    ocr_chars는 PARSE_SIGNAL_OCR=1일 때만 채움(그 외엔 None — 렌더+OCR 비용 큼). PDF가 아니면 [].
+    hidden_over_image(AD47 — 보이지 않는 글자 상자 하나가 그림과 겹치는지, 국소 신호)}]. PDF가 아니면 [].
+    (렌더 OCR 글자 수 ocr_chars는 pl-34 10-30에 지움 — 옛 캐시에 남은 ocr_chars 칸은 읽지 않음)
     원본 파일 sha256로 한 번 계산해 _signals_path 캐시에 저장 — 다시 부르면 그 파일을 읽어 같은 쪽을 다시 안 연다."""
     p = Path(path)
     if p.suffix.lower() != ".pdf":
         return []
-    want_ocr = pc.cfg().extract.signal_ocr  # S7c — 설정 객체(on=("1",) = 옛 =="1")
     cache = _signals_path(sha(p.read_bytes()))
     if cache.exists():
-        cached = json.loads(cache.read_text(encoding="utf-8"))
-        if not want_ocr or all(r.get("ocr_chars") is not None for r in cached):
-            return cached
+        return json.loads(cache.read_text(encoding="utf-8"))
     import fitz
 
     from pipeline.transform.represent.parse_qa import garbage_ratio
@@ -242,7 +220,6 @@ def page_signals(path):
             "garbage_ratio": garbage_ratio(text),
             "hidden_ratio": _hidden_ratio(pg),
             "hidden_over_image": _hidden_image_overlap(pg, img_rects),
-            "ocr_chars": _render_ocr_chars(pg) if want_ocr else None,
         }
         out.append(rec)
     cache.parent.mkdir(parents=True, exist_ok=True)
@@ -267,10 +244,6 @@ def scan_pages_detail(path):
                보이는 값이 쉼표/마침표만 다르면(430.000 vs 430,000) _page_agreement의 정규화가 그 차이를 지워
                버려 "일치"로 오판(원래 틀린 글을 유지)하기 때문(synth-mixedpdf textlayer_mismatch.pdf로 확인). 문서당
                상한 PARSE_HIDDEN_OVERLAP_MAX(env, 기본 20, 0=꺼짐 — 이 조건 자체를 안 봐 이전과 바이트 동일).
-    'ocr_gt_text' = AD31(10-08) — 렌더 쪽 OCR 글자 수가 글자층의 PAGE_OCR_GT_RATIO배 이상(기본 3배) — 글자층이
-               쪽 실제 내용(그림 속 글자·이미지 표 등)을 못 담고 있다는 신호. ocr_chars는 PARSE_SIGNAL_OCR=1일
-               때만 채워지므로(렌더+OCR 비용 큼, 기본 꺼짐) 꺼져 있으면 이 조건은 조용히 안 걸림(바이트 동일).
-               상한 PARSE_OCR_GT_MAX(env, 기본 20, 0=꺼짐).
     'rotated' = AD31(10-08) — prepare.py가 돌린 쪽(rotation.csv의 angle≠0, rotation_info 재사용) — 회전 전
                OCR 점수로 방향을 골랐어도 회전 자체가 쪽의 글자층 추출 신뢰도를 낮출 수 있어 쪽 VLM 후보로 넓힌다.
                상한 PARSE_ROTATED_MAX(env, 기본 20, 0=꺼짐 — rotation.csv를 안 읽음).
@@ -279,13 +252,12 @@ def scan_pages_detail(path):
                PARSE_VECTORS_MAX(env, 기본 20, 0=꺼짐). (규칙 신호만 — VLM에 보일지 말지의 '가벼운 판단'은 AG11 몫)
     문서 전체가 스캔(is_scan)이면 page_text가 이 함수를 안 부른다(전체 쪽 경로 그대로)."""
     cap = _hidden_overlap_cap()
-    ocr_cap, vec_cap, rot_cap = (
-        _cap("PARSE_OCR_GT_MAX", PARSE_OCR_GT_MAX_DEFAULT),
+    vec_cap, rot_cap = (
         _cap("PARSE_VECTORS_MAX", PARSE_VECTORS_MAX_DEFAULT),
         _cap("PARSE_ROTATED_MAX", PARSE_ROTATED_MAX_DEFAULT),
     )
     rot = rotation_info(path) if rot_cap else {}  # rot_cap==0이면 rotation.csv를 안 읽음(이전과 바이트 동일)
-    n_overlap = n_ocr = n_rot = n_vec = 0
+    n_overlap = n_rot = n_vec = 0
     out = {}
     for r in page_signals(path):
         area = r["image_area_ratio"]
@@ -298,9 +270,6 @@ def scan_pages_detail(path):
             n_overlap += 1
         elif r.get("garbage_ratio", 0.0) >= PAGE_SCAN_GARBAGE and area >= PAGE_SCAN_AREA:
             out[r["page"]] = "garbage"
-        elif r.get("ocr_chars") is not None and r["ocr_chars"] >= PAGE_OCR_GT_RATIO * max(r["chars"], 1) and n_ocr < ocr_cap:
-            out[r["page"]] = "ocr_gt_text"
-            n_ocr += 1
         elif (rot.get(r["page"], {}).get("angle") or 0) != 0 and n_rot < rot_cap:
             out[r["page"]] = "rotated"
             n_rot += 1
@@ -518,7 +487,6 @@ def page_targets(doc_path):
         독립 검토가 지적한 원래 버그: figures.py가 scan_pages()만 보고 이 조건을 몰라, 쪽 VLM이 안 도는데도 그림을 건너뛰어 내용 손실)
       - VLM_PAGE_MAX=='0'(비용·시간 가드로 꺼짐)
       - PDF도 아니고 문서 전체 스캔(is_scan)도 아님 — 쪽 VLM 대상 자체가 없음
-      - 글자 PDF인데 PARSE_PAGE_SCAN=0 — 쪽 신호 자체를 안 봄
       - 글자 PDF인데 스캔 신호 쪽이 하나도 없음(scan_pages 빈 목록)
     남는 경우: 문서 전체가 스캔(이미지 파일 또는 스캔 PDF)이면 전체 쪽, 아니면 scan_pages() 결과 — 거기에
     VLM_PAGE_MAX(cap) 절단까지 적용한 뒤 집합으로(독립 검토가 지적한 둘째 버그: cap으로 잘려 실제로 안 불릴
@@ -533,7 +501,7 @@ def page_targets(doc_path):
     p = Path(doc_path)
     if is_scan(p):
         return pick_pages(len(pages_of(p)), True, [], cap)
-    if not pc.cfg().extract.page_scan or p.suffix.lower() != ".pdf":
+    if p.suffix.lower() != ".pdf":
         return set()
     # AD12·AD31 — 글자 PDF 안의 스캔 쪽만(쓰레기·숨은 글자층·OCR≫글자층·회전·벡터 도식 신호 — scan_pages_detail 참고)
     return pick_pages(0, False, scan_pages(p), cap)
@@ -547,8 +515,8 @@ def pick_pages(n_pages, whole_scan, scan, cap):
 
 
 def page_text_pages(doc_path):
-    """문서 전체(또는 AD12·AD31 — 글자 PDF 안의 스캔 쪽만, `PARSE_PAGE_SCAN=0`이 아닌 한 기본 켬) 쪽 VLM 옮기기 —
-    쪽 단위로 [(쪽 번호, 글, provenance), ...] (AD39 — 쪽별 중복 제거(scan_dedup)가 OCR 쪽과 맞춰야 해서 page_text처럼
+    """문서 전체(또는 AD12·AD31 — 글자 PDF 안의 스캔 쪽만) 쪽 VLM 옮기기 —
+    쪽 단위로 [(쪽 번호, 글, provenance), ...] (scan_fill이 그 쪽만 채우려면 page_text처럼
     합친 글이 아니라 쪽 번호가 필요). 대상 쪽 계산은 page_targets()(단일 진본, figures.py와 공유) — 여기선 그
     번호로 실제 렌더·VLM 호출만 한다."""
     # 2026-10-22 — 쪽 전사를 순차→병렬로: 15쪽 × 26초 순차=390초 wall → 병렬(min(N,병렬)배치=wall 최소화), 품질 무변
@@ -611,10 +579,8 @@ def page_text_pages(doc_path):
 
 
 def page_text(doc_path):
-    """문서 전체(또는 AD12·AD31 — 글자 PDF 안의 스캔 쪽만, 기본 켬) 쪽 VLM 옮기기 — 둘 다 아니면 빈 문자열
+    """문서 전체(또는 AD12·AD31 — 글자 PDF 안의 스캔 쪽만) 쪽 VLM 옮기기 — 둘 다 아니면 빈 문자열
     (호출 0) · VLM_PAGE_MAX=0이면 꺼짐. 반환: (쪽마다 옮긴 글자를 합친 것, [쪽별 provenance]). 결정적 열쇠(det)는
-    rotation.csv의 orig_sha256·angle로 — 없으면 렌더 바이트 sha로 대체(옛 rotation.csv·목록에 없는 문서).
-    AD31(10-11) — PARSE_PAGE_SCAN 기본 켬(신호 대상 쪽만 쪽 VLM 실제 호출, 비용·쪽 상한은 그대로) ·
-    `PARSE_PAGE_SCAN=0`이면 scan_pages를 안 부르고 이전(기본 꺼짐 시절) 동작과 바이트 동일."""
+    rotation.csv의 orig_sha256·angle로 — 없으면 렌더 바이트 sha로 대체(옛 rotation.csv·목록에 없는 문서)."""
     pages = page_text_pages(doc_path)
     return "\n".join(t for _, t, _ in pages if t), [pv for _, _, pv in pages]

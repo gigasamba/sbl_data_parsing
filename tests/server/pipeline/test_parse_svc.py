@@ -31,3 +31,18 @@ def test_ocr_follows_pipeline_switch():
         assert S._engines_no_ocr_arg() == []  # 켜면 run_all 기본(OCR·VLM 포함)
     args = S._engines_no_ocr_arg()
     assert not args or not {"rapidocr_ko", "qwen_vlm"} & set(args[1].split(","))
+
+
+def test_scan_pdf_note():
+    """pl-03(사용자 10-31) — 스캔 PDF는 파이프라인 없이 임시 안내(돌 엔진이 없음), 표본보다 스캔으로 분류돼 엔진이 하나도 못 돌면
+    run_all의 NO_JOB_MARK 줄로 같은 안내 — 엔진이 돌다 다 실패했을 때만 DRM 추정."""
+    from pipeline import mcp_parse_service as S
+    from pipeline.extract.run_all import IDLE_MARK, NO_JOB_MARK
+
+    assert S.skip_note("a.pdf", 0) == S.SCAN_NOTE and S.skip_note("a.pdf", 19) == S.SCAN_NOTE
+    assert S.skip_note("a.pdf", 20) is None and S.skip_note("a.pdf", -1) is None and S.skip_note("a.pdf", None) is None
+    assert S.skip_note("a.docx", None) is None
+    assert "추후 지원 예정" in S.SCAN_NOTE
+    assert S.empty_note(f"== run_all\n{IDLE_MARK}(비교하려면 stack json을 고침): docling\n{NO_JOB_MARK}\n") == S.SCAN_NOTE
+    assert S.empty_note(f"== run_all\n{IDLE_MARK}(비교하려면 stack json을 고침): docling\n") == S.DRM_NOTE  # 일부만 안 돎
+    assert S.empty_note("== run_all\nTraceback …") == S.DRM_NOTE and S.empty_note(None) == S.DRM_NOTE

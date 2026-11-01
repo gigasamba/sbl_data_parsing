@@ -13,7 +13,6 @@ from common.core.paths import (
     PROJ_ROOT,
     RES_ROOT,
     STACK_FILE,
-    TEMPLATES_DIR,
     atomic_write_bytes,
     atomic_write_text,
     child_env,
@@ -34,16 +33,6 @@ def _demo():
     env = child_env({"X_DEMO": "1"})
     assert env["X_DEMO"] == "1" and str(PKG_ROOT.parent) in env["PYTHONPATH"].split(os.pathsep)
     assert env is not os.environ  # env 남김 — 시험 · 원본 os.environ을 안 바꿈
-    # 운영 DB 가드(structdb.PROD_DBS)가 이 상수를 들여놓아도 그대로 같은 절대경로를 가리키는지 —
-    # 이 모듈은 structdb.py를 고치지 않았으므로 바뀔 리 없지만, 단계 4 이동이 그 경로를 흔들지 않았다는 증거로 남긴다.
-    from common.store import structdb  # deploy/common/store/structdb.py — `-m common.core.paths`로 이미 deploy/가 sys.path에 있어 바로 찾음
-
-    expect = {
-        (PROJ_ROOT / "valid_env" / "structured" / "sales.sqlite").resolve(),
-        (PROJ_ROOT / "valid_env" / "sim" / "structured" / "sales.sqlite").resolve(),
-        (PROJ_ROOT / "data" / "structured" / "sales.sqlite").resolve(),
-    }
-    assert structdb.PROD_DBS == expect, (structdb.PROD_DBS, expect)
     with tempfile.TemporaryDirectory() as t:
         root = Path(t)
         d1 = resolve_run_dir(root, None, new=True)
@@ -71,13 +60,14 @@ def _demo():
             doc_dir()
             raise AssertionError("DOC_DIR 없으면 SystemExit이어야 함")
         except SystemExit as e:
-            assert "DOC_DIR" in str(e)
+            assert "ops.paths.doc_dir" in str(e)
     # S2 — resources/prompts/는 모든 이미지에 폴더째 있으므로 앱별 묶음도 이미지 구분 없이 확인
-    # (research_judge는 검색 전용이지만 agent_prompts·adk.py selftest가 모든 이미지에서 씀 — D-019 ④로 mcp/)
-    assert resolve_agent_dir("research_judge") == RES_ROOT / "prompts" / "mcp" / "research_judge"
-    assert resolve_agent_dir("value_choice") == RES_ROOT / "prompts" / "common" / "value_choice"
-    assert resolve_agent_dir("agg_llm_route") == RES_ROOT / "prompts" / "mcp" / "agg_llm_route"  # S11 — research_check 삭제(D-025)
-    assert (RES_ROOT / "prompts" / "common" / "_common" / "tail.md").is_file() and CRITERIA_FILE.is_file() and TEMPLATES_DIR.is_dir()
+    # (11-01 — 호출부 없는 지시서 research_judge·agg_llm_route·parse_shadow·doc_summary·mermaid_check는 지움)
+    assert resolve_agent_dir("page_transcribe") == RES_ROOT / "prompts" / "common" / "page_transcribe"
+    assert resolve_agent_dir("nested_figure") == RES_ROOT / "prompts" / "pipeline" / "nested_figure"
+    assert (
+        RES_ROOT / "prompts" / "common" / "_common" / "tail.md"
+    ).is_file() and CRITERIA_FILE.is_file()  # 보고서 틀 폴더(TEMPLATES_DIR)는 11-01에 지움 — 상수는 pl-46
     assert STACK_FILE.is_file() and (GLOSSARY_ROOT / "domain_terms.csv").is_file()
     if (PROJ_ROOT / "dev_tools").is_dir():  # 저장소 체크아웃에서만(이미지엔 dev_tools 없음)
         assert resolve_agent_dir("example_agentic") == PROJ_ROOT / "dev_tools" / "unit_test" / "fixtures" / "example_agentic"

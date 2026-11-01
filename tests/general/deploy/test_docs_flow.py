@@ -12,7 +12,9 @@ import time
 from pathlib import Path
 from unittest import mock
 
-ROOT = Path(__file__).resolve().parents[3]
+from common.core.paths import DEPLOY_ROOT
+
+ROOT = DEPLOY_ROOT  # 저장소 루트(op-09 — paths 상수)
 
 
 def _load():
@@ -49,6 +51,7 @@ def _run_main(work, rows, parse_one, structure_one, cleanup_doc, setup=None):
     M.code_layout_problems = lambda: []
     M.edw_list = lambda keywords: rows
     M.write_envfile = lambda: 0
+    M.stack_check = lambda: None  # 엔진 구성 파일 확인(docker exec) 대신
     M.warm_one = lambda seq, row: True
     M.parse_one, M.structure_one, M.cleanup_doc = parse_one, structure_one, cleanup_doc
     M.pg_count = lambda: (0, 0)

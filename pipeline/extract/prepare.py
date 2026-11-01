@@ -13,7 +13,7 @@
 
 작은 기울기(1~5도) 보정은 하지 않는다 — 필요하면 튜닝 항목(AGENTS.md C11).
 
-AD18 — 방향 보정 빠르게(기본 켬, PREPARE_ROTATE_FAST=0으로 끄면 아래 없이 기존처럼 매 쪽 4방향 전부 계산):
+AD18 — 방향 보정 빠르게(늘 켬):
 쪽마다 먼저 "기대 각도"(문서 맨 앞 PREPARE_ROTATE_LEAD쪽이 전부 같은 각도로 정해지면 그 각도, 그 전엔 0도)와
 **그 반대(기대 각도+180도)** 두 방향만 축소 크기(PREPARE_ROTATE_PROBE_FAST, 기본 480px)로 점수를 재, 기대
 각도 쪽이 PREPARE_ROTATE_S0_MIN(기본 150) 이상이고 **반대보다 min_gain(기본 1.3)배 이상 앞설 때만** 그 각도로
@@ -34,16 +34,15 @@ import struct
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.contract import file_hash  # noqa: E402
-from common.core.paths import (  # noqa: E402 — 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
+from common.core.console import utf8_stdout
+from common.core.contract import file_hash
+from common.core.paths import (  # 폴더 재편 뒤 이 상수만 바뀌면 됨
     APP_ROOT,
     doc_dir,
     tmp_path_for,  # GH1-01, tmp+os.replace 공용(RV6과 같은 원칙) · place()가 하드링크한 dst를 그 자리에서 save()하면 원본 inode까지 덮어씀
 )
-from pipeline import config as pc  # noqa: E402 — S7c: 설정 객체(옛 os.environ 읽기)
-from pipeline.extract.engines import registry  # noqa: E402 — SI44 '처리 엔진 없는 확장자' 판정(engines_for) 공용
+from pipeline import config as pc  # S7c: 설정 객체(옛 os.environ 읽기)
+from pipeline.extract.engines import registry  # SI44 '처리 엔진 없는 확장자' 판정(engines_for) 공용
 
 IMG = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 _OCR: list = []
@@ -229,29 +228,15 @@ def _drm_reason(p):
 
 
 def _ocr_lines(arr):
-    """글상자 [(box, text, conf)] — rapidocr_onnxruntime(1.x, 개발 PC 실측 기준)이 있으면 그것, 없으면 rapidocr 3.x 한국어 모델
-    (Docker 이미지 — rapidocr_ko와 같은 패키지·모델이라 이미지가 작아짐). PREPARE_OCR=v1|v3로 강제."""
+    """글상자 [(box, text, conf)] — rapidocr 3.x 한국어 모델(rapidocr_ko 엔진과 같은 패키지·모델).
+    (11-01 — 옛 rapidocr_onnxruntime 1.x 길과 설정 extract.prepare.ocr(auto|v1|v3)는 지움: 서버 이미지에는 1.x가 없어 늘 3.x였음.)"""
     if not _OCR:
-        want = pc.cfg().extract.prepare.ocr  # S7c — 설정 객체(blank keep: 옛 `get(X, "auto")` — `PREPARE_OCR=`은 '' 유지)
-        try:
-            if want == "v3":
-                raise ImportError
-            from rapidocr_onnxruntime import RapidOCR
+        from rapidocr import RapidOCR
 
-            _OCR.append(("v1", RapidOCR()))
-        except ImportError:
-            from rapidocr import RapidOCR
+        from pipeline.extract.engines.rapidocr.parser import ko_params  # OC1 — 엔진과 같은 설정·스레드 상한(병렬 prepare도 코어 다툼 없게)
 
-            from pipeline.extract.engines.rapidocr.parser import (
-                ko_params,
-            )  # OC1 — 엔진과 같은 설정·스레드 상한(병렬 prepare도 코어 다툼 없게)
-
-            _OCR.append(("v3", RapidOCR(params=ko_params())))
-    kind, eng = _OCR[0]
-    if kind == "v1":
-        res, _ = eng(arr, use_cls=False)
-        return list(res or [])
-    r = eng(arr, use_cls=False)
+        _OCR.append(RapidOCR(params=ko_params()))
+    r = _OCR[0](arr, use_cls=False)
     return list(zip(r.boxes.tolist(), r.txts, r.scores)) if r.boxes is not None else []
 
 
@@ -268,10 +253,6 @@ def score(im, probe):
         if max(xs) - min(xs) > 1.5 * (max(ys) - min(ys)):
             total += float(conf) * len(text)
     return total
-
-
-def _rotate_fast():
-    return bool(pc.cfg().extract.prepare.rotate_fast)  # S7c — 설정 객체(켜기 칸 off=("0",) — 옛 `!= "0"`)
 
 
 def _rotate_lead():
@@ -297,15 +278,13 @@ def best_angle(im, probe, min_gain, hint=0):
     경우(0 vs 180)만 가로 글상자로 오인될 수 있고, 90·270도는 가로·세로가 바뀌어 글줄이 세로 상자가
     되므로 그 필터에 거의 안 걸려(실측상 0 가까운 값) hint가 0·180 중 하나여도 90·270과 혼동될 위험은
     낮다 — hint가 90·270이어도 마찬가지로 그 반대(270·90)만 보면 된다. 그래도 확신 없으면(문턱 또는 반대
-    비교 중 하나라도 실패) 기존과 완전히 같은 4방향 전체 계산으로 떨어진다(정확도 불변, 속도만 다름).
-    PREPARE_ROTATE_FAST=0이면 이 지름길 자체를 안 써 바이트까지 기존과 동일."""
-    if _rotate_fast():
-        fp = min(probe, _rotate_probe_fast())
-        opp = (hint + 180) % 360
-        s_hint = score(im.rotate(hint, expand=True) if hint else im, fp)
-        s_opp = score(im.rotate(opp, expand=True), fp)
-        if s_hint >= _rotate_s0_min() and s_hint >= s_opp * min_gain:
-            return hint, {hint: s_hint, opp: s_opp}
+    비교 중 하나라도 실패) 기존과 완전히 같은 4방향 전체 계산으로 떨어진다(정확도 불변, 속도만 다름)."""
+    fp = min(probe, _rotate_probe_fast())
+    opp = (hint + 180) % 360
+    s_hint = score(im.rotate(hint, expand=True) if hint else im, fp)
+    s_opp = score(im.rotate(opp, expand=True), fp)
+    if s_hint >= _rotate_s0_min() and s_hint >= s_opp * min_gain:
+        return hint, {hint: s_hint, opp: s_opp}
     s = {a: score(im.rotate(a, expand=True), probe) for a in (0, 90, 180, 270)}
     a = max(s, key=s.get)
     return (a if s[a] >= s[0] * min_gain and s[a] > 0 else 0), s
@@ -385,9 +364,7 @@ def main():
     if out.resolve() == src.resolve():  # out은 만들어 내는 폴더(지우고 다시 씀) — 원본 폴더면 원본이 지워짐
         raise SystemExit("--out이 원본 폴더와 같음 — 다른 폴더를 지정")
     out.mkdir(parents=True, exist_ok=True)
-    skipped_log = Path(
-        pc.cfg().extract.skipped_log or (out / "skipped.jsonl")
-    )  # S7c — 설정 객체   # D4 — 스트리밍은 stream.py가 output/parse/_source로 돌림(--out이 지워지는 임시 폴더라)
+    skipped_log = Path(pc.cfg().extract.skipped_log or (out / "skipped.jsonl"))  # S7c — 설정 객체
     only = {x.strip() for x in Path(a.only).read_text(encoding="utf-8").splitlines() if x.strip()} if a.only else None
     files = sorted(p for p in src.iterdir() if p.is_file() and p.name != ".gitkeep" and (only is None or p.name in only))
     old = {}

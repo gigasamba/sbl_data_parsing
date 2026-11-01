@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from common.config import settings
+from common.config import layout, settings
 
 
 def test_start_secret_policy():
@@ -33,7 +33,7 @@ def test_start_secret_policy():
                 field = "connect_kwargs" if json_or_dsn else "password"
                 connection = "rdb" if json_or_dsn else "pg"
                 doc = {"common": {"run_env": run, "connections": {connection: {field: value}}}}
-                path.write_text(yaml.safe_dump(doc), encoding="utf-8")
+                path.write_text(yaml.safe_dump(layout.to_file(doc)), encoding="utf-8")
                 errors = io.StringIO()
                 with contextlib.redirect_stderr(errors):
                     try:
@@ -48,7 +48,9 @@ def test_start_secret_policy():
                         assert actual == run and (not rejected or run == "local")
         # 앱 전용 비밀도 같은 시작 관문에서 검사한다.
         for run in ("dev", "prd"):
-            path.write_text(yaml.safe_dump({"common": {"run_env": run}, "mcp": {"server": {"token": "seven77"}}}), encoding="utf-8")
+            path.write_text(
+                yaml.safe_dump(layout.to_file({"common": {"run_env": run}, "mcp": {"server": {"token": "seven77"}}})), encoding="utf-8"
+            )
             errors = io.StringIO()
             with contextlib.redirect_stderr(errors):
                 try:

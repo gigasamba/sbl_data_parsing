@@ -15,17 +15,14 @@ import io
 import json
 import re
 import time
-from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
-from common.ai import adk as A  # noqa: E402
-from common.ai.agent_prompts import load as _load_prompt  # noqa: E402
-from common.config.settings import cfg as ccfg  # noqa: E402 — common 칸 설정 객체(S7c)
-from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
-from pipeline.shared.artifacts import prompt_id, raw_vlm_path  # noqa: E402
-from pipeline.shared.postprocess import raw_root  # noqa: E402 — PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
-from pipeline.transform.figures.vlm_page import _host, _model_dir, _png, sha  # noqa: E402 — 캐시 경로·PNG 축소 helper 재사용(중복 구현 금지)
+from common.ai import adk as A
+from common.ai.agent_prompts import load as _load_prompt
+from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
+from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.shared.artifacts import prompt_id, raw_vlm_path
+from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
+from pipeline.transform.figures.vlm_page import _host, _model_dir, _png, sha  # 캐시 경로·PNG 축소 helper 재사용(중복 구현 금지)
 
 P_BBOX = _load_prompt("nested_figure", "bbox")  # 글자는 prompts/nested_figure/prompt.md
 PID_BBOX = prompt_id("bbox", "v1", P_BBOX)
@@ -37,19 +34,10 @@ MAX_CHILDREN_TOTAL = 4  # 독립 검토 Minor(10-13) — 쪽 1장에서 나오�
 # 다른(원래) 그림을 굶길 수 있다 — find_children()이 쪽 1장당 이 상한으로 너비 우선 탐색을 멈춘다.
 
 
-def on():
-    """F7 독립 검토 Major(10-13) — PARSE_NESTED_FIGURE(env, 기본 켬) 전용 off 스위치. 이전엔 VLM_BASE_URL·
-    VLM_MODEL을 통째로 지우는 것만이 끄는 방법이었다(다른 VLM 기능까지 같이 죽음) — 이 기능만 끄고 싶을 때 =0."""
-    return pc.cfg().transform.figures.nested_figure  # S7c — 설정 객체(off=("0",) = 옛 !="0")
-
-
 def bbox_regions(img_bytes):
     """부모 그림(page_render 또는 그 자식) PNG bytes → ([{"bbox":[x0,y0,x1,y1](0~1 비율), "kind": str|None}], provenance).
     P0 캐시(모델·prompt_id·그림 sha가 같으면 재사용, 호출 0) — vlm_fig()와 같은 캐시 원칙. VLM 미설정/오류/빈 응답/
-    JSON 파싱 실패/못 여는 이미지는 ([], {"error"|"skipped": ...})로 돌려주고 예외를 던지지 않는다(문서는 계속).
-    PARSE_NESTED_FIGURE=0이면 VLM 설정 여부와 무관하게 호출 자체를 안 함(바이트 영향 0 쪽으로)."""
-    if not on():
-        return [], {"skipped": "off"}
+    JSON 파싱 실패/못 여는 이미지는 ([], {"error"|"skipped": ...})로 돌려주고 예외를 던지지 않는다(문서는 계속)."""
     from PIL import Image
 
     try:
@@ -169,13 +157,10 @@ def find_children(parent_bytes, max_depth=MAX_DEPTH_DEFAULT):
     "bbox_frac": [x0,y0,x1,y1](그 depth의 직속 부모 기준 0~1), "bytes": 자른 PNG, "kind": str|None}, ...].
     local_id는 설계 §3의 ".c<순번>" 접미사 그대로(점으로 이으면 그대로 image_id 접미사가 된다) — 호출부
     (figures.py)가 실제 부모 image_id 앞에 이어붙인다. 너비 우선, depth마다 child_crops() 한 번씩(설계 §2-5
-    "1~4를 반복"), 형제가 여럿이면 부모별로 번호를 따로 세 섞이지 않는다. PARSE_NESTED_FIGURE=0이면 즉시
-    빈 목록(on() 끄면 child_crops→bbox_regions가 VLM 자체를 안 부름, 여기서도 먼저 막아 렌더·순회 비용을 아낌).
+    "1~4를 반복"), 형제가 여럿이면 부모별로 번호를 따로 세 섞이지 않는다.
     독립 검토 Minor(10-13) — 쪽 1장에서 나오는 자식 총합이 MAX_CHILDREN_TOTAL(기본 4, 손자 포함)을 넘으면 그
     자리에서 멈춘다(MAX_REGIONS×depth 조합이 그대로면 쪽 1장에서 최대 20개까지 나와 VLM_FIGURES_MAX를 자식이
     혼자 다 쓸 수 있었음)."""
-    if not on():
-        return []
     out = []
     counters = {}  # parent_local(또는 None=최상위) → 지금까지 매긴 자식 수
     queue = [(None, 1, parent_bytes)]

@@ -8,8 +8,6 @@ OVERLAY_BG_AREA_RATIO(40%, 사용자 결정 10-14)를 넘는 개체는 호출부
 여유(tolerance) 없이 엄격한 겹침·포함만(사용자 결정 10-14 — 안 닿은 근처 콜아웃은 F10 near 목록 몫, 이 모듈
 대상 아님).
 
-FIG_OVERLAY_CLUSTER(env, 기본 켬) — =0이면 꺼짐(이전 동작 그대로, 그림마다 따로 기록).
-
 형식별 좌표 추출:
   - pdf_page_objects(pg, pic_objs) — fitz Page, 그림은 호출부가 이미 찾은 rect를 그대로 받고 글자 블록(get_text
     "blocks")·그리기(get_drawings, 쪽의 OVERLAY_BG_AREA_RATIO 넘는 배경 도형은 뺌)를 'other'로 더한다.
@@ -20,12 +18,6 @@ FIG_OVERLAY_CLUSTER(env, 기본 켬) — =0이면 꺼짐(이전 동작 그대로
     뿐(거짓 양성 없음, 좌표 자체가 이상해 보이면 clusters가 그냥 비게 된다).
   - xlsx(시트 도형)는 이번 버전 범위 밖(YAGNI) — openpyxl이 textbox shape의 신뢰할 bbox를 안 줌, 타겟 세트에도
     xlsx 겹침 샘플이 없음. 실 사례가 나오면 drawing XML(xdr:sp) 직접 파싱으로 docx_float_objects와 같은 자리에 추가."""
-
-from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
-
-
-def on():
-    return pc.cfg().transform.figures.overlay_cluster  # S7c — 설정 객체(켜기 칸 off=("0",) = 옛 !="0")
 
 
 def _overlaps(a, b):

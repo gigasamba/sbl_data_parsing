@@ -11,8 +11,10 @@ has_conn() 단일 분기). bm25·그래프·집계가 필요한 검증은 실 PG
 """
 
 import datetime
+import math
 import re
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -69,7 +71,9 @@ def _xlat(sql, params, schema):
     if um:
         terms, weights = params[0], params[1]
         vsql = ",".join("(?,?)" for _ in terms) or "(NULL,NULL)"
-        sql = sql[: um.start()] + f"(VALUES {vsql}) AS w(term, weight)" + sql[um.end() :]
+        sql = (
+            sql[: um.start()] + f"(SELECT column1 AS term, column2 AS weight FROM (VALUES {vsql})) AS w" + sql[um.end() :]
+        )  # SQLite는 AS w(칸 별칭) 꼴이 없음(mc-01)
         for t, w in zip(terms, weights):
             prefix += [t, w]
         params = params[2:]
@@ -164,7 +168,13 @@ def _vector_top(con, sql, params):
 
 
 def _run(con, sql, params=None):
-    """단일 실행 지점 — .q()·커서 .execute() 둘 다 이걸 거침. 반환 (rows:list[tuple], cols:list[str]|None)."""
+    """단일 실행 지점 — .q()·커서 .execute() 둘 다 이걸 거침. 반환 (rows:list[tuple], cols:list[str]|None).
+    mc-01(11-01) — 검색 MCP는 작업 스레드에서 부르므로 연결 하나를 잠금(con.lock)으로 줄 세움."""
+    with con.lock:
+        return _run_locked(con, sql, params)
+
+
+def _run_locked(con, sql, params=None):
     sql = sql.replace(f"{con.schema}.", "")
     low = sql.lower()
     if "create schema" in low:  # schema.sql 전체(여러 문장) — 먼저 걸러야 함(그 안의 주석에 "create extension" 글자가 섞여 있음)
@@ -200,8 +210,8 @@ def _run(con, sql, params=None):
 class _Cp:
     """psycopg Cursor.copy() 자리 — COPY ... FROM STDIN을 행마다 INSERT로."""
 
-    def __init__(self, sqlite_cn, table, cols):
-        self.sqlite_cn, self.table, self.cols = sqlite_cn, table, cols
+    def __init__(self, pg, table, cols):
+        self.pg, self.table, self.cols = pg, table, cols
 
     def __enter__(self):
         return self
@@ -211,7 +221,8 @@ class _Cp:
 
     def write_row(self, values):
         ph = ",".join("?" for _ in values)
-        self.sqlite_cn.execute(f"INSERT INTO {self.table}({self.cols}) VALUES ({ph})", values)
+        with self.pg.lock:
+            self.pg.sqlite.execute(f"INSERT INTO {self.table}({self.cols}) VALUES ({ph})", values)
 
 
 class _Cur:
@@ -233,7 +244,8 @@ class _Cur:
 
     def executemany(self, sql, rows):
         sql = sql.replace(f"{self.pg.schema}.", "")
-        self.pg.sqlite.executemany(_sql_only(sql, self.pg.schema), rows)
+        with self.pg.lock:
+            self.pg.sqlite.executemany(_sql_only(sql, self.pg.schema), rows)
         return self
 
     def fetchone(self):
@@ -244,7 +256,7 @@ class _Cur:
 
     def copy(self, sql):
         m = _COPY_RE.search(sql.replace(f"{self.pg.schema}.", ""))
-        return _Cp(self.pg.sqlite, m.group(1), m.group(2))
+        return _Cp(self.pg, m.group(1), m.group(2))
 
 
 class _Conn:
@@ -256,14 +268,15 @@ class _Conn:
 
     @contextmanager
     def transaction(self):
-        self.pg.sqlite.execute("BEGIN")
-        try:
-            yield
-        except Exception:
-            self.pg.sqlite.execute("ROLLBACK")
-            raise
-        else:
-            self.pg.sqlite.execute("COMMIT")
+        with self.pg.lock:  # 거래 동안 다른 스레드가 끼어들지 않게(RLock — 같은 스레드의 _run은 그대로 들어감)
+            self.pg.sqlite.execute("BEGIN")
+            try:
+                yield
+            except Exception:
+                self.pg.sqlite.execute("ROLLBACK")
+                raise
+            else:
+                self.pg.sqlite.execute("COMMIT")
 
 
 class StandinPG:
@@ -278,9 +291,14 @@ class StandinPG:
         path = d / f"{schema}.sqlite"
         self.schema = schema
         self.existed_before = path.exists()
-        self.sqlite = sqlite3.connect(str(path), timeout=30, isolation_level=None)
+        # check_same_thread=False + lock(RLock) — 검색 MCP 작업 스레드에서도 쓰게(mc-01 11-01, 실 PG는 PGPool)
+        self.sqlite = sqlite3.connect(str(path), timeout=30, isolation_level=None, check_same_thread=False)
+        self.lock = threading.RLock()
         self.sqlite.execute("PRAGMA foreign_keys=ON")
         self.sqlite.create_function("now", 0, _now_iso)
+        # mc-01(11-01) — PG 검색 SQL을 대역에서 그대로 돌리게: v_chunk_source 뷰의 regexp_replace · BM25의 ln(이미지 sqlite에 수학 함수가 없을 수도)
+        self.sqlite.create_function("regexp_replace", 3, lambda s, p, r: None if s is None else re.sub(p, r, s))
+        self.sqlite.create_function("ln", 1, lambda x: None if x is None or x <= 0 else math.log(x))
         self.cn = _Conn(self)
 
     def q(self, sql, params=None):

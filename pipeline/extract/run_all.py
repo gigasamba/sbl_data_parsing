@@ -1,26 +1,21 @@
 #!/usr/bin/env python3
 """문서 폴더 × 엔진 일괄 파싱 → output/parse/<engine>/<문서>.json + output/parse/runs.jsonl(시간·오류).
 
-사용: python modules/parse/run_all.py [--src <원본 문서 폴더>] [--out output/parse] [--engines pdfplumber,docling] [--limit N]
+사용: python modules/parse/run_all.py [--src <원본 문서 폴더>] [--out output/parse] [--engines pdfplumber,pymupdf] [--limit N]
   --src 생략 시 DOC_DIR env 필수(없으면 SystemExit) — common/paths.py.doc_dir.
   제한 시간(사용자 10-29 — phase 없앰): 문서×엔진 1건 = 쪽 수 × 쪽당 초 — 글자 엔진 text_page_sec(PARSE_TEXT_PAGE_SEC, 기본 10) ·
     VLM 엔진 vlm_page_sec(PARSE_VLM_PAGE_SEC, 기본 120) + 엔진의 첫 문서는 warmup_sec 하한 + 별도 프로세스 시작 여유 isolate_overhead.
-    넘으면 같은 실행에서 제한을 두 배로 한 번 더, 그래도 넘으면 실패로 기록(다음 실행은 --retry-failed로만 다시).
+    넘으면 같은 실행에서 제한을 두 배로 한 번 더, 그래도 넘으면 실패로 기록.
   문서마다 그 형식의 엔진(stack.json — 형식당 최대 2개)을 **동시에**(엔진마다 별도 프로세스 parse/parse_one.py — 세그폴트가 전체를
     멈추지 않음). --workers N: 문서 N개를 동시에. --procs N: 문서를 N조각으로 나눠 프로세스 N개가 동시에(스레드는 코어 ÷ N).
   OCR 엔진(OCR_ENGINES — rapidocr·rapidocr_ko)은 ocr_engine(PARSE_OCR_ENGINE, 기본 끔)일 때만 돈다 — 이미지·스캔 문서는 VLM 엔진만.
     글자 PDF 안의 스캔 쪽은 여기서 OCR 엔진을 더하지 않고 대표 결과(represent)의 쪽 VLM이 그 쪽만 채운다.
   진행 현황: 1건 끝날 때마다 <out>/PROGRESS.md 갱신(형식별·엔진별 표·남은 시간) — 서버에서 `watch -n 30 cat output/parse/PROGRESS.md`.
-  --engines 생략 시 형식별로 등록된 엔진 전부(tools/engines/<스택>/parser.py의 FORMATS).
-  PARSE_ENGINE_SCOPE(환경변수, 기본 all) — stack: 문서마다 형식 키(.pdf_text/.pdf_image/확장자, stack.json과 같은 키)에
-    해당하는 stack.json parse 목록으로만 좁힌다(생산 서버에서 PDF 1건에 OCR·VLM까지 9개+ 전부 도는 무거움 해소, 2026-10-07).
-    stack.json에 그 키가 없으면 지금처럼 그대로(핵심 엔진 합집합, 누락 방지)+1회 로그. all(기본) = 지금 동작 그대로
-    (--engines 명시 호출·compare-parse 등 실험 경로는 이 env를 안 건드리므로 영향 없음).
-  다시 돌리지 않는 규칙(파일 내용 sha256 기준 — runs.jsonl에 기록):
-    · 같은 내용이 그 엔진으로 이미 성공 → 건너뜀 (이름만 다른 같은 내용이면 결과를 복사해 씀, runs에 reused_from)
-    · 원본 내용이 바뀜(sha 다름) → 다시 파싱
-    · 실패·시간 초과 → 건너뜀(--retry-failed로 다시 — phase 시절의 옛 시간 초과 기록(phase 칸 있음)은 다시 시도) · 미설치·미설정(환경) → 매번 다시 시도(환경을 고쳤을 수 있음)
-    · --force: 전부 다시
+  엔진 범위는 stack 하나(pl-03, 사용자 10-30 — 옛 PARSE_ENGINE_SCOPE all·--engines all 길은 지움): 문서마다 형식 키
+    (.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록만 돈다. --engines는 그 안에서 더 좁힐 뿐(비교 실험은
+    stack json을 고쳐서). stack.json에 그 키가 없으면 핵심 엔진 합집합으로 대체(누락 방지)+형식별 1회 로그.
+  앞 실행 결과를 다시 쓰지 않는다(pl-32 사용자 10-30 — 실행마다 새 작업 폴더): 요청한 문서×엔진은 늘 돈다. runs.jsonl은 이번 실행의
+    시간·오류 기록(보고 도구가 읽음). 같은 실행 안의 같은 내용 사본(sha 같음)은 한 번만 파싱해 복사(runs에 reused_from).
   RB3② — 미설치·미설정(환경) 엔진은 이번 실행(프로세스) 안에서 처음 실패한 문서 뒤로 같은 엔진은 나머지 문서를 시도하지 않고
     runs.jsonl에 '건너뜀(환경 — 첫 실패 <문서>)'로 기록(문서마다 프로세스 기동·import 비용 반복 방지). 시간 초과·그 밖의 예외는 문서 탓일 수 있어 그대로 매 문서 시도.
     --procs 자식 프로세스끼리는 공유하지 않음(프로세스마다 다시 한 번 확인).
@@ -49,11 +44,10 @@ from common.core.paths import (  # 폴더 재편 뒤 이 두 상수만 바뀌면
 )
 from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
 from pipeline.extract.engines import registry
-from pipeline.shared import artifacts as P0  # P0 열쇠(엔진 버전·코드 지문)로 재사용 판단(실험 저장소 계약과 같은 규칙)
+from pipeline.shared import artifacts as P0  # P0 열쇠(엔진 버전·코드 지문) — 결과 출처 기록(실험 저장소 계약과 같은 규칙)
 from pipeline.shared import runtrace
 from pipeline.shared.progress import (  # output/parse/PROGRESS.md 갱신 · 문서→형식 키(.pdf_text/.pdf_image, _types.json 캐시) · SI44③ 암호 오류 단서(한 곳)
     doc_types,
-    is_encrypted_error,
     write_progress,
 )
 from pipeline.stackcfg import MAX_PER_TYPE, over_limit  # 사용자 10-29 — 형식당 엔진 2개 상한(진입점 검사와 같은 함수)
@@ -65,9 +59,9 @@ def redact(s):
     return SP.redact_text(s)
 
 
-VLM_ENGINES = {"qwen_vlm", "docling_vlm", "marker_llm"}
+VLM_ENGINES = {"qwen_vlm"}  # docling_vlm·marker_llm은 10-30 지움(pl-31)
 # 사용자 10-29 — OCR 엔진은 기본으로 안 돌림(ocr_engine 설정, 기본 끔). 엔진 코드는 남김(나중에 쪽 회전 판정에 씀) · stack 표는 그대로
-OCR_ENGINES = {"rapidocr", "rapidocr_ko"}
+OCR_ENGINES = {"rapidocr_ko"}  # rapidocr(1.x)는 10-30 지움(pl-31)
 
 
 def n_pages(doc):
@@ -91,19 +85,20 @@ def page_timeout(eng, pages, first=False):
     return round(tmo + float(x.isolate_overhead), 2)
 
 
-def engines_for_doc(doc, scope, stack_parse, types, logged_missing):
-    """문서 하나에 돌릴 엔진 후보(이후 --engines want로 더 좁혀짐) — PE1(2026-10-07, PARSE_ENGINE_SCOPE). doc은 Path.
-    scope != "stack"(기본 all) → registry.engines_for(suffix) 그대로(실험 경로·명시 --engines).
-    scope == "stack" → 문서 형식 키(.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록으로 좁힌다.
+IDLE_MARK = "[engine-scope] stack 목록 밖이라 안 돎"  # 명시 --engines 중 일부가 안 돎(알림 — 거의 매 실행)
+NO_JOB_MARK = "[engine-scope] 돌 엔진 없음"  # 명시 --engines가 하나도 못 돎 — mcp_parse_service가 이 줄로 스캔 PDF를 가름(pl-03)
+
+
+def engines_for_doc(doc, stack_parse, types, logged_missing):
+    """문서 하나에 돌릴 엔진 후보(이후 --engines want로 더 좁혀짐) — PE1(2026-10-07) · pl-03(10-30, stack 하나). doc은 Path.
+    문서 형식 키(.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록으로 좁힌다.
     그 키가 stack.json에 없으면 그대로(핵심 엔진 합집합으로 대체, 누락 방지) + 형식별 1회만 로그.
     사용자 10-29 — .pdf_text 안 스캔 쪽 때문에 .pdf_image 엔진을 합치지 않음(대표 결과의 쪽 VLM이 그 쪽만 채움) ·
-    OCR 엔진은 ocr_engine 설정이 켜졌을 때만(두 scope 모두)."""
+    OCR 엔진은 ocr_engine 설정이 켜졌을 때만."""
     suffix = doc.suffix
     cands = registry.engines_for(suffix)
     if not pc.cfg().extract.ocr_engine:
         cands = [e for e in cands if e not in OCR_ENGINES]
-    if scope != "stack":
-        return cands
     key = types.get(doc.name, suffix.lower())
     stack_eng = stack_parse.get(key)
     if stack_eng is None:
@@ -174,13 +169,11 @@ def main():
     ap.add_argument(
         "--engines",
         default="",
-        help="비우면 핵심 19종(registry.CORE, 사용자 10-07: paddleocr·docling_ocr 제외 · openviking_import·cognee_import는 SI33로 어댑터 자체 삭제) · all = 전부 · a,b = 그것만",
+        help="비우면 핵심 16종(registry.CORE, 10-30 docling·unstructured_auto 지움 — pl-31 · 사용자 10-07: paddleocr·docling_ocr 제외 · openviking_import·cognee_import는 SI33로 어댑터 자체 삭제) · all = 전부 · a,b = 그것만",
     )
     ap.add_argument("--profile", default="default", choices=["default", "tuned"])
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--docs-from", default="", help="이 목록(파일 이름 한 줄씩)에 있는 문서만 — 파싱 모듈의 밤당 상한(PARSE_MAX_NEW)이 씀")
-    ap.add_argument("--force", action="store_true", help="이미 한 것도 전부 다시")
-    ap.add_argument("--retry-failed", action="store_true", help="실패·시간 초과했던 문서×엔진을 다시")
     ap.add_argument("--isolate", action="store_true", help="(옛 호환 — 이제 늘 문서×엔진마다 별도 프로세스)")
     ap.add_argument("--workers", type=int, default=1, help="동시에 처리할 문서 수(문서 안 엔진들은 늘 동시에)")
     ap.add_argument(
@@ -190,9 +183,9 @@ def main():
     )
     ap.add_argument("--shard", default="", help="i/k — 문서 목록의 i번째 조각만(--procs가 씀)")
     ap.add_argument(
-        "--refresh-unknown",
-        action="store_true",
-        help="P0 열쇠(엔진 버전·코드 지문) 없는 옛 기록('버전 미상')도 다시 돈다(기본은 그대로 건너뜀 — 야간 배치 안전)",
+        "--stack",
+        default=None,
+        help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file · pl-03 represent·build_bundle과 같음)",
     )
     a = ap.parse_args()
     from common.core import resources
@@ -247,113 +240,28 @@ def main():
     run_id = (
         os.environ.get("PARSE_RUN_ID") or None
     )  # env 남김 — 내부 신호(5-3 H) · SI23 — pipeline.py가 넘기는 이번 실행 id(없으면 run_id 칸 없이 기록)
-    last, ok_by_sha = {}, {}  # (문서, 엔진) → 마지막 기록 · (엔진, sha) → 성공한 문서 이름
-    if (out / "runs.jsonl").exists():
-        for line in (out / "runs.jsonl").read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                r = json.loads(line)
-                last[(r["doc"], r["engine"])] = r
-                if not r.get("error") and r.get("sha"):
-                    ok_by_sha[(r["engine"], r["sha"])] = r["doc"]
-    jobs, skip, reuse, planned, deferred = [], Counter(), [], {}, []
-    plan_stack = (
-        contextlib.ExitStack()
-    )  # op-01 — 계획 단계(sha·재사용 판단) 시간과 결정 요약을 span 1행으로(문서×엔진마다 행을 만들지 않음)
+    # pl-32(사용자 10-30) — 앞 실행의 runs.jsonl로 건너뛰거나 결과를 복사하지 않는다(실행마다 새 작업 폴더 — runs.jsonl은 이번 실행 기록만).
+    # 같은 실행 안의 같은 내용 사본은 한 번만 파싱 후 복사(planned·deferred).
+    jobs, skip, planned, deferred = [], Counter(), {}, []
+    plan_stack = contextlib.ExitStack()  # op-01 — 계획 단계 시간과 결정 요약을 span 1행으로(문서×엔진마다 행을 만들지 않음)
     plan_sp = plan_stack.enter_context(SP.span("extract.plan", docs=len(docs)))
-    scope = pc.cfg().extract.engine_scope  # S7c — 설정 객체(옛 `get(X, "all")`: 없음 → all, 빈 글자는 그대로)
-    scope = scope if scope is not None else "all"  # PE1 — stack: 문서 형식별 stack.json 목록만(생산 기본), all(기본): 지금 동작 그대로
-    stack_parse = {}
-    if scope == "stack":
-        try:
-            stack = pc.stack_path()  # S8b — 진입점이 만든 판 사본(PC는 파일)
-            stack_parse = (json.loads(stack.read_text(encoding="utf-8")).get("parse") or {}) if stack.exists() else {}
-        except (OSError, ValueError):
-            stack_parse = {}
-        bad = over_limit({"parse": stack_parse})  # 사용자 10-29 — 형식당 엔진 2개 넘으면 설정 오류(진입점 resolve도 같은 검사)
-        if bad:
-            raise SystemExit(f"[엔진 구성] {stack} — " + " · ".join(bad))
+    # pl-03(사용자 10-30) — 엔진 범위는 stack 하나: 문서 형식별 stack.json 목록만
+    stack = (
+        json.loads(Path(a.stack).read_text(encoding="utf-8")) if a.stack else pc.stack()
+    )  # 엔진 구성 파일(서버·PC 같음 — 사용자 11-01) · --stack은 시험·실험용 파일
+    stack_parse = stack.get("parse") or {}
+    bad = over_limit({"parse": stack_parse})  # 사용자 10-29 — 형식당 엔진 2개 넘으면 설정 오류(진입점 resolve도 같은 검사)
+    if bad:
+        raise SystemExit(f"[엔진 구성] {stack.get('name')} — " + " · ".join(bad))
     types = doc_types(docs, out) if stack_parse else {}
     logged_missing = set()
-    skipped_log = src / "skipped.jsonl"  # SI44③ — prepare 단계와 같은 파일(누적)
-    encrypted_detected = set()  # 이미 encrypted_detected로 기록된 문서(여러 실행에 중복 기록 방지)
-    if skipped_log.exists():
-        for ln in skipped_log.read_text(encoding="utf-8").splitlines():
-            try:
-                r = json.loads(ln)
-            except ValueError:
-                continue
-            if r.get("reason") == "encrypted_detected":
-                encrypted_detected.add(r.get("file"))
     for doc in docs:
         sha = _sha(doc)
-        cand = engines_for_doc(doc, scope, stack_parse, types, logged_missing)
-        if not a.retry_failed:  # SI44③ — 앞 실행에서 실패 엔진 전부가 암호 오류면 다시 시도 안 함
-            if doc.name not in encrypted_detected:
-                tried = [r for r in (last.get((doc.name, e)) for e in cand) if r]
-                if tried and all(r.get("error") and is_encrypted_error(r["error"]) for r in tried):
-                    with skipped_log.open("a", encoding="utf-8") as f:
-                        f.write(
-                            json.dumps(
-                                {"file": doc.name, "reason": "encrypted_detected", "sha": sha, "time": time.strftime("%Y-%m-%dT%H:%M:%S")},
-                                ensure_ascii=False,
-                            )
-                            + "\n"
-                        )
-                    encrypted_detected.add(doc.name)
-            if doc.name in encrypted_detected:
-                skip["암호 감지(앞 실행에서 전부 암호 오류 — encrypted_detected, 다시 시도 안 함)"] += len(cand)
-                continue
+        cand = engines_for_doc(doc, stack_parse, types, logged_missing)
         for eng in cand:
             if want and eng not in want:
                 continue
-            dst, prev = out / eng / (doc.name + ".json"), last.get((doc.name, eng))
-            if not a.force:
-                same = prev is not None and prev.get("sha") in (None, sha)  # sha 없는 옛 기록은 같은 내용으로 봄
-                pst = p0_status(prev, eng, sha)[0] if same else None  # P0(엔진 버전·코드 지문) 비교 — 결과 없으면 None
-                refresh_p0 = pst == "stale" or (pst == "unknown" and a.refresh_unknown)
-                if dst.exists() and same and not (prev or {}).get("error") and not refresh_p0:
-                    skip["이미 성공" if pst == "ok" else "이미 성공(버전 미상 — --refresh-unknown으로 다시)"] += 1
-                    if pst == "ok" and not prev.get(
-                        "p0_code"
-                    ):  # 옛 형식 기록을 새 열쇠로 덧씀(다시 파싱 없음) — 다음 엔진 코드 변경부터 잡히게(독립 검토 10-04)
-                        ver = P0.engine_version(eng)
-                        reuse.append(
-                            _with_run_id(
-                                {
-                                    **prev,
-                                    "p0_key": p0_key(eng, sha, ver),
-                                    "p0_code": engine_code_fp(eng),
-                                    "engine_version": ver,
-                                    "backfill": True,
-                                    "at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                                },
-                                run_id,
-                            )
-                        )
-                    continue
-                src_doc = ok_by_sha.get((eng, sha))
-                src_rec = (
-                    last.get((src_doc, eng)) if src_doc else None
-                )  # GH1-03 — src_doc 결과가 이번 sha·엔진 버전(P0)과 아직 맞는지 same 분기와 같은 검사로 확인(안 맞으면 다시 파싱)
-                if (
-                    src_doc
-                    and src_doc != doc.name
-                    and src_rec
-                    and src_rec.get("sha") == sha
-                    and p0_status(src_rec, eng, sha)[0] == "ok"
-                    and (out / eng / (src_doc + ".json")).exists()
-                ):
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    dst.write_bytes((out / eng / (src_doc + ".json")).read_bytes())
-                    last[(doc.name, eng)] = _with_run_id(
-                        {"doc": doc.name, "engine": eng, "sec": 0, "error": None, "sha": sha, "reused_from": src_doc}, run_id
-                    )
-                    reuse.append(last[(doc.name, eng)])
-                    skip["같은 내용 결과 복사"] += 1
-                    continue
-                if same and prev.get("error") and not _env_error(prev["error"]) and not a.retry_failed and not _old_phase_timeout(prev):
-                    skip["이전 실패(--retry-failed로 다시)"] += 1
-                    continue
+            dst = out / eng / (doc.name + ".json")
             dst.parent.mkdir(parents=True, exist_ok=True)
             if (eng, sha) in planned:  # 같은 실행 안의 같은 내용 사본 — 먼저 도는 것 결과를 끝나고 복사
                 deferred.append((doc, eng, dst, sha, planned[(eng, sha)]))
@@ -362,15 +270,18 @@ def main():
             jobs.append((doc, eng, dst, sha))
     if deferred:
         skip["같은 내용 사본(1번만 파싱 후 복사)"] += len(deferred)
-    plan_sp.add(jobs=len(jobs), skipped=dict(skip), deferred=len(deferred), reuse_records=len(reuse))
+    plan_sp.add(jobs=len(jobs), skipped=dict(skip), deferred=len(deferred))
     plan_stack.close()
+    # pl-03 — 범위는 stack 하나: 명시 --engines 중 stack 형식별 목록 밖(또는 이 문서들 형식에 없음)은 안 돎 — 조용히 빠지지 않게 1줄
+    idle = sorted(set(want or ()) - {e for _, e, _, _ in jobs} - {e for _, e, _, _, _ in deferred})
+    if idle:
+        print(f"{IDLE_MARK}(비교하려면 stack json을 고침): {', '.join(idle)}", flush=True)
+    if want and not jobs and not deferred:
+        print(NO_JOB_MARK, flush=True)
     if skip:
         print("건너뜀: " + " · ".join(f"{k} {v}" for k, v in skip.items()), flush=True)
     out.mkdir(parents=True, exist_ok=True)
     log, lock = RunLog(out / "runs.jsonl"), threading.Lock()
-    for r in reuse:
-        log.write(json.dumps(r, ensure_ascii=False) + "\n")
-    log.flush()
     try:
         write_progress(src, out, a.engines)
     except Exception as ex:
@@ -450,7 +361,7 @@ def main():
                 "timeout" if "Timeout" in err else "fail", "timeout" if "Timeout" in err else "env" if _env_error(err) else "doc", err
             )
         ever = P0.engine_version(eng)
-        pkey = p0_key(eng, sha, ever)  # P0 열쇠(다음 실행의 재사용 판단용) — p0_status와 같은 함수
+        pkey = p0_key(eng, sha, ever)  # P0 열쇠(결과 출처 기록 — provenance·runs.jsonl)
         if not err and dst.exists():
             _stamp_provenance(dst, eng, ever, pkey, a.profile)
         elif err and dst.exists():
@@ -562,7 +473,7 @@ def run_procs(a, docs):
             sp.add(rc=rc)
             if rc != 0:
                 sp.result("fail", None, SP.safe(f"종료 코드 {rc}"))
-                print(f"조각 {i}/{k} 비정상 종료({rc}) — 끝낸 문서×엔진은 runs.jsonl에 남아 다음 실행에서 건너뜀", flush=True)
+                print(f"조각 {i}/{k} 비정상 종료({rc}) — 이 조각은 다시 돌려야 함(앞 실행 결과를 건너뛰지 않음 — pl-32)", flush=True)
 
     with ThreadPoolExecutor(max_workers=k) as ex:
         list(ex.map(SP.carry(one), range(k)))
@@ -620,19 +531,10 @@ def _vlm_child_env():
     return C.child_env(child_env(), VLM_TIMEOUT=str(max(1, int(lim))))
 
 
-def _old_phase_timeout(r):
-    """phase 시절(10-29 전)의 시간 초과 기록 — 그때 제한(쪽당 0.1~1초)이 지금보다 훨씬 짧았으므로 실패로 막지 않고 다시 시도."""
-    return bool(r.get("phase")) and _is_timeout(r)
-
-
 def _with_run_id(rec, run_id):
     """SI23 — runs.jsonl 줄에 이번 실행 run_id(env PARSE_RUN_ID)를 달아 run_board가 이번 실행만 거를 수 있게.
     env 없으면 그대로(run_id 칸 없음 — 옛 형식과 호환, run_board는 그때 지금처럼 마지막 기록 기준으로 폴백)."""
     return {**rec, "run_id": run_id} if run_id else rec
-
-
-def _is_timeout(r):
-    return bool(r.get("error")) and "Timeout" in r["error"]
 
 
 def _write_atomic(dst, text):
@@ -674,23 +576,6 @@ def _sha(p):
     return h.hexdigest()[:16]
 
 
-def p0_status(prev, eng, sha):
-    """P0 열쇠(엔진 버전·코드 지문, pipeline.shared.artifacts) 비교 → ("ok"|"stale"|"unknown", 지금 열쇠).
-    열쇠 없는 옛 기록(provenance 이전) = "버전 미상"(unknown) — 기본은 그대로 건너뜀, --refresh-unknown일 때만 다시."""
-    ver = P0.engine_version(eng)
-    cur = p0_key(eng, sha, ver)
-    prev_key = (prev or {}).get("p0_key")
-    if not prev_key:
-        return "unknown", cur
-    if prev_key == cur:
-        return "ok", cur
-    # 옛 기록(10-03 — 열쇠에 common/*.py·run_all.py까지 들어가 검색 토크나이저만 바꿔도 낡음이 되던 형식):
-    # 엔진 코드 지문(p0_code)이 기록에 없으면, 같은 내용(sha)·같은 엔진 설치 버전이면 같은 결과로 봄(원문 재파싱 방지 — 사용자 원칙)
-    if not (prev or {}).get("p0_code") and (prev or {}).get("engine_version") == ver and (prev or {}).get("sha") in (None, sha):
-        return "ok", cur
-    return "stale", cur
-
-
 def engine_code_fp(eng):
     """원문 파싱 결과를 정하는 코드 = 그 엔진 폴더(parse/engines/<엔진>)만 — common·run_all(실행 관리)이 바뀌어도 결과는 같으므로 넣지 않음."""
     import hashlib
@@ -710,7 +595,7 @@ def engine_code_fp(eng):
 
 
 def p0_key(eng, sha, ver=None):
-    """P0 열쇠 하나로 — 기록(run_job)과 비교(p0_status)가 같은 함수를 씀 = (원본 sha · 엔진 설치 버전 · 엔진 코드 지문).
+    """P0 열쇠 하나로(결과 출처 기록) = (원본 sha · 엔진 설치 버전 · 엔진 코드 지문).
     (10-04 결함: 비교는 버전 포함·기록은 버전 없이 만들어 늘 '낡음' → 바뀌지 않은 문서도 전부 다시 파싱하던 일)"""
     import hashlib
 

@@ -49,21 +49,36 @@ def _close_pool_later(pool, delay=5):
     threading.Thread(target=_close, daemon=True).start()
 
 
+def check_store():
+    """op-09 — 서버(dev·prd)에서 PG 접속 칸이 비면 SystemExit(채울 자리를 적음 — common.store.pg.conf). 검색 저장소는 PG 하나(mc-01 —
+    저장소 종류 칸 mcp.server.store는 11-01에 없앰), PC는 칸이 비면 SQLite 대역. main이 시작 때 부른다(예열 스레드·요청 안에서는
+    SystemExit가 조용히 스레드만 죽이므로 — 리뷰 10-31)."""
+    from common.core import paths
+
+    if paths.LOCAL_RUN:
+        return
+    from common.store.pg import conf
+
+    conf()
+
+
 def _build_retriever():
-    from common.store import registry as REG
     from common.store import services
     from mcp_server.services.search import retriever as RT
 
     old = _STATE.get("R")
-    sv = mc.cfg().server  # 한 번 묶음(S7d — 두 칸이 같은 판 값)
-    a = types.SimpleNamespace(pg=sv.store == "pg", local=sv.store == "local", edw=False, edw_client=False)
-    services.connect(a)
-    from common.store.db import cfgtables
+    try:
+        check_store()  # 시작 때 이미 확인(main) — 설정이 그 뒤 바뀐 경우만 여기서 걸림
+    except SystemExit as e:  # 스레드·요청 안에서는 오류로(조용히 스레드만 죽지 않게)
+        raise RuntimeError(str(e)) from None
+    a = types.SimpleNamespace(pg=False, local=False, edw=False, edw_client=False)
+    services.connect(a)  # PC — Docker pgvector 주소 찾기(못 찾으면 SQLite 대역 — 검색은 PG 하나, mc-01)
+    from common.store.db import cfgfile
 
-    cur = cfgtables.active("stack")  # S8b — 엔진 구성 활성 판(서버 = 판 표 — 프로세스 시작 때 읽은 것, PC = 파일)
+    cur = cfgfile.active("stack")  # 엔진 구성 파일(서버·PC 같음 — 프로세스 시작 때 읽은 것, 사용자 11-01)
     st = cur.named()
     bundle = C.cfg().paths.mcp_bundle or str(APP_ROOT / "output" / "edw" / "bundle")  # S7e1 — common 칸(옛 mcp.server.bundle)
-    R = RT.Retriever(bundle, st.get("retrieve", "hybrid"), a.pg, REG.try_open_db())  # OP1 — 숨김 집합(best-effort, 없으면 바이트 동일)
+    R = RT.Retriever(bundle, st.get("retrieve", "hybrid"))
     _STATE["R"], _STATE["bundle"], _STATE["stack"] = R, bundle, st
     _STATE["version"], _STATE["checked_at"] = _version_of(R.pg, bundle), time.time()
     if old is not None and old.pg is not None and old.pg is not R.pg:
@@ -71,10 +86,8 @@ def _build_retriever():
 
 
 def _retriever():
-    """저장소 연결(Docker PostgreSQL → 없으면 로컬 묶음)·Retriever — 처음엔 만들고, 이후엔 최소 MCP_RELOAD_CHECK_SEC(기본 30초)
+    """저장소 연결(PG 하나 — mc-01)·Retriever — 처음엔 만들고, 이후엔 최소 MCP_RELOAD_CHECK_SEC(기본 30초)
     간격으로 적재 버전이 바뀌었는지만 확인해 바뀌었으면 다시 만든다(S12, load 재실행 뒤 새 데이터가 안 보이던 문제).
-    버전이 안 바뀌어도 같은 간격에 숨김 집합만 다시 읽는다(OP1, 독립 검토 BLOCK 반영 — 전체 재적재 없이 hide·unhide가
-    MCP_RELOAD_CHECK_SEC 안에 반영되게, Retriever.refresh_hidden).
     재생성 중인 동시 요청은 기다리지 않고 기존 객체로 바로 응답(비차단 잠금)."""
     if "R" not in _STATE:
         with _RELOAD_LOCK:
@@ -89,8 +102,6 @@ def _retriever():
             _STATE["checked_at"] = time.time()
             if _version_of(_STATE["R"].pg, _STATE["bundle"]) != _STATE.get("version"):
                 _build_retriever()
-            else:
-                _STATE["R"].refresh_hidden()  # OP1 — 전체 재적재 없이 숨김 집합만(같은 비차단 잠금 안, 추가 부담 없음)
         finally:
             _RELOAD_LOCK.release()
     return _STATE["R"]
@@ -139,17 +150,9 @@ def _index_retriever(index_id):
         if ent and ver == ent["version"]:
             ent["checked_at"] = now
             return ent["R"], None, ent["warn"]
-        from common.store import registry as REG
         from mcp_server.services.search import retriever as RT
 
-        pg = base.pg is not None
-        R = RT.Retriever(
-            bundle,
-            (_STATE.get("stack") or {}).get("retrieve", "hybrid"),
-            pg,
-            REG.try_open_db(),
-            pg_schema=info["pg_schema"] if pg else None,
-        )
+        R = RT.Retriever(bundle, (_STATE.get("stack") or {}).get("retrieve", "hybrid"), pg_schema=info["pg_schema"])
         if ent and ent["R"].pg is not None:
             _close_pool_later(ent["R"].pg)
         warn = ICR.input_drift(info)  # 사전·명부 해시는 Retriever를 (다시) 만들 때만 계산 — 질의마다 파일을 안 읽음
@@ -197,7 +200,7 @@ def _health():
     out = {
         "ok": True,
         "ready": bool(R is not None and done),
-        "store": ("pgvector" if R.pg else "local") if R else None,
+        "store": "pgvector" if R else None,
         "data_version": _STATE.get("version"),
     }
     if R is not None and R.pg:

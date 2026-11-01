@@ -2,15 +2,13 @@
 그림 신호: 곡선(원·타원)·사선·작은 채운 다각형(화살촉)·채운 사각형 여러 개(막대). 표 신호: 축 정렬 선·빈 사각형만(격자) → 제외.
 AD13 — 곡선·사선·화살촉 없는 "상자(테두리만)+직선 연결"만의 흐름도는 위 신호가 전부 0이라 표 격자와 똑같이 보여 버려지던
 오탐 — 글자 든 상자 ≥3개 + 상자들이 직선으로 ≥3개짜리 사슬(연결 요소)을 이루고 + 상자가 빈틈없이 격자로 맞물리지
-않으면(표는 맞물림) 그림으로 승격한다(VECTOR_BOX_DIAGRAM=0이면 이전 동작). 가로/세로 폭이 정확히 0인 순수 직선
+않으면(표는 맞물림) 그림으로 승격한다. 가로/세로 폭이 정확히 0인 순수 직선
 (화살촉 없는 연결선)은 묶기 단계의 intersects()가 "빈 사각형"으로 보고 아무것과도 안 묶여(기존 12pt 여유 병합은
 그대로 두고 — 아래 _diagram_groups가 그 선분만 살짝 부풀린 별도 한 번 더 묶기로 상자 사이를 이어 본다) 애초에
 min_items(5)에도 못 미치던 — 기존 경로(곡선·사선·화살촉·채운 막대)는 이 두 번째 묶기를 안 타 바이트 그대로다.
 AD13b — 라벨상자→값상자를 짧은 선 하나로만 잇는 서식(form) 표는 상자쌍 수(≥2)만 보면 쉽게 걸린다(각 행이 독립
 쌍이라 쌍 수는 행 수만큼 늘지만 사슬은 길이 2에서 끝남) — _chain_len이 "서로 분리된 여러 쌍"과 "상자를 타고
 이어지는 흐름"을 구분한다(최소 연결 요소 크기 3)."""
-
-from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 
 
 def _box_has_text(r, words):
@@ -90,9 +88,6 @@ def vector_regions(pg, min_items=5):
     """쪽의 벡터 도형을 가까운 것끼리 묶어 '그림에 가까운' 영역만 고른다 → [{bbox, items, signals, words, text_layer}]."""
     import fitz
 
-    box_diagram_on = (
-        pc.cfg().transform.figures.vector_box_diagram
-    )  # S7c — 설정 객체(off=("0",) = 옛 !="0") · AD13 — =0이면 이전 동작(상자+직선만은 표 격자로 버림)
     area = pg.rect.width * pg.rect.height
     all_words = pg.get_text("words")
     items = []
@@ -145,7 +140,7 @@ def vector_regions(pg, min_items=5):
         bars = sum(i["bar"] for i in its)
         grid = sig == 0 and bars < 3  # 축 정렬 선·빈 사각형만 = 표 격자·밑줄
         box_diagram = False
-        if box_diagram_on and grid and n >= min_items:  # AD13 — 격자로 보일 때만(선이 상자에 바로 안 붙어도 묶인 경우) 확인
+        if grid and n >= min_items:  # AD13 — 격자로 보일 때만(선이 상자에 바로 안 붙어도 묶인 경우) 확인
             boxes = [i["r"] for i in its if i["is_box"]]
             lines = [ln for i in its if not i["is_box"] for ln in i["lines"]]
             boxed_text = sum(1 for r in boxes if _box_has_text(r, all_words))
@@ -166,32 +161,32 @@ def vector_regions(pg, min_items=5):
                     "text_layer": " ".join(w[4] for w in words),
                 }
             )
-    if box_diagram_on:  # AD13 2단계 — 화살촉 없는 순수 직선이 상자를 안 이어 위에서
-        entries = [dict(it, cr=(it["r"] if not it["r"].is_empty else it["r"] + (-1, -1, 1, 1))) for it in items]
-        for g in _near_groups(entries):  # min_items에도 못 미친 묶음을 선분만 살짝 부풀려 다시 묶어 본다
-            its = g["items"]
-            n = sum(i["n"] for i in its)
-            sig = sum(i["curve"] for i in its) + sum(i["diag"] for i in its) + 2 * sum(i["arrow"] for i in its)
-            bars = sum(i["bar"] for i in its)
-            if n < min_items or sig != 0 or bars >= 3:  # 격자 모양(=기존 path가 이미 다루거나 다룰 자격이 없는 쪽)만
-                continue
-            boxes = [i["r"] for i in its if i["is_box"]]
-            lines = [ln for i in its if not i["is_box"] for ln in i["lines"]]
-            boxed_text = sum(1 for r in boxes if _box_has_text(r, all_words))
-            if boxed_text < 3 or _chain_len(boxes, lines) < 3 or _tiles_as_grid(boxes):
-                continue
-            r = g["r"] + (-14, -14, 14, 18)
-            r &= pg.rect
-            if any(fitz.Rect(o["bbox"]).intersects(r) for o in out):
-                continue  # 1단계가 이미 같은 자리에 냈으면 중복 금지
-            words = [w for w in all_words if fitz.Rect(w[:4]).intersects(r)]
-            out.append(
-                {
-                    "bbox": [round(v, 1) for v in r],
-                    "items": n,
-                    "signals": {"curve_diag_arrow": sig, "bars": bars, "box_diagram": True},
-                    "words": len(words),
-                    "text_layer": " ".join(w[4] for w in words),
-                }
-            )
+    # AD13 2단계 — 화살촉 없는 순수 직선이 상자를 안 이어 위에서
+    entries = [dict(it, cr=(it["r"] if not it["r"].is_empty else it["r"] + (-1, -1, 1, 1))) for it in items]
+    for g in _near_groups(entries):  # min_items에도 못 미친 묶음을 선분만 살짝 부풀려 다시 묶어 본다
+        its = g["items"]
+        n = sum(i["n"] for i in its)
+        sig = sum(i["curve"] for i in its) + sum(i["diag"] for i in its) + 2 * sum(i["arrow"] for i in its)
+        bars = sum(i["bar"] for i in its)
+        if n < min_items or sig != 0 or bars >= 3:  # 격자 모양(=기존 path가 이미 다루거나 다룰 자격이 없는 쪽)만
+            continue
+        boxes = [i["r"] for i in its if i["is_box"]]
+        lines = [ln for i in its if not i["is_box"] for ln in i["lines"]]
+        boxed_text = sum(1 for r in boxes if _box_has_text(r, all_words))
+        if boxed_text < 3 or _chain_len(boxes, lines) < 3 or _tiles_as_grid(boxes):
+            continue
+        r = g["r"] + (-14, -14, 14, 18)
+        r &= pg.rect
+        if any(fitz.Rect(o["bbox"]).intersects(r) for o in out):
+            continue  # 1단계가 이미 같은 자리에 냈으면 중복 금지
+        words = [w for w in all_words if fitz.Rect(w[:4]).intersects(r)]
+        out.append(
+            {
+                "bbox": [round(v, 1) for v in r],
+                "items": n,
+                "signals": {"curve_diag_arrow": sig, "bars": bars, "box_diagram": True},
+                "words": len(words),
+                "text_layer": " ".join(w[4] for w in words),
+            }
+        )
     return out

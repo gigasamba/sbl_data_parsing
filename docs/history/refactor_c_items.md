@@ -1,6 +1,6 @@
 # refactor.md 확인 사항(C) — 이력
 
-10-30(do-04)에 [refactor.md](../../refactor.md)의 확인 사항 표(C)에서 옮긴 행이다. 닫혔거나 다른 C 항목·PRD로 이어진 기록이라 내용은 옮길 때 그대로 두었다(경로·상태·단계 이름은 그때 기준 — 지금 사실은 refactor.md와 [docs/PRD.md](../PRD.md)). 링크만 이 폴더 기준으로 고쳤다. 서버 live 폴더에서 지울 목록(최종 ③-4)은 refactor.md에 남겼다.
+10-30(do-04)에 [refactor.md](../refactoring/refactor.md)의 확인 사항 표(C)에서 옮긴 행이다. 닫혔거나 다른 C 항목·PRD로 이어진 기록이라 내용은 옮길 때 그대로 두었다(경로·상태·단계 이름은 그때 기준 — 지금 사실은 refactor.md와 [docs/PRD.md](../PRD.md)). 링크만 이 폴더 기준으로 고쳤다. 서버 live 폴더에서 지울 목록(최종 ③-4)은 refactor.md에 남겼다.
 
 | ID | 무엇을 | 왜 | 언제 | 누가 | 근거 | 상태 |
 |---|---|---|---|---|---|---|

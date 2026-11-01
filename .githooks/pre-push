@@ -1,3 +1,11 @@
 #!/usr/bin/env bash
-# push 전 점검(켜기 한 번: git config core.hooksPath .githooks) — 저장소 전체 파이썬 파일 ruff·mypy + 모듈 경계(CLAUDE.md §5-2).
-ALL=1 exec bash "$(git rev-parse --show-toplevel)/deploy/release/lint_changed.sh"
+# push 전 점검(켜기 한 번: git config core.hooksPath .githooks — CLAUDE.md §5-2, 사용자 10-30 "로컬에서만, githook으로"):
+#   ① 저장소 전체 파이썬 파일 ruff·mypy + 모듈 경계 ② selftest(서버 배포 테스트, 약 30초) — 알려진 FAIL(known_fail.txt) 밖 FAIL 0이어야 push.
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)" || exit 2
+ALL=1 bash deploy/release/lint_changed.sh || exit 1
+if [ -x .venv/bin/python ]; then PY=.venv/bin/python; else PY=.venv/Scripts/python; fi
+echo "[push 전] selftest"
+out=$(PYTHONPATH=. bash deploy/release/selftest_gate.sh "$PY" -m pipeline.cli selftest 2>&1); rc=$?
+printf '%s\n' "$out" | tail -n 3
+exit $rc

@@ -29,7 +29,6 @@ from common.core.paths import PKG_ROOT  # 공용 자산 루트(10-14 이미지 �
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.load import index_cfg as ICS  # normalize·load·index_id·env_for·inputs·pg_schema(빌더 전용, 10-14 이전)
 
-HERE = Path(__file__).resolve().parent
 ROOT = PKG_ROOT  # 하위 프로세스 cwd(공용 패키지 루트) — 10-14 분리 전엔 HERE.parent(data_pipeline/)
 
 PY = sys.executable
@@ -96,11 +95,17 @@ class _lock:
 
 def _build_locked(conf, iid, a):
     rep = Path(a.parse_dir) / "_rep"
-    if not a.stack:  # S8b — 엔진 구성 활성 판의 사본(넘겨받은 것 — 없으면 여기서: 서버 판 표·PC 파일)
+    stack_args = ["--stack", a.stack]
+    if a.stack:  # 엔진 구성 파일(PC 실험·시험 — 옛 사본과 같은 꼴)
+        if not Path(a.stack).is_file():
+            raise SystemExit(f"[index] --stack 파일 없음: {a.stack}")
+        stack_bytes = Path(a.stack).read_bytes()
+    else:  # 엔진 구성 파일(서버·PC 같음 — 사용자 11-01)
         from pipeline import stackcfg
 
-        a.stack = str(stackcfg.current(Path(a.parse_dir).parent)[0])
-    inputs = ICS.inputs(rep, a.stack)  # 재빌드 판정용 입력 지문(_rep·사전·명부·stack·common·구조화 코드) — index_id와 별개
+        stack_bytes = stackcfg.snapshot_bytes(stackcfg.resolve())
+        stack_args = []
+    inputs = ICS.inputs(rep, stack_bytes)  # 재빌드 판정용 입력 지문(_rep·사전·명부·stack·common·구조화 코드) — index_id와 별개
     done = IC.info(iid)
     if done and done.get("inputs") == inputs and bool(done.get("pg_schema")) == a.pg and not a.force:
         print(f"[index] {iid} 이미 있음(입력 지문 같음) — 건너뜀(--force로 다시)", flush=True)
@@ -141,8 +146,7 @@ def _build_locked(conf, iid, a):
             conf["summary"],
             "--chunk",
             conf["chunker"],
-            "--stack",
-            a.stack,
+            *stack_args,
             "--out",
             bundle,
             *(["--path-prefix", a.path_prefix] if a.path_prefix else []),
@@ -191,7 +195,7 @@ def main(argv=None):
     b.add_argument("--conf", action="append", required=True, help="색인 설정 JSON(여러 번 — 같은 _rep에서 차례로)")
     b.add_argument("--parse-dir", default="output/parse")
     b.add_argument("--src", default="output/prepared")
-    b.add_argument("--stack", default=None, help="엔진 구성 파일(비우면 활성 판의 사본 — S8b)")
+    b.add_argument("--stack", default=None, help="엔진 구성 파일(PC 실험·시험 — 비우면 넘겨받은 판·활성 판, pl-32)")
     b.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
     b.add_argument("--pg", action="store_true", help="PostgreSQL 스키마 <PG_SCHEMA>_<index_id>에 적재")
     b.add_argument("--force", action="store_true")

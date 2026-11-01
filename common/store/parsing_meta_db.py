@@ -10,11 +10,14 @@ import re
 import sqlite3
 import sys
 
+from common.config import layout as L
 from common.config.settings import cfg
 
 DEFAULT_TABLE = "AI.ParsingMeta"
 TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # source.py TABLE_ID_RE와 같은 규칙(SQL 삽입 방지)
-STATUS_VALUES = ("active", "changed", "deleted")  # SI39④ — status 열에 허용되는 값(OP1)
+# C10(사용자 10-31 · skipped_dup 11-01 — 완전 중복은 매일 밤 다시 안 고름) — 이 parse_status 행이 있으면 "파싱 끝난 문서"
+# (not_parsed·skipped_disk_cap·실패는 다시 고름 · 통째 실패는 ParsingMeta에 안 씀 — C3)
+DONE_STATUSES = ("ok", "partial", "skipped_dup")
 # 열 순서 — EDW DDL docs/operations/parsing_meta_mssql.sql과 같음(parse_meta_id·parsed_at·source_key_hash는 표가 자동으로 채움, test_parsing_meta_ddl.py가 고정)
 # PM2(10-15, 사용자) — 열·키를 최소로: doc_key(원본 sha256)만 필수, 그 밖은 전부 비어도 됨. engines_used·
 # engines_summary는 맨 끝에 더함(기존 열 자리는 안 바꿔 디프를 작게).
@@ -52,10 +55,6 @@ SET_OPTIONS_SQL = (
     "SET ANSI_NULLS ON; SET QUOTED_IDENTIFIER ON; SET ANSI_PADDING ON; SET ANSI_WARNINGS ON; "
     "SET CONCAT_NULL_YIELDS_NULL ON; SET ARITHABORT ON; SET NUMERIC_ROUNDABORT OFF;"
 )
-
-
-def _utcnow():
-    return datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _today_date():
@@ -102,43 +101,21 @@ def _insert_new_rows(cur, table, ph, rows, integrity_error, columns=None):
     return inserted, skipped
 
 
-def _update_status_row(cur, table, ph, source_system, source_key, parse_date, status, status_at):
-    """SI39④ — EDW에서 유일하게 허용되는 UPDATE 대상 열: status·status_at(active·changed·deleted, OP1이 호출).
-    changed·deleted 전용 — touched(AD17①, 원본 바이트는 같고 날짜만 바뀜)는 status 열을 안 쓰는
-    `_update_status_at_row()`를 쓴다. 모듈 안의 SQL UPDATE 문은 이 둘뿐이다(둘 다 status·status_at만 건드림) —
-    다른 경로로 EDW 행을 고치는 코드를 추가하지 않는다(시험: test_only_two_update_statements_both_restricted_to_status_columns)."""
-    if status not in STATUS_VALUES:
-        raise ValueError(f"[parsing_meta] status 값이 올바르지 않음(active·changed·deleted만) — {status!r}")
-    cur.execute(
-        f"UPDATE {table} SET status={ph}, status_at={ph} WHERE source_system={ph} AND source_key={ph} AND parse_date={ph}",
-        (status, status_at, source_system, source_key, parse_date),
-    )
-    return cur.rowcount
-
-
-def _update_status_at_row(cur, table, ph, source_system, source_key, parse_date, expected_status, status_at):
-    """AD17① touched(원본 바이트는 같고 날짜만 바뀜) 전용 — **status 열은 쓰지 않고 status_at만** UPDATE한다.
-    독립 검토(engine-qa, 10-08) 반영: find_by_doc_key()의 SELECT와 이 UPDATE 사이에 다른 쓰기(changed·deleted로의
-    실제 status 전환)가 끼어들면, 그 틈을 못 보고 touched가 '읽은 옛 status 값'을 그대로 다시 썼다가 막 바뀐
-    값을 덮어쓸 위험이 있다 — 그래서 status 열 자체는 절대 쓰지 않고, WHERE 절에 `AND status=expected_status`를
-    넣어 **그 사이 status가 그대로일 때만** status_at을 찍는다. 0행이면 그사이 다른 쓰기가 이겼다는 뜻 —
-    호출자(apply_registry_status)는 에러 없이 건너뛴다(다음 build가 다시 본다)."""
-    cur.execute(
-        f"UPDATE {table} SET status_at={ph} WHERE source_system={ph} AND source_key={ph} AND parse_date={ph} AND status={ph}",
-        (status_at, source_system, source_key, parse_date, expected_status),
-    )
-    return cur.rowcount
-
-
 def _find_by_doc_key_rows(cur, table, ph, doc_key):
-    """OP1 — 문서 대장(doc_registry)이 changed·deleted·touched로 본 doc_key의 EDW 행(source_system·source_key·
-    parse_date·status) — update_status()를 어디에 적용할지 찾는 유일한 조회(읽기만, SELECT). status도 같이
-    돌려줘야 touched(AD17①, 원본 바이트는 같고 날짜만 바뀜)가 기존 status 값을 그대로 유지한 채 status_at만
-    새로 찍을 수 있다(apply_registry_status()). rep_bucket·rep_key도 같이 읽음(OP21 — mcp_server.py 근거
-    '파싱 결과 경로' 칸이 find_rep_path()로 이 조회를 재사용, apply_registry_status는 안 쓰는 칸이라 영향 없음)."""
+    """doc_key의 EDW 행(source_system·source_key·parse_date·status·rep_bucket·rep_key) — 읽기만(SELECT).
+    OP21 — 검색 MCP 근거 '파싱 결과 경로' 칸(find_rep_path())이 쓴다."""
     cur.execute(f"SELECT source_system, source_key, parse_date, status, rep_bucket, rep_key FROM {table} WHERE doc_key={ph}", (doc_key,))
     cols = ["source_system", "source_key", "parse_date", "status", "rep_bucket", "rep_key"]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def _done_keys_rows(cur, table):
+    """C10(pl-12, 사용자 10-31) — 파싱이 끝난 원본 키(source_key) 집합 — parse_status가 DONE_STATUSES(ok·partial·skipped_dup — 사용자 11-01)인 행만.
+    파싱 입구(pipeline.cli `_unparsed`)가 "FileStorageMap ∖ ParsingMeta"로 새 문서를 고를 때 쓴다(읽기만, SELECT).
+    상수 글자만 SQL에 끼우고(DONE_STATUSES는 코드 상수) 값 바인딩은 없음."""
+    done = ", ".join(f"'{v}'" for v in DONE_STATUSES)
+    cur.execute(f"SELECT DISTINCT source_key FROM {table} WHERE source_key IS NOT NULL AND parse_status IN ({done})")
+    return {r[0] for r in cur.fetchall()}
 
 
 def find_rep_path(db, doc_key):
@@ -165,8 +142,8 @@ def find_rep_path(db, doc_key):
 class MssqlStore:
     """실제 EDW 쓰기(PM1 결정 뒤) — PM_TABLE은 화이트리스트 확인(스키마.표만), 열 이름은 고정 상수, 값은 전부 %s
     파라미터. 접속은 common.connections.rdb — 게시는 쓰기 계정, 조회(검색 MCP)는 읽기 계정(role, 사용자 10-29 ops.md#op-03). 한 실행 = 한 트랜잭션(커밋 전엔 아무것도 안 남음).
-    KEY(source_system, source_key)가 이미 있으면(PM2 — 없으면 doc_key) 그 행은 건너뜀(INSERT만) — update_status()만
-    예외(상태 열 UPDATE).
+    KEY(source_system, source_key)가 이미 있으면(PM2 — 없으면 doc_key) 그 행은 건너뜀(INSERT만 — UPDATE 없음, C10 10-31에
+    문서 대장과 함께 상태 열 UPDATE 길도 지움).
     PM2 하위 호환 — DBA가 새 DDL을 아직 안 돌려 옛 표(engines_used·engines_summary 없음, 그 밖은 PM1 그대로)에
     쓰게 되더라도 INSERT가 죽지 않게: 첫 호출에서 INFORMATION_SCHEMA.COLUMNS로 실제 있는 열만 추려 그 열만
     INSERT하고(없는 열은 조용히 비움), 한 번 경고를 남긴다(요건 "DDL 미실행이어도 안 죽음").
@@ -220,30 +197,12 @@ class MssqlStore:
             self.cn.rollback()
             raise
 
-    def update_status(self, source_system, source_key, parse_date, status, status_at=None):
-        cur = self.cn.cursor()
-        try:
-            n = _update_status_row(cur, self.ident, "%s", source_system, source_key, parse_date, status, status_at or _utcnow())
-            self.cn.commit()
-            return n
-        except Exception:
-            self.cn.rollback()
-            raise
-
-    def update_status_at(self, source_system, source_key, parse_date, expected_status, status_at=None):
-        """AD17① touched — status 열은 안 쓰고 status_at만(expected_status가 그대로일 때만, 경합 시 0행)."""
-        cur = self.cn.cursor()
-        try:
-            n = _update_status_at_row(cur, self.ident, "%s", source_system, source_key, parse_date, expected_status, status_at or _utcnow())
-            self.cn.commit()
-            return n
-        except Exception:
-            self.cn.rollback()
-            raise
-
     def find_by_doc_key(self, doc_key):
         cur = self.cn.cursor()
         return _find_by_doc_key_rows(cur, self.ident, "%s", doc_key)
+
+    def done_source_keys(self):
+        return _done_keys_rows(self.cn.cursor(), self.ident)
 
     def close(self):
         self.cn.close()
@@ -283,22 +242,12 @@ class SqliteStore:
         self.cn.commit()
         return counts
 
-    def update_status(self, source_system, source_key, parse_date, status, status_at=None):
-        cur = self.cn.cursor()
-        n = _update_status_row(cur, self.table, "?", source_system, source_key, parse_date, status, status_at or _utcnow())
-        self.cn.commit()
-        return n
-
-    def update_status_at(self, source_system, source_key, parse_date, expected_status, status_at=None):
-        """AD17① touched — status 열은 안 쓰고 status_at만(expected_status가 그대로일 때만, 경합 시 0행)."""
-        cur = self.cn.cursor()
-        n = _update_status_at_row(cur, self.table, "?", source_system, source_key, parse_date, expected_status, status_at or _utcnow())
-        self.cn.commit()
-        return n
-
     def find_by_doc_key(self, doc_key):
         cur = self.cn.cursor()
         return _find_by_doc_key_rows(cur, self.table, "?", doc_key)
+
+    def done_source_keys(self):
+        return _done_keys_rows(self.cn.cursor(), self.table)
 
     def count(self):
         return self.cn.execute(f"SELECT COUNT(*) FROM {self.table}").fetchone()[0]
@@ -317,5 +266,7 @@ def make_db(role):
     table = cfg().connections.parsing_meta.table  # 기본 'AI.ParsingMeta'(DEFAULT_TABLE과 같음) · 빈 값 그대로(blank=keep)
     _, miss = mssql.login(role, extra=False)
     if miss:
-        raise SystemExit(f"[parsing_meta] EDW 접속 정보 없음: {', '.join(miss)}(common.connections.rdb) 또는 RDB_SQLITE(시험)")
+        raise SystemExit(
+            f"[parsing_meta] EDW 접속 정보 없음: {', '.join(miss)}(settings.yaml {L.to_yaml('common.connections.rdb.host').rsplit('.', 1)[0]}.*) 또는 RDB_SQLITE(시험)"
+        )
     return MssqlStore(table, role)

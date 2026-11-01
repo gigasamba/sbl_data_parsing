@@ -227,11 +227,17 @@ def selftest():
     port5 = srv5.server_address[1]
     threading.Thread(target=srv5.serve_forever, daemon=True).start()
     try:
-        with COMMON.env(LLM_BASE_URL=f"http://127.0.0.1:{port5}/v1", LLM_MODEL="mock", MODEL_TRANSPORT=None):
-            text_direct, usage_direct = complete("llm", [{"role": "user", "content": "X는?"}], max_tokens=10)
+        with COMMON.env(
+            VLM_BASE_URL=f"http://127.0.0.1:{port5}/v1",
+            VLM_MODEL="mock",
+            LLM_BASE_URL=f"http://127.0.0.1:{port5}/v1",
+            LLM_MODEL="mock",
+            MODEL_TRANSPORT=None,
+        ):
+            text_direct, usage_direct = complete("vlm", [{"role": "user", "content": "X는?"}], max_tokens=10)
             text_agent, usage_agent = complete(
-                "llm", [{"role": "user", "content": "X는?"}], max_tokens=10, agent="doc_summary"
-            )  # 스키마 없는 에이전트 - 형식 재요청 없이 경로 동일성만
+                "vlm", [{"role": "user", "content": "X는?"}], max_tokens=10, agent="page_transcribe"
+            )  # 스키마 없는 에이전트 - 형식 재요청 없이 경로 동일성만(11-01 — doc_summary 지움 → page_transcribe)
             assert text_direct == text_agent == "에이전트 응답" and usage_direct == usage_agent == {
                 "prompt_tokens": 2,
                 "completion_tokens": 3,
@@ -245,7 +251,7 @@ def selftest():
         srv5.shutdown()
     print("[selftest] agent= — 응답·usage가 비-agent 경로와 같음(parity) · model_role 불일치 거부 통과")
 
-    # output_schema — 형식 검사·1회 재요청(AD33 ⓑ). research_judge(output_schema 있음, 필수 "status")로:
+    # output_schema — 형식 검사·1회 재요청(AD33 ⓑ). nested_figure(output_schema 있음, 필수 "regions" — 11-01 research_judge 지움)로:
     # ① 1차 깨진 JSON → 2차 정상 → 정상 반환·요청 2회·invalid+1·retry_ok+1 ② 둘 다 깨짐 → 마지막(2차) 응답 그대로·
     # 요청 2회·invalid+1·retry_failed+1(호출부가 그 뒤 기본값 처리) ③ 1차부터 정상 → 요청 1회·통계 불변(재요청 없음).
     def _schema_server(bodies):
@@ -276,12 +282,12 @@ def selftest():
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         return srv, hits
 
-    valid = json.dumps({"status": "found", "answer": "X", "cite": [1], "near_miss": [], "follow_up": None})
+    valid = json.dumps({"regions": []})
     srvA, hitsA = _schema_server(["이건 JSON이 아님", valid])
     try:
-        with COMMON.env(LLM_BASE_URL=f"http://127.0.0.1:{srvA.server_address[1]}/v1", LLM_MODEL="mock"):
+        with COMMON.env(VLM_BASE_URL=f"http://127.0.0.1:{srvA.server_address[1]}/v1", VLM_MODEL="mock"):
             before = schema_stats()
-            text, _u = complete("llm", [{"role": "user", "content": "x"}], agent="research_judge")
+            text, _u = complete("vlm", [{"role": "user", "content": "x"}], agent="nested_figure")
             assert text == valid and len(hitsA) == 2, (text, hitsA)
             assert _u.get("prompt_tokens") == 2 and _u.get("completion_tokens") == 2 and _u.get("calls") == 2, (
                 _u
@@ -293,9 +299,9 @@ def selftest():
 
     srvB, hitsB = _schema_server(["여전히 JSON 아님"])
     try:
-        with COMMON.env(LLM_BASE_URL=f"http://127.0.0.1:{srvB.server_address[1]}/v1", LLM_MODEL="mock"):
+        with COMMON.env(VLM_BASE_URL=f"http://127.0.0.1:{srvB.server_address[1]}/v1", VLM_MODEL="mock"):
             before = schema_stats()
-            text, _u = complete("llm", [{"role": "user", "content": "x"}], agent="research_judge")
+            text, _u = complete("vlm", [{"role": "user", "content": "x"}], agent="nested_figure")
             assert text == "여전히 JSON 아님" and len(hitsB) == 2, (text, hitsB)  # 재요청 1회(2차도 깨짐) — 그대로 반환(호출부 기본값 처리)
             after = schema_stats()
             assert after["invalid"] == before["invalid"] + 1 and after["retry_failed"] == before["retry_failed"] + 1
@@ -304,9 +310,9 @@ def selftest():
 
     srvC, hitsC = _schema_server([valid])
     try:
-        with COMMON.env(LLM_BASE_URL=f"http://127.0.0.1:{srvC.server_address[1]}/v1", LLM_MODEL="mock"):
+        with COMMON.env(VLM_BASE_URL=f"http://127.0.0.1:{srvC.server_address[1]}/v1", VLM_MODEL="mock"):
             before = schema_stats()
-            text, _u = complete("llm", [{"role": "user", "content": "x"}], agent="research_judge")
+            text, _u = complete("vlm", [{"role": "user", "content": "x"}], agent="nested_figure")
             assert text == valid and len(hitsC) == 1, (text, hitsC)  # 1차부터 정상 — 재요청 없음(호출 1회)
             assert schema_stats() == before
     finally:
@@ -319,7 +325,7 @@ def selftest():
     # 빈 응답 안전망 밖이었다. page_transcribe(output_schema 없음, vlm_page.py가 실제로 쓰는 패키지)로: ① 1차가 빈
     # 응답(토큰 소모)→4배 max_tokens로 딱 한 번 재요청→성공(요청 2회·공유 장부 2건=counted) ② 재요청도 빈 응답이면
     # 그대로 반환(요청 2회에서 끝 — 무한 재시도 없음) ③ call_reserved=True(chat()이 이미 자기 안전망을 가진 모양)는
-    # 여기서 또 재요청하지 않는다(두 안전망이 겹치면 최대 4회까지 늘어나는 것을 막음) ④ LLM_EMPTY_RETRY=0(끔) 존중.
+    # 여기서 또 재요청하지 않는다(두 안전망이 겹치면 최대 4회까지 늘어나는 것을 막음).
     def _rv16_server(bodies):
         hits = []
 
@@ -375,17 +381,9 @@ def selftest():
             assert text == "" and len(hitsF) == 1, (text, hitsF)
     finally:
         srvF.shutdown()
-
-    srvG, hitsG = _rv16_server([("", 50), ("실제 답", 60)])
-    try:  # LLM_EMPTY_RETRY=0 — 끔(기존 env 스위치 그대로 존중)
-        with COMMON.env(VLM_BASE_URL=f"http://127.0.0.1:{srvG.server_address[1]}/v1", VLM_MODEL="mock", LLM_EMPTY_RETRY="0"):
-            text, u = complete("vlm", [{"role": "user", "content": "x"}], max_tokens=500, agent="page_transcribe")
-            assert text == "" and len(hitsG) == 1, (text, hitsG)
-    finally:
-        srvG.shutdown()
     print(
         "[selftest] RV16 — 직접 호출자(agent=) 빈 응답 1회 재요청(4배 max_tokens)·공유 장부 집계(counted) · "
-        "재요청도 빈 응답이면 그대로 · call_reserved=True(chat() 자기 안전망)는 안 겹침 · LLM_EMPTY_RETRY=0 끔 통과"
+        "재요청도 빈 응답이면 그대로 · call_reserved=True(chat() 자기 안전망)는 안 겹침 통과"
     )
 
     # agent= — 리다이렉트 차단(DONT 13). _redirect_block 상자(1차 신호)로 판정해 ① 실제 연결 0(8.8.8.8에 안 닿음·짧은 시간)

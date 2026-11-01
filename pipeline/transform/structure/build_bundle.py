@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""저장소 묶음 만들기(로컬 output/edw/bundle → PostgreSQL 적재 원본, EDW에는 적재 안 함) — 파싱 선정 엔진 결과 → 청크(원본 위치) · 요약 · 메타 · 임베딩 · 지식 그래프 → output/edw/bundle/
+"""저장소 묶음 만들기(로컬 output/edw/bundle → PostgreSQL 적재 원본, EDW에는 적재 안 함) — 파싱 선정 엔진 결과 → 청크(원본 위치) · 요약 · 메타 · 임베딩 → output/edw/bundle/
 
 기술 비교 없이 **파싱에서 선정된 엔진만** 쓴다(output/parse/selection.json `final` 형식별 주 엔진 → 실패면 예비 → route 순).
   청크   : structure 청커(pipeline.transform.structure.chunking, AD32③ — evaluation.stages는 조합 실험용으로 같은 것을 가져다 씀) — 본문은 정제 텍스트(쪽 번호 줄 제외), 위치 = 파일 경로·쪽·줄·문자 범위·제목,
            쪽 안 위치(bbox, pt) = OCR 엔진은 글자 상자 합집합, 텍스트 PDF는 원본 PDF에서 청크 첫·끝 줄을 찾아 합집합
-  요약   : --summary llm(내부망 GLM) → 없으면 앞부분 발췌
+  요약   : 앞부분 발췌(LLM 요약은 op-08에 지움 — --summary auto·lead 둘 다 발췌)
   메타   : 고객사·계약 번호 — 파싱 모듈 교차 확인 값(_rep rep.meta)(서로 다른 계열 파서 2개+)만
   임베딩 : --embed api(EMBED_BASE_URL·EMBED_MODEL — 서버 임베딩 전용 모델) · bge-m3 · e5-small … (L2 정규화 저장, 차원은 첫 응답에서)
-  그래프 : 폴더 → 문서 + 문서 → 청크(+순서) + 청크 → 개체(ID·이메일·날짜 + AD28② 업무 개체: 고객·계약·제품·모달리티·
-           배치/로트)·라벨·값(사실)·개념(AD28③, 용어 사전 — broader·related 간선 포함). 같은 값 = 같은 노드 → 문서 간 연결.
-           업무 관계(문서 단위): client-has-contract·contract-covers-product·doc-links-contract
-산출: docs.jsonl · chunks.jsonl · vectors.npy(float32, chunks 순서) · kg_nodes.jsonl · kg_edges.jsonl · meta.json · images.jsonl(F8, doc_image·chunk_image 적재 원본)
-사용: python -m pipeline.transform.structure.build_bundle [--parse-dir output/parse] [--src output/prepared] [--embed api|bge-m3] [--summary auto|llm|lead] [--out output/edw/bundle]
+  (지식 그래프 kg_nodes·kg_edges · 개념→청크 concept_chunk · 그림 행 images.jsonl · 집계 사실 facts.jsonl은 11-01에 지움 — PRD pl-06:
+   아무도 적재·조회하지 않음(facts.jsonl을 읽던 검색 쪽 집계는 mc-04에서 지움). kg_nodes.jsonl·kg_edges.jsonl은 빈 파일로만 씀 — 묶음 계약 common/core/contract.py가 파일을 요구, 그 목록은 핸드오프 지문 파일이라 0.2.0 배치에서 고침)
+산출: docs.jsonl · chunks.jsonl · vectors.npy(float32, chunks 순서) · meta.json · kg_nodes.jsonl·kg_edges.jsonl(빈 파일)
+사용: python -m pipeline.transform.structure.build_bundle [--parse-dir output/parse] [--src output/prepared] [--embed api|bge-m3] [--summary auto|lead] [--out output/edw/bundle]
 """
 
 import argparse
@@ -22,34 +21,30 @@ import sys
 import time
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[0]
-from common.ai.agent_prompts import load as _load_prompt  # noqa: E402 — AD33
-from common.ai.embed import embed_texts  # noqa: E402
-from common.config import settings as C  # noqa: E402 — S7c: 설정 객체(common 칸 EMBED_MODEL·EMBED_BASE_URL·LLM_ALLOW_EXTERNAL·GLOSSARY_DIR·OV_URL)
-from common.core import docmeta as DM  # noqa: E402 — 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
-from common.core import repfmt as AQ  # noqa: E402 — 대표 결과 형식 읽기(라벨 어휘·키-값 쌍·표 행)
-from common.core import span as SP  # noqa: E402 — op-01 성능 span
-from common.core import terms as T  # noqa: E402 — 고객 명부·이름 정규화·ID 모양(검색과 같은 규칙)
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.contract import (  # noqa: E402 — 문서 ID(doc_key) 규칙(GH1-04: orig_sha256으로 parse와 같은 값)
+from common.ai.embed import embed_texts
+from common.config import layout as L  # 안내 메시지의 settings.yaml 자리
+from common.config import settings as C  # S7c: 설정 객체(common 칸 EMBED_MODEL·EMBED_BASE_URL·LLM_ALLOW_EXTERNAL·GLOSSARY_DIR·OV_URL)
+from common.core import docmeta as DM  # 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
+from common.core import repfmt as AQ  # 대표 결과 형식 읽기(라벨 어휘·키-값 쌍·표 행)
+from common.core import span as SP  # op-01 성능 span
+from common.core import terms as T  # 고객 명부·이름 정규화·ID 모양(검색과 같은 규칙)
+from common.core.console import utf8_stdout
+from common.core.contract import (  # 문서 ID(doc_key) 규칙(GH1-04: orig_sha256으로 parse와 같은 값)
     file_hash,
     original_file_hash,
 )
-from common.core.meaning import strip_page_numbers  # noqa: E402
-from common.core.paths import APP_ROOT, STACK_FILE  # noqa: E402 — 폴더 재편 뒤 이 두 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
-from common.core.text import (  # noqa: E402 — 색인 본문·토큰 규칙(모듈 계약)
+from common.core.meaning import strip_page_numbers
+from common.core.paths import APP_ROOT  # 폴더 재편 뒤 이 상수만 바뀌면 됨
+from common.core.text import (  # 색인 본문·토큰 규칙(모듈 계약)
     index_text,
     normalize_value,
     tokens,
 )
-from pipeline import config as pc  # noqa: E402 — S7c: 설정 객체(pipeline 칸)
-from pipeline.shared import runtrace  # noqa: E402 — op-01 run.progress
-from pipeline.transform.structure import chunking as S  # noqa: E402 — 청킹·개체 정규식(구조화 모듈)
-from pipeline.transform.structure import facts as AG  # noqa: E402 — 계약 사실 추출(contract_facts)·제품 코드
-from pipeline.transform.structure import terms as ST  # noqa: E402 — name_hits·seed_roster(구조화 전용, 10-16 분리)
-
-RE_ENTITY = (S.RE_ID, S.RE_EMAIL, S.RE_DATE)
+from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
+from pipeline.shared import runtrace  # op-01 run.progress
+from pipeline.transform.structure import chunking as S  # 청킹·개체 정규식(구조화 모듈)
+from pipeline.transform.structure import facts as AG  # 제품 코드(PRODUCT_CODE_RE — 용어 draft)
+from pipeline.transform.structure import terms as ST  # name_hits·seed_roster(구조화 전용, 10-16 분리)
 
 
 def pick_engine(doc, dd, sel, route):
@@ -117,22 +112,6 @@ def lead_summary(text, n=300):
         if sum(map(len, out)) >= n:
             break
     return " ".join(out)[:n]
-
-
-def llm_summary(text):
-    from common.ai import llm as L
-
-    msg = [
-        {
-            "role": "system",
-            "content": _load_prompt("doc_summary", "summary"),
-        },  # 글자는 resources/prompts/common/doc_summary/prompt.md(AD33)
-        {"role": "user", "content": strip_page_numbers(text)[:6000]},
-    ]
-    # 외부 LLM은 LLM_ALLOW_EXTERNAL=1 + RUN_ENV=local일 때만(서버 dev·prd는 늘 거부 — common/ai/guard.py)
-    return L.chat(
-        msg, temperature=0.0, max_tokens=300, allow_external=C.cfg().models.llm.allow_external, agent="doc_summary"
-    ).strip()  # S7c — 설정 객체(켜기 "1")
 
 
 def _embed(model, texts, kind):
@@ -242,147 +221,6 @@ def embed_all(model, texts, batch=None, cache=None, out=None):
     return arr
 
 
-ID_ENTITY_KIND = {"contract_no": "contract", "lot_no": "batch", "batch_no": "batch"}  # id_patterns.csv id_type → kg_node kind(AD28②)
-# 그 외 id_type(rfi_no·deal_no·deviation_no·capa_no·change_control_no)은 kind="id"(props.id_type) — 장비 전용 명부는 아직 없어
-# id_patterns.csv에 그 종류가 생기면 여기 추가하거나 "id"로 자동 포함(설계는 그대로, 새 정규식만 더하면 됨).
-
-BIZ_REL = ("client-has-contract", "contract-covers-product", "doc-links-contract")  # AD28② 문서 단위 관계(meta_confirmed일 때만 생김)
-
-
-def _modality_hits(text):
-    """본문에 나온 모달리티 어휘(common.core.terms.MODALITIES, 검색과 같은 어휘) → 표준 표기 집합(AD28②)."""
-    out = set()
-    for key, canon in T.MODALITIES.items():
-        if re.search(r"(?<![a-z0-9가-힣])" + re.escape(key) + r"(?![a-z0-9가-힣])", text, re.I):
-            out.add(canon)
-    return out
-
-
-def _biz_entities(text, id_pats):
-    """본문의 업무 개체(AD28②) — 제품 코드(AG.PRODUCT_CODE_RE)·모달리티(공용 어휘)·id_patterns.csv 모양(계약 번호·배치/로트 등)
-    → [(kind, 표기), …]. 고객은 문서별 명부(known_clients)로 따로 찾음(build_graph에서, T.match_clients)."""
-    hits = [("product", m) for m in set(AG.PRODUCT_CODE_RE.findall_codes(text))]
-    hits += [("modality", m) for m in _modality_hits(text)]
-    for id_type, pat in id_pats:
-        if id_type == "product_code":
-            continue  # AG.PRODUCT_CODE_RE가 이미 담당(같은 개체를 두 정규식으로 중복 추출 안 함)
-        kind = ID_ENTITY_KIND.get(id_type, "id")
-        for m in set(pat.findall(text)):
-            hits.append((kind, m))
-    return hits
-
-
-def build_graph(docs, chunks, folder_of, glossary=None, concept_chunk=None):
-    """노드 키 = (kind, 정규화 키). 같은 개체·값은 한 노드 → 그 노드를 거쳐 다른 문서의 청크로 이어짐.
-    AD28②③ — 기존 entity·label·value에 업무 개체(kind=client·contract·product·modality·batch·id, 정규식·명부로 추출)와
-    개체 관계(client-has-contract·contract-covers-product·doc-links-contract, 문서 단위)를 더한다. **관계 간선은
-    doc.meta_confirmed가 True(교차 확인 — 서로 다른 계열 파서 2개+가 같은 값을 냄)일 때만 만든다**(engine-qa MAJOR
-    10-08) — meta_confirmed가 False면 doc.client·contract_no는 단일 엔진 추정값(build_bundle.py main())이라 관계로
-    싣지 않는다(멘션 간선은 그대로 — 그건 원래부터 신뢰도 주장이 없는 설계). 만들어지는 관계 간선·그 contract·
-    client·product 노드의 props에 confirmed=True·prov="bundle"(W18 link_doc 결과 아님 — build_bundle.py 자체 교차
-    확인 값 재사용, modules 간 직접 import 금지라 link_doc을 직접 부르지 않음)를 남긴다. 개념 노드(kind=concept,
-    용어 사전, broader·related 간선)도 같은 그래프에 합친다. glossary·concept_chunk를 안 주면(기본 None) 개념 쪽은
-    빈 목록 — 기존 호출자(테스트 등)는 바이트 동일."""
-    pairs_of, NUM_RE = AQ.pairs_of, AQ.NUM_RE
-    glossary, concept_chunk = glossary or {}, concept_chunk or []
-    nodes, edges, idx = [], set(), {}
-
-    def node(kind, key, label=None, **kw):
-        k = (kind, key[:440])
-        if k not in idx:
-            idx[k] = len(nodes)
-            nodes.append({"id": idx[k], "kind": kind, "node_key": k[1], "label": (label or key)[:1000], **kw})
-        return idx[k]
-
-    aliases = T._aliases()
-    client_names = sorted({d["client"] for d in docs if d.get("client")} | set(aliases))  # AD28② — 알려진 고객(문서 확정값 + 명부)
-    id_pats = T.load_id_patterns_typed()
-    chunk_node_of = {}
-
-    for di, d in enumerate(docs):
-        fo = node("folder", folder_of(d), folder_of(d))
-        dn = node("doc", d["doc_key"], d["doc_name"], doc=di, props={"summary": (d.get("summary") or "")[:500]})
-        edges.add((fo, dn, "contains", None))
-        if d.get("meta_confirmed"):  # engine-qa MAJOR(10-08) — 단일 엔진 추정값(meta_confirmed=False)으로는 관계 간선을 안 만듦
-            biz_props = {
-                "confirmed": True,
-                "prov": "bundle",
-            }  # prov: W18 link_doc 결과가 아니라 build_bundle.py 자체 교차 확인 값(이름은 edge의
-            cl, co = (
-                d.get("client"),
-                d.get("contract_no"),
-            )  #   기존 src(출발 노드 id) 칸과 안 겹치게 prov로 — "src"를 그대로 쓰면 그래프가 깨짐)
-            co_n = node("contract", normalize_value(co), co, props=dict(biz_props)) if co else None
-            if co_n is not None:
-                edges.add((dn, co_n, "doc-links-contract", None))
-            if cl and co_n is not None:
-                edges.add((node("client", normalize_value(cl), cl, props=dict(biz_props)), co_n, "client-has-contract", None))
-            code = (d.get("contract") or {}).get("product_code")
-            if co_n is not None and code:
-                edges.add((co_n, node("product", normalize_value(code), code, props=dict(biz_props)), "contract-covers-product", None))
-    prev = {}
-    for ci, c in enumerate(chunks):
-        cn = node("chunk", f"{docs[c['doc']]['doc_key']}:{c['seq']}", f"{docs[c['doc']]['doc_name']} #{c['seq']}", doc=c["doc"], chunk=ci)
-        chunk_node_of[ci] = cn
-        dn = idx[("doc", docs[c["doc"]]["doc_key"])]
-        edges.add((dn, cn, "has_chunk", ci))
-        if c["doc"] in prev:
-            edges.add((prev[c["doc"]], cn, "seq", ci))
-        prev[c["doc"]] = cn
-        for rx in RE_ENTITY:
-            for m in set(rx.findall(c["chunk_text"])):
-                edges.add((cn, node("entity", normalize_value(m), m), "mentions", ci))
-        for kind, m in _biz_entities(c["chunk_text"], id_pats):  # AD28② — 멘션 기반(기존 entity와 같은 자리)
-            edges.add((cn, node(kind, normalize_value(m), m), "mentions", ci))
-        for name in T.match_clients(c["chunk_text"], client_names, aliases):  # AD28②
-            edges.add((cn, node("client", normalize_value(name), name), "mentions", ci))
-        for label, value in pairs_of({"text": c["chunk_text"], "facts": []}):
-            if not NUM_RE.search(value) and not re.search(r"[A-Za-z가-힣]{2,}", value):
-                continue
-            ln, vn = node("label", normalize_value(label)[:200], label), node("value", normalize_value(value)[:400], value)
-            edges.add((cn, ln, "has_label", ci))
-            edges.add((ln, vn, "fact", ci))
-            edges.add((cn, vn, "has_value", ci))
-    # AD28③ — 개념 노드(용어 사전) · 청크→개념(concept_chunk, 실제 멘션된 개념만 노드화 — 고아 노드 안 만듦) ·
-    #   개념→개념(broader·related, 양쪽 다 이 문서군에 실제 멘션됐을 때만, chunk=None — 검색 확장의 2홉 재료)
-    ck_to_ci = {f"{docs[c['doc']]['doc_key']}:{c['seq']}": ci for ci, c in enumerate(chunks)}
-    concept_node_id = {}
-    for r in concept_chunk:
-        ci = ck_to_ci.get(r["chunk_key"])
-        cn = chunk_node_of.get(ci) if ci is not None else None
-        if cn is None:
-            continue
-        cid = r["concept_id"]
-        cnode = node("concept", cid, (glossary.get(cid) or {}).get("canonical") or cid)
-        concept_node_id[cid] = cnode
-        edges.add((cn, cnode, "concept_chunk", ci))
-    for cid, cnode in concept_node_id.items():
-        r = glossary.get(cid) or {}
-        for rel in ("broader", "related"):
-            for sib in T.split_terms(r.get(rel)):
-                if sib in concept_node_id:
-                    edges.add((cnode, concept_node_id[sib], rel, None))
-    # 허브 제한: 개체·라벨·값·개념 노드가 HUB_MAX개 넘는 문서에 걸치면(공통 제품 코드·'단가' 같은 흔한 라벨, 흔한 개념) 청크와의
-    #   연결을 끊음 — 그래프 확장이 관련 없는 문서를 끌어오지 않게(개발 PC: 'BIS-402'가 모든 견적서를 이웃으로 끌어옴). 노드는
-    #   남기고 hub 표시. AD28②③ — 새 업무 개체(kind=client·contract·product·modality·batch·id)는 rel="mentions"를 그대로
-    #   쓰므로(기존 entity와 같은 자리) 추가 분기 없이 이미 적용됨 · 개념은 rel="concept_chunk"를 같이 검사.
-    span = {}
-    for _a, b, r, ci in edges:
-        if r in ("mentions", "has_label", "has_value", "concept_chunk") and ci is not None:
-            span.setdefault(b, set()).add(chunks[ci]["doc"])
-    hubs = {n for n, ds in span.items() if len(ds) > HUB_MAX}
-    for n in hubs:
-        nodes[n].setdefault("props", {})["hub_docs"] = len(span[n])
-    edges = {e for e in edges if not (e[2] in ("mentions", "has_label", "has_value", "concept_chunk") and e[1] in hubs)}
-    # engine-qa MAJOR(10-08) — 업무 관계 간선(BIZ_REL)은 전부 meta_confirmed일 때만 만들어졌으므로(위 게이트) 전부 confirmed=True·
-    # prov="bundle"(W18 link_doc 결과 아님, build_bundle.py 자체 값). kg_edge 표에는 props 칸이 없어 PG 적재 때는 안 실리고(스키마 변경 없음,
-    # pgstore.load()가 src·dst·rel·chunk 4칸만 읽음) 로컬 kg_edges.jsonl에는 남아 디버그·감사용으로 보임.
-    return nodes, [
-        {"src": a, "dst": b, "rel": r, "chunk": ci, **({"confirmed": True, "prov": "bundle"} if r in BIZ_REL else {})}
-        for a, b, r, ci in sorted(edges, key=lambda e: (e[0], e[1], e[2]))
-    ]
-
-
 def infer_clients(docs, head=400, roster=None):
     """문서 고객 라벨(다중 가능, 10-14) — d['clients'](증거 강도 내림차순 목록) + 기존 호환용 d['client'](= clients[0],
     단일 필드를 쓰는 옛 호출자·검색 경로용 1순위)를 채운다.
@@ -399,14 +237,13 @@ def infer_clients(docs, head=400, roster=None):
     (2) 그래도 clients가 비면 제품 코드 접두어(MRH-MAB-01 → MRH)를 다른 문서에서 그 고객과 함께 나온 것으로
     배워 채움(client_src='product') — 그대로, clients에도 반영.
     알려진 고객 = 교차 확인된 고객 + 고객 명부(roster, 기본 T._aliases() — stack.json client_aliases·CLIENT_ROSTER·
-    GLOSSARY_DIR org_client) + CLIENT_ROSTER_SEED(기본 켬, =0으로 끔 — 주요 바이오·제약사 공개 이름 seed,
-    pipeline.transform.structure.terms.seed_roster()) 합집합 — roster를 명시하면(옛 호출자·시험) seed는 안 더함(바이트 동일).
+    GLOSSARY_DIR org_client) + 주요 바이오·제약사 공개 이름 seed(pipeline.transform.structure.terms.seed_roster())
+    합집합 — roster를 명시하면(옛 호출자·시험) seed는 안 더함(바이트 동일).
     ponytail: 알려진 고객 수 × 문서 전체 길이 스캔(O(roster×len(text))) — 명부가 아주 커지면 아호코라식 등으로."""
     if roster is None:
         roster = dict(T._aliases())
-        if pc.cfg().transform.structure.client_roster_seed:  # S7c — 설정 객체(끄기 "0")
-            for c, al in ST.seed_roster().items():
-                roster[c] = sorted(set(roster.get(c, [])) | set(al))
+        for c, al in ST.seed_roster().items():
+            roster[c] = sorted(set(roster.get(c, [])) | set(al))
     known = {d["client"]: [] for d in docs if d.get("meta_confirmed") and d.get("client")}
     known.update({c: list(a) for c, a in roster.items()})
     for d in docs:
@@ -454,7 +291,12 @@ def warn_if_no_client_roster(docs):
         return
     if T._aliases():
         return  # 명부는 있는데 이 묶음 문서들이 그냥 다 안 걸렸을 뿐 — 경고 대상 아님
-    print("WARNING: 고객 명부 없음 — client 메타가 비어 고객 필터·비교 분할이 동작 안 함 (GLOSSARY_DIR 확인)", file=sys.stderr, flush=True)
+    print(
+        "WARNING: 고객 명부 없음 — client 메타가 비어 고객 필터·비교 분할이 동작 안 함"
+        f" (settings.yaml {L.to_yaml('common.paths.glossary_dir')}·{L.to_yaml('common.paths.client_roster')} 확인)",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def collect_draft_terms(docs, glossary_dir=None):
@@ -465,13 +307,11 @@ def collect_draft_terms(docs, glossary_dir=None):
     검토 BLOCK 1, 10-13: GLOSSARY_DIR은 서버에서 이미지 밖 실 운영 사전 폴더라 거기 쓰면 PermissionError로
     구조화 전체가 깨진다)에 쌓는다 — 사람 승인 없이, BM25 weak 가중만(하드 필터·고객 판별엔 안 들어감).
     glossary_dir 인자는 **읽기**(이미 아는 approved 이름 판별)에만 쓰고, 쓰기 경로는 항상 output/(또는
-    DRAFT_TERMS_OUT) — 둘을 혼동하지 않는다. DRAFT_TERMS=0(기본 켬)이면 아무것도 안 함. 이 함수 전체(명부·
+    DRAFT_TERMS_OUT) — 둘을 혼동하지 않는다. 이 함수 전체(명부·
     용어집 읽기 포함)를 try/except로 감싸 — 어떤 이유로든(디스크 가득·권한·잠긴 파일) 실패해도 WARNING만 찍고
     빈 목록을 돌려준다(warn_if_no_client_roster와 같은 관례) — 구조화(build_bundle.py main())가 이 보조 기능 때문에
     멈추지 않게. 반환: 새로 추가한 이름 목록(로그용, 실패하면 빈 목록)."""
     d = glossary_dir or C.cfg().paths.glossary_dir  # S7c — 설정 객체(인계 칸 — terms.py는 아직 env로 읽음)
-    if not pc.cfg().transform.structure.draft_terms:  # S7c — 설정 객체(끄기 "0")
-        return []
     try:
         from pipeline.transform.structure import draft_terms as DT
 
@@ -501,35 +341,6 @@ def canon_clients(docs, cut=0.9):
             m = difflib.get_close_matches(c, known, n=1, cutoff=cut)
             if m:
                 d["client_raw"], d["client"] = c, m[0]
-
-
-def build_concept_chunk(docs, chunks, glossary):
-    """개념→청크 역색인(X4) — 사전 표기(canonical·synonyms·abbreviations·weak_synonyms) 일치 횟수, 임베딩 재계산 없음.
-    [{concept_id, chunk_key, count}, …], count=0인 조합은 뺌. glossary 비어 있으면(사전 없음) 빈 목록.
-    V17 — 정규식 전에 소문자 부분 문자열로 먼저 거름(합본 505문서 15.5초 → 커밋 참조, 결과 바이트 동일).
-    ponytail: 개념×청크 스캔(O(개념×청크)) — 코퍼스가 커지면 Aho-Corasick 등으로. 거름은 lower() 기준이라 re.I만
-    맞추는 특수 대소문자(ſ↔s 등)는 놓칠 수 있음 — 사전 표기에 그런 글자가 들어오면 거름을 빼면 됨."""
-    out = []
-    lows = [c["chunk_text"].lower() for c in chunks]
-    for cid, r in glossary.items():
-        surfaces = (
-            [r.get("canonical")]
-            + T.split_terms(r.get("synonyms"))
-            + T.split_terms(r.get("abbreviations"))
-            + T.split_terms(r.get("weak_synonyms"))
-        )
-        pats = [(s.lower(), re.compile(r"\b" + re.escape(s) + r"\b", re.I)) for s in surfaces if s]
-        if not pats:
-            continue
-        for c, low in zip(chunks, lows):
-            n = sum(len(p.findall(c["chunk_text"])) for s, p in pats if s in low)
-            if n:
-                d = docs[c["doc"]]
-                out.append({"concept_id": cid, "chunk_key": f"{d['doc_key']}:{c['seq']}", "count": n})
-    return out
-
-
-HUB_MAX = 5  # 이 수보다 많은 문서에 걸친 개체·라벨·값은 허브 → 청크 연결 제외(ID 우선 검색의 '드문 ID' 기준과 같은 값)
 
 
 def load_figures(images_dir):
@@ -607,28 +418,6 @@ def figure_chunk(di, seq, rec, source_system=None):
     }
 
 
-def image_record(di, rec):
-    """F8 — 그림 기록(_images/index.jsonl) → images.jsonl 행(doc_image 적재용, 청크 본문과 별도 관리).
-    chunk·rel은 호출부가 채움(그림 자신의 청크=figure_chunk, 빈 그림이 붙은 텍스트 청크=host, 둘 다 없으면 None=연결 없음)."""
-    vlm = rec.get("vlm") or {}
-    return {
-        "image_id": rec["image_id"],
-        "doc": di,
-        "page": rec.get("page"),
-        "sheet": rec.get("sheet"),
-        "bbox": rec.get("bbox"),
-        "kind": rec.get("kind"),
-        "caption": rec.get("caption"),
-        "summary": vlm.get("summary"),
-        "content": vlm.get("content"),
-        "image_sha256": rec.get("sha256"),
-        "parent_image_id": rec.get("parent_image_id"),
-        "vlm_model": vlm.get("model"),
-        "chunk": None,
-        "rel": None,
-    }
-
-
 def fig_empty(rec):
     """AD21③ — 검색 청크로 만들 가치 없는 그림 기록: 상한·작은·반복으로 VLM이 안 돈 것(skipped) 또는 VLM이
     돌았지만 요약·글자·값·연결·표가 모두 빈 플레이스홀더. 캡션은 안 봄(본문에 이미 있어 캡션만으로는 그림 청크를 안 만들 근거가 안 됨)."""
@@ -647,8 +436,8 @@ def fig_empty(rec):
 
 def fig_page_child(rec, page_vlm_ids):
     """F11 — 쪽 VLM이 이미 쪽 전체를 옮겨 적은(부모 skipped=page_vlm) 하위 그림: 내용이 본문 청크와 겹쳐 합본 잡음·1위 하락
-    → 검색 청크는 안 만들고 image_id만 본문 청크에 연결(get_image·images.jsonl엔 남음). FIG_PAGE_CHILD_DEDUP=0이면 옛 동작."""
-    return rec.get("parent_image_id") in page_vlm_ids and pc.cfg().transform.figures.page_child_dedup  # S7c — 설정 객체(끄기 "0")
+    → 검색 청크는 안 만들고 image_id만 본문 청크에 연결(get_image·images.jsonl엔 남음)."""
+    return rec.get("parent_image_id") in page_vlm_ids
 
 
 def fig_host(doc_chunks, page):
@@ -665,47 +454,6 @@ def fig_host(doc_chunks, page):
     return doc_chunks[0]
 
 
-def doc_facts(di, raw, chunks_of_doc):
-    """대표 파싱의 표에서 수량·용량 열 값 → 집계용 사실 [{doc, item, attr, value, num, unit, chunk}] (건수·합계 질문의 SQL 경로)."""
-    table_rows, QTY_RE, NUM_RE, num = AQ.table_rows, AQ.QTY_RE, AQ.NUM_RE, AQ.num
-    out, seen = [], set()
-    rows = table_rows({"text": raw.get("text") or "", "facts": raw.get("facts") or []})
-    # 같은 머리글(=같은 표)의 행 라벨이 1,2,3…처럼 연속 일련번호일 때만 "번호 열"로 본다(review 1차③) —
-    # 품목 코드(1001·2050류)는 숫자이기만 하고 연속이 아니라 그대로 item으로 남아야 함.
-    by_header = {}
-    for row, header, _ in rows:
-        by_header.setdefault(tuple(header), []).append(row.strip())
-    serial_headers = set()
-    for h, labels in by_header.items():
-        if len(labels) >= 2 and all(lb.isdigit() for lb in labels):
-            start = int(labels[0])
-            if [int(lb) for lb in labels] == list(range(start, start + len(labels))):
-                serial_headers.add(h)
-    for row, header, cells in rows:
-        item = row.strip()
-        if tuple(header) in serial_headers and item.isdigit():  # 번호 열 — 식별 열(이름)을 대신 item으로(AD24④, 그림 속 표)
-            ident = next(
-                (c2.strip() for h2, c2 in zip(header, cells) if c2.strip() and not QTY_RE.search(h2) and not NUM_RE.fullmatch(c2.strip())),
-                None,
-            )
-            item = ident or item
-        for h, c in zip(header, cells):
-            vn, rn = normalize_value(c), normalize_value(item)
-            key = (rn, normalize_value(h))  # 같은 행·열은 한 번만(먼저 = 대표 엔진 값) — 표기 차이로 합계 중복 방지(E2)
-            if not QTY_RE.search(h) or num(c) is None or key in seen:
-                continue
-            seen.add(key)
-            ci = next(
-                (i for i, ch in chunks_of_doc if vn in normalize_value(ch["chunk_text"]) and rn in normalize_value(ch["chunk_text"])), None
-            )
-            m = NUM_RE.search(c)
-            tail = c[m.end() :].strip() if m else ""
-            unit = (re.search(r"\(([^)]+)\)", h) or [None, None])[1] or (tail.split()[0] if tail else None)
-            # ponytail: 단위는 꼬리의 첫 토큰만("20 L 유리병" → "L") — 여러 단어로 된 단위 표기는 못 잡음, 필요해지면 업그레이드
-            out.append({"doc": di, "item": item, "attr": h.strip(), "value": c.strip(), "num": num(c), "unit": unit, "chunk": ci})
-    return out
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--parse-dir", default="output/parse")
@@ -716,18 +464,16 @@ def main(argv=None):
         help="저장소(doc.file_path)에 기록할 원본 경로 접두(서버의 실제 보관 위치) — 없으면 --src 절대 경로",
     )
     ap.add_argument(
-        "--embed", default=pc.cfg().transform.structure.edw_embed or ("api" if C.cfg().models.embed.base_url else "bge-m3")
+        "--embed", default=pc.cfg().transform.structure.embed or ("api" if C.cfg().models.embed.base_url else "bge-m3")
     )  # S7c — 설정 객체
-    ap.add_argument(
-        "--summary", default="auto", choices=["auto", "llm", "lead"], help="auto = EDW_SUMMARY_LLM이면 LLM 요약, 아니면 앞부분 발췌"
-    )
+    ap.add_argument("--summary", default="auto", choices=["auto", "lead"], help="둘 다 앞부분 발췌(옛 호출·색인 설정 호환)")
     ap.add_argument("--chunk", default=None, help="기본 = stack.json chunk(없으면 structure)")
-    ap.add_argument("--stack", default=str(STACK_FILE))
+    ap.add_argument("--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file)")
     ap.add_argument("--no-rep", action="store_true", help="대표 파싱(output/parse/_rep) 대신 선정 엔진을 문서마다 고름(단계 1 실험용)")
     ap.add_argument("--images-dir", default=None, help="그림 기록 index.jsonl 폴더(L1, 기본 = --parse-dir/_images) — 없으면 그림 청크 0건")
     ap.add_argument("--out", default="output/edw/bundle")
     a = ap.parse_args(argv)
-    stack = json.loads(Path(a.stack).read_text(encoding="utf-8")) if Path(a.stack).exists() else {}
+    stack = json.loads(Path(a.stack).read_text(encoding="utf-8")) if a.stack else pc.stack()
     a.chunk = a.chunk or stack.get("chunk") or "structure"
     t0 = time.time()
     pd = Path(a.parse_dir)
@@ -752,10 +498,7 @@ def main(argv=None):
 
         meta_docs = build(a.parse_dir, a.src)  # 교차 확인 (라벨, 값)
     src = Path(a.src)
-    keep_empty_fig = (
-        pc.cfg().transform.structure.bundle_keep_empty_fig
-    )  # S7c — 설정 객체(켜기 "1") · AD21③ — 되돌리기 스위치(기본 꺼짐: 빈 VLM 청크 색인 안 함)
-    n_fig_dropped = 0
+    n_fig_dropped = 0  # AD21③ — 빈 VLM 그림은 청크를 만들지 않음
 
     # EDW 파일 메타 로드 (FILE_META_PATH env 또는 --file-meta 인자)
     _file_meta = {}
@@ -778,7 +521,7 @@ def main(argv=None):
                 r = json.loads(line)
                 if r.get("file_name") and r.get("key"):
                     _manifest_keys[r["file_name"]] = r["key"]
-    docs, chunks, n_sum, seen_sha, facts, images = [], [], {"llm": 0, "lead": 0}, {}, [], []
+    docs, chunks, n_sum, seen_sha = [], [], {"llm": 0, "lead": 0}, {}
     alias = {}  # 견적·주문 번호 → 같은 문서의 (교차 확인된) 계약 번호
     for md in meta_docs.values():
         con = AQ.pick(md["pairs"], AQ.CONTRACT_FIRST)
@@ -804,11 +547,8 @@ def main(argv=None):
         text, _ = S.load_parse_doc(pd, folder, doc)
         if not text.strip():
             continue
-        if a.summary == "llm" or (a.summary == "auto" and pc.cfg().transform.structure.edw_summary_llm):  # S7c — 설정 객체(켜기 "1")
-            ab, ssrc = llm_summary(text), "llm"
-        else:
-            ab, ssrc = lead_summary(text), "lead"
-        n_sum[ssrc] += 1
+        ab = lead_summary(text)
+        n_sum["lead"] += 1
         md = meta_docs.get(doc, {})
         cl = AQ.pick(md.get("pairs", []), AQ.CLIENT_RE, AQ.SUPPLIER_RE)
         co = AQ.pick(md.get("pairs", []), AQ.CONTRACT_RE)
@@ -883,7 +623,7 @@ def main(argv=None):
                 "summary": ab,
                 "full_text": text,  # full_text는 본문 매칭(client) 내부용 — db 적재 안 함
                 "source_system": _src_sys,
-                "doc_key": path,  # doc_key(file_sha256 대신 file_path) — kg/concept 로컬 키용
+                "doc_key": path,  # doc_key(file_sha256 대신 file_path) — 로컬 키
                 "sf_acc_name": _edw.get("sf_acc_name"),
                 "sf_op_id": _edw.get("sf_op_id"),
                 "sf_op_name": _edw.get("sf_op_name"),
@@ -928,40 +668,30 @@ def main(argv=None):
                 )
                 seq += 1
             sp.add(chunks=seq, chunk_chars=sum(len(c["chunk_text"]) for c in chunks[first:]), text_chars=len(text))
-        facts += doc_facts(di, raw, [(i, chunks[i]) for i in range(first, len(chunks))])
         doc_text_chunks = chunks[first : len(chunks)]  # 이 문서의 텍스트 청크(그림 청크 추가 전) — 빈 그림의 image_id를 붙일 자리
         page_vlm_ids = {r["image_id"] for r in fig_by_doc.get(doc, []) if r.get("skipped") == "page_vlm"}
         for rec in fig_by_doc.get(doc, []):  # L1: 그림 1개 = 청크 1개(자르지 않음) — 텍스트 청크 뒤 이어서
-            img = image_record(di, rec)  # F8 — 그림 관리 표(doc_image) 행: 청크 본문과 별도로 그림 자체 메타를 보관
-            if fig_page_child(rec, page_vlm_ids) or (fig_empty(rec) and not keep_empty_fig):  # AD21③ 빈 VLM · F11 쪽 VLM과 중복
+            if fig_page_child(rec, page_vlm_ids) or fig_empty(rec):  # AD21③ 빈 VLM · F11 쪽 VLM과 중복
                 n_fig_dropped += 1
                 host = fig_host(doc_text_chunks, rec.get("page"))
                 if host is not None:  # 원본 이미지 조회(get_image)용 image_id 연결은 문서/쪽 청크에 남김
                     host.setdefault("image_ids", []).append(rec["image_id"])
-                    img["chunk"] = next(i for i in range(first, len(chunks)) if chunks[i] is host)  # F8 — chunk_image rel=host
-                    img["rel"] = "host"
-                images.append(img)
                 seq += 1  # 독립 검토 MAJOR① — 빠진 그림도 seq를 소비(건너뛴 번호) → 남은 청크의
                 continue  #   chunk_key(doc_sha:seq)가 어느 그림이 비었는지와 무관하게 항상 같음(결정성)
             chunks.append(figure_chunk(di, seq, rec, source_system=_src_sys))
-            img["chunk"], img["rel"] = len(chunks) - 1, "figure_chunk"  # F8 — chunk_image: 그림 자신의 청크
-            images.append(img)
             seq += 1
     progress.close()
     runtrace.docs(total=len(docs))  # op-01 — pipe_run 문서 수(구조화에 들어간 문서)
     canon_clients(docs)
     infer_clients(docs)
     warn_if_no_client_roster(docs)
-    added = collect_draft_terms(docs)  # SI43④ — 새 회사 이름 후보를 glossary draft로(약한 BM25만, DRAFT_TERMS=0로 끔)
+    added = collect_draft_terms(docs)  # SI43④ — 새 회사 이름 후보를 glossary draft로(약한 BM25만)
     if added:
         print(f"[bundle] 새 회사 이름 후보 {len(added)}건을 용어집 draft로 추가(사람 승인 전): {', '.join(added)}", flush=True)
-    if (
-        pc.cfg().transform.structure.chunk_head
-    ):  # S7c — 설정 객체(끄기 "0") · G9: 청크 머리말 [문서명 · 고객 · 절 제목] — 같은 양식 다른 고객·문서를 가름
-        for c in chunks:
-            d = docs[c["doc"]]
-            c["head"] = "[" + " · ".join(x for x in (Path(d["doc_name"]).stem, d.get("client"), c.get("section")) if x) + "]"
-            c["n_terms"] = len(tokens(index_text(c)))
+    for c in chunks:  # G9: 청크 머리말 [문서명 · 고객 · 절 제목] — 같은 양식 다른 고객·문서를 가름
+        d = docs[c["doc"]]
+        c["head"] = "[" + " · ".join(x for x in (Path(d["doc_name"]).stem, d.get("client"), c.get("section")) if x) + "]"
+        c["n_terms"] = len(tokens(index_text(c)))
     final = Path(a.out)
     out = final.with_name(
         final.name + ".tmp"
@@ -973,21 +703,10 @@ def main(argv=None):
     with SP.span("embed.bundle", "embed", model=a.embed) as sp:  # op-01 — 임베딩 1회 = 1행(캐시 적중·배치 수·호출 지연은 metrics)
         vecs = embed_all(a.embed, [index_text(c) for c in chunks], out=str(out / "vectors.npy"))  # 머리말 포함(G9)
         sp.add(chunks=len(chunks))
-    folder_of = lambda d: str(Path(d["file_path"]).parent).replace("\\", "/")  # 폴더 단위
-    glossary = T.load_glossary()  # X4 — 개념→청크 역색인(사전 없으면 빈 목록, 추가 파일이라 묶음 계약은 안 바뀜)
-    concept_chunk = build_concept_chunk(docs, chunks, glossary)
-    nodes, edges = build_graph(docs, chunks, folder_of, glossary, concept_chunk)  # AD28②③ — 업무 개체·관계 + 개념 노드도 같이
     dim = int(vecs.shape[1]) if len(vecs) else 0
     del vecs  # memmap 닫기(Windows는 열린 파일을 옮길 수 없음)
-    for name, rows in (
-        ("docs", docs),
-        ("chunks", chunks),
-        ("kg_nodes", nodes),
-        ("kg_edges", edges),
-        ("facts", facts),
-        ("concept_chunk", concept_chunk),
-        ("images", images),
-    ):  # F8 — 그림 관리 표(doc_image·chunk_image) 적재 원본, 기존 파일은 안 바뀜(추가 파일만)
+    # ponytail: kg_nodes·kg_edges는 빈 파일 — 묶음 계약(contract.check_bundle 파일 목록, 핸드오프 지문 파일)이 요구해서만 씀. 0.2.0 배치에서 목록과 함께 지움(pl-06)
+    for name, rows in (("docs", docs), ("chunks", chunks), ("kg_nodes", []), ("kg_edges", [])):
         with open(out / f"{name}.jsonl", "w", encoding="utf-8") as f:
             for r in rows:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
@@ -1004,16 +723,10 @@ def main(argv=None):
         "summary": n_sum,
         "docs": len(docs),
         "chunks": len(chunks),
-        "nodes": len(nodes),
-        "edges": len(edges),
         "engines": sorted({d.get("parse_engine") or "rep" for d in docs}),
         "bbox": sum(1 for c in chunks if c["bbox"]),
         "fig_chunks": sum(1 for c in chunks if c.get("image_id")),  # L1
-        **(
-            {"figure_chunks_dropped": n_fig_dropped} if not keep_empty_fig else {}
-        ),  # AD21③ — 켜졌을 때만(독립 검토 MINOR④, 꺼짐=옛 meta와 바이트 동일)
-        "concepts": len(glossary),
-        "concept_chunk": len(concept_chunk),  # X4
+        "figure_chunks_dropped": n_fig_dropped,  # AD21③
         "sec": round(time.time() - t0, 1),
     }
     (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -1034,7 +747,7 @@ def main(argv=None):
     print(json.dumps(meta, ensure_ascii=False))
     from common.core.runlog import note
 
-    note(f"EDW 묶음: 문서 {len(docs)} · 청크 {len(chunks)} · 차원 {meta['dim']} · 노드 {len(nodes)} · 엣지 {len(edges)} → {out}")
+    note(f"EDW 묶음: 문서 {len(docs)} · 청크 {len(chunks)} · 차원 {meta['dim']} → {out}")
 
 
 if __name__ == "__main__":

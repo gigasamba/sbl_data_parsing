@@ -3,38 +3,46 @@
 [PRD.md](../PRD.md)의 카테고리 하나 — 이미지 `mcp-server`. 항목마다 무엇·왜·관련 파일. 끝난 항목은 `Status: done`, 열린 항목은 `Status:` 줄에 진행 상황.
 도구 계약(이름, 입력, 출력, `tools/list` 순서)은 고정이다 — 협의와 새 판으로만 바꾼다([CLAUDE.md](../../CLAUDE.md) §4).
 
-순서(주제별): `search` 도구 mc-01·mc-02·mc-05 → 집계 mc-04·mc-11·mc-12 → 문서 키·기록 결함 mc-10·mc-13·mc-14·mc-15 → 다른 도구 mc-06·mc-07·mc-08 → 서버 실행 mc-09 → 코드와 다른 점.
+순서(주제별): `search` 도구 mc-01·mc-02·mc-05 → 집계 mc-04·mc-11·mc-12 → 문서 키·기록 결함 mc-10·mc-13·mc-14·mc-15 → 운영 계약 mc-16·mc-17 → 다른 도구 mc-06·mc-07·mc-08 → 서버 실행 mc-09 → 코드와 다른 점.
 
 <a id="mc-01"></a>
 ## mc-01 · `search` 도구 — 적재된 문서에서 근거 찾기
+- 결정(사용자 10-31 범위 축소 grill): PC 전용 검색 우회로(PG 없이 묶음 검색 local.py, SQLite PG 대역 pg_standin)를 **지운다** — 검색은 PG 하나(op-09와 같음). 단 이미지 selftest가 pg_standin을 쓰면 그것만 남김(확인 후).
 - 이유: 클라이언트가 출처 달린 근거를 얻는 단 하나의 입구.
 - 무엇: 세 방식 — 질문만(혼합 검색), 거르기만(맞는 문서의 모든 청크, 점수 없음), 질문 + 거르기(저장소 질의에서 범위를 걸고 후보 `min(50, max(3k, 30))`을 거른 뒤 번호를 다시 매김 — 재순위 단계 없음). 거르기 `client`, `client_like`, `source_system`, `project_id`, `division`, `service_type`은 PG 저장소에서만 동작(로컬 묶음: 거르기만이면 오류, 질문 + 거르기면 거르지 않고 검색). `index_id`는 이름 붙은 색인을 고른다. `limit`은 거르기만 방식에 적용.
 - 찾기: 방법은 `vector`·`bm25`·`id`만(graph·concept·image·openviking은 10-29에 지움 — 다른 값은 메모와 함께 무시). vector(pgvector 코사인, HNSW. HNSW 차원을 넘으면 binary quantize + 상위 200 다시 점수) + BM25(`chunk_term`·`term_stat`·`corpus_stat`) + 드문 ID 정규식을 가중 RRF로 합친다(질문 유형별 가중치).
 - 출력: 근거 항목(`chunk_id`, `source_uri`, `page`, `bbox`, `section`, `text`, `score`, `via`, `rank`, …), `evidence_status` found/weak/none(라벨만, 빼는 것 없음), `notes`.
-- 계약 변경 예정(사용자 10-30 — 등급 A, 승인): 근거 항목의 `file_path` 키를 0.1.0에서 뺀다(gold `doc.file_path` 삭제 — [etl.md#pl-25](etl.md#pl-25)). 버전 규칙(CLAUDE.md §5-2, D-036 — D-009 git flow): 계약이 깨지면 MAJOR. 0.1.0은 첫 릴리스(태그된 버전 없음)라 이 변경을 0.1.0에 싣고 릴리스 노트([doc.md#op-04](doc.md#op-04))에 깨지는 변경으로 적는다 — 0.1.0 뒤의 계약 변경은 MAJOR.
+- `file_path` 키 제거는 [mc-16](#mc-16)에서 다룬다(사용자 10-30 PRD grill D1).
 - 파일: `mcp_server/routers/`, `mcp_server/services/search/search_svc.py`, `retriever.py`, `pgsearch.py`, `local.py`, `shaping.py`, `mcp_server/schemas/evidence.py`.
-- Status: done
+- 한 것(11-01 `feature/scope-cut-search` — A안, 허브·사용자 11-01): PC 전용 로컬 묶음 검색(`Local` 검색·`ask --local`·저장소 칸 `mcp.server.store`·`pgsearch bench`) 지움 — 검색은 PG 하나, PC는 SQLite 대역(`pg_standin` — 이미지 selftest도 씀, 남김). 대역이 PG 검색 SQL·작업 스레드를 받도록 고침(`regexp_replace`·`ln`·VALUES 별칭·스레드 잠금). 묶음은 아직 실행 중에 읽음(`BundleDocs` — 문서 메타·청크 키) — 없애는 것은 [mc-19](#mc-19). 시험은 대역으로 옮김(`tests/server/mcp/pgfix.py`).
+- Status: done — A안(11-01 `feature/scope-cut-search`) · B안은 [mc-19](#mc-19)
 
 <a id="mc-02"></a>
 ## mc-02 · 질문 이해 — 넓히기
 - 이유: 사용자는 동의어, 약어, 여러 고객을 한꺼번에 넣어 묻는다.
-- 무엇: BM25용 용어집 넓히기(동의어 1.0 / 약어 0.8 / 약한 것 0.3, 고객 목록 별칭, 최대 20), vector 질의에 별칭 글 붙이기, 비교 질문은 고객별로 나눠 찾기(`SEARCH_ENTITY_SPLIT`, 번갈아 합치기 `search_svc._gather`), 가중치용 규칙 기반 질문 유형. LLM 질문 분해는 10-29에 지움(`decompose` 입력은 받고 무시, `subs`는 늘 `[]`).
+- 무엇: BM25용 용어집 넓히기(동의어 1.0 / 약어 0.8 / 약한 것 0.3, 고객 목록 별칭, 최대 20), vector 질의에 별칭 글 붙이기, 비교 질문은 고객별로 나눠 찾기(번갈아 합치기 `search_svc._gather`), 가중치용 규칙 기반 질문 유형. LLM 질문 분해는 10-29에 지움(`decompose` 입력은 받고 무시, `subs`는 늘 `[]`).
 - 파일: `mcp_server/services/search/terms.py`, `qtype.py`, `search_svc.py`.
 - Status: done
 
 <a id="mc-05"></a>
 ## mc-05 · 고객 범위, 판, 중복
+- 결정(사용자 10-31 범위 축소 grill): 본문 글자로 판·개정·구판을 추정하는 기능(docmeta 추정, version·superseded 출력 칸)을 **지운다**. 최신성 정렬·날짜 필터는 EDW `created_at`(문서가 생긴 시각). 도구 출력 변경 — 0.2.0.
 - 이유: 답이 고객을 섞거나 옛 판을 인용하면 안 된다.
 - 무엇: 부드러운/하드 고객 범위, 숨김 문서 제외, 최신을 묻는 질문에서는 새 판을 옛 판보다 위로(`SEARCH_RECENCY=1` 기본, `2` = 늘. 옛 판은 남기고 `superseded` 표시), 사본 묶음이 이름 바뀐 사본을 합친다.
 - 파일: `mcp_server/services/search/clientscope.py`, `supersede.py`, `common/core/docmeta.py`.
-- Status: done
+- 고칠 것(reference 비교(사용자 grill 10-30, 원본은 git 밖) M3·T2 — 버그): `client` 판정을 운영 10-28 방식으로 — 별칭 그룹으로 정확히 일치, `sf_acc_name`이 비었을 때만 라벨로 판정, 목록은 OR로 받는다. 파일: `mcp_server/services/search/search_svc.py`, `clientscope.py`.
+- 결정(사용자 10-30 PRD grill): C6 — 검색의 고객 거르기는 EDW에서 조인한 고객(`client_edw`)만 쓴다. 본문에서 찾은 고객(`clients_doc`)은 참고용으로만 둔다. LAS는 EDW 고객이 비어 고객 거르기에서 늘 빠진다(원천별 스키마라 LAS는 따로 검색됨).
+- 결정(허브 10-31, 최신 결정 우선): C6이 이긴다 — 고객 거르기는 `client_edw`만. 위 T2의 '`sf_acc_name`이 비었을 때만 라벨로 판정'은 없앤다(별칭 그룹 정확 일치·목록 OR은 남김 — 별칭 CSV는 [etl.md#pl-38](etl.md#pl-38) 0.2.0 몫). 근거의 `client` = `client_edw`, `clients_doc`은 따로 둔 참고 칸.
+- Status: todo — client 판정 고침(T2, 라벨 대체 없이 — C6). 나머지는 done.
 
 <a id="mc-04"></a>
 ## mc-04 · 집계 답
+- 결정(사용자 10-31 범위 축소 grill): 집계 답(세기·합계·환율 메모·LLM 분류)을 **지금 지운다** — 숫자 질문은 query_edw. MCP 도구 계약은 그대로(via=aggregate만 안 나옴).
 - 이유: 건수·합계 질문에는 청크가 아니라 계산한 값이 필요하다.
 - 무엇: 고객·계약·기간·모달리티별 규칙 기반 건수·금액·배치·표 합계. 다른 통화는 절대 더하지 않음. 집계 항목에 환율 글을 붙임. 결과는 `via="aggregate"`로 맨 앞. 애매한 질문은 선택적 LLM 라우터.
 - 파일: `mcp_server/services/search/aggregate.py`, `resources/prompts/mcp/agg_llm_route/`.
-- Status: done
+- 한 것(11-01 `feature/scope-cut-search`): `aggregate.py`·`supersede.py`·검색 `structdb.py`·`internal_docs.do_aggregate`·`search_svc`의 집계·환율 갈래·`ask`의 집계 지움. 질문 유형 단서(COUNT·SUM·LIST·MAXMIN)는 `qtype.py`로. 설정 `search.agg` 절·`agg_today`·`data_catalog`·`struct_context_max` 지움(남으면 경고). 프롬프트 `agg_llm_route`는 바이트 그대로(호출부 없음). MCP 도구 계약 그대로 — 근거에 `via=aggregate`가 안 나올 뿐.
+- Status: done (11-01 `feature/scope-cut-search`)
 
 <a id="mc-11"></a>
 ## mc-11 · 집계 길이 지운 칸을 고름
@@ -64,11 +72,12 @@
 
 <a id="mc-14"></a>
 ## mc-14 · 숨김 문서가 검색에서 빠지지 않는다
+- 결정(사용자 10-31 범위 축소 grill): 숨김 기능 자체를 지우므로 닫는다(pl-12 결정).
 - 이유: 숨김 표(`doc_hidden`, struct 스키마)의 키는 문서 대장 `doc_key` = 원본 sha256인데(`registry.apply()`가 원천에서 사라진 문서를 자동 숨김, `registry_cli hide`도 같은 키), 10-20 축소 스키마 뒤 검색 쪽 문서 키는 `file_path`다. `pgsearch._not_hidden_restrict`가 sha256을 `doc.file_path`와 비교해 절대 안 맞고, 로컬 묶음(`local.py`)·`retriever.hidden_names`는 PG에서 없는 열을 골라 숨김 문서가 하나라도 있으면 오류가 났다 — 10-30부터 PG에서는 빈 집합(오류 대신, 숨김 안 됨은 그대로).
 - 조사(10-30): 스키마 변경 없이 잇는 길이 없다. 검색 `doc` 표에는 sha256도 원본 키(`s3_key`)도 없고(`file_path` = `edw_path_prefix` + 파일 이름 또는 PC 경로), 문서 대장의 `source_keys`(`local::<경로>`·`<출처>::<원본 키>`)는 모양이 달라 정확히 맞출 수 없다. 파일 이름으로 맞추면 다른 폴더·고객의 같은 이름 문서가 잘못 숨겨진다(engine-qa 10-08이 이름 짝짓기를 금지한 이유와 같음).
 - 결정(사용자 10-30): 모든 문서 키를 `s3_key`로 바꾸고 문서 대장·숨김 표를 DB 명세로 다시 키를 잡는다(pl-25, 스키마 변경 — Alembic·DB 담당자). 그때 이 비교를 같은 키로 고친다.
 - 파일: `mcp_server/services/search/pgsearch.py`(`_not_hidden_restrict`), `mcp_server/services/search/local.py`, `mcp_server/services/search/retriever.py`, `common/store/registry.py`.
-- Status: todo — pl-25 대기(코드 수정 없음 — 키 설계는 [db_schema.md](../architecture/db_schema.md) §1·§3).
+- Status: dropped (사용자 10-31 범위 축소)
 
 <a id="mc-15"></a>
 ## mc-15 · 검색 근거의 `rep_uri`(대표 파싱 결과 경로)가 늘 비어 있다
@@ -76,13 +85,77 @@
 - 조사(10-30): ParsingMeta에서 원본을 가리키는 열은 `doc_key`(sha256)·`source_key`(Object Storage 원본 전체 키)·`source_uri`·`original_filename`이다. 검색 `doc` 표에는 sha256도 원본 키도 없어서(10-20 축소 스키마가 `s3_key`를 뺌, `build_bundle`의 `_meta`에도 안 남음) 정확히 맞출 열이 없다. `original_filename`으로 맞추면 같은 이름 문서가 섞인다(mc-14와 같은 이유로 하지 않음).
 - 결정: mc-14와 같이 pl-25(문서 키 `s3_key` 통일 — 검색 `doc`에 원본 키가 들어옴)를 기다린다. 그 뒤 `source_key`로 조회하도록 고친다(ParsingMeta 쪽 스키마 변경은 필요 없음).
 - 파일: `mcp_server/services/search/shaping.py`, `common/store/parsing_meta_db.py`.
+- 결정(사용자 10-30 PRD grill): C8 — 근거의 `rep_uri`(대표 파싱 결과의 전체 주소 `s3://<rep_bucket>/<rep_key>`)는 검색 중 EDW에 접속하지 않고 gold `doc`의 `rep_key`(적재 때 ParsingMeta에서 복사)로 만든다. ParsingMeta 조회 길은 없앤다. 0.2.0.
 - Status: todo — pl-25 대기(코드 수정 없음 — 키 설계는 [db_schema.md](../architecture/db_schema.md) §1·§3).
+
+<a id="mc-16"></a>
+## mc-16 · `search` 운영 계약 구현
+- 결정(사용자 10-31 범위 축소 grill): 필터는 **데이터 있는 것만** 먼저: sf_op_name·contract_id·project_id는 출처 열이 정해지면(D-1) 추가. doc_class(pl-33 유지)·FAQ_group은 남김.
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) M1·T1): `search`를 운영 계약 그대로 구현한다 — `question` 필수, 필터 11종, 출력 축소. 기준 명세는 운영 `05_mcp_tools_schema.md` §2(git 밖). MCP 계약 변경이라 검토 등급 A, 새 판.
+- 운영 계약(사용자 10-30 PRD grill A9 — 사용자 로컬 reference의 MCP 규약 최신판에서 필터 이름·뜻·출력 칸만 옮김):
+  - 입력: `question` 필수(비면 오류 — 거르기만 하는 방식은 없음) · `k` 기본 8, 상한 50(넘으면 50으로 줄임).
+  - 거르기(모두 AND, 같은 거르기의 목록은 OR, 맞는 값이 없으면 오류가 아니라 빈 결과, 모르는 인자는 무시):
+    - `source_system` — **필수, 값 하나**(G20 — 그 시스템의 gold 스키마만 찾음, 여러 시스템은 여러 번 부름) · `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`(A2) · `-test` 별칭도 받음(G4).
+    - `client` — 고객 이름 하나 또는 목록(OR). 우리 결정은 EDW에서 조인한 고객(`client_edw`)만 본다([mc-05](#mc-05), C6 — 운영처럼 본문 라벨로 대신하지 않음). `client_like`(`true`) — `client`와 함께 쓰는 유일한 부분 일치.
+    - `project_id` — SFDC 프로젝트 코드.
+    - `division` — EDW에 실제 있는 값을 그대로 받는다(`CD`·`DS`·`DP`는 예 — 허브 10-31).
+    - `service_type` — `CDO`·`CMO DS`·`CMO DP`·`ADC`·`mRNA`·`New Platform`·`CMO DS (MTOP Shared)`.
+    - `FAQ_group` — FAQ 시트 값(DP·FMD·Study·Facility·Regulatory·Analytical·DS·CLD·Others) — FAQ만([etl.md#pl-39](etl.md#pl-39)).
+    - `doc_class` — `source_system`과 함께(SFDC 또는 LAS 분류값 — [etl.md#pl-33](etl.md#pl-33)).
+    - `sf_op_id`·`sf_op_name` — SFDC 영업 기회 id(18자 `006…`)·이름.
+    - `contract_id` — 계약 번호(CRMS 계약 코드, LAS 관리 번호).
+    - `created_since`·`created_until` — 원천 등록 시각(시간대 없으면 KST). `created_at`이 없는 문서는 빠진다.
+  - "하드 거르기 최소 1개"는 권고만(G5).
+  - 출력 맨 위: `question` · `evidence[]`(길이 k) · `evidence_status`(`found`·`weak`·`none`) · `filter`(정규화한 거르기 메아리) · `scope_docs`(맞은 문서 수, 0도 정상).
+  - `evidence[]` 항목: `text` · `file_name`(`list_doc_fulltext`로 잇는 다리 — [mc-17](#mc-17)) · `page` · `line` · `section` · `client` · `contract_no` · `doc_date` · `version` · `superseded` · `chunk_key`. 운영에는 `file_path`도 있으나 뺀다(아래).
+  - `file_path` 키 제거(사용자 10-30 "mcp 기능에서 제거될 것이니 pass" · "reference 기준으로 하면 file_path 관련 부분 뺄거라 제거 대상으로 간주만 하고 일단 pass", D1 — 이 행에서만 다룸): gold `doc.file_path` 삭제([etl.md#pl-25](etl.md#pl-25))와 함께 0.2.0(C1·C2), 계약 변경이라 등급 A. 열린 점: 운영 `chunk_key`는 `<file_path>:<순번>` 꼴 — `file_path`를 빼면 키 바탕(`s3_key` 등)을 정해야 함 → 해소(10-31 결정 — `<doc_id>:<seq>`, 아래).
+- 결정(허브 10-31, 최신 결정 우선): 거르기 이름은 위 그대로 고정(계약). 스키마마다 거르기 이름 → 그 EDW 원본 칸 이름(D-1) 대응표를 코드에 하나씩 둔다. 근거 `client` = `client_edw`, `clients_doc`은 따로 참고 칸([mc-05](#mc-05)). 목록 값(`division` 등)은 예 — EDW에 있는 값을 받는다.
+- 필터용 칸 `doc_class`·`created_at`은 gold `doc`에 Alembic으로 더한다(M4 — [etl.md#pl-25](etl.md#pl-25)).
+- 남은 확인: 운영 MCP 서버 소스는 없음 — 명세 기준으로 새로 구현, 구하면 대조.
+- 파일: `mcp_server/routers/`, `mcp_server/schemas/`, `mcp_server/services/search/`.
+- 결정(2차 grill(사용자 10-30, 원본은 git 밖)):
+  - G4: `source_system` 값은 `SFDC`·`CRMS`·`LAS`·`FAQ`로 통일, `-test`가 붙은 입력(`SFDC-test` 등)도 같은 뜻으로 받는다(두 도구 모두).
+  - G5: "하드 필터 최소 1개"는 권고만 — 강제하지 않는다.
+  - G6: `search` 속도 목표는 두지 않는다.
+  - G20(4차 grill(사용자 10-30)): `source_system`은 **필수, 값 하나** — 그 시스템의 gold 스키마만 찾는다([etl.md#pl-28](etl.md#pl-28)). 여러 시스템은 클라이언트가 여러 번 부른다.
+  - G7 → 사용자 10-30 PRD grill C1·C2로 바뀜: 0.1.0(10-30 릴리스)에는 들어가지 않았고 0.2.0에 싣는다. 1.0 전에는 MINOR에서도 계약·스키마를 깰 수 있다(버전 규칙 — 운영이 안정되면 1.0.0).
+- 결정(사용자 10-30 PRD grill): A9 — 필터·출력 축소 기준은 사용자 로컬 `reference/`(git 밖, 비밀값 포함 — 커밋·인용 금지)의 MCP 규약 문서를 보고 운영 최신판으로 이 행에 옮겨 적는다(필터 이름·뜻·출력 칸만, 접속 정보·회사 데이터 없이). D1 — MCP 근거의 `file_path` 없애기는 이 행 하나로 합친다(mc-01·pl-25·op-04에는 이 행 링크만).
+- (10-31 뒤집힘 — `<doc_id>:<seq>`, 아래) 결정(사용자 10-31 grill): 근거 `chunk_key`는 `<doc_key>:<순번>`(doc_key = 원본 내용 sha256, 계약 함수 `make_chunk_key`)으로 바꾼다 — 운영의 `<file_path>:<순번>`을 대신하며 file_path 제거와 함께 0.2.0, 등급 A.
+- 결정(사용자 10-31 grill): 근거 `chunk_key`는 `<doc_id>:<seq>`(gold `doc.doc_id` 자동 번호 — 위 `<doc_key>:<순번>`을 뒤집음). 스키마 5벌이 시퀀스 하나를 함께 써서 겹치지 않는다(허브 제안 — 사용자 확인 11-01). `make_chunk_key`·sha256 `doc_key`는 0.2.0에 없어진다.
+- 결정(사용자 11-01, reference ↔ 저장소 비교 — 0.2.0, 등급 A): 이 행에서 함께 지운다 — 이름 붙은 색인(`index_id`·AD41 코드·`deploy/host/compose/compose.index.yml`), 질문 없는 덤프 방식, 옛 입력 `methods`·`decompose`·`limit`, 옛 출력 `subs`·`store`·`images`·`notes`·`ms`와 근거 칸(운영 계약 밖).
+- Status: todo — 순서는 허브가 정함([etl.md#pl-32](etl.md#pl-32)).
+
+<a id="mc-17"></a>
+## mc-17 · 원문 전송 도구 `list_doc_fulltext`·`get_doc_fulltext`
+- 결정(사용자 10-31 범위 축소 grill): 원문 도구 2개는 0.2.0에 **유지**(미루지 않음 — 사용자 선택 안 함).
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) M2·T3): 두 도구를 더한다(운영 명세 `05_mcp_tools_schema.md` §6). 새 도구 — 계약 추가라 검토 등급 A.
+- 파일: `mcp_server/routers/`, `mcp_server/services/`(새 파일).
+- 결정(2차 grill(사용자 10-30, 원본은 git 밖)): G1 — 목록은 EDW `ParsingMeta`의 `doc_class`·`sf_op_id`·`parsed_at`·`rep_engine`·`created_at`(G9 — `created_since`/`created_until` 거르기·출력, `get_doc_fulltext` 생성 범위 가드)을 읽는다(운영 계약 그대로, [etl.md#pl-25](etl.md#pl-25)). G4 — `source_system` 통일·`-test` 별칭. G7 — 0.1.0에 함께 싣고 따로 MAJOR 없음.
+- 결정(G19·G20 — 4차 grill(사용자 10-30), 위 G1 부분을 뒤집음): 두 도구는 EDW `ParsingMeta`를 읽지 않는다. 목록·거르기(`doc_class`·`sf_op_id`·`created_since/until`)·출력은 **시스템별 gold `doc`**에서 읽는다 — `doc`에 `rep_key`(silver 위치)와 `parsed_at`·`rep_engine`을 복사해 둔다. `get_doc_fulltext`의 등록 시각 가드도 `doc.created_at`. `source_system`은 필수, 값 하나([etl.md#pl-28](etl.md#pl-28)). EDW 장애가 원문 도구에 영향을 주지 않는다.
+- 결정(사용자 10-30 PRD grill): C8 — 원문 전송 도구도 gold `doc.rep_key`를 읽는다(mc-15와 같음). C2 — 0.2.0.
+- Status: todo — 순서는 허브가 정함.
+
+<a id="mc-19"></a>
+## mc-19 · 검색 — PG만, 실행 중 묶음 없음
+- 결정(허브·사용자 11-01, [mc-01](#mc-01) B안): 서버 검색 MCP가 묶음 파일(`docs.jsonl`·`chunks.jsonl`·`meta.json`)을 실행 중에 읽지 않게 — 문서 메타(최신성 순위 L3-1)·임베딩 정보·청크 키를 PG에서 읽는다.
+- 왜 따로: 검색 동작이 바뀌는 일(r 층) — 자기 PR + 평가(e2e)로.
+- 파일: `mcp_server/services/search/{retriever,local,pgsearch,server_state}.py`.
+- Status: todo
+
+<a id="mc-18"></a>
+## mc-18 · `parse_document` 스캔 PDF 다시 지원
+- 결정(사용자 10-31): 지금은 스캔 PDF를 건너뛰고 안내만 보내지만 추후 다시 살린다. 이 행이 그 기억이다.
+- 지금(11-01 — [pl-03](parse.md#pl-03)): 엔진 범위가 stack 하나라 `.pdf_image`(OCR·VLM 엔진뿐)는 이 서비스(OCR·VLM 안 돎)에서 돌 엔진이 없다 — `pipeline/mcp_parse_service.py` `skip_note`(글자층 표본 < 20자)·`empty_note`(run_all `NO_JOB_MARK`)가 빈 결과 + 임시 안내를 돌려준다.
+- 할 일(정할 것): 스캔 PDF에 어떤 엔진을 돌릴지(OCR·VLM — 응답 시간·자원, [rn-03](etl.md#rn-03) CPU 우선과 함께) · 안내 문구 지우기 · MCP 출력 계약(등급 A).
+- 파일: `pipeline/mcp_parse_service.py`, `tests/server/pipeline/test_parse_svc.py`.
+- Status: todo
 
 <a id="mc-06"></a>
 ## mc-06 · `query_edw` 도구 — 읽기 전용 EDW SQL
 - 이유: 정형 질문은 회사 EDW에서 답한다.
 - 무엇: SELECT/WITH 하나만, 표 허용 목록(mssql: 기본 꺼짐 — `EDW_QUERY_TABLES_STRICT=0`이면 시스템 카탈로그를 뺀 모든 스키마 허용, sqlite 대역은 함께 든 목록), 행·시간·바이트 상한, 낮은 권한의 별도 로그인, PC 시험용 sqlite 대역.
 - 파일: `mcp_server/services/edw_query.py`, `mcp_server/services/edw_calls.py`.
+- 배포 주의(reference 비교(사용자 grill 10-30, 원본은 git 밖) T14): `query_edw` 가드의 오탐(정상 SELECT 거부)을 서버에서 확인.
 - Status: done
 
 <a id="mc-07"></a>
@@ -90,6 +163,7 @@
 - 이유: 클라이언트는 SQL을 쓰기 전에 표·칸 이름이 필요하다.
 - 무엇: 정적 개인정보 제거 자료(`catalog.json` + `columns.jsonl`)에서 3단계 찾기(스키마 → 표 → 칸). 모르는 이름은 difflib 제안. LLM·벡터 없음.
 - 파일: `mcp_server/services/edw_meta.py`.
+- 배포 주의(reference 비교(사용자 grill 10-30, 원본은 git 밖) T14): `edw_meta` 표 이름 끝 공백 확인.
 - Status: done
 
 <a id="mc-08"></a>
@@ -97,6 +171,7 @@
 - 이유: 클라이언트가 아직 적재되지 않은 파일을 묻는다.
 - 무엇: 경로(inbox 루트 아래) 또는 base64 내용을 127.0.0.1:8766의 파싱 서비스에 Bearer 토큰으로 넘긴다. 글, 표준 표, 사실, 엔진, 시간을 돌려주고 시간 초과면 `job_id`.
 - 파일: `mcp_server/services/parse_proxy.py`, `pipeline/mcp_parse_service.py`.
+- 스캔 PDF(11-01 — [pl-03](parse.md#pl-03) stack 하나): 파이프라인 없이 빈 결과 + 안내 "스캔 PDF — 지금은 text 파싱 결과 없음(OCR·VLM 미실행, 추후 지원 예정)" — 다시 지원은 [mc-18](#mc-18).
 - Status: done
 
 <a id="mc-09"></a>
@@ -104,6 +179,7 @@
 - 이유: 공용 내부 서비스라 계속 떠 있어야 하고 위험한 노출은 거부해야 한다.
 - 무엇: FastMCP streamable HTTP(`/mcp`, 기본 127.0.0.1:8765) 또는 `--stdio`. loopback이 아닌 주소는 `MCP_TOKEN` 필요(상수 시간 비교), 0.0.0.0 거부, DNS 리바인딩 가드, `/health`(준비 중이면 503), 동시 8 + 대기열 + 도구 시간 30초, 새 적재 판이면 다시 읽기, `query_edw` 호출을 포함한 jsonl 질의 기록(90일).
 - 파일: `mcp_server/main.py`, `mcp_server/routers/dispatch.py`, `mcp_server/config.py`.
+- 배포 주의(reference 비교(사용자 grill 10-30, 원본은 git 밖) T14): 질의 기록(`qa_log.jsonl`) 경로를 컨테이너에서 쓰기 가능한 곳으로.
 - Status: done
 
 ## 코드와 다른 점 · 지울 코드
@@ -117,9 +193,8 @@
 | 모든 저장소에서 하드 거르기 | PG 저장소만. 로컬 묶음: 거르기만이면 오류, 질문 + 거르기면 거르지 않고 검색 | `search_svc.py` | mc-01 |
 
 ### 요건 없는 코드 — 남길지(앵커를 씀) 지울지([test.md#e2-18](test.md#e2-18))
-- `AI.ParsingMeta`에서 근거의 파싱 결과 경로(`MCP_EVIDENCE_PATHS`, 켜짐). `shaping.py`.
-- 도구로 노출되지 않은 근거 이미지 자르기와 내부 조회: `do_evidence_image`, `do_get_image`, `do_related`(시험만), `do_lookup_term`, `do_get_document`, `do_list_documents`. `internal_docs.py`.
-- 질문 개체로 동점 가르기(`SEARCH_TIE_BREAK`, 켜짐). `search_svc.py`.
+- `AI.ParsingMeta`에서 근거의 파싱 결과 경로(`MCP_EVIDENCE_PATHS`, 켜짐). `shaping.py`. 0.2.0에 ParsingMeta 조회 길을 없앤다(C8 — [mc-15](#mc-15)).
+- 질문 개체로 동점 가르기(늘 켬 — 스위치는 op-08에 지움). `search_svc.py`.
 - PG 대역(PG 설정이 없으면 SQLite — PC). `common/store/pg_standin.py`.
 - 문서 대장 CLI. `mcp_server/cli/registry_cli.py`.
 
@@ -128,7 +203,6 @@
 |---|---|---|
 | 하드 고객 격리 | `SEARCH_CLIENT_HARD=0`, `SEARCH_CLIENT_STRICT=0` | — |
 | 늘 새 판 먼저 | `SEARCH_RECENCY=1`("최신" 질문만, `2` = 늘) | — |
-| 애매한 집계용 LLM 라우터 | `SEARCH_AGG_LLM=0` | LLM |
 | `query_edw` | `EDW_QUERY=1` | `common.connections.rdb` + 읽기 계정, 또는 `RDB_SQLITE` |
 | `edw_meta` | — | `EDW_META_DIR`의 자료(기본 `/app/config/edw_meta`) |
 | `parse_document` | `PARSE_OCR_ENGINE=0`(OCR/VLM 엔진 없음 — `PARSE_MCP_OCR`은 10-29에 합침) · 제한 글자 쪽당 1초, VLM 쪽당 60초 | `mcp_parse_service` 실행 + `PARSE_SERVICE_TOKEN` |

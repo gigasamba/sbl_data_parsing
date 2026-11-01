@@ -10,7 +10,7 @@
     — 쪽 번호는 원본 위치 매핑(청크 meta.page)에만 쓰고 정제 텍스트에서는 뺀다(사용자 2026-09-30)
   - 1자 토큰(단일 숫자·글자 — 목록 번호·잡음이 대부분)
 
-AD25(a)(e) PARSE_TOKEN_NORM(환경변수, 기본 켬, =0으로 끔) — 켜지면(기본) 아래 추가 규칙(=0이면 지금과 완전히 같다, __main__ 자기점검으로 확인):
+AD25(a)(e) 토큰 정규화(늘 켬 — 끄는 스위치는 op-08에 지움):
   (e) 글자(한글·영문) 사이에 낀 마침표만 분리: "무관.배치" → "무관"·"배치"(거짓 누락 제거). 숫자 쪽 마침표(7.8·430.000)·
       하이픈 자리(2026-07-13·D-2024-122·Q-77)·퍼센트는 글자 양쪽 조건이 아니라서 그대로 붙어 있다.
   (a) 숫자 정규화 한 곳: 공백·작은따옴표 천 단위(430 000·1'000)는 쉼표로 통일 → 유효 3자리 쉼표 묶음만 숫자로 합친다
@@ -19,10 +19,9 @@ AD25(a)(e) PARSE_TOKEN_NORM(환경변수, 기본 켬, =0으로 끔) — 켜지�
       canon_num_key가 충돌 탐지만).
 
 10-14 함수별 분리(사용자) — pipeline에서만 쓰는 canon_num_key는 pipeline/shared/meaning.py로 옮김(로직
-바이트 동일). tokens·_norm_enabled·chars·strip_page_numbers는 계획과 달리 여기 남긴다: tokens는 check_modules.py
-CONTRACT_FUNCS(계약 함수는 common/에만 정의)에 걸리고, _norm_enabled는 그 tokens()가 내부에서 직접 부르고,
-chars·strip_page_numbers는 pipeline/eval/stages.py(여러 이미지 공용)가 그대로 부른다 — 재검증 결과
-이 넷은 "공통에서 호출" 규칙으로 못 옮긴다(engine-dev 10-14, 사용자 승인 전 1차 보류).
+바이트 동일). tokens·chars·strip_page_numbers는 계획과 달리 여기 남긴다: tokens는 check_modules.py
+CONTRACT_FUNCS(계약 함수는 common/에만 정의)에 걸리고, chars·strip_page_numbers는 pipeline/eval/stages.py(여러
+이미지 공용)가 그대로 부른다 — 재검증 결과 이 셋은 "공통에서 호출" 규칙으로 못 옮긴다(engine-dev 10-14).
 """
 
 import re
@@ -55,14 +54,6 @@ def strip_page_numbers(text):
     return "\f".join(out)
 
 
-def _norm_enabled():
-    """AD25 PARSE_TOKEN_NORM(기본 켬, =0으로 끔) — 단일 읽기 지점(modules/parse/parse_qa.py build_token_consensus도
-    이 함수를 씀, 두 곳이 따로 env를 읽어 갈라지지 않게)."""
-    from common.config.settings import cfg  # S7b — 설정 객체(켜기 칸 — 빈 글자·0·none·false가 끔, 옛 판정 꼴 그대로)
-
-    return bool(cfg().text.parse_token_norm)
-
-
 def _join_space_groups(text):
     """AD25(a) — 공백·작은따옴표 천 단위 구분자를 쉼표로 통일(정규식 구조 자체가 유효 3자리 묶음만 잡는다)."""
     return _SPACE_GROUPED.sub(lambda m: re.sub(r"[ ']", ",", m.group(0)), text)
@@ -84,20 +75,13 @@ def _norm_number(tok):
 
 
 def tokens(text):
-    """유의미 토큰 집합(쉼표 제거·쪽 번호 제외). PARSE_TOKEN_NORM=1이면 모듈 docstring의 AD25(a)(e) 규칙 추가 적용
-    — 꺼져 있으면(기본) 지금과 바이트 동일(아래 __main__ 자기점검에서 assert로 확인)."""
-    norm = _norm_enabled()
-    body = strip_page_numbers(text)
-    if norm:
-        body = _join_space_groups(body)
+    """유의미 토큰 집합(쉼표 제거·쪽 번호 제외) + 모듈 docstring의 AD25(a)(e) 규칙."""
+    body = _join_space_groups(strip_page_numbers(text))
     out = set()
     for raw in TOKEN.findall(body):
-        for piece in _split_letter_dots(raw) if norm else (raw,):
+        for piece in _split_letter_dots(raw):
             t = piece.rstrip(".,:/-")
             if len(t) < 2:
-                continue
-            if not norm:
-                out.add(t.replace(",", ""))
                 continue
             for sub in _norm_number(t):
                 sub = sub.rstrip(".,:/-") if sub else sub

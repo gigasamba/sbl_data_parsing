@@ -6,7 +6,7 @@
 [패치 2026-10-22] ① 기본 time_out_threshold 300초 ② 큐 대기 순번을 제출 응답과 시작 시점에 표시(지연 원인 파악)
   ③ 서비스 PID 로그 파일 남김(docker exec -d 로그 없음 문제) ④ _purge_old에서 방금 만든 작업 보호(버그 수정)
 실행: docker exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service
-  토큰은 설정 필수(컨테이너에 붙인 settings.yaml pipeline.service.parse_mcp.token — 검색 MCP의 MCP_TOKEN과 같은 값, 없으면 시작 거부, D-028 ⑨ · S7c ·
+  토큰은 설정 필수(컨테이너에 붙인 settings.yaml required.tokens.parse_mcp — 검색 MCP의 MCP_TOKEN과 같은 값, 없으면 시작 거부, D-028 ⑨ · S7c ·
   S7e2부터 env PARSE_MCP_TOKEN은 읽지 않음 — `docker exec -e PARSE_MCP_TOKEN=…`은 효과 없음, VS7e2 R-6)
 API(127.0.0.1:8766 · Bearer):  POST /jobs {content_b64+filename} → 202 {job_id, queue_position}
   GET /health  → {ok, ready, running, queued} · GET /jobs/<id> → {status, result, elapsed_ms}"""
@@ -31,44 +31,40 @@ from common.core.paths import APP_ROOT  # I4 — 컨테이너 경로(/app/…) �
 from pipeline import config as pc
 
 SERVICE_DIR = APP_ROOT / "output" / "mcp_parse"  # 이미지 안 /app/output/mcp_parse
-_JOB_ENVS: dict = {}  # (PARSE_POST, 사본, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
+_JOB_ENVS: dict = {}  # (PARSE_POST, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
 _JOB_KEYS = (
     "SETTINGS_FILE",
-    "PARSE_FUSE_REREAD_P3",
     "PARSE_POST",
-)  # 얹을 몫에 늘 넣는 이름(VS8a R-5) — STACK_SNAPSHOT은 env가 아니라 덮기 파일로만 감(VS8b R-8)
+)  # 얹을 몫에 늘 넣는 이름(VS8a R-5)
 
 
 def _job_stack():
-    """작업마다 엔진 구성 활성 판을 다시 읽어 사본(SERVICE_DIR/_stack/)으로(S8b — 사용자 10-28 Q3 a). 판 표를 못 읽거나(종료 4) 없는 엔진이면
-    (종료 2) 그 작업만 실패(서비스 스레드는 계속)."""
+    """작업마다 엔진 구성 파일을 다시 읽어 검사(S8b — 사용자 10-28 Q3 a). 못 읽거나 없는 엔진이면(종료 2) 그 작업만 실패(서비스 스레드는 계속)."""
     from pipeline import stackcfg
 
     try:
-        return stackcfg.resolve(SERVICE_DIR, refresh=True, publish=False)[0]
+        stackcfg.resolve(refresh=True)
     except SystemExit as e:
-        raise RuntimeError(f"엔진 구성(판 표)을 쓰지 못함 — 종료 코드 {e.code}") from None
+        raise RuntimeError(f"엔진 구성 파일을 쓰지 못함 — 종료 코드 {e.code}") from None
 
 
-def _job_env(post, stack=None):
-    """작업 자식 env — 덮기 파일(PARSE_FUSE_REREAD_P3=0·PARSE_POST)을 서비스 설정 파일·후보정 값마다 한 번만 만든다(임시 파일이 작업 수만큼
+def _job_env(post):
+    """작업 자식 env — 덮기 파일(PARSE_POST 등)을 서비스 설정 파일·후보정 값마다 한 번만 만든다(임시 파일이 작업 수만큼
     쌓이지 않게 — refactor.md C-46). 만든 파일은 서비스가 끝날 때 지운다(pl-27 — child_env가 exitclean에 맡김). OS 임시 폴더 정리(tmpwatch·systemd-tmpfiles·macOS periodic)가 오래 도는 서비스의 그 파일을 지웠으면
     다시 만든다(리뷰 S7e3 — 지워진 파일을 가리키면 서버 자식은 시작 거부, PC는 기본 후보정 all로 돎). 캐시는 덮기 파일이 얹는 몫만 — env는
     작업마다 지금 os.environ에서 새로 만든다(VS7e3 R-6 — 오래 도는 서비스의 라이브러리 env가 바뀌어도 작업 자식에 감). 반환은 새 dict."""
-    key = (post, str(stack), os.environ.get("SETTINGS_FILE"))  # env 남김 — 설정 파일 자리 신호
+    key = (post, os.environ.get("SETTINGS_FILE"))  # env 남김 — 설정 파일 자리 신호
     extra = _JOB_ENVS.get(key)
     if extra is None or not Path(extra["SETTINGS_FILE"]).is_file():
         pm = pc.cfg().service.parse_mcp
         # 10-29 — 파이프라인과 같은 규칙(쪽당 제한 + 두 배로 한 번 더)을 서비스 값으로 · 첫 시도 하한은 서비스 칸 warmup_sec(작업마다 새 run_all이라
         # 늘 '첫 문서' — 파이프라인 warmup 60초면 쪽당 제한이 무의미, 콜드 시작 여유는 이 칸) · 엔진 자식은 보통 우선순위(일괄 파싱보다 CPU 먼저)
         made = settings_env(
-            PARSE_FUSE_REREAD_P3="0",
             PARSE_POST=post,
             PARSE_TEXT_PAGE_SEC=str(pm.text_page_sec),
             PARSE_VLM_PAGE_SEC=str(pm.vlm_page_sec),
             PARSE_WARMUP_SEC=str(pm.warmup_sec),
             PARSE_LOW_PRIORITY="0",
-            **({"STACK_SNAPSHOT": str(stack)} if stack else {}),
         )
         # 덮기 파일이 얹은 몫만 — 넘긴 칸(SETTINGS_FILE·영구 다리로 env에 든 칸)은 지금 env와 같아도 늘 넣음(뒤에 env가 바뀌어도 자식 env와
         # 덮기 파일이 어긋나지 않게 — VS8a R-5)
@@ -169,8 +165,8 @@ _ENGINES_NO_OCR = _engines_no_ocr_arg
 
 def _pdf_text_chars(raw=None, p=None):
     """글자층 샀플(pypdf, 첫 5쪽) — 2026-10-21 사용자: 스캔/이미지 문서도 거부하지 않고 OCR·VLM 없이 그 결과를
-    그대로(≈빈) 돌려준다. 이 값은 두 곳에만 쓴다: ① 글자층이 사실상 없는 PDF(<20자)는 OCR 가능성이 있는
-    엔진(kreuzberg 폴백 포함)까지 빼고 글자층 추출 전용(pymupdf·pdfplumber·pypdf)만 돈다(시간 보장) ② 응답 note.
+    그대로(≈빈) 돌려준다. 이 값은 skip_note에만 쓴다: 글자층이 사실상 없는 PDF(<20자)는 파이프라인 없이 스캔 안내(pl-03 10-31 —
+    엔진 범위가 stack 하나라 그 문서에 돌 엔진이 없음, 옛: 글자층 엔진만 돌려 ≈빈 결과).
     판독 자체에 실패하면 -1(특별 취급 없음 — 파이프라인이 제대로 된 오류를 냄)."""
     try:
         import io
@@ -183,7 +179,27 @@ def _pdf_text_chars(raw=None, p=None):
         return -1
 
 
-_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}  # ALLOWED_EXTS에서 뺐으므로 도달 불가 — 참고용(전이해)
+# pl-03(사용자 10-31) — 엔진 범위가 stack 하나라 스캔 PDF(.pdf_image = OCR·VLM 엔진뿐)는 이 서비스(OCR·VLM 안 돎)에서 돌 엔진이 없다.
+#   지금은 건너뛰고 안내만 — 다시 지원은 PRD mc-18(todo).
+SCAN_NOTE = "스캔 PDF — 지금은 text 파싱 결과 없음(OCR·VLM 미실행, 추후 지원 예정)"
+DRM_NOTE = "텍스트 추출 실패 — DRM/암호화 문서일 가능성(엔진 전부 파싱 실패)"
+
+
+def skip_note(fname, pdf_text_chars):
+    """파이프라인 없이 바로 빈 결과로 끝낼 문서면 그 안내(글자층이 사실상 없는 PDF), 아니면 None.
+    (이미지 확장자는 ALLOWED_EXTS에 없어 여기 오지 않음 — 11-01에 도달 불가 갈래 _IMAGE_EXTS·IMAGE_NOTE 지움.)"""
+    ext = Path(fname).suffix.lower()
+    if ext == ".pdf" and 0 <= (pdf_text_chars if pdf_text_chars is not None else -1) < 20:
+        return SCAN_NOTE
+    return None
+
+
+def empty_note(run_log):
+    """run_all이 결과를 하나도 안 남겼을 때(runs.jsonl 없음)의 안내 — 돌 엔진이 하나도 없었으면(run_all의 NO_JOB_MARK 줄 — 표본보다 스캔으로
+    분류된 PDF) 스캔 안내, 엔진이 돌다 다 실패했으면 DRM 추정."""
+    from pipeline.extract.run_all import NO_JOB_MARK
+
+    return SCAN_NOTE if NO_JOB_MARK in (run_log or "") else DRM_NOTE
 
 
 def _submit(source):
@@ -269,7 +285,8 @@ def _worker():
                 import shutil
 
                 shutil.copy2(Path(j["path"]), ws / "in" / fname)
-            if Path(fname).suffix.lower() in _IMAGE_EXTS:  # 2026-10-21 사용자: 이미지 문서 — OCR·VLM 미실행, 파이프라인 없이 빈 결과 즉시
+            note = skip_note(fname, j.get("pdf_text_chars"))
+            if note:  # 2026-10-21 사용자: 이미지 문서 · pl-03(10-31): 스캔 PDF — OCR·VLM 미실행, 파이프라인 없이 빈 결과 즉시
                 j["result"] = {
                     "job_id": job_id,
                     "filename": fname,
@@ -282,20 +299,18 @@ def _worker():
                     "fields": {},
                     "rep_path": None,
                     "all_keys": [],
-                    "note": "이미지 문서 — text 파싱 결과 없음(OCR·VLM 기본 미실행 · 재가능: pipeline.extract.ocr_engine 켬)",
+                    "note": note,
                 }
                 j["status"] = "done"
             else:
                 engines = _ENGINES_NO_OCR()
-                if Path(fname).suffix.lower() == ".pdf" and 0 <= (j.get("pdf_text_chars") or -1) < 20:
-                    engines = ["--engines", "pymupdf,pdfplumber,pypdf"]
                 only = ws / "only.txt"
                 only.write_text(fname + "\n", encoding="utf-8")
                 log = open(ws / "run.log", "w", encoding="utf-8")
                 left = JOB_TIMEOUT
                 post = pc.cfg().transform.represent.post  # S7c — 옛 get(X) or "supsub"(없음·빈 값 → supsub)
-                stack = _job_stack()  # S8b — 작업마다 활성 판(사본 경로 — run_all·attachments는 STACK_SNAPSHOT, represent는 --stack)
-                job_env = _job_env(post or "supsub", stack)  # 하위 프로세스 — 덮기 파일(S7e2), 같은 값이면 한 번 만든 것 재사용(VS7e2 R-4)
+                _job_stack()  # S8b — 작업마다 엔진 구성 파일 다시 검사
+                job_env = _job_env(post or "supsub")  # 하위 프로세스 — 덮기 파일(S7e2), 같은 값이면 한 번 만든 것 재사용(VS7e2 R-4)
                 # 2026-10-22 병목 해소: post 기본 all→supsub — RapidOCR·figures·vlm_page·context·attachments를 끔
                 # 교차재현율(③)·table_inline(⑦)은 0.0초로 병목이 아니었으므로 그대로 유지 — 실측 47→~0.3초
                 _run = lambda cmd: _run_group(cmd, left, job_env)  # noqa: B023 — 같은 반복 안에서만 부름
@@ -322,10 +337,11 @@ def _worker():
                     if p.returncode != 0:
                         raise RuntimeError(f"단계 실패({cmd[0]}): {(p.stdout + p.stderr).strip().splitlines()[-1:] or ['?']}")
 
-                # ② 엔진 전부 실패(DRM/암호화)? → runs.jsonl 부재 → 빈 결과
+                # ② 결과 없음 → runs.jsonl 부재 → 빈 결과(돌 엔진이 없었으면 스캔 안내, 다 실패했으면 DRM 추정)
                 runs_file = ws / "parse" / "runs.jsonl"
                 if not runs_file.exists():
-                    _log(f"{job_id} · 엔진 전부 실패 → 빈 결과(DRM 추정)")
+                    note = empty_note((ws / "run.log").read_text(encoding="utf-8", errors="replace"))
+                    _log(f"{job_id} · 결과 없음 → 빈 결과({'스캔' if note == SCAN_NOTE else 'DRM 추정'})")
                     j["result"] = {
                         "job_id": job_id,
                         "filename": fname,
@@ -338,7 +354,7 @@ def _worker():
                         "fields": {},
                         "rep_path": None,
                         "all_keys": [],
-                        "note": "텍스트 추출 실패 — DRM/암호화 문서일 가능성(엔진 전부 파싱 실패)",
+                        "note": note,
                         "ms": round((time.time() - t0) * 1000, 1),
                     }
                 else:
@@ -355,8 +371,6 @@ def _worker():
                         ],
                         [
                             "pipeline.transform.represent.represent",
-                            "--stack",
-                            str(stack),
                             "--src",
                             str(ws / "prep"),
                             "--parse-dir",
@@ -480,7 +494,7 @@ if __name__ == "__main__":
     )  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
     if not TOKEN:  # D-028 ⑨(S7c) — 옛 코드 기본 토큰 없앰: 설정에 없으면 시작 거부(값은 찍지 않음)
         print(
-            "[설정] mcp_parse_service: 토큰 없음 — settings.yaml pipeline.service.parse_mcp.token(PARSE_MCP_TOKEN)에 검색 MCP의 MCP_TOKEN과 "
+            "[설정] mcp_parse_service: 토큰 없음 — settings.yaml required.tokens.parse_mcp에 검색 MCP의 MCP_TOKEN과 "
             "같은 값을 적음(env로 준 값은 읽지 않음 — S7e2 · 코드 기본 토큰은 없앰 — refactor.md C-42)",
             file=sys.stderr,
         )
@@ -488,7 +502,7 @@ if __name__ == "__main__":
     SERVICE_DIR.mkdir(parents=True, exist_ok=True)  # service.json 자리 — ROOTS·JOBS_DIR를 env로 다른 곳에 둬도
     from pipeline import stackcfg
 
-    stackcfg.resolve(SERVICE_DIR, publish=False)  # S8b(Q7) — 서버에서 판 표를 못 읽으면 시작 거부(종료 4), 없는 엔진이면 종료 2
+    stackcfg.resolve()  # S8b(Q7) — 엔진 구성 파일을 못 읽거나 없는 엔진이면 시작 거부(종료 2)
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
     for r in ROOTS:
         Path(r).mkdir(parents=True, exist_ok=True)

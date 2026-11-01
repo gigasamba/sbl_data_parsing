@@ -18,16 +18,14 @@ import time
 from collections import Counter
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[0]
-from common.core import span as SP  # noqa: E402 — op-01 성능 span
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.contract import jl  # noqa: E402 — 묶음 읽기
-from common.core.text import index_text, tokens  # noqa: E402 — 색인·토큰 규칙(모듈 계약)
-from common.store.pg import HNSW_MAX, PG, conf, has_conn, vec  # noqa: E402,F401
-from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
-from pipeline.load.pg_load_connect import connect as pg_connect  # noqa: E402
-from pipeline.shared import runtrace  # noqa: E402 — op-01 pipe_run 문서 수·직접 실행 run_id
+from common.core import span as SP  # op-01 성능 span
+from common.core.console import utf8_stdout
+from common.core.contract import jl  # 묶음 읽기
+from common.core.text import index_text, tokens  # 색인·토큰 규칙(모듈 계약)
+from common.store.pg import HNSW_MAX, PG, conf, has_conn, vec  # noqa: F401
+from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.load.pg_load_connect import connect as pg_connect
+from pipeline.shared import runtrace  # op-01 pipe_run 문서 수·직접 실행 run_id
 
 # DROP/TRUNCATE/DELETE 대상 식별자 화이트리스트(XS3) — 우리 스키마의 우리 표만. 스키마명 자체는 common/pg.conf()가 이미 정규식으로 검증.
 _OUR_TABLES = {"load_run", "doc", "chunk", "chunk_term", "term_stat", "corpus_stat"}  # 2026-10-20 축소 — 검색(chunk+BM25)에 필요한 표만
@@ -252,9 +250,9 @@ def load(db, bundle, replace=False):
                         n_terms += 1
             sp.rows(n_terms)
         with SP.span("load.stats", "load", table="term_stat/corpus_stat"):
-            # 문서 빈도: 새 청크 단어만 더함(지운 문서는 drop_terms에서 뺌). 비었거나 BM25_STAT_REBUILD=1이면 전체 다시 셈
+            # 문서 빈도: 새 청크 단어만 더함(지운 문서는 drop_terms에서 뺌). 비었으면 전체 다시 셈(BM25_STAT_REBUILD는 op-08에 지움)
             cur.execute(f"SELECT NOT EXISTS (SELECT 1 FROM {s}.term_stat)")
-            if cur.fetchone()[0] or pc.cfg().load.bm25_stat_rebuild:
+            if cur.fetchone()[0]:
                 cur.execute(f"DELETE FROM {_tbl(s, 'term_stat')}")
                 cur.execute(f"INSERT INTO {s}.term_stat SELECT term, COUNT(*) FROM {s}.chunk_term GROUP BY term")
             elif ci_db:

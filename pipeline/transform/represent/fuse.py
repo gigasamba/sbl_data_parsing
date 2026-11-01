@@ -3,7 +3,7 @@
 설계(backlog dev/docs/backlog/parse.md AD29): ① 조각 나누기 = 줄·표 칸·라벨:값 · 엔진 간 같은 자리 맞추기 =
 좌표가 있으면 좌표, 없으면 쪽별 순서 정렬(정규화 글자 비교, OCR 앙상블 ROVER 방식) ② 조각별 투표 = 점수
 = 출처 신뢰도(원문 추출 > VLM > OCR) × 형식 타당성(3자리 쉼표 묶음·깨짐 비율) + 동점이면 대표 엔진 가산점,
-결과마다 출처(동의 엔진·탈락 후보) 기록. ③(좌표 영역만 다시 읽기)는 범위 밖(P2 `reread.py`·P3 `reread_stage3.py`).
+결과마다 출처(동의 엔진·탈락 후보) 기록. ③(좌표 영역만 다시 읽기)는 범위 밖(재판독 P2·P3는 pl-34 10-30에 지움).
 
 ④(사전·그래프 타당성, AD29 ④)·AD26 2:2 동점 판정을 이 모듈(P1)에 더함(10-08 조각 대표값 마무리, engine-qa
 CONCERN 반영 10-08 2차):
@@ -25,22 +25,14 @@ CONCERN 반영 10-08 2차):
     바꿈, 거기서 모호함은 AD26 (d) VLM 선택형으로 넘긴다). 0.500처럼 순수 소수인 값까지 로캘 증거로 잘못
     세는 문제의 1차 완화 — 완전한 해결(소수점 자리수·문맥으로 판별)은 더 큼.
   - `vote_fragment()` 반환에 `"split"`(bool)·`"resolved_by"`("trust"|"heuristic"|None) — **split·resolved_by는
-    항상 계산**(신호 유무와 무관, PARSE_FUSE_SIGNALS를 꺼도 — engine-qa 10-08 ⑤). 그룹마다 "기본 점수"(신뢰도
+    항상 계산**(신호 유무와 무관 — engine-qa 10-08 ⑤). 그룹마다 "기본 점수"(신뢰도
     ×형식_locale없이+대표엔진 가산, = 신호 꺼짐 때와 같은 셈)와 "전체 점수"(+사전·그래프·로캘 가산)를 따로
     매겨 1위·2위를 비교한다: 기본 점수로도 이미 갈렸으면 **"trust"**(split=False, 가산 없이도 확실) · 기본
     점수는 동점인데 전체 점수가 갈랐으면 **"heuristic"**(split=**True로 유지** — 대표는 그래도 전체 점수가
     높은 후보로 뽑지만, 근거가 신뢰도·형식이 아니라 사전·그래프·로캘 같은 보조 신호뿐이라 **아직 확인된 건
-    아니다**로 보고 P2·P3 재판독·AG11 판단 세션이 이 자리를 먼저 보게 한다) · 전체 점수도 동점이면
-    **None**(split=True, 아무 신호로도 못 깸). P2(`reread.py`)·P3(`reread_stage3.py`)가 좌표·그림으로 실제
-    확인하면 split을 False로 해소한다(resolved_by는 그대로 — 원래 무엇이 판정했는지 기록).
-
-PARSE_FUSE_SIGNALS(환경변수, 기본 켬, =0으로 끔, PARSE_FUSE 전제) — 끄면(=0) 사전·명부·문서 내 교차 언급·
-로캘의 **점수 가산만** 빠져 이 커밋 이전과 점수가 바이트 동일(trust×format_plausibility만, format_plausibility
-도 locale_pref 없이 옛 동작) — split·resolved_by 계산 자체는 안 빠진다(위 참조, 신호가 없으면 자연히 전부
-"trust"/None이 된다). 단 **conflicts.jsonl 스키마는 꺼지면 이 기능 자체가 없던 코드와 바이트 동일**하도록
-`fuse_facts()`가 꺼졌을 때(`on_signals()` False) "split"·"resolved_by" 키를 conflicts 항목에 아예 안 싣는다
-(값은 계산해도 파일에는 안 씀) — 트러스트 점수에 끼어드는 새 신호라 P1 자체(PARSE_FUSE)와 별도 스위치로
-따로 끌 수 있게.
+    아니다**로 보고 미확인 자리로 남긴다) · 전체 점수도 동점이면
+    **None**(split=True, 아무 신호로도 못 깸). (옛 P2 재판독이 좌표로 실제
+    확인하면 split을 False로 해소했다 — pl-34에 지움, 이제 split은 그대로 남는다.)
 
 이 모듈의 두 층:
   - `vote_fragment()` — 조각 하나(같은 자리로 이미 맞춰진 엔진별 텍스트 후보 목록)의 투표 — 범용(표 칸·라벨:값
@@ -50,8 +42,8 @@ PARSE_FUSE_SIGNALS(환경변수, 기본 켬, =0으로 끔, PARSE_FUSE 전제) �
     ponytail: 줄(자유 문장) 단위 자리 맞추기(라벨이 없는 조각의 쪽별 순서 정렬)는 좌표 재확인(P2)과 묶어
     처리하는 게 더 값싸 이번엔 안 함 — `fuse()`는 facts만 다룬다(문서 본문 rep["text"]는 안 건드림).
 
-PARSE_FUSE(환경변수, 기본 켬, =0으로 끔) — 끄면(=0) represent.py가 이 모듈을 안 불러 rep에 "fused" 키 자체가
-안 생김(바이트 동일). 켜지면(기본) rep["text"]·rep["facts"](기존 칸)는 그대로 — fused는 새 칸으로만 추가된다(덮어쓰기 없음).
+융합·신호 가산은 늘 켬(끄는 스위치 PARSE_FUSE·PARSE_FUSE_SIGNALS는 op-08에 지움) — rep["text"]·rep["facts"](기존 칸)는
+그대로, fused는 새 칸으로만 추가된다(덮어쓰기 없음).
 """
 
 import difflib
@@ -63,29 +55,8 @@ from common.core.terms import (  # 용어 사전·고객 명부(AD29 ④) — co
     split_terms,
 )
 from common.core.text import normalize_value  # NFKC·소문자·제로폭 제거·숫자 사이 쉼표 제거·공백 제거(조각 맞추기 키)
-from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared.summarize import FAMILY  # 엔진 → 인식 계열(요약 모듈과 같은 매핑, 중복 정의 안 함)
 from pipeline.transform.represent.parse_qa import garbage_ratio  # 깨짐률(형식 타당성 신호 재사용)
-
-
-def on(config=None):
-    """PARSE_FUSE(환경변수, 기본 켬, =0으로 끔)."""
-    config = (
-        pc.cfg().transform.represent.fuse if config is None else config
-    )  # S7c — 설정 객체(bool 칸 → "true"/"false"로 아래 판정이 옛 글자 판정과 같음)
-    return str(config).strip().lower() not in ("", "0", "none", "false")
-
-
-def on_signals(config=None):
-    """PARSE_FUSE_SIGNALS(환경변수, 기본 켬, =0으로 끔, PARSE_FUSE 전제) — AD29 ④ 사전·명부·문서 내 교차
-    언급 가산 + AD26 (c) 로캘 가산(점수만, split·resolved_by 계산 자체는 항상 돈다 — engine-qa 10-08 ⑤).
-    끄면(=0) 점수는 이 커밋 이전과 바이트 동일 + `fuse_facts()`가 conflicts 항목에 "split"·"resolved_by"
-    키를 아예 안 실어 `conflicts.jsonl` 스키마도 이 기능 이전과 바이트 동일하게 유지한다."""
-    config = (
-        pc.cfg().transform.represent.fuse_signals if config is None else config
-    )  # S7c — 설정 객체(bool 칸 → "true"/"false"로 아래 판정이 옛 글자 판정과 같음)
-    return str(config).strip().lower() not in ("", "0", "none", "false")
-
 
 # 출처 신뢰도(AD26 (a)) — 원문 추출(텍스트 레이어·오피스 XML) > VLM > OCR. FAMILY(summarize.py)는 엔진 이름 →
 # 인식 계열(모델)이고, 여기 집합에 없는 계열(=텍스트 레이어·오피스 XML 추출기, pdfplumber·pymupdf·office 등)은
@@ -228,7 +199,7 @@ def vote_fragment(candidates, rep_engine=None, tie_bonus=0.5, locale_pref=None, 
     rep_engine: 지금 대표 엔진 — 그 엔진이 든 그룹에 tie_bonus(동점 깨기·안정성, AD29 ⑤)를 더한다(이건
     "기본" 점수에 포함 — 사전·그래프·로캘처럼 이번에 더한 보조 신호가 아니라 원래 있던 안정화 장치).
     locale_pref·term_ctx({"glossary","aliases"})·value_graph: AD29 ④·AD26 (c) 신호 — 전부 생략(None)하면
-    이 세 가산 없이 옛(PARSE_FUSE_SIGNALS 전) 동작과 점수가 같다(fuse_facts가 on_signals()일 때만 넘긴다).
+    이 세 가산 없이 옛 동작과 점수가 같다(fuse_facts는 늘 넘긴다).
     그룹마다 두 점수를 매긴다 — **기본 점수**(base = trust_weight 합 × format_plausibility(locale_pref 없이)
     + rep_engine 보너스, = 신호가 전혀 없을 때와 같은 셈) · **전체 점수**(score = base + locale 가산(trust ×
     (locale 있는 format_plausibility − 없는 쪽)) + term_plausibility 가산 + 문서 내 교차 언급 가산). 승자는
@@ -236,8 +207,8 @@ def vote_fragment(candidates, rep_engine=None, tie_bonus=0.5, locale_pref=None, 
     무관하게 항상 계산**(engine-qa 10-08 ⑤) — 승자·최선 패자의 **기본** 점수까지 비교해서 셋 중 하나로 가른다:
     기본 점수로 이미 갈렸으면 resolved_by="trust"(split=False, 사전·그래프·로캘 없이도 확실) · 기본 점수는
     동점인데 전체 점수가 갈랐으면 resolved_by="heuristic"(**split=True 유지** — AD26 (f): 대표는 그래도
-    전체 점수가 높은 후보로 뽑지만, 신뢰도·형식만으로는 못 가른 자리라 "확인된 건 아님"으로 보고 P2·P3
-    재판독·AG11 판단 세션이 먼저 보게 한다) · 전체 점수도 동점이면 resolved_by=None(split=True, 아무 신호로도
+    전체 점수가 높은 후보로 뽑지만, 신뢰도·형식만으로는 못 가른 자리라 "확인된 건 아님"으로 남긴다 — 재판독
+    P2·P3는 pl-34 10-30에 지움) · 전체 점수도 동점이면 resolved_by=None(split=True, 아무 신호로도
     못 갈림). 패자가 없으면 split=False·resolved_by=None(갈릴 상대가 없음).
     반환: {"text", "engines"(동의), "score", "split", "resolved_by", "losers":[{engines,text,score}]}(승자
     기준 — 결과마다 동의 엔진·탈락 후보를 남겨 출처를 추적, AD29 ②) 또는 후보가 전부 비면 None.
@@ -298,22 +269,16 @@ def fuse_facts(engine_docs, rep_engine, tie_bonus=0.5):
     보충해 만든 rep["facts"] 말고 엔진별 원본 — represent.py가 합치기 전 스냅샷을 넘긴다) → 라벨:값·표 칸
     조각(facts, cells 포함) 융합. 자리 맞추기 = _fact_key(라벨 정규화) 같은 키끼리(좌표·쪽 순서 정렬 없이도
     라벨 자체가 자리 열쇠 — AD29 ①의 '좌표가 없으면' 경로를 facts에서는 라벨 키로 대신한다).
-    on_signals()이면(기본) AD29 ④ 사전·명부·문서 내 교차 언급 + AD26 (c) 로캘을 문서 전체(모든 facts) 기준
-    한 번만 계산해 매 자리의 vote_fragment에 넘긴다(끄면(=0) 전부 None — 옛 점수와 바이트 동일).
+    AD29 ④ 사전·명부·문서 내 교차 언급 + AD26 (c) 로캘을 문서 전체(모든 facts) 기준
+    한 번만 계산해 매 자리의 vote_fragment에 넘긴다.
     반환: (facts, conflicts). facts = [{..원래 칸(from 빼고).., "value", "engines", "score"}] 승자만 —
     라벨 정렬(정렬 안정성) 순. conflicts = 같은 자리에서 승자 외 다른 값이 있던 자리만
-    [{"label", "winner", "winner_engines", "losers"}] + on_signals()일 때만 `"split"`·`"resolved_by"`도
-    (vote_fragment는 이 둘을 항상 계산하지만, **conflicts.jsonl 스키마는 꺼졌을 때 이 기능 이전과 바이트
-    동일**하도록 여기서 싣는 걸 막는다 — engine-qa 10-08 ⑤). "split"=True면 AD26 (f) '갈림' — 사람 확인
+    [{"label", "winner", "winner_engines", "losers", "split", "resolved_by"}]. "split"=True면 AD26 (f) '갈림' — 사람 확인
     목록·검색 근거 '값 갈림' 꼬리표는 다른 모듈 몫, 여기는 플래그만 남긴다."""
-    signals_on = on_signals()
-    locale_pref, term_ctx, value_graph = None, None, None
-    if signals_on:
-        locale_pref = _doc_locale_pref(engine_docs)
-        value_graph = _doc_value_graph(engine_docs)
-        glossary, aliases = load_glossary(), _aliases()
-        if glossary or aliases:
-            term_ctx = {"glossary": glossary, "aliases": aliases}
+    locale_pref = _doc_locale_pref(engine_docs)
+    value_graph = _doc_value_graph(engine_docs)
+    glossary, aliases = load_glossary(), _aliases()
+    term_ctx = {"glossary": glossary, "aliases": aliases} if glossary or aliases else None
     by_key = {}
     for eng, d in engine_docs.items():
         for f in (d or {}).get("facts") or []:
@@ -337,10 +302,16 @@ def fuse_facts(engine_docs, rep_engine, tie_bonus=0.5):
             }
         )
         if result["losers"]:
-            entry = {"label": label, "winner": result["text"], "winner_engines": result["engines"], "losers": result["losers"]}
-            if signals_on:  # 꺼지면(=0) 이 기능 이전과 conflicts.jsonl 스키마가 바이트 동일하게(키 자체가 없음)
-                entry["split"], entry["resolved_by"] = result["split"], result["resolved_by"]
-            conflicts.append(entry)
+            conflicts.append(
+                {
+                    "label": label,
+                    "winner": result["text"],
+                    "winner_engines": result["engines"],
+                    "losers": result["losers"],
+                    "split": result["split"],
+                    "resolved_by": result["resolved_by"],
+                }
+            )
     return facts, conflicts
 
 

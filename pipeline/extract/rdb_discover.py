@@ -26,7 +26,7 @@ from pathlib import Path
 from common.core.paths import PKG_ROOT  # 공용 자산 루트(10-14 이미지 단위 분리)
 
 ROOT = PKG_ROOT
-from common.core.sources import TABLE_ID_RE  # noqa: E402
+from common.store.parsing_meta_db import TABLE_ID_RE  # noqa: E402 — 표 이름 화이트리스트(옛 common.core.sources와 같은 규칙)
 from pipeline import config as pc  # noqa: E402 — S7c: 설정 객체(pipeline 칸)
 
 NAME_RULES = (
@@ -123,21 +123,6 @@ def table_columns(table):
                 cn, "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=%s ORDER BY ORDINAL_POSITION", (bare,)
             )
         ]
-
-
-def column_problems(body):
-    """원천 목록(판 표 body·sources.json 모양)의 표·columns가 실제로 있는지 — 문제 글자 목록(빈 목록 = 모두 있음). 열 이름은 대소문자 무시
-    (SQL Server 기본 정렬)."""
-    out = []
-    for e in body:
-        have = {c.lower() for c in table_columns(e["table"])}
-        if not have:
-            out.append(f"{e['name']}: 표 {e['table']} 없음(또는 열 0)")
-            continue
-        miss = sorted(f"{k}={v}" for k, v in e["columns"].items() if v.lower() not in have)
-        if miss:
-            out.append(f"{e['name']}: {e['table']}에 없는 열 {', '.join(miss)}")
-    return out
 
 
 def _pg_tables(like):

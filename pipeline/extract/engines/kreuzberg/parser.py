@@ -7,7 +7,6 @@
 from pipeline.extract.engines._common.contract import _md_tables, _with_split_tables, split_tables
 
 
-import os
 import re
 
 _SENT_END = re.compile(r"(\.|다\.|음\.|요\.|[.!?。])\s*$")
@@ -17,7 +16,8 @@ def _prose_grid(rows):
     """BR49(10-11) — kreuzberg가 번호 목록 평문을 표로 오인(long_320p.pdf 320쪽 중 221개 '표', 실제로는 한 문장이 칸 4개로
     쪼개진 것). 판정: 행 5개 이상 · 빈칸 없는 행이 대부분 · 행의 마지막 칸이 문장 끝(마침표)으로 끝나는 비율 80% 이상이면 평문.
     실제 표는 행마다 마침표로 끝나는 일이 드묾(값·단위·코드). KREUZBERG_PROSE_FILTER=0이면 끔."""
-    if os.environ.get("KREUZBERG_PROSE_FILTER") == "0":
+    from pipeline import config as pc
+    if not pc.cfg().extract.kreuzberg_prose_filter:
         return False
     body = [[str(c).strip() for c in r] for r in rows if any(str(c).strip() for c in r)]
     if len(body) < 5:
@@ -60,23 +60,7 @@ def parse_kreuzberg(path):
 
 
 ENGINES = {"kreuzberg": parse_kreuzberg}
-def parse_kreuzberg_ocr(path):
-    """Kreuzberg OCR 강제 — 이미지·이미지 PDF. 백엔드는 kreuzberg 기본(Tesseract), 언어 kor+eng."""
-    from kreuzberg import extract_file_sync, ExtractionConfig, OcrConfig
-    r = extract_file_sync(str(path), config=ExtractionConfig(force_ocr=True, ocr=OcrConfig(backend="tesseract", language="kor+eng")))
-    groups = []
-    for t in getattr(r, "tables", None) or []:
-        cells = getattr(t, "cells", None)
-        if cells:
-            groups += split_tables([[str(c) for c in row] for row in cells])
-        else:
-            for tb in _md_tables(getattr(t, "markdown", "") or ""):
-                groups += split_tables(tb)
-    return _with_split_tables(r.content, groups, "kreuzberg[ocr]")
-
-
-ENGINES["kreuzberg_ocr"] = parse_kreuzberg_ocr
-FORMATS = {"kreuzberg": ('.pdf', '.docx', '.xlsx', '.pptx', '.ppt', '.xls', '.txt', '.mht', '.mhtml', '.doc', '.html', '.htm', '.eml', '.msg', '.xlsm'), "kreuzberg_ocr": ('.pdf', '.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp')}
+FORMATS = {"kreuzberg": ('.pdf', '.docx', '.xlsx', '.pptx', '.ppt', '.xls', '.txt', '.mht', '.mhtml', '.doc', '.html', '.htm', '.eml', '.msg', '.xlsm')}
 REQUIRES = {"modules": ['kreuzberg'], "tools": []}
 PROFILED = set()
-UNVERIFIED = {"kreuzberg_ocr"}   # Tesseract 필요 — 개발 PC 미실측
+UNVERIFIED = set()   # kreuzberg_ocr(Tesseract)는 10-30 지움 — pl-31

@@ -6,34 +6,23 @@
   대표 = 후보 중 정확도(pipeline.transform.represent.repfmt.doc_accuracy — 정답 없으면 교차 재현율, AG11 2단계 착수 조건으로 parse_qa에서 옮김)가 가장 높은 것, 같으면 스택 순서
   추합 = 대표 본문 + 다른 후보의 구조 사실(표 행·키-값, 대표에 없는 것만) · OCR 글자 상자는 대표 것만(위치가 대표 본문과 맞아야 함)
   후보가 하나도 성공 못 하면 스택 밖 성공 엔진으로 대체하고 표시(fallback) — 빠진 문서가 생기지 않게
-PARSE_STANDARDIZE(환경변수, 기본 켬, =0으로 끔) — 켜지면(기본) 엔진 묶음 직후·융합 전에 기호 맵·첨자 표기
+아래 단계는 늘 켬(되돌리기 스위치 PARSE_STANDARDIZE·SCAN_FILL·CONTEXT·TABLE_INLINE·TABLE_STD·FUSE·MERGE_PAGES는 op-08에 지움):
+표준화 — 엔진 묶음 직후·융합 전에 기호 맵·첨자 표기
   (common.core.text.standardize_text)를 본문·facts·표 칸에 적용(SI20·AD46⑤, 표 칸 재현율 저하 원인인 기호 정형화
-  부재를 산출 쪽에서 메움). 꺼지면(=0) 이전 동작과 바이트 동일(rep.rep.standardize로 적용 여부·바뀐 조각 수
-  표시, 원문은 output/parse/<엔진>/ 그대로).
-PARSE_SCAN_FILL(환경변수, 기본 켬) — PE1 후속(2026-10-07, 정답률 1순위): .pdf_text 대표 문서 안에 스캔 쪽
+  부재를 산출 쪽에서 메움). rep.rep.standardize에 바뀐 조각 수 표시, 원문은 output/parse/<엔진>/ 그대로.
+스캔 쪽 채움 — PE1 후속(2026-10-07, 정답률 1순위): .pdf_text 대표 문서 안에 스캔 쪽
   (pipeline.transform.figures.vlm_page.scan_pages_detail — reason chars/hidden/garbage/hidden_overlap, AD31·AD47)이 있고 그 쪽의 OCR 엔진
   (.pdf_image 계열, stack.json 순서) 결과가 있으면 그 쪽만 대표 본문을 OCR 쪽 글로 채운다(글자층 쪽은 그대로) —
   기존 한계(대표가 .pdf_text 엔진이면 스캔 쪽 값이 아예 안 들어가던 것, backlog PE1 "후속 과제"). 쪽 경계는
-  scan_dedup._page_texts 재사용(boxes 있으면 그걸로, 없으면 \f 개수가 문서 실제 쪽 수와 맞을 때만) — 쪽 번호를
+  _page_texts(boxes 있으면 그걸로, 없으면 \f 개수가 문서 실제 쪽 수와 맞을 때만) — 쪽 번호를
   확정할 수 없으면 건너뜀(rep.rep.scan_fill.skip에 기록, 바이트 불변). 그 쪽 OCR 글이 깨져 있으면(garbage_ratio
-  > 0.1, scan_dedup.pick과 같은 기준) 그 쪽도 안 덮고 건너뜀 · reason='hidden'(검색 가능 스캔 PDF 포함)은 원래
+  > 0.1, 즉 OCR 신뢰도 0.9 미만) 그 쪽도 안 덮고 건너뜀 · reason='hidden'(검색 가능 스캔 PDF 포함)은 원래
   글(숨은 글자층)과 OCR 글의 일치도(HIDDEN_AGREE_MIN)가 높으면 원래 글을 유지(독립 검토 MAJOR, AD31) — 모두
-  rep.rep.scan_fill.page_skip에 기록. 끄면(0) fill_scan_pages를 안 불러 이전 동작과 바이트 동일.
-PARSE_CONTEXT(환경변수, 기본 켬, =0으로 끔) — PA0(2026-10-08): 켜지면(기본) 이미 계산된 문서·쪽 신호
+  rep.rep.scan_fill.page_skip에 기록.
+맥락 기록 — PA0(2026-10-08): 이미 계산된 문서·쪽 신호
   (pipeline.transform.represent.trace)를 rep["context"]·규칙 결정과 이유를 rep["decisions"]로 남긴다(새 엔진 실행·VLM 호출
-  없음, 나중 파싱 에이전트 PA2의 바탕). 꺼지면(=0) 이 모듈을 안 불러 이전 동작과 바이트 동일.
-PARSE_FUSE_REREAD(환경변수, 기본 켬, =0으로 끔, PARSE_FUSE 전제) — AD29 P2: fuse_mod.fuse() 뒤 pipeline.transform.represent.reread가
-  근소하게 갈렸거나 승자가 한 인식 계열뿐인 조각만 글자층 좌표(pymupdf 단어 bbox)로 찾아 고해상도로 다시 OCR해
-  보고, 확인되면 승자를 바꾼다(AD19 "확인되면 채택") — 아무 것도 안 맞으면 값은 그대로 두고 unverified만 표시.
-  doc_path가 PDF가 아니면 전부 건너뜀(이 단계는 OCR·PDF 글자층 전용, rep.fused.reread.skip_reason). 문서당 재판독
-  횟수 상한 FUSE_REREAD_MAX(기본 20). 꺼지면(=0) 안 불러 rep["fused"]가 PARSE_FUSE만 켰을 때와 바이트 동일.
-PARSE_FUSE_REREAD_P3(환경변수, 기본 켬, =0으로 끔, PARSE_FUSE_REREAD 전제) — AD29 P3: P2가 "unverified"로 남긴 자리만
-  pipeline.transform.represent.reread_stage3가 더 본다 — ① 그 쪽에 박힌 그림(삽입 이미지) 중 자리에 가장 가까운 것만 다시
-  OCR(모델 호출 0) ② 그래도 못 맞추면 그 크롭 + 후보 목록을 내부 VLM(dev/agents/value_choice)에 보여 후보 중
-  하나를 고르게 한다(문서당 FUSE_VLM_MAX로 호출 상한, NONE·후보 밖 답은 그대로 unverified — 값을 지어내지
-  않음, VLM_BASE_URL·VLM_MODEL 미설정이면 조용히 NONE 취급 — 외부 호출 없음). 꺼지면(=0, 또는 PARSE_FUSE_REREAD가
-  =0이면) 안 불러 rep["fused"]가 P2까지만 켰을 때와 바이트 동일.
-PARSE_TABLE_INLINE(환경변수, 기본 켬, =0으로 끔) — TA1(사용자 10-15): 대표 엔진 하나의 표만 쓰던 것을, 이 문서를
+  없음, 나중 파싱 에이전트 PA2의 바탕).
+표 제자리 넣기 — TA1(사용자 10-15): 대표 엔진 하나의 표만 쓰던 것을, 이 문서를
   표로 인식한 엔진 전부(대표 + other_docs)의 그리드를 모아(pipeline.transform.represent.table_inline) 표 자리마다
   가장 구조가 완전한(칸 채움 비율·다른 엔진과의 칸 글자 일치도) 것 하나를 고르고, 대표 본문(rep["text"]) 안
   그 표가 있던 자리를 찾아(순서 보존 보수적 매칭 — 못 찾으면 안 건드림) 그 자리에 GitHub 표로 바꿔 넣는다.
@@ -41,8 +30,7 @@ PARSE_TABLE_INLINE(환경변수, 기본 켬, =0으로 끔) — TA1(사용자 10-
   넣은 표는 inline:true로 표시(parsing_meta.render_md가 끝에 또 붙이지 않게) — 못 찾은 표는 inline:false로
   그대로 끝에 붙는다. 교체 영역 안 두 칸 사이에 낀 짧은 글(각주·캡션 등, GAP_MAX_CHARS 안)은 지우지 않고
   표 바로 뒤에 원래 순서대로 남긴다(독립 검토 engine-qa 10-21 반영) — rep["rep"]["table_inline"]에 묶음
-  수·넣은 수·못 찾은 수·고른 그리드의 엔진별 건수·남긴 각주 수(residue)를 남긴다. 꺼지면(=0) 이 모듈을 안
-  불러 PARSE_TABLE_STD만 켰을 때(대표 엔진 표만, 본문은 안 바뀜)와 바이트 동일.
+  수·넣은 수·못 찾은 수·고른 그리드의 엔진별 건수·남긴 각주 수(residue)를 남긴다.
 산출 형식 = 엔진 공통 출력 계약(text·tables·facts·boxes) + "rep": {engine, candidates[{engine, ok, acc}], fallback, low_n}
 → modules/structure/bundle.py가 이것만 읽어 청킹·벡터화·그래프(데이터 구조화)를 한다. 목록 = output/parse/_rep/index.json
 AD25(b)(c) — fuse_mod(AD29 P1)이 찾은, 같은 표 행(자리)에서 값은 같은데 표기가 갈린 엔진들의 충돌을 문서마다
@@ -58,18 +46,15 @@ import json
 import time
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[0]
-from common.core import span as SP  # noqa: E402 — op-01 성능 span
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.paths import STACK_FILE  # noqa: E402 — 폴더 재편 뒤 이 상수만 바뀌면 됨(위 ROOT는 sys.path 부트스트랩에만 씀)
-from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
+from common.core import span as SP  # op-01 성능 span
+from common.core.console import utf8_stdout
+from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 
 
 def load_stack(path):
     p = Path(path)
     if not p.exists():
-        raise SystemExit(f"{p} 없음 — 먼저 python cli/pipeline.py set-stack (선정 결과로 만들거나 직접 지정)")
+        raise SystemExit(f"{p} 없음 — --stack에 엔진 구성 파일 경로(resources/config/pipeline_stack.json 모양)")
     return json.loads(p.read_text(encoding="utf-8"))
 
 
@@ -100,47 +85,6 @@ def _select_best(ok, pd, doc):
         return (acc, r, -ok.index(c))
 
     return max(ok, key=score)
-
-
-def _engine_out_rank(pd, doc, engines):
-    """2026-10-22 사용자 지정 — reread(P2)에서조차 못 가릴 때 따라갈 '산출 정확도 높은 엔진' 순서(내림차순).
-    기준(사용자 지정 우선순위): ① 머리글/바닥글 제외 본문 풍부도(글자 수) ② 표 인식 칸 수(구조 표 rows×cols
-    합, 없으면 마크다운 표 줄의 '|' 개수 합) ③ 이미지 존재 인식 수(엔진 원본 산출 기준 — 텍스트 계열엔 figures
-    필드가 없어 boxes가 있는 OCR 계열만 0이 아님. post.figures는 represent 이후라 여기 기준에 못 쓴다).
-    각 엔진의 원본 결과(pd/<엔진>/<문서>.json)를 그대로 읽는다(대표 표준화·병합 이전의 그 엔진 산출)."""
-
-    def score(e):
-        try:
-            r = json.loads((pd / e / f"{doc}.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return (-1, -1, -1)
-        t = r.get("text") or ""
-        blocks = [b for b in t.split("\f") if b.strip()]
-        if len(blocks) >= 3:  # 쪽 구분(\f)이 있으면 — 첫/끝 줄이 절반 이상의 쪽에서 반복되면 머리글/바닥글로 보고 제외
-            from collections import Counter
-
-            firsts = Counter((b.strip().splitlines() or [""])[0] for b in blocks)
-            lasts = Counter((b.strip().splitlines() or [""])[-1] for b in blocks)
-            half = max(2, len(blocks) // 2)
-            body_lines = []
-            for b in blocks:
-                lines = b.strip().splitlines()
-                if lines:
-                    if firsts.get(lines[0], 0) >= half:
-                        lines = lines[1:]
-                    if lines and lasts.get(lines[-1], 0) >= half:
-                        lines = lines[:-1]
-                body_lines += lines
-            text_len = sum(len(x) for x in body_lines)
-        else:
-            text_len = len(t)  # 쪽 구분이 없는 엔진 산출 — 머리글/바닥글 분리 근거가 없어 전체 글자 수
-        cells = sum((tb.get("rows") or 0) * (tb.get("cols") or 0) for tb in (r.get("tables") or []))
-        if not cells:
-            cells = sum(ln.count("|") for ln in t.splitlines() if ln.strip().startswith("|"))
-        fig_marks = len(r["figures"]) if isinstance(r.get("figures"), list) else len(r.get("boxes") or [])
-        return (text_len, cells, fig_marks)
-
-    return sorted(engines, key=lambda e: (score(e), e), reverse=True)  # 동점이면 이름 역정렬로 결정적
 
 
 def _para_has_structure(para):
@@ -323,14 +267,6 @@ def fix_tables(rep, texts=()):
     return {"headers": n_h, "tab_rows": n_t}
 
 
-def standardize_on(config=None):
-    """PARSE_STANDARDIZE(환경변수, 기본 켬, =0으로 끔 — 끄면 rep이 이전 동작과 바이트 동일). SI20·AD46⑤."""
-    config = (
-        pc.cfg().transform.represent.standardize if config is None else config
-    )  # S7c — 설정 객체(bool 칸 → "true"/"false"로 아래 판정이 옛 글자 판정과 같음)
-    return str(config).strip().lower() not in ("", "0", "none", "false")
-
-
 def standardize_rep(d):
     """SI20·AD46⑤ — 표 칸 재현율 저하 원인(기호 정형화 부재)을 산출 쪽에서 메움: 엔진 묶음 직후·융합(facts 합치기) 전에
     본문·facts·표 칸에 common.core.text.standardize_text(기호 맵 + 첨자 표기 통일)을 적용. 원문(pd/<엔진>/<문서>.json)은
@@ -355,15 +291,6 @@ def standardize_rep(d):
         if f.get("cells"):
             f["cells"] = [_std(c) for c in f["cells"]]
     return n
-
-
-def scan_fill_on(config=None):
-    """PARSE_SCAN_FILL(환경변수, 기본 켬 — 정답률 1순위라 PARSE_STANDARDIZE·PARSE_POST와 반대 기본값).
-    끄면(0) fill_scan_pages를 안 불러 이전 동작과 바이트 동일."""
-    config = (
-        pc.cfg().extract.scan_fill if config is None else config
-    )  # S7c — 설정 객체(bool 칸 → "true"/"false"로 아래 판정이 옛 글자 판정과 같음)
-    return str(config).strip().lower() not in ("", "0", "none", "false")
 
 
 HIDDEN_AGREE_MIN = 0.6  # 독립 검토 MAJOR(AD31) — '검색 가능 스캔 PDF'(이미지와 같은 내용의 양질 숨은 OCR 글자층)
@@ -416,7 +343,7 @@ def _page_agreement(text_a, text_b, min_len=HIDDEN_AGREE_MIN_LEN):
 LOCAL_AGREE_MIN_LEN = 4  # 국소 비교는 원래 짧다(상자 하나 분량) — HIDDEN_AGREE_MIN_LEN(20)은 쪽 전체용이라
 # 그대로 쓰면 항상 "판단 불가"가 나옴. 그래도 극단적으로 짧은 조각(숫자 1~2자)은 거름.
 LOCAL_PAD_PT = 20.0  # 겹친 숨은 글자 상자 둘레 여백(pt) — 그 상자와 겹치는 OCR 줄만 "주변"으로 본다
-# (AD29 P2 reread.py FUSE_REREAD_PAD_PT=40pt보다 좁음 — 여긴 그림 하나 안에서만 비교).
+# (여긴 그림 하나 안에서만 비교).
 _NUM_TOK = __import__("re").compile(r"\d[\d.,]*\d|\d")
 
 
@@ -507,15 +434,57 @@ def _numbers_conflict(hidden_text, ocr_text):
     return h != o
 
 
+def _doc_page_count(doc_path):
+    """문서의 실제 쪽 수 — \\f(쪽 경계) 개수가 이것과 다르면 중간에 글자 0개(빈) 쪽이 있어 \\f로 나눈 쪽 번호를
+    못 믿는다(독립 검토 MAJOR-1: `_ocr_out`은 박스가 있는 쪽 사이에서만 \\f를 찍어, 빈 쪽이 있으면 뒤 쪽 번호가 밀림).
+    이미지 파일은 항상 1쪽. 못 세면(손상 등) None — 호출부가 안전하게(쪽 번호 확정 불가) 처리.
+    (pl-34 10-30 — scan_dedup.py를 지우며 이리로 옮김, 로직 그대로)"""
+    p = Path(doc_path)
+    if p.suffix.lower() != ".pdf":
+        return 1
+    try:
+        import pypdfium2 as pdfium
+
+        return len(pdfium.PdfDocument(str(p)))
+    except Exception:
+        return None
+
+
+def _page_texts(base, doc_path, boxes):
+    """base를 실제 쪽 번호별 글로 나눈다 — 독립 검토 MAJOR-1 반영:
+    1) boxes(엔진 출력의 rep["boxes"] — OCR 엔진만, 박스마다 실제 "page" 번호) 있으면 그걸로 그룹화한다.
+       글자 0개(박스 없는) 빈 쪽은 그냥 키가 없을 뿐이라 뒤 쪽 번호가 안 밀린다(\\f 세는 방식과 다름 — 이게 고친 점).
+    2) boxes가 없으면(OCR 아닌 엔진) \\f로 나누되, \\f 개수가 문서의 실제 쪽 수와 같을 때만 믿는다(빈 쪽이 없다는
+       뜻). 다르면 쪽 번호를 확정할 수 없음 → None(호출부가 그 문서는 건너뛴다 — 틀린 쪽끼리 비교·치환하는
+       것보다 안전한 쪽). (pl-34 10-30 — scan_dedup.py를 지우며 이리로 옮김, 로직 그대로)"""
+    if boxes:
+        pages = {}
+        for b in boxes:
+            p = b.get("page")
+            if p is None:
+                continue
+            pages.setdefault(p, []).append(b.get("text") or "")
+        return {p: "\n".join(ts) for p, ts in pages.items()}
+    if not base:
+        return {}
+    parts = base.split("\f")
+    if len(parts) == 1:
+        return {1: base}
+    n_pages = _doc_page_count(doc_path)
+    if n_pages is not None and len(parts) != n_pages:
+        return None  # 쪽 번호 확정 불가 — 건너뜀(MAJOR-1)
+    return {i + 1: p for i, p in enumerate(parts)}
+
+
 def fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=None):
     """PE1 후속(2026-10-07) — .pdf_text 대표 문서(rep) 안 스캔 쪽만 그 쪽의 OCR 엔진(.pdf_image 계열, stack 순서로
     정확도 가장 높은 성공 후보) 결과로 채운다(글자층 쪽은 그대로 — 쪽 전체를 OCR 글로 바꾸지 않음).
     사용자 10-29 — page_vlm(쪽 VLM 함수, vlm_page.page_text_pages — 스캔 신호 쪽만 병렬 호출)을 주면 그 쪽 글을 먼저 쓴다
     (기록 엔진 이름 "vlm_page" — OCR 엔진은 기본으로 안 돌고 .pdf_text 문서에 .pdf_image 엔진도 안 합침). 쪽 VLM 글이 하나도
     없을 때만 옛 OCR 엔진 결과로. 쪽 VLM은 글자 상자(boxes)가 없어 'hidden_overlap' 쪽의 국소 확인은 늘 '원래 글 유지'.
-    쪽 경계는 pipeline.transform.represent.scan_dedup._page_texts 재사용(boxes 있으면 그걸로, 없으면 \f 개수가 문서의 실제
+    쪽 경계는 _page_texts(boxes 있으면 그걸로, 없으면 \f 개수가 문서의 실제
     쪽 수와 같을 때만) — 대표·OCR 어느 쪽이든 쪽 번호를 확정할 수 없으면 건너뛴다(틀린 쪽끼리 바꿔치기하는 것보다 안전).
-    쪽 단위 품질 검사(독립 검토 보강) — 그 쪽 OCR 글의 garbage_ratio가 scan_dedup.pick과 같은 기준(OCR 신뢰도
+    쪽 단위 품질 검사(독립 검토 보강) — 그 쪽 OCR 글의 garbage_ratio가 기준(OCR 신뢰도
     0.9, 즉 garbage_ratio ≤ 0.1)을 넘으면 깨진 OCR 글로 덮지 않고 건너뛴다(원래 글 유지) — page_skip에 기록.
     AD31 reason='hidden'(독립 검토 MAJOR, 10-07 2차) — 그림과 같은 내용을 옮긴 양질의 숨은 글자층('검색 가능
     스캔 PDF')은 scan_pages_detail이 reason='chars'인 쪽과 똑같이 스캔 후보에 들어오지만, 원래 글(숨은 층)이
@@ -538,7 +507,6 @@ def fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=None):
         return None
     from pipeline.transform.figures.vlm_page import scan_pages_detail
     from pipeline.transform.represent.parse_qa import garbage_ratio
-    from pipeline.transform.represent.scan_dedup import _page_texts
 
     pages_detail = scan_pages_detail(doc_path)
     pages = list(pages_detail.keys())
@@ -560,7 +528,7 @@ def fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=None):
         text = ocr_pages.get(p, "")
         if not text.strip():
             continue
-        if garbage_ratio(text) > 0.1:  # scan_dedup.pick의 "OCR 신뢰도 0.9"와 같은 기준 — 깨진 OCR 글로 덮지 않음
+        if garbage_ratio(text) > 0.1:  # "OCR 신뢰도 0.9" 기준 — 깨진 OCR 글로 덮지 않음
             page_skip[p] = "OCR 글 품질 낮음(garbage_ratio > 0.1) — 원래 글 유지"
             continue
         if pages_detail.get(p) == "hidden":
@@ -597,7 +565,6 @@ def fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=None):
 def _ocr_pages(doc, dd, stack, pd, doc_path):
     """옛 경로 — .pdf_image 계열 OCR 엔진 중 정확도 가장 높은 성공 후보의 쪽별 글. 반환: (엔진, {쪽: 글}, boxes) 또는 건너뜀 dict."""
     from pipeline.transform.represent.repfmt import doc_accuracy
-    from pipeline.transform.represent.scan_dedup import _page_texts
 
     ocr_list = stack["parse"].get(".pdf_image", [])
     ocr_cands = [
@@ -671,14 +638,9 @@ from common.core.artifacts import code_fp  # noqa: E402
 from common.core.contract import source_record  # noqa: E402 — 문서 ID·원본 위치 규칙(모듈 계약)
 from pipeline.shared import postprocess as post_cfg  # noqa: E402 — PARSE_POST 해석(W1~W3·W9·W11 후보정 패키지)
 from pipeline.shared import runtrace  # noqa: E402 — op-01 run.progress
-from pipeline.transform.represent import fuse as fuse_mod  # noqa: E402 — AD29 P1 조각 단위 융합(fuse_mod.on() = PARSE_FUSE, 기본 켬)
-from pipeline.transform.represent import reread as reread_mod  # noqa: E402 — AD29 P2 좌표 재판독(reread_mod.on() = PARSE_FUSE_REREAD, 기본 켬)
-from pipeline.transform.represent import reread_stage3 as reread_p3_mod  # noqa: E402 — AD29 P3 그림 경계 OCR·VLM 선택형(on() = PARSE_FUSE_REREAD_P3, 기본 켬)
-from pipeline.transform.represent import (  # noqa: E402 — 모듈 중간 import(기존 배치 그대로 — 위 함수 정의 뒤)
-    table_inline,  # TA1(사용자 10-15) 엔진별 표 그리드를 모아 본문 제자리에 GFM 표(PARSE_TABLE_INLINE, 기본 켬)
-    table_std,  # AD23·SI20③ 표 표준 형식(PARSE_TABLE_STD, 기본 켬)
-)
-from pipeline.transform.represent import trace as trace_mod  # noqa: E402 — PA0 맥락 기록(trace_mod.on() = PARSE_CONTEXT, 기본 켬)
+from pipeline.transform.represent import fuse as fuse_mod  # noqa: E402 — AD29 P1 조각 단위 융합
+from pipeline.transform.represent import table_inline  # noqa: E402 — TA1(사용자 10-15) 엔진별 표 그리드를 본문 제자리에 GFM 표로
+from pipeline.transform.represent import trace as trace_mod  # noqa: E402 — PA0 맥락 기록
 
 
 def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_pages=None, page_covered=False):
@@ -687,8 +649,6 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     features, code_fp, supsub(첨자 표기본 전체 — 색인에는 안 들어가고 여기만)}를 남긴다.
     프로토타입(eval_hard_parse) 설정 F_context의 쌓는 순서(base, vtext, 그림 기록(+근처 본문), 차트)를 그대로 따름.
     PARSE_POST=none(feats 빔) → rep["text"] 불변(이전 동작과 바이트 동일, W10 설계대로 원본 층은 손대지 않음).
-    PARSE_DEDUP_SCAN(환경변수, 기본 꺼짐) — AD39: 스캔 쪽에서 OCR 본문(base)과 쪽 VLM 전사가 같은 쪽을 둘 다 담아
-    두 번 색인되던 것을 쪽마다 하나만 남기고(pipeline.transform.represent.scan_dedup) 다른 하나는 rep.post.page_alt로.
     out_images — 그림 PNG·index.jsonl·capped.jsonl이 쓰일 폴더(AG11 2단계 착수 조건, 10-08: 전엔 호출자가
     PARSE_IMAGES_ROOT 환경변수를 바꿔 치환해야 했던 것을 인자로 — 기본값 None이면 fig_mod.images_root()를 써
     이전과 바이트 동일, 운영 배치는 그대로 안 넘겨 기본 경로를 그대로 쓴다).
@@ -710,7 +670,6 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
         "attachments_cached": 0,
     }
     _pt = {
-        "dedup": 0.0,
         "vlm_page": 0.0,
         "figures": 0.0,
         "charts": 0.0,
@@ -723,32 +682,21 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     from pipeline.transform.figures import charts
     from pipeline.transform.figures import figures as fig_mod
     from pipeline.transform.figures import vlm_page as vp_mod
-    from pipeline.transform.represent import scan_dedup, supsub
+    from pipeline.transform.represent import supsub
 
     base = rep.get("text") or ""
     blocks = []
     doc_text = base  # 그림 근처 본문 언급(link_context) 검색 대상 — 쪽 VLM 옮기기 글자도 포함(스캔은 OCR 본문이 부실할 수 있어)
     if "vlm_page" in feats:
-        if scan_dedup.on():
-            base, page_alt, provs, n_dedup, dedup_skip = scan_dedup.dedup(base, doc_path, rep.get("boxes"), pages=vp_pages)
-            if page_alt:
-                info["page_alt"] = page_alt
-            info["dedup_scan"] = n_dedup
-            if dedup_skip:
-                info["dedup_scan_skipped"] = dedup_skip  # MAJOR-1 — 쪽 번호를 확정할 수 없어 건너뜀(기록만, 바이트는 안 바꿈)
-            _pt["dedup"] += time.time() - _pt0
-            _pt0 = time.time()  # 2026-10-22 — dedup 완료
-            doc_text = base
-        else:
-            # 10-29 — scan_fill이 쪽 VLM 글로 이미 채운 쪽은 덧붙이지 않음(같은 쪽이 본문에 두 번 — 호출은 캐시라 다시 안 감)
-            sf = ((rep.get("rep") or {}).get("scan_fill") or {}).get("filled") or {}
-            if vp_pages is None:
-                vp_pages = vp_mod.page_text_pages(doc_path)
-            vt = "\n".join(t for i, t, _ in vp_pages if t and sf.get(str(i)) != "vlm_page")
-            provs = [pv for _, _, pv in vp_pages]
-            if vt.strip():
-                blocks.append(vt)
-                doc_text = base + "\n" + vt
+        # 10-29 — scan_fill이 쪽 VLM 글로 이미 채운 쪽은 덧붙이지 않음(같은 쪽이 본문에 두 번 — 호출은 캐시라 다시 안 감)
+        sf = ((rep.get("rep") or {}).get("scan_fill") or {}).get("filled") or {}
+        if vp_pages is None:
+            vp_pages = vp_mod.page_text_pages(doc_path)
+        vt = "\n".join(t for i, t, _ in vp_pages if t and sf.get(str(i)) != "vlm_page")
+        provs = [pv for _, _, pv in vp_pages]
+        if vt.strip():
+            blocks.append(vt)
+            doc_text = base + "\n" + vt
         info["vlm_page_calls"] = len(provs)
         info["vlm_page_cached"] = sum(1 for pv in provs if pv.get("cached"))
         from pipeline.transform.figures.pptx_render import pptx_slide_vlm  # AD20(남은 것): pptx 아니면 즉시 []( 바이트 영향 0)
@@ -868,7 +816,6 @@ def represent(stack, parse_dir, src=None):
 
     meta = build(parse_dir, src) if src else {}  # 교차 확인 (라벨, 값) — 엔진별 결과가 있는 파싱 모듈에서 미리 → 구조화는 _rep만 읽음
     feats = post_cfg.active_features()  # PARSE_POST(기본 all) — none이면 이전 동작과 바이트 동일(W10)
-    std_on = standardize_on()  # PARSE_STANDARDIZE(기본 켬) — SI20·AD46⑤
 
     def _doc_one(_pair):
         """문서 1개 represent 처리(2026-10-22 문서 병렬 리팩터) — index 행 반환:
@@ -928,7 +875,7 @@ def represent(stack, parse_dir, src=None):
                 "tried": tried_of(doc, last, pd),
             }
             return None
-        _t = {"load": 0.0, "merge": 0.0, "fuse": 0.0, "reread": 0.0, "scanfill": 0.0, "post": 0.0, "table": 0.0, "agent": 0.0}
+        _t = {"load": 0.0, "merge": 0.0, "fuse": 0.0, "scanfill": 0.0, "post": 0.0, "table": 0.0, "agent": 0.0}
         _t0 = time.time()
         # 2026-10-22 — PARSE_REP_SELECT: first(첫 성공 엔진·파일 읽기 0) | acc(정확도만·파일 읽기 0) | best(정확도+풍부도, 기본)
         _sel = pc.cfg().transform.represent.rep_select or ""  # S7c — 설정 객체(없음·'' = "")
@@ -941,7 +888,7 @@ def represent(stack, parse_dir, src=None):
         rep = json.loads((pd / best["engine"] / f"{doc}.json").read_text(encoding="utf-8"))
         _t["load"] = time.time() - _t0
         _t0 = time.time()
-        std_n = standardize_rep(rep) if std_on else 0  # 엔진 묶음(텍스트 파싱) 직후·융합(아래 facts 합치기) 전 — SI20·AD46⑤
+        std_n = standardize_rep(rep)  # 엔진 묶음(텍스트 파싱) 직후·융합(아래 facts 합치기) 전 — SI20·AD46⑤
         best_facts_raw = [dict(f) for f in rep.get("facts") or []]  # AD29 P1 — 대표 자신의 원본 facts 스냅샷(아래서 rep["facts"]를
         # 다른 엔진 것으로 보충하기 전, fuse_mod가 엔진별 원본을 보게)
         other_docs = {}  # AD29 P1 — {엔진: 그 엔진 원본 결과}(fuse_mod 입력)
@@ -957,9 +904,8 @@ def represent(stack, parse_dir, src=None):
             if not f.exists():
                 continue
             other = json.loads(f.read_text(encoding="utf-8"))
-            other_docs[c["engine"]] = other  # AD29 P1 — std_on이면 아래서 제자리 표준화된 뒤의 값을 가짐(의도)
-            if std_on:
-                std_n += standardize_rep(other)
+            other_docs[c["engine"]] = other  # AD29 P1 — 아래서 제자리 표준화된 뒤의 값을 가짐(의도)
+            std_n += standardize_rep(other)
             texts.append(other.get("text") or "")
             for fact in other.get("facts") or []:
                 k = row_key(fact)
@@ -968,14 +914,12 @@ def represent(stack, parse_dir, src=None):
                     rep.setdefault("facts", []).append({**fact, "from": c["engine"]})
                     added += 1
         # 쪽 단위 보정 — 대표 엔진이 표/이미지를 인식 못한 쪽을, 인식한 다른 엔진의 쪽으로 교체
-        # 2026-10-22 — PARSE_MERGE_PAGES=0 으로 끔(⑧, 소요 ~5%·본문 미세 차이만)
         page_merged, page_details = 0, []
         para_merged, para_replaced = 0, 0
-        _mp = pc.cfg().extract.merge_pages  # S7c — 설정 객체(off=("0",) = 옛 !="0", ''은 켬)
-        if _mp and other_docs and rep.get("text"):
+        if other_docs and rep.get("text"):
             page_merged, page_details = _merge_pages(rep, other_docs)
         # 문단별 조각 보정 — 표/이미지를 더 많이 인식한 엔진의 문단을 우선, 같은 위치 문단 중 더 긴 것으로 교체
-        if _mp and texts and rep.get("text"):
+        if texts and rep.get("text"):
             merged, para_replaced = _merge_paragraphs(rep["text"], texts, other_docs)
             if para_replaced:
                 rep["text"] = merged
@@ -1000,30 +944,18 @@ def represent(stack, parse_dir, src=None):
             "page_merged": page_merged,  # 쪽 보정으로 교체된 쪽 수 (표/이미지 인식 우선)
             "page_merge_details": page_details if page_merged else [],  # 쪽별 교체 상세
             "richness": _richness(rep),  # 대표 엔진의 구조 인식 풍부도 (tables, facts, figures, boxes)
-            "standardize": {"on": std_on, "changed": std_n},
-        }  # SI20·AD46⑤ — 기호 맵·첨자 표기 표준화 적용 여부·바뀐 조각 수(되돌림 근거)
-        engine_docs = None  # 융합을 켰을 때만 채워짐
-        if fuse_mod.on():  # AD29 P1 — 조각(라벨:값·표 칸) 단위 맞추기+투표(모델 호출 0), 기본 켬
-            engine_docs = {best["engine"]: {"facts": best_facts_raw}}
-            engine_docs.update({e: {"facts": od.get("facts") or []} for e, od in other_docs.items()})
-            rep["fused"] = fuse_mod.fuse(engine_docs, best["engine"])  # 대표 본문·기존 facts는 안 건드림 — 새 칸만 추가
-            _t["fuse"] = time.time() - _t0
-            _t0 = time.time()  # 2026-10-22 — fuse 완료 (reread 전)
-            if rep["fused"].get("conflicts"):  # AD25(b)(c) — 자리(행 라벨)·엔진별 원문 표기·계열 수를 문서 밖
-                conflicts_out.append(
-                    {"doc": doc, "conflicts": rep["fused"]["conflicts"]}
-                )  # conflicts.jsonl로도 모음(지금까진 각 문서 _rep/<문서>.json 안에만 있었음)
-            if reread_mod.on():  # AD29 P2 — 갈린·한 계열뿐인 조각만 좌표 재판독(OCR, 기본 켬, PARSE_FUSE 전제)
-                rr_source = rep["rep"]["source"]
-                rr_doc_path = Path(rr_source["path"]) if rr_source else None
-                _rank = (
-                    _engine_out_rank(pd, doc, list(engine_docs)) if pc.cfg().transform.represent.reread_fallback_best else None
-                )  # 2026-10-22 사용자 지정 — P2도 못 가리면 산출 정확도 최고 엔진 후보로
-                reread_mod.rereview_facts(engine_docs, rep["fused"], best["engine"], rr_doc_path, engine_rank=_rank)
-                if reread_p3_mod.on():  # AD29 P3 — P2가 unverified로 남긴 자리만 그림 경계 OCR·VLM 선택형(기본 켬, PARSE_FUSE_REREAD 전제)
-                    reread_p3_mod.rereview_facts_p3(engine_docs, rep["fused"], best["engine"], rr_doc_path)
-                _t["reread"] = time.time() - _t0
-                _t0 = time.time()  # 2026-10-22 — reread P2+P3 시간
+            "standardize": {"on": True, "changed": std_n},
+        }  # SI20·AD46⑤ — 기호 맵·첨자 표기 표준화 바뀐 조각 수(되돌림 근거) · "on"은 옛 형식 유지(늘 True)
+        # AD29 P1 — 조각(라벨:값·표 칸) 단위 맞추기+투표(모델 호출 0)
+        engine_docs = {best["engine"]: {"facts": best_facts_raw}}
+        engine_docs.update({e: {"facts": od.get("facts") or []} for e, od in other_docs.items()})
+        rep["fused"] = fuse_mod.fuse(engine_docs, best["engine"])  # 대표 본문·기존 facts는 안 건드림 — 새 칸만 추가
+        _t["fuse"] = time.time() - _t0
+        _t0 = time.time()  # 2026-10-22 — fuse 완료
+        if rep["fused"].get("conflicts"):  # AD25(b)(c) — 자리(행 라벨)·엔진별 원문 표기·계열 수를 문서 밖
+            conflicts_out.append(
+                {"doc": doc, "conflicts": rep["fused"]["conflicts"]}
+            )  # conflicts.jsonl로도 모음(지금까진 각 문서 _rep/<문서>.json 안에만 있었음)
         source = rep["rep"]["source"]
         doc_path = Path(source["path"]) if source else None
         # 10-29 — 쪽 VLM은 PARSE_POST에 vlm_page가 있을 때만(run_docs light 레인·parse MCP의 supsub만 존중 — P1-1), 문서당 한 번만(M4).
@@ -1034,12 +966,10 @@ def represent(stack, parse_dir, src=None):
             from pipeline.transform.figures import vlm_page as vp_mod
 
             vp_pages = [] if covered else vp_mod.page_text_pages(doc_path)
-        if (
-            scan_fill_on()
-        ):  # PE1 후속 — .pdf_text 대표의 스캔 쪽만 쪽 VLM(없으면 OCR) 글로 채움(apply_post 전, 후보정이 채운 본문을 기준으로 돌게)
-            fill = fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=(lambda _p: vp_pages) if vp_pages is not None else None)
-            if fill is not None:
-                rep["rep"]["scan_fill"] = fill
+        # PE1 후속 — .pdf_text 대표의 스캔 쪽만 쪽 VLM(없으면 OCR) 글로 채움(apply_post 전, 후보정이 채운 본문을 기준으로 돌게)
+        fill = fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=(lambda _p: vp_pages) if vp_pages is not None else None)
+        if fill is not None:
+            rep["rep"]["scan_fill"] = fill
         _t["scanfill"] = time.time() - _t0
         _t0 = time.time()  # 2026-10-22 — scan_fill 완료
         with SP.span("transform.figures", doc_id=doc, ext=Path(doc).suffix.lower()):  # op-01 — 쪽 VLM·그림 VLM/OCR 호출 지표가 이 span에
@@ -1051,12 +981,8 @@ def represent(stack, parse_dir, src=None):
         # TA1(사용자 10-15) — apply_post·scan_fill 뒤, 즉 이 문서가 실제로 내보낼 rep["text"]가 다 정해진 뒤에 부른다:
         # table_inline이 찾는 표 자리(span)는 이 최종 본문 기준이어야 맞다(더 일찍 부르면 scan_fill이 쪽 전체를 OCR
         # 글로 갈아치울 수 있어 자리가 어긋날 수 있음 — 그때는 그냥 못 찾은 걸로 남고 본문은 안 바뀜, 안전).
-        if table_inline.on():  # TA1(기본 켬) — 엔진별 표 그리드를 모아 본문 제자리에 GFM 표로(rep["text"]도 바꿈)
-            rep["rep"]["table_inline"] = table_inline.inline_tables(rep, best["engine"], other_docs, std_on)
-        elif table_std.on():  # PARSE_TABLE_INLINE=0 — 이전 동작(대표 엔진 표만, 본문은 안 바꿈)과 바이트 동일
-            rep["tables_std"] = table_std.build_tables(rep.get("tables") or [], best["engine"], std_on)
-        if trace_mod.on():  # PA0 — 맥락 기록(rep.context·rep.decisions, 기본 켬) — 위에서 이미 계산한 값만 읽음
-            trace_mod.attach(rep, dd, cands, stack, feats, doc_path)
+        rep["rep"]["table_inline"] = table_inline.inline_tables(rep, best["engine"], other_docs)  # TA1 — rep["text"]도 바꿈
+        trace_mod.attach(rep, dd, cands, stack, feats, doc_path)  # PA0 — 맥락 기록(rep.context·rep.decisions)
         _t["table"] = time.time() - _t0
         _t0 = time.time()  # 2026-10-22 — table_inline+trace 완료
         rep["rep"]["stage_times"] = {k: round(v, 2) for k, v in _t.items()}  # 2026-10-22 — 단계별 소요(초) 기록
@@ -1064,7 +990,7 @@ def represent(stack, parse_dir, src=None):
         _pdt = (rep.get("post") or {}).get("post_times") or {}
         _pdetail = (
             " | post["
-            + " ".join(f"{k}={_pdt[k]:.1f}s" for k in ("dedup", "vlm_page", "figures", "charts", "attachments", "supsub") if k in _pdt)
+            + " ".join(f"{k}={_pdt[k]:.1f}s" for k in ("vlm_page", "figures", "charts", "attachments", "supsub") if k in _pdt)
             + "]"
             if _pdt
             else ""
@@ -1145,10 +1071,10 @@ def represent(stack, parse_dir, src=None):
         json.dumps({"stack": stack.get("name"), "docs": index}, ensure_ascii=False, indent=1), encoding="utf-8"
     )
     with (out_dir / "conflicts.jsonl").open("w", encoding="utf-8") as f:  # AD25(b)(c) — 표 행(자리)에서 값은 같은데 표기가
-        for r in conflicts_out:  # 갈린 엔진들(승자·패자·원문 표기) 문서 밖 한 파일로(PARSE_FUSE 꺼지면 빈 파일)
+        for r in conflicts_out:  # 갈린 엔진들(승자·패자·원문 표기) 문서 밖 한 파일로
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     _agg = {}
-    for k in ("load", "merge", "fuse", "reread", "scanfill", "post", "table"):
+    for k in ("load", "merge", "fuse", "scanfill", "post", "table"):
         _agg[k] = round(
             sum(
                 (
@@ -1169,11 +1095,11 @@ def represent(stack, parse_dir, src=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--stack", default=str(STACK_FILE))
+    ap.add_argument("--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file)")
     ap.add_argument("--parse-dir", default="output/parse")
     ap.add_argument("--src", default=None, help="파싱한 문서 폴더(원본 경로·sha256을 대표 결과에 남김 — 구조화 모듈이 원본 없이 돌 때 씀)")
     a = ap.parse_args(argv)
-    idx = represent(load_stack(a.stack), a.parse_dir, a.src)
+    idx = represent(load_stack(a.stack) if a.stack else pc.stack(), a.parse_dir, a.src)
     done = [r for r in idx if r["engine"]]
     from collections import Counter
 

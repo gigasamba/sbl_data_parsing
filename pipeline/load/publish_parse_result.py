@@ -6,18 +6,10 @@ Storage·EDW를 **읽기만** 한다. 공용 로직은 modules/load/parsing_meta
 요건(SI39, 사용자 10-08 — backlog/server.md SI39): ① 올리는 것은 **대표 결과(.md)**, 원본 파일은 올리지 않는다
 (원천 원본은 읽기만, 수정·삭제 금지) ② 겹침/건너뜀 키 = (source_system, 원본 전체 키) ③ Object Storage 키는
 항상 `<PM_PREFIX>/<source_system 또는 PM_PATH_MAP 새 앞부분>/<원본 폴더>/<파일명>/<파일명>_<parse_date>.md`(사용자 10-14) — 이미 있으면 건너뜀, `--reparse`로 명시한
-키만 새 날짜 폴더(옛 결과 안 덮음) ④ EDW는 INSERT만 + 상태 열(status·status_at)만 UPDATE 허용(`parsing_meta.
-update_status()`) ⑤ PM_BUCKET이 원천 원본 버킷과 같으면 거부 ⑥ DRM·파싱 실패는 EDW에 안 넣고
+키만 새 날짜 폴더(옛 결과 안 덮음) ④ EDW는 INSERT만 ⑤ PM_BUCKET이 원천 원본 버킷과 같으면 거부 ⑥ DRM·파싱 실패는 EDW에 안 넣고
 `output/publish/excluded_<날짜>.md` 보고서로만.
 
-OP1/OP9(원천 변경·삭제 탐지, --apply일 때만) — 문서 대장(AD16, common/registry.py)을 같이 갱신해 changed·deleted·
-touched(AD17①, 원본 바이트는 같고 날짜만 바뀜) doc_key를 `parsing_meta.apply_registry_status()`로 EDW status
-UPDATE(changed·deleted는 status 값 자체를 바꿈 · touched는 status 값은 그대로 두고 status_at만 — active는 안
-건드림, 그 밖 UPDATE 없음). deleted는 문서 대장이 자동으로 검색에서 숨김(색인 행 삭제 아님, `cli/registry.py
-unhide`로 되돌릴 수 있음) · changed는 보고만(`output/registry/report.md` — 사람이 `--reparse`로 명시하기 전까지
-재파싱하지 않음, 옛 내용 그대로 검색됨) · touched는 재파싱·새 판·변경 보고 모두 제외(report.md엔 건수만, 목록
-없음 — 파싱 결과끼리 비교하는 '판' 단위 작업(AD17②·D10)은 범위 밖·다음 단계). 문서 대장을 못 열면
-(DOC_REGISTRY=0·DB 없음) 조용히 건너뜀 — 게시 자체는 그대로 진행(전과 동일).
+문서 대장(OP1/OP9 — 원천 변경 탐지·EDW status UPDATE)은 C10(pl-12, 사용자 10-31)에 지움 — EDW는 INSERT만.
 
 사용(기본 --out의 하위 경로를 그대로 — pipeline.py와 같은 레이아웃):
   python cli/publish_parse.py [--out out] [--source-system FileStorageMap] [--version <판>] [--parse-date <날짜>]
@@ -153,7 +145,6 @@ def run(a):
             sp.rows(len(rows)).add(
                 eligible=out["upload_plan"]["eligible"], **{k: v for k, v in (result or {}).items() if isinstance(v, (int, float))}
             )
-        out["registry_status_update"] = _apply_registry_status(a.out, db)  # OP1/OP9 — changed·deleted만 status UPDATE(아래)
     finally:
         if hasattr(db, "close"):
             db.close()
@@ -163,65 +154,8 @@ def run(a):
     report_path = report_dir / f"excluded_{parse_date}.md"
     report_path.write_text(PM.render_excluded_report(rows), encoding="utf-8")  # SI39⑥ — DRM·실패는 여기로만
     out["excluded_report"] = str(report_path)
-    if out["registry_status_update"].get("changed_report"):
-        out["changed_report"] = out["registry_status_update"].pop("changed_report")
     print(json.dumps(out, ensure_ascii=False))
     return out
-
-
-def _apply_registry_status(out_dir, db):
-    """OP1/OP9 — publish --apply에서만: 문서 대장을 갱신(scan·diff·apply — deleted는 apply()가 자동 hide, OP1)하고
-    changed·deleted·touched(AD17①) doc_key의 EDW status UPDATE(PM.apply_registry_status, update_status()만 씀 —
-    touched는 status 값은 그대로, status_at만). changed는 report.md로만(재파싱 안 함, OP1) — output/registry/report.md에
-    이번 build의 new/touched/changed/deleted 요약(touched는 건수만, 목록 없음).
-    문서 대장을 못 열면(DOC_REGISTRY=0·DB 없음·그 밖 오류) 조용히 건너뜀(게시 자체는 막지 않음 — 전과 동일)."""
-    from common.store import registry as REG
-
-    reg_db = REG.try_open_db()
-    if reg_db is None:
-        return {"changed": 0, "deleted": 0, "skipped": 0, "note": "문서 대장 사용 안 함(DOC_REGISTRY=0 또는 연결 안 됨)"}
-    try:
-        from common.store.db import dbtool
-        from common.store.structdb import ensure_registry_schema
-
-        dbtool.require_struct(reg_db)  # S8a — 판 확인(낮거나 모르는 판은 StructDBError → 아래에서 문서 대장만 건너뜀, 게시는 계속)
-        ensure_registry_schema(reg_db)
-        diff, build_id = REG.build(out_dir, reg_db)
-        counts = PM.apply_registry_status(db, diff)
-        report_path = Path(out_dir) / "registry" / "report.md"
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(
-            f"# 문서 대장 build {build_id}\n\n"
-            f"- 새 문서 {len(diff['new'])}건 · **날짜만 바뀜(touched, 원본 바이트는 같음 — 재파싱·새 판·변경 보고 제외) "
-            f"{len(diff.get('touched') or [])}건** · **바뀜(보고만, 재파싱 안 함) {len(diff['changed'])}건** · "
-            f"**삭제(검색에서 숨김) {len(diff['deleted'])}건** · 그대로 {len(diff['unchanged'])}건\n\n"
-            + (
-                "## 바뀜(changed) — 사람 조치 뒤 재파싱 전까지 옛 내용 그대로 서빙\n"
-                + "\n".join(f"- {k}" for k in diff["changed"])
-                + "\n\n"
-                if diff["changed"]
-                else ""
-            )
-            + (
-                "## 삭제(deleted) — 검색에서 숨김(색인 행 삭제 아님, cli/registry.py unhide로 되돌릴 수 있음)\n"
-                + "\n".join(f"- {k}" for k in diff["deleted"])
-                + "\n"
-                if diff["deleted"]
-                else ""
-            ),
-            encoding="utf-8",
-        )
-        counts["changed_report"] = str(report_path)
-        return counts
-    except Exception as ex:
-        return {
-            "changed": 0,
-            "deleted": 0,
-            "skipped": 0,
-            "note": f"문서 대장 갱신 실패 — EDW 상태 갱신 건너뜀: {type(ex).__name__}: {str(ex)[:160]}",
-        }
-    finally:
-        reg_db.close()
 
 
 def main(argv=None):

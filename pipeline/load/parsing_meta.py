@@ -6,7 +6,7 @@
 ① 올릴 것 = **대표 결과(.md)** — 원본 파일은 올리지 않는다(원천 원본은 읽기만, 수정·삭제 금지). `render_md()`가
    `_rep/<doc>.json`(text·tables_std)에서 마크다운을 만든다.
    + 사용자 10-14: 같은 날짜 폴더에 파싱 결과 원본도 함께(`raw_artifacts()` — <파일명>_<날짜>.json·<엔진>_<판>_<파일명>.json·vlm_<모델>_<파일명>.jsonl·
-   <파일명>_<날짜>_meta.json, rep.md를 마지막에 써서 완료 표시 · `PM_UPLOAD_RAW=0`이면 옛 동작). 원본 문서 파일은 여전히 안 올림.
+   <파일명>_<날짜>_meta.json, rep.md를 마지막에 써서 완료 표시). 원본 문서 파일은 여전히 안 올림.
 ② 겹침/건너뜀 키(KEY) = (source_system, source_key) — source_key는 **원본 Object Storage 전체 키**(경로 포함,
    manifest의 "key" — 폴더 직접 소스 등 키가 없으면 상대 경로인 file_name으로 대체). 파일 이름만 보던 SI37보다 더
    정확한 키(두 폴더의 같은 이름 파일이 서로 안 겹침).
@@ -18,10 +18,8 @@
    같이 쓰는 sidecar(`source.json`, `_sidecar_key()`)로 "이미 있는 키가 정말 같은 문서인가"를 대조해 다르면(또는
    sidecar가 없으면) 조용히 건너뛰지 않고 그 문서만 에러로 거부한다(`apply()`의 `error_key_collision`).
 ④ EDW = INSERT만(이름 아니라 KEY가 이미 있으면 건너뜀, 재파싱 행은 예외 · 업로드가 거부된(`error_key_collision`)
-   문서는 저장이 안 됐으므로 EDW에도 안 들어감 — "저장 안 됐는데 성공"을 EDW가 보고하면 안 된다) + **상태 열
-   (status·status_at)만 UPDATE 허용**(active·changed·deleted, `update_status()` — OP1이 호출할 유일한 쓰기 경로,
-   그 밖 UPDATE 없음). AD17① touched(원본 바이트는 같고 날짜만 바뀜)는 `update_status_at()` — status 열은 안
-   쓰고 status_at만, SELECT로 읽은 status 값이 그대로일 때만(경합 시 0행 — 다른 쓰기가 이김, 조용히 건너뜀).
+   문서는 저장이 안 됐으므로 EDW에도 안 들어감 — "저장 안 됐는데 성공"을 EDW가 보고하면 안 된다). UPDATE 없음
+   (상태 열 UPDATE 길은 C10 10-31에 문서 대장과 함께 지움).
 ⑤ `check_bucket_overlap()` — PM_BUCKET이 원천 원본이 실제로 있는 버킷과 같으면 거부. `file://`(로컬 가짜 Object
    Storage, 시험 전용)는 이 검사를 건너뛴다. manifest에 s3 URI가 하나도 없으면(예: 폴더 전용 소스 등) 비교할
    근거가 없어 **열려 있음(fail-open, 검사를 건너뜀)** — PM1이 버킷을 정할 때 이 경계도 함께 결정해야 한다.
@@ -51,14 +49,13 @@ import json
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
 # safe_name·safe_join은 common/ids.py(독립 검토 MAJOR-1) — modules/load가 modules/parse를 import하면 이미지 경계
 # 위반이라 공용 위치는 common/(source.py도 같은 함수를 씀, dev/modules/parse/source.py 참고).
-from common.config import settings as C  # noqa: E402 — common 칸(VLM_MODEL·OS_*) · 비밀 꺼내기(S7c)
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.contract import file_hash, safe_filename, safe_path_join  # noqa: E402
-from common.core.paths import CRITERIA_FILE  # noqa: E402
-from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
+from common.config import settings as C  # common 칸(VLM_MODEL·OS_*) · 비밀 꺼내기(S7c)
+from common.core.console import utf8_stdout
+from common.core.contract import file_hash, safe_filename, safe_path_join
+from common.core.paths import CRITERIA_FILE
+from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 
 _CROSS_ACC_FULL = json.loads(CRITERIA_FILE.read_text(encoding="utf-8"))["run"][
     "cross_acc_full"
@@ -71,7 +68,6 @@ from common.store.parsing_meta_db import (  # noqa: E402,F401
     COLUMNS,
     DEFAULT_TABLE,
     KEY,
-    STATUS_VALUES,
     TABLE_ID_RE,
     MssqlStore,
     SqliteStore,
@@ -181,7 +177,7 @@ def render_md(rep):
     """대표 결과(`_rep/<doc>.json`) → 마크다운(SI39① — 업로드 대상은 이것, 원본이 아님). 본문(쪽 구분 \\f는 빈
     줄로) + 표(`tables_std`가 있으면 GitHub 표, 없으면 원시 `tables[].text`를 코드블록으로) — 이 저장소에 기존
     md 렌더러가 없어 최소 결정적 렌더러로 새로 만듦(순수 함수, I/O 없음).
-    TA1 — `table_inline`(PARSE_TABLE_INLINE, 기본 켬)이 표를 이미 본문 제자리에 넣은 표(entry["inline"] True)는
+    TA1 — `table_inline`이 표를 이미 본문 제자리에 넣은 표(entry["inline"] True)는
     여기서 다시 안 붙인다(끝에 또 붙으면 같은 표가 두 번 — 이 백로그가 고치려던 것). 자리를 못 찾아 본문엔 안
     들어간 표(inline False·끈 경우 inline 칸 자체가 없음, 옛 동작과 같음)는 그대로 끝에 붙인다."""
     parts = []
@@ -335,7 +331,7 @@ def engines_used(rep_json, env_fallback=True):
       rep.rep.engine(대표로 뽑힌 엔진) → role='rep' · rep.rep.tried(시도한 엔진 전부, rapidocr_ko·qwen_vlm 포함) 중
       대표가 아닌 것 → role='ocr'(_OCR_ENGINE_NAMES) 또는 'candidate'(그 밖 텍스트 엔진) · rep.post.vlm_page_calls
       (+모델 rep.post.vlm_models.page) → role='vlm_page' · rep.post.figures(+모델 rep.post.vlm_models.figure) →
-      role='vlm_figure' · rep.fused.reread(좌표 재판독 OCR) → role='reread' · rep.agent(AG11 판단, 있으면) →
+      role='vlm_figure' · rep.agent(AG11 판단, 있으면) →
       role='agent'. 항목 = {"engine","role","status","version_or_model","calls"}.
     rep_json이 비었으면([], None)."""
     if not rep_json:
@@ -368,11 +364,6 @@ def engines_used(rep_json, env_fallback=True):
         if fig_fb:
             row["source"] = "env_fallback"
         out.append(row)
-    reread = (rep_json.get("fused") or {}).get("reread") or {}
-    if reread:
-        out.append(
-            {"engine": "reread_ocr", "role": "reread", "status": "ok", "version_or_model": None, "calls": reread.get("attempted") or 0}
-        )
     agent = rep_json.get("agent") or {}
     if agent:
         out.append(
@@ -386,8 +377,6 @@ def engines_used(rep_json, env_fallback=True):
     vlm_bits = ([f"page×{page_calls}"] if page_calls else []) + ([f"fig×{fig_calls}"] if fig_calls else [])
     if vlm_bits:
         parts.append(f"vlm={page_model or fig_model or '모델?'} " + " ".join(vlm_bits))
-    if reread.get("attempted"):
-        parts.append(f"reread×{reread['attempted']}")
     if agent:
         parts.append(f"agent={agent.get('agent') or 'agent'}")
     summary = "; ".join(parts) or None
@@ -395,13 +384,11 @@ def engines_used(rep_json, env_fallback=True):
 
 
 def raw_artifacts(parse_dir, name, figs, runs=None):
-    """PM_UPLOAD_RAW(사용자 10-14, 기본 켬 · =0이면 옛 동작 rep.md만) — rep.md와 같은 날짜 폴더에 함께 올릴 것
+    """사용자 10-14 — rep.md와 같은 날짜 폴더에 함께 올릴 것
     [(파일 이름, 로컬 Path 또는 텍스트)]: rep.json(후보정까지 끝난 대표 결과 원본 전체) · engines/<엔진>.json(엔진별
     파싱 원본 — provenance.engine_version 포함) · figures.jsonl(이 문서 그림 기록 — VLM 모델·prompt_id·캡션·본문
     언급) · meta.json(엔진 판·VLM 모델·prompt_id·맥락 요약). 큰 파일은 Path로 넘겨 apply()가 그대로 올린다(메모리에
     안 담음)."""
-    if not pc.cfg().load.publish.upload_raw:
-        return []
     parse_dir = Path(parse_dir)
     out = []
     rep_p = parse_dir / "_rep" / f"{name}.json"
@@ -463,9 +450,8 @@ def plan(
     reparse_keys = reparse_keys or set()
     parse_date = parse_date or today()
     out, missing = [], 0
-    raw_on = pc.cfg().load.publish.upload_raw
-    figs_by_doc = _figures_by_doc(Path(rep_dir).parent) if raw_on else {}
-    runs = _runs_by_doc_engine(Path(rep_dir).parent) if raw_on else {}
+    figs_by_doc = _figures_by_doc(Path(rep_dir).parent)
+    runs = _runs_by_doc_engine(Path(rep_dir).parent)
     for e in entries:
         name = e.get("file_name")
         if not name:
@@ -743,36 +729,6 @@ def make_storage():
     if bucket.startswith("file://"):
         return LocalFolderStore(bucket[len("file://") :])
     return S3Store(bucket)
-
-
-def apply_registry_status(db, registry_diff):
-    """OP1/OP9 — 문서 대장 diff(changed·deleted·touched doc_key)에 따라 그 doc_key의 EDW 행만 status·status_at
-    UPDATE(update_status()만 씀 — SI39④ 유일한 쓰기 경로). doc_key가 EDW에 아직 없으면(업로드 전) 건너뜀
-    (skipped로 셈). registry_diff = common.store.registry.diff_against()·build()의 반환값(또는 그와 같은 모양의 dict).
-    changed·deleted = status 열 자체를 그 값으로 바꿈(기존 동작) · touched(AD17① — 원본 바이트는 같고 날짜만
-    바뀜, 파싱 결과 비교·새 판은 범위 밖·다음 단계)는 **status 열은 쓰지 않고 status_at만** 새로 찍음
-    (`db.update_status_at()` — SELECT로 읽은 status 값이 UPDATE 때까지 그대로일 때만 성공하는 조건부 UPDATE,
-    독립 검토 10-08 반영: 그 틈에 다른 쓰기가 changed·deleted로 바꿨으면 0행 — 건너뜀, 옛 값으로 덮어쓰지 않음).
-    새 표·열 없이 기존 status 열 그대로(STATUS_VALUES 불변, status 열에 'touched'라는 값을 넣지 않는다).
-    반환: {"changed": 적용 행 수, "deleted": 적용 행 수, "touched": 적용 행 수(경합으로 0행 된 건 제외), "skipped": EDW에 없어 건너뛴 doc_key 수}."""
-    counts = {"changed": 0, "deleted": 0, "touched": 0, "skipped": 0}
-    for status in ("changed", "deleted"):
-        for doc_key in registry_diff.get(status) or []:
-            rows = db.find_by_doc_key(doc_key)
-            if not rows:
-                counts["skipped"] += 1
-                continue
-            for r in rows:
-                db.update_status(r["source_system"], r["source_key"], r["parse_date"], status)
-            counts[status] += len(rows)
-    for doc_key in registry_diff.get("touched") or []:
-        rows = db.find_by_doc_key(doc_key)
-        if not rows:
-            counts["skipped"] += 1
-            continue
-        for r in rows:
-            counts["touched"] += db.update_status_at(r["source_system"], r["source_key"], r["parse_date"], r["status"])
-    return counts
 
 
 if __name__ == "__main__":

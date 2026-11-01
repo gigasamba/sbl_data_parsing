@@ -14,11 +14,11 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
-from pathlib import Path
 
 from common.core.console import utf8_stdout
+from common.core.paths import DEPLOY_ROOT
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = DEPLOY_ROOT  # 저장소 루트(PC) — git ls-files 기준
 _SKIP = (
     "valid_env/",
     ".claude/",
@@ -31,9 +31,6 @@ PREFIXES = ("LLM", "VLM", "EMBED")
 
 # 규칙(아래 정규식)으로 못 잡는 읽기 — 이름 목록·동적 이름(9-4 "이름 목록") · S7a에 다시 모으며 찾음
 NAME_LIST = {
-    "TRIGGER_SHUTDOWN_TIMEOUT_SEC": "pipeline/trigger_server.py(_serve 인자 기본값)",
-    "E2E_QA_SET": "pipeline/check_env.py(경로 점검 표)",
-    "E2E_QUESTIONS": "pipeline/check_env.py(경로 점검 표)",
     "VLM_EXTRA_BODY": "common/ai/adk.py(_EXTRA_ENV_KEY 표)",
     **{
         f"RDB_COL_{f}": 'pipeline/extract/source.py(f"RDB_COL_{k.upper()}")'
@@ -79,10 +76,6 @@ NOT_SETTINGS = {
         "삭제 후보",
         "S7b에 RUN_ENV=local로 대체 — 코드가 더 읽지 않음(migrate는 옛 env 파일의 LOCAL_RUN=1을 common.run_env: local로)",
     ),
-    "MINERU_BIN": (
-        "env로 남김",
-        "엔진 파일 registry.py가 env를 직접 읽음(기본 mineru — 엔진 지문 파일이라 그대로) · 설정 칸은 10-29에 지움(엔진 구성에서 뺀 엔진)",
-    ),
     "NETWORK_HOST": ("env로 남김", "entrypoint 신호(compose)"),
     "OMP_NUM_THREADS": ("env로 남김", "라이브러리(OpenMP)가 읽음"),
     "PARSE_RUN_ID": ("env로 남김", "부모 → 자식 프로세스 신호"),
@@ -98,11 +91,15 @@ NOT_SETTINGS = {
     "SCARF_NO_ANALYTICS": ("env로 남김", "외부 라이브러리 원격 측정 끄기 — Dockerfile ENV(U-1, S7a2) · settings·빈 틀에서만 뺌(S7e)"),
     "TESSDATA_PREFIX": ("env로 남김", "라이브러리(tesseract)가 읽음"),
     "TRANSFORMERS_OFFLINE": ("env로 남김", "라이브러리가 읽음"),
-    "TRIGGER_MODULE": ("env로 남김", "compose 서비스별 신호"),
     "TZ": ("env로 남김", "OS·이미지 ENV"),
     "USER": ("env로 남김", "OS 사용자 이름(OS가 줌)"),
     "USERNAME": ("env로 남김", "OS 사용자 이름(Windows)"),
     "ALLOW_NO_ASSETS": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
+    **{
+        n: ("인자", "빌드·굽기 스크립트 변수(build_ship.sh·bake.sh·ship_stage.sh — op-06·op-07)")
+        for n in ("APP_VERSION", "VCS_REF", "BAKE_TEST", "CODE_BUNDLE", "CODE_DIR", "CODE_OUT")
+    },
+    "NF": ("인자", "awk 내장 변수($NF — build_ship.sh tar 권한 점검), 설정 아님"),
     "SMOKE_OVERLAY_DIR": ("인자", "PC 시험 Docker 덮기 파일 폴더 — smoke_test.sh가 mktemp로 만들어 compose에 넘김(S7e2)"),
     "ASSET_SRC": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "BUILDKIT_SYNTAX": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
@@ -128,6 +125,15 @@ NOT_SETTINGS = {
     "TAG": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "TARGET": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "WHY": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
+    "APP_VERSION": ("인자", "Dockerfile 빌드 인자 — 이미지에 버전을 새김(build_ship.sh가 VERSION 파일에서, op-09)"),
+    "VCS_REF": ("인자", "Dockerfile 빌드 인자 — 이미지에 커밋을 새김(build_ship.sh, op-09)"),
+    "CODE_OUT": ("인자", "build_ship.sh — 코드 묶음 출력 파일(op-09)"),
+    "CODE_BUNDLE": ("인자", "ship_stage.sh — 실행 이미지와 함께 옮길 코드 묶음 파일(bake.sh가 넘김, op-09)"),
+    "BAKE_TEST": ("인자", "bake.sh — PC 시험 태그면 1(태그가 VERSION과 달라도 멈추지 않음, op-09)"),
+    "CODE_DIR": (
+        "인자",
+        "호스트 스크립트 변수 — 개발 서버 코드 폴더(image_vars.sh가 실행 이미지일 때 pwd로 채움, compose.code*.yml 마운트 — op-09)",
+    ),
     "COGNEE_EXPORT_DIR": ("삭제 후보", "빈 틀에만 — 코드가 안 읽음"),
     "DATA_PARSING_IMAGE": ("삭제 후보", "S6b 옛 이름 — image_vars.sh가 거부 안내만"),
     "ENV_AUTOLOAD": ("삭제 후보", "코드가 읽은 적 없음 — 명령 줄 흔적만(S7a2, VS7a R-8)"),
@@ -154,9 +160,108 @@ NOT_SETTINGS = {
     "LLM_SYNTHETIC_TRUTH": ("삭제 후보", "합성 문서 선언 잠금 삭제(사용자 10-29) — 외부 허용은 *_ALLOW_EXTERNAL + RUN_ENV=local"),
     "SYNTHETIC_TRUTH": ("삭제 후보", "LLM_SYNTHETIC_TRUTH의 옛 별칭 — 둘 다 삭제(사용자 10-29)"),
     "ZZ_BASE_URL": ("삭제 후보", "ping_models selftest의 가짜 이름"),
+    "SERVER_ENV_DIR": ("env로 남김", "호스트 셸·systemd가 settings.yaml을 찾는 폴더(설정 칸 common.paths.config_dir는 op-08에 지움)"),
+    "POSTGRES_DB": ("env로 남김", "PG 컨테이너 env — compose가 PG_DB로 채움(설정 칸은 op-08에 지움)"),
+    "POSTGRES_USER": ("env로 남김", "PG 컨테이너 env — compose가 PG_USER로 채움(설정 칸은 op-08에 지움)"),
+    **{
+        n: ("삭제 후보", f"삭제됨(op-08, 사용자 10-30) — {why}")
+        for n, why in (
+            ("CRITERIA_FILE", "코드 상수 paths.CRITERIA_FILE"),
+            ("PM_SOURCE_SYSTEM", "코드 고정값 FileStorageMap"),
+            ("E2E_QA_SET", "형식 점검만 하던 칸"),
+            ("E2E_QUESTIONS", "형식 점검만 하던 칸"),
+            ("MCP_QUERY_CACHE", "common.models.embed.query_cache(EMBED_QUERY_CACHE)로 합침"),
+            ("EDW_EMBED", "pipeline.transform.structure.embed(PIPE_EMBED)로 합침"),
+            ("EMBED_DIM", "ping_models는 받은 차원만 보여 줌"),
+        )
+    },
+    **{
+        n: ("삭제 후보", "삭제됨(op-08, 사용자 10-30) — 되돌리기 스위치: 늘 켬(옛 동작 코드 지움)")
+        for n in (
+            "REGISTRY_EDITIONS",
+            "PARSE_MERGE_PAGES",
+            "PARSE_PAGE_SCAN",
+            "PREPARE_ROTATE_FAST",
+            "PARSE_SCAN_FILL",
+            "PARSE_TABLE_INLINE",
+            "PARSE_TABLE_STD",
+            "PARSE_TABLE_STITCH",
+            "CHART_VALUES_DET",
+            "DIAGRAM_EDGES_DET",
+            "PARSE_DOC_SHAPE_FIGURE",
+            "PARSE_NESTED_FIGURE",
+            "FIG_OCR_FALLBACK",
+            "FIG_OVERLAY_CLUSTER",
+            "PARSE_PPTX_SLIDE_VLM",
+            "VECTOR_BOX_DIAGRAM",
+            "VLM_FIG_KIND",
+            "VLM_FIG_SELECT",
+            "PARSE_TOKEN_NORM",
+            "PARSE_CONTEXT",
+            "PARSE_FUSE",
+            "PARSE_FUSE_SIGNALS",
+            "PARSE_QA_CARRY_FORWARD",
+            "PARSE_STANDARDIZE",
+            "FIG_PAGE_CHILD_DEDUP",
+            "BUNDLE_KEEP_EMPTY_FIG",
+            "CHUNK_HEAD",
+            "CLIENT_ROSTER_SEED",
+            "DRAFT_TERMS",
+            "PM_UPLOAD_RAW",
+            "QUERY_EXPAND_DRAFT",
+            "QUERY_EXPAND",
+            "QUERY_EXPAND_SHORTTOK",
+            "SEARCH_VECTOR_ALIAS_EXPAND",
+            "SEARCH_AGG_FX",
+            "SEARCH_AGG_ROUTE",
+            "SEARCH_CLIENT_FILTER",
+            "SEARCH_COPY_GROUP",
+            "SEARCH_ENTITY_SPLIT",
+            "SEARCH_EVIDENCE_GATE",
+            "SEARCH_TIE_BREAK",
+            "SEARCH_TYPE_WEIGHTS",
+            "CAP_RANKED",
+            "LLM_EMPTY_RETRY",
+        )
+    },
+    "PARSE_TABLE_DB": ("삭제 후보", "삭제됨(op-08, 사용자 10-30) — 표 정형 적재(doc_table·doc_cell) 기능째 지움"),
+    **{
+        n: ("삭제 후보", "삭제됨(op-08, 사용자 10-30) — 스트리밍 파싱(pipeline/stream.py) 기능째 지움")
+        for n in (
+            "PARSE_STREAM",
+            "PARSE_STREAM_FINGERPRINT",
+            "PARSE_STREAM_BATCH",
+            "KEEP_RAW_LAYER",
+            "KEEP_ENGINE_CACHE",
+            "PARSE_STREAM_TEST_CRASH",
+        )
+    },
+    **{
+        n: ("삭제 후보", "삭제됨(op-08, 사용자 10-30) — 실험 기능째 지움")
+        for n in (
+            "PARSE_SHADOW",
+            "SEARCH_AGG_LLM",
+            "SEARCH_AGG_LLM_TIMEOUT",
+            "EDW_SUMMARY_LLM",
+            "VLM_FIG_TEXT_SKIP",
+            "BM25_STAT_REBUILD",
+            "KEEP_LOCAL_ORIGINALS",
+        )
+    },
+    **{
+        n: ("삭제 후보", "삭제됨(op-08 ②, 사용자 10-30) — 읽는 곳이 없어진 칸(① 기능 삭제 뒤)")
+        for n in (
+            "PARSE_TMP_MAX_GB",
+            "DISK_FREE_WARN_GB",
+            "ENGINE_CACHE_WARN_GB",
+            "PARSE_SHADOW_MAX",
+            "SEARCH_AGG_LLM_MIN",
+            "PARSE_KEEP_MAX_GB",
+        )
+    },
 }
 # 모은 키가 아닌 것(셸 문법·Dockerfile ARG·selftest 가짜 이름)
-IGNORE = {"BASE", "X_ALLOW_EXTERNAL"}
+IGNORE = {"BASE", "X_ALLOW_EXTERNAL", "NF"}  # NF — awk의 `$NF`(마지막 칸)를 셸 변수로 잘못 잡음(op-09)
 
 _K = r"([A-Z][A-Z0-9_]{1,})"
 _PY = [
@@ -279,7 +384,7 @@ def object_reads():
     역할 접두로 짓는 이름(`{prefix}_BASE_URL` 꼴 — PREFIXES)의 꼬리가 나오면 읽는 것으로 친다."""
     from common.config import settings as S
 
-    root = Path(__file__).resolve().parents[2]
+    root = ROOT
 
     def texts(folder, skip):
         return (

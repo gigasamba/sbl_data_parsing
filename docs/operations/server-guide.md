@@ -11,38 +11,38 @@
 
 | 이미지 | 역할 | `RAG_MODULE` | 돌리는 서비스(`deploy/host/compose/compose.pipeline.yml`) |
 |---|---|---|---|
-| `data-pipeline` | 파싱(dedup→prepare→파싱→대표 결과)·구조화(청킹·임베딩)·적재(PostgreSQL)·퍼블리시 | `pipeline` | 1회: `parse`·`structure`·`load`·`publish`·`index_a`·`index_b` · 상주 트리거 컨테이너(선택, 같은 이미지): `data-pipeline-parse`(`TRIGGER_MODULE=parse`)·`data-pipeline-structure`(`TRIGGER_MODULE=structure`) |
-| `mcp-server` | 검색 MCP(상주) + 도구(`mcp_eval` 등) | `mcp` | `mcp`(상주, 컨테이너 이름 `mcp-server`) · `retrieval`(도구 job) |
+| `data-pipeline` | 파싱(dedup→prepare→파싱→대표 결과)·구조화(청킹·임베딩)·적재(PostgreSQL)·퍼블리시 | `pipeline` | 1회: `parse`·`structure`·`load`·`publish`·`index_a`·`index_b` · 상주 컨테이너(같은 이미지, 일 없이 떠 있음 — `run_docs.py`가 docker exec): `data-pipeline-parse`·`data-pipeline-structure` |
+| `mcp-server` | 검색 MCP(상주) | `mcp` | `mcp`(상주, 컨테이너 이름 `mcp-server`) — 도구 job `retrieval`·`mcp_eval`은 11-01에 지움(e2-10) |
 
 옛 이름: `data-parsing`·`data-structure` → `data-pipeline`(컨테이너 `data-pipeline-parse`·`data-pipeline-structure`), `data-retrieval` → `mcp-server`.
 
 - 각 이미지의 `entrypoint.sh`는 받은 명령을 `RAG_MODULE`로 거른다. 다른 이미지의 명령이면 종료 코드 64(오류 메시지에 맞는 이미지를 알려 줌).
-- `full`(dedup → prepare → night를 한 컨테이너에서)은 data-pipeline만 받고 mcp-server는 거부한다. 서버 새벽 배치의 정본은 `trigger.sh night`(모듈별 컨테이너)다.
+- 서버 입구는 `run_docs.py` 하나다(사용자 10-31). 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`는 11-01에 지웠다.
 - `tool index`(AD41 색인 빌더 — `index_a`·`index_b`)도 data-pipeline에서 돈다.
-- 공통 명령(어느 이미지에서나): `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`·`smoke [--src <폴더>]`.
+- 공통 명령(어느 이미지에서나): `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`.
 
 **코드 폴더 배치(`PATCH_CODE`, 기본 `/srv/rag/code/live`)** — `live/app/`은 컨테이너가 읽기 전용으로 붙이는 코드(`app/deploy/<폴더>`·`app/docker`), `live/deploy/host/`·`live/deploy/release/`는 호스트에서 부르는 스크립트·compose·systemd 파일이다. 아래 명령은 모두 `live`(코드 폴더 루트)에서 실행한다.
 
+### 0-1. 개발 서버는 실행 이미지 + 코드 폴더(op-06, 사용자 10-30)
+개발 서버(폐쇄망)는 코드 없는 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`을 쓰고, 코드 폴더(저장소 트리 그대로)를 `/app/deploy`에 읽기 전용으로 붙인다 — 셸·systemd에 `CODE_DIR=/srv/rag/code/live`(판 폴더를 가리키는 링크)를 주면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`가 `compose.code.yml`·`compose.code.mcp.yml`을 덧붙인다. settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`는 실행 이미지 태그. 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 설치·바꾸기·되돌리기는 README §5-0(배포 단계 표)과 [release-and-patch.md](release-and-patch.md) §1-1. 수집(운영) 서버는 코드가 든 이미지 — 개발 서버에서 `bake.sh`로 구운 것(release-and-patch §1-2), 띄우는 법은 아래 그대로.
+
 ## 1. 설치 · 첫 실행
 
-### 1-1. 이미지 받기
-```bash
-gunzip -c data-pipeline_<태그>.tar.gz | docker load      # 이미지 2개(data-pipeline·mcp-server) 각각(조각이면 cat part* > 로 합친 뒤)
-```
-PC에서 보낼 때는 `deploy/release/build_ship.sh`(빌드+전송+적재 한 번에, SSH) 또는 `deploy/release/ship_stage.sh`(저장만, 95MB 조각) — 상세는 [release-and-patch.md](release-and-patch.md) §5.
+### 1-1. 이미지와 코드 받기
+설치는 README §5-0 "개발 서버 설치" 한 길로 한다(op-10): 코드 git·이미지 git(`sbl_images`)을 zip으로 받아 한 폴더에 풀고, `DOCKER=podman bash sbl_images-main/load.sh <판>`으로 이미지를 불러온다. 운영 서버(구운 이미지)도 같은 `load.sh`로 불러온다([release-and-patch.md](release-and-patch.md) §1-2).
 
 ### 1-2. 설정 파일
 ```bash
 sudo mkdir -p /srv/rag/env && sudo chmod 700 /srv/rag/env
 cp <받은 저장소 ZIP>/settings.sample.yaml /srv/rag/env/settings.yaml   # 설정 파일은 이것 하나
 sudo chown 10001:<운영 계정 그룹> /srv/rag/env/settings.yaml && sudo chmod 640 /srv/rag/env/settings.yaml   # 컨테이너 사용자 UID 10001이 읽음(운영 계정 UID가 10001이면 600 — refactor.md C-09)
-# 값 채우기 — 항목·설명은 settings.sample.yaml·env-guide.md, [서버 옛 값: …] 항목은 그 값으로(C-39), 값은 문서·채팅·로그에 쓰지 않는다 · 옛 pipeline.env가 있으면 release-and-patch.md §5-4(옮기기)
+# 값 채우기 — 항목·설명은 settings.sample.yaml·env-guide.md, env-guide "옛 서버 값" 표의 항목은 그 값으로(C-39), 값은 문서·채팅·로그에 쓰지 않는다 · 옛 pipeline.env가 있으면 release-and-patch.md §5-4(옮기기)
 sudo mkdir -p /srv/rag/output && sudo chown 10001 /srv/rag/output    # 컨테이너 사용자 UID 10001
 export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.yaml을 읽음
 ```
 - `export`는 그 셸에서만 유효하다. 운영 계정 셸 설정(예: `~/.bashrc`)에 `export SERVER_ENV_DIR=/srv/rag/env`를 영구로 두거나 명령 앞에 붙인다. `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd unit은 스스로 이 값을 넘긴다. 컨테이너는 이 폴더를 마운트하지 않는다.
 
-> ⚠️ **원천 목록·엔진 구성은 pgvector 버전 표(`struct.source_version`·`stack_version`)의 활성 버전이다(D-031).** `$SERVER_ENV_DIR/sources.json` 덮어쓰기는 읽지 않는다. 그 파일이 있으면 배포 때 `set-sources --file`로 버전을 넣는다 — [release-and-patch.md](release-and-patch.md) §5-5, `refactor.md` C-12·C-49. (컨테이너에서 원천 파일을 바꾸려면 `SOURCES_FILE` — [env-guide.md](env-guide.md) 1절.)
+> ⚠️ **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` — 사용자 11-01, D-031). 바꾸려면 코드 폴더의 파일을 고쳐 오버레이 패치로 보낸다(다른 파일을 쓰려면 settings.yaml `ops.paths.stack_file` — [env-guide.md](env-guide.md) 1절). 원천 목록 `sources.json`은 11-01에 지웠다(원천은 폴더·`rdb:csv`만). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다.
 
 #### 값 바꾸기
 - 앱 설정 값은 `settings.yaml`을 직접 고친다. 고친 뒤 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`는 다시 띄운다.
@@ -53,37 +53,23 @@ export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.
 - 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지 태그·자원·포트·호스트 경로)뿐이다 — `load_settings`는 셸에 이미 있는 이름은 덮지 않는다.
 
 ### 1-3. 기동 확인
-```bash
-cd /srv/rag/code/live      # 코드 폴더 루트
-( . deploy/host/scripts/settings_env.sh && load_settings && \
-  docker compose -f deploy/host/compose/compose.pipeline.yml run --rm parse check )   # settings.yaml 호스트 항목을 셸 env로(compose 치환). 하위 셸 ( … )로 — 대화형 셸에 export해 두면 그 뒤 settings.yaml을 고쳐도 그 셸에는 반영되지 않음
-docker run --rm data-pipeline:<태그> check-modules      # 이미지 경계(이름 넘어 import 금지) 점검
-bash deploy/release/selftest_gate.sh docker run --rm data-pipeline:<태그> selftest   # 알려진 FAIL 1개라 selftest 종료 코드는 늘 1, 판정은 [판정] 줄(release-and-patch.md §3-3)
-docker run --rm data-pipeline:<태그> smoke --src <실문서 몇 건 폴더>   # 실문서 투입 전 연결 점검, 사람이 읽는 요약
-```
-`check`는 자원·쓰기 권한·`PG_HOST`가 컨테이너 자신(127.0.0.1)인지·디스크 여유를 본다. 통과하면 2절로.
+README §5-3 ④ 연결 점검(`run_tool.sh ping_models`·`check_env`, `dc run --rm parse check`)과 ⑤ 이미지 점검(`check-modules`·`selftest_gate.sh` — 실행 이미지는 코드 폴더를 `-v`로 붙여)을 차례로 한다. `check`는 자원·쓰기 권한·`PG_HOST`가 컨테이너 자신(127.0.0.1)인지·디스크 여유를 본다. 통과하면 2절로.
 
-## 2. 일상 실행 — parse → structure → load → publish
+## 2. 일상 실행 — run_docs(문서별 흐름)
 
-순서대로 실행한다. **앞 모듈이 끝 표시를 남겨야 다음이 시작**(없으면 종료 코드 3). 모듈은 한 결과 폴더(`RAG_OUT`)로 파일을 주고받고, 서로 직접 부르지 않는다.
+서버 입구는 `deploy/host/scripts/run_docs.py` 하나다(사용자 10-31) — 문서마다 파싱 → 구조화 → 적재 → publish를 상주 컨테이너 안에서 `docker exec`로 돌린다(설계 `docs/architecture/run_docs_design.md`). 옛 1회 job 배치(`trigger.sh structure`·`load`·`all`·`night`)는 11-01에 지웠다. 파싱·게시만 따로 볼 때:
 ```bash
 bash deploy/host/scripts/trigger.sh parse       # dedup→prepare→파싱→채점→대표 결과(_rep). 임베딩·DB 없음
-bash deploy/host/scripts/trigger.sh structure   # 대표 결과→청킹·사실·임베딩 번들
-bash deploy/host/scripts/trigger.sh load        # 번들→PostgreSQL(pgvector). PG 없으면 종료 코드 4
-bash deploy/host/scripts/trigger.sh publish     # 대표 결과(.md) Object Storage 업로드 + EDW 메타 — 스케줄 없음, 트리거만
-bash deploy/host/scripts/trigger.sh all         # parse→publish→structure→load(publish 포함 — 빼려면 모듈을 하나씩)
-bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서(NIGHTLY_MODULES, 기본 "parse publish structure load" — publish는 NIGHTLY_PUBLISH≠1이면 건너뜀)
+bash deploy/host/scripts/trigger.sh publish     # 대표 결과(.md) Object Storage 업로드 + EDW 메타
 ```
 - 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock` 때문에 뒤쪽이 즉시 종료 코드 75(실행 중). 재시도는 다음 트리거에서.
-- `night`는 각 단계의 75(마감·잠금)를 실패로 치지 않고 다음 단계로 넘어간다. `NIGHTLY_PUBLISH=0`(기본)이면 publish는 건너뛴다.
 - 우선순위 낮추기(`pipeline.extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 **같은 세션·autogroup 안에서만** 효과가 있다. Linux가 `sched_autogroup_enabled=1`이면 CPU를 autogroup끼리 먼저 나누므로 다른 컨테이너·세션의 parse MCP 서비스와는 nice로 겨루지 않고, 컨테이너끼리는 cgroup CPU 가중치(`cpu.weight`)가 정한다. 확인: `cat /proc/sys/kernel/sched_autogroup_enabled`, 일괄 파싱과 `parse_document`를 동시에 걸어 응답 시간 비교(refactor.md C-65 ⑥).
 
-특정 도구만 따로 돌릴 때(`score_gold`·`run_board`·`rdb_discover`·`check_env`는 data-pipeline 이미지, `mcp_eval`은 mcp-server 이미지):
+특정 도구만 따로 돌릴 때(`rdb_discover`·`check_env`·`ping_models` — data-pipeline 이미지):
 ```bash
-bash deploy/host/scripts/run_tool.sh score_gold --gold /srv/rag/gold
-bash deploy/host/scripts/run_tool.sh run_board --out /app/output
-bash deploy/host/scripts/run_tool.sh mcp_eval --set <세트>
+bash deploy/host/scripts/run_tool.sh check_env
 ```
+평가 도구(`score_gold`·`run_board`·`mcp_eval`)는 11-01에 지웠다(PRD [e2-10](../prd/test.md#e2-10)).
 
 ### 2-1. 검색 MCP는 늘 켜 둠
 ```bash
@@ -93,19 +79,17 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 
 ### 2-2. 새벽 배치(선택)
 `sudo cp deploy/host/systemd/data-pipeline-nightly.* /etc/systemd/system/ && sudo systemctl enable --now data-pipeline-nightly.timer`. 옛 `rag-nightly.*`가 있으면 disable 뒤 지운다.
-- 스케줄 ON/OFF는 settings.yaml `pipeline.host.nightly.enabled`(env 이름 `NIGHTLY_ENABLED`, 기본 0). 꺼져 있으면 타이머가 깨워도 로그 1줄만 남기고 끝난다.
-- 꺼진 채로도 `bash deploy/host/scripts/trigger.sh night`는 요청하면 바로 돈다.
+- 스케줄은 settings.yaml `pipeline.host.nightly.time`(env 이름 `NIGHTLY_TIME`, HH:MM — 기본 비움 = 새벽 배치 없음, pl-32). 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 그 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done`을 부른다(그 밖에는 말없이 끝 — 11-01부터 새벽 배치 = run_docs, 사용자 10-31). 옛 `nightly.enabled`는 지움(남아 있으면 경고만).
+- 지금 바로 돌리려면 run_docs를 직접 부른다(옛 `trigger.sh night`는 11-01에 지움).
 
-### 2-3. 상주 트리거 서버(선택)
-웹 업로드가 "파싱 시작"을 직접 호출하게 하려면 `data-pipeline-parse`·`data-pipeline-structure` 컨테이너를 `serve-trigger`로 상주시킨다(`compose.pipeline.yml`의 같은 이름 서비스 — 둘 다 data-pipeline 이미지에 `TRIGGER_MODULE=parse`·`structure`):
+### 2-3. 상주 컨테이너
+`data-pipeline-parse`·`data-pipeline-structure`는 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업을 돌리고, MCP `parse_document` 작업 서비스도 `data-pipeline-parse` 안에서 돈다. 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/etl.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
 ```bash
 docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-parse data-pipeline-structure
 ```
-`/health`(토큰 불필요)·`/jobs`(Bearer `TRIGGER_TOKEN`). parse가 끝나면 `CHAIN_STRUCTURE_URL`로 structure를 자동 호출한다. 1회 트리거(`trigger.sh`)와 병행할 수 있다.
 
 ### 2-4. 테스트 실행 스크립트(코드 폴더에서 네이티브, 이미지 밖)
 - 네이티브 실행 전 셸에 `SERVER_ENV_DIR`(settings.yaml 위치)이 있는지 본다: `echo "$SERVER_ENV_DIR"`(§1-2).
-- 파싱 시작: `python deploy/host/scripts/parse_trigger_test.py --source <서버 샘플 폴더>` · `--source s3://버킷/접두 --limit 5 [--chain]`(trigger.sh 1회 job) · `--url http://127.0.0.1:8770`(상주 트리거 서버, s3://·rdb:만).
 - 답변 생성: `PYTHONPATH=. python -m validation.e2e.answer_gen --url http://<검색 MCP>:8765/mcp --q "<질문>"`.
   - 코드 폴더(저장소 배치 — `validation/`은 이미지 밖)에서 검색 MCP로 호출. `--concurrency N` 병렬. 결과(답·인용·인용 검증·지연)는 `output/eval/answer_gen/`.
   - Answer Agent(`valid_env/answer_test/rag_qa/` — PC 전용 데이터)는 컨테이너 없이 이것으로만 점검한다.
@@ -113,36 +97,7 @@ docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-p
 
 ## 3. 결과 확인
 
-모든 단계 뒤 실행판을 다시 만든다:
-```bash
-docker run --rm -v "$RAG_OUT:/app/output:ro" data-pipeline:<태그> tool run_board --out /app/output
-```
-→ `output/report/run_board.html` — 단계 지도(정상·정확도 문제·개발 문제·실행 안 함·막힌 곳)·문서 깔때기·엔진별 결과·근거 반환 평가. 문서 이름은 기본 해시다(`--plain-names` 금지 — 본문·원본 경로·고객명은 서버 밖으로 나가지 않음).
-
-### 3-1. 파싱 정답률 (`score_gold`, 사람 정답 있을 때)
-`summary.html`의 "대표 결과" 표 — 주요 지표만:
-
-| 지표 | 뜻 | 낮을 때 |
-|---|---|---|
-| `value_recall` | 정답 숫자·ID·고객명이 대표 결과에 있나(정규화 후) | `raw_value_recall`과 차이 크면 표기 문제 / 둘 다 낮으면 진짜 누락 |
-| `num_halluc` | 정답에 없는 숫자를 만들어 냈나 | 0보다 크면 해당 문서의 VLM·OCR 결과 확인 |
-| `table_cell_recall` / `_token_recall` | 표 셀 값(엄격/느슨) | 엄격만 낮으면 셀 경계·병합 문제, 둘 다 낮으면 표를 못 읽음 |
-| `char_acc` | 대표 엔진 본문 글자 정확도 | 낮으면 읽기 순서·다단·줄바꿈 |
-| `rep_len_ratio` | 대표 본문 길이 ÷ 정답 길이 | 1.5↑ 중복, 0.7↓ 누락 |
-| `selection_match` | 대표 엔진 선정이 맞았나 | 낮으면 대표 선정 규칙 확인 |
-
-### 3-2. 검색 근거 (`mcp_eval`)
-`output/eval/mcp_eval/<시각>.html`:
-
-| 지표 | 뜻 | 낮을 때 |
-|---|---|---|
-| `errors` | 호출 실패 수 | 0이 아니면 다른 숫자는 보지 말고 연결·토큰·`/health`부터 |
-| `hit@1`/`hit@5`/`hit@k` | 정답 문서가 근거 상위 안에 있나 | `hit@k`는 높은데 `hit@1`이 낮으면 순서 문제, 둘 다 낮으면 검색 자체 실패(`via_*` 확인) |
-| `value_in_evidence` | 정답 값이 근거 원문에 있나 | `hit`는 높은데 낮으면 청킹·근거 자르기 문제 |
-| `vector_used_rate` | 벡터 검색이 실제로 쓰였나 | 1.0 미만이면 질의 임베딩 연결 확인 |
-| `ms_p50`/`ms_p95` | 지연 | 원격 호출이 로컬보다 크게 느리면 동시 상한 확인 |
-
-**파싱×검색 함께**: 파싱 `value_recall` 낮음 + 검색 `hit@k` 높음 + `value_in_evidence` 낮음 → 파싱 누락이 검색까지 이어짐(3-1부터) · 둘 다 높음 → 정상.
+실행 보드(`run_board`)·파싱 정답률(`score_gold`)·검색 평가(`mcp_eval`)는 11-01에 지웠다(PC 평가 도구 삭제 — PRD [e2-10](../prd/test.md#e2-10)). 서버 결과는 단계별 종료 코드·로그와 EDW `AI.ParsingMeta`로 본다. 검색 결과는 PC의 검증 페이지(`validation/search_ui`)와 답변 점검(`valid_env/answer_test`)으로 본다.
 
 ## 4. 검색 MCP 사용
 
@@ -179,13 +134,13 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 | 용어집(동의어·약어) | `app/deploy/resources/vocab/glossary/domain_terms.csv`(다른 폴더는 settings.yaml `common.paths.glossary_dir` — 옛 env `GLOSSARY_DIR`, 아래 5-1) |
 | 고객 명부 | settings.yaml `common.paths.client_roster`(옛 env `CLIENT_ROSTER` — CSV `이름,별칭\|별칭` 또는 JSON) |
 | 제품 코드 규칙 | `app/deploy/resources/vocab/glossary/id_patterns.csv` |
-| 원천 표·열(문서 위치) | 서버 = 버전 표 `struct.source_version` 활성 버전(`set-sources`·`show-sources` — [docs/architecture/pipeline_stack.md](../architecture/pipeline_stack.md)) · PC = `resources/mappings/sources.json`(`common.paths.sources_file`) — `python -m pipeline.extract.rdb_discover`가 초안 |
-| 엔진 구성 | 서버 = 버전 표 `struct.stack_version` 활성 버전(`set-stack`·`show-stack`) · PC = `resources/config/pipeline_stack.json`(`common.paths.stack_file`) |
+| 원천 표·열(문서 위치) | (11-01 원천 목록 `sources.json`·`show-sources` 지움 — 원천은 `run_docs`가 EDW에서 만든 `rdb:csv`. 열 이름이 다른 표는 `RDB_COL_*`) |
+| 엔진 구성 | `resources/config/pipeline_stack.json`(서버·PC 같음 · `ops.paths.stack_file` · 확인 `show-stack`) — 바꾸기 = 파일을 고쳐 오버레이 패치 |
 | 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성) · 서버 정답 폴더(settings.yaml 호스트 항목 `pipeline.host.gold_dir` — `run_tool.sh`가 컨테이너 `/data/gold`로 붙임) |
-| 집계 지표 단서어 | `app/deploy/resources/vocab/agg_vocab.json`(다른 파일은 settings.yaml `mcp.search.agg_vocab_file` — 옛 env `AGG_VOCAB_FILE`) |
+| 집계 지표 단서어 | 코드 기본값(`mcp_server/services/search/qtype.py` `_AGG_VOCAB_DEFAULT`) — 11-01 사전 파일 `agg_vocab.json`·설정 `search.agg_vocab_file`은 지움(내용이 기본값과 같았음) |
 | MCP 안내 문구 | settings.yaml `mcp.server.instructions`(옛 env `MCP_INSTRUCTIONS`) |
 
-기밀(실고객·실제품·계약 값)은 **서버 폴더에만** 둔다 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤에는 같은 질문 세트로 `score_gold`·`mcp_eval` 전/후를 비교한다.
+기밀(실고객·실제품·계약 값)은 **서버 폴더에만** 둔다 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤에는 같은 질문 세트로 검색 결과를 전/후 비교한다(PC 검증 페이지 `validation/search_ui`·답변 점검 `valid_env/answer_test` — `score_gold`·`mcp_eval`은 11-01에 지움).
 
 ### 5-1. 고객 명부·용어집 작성법 (예제 파일을 복사해서 고쳐 쓰기)
 
@@ -258,7 +213,7 @@ PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --check 
 - 적재 오류(조용히 넘기지 않음): 명시한 `concept_id` 중복 · 없는 ID를 가리키는 `broader`/`related` · `id_patterns.csv`의 깨진 정규식.
 - 서버: 폴더째 `/srv/rag/env/glossary/`(같은 폴더에 `id_patterns.csv`·`units.csv`도 — 예제는 `app/deploy/resources/vocab/glossary/`의 같은 이름 파일)에 두고 settings.yaml `common.paths.glossary_dir`에 **컨테이너 안에서 보이는** 그 폴더 경로를 적는다(위 ⚠️).
 - 자동 초안: `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`는 `output/` 아래 draft만 만든다. 사람이 확인해 `domain_terms.csv`로 옮긴다(`status`를 비우거나 `approved`).
-- 실명(실고객·실제품)은 서버 폴더에만 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤 같은 질문 세트로 `mcp_eval` 전/후 비교.
+- 실명(실고객·실제품)은 서버 폴더에만 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤 같은 질문 세트로 검색 결과 전/후 비교(검증 페이지 — `mcp_eval`은 11-01에 지움).
 
 #### 점검(반영 전)
 서버가 읽는 로더를 그대로 쓴다(cp949·빈칸·AUTO ID·건너뜀 알림까지 같음).
@@ -313,8 +268,5 @@ PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys;
 
 ### 날짜·버전 요약
 파싱이 끝날 때마다 수집 서버가 요약을 만들고 개발 서버가 가져간다:
-```bash
-docker run --rm -v "$RAG_OUT:/app/output:ro" data-pipeline:<태그> tool run_board --out /app/output --digest /srv/rag/reports/parse_digest
-rsync -a <수집 서버>:/srv/rag/reports/parse_digest/ /srv/rag/reports/collect/
-```
-보고서(`/srv/rag/reports/<날짜>.md`)에는 버전(`versions.md` 줄)·단계·종료 코드·핵심 숫자(정답률·시간·건수)·실행판 판정 한 줄·막힌 곳·멈춤 사유와 로그 마지막 20줄(비밀값 가림)을 적는다. 본문·숫자 표를 그대로 복사하지 말고 `run_board.html` 링크로.
+(실행 보드 요약 `run_board --digest`는 11-01에 지웠다 — e2-10. 아래 보고서는 로그·종료 코드로 직접 쓴다.)
+보고서(`/srv/rag/reports/<날짜>.md`)에는 버전(`versions.md` 줄)·단계·종료 코드·핵심 숫자(정답률·시간·건수)·실행판 판정 한 줄·막힌 곳·멈춤 사유와 로그 마지막 20줄(비밀값 가림)을 적는다. 본문·숫자 표를 그대로 복사하지 않는다.

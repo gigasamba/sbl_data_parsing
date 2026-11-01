@@ -10,7 +10,7 @@ from mcp_server import config as mc
 from mcp_server.config import CFG
 
 _NO_TOKEN = (
-    "parse 서비스 토큰 없음 — PARSE_SERVICE_TOKEN(settings.yaml mcp.parse_proxy.token) 또는 MCP_TOKEN을 설정"
+    "parse 서비스 토큰 없음 — settings.yaml required.tokens.parse_proxy 또는 MCP_TOKEN을 설정"
     "(data-pipeline-parse의 PARSE_MCP_TOKEN과 같은 값, refactor.md C-44)"
 )
 
@@ -31,7 +31,7 @@ def _token():
 
 # ── 텍스트 파싱 프록시(2026-10-21 사용자 요청) — data-pipeline-parse 컨테이너(S6b — 옛 data-parsing)의 작업 서비스(mcp_parse_service,
 #    127.0.0.1:8766, docker exec -d data-pipeline-parse python -m pipeline.mcp_parse_service — 토큰은 그 컨테이너 settings.yaml
-#    pipeline.service.parse_mcp.token = MCP_TOKEN과 같은 값, S7e2부터 env PARSE_MCP_TOKEN은 안 읽음 — VS7e2 R-6)
+#    settings.yaml required.tokens.parse_mcp = MCP_TOKEN과 같은 값, S7e2부터 env PARSE_MCP_TOKEN은 안 읽음 — VS7e2 R-6)
 #    를 localhost HTTP로 호출 — 구조화·임베딩·EDW/OS 적재·그림[VLM] 파싱 없이 text 파싱 대표 결과만. ──
 def _parse_service(method, path, payload=None, timeout=10):
     """parse 서비스 HTTP — 토큰은 PARSE_SERVICE_TOKEN, 없으면 MCP_TOKEN을 재사용(서비스를 같은 값으로 띄운다 — _token)."""

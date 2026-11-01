@@ -89,27 +89,16 @@ def check_critical_imports():
 
 # OP15(c1) — env-guide 1-2 경로 묶음(서버 LLM이 바꿀 곳). 각 항목: (이름, 값→실제 경로 또는 None(형식 검사만)).
 # 값 없으면 '미설정(선택)'(오류 아님) · 값이 있는데 경로가 없으면 경고만(line(False, …)) — 실패 종료 아님(req_bad에 안 섞음).
-def _qa_set_path(v):
-    return ROOT / "valid_env" / "unstructured" / v / "qa.json"
-
-
-def _questions_path(v):
-    return None if v == "auto" else Path(v)  # auto = 그 자리에서 생성(파일 없어도 정상)
-
-
 def _parse_source_path(v):
-    return None if v.startswith(("rdb:", "s3://")) else Path(v)  # rdb:*·s3://는 형식만(파일 경로 아님)
+    return None if v.startswith("rdb:") else Path(v)  # rdb:csv는 형식만(파일 경로 아님) · s3://는 11-01에 지움(경로로 보고 없으면 경고)
 
 
 PATH_BUNDLE = [
     ("GOLD_DIR", Path),
-    ("E2E_QA_SET", _qa_set_path),
-    ("E2E_QUESTIONS", _questions_path),
     ("CLIENT_ROSTER", Path),
     ("GLOSSARY_DIR", Path),
     ("SOURCES_FILE", Path),
     ("PARSE_SOURCE", _parse_source_path),
-    ("REPORT_DIGEST_DIR", Path),
 ]
 
 
@@ -212,8 +201,7 @@ def main():
     print("\n== 시스템 도구 ==")
     for tool, why in [
         ("java", "OpenDataLoader"),
-        ("tesseract", "Tesseract OCR·unstructured hi_res"),
-        ("pdftoppm", "poppler — unstructured hi_res"),
+        ("tesseract", "Tesseract OCR"),
         ("soffice", "LibreOffice — doc/ppt/hwp 변환"),
         ("gs", "Ghostscript — camelot 선택"),
         ("mineru", "MinerU CLI"),
@@ -232,7 +220,7 @@ def main():
     else:
         ok_n = 0
         for stack, m in registry.stacks().items():
-            tools = ["mineru" if t == "$MINERU_BIN" else t for t in m.REQUIRES["tools"]]  # MINERU_BIN 칸은 지움(엔진 구성에서 뺀 엔진)
+            tools = m.REQUIRES["tools"]
             miss = [x for x in m.REQUIRES["modules"] if importlib.util.find_spec(x) is None] + [t for t in tools if not shutil.which(t)]
             for e in m.ENGINES:
                 miss += [f"{e}: ${v}" for v in registry.missing_env(e)]
@@ -264,13 +252,8 @@ def main():
         ("HF multilingual-e5-small", hf / "models--intfloat--multilingual-e5-small"),
         ("HF multilingual-e5-base", hf / "models--intfloat--multilingual-e5-base"),
         ("HF bge-reranker-v2-m3", hf / "models--BAAI--bge-reranker-v2-m3"),
-        ("HF docling layout", hf / "models--docling-project--docling-layout-heron"),
-        ("docling 모델", home / ".cache" / "docling"),
-        ("marker/surya", home / ".cache" / "datalab"),
         ("EasyOCR ko+en", home / ".EasyOCR"),
         ("PaddleX (PaddleOCR 한국어)", home / ".paddlex"),
-        ("unstructured yolox", hf / "models--unstructuredio--yolo_x_layout"),
-        ("unstructured 표 구조", hf / "models--microsoft--table-transformer-structure-recognition"),
     ]:
         line(p.exists() and any(p.iterdir()), label, str(p))
     line(
@@ -288,11 +271,11 @@ def main():
     )
 
     print(f"\n디스크 여유 {shutil.disk_usage(ROOT).free / 1e9:.0f}GB")
-    print("\n== VLM (qwen_vlm · docling_vlm · marker_llm) ==")
+    print("\n== VLM (qwen_vlm) ==")
     vlm = C.cfg().models.vlm  # S7c — 설정 객체(VLM_BASE_URL·VLM_MODEL·VLM_API_KEY)
     url = vlm.base_url
     if not url:
-        line(False, "VLM_BASE_URL", "미설정 — VLM 엔진 3종은 건너뜀")
+        line(False, "VLM_BASE_URL", "미설정 — VLM 엔진(qwen_vlm)은 건너뜀")
     else:
         try:
             req = urllib.request.Request(url.rstrip("/") + "/models")

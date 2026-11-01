@@ -302,7 +302,7 @@ def main(argv=None):
     else:
         prof = profile("llm")
         if prof is None:
-            raise SystemExit("LLM 모델 설정 없음 — settings.yaml common.models.llm(base_url·model·api_key) 또는 --fake")
+            raise SystemExit("LLM 모델 설정 없음 — settings.yaml required.models.llm_base_url·llm_model·llm_api_key 또는 --fake")
         G.check_scope([prof.base_url], n_combos=1, n_questions=len(qs))  # 외부 모델 범위 가드(옛과 같음 — 예산 없으면 거부)
     token = mc.token_text(mc.cfg().server.token)  # 공백만이면 토큰 없음(C-42·C-44) — 출력하지 않음
     contracts = asyncio.run(_mcp(a.url, token, None))

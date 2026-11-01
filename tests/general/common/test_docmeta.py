@@ -1,7 +1,5 @@
 """common.core.docmeta 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.core.docmeta`."""
 
-import os
-
 from common.core.docmeta import (
     _format_tier,
     copy_groups,
@@ -69,20 +67,13 @@ def selftest():
 
     # L4-7 — GLOSSARY_DIR 없으면 오늘 동작 그대로(과병합, 알려진 한계) · 있으면 id_patterns.csv(contract_no)로 연도가
     # ID의 일부인 계약 번호는 안 지움(4clients C-PFE-2022-01 vs C-PFE-2024-03 실측 패턴)
-    _g = os.environ.pop(
-        "GLOSSARY_DIR", None
-    )  # 실행 환경 변수와 무관하게(사전 없음 → 있음 순서로 확인) — env 남김 — 시험: terms.py(인계 파일)가 env를 읽음
-    assert family_key("C-PFE-2022-01.pdf") == family_key("C-PFE-2024-03.pdf")
+    with COMMON.env(GLOSSARY_DIR=None):  # 설정 파일 값과 무관하게(사전 없음 → 있음 순서로 확인 — op-09 설정 객체)
+        assert family_key("C-PFE-2022-01.pdf") == family_key("C-PFE-2024-03.pdf")
     from common.core.paths import GLOSSARY_ROOT
 
-    os.environ["GLOSSARY_DIR"] = str(GLOSSARY_ROOT)  # env 남김 — 시험: terms.py(인계 파일)가 env를 읽음
-    try:
+    with COMMON.env(GLOSSARY_DIR=str(GLOSSARY_ROOT)):
         assert family_key("C-PFE-2022-01.pdf") != family_key("C-PFE-2024-03.pdf")
         assert family_key("C-PFE-2024-02.pdf") == family_key("C-PFE-2024-02_v2.pdf")  # 같은 계약의 개정은 여전히 한 family
-    finally:
-        os.environ.pop("GLOSSARY_DIR", None)  # env 남김 — 시험: terms.py(인계 파일)가 env를 읽음
-        if _g is not None:
-            os.environ["GLOSSARY_DIR"] = _g  # env 남김 — 시험: terms.py(인계 파일)가 env를 읽음
     print("[selftest] family 키 — id_patterns.csv로 계약 번호 과병합 방지(L4-7) 통과")
 
     # 최신성 순위 — 같은 family ≥2건이면 최신만 원 자리, 옛 것은 뒤로(지우지 않음)
