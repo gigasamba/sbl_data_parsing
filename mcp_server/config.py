@@ -137,9 +137,9 @@ class McpSearch(Section):
             "agg_today",
             "data_catalog",
             "struct_context_max",
+            "agg_vocab_file",
         }
-    )  # 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) — 지운 칸·절(남으면 경고만)
-    agg_vocab_file: str | None = F(None, "AGG_VOCAB_FILE", "질문 유형 단서어 사전(agg_vocab.json — 건수·합계 단서)을 다른 경로로 지정")
+    )  # 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) · agg_vocab_file 11-01(사전 파일이 코드 기본값과 같아 지움) — 지운 칸·절(남으면 경고만)
     methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서)")
     min_score: float | None = F(None, "SEARCH_MIN_SCORE", "근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak")
     client: McpSearchClient = Field(default_factory=McpSearchClient)

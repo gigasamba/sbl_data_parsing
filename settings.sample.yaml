@@ -270,8 +270,6 @@ search:
   client:
     hard: false  # 고객 범위를 하드 격리(다른 고객 문서 제외) · 기본 false · 값: true·false
     strict: false  # 하드 격리에서 고객 미상 문서도 제외 · 기본 false · 값: true·false
-  # ─── 질문 유형 ───
-  agg_vocab_file:  # 질문 유형 단서어 사전(agg_vocab.json — 건수·합계 단서)을 다른 경로로 지정 · 값: 경로
   # ─── EDW 도구 ───
   edw_meta:
     dir:  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · 값: 경로

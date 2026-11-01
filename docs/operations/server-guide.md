@@ -137,7 +137,7 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 | 원천 표·열(문서 위치) | `resources/mappings/sources.json`(서버·PC 같음 · `ops.paths.sources_file` · 확인 `show-sources` — [docs/architecture/pipeline_stack.md](../architecture/pipeline_stack.md)) — `python -m pipeline.extract.rdb_discover`가 초안 |
 | 엔진 구성 | `resources/config/pipeline_stack.json`(서버·PC 같음 · `ops.paths.stack_file` · 확인 `show-stack`) — 바꾸기 = 파일을 고쳐 오버레이 패치 |
 | 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성) · 서버 정답 폴더(settings.yaml 호스트 항목 `pipeline.host.gold_dir` — `run_tool.sh`가 컨테이너 `/data/gold`로 붙임) |
-| 집계 지표 단서어 | `app/deploy/resources/vocab/agg_vocab.json`(다른 파일은 settings.yaml `mcp.search.agg_vocab_file` — 옛 env `AGG_VOCAB_FILE`) |
+| 집계 지표 단서어 | 코드 기본값(`mcp_server/services/search/qtype.py` `_AGG_VOCAB_DEFAULT`) — 11-01 사전 파일 `agg_vocab.json`·설정 `search.agg_vocab_file`은 지움(내용이 기본값과 같았음) |
 | MCP 안내 문구 | settings.yaml `mcp.server.instructions`(옛 env `MCP_INSTRUCTIONS`) |
 
 기밀(실고객·실제품·계약 값)은 **서버 폴더에만** 둔다 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤에는 같은 질문 세트로 `score_gold`·`mcp_eval` 전/후를 비교한다.

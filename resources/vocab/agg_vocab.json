@@ -1,9 +1,0 @@
-{
- "_comment": "집계 질문 지표 단서어(DT1 c1) — deploy/mcp_server/services/search/aggregate.py가 읽음(env AGG_VOCAB_FILE로 다른 경로 지정 가능). 키·목록이 없으면 코드 기본값(_AGG_VOCAB_DEFAULT)을 씀. 이 파일은 그 기본값과 바이트 동일(CDMO 예제) — 그 회사 업종 표현으로 바꿀 때만 고친다.",
- "count": ["건수", "몇\\s*건", "개수", "몇\\s*개(?!월)", "how\\s+many", "number\\s+of", "\\bcount\\b"],
- "sum": ["합계", "합", "총", "전체", "모두\\s*더", "total", "sum"],
- "qty": ["수량", "용량", "qty", "quantity", "capacity", "volume"],
- "amount": ["금액", "규모", "contract\\s*value", "\\bvalue\\b", "amount"],
- "unit_price": ["단가", "unit\\s*price"],
- "batch": ["배치", "batch"]
-}
