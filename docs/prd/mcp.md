@@ -135,7 +135,10 @@
 - 결정(2차 grill(사용자 10-30, 원본은 git 밖)): G1 — 목록은 EDW `ParsingMeta`의 `doc_class`·`sf_op_id`·`parsed_at`·`rep_engine`·`created_at`(G9 — `created_since`/`created_until` 거르기·출력, `get_doc_fulltext` 생성 범위 가드)을 읽는다(운영 계약 그대로, [etl.md#pl-25](etl.md#pl-25)). G4 — `source_system` 통일·`-test` 별칭. G7 — 0.1.0에 함께 싣고 따로 MAJOR 없음.
 - 결정(G19·G20 — 4차 grill(사용자 10-30), 위 G1 부분을 뒤집음): 두 도구는 EDW `ParsingMeta`를 읽지 않는다. 목록·거르기(`doc_class`·`sf_op_id`·`created_since/until`)·출력은 **시스템별 gold `doc`**에서 읽는다 — `doc`에 `rep_key`(silver 위치)와 `parsed_at`·`rep_engine`을 복사해 둔다. `get_doc_fulltext`의 등록 시각 가드도 `doc.created_at`. `source_system`은 필수, 값 하나([etl.md#pl-28](etl.md#pl-28)). EDW 장애가 원문 도구에 영향을 주지 않는다.
 - 결정(사용자 10-30 PRD grill): C8 — 원문 전송 도구도 gold `doc.rep_key`를 읽는다(mc-15와 같음). C2 — 0.2.0.
-- Status: todo — 순서는 허브가 정함.
+- 결정(사용자 11-01): rep_engine 출력 없음 — 사용자 11-01, 대표 엔진 칸 삭제와 맞춤(운영과 다른 칸 하나).
+- 구현(11-01 `feature/mcp-ops-parity`, 등급 A — MCP 계약 추가·DB 스키마): `mcp_server/routers/fulltext_tool.py`(등록) · `services/fulltext.py`(일) · `schemas/fulltext.py`(모양·한도). 목록은 gold `doc`에서(`rep_key`가 있는 문서만, `doc_id` 순 — `cursor` = 마지막 `doc_id`), 대표 결과 폴더(`rep_bucket`/`rep_key`) 바로 아래 최신 `<이름>_<parse_date>.md`·`.json`만(`engine/`·`source.json` 제외). sfid = `sf1.<base64url(버킷/키)>.<HMAC-SHA256>` — 서명 키 `search.server.fulltext_secret`(settings.yaml 비밀 칸, 비면 두 도구 `not_configured`, 바꾸면 발급된 sfid 전부 `bad_sfid`). 한도: docs 200 · limit 기본 50·상한 200 · get 20개 · 파일 16MB(`too_large`) · 합계 24MB(`batch_full`) · 파일 60초. 등록 시각 가드는 gold `doc.created_at`(EDW 접속 없음 — 대역 DB를 못 읽으면 `registry_unavailable`). 판 0002에 `rep_bucket`·`parsed_at`·`doc_key`(원본 sha256 — `build_bundle`이 `file_sha256`으로 넘김)를 더했다(허브 확인 대기 — 제안대로 구현). 시험: `tests/server/mcp/test_fulltext.py`.
+- 운영과 다른 점: ① `rep_engine` 없음. ② `source_system` 출력은 저장값(`SFDC`) — 운영은 EDW 값(`SFDC-test`), 입력은 둘 다 받음(G4). ③ 시간대 없는 시각은 KST로 읽음(운영은 기본 시간대를 밝히지 않음). ④ 건너뜀 행에 `status` 칸 없음(운영 예시와 같음 — `skip_reason`으로 판단). ⑤ `rep_key`·`rep_bucket`·`parsed_at`은 mc-15 적재 복사 뒤에야 찬다 — 그 전 적재 문서는 목록에 안 나옴. ⑥ `source_system`은 선택(조건 하나 이상이면 됨) — G20 "필수·값 하나"는 스키마 나누기([pl-28](etl.md#pl-28)) 때.
+- Status: partial(11-01) — 도구·시험은 끝, 값 채우기는 [mc-15](#mc-15)(다음 커밋)
 
 <a id="mc-19"></a>
 ## mc-19 · 검색 — PG만, 실행 중 묶음 없음

@@ -96,6 +96,7 @@
 | `MCP_SERVER_IMAGE` | — | `mcp-server:<태그>`(옛 `DATA_RETRIEVAL_IMAGE`·`RAG_IMAGE`는 읽지 않음, 남아 있으면 스크립트가 멈춤) |
 | `RAG_OUT` | — | 결과 폴더(모든 모듈 공용) |
 | `MCP_HOST` | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부 |
+| `FULLTEXT_SIGN_SECRET`(`search.server.fulltext_secret`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 파일 손잡이 sfid 서명 키 — 비밀 칸(settings.yaml에만). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 sfid가 모두 무효(사용자에게 먼저 알림 — mc-17, refactor.md C-75) |
 | `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 호출부 env에만 · 공백만인 토큰은 없음과 같음 · `MCP_PORT` 형식이 틀리면 시작 실패(값은 안 찍음) |
 | `PARSE_SERVICE_TOKEN` | 비움(→ `MCP_TOKEN`) | `parse_document`가 parse 작업 서비스를 부를 때 쓰는 토큰 — data-pipeline-parse의 `PARSE_MCP_TOKEN`과 같은 값. 이것도 `MCP_TOKEN`도 없으면(공백만 포함) `parse_document`가 "parse 서비스 토큰 없음" 오류를 돌려줌(코드 대체 토큰 없음 — `refactor.md` C-44) |
 | `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음 |

@@ -247,6 +247,7 @@ load:
 search:
   # ─── MCP 서버 ───
   server:
+    fulltext_secret:  # 원문 도구(list/get_doc_fulltext) 파일 손잡이 sfid 서명 키 · 값: 비밀 글자 [비밀]
     allowed_hosts: []  # 비루프백 바인드 때 추가로 허용할 Host(쉼표 목록, 리버스 프록시 이름 등) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
     host: 127.0.0.1  # MCP 서버 바인드 주소 · 기본 127.0.0.1 · 값: 127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부
     instructions:  # MCP 서버 instructions 글자(도구 안내문) 교체 · 값: 글자

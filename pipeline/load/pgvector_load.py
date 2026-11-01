@@ -183,8 +183,8 @@ def load(db, bundle, replace=False):
             cur.execute(
                 f"""INSERT INTO {s}.doc(file_path, summary, clients, run_id, source_system,
                             sf_acc_name, sf_op_id, sf_op_name, project_code__c,
-                            contract_id, contract_date, prod_name, division, service_type, doc_class, created_at)
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING doc_id""",
+                            contract_id, contract_date, prod_name, division, service_type, doc_class, created_at, doc_key)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING doc_id""",
                 (
                     d["file_path"],
                     d.get("summary"),
@@ -202,6 +202,7 @@ def load(db, bundle, replace=False):
                     d.get("service_type"),
                     d.get("doc_class"),
                     _kst(d.get("created_at")),
+                    d.get("file_sha256"),
                 ),
             )
             doc_id[i] = cur.fetchone()[0]

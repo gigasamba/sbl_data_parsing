@@ -66,7 +66,9 @@
 | doc_class | TEXT | (판 0002, 11-01 — mc-16) 문서 분류 라벨 하나(SFDC: RFI/RFP/RFI+RFP/Proposal/Other, LAS: MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other, 다른 원천 NULL) — low_conf·모델·시각은 두지 않음. ParsingMeta에는 두지 않는다(G19) — D-6 | (분류 단계 → 적재 — [pl-33](../prd/etl.md#pl-33)) | (MCP `search`·`list_doc_fulltext` 거르기 — mc-16, mc-17) | 유지 |
 | created_at | TIMESTAMPTZ | (판 0002, 11-01 — mc-16) 원천 등록 시각 — 출처는 `AI.FileStorageMap.created_at`(시간대 없는 값은 KST로 읽음). ParsingMeta에는 두지 않는다(G19). `search`의 `created_since`/`created_until` 거르기, `list_doc_fulltext` 거르기·출력, `get_doc_fulltext` 등록 시각 가드에 씀 — D-6 | (적재 — FileStorageMap) | (MCP 거르기 — mc-16, mc-17) | 유지 |
 | rep_key | TEXT | (판 0002, 11-01) 대표 파싱 결과(silver) 위치 — 적재 때 ParsingMeta `rep_key`에서 복사. `rep_uri`는 이 값으로 만든다(C8) | (적재) | (shaping `rep_uri`, mc-17 원문 도구) | 유지 |
-| parsed_at | TIMESTAMPTZ | 파싱한 때 — 적재 때 ParsingMeta `parsed_at`에서 복사(G19) | (적재) | (mc-17 `list_doc_fulltext` 출력) | 새로 |
+| parsed_at | TIMESTAMPTZ | (판 0002, 11-01) 파싱한 때 — 적재 때 ParsingMeta `parsed_at`에서 복사(G19) | (적재 — mc-15) | (mc-17 `list_doc_fulltext` `since`/`until`) | 유지 |
+| rep_bucket | TEXT | (판 0002, 11-01) 대표 파싱 결과 버킷 — 적재 때 ParsingMeta `rep_bucket`에서 복사, `rep_uri` = `s3://<rep_bucket>/<rep_key>` | (적재 — mc-15) | (mc-17 원문 도구) | 유지 |
+| doc_key | TEXT | (판 0002, 11-01 — 허브 확인 대기) 원본 sha256(64자) — `list_doc_fulltext`의 `docs=[doc_key]`·출력(운영 계약). 10-31 "sha256 `doc_key` 없앰"은 근거 키(`chunk_key`) 얘기라 문서 식별용으로만 둔다 | (build_bundle → 적재) | (mc-17 원문 도구) | 유지 |
 
 ### gold.chunk
 

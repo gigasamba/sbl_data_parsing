@@ -34,6 +34,9 @@ class Doc(BaseModel):
     doc_class: str | None = None
     created_at: _dt.datetime | None = None
     rep_key: str | None = None
+    rep_bucket: str | None = None
+    parsed_at: _dt.datetime | None = None
+    doc_key: str | None = None
 
 
 class Chunk(BaseModel):

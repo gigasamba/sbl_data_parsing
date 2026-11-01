@@ -626,6 +626,7 @@ def main(argv=None):
                 "service_type": _edw.get("service_type"),
                 "division": _edw.get("division"),
                 "prod_name": _edw.get("prod_name"),
+                "file_sha256": h,  # 11-01(mc-17) 원본 sha256 → gold doc.doc_key(list_doc_fulltext docs=[doc_key])
                 "doc_class": _edw.get("doc_class"),  # 11-01(mc-16) 분류 라벨 — 분류 단계(pl-33) 전에는 EDW 파일 메타에 있을 때만
                 "created_at": _edw.get("created_at") or _manifest_created.get(doc) or _manifest_created.get(Path(path).name),
                 **DM.doc_meta(doc, text),

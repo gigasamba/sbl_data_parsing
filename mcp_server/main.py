@@ -7,7 +7,7 @@
     created_since/created_until(모두 AND, 같은 거르기의 목록은 OR, 맞는 것이 없으면 빈 결과) · 거르기에 맞는 문서(v_chunk_source) 범위 안에서만
     하이브리드 검색(vector·bm25·id — 서버 설정만) · 응답 {question, evidence[12칸], evidence_status, filter, scope_docs}
     (mcp_server/schemas/evidence.py). 덤프 방식·이름 있는 색인(index_id)·옛 입력(methods·decompose·limit)·옛 출력(subs·store·images·notes·ms)은 지움.
-  MCP 노출 도구는 search·query_edw·parse_document·edw_meta(2026-10-20 사용자 결정 · 10-21 파싱 도구 추가).
+  MCP 노출 도구는 search·query_edw·parse_document·edw_meta·list_doc_fulltext·get_doc_fulltext(2026-10-20 사용자 결정 · 10-21 파싱 도구 · 11-01 원문 도구 mc-17).
   (EQ1, English docstrings per 10-15 user rule)
   query_edw(sql, max_rows=2000) Read-only SQL against EDW: SELECT/WITH only, one statement, table allowlist
     (EDW_QUERY_TABLES), row/time/response-size caps. Returns raw rows only — no summarization, the
@@ -54,7 +54,7 @@ import threading
 
 from common.core.console import utf8_stdout
 from mcp_server import config as mc  # 설정 객체(S7d)
-from mcp_server.routers import edw_tools, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
+from mcp_server.routers import edw_tools, fulltext_tool, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
 from mcp_server.services.search.server_state import CALLER, _warmup_bg
 
 _DEFAULT_MCP_INSTRUCTIONS = (
@@ -97,10 +97,13 @@ def build(host, port):
         transport_security=None if loop else _transport_security(host),
     )
 
-    search_tool.register(m)  # 등록 순서 = tools/list 순서(MCP 계약 바이트) — search · query_edw · parse_document · edw_meta
+    search_tool.register(
+        m
+    )  # 등록 순서 = tools/list 순서(MCP 계약 바이트) — search · query_edw · parse_document · edw_meta · list/get_doc_fulltext
     edw_tools.register_query_edw(m)
     parse_tool.register(m)
     edw_tools.register_edw_meta(m)
+    fulltext_tool.register(m)  # mc-17(11-01)
     return m
 
 

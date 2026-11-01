@@ -151,6 +151,11 @@ class McpServer(Section):
     REMOVED = frozenset(
         {"query_cache", "store"}
     )  # store 11-01(mc-01 — 검색 저장소는 PG 하나) · 사용자 10-30(op-08) — common.models.embed.query_cache로 합침(mcp 이미지 기본은 그 칸에) — 옛 설정 파일에 남아도 경고만
+    fulltext_secret: SecretStr | None = F(
+        None,
+        "FULLTEXT_SIGN_SECRET",
+        "원문 도구(list/get_doc_fulltext) 파일 손잡이 sfid 서명 키 — 비면 두 도구는 not_configured, 바꾸면 발급된 sfid 전부 무효",
+    )
     allowed_hosts: CsvList | None = F([], "MCP_ALLOWED_HOSTS", "비루프백 바인드 때 추가로 허용할 Host(쉼표 목록, 리버스 프록시 이름 등)")
     host: str | None = F("127.0.0.1", "MCP_HOST", "MCP 서버 바인드 주소 — auto면 컨테이너 자기 사설 IP")
     instructions: str | None = F(None, "MCP_INSTRUCTIONS", "MCP 서버 instructions 글자(도구 안내문) 교체")

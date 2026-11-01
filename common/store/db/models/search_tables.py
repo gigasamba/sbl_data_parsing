@@ -56,6 +56,9 @@ def search_metadata(schema, dim):
         Column("doc_class", Text),  # 0002(11-01 — mc-16 거르기)
         Column("created_at", TIMESTAMP(timezone=True)),  # 0002 — 원천 등록 시각(FileStorageMap.created_at)
         Column("rep_key", Text),  # 0002 — 대표 파싱 결과 silver 폴더(C8)
+        Column("rep_bucket", Text),  # 0002 — 그 버킷
+        Column("parsed_at", TIMESTAMP(timezone=True)),  # 0002 — 파싱 시각(ParsingMeta에서 복사)
+        Column("doc_key", Text),  # 0002 — 원본 sha256(mc-17)
     )
     chunk = Table(
         "chunk",
@@ -148,11 +151,14 @@ VIEWS_EXPECTED = {
             "doc_class",
             "created_at",
             "rep_key",
+            "rep_bucket",
+            "parsed_at",
+            "doc_key",
         ),
         "SELECT c.chunk_id, c.doc_id, d.file_path, regexp_replace(d.file_path, '^.*/'::text, ''::text) AS file_name, c.page, "
         "c.line_start, c.line_end, c.bbox, c.section, c.seq, c.chunk_text, d.summary, d.clients, c.source_system, "
         "c.source_system AS chunk_source_system, d.source_system AS doc_source_system, d.sf_acc_name, d.sf_op_id, d.sf_op_name, "
-        "d.project_code__c, d.contract_id, d.contract_date, d.prod_name, d.division, d.service_type, d.doc_class, d.created_at, d.rep_key "
+        "d.project_code__c, d.contract_id, d.contract_date, d.prod_name, d.division, d.service_type, d.doc_class, d.created_at, d.rep_key, d.rep_bucket, d.parsed_at, d.doc_key "
         "FROM ({S}.chunk c JOIN {S}.doc d ON ((d.doc_id = c.doc_id)));",
     ),
 }
@@ -166,5 +172,5 @@ SELECT c.chunk_id, c.doc_id,
        c.chunk_text, d.summary, d.clients, c.source_system, c.source_system AS chunk_source_system,
        d.source_system AS doc_source_system, d.sf_acc_name, d.sf_op_id, d.sf_op_name, d.project_code__c,
        d.contract_id, d.contract_date, d.prod_name, d.division, d.service_type,
-       d.doc_class, d.created_at, d.rep_key
+       d.doc_class, d.created_at, d.rep_key, d.rep_bucket, d.parsed_at, d.doc_key
 FROM {S}.chunk c JOIN {S}.doc d ON d.doc_id = c.doc_id"""
