@@ -17,8 +17,7 @@
 #     pipeline(data-pipeline — 옛 data-parsing+data-structure, 두 이미지가 받던 명령의 합 + full(S6c))=parse·publish·show-stack·show-sources·idle·migrate ·
 #     mcp(mcp-server — 옛 data-retrieval)=mcp·ask·show-stack · 공통(모든 이미지) = help·check·resources·services·
 #     check-modules·tool·selftest(S9 — 서버 반입 시험 /app/deploy/tests/server를 파일마다, 다른 이미지(RAG_MODULE) 폴더 사례·다른 이미지 패키지가 없어서만 실패한 사례는 SKIP,
-#     서드파티 패키지가 없으면 FAIL(I2c) — 반입 판정은 /app/docker/selftest_gate.sh)·smoke(10-14 — --src(기본 DOC_DIR) 실문서 폴더를
-#     이 이미지에 있는 모듈로 실제 돌려 사람이 읽는 요약, 실문서 투입 전 와이어링 점검 — find_spec으로 없는 단계는 자동 SKIP)
+#     서드파티 패키지가 없으면 FAIL(I2c) — 반입 판정은 /app/docker/selftest_gate.sh)  (smoke는 11-01에 지움 — 실문서 점검은 run_docs·trigger.sh parse로)
 set -euo pipefail
 cd /app
 
@@ -69,7 +68,7 @@ case "$cmd" in
 esac
 shell_names=""
 case "$cmd" in
-  parse|publish|check|smoke|idle|migrate|show-stack|show-sources)
+  parse|publish|check|idle|migrate|show-stack|show-sources)
     shell_names="DOC_DIR DOC_DIR_PREPARED PARSE_SOURCE PG_HOST";;
 esac
 # 점검 명령(관문 면제)은 설정 파일이 틀려도 돌아 원인을 보이게 — 내부 신호 SETTINGS_LENIENT=1(영구 다리가 서버에서도 경고만, 앱 명령은 안 줌)
@@ -147,7 +146,7 @@ for entry in sys.argv[2:]:
     preflight; locked python -m pipeline.load.publish_parse_result --apply "$@";;
   ask)   # S5(T-15) — 검색 명령은 mcp_server/cli/ask.py(test-stack은 11-01에 지움)
     preflight; exec python -m mcp_server.cli.ask ask "$@";;
-  show-stack|show-sources|selftest|smoke)   # 실행 기록을 /app/output/logs에 씀 — mcp-server(/app/output:ro)에서는 안 됨(VS8b R-9 — data-pipeline 컨테이너에서)
+  show-stack|show-sources|selftest)   # 실행 기록을 /app/output/logs에 씀 — mcp-server(/app/output:ro)에서는 안 됨(VS8b R-9 — data-pipeline 컨테이너에서)
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
   # 11-01(pl-10 — trigger 서버 serve-trigger 지움) — 상주 컨테이너 data-pipeline-parse·data-pipeline-structure는 일을 하지 않고 떠 있기만 한다.
   # run_docs.py가 그 안에서 docker exec로 문서별 작업을 돌리고, MCP parse_document 작업 서비스(mcp_parse_service)도 그 안에 띄운다.
