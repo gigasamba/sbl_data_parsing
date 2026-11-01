@@ -95,7 +95,7 @@ case "$cmd" in
     [[ "$name" =~ ^[a-z_][a-z0-9_]*$ ]] || { echo "bad tool name"; exit 64; }
     # ping_models·os_put·check_modules는 common/check/(S3 — 옛 common_tools/cli/) — common.check를 맨 먼저(덧씌우기 live에 옛 사본이 남아도 새 것이 이김), 그다음 이 순서로 시도.
     # S4 — 단계 4 도구는 pipeline/로: check_env는 pipeline/, rdb_discover는 pipeline/extract/,
-    # gen_roster·glossary_suggest는 pipeline/transform/structure/, figure_review는 pipeline/transform/figures/ ·
+    # gen_roster·glossary_suggest는 pipeline/transform/structure/ (figure_review는 11-01에 지움) ·
     # (pipeline/eval/의 평가 도구와 mcp_server/cli/의 mcp_eval·search_checks는 11-01에 지움 — e2-10) ·
     # S6c(사용자 10-27, C-30 ①) — index(AD41 색인 빌더 — compose.pipeline.yml index_a·index_b의 `tool index build`)는 pipeline/load/(옛 data_structure/ —
     #   pre-refactor부터 찾는 목록에 없어 "모르는 도구"였음).
@@ -104,7 +104,7 @@ case "$cmd" in
     # (pipeline 단계 모듈 run_all·dedup·stream 등을 preflight·잠금 없이 부르지 않게).
     # 이름은 sys.argv로 전달(소스 문자열에 끼워 넣지 않음). 찾기는 python 한 번에(VS3 R-7 — 전에는 패키지마다 프로세스 하나).
     [ "$name" = pipeline ] && name=cli
-    TOOL_PKGS="common.check pipeline:check_env,cli pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest pipeline.transform.figures:figure_review pipeline.load:index"
+    TOOL_PKGS="common.check pipeline:check_env,cli pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest pipeline.load:index"
     # shellcheck disable=SC2086
     mod=$(python -c "
 import importlib.util, sys

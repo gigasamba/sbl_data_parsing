@@ -140,6 +140,7 @@
 - 이유: 차트·도식·이미지에는 글자 추출이 놓치는 값이 있다.
 - 무엇: 이미지 VLM 설명(pdf, docx, xlsx, pptx, eml), VLM 없이 원본 차트 XML과 벡터 차트 값, 규칙 기반 도식 연결선, Mermaid 출력, 겹친 그룹, 중첩 그림, 스캔은 쪽 전체 VLM, 도형·슬라이드는 soffice 렌더, 전체 VLM 관문(기본 12).
 - 파일: `pipeline/transform/figures/figures.py`, `charts.py`, `pptx_render.py`, `vgate.py`, `resources/prompts/pipeline/`.
+- 11-01(`feature/scope-cut-unused`, 허브 지시): 그림 기록 검토 루프 `pipeline/transform/figures/figure_review.py`(독립 재추출 → 대조 → VLM 판정)와 그것만 쓰던 지시서 `figure_extract`·`figure_judge`, 시험, 이미지 `tool` 목록 자리, 설정 `pipeline.eval.review_max_rounds`(남으면 경고만)를 지움 — 파싱 흐름은 부르지 않던 도구. `common/ai`의 `vlm_judge` 역할 표는 code_fp 파일이라 남김.
 - Status: done
 
 ## 코드와 다른 점 · 지울 코드

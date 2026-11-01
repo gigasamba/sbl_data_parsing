@@ -35,8 +35,6 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 | `page_transcribe` | `common/` | vlm | 스캔·이미지 쪽 1장 → 마크다운(OCR 교차 확인용) | 쪽 PNG + 지시문(사용자, 출력 상한 없음) → 마크다운 | `pipeline/transform/figures/vlm_page.py` `vlm_page()`(`P_PAGE`) | free · 없음 |
 | `research_judge` | `mcp/` | llm | 근거 조각이 하위 질문에 답하는지 판정 | 하위 질문 + 번호 붙은 근거 조각 → status/answer/cite JSON | 시험만 — `tests/server/common/test_adk.py`·`test_agent_prompts.py`·`test_paths.py`(S9 전 각 모듈 selftest · 호출부 `research.py`는 S5a 삭제 — D-025) | 기본 · 있음 |
 | `rag_qa` | (`valid_env/answer_test/` — PC 전용, S10에 `validation/e2e/`로 옮겼다가 10-29 되돌림) | llm | 검색 MCP 도구(`search`·`edw_meta`·`query_edw`)를 스스로 골라 근거를 찾고 숫자마다 인용을 붙여 답함(agentic — `max_turns` 12, 로컬 도구 `verify_citations`: 답의 숫자가 인용 `quote`에 있고 그 quote가 이번 질문의 검색 근거에 있는지) | 질문(사용자) → `{answer, status: found\|partial\|not_found, citations}` | `validation/e2e/answer_gen.py`(`common.ai.adk.run_agent(per_turn_admit=True)` — 도구 함수·근거 pool은 호출자, 지시문 `instructions.md` + 출력 스키마, 옛 패키지 README는 S10에 지움) | 없음(instruction에 지시문) · 있음 |
-| `figure_extract` | `pipeline/` | vlm | 그림만 보고 독립 재추출(검토 루프 — 원본 기록은 안 보여 줌) | 그림 PNG + 지시문 + 근처 맥락·이전 지적 → figure-v1 JSON | `pipeline/transform/figures/figure_review.py` `extract()`·`_vlm_call(which="extract")`(`P_EXTRACT`) | template+tail · 있음 |
-| `figure_judge` | `pipeline/` | vlm_judge | 독립 추출과 우리 기록의 자동 diff 감사(검토 루프 판정자) | 그림 PNG + 지시문 + 우리 기록·대조 결과·맥락 → items/verdict JSON | `pipeline/transform/figures/figure_review.py` `_vlm_call(which="judge")`(`P_JUDGE`) | template+tail · 있음 |
 | `figure_overlay` | `pipeline/` | vlm | 겹친 개체 묶음(그림 + 글상자·화살표·도형) 1장 → 검색용 기록(F12) | 묶음 union bbox 크롭 + 지시문(생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figures.py` `vlm_fig_overlay()`(`P_FIGOVERLAY`) | 기본 · 있음 |
 | `mermaid_check` | `pipeline/` | vlm | (부르는 코드는 11-01에 지움 — e2-10, 지시서 시험 `test_agent_prompts`의 예시로만 남음) `gold_draft`가 옮긴 흐름도를 원본 이미지에 블라인드 질문으로 2차 확인 | 쪽 PNG + `template()` + 단계 이름 목록 + `tail()` → `{"is_flowchart", "next"}` | `pipeline/eval/gold_draft.py` `_vlm_check_mermaid()`(끄기 `GOLD_DRAFT_MERMAID_CHECK=0`) | 기본(template+tail) · 없음 |
 | `nested_figure` | `pipeline/` | vlm | 쪽 전체 그림 안의 자식 그림 bbox 찾기(F7) | 쪽 그림 + 지시문 → `{"regions": [{bbox, kind, …}]}` | `pipeline/transform/figures/nested.py` `bbox_regions()`(`P_BBOX`) | 기본 · 있음 |
@@ -61,5 +59,5 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 |---|---|---|
 | `do_search` / `do_aggregate` | 벡터·BM25·그래프 검색·SQL 집계 | `mcp_server/services/search/search_svc.py` · `internal_docs.py`(도구 등록은 `mcp_server/routers/` — MCP 도구 계약, CLAUDE.md §4) |
 | `split_question` / `keep_context` / `gather` | 하위 질문 검색어 만들기·병합(LLM 없이) | `mcp_server/services/search/decompose.py` |
-| `compare` / `value_check` | 그림 기록 ↔ VLM 추출 결정적 대조 | `pipeline/transform/figures/figure_review.py` · `pipeline/transform/represent/context.py` |
+| `compare` / `value_check` | 그림 기록 ↔ VLM 추출 결정적 대조 | (`figure_review.py`는 11-01에 지움) · `pipeline/transform/represent/context.py` |
 | `embed_texts` | 임베딩 호출(역할 `embed` — ADK 역할 아님) | `common/ai/embed.py` |

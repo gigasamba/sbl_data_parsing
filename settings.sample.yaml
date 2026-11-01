@@ -375,8 +375,6 @@ dev:
     test_min_docs: 50  # 시험 모드(--mode test)에서 표본 추출을 시작하는 최소 문서 수(개) · 기본 50 · 값: 0 이상 정수
     test_per_type: 5  # 시험 모드 표본에서 확장자별로 고르는 문서 수(개) · 기본 5 · 값: 0 이상 정수
   # ─── 평가 ───
-  eval:
-    review_max_rounds: 2  # 도식 검토 루프의 최대 재추출 횟수(회) · 기본 2 · 값: 0 이상 정수
   mcp:
     mcp_url: http://127.0.0.1:18765/mcp  # 검증 페이지가 붙을 MCP 서버 URL · 기본 http://127.0.0.1:18765/mcp · 값: URL
     ui_port: 8790  # 검증 페이지(validation/search_ui) 서버 포트 · 기본 8790 · 값: 1~65535

@@ -293,9 +293,9 @@ class PipelineEval(Section):
             "qa_draft_per_page",
             "score_table_judge",
             "rerank_model",
+            "review_max_rounds",
         }
-    )  # 사용자 10-29 · e2e_* 10-30(op-08) · 정답·질문 초안·표 채점·재순위 모델(op-09가 stages.py용으로 더함) 11-01(e2-10 — PC 평가 도구 지움) — 지운 칸·절(남으면 경고만)
-    review_max_rounds: int | None = F(2, "REVIEW_MAX_ROUNDS", "도식 검토 루프의 최대 재추출 횟수(회)")
+    )  # 사용자 10-29 · e2e_* 10-30(op-08) · 정답·질문 초안·표 채점·재순위 모델(op-09가 stages.py용으로 더함) 11-01(e2-10 — PC 평가 도구 지움) · review_max_rounds 11-01(figure_review 지움) — 지운 칸·절(남으면 경고만)
 
 
 class PipelineExtract(Section):
