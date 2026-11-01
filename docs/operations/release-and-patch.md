@@ -231,7 +231,7 @@ cd /srv/rag/code/live
 PYTHONPATH=app/deploy python -m common.config.migrate /srv/rag/env/pipeline.env --out /srv/rag/env/settings.yaml   # 서버 배치 코드 폴더 live/app/deploy(저장소 배치면 PYTHONPATH=.)
 #   이미지 안: docker run --rm -i --network none --entrypoint bash data-pipeline:<태그> -c 'cat > /tmp/p.env && python -m common.config.migrate /tmp/p.env --out /tmp/s.yaml >&2 && cat /tmp/s.yaml' < /srv/rag/env/pipeline.env > /srv/rag/env/settings.yaml
 # ② env-guide.md "옛 서버 값" 표의 항목(옛 options.conf가 채우던 값 — run_mode: prod·parse_post: all·max_rows: 1000 등, C-39·C-43
-#    + 옛 compose 기본값 chain_structure_url·mcp.server.store: pg — C-47) 중 pipeline.env에 같은 이름이 없던 것만 settings.yaml에 옮겨 적는다 ·
+#    + 옛 compose 기본값 chain_structure_url — C-47 · mcp.server.store는 11-01에 없앰) 중 pipeline.env에 같은 이름이 없던 것만 settings.yaml에 옮겨 적는다 ·
 #    특히 common.store.run_mode: prod — 빠뜨리면 PG 연결 실패 때 문서 레지스트리가 SQLite로 조용히 대체돼 run_docs 문서별 publish가 그 전 문서를 deleted·숨김으로 만든다(C-54) ·
 #    EDW를 쓰면 common.connections.rdb의 read·write 계정(필수 — C-67, 옛 common.connections.edw는 없앰) · run_docs.py를 쓰면 C-45 ③의 항목도
 # ③ 대조 — 옛 실효 값(옛 카탈로그 값 + pipeline.env) ↔ 새 파일, 값은 안 찍음. "다름 0 · 옛에만 0 · 확인 필요 0"(종료 코드 0)일 때까지 ②를 고침
@@ -318,8 +318,6 @@ dc run --rm load migrate check --target all     # 차이·버전 확인(읽기�
 dc run --rm load migrate up --target all        # 새 판 마이그레이션(없으면 아무것도 안 함)
 dc run --rm load migrate check --target all     # "차이 없음"
 ```
-
-**4-1. 엔진 구성 새 판(pl-42 — refactor.md C-69)** — 판 1 시드는 고치지 않으므로 새 형식(`.jpeg`·`.tif`·`.tiff`·`.bmp`·`.mhtml`)은 새 판으로: `dc run --rm load set-stack --parse ".jpeg=rapidocr_ko,qwen_vlm;.tif=rapidocr_ko,qwen_vlm;.tiff=rapidocr_ko,qwen_vlm;.bmp=rapidocr_ko,qwen_vlm;.mhtml=mhtml,kreuzberg" --reason "pl-42 확장자 추가"` → `dc run --rm load show-stack --history 3`. 되돌릴 때는 `set-stack --activate <앞 판> --reason …`(DB를 백업으로 되돌렸으면 필요 없음).
 
 **5. 띄우기·확인** — README §5-3 ④ 연결 점검 · ⑤ 이미지 점검 → `mcp_up.sh` · 상주 트리거 `dc up -d …`(§5-5) → 시작 로그 첫 줄 `[image] … · 코드 <커밋> …`이 새 판인지 → 새벽 배치 다시 켬(`systemctl start data-pipeline-nightly.timer`).
 

@@ -7,6 +7,8 @@
 옛 배치(최상위 common·pipeline·mcp — op-08 전)는 거부하고 `python -m common.config.migrate <옛 settings.yaml>`로 바꾸게 안내한다.
 """
 
+import sys
+
 # 파일 최상위 절 — 이 순서로 sample에 낸다.
 SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops", "dev", "tuning")
 MIGRATE_HINT = "python -m common.config.migrate <옛 settings.yaml> --out <새 파일>"
@@ -83,6 +85,9 @@ REQUIRED_GROUPS = (
     ),
 )
 REQUIRED = {m: f"required.{g}.{k}" for g, _t, _w, rows in REQUIRED_GROUPS for k, m in rows}
+RETIRED = frozenset(
+    {"required.deploy.mcp_store"}
+)  # 지운 파일 자리 — 남아 있으면 경고만(mc-01 11-01: 검색 저장소는 PG 하나, op-09가 필수로 적게 했던 칸)
 
 # 역할 절 — (모델 접두, 파일 접두). 긴 접두가 먼저 맞는다. 파일 접두도 서로 1:1(거꾸로 바꿀 때 가장 긴 파일 접두).
 ROLES = (
@@ -278,6 +283,9 @@ def to_model(doc, source=""):
         raise LayoutError(f"설정 파일에 모르는 최상위 절 {unknown} — {'·'.join(SECTIONS)}만(덮기 파일은 base·overrides){where}")
     out, bad, moved = {}, [], []
     for y, v in _leaves(doc):
+        if y in RETIRED:
+            sys.stderr.write(f"[settings] 지운 칸 무시: {y} — 설정 파일에서 지울 것(값은 출력 안 함)\n")
+            continue
         m = to_model_path(y)
         if m is None:
             if v not in (None, {}):

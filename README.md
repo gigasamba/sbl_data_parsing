@@ -204,7 +204,6 @@ required:
   env: {run_env: local, run_mode: prod}
   pg: {host: 127.0.0.1, port: 55433, db: rag, user: rag, password: <비밀번호>, db_schema: demo}   # 적재·검색할 스키마
   embed: {base_url: <OpenAI 호환 주소>, model: <임베딩 모델>, api_key: <키>}
-  deploy: {mcp_store: pg}                       # 검색 저장소 — PC도 꼭 적는다
 common:
   models:
     embed: {allow_external: true}
@@ -226,7 +225,7 @@ tuning:
 ```
 
 - 옛 배치(최상위 `common`·`pipeline`·`mcp` — op-08 전) 파일은 읽지 않는다. `python -m common.config.migrate settings.yaml --out settings.new.yaml`로 바꾼 뒤 새 파일로 바꿔 넣는다(지운 칸은 "삭제됨"으로 이름만 알림).
-- 검색 저장소 종류(`required.deploy.mcp_store` — `pg`·`local`)와 PG 접속값은 PC·서버 모두 채운다 — 비우면 시작을 거부한다(사용자 10-31, op-09 — 자동 탐지 없음).
+- PG 접속값은 서버에서 꼭 채운다 — 비우면 시작을 거부한다(사용자 10-31, op-09 — 자동 탐지 없음). PC는 비우면 SQLite 대역으로 돈다. 검색 저장소는 PG 하나라 종류 칸은 없다(옛 `required.deploy.mcp_store`가 남아 있으면 경고만 — mc-01, 11-01).
 - 같은 절(`search:` 등)이나 같은 칸을 두 번 쓰면 시작을 거부한다 — 칸을 더할 때는 이미 있는 절 안에 넣는다.
 - **외부 임베딩은 세 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `run_env: local` · `no_paid_calls: false`. 하나라도 빠지면 호출하지 않는다(서버 dev·prd는 늘 거부).
 - PG 접속 항목(`required.pg`의 host·port·db·user·password·db_schema)은 모두 필수다 — 비우면 채울 자리를 알려 주고 멈춘다(op-09, `docker ps` 자동 탐지와 코드 기본값은 없앰). 로컬 묶음만 쓸 때는 명령에 `--local`.
@@ -324,7 +323,7 @@ SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
 
 # ask·MCP는 --set을 받지 않으므로 오버레이 설정 파일(방법 C)로 같은 값을 넘긴다
 SF=$(.venv/bin/python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 \
-     NO_PAID_CALLS=0 LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_STORE=pg MCP_BUNDLE=$O/bundle MCP_PORT=18769)
+     NO_PAID_CALLS=0 LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_BUNDLE=$O/bundle MCP_PORT=18769)
 SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.ask ask --pg --bundle $O/bundle --k 3 --q "<질문>"
 SETTINGS_FILE=$SF nohup .venv/bin/python -m mcp_server.main > $O/mcp.log 2>&1 & echo $! > $O/mcp.pid
 ```
@@ -344,7 +343,7 @@ kill $(cat output/demo/mcp.pid)              # 끄기 — PID로만(pkill -f 금
 
 ### 4-6. 검증 페이지(브라우저로 검색 확인)
 
-검색 MCP와 pgvector를 브라우저로 보여 주는 PC 전용 페이지다. 설정은 루트 `settings.yaml` 하나이고(전용 설정 파일 없음), §4-2 예시의 `required.deploy.mcp_store`·`ops.paths.mcp_bundle`·`search.server`·`dev.mcp`를 그대로 쓴다(따로 더할 절 없음 — 다른 번들을 보려면 그 칸 값만 바꾼다).
+검색 MCP와 pgvector를 브라우저로 보여 주는 PC 전용 페이지다. 설정은 루트 `settings.yaml` 하나이고(전용 설정 파일 없음), §4-2 예시의 `ops.paths.mcp_bundle`·`search.server`·`dev.mcp`를 그대로 쓴다(따로 더할 절 없음 — 다른 번들을 보려면 그 칸 값만 바꾼다).
 
 ```bash
 nohup bash validation/search_ui/start_mcp.sh > output/validation/mcp.log 2>&1 & echo $! > output/validation/mcp.pid

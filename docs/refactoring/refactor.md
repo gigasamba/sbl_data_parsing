@@ -34,7 +34,7 @@ S11(10-28)에 VS10 배포 준비 목록(`output/orca/VS10-verify.md` 끝 절)을
 | 서버 자체 수정 기록 읽기 — `/srv/rag/reports/server-changes.md`(+ `server-changes/<ID>.diff`)와 서버 settings.yaml에서 상태 `서버에만`·`PC 보냄` 행마다 새 코드에 이미 들어 있는지(`PC 반영됨`) · ③-4 덮어쓴 뒤 다시 얹을 것인지 정함(전체 덮어쓰기는 서버에서 직접 고친 코드를 지움) | 서버 운영(PC 쪽 대조는 각 개발자) | 배포 전 | (R§4 · R§7 0단계 · R§3-2 원칙) |
 | **서버에서 실제로 실행되는 `run_docs.py` 대조** — 저장소 버전은 `main()`이 파싱 스레드를 띄우지 않던 결함(pre-refactor부터)을 S12에 고쳤다. 서버 작업 폴더의 `run_docs.py`에서 `def lane_worker`가 `main()` 안(들여쓰기 4칸)인지, `server-changes.md`에 run_docs 수정 행이 있는지 보고 — 서버에 손으로 고친 정상 버전이 있으면 그 버전의 다른 수정을 새 버전에 합침(위 줄 규칙) | 서버 운영 | 배포 전 | C-59 |
 | 첫 버전 태그·설명서 — `release/0.1.0` → 새 저장소 `main` 머지 커밋에 첫 버전 태그 `v0.1.0`(D-009 — annotated · 이미지 태그는 `v` 없이 `data-pipeline:0.1.0`·`mcp-server:0.1.0` = 저장소 루트 `VERSION`, D-036) · 이번 배포의 `RELEASE_NOTES.md`는 손으로 씀(시작점이 S6b 전 배치라 `make_patch.sh` 설명서 생성이 종료 3 — R§4) | devops·사용자 | 빌드 전 | (refactor_plan 6-1 "반입" · D-009 · R§4) |
-| 서버 settings.yaml 이관과 꼭 적을 항목(아래 표 — `run_mode: prod`·`chain_structure_url`·`mcp.server.store: pg`·EDW 계정·run_docs 항목 등) · `migrate --compare`가 "다름 0 · 옛에만 0 · 확인 필요 0" · 주인 UID 10001·640 | 서버 운영(EDW 계정은 EDW 담당) | 배포 전 준비 · 배포 때 5번 | C-09·C-34·C-39·C-43·C-45·C-47 |
+| 서버 settings.yaml 이관과 꼭 적을 항목(아래 표 — `run_mode: prod`·`chain_structure_url`·EDW 계정·run_docs 항목 등) · `migrate --compare`가 "다름 0 · 옛에만 0 · 확인 필요 0" · 주인 UID 10001·640 | 서버 운영(EDW 계정은 EDW 담당) | 배포 전 준비 · 배포 때 5번 | C-09·C-34·C-39·C-43·C-45·C-47 |
 | 폐쇄망 휠 — `deploy/docker/wheels/`에 linux/amd64·py3.12 휠(`SQLAlchemy`·`alembic`·`Mako`·`pydantic-settings`·`PyYAML` — 버전은 C-48 ①·C-16) · `assets/rapidocr/*.onnx`를 넣고 빌드(`ALLOW_NO_ASSETS=1` 금지) | devops | 빌드 전 | C-11·C-16·C-48 ① |
 | DB 담당 협의 — 위 ①의 버전 기록 테이블 + 회사 DB `AI.ParsingMeta` DDL 전달(서버에 남은 옛 `struct` 스키마는 그대로 두거나 DB 담당자가 지움 — pl-08) | DB 담당·사용자 | 배포 전 | C-48·C-49·C-17 |
 | 내부망 모델 — `*_ALLOW_EXTERNAL` 없음 · 모델 주소 모두 내부망(서버는 외부 거부) | 서버 운영 | 배포 전 | C-41 |
@@ -48,7 +48,7 @@ S11(10-28)에 VS10 배포 준비 목록(`output/orca/VS10-verify.md` 끝 절)을
 |---|---|---|
 | `common.run_env` | dev·prd(없으면 앱·entrypoint·compose 거부 · `stage`는 없앰 — C-66) | C-34·C-09·C-66 |
 | **`common.store.run_mode: prod`** | 빠지면 PG 연결 실패 때 문서 레지스트리가 SQLite로 대체 → run_docs 문서별 publish가 그 전 문서를 deleted·숨김(옛 `options.conf`가 늘 막던 길) | C-43·C-47·C-54 |
-| `pipeline.service.trigger.chain_structure_url` · `mcp.server.store: pg` | 옛 compose 기본값 | C-47 ① |
+| `pipeline.service.trigger.chain_structure_url`(`mcp.server.store`는 11-01 mc-01에 없앰 — 안 적음) | 옛 compose 기본값 | C-47 ① |
 | `[서버 옛 값]` 항목 | `settings.sample.yaml`의 `[서버 옛 값: …]` 표시 그대로(`post: all`·`max_rows: 1000` 등) | C-39 |
 | EDW 계정 | `common.connections.rdb`의 `read`·`write` 계정(+ 비밀번호) — EDW를 쓰면 필수(옛 `common.connections.edw`는 없앰 — C-67) | C-47 ④ · C-67 |
 | 토큰 | `pipeline.service.parse_mcp.token` = `mcp.server.token` · `pipeline.service.trigger.token` | C-42·C-44 |

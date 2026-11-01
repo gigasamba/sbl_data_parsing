@@ -120,7 +120,7 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 이유(허브 전체 점검, 사용자 10-31): 서버 경로·포트·주소·모델 이름이 코드·호스트 스크립트·compose·systemd 여러 곳에 복사돼 있고, env를 직접 읽는 줄이 남아 있다. 한 곳을 바꾸면 나머지가 어긋난다.
 - 규칙: 설정 값은 settings.yaml(코드 기본값은 설정 모델에 한 번) 또는 이미지 기본값 표(`common/config/settings.py` — D-029) 하나에서만 온다. 호스트 스크립트는 `settings_env.sh`가 내준 값만 쓴다. 저장소 안 경로는 `common/core/paths.py` 상수로만.
 - 결정(사용자 10-31): 핑거프린트 보호 파일도 0.2.0에서 고친다 — 엔진 파일과 `common/core/{contract,terms,text}.py`의 env 직접 읽기(약 49곳), `paths.py` 밖 `Path(__file__).parents[n]`(34곳). 0.2.0은 어차피 전부 다시 처리한다. 검토 등급 A(엔진·핸드오프 핑거프린트 — 사람 검토).
-- 결정(사용자 10-31): PG 자동 찾기를 지운다 — `docker ps`로 pgvector 찾기, 대체 포트, 코드 기본값 `127.0.0.1`/`5432`/`rag`. PG 접속 정보와 `required.deploy.mcp_store`(op-08)는 필수이고, 비어 있으면 시작을 거부한다. 로컬 묶음으로 조용히 바꿔 타지 않는다.
+- 결정(사용자 10-31): PG 자동 찾기를 지운다 — `docker ps`로 pgvector 찾기, 대체 포트, 코드 기본값 `127.0.0.1`/`5432`/`rag`. PG 접속 정보는 필수이고(서버), 비어 있으면 시작을 거부한다. `required.deploy.mcp_store`(op-08)는 11-01에 없앴다(검색은 PG 하나 — [mc-01](mcp.md#mc-01), 남아 있으면 경고만). 로컬 묶음으로 조용히 바꿔 타지 않는다.
 - 고칠 곳(허브 점검 10-31 — 줄 번호는 그날 기준):
   - `/srv/rag/code/live`가 15곳에 복사됨 — `deploy/host/compose/compose.patch*.yml`, `deploy/host/scripts/mcp_up.sh:15`, `run_docs.py:141`, systemd unit.
   - `SERVER_ENV_DIR` 기본 `/srv/rag/env`가 4곳 — `settings_env.sh:54` 하나만 기본값으로 남긴다.

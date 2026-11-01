@@ -53,7 +53,7 @@ from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 def load_stack(path):
     p = Path(path)
     if not p.exists():
-        raise SystemExit(f"{p} 없음 — 먼저 python cli/pipeline.py set-stack (선정 결과로 만들거나 직접 지정)")
+        raise SystemExit(f"{p} 없음 — --stack에 엔진 구성 파일 경로(resources/config/pipeline_stack.json 모양)")
     return json.loads(p.read_text(encoding="utf-8"))
 
 
