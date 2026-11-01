@@ -224,7 +224,7 @@ def parse_module(a):
     if a.source:  # 문서 위치: 같은 서버 폴더 → Object Storage 몇 건 → 전체(사용자 10-02)
         from pipeline.extract import source as SRC
 
-        local, names, state = SRC.resolve(a.source, OUT, a.source_limit, a.mode)
+        local, names, state = SRC.resolve(a.source, OUT, a.source_limit)
         src_info = (state, local)
         _tstep("t_resolve")
         if not SRC.is_remote(a.source):
@@ -317,7 +317,6 @@ def parse_module(a):
         "parse",
         src=str(a.src),
         source=str(a.source or a.src),
-        mode=a.mode,
         engines=engines.split(","),
         docs=len(idx),
         digest=digest,
@@ -529,12 +528,6 @@ def main(argv=None):
         "주면 가져오기·중복 확인·방향 보정부터",
     )
     p.add_argument("--source-limit", type=int, default=pc.cfg().extract.source_limit, help="원본 몇 건만(Object Storage 시험)")
-    p.add_argument(
-        "--mode",
-        default=C.cfg().store.run_mode or "prod",
-        choices=["prod", "test"],
-        help="test = 대상이 50건 이상이면 파일 형식별 5건씩만(TEST_MIN_DOCS·TEST_PER_TYPE) · prod = 전부",
-    )
     p.add_argument("--engines", default="")
     p.add_argument("--procs", default=_default_procs())
     p.add_argument("--workers", default=_default_workers())

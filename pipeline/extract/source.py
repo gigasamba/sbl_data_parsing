@@ -8,7 +8,7 @@
   --source rdb:*                     SI41 — common/sources.json(git)에 enabled=true인 원천 전부(표마다 처리 기록·watermark 분리)
   --source rdb:<이름>                 SI41 — sources.json에 등록된 이름 하나(table·columns·bucket을 그 설정에서) ·
                                       이름이 등록돼 있지 않으면 레거시(표 이름·csv:<경로> 직접 지정, env RDB_COL_*·RDB_BUCKET)로 그대로 동작
-  --mode test                        시험 모드: 대상이 TEST_MIN_DOCS(기본 50)건 이상이면 파일 형식별 TEST_PER_TYPE(기본 5)건만(이름 해시 순 — 늘 같은 표본)
+  (--mode test 표본 모드와 스트리밍용 plan()은 11-01에 지움)
 
 Object Storage 원본 처리(백로그 O2 일부): 대표 결과가 나온 문서의 내려받은 원본은 parse 뒤 바로 지움(보존 스위치
 KEEP_LOCAL_ORIGINALS·상한 PARSE_KEEP_MAX_GB는 op-08에 지움).
@@ -130,21 +130,6 @@ def _record_duplicate(state, source_id, dup, etag=None, size=None, updated_at=No
 def is_remote(source):
     """원본이 다른 서버(Object Storage)에서 오는지 — s3:// 목록이든 rdb:(RDB가 키를 알려줌)든 같은 처리(처리 기록·원본 삭제)."""
     return str(source).startswith(("s3://", "rdb:"))
-
-
-def sample(names, mode):
-    """시험 모드 표본 — 대상이 TEST_MIN_DOCS건 이상이면 확장자별 TEST_PER_TYPE건(이름 해시 순). 실제 구동(prod)은 전부."""
-    dev = pc.cfg().dev  # S7c — 설정 객체(TEST_MIN_DOCS 기본 50·TEST_PER_TYPE 기본 5 — 빈 글자도 기본값)
-    if mode != "test" or len(names) < int(dev.test_min_docs):
-        return sorted(names)
-    per = int(dev.test_per_type)
-    by = defaultdict(list)
-    for n in names:
-        by[Path(n).suffix.lower()].append(n)
-    pick = []
-    for _ext, ns in sorted(by.items()):
-        pick += sorted(ns, key=lambda x: hashlib.sha1(x.encode("utf-8")).hexdigest())[:per]
-    return sorted(pick)
 
 
 # _safe_name·_safe_join은 common/ids.py(safe_name·safe_join)로 옮김(독립 검토 MAJOR-1 — modules/load도 같이 씀,
@@ -758,15 +743,14 @@ def _warm_cmd(argv):
     return 0
 
 
-def _rdb_resolve_spec(spec, state, limit, mode):
+def _rdb_resolve_spec(spec, state, limit):
     """rdb:<spec> 전체(여러 원천 가능, SI41) → (names, fetch_one(name,dest)→Path, state) — resolve()·plan() 공용.
     여러 원천이면(rdb:*) 상태(처리 기록·watermark)는 이름별로 따로(_processed_path·_rdb_wm_path), manifest·로컬
     폴더는 공유(기존과 같은 레이아웃) — 서로 다른 원천의 파일 이름이 겹치면(두 표에 같은 파일 이름, 다른 키)
     `<원천 이름>__<이름>`으로 다시 구분(원천 안 충돌은 이미 doc_id로 구분됨, `_rdb_names`)."""
     specs = _parse_rdb_source(spec)
     plans = [
-        (name, *_rdb_plan(table, state, limit, mode, cols=cols, default_bucket=bucket, source_name=name))
-        for name, table, cols, bucket in specs
+        (name, *_rdb_plan(table, state, limit, cols=cols, default_bucket=bucket, source_name=name)) for name, table, cols, bucket in specs
     ]
     if len(plans) == 1 and plans[0][0] is None:
         _, names, fetch_one, st = plans[0]
@@ -796,7 +780,7 @@ def _rdb_resolve_spec(spec, state, limit, mode):
     return names_all, fetch_one_all, state
 
 
-def _rdb_plan(table, state, limit=0, mode="prod", cols=None, default_bucket=None, source_name=None):
+def _rdb_plan(table, state, limit=0, cols=None, default_bucket=None, source_name=None):
     """RDB(표 또는 csv:)에서 대상 행을 질의 → (names, fetch_one(name,dest)→Path, state). plan()·resolve() 공용(AD44) —
     resolve()는 이걸 부른 뒤 모든 이름을 즉시 받는다.
     받기 전 대조는 ETag가 있으면 ETag(head_object), 없으면 크기(ContentLength)로 — 불일치면 거부·기록하고 받지
@@ -818,8 +802,7 @@ def _rdb_plan(table, state, limit=0, mode="prod", cols=None, default_bucket=None
     if skipped:
         _record_source_skipped(state, skipped, source_name)
     name_of = {r["key"]: name_of[r["key"]] for r in rows}
-    keep = set(sample(list(name_of.values()), mode))
-    rows = [r for r in sorted(rows, key=lambda r: r["key"]) if name_of[r["key"]] in keep][: limit or None]
+    rows = sorted(rows, key=lambda r: r["key"])[: limit or None]
     by_name = {name_of[r["key"]]: r for r in rows}
     names = sorted(by_name)
     cli = _s3()
@@ -935,9 +918,7 @@ def _rdb_plan(table, state, limit=0, mode="prod", cols=None, default_bucket=None
         man_f.touch()
     C.put(SOURCE_MANIFEST=str(man_f))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스) + 인계 키라 env에도(contract.py)
     label = f"{source_name}({table})" if source_name else table
-    print(
-        f"[source] rdb:{label} · 대상 {len(names)}개(이미 처리 {len(done)}개 제외)" + (" · 시험 표본" if mode == "test" else ""), flush=True
-    )
+    print(f"[source] rdb:{label} · 대상 {len(names)}개(이미 처리 {len(done)}개 제외)", flush=True)
     return names, fetch_one, state
 
 
@@ -979,7 +960,7 @@ def _s3_download(cli, bucket, key, dest_path):
     os.replace(tmp, dest_path)
 
 
-def fetch_s3(uri, dest, state, limit=0, mode="prod"):
+def fetch_s3(uri, dest, state, limit=0):
     """s3://버킷/접두 → dest(평면 폴더). 이미 처리한 객체(같은 ETag)는 건너뜀. → 내려받은 파일 이름 목록."""
     bucket, _, prefix = uri[5:].partition("/")
     cli = _s3()
@@ -992,8 +973,7 @@ def fetch_s3(uri, dest, state, limit=0, mode="prod"):
     if skipped:
         _record_s3_skipped(state, skipped)
     name_of = _dedupe_names({o["Key"]: name_of[o["Key"]] for o in objs})  # GH1-02 — 겹치는 안전 이름만 키 해시로 갈라놓음
-    keep = set(sample(list(name_of.values()), mode))
-    objs = [o for o in sorted(objs, key=lambda o: o["Key"]) if name_of[o["Key"]] in keep][: limit or None]
+    objs = sorted(objs, key=lambda o: o["Key"])[: limit or None]
     dest.mkdir(parents=True, exist_ok=True)
     man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")} if (state / "manifest.jsonl").exists() else {}
     got = []
@@ -1008,27 +988,26 @@ def fetch_s3(uri, dest, state, limit=0, mode="prod"):
         got.append(n)
     atomic_write_text(state / "manifest.jsonl", "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in man.values()))
     print(
-        f"[source] {uri} → {dest} · 새로 처리할 객체 {len(objs)}개(이미 처리 {len(done)}개 건너뜀)"
-        + (" · 시험 표본" if mode == "test" else ""),
+        f"[source] {uri} → {dest} · 새로 처리할 객체 {len(objs)}개(이미 처리 {len(done)}개 건너뜀)",
         flush=True,
     )
     return got
 
 
-def resolve(source, out, limit=0, mode="prod"):
+def resolve(source, out, limit=0):
     """→ (로컬 원본 폴더, 대상 파일 이름 목록, 상태 폴더). 폴더면 그대로, s3://면 내려받음, rdb:면 RDB 질의 뒤 내려받음(AD44)."""
     state = Path(out) / "parse" / "_source"
     state.mkdir(parents=True, exist_ok=True)
     if str(source).startswith("s3://"):
         local = Path(out) / "_source_files"
-        names = fetch_s3(source, local, state, limit, mode)
+        names = fetch_s3(source, local, state, limit)
         C.put(
             SOURCE_MANIFEST=str(state / "manifest.jsonl")
         )  # S7e2 — 덮기 파일(op-09 — 인계 파일도 설정 객체로 읽음) · 원본 위치 = s3://버킷/키
         return local, names, state
     if str(source).startswith("rdb:"):
         local = Path(out) / "_source_files"
-        names, fetch_one, state = _rdb_resolve_spec(source[len("rdb:") :], state, limit, mode)  # SI41 — rdb:*·rdb:<이름>·레거시 공용
+        names, fetch_one, state = _rdb_resolve_spec(source[len("rdb:") :], state, limit)  # SI41 — rdb:*·rdb:<이름>·레거시 공용
         ok = []
         nw = max(
             1, int(pc.cfg().extract.source.fetch_workers)
@@ -1062,8 +1041,8 @@ def resolve(source, out, limit=0, mode="prod"):
             raise RuntimeError("[source] rdb 모드인데 SOURCE_MANIFEST 파일이 없음 — 원본 위치가 조용히 file://로 떨어질 수 있어 멈춤")
         return local, ok, state
     src = Path(source)
-    names = sample([p.name for p in src.iterdir() if p.is_file() and p.name != ".gitkeep"], mode)[: limit or None]
-    print(f"[source] 폴더 {src} · 대상 {len(names)}개" + (" · 시험 표본(형식별)" if mode == "test" else ""), flush=True)
+    names = sorted(p.name for p in src.iterdir() if p.is_file() and p.name != ".gitkeep")[: limit or None]
+    print(f"[source] 폴더 {src} · 대상 {len(names)}개", flush=True)
     return src, names, state
 
 
@@ -1120,89 +1099,6 @@ def finish(state, local, rep_index):
         "기다리지 않음, 실패 문서는 다시 시도하도록 남김)",
         flush=True,
     )
-
-
-def plan(source, out, limit=0, mode="prod"):
-    """스트리밍(X2)용 — 대상 이름만 정하고(표본·제한, 이미 처리한 것은 뺌) 내려받지 않는다.
-    → (names, fetch_one(name, dest)→Path, state). fetch_one은 이름 하나를 dest 폴더로 받아(또는 복사해) 그 경로를 돌려준다.
-    s3://면 목록만 보고 ETag로 이미 처리한 것은 뺀다. 폴더면 그 폴더를 '원본 저장소'로 보고(샘플 폴더가 아니라) 받을 때마다 복사한다
-    — 폴더 자체는 지우지 않음(시험 모드가 git에 있는 예제 폴더를 건드리지 않게)."""
-    state = Path(out) / "parse" / "_source"
-    state.mkdir(parents=True, exist_ok=True)
-    if str(source).startswith("rdb:"):
-        return _rdb_resolve_spec(source[len("rdb:") :], state, limit, mode)  # SI41 — rdb:*·rdb:<이름>·레거시 공용
-    if str(source).startswith("s3://"):
-        bucket, _, prefix = source[5:].partition("/")
-        cli = _s3()
-        done = {r["key"]: r["etag"] for r in jl(state / "processed.jsonl")} if (state / "processed.jsonl").exists() else {}
-        objs = []
-        for page in cli.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
-            objs += [o for o in page.get("Contents", []) if not o["Key"].endswith("/") and done.get(o["Key"]) != o["ETag"].strip('"')]
-        name_of = {o["Key"]: _safe_name(o["Key"], prefix) for o in objs}
-        name_of = _dedupe_names(name_of)  # GH1-02b — fetch_s3와 같은 처리: 겹치는 안전 이름만 키 해시로 갈라놓음(이 배치 안에서)
-        keep = set(sample(list(name_of.values()), mode))
-        objs = [o for o in sorted(objs, key=lambda o: o["Key"]) if name_of[o["Key"]] in keep][: limit or None]
-        by_name = {name_of[o["Key"]]: o for o in objs}
-        names = sorted(by_name)
-
-        def fetch_one(name, dest):
-            # GH1-02b — fetch_s3와 같은 패턴: ETag가 그대로면 생략, 받을 땐 임시 파일+os.replace(원자적, 실패 시
-            # 임시 파일 지움, _s3_download). 받다가 끊겨 반쪽 파일이 남는 일은 여기서도 똑같이 막아야 한다.
-            o = by_name[name]
-            etag = o["ETag"].strip('"')
-            source_id = f"s3://{bucket}/{o['Key']}"
-            # O3 재설계(2026-10-14) — 받기 전 완전 중복 사전 확인(비멀티파트 ETag+크기만, 캐비앗은 _etag_duplicate 참고)
-            dup = _etag_duplicate(state, source_id, etag, o.get("Size"))
-            if dup:
-                _record_duplicate(state, source_id, dup, etag=etag, size=o.get("Size"))
-                with _processed_path(state).open("a", encoding="utf-8") as fh:
-                    fh.write(json.dumps({"key": o["Key"], "etag": etag, "ver": None}, ensure_ascii=False) + "\n")
-                raise DuplicateContent(f"[source] 받기 전 중복(ETag+크기) — {source_id} ≡ {dup.get('source_id')} — 받지 않음")
-            dest.mkdir(parents=True, exist_ok=True)
-            f = _safe_join(dest, name)
-            man_f = state / "manifest.jsonl"
-            man = {r["file_name"]: r for r in jl(man_f)} if man_f.exists() else {}
-            prev = man.get(name)
-            if not (f.exists() and prev and prev.get("etag") == etag):
-                _s3_download(cli, bucket, o["Key"], f)
-            # O3 재설계 — 받은 뒤 완전 중복 확인(멀티파트 ETag 등 사전 확인 못한 경우의 공용 경로)
-            dup2 = _sha_duplicate(state, source_id, f)
-            if dup2:
-                _record_duplicate(state, source_id, dup2, etag=etag, size=o.get("Size"))
-                with _processed_path(state).open("a", encoding="utf-8") as fh:
-                    fh.write(json.dumps({"key": o["Key"], "etag": etag, "ver": None}, ensure_ascii=False) + "\n")
-                f.unlink(missing_ok=True)
-                raise DuplicateContent(f"[source] 받은 뒤 중복(sha256) — {source_id} ≡ {dup2.get('source_id')} — 파싱하지 않음")
-            man[name] = {"file_name": name, "uri": source_id, "key": o["Key"], "etag": etag, "size": o["Size"]}
-            man_f.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in man.values()), encoding="utf-8")
-            return f
-
-        C.put(SOURCE_MANIFEST=str(state / "manifest.jsonl"))  # S7e2 — 덮기 파일 + 인계 키 env
-        print(
-            f"[source] {source} · 스트리밍 대상 {len(names)}개(이미 처리 {len(done)}개 제외)" + (" · 시험 표본" if mode == "test" else ""),
-            flush=True,
-        )
-        return names, fetch_one, state
-
-    src = Path(source)
-    names = sample([p.name for p in src.iterdir() if p.is_file() and p.name != ".gitkeep"], mode)[: limit or None]
-
-    def fetch_one(name, dest):
-        # O3 재설계(2026-10-14) — 폴더 원본은 네트워크 비용이 없어 받기 전 사전 확인 대신, 복사 전에 바로
-        # sha256(로컬 읽기만)으로 완전 중복을 본다 — 중복이면 복사하지 않는다(폴더는 처리 기록이 없음,
-        # mark_done과 같은 전제).
-        source_id = (src / name).resolve().as_uri()
-        dup = _sha_duplicate(state, source_id, src / name)
-        if dup:
-            _record_duplicate(state, source_id, dup)
-            raise DuplicateContent(f"[source] 중복(sha256) — {source_id} ≡ {dup.get('source_id')} — 복사하지 않음")
-        dest.mkdir(parents=True, exist_ok=True)
-        f = _safe_join(dest, name)
-        shutil.copy2(src / name, f)
-        return f
-
-    print(f"[source] 폴더 {src} · 스트리밍 대상 {len(names)}개" + (" · 시험 표본(형식별)" if mode == "test" else ""), flush=True)
-    return names, fetch_one, state
 
 
 def _derive_source_from_key(key):

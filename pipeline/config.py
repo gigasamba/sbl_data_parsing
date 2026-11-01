@@ -269,13 +269,11 @@ class PipelineTransformVlm(Section):
 
 class PipelineDev(Section):
     REMOVED = frozenset(
-        {"stream_test_crash", "parse_agent_fake", "parallel_test_crash", "allow_common_mismatch"}
-    )  # 사용자 10-29 · parallel_test_crash 10-30(pl-35) · allow_common_mismatch 11-01(structure·load 모듈의 끝 표시 확인 지움) — 지운 칸·절(남으면 경고만)
+        {"stream_test_crash", "parse_agent_fake", "parallel_test_crash", "allow_common_mismatch", "test_min_docs", "test_per_type"}
+    )  # 사용자 10-29 · parallel_test_crash 10-30(pl-35) · allow_common_mismatch 11-01(structure·load 모듈의 끝 표시 확인 지움) · test_min_docs·test_per_type 11-01(--mode test 표본 모드 지움) — 지운 칸·절(남으면 경고만)
     check_env_any_py: bool | None = F(
         False, "CHECK_ENV_ANY_PY", "check_env가 시스템 python에서도 멈추지 않고 계속할지(=1 계속 / 그 외 중단)", on=("1",)
     )
-    test_min_docs: int | None = F(50, "TEST_MIN_DOCS", "시험 모드(--mode test)에서 표본 추출을 시작하는 최소 문서 수(개)")
-    test_per_type: int | None = F(5, "TEST_PER_TYPE", "시험 모드 표본에서 확장자별로 고르는 문서 수(개)")
 
 
 class PipelineEval(Section):
