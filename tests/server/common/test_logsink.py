@@ -24,7 +24,7 @@ def test_db_fallback():
 
     with tempfile.TemporaryDirectory() as directory:
         sink = logsink.Sink(writer=failed, fallback_dir=directory, flush_sec=60)
-        assert sink.emit("mcp_call", {"args": '{"token": "never-store-secret"}', "client_info": {"password": "never-store-secret"}})
+        assert sink.emit("mcp_call", {"args": '{"token": "never-store-secret"}', "result_keys": {"password": "never-store-secret"}})
         sink.close()
         sink.close()
         rows = _rows(directory)

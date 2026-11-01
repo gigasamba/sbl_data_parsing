@@ -5,7 +5,7 @@
     emit("pipe_event", {"ts_start": ..., "run_id": uuid, ...})
 
 pipe_run은 시작(running)·종료를 같은 run_id로 emit하면 UPSERT한다.
-TEXT 칸(args/result/stack 등)은 문자열, JSONB 칸(client_info/result_keys/code_fp/metrics)은
+TEXT 칸(args/result/stack 등)은 문자열, JSONB 칸(result_keys/code_fp/metrics)은
 dict/list, 시각은 datetime 또는 ISO 문자열을 준다.
 common.log.db_enabled=false면 emit은 False(기록 안 함). True면 첫 emit에 시작한다.
 Handler는 log_table/log_row extra가 있는 LogRecord만 받는다. 수준 필터는 logger가 맡는다.

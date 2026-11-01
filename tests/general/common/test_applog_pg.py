@@ -63,8 +63,7 @@ def test_applog_migration():
                     "ts": now,
                     "request_id": str(uuid.uuid4()),
                     "status": "ok",
-                    "client_info": {"password": "never-store"},
-                    "result_keys": {"chunks": [1, 2]},
+                    "result_keys": {"password": "never-store", "chunks": [1, 2]},
                 },
             )
             sink.emit(
@@ -76,7 +75,7 @@ def test_applog_migration():
             with eng.connect() as conn:
                 assert conn.exec_driver_sql(f"SELECT count(*) FROM {schema}.pipe_run").scalar() == 1
                 assert conn.exec_driver_sql(f"SELECT status FROM {schema}.pipe_run").scalar() == "ok"
-                assert conn.exec_driver_sql(f"SELECT client_info FROM {schema}.mcp_call").scalar() == {"password": "***"}
+                assert conn.exec_driver_sql(f"SELECT result_keys FROM {schema}.mcp_call").scalar() == {"password": "***", "chunks": [1, 2]}
                 assert conn.exec_driver_sql(f"SELECT metrics FROM {schema}.pipe_event").scalar() == {"count": 2}
             start = month_start(now - timedelta(days=400))
             end = next_month(start)

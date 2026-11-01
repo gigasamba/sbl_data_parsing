@@ -316,7 +316,6 @@ def test_large_metadata():
             assert len(row["err"] or "") <= audit._META_TEXT_LIMIT
             assert len(row.get("user_id") or "") <= audit._META_TEXT_LIMIT
             assert len(row.get("agent") or "") <= audit._META_TEXT_LIMIT
-            assert len(json.dumps(row.get("client_info"))) < 140000
         return original(row)
 
     assert len(audit._status({"error": huge})[1]) <= audit._META_TEXT_LIMIT
@@ -327,7 +326,7 @@ def test_large_metadata():
         patch.object(audit, "_WORKER", worker),
         patch.object(audit.jsonlog, "masked", side_effect=observe),
         patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)),
-        audit.request_context({"x-mcp-user": huge, "x-mcp-client": huge}, {}, client_info={"name": huge, "nested": [huge] * 1000}),
+        audit.request_context({"x-mcp-user": huge, "x-mcp-client": huge}),
     ):
         try:
             audit.start(lambda: None).finish({"error": huge}, err=huge)

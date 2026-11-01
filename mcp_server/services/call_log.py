@@ -76,25 +76,11 @@ def _text(value, limit=_META_TEXT_LIMIT):
 
 
 def _metadata(row):
-    """마스킹 전에 동기 메타의 글자 수/구조를 제한한다. 본문은 전달하지 않는다."""
-    budget = [64]
-
-    def bounded(value, depth=0):
-        budget[0] -= 1
-        if budget[0] < 0 or depth > 4:
-            return None
-        if isinstance(value, dict):
-            return {_text(key, 256) or "?": bounded(child, depth + 1) for key, child in itertools.islice(value.items(), max(0, budget[0]))}
-        if isinstance(value, (list, tuple)):
-            return [bounded(child, depth + 1) for child in itertools.islice(value, max(0, budget[0]))]
-        return _text(value) if isinstance(value, str) else value if value is None or isinstance(value, (bool, int, float)) else None
-
+    """마스킹 전에 동기 메타의 글자 수를 제한한다. 본문은 전달하지 않는다."""
     safe = dict(row)
-    for key in ("request_id", "agent", "user_id", "remote_addr", "session_id", "tool", "app_version", "err"):
+    for key in ("request_id", "agent", "user_id", "session_id", "tool", "app_version", "err"):
         if key in safe:
             safe[key] = _text(safe[key])
-    if "client_info" in safe:
-        safe["client_info"] = bounded(safe["client_info"])
     return safe
 
 
@@ -208,7 +194,7 @@ def _status(result):
 
 
 @contextlib.contextmanager
-def request_context(headers, scope, payload=None, client_info=None):
+def request_context(headers, payload=None):
     """ASGI 요청 범위. 헤더 우선 user, 없으면 tools/call params._meta.user."""
     payload = payload if isinstance(payload, dict) else {}
     params = payload.get("params") or {}
@@ -224,9 +210,7 @@ def request_context(headers, scope, payload=None, client_info=None):
         "request_id": request_id,
         "agent": (headers.get("x-mcp-client") or "http")[:60],
         "user_id": headers.get("x-mcp-user") or meta.get("user"),
-        "remote_addr": str((scope.get("client") or ("",))[0]),
         "session_id": headers.get("mcp-session-id"),
-        "client_info": client_info,
     }
     update_request(data, payload)
     token = _REQUEST.set(data)
@@ -249,14 +233,8 @@ def update_request(data, payload):
     if not data.get("user_id") and isinstance(meta, dict):
         data["user_id"] = meta.get("user")
     if payload.get("method") == "initialize":
-        data.update(
-            tool="initialize",
-            arguments=params,
-            client_info={
-                **(params["clientInfo"] if isinstance(params.get("clientInfo"), dict) else {}),
-                "protocolVersion": params.get("protocolVersion"),
-            },
-        )
+        # 클라이언트 정보는 기록하지 않는다(args에도 남기지 않음).
+        data.update(tool="initialize", arguments={k: v for k, v in params.items() if k != "clientInfo"})
     if payload.get("method") == "tools/call":
         data.update(tool=params.get("name"), arguments=params.get("arguments") or {})
 
@@ -518,7 +496,7 @@ def unauthorized():
 
 
 def initialize_call(payload):
-    """stateless 연결의 clientInfo를 추정 연결 없이 initialize 자체 행에 남긴다."""
+    """initialize 요청을 자체 행으로 남긴다(clientInfo는 빼고 기록)."""
     return start(lambda: None) if isinstance(payload, dict) and payload.get("method") == "initialize" else None
 
 

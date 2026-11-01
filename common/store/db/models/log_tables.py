@@ -7,7 +7,7 @@ from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, DateTime, F
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 PARTITION_KEYS = {"mcp_call": "ts", "pipe_event": "ts_start"}
-JSON_COLUMNS = {"client_info", "result_keys", "code_fp", "metrics"}
+JSON_COLUMNS = {"result_keys", "code_fp", "metrics"}
 
 
 def log_metadata(schema="applog"):
@@ -21,8 +21,6 @@ def log_metadata(schema="applog"):
             "tool": Text,
             "agent": Text,
             "user_id": Text,
-            "remote_addr": Text,
-            "client_info": JSONB,
             "args": Text,
             "args_bytes": Integer,
             "args_truncated": Boolean,

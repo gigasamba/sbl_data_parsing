@@ -20,8 +20,6 @@ DDL = (
     tool TEXT,
     agent TEXT,
     user_id TEXT,
-    remote_addr TEXT,
-    client_info JSONB,
     args TEXT,
     args_bytes INTEGER,
     args_truncated BOOLEAN,

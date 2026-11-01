@@ -70,7 +70,7 @@ def test_result_keys():
     result = {"evidence": hits, "evidence_status": "found", "total_docs": 3, "total_chunks": 2000}
     rows = []
     with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
-        with audit.request_context({}, {}, {"method": "tools/call", "params": {"name": "search"}}):
+        with audit.request_context({}, {"method": "tools/call", "params": {"name": "search"}}):
             audit.start(lambda: None).finish(result)
             assert audit.drain()
     keys = rows[0]["result_keys"]
@@ -200,7 +200,7 @@ def test_http_context():
             r = await client.post("/mcp", json=payload, headers=hdr)
             assert audit.drain()
             assert r.status_code == 200 and rows[-1]["user_id"] == "meta-user"
-            assert rows[-1]["remote_addr"] == "127.0.0.1"
+            assert "remote_addr" not in rows[-1]
         assert CALLER.get() == original and audit._REQUEST.get() is None
         assert len(rows) == 3, (len(rows), [(row.get("tool"), row.get("status"), row.get("request_id")) for row in rows])
 
@@ -245,7 +245,8 @@ def test_initialize_contract():
             assert response.status_code == 200, response.text
             assert audit.drain()
             assert len(rows) == 1 and rows[0]["tool"] == "initialize"
-            assert rows[0]["client_info"] == {"name": "audit-test", "version": "1", "protocolVersion": LATEST_PROTOCOL_VERSION}
+            assert "client_info" not in rows[0] and "audit-test" not in rows[0]["args"]
+            assert json.loads(rows[0]["args"])["protocolVersion"] == LATEST_PROTOCOL_VERSION
             assert "serverInfo" in json.loads(rows[0]["result"])
             with patch.object(edw_tools, "do_edw_meta", return_value={"kind": "schemas", "schemas": []}):
                 response = await client.post(
@@ -254,7 +255,7 @@ def test_initialize_contract():
             assert audit.drain()
             assert response.status_code == 200 and len(rows) == 2
             assert rows[-1]["tool"] == "edw_meta" and rows[-1]["status"] == "ok"
-            assert rows[-1]["client_info"] is None and rows[-1]["session_id"] is None
+            assert rows[-1]["session_id"] is None
             assert audit._REQUEST.get() is None
 
     with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):

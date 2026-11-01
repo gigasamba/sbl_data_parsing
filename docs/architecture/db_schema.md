@@ -378,6 +378,9 @@
 | D-5 | (없어짐 — 사용자 10-30: 마스터는 CSV 파일, 마스터 PostgreSQL 없음) | — |
 | D-6 | gold 스키마 변경(`s3_key`·`client_edw`·`clients_doc` 추가, `clients` 삭제)은 Alembic 새 판 — 뷰 `v_chunk_source`를 지우고 다시 만듦(`doc.clients`에 걸려 있음), 기존 서버 데이터는 다시 적재 | 첫 적재가 전체 e2e([pl-23](../prd/etl.md#pl-23))와 함께 |
 | D-7 | struct 표 지우기(`doc_location`·`doc_contract_link`·`doc_table`·`doc_cell`·`prod_master`, 마스터 2개는 CSV로) 전 백업 | 되돌릴 수 없는 삭제 |
+| D-8 | `applog` 스키마 추가(§8) — `up`의 `CREATE SCHEMA`, `maintain`의 파티션 생성·DROP, 앱의 INSERT와 `pipe_run` UPDATE 권한. 호출량 기준 용량(`mcp_call` 행 본문 최대 약 80KB) | 새 스키마이고 로그 쓰기가 기존 PG 접속 정보를 함께 씀 |
+| D-9 | `applog.mcp_call`의 `args`·`result` 읽기 권한 분리 | 문서 본문·EDW 결과가 들어가는데 판에 GRANT가 없어 지금은 앱 계정이 읽을 수 있음 |
+| D-10 | 실제 보존 기간 약 90~120일(월 단위 DROP)이 감사·개인정보 기준에 맞는지, `dbtool maintain` 매일 예약 | 예약이 약 2개월 이상 멈추면 새 달 파티션이 없어 DB 쓰기가 실패하고 대체 파일로만 쌓임 |
 
 ## 7. 사용자 결정 (10-30 grill 7차)
 
@@ -392,3 +395,110 @@ U-1~U-6은 이 문서의 안대로, U-7은 아래 결정대로 한다.
 | U-5 | 출처 표시 이름을 붙일 값 — 지금은 고객만. 계약 id(`contract_id`)·제품 이름은 EDW에서만 옴 | 고객만 `_edw`·`_doc`로 나눔, 나머지는 그대로 |
 | U-6 | `ParsingMeta.status_at`은 SELECT하는 코드가 없음(운영자가 봄) · `parse_meta_id`·`source_key_hash`는 DB 키 | 셋 다 유지 |
 | U-7 | 같은 내용이 여러 `s3_key`로 들어온 문서 — 지금은 첫 키만 `doc` 행, 나머지는 `aliases`(묶음 안). 키가 하나뿐인 설계라 둘째 키는 숨김·ParsingMeta 조회가 안 맞음 | `s3_key`마다 `doc` 행 하나 — `doc_alias` 없음. `build_bundle`의 내용 해시 합치기(첫 키로 `aliases`)를 없앰 — 같은 내용이 두 키면 문서 둘(임베딩은 캐시가 다시 씀) |
+
+## 8. applog — 로그 저장소 (pgvector PG, 스키마 `applog`, [op-01](../prd/settings.md#op-01))
+
+위 §2~§7의 pl-25 설계안과 별개인 표다. 기존 gold·struct·EDW 표는 바꾸지 않는다. 서버에는 아직 없어서 칸의 결정은 모두 `새로`다(적용 절차는 refactor.md C-68).
+
+판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/applog/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: `common.log.db_enabled`(기본 꺼짐). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — 판과 실제 DB 대조는 `dbtool check --target applog`.
+
+- **파티션:** `mcp_call`(`ts`)·`pipe_event`(`ts_start`)는 월 단위(UTC). 이름은 `<표>_YYYYMM`. `dbtool up`과 `dbtool maintain`이 현재 달부터 3개월 치를 만든다.
+- **보존:** `dbtool maintain --target applog`를 매일 실행한다. `common.log.retention_days`(기본 90)가 지난 달의 파티션을 DROP하고 `pipe_run`은 DELETE한다. 달이 통째로 지나야 DROP되므로 파티션 표의 행은 약 90~120일 남는다.
+- **되돌리기:** `downgrade`는 막혀 있다. 지우려면 DB 담당자가 직접 한다.
+- **연결:** `pipe_event.run_id` → `pipe_run.run_id`는 외래 키가 없다(지우는 시점이 달라 짝 없는 행이 생길 수 있음). 파티션 표의 `id`는 기본 키가 시각과 묶여 있어 그것만으로는 고유하지 않다.
+- **기록하지 않는 값:** 접속 IP와 MCP `clientInfo`(사용자 11-02, `args`에서도 뺌).
+
+### applog.mcp_call
+
+MCP 호출 1건당 1행. 인증 실패(`tool=http`)와 `initialize`도 행으로 남는다. 기본 키 `(id, ts)`. 색인: `ts`(BRIN) · `(user_id, ts)` · `(tool, ts)` · `request_id`. 쓰는 곳: `mcp_server/services/call_log.py`. 읽는 코드는 없다(감사 조회용). 질의 기록 `qa_log.jsonl`은 그대로 따로 있다.
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| id | BIGSERIAL | 일련번호(PK 일부) | DB | 없음 | 새로 |
+| ts | TIMESTAMPTZ NOT NULL | 호출 시각(기본 now, 파티션 키) | call_log | 없음 | 새로 |
+| request_id | UUID | 요청 ID(`X-Request-Id`, 없으면 서버가 만듦) | 〃 | 없음 | 새로 |
+| session_id | TEXT | `Mcp-Session-Id`. 없으면 NULL | 〃 | 없음 | 새로 |
+| tool | TEXT | 도구 이름 | 〃 | 없음 | 새로 |
+| agent | TEXT | `X-MCP-Client`(자기 신고 값) | 〃 | 없음 | 새로 |
+| user_id | TEXT | `X-MCP-User`, 없으면 `_meta.user`(자기 신고 값, 검증 안 함) | 〃 | 없음 | 새로 |
+| args | TEXT | 입력 JSON 앞부분(`mcp.audit.max_input_bytes`, 기본 16KB). 비밀값 가림. `content_b64`는 해시와 크기로 바꿈 | 〃 | 없음 | 새로 |
+| args_bytes | INTEGER | 입력 원본 크기 | 〃 | 없음 | 새로 |
+| args_truncated | BOOLEAN | 입력이 잘렸는지. 잘리면 JSON으로 안 읽힐 수 있음 | 〃 | 없음 | 새로 |
+| result | TEXT | 출력 JSON 앞부분(`mcp.audit.max_output_bytes`, 기본 64KB). 문서 본문·EDW 결과 포함 가능 | 〃 | 없음 | 새로 |
+| result_bytes | INTEGER | 출력 원본 크기 | 〃 | 없음 | 새로 |
+| result_truncated | BOOLEAN | 출력이 잘렸는지 | 〃 | 없음 | 새로 |
+| result_sha256 | TEXT | 출력 원본 전체의 해시 | 〃 | 없음 | 새로 |
+| result_keys | JSONB | 자르지 않는 응답 식별 정보(`chunk_ids`, `row_count` 등) | 〃 | 없음 | 새로 |
+| status | TEXT CHECK | ok·error·busy·timeout·unauthorized | 〃 | 없음 | 새로 |
+| err | TEXT | 오류 내용(비밀값 가림) | 〃 | 없음 | 새로 |
+| queue_wait_ms | INTEGER | 실행 전 대기 시간 | 〃 | 없음 | 새로 |
+| duration_ms | INTEGER | 걸린 시간 | 〃 | 없음 | 새로 |
+| app_version | TEXT | 앱 버전 | 〃 | 없음 | 새로 |
+
+과부하로 감사 대기열이 차면 `args`·`result` 없는 행이 남고, 기록기 큐까지 차면 행 없이 건수로만 집계된다(호출 1건 = 1행의 예외, 사용자 11-01).
+
+### applog.pipe_run
+
+파이프라인 실행 1건당 1행. 기본 키 `run_id`. 색인: `started_at`. 시작할 때 `status=running`으로 쓰고 끝날 때 같은 `run_id`로 덮어쓴다(UPSERT — 이 표만). 강제 종료된 실행은 `running`으로 남는다. 쓰는 곳: `pipeline/shared/runtrace.py`. 읽는 곳: `pipeline/tools/perf.py`.
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| run_id | UUID PK | 실행 ID | runtrace | perf | 새로 |
+| command | TEXT | 명령 | 〃 | 〃 | 새로 |
+| args | TEXT | 인자(비밀값 가림) | 〃 | 없음 | 새로 |
+| started_at | TIMESTAMPTZ NOT NULL | 시작 시각(기본 now) | 〃 | perf | 새로 |
+| ended_at | TIMESTAMPTZ | 끝 시각 | 〃 | 없음 | 새로 |
+| duration_ms | INTEGER | 걸린 시간 | 〃 | perf | 새로 |
+| status | TEXT | 실행 상태(CHECK 없음) | 〃 | 〃 | 새로 |
+| host | TEXT | 서버 이름 | 〃 | 없음 | 새로 |
+| pid | INTEGER | 프로세스 ID | 〃 | 없음 | 새로 |
+| app_version | TEXT | 앱 버전 | 〃 | perf | 새로 |
+| run_env | TEXT | 실행 환경 | 〃 | 〃 | 새로 |
+| code_fp | JSONB | 레이어별 code_fp | 〃 | 〃(실행 비교) | 새로 |
+| stack | TEXT | 스택 이름 | 〃 | 〃 | 새로 |
+| settings_hash | TEXT | 설정 해시 | 〃 | 〃 | 새로 |
+| docs_total | INTEGER | 문서 수 | 〃 | 〃 | 새로 |
+| docs_ok | INTEGER | 성공 문서 수 | 〃 | 〃 | 새로 |
+| docs_fail | INTEGER | 실패 문서 수 | 〃 | 〃 | 새로 |
+| docs_reused | INTEGER | 재사용 문서 수(parse만 채움) | 〃 | 〃 | 새로 |
+| workers | INTEGER | 작업자 수 | 〃 | 〃 | 새로 |
+| cpu_max_load | FLOAT | CPU 문턱값 | 〃 | 〃 | 새로 |
+| mem_start_pct | FLOAT | 메모리 문턱값 | 〃 | 없음 | 새로 |
+
+### applog.pipe_event
+
+문서×단계 1건당 1행. 60초마다 남는 진행 상황도 `stage=run.progress`로 들어온다. 기본 키 `(id, ts_start)`. 색인: `ts_start`(BRIN) · `run_id` · `(stage, ts_start)`. `doc_id` 색인은 없다(보통 `run_id`로 먼저 좁힌다). 쓰는 곳: `common/core/span.py`(진행 상황은 `pipeline/shared/runtrace.py`). 읽는 곳: `pipeline/tools/perf.py`.
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| id | BIGSERIAL | 일련번호(PK 일부) | DB | 없음 | 새로 |
+| ts_start | TIMESTAMPTZ NOT NULL | 시작 시각(기본 now, 파티션 키) | span | perf | 새로 |
+| ts_end | TIMESTAMPTZ | 끝 시각 | 〃 | 〃 | 새로 |
+| run_id | UUID | 실행 ID | 〃 | 〃 | 새로 |
+| span_id | UUID | 단계 ID | 〃 | 없음 | 새로 |
+| parent_id | UUID | 부모 단계 ID | 〃 | 없음 | 새로 |
+| layer | TEXT | 레이어(extract·transform·load 등) | 〃 | perf | 새로 |
+| stage | TEXT | 단계(`extract.parse`, `run.progress` 등) | 〃 | 〃 | 새로 |
+| engine | TEXT | 엔진 | 〃 | 〃 | 새로 |
+| model | TEXT | 모델 | 〃 | 없음 | 새로 |
+| attempt | INTEGER | 시도 번호 | 〃 | 없음 | 새로 |
+| doc_id | TEXT | 문서 ID | 〃 | perf | 새로 |
+| ext | TEXT | 확장자 | 〃 | 없음 | 새로 |
+| file_bytes | BIGINT | 파일 크기 | 〃 | 없음 | 새로 |
+| seq | INTEGER | 실행 안에서 몇 번째 | 〃 | perf | 새로 |
+| total | INTEGER | 전체 개수 | 〃 | 〃 | 새로 |
+| duration_ms | INTEGER | 전체 시간 | 〃 | 〃 | 새로 |
+| wait_mem_ms | INTEGER | 메모리 문 대기 | 〃 | 〃 | 새로 |
+| wait_cpu_ms | INTEGER | CPU 문 대기 | 〃 | 〃 | 새로 |
+| cpu_ms | INTEGER | CPU 시간(회수된 자식 포함). 다른 단계와 겹쳐 정확히 못 재면 NULL | 〃 | 〃 | 새로 |
+| ext_call_ms | INTEGER | 외부 모델 호출 시간 | 〃 | 없음 | 새로 |
+| rss_peak_mb | FLOAT | 최대 메모리 | 〃 | perf | 새로 |
+| load1_per_cpu_start | FLOAT | 시작 때 코어당 부하 | 〃 | 없음 | 새로 |
+| load1_per_cpu_end | FLOAT | 끝날 때 코어당 부하 | 〃 | 없음 | 새로 |
+| mem_used_pct | FLOAT | 메모리 사용률(`/proc` 없는 macOS는 빔) | 〃 | 없음 | 새로 |
+| inflight | INTEGER | 같은 단계에서 동시에 돌던 작업 수 | 〃 | 없음 | 새로 |
+| metrics | JSONB | 단계별 지표(쪽 수, 청크 수, 캐시 적중, 표별 적재 행 수 등) | 〃 | perf | 새로 |
+| status | TEXT CHECK | ok·fail·timeout·skip·reused | 〃 | 〃 | 새로 |
+| err_kind | TEXT CHECK | env·timeout·doc·external·db | 〃 | 〃 | 새로 |
+| err | TEXT | 예외 타입과 고정 문구만. 외부 예외 원문은 저장 안 함 | 〃 | 없음 | 새로 |
+| app_version | TEXT | 앱 버전 | 〃 | perf | 새로 |
