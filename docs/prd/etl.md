@@ -153,6 +153,7 @@
 - 이유: 스케줄러가 실패를 못 본다(C-33).
 - 결정(사용자 10-30 grill): 종료 코드 — 대상 0건 = 0, 실패 = 1, 마감 시각 도달 = 75.
 - 파일: `pipeline/cli.py`(`night`), `deploy/docker/entrypoint.sh`(`full`).
+- 결정(사용자 11-01 기본값 — 허브 11-01): 새벽 run_docs에 문서 수 상한 · 마감 시각 · 사람이 따로 돌린 run_docs와 겹치지 않게 하는 잠금을 둔다(지금은 systemd `TimeoutStartSec=6h`뿐 — #83).
 - Status: todo — 11-01(`feature/scope-cut-unused`) 옛 입구를 지움: `pipeline.cli`의 `night`·`run-stack`·`structure`·`load`(+ 끝 표시 확인 `need()`), 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`, `trigger.sh` `night`·`structure`·`load`·`all`, compose job `structure`(`load` 서비스는 `run_tool.sh` 도구용으로 남김 — 명령 `help`), 죽은 설정(`ops.nightly.max_new`·`modules`·`publish`, `ops.nightly_run.deadline`·`parse_deadline`, `dev.pipeline.allow_common_mismatch` — 남으면 경고만). 새벽 배치는 systemd 타이머 → `trigger.sh scheduled` → `run_docs.py --start-offset 0 --skip-done`(서버 확인 refactor.md C-72). 남음: 종료 코드 규칙(대상 0건 = 0, 실패 = 1, 마감 = 75)을 run_docs에 만든다.
 
 <a id="pl-23"></a>
