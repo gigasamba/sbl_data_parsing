@@ -84,8 +84,7 @@ class PipelineExtractCache(Section):
 
 
 class PipelineExtractDedup(Section):
-    common_max: int | None = F(None, "DEDUP_COMMON_MAX", "중복 검사에서 '흔한 조각'으로 보고 열쇠에서 뺄 공통 문서 수 기준(개)")
-    fuzzy_max: int | None = F(50000, "DEDUP_FUZZY_MAX", "문서가 이 수보다 많으면 이름 유사도 비교를 생략(개)")
+    REMOVED = frozenset({"common_max", "fuzzy_max"})  # 11-01(pl-02 — 이름·내용 유사 후보 지움, 완전 중복만) — 지운 칸(남으면 경고만)
 
 
 class PipelineExtractOcr(Section):

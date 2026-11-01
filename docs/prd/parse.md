@@ -9,8 +9,9 @@
 ## pl-02 · 준비
 - 결정(사용자 10-31 범위 축소 grill): 비슷한 문서 묶기(이름·내용 유사도, dhash·shingle)를 **지운다**. 완전히 같은 파일(sha256)은 **파싱만 한 번**(결과 재사용)하고 문서는 S3 키마다 따로 둔다(U-7 유지 — 메타가 키마다 다름). 이 경우는 별도로 적어 둔다(같은 sha256 다른 키 → 파싱 재사용 기록).
 - 이유: 비싼 파싱 전에 쓸모없는 것을 거른다.
-- 무엇: sha256 중복 제거 + 이름·내용이 비슷한 후보, RapidOCR 점수로 스캔 쪽 회전, DRM·암호 감지(msoffcrypto/pikepdf 복호화는 수동 CLI — `python -m pipeline.extract.secure_docs decrypt`, prepare·stream에 들어 있지 않음), 압축 파일은 미지원 표시.
+- 무엇: sha256 중복 제거(이름·내용이 비슷한 후보는 11-01에 지움 — 아래), RapidOCR 점수로 스캔 쪽 회전, DRM·암호 감지(msoffcrypto/pikepdf 복호화는 수동 CLI — `python -m pipeline.extract.secure_docs decrypt`, prepare·stream에 들어 있지 않음), 압축 파일은 미지원 표시.
 - 파일: `pipeline/extract/prepare.py`, `pipeline/extract/dedup.py`, `pipeline/extract/secure_docs.py`.
+- 11-01(`feature/scope-cut-unused`, 허브 지시 — 위 10-31 결정의 앞부분): `dedup.py`의 이름·내용 유사 후보(파일명 유사도·텍스트 5-gram Jaccard·이미지 dHash — `candidate_pairs`·`name_ratio`·`dhash`·`shingles`·썸네일 report.html)를 지우고 완전 중복(sha256)만 묶는다. keep.txt는 원래 해시로만 정해져 파싱 대상은 그대로. 설정 `extract.dedup.fuzzy_max`·`common_max`는 지운 칸(남으면 경고만). 남음(0.2.0): 같은 sha256 다른 키는 파싱만 한 번(결과 재사용) + 기록.
 - Status: done
 
 <a id="pl-03"></a>
