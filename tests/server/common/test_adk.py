@@ -227,11 +227,17 @@ def selftest():
     port5 = srv5.server_address[1]
     threading.Thread(target=srv5.serve_forever, daemon=True).start()
     try:
-        with COMMON.env(LLM_BASE_URL=f"http://127.0.0.1:{port5}/v1", LLM_MODEL="mock", MODEL_TRANSPORT=None):
-            text_direct, usage_direct = complete("llm", [{"role": "user", "content": "X는?"}], max_tokens=10)
+        with COMMON.env(
+            VLM_BASE_URL=f"http://127.0.0.1:{port5}/v1",
+            VLM_MODEL="mock",
+            LLM_BASE_URL=f"http://127.0.0.1:{port5}/v1",
+            LLM_MODEL="mock",
+            MODEL_TRANSPORT=None,
+        ):
+            text_direct, usage_direct = complete("vlm", [{"role": "user", "content": "X는?"}], max_tokens=10)
             text_agent, usage_agent = complete(
-                "llm", [{"role": "user", "content": "X는?"}], max_tokens=10, agent="doc_summary"
-            )  # 스키마 없는 에이전트 - 형식 재요청 없이 경로 동일성만
+                "vlm", [{"role": "user", "content": "X는?"}], max_tokens=10, agent="page_transcribe"
+            )  # 스키마 없는 에이전트 - 형식 재요청 없이 경로 동일성만(11-01 — doc_summary 지움 → page_transcribe)
             assert text_direct == text_agent == "에이전트 응답" and usage_direct == usage_agent == {
                 "prompt_tokens": 2,
                 "completion_tokens": 3,

@@ -30,12 +30,10 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 
 | 패키지 | 자리(`resources/prompts/…`) | 모델 역할 | 무엇 | 입력 → 출력 | 호출부 | 꼬리 · 스키마 |
 |---|---|---|---|---|---|---|
-| `doc_summary` | `common/` | llm | 문서 본문을 한국어 3문장 이내로 요약 | 지시문(시스템) + 문서 본문 앞부분(사용자) → 요약 글자 | `pipeline/transform/structure/build_bundle.py` `llm_summary()` · `pipeline/transform/represent/agent_tools.py` `summarize_document()` | free · 없음 |
 | `figure_describe` | `common/` | vlm | 그림 1장 → 검색용 기록(종류·요약·글자·값·연결·표) | 그림 PNG(data: URL) + 지시문(사용자, 생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figures.py` `vlm_fig()`(`P_FIGJ`) | 기본 · 있음 |
 | `page_transcribe` | `common/` | vlm | 스캔·이미지 쪽 1장 → 마크다운(OCR 교차 확인용) | 쪽 PNG + 지시문(사용자, 출력 상한 없음) → 마크다운 | `pipeline/transform/figures/vlm_page.py` `vlm_page()`(`P_PAGE`) | free · 없음 |
 | `rag_qa` | (`valid_env/answer_test/` — PC 전용, S10에 `validation/e2e/`로 옮겼다가 10-29 되돌림) | llm | 검색 MCP 도구(`search`·`edw_meta`·`query_edw`)를 스스로 골라 근거를 찾고 숫자마다 인용을 붙여 답함(agentic — `max_turns` 12, 로컬 도구 `verify_citations`: 답의 숫자가 인용 `quote`에 있고 그 quote가 이번 질문의 검색 근거에 있는지) | 질문(사용자) → `{answer, status: found\|partial\|not_found, citations}` | `validation/e2e/answer_gen.py`(`common.ai.adk.run_agent(per_turn_admit=True)` — 도구 함수·근거 pool은 호출자, 지시문 `instructions.md` + 출력 스키마, 옛 패키지 README는 S10에 지움) | 없음(instruction에 지시문) · 있음 |
 | `figure_overlay` | `pipeline/` | vlm | 겹친 개체 묶음(그림 + 글상자·화살표·도형) 1장 → 검색용 기록(F12) | 묶음 union bbox 크롭 + 지시문(생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figures.py` `vlm_fig_overlay()`(`P_FIGOVERLAY`) | 기본 · 있음 |
-| `mermaid_check` | `pipeline/` | vlm | (부르는 코드는 11-01에 지움 — e2-10, 지시서 시험 `test_agent_prompts`의 예시로만 남음) `gold_draft`가 옮긴 흐름도를 원본 이미지에 블라인드 질문으로 2차 확인 | 쪽 PNG + `template()` + 단계 이름 목록 + `tail()` → `{"is_flowchart", "next"}` | `pipeline/eval/gold_draft.py` `_vlm_check_mermaid()`(끄기 `GOLD_DRAFT_MERMAID_CHECK=0`) | 기본(template+tail) · 없음 |
 | `nested_figure` | `pipeline/` | vlm | 쪽 전체 그림 안의 자식 그림 bbox 찾기(F7) | 쪽 그림 + 지시문 → `{"regions": [{bbox, kind, …}]}` | `pipeline/transform/figures/nested.py` `bbox_regions()`(`P_BBOX`) | 기본 · 있음 |
 
 시험 고정물(`example_agentic`·`example_agentic_vlm_sub` — `tests/server/common/test_adk.py`(S9 전 `adk.py` selftest)의 `run_agent` 묶음)은 upstream `dev_tools/unit_test/fixtures/`에 있고 이 저장소에는 없다. 없으면 시험이 그 묶음을 건너뛴다.
@@ -43,9 +41,7 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 ## 4. 패키지별 메모 (옛 README에서 표에 안 들어간 것)
 
 - **`figure_overlay`** — 출력 스키마는 `figure_describe`와 같고(kind/summary/text/values/edges/table_md), 지시문이 "위 개체는 아래 그림을 설명할 수 있다"는 관계를 읽게 한다. 캐시 이름 `figoverlay` — 같은 그림이라도 `figure_describe`와 다른 열쇠.
-- **`mermaid_check`** — 옮긴 화살표 목록은 보여 주지 않고 단계 이름만 준다(앵커링 방지) → 단계별 '나가는 화살표' 답과 Mermaid를 코드로 대조. 흐름도가 아닌 그림이면 `is_flowchart=false` → Mermaid 블록을 뺀다.
 - **`table_struct_judge`** — 결정적 결과를 먼저 계산하고 판정자는 **승격만**(0 → 1) 한다. 가드(`NO_PAID_CALLS`·`LLM_FAKE`·내부망 전용)는 `common.ai.llm.chat()`이 집행(`allow_external`을 주지 않아 내부망 LLM만). 판정자 호출 실패는 조용히 "승격 안 함". `vlm` 모드는 아직 TODO.
-- **`doc_summary`** — 호출부(LLM 묶음 요약)는 op-08(10-30)에 지웠다(시험 `test_agent_prompts`·`test_paths`가 free_text 꼬리 예시로 씀). `parse_shadow`·`agg_llm_route`·`research_judge`는 11-01에 지움(호출부 없음). 지시문 묶음은 프롬프트 바이트 규칙과 시험(`test_paths`·`test_adk`·`test_agent_prompts`)이 읽어 남긴다.
 
 ## 5. 도구(결정적 — 모델 호출 없음)
 
