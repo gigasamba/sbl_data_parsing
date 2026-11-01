@@ -34,20 +34,20 @@ def test_db_fallback():
 
 
 def test_full_queue():
-    started, release = threading.Event(), threading.Event()
+    started, release, finished = threading.Event(), threading.Event(), threading.Event()
 
     def slow(batch):
         started.set()
-        release.wait(5)
+        release.wait(30)
+        finished.set()
 
     with tempfile.TemporaryDirectory() as directory:
         sink = logsink.Sink(writer=slow, fallback_dir=directory, queue_size=1, batch_size=1, flush_sec=0.01, shutdown_sec=0.02)
         assert sink.emit("pipe_event", {"stage": "first"})
         assert started.wait(3)
-        begin = time.monotonic()
         assert sink.emit("pipe_event", {"stage": "second"})
         assert not sink.emit("pipe_event", {"stage": "dropped"})
-        assert time.monotonic() - begin < 0.5
+        assert not release.is_set() and not finished.is_set()
         assert sink.stats()["dropped"] == 1
         sink.close()
         assert {r["row"]["stage"] for r in _rows(directory)} == {"first", "second"}
@@ -122,7 +122,7 @@ def test_setting_rows():
 def test_blocked_fallback():
     # 잠금을 쥔 기존 fallback과 종료 때 처음 시작한 파일 쓰기 양쪽을 재현한다.
     for mode in ("lock", "write"):
-        entered, release = threading.Event(), threading.Event()
+        entered, release, finished = threading.Event(), threading.Event(), threading.Event()
 
         def failed(batch):
             raise RuntimeError("offline")
@@ -134,9 +134,10 @@ def test_blocked_fallback():
             def __exit__(self, *args):
                 pass
 
-            def write(self, text, entered=entered, release=release):
+            def write(self, text, entered=entered, release=release, finished=finished):
                 entered.set()
-                release.wait(3)
+                release.wait(30)
+                finished.set()
 
         with tempfile.TemporaryDirectory() as directory:
             sink = logsink.Sink(writer=failed, fallback_dir=directory, flush_sec=0.01, shutdown_sec=0.08)
@@ -149,9 +150,8 @@ def test_blocked_fallback():
                         assert entered.wait(2)
                     else:
                         time.sleep(0.03)
-                    started = time.monotonic()
                     assert sink.close()
-                    assert time.monotonic() - started < 0.25
+                    assert not release.is_set() and not finished.is_set()
                     assert sink.stats()["dropped"] == 1
                     sink.close()
                     assert sink.stats()["dropped"] == 1

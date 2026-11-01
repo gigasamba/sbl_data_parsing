@@ -500,6 +500,7 @@ pipeline:
 mcp:
   # ─── 7. mcp — 검색 서버·검색 동작 ───
   audit:
+    max_queue_bytes: 268435456  # 감사 대기/처리 중 본문 추정 바이트 합계 상한(기본 256MiB) · 기본 268435456 · 값: 0 이상 정수 · env=MCP_AUDIT_MAX_QUEUE_BYTES
     max_input_bytes: 16384  # [파라미터] 감사 로그 입력 원문 UTF-8 바이트 상한 · 기본 16384 · 값: 0 이상 정수 · env=MCP_AUDIT_MAX_INPUT_BYTES
     max_output_bytes: 65536  # [파라미터] 감사 로그 출력 원문 UTF-8 바이트 상한 · 기본 65536 · 값: 0 이상 정수 · env=MCP_AUDIT_MAX_OUTPUT_BYTES
   edw_meta:

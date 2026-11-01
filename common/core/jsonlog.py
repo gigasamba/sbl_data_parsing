@@ -20,11 +20,11 @@ import sys
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import quote, quote_plus, unquote, urlsplit
+from urllib.parse import quote, quote_plus
 
-from common.config.settings import cfg, secret_values
+from common.config.settings import cfg, secret_parts, secret_values
 from common.core import paths
-from common.core.runlog import _LABEL, _mask
+from common.core.runlog import _mask
 
 _IDS = ("request_id", "run_id", "span_id")
 try:
@@ -38,7 +38,6 @@ _LOGGERS: dict[str, logging.Logger] = {}
 _STREAMS: dict = {}
 _SHORT_WARNED = False
 _SECRET_LOCK = threading.Lock()
-_SECRET_LABEL = re.compile(r"(?:" + _LABEL + r")$", re.IGNORECASE)
 
 
 def get_context():
@@ -72,31 +71,7 @@ def _secret_variants():
     values = set(fields.values())
     short_fields = set()
     for name, value in fields.items():
-        extracted = {value}
-        # JSON 옵션은 비밀 라벨의 문자열 값만 수집(라벨 없는 리스트 제외).
-        if value.startswith(("{", "[")):
-            try:
-                pending = [json.loads(value)]
-                while pending:
-                    item = pending.pop()
-                    if isinstance(item, dict):
-                        for key, child in item.items():
-                            if isinstance(child, str) and _SECRET_LABEL.search(key):
-                                extracted.add(child)
-                            elif isinstance(child, (dict, list)):
-                                pending.append(child)
-                    elif isinstance(item, list):
-                        pending.extend(child for child in item if isinstance(child, (dict, list)))
-            except (ValueError, TypeError):
-                pass
-        if "://" in value:
-            try:
-                password = urlsplit(value).password
-                if password:
-                    extracted.add(unquote(password))
-            except ValueError:
-                pass
-        extracted.update(m.group(1).strip("\"'{}") for m in re.finditer(r"(?i)(?:password|pwd)\s*=\s*([^;]+)", value))
+        extracted = {value, *secret_parts(value).values()}
         values.update(extracted)
         if any(0 < len(item) < 4 for item in extracted):
             short_fields.add(name)
@@ -122,7 +97,8 @@ def masked(value):
 
     4자 이상은 부분 문자열, 1~3자는 앞뒤가 문자·숫자가 아닌 토큰 경계에서만
     가린다. 짧은 비밀값이 다른 문자·숫자에 붙으면 값 대조로 가려지지 않는다.
-    설정 시작은 거부하지 않으며 해당 설정 칸만 프로세스당 한 번 stderr로 알린다.
+    local은 해당 설정 칸만 프로세스당 한 번 stderr로 알린다. 서버 시작 관문은
+    비어 있지 않은 비밀값이 MIN_SECRET_LENGTH 미만이면 거부한다.
     DSN 비밀번호와 URL/JSON 이스케이프 표기도 포함하며 원본은 바꾸지 않는다.
     CLI의 분리된 인자, 라벨 없는 오류/traceback도 같은 API를 사용한다.
     """

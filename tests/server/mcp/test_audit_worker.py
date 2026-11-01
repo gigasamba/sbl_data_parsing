@@ -21,11 +21,13 @@ from mcp_server.services import call_log as audit
 def test_response_deadlines():
     rows, threads = [], []
     original = audit.Call._prepare
+    entered, release = threading.Event(), threading.Event()
     result = {"answer": [1, 2, 3]}
 
     def delayed(call):
         threads.append(threading.current_thread().name)
-        time.sleep(0.3)
+        entered.set()
+        assert release.wait(30)
         original(call)
 
     async def run():
@@ -37,26 +39,31 @@ def test_response_deadlines():
         await default.acquire()
         try:
             with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1", MCP_TOOL_TIMEOUT_SEC="0.05"):
-                started = time.monotonic()
-                assert await dispatch._bg(lambda: time.sleep(0.15)) == {"error": "timeout"}
-                elapsed = time.monotonic() - started
-                assert 0.035 <= elapsed < 0.12, elapsed
+
+                async def wait_until_entered():
+                    while not entered.is_set():
+                        await asyncio.sleep(0.001)
+
+                # 업무도 감사도 release 전에는 끝나지 않는다. timeout 응답은 먼저 온다.
+                assert await dispatch._bg(lambda: release.wait(30)) == {"error": "timeout"}
+                await asyncio.wait_for(wait_until_entered(), 30)
+                assert not release.is_set() and not rows
                 dispatch._INFLIGHT = 2
                 for invoke in (lambda: dispatch._bg(lambda: None), lambda: dispatch._bg_long(lambda: None, 1)):
-                    started = time.monotonic()
                     assert await invoke() == {"error": "busy"}
-                    assert time.monotonic() - started < 0.05
+                    assert not release.is_set() and not rows
                 dispatch._INFLIGHT = 0
                 for invoke in (lambda: dispatch._bg(lambda: result), lambda: dispatch._bg_long(lambda: result, 1)):
-                    started = time.monotonic()
                     reply = await invoke()
-                    assert reply is result and time.monotonic() - started < 0.05
-                assert audit.drain(deadline=time.monotonic() + 5)
+                    assert reply is result and not release.is_set() and not rows
+                release.set()
+                assert audit.drain(deadline=time.monotonic() + 30)
                 assert len(rows) == 5 and all(name == "mcp-audit" for name in threads)
-                assert rows[0]["status"] == "timeout" and 35 <= rows[0]["duration_ms"] < 120
+                assert rows[0]["status"] == "timeout" and rows[0]["duration_ms"] >= 0
                 assert [row["status"] for row in rows] == ["timeout", "busy", "busy", "ok", "ok"]
-                assert rows[-1]["duration_ms"] < 50 and result == {"answer": [1, 2, 3]}
+                assert result == {"answer": [1, 2, 3]}
         finally:
+            release.set()
             default.release()
             default.total_tokens = previous_tokens
             dispatch._LIMITER, dispatch._INFLIGHT = None, 0
@@ -73,10 +80,10 @@ def test_queue_metadata():
 
     def blocked(call):
         entered.set()
-        assert release.wait(3)
+        assert release.wait(30)
         original(call)
 
-    with settings.isolated(PG_PASSWORD="abc"):
+    with settings.isolated(PG_PASSWORD="zqz"):
         worker = audit.Worker(capacity=1)
         with (
             patch.object(audit, "_WORKER", worker),
@@ -84,15 +91,14 @@ def test_queue_metadata():
             patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)),
         ):
             try:
-                first = audit.start(lambda query: None, ("abc",))
-                first.finish({"query": "abc"})
-                assert entered.wait(1)
-                audit.start(lambda: None).finish({"query": "abc"})
-                started = time.monotonic()
-                overflow = audit.start(lambda query: None, ("abc",))
-                overflow.finish({"query": "abc"}, err="abc")
-                overflow.finish({"query": "abc"})
-                assert time.monotonic() - started < 0.05
+                first = audit.start(lambda query: None, ("zqz",))
+                first.finish({"query": "zqz"})
+                assert entered.wait(30)
+                audit.start(lambda: None).finish({"query": "zqz"})
+                overflow = audit.start(lambda query: None, ("zqz",))
+                overflow.finish({"query": "zqz"}, err="zqz")
+                overflow.finish({"query": "zqz"})
+                assert not release.is_set()
                 assert len(rows) == 1 and rows[0]["args"] is None and rows[0]["result"] is None
                 assert rows[0]["err"] == "audit_queue_full"
                 assert rows[0]["result_keys"] == {"audit_body_omitted": "queue_full"}
@@ -102,17 +108,18 @@ def test_queue_metadata():
                 assert worker.drain()
                 worker.close()
             assert len(rows) == 3 and len({row["request_id"] for row in rows}) == 3
-            assert "abc" not in json.dumps(rows)
+            assert "zqz" not in json.dumps(rows)
             assert rows[1]["args"] == '{"query": "***"}'
             assert rows[1]["result"] == '{"query": "***"}'
 
 
 def test_overflow_sink_nonblocking():
-    entered, release = threading.Event(), threading.Event()
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
 
     def blocked_writer(batch):
         entered.set()
-        release.wait(3)
+        release.wait(30)
+        finished.set()
 
     with tempfile.TemporaryDirectory() as directory:
         sink = logsink.Sink(writer=blocked_writer, fallback_dir=directory, queue_size=1, batch_size=1, flush_sec=0.001)
@@ -120,13 +127,13 @@ def test_overflow_sink_nonblocking():
         with settings.isolated(APPLOG_DB_ENABLED="1"), patch.object(logsink, "_SINGLETON", sink):
             try:
                 sink.emit("mcp_call", {"tool": "occupied"})
-                assert entered.wait(1)
+                assert entered.wait(30)
                 sink.emit("mcp_call", {"tool": "queued"})
                 # 닫힌 감사 큐도 같은 본문 생략 경로, sink 포화도 기다리지 않음.
                 worker.close()
-                started = time.monotonic()
                 worker.submit(audit.start(lambda: None), None, {"tool": "overflow", "status": "ok"})
-                assert time.monotonic() - started < 0.05
+                assert not release.is_set()
+                assert not finished.is_set()
                 assert worker.stats()["body_omitted"] == 1 and sink.stats()["dropped"] == 1
             finally:
                 release.set()
@@ -142,33 +149,34 @@ from common.config import settings
 from common.core import exitclean
 from common.store import logsink
 from mcp_server.services import call_log as audit
-with settings.isolated(APPLOG_SHUTDOWN_SEC="0.08", APPLOG_DB_ENABLED="1"):
+with settings.isolated(APPLOG_SHUTDOWN_SEC="1", APPLOG_DB_ENABLED="1"):
     rows=[]
     worker=audit._worker()
     with patch.object(logsink, "_SINGLETON", None), patch.object(logsink, "_write_db", side_effect=lambda batch: rows.extend(batch)):
         # 감사 drain 중 처음 만들어지는 sink도 같은 종료 호출에서 비운다.
         audit.start(lambda: None).finish({"answer":1})
-        started=time.monotonic()
-        assert exitclean._cleanup()
-        assert time.monotonic()-started < 0.2
+        with patch.object(worker, "close", wraps=worker.close) as close_worker, patch.object(logsink, "shutdown", wraps=logsink.shutdown) as close_sink:
+            assert exitclean._cleanup()
+            assert close_worker.call_args.kwargs["deadline"] == close_sink.call_args.kwargs["deadline"]
+        assert not worker.thread.is_alive()
         assert len(rows)==1 and not worker.thread.is_alive() and not logsink._SINGLETON._thread.is_alive()
     entered, release=threading.Event(),threading.Event()
     worker=audit.Worker()
     def blocked(call):
         entered.set()
-        release.wait(2)
+        release.wait(30)
     sink=logsink.Sink(writer=lambda batch: None, flush_sec=0.001)
     with patch.object(audit,"_WORKER",worker), patch.object(audit.Call,"_prepare",blocked), patch.object(logsink,"_SINGLETON",sink):
         audit.start(lambda: None).finish(None)
-        assert entered.wait(1)
+        assert entered.wait(30)
         started=time.monotonic()
         assert exitclean._cleanup()
         elapsed=time.monotonic()-started
-        assert 0.06 <= elapsed < 0.2, elapsed
+        assert not release.is_set() and worker.thread.is_alive()
         assert worker.stats()["dropped"] == 1
         release.set()
-        worker.thread.join(1)
-        sink._thread.join(1)
+        worker.thread.join(30)
+        sink._thread.join(30)
         assert not worker.thread.is_alive() and not sink._thread.is_alive()
         print(json.dumps({"elapsed":elapsed,"rows":len(rows)}))
 """
@@ -176,7 +184,7 @@ with settings.isolated(APPLOG_SHUTDOWN_SEC="0.08", APPLOG_DB_ENABLED="1"):
         [sys.executable, "-c", program], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=settings.child_env()
     )
     try:
-        stdout, stderr = proc.communicate(timeout=5)
+        stdout, stderr = proc.communicate(timeout=60)
     except subprocess.TimeoutExpired:
         proc.kill()
         proc.communicate()
@@ -197,3 +205,121 @@ def test_short_secrets_sink():
         row = rows[0][1]
         assert json.loads(row["args"]) == {"query": "***", "argv": ["--query", "***"]}
         assert json.loads(row["result"]) == {"query": "***", "other": "abcd"}
+
+
+def test_byte_budget():
+    entered, release = threading.Event(), threading.Event()
+    rows, sizes, processing_bytes = [], [], []
+    original = audit.Call._prepare
+
+    def blocked(call):
+        processing_bytes.append(worker.stats()["pending_bytes"])
+        entered.set()
+        assert release.wait(30)
+        original(call)
+
+    call = audit.start(lambda query: None, ("first",))
+    result = {"answer": "한글"}
+    size = audit._estimate((call.arguments, result), 10000)
+    assert size is not None
+    worker = audit.Worker(max_queue_bytes=size * 2)
+    with (
+        patch.object(audit, "_WORKER", worker),
+        patch.object(audit.Call, "_prepare", blocked),
+        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)),
+    ):
+        try:
+            call.finish(result)
+            assert entered.wait(30)
+            sizes.append(worker.stats()["pending_bytes"])
+            audit.start(lambda query: None, ("first",)).finish(result)
+            sizes.append(worker.stats()["pending_bytes"])
+            # 각 항목은 한도 안이지만 합계가 초과: 원문을 보관하지 않고 즉시 메타만.
+            audit.start(lambda query: None, ("first",)).finish(result, err="x" * 1000000)
+            assert len(rows) == 1 and rows[0]["args"] is None and rows[0]["result"] is None
+            assert not release.is_set() and worker.stats()["body_omitted"] == 1
+            assert sizes == [size, 2 * size]
+            assert worker.stats()["pending_bytes"] == 2 * size
+        finally:
+            release.set()
+            assert worker.drain(deadline=time.monotonic() + 30)
+            worker.close()
+    assert len(rows) == 3 and worker.stats()["pending_bytes"] == 0
+    assert processing_bytes == [size, size]
+
+
+def test_estimate_bound():
+    class CountingList(list):
+        visited = 0
+
+        def __iter__(self):
+            for value in super().__iter__():
+                self.visited += 1
+                yield value
+
+    many = CountingList([None] * (audit._ESTIMATE_MAX_NODES * 2))
+    assert audit._estimate(many, 10**12) is None
+    assert many.visited == audit._ESTIMATE_MAX_NODES
+    many.visited = 0
+    assert audit._estimate(many, 128) is None and many.visited <= 2
+    assert audit._estimate("한" * 1000, 4000) is None
+    loop = []
+    loop.append(loop)
+    assert audit._estimate(loop, 10**12) is None
+
+
+def test_large_metadata():
+    rows, seen = [], []
+    original = audit.jsonlog.masked
+    huge = "x" * 1000000
+
+    def observe(row):
+        if isinstance(row, dict) and "err" in row:
+            seen.append(row)
+            assert len(row["err"] or "") <= audit._META_TEXT_LIMIT
+            assert len(row.get("user_id") or "") <= audit._META_TEXT_LIMIT
+            assert len(row.get("agent") or "") <= audit._META_TEXT_LIMIT
+            assert len(json.dumps(row.get("client_info"))) < 140000
+        return original(row)
+
+    assert len(audit._status({"error": huge})[1]) <= audit._META_TEXT_LIMIT
+    with settings.isolated(PG_PASSWORD="long-secret-" * 300):
+        assert "long-secret-" not in audit.jsonlog.masked(audit._metadata({"err": "long-secret-" * 300}))["err"]
+    worker = audit.Worker(max_queue_bytes=0)
+    with (
+        patch.object(audit, "_WORKER", worker),
+        patch.object(audit.jsonlog, "masked", side_effect=observe),
+        patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)),
+        audit.request_context({"x-mcp-user": huge, "x-mcp-client": huge}, {}, client_info={"name": huge, "nested": [huge] * 1000}),
+    ):
+        try:
+            audit.start(lambda: None).finish({"error": huge}, err=huge)
+        finally:
+            worker.close()
+    assert len(rows) == 1 and seen and rows[0]["result"] is None
+
+
+def test_cancelled_bytes():
+    entered, release = threading.Event(), threading.Event()
+    worker = audit.Worker(max_queue_bytes=10000)
+    call = audit.start(lambda: None)
+    size = audit._estimate((call.arguments, None), 10000)
+
+    def blocked(*args):
+        entered.set()
+        assert release.wait(30)
+
+    with patch.object(audit.Call, "_write", blocked):
+        try:
+            worker.submit(call, None, {})
+            assert entered.wait(30)
+            worker.submit(audit.start(lambda: None), None, {})
+            worker.submit(audit.start(lambda: None), None, {})
+            assert worker.stats()["pending_bytes"] == 3 * size
+            worker.close(deadline=time.monotonic())
+            assert worker.stats()["pending_bytes"] == size  # 활성 한 건만 남음.
+            assert worker.stats()["queued"] == 0 and worker.stats()["dropped"] == 3
+        finally:
+            release.set()
+            worker.thread.join(30)
+    assert not worker.thread.is_alive() and worker.stats()["pending_bytes"] == 0

@@ -10,12 +10,12 @@
 - 이유: 반입 판정은 네트워크 없이 이미지 안에서 돌아야 한다.
 - 무엇: `tests/server/`(이미지 반입 관문, `pipeline.cli selftest`가 `tests/runner.py`로 실행), `tests/general/`(PC 전용: PG, Docker, 느린 것). 알려진 실패는 목록에 두고, XPASS면 지우라고 경고.
 - 파일: `tests/runner.py`, `tests/conftest.py`, `deploy/release/known_fail.txt`.
-- 기준선(CLAUDE.md §4·§6-3에서 옮김, 10-30):
-  - `selftest`는 **94개 중 93개 통과**다(10-30 `feature/ocrvlm-leftovers` — #30·#31·#34 병합 뒤). 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
-  - `pytest tests/`는 **146 passed · 3 xfailed**다(10-30 `feature/ocrvlm-leftovers` — 루트 `settings.yaml`에 전용 PG가 있을 때. 없으면 `test_pl14_deploy`가 건너뛰어 145 passed · 1 skipped). 위 1개와 일반 테스트 2개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — `test_run_combo`·`test_pub_registry`(C-54 ①))이며, 모두 리팩토링 전부터 있던 실패다.
-  - 핑거프린트 10-30 값(`feature/ocrvlm-leftovers` — 0.1.0 pl-31 정리 뒤): `FINGERPRINT abe9b7b0799ceaae` · a `e3b0c44298fc` · p0 `2a828b0470c1` · p1 `9ee173300a82` · r `0d4fcc7a4cbc` · s `bd154d04467a`. 엔진 26개(재파싱 키 `run_all.engine_code_fp` — `qwen_vlm` `06f937fcc39e`, 나머지는 refactor.md 부록 2). 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다(CLAUDE.md §4).
+- 기준선(CLAUDE.md §4·§6-3, 11-01 `feature/logging` G1):
+  - `selftest`는 **104개 중 102개 통과**다. 실패는 알려진 `tests.server.pipeline.test_publish_guard` 1개(`deploy/release/known_fail.txt`, refactor.md C-54)와 PC의 `tests.server.common.test_db_schema` 1개다. 후자는 로깅 이전(`538067a`)부터 있던 문서/DDL의 `edw.ParsingMeta` 칸 불일치(`engines_used`, `rep_engine`): 시험·문서·DDL 파일은 그 기준 이후 동일하며 운영 DB 접속 검사가 아니다. `known_fail.txt`에 추가하지 않았다.
+  - `pytest tests/`는 **158 passed · 3 xfailed · 1 failed**다(루트 settings.yaml에 전용 PG가 있는 PC). xfailed는 위 publish_guard와 일반 `test_run_combo`·`test_pub_registry`(`GENERAL_KNOWN_FAIL`, C-54 ①), failed는 위 db_schema다. 로깅 직전 PRD의 146 passed·3 xfailed와 숫자만 비교해 새 실패로 해석하지 않는다. db_schema의 기존 불일치는 별도로 남겨 두었다.
+  - 핑거프린트 11-01 G1: `FINGERPRINT abe9b7b0799ceaae` · a `e3b0c44298fc` · p0 `6dcf5bef6c97` · p1 `63de796be46c` · r `ba614c3e710c` · s `00b318e8a1aa`. 엔진 26개와 핸드오프는 불변(`qwen_vlm` `06f937fcc39e`, 나머지는 refactor.md 부록 2). 공용 변경의 전후 code_fp는 커밋 메시지에 기록한다. MCP tools/list는 9330바이트·SHA-256 `6ada3aaa8a6d19ee6926d43ecae2574962b9cc782810625ac77424efb05d32bb` 불변이다.
   - PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕 설정(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`에 넣는다(지금 `test_pub_registry`).
-  - Mac의 부하가 높으면 `test_trigger_server`가 시간 초과로 실패할 수 있다(환경 문제).
+  - Mac의 부하가 높으면 기존 `test_exitclean`·`test_trigger_server`가 CPU 문 대기/시간 초과로 실패할 수 있다(C-68). G1의 첫 부하 직후 selftest는 100/104였고 부하 소멸 뒤 102/104로 복구됐다. 두 시험 소스는 수정하지 않았다. 로깅 신규 시험은 마스킹 크기별 thread CPU 시간 비율(1:4 입력, 비율 <10) 및 이벤트 순서로 판정하며 합성 CPU 부하 24개에서도 통과했다. 행 전체에 없는지 검사하는 짧은 표식은 UUID와 우연히 겹치지 않도록 16진수에 없는 3자 `zqz`로 바꿨다(test_span_soft·test_audit_worker).
 - Status: done
 
 <a id="e2-08"></a>

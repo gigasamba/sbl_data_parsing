@@ -9,6 +9,7 @@ import contextlib
 import contextvars
 import hashlib
 import inspect
+import itertools
 import json
 import queue
 import sys
@@ -28,6 +29,73 @@ _LOG = None
 _LOG_LOCK = threading.Lock()
 _WORKER = None
 _WORKER_LOCK = threading.Lock()
+
+_ESTIMATE_MAX_NODES = 65536
+_META_TEXT_LIMIT = 2048
+
+
+def _estimate(value, limit):
+    """보관 추정: 문자열은 UTF-8 최대 4바이트/글자, 노드당 64바이트. 초과 즉시 종료.
+
+    입력 복사/인코딩 없이 반복자로 순회한다. 순환·다량의 작은 요소·미지원 객체도
+    상한에서 생략한다. 실제 RSS나 SDK 입력 크기의 상한은 아니다.
+    """
+    size, nodes = 0, 0
+    pending = [iter((value,))]
+    while pending:
+        try:
+            item = next(pending[-1])
+        except StopIteration:
+            pending.pop()
+            continue
+        nodes += 1
+        if nodes > _ESTIMATE_MAX_NODES:
+            return None
+        size += 64
+        if isinstance(item, str):
+            size += 4 * len(item)
+        elif isinstance(item, bytes):
+            size += len(item)
+        elif isinstance(item, dict):
+            pending.append(itertools.chain.from_iterable(item.items()))
+        elif isinstance(item, (list, tuple)):
+            pending.append(iter(item))
+        elif item is not None and not isinstance(item, (bool, int, float)):
+            return None
+        if size > limit:
+            return None
+    return size
+
+
+def _text(value, limit=_META_TEXT_LIMIT):
+    # 호출 경로에서 미지원 대형 객체의 str()를 실행하지 않는다.
+    if isinstance(value, str):
+        # 긴 비밀값의 일부만 남아 값 대조 마스킹을 우회하지 않도록 통째로 생략한다.
+        return value if len(value) <= limit else "[audit metadata omitted]"
+    return str(value)[:limit] if isinstance(value, (bool, int, float)) else None
+
+
+def _metadata(row):
+    """마스킹 전에 동기 메타의 글자 수/구조를 제한한다. 본문은 전달하지 않는다."""
+    budget = [64]
+
+    def bounded(value, depth=0):
+        budget[0] -= 1
+        if budget[0] < 0 or depth > 4:
+            return None
+        if isinstance(value, dict):
+            return {_text(key, 256) or "?": bounded(child, depth + 1) for key, child in itertools.islice(value.items(), max(0, budget[0]))}
+        if isinstance(value, (list, tuple)):
+            return [bounded(child, depth + 1) for child in itertools.islice(value, max(0, budget[0]))]
+        return _text(value) if isinstance(value, str) else value if value is None or isinstance(value, (bool, int, float)) else None
+
+    safe = dict(row)
+    for key in ("request_id", "agent", "user_id", "remote_addr", "session_id", "tool", "app_version", "err"):
+        if key in safe:
+            safe[key] = _text(safe[key])
+    if "client_info" in safe:
+        safe["client_info"] = bounded(safe["client_info"])
+    return safe
 
 
 def _debug(event, **fields):
@@ -130,7 +198,7 @@ def result_keys(tool, result):
 
 def _status(result):
     if isinstance(result, dict) and (result.get("error") or result.get("ok") is False):
-        err = str(result.get("error") or "tool error")
+        err = _text(result.get("error")) or "tool error"
         if err in ("busy", "unauthorized"):
             return err, err
         if "timeout" in err.lower() or "시간 안에" in err:
@@ -208,7 +276,7 @@ class Call:
         if arguments is None:
             arguments = dict(inspect.signature(fn).bind(*args, **kwargs).arguments)
         request_id = context.get("request_id") or jsonlog.get_context().get("request_id") or str(uuid4())
-        self.row = {"request_id": request_id, "agent": CALLER.get().removeprefix("mcp:"), **context, "tool": tool}
+        self.row = _metadata({"request_id": request_id, "agent": CALLER.get().removeprefix("mcp:"), **context, "tool": tool})
         conf = mc.cfg().audit
         self.output_limit = conf.max_output_bytes
         self.input_limit = conf.max_input_bytes
@@ -250,7 +318,7 @@ class Call:
                     **self.row,
                     "ts": self.ts,
                     "status": status or inferred,
-                    "err": err or inferred_err,
+                    "err": _text(err) or inferred_err,
                     "duration_ms": round((now - self.started) * 1000),
                     "queue_wait_ms": round(((self.thread_started or now) - self.started) * 1000),
                     "app_version": pipeline_version(),
@@ -283,9 +351,11 @@ class Call:
 
 
 class Worker:
-    """전용 데몬 하나, 본문 대기 최대 64건. 포화 시 본문 없는 메타만 비차단 sink로."""
+    """전용 데몬 하나, 대기 64건 및 처리 중 포함 추정 바이트 상한. 초과는 메타만."""
 
-    def __init__(self, capacity=64):
+    def __init__(self, capacity=64, max_queue_bytes=None):
+        self.max_queue_bytes = mc.cfg().audit.max_queue_bytes if max_queue_bytes is None else max_queue_bytes
+        self.pending_bytes = 0
         self.queue = queue.Queue(maxsize=capacity)
         self.condition = threading.Condition()
         self.pending = 0
@@ -299,11 +369,14 @@ class Worker:
         self.thread.start()
 
     def submit(self, call, result, row):
+        row = _metadata(row)
+        size = _estimate((call.arguments, result), self.max_queue_bytes)
         with self.condition:
             try:
-                if self.closed:
+                if self.closed or size is None or self.pending_bytes + size > self.max_queue_bytes:
                     raise queue.Full
-                self.queue.put_nowait((call, result, row))
+                self.queue.put_nowait((call, result, row, size))
+                self.pending_bytes += size
                 self.pending += 1
                 self.condition.notify_all()
                 return
@@ -330,13 +403,14 @@ class Worker:
                 item = self.queue.get_nowait()
                 self.active = True
             try:
-                call, result, row = item
+                call, result, row, size = item
                 call._write(result, row, self._emit)
             finally:
                 # 다음 대기 중 큰 응답의 참조를 유지하지 않는다.
                 del item, call, result, row
                 with self.condition:
                     self.pending -= 1
+                    self.pending_bytes -= size
                     self.active = False
                     self.condition.notify_all()
 
@@ -365,7 +439,8 @@ class Worker:
                 self.dropped += 1
                 self.expired = True
             while not self.queue.empty():
-                self.queue.get_nowait()
+                _, _, _, size = self.queue.get_nowait()
+                self.pending_bytes -= size
                 self.pending -= 1
                 self.dropped += 1
         return True
@@ -384,7 +459,13 @@ class Worker:
 
     def stats(self):
         with self.condition:
-            return {"pending": self.pending, "queued": self.queue.qsize(), "body_omitted": self.omitted, "dropped": self.dropped}
+            return {
+                "pending": self.pending,
+                "pending_bytes": self.pending_bytes,
+                "queued": self.queue.qsize(),
+                "body_omitted": self.omitted,
+                "dropped": self.dropped,
+            }
 
 
 def _worker():
@@ -401,7 +482,7 @@ def drain(*, deadline=None):
 
 
 def stats():
-    return _WORKER.stats() if _WORKER else {"pending": 0, "queued": 0, "body_omitted": 0, "dropped": 0}
+    return _WORKER.stats() if _WORKER else {"pending": 0, "pending_bytes": 0, "queued": 0, "body_omitted": 0, "dropped": 0}
 
 
 class _NoLog:

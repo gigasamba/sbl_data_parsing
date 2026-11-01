@@ -30,10 +30,12 @@ import contextlib
 import functools
 import json
 import os
+import re
 import sys
 import weakref
 from pathlib import Path
 from typing import Annotated, ClassVar, Literal, get_args, get_origin
+from urllib.parse import unquote, urlsplit
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PrivateAttr, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -47,6 +49,7 @@ LOCAL_FILE = (
 )  # RUN_ENV=local 기본 자리 — 저장소 루트, settings.sample.yaml 옆(git 밖 — .gitignore · 사용자 10-29)
 RUN_ENVS = ("local", "dev", "prd")  # 사용자 10-29(op-02) — stage 삭제(동작이 prd와 같았음), 입력도 거부
 SERVER_ENVS = ("dev", "prd")
+MIN_SECRET_LENGTH = 8  # 서버 시작 관문만 적용; local 마스킹 경계 정책은 유지
 SECTIONS = ("common", "pipeline", "mcp")
 OVERLAY_KEYS = ("base", "overrides")  # 덮기 파일의 최상위 열쇠(위 모듈 설명 — S7e2)
 STRICT = True  # RUN_ENV가 없으면 거부(사용자 10-27, D-028 ②)
@@ -811,6 +814,15 @@ def require_run_env(app="", environ=None, sections=None):
         names = image_sections(environ) if sections is None else ("common", *sections)
         try:
             st = load(section_class(names)[0], environ=environ, require_file=True)
+            invalid = []
+            for path in _secret_paths(type(st)):
+                secret = _get(st, path)
+                if isinstance(secret, SecretStr):
+                    for suffix, raw in secret_parts(secret.get_secret_value(), json_options=path.endswith(".connect_kwargs")).items():
+                        if raw and len(raw) < MIN_SECRET_LENGTH:
+                            invalid.append(path + suffix)
+            if invalid:
+                raise SettingsError("비밀 설정 정책 위반: " + ", ".join(sorted(invalid)))
         except SettingsError as e:
             print(f"{tag}서버(RUN_ENV={value}) — 설정을 읽지 못해 시작하지 않음: {e}", file=sys.stderr)
             raise SystemExit(2) from None
@@ -1244,6 +1256,45 @@ class Cache:
 @functools.cache
 def _secret_paths(model_cls):
     return tuple(path for path, field, _ in walk(model_cls) if is_secret(field))
+
+
+def secret_parts(value, *, json_options=True):
+    """비밀 칸의 검사/마스킹 대상(상대 경로→값). 반환값은 출력하지 않는다.
+
+    JSON은 비밀 라벨 문자열만, URL DSN은 디코딩한 password만 검사한다.
+    일반 비밀 칸은 전체 값, ODBC 연결 문자열은 password/pwd 부분을 검사한다.
+    """
+    from common.core.runlog import _LABEL
+
+    label = re.compile(r"(?:" + _LABEL + r")$", re.IGNORECASE)
+    if json_options and value.lstrip().startswith(("{", "[")):
+        try:
+            pending, parts = [("", json.loads(value))], {}
+            while pending:
+                path, item = pending.pop()
+                if isinstance(item, dict):
+                    for key, child in item.items():
+                        child_path = path + "." + key
+                        if isinstance(child, str) and label.search(key):
+                            parts[child_path] = child
+                        elif isinstance(child, (dict, list)):
+                            pending.append((child_path, child))
+                elif isinstance(item, list):
+                    pending.extend((f"{path}[{i}]", child) for i, child in enumerate(item) if isinstance(child, (dict, list)))
+            return parts
+        except (ValueError, TypeError):
+            pass
+    if "://" in value:
+        try:
+            password = urlsplit(value).password
+            if password is not None:
+                return {".password": unquote(password)}
+        except ValueError:
+            pass
+    passwords = list(re.finditer(r"(?i)(?:password|pwd)\s*=\s*([^;]+)", value))
+    if passwords:
+        return {f".password[{i}]": match.group(1).strip("\"'{}") for i, match in enumerate(passwords)}
+    return {"": value}
 
 
 def secret_values(*, named=False):

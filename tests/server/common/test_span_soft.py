@@ -178,7 +178,7 @@ def test_err_never_stores_exception_text():
     rows, patched = _capture()
     body = "환자 홍길동 혈압 120/80 그대로 에코된 문서 본문"
     with patched, jsonlog.context(run_id=str(uuid.uuid4())):
-        for exc in (ValueError(body), RuntimeError(f"bad 'abc' {body}"), subprocess.CalledProcessError(2, ["x", body])):
+        for exc in (ValueError(body), RuntimeError(f"bad 'zqz' {body}"), subprocess.CalledProcessError(2, ["x", body])):
             try:
                 with span.span("extract.parse", doc_id="d.pdf"):
                     raise exc
@@ -194,7 +194,7 @@ def test_err_never_stores_exception_text():
             sp.result("fail", "doc", span.safe(None))
     errs = [r["err"] for r in rows]
     assert errs == ["ValueError", "RuntimeError", "CalledProcessError[rc=2]", "RuntimeError", None, "건너뜀(환경)", None]
-    assert not any(body in str(r) for r in rows) and "abc" not in str(rows)
+    assert not any(body in str(r) for r in rows) and "zqz" not in str(rows)
 
 
 def test_err_reaches_json_log_as_label_only():

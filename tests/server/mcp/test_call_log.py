@@ -356,7 +356,8 @@ def test_setting_audit():
 
 def test_audit_off_loop():
     rows, seen = [], []
-    entered, output_entered = threading.Event(), threading.Event()
+    entered, output_entered, release = threading.Event(), threading.Event(), threading.Event()
+    input_release = threading.Event()
     original_input, original_body = audit._input, audit._body
     loop_thread = threading.get_ident()
     encoded = base64.b64encode(b"a" * (8 * 1024 * 1024)).decode()
@@ -365,14 +366,14 @@ def test_audit_off_loop():
         assert threading.get_ident() != loop_thread
         seen.append(dispatch._INFLIGHT)
         entered.set()
-        time.sleep(0.1)  # 파일 해시가 느린 경우에도 health는 바로 응답한다.
+        assert input_release.wait(30)  # 감사 입력 처리가 막혀 있어도 health/도구 응답은 먼저 온다.
         return original_input(tool, args)
 
     def observed_body(*args):
         assert threading.get_ident() != loop_thread
         if isinstance(args[0], dict) and "text" in args[0]:
             output_entered.set()
-            time.sleep(0.1)
+            assert release.wait(30)
         return original_body(*args)
 
     def do_parse_document(content_b64):
@@ -387,7 +388,7 @@ def test_audit_off_loop():
             return health
 
     async def ready(event):
-        async with asyncio.timeout(5):
+        async with asyncio.timeout(30):
             while not event.is_set():
                 await asyncio.sleep(0.001)
 
@@ -399,20 +400,23 @@ def test_audit_off_loop():
             with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1"):
                 task = asyncio.create_task(dispatch._bg_long(do_parse_document, 1, encoded))
                 await ready(entered)
-                started = time.monotonic()
                 assert (await client.get("/health")).status_code == 200
-                assert time.monotonic() - started < 0.1
+                assert not release.is_set()
                 assert await task == {"error": "busy"}
+                input_release.set()
                 assert audit.drain()
                 assert seen == [2]  # busy 판정/거부 뒤에만 입력 처리, 업무 함수는 안 돌림.
             entered.clear()
+            input_release.clear()
             dispatch._INFLIGHT = 0
             task = asyncio.create_task(dispatch._bg(do_parse_document, encoded))
             for event in (entered, output_entered):
                 await ready(event)
-                started = time.monotonic()
                 assert (await client.get("/health")).status_code == 200
-                assert time.monotonic() - started < 0.1
+                assert not release.is_set()
+                if event is entered:
+                    input_release.set()
+            release.set()
             result = await task
             assert audit.drain()
             assert result["job_id"] == "j" and rows[-1]["result_truncated"]
@@ -428,6 +432,8 @@ def test_audit_off_loop():
         try:
             asyncio.run(run())
         finally:
+            input_release.set()
+            release.set()
             dispatch._LIMITER, dispatch._INFLIGHT = None, 0
 
 

@@ -149,11 +149,18 @@ def test_mask_linear():
         for pattern in (*_SECRET_PATTERNS[:-1], original_dsn):
             old = pattern.sub(lambda m: m.group(0)[: m.start("val") - m.start()] + "***" + m.group(0)[m.end("val") - m.start() :], old)
         assert _mask(value) == old
-    for size in (1024 * 1024, 2 * 1024 * 1024):
-        value = "a" * size
-        started = time.monotonic()
-        assert _mask(value) == value
-        assert time.monotonic() - started < 1.5  # 기존 제곱 시간 패턴은 1MiB에서도 멎는다.
+    from statistics import median
+
+    timings = []
+    for size in (1024 * 1024, 4 * 1024 * 1024):
+        value, samples = "a" * size, []
+        for _ in range(3):
+            # 스케줄링 대기는 제외: 부하 환경에서도 알고리즘의 크기별 증가율을 비교.
+            started = time.thread_time()
+            assert _mask(value) == value
+            samples.append(time.thread_time() - started)
+        timings.append(median(samples))
+    assert timings[1] / timings[0] < 10, timings  # 선형 4배 허용, 종전 제곱 16배는 거부.
 
 
 def test_short_and_json_options():
