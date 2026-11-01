@@ -3,11 +3,11 @@
 
 (단계 1 비교 명령 compare-parse·compare-all은 11-01에 지움 — PC 평가 도구 삭제, PRD e2-10)
 단계 2 · 고정 스택(정해진 기술로 실제 파이프라인 + 기본 테스트)
-  show-stack · show-sources  지금 엔진 구성·원천 목록(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01 —
+  show-stack  지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01 —
                   docs/architecture/pipeline_stack.md)
   parse           파싱 모듈 1회(run_docs가 문서마다 부름) — 끝 표시 _rep/_DONE.json
   (night·run-stack·structure·load는 11-01에 지움 — 서버 입구는 run_docs 하나, 구조화·적재는 run_docs가 모듈을 직접 부름)
-  (ask · test-stack — 검색 명령은 S5(10-26, T-15)에 python -m mcp_server.cli.ask로 옮김: 파이프라인 CLI가 검색 코드를 import하지 않게)
+  (ask — 검색 명령은 S5(10-26, T-15)에 python -m mcp_server.cli.ask로 옮김: 파이프라인 CLI가 검색 코드를 import하지 않게)
 산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서) · output/stack_test.md · output/RUNLOG.md(명령 요약)
 """
 
@@ -114,15 +114,6 @@ def show_stack(a=None):
     )
 
 
-def show_sources(a=None):
-    from common.store.db import cfgfile
-
-    cur = cfgfile.active("sources", refresh=True)
-    print(f"원천 목록 {cur.label()}")
-    for e in cur.body:
-        print(f"  {'켜짐' if e.get('enabled', True) else '꺼짐'} {e['name']} · {e['table']} · 열 {len(e['columns'])}개")
-
-
 # ── 파싱 모듈(run_docs가 문서마다 부름 — 서버 입구는 run_docs 하나, 사용자 10-31) ──────────
 # 11-01: 옛 배치 입구 night·run-stack·structure·load 모듈과 그 끝 표시 확인(need)은 지움 — 구조화·적재는 run_docs가 build_bundle·pgvector_load를 직접 부름.
 # 파싱 끝 표시(_rep/_DONE.json)는 남김.
@@ -224,7 +215,7 @@ def parse_module(a):
     if a.source:  # 문서 위치: 같은 서버 폴더 → Object Storage 몇 건 → 전체(사용자 10-02)
         from pipeline.extract import source as SRC
 
-        local, names, state = SRC.resolve(a.source, OUT, a.source_limit, a.mode)
+        local, names, state = SRC.resolve(a.source, OUT, a.source_limit)
         src_info = (state, local)
         _tstep("t_resolve")
         if not SRC.is_remote(a.source):
@@ -317,7 +308,6 @@ def parse_module(a):
         "parse",
         src=str(a.src),
         source=str(a.source or a.src),
-        mode=a.mode,
         engines=engines.split(","),
         docs=len(idx),
         digest=digest,
@@ -497,154 +487,6 @@ def selftest(a):
         raise SystemExit(1)
 
 
-# 10-14 요건 — selftest는 가짜 모듈 자기 점검만(실문서 모양 없음). smoke는 --src(기본 DOC_DIR) 폴더의 실문서를
-# 이 이미지에 있는 것만(find_spec, selftest와 같은 감지) 실제로 돌려 사람이 읽는 요약을 남긴다 — "실문서 전에
-# 와이어링 점검"(샘플은 이미지 안에 안 넣는다, 운영자가 서버에서 폴더를 직접 줌). 지금은 parse만 실제로 문서를
-# 읽는다(structure·load·search는 대표 파싱 결과(_rep)가 있어야 돌아 raw 문서만으로는 못 함 — 이미 있는 그
-# 모듈들의 시험(tests/)이 와이어링은 따로 확인) → skipped: structure·load·search의 파일별 처리, 필요해지면
-# parse로 만든 _rep를 같은 실행에서 이어 쓰게(예: --src가 parse 이미지의 output/parse/_rep를 가리킬 때) 확장.
-def _parse_engine_needs_endpoint(engine):
-    """registry.missing_env와 같은 자리(REQUIRES_ENV)를 보되, 지금 비어 있는지가 아니라 "애초에 모델 엔드포인트가
-    필요한 엔진인지"만 — smoke 기본(오프라인)은 설정 여부와 무관하게 이런 엔진을 건너뛰고 --real-models일 때만 쓴다."""
-    from pipeline.extract.engines import registry
-
-    _, m = registry.engines()[engine]
-    return bool(getattr(m, "REQUIRES_ENV", {}).get(engine))
-
-
-def _smoke_parse_file(f, real_models):
-    """문서 1건 → (status, engine, detail, rec) — registry.run()으로 엔진 하나만(run_all의 다중 엔진·dedup·phase 없음,
-    가벼운 와이어링 점검이 목적)."""
-    from pipeline.extract.engines import registry
-
-    all_engines = registry.engines_for(f.suffix)
-    if not all_engines:
-        return "SKIP", None, f"확장자 {f.suffix or '(없음)'} 처리 엔진 없음(이 이미지에)", {}
-    installed = [e for e in all_engines if registry.installed(e)]
-    if not installed:
-        return "FAIL", None, f"설치된 엔진 없음(의존성 누락): {','.join(all_engines)}", {}
-    local = [e for e in installed if not _parse_engine_needs_endpoint(e)]
-    usable = installed if real_models else local
-    if not usable:
-        return "SKIP", None, f"모델 엔드포인트 필요({','.join(installed)}) — --real-models로", {}
-    eng = usable[0]
-    try:
-        out = registry.run(eng, f)
-    except Exception as e:  # 문서 하나가 터져도 나머지는 계속 — 와이어링 점검이 목적, 어디서·무엇을·왜
-        return "FAIL", eng, f"{type(e).__name__}: {e}", {}
-    text = out.get("text") or ""
-    tables = out.get("tables") or []
-    rec = {
-        "engine": eng,
-        "pages": text.count("\f") + 1 if text else 0,
-        "tables": len(tables),
-        "merged_cell": any(t.get("merges") for t in tables),
-        "figures": out.get("trace", {}).get("images"),
-    }
-    return "PASS", eng, "", {**rec, "_text": text}
-
-
-def _check_expected(rec, want):
-    """expected.json[name]에 있는 키만 대조(없는 키는 건너뜀) → (통과?, 상세 문장 목록)."""
-    text = rec.pop("_text", "")
-    checks = []
-    if "engine" in want:
-        ok_list = want["engine"] if isinstance(want["engine"], list) else [want["engine"]]
-        checks.append((rec.get("engine") in ok_list, f"engine {rec.get('engine')} in {ok_list}"))
-    if "min_pages" in want:
-        checks.append(((rec.get("pages") or 0) >= want["min_pages"], f"pages {rec.get('pages')} >= {want['min_pages']}"))
-    if "tables" in want:
-        checks.append(((rec.get("tables") or 0) >= want["tables"], f"tables {rec.get('tables')} >= {want['tables']}"))
-    if "merged_cell" in want:
-        checks.append(
-            (bool(rec.get("merged_cell")) == bool(want["merged_cell"]), f"merged_cell {rec.get('merged_cell')} == {want['merged_cell']}")
-        )
-    if "contains" in want:
-        miss = [s for s in want["contains"] if s not in text]
-        checks.append((not miss, "contains 전부 있음" if not miss else f"contains 빠짐: {miss}"))
-    return all(ok for ok, _ in checks), checks
-
-
-def smoke(a):
-    """`docker run … IMG smoke [--src <실문서 폴더>] [--real-models]` — 이 이미지에 있는 모듈만(find_spec) --src
-    (기본 DOC_DIR)의 실문서에 돌려 사람이 읽는 요약(PASS/SKIP/FAIL 표)을 stdout + output/smoke/<시각>/summary.json에
-    남긴다. --src에 expected.json이 있으면(선택 — 없어도 그냥 보고만) 파일별 최소 기대값(engine·min_pages·tables·
-    merged_cell·contains)을 대조해 PASS/FAIL도 같이 찍는다. 기본은 오프라인(모델 엔드포인트가 필요한 엔진은
-    건너뜀) — --real-models면 pipeline.env에 이미 설정된 내부망 엔드포인트로(외부·유료 호출 없음 — NO_PAID_CALLS
-    가드는 항상 켬, common/guard.py가 그 값을 보고 막는다)."""
-
-    if (
-        not C.cfg().models.guard.no_paid_calls
-    ):  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스) · 이 가드는 smoke에서 항상 켬 — --real-models도 내부망 엔드포인트만
-        C.put(NO_PAID_CALLS="1")
-    src = Path(a.src or C.cfg().paths.doc_dir or "")
-    if not src.is_dir():
-        print(f"[smoke] 문서 폴더 없음: {src or '(지정 안 함, DOC_DIR도 없음)'} — --src 또는 DOC_DIR로 폴더 지정", flush=True)
-        raise SystemExit(2)
-
-    def has(mod):
-        return not _spec_missing(mod)
-
-    pkg = {
-        "parse": "pipeline.extract",
-        "structure": "pipeline.transform.structure",
-        "load": "pipeline.load",
-        "search": "mcp_server",
-    }  # 10-14 이미지별 폴더 분리 · I2 data_etl(S4부터 pipeline) 단계 폴더 · S5 data_retrieval → mcp_server
-    stages = {s: has(p) for s, p in pkg.items()}
-    files = sorted(p for p in src.iterdir() if p.is_file() and p.name != "expected.json")
-    expected_file = src / "expected.json"
-    expected = json.loads(expected_file.read_text(encoding="utf-8")) if expected_file.exists() else {}
-
-    rows = []
-    for f in files:
-        if not stages["parse"]:
-            rows.append({"file": f.name, "status": "SKIP", "detail": "이 이미지엔 parse 모듈 없음"})
-            continue
-        status, eng, detail, rec = _smoke_parse_file(f, a.real_models)
-        row = {"file": f.name, "status": status, "engine": eng, **{k: v for k, v in rec.items() if k != "_text"}}
-        if status == "PASS" and f.name in expected:
-            ok, checks = _check_expected(rec, expected[f.name])
-            row["status"] = "PASS" if ok else "FAIL"
-            row["expected_checks"] = [{"ok": c_ok, "detail": c_detail} for c_ok, c_detail in checks]
-        row["detail"] = detail
-        rows.append(row)
-
-    ts = time.strftime("%Y%m%d-%H%M%S")
-    outdir = OUT / "smoke" / ts
-    outdir.mkdir(parents=True, exist_ok=True)
-    summary = {"ts": ts, "src": str(src), "real_models": bool(a.real_models), "stages": stages, "files": rows}
-    (outdir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
-
-    print(
-        f"[smoke] 이 이미지 — parse={stages['parse']} structure={stages['structure']} load={stages['load']} search={stages['search']}"
-        + (
-            " (structure·load·search는 대표 파싱 결과가 있어야 함 — 이 경량 점검은 parse만 실문서를 읽음)"
-            if any(stages[s] for s in ("structure", "load", "search"))
-            else ""
-        ),
-        flush=True,
-    )
-    for r in rows:
-        extra = " · ".join(f"{k}={r[k]}" for k in ("engine", "pages", "tables", "merged_cell", "figures") if r.get(k) is not None)
-        print(
-            f"{r['status']:4} {r['file']}" + (f"  {extra}" if extra else "") + (f"  ({r['detail']})" if r.get("detail") else ""), flush=True
-        )
-        for c in r.get("expected_checks") or []:
-            print(("     ✓ " if c["ok"] else "     ✗ ") + c["detail"], flush=True)
-    fails = sum(1 for r in rows if r["status"] == "FAIL")
-    skips = sum(1 for r in rows if r["status"] == "SKIP")
-    print(
-        f"\n{len(rows) - fails - skips}/{len(rows) - skips} 통과"
-        + (f" · SKIP {skips}" if skips else "")
-        + (f" · FAIL {fails}" if fails else "")
-        + f" · 요약 → {outdir / 'summary.json'}",
-        flush=True,
-    )
-    if fails:
-        raise SystemExit(1)
-
-
 def _default_procs():
     """--procs 기본 — PIPE_PROCS(설정 객체, auto·빈 값 = None) 글자로, 없으면 "auto"(S7c — 받는 쪽 resolve_procs가 같은 글자를 읽음)."""
     v = C.cfg().runtime.pipe_procs
@@ -672,17 +514,10 @@ def main(argv=None):
     p.add_argument(
         "--source",
         default=pc.cfg().extract.input_source or None,
-        help="파싱할 원본 위치 — 폴더(같은 서버 샘플) · s3://버킷/접두(Object Storage) · rdb:<표>(RDB 문서 위치 메타로 질의, AD44) · "
-        "rdb:*(common/sources.json의 enabled 원천 전부, SI41) · rdb:<이름>(sources.json에 등록된 원천 하나). "
-        "주면 가져오기·중복 확인·방향 보정부터",
+        help="파싱할 원본 위치 — 폴더(같은 서버 샘플) · rdb:csv:<경로>(문서 위치 표 — run_docs가 만듦, AD44). "
+        "주면 가져오기·중복 확인·방향 보정부터(11-01 s3://·rdb:*·rdb:<이름>·rdb:<표> 지움)",
     )
     p.add_argument("--source-limit", type=int, default=pc.cfg().extract.source_limit, help="원본 몇 건만(Object Storage 시험)")
-    p.add_argument(
-        "--mode",
-        default=C.cfg().store.run_mode or "prod",
-        choices=["prod", "test"],
-        help="test = 대상이 50건 이상이면 파일 형식별 5건씩만(TEST_MIN_DOCS·TEST_PER_TYPE) · prod = 전부",
-    )
     p.add_argument("--engines", default="")
     p.add_argument("--procs", default=_default_procs())
     p.add_argument("--workers", default=_default_workers())
@@ -694,21 +529,10 @@ def main(argv=None):
         help="이번 실행에서 처음 파싱할 문서 수 상한(0 = 제한 없음)",
     )
     sub.add_parser("show-stack")
-    sub.add_parser("show-sources")
     p = sub.add_parser(
         "selftest", help="서버 반입 시험(tests/server — 이 이미지 폴더 + common)을 파일마다 — PASS/FAIL 표, 실패 있으면 종료 코드 1"
     )
     p.add_argument("--only", action="append", metavar="이름 조각", help="이름에 이 조각이 든 사례만(여러 번)")
-    p = sub.add_parser(
-        "smoke",
-        help="--src(기본 DOC_DIR) 실문서 폴더를 이 이미지에 있는 모듈로 — 사람이 읽는 요약(+ expected.json 있으면 PASS/FAIL), 실문서 전 와이어링 점검",
-    )
-    p.add_argument("--src", default=None, help="실문서 폴더(기본 DOC_DIR env)")
-    p.add_argument(
-        "--real-models",
-        action="store_true",
-        help="pipeline.env의 내부망 모델 엔드포인트로(기본은 모델 필요 엔진을 건너뜀 — 외부·유료 호출은 항상 차단)",
-    )
     a = ap.parse_args(argv)
     if a.cmd != "selftest":  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(selftest는 시험이라 뺌)
         from common.config.settings import require_run_env
@@ -716,9 +540,7 @@ def main(argv=None):
         require_run_env("pipeline.cli", sections=("pipeline",))  # 서버면 설정 검증 실패도 거부(S7e2 U-1)
     {
         "show-stack": show_stack,
-        "show-sources": show_sources,
         "selftest": selftest,
-        "smoke": smoke,
         "parse": parse_module,
     }[a.cmd](a)
 

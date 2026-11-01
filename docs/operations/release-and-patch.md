@@ -189,7 +189,7 @@ bash deploy/release/ship_stage.sh pipeline mcp            # 태그 = VERSION(다
 3. 코드 폴더 전체 덮어쓰기(§4 — 호스트 스크립트가 `live/deploy/host/`로).
 4. 이미지 이름을 settings.yaml 항목 `required.deploy.pipeline_image`·`required.deploy.mcp_image`(op-08 배치 — 옛 `pipeline.host.image`·`mcp.host.image`)에 적는다(옛 env `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE`). S7e1 버전부터 `pipeline.env`만 있으면 종료 코드 2, 옛 `DATA_PARSING_IMAGE`·`DATA_STRUCTURE_IMAGE`·`DATA_RETRIEVAL_IMAGE`(·`RAG_*`)는 안내 뒤 종료 코드 2 — 설정 옮기기는 §5-4.
 5. systemd: 옛 `rag-nightly`·`data-retrieval-keepalive` unit disable·삭제, 새 `data-pipeline-nightly`·`mcp-server-keepalive` 설치(`daemon-reload`).
-6. 새 compose(`deploy/host/compose/compose.pipeline.yml`·`compose.mcp.yml` + `compose.patch*.yml`)로 새 이름 컨테이너(`data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`)를 띄운다.
+6. 새 compose로 새 이름 컨테이너를 띄운다 — 파싱 상주 `data-pipeline-parse`·`data-pipeline-structure`는 `deploy/host/compose/compose.pipeline.yml`(+ `compose.patch.yml`), 검색 MCP `mcp-server`는 `compose.mcp.yml`(+ `compose.patch.mcp.yml` — `mcp_up.sh`가 씀, 11-01부터 검색 MCP 정의는 이 파일 하나).
 7. MCP `parse_document`의 작업 서비스를 손으로 띄운다: `docker exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service`(`-e` 없이, 토큰은 settings.yaml `pipeline.service.parse_mcp.token`). compose·keepalive가 띄우지 않으므로 `data-pipeline-parse`가 다시 시작될 때마다 다시 띄운다.
 
 **배포 전 확인(V4 R1)** — `run_docs.py`·compose·systemd가 보는 `PATCH_CODE`(기본 `/srv/rag/code/live`)가 파싱 상주 컨테이너(S6b 배포 전에는 옛 이름 `data-parsing`, 뒤에는 `data-pipeline-parse`)가 지금 실제로 마운트하는 코드 폴더와 같은지 본다. 출력의 원본이 `<PATCH_CODE>/app/deploy/pipeline`(옛 버전이면 `…/data_etl`, 옛 배치 컨테이너면 `data_parsing`·`common_tools` 줄)이 아니면(예: `<운영자 작업 폴더>/patch_code/…`) 운영 절차에서 `run_docs.py`를 `PATCH_CODE=<원본에서 /app/deploy/<폴더>를 뺀 앞부분>`으로 띄운다. 출력이 비면 오버레이 패치 마운트 없이 이미지 안 코드로 떠 있는 것이다 — 배포 때 `compose.patch.yml`로 다시 띄운다:
@@ -271,15 +271,14 @@ $DC run --rm load migrate stamp --target search
 #      $DC run --rm load migrate up --target search
 # ③-c 컬럼 이름·형식·NULL·기본값·키가 다르거나 남는 표·컬럼·색인 → stamp·up 모두 거부(종료 2) — 멈추고 출력(이름만)을 DB 담당과 협의
 # ④ 색인 빌더 스키마(index_a·index_b)도 스키마마다: migrate check|stamp|up --target search --schema <PG_SCHEMA>_<index_id>
-# ⑤ 확인 — "판 끝 ['0001_search'] · 코드의 끝 판 0001_search … 비교: 차이 없음" + 엔진 구성·원천 목록 파일이 읽히는지
+# ⑤ 확인 — "판 끝 ['0001_search'] · 코드의 끝 판 0001_search … 비교: 차이 없음" + 엔진 구성 파일이 읽히는지
 $DC run --rm load migrate check --target all
 $DC run --rm load show-stack                           # 이름·sha·파일 경로 — 못 읽으면 종료 2
-$DC run --rm load show-sources
 ```
 - **버전 기록 전에 적재가 돌면:** `pgvector_load deploy`·`load`(trigger load·night·run_docs)는 "판 기록 없음" 경고를 찍고 계속한다(기준 리비전 = 지금 스키마 — 결과 같음). 코드보다 낮은 버전이면 적재 전에 `migrate up`을 하라고 종료 2, DB가 코드보다 새 버전(모르는 리비전)이면 이미지·코드 버전을 맞추라고 종료 2(D-030 ⑤). 검색 MCP(읽기)는 버전을 보지 않는다.
 - **새 검색 스키마(차원이 바뀜 — 새 `PG_SCHEMA`):** `migrate up --target search --schema <새 스키마> --bundle <번들>`(차원은 번들 meta.json — 또는 `--dim N`). vector 확장이 없으면 관리자 설치(공유 PG에서 `--create-extension`·`PG_CREATE_EXTENSION`을 켜지 않음).
 - **버전이 바뀌는 릴리스:** 패치 노트의 "DB 판" 줄을 보고 적재 전에 `migrate up --target <갈래>` — 표·컬럼을 바꾸는 리비전은 데이터 계약 변경(검토 등급 A·DB 담당 협의 — D-008).
-- **엔진 구성·원천 목록 바꾸기(사용자 11-01):** 코드 폴더의 `resources/config/pipeline_stack.json`·`resources/mappings/sources.json`을 고쳐 오버레이 패치로 보낸다(되돌리기 = git). 이미지에 없는 엔진이 있으면 파이프라인 진입점이 시작하지 않는다(종료 2). 오래 도는 검색 MCP는 시작 때 읽으므로 패치 뒤 다시 띄운다(`mcp_up.sh`) — 파싱 MCP 서비스는 작업마다 다시 읽는다. 서버에만 따로 쓰던 원천 목록(`$SERVER_ENV_DIR/sources.json` — C-12)은 읽지 않으므로, 필요하면 그 내용을 코드 폴더의 파일에 반영한다.
+- **엔진 구성 바꾸기(사용자 11-01):** 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 오버레이 패치로 보낸다(되돌리기 = git). 이미지에 없는 엔진이 있으면 파이프라인 진입점이 시작하지 않는다(종료 2). 오래 도는 검색 MCP는 시작 때 읽으므로 패치 뒤 다시 띄운다(`mcp_up.sh`) — 파싱 MCP 서비스는 작업마다 다시 읽는다. (원천 목록 `sources.json`은 11-01에 지웠다 — 원천은 폴더·`rdb:csv`만.)
 - **계정의 기본 스키마가 우리 스키마여도 같음(VS8a B-1):** DB 계정의 `search_path`가 우리 스키마로 정해져 있거나(`ALTER ROLE … SET search_path`), 계정 이름 = 스키마 이름(`"$user"`), `PG_SCHEMA=public`이어도 ②가 표·컬럼을 그대로 비교한다. S8a 버전으로 버전을 기록했다면(그때는 "표 없음"만 보이고 ③-b가 컬럼이 다른 스키마도 기록했음) 지금 버전에서 ②를 다시 돌려 차이 0인지 확인한다.
 - **모르는 리비전:** 버전 표에 코드가 모르는 리비전이 하나라도 있으면(새 이미지 → 옛 이미지로 되돌린 뒤 등) 적재·`up`·`stamp` 모두 종료 2.
 - PC: `python -m common.store.db.dbtool <up|stamp|current|check> --target …`([CLAUDE.md](../../CLAUDE.md) §6 — 전용 PG에 처음 한 번 `up --target search`) · 기본 스키마·vector 확장 자리 사례 `--pg-cases orca_<새 이름>`(새 테스트 DB를 만듦 — PC 전용).

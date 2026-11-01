@@ -32,18 +32,22 @@ def test_every_schema_name_resolves_read_only():
             cn.close()
 
 
-def test_source_query_and_publish_share_one_file():
+def test_query_and_publish_share_one_file():
+    """(11-01 — 파싱 입구의 표 직접 질의 _mssql_rows는 rdb:* 길과 함께 지움 — 읽기는 대역 파일을 바로 셈.)"""
     from mcp_server.services import edw_query
-    from pipeline.extract.source import _mssql_rows, _rdb_cols
 
     with tempfile.TemporaryDirectory() as d:
         p = _standin(d)
         with COMMON.env(RDB_SQLITE=str(p)):
-            rows = _mssql_rows("AI.FileStorageMap", _rdb_cols(), None, None, "id", None)
-            assert rows and {"id", "s3_key"} <= set(rows[0]), rows[:1]
+            cn = mssql.standin(p)
+            try:
+                n = cn.execute("SELECT COUNT(*) FROM AI.FileStorageMap").fetchone()[0]
+            finally:
+                cn.close()
+            assert n > 0, n
             assert edw_query.backend() == ("sqlite", str(p))
             res = edw_query.query("SELECT COUNT(*) AS n FROM AI.FileStorageMap")
-            assert res["ok"] and res["rows"][0][0] == len(rows), res
+            assert res["ok"] and res["rows"][0][0] == n, res
             db = PM.make_db("write")
             try:
                 assert isinstance(db, PM.SqliteStore)

@@ -11,6 +11,5 @@ services:
   parse: {volumes: *code}
   load: {volumes: *code}
   publish: {volumes: *code}
-  mcp: {volumes: *code}
   data-pipeline-parse: {volumes: *code}
   data-pipeline-structure: {volumes: *code}

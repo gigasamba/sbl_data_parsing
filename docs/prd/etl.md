@@ -7,8 +7,8 @@
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
 - 이유: 문서는 폴더, Object Storage, 회사 RDB 목록에서 온다.
-- 무엇: `input_source` = 폴더 · `s3://버킷/접두` · `rdb:csv:<경로>` · `rdb:<표>`. RDB 열 대응(`RDB_COL_*`), since/watermark 증분, 미리 받기(warm), 원천 목록은 서버·PC 모두 파일 `resources/mappings/sources.json`이다(사용자 11-01 — [pl-08](#pl-08)).
-- 파일: `pipeline/extract/source.py`, `pipeline/extract/rdb_discover.py`, `resources/mappings/sources.json`.
+- 무엇: `input_source` = 폴더 · `rdb:csv:<경로>`(사용자 11-01 — `s3://`·`rdb:*`·`rdb:<이름>` 지움 · `rdb:<표>` 직접 질의·since/watermark·원천 목록 `sources.json`·`show-sources`도 함께). RDB 열 대응(`RDB_COL_*`), 미리 받기(warm).
+- 파일: `pipeline/extract/source.py`, `pipeline/extract/rdb_discover.py`.
 - Status: done
 
 <a id="pl-29"></a>
@@ -91,7 +91,7 @@
 - 파일: (지움) `pipeline/load/structured.py`, `common/store/structdb.py`, struct Alembic 갈래(`0001_struct_base`·`0002_struct_config`·`0003_struct_drop`), `common/store/db/models/struct_tables.py`·`schemas/struct_rows.py`·`cfgtables.py`, `resources/sql/0002_*_seed.json` · (새로) `common/store/db/cfgfile.py`(파일 읽기 + 모양 검사).
 - 결정(허브 10-31, 최신 결정 우선): 지울 표 저장소(`doc_table`·`doc_cell` — [pl-25](#pl-25) `struct`)를 읽는 검색 쪽 코드는 죽은 코드다 — `mcp_server/services/search/aggregate.py`의 `table_cell_list`·`find_table_cells`·`struct()`, `common/store/structdb.py:406`. 0.2.0에 표를 지우는 마이그레이션과 함께 지운다.
 - 한 것(11-01 — 사용자 10-31 결정): 위 표 10개(+ `doc_registry_seen`)와 그 코드를 지웠다 — 연결기·CSV 적재(`structured.py`), 연결·SQLite 대체(`structdb.py`), 설정 `common.store.struct_backend`·`struct_db`(경고만).
-- 한 것(11-01 — 사용자 11-01 결정): struct 스키마를 코드에서 모두 없앴다 — Alembic struct 갈래·표 정의·시드 지움, `dbtool`/`migrate --target`은 `search`·`all`만. 엔진 구성·원천 목록은 서버(dev·prd)·PC 모두 파일 `resources/config/pipeline_stack.json`·`resources/mappings/sources.json`(`ops.paths.stack_file`·`sources_file`)을 `cfgfile`로 읽고 모양을 검사한다(못 읽거나 틀리면 시작 때 종료 2). 바꾸기 = 파일을 고쳐 오버레이 패치, 되돌리기 = git. `set-stack`·`set-sources` 명령과 내부 칸 `STACK_VERSION`·`--stack-version`을 지웠고(`show-stack`·`show-sources`는 파일을 보여 줌), `run_docs.py`는 시작 때 `show-stack`으로 확인만 한다. 파싱·검색 MCP 컨테이너는 PG 없이 시작한다(PG는 적재·검색에만). 설명은 [pipeline_stack.md](../architecture/pipeline_stack.md).
+- 한 것(11-01 — 사용자 11-01 결정): struct 스키마를 코드에서 모두 없앴다 — Alembic struct 갈래·표 정의·시드 지움, `dbtool`/`migrate --target`은 `search`·`all`만. 엔진 구성은 서버(dev·prd)·PC 모두 파일 `resources/config/pipeline_stack.json`(`ops.paths.stack_file`)을 `cfgfile`로 읽고 모양을 검사한다(못 읽거나 틀리면 시작 때 종료 2). 바꾸기 = 파일을 고쳐 오버레이 패치, 되돌리기 = git. `set-stack`·`set-sources` 명령과 내부 칸 `STACK_VERSION`·`--stack-version`을 지웠고(`show-stack`은 파일을 보여 줌 · 원천 목록 `sources.json`·`show-sources`는 11-01 뒤 결정으로 지움 — [pl-01](#pl-01)), `run_docs.py`는 시작 때 `show-stack`으로 확인만 한다. 파싱·검색 MCP 컨테이너는 PG 없이 시작한다(PG는 적재·검색에만). 설명은 [pipeline_stack.md](../architecture/pipeline_stack.md).
 - Status: done
 
 <a id="pl-38"></a>
@@ -137,7 +137,7 @@
 ## pl-10 · 실행 관리(오케스트레이션)
 - 결정(사용자 10-31 범위 축소 grill): trigger 서버(/jobs·/upload·CHAIN_STRUCTURE_URL·serve-trigger)를 **지운다** — 새 문서는 run_docs 정기 실행이 FileStorageMap으로 고름(C10). DRM과 무관(DRM 자동 복호화 기능은 없음).
 - 이유: 서버는 문서 수천 건을 사람 없이 돌린다.
-- 무엇: CLI `parse`·`structure`·`load`·`night`(마감 시각, 다음 밤에 이어서)·`run-stack`·`show-stack`·`show-sources`·`smoke`·`selftest`. 이미지 entrypoint가 `dedup`·`prepare`·`publish`·`full`·`idle`(상주 컨테이너가 떠 있기만 — run_docs가 docker exec)·`migrate`·`check`를 더한다(`deploy/docker/entrypoint.sh`). 서버 flow 러너(EDW 목록, 12개 미리 받기, light/medium/vlm 레인, 문서마다 컨테이너, `parse_document` 작업에 양보). (trigger 서버 `/jobs`·`/upload`·`serve-trigger`·`CHAIN_STRUCTURE_URL`은 11-01에 지움 · `compare-parse`·`compare-all`은 11-01에 지움 — [test.md#e2-10](test.md#e2-10).) (문서별 병렬 파싱 `parse_parallel.py`는 10-30에 지움 — [parse.md#pl-35](parse.md#pl-35).)
+- 무엇: CLI `parse`·`structure`·`load`·`night`(마감 시각, 다음 밤에 이어서)·`run-stack`·`show-stack`·`smoke`·`selftest`. 이미지 entrypoint가 `dedup`·`prepare`·`publish`·`full`·`idle`(상주 컨테이너가 떠 있기만 — run_docs가 docker exec)·`migrate`·`check`를 더한다(`deploy/docker/entrypoint.sh`). 서버 flow 러너(EDW 목록, 12개 미리 받기, light/medium/vlm 레인, 문서마다 컨테이너, `parse_document` 작업에 양보). (trigger 서버 `/jobs`·`/upload`·`serve-trigger`·`CHAIN_STRUCTURE_URL`은 11-01에 지움 · `compare-parse`·`compare-all`은 11-01에 지움 — [test.md#e2-10](test.md#e2-10).) (문서별 병렬 파싱 `parse_parallel.py`는 10-30에 지움 — [parse.md#pl-35](parse.md#pl-35).)
 - 서버 flow 러너 요구(사용자 10-22·10-23 — 원문 [../history/run_docs_req.md](../history/run_docs_req.md), 바뀐 값은 rn-01·rn-02·[parse.md#pl-22](parse.md#pl-22)):
   - 문서별 flow(배치 장벽 없음) · warm 12(진행 중 제외, 끝나면 tmp 지움 — 10-29부터 20) · 컨테이너 하나에 worker 4.
   - VLM 동시 12(figure·vlm_page 포함), 문서 병렬 4, 문서당 VLM 4·OCR 1, vlm_page 끔, OCR dpi 150. 구조화+적재도 문서 단위 — 임베딩 묶음 호출(32 → 12)·문서당 병렬 4, BM25 병렬 4, 단계별 시간 기록.
@@ -153,6 +153,7 @@
 - 이유: 스케줄러가 실패를 못 본다(C-33).
 - 결정(사용자 10-30 grill): 종료 코드 — 대상 0건 = 0, 실패 = 1, 마감 시각 도달 = 75.
 - 파일: `pipeline/cli.py`(`night`), `deploy/docker/entrypoint.sh`(`full`).
+- 결정(사용자 11-01 기본값 — 허브 11-01): 새벽 run_docs에 문서 수 상한 · 마감 시각 · 사람이 따로 돌린 run_docs와 겹치지 않게 하는 잠금을 둔다(지금은 systemd `TimeoutStartSec=6h`뿐 — #83).
 - Status: todo — 11-01(`feature/scope-cut-unused`) 옛 입구를 지움: `pipeline.cli`의 `night`·`run-stack`·`structure`·`load`(+ 끝 표시 확인 `need()`), 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`, `trigger.sh` `night`·`structure`·`load`·`all`, compose job `structure`(`load` 서비스는 `run_tool.sh` 도구용으로 남김 — 명령 `help`), 죽은 설정(`ops.nightly.max_new`·`modules`·`publish`, `ops.nightly_run.deadline`·`parse_deadline`, `dev.pipeline.allow_common_mismatch` — 남으면 경고만). 새벽 배치는 systemd 타이머 → `trigger.sh scheduled` → `run_docs.py --start-offset 0 --skip-done`(서버 확인 refactor.md C-72). 남음: 종료 코드 규칙(대상 0건 = 0, 실패 = 1, 마감 = 75)을 run_docs에 만든다.
 
 <a id="pl-23"></a>

@@ -75,7 +75,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 |---|---|---|
 | `0001_search` | 검색 스키마(`required.pg.db_schema`, 예: `ai`) — `--target search` | `doc` · `chunk` · `chunk_term` · `term_stat` · `corpus_stat` · `load_run` 테이블, 색인, 뷰 `v_chunk_source`(벡터 차원은 번들 `meta.json` 또는 `--dim`) |
 
-- **엔진 구성·원천 목록은 DB가 아니라 파일이다** — 서버·PC 모두 `resources/config/pipeline_stack.json`, `resources/mappings/sources.json`을 읽는다(5-7). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다(그대로 두거나 DB 담당자가 지움).
+- **엔진 구성은 DB가 아니라 파일이다** — 서버·PC 모두 `resources/config/pipeline_stack.json`을 읽는다(5-7). 원천 목록 `sources.json`은 11-01에 지웠다(원천은 폴더·`rdb:csv`만). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다(그대로 두거나 DB 담당자가 지움).
 - **실행 기록은 파일이 아니라 DB에 남는다** — 스키마마다 `<스키마>.alembic_version`.
 
 | 명령 | 하는 일 |
@@ -124,8 +124,8 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  └─ cli/              ask(질의 테스트) · mcp_smoke
 ├─ resources/           코드가 읽는 데이터(이미지에 포함)
 │  ├─ prompts/          AI 프롬프트 패키지 {common,pipeline,mcp}
-│  ├─ config/           엔진 구성 pipeline_stack.json(서버·PC 같음) · 채점 기준 · 보고서 템플릿
-│  ├─ mappings/         원천 목록 sources.json(서버·PC 같음) · 문서 메타데이터 매핑
+│  ├─ config/           엔진 구성 pipeline_stack.json(서버·PC 같음) · 채점 기준(criteria.json)
+│  ├─ mappings/         문서 메타데이터 매핑
 │  └─ vocab/            집계 어휘 · 질문 유형 · 용어집
 ├─ deploy/              배포
 │  ├─ docker/           Dockerfile(타깃 pipeline, mcp) · requirements · entrypoint.sh · IMAGE_BASE · wheels/(폐쇄망용 휠)
@@ -300,7 +300,7 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 **(선택) MCP 없이 검색만 확인**
 
 ```bash
-.venv/bin/python -m mcp_server.cli.ask ask --pg --bundle output/demo/bundle --k 3 --q "<질문>"
+.venv/bin/python -m mcp_server.cli.ask ask --bundle output/demo/bundle --k 3 --q "<질문>"
 ```
 
 **⑥ 정리** — 4-5에서 MCP까지 확인한 뒤 `settings.yaml`의 `no_paid_calls`를 `true`로 되돌린다(평소 테스트가 외부를 호출하지 않게).
@@ -323,7 +323,7 @@ SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
 # ask·MCP는 --set을 받지 않으므로 오버레이 설정 파일(방법 C)로 같은 값을 넘긴다
 SF=$(.venv/bin/python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 \
      NO_PAID_CALLS=0 LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_BUNDLE=$O/bundle MCP_PORT=18769)
-SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.ask ask --pg --bundle $O/bundle --k 3 --q "<질문>"
+SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.ask ask --bundle $O/bundle --k 3 --q "<질문>"
 SETTINGS_FILE=$SF nohup .venv/bin/python -m mcp_server.main > $O/mcp.log 2>&1 & echo $! > $O/mcp.pid
 ```
 실제 임베딩 호출을 확인하려면 `--set EMBED_CACHE=<빈 sqlite 경로>`를 더한다.
@@ -503,14 +503,12 @@ dc run --rm load migrate check --target all                # a. 지금 버전과
 
 # b. 검색 스키마 — 옛 코드가 만든 스키마가 있고 차이가 0이면 실행 없이 기록만, 없거나 빠진 것만 있으면 up
 #      dc run --rm load migrate stamp --target search     또는     dc run --rm load migrate up --target search
-# c. 확인 — "차이 없음", 엔진 구성·원천 목록 파일이 읽히는지
+# c. 확인 — "차이 없음", 엔진 구성 파일이 읽히는지
 #      dc run --rm load migrate check --target all
 #      dc run --rm load show-stack                          # 엔진 구성 파일(이름·sha·경로)이 보이면 정상
-#      dc run --rm load show-sources
 ```
 
 - 컬럼 이름·형식·NULL·키가 다르거나 남는 테이블이 있으면 `stamp`·`up` 모두 거부된다(종료 코드 2). 멈추고 출력(이름만)을 DB 담당자와 협의한다.
-- 서버에만 따로 쓰던 원천 목록 파일이 있으면 코드 폴더의 `resources/mappings/sources.json`에 반영해 오버레이 패치로 보낸다(또는 `ops.paths.sources_file`로 그 파일을 가리킨다).
 - 색인 빌더 스키마(`index_a`·`index_b` — `deploy/host/compose/compose.index.yml`, 쓸 때만 덧붙임)를 쓰면 스키마마다 `migrate check|stamp|up --target search --schema <스키마>_<index_id>`.
 
 **④ 연결 점검** — 파이프라인을 돌리기 전에 접속을 하나씩 확인한다.
@@ -599,7 +597,7 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 설정 값                     | settings.yaml을 직접 고치고 상주 컨테이너(`data-pipeline-parse`, `data-pipeline-structure`, `mcp-server`)를 다시 띄운다                                                                      |
 | 이번 실행만 다른 값              | `--set 이름=값`(오버레이 설정 파일 도구는 PC 전용 — 서버에서는 종료 코드 2)                                                                                                                         |
-| 엔진 구성 · 원천 목록(파일) | 코드 폴더의 `resources/config/pipeline_stack.json`·`resources/mappings/sources.json`을 고쳐 오버레이 패치(5-8) — 되돌리기는 git, 확인은 `show-stack`·`show-sources` — [docs/architecture/pipeline\_stack.md](docs/architecture/pipeline_stack.md) |
+| 엔진 구성(파일) | 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 오버레이 패치(5-8) — 되돌리기는 git, 확인은 `show-stack` — [docs/architecture/pipeline\_stack.md](docs/architecture/pipeline_stack.md) |
 
 
 ### 5-8. 코드만 고쳤을 때 — 오버레이 패치

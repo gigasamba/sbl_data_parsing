@@ -19,7 +19,7 @@
 - 각 이미지의 `entrypoint.sh`는 받은 명령을 `RAG_MODULE`로 거른다. 다른 이미지의 명령이면 종료 코드 64(오류 메시지에 맞는 이미지를 알려 줌).
 - 서버 입구는 `run_docs.py` 하나다(사용자 10-31). 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`는 11-01에 지웠다.
 - `tool index`(AD41 색인 빌더 — `index_a`·`index_b`)도 data-pipeline에서 돈다.
-- 공통 명령(어느 이미지에서나): `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`·`smoke [--src <폴더>]`.
+- 공통 명령(어느 이미지에서나): `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`.
 
 **코드 폴더 배치(`PATCH_CODE`, 기본 `/srv/rag/code/live`)** — `live/app/`은 컨테이너가 읽기 전용으로 붙이는 코드(`app/deploy/<폴더>`·`app/docker`), `live/deploy/host/`·`live/deploy/release/`는 호스트에서 부르는 스크립트·compose·systemd 파일이다. 아래 명령은 모두 `live`(코드 폴더 루트)에서 실행한다.
 
@@ -42,7 +42,7 @@ export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.
 ```
 - `export`는 그 셸에서만 유효하다. 운영 계정 셸 설정(예: `~/.bashrc`)에 `export SERVER_ENV_DIR=/srv/rag/env`를 영구로 두거나 명령 앞에 붙인다. `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd unit은 스스로 이 값을 넘긴다. 컨테이너는 이 폴더를 마운트하지 않는다.
 
-> ⚠️ **원천 목록·엔진 구성은 코드 폴더의 파일이다**(`resources/mappings/sources.json`·`resources/config/pipeline_stack.json` — 사용자 11-01, D-031). `$SERVER_ENV_DIR/sources.json` 덮어쓰기는 읽지 않는다. 바꾸려면 코드 폴더의 파일을 고쳐 오버레이 패치로 보낸다(다른 파일을 쓰려면 settings.yaml `ops.paths.sources_file`·`stack_file` — [env-guide.md](env-guide.md) 1절). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다.
+> ⚠️ **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` — 사용자 11-01, D-031). 바꾸려면 코드 폴더의 파일을 고쳐 오버레이 패치로 보낸다(다른 파일을 쓰려면 settings.yaml `ops.paths.stack_file` — [env-guide.md](env-guide.md) 1절). 원천 목록 `sources.json`은 11-01에 지웠다(원천은 폴더·`rdb:csv`만). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다.
 
 #### 값 바꾸기
 - 앱 설정 값은 `settings.yaml`을 직접 고친다. 고친 뒤 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`는 다시 띄운다.
@@ -134,13 +134,13 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 | 용어집(동의어·약어) | `app/deploy/resources/vocab/glossary/domain_terms.csv`(다른 폴더는 settings.yaml `common.paths.glossary_dir` — 옛 env `GLOSSARY_DIR`, 아래 5-1) |
 | 고객 명부 | settings.yaml `common.paths.client_roster`(옛 env `CLIENT_ROSTER` — CSV `이름,별칭\|별칭` 또는 JSON) |
 | 제품 코드 규칙 | `app/deploy/resources/vocab/glossary/id_patterns.csv` |
-| 원천 표·열(문서 위치) | `resources/mappings/sources.json`(서버·PC 같음 · `ops.paths.sources_file` · 확인 `show-sources` — [docs/architecture/pipeline_stack.md](../architecture/pipeline_stack.md)) — `python -m pipeline.extract.rdb_discover`가 초안 |
+| 원천 표·열(문서 위치) | (11-01 원천 목록 `sources.json`·`show-sources` 지움 — 원천은 `run_docs`가 EDW에서 만든 `rdb:csv`. 열 이름이 다른 표는 `RDB_COL_*`) |
 | 엔진 구성 | `resources/config/pipeline_stack.json`(서버·PC 같음 · `ops.paths.stack_file` · 확인 `show-stack`) — 바꾸기 = 파일을 고쳐 오버레이 패치 |
 | 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성) · 서버 정답 폴더(settings.yaml 호스트 항목 `pipeline.host.gold_dir` — `run_tool.sh`가 컨테이너 `/data/gold`로 붙임) |
-| 집계 지표 단서어 | `app/deploy/resources/vocab/agg_vocab.json`(다른 파일은 settings.yaml `mcp.search.agg_vocab_file` — 옛 env `AGG_VOCAB_FILE`) |
+| 집계 지표 단서어 | 코드 기본값(`mcp_server/services/search/qtype.py` `_AGG_VOCAB_DEFAULT`) — 11-01 사전 파일 `agg_vocab.json`·설정 `search.agg_vocab_file`은 지움(내용이 기본값과 같았음) |
 | MCP 안내 문구 | settings.yaml `mcp.server.instructions`(옛 env `MCP_INSTRUCTIONS`) |
 
-기밀(실고객·실제품·계약 값)은 **서버 폴더에만** 둔다 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤에는 같은 질문 세트로 `score_gold`·`mcp_eval` 전/후를 비교한다.
+기밀(실고객·실제품·계약 값)은 **서버 폴더에만** 둔다 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤에는 같은 질문 세트로 검색 결과를 전/후 비교한다(PC 검증 페이지 `validation/search_ui`·답변 점검 `valid_env/answer_test` — `score_gold`·`mcp_eval`은 11-01에 지움).
 
 ### 5-1. 고객 명부·용어집 작성법 (예제 파일을 복사해서 고쳐 쓰기)
 
@@ -213,7 +213,7 @@ PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --check 
 - 적재 오류(조용히 넘기지 않음): 명시한 `concept_id` 중복 · 없는 ID를 가리키는 `broader`/`related` · `id_patterns.csv`의 깨진 정규식.
 - 서버: 폴더째 `/srv/rag/env/glossary/`(같은 폴더에 `id_patterns.csv`·`units.csv`도 — 예제는 `app/deploy/resources/vocab/glossary/`의 같은 이름 파일)에 두고 settings.yaml `common.paths.glossary_dir`에 **컨테이너 안에서 보이는** 그 폴더 경로를 적는다(위 ⚠️).
 - 자동 초안: `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`는 `output/` 아래 draft만 만든다. 사람이 확인해 `domain_terms.csv`로 옮긴다(`status`를 비우거나 `approved`).
-- 실명(실고객·실제품)은 서버 폴더에만 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤 같은 질문 세트로 `mcp_eval` 전/후 비교.
+- 실명(실고객·실제품)은 서버 폴더에만 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤 같은 질문 세트로 검색 결과 전/후 비교(검증 페이지 — `mcp_eval`은 11-01에 지움).
 
 #### 점검(반영 전)
 서버가 읽는 로더를 그대로 쓴다(cp949·빈칸·AUTO ID·건너뜀 알림까지 같음).

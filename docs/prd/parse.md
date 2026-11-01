@@ -147,6 +147,26 @@
   - 묶음 계약 `common/core/contract.py`의 `DOC_KEYS`·`check_bundle`([etl.md#pl-15](etl.md#pl-15) — 지금 `build_bundle`이 계약용 빈 `kg_nodes.jsonl`·`kg_edges.jsonl`을 씀, [etl.md#pl-06](etl.md#pl-06)), 그림 `capped.jsonl` 잔재.
   - `extract.ocr_engine` 스위치와 대표 결과의 OCR 대체 길(`represent`의 `_ocr_pages`·`_hidden_overlap_conflict`). `rapidocr` 엔진 파일은 남김(`prepare.py`·`figures.py`가 씀). 이 스위치를 없앨 때 `pipeline_stack.json`의 이미지 확장자 행(지금 `rapidocr_ko`·`qwen_vlm`)도 같은 변경에서 `qwen_vlm` 하나로(11-01 `.pdf_image`는 이미 바꿈 — [pl-03](#pl-03)).
   - `common/core/paths.py:112` 주석의 `parse_shadow` 언급(11-01 지시서 지움 — 고치면 레이어 code_fp가 바뀌어 미룸), `common/ai/{adk,llm}.py`의 `vlm_judge` 역할 표(11-01 `figure_review` 지움 — 부르는 곳 없음).
+- 결정(사용자 11-01, reference ↔ 저장소 2차 비교 — 같은 0.2.0 지문 배치):
+  - `common/core/fingerprint.py`의 `_LEGACY_NAMES`·`_HANDOFF_LEGACY` 옛 이름 대응을 정리(이름 바꾸기 — 핸드오프 지문이 바뀜).
+  - 첫 이관용 호환 코드를 지운다 — `common/config/migrate.py`의 env 변환·`--compare`, `keyscan`의 지울 후보, `image_vars.sh`의 옛 이미지 이름, `trigger.sh`의 `pipeline.env` 거부, entrypoint `legacy_tool_name`, 절마다 둔 `REMOVED` 목록, `pin_env`의 옛 env 경고. **두 서버가 settings.yaml로 옮긴 뒤**(refactor.md 37행 — 이관 확인)에만.
+  - 로컬 임베딩 모델 길 — `common/ai/embed.py`의 sentence-transformers, `build_bundle`의 `bge-m3` 기본값, `check_env`의 HF 점검.
+  - `common/core/paths.py`의 `TEMPLATES_DIR`·`PIPELINE_ROOT`·`RETRIEVAL_ROOT` 상수(11-01 보고서 틀 폴더는 지움).
+  - `pipeline/transform/structure/facts.py`의 `contract_facts`·`MONEY_RE`·`DATE_RE`·`L_*`.
+  - `build_bundle`의 같은 뜻 선택지 `--summary auto|lead`(둘 다 앞부분 발췌).
+  - 빈 레이어 `a`(code_fp `e3b0c44298fc` = 빈 집합).
+  - `run_all`·`progress.py`의 `PROGRESS.md` 쓰기(`is_env_error`는 남김).
+  - `common.store.run_mode`의 `Literal` 값 `test`(11-01 `--mode test` 표본 모드 지움 뒤).
+  - 낡은 `# noqa — 영구 다리` 주석.
+  - `deploy/docker/requirements-image.txt` 머리 주석의 옛 `requirements-models.txt` 언급(11-01 파일 지움 — 고치면 `deps_hash`가 바뀌어 다음 이미지 빌드 때).
+- 결정(사용자 11-01 — 같은 배치의 구조 단순화):
+  - 점검 셋(`check_env`·`services`·`ping_models`)을 점검기 하나로.
+  - 작게 나뉜 파일을 합친다 — `pipeline/shared/{artifacts,meaning,text}.py`, `pipeline/extract/resources.py`, `pg_load_connect.py`, `pg_mcp_connect.py`.
+  - 지운 칸 목록(`REMOVED`)을 `common/config/layout.py` 표 하나로.
+  - entrypoint `TOOL_PKGS`를 고정 표로.
+  - compose 덧씌우기 파일을 4개에서 2개로.
+- 11-01(`feature/scope-cut-unused2`): 원천 목록 `sources.json`을 지우며 설정 칸 `common.paths.sources_file`은 남겼다 — `common/config/settings.py`를 고치면 레이어 code_fp 4개가 바뀌어 이 배치에서 지운다. `common/core/fingerprint.py` `EXCLUDED_FILES`의 `core/sources.py` 줄도 같이.
+- 11-01(같은 브랜치): PC Docker 스모크에서 `s3://` 원천(MinIO 대역·게시 ⑥)과 자정 배치 모양을 지우며 쓰이지 않게 된 설정 칸 `smoke_source`·`smoke_nightly`(`common/config/settings.py`)와 MinIO 올리기 도구 `common/check/os_put.py`도 이 배치에서 지운다.
 - Status: todo — 0.2.0(엔진·핸드오프·레이어 지문이 바뀜 — 사람 검토).
 
 <a id="pl-47"></a>

@@ -23,13 +23,9 @@ docstring 참고). 그래서 두 결과가 같은 질문에서 어긋날 수 있
 """
 
 import copy
-import json
 import re
-from pathlib import Path
 
 from common.core.docmeta import RE_LATEST_QUESTION  # 최신판 질문 단서(L3-1과 같은 규칙)
-from common.core.paths import RES_ROOT
-from mcp_server import config as mc  # 설정 객체(mcp 칸)
 
 # 집계·목록 단서(mc-04 10-31 — 집계 답 aggregate.py를 지우며 이 판별에 쓰던 정규식만 이리로, 글자 그대로)
 _AGG_VOCAB_DEFAULT = {  # DT1 c1 — 지표 판별 단서어(CDMO 예제: 건수·합계·수량·금액·단가·배치) 코드 기본값
@@ -44,24 +40,7 @@ _AGG_VOCAB_DEFAULT = {  # DT1 c1 — 지표 판별 단서어(CDMO 예제: 건수
 }
 
 
-def _load_agg_vocab():
-    """단서어 사전 — `resources/vocab/agg_vocab.json`(기본) 또는 설정 `search.agg_vocab_file`. 파일 없음·깨짐·빈 목록이면 그 키는 코드 기본값."""
-    default = dict(_AGG_VOCAB_DEFAULT)
-    p = Path(mc.cfg().search.agg_vocab_file or (RES_ROOT / "vocab" / "agg_vocab.json"))
-    if not p.exists():
-        return default
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return default
-    out = dict(default)
-    for k, v in (data or {}).items():
-        if k in default and isinstance(v, list) and v:
-            out[k] = v
-    return out
-
-
-_AGG_VOCAB = _load_agg_vocab()
+_AGG_VOCAB = _AGG_VOCAB_DEFAULT  # 11-01 — 사전 파일 agg_vocab.json(코드 기본값과 같았음)·설정 search.agg_vocab_file 지움
 COUNT_RE = re.compile("|".join(_AGG_VOCAB["count"]), re.I)
 SUM_RE = re.compile("|".join(_AGG_VOCAB["sum"]), re.I)
 LIST_RE = re.compile(r"각\s*계약|계약별|계약마다|of\s+each|each\s+contract|목록|\blist\b", re.I)

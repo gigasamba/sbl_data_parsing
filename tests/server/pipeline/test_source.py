@@ -7,51 +7,22 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pipeline.extract.source as M
-from common.config.settings import COMMON
 from common.core.contract import jl
 from common.core.paths import DEPLOY_ROOT
 from pipeline import config as pc
 from pipeline.extract.source import (
-    TABLE_ID_RE,
-    _mssql_rows,
-    _rdb_cols,
     _safe_join,
     _safe_name,
     finish,
     mark_done,
-    plan,
     resolve,
-    sample,
 )
-from tests.server.common.test_mssql import (
-    FakeConnection,
-)  # S9 — 옛 `mssql.FakeConnection`(그룹 A가 common.store.mssql에서 시험 파일로 옮김)
 
 
 def selftest():
-    names = [f"d{i}.pdf" for i in range(40)] + [f"x{i}.docx" for i in range(20)] + ["a.png"]
-    with pc.PIPE.env(
-        TEST_MIN_DOCS=None, TEST_PER_TYPE=None
-    ):  # S7c — sample()이 설정 객체로 읽으므로 env 대신 객체를 덮어씀(os.environ은 안 바뀜)
-        s = sample(names, "test")
-        assert len(s) == 11 and sum(n.endswith(".pdf") for n in s) == 5 and "a.png" in s and sample(names, "test") == s
-        assert sample(names, "prod") == sorted(names) and sample(names[:10], "test") == sorted(names[:10])  # 50건 미만이면 전부
-    print("[selftest] 시험 모드 표본(형식별·늘 같은 표본·50건 미만은 전부) 통과")
-
     import tempfile
 
-    src = Path(tempfile.mkdtemp())
-    for n in ("a.txt", "b.txt"):
-        (src / n).write_text(n, encoding="utf-8")
-    out = Path(tempfile.mkdtemp())
-    plan_names, fetch_one, state = plan(str(src), out, mode="prod")
-    assert plan_names == ["a.txt", "b.txt"] and (src / "a.txt").exists()  # 폴더 원본은 그대로(목록만)
-    dest = Path(tempfile.mkdtemp())
-    got = fetch_one("a.txt", dest)
-    assert got.read_text(encoding="utf-8") == "a.txt" and (src / "a.txt").exists()  # 복사 — 원본 저장소는 안 지움
-    mark_done(state, plan_names, is_s3=False)
-    assert not (state / "processed.jsonl").exists()  # 폴더는 추적할 상태가 없음(s3일 때만 기록)
-    print("[selftest] X2 스트리밍 — plan(폴더)이 이름만 정하고 fetch_one이 복사 · mark_done은 s3에만 통과")
+    dest = Path(tempfile.mkdtemp())  # 11-01 — 시험 표본(sample)·스트리밍 plan() 사례는 기능과 함께 지움
 
     # 독립 보안 검토 BLOCKER 2: S3 키의 `\`·`:`·`/`를 전부 지워 평면 이름으로 — 윈도 절대경로·상위 폴더 조작 방지
     cleaned = _safe_name(r"pre/fix/C:\Windows\doc.pdf", "pre/fix/")
@@ -75,7 +46,6 @@ def selftest():
     _selftest_rdb_doc_location_fields()
     _selftest_filestoragemap()
     _selftest_same_key_new_version()
-    _selftest_mssql()
     _selftest_finish_keep()
 
 
@@ -173,7 +143,7 @@ def _selftest_rdb():
 
             # ① 고객 필터(CL-1001, 3건) — 목록 질의 → 받기
             env.enter_context(pc.PIPE.env(RDB_COMPANY="CL-1001"))
-            local_dir, names1, state = resolve(f"rdb:{table}", state_root, mode="prod")
+            local_dir, names1, state = resolve(f"rdb:{table}", state_root)
             assert len(names1) == 3, names1
             from common.core import contract as ids
 
@@ -184,13 +154,13 @@ def _selftest_rdb():
             mark_done(state, names1, is_s3=True)
 
             # ② 2회차 — 같은 필터는 이미 처리한 3건뿐이라 0건
-            local_dir2, names2, _ = resolve(f"rdb:{table}", state_root, mode="prod")
+            local_dir2, names2, _ = resolve(f"rdb:{table}", state_root)
             assert names2 == [], names2
             print("[selftest] AD44 — RDB 고객 필터(CL-1001) 3건 → 2회차 0건 통과")
 
             # ③ 필터 없이 전체 — 나머지 7건(이미 처리한 3건은 빠짐), 누적 10건 전부 source_uri = s3://rag-docs/<키>
             env.enter_context(pc.PIPE.env(RDB_COMPANY=None))  # 필터 없음
-            local_dir3, names3, state3 = resolve(f"rdb:{table}", state_root, mode="prod")
+            local_dir3, names3, state3 = resolve(f"rdb:{table}", state_root)
             assert len(names3) == 7, names3
             mark_done(state3, names3, is_s3=True)
             man = {r["file_name"]: r for r in jl(state3 / "manifest.jsonl")}
@@ -216,7 +186,7 @@ def _selftest_rdb():
             )
             state4 = state_root / "run4"
             state4.mkdir()
-            local4, names4, state4s = resolve(f"rdb:csv:{mixed_csv}", state4, mode="prod")
+            local4, names4, state4s = resolve(f"rdb:csv:{mixed_csv}", state4)
             assert names4 == ["doc_good"], names4  # doc_bad는 거부돼 빠짐, 크래시 안 하고 doc_good은 받음
             assert (local4 / "doc_good").exists() and not (local4 / "doc_bad").exists()
             rej = jl(state4s / "rejected.jsonl")
@@ -240,19 +210,19 @@ def _selftest_rdb():
             M._s3 = lambda: _FakeS3(wm_objs)
             state5 = state_root / "run5"
             state5.mkdir()
-            local5, names5a, state5s = resolve(f"rdb:csv:{wm_csv}", state5, mode="prod")
+            local5, names5a, state5s = resolve(f"rdb:csv:{wm_csv}", state5)
             assert names5a == ["doc_wx"], names5a  # wy 거부, wx만 받음 — 둘 다 updated_at 같음
             mark_done(state5s, names5a, is_s3=True)
 
             wm_objs[("rag-docs", "clients/wy.pdf")] = ("e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2", b"y")  # wy가 이제 고쳐짐(ETag 일치)
             # 2회차 — BLOCK 2가 있었다면 wx의 updated_at으로 since가 전진해 "같은 updated_at"인 wy가 질의 후보에도 안 들어
             # 0건이 됨(고쳐졌어도 영영 못 받음). 고친 지금은 since가 그대로(None)라 wy가 다시 후보로 나와 이번엔 받아진다.
-            local5b, names5b, state5b = resolve(f"rdb:csv:{wm_csv}", state5, mode="prod")
+            local5b, names5b, state5b = resolve(f"rdb:csv:{wm_csv}", state5)
             assert names5b == ["doc_wy"], names5b
             mark_done(state5b, names5b, is_s3=True)
 
             # 둘 다 끝났으니 이제 since가 전진 — 3회차는 0건
-            _, names5c, _ = resolve(f"rdb:csv:{wm_csv}", state5, mode="prod")
+            _, names5c, _ = resolve(f"rdb:csv:{wm_csv}", state5)
             assert names5c == [], names5c
             print("[selftest] AD44 — watermark: 같은 updated_at 중 실패분이 영영 안 가려짐(해결되면 전진) 통과")
         finally:
@@ -278,7 +248,7 @@ def _selftest_rdb_doc_location_fields():
         M._s3 = lambda: _FakeS3(objs)
         try:
             state_root = Path(tempfile.mkdtemp())
-            local_dir, names, state = resolve(f"rdb:csv:{csv_path}", state_root, mode="prod")
+            local_dir, names, state = resolve(f"rdb:csv:{csv_path}", state_root)
             assert len(names) == len(rows), (len(names), len(rows))  # synth-meta-rdb는 전부 받아지는 ETag(가짜 저장소도 그대로 생성)
             man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")}
             v2 = man["rfi_answer_sjm_2023_v2"]
@@ -303,8 +273,6 @@ def _selftest_filestoragemap():
     # S9 — 옛 `global _s3` → `M._s3`(모듈 전역 대입)
     real_s3 = M._s3
 
-    assert TABLE_ID_RE.match("AI.FileStorageMap")  # 요건 ⑥ — 대소문자 섞인 스키마.표도 화이트리스트 통과
-
     state_root = Path(tempfile.mkdtemp())
     csv_path = state_root / "file_storage_map.csv"
     # 5행 — id=1·4는 같은 original_filename(report.pdf, 이름 충돌 구분 시험)
@@ -326,7 +294,7 @@ def _selftest_filestoragemap():
     )  # S7c — 설정 객체 덮어쓰기(os.environ은 안 바뀜) · 이 표엔 company 열이 없음 — 경고 후 필터 없이 진행돼야 함(요건 ⑦)
     try:
         table = f"csv:{csv_path}"
-        local_dir, names1, state = resolve(f"rdb:{table}", state_root, mode="prod")
+        local_dir, names1, state = resolve(f"rdb:{table}", state_root)
         assert len(names1) == 5, names1  # company 필터가 조용히 걸리지 않고 무시됨 — 전부 받음
         assert {"1__report.pdf", "4__report.pdf"} <= set(names1), names1  # 이름 충돌 — doc_id 접두로 구분
         assert "summary.pdf" in names1 and "contract.pdf" in names1 and "notes.pdf" in names1
@@ -340,7 +308,7 @@ def _selftest_filestoragemap():
         mark_done(state, names1, is_s3=True)
 
         # 2회차 — 전부 처리 기록됐으니 0건(ETag 없는 표라도 _rdb_is_done이 키 존재만으로 판정)
-        _, names2, _ = resolve(f"rdb:{table}", state_root, mode="prod")
+        _, names2, _ = resolve(f"rdb:{table}", state_root)
         assert names2 == [], names2
         print("[selftest] AD44(c) — FileStorageMap: company 열 없음 경고·전부 받기(이름 충돌 구분)·2회차 0건·source_uri 통과")
 
@@ -355,7 +323,7 @@ def _selftest_filestoragemap():
         M._s3 = lambda: _FakeS3(
             {("fsm-bucket", "docs/good.pdf"): ("x", b"good"), ("fsm-bucket", "docs/bad.pdf"): ("x", b"bad!")}
         )  # 실제 길이 4 ≠ RDB 999
-        local3, names3, state3 = resolve(f"rdb:csv:{bad_csv}", state2, mode="prod")
+        local3, names3, state3 = resolve(f"rdb:csv:{bad_csv}", state2)
         assert names3 == ["bad.pdf", "good.pdf"], (
             names3
         )  # 2026-10-15(운영) — 크기 불일치는 참고 기록만 남기고 그대로 받음(식별은 key·sha256, 옛 거부 동작 폐지)
@@ -388,68 +356,21 @@ def _selftest_same_key_new_version():
     env.enter_context(pc.PIPE.env(RDB_BUCKET="fsm-bucket"))  # S7c — 설정 객체 덮어쓰기(os.environ은 안 바뀜)
     try:
         table = f"csv:{csv_path}"
-        _, names1, state = resolve(f"rdb:{table}", state_root, mode="prod")
+        _, names1, state = resolve(f"rdb:{table}", state_root)
         assert names1 == ["same.pdf"], names1
         mark_done(state, names1, is_s3=True)
 
         # id=2 — 같은 s3_key에 새 content_version_id(새 판) 추가(원본 object는 새 내용으로 덮였다고 가정, 길이는 같음)
         csv_path.write_text(header + "1,101,docs/same.pdf,same.pdf,4\n2,102,docs/same.pdf,same.pdf,4\n", encoding="utf-8")
-        _, names2, state2 = resolve(f"rdb:{table}", state_root, mode="prod")
+        _, names2, state2 = resolve(f"rdb:{table}", state_root)
         assert names2 == ["same.pdf"], names2  # 키만 보면 0건이 돼야 하지만 새 판(id=2)이므로 1건 받아야 함
         mark_done(state2, names2, is_s3=True)
 
-        _, names3, _ = resolve(f"rdb:{table}", state_root, mode="prod")
+        _, names3, _ = resolve(f"rdb:{table}", state_root)
         assert names3 == [], names3  # 둘 다 처리 기록됐으니 since가 2까지 전진 — 3회차는 0건
         print("[selftest] AD44(c) — 같은 s3_key에 새 id(새 판): 키만으론 영구 누락됐을 것 → 2회차 1건 받음·3회차 0건 통과")
     finally:
         M._s3 = real_s3
-        env.close()
-
-
-def _selftest_mssql():
-    """RDB_ENGINE=mssql(기본, 2026-10-07 EDW=Azure SQL/SQL Server 확정) — 실제 pymssql 연결 없이 pymssql.connect만
-    가짜로 바꿔(monkeypatch) 쿼리 조립(대괄호 식별자·id 증분 WHERE·ORDER BY)과 dict 행 처리만 확인. 실제 설치·
-    접속 시험 아님(사용자 10-07: 로컬 시험은 가짜 연결로)."""
-    import pymssql
-
-    from common.store import mssql  # S8b — 연결이 SQLAlchemy라 가짜 연결도 방언의 첫 연결 카탈로그 질의에 대답(mssql.FakeConnection)
-
-    calls = []
-
-    all_rows = [
-        {"id": 1, "content_version_id": 101, "s3_key": "docs/a.pdf", "original_filename": "a.pdf", "file_size": 4},
-        {"id": 2, "content_version_id": 102, "s3_key": "docs/b.pdf", "original_filename": "b.pdf", "file_size": 4},
-    ]
-    conns = []
-    real_connect = pymssql.connect
-    cols_of = list(all_rows[0])
-    pymssql.connect = lambda **kw: (
-        conns.append(FakeConnection(lambda sql, params: (cols_of, [tuple(r[c] for c in cols_of) for r in all_rows]), calls)) or conns[-1]
-    )
-    mssql.clear()
-    env = contextlib.ExitStack()
-    env.enter_context(
-        COMMON.env(RDB_HOST="h", RDB_READ_USER="u", RDB_READ_PASSWORD="p", RDB_DATABASE="d")
-    )  # 설정 객체 덮어쓰기(os.environ은 안 바뀜) — 원천 읽기는 읽기 계정(ops.md#op-03)
-    try:
-        cols = _rdb_cols()
-        rows = _mssql_rows("AI.FileStorageMap", cols, None, None, "id", None)
-        assert rows == all_rows, rows
-        sql, params = calls[0]
-        assert "[AI].[FileStorageMap]" in sql and "[id]" in sql and "ORDER BY [id]" in sql and "WHERE" not in sql, sql
-        assert not params, params
-        assert conns[0].closed  # 연결은 늘 닫힘(finally)
-
-        calls.clear()
-        _mssql_rows("AI.FileStorageMap", cols, None, None, "id", 1)
-        sql2, params2 = calls[0]
-        assert "WHERE [id] >= %s" in sql2 and params2 == (1,), (sql2, params2)  # DET1 — 엄격한 > 아님
-        print(
-            "[selftest] AD44(c) — RDB_ENGINE=mssql(기본): 대괄호 식별자·id 증분 WHERE·dict 행 처리(가짜 연결 — SQLAlchemy mssql+pymssql, S8b) 통과"
-        )
-    finally:
-        pymssql.connect = real_connect
-        mssql.clear()
         env.close()
 
 
