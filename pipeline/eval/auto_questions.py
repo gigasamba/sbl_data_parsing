@@ -33,10 +33,8 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent
-from common.core import terms as T  # noqa: E402 — ID 모양(검색·구조화와 같은 규칙)
-from common.core.repfmt import (  # noqa: E402,F401
+from common.core import terms as T  # ID 모양(검색·구조화와 같은 규칙)
+from common.core.repfmt import (  # noqa: F401
     CLIENT_RE,
     CONTRACT_FIRST,
     CONTRACT_RE,
@@ -52,9 +50,9 @@ from common.core.repfmt import (  # noqa: E402,F401
     pick,
     table_rows,
 )  # 대표 결과 형식 읽기(common)
-from pipeline.eval import stages as S  # noqa: E402
-from pipeline.transform.represent.crosscheck import build, families, load_doc, locate_value  # noqa: E402,F401 — 교차 확인(파싱 모듈)
-from pipeline.transform.represent.parse_qa import garbage_ratio  # noqa: E402 — 글자 깨짐 보조 판정 재사용(E12)
+from pipeline.eval import stages as S
+from pipeline.transform.represent.crosscheck import build, families, load_doc, locate_value  # noqa: F401 — 교차 확인(파싱 모듈)
+from pipeline.transform.represent.parse_qa import garbage_ratio  # 글자 깨짐 보조 판정 재사용(E12)
 
 MAIL_FORMATS = {".eml", ".msg", ".mht", ".mhtml"}  # '글자 깨짐 → 미확인 문서' 판정 대상 형식만(E12 독립 검토 MAJOR)
 # — 스캔 PDF 등 OCR 노이즈 문서는 다른 깨짐 원인이라 대상에서 뺀다.

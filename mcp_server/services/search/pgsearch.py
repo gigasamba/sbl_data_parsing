@@ -8,14 +8,13 @@ import time
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-from common.core.console import utf8_stdout  # noqa: E402 — 옆 import들과 같은 자리(앞 코드 뒤)
-from common.core.text import id_terms, normalize_value, tokens  # noqa: E402 — 토큰 규칙(모듈 계약)
-from common.store.pg import HNSW_MAX, PG, conf, vec  # noqa: E402
-from mcp_server import config as mc  # noqa: E402 — 설정 객체(S7d)
-from mcp_server.services.search import clientscope as CS  # noqa: E402 — BR50 고객 범위 단일 규칙(SQL 조각, local.py와 같은 규칙)
-from mcp_server.services.search.local import ID_MAX_DF, Local, embed_query, tie_break, weights  # noqa: E402 — BR41 동점 깨기(local과 공용)
-from mcp_server.services.search.text import term_weights  # noqa: E402 — X3(10-16 검색 전용으로 분리)
+from common.core.console import utf8_stdout
+from common.core.text import id_terms, normalize_value, tokens  # 토큰 규칙(모듈 계약)
+from common.store.pg import HNSW_MAX, PG, conf, vec
+from mcp_server import config as mc  # 설정 객체(S7d)
+from mcp_server.services.search import clientscope as CS  # BR50 고객 범위 단일 규칙(SQL 조각, local.py와 같은 규칙)
+from mcp_server.services.search.local import ID_MAX_DF, Local, embed_query, tie_break, weights  # BR41 동점 깨기(local과 공용)
+from mcp_server.services.search.text import term_weights  # X3(10-16 검색 전용으로 분리)
 
 RERANK = 200  # 이진 양자화 후보 수 → 원 벡터 코사인으로 재정렬
 

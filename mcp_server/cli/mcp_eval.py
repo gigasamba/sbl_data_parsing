@@ -50,7 +50,6 @@ from mcp_server.services.search import shaping as M  # evidence_status(R3, 서�
 from mcp_server.services.search.synth_score import score as synth_score  # answer_keywords·forbid_keywords 채점(재사용)
 from mcp_server.services.search.synth_score import score_table as synth_score_table
 
-HERE = Path(__file__).resolve().parent  # deploy/mcp_server/cli(S5 — 옛 deploy/common_tools/evaluation)
 DEV = APP_ROOT  # output/ 등 런타임 경로용(오늘은 dev/, 단계 5·7 전)
 PROJ = PROJ_ROOT
 
@@ -893,7 +892,7 @@ def main():
         "gold_docs=gold_evidence[].file · 값=answer/value · count 유형·미확인 문서는 채점 제외",
     )
     ap.add_argument("--pool", action="store_true", help="서버가 풀(synth-distractors-v2 묶음)을 가리킴 — gold_docs를 rename_map으로 치환")
-    ap.add_argument("--url", default="http://127.0.0.1:18765/mcp")
+    ap.add_argument("--url", default=mc.cfg().dev.mcp_url)
     ap.add_argument("--token", default="")
     ap.add_argument("--store-root", default="", help="메인 체크아웃 output/store(읍 전용) — 묶음 탐색·stack_matrix 비교용")
     ap.add_argument("--index-id", default="", help="AD41 — 고를 색인(cli/index.py가 만든 index_id) · 비우면 기본 색인")

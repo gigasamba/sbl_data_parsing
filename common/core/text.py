@@ -1,5 +1,4 @@
 """토큰·정규화·색인 본문 규칙 — 구조화(키워드 색인 chunk_term)와 검색(질의 토큰)이 반드시 같아야 함."""
-import os
 import re
 import unicodedata
 
@@ -76,8 +75,9 @@ _NUM_UNIT_SPLIT = re.compile(r"^(\d[\d.]*\d|\d)([a-z]+)$")   # 숫자+단위 붙
 
 
 def _num_norm_enabled():
-    """T1 TOKEN_NUM_NORM(기본 켬, =0으로 끔) — 단일 읽기 지점."""
-    return str(os.environ.get("TOKEN_NUM_NORM", "1")).strip().lower() not in ("", "0", "none", "false")
+    """T1 TOKEN_NUM_NORM(설정 common.text.token_num_norm — 기본 켬, =0으로 끔) — 단일 읽기 지점."""
+    from common.config.settings import cfg   # op-09 — 설정 객체(옛 env 다리)
+    return bool(cfg().text.token_num_norm)
 
 
 def _fuse_num_seps(s):
@@ -138,7 +138,8 @@ def tokens(s):
                 out += [p[i:i + 2] for i in range(len(p) - 1)]
     # ^·_로 이어진 덩어리(10^6·m/s^2·H_2O)는 기존 분리 토큰에 더해 통짜로도(첨자가 BM25에서 흩어지지 않게, 가산만·기존 분리는 유지)
     out += [m for m in _SUPTOK.findall(low) if "^" in m or "_" in m]
-    if os.environ.get("SEARCH_EN_STEM", "1") != "0":   # G16 — batches·lots·months처럼 영어 복수가 질문 단수형과 안 맞던 것(가산만)
+    from common.config.settings import cfg   # op-09 — 설정 객체(옛 env 다리)
+    if cfg().text.search_en_stem:   # G16 — batches·lots·months처럼 영어 복수가 질문 단수형과 안 맞던 것(가산만)
         out += [b for t in toks for b in (_en_singular(t),) if b]
     if norm:   # T1(d) — 숫자+단위 붙음(10ppm·2000l)을 가산 분리(기존 붙은 토큰은 그대로 유지, 글로서리 units.csv 메모와 같은 규칙)
         for t in toks:

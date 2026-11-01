@@ -12,8 +12,9 @@ import subprocess
 import time
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-DEV = HERE.parent.parent  # deploy/ — CT1(contract/ 한 단 더 깊음, HERE.parent=common_tools/ — S3부터 core/ 한 단, HERE.parent=common/) · 10-14 이미지별 폴더 분리 뒤
+from common.core.paths import DEPLOY_ROOT
+
+DEV = DEPLOY_ROOT  # deploy/(op-09 — paths 상수) · 10-14 이미지별 폴더 분리 뒤
 # 층 코드는 형제 패키지(engine-qa 10-14 BLOCKER 1: HERE로 두면 글롭이 빈 집합 = 늘 같은 빈 해시)
 
 # 층별 소스 파일 glob(deploy/ 기준) — common은 그 층 파일이 실제로 import하는 모듈만 더함(_common_deps, 10-05).

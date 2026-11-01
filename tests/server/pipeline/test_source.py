@@ -9,9 +9,9 @@ from pathlib import Path
 import pipeline.extract.source as M
 from common.config.settings import COMMON
 from common.core.contract import jl
+from common.core.paths import DEPLOY_ROOT
 from pipeline import config as pc
 from pipeline.extract.source import (
-    ROOT,
     TABLE_ID_RE,
     _mssql_rows,
     _rdb_cols,
@@ -268,7 +268,7 @@ def _selftest_rdb_doc_location_fields():
     # S9 — 옛 `global _s3` → `M._s3`(모듈 전역 대입)
     real_s3 = M._s3
     with _legacy_rdb_cols():
-        csv_path = ROOT / "valid_env" / "edw" / "meta_rdb" / "doc_location.csv"
+        csv_path = DEPLOY_ROOT / "valid_env" / "edw" / "meta_rdb" / "doc_location.csv"
         if not csv_path.exists():  # 10-15 — valid_env는 이미지에 없음(PC 시험 전용) → 이 부분만 건너뜀
             print(f"[selftest] RDB doc_location 실표 확인 건너뜀 — 합성 표 없음({csv_path.name}, 이미지)")
             return

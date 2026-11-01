@@ -5,11 +5,11 @@ PC 일반 시험: `PYTHONPATH=$PWD .venv/bin/python -m pytest tests/general`(S9 
 import importlib.util
 import re
 import shlex
-from pathlib import Path
 
 from common.config import setarg
+from common.core.paths import DEPLOY_ROOT
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = DEPLOY_ROOT  # 저장소 루트(op-09 — paths 상수)
 INPROCESS = True  # 상태를 바꾸지 않는 시험 — pytest가 함수마다 그대로 모음(tests/conftest.py)
 
 

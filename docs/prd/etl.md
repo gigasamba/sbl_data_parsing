@@ -13,6 +13,7 @@
 
 <a id="pl-29"></a>
 ## pl-29 · EDW 고객 매핑을 파이프라인이 직접 만든다
+- 결정(사용자 10-31 범위 축소 grill): 고객 매핑은 **기회 직접 + 계정 직접만** 먼저(+CRMS). Task·Event·Quote 단계는 매칭률을 재 보고 낮으면 추가 — PC 가짜 Quote 표도 그때.
 - 이유: 문서마다 EDW 고객 하나(`client_edw` — MCP 고객 거르기의 유일한 키, [pl-25](#pl-25))와 SFDC 칸(`sf_acc_name`·`sf_op_id`·`sf_op_name`·`project_code__c` 등)을 지금은 외부에서 뽑은 `file_meta_new.jsonl`(`pipeline.paths.file_meta_path`)에서 읽는데, 그 파일을 만드는 코드가 저장소에 없다(db_schema.md D-2).
 - 결정(사용자 10-30 grill 7차): 파이프라인이 EDW 읽기 계정(`common.connections.rdb.read`)으로 조인을 직접 만든다. SFDC: `AI.FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account`(고객 = Account 이름). CRMS·LAS 경로는 DB 담당자 확인(D-2). `file_meta_new.jsonl` 읽기를 대신한다.
 - 결정(사용자 10-30 grill — pl-25 검토): 고객뿐 아니라 나머지 문서 메타(`sf_*`, `project_code__c`, `contract_id`, `contract_date`, `prod_name`, `division`, `service_type`)도 같은 자리에서 EDW에서 직접 읽는다 — 외부 파일 `file_meta_new.jsonl`은 없어진다.
@@ -28,17 +29,19 @@
 
 <a id="pl-06"></a>
 ## pl-06 · 구조화 — 청크·메타데이터·임베딩
+- 결정(사용자 10-31 범위 축소 grill): 묶음의 지식 그래프(kg_nodes·kg_edges)·개념 청크·이미지 행·doc_facts 생성을 **지운다**(아무도 적재·조회 안 함). parse_document의 facts는 남김. 구조화 code_fp 변경 — 0.2.0 배치.
 - 이유: 검색에는 출처가 달린 청크와 메타데이터가 필요하다.
 - 무엇: 청크 나누기 structure(기본, 800자, 제목, 표는 통째) / fixed 512+64 / sentence / page, 큰 표는 25행씩. 요약(앞부분 발췌 — OpenViking 요약은 10-29, LLM 요약은 op-08에 지움). 사실(제품, 모달리티, 날짜, 단가, 금액, 통화, 배치). 고객·계약은 교차 확인된 것만 남긴다. 규칙 기반 지식 그래프(묶음에는 만들지만 PG에는 더 적재하지 않음 — [mcp.md#mc-12](mcp.md#mc-12)). 임베딩은 로컬(e5, bge-m3) 또는 내부 `api`.
 - 파일: `pipeline/transform/structure/build_bundle.py`, `chunking.py`, `facts.py`, `draft_terms.py`, `common/ai/embed.py`.
-- Status: done
+- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
 
 <a id="pl-15"></a>
 ## pl-15 · structure/load 계약 점검이 새 묶음을 거부
+- 결정(사용자 10-31 범위 축소 grill): structure/load DOC_KEYS 계약 점검은 서버가 쓰지 않으므로 고치지 않고 **지운다**.
 - 이유: `contract.py`의 `DOC_KEYS`가 지운 키를 아직 기대한다(서버는 이 모듈을 쓰지 않음).
 - 파일: `common/core/contract.py`(핸드오프 핑거프린트 — 사람 검토), `pipeline/cli.py`.
 - 결정(사용자 10-30 PRD grill): A5 — 구조화·적재 계약 `DOC_KEYS`를 새 묶음 키에 맞게 고친다. 핸드오프 지문 파일이라 등급 A(사람 검토)이고 0.2.0 재처리에 함께 싣는다.
-- Status: todo
+- Status: dropped (사용자 10-31 범위 축소)
 
 <a id="pl-16"></a>
 ## pl-16 · `PIPE_EMBED=none`이면 `vector(0)`을 만든다
@@ -80,14 +83,16 @@
 
 <a id="pl-08"></a>
 ## pl-08 · 정형 DB와 문서 대장
+- 결정(사용자 10-31 범위 축소 grill): 정형 DB 파생 표·마스터 표(contract/client/prod master, doc_contract_link, doc_location, doc_table, doc_cell)와 적재 코드를 **지금 지운다**(mc-04와 함께). stack_version·source_version은 남김. 마스터는 따로 둔 마스터 DB로 옮김(pl-38).
 - 이유: 계약·고객·문서 판이 정형 질문에 답하고 증분 실행을 이끈다.
 - 무엇: `contract_master`·`client_master`·`prod_master`·`doc_contract_link`(점수 매기는 연결기)·`doc_location`·`doc_registry`·`doc_hidden`·`doc_table`·`doc_cell`. PG 또는 SQLite.
 - 파일: `pipeline/load/structured.py`, `common/store/structdb.py`.
 - 결정(허브 10-31, 최신 결정 우선): 지울 표 저장소(`doc_table`·`doc_cell` — [pl-25](#pl-25) `struct`)를 읽는 검색 쪽 코드는 죽은 코드다 — `mcp_server/services/search/aggregate.py`의 `table_cell_list`·`find_table_cells`·`struct()`, `common/store/structdb.py:406`. 0.2.0에 표를 지우는 마이그레이션과 함께 지운다.
-- Status: done
+- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
 
 <a id="pl-38"></a>
 ## pl-38 · 마스터 CSV 활용 방안 설계(후순위)
+- 결정(사용자 10-31 범위 축소 grill): 마스터는 **모두 별도 RDB로 관리**. 지금은 마스터용 SQLite 하나를 만들어 마스터 CSV를 모두 그리로 옮긴다 — 나중 logging 자리와 같은 DB. 명부 생성·용어 제안 도구는 그 DB를 읽게 바꾸거나 지움(구현 때).
 - 결정(사용자 10-30): "contract_master, client_master 등 활용하는 방안 같이 설계하자. 후순위로 해줘."
 - 사실: PR 3a 뒤에는 `resources/vocab/glossary/contract_master.csv`·`client_master.csv`를 읽는 코드가 없다. `client_master.example.csv`는 `gen_roster` 입력. 두 파일은 설계가 끝날 때까지 git에 남긴다 — 3a에서 지우지 않는다.
 - 열린 질문: 마스터마다 무엇에 쓰나(검색 거르기 / 분류 단서 / mc-05의 고객 별칭 그룹), EDW 고객 연결([pl-29](#pl-29))·분류 단계([pl-33](#pl-33))와 어떻게 이어지나.
@@ -96,6 +101,7 @@
 
 <a id="pl-12"></a>
 ## pl-12 · 문서 대장 upsert와 게시 가드
+- 결정(사용자 10-31 범위 축소 grill): 문서 대장(doc_registry)·숨김(doc_hidden)·숨김 명령을 **모두 지운다**(hidden 열도 두지 않음). 빼야 할 문서는 원천에서 지우거나 사람이 SQL로. ① PG upsert 번역 문제는 대장과 함께 닫힘.
 - 이유: 문서 대장 upsert에 PG 문법 오류가 있다(C-54 ①). 서버가 `source.json`을 올리지 않아 게시 가드가 꺼져 있다(C-54 ②).
 - 파일: `common/store/structdb.py`, `pipeline/load/publish_parse_result.py`, `tests/server/pipeline/test_publish_guard.py`(알려진 실패).
 - 결정(사용자 10-30 grill):
@@ -104,7 +110,7 @@
 - 결정(사용자 10-30 grill 12~13차): 원천에서 사라진 문서(deleted) 처리 길은 통째로 없앤다 — 지우기·숨기기·EDW `deleted` 표시 모두 없음, 로컬 기록만(refactor.md C-54).
 - 10-30 [pl-32](#pl-32): PG `doc_registry`는 남고 로컬 SQLite 대체는 없앤다. 실패 횟수(`fail_count`)·재시도 설정(`registry_retry_max`)은 없앤다 — 성공했을 때만 갱신(사용자 10-30).
 - 한 것(10-30, B1 — 개발 서버 반입 전 검토): deleted 길 없앰 — `registry.apply`가 관측에 없는 문서에 `status='deleted'`·자동 숨김을 쓰지 않고, `parsing_meta.apply_registry_status`가 EDW에 `deleted`를 쓰지 않는다(`diff["deleted"]`는 판 잇기 정보로만). 서버(dev·prd)는 SQLite·PG 스탠드인으로 대체하지 않고 멈춘다(`structdb.open_backend` — `run_mode: prod`·`struct_backend` pg/tsql 필수, `pg._warn_standin`). `common.store.run_mode`는 `prod`·`test`만. 시험 `tests/server/common/test_no_deleted.py`. code_fp p0·p1·r·s 바뀜(공용 `settings.py`·`pg.py`·`structdb.py`).
-- Status: partly done — deleted 길·서버 대체 금지 끝(10-30). 남음: ① upsert PG 번역 · ② ParsingMeta 게시 가드([pl-25](#pl-25) 뒤).
+- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
 
 <a id="pl-09"></a>
 ## pl-09 · 파싱 결과 게시
@@ -115,6 +121,7 @@
 
 <a id="pl-26"></a>
 ## pl-26 · `full`은 늘 게시하고 게시 대상은 필수
+- 결정(사용자 10-31 범위 축소 grill): run_docs 하나로 합침(pl-18 결정) — 규칙(C10 고르기·종료 코드·항상 게시)은 run_docs에만 만든다.
 - 이유: 도움말은 "EDW 적재 없음"이라 했지만 `full`은 게시했고 `NIGHTLY_PUBLISH`를 무시했다(C-31).
 - 결정(사용자 10-29 grill): 게시(silver → Object Storage + EDW)가 기본이자 유일한 방식 — `--no-publish`와 `pipeline.host.nightly.publish`를 없앤다. 게시 대상은 필수 설정이고 없으면 시작을 거부한다.
 - `RUN_ENV`별 대상: `local`·`dev`는 (a) 로컬 경로(Object Storage는 폴더, EDW는 파일 DB) 또는 (b) 실제 접속 정보(API·DB) 중 하나. `prd`는 실제 접속만(`stage`는 RUN_ENV에서 없앰 — op-02). PC는 CLAUDE.md §4 가드를 그대로 지킨다(PC에서 운영 EDW·OS 접속 금지).
@@ -123,6 +130,7 @@
 
 <a id="pl-10"></a>
 ## pl-10 · 실행 관리(오케스트레이션)
+- 결정(사용자 10-31 범위 축소 grill): trigger 서버(/jobs·/upload·CHAIN_STRUCTURE_URL·serve-trigger)를 **지운다** — 새 문서는 run_docs 정기 실행이 FileStorageMap으로 고름(C10). DRM과 무관(DRM 자동 복호화 기능은 없음).
 - 이유: 서버는 문서 수천 건을 사람 없이 돌린다.
 - 무엇: CLI `parse`·`structure`·`load`·`night`(마감 시각, 다음 밤에 이어서)·`run-stack`·`compare-parse`·`compare-all`·`set-stack`·`show-stack`·`set-sources`·`show-sources`·`smoke`·`selftest`. 이미지 entrypoint가 `dedup`·`prepare`·`publish`·`full`·`serve-trigger`·`migrate`·`check`를 더한다(`deploy/docker/entrypoint.sh`). 서버 flow 러너(EDW 목록, 12개 미리 받기, light/medium/vlm 레인, 문서마다 컨테이너, `parse_document` 작업에 양보). trigger 서버(`/jobs`, `/upload`, Bearer). (문서별 병렬 파싱 `parse_parallel.py`는 10-30에 지움 — [parse.md#pl-35](parse.md#pl-35).)
 - 서버 flow 러너 요구(사용자 10-22·10-23 — 원문 [../history/run_docs_req.md](../history/run_docs_req.md), 바뀐 값은 rn-01·rn-02·[parse.md#pl-22](parse.md#pl-22)):
@@ -132,10 +140,11 @@
   - 3클래스: warm에서 무게 평가(과거 소요 시간 규칙), vlm_page는 스캔 PDF처럼 꼭 필요한 문서만, 1/2/1 + 빈 레인 가져가기, light 1개 강하게 점유, 전담 분류 먼저, light 전용 executor. MCP 업로드가 오면 medium 전담 1개를 멈추고 먼저.
   - 속도: phase 1 건너뛰기(→ pl-22), 끝난 문서 건너뛰기, parse_qa 가볍게, 10-23 OCR 끔. SSH가 끊겨도 작업은 계속(nohup 확인).
 - 파일: `pipeline/cli.py`, `deploy/host/scripts/run_docs.py`(서버 전용 — PC에서 실행 금지), `pipeline/trigger_server.py`, `docs/history/run_docs_req.md`, `docs/architecture/run_docs_design.md`.
-- Status: done
+- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
 
 <a id="pl-18"></a>
 ## pl-18 · 중간에 멈춰도 `night`/`full`이 종료 코드 0
+- 결정(사용자 10-31 범위 축소 grill): 서버 입구는 **run_docs 하나**. night·full 입구를 없애고, 정기 실행(새벽 배치)은 타이머가 run_docs를 부르는 꼴로(night = run_docs를 바깥에서 부르는 것).
 - 이유: 스케줄러가 실패를 못 본다(C-33).
 - 결정(사용자 10-30 grill): 종료 코드 — 대상 0건 = 0, 실패 = 1, 마감 시각 도달 = 75.
 - 파일: `pipeline/cli.py`(`night`), `deploy/docker/entrypoint.sh`(`full`).
@@ -143,6 +152,7 @@
 
 <a id="pl-23"></a>
 ## pl-23 · 증분 실행만, 전체 재파싱은 명시적인 전체 e2e
+- 결정(사용자 10-31 범위 축소 grill): run_docs 하나로 합침(pl-18 결정).
 - 이유: 엔진·핸드오프·코드 핑거프린트가 모든 문서에서 바뀌었다. 전체 자동 재파싱은 밤 작업 시간을 넘긴다(C-52, C-08).
 - 결정(사용자 10-29 grill): 밤 작업과 `run_docs`는 핑거프린트가 바뀌어도 **새** 문서만 처리한다. "새" = `AI.FileStorageMap.s3_key`가 아직 `AI.ParsingMeta`에 없음(s3 키만 — 갱신 시각 확인 없음, `run_docs`는 이미 이렇게 동작). 전체 재파싱은 사람이 전체 e2e를 시작할 때만(가끔 — 로직을 바꾼 뒤, 결과를 검토). 이 판의 첫 적재는 전체 e2e 한 번.
 - 결정(사용자 10-30 grill): 밤 배치는 꺼 둔다(systemd 타이머는 켜지 않음). 나중에 사람이 settings.yaml에서 켠다. → 켜기·끄기와 시각은 아래 새벽 일정 키 하나가 정한다(null = 끔) — 그 키를 구현하면 지금의 `pipeline.host.nightly.enabled`는 없어진다(그때까지 서버 절차는 enabled false).
@@ -185,6 +195,7 @@
 
 <a id="rn-03"></a>
 ## rn-03 · MCP `parse_document`에 CPU 먼저 주기
+- 결정(사용자 10-31 범위 축소 grill): 선택지 1로 바꾼다(사용자): MCP parse_document 전용 컨테이너를 따로 띄우고(같은 이미지), extract 단계 없이 파싱 함수만 부르며, CPU 가중치(cpu_shares/cpu.weight)를 가장 높게 준다. nice는 그대로 둬도 됨.
 - 이유: 일괄 파싱이 CPU를 다 쓰면 `parse_document`(사람이 기다리는 요청)가 느려진다. 일괄 엔진 자식은 nice +10(`pipeline.extract.low_priority`, [parse.md#pl-22](parse.md#pl-22))이지만 nice는 한 세션·autogroup 안에서만 듣고, 컨테이너끼리는 cgroup CPU 가중치가 정한다(refactor.md C-65 ⑥).
 - 선택지:
   1. 같은 이미지로 컨테이너를 따로 띄우고 cgroup `cpu.weight`로 나눔(허브 추천). 장점: 컨테이너끼리도 확실히 먼저, 서버에서 숫자로 조정. 단점: 컨테이너·compose·systemd 하나 더, 메모리 더, 서버 설정 일.
@@ -201,6 +212,7 @@
 
 <a id="pl-25"></a>
 ## pl-25 · DB 스키마 명세 — pl-26·pl-23·pl-24를 만들기 전에 먼저
+- 결정(사용자 10-31 범위 축소 grill): EDW 추가 기록은 **계획대로**(SupersededRow 표 + ParsingMeta 단계별 열). silver·gold 생성 시각 칸 이름은 `silver_at`·`gold_at`(gold doc·ParsingMeta 같은 이름) — `created_at`은 문서가 생긴 시각(원천)으로만.
 - 이유: 표·칸 정의가 Alembic 마이그레이션(`common/store/db/migrations/versions/`), `docs/operations/parsing_meta_mssql.sql`(ParsingMeta만), `AI.FileStorageMap`을 읽는 코드(정의 없음)에 흩어져 있다. 10-20 축소 스키마는 코드에 반만 반영됐다(mc-10, mc-11, pl-14, pl-15).
 - 결정(사용자 10-29 grill): 문서 하나 `docs/architecture/db_schema.md` — 표마다 칸, 타입, 뜻, 어느 코드가 쓰고 읽는지. 대상: EDW `AI.FileStorageMap`(id, s3_key, original_filename, file_size, `last_modified_time` 가정), `AI.ParsingMeta`(+ `gold_status`), pgvector 검색 스키마, `struct`. 10-20 축소 스키마가 정답이고 다른 코드는 mc-10/mc-11/pl-14/pl-15에서 고친다. 시험 하나가 문서의 칸을 마이그레이션·mssql SQL과 대조한다. 구현 전에 사용자와 DB 담당자가 승인하고, DB 담당자는 이 문서를 받는다.
 - 결정(사용자 10-30 grill — gold 스키마):
@@ -247,6 +259,7 @@
 
 <a id="pl-32"></a>
 ## pl-32 · 저장 구조 — silver는 Object Storage uuid 폴더, 메타는 EDW, gold는 pgvector
+- 결정(사용자 10-31 범위 축소 grill): 같은 s3_key 최신 행만 남김(기존) — 구판 표시는 쓰지 않음(mc-05). 대체된 행은 SupersededRow(pl-25 계획대로).
 - 결정(사용자 10-30 grill): 결과 저장 자리를 셋으로 정한다 — [parse.md#pl-20](parse.md#pl-20)(엔진 스택 사본 파일)을 대신함.
 - silver(파싱 결과)는 Object Storage에만. PC는 `valid_env/object_storage`(file:// 대역). 문서마다 폴더 하나 — 이름은 파일 경로(`s3_key`)에서 uuid5로 만든 uuid(같은 경로 = 같은 uuid, 다시 처리하면 그 폴더를 덮어씀).
 - `AI.FileStorageMap`에 같은 `s3_key` 행이 여럿이면(SFDC 판 등) 갱신·수정 시각이 가장 늦은 행만 처리. (허브 10-31 고침 — 아래) 나머지는 로컬에 "duplicate of <행>"으로 기록만, EDW에는 아무것도 안 씀.
@@ -285,6 +298,7 @@
 
 <a id="pl-33"></a>
 ## pl-33 · 분류 단계 — silver 뒤, gold 앞
+- 결정(사용자 10-31 범위 축소 grill): 분류 단계는 0.2.0에 **유지**(빼지 않음 — 사용자 선택 안 함).
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) C1·C3·C4·C5·C7·C8·C9, T5·T6):
   - 분류는 파이프라인 단계다 — silver 뒤, gold 적재 전에 분류하고 적재가 `doc_class`를 함께 넣는다([pl-24](#pl-24) 순서). 운영의 gold 동기화 스크립트 같은 별도 동기화는 두지 않는다.
   - 대상: SFDC(RFI/RFP/RFI+RFP/Proposal/Other), LAS(MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other)만. 다른 원천은 NULL.
@@ -313,15 +327,17 @@
 
 <a id="pl-40"></a>
 ## pl-40 · 수동 갱신 명령 — 분류·시스템 메타를 따로
+- 결정(사용자 10-31 범위 축소 grill): 수동 갱신 명령 2개를 **만들지 않는다** — load --replace나 다시 실행으로 대신.
 - 결정(G10·G11·G12·T17 — 3차 grill(사용자 10-30, 원본은 git 밖)): 수동 갱신 명령은 두 갈래를 **각각 따로** 고른다(한 번에 둘을 같이 고치는 길은 없음).
   - ① LLM 갈래: 분류(`doc_class`) — 기본 대상은 `doc_class`가 NULL인 문서(G10).
   - ② 시스템 메타 갈래: EDW에서 오는 고객·`sf_op_id`·`created_at` 등 — 요청하면 전체 문서(G11).
   - 재파싱·재임베딩은 하지 않는다. 시스템별 gold `doc` 칸만 UPDATE한다(G19 — 파일 메타는 ParsingMeta에 없음).
 - 관련: [pl-33](#pl-33)(분류), [pl-29](#pl-29)(고객 연결), [pl-25](#pl-25)(칸).
-- Status: todo
+- Status: dropped (사용자 10-31 범위 축소)
 
 <a id="pl-41"></a>
 ## pl-41 · FAQ 다시 올리기 — 행 단위 비교 적재
+- 결정(사용자 10-31 범위 축소 grill): 행 단위 비교 대신 **통째 교체** — FAQ 파일을 다시 올리면 그 FAQ 문서의 청크를 지우고 다시 적재.
 - 결정(G13·T18 — 3차 grill(사용자 10-30, 원본은 git 밖)): FAQ를 고쳐 새 `s3_key`로 올리면 기존 FAQ 청크와 **행(청크) 단위로** 비교한다.
   - 같은 항목 = `FAQ_group`과 질문 글이 같음.
   - 가장 최신 답만 남긴다 — `last modified date`, 없으면 새 파일. 예전 행은 gold에서 지우고 새 행을 더한다. 같은 질문이 없는 새 행은 더한다.
@@ -332,6 +348,7 @@
 
 <a id="pl-28"></a>
 ## pl-28 · 원천 시스템별 gold 스키마 — 0.2.0에 만든다
+- 결정(사용자 10-31 범위 축소 grill): 5벌 그대로(재확인) — 원천 시스템마다 메타 연결 칸이 다르다(사용자). 5벌이 doc_id 시퀀스 하나를 함께 씀 — 사용자 확인(11-01).
 - 이유: SFDC · CRMS · LAS · FAQ · Other는 메타데이터가 다르다. 원천마다 표 하나면 칸이 깔끔하다.
 - 무엇(사용자 10-30): gold 표 묶음 — `doc`, `chunk`, BM25 표(`chunk_term`, `term_stat`, `corpus_stat`) — 이 원천마다 한 벌씩(5벌 — A2 아래). 원천마다 칸이 다를 수 있다(SFDC 전용 `sf_*`, `project_code__c`는 SFDC doc 표로). `load_run`과 Alembic 판 표는 공용. 그때 MCP `search`가 원천을 필수로 받는다 — 계약 변경 한 번, 새 판, 검토 등급 A. 또 나중에: 글에서 찾은 고객(`clients_doc`)도 고객 거르기에 허용.
 - 결정(4차 grill(사용자 10-30) — 위 "나중"을 뒤집음, 0.2.0에 만든다 — 지금 코드가 0.1.0):
@@ -341,7 +358,7 @@
   - MCP: `source_system`이 **필수, 값 하나** — 그 시스템 스키마만 찾는다. 여러 시스템은 클라이언트가 여러 번 부른다(시스템별 BM25 통계라 점수를 섞지 않음). [mcp.md#mc-16](mcp.md#mc-16), [mcp.md#mc-17](mcp.md#mc-17). 계약 변경 — 등급 A, 0.2.0에 함께(지금 코드가 0.1.0이므로 G7의 "0.1.0에 함께" 대신).
   - 위 `chunk`의 `source_system`·`clients[]` 유지([pl-25](#pl-25))는 스키마가 원천을 정하므로 필요 없어진다 — `db_schema.md`를 이에 맞게 고친다.
 - 결정(사용자 10-30 PRD grill): C2 — MCP 계약이 바뀌어도 0.2.0(버전 규칙에 '1.0 전에는 MINOR에서도 계약·스키마를 깰 수 있음'을 더함 — 운영이 안정되면 1.0.0). C4 — 원천 스키마마다 칸 구조가 다를 수 있다: `faq` 스키마만 `chunk`에 `faq_group` 칸을 두고, 다른 원천은 '파일 메타는 `doc`에만' 그대로. A2 — 스키마 5벌(`sfdc`·`crms`·`las`·`faq`·`other`), MCP `source_system`은 `other`도 받는다.
-- 결정(사용자 10-31 grill): `chunk_key` = `<doc_id>:<seq>`(gold `doc.doc_id` 자동 번호), 청크는 `doc_id`만(FK). 스키마 5벌이 **시퀀스 하나를 함께 써서** `doc_id`가 겹치지 않는다 — 이 부분은 허브가 정함(사용자 확인 필요). 적재는 `s3_key`로 upsert해 `doc_id`가 바뀌지 않는다. `doc.source_system`도 지운다. 원천 id 칸은 스키마마다 EDW 원본 칸 이름.
+- 결정(사용자 10-31 grill): `chunk_key` = `<doc_id>:<seq>`(gold `doc.doc_id` 자동 번호), 청크는 `doc_id`만(FK). 스키마 5벌이 **시퀀스 하나를 함께 써서** `doc_id`가 겹치지 않는다 — 허브 제안을 사용자가 확인(11-01). 적재는 `s3_key`로 upsert해 `doc_id`가 바뀌지 않는다. `doc.source_system`도 지운다. 원천 id 칸은 스키마마다 EDW 원본 칸 이름.
 - Status: todo — 0.2.0, 전체 다시 적재 필요. 설계 반영(`db_schema.md`)과 DB 담당자 협의 먼저(등급 A).
 
 ## 코드와 다른 점 · 지울 코드

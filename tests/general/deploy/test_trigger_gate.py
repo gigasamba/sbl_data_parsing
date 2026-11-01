@@ -7,7 +7,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+from common.core.paths import DEPLOY_ROOT
+
+ROOT = DEPLOY_ROOT  # 저장소 루트(op-09 — paths 상수)
 
 CASES = [  # (NIGHTLY_TIME, 지금, 종료 코드, night로 넘어감?)
     ("", "01:00", 0, False),  # 비움 = 새벽 배치 없음
