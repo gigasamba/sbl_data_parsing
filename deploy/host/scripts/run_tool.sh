@@ -25,7 +25,7 @@ case "$tool" in
   *) echo "[run_tool] 모르는 도구: $tool — rdb_discover·check_env·ping_models(data-pipeline 이미지) 중 하나" >&2; exit 2 ;;
 esac
 
-need_image pipeline || exit 2; need_image mcp || exit 2   # S6b — 옛 이미지 변수만 있으면 종료 코드 2
+need_image pipeline || exit 2   # S6b — 옛 이미지 변수만 있으면 종료 코드 2 · 11-01 mcp 이미지 변수는 안 봄(이 compose에 검색 MCP 없음)
 
 extra=()
 if [ -n "${GOLD_DIR:-}" ] && [ -d "$GOLD_DIR" ]; then

@@ -38,8 +38,8 @@ case "$mod" in
   parse|publish) ;;
   *) echo "[trigger] 모르는 모듈: $mod — parse|publish|scheduled (night·structure·load·all은 11-01에 지움 — 서버 입구는 run_docs)" >&2; exit 2 ;;
 esac
-. deploy/host/scripts/image_vars.sh   # S6b — compose.pipeline.yml은 두 이미지 변수를 다 치환하므로 둘 다 확인(옛 변수만 있으면 종료 코드 2)
-need_image pipeline || exit 2; need_image mcp || exit 2
+. deploy/host/scripts/image_vars.sh   # S6b — 옛 이미지 변수만 있으면 종료 코드 2
+need_image pipeline || exit 2   # 11-01 — compose.pipeline.yml에 검색 MCP 서비스가 없어 mcp 이미지 변수는 안 봄
 code_dir_default DATA_PIPELINE_IMAGE   # op-06 — 실행 이미지면 이 코드 폴더 루트를 /app/deploy에(CODE_DIR 없을 때)
 DC="$DOCKER compose -f deploy/host/compose/compose.pipeline.yml"   # DOCKER — load_settings가 정함(셸 env > ops.host.docker > podman, 없으면 docker — op-10)
 [ -n "${CODE_DIR:-}" ] && DC="$DC -f deploy/host/compose/compose.code.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 /app/deploy에

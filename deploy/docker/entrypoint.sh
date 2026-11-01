@@ -4,7 +4,7 @@
 # data_pipeline.<패키지>.<이름>`으로 부른다(운영자가 쓰는 명령 이름 자체는 그대로).
 #   docker run --rm --init -v <settings.yaml>:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=<dev|prd> \
 #     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>   (S7e1·S7e2 — 옛 --env-file pipeline.env 대신 설정 파일 하나)
-# 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp · dedup · prepare ·
+# 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp ·  (이미지 명령 dedup·prepare는 11-01에 지움 — parse가 안에서 부름)
 #       ask --q …  (test-stack·night·run-stack·full·structure·load는 11-01에 지움 — 서버 입구는 run_docs 하나, 사용자 10-31)
 #   tool <이름> = cli/<이름>.py 하나를 바로 돌림(rdb_discover·check_env·index 등 — run_tool.sh가 쓰는 자리)
 #     옛 형태 `tool cli/<이름>.py`도 이번 판까지는 받아 줌(경고 후 번역) — 다음 판부터 이름만.
@@ -14,7 +14,7 @@
 #   show-stack·show-sources = 지금 엔진 구성·원천 목록(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01: 판 표·set-stack·
 #     set-sources 없앰) — show-sources는 data-pipeline만, show-stack은 두 이미지. docs/architecture/pipeline_stack.md
 #   S6b(D-020) — 이미지 2개: RAG_MODULE마다 쓸 수 있는 명령이 다름(아래 case가 거름):
-#     pipeline(data-pipeline — 옛 data-parsing+data-structure, 두 이미지가 받던 명령의 합 + full(S6c))=parse·dedup·prepare·publish·show-stack·show-sources·idle·migrate ·
+#     pipeline(data-pipeline — 옛 data-parsing+data-structure, 두 이미지가 받던 명령의 합 + full(S6c))=parse·publish·show-stack·show-sources·idle·migrate ·
 #     mcp(mcp-server — 옛 data-retrieval)=mcp·ask·show-stack · 공통(모든 이미지) = help·check·resources·services·
 #     check-modules·tool·selftest(S9 — 서버 반입 시험 /app/deploy/tests/server를 파일마다, 다른 이미지(RAG_MODULE) 폴더 사례·다른 이미지 패키지가 없어서만 실패한 사례는 SKIP,
 #     서드파티 패키지가 없으면 FAIL(I2c) — 반입 판정은 /app/docker/selftest_gate.sh)·smoke(10-14 — --src(기본 DOC_DIR) 실문서 폴더를
@@ -52,8 +52,8 @@ cmd="${1:-help}"; shift || true
 case "${RAG_MODULE:-}:$cmd" in
   # 옛 parse·structure 이미지가 거르던 명령의 교집합만 거른다(합친 이미지 = 두 이미지가 받던 명령의 합). full·night·structure·load는 11-01에 지움.
   pipeline:mcp|pipeline:ask)
-    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask)은 mcp-server. 이 이미지는 parse·dedup·prepare·publish·show-stack·show-sources·idle·migrate"; exit 64;;
-  mcp:parse|mcp:dedup|mcp:prepare|mcp:publish|mcp:idle|mcp:migrate|mcp:show-sources)
+    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask)은 mcp-server. 이 이미지는 parse·publish·show-stack·show-sources·idle·migrate"; exit 64;;
+  mcp:parse|mcp:publish|mcp:idle|mcp:migrate|mcp:show-sources)
     echo "[오류] '$cmd'는 이 이미지(mcp-server)에 없음 — 파싱·구조화·적재·판 관리(migrate)·show-sources는 data-pipeline. 이 이미지는 mcp·ask·show-stack만"; exit 64;;
 esac
 # S7a(D-028 ②, 사용자 10-27) — 실행 환경(RUN_ENV) 없이는 앱 명령을 시작하지 않음. 이미지 ENV에는 넣지 않는다(서버가 dev·prd를
@@ -69,7 +69,7 @@ case "$cmd" in
 esac
 shell_names=""
 case "$cmd" in
-  parse|dedup|prepare|publish|check|smoke|idle|migrate|show-stack|show-sources)
+  parse|publish|check|smoke|idle|migrate|show-stack|show-sources)
     shell_names="DOC_DIR DOC_DIR_PREPARED PARSE_SOURCE PG_HOST";;
 esac
 # 점검 명령(관문 면제)은 설정 파일이 틀려도 돌아 원인을 보이게 — 내부 신호 SETTINGS_LENIENT=1(영구 다리가 서버에서도 경고만, 앱 명령은 안 줌)
@@ -122,8 +122,6 @@ for entry in sys.argv[2:]:
     [ -n "$mod" ] && exec python -m "$mod" "$@"
     echo "[tool] 모르는 도구: $name (${TOOL_PKGS// /·} 어디에도 없음)" >&2; exit 2;;
   mcp)        exec python -m mcp_server.main "$@";;        # 검색 MCP(deploy/host/compose/compose.mcp.yml) — 잠금 없음(읽기 전용)
-  dedup)      preflight; exec python -m pipeline.extract.dedup --src "${DOC_DIR:?}" "$@";;
-  prepare)    preflight; exec python -m pipeline.extract.prepare --src "${DOC_DIR:?}" --out "${DOC_DIR_PREPARED:?}" "$@";;
   # 모듈(트리거 1회 실행 — docs/architecture.md). 종료 코드: 0 끝남·건너뜀 · 3 앞 모듈 결과 없음 · 4 PostgreSQL 없음 · 75 실행 중·마감
   parse)
     preflight

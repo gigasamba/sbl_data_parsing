@@ -17,6 +17,5 @@ services:
   parse: {volumes: *code, entrypoint: *entry}
   load: {volumes: *code, entrypoint: *entry}
   publish: {volumes: *code, entrypoint: *entry}
-  mcp: {volumes: *code, entrypoint: *entry}
   data-pipeline-parse: {volumes: *code, entrypoint: *entry}       # 상주 컨테이너(11-01부터 `idle` — run_docs.py가 docker exec, S6b — 옛 data-parsing·data-structure)
   data-pipeline-structure: {volumes: *code, entrypoint: *entry}
