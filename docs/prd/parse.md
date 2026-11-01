@@ -166,6 +166,7 @@
   - entrypoint `TOOL_PKGS`를 고정 표로.
   - compose 덧씌우기 파일을 4개에서 2개로.
 - 11-01(`feature/scope-cut-unused2`): 원천 목록 `sources.json`을 지우며 설정 칸 `common.paths.sources_file`은 남겼다 — `common/config/settings.py`를 고치면 레이어 code_fp 4개가 바뀌어 이 배치에서 지운다. `common/core/fingerprint.py` `EXCLUDED_FILES`의 `core/sources.py` 줄도 같이.
+- 11-01(같은 브랜치): PC Docker 스모크에서 `s3://` 원천(MinIO 대역·게시 ⑥)과 자정 배치 모양을 지우며 쓰이지 않게 된 설정 칸 `smoke_source`·`smoke_nightly`(`common/config/settings.py`)와 MinIO 올리기 도구 `common/check/os_put.py`도 이 배치에서 지운다.
 - Status: todo — 0.2.0(엔진·핸드오프·레이어 지문이 바뀜 — 사람 검토).
 
 <a id="pl-47"></a>
