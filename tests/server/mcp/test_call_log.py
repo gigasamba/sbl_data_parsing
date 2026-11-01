@@ -141,6 +141,8 @@ def test_dispatch_audit():
         assert rows[-1]["status"] == "error" and "do-not-store" not in rows[-1]["err"]
         with patch.object(audit.logsink, "emit", side_effect=RuntimeError("sink failed")):
             assert await dispatch._bg(lambda: 42) == 42
+            # 실패 sink 모의를 유지한 채 이 감사까지 비워 다음 HTTP 시험에 행을 넘기지 않는다.
+            assert audit.drain()
         with patch.object(audit, "Call", side_effect=RuntimeError("serialization failed")):
             assert await dispatch._bg(lambda: 43) == 43
 
@@ -200,7 +202,7 @@ def test_http_context():
             assert r.status_code == 200 and rows[-1]["user_id"] == "meta-user"
             assert rows[-1]["remote_addr"] == "127.0.0.1"
         assert CALLER.get() == original and audit._REQUEST.get() is None
-        assert len(rows) == 3
+        assert len(rows) == 3, (len(rows), [(row.get("tool"), row.get("status"), row.get("request_id")) for row in rows])
 
     with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
         try:
