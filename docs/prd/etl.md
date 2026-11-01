@@ -41,6 +41,7 @@
 - 이유: `contract.py`의 `DOC_KEYS`가 지운 키를 아직 기대한다(서버는 이 모듈을 쓰지 않음).
 - 파일: `common/core/contract.py`(핸드오프 핑거프린트 — 사람 검토), `pipeline/cli.py`.
 - 결정(사용자 10-30 PRD grill): A5 — 구조화·적재 계약 `DOC_KEYS`를 새 묶음 키에 맞게 고친다. 핸드오프 지문 파일이라 등급 A(사람 검토)이고 0.2.0 재처리에 함께 싣는다.
+- 결정(사용자 11-01): 계약 점검(`common/core/contract.py`의 `DOC_KEYS`·`check_bundle`)은 0.2.0 지문 배치에서 코드째 지운다 — [parse.md#pl-46](parse.md#pl-46).
 - Status: dropped (사용자 10-31 범위 축소)
 
 <a id="pl-16"></a>
