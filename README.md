@@ -124,7 +124,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  └─ cli/              ask(질의 테스트) · mcp_smoke
 ├─ resources/           코드가 읽는 데이터(이미지에 포함)
 │  ├─ prompts/          AI 프롬프트 패키지 {common,pipeline,mcp}
-│  ├─ config/           엔진 구성 pipeline_stack.json(서버·PC 같음) · 채점 기준 · 보고서 템플릿
+│  ├─ config/           엔진 구성 pipeline_stack.json(서버·PC 같음) · 채점 기준(criteria.json)
 │  ├─ mappings/         원천 목록 sources.json(서버·PC 같음) · 문서 메타데이터 매핑
 │  └─ vocab/            집계 어휘 · 질문 유형 · 용어집
 ├─ deploy/              배포

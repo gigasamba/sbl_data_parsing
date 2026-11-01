@@ -13,7 +13,6 @@ from common.core.paths import (
     PROJ_ROOT,
     RES_ROOT,
     STACK_FILE,
-    TEMPLATES_DIR,
     atomic_write_bytes,
     atomic_write_text,
     child_env,
@@ -66,7 +65,9 @@ def _demo():
     # (11-01 — mcp/ 지시서 research_judge·agg_llm_route와 pipeline/parse_shadow는 호출부가 없어 지움)
     assert resolve_agent_dir("doc_summary") == RES_ROOT / "prompts" / "common" / "doc_summary"
     assert resolve_agent_dir("nested_figure") == RES_ROOT / "prompts" / "pipeline" / "nested_figure"
-    assert (RES_ROOT / "prompts" / "common" / "_common" / "tail.md").is_file() and CRITERIA_FILE.is_file() and TEMPLATES_DIR.is_dir()
+    assert (
+        RES_ROOT / "prompts" / "common" / "_common" / "tail.md"
+    ).is_file() and CRITERIA_FILE.is_file()  # 보고서 틀 폴더(TEMPLATES_DIR)는 11-01에 지움 — 상수는 pl-46
     assert STACK_FILE.is_file() and (GLOSSARY_ROOT / "domain_terms.csv").is_file()
     if (PROJ_ROOT / "dev_tools").is_dir():  # 저장소 체크아웃에서만(이미지엔 dev_tools 없음)
         assert resolve_agent_dir("example_agentic") == PROJ_ROOT / "dev_tools" / "unit_test" / "fixtures" / "example_agentic"
