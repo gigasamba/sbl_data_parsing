@@ -70,20 +70,22 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 
 <a id="pl-44"></a>
 ## pl-44 · 강제 종료로 남은 임시 설정 파일 정리
+- 결정(사용자 10-31 범위 축소 grill): **요건에서 지운다** — 남은 임시 파일은 두어도 된다. 다시 돌릴 때는 Object Storage의 silver와 EDW의 silver 성공 시각으로 재사용(사용자).
 - 이유: pl-27은 정상·오류·SIGTERM 종료 때 덮기 설정 임시 파일을 지우지만, SIGKILL·OOM으로 끝나면 남는다(사용자 10-30 PRD grill S1 — pl-27은 done으로 닫음).
 - 결정(사용자 10-30 grill 12~13차 — refactor.md C-46): 다음 시작 때, 만든 프로세스가 더는 없는 임시 설정 파일(`settings-*.yaml`)을 지운다.
 - 파일: `common/core/exitclean.py`, `common/config/settings.py`.
-- Status: todo
+- Status: dropped (사용자 10-31 범위 축소)
 
 <a id="op-01"></a>
 ## op-01 · JSON Lines 사건 기록(두 앱)
+- 결정(사용자 10-31 범위 축소 grill): JSON Lines 사건 기록은 logging 기능 — 나중에 logging 시스템을 따로 만들므로 **요건에서 지운다**.
 - 이유: 지금 `common/core/runlog.py`는 실행마다 요약 하나(`output/runlog.jsonl`)와 날 콘솔 기록(`output/logs/*.log`, `_mask()`로 가림)을 쓰고, 러너는 `doc_stats.jsonl`, MCP 서버는 질의 jsonl을 쓴다. 공통 사건 줄(level, request id, duration)도 로그 수준 설정도 없다.
 - 단계: (1) 표준 `logging` + `common/core/`에 작은 JSON 포매터 하나 — 키 `time, level, msg, request_id, duration_ms, err`, `_mask()` 재사용(새 패키지 없음). (2) 로그 수준은 **settings.yaml** 항목(검토의 `LOG_LEVEL` env는 CLAUDE.md §3과 충돌 — 옛 env 이름은 별칭으로만). (3) PC는 `logs/<앱>.jsonl`(git 제외), 서버는 stdout. (4) 비밀값과 개인정보를 가린다.
 - 위험: `common/`을 고침 → code_fp가 바뀔 수 있음(서버 재처리). 설계 때 사용자에게 알리고 핑거프린트 전후를 커밋에. 검토 등급 A(비밀값 처리).
 - 수용 기준: 줄마다 필수 키가 있는 JSON으로 읽힘, 예시 비밀 문자열이 가려짐, 수준 설정이 줄을 거름.
 - 파일: `common/core/`(새 포매터), `common/config/settings.py`, `mcp_server/main.py`, `pipeline/cli.py`, `.gitignore`.
 - 결정(사용자 10-30 grill): gold DB 변경([etl.md#pl-25](etl.md#pl-25))과 같은 판에 싣는다 — 재처리 한 번.
-- Status: todo — 0.2.0(사용자 10-30 PRD grill C1).
+- Status: dropped (사용자 10-31 범위 축소)
 
 <a id="pl-21"></a>
 ## pl-21 · 미룬 설정 지우기(핑거프린트)

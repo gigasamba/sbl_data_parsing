@@ -111,6 +111,12 @@
 | `CRMS/c6532711-6031-5a69-a504-985dd8a86fb1/lmx_lxt204_sample_receipt_photo.png` | png | Luminexis Therapeutics·LXT-204 시료 접수 양식 사진(손글씨·기울어짐) |
 | `CRMS/ad0831fc-55a6-5a3d-8161-fcd3ab418236/arg_arb305_lims_stability_capture.png` | png | Argen Biopharma·ARB-305 LIMS 안정성 화면 캡처(그래프·표) |
 
+## FAQ 버킷 (1건 — 11-01 추가)
+
+| 파일 (s3_key) | 형식 | 세트 | 왜 있나 | gold | 예상 결과 | 관련 이슈 |
+|---|---|---|---|---|---|---|
+| `FAQ/74e7751a-97c6-4e17-a73e-85bbd890188f/CDO questionnarie library.xlsx` | xlsx | - | 시험용 FAQ 묶음(사용자 11-01 — 실제 회사 자료 아님) — FAQ 스키마(`faq`, `faq_group`)·FAQ 통째 교체(pl-41) 확인용 | - | ok | pl-28·pl-41 |
+
 ## 알려진 이슈 요약 (백로그 기준, 이 문서들에 닿는 것만)
 
 | ID | 증상 | 해당 문서 | 상태 |
