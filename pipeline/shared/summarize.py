@@ -8,7 +8,7 @@
 import re
 
 # 인식 계열: 같은 인식 모델(또는 같은 텍스트 레이어 추출기)을 쓰는 엔진 묶음. 목록에 없으면 스택 이름이 계열.
-FAMILY = {
+FAMILY = {  # 11-01 — 지운 엔진 easyocr·docling_ocr·marker·marker_llm 줄은 뺌
     # 이미지 인식 모델
     "paddleocr": "paddle",
     "rapidocr": "paddle",
@@ -20,12 +20,8 @@ FAMILY = {
     "unstructured_ocr": "tesseract",
     "kreuzberg_ocr": "tesseract",
     "tika": "tesseract",
-    "easyocr": "easyocr",
-    "docling_ocr": "easyocr",  # Docling OCR 기본 = EasyOCR
-    "marker": "surya",
     "qwen_vlm": "qwen",
     "docling_vlm": "qwen",
-    "marker_llm": "qwen",
     # 텍스트 레이어 추출기
     "pdfplumber": "pdfminer",
     "markitdown": "pdfminer",
