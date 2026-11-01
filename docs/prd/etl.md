@@ -262,6 +262,7 @@
   - `doc.source_system`도 지운다(스키마가 원천을 정함 — 청크와 같음).
   - `s3_key`는 gold `doc`에만(청크에는 없음). `source_uri`는 `doc.s3_key`로, `rep_uri`는 `doc.rep_key`로(C8).
   - 원천 id(영업 기회 id 등)는 스키마마다 그 EDW 원본 표의 칸 이름 그대로 — 한 이름(`sf_op_id`)을 함께 쓰지 않음. 모르는 이름은 D-1 확인.
+- 결정(사용자 11-01): ParsingMeta에 s3_key 칸 없음 — 연결은 source_system + source_key(원본 전체 경로). rep_engine·stack_version 없음(gold doc.rep_engine도)
 - Status: dev — `docs/architecture/db_schema.md` 설계안 + 시험 `tests/server/common/test_db_schema.py`(`feature/db-schema-spec`) — 사용자·DB 담당자 승인 대기(코드·스키마 변경 없음).
 
 <a id="pl-32"></a>
