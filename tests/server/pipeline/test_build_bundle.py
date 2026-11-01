@@ -10,12 +10,7 @@ from common.core.paths import STACK_FILE
 from common.core.text import tokens
 from pipeline import config as pc
 from pipeline.transform.structure.build_bundle import (
-    BIZ_REL,
-    HUB_MAX,
-    build_concept_chunk,
-    build_graph,
     canon_clients,
-    doc_facts,
     embed_all,
     fig_empty,
     fig_host,
@@ -87,38 +82,7 @@ def selftest():
             warn_if_no_client_roster([])
         assert buf.getvalue() == ""
     print("[selftest] BR57 — warn_if_no_client_roster: 명부 없음+client 전부 빔일 때만 경고, 동작(docs)은 안 바뀜 통과")
-    raw = {
-        "text": "",
-        "facts": [
-            {"context": ["항목"], "cells": ["단가", "수량(L)"]},
-            {"context": ["A-1"], "cells": ["USD 1", "1,000"]},
-            {"context": ["A-1 "], "cells": ["USD 1", "1000"]},
-            {"context": [" a-1"], "cells": ["USD 1", "1 000"]},
-        ],
-    }
-    assert [f["num"] for f in doc_facts(0, raw, [])] == [1000.0]  # E2: 쉼표·공백·대소문자 변형 같은 A-1 행 3개 → 사실 1개·SUM 1,000
     print("[selftest] 고객사 이름 보정 통과")
-
-    # AD24④ — 그림 속 표(table_md)의 첫 열이 단계 번호(1,2,3… 연속 일련번호)일 때 식별 열(장비 이름)을 item으로,
-    # 값의 단위를 채움(꼬리의 첫 토큰만 — review 1차④, "20 L 유리병" → "L")
-    fig_table = {
-        "text": (
-            "| 단계 | 장비/용기 | 용량 | 기간 |\n|---|---|---|---|\n"
-            "| 1 | 20 L 플라스크 | 20 L | Day 0-4 |\n| 2 | SB-0201 | 200 L | Day 4-8 |\n"
-            "| 3 | BR-2001 | 2,000 L 스테인리스 | Day 8-22 |"
-        ),
-        "facts": [],
-    }
-    ff = doc_facts(0, fig_table, [])
-    assert [f["item"] for f in ff] == ["20 L 플라스크", "SB-0201", "BR-2001"], ff  # 번호 열 "1/2/3"이 아니라 장비 이름
-    assert [f["unit"] for f in ff] == ["L", "L", "L"], ff  # "2,000 L 스테인리스"도 단위는 "L"만(꼬리 첫 토큰)
-    print("[selftest] 집계 사실 item=식별 열·단위 채움(AD24④) 통과")
-
-    # review 1차③ — 행 라벨이 숫자이기만 하고 연속 일련번호가 아니면(품목 코드) item을 그대로 둠
-    code_table = {"text": "| 코드 | 품목 | 수량 |\n|---|---|---|\n| 1001 | 위젯 | 5 개 |\n| 2050 | 가젯 | 3 개 |", "facts": []}
-    cf = doc_facts(0, code_table, [])
-    assert [f["item"] for f in cf] == ["1001", "2050"], cf  # 연속 아님 → 품목 코드 그대로(장비 이름으로 안 바꿈)
-    print("[selftest] 연속 아닌 숫자 행 라벨(품목 코드) 보존(review 1차③) 통과")
 
     rec = {
         "image_id": "d.pdf#p2#i1",
@@ -320,146 +284,12 @@ def selftest():
     ]  # 빠진 그림 B의 image_id는 텍스트 청크 하나에 연결(get_image 조회용)
     print("[selftest] 독립 검토 MAJOR① — 빠진 그림도 seq 소비(결정성) · image_ids 텍스트 청크 연결 통과")
 
-    # F8 — images.jsonl(추가 파일, doc_image·chunk_image 적재 원본): 3개 그림 모두 기록, chunk/rel이 실제 chunks.jsonl 쪽을 가리킴
-    imgs_empty = [json.loads(ln) for ln in (out_empty / "images.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
-    assert {r["image_id"] for r in imgs_empty} == {"d.pdf#p1#iA", "d.pdf#p2#iB", "d.pdf#p2#iC"}
-    rel = {r["image_id"]: r["rel"] for r in imgs_empty}
-    assert rel == {"d.pdf#p1#iA": "figure_chunk", "d.pdf#p2#iB": "host", "d.pdf#p2#iC": "figure_chunk"}
-    by_id = {r["image_id"]: r for r in imgs_empty}
-    assert cs_empty[by_id["d.pdf#p1#iA"]["chunk"]]["image_id"] == "d.pdf#p1#iA"  # 자신의 그림 청크
-    assert cs_empty[by_id["d.pdf#p2#iC"]["chunk"]]["image_id"] == "d.pdf#p2#iC"
-    assert cs_empty[by_id["d.pdf#p2#iB"]["chunk"]]["image_ids"] == ["d.pdf#p2#iB"]  # 빈 그림 B → host 텍스트 청크(hosts[0]과 같은 것)
-    imgs_full = [json.loads(ln) for ln in (out_full / "images.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
-    assert all(r["rel"] == "figure_chunk" for r in imgs_full)  # 안 빈 그림은 전부 자신의 청크
-    print("[selftest] F8 — images.jsonl(doc_image·chunk_image 적재 원본) 생성·chunk/rel 연결 통과")
-
-    docs2 = [
-        {"doc_key": "c" * 64}
-    ]  # S9b(C-54) — 10-20 축소 스키마: 문서 행 키가 file_sha256 → doc_key(build_bundle 문서 행·build_concept_chunk 모두) — 시험 데이터만 낡았음
-    chunks2 = [
-        {"doc": 0, "seq": 0, "chunk_text": "DSP 공정에서 바이러스 불활화(VI)를 수행"},
-        {"doc": 0, "seq": 1, "chunk_text": "관련 없는 문장"},
-    ]
-    g = {
-        "PROC.VI": {"canonical": "Viral Inactivation", "synonyms": "바이러스 불활화", "abbreviations": "VI", "weak_synonyms": ""},
-        "PROC.DSP": {"canonical": "DSP", "synonyms": "", "abbreviations": "", "weak_synonyms": ""},
-    }
-    cc = build_concept_chunk(docs2, chunks2, g)
-    assert {(r["concept_id"], r["chunk_key"], r["count"]) for r in cc} == {
-        ("PROC.VI", f"{'c' * 64}:0", 2),
-        ("PROC.DSP", f"{'c' * 64}:0", 1),
-    }
-    assert build_concept_chunk(docs2, chunks2, {}) == []  # 사전 없음 — 빈 목록(추가 파일이라 기본 흐름 불변)
-    print("[selftest] 개념→청크 역색인(X4) 통과")
-
-    _selftest_build_graph()
-
-
-def _selftest_build_graph():
-    """AD28②③ — build_graph()가 기존 entity·label·value에 더해 업무 개체(client·contract·product·modality·batch·id)·
-    업무 관계(client-has-contract·contract-covers-product·doc-links-contract)·개념 노드(concept, broader·related)를
-    만드는지. glossary·concept_chunk를 안 주면(기존 호출자) 개념 쪽은 생기지 않음(바이트 동일 하위 호환)도 같이 확인.
-    engine-qa MAJOR(10-08) — 관계 간선·그 노드 props(confirmed·prov)는 doc.meta_confirmed(교차 확인)일 때만."""
-    import tempfile
-
-    gdir = Path(tempfile.mkdtemp())
-    (gdir / "id_patterns.csv").write_text(
-        'id_type,regex,example,note,updated\ncontract_no,"C-[A-Z]{2,4}-\\d{4}-\\d{2}",C-PFE-2024-02,,\nlot_no,"LOT-\\d{4}-\\d{3,}",LOT-2025-324,,\n',
-        encoding="utf-8",
-    )
-    (gdir / "domain_terms.csv").write_text(  # T._aliases()가 GLOSSARY_DIR을 보면 load_glossary도 돎 — 머리글만(빈 사전)
-        "concept_id,canonical,category,synonyms,abbreviations,weak_synonyms,broader,related,context_required,"
-        "case_sensitive,definition_ko,definition_en,status\n",
-        encoding="utf-8",
-    )
-    with COMMON.env(GLOSSARY_DIR=str(gdir)):  # op-09 — 설정 객체 · id_patterns.csv(contract_no·lot_no)만 — load_id_patterns_typed용
-        sha = "a" * 64
-        docs = [
-            {
-                "doc_key": sha,
-                "doc_name": "a.pdf",
-                "file_path": "d/a.pdf",  # S9b(C-54) — 10-20 축소 스키마 문서 행 키(옛 file_sha256·file_name)
-                "client": "Pfizer Inc.",
-                "contract_no": "C-PFE-2024-03",
-                "contract": {"product_code": "PFE-MAB-02"},
-                "summary": "",
-                "meta_confirmed": True,
-            }
-        ]
-        chunks = [{"doc": 0, "seq": 0, "chunk_text": "Pfizer Inc.와 PFE-MAB-02(mAb) 계약 C-PFE-2024-03, 로트 LOT-2025-324"}]
-        folder_of = lambda d: d["file_path"].rsplit("/", 1)[0]
-        nodes, edges = build_graph(docs, chunks, folder_of)  # glossary·concept_chunk 생략 — 기존 호출자 그대로
-        by_kind = {}
-        for n in nodes:
-            by_kind.setdefault(n["kind"], set()).add(n["node_key"])
-        assert by_kind.get("client") == {"pfizerinc."} and by_kind.get("contract") == {"c-pfe-2024-03"}
-        assert by_kind.get("product") == {"pfe-mab-02"} and by_kind.get("modality") == {"mab"}
-        assert by_kind.get("batch") == {"lot-2025-324"}, by_kind.get("batch")
-        assert "concept" not in by_kind  # glossary 생략 → 개념 노드 없음(하위 호환)
-        rel_set = {(nodes[e["src"]]["kind"], nodes[e["dst"]]["kind"], e["rel"]) for e in edges}
-        assert ("doc", "contract", "doc-links-contract") in rel_set
-        assert ("client", "contract", "client-has-contract") in rel_set
-        assert ("contract", "product", "contract-covers-product") in rel_set
-        assert ("chunk", "client", "mentions") in rel_set and ("chunk", "contract", "mentions") in rel_set
-        assert ("chunk", "product", "mentions") in rel_set and ("chunk", "modality", "mentions") in rel_set
-        assert ("chunk", "batch", "mentions") in rel_set
-        biz_edges = [e for e in edges if e["rel"] in BIZ_REL]
-        assert biz_edges and all(e.get("confirmed") is True and e.get("prov") == "bundle" for e in biz_edges), biz_edges
-        contract_node = next(n for n in nodes if n["kind"] == "contract")
-        assert contract_node["props"] == {"confirmed": True, "prov": "bundle"}, contract_node
-        print("[selftest] AD28② engine-qa MAJOR — 교차 확인된 문서(meta_confirmed=True)의 관계 간선·노드 props(confirmed·prov) 통과")
-
-        # engine-qa MAJOR(10-08) — meta_confirmed=False(단일 엔진 추정값)면 관계 간선 0, mentions만 그대로
-        docs_u = [{**docs[0], "meta_confirmed": False}]
-        nodes_u, edges_u = build_graph(docs_u, chunks, folder_of)
-        rel_set_u = {(nodes_u[e["src"]]["kind"], nodes_u[e["dst"]]["kind"], e["rel"]) for e in edges_u}
-        assert not any(r in BIZ_REL for _, _, r in rel_set_u), rel_set_u  # 관계 간선 0
-        assert ("chunk", "client", "mentions") in rel_set_u and ("chunk", "contract", "mentions") in rel_set_u  # mentions는 그대로
-        assert ("chunk", "product", "mentions") in rel_set_u and ("chunk", "batch", "mentions") in rel_set_u
-        contract_node_u = next(n for n in nodes_u if n["kind"] == "contract")
-        assert "props" not in contract_node_u, contract_node_u  # 관계 경로를 안 타 confirmed·prov props도 안 실림(mentions 전용 생성)
-        docs_missing = [{**docs[0]}]
-        del docs_missing[0]["meta_confirmed"]  # meta_confirmed 키 자체가 없는 문서(옛 호출자)도 False와 같게 처리
-        nodes_m, edges_m = build_graph(docs_missing, chunks, folder_of)
-        rel_set_m = {(nodes_m[e["src"]]["kind"], nodes_m[e["dst"]]["kind"], e["rel"]) for e in edges_m}
-        assert not any(r in BIZ_REL for _, _, r in rel_set_m), rel_set_m
-        print("[selftest] AD28② engine-qa MAJOR — meta_confirmed=False(또는 없음) 문서는 관계 간선 0, mentions만 유지 통과")
-    print("[selftest] AD28② build_graph 업무 개체(client·contract·product·modality·batch)·관계(doc-links-contract 등) 통과")
-
-    # AD28③ — 개념 노드 + broader·related(둘 다 실제 멘션됐을 때만) + 멘션 안 된 형제 개념은 노드 자체가 안 생김
-    docs2 = [{"doc_key": "b" * 64, "doc_name": "b.pdf", "file_path": "d/b.pdf", "summary": ""}]  # S9b(C-54) — 축소 스키마 키
-    chunks2 = [{"doc": 0, "seq": 0, "chunk_text": "DSP 공정에서 바이러스 불활화(VI)를 수행"}]
-    g = {
-        "PROC.VI": {
-            "canonical": "Viral Inactivation",
-            "synonyms": "바이러스 불활화",
-            "abbreviations": "VI",
-            "weak_synonyms": "",
-            "broader": "PROC.DSP",
-            "related": "PROC.UNSEEN",
-        },
-        "PROC.DSP": {"canonical": "DSP", "synonyms": "", "abbreviations": "", "weak_synonyms": "", "broader": "", "related": ""},
-        "PROC.UNSEEN": {"canonical": "Unseen", "synonyms": "", "abbreviations": "", "weak_synonyms": "", "broader": "", "related": ""},
-    }
-    cc2 = build_concept_chunk(docs2, chunks2, g)
-    n2, e2 = build_graph(docs2, chunks2, folder_of, g, cc2)
-    k2 = {n["id"]: n["kind"] for n in n2}
-    ck2 = {n["id"]: n["node_key"] for n in n2}
-    assert {ck2[n["id"]] for n in n2 if n["kind"] == "concept"} == {"PROC.VI", "PROC.DSP"}  # PROC.UNSEEN은 멘션이 없어 노드 자체가 없음
-    rel2 = {(k2[e["src"]], k2[e["dst"]], e["rel"]) for e in e2}
-    assert ("chunk", "concept", "concept_chunk") in rel2
-    assert ("concept", "concept", "broader") in rel2 and ("concept", "concept", "related") not in rel2  # related 상대(UNSEEN)는 없음
-    print("[selftest] AD28③ build_graph 개념 노드·broader(둘 다 멘션됐을 때만, 고아 노드 없음) 통과")
-
-    # 허브 규칙(HUB_MAX)이 새 개체·개념에도 적용되는지 — 같은 개체가 HUB_MAX(5) 넘는 문서에 걸치면 청크 연결이 끊김
-    many_docs = [{"doc_key": f"{i:064d}", "doc_name": f"{i}.pdf", "file_path": f"d/{i}.pdf", "summary": ""} for i in range(HUB_MAX + 1)]
-    many_chunks = [{"doc": i, "seq": 0, "chunk_text": "흔한 모달리티 mAb 공정 설명"} for i in range(HUB_MAX + 1)]
-    n3, e3 = build_graph(many_docs, many_chunks, folder_of)
-    k3 = {n["id"]: n for n in n3}
-    mab_id = next(n["id"] for n in n3 if n["kind"] == "modality" and n["node_key"] == "mab")
-    assert k3[mab_id].get("props", {}).get("hub_docs") == HUB_MAX + 1  # 노드는 남되 허브 표시
-    assert not any(e["dst"] == mab_id and e["rel"] == "mentions" for e in e3)  # 청크 연결은 끊김(기존 entity와 같은 규칙)
-    print("[selftest] AD28② HUB_MAX가 새 업무 개체에도 적용 통과")
+    # pl-06(11-01) — 그림 행·사실·개념 파일은 안 만들고, kg 파일은 묶음 계약용 빈 파일만
+    for gone in ("images.jsonl", "facts.jsonl", "concept_chunk.jsonl"):
+        assert not (out_empty / gone).exists(), gone
+    assert (out_empty / "kg_nodes.jsonl").read_text(encoding="utf-8") == ""
+    assert (out_empty / "kg_edges.jsonl").read_text(encoding="utf-8") == ""
+    print("[selftest] pl-06 — 그래프·개념·그림 행·사실 파일 없음(kg 파일은 빈 파일) 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

@@ -146,8 +146,8 @@ def test_stack(a):
     from common.core import text as S
 
     qpath = Path(a.questions)
-    if not qpath.exists():
-        sh("pipeline.eval.auto_questions", "--src", a.src, "--out", qpath)
+    if not qpath.exists():  # 11-01 — 질문 자동 생성(pipeline.eval.auto_questions)은 지움(e2-10): 질문 파일을 직접 준다
+        raise SystemExit(f"[test-stack] 질문 파일 없음: {qpath}")
     qs = [json.loads(x) for x in qpath.read_text(encoding="utf-8").splitlines() if x.strip()][: a.limit]
     st0 = _stack()
     R = Retriever(a.bundle, a.retrieve or st0.get("retrieve", "hybrid"))

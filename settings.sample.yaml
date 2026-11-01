@@ -57,7 +57,6 @@ required:
     publish_prefix:  # 버킷 안 업로드 경로 접두 · 값: 경로
   # ─── 서비스 토큰 [서버만] ───
   tokens:
-    trigger:  # 트리거 서버 Bearer 토큰 · 값: 비밀 글자 [비밀]
     parse_mcp:  # parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값) · 값: 비밀 글자 [비밀]
     mcp:  # MCP 서버 Bearer 토큰(비루프백 바인드면 필수) · 값: 비밀 글자 [비밀]
     parse_proxy:  # parse_document가 작업 서비스(mcp_parse_service)를 부를 때 쓰는 토큰 · 값: 비밀 글자 [비밀]
@@ -321,7 +320,6 @@ ops:
     out_root:  # 파이프라인 출력 루트(output) · 값: 경로
     parse_tmp:  # 임시 폴더(첨부 임시 파일은 형제 attach/) · 값: 경로
     raw_root:  # P0 원본 층(raw/VLM) 캐시 저장소 루트 · 값: 경로
-    report_digest_dir:  # run_board 날짜·판 요약 폴더 루트(비우면 요약 안 만듦) · 값: 경로
     soffice_bin:  # LibreOffice soffice 실행 파일 경로 · 값: 경로
   # ─── 호스트 — 컨테이너 도구·패치·정리 ───
   host:
@@ -346,8 +344,6 @@ ops:
     cpus: 1.0  # mcp-server 컨테이너 CPU 한도(compose cpus) · 기본 1.0 · 값: 0 이상
     jobs_dir:  # MCP parse_document 업로드 작업 폴더(공유 볼륨) · 값: 경로
     mem_limit: 4g  # mcp-server 컨테이너 메모리 한도(compose mem_limit) · 기본 4g · 값: 글자
-    tool_cpus: 1.0  # 검색 도구 실행 컨테이너(run_tool) CPU 한도 · 기본 1.0 · 값: 0 이상
-    tool_mem_limit: 2g  # 검색 도구 실행 컨테이너(run_tool) 메모리 한도 · 기본 2g · 값: 글자
   # ─── 상주 서비스 — 트리거·parse MCP ───
   services:
     parse_mcp:
@@ -355,14 +351,6 @@ ops:
       max_mb: 64.0  # parse MCP 서비스가 받는 파일 크기 상한(MB) · 기본 64.0 · 값: 0 이상
       port: 8766  # parse MCP 서비스 포트 · 기본 8766 · 값: 1~65535
       roots:  # parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) · 값: 쉼표 목록 또는 YAML 목록
-    trigger:
-      allow_no_token: false  # TRIGGER_TOKEN 없이 무인증 시작 허용 · 기본 false · 값: true·false
-      chain_structure_url: []  # parse 성공 뒤 structure 작업을 올릴 트리거 서버 URL(쉼표로 여러 개) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
-      host: 127.0.0.1  # 트리거 서버 바인딩 주소 · 기본 127.0.0.1 · 값: 호스트 이름·IP
-      parse_port:  # parse 상주 트리거 서버 포트(--module parse — port 칸이 비었을 때, S7e2: 옛 compose가 TRIGGER_PORT로 넘기던 호스트 칸을 앱 칸으로) · 기본 8770 · 값: 1~65535
-      port:  # 트리거 서버 포트 · 값: 1~65535
-      structure_port:  # structure 상주 트리거 서버 포트(--module structure — port 칸이 비었을 때, S7e2) · 기본 8771 · 값: 1~65535
-      upload_max_mb: 50  # 트리거 서버 /upload 본문 크기 상한(MB) · 기본 50 · 값: 0 이상 정수
   # ─── 새벽 배치 ───
   nightly:
     time:  # 새벽 배치 시작 시각(HH:MM, 서버 시간) · 값: HH:MM
@@ -395,15 +383,8 @@ dev:
     test_per_type: 5  # 시험 모드 표본에서 확장자별로 고르는 문서 수(개) · 기본 5 · 값: 0 이상 정수
   # ─── 평가 ───
   eval:
-    gold_draft_max_pages: 30  # 정답 초안 생성(gold_draft)에서 문서당 처리할 쪽 수 상한(쪽) · 기본 30 · 값: 0 이상 정수
-    gold_draft_mermaid_check: true  # 정답 초안의 Mermaid 블록 2차 점검을 켤지(0/false/no면 끔) · 기본 true · 값: true·false
-    qa_draft_max_pages: 20  # 질문 초안 생성(qa_draft)에서 문서당 처리할 쪽 수 상한(쪽) · 기본 20 · 값: 0 이상 정수
-    qa_draft_per_page: 5  # 질문 초안 생성에서 쪽당 질문 수 상한(개) · 기본 5 · 값: 0 이상 정수
-    rerank_model: BAAI/bge-reranker-v2-m3  # 검색 단계 실험(pipeline.eval.stages)의 재순위 모델 이름 · 기본 BAAI/bge-reranker-v2-m3 · 값: 글자
     review_max_rounds: 2  # 도식 검토 루프의 최대 재추출 횟수(회) · 기본 2 · 값: 0 이상 정수
-    score_table_judge: '0'  # 표 구조 채점의 경계 표 판정자(0 없음 | llm 경계 표만 LLM 판정) · 기본 0 · 값: 글자
   mcp:
-    eval_s_parts:  # 검색 평가가 고를 S 묶음 설정(JSON, 예 {'chunk_size':256}) · 값: JSON 객체
     mcp_url: http://127.0.0.1:18765/mcp  # 검증 페이지가 붙을 MCP 서버 URL · 기본 http://127.0.0.1:18765/mcp · 값: URL
     ui_port: 8790  # 검증 페이지(validation/search_ui) 서버 포트 · 기본 8790 · 값: 1~65535
   # ─── PC 시험 Docker ───
@@ -519,8 +500,3 @@ tuning:
         text_page_sec: 1.0  # parse MCP 서비스 작업의 글자 엔진 쪽당 제한 시간(초) · 기본 1.0 · 값: 0 이상 초
         warmup_sec: 20.0  # parse MCP 서비스 작업의 첫 시도 제한 하한(초) · 기본 20.0 · 값: 0 이상 초
         vlm_page_sec: 60.0  # parse MCP 서비스 작업의 VLM 엔진 쪽당 제한 시간(초) · 기본 60.0 · 값: 0 이상 초
-      trigger:
-        client_timeout: 10.0  # 트리거 서버 CLI 클라이언트 HTTP 제한 시간(초) · 기본 10.0 · 값: 0 이상 초
-        queue_max: 100  # 트리거 서버 대기 작업 상한(건) · 기본 100 · 값: 0 이상 정수
-        shutdown_timeout_sec: 300.0  # SIGTERM 뒤 실행 중 작업을 기다리는 한도(초) · 기본 300.0 · 값: 0 이상 초
-        socket_timeout_sec: 30  # 연결당 소켓 read 제한(초) · 기본 30 · 값: 0 이상 정수(초)

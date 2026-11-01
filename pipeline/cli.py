@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 """파이프라인 진입점 — 두 단계를 나눠 부른다(요청 문장 → 명령 대응표는 AGENTS.md "요청 → 명령").
 
-단계 1 · 비교(기술 스택 고르기)
-  compare-parse   여러 파싱 엔진 비교: run_all → parse_qa → 보고서(엔진 × 형식·선정 후보)
-  compare-all     파싱 + 데이터 구조화(청킹·임베딩·그래프) + 검색까지 전체 조합 비교 → 보고서·문항 탐색기(답변 비교 단계는
-                  10-13 답변 경로 통일 4단계로 archive — 답변 품질은 dev_tools/perform_test/answer_stage/run.py, rag_qa만)
+(단계 1 비교 명령 compare-parse·compare-all은 11-01에 지움 — PC 평가 도구 삭제, PRD e2-10)
 단계 2 · 고정 스택(정해진 기술로 실제 파이프라인 + 기본 테스트)
   show-stack · show-sources  지금 엔진 구성·원천 목록(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01 —
                   docs/architecture/pipeline_stack.md)
@@ -213,31 +210,6 @@ def night(a):
     from common.core.runlog import note
 
     note("야간 배치: " + " · ".join(log) + (f" · 멈춤: {stopped}" if stopped else " · 전부 끝남"))
-
-
-# ── 단계 1 ───────────────────────────────────────────────────
-def compare_parse(a):
-    engines = a.engines
-    if engines == "candidates":  # 스택의 선정 엔진 + 사용자 후보 목록(stack.json candidates)
-        st = _stack()
-        engines = ",".join(_engines_of(st))
-        print(f"비교 엔진: {engines}")
-    if not a.skip_parse:
-        parse_docs(a.src, engines, a.procs)
-    sh("pipeline.transform.represent.parse_qa", "--src", a.src)
-    sh("pipeline.eval.report")
-    print("→ output/report/report.html(파싱 결과 탭: 엔진 × 형식 · 최종 엔진 조합 후보) · output/parse/selection.json")
-
-
-def compare_all(a):
-    compare_parse(a)
-    sh("pipeline.eval.auto_questions", "--src", a.src, check=False)
-    sh("pipeline.eval.run_combo", "--parse-dir", "output/parse", "--src", a.src)
-    # 10-13 답변 경로 통일 4단계 — run_answers·verify_key(옛 §3-6 답변 평가 CLI) archive, 답변 품질은
-    # dev_tools/perform_test/answer_stage/run.py(서빙되는 Answer Agent rag_qa)로.
-    sh("pipeline.eval.report")
-    sh("pipeline.eval.explorer")
-    print("→ output/report/report.html(조합 순위) · output/report/explorer.html(문항별 결과)")
 
 
 # ── 단계 2 ───────────────────────────────────────────────────
@@ -734,35 +706,22 @@ def _case_settings():
     return _CASE_ENVS["file"]
 
 
-# 단계 4 도구 15개(10-30 parse_parallel 지움 — pl-35)(S4 — 옛 공용 cli/·evaluation/에서 pipeline/로 옮김). S9 전에는 "공용" 사례였고 mcp 이미지에서는 모듈이 없어 SKIP이었다 —
+# 단계 4 도구(10-30 parse_parallel 지움 — pl-35 · 11-01 pipeline.eval 지움 — e2-10)(S4 — 옛 공용 cli/·evaluation/에서 pipeline/로 옮김). S9 전에는 "공용" 사례였고 mcp 이미지에서는 모듈이 없어 SKIP이었다 —
 # S9부터 그 시험은 tests/server/pipeline(mcp 이미지에서 "다른 이미지 사례" SKIP — 결과 같음). 여기서는 두 손 목록 확인만(check_modules.MOVED_TOOLS).
 # S6a — 목록은 전에 경계 점검의 LEGACY_TOOLS(파일 경로 → 옛 자리)에서 읽었다. 경계 판정에 더 안 쓰여 그 표를 지우고 여기 둔다(같은 15개).
 _STAGE4_TOOLS = frozenset(
     {
         "pipeline.cli",
         "pipeline.check_env",
-        "pipeline.trigger_server",
         "pipeline.extract.rdb_discover",
         "pipeline.transform.structure.gen_roster",
         "pipeline.transform.structure.glossary_suggest",
-        *(
-            f"pipeline.eval.{n}"
-            for n in (
-                "make_questions",
-                "run_combo",
-                "report",
-                "server_checks",
-                "anchors",
-                "auto_questions",
-                "stages",
-            )
-        ),
     }
 )
 
 
 def _tool_list_check():
-    """PC 전용 — 단계 4 도구 두 손 목록(맨 이름 check_modules.MOVED_TOOLS['etl'] · 모듈 이름 _STAGE4_TOOLS)이 같은 16개인지
+    """PC 전용 — 단계 4 도구 두 손 목록(맨 이름 check_modules.MOVED_TOOLS['etl'] · 모듈 이름 _STAGE4_TOOLS)이 같은지
     (S6a 리뷰 — 옛 cli/pipeline.py는 맨 이름 pipeline). 어긋난 것 목록."""
     from common.check.check_modules import MOVED_TOOLS
 
@@ -1026,24 +985,15 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     src = C.cfg().paths.doc_dir_prepared or "output/prepared"
-    for name in ("compare-parse", "compare-all", "run-stack"):
-        p = sub.add_parser(name)
-        p.add_argument("--src", default=src)
-        p.add_argument("--procs", default=_default_procs(), help="CPU 엔진 프로세스 수 · auto = CPU·메모리(cgroup) 기준")
-        p.add_argument("--skip-parse", action="store_true", help="파싱은 이미 했으면 건너뜀")
-        if name != "run-stack":
-            p.add_argument(
-                "--engines",
-                default="",
-                help="비우면 핵심 엔진(registry.CORE) — 늘 stack.json 형식별 목록 안에서만 돎(pl-03: 범위는 stack 하나 · stack에 없는 후보를 비교하려면 stack json을 고침)",
-            )
-            p.add_argument("--top", default="4")
-        else:
-            p.add_argument("--pg", action="store_true", help="pgvector에 배포·적재까지(기본 — 접속 칸 필수, op-09)")
-            p.add_argument("--local", action="store_true", help="PostgreSQL 없이 로컬 묶음까지만")
-            p.add_argument("--replace", action="store_true")
-            p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
-            p.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
+    p = sub.add_parser("run-stack")
+    p.add_argument("--src", default=src)
+    p.add_argument("--procs", default=_default_procs(), help="CPU 엔진 프로세스 수 · auto = CPU·메모리(cgroup) 기준")
+    p.add_argument("--skip-parse", action="store_true", help="파싱은 이미 했으면 건너뜀")
+    p.add_argument("--pg", action="store_true", help="pgvector에 배포·적재까지(기본 — 접속 칸 필수, op-09)")
+    p.add_argument("--local", action="store_true", help="PostgreSQL 없이 로컬 묶음까지만")
+    p.add_argument("--replace", action="store_true")
+    p.add_argument("--no-prune", action="store_true", help=argparse.SUPPRESS)  # pl-13 호환 — 무시
+    p.add_argument("--path-prefix", default=pc.cfg().load.edw_path_prefix)
     p = sub.add_parser("night", help="새벽 파싱 배치(GPU 모델 API만, LLM 없음, 마감 시각에 멈춤 — 다음 밤은 문서 대장 기준으로 다시 고름)")
     p.add_argument("--src", default=src)
     p.add_argument(
@@ -1128,8 +1078,6 @@ def main(argv=None):
 
         require_run_env("pipeline.cli", sections=("pipeline",))  # 서버면 설정 검증 실패도 거부(S7e2 U-1)
     {
-        "compare-parse": compare_parse,
-        "compare-all": compare_all,
         "show-stack": show_stack,
         "show-sources": show_sources,
         "night": night,

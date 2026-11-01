@@ -149,10 +149,6 @@ def parse_env_text(text, known=None):
             if "$" in val:
                 val, missing = _expand(val, known)
                 why.append("$ 치환" + (f"(모르는 이름 {' '.join(missing)} — compose는 셸 env 값)" if missing else ""))
-        if key == "TRIGGER_PORT":  # 리뷰 S7e2 — 옛 서버 compose가 상주 서비스마다 덮어 상주 컨테이너에는 안 걸리던 이름
-            why.append(
-                "옛 서버 compose는 서비스마다 TRIGGER_PARSE_PORT·TRIGGER_STRUCTURE_PORT로 덮었음 — 상주 서버 두 개면 parse_port·structure_port를 쓰고 이 칸은 비움 권장"
-            )
         out[key] = known[key] = val
         if why:
             notes[key] = " · ".join(why)

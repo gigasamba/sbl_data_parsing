@@ -19,6 +19,5 @@ services:
   load: {volumes: *code, entrypoint: *entry}
   publish: {volumes: *code, entrypoint: *entry}
   mcp: {volumes: *code, entrypoint: *entry}
-  retrieval: {volumes: *code, entrypoint: *entry}   # 10-16 — mcp_eval 등 도구 전용 job 서비스
-  data-pipeline-parse: {volumes: *code, entrypoint: *entry}       # 10-14 — 상주 트리거 서버(S6b — 옛 data-parsing·data-structure, 둘 다 data-pipeline 이미지)
+  data-pipeline-parse: {volumes: *code, entrypoint: *entry}       # 상주 컨테이너(11-01부터 `idle` — run_docs.py가 docker exec, S6b — 옛 data-parsing·data-structure)
   data-pipeline-structure: {volumes: *code, entrypoint: *entry}

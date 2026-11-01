@@ -59,8 +59,8 @@ MCP 도구 4개의 이름과 입출력은 외부 클라이언트와의 계약이
 
 | 이미지             | 역할                                 | 컨테이너                                                                                                             |
 | --------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `data-pipeline` | parse · structure · load · publish | 1회 실행 job(`parse`, `structure`, `load`, `publish`) · 상주 트리거(선택) `data-pipeline-parse`, `data-pipeline-structure` |
-| `mcp-server`    | 검색 MCP(상주) + 검색 도구                 | 상주 `mcp-server` · 도구 job `retrieval`                                                                             |
+| `data-pipeline` | parse · structure · load · publish | 1회 실행 job(`parse`, `structure`, `load`, `publish`) · 상주(일 없이 떠 있음 — `run_docs.py`가 docker exec) `data-pipeline-parse`, `data-pipeline-structure` |
+| `mcp-server`    | 검색 MCP(상주)                         | 상주 `mcp-server`                                                                                                  |
 
 
 - **버전은 저장소 루트 `VERSION` 하나**(SemVer, 지금 `0.1.0`)이고 두 이미지가 함께 쓴다(D-036).
@@ -114,15 +114,14 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  ├─ transform/        represent(대표 결과) · figures(그림) · structure(청킹·임베딩·번들)
 │  ├─ load/             pgvector 적재 · publish · 회사 DB 메타데이터 · 인덱스 빌더
 │  ├─ shared/ · tools/  단계 공용 모듈 · 운영 도구
-│  ├─ eval/             채점 · 실행 보드(score_gold, run_board 등)
-│  └─ trigger_server.py · mcp_parse_service.py                                상주 트리거 · MCP 파싱 작업
+│  └─ mcp_parse_service.py                                                     MCP 파싱 작업
 ├─ mcp_server/          검색 MCP 앱(mcp-server 이미지, FastMCP)
 │  ├─ main.py           진입점(앱 조립 · 토큰 · 서버 시작)
 │  ├─ config.py         mcp 섹션 설정 모델
 │  ├─ routers/          도구 4개와 /health 등록(이름·시그니처 고정)
 │  ├─ schemas/          출력 구조
 │  ├─ services/         EDW 질의 · 파싱 중계 · 메타데이터 · search/(하이브리드 검색 · 근거 정리 · 재순위)
-│  └─ cli/              ask(질의 테스트) · mcp_smoke · mcp_eval
+│  └─ cli/              ask(질의 테스트) · mcp_smoke
 ├─ resources/           코드가 읽는 데이터(이미지에 포함)
 │  ├─ prompts/          AI 프롬프트 패키지 {common,pipeline,mcp}
 │  ├─ config/           엔진 구성 pipeline_stack.json(서버·PC 같음) · 채점 기준 · 보고서 템플릿
@@ -580,9 +579,9 @@ bash deploy/host/scripts/trigger.sh night       # 새벽 배치 순서를 지금
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 검색 MCP 상주 확인                                       | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_up.sh`                                                                                             |
 | 새벽 배치                                              | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.time: "HH:MM"`(그 시각부터 5분 안에 시작 — 비우면 새벽 배치 없음, 기본 비움 · pl-32) |
-| 상주 트리거 서버(선택 — 웹 업로드에서 파싱 직접 호출, `run_docs.py`가 씀) | `dc up -d data-pipeline-parse data-pipeline-structure`(§5-3의 `dc` — 실행 이미지면 코드 폴더를 붙임). 여러 번 불러도 안전 — 꺼진 것만 띄움 |
+| 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음, 11-01 trigger 서버 지움) | `dc up -d data-pipeline-parse data-pipeline-structure`(§5-3의 `dc` — 실행 이미지면 코드 폴더를 붙임). 여러 번 불러도 안전 — 꺼진 것만 띄움 |
 | MCP `parse_document` 작업 서비스                        | compose가 띄우지 않으므로 파싱 컨테이너가 다시 시작될 때마다: `$DOCKER exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service` |
-| 재부팅 뒤 되살리기(podman)                                | `systemctl enable --now podman-restart` — podman은 docker처럼 데몬이 없어 `restart: unless-stopped` 컨테이너(검색 MCP·상주 트리거)를 부팅 때 다시 띄우지 않는다. 이 서비스가 그 컨테이너들을 되살린다. 검색 MCP는 keepalive 타이머가 한 번 더 본다. 상주 트리거는 keepalive 타이머가 없으니, 재부팅 뒤 `$DOCKER ps`로 `data-pipeline-parse`·`data-pipeline-structure`가 떠 있는지 보고, 없으면 위 `dc up -d …`를 다시 실행한 뒤 `parse_document` 작업 서비스도 다시 띄운다 |
+| 재부팅 뒤 되살리기(podman)                                | `systemctl enable --now podman-restart` — podman은 docker처럼 데몬이 없어 `restart: unless-stopped` 컨테이너(검색 MCP·상주 컨테이너)를 부팅 때 다시 띄우지 않는다. 이 서비스가 그 컨테이너들을 되살린다. 검색 MCP는 keepalive 타이머가 한 번 더 본다. 상주 트리거는 keepalive 타이머가 없으니, 재부팅 뒤 `$DOCKER ps`로 `data-pipeline-parse`·`data-pipeline-structure`가 떠 있는지 보고, 없으면 위 `dc up -d …`를 다시 실행한 뒤 `parse_document` 작업 서비스도 다시 띄운다 |
 
 
 systemd 설치(한 번 — DB 버전과 컨테이너를 확인한 뒤):
@@ -598,9 +597,8 @@ sudo systemctl enable --now data-pipeline-nightly.timer      # 새벽 배치를 
 ### 5-6. 서버 — 결과 확인과 도구
 
 ```bash
-bash deploy/host/scripts/run_tool.sh run_board --out /app/output                                    # 실행 보드 → output/report/run_board.html
-bash deploy/host/scripts/run_tool.sh mcp_eval --set <세트>                                           # 검색 근거 평가
-bash deploy/host/scripts/run_tool.sh <도구> [인자]                                                    # score_gold · rdb_discover · check_env 등
+bash deploy/host/scripts/run_tool.sh <도구> [인자]                                                    # rdb_discover · check_env · ping_models
+# 실행 보드(run_board)·정답률(score_gold)·검색 평가(mcp_eval)는 11-01에 지움(PRD e2-10)
 ```
 
 ### 5-7. 서버 — 값 바꾸기

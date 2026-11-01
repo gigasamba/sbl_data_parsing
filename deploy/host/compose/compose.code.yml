@@ -13,6 +13,5 @@ services:
   load: {volumes: *code}
   publish: {volumes: *code}
   mcp: {volumes: *code}
-  retrieval: {volumes: *code}
   data-pipeline-parse: {volumes: *code}
   data-pipeline-structure: {volumes: *code}

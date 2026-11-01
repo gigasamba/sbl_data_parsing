@@ -6,7 +6,7 @@
 #     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>   (S7e1·S7e2 — 옛 --env-file pipeline.env 대신 설정 파일 하나)
 # 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp · dedup · prepare ·
 #       night [인자] · run-stack [인자] · ask --q … · test-stack · full(data-pipeline만 — dedup → prepare → night)
-#   tool <이름> = cli/<이름>.py 하나를 바로 돌림(score_gold·run_board·mcp_eval·rdb_discover·check_env·index 등 — run_tool.sh가 쓰는 자리)
+#   tool <이름> = cli/<이름>.py 하나를 바로 돌림(rdb_discover·check_env·index 등 — run_tool.sh가 쓰는 자리)
 #     옛 형태 `tool cli/<이름>.py`도 이번 판까지는 받아 줌(경고 후 번역) — 다음 판부터 이름만.
 #   모듈(트리거 1회): parse(= 가져오기(폴더·s3://, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과, RUN_MODE=test면 형식별 표본) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타, SI39 — cli/publish_parse.py --apply) — docs/architecture.md
 #   full = dedup → prepare(중복 제외 목록만) → night(파싱 → 대표 파싱·구조화·임베딩 → PostgreSQL 적재, EDW 적재 없음) — data-pipeline 이미지만(S6c)
@@ -15,7 +15,7 @@
 #   show-stack·show-sources = 지금 엔진 구성·원천 목록(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01: 판 표·set-stack·
 #     set-sources 없앰) — show-sources는 data-pipeline만, show-stack은 두 이미지. docs/architecture/pipeline_stack.md
 #   S6b(D-020) — 이미지 2개: RAG_MODULE마다 쓸 수 있는 명령이 다름(아래 case가 거름):
-#     pipeline(data-pipeline — 옛 data-parsing+data-structure, 두 이미지가 받던 명령의 합 + full(S6c))=parse·dedup·prepare·structure·load·publish·night·full·run-stack·show-stack·show-sources·serve-trigger·migrate ·
+#     pipeline(data-pipeline — 옛 data-parsing+data-structure, 두 이미지가 받던 명령의 합 + full(S6c))=parse·dedup·prepare·structure·load·publish·night·full·run-stack·show-stack·show-sources·idle·migrate ·
 #     mcp(mcp-server — 옛 data-retrieval)=mcp·ask·test-stack·show-stack · 공통(모든 이미지) = help·check·resources·services·
 #     check-modules·tool·selftest(S9 — 서버 반입 시험 /app/deploy/tests/server를 파일마다, 다른 이미지(RAG_MODULE) 폴더 사례·다른 이미지 패키지가 없어서만 실패한 사례는 SKIP,
 #     서드파티 패키지가 없으면 FAIL(I2c) — 반입 판정은 /app/docker/selftest_gate.sh)·smoke(10-14 — --src(기본 DOC_DIR) 실문서 폴더를
@@ -54,8 +54,8 @@ case "${RAG_MODULE:-}:$cmd" in
   # 옛 parse·structure 이미지가 거르던 명령의 교집합만 거른다(합친 이미지 = 두 이미지가 받던 명령의 합). full은 10-14부터 두 이미지 모두
   # 거부했으나(dedup·prepare·night가 서로 다른 이미지에 있었음) 합친 이미지에는 셋이 다 있어 S6c(사용자 10-27, C-30 ④)부터 data-pipeline에서 허용
   pipeline:mcp|pipeline:ask|pipeline:test-stack)
-    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask·test-stack)은 mcp-server. 이 이미지는 parse·dedup·prepare·structure·load·publish·night·full·run-stack·show-stack·show-sources·serve-trigger·migrate"; exit 64;;
-  mcp:parse|mcp:dedup|mcp:prepare|mcp:full|mcp:structure|mcp:load|mcp:publish|mcp:night|mcp:run-stack|mcp:serve-trigger|mcp:migrate|mcp:show-sources)
+    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask·test-stack)은 mcp-server. 이 이미지는 parse·dedup·prepare·structure·load·publish·night·full·run-stack·show-stack·show-sources·idle·migrate"; exit 64;;
+  mcp:parse|mcp:dedup|mcp:prepare|mcp:full|mcp:structure|mcp:load|mcp:publish|mcp:night|mcp:run-stack|mcp:idle|mcp:migrate|mcp:show-sources)
     echo "[오류] '$cmd'는 이 이미지(mcp-server)에 없음 — 파싱·구조화·적재·판 관리(migrate)·show-sources는 data-pipeline. 이 이미지는 mcp·ask·test-stack·show-stack만"; exit 64;;
 esac
 # S7a(D-028 ②, 사용자 10-27) — 실행 환경(RUN_ENV) 없이는 앱 명령을 시작하지 않음. 이미지 ENV에는 넣지 않는다(서버가 dev·prd를
@@ -71,7 +71,7 @@ case "$cmd" in
 esac
 shell_names=""
 case "$cmd" in
-  parse|dedup|prepare|full|night|run-stack|structure|load|publish|check|smoke|serve-trigger|migrate|show-stack|show-sources)
+  parse|dedup|prepare|full|night|run-stack|structure|load|publish|check|smoke|idle|migrate|show-stack|show-sources)
     shell_names="DOC_DIR DOC_DIR_PREPARED PARSE_SOURCE PG_HOST";;
 esac
 # 점검 명령(관문 면제)은 설정 파일이 틀려도 돌아 원인을 보이게 — 내부 신호 SETTINGS_LENIENT=1(영구 다리가 서버에서도 경고만, 앱 명령은 안 줌)
@@ -91,21 +91,21 @@ case "$cmd" in
   services)      python -m common.store.services "$@";;
   check-modules) exec python -m common.check.check_modules "$@";;
   tool)
-    name=$(legacy_tool_name "${1:?도구 이름(예: score_gold·run_board·mcp_eval·rdb_discover·check_env)}"); shift || true
+    name=$(legacy_tool_name "${1:?도구 이름(예: rdb_discover·check_env)}"); shift || true
     # C3(독립 검토 10-13) — 이름을 python -c 소스 문자열에 그대로 끼워 넣으면 코드 주입 경로가 됨. 모듈 이름 문법만 허용.
     [[ "$name" =~ ^[a-z_][a-z0-9_]*$ ]] || { echo "bad tool name"; exit 64; }
     # ping_models·os_put·check_modules는 common/check/(S3 — 옛 common_tools/cli/) — common.check를 맨 먼저(덧씌우기 live에 옛 사본이 남아도 새 것이 이김), 그다음 이 순서로 시도.
-    # S4 — 단계 4 도구는 pipeline/로: check_env·parse_parallel·trigger_server는 pipeline/, rdb_discover는 pipeline/extract/,
-    # gen_roster·glossary_suggest는 pipeline/transform/structure/, figure_review는 pipeline/transform/figures/, score_gold·run_board·
-    # report·run_combo·server_checks·stages 등은 pipeline/eval/(옛 data_etl/eval_tools·common_tools/cli·evaluation) ·
+    # S4 — 단계 4 도구는 pipeline/로: check_env는 pipeline/, rdb_discover는 pipeline/extract/,
+    # gen_roster·glossary_suggest는 pipeline/transform/structure/, figure_review는 pipeline/transform/figures/ ·
+    # (pipeline/eval/의 평가 도구와 mcp_server/cli/의 mcp_eval·search_checks는 11-01에 지움 — e2-10) ·
     # S6c(사용자 10-27, C-30 ①) — index(AD41 색인 빌더 — compose.pipeline.yml index_a·index_b의 `tool index build`)는 pipeline/load/(옛 data_structure/ —
     #   pre-refactor부터 찾는 목록에 없어 "모르는 도구"였음).
-    # S5 — mcp_eval·search_checks(옛 server_checks의 br54·l8·gh114 — T-15)는 mcp_server/cli/(mcp 이미지 — S6b 전 retrieval) · S6a — model_matrix·stack_matrix는 validation/e2e/(PC 전용 — 이미지에 없음, T-15), assets는 /app/docker/assets.py(파일로 실행 — `python /app/docker/assets.py install`, 저장소 자리 deploy/release/ — S6b), eval_research는 S5a 삭제.
+    # assets는 /app/docker/assets.py(파일로 실행 — `python /app/docker/assets.py install`, 저장소 자리 deploy/release/ — S6b), eval_research는 S5a 삭제.
     # 옛 `tool pipeline`(common_tools.cli.pipeline)은 pipeline.cli로. `패키지:이름,…`은 그 이름만 — S4 전에 tool로 부를 수 있던 것만
     # (pipeline 단계 모듈 run_all·dedup·stream 등을 preflight·잠금 없이 부르지 않게).
     # 이름은 sys.argv로 전달(소스 문자열에 끼워 넣지 않음). 찾기는 python 한 번에(VS3 R-7 — 전에는 패키지마다 프로세스 하나).
     [ "$name" = pipeline ] && name=cli
-    TOOL_PKGS="common.check pipeline:check_env,cli,trigger_server pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest pipeline.transform.figures:figure_review pipeline.load:index pipeline.eval mcp_server.cli:mcp_eval,search_checks"
+    TOOL_PKGS="common.check pipeline:check_env,cli pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest pipeline.transform.figures:figure_review pipeline.load:index"
     # shellcheck disable=SC2086
     mod=$(python -c "
 import importlib.util, sys
@@ -160,20 +160,10 @@ for entry in sys.argv[2:]:
   full)
     preflight
     locked bash -c 'd=$1 p=$2; shift 2; python -m pipeline.extract.dedup --src "$d"       && python -m pipeline.extract.prepare --src "$d" --out "$p" --only /app/output/dedup/keep.txt       && python -m pipeline.cli night "$@"' full "${DOC_DIR:?}" "${DOC_DIR_PREPARED:?}" "$@";;
-  # 10-14 — 상주 트리거 서버(웹 업로드 → "파싱 시작" 호출). S6b(D-020) — 이미지가 하나라 맡을 모듈은 TRIGGER_MODULE(parse|structure)로
-  # 고른다(전에는 RAG_MODULE=parse·structure 이미지가 곧 모듈). compose.pipeline.yml의 상주 서비스 data-pipeline-parse(parse, 8770)·
-  # data-pipeline-structure(structure+load, 8771 — 옛 컨테이너 data-parsing·data-structure)가 같은 data-pipeline 이미지에 TRIGGER_MODULE만 달리 준다.
-  # pipeline.trigger_server(--module parse|structure·Bearer TRIGGER_TOKEN·/health·CHAIN_STRUCTURE_URL)가 없으면 트레이스백 대신 또렷한 오류로 멈춤.
-  serve-trigger)
-    case "${TRIGGER_MODULE:-}" in
-      parse|structure) : ;;
-      *) echo "[오류] 'serve-trigger'는 TRIGGER_MODULE=parse|structure 필요(지금 '${TRIGGER_MODULE:-}') — compose.pipeline.yml의 data-pipeline-parse·data-pipeline-structure 서비스가 줌"; exit 64;;
-    esac
-    if ! python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pipeline.trigger_server') else 1)" 2>/dev/null; then
-      echo "[오류] pipeline.trigger_server 없음(아직 이 이미지에 병합 안 됨) — serve-trigger 사용 불가, 기존 '$TRIGGER_MODULE' 1회 트리거(trigger.sh)로 돌릴 것"
-      exit 64
-    fi
+  # 11-01(pl-10 — trigger 서버 serve-trigger 지움) — 상주 컨테이너 data-pipeline-parse·data-pipeline-structure는 일을 하지 않고 떠 있기만 한다.
+  # run_docs.py가 그 안에서 docker exec로 문서별 작업을 돌리고, MCP parse_document 작업 서비스(mcp_parse_service)도 그 안에 띄운다.
+  idle)
     preflight
-    exec python -m pipeline.trigger_server --module "$TRIGGER_MODULE" "$@";;
+    exec sleep infinity;;
   *) echo "모르는 명령: $cmd (help 참고)"; exit 64;;
 esac

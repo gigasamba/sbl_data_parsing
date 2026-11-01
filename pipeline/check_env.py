@@ -99,7 +99,6 @@ PATH_BUNDLE = [
     ("GLOSSARY_DIR", Path),
     ("SOURCES_FILE", Path),
     ("PARSE_SOURCE", _parse_source_path),
-    ("REPORT_DIGEST_DIR", Path),
 ]
 
 

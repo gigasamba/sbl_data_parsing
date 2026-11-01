@@ -130,7 +130,7 @@ op-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
   - soffice 경로 추측 — `pipeline/transform/figures/pptx_render.py:63-69` → PATH와 `SOFFICE_BIN`만(§2).
   - `deploy/docker/entrypoint.sh`의 `${DOC_DIR:-/data/docs}` 같은 기본값 → `${…:?}`(이미지 기본값 표가 넘김).
   - `/etc/rag/settings.yaml`이 `IMAGE_PATHS`(이미지 기본값 표)에 없음.
-  - `deploy/host/scripts/parse_trigger_test.py:34`의 `/data/docs`.
+  - (`deploy/host/scripts/parse_trigger_test.py`는 11-01에 지움 — pl-10.)
   - `CODE_DIR`에 설정 키가 없음.
   - `keyscan` 빠진 키 7개 — `APP_VERSION`·`BAKE_TEST`·`CODE_BUNDLE`·`CODE_DIR`·`CODE_OUT`·`VCS_REF`는 빌드 인자 → 빌드 인자로 표시, `NF`는 awk 오탐.
   - systemd `User=root` — 그대로 둘지 확인.

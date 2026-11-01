@@ -18,7 +18,7 @@
   - 핑거프린트 10-30 값(`feature/pl12-no-deleted` — 공용 `settings.py`·`pg.py`·`structdb.py`가 바뀌어 p0·p1·r·s 모두 바뀜. 그 전 `feature/pl34-p1-cleanup` 값: p0 `2b4ad090d25e` · p1 `81cfe39fd09e` · r `7901ef34500b` · s `bcac3fe53d14`): `FINGERPRINT abe9b7b0799ceaae` · a `e3b0c44298fc` · p0 `0e6a5bc155b1` · p1 `1df0ba57214b` · r `bce50575a881` · s `10f13083e536`. 엔진 18개(재파싱 키 `run_all.engine_code_fp` — `qwen_vlm` `06f937fcc39e` · `kreuzberg` `7e7c9ac44287` · `rapidocr_ko` `990ebae04429`, 나머지는 refactor.md 부록 2). 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다(CLAUDE.md §4).
   - PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕 설정(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`에 넣는다(지금 `test_pub_registry`).
   - 0.1.0 반입 판정(10-30, develop `0ef807f` 코드를 실행 이미지에 붙여 실행): `data-pipeline-runtime:0.1.0` **75개 중 74개 통과**(SKIP 19, 알려진 실패 1) · `mcp-server-runtime:0.1.0` **47개 모두 통과** · 의존성 지문 `f0fcc30bd067bc2f` 일치.
-  - Mac의 부하가 높으면 `test_trigger_server`가 시간 초과로 실패할 수 있다(환경 문제).
+  - (`test_trigger_server`는 11-01에 trigger 서버와 함께 지움 — pl-10.)
 - Status: done
 
 <a id="e2-08"></a>
@@ -153,7 +153,7 @@
 - 파일: `validation/e2e/`, `pipeline/eval/`, `mcp_server/cli/`, `common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`.
 - 결정(사용자 10-30 grill): `validation/search_ui`(검색 점검 페이지)와 `valid_env/answer_test`(답변 점검)**만** 남긴다. 스택 비교, 자동 질문 만들기, 지운 묶음용 채점기(예: `chart_values_score.py`)와 그 설정은 지운다.
 - 결정(사용자 10-30 PRD grill): C7 — PC 평가 도구는 이 행대로 둘만 남긴다. 스택·모델 비교 도구(`model_matrix`·`score_gold`·`mcp_eval`)를 전제로 한 다른 행(e2-03·e2-04·e2-06·pl-31·pl-32·pl-03)은 '비교는 필요할 때 다시 만든다'로 고치고, e2-11의 `test_run_combo`는 도구와 함께 지운다.
-- Status: todo (지움·일부 지움 — 사용자 10-31 범위 축소, 위 결정 줄)
+- Status: done (11-01, `feature/scope-cut-pipeline`) — 지움: `pipeline/eval/` 전부(report·run_board·score_gold·auto_questions·gold_draft·qa_draft·make_questions·run_combo·stages·anchors·explorer·server_checks), `pipeline/shared/phase_report.py`, `validation/e2e/model_matrix.{py,json}`, `mcp_server/cli/{mcp_eval,search_checks}.py`, `mcp_server/services/search/synth_score.py`, 그것만 쓰던 지시서 `gold_draft`·`qa_draft`·`table_struct_judge`, `pipeline.cli`의 `compare-parse`·`compare-all`, 이미지 `tool` 목록(`entrypoint.sh` TOOL_PKGS)·`run_tool.sh`의 평가 도구, 검색 도구 job 서비스 `retrieval`(compose), 시험 12개(`GENERAL_KNOWN_FAIL`의 `test_run_combo` 포함). 설정 칸(남으면 경고만): `pipeline.eval`의 정답·질문 초안·표 채점 5칸, `pipeline.paths.report_digest_dir`, `mcp.dev.eval_s_parts`, `mcp.host.tool_cpus`·`tool_mem_limit`. 남김: `validation/search_ui`, `valid_env/answer_test`, `validation/e2e/answer_gen`, `pipeline.eval.review_max_rounds`(그림 검토 `figure_review`가 읽음), 지시서 `mermaid_check`(`test_agent_prompts`의 예시), `mcp_server/cli/mcp_smoke.py`(10-31 결정 목록 밖), `check_env`의 `GOLD_DIR` 점검. `mcp_server/cli/ask.py test-stack`은 질문 파일이 없으면 멈춘다(자동 질문 생성 지움).
 
 <a id="e2-17"></a>
 ## e2-17 · 10-29 감사에서 찾은 안 쓰는 함수 지우기

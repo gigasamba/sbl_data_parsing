@@ -14,7 +14,7 @@
 # 코드 폴더: 서버 배치 <루트>/app/deploy(release-and-patch §4 — live/app/deploy/{common,pipeline,mcp_server})가 있으면 그것, 없으면 저장소 루트(PC) — VS7e1 B-1.
 # DOCKER로 docker·podman을 고른다(`DOCKER="sudo podman"`처럼 두 낱말도 — 따옴표 없이 펼침, VS7e1 R-1). 값은 출력하지 않는다(source 쪽 — 실행 쪽은 요청한 줄만 표준 출력에).
 #   op-10 — 셸 env와 settings.yaml(ops.host.docker)에 없으면 podman(서버 기본 컨테이너 도구), podman이 없으면 docker(docker_default).
-HOST_SECTIONS="common.run_env common.host pipeline.host pipeline.night.parse_deadline pipeline.service.trigger.parse_port pipeline.service.trigger.structure_port mcp.host mcp.server.host mcp.server.port"
+HOST_SECTIONS="common.run_env common.host pipeline.host pipeline.night.parse_deadline mcp.host mcp.server.host mcp.server.port"
 docker_default() { command -v podman >/dev/null 2>&1 && echo podman || echo docker; }   # op-10 — 서버(RHEL) 기본 podman, 없으면 docker(bake.sh와 같음)
 _SETTINGS_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)   # 배치 루트(서버 live/ — deploy/host가 바로 아래 · PC 저장소 루트)
 if [ -d "$_SETTINGS_ROOT/app/deploy/common" ]; then

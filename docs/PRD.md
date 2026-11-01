@@ -13,7 +13,7 @@
 |---|---|---|---|
 | 원천과 가져오기 | done | 폴더·S3·RDB · 증분 · warm | [pl-01](prd/etl.md#pl-01) |
 | EDW 고객 매핑을 파이프라인이 만듦 | todo | FileStorageMap 조인 · `file_meta` 대체 | [pl-29](prd/etl.md#pl-29) |
-| 구조화 — 청크·메타·임베딩 | todo | **일부 지움**(kg·개념 청크·이미지·doc_facts — 사용자 10-31) · 청크 · 요약 · 사실 · 임베딩 | [pl-06](prd/etl.md#pl-06) |
+| 구조화 — 청크·메타·임베딩 | done | 청크 · 요약 · 임베딩 · 그래프·개념·그림 행·사실 지움(사용자 10-31, 11-01) | [pl-06](prd/etl.md#pl-06) |
 | structure/load 계약이 새 묶음 거부 | dropped | `DOC_KEYS` 고침(사람 검토) | [pl-15](prd/etl.md#pl-15) |
 | `PIPE_EMBED=none`이면 `vector(0)` | todo | 차원 0 처리 | [pl-16](prd/etl.md#pl-16) |
 | pgvector 적재 | done | Alembic 표 · 건너뛰기 · 색인 | [pl-07](prd/etl.md#pl-07) |
@@ -25,7 +25,7 @@
 | 문서 대장 upsert·게시 가드 | done | **지움**(사용자 10-31) · deleted 길 없앰·서버 대체 금지 ✓ · PG 번역 · ParsingMeta 가드 | [pl-12](prd/etl.md#pl-12) |
 | 파싱 결과 게시 | done | Object Storage · ParsingMeta | [pl-09](prd/etl.md#pl-09) |
 | `full`은 늘 게시, 대상 필수 | todo | `--no-publish` 없앰 · 시작 거부 | [pl-26](prd/etl.md#pl-26) |
-| 실행 관리(오케스트레이션) | todo | **일부 지움**(trigger 서버 — 사용자 10-31) · CLI · entrypoint · flow 러너 · trigger | [pl-10](prd/etl.md#pl-10) |
+| 실행 관리(오케스트레이션) | done | CLI · entrypoint · flow 러너 · trigger 서버 지움(사용자 10-31, 11-01) | [pl-10](prd/etl.md#pl-10) |
 | 중간 멈춤에도 종료 코드 0 | todo | `night` · `full` 종료 코드 | [pl-18](prd/etl.md#pl-18) |
 | 증분만, 전체 재파싱은 전체 e2e | todo | 새 문서 = s3_key · 밤 배치 끔 | [pl-23](prd/etl.md#pl-23) |
 | `run_docs` 순서: silver → 원본 삭제 → gold | todo | 순서 · `gold_status` · 임시 폴더 | [pl-24](prd/etl.md#pl-24) |
@@ -116,7 +116,7 @@
 | 스택·모델 비교 | done | 행렬 · 예상 비용 | [e2-06](prd/test.md#e2-06) |
 | 검색 점검 페이지 | done | 로컬 페이지 · 포트 | [e2-07](prd/test.md#e2-07) |
 | 검색 페이지 고정 글 | dropped | 실제 개수 표시 | [e2-16](prd/test.md#e2-16) |
-| PC 평가 도구 줄이기 | todo | **지움**(사용자 10-31) · 둘만 남김 · 설정 지움 | [e2-10](prd/test.md#e2-10) |
+| PC 평가 도구 줄이기 | done | 지움(사용자 10-31, 11-01) · 둘만 남김 · 설정 지움 | [e2-10](prd/test.md#e2-10) |
 | 안 쓰는 함수 지우기 | done | 시험만 부르는 것도(drop-unused) | [e2-17](prd/test.md#e2-17) |
 | 요건 없는 코드 지우기 | done | 지움 · 남김 목록(drop-unused) | [e2-18](prd/test.md#e2-18) |
 

@@ -177,39 +177,6 @@ class PipelineServiceParseMcp(Section):
     )
 
 
-class PipelineServiceTrigger(Section):
-    allow_no_token: bool | None = F(
-        False, "TRIGGER_ALLOW_NO_TOKEN", "TRIGGER_TOKEN 없이 무인증 시작 허용 — 1이면 허용(PC 전용, 경고)", on=("1",)
-    )
-    chain_structure_url: CsvList | None = F(
-        [],
-        "CHAIN_STRUCTURE_URL",
-        "parse 성공 뒤 structure 작업을 올릴 트리거 서버 URL(쉼표로 여러 개) — 비면 이어 올리지 않음(서버 compose는 http://127.0.0.1:8771을 줌)",
-    )
-    client_timeout: float | None = F(10.0, "TRIGGER_CLIENT_TIMEOUT", "트리거 서버 CLI 클라이언트 HTTP 제한 시간(초)")
-    host: str | None = F(
-        "127.0.0.1", "TRIGGER_HOST", "트리거 서버 바인딩 주소 — 비우면 127.0.0.1(모든 인터페이스는 0.0.0.0을 명시 — C-37, 사용자 10-27)"
-    )
-    parse_port: Port | None = F(
-        8770,
-        "TRIGGER_PARSE_PORT",
-        "parse 상주 트리거 서버 포트(--module parse — port 칸이 비었을 때, S7e2: 옛 compose가 TRIGGER_PORT로 넘기던 호스트 칸을 앱 칸으로)",
-    )
-    port: Port | None = F(
-        None,
-        "TRIGGER_PORT",
-        "트리거 서버 포트 — 모듈 칸(parse_port·structure_port)을 따로 주지 않았을 때 두 모듈 모두 이 포트(PC 직접 실행만 — 이미지 안 상주 서버는 이 칸을 쓰지 않고 모듈 칸, VS7e2 R-1)",
-    )
-    structure_port: Port | None = F(
-        8771, "TRIGGER_STRUCTURE_PORT", "structure 상주 트리거 서버 포트(--module structure — port 칸이 비었을 때, S7e2)"
-    )
-    queue_max: int | None = F(100, "TRIGGER_QUEUE_MAX", "트리거 서버 대기 작업 상한(건) — 넘으면 429")
-    shutdown_timeout_sec: float | None = F(300.0, "TRIGGER_SHUTDOWN_TIMEOUT_SEC", "SIGTERM 뒤 실행 중 작업을 기다리는 한도(초)")
-    socket_timeout_sec: int | None = F(30, "TRIGGER_SOCKET_TIMEOUT_SEC", "연결당 소켓 read 제한(초) — 느린 클라이언트 차단")
-    token: SecretStr | None = F(None, "TRIGGER_TOKEN", "트리거 서버 Bearer 토큰 — 필수(없으면 시작 거부)")
-    upload_max_mb: int | None = F(50, "TRIGGER_UPLOAD_MAX_MB", "트리거 서버 /upload 본문 크기 상한(MB)")
-
-
 class PipelineTransformFigures(Section):
     REMOVED = frozenset(
         {
@@ -323,23 +290,20 @@ class PipelineDev(Section):
 
 class PipelineEval(Section):
     REMOVED = frozenset(
-        {"diagram_raster_vlm", "phase_report_legacy", "e2e_qa_set", "e2e_questions"}
-    )  # 사용자 10-29 · e2e_* 10-30(op-08) — 지운 칸·절(남으면 경고만)
-    gold_draft_max_pages: int | None = F(30, "GOLD_DRAFT_MAX_PAGES", "정답 초안 생성(gold_draft)에서 문서당 처리할 쪽 수 상한(쪽)")
-    gold_draft_mermaid_check: bool | None = F(
-        True,
-        "GOLD_DRAFT_MERMAID_CHECK",
-        "정답 초안의 Mermaid 블록 2차 점검을 켤지(0/false/no면 끔)",
-        off=("0", "false", "no"),
-        fold="strip",
-    )
-    qa_draft_max_pages: int | None = F(20, "QA_DRAFT_MAX_PAGES", "질문 초안 생성(qa_draft)에서 문서당 처리할 쪽 수 상한(쪽)")
-    qa_draft_per_page: int | None = F(5, "QA_DRAFT_PER_PAGE", "질문 초안 생성에서 쪽당 질문 수 상한(개)")
-    rerank_model: str | None = F(
-        "BAAI/bge-reranker-v2-m3", "RERANK_MODEL", "검색 단계 실험(pipeline.eval.stages)의 재순위 모델 이름 — 폐쇄망 로컬 캐시에 있어야 함"
-    )
+        {
+            "diagram_raster_vlm",
+            "phase_report_legacy",
+            "e2e_qa_set",
+            "e2e_questions",
+            "gold_draft_max_pages",
+            "gold_draft_mermaid_check",
+            "qa_draft_max_pages",
+            "qa_draft_per_page",
+            "score_table_judge",
+            "rerank_model",
+        }
+    )  # 사용자 10-29 · e2e_* 10-30(op-08) · 정답·질문 초안·표 채점·재순위 모델(op-09가 stages.py용으로 더함) 11-01(e2-10 — PC 평가 도구 지움) — 지운 칸·절(남으면 경고만)
     review_max_rounds: int | None = F(2, "REVIEW_MAX_ROUNDS", "도식 검토 루프의 최대 재추출 횟수(회)")
-    score_table_judge: str | None = F("0", "SCORE_TABLE_JUDGE", "표 구조 채점의 경계 표 판정자(0 없음 | llm 경계 표만 LLM 판정)")
 
 
 class PipelineExtract(Section):
@@ -472,8 +436,8 @@ class PipelineNight(Section):
 
 class PipelinePaths(Section):
     REMOVED = frozenset(
-        {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot", "stack_version"}
-    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) — 지운 칸·절(남으면 경고만)
+        {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot", "stack_version", "report_digest_dir"}
+    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) — 지운 칸·절(남으면 경고만)
     file_meta_path: str | None = F(None, "FILE_META_PATH", "EDW 파일 메타 JSONL 경로(s3_key → 메타)")
     gold_dir: str | None = F(
         None,
@@ -485,7 +449,6 @@ class PipelinePaths(Section):
     out_root: str | None = F(None, "PIPE_OUT_ROOT", "파이프라인 출력 루트(output)")
     parse_tmp: str | None = F(None, "PARSE_TMP", "임시 폴더(첨부 임시 파일은 형제 attach/) — output 아래 2단 이상 하위만 허용")
     raw_root: str | None = F(None, "PARSE_RAW_ROOT", "P0 원본 층(raw/VLM) 캐시 저장소 루트")
-    report_digest_dir: str | None = F(None, "REPORT_DIGEST_DIR", "run_board 날짜·판 요약 폴더 루트(비우면 요약 안 만듦)")
     soffice_bin: str | None = F(
         image_default("SOFFICE_BIN"),
         "SOFFICE_BIN",
@@ -502,8 +465,8 @@ class PipelineConnections(Section):
 
 
 class PipelineService(Section):
+    REMOVED = frozenset({"trigger"})  # 11-01(pl-10 — trigger 서버 지움) — 지운 절(남으면 경고만)
     parse_mcp: PipelineServiceParseMcp = Field(default_factory=PipelineServiceParseMcp)
-    trigger: PipelineServiceTrigger = Field(default_factory=PipelineServiceTrigger)
 
 
 class PipelineTransform(Section):
