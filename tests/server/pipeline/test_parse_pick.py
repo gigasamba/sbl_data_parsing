@@ -1,5 +1,5 @@
-"""C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = FileStorageMap ∖ ParsingMeta: ParsingMeta에 ok·partial 행이 있는 원본 키는 안 고르고,
-행이 없거나(새 문서·통째 실패) 다른 상태면 고른다. 이름 ↔ 원본 키는 manifest.jsonl(없으면 이름 그대로). 받은 순서 그대로.
+"""C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = FileStorageMap ∖ ParsingMeta: ParsingMeta에 ok·partial·skipped_dup 행이(사용자 11-01) 있는 원본 키는 안 고르고,
+행이 없거나(새 문서·통째 실패) 다른 상태(not_parsed·skipped_disk_cap 등)면 고른다. 이름 ↔ 원본 키는 manifest.jsonl(없으면 이름 그대로). 받은 순서 그대로.
 EDW를 못 읽으면 서버(run_mode prod·RUN_ENV dev)는 종료 4, PC는 받은 목록 그대로. 임시 SQLite EDW 대역만 — 외부 접속 없음."""
 
 import json
@@ -17,6 +17,8 @@ DOCS = [
     ("part.pdf", "SFDC/a/part.pdf", "partial", False),  # 부분 성공도 끝난 것
     ("new.pdf", "SFDC/a/new.pdf", None, True),  # ParsingMeta에 없음(새 문서 또는 통째 실패) — 고름
     ("np.pdf", "SFDC/a/np.pdf", "not_parsed", True),  # 행은 있지만 성공 아님 — 고름
+    ("dup.pdf", "SFDC/a/dup.pdf", "skipped_dup", False),  # 완전 중복 — 끝난 것(사용자 11-01)
+    ("cap.pdf", "SFDC/a/cap.pdf", "skipped_disk_cap", True),  # 디스크 상한으로 건너뜀 — 다시 고름
     ("same.pdf", "SFDC/b/same.pdf", None, True),  # 같은 이름이 다른 키(SFDC/a/same.pdf)로 성공 — 키로 보므로 고름
     ("folder.pdf", None, "ok", False),  # manifest 없음(폴더 소스) — 이름이 곧 키
 ]

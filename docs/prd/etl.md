@@ -162,7 +162,7 @@
 - 지금 안 씀: FileStorageMap 갱신 시각 — 가정한 칸 `last_modified_time`, 나중에 EDW 예시에 추가([pl-25](#pl-25)).
 - 파일: `deploy/host/scripts/run_docs.py`(처리 끝난 집합), `pipeline/cli.py`(`night` — 같게 동작하는지 확인).
 - 결정(사용자 10-30 PRD grill): C10 — '새 문서' 후보는 모든 입구(run_docs·night)에서 EDW `FileStorageMap`에 있고 `ParsingMeta`에 없는 것. 문서 대장은 숨김·판 관리에만 쓴다.
-- C10 구현(11-01 `feature/scope-cut-search` — 사용자 11-01 Q1(a)): 파싱 `--source`·`--max-new` 고르기 = 원천 이름(FileStorageMap) 중 `s3_key`(manifest — 없으면 이름)에 ParsingMeta 성공 행(`parse_status` ok·partial)이 없는 것(`pipeline/cli.py` `_unparsed` · `parsing_meta_db.done_source_keys` — 읽기 계정, PC는 `RDB_SQLITE` 대역). **파싱 입구에 EDW 읽기가 생김** — 서버에서 못 읽으면 종료 4, PC는 받은 목록 그대로 + 로그 한 줄. 실패 문서(행 없음)는 다음 실행에 다시. 문서 대장 고르기(pl-32 2c)는 지움. 결정 대기(허브에 물음 11-01): ok·partial 밖 행(skipped_dup 등)도 "끝남"으로 볼지 — 지금은 다시 고름.
+- C10 구현(11-01 `feature/scope-cut-search` — 사용자 11-01 Q1(a)): 파싱 `--source`·`--max-new` 고르기 = 원천 이름(FileStorageMap) 중 `s3_key`(manifest — 없으면 이름)에 ParsingMeta 끝난 행이 없는 것(`pipeline/cli.py` `_unparsed` · `parsing_meta_db.done_source_keys` — 읽기 계정, PC는 `RDB_SQLITE` 대역). **파싱 입구에 EDW 읽기가 생김** — 서버에서 못 읽으면 종료 4, PC는 받은 목록 그대로 + 로그 한 줄. 실패 문서(행 없음)는 다음 실행에 다시. 문서 대장 고르기(pl-32 2c)는 지움. "끝남" = `parse_status` ok·partial·skipped_dup(사용자 11-01) — not_parsed·skipped_disk_cap·실패·행 없음은 다시 고름. ParsingMeta 상태 갱신 길은 지운 채(게시는 넣기만 — 사용자 11-01).
 - Status: todo
 
 <a id="pl-24"></a>

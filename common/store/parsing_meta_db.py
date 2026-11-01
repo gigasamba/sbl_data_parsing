@@ -15,7 +15,9 @@ from common.config.settings import cfg
 
 DEFAULT_TABLE = "AI.ParsingMeta"
 TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # source.py TABLE_ID_RE와 같은 규칙(SQL 삽입 방지)
-DONE_STATUSES = ("ok", "partial")  # C10(사용자 10-31) — 이 parse_status 행이 있으면 "파싱 끝난 문서"(통째 실패는 ParsingMeta에 안 씀 — C3)
+# C10(사용자 10-31 · skipped_dup 11-01 — 완전 중복은 매일 밤 다시 안 고름) — 이 parse_status 행이 있으면 "파싱 끝난 문서"
+# (not_parsed·skipped_disk_cap·실패는 다시 고름 · 통째 실패는 ParsingMeta에 안 씀 — C3)
+DONE_STATUSES = ("ok", "partial", "skipped_dup")
 # 열 순서 — EDW DDL docs/operations/parsing_meta_mssql.sql과 같음(parse_meta_id·parsed_at·source_key_hash는 표가 자동으로 채움, test_parsing_meta_ddl.py가 고정)
 # PM2(10-15, 사용자) — 열·키를 최소로: doc_key(원본 sha256)만 필수, 그 밖은 전부 비어도 됨. engines_used·
 # engines_summary는 맨 끝에 더함(기존 열 자리는 안 바꿔 디프를 작게).
@@ -108,7 +110,7 @@ def _find_by_doc_key_rows(cur, table, ph, doc_key):
 
 
 def _done_keys_rows(cur, table):
-    """C10(pl-12, 사용자 10-31) — 파싱이 끝난 원본 키(source_key) 집합 — parse_status가 DONE_STATUSES(ok·partial)인 행만.
+    """C10(pl-12, 사용자 10-31) — 파싱이 끝난 원본 키(source_key) 집합 — parse_status가 DONE_STATUSES(ok·partial·skipped_dup — 사용자 11-01)인 행만.
     파싱 입구(pipeline.cli `_unparsed`)가 "FileStorageMap ∖ ParsingMeta"로 새 문서를 고를 때 쓴다(읽기만, SELECT).
     상수 글자만 SQL에 끼우고(DONE_STATUSES는 코드 상수) 값 바인딩은 없음."""
     done = ", ".join(f"'{v}'" for v in DONE_STATUSES)
