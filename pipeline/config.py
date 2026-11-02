@@ -388,21 +388,17 @@ class PipelineHostRunDocs(Section):
 
 
 class PipelineHost(Section):
+    REMOVED = frozenset(
+        {"index_conf_dir", "load_cpus", "load_mem_limit", "publish_cpus", "publish_mem_limit"}
+    )  # 0.2.0(pl-46) — 이름 있는 색인·1회 job 컨테이너(load·publish — #100에서 지움) 칸(남으면 경고만)
     gold_dir: str | None = F(
         None,
         "GOLD_DIR",
-        "호스트의 사람 정답(gold) 폴더(서버 경로) — run_tool.sh가 컨테이너 /data/gold로 읽기 전용 마운트하는 원본(T-21 — 코드가 읽는 칸은 pipeline.paths.gold_dir)",
+        "호스트의 사람 정답(gold) 폴더(서버 경로) — 컨테이너 /data/gold로 읽기 전용 마운트하는 원본(T-21 — 코드가 읽는 칸은 pipeline.paths.gold_dir · 붙이는 방식은 결정 대기 — doc.md)",
     )
     image: str | None = F(None, "DATA_PIPELINE_IMAGE", "data-pipeline 이미지 이름:태그(compose 필수 변수)")
-    index_conf_dir: str | None = F(
-        None, "INDEX_CONF_DIR", "색인 설정 json 폴더(호스트 경로) — 컨테이너 /app/output/index-conf에 읽기 전용 연결"
-    )
-    load_cpus: float | None = F(1.0, "LOAD_CPUS", "load 컨테이너 CPU 개수 상한(개)")
-    load_mem_limit: str | None = F("4g", "LOAD_MEM_LIMIT", "load 컨테이너 메모리·스왑 상한(docker 형식, 예 4g)")
-    parse_cpus: float | None = F(3.0, "PARSE_CPUS", "parse 컨테이너(1회 job·상주 트리거) CPU 개수 상한(개)")
+    parse_cpus: float | None = F(3.0, "PARSE_CPUS", "상주 파싱 컨테이너(data-pipeline-parse) CPU 개수 상한(개)")
     parse_mem_limit: str | None = F("16g", "PARSE_MEM_LIMIT", "parse 컨테이너 메모리·스왑 상한(docker 형식)")
-    publish_cpus: float | None = F(1.0, "PUBLISH_CPUS", "publish 컨테이너 CPU 개수 상한(개)")
-    publish_mem_limit: str | None = F("2g", "PUBLISH_MEM_LIMIT", "publish 컨테이너 메모리·스왑 상한(docker 형식)")
     run_docs_dir: str | None = F(
         None,
         "RUN_DOCS_DIR",
@@ -434,15 +430,23 @@ class PipelineNight(Section):
 
 class PipelinePaths(Section):
     REMOVED = frozenset(
-        {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot", "stack_version", "report_digest_dir", "file_meta_path"}
-    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) · file_meta_path 11-02(pl-29 — 적재가 EDW 조인) — 지운 칸·절(남으면 경고만)
+        {
+            "mineru_bin",
+            "paddle_python",
+            "soffice_candidates",
+            "stack_snapshot",
+            "stack_version",
+            "report_digest_dir",
+            "file_meta_path",
+            "index_conf",
+        }
+    )  # 0.2.0 index_conf(pl-46 — 이름 있는 색인) · 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) · file_meta_path 11-02(pl-29 — 적재가 EDW 조인) — 지운 칸·절(남으면 경고만)
     gold_dir: str | None = F(
         None,
         "GOLD_DIR",
-        "사람 정답(gold) 폴더 — score_gold·점검 도구의 기본 입력(코드가 읽는 경로 — 컨테이너 안은 run_tool.sh가 /data/gold로 줌, 원본은 pipeline.host.gold_dir — T-21)",
+        "사람 정답(gold) 폴더 — score_gold·점검 도구의 기본 입력(코드가 읽는 경로 — 컨테이너 안은 /data/gold, 원본은 pipeline.host.gold_dir — T-21)",
     )
     images_root: str | None = F(None, "PARSE_IMAGES_ROOT", "그림 PNG·index.jsonl 저장 루트")
-    index_conf: str | None = F(None, "INDEX_CONF", "색인 설정 JSON 경로(있으면 색인 모듈로 구조화)")
     out_root: str | None = F(None, "PIPE_OUT_ROOT", "파이프라인 출력 루트(output)")
     parse_tmp: str | None = F(None, "PARSE_TMP", "임시 폴더(첨부 임시 파일은 형제 attach/) — output 아래 2단 이상 하위만 허용")
     raw_root: str | None = F(None, "PARSE_RAW_ROOT", "P0 원본 층(raw/VLM) 캐시 저장소 루트")
@@ -512,9 +516,7 @@ def cfg():
 
 by_env, given, dropped, checked = _VIEW.by_env, _VIEW.given, _VIEW.dropped, _VIEW.checked  # common.config.settings의 같은 이름 설명
 
-GOLD_MOUNT = Path(
-    IMAGE_PATHS["gold_mount"]
-)  # run_tool.sh가 사람 정답 폴더를 붙이는 컨테이너 자리(이미지 약속 — 표는 settings.IMAGE_PATHS 한 곳, R-12)
+GOLD_MOUNT = Path(IMAGE_PATHS["gold_mount"])  # 사람 정답 폴더가 붙는 컨테이너 자리(이미지 약속 — 표는 settings.IMAGE_PATHS 한 곳, R-12)
 
 
 def gold_dir():

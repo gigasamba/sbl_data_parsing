@@ -38,7 +38,6 @@ CATALOG_VALUES = {
     "EMBED_MODEL": "",
     "EMBED_QUERY_CACHE": "",
     "EMBED_QUERY_PREFIX": "",
-    "INDEX_CONF": "",
     "LLM_MODEL": "",
     "LLM_SPEND_FILE": "",
     "MCP_BUNDLE": "",

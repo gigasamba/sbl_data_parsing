@@ -59,7 +59,7 @@ IMAGE_PATHS = {
     # 이 표로 만든 deploy/host/scripts/image_paths.json을 읽는다(호스트 python엔 pydantic이 없음 — settings_env.sh가 APP_* env로도 냄).
     "output_root": "/app/output",  # 결과 폴더를 붙이는 자리(compose RAG_OUT → 이 자리)
     "code_root": "/app/deploy",  # 코드 자리(PYTHONPATH — 실행 이미지는 서버 코드 폴더를 여기에 붙임)
-    "gold_mount": "/data/gold",  # run_tool.sh가 사람 정답 폴더를 붙이는 자리(pipeline.config.gold_dir — 옛 `-e GOLD_DIR=/data/gold`)
+    "gold_mount": "/data/gold",  # 사람 정답 폴더가 붙는 자리(pipeline.config.gold_dir — 옛 run_tool.sh `-e GOLD_DIR=/data/gold`, 붙이는 방식은 결정 대기 — doc.md)
     "image_env": "/app/docker/image_env.txt",  # 빌드 때 이미지 ENV를 적어 둔 파일(common.config.boot — 라이브러리 env가 이미지 값만 덮게)
     "docs_mount": "/data/docs",  # 원본 폴더를 읽기 전용으로 붙이는 자리(compose DOC_SRC → 이 자리 · pipeline DOC_DIR 기본값)
 }
@@ -1243,10 +1243,10 @@ class CommonConnectionsPg(Section):
 
 
 class CommonDevDocker(Section):
-    REMOVED = frozenset({"postgres_db", "postgres_user"})  # 사용자 10-30(op-08) — compose는 PG_DB·PG_USER로 채움(남으면 경고만)
+    REMOVED = frozenset(
+        {"postgres_db", "postgres_user", "minio_image", "minio_publish_port", "smoke_nightly", "smoke_pm_bucket", "smoke_source"}
+    )  # 사용자 10-30(op-08) — compose는 PG_DB·PG_USER로 채움 · 0.2.0(pl-46) MinIO·s3 원천·자정 배치 모양 시험 칸(11-01 스모크에서 지움)(남으면 경고만)
     mcp_publish_port: Port | None = F(18765, "MCP_PUBLISH_PORT", "시험 compose에서 MCP를 호스트에 게시할 포트")
-    minio_image: str | None = F("bitnamilegacy/minio:latest", "MINIO_IMAGE", "시험용 minio 이미지")
-    minio_publish_port: Port | None = F(19000, "MINIO_PUBLISH_PORT", "시험 minio를 호스트에 게시할 포트")
     pg_bind: str | None = F("127.0.0.1", "PG_BIND", "시험 PostgreSQL 컨테이너를 호스트에 게시할 바인드 주소")
     pg_effective_cache: str | None = F("12GB", "PG_EFFECTIVE_CACHE", "시험 PG effective_cache_size")
     pg_image: str | None = F("pgvector/pgvector:pg16", "PG_IMAGE", "시험 PostgreSQL(pgvector) 이미지")
@@ -1262,15 +1262,12 @@ class CommonDevDocker(Section):
         "SMOKE_SETTINGS",
         "스모크 시험 컨테이너가 붙여 읽는 설정 파일(settings.yaml) 경로 — MCP 토큰·임베딩·Object Storage 키 등(S7e1 — 옛 SMOKE_ENV env 파일)",
     )
-    smoke_keep: bool | None = F(False, "SMOKE_KEEP", "1이면 시험 끝나도 pg·minio 컨테이너를 남김")
+    smoke_keep: bool | None = F(False, "SMOKE_KEEP", "1이면 시험 끝나도 pg 컨테이너를 남김")
     smoke_limit: int | None = F(0, "SMOKE_LIMIT", "시험에서 파싱할 문서 수 상한(0이면 제한 없음)")
     smoke_mode: str | None = F("prod", "SMOKE_MODE", "시험 파싱 모드(prod|test — test는 형식별 표본)")
-    smoke_nightly: bool | None = F(False, "SMOKE_NIGHTLY", "1이면 자정 배치 모양(parse·publish만, pg·구조화·적재·MCP 생략)")
     smoke_pg_password: SecretStr | None = F(
         None, "SMOKE_PG_PASSWORD", "시험 PostgreSQL 비밀번호(compose.test.yml이 컨테이너 PG_PASSWORD로 넘김 — S7e1)"
     )
-    smoke_pm_bucket: str | None = F("rag-publish", "SMOKE_PM_BUCKET", "시험 결과 게시용 minio 버킷 이름")
-    smoke_source: str | None = F(IMAGE_PATHS["docs_mount"], "SMOKE_SOURCE", "시험 원천 위치(원본 폴더 자리 또는 s3://버킷/접두)")
 
 
 class CommonModelsEmbed(Section):
@@ -1386,8 +1383,8 @@ class CommonHost(Section):
 
 class CommonPaths(Section):
     REMOVED = frozenset(
-        {"eval_sets_dir", "korean_font", "config_dir", "criteria_file"}
-    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치 · op-08) — 지운 칸(남으면 경고만)
+        {"eval_sets_dir", "korean_font", "config_dir", "criteria_file", "index_root", "sources_file"}
+    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치 · op-08) · 0.2.0(pl-46) 이름 있는 색인·원천 목록 파일 — 지운 칸(남으면 경고만)
     client_roster: str | None = F(None, "CLIENT_ROSTER", "고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) — 용어·별칭에 합침")
     doc_dir: str | None = F(
         image_default("DOC_DIR"),
@@ -1401,7 +1398,6 @@ class CommonPaths(Section):
     )
     draft_terms_out: str | None = F(None, "DRAFT_TERMS_OUT", "용어 자동 초안 CSV 경로")
     glossary_dir: str | None = F(None, "GLOSSARY_DIR", "용어 사전 폴더(domain_terms.csv·id_patterns.csv 등)")
-    index_root: str | None = F(None, "INDEX_ROOT", "이름 있는 색인 폴더 루트(<index_id>/bundle)")
     mcp_bundle: str | None = F(
         None,
         "MCP_BUNDLE",
@@ -1414,11 +1410,6 @@ class CommonPaths(Section):
     )
     runlog_dir: str | None = F(None, "RUNLOG_DIR", "실행 기록(output/logs) 루트 폴더")
     source_manifest: str | None = F(None, "SOURCE_MANIFEST", "원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응)")
-    sources_file: str | None = F(
-        None,
-        "SOURCES_FILE",
-        "원천 목록 파일 경로(비우면 resources/mappings/sources.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰)",
-    )
     stack_file: str | None = F(
         None,
         "PIPELINE_STACK_FILE",
@@ -1470,10 +1461,10 @@ class CommonStore(Section):
     REMOVED = frozenset(
         {"registry_editions", "registry_retry_max", "doc_registry", "registry_etag_md5", "struct_backend", "struct_db"}
     )  # 사용자 10-30(pl-32 — 재시도 횟수 없음) · 10-31(pl-12 C10 — 문서 대장·숨김 통째로 지움 · pl-08 — 정형 저장소 통째로 지움) — 옛 파일에 남아도 경고만
-    run_mode: Annotated[Literal["prod", "test"] | None, BeforeValidator(lambda v: v or None)] = F(  # "" = 설정 안 함(옛 str 칸과 같게)
+    run_mode: Annotated[Literal["prod"] | None, BeforeValidator(lambda v: v or None)] = F(  # "" = 설정 안 함(옛 str 칸과 같게)
         None,
         "RUN_MODE",
-        "실행 모드 prod|test — pipeline --mode 기본, prod이면 EDW를 못 읽을 때 종료 4·VLM 시간 완화. dev·prd 서버는 prod(pl-12)",
+        "실행 모드 prod — prod이면 EDW를 못 읽을 때 종료 4·VLM 시간 완화. dev·prd 서버는 prod(pl-12 · test 값은 0.2.0에 지움 — 11-01 표본 모드 없앰)",
     )
 
 

@@ -13,7 +13,7 @@ required:
   # ─── 실행 환경 [PC·서버] ───
   env:
     run_env:  # 실행 환경 · 값: local·dev·prd 중 하나
-    run_mode:  # 실행 모드 prod|test · 값: prod·test 중 하나
+    run_mode:  # 실행 모드 prod · 값: prod·test 중 하나
   # ─── PostgreSQL(pgvector · gold) [PC·서버] ───
   pg:
     host:  # PostgreSQL 서버 호스트 · 값: 호스트 이름·IP
@@ -291,17 +291,14 @@ ops:
     doc_dir_prepared:  # 준비(dedup·회전) 끝난 문서 폴더 · 값: 경로
     draft_terms_out:  # 용어 자동 초안 CSV 경로 · 값: 경로
     glossary_dir:  # 용어 사전 폴더(domain_terms.csv·id_patterns.csv 등) · 값: 경로
-    index_root:  # 이름 있는 색인 폴더 루트(<index_id>/bundle) · 값: 경로
     mcp_bundle:  # 검색할 로컬 묶음(bundle) 폴더 경로 · 값: 경로
     output_root:  # 결과(output) 폴더 · 값: 경로
     runlog_dir:  # 실행 기록(output/logs) 루트 폴더 · 값: 경로
     source_manifest:  # 원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응) · 값: 경로
-    sources_file:  # 원천 목록 파일 경로(비우면 resources/mappings/sources.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
     stack_file:  # 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
   pipeline_paths:
     gold_dir:  # 사람 정답(gold) 폴더 · 값: 경로
     images_root:  # 그림 PNG·index.jsonl 저장 루트 · 값: 경로
-    index_conf:  # 색인 설정 JSON 경로(있으면 색인 모듈로 구조화) · 값: 경로
     out_root:  # 파이프라인 출력 루트(output) · 값: 경로
     parse_tmp:  # 임시 폴더(첨부 임시 파일은 형제 attach/) · 값: 경로
     raw_root:  # P0 원본 층(raw/VLM) 캐시 저장소 루트 · 값: 경로
@@ -315,13 +312,8 @@ ops:
   # ─── 서버 컨테이너 — CPU·메모리 한도·폴더 ───
   pipeline_host:
     gold_dir:  # 호스트의 사람 정답(gold) 폴더(서버 경로) · 값: 호스트 이름·IP
-    index_conf_dir:  # 색인 설정 json 폴더(호스트 경로) · 값: 호스트 이름·IP
-    load_cpus: 1.0  # load 컨테이너 CPU 개수 상한(개) · 기본 1.0 · 값: 0 이상
-    load_mem_limit: 4g  # load 컨테이너 메모리·스왑 상한(docker 형식, 예 4g) · 기본 4g · 값: 글자
-    parse_cpus: 3.0  # parse 컨테이너(1회 job·상주 트리거) CPU 개수 상한(개) · 기본 3.0 · 값: 0 이상
+    parse_cpus: 3.0  # 상주 파싱 컨테이너(data-pipeline-parse) CPU 개수 상한(개) · 기본 3.0 · 값: 0 이상
     parse_mem_limit: 16g  # parse 컨테이너 메모리·스왑 상한(docker 형식) · 기본 16g · 값: 글자
-    publish_cpus: 1.0  # publish 컨테이너 CPU 개수 상한(개) · 기본 1.0 · 값: 0 이상
-    publish_mem_limit: 2g  # publish 컨테이너 메모리·스왑 상한(docker 형식) · 기본 2g · 값: 글자
     run_docs_dir:  # 문서별 flow 러너(deploy/host/scripts/run_docs.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) · 값: 호스트 이름·IP
     structure_cpus: 2.0  # structure 컨테이너(job·상주 트리거·색인) CPU 개수 상한(개) · 기본 2.0 · 값: 0 이상
     structure_mem_limit: 8g  # structure 컨테이너 메모리·스왑 상한(docker 형식) · 기본 8g · 값: 글자
@@ -367,8 +359,6 @@ dev:
   # ─── PC 시험 Docker ───
   docker:
     mcp_publish_port: 18765  # 시험 compose에서 MCP를 호스트에 게시할 포트 · 기본 18765 · 값: 1~65535
-    minio_image: bitnamilegacy/minio:latest  # 시험용 minio 이미지 · 기본 bitnamilegacy/minio:latest · 값: 글자
-    minio_publish_port: 19000  # 시험 minio를 호스트에 게시할 포트 · 기본 19000 · 값: 1~65535
     pg_bind: 127.0.0.1  # 시험 PostgreSQL 컨테이너를 호스트에 게시할 바인드 주소 · 기본 127.0.0.1 · 값: 호스트 이름·IP
     pg_effective_cache: 12GB  # 시험 PG effective_cache_size · 기본 12GB · 값: 경로
     pg_image: pgvector/pgvector:pg16  # 시험 PostgreSQL(pgvector) 이미지 · 기본 pgvector/pgvector:pg16 · 값: 글자
@@ -380,13 +370,10 @@ dev:
     pg_shm: 3g  # 시험 PG 컨테이너 공유 메모리(shm_size) · 기본 3g · 값: 글자
     pg_work_mem: 64MB  # 시험 PG work_mem · 기본 64MB · 값: 글자
     smoke_settings:  # 스모크 시험 컨테이너가 붙여 읽는 설정 파일(settings.yaml) 경로 · 값: 경로
-    smoke_keep: false  # 1이면 시험 끝나도 pg·minio 컨테이너를 남김 · 기본 false · 값: true·false
+    smoke_keep: false  # 1이면 시험 끝나도 pg 컨테이너를 남김 · 기본 false · 값: true·false
     smoke_limit: 0  # 시험에서 파싱할 문서 수 상한(0이면 제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음)
     smoke_mode: prod  # 시험 파싱 모드(prod|test — test는 형식별 표본) · 기본 prod · 값: prod·test 중 하나
-    smoke_nightly: false  # 1이면 자정 배치 모양(parse·publish만, pg·구조화·적재·MCP 생략) · 기본 false · 값: true·false
     smoke_pg_password:  # 시험 PostgreSQL 비밀번호(compose.test.yml이 컨테이너 PG_PASSWORD로 넘김 — S7e1) · 값: 비밀 글자 [비밀]
-    smoke_pm_bucket: rag-publish  # 시험 결과 게시용 minio 버킷 이름 · 기본 rag-publish · 값: 글자
-    smoke_source: /data/docs  # 시험 원천 위치(원본 폴더 자리 또는 s3://버킷/접두) · 기본 /data/docs · 값: 경로
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 # tuning — 코드 상수 후보(사용자 10-30 op-08): 기본값 말고 쓴 흔적이 없는 내부 조정값·자원 세부값. 보통 비워 둔다.

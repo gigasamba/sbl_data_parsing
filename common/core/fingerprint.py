@@ -43,7 +43,6 @@ EXCLUDED_FILES = (
     "core/__init__.py",  # 하위 패키지 입구(빈 파일)
     "store/__init__.py",  # 하위 패키지 입구(빈 파일)
     "check/check_modules.py",  # 모듈 경계 점검 — 개발·반입 점검 도구, 인계 내용과 무관
-    "check/os_put.py",  # 시험용 Object Storage 올리기 — 운영 도구
     "check/ping_models.py",  # 모델 연결 확인 — 운영 도구
     "core/exitclean.py",  # 종료 정리(pl-27 — 임시 파일 지우기·자식 회수) — 프로세스 관리, 인계 내용과 무관
     "core/console.py",  # CLI 표준 출력을 UTF-8로(S12 /simplify — utf8_stdout) — 화면 출력만, 인계 내용과 무관
@@ -65,7 +64,6 @@ EXCLUDED_FILES = (
     "ai/embed.py",  # 임베딩 계산은 structure(쓰기)·search(질의)가 맞아야 하지만 search는 이 FINGERPRINT 경계 밖(MARK에 없음)이라 넣어도 그 위험을 못 막고,
     # 질의 캐시 코드(RV1)가 내용과 무관하게 자주 바뀌어 넣으면 그 캐시 수정마다 재파싱을 유발(10-09 사고). structure 쪽 재사용 판정은 common/artifacts.code_fp("s")가 이미 embed.py를 따로 잡음(cli/index.py)
     "ai/guard.py",  # 내부망 확인(허용/거부) — 통과하면 호출 내용을 바꾸지 않음, _rep/bundle 바이트·해석과 무관
-    "core/index_cfg.py",  # 색인 설정·주소(index_id·PG 스키마) — search·cli/index.py 전용, parse·structure·load 경계 밖
     "ai/llm.py",  # LLM 클라이언트(재시도·캐시·예산) — 호출 메커니즘 + 모델 프로필(주소·이름) env 조회(CT1 — 옛 models.py 병합)
     "core/meaning.py",  # 유의미 토큰 — parse 내부(대표 선정·QA)·structure 내부(쪽 번호 제거) 각자 전용, 서로 맞출 공유 값이 없음(CT1 — text.py와 tokens() 이름이 겹쳐 병합 안 하고 그대로 둠)
     "store/mssql.py",  # S8b — 회사 DB(SQL Server) SQLAlchemy 연결 — 연결 방법만
@@ -77,7 +75,6 @@ EXCLUDED_FILES = (
     "core/resources.py",  # 실행 자원(CPU·메모리) 판단 — 병렬 수 결정만
     "core/runlog.py",  # 실행 로그(output/RUNLOG.md 등)
     "store/services.py",  # 외부 서비스 탐색(Docker pgvector 등) — 연결 방법만
-    "core/sources.py",  # 수집(ingest) 원천 표 목록 — parse 이전 단계(수집 서버), 모듈 핸드오프 밖
     "store/db/",  # S8a — pgvector 표 정의·행 모양·Alembic 판·migrate 명령(폴더째 — "/"로 끝나면 그 아래 전부). DB 표 모양만,
     # _rep/bundle 내용과 무관 · 판을 더할 때마다 이 파일을 고치지 않게(이 파일은 모든 층의 공용 의존 — code_fp)
 )
