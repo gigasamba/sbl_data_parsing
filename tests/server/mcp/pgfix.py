@@ -32,10 +32,7 @@ DOC_META = (
     "service_type",
     "doc_class",
     "created_at",
-    "rep_key",
-    "rep_bucket",
-    "parsed_at",
-    "doc_key",
+    "s3_key",
 )
 SCHEMA = "test_mcp"  # stand-in file <dir>/test_mcp.sqlite — a temp dir per bundle, never a shared one
 

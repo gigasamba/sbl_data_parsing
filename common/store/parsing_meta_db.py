@@ -101,14 +101,29 @@ def _insert_new_rows(cur, table, ph, rows, integrity_error, columns=None):
     return inserted, skipped
 
 
-def _find_by_source_rows(cur, table, ph, source_key):
-    """원본 키(source_key = 원본 전체 경로)의 EDW 행 — 읽기만(SELECT). 적재가 gold doc에 대표 결과 위치를 복사할 때 쓴다(C8 — mc-15)."""
-    cur.execute(
-        f"SELECT source_system, source_key, parse_date, status, rep_bucket, rep_key, parsed_at FROM {table} WHERE source_key={ph}",
-        (source_key,),
-    )
-    cols = ["source_system", "source_key", "parse_date", "status", "rep_bucket", "rep_key", "parsed_at"]
-    return [dict(zip(cols, r)) for r in cur.fetchall()]
+REP_COLS = ("source_system", "source_key", "parse_date", "status", "rep_bucket", "rep_key", "parsed_at", "sha256")
+IN_CHUNK = 500  # ponytail: IN 목록을 이만큼씩 나눠 묻는다 — 아주 넓은 범위(수만 건)는 느림, 필요하면 임시 표 조인으로
+
+
+def _rows_where(cur, table, ph, col, values):
+    """col IN (values)인 행(REP_COLS) — 읽기만(SELECT). 값은 IN_CHUNK개씩 나눠 묻는다. col은 코드 상수만."""
+    out, values = [], list(values)
+    for k in range(0, len(values), IN_CHUNK):
+        part = values[k : k + IN_CHUNK]
+        cur.execute(f"SELECT {', '.join(REP_COLS)} FROM {table} WHERE {col} IN ({', '.join([ph] * len(part))})", tuple(part))
+        out += [dict(zip(REP_COLS, r)) for r in cur.fetchall()]
+    return out
+
+
+def _rows_parsed(cur, table, ph, lo, hi):
+    """parsed_at(UTC)이 [lo, hi] 범위인 행 — lo·hi는 (연산자, 시각 글자) 또는 None."""
+    conds, vals = [], []
+    for b in (lo, hi):
+        if b:
+            conds.append(f"parsed_at {b[0]} {ph}")
+            vals.append(b[1])
+    cur.execute(f"SELECT {', '.join(REP_COLS)} FROM {table} WHERE {' AND '.join(conds)}", tuple(vals))
+    return [dict(zip(REP_COLS, r)) for r in cur.fetchall()]
 
 
 def _done_keys_rows(cur, table):
@@ -120,21 +135,17 @@ def _done_keys_rows(cur, table):
     return {r[0] for r in cur.fetchall()}
 
 
-def find_rep(db, source_system, source_key):
-    """C8(mc-15, 11-01) — 적재 때 gold doc에 복사할 대표 결과 위치: {rep_bucket, rep_key, parsed_at} 또는 None.
-    연결 키는 source_system + source_key(사용자 11-01). 같은 원본이 재파싱으로 여러 행이면 status='active'인 것 중(없으면 전체 중)
-    parse_date가 가장 늦은 행. source_system이 맞는 행이 없으면 source_key만 맞는 행(게시가 원천 이름을 다르게 적은 옛 행) — ponytail:
-    원천 표기가 하나로 정리되면(pl-28) 이 대체를 뺀다. rep_bucket·rep_key가 비면 None. 조회 예외는 호출부가 처리."""
-    rows = db.find_by_source(source_key)
+def pick_rep(rows, source_system):
+    """같은 원본(source_key)의 행들 → 쓸 행 하나 또는 None(mc-17 — 원문 도구가 부를 때 읽음, C8은 11-01에 '적재 때 복사'에서 바뀜).
+    연결 키는 source_system + source_key(사용자 11-01). 재파싱으로 여러 행이면 status='active'인 것 중(없으면 전체 중) parse_date가 가장 늦은 행.
+    source_system이 맞는 행이 없으면, 남은 행이 모두 한 원천일 때만 그것으로 대체(게시가 원천 이름을 다르게 적은 옛 행) — ponytail:
+    원천 표기가 하나로 정리되면(pl-28) 이 대체를 뺀다. 조회 예외는 호출부가 처리."""
     same = [r for r in rows if r.get("source_system") == source_system]
-    rows = same or (rows if len({r.get("source_system") for r in rows}) == 1 else [])  # 다른 원천끼리 이름이 겹치면 대체하지 않음
+    rows = same or (rows if len({r.get("source_system") for r in rows}) == 1 else [])
     if not rows:
         return None
     active = [r for r in rows if r.get("status") == "active"]
-    pick = max(active or rows, key=lambda r: r.get("parse_date") or "")
-    if not pick.get("rep_bucket") or not pick.get("rep_key"):
-        return None
-    return {"rep_bucket": pick["rep_bucket"], "rep_key": pick["rep_key"], "parsed_at": pick.get("parsed_at")}
+    return max(active or rows, key=lambda r: r.get("parse_date") or "")
 
 
 class MssqlStore:
@@ -195,8 +206,11 @@ class MssqlStore:
             self.cn.rollback()
             raise
 
-    def find_by_source(self, source_key):
-        return _find_by_source_rows(self.cn.cursor(), self.ident, "%s", source_key)
+    def rows_where(self, col, values):
+        return _rows_where(self.cn.cursor(), self.ident, "%s", col, values)
+
+    def rows_parsed(self, lo, hi):
+        return _rows_parsed(self.cn.cursor(), self.ident, "%s", lo, hi)
 
     def done_source_keys(self):
         return _done_keys_rows(self.cn.cursor(), self.ident)
@@ -239,8 +253,11 @@ class SqliteStore:
         self.cn.commit()
         return counts
 
-    def find_by_source(self, source_key):
-        return _find_by_source_rows(self.cn.cursor(), self.table, "?", source_key)
+    def rows_where(self, col, values):
+        return _rows_where(self.cn.cursor(), self.table, "?", col, values)
+
+    def rows_parsed(self, lo, hi):
+        return _rows_parsed(self.cn.cursor(), self.table, "?", lo, hi)
 
     def done_source_keys(self):
         return _done_keys_rows(self.cn.cursor(), self.table)

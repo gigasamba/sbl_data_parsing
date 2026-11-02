@@ -19,15 +19,15 @@
 | 파일 메타는 `doc`에만 | 고객·`sf_*`·`doc_class`·`created_at`·`contract_id` 같은 파일 메타는 시스템별 `doc`에만 둔다. `chunk`는 문서 키만 갖고 메타를 복사하지 않는다(예외 `faq.chunk.faq_group`). 거르기는 `doc`에서 문서 범위를 고른 뒤 그 안의 `chunk`만 찾는다([pl-28](../prd/load-schema.md#pl-28)). |
 | ParsingMeta = 파싱 정보만 | EDW `AI.ParsingMeta`에는 원천 키·파싱 상태·silver 위치·단계별 칸만 쓴다(G19). 예외: 같은 내용 묶기용 원본 지문 `sha256`은 남긴다(C5). 파일 메타는 쓰지 않는다. 파싱이 통째로 실패한 문서는 행을 쓰지 않는다(C3 — 다음 실행에서 다시 후보). |
 | 판 표기 둘 | 두 곳 모두 이름은 `pipeline_version` — ParsingMeta `pipeline_version` = 이 문서를 gold에 올린 판(다시 올릴지 판단) · gold `doc.pipeline_version` = 이 행을 만든 코드 판(검색 쪽 확인). 뜻은 C9대로 나누고 이름만 맞춘다(사용자 10-31 grill — C9 고침, ParsingMeta `gold_version` 안은 없앰). |
-| 근거 주소 `rep_uri` | 검색 중 EDW에 접속하지 않는다 — 적재 때 ParsingMeta의 `rep_key`를 gold `doc.rep_key`로 복사하고, `rep_uri`(`s3://<버킷>/<rep_key>`)는 그 값으로 만든다(C8 — mc-15·mc-17). |
+| 근거 주소 `rep_uri` | (11-01 사용자 — C8 바뀜) pgvector에는 거르기 메타만 둔다. 대표 결과 위치(`rep_bucket`·`rep_key`)·파싱 시각(`parsed_at`)·원본 sha256은 ParsingMeta에만 두고, 원문 도구(`list_doc_fulltext`·`get_doc_fulltext` 등록 시각 가드)가 부를 때 `source_system` + `source_key`(= gold `doc.s3_key`)로 읽는다 — EDW를 못 읽으면 `registry_unavailable`. `search` 근거에는 `rep_uri`가 없다(운영 12칸). 적재 때 복사하던 길(mc-15 첫 구현)은 지웠다. |
 | 가장 늦은 행 | 같은 `s3_key`가 `AI.FileStorageMap`에 여러 행이면 `created_at`이 가장 큰 행을 기준으로 삼는다(A4). 나중에 같은 `s3_key`의 더 새 행이 오면 **같은 `doc_id`를 유지한다** — `file_size`가 같으면 다시 파싱하지 않고 저장된 기준·메타만 새 행으로 고치며, `file_size`가 조금이라도 다르면 같은 `doc_id`로 다시 파싱·다시 적재한다(원본을 내려받는 sha256 비교는 하지 않음 — 사용자 10-31). 밀려난 행은 EDW 예외 이력 표(§4 `edw.SupersededRow`, 새로 — D-9)에 남긴다(사용자 10-31 grill, A4 고침). |
 | 근거 키 | `doc.file_path`는 지운다. MCP 근거의 `chunk_key`는 `<doc_id>:<순번>` — `doc_id`는 gold `doc.doc_id`(자동 번호), 청크는 `doc_id`만 갖는다(FK, 청크에 `s3_key` 없음). 스키마 5벌이 **시퀀스 하나를 함께 써서** `doc_id`가 스키마끼리 겹치지 않는다(허브 제안 — 사용자 확인 11-01). 적재는 `s3_key`로 upsert하고 다시 넣지 않으므로 `doc_id`가 바뀌지 않는다. `make_chunk_key`·sha256 `doc_key`는 0.2.0에 없어진다(사용자 10-31 grill — mc-16의 `<doc_key>:<순번>`을 뒤집음). |
-| 원본 주소 | `source_uri`는 gold `doc.s3_key`로 만들고, 근거 주소 `rep_uri`는 `doc.rep_key`로 만든다(C8) — `s3_key`는 `doc`에만 둔다(사용자 10-31 grill). |
+| 원본 주소 | `source_uri`는 gold `doc.s3_key`로 만든다 — `s3_key`는 `doc`에만 둔다(사용자 10-31 grill). 대표 결과 주소 `rep_uri`는 ParsingMeta에서(위 줄). |
 | 원천 id 칸 | 원천 시스템의 id(영업 기회 id 등)는 스키마마다 그 EDW 원본 표의 칸 이름 그대로 둔다(예: `crms.doc`은 CRMS 원본 칸 이름) — `sf_op_id` 같은 한 이름을 함께 쓰지 않는다. 아직 모르는 이름은 "EDW 원본 칸 이름 — D-1 확인"(사용자 10-31 grill). |
 
 ## 2. gold — 검색 스키마 (pgvector — 0.2.0에 원천별 스키마 5벌, 아래는 그 틀)
 
-판: `common/store/db/migrations/versions/0001_search_base.py` + `0002_search_doc_meta.py`(11-01 — `doc_class`·`created_at`·`rep_key`, 뷰 끝에 같은 칸) · 모델: `common/store/db/models/search_tables.py` · 적재: `pipeline/load/pgvector_load.py`(`load`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`). 아래 `gold.<표>`는 지금 표 한 벌(`PG_SCHEMA`)의 칸과 0.2.0 목표다 — 0.2.0에는 이 틀을 `sfdc`·`crms`·`las`·`faq`·`other` 스키마마다 만든다(§1). `load_run`과 Alembic 판 표는 나눈 뒤에도 하나로 둔다.
+판: `common/store/db/migrations/versions/0001_search_base.py` + `0002_search_doc_meta.py`(11-01 — `doc_class`·`created_at`·`s3_key`, 뷰 끝에 같은 칸) · 모델: `common/store/db/models/search_tables.py` · 적재: `pipeline/load/pgvector_load.py`(`load`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`). 아래 `gold.<표>`는 지금 표 한 벌(`PG_SCHEMA`)의 칸과 0.2.0 목표다 — 0.2.0에는 이 틀을 `sfdc`·`crms`·`las`·`faq`·`other` 스키마마다 만든다(§1). `load_run`과 Alembic 판 표는 나눈 뒤에도 하나로 둔다.
 
 ### gold.load_run
 
@@ -46,7 +46,7 @@
 | doc_id | SERIAL PK | 문서 행 번호(내부) — MCP `chunk_key`의 앞부분. 0.2.0: 스키마 5벌이 시퀀스 하나를 함께 씀(겹치지 않음 — 허브가 정함), `s3_key`로 upsert해 번호가 바뀌지 않음(사용자 10-31 grill) | pgvector_load `load` | pgsearch, 뷰 `v_chunk_source` | 유지 |
 | file_path | TEXT | 개발 서버 기준 원본 경로 — 0.2.0에 지움(보여 줄 때는 `s3_key` + `original_filename`, MCP 출력에서도 뺌 — mc-16, 등급 A) | build_bundle `main` | pgsearch, retriever, search_svc, shaping, local, aggregate, `schemas/evidence.py`(MCP `search` 출력 키), `cli/ask.py`, `models/search_tables.py`(칸·`VIEWS_EXPECTED`·뷰 SQL), `schemas/search_rows.py`, 뷰, pgvector_load·build_bundle(건너뛰기 키 → `s3_key`), `validation/search_ui/serve.py` | 삭제 |
 | original_filename | TEXT | 원본 파일 이름(보여 주기용) | (파이프라인 — `AI.FileStorageMap.original_filename`) | (pgsearch, retriever, search_svc, shaping, 뷰) | 새로 |
-| s3_key | TEXT | 문서 키 — Object Storage 원본 전체 키(`AI.FileStorageMap.s3_key`). 적재 upsert 키, `source_uri`를 만듦. `doc`에만 둔다(청크에는 없음 — 사용자 10-31 grill) | (build_bundle가 이미 `_s3_key`로 알지만 묶음에 안 넣음) | (대장·숨김·ParsingMeta 조회) | 새로 |
+| s3_key | TEXT | (판 0002, 11-01 — mc-17) 원본 전체 경로 = `AI.FileStorageMap.s3_key` = ParsingMeta `source_key`. `source_system`과 함께 ParsingMeta와 잇는 키(사용자 11-01 — 경로 그대로, 해시 칸 없음) · 원문 도구 `docs=[경로]` 정확 일치 · 0.2.0 적재 upsert 키·`source_uri`(계획). `doc`에만 둔다(청크에는 없음 — 사용자 10-31 grill) | build_bundle(`s3_key`) → pgvector_load `load` | mcp `fulltext`(list·등록 시각 가드) | 유지 |
 | clients | TEXT(JSON) | 고객 목록 — 지금은 본문에서 찾은 이름(`infer_clients`)과 섞여 있음 | build_bundle `infer_clients` | pgsearch `_client_restrict`, retriever, internal_docs, search_svc | 삭제 |
 | client_edw | TEXT | EDW 조인으로 얻은 고객 하나 — MCP 고객 거르기의 유일한 키 | (파이프라인이 EDW 읽기 계정으로 직접 조인 — [pl-29](../prd/extract.md#pl-29)) | (pgsearch 고객 거르기) | 새로 |
 | clients_doc | TEXT(JSON) | 문서 본문에서 찾은 고객 목록(참고용 — 거르기에 안 씀) | (build_bundle `infer_clients`) | (근거 표시) | 새로 |
@@ -65,10 +65,6 @@
 | pipeline_version | TEXT | 이 행을 만든 코드 판(`VERSION`) — ParsingMeta `pipeline_version`(gold에 올린 판)과 이름은 같고 뜻은 다르다(C9, 사용자 10-31 grill) | (pgvector_load `load`) | (검색 쪽 확인·운영자) | 새로 |
 | doc_class | TEXT | (판 0002, 11-01 — mc-16) 문서 분류 라벨 하나(SFDC: RFI/RFP/RFI+RFP/Proposal/Other, LAS: MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other, 다른 원천 NULL) — low_conf·모델·시각은 두지 않음. ParsingMeta에는 두지 않는다(G19) — D-6 | (분류 단계 → 적재 — [pl-33](../prd/transform.md#pl-33)) | (MCP `search`·`list_doc_fulltext` 거르기 — mc-16, mc-17) | 유지 |
 | created_at | TIMESTAMPTZ | (판 0002, 11-01 — mc-16) 원천 등록 시각 — 출처는 `AI.FileStorageMap.created_at`(시간대 없는 값은 KST로 읽음). ParsingMeta에는 두지 않는다(G19). `search`의 `created_since`/`created_until` 거르기, `list_doc_fulltext` 거르기·출력, `get_doc_fulltext` 등록 시각 가드에 씀 — D-6 | (적재 — FileStorageMap) | (MCP 거르기 — mc-16, mc-17) | 유지 |
-| rep_key | TEXT | (판 0002, 11-01) 대표 파싱 결과(silver) 위치 — 적재 때 ParsingMeta `rep_key`에서 복사. `rep_uri`는 이 값으로 만든다(C8) | (적재) | (shaping `rep_uri`, mc-17 원문 도구) | 유지 |
-| parsed_at | TIMESTAMPTZ | (판 0002, 11-01) 파싱한 때 — 적재 때 ParsingMeta `parsed_at`에서 복사(G19) | (적재 — mc-15) | (mc-17 `list_doc_fulltext` `since`/`until`) | 유지 |
-| rep_bucket | TEXT | (판 0002, 11-01) 대표 파싱 결과 버킷 — 적재 때 ParsingMeta `rep_bucket`에서 복사, `rep_uri` = `s3://<rep_bucket>/<rep_key>` | (적재 — mc-15) | (mc-17 원문 도구) | 유지 |
-| doc_key | TEXT | (판 0002, 11-01 — 허브 확인 대기) 원본 sha256(64자) — `list_doc_fulltext`의 `docs=[doc_key]`·출력(운영 계약). 10-31 "sha256 `doc_key` 없앰"은 근거 키(`chunk_key`) 얘기라 문서 식별용으로만 둔다 | (build_bundle → 적재) | (mc-17 원문 도구) | 유지 |
 
 ### gold.chunk
 
@@ -171,15 +167,15 @@ PC 대역 예시 — [pl-29](../prd/extract.md#pl-29) 10-31. 고객 연결 4단�
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
 | parse_meta_id | BIGINT IDENTITY PK | 행 번호 | DB | 없음(기본 키) | 유지 |
-| source_system | NVARCHAR(64) | 원천 | parsing_meta `plan` | parsing_meta_db 겹침 확인·`find_by_source`(11-01 mc-15), 상태 UPDATE 조건 | 유지 |
+| source_system | NVARCHAR(64) | 원천 | parsing_meta `plan` | parsing_meta_db 겹침 확인·`rows_where`(원문 도구 — 11-01 mc-17), 상태 UPDATE 조건 | 유지 |
 | source_key | NVARCHAR(1024) | 원본 전체 경로 = `AI.FileStorageMap.s3_key` 값(문서 키). 원본과의 연결 키는 `source_system` + `source_key` — 따로 `s3_key` 칸을 두지 않는다(사용자 11-01) | 〃 | 〃, run_docs `edw_done_keys` | 유지 |
 | source_uri | NVARCHAR(2048) | 원본 주소 | 〃 | 없음 | 삭제 |
 | original_filename | NVARCHAR(512) | 원본 파일 이름 | 〃 | 없음 | 삭제 |
 | file_format | NVARCHAR(32) | 형식 | 〃 | 없음 | 삭제 |
 | file_size | BIGINT | 크기 | 〃 | 없음 | 삭제 |
-| sha256 | NVARCHAR(64) | 원본 sha256 — 같은 내용 묶기에 씀(C5 — G19 "파싱 정보만"의 예외, 파싱한 원본의 지문) | parsing_meta `plan` | (분류 단계 같은 내용 묶음 — [pl-33](../prd/transform.md#pl-33)) | 유지 |
-| rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | parsing_meta `plan` | 적재(`pgvector_load` → `parsing_meta_db.find_rep`)가 gold `doc.rep_bucket`으로 복사(C8 — 11-01 mc-15, 검색 중 조회 길은 지움) | 유지 |
-| rep_key | NVARCHAR(2048) | 대표 결과 폴더 | parsing_meta `apply` | 〃 → (적재가 gold `doc.rep_key`로 복사 — C8) | 유지 |
+| sha256 | NVARCHAR(64) | 원본 sha256 — 같은 내용 묶기에 씀(C5 — G19 "파싱 정보만"의 예외, 파싱한 원본의 지문) | parsing_meta `plan` | mcp `fulltext`(`list_doc_fulltext` `doc_key` 입력·출력 — 11-01 mc-17) · (분류 단계 같은 내용 묶음 — [pl-33](../prd/transform.md#pl-33)) | 유지 |
+| rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | parsing_meta `plan` | mcp `fulltext`(`parsing_meta_db.rows_where`·`pick_rep` — 원문 도구가 부를 때 읽음, 11-01 mc-17) | 유지 |
+| rep_key | NVARCHAR(2048) | 대표 결과 폴더 | parsing_meta `apply` | 〃(목록 `rep_uri`·sfid 발급, 등록 시각 가드의 폴더 → 원본 찾기) | 유지 |
 | rep_etag | NVARCHAR(128) | 대표 결과 etag | 〃 | 없음 | 삭제 |
 | parse_status | NVARCHAR(32) | ok·partial | parsing_meta `plan` | run_docs `edw_done_keys` | 유지 |
 | status_reason | NVARCHAR(2000) | 상태 이유 | 〃 | 없음 | 삭제 |
@@ -189,11 +185,11 @@ PC 대역 예시 — [pl-29](../prd/extract.md#pl-29) 10-31. 고객 연결 4단�
 | doc_key | NVARCHAR(64) | 원본 sha256(지금 유일한 필수 칸 — 검색 키와 안 맞아 `rep_uri`가 늘 빔, mc-15) | 〃 | 없음(11-01 `find_by_doc_key` 지움 — mc-15) | 삭제 |
 | parse_date | NVARCHAR(32) | 파싱 시각 글자(`YYYY-MM-DD_HHMMSS`) | parsing_meta `apply` | find·상태 UPDATE 조건 | 유지 |
 | pipeline_version | NVARCHAR(64) | 이 문서를 gold에 올린 판 — 다시 올릴지 판단. 지금은 파싱 때 쓰는 파이프라인 판이었으나 0.2.0에는 gold 성공 때 쓰고 gold가 끝나기 전에는 NULL(C9 — gold `doc.pipeline_version`은 행을 만든 코드 판, 이름 같고 뜻 다름 — 사용자 10-31 grill: `gold_version` 새 칸 대신 이 칸 이름을 씀) | parsing_meta `plan` → (gold 성공 때) | (운영자·재처리 판정) | 유지 |
-| status | NVARCHAR(16) | active·changed·deleted | 〃, `apply_registry_status` | find·상태 UPDATE 조건(`find_rep_path`는 11-01에 지움 — `find_rep`가 적재 때 읽음) | 유지 |
+| status | NVARCHAR(16) | active·changed·deleted | 〃, `apply_registry_status` | `pick_rep`(active 중 최신 — 원문 도구가 부를 때, 11-01 mc-17)·상태 UPDATE 조건 | 유지 |
 | status_at | NVARCHAR(32) | 상태 바뀐 때(UTC) | `apply_registry_status` | 없음(SELECT 안 함 — 운영자가 봄) | 유지 |
 | engines_used | NVARCHAR(MAX) | 쓰인 엔진 전부(JSON) — 0.2.0: 성공한 엔진만(이름 + 판, 사용자 10-30 grill) | parsing_meta `plan` | 없음 | 유지 |
 | engines_summary | NVARCHAR(512) | 엔진 한 줄 요약 | 〃 | 없음 | 삭제 |
-| parsed_at | DATETIME2(0) | 넣은 때(기본 SYSUTCDATETIME) — 파싱 정보라 남김(G19), gold `doc.parsed_at`으로 복사 | DB 기본값 | (적재 — gold `doc` 복사) | 유지 |
+| parsed_at | DATETIME2(0) | 넣은 때(기본 SYSUTCDATETIME — UTC) — 파싱 정보라 남김(G19) | DB 기본값 | mcp `fulltext`(`list_doc_fulltext` `since`/`until` — 11-01 mc-17) | 유지 |
 | source_key_hash | BINARY(32) 계산 칸 | `source_key` sha256 — 유일 색인 키(1700바이트 상한 우회) | DB | 유일 색인 | 유지 |
 | gold_status | NVARCHAR(32) | gold(검색 DB) 적재 상태 | (pl-24 — run_docs·적재) | (pl-24 재시도·건너뜀) | 새로 |
 | gold_reason | NVARCHAR(2000) | gold 상태 이유(실패 원인 등) | (pl-24) | (운영자) | 새로 |

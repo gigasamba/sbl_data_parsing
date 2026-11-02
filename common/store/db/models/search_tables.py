@@ -1,6 +1,6 @@
 """검색 스키마 표 정의(정본 — S8a, 5-4) — 10-20 축소 스키마 그대로(refactor_plan 9-3, D-008): load_run·doc·chunk·chunk_term·term_stat·
 corpus_stat + 뷰 v_chunk_source. 스키마 이름(PG_SCHEMA — index --pg면 <PG_SCHEMA>_<index_id>)과 임베딩 차원은 실행 값이라 함수로 만든다.
-Alembic 판(migrations/versions/0001_search_base.py — 옛 DDL 글자 그대로 + 0002_search_doc_meta.py — doc_class·created_at·rep_key)을 끝까지 올린 DB와 같은지 시험이 본다(dbcompare).
+Alembic 판(migrations/versions/0001_search_base.py — 옛 DDL 글자 그대로 + 0002_search_doc_meta.py — doc_class·created_at·s3_key)을 끝까지 올린 DB와 같은지 시험이 본다(dbcompare).
 색인 정의 글자(index_defs)·뷰(VIEWS_EXPECTED — 칸 이름 순서 + 정의 글자)는 PostgreSQL이 돌려주는 꼴(pg_get_indexdef·pg_get_viewdef —
 `{S}` = 스키마) — 비교용(dbcompare)."""
 
@@ -55,10 +55,7 @@ def search_metadata(schema, dim):
         Column("run_id", Integer),
         Column("doc_class", Text),  # 0002(11-01 — mc-16 거르기)
         Column("created_at", TIMESTAMP(timezone=True)),  # 0002 — 원천 등록 시각(FileStorageMap.created_at)
-        Column("rep_key", Text),  # 0002 — 대표 파싱 결과 silver 폴더(C8)
-        Column("rep_bucket", Text),  # 0002 — 그 버킷
-        Column("parsed_at", TIMESTAMP(timezone=True)),  # 0002 — 파싱 시각(ParsingMeta에서 복사)
-        Column("doc_key", Text),  # 0002 — 원본 sha256(mc-17)
+        Column("s3_key", Text),  # 0002 — 원본 전체 경로 = ParsingMeta.source_key(mc-17 연결 키)
     )
     chunk = Table(
         "chunk",
@@ -150,15 +147,12 @@ VIEWS_EXPECTED = {
             "service_type",
             "doc_class",
             "created_at",
-            "rep_key",
-            "rep_bucket",
-            "parsed_at",
-            "doc_key",
+            "s3_key",
         ),
         "SELECT c.chunk_id, c.doc_id, d.file_path, regexp_replace(d.file_path, '^.*/'::text, ''::text) AS file_name, c.page, "
         "c.line_start, c.line_end, c.bbox, c.section, c.seq, c.chunk_text, d.summary, d.clients, c.source_system, "
         "c.source_system AS chunk_source_system, d.source_system AS doc_source_system, d.sf_acc_name, d.sf_op_id, d.sf_op_name, "
-        "d.project_code__c, d.contract_id, d.contract_date, d.prod_name, d.division, d.service_type, d.doc_class, d.created_at, d.rep_key, d.rep_bucket, d.parsed_at, d.doc_key "
+        "d.project_code__c, d.contract_id, d.contract_date, d.prod_name, d.division, d.service_type, d.doc_class, d.created_at, d.s3_key "
         "FROM ({S}.chunk c JOIN {S}.doc d ON ((d.doc_id = c.doc_id)));",
     ),
 }
@@ -172,5 +166,5 @@ SELECT c.chunk_id, c.doc_id,
        c.chunk_text, d.summary, d.clients, c.source_system, c.source_system AS chunk_source_system,
        d.source_system AS doc_source_system, d.sf_acc_name, d.sf_op_id, d.sf_op_name, d.project_code__c,
        d.contract_id, d.contract_date, d.prod_name, d.division, d.service_type,
-       d.doc_class, d.created_at, d.rep_key, d.rep_bucket, d.parsed_at, d.doc_key
+       d.doc_class, d.created_at, d.s3_key
 FROM {S}.chunk c JOIN {S}.doc d ON d.doc_id = c.doc_id"""

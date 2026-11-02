@@ -1,5 +1,6 @@
-"""원문 도구(mc-17, 11-01) — list_doc_fulltext(gold doc에서 문서 고르기 + 대표 결과 폴더 목록 + sfid 발급) ·
-get_doc_fulltext(sfid로 Object Storage에서 받기). 검색 중 EDW에 접속하지 않는다(G19 — 목록·거르기·등록 시각 가드 모두 gold doc).
+"""원문 도구(mc-17, 11-01) — list_doc_fulltext(gold doc에서 거르기 → ParsingMeta에서 대표 결과 위치를 그때 읽음 → 폴더 목록 + sfid 발급) ·
+get_doc_fulltext(sfid로 Object Storage에서 받기). pgvector에는 거르기 메타(doc_class·created_at·s3_key)만, 대표 결과 위치·파싱 시각·원본 sha256은
+EDW ParsingMeta에만(사용자 11-01) — ParsingMeta를 못 읽으면 registry_unavailable. 연결 키는 source_system + source_key(= gold doc.s3_key).
 sfid = `sf1.<base64url("버킷/키")>.<HMAC-SHA256 서명>` — 서명 키는 search.server.fulltext_secret(바꾸면 발급된 sfid 전부 무효).
 응답 모양·한도는 mcp_server/schemas/fulltext.py.
 """
@@ -10,7 +11,7 @@ import hmac
 import json
 import re
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 
 from common.config.settings import cfg as common_cfg
 from common.config.settings import reveal
@@ -117,6 +118,22 @@ def _norm_sys(v):
     return v[: -len("-test")] if v.lower().endswith("-test") else v  # G4 — SFDC-test = SFDC
 
 
+def _pm():
+    """ParsingMeta 읽기 연결(common.connections.rdb 읽기 계정) — 못 열면 예외(호출부가 registry_unavailable로)."""
+    from common.store import parsing_meta_db as PM
+
+    try:
+        return PM.make_db("read")
+    except SystemExit as e:  # make_db는 접속 정보가 없으면 SystemExit
+        raise RuntimeError("ParsingMeta 연결 정보 없음") from e
+
+
+def _utc_text(bound):
+    """(연산자, aware 시각) → (연산자, UTC 시간대 없는 글자) — ParsingMeta parsed_at은 SYSUTCDATETIME(UTC, 시간대 없음)."""
+    op, t = bound
+    return op, t.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def do_list(
     docs=None,
     source_system=None,
@@ -129,66 +146,89 @@ def do_list(
     limit=FT.LIST_LIMIT_DEFAULT,
     cursor=None,
 ):
+    """gold doc에서 거르기(분류·영업 기회·등록 시각·원천·이름/경로) → ParsingMeta에서 대표 결과 위치·파싱 시각·원본 sha256을 그때 읽음
+    (pgvector에는 거르기 메타만 — 사용자 11-01). 연결 키는 source_system + source_key(= gold doc.s3_key)."""
     t0 = time.perf_counter()
     secret = _secret()
     if secret is None:
         return {"error": "not_configured", "detail": "search.server.fulltext_secret(sfid 서명 키)가 비어 있음"}
-    conds, vals = ["rep_bucket IS NOT NULL", "rep_key LIKE %s"], ["%_/"]  # 폴더 키(끝 '/')만 — 빈 값·접두가 넓어지는 값 제외
+    conds, vals = ["s3_key IS NOT NULL"], []
     try:
         if not any(x not in (None, "", []) for x in (docs, source_system, doc_class, sf_op_id, since, until, created_since, created_until)):
             raise BadRequest("조건이 하나도 없음 — docs·source_system·doc_class·sf_op_id·since/until·created_since/until 중 하나 이상")
-        if docs:
-            if not isinstance(docs, list) or len(docs) > FT.DOCS_MAX:
-                raise BadRequest(f"docs는 목록, {FT.DOCS_MAX}개 이하")
-            keys = [x for x in docs if _HEX64.fullmatch(str(x))]
-            names = [str(x) for x in docs if not _HEX64.fullmatch(str(x))]
-            alt = []
-            if names:  # 원본 파일 이름(확장자 포함) = 경로 마지막 조각
-                alt.append("(" + " OR ".join(["file_path = %s OR file_path LIKE %s ESCAPE '!'"] * len(names)) + ")")
-                for n in names:
-                    vals += [n, "%/" + n.replace("!", "!!").replace("%", "!%").replace("_", "!_")]
-            if keys:
-                alt.append("doc_key IN (" + ",".join(["%s"] * len(keys)) + ")")
-                vals += keys
-            conds.append("(" + " OR ".join(alt) + ")")
+        if docs and (not isinstance(docs, list) or len(docs) > FT.DOCS_MAX):
+            raise BadRequest(f"docs는 목록, {FT.DOCS_MAX}개 이하")
+        hexes = [str(x) for x in docs or [] if _HEX64.fullmatch(str(x))]
+        paths = [str(x) for x in docs or [] if not _HEX64.fullmatch(str(x)) and "/" in str(x)]
+        names = [str(x) for x in docs or [] if not _HEX64.fullmatch(str(x)) and "/" not in str(x)]
+        p_lo = _utc_text(_when(since, False, "since")) if since else None
+        p_hi = _utc_text(_when(until, True, "until")) if until else None
         for col, v in (("source_system", source_system and _norm_sys(source_system)), ("doc_class", doc_class), ("sf_op_id", sf_op_id)):
             if v:
                 conds.append(f"{col} = %s")
                 vals.append(str(v))
-        for col, name, v, upper in (
-            ("parsed_at", "since", since, False),
-            ("parsed_at", "until", until, True),
-            ("created_at", "created_since", created_since, False),
-            ("created_at", "created_until", created_until, True),
-        ):
+        for name, v, upper in (("created_since", created_since, False), ("created_until", created_until, True)):
             if v:
                 op, t = _when(v, upper, name)
-                conds.append(f"{col} {op} %s")
+                conds.append(f"created_at {op} %s")
                 vals.append(t.isoformat())
-        if cursor not in (None, ""):
-            if not str(cursor).isdecimal() or not str(cursor).isascii():
-                raise BadRequest("cursor는 앞 응답의 batch.next_cursor 값 그대로")
-            conds.append("doc_id > %s")
-            vals.append(int(cursor))
+        if cursor not in (None, "") and (not str(cursor).isdecimal() or not str(cursor).isascii()):
+            raise BadRequest("cursor는 앞 응답의 batch.next_cursor 값 그대로")
         lim = max(1, min(int(limit or FT.LIST_LIMIT_DEFAULT), FT.LIST_LIMIT_MAX))
     except (BadRequest, TypeError, ValueError) as e:
         return _bad(str(e))
     try:
-        pg = _retriever().pg
-        rows, matched = _select(pg, conds, vals, cursor not in (None, ""), lim)
+        pm = _pm()
     except Exception:
         return {"error": "registry_unavailable"}
-    more, rows = len(rows) > lim, rows[:lim]
+    try:
+        # ParsingMeta에서 먼저 정해지는 범위(doc_key=sha256·파싱 시각) → 원본 경로 집합으로 gold를 좁힘
+        if hexes:
+            paths += [r["source_key"] for r in pm.rows_where("sha256", hexes) if r.get("source_key")]
+        if docs:
+            alt = []
+            if paths:  # 원본 전체 경로(또는 doc_key로 찾은 경로) — 서버 안 경로(file_path)로 줘도 맞게
+                alt.append("(s3_key = ANY(%s) OR file_path = ANY(%s))")
+                vals += [paths, paths]
+            for n in names:  # 원본 파일 이름(확장자 포함) = 경로 마지막 조각
+                alt.append("(s3_key LIKE %s ESCAPE '!' OR file_path = %s OR file_path LIKE %s ESCAPE '!')")
+                vals += ["%/" + _esc(n), n, "%/" + _esc(n)]
+            conds.append("(" + " OR ".join(alt) + ")" if alt else "1 = 0")
+        if p_lo or p_hi:
+            keys = _parsed_keys(pm, p_lo, p_hi)
+            # ponytail: 넓은 파싱 시각 범위는 원본 경로 목록이 커짐(배열 값 하나로 넘겨 자리표시자 상한은 없음, 수십만 건이면 느림)
+            conds.append("s3_key = ANY(%s)")
+            vals.append(keys)
+        if cursor not in (None, ""):
+            conds.append("doc_id > %s")
+            vals.append(int(cursor))
+        pg = _retriever().pg
+        rows, matched = _select(pg, conds, vals, cursor not in (None, ""), lim)
+        more, rows = len(rows) > lim, rows[:lim]
+        from common.store import parsing_meta_db as PM
+
+        by_key = {}
+        for r in pm.rows_where("source_key", sorted({r["s3_key"] for r in rows})):
+            by_key.setdefault(r["source_key"], []).append(r)
+        reps = {r["doc_id"]: PM.pick_rep(by_key.get(r["s3_key"], []), r["source_system"]) for r in rows}
+    except Exception:
+        return {"error": "registry_unavailable"}
+    finally:
+        pm.close()
     s3 = _storage()
     if s3 is None and rows:
         return {"error": "source_storage_unavailable"}
     out, total = [], 0
     for r in rows:
-        bucket, folder = r["rep_bucket"], r["rep_key"]
-        try:
-            parse_date, files = _rep_files(s3, bucket, folder)
-        except Exception:
-            return {"error": "source_storage_unavailable"}
+        rep = reps[r["doc_id"]] or {}
+        bucket, folder = rep.get("rep_bucket"), rep.get("rep_key")
+        files = {"md": None, "json": None}
+        parse_date = rep.get("parse_date")
+        if bucket and folder and str(folder).endswith("/"):  # 폴더 키(끝 '/')만 — 빈 값·접두가 넓어지는 값은 목록을 보지 않음
+            try:
+                parse_date, files = _rep_files(s3, bucket, folder)
+            except Exception:
+                return {"error": "source_storage_unavailable"}
         ok = any(files.values())
         fl = None
         if ok:
@@ -206,14 +246,14 @@ def do_list(
                 }
         out.append(
             {
-                "file_name": str(r["file_path"]).rsplit("/", 1)[-1],
-                "doc_key": r["doc_key"],
+                "file_name": str(r["s3_key"] or r["file_path"]).rsplit("/", 1)[-1],
+                "doc_key": rep.get("sha256"),
                 "source_system": r["source_system"],
                 "doc_class": r["doc_class"],
                 "sf_op_id": r["sf_op_id"],
                 "created_at": _iso(r["created_at"]),
                 "parse_date": parse_date,
-                "rep_uri": f"s3://{bucket}/{folder}" if bucket else None,
+                "rep_uri": f"s3://{bucket}/{folder}" if bucket and folder else None,
                 "status": "ok" if ok else "no_files",
                 "files": fl,
             }
@@ -227,24 +267,57 @@ def do_list(
     return {"batch": batch, "documents": out, "ms": round((time.perf_counter() - t0) * 1000, 1)}
 
 
+def _parsed_keys(pm, lo, hi):
+    """파싱 시각(since/until)에 맞는 원본 경로 — 범위 안 행이 있는 원본마다 쓸 행(pick_rep: active 중 최신)을 다시 골라
+    그 행의 parsed_at이 범위 안일 때만(옛 행만 범위 안이면 빼서, 출력 parse_date와 거르기가 어긋나지 않게)."""
+    from common.store import parsing_meta_db as PM
+
+    cand = sorted({r["source_key"] for r in pm.rows_parsed(lo, hi) if r.get("source_key")})
+    groups = {}
+    for r in pm.rows_where("source_key", cand):
+        groups.setdefault((r["source_key"], r.get("source_system")), []).append(r)
+    out = set()
+    for (key, sys_), rows in groups.items():
+        pick = PM.pick_rep(rows, sys_) or {}
+        t = str(pick.get("parsed_at") or "")[:19].replace("T", " ")
+        if t and (not lo or _cmp_text(t, *lo)) and (not hi or _cmp_text(t, *hi)):
+            out.add(key)
+    return sorted(out)
+
+
+def _cmp_text(t, op, bound):
+    return {"<": t < bound, "<=": t <= bound, ">=": t >= bound}[op]
+
+
+def _esc(x):
+    """LIKE 안에서 글자 그대로(ESCAPE '!')."""
+    return x.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+
+
 def _select(pg, conds, vals, has_cursor, lim):
     """(이 쪽 행 lim+1개, 쪽과 무관한 matched). cursor 조건·값은 늘 맨 끝."""
     s = pg.schema
     base = conds[:-1] if has_cursor else conds
     matched = pg.q(f"SELECT COUNT(*) AS n FROM {s}.doc WHERE " + " AND ".join(base), tuple(vals[:-1] if has_cursor else vals))[0]["n"]
     rows = pg.q(
-        f"SELECT doc_id, file_path, doc_key, source_system, doc_class, sf_op_id, created_at, rep_bucket, rep_key FROM {s}.doc "
+        f"SELECT doc_id, file_path, s3_key, source_system, doc_class, sf_op_id, created_at FROM {s}.doc "
         "WHERE " + " AND ".join(conds) + " ORDER BY doc_id LIMIT %s",
         (*vals, lim + 1),
     )
     return rows, matched
 
 
-def _created_ok(pg, bucket, folder, lo, hi, cache):
-    """등록 시각 가드 — 이 대표 결과 폴더(rep_bucket·rep_key)를 가진 gold doc의 created_at이 범위 안인지. 행이 없거나 created_at이 모두 비면 False."""
+def _created_ok(pm, pg, bucket, folder, lo, hi, cache):
+    """등록 시각 가드 — 이 대표 결과 폴더(rep_bucket·rep_key)를 ParsingMeta에서 찾아 그 원본(source_key)의 gold doc.created_at이 범위 안인지.
+    행이 없거나 created_at이 모두 비면 False(확인 못 하면 통과시키지 않음)."""
     if (bucket, folder) not in cache:
-        rows = pg.q(f"SELECT created_at FROM {pg.schema}.doc WHERE rep_bucket = %s AND rep_key = %s", (bucket, folder))
-        ts = [t for t in (_aware(r["created_at"]) for r in rows) if t]
+        keys = sorted(
+            {r["source_key"] for r in pm.rows_where("rep_key", [folder]) if r.get("rep_bucket") == bucket and r.get("source_key")}
+        )
+        ts = []
+        if keys:
+            rows = pg.q(f"SELECT created_at FROM {pg.schema}.doc WHERE s3_key = ANY(%s)", (keys,))
+            ts = [t for t in (_aware(r["created_at"]) for r in rows) if t]
         cache[(bucket, folder)] = any((lo is None or _cmp(t, *lo)) and (hi is None or _cmp(t, *hi)) for t in ts)
     return cache[(bucket, folder)]
 
@@ -269,12 +342,25 @@ def do_get(files=None, json_section=None, created_since=None, created_until=None
     s3 = _storage()
     if s3 is None:
         return {"error": "source_storage_unavailable"}
-    pg, guard_cache = None, {}
-    if lo or hi:
+    pm, pg, guard_cache = None, None, {}
+    if lo or hi:  # 가드를 걸었을 때만 ParsingMeta·gold를 읽음(안 걸면 저장소만 — 운영과 같음)
+        try:
+            pm = _pm()
+        except Exception:
+            return {"error": "registry_unavailable"}
         try:
             pg = _retriever().pg
         except Exception:
+            pm.close()
             return {"error": "registry_unavailable"}
+    try:
+        return _get_files(files, keys, json_section, s3, secret, pm, pg, lo, hi, guard_cache, t0)
+    finally:
+        if pm is not None:
+            pm.close()
+
+
+def _get_files(files, keys, json_section, s3, secret, pm, pg, lo, hi, guard_cache, t0):
     out, ok_n, total, truncated = [], 0, 0, False
     for sfid in files:
         loc = read_sfid(secret, sfid)
@@ -287,7 +373,7 @@ def do_get(files=None, json_section=None, created_since=None, created_until=None
         skip = {"sfid": sfid, "name": name, "kind": kind}
         if pg is not None:
             try:
-                if not _created_ok(pg, bucket, key.rsplit("/", 1)[0] + "/", lo, hi, guard_cache):
+                if not _created_ok(pm, pg, bucket, key.rsplit("/", 1)[0] + "/", lo, hi, guard_cache):
                     out.append({**skip, "skip_reason": "created_out_of_range"})
                     continue
             except Exception:

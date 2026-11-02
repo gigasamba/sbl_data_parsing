@@ -68,7 +68,7 @@ def test_read_role_never_changes_the_file():
         with COMMON.env(RDB_SQLITE=str(p)):
             db = PM.make_db("read")
             try:
-                assert db.find_by_source("none") in (None, [], ())
+                assert db.rows_where("source_key", ["none"]) == []
             finally:
                 db.close()
         assert hashlib.sha256(p.read_bytes()).hexdigest() == h

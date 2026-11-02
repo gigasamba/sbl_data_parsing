@@ -22,7 +22,14 @@ def _bundle(paths, tmp):
     d = Path(tempfile.mkdtemp(dir=tmp))
     (d / "meta.json").write_text(json.dumps({"dim": DIM, "embed_model": "test"}), encoding="utf-8")
     docs = [
-        {"file_path": p, "summary": p, "clients": ["A사"], "doc_class": "RFP", "created_at": "2025-03-01 10:00:00", "file_sha256": "f" * 64}
+        {
+            "file_path": p,
+            "summary": p,
+            "clients": ["A사"],
+            "doc_class": "RFP",
+            "created_at": "2025-03-01 10:00:00",
+            "s3_key": "SFDC/u/" + p.rsplit("/", 1)[-1],
+        }
         for p in paths
     ]
     chunks = [
@@ -80,7 +87,7 @@ def _run_twice(S, tmp):
         M.main(["load", "--bundle", str(_bundle(["/d/a.txt", "/d/b.txt"], tmp))])
         M.main(["load", "--bundle", str(_bundle(["/d/c.txt", "/d/a.txt"], tmp))])  # b는 이번 묶음에 없음 · a는 이미 있음(건너뜀)
         docs = sorted(str(r["file_path"]) for r in db.q(f"SELECT file_path FROM {S}.doc"))
-        meta = {(r["doc_class"], str(r["created_at"]), r["doc_key"]) for r in db.q(f"SELECT doc_class, created_at, doc_key FROM {S}.doc")}
+        meta = {(r["doc_class"], str(r["created_at"]), r["s3_key"]) for r in db.q(f"SELECT doc_class, created_at, s3_key FROM {S}.doc")}
         n_chunks = _count(db, f"SELECT COUNT(*) AS n FROM {S}.chunk")
         b_terms = _count(
             db,
@@ -94,5 +101,7 @@ def _run_twice(S, tmp):
             assert e.code == 2, e.code  # argparse — 모르는 인자
     assert docs == ["/d/a.txt", "/d/b.txt", "/d/c.txt"], docs  # 묶음에 없던 b도 남음
     assert n_chunks == 3 and b_terms > 0, (n_chunks, b_terms)  # b의 청크·키워드 색인도 그대로
-    assert meta == {("RFP", "2025-03-01T10:00:00+09:00", "f" * 64)}, meta  # mc-16 — 분류·등록 시각 적재(시간대 없는 값은 KST)
+    assert meta == {("RFP", "2025-03-01T10:00:00+09:00", f"SFDC/u/{n}.txt") for n in "abc"}, (
+        meta
+    )  # mc-16 — 분류·등록 시각 적재(시간대 없는 값은 KST)
     print("[시험] 적재 — 묶음에 없는 저장 문서(청크·키워드 색인 포함)는 지우지 않음 · --prune 없음")

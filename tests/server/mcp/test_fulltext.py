@@ -4,6 +4,7 @@ import hashlib
 import json
 from unittest.mock import patch
 
+from common.store import parsing_meta_db as PMDB
 from mcp_server import config as mc
 from mcp_server.schemas import fulltext as FT
 from mcp_server.services import fulltext as M
@@ -52,37 +53,54 @@ class _Body:  # read(n) — boto3 StreamingBody처럼 최대 n바이트
 
 
 def _docs():
+    """gold doc — 거르기 메타와 원본 경로(s3_key)만(대표 결과 위치는 ParsingMeta에)."""
+    pre = "/app/output/prepared/"
     return [
         {
-            "file_path": "/app/output/prepared/A.pdf",
+            "file_path": pre + "A.pdf",
+            "s3_key": "SFDC/u1/A.pdf",
             "source_system": "SFDC",
             "doc_class": "RFP",
             "sf_op_id": "006A",
             "created_at": "2025-03-01T10:00:00+09:00",
-            "parsed_at": "2025-04-01T09:00:00+09:00",
-            "rep_bucket": B,
-            "rep_key": "PR/SFDC/A/",
-            "doc_key": "a" * 64,
         },
         {
-            "file_path": "/app/output/prepared/B.docx",
+            "file_path": pre + "B.docx",
+            "s3_key": "SFDC/u2/B.docx",
             "source_system": "SFDC",
             "doc_class": "RFI",
             "created_at": "2025-03-05T10:00:00+09:00",
-            "parsed_at": "2025-04-02T09:00:00+09:00",
-            "rep_bucket": B,
-            "rep_key": "PR/SFDC/B/",
-            "doc_key": "b" * 64,
         },
-        {"file_path": "/app/output/prepared/C.pdf", "source_system": "LAS", "rep_bucket": B, "rep_key": "PR/LAS/C/", "doc_key": "c" * 64},
-        {"file_path": "/app/output/prepared/D.pdf", "source_system": "SFDC"},  # rep_key 없음 — 목록 대상 아님
+        {"file_path": pre + "C.pdf", "s3_key": "LAS/u3/C.pdf", "source_system": "LAS"},
+        {"file_path": pre + "D.pdf", "source_system": "SFDC"},  # 원본 경로 없음 — 목록 대상 아님
         {
-            "file_path": "/app/output/prepared/E.pdf",
+            "file_path": pre + "E.pdf",
+            "s3_key": "SFDC/u5/E.pdf",
             "source_system": "SFDC",
-            "rep_bucket": B,
-            "rep_key": "PR/SFDC/A",
-        },  # 끝 '/' 없는 값 — 대상 아님
+        },  # ParsingMeta 결과 위치가 폴더 키가 아님 → no_files
+        {"file_path": pre + "F.pdf", "s3_key": "CRMS/u6/F.pdf", "source_system": "CRMS"},  # ParsingMeta 행 없음 → no_files
     ]
+
+
+PM_ROWS = [  # ParsingMeta(source_system, source_key, parse_date, status, rep_bucket, rep_key, parsed_at — UTC, sha256)
+    ("SFDC", "SFDC/u1/A.pdf", "2025-03-31_090000", "changed", B, "PR/SFDC/A_old/", "2025-03-31 00:00:00", "a" * 64),
+    ("SFDC", "SFDC/u1/A.pdf", "2025-04-01_090000", "active", B, "PR/SFDC/A/", "2025-04-01 00:00:00", "a" * 64),
+    ("SFDC", "SFDC/u2/B.docx", "2025-04-02_090000", "active", B, "PR/SFDC/B/", "2025-04-02 00:00:00", "b" * 64),
+    ("LAS", "LAS/u3/C.pdf", "2025-04-03_090000", "active", B, "PR/LAS/C/", "2025-04-03 00:00:00", "c" * 64),
+    ("SFDC", "SFDC/u5/E.pdf", "2025-04-03_090000", "active", B, "PR/SFDC/A", "2025-04-03 00:00:00", "e" * 64),
+]
+
+
+def _pm_file(d):
+    p = d / "pm.sqlite"
+    st = PMDB.SqliteStore(str(p))
+    st.cn.executemany(
+        "INSERT INTO ParsingMeta(source_system, source_key, parse_date, status, rep_bucket, rep_key, parsed_at, sha256, doc_key) VALUES (?,?,?,?,?,?,?,?,?)",
+        [(*r, r[-1]) for r in PM_ROWS],
+    )
+    st.cn.commit()
+    st.close()
+    return p
 
 
 OBJS = {
@@ -99,20 +117,27 @@ OBJS = {
 def test_fulltext():
     chunk = {"doc": 0, "seq": 0, "page": 1, "line_start": 1, "line_end": 1, "chunk_text": "x", "n_terms": 1}
     d = pgfix.mk_bundle(_docs(), [chunk])
+    pm_path = _pm_file(d)
     _STATE.clear()
     s3 = FakeS3(dict(OBJS))
-    with pgfix.use(d, MCP_BUNDLE=str(d)), patch.object(M, "_storage", return_value=s3):
+    pm = lambda: PMDB.SqliteStore(str(pm_path))  # 부를 때마다 새 연결(서비스가 닫음)
+    with pgfix.use(d, MCP_BUNDLE=str(d)), patch.object(M, "_storage", return_value=s3), patch.object(M, "_pm", pm):
         # 서명 키 없음 → not_configured
         with mc.senv(FULLTEXT_SIGN_SECRET=None):
             assert M.do_list(source_system="SFDC")["error"] == "not_configured"
         with mc.senv(FULLTEXT_SIGN_SECRET="k1"):
             _cases(s3)
             listed = M.do_list(docs=["A.pdf"])
+            with patch.object(M, "_pm", side_effect=RuntimeError("down")):  # ParsingMeta를 못 읽음
+                assert M.do_list(source_system="SFDC") == {"error": "registry_unavailable"}
+                sf = listed["documents"][0]["files"]["md"]["sfid"]
+                assert M.do_get(files=[sf], created_since="2025-01-01") == {"error": "registry_unavailable"}
+                assert M.do_get(files=[sf])["files"][0]["status"] == "ok"  # 가드가 없으면 저장소만 — EDW와 무관
         with mc.senv(FULLTEXT_SIGN_SECRET="k2"):  # 서명 키를 바꾸면 발급된 sfid는 무효
             sf = listed["documents"][0]["files"]["md"]["sfid"]
             assert M.do_get(files=[sf])["files"][0]["skip_reason"] == "bad_sfid"
     _STATE.clear()
-    print("[시험] mc-17 원문 도구 — 목록 거르기·쪽 넘김·sfid·받기 한도·건너뜀 사유·등록 시각 가드 통과")
+    print("[시험] mc-17 원문 도구 — 목록 거르기·ParsingMeta 그때 읽기·쪽 넘김·sfid·받기 한도·건너뜀 사유·등록 시각 가드 통과")
 
 
 def _cases(s3):
@@ -128,15 +153,18 @@ def _cases(s3):
         r = M.do_list(**kw)
         assert r["error"] == "bad_request" and word in r["detail"], (kw, r)
     cases = [  # (인자, 기대 file_name 목록, matched)
-        ({"source_system": "SFDC"}, ["A.pdf", "B.docx"], 2),  # rep_key 없는 D는 빠짐
-        ({"source_system": "SFDC-test"}, ["A.pdf", "B.docx"], 2),  # G4 별칭
-        ({"docs": ["A.pdf", "c" * 64]}, ["A.pdf", "C.pdf"], 2),  # 이름·doc_key 섞어도 됨
+        ({"source_system": "SFDC"}, ["A.pdf", "B.docx", "E.pdf"], 3),  # 원본 경로 없는 D는 빠짐
+        ({"source_system": "SFDC-test"}, ["A.pdf", "B.docx", "E.pdf"], 3),  # G4 별칭
+        ({"docs": ["A.pdf", "c" * 64]}, ["A.pdf", "C.pdf"], 2),  # 이름·doc_key(ParsingMeta sha256) 섞어도 됨
+        ({"docs": ["SFDC/u2/B.docx"]}, ["B.docx"], 1),  # 원본 전체 경로 = 정확히 하나
         ({"docs": ["A"]}, [], 0),  # 확장자 없는 이름은 0건(오류 아님)
+        ({"docs": ["f" * 64]}, [], 0),  # 모르는 doc_key
         ({"doc_class": "RFI"}, ["B.docx"], 1),
         ({"sf_op_id": "006A"}, ["A.pdf"], 1),
-        ({"since": "2025-04-02"}, ["B.docx"], 1),  # 파싱 시각 축
+        ({"since": "2025-04-02"}, ["B.docx", "C.pdf", "E.pdf"], 3),  # 파싱 시각 축(ParsingMeta, KST 00:00 = 전날 15:00 UTC)
         ({"until": "2025-04-01"}, ["A.pdf"], 1),  # 날짜만 until = 그날 전체
-        ({"created_since": "2025-03-02 00:00:00"}, ["B.docx"], 1),  # 등록 시각 축 · created_at 없는 C는 빠짐
+        ({"until": "2025-03-31"}, [], 0),  # A의 옛 행(changed)만 범위 안 — 쓸 행(active)이 밖이면 빠짐
+        ({"created_since": "2025-03-02 00:00:00"}, ["B.docx"], 1),  # 등록 시각 축(gold) · created_at 없는 문서는 빠짐
         ({"source_system": "FAQ"}, [], 0),
     ]
     for kw, want, n in cases:
@@ -146,14 +174,21 @@ def _cases(s3):
         assert all(tuple(x) == FT.DOC_KEYS for x in r["documents"]), r
     # 쪽 넘김 — limit 1이면 next_cursor로 이어 받고 마지막 쪽은 null
     p1 = M.do_list(source_system="SFDC", limit=1)
-    p2 = M.do_list(source_system="SFDC", limit=1, cursor=p1["batch"]["next_cursor"])
-    assert [p1["documents"][0]["file_name"], p2["documents"][0]["file_name"]] == ["A.pdf", "B.docx"], (p1, p2)
-    assert p1["batch"]["matched"] == p2["batch"]["matched"] == 2 and p2["batch"]["next_cursor"] is None, (p1, p2)
+    p2 = M.do_list(source_system="SFDC", limit=2, cursor=p1["batch"]["next_cursor"])
+    assert [x["file_name"] for x in p1["documents"] + p2["documents"]] == ["A.pdf", "B.docx", "E.pdf"], (p1, p2)
+    assert p1["batch"]["matched"] == p2["batch"]["matched"] == 3 and p2["batch"]["next_cursor"] is None, (p1, p2)
     # 문서 한 건의 모양 — 최신 parse_date의 md·json, engine/·source.json 제외
     a = M.do_list(docs=["a" * 64])["documents"][0]
     assert a["parse_date"] == "2025-04-02_090000" and a["status"] == "ok" and a["rep_uri"] == f"s3://{B}/PR/SFDC/A/", a
     assert a["files"]["md"]["name"] == "A_2025-04-02_090000.md" and tuple(a["files"]["md"]) == FT.FILE_KEYS, a
-    assert a["created_at"] == "2025-03-01T10:00:00+09:00" and a["doc_class"] == "RFP", a
+    assert a["created_at"] == "2025-03-01T10:00:00+09:00" and a["doc_class"] == "RFP" and a["doc_key"] == "a" * 64, (
+        a
+    )  # doc_key = ParsingMeta sha256
+    f = M.do_list(docs=["F.pdf"])["documents"][0]
+    assert f["status"] == "no_files" and f["doc_key"] is None and f["rep_uri"] is None, f
+    assert [x["file_name"] for x in M.do_list(docs=["/app/output/prepared/B.docx"])["documents"]] == ["B.docx"]  # 서버 안 경로도 정확 일치
+    e = M.do_list(docs=["E.pdf"])["documents"][0]
+    assert e["status"] == "no_files" and e["files"] is None and e["doc_key"] == "e" * 64, e  # 폴더 키가 아닌 결과 위치는 목록을 보지 않음
     c = M.do_list(docs=["C.pdf"])["documents"][0]
     assert c["status"] == "no_files" and c["files"] is None, c
     b = M.do_list(docs=["B.docx"])["documents"][0]
