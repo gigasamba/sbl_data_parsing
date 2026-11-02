@@ -127,8 +127,18 @@ class PipelineHostNightly(Section):
         "새벽 배치 시작 시각(HH:MM, 서버 시간) — 비우면 새벽 배치 없음. 타이머가 5분마다 깨워 이 시각부터 5분 안이면 시작(trigger.sh scheduled)",
         pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$",  # 틀린 꼴은 설정을 읽을 때 거부(타이머가 5분마다 실패로 남기지 않게)
     )
+    # 사용자 11-02 — 시작 시각·문서 수 상한·마감 시각 셋이 모두 있어야 새벽 배치가 돈다(하나라도 비면 trigger.sh scheduled가 조용히 끝)
+    max_docs: int | None = F(
+        None, "NIGHTLY_MAX_DOCS", "새벽 배치 한 번에 처리할 새 문서 수 상한(이미 끝난 문서 뺀 뒤) — 비우면 새벽 배치 없음", ge=1
+    )
+    deadline: str | None = F(
+        None,
+        "NIGHTLY_DEADLINE",
+        "새벽 배치 마감 시각(HH:MM, 서버 시간) — 지나면 새 문서를 받기 시작하지 않음(받은 문서는 끝까지). 비우면 새벽 배치 없음",
+        pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$",
+    )
 
-    @field_validator("time", mode="before")
+    @field_validator("time", "deadline", "max_docs", mode="before")
     @classmethod
     def _blank_is_off(cls, v):
         """빈 글자·공백만 = 새벽 배치 없음(None) — sample·손으로 쓴 settings.yaml의 `time: ""`가 꼴 검사에 걸려 시작을 막지 않게(PR #44 리뷰)."""

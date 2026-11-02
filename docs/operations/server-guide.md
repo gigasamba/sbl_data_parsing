@@ -80,7 +80,7 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 
 ### 2-2. 새벽 배치(선택)
 `sudo cp deploy/host/systemd/data-pipeline-nightly.* /etc/systemd/system/ && sudo systemctl enable --now data-pipeline-nightly.timer`. 옛 `rag-nightly.*`가 있으면 disable 뒤 지운다.
-- 스케줄은 settings.yaml `pipeline.host.nightly.time`(env 이름 `NIGHTLY_TIME`, HH:MM — 기본 비움 = 새벽 배치 없음, pl-32). 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 그 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done`을 부른다(그 밖에는 말없이 끝 — 11-01부터 새벽 배치 = run_docs, 사용자 10-31). 옛 `nightly.enabled`는 지움(남아 있으면 경고만).
+- 스케줄은 settings.yaml `ops.nightly.time`·`ops.nightly.max_docs`·`ops.nightly.deadline`(env 이름 `NIGHTLY_TIME`·`NIGHTLY_MAX_DOCS`·`NIGHTLY_DEADLINE` — 시작 시각 HH:MM·새 문서 수 상한·마감 시각 HH:MM, 기본 비움 = 새벽 배치 없음, 셋이 모두 있어야 돎 — pl-32·사용자 11-02). 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시작 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받기 시작하지 않고, 받은 문서는 끝까지)(그 밖에는 말없이 끝 — 11-01부터 새벽 배치 = run_docs, 사용자 10-31). 옛 `nightly.enabled`는 지움(남아 있으면 경고만).
 - 지금 바로 돌리려면 run_docs를 직접 부른다(옛 `trigger.sh night`는 11-01에 지움).
 
 ### 2-3. 상주 컨테이너

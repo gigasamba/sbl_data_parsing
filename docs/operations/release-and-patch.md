@@ -364,7 +364,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 이미지와 코드 | dev까지는 코드 없는 실행 이미지 + 코드 폴더. dev → prd는 이미지 + 시험한 코드를 굽는다(`bake.sh`). **prd는 settings.yaml(비밀 포함)도 이미지에 굽는다(사용자 선택) — 🔒 검토 등급 A(비밀 처리).** 다루는 규칙: ① 구운 이미지 파일(저장한 `.tar`·45 MB 조각 포함)은 비밀과 같다 — 운영 서버와 권한 있는 반입 경로에만 두고, 공용 레지스트리·공유 폴더·메일·채팅에 올리지 않는다 ② 키를 바꿀 때마다 다시 굽고, 옛 키가 든 이미지·조각은 지운다 ③ 굽고 나서 이미지 이력(`history`)·`inspect`·시작 로그에 값이 보이지 않는지 본다 ④ 굽는 데 쓴 settings.yaml 사본은 굽고 나서 지운다 | [op-07](../prd/doc.md#op-07) |
 | 모델 | dev부터 내부망 GLM, PC(local)는 OpenRouter(유료 — CLAUDE.md §7 상한) | [pl-11](../prd/ops.md#pl-11) |
 | 배포 전 검토 | 판 전체를 grill-me로 한 번 검토한다(사용자) | — |
-| 새벽 배치 | 시작 시각·문서 수 상한·마감 시각이 settings.yaml 칸 — 비면 돌지 않는다. 칸 이름 어긋남(`pipeline.host.nightly.time` ↔ `ops.nightly.time`)을 고친다 | [pl-23](../prd/ops.md#pl-23) |
+| 새벽 배치 | 시작 시각·문서 수 상한·마감 시각이 settings.yaml 칸 `ops.nightly.time`·`max_docs`·`deadline` — 하나라도 비면 돌지 않는다(11-02 `feature/nightly-key` — 칸 이름은 설정 파일 기준 `ops.nightly.*` 하나) | [pl-23](../prd/ops.md#pl-23) |
 | Quote 표 · 고객 조인 사슬 | Quote 표는 지금 없다(기본 사슬에서 뺌 — 표가 생기면 설정 파일의 주석 줄을 켬). 고객 조인 사슬은 운영 쪽이 고칠 수 있는 설정 파일 `resources/config/edw_chain.yaml` | [pl-29](../prd/load.md#pl-29) |
 | `adk.py` | 지시문은 두고 장치는 `llm.py` 호출 하나로 줄인다 — 0.2.0 지문 배치에서 CPU 부하 고침과 함께 | [pl-46](../prd/transform-cleanup.md#pl-46) |
 | 설정 이관 | 0.1.0 settings.yaml → 0.2.0은 `common.config.migrate`의 옛 배치 바꾸기만 남긴다(env 파일 옮기기·`--compare`는 정리 3에서 지움) | [op-08](../prd/ops-settings.md#op-08) |
@@ -405,7 +405,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 |---|---|---|---|
 | 1 | 적재 기록 — 실행 기록의 `meta_missing`·`loaded_at_failed`가 0인지, ParsingMeta에 판·적재 시각이 채워지는지 | 서버 운영 | C-76 |
 | 2 | 적재가 지우지 않는지·상주 컨테이너 `/tmp`·좀비 프로세스 | 서버 운영 | C-68 |
-| 3 | 새벽 배치 — 시각·상한·마감 칸을 채울 때만 켬, `journalctl -u data-pipeline-nightly` | 서버 운영 | C-72 |
+| 3 | 새벽 배치 — `ops.nightly.time`·`max_docs`·`deadline`을 모두 채울 때만 켬(마감은 시작보다 5분 넘게 뒤), `journalctl -u data-pipeline-nightly` | 서버 운영 | C-72 |
 | 4 | 2주 뒤 옛 gold 스키마·옛 `struct` 스키마를 백업한 뒤 지움 | DB 담당 | C-74 |
 | 5 | `versions.md`에 판 한 줄 · `deploy/docker/IMAGE_BASE` · 되돌리기가 필요 없어진 뒤 옛 이미지 정리(`prune_old.sh --apply`) | 서버 운영·devops | §6·§7 |
 | 6 | 문제는 `server-changes.md`에 이슈로 → PC가 고침 → 다음 오버레이 패치 | 서버 운영·개발자 | [server-guide.md](server-guide.md) §7 |
