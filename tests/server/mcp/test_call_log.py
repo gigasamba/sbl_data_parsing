@@ -211,6 +211,25 @@ def test_http_context():
             dispatch._LIMITER = None
 
 
+def test_sdk_info_lines_quiet():
+    import logging
+
+    from common.config import settings
+
+    sdk = logging.getLogger("mcp.server.lowlevel.server")  # 요청마다 INFO를 내는 SDK logger
+    root = logging.getLogger("mcp.server")
+    level = root.level
+    try:
+        with settings.isolated(LOG_LEVEL="INFO"):
+            audit._quiet_sdk()
+            assert not sdk.isEnabledFor(logging.INFO) and sdk.isEnabledFor(logging.WARNING)
+        with settings.isolated(LOG_LEVEL="DEBUG"):
+            audit._quiet_sdk()
+            assert sdk.isEnabledFor(logging.DEBUG)
+    finally:
+        root.setLevel(level)
+
+
 def test_initialize_contract():
     from mcp.types import LATEST_PROTOCOL_VERSION, ListToolsResult
 

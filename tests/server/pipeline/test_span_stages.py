@@ -49,6 +49,21 @@ def test_warm_span_counts():
     assert row["layer"] == "extract" and row["total"] == 2 and row["metrics"] == {"done": 1, "failed": 1}
 
 
+def test_parse_attempt_column():
+    from pipeline.extract import run_all
+
+    def run(side_effect):
+        rows, patched = _capture()
+        with patched, jsonlog.context(run_id=str(uuid.uuid4())):
+            with mock.patch.object(run_all, "_isolated", mock.Mock(side_effect=side_effect)):
+                with span.span("extract.parse"):
+                    run_all._run_with_retry("pymupdf", Path("a.pdf"), Path("a.json"), "default", 20.0, [], None)
+        return rows[0]["attempt"]
+
+    assert run([None]) == 1
+    assert run([TimeoutError("시간 제한 초과"), None]) == 2  # 시간 초과로 한 번 더
+
+
 def test_embed_span_cache_batches_retries():
     calls = []
 
@@ -70,10 +85,13 @@ def test_embed_span_cache_batches_retries():
                 with span.span("embed.bundle", "embed", model="api"):
                     second = build_bundle.embed_all("api", texts, batch=2, cache=cache)
     assert first.shape == second.shape == (5, 4) and np.allclose(first, second)
-    cold, warm = rows[0]["metrics"], rows[1]["metrics"]
+    embeds = [r for r in rows if r["stage"] == "embed.bundle"]
+    cold, warm = (r["metrics"] for r in embeds)
+    progress = [r for r in rows if r["stage"] == "run.progress"]  # 호출이 있던 첫 번째만 — 캐시만 쓴 두 번째는 없음
+    assert len(progress) == 1 and progress[0]["seq"] == progress[0]["total"] == 5 and progress[0]["metrics"]["unit"] == "chunk"
     assert (cold["cache_hit"], cold["cache_miss"], cold["batches"], cold["embed_retries"]) == (0, 5, 3, 1)
     assert cold["embed_calls"] == 3 and cold["embed_call_ms_n"] == 3 and cold["chunks"] == 5  # 실패한 호출은 지연에 안 셈
-    assert rows[0]["ext_call_ms"] >= 0 and rows[0]["model"] == "api" and rows[0]["layer"] == "embed"
+    assert embeds[0]["ext_call_ms"] >= 0 and embeds[0]["model"] == "api" and embeds[0]["layer"] == "embed"
     assert (warm["cache_hit"], warm["cache_miss"], warm["batches"]) == (5, 0, 0) and "embed_calls" not in warm  # 두 번째는 전부 캐시
 
 

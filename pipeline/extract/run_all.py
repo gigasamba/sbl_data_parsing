@@ -502,6 +502,9 @@ def _run_with_retry(eng, doc, dst, profile, tmo, unset, env):
     """문서×엔진 1건 — 시간 초과면 같은 실행에서 제한 두 배로 한 번 더(사용자 10-29), 그래도 넘으면 실패. 반환: (오류 글자 또는 None, 마지막 제한)."""
     for attempt in range(2):
         err = None
+        sp = SP.current()
+        if sp is not None:  # op-01 — 몇 번째 시도인지(시간 초과로 다시 돌면 2)
+            sp.set(attempt=attempt + 1)
         try:
             if unset:
                 raise LookupError("환경변수 미설정: " + ", ".join(unset))

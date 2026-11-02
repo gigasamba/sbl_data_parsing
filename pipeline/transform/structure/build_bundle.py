@@ -191,16 +191,18 @@ def embed_all(model, texts, batch=None, cache=None, out=None):
             db.executemany("INSERT OR REPLACE INTO e(k, v) VALUES (?, ?)", [(keys[j], row.tobytes()) for j, row in zip(idx, v)])
             db.commit()
 
-    if conc > 1 and len(slices) > 1:  # 병렬 — 워커는 HTTP 호출만, 저장(캐시·배열)은 메인 스레드가 완료 순서대로
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+    # op-01 — 호출이 있을 때만 run.progress(임베딩한 청크/전체). 구조화 반복의 진행 기록은 임베딩 전에 끝난다
+    with runtrace.Progress(total=len(texts), done=lambda: int(done.sum()), unit="chunk") if slices else contextlib.nullcontext():
+        if conc > 1 and len(slices) > 1:  # 병렬 — 워커는 HTTP 호출만, 저장(캐시·배열)은 메인 스레드가 완료 순서대로
+            from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        with ThreadPoolExecutor(max_workers=conc) as ex:
-            futs = {ex.submit(SP.carry(_one), idx): idx for idx in slices}  # op-01 — 풀 스레드에 run/span ID를 실음
-            for fut in as_completed(futs):
-                _store(futs[fut], fut.result())
-    else:
-        for idx in slices:
-            _store(idx, _one(idx))
+            with ThreadPoolExecutor(max_workers=conc) as ex:
+                futs = {ex.submit(SP.carry(_one), idx): idx for idx in slices}  # op-01 — 풀 스레드에 run/span ID를 실음
+                for fut in as_completed(futs):
+                    _store(futs[fut], fut.result())
+        else:
+            for idx in slices:
+                _store(idx, _one(idx))
     if db is not None:
         db.close()
     SP.add_current(

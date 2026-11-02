@@ -11,6 +11,7 @@ import hashlib
 import inspect
 import itertools
 import json
+import logging
 import queue
 import sys
 import threading
@@ -19,6 +20,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from common import pipeline_version
+from common.config.settings import cfg
 from common.core import exitclean, jsonlog
 from common.store import logsink
 from mcp_server import config as mc
@@ -92,11 +94,17 @@ def _debug(event, **fields):
         pass
 
 
+def _quiet_sdk():
+    """앱 logger 이름이 "mcp"라 SDK(mcp.server.*)의 요청마다 나오는 INFO 줄이 같은 로그에 섞인다. 감사 행과 겹치므로 DEBUG일 때만 남긴다."""
+    logging.getLogger("mcp.server").setLevel(logging.DEBUG if cfg().log.level == "DEBUG" else logging.WARNING)
+
+
 def _logger():
     global _LOG
     if _LOG is None:
         with _LOG_LOCK:
             if _LOG is None:
+                _quiet_sdk()
                 _LOG = jsonlog.setup("mcp")
     return _LOG
 
@@ -106,6 +114,7 @@ def configure_stdio():
     global _LOG
     try:
         with _LOG_LOCK:
+            _quiet_sdk()
             _LOG = jsonlog.setup("mcp", stream=sys.stderr)
     except Exception:
         pass

@@ -333,7 +333,7 @@ MCP 호출 1건당 1행. 인증 실패(`tool=http`)와 `initialize`도 행으로
 | stage | TEXT | 단계(`extract.parse`, `run.progress` 등) | 〃 | 〃 | 새로 |
 | engine | TEXT | 엔진 | 〃 | 〃 | 새로 |
 | model | TEXT | 모델 | 〃 | 없음 | 새로 |
-| attempt | INTEGER | 시도 번호 | 〃 | 없음 | 새로 |
+| attempt | INTEGER | 시도 번호(1부터, 시간 초과로 다시 돌면 2 — `extract.parse`만 채움) | 〃 | 없음 | 새로 |
 | doc_id | TEXT | 문서 ID | 〃 | perf | 새로 |
 | ext | TEXT | 확장자 | 〃 | 없음 | 새로 |
 | file_bytes | BIGINT | 파일 크기 | 〃 | 없음 | 새로 |
@@ -343,7 +343,7 @@ MCP 호출 1건당 1행. 인증 실패(`tool=http`)와 `initialize`도 행으로
 | wait_mem_ms | INTEGER | 메모리 문 대기 | 〃 | 〃 | 새로 |
 | wait_cpu_ms | INTEGER | CPU 문 대기 | 〃 | 〃 | 새로 |
 | cpu_ms | INTEGER | CPU 시간(회수된 자식 포함). 다른 단계와 겹쳐 정확히 못 재면 NULL | 〃 | 〃 | 새로 |
-| ext_call_ms | INTEGER | 외부 모델 호출 시간 | 〃 | 없음 | 새로 |
+| ext_call_ms | INTEGER | 외부 모델 호출 시간의 합. 병렬 호출은 더해지므로 `duration_ms`보다 클 수 있음 | 〃 | 없음 | 새로 |
 | rss_peak_mb | FLOAT | 최대 메모리 | 〃 | perf | 새로 |
 | load1_per_cpu_start | FLOAT | 시작 때 코어당 부하 | 〃 | 없음 | 새로 |
 | load1_per_cpu_end | FLOAT | 끝날 때 코어당 부하 | 〃 | 없음 | 새로 |
