@@ -191,17 +191,29 @@ def mark_loaded(db, loaded, version, kept=()):
     return 0
 
 
-def _set_loaded(cur, table, ph, now, ids, version, has_gold, kept):
-    """set_loaded 공용 — UPDATE 글자(상수·칸 이름만 끼움, 값은 바인딩). kept면 gold_version이 빈 행만(칸이 없으면 할 일 없음)."""
+LOADED_COLS = ("loaded_at", "gold_version")  # C10 예외 — 적재 때 UPDATE하는 칸은 이 둘뿐(test_no_deleted가 봄)
+
+
+def _set_loaded(cur, table, ph, now, ids, version, cols, kept):
+    """set_loaded 공용 — UPDATE 글자(상수·칸 이름만 끼움, 값은 바인딩). 칸마다 있을 때만 쓴다(DB 담당자가 둘 중 하나만 먼저 더해도 —
+    리뷰 #95: gold_version만 있고 loaded_at이 없으면 UPDATE가 통째로 실패해 gold_version이 늘 비고 매일 밤 다시 골라짐).
+    kept면 gold_version이 빈 행만(gold_version 칸이 없으면 할 일 없음)."""
+    has_gold = "gold_version" in cols
     if kept and not has_gold:
         return
-    la = f"COALESCE(loaded_at, {now})" if kept else now
-    gv, vals = (f", gold_version = {ph}", (version,)) if has_gold else ("", ())
+    sets, vals = [], ()
+    if "loaded_at" in cols:
+        sets.append(f"loaded_at = COALESCE(loaded_at, {now})" if kept else f"loaded_at = {now}")
+    if has_gold:
+        sets.append(f"gold_version = {ph}")
+        vals = (version,)
+    if not sets:
+        return
     only = " AND gold_version IS NULL" if kept else ""
     for k in range(0, len(ids), IN_CHUNK):
         part = ids[k : k + IN_CHUNK]
         cur.execute(
-            f"UPDATE {table} SET loaded_at = {la}{gv} WHERE parse_meta_id IN ({', '.join([ph] * len(part))}){only}",
+            f"UPDATE {table} SET {', '.join(sets)} WHERE parse_meta_id IN ({', '.join([ph] * len(part))}){only}",
             vals + tuple(part),
         )
 
@@ -294,7 +306,7 @@ class MssqlStore:
             self._available_columns(self.cn.cursor())
         cur = self.cn.cursor()
         try:
-            _set_loaded(cur, self.ident, "%s", "SYSUTCDATETIME()", ids, version, "gold_version" in self._found, kept)
+            _set_loaded(cur, self.ident, "%s", "SYSUTCDATETIME()", ids, version, self._found, kept)
             self.cn.commit()
         except Exception:
             self.cn.rollback()
@@ -356,7 +368,7 @@ class SqliteStore:
 
     def set_loaded(self, ids, version, kept=False):
         cols = self._colset()
-        _set_loaded(self.cn.cursor(), self.table, "?", "datetime('now')", ids, version, "gold_version" in cols, kept)
+        _set_loaded(self.cn.cursor(), self.table, "?", "datetime('now')", ids, version, cols, kept)
         self.cn.commit()
 
     def count(self):

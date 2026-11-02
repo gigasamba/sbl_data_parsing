@@ -60,6 +60,25 @@ def test_done_keys():
     assert PM._done_keys_rows(cn.cursor(), "T", gold=False) == {"a", "b", "c", "d"}  # DB 담당자 DDL 전
 
 
+def test_loaded_cols_alone():
+    """리뷰 #95 — DB 담당자가 두 칸 중 하나만 먼저 더해도 있는 칸은 쓴다(gold_version만 있을 때 UPDATE가 통째로 실패하지 않게)."""
+    cases = [  # (표의 칸, 기대 (loaded_at 채움?, gold_version))
+        ({"gold_version"}, (None, "0.2.0")),
+        ({"loaded_at"}, (1, None)),
+        ({"loaded_at", "gold_version"}, (1, "0.2.0")),
+        (set(), (None, None)),  # 둘 다 없음 — 할 일 없음(예외 아님)
+    ]
+    for cols, want in cases:
+        cn = sqlite3.connect(":memory:")
+        cn.execute(f"CREATE TABLE T (parse_meta_id, {', '.join(['x', *sorted(cols)])})")
+        cn.execute("INSERT INTO T (parse_meta_id) VALUES (1)")
+        PM._set_loaded(cn.cursor(), "T", "?", "datetime('now')", [1], "0.2.0", cols, False)
+        row = cn.execute(
+            f"SELECT {'loaded_at IS NOT NULL OR NULL' if 'loaded_at' in cols else 'NULL'}, {'gold_version' if 'gold_version' in cols else 'NULL'} FROM T"
+        ).fetchone()
+        assert row == want, (cols, row)
+
+
 class _Db:
     def __init__(self, fail):
         self.fail = fail
