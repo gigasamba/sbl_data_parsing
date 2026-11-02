@@ -30,7 +30,7 @@ extract-msg               # .msg (msg_extract 엔진) · GPL-3.0
 pandas==2.3.3
 
 # OCR (경량) · Java·서버 계열 클라이언트
-rapidocr-onnxruntime==1.4.4   # prepare.py 회전 검토 OCR v1(PREPARE_OCR=v1·auto) — 엔진 rapidocr 1.x는 10-30 지움(pl-31)
+rapidocr-onnxruntime==1.4.4   # 쓰는 코드 없음 — prepare.py v1 길·PREPARE_OCR는 11-01 지움, 엔진 rapidocr 1.x는 10-30 지움(pl-31) · 패키지를 뺄지는 따로
 rapidocr==3.9.2               # rapidocr_ko: PP-OCRv5 한국어 모델(첫 실행 때 받음 — prefetch 필요)
 onnxruntime==1.20.1
 pytesseract==0.3.13        # 시스템 tesseract + kor 언어팩 필요
