@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
-"""pipeline 전용 아티팩트 계약(10-14 함수별 분리 — common/core/artifacts.py에서 이전, 로직 바이트 동일).
-P0 원본 캐시 경로·지시문 id·엔진 버전·중간 캐시 정리 — 파싱 쪽(S6b 전 data-parsing 이미지, 지금 data-pipeline)에서만 쓴다(다른 이미지는 호출하지
-않음, common.core.artifacts에는 둘 이상의 이미지가 쓰는 code_fp·key·manifest·is_stale·sha8만 남는다).
-"""
+"""파싱 실행 공용(0.2.0에 옛 pipeline/shared/artifacts.py·progress.py를 합침, pl-46): P0 원본 캐시 경로·지시문 id·엔진 버전·중간 캐시 정리 ·
+환경 실패 단서(is_env_error)·문서 → 형식 키(doc_types)."""
 
 import importlib.metadata
+import json
 import os
 from pathlib import Path
 
@@ -12,6 +10,7 @@ from common.core.artifacts import sha8
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 
 
+# ---- (옛 pipeline/shared/artifacts.py)
 def prompt_id(name, version, text):
     """지시문 id = name-version-sha8(지시문 글자) — 코드 이름이 같아도 버전·글자가 바뀌면 다른 id."""
     return f"{name}-{version}-{sha8(text)}"
@@ -165,3 +164,73 @@ def purge_caches(parse_dir, max_gb=None, dirs=PURGE_CACHE_DIRS, log=print):
             d = d.parent
     log(f"[cache-purge] {total_gb:.2f}GB > 상한 {max_gb:g}GB — 오래된 캐시 파일 {removed}개({removed_bytes / 1024**3:.2f}GB) 지움 ({root})")
     return {"total_gb": round(total_gb, 3), "removed": removed, "removed_gb": round(removed_bytes / 1024**3, 3)}
+
+
+# ---- (옛 pipeline/shared/progress.py)
+# 환경(미설치·미설정) 실패 단서 — 한 곳(run_all RB3② env_failed·parse_qa·실행판 공용). SI45: 예전 "not found"·"NotFoundError"는
+# 손상 PDF의 'PdfReadError: EOF marker not found'까지 env로 잡아 그 엔진을 실행 전체에서 건너뛰게 했음 → 구체적인 표현만.
+ENV_ERR = (
+    "미설정",
+    "미설치",
+    "ModuleNotFoundError",
+    "No module named",
+    "command not found",
+    "FileNotFoundError",
+    "TesseractNotFoundError",
+    "NotInstalledError",
+    "not installed",
+    "SpawnError",
+    "initialization fai",
+)
+
+
+def is_env_error(err):
+    return bool(err) and any(k in err for k in ENV_ERR)
+
+
+def doc_types(docs, out):
+    """문서 → 타입(.pdf는 .pdf_text / .pdf_image — 쪽당 글자 레이어 20자 기준). 판정은 <out>/_types.json에 캐시(크기·수정 시각)."""
+    from pipeline.transform.represent.parse_qa import pdf_kind
+
+    cache_f = Path(out) / "_types.json"
+    try:
+        cache = json.loads(cache_f.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        cache = {}
+    res, dirty = {}, False
+    for d in docs:
+        if d.suffix.lower() != ".pdf":
+            res[d.name] = d.suffix.lower()
+            continue
+        st = d.stat()
+        key = f"{d.name}|{st.st_size}|{int(st.st_mtime)}"
+        if key not in cache:
+            cache[key], dirty = "." + pdf_kind(d)[0], True
+        res[d.name] = cache[key]
+    if dirty:
+        Path(out).mkdir(parents=True, exist_ok=True)
+        cache_f.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    return res
+
+
+def _fill_chars(runs, out):
+    """글자 수 없는 옛 기록(성공)은 출력 JSON에서 한 번 읽어 <out>/_chars.json에 캐시."""
+    cache_f = Path(out) / "_chars.json"
+    try:
+        cache = json.loads(cache_f.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        cache = {}
+    dirty = False
+    for (doc, eng), r in runs.items():
+        if "chars" in r or r.get("error"):
+            continue
+        k = f"{eng}|{doc}"
+        if k not in cache:
+            try:
+                cache[k] = len((json.loads((Path(out) / eng / (doc + ".json")).read_text(encoding="utf-8")).get("text") or "").strip())
+            except (OSError, ValueError):
+                cache[k] = 0
+            dirty = True
+        r["chars"] = cache[k]
+    if dirty:
+        cache_f.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")

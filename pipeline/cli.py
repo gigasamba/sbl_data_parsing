@@ -79,8 +79,8 @@ def _run_until(args, env, sec):
     args[0] = 모듈 점 표기(예: pipeline.extract.run_all)."""
     cmd = [PY, "-m", str(args[0]), *map(str, args[1:])]
     print("$ " + " ".join(cmd), flush=True)
+    from common.core import resources as PR  # 프로세스 묶음(OS 분기 한 곳)
     from common.core import resources as RS
-    from pipeline.extract import resources as PR  # 프로세스 묶음(OS 분기 한 곳)
 
     p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **PR.group_kw())  # cwd=APP_ROOT(런타임 루트) — sh()와 같은 이유
     try:

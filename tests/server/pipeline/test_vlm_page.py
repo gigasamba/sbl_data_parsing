@@ -8,7 +8,7 @@ from pathlib import Path
 import pipeline.transform.figures.vlm_page as M
 from common.config.settings import COMMON
 from pipeline import config as pc
-from pipeline.shared.artifacts import raw_vlm_path
+from pipeline.shared.parse_run import raw_vlm_path
 from pipeline.shared.postprocess import raw_root
 from pipeline.transform.figures.vlm_page import (
     MAX_SIDE,

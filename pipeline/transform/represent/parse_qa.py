@@ -350,9 +350,9 @@ def build_token_consensus(per_doc_toks, eng_fam, min_fams=2):
     """문서별 '유의미 텍스트' = 서로 다른 계열 min_fams개 이상이 뽑은 토큰. 계열이 min_fams보다 적으면 없음(판정 불가).
     반환 = (cons, conflicts). cons는 이전과 완전히 같은 모양(doc → 토큰 집합) — 호출부 로직 불변.
     conflicts는 AD25(a) 추가: 같은 문서에서 숫자 표기가 갈리지만
-    같은 값일 수 있는 자리(pipeline.shared.meaning.canon_num_key, 예 430.000↔430,000)를 엔진별 원문 표기와 함께 기록한다
+    같은 값일 수 있는 자리(pipeline.shared.canon.canon_num_key, 예 430.000↔430,000)를 엔진별 원문 표기와 함께 기록한다
     (합치지 않고 표시만 — 판정은 AD26 이후 몫)."""
-    from pipeline.shared.meaning import canon_num_key
+    from pipeline.shared.canon import canon_num_key
 
     out, conflicts = {}, {}
     for doc, by_eng in per_doc_toks.items():
@@ -515,7 +515,7 @@ def flags(qa_docs):
 
 
 def _unavailable(err):
-    from pipeline.shared.progress import is_env_error  # 환경 실패 단서 한 곳(SI45)
+    from pipeline.shared.parse_run import is_env_error  # 환경 실패 단서 한 곳(SI45)
 
     return is_env_error(err)
 

@@ -21,7 +21,7 @@ from common.ai import adk as A
 from common.ai.agent_prompts import load as _load_prompt
 from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
-from pipeline.shared.artifacts import prompt_id, raw_vlm_path
+from pipeline.shared.parse_run import prompt_id, raw_vlm_path
 from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
 from pipeline.transform.figures.vector import vector_regions  # 쪽 벡터 도형 군집 수(page_signals)
 
@@ -87,7 +87,7 @@ PAGE_SIGNALS_VERSION = "v3"  # 독립 검토 A — 알고리즘·상수(PAGE_SCA
 
 def _signals_path(file_sha256):
     """쪽 신호 캐시 파일 — raw_root()/signals/page_signals@<버전>/<파일 sha256 앞 16자>.json(content-addressed,
-    `<name>@<version>` 관례는 pipeline.shared.artifacts.raw_engine_path·raw_vlm_path와 같음 — 기존 VLM 캐시 원칙 그대로.
+    `<name>@<version>` 관례는 pipeline.shared.parse_run.raw_engine_path·raw_vlm_path와 같음 — 기존 VLM 캐시 원칙 그대로.
     tools/parse_agent_tools.inspect_document도 이걸 읽고/채운다, AD46 '한 번 계산해 저장, 판단들이 읽음')."""
     return Path(raw_root()) / "signals" / f"page_signals@{PAGE_SIGNALS_VERSION}" / f"{file_sha256[:16]}.json"
 

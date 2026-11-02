@@ -22,9 +22,8 @@ from pathlib import Path
 from common.core.console import utf8_stdout
 from common.core.contract import jl  # 묶음 읽기
 from common.core.text import index_text, tokens  # 색인·토큰 규칙(모듈 계약)
-from common.store.pg import HNSW_MAX, PG, conf, has_conn, vec  # noqa: F401
+from common.store.pg import HNSW_MAX, PG, _standin_schema, _warn_standin, conf, has_conn, vec  # noqa: F401
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
-from pipeline.load.pg_load_connect import connect as pg_connect
 
 # DROP/TRUNCATE/DELETE 대상 식별자 화이트리스트(XS3) — 우리 스키마의 우리 표만. 스키마명 자체는 common/pg.conf()가 이미 정규식으로 검증.
 _OUR_TABLES = {"doc", "chunk", "chunk_term", "term_stat", "corpus_stat"}  # 원천 스키마마다 같은 표(pl-28 — load_run은 11-02에 지움)
@@ -411,3 +410,20 @@ if __name__ == "__main__":
     setarg.apply()  # --set 이름=값(S9 Step A — 호스트 run_docs.py 적재가 BM25_THREADS를 넘김)
     utf8_stdout()
     main()
+
+
+# ---- PG 단일 연결 전환점(0.2.0 — 옛 pipeline/load/pg_load_connect.py, pl-46)
+def pg_connect(c=None, pg_schema=None):
+    """AD41 단일 전환점 — PG_PASSWORD·PG_CONN_FILE이 있으면 진짜 PG(PG 클래스), 없으면 스탠드인(StandinPG, sqlite ·
+    PG_STANDIN_DIR, 기본 output/pg_standin). load/pgstore.py main()이 씀 — 서버는 pipeline.env에 연결 정보만 채우면
+    코드 변경 없이 진짜 PG로 바뀐다. 한 줄 알림(모드)은 호출부(check_env.py·pgvector_load.py)가 찍는다 — 스탠드인을
+    고를 때는 여기서도 WARNING 한 줄(_warn_standin, 서버에서 비밀번호를 빠뜨려도 조용히 안 넘어가게)."""
+    if has_conn():
+        c = c or conf()
+        if pg_schema:
+            c = {**c, "PG_SCHEMA": pg_schema}
+        return PG(c)
+    _warn_standin()
+    from common.store.pg_standin import StandinPG
+
+    return StandinPG(_standin_schema(pg_schema or (c or {}).get("PG_SCHEMA")))

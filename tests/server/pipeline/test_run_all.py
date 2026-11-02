@@ -20,7 +20,7 @@ from pipeline.extract.run_all import (
     page_timeout,
     redact,
 )
-from pipeline.shared import artifacts as P0
+from pipeline.shared import parse_run as P0
 
 
 def selftest():
@@ -324,11 +324,11 @@ def test_run_procs_doc_shards():
 
 
 def test_low_priority_children():
-    """10-29 — 일괄 파싱 엔진 자식은 낮은 우선순위(OS 분기 한 곳 — pipeline.extract.resources), 끄면(parse MCP 서비스) 아무 인자 없음."""
+    """10-29 — 일괄 파싱 엔진 자식은 낮은 우선순위(OS 분기 한 곳 — common.core.resources), 끄면(parse MCP 서비스) 아무 인자 없음."""
     import os
     import subprocess
 
-    from pipeline.extract import resources as PR
+    from common.core import resources as PR
 
     assert PR.low_priority_kw(False) == {}
     if os.name == "nt":
@@ -354,7 +354,7 @@ def test_kill_group_reaps_grandchild():
     import subprocess
     import time
 
-    from pipeline.extract import resources as PR
+    from common.core import resources as PR
 
     if os.name == "nt":
         print("[selftest] kill_group — Windows는 건너뜀(taskkill /T)")

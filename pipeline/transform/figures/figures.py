@@ -1,6 +1,6 @@
 """W1·W9 — 내장 그림을 형식과 무관하게 모두 찾아 VLM 기록(+ 위치·근처 글자). 원본: eval_hard_parse.figures()·vlm_raw().
 PDF 래스터·벡터 군집(post.vector)·docx(본문·표 칸)·xlsx(모든 시트·셀 위)·pptx·eml 본문 이미지(cid) → 그림 1개 = 기록 1개.
-VLM은 common.ai.guard(내부망 가드)·추론 끔·P0 원본 층 캐시(pipeline.shared.artifacts.raw_vlm_path, PARSE_RAW_ROOT로 저장소 바꿀 수 있음).
+VLM은 common.ai.guard(내부망 가드)·추론 끔·P0 원본 층 캐시(pipeline.shared.parse_run.raw_vlm_path, PARSE_RAW_ROOT로 저장소 바꿀 수 있음).
 산출: output/parse/_images/index.jsonl(설계 git 이력 docs/plans/image-parsing-2026-10-01.md(c4874dd0^) §3 계약 + W11 필드) + <doc>/<image_id>.png."""
 
 import base64
@@ -22,7 +22,7 @@ from common.core.paths import (
     APP_ROOT,  # 폴더 재편 뒤 이 상수만 바뀌면 됨
 )
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
-from pipeline.shared.artifacts import prompt_id, raw_vlm_path
+from pipeline.shared.parse_run import prompt_id, raw_vlm_path
 from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
 from pipeline.transform.figures import chart_values as CV  # F14(a)·(c) 벡터 차트 결정적 값·추세
 from pipeline.transform.figures import diagram_edges as diag_edges  # F13, PDF 벡터·텍스트 글자 화살표 결정적 edges

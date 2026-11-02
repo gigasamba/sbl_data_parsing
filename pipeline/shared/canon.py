@@ -1,12 +1,10 @@
-"""기호 정규화·산출 표준화(파싱 전용) — canon_symbols(Symbol 글꼴 PUA·대시·특수 공백·전각→반각)·standardize_text
-(대표 결과 본문·facts·표 칸 표준화, 텍스트 파싱 직후·융합 전). score_gold.py 채점(canon())·represent.py·
-postprocess/{diagram_edges,table_std}.py가 공용(옛 scan_dedup은 pl-34에 지움) — 각자 맵을 두면 또 벌어짐(SI20·AD25, 서버 실측 10-06).
-첨자 표기(supsub_mark)는 common.core.text 쪽(파싱·검색 공용, parse_qa·synth_score도 씀)에 그대로 둔다."""
+"""기호·숫자 정규화(파싱 전용 — 0.2.0에 옛 pipeline/shared/text.py·meaning.py를 합침, pl-46): canon_symbols·standardize_text·canon_num_key."""
 
 import re
 
 from common.core.text import supsub_mark
 
+# ---- (옛 pipeline/shared/text.py)
 # SI20·AD25 — 기호 정규화 맵(산출 쪽 표준화·score_gold 채점 공용 — 각자 맵을 두면 또 벌어짐, 서버 실측 10-06).
 # Symbol 글꼴(PDF·Word가 사용자 영역 U+F0xx로 내보냄) → 표준 글자 — 자주 나오는 것만(score_gold에서 옮김, 값 불변).
 SYMBOL_PUA = {
@@ -116,3 +114,15 @@ def standardize_text(s):
     if not s:
         return s
     return canon_symbols(supsub_mark(s))
+
+
+# ---- (옛 pipeline/shared/meaning.py)
+def canon_num_key(tok):
+    """AD25(a) 충돌 탐지 전용(tokens()는 이 값으로 합치지 않는다 — 모호해서) — 430.000과 430,000처럼 천 단위
+    구분자로 보이는 자리를 모두 지운 정규값. parse_qa.build_token_consensus가 같은 계열 사이에서 표기가 갈리는
+    숫자(conflicts)를 찾을 때만 쓴다. 3자리 묶음 모양(쉼표·마침표)이 아니면 None(충돌 비교 대상 아님 — 4,30,000은
+    묶음이 무효라 여기도 안 걸린다)."""
+    core = tok.rstrip(".,:/-")
+    if not re.fullmatch(r"\d{1,3}(?:[,.]\d{3})+", core):
+        return None
+    return re.sub(r"[,.]", "", core)

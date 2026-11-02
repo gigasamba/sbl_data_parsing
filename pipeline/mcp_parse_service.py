@@ -125,8 +125,8 @@ def _jail(path_str):
 
 def _run_group(cmd, timeout, env):
     """작업 단계 하나(python -m …) — 새 프로세스 묶음으로 띄우고 시간 초과면 묶음째 끝냄(run_all이 띄운 parse_one 손자가 남지 않게,
-    cli._run_until과 같은 규칙 — pipeline.extract.resources). 시간 초과는 subprocess.TimeoutExpired로 올림(옛 subprocess.run과 같음)."""
-    from pipeline.extract import resources as PR
+    cli._run_until과 같은 규칙 — common.core.resources). 시간 초과는 subprocess.TimeoutExpired로 올림(옛 subprocess.run과 같음)."""
+    from common.core import resources as PR
 
     p = exitclean.track(  # pl-27 — 서비스가 끝날 때 아직 돌면 묶음째 끝내고 회수
         subprocess.Popen(

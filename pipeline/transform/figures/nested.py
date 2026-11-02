@@ -20,7 +20,7 @@ from common.ai import adk as A
 from common.ai.agent_prompts import load as _load_prompt
 from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
-from pipeline.shared.artifacts import prompt_id, raw_vlm_path
+from pipeline.shared.parse_run import prompt_id, raw_vlm_path
 from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
 from pipeline.transform.figures.vlm_page import _host, _model_dir, _png, sha  # 캐시 경로·PNG 축소 helper 재사용(중복 구현 금지)
 

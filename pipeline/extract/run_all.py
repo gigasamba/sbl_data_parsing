@@ -43,8 +43,8 @@ from common.core.paths import (  # 폴더 재편 뒤 이 두 상수만 바뀌면
 )
 from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
 from pipeline.extract.engines import registry
-from pipeline.shared import artifacts as P0  # P0 열쇠(엔진 버전·코드 지문) — 결과 출처 기록(실험 저장소 계약과 같은 규칙)
-from pipeline.shared.progress import doc_types  # 문서→형식 키(.pdf_text/.pdf_image, _types.json 캐시)
+from pipeline.shared import parse_run as P0  # P0 열쇠(엔진 버전·코드 지문) — 결과 출처 기록(실험 저장소 계약과 같은 규칙)
+from pipeline.shared.parse_run import doc_types  # 문서→형식 키(.pdf_text/.pdf_image, _types.json 캐시)
 
 _QUOTED = re.compile(r"""(['"])((?:(?!\1).){30,})\1""", re.S)
 
@@ -183,7 +183,7 @@ def main():
     )
     a = ap.parse_args()
     from common.core import resources
-    from pipeline.extract import resources as presources  # 10-14 — resolve_procs·thread_env는 common.core.resources에서 옮김(P만 씀)
+    from common.core import resources as presources  # 10-14 — resolve_procs·thread_env는 common.core.resources에서 옮김(P만 씀)
 
     a.procs = 1 if a.shard else presources.resolve_procs(a.procs)  # --shard = run_procs가 띄운 하위 → 다시 나누지 않음
     # OC2(사용자 10-15) — 실제 동시 수로 CPU를 나눔(thread_share). 조각은 이 값을 setdefault로 물려받음. OC1 rapidocr 스레드도 OMP_NUM_THREADS를 따름.
@@ -548,7 +548,7 @@ def p0_key(eng, sha, ver=None):
 
 
 def _env_error(err):
-    from pipeline.shared.progress import is_env_error  # 환경 실패 단서 한 곳(SI45 — 손상 PDF 'EOF marker not found'를 env로 보던 것)
+    from pipeline.shared.parse_run import is_env_error  # 환경 실패 단서 한 곳(SI45 — 손상 PDF 'EOF marker not found'를 env로 보던 것)
 
     return is_env_error(err)
 
@@ -569,9 +569,9 @@ def _isolated(eng, doc, dst, profile, tmo, py=None, env=None):
 def _isolated_once(eng, doc, dst, profile, tmo, py, env=None):
     import subprocess
 
+    from common.core import resources as PR  # 우선순위 OS 분기 한 곳
     from common.core import resources as RS
     from common.core.paths import child_env
-    from pipeline.extract import resources as PR  # 우선순위 OS 분기 한 곳
 
     low = bool(pc.cfg().extract.low_priority)  # 10-29 — 일괄 파싱은 낮은 우선순위(parse MCP 서비스는 끔 — 요청이 CPU를 먼저)
     # PADDLE_PYTHON은 별도 venv(.venv-paddle)라 cwd 상속에 의존하지 않고 child_env()의 PYTHONPATH(deploy/)로 `-m pipeline.extract.parse_one`을 찾게 함

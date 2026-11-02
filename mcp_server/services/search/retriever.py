@@ -36,7 +36,7 @@ class Retriever:
             }
             for d in self.local.docs
         }  # L3-1: pgvector 저장소도 이 로컬 묶음 문서 메타로 최신성 순위(항상 로드됨)
-        # 저장소는 PostgreSQL + pgvector(mc-01). pg = 원천 스키마 하나의 연결(pl-28 — server_state가 pg_mcp_connect.connect_sources로 만들어 줌).
+        # 저장소는 PostgreSQL + pgvector(mc-01). pg = 원천 스키마 하나의 연결(pl-28 — server_state가 connect_sources.connect_sources로 만들어 줌).
         from mcp_server.services.search import pgsearch
 
         self.pgmod, self.pg = pgsearch, pg

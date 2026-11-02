@@ -270,7 +270,7 @@ def standardize_rep(d):
     """SI20·AD46⑤ — 표 칸 재현율 저하 원인(기호 정형화 부재)을 산출 쪽에서 메움: 엔진 묶음 직후·융합(facts 합치기) 전에
     본문·facts·표 칸에 common.core.text.standardize_text(기호 맵 + 첨자 표기 통일)을 적용. 원문(pd/<엔진>/<문서>.json)은
     여기서 손대지 않고 대표 결과(_rep)에만 적용 — 되돌릴 수 있게 바뀐 개수만 돌려준다(rep.rep.standardize)."""
-    from pipeline.shared.text import standardize_text as _std
+    from pipeline.shared.canon import standardize_text as _std
 
     n = 0
     if d.get("text"):
@@ -311,7 +311,7 @@ def _norm_agree(text):
     import re
 
     from common.core.text import normalize_value
-    from pipeline.shared.text import canon_symbols
+    from pipeline.shared.canon import canon_symbols
 
     return re.sub(r"(?<=\d)\.(?=\d)", "", normalize_value(canon_symbols(text or "")))
 

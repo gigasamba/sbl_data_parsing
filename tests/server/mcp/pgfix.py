@@ -124,8 +124,8 @@ def use(bundle, **names):
     Returns an ExitStack (with … or .close()); closing it also closes every stand-in connection opened meanwhile
     (Windows keeps open sqlite files locked) and removes the bundle's temp dir."""
     from common.store import pg as PGC
-    from mcp_server.services.search import pg_mcp_connect as PGM
     from mcp_server.services.search import server_state
+    from mcp_server.services.search import server_state as PGM
 
     opened = []
 
@@ -150,7 +150,7 @@ def use(bundle, **names):
 @contextlib.contextmanager
 def retriever(bundle, *args, **names):
     """Retriever on the stand-in of `bundle` under use() (connections closed and temp dir removed after)."""
-    from mcp_server.services.search import pg_mcp_connect as PGM
+    from mcp_server.services.search import server_state as PGM
     from mcp_server.services.search.retriever import Retriever
 
     src = names.pop("src", "other")

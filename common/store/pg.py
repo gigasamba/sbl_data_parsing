@@ -3,7 +3,7 @@
 PG_CONNECT_TIMEOUT(기본 10초) — 공유 PG가 방화벽·주소 문제로 안 보일 때 수십 초씩 매달리지 않게(XS4).
 PG_POOL_MAX(기본 8, PGPool) — 공유 PG의 max_connections 여유 안에서 잡을 것(다른 팀 서비스도 같은 PG를 씀).
 10-14 함수별 분리(사용자) — connect()는 pipeline(load, 단일 연결)에서만, connect_pool()은 검색 MCP
-(상주 Retriever)에서만 써서 각각 pipeline/load/pg_load_connect.py·mcp_server/services/search/pg_mcp_connect.py(옛 data_retrieval/tools/pg.py)로 옮김(로직
+(상주 Retriever)에서만 써서 각각 pipeline/load/pgvector_load.py(pg_connect)·mcp_server/services/search/server_state.py(옛 data_retrieval/tools/pg.py)로 옮김(로직
 바이트 동일). has_conn·conf·_standin_schema·_warn_standin·PG·PGPool·vec은 두 전환점이 같이 쓰고
 cli/server_checks.py 등 공통 쪽도 PG·conf를 직접 쓰므로 여기(공용)에 남는다."""
 

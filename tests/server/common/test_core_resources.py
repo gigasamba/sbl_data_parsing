@@ -43,7 +43,7 @@ def selftest():
     p = plan(cpu=1, mem=None)
     assert (p["procs"], p["threads"]) == (1, 1), p
     with COMMON.env(PIPE_PROCS="5"):
-        assert plan(cpu=4, mem=32)["procs"] == 5  # resolve_procs("2")==2는 pipeline.extract.resources.selftest()로 옮김(10-14, P만 씀)
+        assert plan(cpu=4, mem=32)["procs"] == 5  # resolve_procs("2")==2는 common.core.resources.selftest()로 옮김(10-14, P만 씀)
     (d / "memory.current").write_text(str(6 * 1024**3) + "\n")  # cgroup 8 GB 중 6 GB = 75%
     (d / "memory.max").write_text(str(8 * 1024**3) + "\n")
     assert round(mem_used_pct(d, mi)) == 75

@@ -11,7 +11,7 @@ import pipeline.transform.figures.figures as M
 from common.ai import adk as A
 from common.config.settings import COMMON
 from pipeline import config as pc
-from pipeline.shared.artifacts import raw_vlm_path
+from pipeline.shared.parse_run import raw_vlm_path
 from pipeline.shared.postprocess import raw_root
 from pipeline.transform.figures.figures import (
     FIG_OCR_FALLBACK_MIN_CHARS_DEFAULT,

@@ -31,6 +31,7 @@ CPU 문(gated_popen이 메모리 문 다음에 같이 거침 — 측정 못 하�
 
 import math
 import os
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -327,3 +328,59 @@ if __name__ == "__main__":
         print(
             f"CPU {p['cpus']} · 메모리 {p['mem_gb']} GB → CPU 엔진 프로세스 {p['procs']} × 스레드 {p['threads']} · VLM 동시 문서 {p['workers']}  ({p['why']})"
         )
+
+
+# ---- 일괄 파싱 프로세스(0.2.0 — 옛 pipeline/extract/resources.py에서 옮김, pl-46: OS별 분기를 이 파일 한 곳에)
+LOW_NICE = 10  # POSIX nice 증가분 — 일괄 파싱 엔진 자식(parse MCP 서비스의 자식은 0)
+
+
+def resolve_procs(v):
+    """명령 인자 --procs 값('auto'·숫자) → 정수."""
+    return plan()["procs"] if str(v).strip().lower() in ("", "auto", "0") else max(1, int(v))
+
+
+def thread_share(cpus, procs, workers=1):
+    """동시 실행 단위 하나가 쓸 스레드 수(OC2, 사용자 10-15) — 실제 동시 수 = procs × workers로 CPU를 나눔.
+    run_all은 --procs만큼 조각(shard)을 띄우고 각 조각이 동시 자식(글자 엔진 상한 text_slots)을 돌린다 → 호출자가 그 수를 workers로. 최소 1."""
+    return max(1, int(cpus) // (max(1, int(procs)) * max(1, int(workers))))
+
+
+def text_slots(cpus, procs):
+    """조각 하나에서 동시에 돌릴 글자(CPU) 엔진 자식 수 상한(10-29) — 코어 ÷ 조각 수(최소 1). VLM 엔진(API 대기)은 이 상한 밖 —
+    --workers(문서 동시 수, VLM에 맞춘 값)를 글자 엔진이 그대로 물려받지 않게."""
+    return max(1, int(cpus) // max(1, int(procs)))
+
+
+def low_priority_kw(low=True):
+    """일괄 파싱 엔진 자식을 띄울 때 Popen 추가 인자 — Windows는 BELOW_NORMAL 우선순위 클래스, POSIX는 없음(띄운 뒤 renice_low)."""
+    if low and os.name == "nt":
+        return {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS}
+    return {}
+
+
+def renice_low(pid, low=True):
+    """POSIX — 띄운 자식의 nice를 LOW_NICE만큼 올림(preexec_fn은 스레드와 같이 쓰면 위험해 띄운 뒤에). Windows·실패는 아무것도 안 함."""
+    if low and os.name != "nt":
+        try:
+            os.setpriority(os.PRIO_PROCESS, pid, os.getpriority(os.PRIO_PROCESS, pid) + LOW_NICE)
+        except OSError:
+            pass  # 이미 끝난 자식 등 — 우선순위는 최선(실패해도 파싱은 계속)
+
+
+def group_kw():
+    """자식을 새 프로세스 묶음(세션)으로 — kill_group이 손자까지 끝낼 수 있게."""
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def kill_group(p):
+    """group_kw로 띄운 자식과 그 아래 프로세스 전부를 끝내고 기다림(시간 초과 처리) — 끝내기·회수는 common.core.exitclean.stop 한 곳(pl-27)."""
+    exitclean.stop(p, group=True)
+    p.communicate()
+
+
+def thread_env(threads):
+    """수치 라이브러리 스레드 수 고정 — 정하지 않으면 각 프로세스가 호스트 코어 수만큼 스레드를 띄움(프로세스 × 코어 = CPU 폭주)."""
+    t = str(threads)
+    return {k: t for k in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS", "TORCH_NUM_THREADS")}
