@@ -4,7 +4,7 @@
 행 = 요건 하나(끝난 것 포함) — 칸은 요건(무엇을, 어디서) · 기준·이유 · 상태 · ID. ID 하나가 여러 행에 나올 수 있다(상세는 ID 링크의 앵커). 상태: todo · dev · done(그 밖에 partly done) · dropped(요건에서 뺌 — 행은 남김, 사용자 10-31 범위 축소). ID는 그대로 두고 카테고리 파일이 자리를 정한다(do-04 3부 11-01 — 수집·변환·적재·검색·운영·테스트·문서, 2만 자 넘는 카테고리는 `<분류>-<하위>.md`). 상세는 ID 링크.
 
 ## 지금 진행 중
-- pl-25 DB 스키마 명세 — dev: `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인 대기(`ParsingMeta.stack_version` 칸 — 판 표가 없어져 무엇을 둘지 결정 대기, 사용자).
+- pl-25 DB 스키마 명세 — dev: `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인 대기(ParsingMeta 판 칸은 11-02 결정 — `silver_version`·`gold_version`, `stack_version` 없음).
 - 0.2.0 묶음(todo — 순서는 허브가 정함): 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 원천별 gold 스키마 [pl-28](prd/load-schema.md#pl-28) · run_docs 순서 [pl-24](prd/ops.md#pl-24) · 게시 필수 [pl-26](prd/load.md#pl-26) · 분류 [pl-33](prd/transform.md#pl-33) · FAQ [pl-39](prd/extract.md#pl-39)·[pl-41](prd/load.md#pl-41) · 지문 배치 [pl-46](prd/transform-cleanup.md#pl-46)·[pl-47](prd/transform-cleanup.md#pl-47) · 확장자 2차 [pl-45](prd/transform.md#pl-45) · `search` 계약 [mc-16](prd/mcp.md#mc-16) · 원문 도구 [mc-17](prd/mcp.md#mc-17).
 - 운영 고침 묶음(todo — 사용자 11-02 결정, 코드는 따로): 회전 판정 병렬·기본 적용 끄기 [pl-02](prd/extract.md#pl-02) · 서버 러너 병렬 받기 [pl-48](prd/extract.md#pl-48) · `run_docs` 끝난 문서에 `skipped_dup` 넣기 · EDW 고객 매핑 적재로 옮김 [pl-29](prd/load.md#pl-29).
 - 검색 — PG만, 실행 중 묶음 없음 [mc-19](prd/mcp.md#mc-19)(todo, 자기 PR + 평가).
@@ -88,7 +88,7 @@
 | 같은 `s3_key`가 FileStorageMap에 여러 행이면 `created_at`이 가장 늦은 행만. 새 행은 `file_size`가 같으면 건너뛰고 다르면 같은 `doc_id`로 다시 처리, 밀려난 행은 EDW `SupersededRow`에 | 원본을 받지 않고 판별한다(같은 크기로 덮어쓴 경우는 놓침 — 받아들임) | todo | [pl-32](prd/load-schema.md#pl-32) |
 | 실행을 넘어 남는 로컬 완료 표시(`_DONE`, `runs.jsonl` 재사용)를 없애고 실패 문서는 다음 실행이 다시 고르게 | 저장 자리는 하나라는 원칙 | todo | [pl-32](prd/load-schema.md#pl-32) |
 | DB 스키마 명세는 `docs/architecture/db_schema.md` 하나(검색 DB·EDW·마스터 CSV의 칸·타입·쓰고 읽는 코드), `test_db_schema.py`가 대조 | 정의가 흩어져 있었다. 사용자·DB 담당자 승인 대기 | dev | [pl-25](prd/load-schema.md#pl-25) |
-| ParsingMeta에는 파싱 정보만(원천 키·상태·silver 위치·엔진·`gold_status`·`pipeline_version`·`sha256`), 고객·분류 같은 파일 메타는 검색 DB `doc`에만 | 중복 적재를 없앤다. 운영이 더한 칸은 0.2.0에 지운다(D-3). `stack_version` 칸은 결정 대기 | dev | [pl-25](prd/load-schema.md#pl-25) |
+| ParsingMeta에는 파싱 정보만(원천 키·상태·silver 위치·엔진·`gold_status`·`silver_version`·`gold_version`·`sha256`), 고객·분류 라벨 같은 파일 메타는 검색 DB `doc`에만 | 중복 적재를 없앤다. 운영이 더한 칸은 0.2.0에 지운다(D-3). `stack_version`은 만들지 않음(11-02) | dev | [pl-25](prd/load-schema.md#pl-25) |
 | 문서 키는 원본 경로 하나 — 검색 DB `doc.file_path` = Object Storage 원본 경로 = EDW `s3_key`(청크는 `doc_id`만), ParsingMeta와 이 값으로 잇는다 | sha256 `doc_key`는 검색 DB에 안 둔다(ParsingMeta `sha256`만). 사용자 11-02 — 경로 칸 하나 | dev | [pl-25](prd/load-schema.md#pl-25) |
 | 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타 칸이 다르다. 판 0002 — 전체 다시 적재·MCP `source_system` 필수(등급 A, 11-02) | done | [pl-28](prd/load-schema.md#pl-28) |
 | 원천 = `FileStorageMap.source_system`(`SFDC`·`CRMS`·`LAS`·`FAQ`, `-test` 붙어도 같음), 비었거나 다른 값이면 `other`. `faq` 스키마만 `chunk.faq_group` 칸 | 원본 경로 첫 마디로도 정함 | done | [pl-28](prd/load-schema.md#pl-28) |

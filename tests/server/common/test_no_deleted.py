@@ -34,6 +34,9 @@ def test_publish_never_updates():
     from common.store import parsing_meta_db
 
     src = inspect.getsource(parsing_meta_db)
-    # EDW는 INSERT만 — status를 deleted·changed로 바꾸는 길 없음. 예외는 적재 시각 loaded_at 하나뿐(사용자 11-02, C10 예외)
+    # EDW는 INSERT만 — status를 deleted·changed로 바꾸는 길 없음. 예외는 적재 때 loaded_at·gold_version뿐(사용자 11-02, C10 예외)
     ups = [ln for ln in src.splitlines() if "UPDATE {" in ln]
-    assert ups and all("SET loaded_at" in ln for ln in ups), ups
+    assert ups and all("SET {', '.join(sets)}" in ln for ln in ups), ups
+    assert parsing_meta_db.LOADED_COLS == ("loaded_at", "gold_version")
+    sets = [ln.split("sets.append(", 1)[1] for ln in src.splitlines() if "sets.append(" in ln]
+    assert sets and all(s.lstrip('f"').startswith(parsing_meta_db.LOADED_COLS) for s in sets), sets

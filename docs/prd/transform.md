@@ -144,7 +144,7 @@
 5. **LAS 지시문**(`resources/prompts/pipeline/classify_las/` — 운영 `SYSTEM` 글자 그대로, PSA = Product Specific Agreement): 라벨 `MSA`·`PSA`·`QAG`·`LOI`·`Amendment`·`Assignment Letter`·`Other`, 규칙(기존 계약 변경은 모두 Amendment · 자료만 더하는 QAG 추가분은 QAG · 경개는 Assignment Letter · SoW·NDA/CDA·MTA/TTA·MOU·검토 메모·부속 서한·공급/제조·해지·전자서명 감사 기록·LOU는 Other), 확신도 기준(모두 맞음 0.90 이상·애매 0.80·부딪힘 0.60·메모 0.75).
 6. **LAS 근거**: 문서 정보(원본 파일 이름·형식, 품의 제목 = gold `<기준>_las.doc.approvalname`(`LAS.Contract.ApprovalName` 최신 판, 판 0003), 상대방 = `client_edw`(`PartnerCorpName`)) + 키워드 근거(운영 `extract_evidence` 그대로 — Signal ① 본문 앞 300자 자기 이름 ② 앞 2,000자의 계약 종류 전체 이름·경개·Other 종류 ③ 파일 이름 키워드(전체 이름·약어)·DR ④ 변경 키워드 · 두 종류 이상·변경·보고서·메모 경고) + 본문 8,000자. `pipeline/load/classify.py` `las_evidence`·`las_user`.
 7. 답은 운영과 같은 찾기로 읽는다 — 코드 울타리를 벗기고 `class`(SFDC는 `doc_class`도)가 있는 첫 JSON 객체. SFDC는 운영 별칭표(소문자·공백 뺌 — `RFP+RFI` → `RFI+RFP`), LAS는 앞뒤 공백만 정리한 글자가 집합 안이어야 한다. 집합 밖·참거짓·숫자면 실패. 확신도는 읽지 않는다(지시문의 확신도 줄은 운영 글자 그대로 두고 무시 — 사용자 11-02).
-8. **재시도 없음·수동 명령 없음**(사용자 11-02): 호출 안에서 다시 묻지 않는다. 분류 실패(모델 장애·예산 초과·집합 밖·본문 없음)는 **그 문서의 적재 실패**다 — gold에 넣지 않아 gold_version이 적히지 않고, 다음 정상 실행에서 수집이 다시 고른다(EDW ParsingMeta에 silver/gold 결과가 없는 문서가 대상). 감사 한 줄.
+8. **재시도 없음·수동 명령 없음**(사용자 11-02): 호출 안에서 다시 묻지 않는다. 분류 실패(모델 장애·예산 초과·집합 밖·본문 없음)는 **그 문서의 적재 실패**다 — gold에 넣지 않아 gold_version이 적히지 않고, 다음 정상 실행에서 수집이 다시 고른다(EDW ParsingMeta에 silver/gold 결과가 없는 문서가 대상 — 추출의 유일한 선택 규칙, [load-schema.md#pl-25](load-schema.md#pl-25)). 감사 한 줄.
 9. 같은 sha256은 라벨 하나: 묶음이 같은 sha256 문서를 하나만 남기므로(`build_bundle` — 다른 경로는 `aliases`) 한 번만 부른다. 파싱되지 않은 행(`not_parsed`)에는 라벨을 붙이지 않는다(gold에는 파싱된 문서만).
 10. 이미 라벨이 있는 문서(gold 또는 묶음)는 덮지 않는다 — `--replace`로 다시 적재해도 옛 라벨 유지.
 
@@ -155,8 +155,8 @@
 - (시험은 합성 문서·가짜 LLM — 실제 회사 문서 아님.)
 
 ### 데이터·약속
-- 검색 DB(gold) `<기준>_sfdc.doc.doc_class`·`<기준>_las.doc.doc_class`(#86) + 분류 힌트 칸(판 `0003_search` — sfdc 10칸·las `approvalname`, 검색 뷰에는 없음, 등급 A DB 스키마). PC 검색 대역(`output/pg_standin/<스키마>_sfdc|las.sqlite`)이 0003 전에 만든 것이면 힌트 칸이 없어 적재가 멈춘다 — 그 파일을 지우고 다시 만든다(대역은 `CREATE TABLE IF NOT EXISTS`만).
-- 모델 이름·분류 시각은 어디에도 두지 않는다(사용자 11-02) — ParsingMeta의 silver_version·gold_version이 어떤 코드로 만든 결과인지 남긴다.
+- 검색 DB(gold) `<기준>_sfdc.doc.doc_class`·`<기준>_las.doc.doc_class`(#86 — [load-schema.md#pl-28](load-schema.md#pl-28)) + 분류 힌트 칸(판 `0003_search` — sfdc 10칸·las `approvalname`, 검색 뷰에는 없음, 등급 A DB 스키마). PC 검색 대역(`output/pg_standin/<스키마>_sfdc|las.sqlite`)이 0003 전에 만든 것이면 힌트 칸이 없어 적재가 멈춘다 — 그 파일을 지우고 다시 만든다(대역은 `CREATE TABLE IF NOT EXISTS`만).
+- 결정(사용자 11-02): 라벨 `doc_class`만 gold 원천별 `doc`에 둔다. 모델 글자·분류 시각·`low_conf` 칸은 어디에도 두지 않는다 — 판은 ParsingMeta `silver_version`·`gold_version`이 대신한다(되돌리기 열쇠 — [load-schema.md#pl-25](load-schema.md#pl-25)). 운영이 ParsingMeta에 쓰던 분류 네 칸(`doc_class`·`doc_class_low_conf`·`doc_class_at`·`doc_class_model`)은 0.2.0에 지운다(refactor.md C-76).
 - 감사 기록: `<묶음>/classify_audit.jsonl` — 문서마다 한 줄(시각·원본 키·원천·라벨·오류).
 - 지시문: `resources/prompts/pipeline/classify_sfdc/`·`classify_las/`(지시문 지문 — 바이트 그대로, LF). `output_schema`는 두지 않는다(어긋나면 자동으로 한 번 더 묻는 길이 있어서 — 재시도 없음).
 

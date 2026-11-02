@@ -114,14 +114,41 @@ def _rep_files(s3, bucket, folder):
     return (max(dates) if dates else None), {k: (best[k][1] if k in best else None) for k in ("md", "json")}
 
 
-def _pm():
-    """ParsingMeta 읽기 연결(common.connections.rdb 읽기 계정) — 못 열면 예외(호출부가 registry_unavailable로)."""
+def _open_pm():
     from common.store import parsing_meta_db as PM
 
     try:
         return PM.make_db("read")
     except SystemExit as e:  # make_db는 접속 정보가 없으면 SystemExit
         raise RuntimeError("ParsingMeta 연결 정보 없음") from e
+
+
+class _pm:
+    """ParsingMeta 읽기 연결(common.connections.rdb 읽기 계정) — 못 열면 예외(호출부가 registry_unavailable로).
+    조회가 실패하면(연결 끊김 등) 한 번 다시 연결해 다시 묻고, 또 실패하면 예외(운영 `_pm_retry`와 같음 — 사용자 11-02)."""
+
+    def __init__(self):
+        self.db = _open_pm()
+
+    def _call(self, name, *args):
+        try:
+            return getattr(self.db, name)(*args)
+        except Exception:
+            self.close()
+            self.db = _open_pm()
+            return getattr(self.db, name)(*args)
+
+    def rows_where(self, col, values):
+        return self._call("rows_where", col, values)
+
+    def rows_parsed(self, lo, hi):
+        return self._call("rows_parsed", lo, hi)
+
+    def close(self):
+        try:
+            self.db.close()
+        except Exception:
+            pass  # 끊긴 연결을 닫다 난 오류는 무시
 
 
 def _utc_text(bound):

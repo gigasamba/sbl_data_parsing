@@ -180,9 +180,9 @@ def test_read_settings_new_layout(tmp_path):
 
 def test_done_keys_match_parsing_meta():
     """운영 고침 11b — 끝난 문서 상태는 ParsingMeta 쪽(DONE_STATUSES — ok·partial·skipped_dup, 사용자 11-01 C10)과 같다."""
-    from common.store.parsing_meta_db import DONE_STATUSES
+    from common.store.parsing_meta_db import DONE_STATUSES, GOLD_STATUSES
 
-    assert RD.DONE_STATUSES == DONE_STATUSES
+    assert RD.DONE_STATUSES == DONE_STATUSES and RD.GOLD_STATUSES == GOLD_STATUSES  # gold_version도 봄(사용자 11-02)
 
 
 def test_parallel_warm_respects_free_slots():

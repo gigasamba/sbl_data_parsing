@@ -472,17 +472,24 @@ DONE_STATUSES = (
     "partial",
     "skipped_dup",
 )  # 끝난 문서 = common/store/parsing_meta_db.DONE_STATUSES와 같게(C10 — 사용자 11-01, 운영 고침 11b)
+GOLD_STATUSES = ("ok", "partial")  # parsing_meta_db.GOLD_STATUSES와 같게 — gold_version도 있어야 끝(사용자 11-02)
 
 
 def edw_done_keys():
-    """EDW AI.ParsingMeta에서 끝난(DONE_STATUSES) source_key 집합(2026-10-22 사용자 지정 — 재실행 skip용 · 키는 FileStorageMap s3_key와 글자 그대로 비교)."""
+    """EDW AI.ParsingMeta에서 끝난(DONE_STATUSES — ok·partial은 gold_version도, 11-02) source_key 집합(2026-10-22 사용자 지정 — 재실행 skip용 · 키는 FileStorageMap s3_key와 글자 그대로 비교)."""
 
     conn = _edw_connect()  # S7e1 — 설정 파일의 parsing-meta 접속(옛 코드 기본값 — 운영 접속 값·비밀 삭제, D-028 ⑨)
     cur = conn.cursor()
     cur.execute("SELECT COL_LENGTH('AI.ParsingMeta', 'source_key')")  # 11-02 — 원본 키 칸 이름 바꾸기(source_key → s3_key, C-76) 전후 모두
     kc = "source_key" if cur.fetchone()[0] is not None else "s3_key"
-    marks = ", ".join(f"'{s}'" for s in DONE_STATUSES)  # 코드 상수만 SQL에 넣음(값 바인딩 없음)
-    cur.execute(f"SELECT {kc} FROM AI.ParsingMeta WHERE parse_status IN ({marks})")
+    cur.execute("SELECT COL_LENGTH('AI.ParsingMeta', 'gold_version')")
+    gold = cur.fetchone()[0] is not None
+    q = lambda xs: ", ".join(f"'{s}'" for s in xs)  # 코드 상수만 SQL에 넣음(값 바인딩 없음)
+    cond = f"parse_status IN ({q(DONE_STATUSES)})"
+    if gold:  # 11-02 — ok·partial은 gold에도 올라가야 끝(gold_version) · 칸이 생기기 전(C-76 ③)에는 parse_status만
+        rest = [s for s in DONE_STATUSES if s not in GOLD_STATUSES]
+        cond = f"(parse_status IN ({q(rest)}) OR (parse_status IN ({q(GOLD_STATUSES)}) AND gold_version IS NOT NULL))"
+    cur.execute(f"SELECT {kc} FROM AI.ParsingMeta WHERE {cond}")
     keys = {r[0] for r in cur.fetchall()}
     conn.close()
     return keys
