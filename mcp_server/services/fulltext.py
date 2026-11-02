@@ -1,6 +1,6 @@
 """원문 도구(mc-17, 11-01) — list_doc_fulltext(gold doc에서 거르기 → ParsingMeta에서 대표 결과 위치를 그때 읽음 → 폴더 목록 + sfid 발급) ·
-get_doc_fulltext(sfid로 Object Storage에서 받기). pgvector에는 거르기 메타(doc_class·created_at·s3_key)만, 대표 결과 위치·파싱 시각·원본 sha256은
-EDW ParsingMeta에만(사용자 11-01) — ParsingMeta를 못 읽으면 registry_unavailable. 연결 키는 source_system + source_key(= gold doc.s3_key).
+get_doc_fulltext(sfid로 Object Storage에서 받기). pgvector에는 거르기 메타(원천 스키마 5벌 — doc_class·created_at·file_path 등)만, 대표 결과 위치·파싱 시각·원본 sha256은
+EDW ParsingMeta에만(사용자 11-01) — ParsingMeta를 못 읽으면 registry_unavailable. 연결 키는 source_system + 원본 키(= gold doc.file_path — Object Storage 원본 경로).
 sfid = `sf1.<base64url("버킷/키")>.<HMAC-SHA256 서명>` — 서명 키는 search.server.fulltext_secret(바꾸면 발급된 sfid 전부 무효).
 응답 모양·한도는 mcp_server/schemas/fulltext.py.
 """
@@ -15,6 +15,7 @@ from datetime import UTC, date, datetime, timedelta, timezone
 
 from common.config.settings import cfg as common_cfg
 from common.config.settings import reveal
+from common.store.db.models import search_tables as ST
 from mcp_server import config as mc
 from mcp_server.schemas import fulltext as FT
 from mcp_server.services.search.server_state import _retriever
@@ -113,11 +114,6 @@ def _rep_files(s3, bucket, folder):
     return (max(dates) if dates else None), {k: (best[k][1] if k in best else None) for k in ("md", "json")}
 
 
-def _norm_sys(v):
-    v = str(v)
-    return v[: -len("-test")] if v.lower().endswith("-test") else v  # G4 — SFDC-test = SFDC
-
-
 def _pm():
     """ParsingMeta 읽기 연결(common.connections.rdb 읽기 계정) — 못 열면 예외(호출부가 registry_unavailable로)."""
     from common.store import parsing_meta_db as PM
@@ -147,12 +143,12 @@ def do_list(
     cursor=None,
 ):
     """gold doc에서 거르기(분류·영업 기회·등록 시각·원천·이름/경로) → ParsingMeta에서 대표 결과 위치·파싱 시각·원본 sha256을 그때 읽음
-    (pgvector에는 거르기 메타만 — 사용자 11-01). 연결 키는 source_system + source_key(= gold doc.s3_key)."""
+    (pgvector에는 거르기 메타만 — 사용자 11-01). 연결 키는 source_system + 원본 키(= gold doc.file_path — Object Storage 원본 경로)."""
     t0 = time.perf_counter()
     secret = _secret()
     if secret is None:
         return {"error": "not_configured", "detail": "search.server.fulltext_secret(sfid 서명 키)가 비어 있음"}
-    conds, vals = ["s3_key IS NOT NULL"], []
+    conds, vals = [], []
     try:
         if not any(x not in (None, "", []) for x in (docs, source_system, doc_class, sf_op_id, since, until, created_since, created_until)):
             raise BadRequest("조건이 하나도 없음 — docs·source_system·doc_class·sf_op_id·since/until·created_since/until 중 하나 이상")
@@ -163,7 +159,8 @@ def do_list(
         names = [str(x) for x in docs or [] if not _HEX64.fullmatch(str(x)) and "/" not in str(x)]
         p_lo = _utc_text(_when(since, False, "since")) if since else None
         p_hi = _utc_text(_when(until, True, "until")) if until else None
-        for col, v in (("source_system", source_system and _norm_sys(source_system)), ("doc_class", doc_class), ("sf_op_id", sf_op_id)):
+        srcs = [ST.source_of(source_system)] if source_system else list(ST.SOURCES)  # 원천 스키마 고르기(pl-28) — 안 주면 5벌 모두
+        for col, v in (("doc_class", doc_class), ("sf_op_id", sf_op_id)):
             if v:
                 conds.append(f"{col} = %s")
                 vals.append(str(v))
@@ -187,30 +184,36 @@ def do_list(
             paths += [r["source_key"] for r in pm.rows_where("sha256", hexes) if r.get("source_key")]
         if docs:
             alt = []
-            if paths:  # 원본 전체 경로(또는 doc_key로 찾은 경로) — 서버 안 경로(file_path)로 줘도 맞게
-                alt.append("(s3_key = ANY(%s) OR file_path = ANY(%s))")
-                vals += [paths, paths]
+            if paths:  # 원본 전체 경로(= gold file_path = ParsingMeta 키, 또는 doc_key로 찾은 경로)
+                alt.append("file_path = ANY(%s)")
+                vals.append(paths)
             for n in names:  # 원본 파일 이름(확장자 포함) = 경로 마지막 조각
-                alt.append("(s3_key LIKE %s ESCAPE '!' OR file_path = %s OR file_path LIKE %s ESCAPE '!')")
-                vals += ["%/" + _esc(n), n, "%/" + _esc(n)]
+                alt.append("(file_path = %s OR file_path LIKE %s ESCAPE '!')")
+                vals += [n, "%/" + _esc(n)]
             conds.append("(" + " OR ".join(alt) + ")" if alt else "1 = 0")
         if p_lo or p_hi:
             keys = _parsed_keys(pm, p_lo, p_hi)
             # ponytail: 넓은 파싱 시각 범위는 원본 경로 목록이 커짐(배열 값 하나로 넘겨 자리표시자 상한은 없음, 수십만 건이면 느림)
-            conds.append("s3_key = ANY(%s)")
+            conds.append("file_path = ANY(%s)")
             vals.append(keys)
         if cursor not in (None, ""):
             conds.append("doc_id > %s")
             vals.append(int(cursor))
-        pg = _retriever().pg
-        rows, matched = _select(pg, conds, vals, cursor not in (None, ""), lim)
+        rows, matched = [], 0
+        for src in (
+            srcs
+        ):  # 원천 스키마마다 같은 조건 — doc_id는 5벌 공용 시퀀스라 합쳐서 한 줄로 정렬·쪽 넘김(대역은 스키마마다 파일이라 SQL로 못 합침)
+            rs, m = _select(_retriever(src).pg, src, conds, vals, cursor not in (None, ""), lim)
+            rows += rs
+            matched += m
+        rows.sort(key=lambda r: r["doc_id"])
         more, rows = len(rows) > lim, rows[:lim]
         from common.store import parsing_meta_db as PM
 
         by_key = {}
-        for r in pm.rows_where("source_key", sorted({r["s3_key"] for r in rows})):
+        for r in pm.rows_where("source_key", sorted({r["file_path"] for r in rows})):
             by_key.setdefault(r["source_key"], []).append(r)
-        reps = {r["doc_id"]: PM.pick_rep(by_key.get(r["s3_key"], []), r["source_system"]) for r in rows}
+        reps = {r["doc_id"]: PM.pick_rep(by_key.get(r["file_path"], []), r["source_system"]) for r in rows}
     except Exception:
         return {"error": "registry_unavailable"}
     finally:
@@ -246,7 +249,7 @@ def do_list(
                 }
         out.append(
             {
-                "file_name": str(r["s3_key"] or r["file_path"]).rsplit("/", 1)[-1],
+                "file_name": str(r["file_path"]).rsplit("/", 1)[-1],
                 "doc_key": rep.get("sha256"),
                 "source_system": r["source_system"],
                 "doc_class": r["doc_class"],
@@ -294,20 +297,26 @@ def _esc(x):
     return x.replace("!", "!!").replace("%", "!%").replace("_", "!_")
 
 
-def _select(pg, conds, vals, has_cursor, lim):
-    """(이 쪽 행 lim+1개, 쪽과 무관한 matched). cursor 조건·값은 늘 맨 끝."""
+_SYS_LABEL = {"sfdc": "SFDC", "crms": "CRMS", "las": "LAS", "faq": "FAQ", "other": "Other"}
+
+
+def _select(pg, src, conds, vals, has_cursor, lim):
+    """원천 스키마 하나 — (이 쪽 행 lim+1개, 쪽과 무관한 matched). cursor 조건·값은 늘 맨 끝. 그 스키마에 없는 칸(doc_class·sf_op_id)을
+    거르면 0건, 출력은 NULL. source_system 출력 = 스키마의 원천 이름(저장값 — 사용자 11-01 승인)."""
+    have = set(ST.doc_columns(src))
+    if any(c.split()[0] not in have for c in conds if c.split()[0] in ("doc_class", "sf_op_id")):
+        return [], 0
     s = pg.schema
+    where = (" WHERE " + " AND ".join(conds)) if conds else ""
     base = conds[:-1] if has_cursor else conds
-    matched = pg.q(f"SELECT COUNT(*) AS n FROM {s}.doc WHERE " + " AND ".join(base), tuple(vals[:-1] if has_cursor else vals))[0]["n"]
-    rows = pg.q(
-        f"SELECT doc_id, file_path, s3_key, source_system, doc_class, sf_op_id, created_at FROM {s}.doc "
-        "WHERE " + " AND ".join(conds) + " ORDER BY doc_id LIMIT %s",
-        (*vals, lim + 1),
-    )
-    return rows, matched
+    bwhere = (" WHERE " + " AND ".join(base)) if base else ""
+    matched = pg.q(f"SELECT COUNT(*) AS n FROM {s}.doc{bwhere}", tuple(vals[:-1] if has_cursor else vals))[0]["n"]
+    sel = ", ".join(c if c in have else f"NULL AS {c}" for c in ("doc_class", "sf_op_id"))
+    rows = pg.q(f"SELECT doc_id, file_path, {sel}, created_at FROM {s}.doc{where} ORDER BY doc_id LIMIT %s", (*vals, lim + 1))
+    return [{**r, "source_system": _SYS_LABEL[src]} for r in rows], matched
 
 
-def _created_ok(pm, pg, bucket, folder, lo, hi, cache):
+def _created_ok(pm, bucket, folder, lo, hi, cache):
     """등록 시각 가드 — 이 대표 결과 폴더(rep_bucket·rep_key)를 ParsingMeta에서 찾아 그 원본(source_key)의 gold doc.created_at이 범위 안인지.
     행이 없거나 created_at이 모두 비면 False(확인 못 하면 통과시키지 않음)."""
     if (bucket, folder) not in cache:
@@ -315,9 +324,15 @@ def _created_ok(pm, pg, bucket, folder, lo, hi, cache):
             {r["source_key"] for r in pm.rows_where("rep_key", [folder]) if r.get("rep_bucket") == bucket and r.get("source_key")}
         )
         ts = []
-        if keys:
-            rows = pg.q(f"SELECT created_at FROM {pg.schema}.doc WHERE s3_key = ANY(%s)", (keys,))
-            ts = [t for t in (_aware(r["created_at"]) for r in rows) if t]
+        for src in ST.SOURCES if keys else ():
+            pg = _retriever(src).pg
+            ts += [
+                t
+                for t in (
+                    _aware(r["created_at"]) for r in pg.q(f"SELECT created_at FROM {pg.schema}.doc WHERE file_path = ANY(%s)", (keys,))
+                )
+                if t
+            ]
         cache[(bucket, folder)] = any((lo is None or _cmp(t, *lo)) and (hi is None or _cmp(t, *hi)) for t in ts)
     return cache[(bucket, folder)]
 
@@ -342,25 +357,20 @@ def do_get(files=None, json_section=None, created_since=None, created_until=None
     s3 = _storage()
     if s3 is None:
         return {"error": "source_storage_unavailable"}
-    pm, pg, guard_cache = None, None, {}
+    pm, guard_cache = None, {}
     if lo or hi:  # 가드를 걸었을 때만 ParsingMeta·gold를 읽음(안 걸면 저장소만 — 운영과 같음)
         try:
             pm = _pm()
         except Exception:
             return {"error": "registry_unavailable"}
-        try:
-            pg = _retriever().pg
-        except Exception:
-            pm.close()
-            return {"error": "registry_unavailable"}
     try:
-        return _get_files(files, keys, json_section, s3, secret, pm, pg, lo, hi, guard_cache, t0)
+        return _get_files(files, keys, json_section, s3, secret, pm, lo, hi, guard_cache, t0)
     finally:
         if pm is not None:
             pm.close()
 
 
-def _get_files(files, keys, json_section, s3, secret, pm, pg, lo, hi, guard_cache, t0):
+def _get_files(files, keys, json_section, s3, secret, pm, lo, hi, guard_cache, t0):
     out, ok_n, total, truncated = [], 0, 0, False
     for sfid in files:
         loc = read_sfid(secret, sfid)
@@ -371,9 +381,9 @@ def _get_files(files, keys, json_section, s3, secret, pm, pg, lo, hi, guard_cach
         name = key.rsplit("/", 1)[-1]
         kind = "md" if name.endswith(".md") else "json"
         skip = {"sfid": sfid, "name": name, "kind": kind}
-        if pg is not None:
+        if pm is not None:
             try:
-                if not _created_ok(pm, pg, bucket, key.rsplit("/", 1)[0] + "/", lo, hi, guard_cache):
+                if not _created_ok(pm, bucket, key.rsplit("/", 1)[0] + "/", lo, hi, guard_cache):
                     out.append({**skip, "skip_reason": "created_out_of_range"})
                     continue
             except Exception:

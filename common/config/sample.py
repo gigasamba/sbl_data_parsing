@@ -110,7 +110,6 @@ CATEGORIES = {
     "search": (
         ("MCP 서버", ("search.server",)),
         ("검색 순위·방식", ("search.methods", "search.min_score", "search.weights", "search.pg")),
-        ("고객 범위", ("search.client",)),
         ("EDW 도구", ("search.edw_meta", "search.edw_query")),
         ("출력·기록·파싱 프록시", ("search.output", "search.query_log", "search.parse_proxy")),
     ),

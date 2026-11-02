@@ -447,6 +447,17 @@ def fig_host(doc_chunks, page):
     return doc_chunks[0]
 
 
+def _rel_to_source(path):
+    """PC 폴더 원천의 원본 경로 → 원천 폴더(PARSE_SOURCE) 기준 상대 경로(posix). 그 폴더 밖이거나 폴더 원천이 아니면 None."""
+    root = pc.cfg().extract.input_source
+    if not root or root.startswith("rdb:"):
+        return None
+    try:
+        return Path(path).resolve().relative_to(Path(root).resolve()).as_posix()
+    except (ValueError, OSError):
+        return None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--parse-dir", default="output/parse")
@@ -579,8 +590,13 @@ def main(argv=None):
         _s3_key = uri.split("/", 3)[-1] if uri.startswith("s3://") and uri.count("/") >= 3 else None
         if not _s3_key:  # rdb:csv 배치 — rep.source.uri가 file://이면 manifest에서 파일명으로 s3_key를 찾는다
             _s3_key = _manifest_keys.get(doc) or _manifest_keys.get(Path(path).name)
+        if not _s3_key:  # PC 폴더 원천(사용자 11-02 Q4) — 원천 폴더 기준 상대 경로(`SFDC/<uuid>/<이름>` — s3_key와 같은 모양)
+            _s3_key = _rel_to_source(path)
         _src_sys = None
-        if _s3_key:
+        _seg = _s3_key.split("/", 1)[0].upper() if _s3_key else ""
+        if _seg in ("SFDC", "CRMS", "LAS", "FAQ"):  # 원본 키 첫 마디 = 원천(pl-28 스키마 고르기)
+            _src_sys = _seg
+        elif _s3_key:
             if _s3_key.startswith(("SFDC-", "SFDC_")):
                 _src_sys = "SFDC"
             elif _s3_key.startswith(("CRMS-", "CRMS_")):
@@ -611,12 +627,13 @@ def main(argv=None):
         # clients는 main의 infer_clients(docs)가 이후에 채움(기존 흐름 그대로). file_name은 file_path에서 유도.
         docs.append(
             {
-                "file_path": path,
+                "file_path": _s3_key
+                or path,  # 11-02(pl-28) Object Storage 원본 경로 = EDW s3_key(ParsingMeta와 잇는 키) — 개발 서버 로컬 경로는 안 씀
                 "doc_name": doc,  # doc_name은 번들 JSONL 로컬용(파일명) — db 적재 안 함
                 "summary": ab,
                 "full_text": text,  # full_text는 본문 매칭(client) 내부용 — db 적재 안 함
                 "source_system": _src_sys,
-                "doc_key": path,  # doc_key(file_sha256 대신 file_path) — 로컬 키
+                "doc_key": _s3_key or path,  # doc_key = file_path(검색 근거의 문서 키와 같은 값)
                 "sf_acc_name": _edw.get("sf_acc_name"),
                 "sf_op_id": _edw.get("sf_op_id"),
                 "sf_op_name": _edw.get("sf_op_name"),

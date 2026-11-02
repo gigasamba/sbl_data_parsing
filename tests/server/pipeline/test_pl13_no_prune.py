@@ -24,11 +24,11 @@ def _bundle(paths, tmp):
     docs = [
         {
             "file_path": p,
+            "source_system": "SFDC",
             "summary": p,
             "clients": ["A사"],
             "doc_class": "RFP",
             "created_at": "2025-03-01 10:00:00",
-            "s3_key": "SFDC/u/" + p.rsplit("/", 1)[-1],
         }
         for p in paths
     ]
@@ -79,29 +79,56 @@ def test_load_keeps_docs_not_in_run():
 
 
 def _run_twice(S, tmp):
+    from common.store import parsing_meta_db as PMDB
+
+    pm_path = tmp / "pm.sqlite"
+    st = PMDB.SqliteStore(str(pm_path))
+    st.insert_new(
+        [
+            {
+                "source_system": "SFDC",
+                "source_key": "SFDC/u/a.txt",
+                "doc_key": "a" * 64,
+                "status": "active",
+                "parse_date": "2025-01-01_000000",
+            }
+        ]
+    )
+    st.close()
     with COMMON.env(PG_STANDIN_DIR=str(tmp / "pg")):
         db = PS.StandinPG(S)
-        with db.cn.cursor() as cur:
-            cur.execute(standin_script(S, DIM))
-    with patch.object(M, "pg_connect", return_value=db):  # 늘 대역 — 설정 파일에 실 PG가 있어도 닿지 않게
-        M.main(["load", "--bundle", str(_bundle(["/d/a.txt", "/d/b.txt"], tmp))])
-        M.main(["load", "--bundle", str(_bundle(["/d/c.txt", "/d/a.txt"], tmp))])  # b는 이번 묶음에 없음 · a는 이미 있음(건너뜀)
-        docs = sorted(str(r["file_path"]) for r in db.q(f"SELECT file_path FROM {S}.doc"))
-        meta = {(r["doc_class"], str(r["created_at"]), r["s3_key"]) for r in db.q(f"SELECT doc_class, created_at, s3_key FROM {S}.doc")}
-        n_chunks = _count(db, f"SELECT COUNT(*) AS n FROM {S}.chunk")
-        b_terms = _count(
-            db,
-            f"SELECT COUNT(*) AS n FROM {S}.chunk_term t JOIN {S}.chunk c ON c.chunk_id = t.chunk_id "
-            f"JOIN {S}.doc d ON d.doc_id = c.doc_id WHERE d.file_path = '/d/b.txt'",
-        )
-        try:
-            M.main(["load", "--prune"])
-            raise AssertionError("--prune이 아직 받아짐(지우는 길이 남음)")
-        except SystemExit as e:
-            assert e.code == 2, e.code  # argparse — 모르는 인자
-    assert docs == ["/d/a.txt", "/d/b.txt", "/d/c.txt"], docs  # 묶음에 없던 b도 남음
-    assert n_chunks == 3 and b_terms > 0, (n_chunks, b_terms)  # b의 청크·키워드 색인도 그대로
-    assert meta == {("RFP", "2025-03-01T10:00:00+09:00", f"SFDC/u/{n}.txt") for n in "abc"}, (
-        meta
-    )  # mc-16 — 분류·등록 시각 적재(시간대 없는 값은 KST)
-    print("[시험] 적재 — 묶음에 없는 저장 문서(청크·키워드 색인 포함)는 지우지 않음 · --prune 없음")
+        sf = PS.StandinPG(f"{S}_sfdc")  # 원천 스키마(pl-28) — SFDC 문서가 들어감
+        with sf.cn.cursor() as cur:
+            cur.execute(standin_script(f"{S}_sfdc", DIM))
+        with patch.object(M, "pg_connect", return_value=db), patch.object(PMDB, "make_db", lambda role: PMDB.SqliteStore(str(pm_path))):
+            M.main(["load", "--bundle", str(_bundle(["SFDC/u/a.txt", "SFDC/u/b.txt"], tmp))])
+            M.main(
+                ["load", "--bundle", str(_bundle(["SFDC/u/c.txt", "SFDC/u/a.txt"], tmp))]
+            )  # b는 이번 묶음에 없음 · a는 이미 있음(건너뜀)
+            with patch.object(PMDB, "make_db", side_effect=SystemExit("no write account")):  # 쓰기 계정 없음 — 적재는 그대로, 실패 건수만
+                counts = M.load(db, _bundle(["SFDC/u/d.txt"], tmp))
+            S2 = f"{S}_sfdc"
+            docs = sorted(str(r["file_path"]) for r in sf.q(f"SELECT file_path FROM {S2}.doc"))
+            meta = {
+                (r["doc_class"], str(r["created_at"]), r["clients_doc"])
+                for r in sf.q(f"SELECT doc_class, created_at, clients_doc FROM {S2}.doc")
+            }
+            n_chunks = _count(sf, f"SELECT COUNT(*) AS n FROM {S2}.chunk")
+            b_terms = _count(
+                sf,
+                f"SELECT COUNT(*) AS n FROM {S2}.chunk_term t JOIN {S2}.chunk c ON c.chunk_id = t.chunk_id "
+                f"JOIN {S2}.doc d ON d.doc_id = c.doc_id WHERE d.file_path = 'SFDC/u/b.txt'",
+            )
+            try:
+                M.main(["load", "--prune"])
+                raise AssertionError("--prune이 아직 받아짐(지우는 길이 남음)")
+            except SystemExit as e:
+                assert e.code == 2, e.code  # argparse — 모르는 인자
+    loaded = PMDB.SqliteStore(str(pm_path)).cn.execute("SELECT loaded_at FROM ParsingMeta").fetchone()[0]
+    assert docs == ["SFDC/u/a.txt", "SFDC/u/b.txt", "SFDC/u/c.txt", "SFDC/u/d.txt"], docs  # 묶음에 없던 b도 남음
+    assert n_chunks == 4 and b_terms > 0, (n_chunks, b_terms)  # b의 청크·키워드 색인도 그대로
+    assert meta == {("RFP", "2025-03-01T10:00:00+09:00", '["A사"]')}, meta  # 분류·등록 시각(시간대 없는 값은 KST)·본문 고객 라벨
+    assert loaded and counts["loaded_at_failed"] == 1 and counts["by_source"]["sfdc"]["docs"] == 1, (loaded, counts)  # C10 예외 — loaded_at
+    print(
+        "[시험] 적재 — 원천 스키마로 · 묶음에 없는 저장 문서는 지우지 않음 · --prune 없음 · ParsingMeta loaded_at(쓰기 계정 없으면 건수만)"
+    )

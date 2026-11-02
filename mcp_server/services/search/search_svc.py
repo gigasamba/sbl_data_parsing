@@ -23,8 +23,10 @@ _EXACT_COLS = {
     "sf_op_id": "sf_op_id",
     "sf_op_name": "sf_op_name",
     "contract_id": "contract_id",
+    "FAQ_group": "faq_group",  # faq.chunk만(C4)
 }
 NO_QUESTION = "question is required — 질문 없이 문서를 고르려면 list_doc_fulltext, 원천 값 조회는 query_edw"
+NO_SOURCE = "source_system is required — exactly one of SFDC, CRMS, LAS, FAQ, Other(원천마다 따로 찾음 — 여러 원천은 여러 번 부름, G20)"
 
 
 def _log(question, evidence, ms):
@@ -81,8 +83,12 @@ def _norm_filters(args):
     return hard
 
 
-def _scope_sql(hard):
-    """정규화한 거르기 → (WHERE 글자, 값). 다른 거르기는 AND, 같은 거르기의 목록은 OR. 모두 정확 일치(client_like만 부분 일치)."""
+def _scope_sql(hard, src):
+    """정규화한 거르기 → (WHERE 글자, 값) — 원천 스키마 src의 v_chunk_source 칸에서. 다른 거르기는 AND, 같은 거르기의 목록은 OR, 모두 정확 일치
+    (client_like만 부분 일치). 그 원천 스키마에 칸이 없는 거르기(예: crms에서 sf_op_id)는 0건(오류 아님). 고객은 client_edw만(C6, 사용자 11-02)."""
+    from common.store.db.models import search_tables as ST
+
+    have = set(ST.view_columns(src))
     conds, vals = [], []
 
     def any_of(tmpl, vs, per):
@@ -92,44 +98,39 @@ def _scope_sql(hard):
 
     for name, v in hard.items():
         vs = _vals(v)
+        if name in ("source_system", "client_like"):
+            continue  # source_system은 스키마 고르기(위) · client_like는 client 안에서
         if name == "client":
             if hard.get("client_like"):
-                any_of("(sf_acc_name LIKE %s ESCAPE '!' OR clients LIKE %s ESCAPE '!')", vs, lambda x: [f"%{_like(x)}%"] * 2)
-            else:  # 계정 이름 정확 일치 또는 문서 고객 라벨(JSON 글자) 안 정확 일치
-                any_of("(sf_acc_name = %s OR clients LIKE %s ESCAPE '!')", vs, lambda x: [x, f'%"{_like(x)}"%'])
-        elif name == "source_system":
-            any_of("(source_system = %s OR doc_source_system = %s)", vs, lambda x: [x, x])
+                any_of("client_edw LIKE %s ESCAPE '!'", vs, lambda x: [f"%{_like(x)}%"])
+            else:
+                any_of("client_edw = %s", vs, lambda x: [x])
         elif name in _EXACT_COLS:
-            any_of(f"{_EXACT_COLS[name]} = %s", vs, lambda x: [x])
-        elif name == "FAQ_group":
-            # ponytail: 한 벌 표에는 faq_group 칸이 없고 FAQ를 아직 적재하지 않음(pl-39) — 늘 0건. 스키마를 나눌 때(pl-28) faq.chunk.faq_group으로
-            conds.append("1 = 0")
+            col = _EXACT_COLS[name]
+            if col in have:
+                any_of(f"{col} = %s", vs, lambda x: [x])
+            else:
+                conds.append("1 = 0")
         elif name in ("created_since", "created_until"):
             op, t = _when(v, name == "created_until")
             conds.append(f"created_at {op} %s")  # created_at이 없는 문서는 빠짐
             vals.append(t)
-    return " WHERE " + " AND ".join(conds), vals
+    return (" WHERE " + " AND ".join(conds)) if conds else "", vals
 
 
-def _hard_filter_scope(hard):
-    """하드 거르기에 정확히 맞는 문서 file_path 집합과 문서 수 — 검색 범위. SQL 실패는 그대로 올림(범위를 모르고 전체 검색으로 새는 것보다 낫다)."""
-    R = _retriever()
-    where, vals = _scope_sql(hard)
+def _hard_filter_scope(hard, src):
+    """하드 거르기에 정확히 맞는 문서 file_path 집합과 문서 수 — 검색 범위(원천 스키마 src 안). SQL 실패는 그대로 올림."""
+    R = _retriever(src)
+    where, vals = _scope_sql(hard, src)
     rows = R.pg.q(f"SELECT DISTINCT file_path FROM {R.pg.schema}.v_chunk_source{where}", tuple(vals))
     return {r["file_path"] for r in rows}, len(rows)
 
 
-def _gather(question, subs, search, base, per):
-    """원 질문은 search(q, base), 하위 검색(고객별)은 search(q, per)로 찾아 라운드로빈으로 합친다(중복 제거) — 원 질문 근거
-    개수는 그대로, 어느 하위 검색도 0개로 밀려나지 않게. 반환: [(키, 출처 번호 0=원 질문)]. 옛 decompose.gather(10-29 이동)."""
-    lists = [search(question, base)] + [search(q, per) for q in subs]
-    out, seen = [], set()
-    for rank in range(max(base, per)):
-        for qi, lst in enumerate(lists):
-            if rank < len(lst) and lst[rank] not in seen:
-                seen.add(lst[rank])
-                out.append((lst[rank], qi))
-    return out
+def _source_docs(src):
+    """원천 스키마의 문서 수(source_system만 줬을 때의 scope_docs)."""
+    R = _retriever(src)
+    r = R.pg.q(f"SELECT COUNT(*) AS n FROM {R.pg.schema}.doc")
+    return int(r[0]["n"]) if r else 0
 
 
 def _out(question, evidence, status, hard, scope_docs):
@@ -149,7 +150,8 @@ def _out(question, evidence, status, hard, scope_docs):
 def do_search(question=None, k=8, **filters):
     """운영 search 계약(mc-16). question 필수(비면 {"error"}) · k 기본 8·상한 50 · 거르기(SEARCH_FILTERS)는 모두 AND, 같은 거르기의 목록은 OR ·
     모르는 인자는 무시 · 맞는 문서가 없으면 오류가 아니라 빈 결과(scope_docs 0, evidence_status none).
-    BR23 — 질문에 고객 2명 이상이면 고객별 하위 검색을 섞고, R2-c — 같은 사건의 사본은 한 자리로 묶는다(응답 모양은 같음)."""
+    source_system은 필수·값 하나(G20 — 그 원천 스키마만 찾음, 사용자 11-02 — 운영과 다름). R2-c — 같은 사건의 사본은 한 자리로 묶는다(응답 모양은 같음).
+    본문 고객 라벨로 앞으로 올리던 길(AD38)·고객별 하위 검색(BR23)은 11-02에 지움 — 고객은 client_edw 거르기만(C6)."""
     t0 = time.perf_counter()
     question = question.strip() if isinstance(question, str) else None
     if not question:
@@ -159,40 +161,30 @@ def do_search(question=None, k=8, **filters):
     except (TypeError, ValueError):
         user_k = 8
     hard = _norm_filters(filters)
+    sysv = hard.get("source_system")
+    if not sysv or isinstance(sysv, list) and len(sysv) != 1:  # G20(사용자 11-02) — 원천 하나 필수(운영과 다름)
+        return {"error": NO_SOURCE}
+    if isinstance(sysv, list):
+        hard["source_system"] = sysv = sysv[0]
+    from common.store.db.models import search_tables as ST
+
+    src = ST.source_of(sysv)
     k, scope, scope_docs = user_k, None, None
-    if hard:
+    if len(hard) > 1:  # source_system 말고 거르기가 있을 때만 범위를 구함(원천 스키마 전체면 범위 없이)
         try:
-            scope, scope_docs = _hard_filter_scope(hard)
+            scope, scope_docs = _hard_filter_scope(hard, src)
         except ValueError as bad:  # created_since/until 형식 틀림
             return {"error": f"created_since/created_until 형식 — YYYY-MM-DD 또는 ISO 8601 시각: {bad}"}
         if scope_docs == 0:  # 조건에 맞는 문서가 없음 — 검색할 범위 자체가 없다
             return _out(question, [], "none", hard, 0)
         k = min(K_MAX, max(user_k * 3, 30))  # 범위 거르기 뒤에도 근거 k개가 남게 — 풀을 넉넉히
-    client = hard.get("client")
-    R = _retriever()
+    else:
+        scope_docs = _source_docs(src)
+    R = _retriever(src)
     core = [m.lower() for m in CFG.DEFAULT_METHODS if m.lower() in CFG.CORE]  # 검색 길은 서버 설정만(호출 인자로 못 바꿈)
     hits = []
     if core:
-        hits, _, _ = R.search_ex(question, k, core, client=client, scope=scope)
-        from common.core.terms import match_clients  # BR23 — 비교 질문(고객 2명 이상)이 한쪽 고객에 몰려 슬롯을 뺏기지 않게
-
-        ents = match_clients(question, R.clients())[:4]  # [:4]는 호출 수 상한
-        if len(ents) >= 2:
-            pool = {h["chunk_ref"]: h for h in hits}
-
-            def srch(q, n):
-                if q == question:
-                    return [h["chunk_ref"] for h in hits[:n]]
-                hs, _, _ = R.search_ex(question, n, core, client=q, client_only=True, scope=scope)  # q=고객명(엔티티별 하위 검색)
-                for h in hs:
-                    pool.setdefault(h["chunk_ref"], h)
-                return [h["chunk_ref"] for h in hs]
-
-            items = _gather(question, ents, srch, base=k, per=max(3, k // 2))
-            hits = [
-                {**pool[c], "rank": i + 1, "via": (pool[c].get("via") or "") + ("" if qi == 0 else f"·ent{qi}")}
-                for i, (c, qi) in enumerate(items)
-            ]
+        hits, _, _ = R.search_ex(question, k, core, scope=scope)
     man = _manifest_by_name()  # AD44 — 있으면 근거 version을 RDB 값으로
     evidence = [_evidence(h, man) for h in hits]
     if evidence:  # R2-c 요건① — 같은 사건의 사본(형식·재명명)이 슬롯을 독점하는 문제

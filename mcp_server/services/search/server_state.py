@@ -7,7 +7,6 @@ import sys
 import threading
 import time
 import types
-from pathlib import Path
 
 from common.config import settings as C  # common 칸(S7e1 — MCP_BUNDLE)
 from common.core.paths import APP_ROOT
@@ -22,16 +21,19 @@ _STATE: dict = {}
 _RELOAD_LOCK = threading.Lock()
 
 
-def _version_of(pg, bundle):
-    """현재 적재 버전 표식 — PG면 ai.load_run 최신 id, 로컬이면 묶음 meta.json mtime(S12, load 뒤 재적재 확인용)."""
-    if pg is not None:
+def _version_of(dbs):
+    """적재 버전 표식(S12 — load 뒤 다시 읽기 확인) — 원천 스키마마다 (MAX(doc_id), COUNT(*))(11-02 — load_run 대신).
+    --replace는 문서를 지우고 다시 넣어 새(더 큰) doc_id를 받으므로 개수가 같아도 MAX가 바뀐다. 표가 없거나 접속이 흔들리면 그 원천은 None
+    (바뀜으로 보지 않음)."""
+    out = []
+    for src in sorted(dbs):
+        db = dbs[src]
         try:
-            r = pg.q(f"SELECT COALESCE(MAX(run_id), 0) AS r FROM {pg.schema}.load_run")
-            return ("pg", r[0]["r"] if r else None)
+            r = db.q(f"SELECT COALESCE(MAX(doc_id), 0) AS m, COUNT(*) AS n FROM {db.schema}.doc")
+            out.append((src, r[0]["m"], r[0]["n"]) if r else (src, None, None))
         except Exception:
-            return ("pg", None)  # 표가 없거나 접속 흔들림 — 버전 모름(바뀜으로 보지 않음)
-    p = Path(bundle) / "meta.json"
-    return ("local", p.stat().st_mtime if p.exists() else None)
+            out.append((src, None, None))
+    return tuple(out)
 
 
 def _close_pool_later(pool, delay=5):
@@ -63,9 +65,10 @@ def check_store():
 
 def _build_retriever():
     from common.store import services
+    from mcp_server.services.search import pg_mcp_connect as PGM
     from mcp_server.services.search import retriever as RT
 
-    old = _STATE.get("R")
+    old = _STATE.get("Rs")
     try:
         check_store()  # 시작 때 이미 확인(main) — 설정이 그 뒤 바뀐 경우만 여기서 걸림
     except SystemExit as e:  # 스레드·요청 안에서는 오류로(조용히 스레드만 죽지 않게)
@@ -77,33 +80,34 @@ def _build_retriever():
     cur = cfgfile.active("stack")  # 엔진 구성 파일(서버·PC 같음 — 프로세스 시작 때 읽은 것, 사용자 11-01)
     st = cur.named()
     bundle = C.cfg().paths.mcp_bundle or str(APP_ROOT / "output" / "edw" / "bundle")  # S7e1 — common 칸(옛 mcp.server.bundle)
-    R = RT.Retriever(bundle, st.get("retrieve", "hybrid"))
-    _STATE["R"], _STATE["bundle"], _STATE["stack"] = R, bundle, st
-    _STATE["version"], _STATE["checked_at"] = _version_of(R.pg, bundle), time.time()
-    if old is not None and old.pg is not None and old.pg is not R.pg:
-        _close_pool_later(old.pg)
+    dbs = PGM.connect_sources()  # 원천 스키마 5벌(pl-28) — 실 PG는 풀 하나를 함께 씀
+    Rs = {src: RT.Retriever(bundle, st.get("retrieve", "hybrid"), pg=db) for src, db in dbs.items()}
+    _STATE["Rs"], _STATE["dbs"], _STATE["bundle"], _STATE["stack"] = Rs, dbs, bundle, st
+    _STATE["version"], _STATE["checked_at"] = _version_of(dbs), time.time()
+    old_pool, _STATE["pool"] = _STATE.get("pool"), getattr(next(iter(dbs.values())), "pool_obj", None)
+    if old is not None and old_pool is not None and old_pool is not _STATE["pool"]:
+        _close_pool_later(old_pool)  # 실 PG 풀(대역은 None)
 
 
-def _retriever():
-    """저장소 연결(PG 하나 — mc-01)·Retriever — 처음엔 만들고, 이후엔 최소 MCP_RELOAD_CHECK_SEC(기본 30초)
-    간격으로 적재 버전이 바뀌었는지만 확인해 바뀌었으면 다시 만든다(S12, load 재실행 뒤 새 데이터가 안 보이던 문제).
-    재생성 중인 동시 요청은 기다리지 않고 기존 객체로 바로 응답(비차단 잠금)."""
-    if "R" not in _STATE:
+def _retriever(src):
+    """원천(sfdc·crms·las·faq·other — pl-28)의 Retriever. 처음엔 만들고, 이후엔 최소 MCP_RELOAD_CHECK_SEC(기본 30초) 간격으로 적재 버전이
+    바뀌었는지만 확인해 바뀌었으면 다시 만든다(S12). 재생성 중인 동시 요청은 기다리지 않고 기존 객체로 바로 응답(비차단 잠금)."""
+    if "Rs" not in _STATE:
         with _RELOAD_LOCK:
-            if "R" not in _STATE:
+            if "Rs" not in _STATE:
                 _build_retriever()
-        return _STATE["R"]
-    if "bundle" not in _STATE:  # 호출자가 Retriever를 직접 넣은 경우(stack_matrix·eval 도구) — 재적재 대상 아님
-        return _STATE["R"]
+        return _STATE["Rs"][src]
+    if "bundle" not in _STATE:  # 시험이 Retriever를 직접 넣은 경우 — 재적재 대상 아님
+        return _STATE["Rs"][src]
     interval = mc.cfg().server.reload_check_sec
     if time.time() - _STATE.get("checked_at", 0) >= interval and _RELOAD_LOCK.acquire(blocking=False):
         try:
             _STATE["checked_at"] = time.time()
-            if _version_of(_STATE["R"].pg, _STATE["bundle"]) != _STATE.get("version"):
+            if _version_of(_STATE["dbs"]) != _STATE.get("version"):
                 _build_retriever()
         finally:
             _RELOAD_LOCK.release()
-    return _STATE["R"]
+    return _STATE["Rs"][src]
 
 
 def _warmup(R):
@@ -128,7 +132,7 @@ def _warmup_bg():
     기록만 — `/health`는 ready=True + warning 플래그로 계속 뜬다."""
     ok = None
     try:
-        ok = _warmup(_retriever())
+        ok = _warmup(_retriever("sfdc"))  # 예열은 한 원천으로 충분(질의 임베딩·연결이 함께 데워짐)
     except Exception as e:  # 색인 로드 실패도 기동은 계속(첫 실제 요청에서 다시 드러남)
         print(f"[mcp] 예열 중 색인 로드 실패(기동은 계속): {type(e).__name__}: {str(e)[:120]}", file=sys.stderr, flush=True)
         ok = False
@@ -141,7 +145,8 @@ def _health():
     warming=True(ready=False, 라우트가 503) · 끝났는데 실패했으면 ready=True + warning(서버는 계속 뜸).
     코디네이터 10-14 — store="pgvector"일 때 db: "standin"(sqlite, common/pg_standin.py) | "pg"(진짜 PG) —
     서버에서 PG_PASSWORD를 빠뜨려 조용히 스탠드인으로 떨어진 경우를 /health만 보고도 알 수 있게."""
-    R = _STATE.get("R")
+    Rs = _STATE.get("Rs") or {}
+    R = next(iter(Rs.values()), None)
     done = _STATE.get("warmup_done", False)
     out = {
         "ok": True,

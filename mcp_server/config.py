@@ -1,7 +1,7 @@
 """검색 MCP 설정 — settings.yaml의 common + mcp 절(S7a 모델, refactor_plan 5-2 · D-015). 칸 표는 refactor_plan 부록 D.
 mcp_server 코드가 읽는 객체는 설정 파일 기반 캐시 MCP다(S7e2 — 전환 다리 없앰: env의 옛 이름은 읽지 않음, 신호 SETTINGS_FILE·RUN_ENV만):
   `from mcp_server import config as mc` → `mc.cfg().search.methods`(mcp 절) · `mc.given("MCP_METHODS")`(준 값만) · `mc.checked(X)` ·
-  시험 `with mc.senv(SEARCH_CLIENT_HARD="1", MCP_BUNDLE=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
+  시험 `with mc.senv(SEARCH_MIN_SCORE="0.5", MCP_BUNDLE=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
   env로 읽는 칸만 env에 씀). common 칸은 `common.config.settings.cfg()`로(COMMON).
 요청마다 읽던 값(MCP_TOOL_TIMEOUT_SEC·SEARCH_* 등)은 쓰는 자리에서 요청마다 cfg()로 읽고, 시작 때 한 번 읽던 상수는 CFG(아래)에
 모은다(S5 — 이름·기본값은 옛 mcp_server.py 모듈 상수 그대로, 읽는 시점도 같음 — 이 모듈 import 때).
@@ -28,12 +28,6 @@ from common.config.settings import (  # noqa: F401 — token_text: 토큰 규칙
 )
 
 # ── settings.yaml mcp 절 모델(S7a) — 칸 표는 refactor_plan 부록 D ─────────────────────────────
-
-
-class McpSearchClient(Section):
-    REMOVED = frozenset({"filter"})  # 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
-    hard: bool | None = F(False, "SEARCH_CLIENT_HARD", "고객 범위를 하드 격리(다른 고객 문서 제외) — 1이면 켬", on=("1",))
-    strict: bool | None = F(False, "SEARCH_CLIENT_STRICT", "하드 격리에서 고객 미상 문서도 제외 — 1이면 켬", on=("1",))
 
 
 class McpSearchPg(Section):
@@ -136,11 +130,11 @@ class McpSearch(Section):
             "data_catalog",
             "struct_context_max",
             "agg_vocab_file",
+            "client",
         }
-    )  # 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) · agg_vocab_file 11-01(사전 파일이 코드 기본값과 같아 지움) — 지운 칸·절(남으면 경고만)
+    )  # 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) · agg_vocab_file 11-01(사전 파일이 코드 기본값과 같아 지움) · client 절 11-02(본문 고객 라벨 순위·하드 격리 지움 — 고객은 client_edw 거르기만, C6) — 지운 칸·절(남으면 경고만)
     methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서)")
     min_score: float | None = F(None, "SEARCH_MIN_SCORE", "근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak")
-    client: McpSearchClient = Field(default_factory=McpSearchClient)
     pg: McpSearchPg = Field(default_factory=McpSearchPg)
     weights: McpSearchWeights = Field(default_factory=McpSearchWeights)
 

@@ -53,32 +53,27 @@ class _Body:  # read(n) — boto3 StreamingBody처럼 최대 n바이트
 
 
 def _docs():
-    """gold doc — 거르기 메타와 원본 경로(s3_key)만(대표 결과 위치는 ParsingMeta에)."""
-    pre = "/app/output/prepared/"
+    """gold doc — 거르기 메타와 원본 경로(file_path = s3 경로)만(대표 결과 위치는 ParsingMeta에)."""
     return [
         {
-            "file_path": pre + "A.pdf",
-            "s3_key": "SFDC/u1/A.pdf",
+            "file_path": "SFDC/u1/A.pdf",
             "source_system": "SFDC",
             "doc_class": "RFP",
             "sf_op_id": "006A",
             "created_at": "2025-03-01T10:00:00+09:00",
         },
         {
-            "file_path": pre + "B.docx",
-            "s3_key": "SFDC/u2/B.docx",
+            "file_path": "SFDC/u2/B.docx",
             "source_system": "SFDC",
             "doc_class": "RFI",
             "created_at": "2025-03-05T10:00:00+09:00",
         },
-        {"file_path": pre + "C.pdf", "s3_key": "LAS/u3/C.pdf", "source_system": "LAS"},
-        {"file_path": pre + "D.pdf", "source_system": "SFDC"},  # 원본 경로 없음 — 목록 대상 아님
+        {"file_path": "LAS/u3/C.pdf", "source_system": "LAS"},
         {
-            "file_path": pre + "E.pdf",
-            "s3_key": "SFDC/u5/E.pdf",
+            "file_path": "SFDC/u5/E.pdf",
             "source_system": "SFDC",
         },  # ParsingMeta 결과 위치가 폴더 키가 아님 → no_files
-        {"file_path": pre + "F.pdf", "s3_key": "CRMS/u6/F.pdf", "source_system": "CRMS"},  # ParsingMeta 행 없음 → no_files
+        {"file_path": "CRMS/u6/F.pdf", "source_system": "CRMS"},  # ParsingMeta 행 없음 → no_files
     ]
 
 
@@ -153,7 +148,7 @@ def _cases(s3):
         r = M.do_list(**kw)
         assert r["error"] == "bad_request" and word in r["detail"], (kw, r)
     cases = [  # (인자, 기대 file_name 목록, matched)
-        ({"source_system": "SFDC"}, ["A.pdf", "B.docx", "E.pdf"], 3),  # 원본 경로 없는 D는 빠짐
+        ({"source_system": "SFDC"}, ["A.pdf", "B.docx", "E.pdf"], 3),  # 원천 스키마 sfdc만(pl-28)
         ({"source_system": "SFDC-test"}, ["A.pdf", "B.docx", "E.pdf"], 3),  # G4 별칭
         ({"docs": ["A.pdf", "c" * 64]}, ["A.pdf", "C.pdf"], 2),  # 이름·doc_key(ParsingMeta sha256) 섞어도 됨
         ({"docs": ["SFDC/u2/B.docx"]}, ["B.docx"], 1),  # 원본 전체 경로 = 정확히 하나
@@ -186,7 +181,6 @@ def _cases(s3):
     )  # doc_key = ParsingMeta sha256
     f = M.do_list(docs=["F.pdf"])["documents"][0]
     assert f["status"] == "no_files" and f["doc_key"] is None and f["rep_uri"] is None, f
-    assert [x["file_name"] for x in M.do_list(docs=["/app/output/prepared/B.docx"])["documents"]] == ["B.docx"]  # 서버 안 경로도 정확 일치
     e = M.do_list(docs=["E.pdf"])["documents"][0]
     assert e["status"] == "no_files" and e["files"] is None and e["doc_key"] == "e" * 64, e  # 폴더 키가 아닌 결과 위치는 목록을 보지 않음
     c = M.do_list(docs=["C.pdf"])["documents"][0]

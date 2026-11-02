@@ -266,10 +266,6 @@ search:
     bm25_table: 0.2  # [파라미터] 집계 질문일 때 BM25 가중치 · 기본 0.2 · 값: 0 이상
     id: 2.0  # [파라미터] RRF 융합에서 ID(드문 식별자) 가중치 · 기본 2.0 · 값: 0 이상
     vector: 1.0  # [파라미터] RRF 융합에서 벡터 가중치 · 기본 1.0 · 값: 0 이상
-  # ─── 고객 범위 ───
-  client:
-    hard: false  # 고객 범위를 하드 격리(다른 고객 문서 제외) · 기본 false · 값: true·false
-    strict: false  # 하드 격리에서 고객 미상 문서도 제외 · 기본 false · 값: true·false
   # ─── EDW 도구 ───
   edw_meta:
     dir:  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · 값: 경로

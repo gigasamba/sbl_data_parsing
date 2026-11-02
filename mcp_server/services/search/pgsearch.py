@@ -11,7 +11,6 @@ from common.core.console import utf8_stdout
 from common.core.text import id_terms, tokens  # 토큰 규칙(모듈 계약)
 from common.store.pg import HNSW_MAX, PG, conf, vec
 from mcp_server import config as mc  # 설정 객체(S7d)
-from mcp_server.services.search import clientscope as CS  # BR50 고객 범위 단일 규칙(SQL 조각, local.py와 같은 규칙)
 from mcp_server.services.search.local import ID_MAX_DF, embed_query, tie_break, weights  # BR41 동점 깨기(local과 공용)
 from mcp_server.services.search.text import term_weights  # X3(10-16 검색 전용으로 분리)
 
@@ -24,51 +23,6 @@ def dim_of(db):
             "SELECT atttypmod AS d FROM pg_attribute WHERE attrelid = %s::regclass AND attname = 'embedding'", (f"{db.schema}.chunk",)
         )[0]["d"]
     return db._dim
-
-
-def _doc_clients(row):
-    """10-14 — doc 표 행(clients 열) → allows()에 넘길 모양(list|str|None). 2026-10-20 축소 스키마 — client 열은 없음."""
-    return CS.doc_clients(None, row.get("clients"))
-
-
-def _client_restrict(db, client, strict=False):
-    """AD38 SEARCH_CLIENT_HARD — 저장소 질의로 허용 chunk_id 집합(10-14: clients 다중 라벨 중 ANY 하나라도
-    맞으면 허용, strict 아니면 고객 미상 doc도 포함 — clientscope.allows()와 같은 규칙, local.py와 공용).
-    문서 표는 보통 청크 표보다 훨씬 작아 한 번 통째로 읽어 파이썬에서 판정(PG array/unnest 없음 — AD41
-    sqlite stand-in에도 그대로 동작) → 허용된 doc_id만으로 chunk_id 질의 한 번 더(총 질의 2회, 이전의
-    SQL WHERE 조건 1회보다 늘었지만 둘 다 N+1 없음)."""
-    s = db.schema
-    if not getattr(db, "is_standin", False) and _has_chunk_clients(db):
-        # 10-15 urgent — same rule as clientscope.allows() in one SQL on the GIN index: any label matches; unknown ('{}'/NULL)
-        # allowed unless strict (was: read every doc row + a second chunk query)
-        cond = "clients && %s::text[]" + ("" if strict else " OR clients = '{}' OR clients IS NULL")
-        return {r["chunk_id"] for r in db.q(f"SELECT chunk_id FROM {s}.chunk WHERE {cond}", (sorted(client),))}
-    doc_rows = db.q(f"SELECT doc_id, clients FROM {s}.doc")
-    allowed = set(client)
-    ok = [r["doc_id"] for r in doc_rows if CS.allows(_doc_clients(r), allowed, strict)]
-    if not ok:
-        return set()
-    rows = db.q(f"SELECT chunk_id FROM {s}.chunk WHERE doc_id = ANY(%s)", (ok,))
-    return {r["chunk_id"] for r in rows}
-
-
-_CHUNK_CLIENTS: dict = {}
-
-
-def _has_chunk_clients(db):
-    """chunk.clients column exists AND is fully backfilled (no NULL left) — checked once per schema and process.
-    94 review: while any NULL remains (migration window, failed backfill) the old doc-row path is used, so strict client
-    queries never come back empty. A process started before the backfill keeps the old path until restart (env-guide)."""
-    s = db.schema
-    if s not in _CHUNK_CLIENTS:
-        has = bool(
-            db.q(
-                "SELECT 1 FROM information_schema.columns WHERE table_schema = %s AND table_name = 'chunk' AND column_name = 'clients'",
-                (s,),
-            )
-        )
-        _CHUNK_CLIENTS[s] = has and not db.q(f"SELECT 1 FROM {s}.chunk WHERE clients IS NULL LIMIT 1")
-    return _CHUNK_CLIENTS[s]
 
 
 def _scope_restrict(db, scope):
@@ -126,8 +80,6 @@ def search(
     retrieve="cosine",
     vr=None,
     methods=None,
-    client=None,
-    client_strict=False,
     question=None,
     scope=None,
 ):
@@ -135,8 +87,6 @@ def search(
     vr = 벡터 순위(chunk_id 목록)를 밖에서 줄 때(EDW 벡터 검색 결과) — 없으면 pgvector로 계산.
     methods = 쓸 방법 {vector, bm25, id}(없으면 retrieve대로) · 가중치 weights(question)(SEARCH_W_*, G14 —
     local.py와 같은 함수를 import해 씀, 가중치가 두 저장소에서 갈라지지 않음).
-    client(AD38 SEARCH_CLIENT_HARD) = 허용할 고객 이름 집합 — 주어지면 저장소 질의 단계에서 그 고객 문서(고객 미상은 기본
-    포함, client_strict=True면 미상도 뺌)만 후보로. None(기본)이면 제한 없음 — 전과 바이트 동일.
     scope(2026-10-20 통합 search) = 하드 필터 범위 **안** 문서 file_path 집합 — _scope_restrict로 저장소 질의 단계부터
     그 문서의 청크만 후보로(vector·bm25·ID 전부). None이면 전과 바이트 동일.
     question(G14) = 원문 질문 글자(weights()에 그대로 건넴 — 안 주면 전과 바이트 동일, BR41 tie_break에도 그대로 건넴).
@@ -146,10 +96,7 @@ def search(
     q = vec(qv) if qv is not None else None  # 질의 임베딩이 없으면(장애) 키워드·ID만 — 부르는 쪽이 methods에서 vector를 뺌
     m = set(methods) if methods else ({"vector"} if retrieve == "cosine" else {"vector", "bm25", "id"})
     w = weights(question)
-    restrict = _client_restrict(db, client, client_strict) if client else None
-    if scope:  # 2026-10-20 통합 search — 하드 필터 범위 안 문서만
-        in_scope = _scope_restrict(db, scope)
-        restrict = (restrict & in_scope) if restrict is not None else in_scope
+    restrict = _scope_restrict(db, scope) if scope else None  # 하드 거르기 범위 안 문서만(고객도 이 범위로 — client_edw, 11-02)
     lists = []
     if "vector" in m:
         if vr is None:
@@ -210,8 +157,10 @@ def search(
         return []
     rows = {r["chunk_id"]: r for r in db.q(f"SELECT * FROM {s}.v_chunk_source WHERE chunk_id = ANY(%s)", (top,))}
     top = [c for c in top if c in rows]  # BR41 — rows를 이미 가져온 뒤 재배열(추가 질의 없음), local.py와 같은 tie_break
-    # v_chunk_source에 product_code 열이 없음(client·contract_no만) — rows[c].get()은 그대로 None(죽지 않음, 그 축은 안 씀)
-    docmeta = {c: (rows[c].get("file_name"), rows[c].get("client"), rows[c].get("contract_no"), rows[c].get("product_code")) for c in top}
+    # v_chunk_source에 product_code·contract_no 열이 없음 — rows[c].get()은 그대로 None(죽지 않음, 그 축은 안 씀)
+    docmeta = {
+        c: (rows[c].get("file_name"), rows[c].get("client_edw"), rows[c].get("contract_no"), rows[c].get("product_code")) for c in top
+    }
     top = tie_break(top, {c: rrf[c] for c in top}, docmeta, question)
     return [{**rows[c], "rrf": round(rrf[c], 5), "via": via[c]} for c in top]
 
