@@ -76,6 +76,7 @@
 - 할 일(#86 병합 뒤 — todo):
   - 엔진 구성 읽기를 `pipeline.config.stack()` 하나로 — `stackcfg.snapshot_bytes`, `cfgfile`의 `body_sha`·`label`, `schemas/config_body.py` 모양 검사를 그 안으로 합친다.
   - 0.2.0이 서버에 배포된 뒤: `dbtool`의 비교(`dbcompare`)와 `stamp`(옛 코드가 만든 스키마에 실행 없이 판만 기록 — 첫 이관용)를 지운다.
+- 더할 것(사용자 11-02): `common/ai/adk.py` — 지시문(프롬프트)은 두고 장치(에이전트 실행 틀)는 `llm.py` 호출 하나로 줄인다(`adk.py`는 p1·s·r 지문에 들어가 이 배치에서). CPU 부하 고침도 이 배치에 함께 싣는다.
 - Status: todo — 0.2.0(엔진·핸드오프·레이어 지문이 바뀜 — 사람 검토).
 
 <a id="pl-47"></a>

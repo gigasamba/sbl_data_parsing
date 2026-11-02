@@ -36,7 +36,7 @@
 sudo mkdir -p /srv/rag/env && sudo chmod 700 /srv/rag/env
 cp <받은 저장소 ZIP>/settings.sample.yaml /srv/rag/env/settings.yaml   # 설정 파일은 이것 하나
 sudo chown 10001:<운영 계정 그룹> /srv/rag/env/settings.yaml && sudo chmod 640 /srv/rag/env/settings.yaml   # 컨테이너 사용자 UID 10001이 읽음(운영 계정 UID가 10001이면 600 — refactor.md C-09)
-# 값 채우기 — 항목·설명은 settings.sample.yaml·env-guide.md, env-guide "옛 서버 값" 표의 항목은 그 값으로(C-39), 값은 문서·채팅·로그에 쓰지 않는다 · 옛 pipeline.env가 있으면 release-and-patch.md §5-4(옮기기)
+# 값 채우기 — 항목·설명은 settings.sample.yaml·env-guide.md, env-guide "옛 서버 값" 표의 항목은 그 값으로(C-39), 값은 문서·채팅·로그에 쓰지 않는다 · 0.1.0 settings.yaml은 release-and-patch.md §5-7 3단계(옮기기)
 sudo mkdir -p /srv/rag/output && sudo chown 10001:<운영 그룹> /srv/rag/output && sudo chmod 2775 /srv/rag/output    # UID 10001 · 운영 그룹 · setgid — 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지운다
 # 이미 있는 결과 폴더(옛 판이 644·755로 쓴 것)는 한 번: sudo chgrp -R <운영 그룹> /srv/rag/output && sudo chmod -R g+w /srv/rag/output && sudo find /srv/rag/output -type d -exec chmod g+s {} +
 export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.yaml을 읽음
@@ -238,7 +238,7 @@ PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys;
 | MCP 401 | `MCP_TOKEN` 없음·틀림 | 호출부 env에만 넣기(코드·로그에 쓰지 않음) |
 | MCP가 안 뜸(이미지 버전인데) | settings.yaml에 `common.models.embed`(질의 임베딩 — 옛 `EMBED_*`) 없음 · 컨테이너가 설정 파일을 못 읽음(권한 — C-09) | [env-guide.md](env-guide.md)로 필수 값 채우기 |
 | 포트 충돌 | PostgreSQL·OpenViking과 겹침 | settings.yaml의 `mcp.server.port`(`MCP_PORT`) 등 포트 값만 바꿈(기존 컨테이너는 건드리지 않음) |
-| 설정값이 조용히 틀림 | (옛 env 파일) `docker run --env-file`은 줄 끝 주석·따옴표를 값에 그대로 넣음 | 지금은 settings.yaml — 틀린 항목은 검증 오류로 항목 경로만 찍힘. 옮긴 뒤 `python -m common.config.migrate --compare`로 옛 값과 대조(release-and-patch.md §5-4) |
+| 설정값이 조용히 틀림 | (옛 env 파일) `docker run --env-file`은 줄 끝 주석·따옴표를 값에 그대로 넣음 | 지금은 settings.yaml — 틀린 항목은 검증 오류로 항목 경로만 찍힘. 0.1.0 → 0.2.0 옮긴 뒤에는 migrate 화면 보고서(옮긴 칸 수·지운 칸 이름)를 확인(release-and-patch.md §5-7) |
 | SELinux `Permission denied`(파일은 있는데) | 볼륨 라벨 안 맞음 | 볼륨에 `:z`(공유)·`:Z`(전용) 붙이기 |
 
 ## 7. 개발자에게 보고하는 법

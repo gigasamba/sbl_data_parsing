@@ -30,6 +30,8 @@
 - 파일: `deploy/host/scripts/run_docs.py`(처리 끝난 집합), `pipeline/cli.py`(`night` — 같게 동작하는지 확인).
 - 결정(사용자 10-30 PRD grill): C10 — '새 문서' 후보는 모든 입구(run_docs·night)에서 EDW `FileStorageMap`에 있고 `ParsingMeta`에 없는 것. 문서 대장은 숨김·판 관리에만 쓴다.
 - C10 구현(11-01 `feature/scope-cut-search` — 사용자 11-01 Q1(a)): 파싱 `--source`·`--max-new` 고르기 = 원천 이름(FileStorageMap) 중 `s3_key`(manifest — 없으면 이름)에 ParsingMeta 끝난 행이 없는 것(`pipeline/cli.py` `_unparsed` · `parsing_meta_db.done_source_keys` — 읽기 계정, PC는 `RDB_SQLITE` 대역). **파싱 입구에 EDW 읽기가 생김** — 서버에서 못 읽으면 종료 4, PC는 받은 목록 그대로 + 로그 한 줄. 실패 문서(행 없음)는 다음 실행에 다시. 문서 대장 고르기(pl-32 2c)는 지움. "끝남" = `parse_status` ok·partial·skipped_dup(사용자 11-01) — not_parsed·skipped_disk_cap·실패·행 없음은 다시 고름. ParsingMeta 상태 갱신 길은 지운 채(게시는 넣기만 — 사용자 11-01).
+- 결정(사용자 11-02): 전체 e2e는 local·dev·prd 셋에서 돈다. dev는 settings.yaml이 가리키는 대상(가짜 폴더든 실제든)에 쓴다. **전체 문서 실행은 prd에서만, 새 원천별 스키마 이름으로**(새 `PG_SCHEMA`) — 판 0002가 기준 스키마의 옛 표를 지우므로 prd는 반드시 새 `PG_SCHEMA`를 쓴다(refactor.md C-74). 옛 gold 스키마는 2주 남긴 뒤 DB 담당자가 백업하고 지운다. 옛 `struct` 스키마도 DB 담당자가 백업하고 지운다. 절차: [release-and-patch.md §8](../operations/release-and-patch.md#8-020-배포--사람이-할-일).
+- 결정(사용자 11-02 — 새벽 배치): 시작 시각·문서 수 상한·마감 시각이 settings.yaml 칸이고, 비면 돌지 않는다. 칸 이름 어긋남 고침(아래 한 것) — 호스트 셸·systemd·시험은 `ops.nightly.time`, 설정 모델·시험(`tests/server/pipeline/test_nightly_time.py`)은 `pipeline.host.nightly.time`을 쓴다. 상한·마감 칸은 [pl-18](#pl-18)의 상한·마감과 함께.
 - 한 것(11-02 `feature/nightly-key` — 사용자 11-02): 새벽 배치 칸 셋 — settings.yaml `ops.nightly.time`(시작)·`max_docs`(새 문서 수 상한)·`deadline`(마감, HH:MM) — 하나라도 비면 `trigger.sh scheduled`가 조용히 끝. `run_docs.py`에 `--max-docs`(끝난 문서를 뺀 뒤 앞에서 — 옛 `--limit`은 그 전에 잘라 시험용)·`--deadline`(지나면 새 문서를 받지 않음)을 더함. 칸 이름은 설정 파일 기준 `ops.nightly.*` 하나(모델 안 이름 `pipeline.host.nightly`는 코드만 — 문서·시험 문구를 맞춤). 시험 `test_trigger_gate`·`test_nightly_time`·`test_run_docs`(`deadline_at`).
 - Status: todo
 
@@ -142,6 +144,7 @@
 - 무엇: OpenAI 호환 역할 llm/vlm/embed(rerank는 10-29에, ocr_vlm은 10-30에 지움 — [transform-cleanup.md#pl-31](transform-cleanup.md#pl-31)). 서버(dev/prd)는 외부 모델 거부. 외부 전송은 `*_ALLOW_EXTERNAL` + `RUN_ENV=local`이어야 함. 예산, 호출 상한, RPM, 비용 장부, 응답 캐시, 시험용 가짜 LLM.
 - 10-29(사용자): 합성 문서 선언 `LLM_SYNTHETIC_TRUTH` 잠금 삭제 · 외부 허용은 루트 settings.yaml에 둬도 됨(설정 창구는 하나).
 - 파일: `common/ai/guard.py`, `common/ai/llm.py`, `common/ai/adk.py`, `common/config/settings.py`.
+- 결정(사용자 11-02): 개발 서버(dev)부터 내부망 GLM, PC(local)는 OpenRouter(유료 — 상한은 CLAUDE.md §7).
 - Status: done
 
 <a id="op-01"></a>
