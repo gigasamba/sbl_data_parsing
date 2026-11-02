@@ -36,7 +36,7 @@ def selftest():
     assert got == want, got
     print("[selftest] S7c1 — --procs 기본(PIPE_PROCS: auto → auto · 없음·빈 값 → 1 · 숫자 그대로) 옛 판정과 같음 통과")
     # PE1(2026-10-07) · pl-03(10-30, stack 하나) — 문서 형식 키(stack.json과 같은 키)의 parse 목록으로만 좁힘
-    pdf_cands, doc_cands = ([e for e in registry.engines_for(x) if e not in OCR_ENGINES] for x in (".pdf", ".doc"))  # OCR 기본 끔(10-29)
+    pdf_cands, doc_cands = ([e for e in registry.engines_for(x) if e not in OCR_ENGINES] for x in (".pdf", ".doc"))  # OCR 안 돎(10-29)
     assert "pymupdf" in pdf_cands and "kreuzberg" in pdf_cands and len(pdf_cands) > 2  # 좁혀짐을 보려면 전체가 2개보다 많아야
     stack_parse = {".pdf_text": ["pymupdf", "kreuzberg"]}
     missing = set()
@@ -57,14 +57,12 @@ def selftest():
     assert engines_for_doc(Path("mixed.pdf"), stack_pi, {"mixed.pdf": ".pdf_text"}, set()) == ["pymupdf"]
     print("[selftest] 10-29 — .pdf_text 문서에 .pdf_image 엔진을 합치지 않음 통과")
 
-    # 사용자 10-29 — OCR 엔진은 ocr_engine(PARSE_OCR_ENGINE) 켤 때만 · 기본은 이미지·스캔 문서도 VLM 엔진만
+    # 사용자 10-29 · 0.2.0(pl-46) — OCR 엔진은 파싱 엔진으로 안 돎(스위치 지움) · 이미지·스캔 문서는 VLM 엔진만
     png_stack = {".png": ["rapidocr_ko", "qwen_vlm"]}
     assert OCR_ENGINES == {"rapidocr_ko"}  # rapidocr(1.x) 10-30 지움 — pl-31
     assert engines_for_doc(Path("x.png"), png_stack, {"x.png": ".png"}, set()) == ["qwen_vlm"]
-    assert not OCR_ENGINES & set(engines_for_doc(Path("x.png"), {}, {}, set()))  # stack에 키 없음(합집합 대체)에도 OCR 기본 끔
-    with pc.PIPE.env(PARSE_OCR_ENGINE="1"):
-        assert set(engines_for_doc(Path("x.png"), png_stack, {"x.png": ".png"}, set())) == {"rapidocr_ko", "qwen_vlm"}
-    print("[selftest] 10-29 — OCR 엔진 기본 끔(켜면 포함) 통과")
+    assert not OCR_ENGINES & set(engines_for_doc(Path("x.png"), {}, {}, set()))  # stack에 키 없음(합집합 대체)에도 OCR 없음
+    print("[selftest] 10-29 — OCR 엔진 안 돎 통과")
 
     # 사용자 10-29 — 쪽당 제한: 글자 엔진 10초·VLM 120초(설정) · 첫 문서 warmup 하한 · 별도 프로세스 여유 더함
     with pc.PIPE.env(PARSE_TEXT_PAGE_SEC="10", PARSE_VLM_PAGE_SEC="120", PARSE_WARMUP_SEC="60", PARSE_ISOLATE_OVERHEAD="10"):

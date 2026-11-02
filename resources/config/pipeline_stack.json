@@ -15,27 +15,21 @@
    "hwpx"
   ],
   ".png": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".jpg": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".jpeg": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".tif": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".tiff": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".bmp": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".eml": [

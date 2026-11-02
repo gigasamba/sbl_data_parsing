@@ -8,7 +8,7 @@
     넘으면 같은 실행에서 제한을 두 배로 한 번 더, 그래도 넘으면 실패로 기록.
   문서마다 그 형식의 엔진(stack.json)을 **동시에**(엔진마다 별도 프로세스 parse/parse_one.py — 세그폴트가 전체를
     멈추지 않음). --workers N: 문서 N개를 동시에. --procs N: 문서를 N조각으로 나눠 프로세스 N개가 동시에(스레드는 코어 ÷ N).
-  OCR 엔진(OCR_ENGINES — rapidocr·rapidocr_ko)은 ocr_engine(PARSE_OCR_ENGINE, 기본 끔)일 때만 돈다 — 이미지·스캔 문서는 VLM 엔진만.
+  OCR 엔진(OCR_ENGINES — rapidocr_ko)은 파싱 엔진으로 돌지 않는다 — 이미지·스캔 문서는 VLM 엔진만(0.2.0 ocr_engine 스위치 지움 — pl-46).
     글자 PDF 안의 스캔 쪽은 여기서 OCR 엔진을 더하지 않고 대표 결과(represent)의 쪽 VLM이 그 쪽만 채운다.
   진행 현황: 1건 끝날 때마다 <out>/PROGRESS.md 갱신(형식별·엔진별 표·남은 시간) — 서버에서 `watch -n 30 cat output/parse/PROGRESS.md`.
   엔진 범위는 stack 하나(pl-03, 사용자 10-30 — 옛 PARSE_ENGINE_SCOPE all·--engines all 길은 지움): 문서마다 형식 키
@@ -59,7 +59,7 @@ def redact(s):
 
 
 VLM_ENGINES = {"qwen_vlm"}  # docling_vlm·marker_llm은 10-30 지움(pl-31)
-# 사용자 10-29 — OCR 엔진은 기본으로 안 돌림(ocr_engine 설정, 기본 끔). 엔진 코드는 남김(나중에 쪽 회전 판정에 씀) · stack 표는 그대로
+# 사용자 10-29 · 0.2.0(pl-46) — OCR 엔진은 파싱 엔진으로 안 돌림(스위치 지움). 엔진 코드는 남김(prepare 쪽 회전 판정·figures가 씀)
 OCR_ENGINES = {"rapidocr_ko"}  # rapidocr(1.x)는 10-30 지움(pl-31)
 
 
@@ -93,11 +93,9 @@ def engines_for_doc(doc, stack_parse, types, logged_missing):
     문서 형식 키(.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록으로 좁힌다.
     그 키가 stack.json에 없으면 그대로(핵심 엔진 합집합으로 대체, 누락 방지) + 형식별 1회만 로그.
     사용자 10-29 — .pdf_text 안 스캔 쪽 때문에 .pdf_image 엔진을 합치지 않음(대표 결과의 쪽 VLM이 그 쪽만 채움) ·
-    OCR 엔진은 ocr_engine 설정이 켜졌을 때만."""
+    OCR 엔진은 돌리지 않음(형식 키가 구성에 없어 합집합으로 대체할 때도)."""
     suffix = doc.suffix
-    cands = registry.engines_for(suffix)
-    if not pc.cfg().extract.ocr_engine:
-        cands = [e for e in cands if e not in OCR_ENGINES]
+    cands = [e for e in registry.engines_for(suffix) if e not in OCR_ENGINES]
     key = types.get(doc.name, suffix.lower())
     stack_eng = stack_parse.get(key)
     if stack_eng is None:

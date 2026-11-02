@@ -26,7 +26,7 @@ def test_stack_lists_new_formats():
     for ext in NEW:
         assert ext in sp, ext
         assert sp[ext] and set(sp[ext]) <= set(registry.engines_for(ext)), (ext, sp[ext], registry.engines_for(ext))
-    for ext in IMAGES:  # 이미지는 .jpg와 같은 엔진 — OCR 엔진은 ocr_engine 켤 때만이라 기본은 VLM 하나
+    for ext in IMAGES:  # 이미지는 .jpg와 같은 엔진 — VLM 하나(0.2.0 — 구성에서 OCR 엔진을 뺌, pl-46)
         assert sp[ext] == sp[".jpg"], ext
         assert engines_for_doc(Path("x" + ext), sp, {}, set()) == ["qwen_vlm"], ext
     assert sp[".mhtml"] == sp[".mht"]

@@ -144,11 +144,8 @@ def _run_group(cmd, timeout, env):
 
 def _engines_no_ocr_arg():
     """run_all에 붙일 --engines 인자(2026-10-21 사용자: 이미지 비대상 — OCR 꺼짐 기본).
-    CORE에서 이미지·스캔 전용(rapidocr_ko·qwen_vlm)을 빼고 설치된 것만. pipeline.extract.ocr_engine(PARSE_OCR_ENGINE — 10-29에
-    옛 PARSE_MCP_OCR를 합침)이 켜지면 비워 run_all 기본(CORE 전체 — OCR·VLM 엔진 포함)으로 돌아간다. 스캔 이미지 PDF는 글자층 엔진만 시도되어
-    텍스트가 안 나오면 빠르게 실패한다(수 분 OCR로 큐를 막던 원인 제거 — 실측 10-21)."""
-    if pc.cfg().extract.ocr_engine:  # 10-29 — 파이프라인과 같은 OCR 스위치
-        return []
+    CORE에서 이미지·스캔 전용(rapidocr_ko·qwen_vlm)을 빼고 설치된 것만(OCR 스위치 ocr_engine은 0.2.0에 지움 — pl-46). 스캔 이미지 PDF는
+    글자층 엔진만 시도되어 텍스트가 안 나오면 빠르게 실패한다(수 분 OCR로 큐를 막던 원인 제거 — 실측 10-21)."""
     try:
         from pipeline.extract.engines import registry
 

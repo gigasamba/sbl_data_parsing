@@ -21,7 +21,7 @@
 - 이유(사용자 10-29): phase 1/2/3r은 쪽당 아주 짧은 제한으로 엔진을 다시 돌리고 시간 초과를 뒤로 미뤘다. `need_vlm` 규칙과 OCR 엔진이 이미지 문서를 느리게 하고 쪽 VLM과 겹쳤다.
 - 실행: 문서마다 스택 엔진을 병렬로, 엔진마다 격리된 자식 하나. 문서끼리는 `--workers`와 `--procs`(문서 조각)로 병렬.
 - 제한: 문서×엔진마다 = 쪽 수 × `pipeline.extract.text_page_sec`(10) 또는 VLM 엔진은 `vlm_page_sec`(120), 엔진의 첫 문서는 `warmup_sec` 이상, 여기에 `isolate_overhead`. 시간 초과면 제한을 두 배로 한 번 다시, 그다음 실패 기록. 옛 phase 시간 초과 기록은 다시 시도한다.
-- OCR 엔진: `rapidocr`, `rapidocr_ko`는 `pipeline.extract.ocr_engine`(기본 끔)일 때만 돈다 — 이미지·스캔 문서는 VLM 엔진만. 스택 표는 그대로.
+- OCR 엔진: `rapidocr_ko`는 파싱 엔진으로 돌지 않는다 — 이미지·스캔 문서는 VLM 엔진만(0.2.0 — 스위치 `pipeline.extract.ocr_engine`과 대표 결과의 OCR 대체 길을 지우고 구성의 이미지 행을 `qwen_vlm` 하나로, [transform-cleanup.md#pl-46](transform-cleanup.md#pl-46)). 엔진 파일은 남김(prepare·figures가 씀).
 - 글자 PDF 안 스캔 쪽: 더는 `.pdf_image` 엔진이 없다. represent가 그 쪽을 쪽 VLM으로 채운다(`vlm_page.page_text_pages`, 스캔 신호가 있는 쪽만, 병렬).
 - 이미지·스캔 문서: 쪽마다 VLM 한 번. 대표가 이미지·스캔 형식(`.pdf_image`, png, jpg — run_all과 같은 형식 키)에서 글이 비지 않은 VLM 엔진이면 represent는 쪽 VLM을 건너뛰고 쪽 전체 그림을 처리된 것으로 표시한다(그림 VLM 없음, `vlm_page`가 없어도). 쪽 VLM은 `PARSE_POST`에 `vlm_page`가 있을 때만, 문서당 한 번(실패한 쪽은 다시 부르지 않음).
 - VLM 엔진 자식의 `VLM_TIMEOUT` = min(`models.vlm.timeout`, `vlm_page_sec`).
@@ -200,7 +200,7 @@
 |---|---|---|
 | 큰 표를 행으로 나누기 | `CHUNK_TABLE` 비움(표는 통째) | — |
 | 임베딩 | 이미지 기본 `PIPE_EMBED=api` | `EMBED_BASE_URL`, `EMBED_MODEL` |
-| VLM 엔진, 그림, 쪽 VLM | 켜짐(OCR 엔진은 꺼짐 — `PARSE_OCR_ENGINE=0`, pl-22) | VLM 주소. 슬라이드·도형은 soffice(`SOFFICE_BIN`) |
+| VLM 엔진, 그림, 쪽 VLM | 켜짐(OCR 엔진은 파싱에 안 돎 — pl-22·pl-46) | VLM 주소. 슬라이드·도형은 soffice(`SOFFICE_BIN`) |
 
 ### 10-29에 지운 기능(사용자 결정)
 - 파싱 판단 에이전트(`PARSE_AGENT`, 기본 shadow — 결과를 바꾸지 않으면서 서버에서 LLM 세션을 열었음) — `77433fe`.

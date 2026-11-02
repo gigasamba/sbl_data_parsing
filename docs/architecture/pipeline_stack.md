@@ -34,7 +34,7 @@
 
 ### 3-1. 지원 형식 더하기(pl-42, 사용자 10-30)
 
-- `resources/config/pipeline_stack.json`에 `.jpeg`·`.tif`·`.tiff`·`.bmp`(`.png`·`.jpg`와 같은 `rapidocr_ko`·`qwen_vlm` — OCR 엔진은 `pipeline.extract.ocr_engine`을 켤 때만)·`.mhtml`(`.mht`와 같은 `mhtml`·`kreuzberg`)을 더했다. `.hwpx`(`hwpx`)는 원래 있었다. 엔진 코드는 바꾸지 않았다(다섯 형식 모두 엔진이 이미 읽음).
+- `resources/config/pipeline_stack.json`에 `.jpeg`·`.tif`·`.tiff`·`.bmp`(`.png`·`.jpg`와 같은 엔진 — 0.2.0부터 `qwen_vlm` 하나, OCR 스위치 지움 — pl-46)·`.mhtml`(`.mht`와 같은 `mhtml`·`kreuzberg`)을 더했다. `.hwpx`(`hwpx`)는 원래 있었다. 엔진 코드는 바꾸지 않았다(다섯 형식 모두 엔진이 이미 읽음).
 - 서버도 같은 파일을 읽으므로 따로 할 일이 없다(옛 `set-stack` 단계 없음 — `refactor.md` C-69 닫음).
 - 파일에 없는 형식은 핵심 엔진 합집합으로 대체돼 돌기는 한다(+형식별 1회 로그).
 

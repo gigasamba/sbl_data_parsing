@@ -97,7 +97,7 @@ CATEGORIES = {
                 "extract.warmup_sec",
             ),
         ),
-        ("OCR·표", ("extract.ocr", "extract.ocr_engine", "extract.rapidocr_page_workers", "extract.table_grid_max_rows")),
+        ("OCR·표", ("extract.ocr", "extract.rapidocr_page_workers", "extract.table_grid_max_rows")),
         ("첨부·중복", ("extract.attach", "extract.dedup")),
     ),
     "transform": (
@@ -139,7 +139,6 @@ _OPS = re.compile(
 HYPER = {  # 이름 규칙으로는 운영값이지만 결과(파싱·청크·검색 순위)를 바꾸는 칸
     "common.models.llm.extra_body",  # 생각 켬/끔 등 — 답 글자가 바뀜
     "common.models.vlm.extra_body",
-    "pipeline.extract.ocr_engine",  # 이미지·스캔 문서에 OCR 엔진도 돌림(파싱 결과가 바뀜)
     "pipeline.extract.table_grid_max_rows",
     "pipeline.extract.ocr.dpi",
     "pipeline.transform.structure.page_chunk_max",
