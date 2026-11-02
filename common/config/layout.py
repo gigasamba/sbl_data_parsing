@@ -309,3 +309,218 @@ def to_file(model_doc):
     for p, v in _leaves(model_doc or {}):
         set_path(out, to_yaml(p), v)
     return {s: out[s] for s in SECTIONS if s in out}
+
+
+# 지운 설정 칸 — 설정 절 클래스 이름 → 칸 이름(0.2.0 — 절마다 두던 Section.REMOVED를 이 표 하나로, pl-46).
+# 설정 파일에 남아 있으면 경고만 하고 무시(시작 거부 막기 — 0.1.0 settings.yaml도 시작됨) · migrate는 "삭제됨"으로 알림.
+REMOVED: dict[str, frozenset[str]] = {
+    # CommonConnections(common/config/settings.py) — 사용자 10-29 — 지운 칸·절(남으면 경고만) · edw = EDW 벡터 경로(ops.md#op-03)
+    "CommonConnections": frozenset({"edw", "openviking"}),
+    # CommonConnectionsParsingMeta(common/config/settings.py) — 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)
+    "CommonConnectionsParsingMeta": frozenset({"connect_kwargs", "database", "host", "password", "port", "sqlite", "user"}),
+    # CommonDev(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(남으면 경고만)
+    "CommonDev": frozenset({"exp_store", "llm_est_in_tokens", "llm_est_out_tokens", "min_gold_coverage"}),
+    # CommonDevDocker(common/config/settings.py) — 사용자 10-30(op-08) — compose는 PG_DB·PG_USER로 채움 · 0.2.0(pl-46) MinIO·s3 원천·자정 배치 모양 시험 칸(11-01 스모크에서 지움)(남으면 경고만)
+    "CommonDevDocker": frozenset(
+        {
+            "minio_image",
+            "minio_publish_port",
+            "postgres_db",
+            "postgres_user",
+            "smoke_mode",
+            "smoke_nightly",
+            "smoke_pm_bucket",
+            "smoke_source",
+        }
+    ),
+    # CommonModels(common/config/settings.py) — 사용자 10-29 · ocrvlm 10-30(pl-31) — 지운 칸·절(남으면 경고만)
+    "CommonModels": frozenset({"ocrvlm", "rerank"}),
+    # CommonModelsEmbed(common/config/settings.py) — 사용자 10-30(op-08) — ping_models는 받은 차원만 보여 줌(남으면 경고만)
+    "CommonModelsEmbed": frozenset({"dim"}),
+    # CommonModelsGuard(common/config/settings.py) — 사용자 10-29 — 합성 문서 선언 잠금 삭제(옛 migrate C-35가 옮겨 둔 서버 파일 보호)
+    "CommonModelsGuard": frozenset({"synthetic_truth"}),
+    # CommonModelsLlm(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(남으면 경고만)
+    "CommonModelsLlm": frozenset({"empty_retry", "max_concurrency"}),
+    # CommonModelsVlm(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(남으면 경고만)
+    "CommonModelsVlm": frozenset({"model_alt"}),
+    # CommonPaths(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치 · op-08) · 0.2.0(pl-46) 이름 있는 색인·원천 목록 파일 — 지운 칸(남으면 경고만)
+    "CommonPaths": frozenset({"config_dir", "criteria_file", "eval_sets_dir", "index_root", "korean_font", "sources_file"}),
+    # CommonRuntime(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(남으면 경고만)
+    "CommonRuntime": frozenset({"exp_max_workers", "exp_proc_gb_answer", "exp_proc_gb_build", "exp_proc_gb_run", "exp_reserve_gb"}),
+    # CommonStore(common/config/settings.py) — 사용자 10-30(pl-32 — 재시도 횟수 없음) · 10-31(pl-12 C10 — 문서 대장·숨김 통째로 지움 · pl-08 — 정형 저장소 통째로 지움) — 옛 파일에 남아도 경고만
+    "CommonStore": frozenset(
+        {"doc_registry", "registry_editions", "registry_etag_md5", "registry_retry_max", "struct_backend", "struct_db"}
+    ),
+    # CommonText(common/config/settings.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
+    "CommonText": frozenset({"parse_token_norm"}),
+    # McpDev(mcp_server/config.py) — 11-01(e2-10 — mcp_eval 지움) — 지운 칸(남으면 경고만)
+    "McpDev": frozenset({"eval_s_parts"}),
+    # McpEdwQuery(mcp_server/config.py) — 사용자 10-29 — 접속은 common.connections.rdb 읽기 계정(ops.md#op-03)
+    "McpEdwQuery": frozenset({"conn_file", "database", "password", "port", "server", "sqlite", "user"}),
+    # McpHost(mcp_server/config.py) — 11-01(e2-10 — 검색 도구 컨테이너 retrieval·mcp_eval 지움) — 지운 칸(남으면 경고만)
+    "McpHost": frozenset({"tool_cpus", "tool_mem_limit"}),
+    # McpOutput(mcp_server/config.py) — 사용자 10-29·10-30(e2-18 — 근거 이미지·그림 조회 지움) — 지운 칸·절(남으면 경고만)
+    "McpOutput": frozenset(
+        {
+            "cap_ranked",
+            "evid_local_roots",
+            "evid_max_concurrency",
+            "evid_max_mb",
+            "evid_timeout_sec",
+            "evidence_paths",
+            "images",
+            "list_docs_max",
+            "max_image_px",
+        }
+    ),
+    # McpSearch(mcp_server/config.py) — 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) · agg_vocab_file 11-01(사전 파일이 코드 기본값과 같아 지움) · client 절 11-02(본문 고객 라벨 순위·하드 격리 지움 — 고객은 client_edw 거르기만, C6) — 지운 칸·절(남으면 경고만)
+    "McpSearch": frozenset(
+        {
+            "agg",
+            "agg_today",
+            "agg_vocab_file",
+            "client",
+            "copy_group",
+            "data_catalog",
+            "decompose",
+            "decompose_llm",
+            "entity_split",
+            "evidence_gate",
+            "graph",
+            "ocr_dpi",
+            "ov_search_path",
+            "query_expand",
+            "rerank",
+            "struct_context_max",
+            "tie_break",
+            "type_weights",
+            "vector_alias_expand",
+        }
+    ),
+    # McpServer(mcp_server/config.py) — store 11-01(mc-01 — 검색 저장소는 PG 하나) · 사용자 10-30(op-08) — common.models.embed.query_cache로 합침(mcp 이미지 기본은 그 칸에) — 옛 설정 파일에 남아도 경고만
+    "McpServer": frozenset({"query_cache", "store"}),
+    # PipelineConnections(pipeline/config.py) — 사용자 10-29 · graphiti 10-30(e2-18 — 외부 KG 어댑터 지움) — 지운 칸·절(남으면 경고만)
+    "PipelineConnections": frozenset({"graphiti", "openviking"}),
+    # PipelineConnectionsRdb(pipeline/config.py) — 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)
+    "PipelineConnectionsRdb": frozenset({"connect_kwargs", "database", "host", "password", "port", "user"}),
+    # PipelineDev(pipeline/config.py) — 사용자 10-29 · parallel_test_crash 10-30(pl-35) · allow_common_mismatch 11-01(structure·load 모듈의 끝 표시 확인 지움) · test_min_docs·test_per_type 11-01(--mode test 표본 모드 지움) — 지운 칸·절(남으면 경고만)
+    "PipelineDev": frozenset(
+        {"allow_common_mismatch", "parallel_test_crash", "parse_agent_fake", "stream_test_crash", "test_min_docs", "test_per_type"}
+    ),
+    # PipelineEval(pipeline/config.py) — 사용자 10-29 · e2e_* 10-30(op-08) · 정답·질문 초안·표 채점·재순위 모델(op-09가 stages.py용으로 더함) 11-01(e2-10 — PC 평가 도구 지움) · review_max_rounds 11-01(figure_review 지움) — 지운 칸·절(남으면 경고만)
+    "PipelineEval": frozenset(
+        {
+            "diagram_raster_vlm",
+            "e2e_qa_set",
+            "e2e_questions",
+            "gold_draft_max_pages",
+            "gold_draft_mermaid_check",
+            "phase_report_legacy",
+            "qa_draft_max_pages",
+            "qa_draft_per_page",
+            "rerank_model",
+            "review_max_rounds",
+            "score_table_judge",
+        }
+    ),
+    # PipelineExtract(pipeline/config.py) — 사용자 10-29 — phase 없앰 · 10-30 auto_reparse_changed·parallel 지움(pl-35) · dedup_scan·ocr_gt_max·signal_ocr 지움(pl-34) · engine_scope 지움(pl-03 — stack 하나) · 0.2.0 ocr_engine 지움(pl-46)(남으면 경고만)
+    "PipelineExtract": frozenset(
+        {
+            "auto_reparse_changed",
+            "dedup_scan",
+            "disk_free_warn_gb",
+            "engine_cache_warn_gb",
+            "engine_scope",
+            "merge_pages",
+            "ocr_engine",
+            "ocr_gt_max",
+            "page_scan",
+            "parallel",
+            "phase_sec",
+            "phases",
+            "scan_fill",
+            "signal_ocr",
+            "stream",
+        }
+    ),
+    # PipelineExtractCache(pipeline/config.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
+    "PipelineExtractCache": frozenset(
+        {"keep_engine_cache", "keep_local_originals", "keep_raw_layer", "parse_keep_max_gb", "parse_tmp_max_gb"}
+    ),
+    # PipelineExtractDedup(pipeline/config.py) — 11-01(pl-02 — 이름·내용 유사 후보 지움, 완전 중복만) — 지운 칸(남으면 경고만)
+    "PipelineExtractDedup": frozenset({"common_max", "fuzzy_max"}),
+    # PipelineExtractPrepare(pipeline/config.py) — 사용자 10-30(op-08) · ocr 11-01(rapidocr 1.x 길 지움 — 늘 3.x) · rotate_lead·rotate_probe_fast·rotate_s0_min 11-02(회전 판단 규칙 지움 — 켬/끔만) — 지운 칸(남으면 경고만)
+    "PipelineExtractPrepare": frozenset({"ocr", "rotate_fast", "rotate_lead", "rotate_probe_fast", "rotate_s0_min"}),
+    # PipelineHost(pipeline/config.py) — 0.2.0(pl-46) — 이름 있는 색인·1회 job 컨테이너(load·publish — #100에서 지움) 칸(남으면 경고만)
+    "PipelineHost": frozenset({"index_conf_dir", "load_cpus", "load_mem_limit", "publish_cpus", "publish_mem_limit"}),
+    # PipelineHostNightly(pipeline/config.py) — 사용자 10-30(pl-32) — 켬/끔은 time 하나로 · max_new·modules·publish 11-01(night 모듈 배치 지움 — 새벽 배치는 run_docs)
+    "PipelineHostNightly": frozenset({"enabled", "max_new", "modules", "publish"}),
+    # PipelineLoad(pipeline/config.py) — 사용자 10-29(prune_* — 적재가 안 지움, pl-13 · edw_load — EDW 벡터 경로 삭제, ops.md#op-03) · index_lock_stale_sec 11-01(mc-16 — 이름 있는 색인 AD41 지움) — 지운 칸·절(남으면 경고만)
+    "PipelineLoad": frozenset(
+        {"bm25_stat_rebuild", "edw_load", "index_lock_stale_sec", "prune_force", "prune_min_ratio", "structure_target"}
+    ),
+    # PipelineLoadPublish(pipeline/config.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
+    "PipelineLoadPublish": frozenset({"source_system", "upload_raw"}),
+    # PipelineNight(pipeline/config.py) — 11-01(night·trigger.sh night 지움) — 지운 칸(남으면 경고만)
+    "PipelineNight": frozenset({"deadline", "parse_deadline"}),
+    # PipelinePaths(pipeline/config.py) — 0.2.0 index_conf(pl-46 — 이름 있는 색인) · 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) · file_meta_path 11-02(pl-29 — 적재가 EDW 조인) — 지운 칸·절(남으면 경고만)
+    "PipelinePaths": frozenset(
+        {
+            "file_meta_path",
+            "index_conf",
+            "mineru_bin",
+            "paddle_python",
+            "report_digest_dir",
+            "soffice_candidates",
+            "stack_snapshot",
+            "stack_version",
+        }
+    ),
+    # PipelineService(pipeline/config.py) — 11-01(pl-10 — trigger 서버 지움) — 지운 절(남으면 경고만)
+    "PipelineService": frozenset({"trigger"}),
+    # PipelineServiceParseMcp(pipeline/config.py) — 10-29 PARSE_MCP_OCR → extract.ocr_engine으로 합침(그 스위치도 0.2.0에 지움) — 남으면 경고만
+    "PipelineServiceParseMcp": frozenset({"ocr"}),
+    # PipelineTransform(pipeline/config.py) — 사용자 10-29 — 지운 칸·절(남으면 경고만)
+    "PipelineTransform": frozenset({"agent"}),
+    # PipelineTransformFigures(pipeline/config.py) — 사용자 10-30(pl-31 — ocr_vlm 엔진과 함께 지움) — 지운 칸(남으면 경고만)
+    "PipelineTransformFigures": frozenset(
+        {
+            "chart_values_det",
+            "diagram_edges_det",
+            "doc_shape_figure",
+            "nested_figure",
+            "ocr_fallback",
+            "ocrvlm_prompt",
+            "overlay_cluster",
+            "page_child_dedup",
+            "pptx_slide_vlm",
+            "vector_box_diagram",
+        }
+    ),
+    # PipelineTransformRepresent(pipeline/config.py) — pl-34(10-30) — 재판독 P2·P3를 모두 지움(사용자 10-30, 남으면 경고만)
+    "PipelineTransformRepresent": frozenset(
+        {
+            "context",
+            "fuse",
+            "fuse_reread",
+            "fuse_reread_p3",
+            "fuse_signals",
+            "qa_carry_forward",
+            "reread",
+            "reread_fallback_best",
+            "shadow",
+            "shadow_max",
+            "standardize",
+            "table_db",
+            "table_inline",
+            "table_std",
+            "table_stitch",
+        }
+    ),
+    # PipelineTransformStructure(pipeline/config.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐 · op-08 edw_embed → embed로 합침) — 지운 칸(남으면 경고만)
+    "PipelineTransformStructure": frozenset(
+        {"bundle_keep_empty_fig", "chunk_head", "client_roster_seed", "draft_terms", "edw_embed", "edw_summary_llm", "wiki_domain_phrase"}
+    ),
+    # PipelineTransformVlm(pipeline/config.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
+    "PipelineTransformVlm": frozenset({"fig_kind", "fig_select", "fig_text_skip"}),
+}

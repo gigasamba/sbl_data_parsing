@@ -43,7 +43,6 @@ class McpSearchWeights(Section):
 
 
 class McpDev(Section):
-    REMOVED = frozenset({"eval_s_parts"})  # 11-01(e2-10 — mcp_eval 지움) — 지운 칸(남으면 경고만)
     mcp_url: str | None = F("http://127.0.0.1:18765/mcp", "MCP_URL", "검증 페이지가 붙을 MCP 서버 URL", blank="keep")
     ui_port: Port | None = F(8790, "UI_PORT", "검증 페이지(validation/search_ui) 서버 포트")
 
@@ -54,9 +53,6 @@ class McpEdwMeta(Section):
 
 
 class McpEdwQuery(Section):
-    REMOVED = frozenset(
-        {"conn_file", "database", "password", "port", "server", "sqlite", "user"}
-    )  # 사용자 10-29 — 접속은 common.connections.rdb 읽기 계정(ops.md#op-03)
     enabled: bool | None = F(True, "EDW_QUERY", "query_edw 도구 스위치 — 0이면 끔", off=("0",))
     max_bytes: int | None = F(2000000, "EDW_QUERY_MAX_BYTES", "query_edw 응답 크기 상한(바이트)")
     max_rows: int | None = F(2000, "EDW_QUERY_MAX_ROWS", "query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽)")
@@ -73,9 +69,6 @@ class McpEdwQuery(Section):
 
 
 class McpHost(Section):
-    REMOVED = frozenset(
-        {"tool_cpus", "tool_mem_limit"}
-    )  # 11-01(e2-10 — 검색 도구 컨테이너 retrieval·mcp_eval 지움) — 지운 칸(남으면 경고만)
     cpus: float | None = F(1.0, "MCP_CPUS", "mcp-server 컨테이너 CPU 한도(compose cpus)")
     image: str | None = F(None, "MCP_SERVER_IMAGE", "mcp-server 컨테이너 이미지 이름:태그")
     jobs_dir: str | None = F(None, "MCP_JOBS_DIR", "MCP parse_document 업로드 작업 폴더(공유 볼륨) — medium 레인 양보 감지용")
@@ -83,19 +76,6 @@ class McpHost(Section):
 
 
 class McpOutput(Section):
-    REMOVED = frozenset(
-        {
-            "evidence_paths",  # 11-01(mc-15 — 검색 중 ParsingMeta 조회 지움, 적재 때 gold doc에 복사)
-            "cap_ranked",
-            "list_docs_max",
-            "evid_local_roots",
-            "evid_max_concurrency",
-            "evid_max_mb",
-            "evid_timeout_sec",
-            "images",
-            "max_image_px",
-        }
-    )  # 사용자 10-29·10-30(e2-18 — 근거 이미지·그림 조회 지움) — 지운 칸·절(남으면 경고만)
     max_chars: int | None = F(20000, "MCP_MAX_CHARS", "search 응답 크기 상한(JSON UTF-8 바이트) — 넘으면 근거 본문을 줄임")
 
 
@@ -110,29 +90,6 @@ class McpQueryLog(Section):
 
 
 class McpSearch(Section):
-    REMOVED = frozenset(
-        {
-            "copy_group",
-            "query_expand",
-            "entity_split",
-            "evidence_gate",
-            "tie_break",
-            "type_weights",
-            "vector_alias_expand",
-            "decompose",
-            "decompose_llm",
-            "graph",
-            "ov_search_path",
-            "rerank",
-            "ocr_dpi",
-            "agg",
-            "agg_today",
-            "data_catalog",
-            "struct_context_max",
-            "agg_vocab_file",
-            "client",
-        }
-    )  # 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) · agg_vocab_file 11-01(사전 파일이 코드 기본값과 같아 지움) · client 절 11-02(본문 고객 라벨 순위·하드 격리 지움 — 고객은 client_edw 거르기만, C6) — 지운 칸·절(남으면 경고만)
     methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서)")
     min_score: float | None = F(None, "SEARCH_MIN_SCORE", "근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak")
     pg: McpSearchPg = Field(default_factory=McpSearchPg)
@@ -140,9 +97,6 @@ class McpSearch(Section):
 
 
 class McpServer(Section):
-    REMOVED = frozenset(
-        {"query_cache", "store"}
-    )  # store 11-01(mc-01 — 검색 저장소는 PG 하나) · 사용자 10-30(op-08) — common.models.embed.query_cache로 합침(mcp 이미지 기본은 그 칸에) — 옛 설정 파일에 남아도 경고만
     fulltext_secret: SecretStr | None = F(
         None,
         "FULLTEXT_SIGN_SECRET",

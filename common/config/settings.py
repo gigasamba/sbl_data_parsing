@@ -33,7 +33,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Annotated, ClassVar, Literal, get_args, get_origin
+from typing import Annotated, Literal, get_args, get_origin
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PrivateAttr, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -343,9 +343,7 @@ class Section(BaseModel):
     """설정 절 공통 — 모르는 칸은 거부(오타 잡기), 비운 칸은 기본값, YAML 스칼라는 칸 종류에 맞게(위 모듈 설명)."""
 
     model_config = ConfigDict(extra="forbid", validate_default=False)
-    REMOVED: ClassVar[frozenset[str]] = (
-        frozenset()
-    )  # 지운 칸 — 설정 파일에 남으면 경고만 하고 무시(시작 거부 막기 · migrate는 "삭제됨"으로 알림)
+    # 지운 칸 — 표 하나 common.config.layout.REMOVED(절 클래스 이름 → 칸 이름, 0.2.0 pl-46): 설정 파일에 남으면 경고만 하고 무시
 
     @model_validator(mode="before")
     @classmethod
@@ -356,7 +354,7 @@ class Section(BaseModel):
         for k, v in data.items():
             if v is None:
                 continue
-            if k in cls.REMOVED:
+            if k in L.REMOVED.get(cls.__name__, ()):
                 sys.stderr.write(f"[settings] 지운 칸 무시: {k} — 설정 파일에서 지울 것(값은 출력 안 함)\n")
                 continue
             f = cls.model_fields.get(k)
@@ -1178,9 +1176,6 @@ class CommonConnectionsObjectStorage(Section):
 
 
 class CommonConnectionsParsingMeta(Section):
-    REMOVED = frozenset(
-        {"connect_kwargs", "database", "host", "password", "port", "sqlite", "user"}
-    )  # 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)
     table: str | None = F("AI.ParsingMeta", "PM_TABLE", "parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_)", blank="keep")
 
 
@@ -1234,18 +1229,6 @@ class CommonConnectionsPg(Section):
 
 
 class CommonDevDocker(Section):
-    REMOVED = frozenset(
-        {
-            "postgres_db",
-            "postgres_user",
-            "minio_image",
-            "minio_publish_port",
-            "smoke_mode",
-            "smoke_nightly",
-            "smoke_pm_bucket",
-            "smoke_source",
-        }
-    )  # 사용자 10-30(op-08) — compose는 PG_DB·PG_USER로 채움 · 0.2.0(pl-46) MinIO·s3 원천·자정 배치 모양 시험 칸(11-01 스모크에서 지움)(남으면 경고만)
     mcp_publish_port: Port | None = F(18765, "MCP_PUBLISH_PORT", "시험 compose에서 MCP를 호스트에 게시할 포트")
     pg_bind: str | None = F("127.0.0.1", "PG_BIND", "시험 PostgreSQL 컨테이너를 호스트에 게시할 바인드 주소")
     pg_effective_cache: str | None = F("12GB", "PG_EFFECTIVE_CACHE", "시험 PG effective_cache_size")
@@ -1270,7 +1253,6 @@ class CommonDevDocker(Section):
 
 
 class CommonModelsEmbed(Section):
-    REMOVED = frozenset({"dim"})  # 사용자 10-30(op-08) — ping_models는 받은 차원만 보여 줌(남으면 경고만)
     allow_external: bool | None = F(False, "EMBED_ALLOW_EXTERNAL", "임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "EMBED_API_KEY", "임베딩 엔드포인트 API 키(있을 때만 Authorization 헤더로 보냄)")
     base_url: str | None = F(None, "EMBED_BASE_URL", "임베딩 엔드포인트 주소(OpenAI 호환 …/v1)")
@@ -1287,7 +1269,6 @@ class CommonModelsEmbed(Section):
 
 
 class CommonModelsGuard(Section):
-    REMOVED = frozenset({"synthetic_truth"})  # 사용자 10-29 — 합성 문서 선언 잠금 삭제(옛 migrate C-35가 옮겨 둔 서버 파일 보호)
     budget_usd: float | None = F(
         None,
         "LLM_BUDGET_USD",
@@ -1309,9 +1290,6 @@ class CommonModelsGuard(Section):
 
 
 class CommonModelsLlm(Section):
-    REMOVED = frozenset(
-        {"empty_retry", "max_concurrency"}
-    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(남으면 경고만)
     allow_external: bool | None = F(False, "LLM_ALLOW_EXTERNAL", "LLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "LLM_API_KEY", "LLM 엔드포인트 API 키(있을 때만 사용)")
     base_url: str | None = F(None, "LLM_BASE_URL", "LLM 엔드포인트 주소(OpenAI 호환 …/v1)")
@@ -1337,7 +1315,6 @@ class CommonModelsTransport(Section):
 
 
 class CommonModelsVlm(Section):
-    REMOVED = frozenset({"model_alt"})  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(남으면 경고만)
     allow_external: bool | None = F(False, "VLM_ALLOW_EXTERNAL", "VLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "VLM_API_KEY", "VLM 엔드포인트 API 키(있을 때만)")
     base_url: str | None = F(None, "VLM_BASE_URL", "VLM 엔드포인트 주소(OpenAI 호환 …/v1)")
@@ -1353,9 +1330,6 @@ class CommonModelsVlm(Section):
 
 
 class CommonDev(Section):
-    REMOVED = frozenset(
-        {"exp_store", "llm_est_in_tokens", "llm_est_out_tokens", "min_gold_coverage"}
-    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(남으면 경고만)
     llm_fake: bool | None = F(False, "LLM_FAKE", "1이면 LLM 호출을 네트워크·캐시 없는 모의 응답으로 대체(시험·비용 추정용)", on=("1",))
     docker: CommonDevDocker = Field(default_factory=CommonDevDocker)
 
@@ -1381,9 +1355,6 @@ class CommonHost(Section):
 
 
 class CommonPaths(Section):
-    REMOVED = frozenset(
-        {"eval_sets_dir", "korean_font", "config_dir", "criteria_file", "index_root", "sources_file"}
-    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치 · op-08) · 0.2.0(pl-46) 이름 있는 색인·원천 목록 파일 — 지운 칸(남으면 경고만)
     client_roster: str | None = F(None, "CLIENT_ROSTER", "고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) — 용어·별칭에 합침")
     doc_dir: str | None = F(
         image_default("DOC_DIR"),
@@ -1417,9 +1388,6 @@ class CommonPaths(Section):
 
 
 class CommonRuntime(Section):
-    REMOVED = frozenset(
-        {"exp_max_workers", "exp_proc_gb_answer", "exp_proc_gb_build", "exp_proc_gb_run", "exp_reserve_gb"}
-    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(남으면 경고만)
     cpu_max_load: float | None = F(0.9, "CPU_MAX_LOAD", "새 하위 프로세스를 띄우는 CPU 부하 상한(1분 부하 평균 ÷ 코어 수)", unset=("auto",))
     draft_terms_lock_timeout: float | None = F(
         5.0, "DRAFT_TERMS_LOCK_TIMEOUT", "용어 초안 CSV 쓰기 잠금 대기 시간(초) — 못 얻으면 이번엔 포기"
@@ -1457,9 +1425,6 @@ class CommonRuntime(Section):
 
 
 class CommonStore(Section):
-    REMOVED = frozenset(
-        {"registry_editions", "registry_retry_max", "doc_registry", "registry_etag_md5", "struct_backend", "struct_db"}
-    )  # 사용자 10-30(pl-32 — 재시도 횟수 없음) · 10-31(pl-12 C10 — 문서 대장·숨김 통째로 지움 · pl-08 — 정형 저장소 통째로 지움) — 옛 파일에 남아도 경고만
     run_mode: Annotated[Literal["prod"] | None, BeforeValidator(lambda v: v or None)] = F(  # "" = 설정 안 함(옛 str 칸과 같게)
         None,
         "RUN_MODE",
@@ -1468,7 +1433,6 @@ class CommonStore(Section):
 
 
 class CommonText(Section):
-    REMOVED = frozenset({"parse_token_norm"})  # 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
     draft_terms_max: int | None = F(500, "DRAFT_TERMS_MAX", "용어 자동 초안 파일 행 수 상한(개) — 넘으면 가장 빈번한 것만 유지")
     search_recency: str | None = F(
         "1",
@@ -1488,7 +1452,6 @@ class CommonText(Section):
 
 
 class CommonConnections(Section):
-    REMOVED = frozenset({"openviking", "edw"})  # 사용자 10-29 — 지운 칸·절(남으면 경고만) · edw = EDW 벡터 경로(ops.md#op-03)
     object_storage: CommonConnectionsObjectStorage = Field(default_factory=CommonConnectionsObjectStorage)
     parsing_meta: CommonConnectionsParsingMeta = Field(default_factory=CommonConnectionsParsingMeta)
     pg: CommonConnectionsPg = Field(default_factory=CommonConnectionsPg)
@@ -1496,7 +1459,6 @@ class CommonConnections(Section):
 
 
 class CommonModels(Section):
-    REMOVED = frozenset({"ocrvlm", "rerank"})  # 사용자 10-29 · ocrvlm 10-30(pl-31) — 지운 칸·절(남으면 경고만)
     embed: CommonModelsEmbed = Field(default_factory=CommonModelsEmbed)
     guard: CommonModelsGuard = Field(default_factory=CommonModelsGuard)
     llm: CommonModelsLlm = Field(default_factory=CommonModelsLlm)
