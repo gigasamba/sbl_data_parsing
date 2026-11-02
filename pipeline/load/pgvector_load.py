@@ -360,7 +360,7 @@ def _mark_loaded(loaded, kept=()):
         )
         return len(loaded)
     try:
-        from common import pipeline_version
+        from pipeline.load.parsing_meta import pipeline_version  # 게시(silver_version)와 같은 자리
 
         return PM.mark_loaded(pm, loaded, pipeline_version(), kept)  # gold_version = 적재한 코드 판(사용자 11-02)
     except Exception as e:

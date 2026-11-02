@@ -283,8 +283,9 @@ class MssqlStore:
         return _rows_parsed(self.cn.cursor(), self.ident, "%s", lo, hi, self.key_col())
 
     def done_source_keys(self):
-        kc = self.key_col()  # 칸 목록(_found)도 여기서 채워짐
-        return _done_keys_rows(self.cn.cursor(), self.ident, kc, "gold_version" in self._found)
+        if self._cols is None:
+            self._available_columns(self.cn.cursor())
+        return _done_keys_rows(self.cn.cursor(), self.ident, self.key_col(), "gold_version" in self._found)
 
     def set_loaded(self, ids, version, kept=False):
         """loaded_at = SYSUTCDATETIME()·gold_version = version(C10 예외 — 칸은 DB 담당자가 더함, C-76). loaded_at이 없으면 예외(호출부가 경고),
@@ -337,9 +338,11 @@ class SqliteStore:
         self.cn.commit()
         return counts
 
+    def _colset(self):
+        return {r[1].lower() for r in self.cn.execute(f"PRAGMA table_info({self.table})")}
+
     def key_col(self):
-        cols = {r[1] for r in self.cn.execute(f"PRAGMA table_info({self.table})")}
-        return "s3_key" if "s3_key" in cols and "source_key" not in cols else "source_key"
+        return renames(self._colset()).get("source_key", "source_key")
 
     def rows_where(self, col, values):
         return _rows_where(self.cn.cursor(), self.table, "?", col, values, self.key_col())
@@ -348,11 +351,11 @@ class SqliteStore:
         return _rows_parsed(self.cn.cursor(), self.table, "?", lo, hi, self.key_col())
 
     def done_source_keys(self):
-        cols = {r[1].lower() for r in self.cn.execute(f"PRAGMA table_info({self.table})")}
-        return _done_keys_rows(self.cn.cursor(), self.table, self.key_col(), "gold_version" in cols)
+        cols = self._colset()
+        return _done_keys_rows(self.cn.cursor(), self.table, renames(cols).get("source_key", "source_key"), "gold_version" in cols)
 
     def set_loaded(self, ids, version, kept=False):
-        cols = {r[1].lower() for r in self.cn.execute(f"PRAGMA table_info({self.table})")}
+        cols = self._colset()
         _set_loaded(self.cn.cursor(), self.table, "?", "datetime('now')", ids, version, "gold_version" in cols, kept)
         self.cn.commit()
 
