@@ -343,7 +343,7 @@ _PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|
 # 설명 글자로는 선택지를 못 뽑는 칸 — 코드가 받는 값(읽는 코드·설명 기준).
 VALUES = {
     "common.run_env": "local·dev·prd 중 하나",
-    "common.store.run_mode": "prod·test 중 하나",
+    "common.store.run_mode": "prod 하나(비우면 설정 안 함 — test는 0.2.0에 지움)",
     "common.text.search_recency": "0(끔)·1(최신을 묻는 질문만)·2(항상) 중 하나",
     "common.connections.object_storage.verify_tls": "1(검증)·0(끔)·CA 파일 경로",
     "common.models.guard.external_scope": "func·e2e 중 하나",

@@ -1243,7 +1243,16 @@ class CommonConnectionsPg(Section):
 
 class CommonDevDocker(Section):
     REMOVED = frozenset(
-        {"postgres_db", "postgres_user", "minio_image", "minio_publish_port", "smoke_nightly", "smoke_pm_bucket", "smoke_source"}
+        {
+            "postgres_db",
+            "postgres_user",
+            "minio_image",
+            "minio_publish_port",
+            "smoke_mode",
+            "smoke_nightly",
+            "smoke_pm_bucket",
+            "smoke_source",
+        }
     )  # 사용자 10-30(op-08) — compose는 PG_DB·PG_USER로 채움 · 0.2.0(pl-46) MinIO·s3 원천·자정 배치 모양 시험 칸(11-01 스모크에서 지움)(남으면 경고만)
     mcp_publish_port: Port | None = F(18765, "MCP_PUBLISH_PORT", "시험 compose에서 MCP를 호스트에 게시할 포트")
     pg_bind: str | None = F("127.0.0.1", "PG_BIND", "시험 PostgreSQL 컨테이너를 호스트에 게시할 바인드 주소")
@@ -1263,7 +1272,6 @@ class CommonDevDocker(Section):
     )
     smoke_keep: bool | None = F(False, "SMOKE_KEEP", "1이면 시험 끝나도 pg 컨테이너를 남김")
     smoke_limit: int | None = F(0, "SMOKE_LIMIT", "시험에서 파싱할 문서 수 상한(0이면 제한 없음)")
-    smoke_mode: str | None = F("prod", "SMOKE_MODE", "시험 파싱 모드(prod|test — test는 형식별 표본)")
     smoke_pg_password: SecretStr | None = F(
         None, "SMOKE_PG_PASSWORD", "시험 PostgreSQL 비밀번호(compose.test.yml이 컨테이너 PG_PASSWORD로 넘김 — S7e1)"
     )

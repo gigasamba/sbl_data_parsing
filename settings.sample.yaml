@@ -13,7 +13,7 @@ required:
   # ─── 실행 환경 [PC·서버] ───
   env:
     run_env:  # 실행 환경 · 값: local·dev·prd 중 하나
-    run_mode:  # 실행 모드 prod · 값: prod·test 중 하나
+    run_mode:  # 실행 모드 prod · 값: prod 하나(비우면 설정 안 함 — test는 0.2.0에 지움)
   # ─── PostgreSQL(pgvector · gold) [PC·서버] ───
   pg:
     host:  # PostgreSQL 서버 호스트 · 값: 호스트 이름·IP
@@ -372,7 +372,6 @@ dev:
     smoke_settings:  # 스모크 시험 컨테이너가 붙여 읽는 설정 파일(settings.yaml) 경로 · 값: 경로
     smoke_keep: false  # 1이면 시험 끝나도 pg 컨테이너를 남김 · 기본 false · 값: true·false
     smoke_limit: 0  # 시험에서 파싱할 문서 수 상한(0이면 제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음)
-    smoke_mode: prod  # 시험 파싱 모드(prod|test — test는 형식별 표본) · 기본 prod · 값: prod·test 중 하나
     smoke_pg_password:  # 시험 PostgreSQL 비밀번호(compose.test.yml이 컨테이너 PG_PASSWORD로 넘김 — S7e1) · 값: 비밀 글자 [비밀]
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
