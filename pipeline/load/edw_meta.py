@@ -7,11 +7,16 @@
 - CRMS: FileStorageMap_CRMS.rm_contract_code → RM_CM_PJTLIST(SF_ACC_NAME·DIVISION·RM_CONTRACT_NAME·INIT_DTTM) · 등록 시각 RM_CM_DOCU.INIT_DTTM(4 키).
 - LAS: FileStorageMap_LAS.manage_no → LAS.Contract(최신 판 — IsActive·ContractID 내림차순) · 등록 시각 FileManager.CreateDate(las_file_id).
 - FAQ·Other: FileStorageMap.created_at만.
+분류 힌트(pl-33, 사용자 11-02 — 운영 analyze_clues와 같은 규칙, gold 칸 이름은 원본 칸 이름의 소문자 — project_code__c처럼): SFDC는 ContentVersion.Title + 첫 번째 User 아닌 연결 개체
+(title·entity_type·entity_id·entity_class — 접두 → 개체 표는 resources/mappings/sfdc_prefix.json) + 그 개체가 Task/Event면 Subject(120자)·Sent_Received__c,
+영업 기회면 StageName·Real_RFP__c·RFP_Received_Start/End_Date__c. LAS는 Contract.ApprovalName. 힌트 칸을 못 읽는 EDW면 힌트만 비움(경고).
 EDW를 못 열면 빈 dict와 경고(적재는 메타를 비운 채 계속 — 사용자 11-02, 자동 갱신 없음: 나중에 --replace로 다시 적재해 채움)."""
 
+import json
 import sys
 from datetime import UTC, date, datetime
 
+from common.core.paths import RES_ROOT
 from common.store.db.models import search_tables as ST
 
 CHUNK = 500  # IN 목록 크기
@@ -127,13 +132,14 @@ def _one(values):
 
 def _sfdc(edw, paths):
     files = edw.q_in(
-        "SELECT f.s3_key, f.created_at, cv.ContentDocumentId AS doc_id, cv.CreatedDate AS cv_created "
+        "SELECT f.s3_key, f.created_at, f.content_version_id, cv.ContentDocumentId AS doc_id, cv.CreatedDate AS cv_created "
         "FROM AI.FileStorageMap f LEFT JOIN SFDC.ContentVersion cv ON cv.Id = f.content_version_id WHERE f.s3_key IN ({IN})",
         paths,
     )
     links = {}
     for r in edw.q_in(
-        "SELECT ContentDocumentId, LinkedEntityId FROM SFDC.ContentDocumentLink WHERE IsDeleted = 0 AND ContentDocumentId IN ({IN})",
+        "SELECT ContentDocumentId, LinkedEntityId FROM SFDC.ContentDocumentLink WHERE IsDeleted = 0 AND ContentDocumentId IN ({IN}) "
+        "ORDER BY ContentDocumentId, LinkedEntityId",
         [f["doc_id"] for f in files],
     ):
         links.setdefault(r["ContentDocumentId"], []).append(str(r["LinkedEntityId"] or ""))
@@ -193,7 +199,95 @@ def _sfdc(edw, paths):
             "contract_date": _date(o.get("X1st_Contract_Execution_Date__c")),
             "client_edw": accs.get(o.get("AccountId") or acc),
         }
+    hints = _sfdc_hints(edw, files, links)
+    for key, h in hints.items():
+        out.setdefault(key, {}).update(h)
     return out
+
+
+ENTITY_CLASS = {  # 운영 analyze_clues 그대로 — 개체 종류 → 분류 힌트 갈래(표에 없으면 other)
+    "IF_Log__c": "if_log",
+    "EventLogFile__c": "event_log",
+    "Task": "task",
+    "Event": "event",
+    "Quote": "quote",
+    "Opportunity": "opportunity",
+    "Account": "account",
+    "Contract": "contract",
+    "Dashboard": "dashboard",
+    "User": "user_only",
+    "Organization": "organization",
+}
+
+
+def _prefixes():
+    return json.loads((RES_ROOT / "mappings" / "sfdc_prefix.json").read_text(encoding="utf-8"))["prefixes"]
+
+
+def _hint_rows(edw, sql, values, what):
+    """힌트 칸 조회 — 서버 EDW에 칸·표가 없으면 빈 목록 + 경고(힌트만 비고 메타는 그대로)."""
+    try:
+        return edw.q_in(sql, values)
+    except Exception as e:
+        print(f"[edw_meta] 경고: 분류 힌트 {what}를 못 읽음 — 그 힌트 없이: {type(e).__name__}", file=sys.stderr, flush=True)
+        return []
+
+
+def _flag(v):
+    """SFDC 체크박스(BIT·bool·글자) → 글자('1'/'0' — 운영 프롬프트의 Real_RFP__c=1과 같게)."""
+    return None if v in (None, "") else str(int(v)) if isinstance(v, (bool, int)) else str(v)
+
+
+def _sfdc_hints(edw, files, links):
+    """운영 analyze_clues와 같은 규칙 — 연결 없음 unlinked · 모두 User면 user_only · 아니면 첫 User 아닌 연결(운영 확인: 문서마다 ≤1개)."""
+    pmap = _prefixes()
+    titles = {
+        str(r["Id"]): r["Title"]
+        for r in _hint_rows(
+            edw, "SELECT Id, Title FROM SFDC.ContentVersion WHERE Id IN ({IN})", [str(f["content_version_id"]) for f in files], "Title"
+        )
+    }
+    pick = {}
+    for f in files:
+        le = [e for e in links.get(f["doc_id"], []) if e]
+        other = [e for e in le if pmap.get(e[:3], "") != "User"]
+        h = {"title": titles.get(str(f["content_version_id"])), "entity_class": "unlinked" if not le else "user_only"}
+        if other:
+            e = other[0]
+            etype = pmap.get(e[:3], "Unknown:" + e[:3])
+            h.update(entity_id=e, entity_type=etype, entity_class=ENTITY_CLASS.get(etype, "other"))
+        pick[f["s3_key"]] = h
+    by_type = {}
+    for h in pick.values():
+        by_type.setdefault(h.get("entity_type"), []).append(h.get("entity_id"))
+    chan = {}
+    for tbl in ("Task", "Event"):
+        for r in _hint_rows(
+            edw, f"SELECT Id, Subject, Sent_Received__c FROM SFDC.{tbl} WHERE Id IN ({{IN}})", by_type.get(tbl, []), f"{tbl} Subject"
+        ):
+            chan[r["Id"]] = r
+    opp = {
+        r["Id"]: r
+        for r in _hint_rows(
+            edw,
+            "SELECT Id, StageName, Real_RFP__c, RFP_Received_Start_Date__c, RFP_Received_End_Date__c FROM SFDC.Opportunity WHERE Id IN ({IN})",
+            by_type.get("Opportunity", []),
+            "Opportunity StageName",
+        )
+    }
+    for h in pick.values():
+        c = chan.get(h.get("entity_id")) if h.get("entity_type") in ("Task", "Event") else None
+        if c:
+            h.update(subject=(c["Subject"] or "")[:120], sent_received__c=c["Sent_Received__c"])
+        o = opp.get(h.get("entity_id")) if h.get("entity_type") == "Opportunity" else None
+        if o:
+            h.update(
+                stagename=o["StageName"],
+                real_rfp__c=_flag(o["Real_RFP__c"]),
+                rfp_received_start_date__c=_date(o["RFP_Received_Start_Date__c"]),
+                rfp_received_end_date__c=_date(o["RFP_Received_End_Date__c"]),
+            )
+    return pick
 
 
 def _crms(edw, paths):
@@ -242,112 +336,16 @@ def _las(edw, paths):
             "contract_date": _date(c.get("ContractDate")) or _date(r["signed_date"]),
             "client_edw": c.get("PartnerCorpName") or None,  # 지금은 모두 비어 있음(상대사 출처 미정 — G2)
         }
-    return out
-
-
-# ── 분류 근거(pl-33, 사용자 11-02 — 운영의 10-21 고정 파일 대신 문서마다 EDW에서 새로) ──────────────────
-_ENTITY = {"006": "영업 기회", "00T": "Task", "00U": "Event", "0Q0": "견적(Quote)", "001": "계정"}
-
-
-def _try(edw, sql, values, what):
-    """칸·표 이름이 서버 EDW와 다를 수 있는 조회 — 실패하면 빈 목록 + 경고(그 근거만 빠짐)."""
-    try:
-        return edw.q_in(sql, values)
-    except Exception as e:
-        print(f"[edw_meta] 경고: 분류 근거 {what}를 못 읽음 — 그 근거 없이: {type(e).__name__}", file=sys.stderr, flush=True)
-        return []
-
-
-def classify_context(docs, edw=None):
-    """docs = [(source_system, file_path)] → {file_path: 분류 근거}. SFDC: 제목(ContentVersion.Title)·연결된 개체 종류·채널(Task/Event 제목)·
-    영업 기회 이름·단계, LAS: 품의 제목·상대방(계약 대장 — 최신 판). 사슬은 fetch()와 같다(FileStorageMap → …). 못 구한 칸은 뺀다.
-    EDW를 못 열면 {} + 경고(분류는 파일 이름·본문만으로)."""
-    own = edw is None
-    try:
-        edw = edw or _Edw()
-    except Exception as e:
-        print(f"[edw_meta] 경고: EDW를 못 엶 — 분류 근거 없이({len(docs)}건): {type(e).__name__}", file=sys.stderr, flush=True)
-        return {}
-    by_src = {}
-    for sys_, path in docs:
-        by_src.setdefault(ST.source_of(sys_), []).append(path)
-    out = {}
-    try:
-        if by_src.get("sfdc"):
-            out.update(_sfdc_ctx(edw, by_src["sfdc"]))
-        if by_src.get("las"):
-            out.update(_las_ctx(edw, by_src["las"]))
-    finally:
-        if own:
-            edw.close()
-    return out
-
-
-def _sfdc_ctx(edw, paths):
-    files = edw.q_in(
-        "SELECT f.s3_key, f.content_version_id, cv.ContentDocumentId AS doc_id "
-        "FROM AI.FileStorageMap f LEFT JOIN SFDC.ContentVersion cv ON cv.Id = f.content_version_id WHERE f.s3_key IN ({IN})",
-        paths,
-    )
-    titles = {
-        str(r["Id"]): r["Title"]
-        for r in _try(edw, "SELECT Id, Title FROM SFDC.ContentVersion WHERE Id IN ({IN})", [f["content_version_id"] for f in files], "제목")
-    }
-    links = {}
-    for r in edw.q_in(
-        "SELECT ContentDocumentId, LinkedEntityId FROM SFDC.ContentDocumentLink WHERE IsDeleted = 0 AND ContentDocumentId IN ({IN})",
-        [f["doc_id"] for f in files],
-    ):
-        links.setdefault(r["ContentDocumentId"], []).append(str(r["LinkedEntityId"] or ""))
-    ents = [e for v in links.values() for e in v]
-    subj = {}
-    for tbl, pre in (("Task", "00T"), ("Event", "00U")):
-        for r in _try(
-            edw, f"SELECT Id, Subject FROM SFDC.{tbl} WHERE Id IN ({{IN}})", [e for e in ents if e.startswith(pre)], f"{tbl} 제목"
-        ):
-            subj[r["Id"]] = r["Subject"]
-    meta, _ = fetch([("SFDC", p) for p in paths], edw)
-    opps = {
-        r["Id"]: r
-        for r in _try(
+    appr = {  # 분류 힌트(pl-33) — 품의 제목. 최신 판의 것(ContractID로 짝지음)
+        r["ContractID"]: r["ApprovalName"]
+        for r in _hint_rows(
             edw,
-            "SELECT Id, Name, StageName FROM SFDC.Opportunity WHERE Id IN ({IN})",
-            [m.get("sf_op_id") for m in meta.values()],
-            "기회 단계",
+            "SELECT ContractID, ApprovalName FROM LAS.Contract WHERE ContractID IN ({IN})",
+            [c["ContractID"] for c in contracts.values()],
+            "ApprovalName",
         )
     }
-    out = {}
-    for f in files:
-        le = links.get(f["doc_id"], [])
-        kinds = sorted({_ENTITY.get(e[:3], f"기타({e[:3]})") for e in le if e})
-        chans = [f"{'Task' if e.startswith('00T') else 'Event'}: {subj[e]}" for e in le if subj.get(e)]
-        o = opps.get((meta.get(f["s3_key"]) or {}).get("sf_op_id")) or {}
-        ctx = {
-            "title": titles.get(str(f["content_version_id"])),
-            "entities": ", ".join(kinds) or None,
-            "channel": "; ".join(chans) or None,
-            "opportunity": o.get("Name"),
-            "stage": o.get("StageName"),
-        }
-        out[f["s3_key"]] = {k: v for k, v in ctx.items() if v}
-    return out
-
-
-def _las_ctx(edw, paths):
-    rows = edw.q_in("SELECT s3_key, manage_no FROM AI.FileStorageMap_LAS WHERE s3_key IN ({IN})", paths)
-    nos = [r["manage_no"] for r in rows]
-    best = {}
-    cols = "ManageNo, ContractID, IsActive, PartnerCorpName, ApprovalName"
-    found = _try(edw, f"SELECT {cols} FROM LAS.Contract WHERE ManageNo IN ({{IN}})", nos, "품의 제목")
-    if not found:  # 품의 제목 칸이 없는 EDW — 상대방만
-        found = edw.q_in("SELECT ManageNo, ContractID, IsActive, PartnerCorpName FROM LAS.Contract WHERE ManageNo IN ({IN})", nos)
-    for c in found:
-        b = best.get(c["ManageNo"])  # 최신 판 — IsActive 먼저, 그다음 ContractID 큰 것(fetch()의 _las와 같음)
-        if b is None or (int(c["IsActive"] or 0), c["ContractID"] or 0) > (int(b["IsActive"] or 0), b["ContractID"] or 0):
-            best[c["ManageNo"]] = c
-    out = {}
     for r in rows:
-        c = best.get(r["manage_no"]) or {}
-        ctx = {"approval_name": c.get("ApprovalName"), "counterparty": c.get("PartnerCorpName")}
-        out[r["s3_key"]] = {k: v for k, v in ctx.items() if v}
+        c = contracts.get(r["manage_no"]) or {}
+        out[r["s3_key"]]["approvalname"] = appr.get(c.get("ContractID"))
     return out

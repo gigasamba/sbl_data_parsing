@@ -204,7 +204,6 @@ def _classify(db, bundle, docs, rep_dir):
     .md와 같은 글(rep_dir의 대표 결과 → render_md, 없으면 묶음 full_text). 반환: 분류에 실패한 file_path 집합(적재하지 않음)."""
     from common.store.db.models import search_tables as ST
     from pipeline.load import classify as CL
-    from pipeline.load import edw_meta
 
     targets = [d for d in docs if ST.source_of(d.get("source_system")) in CL.LABELS]
     if not targets:
@@ -219,9 +218,8 @@ def _classify(db, bundle, docs, rep_dir):
         except Exception:  # 표가 아직 없음(처음 적재)
             rows = []
         existing.update({r["file_path"]: r["doc_class"] for r in rows if r["doc_class"]})
-    todo = [d for d in targets if d["file_path"] not in existing and not d.get("doc_class")]
-    ctx = edw_meta.classify_context([(d.get("source_system"), d["file_path"]) for d in todo]) if todo else {}
-    return CL.apply(targets, CL.rep_texts(todo, rep_dir), ctx, existing, audit_path=Path(bundle) / "classify_audit.jsonl")
+    todo = [d for d in targets if d["file_path"] not in existing and not d.get("doc_class")]  # 힌트는 문서 행(edw_meta가 채운 칸)
+    return CL.apply(targets, CL.rep_inputs(todo, rep_dir), existing, audit_path=Path(bundle) / "classify_audit.jsonl")
 
 
 def _elsewhere(dbs, docs, by_src):

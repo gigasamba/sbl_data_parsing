@@ -65,3 +65,5 @@ CREATE TABLE FileManager (
     CreateDate TEXT
 ) STRICT;
 INSERT INTO FileManager SELECT las_file_id, '2025-03-02 11:00:00' FROM FileStorageMap_LAS;
+-- [SYNTHETIC] 11-02(pl-33) — 분류 힌트 품의 제목(운영 노트의 칸 이름). 대역에는 LAS 문서가 아직 없어 행이 없다(갈래 시험은 tests/server/pipeline/test_classify.py test_edw_hint_columns).
+ALTER TABLE Contract ADD COLUMN ApprovalName TEXT;

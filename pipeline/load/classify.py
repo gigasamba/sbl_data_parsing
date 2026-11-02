@@ -1,10 +1,10 @@
-"""분류(pl-33, 사용자 11-02) — SFDC·LAS 문서에 종류 라벨 `doc_class`를 붙인다. 판단은 운영 분류와 같게(라벨 집합·지시문 구조·근거·
-경계 규칙), 흐름은 적재와 하나다: 적재(pgvector_load)가 EDW 메타를 붙인 직후, gold에 넣기 전에 한다 — 고르는 규칙을 따로 두지 않는다
-(적재가 고른 문서 그대로 · 같은 내용은 묶음이 한 문서만 남김 · 파싱 안 된 문서는 gold에 오지 않음).
+"""분류(pl-33, 사용자 11-02) — SFDC·LAS 문서에 종류 라벨 `doc_class`를 붙인다. 운영 분류와 같게: 지시문은 운영 글자 그대로
+(resources/prompts/pipeline/classify_sfdc·classify_las), 사용자 쪽 글(문서 정보·LAS 키워드 근거·본문 8,000자)도 운영 코드와 같은 모양.
+흐름은 적재와 하나다 — 적재(pgvector_load)가 EDW 메타(edw_meta — 분류 힌트 칸 포함)를 붙인 직후, gold에 넣기 전. 힌트는 그 문서 행의
+gold 칸에서 읽는다. 고르는 규칙을 따로 두지 않는다(같은 내용은 묶음이 한 문서만 · 파싱 안 된 문서는 gold에 안 옴).
 · 모델은 `llm.chat`(역할 llm — 예산 장부, 서버는 내부 GLM, PC는 외부 허용·가짜 LLM). effort는 설정 `common.models.llm.extra_body`.
-· 본문 근거 = 게시가 올리는 대표 결과 .md(render_md — silver와 같은 글)의 앞 TEXT_CHARS자.
-· 답은 JSON {"class", "confidence"} — 라벨 집합 밖이면 실패. 다시 묻지 않는다(재시도 없음). 실패한 문서는 그 문서의 적재 실패로 본다:
-  gold에 넣지 않아 gold_version이 안 적히고 다음 정상 실행이 다시 고른다(사용자 11-02). 감사 한 줄.
+· 답은 JSON의 class만 읽는다(확신도는 쓰지 않음 — 사용자 11-02). 라벨 집합 밖이면 실패. 다시 묻지 않는다. 실패한 문서는 그 문서의
+  적재 실패 — gold에 넣지 않아 gold_version이 안 적히고 다음 정상 실행이 다시 고른다. 감사 한 줄.
 · 이미 라벨이 있는 문서는 덮지 않는다."""
 
 import json
@@ -14,110 +14,216 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 TEXT_CHARS = 8000
+FRONT = 2000  # LAS 키워드 근거 ② — 본문 앞 글자 수(운영 그대로)
 LABELS = {
     "sfdc": ("RFI", "RFP", "RFI+RFP", "Proposal", "Other"),
     "las": ("MSA", "PSA", "QAG", "LOI", "Amendment", "Assignment Letter", "Other"),
 }
 AGENT = {"sfdc": "classify_sfdc", "las": "classify_las"}
-ALIASES = {"RFP+RFI": "RFI+RFP"}
+SFDC_ALIASES = {
+    "rfi": "RFI",
+    "rfp": "RFP",
+    "rfi+rfp": "RFI+RFP",
+    "rfp+rfi": "RFI+RFP",
+    "proposal": "Proposal",
+    "other": "Other",
+}  # 운영 그대로
 MAX_TOKENS = 4096
 
 
-# ── 라벨·모델 글자 ─────────────────────────────────────────────────────────────
-def _norm(s):
-    return re.sub(r"\s+", "", str(s)).upper()
-
-
-def label_of(raw, src):
-    """모델이 고른 라벨 글자 → 집합 안 라벨(대소문자·공백·별칭 바로잡음) 또는 None."""
-    if not isinstance(raw, str) or not raw.strip():
-        return None
-    k = _norm(raw)
-    k = {_norm(x): _norm(y) for x, y in ALIASES.items()}.get(k, k)
-    return {_norm(x): x for x in LABELS[src]}.get(k)
-
-
+# ── 답 읽기 ─────────────────────────────────────────────────────────────────────
 def parse_answer(text, src):
-    """응답 글자 → 라벨 또는 None. 코드 울타리를 벗기고 첫 JSON 객체의 class를 읽는다(참거짓·숫자·NaN은 None)."""
-    if not isinstance(text, str):
-        return None
-    t = re.sub(r"```(?:json)?", "", text)
+    """응답 → 라벨 또는 None. 운영 parse_answer와 같은 찾기(코드 울타리를 벗기고 class(SFDC는 doc_class도)가 있는 첫 JSON 객체).
+    SFDC는 운영 별칭표(소문자·공백 뺌), LAS는 집합 안 글자(앞뒤 공백 정리 — 운영은 집합 확인이 없었지만 집합 밖은 실패, 사용자 11-02)."""
+    s = text.strip() if isinstance(text, str) else ""
+    if s.startswith("```"):
+        s = re.sub(r"^```[A-Za-z0-9_-]*\s*", "", s)
+        s = re.sub(r"\s*```[A-Za-z0-9_-]*\s*$", "", s).strip()
+    keys = ("class", "doc_class") if src == "sfdc" else ("class",)
     dec = json.JSONDecoder()
-    for m in re.finditer(r"\{", t):
+    i = 0
+    while (j := s.find("{", i)) != -1:
+        i = j + 1
         try:
-            obj, _ = dec.raw_decode(t[m.start() :])
+            obj, _ = dec.raw_decode(s, j)
         except ValueError:
             continue
-        if isinstance(obj, dict) and "class" in obj:
-            return label_of(obj.get("class"), src)
+        if isinstance(obj, dict) and any(k in obj for k in keys):
+            raw = next((obj[k] for k in keys if obj.get(k)), None)
+            if not isinstance(raw, str):
+                return None
+            if src == "sfdc":
+                return SFDC_ALIASES.get(raw.strip().lower().replace(" ", ""))
+            return raw.strip() if raw.strip() in LABELS["las"] else None
     return None
 
 
-# ── LAS 키워드 근거(코드가 미리 찾아 지시문에 보여 줌 — 판단은 모델) ─────────────────────
-_TYPES = {  # 계약 종류 → 본문·파일 이름에서 찾는 전체 이름
-    "MSA": (r"master\s+services?\s+agreement",),
-    "PSA": (r"product\s+specific\s+agreement", r"project\s+specific\s+agreement"),
-    "QAG": (r"quality\s+agreement",),
-    "LOI": (r"letter\s+of\s+intent",),
-    "Amendment": (r"amendment",),
-    "Assignment Letter": (r"assignment", r"novation"),
+# ── SFDC 제목 키워드 묶음(운영 analyze_clues 그대로 — 분류 때 계산) ─────────────────────
+FAMILIES = {
+    "rfi": re.compile(r"\brfi\b|request for information", re.I),
+    "rfp": re.compile(r"\brfp\b|request for( a)? proposal", re.I),
+    "rfq": re.compile(r"\brfq\b|\bbid(s)?\b|tender", re.I),
+    "proposal": re.compile(r"proposal|제안", re.I),
+    "pricing": re.compile(r"pricing|quotation|견적|\bprice\b|시세", re.I),
+    "legal": re.compile(r"\bloi\b|\bpsa\b|\bmsa\b|\bcda\b|\bnda\b|agreement|contract|품의|계약|\bsow\b", re.I),
+    "meeting": re.compile(
+        r"meeting|call report|minutes|회의|conference|dcat|jpm|bio ?asia|peg ?s|cphi|site visit|tc with|partnering", re.I
+    ),
+    "tech": re.compile(
+        r"tech(nology)? transfer|process description|purification|upstream|downstream|cell bank|batch record|\bbds\b|fermentation|chromatography",
+        re.I,
+    ),
+    "system": re.compile(r"^(log-|login|reportexport|lightningpageview|dashboard|report-)", re.I),
 }
-_NAME_ABBR = {"QAG": r"\bqag\b", "PSA": r"\bpsa\b", "LOI": r"\bloi\b"}  # 파일 이름 약어 — MSA는 전체 이름만
-_AMEND = r"amend|amendment|변경"
-_MEMO = r"\bmemo\b|\bbefore\b|\bdecision\b|request\s+for|\breport\b|검토|보고"
 
 
-def las_signals(file_name, text):
-    """LAS 키워드 근거 줄들 — ① 본문 앞 300자 자기 이름 ② 공백 정리한 앞 2,000자의 계약 종류 전체 이름 ③ 파일 이름 키워드
-    ④ 파일 이름 변경 키워드, 그리고 경고(보고서·메모 같은 제목, 두 종류 이상)."""
-    head300 = text[:300]
-    m = re.search(r"\bTHIS\s+([A-Za-z &\-]{2,80}?)\s+AGREEMENT\b", head300, re.I)
-    lines = [f"① 자기 이름(본문 앞 300자): {('THIS ' + m.group(1).strip() + ' AGREEMENT') if m else '뚜렷한 자기 이름 없음'}"]
-    body = re.sub(r"\s+", " ", text[:2000]).lower()
-    in_body = [k for k, pats in _TYPES.items() if any(re.search(p, body) for p in pats)]
-    lines.append(f"② 본문 앞 2,000자의 계약 종류 이름: {', '.join(in_body) or '없음'}")
-    name = re.sub(r"_+", " ", file_name or "").lower()
-    in_name = [k for k, pats in _TYPES.items() if any(re.search(p, name) for p in pats)]
-    in_name += [k for k, p in _NAME_ABBR.items() if re.search(p, name) and k not in in_name]
-    lines.append(f"③ 파일 이름 키워드: {', '.join(in_name) or '없음'}")
-    lines.append(f"④ 파일 이름 변경 키워드: {'있음' if re.search(_AMEND, name) else '없음'}")
-    if re.search(_MEMO, name):
-        lines.append("경고: 파일 이름이 보고서·메모처럼 보임")
-    kinds = set(in_body) | set(in_name)
-    if len(kinds) >= 2:
-        lines.append(f"경고: 두 종류 이상이 보임({', '.join(sorted(kinds))}) — 확신도는 0.80 이하로")
-    return lines
+def fams(title):
+    """제목 → 맞는 묶음 이름들(FAMILIES 순서). system이 있으면 system만."""
+    hits = [k for k in FAMILIES if FAMILIES[k].search(title or "")]
+    return ["system"] if "system" in hits else hits
 
 
-# ── 지시문 사용자 쪽 ───────────────────────────────────────────────────────────
-def _fmt(file_name):
-    return Path(file_name or "").suffix.lstrip(".").lower() or "알 수 없음"
+# ── LAS 키워드 근거(운영 extract_evidence 그대로 — 정규식 글자 포함) ─────────────────────
+MAIN_KW = [
+    ("QAG", re.compile(r"quality\s+agreements?|품질계약|품질협정", re.I), re.compile(r"(?<![A-Za-z])QA[GA](?![A-Za-z])", re.I)),
+    ("PSA", re.compile(r"product\s+specific\s+agreements?", re.I), re.compile(r"(?<![A-Za-z])PSA(?![A-Za-z])", re.I)),
+    ("MSA", re.compile(r"master\s+(?:services?|purchase)\s+agreements?|주계약|기본계약", re.I), None),
+    ("LOI", re.compile(r"letter\s+of\s+intent|의향서|양해각서", re.I), re.compile(r"(?<![A-Za-z])LOI(?![A-Za-z])", re.I)),
+]
+NOV_PAT = re.compile(r"(?<![A-Za-z])novation(?![A-Za-z])|assignment\s+and\s+assumption|계약양도", re.I)
+OTHER_PAT = re.compile(
+    r"(?<![A-Za-z])(NDA|CDA|MTA|TTA|TMA|MOU|SOWSoW|PSR|LOU)(?![A-Za-z])|"  # 'SOWSoW'는 운영 글자 그대로(같은 결과를 내려고 고치지 않음)
+    r"statement\s+of\s+work|scope\s+of\s+work|work\s+order|service\s+order|order\s+form|"
+    r"termination\s+agre|sequence\s+transfer|side\s*letter|letter\s+agreement|"
+    r"letter\s+of\s+understanding|memorandum\s+of\s+understanding|"
+    r"material\s+transfer\s+agre|non[-\s]?disclosure\s+agre|"
+    r"confidential(ity)?\s+disclosure\s+agre|partnering\s+agre|"
+    r"비밀유지|시설대|리스|보험|용역|품의|결과보고",
+    re.I,
+)
+DR_PAT = re.compile(r"decision\s+report|(?<![A-Za-z])DR(?=[ _\-.(\d\]])|품의|결과보고", re.I)
+REFUSE_PAT = re.compile(
+    r"memo|before|month\s+of|dec\s+\d|decision(?!\s+report\s+for\s+(MSA|PSA|QAG|LOI))|"
+    r"scope\s+of\s+work(?!\s*agreement)|request\s+for|draft\s+for|"
+    r"prior\s+to|in\s+preparation|비용|예산",
+    re.I,
+)
+AMEND_PAT = re.compile(r"amendment|addendum|(?<![A-Za-z])AM(?=\s*No)|변경합의|개정", re.I)
+SELF_ID = [
+    ("MSA", r"this\s+master\s+(?:development\s+)?services?\s+agreement|master\s+(?:development\s+)?services?\s+agreement\s+between"),
+    ("PSA", r"this\s+product\s+specific\s+agreement|this\s+supply\s+agreement|product\s+specific\s+agreement\s+between"),
+    ("QAG", r"this\s+quality\s+agreement|quality\s+agreement\s+between|this\s+technical\s*[-\s]*quality"),
+    ("LOI", r"this\s+letter\s+of\s+intent|letter\s+of\s+intent\s+between"),
+    ("Amendment", r"this\s+amendment|amendment\s+(no|number)\s*\d"),
+    ("Other", r"this\s+memorandum|this\s+decision\s+report|품의|re\s*:|memo"),
+]
+CORE_TYPES = {"MSA", "PSA", "QAG", "LOI", "Amendment", "Novation", "Other-type", "DR"}
 
 
-def user_message(src, doc, ctx, text):
-    """문서 하나의 사용자 쪽 글 — 문서 정보 묶음 + (LAS) 키워드 근거 + 본문 앞 TEXT_CHARS자."""
-    name = doc.get("original_filename") or Path(doc["file_path"]).name
-    info = [f"- 원본 파일 이름: {name}", f"- 파일 형식: {_fmt(name)}"]
-    if src == "sfdc":
-        if ctx.get("title"):
-            info.insert(0, f"- 제목: {ctx['title']}")
-        for k, label in (
-            ("entities", "연결된 SFDC 개체"),
-            ("channel", "채널(제목·방향)"),
-            ("opportunity", "영업 기회"),
-            ("stage", "기회 단계"),
-        ):
-            if ctx.get(k):
-                info.append(f"- {label}: {ctx[k]}")
-    else:
-        for k, label in (("approval_name", "품의 제목"), ("counterparty", "상대방")):
-            if ctx.get(k):
-                info.append(f"- {label}: {ctx[k]}")
-    parts = ["## 문서 정보", *info]
-    if src == "las":
-        parts += ["", "## 키워드 근거", *[f"- {x}" for x in las_signals(name, text)]]
-    parts += ["", f"## 본문(앞 {TEXT_CHARS}자)", text[:TEXT_CHARS]]
-    return "\n".join(parts)
+def las_evidence(fn, body):
+    """운영 extract_evidence(fn, body)와 같은 글 — Signal ①~④·충돌 경고."""
+    title = fn.replace("_", " ")
+    front = (body or " ").replace("_", " ")[:FRONT]
+    body_start = (body or " ").strip()[:300].replace("_", " ")
+    lab0 = next((lab for lab, pat in SELF_ID if re.search(pat, body_start, re.I)), None)
+    opening = (
+        f"  Signal①(BODY OPENING): Document starts with '{lab0}' self-identification"
+        if lab0
+        else f"  Signal①(BODY OPENING): '{body_start[:80]}' (no clear self-ID in first line)"
+    )
+    b2 = []
+    for name, fp, _ap in MAIN_KW:
+        m = fp.search(front)
+        if m:
+            b2.append(f"{name}('{m.group(0)[:16]}')")
+    if NOV_PAT.search(front):
+        b2.append("Novation/Assignment")
+    if OTHER_PAT.search(front):
+        b2.append("Other-type")
+    t3 = []
+    for name, fp, ap in MAIN_KW:
+        m1 = fp.search(title)
+        m2 = ap.search(title) if ap else None
+        if m1:
+            t3.append(f"{name}(full:'{m1.group(0)[:14]}')")
+        elif m2:
+            t3.append(f"{name}(abbr:'{m2.group(0)[:8]}')")
+    if NOV_PAT.search(title):
+        t3.append("Novation")
+    if OTHER_PAT.search(title):
+        t3.append("Other-type")
+    if DR_PAT.search(title):
+        t3.append("DR/DecisionReport")
+    amend = bool(AMEND_PAT.search(title))
+    sig = ({lab0} if lab0 else set()) | {e.split("(")[0] for e in b2 + t3}
+    found = {x for x in sig if x in CORE_TYPES or x.startswith("Other")}
+    conflicts = []
+    if len(found) >= 2:
+        conflicts.append(f"⚠ MULTIPLE TYPE SIGNALS: {', '.join(sorted(found))}")
+    if amend:
+        conflicts.append("⚠ Amendment keyword present — check parent")
+    r = REFUSE_PAT.search(title)
+    if r:
+        conflicts.append(f"⚠ Title reference keyword '{r.group(0)}' — may be REPORT/MEMO context")
+    ev = [
+        "## Keyword Evidence (evaluate by Signal Priority ①→②→③→④)",
+        opening,
+        f"  Signal②(BODY first-2000): {'; '.join(b2) if b2 else '(none)'}",
+        f"  Signal③(TITLE keywords): {'; '.join(t3) if t3 else '(none)'}",
+    ]
+    if amend:
+        ev.append("  Signal④(AMENDMENT): YES — title contains amendment keyword")
+    if conflicts:
+        ev += ["", *conflicts, "  → SIGNALS CONFLICT — you MUST lower confidence to ≤0.80"]
+    return "\n".join(ev)
+
+
+# ── 사용자 쪽 글(운영 코드와 같은 모양) ──────────────────────────────────────────────
+def _s(v):
+    return "" if v is None else str(v)
+
+
+def sfdc_user(doc, rep):
+    """운영 build_user_prompt와 같은 글 — 힌트는 문서 행(gold 칸). 제목이 비면 원본 파일 이름. rep = {text, format, engine}."""
+    fn = Path(doc["file_path"]).name
+    title = doc.get("title") or fn
+    lines = [
+        "## Document metadata",
+        f"- Title: {title}",
+        f"- Original filename: {fn}",
+        f"- File format: {_s(rep.get('format'))} (representative parse engine: {_s(rep.get('engine'))})",
+    ]
+    if doc.get("entity_class"):  # 운영 `if f:` — EDW 사슬이 이 파일을 찾았으면 늘 있음(연결 없음도 unlinked)
+        lines.append(f"- SFDC entity: type={_s(doc.get('entity_type'))} class={doc['entity_class']} id={_s(doc.get('entity_id'))}")
+        direction = _s(doc.get("sent_received__c")).strip()
+        if direction:
+            lines.append(f"- Communication channel: direction={direction}, subject={_s(doc.get('subject'))[:300]}")
+        if _s(doc.get("stagename")).strip():
+            lines.append(
+                f"- Opportunity: stage={doc['stagename']}, Real_RFP__c={_s(doc.get('real_rfp__c'))}, "
+                f"rfp_window={_s(doc.get('rfp_received_start_date__c'))}~{_s(doc.get('rfp_received_end_date__c'))}"
+            )
+        kw = "|".join(fams(title))
+        if kw:
+            lines.append(f"- Title keyword families: {kw}")
+    lines += ["", f"## Document text (first {TEXT_CHARS} chars of parsed Markdown)", rep["text"][:TEXT_CHARS]]
+    return "\n".join(lines)
+
+
+def las_user(doc, rep):
+    """운영 LAS 사용자 쪽 글과 같은 모양 — 상대방은 gold client_edw(LAS.Contract.PartnerCorpName)."""
+    fn = doc["file_path"].split("/")[-1]
+    up = ["## Document metadata", f"- Original filename: {fn}", f"- File format: {_s(rep.get('format'))}"]
+    if doc.get("approvalname"):
+        up.append(f"- Approval title: {doc['approvalname']}")
+    if doc.get("client_edw"):
+        up.append(f"- Counterparty: {doc['client_edw']}")
+    body = rep["text"]
+    up += ["", las_evidence(fn, body), f"## Document text (first {TEXT_CHARS} chars)", body[:TEXT_CHARS]]
+    return "\n".join(up)
+
+
+USER = {"sfdc": sfdc_user, "las": las_user}
 
 
 # ── 분류 ─────────────────────────────────────────────────────────────────────
@@ -127,7 +233,7 @@ def _system(src):
     return load(AGENT[src], AGENT[src])
 
 
-def classify_one(src, doc, ctx, text, chat=None):
+def classify_one(src, doc, rep, chat=None):
     """문서 하나 → (라벨 또는 None, 오류 글 또는 None). LLM 한 번, 다시 묻지 않음."""
     if chat is None:
         from common.ai import llm
@@ -135,20 +241,20 @@ def classify_one(src, doc, ctx, text, chat=None):
         chat = llm.chat
     try:
         out = chat(
-            [{"role": "system", "content": _system(src)}, {"role": "user", "content": user_message(src, doc, ctx, text)}],
+            [{"role": "system", "content": _system(src)}, {"role": "user", "content": USER[src](doc, rep)}],
             max_tokens=MAX_TOKENS,
             json_mode=True,
             agent=AGENT[src],
         )
-    except Exception as e:  # 모델 장애·예산 초과 — NULL(재시도 없음)
+    except Exception as e:  # 모델 장애·예산 초과 — 실패(재시도 없음)
         return None, f"{type(e).__name__}: {str(e)[:200]}"
     lab = parse_answer(out, src)
     return lab, (None if lab else f"라벨 집합 밖·읽을 수 없는 답: {str(out)[:200]!r}")
 
 
-def apply(docs, texts, contexts, existing, audit_path=None, chat=None, now=None):
-    """적재 직전 — docs(묶음 문서, 원천 SFDC·LAS만 대상)에 doc_class를 채운다.
-    texts {file_path: 본문}, contexts {file_path: 문서 정보}, existing {file_path: 이미 gold에 있는 라벨 — 덮지 않음}.
+def apply(docs, reps, existing, audit_path=None, chat=None, now=None):
+    """적재 직전 — docs(묶음 문서 — EDW 메타·힌트 칸이 붙은 행, 원천 SFDC·LAS만 대상)에 doc_class를 채운다.
+    reps {file_path: {text, format, engine}}, existing {file_path: 이미 gold에 있는 라벨 — 덮지 않음}.
     반환: 분류에 실패한 file_path 집합 — 적재가 그 문서를 넣지 않는다(다음 정상 실행이 다시 고름)."""
     from common.store.db.models import search_tables as ST
 
@@ -162,11 +268,11 @@ def apply(docs, texts, contexts, existing, audit_path=None, chat=None, now=None)
         if existing.get(fp) or d.get("doc_class"):  # 이미 라벨 있음(gold 또는 묶음) — 덮지 않음(운영과 같음)
             d["doc_class"] = existing.get(fp) or d["doc_class"]
             continue
-        text = texts.get(fp)
-        if not text:
+        rep = reps.get(fp) or {}
+        if not (rep.get("text") or "").strip():
             lab, err = None, "대표 결과 본문 없음"
         else:
-            lab, err = classify_one(src, d, contexts.get(fp) or {}, text, chat)
+            lab, err = classify_one(src, d, rep, chat)
         d["doc_class"] = lab
         if lab is None:
             failed.add(fp)
@@ -182,15 +288,17 @@ def apply(docs, texts, contexts, existing, audit_path=None, chat=None, now=None)
     return failed
 
 
-def rep_texts(docs, rep_dir):
-    """대표 결과 폴더(_rep/<이름>.json) → {file_path: 게시가 올리는 .md 글(render_md — silver와 같은 글)}. 없으면 묶음의 full_text."""
+def rep_inputs(docs, rep_dir):
+    """대표 결과 폴더(_rep/<이름>.json) → {file_path: {text: 게시가 올리는 .md(render_md — silver와 같은 글), format, engine}}
+    (format·engine = ParsingMeta file_format·rep_engine과 같은 값). 대표 결과가 없으면 묶음의 full_text(형식·엔진 비움)."""
     from pipeline.load.parsing_meta import render_md
 
     out = {}
     for d in docs:
         p = Path(rep_dir) / f"{d.get('doc_name')}.json" if rep_dir else None
         if p and p.exists():
-            out[d["file_path"]] = render_md(json.loads(p.read_text(encoding="utf-8")))
+            rep = json.loads(p.read_text(encoding="utf-8"))
+            out[d["file_path"]] = {"text": render_md(rep), "format": rep.get("format"), "engine": rep.get("engine")}
         elif d.get("full_text"):
-            out[d["file_path"]] = d["full_text"]
+            out[d["file_path"]] = {"text": d["full_text"], "format": None, "engine": None}
     return out

@@ -12,7 +12,7 @@ def selftest():
     base = importlib.util.module_from_spec(sp)
     sp.loader.exec_module(base)
     assert base.HNSW_MAX == ST.HNSW_MAX  # 판 파일이 굳혀 둔 숫자 = 지금 pg.HNSW_MAX
-    assert TARGETS == ("search",) and head("search") == "0002_search" and known("search") == ["0002_search", "0001_search"]
+    assert TARGETS == ("search",) and head("search") == "0003_search" and known("search") == ["0003_search", "0002_search", "0001_search"]
     assert not list((MIGRATIONS / "versions").glob("*struct*"))  # 사용자 11-01 — struct 갈래 없음(엔진 구성·원천 목록은 파일)
     print("[selftest] dbtool — 판 폴더 갈래 search 하나·끝 판·HNSW 2000 같음 통과")
     # 판 0002가 굳혀 둔 원천별 칸 = 지금 표 정의(pl-28 — 판 파일은 모델을 import하지 않으므로 여기서 대조)
@@ -25,6 +25,11 @@ def selftest():
         assert [c.split()[0] for c in m2.CHUNK_EXTRA.get(src, "").split(", ") if c] == [n for n, _ in ST.CHUNK_EXTRA.get(src, ())], src
         assert m2.view(src).replace(" ", "") == ST.view_sql(src).replace(" ", ""), src
     print("[selftest] dbtool — 판 0002 원천별 칸·뷰 = 표 정의(5벌) 통과")
+    sp = importlib.util.spec_from_file_location("s_0003", MIGRATIONS / "versions" / "0003_doc_hints.py")
+    m3 = importlib.util.module_from_spec(sp)
+    sp.loader.exec_module(m3)
+    assert m3.DOC_HINTS_COLS == {k: [n for n, _ in v] for k, v in ST.DOC_HINTS.items()}
+    print("[selftest] dbtool — 판 0003 분류 힌트 칸 = 표 정의 통과")
     # 원천 스키마 SQLite 대역 — 표 정의에서 만든 DDL을 pg_standin이 받음(칸 순서·차원 글자 vector(n) 그대로)
     import tempfile
 
@@ -59,10 +64,11 @@ def selftest():
     for have, want in (
         (None, "없음"),
         ([], "없음"),
-        (["0002_search"], "끝"),
+        (["0003_search"], "끝"),
+        (["0002_search"], "낮음"),
         (["0001_search"], "낮음"),
         (["9999_x"], "모름"),
-        (["0002_search", "9999_x"], "모름"),
+        (["0003_search", "9999_x"], "모름"),
     ):
         fq = (
             lambda h: lambda sql, p=None: ([{"x": 1}] if h is not None else []) if "to_regclass" in sql else [{"version_num": v} for v in h]

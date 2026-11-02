@@ -272,7 +272,7 @@ $DC run --rm load migrate stamp --target search
 # ③-b 차이가 "표 없음·색인 없음·뷰 없음·뷰 칸 다름"뿐 → 없는 것만 만들고(뷰는 다시 만듦) 버전 기록(기준 리비전이 IF NOT EXISTS) — ③-a 대신
 #      $DC run --rm load migrate up --target search
 # ③-c 컬럼 이름·형식·NULL·기본값·키가 다르거나 남는 표·컬럼·색인 → stamp·up 모두 거부(종료 2) — 멈추고 출력(이름만)을 DB 담당과 협의
-# ⑤ 확인 — "판 끝 ['0002_search'] · 코드의 끝 판 0002_search … 비교: 차이 없음" + 엔진 구성 파일이 읽히는지
+# ⑤ 확인 — "판 끝 ['0003_search'] · 코드의 끝 판 0003_search … 비교: 차이 없음" + 엔진 구성 파일이 읽히는지
 $DC run --rm load migrate check --target all
 $DC run --rm load show-stack                           # 이름·sha·파일 경로 — 못 읽으면 종료 2
 ```
