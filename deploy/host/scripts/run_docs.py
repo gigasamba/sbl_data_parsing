@@ -464,13 +464,30 @@ def edw_list(keywords):
     return rows
 
 
+DONE_STATUSES = (
+    "ok",
+    "partial",
+    "skipped_dup",
+)  # 끝난 문서 = common/store/parsing_meta_db.DONE_STATUSES와 같게(C10 — 사용자 11-01, 운영 고침 11b)
+
+
+def plain_key(k):
+    """원본 키 비교용 — `s3://<버킷>/<키>` 꼴이면 버킷까지 떼고 키만(파싱 쪽 source.py가 manifest에 그렇게 남겨 ParsingMeta.source_key도
+    버킷 없는 키다 — 운영 고침 11a). 그 밖은 그대로."""
+    if k.startswith("s3://"):
+        rest = k[len("s3://") :]
+        return rest.split("/", 1)[1] if "/" in rest else ""
+    return k
+
+
 def edw_done_keys():
-    """EDW AI.ParsingMeta에서 ok·parallel 종료된 source_key 집합(2026-10-22 사용자 지정 — 재실행 skip용)."""
+    """EDW AI.ParsingMeta에서 끝난(DONE_STATUSES) source_key 집합(2026-10-22 사용자 지정 — 재실행 skip용 · 키는 plain_key로 맞춤)."""
 
     conn = _edw_connect()  # S7e1 — 설정 파일의 parsing-meta 접속(옛 코드 기본값 — 운영 접속 값·비밀 삭제, D-028 ⑨)
     cur = conn.cursor()
-    cur.execute("SELECT source_key FROM AI.ParsingMeta WHERE parse_status IN ('ok','partial')")
-    keys = {r[0] for r in cur.fetchall()}
+    marks = ", ".join(f"'{s}'" for s in DONE_STATUSES)  # 코드 상수만 SQL에 넣음(값 바인딩 없음)
+    cur.execute(f"SELECT source_key FROM AI.ParsingMeta WHERE parse_status IN ({marks})")
+    keys = {plain_key(r[0]) for r in cur.fetchall() if r[0]}
     conn.close()
     return keys
 
@@ -831,8 +848,8 @@ def main():
     if a.skip_done:
         done = edw_done_keys()
         before = len(order)
-        order = [s for s in order if rows[s]["s3_key"] not in done]
-        log(f"skip-done: {before - len(order)}건 이미 완료(ok·partial) — 남은 {len(order)}건 처리")
+        order = [s for s in order if plain_key(rows[s]["s3_key"]) not in done]
+        log(f"skip-done: {before - len(order)}건 이미 완료({'·'.join(DONE_STATUSES)}) — 남은 {len(order)}건 처리")
     if not order:
         log("처리할 문서 없음 — 종료")
         return

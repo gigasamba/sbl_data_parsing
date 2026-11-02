@@ -176,3 +176,16 @@ def test_read_settings_new_layout(tmp_path):
     f.write_text("required:\n  env: {run_env: dev}\nops:\n  host: {docker: podman}\nops:\n  nightly: {time: '01:00'}\n", encoding="utf-8")
     doc, err = RD.read_settings(f)
     assert doc == {} and "같은 칸 두 번: ops" in err  # 앱 settings와 같은 거부(layout.reject_dup_keys)
+
+
+def test_done_keys_match_parsing_meta():
+    """운영 고침 11 — 끝난 문서 상태는 ParsingMeta 쪽(DONE_STATUSES)과 같고, `s3://<버킷>/` 꼴 키도 버킷 없는 키로 비교한다."""
+    from common.store.parsing_meta_db import DONE_STATUSES
+
+    assert RD.DONE_STATUSES == DONE_STATUSES
+    for raw, want in (
+        ("SFDC/a/b.pdf", "SFDC/a/b.pdf"),  # 보통 꼴 — 그대로
+        ("s3://bkt/SFDC/a/b.pdf", "SFDC/a/b.pdf"),  # 버킷 붙은 꼴 — 파싱 쪽(source.py)처럼 버킷까지 뗌
+        ("s3://bkt", ""),
+    ):
+        assert RD.plain_key(raw) == want, (raw, RD.plain_key(raw))
