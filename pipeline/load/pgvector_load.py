@@ -162,11 +162,18 @@ def load(db, bundle, replace=False):
     for i, d in enumerate(docs):
         by_src.setdefault(ST.source_of(d.get("source_system")), []).append(i)
     dbs = src_dbs(db)
+    elsewhere = _elsewhere(dbs, docs, by_src)  # 같은 원본 경로가 다른 원천 스키마에 있는지(원천이 바뀐 문서 — 리뷰 #86)
+    if not replace:  # 어디든 이미 있으면 건너뜀(두 스키마에 같은 문서가 생기지 않게)
+        by_src = {src: [i for i in idx if docs[i]["file_path"] not in elsewhere] for src, idx in by_src.items()}
     counts = {"docs": 0, "chunks": 0, "terms": 0, "by_source": {}, "meta_missing": meta_missing}
     loaded = []
     if getattr(db, "is_standin", False):
         # 대역은 스키마마다 파일이라 공용 시퀀스가 없음 — 5벌의 가장 큰 doc_id 다음부터 번호를 줘 겹치지 않게(chunk_key·원문 도구 cursor)
         nxt = [1 + max(_max_doc_id(sdb) for sdb in dbs.values())]
+        for src, ids in _drop_plan(elsewhere, replace).items():
+            sdb = dbs[src]
+            with sdb.cn.transaction(), sdb.cn.cursor() as cur:
+                _drop_docs(cur, sdb.schema, ids, meta["dim"])
         for src, idx in by_src.items():
             sdb = dbs[src]
             with sdb.cn.transaction(), sdb.cn.cursor() as cur:
@@ -175,6 +182,8 @@ def load(db, bundle, replace=False):
             loaded += ld
     else:
         with db.cn.transaction(), db.cn.cursor() as cur:  # 한 트랜잭션 — 실패하면 5벌 모두 되돌림
+            for src, ids in _drop_plan(elsewhere, replace).items():
+                _drop_docs(cur, dbs[src].schema, ids, meta["dim"])
             for src, idx in by_src.items():
                 c, ld = _load_src(cur, dbs[src].schema, src, docs, idx, chunks, vecs, meta, replace)
                 _add(counts, src, c)
@@ -185,6 +194,41 @@ def load(db, bundle, replace=False):
 
     runlog.note(f"적재 {json.dumps({'bundle': str(B), 'meta': meta, 'counts': counts}, ensure_ascii=False, default=str)}")
     return counts
+
+
+def _elsewhere(dbs, docs, by_src):
+    """원본 경로 → [(원천, doc_id)] — 이번 묶음 문서가 **목표가 아닌** 원천 스키마에 이미 있는 곳(원천이 바뀐 문서). 표가 없는 스키마는 건너뜀."""
+    target = {docs[i]["file_path"]: src for src, idx in by_src.items() for i in idx}
+    out = {}
+    for src, sdb in dbs.items():
+        try:
+            rows = sdb.q(f"SELECT file_path, doc_id FROM {sdb.schema}.doc WHERE file_path = ANY(%s)", (sorted(target),))
+        except Exception:
+            continue
+        for r in rows:
+            if target.get(r["file_path"]) != src:
+                out.setdefault(r["file_path"], []).append((src, r["doc_id"]))
+    return out
+
+
+def _drop_plan(elsewhere, replace):
+    """--replace일 때만 — 원천 → 지울 doc_id들(다른 원천 스키마에 남은 옛 사본)."""
+    plan = {}
+    for locs in elsewhere.values() if replace else ():
+        for src, did in locs:
+            plan.setdefault(src, []).append(did)
+    return plan
+
+
+def _drop_docs(cur, s, ids, dim):
+    """원천 스키마 s에서 문서들을 지움(키워드 색인·문서 빈도 포함, chunk는 CASCADE) — 그 스키마의 BM25 통계도 다시 셈."""
+    drop_terms(cur, s, ids)
+    cur.execute(f"DELETE FROM {_tbl(s, 'doc')} WHERE doc_id = ANY(%s)", (ids,))
+    cur.execute(
+        f"""INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len, dim) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0), %s FROM {s}.chunk
+                    ON CONFLICT (id) DO UPDATE SET n_chunks = EXCLUDED.n_chunks, avg_len = EXCLUDED.avg_len, dim = EXCLUDED.dim""",
+        (dim,),
+    )
 
 
 def _max_doc_id(sdb):

@@ -18,13 +18,13 @@ from pipeline.load import pgvector_load as M
 DIM = 4
 
 
-def _bundle(paths, tmp):
+def _bundle(paths, tmp, source_system="SFDC"):
     d = Path(tempfile.mkdtemp(dir=tmp))
     (d / "meta.json").write_text(json.dumps({"dim": DIM, "embed_model": "test"}), encoding="utf-8")
     docs = [
         {
             "file_path": p,
-            "source_system": "SFDC",
+            "source_system": source_system,
             "summary": p,
             "clients": ["A사"],
             "doc_class": "RFP",
@@ -100,6 +100,9 @@ def _run_twice(S, tmp):
         sf = PS.StandinPG(f"{S}_sfdc")  # 원천 스키마(pl-28) — SFDC 문서가 들어감
         with sf.cn.cursor() as cur:
             cur.execute(standin_script(f"{S}_sfdc", DIM))
+        la = PS.StandinPG(f"{S}_las")  # 원천이 바뀐 문서가 옮겨 갈 곳
+        with la.cn.cursor() as cur:
+            cur.execute(standin_script(f"{S}_las", DIM))
         with patch.object(M, "pg_connect", return_value=db), patch.object(PMDB, "make_db", lambda role: PMDB.SqliteStore(str(pm_path))):
             M.main(["load", "--bundle", str(_bundle(["SFDC/u/a.txt", "SFDC/u/b.txt"], tmp))])
             M.main(
@@ -119,6 +122,11 @@ def _run_twice(S, tmp):
                 f"SELECT COUNT(*) AS n FROM {S2}.chunk_term t JOIN {S2}.chunk c ON c.chunk_id = t.chunk_id "
                 f"JOIN {S2}.doc d ON d.doc_id = c.doc_id WHERE d.file_path = 'SFDC/u/b.txt'",
             )
+            moved = []  # (경우, sfdc에 있나, las에 있나) — 같은 원본 경로의 원천이 SFDC → LAS로 바뀜(리뷰 #86)
+            for case, rep_ in (("replace 없음 — 어디든 있으면 건너뜀", False), ("--replace — 옛 스키마에서 지우고 새 스키마에", True)):
+                M.load(db, _bundle(["SFDC/u/b.txt"], tmp, source_system="LAS"), replace=rep_)
+                inn = lambda x, p="SFDC/u/b.txt": bool(x.q(f"SELECT 1 AS o FROM {x.schema}.doc WHERE file_path = %s", (p,)))
+                moved.append((case, inn(sf), inn(la)))
             try:
                 M.main(["load", "--prune"])
                 raise AssertionError("--prune이 아직 받아짐(지우는 길이 남음)")
@@ -129,7 +137,10 @@ def _run_twice(S, tmp):
     assert n_chunks == 4 and b_terms > 0, (n_chunks, b_terms)  # b의 청크·키워드 색인도 그대로
     assert meta == {("RFP", "2025-03-01T10:00:00+09:00", '["A사"]')}, meta  # 분류·등록 시각(시간대 없는 값은 KST)·본문 고객 라벨
     assert loaded and counts["loaded_at_failed"] == 1 and counts["by_source"]["sfdc"]["docs"] == 1, (loaded, counts)  # C10 예외 — loaded_at
-    assert counts["meta_missing"] == 1, counts  # pl-29 — EDW 계정 없음: 메타를 비운 채 적재(건수만)
+    assert counts["meta_missing"] == 1, counts
+    assert moved == [("replace 없음 — 어디든 있으면 건너뜀", True, False), ("--replace — 옛 스키마에서 지우고 새 스키마에", False, True)], (
+        moved
+    )  # pl-29 — EDW 계정 없음: 메타를 비운 채 적재(건수만)
     print(
         "[시험] 적재 — 원천 스키마로 · 묶음에 없는 저장 문서는 지우지 않음 · --prune 없음 · ParsingMeta loaded_at(쓰기 계정 없으면 건수만)"
     )
