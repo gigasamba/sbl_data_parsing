@@ -48,11 +48,11 @@
 | original_filename | TEXT | 원본 파일 이름(보여 주기용) | (파이프라인 — `AI.FileStorageMap.original_filename`) | (pgsearch, retriever, search_svc, shaping, 뷰) | 새로 |
 | s3_key | TEXT | 문서 키 — Object Storage 원본 전체 키(`AI.FileStorageMap.s3_key`). 적재 upsert 키, `source_uri`를 만듦. `doc`에만 둔다(청크에는 없음 — 사용자 10-31 grill) | (build_bundle가 이미 `_s3_key`로 알지만 묶음에 안 넣음) | (대장·숨김·ParsingMeta 조회) | 새로 |
 | clients | TEXT(JSON) | 고객 목록 — 지금은 본문에서 찾은 이름(`infer_clients`)과 섞여 있음 | build_bundle `infer_clients` | pgsearch `_client_restrict`, retriever, internal_docs, search_svc | 삭제 |
-| client_edw | TEXT | EDW 조인으로 얻은 고객 하나 — MCP 고객 거르기의 유일한 키 | (파이프라인이 EDW 읽기 계정으로 직접 조인 — [pl-29](../prd/extract.md#pl-29)) | (pgsearch 고객 거르기) | 새로 |
+| client_edw | TEXT | EDW 조인으로 얻은 고객 하나 — MCP 고객 거르기의 유일한 키 | (파이프라인이 EDW 읽기 계정으로 직접 조인 — [pl-29](../prd/load.md#pl-29)) | (pgsearch 고객 거르기) | 새로 |
 | clients_doc | TEXT(JSON) | 문서 본문에서 찾은 고객 목록(참고용 — 거르기에 안 씀) | (build_bundle `infer_clients`) | (근거 표시) | 새로 |
 | summary | TEXT | 요약(검색 결과용) | build_bundle | 뷰 → retriever → shaping | 유지 |
 | source_system | VARCHAR(20) | SFDC·CRMS·LAS·Other — 0.2.0에는 스키마가 원천을 정하므로 지운다(사용자 10-31 grill) | build_bundle(`s3_key` 접두, 없으면 file_meta) | 뷰 → search_svc, internal_docs | 삭제 |
-| sf_acc_name | TEXT | SFDC 고객사 이름 — 0.2.0: 스키마마다 그 EDW 원본 표의 칸 이름으로 둔다(`sfdc.doc`은 SFDC 원본 칸 이름, 다른 스키마는 그 원본 칸 이름 — EDW 원본 칸 이름 — D-1 확인, 사용자 10-31 grill) | build_bundle(file_meta JSONL → EDW 직접 — [pl-29](../prd/extract.md#pl-29)) | 뷰 → search_svc, internal_docs | 유지 |
+| sf_acc_name | TEXT | SFDC 고객사 이름 — 0.2.0: 스키마마다 그 EDW 원본 표의 칸 이름으로 둔다(`sfdc.doc`은 SFDC 원본 칸 이름, 다른 스키마는 그 원본 칸 이름 — EDW 원본 칸 이름 — D-1 확인, 사용자 10-31 grill) | build_bundle(file_meta JSONL → EDW 직접 — [pl-29](../prd/load.md#pl-29)) | 뷰 → search_svc, internal_docs | 유지 |
 | sf_op_id | TEXT | SFDC 영업 기회 id — 0.2.0: 스키마마다 그 EDW 원본 표의 칸 이름으로 둔다(`sfdc.doc`은 SFDC 원본 칸 이름, 다른 스키마는 그 원본 칸 이름 — EDW 원본 칸 이름 — D-1 확인, 사용자 10-31 grill) | build_bundle(file_meta → EDW 직접) | 뷰 → internal_docs(그대로 내보냄) | 유지 |
 | sf_op_name | TEXT | SFDC 영업 기회 이름 — 0.2.0: 스키마마다 그 EDW 원본 표의 칸 이름으로 둔다(`sfdc.doc`은 SFDC 원본 칸 이름, 다른 스키마는 그 원본 칸 이름 — EDW 원본 칸 이름 — D-1 확인, 사용자 10-31 grill) | build_bundle(file_meta → EDW 직접) | 뷰 → internal_docs | 유지 |
 | project_code__c | TEXT | SFDC 프로젝트 코드 — 0.2.0: 스키마마다 그 EDW 원본 표의 칸 이름으로 둔다(`sfdc.doc`은 SFDC 원본 칸 이름, 다른 스키마는 그 원본 칸 이름 — EDW 원본 칸 이름 — D-1 확인, 사용자 10-31 grill) | build_bundle(file_meta → EDW 직접) | 뷰 → search_svc, internal_docs(거르기) | 유지 |
@@ -155,7 +155,7 @@ PostgreSQL `struct` 스키마는 코드에서 모두 없앴다(사용자 11-01 �
 
 ### edw.Quote
 
-PC 대역 예시 — [pl-29](../prd/extract.md#pl-29) 10-31. 고객 연결 4단계의 마지막(Quote)을 PC에서 구현·시험하려고 PC 대역 EDW(`valid_env/edw`)에 SFDC Quote 표를 **예시 칸**으로 새로 만든다(A3). 서버 레플리카에는 Quote 표가 없다 — Quote는 `OpportunityId`로 파일과 이어진다고 가정한다(사용자 10-31 grill). 실제 표·칸 이름은 DB 담당자 답(D-1)으로 맞춘다. 시험 비교 대상이 아니다.
+PC 대역 예시 — [pl-29](../prd/load.md#pl-29) 10-31. 고객 연결 4단계의 마지막(Quote)을 PC에서 구현·시험하려고 PC 대역 EDW(`valid_env/edw`)에 SFDC Quote 표를 **예시 칸**으로 새로 만든다(A3). 서버 레플리카에는 Quote 표가 없다 — Quote는 `OpportunityId`로 파일과 이어진다고 가정한다(사용자 10-31 grill). 실제 표·칸 이름은 DB 담당자 답(D-1)으로 맞춘다. 시험 비교 대상이 아니다.
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
@@ -199,9 +199,9 @@ PC 대역 예시 — [pl-29](../prd/extract.md#pl-29) 10-31. 고객 연결 4단�
 | stack_version | INT | 파싱 엔진 스택 판 — **결정 대기(11-01):** 판 표가 없어져 판 번호가 없다(엔진 구성 파일의 sha·이름으로 바꿀지, 칸을 뺄지). 파싱이 통째로 실패하면 행 자체를 쓰지 않는다(C3) | (파싱 단계 성공 때) | (운영자·재처리 판정) | 새로 |
 | engines_failed | NVARCHAR(MAX) | 실패한 엔진(JSON — 이름·이유·걸린 시간), 없으면 NULL | (파싱 단계 — 사용자 10-30 "EDW에도") | (운영자·재시도 판단) | 새로 |
 
-**운영이 더한 분류·고객 칸(G19 — 4차 grill, G1·G9를 뒤집음):** 운영이 ParsingMeta에 더한 분류·고객 칸(`doc_class`·`sf_op_id`·`created_at`·`sf_acc_name` 등 — 이 저장소의 DDL에는 없음)은 0.2.0에 모두 지운다(DB 담당자 D-3, 등급 A). 분류·고객·등록 시각은 시스템별 gold `doc`에만 둔다([pl-33](../prd/transform.md#pl-33), [pl-29](../prd/extract.md#pl-29)). 그때 운영 분류 스크립트가 멈추므로 운영 담당자에게 알린다.
+**운영이 더한 분류·고객 칸(G19 — 4차 grill, G1·G9를 뒤집음):** 운영이 ParsingMeta에 더한 분류·고객 칸(`doc_class`·`sf_op_id`·`created_at`·`sf_acc_name` 등 — 이 저장소의 DDL에는 없음)은 0.2.0에 모두 지운다(DB 담당자 D-3, 등급 A). 분류·고객·등록 시각은 시스템별 gold `doc`에만 둔다([pl-33](../prd/transform.md#pl-33), [pl-29](../prd/load.md#pl-29)). 그때 운영 분류 스크립트가 멈추므로 운영 담당자에게 알린다.
 
-**단계별 기록(사용자 10-30 grill — 등급 A, DB 담당자 D-3):** 단계마다 성공했을 때만 쓴다(파싱이 통째로 실패하면 행 없음 — C3) — 파싱: `stack_version`·성공한 엔진(`engines_used`)·실패한 엔진(`engines_failed`)·대표 silver 엔진 + 판(`rep_engine`) · gold: `pipeline_version`·`gold_status`. 3차의 "읽는 칸만" 안에 칸을 다시 더한 것이다. 저장 구조(silver = Object Storage uuid5 폴더 · gold = pgvector)는 [pl-32](../prd/load.md#pl-32).
+**단계별 기록(사용자 10-30 grill — 등급 A, DB 담당자 D-3):** 단계마다 성공했을 때만 쓴다(파싱이 통째로 실패하면 행 없음 — C3) — 파싱: `stack_version`·성공한 엔진(`engines_used`)·실패한 엔진(`engines_failed`)·대표 silver 엔진 + 판(`rep_engine`) · gold: `pipeline_version`·`gold_status`. 3차의 "읽는 칸만" 안에 칸을 다시 더한 것이다. 저장 구조(silver = Object Storage uuid5 폴더 · gold = pgvector)는 [pl-32](../prd/load-schema.md#pl-32).
 
 ## 5. master — CSV 파일 (`resources/vocab/glossary/`, 사용자 10-30)
 
@@ -222,7 +222,7 @@ PC 대역 예시 — [pl-29](../prd/extract.md#pl-29) 10-31. 고객 연결 4단�
 | # | 무엇 | 왜 |
 |---|---|---|
 | D-1 | `AI.FileStorageMap`의 실제 정의 — 특히 고친 때 칸 이름(`last_modified_time` 가정)과 `source_system` 값 목록 | 저장소에는 PC 대역(`valid_env/edw/ai.sql` — `created_at`만)뿐 · **G9(사용자 10-30) 확인:** 지금 운영 `ParsingMeta.created_at`은 원천별 표에서 온다(SFDC `ContentVersion_dump.CreatedDate`, CRMS `RM_CM_DOCU.INIT_DTTM`, LAS `FileManager.CreateDate`) — `FileStorageMap.created_at`이 같은 값을 갖는지 · **0.2.0(A4·A3):** `FileStorageMap.created_at`이 실제로 있는지(같은 `s3_key` 중 가장 늦은 행을 이 칸으로 고름) · SFDC Quote 표의 실제 이름·칸(PC 대역은 예시 칸 — §4 `edw.Quote`) · **사용자 10-31 grill:** 원천 id 칸(영업 기회 id 등)의 원천별 실제 칸 이름 · Quote가 `OpportunityId`로 파일과 이어지는지 |
-| D-2 | 문서당 EDW 고객 하나(`client_edw`)를 얻는 조인 경로 — 원천별(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account.Name`로 보임, CRMS·LAS는?) | 지금은 외부에서 뽑은 `file_meta_new.jsonl`을 읽고, 그 파일을 만드는 코드가 저장소에 없음 → **결정(사용자 10-30):** 파이프라인이 EDW 읽기 계정으로 조인을 직접 만든다(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account`) — `file_meta_new.jsonl`을 대신함, [pl-29](../prd/extract.md#pl-29). CRMS·LAS 경로는 여전히 확인 필요 · **2차 grill(사용자 10-30, G2):** CRMS는 `FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST`로 채움(DB 담당자 확인) · LAS는 상대사 출처가 정해질 때까지 비움 |
+| D-2 | 문서당 EDW 고객 하나(`client_edw`)를 얻는 조인 경로 — 원천별(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account.Name`로 보임, CRMS·LAS는?) | 지금은 외부에서 뽑은 `file_meta_new.jsonl`을 읽고, 그 파일을 만드는 코드가 저장소에 없음 → **결정(사용자 10-30):** 파이프라인이 EDW 읽기 계정으로 조인을 직접 만든다(SFDC: `FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account`) — `file_meta_new.jsonl`을 대신함, [pl-29](../prd/load.md#pl-29). CRMS·LAS 경로는 여전히 확인 필요 · **2차 grill(사용자 10-30, G2):** CRMS는 `FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST`로 채움(DB 담당자 확인) · LAS는 상대사 출처가 정해질 때까지 비움 |
 | D-3 | `AI.ParsingMeta` 칸 정리(ALTER) — 안 읽는 칸 삭제, `gold_status`·`gold_reason`·단계별 칸(`stack_version`·`engines_failed`) 추가, `pipeline_version` 뜻 바꿈(gold에 올린 판 — gold 성공 때 씀, 10-31: 새 칸 `gold_version` 대신), `engines_used`·`rep_engine` 뜻 바꿈 — 권한, 기존 행, 다른 사용처 | 이 프로젝트 밖에서 그 칸을 읽는 곳이 있는지 모름 · **G19·C5(0.2.0):** 파싱 정보만 — 운영이 더한 분류·고객 칸(`doc_class`·`sf_op_id`·`created_at`·`sf_acc_name` 등)은 모두 지움, `sha256`은 남김 · 운영 분류 스크립트가 멈춤 |
 | D-4 | `ParsingMeta.doc_key` 삭제 때 `UQ_ParsingMeta_dockey`·`IX_ParsingMeta_doc_key` 색인 처리 · `source_key`를 필수(NOT NULL)로 | 지금 `source_key`가 비면 `doc_key`가 겹침 키 |
 | D-5 | (없어짐 — 사용자 10-30: 마스터는 CSV 파일, 마스터 PostgreSQL 없음) | — |
