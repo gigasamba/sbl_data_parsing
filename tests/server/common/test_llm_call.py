@@ -132,7 +132,9 @@ def selftest():
                 complete("vlm", [{"role": "user", "content": "x"}], retries=1)
                 raise AssertionError("외부로 리다이렉트인데 통과됨(http 전송)")
             except RuntimeError as ex:
-                assert "openrouter" in str(ex) and "리다이렉트" in str(ex), ex
+                assert isinstance(ex, ModelUnavailable) and "openrouter" in str(ex) and "리다이렉트" in str(ex), (
+                    ex
+                )  # 0.2.0 — 호출부가 건너뛰게(GuardBlocked)
     finally:
         srv2.shutdown()
     print("[selftest] 내부 주소의 외부 리다이렉트 차단 통과")

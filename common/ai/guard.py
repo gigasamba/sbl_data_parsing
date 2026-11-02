@@ -363,11 +363,17 @@ class _ConnectTimeoutHTTPSHandler(urllib.request.HTTPSHandler):
         return self.do_open(_SplitTimeoutHTTPSConnection, req, context=self._context)
 
 
+def open_guarded(req, timeout, prefix):
+    """precheck 없이 여는 길 — 리다이렉트 가드(_Redirect)·연결 시간 상한은 같음. 호출자가 이미 precheck로 선차감한 경우만
+    (common.ai.llm.complete — 시도마다 다시 선차감하면 정산되지 않는 몫이 장부에 쌓임, 0.2.0 리뷰)."""
+    opener = urllib.request.build_opener(_Redirect(prefix), _ConnectTimeoutHTTPHandler(), _ConnectTimeoutHTTPSHandler())
+    return opener.open(req, timeout=timeout)
+
+
 def _precheck_and_open(req, timeout, prefix):
     url = req.full_url if hasattr(req, "full_url") else str(req)
     reserved = precheck(url, prefix)
-    opener = urllib.request.build_opener(_Redirect(prefix), _ConnectTimeoutHTTPHandler(), _ConnectTimeoutHTTPSHandler())
-    return opener.open(req, timeout=timeout), reserved
+    return open_guarded(req, timeout, prefix), reserved
 
 
 def urlopen(req, timeout, prefix):

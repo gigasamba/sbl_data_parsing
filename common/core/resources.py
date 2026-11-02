@@ -211,6 +211,7 @@ def cpu_load(cg=CG, sample=0.25, now=None, sleep=None, loadavg=None):
 
     now, sleep, loadavg = now or time.monotonic, sleep or time.sleep, loadavg or _loadavg1
     lim = cpu_limit(cg)
+    lim = min(lim, _host_cpus()) if lim else lim  # 한도가 실제 코어보다 크면(--cpus 8, 코어 4) 실제 코어로
     if lim:
         u1 = _cg_usage_usec(cg)
         if u1 is not None:
@@ -318,18 +319,6 @@ def vlm_page_concurrency(doc_workers, requested):
     return max(1, min(int(requested), cap // max(1, int(doc_workers))))
 
 
-if __name__ == "__main__":
-    utf8_stdout()
-    if "--env" in sys.argv:
-        p = plan()
-        print(f"export PIPE_PROCS={p['procs']} PIPE_THREADS={p['threads']} PIPE_WORKERS={p['workers']}")
-    else:
-        p = plan()
-        print(
-            f"CPU {p['cpus']} · 메모리 {p['mem_gb']} GB → CPU 엔진 프로세스 {p['procs']} × 스레드 {p['threads']} · VLM 동시 문서 {p['workers']}  ({p['why']})"
-        )
-
-
 # ---- 일괄 파싱 프로세스(0.2.0 — 옛 pipeline/extract/resources.py에서 옮김, pl-46: OS별 분기를 이 파일 한 곳에)
 LOW_NICE = 10  # POSIX nice 증가분 — 일괄 파싱 엔진 자식(parse MCP 서비스의 자식은 0)
 
@@ -384,3 +373,15 @@ def thread_env(threads):
     """수치 라이브러리 스레드 수 고정 — 정하지 않으면 각 프로세스가 호스트 코어 수만큼 스레드를 띄움(프로세스 × 코어 = CPU 폭주)."""
     t = str(threads)
     return {k: t for k in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS", "TORCH_NUM_THREADS")}
+
+
+if __name__ == "__main__":
+    utf8_stdout()
+    if "--env" in sys.argv:
+        p = plan()
+        print(f"export PIPE_PROCS={p['procs']} PIPE_THREADS={p['threads']} PIPE_WORKERS={p['workers']}")
+    else:
+        p = plan()
+        print(
+            f"CPU {p['cpus']} · 메모리 {p['mem_gb']} GB → CPU 엔진 프로세스 {p['procs']} × 스레드 {p['threads']} · VLM 동시 문서 {p['workers']}  ({p['why']})"
+        )

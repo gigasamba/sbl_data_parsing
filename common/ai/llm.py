@@ -344,8 +344,8 @@ import urllib.error  # noqa: E402
 import urllib.request  # noqa: E402
 
 from common.ai.guard import BudgetExceeded as _BudgetExceeded  # noqa: E402
+from common.ai.guard import open_guarded as _g_open  # noqa: E402 — precheck는 complete()가 한 번만
 from common.ai.guard import precheck  # noqa: E402
-from common.ai.guard import urlopen as _g_urlopen  # noqa: E402
 from common.core.paths import resolve_agent_dir  # noqa: E402
 
 _ROLE_GUARD_PREFIX = {"llm": "LLM", "vlm": "VLM", "embed": "EMBED"}
@@ -490,7 +490,7 @@ def _post_chat(prof, messages, temperature, max_tokens, json_mode, extra, timeou
         headers["Authorization"] = "Bearer " + key
     req = urllib.request.Request(prof.base_url.rstrip("/") + "/chat/completions", data=json.dumps(body).encode(), headers=headers)
     try:
-        with _g_urlopen(req, timeout, guard_prefix) as r:
+        with _g_open(req, timeout, guard_prefix) as r:
             data = json.load(r)
     except urllib.error.HTTPError as ex:
         if ex.code in (429, 500, 502, 503, 504):
@@ -499,6 +499,8 @@ def _post_chat(prof, messages, temperature, max_tokens, json_mode, extra, timeou
         raise ModelUnavailable(f"모델 호출 실패: HTTPError {ex.code}: {str(ex)[:200]}") from ex
     except (urllib.error.URLError, TimeoutError, OSError) as ex:
         raise _Retryable(ex) from ex
+    except RuntimeError as ex:  # 리다이렉트 가드 거부 등(guard._Redirect) — 재시도 대상 아님, '모델 없음'처럼 건너뛰게
+        raise GuardBlocked(str(ex)) from ex
     msg = (data.get("choices") or [{}])[0].get("message") or {}
     u = data.get("usage") or {}
     return msg, {"prompt_tokens": u.get("prompt_tokens", 0), "completion_tokens": u.get("completion_tokens", 0)}
@@ -617,6 +619,14 @@ def complete(
             last_err, last_elapsed = ex.inner, time.monotonic() - t0
             if attempt < retries - 1:
                 time.sleep(ex.retry_after if ex.retry_after else 2**attempt * 2)
+        except ModelUnavailable:  # 재시도 대상 아닌 실패(HTTP 400·리다이렉트 거부 등) — 예약 자리·선차감을 돌려주고 그대로
+            if call_reserved:
+                release_call()
+            if reserved:
+                from common.ai import guard as G
+
+                G.spend_settle(-reserved)
+            raise
     # 빨리 끝난 실패(연결 자체가 안 됨)만 회로 실패로 센다 — 느린 응답(살아있지만 느림)은 안 셈(RV24 BLOCK)
     if last_elapsed is not None and last_elapsed <= min(cfg().models.transport.connect_timeout * 1.5, deadline * 0.5):
         _model_down_mark_failure(prof.base_url)

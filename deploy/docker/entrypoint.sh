@@ -7,7 +7,7 @@
 # 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp ·  (이미지 명령 dedup·prepare는 11-01에 지움 — parse가 안에서 부름)
 #       ask --q …  (test-stack·night·run-stack·full·structure·load는 11-01에 지움 — 서버 입구는 run_docs 하나, 사용자 10-31)
 #   tool <이름> = 고정 표의 도구 하나(check_env·ping_models·check_modules·cli·rdb_discover·gen_roster·glossary_suggest — run_tool.sh가 쓰는 자리)
-#     옛 형태 `tool cli/<이름>.py`도 이번 판까지는 받아 줌(경고 후 번역) — 다음 판부터 이름만.
+#     이름만 받는다(옛 `tool cli/<이름>.py` 형태는 0.2.0에 지움 — 종료 64).
 #   모듈(트리거 1회): parse(= 가져오기(폴더·rdb:csv, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타, SI39 — cli/publish_parse.py --apply) — docs/architecture.md
 #   migrate up|stamp|current|check [--target search|all] [--schema S] [--dim N|--bundle B] = pgvector 우리 스키마 판 관리(S8a — Alembic,
 #     common.store.db.dbtool) — data-pipeline 이미지만, up·stamp는 load와 같은 잠금(current·check는 읽기만 — 잠금 없음). 서버 절차 docs/operations/release-and-patch.md §5-5
@@ -61,7 +61,7 @@ esac
 gate=1
 case "$cmd" in
   help|selftest|check|check-modules|resources|services) gate=0;;
-  tool) case "${1:-}" in check_env|check_env.py|cli/check_env.py) gate=0;; esac;;
+  tool) case "${1:-}" in check_env) gate=0;; esac;;
 esac
 shell_names=""
 case "$cmd" in

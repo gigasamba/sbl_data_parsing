@@ -404,14 +404,6 @@ def main(argv=None):
         print(json.dumps(load(db, a.bundle, a.replace), ensure_ascii=False))
 
 
-if __name__ == "__main__":
-    from common.config import setarg
-
-    setarg.apply()  # --set 이름=값(S9 Step A — 호스트 run_docs.py 적재가 BM25_THREADS를 넘김)
-    utf8_stdout()
-    main()
-
-
 # ---- PG 단일 연결 전환점(0.2.0 — 옛 pipeline/load/pg_load_connect.py, pl-46)
 def pg_connect(c=None, pg_schema=None):
     """AD41 단일 전환점 — PG_PASSWORD·PG_CONN_FILE이 있으면 진짜 PG(PG 클래스), 없으면 스탠드인(StandinPG, sqlite ·
@@ -427,3 +419,11 @@ def pg_connect(c=None, pg_schema=None):
     from common.store.pg_standin import StandinPG
 
     return StandinPG(_standin_schema(pg_schema or (c or {}).get("PG_SCHEMA")))
+
+
+if __name__ == "__main__":
+    from common.config import setarg
+
+    setarg.apply()  # --set 이름=값(S9 Step A — 호스트 run_docs.py 적재가 BM25_THREADS를 넘김)
+    utf8_stdout()
+    main()
