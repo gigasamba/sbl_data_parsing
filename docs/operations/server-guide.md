@@ -85,7 +85,7 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 ### 2-3. 상주 컨테이너
 `data-pipeline-parse`·`data-pipeline-structure`는 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업을 돌리고, MCP `parse_document` 작업 서비스도 `data-pipeline-parse` 안에서 돈다. 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/ops.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
 ```bash
-docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-parse data-pipeline-structure
+dc up -d data-pipeline-parse data-pipeline-structure   # dc = README §5-3 ①의 도우미(settings.yaml 값을 compose에 넘김 — 그냥 docker compose는 필수 칸 `${…:?}`에서 멈춤)
 ```
 
 ### 2-4. 테스트 실행 스크립트(코드 폴더에서 네이티브, 이미지 밖)
