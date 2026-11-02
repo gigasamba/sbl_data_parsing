@@ -1,20 +1,105 @@
 """적재 때 EDW 조인으로 문서 메타 채우기(pl-29, 사용자 11-02 — 매핑은 적재 몫). 원본 경로(gold doc.file_path = FileStorageMap.s3_key)마다
 원천별 사슬을 따라 고객(client_edw)·원천 전용 칸·등록 시각(created_at)을 구한다 — 외부 파일 file_meta는 쓰지 않는다. 읽기 계정만(SELECT).
-사슬(운영 gold 스키마 노트 — 실제 칸 이름은 DB 담당자 확인, refactor.md C-76 · db_schema §1 원천별 사슬):
-- SFDC: FileStorageMap.content_version_id → ContentVersion(Id → ContentDocumentId, CreatedDate) → ContentDocumentLink(IsDeleted=0).LinkedEntityId
-  접두로 영업 기회: 006 직접 > 00T Task.WhatId > 00U Event.WhatId > 0Q0 Quote.OpportunityId(표가 없으면 건너뜀) · 고객: 기회.AccountId → Account.Name,
-  기회가 없으면 Task/Event.WhatId 001 > LinkedEntityId 001(계정 직접) · 같은 단계에 후보가 둘 이상이면 비움(NULL).
-- CRMS: FileStorageMap_CRMS.rm_contract_code → RM_CM_PJTLIST(SF_ACC_NAME·DIVISION·RM_CONTRACT_NAME·INIT_DTTM) · 등록 시각 RM_CM_DOCU.INIT_DTTM(4 키).
-- LAS: FileStorageMap_LAS.manage_no → LAS.Contract(최신 판 — IsActive·ContractID 내림차순) · 등록 시각 FileManager.CreateDate(las_file_id).
-- FAQ·Other: FileStorageMap.created_at만.
-EDW를 못 열면 빈 dict와 경고(적재는 메타를 비운 채 계속 — 사용자 11-02, 자동 갱신 없음: 나중에 --replace로 다시 적재해 채움)."""
+사슬의 표·칸 이름·SFDC 단계 순서·gold 칸 대응은 설정 파일 resources/config/edw_chain.yaml(운영 쪽이 고침 — 사용자 11-02, load_chain이 검사).
+사슬의 모양(코드):
+- SFDC: FileStorageMap → ContentVersion(문서 id·등록 시각 UTC) → ContentDocumentLink(지우지 않은 연결) → 연결 개체 접두로 영업 기회 — 설정의
+  steps 순서(지금: 006 직접 > 00T Task > 00U Event; Quote 표는 없음 — 생기면 설정 한 줄, optional이면 표를 못 읽을 때 그 단계만 건너뜀) ·
+  고객: 기회의 계정 → Account 이름, 기회 후보가 아예 없으면 단계 표 값 001 > 연결 개체 001(계정 직접) · 같은 단계에 후보가 둘 이상이면 비움(NULL).
+- CRMS: FileStorageMap_CRMS → 계약 목록(RM_CM_PJTLIST) · 등록 시각 문서 표(RM_CM_DOCU, 키 4개).
+- LAS: FileStorageMap_LAS → 계약(최신 판 — active·id 내림차순) · 등록 시각 FileManager.
+- FAQ·Other: FileStorageMap 등록 시각만.
+EDW를 못 열면 빈 dict와 경고(적재는 메타를 비운 채 계속 — 사용자 11-02, 자동 갱신 없음: 나중에 --replace로 다시 적재해 채움).
+설정 파일이 틀리면(빠진 이름·SQL에 넣을 수 없는 이름·doc 표에 없는 gold 칸) ValueError로 멈춘다 — 이름은 SQL 글자에 들어가므로 검사, 값은 늘 바인딩."""
 
+import re
 import sys
 from datetime import UTC, date, datetime
+from pathlib import Path
 
+from common.core.paths import RES_ROOT
 from common.store.db.models import search_tables as ST
 
 CHUNK = 500  # IN 목록 크기
+CHAIN_FILE = RES_ROOT / "config" / "edw_chain.yaml"
+_ID = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_TABLE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*")
+_PREFIX = re.compile(r"[0-9A-Za-z]{3}")
+_REQ = {  # 설정 자리 → 꼭 있어야 하는 이름
+    ("files",): ("table", "key", "created"),
+    ("sfdc", "version"): ("table", "file_col", "id", "doc", "created"),
+    ("sfdc", "link"): ("table", "doc", "entity", "deleted"),
+    ("sfdc",): ("opp_prefix", "account_prefix", "steps"),
+    ("sfdc", "opportunity"): ("table", "id", "account", "out"),
+    ("sfdc", "account"): ("table", "id", "name"),
+    ("crms", "map"): ("table", "key", "contract", "gate", "gate_version", "seq"),
+    ("crms", "project"): ("table", "contract"),
+    ("crms", "docu"): ("table", "contract", "gate", "gate_version", "seq", "created"),
+    ("las", "map"): ("table", "key", "manage_no", "signed", "file_id"),
+    ("las", "file"): ("table", "id", "created"),
+    ("las", "contract"): ("table", "manage_no", "active", "id", "date", "client"),
+}
+
+
+def load_chain(path=CHAIN_FILE):
+    """사슬 설정 읽기 + 검사 — 틀리면 ValueError(어디가 왜 틀렸는지 모두)."""
+    import yaml
+
+    c = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    errs = []
+    for where, names in _REQ.items():
+        sec = c
+        for k in where:
+            sec = sec.get(k) if isinstance(sec, dict) else None
+        if not isinstance(sec, dict):
+            errs.append(f"{'.'.join(where)}: 없음")
+            continue
+        errs += [f"{'.'.join(where)}.{n}: 없음" for n in names if n not in sec]
+    sf = c.get("sfdc") if isinstance(c, dict) else None
+    steps = sf.get("steps") if isinstance(sf, dict) else None
+    if not isinstance(steps, list) or not steps:
+        errs.append("sfdc.steps: 단계 목록이 비었거나 목록이 아님")
+    for i, st in enumerate(steps if isinstance(steps, list) else []):
+        need = ("prefix", "id", "value") if isinstance(st, dict) and "table" in st else ("prefix",)
+        errs += [f"sfdc.steps[{i}].{n}: 없음" for n in need if not isinstance(st, dict) or n not in st]
+    _check(c, "", "", None, errs)
+    if errs:
+        raise ValueError(f"[edw_meta] 사슬 설정 오류({path}): " + "; ".join(errs))
+    return c
+
+
+def _out_cols(src):
+    """설정 out으로 채울 수 있는 gold 칸 — 그 원천 전용 칸(분류 라벨 doc_class 빼고) + client_edw(SFDC는 코드가 계정에서 채움).
+    키·경로(file_path·doc_id)·created_at(코드가 사슬에서 정함)은 안 됨 — 적재가 이 값으로 문서 행을 덮어쓰므로(리뷰)."""
+    if src not in ST.DOC_EXTRA:
+        return set()
+    return {n for n, _ in ST.DOC_EXTRA[src] if n != "doc_class"} | (set() if src == "sfdc" else {"client_edw"})
+
+
+def _check(node, where, key, src, errs):
+    """이름 검사 — table은 `스키마.표`, *prefix는 3자, optional은 참거짓, out은 {그 원천 doc 칸: EDW 칸}, 나머지 글자는 칸 이름."""
+    if isinstance(node, dict):
+        for k, v in node.items():
+            w = f"{where}.{k}" if where else str(k)
+            if k == "out":
+                cols = _out_cols(src)
+                if not isinstance(v, dict) or not v:
+                    errs.append(f"{w}: {{gold 칸: EDW 칸}} 꼴이어야 함")
+                    continue
+                errs += [f"{w}.{g}: {src}에서 설정으로 채울 수 없는 칸(허용 {sorted(cols)})" for g in v if g not in cols]
+                for g, e in v.items():
+                    _check(e, f"{w}.{g}", g, src, errs)
+            elif k == "optional":
+                if not isinstance(v, bool):
+                    errs.append(f"{w}: true 또는 false")
+            else:
+                _check(v, w, k, src or (k if not where else None), errs)
+    elif isinstance(node, list):
+        for i, x in enumerate(node):
+            _check(x, f"{where}[{i}]", key, src, errs)
+    else:
+        rx = _TABLE if key == "table" else _PREFIX if str(key).endswith("prefix") else _ID
+        if not isinstance(node, str) or not rx.fullmatch(node):
+            errs.append(f"{where}: {node!r} — {'스키마.표' if rx is _TABLE else '3자 접두' if rx is _PREFIX else '영문·숫자·_ 이름'}만")
 
 
 class _Edw:
@@ -50,8 +135,10 @@ class _Edw:
         self.cn.close()
 
 
-def fetch(docs, edw=None):
-    """docs = [(source_system, file_path)] → ({file_path: {칸: 값}}, 메타를 못 구한 문서 수). EDW를 못 열면 ({}, len(docs)) + 경고."""
+def fetch(docs, edw=None, chain=None):
+    """docs = [(source_system, file_path)] → ({file_path: {칸: 값}}, 메타를 못 구한 문서 수). EDW를 못 열면 ({}, len(docs)) + 경고.
+    chain — 사슬 설정(기본 load_chain() — 틀리면 ValueError로 멈춤)."""
+    chain = chain or load_chain()
     own = edw is None
     try:
         edw = edw or _Edw()
@@ -69,7 +156,7 @@ def fetch(docs, edw=None):
     try:
         for src, paths in by_src.items():
             try:
-                out.update({"sfdc": _sfdc, "crms": _crms, "las": _las}.get(src, _plain)(edw, paths))
+                out.update({"sfdc": _sfdc, "crms": _crms, "las": _las}.get(src, _plain)(edw, paths, chain))
             except Exception as e:  # 한 원천의 사슬 실패(표·칸 이름 다름 등) — 그 원천만 비움
                 print(
                     f"[edw_meta] 경고: {src} 메타 조회 실패 — 그 원천 문서는 메타를 비움({len(paths)}건): {type(e).__name__}: {str(e)[:160]}",
@@ -82,12 +169,18 @@ def fetch(docs, edw=None):
     return out, sum(1 for _, p in docs if not any(v is not None for v in (out.get(p) or {}).values()))
 
 
-def _plain(edw, paths):
-    """FAQ·Other — 등록 시각만(FileStorageMap.created_at)."""
+def _plain(edw, paths, c):
+    """FAQ·Other — 등록 시각만(FileStorageMap)."""
+    F = c["files"]
     return {
-        r["s3_key"]: {"created_at": _ts(r["created_at"])}
-        for r in edw.q_in("SELECT s3_key, created_at FROM AI.FileStorageMap WHERE s3_key IN ({IN})", paths)
+        r["k"]: {"created_at": _ts(r["created_at"])}
+        for r in edw.q_in(f"SELECT {F['key']} AS k, {F['created']} AS created_at FROM {F['table']} WHERE {F['key']} IN ({{IN}})", paths)
     }
+
+
+def _conv(col, v):
+    """gold 칸에 맞게 — contract_date는 날짜, created_at은 시각, 그 밖은 그대로."""
+    return _date(v) if col == "contract_date" else _ts(v) if col == "created_at" else v
 
 
 def _ts(v, tz=None):
@@ -125,121 +218,128 @@ def _one(values):
     return next(iter(vs)) if len(vs) == 1 else None
 
 
-def _sfdc(edw, paths):
+def _sfdc(edw, paths, c):
+    F, S = c["files"], c["sfdc"]
+    V, L, Op, A = S["version"], S["link"], S["opportunity"], S["account"]
     files = edw.q_in(
-        "SELECT f.s3_key, f.created_at, cv.ContentDocumentId AS doc_id, cv.CreatedDate AS cv_created "
-        "FROM AI.FileStorageMap f LEFT JOIN SFDC.ContentVersion cv ON cv.Id = f.content_version_id WHERE f.s3_key IN ({IN})",
+        f"SELECT f.{F['key']} AS k, f.{F['created']} AS created_at, cv.{V['doc']} AS doc_id, cv.{V['created']} AS cv_created "
+        f"FROM {F['table']} f LEFT JOIN {V['table']} cv ON cv.{V['id']} = f.{V['file_col']} WHERE f.{F['key']} IN ({{IN}})",
         paths,
     )
     links = {}
     for r in edw.q_in(
-        "SELECT ContentDocumentId, LinkedEntityId FROM SFDC.ContentDocumentLink WHERE IsDeleted = 0 AND ContentDocumentId IN ({IN})",
+        f"SELECT {L['doc']} AS d, {L['entity']} AS e FROM {L['table']} WHERE {L['deleted']} = 0 AND {L['doc']} IN ({{IN}})",
         [f["doc_id"] for f in files],
     ):
-        links.setdefault(r["ContentDocumentId"], []).append(str(r["LinkedEntityId"] or ""))
+        links.setdefault(r["d"], []).append(str(r["e"] or ""))
     ents = [e for v in links.values() for e in v]
-    what = {}
-    for tbl, pre in (("Task", "00T"), ("Event", "00U")):
-        for r in edw.q_in(f"SELECT Id, WhatId FROM SFDC.{tbl} WHERE Id IN ({{IN}})", [e for e in ents if e.startswith(pre)]):
-            what[r["Id"]] = str(r["WhatId"] or "")
-    quote = {}
-    qids = [e for e in ents if e.startswith("0Q0")]
-    if qids:
+    opp_pre, acc_pre = S["opp_prefix"], S["account_prefix"]
+    looked = [st for st in S["steps"] if "table" in st]  # 단계 표(연결 개체 id → 값)
+    val = {}
+    for st in looked:
+        ids = [e for e in ents if e.startswith(st["prefix"])]
+        if not ids:
+            continue
         try:
-            quote = {r["Id"]: r for r in edw.q_in("SELECT Id, OpportunityId, AccountId FROM SFDC.Quote WHERE Id IN ({IN})", qids)}
-        except Exception as e:  # 서버 EDW 복사본에는 Quote 표가 아직 없음(C-76) — 그 단계만 건너뜀
-            print(f"[edw_meta] 경고: SFDC.Quote를 못 읽음 — Quote 단계(0Q0) 건너뜀: {type(e).__name__}", file=sys.stderr, flush=True)
+            rows = edw.q_in(f"SELECT {st['id']} AS i, {st['value']} AS v FROM {st['table']} WHERE {st['id']} IN ({{IN}})", ids)
+        except Exception as e:
+            if not st.get("optional"):
+                raise
+            print(f"[edw_meta] 경고: {st['table']}를 못 읽음 — {st['prefix']} 단계 건너뜀: {type(e).__name__}", file=sys.stderr, flush=True)
+            continue
+        val.update({r["i"]: str(r["v"] or "") for r in rows})
     pick = {}
     for f in files:
         le = links.get(f["doc_id"], [])
-        task_ev = [what.get(e, "") for e in le if e[:3] in ("00T", "00U")]
         steps = [
-            [e for e in le if e.startswith("006")],
-            [what.get(e, "") for e in le if e.startswith("00T") and what.get(e, "").startswith("006")],
-            [what.get(e, "") for e in le if e.startswith("00U") and what.get(e, "").startswith("006")],
-            [str(quote[e]["OpportunityId"] or "") for e in le if e in quote],
+            [e for e in le if e.startswith(st["prefix"])]
+            if "table" not in st
+            else [val.get(e, "") for e in le if e.startswith(st["prefix"]) and val.get(e, "").startswith(opp_pre)]
+            for st in S["steps"]
         ]
         opp, had_opp = None, False
         for cand in steps:  # 단계 순서대로 — 그 단계에 후보가 있으면 거기서 정함(둘 이상이면 비움)
             if {c for c in cand if c}:
                 opp, had_opp = _one(cand), True
                 break
-        acc_steps = [[w for w in task_ev if w.startswith("001")], [e for e in le if e.startswith("001")]]
+        via = [val.get(e, "") for e in le if any(e.startswith(st["prefix"]) for st in looked)]
+        acc_steps = [[w for w in via if w.startswith(acc_pre)], [e for e in le if e.startswith(acc_pre)]]
         acc = None
         if not had_opp:  # 기회 후보가 아예 없을 때만 계정 단계로(기회가 동률이면 고객도 비움 — 다른 사슬의 고객을 붙이지 않음)
             for cand in acc_steps:
                 if {c for c in cand if c}:
                     acc = _one(cand)
                     break
-        pick[f["s3_key"]] = (opp, acc, _ts(f.get("cv_created"), UTC) or _ts(f.get("created_at")))  # SFDC CreatedDate는 UTC
+        pick[f["k"]] = (opp, acc, _ts(f.get("cv_created"), UTC) or _ts(f.get("created_at")))  # SFDC CreatedDate는 UTC
+    outs = ", ".join(f"{col} AS o_{g}" for g, col in Op["out"].items())
     opps = {
-        r["Id"]: r
+        r["i"]: r
         for r in edw.q_in(
-            "SELECT Id, Name, AccountId, Project_Code__c, Record_Type__c, X1st_Contract_Execution_Date__c FROM SFDC.Opportunity WHERE Id IN ({IN})",
+            f"SELECT {Op['id']} AS i, {Op['account']} AS a, {outs} FROM {Op['table']} WHERE {Op['id']} IN ({{IN}})",
             [o for o, _, _ in pick.values()],
         )
     }
-    acc_ids = [(opps.get(o) or {}).get("AccountId") or a for o, a, _ in pick.values()]
-    accs = {r["Id"]: r["Name"] for r in edw.q_in("SELECT Id, Name FROM SFDC.Account WHERE Id IN ({IN})", acc_ids)}
+    acc_ids = [(opps.get(o) or {}).get("a") or a for o, a, _ in pick.values()]
+    accs = {
+        r["i"]: r["n"] for r in edw.q_in(f"SELECT {A['id']} AS i, {A['name']} AS n FROM {A['table']} WHERE {A['id']} IN ({{IN}})", acc_ids)
+    }
     out = {}
     for key, (opp, acc, created) in pick.items():
         o = opps.get(opp) or {}
         out[key] = {
             "created_at": created,
-            "sf_op_id": o.get("Id"),
-            "sf_op_name": o.get("Name"),
-            "project_code__c": o.get("Project_Code__c"),
-            "service_type": o.get("Record_Type__c"),
-            "contract_date": _date(o.get("X1st_Contract_Execution_Date__c")),
-            "client_edw": accs.get(o.get("AccountId") or acc),
+            **{g: _conv(g, o.get(f"o_{g}")) for g in Op["out"]},
+            "client_edw": accs.get(o.get("a") or acc),
         }
     return out
 
 
-def _crms(edw, paths):
+def _crms(edw, paths, c):
+    F, M, P, D = c["files"], c["crms"]["map"], c["crms"]["project"], c["crms"]["docu"]
+    mo, po = M.get("out") or {}, P.get("out") or {}
+    sel = [f"m.{col} AS m_{g}" for g, col in mo.items()] + [f"p.{col} AS p_{g}" for g, col in po.items()]
     rows = edw.q_in(
-        "SELECT m.s3_key, f.created_at, m.rm_contract_code, p.SF_ACC_NAME, p.DIVISION, p.RM_CONTRACT_NAME, p.INIT_DTTM AS contract_dt, d.INIT_DTTM AS docu_dt "
-        "FROM AI.FileStorageMap_CRMS m JOIN AI.FileStorageMap f ON f.s3_key = m.s3_key "
-        "LEFT JOIN CRMS.RM_CM_PJTLIST p ON p.RM_CONTRACT_CODE = m.rm_contract_code "
-        "LEFT JOIN CRMS.RM_CM_DOCU d ON d.RM_CONTRACT_CODE = m.rm_contract_code AND d.GATE_CODE = m.gate_code "
-        "AND d.GATE_VERSION = m.gate_version AND d.DOCU_SEQ = m.docu_seq WHERE m.s3_key IN ({IN})",
+        f"SELECT m.{M['key']} AS k, f.{F['created']} AS created_at, d.{D['created']} AS docu_dt{''.join(', ' + x for x in sel)} "
+        f"FROM {M['table']} m JOIN {F['table']} f ON f.{F['key']} = m.{M['key']} "
+        f"LEFT JOIN {P['table']} p ON p.{P['contract']} = m.{M['contract']} "
+        f"LEFT JOIN {D['table']} d ON d.{D['contract']} = m.{M['contract']} AND d.{D['gate']} = m.{M['gate']} "
+        f"AND d.{D['gate_version']} = m.{M['gate_version']} AND d.{D['seq']} = m.{M['seq']} WHERE m.{M['key']} IN ({{IN}})",
         paths,
     )
     return {
-        r["s3_key"]: {
+        r["k"]: {
             "created_at": _ts(r["docu_dt"]) or _ts(r["created_at"]),
-            "client_edw": r["SF_ACC_NAME"],
-            "division": r["DIVISION"],
-            "prod_name": r["RM_CONTRACT_NAME"],
-            "contract_id": r["rm_contract_code"],
-            "contract_date": _date(r["contract_dt"]),
+            **{g: _conv(g, r[f"m_{g}"]) for g in mo},
+            **{g: _conv(g, r[f"p_{g}"]) for g in po},
         }
         for r in rows
     }
 
 
-def _las(edw, paths):
+def _las(edw, paths, c):
+    F, M, Fm, C = c["files"], c["las"]["map"], c["las"]["file"], c["las"]["contract"]
     rows = edw.q_in(
-        "SELECT m.s3_key, f.created_at, m.manage_no, m.signed_date, fm.CreateDate AS file_dt "
-        "FROM AI.FileStorageMap_LAS m JOIN AI.FileStorageMap f ON f.s3_key = m.s3_key "
-        "LEFT JOIN LAS.FileManager fm ON fm.FileID = m.las_file_id WHERE m.s3_key IN ({IN})",
+        f"SELECT m.{M['key']} AS k, f.{F['created']} AS created_at, m.{M['manage_no']} AS manage_no, m.{M['signed']} AS signed_date, "
+        f"fm.{Fm['created']} AS file_dt FROM {M['table']} m JOIN {F['table']} f ON f.{F['key']} = m.{M['key']} "
+        f"LEFT JOIN {Fm['table']} fm ON fm.{Fm['id']} = m.{M['file_id']} WHERE m.{M['key']} IN ({{IN}})",
         paths,
     )
     contracts = {}
-    for c in edw.q_in(
-        "SELECT ManageNo, ContractID, IsActive, ContractDate, PartnerCorpName FROM LAS.Contract WHERE ManageNo IN ({IN})",
+    for k in edw.q_in(
+        f"SELECT {C['manage_no']} AS mn, {C['id']} AS cid, {C['active']} AS act, {C['date']} AS dt, {C['client']} AS cl "
+        f"FROM {C['table']} WHERE {C['manage_no']} IN ({{IN}})",
         [r["manage_no"] for r in rows],
     ):
-        best = contracts.get(c["ManageNo"])  # 최신 판 — IsActive 먼저, 그다음 ContractID 큰 것
-        if best is None or (int(c["IsActive"] or 0), c["ContractID"] or 0) > (int(best["IsActive"] or 0), best["ContractID"] or 0):
-            contracts[c["ManageNo"]] = c
+        best = contracts.get(k["mn"])  # 최신 판 — active 먼저, 그다음 id 큰 것
+        if best is None or (int(k["act"] or 0), k["cid"] or 0) > (int(best["act"] or 0), best["cid"] or 0):
+            contracts[k["mn"]] = k
     out = {}
     for r in rows:
-        c = contracts.get(r["manage_no"]) or {}
-        out[r["s3_key"]] = {
+        k = contracts.get(r["manage_no"]) or {}
+        out[r["k"]] = {
             "created_at": _ts(r["file_dt"]) or _ts(r["created_at"]),
-            "contract_id": r["manage_no"] or c.get("ContractID"),
-            "contract_date": _date(c.get("ContractDate")) or _date(r["signed_date"]),
-            "client_edw": c.get("PartnerCorpName") or None,  # 지금은 모두 비어 있음(상대사 출처 미정 — G2)
+            "contract_id": r["manage_no"] or k.get("cid"),
+            "contract_date": _date(k.get("dt")) or _date(r["signed_date"]),
+            "client_edw": k.get("cl") or None,  # 지금은 모두 비어 있음(상대사 출처 미정 — G2)
         }
     return out
