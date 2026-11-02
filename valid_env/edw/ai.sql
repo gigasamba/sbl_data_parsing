@@ -133,3 +133,20 @@ INSERT INTO FileStorageMap (id, content_id, s3_key, source_system, original_file
     (78, 'cf0e5aaabc4cb1cde34dd89d43d53dbe24a2a0314c095e5895a15ad1c34e5e00', 'CRMS/c6532711-6031-5a69-a504-985dd8a86fb1/lmx_lxt204_sample_receipt_photo.png', 'CRMS', 'lmx_lxt204_sample_receipt_photo.png', 1, 2339899, 'cf0e5aaabc4cb1cde34dd89d43d53dbe24a2a0314c095e5895a15ad1c34e5e00', NULL, NULL, '2026-10-30 09:00:00'),
     (79, '783c3a16e500d23dfad3be5c310977943be88ed42ffac3cb8c58c125a402eab3', 'CRMS/ad0831fc-55a6-5a3d-8161-fcd3ab418236/arg_arb305_lims_stability_capture.png', 'CRMS', 'arg_arb305_lims_stability_capture.png', 1, 1585828, '783c3a16e500d23dfad3be5c310977943be88ed42ffac3cb8c58c125a402eab3', NULL, NULL, '2026-10-30 09:00:00'),
     (80, 'c2bdb0b14f897e7b1d272f26f3c9f37799d02beb5c0a357bc443c2e45d1ea567', 'FAQ/74e7751a-97c6-4e17-a73e-85bbd890188f/CDO questionnarie library.xlsx', 'FAQ', 'CDO questionnarie library.xlsx', 1, 14316, 'c2bdb0b14f897e7b1d272f26f3c9f37799d02beb5c0a357bc443c2e45d1ea567', NULL, NULL, '2026-11-01 09:00:00');
+
+-- [SYNTHETIC] 11-02(pl-29) — 원천별 파일 대응 표(운영 gold 스키마 노트의 칸 이름 — 실제 정의는 DB 담당자 확인, D-1). 값은 가짜.
+CREATE TABLE FileStorageMap_CRMS (
+    s3_key           TEXT NOT NULL,
+    rm_contract_code TEXT,
+    gate_code        TEXT,
+    gate_version     TEXT,
+    docu_seq         INTEGER
+) STRICT;
+INSERT INTO FileStorageMap_CRMS SELECT s3_key, 'RC-' || id, 'G1', '1', id FROM FileStorageMap WHERE source_system = 'CRMS';
+CREATE TABLE FileStorageMap_LAS (
+    s3_key      TEXT NOT NULL,
+    manage_no   TEXT,
+    las_file_id TEXT,
+    signed_date TEXT
+) STRICT;
+INSERT INTO FileStorageMap_LAS SELECT s3_key, 'M-' || id, 'F' || id, NULL FROM FileStorageMap WHERE source_system = 'LAS';

@@ -20,13 +20,14 @@
 - 결정(G11 — 3차 grill(사용자 10-30, 원본은 git 밖)): 적재 뒤 바뀐 SFDC 연결(고객·`sf_op_id` 등)은 자동으로 갱신하지 않는다. 수동 요청 때 전체 문서를 갱신한다([pl-40](#pl-40)).
 - 결정(사용자 10-30 PRD grill): A3 — 고객 연결의 마지막 단계(SFDC Quote 스냅샷)는 미정으로 둔다(서버 레플리카에 Quote 표 없음). 허브가 0.2.0 설계 확인 때 사용자에게 다시 묻는다. 그 전까지 구현은 기회 직접 > Task > Event 3단계(+계정 직접).
 - 결정(사용자 10-31 grill): A3 — Quote 단계도 0.2.0에 넣는다. PC 대역 EDW(`valid_env/edw`)에 SFDC Quote 표를 예시 칸으로 새로 만들어 4단계(기회 직접 > Task > Event > Quote, +계정 직접)로 구현한다. 실제 표·칸 이름은 DB 담당자 답으로 맞춘다(A4 `created_at`과 같은 방식).
-- Status: todo
+- 구현(11-02 `feature/mcp-ops-parity`): 사용자 11-02 — 매핑은 적재 몫. `pipeline/load/edw_meta.py`가 적재 때(PG 트랜잭션 밖, 읽기 계정) 원천별 사슬로 `client_edw`·원천 칸·`created_at`을 채운다(사슬은 [db_schema.md](../architecture/db_schema.md) §1 — 운영 gold 스키마 노트 기준, 칸 이름은 D-1 확인). SFDC 4단계(기회 직접 > Task > Event > Quote, +계정 직접 — 같은 단계 동률은 비움), CRMS(`RM_CM_PJTLIST`·`RM_CM_DOCU`), LAS(`LAS.Contract` 최신 판·`FileManager`). Quote는 운영처럼 EDW 표로 재현(사용자 11-02) — 서버 EDW에 표가 없으면 그 단계만 건너뜀(C-76: DB 담당자가 표를 만들고 REST 스냅샷으로 채움, 누가·언제는 미정). 외부 `file_meta_new.jsonl`·`FILE_META_PATH`·build_bundle의 `_file_meta`를 지웠다. EDW를 못 읽으면 메타 없이 적재(경고·`meta_missing`) — 자동 갱신 없음, `--replace`로 다시 적재해 채움. PC 가짜 EDW(`valid_env/edw`)에 가짜 사슬 표를 더했다. 시험: `tests/server/pipeline/test_edw_meta.py`.
+- Status: done(11-02)
 
 <a id="pl-07"></a>
 ## pl-07 · pgvector 적재
 - 이유: 검색 서버는 PG를 읽는다.
-- 무엇: 표 `load_run`·`doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + 뷰 `v_chunk_source`(Alembic으로만). 이미 적재된 문서는 `file_path`로 건너뛴다(sha 열 없음 — 같은 경로에서 내용이 바뀌어도 `--replace` 없이는 건너뜀). (`--prune`은 10-30에 없앰 — [pl-13](#pl-13).) 이름 붙은 색인(`index_id`). 벡터는 pgvector에만 둔다(EDW 벡터 적재는 10-29에 지움 — [ops.md#op-03](ops.md#op-03)).
-- 파일: `pipeline/load/pgvector_load.py`, `pipeline/load/index.py`, `common/store/db/migrations/`.
+- 무엇: 원천 스키마 5벌마다 표 `doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + 뷰 `v_chunk_source`(Alembic으로만 — 11-02 판 0002, `load_run`은 지움). 이미 적재된 문서는 `file_path`로 건너뛴다(sha 열 없음 — 같은 경로에서 내용이 바뀌어도 `--replace` 없이는 건너뜀). (`--prune`은 10-30에 없앰 — [pl-13](#pl-13).) 이름 붙은 색인(`index_id`). 벡터는 pgvector에만 둔다(EDW 벡터 적재는 10-29에 지움 — [ops.md#op-03](ops.md#op-03)).
+- 파일: `pipeline/load/pgvector_load.py`, `common/store/db/migrations/`.
 - 결정(허브 10-31, 최신 결정 우선): 이름 붙은 색인(`index_id`)은 0.2.0에 없앤다 — 원천(`source_system`)이 gold 스키마를 고르므로 색인 이름이 필요 없다(선택지 줄이기 원칙). 구현은 [pl-28](load-schema.md#pl-28)과 함께.
 - 결정(사용자 10-31): PG 자동 찾기(`docker ps` pgvector·대체 포트·코드 기본 `127.0.0.1`/`5432`/`rag`)를 없애고 PG 접속은 필수 — [ops-settings.md#op-09](ops-settings.md#op-09).
 - Status: done
@@ -38,13 +39,15 @@
 - 결정(사용자 10-29 grill): 적재는 더하고 고치기만 하고 지우지 않는다. 건너뛴(이미 있는) 문서는 남는다. 원천에서 지워진 문서와 파싱 실패는 로컬에 기록만(원인 + 걸린 시간), 자동 삭제 없음. `load`와 그 호출부(`pipeline/cli.py` load, 색인 빌드 `--pg`)에서 prune 길을 없앤다.
 - 결정(사용자 10-30 PRD grill): S1 — 브랜치가 병합됐으므로 done으로 닫는다(남은 서버 확인은 refactor.md C 항목으로).
 - 한 것(10-30 병합, #17): `feature/load-no-prune`: `prune`·`--prune`·`PRUNE_*` 설정 없앰(옛 설정 칸은 경고만), `cli load`·`run-stack`·색인 빌드 `--pg`가 더는 안 붙임, `--no-prune`은 옛 호출 호환으로 받기만, 색인 빌드 `--pg`는 `--replace`로(다시 빌드 때 고침). 남은 한계: `file_path`가 바뀐 같은 내용은 옛 행이 남음(사람이 지움 — 사용자 확인). 시험 `tests/server/pipeline/test_pl13_no_prune.py`. 검토 등급 A(서버 적재 동작).
+- 11-02(pl-28, 리뷰 #86): 원천 스키마 5벌을 함께 본다 — 적재는 묶음 문서의 원본 경로(`file_path`)를 5벌 모두에서 찾는다. `--replace` 없이 어느 스키마에든 이미 있으면 건너뛴다(두 스키마에 같은 문서가 생기지 않게). `--replace`면 다른 원천 스키마에 남은 옛 사본을 먼저 지우고(키워드 색인·문서 빈도·그 스키마 `corpus_stat` 포함, 실 PG는 같은 트랜잭션) 새 원천 스키마에 넣는다 — 원천(`source_system`)이 바뀐 문서가 옮겨 간다. 시험: `test_pl13_no_prune`.
 - Status: done — 남은 서버 확인은 refactor.md C-68.
 
 <a id="pl-14"></a>
 ## pl-14 · 배포 backfill이 지운 `doc.client`를 읽음
 - 이유: 10-20 축소 스키마 뒤 `pgvector_load deploy`의 `backfill_chunk_clients`가 실패한다(표와 색인은 그래도 만들어짐).
 - 파일: `pipeline/load/pgvector_load.py`.
-- Status: done (10-30, `feature/search-path-fixes`) — backfill은 남기고(사용자 10-30) `doc.clients`만 읽음(없는 `doc.client` 안 고름, `_doc_row_clients`도 `clients`만 받음). NULL인 청크만 채우고 멱등인 것은 그대로. 동작은 같음 — 축소 스키마의 고객 라벨은 원래 `clients`에만 있음. 시험: `tests/server/pipeline/test_pl14_backfill.py`(가짜 DB, 이미지) · `tests/general/pipeline/test_pl14_deploy.py`(실 PG 임시 스키마에서 `deploy()` — PG 설정 없으면 건너뜀).
+- 11-02(pl-28): `chunk.clients`·`doc.clients`와 backfill(`backfill_chunk_clients`)·그 시험을 지웠다 — 고객은 `client_edw` 거르기만(C6).
+- Status: done (10-30) · 11-02 backfill 길 지움(pl-28)
 
 <a id="pl-16"></a>
 ## pl-16 · `PIPE_EMBED=none`이면 `vector(0)`을 만든다
@@ -58,7 +61,8 @@
 - 이유: C-32.
 - 결정(사용자 10-30 grill): compose `index_a`/`index_b` 예시를 지운다.
 - 파일: `deploy/host/`.
-- Status: todo
+- 11-01(`feature/mcp-ops-parity`, mc-16): 이름 있는 색인(AD41)을 통째로 지우며 `compose.index.yml`·`pipeline/load/index.py`·`index_cfg.py`도 지웠다.
+- Status: done
 
 <a id="pl-09"></a>
 ## pl-09 · 파싱 결과 게시
@@ -121,6 +125,7 @@
 - 10-30 [pl-32](load-schema.md#pl-32): PG `doc_registry`는 남고 로컬 SQLite 대체는 없앤다. 실패 횟수(`fail_count`)·재시도 설정(`registry_retry_max`)은 없앤다 — 성공했을 때만 갱신(사용자 10-30).
 - 한 것(10-30, B1 — 개발 서버 반입 전 검토): deleted 길 없앰 — `registry.apply`가 관측에 없는 문서에 `status='deleted'`·자동 숨김을 쓰지 않고, `parsing_meta.apply_registry_status`가 EDW에 `deleted`를 쓰지 않는다(`diff["deleted"]`는 판 잇기 정보로만). 서버(dev·prd)는 SQLite·PG 스탠드인으로 대체하지 않고 멈춘다(`structdb.open_backend` — `run_mode: prod`·`struct_backend` pg/tsql 필수, `pg._warn_standin`). `common.store.run_mode`는 `prod`·`test`만. 시험 `tests/server/common/test_no_deleted.py`. code_fp p0·p1·r·s 바뀜(공용 `settings.py`·`pg.py`·`structdb.py`).
 - 한 것(11-01 `feature/scope-cut-search`): `common/store/registry.py`·`registry_cli`·검색 `registry.py`·숨김 거르기(retriever·pgsearch)·게시의 대장 상태 갱신·ParsingMeta 상태 갱신 길 지움. 표는 struct 스키마와 함께 코드에서 없앰([pl-08](#pl-08)). 설정 `common.store.doc_registry`·`registry_etag_md5` 지움(남으면 경고).
+- 11-02 C10 예외(사용자): ParsingMeta `loaded_at` 한 칸만 적재 때 UPDATE(`parsing_meta_db.mark_loaded`) — 다른 칸은 그대로 INSERT만(`test_no_deleted`가 UPDATE는 `SET loaded_at`뿐인지 본다).
 - Status: done (11-01 `feature/scope-cut-search`)
 
 <a id="pl-38"></a>

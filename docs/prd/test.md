@@ -167,7 +167,7 @@
 ## e2-18 · 요건 없는 코드 지우기
 - 이유(사용자 10-30 grill): 안 쓰는 길이 아직 지운 칸을 읽고 관리 비용을 든다. 대상은 각 카테고리 파일 끝 "요건 없는 코드"(옛 gaps §2).
 - 지움: `internal_docs.py` 숨김 문서 함수(6개, 지운 doc 칸을 아직 SELECT하는 문서 조회·목록 포함), 위키 도구, 외부 KG 어댑터, 시험만 부르는 함수([e2-17](#e2-17)), 지운 평가 묶음용 채점기([e2-10](#e2-10)).
-- 남김: `MCP_EVIDENCE_PATHS`, SQLite 대체, 문서 대장 CLI, 메일 첨부, 용어집·고객 목록 도구, 밤 타이머, `os_put`, 서버 점검.
+- 남김: SQLite 대체(`MCP_EVIDENCE_PATHS`는 11-01 mc-15에 지움), 문서 대장 CLI, 메일 첨부, 용어집·고객 목록 도구, 밤 타이머, `os_put`, 서버 점검.
 - 규칙: MCP 도구 이름과 입출력은 그대로. 하나라도 바뀌면 멈추고 묻는다.
 - 남김 목록 고침(허브 10-31): `PARSE_STREAM`·그림자 모드·`SEARCH_TIE_BREAK` 스위치는 op-08에서 지워 남김에서 뺐다. 카테고리 파일 끝 '요건 없는 코드' 목록에서 이미 지운 것(이 행·fp-batch)을 뺐다(mcp·etl·test, 10-31).
 - 11-01(`feature/scope-cut-unused`, 허브 지시): 호출부 없는 지시서 `pipeline/parse_shadow`·`mcp/research_judge`·`mcp/agg_llm_route`를 지움 — 지시서 시험(`test_agent_prompts`·`test_adk`의 output_schema 재요청)은 `nested_figure`로, `test_paths`는 남은 패키지로 바꿈. `common/core/paths.py:112` 주석의 `parse_shadow` 언급은 고치면 레이어 code_fp 4개가 모두 바뀌어 남김(0.2.0 배치에서).

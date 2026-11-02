@@ -89,6 +89,8 @@
   - `doc.source_system`도 지운다(스키마가 원천을 정함 — 청크와 같음).
   - `s3_key`는 gold `doc`에만(청크에는 없음). `source_uri`는 `doc.s3_key`로, `rep_uri`는 `doc.rep_key`로(C8).
   - 원천 id(영업 기회 id 등)는 스키마마다 그 EDW 원본 표의 칸 이름 그대로 — 한 이름(`sf_op_id`)을 함께 쓰지 않음. 모르는 이름은 D-1 확인.
+- 결정(사용자 11-01): ParsingMeta에 s3_key 칸 없음 — 연결은 source_system + source_key(원본 전체 경로). rep_engine·stack_version 없음(gold doc.rep_engine도)
+- 결정(사용자 11-02, 위를 고침): 이름을 맞춘다 — ParsingMeta `source_key` → `s3_key`(DB 담당자 DDL, C-76 — 코드는 바꾸기 전후 모두 돎). gold 경로 칸은 `file_path` 하나(= s3_key, 연결 키). gold doc에서 `original_filename`·`clients`·`run_id`·`pipeline_version`·파싱 이력은 두지 않는다(EDW에만). ParsingMeta에 `loaded_at`(적재 시각 — C10 예외, 적재 때 UPDATE).
 - Status: dev — `docs/architecture/db_schema.md` 설계안 + 시험 `tests/server/common/test_db_schema.py`(`feature/db-schema-spec`) — 사용자·DB 담당자 승인 대기(코드·스키마 변경 없음).
 
 <a id="pl-28"></a>
@@ -104,7 +106,8 @@
   - 위 `chunk`의 `source_system`·`clients[]` 유지([pl-25](#pl-25))는 스키마가 원천을 정하므로 필요 없어진다 — `db_schema.md`를 이에 맞게 고친다.
 - 결정(사용자 10-30 PRD grill): C2 — MCP 계약이 바뀌어도 0.2.0(버전 규칙에 '1.0 전에는 MINOR에서도 계약·스키마를 깰 수 있음'을 더함 — 운영이 안정되면 1.0.0). C4 — 원천 스키마마다 칸 구조가 다를 수 있다: `faq` 스키마만 `chunk`에 `faq_group` 칸을 두고, 다른 원천은 '파일 메타는 `doc`에만' 그대로. A2 — 스키마 5벌(`sfdc`·`crms`·`las`·`faq`·`other`), MCP `source_system`은 `other`도 받는다.
 - 결정(사용자 10-31 grill): `chunk_key` = `<doc_id>:<seq>`(gold `doc.doc_id` 자동 번호), 청크는 `doc_id`만(FK). 스키마 5벌이 **시퀀스 하나를 함께 써서** `doc_id`가 겹치지 않는다 — 허브 제안을 사용자가 확인(11-01). 적재는 `s3_key`로 upsert해 `doc_id`가 바뀌지 않는다. `doc.source_system`도 지운다. 원천 id 칸은 스키마마다 EDW 원본 칸 이름.
-- Status: todo — 0.2.0, 전체 다시 적재 필요. 설계 반영(`db_schema.md`)과 DB 담당자 협의 먼저(등급 A).
+- 구현(11-02 `feature/mcp-ops-parity`, 등급 A — DB 스키마·MCP 계약): 판 0002를 고쳐(배포 전) 기준 스키마 `<PG_SCHEMA>`(판 표·공용 `doc_id_seq`) + 원천 스키마 5벌 `<PG_SCHEMA>_<원천>`. 원천 전용 칸·EDW 사슬은 [db_schema.md](../architecture/db_schema.md) §1·§2. 적재는 문서의 `source_system`으로 스키마를 고르고(실 PG는 한 트랜잭션), 검색 MCP는 원천마다 Retriever(풀 하나), `search`는 `source_system` 필수·값 하나. chunk는 `char_*`·`n_chars`·`embed_model`·`clients`·`source_system`을 지웠다. `load_run`을 지우고 실행 정보는 실행 기록, 다시 읽기 신호는 원천마다 (MAX(doc_id), COUNT(*)), 우리 스키마 표식은 판 표. 시험: `test_dbtool`·`test_db_schema`·`test_search_svc`·`test_pl13_no_prune`·`test_server_state`.
+- Status: done(11-02 — 서버는 판 올리기·전체 다시 적재, refactor.md C-74·C-76)
 
 ## 코드와 다른 점 · 지울 코드
 

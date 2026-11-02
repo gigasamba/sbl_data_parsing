@@ -2,30 +2,12 @@
 """검색 MCP — 질문 하나로 근거(원문·원본 경로·쪽·위치·그림)를 돌려주는 한 창구(백로그 G1~G5). 답변 생성은 클라이언트(GLM 등) 몫.
 
 도구(G2):
-  search(question, k=8, methods=[vector,bm25,id], decompose=false, client=None)  근거 목록 — BM25는 용어 사전으로 확장(X3, notes에 표시) ·
-    methods는 vector·bm25·id만(graph·image·openviking·concept·decompose는 10-29에 지움 — 입력은 받고 무시). client(AD38): 고객 명시(SEARCH_CLIENT_HARD=1이면 저장소 질의
-    단계에서 다른 고객 제외, 기본 꺼짐). AD42(R3·R1): 응답에
-    evidence_status(found/weak/none)·근거별 low_score(SEARCH_MIN_SCORE 문턱) 표시만(근거는 안 줄임) · 늘
-    집계 질문을 aggregate.detect()로 가려 집계 결과(기존 정해진 함수만, 자유 SQL 없음)를 근거 맨 앞에 via="aggregate"로 · 집계 결과 통화가 2개 이상 섞이면(비교
-    질문 등) 고정 질의(BR43)("환율 exchange rate USD KRW", bm25+id)로 1위 근거를
-    더 찾아 진짜 환율 패턴일 때만 집계 근거 text 끝에 붙인다(단일 통화면 영향 없음).
-    근거마다 doc_type·version·supersedes_doc_id·is_deleted·contract_id·updated_at·company는 RDB 문서 위치 메타(AD44
-    manifest)에 그 문서가 있을 때만(없으면 칸 자체가 없음).
-  (2026-10-20 사용자 결정·같은 날 통합 · 10-21 파싱 도구 추가) MCP 노출 도구는 search·query_edw·parse_document·edw_meta — 문서 목록(list_documents)·문서 단건
-    (get_document)·그림(get_image)·근거 이미지(get_evidence_image)·집계 질의(aggregate)·요건별 연구(research)·용어(lookup_term)·
-    개념(related)·describe_edw는 노출에서 뺐다. 내부 구현(do_*)은 search 안쪽 경로·셀프테스트만 남아 있고 MCP로는 호출 불가.
-  search(question, k=8, methods=[vector,bm25,id], decompose, client, index_id, source_system, project_id, division,
-    service_type, limit=100)  근거 검색 + 하드 필터 통합(2026-10-20) —
-    · question만: 기존 하이브리드 검색 그대로(근거 상위 k) ·
-    · 하드 필터만(question 없이 client·source_system·project_id·division·service_type): 조건에 정확히 맞는 문서 전부와
-      그 청크 전부를 점수·임베딩 없이 돌려줌(do_filter_documents 응답 모양 — 문서 수 상한 limit 기본 100, 0이면 무제한,
-      넘으면 truncated=true) ·
-    · question + 하드 필터: 조건에 정확히 맞는 문서(v_chunk_source) 범위 안에서만 검색 — 풀을 넉넉히 잡아(k×3,
-      상한 MAX_K) 파일 단위 후치 필터 뒤 근거 재순위·k로 자름(응답에 filter·scope_docs 표시) · 집계 근거는 전체 구조화
-      집계라 범위가 안 맞아 이 결합에서는 생략 · 조건은 모두 정확 일치(부분 문자열 불가) — client는 고객명 전체
-      (sf_acc_name·clients JSON 라벨) · source_system 'SFDC'/'CRMS'/'LAS' · project_id 프로젝트 코드(예: 'E54B') ·
-      division 'DS'/'DP'/'CD'/'CM'/'AD'/'AS' · service_type 'CMO DS'/'CMO DP'/'CDO'/'ADC' 등 · 범위 산정은 PG 적재
-      저장소만(로컬 묶음이면 필터 안내 후 전체 검색).
+  search(question, k=8, 거르기 13칸) — 11-01(mc-16, 등급 A) 운영 계약: question 필수(비면 {"error"}) · k 기본 8·상한 50 ·
+    거르기 source_system·client(+client_like)·project_id·division·service_type·FAQ_group·doc_class·sf_op_id·sf_op_name·contract_id·
+    created_since/created_until(모두 AND, 같은 거르기의 목록은 OR, 맞는 것이 없으면 빈 결과) · 거르기에 맞는 문서(v_chunk_source) 범위 안에서만
+    하이브리드 검색(vector·bm25·id — 서버 설정만) · 응답 {question, evidence[12칸], evidence_status, filter, scope_docs}
+    (mcp_server/schemas/evidence.py). 덤프 방식·이름 있는 색인(index_id)·옛 입력(methods·decompose·limit)·옛 출력(subs·store·images·notes·ms)은 지움.
+  MCP 노출 도구는 search·query_edw·parse_document·edw_meta·list_doc_fulltext·get_doc_fulltext(2026-10-20 사용자 결정 · 10-21 파싱 도구 · 11-01 원문 도구 mc-17).
   (EQ1, English docstrings per 10-15 user rule)
   query_edw(sql, max_rows=2000) Read-only SQL against EDW: SELECT/WITH only, one statement, table allowlist
     (EDW_QUERY_TABLES), row/time/response-size caps. Returns raw rows only — no summarization, the
@@ -72,7 +54,7 @@ import threading
 
 from common.core.console import utf8_stdout
 from mcp_server import config as mc  # 설정 객체(S7d)
-from mcp_server.routers import edw_tools, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
+from mcp_server.routers import edw_tools, fulltext_tool, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
 from mcp_server.services.search.server_state import CALLER, _warmup_bg
 
 _DEFAULT_MCP_INSTRUCTIONS = (
@@ -115,10 +97,13 @@ def build(host, port):
         transport_security=None if loop else _transport_security(host),
     )
 
-    search_tool.register(m)  # 등록 순서 = tools/list 순서(MCP 계약 바이트) — search · query_edw · parse_document · edw_meta
+    search_tool.register(
+        m
+    )  # 등록 순서 = tools/list 순서(MCP 계약 바이트) — search · query_edw · parse_document · edw_meta · list/get_doc_fulltext
     edw_tools.register_query_edw(m)
     parse_tool.register(m)
     edw_tools.register_edw_meta(m)
+    fulltext_tool.register(m)  # mc-17(11-01)
     return m
 
 

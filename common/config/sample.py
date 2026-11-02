@@ -110,7 +110,6 @@ CATEGORIES = {
     "search": (
         ("MCP 서버", ("search.server",)),
         ("검색 순위·방식", ("search.methods", "search.min_score", "search.weights", "search.pg")),
-        ("고객 범위", ("search.client",)),
         ("EDW 도구", ("search.edw_meta", "search.edw_query")),
         ("출력·기록·파싱 프록시", ("search.output", "search.query_log", "search.parse_proxy")),
     ),
@@ -198,6 +197,7 @@ LAYOUT_GONE = frozenset(
         "pipeline.service.trigger.shutdown_timeout_sec",
         "pipeline.service.trigger.socket_timeout_sec",
         "pipeline.extract.dedup.fuzzy_max",  # 11-01(pl-02 — 유사 후보 지움)
+        "pipeline.load.index_lock_stale_sec",  # 11-01(mc-16 — 이름 있는 색인 AD41 지움)
     }
 )
 

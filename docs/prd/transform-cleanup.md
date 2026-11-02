@@ -68,6 +68,7 @@
   - compose 덧씌우기 파일을 4개에서 2개로.
 - 11-01(`feature/scope-cut-unused2`): 원천 목록 `sources.json`을 지우며 설정 칸 `common.paths.sources_file`은 남겼다 — `common/config/settings.py`를 고치면 레이어 code_fp 4개가 바뀌어 이 배치에서 지운다. `common/core/fingerprint.py` `EXCLUDED_FILES`의 `core/sources.py` 줄도 같이.
 - 11-01(같은 브랜치): PC Docker 스모크에서 `s3://` 원천(MinIO 대역·게시 ⑥)과 자정 배치 모양을 지우며 쓰이지 않게 된 설정 칸 `smoke_source`·`smoke_nightly`(`common/config/settings.py`)와 MinIO 올리기 도구 `common/check/os_put.py`도 이 배치에서 지운다.
+- 11-01(`feature/mcp-ops-parity`, mc-16): 이름 있는 색인(AD41)을 지우며 설정 칸 `common.paths.index_root`(`INDEX_ROOT`)·`INDEX_CONF`·`INDEX_CONF_DIR`은 남겼다(`common/config/settings.py`를 고치면 레이어 code_fp 4개가 바뀜 — 이 배치에서). `common/core/fingerprint.py` `EXCLUDED_FILES`의 `core/index_cfg.py` 줄도 같이.
 - 결정(사용자 11-02 — 허브 전달, 같은 0.2.0 지문 배치):
   - 죽은 설정 칸 `minio_image`·`minio_publish_port`·`smoke_pm_bucket`(`common/config/settings.py:1244·1245·1268` — 11-01 PC 스모크에서 MinIO를 지운 뒤 읽는 곳 없음).
   - `settings.py`의 `__main__`(설정 확인 명령)이 `common.config.show`를 import하고 `show`가 `export`를 import해서(`settings.py:1637`, `show.py:11`), 두 도구 파일이 모든 레이어의 code_fp 의존이 된다 — 명령 입구를 `settings.py` 밖으로 옮겨 이 import를 끊는다(그 뒤 `show`·`export`를 고쳐도 레이어 지문이 바뀌지 않음).

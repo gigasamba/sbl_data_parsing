@@ -1,4 +1,4 @@
-"""근거 모양 만들기 — 근거 칸(원본 경로·대표 결과 위치)·근거 상태(evidence_status)·결과 크기 상한(cap).
+"""근거 모양 만들기 — 근거 칸·근거 상태(evidence_status)·결과 크기 상한(cap). 검색 중 ParsingMeta 조회(rep_uri)는 11-01에 지움(mc-15 — 적재 때 gold doc에 복사).
 S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/main.py(옛 data_retrieval/mcp_server.py)에서 옮김 — 내용 그대로
 (설정 상수만 mcp_server/config.py의 CFG로).
 """
@@ -7,99 +7,35 @@ import json
 import re
 from pathlib import Path
 
-from mcp_server import config as mc  # 설정 객체(S7d)
 from mcp_server.config import CFG
-from mcp_server.services.search.server_state import _STATE
 
 
-def _pm_db():
-    """OP21(S78) — EDW `AI.ParsingMeta` 읽기 연결(common/parsing_meta_db.make_db() — modules/load/parsing_meta.py와
-    공용, cli/check_modules.py 경계① 때문에 modules/search는 modules/load를 직접 import 못 해 common/에서 가져옴).
-    연결 정보 없음(common.connections.rdb 읽기 계정·sqlite 둘 다 없음)이거나 접속 실패면 None — 그 뒤로 이 프로세스에서 다시
-    시도하지 않음(근거의 '파싱 결과 경로' 칸이 조용히 빠짐, MCP는 계속 동작). MCP_EVIDENCE_PATHS=0이면 시도
-    자체를 안 함(기본 켬)."""
-    if not mc.cfg().output.evidence_paths:
-        return None
-    if _STATE.get("_pm_db_tried"):
-        return _STATE.get("_pm_db")
-    _STATE["_pm_db_tried"] = True
-    try:
-        from common.store import parsing_meta_db as PM
-
-        _STATE["_pm_db"] = PM.make_db("read")  # 검색 MCP는 읽기 계정만(사용자 10-29 — ops.md#op-03)
-    except (Exception, SystemExit) as e:  # make_db()는 접속 정보 없으면 SystemExit — 기능 꺼짐으로만 처리
-        print(f"[mcp] AI.ParsingMeta 연결 없음(근거의 '파싱 결과 경로' 칸은 빠짐) — {e}", flush=True)
-        _STATE["_pm_db"] = None
-    return _STATE.get("_pm_db")
-
-
-def _rep_uri(doc_key, cache):
-    """OP21(S78) — doc_key로 EDW AI.ParsingMeta의 대표 결과 경로(common.store.parsing_meta_db.find_rep_path, 같은 키
-    함수가 쓴 rep_key 그대로) 조회 — cache(요청 하나당 dict)로 같은 문서를 여러 청크가 가리켜도 한 번만 조회."""
-    if not doc_key:
-        return None
-    if doc_key in cache:
-        return cache[doc_key]
-    db = _pm_db()
-    if db is None:
-        return None
-    try:
-        from common.store import parsing_meta_db as PM
-
-        v = PM.find_rep_path(db, doc_key)
-    except Exception as e:  # 조회 1건 실패(네트워크 등) — 이 근거만 null, 검색은 계속
-        print(f"[mcp] AI.ParsingMeta 조회 실패(이 근거는 '파싱 결과 경로' 없음) — {e}", flush=True)
-        v = None
-    cache[doc_key] = v
-    return v
-
-
-def _evidence(h, man=None, rep_cache=None):
-    """man(AD44 rdb 수집 manifest, _manifest_by_name()): 있고 그 문서(file_name)가 있을 때만 doc_type·supersedes_doc_id·
-    is_deleted·contract_id·updated_at·company 칸을 더 붙인다(없으면 칸 자체가 없음 — 바이트 동일). version은 manifest에
-    있으면 그 값이 우선(RDB가 더 정확) · 없으면 L3-1 추출값(h.get("version"))을 그대로 둔다.
-    rep_cache(dict, 요청 하나당): 있고 AI.ParsingMeta에서 이 문서의 대표 결과 경로가 찾아지면 rep_uri 칸을 더
-    붙인다(OP21·S78 — 원본 경로는 기존 source_uri 칸 그대로, 찾은 게 없으면 칸 자체가 없음 — 바이트 동일)."""
+def _evidence(h, man=None):
+    """검색 결과 한 건 → 근거 dict(안쪽 칸 chunk_id·score·via·rank 포함 — 응답에는 schemas.evidence.EVIDENCE_KEYS 12칸만 나감).
+    man(AD44 rdb 수집 manifest, _manifest_by_name()): version은 그 문서(file_name)의 manifest 값만(없으면 null).
+    mc-05(사용자 10-31·11-01): 본문 글자로 판·구판을 추정한 값은 내보내지 않는다 — 운영 계약에 칸은 남아 있어 version·superseded 칸은
+    두되 superseded는 늘 null(원천에 구판 표시가 생기면 그 값으로). 추정값은 안쪽 최신성 순위(L3-1)에만 남음.
+    11-01(mc-16) — manifest의 다른 칸·rep_uri는 계약 밖이라 붙이지 않는다."""
     out = {
         "chunk_id": h.get("chunk_ref"),
         "chunk_key": h.get("chunk_key"),
-        "doc_key": h.get("doc_key"),
         "doc_id": h.get("doc_id"),
-        "source_uri": h.get("source_uri"),
         "file_path": h.get("file_path"),
         "file_name": h.get("file_name") or Path(h.get("file_path") or "").name,
         "page": h.get("page"),
         "line": h.get("line"),
-        "bbox": h.get("bbox"),
         "section": h.get("section"),
         "text": h.get("text"),
-        "doc_summary": h.get("summary"),
         "client": h.get("client"),
         "contract_no": h.get("contract_no"),
         "score": h.get("score"),
         "via": h.get("via"),
         "rank": h.get("rank"),
-        "image_ids": h.get("image_ids") or [],
         "doc_date": h.get("doc_date"),
-        "version": h.get("version"),
-        "superseded": h.get("superseded"),
-    }  # L3-1
-    m = (man or {}).get(out["file_name"])
-    if m:
-        out.update(
-            doc_type=m.get("doc_type"),
-            supersedes_doc_id=m.get("supersedes_doc_id"),
-            is_deleted=m.get("is_deleted"),
-            contract_id=m.get("contract_id"),
-            updated_at=m.get("updated_at"),
-            company=m.get("company_id"),
-        )
-        if m.get("version"):
-            out["version"] = m["version"]
-    if rep_cache is not None:
-        rep_uri = _rep_uri(out["doc_key"], rep_cache)
-        if rep_uri:
-            out["rep_uri"] = rep_uri
+        "version": None,
+        "superseded": None,
+    }
+    out["version"] = ((man or {}).get(out["file_name"]) or {}).get("version") or None
     return out
 
 

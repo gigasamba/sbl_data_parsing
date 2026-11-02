@@ -244,6 +244,7 @@ load:
 search:
   # ─── MCP 서버 ───
   server:
+    fulltext_secret:  # 원문 도구(list/get_doc_fulltext) 파일 손잡이 sfid 서명 키 · 값: 비밀 글자 [비밀]
     allowed_hosts: []  # 비루프백 바인드 때 추가로 허용할 Host(쉼표 목록, 리버스 프록시 이름 등) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
     host: 127.0.0.1  # MCP 서버 바인드 주소 · 기본 127.0.0.1 · 값: 127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부
     instructions:  # MCP 서버 instructions 글자(도구 안내문) 교체 · 값: 글자
@@ -262,10 +263,6 @@ search:
     bm25_table: 0.2  # [파라미터] 집계 질문일 때 BM25 가중치 · 기본 0.2 · 값: 0 이상
     id: 2.0  # [파라미터] RRF 융합에서 ID(드문 식별자) 가중치 · 기본 2.0 · 값: 0 이상
     vector: 1.0  # [파라미터] RRF 융합에서 벡터 가중치 · 기본 1.0 · 값: 0 이상
-  # ─── 고객 범위 ───
-  client:
-    hard: false  # 고객 범위를 하드 격리(다른 고객 문서 제외) · 기본 false · 값: true·false
-    strict: false  # 하드 격리에서 고객 미상 문서도 제외 · 기본 false · 값: true·false
   # ─── EDW 도구 ───
   edw_meta:
     dir:  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · 값: 경로
@@ -275,8 +272,6 @@ search:
     tables:  # query_edw 허용 표 목록(쉼표) · 값: 쉼표 목록 또는 YAML 목록
     tables_strict: false  # 1이면 허용 표 목록(EDW_QUERY_TABLES) 검사를 켬 · 기본 false · 값: true·false
   # ─── 출력·기록·파싱 프록시 ───
-  output:
-    evidence_paths: true  # 근거의 '파싱 결과 경로' 조회(AI.ParsingMeta) 스위치 · 기본 true · 값: true·false
   parse_proxy:
     url: http://127.0.0.1:8766  # parse_document가 부르는 작업 서비스 주소 · 기본 http://127.0.0.1:8766 · 값: URL
   query_log:
@@ -305,7 +300,6 @@ ops:
     sources_file:  # 원천 목록 파일 경로(비우면 resources/mappings/sources.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
     stack_file:  # 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
   pipeline_paths:
-    file_meta_path:  # EDW 파일 메타 JSONL 경로(s3_key → 메타) · 값: 경로
     gold_dir:  # 사람 정답(gold) 폴더 · 값: 경로
     images_root:  # 그림 PNG·index.jsonl 저장 루트 · 값: 경로
     index_conf:  # 색인 설정 JSON 경로(있으면 색인 모듈로 구조화) · 값: 경로
@@ -438,9 +432,6 @@ tuning:
       deadline: 360.0  # (자원) VLM 호출 1건 제한 시간(초) · 기본 360.0 · 값: 0 이상 초
       page_concurrency:  # (자원) 쪽 VLM 병렬 워커 수 최대값 · 값: 0 이상 정수
       page_min_concurrency: 2  # (자원) 쪽 VLM 적응형 병렬에서 느릴 때 줄일 수 있는 최소 워커 수 · 기본 2 · 값: 0 이상 정수
-  # ─── load의 조정값 ───
-  load:
-    index_lock_stale_sec: 21600.0  # 색인 빌드 잠금 파일을 죽은 빌드로 보고 회수하는 경과 시간(초) · 기본 21600.0 · 값: 0 이상 초
   # ─── search의 조정값 ───
   search:
     edw_meta:

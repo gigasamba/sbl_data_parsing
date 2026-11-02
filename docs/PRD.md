@@ -64,16 +64,16 @@
 ## 적재 (load) — 검색 DB(pgvector)·게시·저장 구조·DB 스키마
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
 |---|---|---|---|
-| 문서마다 고객·SFDC 메타를 EDW 조인으로 붙인다 — SFDC `FileStorageMap.sf_op_id → Opportunity → Account`(+ Task·Event·Quote 단계), CRMS `FileStorageMap_CRMS.rm_contract_code → RM_CM_PJTLIST`, LAS는 비움. 적재 때 검색 DB `doc`(`client_edw`·`sf_*`)에 쓰고 검색 거르기에 쓴다 | 파싱·구조화는 이 값을 안 쓴다 — 적재 때 붙이면 매핑이 바뀌어도 다시 파싱하지 않는다(사용자 11-02, 수집에서 옮김). 지금은 외부 파일 `file_meta_new.jsonl`을 `build_bundle._file_meta`가 읽는데 그 파일을 만드는 코드가 없다 | todo | [pl-29](prd/load.md#pl-29) |
+| 문서마다 고객·원천 메타를 EDW 조인으로 붙인다 — SFDC `FileStorageMap.content_version_id → ContentVersion → ContentDocumentLink`로 영업 기회(직접 > Task > Event > Quote, + 계정 직접 — 같은 단계 동률은 비움) → `Account.Name`, CRMS `FileStorageMap_CRMS.rm_contract_code → RM_CM_PJTLIST`, LAS `FileStorageMap_LAS.manage_no → LAS.Contract`. 적재 때(`pipeline/load/edw_meta.py`) 원천 스키마 `doc`(`client_edw`·원천 칸·`created_at`)에 쓴다 | 파싱·구조화는 이 값을 안 쓴다 — 매핑이 바뀌어도 다시 파싱하지 않는다(사용자 11-02). 외부 `file_meta_new.jsonl`은 지웠다. EDW를 못 읽으면 메타 없이 적재(`meta_missing`) — `--replace`로 다시 채움 | done | [pl-29](prd/load.md#pl-29) |
 | 검색 DB(gold — pgvector) 표 6개(`load_run`·`doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat`)와 뷰 1개(`v_chunk_source`)는 Alembic(DB 판 관리 도구)으로만 만든다 | 검색 MCP는 PG만 읽는다. 실행 중 DDL 금지 | done | [pl-07](prd/load.md#pl-07) |
 | 문서 묶음 하나를 한 트랜잭션으로 적재한다(`pgvector_load load`) — 하나라도 실패하면 전부 되돌림 | 반쯤 들어간 문서가 검색에 보이지 않게 | done | [pl-07](prd/load.md#pl-07) |
 | 이미 있는 문서는 `doc.file_path`가 같으면 건너뛴다. 바뀐 내용은 `--replace`로 | 내용 지문(sha) 칸이 없어 같은 경로에서 내용이 바뀌어도 건너뛴다(알려진 한계) | done | [pl-07](prd/load.md#pl-07) |
 | 적재 전에 DB 판을 확인 — 판 기록이 없으면 경고 후 계속, 낮거나 모르는 판이면 종료 2. `--replace`는 `load_run` 표가 있는 우리 스키마에서만 | 남의 스키마나 옛 판 DB를 망가뜨리지 않게 | done | [pl-07](prd/load.md#pl-07) |
 | 처음 쓰는 PG에는 `vector` 확장을 관리자가 한 번 만든다(`CREATE EXTENSION vector`) — 없으면 적재가 멈춘다 | 서버 계정은 보통 우리 스키마 권한만 있다. 서버 절차 문서에 이 단계가 빠져 있다(운영 고침 묶음) | done | [pl-07](prd/load.md#pl-07) |
-| 적재는 더하고 고치기만 하고 지우지 않는다(`--prune` 없앰). 원천에서 지워진 문서·실패 문서는 로그에만 | 건너뛴 문서까지 지워지던 문제(C-60). 경로가 바뀐 옛 행은 사람이 지운다 | done | [pl-13](prd/load.md#pl-13) |
-| 배포(`pgvector_load deploy`) 때 `chunk.clients`가 빈 옛 청크를 `doc.clients`로 채운다(200문서마다 커밋, 다시 돌려도 같음) | 없어진 `doc.client`를 읽어 실패하던 것을 고쳤다 | done | [pl-14](prd/load.md#pl-14) |
+| 적재는 더하고 고치기만 하고 지우지 않는다(`--prune` 없앰). 원천에서 지워진 문서·실패 문서는 로그에만. 원본 경로는 원천 스키마 5벌을 통틀어 하나 — `--replace` 없이 이미 있으면 건너뛰고, `--replace`면 다른 원천 스키마의 옛 사본을 지우고 옮긴다 | 건너뛴 문서까지 지워지던 문제(C-60). 경로가 바뀐 옛 행은 사람이 지운다 | done | [pl-13](prd/load.md#pl-13) |
+| ~~배포 때 `chunk.clients`를 `doc.clients`로 채운다~~ | 11-02(pl-28) 지움 — 청크·문서의 본문 고객 칸과 backfill을 없앰(고객은 `client_edw`만) | done | [pl-14](prd/load.md#pl-14) |
 | 임베딩 없음(`PIPE_EMBED=none`)이면 적재를 시작할 때 거부한다 | 지금은 `vector(0)` 표를 만들려다 실패한다. 검색에는 벡터가 필수 | todo | [pl-16](prd/load.md#pl-16) |
-| 색인 비교 예시 `index_a`·`index_b`(`compose.index.yml`) 지우기 | 끝까지 돌리면 실패한다(C-32) | todo | [pl-19](prd/load.md#pl-19) |
+| 색인 비교 예시 `index_a`·`index_b`(`compose.index.yml`) 지우기 | 끝까지 돌리면 실패한다(C-32) — 11-01 이름 있는 색인째 지움(mc-16) | done | [pl-19](prd/load.md#pl-19) |
 | 게시(publish — 파싱 결과를 Object Storage에 올리고 EDW `AI.ParsingMeta`에 기록) — 대표 `.md`와 엔진별 원결과를 올리고 원본 파일은 올리지 않는다 | 다른 팀은 결과를 Object Storage와 ParsingMeta에서 읽는다 | done | [pl-09](prd/load.md#pl-09) |
 | ParsingMeta에는 INSERT만 — 키 (`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뜀, UPDATE 없음 | 상태를 고쳐 쓰는 길은 10-31에 지웠다 | done | [pl-09](prd/load.md#pl-09) |
 | DRM(`skipped_drm`)·실패(`failed`) 문서는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만. 업로드 대상 상태는 `load.publish.upload_statuses`(기본 ok·partial) | 깨진 결과가 다른 팀에 넘어가지 않게 | done | [pl-09](prd/load.md#pl-09) |
@@ -89,9 +89,9 @@
 | 실행을 넘어 남는 로컬 완료 표시(`_DONE`, `runs.jsonl` 재사용)를 없애고 실패 문서는 다음 실행이 다시 고르게 | 저장 자리는 하나라는 원칙 | todo | [pl-32](prd/load-schema.md#pl-32) |
 | DB 스키마 명세는 `docs/architecture/db_schema.md` 하나(검색 DB·EDW·마스터 CSV의 칸·타입·쓰고 읽는 코드), `test_db_schema.py`가 대조 | 정의가 흩어져 있었다. 사용자·DB 담당자 승인 대기 | dev | [pl-25](prd/load-schema.md#pl-25) |
 | ParsingMeta에는 파싱 정보만(원천 키·상태·silver 위치·엔진·`gold_status`·`pipeline_version`·`sha256`), 고객·분류 같은 파일 메타는 검색 DB `doc`에만 | 중복 적재를 없앤다. 운영이 더한 칸은 0.2.0에 지운다(D-3). `stack_version` 칸은 결정 대기 | dev | [pl-25](prd/load-schema.md#pl-25) |
-| 문서 키는 `s3_key` 하나(`doc`에만, 청크는 `doc_id`만) — `doc.file_path`를 지우고 `s3_key`·`original_filename`으로 보여 준다 | sha256 `doc_key`를 없앤다. 근거 `rep_uri` 조회(mc-15)를 푼다 | dev | [pl-25](prd/load-schema.md#pl-25) |
-| 원천 시스템별 PG 스키마 5벌(`sfdc`·`crms`·`las`·`faq`·`other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 하나를 함께 | 원천마다 메타 칸이 다르다. 전체 다시 적재·MCP `source_system` 필수(등급 A) | todo | [pl-28](prd/load-schema.md#pl-28) |
-| 원천 = `FileStorageMap.source_system`(`SFDC`·`CRMS`·`LAS`·`FAQ`), 비었거나 다른 값이면 `other`. `faq` 스키마만 `chunk.faq_group` 칸 | `s3_key` 접두와 다르면 경고만 | todo | [pl-28](prd/load-schema.md#pl-28) |
+| 문서 키는 원본 경로 하나 — 검색 DB `doc.file_path` = Object Storage 원본 경로 = EDW `s3_key`(청크는 `doc_id`만), ParsingMeta와 이 값으로 잇는다 | sha256 `doc_key`는 검색 DB에 안 둔다(ParsingMeta `sha256`만). 사용자 11-02 — 경로 칸 하나 | dev | [pl-25](prd/load-schema.md#pl-25) |
+| 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타 칸이 다르다. 판 0002 — 전체 다시 적재·MCP `source_system` 필수(등급 A, 11-02) | done | [pl-28](prd/load-schema.md#pl-28) |
+| 원천 = `FileStorageMap.source_system`(`SFDC`·`CRMS`·`LAS`·`FAQ`, `-test` 붙어도 같음), 비었거나 다른 값이면 `other`. `faq` 스키마만 `chunk.faq_group` 칸 | 원본 경로 첫 마디로도 정함 | done | [pl-28](prd/load-schema.md#pl-28) |
 
 ## 검색 MCP (mcp) — AI 클라이언트가 부르는 도구 서버(이미지 `mcp-server`)
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
@@ -102,17 +102,17 @@
 | 질문 + 하드 거르기(`client`·`client_like`·`source_system`·`project_id`·`division`·`service_type`) — 후보 `min(50, max(3k,30))`개에서 범위 안만 남김 | 조건 밖 문서가 근거에 섞이지 않게 | done | [mc-01](prd/mcp.md#mc-01) |
 | 질문 넓히기 — 용어집으로 BM25 낱말을 더함(동의어 1.0·약어 0.8·약한 것 0.3), 고객 별칭 최대 20토큰 | 동의어·약어로 물어도 찾게 | done | [mc-02](prd/mcp.md#mc-02) |
 | 고객 2명 이상 비교 질문은 고객별(최대 4명)로 나눠 찾고 번갈아 합침. 집계형 질문은 BM25 가중치 0.2 | 한 고객이 근거 자리를 독차지하지 않게 | done | [mc-02](prd/mcp.md#mc-02) |
-| 고객 거르기는 EDW에서 붙인 고객(`client_edw`)만 본다(별칭 그룹 정확 일치, 목록은 OR) | 답이 고객을 섞으면 안 된다(C6). 지금 코드는 본문 라벨(`clients`)도 봄 | todo | [mc-05](prd/mcp.md#mc-05) |
+| 고객 거르기는 EDW에서 붙인 고객(`client_edw`)만 본다(정확 일치, 목록은 OR, `client_like`는 부분 일치) — 본문 라벨 순위 올리기(AD38·BR23·BR50)는 지움 | 답이 고객을 섞으면 안 된다(C6, 11-02). 별칭 그룹은 pl-38 | done | [mc-05](prd/mcp.md#mc-05) |
 | "최신"을 묻는 질문은 같은 문서군의 새 판을 위로(`common.text.search_recency` 0 끔·1 기본·2 늘), 이름만 다른 사본은 하나로 | 옛 판 인용 방지. 본문으로 판 추정은 지우기로(0.2.0) | todo | [mc-05](prd/mcp.md#mc-05) |
 | ~~집계 답(건수·합계·환율 메모·LLM 라우터)과 그 길이 읽던 지운 칸·표~~ | 11-01 지움 — 숫자 질문은 `query_edw`로 | done | [mc-04](prd/mcp.md#mc-04) · [mc-11](prd/mcp.md#mc-11) · [mc-12](prd/mcp.md#mc-12) |
 | ~~숨김 문서를 검색에서 빼기~~ | 숨김 기능 자체를 지움(pl-12) | dropped | [mc-14](prd/mcp.md#mc-14) |
 | 검색기가 지운 칸(`file_sha256` 등) 대신 문서 키 `doc_key`(= `file_path`)로 읽음 | 새 묶음으로 검색기를 만들면 실패하던 문제 | done | [mc-10](prd/mcp.md#mc-10) |
 | 질의 기록은 파일 `qa_log.jsonl`만(호출자·질문·근거·지연), 90일 보관·24시간마다 정리 | PG `qa_log` 표는 마이그레이션에 없었다. 토큰·원문은 남기지 않는다 | done | [mc-13](prd/mcp.md#mc-13) · [mc-09](prd/mcp.md#mc-09) |
-| 근거에 대표 파싱 결과 주소 `rep_uri`(`s3://<bucket>/<key>`) | 지금은 늘 빈 값 — 키 모양이 달라서. pl-25(문서 키 통일) 대기 | todo | [mc-15](prd/mcp.md#mc-15) |
-| `search` 운영 계약 — `question` 필수, `source_system` 필수·값 하나(`SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`, `-test` 별칭도) | 운영 명세와 같게. 계약 변경이라 사람 검토(등급 A), 0.2.0 | todo | [mc-16](prd/mcp.md#mc-16) |
-| 거르기 추가 — `FAQ_group`·`doc_class`·`sf_op_id`·`sf_op_name`·`contract_id`·`created_since/until`(시간대 없으면 한국 시간) | 모두 AND, 목록은 OR. 맞는 값이 없으면 오류가 아니라 빈 결과 | todo | [mc-16](prd/mcp.md#mc-16) |
-| 출력 줄이기 — 맨 위 `question`·`evidence[]`·`evidence_status`·`filter`·`scope_docs`, 근거 키 `chunk_key` = `<doc_id>:<seq>` | `file_path`·`index_id`·`subs`·`images`·`notes`·`ms` 등을 지운다 | todo | [mc-16](prd/mcp.md#mc-16) |
-| 원문 도구 2개 — `list_doc_fulltext`(목록)·`get_doc_fulltext`(원문), 시스템별 검색 DB `doc`에서 읽음 | EDW가 멈춰도 동작. 새 도구라 등급 A, 0.2.0 | todo | [mc-17](prd/mcp.md#mc-17) |
+| 대표 파싱 결과 주소 `rep_uri`(`s3://<bucket>/<key>`)는 원문 도구가 부를 때 ParsingMeta에서 읽는다(검색 근거 12칸에는 없음) | 사용자 11-01 — 검색 DB에는 거르기 메타만(C8 바뀜) | done | [mc-15](prd/mcp.md#mc-15) |
+| `search` 운영 계약 — `question` 필수, `source_system` 필수·값 하나(`SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`, `-test` 별칭도) | 운영 명세와 같게. 계약 변경이라 사람 검토(등급 A), 0.2.0 | done | [mc-16](prd/mcp.md#mc-16) |
+| 거르기 추가 — `FAQ_group`·`doc_class`·`sf_op_id`·`sf_op_name`·`contract_id`·`created_since/until`(시간대 없으면 한국 시간) | 모두 AND, 목록은 OR. 맞는 값이 없으면 오류가 아니라 빈 결과 | done | [mc-16](prd/mcp.md#mc-16) |
+| 출력 줄이기 — 맨 위 `question`·`evidence[]`·`evidence_status`·`filter`·`scope_docs`, 근거 키 `chunk_key` = `<doc_id>:<seq>` | `file_path`·`index_id`·`subs`·`images`·`notes`·`ms` 등을 지운다 | done | [mc-16](prd/mcp.md#mc-16) |
+| 원문 도구 2개 — `list_doc_fulltext`(목록)·`get_doc_fulltext`(원문). 거르기는 원천 스키마 `doc`, 대표 결과 위치·`doc_key`는 부를 때 ParsingMeta에서 | 사용자 11-01 — 검색 DB에는 거르기 메타만(EDW를 못 읽으면 `registry_unavailable`). 새 도구라 등급 A, 0.2.0 | done | [mc-17](prd/mcp.md#mc-17) |
 | 검색이 실행 중에 묶음 파일(`docs.jsonl`·`chunks.jsonl`·`meta.json`)을 읽지 않고 문서 메타·임베딩 정보·청크 키를 PG에서 읽는다 | 서버에서 묶음 경로를 맞출 필요가 없어진다. 검색 동작이 바뀌는 일이라 자기 PR + 평가 | todo | [mc-19](prd/mcp.md#mc-19) |
 | `query_edw` — EDW 읽기 전용 SQL(SELECT/WITH 한 문장, 읽기 계정), 2,000행·20초·2 MB 상한 | 정형 숫자는 EDW에서 답한다. 표 허용 목록은 `tables_strict`를 켤 때만(기본 꺼짐) | done | [mc-06](prd/mcp.md#mc-06) |
 | `edw_meta` — 정적 자료(`catalog.json`+`columns.jsonl`)로 스키마 → 표 → 칸 찾기, 모르는 이름은 비슷한 이름 제안, 응답 200 KB 상한 | SQL을 쓰기 전에 이름 확인. 표본 값은 내지 않는다 | done | [mc-07](prd/mcp.md#mc-07) |

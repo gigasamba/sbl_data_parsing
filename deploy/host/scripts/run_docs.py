@@ -259,9 +259,7 @@ def parse_cmd(seq, chan, scan, gate):
 def struct_cmd(seq):
     """문서 1개 구조화 + 적재(구조화 컨테이너). 엔진 구성은 파싱과 같은 파일(코드 폴더 — 사용자 11-01: 판 번호 없음, 실행 중에는 안 바뀜)."""
     inside = f"/app/output/docflow/{seq}"
-    st = sets(
-        *EMBED_SET, "FILE_META_PATH=/app/output/file_meta_new.jsonl"
-    )  # 묶음·적재 python에(stackcfg는 이 칸을 안 읽어 뺌 — 덮기 파일 하나 덜, 리뷰 S9)
+    st = sets(*EMBED_SET)  # 묶음·적재 python에(문서 메타는 적재가 EDW 조인으로 — pl-29 11-02, FILE_META_PATH 지움)
     return (
         f"{DOCKER} exec {STRUCT_C} bash -c 'umask 0002 && cd /app && "
         f"PYTHONPATH=/app/deploy "
@@ -481,8 +479,10 @@ def edw_done_keys():
 
     conn = _edw_connect()  # S7e1 — 설정 파일의 parsing-meta 접속(옛 코드 기본값 — 운영 접속 값·비밀 삭제, D-028 ⑨)
     cur = conn.cursor()
+    cur.execute("SELECT COL_LENGTH('AI.ParsingMeta', 'source_key')")  # 11-02 — 원본 키 칸 이름 바꾸기(source_key → s3_key, C-76) 전후 모두
+    kc = "source_key" if cur.fetchone()[0] is not None else "s3_key"
     marks = ", ".join(f"'{s}'" for s in DONE_STATUSES)  # 코드 상수만 SQL에 넣음(값 바인딩 없음)
-    cur.execute(f"SELECT source_key FROM AI.ParsingMeta WHERE parse_status IN ({marks})")
+    cur.execute(f"SELECT {kc} FROM AI.ParsingMeta WHERE parse_status IN ({marks})")
     keys = {r[0] for r in cur.fetchall()}
     conn.close()
     return keys

@@ -6,12 +6,12 @@
   python -m common.store.db.dbtool check   --target …   — 표 정의 ↔ 실제 DB 비교(차이·판이 끝이 아니면 종료 코드 1)
   python -m common.store.db.dbtool --pg-cases orca_<이름>  — PC 전용 PG 시험(새 시험 DB — 기본 스키마·vector 확장 자리, VS8a B-1·R-9)
   이미지: `migrate up --target all --bundle …`(entrypoint — pipeline 이미지, load와 같은 잠금).
-· 갈래 search = 검색 스키마(PG_SCHEMA — index --pg 스키마는 --schema) 하나(struct 갈래는 사용자 11-01에 없앰 — 엔진 구성·원천 목록은 파일).
-  판 기록 표는 스키마마다 <스키마>.alembic_version.
+· 갈래 search = 기준 스키마(PG_SCHEMA — --schema로 바꿈) 하나 + 원천 스키마 5벌 `<기준>_sfdc|crms|las|faq|other`(pl-28 — 판 0002가 만듦).
+  판 기록 표·공용 doc_id 시퀀스는 기준 스키마에(<기준>.alembic_version).
 · up: 판 기록이 없는데 표가 있는 스키마(옛 코드가 만든 DB)는 먼저 비교 — 차이가 기준판이 고치는 것(표·색인·뷰 없음, 뷰 칸 다름)뿐이면 고치고
   판 기록(기준판이 IF NOT EXISTS·뷰는 DROP 뒤 다시 만듦), 칸 이름·형식·NULL·기본값·키가 다르거나 남는 표가 있으면 거부(Q3). 적재 앞 자동 길
   (pgvector_load deploy)은 판 기록 없는 기존 스키마면 비교·DDL 없이 경고만(코디네이터 10-28 a — Q5). 검색 스키마는 지금 deploy와 같은 확인을 먼저 —
-  vector 확장(없으면 멈춤, --create-extension = 옛 PG_CREATE_EXTENSION=1 옵트인)·남의 스키마 거부(load_run 없음)·차원(DB와 다르면 새 PG_SCHEMA).
+  vector 확장(없으면 멈춤, --create-extension = 옛 PG_CREATE_EXTENSION=1 옵트인)·남의 스키마 거부(판 표 alembic_version 없음)·차원(DB와 다르면 새 PG_SCHEMA).
 · 차원은 --dim 또는 --bundle <묶음>/meta.json, 있는 스키마는 DB 차원(새 설정 칸 없음 — Q4).
 · 적재 전 판 확인(require_current — Q5): 판 기록 없음 = 경고 뒤 계속(기준판 = 지금 스키마), 끝보다 낮거나 모르는 판 = 거부. MCP(읽기)는 안 봄.
 · SQLite 대체(pg_standin)는 판 관리 밖 — 표 정의에서 바로 만든다(standin_script). 접속 값은 settings.yaml(common.store.pg.conf).
@@ -75,6 +75,8 @@ def schema_of(target, schema=None):
         schema = conf()["PG_SCHEMA"]
     if not _SCHEMA_RE.fullmatch(schema):
         raise DbToolError(f"검색 스키마 이름이 틀림: {schema!r} — 소문자·숫자·_ 만")
+    if len(schema) > 50:  # 원천 스키마 `<기준>_other`·색인 `ix_<기준>_other_chunk_embq`가 PG 이름 63자를 넘지 않게(pl-28)
+        raise DbToolError(f"기준 스키마 이름이 김({len(schema)}자) — 50자 이하")
     return schema
 
 
@@ -177,22 +179,27 @@ def precheck_search(q, schema, dim, create_extension=False):
     if (
         q(f"SELECT 1 FROM information_schema.schemata WHERE schema_name='{schema}'")
         and q(f"SELECT 1 FROM information_schema.tables WHERE table_schema='{schema}' LIMIT 1")
-        and not q(f"SELECT 1 FROM information_schema.tables WHERE table_schema='{schema}' AND table_name='load_run'")
+        and not q(f"SELECT 1 FROM information_schema.tables WHERE table_schema='{schema}' AND table_name='alembic_version'")
     ):
         raise SystemExit(
-            f"deploy 거부: 스키마 {schema}에 표가 있지만 우리 표식(load_run)이 없음 — 남의 기존 스키마일 수 있음(다른 PG_SCHEMA 사용)"
+            f"deploy 거부: 스키마 {schema}에 표가 있지만 우리 표식(판 표 alembic_version)이 없음 — 남의 기존 스키마일 수 있음(다른 PG_SCHEMA 사용). "
+            "판 기록 전 옛 우리 스키마면 `migrate check` 뒤 `migrate stamp`"
         )
     check_dim(q, schema, dim)
 
 
 def check_dim(q, schema, dim):
-    """있는 chunk 표의 차원(없으면 None) — dim과 다르면 거부(옛 deploy 글자 그대로)."""
+    """있는 chunk 표의 차원(없으면 None) — 원천 스키마 5벌(pl-28)을 차례로 보고, 기준 스키마 자체(0001의 옛 한 벌)도 본다. dim과 다르면 거부."""
     from common.store.db.dbcompare import DIM_SQL
+    from common.store.db.models import search_tables as ST
 
-    have = q(DIM_SQL.format(schema=schema))
-    if dim is not None and have and have[0]["d"] not in (None, -1) and have[0]["d"] != int(dim):
-        raise SystemExit(f"{schema}.chunk.embedding 차원 {have[0]['d']} ≠ 묶음 {dim} — 임베딩 모델이 바뀜: 새 PG_SCHEMA로 배포")
-    return have[0]["d"] if have and have[0]["d"] not in (None, -1) else None
+    for s in (*(ST.src_schema(schema, src) for src in ST.SOURCES), schema):
+        have = q(DIM_SQL.format(schema=s))
+        if have and have[0]["d"] not in (None, -1):
+            if dim is not None and have[0]["d"] != int(dim):
+                raise SystemExit(f"{s}.chunk.embedding 차원 {have[0]['d']} ≠ 묶음 {dim} — 임베딩 모델이 바뀜: 새 PG_SCHEMA로 배포")
+            return have[0]["d"]
+    return None
 
 
 def index_kind(dim):
@@ -274,26 +281,27 @@ def check(target, schema, dim=None, conn=None):
     st, have = status(q, target, schema)
     if target == "search":
         dim = check_dim(q, schema, dim) or dim
-    rep = dbcompare.compare(conn, target, schema, dim) if has_tables(q, schema) else None
+    rep = dbcompare.compare(conn, target, schema, dim) if (has_tables(q, schema) or st != "없음") else None
     return st, have, rep
 
 
 # ── SQLite 대역(pg_standin) — 판 관리 밖, 표 정의에서 바로(5-4) ───────────────────────────────
 def standin_script(schema, dim):
-    """검색 스키마를 PostgreSQL 꼴 DDL 글자로(표 정의에서 컴파일 + 뷰) — pg_standin이 옛 schema.sql처럼 받아 SQLite로 번역한다
-    (첫 문장 CREATE SCHEMA로 DDL 묶음임을 알아봄). HNSW·GIN 색인은 대역이 흉내 내지 않아 넣지 않는다."""
+    """원천 스키마 하나(`<기준>_<원천>`)를 PostgreSQL 꼴 DDL 글자로(표 정의에서 컴파일 + 뷰) — pg_standin이 옛 schema.sql처럼 받아 SQLite로
+    번역한다(첫 문장 CREATE SCHEMA로 DDL 묶음임을 알아봄). 대역은 스키마마다 파일 하나라 공용 시퀀스를 흉내 내지 않고(자동 번호) HNSW 색인도 넣지 않는다."""
     from sqlalchemy.dialects import postgresql
     from sqlalchemy.schema import CreateIndex, CreateTable
 
     from common.store.db.models import search_tables as ST
 
-    md = ST.search_metadata(schema, dim)
+    md = ST.search_metadata(schema, dim, shared_seq=False)
+    _, src = ST.split_schema(schema)
     d = postgresql.dialect()
     parts = [f"CREATE SCHEMA IF NOT EXISTS {schema}"]
-    for t in md.tables.values():  # 정의 순서(옛 schema.sql 순서 — load_run·doc·chunk·…)
+    for t in md.tables.values():  # 정의 순서(doc·chunk·…)
         parts.append(str(CreateTable(t, if_not_exists=True).compile(dialect=d)).strip())
         parts += [str(CreateIndex(i, if_not_exists=True).compile(dialect=d)).strip() for i in sorted(t.indexes, key=lambda i: i.name)]
-    parts.append(ST.VIEW_SQL.replace("{S}", schema))
+    parts.append(ST.view_ddl(src).replace("{S}", schema))
     return ";\n".join(parts) + ";\n"
 
 
@@ -314,7 +322,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("cmd", nargs="?", choices=["up", "stamp", "current", "check"])
     ap.add_argument("--target", choices=[*TARGETS, "all"], default="all")
-    ap.add_argument("--schema", help="검색 스키마(기본 settings PG_SCHEMA — index --pg 스키마는 <PG_SCHEMA>_<index_id>)")
+    ap.add_argument("--schema", help="기준 스키마(기본 settings PG_SCHEMA — 원천 스키마는 <기준>_<원천>)")
     ap.add_argument("--dim", type=int, help="임베딩 차원(새 검색 스키마 — 있는 스키마는 DB 차원)")
     ap.add_argument("--bundle", help="묶음 폴더 — meta.json의 dim")
     ap.add_argument(
@@ -423,8 +431,8 @@ def pg_cases(name):
         eng, cur = same(name, target, schema, 8, opts, label)
         ok(cur == schema, f"{label}: 기본 스키마가 우리 스키마({cur})")
         bad = (
-            f"DROP TABLE {schema}.{VERSION_TABLE}; ALTER TABLE {schema}.doc ADD COLUMN file_sha256 CHAR(64); "
-            f"ALTER TABLE {schema}.chunk ALTER COLUMN n_terms TYPE BIGINT"
+            f"DROP TABLE {schema}.{VERSION_TABLE}; ALTER TABLE {schema}_sfdc.doc ADD COLUMN file_sha256 CHAR(64); "
+            f"ALTER TABLE {schema}_sfdc.chunk ALTER COLUMN n_terms TYPE BIGINT"
         )
         run(name, bad, opts)
         with eng().connect() as c:

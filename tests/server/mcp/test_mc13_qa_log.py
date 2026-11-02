@@ -26,7 +26,7 @@ class _PG:  # qa_log 표가 없는 PG — 어떤 질의든 받으면 기록(받�
 def test_log_file_only():
     d = Path(tempfile.mkdtemp())
     R = SimpleNamespace(pg=_PG())
-    with mc.senv(MCP_QUERY_LOG_DIR=str(d)), patch.dict(_STATE, {"R": R, "stack": {"name": "dev-v1"}}):
+    with mc.senv(MCP_QUERY_LOG_DIR=str(d)), patch.dict(_STATE, {"Rs": {"sfdc": R}, "stack": {"name": "dev-v1"}}):
         S._log("배치 수는?", [{"chunk_id": 7, "rank": 1, "via": "bm25"}], 12.34)
         recs = [json.loads(x) for x in (d / "qa_log.jsonl").read_text(encoding="utf-8").splitlines()]
     assert R.pg.calls == [], R.pg.calls  # PG에 질의 기록을 보내지 않음

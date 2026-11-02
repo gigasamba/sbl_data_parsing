@@ -16,6 +16,7 @@ import json
 import sys
 import time
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from common.core.console import utf8_stdout
@@ -26,7 +27,7 @@ from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.load.pg_load_connect import connect as pg_connect
 
 # DROP/TRUNCATE/DELETE 대상 식별자 화이트리스트(XS3) — 우리 스키마의 우리 표만. 스키마명 자체는 common/pg.conf()가 이미 정규식으로 검증.
-_OUR_TABLES = {"load_run", "doc", "chunk", "chunk_term", "term_stat", "corpus_stat"}  # 2026-10-20 축소 — 검색(chunk+BM25)에 필요한 표만
+_OUR_TABLES = {"doc", "chunk", "chunk_term", "term_stat", "corpus_stat"}  # 원천 스키마마다 같은 표(pl-28 — load_run은 11-02에 지움)
 
 
 def _tbl(s, name):
@@ -36,17 +37,36 @@ def _tbl(s, name):
 
 
 def _has_marker(db):
-    """스키마에 우리 load_run 표(deploy가 만듦)가 있는지."""
-    return bool(db.q("SELECT 1 FROM information_schema.tables WHERE table_schema=%s AND table_name='load_run'", (db.schema,)))
+    """기준 스키마에 우리 판 표(alembic_version — deploy·migrate가 만듦)가 있는지(11-02 — load_run 표식을 대신)."""
+    return bool(db.q("SELECT 1 FROM information_schema.tables WHERE table_schema=%s AND table_name='alembic_version'", (db.schema,)))
 
 
 def _require_marked_schema(db):
-    """--replace는 우리가 만든 스키마(load_run 표가 있음)에서만(XS3) — 표식 없는 기존 스키마는 남의 것일 수 있어 거부."""
+    """--replace는 우리가 만든 스키마(판 표가 있음)에서만(XS3) — 표식 없는 기존 스키마는 남의 것일 수 있어 거부."""
     if not _has_marker(db):
         raise SystemExit(
-            f"--replace 거부: 스키마 {db.schema}에 우리 표식(load_run)이 없음 — "
-            "남의 기존 스키마일 수 있음(deploy로 먼저 만들거나 다른 PG_SCHEMA 사용)"
+            f"--replace 거부: 스키마 {db.schema}에 우리 표식(판 표 alembic_version)이 없음 — "
+            "남의 기존 스키마일 수 있음(deploy로 먼저 만들거나 다른 PG_SCHEMA 사용 · 판 기록 전 옛 우리 스키마면 migrate stamp)"
         )
+
+
+class _Src:
+    """기준 연결 하나로 원천 스키마 하나를 가리킴(실 PG — 한 연결·한 트랜잭션으로 5벌 모두에 쓴다). q·cn은 기준 연결 그대로."""
+
+    def __init__(self, db, schema):
+        self.db, self.schema = db, schema
+        self.cn, self.q = db.cn, db.q
+
+
+def src_dbs(db):
+    """원천 이름 → 그 원천 스키마를 가리키는 연결(pl-28). SQLite 대역은 스키마마다 파일 하나라 원천마다 대역을 따로 연다."""
+    from common.store.db.models import search_tables as ST
+
+    if getattr(db, "is_standin", False):
+        from common.store.pg_standin import StandinPG
+
+        return {src: StandinPG(ST.src_schema(db.schema, src)) for src in ST.SOURCES}
+    return {src: _Src(db, ST.src_schema(db.schema, src)) for src in ST.SOURCES}
 
 
 def _upgrade(schema, dim):
@@ -66,10 +86,11 @@ def deploy(db, dim):
     dbtool.precheck_search(db.q, db.schema, dim, pc.cfg().load.pg_create_extension)  # S7c — 설정 객체 · 옵트인은 PC·단독 시험만
     standin = getattr(db, "is_standin", False)
     kind = dbtool.index_kind(dim)
-    if standin:
-        with db.cn.cursor() as cur:
-            cur.execute(dbtool.standin_script(db.schema, int(dim)))
-        dbtool.check_dim(db.q, db.schema, dim)  # 대역 파일이 옛 차원으로 남아 있을 때(PG는 판 올리기 전 precheck가 봄)
+    if standin:  # 원천 스키마마다 대역 파일 하나(pl-28)
+        for sdb in src_dbs(db).values():
+            with sdb.cn.cursor() as cur:
+                cur.execute(dbtool.standin_script(sdb.schema, int(dim)))
+            dbtool.check_dim(sdb.q, sdb.schema, dim)  # 대역 파일이 옛 차원으로 남아 있을 때(PG는 판 올리기 전 precheck가 봄)
     elif dbtool.status(db.q, "search", db.schema)[0] == "없음" and dbtool.has_tables(db.q, db.schema):
         # 판 기록 없는 기존 스키마(옛 코드가 만든 DB — stamp 전): DDL·비교 없이 경고 뒤 계속(Q5를 적재 앞 자동 길에도 — 코디네이터 10-28 a).
         # Q3 비교·거부는 사람이 돌리는 migrate up|stamp에서만. 옛 deploy가 IF NOT EXISTS로 빠진 표·색인을 채우던 것은 없음(check가 보임)
@@ -77,45 +98,7 @@ def deploy(db, dim):
         kind += "(확인 안 함 — 판 기록 없는 기존 스키마: migrate check)"  # 색인을 만들지도 보지도 않음(VS8a R-7)
     else:
         _upgrade(db.schema, int(dim))  # 새 스키마 = 만들고 판 기록 · 판 기록 있음 = 끝까지(끝이면 그대로, 모르는 판은 거부)
-    # 10-15 urgent — one-time backfill of rows loaded before chunk.clients existed (no re-load needed)
-    if not standin:
-        backfill_chunk_clients(db)
     return kind
-
-
-def _doc_row_clients(clients):
-    """doc.clients (JSON TEXT) -> label list, [] = unknown. Bad JSON never raises — 94 review: one broken row must not fail
-    deploy(). pl-14 — the 10-20 reduced doc table has no client column, so there is no single-label fallback any more."""
-    try:
-        v = json.loads(clients or "[]")
-    except (ValueError, TypeError):
-        return []
-    return [str(x) for x in v if x] if isinstance(v, list) else []
-
-
-def backfill_chunk_clients(db):
-    """Fill chunk.clients for rows loaded before the column existed — in ONE transaction, parsed in Python (no SQL JSON cast
-    that one bad row could abort). Idempotent: only rows with clients IS NULL. Search keeps the old (correct) path while any
-    NULL remains (pgsearch._has_chunk_clients), so a half-done or failed backfill never makes strict queries return empty."""
-    s = db.schema
-    rows = db.q(f"SELECT DISTINCT d.doc_id, d.clients FROM {s}.doc d JOIN {s}.chunk c ON c.doc_id = d.doc_id WHERE c.clients IS NULL")
-    if not rows:
-        return 0
-    for i in range(0, len(rows), 200):  # 94 review — commit every 200 docs (short row locks; partial progress is safe, NULL-gated)
-        with db.cn.transaction(), db.cn.cursor() as cur:
-            for r in rows[i : i + 200]:
-                cur.execute(
-                    f"UPDATE {s}.chunk SET clients = %s WHERE doc_id = %s AND clients IS NULL",
-                    (_doc_row_clients(r["clients"]), r["doc_id"]),
-                )
-    return len(rows)
-
-
-def _chunk_clients(d, standin=False):
-    """10-15 — the doc's client labels for chunk.clients: doc clients list (strongest first) or the single client, [] = unknown.
-    PostgreSQL gets a list (text[]); the SQLite stand-in gets JSON text (no arrays there)."""
-    names = [n for n in (d.get("clients") or ([d["client"]] if d.get("client") else [])) if n]
-    return json.dumps(names, ensure_ascii=False) if standin else names
 
 
 def _nonul(o):
@@ -142,8 +125,25 @@ def drop_terms(cur, s, doc_ids):
     cur.execute(f"DELETE FROM {_tbl(s, 'term_stat')} WHERE df <= 0")
 
 
+def _kst(v):
+    """원천 등록 시각 글자 → 시간대 붙은 ISO 글자(시간대 없는 값은 KST — FileStorageMap 값, 운영 계약). 비었거나 형식이 틀리면 None(적재는 계속)."""
+    if not v:
+        return None
+    try:
+        t = datetime.fromisoformat(str(v).strip())
+    except ValueError:
+        print(f"[pgstore] created_at 형식이 아님 — 비워 둠: {v!r}", flush=True)
+        return None
+    return (t if t.tzinfo else t.replace(tzinfo=timezone(timedelta(hours=9)))).isoformat()
+
+
 def load(db, bundle, replace=False):
-    """묶음 → 한 트랜잭션. 저장된 문서(file_path 같음)는 건너뜀(replace면 지우고 다시 넣음 — 고치기). 묶음에 없는 저장 문서는 그대로 둠(pl-13)."""
+    """묶음 → 원천 스키마별로(pl-28 — 문서의 source_system으로 고름: SFDC·CRMS·LAS·FAQ, 그 밖은 other) 적재. 실 PG는 기준 연결 한 트랜잭션
+    (실패하면 5벌 모두 되돌림), 대역은 원천마다 따로. 저장된 문서(file_path 같음)는 건너뜀(replace면 지우고 다시 넣음 — 고치기). 묶음에 없는
+    저장 문서는 그대로 둠(pl-13). 실행 정보(묶음 meta·건수·시간)는 실행 기록에 남긴다(load_run 표는 11-02에 지움). 적재가 끝나면(커밋 뒤)
+    ParsingMeta.loaded_at을 적는다(C10 예외 — 실패해도 적재는 그대로, 경고와 건수만)."""
+    from common.store.db.models import search_tables as ST
+
     if replace:
         _require_marked_schema(db)  # XS3 — 남의 기존 스키마에 --replace 금지
     import numpy as np
@@ -152,114 +152,215 @@ def load(db, bundle, replace=False):
     meta = json.loads((B / "meta.json").read_text(encoding="utf-8"))
     docs, chunks = _nonul(jl(B / "docs.jsonl")), _nonul(jl(B / "chunks.jsonl"))
     vecs = np.load(B / "vectors.npy", mmap_mode="r")  # 필요한 청크만 읽음(전체를 메모리에 올리지 않음)
-    s, t0 = db.schema, time.time()
-    with db.cn.transaction(), db.cn.cursor() as cur:  # 한 트랜잭션 — 실패하면 전부 되돌림
-        cur.execute(f"INSERT INTO {s}.load_run(params) VALUES (%s) RETURNING run_id", (json.dumps(meta, ensure_ascii=False),))
-        run = cur.fetchone()[0]
-        cur.execute(f"SELECT file_path, doc_id FROM {s}.doc")
-        have = {r[0]: r[1] for r in cur.fetchall()}
-        doc_id = {}
-        for i, d in enumerate(docs):
-            old = have.get(d["file_path"])
-            if old and not replace:
-                continue
-            if old:
-                drop_terms(cur, s, [old])
-                cur.execute(f"DELETE FROM {_tbl(s, 'doc')} WHERE doc_id=%s", (old,))  # chunk는 ON DELETE CASCADE
-            # 2026-10-20 축소 스키마 — 검색에 필요한 최소 컬럼만 (file_name은 뷰에서 file_path 유도)
-            cur.execute(
-                f"""INSERT INTO {s}.doc(file_path, summary, clients, run_id, source_system,
-                            sf_acc_name, sf_op_id, sf_op_name, project_code__c,
-                            contract_id, contract_date, prod_name, division, service_type)
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING doc_id""",
-                (
-                    d["file_path"],
-                    d.get("summary"),
-                    json.dumps(d["clients"], ensure_ascii=False) if d.get("clients") else None,
-                    run,
-                    d.get("source_system"),
-                    d.get("sf_acc_name"),
-                    d.get("sf_op_id"),
-                    d.get("sf_op_name"),
-                    d.get("project_code__c"),
-                    d.get("contract_id"),
-                    d.get("contract_date"),
-                    d.get("prod_name"),
-                    d.get("division"),
-                    d.get("service_type"),
-                ),
-            )
-            doc_id[i] = cur.fetchone()[0]
-        sel = [ci for ci, c in enumerate(chunks) if c["doc"] in doc_id]
-        ci_db = {}
-        doc_cl = {i: _chunk_clients(docs[i], getattr(db, "is_standin", False)) for i in doc_id}  # chunks.jsonl "doc" = docs.jsonl 줄 번호
-        for ci in sel:
-            c = chunks[ci]
-            cur.execute(
-                f"""INSERT INTO {s}.chunk(doc_id, seq, page, line_start, line_end, char_start, char_end, bbox, section, chunk_text,
-                            n_chars, n_terms, embed_model, embedding, clients, source_system) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::vector,%s,%s) RETURNING chunk_id""",
-                (
-                    doc_id[c["doc"]],
-                    c["seq"],
-                    c["page"],
-                    c["line_start"],
-                    c["line_end"],
-                    c["char_start"],
-                    c["char_end"],
-                    c["bbox"],
-                    c["section"],
-                    c["chunk_text"],
-                    c["n_chars"],
-                    c["n_terms"],
-                    meta.get("embed_model"),
-                    vec(vecs[ci]),
-                    doc_cl[c["doc"]],
-                    c.get("source_system"),
-                ),
-            )
-            ci_db[ci] = cur.fetchone()[0]
-        # 2026-10-20 축소 — doc_fact·doc_image·chunk_image·concept_chunk·kg_node·kg_edge는 더 이상 적재하지 않음(테이블 삭제됨)
-        # 2026-10-22 사용자 지정 — BM25 항목(term,tf) 계산 문서당 BM25_THREADS(기본 4) 병렬 선처리, COPY는 그대로 단일 트랜잭션
-        bthreads = max(1, int(pc.cfg().load.bm25_threads))
-        sel_terms = {}
-        if bthreads > 1 and len(sel) > 1:
-            from concurrent.futures import ThreadPoolExecutor
+    t0 = time.time()
+    from pipeline.load import edw_meta
 
-            _tk = [ci for ci in sel]
+    edw, meta_missing = edw_meta.fetch([(d.get("source_system"), d["file_path"]) for d in docs])  # pl-29 — EDW 조인(트랜잭션 밖, 읽기 계정)
+    for d in docs:
+        d.update({k: v for k, v in (edw.get(d["file_path"]) or {}).items() if v is not None})
+    by_src = {}
+    for i, d in enumerate(docs):
+        by_src.setdefault(ST.source_of(d.get("source_system")), []).append(i)
+    dbs = src_dbs(db)
+    elsewhere = _elsewhere(dbs, docs, by_src)  # 같은 원본 경로가 다른 원천 스키마에 있는지(원천이 바뀐 문서 — 리뷰 #86)
+    if not replace:  # 어디든 이미 있으면 건너뜀(두 스키마에 같은 문서가 생기지 않게)
+        by_src = {src: [i for i in idx if docs[i]["file_path"] not in elsewhere] for src, idx in by_src.items()}
+    counts = {"docs": 0, "chunks": 0, "terms": 0, "by_source": {}, "meta_missing": meta_missing}
+    loaded = []
+    if getattr(db, "is_standin", False):
+        # 대역은 스키마마다 파일이라 공용 시퀀스가 없음 — 5벌의 가장 큰 doc_id 다음부터 번호를 줘 겹치지 않게(chunk_key·원문 도구 cursor)
+        nxt = [1 + max(_max_doc_id(sdb) for sdb in dbs.values())]
+        for src, ids in _drop_plan(elsewhere, replace).items():
+            sdb = dbs[src]
+            with sdb.cn.transaction(), sdb.cn.cursor() as cur:
+                _drop_docs(cur, sdb.schema, ids, meta["dim"])
+        for src, idx in by_src.items():
+            sdb = dbs[src]
+            with sdb.cn.transaction(), sdb.cn.cursor() as cur:
+                c, ld = _load_src(cur, sdb.schema, src, docs, idx, chunks, vecs, meta, replace, nxt)
+            _add(counts, src, c)
+            loaded += ld
+    else:
+        with db.cn.transaction(), db.cn.cursor() as cur:  # 한 트랜잭션 — 실패하면 5벌 모두 되돌림
+            for src, ids in _drop_plan(elsewhere, replace).items():
+                _drop_docs(cur, dbs[src].schema, ids, meta["dim"])
+            for src, idx in by_src.items():
+                c, ld = _load_src(cur, dbs[src].schema, src, docs, idx, chunks, vecs, meta, replace)
+                _add(counts, src, c)
+                loaded += ld
+    counts["sec"] = round(time.time() - t0, 1)
+    counts["loaded_at_failed"] = _mark_loaded(loaded)
+    from common.core import runlog
 
-            def _toks(ci):
-                return ci, Counter(tokens(index_text(chunks[ci]))).items()
-
-            with ThreadPoolExecutor(max_workers=bthreads) as ex:
-                for ci, items in ex.map(_toks, _tk):
-                    sel_terms[ci] = items
-        with cur.copy(f"COPY {s}.chunk_term(term, chunk_id, tf) FROM STDIN") as cp:  # 키워드 색인 — 대량은 COPY
-            n_terms = 0
-            for ci in sel:
-                for term, tf in (
-                    sel_terms.get(ci) or Counter(tokens(index_text(chunks[ci]))).items()
-                ):  # 머리말 포함(G9) — 규칙은 common.core.text
-                    cp.write_row((term, ci_db[ci], min(tf, 32767)))
-                    n_terms += 1
-        # 문서 빈도: 새 청크 단어만 더함(지운 문서는 drop_terms에서 뺌). 비었으면 전체 다시 셈(BM25_STAT_REBUILD는 op-08에 지움)
-        cur.execute(f"SELECT NOT EXISTS (SELECT 1 FROM {s}.term_stat)")
-        if cur.fetchone()[0]:
-            cur.execute(f"DELETE FROM {_tbl(s, 'term_stat')}")
-            cur.execute(f"INSERT INTO {s}.term_stat SELECT term, COUNT(*) FROM {s}.chunk_term GROUP BY term")
-        elif ci_db:
-            cur.execute(
-                f"""INSERT INTO {s}.term_stat SELECT term, COUNT(*) FROM {s}.chunk_term WHERE chunk_id = ANY(%s) GROUP BY term
-                            ON CONFLICT (term) DO UPDATE SET df = {s}.term_stat.df + EXCLUDED.df""",
-                (list(ci_db.values()),),
-            )
-        cur.execute(
-            f"""INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len, dim) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0), %s FROM {s}.chunk
-                        ON CONFLICT (id) DO UPDATE SET n_chunks = EXCLUDED.n_chunks, avg_len = EXCLUDED.avg_len, dim = EXCLUDED.dim""",
-            (meta["dim"],),
-        )
-        counts = {"docs": len(doc_id), "chunks": len(sel), "terms": n_terms, "sec": round(time.time() - t0, 1)}
-        cur.execute(f"UPDATE {s}.load_run SET finished_at = now(), counts = %s WHERE run_id = %s", (json.dumps(counts), run))
+    runlog.note(f"적재 {json.dumps({'bundle': str(B), 'meta': meta, 'counts': counts}, ensure_ascii=False, default=str)}")
     return counts
+
+
+def _elsewhere(dbs, docs, by_src):
+    """원본 경로 → [(원천, doc_id)] — 이번 묶음 문서가 **목표가 아닌** 원천 스키마에 이미 있는 곳(원천이 바뀐 문서). 표가 없는 스키마는 건너뜀."""
+    target = {docs[i]["file_path"]: src for src, idx in by_src.items() for i in idx}
+    out = {}
+    for src, sdb in dbs.items():
+        try:
+            rows = sdb.q(f"SELECT file_path, doc_id FROM {sdb.schema}.doc WHERE file_path = ANY(%s)", (sorted(target),))
+        except Exception:
+            continue
+        for r in rows:
+            if target.get(r["file_path"]) != src:
+                out.setdefault(r["file_path"], []).append((src, r["doc_id"]))
+    return out
+
+
+def _drop_plan(elsewhere, replace):
+    """--replace일 때만 — 원천 → 지울 doc_id들(다른 원천 스키마에 남은 옛 사본)."""
+    plan = {}
+    for locs in elsewhere.values() if replace else ():
+        for src, did in locs:
+            plan.setdefault(src, []).append(did)
+    return plan
+
+
+def _drop_docs(cur, s, ids, dim):
+    """원천 스키마 s에서 문서들을 지움(키워드 색인·문서 빈도 포함, chunk는 CASCADE) — 그 스키마의 BM25 통계도 다시 셈."""
+    drop_terms(cur, s, ids)
+    cur.execute(f"DELETE FROM {_tbl(s, 'doc')} WHERE doc_id = ANY(%s)", (ids,))
+    cur.execute(
+        f"""INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len, dim) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0), %s FROM {s}.chunk
+                    ON CONFLICT (id) DO UPDATE SET n_chunks = EXCLUDED.n_chunks, avg_len = EXCLUDED.avg_len, dim = EXCLUDED.dim""",
+        (dim,),
+    )
+
+
+def _max_doc_id(sdb):
+    """대역 원천 파일의 가장 큰 doc_id(표가 아직 없으면 0)."""
+    try:
+        return int(sdb.q(f"SELECT COALESCE(MAX(doc_id), 0) AS m FROM {sdb.schema}.doc")[0]["m"])
+    except Exception:
+        return 0
+
+
+def _add(counts, src, c):
+    for k in ("docs", "chunks", "terms"):
+        counts[k] += c[k]
+    counts["by_source"][src] = c
+
+
+def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
+    """원천 스키마 s 하나에 문서 idx(docs.jsonl 줄 번호)를 적재 — 반환 (건수, [(source_system, file_path) — 새로 넣은 문서])."""
+    from common.store.db.models import search_tables as ST
+
+    cols = ST.doc_columns(src)[1:]  # doc_id 빼고(실 PG는 공용 시퀀스 기본값)
+    if nxt is not None:  # 대역 — 번호를 직접 줌
+        cols = ["doc_id", *cols]
+    chunk_extra = [n for n, _ in ST.CHUNK_EXTRA.get(src, ())]
+    cur.execute(f"SELECT file_path, doc_id FROM {s}.doc")
+    have = {r[0]: r[1] for r in cur.fetchall()}
+    doc_id, loaded = {}, []
+    for i in idx:
+        d = docs[i]
+        old = have.get(d["file_path"])
+        if old and not replace:
+            continue
+        if old:
+            drop_terms(cur, s, [old])
+            cur.execute(f"DELETE FROM {_tbl(s, 'doc')} WHERE doc_id=%s", (old,))  # chunk는 ON DELETE CASCADE
+        row = {
+            **{c: d.get(c) for c in cols},
+            "doc_id": nxt[0] if nxt is not None else None,
+            "created_at": _kst(d.get("created_at")),
+            "clients_doc": json.dumps(d["clients"], ensure_ascii=False) if d.get("clients") else None,
+        }
+        cur.execute(
+            f"INSERT INTO {s}.doc({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))}) RETURNING doc_id",
+            tuple(row[c] for c in cols),
+        )
+        doc_id[i] = cur.fetchone()[0]
+        if nxt is not None:
+            nxt[0] += 1
+        loaded.append((d.get("source_system"), d["file_path"]))
+    sel = [ci for ci, c in enumerate(chunks) if c["doc"] in doc_id]
+    ci_db = {}
+    ccols = ["doc_id", "seq", "page", "line_start", "line_end", "bbox", "section", "chunk_text", "n_terms", "embedding", *chunk_extra]
+    ph = ["%s"] * 9 + ["%s::vector"] + ["%s"] * len(chunk_extra)
+    for ci in sel:
+        c = chunks[ci]
+        cur.execute(
+            f"INSERT INTO {s}.chunk({', '.join(ccols)}) VALUES ({', '.join(ph)}) RETURNING chunk_id",
+            (
+                doc_id[c["doc"]],
+                c["seq"],
+                c["page"],
+                c["line_start"],
+                c["line_end"],
+                c["bbox"],
+                c["section"],
+                c["chunk_text"],
+                c["n_terms"],
+                vec(vecs[ci]),
+                *(c.get(n) for n in chunk_extra),
+            ),
+        )
+        ci_db[ci] = cur.fetchone()[0]
+    # 2026-10-22 사용자 지정 — BM25 항목(term,tf) 계산 문서당 BM25_THREADS(기본 4) 병렬 선처리, COPY는 그대로 단일 트랜잭션
+    bthreads = max(1, int(pc.cfg().load.bm25_threads))
+    sel_terms = {}
+    if bthreads > 1 and len(sel) > 1:
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _toks(ci):
+            return ci, Counter(tokens(index_text(chunks[ci]))).items()
+
+        with ThreadPoolExecutor(max_workers=bthreads) as ex:
+            for ci, items in ex.map(_toks, sel):
+                sel_terms[ci] = items
+    n_terms = 0
+    with cur.copy(f"COPY {s}.chunk_term(term, chunk_id, tf) FROM STDIN") as cp:  # 키워드 색인 — 대량은 COPY
+        for ci in sel:
+            for term, tf in (
+                sel_terms.get(ci) or Counter(tokens(index_text(chunks[ci]))).items()
+            ):  # 머리말 포함(G9) — 규칙은 common.core.text
+                cp.write_row((term, ci_db[ci], min(tf, 32767)))
+                n_terms += 1
+    # 문서 빈도: 새 청크 단어만 더함(지운 문서는 drop_terms에서 뺌). 비었으면 전체 다시 셈
+    cur.execute(f"SELECT NOT EXISTS (SELECT 1 FROM {s}.term_stat)")
+    if cur.fetchone()[0]:
+        cur.execute(f"DELETE FROM {_tbl(s, 'term_stat')}")
+        cur.execute(f"INSERT INTO {s}.term_stat SELECT term, COUNT(*) FROM {s}.chunk_term GROUP BY term")
+    elif ci_db:
+        cur.execute(
+            f"""INSERT INTO {s}.term_stat SELECT term, COUNT(*) FROM {s}.chunk_term WHERE chunk_id = ANY(%s) GROUP BY term
+                        ON CONFLICT (term) DO UPDATE SET df = {s}.term_stat.df + EXCLUDED.df""",
+            (list(ci_db.values()),),
+        )
+    cur.execute(
+        f"""INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len, dim) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0), %s FROM {s}.chunk
+                    ON CONFLICT (id) DO UPDATE SET n_chunks = EXCLUDED.n_chunks, avg_len = EXCLUDED.avg_len, dim = EXCLUDED.dim""",
+        (meta["dim"],),
+    )
+    return {"docs": len(doc_id), "chunks": len(sel), "terms": n_terms}, loaded
+
+
+def _mark_loaded(loaded):
+    """C10 예외(사용자 11-02) — 새로 적재한 문서의 ParsingMeta.loaded_at을 적는다(쓰기 계정, PG 커밋 뒤). 못 열거나 실패하면 경고 한 줄과
+    실패 건수만 돌려준다(적재는 그대로 — gold가 검색의 정본, loaded_at은 기록용. DB 담당자가 칸을 더하기 전에도 적재가 멈추지 않게)."""
+    if not loaded:
+        return 0
+    from common.store import parsing_meta_db as PM
+
+    try:
+        pm = PM.make_db("write")
+    except (Exception, SystemExit) as e:  # make_db는 접속 정보가 없으면 SystemExit
+        print(
+            f"[pgstore] 경고: ParsingMeta loaded_at 못 적음(연결 없음) — {len(loaded)}건: {type(e).__name__}", file=sys.stderr, flush=True
+        )
+        return len(loaded)
+    try:
+        return PM.mark_loaded(pm, loaded)
+    except Exception as e:
+        print(f"[pgstore] 경고: ParsingMeta loaded_at 못 적음 — {len(loaded)}건: {type(e).__name__}", file=sys.stderr, flush=True)
+        return len(loaded)
+    finally:
+        pm.close()
 
 
 def main(argv=None):

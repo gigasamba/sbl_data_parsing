@@ -1,15 +1,33 @@
-"""검색 서비스 — do_search(하이브리드 근거 검색·하드 필터·집계 근거·질의 기록).
-S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/main.py(옛 data_retrieval/mcp_server.py)에서 옮김 — 내용 그대로
-(설정 상수만 mcp_server/config.py의 CFG로).
+"""검색 서비스 — do_search(하드 거르기 범위 안의 하이브리드 근거 검색·질의 기록). 계약 모양은 mcp_server/schemas/evidence.py.
+S5(10-26)에 mcp_server/main.py에서 옮김 · 11-01(mc-16) 운영 계약으로 — question 필수(덤프 방식 지움), 거르기 13칸, 맨 위 5칸·근거 12칸,
+이름 있는 색인(index_id·AD41)·옛 입력(methods·decompose·limit)·옛 출력(subs·store·images·notes·ms) 지움.
 """
 
 import time
+from datetime import date, datetime, timedelta, timezone
 
 from mcp_server import config as mc  # mcp 설정 객체(S7d)
 from mcp_server.config import CFG
-from mcp_server.services.search.internal_docs import _manifest_by_name, do_filter_documents
-from mcp_server.services.search.server_state import _STATE, CALLER, _index_retriever, _retriever
+from mcp_server.schemas.evidence import EVIDENCE_KEYS, K_MAX, SEARCH_FILTERS
+from mcp_server.services.search.internal_docs import _manifest_by_name
+from mcp_server.services.search.server_state import _STATE, CALLER, _retriever
 from mcp_server.services.search.shaping import _evidence, cap, evidence_status
+
+KST = timezone(timedelta(hours=9))  # 시간대 없는 등록 시각은 KST(운영 계약)
+# 정확 일치 거르기 → v_chunk_source 칸
+_EXACT_COLS = {
+    "project_id": "project_code__c",
+    "division": "division",
+    "service_type": "service_type",
+    "doc_class": "doc_class",
+    "sf_op_id": "sf_op_id",
+    "sf_op_name": "sf_op_name",
+    "contract_id": "contract_id",
+    "FAQ_group": "faq_group",  # faq.chunk만(C4)
+}
+NO_QUESTION = "question is required — 질문 없이 문서를 고르려면 list_doc_fulltext, 원천 값 조회는 query_edw"
+_SYSTEMS = ("SFDC", "CRMS", "LAS", "FAQ", "OTHER")
+NO_SOURCE = "source_system is required — exactly one of SFDC, CRMS, LAS, FAQ, Other(원천마다 따로 찾음 — 여러 원천은 여러 번 부름, G20)"
 
 
 def _log(question, evidence, ms):
@@ -22,229 +40,172 @@ def _log(question, evidence, ms):
         pass
 
 
-def _hard_filter_scope(hard):
-    """(2026-10-20 통합) 하드 필터 조건에 정확히 맞는 문서 file_path 집합 — question+필터 검색의 범위.
-    client는 sf_acc_name 정확 일치 또는 clients(JSON 텍스트) 안 라벨 포함 — do_filter_documents와 같은 뜻(여기는
-    문서 집합만 구하면 되므로 SQL 한 번으로). PG 적재 저장소일 때만 가능 — 로컬 묶음이면 (None, None), 호출부가 안내.
-    SQL 실패는 조용히 넘기지 않고 그대로 올림(범위를 모르고 전체 검색으로 새는 것보다 오류가 낫다)."""
-    R = _retriever()
-    if not R.pg:
-        return None, None
+def _vals(v):
+    """거르기 값 → 목록(문자열 하나 또는 목록, 빈 값 뺌)."""
+    return [str(x) for x in (v if isinstance(v, list | tuple) else [v]) if x not in (None, "")]
+
+
+def _when(v, upper):
+    """created_since/created_until 글자 → (비교 연산자, 시각). 날짜만이면 since = 그날 00:00 KST, until = 다음 날 00:00 미만(그날 전체).
+    시간대 없는 시각은 KST. 형식이 틀리면 ValueError."""
+    s = str(v).strip()
+    try:
+        day = date.fromisoformat(s)  # 날짜만(2025-03-01·20250301)
+    except ValueError:
+        day = None
+    if day is not None:
+        d = datetime.combine(day, datetime.min.time(), KST)
+        return ("<", (d + timedelta(days=1)).isoformat()) if upper else (">=", d.isoformat())
+    t = datetime.fromisoformat(s)
+    # KST로 맞춰 글자로 — 적재 값(pgvector_load._kst)과 같은 시간대 표기라 SQLite 대역의 글자 비교도 맞음(PG는 시각으로 비교)
+    return ("<=" if upper else ">="), (t if t.tzinfo else t.replace(tzinfo=KST)).astimezone(KST).isoformat()
+
+
+def _like(x):
+    """LIKE 안에서 글자 그대로 — 값의 %·_는 와일드카드가 아님(ESCAPE '!')."""
+    return x.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+
+
+def _norm_filters(args):
+    """받은 거르기 → 정규화한 메아리(dict — 응답 filter 칸). 빈 값은 뺌 · source_system의 `-test` 붙은 값은 같은 뜻(G4) ·
+    client_like는 client가 있을 때만."""
+    hard = {}
+    for name in SEARCH_FILTERS:
+        v = args.get(name)
+        if name == "client_like":
+            continue
+        vs = _vals(v)
+        if name == "source_system":
+            vs = [x[: -len("-test")] if x.lower().endswith("-test") else x for x in vs]
+        if vs:
+            hard[name] = vs if isinstance(v, list | tuple) else vs[0]
+    if hard.get("client") and args.get("client_like"):
+        hard["client_like"] = True
+    return hard
+
+
+def _scope_sql(hard, src):
+    """정규화한 거르기 → (WHERE 글자, 값) — 원천 스키마 src의 v_chunk_source 칸에서. 다른 거르기는 AND, 같은 거르기의 목록은 OR, 모두 정확 일치
+    (client_like만 부분 일치). 그 원천 스키마에 칸이 없는 거르기(예: crms에서 sf_op_id)는 0건(오류 아님). 고객은 client_edw만(C6, 사용자 11-02)."""
+    from common.store.db.models import search_tables as ST
+
+    have = set(ST.view_columns(src))
     conds, vals = [], []
-    if hard.get("client"):
-        if hard.get("client_like"):
-            conds.append(
-                "(sf_acc_name LIKE %s OR clients LIKE %s)"
-            )  # 2026-10-22: client_like=true → 포함매칭 — 'Daiichi'로 'Daiichi Sankyo Co Ltd'도 찾음
-            vals += [f"%{hard['client']}%", f"%{hard['client']}%"]
-        else:
-            conds.append("(sf_acc_name = %s OR clients LIKE '%%\"' || %s || '\"%%')")  # 기본: 정확 일치
-            vals += [hard["client"], hard["client"]]
-    if hard.get("source_system"):
-        conds.append("(source_system = %s OR doc_source_system = %s)")
-        vals += [hard["source_system"], hard["source_system"]]
-    if hard.get("project_id"):
-        conds.append("project_code__c = %s")
-        vals.append(hard["project_id"])
-    if hard.get("division"):
-        conds.append("division = %s")
-        vals.append(hard["division"])
-    if hard.get("service_type"):
-        conds.append("service_type = %s")
-        vals.append(hard["service_type"])
-    where = " WHERE " + " AND ".join(conds)
+
+    def any_of(tmpl, vs, per):
+        conds.append("(" + " OR ".join([tmpl] * len(vs)) + ")")
+        for x in vs:
+            vals.extend(per(x))
+
+    for name, v in hard.items():
+        vs = _vals(v)
+        if name in ("source_system", "client_like"):
+            continue  # source_system은 스키마 고르기(위) · client_like는 client 안에서
+        if name == "client":
+            if hard.get("client_like"):
+                any_of("client_edw LIKE %s ESCAPE '!'", vs, lambda x: [f"%{_like(x)}%"])
+            else:
+                any_of("client_edw = %s", vs, lambda x: [x])
+        elif name in _EXACT_COLS:
+            col = _EXACT_COLS[name]
+            if col in have:
+                any_of(f"{col} = %s", vs, lambda x: [x])
+            else:
+                conds.append("1 = 0")
+        elif name in ("created_since", "created_until"):
+            op, t = _when(v, name == "created_until")
+            conds.append(f"created_at {op} %s")  # created_at이 없는 문서는 빠짐
+            vals.append(t)
+    return (" WHERE " + " AND ".join(conds)) if conds else "", vals
+
+
+def _hard_filter_scope(hard, src):
+    """하드 거르기에 정확히 맞는 문서 file_path 집합과 문서 수 — 검색 범위(원천 스키마 src 안). SQL 실패는 그대로 올림."""
+    R = _retriever(src)
+    where, vals = _scope_sql(hard, src)
     rows = R.pg.q(f"SELECT DISTINCT file_path FROM {R.pg.schema}.v_chunk_source{where}", tuple(vals))
     return {r["file_path"] for r in rows}, len(rows)
 
 
-def _gather(question, subs, search, base, per):
-    """원 질문은 search(q, base), 하위 검색(고객별)은 search(q, per)로 찾아 라운드로빈으로 합친다(중복 제거) — 원 질문 근거
-    개수는 그대로, 어느 하위 검색도 0개로 밀려나지 않게. 반환: [(키, 출처 번호 0=원 질문)]. 옛 decompose.gather(10-29 이동)."""
-    lists = [search(question, base)] + [search(q, per) for q in subs]
-    out, seen = [], set()
-    for rank in range(max(base, per)):
-        for qi, lst in enumerate(lists):
-            if rank < len(lst) and lst[rank] not in seen:
-                seen.add(lst[rank])
-                out.append((lst[rank], qi))
-    return out
+def _source_docs(src):
+    """원천 스키마의 문서 수(source_system만 줬을 때의 scope_docs)."""
+    R = _retriever(src)
+    r = R.pg.q(f"SELECT COUNT(*) AS n FROM {R.pg.schema}.doc")
+    return int(r[0]["n"]) if r else 0
 
 
-def do_search(
-    question,
-    k=10,
-    methods=None,
-    decompose=None,
-    client=None,
-    index_id=None,
-    source_system=None,
-    project_id=None,
-    division=None,
-    service_type=None,
-    limit=100,
-    client_like=None,
-):
-    """client(AD38): 질문에서 못 잡아도 강제할 고객 — SEARCH_CLIENT_HARD=1이면 저장소 질의 단계에서 다른 고객은 뺌(미상은 기본 포함).
-    (2026-10-20 통합) question 없이 하드 필터 조건만 주면 do_filter_documents 덤프를 그대로 돌려주고(문서 수 상한 limit 기본 100),
-    question과 조건을 함께 주면 조건에 정확히 맞는 문서 범위 안에서만 검색한다(_hard_filter_scope 후치 필터 — 헤더 docstring 참고).
-    조건 문구·limit 의미는 do_filter_documents와 동일(정확 일치)."""
-    t0 = time.perf_counter()
-    question = question.strip() if isinstance(question, str) else (question or None)
-    user_k = max(1, min(int(k), CFG.MAX_K))
-    hard = {
-        c: v
-        for c, v in (
-            ("client", client),
-            ("source_system", source_system),
-            ("project_id", project_id),
-            ("division", division),
-            ("service_type", service_type),
-        )
-        if v
+def _out(question, evidence, status, hard, scope_docs):
+    """계약 모양으로 — 근거는 12칸만, 맨 위 5칸(filter·scope_docs는 거르기를 줬을 때만). cap이 줄이면 근거 글·개수만 줄고 표시 칸은 뺀다(계약 밖)."""
+    obj = {
+        "question": question,
+        "evidence": [{k: e.get(k) for k in EVIDENCE_KEYS} for e in evidence],
+        "evidence_status": status,
+        **({"filter": hard, "scope_docs": scope_docs} if hard else {}),
     }
-    if client and client_like:
-        hard["client_like"] = True
+    obj = cap(obj)
+    obj.pop("truncated", None)
+    obj.pop("truncation", None)
+    return obj
+
+
+def do_search(question=None, k=8, **filters):
+    """운영 search 계약(mc-16). question 필수(비면 {"error"}) · k 기본 8·상한 50 · 거르기(SEARCH_FILTERS)는 모두 AND, 같은 거르기의 목록은 OR ·
+    모르는 인자는 무시 · 맞는 문서가 없으면 오류가 아니라 빈 결과(scope_docs 0, evidence_status none).
+    source_system은 필수·값 하나(G20 — 그 원천 스키마만 찾음, 사용자 11-02 — 운영과 다름). R2-c — 같은 사건의 사본은 한 자리로 묶는다(응답 모양은 같음).
+    본문 고객 라벨로 앞으로 올리던 길(AD38)·고객별 하위 검색(BR23)은 11-02에 지움 — 고객은 client_edw 거르기만(C6)."""
+    t0 = time.perf_counter()
+    question = question.strip() if isinstance(question, str) else None
     if not question:
-        if not hard:
-            return {"error": "question 또는 하드 필터 조건(client·source_system·project_id·division·service_type) 중 하나는 필요"}
-        return do_filter_documents(
-            client=client,
-            source_system=source_system,
-            project_id=project_id,
-            division=division,
-            service_type=service_type,
-            limit=limit,
-            client_like=client_like,
-        )
-    k = user_k
-    scope, scope_docs = None, None
-    if hard:
-        scope, scope_docs = _hard_filter_scope(hard)
-        if scope_docs == 0:  # 조건에 맞는 문서가 없음 — 검색할 범위 자체가 없다(빠른 반환)
-            ms = (time.perf_counter() - t0) * 1000
-            return cap(
-                {
-                    "question": question,
-                    "store": "pgvector" if _retriever().pg else "local",
-                    "methods": [],
-                    "filter": hard,
-                    "scope_docs": 0,
-                    "evidence": [],
-                    "images": [],
-                    "notes": ["하드 필터에 맞는 문서 0건 — 근거 없음"],
-                    "evidence_status": "none",
-                    "ms": round(ms, 1),
-                }
-            )
-        if scope:  # 범위 필터 뒤에도 근거 k개가 남게 — 풀을 넉넉히(상한 MAX_K)
-            k = min(CFG.MAX_K, max(user_k * 3, 30))
-    methods = [m.lower() for m in (methods or CFG.DEFAULT_METHODS)]
-    unknown = [m for m in methods if m not in CFG.CORE]  # graph·concept·image·openviking은 10-29에 지움
-    if index_id:  # AD41 — 이름 있는 색인(없으면 기본 색인, 응답도 전과 같음)
-        R, err, warn = _index_retriever(index_id)
-        if err:
-            return err
+        return {"error": NO_QUESTION}
+    try:
+        user_k = max(1, min(int(k), K_MAX))
+    except (TypeError, ValueError):
+        user_k = 8
+    hard = _norm_filters(filters)
+    sysv = hard.get("source_system")
+    if not sysv or isinstance(sysv, list) and len(sysv) != 1:  # G20(사용자 11-02) — 원천 하나 필수(운영과 다름)
+        return {"error": NO_SOURCE}
+    if isinstance(sysv, list):
+        hard["source_system"] = sysv = sysv[0]
+    if str(sysv).upper() not in _SYSTEMS:  # 다섯 값 밖은 거부(조용히 other로 찾지 않음)
+        return {"error": NO_SOURCE}
+    from common.store.db.models import search_tables as ST
+
+    src = ST.source_of(sysv)
+    k, scope, scope_docs = user_k, None, None
+    if len(hard) > 1:  # source_system 말고 거르기가 있을 때만 범위를 구함(원천 스키마 전체면 범위 없이)
+        try:
+            scope, scope_docs = _hard_filter_scope(hard, src)
+        except ValueError as bad:  # created_since/until 형식 틀림
+            return {"error": f"created_since/created_until 형식 — YYYY-MM-DD 또는 ISO 8601 시각: {bad}"}
+        if scope_docs == 0:  # 조건에 맞는 문서가 없음 — 검색할 범위 자체가 없다
+            return _out(question, [], "none", hard, 0)
+        k = min(K_MAX, max(user_k * 3, 30))  # 범위 거르기 뒤에도 근거 k개가 남게 — 풀을 넉넉히
     else:
-        R, warn = _retriever(), None
-    notes = [warn] if warn else []
-    if hard and scope is None:  # (2026-10-20 통합) 로컬 묶음 저장소 — 범위 산정 불가, 솔직히 알림
-        notes.append("하드 필터는 PG 적재 저장소에서만 동작 — 이 요청은 필터 없이 전체 검색")
-    if unknown:
-        notes.append(f"모르는 방법 무시: {unknown}")
-    core = [m for m in methods if m in CFG.CORE]
-    subs = []  # 응답 모양 유지(질문 분해는 10-29에 지움 — 늘 빈 목록)
-    hits, r_notes = [], {}
+        scope_docs = _source_docs(src)
+    R = _retriever(src)
+    core = [m.lower() for m in CFG.DEFAULT_METHODS if m.lower() in CFG.CORE]  # 검색 길은 서버 설정만(호출 인자로 못 바꿈)
+    hits = []
     if core:
-        hits, _, r_notes = R.search_ex(
-            question, k, core, client=client, scope=scope
-        )  # S12: search_ex — note류를 반환값으로(공유 R을 여러 스레드가 써도 안 섞임)
-        if True:  # BR23 — 비교 질문(고객 2명 이상 동시 언급)이
-            from common.core.terms import match_clients  # 한쪽 고객에 몰려 슬롯을 뺏기는 문제. R2-c 요건③(client+ID_LIKE)은
-
-            ents = match_clients(question, R.clients())[:4]  # 94/115건 과다발동 p95+511ms로 기각됨 — 여기선 trigger를 "고객명
-            if len(ents) >= 2:  # 2개 이상 실제 일치 + 집계 경로로 안 빠짐"으로 좁혀 재시도.
-                # agg_hit 제외 — 집계 비교(계약 건수·합계)는 구조화 집계가
-                # 답을 내고 전문 검색 근거는 참고용이라 분해해도 doc_hit·evid_cov
-                # 효과가 없다(synth-4clients-cmp 실측, [:4]는 호출 수 상한).
-                pool = {h["chunk_ref"]: h for h in hits}
-
-                def srch(q, n):
-                    nonlocal r_notes
-                    if q == question:
-                        return [h["chunk_ref"] for h in hits[:n]]
-                    hs, _, r_notes = R.search_ex(
-                        question, n, core, client=q, client_only=True, scope=scope
-                    )  # q=고객명(엔티티별 하위 검색, 다른 고객 자동매칭 무시)
-                    for h in hs:
-                        pool.setdefault(h["chunk_ref"], h)
-                    return [h["chunk_ref"] for h in hs]
-
-                items = _gather(question, ents, srch, base=k, per=max(3, k // 2))
-                hits = [
-                    {**pool[c], "rank": i + 1, "via": (pool[c].get("via") or "") + ("" if qi == 0 else f"·ent{qi}")}
-                    for i, (c, qi) in enumerate(items)
-                ]
-                notes.append(f"엔티티 분해(BR23, 고객 {len(ents)}명)")
-    man = _manifest_by_name()  # AD44 — 있을 때만 근거에 RDB 문서 메타(doc_type 등) 더 붙음
-    rep_cache = {}  # OP21(S78) — 이 요청 안에서 문서별 AI.ParsingMeta 조회 1회만
-    evidence = [_evidence(h, man, rep_cache) for h in hits]
+        hits, _, _ = R.search_ex(question, k, core, scope=scope)
+    man = _manifest_by_name()  # AD44 — 있으면 근거 version을 RDB 값으로
+    evidence = [_evidence(h, man) for h in hits]
     if evidence:  # R2-c 요건① — 같은 사건의 사본(형식·재명명)이 슬롯을 독점하는 문제
         from common.core.docmeta import copy_groups, copy_representative
 
         groups = copy_groups([{"file_name": e.get("file_name"), "text": e.get("text")} for e in evidence])
-        if groups:
-            drop = set()
-            for rep_i, dup_is in groups.items():
-                members_i = [rep_i] + dup_is  # 슬롯 자리는 rep_i(최상위 순위)로 그대로 — 내용만 아래서 바꿈
-                names = [evidence[i]["file_name"] for i in members_i]
-                best_i = members_i[
-                    copy_representative([evidence[i] for i in members_i])
-                ]  # engine-qa CONCERN(QA066) — 형식·본문 길이로 대표 텍스트 고름
-                rank = evidence[rep_i].get("rank")
-                evidence[rep_i] = {
-                    **evidence[best_i],
-                    "rank": rank,
-                    "variants": list(dict.fromkeys(n for n in names if n != evidence[best_i]["file_name"])),
-                }  # 대표 자신 이름은 variants에서 뺌(중복 제거)
-                drop |= set(members_i) - {rep_i}
-            evidence = [e for i, e in enumerate(evidence) if i not in drop]
-            notes.append(f"사본 그룹 {len(groups)}개 묶음({sum(len(v) for v in groups.values())}건)")
-    if r_notes.get("note"):  # 질의 임베딩 장애·임베딩 없는 묶음 → 키워드·ID만(G11)
-        notes.append(r_notes["note"])
-    exn = r_notes.get("expand_notes")  # X3 — BM25 질의 확장(용어 사전)이 적용됐으면 표시
-    if exn:
-        notes.append("용어 확장: " + "; ".join(exn))
-    if r_notes.get("recency_note"):  # L3-1 — 같은 문서군 최신성 순위가 적용됐으면 표시
-        notes.append(r_notes["recency_note"])
-    images = []  # 응답 모양 유지(그림 검색 image는 10-29에 지움)
-    if hard and scope:  # (2026-10-20 통합) 하드 필터 범위 안 문서만 남기고 다시 1..n 순위 — 요청한 k개로
-        kept_agg = evidence[0] if evidence and evidence[0].get("via") == "aggregate" else None
-        scoped = [e for e in evidence if e is not kept_agg and (e.get("file_path") or "") in scope]
-        for i, e in enumerate(scoped):
-            e["rank"] = i + 1
-        evidence = ([kept_agg] if kept_agg else []) + scoped[:user_k]
-        notes.append(f"하드 필터 — 조건에 정확히 맞는 {scope_docs}문서 범위에서 검색")
-    # R3(AD42) — 근거가 있나(표시만, 근거 목록은 안 줄임)
-    min_score = mc.cfg().search.min_score  # 옛 `float(raw) if raw else None`(형식 틀림·빈 글자 = None) — 칸이 같게 처리(S7d)
-    status, low = evidence_status(question, evidence, min_score)
-    for e, lv in zip(evidence, low):
-        if lv is not None:
-            e["low_score"] = lv
-    gate = {"evidence_status": status}
-    ms = (time.perf_counter() - t0) * 1000
-    _log(question, evidence, ms)
-    return cap(
-        {
-            "question": question,
-            "subs": subs,
-            "store": "pgvector" if R.pg else "local",
-            "methods": methods,
-            "evidence": evidence,
-            "images": images,
-            "notes": notes,
-            "ms": round(ms, 1),
-            **gate,
-            **({"index_id": index_id} if index_id else {}),
-            **({"filter": hard, "scope_docs": scope_docs} if hard else {}),
-        }
-    )
+        drop = set()
+        for rep_i, dup_is in groups.items():
+            members_i = [rep_i] + dup_is  # 슬롯 자리는 rep_i(최상위 순위) 그대로 — 내용만 대표로
+            best_i = members_i[copy_representative([evidence[i] for i in members_i])]  # 형식·본문 길이로 대표 텍스트 고름
+            evidence[rep_i] = {**evidence[best_i], "rank": evidence[rep_i].get("rank")}
+            drop |= set(members_i) - {rep_i}
+        evidence = [e for i, e in enumerate(evidence) if i not in drop]
+    if scope is not None:  # 하드 거르기 범위 안 문서만 남기고 다시 1..n — 요청한 k개로
+        evidence = [e for e in evidence if (e.get("file_path") or "") in scope]
+    evidence = evidence[:user_k]
+    for i, e in enumerate(evidence):
+        e["rank"] = i + 1
+    status, _ = evidence_status(question, evidence, mc.cfg().search.min_score)  # R3(AD42) — 표시만, 근거 목록은 안 줄임
+    _log(question, evidence, (time.perf_counter() - t0) * 1000)
+    return _out(question, evidence, status, hard, scope_docs)

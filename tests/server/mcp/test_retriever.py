@@ -31,7 +31,7 @@ def test_bm25_no_embedding():
         hits, _ = R.search("아무 질문", 5, methods=["bm25"])
         assert isinstance(hits, list)
         hits, _ = R.search("바이러스 불활화", 5, methods=["bm25"])
-        assert [h["chunk_key"] for h in hits] == ["a.txt:0"], hits
+        assert [h["chunk_key"] for h in hits] == [f"{hits[0]['doc_id']}:0"], hits  # <doc_id>:<seq>(11-02)
 
 
 def test_recency():
@@ -52,31 +52,6 @@ def test_recency():
             hits0, _ = R.search("단가는?", 3, methods=["bm25"])
             assert [h["doc_key"] for h in hits0] == ["msa_old.docx", "msa.docx", "nda.docx"]  # 꺼짐 — 저장소 순서 그대로
             assert R.recency_note is None
-
-
-def test_client_hard():
-    """AD38 — SEARCH_CLIENT_HARD=1 + client 인자: 저장소 질의 단계에서 진짜 제외(재순위 아님).
-    문서 3건(Acme Co · Other Co · 고객 미상)이 bm25 점수 순(a > b > c) — 섞이면 바로 드러남."""
-    docs = [{"file_path": "a.txt", "client": "Acme Co"}, {"file_path": "b.txt", "client": "Other Co"}, {"file_path": "c.txt"}]
-    d = pgfix.mk_bundle(docs, _ranked(3))
-    with pgfix.retriever(d, GLOSSARY_DIR=None, SEARCH_CLIENT_HARD=None, SEARCH_CLIENT_STRICT=None) as R:
-        names = lambda hits: [h["file_name"] for h in hits]  # 짧은 시험 도우미
-        base, _, _ = R.search_ex("단가는?", 5, methods=["bm25"])  # client 인자 없음 — 기준
-        assert names(base) == ["a.txt", "b.txt", "c.txt"], base
-        off, _, _ = R.search_ex("단가는?", 5, methods=["bm25"], client="Acme Co")  # 끔(기본) — 앞으로만(다 있음)
-        assert names(off) == ["a.txt", "c.txt", "b.txt"], off
-        with mc.senv(SEARCH_CLIENT_HARD="1"):
-            same, _, _ = R.search_ex("단가는?", 5, methods=["bm25"])  # client 없음 — 켜져도 영향 없음
-            assert names(same) == ["a.txt", "b.txt", "c.txt"], same
-            hard, _, _ = R.search_ex("단가는?", 5, methods=["bm25"], client="Acme Co")  # Other Co 완전히 빠짐(미상 포함)
-            assert names(hard) == ["a.txt", "c.txt"], hard
-            with mc.senv(SEARCH_CLIENT_STRICT="1"):
-                strict, _, _ = R.search_ex("단가는?", 5, methods=["bm25"], client="Acme Co")  # 미상도 뺌
-                assert names(strict) == ["a.txt"], strict
-                # BR50 E — client_strict=False가 전역 STRICT를 이 호출만 무시(미상 c.txt 살아남음, Other Co는 여전히 빠짐)
-                override, _, _ = R.search_ex("단가는?", 5, methods=["bm25"], client="Acme Co", client_strict=False)
-                assert names(override) == ["a.txt", "c.txt"], override
-        assert R.clients() == ["Acme Co", "Other Co"]  # 적재된 고객 이름(doc.clients)
 
 
 def test_bm25_weights():

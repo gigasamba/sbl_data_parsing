@@ -9,6 +9,7 @@
 | [CLAUDE.md](../CLAUDE.md) | 작업 규칙 — 지문·계약·운영 가드, 경계·이름, 배포 환경 규칙, 로컬 하네스·점검 명령 | 작업을 시작하기 전에 늘 |
 | [refactoring/refactor.md](refactoring/refactor.md) | 서버·사람이 확인해야 할 사항(C-xx) — 저장소 안에서 끝낼 수 없는 확인·협의 · 머리의 **"최종 — 사람이 할 일"**(사람 할 일의 정본 — 검토 등급 A·반입 전·때·뒤·다음 판, 누가·언제·C) | 단계를 끝낼 때(새 확인 사항 덧붙임), 반입 준비·반입 때 |
 | [operations/server-guide.md](operations/server-guide.md) | 서버 가이드 — 이미지 역할, 설치·첫 실행, 일상 실행, 결과 확인, 검색 MCP·EDW 질의 도구, 회사 맞춤, 문제 해결, 개발자에게 보고하는 법 | 서버를 설치·운영할 때 |
+| [operations/mcp-guide.md](operations/mcp-guide.md) | 검색 MCP 사용 가이드 — 도구 6개(`search`·`query_edw`·`parse_document`·`edw_meta`·`list_doc_fulltext`·`get_doc_fulltext`)의 입력·거르기·돌려주는 모양·한도·오류·예·쓰는 순서, 지원 확장자, 운영과 다른 점(입력·출력 표는 `tests/general/mcp/test_mcp_guide.py`가 코드와 대조) | MCP 클라이언트(답변 agent)를 붙이거나 도구 입출력을 바꿀 때 |
 | [operations/env-guide.md](operations/env-guide.md) | 설정 작성 가이드 — 서버·PC `settings.yaml`(S7e1 — 옛 `pipeline.env`)의 자리·권한·키(옛 env 이름)·기본값, 판마다 바뀐 설정 | 설정 값을 채우거나 바꿀 때, 새 판 반입 때 |
 | [operations/release-and-patch.md](operations/release-and-patch.md) | 릴리스·패치 — 이미지 기준판과 덧씌우기 만들기·적용·확인, selftest 반입 판정 | 새 이미지 판이나 덧씌우기를 만들거나 서버에 넣을 때 |
 | [history/refactor_c_items.md](history/refactor_c_items.md) | 끝난·옛 확인 항목 이력(refactor.md에서 10-30 옮김 — do-04): C-05·06·13·14·15·18·20·22~26·28·30·35·38·40·57·63, C-41 합성 정답 부분, PRD로 옮긴 C-31·32·33·50·53의 옛 글 · 11-02 옮김: C-12·31·32·33·37·39·49(①~④ 옛 글)·53·56·60·61과 "최종" 표에서 지우거나 고친 줄의 옛 글 | 옛 확인 항목의 결정·경위를 찾을 때 |
@@ -34,7 +35,7 @@
 | EDW | 회사 DB(SQL Server) — `AI.FileStorageMap`(원본 목록)·`AI.ParsingMeta`(게시 기록)·원천 표 |
 | OS | Object Storage — 원본과 파싱 결과(silver) 파일 |
 | silver · gold | 게시한 파싱 결과(OS + ParsingMeta) · 검색용 적재 결과(pgvector `doc`·`chunk`…) |
-| MCP | 검색 서버(Model Context Protocol) — 도구 `search`·`query_edw`·`parse_document`·`edw_meta` |
+| MCP | 검색 서버(Model Context Protocol) — 도구 `search`·`query_edw`·`parse_document`·`edw_meta`·`list_doc_fulltext`·`get_doc_fulltext`([operations/mcp-guide.md](operations/mcp-guide.md)) |
 | VLM · OCR | 이미지를 읽는 언어 모델 · 글자 인식 엔진 |
 | BM25 · RRF · HNSW | 낱말 점수 검색 · 순위 합치기 · pgvector 근사 최근접 색인 |
 | code_fp · FINGERPRINT | 레이어 코드 핑거프린트(a·p0·p1·r·s) · 핸드오프 핑거프린트 — 바뀌면 서버 재처리(CLAUDE.md §4) |

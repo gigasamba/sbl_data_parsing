@@ -188,9 +188,8 @@ def _run_locked(con, sql, params=None):
         return [], None
     if "information_schema.schemata" in low:
         return ([(1,)] if con.existed_before else []), ["x"]
-    if "information_schema.tables" in low and "load_run" in sql:
-        r = con.sqlite.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='load_run'").fetchall()
-        return r, ["x"]
+    if "information_schema.tables" in low and "alembic_version" in sql:  # 우리 표식(11-02 — load_run 대신) — 대역은 늘 우리 것(판 관리 밖)
+        return [(1,)], ["x"]
     if "information_schema.tables" in low:
         r = con.sqlite.execute("SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1").fetchall()
         return r, ["x"]

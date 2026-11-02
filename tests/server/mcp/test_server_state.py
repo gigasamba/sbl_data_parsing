@@ -17,7 +17,7 @@ def _selftest_warmup_health():
         class _FakeR:
             pg = None
 
-        _STATE["R"] = _FakeR()
+        _STATE["Rs"] = {"sfdc": _FakeR()}
         _STATE["warmup_done"], _STATE["warmup_ok"] = True, True
         body = _health()
         assert body["ready"] is True and "warming" not in body and "warning" not in body, body
@@ -57,19 +57,23 @@ def _selftest_warmup_bg_failure_keeps_server_up():
 
 
 def _selftest_reload():
-    """load 뒤 재적재(S12) — 적재 버전(load_run 최신 id)이 바뀌면 Retriever를 다시 만들고, 안 바뀌면 그대로(매번 다시 안 만듦).
-    mc-01(11-01) — 저장소는 PG 하나: SQLite 대역(pgfix, 임시 폴더)에 적재 한 번을 더해 버전을 바꾼다."""
+    """load 뒤 재적재(S12) — 적재 버전(원천 스키마마다 MAX(doc_id)·COUNT — 11-02, load_run 대신)이 바뀌면 Retriever를 다시 만들고,
+    안 바뀌면 그대로. --replace처럼 개수는 같고 doc_id만 커진 경우도 잡는다. SQLite 대역(pgfix, 임시 폴더) — 원천 other."""
     c = {"doc": 0, "seq": 0, "page": 1, "line_start": 1, "line_end": 1, "chunk_text": "x", "n_terms": 1, "bbox": None, "section": None}
     d = pgfix.mk_bundle([{"file_path": "a.txt"}], [c])
     _env = pgfix.use(d, MCP_BUNDLE=str(d), MCP_RELOAD_CHECK_SEC="0")  # 설정 객체 덮기(S7d) · 늘 대역
     try:
-        r1 = _retriever()
+        r1 = _retriever("other")
         assert r1.pg.is_standin and _health()["store"] == "pgvector"
-        r1.pg.q(f"INSERT INTO {r1.pg.schema}.load_run(params) VALUES (%s)", ("{}",))  # 새 적재 — 버전 바뀜
-        r2 = _retriever()
+        r1.pg.q(f"INSERT INTO {r1.pg.schema}.doc(file_path) VALUES (%s)", ("b.txt",))  # 새 적재 — 개수 바뀜
+        r2 = _retriever("other")
         assert r2 is not r1, "적재 버전 바뀌었는데 다시 안 만듦"
-        r3 = _retriever()
+        r3 = _retriever("other")
         assert r3 is r2, "안 바뀌었는데 또 만듦"
+        r3.pg.q(f"DELETE FROM {r3.pg.schema}.doc WHERE file_path = %s", ("a.txt",))
+        r3.pg.q(f"INSERT INTO {r3.pg.schema}.doc(file_path) VALUES (%s)", ("a.txt",))  # --replace 꼴 — 개수 같고 새 doc_id가 가장 큼
+        r4 = _retriever("other")
+        assert r4 is not r3, "같은 개수 다시 넣기(--replace)를 못 잡음"
     finally:
         _env.close()
         _STATE.clear()
