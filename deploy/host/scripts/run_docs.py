@@ -213,7 +213,7 @@ def sets(*pairs):
 def warm_cmd(seq):
     """문서 1개 warm(프리페치) — 파싱 컨테이너 안 source warm."""
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'mkdir -p /app/output/_warm && cd /app && "
+        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && mkdir -p /app/output/_warm && cd /app && "
         f"PYTHONPATH=/app/deploy "
         f"python -m pipeline.extract.source{sets('SOURCE_WARM=/app/output/_warm')} warm --csv /app/output/docflow/{seq}/batch.csv'"
     )
@@ -251,7 +251,7 @@ def parse_cmd(seq, chan, scan, gate):
         f"CPU_MAX_LOAD={gate}",
     )
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && "
+        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && cd /app && "
         f"echo [envcheck] gate={gate} 채널={chan}; "
         f"{DOC_MARK}={inside} {LIB_ENV} "
         f"python -m pipeline.cli{doc} parse --source rdb:csv:{inside}/batch.csv'"
@@ -265,7 +265,7 @@ def struct_cmd(seq):
         *EMBED_SET, "FILE_META_PATH=/app/output/file_meta_new.jsonl"
     )  # 묶음·적재 python에(stackcfg는 이 칸을 안 읽어 뺌 — 덮기 파일 하나 덜, 리뷰 S9)
     return (
-        f"{DOCKER} exec {STRUCT_C} bash -c 'cd /app && "
+        f"{DOCKER} exec {STRUCT_C} bash -c 'umask 0002 && cd /app && "
         f"PYTHONPATH=/app/deploy "
         f"python -m pipeline.transform.structure.build_bundle{st} --parse-dir {inside}/parse"
         f" --out {inside}/bundle && "
@@ -278,7 +278,7 @@ def publish_cmd(seq):
     """문서 1개 publish(OS + EDW — 파싱 컨테이너)."""
     inside = f"/app/output/docflow/{seq}"
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && "
+        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && cd /app && "
         "PYTHONPATH=/app/deploy python -m pipeline.load.publish_parse_result"
         f"{sets('PM_BUCKET_SKIP_OVERLAP_CHECK=1')} "  # 실행 방침(접속 값 아님) — 버킷·접두·표·EDW·Object Storage는 컨테이너가 설정 파일에서(S7e1 Q8)
         f"--out {inside} --source-system FileStorageMap --apply "

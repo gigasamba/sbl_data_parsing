@@ -477,7 +477,7 @@ dc() { ( . deploy/host/scripts/settings_env.sh && load_settings && . deploy/host
 mkdir -p /srv/rag/env && chmod 700 /srv/rag/env
 cp settings.sample.yaml /srv/rag/env/settings.yaml                  # 필요한 항목만 값을 채움
 chown 10001:<운영 그룹> /srv/rag/env/settings.yaml && chmod 640 /srv/rag/env/settings.yaml
-mkdir -p /srv/rag/output && chown 10001 /srv/rag/output              # 컨테이너 사용자 UID 10001(root podman이라 그대로 맞음)
+mkdir -p /srv/rag/output && chown 10001:<운영 그룹> /srv/rag/output && chmod 2775 /srv/rag/output   # 컨테이너 UID 10001 · 그룹 = 운영 계정 그룹 · setgid(2) — 새 파일이 그 그룹을 물려받고, 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지울 수 있다
 ```
 
 서버 settings.yaml에 **반드시 적을 항목**이다. 빠지면 시작을 거부하거나 동작이 조용히 바뀐다(전체 표는 refactor.md "최종" ②-1).
@@ -571,7 +571,7 @@ bash deploy/host/scripts/trigger.sh publish     # Object Storage 업로드 + EDW
 | 검색 MCP 상주 확인                                       | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_up.sh`                                                                                             |
 | 새벽 배치                                              | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.time: "HH:MM"`(그 시각부터 5분 안에 시작 — 비우면 새벽 배치 없음, 기본 비움 · pl-32) |
 | 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음, 11-01 trigger 서버 지움) | `dc up -d data-pipeline-parse data-pipeline-structure`(§5-3의 `dc` — 실행 이미지면 코드 폴더를 붙임). 여러 번 불러도 안전 — 꺼진 것만 띄움 |
-| MCP `parse_document` 작업 서비스                        | compose가 띄우지 않으므로 파싱 컨테이너가 다시 시작될 때마다: `$DOCKER exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service` |
+| MCP `parse_document` 작업 서비스                        | compose가 띄우지 않으므로 파싱 컨테이너가 다시 시작될 때마다: `$DOCKER exec -d data-pipeline-parse bash -c 'umask 0002 && exec python -u -m pipeline.mcp_parse_service'`(`docker exec`는 entrypoint를 거치지 않아 umask를 여기서 준다) |
 | 재부팅 뒤 되살리기(podman)                                | `systemctl enable --now podman-restart` — podman은 docker처럼 데몬이 없어 `restart: unless-stopped` 컨테이너(검색 MCP·상주 컨테이너)를 부팅 때 다시 띄우지 않는다. 이 서비스가 그 컨테이너들을 되살린다. 검색 MCP는 keepalive 타이머가 한 번 더 본다. 상주 트리거는 keepalive 타이머가 없으니, 재부팅 뒤 `$DOCKER ps`로 `data-pipeline-parse`·`data-pipeline-structure`가 떠 있는지 보고, 없으면 위 `dc up -d …`를 다시 실행한 뒤 `parse_document` 작업 서비스도 다시 띄운다 |
 
 

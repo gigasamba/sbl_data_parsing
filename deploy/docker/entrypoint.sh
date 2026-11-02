@@ -19,6 +19,7 @@
 #     서드파티 패키지가 없으면 FAIL(I2c) — 반입 판정은 /app/docker/selftest_gate.sh)  (smoke는 11-01에 지움 — 실문서 점검은 run_docs·trigger.sh parse로)
 set -euo pipefail
 cd /app
+umask 0002   # 그룹도 쓸 수 있게(파일 664·폴더 775) — 서버 운영 계정이 UID 10001이 쓴 결과를 고치고 지우게(결과 폴더 그룹·setgid는 server-guide §1-2)
 
 preflight() {
   echo "[점검] $(date '+%F %T %Z') · 시간대 ${TZ:-?} · 사용자 $(id -un)"
