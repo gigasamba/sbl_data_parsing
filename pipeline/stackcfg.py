@@ -2,7 +2,6 @@
 진입점(pipeline.cli·mcp_parse_service)이 resolve()로 시작 때 검사하고, 층(run_all·attachments·represent·build_bundle)은
 pipeline.config.stack()으로 같은 파일을 읽는다. 파일은 오버레이 패치로만 바뀐다(실행 중에는 그대로)."""
 
-import json
 import sys
 
 EXIT_BAD_ENGINE = 2
@@ -33,13 +32,6 @@ def require_engines(body, where):
     if bad:
         print(f"[엔진 구성] {where} — 이 이미지에 없는 엔진: " + " · ".join(bad), file=sys.stderr, flush=True)
         raise SystemExit(EXIT_BAD_ENGINE)
-
-
-def snapshot_bytes(a):
-    snap = {"name": a.name, "body_sha": a.body_sha, **a.body}
-    return (json.dumps(snap, ensure_ascii=False, indent=1, sort_keys=True) + "\n").encode(
-        "utf-8"
-    )  # 키 정렬 — DB(JSONB)·파일 키 순서와 무관
 
 
 def resolve(refresh=False):
