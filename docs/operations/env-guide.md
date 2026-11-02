@@ -71,8 +71,8 @@
 ### 사내망 판정
 | 이름 | 뜻 | 기본 | 필수? |
 |---|---|---|---|
-| `INTERNAL_HOST_SUFFIXES` | 사내 도메인 접미사 | 비움 | 모델 주소가 사설 대역 밖일 때만 |
-| `INTERNAL_IP_RANGES` | 사내 IP 대역(/24처럼 좁게) | 비움 | 위와 같음 |
+| `INTERNAL_HOST_SUFFIXES`(`common.models.guard.internal_host_suffixes`) | 사내 도메인 접미사 — **상위 도메인**을 적는다(예: 모델 주소가 `llm.corp.example`이면 `corp.example`). 앞에 점을 붙여 끝부분으로 맞추므로 전체 호스트 이름을 그대로 적으면 맞지 않는다 | 비움 | 모델 주소가 점 있는 호스트 이름이고 기본 접미(`.local`·`.internal`·`.corp`·`.lan`)로 끝나지 않을 때 — 사설 대역 여부와 별개(호스트 이름 확인과 IP 확인을 둘 다 통과해야 내부로 본다) |
+| `INTERNAL_IP_RANGES`(`common.models.guard.internal_ip_ranges`) | 사내 IP 대역(/24처럼 좁게) | 비움 | 모델 서버 IP가 사설 대역(RFC1918) 밖일 때만 |
 
 ### 모델
 | 이름 | 뜻 | 필수? |
