@@ -498,6 +498,8 @@ mkdir -p /srv/rag/output && chown 10001 /srv/rag/output              # 컨테이
 **③ DB 마이그레이션** — 적재·검색을 하기 전에 끝낸다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다).
 
 ```bash
+# 0. (DB마다 처음 한 번 — DB 관리자) vector 확장 — 서버 계정은 보통 우리 스키마 권한만 있어 직접 못 만든다. 없으면 migrate·적재가 "vector 확장 없음"으로 멈춘다
+#    $DOCKER exec <pg 컨테이너> psql -U <관리자 계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
 dc run --rm load migrate current
 dc run --rm load migrate check --target all                # a. 지금 버전과 차이 확인(읽기만)
 

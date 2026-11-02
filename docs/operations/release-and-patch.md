@@ -261,6 +261,8 @@ S8a(사용자 10-28, D-030) 버전부터 pgvector의 우리 스키마(검색 `PG
 cd /srv/rag/code/live
 . deploy/host/scripts/settings_env.sh && load_settings && . deploy/host/scripts/image_vars.sh
 DC="docker compose -f deploy/host/compose/compose.pipeline.yml"   # 오버레이 패치 버전이면 -f deploy/host/compose/compose.patch.yml도(§3-2)
+# ⓪ (DB마다 처음 한 번 — DB 관리자) vector 확장: 서버 계정은 우리 스키마 권한만이라 직접 못 만든다(없으면 "vector 확장 없음"으로 멈춤)
+#    $DOCKER exec <pg 컨테이너> psql -U <관리자 계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
 # ① 지금 버전 — 처음엔 "판 없음"(옛 코드가 만든 DB)
 $DC run --rm load migrate current
 # ② 비교(읽기만 — 잠금 없음) — 표 정의 ↔ 실제 DB: 표·컬럼·형식·NULL·기본값·키 + 색인 정의 글자 + 뷰 컬럼. 컬럼 순서·뷰 정의 글자(PostgreSQL 버전마다 꼴이 다름)는 "(알림)"만(판정 밖)
