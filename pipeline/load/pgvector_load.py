@@ -163,7 +163,9 @@ def load(db, bundle, replace=False):
         by_src.setdefault(ST.source_of(d.get("source_system")), []).append(i)
     dbs = src_dbs(db)
     elsewhere = _elsewhere(dbs, docs, by_src)  # 같은 원본 경로가 다른 원천 스키마에 있는지(원천이 바뀐 문서 — 리뷰 #86)
+    kept = []  # 이미 gold에 있어 건너뛴 문서 — ParsingMeta gold_version이 비었으면 채움(_mark_loaded)
     if not replace:  # 어디든 이미 있으면 건너뜀(두 스키마에 같은 문서가 생기지 않게)
+        kept = [(d.get("source_system"), d["file_path"]) for d in docs if d["file_path"] in elsewhere]
         by_src = {src: [i for i in idx if docs[i]["file_path"] not in elsewhere] for src, idx in by_src.items()}
     counts = {"docs": 0, "chunks": 0, "terms": 0, "by_source": {}, "meta_missing": meta_missing}
     loaded = []
@@ -177,19 +179,21 @@ def load(db, bundle, replace=False):
         for src, idx in by_src.items():
             sdb = dbs[src]
             with sdb.cn.transaction(), sdb.cn.cursor() as cur:
-                c, ld = _load_src(cur, sdb.schema, src, docs, idx, chunks, vecs, meta, replace, nxt)
+                c, ld, kp = _load_src(cur, sdb.schema, src, docs, idx, chunks, vecs, meta, replace, nxt)
             _add(counts, src, c)
             loaded += ld
+            kept += kp
     else:
         with db.cn.transaction(), db.cn.cursor() as cur:  # 한 트랜잭션 — 실패하면 5벌 모두 되돌림
             for src, ids in _drop_plan(elsewhere, replace).items():
                 _drop_docs(cur, dbs[src].schema, ids, meta["dim"])
             for src, idx in by_src.items():
-                c, ld = _load_src(cur, dbs[src].schema, src, docs, idx, chunks, vecs, meta, replace)
+                c, ld, kp = _load_src(cur, dbs[src].schema, src, docs, idx, chunks, vecs, meta, replace)
                 _add(counts, src, c)
                 loaded += ld
+                kept += kp
     counts["sec"] = round(time.time() - t0, 1)
-    counts["loaded_at_failed"] = _mark_loaded(loaded)
+    counts["loaded_at_failed"] = _mark_loaded(loaded, kept)
     from common.core import runlog
 
     runlog.note(f"적재 {json.dumps({'bundle': str(B), 'meta': meta, 'counts': counts}, ensure_ascii=False, default=str)}")
@@ -246,7 +250,7 @@ def _add(counts, src, c):
 
 
 def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
-    """원천 스키마 s 하나에 문서 idx(docs.jsonl 줄 번호)를 적재 — 반환 (건수, [(source_system, file_path) — 새로 넣은 문서])."""
+    """원천 스키마 s 하나에 문서 idx(docs.jsonl 줄 번호)를 적재 — 반환 (건수, 새로 넣은 문서, 이미 있어 건너뛴 문서 — 둘 다 [(source_system, file_path)])."""
     from common.store.db.models import search_tables as ST
 
     cols = ST.doc_columns(src)[1:]  # doc_id 빼고(실 PG는 공용 시퀀스 기본값)
@@ -255,11 +259,12 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
     chunk_extra = [n for n, _ in ST.CHUNK_EXTRA.get(src, ())]
     cur.execute(f"SELECT file_path, doc_id FROM {s}.doc")
     have = {r[0]: r[1] for r in cur.fetchall()}
-    doc_id, loaded = {}, []
+    doc_id, loaded, kept = {}, [], []
     for i in idx:
         d = docs[i]
         old = have.get(d["file_path"])
         if old and not replace:
+            kept.append((d.get("source_system"), d["file_path"]))
             continue
         if old:
             drop_terms(cur, s, [old])
@@ -337,13 +342,13 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
                     ON CONFLICT (id) DO UPDATE SET n_chunks = EXCLUDED.n_chunks, avg_len = EXCLUDED.avg_len, dim = EXCLUDED.dim""",
         (meta["dim"],),
     )
-    return {"docs": len(doc_id), "chunks": len(sel), "terms": n_terms}, loaded
+    return {"docs": len(doc_id), "chunks": len(sel), "terms": n_terms}, loaded, kept
 
 
-def _mark_loaded(loaded):
-    """C10 예외(사용자 11-02) — 새로 적재한 문서의 ParsingMeta.loaded_at을 적는다(쓰기 계정, PG 커밋 뒤). 못 열거나 실패하면 경고 한 줄과
+def _mark_loaded(loaded, kept=()):
+    """C10 예외(사용자 11-02) — 새로 적재한 문서의 ParsingMeta.loaded_at·gold_version을 적는다(쓰기 계정, PG 커밋 뒤). 못 열거나 실패하면 경고 한 줄과
     실패 건수만 돌려준다(적재는 그대로 — gold가 검색의 정본, loaded_at은 기록용. DB 담당자가 칸을 더하기 전에도 적재가 멈추지 않게)."""
-    if not loaded:
+    if not loaded and not kept:
         return 0
     from common.store import parsing_meta_db as PM
 
@@ -355,7 +360,9 @@ def _mark_loaded(loaded):
         )
         return len(loaded)
     try:
-        return PM.mark_loaded(pm, loaded)
+        from pipeline.load.parsing_meta import pipeline_version  # 게시(silver_version)와 같은 자리
+
+        return PM.mark_loaded(pm, loaded, pipeline_version(), kept)  # gold_version = 적재한 코드 판(사용자 11-02)
     except Exception as e:
         print(f"[pgstore] 경고: ParsingMeta loaded_at 못 적음 — {len(loaded)}건: {type(e).__name__}", file=sys.stderr, flush=True)
         return len(loaded)
