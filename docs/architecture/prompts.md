@@ -16,12 +16,12 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 
 ## 2. 패키지 구성
 
-- `agent.json`(manifest — `model_role`·`output_schema`·`common_tail`·`agentic`·`budget`·`local_tools`) · `agent.py`(`create_agent(model, tools)` → `LlmAgent(instruction="", mode="single_turn")`) · 지시문 `prompt.md`(1개) 또는 `<prompt_id>.md`(여러 개 — 지금은 그런 패키지가 없음, S5a에 지운 `research_decompose`가 `decompose.md`·`decompose_context.md`를 썼음 · 로더 `common/ai/agent_prompts.py`는 그대로 지원) · 여러 턴 패키지(`parse_agent`·`parse_decide`·`parse_decide_vlm`)는 설계 절 `instructions.md`.
+- `agent.json`(manifest — `model_role`·`output_schema`·`common_tail`·`agentic`·`budget`·`local_tools`) · `agent.py`(옛 ADK 패키지 정의 — 0.2.0부터 코드가 읽지 않음, 지시서 지문 때문에 바이트 그대로 둠) · 지시문 `prompt.md`(1개) 또는 `<prompt_id>.md`(여러 개 — 지금은 그런 패키지가 없음, S5a에 지운 `research_decompose`가 `decompose.md`·`decompose_context.md`를 썼음 · 로더 `common/ai/agent_prompts.py`는 그대로 지원) · 여러 턴 패키지(`parse_agent`·`parse_decide`·`parse_decide_vlm`)는 설계 절 `instructions.md`.
 - **지시문:** `common/ai/agent_prompts.py` `load(agent_id, prompt_id)`가 읽어 호출부 모듈 상수를 만든다. 찾는 순서는 ① 패키지에 지시문이 하나면 `prompt.md` ② `<prompt_id>.md` ③ 옛 `prompts/<prompt_id>.md`(한 판 폴백). `.format()` 자리표시는 호출부가 채운다. 글자는 바이트 그대로 두고(지시문 지문 — CLAUDE.md §4), 줄끝은 LF다(`.gitattributes`).
-- **지시서 캐시 열쇠:** `common/ai/adk.py` `_package_digest()` — 패키지 폴더 안 모든 파일의 상대 경로·sha256을 다시 해시한다(옛 `agent_platform.pipeline`과 같은 값, I6). 패키지 모듈 이름·로그에 들어간다. 패키지 안 파일을 더하거나 빼거나 고치면 바뀐다 — S2에서 `README.md`·`cases.json`이 빠져 한 번 바뀌었다(`refactor.md` C-08). 모델 응답 캐시 열쇠(모델·메시지 해시)는 지시문 글자가 같으면 그대로다.
-- **output_schema:** JSON을 돌려주는 패키지는 `agent.json`에 `output_schema`를 둔다(호출부 파서가 기대하던 키·형식 그대로, 더 엄격하지 않게). `adk.complete(..., agent=...)`가 응답을 이 스키마로 검사하고, 어긋나면 원 메시지 + 안내 한 줄로 1회만 다시 묻는다(새 메시지라 원 캐시는 그대로). 그래도 어긋나면 호출부 기본값 처리에 맡긴다. 집계는 `adk.schema_stats()`(`invalid`·`retry_ok`·`retry_failed`). `LLM_FAKE=1` 경로(`common/ai/llm.py`)는 `adk.complete`를 거치지 않아 검사 대상이 아니다.
+- **캐시 열쇠:** 모델 응답 캐시 열쇠는 모델·메시지 해시라 지시문 글자가 같으면 그대로다(옛 `adk.py` `_package_digest()` 패키지 해시는 0.2.0에 ADK 장치와 함께 지움 — pl-46).
+- **output_schema:** JSON을 돌려주는 패키지는 `agent.json`에 `output_schema`를 둔다(호출부 파서가 기대하던 키·형식 그대로, 더 엄격하지 않게). `common.ai.llm.complete(..., agent=...)`가 응답을 이 스키마로 검사하고, 어긋나면 원 메시지 + 안내 한 줄로 1회만 다시 묻는다(새 메시지라 원 캐시는 그대로). 그래도 어긋나면 호출부 기본값 처리에 맡긴다. 집계는 `llm.schema_stats()`(`invalid`·`retry_ok`·`retry_failed`). `LLM_FAKE=1` 경로는 `complete()`를 거치지 않아 검사 대상이 아니다.
 - **공용 꼬리(ADK14 P1, 인젝션 방어):** `resources/prompts/common/_common/tail.md`(패키지 아님 — 꼬리 파일만) — 자료 속 지시 무시·지어내기 금지·형식 준수 3줄을 `load()`가 지시문 **맨 끝**에 붙인다. `agent.json` `common_tail`: 칸 없음 = `tail.md` · `false` = 안 붙음 · `"free_text"` = `tail_free.md`(JSON 전용 3번째 줄을 뺀 것 — 출력이 자유 글인 패키지). 자료를 문자열 이어붙이기로 템플릿 뒤에 붙이는 호출부는 `load()` 대신 `template()`(꼬리 없음) + 자료 + `tail(agent_id)`를 써서 꼬리가 항상 자료 뒤에 오게 한다(아래 표 "꼬리" 칸 `template+tail`).
-- **실행:** `adk.py` `_load_pipeline_agent`·`_run_once`·`_run_agentic`(I6 임시 대체 구현 — 옛 `agent_platform`은 D-013으로 지움). `complete(..., agent=<id>)`가 가드·캐시·재시도·사용량·형식 검사를 감싼다. 1회 호출 패키지는 local_tools가 없다(되돌이·분기는 호출자 파이썬 코드).
+- **실행:** `common/ai/llm.py` `complete(role, messages, agent=<id>)` — OpenAI 호환 HTTP 한 길(0.2.0 — ADK·litellm 장치 지움, pl-46)이 가드·재시도·사용량·형식 검사를 감싼다. 1회 호출 패키지는 local_tools가 없다(되돌이·분기는 호출자 파이썬 코드). 여러 턴 도구 왕복은 PC 답변 점검(`rag_qa`)만 — `validation/e2e/tool_loop.py`.
 - **사례:** 옛 패키지 `cases.json`(S2에 `tests/fixtures/prompts/`로 옮김)은 읽는 코드·테스트가 없어 10-29에 지웠다(사용자 — `refactor.md` C-63).
 
 ## 3. 패키지 표
@@ -36,7 +36,7 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 | `figure_overlay` | `pipeline/` | vlm | 겹친 개체 묶음(그림 + 글상자·화살표·도형) 1장 → 검색용 기록(F12) | 묶음 union bbox 크롭 + 지시문(생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figures.py` `vlm_fig_overlay()`(`P_FIGOVERLAY`) | 기본 · 있음 |
 | `nested_figure` | `pipeline/` | vlm | 쪽 전체 그림 안의 자식 그림 bbox 찾기(F7) | 쪽 그림 + 지시문 → `{"regions": [{bbox, kind, …}]}` | `pipeline/transform/figures/nested.py` `bbox_regions()`(`P_BBOX`) | 기본 · 있음 |
 
-시험 고정물(`example_agentic`·`example_agentic_vlm_sub` — `tests/server/common/test_adk.py`(S9 전 `adk.py` selftest)의 `run_agent` 묶음)은 upstream `dev_tools/unit_test/fixtures/`에 있고 이 저장소에는 없다. 없으면 시험이 그 묶음을 건너뛴다.
+(옛 `run_agent` 시험 고정물 `example_agentic`·`example_agentic_vlm_sub`는 `run_agent`와 함께 0.2.0에 쓰임이 없어졌다 — pl-46. 모델 호출 시험은 `tests/server/common/test_llm_call.py`, 도구 왕복은 `tests/general/e2e/test_answer_gen.py`.)
 
 ## 4. 패키지별 메모 (옛 README에서 표에 안 들어간 것)
 

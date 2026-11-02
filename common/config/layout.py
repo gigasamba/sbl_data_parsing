@@ -314,6 +314,8 @@ def to_file(model_doc):
 # 지운 설정 칸 — 설정 절 클래스 이름 → 칸 이름(0.2.0 — 절마다 두던 Section.REMOVED를 이 표 하나로, pl-46).
 # 설정 파일에 남아 있으면 경고만 하고 무시(시작 거부 막기 — 0.1.0 settings.yaml도 시작됨) · migrate는 "삭제됨"으로 알림.
 REMOVED: dict[str, frozenset[str]] = {
+    # CommonModelsTransport(common/config/settings.py) — 0.2.0(pl-46) 전송은 HTTP 한 길(ADK 장치 지움 — 남으면 경고만)
+    "CommonModelsTransport": frozenset({"transport"}),
     # CommonConnections(common/config/settings.py) — 사용자 10-29 — 지운 칸·절(남으면 경고만) · edw = EDW 벡터 경로(ops.md#op-03)
     "CommonConnections": frozenset({"edw", "openviking"}),
     # CommonConnectionsParsingMeta(common/config/settings.py) — 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)

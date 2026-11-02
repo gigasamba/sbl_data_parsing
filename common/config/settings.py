@@ -1311,7 +1311,6 @@ class CommonModelsTransport(Section):
     down_after: int | None = F(3, "MODEL_DOWN_AFTER", "연속 연결 실패 몇 번이면 그 주소를 '다운'으로 보는가(회)")
     down_cooldown: float | None = F(300.0, "MODEL_DOWN_COOLDOWN", "'다운' 판정 뒤 네트워크를 보내지 않고 즉시 거부하는 시간(초)")
     ping_timeout: int | None = F(60, "PING_TIMEOUT", "ping_models 점검의 호출 제한 시간(초)")
-    transport: str | None = F("adk", "MODEL_TRANSPORT", "모델 호출 전송 방식 — adk(기본) 또는 http(urllib 롤백 경로)")
 
 
 class CommonModelsVlm(Section):

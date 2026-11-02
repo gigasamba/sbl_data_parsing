@@ -347,7 +347,6 @@ VALUES = {
     "common.text.search_recency": "0(끔)·1(최신을 묻는 질문만)·2(항상) 중 하나",
     "common.connections.object_storage.verify_tls": "1(검증)·0(끔)·CA 파일 경로",
     "common.models.guard.external_scope": "func·e2e 중 하나",
-    "common.models.transport.transport": "adk·http 중 하나",
     "common.runtime.pipe_procs": "1 이상 정수 · auto 또는 비우면 자동 계산",
     "pipeline.connections.rdb.engine": "mssql·pg 중 하나",
     "pipeline.transform.represent.post": "all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments)",

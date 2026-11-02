@@ -102,8 +102,6 @@ common:
       price_in:  # LLM 입력 단가($/백만 토큰) · 값: 0 이상
       price_out:  # LLM 출력 단가($/백만 토큰) · 값: 0 이상
       rpm: 0  # LLM 분당 호출 상한(건) · 기본 0 · 값: 0 이상 정수 (0 = 무제한)
-    transport:
-      transport: adk  # 모델 호출 전송 방식 · 기본 adk · 값: adk·http 중 하나
     vlm:
       allow_external:  # VLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · 기본 false · 값: true·false
       concurrency: 4  # 한 문서의 쪽(그림) VLM 동시 요청 수(개) · 기본 4 · 값: 0 이상 정수

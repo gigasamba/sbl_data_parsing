@@ -26,8 +26,8 @@ import zlib
 from collections import Counter
 from pathlib import Path
 
-from common.ai import adk as A
 from common.ai import guard
+from common.ai import llm as A  # 모델 호출(0.2.0 — 옛 common.ai.adk, pl-46)
 from common.ai.guard import external_allowed, is_internal
 from common.ai.guard import urlopen as guard_urlopen
 from common.config import settings as C  # common 칸(S7c — 설정 객체 · cfg()·given()·reveal()·COMMON.env())
@@ -409,7 +409,7 @@ def ping(prefix):
     base, model = by_env(f"{prefix}_BASE_URL"), by_env(f"{prefix}_MODEL")
     if not base:
         return None
-    if prefix in ("LLM", "VLM"):  # common/adk.py complete() 경유(가드·재시도 공용) — EMBED은 GA6로 adk 역할 없음
+    if prefix in ("LLM", "VLM"):  # common.ai.llm.complete() 경유(가드·재시도 공용) — EMBED은 따로
         try:
             _, body = payload(prefix, model)
             t = time.perf_counter()

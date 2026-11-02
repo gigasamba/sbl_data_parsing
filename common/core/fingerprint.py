@@ -57,7 +57,6 @@ EXCLUDED_FILES = (
     "config/migrate.py",  # 옛 env 파일 → settings.yaml(S7a) — 운영 도구
     "config/sample.py",  # settings.sample.yaml 만들기·대조(S7a) — 개발 도구
     "config/show.py",  # 앱 설정 확인 명령(S7a) — 운영 도구
-    "ai/adk.py",  # LLM·VLM 호출 메커니즘(세션·재시도) — 생성된 글자 자체는 agent_prompts(별도로 agent_platform._package_digest가 추적)·모델 설정이 결정
     "ai/agent_prompts.py",  # 지시문 글자 변경은 agent_platform.pipeline._package_digest가 이미 따로 추적(여기서 또 볼 필요 없음)
     "core/artifacts.py",  # 실험 저장소 계약(code_fp·캐시 정리) — 파싱 이식 도구 전용, parse↔structure↔load 런타임 핸드오프 밖
     "core/docmeta.py",  # structure(build_bundle.py)↔search(retriever.py) 전용(날짜·구판 판정) — parse·load는 안 씀, 이 FINGERPRINT가 보는 두 경계(parse→structure·structure→load) 밖

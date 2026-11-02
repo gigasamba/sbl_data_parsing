@@ -15,7 +15,7 @@ import uuid
 from email import policy
 from pathlib import Path
 
-from common.ai import adk as A
+from common.ai import llm as A  # 모델 호출(0.2.0 — 옛 common.ai.adk, pl-46)
 from common.ai.agent_prompts import load as _load_prompt
 from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
 from common.core.paths import (
