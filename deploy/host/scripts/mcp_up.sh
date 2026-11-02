@@ -5,16 +5,21 @@
 #   S6b(D-020, 사용자 10-27) — 이미지 mcp-server(MCP_SERVER_IMAGE), 컨테이너 이름 mcp-server(옛 data-retrieval)
 # 설정: settings.yaml(SETTINGS_FILE, 기본 $SERVER_ENV_DIR/settings.yaml — SERVER_ENV_DIR 기본 배치 /srv/rag/env, S7e1 사용자 10-27 Q3·Q5) — 호스트 칸
 #      (MCP_SERVER_IMAGE·RAG_OUT·MCP_HOST·MCP_PORT)을 settings_env.sh load_settings가 셸 env로, 컨테이너는 같은 파일을 붙여 읽음(토큰·PG 접속 등 비밀)
-#      DOCKER(셸 env > settings.yaml ops.host.docker > podman, 없으면 docker — op-10 · 두 낱말도 됨: DOCKER="sudo podman") · PATCH_CODE(덧씌우기/전체 덮어쓰기 코드 폴더 — 있으면 compose.patch.mcp.yml도)
+#      DOCKER(셸 env > settings.yaml ops.host.docker > podman, 없으면 docker — op-10 · 두 낱말도 됨: DOCKER="sudo podman") · PATCH_CODE(settings.yaml ops.host.patch_code — 덧씌우기 코드 폴더, 적었고 그 아래 app/가 있으면 compose.patch.mcp.yml도)
 # 종료 코드: 0 응답 확인(원래 떠 있었거나 다시 띄움) · 1 다시 띄웠는데도 응답 없음(로그 마지막 줄 출력)
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트(S6b)
 . deploy/host/scripts/settings_env.sh && load_settings || exit $?   # S7e1 — compose 치환(MCP_SERVER_IMAGE·RAG_OUT)과 /health 주소 — 값은 출력하지 않음
 . deploy/host/scripts/image_vars.sh; need_image mcp || exit 2; code_dir_default MCP_SERVER_IMAGE   # op-06 — 실행 이미지면 코드 폴더 루트 · S6b — compose.mcp.yml은 MCP_SERVER_IMAGE만 봄(옛 DATA_RETRIEVAL_IMAGE·RAG_IMAGE만 있으면 종료 코드 2)
-PATCH_CODE=${PATCH_CODE:-/srv/rag/code/live}
 files="-f deploy/host/compose/compose.mcp.yml"
-[ -n "${CODE_DIR:-}" ] && files="$files -f deploy/host/compose/compose.code.mcp.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 /app/deploy에
-[ -d "$PATCH_CODE/app" ] && files="$files -f deploy/host/compose/compose.patch.mcp.yml"
+[ -n "${CODE_DIR:-}" ] && files="$files -f deploy/host/compose/compose.code.mcp.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 컨테이너 코드 자리에
+# 오버레이 패치 — settings.yaml ops.host.patch_code(PATCH_CODE)를 적었을 때만(기본값 없음 — 사용자 11-02)
+if [ -n "${PATCH_CODE:-}" ]; then
+  [ -d "$PATCH_CODE/app" ] && files="$files -f deploy/host/compose/compose.patch.mcp.yml"
+elif [ -d app ]; then   # 코드 폴더에 오버레이(app/)가 있는데 칸이 비면 — 파이프라인 compose.patch.yml처럼 멈춤(조용히 이미지 코드로 뜨지 않게)
+  echo "[오류] 코드 폴더에 오버레이 app/이 있는데 settings.yaml ops.host.patch_code가 비었음(기본값 없음 — 사용자 11-02) — 그 폴더를 적을 것" >&2
+  exit 2
+fi
 DC="$DOCKER compose $files"
 URL="http://${MCP_HOST:-127.0.0.1}:${MCP_PORT:-8765}/health"
 

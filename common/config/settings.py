@@ -55,11 +55,15 @@ IN_IMAGE = REPO_ROOT.name == "deploy"  # 코드가 이미지 배치(/app/deploy/
 # ── 이미지 배치 약속 경로 — 코드에 둔 컨테이너 안 자리는 이 두 표에만(CLAUDE.md 3절 경로 규칙의 예외, 사용자 10-28 — VS7e2 R-12 · D-029) ──
 # 이미지(Dockerfile·compose 마운트·entrypoint)가 만드는 자리라 서버 설정 값이 아니라 이미지와 함께 바뀐다. 동작은 S7e2와 같음.
 IMAGE_PATHS = {
+    # 사용자 11-02 — 컨테이너 안 약속 경로는 이 표 하나(두 이미지 공통). 호스트 쪽(compose·run_docs·스크립트)은 deploy/release/hostkeys.py가
+    # 이 표로 만든 deploy/host/scripts/image_paths.json을 읽는다(호스트 python엔 pydantic이 없음 — settings_env.sh가 APP_* env로도 냄).
+    "output_root": "/app/output",  # 결과 폴더를 붙이는 자리(compose RAG_OUT → 이 자리)
+    "code_root": "/app/deploy",  # 코드 자리(PYTHONPATH — 실행 이미지는 서버 코드 폴더를 여기에 붙임)
     "gold_mount": "/data/gold",  # run_tool.sh가 사람 정답 폴더를 붙이는 자리(pipeline.config.gold_dir — 옛 `-e GOLD_DIR=/data/gold`)
     "image_env": "/app/docker/image_env.txt",  # 빌드 때 이미지 ENV를 적어 둔 파일(common.config.boot — 라이브러리 env가 이미지 값만 덮게)
     "docs_mount": "/data/docs",  # 원본 폴더를 읽기 전용으로 붙이는 자리(compose DOC_SRC → 이 자리 · pipeline DOC_DIR 기본값)
-    "prepared_out": "/app/output/prepared",  # 원본 사본(prepare) 자리(pipeline DOC_DIR_PREPARED 기본값)
 }
+IMAGE_PATHS["prepared_out"] = IMAGE_PATHS["output_root"] + "/prepared"  # 원본 사본(prepare) 자리(pipeline DOC_DIR_PREPARED 기본값)
 # VS7e1 B-2(사용자 10-28 ①) — 옛 Dockerfile ENV로 굽던 값은 이미지 안 모델 기본값으로(규칙은 "settings.yaml > 코드 기본값" 하나 — 옛 ENV는
 # 다리가 사용자 env로 봐 settings.yaml이 못 덮었음). 이미지 신호 RAG_MODULE(5-3 H)로 그 이미지가 굽던 것만. PC·시험 하위 프로세스(RAG_MODULE 없음)는 PC 기본값.
 _IMAGE_DEFAULTS = {
@@ -1370,7 +1374,7 @@ class CommonHost(Section):
         "호스트의 결과(output) 폴더(서버 경로) — compose가 컨테이너 /app/output으로 마운트하는 원본(T-21 — 코드가 읽는 칸은 common.paths.output_root)",
     )
     patch_code: str | None = F(
-        "/srv/rag/code/live", "PATCH_CODE", "덧씌우기 코드 폴더(호스트) — compose.patch*.yml이 컨테이너 /app/deploy/*로 마운트"
+        None, "PATCH_CODE", "덧씌우기 코드 폴더(호스트) — compose.patch*.yml이 컨테이너 코드 자리로 마운트(기본값 없음, 사용자 11-02)"
     )
     pg_container: str | None = F(
         None,

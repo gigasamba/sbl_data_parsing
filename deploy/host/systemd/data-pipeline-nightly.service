@@ -10,7 +10,7 @@
 #   지웠다 — ExecStart가 settings_env.sh load_settings로 호스트 칸(NIGHTLY_TIME·DATA_PIPELINE_IMAGE·RAG_OUT·DOC_SRC·RUN_ENV 등)을
 #   셸 env로 받은 뒤 trigger.sh scheduled가 NIGHTLY_TIME을 본다(RUN_ENV는 settings.yaml required.env.run_env에만 — unit에 적지 않음). 설정 파일이 없거나 틀리면 종료 코드 2
 #   (settings.yaml 없이 pipeline.env만 있으면 "설정 이관 필요"). 설정 파일을 다른 자리에 두면 Environment=SETTINGS_FILE=<파일>을 더한다.
-#   호스트 python에 pydantic·PyYAML이 없으면 Environment=SETTINGS_IMAGE=data-pipeline:<태그>(이미지 안에서 꺼냄 — refactor.md C-36).
+#   호스트 python에는 PyYAML이 있어야 한다(settings_env.sh — host_env.py, 사용자 11-02 — 이미지 안에서 꺼내던 길은 지움).
 [Unit]
 Description=RAG 새벽 배치 — run_docs.py(문서별 flow)를 NIGHTLY_TIME 시각에만(trigger.sh scheduled)
 Wants=network-online.target

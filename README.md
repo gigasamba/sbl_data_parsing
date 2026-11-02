@@ -584,7 +584,7 @@ bash deploy/host/scripts/trigger.sh parse       # 파싱 → output/parse/_rep(d
 bash deploy/host/scripts/trigger.sh publish     # Object Storage 업로드 + EDW 메타데이터(운영 시스템에 씀)
 ```
 
-- **문서별 흐름 `run_docs.py`** 는 `<운영자 작업 폴더>/run_docs.py`에 두고 실행한다(코드 폴더 안의 사본이 아니다). 설정 배치 모듈을 찾을 코드 폴더는 `--code`(기본 `/srv/rag/code/live`), 컨테이너 명령은 settings.yaml `ops.host.docker`(없으면 podman). 서버 settings.yaml의 운영 접속 항목을 읽고, 문서별 값은 상주 컨테이너에 `--set`으로 넘긴다 — 설계: [docs/architecture/run_docs_design.md](docs/architecture/run_docs_design.md). **PC에서는 실행하지 않는다**(운영 EDW·Object Storage에 접속).
+- **문서별 흐름 `run_docs.py`** 는 `<운영자 작업 폴더>/run_docs.py`에 두고 실행한다(코드 폴더 안의 사본이 아니다). 설정 배치 모듈·컨테이너 안 경로 표(`deploy/host/scripts/host_keys.tsv`)를 찾을 코드 폴더는 `--code`(기본값 없음 — 운영자 폴더에서 돌릴 때 꼭 준다, 사용자 11-02), 컨테이너 명령은 settings.yaml `ops.host.docker`(없으면 podman). 서버 settings.yaml의 운영 접속 항목을 읽고, 문서별 값은 상주 컨테이너에 `--set`으로 넘긴다 — 설계: [docs/architecture/run_docs_design.md](docs/architecture/run_docs_design.md). **PC에서는 실행하지 않는다**(운영 EDW·Object Storage에 접속).
 
 ### 5-5. 서버 — 상주 서비스와 자동 실행
 
