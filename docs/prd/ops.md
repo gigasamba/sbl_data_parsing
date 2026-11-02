@@ -30,6 +30,7 @@
 - 파일: `deploy/host/scripts/run_docs.py`(처리 끝난 집합), `pipeline/cli.py`(`night` — 같게 동작하는지 확인).
 - 결정(사용자 10-30 PRD grill): C10 — '새 문서' 후보는 모든 입구(run_docs·night)에서 EDW `FileStorageMap`에 있고 `ParsingMeta`에 없는 것. 문서 대장은 숨김·판 관리에만 쓴다.
 - C10 구현(11-01 `feature/scope-cut-search` — 사용자 11-01 Q1(a)): 파싱 `--source`·`--max-new` 고르기 = 원천 이름(FileStorageMap) 중 `s3_key`(manifest — 없으면 이름)에 ParsingMeta 끝난 행이 없는 것(`pipeline/cli.py` `_unparsed` · `parsing_meta_db.done_source_keys` — 읽기 계정, PC는 `RDB_SQLITE` 대역). **파싱 입구에 EDW 읽기가 생김** — 서버에서 못 읽으면 종료 4, PC는 받은 목록 그대로 + 로그 한 줄. 실패 문서(행 없음)는 다음 실행에 다시. 문서 대장 고르기(pl-32 2c)는 지움. "끝남" = `parse_status` ok·partial·skipped_dup(사용자 11-01) — not_parsed·skipped_disk_cap·실패·행 없음은 다시 고름. ParsingMeta 상태 갱신 길은 지운 채(게시는 넣기만 — 사용자 11-01).
+- 한 것(11-02 `feature/nightly-key` — 사용자 11-02): 새벽 배치 칸 셋 — settings.yaml `ops.nightly.time`(시작)·`max_docs`(새 문서 수 상한)·`deadline`(마감, HH:MM) — 하나라도 비면 `trigger.sh scheduled`가 조용히 끝. `run_docs.py`에 `--max-docs`(끝난 문서를 뺀 뒤 앞에서 — 옛 `--limit`은 그 전에 잘라 시험용)·`--deadline`(지나면 새 문서를 받지 않음)을 더함. 칸 이름은 설정 파일 기준 `ops.nightly.*` 하나(모델 안 이름 `pipeline.host.nightly`는 코드만 — 문서·시험 문구를 맞춤). 시험 `test_trigger_gate`·`test_nightly_time`·`test_run_docs`(`deadline_at`).
 - Status: todo
 
 <a id="pl-24"></a>

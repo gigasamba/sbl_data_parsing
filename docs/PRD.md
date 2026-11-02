@@ -128,7 +128,7 @@
 | run_docs 흐름 — 문서마다 미리 받기 → 파싱 → 구조화+적재 → 게시 → 임시 폴더 삭제, 배치 장벽(앞 묶음이 다 끝날 때까지 기다리기) 없음 | 문서 수천 건을 사람 없이 처리 | done | [pl-10](prd/ops.md#pl-10) |
 | 새 문서만 처리(목록 − ParsingMeta 끝난 행) — 파싱 입구는 구현됨(수집 표). 전체 재파싱은 사람이 전체 e2e로만 | 지문이 바뀔 때 전체 자동 재파싱을 하면 밤 시간을 넘긴다 | todo | [pl-23](prd/ops.md#pl-23) |
 | run_docs 대상 고르기를 위 규칙에 맞춘다 — 지금은 파일 이름 키워드(`--filter RFP,proposal`)·`--start-offset`·`--skip-done`(ok·partial만)으로 고른다 | 지금 새벽 배치는 이름에 RFP·proposal이 든 문서만 처리한다 | todo | [pl-23](prd/ops.md#pl-23) |
-| 새벽 배치는 `ops.nightly.time`(HH:MM) 하나로 켠다(비우면 안 돎) — systemd 타이머가 5분마다 `trigger.sh scheduled` → `run_docs.py --start-offset 0 --skip-done` | 지금 서버는 비워 둠(꺼짐) | todo | [pl-23](prd/ops.md#pl-23) |
+| 새벽 배치는 `ops.nightly.time`·`max_docs`·`deadline` 셋이 모두 있을 때만 돈다(하나라도 비면 안 돎 — 사용자 11-02) — systemd 타이머가 5분마다 `trigger.sh scheduled` → `run_docs.py --start-offset 0 --skip-done --max-docs --deadline` | 지금 서버는 비워 둠(꺼짐) | todo | [pl-23](prd/ops.md#pl-23) |
 | 문서별 순서를 파싱 → silver 게시 → 원본 임시 파일 삭제 → gold로 | 지금은 게시가 gold 성공을 기다리고, 실패해도 임시 원본을 지운다 | todo | [pl-24](prd/ops.md#pl-24) |
 | gold 실패면 ParsingMeta 행은 남기고 새 칸 `gold_status`=failed·이유. 파싱이 통째로 실패하면 EDW에 쓰지 않고 로그에만 — 다음 실행이 다시 고른다 | gold는 silver에서 다시 만들 수 있다. 칸 추가는 DB 담당자 몫(등급 A) | todo | [pl-24](prd/ops.md#pl-24) |
 | run_docs 종료 코드 — 대상 0건 = 0, 실패 있음 = 1, 마감 도달 = 75 | 지금은 실패가 있어도 0으로 끝나 스케줄러가 실패를 못 본다(C-33) | todo | [pl-18](prd/ops.md#pl-18) |

@@ -408,7 +408,8 @@ def _values(p, f):
     elif re.search(r"\(초\)|시간\(초\)|제한 시간|상한\(초\)|_sec$|timeout", desc + " " + leaf):
         rng = "0 이상 초" if not is_int else "0 이상 정수(초)"
     else:
-        rng = "0 이상 정수" if is_int else "0 이상"
+        lo = next((m.ge for m in f.metadata if getattr(m, "ge", None) is not None), 0)  # 모델의 아래 한계(ge) — 없으면 0
+        rng = f"{lo} 이상 정수" if is_int else f"{lo} 이상"
     z = re.search(r"0(?:이면| ?= ?| 이하면)\s*([^,·)—(]+)", desc)
     if z:
         rng += f" (0 = {z.group(1).strip()})"
