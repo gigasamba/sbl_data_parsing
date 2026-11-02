@@ -45,7 +45,7 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 <a id="op-04"></a>
 ## op-04 · 첫 릴리스 태그 `v0.1.0`과 릴리스 노트
 - 이유: `VERSION`과 이미지 태그는 있지만 태그나 릴리스 노트를 만든 적이 없다.
-- 무엇: `release/0.1.0`에서 `main`에 태그, `RELEASE_NOTES`(변경, 채울 설정, 핑거프린트 변경, refactor.md "최종"의 서버 할 일)를 쓴다.
+- 무엇: `release/0.1.0`에서 `main`에 태그, `RELEASE_NOTES`(변경, 채울 설정, 핑거프린트 변경, 옛 refactor.md "최종"의 서버 할 일 — 지금 [history/deploy_0_1_0.md](../history/deploy_0_1_0.md))를 쓴다.
 - 릴리스 노트 후보: MCP `search` 근거 출력의 `file_path` 키 제거 — [mcp.md#mc-16](mcp.md#mc-16)(사용자 10-30 PRD grill D1).
 - 끝남 10-30: `main` 7910257에 태그 `v0.1.0`을 만들었다. 릴리스 노트는 GitHub release v0.1.0.
 - Status: done
@@ -75,6 +75,7 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 검토 반영(10-30): `ship_stage.sh` 저장 실패를 실패로(전에는 `if stage_one` 안이라 잘린 조각에 sha256을 만들고 성공으로 끝남) · 태그 = 코드 VERSION만(D-036) · 저장 기본 `/var/tmp/bake`(코드 폴더 밖) · 운영 서버 호스트 스크립트용으로 시험한 코드 폴더 묶음도 같이 저장(컨테이너엔 마운트 안 함).
 - 같이 고친 것(허브 10-30): `build_ship.sh` 코드 묶음 기본 위치 `output/ship/`(옛 `/var/tmp`는 Windows Git Bash에 없음) · `ship_stage.sh`가 실행 이미지(`pipeline-runtime`·`mcp-runtime`)와 `CODE_BUNDLE`(코드 묶음 + sha256)도 받음 · README §5-0 배포 단계 표(사용자 10-30).
 - 파일: `deploy/docker/Dockerfile.bake`, `deploy/release/{bake.sh,build_ship.sh,ship_stage.sh}`, `.gitattributes`, README §5-0, `docs/operations/release-and-patch.md` §1-1·§1-2, `docs/operations/server-guide.md` §0-1.
+- 결정(사용자 11-02 — 🔒 검토 등급 A, 비밀 처리): 운영(prd) 이미지에는 settings.yaml(비밀 포함)도 굽는다. 다루는 규칙: ① 구운 이미지 파일(저장한 `.tar`·조각 포함)은 비밀과 같다 — 운영 서버와 권한 있는 반입 경로에만 두고 공용 레지스트리·공유 폴더·메일·채팅에 올리지 않는다 ② 키를 바꿀 때마다 다시 굽고 옛 키가 든 이미지·조각은 지운다 ③ 굽고 나서 이미지 이력·`inspect`·시작 로그에 값이 보이지 않는지 본다 ④ 굽는 데 쓴 settings.yaml 사본은 지운다. todo: `bake.sh`·`Dockerfile.bake`에 settings.yaml 굽기(코드는 따로 — 사람 검토).
 - Status: done (10-30 `feature/bake-image`)
 
 <a id="op-10"></a>
@@ -103,4 +104,5 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
   - `deploy/release/load.sh` 커밋 · `ship_stage.sh`가 이미지 저장소 배치 하나(`sbl_images/load.sh` · `<판>/BUILD.txt` · `<판>/<이미지>/` 45MB 조각) — 개발·운영(bake) 같은 배치.
   - 문서: README §5-0·§5-2·§5-3·§5-5(설치 길 하나 · `mkdir -p /srv/rag/code` · podman-compose 폐쇄망 설치 · `podman-restart` · 상주 트리거 재부팅 뒤 확인), server-guide·env-guide·release-and-patch는 링크, release-and-patch §5-7 0.2.0 올리기·되돌리기(이미지 안 migrate 표준 입력·출력 — PC에서 확인), refactor.md C-71.
   - 남김: 상주 파싱 서비스 전용 keepalive 타이머는 만들지 않음(재부팅은 `podman-restart`, 그 뒤 확인 절차만) · `NIGHTLY_PUBLISH`는 [pl-26](load.md#pl-26) 몫.
+- 결정(사용자 11-02): 일회성 작업 컨테이너를 지운다 — todo(정리 3a): compose 작업 서비스 `parse`·`index_a`·`index_b`, `trigger.sh`·`run_tool.sh`의 `compose run --rm`. `settings_env --image`는 PyYAML만 있는 호스트 python으로. 운영 작업·`dbtool`·`migrate`는 상주 `data-pipeline` 컨테이너에 `exec`로 돌린다. 빌드·반입 이미지 점검(`build_ship`·`bake`·`selftest_gate`의 `docker run --rm <새 이미지> selftest`)은 그대로.
 - Status: done (11-01, feature/op10-server-install)
