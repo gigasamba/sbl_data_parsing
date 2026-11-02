@@ -6,7 +6,7 @@
 #     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>   (S7e1·S7e2 — 옛 --env-file pipeline.env 대신 설정 파일 하나)
 # 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp ·  (이미지 명령 dedup·prepare는 11-01에 지움 — parse가 안에서 부름)
 #       ask --q …  (test-stack·night·run-stack·full·structure·load는 11-01에 지움 — 서버 입구는 run_docs 하나, 사용자 10-31)
-#   tool <이름> = cli/<이름>.py 하나를 바로 돌림(rdb_discover·check_env·index 등 — run_tool.sh가 쓰는 자리)
+#   tool <이름> = 고정 표의 도구 하나(check_env·ping_models·check_modules·cli·rdb_discover·gen_roster·glossary_suggest — run_tool.sh가 쓰는 자리)
 #     옛 형태 `tool cli/<이름>.py`도 이번 판까지는 받아 줌(경고 후 번역) — 다음 판부터 이름만.
 #   모듈(트리거 1회): parse(= 가져오기(폴더·rdb:csv, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타, SI39 — cli/publish_parse.py --apply) — docs/architecture.md
 #   migrate up|stamp|current|check [--target search|all] [--schema S] [--dim N|--bundle B] = pgvector 우리 스키마 판 관리(S8a — Alembic,
@@ -88,38 +88,20 @@ case "$cmd" in
     name="${1:?도구 이름(예: rdb_discover·check_env)}"; shift || true
     # C3(독립 검토 10-13) — 이름을 python -c 소스 문자열에 그대로 끼워 넣으면 코드 주입 경로가 됨. 모듈 이름 문법만 허용.
     [[ "$name" =~ ^[a-z_][a-z0-9_]*$ ]] || { echo "bad tool name"; exit 64; }
-    # ping_models·os_put·check_modules는 common/check/(S3 — 옛 common_tools/cli/) — common.check를 맨 먼저(덧씌우기 live에 옛 사본이 남아도 새 것이 이김), 그다음 이 순서로 시도.
-    # S4 — 단계 4 도구는 pipeline/로: check_env는 pipeline/, rdb_discover는 pipeline/extract/,
-    # gen_roster·glossary_suggest는 pipeline/transform/structure/ (figure_review는 11-01에 지움) ·
-    # (pipeline/eval/의 평가 도구와 mcp_server/cli/의 mcp_eval·search_checks는 11-01에 지움 — e2-10) ·
-    # (index — AD41 색인 빌더는 11-01에 지움, mc-16)
-    # assets는 /app/docker/assets.py(파일로 실행 — `python /app/docker/assets.py install`, 저장소 자리 deploy/release/ — S6b), eval_research는 S5a 삭제.
-    # 옛 `tool pipeline`(common_tools.cli.pipeline)은 pipeline.cli로. `패키지:이름,…`은 그 이름만 — S4 전에 tool로 부를 수 있던 것만
-    # (pipeline 단계 모듈 run_all·dedup·stream 등을 preflight·잠금 없이 부르지 않게).
-    # 이름은 sys.argv로 전달(소스 문자열에 끼워 넣지 않음). 찾기는 python 한 번에(VS3 R-7 — 전에는 패키지마다 프로세스 하나).
-    [ "$name" = pipeline ] && name=cli
-    case "$name" in  # 0.2.0 — 점검기 하나(common.check.checker)로 합침: 옛 도구 이름 그대로
-      check_env) exec python -m common.check.checker env "$@";;
-      ping_models) exec python -m common.check.checker ping "$@";;
+    # 0.2.0(pl-46) — 도구 이름 → 모듈 고정 표(옛 TOOL_PKGS 패키지 목록 찾기 대신). 표 밖 이름은 거부. 이 이미지에 없는 모듈(mcp-server의 pipeline)도 거부.
+    case "$name" in
+      check_env)        set -- common.check.checker env "$@";;
+      ping_models)      set -- common.check.checker ping "$@";;
+      check_modules)    set -- common.check.check_modules "$@";;
+      cli|pipeline)     set -- pipeline.cli "$@";;
+      rdb_discover)     set -- pipeline.extract.rdb_discover "$@";;
+      gen_roster)       set -- pipeline.transform.structure.gen_roster "$@";;
+      glossary_suggest) set -- pipeline.transform.structure.glossary_suggest "$@";;
+      *) echo "[tool] 모르는 도구: $name (check_env·ping_models·check_modules·cli·rdb_discover·gen_roster·glossary_suggest 중 하나)" >&2; exit 2;;
     esac
-    TOOL_PKGS="common.check pipeline:cli pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest"
-    # shellcheck disable=SC2086
-    mod=$(python -c "
-import importlib.util, sys
-for entry in sys.argv[2:]:
-    pkg, _, names = entry.partition(':')
-    if names and sys.argv[1] not in names.split(','):
-        continue
-    try:
-        found = importlib.util.find_spec(pkg + '.' + sys.argv[1])
-    except Exception:   # 이미지에 없는 패키지(중간 패키지가 없으면 ModuleNotFoundError) → 다음
-        found = None
-    if found:
-        print(pkg + '.' + sys.argv[1])
-        break
-" "$name" $TOOL_PKGS 2>/dev/null) || mod=""
-    [ -n "$mod" ] && exec python -m "$mod" "$@"
-    echo "[tool] 모르는 도구: $name (${TOOL_PKGS// /·} 어디에도 없음)" >&2; exit 2;;
+    python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1].rsplit('.', 1)[0]) else 2)" "$1" 2>/dev/null \
+      || { echo "[tool] 이 이미지에 없는 도구: $name ($1)" >&2; exit 2; }
+    exec python -m "$@";;
   mcp)        exec python -m mcp_server.main "$@";;        # 검색 MCP(deploy/host/compose/compose.mcp.yml) — 잠금 없음(읽기 전용)
   # 모듈(트리거 1회 실행 — docs/architecture.md). 종료 코드: 0 끝남·건너뜀 · 3 앞 모듈 결과 없음 · 4 PostgreSQL 없음 · 75 실행 중·마감
   parse)
