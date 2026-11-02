@@ -168,10 +168,7 @@ extract:
   # ─── 회전 준비(prepare) ───
   prepare:
     link: auto  # 회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy · 기본 auto · 값: auto·hardlink·symlink·copy 중 하나
-    rotate: true  # 스캔 PDF 회전 검토(OCR 점수) 켬/끔 · 기본 true · 값: true·false
-    rotate_lead: 3  # [파라미터] 빠른 회전 검토에서 기대 각도를 정하는 문서 맨 앞 쪽 수(개) · 기본 3 · 값: 0 이상 정수
-    rotate_probe_fast: 480  # [파라미터] 빠른 회전 검토의 축소 점검 이미지 크기(px) · 기본 480 · 값: 0 이상 정수
-    rotate_s0_min: 150.0  # [파라미터] 빠른 회전 검토에서 힌트 각도를 믿는 최소 OCR 점수 · 기본 150.0 · 값: 0 이상
+    rotate: false  # 이미지·스캔 PDF 쪽 방향 바로잡기 켬/끔 · 기본 false · 값: true·false
   # ─── 파싱 엔진·쪽 처리 ───
   doc_parallel: 1  # 대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개) · 기본 1 · 값: 0 이상 정수
   fill_merged: true  # 표에서 병합 셀이 덮은 빈 칸을 원본 칸 값으로 채울지 · 기본 true · 값: true·false

@@ -100,12 +100,16 @@ class PipelineExtractOcr(Section):
 
 
 class PipelineExtractPrepare(Section):
-    REMOVED = frozenset({"rotate_fast", "ocr"})  # 사용자 10-30(op-08) · ocr 11-01(rapidocr 1.x 길 지움 — 늘 3.x) — 지운 칸(남으면 경고만)
+    REMOVED = frozenset(
+        {"rotate_fast", "ocr", "rotate_lead", "rotate_probe_fast", "rotate_s0_min"}
+    )  # 사용자 10-30(op-08) · ocr 11-01(rapidocr 1.x 길 지움 — 늘 3.x) · rotate_lead·rotate_probe_fast·rotate_s0_min 11-02(회전 판단 규칙 지움 — 켬/끔만) — 지운 칸(남으면 경고만)
     link: str | None = F("auto", "PREPARE_LINK", "회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy")
-    rotate: bool | None = F(True, "PREPARE_ROTATE", "스캔 PDF 회전 검토(OCR 점수) 켬/끔 — 0이면 생략하고 그대로 복사", off=("0",))
-    rotate_lead: int | None = F(3, "PREPARE_ROTATE_LEAD", "빠른 회전 검토에서 기대 각도를 정하는 문서 맨 앞 쪽 수(개)")
-    rotate_probe_fast: int | None = F(480, "PREPARE_ROTATE_PROBE_FAST", "빠른 회전 검토의 축소 점검 이미지 크기(px)")
-    rotate_s0_min: float | None = F(150.0, "PREPARE_ROTATE_S0_MIN", "빠른 회전 검토에서 힌트 각도를 믿는 최소 OCR 점수")
+    rotate: bool | None = F(
+        False,
+        "PREPARE_ROTATE",
+        "이미지·스캔 PDF 쪽 방향 바로잡기 켬/끔 — 켜면 4방향 OCR 점수를 동시에 재 가장 높은 방향으로 돌림, 끄면 회전용 OCR 없이 그대로(사용자 11-02 기본 꺼짐)",
+        off=("0",),
+    )
 
 
 class PipelineExtractSource(Section):
