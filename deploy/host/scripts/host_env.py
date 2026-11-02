@@ -2,7 +2,7 @@
 칸 목록·옛 env 이름·종류는 host_keys.tsv(설정 모델에서 자동 생성 — `PYTHONPATH=. python deploy/release/hostkeys.py`), 파일 배치 → 모델 배치는
 common/config/layout.py(표준 라이브러리만 — run_docs.py와 같은 길)를 파일로 읽어 바꾼다. 값 검증은 하지 않는다(컨테이너 안 앱이 같은 파일을 읽어 검증).
 YAML에 적은 값만 낸다(비운 칸·없는 칸은 안 냄 — compose·스크립트 기본값이 걸림). 비밀 칸은 표에 없다. 값은 찍지 않는다(요청한 줄만 표준 출력).
-사용: python3 deploy/host/scripts/host_env.py [--format sh|env] [--file settings.yaml] <절>...   (절 예: pipeline.host common.host mcp.server.port)
+사용: python3 deploy/host/scripts/host_env.py [--format sh|env] [--file settings.yaml] [<절>...]   (절 예: pipeline.host common.host — 없으면 표 전부)
 """
 
 import argparse
@@ -68,7 +68,7 @@ def lines(doc, sections, fmt="sh"):
         if not row or row.startswith("#"):
             continue
         path, name, kind = row.split("\t")
-        if not any(path == s or path.startswith(s + ".") for s in sections):
+        if sections and not any(path == s or path.startswith(s + ".") for s in sections):
             continue
         v = _get(doc, path)
         if v is None:
@@ -92,7 +92,7 @@ def lines(doc, sections, fmt="sh"):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    ap.add_argument("sections", nargs="+")
+    ap.add_argument("sections", nargs="*", help="모델 경로 절(없으면 표 전부 — 호스트 칸 모두)")
     ap.add_argument("--file", help="설정 파일(없으면 SETTINGS_FILE)")
     ap.add_argument("--format", choices=("env", "sh"), default="env")
     a = ap.parse_args(argv)

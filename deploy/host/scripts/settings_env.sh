@@ -3,7 +3,7 @@
 #   source: . deploy/host/scripts/settings_env.sh && load_settings || exit $?   — trigger.sh·run_tool.sh·mcp_up.sh·systemd nightly가 씀
 #     설정 파일: SETTINGS_FILE(있으면) > $SERVER_ENV_DIR/settings.yaml(서버 기본 배치 /srv/rag/env) > (RUN_ENV=local) 저장소 루트 settings.yaml
 #     없으면 종료 코드 2(옛 env 파일 pipeline.env는 읽지 않음 — Q5)
-#     호스트 칸(HOST_SECTIONS — 이미지·자원·포트·호스트 경로·RUN_ENV·새벽 배치 PARSE_DEADLINE, compose healthcheck·mcp_up.sh가 쓰는 앱 칸 MCP_HOST·MCP_PORT·
+#     호스트 칸(host_keys.tsv 전부 — deploy/release/hostkeys.py HOST_SECTIONS: 이미지·자원·포트·호스트 경로·RUN_ENV·새벽 배치 PARSE_DEADLINE, compose healthcheck·mcp_up.sh가 쓰는 앱 칸 MCP_HOST·MCP_PORT·
 #     TRIGGER_PARSE_PORT·TRIGGER_STRUCTURE_PORT)을 export한다. 이미 셸 env에 있는 이름은 덮지 않는다(옛 compose의 "셸 env > --env-file"과 같음).
 #     S7e2 — 컨테이너는 이 값을 env로 받지 않는다(앱이 붙인 settings.yaml에서 직접 — compose environment의 덮기 줄 없앰).
 #     YAML에 없는 칸은 내지 않으므로 compose 파일 기본값(${X:-…})이 그대로 걸린다(R-h). SETTINGS_FILE은 절대 경로로 export(compose 마운트 원본).
@@ -13,15 +13,12 @@
 # `PYTHONPATH=. python deploy/release/hostkeys.py`)와 common/config/layout.py로 읽는다(사용자 11-02 — 옛 이미지 안 export 길·SETTINGS_IMAGE 지움).
 # DOCKER로 docker·podman을 고른다(`DOCKER="sudo podman"`처럼 두 낱말도 — 따옴표 없이 펼침, VS7e1 R-1). 값은 출력하지 않는다(source 쪽 — 실행 쪽은 요청한 줄만 표준 출력에).
 #   op-10 — 셸 env와 settings.yaml(ops.host.docker)에 없으면 podman(서버 기본 컨테이너 도구), podman이 없으면 docker(docker_default).
-#   이 목록은 deploy/release/hostkeys.py HOST_SECTIONS와 같다(host_keys.tsv가 이 절들의 칸).
-HOST_SECTIONS="common.run_env common.host pipeline.host mcp.host mcp.server.host mcp.server.port"
 docker_default() { command -v podman >/dev/null 2>&1 && echo podman || echo docker; }   # op-10 — 서버(RHEL) 기본 podman, 없으면 docker(bake.sh와 같음)
 _SETTINGS_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)   # 배치 루트(서버 live/ — deploy/host가 바로 아래 · PC 저장소 루트)
 
-settings_export() {   # settings_export <env|sh> <절>... — 줄을 표준 출력에, 실패면 0 아닌 종료 코드(안내는 표준 오류)
+settings_export() {   # settings_export <env|sh> [<절>...] — 줄을 표준 출력에(절이 없으면 호스트 칸 전부), 실패면 0 아닌 종료 코드(안내는 표준 오류)
   local fmt=$1
   shift
-  [ $# -gt 0 ] || { echo "[settings_env] 절 이름이 필요함(예: pipeline.host)" >&2; return 2; }
   "${PY:-python3}" "$_SETTINGS_ROOT/deploy/host/scripts/host_env.py" --format "$fmt" "$@"
 }
 
@@ -45,8 +42,7 @@ load_settings() {   # 위 설명(source) — 성공 0 · 설정 파일 없음·�
     return 0
   fi
   local out line name
-  # shellcheck disable=SC2086
-  out=$(settings_export sh $HOST_SECTIONS) || { echo "[설정] 설정 파일에서 호스트 값을 읽지 못함($SETTINGS_FILE) — 위 안내 확인" >&2; return 2; }
+  out=$(settings_export sh) || { echo "[설정] 설정 파일에서 호스트 값을 읽지 못함($SETTINGS_FILE) — 위 안내 확인" >&2; return 2; }
   while IFS= read -r line; do
     case "$line" in "export "*=*) ;; *) continue ;; esac
     name=${line#export }; name=${name%%=*}
