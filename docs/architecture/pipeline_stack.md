@@ -9,7 +9,7 @@
 | 엔진 구성 | `resources/config/pipeline_stack.json` | `ops.paths.stack_file` |
 | 못 읽을 때 | **시작 거부 — 종료 코드 2**(파일 없음·JSON 오류·모양이 틀림 — 한 줄 안내, 값은 찍지 않음) | |
 
-- 읽는 곳은 `common/store/db/cfgfile.py` 한 곳이다. 읽을 때 pydantic으로 모양을 검사한다(`common/store/db/schemas/config_body.py` — 원천 항목은 `common/core/sources.py` `_validate_entry` 한 곳). `body_sha` = 정규 JSON(키 정렬·공백 없음·UTF-8)의 sha256 — 같은 구성이면 서버·PC가 같은 값이다.
+- 읽는 곳은 `common/store/db/cfgfile.py` 한 곳이다. 읽을 때 pydantic으로 모양을 검사한다(`common/store/db/cfgfile.py`의 `StackFile` — 원천 항목은 `common/core/sources.py` `_validate_entry` 한 곳). `body_sha` = 정규 JSON(키 정렬·공백 없음·UTF-8)의 sha256 — 같은 구성이면 서버·PC가 같은 값이다.
 - 프로세스마다 한 번 읽어 캐시한다. 오래 도는 것: 검색 MCP 서버는 시작 때만(파일을 바꾸면 다시 띄움), 파싱 MCP 서비스(`mcp_parse_service`)는 작업마다 다시 읽는다.
 - 파싱·검색 MCP 컨테이너는 엔진 구성을 읽으려고 PostgreSQL에 접속하지 않는다(PG가 없어도 시작한다). PG는 적재·검색에만 필요하다.
 - 서버에 남은 옛 `struct` 스키마(판 표 `stack_version`·`source_version` 등 — 쓰이지 않음)는 코드가 읽지 않는다. 그대로 두거나 DB 담당자가 지운다.
