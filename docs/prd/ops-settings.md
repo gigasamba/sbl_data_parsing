@@ -73,6 +73,7 @@
   - ②(10-31): 칸 자리 재편 — 새 모듈 `common/config/layout.py`(파일 자리 ↔ 모델 경로 표: `required` 41칸 · 역할 절 접두어 규칙 · `tuning` 58칸 = 내부 조정값 38 + 자원·대기·병렬 20). 설정 모델 경로(`common.*`·`pipeline.*`·`mcp.*`)는 그대로 두고 `read_settings`가 파일을 모델 배치로 바꿔 읽음(`export --section`·`data=`는 모델 경로). 옛 배치는 시작 거부 + migrate 안내, 자리가 다른 칸은 "자리가 다른 칸 … → 새 자리"로 거부. `migrate <옛 settings.yaml> --out <새 파일>` = 새 배치로 변환(값은 쓴 글자 그대로, 지운 칸은 "삭제됨"). 쓰는 곳 없는 6칸 지움(`parse_tmp_max_gb`·`parse_keep_max_gb`·`disk_free_warn_gb`·`engine_cache_warn_gb`·`shadow_max`·`agg.llm_min` — `REMOVED` 경고만). sample 주석 한 줄(설명·기본값·값) — 옛 env 이름·판정 꼴은 `python -m common.config.sample --where 이름`. 호스트 `run_docs.py`도 새 배치를 읽음. 칸 수 374 → 368(required 41 · common 44 · extract 54 · transform 26 · load 7 · search 30 · ops 73 · dev 35 · tuning 58). 문서(③): env-guide·README §4-2·서버 가이드 갱신(옛 서버 값 표는 env-guide로).
 - 파일: `common/config/{layout,settings,sample,keyscan,migrate,export}.py`, `pipeline/config.py`, `mcp_server/config.py`, `settings.sample.yaml`, `deploy/host/`(설정 꺼내 쓰는 셸), `docs/operations/env-guide.md`.
 - 결정(사용자 10-31 grill): tuning 절은 지금대로 — 운영 정책 값 6개(prepare.link·publish.upload_statuses·load.edw_path_prefix·mcp.server.instructions·search.pg.vector_search·trigger.upload_max_mb)는 역할 절, 내부 제한 시간·대기열 13개는 tuning. 옛 배치는 계속 거부한다. PC 루트 settings.yaml은 10-31에 `settings.yaml.bak-20261031`로 백업했고 op-08 병합 직후 migrate로 새 배치로 바꾼다. 서버 2곳 변환은 0.2.0 배포 절차(refactor.md)에 넣는다.
+- 결정(사용자 11-02 — 운영 서버는 0.1.0, settings.yaml 하나): `common.config.migrate`는 옛 배치 settings.yaml → 새 배치(①)만 남긴다. todo(정리 3): env 파일 → yaml 옮기기(②)·`--compare`(옛 `pipeline.env`·`options.conf` 카탈로그 대조)와 그 문서 줄을 지운다(`settings_env.sh`의 이관 안내 포함). 서버 절차: [release-and-patch.md §8](../operations/release-and-patch.md#8-020-배포--사람이-할-일).
 - Status: done (11-01, PR #75 병합)
 
 <a id="op-09"></a>
@@ -95,6 +96,7 @@
   - `keyscan` 빠진 키 7개 — `APP_VERSION`·`BAKE_TEST`·`CODE_BUNDLE`·`CODE_DIR`·`CODE_OUT`·`VCS_REF`는 빌드 인자 → 빌드 인자로 표시, `NF`는 awk 오탐.
   - systemd `User=root` — 그대로 둘지 확인.
 - 파일: 위 목록, `common/config/settings.py`(이미지 기본값 표), `common/config/keyscan.py`, `deploy/host/`, `pipeline/extract/engines/`(등급 A), `common/core/`.
+- 결정(사용자 11-02): 환경마다 다른 경로·접속(게시 대상·Object Storage·EDW·PG·호스트 경로)은 settings.yaml 필수 — 코드 기본값 없음(비면 시작 거부). todo(정리 3b): 컨테이너 안 경로는 이미지 기본값 표(`common/config/settings.py`) 한 곳만 원본으로 — `run_docs.py`·compose·셸이 그 표를 읽고, 다른 곳의 `/app/output`·`/app/deploy` 글자는 없앤다. 호스트 기본값 `PATCH_CODE=/srv/rag/code/live`(`settings.py`·`compose.patch*.yml`)는 지운다.
 - Status: done (11-01, PR #77 병합 — stage 1·2a·2b). 남은 고칠 곳 중 지울 도구(`mcp_eval`·`pipeline/eval/stages.py`·`parse_trigger_test.py`)에 걸린 것은 범위 축소(10-31) 삭제로 사라짐.
 
 <a id="pl-21"></a>
