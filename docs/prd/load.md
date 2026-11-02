@@ -118,7 +118,7 @@
 ## pl-12 · 문서 대장 upsert와 게시 가드
 - 결정(사용자 10-31 범위 축소 grill): 문서 대장(doc_registry)·숨김(doc_hidden)·숨김 명령을 **모두 지운다**(hidden 열도 두지 않음). 빼야 할 문서는 원천에서 지우거나 사람이 SQL로. ① PG upsert 번역 문제는 대장과 함께 닫힘.
 - 이유: 문서 대장 upsert에 PG 문법 오류가 있다(C-54 ①). 서버가 `source.json`을 올리지 않아 게시 가드가 꺼져 있다(C-54 ②).
-- 파일: `common/store/structdb.py`, `pipeline/load/publish_parse_result.py`, `tests/server/pipeline/test_publish_guard.py`(알려진 실패).
+- 파일: `common/store/structdb.py`, `pipeline/load/publish_parse_result.py`, `pipeline/load/parsing_meta.py`.
 - 결정(사용자 10-30 grill):
   - ① 문서 대장은 남기고 고친다 — `INSERT OR REPLACE`의 PG 번역(`structdb._pg_sql` 정규식 ↔ `registry.apply`의 여러 줄 SQL). [pl-25](load-schema.md#pl-25)와 함께 키를 `s3_key`로 바꾼다. 새 문서 판별은 FileStorageMap ↔ ParsingMeta 그대로([pl-23](ops.md#pl-23)).
   - ② 게시 가드는 `source.json` 사이드카 대신 EDW `AI.ParsingMeta`(`source_key` + `rep_bucket`/`rep_key`)를 읽는다. 같은 문서 → 같은 파일에 덮어씀(`-2`/`-3.md` 사본 없음). 다른 원천이 같은 결과 키로 오면 → 거부. 그러면 `test_publish_guard`가 통과 → `deploy/release/known_fail.txt`에서 뺀다.
@@ -127,7 +127,8 @@
 - 한 것(10-30, B1 — 개발 서버 반입 전 검토): deleted 길 없앰 — `registry.apply`가 관측에 없는 문서에 `status='deleted'`·자동 숨김을 쓰지 않고, `parsing_meta.apply_registry_status`가 EDW에 `deleted`를 쓰지 않는다(`diff["deleted"]`는 판 잇기 정보로만). 서버(dev·prd)는 SQLite·PG 스탠드인으로 대체하지 않고 멈춘다(`structdb.open_backend` — `run_mode: prod`·`struct_backend` pg/tsql 필수, `pg._warn_standin`). `common.store.run_mode`는 `prod`·`test`만. 시험 `tests/server/common/test_no_deleted.py`. code_fp p0·p1·r·s 바뀜(공용 `settings.py`·`pg.py`·`structdb.py`).
 - 한 것(11-01 `feature/scope-cut-search`): `common/store/registry.py`·`registry_cli`·검색 `registry.py`·숨김 거르기(retriever·pgsearch)·게시의 대장 상태 갱신·ParsingMeta 상태 갱신 길 지움. 표는 struct 스키마와 함께 코드에서 없앰([pl-08](#pl-08)). 설정 `common.store.doc_registry`·`registry_etag_md5` 지움(남으면 경고).
 - 11-02 C10 예외(사용자): ParsingMeta `loaded_at` 한 칸만 적재 때 UPDATE(`parsing_meta_db.mark_loaded`) — 다른 칸은 그대로 INSERT만(`test_no_deleted`가 UPDATE는 `SET loaded_at`뿐인지 본다).
-- 결정(사용자 11-02): 알려진 실패를 0으로 — todo(정리 3c): 쓰이지 않는 게시 가드(`source.json` `skip_exists`·키 충돌 거부)와 `tests/server/pipeline/test_publish_guard.py`를 지우고 `deploy/release/known_fail.txt`를 비운다.
+- 결정(사용자 11-02): 알려진 실패를 0으로 — (아래 한 것) 쓰이지 않는 게시 가드(`source.json` `skip_exists`·키 충돌 거부)와 `tests/server/pipeline/test_publish_guard.py`를 지우고 `deploy/release/known_fail.txt`를 비운다.
+- 한 것(11-02 `feature/publish-guard` — 사용자 11-02 known_fail 0): ②의 `source.json` 사이드카 가드(`apply()`의 `skip_exists`·`error_key_collision`·`key_collision_*` 건수·저장소 `get_text`)와 그 시험 `test_publish_guard`를 지웠다 — 서버가 source.json을 올리지 않아 늘 꺼져 있었다. ParsingMeta로 다시 만드는 안(위 ②)은 하지 않는다: 같은 문서를 다시 고르지 않는 것은 고르기([pl-25](load-schema.md#pl-25) — silver·gold 결과)가 맡고, 결과 파일 이름에 시각이 들어가 덮어쓰지 않는다. 남는 이론상 충돌(원본 키 sha1 10자)은 막지 않는다(`rep_md_key` 주석). `deploy/release/known_fail.txt`는 빈 목록.
 - Status: done (11-01 `feature/scope-cut-search`)
 
 <a id="pl-38"></a>

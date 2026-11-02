@@ -50,7 +50,7 @@
   - `common/core/paths.py:112` 주석의 `parse_shadow` 언급(11-01 지시서 지움 — 고치면 레이어 code_fp가 바뀌어 미룸), `common/ai/{adk,llm}.py`의 `vlm_judge` 역할 표(11-01 `figure_review` 지움 — 부르는 곳 없음).
 - 결정(사용자 11-01, reference ↔ 저장소 2차 비교 — 같은 0.2.0 지문 배치):
   - `common/core/fingerprint.py`의 `_LEGACY_NAMES`·`_HANDOFF_LEGACY` 옛 이름 대응을 정리(이름 바꾸기 — 핸드오프 지문이 바뀜).
-  - 첫 이관용 호환 코드를 지운다 — `common/config/migrate.py`의 env 변환·`--compare`, `keyscan`의 지울 후보, `image_vars.sh`의 옛 이미지 이름, `trigger.sh`의 `pipeline.env` 거부, entrypoint `legacy_tool_name`, 절마다 둔 `REMOVED` 목록, `pin_env`의 옛 env 경고. **두 서버가 settings.yaml로 옮긴 뒤**(refactor.md 37행 — 이관 확인)에만.
+  - 첫 이관용 호환 코드를 지운다 — (11-02 한 것: `common/config/migrate.py`의 env 변환·`--compare`·`settings_env.sh`의 `pipeline.env` 안내 — `feature/migrate-trim`) `keyscan`의 지울 후보, `image_vars.sh`의 옛 이미지 이름, `trigger.sh`의 `pipeline.env` 거부, entrypoint `legacy_tool_name`, 절마다 둔 `REMOVED` 목록, `pin_env`의 옛 env 경고. **두 서버가 settings.yaml로 옮긴 뒤**(refactor.md 37행 — 이관 확인)에만.
   - 로컬 임베딩 모델 길 — `common/ai/embed.py`의 sentence-transformers, `build_bundle`의 `bge-m3` 기본값, `check_env`의 HF 점검.
   - `common/core/paths.py`의 `TEMPLATES_DIR`·`PIPELINE_ROOT`·`RETRIEVAL_ROOT` 상수(11-01 보고서 틀 폴더는 지움).
   - `pipeline/transform/structure/facts.py`의 `contract_facts`·`MONEY_RE`·`DATE_RE`·`L_*`.

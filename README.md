@@ -237,11 +237,11 @@ export PYTHONPATH=$PWD                                   # 명령은 저장소 �
 .venv/bin/python -m pipeline.config                      # 어느 settings.yaml을 읽는지와 요약(비밀은 가림)
 .venv/bin/python -m common.check.check_modules           # "모듈 경계 통과"
 .venv/bin/python -m common.config.keyscan --check        # "빠진 키 0개"
-.venv/bin/python -m pipeline.cli selftest                # 서버 배포 테스트 — 93개 중 92개 통과(알려진 실패 1개 — 기준선 PRD e2-02)
-.venv/bin/python -m pytest -q tests/                      # 전체 테스트 — 146 passed · 3 xfailed(알려진 실패)
+.venv/bin/python -m pipeline.cli selftest                # 서버 배포 테스트 — 모두 통과(알려진 실패 0 — 기준선 PRD e2-02)
+.venv/bin/python -m pytest -q tests/                      # 전체 테스트 — 실패 0(개수는 PRD e2-02 기준선)
 ```
 
-알려진 실패는 모두 리팩토링 전부터 있던 것이다(이유: refactor.md C-54·C-58 · 목록: `deploy/release/known_fail.txt`, `tests/conftest.py`).
+배포 판정의 알려진 실패는 0개다(11-02 — `deploy/release/known_fail.txt`는 빈 목록). PC 일반 테스트의 알려진 실패는 `tests/conftest.py`(이유: refactor.md C-54·C-58).
 
 ### 4-4. 파이프라인 실행 — 문서 몇 건(①~⑥)
 
@@ -552,7 +552,7 @@ bash deploy/host/scripts/run_tool.sh check                  # PG·모델 요약(
 
 ```bash
 $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> check-modules
-bash deploy/release/selftest_gate.sh $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> selftest   # 기대: 알려진 실패 test_publish_guard 1개만
+bash deploy/release/selftest_gate.sh $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> selftest   # 기대: [판정] 통과 — FAIL 0
 bash deploy/release/selftest_gate.sh $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" mcp-server-runtime:<판> selftest      # 기대: 실패 0
 ```
 

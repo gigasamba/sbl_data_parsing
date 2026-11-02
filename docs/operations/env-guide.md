@@ -150,11 +150,13 @@
 (상주 트리거 서버의 `TRIGGER_*`·`CHAIN_STRUCTURE_URL`은 11-01에 지움 — PRD pl-10. 옛 서버 settings.yaml의 `ops.services.trigger` 절은 남아 있으면 경고만.)
 
 ### 새벽 배치 (systemd `data-pipeline-nightly`)
-코드 주석의 "env-guide 1-3"이 이 절이다(스케줄은 `NIGHTLY_TIME` 하나 — 비우면 없음, pl-32 10-30).
+코드 주석의 "env-guide 1-3"이 이 절이다(settings.yaml `ops.nightly.*` — 아래 셋이 모두 있어야 돎, 하나라도 비면 없음 — pl-32 10-30·사용자 11-02).
 
 | 이름 | 켜면 | 기본 |
 |---|---|---|
-| `NIGHTLY_TIME` | 그 시각(HH:MM, 서버 시간)에 새벽 배치(`run_docs.py --start-offset 0 --skip-done`) 시작 — 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시각을 봄 | 비움(새벽 배치 없음) |
+| `NIGHTLY_TIME`(`ops.nightly.time`) | 그 시각(HH:MM, 서버 시간)에 새벽 배치(`run_docs.py --start-offset 0 --skip-done`) 시작 — 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시각을 봄 | 비움(새벽 배치 없음) |
+| `NIGHTLY_MAX_DOCS`(`ops.nightly.max_docs`) | 한 번에 처리할 새 문서 수 상한(끝난 문서를 뺀 뒤 앞에서 — `--max-docs`) | 비움(새벽 배치 없음) |
+| `NIGHTLY_DEADLINE`(`ops.nightly.deadline`) | 마감 시각(HH:MM — 시작보다 이르면 다음 날) — 지나면 새 문서를 받기 시작하지 않음, 받은 문서는 끝까지(`--deadline`) | 비움(새벽 배치 없음) |
 
 (11-01 지움 — 남아 있으면 경고만: `NIGHTLY_MODULES`·`NIGHTLY_PUBLISH`·`NIGHTLY_MAX_NEW`(`ops.nightly.*`)·`NIGHT_DEADLINE`·`PARSE_DEADLINE`(`ops.nightly_run.*`)·`ALLOW_COMMON_MISMATCH` — night 모듈 배치·structure·load 모듈과 함께.)
 

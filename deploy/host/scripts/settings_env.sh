@@ -2,7 +2,7 @@
 # settings.yaml → 셸 env 다리(S7e1 정식 — refactor_plan 5-2 · D-028 ⑭, 사용자 10-27 Q3~Q5). 비밀 칸은 내보내지 않는다(컨테이너 안 앱이 붙인 설정 파일에서 읽음).
 #   source: . deploy/host/scripts/settings_env.sh && load_settings || exit $?   — trigger.sh·run_tool.sh·mcp_up.sh·systemd nightly가 씀
 #     설정 파일: SETTINGS_FILE(있으면) > $SERVER_ENV_DIR/settings.yaml(서버 기본 배치 /srv/rag/env) > (RUN_ENV=local) 저장소 루트 settings.yaml
-#     없으면 종료 코드 2(옛 env 파일 pipeline.env는 읽지 않음 — Q5)
+#     없으면 종료 코드 2(옛 env 파일 pipeline.env는 읽지 않음 — Q5 · 그 이관 안내는 11-02에 지움, 운영 서버는 0.1.0 settings.yaml)
 #     호스트 칸(host_keys.tsv 전부 — deploy/release/hostkeys.py HOST_SECTIONS: 이미지·자원·포트·호스트 경로·RUN_ENV·새벽 배치 PARSE_DEADLINE, compose healthcheck·mcp_up.sh가 쓰는 앱 칸 MCP_HOST·MCP_PORT·
 #     TRIGGER_PARSE_PORT·TRIGGER_STRUCTURE_PORT)을 export한다. 이미 셸 env에 있는 이름은 덮지 않는다(옛 compose의 "셸 env > --env-file"과 같음).
 #     S7e2 — 컨테이너는 이 값을 env로 받지 않는다(앱이 붙인 settings.yaml에서 직접 — compose environment의 덮기 줄 없앰).
