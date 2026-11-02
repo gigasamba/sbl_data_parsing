@@ -207,6 +207,10 @@ def test_load_labels_and_skips_failed():
                 counts = M.load(db, bundle(["SFDC/u/rfp.pdf", "SFDC/u/bad.pdf"]))
                 with patch("common.ai.llm.chat", lambda *a, **k: '{"class": "Proposal"}'):
                     M.load(db, bundle(["SFDC/u/rfp.pdf"]), replace=True)
+                calls = []
+                with patch("common.ai.llm.chat", lambda *a, **k: calls.append(1) or '{"class": "RFP"}'):
+                    M.load(db, bundle(["SFDC/u/rfp.pdf"]))  # --replace 없이 이미 저장된 문서 — 적재가 건너뛰므로 부르지 않음
+                assert calls == [], calls
             rows = {r["file_path"]: r["doc_class"] for r in sf.q(f"SELECT file_path, doc_class FROM {S}_sfdc.doc")}
         assert rows == {"SFDC/u/rfp.pdf": "RFP"}, rows  # 실패한 bad.pdf는 안 들어감 · 두 번째 답(Proposal)으로 덮지 않음
         assert counts["by_source"]["sfdc"]["docs"] == 1, counts

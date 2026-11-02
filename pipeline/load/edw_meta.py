@@ -148,13 +148,15 @@ def _sfdc(edw, paths):
     for tbl, pre in (("Task", "00T"), ("Event", "00U")):
         for r in edw.q_in(f"SELECT Id, WhatId FROM SFDC.{tbl} WHERE Id IN ({{IN}})", [e for e in ents if e.startswith(pre)]):
             what[r["Id"]] = str(r["WhatId"] or "")
-    quote = {}
-    qids = [e for e in ents if e.startswith("0Q0")]
-    if qids:
-        try:
-            quote = {r["Id"]: r for r in edw.q_in("SELECT Id, OpportunityId, AccountId FROM SFDC.Quote WHERE Id IN ({IN})", qids)}
-        except Exception as e:  # 서버 EDW 복사본에는 Quote 표가 아직 없음(C-76) — 그 단계만 건너뜀
-            print(f"[edw_meta] 경고: SFDC.Quote를 못 읽음 — Quote 단계(0Q0) 건너뜀: {type(e).__name__}", file=sys.stderr, flush=True)
+    quote = {  # 서버 EDW 복사본에는 Quote 표가 아직 없음(C-76) — 그 단계만 건너뜀
+        r["Id"]: r
+        for r in _try_rows(
+            edw,
+            "SELECT Id, OpportunityId, AccountId FROM SFDC.Quote WHERE Id IN ({IN})",
+            [e for e in ents if e.startswith("0Q0")],
+            "SFDC.Quote(Quote 단계 0Q0)",
+        )
+    }
     pick = {}
     for f in files:
         le = links.get(f["doc_id"], [])
@@ -224,12 +226,12 @@ def _prefixes():
     return json.loads((RES_ROOT / "mappings" / "sfdc_prefix.json").read_text(encoding="utf-8"))["prefixes"]
 
 
-def _hint_rows(edw, sql, values, what):
-    """힌트 칸 조회 — 서버 EDW에 칸·표가 없으면 빈 목록 + 경고(힌트만 비고 메타는 그대로)."""
+def _try_rows(edw, sql, values, what):
+    """서버 EDW에 없을 수 있는 표·칸 조회(Quote 표 — C-76, 분류 힌트 칸) — 실패하면 빈 목록 + 경고(그것만 빠지고 나머지 메타는 그대로)."""
     try:
         return edw.q_in(sql, values)
     except Exception as e:
-        print(f"[edw_meta] 경고: 분류 힌트 {what}를 못 읽음 — 그 힌트 없이: {type(e).__name__}", file=sys.stderr, flush=True)
+        print(f"[edw_meta] 경고: {what}를 못 읽음 — 그것 없이: {type(e).__name__}", file=sys.stderr, flush=True)
         return []
 
 
@@ -243,8 +245,11 @@ def _sfdc_hints(edw, files, links):
     pmap = _prefixes()
     titles = {
         str(r["Id"]): r["Title"]
-        for r in _hint_rows(
-            edw, "SELECT Id, Title FROM SFDC.ContentVersion WHERE Id IN ({IN})", [str(f["content_version_id"]) for f in files], "Title"
+        for r in _try_rows(
+            edw,
+            "SELECT Id, Title FROM SFDC.ContentVersion WHERE Id IN ({IN})",
+            [str(f["content_version_id"]) for f in files],
+            "분류 힌트 Title",
         )
     }
     pick = {}
@@ -262,24 +267,27 @@ def _sfdc_hints(edw, files, links):
         by_type.setdefault(h.get("entity_type"), []).append(h.get("entity_id"))
     chan = {}
     for tbl in ("Task", "Event"):
-        for r in _hint_rows(
-            edw, f"SELECT Id, Subject, Sent_Received__c FROM SFDC.{tbl} WHERE Id IN ({{IN}})", by_type.get(tbl, []), f"{tbl} Subject"
+        for r in _try_rows(
+            edw,
+            f"SELECT Id, Subject, Sent_Received__c FROM SFDC.{tbl} WHERE Id IN ({{IN}})",
+            by_type.get(tbl, []),
+            f"분류 힌트 {tbl} Subject",
         ):
             chan[r["Id"]] = r
     opp = {
         r["Id"]: r
-        for r in _hint_rows(
+        for r in _try_rows(
             edw,
             "SELECT Id, StageName, Real_RFP__c, RFP_Received_Start_Date__c, RFP_Received_End_Date__c FROM SFDC.Opportunity WHERE Id IN ({IN})",
             by_type.get("Opportunity", []),
-            "Opportunity StageName",
+            "분류 힌트 Opportunity StageName",
         )
     }
-    for h in pick.values():
-        c = chan.get(h.get("entity_id")) if h.get("entity_type") in ("Task", "Event") else None
+    for h in pick.values():  # chan·opp는 그 종류의 id로만 물었으므로 id가 맞으면 종류도 맞음
+        c = chan.get(h.get("entity_id"))
         if c:
             h.update(subject=(c["Subject"] or "")[:120], sent_received__c=c["Sent_Received__c"])
-        o = opp.get(h.get("entity_id")) if h.get("entity_type") == "Opportunity" else None
+        o = opp.get(h.get("entity_id"))
         if o:
             h.update(
                 stagename=o["StageName"],
@@ -338,11 +346,11 @@ def _las(edw, paths):
         }
     appr = {  # 분류 힌트(pl-33) — 품의 제목. 최신 판의 것(ContractID로 짝지음)
         r["ContractID"]: r["ApprovalName"]
-        for r in _hint_rows(
+        for r in _try_rows(
             edw,
             "SELECT ContractID, ApprovalName FROM LAS.Contract WHERE ContractID IN ({IN})",
             [c["ContractID"] for c in contracts.values()],
-            "ApprovalName",
+            "분류 힌트 ApprovalName",
         )
     }
     for r in rows:
