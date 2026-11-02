@@ -84,8 +84,8 @@
 | FAQ 파일을 다시 올리면 그 FAQ 문서의 청크를 통째로 지우고 다시 적재(청크 0개가 된 옛 `doc` 행도 지움) | pl-13 "지우지 않음"의 FAQ 예외(등급 A). 10-31에 행 단위 비교 → 통째 교체로 바뀜 | todo | [pl-41](prd/load.md#pl-41) |
 | ~~수동 갱신 명령 2개(분류만 / EDW 메타만)~~ | `load --replace`나 다시 실행으로 대신(사용자 10-31) | dropped | [pl-40](prd/load.md#pl-40) |
 | 정형 DB `struct` 스키마(마스터·문서 대장·표·칸)를 코드에서 모두 없앤다. 엔진 구성은 파일만 | 쓰이지 않았다(서버 `doc_registry` 0행). 서버에 남은 표는 DB 담당자가 정리 | done | [pl-08](prd/load.md#pl-08) |
-| 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·원천 삭제 처리를 모두 지운다. 서버는 PG가 없으면 로컬 대체 DB로 바꿔 타지 않고 멈춘다 | 빼야 할 문서는 원천에서 지우거나 사람이 SQL로. 게시 가드는 아직 꺼져 있음(`test_publish_guard` 알려진 실패) | done | [pl-12](prd/load.md#pl-12) |
-| 알려진 실패 0 — 쓰이지 않는 게시 가드와 `test_publish_guard` 지우고 `known_fail.txt` 비움 | 사용자 11-02 | todo | [pl-12](prd/load.md#pl-12) |
+| 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·원천 삭제 처리를 모두 지운다. 서버는 PG가 없으면 로컬 대체 DB로 바꿔 타지 않고 멈춘다 | 빼야 할 문서는 원천에서 지우거나 사람이 SQL로. 늘 꺼져 있던 source.json 게시 가드는 11-02에 지움(알려진 실패 0) | done | [pl-12](prd/load.md#pl-12) |
+| 알려진 실패 0 — 쓰이지 않는 게시 가드와 `test_publish_guard` 지우고 `known_fail.txt` 비움 | 사용자 11-02 | done | [pl-12](prd/load.md#pl-12) |
 | 마스터 CSV(`resources/vocab/glossary/client_master.csv`·`contract_master.csv`) 활용 설계 — 고객 별칭 몫은 0.2.0, 나머지 후순위 | 지금 두 CSV를 읽는 코드가 없다. 검색 고객 별칭 그룹(mc-05)에 필요 | todo | [pl-38](prd/load.md#pl-38) |
 | 저장 자리 셋 — 파싱 결과 저장본(silver)은 Object Storage 문서 폴더(이름 = `s3_key`로 만든 uuid5), 메타는 EDW ParsingMeta, 검색 DB(gold)는 pgvector | 로컬에는 로그·임베딩 캐시만. 다시 처리하면 같은 폴더를 덮어쓴다 | todo | [pl-32](prd/load-schema.md#pl-32) |
 | 같은 `s3_key`가 FileStorageMap에 여러 행이면 `created_at`이 가장 늦은 행만. 새 행은 `file_size`가 같으면 건너뛰고 다르면 같은 `doc_id`로 다시 처리, 밀려난 행은 EDW `SupersededRow`에 | 원본을 받지 않고 판별한다(같은 크기로 덮어쓴 경우는 놓침 — 받아들임) | todo | [pl-32](prd/load-schema.md#pl-32) |

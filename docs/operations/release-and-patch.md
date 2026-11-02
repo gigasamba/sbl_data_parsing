@@ -114,8 +114,8 @@ docker compose -f deploy/host/compose/compose.mcp.yml -f deploy/host/compose/com
 docker run --rm <연결 옵션> <태그> check-modules
 bash <코드 폴더>/deploy/release/selftest_gate.sh docker run --rm <연결 옵션> <태그> selftest
 ```
-**selftest는 종료 코드로 판정하지 않는다.** selftest는 FAIL이 하나라도 있으면 종료 코드 1인데, data-pipeline 이미지는 리팩토링 전부터 있던 알려진 FAIL 때문에 늘 1이라 고장과 구별이 안 된다. `selftest_gate.sh`가 selftest를 돌린 뒤 FAIL 줄을 알려진 목록 `deploy/release/known_fail.txt`(git 안, 이미지 안 `/app/docker/known_fail.txt`, 사례 이름 한 줄씩 + 이유 주석)와 대조해 마지막 `[판정]` 줄과 종료 코드를 낸다 — **목록 밖 FAIL 0이면 통과(0)**, 하나라도 있거나 요약 줄이 없으면 실패(1).
-- 지금 기대값: data-pipeline FAIL 1(목록 안 `test_publish_guard` — 서버가 source.json을 안 올려 꺼진 방어선, `refactor.md` C-54 ②. PG 문서 레지스트리 갱신 실패(C-54 ①)는 배포 판정 밖 일반 테스트 `test_pub_registry`) · mcp-server FAIL 0.
+**selftest는 종료 코드로 판정하지 않는다.** selftest는 FAIL이 하나라도 있으면 종료 코드 1인데, 알려진 FAIL이 있던 때는 늘 1이라 고장과 구별이 안 됐다(11-02부터 목록은 비어 있음). `selftest_gate.sh`가 selftest를 돌린 뒤 FAIL 줄을 알려진 목록 `deploy/release/known_fail.txt`(git 안, 이미지 안 `/app/docker/known_fail.txt`, 사례 이름 한 줄씩 + 이유 주석)와 대조해 마지막 `[판정]` 줄과 종료 코드를 낸다 — **목록 밖 FAIL 0이면 통과(0)**, 하나라도 있거나 요약 줄이 없으면 실패(1).
+- 지금 기대값: data-pipeline·mcp-server 모두 `[판정] 통과 — FAIL 0`(11-02 — 늘 꺼져 있던 source.json 게시 가드와 그 시험 `test_publish_guard`를 지워 알려진 FAIL 목록이 비었음, `refactor.md` C-54 ②).
 - 사례 = 서버 배포 테스트 파일(`tests/server/<common|pipeline|mcp>/test_*.py` — 이미지 안 `/app/deploy/tests/server`, 사례 이름 = 테스트 모듈 이름 예 `tests.server.pipeline.test_build_bundle`). 옛 `python -m <모듈> --selftest`는 없다.
 - 한 사례만: `docker run --rm <태그> selftest --only <이름 조각>`.
 - 이미지 안 목록으로 판정: `docker run --rm --entrypoint bash <태그> /app/docker/selftest_gate.sh /app/docker/entrypoint.sh selftest`.
@@ -360,7 +360,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 |---|---|---|
 | 환경마다 다른 경로·접속은 settings.yaml 필수 | 게시 대상·Object Storage·EDW·PG·호스트 경로는 코드 기본값 없이 settings.yaml에만 적는다(비면 시작 거부). 컨테이너 안 경로는 이미지 기본값 표(`common/config/settings.py`) 한 곳만 — 호스트 기본값 `PATCH_CODE=/srv/rag/code/live`는 지운다(정리 3b) | [op-09](../prd/ops-settings.md#op-09) |
 | 전체 e2e는 local·dev·prd 셋에서 | dev는 settings.yaml이 가리키는 대상(가짜 폴더든 실제든)에 쓴다. **전체 문서 실행은 prd에서만, 새 원천별 스키마 이름으로**(새 `PG_SCHEMA`). 판 0002가 기준 스키마의 옛 표를 지우므로 prd는 반드시 새 `PG_SCHEMA`를 쓴다(C-74). 옛 gold 스키마는 2주 남긴 뒤 DB 담당자가 백업하고 지운다. 옛 `struct` 스키마도 DB 담당자가 백업하고 지운다 | [pl-23](../prd/ops.md#pl-23) |
-| 알려진 실패 0 | 배포 판정의 알려진 실패(`deploy/release/known_fail.txt`)를 비운다 — 쓰이지 않는 게시 가드(`source.json` 대조)와 `test_publish_guard`를 지움(정리 3c, C-54) | [pl-12](../prd/load.md#pl-12) |
+| 알려진 실패 0 | 배포 판정의 알려진 실패(`deploy/release/known_fail.txt`)를 비운다 — 쓰이지 않는 게시 가드(`source.json` 대조)와 `test_publish_guard`를 지움(11-02 `feature/publish-guard` — 한 것, C-54) | [pl-12](../prd/load.md#pl-12) |
 | 이미지와 코드 | dev까지는 코드 없는 실행 이미지 + 코드 폴더. dev → prd는 이미지 + 시험한 코드를 굽는다(`bake.sh`). **prd는 settings.yaml(비밀 포함)도 이미지에 굽는다(사용자 선택) — 🔒 검토 등급 A(비밀 처리).** 다루는 규칙: ① 구운 이미지 파일(저장한 `.tar`·45 MB 조각 포함)은 비밀과 같다 — 운영 서버와 권한 있는 반입 경로에만 두고, 공용 레지스트리·공유 폴더·메일·채팅에 올리지 않는다 ② 키를 바꿀 때마다 다시 굽고, 옛 키가 든 이미지·조각은 지운다 ③ 굽고 나서 이미지 이력(`history`)·`inspect`·시작 로그에 값이 보이지 않는지 본다 ④ 굽는 데 쓴 settings.yaml 사본은 굽고 나서 지운다 | [op-07](../prd/doc.md#op-07) |
 | 모델 | dev부터 내부망 GLM, PC(local)는 OpenRouter(유료 — CLAUDE.md §7 상한) | [pl-11](../prd/ops.md#pl-11) |
 | 배포 전 검토 | 판 전체를 grill-me로 한 번 검토한다(사용자) | — |
@@ -393,7 +393,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 3 | 새 판 받기 — dev: 실행 이미지 + 코드 폴더 · prd: 구운 이미지(8-1) | 서버 운영 | §5-7 2 · README §5-0 |
 | 4 | 설정 옮기기 — `python -m common.config.migrate <0.1.0 settings.yaml> --out <새 파일>`(이미지 안에서) → 화면 보고서(옮긴 칸 수·지운 칸 이름)를 확인 → 새 파일로 바꿈(주인 UID 10001·권한 640) → 새 필수 칸·이미지 칸(`…:0.2.0`)을 채움 | 서버 운영 | §5-7 3 |
 | 5 | DB — settings.yaml의 `PG_SCHEMA`를 새 이름으로 → `migrate check` → `migrate up --target all` → `check`(차이 없음) | 서버 운영·DB 담당 | §5-7 4 · C-74 |
-| 6 | `selftest_gate.sh` — 알려진 실패 밖 FAIL 0(정리 3c 뒤에는 알려진 실패도 0개) | 서버 운영 | §3-3 · C-54 |
+| 6 | `selftest_gate.sh` — `[판정] 통과 — FAIL 0`(알려진 실패 목록 빔) | 서버 운영 | §3-3 · C-54 |
 | 7 | 띄우기·확인 — 시작 로그 첫 줄의 판 · MCP `search`(원천 필수)와 원문 도구 한 번 | 서버 운영 | §5-7 5 · C-75 |
 | 8 | 전체 e2e — dev: settings.yaml이 가리키는 대상으로 · prd: 전체 문서를 새 원천별 스키마로 → 검색 MCP를 새 스키마로 | 서버 운영·사용자 | 8-1 · [pl-23](../prd/ops.md#pl-23) |
 
