@@ -616,6 +616,19 @@ def classify_doc(seq, row, cache=None):
     return cls
 
 
+DEADLINE_AT = None  # --deadline(새벽 배치 마감, 사용자 11-02) — 이 시각(epoch 초)이 지나면 새 문서를 받기 시작하지 않음
+
+
+def deadline_at(hhmm, now=None):
+    """HH:MM → 다음 그 시각(epoch 초) — 지금보다 이르거나 같으면 다음 날(자정을 넘는 배치 — 23:00 시작·05:00 마감)."""
+    now = datetime.datetime.now() if now is None else now
+    h, m = (int(x) for x in hhmm.split(":"))
+    t = now.replace(hour=h, minute=m, second=0, microsecond=0)
+    if t <= now:
+        t += datetime.timedelta(days=1)
+    return t.timestamp()
+
+
 def downloader(rows, order):
     """대기열 유지 — 지정 문서 순서대로 WARM_TARGET개(받는 중 포함)까지 미리 받아 둔다(파싱 중 제외). 받기 워커 WARM_WORKERS개가
     차례(order)를 하나씩 집어 동시에 받는다(pl-48 — 사용자 11-02): 실제 동시 받기 = min(WARM_WORKERS, 대기열 빈자리).
@@ -631,6 +644,12 @@ def downloader(rows, order):
         while not _stop.is_set():
             with _warm_lock:
                 if pos["ptr"] >= len(order):
+                    return
+                if DEADLINE_AT is not None and time.time() >= DEADLINE_AT:  # 마감 — 남은 차례는 다음 새벽 배치가 다시 고름
+                    if pos["ptr"] < len(order):
+                        log(f"마감 — 남은 {len(order) - pos['ptr']}건은 받지 않음(받은 문서는 끝까지)")
+                        pos["ptr"] = len(order)
+                        _next_warm = 10**12
                     return
                 if _lane_total() + len(_warming) >= WARM_TARGET:  # 빈자리 없음 — 파싱이 하나 시작되면 notify
                     _warm_lock.wait(5)
@@ -786,7 +805,7 @@ def _safe_cleanup(seq, row):
 
 
 def main():
-    global WARM_TARGET, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE, STRUCT_BACKLOG, CODE_DIR
+    global WARM_TARGET, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE, STRUCT_BACKLOG, CODE_DIR, DEADLINE_AT
     ap = argparse.ArgumentParser()
     ap.add_argument("--start-offset", type=int, default=1072)
     ap.add_argument(
@@ -799,6 +818,8 @@ def main():
     ap.add_argument("--struct-workers", type=int, default=None, help="구조화 스레드 수 — 기본 settings.yaml ops.run_docs.struct_workers(2)")
     ap.add_argument("--filter", default="RFP,proposal")
     ap.add_argument("--limit", type=int, default=0, help="시험 — 이 개수만 처리")
+    ap.add_argument("--max-docs", type=int, default=0, help="새벽 배치 — 끝난 문서를 뺀 뒤 앞에서 이 개수만(0 = 상한 없음, 사용자 11-02)")
+    ap.add_argument("--deadline", default="", help="새벽 배치 마감(HH:MM) — 지나면 새 문서를 받기 시작하지 않음(사용자 11-02)")
     ap.add_argument("--seqs", default="", help="임의 문서 집합(쉼표 seq 목록) — 지정 시 연속 범위 대신 이 목록만 처리")
     ap.add_argument("--cpu-gate", type=float, default=1.3, help="파이프라인 CPU 게이트(CPU_MAX_LOAD) — 기본 1.3, 조정할 때 --cpu-gate 1.1")
     ap.add_argument("--skip-done", action="store_true", help="EDW ParsingMeta에 ok·partial로 이미 끝난 문서는 건너뜀(재실행 시간 절약)")
@@ -817,6 +838,7 @@ def main():
             print(f"[중단] {msg}", flush=True)
         raise SystemExit(2)
     NO_CLEANUP, CPU_GATE = a.no_cleanup, a.cpu_gate
+    DEADLINE_AT = deadline_at(a.deadline) if a.deadline else None
     if a.warm is not None:
         WARM_TARGET = a.warm
     if a.struct_workers is not None:
@@ -854,6 +876,9 @@ def main():
         before = len(order)
         order = [s for s in order if rows[s]["s3_key"] not in done]
         log(f"skip-done: {before - len(order)}건 이미 완료({'·'.join(DONE_STATUSES)}) — 남은 {len(order)}건 처리")
+    if a.max_docs and len(order) > a.max_docs:
+        log(f"max-docs: {len(order)}건 중 앞 {a.max_docs}건만(나머지는 다음 실행)")
+        order = order[: a.max_docs]
     if not order:
         log("처리할 문서 없음 — 종료")
         return

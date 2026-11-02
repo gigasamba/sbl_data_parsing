@@ -34,8 +34,8 @@ def _value(path, name, kind):
         return 4.0 if name.endswith("CPUS") else 7  # 4.0 → "4"(compose cpus)
     if name == "RUN_ENV":
         return "dev"
-    if name == "NIGHTLY_TIME":
-        return "01:30"
+    if name in ("NIGHTLY_TIME", "NIGHTLY_DEADLINE"):
+        return "01:30" if name == "NIGHTLY_TIME" else "06:00"  # HH:MM 칸(#99)
     if name == "DOCKER":
         return "podman"
     return f"/srv/x/{name.lower()}" if "DIR" in name or name in ("DOC_SRC", "RAG_OUT", "PATCH_CODE") else f"v-{name.lower()}:0.2.0"

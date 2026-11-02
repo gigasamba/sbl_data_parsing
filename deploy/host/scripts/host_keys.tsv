@@ -20,6 +20,8 @@ pipeline.host.run_docs_dir	RUN_DOCS_DIR	text
 pipeline.host.structure_cpus	STRUCTURE_CPUS	num
 pipeline.host.structure_mem_limit	STRUCTURE_MEM_LIMIT	text
 pipeline.host.nightly.time	NIGHTLY_TIME	text
+pipeline.host.nightly.max_docs	NIGHTLY_MAX_DOCS	num
+pipeline.host.nightly.deadline	NIGHTLY_DEADLINE	text
 pipeline.host.run_docs.warm	RUN_DOCS_WARM	num
 pipeline.host.run_docs.warm_workers	RUN_DOCS_WARM_WORKERS	num
 pipeline.host.run_docs.struct_workers	RUN_DOCS_STRUCT_WORKERS	num

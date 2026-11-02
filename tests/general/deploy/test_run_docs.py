@@ -185,6 +185,20 @@ def test_done_keys_match_parsing_meta():
     assert RD.DONE_STATUSES == DONE_STATUSES and RD.GOLD_STATUSES == GOLD_STATUSES  # gold_version도 봄(사용자 11-02)
 
 
+def test_deadline_at():
+    """새벽 배치 마감(사용자 11-02) — 다음 그 시각, 지금보다 이르거나 같으면 다음 날(자정을 넘는 배치)."""
+    import datetime
+
+    now = datetime.datetime(2026, 11, 2, 23, 30)
+    cases = [
+        ("23:45", now.replace(minute=45)),
+        ("05:00", datetime.datetime(2026, 11, 3, 5, 0)),
+        ("23:30", datetime.datetime(2026, 11, 3, 23, 30)),
+    ]
+    for hhmm, want in cases:
+        assert RD.deadline_at(hhmm, now) == want.timestamp(), hhmm
+
+
 def test_parallel_warm_respects_free_slots():
     """pl-48(사용자 11-02) — 미리 받기 워커 여럿이 동시에 받되, 실제 동시 받기 = min(워커 수, 대기열 빈자리). 시험용 가짜 받기만(docker 없음)."""
     import threading
