@@ -44,4 +44,4 @@ def _pin():
 
 
 _pin()
-from common.core.fingerprint import CONTRACT, FINGERPRINT, legacy_names, pipeline_version  # noqa: E402,F401
+from common.core.fingerprint import CONTRACT, FINGERPRINT, pipeline_version  # noqa: E402,F401

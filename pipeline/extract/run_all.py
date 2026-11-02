@@ -552,11 +552,9 @@ def engine_code_fp(eng):
     # _common만 해시 → 엔진 코드를 고쳐도 원문 결과가 낡음으로 안 잡혔음)
     stack = registry.engines().get(eng, (eng, None))[0]
     files = sorted(set((PARSING_ROOT / "engines" / stack).glob("**/*.py")) | set((PARSING_ROOT / "engines" / "_common").glob("**/*.py")))
-    from common import legacy_names  # 10-14 폴더 분리 — 옛 경로(parse/engines/…)·옛 import 이름으로 해시(전 문서 재파싱 방지)
-
     for p in files:
         h.update(("parse/" + p.relative_to(PARSING_ROOT).as_posix()).encode("utf-8"))
-        h.update(legacy_names(p.read_bytes()))
+        h.update(p.read_bytes())  # 0.2.0 — 옛 import 이름 되돌리기(legacy_names) 지움(pl-46)
     return h.hexdigest()[:12]
 
 
