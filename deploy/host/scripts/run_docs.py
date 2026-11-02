@@ -261,9 +261,7 @@ def parse_cmd(seq, chan, scan, gate):
 def struct_cmd(seq):
     """문서 1개 구조화 + 적재(구조화 컨테이너). 엔진 구성은 파싱과 같은 파일(코드 폴더 — 사용자 11-01: 판 번호 없음, 실행 중에는 안 바뀜)."""
     inside = f"/app/output/docflow/{seq}"
-    st = sets(
-        *EMBED_SET, "FILE_META_PATH=/app/output/file_meta_new.jsonl"
-    )  # 묶음·적재 python에(stackcfg는 이 칸을 안 읽어 뺌 — 덮기 파일 하나 덜, 리뷰 S9)
+    st = sets(*EMBED_SET)  # 묶음·적재 python에(문서 메타는 적재가 EDW 조인으로 — pl-29 11-02, FILE_META_PATH 지움)
     return (
         f"{DOCKER} exec {STRUCT_C} bash -c 'cd /app && "
         f"PYTHONPATH=/app/deploy "

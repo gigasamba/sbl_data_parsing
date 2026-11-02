@@ -129,6 +129,7 @@ def _run_twice(S, tmp):
     assert n_chunks == 4 and b_terms > 0, (n_chunks, b_terms)  # b의 청크·키워드 색인도 그대로
     assert meta == {("RFP", "2025-03-01T10:00:00+09:00", '["A사"]')}, meta  # 분류·등록 시각(시간대 없는 값은 KST)·본문 고객 라벨
     assert loaded and counts["loaded_at_failed"] == 1 and counts["by_source"]["sfdc"]["docs"] == 1, (loaded, counts)  # C10 예외 — loaded_at
+    assert counts["meta_missing"] == 1, counts  # pl-29 — EDW 계정 없음: 메타를 비운 채 적재(건수만)
     print(
         "[시험] 적재 — 원천 스키마로 · 묶음에 없는 저장 문서는 지우지 않음 · --prune 없음 · ParsingMeta loaded_at(쓰기 계정 없으면 건수만)"
     )

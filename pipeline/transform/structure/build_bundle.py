@@ -504,20 +504,9 @@ def main(argv=None):
     src = Path(a.src)
     n_fig_dropped = 0  # AD21③ — 빈 VLM 그림은 청크를 만들지 않음
 
-    # EDW 파일 메타 로드 (FILE_META_PATH env 또는 --file-meta 인자)
-    _file_meta = {}
-    _fmp = getattr(a, "file_meta", None) or pc.cfg().paths.file_meta_path  # S7c — 설정 객체
-    if _fmp and Path(_fmp).exists():
-        import json as _json
-
-        for line in Path(_fmp).read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                d = _json.loads(line)
-                k = d.get("s3_key")
-                if k:
-                    _file_meta[k] = d
+    # EDW 파일 메타(고객·원천 칸·등록 시각)는 적재가 EDW 조인으로 채운다(pl-29, 11-02 — 외부 file_meta 파일 지움)
     # rdb:csv 배치 — prepared 파일명 → 원본 s3_key 매핑 (source.py가 남긴 manifest.jsonl)
-    _manifest_keys, _manifest_created = {}, {}
+    _manifest_keys = {}
     _mf = Path(a.parse_dir) / "_source" / "manifest.jsonl"
     if _mf.exists():
         for line in _mf.read_text(encoding="utf-8").splitlines():
@@ -525,8 +514,6 @@ def main(argv=None):
                 r = json.loads(line)
                 if r.get("file_name") and r.get("key"):
                     _manifest_keys[r["file_name"]] = r["key"]
-                if r.get("file_name") and r.get("created_at"):  # 11-01(mc-16) FileStorageMap 원천 등록 시각(batch.csv에 칸이 있을 때)
-                    _manifest_created[r["file_name"]] = r["created_at"]
     docs, chunks, n_sum, seen_sha = [], [], {"llm": 0, "lead": 0}, {}
     alias = {}  # 견적·주문 번호 → 같은 문서의 (교차 확인된) 계약 번호
     for md in meta_docs.values():
@@ -603,26 +590,6 @@ def main(argv=None):
                 _src_sys = "CRMS"
             elif _s3_key.startswith(("las_", "LAS_")):
                 _src_sys = "LAS"
-        _edw = _file_meta.get(_s3_key, {}) if _s3_key else {}
-        if _edw and _edw.get("source_system"):
-            _src_sys = _src_sys or _edw["source_system"]
-        _meta_keys = (
-            "source_system",
-            "content_version_id",
-            "s3_key",
-            "sf_acc_name",
-            "sf_op_id",
-            "sf_op_name",
-            "project_code__c",
-            "contract_id",
-            "contract_date",
-            "service_type",
-            "division",
-            "prod_name",
-        )
-        _meta = (
-            {k: v for k, v in {"s3_key": _s3_key, **_edw}.items() if k not in _meta_keys and v is not None} if (_s3_key or _edw) else None
-        )
         # 2026-10-20 축소 스키마 — pgvector doc에는 검색에 필요한 최소만(EDW 식별 + clients + summary).
         # clients는 main의 infer_clients(docs)가 이후에 채움(기존 흐름 그대로). file_name은 file_path에서 유도.
         docs.append(
@@ -634,18 +601,6 @@ def main(argv=None):
                 "full_text": text,  # full_text는 본문 매칭(client) 내부용 — db 적재 안 함
                 "source_system": _src_sys,
                 "doc_key": _s3_key or path,  # doc_key = file_path(검색 근거의 문서 키와 같은 값)
-                "sf_acc_name": _edw.get("sf_acc_name"),
-                "sf_op_id": _edw.get("sf_op_id"),
-                "sf_op_name": _edw.get("sf_op_name"),
-                "project_code__c": _edw.get("project_code__c"),
-                "contract_id": _edw.get("contract_id"),
-                "contract_date": _edw.get("contract_date"),
-                "service_type": _edw.get("service_type"),
-                "division": _edw.get("division"),
-                "prod_name": _edw.get("prod_name"),
-                "s3_key": _s3_key,  # 11-01(mc-15) 원본 전체 키 — 적재가 ParsingMeta(source_system + source_key)에서 대표 결과 위치를 찾음
-                "doc_class": _edw.get("doc_class"),  # 11-01(mc-16) 분류 라벨 — 분류 단계(pl-33) 전에는 EDW 파일 메타에 있을 때만
-                "created_at": _edw.get("created_at") or _manifest_created.get(doc) or _manifest_created.get(Path(path).name),
                 **DM.doc_meta(doc, text),
             }
         )

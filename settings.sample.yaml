@@ -303,7 +303,6 @@ ops:
     sources_file:  # 원천 목록 파일 경로(비우면 resources/mappings/sources.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
     stack_file:  # 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
   pipeline_paths:
-    file_meta_path:  # EDW 파일 메타 JSONL 경로(s3_key → 메타) · 값: 경로
     gold_dir:  # 사람 정답(gold) 폴더 · 값: 경로
     images_root:  # 그림 PNG·index.jsonl 저장 루트 · 값: 경로
     index_conf:  # 색인 설정 JSON 경로(있으면 색인 모듈로 구조화) · 값: 경로

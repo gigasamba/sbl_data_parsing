@@ -422,9 +422,8 @@ class PipelineNight(Section):
 
 class PipelinePaths(Section):
     REMOVED = frozenset(
-        {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot", "stack_version", "report_digest_dir"}
-    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) — 지운 칸·절(남으면 경고만)
-    file_meta_path: str | None = F(None, "FILE_META_PATH", "EDW 파일 메타 JSONL 경로(s3_key → 메타)")
+        {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot", "stack_version", "report_digest_dir", "file_meta_path"}
+    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) · file_meta_path 11-02(pl-29 — 적재가 EDW 조인) — 지운 칸·절(남으면 경고만)
     gold_dir: str | None = F(
         None,
         "GOLD_DIR",

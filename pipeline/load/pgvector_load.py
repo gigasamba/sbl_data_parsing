@@ -153,11 +153,16 @@ def load(db, bundle, replace=False):
     docs, chunks = _nonul(jl(B / "docs.jsonl")), _nonul(jl(B / "chunks.jsonl"))
     vecs = np.load(B / "vectors.npy", mmap_mode="r")  # 필요한 청크만 읽음(전체를 메모리에 올리지 않음)
     t0 = time.time()
+    from pipeline.load import edw_meta
+
+    edw, meta_missing = edw_meta.fetch([(d.get("source_system"), d["file_path"]) for d in docs])  # pl-29 — EDW 조인(트랜잭션 밖, 읽기 계정)
+    for d in docs:
+        d.update({k: v for k, v in (edw.get(d["file_path"]) or {}).items() if v is not None})
     by_src = {}
     for i, d in enumerate(docs):
         by_src.setdefault(ST.source_of(d.get("source_system")), []).append(i)
     dbs = src_dbs(db)
-    counts = {"docs": 0, "chunks": 0, "terms": 0, "by_source": {}}
+    counts = {"docs": 0, "chunks": 0, "terms": 0, "by_source": {}, "meta_missing": meta_missing}
     loaded = []
     if getattr(db, "is_standin", False):
         for src, idx in by_src.items():
