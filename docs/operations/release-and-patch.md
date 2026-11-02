@@ -114,8 +114,8 @@ docker compose -f deploy/host/compose/compose.mcp.yml -f deploy/host/compose/com
 docker run --rm <연결 옵션> <태그> check-modules
 bash <코드 폴더>/deploy/release/selftest_gate.sh docker run --rm <연결 옵션> <태그> selftest
 ```
-**selftest는 종료 코드로 판정하지 않는다.** selftest는 FAIL이 하나라도 있으면 종료 코드 1인데, data-pipeline 이미지는 리팩토링 전부터 있던 알려진 FAIL 때문에 늘 1이라 고장과 구별이 안 된다. `selftest_gate.sh`가 selftest를 돌린 뒤 FAIL 줄을 알려진 목록 `deploy/release/known_fail.txt`(git 안, 이미지 안 `/app/docker/known_fail.txt`, 사례 이름 한 줄씩 + 이유 주석)와 대조해 마지막 `[판정]` 줄과 종료 코드를 낸다 — **목록 밖 FAIL 0이면 통과(0)**, 하나라도 있거나 요약 줄이 없으면 실패(1).
-- 지금 기대값: data-pipeline FAIL 1(목록 안 `test_publish_guard` — 서버가 source.json을 안 올려 꺼진 방어선, `refactor.md` C-54 ②. PG 문서 레지스트리 갱신 실패(C-54 ①)는 배포 판정 밖 일반 테스트 `test_pub_registry`) · mcp-server FAIL 0.
+**selftest는 종료 코드로 판정하지 않는다.** selftest는 FAIL이 하나라도 있으면 종료 코드 1인데, 알려진 FAIL이 있던 때는 늘 1이라 고장과 구별이 안 됐다(11-02부터 목록은 비어 있음). `selftest_gate.sh`가 selftest를 돌린 뒤 FAIL 줄을 알려진 목록 `deploy/release/known_fail.txt`(git 안, 이미지 안 `/app/docker/known_fail.txt`, 사례 이름 한 줄씩 + 이유 주석)와 대조해 마지막 `[판정]` 줄과 종료 코드를 낸다 — **목록 밖 FAIL 0이면 통과(0)**, 하나라도 있거나 요약 줄이 없으면 실패(1).
+- 지금 기대값: data-pipeline·mcp-server 모두 `[판정] 통과 — FAIL 0`(11-02 — 늘 꺼져 있던 source.json 게시 가드와 그 시험 `test_publish_guard`를 지워 알려진 FAIL 목록이 비었음, `refactor.md` C-54 ②).
 - 사례 = 서버 배포 테스트 파일(`tests/server/<common|pipeline|mcp>/test_*.py` — 이미지 안 `/app/deploy/tests/server`, 사례 이름 = 테스트 모듈 이름 예 `tests.server.pipeline.test_build_bundle`). 옛 `python -m <모듈> --selftest`는 없다.
 - 한 사례만: `docker run --rm <태그> selftest --only <이름 조각>`.
 - 이미지 안 목록으로 판정: `docker run --rm --entrypoint bash <태그> /app/docker/selftest_gate.sh /app/docker/entrypoint.sh selftest`.
