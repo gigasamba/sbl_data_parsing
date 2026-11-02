@@ -374,33 +374,6 @@ def _case_settings():
     return _CASE_ENVS["file"]
 
 
-# 단계 4 도구(10-30 parse_parallel 지움 — pl-35 · 11-01 pipeline.eval 지움 — e2-10)(S4 — 옛 공용 cli/·evaluation/에서 pipeline/로 옮김). S9 전에는 "공용" 사례였고 mcp 이미지에서는 모듈이 없어 SKIP이었다 —
-# S9부터 그 시험은 tests/server/pipeline(mcp 이미지에서 "다른 이미지 사례" SKIP — 결과 같음). 여기서는 두 손 목록 확인만(check_modules.MOVED_TOOLS).
-# S6a — 목록은 전에 경계 점검의 LEGACY_TOOLS(파일 경로 → 옛 자리)에서 읽었다. 경계 판정에 더 안 쓰여 그 표를 지우고 여기 둔다(같은 15개).
-_STAGE4_TOOLS = frozenset(
-    {
-        "pipeline.cli",
-        "pipeline.check_env",
-        "pipeline.extract.rdb_discover",
-        "pipeline.transform.structure.gen_roster",
-        "pipeline.transform.structure.glossary_suggest",
-    }
-)
-
-
-def _tool_list_check():
-    """PC 전용 — 단계 4 도구 두 손 목록(맨 이름 check_modules.MOVED_TOOLS['etl'] · 모듈 이름 _STAGE4_TOOLS)이 같은지
-    (S6a 리뷰 — 옛 cli/pipeline.py는 맨 이름 pipeline). 어긋난 것 목록."""
-    from common.check.check_modules import MOVED_TOOLS
-
-    names = {m.rsplit(".", 1)[1] for m in _STAGE4_TOOLS} - {"cli"} | {"pipeline"}
-    return (
-        []
-        if names == MOVED_TOOLS["etl"]
-        else [f"_STAGE4_TOOLS ↔ check_modules.MOVED_TOOLS['etl'] 어긋남: {sorted(names ^ MOVED_TOOLS['etl'])}"]
-    )
-
-
 def _spec_missing(mod):
     """이 이미지에 없는 모듈인지 — 중간 패키지가 없으면 find_spec이 ModuleNotFoundError를 던지므로 그것도 없음으로."""
     import importlib.util
@@ -433,9 +406,6 @@ def selftest(a):
 
     image = os.environ.get("RAG_MODULE", "").strip()  # env 남김 — 내부 신호(5-3 H)
     image = image if image in ("pipeline", "mcp") else ""
-    split_bad = None if image else _tool_list_check()
-    if not image:  # PC에서만 — 두 손 목록 어긋남은 종료 코드 1(아래)
-        print("도구 목록(단계 4): " + ("맞음" if not split_bad else "어긋남 — " + ", ".join(split_bad)))
     cases = server_cases()
     only = getattr(a, "only", None) or []
     if only:
@@ -483,7 +453,7 @@ def selftest(a):
         + (f" · SKIP {skips}" if skips else "")
         + (f" · FAIL {len(fails)}: {', '.join(fails)}" if fails else "")
     )
-    if fails or split_bad:
+    if fails:
         raise SystemExit(1)
 
 

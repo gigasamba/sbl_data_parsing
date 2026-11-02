@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parent
 #   docker exec로 부르는 컨테이너(data-pipeline-parse·structure)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
 #   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.pipeline_host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더(옛 test_space/rfp_all_output)는
 #   required.deploy.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로, C-29 ⓑ를 코드로 보장 — 사용자 Q8 ⑤).
-TEST = PROG = DOCSPACE = DOCFLOW = WARM = ENVFILE = PATCH_CODE = None  # configure()가 채움
+TEST = PROG = DOCSPACE = DOCFLOW = WARM = ENVFILE = None  # configure()가 채움
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.docker(없으면 podman, 그것도 없으면 docker — op-10)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, op-10)
 DEFAULT_CODE = Path("/srv/rag/code/live")  # 코드 폴더 기본 배치(common.host.patch_code 기본값과 같음)
@@ -128,7 +128,7 @@ def work_dir(doc):
 
 def configure(settings_file=None):
     """서버 settings.yaml을 한 번 읽어 모듈 값(경로·접속)을 채운다 — 문제 목록(빈 목록이면 통과). 값은 찍지 않는다."""
-    global TEST, PROG, DOCSPACE, DOCFLOW, WARM, ENVFILE, PATCH_CODE, MCP_JOBS_DIR, WARM_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA
+    global TEST, PROG, DOCSPACE, DOCFLOW, WARM, ENVFILE, MCP_JOBS_DIR, WARM_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA
     global DOCKER
     doc, err = read_settings(settings_file)
     if err:
@@ -149,7 +149,6 @@ def configure(settings_file=None):
     DOCFLOW = DOCSPACE / "docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     WARM = DOCSPACE / "_warm"  # SOURCE_WARM 대기열 저장소
     # 컨테이너가 마운트하는 코드 폴더 — compose.patch*.yml·systemd·mcp_up.sh와 같은 칸(ops.host.patch_code — 기본 배치 /srv/rag/code/live).
-    PATCH_CODE = Path(_yget(doc, "common.host.patch_code") or DEFAULT_CODE)
     DOCKER = _yget(doc, "common.host.docker") or (
         "podman" if shutil.which("podman") else "docker"
     )  # op-10 — 셸 스크립트와 같은 순서(env 대신 설정)
@@ -176,8 +175,7 @@ def _edw_connect():
     )
 
 
-# I4(V3 R1): 옛 DEPLOY(<이 폴더>/patch_code/app/deploy)·IMAGE는 pre-refactor에서 쓰는 곳이 없던 상수였고, I3 확인이 DEPLOY를
-# 처음 썼지만 컨테이너가 실제로 그 폴더를 마운트한다는 근거가 없어(V3 R1) 확인을 PATCH_CODE로 옮기고 둘 다 지움.
+# 11-02 — 시작 때 코드 배치 확인(code_layout_problems·CODE_MARKER·PATCH_CODE)은 운영 마지막 버전에 없어 지움(사용자 규칙).
 # S6b(D-020, 사용자 10-27) — 파이프라인 이미지가 하나(data-pipeline)로 합쳐지고 상주 컨테이너 이름이 바뀜(옛 data-parsing·data-structure).
 PARSE_C, STRUCT_C = "data-pipeline-parse", "data-pipeline-structure"  # docker inspect·exec 대상(compose.pipeline.yml 상주 서비스)
 
@@ -711,38 +709,6 @@ def pg_count():
         return 0, 0
 
 
-CODE_MARKER = Path("pipeline") / "extract" / "run_all.py"  # pipeline 배치(S4)에 늘 있는 파일(컨테이너 안 /app/deploy/ 아래 같은 자리)
-
-
-def code_layout_problems(code=None, containers=(PARSE_C, STRUCT_C)):
-    """I3(V2-R4) — 이 러너는 pipeline 배치(S4 10-26, 새 이미지 판 — 그 전 I2 data_etl 배치)를 전제로 `docker exec … python -m pipeline.…`를 부른다.
-    컨테이너가 마운트하는 코드 폴더(PATCH_CODE/app/deploy)와 떠 있는 컨테이너가 그 배치인지 시작 전에 본다 — 문제 목록(빈 목록이면 통과).
-    I4(V3 R1): PATCH_CODE 폴더를 이 호스트에서 볼 수 없으면 폴더 확인은 건너뛰고 컨테이너 확인(실제 마운트)만 믿는다.
-    I4b(V4 R2): 폴더가 아니라 파일(CODE_MARKER)로 본다 — docker는 bind 마운트 원본이 없으면 빈 폴더를 만들어 붙여 `test -d`가 통과한다."""
-    code = Path(code) if code else PATCH_CODE
-    probs = []
-    if code.is_dir():
-        deploy = code / "app" / "deploy"
-        if not deploy.is_dir():  # op-06(10-30) — 개발 서버 코드 폴더는 저장소 트리 그대로(실행 이미지가 /app/deploy에 붙임)
-            deploy = code
-        if not (deploy / CODE_MARKER).is_file():
-            probs.append(
-                f"코드 폴더 {deploy}에 {CODE_MARKER.as_posix()} 없음 — 새 이미지 판(S4 pipeline)과 코드 폴더를 같은 때에 반입했는지 확인"
-            )
-        old = [d for d in ("data_parsing", "data_structure") if (deploy / d).exists()]
-        if old:
-            probs.append(f"코드 폴더 {deploy}에 옛 폴더 {', '.join(old)}가 남아 있음 — I2 전 배치가 섞임(반입 절차 확인)")
-    else:
-        log(f"[안내] 코드 폴더 {code}(PATCH_CODE)를 이 호스트에서 볼 수 없음 — 폴더 확인은 건너뛰고 컨테이너 확인만")
-    for c in containers:
-        rc, _, _ = sh(f"{DOCKER} exec {c} test -f /app/deploy/{CODE_MARKER.as_posix()}", timeout=60)
-        if rc != 0:
-            probs.append(
-                f"컨테이너 {c}에 /app/deploy/{CODE_MARKER.as_posix()} 없음(rc {rc}) — 새 이미지·compose.patch.yml 마운트로 다시 띄웠는지 확인"
-            )
-    return probs
-
-
 def mcp_busy():
     """MCP 업로드 처리 중이면 True(공유 볼륨 mcp_parse/jobs/<id>의 파일 mtime이 30초 내 갱신).
     5초마다 불리므로 작업 폴더 전체가 아니라 이름 날짜(<YYYYMMDD>-…, mcp_parse_service)가 어제·오늘·내일인 폴더만 본다(rn-04 —
@@ -827,15 +793,10 @@ def main():
     STRUCT_BACKLOG = _BACKLOG_SETTING if _BACKLOG_SETTING is not None else 2 * max(1, STRUCT_WORKERS)
 
     PROG.mkdir(parents=True, exist_ok=True)
-    probs = code_layout_problems()
     if not MCP_JOBS_DIR.is_dir():
         log(
             f"[안내] MCP 업로드 작업 폴더 {MCP_JOBS_DIR} 없음 — MCP 업로드 감지(medium 레인 양보) 꺼짐, 다른 자리면 settings.yaml ops.mcp_host.jobs_dir"
         )
-    if probs:
-        for msg in probs:
-            log(f"[중단] {msg}")
-        raise SystemExit(2)
     os.umask(0)  # 컨테이너( uid 10001 rag )가 /app/output(=docflow/<seq>)에 쓰려면 777 필요
     WARM.mkdir(mode=0o777, parents=True, exist_ok=True)
     DOCFLOW.mkdir(mode=0o777, parents=True, exist_ok=True)
