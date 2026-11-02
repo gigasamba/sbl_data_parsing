@@ -71,7 +71,7 @@
 - 무엇(10-29): `valid_env/unstructured/` 삭제(파일 781개, 40 MB). PwC HEAD에서 `git archive`로 `edw/`(sql + sqlite), `eval_sets/`, `object_storage/{CRMS,SFDC}` + `test_doc_purpose.md`를 가져옴(문서 33건, `object_keys.csv`와 sha256 일치). 서버 시험 셋이 읽어서 `unstructured/synth-meta-rdb/meta/`는 `edw/meta_rdb/`로 옮김.
 - 파일: `valid_env/README.md`, `.gitattributes`, `tests/server/mcp/test_internal_docs.py`, `tests/server/mcp/test_search_svc.py`, `tests/server/pipeline/test_source.py`, README §4-4.
 - `tests/fixtures/`는 10-29에 지움(refactor.md C-63) — 서버 배포 테스트는 데이터를 임시 폴더에 만든다.
-- 남은 것: `EVAL_SETS_DIR` 기본값 → [settings.md#pl-21](settings.md#pl-21). 옛 묶음을 이름으로 부르는 PC 도구 → [e2-10](#e2-10).
+- 남은 것: `EVAL_SETS_DIR` 기본값 → [ops-settings.md#pl-21](ops-settings.md#pl-21). 옛 묶음을 이름으로 부르는 PC 도구 → [e2-10](#e2-10).
 - Status: done
 
 <a id="e2-03"></a>
@@ -122,7 +122,7 @@
   - local에는 기준을 두지 않는다.
   - dev: 사람이 단 정답 샘플과 대조한 보고서만 — 원천별·라벨별 일치율과 혼동표. 통과 기준은 첫 결과를 본 뒤 정한다.
 - 열린 점: 정답 샘플의 자리와 형식 — 사용자 확인.
-- 관련: [etl.md#pl-33](etl.md#pl-33)(분류 단계).
+- 관련: [transform.md#pl-33](transform.md#pl-33)(분류 단계).
 - 결정(사용자 10-30 PRD grill): A8 — 분류 정답 샘플은 회사 데이터라 git에 넣지 않고 개발 서버 폴더에 CSV로 둔다(칸: `s3_key`, 정답 분류).
 - Status: todo
 
@@ -173,7 +173,7 @@
 - 남김 목록 고침(허브 10-31): `PARSE_STREAM`·그림자 모드·`SEARCH_TIE_BREAK` 스위치는 op-08에서 지워 남김에서 뺐다. 카테고리 파일 끝 '요건 없는 코드' 목록에서 이미 지운 것(이 행·fp-batch)을 뺐다(mcp·etl·test, 10-31).
 - 11-01(`feature/scope-cut-unused`, 허브 지시): 호출부 없는 지시서 `pipeline/parse_shadow`·`mcp/research_judge`·`mcp/agg_llm_route`를 지움 — 지시서 시험(`test_agent_prompts`·`test_adk`의 output_schema 재요청)은 `nested_figure`로, `test_paths`는 남은 패키지로 바꿈. `common/core/paths.py:112` 주석의 `parse_shadow` 언급은 고치면 레이어 code_fp 4개가 모두 바뀌어 남김(0.2.0 배치에서).
 - 11-01(`feature/scope-cut-unused`, 허브 지시): 부르는 곳 없는 코드 둘 — `pipeline/shared/summarize.py`의 엔진 비교 요약 명령 `main`(summary.md·engines.csv — `FAMILY`·`nums`는 represent가 써서 남김), `pipeline/mcp_parse_service.py`의 이미지 갈래 `_IMAGE_EXTS`·`IMAGE_NOTE`(이미지는 `ALLOWED_EXTS`에 없어 도달 불가).
-- Status: done (10-30, `feature/drop-unused`, 사용자 grill 11차 포함) — 지움: `internal_docs.py`의 `do_get_document`·`do_get_image`·`do_evidence_image`·`do_lookup_term`·`do_related`·`do_list_documents`와 그것만 쓰던 도우미(MCP 도구 아님 — 도구 이름·입출력 그대로), `objectstore_access.py`, 위키 도구(`structure/wiki.py`·`wiki_draft.py` + 지시서 `wiki_term_draft`), 외부 KG 어댑터(`eval/kg_external.py`)·LLM 그래프 모드(`validation/e2e/graph_llm.py` + 지시서 `triple_extract`), 채점기 `chart_values_score.py`·`diagram_edges_score.py`(`score_gold`의 mermaid 재현율은 같은 규칙으로 그 안에), `search/terms.lookup_term`, `valid_env/eval_sets/`와 그것만 읽던 `validation/e2e/stack_matrix.py`(+ `stack_matrix.json`·보고서 `pipeline/eval/stack_report.py`), Q&A 보고서 `mcp_server/cli/qa_report.py`(사용자 10-30), 시험만 쓰던 함수(e2-17), 각 시험, 설정 칸 7개(`MCP_EVID_*`·`MCP_IMAGES`·`MCP_MAX_IMAGE_PX`)와 절 `pipeline.connections.graphiti`(경고만 — env-guide). 지문 그대로._concept_top`·`hidden_names`·`client_map`(r), 상수 `EVAL_SETS_DIR`([settings.md#pl-21](settings.md#pl-21)). · 0.1.0 지문 배치(`feature/fp-batch`)에서 나머지도 지움: `fields_table`, `raster_chart_values`(+ `enlarge`·`ratio_place`·지시서 `figure_chart_raster`), `retriever._concept_top`·`hidden_names`·`client_map`·`_client_rows`·`_chunk_key_hidden`, 상수 `EVAL_SETS_DIR`, 고아 지시서 `diagram_arrows`.
+- Status: done (10-30, `feature/drop-unused`, 사용자 grill 11차 포함) — 지움: `internal_docs.py`의 `do_get_document`·`do_get_image`·`do_evidence_image`·`do_lookup_term`·`do_related`·`do_list_documents`와 그것만 쓰던 도우미(MCP 도구 아님 — 도구 이름·입출력 그대로), `objectstore_access.py`, 위키 도구(`structure/wiki.py`·`wiki_draft.py` + 지시서 `wiki_term_draft`), 외부 KG 어댑터(`eval/kg_external.py`)·LLM 그래프 모드(`validation/e2e/graph_llm.py` + 지시서 `triple_extract`), 채점기 `chart_values_score.py`·`diagram_edges_score.py`(`score_gold`의 mermaid 재현율은 같은 규칙으로 그 안에), `search/terms.lookup_term`, `valid_env/eval_sets/`와 그것만 읽던 `validation/e2e/stack_matrix.py`(+ `stack_matrix.json`·보고서 `pipeline/eval/stack_report.py`), Q&A 보고서 `mcp_server/cli/qa_report.py`(사용자 10-30), 시험만 쓰던 함수(e2-17), 각 시험, 설정 칸 7개(`MCP_EVID_*`·`MCP_IMAGES`·`MCP_MAX_IMAGE_PX`)와 절 `pipeline.connections.graphiti`(경고만 — env-guide). 지문 그대로._concept_top`·`hidden_names`·`client_map`(r), 상수 `EVAL_SETS_DIR`([ops-settings.md#pl-21](ops-settings.md#pl-21)). · 0.1.0 지문 배치(`feature/fp-batch`)에서 나머지도 지움: `fields_table`, `raster_chart_values`(+ `enlarge`·`ratio_place`·지시서 `figure_chart_raster`), `retriever._concept_top`·`hidden_names`·`client_map`·`_client_rows`·`_chunk_key_hidden`, 상수 `EVAL_SETS_DIR`, 고아 지시서 `diagram_arrows`.
 
 ## 코드와 다른 점 · 지울 코드
 
