@@ -186,7 +186,10 @@ Docker 없이 Python으로 직접 실행한다. 순서는 서버의 실제 처�
 ```bash
 # Python 3.12 가상환경 — 서버 이미지와 같은 패키지 + PC 개발 도구(ruff, mypy, pytest)
 uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python -r deploy/docker/requirements-core.txt -r deploy/docker/requirements-image.txt -r requirements-dev.txt
+# 가상환경 켜기 — 셸을 새로 열 때마다 한 번. 아래 명령의 `python`은 모두 이 가상환경의 python이다
+source .venv/bin/activate          # macOS·Linux
+# source .venv/Scripts/activate    # Windows Git Bash   ·   PowerShell은 .venv\Scripts\Activate.ps1
+uv pip install -r deploy/docker/requirements-core.txt -r deploy/docker/requirements-image.txt -r requirements-dev.txt
 git config core.hooksPath .githooks      # 커밋할 때 바꾼 파일 점검(ruff, mypy, 모듈 경계)이 자동 실행 — CLAUDE.md §5-2
 
 # 전용 pgvector(PG 16 + pgvector) — 처음만 run, 이후에는 docker start sbl-mcp-pg / docker stop sbl-mcp-pg
@@ -233,11 +236,11 @@ tuning:
 
 ```bash
 export PYTHONPATH=$PWD                                   # 명령은 저장소 루트에서
-.venv/bin/python -m pipeline.config                      # 어느 settings.yaml을 읽는지와 요약(비밀은 가림)
-.venv/bin/python -m common.check.check_modules           # "모듈 경계 통과"
-.venv/bin/python -m common.config.keyscan --check        # "빠진 키 0개"
-.venv/bin/python -m pipeline.cli selftest                # 서버 배포 테스트 — 93개 중 92개 통과(알려진 실패 1개 — 기준선 PRD e2-02)
-.venv/bin/python -m pytest -q tests/                      # 전체 테스트 — 146 passed · 3 xfailed(알려진 실패)
+python -m pipeline.config                      # 어느 settings.yaml을 읽는지와 요약(비밀은 가림)
+python -m common.check.check_modules           # "모듈 경계 통과"
+python -m common.config.keyscan --check        # "빠진 키 0개"
+python -m pipeline.cli selftest                # 서버 배포 테스트 — 93개 중 92개 통과(알려진 실패 1개 — 기준선 PRD e2-02)
+python -m pytest -q tests/                      # 전체 테스트 — 146 passed · 3 xfailed(알려진 실패)
 ```
 
 알려진 실패는 모두 리팩토링 전부터 있던 것이다(이유: refactor.md C-54·C-58 · 목록: `deploy/release/known_fail.txt`, `tests/conftest.py`).
@@ -259,7 +262,7 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 **② 파싱 — 문서 → 대표 결과**
 
 ```bash
-.venv/bin/python -m pipeline.cli parse --src $SRC
+python -m pipeline.cli parse --src $SRC
 ```
 
 - 처리: 중복 제거 → 쪽 방향 보정 → 엔진별 파싱 → 대표 결과
@@ -268,7 +271,7 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 **③ 구조화·임베딩 — 대표 결과 → 번들**
 
 ```bash
-.venv/bin/python -m pipeline.transform.structure.build_bundle \
+python -m pipeline.transform.structure.build_bundle \
   --parse-dir output/demo/parse --src $SRC --embed api --summary lead --out output/demo/bundle
 ```
 
@@ -279,9 +282,9 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 **④ DB 테이블 — Alembic 마이그레이션(스키마마다 처음 한 번 — 1-4)**
 
 ```bash
-.venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle output/demo/bundle --create-extension
-.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0001_search
-.venv/bin/python -m common.store.db.dbtool check --target all      # 기대: 차이 없음
+python -m common.store.db.dbtool up --target all --schema demo --bundle output/demo/bundle --create-extension
+python -m common.store.db.dbtool current --target all    # 기대: search 0001_search
+python -m common.store.db.dbtool check --target all      # 기대: 차이 없음
 ```
 
 - 이 한 번으로 검색 테이블(`0001_search`)이 만들어진다.
@@ -291,7 +294,7 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 **⑤ 적재 — 번들 → pgvector**
 
 ```bash
-.venv/bin/python -m pipeline.load.pgvector_load load --bundle output/demo/bundle
+python -m pipeline.load.pgvector_load load --bundle output/demo/bundle
 ```
 
 - 이미 적재한 문서를 다시 넣을 때는 `--replace`를 붙인다.
@@ -300,7 +303,7 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 **(선택) MCP 없이 검색만 확인**
 
 ```bash
-.venv/bin/python -m mcp_server.cli.ask ask --bundle output/demo/bundle --k 3 --q "<질문>"
+python -m mcp_server.cli.ask ask --bundle output/demo/bundle --k 3 --q "<질문>"
 ```
 
 **⑥ 정리** — 4-5에서 MCP까지 확인한 뒤 `settings.yaml`의 `no_paid_calls`를 `true`로 되돌린다(평소 테스트가 외부를 호출하지 않게).
@@ -314,17 +317,17 @@ O=$PWD/output/demo; SRC=$O/src     # ①과 같은 문서 폴더
 SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
       --set NO_PAID_CALLS=0 --set LLM_BUDGET_USD=0.10 --set LLM_MAX_CALLS=10 --set LLM_SPEND_FILE=$O/spend.json)
 
-.venv/bin/python -m pipeline.cli "${SETS[@]}" parse --src $SRC
-.venv/bin/python -m pipeline.transform.structure.build_bundle "${SETS[@]}" \
+python -m pipeline.cli "${SETS[@]}" parse --src $SRC
+python -m pipeline.transform.structure.build_bundle "${SETS[@]}" \
     --parse-dir $O/parse --src $SRC --embed api --summary lead --out $O/bundle
-.venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle $O/bundle --create-extension
-.venv/bin/python -m pipeline.load.pgvector_load "${SETS[@]}" load --bundle $O/bundle
+python -m common.store.db.dbtool up --target all --schema demo --bundle $O/bundle --create-extension
+python -m pipeline.load.pgvector_load "${SETS[@]}" load --bundle $O/bundle
 
 # ask·MCP는 --set을 받지 않으므로 오버레이 설정 파일(방법 C)로 같은 값을 넘긴다
-SF=$(.venv/bin/python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 \
+SF=$(python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 \
      NO_PAID_CALLS=0 LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_BUNDLE=$O/bundle MCP_PORT=18769)
-SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.ask ask --bundle $O/bundle --k 3 --q "<질문>"
-SETTINGS_FILE=$SF nohup .venv/bin/python -m mcp_server.main > $O/mcp.log 2>&1 & echo $! > $O/mcp.pid
+SETTINGS_FILE=$SF python -m mcp_server.cli.ask ask --bundle $O/bundle --k 3 --q "<질문>"
+SETTINGS_FILE=$SF nohup python -m mcp_server.main > $O/mcp.log 2>&1 & echo $! > $O/mcp.pid
 ```
 실제 임베딩 호출을 확인하려면 `--set EMBED_CACHE=<빈 sqlite 경로>`를 더한다.
 </details>
@@ -332,7 +335,7 @@ SETTINGS_FILE=$SF nohup .venv/bin/python -m mcp_server.main > $O/mcp.log 2>&1 & 
 ### 4-5. 검색 MCP 서버
 
 ```bash
-nohup .venv/bin/python -m mcp_server.main > output/demo/mcp.log 2>&1 & echo $! > output/demo/mcp.pid
+nohup python -m mcp_server.main > output/demo/mcp.log 2>&1 & echo $! > output/demo/mcp.pid
 curl -s http://127.0.0.1:18769/health        # {"ok":true,"ready":true,"store":"pgvector",…}
 kill $(cat output/demo/mcp.pid)              # 끄기 — PID로만(pkill -f 금지)
 ```
@@ -359,7 +362,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 | 하고 싶은 것                  | 명령                                                                                                                                                                    |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 답변 생성 점검(LLM 설정·예산 필요)   | `.venv/bin/python -m validation.e2e.answer_gen --url http://127.0.0.1:18769/mcp --q "<질문>"`                                                                           |
+| 답변 생성 점검(LLM 설정·예산 필요)   | `python -m validation.e2e.answer_gen --url http://127.0.0.1:18769/mcp --q "<질문>"`                                                                           |
 | 이미지 배치 그대로 PC Docker 테스트 | `bash valid_env/docker/smoke_test.sh`                                                                                                                                 |
 | 이미지 로컬 빌드(시험 태그)         | `ALLOW_NO_ASSETS=1 BUILD_ONLY=1 IMAGE_TARGET=pipeline TAG=data-pipeline:<시험 태그> bash deploy/release/build_ship.sh` — TAG를 빼면 `data-pipeline:<VERSION>`(배포용 태그라 남겨 둔다) |
 | 커밋 전 점검                  | `bash deploy/release/lint_changed.sh`(바꾼 .py만 ruff·mypy·모듈 경계 — `FIX=1`이면 자동 수정)                                                                                      |
@@ -619,7 +622,7 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 요약이다. 전체 규칙은 [CLAUDE.md](CLAUDE.md) §2~§5.
 
 - **결과 재사용 키를 함부로 바꾸지 않는다** — 엔진 파일(`pipeline/extract/engines/`)의 바이트, 핸드오프 핑거프린트(`FINGERPRINT`), 레이어 코드 핑거프린트(`code_fp`), 프롬프트 문구. 바뀌면 서버 문서가 다시 파싱된다. 확인:
-`PYTHONPATH=. .venv/bin/python -c "import common as c; from common.core import artifacts as a; print(c.FINGERPRINT, {l: a.code_fp(l) for l in sorted(a.LAYER_CODE)})"`
+`PYTHONPATH=. python -c "import common as c; from common.core import artifacts as a; print(c.FINGERPRINT, {l: a.code_fp(l) for l in sorted(a.LAYER_CODE)})"`
 - **계약은 바꾸지 않는다** — MCP 도구 4개의 이름과 입출력, DB 테이블·컬럼의 이름과 형식(바꾸려면 협의 후 Alembic 마이그레이션으로).
 - **비밀값은 settings.yaml에만** — 문서, 로그, 커밋, 채팅에 쓰지 않는다. `settings.yaml`은 git에 올리지 않는다.
 - **PC에서 운영 시스템에 접속하지 않는다** — `run_docs.py` 로컬 실행 금지, `valid_env/structured/sales.sqlite`는 열지 않는다.
