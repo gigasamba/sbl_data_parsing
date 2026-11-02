@@ -364,7 +364,12 @@ def main():
     if out.resolve() == src.resolve():  # out은 만들어 내는 폴더(지우고 다시 씀) — 원본 폴더면 원본이 지워짐
         raise SystemExit("--out이 원본 폴더와 같음 — 다른 폴더를 지정")
     out.mkdir(parents=True, exist_ok=True)
-    skipped_log = Path(pc.cfg().extract.skipped_log or (out / "skipped.jsonl"))  # S7c — 설정 객체
+    # 운영 고침 10(11-02) — 기록 파일은 하위 폴더 _records/에(파싱 run_all은 이 폴더의 맨 위 파일만 문서로 훑는다 — 기록이 "건너뜀 .csv"로 세지지 않게)
+    records = out / "_records"
+    records.mkdir(exist_ok=True)
+    if (out / "skipped.jsonl").exists() and not (records / "skipped.jsonl").exists():  # 옛 자리의 누적 기록은 옮겨 이어 씀
+        (out / "skipped.jsonl").replace(records / "skipped.jsonl")
+    skipped_log = Path(pc.cfg().extract.skipped_log or (records / "skipped.jsonl"))  # S7c — 설정 객체
     only = {x.strip() for x in Path(a.only).read_text(encoding="utf-8").splitlines() if x.strip()} if a.only else None
     files = sorted(p for p in src.iterdir() if p.is_file() and p.name != ".gitkeep" and (only is None or p.name in only))
     old = {}
@@ -444,24 +449,22 @@ def main():
         w = csv.DictWriter(f, fieldnames=["file", "page", "angle", "orig_sha256", "s0", "s90", "s180", "s270"])
         w.writeheader()
         w.writerows(log)
-    with (out / "skipped.csv").open("w", encoding="utf-8-sig", newline="") as f:  # 건너뛴 문서와 이유(암호 등) — 사람 확인 목록
+    with (records / "skipped.csv").open("w", encoding="utf-8-sig", newline="") as f:  # 건너뛴 문서와 이유(암호 등) — 사람 확인 목록
         w = csv.DictWriter(f, fieldnames=["file", "reason"])
         w.writeheader()
         w.writerows(skipped)
     gone = 0
     names = {p.name for p in files} - {s["file"] for s in skipped} | {
         "rotation.csv",
-        "skipped.csv",
-        "skipped.jsonl",
         ".gitkeep",
-    }  # 원본에서 지워졌거나 중복으로 빠진 파일 → out에서도 뺌(skipped.jsonl은 누적 기록이라 안 지움)
+    }  # 원본에서 지워졌거나 중복으로 빠진 파일 → out에서도 뺌(기록은 _records/ 폴더라 대상 아님 — 옛 자리의 skipped.csv는 지움)
     for q in out.iterdir():  #   (뒤 단계 묶음이 따라감 — PostgreSQL은 안 지움, pl-13)
         if (q.is_file() or q.is_symlink()) and q.name not in names:
             q.unlink()
             gone += 1
     print(
         f"파일 {len(files)}개 → {out} · 회전 보정 {n_rot}개 · 그대로 둠(안 바뀜) {n_skip}개 · 선택에 없어 뺌 {gone}개 · 쪽별 기록 rotation.csv"
-        + (f" · 암호 등으로 건너뜀 {len(skipped)}개(skipped.csv)" if skipped else "")
+        + (f" · 암호 등으로 건너뜀 {len(skipped)}개(_records/skipped.csv)" if skipped else "")
     )
     if skipped:  # D4 — 사유별 건수(PHASE_REPORT엔 prepare 단계 정보가 없어 여기 요약)
         from collections import Counter

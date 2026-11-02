@@ -182,3 +182,27 @@ def _selftest_rotate_fast():
 
 def test_main():  # 옛 `if a.selftest:` 갈래(main() 안)
     selftest()
+
+
+def test_records_outside_scanned_folder():
+    """운영 고침 10(11-02) — 건너뛴 문서 기록(skipped.csv·skipped.jsonl)은 prepared/_records/에. 파싱(run_all)이 훑는 맨 위에는
+    문서와 rotation.csv만 남아, 기록 파일이 "건너뜀(처리 엔진 없음) .csv"로 세지지 않는다. 옛 자리의 누적 기록은 옮겨 이어 쓴다."""
+    import sys
+    import tempfile
+    from unittest import mock
+
+    with tempfile.TemporaryDirectory() as d:
+        src, out = Path(d) / "src", Path(d) / "prepared"
+        src.mkdir()
+        out.mkdir()
+        (src / "a.txt").write_text("hello", encoding="utf-8")
+        (src / "b.zip").write_bytes(b"PK\x03\x04" + b"\x00" * 20)  # 압축 — 건너뜀(unsupported_archive)
+        (out / "skipped.jsonl").write_text(json.dumps({"file": "old.pdf", "reason": "drm_fasoo"}) + "\n", encoding="utf-8")
+        (out / "skipped.csv").write_text("file,reason\n", encoding="utf-8")
+        with mock.patch.object(sys, "argv", ["prepare", "--src", str(src), "--out", str(out)]):
+            M.main()
+        top = sorted(p.name for p in out.iterdir() if p.is_file())
+        assert top == ["a.txt", "rotation.csv"], top
+        recs = [json.loads(ln) for ln in (out / "_records" / "skipped.jsonl").read_text(encoding="utf-8").splitlines()]
+        assert [r["file"] for r in recs] == ["old.pdf", "b.zip"], recs
+        assert "b.zip" in (out / "_records" / "skipped.csv").read_text(encoding="utf-8-sig")

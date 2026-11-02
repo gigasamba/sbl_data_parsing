@@ -47,7 +47,10 @@ def _load_inputs(out, manifest, source_dir, rep, summary, skipped, keep):
     source_dir = Path(source_dir) if source_dir else out / "_source_files"
     rep = Path(rep) if rep else out / "parse" / "_rep" / "index.json"
     summary = Path(summary) if summary else out / "parse" / "parse_summary.json"
-    skipped = Path(skipped) if skipped else out / "prepared" / "skipped.jsonl"
+    if not skipped:  # 운영 고침 10(11-02) — prepare가 기록을 prepared/_records/에 씀(옛 자리 prepared/skipped.jsonl도 읽음)
+        new, old = out / "prepared" / "_records" / "skipped.jsonl", out / "prepared" / "skipped.jsonl"
+        skipped = new if new.exists() or not old.exists() else old
+    skipped = Path(skipped)
     keep = Path(keep) if keep else out / "dedup" / "keep.txt"
     if not manifest.exists():
         raise SystemExit(f"[publish_parse] manifest 없음 — {manifest}(Object Storage·RDB 기원 파싱만 대상, 폴더 직접 파싱은 PM3 범위 밖)")
@@ -160,7 +163,9 @@ def main(argv=None):
     ap.add_argument("--source-dir", help="기본 <out>/_source_files")
     ap.add_argument("--rep", help="기본 <out>/parse/_rep/index.json")
     ap.add_argument("--summary", help="기본 <out>/parse/parse_summary.json")
-    ap.add_argument("--skipped", help="기본 <out>/prepared/skipped.jsonl(DRM·암호 — 없으면 무시)")
+    ap.add_argument(
+        "--skipped", help="기본 <out>/prepared/_records/skipped.jsonl(옛 자리 prepared/skipped.jsonl도 — DRM·암호, 없으면 무시)"
+    )
     ap.add_argument("--keep", help="기본 <out>/dedup/keep.txt(중복 제외 — 없으면 dedup 정보 없음으로 전부 포함)")
     ap.add_argument(
         "--source-system",
