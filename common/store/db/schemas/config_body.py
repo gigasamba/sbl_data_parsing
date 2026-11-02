@@ -3,11 +3,11 @@
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-STACK_BODY_KEYS = ("parse", "source", "embed", "chunk", "graph", "retrieve", "k", "candidates")  # 파일 body 칸(name은 따로, 메모는 docs)
+STACK_BODY_KEYS = ("parse", "source", "embed", "chunk", "graph", "retrieve", "k")  # 파일 body 칸(name은 따로, 메모는 docs)
 
 
 class StackBody(BaseModel):
-    """엔진 구성 설정 칸 — parse = 형식(.pdf_text·.docx …) → 엔진 우선순위, candidates = 비교 후보(파싱 기본 엔진 = parse ∪ candidates)."""
+    """엔진 구성 설정 칸 — parse = 형식(.pdf_text·.docx …) → 엔진 우선순위(비교 후보 candidates 칸은 0.2.0에 지움 — pl-46)."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
     parse: dict[str, list[str]]
@@ -17,7 +17,6 @@ class StackBody(BaseModel):
     graph: str
     retrieve: str
     k: int
-    candidates: list[str] = []
 
     @field_validator("parse")
     @classmethod

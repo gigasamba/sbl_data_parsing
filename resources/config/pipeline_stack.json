@@ -97,13 +97,5 @@
  "graph": "table+entity",
  "retrieve": "hybrid",
  "k": 10,
- "updated": "2026-10-07 19:29",
- "candidates": [
-  "kreuzberg",
-  "qwen_vlm",
-  "anydoc",
-  "docx2python",
-  "pymupdf4llm",
-  "markitdown"
- ]
+ "updated": "2026-10-07 19:29"
 }

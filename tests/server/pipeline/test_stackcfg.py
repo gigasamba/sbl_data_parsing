@@ -17,10 +17,9 @@ def selftest():
         "graph": "table+entity",
         "retrieve": "hybrid",
         "k": 10,
-        "candidates": ["markitdown"],
     }
-    assert engines_of(body) == ["markitdown", "plaintext"] and not engine_problems(body)
-    bad = {**body, "candidates": ["no_such_engine_xyz"]}
+    assert engines_of({**body, "parse": {".txt": ["plaintext", "markitdown"]}}) == ["markitdown", "plaintext"] and not engine_problems(body)
+    bad = {**body, "parse": {".txt": ["no_such_engine_xyz"]}}
     probs = engine_problems(bad)
     assert len(probs) == 1 and "등록 안 됨" in probs[0], probs
     try:
@@ -52,7 +51,7 @@ def selftest():
         cfgfile._CACHE.clear()
         cfgfile._CACHE.update(keep)
     print(
-        "[selftest] stackcfg — 엔진 집합(parse ∪ candidates)·없는 엔진 거부(종료 2)·같은 body → 같은 바이트·저장소 파일 모양·엔진·서버도 같은 파일 통과"
+        "[selftest] stackcfg — 엔진 집합(parse 합집합)·없는 엔진 거부(종료 2)·같은 body → 같은 바이트·저장소 파일 모양·엔진·서버도 같은 파일 통과"
     )
     return 0
 

@@ -92,7 +92,7 @@ def _run_until(args, env, sec):
 
 # ── 단계 2 ───────────────────────────────────────────────────
 def _engines_of(st):
-    """parse ∪ candidates 엔진(정렬) — stackcfg.engines_of 하나로(VS8b R-8)."""
+    """parse 엔진(정렬) — stackcfg.engines_of 하나로(VS8b R-8)."""
     from pipeline.stackcfg import engines_of
 
     return engines_of(st)
@@ -108,10 +108,7 @@ def show_stack(a=None):
     print("| 형식 | 파싱 엔진(우선순위) |\n|---|---|")
     for f, es in sorted(st["parse"].items()):
         print(f"| {f} | {' → '.join(es)} |")
-    print(
-        f"청킹 {st['chunk']} · 임베딩 {st['embed']} · 그래프 {st['graph']} · 검색 {st['retrieve']} · 상위 k {st['k']}"
-        + (f" · 비교 후보 {', '.join(st['candidates'])}" if st.get("candidates") else "")
-    )
+    print(f"청킹 {st['chunk']} · 임베딩 {st['embed']} · 그래프 {st['graph']} · 검색 {st['retrieve']} · 상위 k {st['k']}")
 
 
 # ── 파싱 모듈(run_docs가 문서마다 부름 — 서버 입구는 run_docs 하나, 사용자 10-31) ──────────

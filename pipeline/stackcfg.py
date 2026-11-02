@@ -10,8 +10,8 @@ MAX_PER_TYPE = 2  # 사용자 10-29 — 형식(parse 키)당 엔진 수 상한(r
 
 
 def engines_of(body):
-    """파싱이 돌릴 수 있는 엔진 전부 — parse 목록 ∪ candidates(cli parse·night 기본 엔진과 같은 집합)."""
-    return sorted({e for es in body.get("parse", {}).values() for e in es} | set(body.get("candidates") or []))
+    """파싱이 돌릴 수 있는 엔진 전부 — parse 목록의 합집합(cli parse 기본 엔진과 같은 집합)."""
+    return sorted({e for es in body.get("parse", {}).values() for e in es})
 
 
 def over_limit(body):

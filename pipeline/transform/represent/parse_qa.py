@@ -82,13 +82,13 @@ NATIVE = {
     ".doc": ["office_stdlib", "office"],
     ".xlsx": ["office"],
     ".xlsm": ["office"],
-    ".xls": ["calamine"],
+    ".xls": [],  # calamine(0.2.0 지움 — pl-46): 지정 파서 없음 → 계열 합의(전과 같은 결과 — calamine은 돈 적이 없음)
     ".txt": ["plaintext"],
     ".mht": ["mhtml"],
     ".mhtml": ["mhtml"],
     ".html": ["markitdown"],
     ".htm": ["markitdown"],
-    ".pptx": ["pptx"],
+    ".pptx": [],  # pptx(python_pptx, 0.2.0 지움) — 위와 같음
 }
 
 
@@ -314,7 +314,8 @@ def resolve_ref(doc, ext_key, group, docs_res, truth, akey_dir, meaning=None):
     if ak:
         return "answer_key", "", ak, [], None
     if group == "native":
-        cands = ["pdfplumber"] if ext_key == ".pdf_text" else NATIVE.get(ext_key)
+        # .pdf_text 지정 파서 pdfplumber는 0.2.0에 지움(돈 적 없음 — 결과 같음)
+        cands = [] if ext_key == ".pdf_text" else NATIVE.get(ext_key)
         if cands is None:
             cands = sorted(registry.engines_for(ext_key), key=lambda e: (-(meaning or {}).get(e, 0), e))
         for c in cands:
