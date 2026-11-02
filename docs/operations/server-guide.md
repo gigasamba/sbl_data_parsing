@@ -140,6 +140,7 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 | 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성) · 서버 정답 폴더(settings.yaml 호스트 항목 `pipeline.host.gold_dir` — `run_tool.sh`가 컨테이너 `/data/gold`로 붙임) |
 | 집계 지표 단서어 | 코드 기본값(`mcp_server/services/search/qtype.py` `_AGG_VOCAB_DEFAULT`) — 11-01 사전 파일 `agg_vocab.json`·설정 `search.agg_vocab_file`은 지움(내용이 기본값과 같았음) |
 | MCP 안내 문구 | settings.yaml `mcp.server.instructions`(옛 env `MCP_INSTRUCTIONS`) |
+| EDW 조인 사슬(고객·원천 메타) | `app/deploy/resources/config/edw_chain.yaml`(아래 5-2) |
 
 기밀(실고객·실제품·계약 값)은 **서버 폴더에만** 둔다 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤에는 같은 질문 세트로 검색 결과를 전/후 비교한다(PC 검증 페이지 `validation/search_ui`·답변 점검 `valid_env/answer_test` — `score_gold`·`mcp_eval`은 11-01에 지움).
 
@@ -223,6 +224,30 @@ PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --check 
 PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys; r=T.read_roster(sys.argv[1]); print(len(r), '명', sorted(r)[:5])" <명부 파일>
 PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys; g=T.load_glossary(sys.argv[1]); print(len(g), '개념 반영', sorted(g)[:5])" <용어집 폴더>   # 오류면 여기서 멈춤
 ```
+
+### 5-2. EDW 조인 사슬 고치기 — `edw_chain.yaml`
+적재가 문서마다 고객·원천 메타(`client_edw`·`sf_op_name`·`contract_date` 등)를 채울 때 따라가는 EDW 표·칸 이름과 SFDC 단계 순서는 코드가 아니라 파일 `resources/config/edw_chain.yaml`에 있다(PRD [pl-29](../prd/load.md#pl-29)). 운영 EDW의 표·칸 이름이 다르거나 단계를 바꿀 때 이 파일만 고친다. 사슬의 모양(같은 단계 후보가 둘 이상이면 비움, 기회가 없을 때만 계정, LAS 최신 판)은 코드에 있고 파일로 바꾸지 않는다.
+
+**어디서 고치나**
+- 개발 서버(dev): 코드 폴더의 `/srv/rag/code/live/app/deploy/resources/config/edw_chain.yaml`을 고친다(오버레이 — 다음 적재부터 읽음, 다시 띄울 필요 없음).
+- 운영 서버(prd): 이미지 안에 코드가 구워져 있어 서버에서 직접 고치지 않는다. 개발 서버에서 고치고 확인한 뒤 `bake.sh`로 이미지를 다시 구워 옮긴다(§0-1·release-and-patch §8). 저장소에도 같은 변경을 커밋한다(다음 판에서 덮어쓰이지 않게).
+
+**고치는 법**
+1. 바꿀 표·칸이 EDW에 있는지 먼저 본다 — 검색 MCP `describe_edw`(표 이름) 또는 `query_edw`로 `SELECT TOP 1 <칸들> FROM <스키마.표>`. 칸 이름은 DB 담당자에게 확인한다(refactor.md C-76 ⑦).
+2. 파일을 고친다. 지킬 것:
+   - 표는 `스키마.표`, 칸은 영문·숫자·`_`만(이 이름은 SQL 글자에 그대로 들어가므로 적재가 검사한다). 접두(`prefix`)는 3자.
+   - `out: {gold 칸: EDW 칸}`의 gold 칸은 그 원천 전용 칸과 `client_edw`만 — 문서 키·`created_at`은 안 된다.
+   - SFDC `steps`는 위에서부터 순서대로 본다. 앞 단계에 후보가 있으면 거기서 정한다.
+   - Quote 표가 EDW에 생기면 `steps`의 Quote 주석 줄(`# - {prefix: "0Q0", …}`) 앞의 `# `만 지운다(`optional: true` — 표를 못 읽으면 그 단계만 건너뜀).
+   - 옛 파일은 지우기 전에 `edw_chain.yaml.<날짜>`로 복사해 둔다.
+3. 검사 — 상주 data-pipeline 컨테이너 안에서(적재가 읽는 것과 같은 검사):
+   ```bash
+   docker exec <data-pipeline 상주 컨테이너> python -c "from pipeline.load.edw_meta import load_chain; load_chain(); print('사슬 설정 OK')"
+   ```
+   틀리면 `[edw_meta] 사슬 설정 오류(…)`에 틀린 곳이 모두 나온다. 이 상태로 적재하면 적재가 같은 이유로 멈춘다(빈 메타로 넘어가지 않음).
+4. 문서 몇 건으로 확인 — 다음 정기 실행(또는 `run_docs` 몇 건)의 적재 뒤 `query_edw`·검색 결과에서 그 문서의 `client_edw`·원천 칸이 채워졌는지 본다.
+
+**이미 적재한 문서** — 사슬을 바꿔도 이미 gold에 있는 메타는 저절로 바뀌지 않는다. 바뀐 값이 필요한 문서는 `--replace`로 다시 적재한다(다시 파싱하지 않음 — 메타는 적재 때만 붙는다). 되돌리려면 복사해 둔 옛 파일을 제자리에 두고 같은 검사를 다시 한다.
 
 ## 6. 문제 해결
 
