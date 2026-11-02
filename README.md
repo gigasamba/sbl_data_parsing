@@ -65,7 +65,7 @@ MCP 도구 4개의 이름과 입출력은 외부 클라이언트와의 계약이
 
 - **버전은 저장소 루트 `VERSION` 하나**(SemVer, 지금 `0.1.0`)이고 두 이미지가 함께 쓴다(D-036).
 - 이미지 태그 = 버전(`data-pipeline:0.1.0`, `mcp-server:0.1.0`). 빌드한 커밋은 이미지 라벨 `org.opencontainers.image.revision`에 남는다.
-- 회사 DB `AI.ParsingMeta.pipeline_version`과 실행 보드에도 이 버전이 기록된다(옛 값은 git 커밋 — DB 담당 협의 필요, refactor.md C-62).
+- 회사 DB `AI.ParsingMeta`에도 이 버전이 기록된다 — silver를 만든 판 `silver_version`(지금 칸 이름 `pipeline_version`), gold에 올린 판 `gold_version`(사용자 11-02, refactor.md C-76)(옛 값은 git 커밋 — DB 담당 협의 필요, refactor.md C-62).
 
 ### 1-4. DB — Alembic 마이그레이션
 
