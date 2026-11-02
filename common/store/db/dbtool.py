@@ -75,6 +75,8 @@ def schema_of(target, schema=None):
         schema = conf()["PG_SCHEMA"]
     if not _SCHEMA_RE.fullmatch(schema):
         raise DbToolError(f"검색 스키마 이름이 틀림: {schema!r} — 소문자·숫자·_ 만")
+    if len(schema) > 50:  # 원천 스키마 `<기준>_other`·색인 `ix_<기준>_other_chunk_embq`가 PG 이름 63자를 넘지 않게(pl-28)
+        raise DbToolError(f"기준 스키마 이름이 김({len(schema)}자) — 50자 이하")
     return schema
 
 

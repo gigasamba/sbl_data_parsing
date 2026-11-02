@@ -81,7 +81,13 @@ def _build_retriever():
     st = cur.named()
     bundle = C.cfg().paths.mcp_bundle or str(APP_ROOT / "output" / "edw" / "bundle")  # S7e1 — common 칸(옛 mcp.server.bundle)
     dbs = PGM.connect_sources()  # 원천 스키마 5벌(pl-28) — 실 PG는 풀 하나를 함께 씀
-    Rs = {src: RT.Retriever(bundle, st.get("retrieve", "hybrid"), pg=db) for src, db in dbs.items()}
+    import copy
+
+    base = RT.Retriever(bundle, st.get("retrieve", "hybrid"))  # 묶음(문서 메타)은 한 번만 읽고 원천마다 연결만 바꿔 씀
+    Rs = {}
+    for src, db in dbs.items():
+        Rs[src] = copy.copy(base)
+        Rs[src].pg = db
     _STATE["Rs"], _STATE["dbs"], _STATE["bundle"], _STATE["stack"] = Rs, dbs, bundle, st
     _STATE["version"], _STATE["checked_at"] = _version_of(dbs), time.time()
     old_pool, _STATE["pool"] = _STATE.get("pool"), getattr(next(iter(dbs.values())), "pool_obj", None)

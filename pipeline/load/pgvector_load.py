@@ -165,10 +165,12 @@ def load(db, bundle, replace=False):
     counts = {"docs": 0, "chunks": 0, "terms": 0, "by_source": {}, "meta_missing": meta_missing}
     loaded = []
     if getattr(db, "is_standin", False):
+        # 대역은 스키마마다 파일이라 공용 시퀀스가 없음 — 5벌의 가장 큰 doc_id 다음부터 번호를 줘 겹치지 않게(chunk_key·원문 도구 cursor)
+        nxt = [1 + max(_max_doc_id(sdb) for sdb in dbs.values())]
         for src, idx in by_src.items():
             sdb = dbs[src]
             with sdb.cn.transaction(), sdb.cn.cursor() as cur:
-                c, ld = _load_src(cur, sdb.schema, src, docs, idx, chunks, vecs, meta, replace)
+                c, ld = _load_src(cur, sdb.schema, src, docs, idx, chunks, vecs, meta, replace, nxt)
             _add(counts, src, c)
             loaded += ld
     else:
@@ -185,17 +187,27 @@ def load(db, bundle, replace=False):
     return counts
 
 
+def _max_doc_id(sdb):
+    """대역 원천 파일의 가장 큰 doc_id(표가 아직 없으면 0)."""
+    try:
+        return int(sdb.q(f"SELECT COALESCE(MAX(doc_id), 0) AS m FROM {sdb.schema}.doc")[0]["m"])
+    except Exception:
+        return 0
+
+
 def _add(counts, src, c):
     for k in ("docs", "chunks", "terms"):
         counts[k] += c[k]
     counts["by_source"][src] = c
 
 
-def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace):
+def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
     """원천 스키마 s 하나에 문서 idx(docs.jsonl 줄 번호)를 적재 — 반환 (건수, [(source_system, file_path) — 새로 넣은 문서])."""
     from common.store.db.models import search_tables as ST
 
-    cols = ST.doc_columns(src)[1:]  # doc_id 빼고
+    cols = ST.doc_columns(src)[1:]  # doc_id 빼고(실 PG는 공용 시퀀스 기본값)
+    if nxt is not None:  # 대역 — 번호를 직접 줌
+        cols = ["doc_id", *cols]
     chunk_extra = [n for n, _ in ST.CHUNK_EXTRA.get(src, ())]
     cur.execute(f"SELECT file_path, doc_id FROM {s}.doc")
     have = {r[0]: r[1] for r in cur.fetchall()}
@@ -210,6 +222,7 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace):
             cur.execute(f"DELETE FROM {_tbl(s, 'doc')} WHERE doc_id=%s", (old,))  # chunk는 ON DELETE CASCADE
         row = {
             **{c: d.get(c) for c in cols},
+            "doc_id": nxt[0] if nxt is not None else None,
             "created_at": _kst(d.get("created_at")),
             "clients_doc": json.dumps(d["clients"], ensure_ascii=False) if d.get("clients") else None,
         }
@@ -218,6 +231,8 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace):
             tuple(row[c] for c in cols),
         )
         doc_id[i] = cur.fetchone()[0]
+        if nxt is not None:
+            nxt[0] += 1
         loaded.append((d.get("source_system"), d["file_path"]))
     sel = [ci for ci, c in enumerate(chunks) if c["doc"] in doc_id]
     ci_db = {}

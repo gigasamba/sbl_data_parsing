@@ -47,6 +47,7 @@ ROWS: dict[str, list[tuple]] = {  # 가짜 데이터 — 사슬 단계마다 문
         ("cd5", "001ACC2", 0),
         ("cd6", "006A", 0),
         ("cd6", "006B", 0),
+        ("cd6", "001ACC1", 0),  # 기회가 동률이면 계정 직접이 있어도 고객을 붙이지 않음
         ("cd1", "006B", 1),  # 지운 연결(IsDeleted=1)은 안 봄
     ],
     "SFDC.Task": [("00TT1", "006B")],
@@ -97,7 +98,7 @@ def test_chains():
         ("SFDC/d1/opp.pdf", "project_code__c", "P001"),
         ("SFDC/d1/opp.pdf", "service_type", "CDO"),
         ("SFDC/d1/opp.pdf", "contract_date", "2025-05-01"),
-        ("SFDC/d1/opp.pdf", "created_at", "2024-12-01 09:00:00"),  # ContentVersion.CreatedDate
+        ("SFDC/d1/opp.pdf", "created_at", "2024-12-01 09:00:00+00:00"),  # ContentVersion.CreatedDate(UTC)
         ("SFDC/d2/task.pdf", "sf_op_id", "006B"),
         ("SFDC/d2/task.pdf", "client_edw", "Beta"),
         ("SFDC/d3/event.pdf", "sf_op_id", "006A"),
@@ -118,8 +119,10 @@ def test_chains():
         ("FAQ/f1/q.xlsx", "created_at", "2025-04-01 00:00:00"),
     ]
     for key, col, want in cases:
-        assert out[key].get(col) == want, (key, col, out[key])
+        got = out[key].get(col)
+        assert (None if got is None else str(got)) == want, (key, col, out[key])
     assert missing == 0, missing
+    assert str(M._date("20250210")) == "2025-02-10" and M._date("bad") is None and M._ts("20250211080000").hour == 8  # EDW 글자 꼴
     # Quote 표가 없는 EDW(서버 지금) — 그 단계만 건너뜀, 나머지는 그대로
     e2 = _edw(str(d / "edw2.sqlite"), quote=False)
     try:

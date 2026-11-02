@@ -26,6 +26,7 @@ _EXACT_COLS = {
     "FAQ_group": "faq_group",  # faq.chunk만(C4)
 }
 NO_QUESTION = "question is required — 질문 없이 문서를 고르려면 list_doc_fulltext, 원천 값 조회는 query_edw"
+_SYSTEMS = ("SFDC", "CRMS", "LAS", "FAQ", "OTHER")
 NO_SOURCE = "source_system is required — exactly one of SFDC, CRMS, LAS, FAQ, Other(원천마다 따로 찾음 — 여러 원천은 여러 번 부름, G20)"
 
 
@@ -166,6 +167,8 @@ def do_search(question=None, k=8, **filters):
         return {"error": NO_SOURCE}
     if isinstance(sysv, list):
         hard["source_system"] = sysv = sysv[0]
+    if str(sysv).upper() not in _SYSTEMS:  # 다섯 값 밖은 거부(조용히 other로 찾지 않음)
+        return {"error": NO_SOURCE}
     from common.store.db.models import search_tables as ST
 
     src = ST.source_of(sysv)

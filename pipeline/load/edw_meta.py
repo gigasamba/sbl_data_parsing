@@ -10,6 +10,7 @@
 EDW를 못 열면 빈 dict와 경고(적재는 메타를 비운 채 계속 — 사용자 11-02, 자동 갱신 없음: 나중에 --replace로 다시 적재해 채움)."""
 
 import sys
+from datetime import UTC, date, datetime
 
 from common.store.db.models import search_tables as ST
 
@@ -78,15 +79,44 @@ def fetch(docs, edw=None):
     finally:
         if own:
             edw.close()
-    return out, sum(1 for _, p in docs if p not in out)
+    return out, sum(1 for _, p in docs if not any(v is not None for v in (out.get(p) or {}).values()))
 
 
 def _plain(edw, paths):
     """FAQ·Other — 등록 시각만(FileStorageMap.created_at)."""
     return {
-        r["s3_key"]: {"created_at": r["created_at"]}
+        r["s3_key"]: {"created_at": _ts(r["created_at"])}
         for r in edw.q_in("SELECT s3_key, created_at FROM AI.FileStorageMap WHERE s3_key IN ({IN})", paths)
     }
+
+
+def _ts(v, tz=None):
+    """EDW 시각(datetime·'YYYY-MM-DD HH:MM:SS'·'YYYYMMDDHHMMSS') → datetime(시간대 없는 값은 tz — 기본 그대로 두어 적재가 KST로 읽음). 못 읽으면 None."""
+    if v in (None, ""):
+        return None
+    if isinstance(v, datetime):
+        return v if v.tzinfo or tz is None else v.replace(tzinfo=tz)
+    t = str(v).strip()
+    try:
+        d = datetime.strptime(t[:14], "%Y%m%d%H%M%S") if len(t) >= 14 and t[:14].isdigit() else datetime.fromisoformat(t)
+    except ValueError:
+        return None
+    return d if d.tzinfo or tz is None else d.replace(tzinfo=tz)
+
+
+def _date(v):
+    """EDW 날짜(date·datetime·'YYYY-MM-DD…'·'YYYYMMDD…') → date. 못 읽으면 None(DATE 칸에 넣다 적재 전체가 되돌려지지 않게)."""
+    if v in (None, ""):
+        return None
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    t = str(v).strip()
+    try:
+        return datetime.strptime(t[:8], "%Y%m%d").date() if t[:8].isdigit() else date.fromisoformat(t[:10])
+    except ValueError:
+        return None
 
 
 def _one(values):
@@ -129,19 +159,19 @@ def _sfdc(edw, paths):
             [what.get(e, "") for e in le if e.startswith("00U") and what.get(e, "").startswith("006")],
             [str(quote[e]["OpportunityId"] or "") for e in le if e in quote],
         ]
-        opp = None
+        opp, had_opp = None, False
         for cand in steps:  # 단계 순서대로 — 그 단계에 후보가 있으면 거기서 정함(둘 이상이면 비움)
             if {c for c in cand if c}:
-                opp = _one(cand)
+                opp, had_opp = _one(cand), True
                 break
         acc_steps = [[w for w in task_ev if w.startswith("001")], [e for e in le if e.startswith("001")]]
         acc = None
-        if not opp:
+        if not had_opp:  # 기회 후보가 아예 없을 때만 계정 단계로(기회가 동률이면 고객도 비움 — 다른 사슬의 고객을 붙이지 않음)
             for cand in acc_steps:
                 if {c for c in cand if c}:
                     acc = _one(cand)
                     break
-        pick[f["s3_key"]] = (opp, acc, f.get("cv_created") or f.get("created_at"))
+        pick[f["s3_key"]] = (opp, acc, _ts(f.get("cv_created"), UTC) or _ts(f.get("created_at")))  # SFDC CreatedDate는 UTC
     opps = {
         r["Id"]: r
         for r in edw.q_in(
@@ -160,7 +190,7 @@ def _sfdc(edw, paths):
             "sf_op_name": o.get("Name"),
             "project_code__c": o.get("Project_Code__c"),
             "service_type": o.get("Record_Type__c"),
-            "contract_date": o.get("X1st_Contract_Execution_Date__c"),
+            "contract_date": _date(o.get("X1st_Contract_Execution_Date__c")),
             "client_edw": accs.get(o.get("AccountId") or acc),
         }
     return out
@@ -177,12 +207,12 @@ def _crms(edw, paths):
     )
     return {
         r["s3_key"]: {
-            "created_at": r["docu_dt"] or r["created_at"],
+            "created_at": _ts(r["docu_dt"]) or _ts(r["created_at"]),
             "client_edw": r["SF_ACC_NAME"],
             "division": r["DIVISION"],
             "prod_name": r["RM_CONTRACT_NAME"],
             "contract_id": r["rm_contract_code"],
-            "contract_date": r["contract_dt"],
+            "contract_date": _date(r["contract_dt"]),
         }
         for r in rows
     }
@@ -207,9 +237,9 @@ def _las(edw, paths):
     for r in rows:
         c = contracts.get(r["manage_no"]) or {}
         out[r["s3_key"]] = {
-            "created_at": r["file_dt"] or r["created_at"],
+            "created_at": _ts(r["file_dt"]) or _ts(r["created_at"]),
             "contract_id": r["manage_no"] or c.get("ContractID"),
-            "contract_date": c.get("ContractDate") or r["signed_date"],
+            "contract_date": _date(c.get("ContractDate")) or _date(r["signed_date"]),
             "client_edw": c.get("PartnerCorpName") or None,  # 지금은 모두 비어 있음(상대사 출처 미정 — G2)
         }
     return out

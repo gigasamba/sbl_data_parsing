@@ -208,7 +208,9 @@ class MssqlStore:
             else:
                 cur.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=%s", (self.table_name,))
             found = {r[0] for r in cur.fetchall()}
-            self._kc = "s3_key" if "s3_key" in found else "source_key"  # 11-02 — DB 담당자 칸 이름 바꾸기 전후 모두
+            self._kc = (
+                "s3_key" if "s3_key" in found and "source_key" not in found else "source_key"
+            )  # 11-02 — 바꾸기 전후 모두(둘 다 있는 중간 상태는 옛 칸)
             if self._kc == "s3_key":
                 found.add("source_key")  # 코드 안 이름 source_key → 실제 칸 s3_key(_insert_new_rows가 바꿔 씀)
             self._cols = [c for c in COLUMNS if c in found]
@@ -300,7 +302,7 @@ class SqliteStore:
 
     def key_col(self):
         cols = {r[1] for r in self.cn.execute(f"PRAGMA table_info({self.table})")}
-        return "s3_key" if "s3_key" in cols else "source_key"
+        return "s3_key" if "s3_key" in cols and "source_key" not in cols else "source_key"
 
     def rows_where(self, col, values):
         return _rows_where(self.cn.cursor(), self.table, "?", col, values, self.key_col())

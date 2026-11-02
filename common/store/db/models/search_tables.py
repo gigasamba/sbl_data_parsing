@@ -77,7 +77,9 @@ def search_metadata(schema, dim, shared_seq=True):
         raise ValueError(f"원천 스키마 이름이 아님(<기준>_<{'|'.join(SOURCES)}>): {schema!r}")
     md = MetaData(schema=schema)
     doc_id = (
-        Column("doc_id", Integer, primary_key=True, server_default=text(f"nextval('{base}.{SEQ}'::regclass)"))
+        Column(
+            "doc_id", Integer, primary_key=True, server_default=text(f"nextval('{base}.{SEQ}')")
+        )  # PG가 ::regclass를 붙여 저장 — Alembic 비교는 그것을 떼고 봄
         if shared_seq
         else Column("doc_id", Integer, primary_key=True)
     )

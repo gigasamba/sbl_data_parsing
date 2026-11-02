@@ -467,8 +467,8 @@ def edw_done_keys():
 
     conn = _edw_connect()  # S7e1 — 설정 파일의 parsing-meta 접속(옛 코드 기본값 — 운영 접속 값·비밀 삭제, D-028 ⑨)
     cur = conn.cursor()
-    cur.execute("SELECT COL_LENGTH('AI.ParsingMeta', 's3_key')")  # 11-02 — 원본 키 칸 이름 바꾸기(source_key → s3_key, C-76) 전후 모두
-    kc = "s3_key" if cur.fetchone()[0] is not None else "source_key"
+    cur.execute("SELECT COL_LENGTH('AI.ParsingMeta', 'source_key')")  # 11-02 — 원본 키 칸 이름 바꾸기(source_key → s3_key, C-76) 전후 모두
+    kc = "source_key" if cur.fetchone()[0] is not None else "s3_key"
     cur.execute(f"SELECT {kc} FROM AI.ParsingMeta WHERE parse_status IN ('ok','partial')")
     keys = {r[0] for r in cur.fetchall()}
     conn.close()
