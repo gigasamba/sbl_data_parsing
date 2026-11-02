@@ -73,8 +73,8 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 
 | 마이그레이션 | 스키마 | 만드는 것 |
 |---|---|---|
-| `0001_search` | 검색 스키마(`required.pg.db_schema`, 예: `ai`) — `--target search` | `doc` · `chunk` · `chunk_term` · `term_stat` · `corpus_stat` · `load_run` 테이블, 색인, 뷰 `v_chunk_source`(벡터 차원은 번들 `meta.json` 또는 `--dim`) |
-| `0002_search` | 같은 검색 스키마(11-01 — mc-16) | `doc`에 `doc_class`·`created_at`·`rep_key` 칸, 뷰 `v_chunk_source` 끝에 같은 칸 |
+| `0001_search` | 기준 스키마(`required.pg.db_schema`, 예: `ai`) — `--target search` | 옛 한 벌 표(0002가 지움) |
+| `0002_search` | 기준 스키마 + 원천 스키마 5벌(11-02 — pl-28) | 기준 `ai`: 판 표·공용 `doc_id_seq` · 원천마다 `ai_sfdc`·`ai_crms`·`ai_las`·`ai_faq`·`ai_other`: `doc` · `chunk` · `chunk_term` · `term_stat` · `corpus_stat` 테이블, 색인, 뷰 `v_chunk_source`(벡터 차원은 번들 `meta.json` 또는 `--dim`) |
 
 - **엔진 구성은 DB가 아니라 파일이다** — 서버·PC 모두 `resources/config/pipeline_stack.json`을 읽는다(5-7). 원천 목록 `sources.json`은 11-01에 지웠다(원천은 폴더·`rdb:csv`만). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다(그대로 두거나 DB 담당자가 지움).
 - **실행 기록은 파일이 아니라 DB에 남는다** — 스키마마다 `<스키마>.alembic_version`.

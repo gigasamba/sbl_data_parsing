@@ -13,7 +13,7 @@
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
 |---|---|---|---|
 | 원천과 가져오기 | done | 폴더·`rdb:csv`(11-01 — S3·RDB 직접 지움) · 증분 · warm | [pl-01](prd/extract.md#pl-01) |
-| EDW 고객 매핑을 파이프라인이 만듦 | todo | FileStorageMap 조인 · `file_meta` 대체 | [pl-29](prd/extract.md#pl-29) |
+| EDW 고객 매핑을 파이프라인이 만듦 | done | 적재 때 EDW 조인(SFDC 4단계·CRMS·LAS) · `file_meta` 지움(11-02) | [pl-29](prd/extract.md#pl-29) |
 | 준비 | done | 중복 · 회전 · DRM 감지 | [pl-02](prd/extract.md#pl-02) |
 | FAQ 원천 — 질의응답 엑셀 행 단위 | todo | 시트 = FAQ_group · 행 = 청크 · FileStorageMap FAQ · 0.2.0 | [pl-39](prd/extract.md#pl-39) |
 
@@ -57,14 +57,14 @@
 | 마스터 CSV 활용 방안 설계 | todo | 고객 별칭 CSV 0.2.0 · 나머지 후순위 · grill | [pl-38](prd/load.md#pl-38) |
 | 저장 구조 — silver OS uuid 폴더 · 메타 EDW · gold pgvector | todo | uuid5 폴더 · 최신 행만 · 로컬 상태 지움 · 0.2.0 | [pl-32](prd/load.md#pl-32) |
 | DB 스키마 명세 | dev | `db_schema.md` · 시험 · 승인 | [pl-25](prd/load-schema.md#pl-25) |
-| 원천 시스템별 gold 스키마(0.2.0) | todo | 시스템별 PG 스키마 · 메타는 `doc`에만 · `source_system` 필수 하나 · ParsingMeta는 파싱 정보만 | [pl-28](prd/load-schema.md#pl-28) |
+| 원천 시스템별 gold 스키마(0.2.0) | done | 시스템별 PG 스키마 · 메타는 `doc`에만 · `source_system` 필수 하나 · ParsingMeta는 파싱 정보만 | [pl-28](prd/load-schema.md#pl-28) |
 
 ## 검색 MCP (mcp)
 | 묶음 (L4) | 상태 | 단계 (L5) | ID |
 |---|---|---|---|
 | `search` 도구 | done | **일부 지움**(PC 묶음 검색·PG 대역 — 사용자 10-31) · 세 방식 · 혼합 찾기 · 근거 출력 | [mc-01](prd/mcp.md#mc-01) |
 | 질문 넓히기 | done | 용어집 · 고객별 나누기 · 질문 유형 | [mc-02](prd/mcp.md#mc-02) |
-| 고객 범위·판·중복 | todo | 고객 범위 · 숨김 · 최신 판 | [mc-05](prd/mcp.md#mc-05) |
+| 고객 범위·판·중복 | todo | 고객 = client_edw만(11-02 done) · 최신성 순위 created_at(남음) | [mc-05](prd/mcp.md#mc-05) |
 | 집계 답 | done | **지움**(사용자 10-31) · 규칙 집계 · 통화 · LLM 라우터 | [mc-04](prd/mcp.md#mc-04) |
 | 집계 길이 지운 칸을 고름 | done | `aggregate.pg()` 지움(mc-12와 함께) | [mc-11](prd/mcp.md#mc-11) |
 | 사실 집계가 지운 `doc_fact` 질의 | done | PG 집계 길 지움 · 숫자는 `query_edw` | [mc-12](prd/mcp.md#mc-12) |

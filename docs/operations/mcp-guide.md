@@ -47,17 +47,17 @@
 |---|---|---|---|---|
 | `question` | 글자 | 예 | — | 빠지면 MCP 스키마 오류(`Field required`, 도구가 돌기 전). 빈 글자면 `{"error": "question is required — …"}` |
 | `k` | 정수 | 아니요 | 8 | 상한 50 — 더 크면 50으로 줄인다(오류 아님). 근거 개수의 최대값 |
-| `source_system` | 글자 또는 목록 | 아니요 | — | `SFDC`·`CRMS`·`LAS`·`FAQ`. `-test`가 붙은 값(`SFDC-test`)도 같은 뜻 |
-| `client` | 글자 또는 목록 | 아니요 | — | 고객(계정) 이름 전체, 정확 일치. 목록은 OR |
+| `source_system` | 글자(목록이면 값 하나) | **예** | — | `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other` 중 **하나** — 그 원천의 문서만 찾는다(원천마다 따로 색인). `-test`가 붙은 값(`SFDC-test`)도 같은 뜻. 빠지거나 둘 이상이면 `{"error": "source_system is required …"}` |
+| `client` | 글자 또는 목록 | 아니요 | — | EDW 고객 이름 전체(`client_edw`), 정확 일치. 목록은 OR. 채워지는 원천: SFDC(영업 기회의 계정)·CRMS(계약 목록의 고객) — LAS·FAQ는 고객이 없어 0건 |
 | `client_like` | 참·거짓 | 아니요 | — | `true`면 `client`를 부분 일치로. `client`와 함께만 뜻이 있다 |
-| `project_id` | 글자 또는 목록 | 아니요 | — | 프로젝트 코드, 정확 일치 |
-| `division` | 글자 또는 목록 | 아니요 | — | 예 `CD`·`DS`·`DP`, 정확 일치(`D`는 0건) |
-| `service_type` | 글자 또는 목록 | 아니요 | — | 예 `CDO`·`CMO DS`·`CMO DP`·`ADC`·`mRNA`·`New Platform`, 정확 일치 |
-| `FAQ_group` | 글자 또는 목록 | 아니요 | — | FAQ 시트 이름(`DP`·`FMD`·`Study` 등) |
-| `doc_class` | 글자 또는 목록 | 아니요 | — | SFDC: `Proposal`·`RFP`·`RFI`·`RFI+RFP`·`Other` / LAS: `MSA`·`PSA`·`QAG`·`LOI`·`Amendment`·`Assignment Letter`·`Other`. 제 원천의 분류값끼리만 맞음 |
-| `sf_op_id` | 글자 또는 목록 | 아니요 | — | SFDC 영업 기회 id(18자 `006…`) |
-| `sf_op_name` | 글자 또는 목록 | 아니요 | — | 영업 기회 이름 전체 |
-| `contract_id` | 글자 또는 목록 | 아니요 | — | 계약 코드 |
+| `project_id` | 글자 또는 목록 | 아니요 | — | 프로젝트 코드, 정확 일치 — SFDC만 |
+| `division` | 글자 또는 목록 | 아니요 | — | 예 `CD`·`DS`·`DP`, 정확 일치(`D`는 0건) — CRMS만 |
+| `service_type` | 글자 또는 목록 | 아니요 | — | 예 `CDO`·`CMO DS`·`CMO DP`·`ADC`·`mRNA`·`New Platform`, 정확 일치 — SFDC만 |
+| `FAQ_group` | 글자 또는 목록 | 아니요 | — | FAQ 시트 이름(`DP`·`FMD`·`Study` 등) — FAQ만 |
+| `doc_class` | 글자 또는 목록 | 아니요 | — | SFDC: `Proposal`·`RFP`·`RFI`·`RFI+RFP`·`Other` / LAS: `MSA`·`PSA`·`QAG`·`LOI`·`Amendment`·`Assignment Letter`·`Other`. SFDC·LAS만 — 제 원천의 분류값끼리만 맞음 |
+| `sf_op_id` | 글자 또는 목록 | 아니요 | — | SFDC 영업 기회 id(18자 `006…`) — SFDC만 |
+| `sf_op_name` | 글자 또는 목록 | 아니요 | — | 영업 기회 이름 전체 — SFDC만 |
+| `contract_id` | 글자 또는 목록 | 아니요 | — | 계약 코드 — CRMS(계약 코드)·LAS(관리 번호) |
 | `created_since` | 글자 | 아니요 | — | 원천 등록 시각부터. `YYYY-MM-DD`(그날 00:00 KST부터) 또는 ISO 8601 시각(시간대 없으면 KST) |
 | `created_until` | 글자 | 아니요 | — | 원천 등록 시각까지. 날짜만 주면 그날 전체 포함(다음 날 00:00 미만) |
 <!-- /guide:search-inputs -->
@@ -67,8 +67,9 @@
 - 모르는 인자(예 `"year": 2025`)는 오류 없이 무시한다.
 - 거르기에 맞는 문서가 없으면 오류가 아니라 빈 결과다(`evidence: []`, `scope_docs: 0`, `evidence_status: "none"`).
 - `created_since`·`created_until`을 주면 등록 시각이 없는 문서는 빠진다. 날짜 형식이 틀리면 `{"error": "created_since/created_until 형식 — …"}`.
-- 거르기를 하나 이상 주기를 권한다(강제하지 않음). 범위가 좁을수록 근거가 촘촘하고 빠르다.
-- **⚠ 운영과 다름:** ① 운영은 `client`만 목록을 받는다 — 여기서는 모든 거르기가 목록을 받는다(운영처럼 부르면 그대로 된다). ② `FAQ_group`은 지금 늘 0건이다 — FAQ 원천을 아직 적재하지 않았다([pl-39](../prd/extract.md#pl-39)). ③ `client`는 계정 이름 또는 문서의 고객 라벨과 정확히 맞춘다 — 운영의 고객 별칭 묶음은 없다. ④ 응답 크기가 상한(`MCP_MAX_CHARS`)을 넘으면 낮은 순위 근거부터 줄이되 표시 칸은 붙이지 않는다.
+- 고른 원천에 없는 칸의 거르기(예: `source_system: "CRMS"`에 `sf_op_id`)는 오류가 아니라 0건이다(위 표의 "…만").
+- `source_system` 말고 거르기를 더 주면 범위가 좁아져 근거가 촘촘하고 빠르다.
+- **⚠ 운영과 다름:** ① **`source_system`이 필수·값 하나**다(운영은 선택) — 원천마다 따로 색인해 점수를 섞지 않는다. 여러 원천은 여러 번 부른다. ② 운영은 `client`만 목록을 받는다 — 여기서는 모든 거르기가 목록을 받는다. ③ `client`는 EDW 고객(`client_edw`)만 본다 — 운영의 문서 고객 라벨 대체·별칭 묶음은 없다. ④ `FAQ_group`은 FAQ를 적재한 뒤에 결과가 나온다([pl-39](../prd/extract.md#pl-39)). ⑤ 응답 크기가 상한(`MCP_MAX_CHARS`)을 넘으면 낮은 순위 근거부터 줄이되 표시 칸은 붙이지 않는다.
 
 ### 4-2. 돌려주는 모양
 
@@ -78,8 +79,8 @@
 | `question` | 글자 | 늘 | 받은 질문 그대로 |
 | `evidence` | 목록 | 늘 | 근거 청크, 순위 순. 최대 `k`개(없으면 빈 목록) |
 | `evidence_status` | 글자 | 늘 | `found`(근거 있음) · `weak`(근거는 있으나 질문 핵심어가 근거에 없거나 점수가 서버 하한 미만) · `none`(근거 0개) |
-| `filter` | 객체 | 거르기를 줬을 때만 | 정리한 거르기 메아리(예 `{"source_system": "SFDC"}` — `-test`는 떼어 냄) |
-| `scope_docs` | 정수 | 거르기를 줬을 때만 | 거르기에 맞은 문서 수 — 검색은 이 문서들 안에서만 했다 |
+| `filter` | 객체 | 늘(`source_system`이 필수라) | 정리한 거르기 메아리(예 `{"source_system": "SFDC"}` — `-test`는 떼어 냄) |
+| `scope_docs` | 정수 | 늘 | 거르기에 맞은 문서 수(`source_system`만 주면 그 원천의 문서 수) — 검색은 이 문서들 안에서만 했다 |
 <!-- /guide:search-top -->
 
 근거 한 건(`evidence[]`)은 늘 12칸이다. 값이 없으면 `null`.
@@ -89,29 +90,30 @@
 |---|---|---|
 | `text` | 글자 | 청크 본문(표는 행 글자로) |
 | `file_name` | 글자 | 원본 파일 이름 — `list_doc_fulltext(docs=[file_name])`로 잇는 다리 |
-| `file_path` | 글자 | 서버 안 원본 경로 |
+| `file_path` | 글자 | Object Storage 원본 경로(EDW `FileStorageMap.s3_key`와 같은 값) ⚠ 운영은 서버 안 경로 |
 | `page` | 정수 또는 null | 쪽 번호 |
 | `line` | 글자 또는 null | 줄 범위(예 `"27-28"`) |
 | `section` | 글자 또는 null | 절 제목 |
-| `client` | 글자 또는 null | 문서 고객 |
+| `client` | 글자 또는 null | EDW 고객(`client_edw`) |
 | `contract_no` | 글자 또는 null | 계약 번호 |
 | `doc_date` | 글자 또는 null | 문서 날짜 |
 | `version` | 글자 또는 null | 문서 판 — 수집 목록(manifest)에 값이 있을 때만 |
 | `superseded` | null | 구판 표시 — 지금은 늘 null([mc-05](../prd/mcp.md#mc-05): 본문 글자로 추정한 값은 내보내지 않음) |
-| `chunk_key` | 글자 | 청크를 다시 가리키는 키 |
+| `chunk_key` | 글자 | 청크를 다시 가리키는 키 `<doc_id>:<seq>` ⚠ 운영은 `<file_path>:<순번>` |
 <!-- /guide:evidence -->
 
 ### 4-3. 예
 
 ```json
 {"name": "search", "arguments": {"question": "<주제> 단가", "source_system": "SFDC", "k": 3}}
-{"name": "search", "arguments": {"question": "<주제>", "sf_op_id": "006<…>"}}
-{"name": "search", "arguments": {"question": "<주제>", "client": ["<고객 A>", "<고객 B>"], "doc_class": "RFI", "k": 5}}
-{"name": "search", "arguments": {"question": "<주제>", "client": "<이름 일부>", "client_like": true}}
-{"name": "search", "arguments": {"question": "<주제>", "project_id": "<코드>", "division": "DS", "service_type": "CDO"}}
+{"name": "search", "arguments": {"question": "<주제>", "source_system": "SFDC", "sf_op_id": "006<…>"}}
+{"name": "search", "arguments": {"question": "<주제>", "source_system": "SFDC", "client": ["<고객 A>", "<고객 B>"], "doc_class": "RFI", "k": 5}}
+{"name": "search", "arguments": {"question": "<주제>", "source_system": "CRMS", "client": "<이름 일부>", "client_like": true}}
+{"name": "search", "arguments": {"question": "<주제>", "source_system": "SFDC", "project_id": "<코드>", "service_type": "CDO"}}
+{"name": "search", "arguments": {"question": "<주제>", "source_system": "CRMS", "division": "DS"}}
 {"name": "search", "arguments": {"question": "<주제>", "source_system": "LAS", "doc_class": "MSA", "contract_id": "<계약 코드>"}}
-{"name": "search", "arguments": {"question": "<주제>", "sf_op_name": "<영업 기회 이름 전체>"}}
-{"name": "search", "arguments": {"question": "<FAQ 질문>", "FAQ_group": "DP"}}
+{"name": "search", "arguments": {"question": "<주제>", "source_system": "SFDC", "sf_op_name": "<영업 기회 이름 전체>"}}
+{"name": "search", "arguments": {"question": "<FAQ 질문>", "source_system": "FAQ", "FAQ_group": "DP"}}
 {"name": "search", "arguments": {"question": "<주제>", "source_system": "CRMS", "created_since": "2025-01-01", "created_until": "2025-06-30"}}
 ```
 
@@ -119,8 +121,8 @@
 
 ```json
 {"question": "<주제> 단가", "evidence": [
-  {"text": "… 단가 100 USD …", "file_name": "<파일>.pdf", "file_path": "/app/output/prepared/<파일>.pdf", "page": 3, "line": "27-28",
-   "section": "가격", "client": null, "contract_no": null, "doc_date": null, "version": null, "superseded": null, "chunk_key": "<키>"}],
+  {"text": "… 단가 100 USD …", "file_name": "<파일>.pdf", "file_path": "SFDC/<uuid>/<파일>.pdf", "page": 3, "line": "27-28",
+   "section": "가격", "client": null, "contract_no": null, "doc_date": null, "version": null, "superseded": null, "chunk_key": "<doc_id>:<seq>"}],
  "evidence_status": "found", "filter": {"source_system": "SFDC"}, "scope_docs": 1234}
 ```
 
@@ -134,7 +136,7 @@
 | 이름 | 형식 | 기본 | 한도·규칙 |
 |---|---|---|---|
 | `docs` | 글자 목록 | — | 원본 파일 이름(확장자 포함 — 빼면 0건) · 원본 전체 경로(`/`가 들어간 값 — 정확히 하나) · 64자 `doc_key`(섞어도 됨). 200개까지 — 넘으면 `bad_request` |
-| `source_system` | 글자 | — | `SFDC`·`CRMS`·`LAS`·`FAQ`(`-test` 붙어도 같은 뜻) |
+| `source_system` | 글자 | — | `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`(`-test` 붙어도 같은 뜻) — 안 주면 원천 5개 모두에서 고름 |
 | `doc_class` | 글자 | — | 분류값, 정확 일치 |
 | `sf_op_id` | 글자 | — | 영업 기회 id, 정확 일치 |
 | `since` | 글자 | — | 파싱 시각부터. `YYYY-MM-DD` 또는 `YYYY-MM-DD HH:MM:SS`(시간대 없이 — KST) |
