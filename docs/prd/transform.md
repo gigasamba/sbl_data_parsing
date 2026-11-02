@@ -70,7 +70,7 @@
 - 이유: C-50.
 - 파일: `pipeline/config.py`(`paths.stack_snapshot`), `docs/architecture/pipeline_stack.md`.
 - 사용자 10-30: 스냅샷 파일 대신 silver는 Object Storage uuid 폴더, 메타는 EDW ParsingMeta(단계별·성공 시), gold는 pgvector만.
-- Status: done — 대체됨(10-30): [load.md#pl-32](load.md#pl-32)가 대신함(`_stack/stack-v*.json`·`STACK_SNAPSHOT` 지움).
+- Status: done — 대체됨(10-30): [load-schema.md#pl-32](load-schema.md#pl-32)가 대신함(`_stack/stack-v*.json`·`STACK_SNAPSHOT` 지움).
 
 <a id="pl-17"></a>
 ## pl-17 · 파싱 단계 위치 — `extract` 또는 `transform`
@@ -143,7 +143,7 @@
 - 결정(G1·G8 — 2차 grill(사용자 10-30, 원본은 git 밖); G19로 고침): `doc_class`는 시스템별 gold `doc`에만 쓴다(EDW `ParsingMeta`에는 쓰지 않음 — [pl-25](load-schema.md#pl-25) G19). FAQ는 분류하지 않는다([pl-39](extract.md#pl-39)).
 - 결정(G10 — 3차 grill(사용자 10-30, 원본은 git 밖)): 분류에 실패한 문서(`doc_class` NULL — LLM 실패나 라벨 밖 값)는 자동으로 다시 하지 않는다. 수동 명령으로만 다시 분류한다([pl-40](load.md#pl-40), [pl-23](ops.md#pl-23) 증분 원칙 그대로).
 - 결정(사용자 10-30 PRD grill): C1 — 0.2.0. C5 — 같은 내용 묶음은 ParsingMeta `sha256`으로 찾는다.
-- Status: todo — 0.2.0, 순서는 허브가 정함([pl-32](load.md#pl-32)).
+- Status: todo — 0.2.0, 순서는 허브가 정함([pl-32](load-schema.md#pl-32)).
 
 ## 코드와 다른 점 · 지울 코드
 

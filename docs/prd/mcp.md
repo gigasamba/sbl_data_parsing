@@ -123,7 +123,7 @@
 - (10-31 뒤집힘 — `<doc_id>:<seq>`, 아래) 결정(사용자 10-31 grill): 근거 `chunk_key`는 `<doc_key>:<순번>`(doc_key = 원본 내용 sha256, 계약 함수 `make_chunk_key`)으로 바꾼다 — 운영의 `<file_path>:<순번>`을 대신하며 file_path 제거와 함께 0.2.0, 등급 A.
 - 결정(사용자 10-31 grill): 근거 `chunk_key`는 `<doc_id>:<seq>`(gold `doc.doc_id` 자동 번호 — 위 `<doc_key>:<순번>`을 뒤집음). 스키마 5벌이 시퀀스 하나를 함께 써서 겹치지 않는다(허브 제안 — 사용자 확인 11-01). `make_chunk_key`·sha256 `doc_key`는 0.2.0에 없어진다.
 - 결정(사용자 11-01, reference ↔ 저장소 비교 — 0.2.0, 등급 A): 이 행에서 함께 지운다 — 이름 붙은 색인(`index_id`·AD41 코드·`deploy/host/compose/compose.index.yml`), 질문 없는 덤프 방식, 옛 입력 `methods`·`decompose`·`limit`, 옛 출력 `subs`·`store`·`images`·`notes`·`ms`와 근거 칸(운영 계약 밖).
-- Status: todo — 순서는 허브가 정함([load.md#pl-32](load.md#pl-32)).
+- Status: todo — 순서는 허브가 정함([load-schema.md#pl-32](load-schema.md#pl-32)).
 
 <a id="mc-17"></a>
 ## mc-17 · 원문 전송 도구 `list_doc_fulltext`·`get_doc_fulltext`
