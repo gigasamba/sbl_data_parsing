@@ -54,7 +54,11 @@ def load_chain(path=CHAIN_FILE):
             errs.append(f"{'.'.join(where)}: 없음")
             continue
         errs += [f"{'.'.join(where)}.{n}: 없음" for n in names if n not in sec]
-    for i, st in enumerate((c.get("sfdc") or {}).get("steps") or [] if isinstance(c, dict) else []):
+    sf = c.get("sfdc") if isinstance(c, dict) else None
+    steps = sf.get("steps") if isinstance(sf, dict) else None
+    if not isinstance(steps, list) or not steps:
+        errs.append("sfdc.steps: 단계 목록이 비었거나 목록이 아님")
+    for i, st in enumerate(steps if isinstance(steps, list) else []):
         need = ("prefix", "id", "value") if isinstance(st, dict) and "table" in st else ("prefix",)
         errs += [f"sfdc.steps[{i}].{n}: 없음" for n in need if not isinstance(st, dict) or n not in st]
     _check(c, "", "", None, errs)
