@@ -75,7 +75,7 @@
   - 나머지 문서 메타(`sf_*`, `project_code__c`, `contract_id`, `contract_date`, `prod_name`, `division`, `service_type`)도 파이프라인이 EDW에서 직접 읽는다 — [pl-29](load.md#pl-29)의 고객 조인과 같은 자리. 외부 파일 `file_meta_new.jsonl`은 없어진다.
 - 파일: `docs/architecture/db_schema.md`(새), `docs/INDEX.md`, `common/store/db/migrations/versions/`, `docs/operations/parsing_meta_mssql.sql`, `tests/server/common/`(시험 하나).
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖)):
-  - M4·T4: gold `doc`에 `doc_class`(분류 라벨 하나 — C5, low_conf·모델·시각은 두지 않음)와 `created_at`(원천 등록 시각을 KST로 해석)을 더한다 — Alembic(D-6).
+  - M4·T4: gold `doc`에 `doc_class`(분류 라벨 하나 — C5. 모델·시각·`low_conf` 칸은 어디에도 없음 — 판은 ParsingMeta `silver_version`·`gold_version`, 사용자 11-02)와 `created_at`(원천 등록 시각을 KST로 해석)을 더한다 — Alembic(D-6).
   - C2·T8: 분류·고객 결과는 gold(pgvector)에만 doc 단위로. 운영이 ParsingMeta에 더한 분류·고객 칸은 0.2.0과 동시에 지운다(DB 담당자 D-3, 등급 A). 그때 운영 분류 스크립트가 멈춘다 — 운영 담당자에게 알릴 것.
   - (G19로 뒤집힘 — 아래) G1(2차 grill(사용자 10-30, 원본은 git 밖) — C2를 고침): EDW `ParsingMeta`에 `doc_class`·`sf_op_id`·`parsed_at`·`rep_engine`·`created_at` 5칸은 **남긴다**(`created_at` — G9, 원천 등록 시각을 `FileStorageMap.created_at`에서 옮김, KST) — 파이프라인이 쓰고 `list_doc_fulltext`([mcp.md#mc-17](mcp.md#mc-17))가 목록으로 읽는다(운영 계약 그대로). 나머지 운영 고객 칸(`sf_acc_name` 등)은 0.1.0에서 지운다. `doc_class`는 ParsingMeta와 pgvector `doc` 양쪽에 쓴다. T8 범위는 이만큼 줄어든다.
   - G4(2차 grill(사용자 10-30, 원본은 git 밖)): `source_system` 값은 `SFDC`·`CRMS`·`LAS`·`FAQ`로 통일(T9와 함께) — MCP 두 도구에서 `-test`가 붙은 입력(`SFDC-test` 등)도 같은 뜻으로 받는다([mcp.md#mc-16](mcp.md#mc-16)).
@@ -91,6 +91,7 @@
   - 원천 id(영업 기회 id 등)는 스키마마다 그 EDW 원본 표의 칸 이름 그대로 — 한 이름(`sf_op_id`)을 함께 쓰지 않음. 모르는 이름은 D-1 확인.
 - 결정(사용자 11-01): ParsingMeta에 s3_key 칸 없음 — 연결은 source_system + source_key(원본 전체 경로). rep_engine·stack_version 없음(gold doc.rep_engine도)
 - 결정(사용자 11-02, 위를 고침): 이름을 맞춘다 — ParsingMeta `source_key` → `s3_key`(DB 담당자 DDL, C-76 — 코드는 바꾸기 전후 모두 돎). gold 경로 칸은 `file_path` 하나(= s3_key, 연결 키). gold doc에서 `original_filename`·`clients`·`run_id`·`pipeline_version`·파싱 이력은 두지 않는다(EDW에만). ParsingMeta에 `loaded_at`(적재 시각 — C10 예외, 적재 때 UPDATE).
+- 결정(사용자 11-02, 10-31 "판 이름 하나"를 고침): ParsingMeta 판 칸은 둘 — `silver_version`(이 행의 silver를 만든 코드 판, 게시 때 — 지금 칸 `pipeline_version`의 이름을 바꿈)·`gold_version`(gold에 올린 코드 판, 적재 때 `loaded_at`과 함께 UPDATE). `stack_version`은 만들지 않는다. 분류: 라벨 `doc_class`만 gold `doc`에 — 모델 글자·분류 시각·낮은 확신 표시 칸은 어디에도 두지 않는다(판은 `silver_version`·`gold_version`이 대신함). 대상 고르기(사용자 11-02): 추출은 EDW ParsingMeta에 그 문서의 silver 결과나 gold 결과(`gold_version`)가 없으면 대상으로 고른다 — 이것이 유일한 선택 규칙이다(따로 다시 시도하는 고리·분류 명령 없음). 분류([pl-33](transform.md#pl-33))는 적재 안에서 적재의 보통 silver 고르기로 하고, 실패하면 그 문서의 적재가 실패로 세어져 `gold_version`이 안 써지므로 다음 실행에서 다시 대상이 된다. 구현(`feature/pm-versions`): `parsing_meta_db.done_source_keys`·run_docs `edw_done_keys` — `gold_version` 칸이 있으면 ok·partial은 `gold_version`도 있어야 끝(`skipped_dup`은 gold에 안 올리므로 그대로 끝), 칸이 생기기 전(C-76 ③)에는 지금처럼 `parse_status`만. DB 담당자 DDL은 refactor.md C-76 한 곳(값 꼴은 0.2.0에 DB 담당자와). 구현(`feature/pm-versions`): 코드는 이름 바꾸기 전후 모두 돎(`parsing_meta_db.RENAMES` — `source_key`→`s3_key`와 같은 길), 원문 도구는 EDW 조회가 끊기면 한 번 다시 연결(운영 `_pm_retry`와 같음), 시험 `tests/server/common/test_pm_versions.py`.
 - Status: dev — `docs/architecture/db_schema.md` 설계안 + 시험 `tests/server/common/test_db_schema.py`(`feature/db-schema-spec`) — 사용자·DB 담당자 승인 대기(코드·스키마 변경 없음).
 
 <a id="pl-28"></a>

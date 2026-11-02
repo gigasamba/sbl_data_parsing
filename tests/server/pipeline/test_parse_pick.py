@@ -1,4 +1,4 @@
-"""C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = FileStorageMap ∖ ParsingMeta: ParsingMeta에 ok·partial·skipped_dup 행이(사용자 11-01) 있는 원본 키는 안 고르고,
+"""C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = FileStorageMap ∖ ParsingMeta: ParsingMeta에 ok·partial(gold_version도 있음 — 사용자 11-02)·skipped_dup 행이(사용자 11-01) 있는 원본 키는 안 고르고,
 행이 없거나(새 문서·통째 실패) 다른 상태(not_parsed·skipped_disk_cap 등)면 고른다. 이름 ↔ 원본 키는 manifest.jsonl(없으면 이름 그대로). 받은 순서 그대로.
 EDW를 못 읽으면 서버(run_mode prod·RUN_ENV dev)는 종료 4, PC는 받은 목록 그대로. 임시 SQLite EDW 대역만 — 외부 접속 없음."""
 
@@ -13,7 +13,8 @@ from pipeline import cli
 
 # (이름, manifest 원본 키 | None, ParsingMeta parse_status | None, 고름?)
 DOCS = [
-    ("z_ok.pdf", "SFDC/a/z_ok.pdf", "ok", False),  # 성공 — 안 고름
+    ("z_ok.pdf", "SFDC/a/z_ok.pdf", "ok", False),  # 성공·gold에도 올림 — 안 고름
+    ("nogold.pdf", "SFDC/a/nogold.pdf", "ok", True),  # silver만 있고 gold_version 없음(적재·분류 실패) — 다시 고름(사용자 11-02)
     ("part.pdf", "SFDC/a/part.pdf", "partial", False),  # 부분 성공도 끝난 것
     ("new.pdf", "SFDC/a/new.pdf", None, True),  # ParsingMeta에 없음(새 문서 또는 통째 실패) — 고름
     ("np.pdf", "SFDC/a/np.pdf", "not_parsed", True),  # 행은 있지만 성공 아님 — 고름
@@ -23,6 +24,7 @@ DOCS = [
     ("folder.pdf", None, "ok", False),  # manifest 없음(폴더 소스) — 이름이 곧 키
 ]
 EXTRA_ROWS = [("SFDC/a/same.pdf", "ok")]
+NO_GOLD = {"SFDC/a/nogold.pdf"}  # 나머지 ok·partial 행은 gold_version을 채움
 # (RUN_ENV, RUN_MODE, EDW 대역 있음, 기대 — 이름 목록 또는 종료 코드)
 CASES = [
     ("local", None, True, [n for n, _, _, pick in DOCS if pick]),
@@ -43,6 +45,8 @@ def _fixture(tmp):
     rows = [(k or n, st) for n, k, st, _ in DOCS if st] + EXTRA_ROWS
     db = SqliteStore(str(edw))
     db.insert_new([{"source_system": "SFDC", "source_key": k, "doc_key": f"d{i}", "parse_status": st} for i, (k, st) in enumerate(rows)])
+    db.cn.executemany("UPDATE ParsingMeta SET gold_version = '0.2.0' WHERE source_key = ?", [(k,) for k, _ in rows if k not in NO_GOLD])
+    db.cn.commit()
     db.close()
     return out, edw
 
