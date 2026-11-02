@@ -6,7 +6,7 @@
 #   둘 다 없으면 0(compose가 `${…:?}` 필수 안내로 멈춤). 값은 출력하지 않는다.
 #   S7e1 — 새 이름은 settings.yaml(pipeline.host.image·mcp.host.image)에서 settings_env.sh load_settings가 셸 env로 낸다. 부르기 전에 load_settings.
 #   (옛 env 파일(ENV_FILE=pipeline.env)은 더 읽지 않는다 — 옛 이름은 settings.yaml 칸이 아니라 migrate가 "삭제 후보"로만 보고함)
-#   need_image pipeline   — 파이프라인 이미지(compose.pipeline.yml의 parse~publish·상주 트리거)
+#   need_image pipeline   — 파이프라인 이미지(compose.pipeline.yml의 상주 컨테이너)
 #   need_image mcp        — 검색 MCP 이미지(compose.mcp.yml의 mcp 서비스)
 _set_somewhere() {   # _set_somewhere <이름들> — 셸 env에 값이 있으면 0
   local n
@@ -19,6 +19,22 @@ code_dir_default() {   # code_dir_default <이미지 변수 이름>
   [ -n "${CODE_DIR:-}" ] && return 0
   case "${!1:-}" in *-runtime:*) CODE_DIR=$(pwd); export CODE_DIR ;; esac
   return 0
+}
+# 사용자 11-02 — 1회 job 컨테이너(compose run --rm)를 없앴다. 운영 작업(parse·publish·도구·migrate·show-stack)은 상주 data-pipeline 컨테이너
+#   안에서 이미지 시작 스크립트로 돈다(docker exec — 컨테이너가 붙인 설정 파일·폴더·코드 그대로). 시작 스크립트: 코드가 든 이미지는
+#   /app/docker/entrypoint.sh, 실행 이미지(*-runtime — 코드 폴더를 붙임)는 /app/docker/runtime_entry.sh(op-06).
+in_pipeline() {   # in_pipeline <상주 컨테이너> <명령> [인자…] — 종료 코드는 그 명령 그대로 · 컨테이너가 안 떠 있으면 2
+  local c=$1
+  shift
+  # shellcheck disable=SC2086 — DOCKER는 낱말 나눔(sudo podman)
+  if [ "$($DOCKER inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" != true ]; then
+    echo "[오류] 상주 컨테이너 $c가 떠 있지 않음 — 먼저 띄울 것: README §5-3 ①의 dc로 \`dc up -d data-pipeline-parse data-pipeline-structure\`(실행 이미지면 compose.code.yml, 오버레이 패치면 compose.patch.yml도 — dc가 붙임)" >&2
+    return 2
+  fi
+  local tty=()
+  [ -t 0 ] && [ -t 1 ] && tty=(-it)   # 터미널에서 부르면 Ctrl-C가 컨테이너 안 작업까지 감(tty 없으면 exec는 신호를 넘기지 않음 — 옛 run --rm과 다름)
+  # shellcheck disable=SC2016,SC2086
+  $DOCKER exec ${tty[@]+"${tty[@]}"} "$c" bash -c 'e=/app/docker/entrypoint.sh; [ -f "$e" ] || e=/app/docker/runtime_entry.sh; exec bash "$e" "$@"' _ "$@"
 }
 need_image() {
   local new old example
