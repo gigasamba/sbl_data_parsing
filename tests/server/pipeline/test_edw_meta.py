@@ -1,6 +1,7 @@
 """pl-29 — 적재 때 EDW 조인(pipeline/load/edw_meta.py): 원천별 사슬로 client_edw·원천 칸·등록 시각. 임시 SQLite EDW(가짜 데이터만,
 스키마 AI·SFDC·CRMS·LAS를 ATTACH — 질의 글자는 서버 T-SQL과 같음) · 외부 접속 없음."""
 
+import copy
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -83,13 +84,22 @@ def _edw(path, quote=True):
 
 
 DOCS = [(r[1], r[0]) for r in ROWS["AI.FileStorageMap"]]
+QUOTE_STEP = {"prefix": "0Q0", "table": "SFDC.Quote", "id": "Id", "value": "OpportunityId", "optional": True}  # 설정 파일의 주석 줄 그대로
+
+
+def _chain(quote=True):
+    c = copy.deepcopy(M.load_chain())  # 기본 설정 파일(Quote 단계 없음 — 사용자 11-02)
+    if quote:
+        c["sfdc"]["steps"].append(QUOTE_STEP)
+    return c
 
 
 def test_chains():
     d = Path(tempfile.mkdtemp())
     e = _edw(str(d / "edw.sqlite"))
     try:
-        out, missing = M.fetch(DOCS, e)
+        out, missing = M.fetch(DOCS, e, _chain())
+        base, _ = M.fetch(DOCS, e)  # 기본 설정 — Quote 단계 없음
     finally:
         e.close()
     cases = [  # (원본 경로, 칸, 기대)
@@ -122,17 +132,108 @@ def test_chains():
         got = out[key].get(col)
         assert (None if got is None else str(got)) == want, (key, col, out[key])
     assert missing == 0, missing
+    assert base["SFDC/d4/quote.pdf"]["sf_op_id"] is None and base["SFDC/d1/opp.pdf"] == out["SFDC/d1/opp.pdf"], base["SFDC/d4/quote.pdf"]
     assert str(M._date("20250210")) == "2025-02-10" and M._date("bad") is None and M._ts("20250211080000").hour == 8  # EDW 글자 꼴
     # Quote 표가 없는 EDW(서버 지금) — 그 단계만 건너뜀, 나머지는 그대로
     e2 = _edw(str(d / "edw2.sqlite"), quote=False)
     try:
-        out2, _ = M.fetch(DOCS, e2)
+        out2, _ = M.fetch(DOCS, e2, _chain())
     finally:
         e2.close()
     assert out2["SFDC/d4/quote.pdf"]["sf_op_id"] is None and out2["SFDC/d1/opp.pdf"]["sf_op_id"] == "006A", out2
     # EDW를 못 엶 — 빈 결과와 전부 메타 없음(적재는 계속)
     with patch.object(M, "_Edw", side_effect=RuntimeError("no account")):
         assert M.fetch(DOCS) == ({}, len(DOCS))
+    bad = [  # (설정 고치기, 오류 글자에 들어갈 말) — 이름은 SQL에 들어가므로 검사
+        (lambda c: c["sfdc"]["opportunity"].__setitem__("table", "SFDC.Opportunity; DROP"), "sfdc.opportunity.table"),
+        (lambda c: c["crms"]["docu"].pop("created"), "crms.docu.created: 없음"),
+        (lambda c: c["crms"]["project"]["out"].__setitem__("sf_op_id", "X"), "crms에서 설정으로 채울 수 없는 칸"),
+        (lambda c: c["crms"]["project"]["out"].__setitem__("file_path", "X"), "crms에서 설정으로 채울 수 없는 칸"),  # 문서 키 덮어쓰기 막음
+        (lambda c: c["sfdc"]["opportunity"]["out"].__setitem__("client_edw", "Name"), "sfdc에서 설정으로 채울 수 없는 칸"),
+        (lambda c: c["sfdc"]["steps"].append({"prefix": "0Q0", "table": "SFDC.Quote"}), "sfdc.steps[3].id: 없음"),
+        (lambda c: c["sfdc"].__setitem__("opp_prefix", "06"), "sfdc.opp_prefix"),
+    ]
+    import yaml
+
+    for fix, want in bad:
+        c = _chain(quote=False)
+        fix(c)
+        f = d / "chain.yaml"
+        f.write_text(yaml.safe_dump(c, allow_unicode=True), encoding="utf-8")
+        try:
+            M.load_chain(f)
+            raise AssertionError(f"틀린 설정이 받아짐: {want}")
+        except ValueError as e:
+            assert want in str(e), (want, str(e))
     print(
-        f"[시험] pl-29 EDW 조인 — 사례 {len(cases)}개(SFDC 4단계·계정 직접·동률 비움·CRMS·LAS 최신 판·FAQ) · Quote 표 없음 · EDW 없음 통과"
+        f"[시험] pl-29 EDW 조인 — 사례 {len(cases)}개(SFDC 4단계·계정 직접·동률 비움·CRMS·LAS 최신 판·FAQ) · Quote 표 없음 · EDW 없음 · 기본 설정(Quote 없음) · 틀린 설정 {len(bad)}개 거부 통과"
     )
+
+
+HINT_SQL = """
+ALTER TABLE SFDC.ContentVersion ADD COLUMN Title TEXT;
+ALTER TABLE SFDC.Task ADD COLUMN Subject TEXT;
+ALTER TABLE SFDC.Task ADD COLUMN Sent_Received__c TEXT;
+ALTER TABLE SFDC.Event ADD COLUMN Subject TEXT;
+ALTER TABLE SFDC.Event ADD COLUMN Sent_Received__c TEXT;
+ALTER TABLE SFDC.Opportunity ADD COLUMN StageName TEXT;
+ALTER TABLE SFDC.Opportunity ADD COLUMN Real_RFP__c INT;
+ALTER TABLE SFDC.Opportunity ADD COLUMN RFP_Received_Start_Date__c TEXT;
+ALTER TABLE SFDC.Opportunity ADD COLUMN RFP_Received_End_Date__c TEXT;
+ALTER TABLE LAS.Contract ADD COLUMN ApprovalName TEXT;
+UPDATE SFDC.ContentVersion SET Title = 'RFP reply' WHERE Id = 'cv2';
+UPDATE SFDC.Task SET Subject = 'RE: ' || substr(hex(zeroblob(100)), 1, 196), Sent_Received__c = 'Received';
+UPDATE SFDC.Opportunity SET StageName = 'RFP', Real_RFP__c = 1, RFP_Received_Start_Date__c = '2026-03-02' WHERE Id = '006A';
+UPDATE LAS.Contract SET ApprovalName = 'QAG 승인' WHERE ContractID = 2;
+INSERT INTO AI.FileStorageMap VALUES ('SFDC/d7/none.pdf', 'SFDC', 'cv7', NULL), ('SFDC/d8/user.pdf', 'SFDC', 'cv8', NULL),
+    ('SFDC/d9/unk.pdf', 'SFDC', 'cv9', NULL);
+INSERT INTO SFDC.ContentVersion (Id, ContentDocumentId, CreatedDate) VALUES ('cv7', 'cd7', NULL), ('cv8', 'cd8', NULL), ('cv9', 'cd9', NULL);
+INSERT INTO SFDC.ContentDocumentLink VALUES ('cd8', '005USER', 0), ('cd9', 'a99X1', 0);
+"""
+HINT_KEYS = (
+    "title",
+    "entity_type",
+    "entity_class",
+    "entity_id",
+    "sent_received__c",
+    "subject",
+    "stagename",
+    "real_rfp__c",
+    "rfp_received_start_date__c",
+)
+
+
+def test_hints():
+    """분류 힌트 칸(pl-33, 운영 analyze_clues 규칙 — 사용자 11-02): 첫 User 아닌 연결(접두 순서 — User는 건너뜀) · 연결 없음 unlinked ·
+    User만 user_only · 모르는 접두 Unknown:<접두>/other · Task 방향·제목 120자 · 연결 개체가 영업 기회일 때만 단계·RFP · LAS 품의 제목.
+    힌트 칸이 없는 EDW(test_chains의 표)는 힌트만 비고 적재 메타는 그대로."""
+    d = Path(tempfile.mkdtemp())
+    e = _edw(str(d / "edw.sqlite"))
+    try:
+        e.cn.executescript(HINT_SQL)
+        docs = [*DOCS, ("SFDC", "SFDC/d7/none.pdf"), ("SFDC", "SFDC/d8/user.pdf"), ("SFDC", "SFDC/d9/unk.pdf")]
+        out, _ = M.fetch(docs, e, _chain())
+    finally:
+        e.close()
+    subj = "RE: " + "0" * 116
+    want = {  # (원본 경로) → HINT_KEYS 차례의 값
+        "SFDC/d1/opp.pdf": (None, "Opportunity", "opportunity", "006A", None, None, "RFP", "1", "2026-03-02"),  # 005USER 건너뜀
+        "SFDC/d2/task.pdf": ("RFP reply", "Task", "task", "00TT1", "Received", subj, None, None, None),
+        "SFDC/d3/event.pdf": (None, "Event", "event", "00UE1", None, "", None, None, None),
+        "SFDC/d4/quote.pdf": (None, "Quote", "quote", "0Q0Q1", None, None, None, None, None),
+        "SFDC/d6/tie.pdf": (None, "Account", "account", "001ACC1", None, None, None, None, None),  # 첫 연결(정렬) = 001
+        "SFDC/d7/none.pdf": (None, None, "unlinked", None, None, None, None, None, None),
+        "SFDC/d8/user.pdf": (None, None, "user_only", None, None, None, None, None, None),
+        "SFDC/d9/unk.pdf": (None, "Unknown:a99", "other", "a99X1", None, None, None, None, None),
+    }
+    for key, vals in want.items():
+        got = tuple(None if out[key].get(k) is None else str(out[key].get(k)) for k in HINT_KEYS)
+        assert got == vals, (key, got)
+    assert out["LAS/l1/m.pdf"]["approvalname"] == "QAG 승인" and out["SFDC/d1/opp.pdf"]["sf_op_id"] == "006A", out["LAS/l1/m.pdf"]
+    e = _edw(str(d / "edw2.sqlite"))  # 힌트 칸 없는 EDW
+    try:
+        bare, _ = M.fetch(DOCS, e, _chain())
+    finally:
+        e.close()
+    assert bare["SFDC/d2/task.pdf"]["entity_class"] == "task" and bare["SFDC/d2/task.pdf"].get("subject") is None, bare["SFDC/d2/task.pdf"]
+    assert bare["SFDC/d1/opp.pdf"]["sf_op_id"] == "006A" and bare["LAS/l1/m.pdf"]["approvalname"] is None

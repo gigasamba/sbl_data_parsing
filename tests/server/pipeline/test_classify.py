@@ -1,6 +1,5 @@
 """pl-33 분류(사용자 11-02) — 가짜 LLM으로 표 행 시험(네트워크·EDW·PG 없음). 라벨 읽기(운영 별칭·LAS 집합)·집합 밖은 실패·다시 묻지
-않음·이미 있는 라벨 안 덮음·SFDC·LAS 말고는 건너뜀·운영과 같은 사용자 쪽 글(LAS 키워드 근거·SFDC 힌트 줄·제목 키워드 묶음), EDW 분류 힌트
-칸(첫 User 아닌 연결 개체 — 갈래마다), 그리고 적재(pgvector_load.load)가 gold doc_class를 넣고 실패한 문서는 넣지 않는지(SQLite 대역).
+않음·이미 있는 라벨 안 덮음·SFDC·LAS 말고는 건너뜀·운영과 같은 사용자 쪽 글(LAS 키워드 근거·SFDC 힌트 줄·제목 키워드 묶음), 그리고 적재(pgvector_load.load)가 gold doc_class를 넣고 실패한 문서는 넣지 않는지(SQLite 대역).
 글 모양의 기대값은 운영 코드(extract_evidence·build_user_prompt·fams)로 만든 글과 바이트 대조한 것(11-02)."""
 
 import json
@@ -216,91 +215,3 @@ def test_load_labels_and_skips_failed():
         assert counts["by_source"]["sfdc"]["docs"] == 1, counts
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-
-
-class _FakeEdw:
-    """가짜 EDW — SQL 글자 조각으로 답을 고른다(앞의 조각이 먼저). broken 조각이 든 질의는 '칸 없음' 오류."""
-
-    def __init__(self, table, broken=()):
-        self.table, self.broken = table, broken
-
-    def q_in(self, sql, values):
-        if any(b in sql for b in self.broken):
-            raise RuntimeError("no such column")
-        return next((rows for k, rows in self.table if k in sql), [])
-
-    def close(self):
-        pass
-
-
-def test_edw_hint_columns():
-    """분류 힌트 칸(운영 analyze_clues 규칙 — 사용자 11-02): 연결 없음 unlinked · User만 user_only · User + Task면 Task(User 건너뜀) ·
-    영업 기회 연결이면 단계·Real_RFP__c·RFP 기간 · 모르는 접두 Unknown:<접두>/other · Task 제목은 120자 · 힌트 칸이 없는 EDW는 힌트만 빔."""
-    from pipeline.load import edw_meta as E
-
-    files = [(f"SFDC/{k}.pdf", f"068{k}", f"069{k}") for k in ("none", "user", "task", "opp", "unk")]
-    table = [
-        (
-            "FROM AI.FileStorageMap f LEFT JOIN SFDC.ContentVersion",
-            [{"s3_key": s, "content_version_id": cv, "doc_id": cd, "created_at": None, "cv_created": None} for s, cv, cd in files],
-        ),
-        ("SELECT Id, Title FROM SFDC.ContentVersion", [{"Id": "068task", "Title": "RFP reply"}]),
-        (
-            "FROM SFDC.ContentDocumentLink",
-            [
-                {"ContentDocumentId": "069user", "LinkedEntityId": "005U1"},
-                {"ContentDocumentId": "069task", "LinkedEntityId": "005U1"},
-                {"ContentDocumentId": "069task", "LinkedEntityId": "00TT1"},
-                {"ContentDocumentId": "069opp", "LinkedEntityId": "006O1"},
-                {"ContentDocumentId": "069unk", "LinkedEntityId": "a99X1"},
-            ],
-        ),
-        ("SELECT Id, Subject, Sent_Received__c FROM SFDC.Task", [{"Id": "00TT1", "Subject": "s" * 200, "Sent_Received__c": "Received"}]),
-        (
-            "SELECT Id, StageName, Real_RFP__c",
-            [
-                {
-                    "Id": "006O1",
-                    "StageName": "RFP",
-                    "Real_RFP__c": True,
-                    "RFP_Received_Start_Date__c": "2026-03-02",
-                    "RFP_Received_End_Date__c": None,
-                }
-            ],
-        ),
-        ("SELECT Id, WhatId FROM SFDC.Task", [{"Id": "00TT1", "WhatId": "006O1"}]),
-        ("FROM SFDC.Opportunity", [{"Id": "006O1", "Name": "Opp", "AccountId": None}]),
-        (
-            "FROM AI.FileStorageMap_LAS m",
-            [{"s3_key": "LAS/q.pdf", "created_at": None, "manage_no": "M-1", "signed_date": None, "file_dt": None}],
-        ),
-        ("SELECT ContractID, ApprovalName FROM LAS.Contract", [{"ContractID": 1, "ApprovalName": "QAG 승인"}]),
-        ("FROM LAS.Contract", [{"ManageNo": "M-1", "ContractID": 1, "IsActive": 1, "ContractDate": None, "PartnerCorpName": "A사"}]),
-    ]
-    docs = [("SFDC", s) for s, _, _ in files] + [("LAS", "LAS/q.pdf")]
-    keys = (
-        "title",
-        "entity_type",
-        "entity_class",
-        "entity_id",
-        "sent_received__c",
-        "subject",
-        "stagename",
-        "real_rfp__c",
-        "rfp_received_start_date__c",
-    )
-    out, _ = E.fetch(docs, _FakeEdw(table))
-    got = {s: tuple(out[s].get(k) for k in keys) for s, _, _ in files}
-    assert got == {
-        "SFDC/none.pdf": (None, None, "unlinked", None, None, None, None, None, None),
-        "SFDC/user.pdf": (None, None, "user_only", None, None, None, None, None, None),
-        "SFDC/task.pdf": ("RFP reply", "Task", "task", "00TT1", "Received", "s" * 120, None, None, None),
-        "SFDC/opp.pdf": (None, "Opportunity", "opportunity", "006O1", None, None, "RFP", "1", date(2026, 3, 2)),
-        "SFDC/unk.pdf": (None, "Unknown:a99", "other", "a99X1", None, None, None, None, None),
-    }, got
-    assert out["SFDC/task.pdf"]["sf_op_id"] == "006O1" and out["LAS/q.pdf"]["approvalname"] == "QAG 승인", out  # 적재 메타는 그대로
-    out, _ = E.fetch(docs, _FakeEdw(table, broken=("Title", "Subject", "StageName", "ApprovalName")))  # 서버 EDW에 힌트 칸이 없을 때
-    assert out["SFDC/task.pdf"]["entity_class"] == "task" and out["SFDC/task.pdf"].get("subject") is None, out
-    assert (
-        out["SFDC/task.pdf"]["sf_op_id"] == "006O1" and out["LAS/q.pdf"]["approvalname"] is None and out["LAS/q.pdf"]["client_edw"] == "A사"
-    )
