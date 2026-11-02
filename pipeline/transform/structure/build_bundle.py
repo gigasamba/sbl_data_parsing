@@ -8,8 +8,8 @@
   메타   : 고객사·계약 번호 — 파싱 모듈 교차 확인 값(_rep rep.meta)(서로 다른 계열 파서 2개+)만
   임베딩 : --embed api(EMBED_BASE_URL·EMBED_MODEL — 서버 임베딩 전용 모델) · bge-m3 · e5-small … (L2 정규화 저장, 차원은 첫 응답에서)
   (지식 그래프 kg_nodes·kg_edges · 개념→청크 concept_chunk · 그림 행 images.jsonl · 집계 사실 facts.jsonl은 11-01에 지움 — PRD pl-06:
-   아무도 적재·조회하지 않음(facts.jsonl을 읽던 검색 쪽 집계는 mc-04에서 지움). kg_nodes.jsonl·kg_edges.jsonl은 빈 파일로만 씀 — 묶음 계약 common/core/contract.py가 파일을 요구, 그 목록은 핸드오프 지문 파일이라 0.2.0 배치에서 고침)
-산출: docs.jsonl · chunks.jsonl · vectors.npy(float32, chunks 순서) · meta.json · kg_nodes.jsonl·kg_edges.jsonl(빈 파일)
+   아무도 적재·조회하지 않음(facts.jsonl을 읽던 검색 쪽 집계는 mc-04에서 지움). 묶음 계약용 빈 kg 파일도 0.2.0에 지움 — pl-46)
+산출: docs.jsonl · chunks.jsonl · vectors.npy(float32, chunks 순서) · meta.json
 사용: python -m pipeline.transform.structure.build_bundle [--parse-dir output/parse] [--src output/prepared] [--embed api|bge-m3] [--summary auto|lead] [--out output/edw/bundle]
 """
 
@@ -665,8 +665,7 @@ def main(argv=None):
     vecs = embed_all(a.embed, [index_text(c) for c in chunks], out=str(out / "vectors.npy"))  # 머리말 포함(G9)
     dim = int(vecs.shape[1]) if len(vecs) else 0
     del vecs  # memmap 닫기(Windows는 열린 파일을 옮길 수 없음)
-    # ponytail: kg_nodes·kg_edges는 빈 파일 — 묶음 계약(contract.check_bundle 파일 목록, 핸드오프 지문 파일)이 요구해서만 씀. 0.2.0 배치에서 목록과 함께 지움(pl-06)
-    for name, rows in (("docs", docs), ("chunks", chunks), ("kg_nodes", []), ("kg_edges", [])):
+    for name, rows in (("docs", docs), ("chunks", chunks)):
         with open(out / f"{name}.jsonl", "w", encoding="utf-8") as f:
             for r in rows:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")

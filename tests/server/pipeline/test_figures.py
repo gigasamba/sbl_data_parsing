@@ -16,7 +16,6 @@ from pipeline.shared.postprocess import raw_root
 from pipeline.transform.figures.figures import (
     FIG_OCR_FALLBACK_MIN_CHARS_DEFAULT,
     FULL_VERSION,
-    NOW,
     P_FIGJ,
     _meaningful_chars,
     _model_dir,
@@ -26,7 +25,6 @@ from pipeline.transform.figures.figures import (
     _save_png,
     _unconvertible_kind,
     build_records,
-    capped_path,
     classify_figure_kind,
     figures,
     parse_json,
@@ -229,7 +227,7 @@ def selftest():
 
 def selftest_select():
     """AD9·AD21①②③ — 상한 2·그림 5개 문서: skipped 표시·우선순위(캡션·본문 언급·면적)·작은/반복 제외·
-    capped.jsonl upsert·이어서 처리(캐시 재사용 — 재호출 0) 통과."""
+    이어서 처리(캐시 재사용 — 재호출 0) 통과(capped.jsonl은 0.2.0에 지움 — pl-46)."""
     import tempfile
 
     import docx as _docx
@@ -291,19 +289,7 @@ def selftest_select():
         assert by_i["3"]["skipped"] == "duplicate"  # img_dup — big과 같은 sha
         assert by_i["4"]["skipped"] is None and by_i["4"]["vlm"]["summary"] == "수율 추이"
         assert by_i["5"]["skipped"] == "small"  # img_small — 짧은 변 < 64px
-        rows = [json.loads(ln) for ln in capped_path().read_text(encoding="utf-8").splitlines()]
-        assert rows == [
-            {
-                "doc": "sel.docx",
-                "doc_key": "docsha123",
-                "total": 5,
-                "vlm": 2,
-                "skipped": 1,
-                "skipped_ids": [by_i["1"]["image_id"]],
-                "at": NOW,
-            }
-        ]
-        print("[selftest] AD9·AD21② 우선순위(캡션·본문 언급·면적)·작은/반복 제외 · ①capped.jsonl 기록 통과")
+        print("[selftest] AD9·AD21② 우선순위(캡션·본문 언급·면적)·작은/반복 제외 통과")
 
         _env.enter_context(_senv(VLM_FIGURES_MAX="10"))  # ③ 이어서 VLM — 상한을 올려 나머지만 시도
         recs2, _, _ = build_records("sel.docx", path, doc_text, "docsha123")
@@ -312,22 +298,16 @@ def selftest_select():
             by_i2["2"]["vlm"]["summary"] == "공정 개요" and by_i2["4"]["vlm"]["summary"] == "수율 추이"
         )  # 앞서 처리한 둘 — 캐시 그대로(재호출 0)
         assert by_i2["1"]["skipped"] is None and by_i2["1"]["vlm_error"]  # 상한에 걸렸던 것만 새로 시도(VLM 미설정이라 호출은 안 나감)
-        assert not capped_path().read_text(encoding="utf-8").strip()  # 더는 안 걸림 — capped.jsonl에서 지워짐(upsert)
-        print("[selftest] AD21③ 이어서 VLM — 앞서 처리한 그림 재호출 0 · capped.jsonl 비워짐 통과")
+        print("[selftest] AD21③ 이어서 VLM — 앞서 처리한 그림 재호출 0 통과")
 
-        # out_images= 인자(AG11 2단계 착수 조건, 10-08) — PARSE_IMAGES_ROOT(env, d/images) 밖의 세션 폴더를 직접
-        # 지정하면(parse_agent_tools.py의 쓰기 범위와 같은 모양 — out_dir/_images) capped.jsonl·PNG가 그 폴더에만
-        # 쓰이고 env 쪽(images_root())은 안 건드린다(이전엔 env 교체로만 격리 가능했음).
+        # out_images= 인자(AG11 2단계 착수 조건, 10-08) — write_index에 세션 폴더를 직접 주면 PNG가 그 폴더에만
+        # 쓰이고 env 쪽(images_root())은 안 건드린다.
         out_images = d / "agent_session" / "_images"
-        env_capped_before = capped_path().read_text(encoding="utf-8") if capped_path().exists() else ""
-        recs4, _, _ = build_records("sel.docx", path, doc_text, "docsha123", out_images=out_images)
-        assert capped_path(out_images) != capped_path()  # 서로 다른 경로(세션마다 분리)
-        assert capped_path(out_images).exists()  # 인자로 준 폴더 쪽에 capped.jsonl
-        assert capped_path().read_text(encoding="utf-8") == env_capped_before  # env 쪽 capped.jsonl은 그대로(안 건드림)
+        recs4, _, _ = build_records("sel.docx", path, doc_text, "docsha123")
         rows4 = write_index("sel.docx", recs4, out_images=out_images)
         assert (out_images / "sel.docx").is_dir() and not (d / "images" / "sel.docx").exists()  # PNG도 인자 폴더에만(env 쪽엔 안 생김)
         assert any(r.get("png") for r in rows4)
-        print("[selftest] out_images= 인자 — capped.jsonl·PNG가 지정 폴더에만(env 쪽 안 건드림) 통과")
+        print("[selftest] out_images= 인자 — PNG가 지정 폴더에만(env 쪽 안 건드림) 통과")
     finally:
         _env.close()
 

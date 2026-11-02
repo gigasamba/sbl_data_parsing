@@ -569,7 +569,7 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     if "figures" in feats:
         doc_sha = (rep.get("rep") or {}).get("source", {}).get("sha256") or fig_mod.sha(Path(doc_path).read_bytes())
         records, plain, enriched = fig_mod.build_records(
-            doc, doc_path, doc_text, doc_sha, out_images=out_images, figures_max=figures_max, page_covered=page_covered
+            doc, doc_path, doc_text, doc_sha, figures_max=figures_max, page_covered=page_covered
         )
         use_context = "context" in feats
         blocks += enriched if use_context else plain

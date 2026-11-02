@@ -20,7 +20,6 @@ from common.ai.agent_prompts import load as _load_prompt
 from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
 from common.core.paths import (
     APP_ROOT,  # 폴더 재편 뒤 이 상수만 바뀌면 됨
-    atomic_write_text,  # RV6, tmp+os.replace 공용
 )
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared.artifacts import prompt_id, raw_vlm_path
@@ -764,45 +763,6 @@ def select_figures(figs, ctxs, min_px):
     return order, skip
 
 
-def capped_path(out_images=None):
-    """out_images(경로)를 주면 그 아래(images_root() 대신) — AG11 2단계 착수 조건(10-08): 호출자가 출력 폴더를
-    인자로 고를 수 있게(기본값 None이면 images_root()의 PARSE_IMAGES_ROOT 관례로 이전과 바이트 동일)."""
-    return (out_images or images_root()).parent / "_figures" / "capped.jsonl"
-
-
-def record_capped(doc_name, doc_key, total, n_vlm, skipped_ids, out_images=None):
-    """AD9·AD21① — 상한에 걸린 문서를 capped.jsonl에 upsert(문서별 한 줄, 같은 문서 재실행 시 갱신 — 건너뛴 그림이
-    없으면 목록에서 지움). out_images — capped_path 참고."""
-    p = capped_path(out_images)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    from common.ai.guard import (
-        _FileLock,
-    )  # 독립 검토(10-07) — 파싱과 figures_resume가 동시에 써도 덮어쓰기 없게(프로세스 간 잠금 + 원자적 교체)
-
-    with _FileLock(p):
-        rows = []
-        if p.exists():
-            for ln in p.read_text(encoding="utf-8").splitlines():
-                if ln.strip():
-                    r = json.loads(ln)
-                    if r.get("doc") != doc_name:
-                        rows.append(r)
-        if skipped_ids:
-            rows.append(
-                {
-                    "doc": doc_name,
-                    "doc_key": doc_key,
-                    "total": total,
-                    "vlm": n_vlm,
-                    "skipped": len(skipped_ids),
-                    "skipped_ids": skipped_ids,
-                    "at": NOW,
-                }
-            )
-        rows.sort(key=lambda r: r["doc"])
-        atomic_write_text(p, "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
-
-
 FULL_VERSION = "v2-nothink"  # 기본(전체 출력 상한) 캐시 버전 세그먼트 — 바뀌면 안 됨(기존 P0 캐시 전부가 이 이름 아래)
 
 
@@ -969,14 +929,12 @@ def _pick_edges_det(ext, page, px_edges, rec_edges, pdf_doc, f):
     return (merged, "+".join(used)) if merged else (edges, edges_source)  # F13 리뷰④ — edges_source는 항상 str|None
 
 
-def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images=None, ocr_fn=None, figures_max=None, page_covered=False):
+def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, ocr_fn=None, figures_max=None, page_covered=False):
     """문서 1건의 그림 기록 목록(설계 git 이력 docs/plans/image-parsing-2026-10-01.md(c4874dd0^) §3·§3-0 계약 — modules/search/mcp_server.py가 이 모양으로 읽음)
     + 렌더된 본문 블록(단순·보정) 목록 → (records, plain_blocks, enriched_blocks).
     AD9·AD21 — 작은 그림·반복 이미지는 VLM 후보에서 빼고(skipped: small/duplicate), 남는 그림은 캡션·본문 언급·면적 순으로
     상한(VLM_FIGURES_MAX) 안을 채운다. 상한에 걸려 건너뛴 그림은
-    skipped: "VLM_FIGURES_MAX"로 기록에 남고, 문서 단위로 capped.jsonl에 upsert(record_capped).
-    out_images — capped.jsonl이 쓰일 폴더를 직접 고름(AG11 2단계 착수 조건, 10-08: PARSE_IMAGES_ROOT 환경변수 교체
-    대신 인자로 — 기본값 None이면 record_capped가 images_root()를 써 이전과 바이트 동일).
+    skipped: "VLM_FIGURES_MAX"로 기록에 남는다(문서별 capped.jsonl은 읽는 곳이 없어 0.2.0에 지움 — pl-46).
     AD10 — VLM 보낼 그림(send)마다 classify_figure_kind()로 종류를 가늠(모델 호출 없음): text_image는 기록만(VLM 그대로), photo는 max_tokens를 낮춰 한 줄 요약 유도,
     chart·flow·other(모름 포함)는 지금처럼 전체 P_FIGJ 호출 — 지시문 글자·prompt_id는 안 바꿔 기존 VLM 캐시 그대로
     재사용한다. ocr_fn — crop OCR 재사용 지점(없으면 _crop_ocr, 테스트는 가짜 OCR 주입).
@@ -1011,7 +969,6 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
             skip_reason[i] = "overlay_cluster"
     order = [i for i in order if i not in skip_reason]  # VLM_FIGURES_MAX 상한은 실제로 VLM이 필요한 그림끼리만 다툰다
     send = set(order[:cap])
-    capped_ids = []
     # engine-qa BLOCK(10-08) ② — classify_figure_kind는 provenance.fig_kind로 기록만 하고 text_image도 VLM을 부른다
     # (글자 이미지 VLM 생략 VLM_FIG_TEXT_SKIP은 op-08에 지움).
     ocr_budget = [VLM_FIG_OCR_MAX]  # 문서당 crop OCR 상한(공유 카운터, 리스트로 함수 밖에서도 줄임)
@@ -1083,7 +1040,6 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
                 text, prov = "", {}
         else:
             text, prov = "", {"skipped": "VLM_FIGURES_MAX"}
-            capped_ids.append(f["image_id"])
         rec = parse_json(text) if text else {}
         ctx = ctxs[i]
         check = C.value_check(rec, ctx["mentions"] + ([ctx["caption"]] if ctx["caption"] else []))
@@ -1161,7 +1117,6 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, out_images
             r["children"] = by_parent[r["image_id"]]
     if pdf_doc is not None:
         pdf_doc.close()
-    record_capped(doc_name, doc_sha256, len(figs), len(send), capped_ids, out_images=out_images)
     return records, plain, enriched
 
 
