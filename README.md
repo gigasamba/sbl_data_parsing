@@ -135,7 +135,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 ├─ tests/               server/(이미지에 포함, 배포 판정) · general/(PC 전용) · runner.py
 ├─ validation/          PC 전용 검증 도구 — search_ui/(검증 페이지) · e2e/(평가·비교, answer_gen)
 ├─ valid_env/           PC 전용 데이터 — object_storage/(합성 테스트 문서, 버킷 모양) · edw/(합성 EDW sqlite) · answer_test/(답변 점검 agent) · docker/(PC 테스트 Docker)
-├─ docs/                문서(지도: docs/INDEX.md) — PRD.md·prd/ · operations/ · architecture/ · refactoring/(refactor.md — 서버·사람 확인 사항 C-xx · "최종 — 사람이 할 일") · history/
+├─ docs/                문서(지도: docs/INDEX.md) — PRD.md·prd/ · operations/ · architecture/ · refactoring/(refactor.md — 서버·사람 확인 사항 C-xx — 열린 것만) · history/
 ├─ VERSION              두 이미지 공통 버전(SemVer)
 ├─ settings.sample.yaml 모든 설정 항목·코드 기본값·설명 — 복사해 settings.yaml로(자동 생성 — 손으로 고치지 않음)
 ├─ settings.yaml        PC 로컬 설정(git 제외 · 권한 600 — 직접 만듦)
@@ -374,7 +374,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 서버는 **이미지 2개 · 코드 폴더**(`/srv/rag/code/live`) **· 설정 파일**(`/srv/rag/env/settings.yaml`) **· 결과 폴더**(`RAG_OUT`, 예: `/srv/rag/output`)로 동작한다. 서버 명령은 모두 코드 폴더 루트에서 실행한다.
 
-> **이번 리팩토링 버전(0.1.0 — 첫 배포)은 [refactor.md](docs/refactoring/refactor.md) 맨 앞 "최종 — 사람이 할 일"의 순서(①검토 → ②배포 전 → ③배포 때 → ④배포 후)를 그대로 따른다.** 핑거프린트가 모두 바뀌어 서버 문서 전체를 다시 파싱해야 하고(재파싱 시간 산정 C-08이 먼저), 설정 이관 · DB 버전 기록 · 옛 컨테이너와 systemd 정리가 함께 필요하다.
+> **0.2.0 배포는 [release-and-patch.md §8](docs/operations/release-and-patch.md#8-020-배포--사람이-할-일) "0.2.0 배포 — 사람이 할 일"의 순서(결정 → 배포 전 → 당일 → 뒤)를 그대로 따른다.** 운영 서버는 지금 0.1.0(settings.yaml 하나)이다. 요약: 판 전체 grill-me 검토 → EDW `AI.ParsingMeta` DDL(DB 담당) → 설정 옮기기(`python -m common.config.migrate <0.1.0 settings.yaml> --out <새 파일>`) → 새 `PG_SCHEMA`로 판 0002 → 전체 e2e(전체 문서는 prd에서만, 새 원천별 스키마로). 0.1.0 배포 기록은 [history/deploy_0_1_0.md](docs/history/deploy_0_1_0.md).
 
 ### 5-0. 배포 단계 — 어디서 어디로, 어떤 이미지·코드로(op-06·op-07, 사용자 10-30)
 
@@ -504,7 +504,7 @@ chown 10001:<운영 그룹> /srv/rag/env/settings.yaml && chmod 640 /srv/rag/env
 mkdir -p /srv/rag/output && chown 10001:<운영 그룹> /srv/rag/output && chmod 2775 /srv/rag/output   # 컨테이너 UID 10001 · 그룹 = 운영 계정 그룹 · setgid(2) — 새 파일이 그 그룹을 물려받고, 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지울 수 있다
 ```
 
-서버 settings.yaml에 **반드시 적을 항목**이다. 빠지면 시작을 거부하거나 동작이 조용히 바뀐다(전체 표는 refactor.md "최종" ②-1).
+서버 settings.yaml에 **반드시 적을 항목**이다. 빠지면 시작을 거부하거나 동작이 조용히 바뀐다(0.2.0 배포 할 일은 [release-and-patch §8](docs/operations/release-and-patch.md#8-020-배포--사람이-할-일)).
 
 | 항목 | 이유 |
 |---|---|
@@ -517,7 +517,7 @@ mkdir -p /srv/rag/output && chown 10001:<운영 그룹> /srv/rag/output && chmod
 | 이미지 `required.deploy.pipeline_image` · `required.deploy.mcp_image` | 예: `data-pipeline-runtime:0.1.0`, `mcp-server-runtime:0.1.0`(개발 서버) · 운영 서버는 `data-pipeline:0.1.0`, `mcp-server:0.1.0` |
 | [env-guide](docs/operations/env-guide.md) "옛 서버 값" 표의 항목 | 옛 서버 동작 유지 |
 
-모델 주소는 모두 내부망 주소여야 한다(서버는 외부 모델 호출을 거부). 옛 `pipeline.env`가 있으면 이관 도구를 쓴다: `python -m common.config.migrate <옛 env> --out <yaml>` → `--compare`로 대조(release-and-patch §5-4). 옛 배치 settings.yaml(op-08 전)은 `python -m common.config.migrate <옛 settings.yaml> --out <새 파일>`로 바꾼다.
+모델 주소는 모두 내부망 주소여야 한다(서버는 외부 모델 호출을 거부). 옛 배치 settings.yaml(op-08 전)은 `python -m common.config.migrate <옛 settings.yaml> --out <새 파일>`로 바꾼다.
 
 **③ DB 마이그레이션** — 적재·검색을 하기 전에 끝낸다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다).
 
