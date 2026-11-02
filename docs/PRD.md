@@ -4,7 +4,7 @@
 행 = 요건 하나(끝난 것 포함) — 칸은 요건(무엇을, 어디서) · 기준·이유 · 상태 · ID. ID 하나가 여러 행에 나올 수 있다(상세는 ID 링크의 앵커). 상태: todo · dev · done(그 밖에 partly done) · dropped(요건에서 뺌 — 행은 남김, 사용자 10-31 범위 축소). ID는 그대로 두고 카테고리 파일이 자리를 정한다(do-04 3부 11-01 — 수집·변환·적재·검색·운영·테스트·문서, 2만 자 넘는 카테고리는 `<분류>-<하위>.md`). 상세는 ID 링크.
 
 ## 지금 진행 중
-- pl-25 DB 스키마 명세 — dev: `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인 대기(`ParsingMeta.stack_version` 칸 — 판 표가 없어져 무엇을 둘지 결정 대기, 사용자).
+- pl-25 DB 스키마 명세 — dev: `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인 대기(ParsingMeta 판 칸은 11-02 결정 — `silver_version`·`gold_version`, `stack_version` 없음).
 - 0.2.0 묶음(todo — 순서는 허브가 정함): 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 원천별 gold 스키마 [pl-28](prd/load-schema.md#pl-28) · run_docs 순서 [pl-24](prd/ops.md#pl-24) · 게시 필수 [pl-26](prd/load.md#pl-26) · 분류 [pl-33](prd/transform.md#pl-33) · FAQ [pl-39](prd/extract.md#pl-39)·[pl-41](prd/load.md#pl-41) · 지문 배치 [pl-46](prd/transform-cleanup.md#pl-46)·[pl-47](prd/transform-cleanup.md#pl-47) · 확장자 2차 [pl-45](prd/transform.md#pl-45) · `search` 계약 [mc-16](prd/mcp.md#mc-16) · 원문 도구 [mc-17](prd/mcp.md#mc-17).
 - 운영 고침 묶음(todo — 사용자 11-02 결정, 코드는 따로): 회전 판정 병렬·기본 적용 끄기 [pl-02](prd/extract.md#pl-02) · 서버 러너 병렬 받기 [pl-48](prd/extract.md#pl-48) · `run_docs` 끝난 문서에 `skipped_dup` 넣기 · EDW 고객 매핑 적재로 옮김 [pl-29](prd/load.md#pl-29).
 - 검색 — PG만, 실행 중 묶음 없음 [mc-19](prd/mcp.md#mc-19)(todo, 자기 PR + 평가).
@@ -54,17 +54,19 @@
 | 임베딩(검색용 숫자 벡터) — 서버는 내부망 `api`(`EMBED_BASE_URL`·`EMBED_MODEL`), 로컬 모델(bge-m3·e5)은 PC용 | 로컬 모델 길은 0.2.0에 지운다([pl-46](prd/transform-cleanup.md#pl-46)) | done | [pl-06](prd/transform.md#pl-06) |
 | ~~지식 그래프·개념 청크·그림 행·집계 사실 만들기~~ | 아무도 적재·조회하지 않았다(11-01 지움) | done | [pl-06](prd/transform.md#pl-06) |
 | ~~구조화·적재 묶음 계약(`DOC_KEYS`) 고치기~~ | 서버가 이 검사를 쓰지 않는다. 0.2.0에 코드째 지운다(pl-46) | dropped | [pl-15](prd/transform.md#pl-15) |
-| 분류 — 파싱 결과 저장본(silver — Object Storage) 뒤, 검색 DB(gold — pgvector) 앞에서 SFDC·LAS 문서에 종류 라벨 `doc_class`를 붙인다. 같은 sha256 묶음은 LLM 한 번 | 운영 분류와 결과가 같게(사용자 11-02) — 같은 모델·effort high·본문 8,000자·경계 규칙·확신도 0.70 미만 표시·이미 있는 라벨 안 덮음. 저장 자리·재시도·LAS 묶음은 결정 대기. 0.2.0, #86 뒤 | todo | [pl-33](prd/transform.md#pl-33) |
+| 분류 — 파싱 결과 저장본(silver — Object Storage) 뒤, 검색 DB(gold — pgvector) 앞에서 SFDC·LAS 문서에 종류 라벨 `doc_class`를 붙인다. 같은 sha256 묶음은 LLM 한 번 | 운영 분류와 결과가 같게(사용자 11-02) — 같은 모델·effort high·본문 8,000자·경계 규칙·이미 있는 라벨 안 덮음(낮은 확신 표시 없음 — 11-02). 저장 자리는 11-02 결정(라벨만 gold — 모델·시각 칸 없음, 적재 안에서 분류 · 다시 시도 고리 없음 — 다음 실행이 다시 고름), LAS 묶음은 결정 대기. 0.2.0, #86 뒤 | todo | [pl-33](prd/transform.md#pl-33) |
 | ~~`ocr_vlm` 엔진·`vlm.model_alt`·안 쓰는 엔진 8개~~ 지움(엔진 18개 남음) | stack에 없어 안 쓰였다. 엔진 지문 바뀜(0.1.0, 등급 A) | done | [pl-31](prd/transform-cleanup.md#pl-31) |
 | ~~다시 읽기(P2·P3)·스캔 중복 제거·렌더 OCR 신호~~ 지움 | 대표 결과 단계 정리. p1 지문 바뀜(0.1.0, 등급 A) | done | [pl-34](prd/transform-cleanup.md#pl-34) |
 | ~~`parse_parallel`·`AUTO_REPARSE_CHANGED`·`figures_resume`~~ 지움 | 지문에 영향 없는 잔재. 증분 처리만 남긴다 | done | [pl-35](prd/transform-cleanup.md#pl-35) |
 | 0.2.0 지문 묶음 정리 — 안 쓰는 엔진 5개(pdfplumber·pypdf·calamine·python_pptx·pymupdf4llm)·묶음 계약·OCR 대체 길·로컬 임베딩·첫 이관 호환 코드를 한 번에 지운다 | 지문이 바뀌는 정리를 서버 재처리 한 번에 모은다. 등급 A | todo | [pl-46](prd/transform-cleanup.md#pl-46) |
+| `adk.py` — 지시문은 두고 장치는 `llm.py` 호출 하나로 줄임 · CPU 부하 고침 | 0.2.0 지문 배치(p1·s·r 지문). 사용자 11-02 | todo | [pl-46](prd/transform-cleanup.md#pl-46) |
 | 엔진 지문(p0) 범위 확인 — 엔진 이름과 폴더 이름이 다른 엔진(html_stdlib·msg_extract·rapidocr_ko·office·pptx)을 고치면 다시 파싱되는지 | 놓치면 엔진을 고쳐도 낡은 결과가 남는다. 0.2.0 · 등급 A | todo | [pl-47](prd/transform-cleanup.md#pl-47) |
 
 ## 적재 (load) — 검색 DB(pgvector)·게시·저장 구조·DB 스키마
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
 |---|---|---|---|
-| 문서마다 고객·원천 메타를 EDW 조인으로 붙인다 — SFDC `FileStorageMap.content_version_id → ContentVersion → ContentDocumentLink`로 영업 기회(직접 > Task > Event > Quote, + 계정 직접 — 같은 단계 동률은 비움) → `Account.Name`, CRMS `FileStorageMap_CRMS.rm_contract_code → RM_CM_PJTLIST`, LAS `FileStorageMap_LAS.manage_no → LAS.Contract`. 적재 때(`pipeline/load/edw_meta.py`) 원천 스키마 `doc`(`client_edw`·원천 칸·`created_at`)에 쓴다 | 파싱·구조화는 이 값을 안 쓴다 — 매핑이 바뀌어도 다시 파싱하지 않는다(사용자 11-02). 외부 `file_meta_new.jsonl`은 지웠다. EDW를 못 읽으면 메타 없이 적재(`meta_missing`) — `--replace`로 다시 채움 | done | [pl-29](prd/load.md#pl-29) |
+| 문서마다 고객·원천 메타를 EDW 조인으로 붙인다 — SFDC `FileStorageMap.content_version_id → ContentVersion → ContentDocumentLink`로 영업 기회(직접 > Task > Event, + 계정 직접 — 같은 단계 동률은 비움 · Quote 표는 지금 없음, 생기면 설정 한 줄) → `Account.Name`, CRMS `FileStorageMap_CRMS.rm_contract_code → RM_CM_PJTLIST`, LAS `FileStorageMap_LAS.manage_no → LAS.Contract`. 적재 때(`pipeline/load/edw_meta.py`, 표·칸 이름·단계는 설정 파일 `resources/config/edw_chain.yaml` — 운영 쪽이 고침, 사용자 11-02) 원천 스키마 `doc`(`client_edw`·원천 칸·`created_at`)에 쓴다 | 파싱·구조화는 이 값을 안 쓴다 — 매핑이 바뀌어도 다시 파싱하지 않는다(사용자 11-02). 외부 `file_meta_new.jsonl`은 지웠다. EDW를 못 읽으면 메타 없이 적재(`meta_missing`) — `--replace`로 다시 채움 | done | [pl-29](prd/load.md#pl-29) |
+| 고객 조인 사슬을 운영 쪽이 고칠 수 있는 설정 파일로 — Quote 표는 지금 없음 | `resources/config/edw_chain.yaml`(사용자 11-02 — `feature/edw-chain-config`) | done | [pl-29](prd/load.md#pl-29) |
 | 검색 DB(gold — pgvector) 표 6개(`load_run`·`doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat`)와 뷰 1개(`v_chunk_source`)는 Alembic(DB 판 관리 도구)으로만 만든다 | 검색 MCP는 PG만 읽는다. 실행 중 DDL 금지 | done | [pl-07](prd/load.md#pl-07) |
 | 문서 묶음 하나를 한 트랜잭션으로 적재한다(`pgvector_load load`) — 하나라도 실패하면 전부 되돌림 | 반쯤 들어간 문서가 검색에 보이지 않게 | done | [pl-07](prd/load.md#pl-07) |
 | 이미 있는 문서는 `doc.file_path`가 같으면 건너뛴다. 바뀐 내용은 `--replace`로 | 내용 지문(sha) 칸이 없어 같은 경로에서 내용이 바뀌어도 건너뛴다(알려진 한계) | done | [pl-07](prd/load.md#pl-07) |
@@ -83,12 +85,13 @@
 | ~~수동 갱신 명령 2개(분류만 / EDW 메타만)~~ | `load --replace`나 다시 실행으로 대신(사용자 10-31) | dropped | [pl-40](prd/load.md#pl-40) |
 | 정형 DB `struct` 스키마(마스터·문서 대장·표·칸)를 코드에서 모두 없앤다. 엔진 구성은 파일만 | 쓰이지 않았다(서버 `doc_registry` 0행). 서버에 남은 표는 DB 담당자가 정리 | done | [pl-08](prd/load.md#pl-08) |
 | 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·원천 삭제 처리를 모두 지운다. 서버는 PG가 없으면 로컬 대체 DB로 바꿔 타지 않고 멈춘다 | 빼야 할 문서는 원천에서 지우거나 사람이 SQL로. 늘 꺼져 있던 source.json 게시 가드는 11-02에 지움(알려진 실패 0) | done | [pl-12](prd/load.md#pl-12) |
+| 알려진 실패 0 — 쓰이지 않는 게시 가드와 `test_publish_guard` 지우고 `known_fail.txt` 비움 | 사용자 11-02 | done | [pl-12](prd/load.md#pl-12) |
 | 마스터 CSV(`resources/vocab/glossary/client_master.csv`·`contract_master.csv`) 활용 설계 — 고객 별칭 몫은 0.2.0, 나머지 후순위 | 지금 두 CSV를 읽는 코드가 없다. 검색 고객 별칭 그룹(mc-05)에 필요 | todo | [pl-38](prd/load.md#pl-38) |
 | 저장 자리 셋 — 파싱 결과 저장본(silver)은 Object Storage 문서 폴더(이름 = `s3_key`로 만든 uuid5), 메타는 EDW ParsingMeta, 검색 DB(gold)는 pgvector | 로컬에는 로그·임베딩 캐시만. 다시 처리하면 같은 폴더를 덮어쓴다 | todo | [pl-32](prd/load-schema.md#pl-32) |
 | 같은 `s3_key`가 FileStorageMap에 여러 행이면 `created_at`이 가장 늦은 행만. 새 행은 `file_size`가 같으면 건너뛰고 다르면 같은 `doc_id`로 다시 처리, 밀려난 행은 EDW `SupersededRow`에 | 원본을 받지 않고 판별한다(같은 크기로 덮어쓴 경우는 놓침 — 받아들임) | todo | [pl-32](prd/load-schema.md#pl-32) |
 | 실행을 넘어 남는 로컬 완료 표시(`_DONE`, `runs.jsonl` 재사용)를 없애고 실패 문서는 다음 실행이 다시 고르게 | 저장 자리는 하나라는 원칙 | todo | [pl-32](prd/load-schema.md#pl-32) |
 | DB 스키마 명세는 `docs/architecture/db_schema.md` 하나(검색 DB·EDW·마스터 CSV의 칸·타입·쓰고 읽는 코드), `test_db_schema.py`가 대조 | 정의가 흩어져 있었다. 사용자·DB 담당자 승인 대기 | dev | [pl-25](prd/load-schema.md#pl-25) |
-| ParsingMeta에는 파싱 정보만(원천 키·상태·silver 위치·엔진·`gold_status`·`pipeline_version`·`sha256`), 고객·분류 같은 파일 메타는 검색 DB `doc`에만 | 중복 적재를 없앤다. 운영이 더한 칸은 0.2.0에 지운다(D-3). `stack_version` 칸은 결정 대기 | dev | [pl-25](prd/load-schema.md#pl-25) |
+| ParsingMeta에는 파싱 정보만(원천 키·상태·silver 위치·엔진·`gold_status`·`silver_version`·`gold_version`·`sha256`), 고객·분류 라벨 같은 파일 메타는 검색 DB `doc`에만 | 중복 적재를 없앤다. 운영이 더한 칸은 0.2.0에 지운다(D-3). `stack_version`은 만들지 않음(11-02) | dev | [pl-25](prd/load-schema.md#pl-25) |
 | 문서 키는 원본 경로 하나 — 검색 DB `doc.file_path` = Object Storage 원본 경로 = EDW `s3_key`(청크는 `doc_id`만), ParsingMeta와 이 값으로 잇는다 | sha256 `doc_key`는 검색 DB에 안 둔다(ParsingMeta `sha256`만). 사용자 11-02 — 경로 칸 하나 | dev | [pl-25](prd/load-schema.md#pl-25) |
 | 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타 칸이 다르다. 판 0002 — 전체 다시 적재·MCP `source_system` 필수(등급 A, 11-02) | done | [pl-28](prd/load-schema.md#pl-28) |
 | 원천 = `FileStorageMap.source_system`(`SFDC`·`CRMS`·`LAS`·`FAQ`, `-test` 붙어도 같음), 비었거나 다른 값이면 `other`. `faq` 스키마만 `chunk.faq_group` 칸 | 원본 경로 첫 마디로도 정함 | done | [pl-28](prd/load-schema.md#pl-28) |
@@ -129,6 +132,8 @@
 | 새 문서만 처리(목록 − ParsingMeta 끝난 행) — 파싱 입구는 구현됨(수집 표). 전체 재파싱은 사람이 전체 e2e로만 | 지문이 바뀔 때 전체 자동 재파싱을 하면 밤 시간을 넘긴다 | todo | [pl-23](prd/ops.md#pl-23) |
 | run_docs 대상 고르기를 위 규칙에 맞춘다 — 지금은 파일 이름 키워드(`--filter RFP,proposal`)·`--start-offset`·`--skip-done`(ok·partial만)으로 고른다 | 지금 새벽 배치는 이름에 RFP·proposal이 든 문서만 처리한다 | todo | [pl-23](prd/ops.md#pl-23) |
 | 새벽 배치는 `ops.nightly.time`(HH:MM) 하나로 켠다(비우면 안 돎) — systemd 타이머가 5분마다 `trigger.sh scheduled` → `run_docs.py --start-offset 0 --skip-done` | 지금 서버는 비워 둠(꺼짐) | todo | [pl-23](prd/ops.md#pl-23) |
+| 전체 e2e는 local·dev·prd 셋에서 — 전체 문서 실행은 prd에서만 새 원천별 스키마 이름(새 `PG_SCHEMA`)으로, 옛 gold·`struct` 스키마는 2주 뒤 DB 담당자가 백업하고 지움 | 판 0002가 기준 스키마의 옛 표를 지운다. 사용자 11-02 | todo | [pl-23](prd/ops.md#pl-23) |
+| 새벽 배치 칸 — 시작 시각·문서 수 상한·마감 시각(비면 안 돎), 칸 이름 하나로(`pipeline.host.nightly.time` ↔ `ops.nightly.time` 어긋남 고침) | 사용자 11-02 | todo | [pl-23](prd/ops.md#pl-23) |
 | 문서별 순서를 파싱 → silver 게시 → 원본 임시 파일 삭제 → gold로 | 지금은 게시가 gold 성공을 기다리고, 실패해도 임시 원본을 지운다 | todo | [pl-24](prd/ops.md#pl-24) |
 | gold 실패면 ParsingMeta 행은 남기고 새 칸 `gold_status`=failed·이유. 파싱이 통째로 실패하면 EDW에 쓰지 않고 로그에만 — 다음 실행이 다시 고른다 | gold는 silver에서 다시 만들 수 있다. 칸 추가는 DB 담당자 몫(등급 A) | todo | [pl-24](prd/ops.md#pl-24) |
 | run_docs 종료 코드 — 대상 0건 = 0, 실패 있음 = 1, 마감 도달 = 75 | 지금은 실패가 있어도 0으로 끝나 스케줄러가 실패를 못 본다(C-33) | todo | [pl-18](prd/ops.md#pl-18) |
@@ -145,12 +150,15 @@
 | PC 대역 EDW는 sqlite 파일 하나(`valid_env/edw/edw.sqlite`)를 `AI`·`CRMS`·`LAS`·`SFDC`로 붙여 같은 SQL이 돌게 | PC에서 운영 EDW에 접속하지 않는다 | done | [op-03](prd/ops.md#op-03) |
 | 모델 역할 llm·vlm·embed(OpenAI 호환). 외부 주소는 `common.models.<역할>.allow_external`이 켜지고 `RUN_ENV=local`일 때만, 서버는 거부. 내부 판정 = 해석된 주소가 사설 IP(또는 `internal_ip_ranges`) + 호스트 접미(`internal_host_suffixes`) | 폐쇄망 밖으로 데이터를 보내지 않는다. 접미 목록에는 전체 호스트 이름이 아니라 상위 도메인을 적어야 맞는다(운영 고침 묶음) | done | [pl-11](prd/ops.md#pl-11) |
 | 비용 상한 — `common.models.guard.budget_usd`(누적 $)·`max_calls`·지출 장부 `spend_file`·`no_paid_calls` | PC 호출을 싸게 유지. 응답 캐시·가짜 LLM도 여기 | done | [pl-11](prd/ops.md#pl-11) |
+| 모델 — 개발 서버부터 내부망 GLM, PC는 OpenRouter | 사용자 11-02 | done | [pl-11](prd/ops.md#pl-11) |
 | ~~JSON Lines 사건 기록(공통 키·로그 수준·비밀 가림)~~ | 나중에 로그 체계를 따로 만든다(사용자 10-31) | dropped | [op-01](prd/ops.md#op-01) |
 | 실행 환경 `RUN_ENV`(`required.env.run_env`)는 `local`·`dev`·`prd`만, 어디서나 필수 — `stage`나 모르는 값이면 시작 거부 | `stage`는 `prd`와 똑같이 동작했다 | done | [op-02](prd/ops-settings.md#op-02) |
 | 서버(`dev`·`prd`)는 가짜 LLM(`dev.llm_fake`)이 켜져 있거나 설정 파일을 못 읽으면 시작 거부 | 서버에서 가짜 답이 도는 것을 막는다 | done | [op-02](prd/ops-settings.md#op-02) |
 | 설정은 settings.yaml 하나 — `settings.sample.yaml`에 모든 키가 기본값과 함께(`python -m common.config.sample`로 생성) | 파라미터 파일 분리안을 대신했다 | done | [op-05](prd/ops-settings.md#op-05) |
 | 배치 — 맨 위 `required`(필수·비밀) → 역할 절 7개 → `tuning`(내부 조정값). 옛 배치는 시작 거부, `python -m common.config.migrate`로 변환 | sample과 실제 파일의 차이를 줄였다 | done | [op-08](prd/ops-settings.md#op-08) |
+| 설정 이관은 옛 배치 settings.yaml → 새 배치만 — env 파일 옮기기·`--compare` 지움 | 운영 서버는 0.1.0(settings.yaml 하나). 사용자 11-02 | todo | [op-08](prd/ops-settings.md#op-08) |
 | 하드코딩 0 — 설정 값은 settings.yaml이나 이미지 기본값 표(`settings.py`)에서만, 호스트 셸은 `settings_env.sh`가 준 값만, PG 자동 찾기 없앰(PG 접속 필수) | 한 곳을 바꾸면 나머지가 어긋나던 문제. 남은 복사본 있음(`/srv/rag/code/live` 기본값 등) | done | [op-09](prd/ops-settings.md#op-09) |
+| 환경마다 다른 경로·접속은 settings.yaml 필수(코드 기본값 없음) — 컨테이너 안 경로는 이미지 기본값 표 하나만, 호스트 `PATCH_CODE` 기본값 지움 | 사용자 11-02 | todo | [op-09](prd/ops-settings.md#op-09) |
 | 은퇴한 설정 지우기 — `common.paths.korean_font`·`eval_sets_dir` 등(남아 있으면 경고만) | 지문이 바뀌어 0.1.0 묶음에 | done | [pl-21](prd/ops-settings.md#pl-21) |
 | 아무도 안 읽는 env 4개(`FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`)를 run_docs 명령에서 뺌 | C-51 | done | [pl-30](prd/ops-settings.md#pl-30) |
 
@@ -191,5 +199,7 @@
 | 코드 없는 실행 이미지(`data-pipeline-runtime`·`mcp-server-runtime`)에 코드 폴더를 `/app/deploy`로 읽기 전용 마운트 | 개발 서버에서 이미지를 다시 만들지 않고 코드만 바꿔 시험 | done | [op-06](prd/doc.md#op-06) |
 | 시작 검사 `runtime_entry.sh` — 코드 폴더가 없거나 의존성 지문(`DEPS_HASH`)이 다르면 종료 2, 이미지 판·코드 커밋을 한 줄 기록 | 의존성 어긋남이 나중에 조용한 오류로 터지지 않게 | done | [op-06](prd/doc.md#op-06) |
 | 개발 → 운영 굽기 `bake.sh` — 개발에서 쓴 실행 이미지 + 시험한 코드 폴더로 `Dockerfile.bake`(네트워크 없이), 반입 판정 뒤 저장·분할 | 운영에는 개발에서 시험한 그대로 올라간다 | done | [op-07](prd/doc.md#op-07) |
+| 운영(prd) 이미지에 settings.yaml(비밀 포함)도 굽는다 — 🔒 검토 등급 A(비밀 처리) | 이미지 파일 = 비밀(반입 경로만), 키를 바꿀 때마다 다시 굽기. 사용자 11-02 | todo | [op-07](prd/doc.md#op-07) |
 | 서버 설치 길은 하나(README §5-0·§5-3). 컨테이너 도구는 셸 env > `ops.host.docker` > podman > docker. 이미지는 `load.sh`로(45 MB 조각) | 문서마다 절차가 달랐다. 서버 기본 도구는 podman | done | [op-10](prd/doc.md#op-10) |
 | 0.2.0 올리기·되돌리기(release-and-patch §5-7) — DB 백업 → `migrate check` → `up`, 되돌릴 땐 `settings.yaml.0.1.0` 복원, 재처리 동안 밤 타이머 멈춤 | DB·EDW·전체 재처리가 함께 바뀐다 | done | [op-10](prd/doc.md#op-10) |
+| 일회성 작업 컨테이너 지움 — 운영 작업·`dbtool`·`migrate`는 상주 `data-pipeline`에 `exec`, 이미지 점검(`docker run --rm … selftest`)은 그대로 | 사용자 11-02 | todo | [op-10](prd/doc.md#op-10) |
