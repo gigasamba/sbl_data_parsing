@@ -409,6 +409,9 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 4 | 2주 뒤 옛 gold 스키마·옛 `struct` 스키마를 백업한 뒤 지움 | DB 담당 | C-74 |
 | 5 | `versions.md`에 판 한 줄 · `deploy/docker/IMAGE_BASE` · 되돌리기가 필요 없어진 뒤 옛 이미지 정리(`prune_old.sh --apply`) | 서버 운영·devops | §6·§7 |
 | 6 | 문제는 `server-changes.md`에 이슈로 → PC가 고침 → 다음 오버레이 패치 | 서버 운영·개발자 | [server-guide.md](server-guide.md) §7 |
+| 7 | `query_edw` 오탐(T14 — [mc-06](../prd/mcp.md#mc-06)) — **확인:** 서버 MCP에서 실제 업무 SELECT 몇 개(JOIN·`WITH`·대괄호 이름·한글 별칭·`TOP`이 든 것)를 `query_edw`로 부른다. **기대:** 모두 행이 오거나 행·시간 상한 안내만 나온다 — 정상 SELECT가 `error`(`unterminated_*`·판단 못 함·허용 목록 밖)로 거부되면 그 SQL과 오류 코드를 `server-changes.md`에 적는다 | 서버 운영 | — |
+| 8 | `edw_meta` 표 이름 끝 공백(T14 — [mc-07](../prd/mcp.md#mc-07)) — **확인:** 서버 카탈로그(`search.edw_meta.dir`의 `catalog.json`)에서 이름 끝에 공백이 있는 표를 찾아, `edw_meta`를 그 이름 그대로와 공백을 뺀 이름으로 각각 부른다. **기대:** 둘 다 같은 표의 칸 목록이 나온다(조회 키는 앞뒤 공백을 빼고 소문자로 맞춤 — `mcp_server/services/edw_meta.py`). "모르는 이름" 제안이 나오면 실패 | 서버 운영 | — |
+| 9 | 질의 기록 쓰기(T14 — [mc-09](../prd/mcp.md#mc-09)) — **확인:** settings.yaml `search.query_log.dir`(비우면 이미지 안 `output/qa_log`) 폴더가 mcp-server 컨테이너에서 UID 10001로 쓰이는지 — `docker exec <mcp 컨테이너> sh -c 'id -u; touch <폴더>/.w && rm <폴더>/.w && echo ok'`, 그다음 `search`를 한 번 부르고 `qa_log.jsonl` 줄 수를 본다. **기대:** `10001`·`ok`가 나오고 줄이 하나 늘어난다. 권한 오류면 호스트 폴더 주인을 10001로(bind 마운트는 `:z`) | 서버 운영 | — |
 
 ## 9. (옮김 — 옛 §8·§9)
 
