@@ -367,7 +367,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 새벽 배치 | 시작 시각·문서 수 상한·마감 시각이 settings.yaml 칸 — 비면 돌지 않는다. 칸 이름 어긋남(`pipeline.host.nightly.time` ↔ `ops.nightly.time`)을 고친다 | [pl-23](../prd/ops.md#pl-23) |
 | Quote 표 · 고객 조인 사슬 | Quote 표는 지금 없다(그 단계만 건너뜀). 고객 조인 사슬은 운영 쪽이 고칠 수 있는 설정 파일로 바꾼다(정리 3d) | [pl-29](../prd/load.md#pl-29) |
 | `adk.py` | 지시문은 두고 장치는 `llm.py` 호출 하나로 줄인다 — 0.2.0 지문 배치에서 CPU 부하 고침과 함께 | [pl-46](../prd/transform-cleanup.md#pl-46) |
-| 설정 이관 | 0.1.0 settings.yaml → 0.2.0은 `common.config.migrate`의 옛 배치 바꾸기만 남긴다(env 파일 옮기기·`--compare`는 정리 3에서 지움) | [op-08](../prd/ops-settings.md#op-08) |
+| 설정 이관 | 0.1.0 settings.yaml → 0.2.0은 `common.config.migrate`의 옛 배치 바꾸기만 남긴다(env 파일 옮기기·`--compare`는 11-02에 지움 — `feature/migrate-trim`) | [op-08](../prd/ops-settings.md#op-08) |
 | 일회성 작업 컨테이너 | compose 작업 서비스(`parse`·`index_a`·`index_b`)와 `compose run --rm`을 지우고, 운영 작업·`dbtool`·`migrate`는 상주 `data-pipeline` 컨테이너에 `exec`로 돌린다. 빌드·반입 이미지 점검(`docker run --rm <새 이미지> selftest`)은 그대로(정리 3a) | [op-10](../prd/doc.md#op-10) |
 | 내부망 코드 관리(P-08) | 내부망 gitea — [gitea-guide.md](gitea-guide.md) | — |
 

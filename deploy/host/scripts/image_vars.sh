@@ -5,7 +5,7 @@
 #   별칭으로 읽지 않는다 — 새 이름이 셸 env에 없는데 옛 이름만 있으면 안내를 찍고 2를 돌려준다(코디네이터 답 Q2 a — 부르는 쪽이 `|| exit 2`).
 #   둘 다 없으면 0(compose가 `${…:?}` 필수 안내로 멈춤). 값은 출력하지 않는다.
 #   S7e1 — 새 이름은 settings.yaml(pipeline.host.image·mcp.host.image)에서 settings_env.sh load_settings가 셸 env로 낸다. 부르기 전에 load_settings.
-#   (옛 env 파일(ENV_FILE=pipeline.env)은 더 읽지 않는다 — 옛 이름은 settings.yaml 칸이 아니라 migrate가 "삭제 후보"로만 보고함)
+#   (옛 env 파일(ENV_FILE=pipeline.env)은 더 읽지 않는다)
 #   need_image pipeline   — 파이프라인 이미지(compose.pipeline.yml의 parse~publish·상주 트리거)
 #   need_image mcp        — 검색 MCP 이미지(compose.mcp.yml의 mcp 서비스)
 _set_somewhere() {   # _set_somewhere <이름들> — 셸 env에 값이 있으면 0
