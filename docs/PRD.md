@@ -18,12 +18,12 @@
 | 파일은 Object Storage 버킷에서 `s3_key`로 받는다. 파싱 입력은 폴더 또는 목록 파일(`rdb:csv:<경로>`) 둘뿐 | `s3://` 직접 입력·RDB 표 직접 조회·원천 목록 파일(`sources.json`)은 지웠다(사용자 11-01) — 길을 하나로 | done | [pl-01](prd/extract.md#pl-01) |
 | 미리 받기(warm) — `run_docs`가 파싱보다 앞서 문서를 최대 20개(`ops.run_docs.warm`)까지 받아 임시 폴더(`_warm`)에 둔다 | 다운로드를 기다리느라 파싱 워커가 놀지 않게. 받기 실패면 파싱 때 직접 받는다 | done | [pl-01](prd/extract.md#pl-01) |
 | 병렬 다운로드 — 목록 파일의 여러 파일을 동시에 받는다(`source warm` 기본 2개 `extract.prefetch_workers` · `rdb:csv` 받기 기본 1개 `extract.source.fetch_workers`) | 큰 목록을 빨리 받는다. 받기는 네트워크 대기라 CPU를 거의 안 쓴다 | done | [pl-48](prd/extract.md#pl-48) |
-| 서버 러너도 병렬로 받는다 — 실제 동시 받기 수 = min(받기 워커 수, 미리 받기 빈자리) | 미리 받기 상한(대기열 관리)과 함께 작동한다. 지금 `run_docs`는 받기 스레드 하나라 하나씩 받는다(사용자 11-02) | todo | [pl-48](prd/extract.md#pl-48) |
+| 서버 러너도 병렬로 받는다 — 받기 워커 `ops.run_docs.warm_workers`(기본 2)개가 차례대로 집어 동시에 받는다. 실제 동시 받기 수 = min(받기 워커 수, 미리 받기 빈자리) | 미리 받기 상한 `ops.run_docs.warm`(받는 중 포함)과 함께 작동 — 빈자리가 없으면 워커가 있어도 받지 않는다(사용자 11-02) | done | [pl-48](prd/extract.md#pl-48) |
 | 레인 나누기 — 받은 직후 셋으로. **vlm**: 스캔 PDF(첫 3쪽 글자 평균 300자 미만)·그림 많은 오피스(내장 그림 8개 이상 또는 800 KB 이상)·pptx·ppt·검사 목록 밖 형식(mht·mhtml·이미지 등). **medium**: 검사한 pdf·오피스 중 가벼운데 큰 파일(docx·doc 300 KB, xlsx·xls·xlsm 500 KB, pdf 1 MB 이상). **light**: 글자형(txt·hwp·hwpx·csv·eml·msg·html)과 나머지 | 그림 읽는 모델(VLM)이 필요한 무거운 문서가 가벼운 문서를 막지 않게 — 레인마다 전담·공유 워커, vlm은 동시 2개(GPU), light는 CPU 부하 대기를 건너뜀(`run_docs.py` `classify_doc`, `docflow_probe.py`) | done | [rn-01](prd/ops.md#rn-01) |
 | 완전히 같은 파일(sha256 같음)은 한 번만 파싱하고 결과를 재사용한다. 문서는 S3 키마다 따로 둔다 | 비싼 파싱을 중복하지 않는다. 키마다 메타(고객 등)가 달라 문서는 따로. 남길 사본: 사본 표시 없는 이름 → 최신 → 큰 파일(`dedup.py` `_rep_select`) | done | [pl-02](prd/extract.md#pl-02) |
 | ~~비슷한 문서 묶기(이름·내용 유사도)~~ | 지움(사용자 10-31, 코드 11-01) — 완전 중복만 남긴다 | dropped | [pl-02](prd/extract.md#pl-02) |
-| 회전 판정 기능 — 4방향(0·90·180·270도)을 한 번에 함께(병렬) 비교해 가장 나은 방향을 고른다. 기록 `rotation.csv` | 돌아간 스캔은 엔진이 읽지 못한다. 기능은 남긴다(사용자 11-02). 지금 코드는 4방향을 차례로 계산(`prepare.py:288`) — 병렬로 바꾸는 것은 운영 고침 묶음 | todo | [pl-02](prd/extract.md#pl-02) |
-| VLM 직전 기본 회전 적용 — 기본으로 끄고 조건이 맞는 쪽에만 쓴다(조건부) | 지금은 이미지·이미지 PDF 쪽마다 늘 돈다(`prepare.py` AD18). 조건 제안: 0도 빠른 OCR 점수 150(`extract.prepare.rotate_s0_min`) 미만인 쪽만 — 사용자 확인 대기 | todo | [pl-02](prd/extract.md#pl-02) |
+| 회전 바로잡기 — 켜면(`extract.prepare.rotate`) 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) OCR 점수를 스레드 4개로 동시에 재 가장 높은 방향으로 돌린다(같으면 0도). 기록 `rotation.csv` | 돌아간 스캔은 엔진이 읽지 못한다. 판단 규칙(문턱·1.3배·기대 각도·빠른 경로)은 지우고 기능만 남겼다(사용자 11-02). `rotation.csv`는 쪽 VLM·원본 sha 확인이 읽어 남김 | done | [pl-02](prd/extract.md#pl-02) |
+| 회전은 기본으로 끈다(`extract.prepare.rotate: false`) — 꺼지면 회전용 OCR을 전혀 하지 않고 그대로 놓는다 | 사용자 11-02. 옛 기본은 켬(이미지·스캔 PDF 쪽마다 OCR 점수 2~4번) | done | [pl-02](prd/extract.md#pl-02) |
 | DRM·암호 파일 감지 — 감지해서 표시만 | 복호화는 흐름 안에서 하지 않고 수동 명령(`python -m pipeline.extract.secure_docs decrypt`)으로 — 요건과 다르게 동작(앵커 표) | done | [pl-02](prd/extract.md#pl-02) |
 | 압축 파일은 지원하지 않는다고 표시 | — | done | [pl-02](prd/extract.md#pl-02) |
 | FAQ 원천 — 질의응답 엑셀을 행 단위로(시트 = FAQ 묶음, 행 하나 = 청크 하나). `FAQ/<uuid>/<파일>`을 FileStorageMap `source_system='FAQ'`로 등록 | 질의응답을 문서 통째가 아니라 질문 하나 단위로 찾는다. 0.2.0 | todo | [pl-39](prd/extract.md#pl-39) |

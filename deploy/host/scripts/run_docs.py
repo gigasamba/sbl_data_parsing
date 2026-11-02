@@ -213,7 +213,7 @@ def sets(*pairs):
 def warm_cmd(seq):
     """문서 1개 warm(프리페치) — 파싱 컨테이너 안 source warm."""
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'mkdir -p /app/output/_warm && cd /app && "
+        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && mkdir -p /app/output/_warm && cd /app && "
         f"PYTHONPATH=/app/deploy "
         f"python -m pipeline.extract.source{sets('SOURCE_WARM=/app/output/_warm')} warm --csv /app/output/docflow/{seq}/batch.csv'"
     )
@@ -251,7 +251,7 @@ def parse_cmd(seq, chan, scan, gate):
         f"CPU_MAX_LOAD={gate}",
     )
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && "
+        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && cd /app && "
         f"echo [envcheck] gate={gate} 채널={chan}; "
         f"{DOC_MARK}={inside} {LIB_ENV} "
         f"python -m pipeline.cli{doc} parse --source rdb:csv:{inside}/batch.csv'"
@@ -265,7 +265,7 @@ def struct_cmd(seq):
         *EMBED_SET, "FILE_META_PATH=/app/output/file_meta_new.jsonl"
     )  # 묶음·적재 python에(stackcfg는 이 칸을 안 읽어 뺌 — 덮기 파일 하나 덜, 리뷰 S9)
     return (
-        f"{DOCKER} exec {STRUCT_C} bash -c 'cd /app && "
+        f"{DOCKER} exec {STRUCT_C} bash -c 'umask 0002 && cd /app && "
         f"PYTHONPATH=/app/deploy "
         f"python -m pipeline.transform.structure.build_bundle{st} --parse-dir {inside}/parse"
         f" --out {inside}/bundle && "
@@ -278,7 +278,7 @@ def publish_cmd(seq):
     """문서 1개 publish(OS + EDW — 파싱 컨테이너)."""
     inside = f"/app/output/docflow/{seq}"
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && "
+        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && cd /app && "
         "PYTHONPATH=/app/deploy python -m pipeline.load.publish_parse_result"
         f"{sets('PM_BUCKET_SKIP_OVERLAP_CHECK=1')} "  # 실행 방침(접속 값 아님) — 버킷·접두·표·EDW·Object Storage는 컨테이너가 설정 파일에서(S7e1 Q8)
         f"--out {inside} --source-system FileStorageMap --apply "
@@ -299,7 +299,8 @@ def sweep_cmd(seq):
 # ── 레인·대기열 정책(사용자 10-29 — docs/prd/runner.md rn-01·rn-02) — settings.yaml ops.run_docs(configure()가 읽음).
 # 기본값은 설정 모델 pipeline.config.PipelineHostRunDocs와 같다(이 스크립트는 호스트 python이라 모델을 import하지 않음 — 시험이 둘을 대조).
 RUN_DOCS_DEFAULTS = {
-    "warm": 20,  # 진입 대기열 — 미리 받아 둘 문서 수(진행 중 제외)
+    "warm": 20,  # 진입 대기열 — 미리 받아 둘 문서 수(받는 중 포함 · 파싱 중 제외)
+    "warm_workers": 2,  # 미리 받기 동시 수(pl-48 — 사용자 11-02) — 실제 동시 받기 = min(이 값, 대기열 빈자리)
     "struct_workers": 2,  # 구조화·적재 스레드 수
     "struct_backlog": None,  # 중간 대기열 상한(파싱 끝·구조화 대기) — 비우면 구조화 워커 × 2, 0 = 상한 없음
     "vlm_cap": 2,  # vlm 문서 동시 파싱 상한(gpu 예산)
@@ -312,6 +313,7 @@ RUN_DOCS_DEFAULTS = {
 }
 LANES = ("light", "medium", "vlm")
 WARM_TARGET, STRUCT_WORKERS, VLM_CAP = RUN_DOCS_DEFAULTS["warm"], RUN_DOCS_DEFAULTS["struct_workers"], RUN_DOCS_DEFAULTS["vlm_cap"]
+WARM_WORKERS = RUN_DOCS_DEFAULTS["warm_workers"]
 LANE_WORKERS = {c: (RUN_DOCS_DEFAULTS[f"{c}_dedicated"], RUN_DOCS_DEFAULTS[f"{c}_shared"]) for c in LANES}  # 레인 → (전담, 공유)
 _BACKLOG_SETTING = RUN_DOCS_DEFAULTS["struct_backlog"]  # main()이 STRUCT_BACKLOG로 풂(구조화 워커 수 인자가 덮은 뒤)
 STRUCT_BACKLOG = 0
@@ -393,7 +395,11 @@ def run_docs_policy(doc):
             probs.append(f"pipeline.host.run_docs.{k} 형식 오류 — 0 이상 정수만")
     if probs:
         return vals, probs
-    for k in ("warm", "vlm_cap"):  # 0이면 문서를 안 받거나(warm) vlm 레인을 아무도 안 집어 배치가 끝나지 않음(PR #7 리뷰)
+    for k in (
+        "warm",
+        "warm_workers",
+        "vlm_cap",
+    ):  # 0이면 문서를 안 받거나(warm·warm_workers) vlm 레인을 아무도 안 집어 배치가 끝나지 않음(PR #7 리뷰)
         if vals[k] < 1:
             probs.append(f"pipeline.host.run_docs.{k} — 1 이상만")
     shared = sum(vals[f"{c}_shared"] for c in LANES)
@@ -405,8 +411,9 @@ def run_docs_policy(doc):
 
 def apply_policy(vals):
     """run_docs_policy() 값 → 모듈 값(configure()가 부름)."""
-    global WARM_TARGET, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING
+    global WARM_TARGET, WARM_WORKERS, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING
     WARM_TARGET, STRUCT_WORKERS, VLM_CAP = vals["warm"], vals["struct_workers"], vals["vlm_cap"]
+    WARM_WORKERS = vals["warm_workers"]
     LANE_WORKERS = {c: (vals[f"{c}_dedicated"], vals[f"{c}_shared"]) for c in LANES}
     _BACKLOG_SETTING = vals["struct_backlog"]
 
@@ -464,12 +471,20 @@ def edw_list(keywords):
     return rows
 
 
+DONE_STATUSES = (
+    "ok",
+    "partial",
+    "skipped_dup",
+)  # 끝난 문서 = common/store/parsing_meta_db.DONE_STATUSES와 같게(C10 — 사용자 11-01, 운영 고침 11b)
+
+
 def edw_done_keys():
-    """EDW AI.ParsingMeta에서 ok·parallel 종료된 source_key 집합(2026-10-22 사용자 지정 — 재실행 skip용)."""
+    """EDW AI.ParsingMeta에서 끝난(DONE_STATUSES) source_key 집합(2026-10-22 사용자 지정 — 재실행 skip용 · 키는 FileStorageMap s3_key와 글자 그대로 비교)."""
 
     conn = _edw_connect()  # S7e1 — 설정 파일의 parsing-meta 접속(옛 코드 기본값 — 운영 접속 값·비밀 삭제, D-028 ⑨)
     cur = conn.cursor()
-    cur.execute("SELECT source_key FROM AI.ParsingMeta WHERE parse_status IN ('ok','partial')")
+    marks = ", ".join(f"'{s}'" for s in DONE_STATUSES)  # 코드 상수만 SQL에 넣음(값 바인딩 없음)
+    cur.execute(f"SELECT source_key FROM AI.ParsingMeta WHERE parse_status IN ({marks})")
     keys = {r[0] for r in cur.fetchall()}
     conn.close()
     return keys
@@ -523,7 +538,11 @@ def _class_cache():
         return {}
 
 
+_class_lock = threading.Lock()  # 분류 캐시 — 미리 받기 워커 여럿(pl-48)이 같은 사전·파일을 씀
+
+
 def _class_save(cache):
+    """호출자가 _class_lock을 잡은 채로 부른다(사전을 글자로 바꾸는 동안 다른 워커가 넣지 않게)."""
     p = PROG / "docflow_class.json"
     p.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
 
@@ -557,48 +576,58 @@ def classify_doc(seq, row, cache=None):
         cls = (
             "vlm"  # 모르는 형식 — 보수적으로 vlm(예산 캡 안에서 처리)                                     # 모르는 형식 — 보수적으로 heavy
         )
-    if cache is not None and row["s3_key"] in cache:
-        cls = cache[row["s3_key"]]
-    elif cache is not None:
-        cache[row["s3_key"]] = cls
-        _class_save(cache)
+    if cache is not None:
+        with _class_lock:
+            if row["s3_key"] in cache:
+                cls = cache[row["s3_key"]]
+            else:
+                cache[row["s3_key"]] = cls
+                _class_save(cache)
     _class[seq] = cls
     mark(seq, "classify", ocr=cls)
     return cls
 
 
 def downloader(rows, order):
-    """대기열 유지 스레드 — 지정 문서 순서대로 WARM_TARGET개까지 미리 받아 둔다(진행중 제외)."""
+    """대기열 유지 — 지정 문서 순서대로 WARM_TARGET개(받는 중 포함)까지 미리 받아 둔다(파싱 중 제외). 받기 워커 WARM_WORKERS개가
+    차례(order)를 하나씩 집어 동시에 받는다(pl-48 — 사용자 11-02): 실제 동시 받기 = min(WARM_WORKERS, 대기열 빈자리).
+    빈자리가 없으면 워커가 있어도 받지 않는다. 다 집으면 워커가 끝나고, 모두 끝나면 이 함수도 끝난다."""
     global _next_warm
-    _cache = _class_cache()
-    ptr = 0
+    cache = _class_cache()
+    pos = {"ptr": 0}
     with _warm_lock:
-        _next_warm = order[ptr] if order else 10**12
-    while not _stop.is_set():
-        with _warm_lock:
-            if ptr >= len(order):
-                if _lane_total() == 0 and not any(_lane_inflight.values()):
+        _next_warm = order[0] if order else 10**12
+
+    def worker():
+        global _next_warm
+        while not _stop.is_set():
+            with _warm_lock:
+                if pos["ptr"] >= len(order):
                     return
-                _warm_lock.wait(5)
-                continue
-            if _lane_total() >= WARM_TARGET:
-                _warm_lock.wait(5)
-                continue
-            seq = order[ptr]
-            ptr += 1
-            _next_warm = order[ptr] if ptr < len(order) else 10**12
-            _warming.add(seq)
-        row = rows[seq]
-        t_w = time.time()
-        ok = warm_one(seq, row)
-        mark(seq, "warm_end", ok=ok, sec=round(time.time() - t_w, 1))
-        classify_doc(seq, row, cache=_cache)  # OCR 필요도 사전 분류(캐시 우선) → 워커 배분용
-        with _warm_lock:
-            LANEQ[_class.get(seq) or "light"].append(seq)
-            mark(seq, "dispatched")
-            _warming.discard(seq)
-            _warm_lock.notify_all()
-        depth("dispatch")
+                if _lane_total() + len(_warming) >= WARM_TARGET:  # 빈자리 없음 — 파싱이 하나 시작되면 notify
+                    _warm_lock.wait(5)
+                    continue
+                seq = order[pos["ptr"]]
+                pos["ptr"] += 1
+                _next_warm = order[pos["ptr"]] if pos["ptr"] < len(order) else 10**12
+                _warming.add(seq)
+            row = rows[seq]
+            t_w = time.time()
+            ok = warm_one(seq, row)
+            mark(seq, "warm_end", ok=ok, sec=round(time.time() - t_w, 1))
+            classify_doc(seq, row, cache=cache)  # OCR 필요도 사전 분류(캐시 우선) → 워커 배분용
+            with _warm_lock:
+                LANEQ[_class.get(seq) or "light"].append(seq)
+                mark(seq, "dispatched")
+                _warming.discard(seq)
+                _warm_lock.notify_all()
+            depth("dispatch")
+
+    ts = [threading.Thread(target=worker, daemon=True) for _ in range(max(1, WARM_WORKERS))]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
 
 
 def _sweep_orphan(seq):
@@ -832,7 +861,7 @@ def main():
         done = edw_done_keys()
         before = len(order)
         order = [s for s in order if rows[s]["s3_key"] not in done]
-        log(f"skip-done: {before - len(order)}건 이미 완료(ok·partial) — 남은 {len(order)}건 처리")
+        log(f"skip-done: {before - len(order)}건 이미 완료({'·'.join(DONE_STATUSES)}) — 남은 {len(order)}건 처리")
     if not order:
         log("처리할 문서 없음 — 종료")
         return

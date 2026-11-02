@@ -461,6 +461,29 @@ bash deploy/release/ship_stage.sh pipeline-runtime mcp-runtime                 #
 
 ### 5-3. 서버 — 처음 설치
 
+**새 서버 첫 설치 순서(한눈에 — 자세한 명령은 아래 ①~⑥)**
+
+1. pgvector 준비 — PG 16 + pgvector가 떠 있고, 우리 DB·계정이 있어야 한다(DB 담당자). 그 DB에 `vector` 확장을 관리자가 한 번 만든다(③ 0번).
+2. 이미지와 코드 폴더 — 이미지 적재(`load.sh`), 코드 zip을 판 폴더에 풀고 `live` 링크(§5-0 1~3).
+3. settings.yaml 만들기 — `settings.sample.yaml`을 복사해 `required:` 칸을 채운다(②). 언제: 컨테이너를 띄우기 전, 이미지·코드를 놓은 직후. 어디: ② 경로(소유 UID 10001, 권한 640). 칸마다 뜻은 sample의 주석과 [env-guide](docs/operations/env-guide.md) §1.
+4. 결과 폴더 — UID 10001 · 운영 그룹 · `chmod 2775`(②).
+5. DB 마이그레이션 — `migrate check` → `up`/`stamp`(③).
+6. 연결 점검 — 모델 주소 `run_tool.sh ping_models`(LLM·VLM·임베딩 — 하나라도 실패면 종료 1), `run_tool.sh check_env`, PG `migrate check`(④).
+7. 이미지 점검 — `check-modules`, `selftest`(⑤).
+8. 띄우는 순서 — pgvector → 파이프라인 상주 컨테이너(`dc up -d data-pipeline-parse data-pipeline-structure`, §5-5) → MCP 파싱 작업 서비스(§5-5 표) → 검색 MCP(`mcp_up.sh`, ⑥). 띄운 뒤 MCP `/health`가 200이고 `parse_document` 시험 파일 1건이 결과를 돌려주는지 본다.
+
+**포트 — 모두 settings.yaml 칸(서버·사용자마다 다르게 둘 수 있음, 비우면 기본값)**
+
+| 무엇 | settings.yaml 칸 | 기본 | 누가 붙나 |
+|---|---|---|---|
+| PostgreSQL(pgvector) | `required.pg.port` | 없음(필수) | 파이프라인·검색 MCP |
+| 검색 MCP 서버 | `search.server.port`(바인드 `search.server.host`) | 8765(127.0.0.1) | AI 클라이언트 |
+| MCP 파싱 작업 서비스 | `ops.services.parse_mcp.port` — 검색 MCP가 부르는 주소는 `search.parse_proxy.url` | 8766 · `http://127.0.0.1:8766` | 검색 MCP의 `parse_document` |
+| EDW(SQL Server) | `common.connections.rdb.port`(주소·계정은 `required.edw`) | 1433 | 파이프라인 목록·게시·`query_edw` |
+| 검증 페이지(PC만) | `dev.mcp.ui_port` | 8790 | 사람(브라우저) |
+
+두 포트를 바꿀 때는 짝을 함께 바꾼다: `ops.services.parse_mcp.port`를 바꾸면 `search.parse_proxy.url`도. 컨테이너는 host 네트워크라 포트가 서버에서 겹치지 않아야 한다.
+
 **① 이미지와 코드 폴더** — §5-0 "개발 서버 설치" 1~3. 운영 서버(구운 이미지)는 §5-0 ②와 [release-and-patch](docs/operations/release-and-patch.md) §1-2.
 
 아래 명령은 root 셸의 코드 폴더(`cd /srv/rag/code/live`)에서 실행한다. 먼저 이 셸에서만 쓸 함수 하나를 정의한다. 이 함수는 settings.yaml을 읽고, 실행 이미지면 코드 폴더를 붙여 compose를 부른다.
@@ -477,7 +500,7 @@ dc() { ( . deploy/host/scripts/settings_env.sh && load_settings && . deploy/host
 mkdir -p /srv/rag/env && chmod 700 /srv/rag/env
 cp settings.sample.yaml /srv/rag/env/settings.yaml                  # 필요한 항목만 값을 채움
 chown 10001:<운영 그룹> /srv/rag/env/settings.yaml && chmod 640 /srv/rag/env/settings.yaml
-mkdir -p /srv/rag/output && chown 10001 /srv/rag/output              # 컨테이너 사용자 UID 10001(root podman이라 그대로 맞음)
+mkdir -p /srv/rag/output && chown 10001:<운영 그룹> /srv/rag/output && chmod 2775 /srv/rag/output   # 컨테이너 UID 10001 · 그룹 = 운영 계정 그룹 · setgid(2) — 새 파일이 그 그룹을 물려받고, 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지울 수 있다
 ```
 
 서버 settings.yaml에 **반드시 적을 항목**이다. 빠지면 시작을 거부하거나 동작이 조용히 바뀐다(전체 표는 refactor.md "최종" ②-1).
@@ -498,6 +521,8 @@ mkdir -p /srv/rag/output && chown 10001 /srv/rag/output              # 컨테이
 **③ DB 마이그레이션** — 적재·검색을 하기 전에 끝낸다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다).
 
 ```bash
+# 0. (DB마다 처음 한 번 — DB 관리자) vector 확장 — 서버 계정은 보통 우리 스키마 권한만 있어 직접 못 만든다. 없으면 migrate·적재가 "vector 확장 없음"으로 멈춘다
+#    $DOCKER exec <pg 컨테이너> psql -U <관리자 계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
 dc run --rm load migrate current
 dc run --rm load migrate check --target all                # a. 지금 버전과 차이 확인(읽기만)
 
@@ -569,7 +594,7 @@ bash deploy/host/scripts/trigger.sh publish     # Object Storage 업로드 + EDW
 | 검색 MCP 상주 확인                                       | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_up.sh`                                                                                             |
 | 새벽 배치                                              | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.time: "HH:MM"`(그 시각부터 5분 안에 시작 — 비우면 새벽 배치 없음, 기본 비움 · pl-32) |
 | 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음, 11-01 trigger 서버 지움) | `dc up -d data-pipeline-parse data-pipeline-structure`(§5-3의 `dc` — 실행 이미지면 코드 폴더를 붙임). 여러 번 불러도 안전 — 꺼진 것만 띄움 |
-| MCP `parse_document` 작업 서비스                        | compose가 띄우지 않으므로 파싱 컨테이너가 다시 시작될 때마다: `$DOCKER exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service` |
+| MCP `parse_document` 작업 서비스                        | compose가 띄우지 않으므로 파싱 컨테이너가 다시 시작될 때마다: `$DOCKER exec -d data-pipeline-parse bash -c 'umask 0002 && exec python -u -m pipeline.mcp_parse_service'`(`docker exec`는 entrypoint를 거치지 않아 umask를 여기서 준다) |
 | 재부팅 뒤 되살리기(podman)                                | `systemctl enable --now podman-restart` — podman은 docker처럼 데몬이 없어 `restart: unless-stopped` 컨테이너(검색 MCP·상주 컨테이너)를 부팅 때 다시 띄우지 않는다. 이 서비스가 그 컨테이너들을 되살린다. 검색 MCP는 keepalive 타이머가 한 번 더 본다. 상주 트리거는 keepalive 타이머가 없으니, 재부팅 뒤 `$DOCKER ps`로 `data-pipeline-parse`·`data-pipeline-structure`가 떠 있는지 보고, 없으면 위 `dc up -d …`를 다시 실행한 뒤 `parse_document` 작업 서비스도 다시 띄운다 |
 
 

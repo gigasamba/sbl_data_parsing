@@ -26,7 +26,7 @@ want=$(tr -d '\r\n' < deploy/docker/DEPS_HASH)
 commit=$(cut -d' ' -f1 CODE_COMMIT 2>/dev/null); case "$commit" in ''|'$Format'*) commit=$(git rev-parse HEAD 2>/dev/null || echo unknown) ;; esac   # clone이면 틀 그대로
 # 운영 서버 호스트 스크립트(deploy/host/ — trigger.sh·compose·systemd)도 이미지와 같은 코드로 — 시험한 코드 폴더 그대로 묶음
 BUNDLE="$OUT/code-$TAG-$(echo "$commit" | cut -c1-7).tar.gz"
-tar -czf - --exclude=./output -C "$CODE_DIR" . > "$BUNDLE"
+tar -czf - --exclude=./output --exclude=./settings.yaml --exclude="./settings.yaml.*" -C "$CODE_DIR" . > "$BUNDLE"   # settings.yaml(비밀값)·그 사본·백업은 운영으로 보내지 않음(운영 고침 — 사용자 11-02)
 
 for t in "${TARGETS[@]}"; do
   case "$t" in pipeline|mcp) ;; *) echo "[bake] 모르는 대상: $t (pipeline·mcp)" >&2; exit 2 ;; esac
