@@ -45,6 +45,9 @@ COLUMNS = (
     "engines_used",
     "engines_summary",
 )
+# 11-02(사용자) — DB 담당자가 칸 이름을 바꾼다(C-76): 코드 안 이름 → 새 실제 이름. 새 이름만 있으면 그것을 쓰고, 옛 이름이 남아 있으면 옛 이름(바꾸기 전후 모두 돎).
+# pipeline_version = 이 행의 silver를 만든 코드 판(게시 때 씀) → silver_version. gold에 올린 판은 gold_version(적재 때 loaded_at과 함께 UPDATE).
+RENAMES = {"source_key": "s3_key", "pipeline_version": "silver_version"}
 KEY = ("source_system", "source_key")  # SI39② — source_key가 있을 때의 겹침/건너뜀 키(이름이 아니라 원본 전체 키).
 # PM2 — source_key가 없으면(요건 "최소 키") doc_key 하나로 대신(_insert_new_rows).
 _SQLITE_TYPE = {"file_size": "INTEGER", "page_count": "INTEGER", "rep_acc": "REAL"}
@@ -57,6 +60,11 @@ SET_OPTIONS_SQL = (
 )
 
 
+def renames(found):
+    """RENAMES 중 표에 새 이름만 있는 것 {코드 안 이름: 실제 이름} — 둘 다 있으면(바꾸는 중간) 옛 이름을 씀."""
+    return {old: new for old, new in RENAMES.items() if new in found and old not in found}
+
+
 def _today_date():
     """PM2 — parse_date 기본값(처리 시각) — pipeline.load.parsing_meta.today()와 같은 글자 형식
     ('YYYY-MM-DD_HHMMSS', 파일 이름에도 쓰여 콜론 없음). 그 모듈을 여기서 import하면 common→pipeline
@@ -64,7 +72,7 @@ def _today_date():
     return datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
 
 
-def _insert_new_rows(cur, table, ph, rows, integrity_error, columns=None, kc="source_key"):
+def _insert_new_rows(cur, table, ph, rows, integrity_error, columns=None, ren=None):
     """rows 전부를 같은 트랜잭션 안에서 — KEY(source_system, source_key)가 이미 있으면(또는 PM2 — source_key가
     없으면 doc_key 하나) 그 행은 건너뜀(SI39④: UPDATE·MERGE 없음, INSERT만) — 단, row["_reparse"]가 참이면
     (사람이 명시한 재파싱) 이 사전 확인을 건너뛰어 새 parse_date로 그대로 INSERT한다(그 행의 rep_key·parse_date는
@@ -74,9 +82,11 @@ def _insert_new_rows(cur, table, ph, rows, integrity_error, columns=None, kc="so
     MAJOR-2 선례). 테이블·열 이름은 상수·화이트리스트만 SQL에 끼워 넣고 값은 전부 파라미터 바인딩.
     columns — 실제 INSERT에 쓸 열 목록(None=COLUMNS 전부). MssqlStore가 옛 표(PM2 DDL을 아직 안 돌린 EDW)에
     새 열이 없으면 이 목록을 줄여 와 그 열 없이도 INSERT가 깨지지 않게(요건 "DDL 미실행이어도 안 죽음").
-    kc — 원본 키 칸의 실제 이름(11-02 — DB 담당자가 source_key → s3_key로 바꾸기 전후 모두 돌게, 코드 안 이름은 source_key 그대로)."""
+    ren — 바뀐 칸 이름 {코드 안 이름: 실제 이름}(RENAMES 중 표에 새 이름만 있는 것 — 11-02, DB 담당자 DDL 전후 모두 돌게)."""
+    ren = ren or {}
+    kc = ren.get("source_key", "source_key")
     cols_list = list(columns) if columns is not None else list(COLUMNS)
-    phys = [kc if c == "source_key" else c for c in cols_list]
+    phys = [ren.get(c, c) for c in cols_list]
     inserted = skipped = 0
     for row in rows:
         row = {
@@ -156,15 +166,16 @@ def pick_rep(rows, source_system):
     return max(active or rows, key=lambda r: r.get("parse_date") or "")
 
 
-def mark_loaded(db, loaded):
-    """C10 예외(사용자 11-02) — 적재한 문서 [(source_system, 원본 키)]마다 쓸 행(pick_rep: active 중 최신)의 loaded_at을 지금(UTC)으로.
+def mark_loaded(db, loaded, version):
+    """C10 예외(사용자 11-02) — 적재한 문서 [(source_system, 원본 키)]마다 쓸 행(pick_rep: active 중 최신)의 loaded_at을 지금(UTC)으로,
+    gold_version을 version(적재한 코드 판)으로(칸이 있을 때만).
     ParsingMeta 행이 없는 문서는 건너뜀(실패 아님). 반환: 실패 건수(늘 0 — 실패는 예외로 올림, 호출부가 경고·건수 처리)."""
     keys = sorted({k for _, k in loaded if k})
     by_key = {}
     for r in db.rows_where("source_key", keys):
         by_key.setdefault(r["source_key"], []).append(r)
     ids = sorted({p["parse_meta_id"] for sys_, k in loaded if (p := pick_rep(by_key.get(k, []), sys_))})
-    db.set_loaded(ids)
+    db.set_loaded(ids, version)
     return 0
 
 
@@ -185,7 +196,8 @@ class MssqlStore:
         self.ident = ".".join(f"[{p}]" for p in table.split("."))
         self.schema, self.table_name = table.split(".", 1) if "." in table else (None, table)
         self._cols = None  # 지연 조회(_available_columns) — 연결하자마자 바로 안 봄, 첫 insert_new에서만
-        self._kc = "source_key"  # 원본 키 칸 실제 이름(_available_columns가 정함)
+        self._ren: dict[str, str] = {}  # 바뀐 칸 이름(_available_columns가 정함 — RENAMES)
+        self._found: set[str] = set()
         from common.store import (
             mssql,
         )  # S8b(5-4) — SQLAlchemy가 연 연결(인자 그대로) · 쓰기 도우미가 SQLite 대역과 같은 DBAPI 커서 코드라 커서 그대로
@@ -208,11 +220,10 @@ class MssqlStore:
             else:
                 cur.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=%s", (self.table_name,))
             found = {r[0] for r in cur.fetchall()}
-            self._kc = (
-                "s3_key" if "s3_key" in found and "source_key" not in found else "source_key"
-            )  # 11-02 — 바꾸기 전후 모두(둘 다 있는 중간 상태는 옛 칸)
-            if self._kc == "s3_key":
-                found.add("source_key")  # 코드 안 이름 source_key → 실제 칸 s3_key(_insert_new_rows가 바꿔 씀)
+            self._found = set(found)
+            # 11-02 — 바꾸기 전후 모두(둘 다 있는 중간 상태는 옛 칸) · 코드 안 이름 → 실제 칸(_insert_new_rows가 바꿔 씀)
+            self._ren = renames(found)
+            found |= set(self._ren)
             self._cols = [c for c in COLUMNS if c in found]
             missing = [c for c in COLUMNS if c not in found]
             if missing:
@@ -225,7 +236,7 @@ class MssqlStore:
         cur = self.cn.cursor()
         try:
             cols = self._available_columns(cur)
-            counts = _insert_new_rows(cur, self.ident, "%s", rows, pymssql.IntegrityError, columns=cols, kc=self._kc)
+            counts = _insert_new_rows(cur, self.ident, "%s", rows, pymssql.IntegrityError, columns=cols, ren=self._ren)
             self.cn.commit()
             return counts
         except Exception:
@@ -236,7 +247,7 @@ class MssqlStore:
         """원본 키 칸의 실제 이름 — s3_key가 있으면 그것(DB 담당자가 바꾼 뒤), 없으면 source_key(11-02 cutover)."""
         if self._cols is None:
             self._available_columns(self.cn.cursor())
-        return self._kc
+        return self._ren.get("source_key", "source_key")
 
     def rows_where(self, col, values):
         return _rows_where(self.cn.cursor(), self.ident, "%s", col, values, self.key_col())
@@ -247,15 +258,19 @@ class MssqlStore:
     def done_source_keys(self):
         return _done_keys_rows(self.cn.cursor(), self.ident, self.key_col())
 
-    def set_loaded(self, ids):
-        """loaded_at = SYSUTCDATETIME()(C10 예외 — 칸은 DB 담당자가 더함, C-76). 칸이 없으면 예외(호출부가 경고)."""
+    def set_loaded(self, ids, version):
+        """loaded_at = SYSUTCDATETIME()·gold_version = version(C10 예외 — 칸은 DB 담당자가 더함, C-76). loaded_at이 없으면 예외(호출부가 경고),
+        gold_version이 없으면 그 칸만 빼고 씀."""
+        if self._cols is None:
+            self._available_columns(self.cn.cursor())
+        gv, vals = (", gold_version = %s", (version,)) if "gold_version" in self._found else ("", ())
         cur = self.cn.cursor()
         try:
             for k in range(0, len(ids), IN_CHUNK):
                 part = ids[k : k + IN_CHUNK]
                 cur.execute(
-                    f"UPDATE {self.ident} SET loaded_at = SYSUTCDATETIME() WHERE parse_meta_id IN ({', '.join(['%s'] * len(part))})",
-                    tuple(part),
+                    f"UPDATE {self.ident} SET loaded_at = SYSUTCDATETIME(){gv} WHERE parse_meta_id IN ({', '.join(['%s'] * len(part))})",
+                    vals + tuple(part),
                 )
             self.cn.commit()
         except Exception:
@@ -286,7 +301,7 @@ class SqliteStore:
         cols_sql = ", ".join(f"{c} {_SQLITE_TYPE.get(c, 'TEXT')}" + (" NOT NULL" if c == "doc_key" else "") for c in COLUMNS)
         self.cn.execute(
             f"CREATE TABLE IF NOT EXISTS {table} (parse_meta_id INTEGER PRIMARY KEY AUTOINCREMENT, {cols_sql}, "
-            f"parsed_at TEXT NOT NULL DEFAULT (datetime('now')), loaded_at TEXT)"
+            f"parsed_at TEXT NOT NULL DEFAULT (datetime('now')), loaded_at TEXT, gold_version TEXT)"
         )
         self.cn.execute(
             f"CREATE UNIQUE INDEX IF NOT EXISTS ux_{table}_key ON {table}(source_system, source_key, parse_date) "
@@ -313,11 +328,14 @@ class SqliteStore:
     def done_source_keys(self):
         return _done_keys_rows(self.cn.cursor(), self.table, self.key_col())
 
-    def set_loaded(self, ids):
+    def set_loaded(self, ids, version):
+        cols = {r[1] for r in self.cn.execute(f"PRAGMA table_info({self.table})")}
+        gv, vals = (", gold_version = ?", (version,)) if "gold_version" in cols else ("", ())
         for k in range(0, len(ids), IN_CHUNK):
             part = ids[k : k + IN_CHUNK]
             self.cn.execute(
-                f"UPDATE {self.table} SET loaded_at = datetime('now') WHERE parse_meta_id IN ({', '.join(['?'] * len(part))})", tuple(part)
+                f"UPDATE {self.table} SET loaded_at = datetime('now'){gv} WHERE parse_meta_id IN ({', '.join(['?'] * len(part))})",
+                vals + tuple(part),
             )
         self.cn.commit()
 
