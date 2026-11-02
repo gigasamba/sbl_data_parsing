@@ -18,6 +18,9 @@ TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")
 # C10(사용자 10-31 · skipped_dup 11-01 — 완전 중복은 매일 밤 다시 안 고름) — 이 parse_status 행이 있으면 "파싱 끝난 문서"
 # (not_parsed·skipped_disk_cap·실패는 다시 고름 · 통째 실패는 ParsingMeta에 안 씀 — C3)
 DONE_STATUSES = ("ok", "partial", "skipped_dup")
+# 11-02(사용자) — ok·partial은 gold에도 올라가야(gold_version) 끝난 문서 — 적재(분류 포함)가 실패하면 다음 실행이 다시 고름.
+# skipped_dup(완전 중복)은 gold에 안 올리므로 그대로 끝. gold_version 칸이 생기기 전(C-76 ③)에는 parse_status만 본다.
+GOLD_STATUSES = ("ok", "partial")
 # 열 순서 — EDW DDL docs/operations/parsing_meta_mssql.sql과 같음(parse_meta_id·parsed_at·source_key_hash는 표가 자동으로 채움, test_parsing_meta_ddl.py가 고정)
 # PM2(10-15, 사용자) — 열·키를 최소로: doc_key(원본 sha256)만 필수, 그 밖은 전부 비어도 됨. engines_used·
 # engines_summary는 맨 끝에 더함(기존 열 자리는 안 바꿔 디프를 작게).
@@ -144,12 +147,17 @@ def _rows_parsed(cur, table, ph, lo, hi, kc="source_key"):
     return [dict(zip(REP_COLS, r)) for r in cur.fetchall()]
 
 
-def _done_keys_rows(cur, table, kc="source_key"):
-    """C10(pl-12, 사용자 10-31) — 파싱이 끝난 원본 키(source_key) 집합 — parse_status가 DONE_STATUSES(ok·partial·skipped_dup — 사용자 11-01)인 행만.
+def _done_keys_rows(cur, table, kc="source_key", gold=False):
+    """C10(pl-12, 사용자 10-31) — 끝난 원본 키(source_key) 집합 — parse_status가 DONE_STATUSES(ok·partial·skipped_dup — 사용자 11-01)인 행,
+    gold=True(gold_version 칸이 있음)면 ok·partial은 gold_version도 있어야(사용자 11-02 — silver나 gold 결과가 없으면 다시 대상).
     파싱 입구(pipeline.cli `_unparsed`)가 "FileStorageMap ∖ ParsingMeta"로 새 문서를 고를 때 쓴다(읽기만, SELECT).
     상수 글자만 SQL에 끼우고(DONE_STATUSES는 코드 상수) 값 바인딩은 없음."""
-    done = ", ".join(f"'{v}'" for v in DONE_STATUSES)
-    cur.execute(f"SELECT DISTINCT {kc} FROM {table} WHERE {kc} IS NOT NULL AND parse_status IN ({done})")
+    q = lambda xs: ", ".join(f"'{v}'" for v in xs)
+    cond = f"parse_status IN ({q(DONE_STATUSES)})"
+    if gold:
+        rest = [s for s in DONE_STATUSES if s not in GOLD_STATUSES]
+        cond = f"(parse_status IN ({q(rest)}) OR (parse_status IN ({q(GOLD_STATUSES)}) AND gold_version IS NOT NULL))"
+    cur.execute(f"SELECT DISTINCT {kc} FROM {table} WHERE {kc} IS NOT NULL AND {cond}")
     return {r[0] for r in cur.fetchall()}
 
 
@@ -166,17 +174,36 @@ def pick_rep(rows, source_system):
     return max(active or rows, key=lambda r: r.get("parse_date") or "")
 
 
-def mark_loaded(db, loaded, version):
+def mark_loaded(db, loaded, version, kept=()):
     """C10 예외(사용자 11-02) — 적재한 문서 [(source_system, 원본 키)]마다 쓸 행(pick_rep: active 중 최신)의 loaded_at을 지금(UTC)으로,
     gold_version을 version(적재한 코드 판)으로(칸이 있을 때만).
+    kept — 이미 gold에 있어 건너뛴 문서: gold_version이 빈 행만 채운다(loaded_at은 비었을 때만). 안 채우면 고르기(done_source_keys)가
+    그 문서를 매일 밤 다시 고른다(gold_version 칸을 더한 날의 옛 행·loaded_at 쓰기 실패·원천이 바뀐 문서 — 리뷰 11-02).
     ParsingMeta 행이 없는 문서는 건너뜀(실패 아님). 반환: 실패 건수(늘 0 — 실패는 예외로 올림, 호출부가 경고·건수 처리)."""
-    keys = sorted({k for _, k in loaded if k})
+    pairs = [*loaded, *kept]
     by_key = {}
-    for r in db.rows_where("source_key", keys):
+    for r in db.rows_where("source_key", sorted({k for _, k in pairs if k})):
         by_key.setdefault(r["source_key"], []).append(r)
-    ids = sorted({p["parse_meta_id"] for sys_, k in loaded if (p := pick_rep(by_key.get(k, []), sys_))})
-    db.set_loaded(ids, version)
+    ids = lambda docs: sorted({p["parse_meta_id"] for sys_, k in docs if (p := pick_rep(by_key.get(k, []), sys_))})
+    db.set_loaded(ids(loaded), version)
+    if kept:
+        db.set_loaded(ids(kept), version, kept=True)
     return 0
+
+
+def _set_loaded(cur, table, ph, now, ids, version, has_gold, kept):
+    """set_loaded 공용 — UPDATE 글자(상수·칸 이름만 끼움, 값은 바인딩). kept면 gold_version이 빈 행만(칸이 없으면 할 일 없음)."""
+    if kept and not has_gold:
+        return
+    la = f"COALESCE(loaded_at, {now})" if kept else now
+    gv, vals = (f", gold_version = {ph}", (version,)) if has_gold else ("", ())
+    only = " AND gold_version IS NULL" if kept else ""
+    for k in range(0, len(ids), IN_CHUNK):
+        part = ids[k : k + IN_CHUNK]
+        cur.execute(
+            f"UPDATE {table} SET loaded_at = {la}{gv} WHERE parse_meta_id IN ({', '.join([ph] * len(part))}){only}",
+            vals + tuple(part),
+        )
 
 
 class MssqlStore:
@@ -220,7 +247,7 @@ class MssqlStore:
             else:
                 cur.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=%s", (self.table_name,))
             found = {r[0] for r in cur.fetchall()}
-            self._found = set(found)
+            self._found = {c.lower() for c in found}  # SQL Server 칸 이름은 대소문자 무관(gold_version 확인용)
             # 11-02 — 바꾸기 전후 모두(둘 다 있는 중간 상태는 옛 칸) · 코드 안 이름 → 실제 칸(_insert_new_rows가 바꿔 씀)
             self._ren = renames(found)
             found |= set(self._ren)
@@ -256,22 +283,17 @@ class MssqlStore:
         return _rows_parsed(self.cn.cursor(), self.ident, "%s", lo, hi, self.key_col())
 
     def done_source_keys(self):
-        return _done_keys_rows(self.cn.cursor(), self.ident, self.key_col())
+        kc = self.key_col()  # 칸 목록(_found)도 여기서 채워짐
+        return _done_keys_rows(self.cn.cursor(), self.ident, kc, "gold_version" in self._found)
 
-    def set_loaded(self, ids, version):
+    def set_loaded(self, ids, version, kept=False):
         """loaded_at = SYSUTCDATETIME()·gold_version = version(C10 예외 — 칸은 DB 담당자가 더함, C-76). loaded_at이 없으면 예외(호출부가 경고),
-        gold_version이 없으면 그 칸만 빼고 씀."""
+        gold_version이 없으면 그 칸만 빼고 씀. kept — mark_loaded 참고."""
         if self._cols is None:
             self._available_columns(self.cn.cursor())
-        gv, vals = (", gold_version = %s", (version,)) if "gold_version" in self._found else ("", ())
         cur = self.cn.cursor()
         try:
-            for k in range(0, len(ids), IN_CHUNK):
-                part = ids[k : k + IN_CHUNK]
-                cur.execute(
-                    f"UPDATE {self.ident} SET loaded_at = SYSUTCDATETIME(){gv} WHERE parse_meta_id IN ({', '.join(['%s'] * len(part))})",
-                    vals + tuple(part),
-                )
+            _set_loaded(cur, self.ident, "%s", "SYSUTCDATETIME()", ids, version, "gold_version" in self._found, kept)
             self.cn.commit()
         except Exception:
             self.cn.rollback()
@@ -326,17 +348,12 @@ class SqliteStore:
         return _rows_parsed(self.cn.cursor(), self.table, "?", lo, hi, self.key_col())
 
     def done_source_keys(self):
-        return _done_keys_rows(self.cn.cursor(), self.table, self.key_col())
+        cols = {r[1].lower() for r in self.cn.execute(f"PRAGMA table_info({self.table})")}
+        return _done_keys_rows(self.cn.cursor(), self.table, self.key_col(), "gold_version" in cols)
 
-    def set_loaded(self, ids, version):
-        cols = {r[1] for r in self.cn.execute(f"PRAGMA table_info({self.table})")}
-        gv, vals = (", gold_version = ?", (version,)) if "gold_version" in cols else ("", ())
-        for k in range(0, len(ids), IN_CHUNK):
-            part = ids[k : k + IN_CHUNK]
-            self.cn.execute(
-                f"UPDATE {self.table} SET loaded_at = datetime('now'){gv} WHERE parse_meta_id IN ({', '.join(['?'] * len(part))})",
-                vals + tuple(part),
-            )
+    def set_loaded(self, ids, version, kept=False):
+        cols = {r[1].lower() for r in self.cn.execute(f"PRAGMA table_info({self.table})")}
+        _set_loaded(self.cn.cursor(), self.table, "?", "datetime('now')", ids, version, "gold_version" in cols, kept)
         self.cn.commit()
 
     def count(self):

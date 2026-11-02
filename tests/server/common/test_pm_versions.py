@@ -37,6 +37,27 @@ def test_gold_version():
     got = st.cn.execute("SELECT pipeline_version, gold_version, loaded_at IS NOT NULL FROM ParsingMeta").fetchone()
     st.close()
     assert got == ("0.1.0", "0.2.0", 1), got  # silver 판은 그대로, gold 판·적재 시각만
+    # 이미 gold에 있어 건너뛴 문서(kept) — gold_version이 빈 행만 채움(안 채우면 매일 밤 다시 고름 — 리뷰 11-02), 있는 값·loaded_at은 그대로
+    st = PM.SqliteStore(str(d / "pm.sqlite"))
+    st.insert_new([{"source_system": "SFDC", "source_key": "SFDC/a/y.pdf", "doc_key": "k2", "pipeline_version": "0.1.0"}])
+    before = st.cn.execute("SELECT loaded_at FROM ParsingMeta WHERE source_key = 'SFDC/a/x.pdf'").fetchone()[0]
+    PM.mark_loaded(st, [], "0.3.0", kept=[("SFDC", "SFDC/a/x.pdf"), ("SFDC", "SFDC/a/y.pdf")])
+    rows = dict(st.cn.execute("SELECT source_key, gold_version || '|' || (loaded_at IS NOT NULL) FROM ParsingMeta").fetchall())
+    after = st.cn.execute("SELECT loaded_at FROM ParsingMeta WHERE source_key = 'SFDC/a/x.pdf'").fetchone()[0]
+    done = st.done_source_keys()
+    st.close()
+    assert rows == {"SFDC/a/x.pdf": "0.2.0|1", "SFDC/a/y.pdf": "0.3.0|1"} and after == before, (rows, before, after)
+    assert done == set(), done  # parse_status가 없는 행 — 끝난 문서 아님(고르기는 parse_status도 봄)
+
+
+def test_done_keys():
+    """끝난 문서(사용자 11-02) — gold_version 칸이 있으면 ok·partial은 gold_version도 있어야 끝, skipped_dup은 그대로 끝. 칸이 없으면 parse_status만."""
+    cn = sqlite3.connect(":memory:")
+    cn.execute("CREATE TABLE T (source_key, parse_status, gold_version)")
+    rows = [("a", "ok", "0.2.0"), ("b", "ok", None), ("c", "partial", None), ("d", "skipped_dup", None), ("e", "not_parsed", "0.2.0")]
+    cn.executemany("INSERT INTO T VALUES (?, ?, ?)", rows)
+    assert PM._done_keys_rows(cn.cursor(), "T", gold=True) == {"a", "d"}
+    assert PM._done_keys_rows(cn.cursor(), "T", gold=False) == {"a", "b", "c", "d"}  # DB 담당자 DDL 전
 
 
 class _Db:
