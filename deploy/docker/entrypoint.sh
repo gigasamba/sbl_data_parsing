@@ -19,6 +19,13 @@
 #     서드파티 패키지가 없으면 FAIL(I2c) — 반입 판정은 /app/docker/selftest_gate.sh)  (smoke는 11-01에 지움 — 실문서 점검은 run_docs·trigger.sh parse로)
 set -euo pipefail
 cd /app
+umask 0002   # 그룹도 쓸 수 있게(파일 664·폴더 775) — 서버 운영 계정이 UID 10001이 쓴 결과를 고치고 지우게(결과 폴더 그룹·setgid는 server-guide §1-2)
+# 실제로 도는 코드의 판·커밋(운영 고침 8 — [image] 줄의 커밋은 실행 이미지를 빌드한 커밋이라 코드만 바꾼 배포와 다름).
+# 코드 폴더(실행 이미지 마운트)·구운 이미지 모두 /app/deploy/VERSION·CODE_COMMIT. CODE_COMMIT은 zip·git archive로 받을 때만 채워짐.
+_code_ver=$(tr -d ' \r\n' < /app/deploy/VERSION 2>/dev/null || true)
+_code_commit=$(tr -d '\r\n' < /app/deploy/CODE_COMMIT 2>/dev/null || true)
+case "$_code_commit" in ''|'$Format'*) _code_commit="표시 없음(git clone — zip·git archive로 받으면 채워짐)" ;; *) _code_commit=${_code_commit##* } ;; esac
+echo "[code] 판 ${_code_ver:-?} · 커밋 ${_code_commit}" >&2
 
 preflight() {
   echo "[점검] $(date '+%F %T %Z') · 시간대 ${TZ:-?} · 사용자 $(id -un)"

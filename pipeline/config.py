@@ -100,12 +100,16 @@ class PipelineExtractOcr(Section):
 
 
 class PipelineExtractPrepare(Section):
-    REMOVED = frozenset({"rotate_fast", "ocr"})  # 사용자 10-30(op-08) · ocr 11-01(rapidocr 1.x 길 지움 — 늘 3.x) — 지운 칸(남으면 경고만)
+    REMOVED = frozenset(
+        {"rotate_fast", "ocr", "rotate_lead", "rotate_probe_fast", "rotate_s0_min"}
+    )  # 사용자 10-30(op-08) · ocr 11-01(rapidocr 1.x 길 지움 — 늘 3.x) · rotate_lead·rotate_probe_fast·rotate_s0_min 11-02(회전 판단 규칙 지움 — 켬/끔만) — 지운 칸(남으면 경고만)
     link: str | None = F("auto", "PREPARE_LINK", "회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy")
-    rotate: bool | None = F(True, "PREPARE_ROTATE", "스캔 PDF 회전 검토(OCR 점수) 켬/끔 — 0이면 생략하고 그대로 복사", off=("0",))
-    rotate_lead: int | None = F(3, "PREPARE_ROTATE_LEAD", "빠른 회전 검토에서 기대 각도를 정하는 문서 맨 앞 쪽 수(개)")
-    rotate_probe_fast: int | None = F(480, "PREPARE_ROTATE_PROBE_FAST", "빠른 회전 검토의 축소 점검 이미지 크기(px)")
-    rotate_s0_min: float | None = F(150.0, "PREPARE_ROTATE_S0_MIN", "빠른 회전 검토에서 힌트 각도를 믿는 최소 OCR 점수")
+    rotate: bool | None = F(
+        False,
+        "PREPARE_ROTATE",
+        "이미지·스캔 PDF 쪽 방향 바로잡기 켬/끔 — 켜면 4방향 OCR 점수를 동시에 재 가장 높은 방향으로 돌림, 끄면 회전용 OCR 없이 그대로(사용자 11-02 기본 꺼짐)",
+        off=("0",),
+    )
 
 
 class PipelineExtractSource(Section):
@@ -361,7 +365,10 @@ class PipelineHostRunDocs(Section):
     """문서별 flow 러너(deploy/host/scripts/run_docs.py — 호스트에서 글자 그대로 읽음) 레인·대기열(사용자 10-29, docs/prd/runner.md rn-01·rn-02).
     기본값은 run_docs.py RUN_DOCS_DEFAULTS와 같다(tests/general/deploy/test_run_docs.py가 대조)."""
 
-    warm: int | None = F(20, "RUN_DOCS_WARM", "진입 대기열 — 미리 받아 둘 문서 수(진행 중 제외, 명령 인자 --warm이 덮음)")
+    warm: int | None = F(20, "RUN_DOCS_WARM", "진입 대기열 — 미리 받아 둘 문서 수(받는 중 포함·파싱 중 제외, 명령 인자 --warm이 덮음)")
+    warm_workers: int | None = F(
+        2, "RUN_DOCS_WARM_WORKERS", "미리 받기 동시 수 — 실제 동시 받기 = min(이 값, 대기열 빈자리)(pl-48, 사용자 11-02)"
+    )
     struct_workers: int | None = F(2, "RUN_DOCS_STRUCT_WORKERS", "구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음)")
     struct_backlog: int | None = F(
         None, "RUN_DOCS_STRUCT_BACKLOG", "중간 대기열 상한(파싱 끝·구조화 대기 문서 수) — 비우면 구조화 스레드 × 2, 0이면 상한 없음"

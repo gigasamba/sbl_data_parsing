@@ -13,7 +13,7 @@
   - `registry.py` 항목, `VLM_ENGINES`·`run_all`, `mcp_parse_service`의 ocr 묶음, `phase_report`·`summarize`·`report.py`의 라벨, `catalog.json` 행, `adk`·`llm`의 역할 표.
   - 엔진 파일 `pipeline/extract/engines/qwen_vlm/parser.py` 안의 ocr_vlm 코드 — qwen_vlm 엔진 핑거프린트가 바뀌어 이미지·스캔 문서를 다시 파싱한다. 0.1.0은 어차피 재처리라 받아들임. 검토 등급 A: 엔진 파일은 사용자가 검토. 스택은 그대로(ocr_vlm은 `pipeline_stack.json`에 없음).
 - `vlm.model_alt`(`VLM_MODEL_ALT`) 지움: figure_review 판정은 `vlm.model`(지금 기본값 — 결과 그대로). `parsing_meta.py`의 대체 길을 고치고 `model_matrix`의 연결을 뺀다. 옛 키는 `Section.REMOVED`(경고만).
-- settings.yaml에 남김: `llm.extra_body`·`vlm.extra_body`·`embed.query_prefix` — 값이 모델에 따라 달라짐(예: thinking 끄기, [ops-ops-settings.md#op-05](ops-ops-settings.md#op-05)).
+- settings.yaml에 남김: `llm.extra_body`·`vlm.extra_body`·`embed.query_prefix` — 값이 모델에 따라 달라짐(예: thinking 끄기, [ops-settings.md#op-05](ops-settings.md#op-05)).
 - 파일(10-30 grep — ocr_vlm·ocrvlm·model_alt가 나오는 곳): `common/config/{settings,keyscan}.py`, `pipeline/config.py`, `common/ai/{adk,llm,guard}.py`, `common/check/ping_models.py`, `common/store/services.py`, `pipeline/extract/engines/{registry.py,qwen_vlm/parser.py}`, `pipeline/extract/run_all.py`, `pipeline/mcp_parse_service.py`, `pipeline/cli.py`, `pipeline/shared/{phase_report,summarize}.py`, `pipeline/eval/report.py`, `pipeline/transform/figures/figure_review.py`, `pipeline/transform/represent/parse_qa.py`, `pipeline/load/parsing_meta.py`, `resources/config/report_templates/catalog.json`, `deploy/docker/Dockerfile`, `validation/e2e/model_matrix.py`, `validation/search_ui/{serve.py,start_mcp.sh}`, `tests/server/common/test_settings.py`, `settings.sample.yaml`.
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P3·T11): 같은 0.1.0 엔진 묶음에서 설치·사용하지 않는 엔진도 지운다 — rapidocr v1, docling, unstructured, kreuzberg_ocr(+ ocr_vlm). **docx2python은 남김**(e2-06 비교용 — C7로 비교 도구는 지우므로 남길 이유는 다시 볼 것). 검토 등급 A. 파일: `pipeline/extract/engines/{docling,unstructured,rapidocr,kreuzberg,qwen_vlm}`, registry `CORE`, `pipeline/check_env.py`.
 - C7(사용자 10-30 PRD grill): 비교 도구(`model_matrix`·`score_gold`·`mcp_eval` 등)는 두지 않는다([test.md#e2-10](test.md#e2-10)) — 비교는 필요할 때 다시 만든다.
@@ -69,6 +69,13 @@
 - 11-01(`feature/scope-cut-unused2`): 원천 목록 `sources.json`을 지우며 설정 칸 `common.paths.sources_file`은 남겼다 — `common/config/settings.py`를 고치면 레이어 code_fp 4개가 바뀌어 이 배치에서 지운다. `common/core/fingerprint.py` `EXCLUDED_FILES`의 `core/sources.py` 줄도 같이.
 - 11-01(같은 브랜치): PC Docker 스모크에서 `s3://` 원천(MinIO 대역·게시 ⑥)과 자정 배치 모양을 지우며 쓰이지 않게 된 설정 칸 `smoke_source`·`smoke_nightly`(`common/config/settings.py`)와 MinIO 올리기 도구 `common/check/os_put.py`도 이 배치에서 지운다.
 - 11-01(`feature/mcp-ops-parity`, mc-16): 이름 있는 색인(AD41)을 지우며 설정 칸 `common.paths.index_root`(`INDEX_ROOT`)·`INDEX_CONF`·`INDEX_CONF_DIR`은 남겼다(`common/config/settings.py`를 고치면 레이어 code_fp 4개가 바뀜 — 이 배치에서). `common/core/fingerprint.py` `EXCLUDED_FILES`의 `core/index_cfg.py` 줄도 같이.
+- 결정(사용자 11-02 — 허브 전달, 같은 0.2.0 지문 배치):
+  - 죽은 설정 칸 `minio_image`·`minio_publish_port`·`smoke_pm_bucket`(`common/config/settings.py:1244·1245·1268` — 11-01 PC 스모크에서 MinIO를 지운 뒤 읽는 곳 없음).
+  - `settings.py`의 `__main__`(설정 확인 명령)이 `common.config.show`를 import하고 `show`가 `export`를 import해서(`settings.py:1637`, `show.py:11`), 두 도구 파일이 모든 레이어의 code_fp 의존이 된다 — 명령 입구를 `settings.py` 밖으로 옮겨 이 import를 끊는다(그 뒤 `show`·`export`를 고쳐도 레이어 지문이 바뀌지 않음).
+  - 형식당 엔진 수 상한 `MAX_PER_TYPE`·`over_limit`를 지운다(`pipeline/stackcfg.py:9·17`, `pipeline/extract/run_all.py:51·197·251·466` — run_all은 p0 지문 의존).
+- 할 일(#86 병합 뒤 — todo):
+  - 엔진 구성 읽기를 `pipeline.config.stack()` 하나로 — `stackcfg.snapshot_bytes`, `cfgfile`의 `body_sha`·`label`, `schemas/config_body.py` 모양 검사를 그 안으로 합친다.
+  - 0.2.0이 서버에 배포된 뒤: `dbtool`의 비교(`dbcompare`)와 `stamp`(옛 코드가 만든 스키마에 실행 없이 판만 기록 — 첫 이관용)를 지운다.
 - Status: todo — 0.2.0(엔진·핸드오프·레이어 지문이 바뀜 — 사람 검토).
 
 <a id="pl-47"></a>

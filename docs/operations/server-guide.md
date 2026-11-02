@@ -37,7 +37,8 @@ sudo mkdir -p /srv/rag/env && sudo chmod 700 /srv/rag/env
 cp <받은 저장소 ZIP>/settings.sample.yaml /srv/rag/env/settings.yaml   # 설정 파일은 이것 하나
 sudo chown 10001:<운영 계정 그룹> /srv/rag/env/settings.yaml && sudo chmod 640 /srv/rag/env/settings.yaml   # 컨테이너 사용자 UID 10001이 읽음(운영 계정 UID가 10001이면 600 — refactor.md C-09)
 # 값 채우기 — 항목·설명은 settings.sample.yaml·env-guide.md, env-guide "옛 서버 값" 표의 항목은 그 값으로(C-39), 값은 문서·채팅·로그에 쓰지 않는다 · 옛 pipeline.env가 있으면 release-and-patch.md §5-4(옮기기)
-sudo mkdir -p /srv/rag/output && sudo chown 10001 /srv/rag/output    # 컨테이너 사용자 UID 10001
+sudo mkdir -p /srv/rag/output && sudo chown 10001:<운영 그룹> /srv/rag/output && sudo chmod 2775 /srv/rag/output    # UID 10001 · 운영 그룹 · setgid — 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지운다
+# 이미 있는 결과 폴더(옛 판이 644·755로 쓴 것)는 한 번: sudo chgrp -R <운영 그룹> /srv/rag/output && sudo chmod -R g+w /srv/rag/output && sudo find /srv/rag/output -type d -exec chmod g+s {} +
 export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.yaml을 읽음
 ```
 - `export`는 그 셸에서만 유효하다. 운영 계정 셸 설정(예: `~/.bashrc`)에 `export SERVER_ENV_DIR=/srv/rag/env`를 영구로 두거나 명령 앞에 붙인다. `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd unit은 스스로 이 값을 넘긴다. 컨테이너는 이 폴더를 마운트하지 않는다.
@@ -85,7 +86,7 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 ### 2-3. 상주 컨테이너
 `data-pipeline-parse`·`data-pipeline-structure`는 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업을 돌리고, MCP `parse_document` 작업 서비스도 `data-pipeline-parse` 안에서 돈다. 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/ops.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
 ```bash
-docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-parse data-pipeline-structure
+dc up -d data-pipeline-parse data-pipeline-structure   # dc = README §5-3 ①의 도우미(settings.yaml 값을 compose에 넘김 — 그냥 docker compose는 필수 칸 `${…:?}`에서 멈춤)
 ```
 
 ### 2-4. 테스트 실행 스크립트(코드 폴더에서 네이티브, 이미지 밖)

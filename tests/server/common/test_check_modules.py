@@ -189,8 +189,6 @@ def _planted_selftest():
     import tempfile
 
     bad_cases = {  # 경로 → 내용(모두 위반이어야 함)
-        "pipeline/v_ask.py": "import ask\n",  # etl → 검색 도구 맨 이름(S5 새 도구)
-        "common/v_ask.py": "from ask import main\n",
         "pipeline/v_e2e_flat.py": "import stack_matrix\n",  # etl → PC 평가 도구 맨 이름
         "pipeline/v_e2e.py": "from validation.e2e import graph_llm\n",  # etl → validation 정적 import
         "pipeline/v_tests.py": "from tests.server.common import appcheck\n",  # S9 — 앱 → tests/ import
@@ -204,7 +202,7 @@ def _planted_selftest():
         "validation/e2e/v_both.py": "import pipeline.eval.stages\nimport mcp_server.main\n",  # ⑨
     }
     ok_cases = {  # 위반이 아니어야 함
-        "mcp_server/cli/ok_ask.py": "import ask\n",  # 같은 앱 안 맨 이름
+        "mcp_server/cli/ok_ask.py": "import ask\n",  # 맨 이름 도구 판정표(MOVED_TOOLS)는 11-02에 지움 — 맨 이름 import는 경계 위반 아님
         "pipeline/eval/ok_stages.py": "import stages\n",
         "validation/e2e/ok_etl.py": "import pipeline.eval.stages\n\ndef f():\n    import mcp_server.main\n",
         "pipeline/eval/ok_dyn.py": "import importlib\nimportlib.import_module('validation.e2e.graph_llm')\n",  # 문자열 — 정적 점검 밖(T-02)

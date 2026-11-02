@@ -27,7 +27,7 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 이유: PR #4 교차 확인에서 낡은 줄이 나왔다.
 - 고칠 것: C-35/C-39/C-41이 지운 `SYNTHETIC_TRUTH`/`PADDLE_PYTHON`/`PHASE_REPORT_LEGACY`를 아직 부름("10-29 지움, 옮기지 않음" 표시). "CLAUDE.md 3절" 링크 9개 → §4. 부록 1 HEAD 행 = CLAUDE.md §4 값. C 항목이 PRD 행을 가리키게(C-31 pl-26, C-52 pl-23, C-54 pl-12, C-60 pl-13, C-61 pl-17, C-56 e2-12, C-53 e2-14, C-33 pl-18, C-32 pl-19, C-50 pl-20). pl-21에서 `paddle_python`/`phase_report_legacy`를 뺌(8d211bf에서 이미 지움).
 - 검토자 역할(사용자 10-29 grill): "engine-qa / be-qa"는 사람이 없는 역할 이름이었다. 등급 A 검토 = 사용자, Claude가 변경을 설명하는 grill-me 세션으로. refactor.md(8줄과 C 행)의 역할 이름을 바꾸고 CLAUDE.md §5-3에 그렇게 적는다.
-- `valid_env/eval_sets/` 지움([ops-ops-settings.md#pl-21](ops-ops-settings.md#pl-21)) — CLAUDE.md §6-5(`list-smoke10.txt`), `valid_env/README.md`, `docs/prd/test.md`의 참조를 고친다.
+- `valid_env/eval_sets/` 지움([ops-settings.md#pl-21](ops-settings.md#pl-21)) — CLAUDE.md §6-5(`list-smoke10.txt`), `valid_env/README.md`, `docs/prd/test.md`의 참조를 고친다.
 - 또: CLAUDE.md §6-3 기준선을 다시 잰다(selftest 89/88, pytest 142/8 — 10-29에 시험 파일을 지움).
 - 끝남 10-30(`feature/refactor-sync`, PR #20 병합): refactor.md 동기화(do-04의 refactor.md 몫 포함 — 옛 항목은 `docs/history/refactor_c_items.md`로). CLAUDE.md 몫(§5-3 검토자 줄·§6-3 기준선·§4 지문 줄·§6-5 `list-smoke10.txt`)은 사용자 확인 뒤 따로(다른 세션 요청만으로 CLAUDE.md를 고치지 않음).
 - Status: done

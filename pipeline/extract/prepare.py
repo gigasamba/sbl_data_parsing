@@ -2,10 +2,10 @@
 """파싱 전 준비 → output/prepared/ (모든 엔진이 같은 입력을 쓰게)
 
 1. 중복 제외: --only output/dedup/keep.txt 에 있는 파일만 (modules/parse/dedup.py 먼저)
-2. 방향 보정: 이미지·이미지 PDF의 쪽마다 0·90·180·270도로 돌려 RapidOCR 점수(가로 글상자의 신뢰도 × 글자 수)가 가장 높은 방향을 고른다.
-   - 개발 PC 실측(합성 스캔 5쪽): 바른 방향 약 320점, 나머지 0~33점으로 90·180·270도 모두 복원.
+2. 방향 보정(설정 `extract.prepare.rotate` — 기본 꺼짐, 사용자 11-02): 켜면 이미지·이미지 PDF의 쪽마다 0·90·180·270도로 돌려
+   RapidOCR 점수(가로 글상자의 신뢰도 × 글자 수)를 **동시에**(스레드 4개, 스레드마다 RapidOCR 하나) 재고 가장 높은 방향으로 돌린다
+   (같으면 0도, 모두 0이면 그대로). 끄면 회전을 위한 OCR을 전혀 하지 않고 그대로 놓는다.
    - 점수는 긴 변 --probe-px(기본 1280)로 줄인 이미지로 계산(속도). 저장은 원래 해상도(PDF는 --dpi, 기본 200).
-   - 0도 대비 --min-gain(기본 1.3배) 이상 좋아질 때만 돌린다(애매하면 원본 유지).
    - 회전이 있었던 파일만 새로 쓰고, 나머지는 그대로 복사. 텍스트 레이어가 있는 PDF·오피스·txt는 복사만.
    - 이미지 PDF를 돌리면 쪽 이미지로 다시 만든 PDF가 된다(원래 텍스트 레이어 없음 전제).
 3. 기록: output/prepared/rotation.csv (파일·쪽·선택 각도·네 방향 점수·`orig_sha256` = 회전 전 원본 파일 sha256 —
@@ -13,14 +13,7 @@
 
 작은 기울기(1~5도) 보정은 하지 않는다 — 필요하면 튜닝 항목(AGENTS.md C11).
 
-AD18 — 방향 보정 빠르게(늘 켬):
-쪽마다 먼저 "기대 각도"(문서 맨 앞 PREPARE_ROTATE_LEAD쪽이 전부 같은 각도로 정해지면 그 각도, 그 전엔 0도)와
-**그 반대(기대 각도+180도)** 두 방향만 축소 크기(PREPARE_ROTATE_PROBE_FAST, 기본 480px)로 점수를 재, 기대
-각도 쪽이 PREPARE_ROTATE_S0_MIN(기본 150) 이상이고 **반대보다 min_gain(기본 1.3)배 이상 앞설 때만** 그 각도로
-바로 확정하고 나머지 계산을 생략한다(engine-qa CONCERN 10-08 반영 — 절대 문턱만 보면 뒤집힌 글도 가로로 읽혀
-점수가 높게 나오는 경우를 못 가려 틀린 회전을 확정할 위험이 있었다). 문턱·경쟁 비교 중 하나라도 모자라면
-(확신 없음) 안전하게 기존처럼 4방향 전체(원래 --probe-px)를 다시 계산한다 — 그래서 복원 정확도는 항상 기존과
-같다(지름길이 틀릴 위험이 있는 쪽은 전부 안전한 전체 계산으로 떨어짐), 빨라지는 건 "이미 바로 보이는 쪽"뿐이다.
+옛 AD18 빠른 경로(기대 각도·반대 각도 2번 비교, 문턱·1.3배 비교)와 그 설정은 11-02에 지웠다(사용자 — 기능만 남김).
 사용: python modules/parse/prepare.py [--only output/dedup/keep.txt] → python modules/parse/run_all.py --src output/prepared
 """
 
@@ -31,6 +24,7 @@ import json
 import os
 import shutil
 import struct
+import threading
 import time
 from pathlib import Path
 
@@ -227,17 +221,36 @@ def _drm_reason(p):
     return "drm_unknown"  # ZIP도 OLE도 아님 — 래핑 의심(제품 특정 안 함)
 
 
+_TLS = threading.local()  # 스레드마다 RapidOCR 하나(회전 판정 4방향 동시 계산 — 사용자 11-02, 한 객체를 여러 스레드가 같이 쓰지 않게)
+_POOL: list = []
+ANGLES = (0, 90, 180, 270)
+
+
 def _ocr_lines(arr):
-    """글상자 [(box, text, conf)] — rapidocr 3.x 한국어 모델(rapidocr_ko 엔진과 같은 패키지·모델).
+    """글상자 [(box, text, conf)] — rapidocr 3.x 한국어 모델(rapidocr_ko 엔진과 같은 패키지·모델). 스레드마다 엔진 하나.
     (11-01 — 옛 rapidocr_onnxruntime 1.x 길과 설정 extract.prepare.ocr(auto|v1|v3)는 지움: 서버 이미지에는 1.x가 없어 늘 3.x였음.)"""
-    if not _OCR:
+    eng = getattr(_TLS, "ocr", None)
+    if eng is None:
         from rapidocr import RapidOCR
 
         from pipeline.extract.engines.rapidocr.parser import ko_params  # OC1 — 엔진과 같은 설정·스레드 상한(병렬 prepare도 코어 다툼 없게)
 
-        _OCR.append(RapidOCR(params=ko_params()))
-    r = _OCR[0](arr, use_cls=False)
+        params = ko_params()
+        n = params.get("EngineConfig.onnxruntime.intra_op_num_threads")
+        if n:  # 4방향 동시 — 엔진 4개가 CPU 몫(n)을 나눠 씀(나누지 않으면 4 × n 스레드가 서로 다퉈 차례 계산보다 느림 — PC 실측 11-02)
+            params["EngineConfig.onnxruntime.intra_op_num_threads"] = max(1, n // len(ANGLES))
+        eng = _TLS.ocr = RapidOCR(params=params)
+    r = eng(arr, use_cls=False)
     return list(zip(r.boxes.tolist(), r.txts, r.scores)) if r.boxes is not None else []
+
+
+def _pool():
+    """4방향 동시 계산 스레드 풀(한 번 만들어 쪽마다 다시 씀 — 스레드의 RapidOCR도 그대로 남아 다시 씀)."""
+    if not _POOL:
+        from concurrent.futures import ThreadPoolExecutor
+
+        _POOL.append(ThreadPoolExecutor(max_workers=len(ANGLES), thread_name_prefix="rotate"))
+    return _POOL[0]
 
 
 def score(im, probe):
@@ -255,39 +268,13 @@ def score(im, probe):
     return total
 
 
-def _rotate_lead():
-    return max(1, pc.cfg().extract.prepare.rotate_lead)  # S7c — 설정 객체(기본 3 — 틀린 값은 옛 except처럼 기본값)
-
-
-def _rotate_s0_min():
-    return pc.cfg().extract.prepare.rotate_s0_min  # S7c — 설정 객체(기본 150.0 — 틀린 값은 옛 except처럼 기본값)
-
-
-def _rotate_probe_fast():
-    return pc.cfg().extract.prepare.rotate_probe_fast  # S7c — 설정 객체(기본 480 — 틀린 값은 옛 except처럼 기본값)
-
-
-def best_angle(im, probe, min_gain, hint=0):
-    """AD18 — hint(문서 앞쪽에서 이미 정해진 공통 각도, 기본 0)가 축소 크기(PREPARE_ROTATE_PROBE_FAST)로도
-    충분히 높은 점수(PREPARE_ROTATE_S0_MIN 이상)**이고 그 반대 각도(hint+180)보다 min_gain배 이상 앞설 때만**
-    그 각도로 확정하고 나머지 계산을 생략한다. 절대 문턱만 보던 첫 판은 engine-qa CONCERN(10-08) —
-    score()의 '방향 분류기 끔'(docstring 실측 327 vs 312)이 경고하듯 **반대로 뒤집힌 글도 가로 글상자로
-    읽혀 점수가 높게 나올 수 있어**, hint가 절대 문턱을 넘었다고 반대 각도보다 확실히 앞선다는 보장이
-    없었다(경쟁 비교 없이 확정 → 틀린 회전이 이후 모든 엔진 입력에 반영될 위험). 반대(180도 차)만 비교하는
-    이유: score()는 "가로로 긴 글상자"(width > 1.5*height)만 센다 — 같은 가로 방향인데 위아래가 뒤집힌
-    경우(0 vs 180)만 가로 글상자로 오인될 수 있고, 90·270도는 가로·세로가 바뀌어 글줄이 세로 상자가
-    되므로 그 필터에 거의 안 걸려(실측상 0 가까운 값) hint가 0·180 중 하나여도 90·270과 혼동될 위험은
-    낮다 — hint가 90·270이어도 마찬가지로 그 반대(270·90)만 보면 된다. 그래도 확신 없으면(문턱 또는 반대
-    비교 중 하나라도 실패) 기존과 완전히 같은 4방향 전체 계산으로 떨어진다(정확도 불변, 속도만 다름)."""
-    fp = min(probe, _rotate_probe_fast())
-    opp = (hint + 180) % 360
-    s_hint = score(im.rotate(hint, expand=True) if hint else im, fp)
-    s_opp = score(im.rotate(opp, expand=True), fp)
-    if s_hint >= _rotate_s0_min() and s_hint >= s_opp * min_gain:
-        return hint, {hint: s_hint, opp: s_opp}
-    s = {a: score(im.rotate(a, expand=True), probe) for a in (0, 90, 180, 270)}
-    a = max(s, key=s.get)
-    return (a if s[a] >= s[0] * min_gain and s[a] > 0 else 0), s
+def best_angle(im, probe):
+    """쪽 하나의 방향 — 0·90·180·270도로 돌린 이미지의 score()를 스레드 4개로 동시에 재고 가장 높은 각도(같으면 0도, 모두 0이면 0도).
+    문턱·비율·기대 각도 같은 판단 규칙은 두지 않는다(사용자 11-02 — 기능만). 반환: (각도, {각도: 점수})."""
+    ims = [im.rotate(a, expand=True) if a else im for a in ANGLES]  # 돌린 이미지는 이 스레드에서 만들어 넘김
+    s = dict(zip(ANGLES, _pool().map(lambda x: score(x, probe), ims)))
+    a = max(ANGLES, key=lambda k: (s[k], k == 0))
+    return (a if s[a] > 0 else 0), s
 
 
 _sha256 = file_hash  # RV6 — common/ids.file_sha256과 중복 구현이던 걸 하나로(결과 바이트 동일) · 이름은 호환 유지
@@ -356,7 +343,6 @@ def main():
     ap.add_argument("--only", default="", help="이 목록(파일명 한 줄씩)에 있는 파일만 — 보통 output/dedup/keep.txt")
     ap.add_argument("--dpi", type=int, default=200)
     ap.add_argument("--probe-px", type=int, default=1280)
-    ap.add_argument("--min-gain", type=float, default=1.3)
     a = ap.parse_args()
     from PIL import Image
 
@@ -364,7 +350,12 @@ def main():
     if out.resolve() == src.resolve():  # out은 만들어 내는 폴더(지우고 다시 씀) — 원본 폴더면 원본이 지워짐
         raise SystemExit("--out이 원본 폴더와 같음 — 다른 폴더를 지정")
     out.mkdir(parents=True, exist_ok=True)
-    skipped_log = Path(pc.cfg().extract.skipped_log or (out / "skipped.jsonl"))  # S7c — 설정 객체
+    # 운영 고침 10(11-02) — 기록 파일은 하위 폴더 _records/에(파싱 run_all은 이 폴더의 맨 위 파일만 문서로 훑는다 — 기록이 "건너뜀 .csv"로 세지지 않게)
+    records = out / "_records"
+    records.mkdir(exist_ok=True)
+    if (out / "skipped.jsonl").exists() and not (records / "skipped.jsonl").exists():  # 옛 자리의 누적 기록은 옮겨 이어 씀
+        (out / "skipped.jsonl").replace(records / "skipped.jsonl")
+    skipped_log = Path(pc.cfg().extract.skipped_log or (records / "skipped.jsonl"))  # S7c — 설정 객체
     only = {x.strip() for x in Path(a.only).read_text(encoding="utf-8").splitlines() if x.strip()} if a.only else None
     files = sorted(p for p in src.iterdir() if p.is_file() and p.name != ".gitkeep" and (only is None or p.name in only))
     old = {}
@@ -373,6 +364,7 @@ def main():
             for r in csv.DictReader(f):
                 old.setdefault(r["file"], []).append(r)
     log, n_rot, n_skip, skipped = [], 0, 0, []
+    rotate_on = bool(pc.cfg().extract.prepare.rotate)  # 사용자 11-02 — 회전 켬/끔 하나(기본 꺼짐)
     for p in files:
         ext = p.suffix.lower()
         dst = out / p.name
@@ -392,10 +384,10 @@ def main():
         if unsup:
             _record_skip(p, unsup, skipped, skipped_log)
             continue
-        if ext in IMG:
+        if ext in IMG and rotate_on:
             osha = _sha256(p)  # 원본(회전 전) sha256 — post.vlm_page P0 열쇠가 렌더 바이트 대신 이걸 씀
             im = Image.open(p)
-            ang, s = best_angle(im, a.probe_px, a.min_gain)
+            ang, s = best_angle(im, a.probe_px)
             log.append({"file": p.name, "page": 1, "angle": ang, "orig_sha256": osha, **{f"s{k}": round(v) for k, v in s.items()}})
             if ang:
                 tmp = tmp_path_for(
@@ -411,24 +403,18 @@ def main():
         ):  # 열기 암호 PDF — 기록하고 건너뜀(한 파일 때문에 묶음 전체가 멈추던 일, synth-edge 10-04)
             continue
         elif (
-            ext == ".pdf" and is_image_pdf(p) and pc.cfg().extract.prepare.rotate
-        ):  # S7c — 설정 객체(켜기 칸 off=("0",) — 옛 `!= "0"`) · 2026-10-23 사용자 지정 — PREPARE_ROTATE=0: 스캔 PDF도 회전 검토(OCR 점수) 생략·복사(VLM 전사 경로에서 OCR 아예 제거)
+            ext == ".pdf" and rotate_on and is_image_pdf(p)
+        ):  # 사용자 11-02 — 회전은 extract.prepare.rotate(기본 꺼짐)일 때만 · 꺼지면 회전용 OCR 없이 그대로 놓음
             import pypdfium2 as pdfium
 
             osha = _sha256(p)
             pages, changed = [], False
-            lead_angles, common = [], None  # AD18 — 앞쪽 PREPARE_ROTATE_LEAD쪽이 같은 각도로 모이면 그 각도를 나머지 쪽 힌트로
-            lead_n = _rotate_lead()
             for i, pg in enumerate(pdfium.PdfDocument(str(p))):
                 im = pg.render(scale=a.dpi / 72).to_pil().convert("RGB")
-                ang, s = best_angle(im, a.probe_px, a.min_gain, hint=(common if common is not None else 0))
+                ang, s = best_angle(im, a.probe_px)
                 log.append({"file": p.name, "page": i + 1, "angle": ang, "orig_sha256": osha, **{f"s{k}": round(v) for k, v in s.items()}})
                 pages.append(im.rotate(ang, expand=True) if ang else im)
                 changed |= bool(ang)
-                if common is None:
-                    lead_angles.append(ang)
-                    if len(lead_angles) >= lead_n and len(set(lead_angles)) == 1:
-                        common = lead_angles[0]
             if changed:
                 tmp = tmp_path_for(dst)  # GH1-01 — 위와 같은 이유(이미지 PDF도 place()로 하드링크됐을 수 있음)
                 pages[0].save(tmp, "PDF", resolution=a.dpi, save_all=True, append_images=pages[1:])
@@ -444,24 +430,22 @@ def main():
         w = csv.DictWriter(f, fieldnames=["file", "page", "angle", "orig_sha256", "s0", "s90", "s180", "s270"])
         w.writeheader()
         w.writerows(log)
-    with (out / "skipped.csv").open("w", encoding="utf-8-sig", newline="") as f:  # 건너뛴 문서와 이유(암호 등) — 사람 확인 목록
+    with (records / "skipped.csv").open("w", encoding="utf-8-sig", newline="") as f:  # 건너뛴 문서와 이유(암호 등) — 사람 확인 목록
         w = csv.DictWriter(f, fieldnames=["file", "reason"])
         w.writeheader()
         w.writerows(skipped)
     gone = 0
     names = {p.name for p in files} - {s["file"] for s in skipped} | {
         "rotation.csv",
-        "skipped.csv",
-        "skipped.jsonl",
         ".gitkeep",
-    }  # 원본에서 지워졌거나 중복으로 빠진 파일 → out에서도 뺌(skipped.jsonl은 누적 기록이라 안 지움)
+    }  # 원본에서 지워졌거나 중복으로 빠진 파일 → out에서도 뺌(기록은 _records/ 폴더라 대상 아님 — 옛 자리의 skipped.csv는 지움)
     for q in out.iterdir():  #   (뒤 단계 묶음이 따라감 — PostgreSQL은 안 지움, pl-13)
         if (q.is_file() or q.is_symlink()) and q.name not in names:
             q.unlink()
             gone += 1
     print(
         f"파일 {len(files)}개 → {out} · 회전 보정 {n_rot}개 · 그대로 둠(안 바뀜) {n_skip}개 · 선택에 없어 뺌 {gone}개 · 쪽별 기록 rotation.csv"
-        + (f" · 암호 등으로 건너뜀 {len(skipped)}개(skipped.csv)" if skipped else "")
+        + (f" · 암호 등으로 건너뜀 {len(skipped)}개(_records/skipped.csv)" if skipped else "")
     )
     if skipped:  # D4 — 사유별 건수(PHASE_REPORT엔 prepare 단계 정보가 없어 여기 요약)
         from collections import Counter

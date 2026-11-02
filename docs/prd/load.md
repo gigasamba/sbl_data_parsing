@@ -1,17 +1,35 @@
 # 적재 — pgvector·게시·저장 구조
 
-[PRD.md](../PRD.md) 카테고리. [transform.md](transform.md) 다음: pgvector 적재(pl-07·pl-13·pl-14·pl-16·pl-19) → 게시(silver — pl-09·pl-26) → FAQ 다시 올리기(pl-41) → 지운 정형 DB·문서 대장(pl-08·pl-12)·마스터 CSV(pl-38) → 저장 구조(pl-32). DB 스키마는 [load-schema.md](load-schema.md).
+[PRD.md](../PRD.md) 카테고리. [transform.md](transform.md) 다음: pgvector 적재(pl-07·pl-13·pl-14·pl-16·pl-19) → 게시(silver — pl-09·pl-26) → FAQ 다시 올리기(pl-41) → 지운 정형 DB·문서 대장(pl-08·pl-12)·마스터 CSV(pl-38). 저장 구조·DB 스키마는 [load-schema.md](load-schema.md).
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서: pl-07 · pl-13 · pl-14 · pl-16 · pl-19 · pl-09 · pl-26 · pl-41 · pl-40 · pl-08 · pl-12 · pl-38 · pl-32.
+순서: pl-29 · pl-07 · pl-13 · pl-14 · pl-16 · pl-19 · pl-09 · pl-26 · pl-41 · pl-40 · pl-08 · pl-12 · pl-38. (저장 구조 pl-32는 [load-schema.md](load-schema.md#pl-32))
+
+<a id="pl-29"></a>
+## pl-29 · EDW 고객 매핑을 파이프라인이 직접 만든다
+- 자리(사용자 11-02): 수집(extract)에서 적재(load)로 옮김 — 매핑 결과는 검색 DB `doc` 행(`client_edw`·`sf_*` 칸)을 쓸 때와 검색 필터만 쓰고, 파싱·구조화는 쓰지 않는다. 적재 때 붙이면 매핑이 바뀌거나 수동 갱신(pl-40)할 때 다시 파싱·구조화하지 않는다. 코드 이동(`build_bundle._file_meta`에서 적재 쪽으로)은 pl-29 구현 때 함께.
+- 결정(사용자 10-31 범위 축소 grill): 고객 매핑은 **기회 직접 + 계정 직접만** 먼저(+CRMS). Task·Event·Quote 단계는 매칭률을 재 보고 낮으면 추가 — PC 가짜 Quote 표도 그때.
+- 이유: 문서마다 EDW 고객 하나(`client_edw` — MCP 고객 거르기의 유일한 키, [pl-25](load-schema.md#pl-25))와 SFDC 칸(`sf_acc_name`·`sf_op_id`·`sf_op_name`·`project_code__c` 등)을 지금은 외부에서 뽑은 `file_meta_new.jsonl`(`pipeline.paths.file_meta_path`)에서 읽는데, 그 파일을 만드는 코드가 저장소에 없다(db_schema.md D-2).
+- 결정(사용자 10-30 grill 7차): 파이프라인이 EDW 읽기 계정(`common.connections.rdb.read`)으로 조인을 직접 만든다. SFDC: `AI.FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account`(고객 = Account 이름). CRMS·LAS 경로는 DB 담당자 확인(D-2). `file_meta_new.jsonl` 읽기를 대신한다.
+- 결정(사용자 10-30 grill — pl-25 검토): 고객뿐 아니라 나머지 문서 메타(`sf_*`, `project_code__c`, `contract_id`, `contract_date`, `prod_name`, `division`, `service_type`)도 같은 자리에서 EDW에서 직접 읽는다 — 외부 파일 `file_meta_new.jsonl`은 없어진다.
+- 파일: `pipeline/extract/source.py`(FileStorageMap 읽기), `pipeline/transform/structure/build_bundle.py`(`_file_meta` → 조인 결과), `pipeline/config.py`(`file_meta_path`), `deploy/host/scripts/run_docs.py`(`FILE_META_PATH`), `docs/architecture/db_schema.md`.
+- 선행: [pl-25](load-schema.md#pl-25)(스키마 — `client_edw` 칸), [pl-32](load-schema.md#pl-32)(저장 구조).
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) C6·T7): 고객 연결은 운영 4단계를 따른다 — 출발점 `FileStorageMap`, 순서 기회 직접 > `Task.WhatId` > `Event.WhatId` > Quote 스냅샷, 계정 직접 연결도 포함. 결과는 pgvector doc에만. 같은 sha256 묶음에도 고객은 전파하지 않는다(C3).
+- 열린 점: Quote 단계는 레플리카에 Quote 표가 없어 SFDC REST 스냅샷에 기댄다 — 서버에서 스냅샷을 어떻게 공급할지 정해야 함. → 해소(10-31 결정 — PC 대역 Quote 표, 아래).
+- 결정(G2·T16 — 2차 grill(사용자 10-30, 원본은 git 밖)): `client_edw`(문서당 고객 하나)는 SFDC(4단계 연결)와 **CRMS**(`FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST` — DB 담당자 확인, D-2)에서 채운다. LAS는 상대사 출처가 정해질 때까지 비워 둔다. FAQ는 고객 연결 없음([pl-39](extract.md#pl-39)).
+- 결정(G11 — 3차 grill(사용자 10-30, 원본은 git 밖)): 적재 뒤 바뀐 SFDC 연결(고객·`sf_op_id` 등)은 자동으로 갱신하지 않는다. 수동 요청 때 전체 문서를 갱신한다([pl-40](#pl-40)).
+- 결정(사용자 10-30 PRD grill): A3 — 고객 연결의 마지막 단계(SFDC Quote 스냅샷)는 미정으로 둔다(서버 레플리카에 Quote 표 없음). 허브가 0.2.0 설계 확인 때 사용자에게 다시 묻는다. 그 전까지 구현은 기회 직접 > Task > Event 3단계(+계정 직접).
+- 결정(사용자 10-31 grill): A3 — Quote 단계도 0.2.0에 넣는다. PC 대역 EDW(`valid_env/edw`)에 SFDC Quote 표를 예시 칸으로 새로 만들어 4단계(기회 직접 > Task > Event > Quote, +계정 직접)로 구현한다. 실제 표·칸 이름은 DB 담당자 답으로 맞춘다(A4 `created_at`과 같은 방식).
+- 구현(11-02 `feature/mcp-ops-parity`): 사용자 11-02 — 매핑은 적재 몫. `pipeline/load/edw_meta.py`가 적재 때(PG 트랜잭션 밖, 읽기 계정) 원천별 사슬로 `client_edw`·원천 칸·`created_at`을 채운다(사슬은 [db_schema.md](../architecture/db_schema.md) §1 — 운영 gold 스키마 노트 기준, 칸 이름은 D-1 확인). SFDC 4단계(기회 직접 > Task > Event > Quote, +계정 직접 — 같은 단계 동률은 비움), CRMS(`RM_CM_PJTLIST`·`RM_CM_DOCU`), LAS(`LAS.Contract` 최신 판·`FileManager`). Quote는 운영처럼 EDW 표로 재현(사용자 11-02) — 서버 EDW에 표가 없으면 그 단계만 건너뜀(C-76: DB 담당자가 표를 만들고 REST 스냅샷으로 채움, 누가·언제는 미정). 외부 `file_meta_new.jsonl`·`FILE_META_PATH`·build_bundle의 `_file_meta`를 지웠다. EDW를 못 읽으면 메타 없이 적재(경고·`meta_missing`) — 자동 갱신 없음, `--replace`로 다시 적재해 채움. PC 가짜 EDW(`valid_env/edw`)에 가짜 사슬 표를 더했다. 시험: `tests/server/pipeline/test_edw_meta.py`.
+- Status: done(11-02)
 
 <a id="pl-07"></a>
 ## pl-07 · pgvector 적재
 - 이유: 검색 서버는 PG를 읽는다.
-- 무엇: 표 `load_run`·`doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + 뷰 `v_chunk_source`(Alembic으로만). 이미 적재된 문서는 `file_path`로 건너뛴다(sha 열 없음 — 같은 경로에서 내용이 바뀌어도 `--replace` 없이는 건너뜀). (`--prune`은 10-30에 없앰 — [pl-13](#pl-13).) 이름 붙은 색인(`index_id`). 벡터는 pgvector에만 둔다(EDW 벡터 적재는 10-29에 지움 — [ops.md#op-03](ops.md#op-03)).
+- 무엇: 원천 스키마 5벌마다 표 `doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + 뷰 `v_chunk_source`(Alembic으로만 — 11-02 판 0002, `load_run`은 지움). 이미 적재된 문서는 `file_path`로 건너뛴다(sha 열 없음 — 같은 경로에서 내용이 바뀌어도 `--replace` 없이는 건너뜀). (`--prune`은 10-30에 없앰 — [pl-13](#pl-13).) 이름 붙은 색인(`index_id`). 벡터는 pgvector에만 둔다(EDW 벡터 적재는 10-29에 지움 — [ops.md#op-03](ops.md#op-03)).
 - 파일: `pipeline/load/pgvector_load.py`, `common/store/db/migrations/`.
 - 결정(허브 10-31, 최신 결정 우선): 이름 붙은 색인(`index_id`)은 0.2.0에 없앤다 — 원천(`source_system`)이 gold 스키마를 고르므로 색인 이름이 필요 없다(선택지 줄이기 원칙). 구현은 [pl-28](load-schema.md#pl-28)과 함께.
-- 결정(사용자 10-31): PG 자동 찾기(`docker ps` pgvector·대체 포트·코드 기본 `127.0.0.1`/`5432`/`rag`)를 없애고 PG 접속은 필수 — [ops-ops-settings.md#op-09](ops-ops-settings.md#op-09).
+- 결정(사용자 10-31): PG 자동 찾기(`docker ps` pgvector·대체 포트·코드 기본 `127.0.0.1`/`5432`/`rag`)를 없애고 PG 접속은 필수 — [ops-settings.md#op-09](ops-settings.md#op-09).
 - Status: done
 
 <a id="pl-13"></a>
@@ -80,7 +98,7 @@
   - ① LLM 갈래: 분류(`doc_class`) — 기본 대상은 `doc_class`가 NULL인 문서(G10).
   - ② 시스템 메타 갈래: EDW에서 오는 고객·`sf_op_id`·`created_at` 등 — 요청하면 전체 문서(G11).
   - 재파싱·재임베딩은 하지 않는다. 시스템별 gold `doc` 칸만 UPDATE한다(G19 — 파일 메타는 ParsingMeta에 없음).
-- 관련: [pl-33](transform.md#pl-33)(분류), [pl-29](extract.md#pl-29)(고객 연결), [pl-25](load-schema.md#pl-25)(칸).
+- 관련: [pl-33](transform.md#pl-33)(분류), [pl-29](#pl-29)(고객 연결), [pl-25](load-schema.md#pl-25)(칸).
 - Status: dropped (사용자 10-31 범위 축소)
 
 <a id="pl-08"></a>
@@ -104,7 +122,7 @@
   - ① 문서 대장은 남기고 고친다 — `INSERT OR REPLACE`의 PG 번역(`structdb._pg_sql` 정규식 ↔ `registry.apply`의 여러 줄 SQL). [pl-25](load-schema.md#pl-25)와 함께 키를 `s3_key`로 바꾼다. 새 문서 판별은 FileStorageMap ↔ ParsingMeta 그대로([pl-23](ops.md#pl-23)).
   - ② 게시 가드는 `source.json` 사이드카 대신 EDW `AI.ParsingMeta`(`source_key` + `rep_bucket`/`rep_key`)를 읽는다. 같은 문서 → 같은 파일에 덮어씀(`-2`/`-3.md` 사본 없음). 다른 원천이 같은 결과 키로 오면 → 거부. 그러면 `test_publish_guard`가 통과 → `deploy/release/known_fail.txt`에서 뺀다.
 - 결정(사용자 10-30 grill 12~13차): 원천에서 사라진 문서(deleted) 처리 길은 통째로 없앤다 — 지우기·숨기기·EDW `deleted` 표시 모두 없음, 로컬 기록만(refactor.md C-54).
-- 10-30 [pl-32](#pl-32): PG `doc_registry`는 남고 로컬 SQLite 대체는 없앤다. 실패 횟수(`fail_count`)·재시도 설정(`registry_retry_max`)은 없앤다 — 성공했을 때만 갱신(사용자 10-30).
+- 10-30 [pl-32](load-schema.md#pl-32): PG `doc_registry`는 남고 로컬 SQLite 대체는 없앤다. 실패 횟수(`fail_count`)·재시도 설정(`registry_retry_max`)은 없앤다 — 성공했을 때만 갱신(사용자 10-30).
 - 한 것(10-30, B1 — 개발 서버 반입 전 검토): deleted 길 없앰 — `registry.apply`가 관측에 없는 문서에 `status='deleted'`·자동 숨김을 쓰지 않고, `parsing_meta.apply_registry_status`가 EDW에 `deleted`를 쓰지 않는다(`diff["deleted"]`는 판 잇기 정보로만). 서버(dev·prd)는 SQLite·PG 스탠드인으로 대체하지 않고 멈춘다(`structdb.open_backend` — `run_mode: prod`·`struct_backend` pg/tsql 필수, `pg._warn_standin`). `common.store.run_mode`는 `prod`·`test`만. 시험 `tests/server/common/test_no_deleted.py`. code_fp p0·p1·r·s 바뀜(공용 `settings.py`·`pg.py`·`structdb.py`).
 - 한 것(11-01 `feature/scope-cut-search`): `common/store/registry.py`·`registry_cli`·검색 `registry.py`·숨김 거르기(retriever·pgsearch)·게시의 대장 상태 갱신·ParsingMeta 상태 갱신 길 지움. 표는 struct 스키마와 함께 코드에서 없앰([pl-08](#pl-08)). 설정 `common.store.doc_registry`·`registry_etag_md5` 지움(남으면 경고).
 - 11-02 C10 예외(사용자): ParsingMeta `loaded_at` 한 칸만 적재 때 UPDATE(`parsing_meta_db.mark_loaded`) — 다른 칸은 그대로 INSERT만(`test_no_deleted`가 UPDATE는 `SET loaded_at`뿐인지 본다).
@@ -115,48 +133,9 @@
 - 결정(사용자 10-31 범위 축소 grill): 마스터는 **모두 별도 RDB로 관리**. 지금은 마스터용 SQLite 하나를 만들어 마스터 CSV를 모두 그리로 옮긴다 — 나중 logging 자리와 같은 DB. 명부 생성·용어 제안 도구는 그 DB를 읽게 바꾸거나 지움(구현 때).
 - 결정(사용자 10-30): "contract_master, client_master 등 활용하는 방안 같이 설계하자. 후순위로 해줘."
 - 사실: PR 3a 뒤에는 `resources/vocab/glossary/contract_master.csv`·`client_master.csv`를 읽는 코드가 없다. `client_master.example.csv`는 `gen_roster` 입력. 두 파일은 설계가 끝날 때까지 git에 남긴다 — 3a에서 지우지 않는다.
-- 열린 질문: 마스터마다 무엇에 쓰나(검색 거르기 / 분류 단서 / mc-05의 고객 별칭 그룹), EDW 고객 연결([pl-29](extract.md#pl-29))·분류 단계([pl-33](transform.md#pl-33))와 어떻게 이어지나.
+- 열린 질문: 마스터마다 무엇에 쓰나(검색 거르기 / 분류 단서 / mc-05의 고객 별칭 그룹), EDW 고객 연결([pl-29](#pl-29))·분류 단계([pl-33](transform.md#pl-33))와 어떻게 이어지나.
 - 결정(허브 10-31, 최신 결정 우선): 고객 별칭 CSV 몫(고객 명부·별칭 그룹 — [mcp.md#mc-05](mcp.md#mc-05))은 0.2.0으로 당긴다 — struct 마스터 표를 지우기 전에 CSV로 읽을 수 있어야 한다. 나머지 활용 설계는 후순위 그대로.
 - Status: todo — 고객 별칭 CSV 몫은 0.2.0, 나머지는 후순위(사용자와 grill).
-
-<a id="pl-32"></a>
-## pl-32 · 저장 구조 — silver는 Object Storage uuid 폴더, 메타는 EDW, gold는 pgvector
-- 결정(사용자 10-31 범위 축소 grill): 같은 s3_key 최신 행만 남김(기존) — 구판 표시는 쓰지 않음(mc-05). 대체된 행은 SupersededRow(pl-25 계획대로).
-- 결정(사용자 10-30 grill): 결과 저장 자리를 셋으로 정한다 — [transform.md#pl-20](transform.md#pl-20)(엔진 스택 사본 파일)을 대신함.
-- silver(파싱 결과)는 Object Storage에만. PC는 `valid_env/object_storage`(file:// 대역). 문서마다 폴더 하나 — 이름은 파일 경로(`s3_key`)에서 uuid5로 만든 uuid(같은 경로 = 같은 uuid, 다시 처리하면 그 폴더를 덮어씀).
-- `AI.FileStorageMap`에 같은 `s3_key` 행이 여럿이면(SFDC 판 등) 갱신·수정 시각이 가장 늦은 행만 처리. (허브 10-31 고침 — 아래) 나머지는 로컬에 "duplicate of <행>"으로 기록만, EDW에는 아무것도 안 씀.
-- 결정(허브 10-31, 최신 결정 우선): 밀려난 `FileStorageMap` 행은 로컬 기록이 아니라 EDW 예외 이력 표에 남긴다(D-9, `db_schema.md` §4 `edw.SupersededRow`, PR #70).
-- 메타는 EDW `AI.ParsingMeta`에 단계별로, 성공했을 때만 쓴다([pl-25](load-schema.md#pl-25)).
-- gold는 pgvector만.
-- 로컬에 남기는 것: 로그와 임베딩 캐시뿐. 문서별 작업 폴더는 지금처럼 문서가 끝나면 지운다. 지울 것: `_stack/stack-v*.json` 사본과 `STACK_SNAPSHOT`, `runs.jsonl` 재사용 저장소, `_DONE` 표시, 로컬 대장·작업 상태 파일.
-- [pl-12](#pl-12)("대장은 고쳐서 남김")와 맞춤: PG `doc_registry`는 남고, 로컬 SQLite 대체만 없앤다.
-- 새벽 배치 계획(사용자 10-30 "새벽 배치 계획은 parameter로 하면 될 것 같아. null 이면 새벽 배치 안하고, 입력되어있으면 작동"): settings.yaml 키 하나(op-05 — settings.yaml 하나). 값이 null이면 새벽 배치를 하지 않고, 값이 있으면 돈다([pl-23](ops.md#pl-23)).
-- 실패 횟수 없앰(사용자 10-30 "fail count 는 제거하자. 그냥 현재 상태에만 성공하면 업데이트"): 재시도 횟수를 어디에도 두지 않는다 — `doc_registry.fail_count`와 `common.store.registry_retry_max`(`REGISTRY_RETRY_MAX`) 설정을 지운다(todo). ParsingMeta는 성공했을 때만 갱신.
-- 실패한 엔진(사용자 10-30 "EDW에도"): 실패한 엔진(이름·이유·걸린 시간)을 로컬 로그와 EDW ParsingMeta 실패 엔진 칸에 함께 남긴다([pl-25](load-schema.md#pl-25), D-3).
-- 구현 결정(허브 — 사용자 결정 안에서, 10-30):
-  - 새벽 배치 파라미터 = 새벽 실행 시각을 담는 settings.yaml 키 하나, null이면 새벽 배치 없음. (허브 10-31 고침 — C10, 아래) 대상 고르기 `nightly_plan()`(새 문서 + 바뀐 문서)은 그대로.
-  - 실패한 문서는 성공 행이 없어 다음 실행에서 다시 시도된다. 실패 정보는 로컬 로그와 ParsingMeta 실패 엔진 칸으로.
-  - `doc_registry.fail_count` 칸은 PR 3a 마이그레이션이 지운다.
-  - `STACK_SNAPSHOT` 사본 파일은 없앴다. (11-01 고침 — [pl-08](#pl-08)) 엔진 구성은 서버·PC 같은 파일 하나라 판 번호를 넘기지 않는다 — 진입점이 `stackcfg.resolve()`로 검사하고 층은 `pipeline.config.stack()`으로 같은 파일을 읽음, 호스트 `run_docs.py`는 시작 때 `show-stack`으로 확인만. `--stack <파일>`은 PC 실험·시험 전용 명시 덮기로 남김(`model_matrix`는 C7로 지움 — [test.md#e2-10](test.md#e2-10)) — 생산 경로(run_docs·trigger·entrypoint·night/full)는 주지 않는다.
-  - 레이어 핸드오프 `_DONE.json`은 남는다 — 문서마다 지우는 작업 폴더 안에 있고 FINGERPRINT도 그대로. 없애는 것은 실행을 넘어 남던 완료 표시(`run_all`, `figures_resume`, 색인 건너뛰기).
-  - `runs.jsonl`: 재사용 역할만 없애고 작업 폴더 안 실행별 기록으로 남긴다.
-  - 구현(10-30 `feature/no-cross-run-done`, 허브): `run_all`은 앞 실행의 `runs.jsonl`로 건너뛰거나 결과를 복사하지 않는다(이미 성공·같은 내용 복사·이전 실패·`encrypted_detected` 건너뜀과 `--force`·`--retry-failed`·`--refresh-unknown` 지움 — 같은 실행 안 같은 내용 사본은 한 번만 파싱) · `figures/figures_resume.py`와 시험 지움(pl-35 그 항목도 끝) · 남김: `pipeline.cli` `need()`(한 실행 안 모듈 사이 인계 — 문서 결과 재사용 아님) · 내용으로 열쇠를 거는 캐시는 남김: 임베딩 캐시, 색인 `index_cfg` 입력 지문(같으면 다시 안 지음).
-  - (허브 10-31 고침 — C10, 아래) 문서 고르기(10-30 허브 B — 2c): 실행을 넘어 다시 처리할 문서는 문서 대장(성공 행만)으로만 고른다 — `pipeline.cli` 파싱의 `--max-new` 고르기는 대장에 파싱 성공 행(status parsed)이 없는 문서(새 + 실패)만(앞 실행 `runs.jsonl`의 seen은 안 봄), `--source` 길은 지금처럼 `nightly_plan`. 대장을 못 열면 run_mode prod(서버)는 종료 4(전체 재파싱 안 함), 그 밖(PC·`DOC_REGISTRY=0`)은 받은 목록 그대로 + 로그 한 줄. 시험 `tests/server/pipeline/test_parse_pick.py`.
-  - **알려진 빈틈(PR 4에서 고침):** 파싱 성공 행은 지금 게시(publish) 단계의 `REG.build`에서만 써진다. 마감에 걸리면 파싱이 종료 75로 바로 끝나 대표 결과·게시가 없으니 그 밤에 끝난 문서도 성공 행이 없어 다음 밤에 다시 골라진다(밤을 넘는 진행이 없음). 서버는 새벽 배치가 꺼져 있어(nightly.time 비움) 지금 운영 영향은 없음. → PR 4(ParsingMeta·대장 단계별, D-3)에 넣음: 파싱 직후(마감으로 멈춰도) 끝난 문서는 represent + `REG.build`(파싱 상태)로 성공 행을 쓰고, 그 몫의 시간을 마감 전에 남김.
-  - `StandinPG`·structdb SQLite는 시험과 이미지 관문에만 — dev/prd 실행 중 조용히 대신하는 일은 없다.
-- 0.2.0 구현 PR 순서(사용자 10-30, PR 1은 3a에 합침): 2a ∥ 2b → 2c → (DB 담당자 D-1~D-7) → 3a + 3b 연달아 병합 ∥ 4 → 2d → 5(SFDC 먼저, CRMS·LAS는 D-2 전까지 Other) → 6.
-  - PR 4에 더할 것(#49 리뷰 10-30): ① 실패 문서 고르기 순서를 대장 `last_seen`(훑은 시각 — 실패 문서끼리 같아져 이름순이 됨) 대신 PR 4가 쓰는 마지막 시도 시각으로 ② `_registry_unparsed`의 대장 읽기는 같은 이름이 행 둘이면 마지막 행이 이김 — "한 행이라도 parsed면 성공"으로(또는 3a 뒤 s3_key당 한 행).
-  - FAQ 원천 [pl-39](extract.md#pl-39)는 PR 3a 뒤(gold 칸이 필요).
-  - reference 비교 행(10-30): 분류 단계 [pl-33](transform.md#pl-33)와 MCP [mc-16](mcp.md#mc-16)·[mc-17](mcp.md#mc-17)은 PR 5 뒤 — 정확한 자리는 허브가 정함. 파싱 p1 묶음 [pl-34](transform-cleanup.md#pl-34)·잔재 정리 [pl-35](transform-cleanup.md#pl-35)는 순서 미정(허브).
-- 구조화 입력: 같은 실행 안에서는 로컬 작업 폴더를 읽고, 나중에 gold만 다시 만들 때는 Object Storage uuid 폴더에서 silver를 받는다.
-- PC도 서버와 같은 흐름 — 대역만 다름(OS 폴더, EDW SQLite, PC pgvector), 따로 생기는 로컬 파일 없음.
-- 파일: `pipeline/load/{publish_parse_result,parsing_meta}.py`, `pipeline/extract/run_all.py`(`runs.jsonl`·`_DONE`), `pipeline/stackcfg.py`·`pipeline/config.py`(`STACK_SNAPSHOT`), `pipeline/cli.py`(`nightly_plan`), `common/store/{registry,structdb}.py`(SQLite 대체), `deploy/host/scripts/run_docs.py`, `docs/architecture/db_schema.md`.
-- (10-31 고침 — 더 새 행은 같은 doc_id, sha256으로 가름, 아래) 결정(사용자 10-30 PRD grill): A4 — 같은 `s3_key`의 여러 행 중 가장 늦은 행은 `FileStorageMap.created_at`이 가장 큰 행으로 고른다. PC 대역 EDW(`valid_env/edw`)의 FileStorageMap에 `created_at` 칸을 새로 만들고 값은 임의로 채운다. 실제 EDW에 이 칸이 있는지는 DB 담당자 답(D-1)으로 확인한다. 0.2.0.
-- (사용자 10-31 다시 고침 — sha256, 아래) 결정(사용자 10-31 grill, A4 고침): 같은 `s3_key`의 기준은 `created_at`이 가장 늦은 `FileStorageMap` 행 그대로. 더 새 행이 오면 같은 `doc_id`를 유지하고 **다시 파싱하지 않는다**(같은 내용) — 저장된 기준·메타만 새 행으로 고친다. 밀려난 행은 새 EDW 예외 이력 표에 남긴다(어느 행이 어느 문서와 겹쳤는지, "파싱 대상 아님" — 표 이름·칸은 DB 담당자 D-9, `db_schema.md` §4).
-- (10-31 다시 고침 — sha256 대신 file_size, 아래) 결정(사용자 10-31, A4 다시 고침): 같은 `s3_key`의 더 새 행은 같은 `doc_id`를 유지한다. `sha256`이 같으면 건너뛴다(기준·메타만 새 행으로). `sha256`이 다르면 같은 `doc_id`로 다시 파싱·다시 적재한다. 밀려난 행은 위처럼 EDW 이력 표에.
-- 결정(사용자 10-31, A4 세 번째 — 최종): 원본을 내려받아 sha256을 비교하지 않는다. 같은 `s3_key`의 더 새 행은 `FileStorageMap.file_size`만 본다 — 크기가 같으면 같은 `doc_id`로 건너뛰고(기준·메타만 새 행으로), 크기가 조금이라도 다르면 같은 `doc_id`로 다시 파싱·다시 적재한다(EDW에 이미 있는 칸이라 내려받기 없음). 같은 키에 같은 크기로 덮어쓰는 드문 경우는 놓친다(받아들임).
-- 결정(허브 10-31, 최신 결정 우선): 새 문서 = C10 — 모든 입구(run_docs·`night`·`parse --max-new`·`--source`)에서 EDW `FileStorageMap`에 있고 `ParsingMeta`에 없는 것([pl-23](ops.md#pl-23)). 위의 `nightly_plan()`(새 + 바뀐 문서)과 '문서 대장 성공 행으로 고르기'(허브 B — 2c)는 이 규칙으로 바꾼다. 문서 대장은 숨김·판 관리에만. 이미 ParsingMeta에 있는 `s3_key`를 다시 처리하는 길은 위 A4(`file_size`가 다른 더 새 행 — 10-31 최종)와 사람이 시작하는 전체 e2e뿐.
-- Status: todo — 0.2.0.
 
 ## 코드와 다른 점 · 지울 코드
 

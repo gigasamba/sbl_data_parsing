@@ -46,7 +46,7 @@ S6a(10-26) — common_tools/가 없어짐: 옛 영역 이름표(PKG_AREA·_canon
 validation/e2e/를 옛 evaluation 영역으로 읽는다(⑧ agent= · ⑨ etl·search top-level 동시 금지 그대로 — triple_extract/agent.py는
 prompts 영역 ⑦). 옛 이름 import(`import common_tools…`)는 그 자체로 위반(남은 실행 코드 0 유지). LEGACY_TOOLS(옮긴 단계 4 도구 표)는
 경계 판정에 안 쓰여 pipeline/cli.py의 이미지 배정 표로 옮겼고, ⑨의 TOOL_IMAGE·IMAGE_AREAS 규칙은 S5부터 걸릴 도구가 없어 뺐다(VS5 R-4).
-맨 이름 import 판정표(MOVED_TOOLS·flat)에 S5 새 도구 ask·search_checks와 validation/e2e 도구를 더함(VS5 R-5 — 같은 앱 안은 허용).
+맨 이름 import 판정표(MOVED_TOOLS — 11-02에 지움 · flat)에 S5 새 도구 ask·search_checks와 validation/e2e 도구를 더함(VS5 R-5 — 같은 앱 안은 허용).
 S7e2(10-28, D-028 ④⑤ — 전환 다리 제거): ⑩ "os.environ 0" — 코드가 os.environ·os.getenv·os.environb를 직접 쓰는 줄(토큰 기준 — 주석·문자열 빼고)은
 그 문장(또는 바로 위 주석 줄)에 분류 주석(op-09 — 예외 자리 없음: 엔진·인계 파일도 설정 객체로 읽음)
 `env 남김 — <분류>`(ENV_KINDS — 라이브러리·하위 프로세스·내부 신호·이미지 신호·설정 파일 자리 신호·RUN_ENV 신호·시험·OS 값·호스트 도구)가
@@ -71,18 +71,6 @@ from common.core.paths import DEPLOY_ROOT
 # 10-14 이미지 단위 분리(사용자) — 코드가 deploy/{data_etl,data_retrieval,common_tools}로 나뉨(I2 전엔 data_etl 자리에 두 폴더 · S3부터 공용은 common/).
 # 아래 규칙은 옛 영역 이름(etl/search/common/cli/evaluation/prompts)으로 쓰여 있어, 파일 경로와
 # import 이름을 그 영역 이름으로 바꿔 읽는 변환만 둔다(규칙 본문 불변). 새 폴더 → 옛 영역:
-# 옛 cli/·evaluation/에서 각 앱으로 옮긴 도구의 파일 이름(맨 이름 import 판정 — 같은 앱 안에서는 경계 위반 아님, 아래 check의 foreign).
-# S4 — 단계 4 도구 16개(옛 cli/pipeline.py는 이름 pipeline) · S5 — mcp_eval·qa_report + 새 ask·search_checks(VS5 R-5).
-MOVED_TOOLS = {
-    "etl": {
-        "pipeline",
-        "check_env",
-        "rdb_discover",
-        "gen_roster",
-        "glossary_suggest",
-    },
-    "search": {"ask"},  # 11-01 mcp_eval·search_checks 지움(e2-10)
-}
 PKG_AREA = (
     ("data_etl", "etl"),
     ("pipeline", "etl"),
@@ -271,14 +259,9 @@ def _key_of(m):
 
 def check():
     bad = []
-    moved = MOVED_TOOLS
-    flat = (
-        {
-            f.stem for f in (ROOT / "validation" / "e2e").glob("*.py") if f.stem != "__init__"
-        }  # PC 평가 도구를 이름만으로 import하는 것도 잡음(S6a — 옛 cli/·evaluation/ glob)
-        | moved["etl"]
-        | moved["search"]
-    )  # 옮긴 도구도 옛 이름 그대로 · 같은 앱 안에서는 경계 위반 아님(아래 foreign)
+    flat = {
+        f.stem for f in (ROOT / "validation" / "e2e").glob("*.py") if f.stem != "__init__"
+    }  # PC 평가 도구를 이름만으로 import하는 것도 잡음(S6a — 옛 cli/·evaluation/ glob · 옛 단계 4 도구 이름표 MOVED_TOOLS는 11-02에 지움)
     for f in sorted(ROOT.rglob("*.py")):
         rel = _virtual_rel(f)
         if rel is None or "/output/" in f"/{rel}" or ".venv" in rel or "__pycache__" in rel:
@@ -311,9 +294,7 @@ def check():
             for m in mods:
                 key = _key_of(m)
                 other = key.startswith("data_pipeline.") and key != f"data_pipeline.{area}" and key.split(".")[1] in MODULE_AREAS
-                foreign = key in ("data_pipeline.cli", "data_pipeline.evaluation", "tools", "dev_tools", "pipeline") or (
-                    m in flat - moved.get(area, set())
-                )
+                foreign = key in ("data_pipeline.cli", "data_pipeline.evaluation", "tools", "dev_tools", "pipeline") or (m in flat)
                 if (other or foreign) and (rel, key) not in ALLOW:
                     bad.append(f"{rel}: {m} import — 모듈 경계 위반(함께 쓸 것은 common/)")
         if rel.startswith("common/"):
