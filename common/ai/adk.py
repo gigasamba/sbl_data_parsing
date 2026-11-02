@@ -47,7 +47,7 @@ from common.ai.llm import profile
 from common.config.settings import by_env, cfg, checked, reveal  # S7b — 설정 객체(호출 때마다 cfg() — 옛 env 읽기와 같은 시점 값)
 from common.core.paths import resolve_agent_dir
 
-_ROLE_GUARD_PREFIX = {"llm": "LLM", "vlm": "VLM", "vlm_judge": "VLM", "embed": "EMBED"}
+_ROLE_GUARD_PREFIX = {"llm": "LLM", "vlm": "VLM", "embed": "EMBED"}
 
 
 class ModelUnavailable(RuntimeError):
@@ -226,7 +226,7 @@ def _append_retry_note(messages, note):
 # 평가·RuntimeSession·ModelGuardPlugin은 옮기지 않음). 함수 이름 앞에 _를 붙인 것 말고는 동작·문구·지문 계산이 같다 —
 # google.adk·litellm·pydantic은 전처럼 함수 안에서 지연 import(S7b부터 설정 객체 — common.config.settings — 때문에 pydantic은 import 때 들어옴).
 _PIPE_LOG = logging.getLogger("common.ai.adk")
-_PIPELINE_MODEL_ROLES = frozenset({"llm", "vlm", "vlm_judge"})
+_PIPELINE_MODEL_ROLES = frozenset({"llm", "vlm"})
 
 
 class PlatformError(Exception):
@@ -871,7 +871,7 @@ def _to_contents(messages):
     return ("\n".join(system_parts) if system_parts else None), contents
 
 
-_EXTRA_ENV_KEY = {"llm": "LLM_EXTRA_BODY", "vlm": "VLM_EXTRA_BODY", "vlm_judge": "VLM_EXTRA_BODY"}
+_EXTRA_ENV_KEY = {"llm": "LLM_EXTRA_BODY", "vlm": "VLM_EXTRA_BODY"}
 
 
 def _env_extra_body(role):
@@ -1448,7 +1448,7 @@ def complete(
     agent=None,
     call_reserved=False,
 ):
-    """역할(llm·vlm·vlm_judge — 임베딩은 common/embed.py 유지, GA6) → (응답 글자, usage_dict).
+    """역할(llm·vlm — 임베딩은 common/embed.py 유지, GA6) → (응답 글자, usage_dict).
     agent=dev/agents/<agent_id> — gamma 에이전트 패키지 경유(_complete_agent, GA2 설계 §1). 업무 호출부(modules/·cli/·eval/)는
     전부 이걸 넘겨야 한다(cli/check_modules.py 정적 검사) — 패키지의 model_role이 role과 달라도 이 자리에서 바로 막힌다.
     agent=None은 옛 직접 모델 경로(이 파일 자신의 selftest·cli/ping_models.py의 연결 확인처럼 업무 프롬프트가 없는 호출용).

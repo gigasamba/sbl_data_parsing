@@ -82,7 +82,7 @@ class ModelProfile:
 
 
 def profile(role):
-    """역할 → ModelProfile. vlm_judge는 VLM_MODEL·VLM_*(판정 전용 모델 칸 VLM_MODEL_ALT는 10-30 지움 — pl-31).
+    """역할 → ModelProfile(판정 역할 vlm_judge는 0.2.0에 지움 — pl-46, 부르는 곳 없음).
     agent_platform import는 여기서 늦게(지연) — structure·retrieval 이미지는 agent_platform 없이도 이 모듈을
     import할 수 있어야 한다(profile()을 실제로 부르는 경로만 agent_platform이 필요, MOD 10-14)."""
     # TODO: 리팩토링 후 구현 필요
@@ -92,14 +92,9 @@ def profile(role):
     #     raise ImportError(
     #         f"agent_platform(저장소 루트 deploy/agent_platform)을 못 찾음 — dev/와 deploy/가 같은 저장소 루트의 형제 폴더여야 함: {e}"
     #     ) from e
-    if role == "vlm_judge":
-        prefix = "VLM"
-        v = cfg().models.vlm
-        base, model, key = v.base_url, v.model, reveal(v.api_key)
-    else:
-        prefix = _ROLE_PREFIX[role]
-        base, model = by_env(f"{prefix}_BASE_URL"), by_env(f"{prefix}_MODEL")  # key_env는 env 이름 글자 그대로(아래)
-        key = reveal(by_env(f"{prefix}_API_KEY"))
+    prefix = _ROLE_PREFIX[role]
+    base, model = by_env(f"{prefix}_BASE_URL"), by_env(f"{prefix}_MODEL")  # key_env는 env 이름 글자 그대로(아래)
+    key = reveal(by_env(f"{prefix}_API_KEY"))
     if not (base and model):
         return None
     # TODO: 리팩토링 후 구현 필요
