@@ -147,6 +147,8 @@ def test_chains():
     bad = [  # (설정 고치기, 오류 글자에 들어갈 말) — 이름은 SQL에 들어가므로 검사
         (lambda c: c["sfdc"]["opportunity"].__setitem__("table", "SFDC.Opportunity; DROP"), "sfdc.opportunity.table"),
         (lambda c: c["crms"]["docu"].pop("created"), "crms.docu.created: 없음"),
+        (lambda c: c["crms"]["map"].pop("out"), "crms.map.out: 없음"),  # 빠뜨리면 CRMS 칸이 조용히 빔(#98 리뷰)
+        (lambda c: c["crms"]["project"].pop("out"), "crms.project.out: 없음"),
         (lambda c: c["crms"]["project"]["out"].__setitem__("sf_op_id", "X"), "crms에서 설정으로 채울 수 없는 칸"),
         (lambda c: c["crms"]["project"]["out"].__setitem__("file_path", "X"), "crms에서 설정으로 채울 수 없는 칸"),  # 문서 키 덮어쓰기 막음
         (lambda c: c["sfdc"]["opportunity"]["out"].__setitem__("client_edw", "Name"), "sfdc에서 설정으로 채울 수 없는 칸"),
