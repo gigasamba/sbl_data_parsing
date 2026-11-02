@@ -31,6 +31,7 @@
 판: `common/store/db/migrations/versions/0001_search_base.py`(옛 한 벌) + `0002_search_doc_meta.py`(11-02 — 원천별 5벌로 나누고 옛 한 벌 표·`load_run`을 지움) · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_EXTRA`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인(`pipeline/load/edw_meta.py` — pl-29).
 
 - **스키마 배치:** 기준 스키마 `<PG_SCHEMA>`(예 `ai`)에는 Alembic 판 표 `alembic_version`과 공용 doc_id 시퀀스 `doc_id_seq`만 둔다. 원천마다 스키마 `<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`에 아래 표 다섯 개와 뷰 `v_chunk_source`가 같은 꼴로 있다(원천 전용 칸만 다름 — 표의 "원천" 칸). 원천은 문서의 `source_system`(SFDC·CRMS·LAS·FAQ, `-test` 붙어도 같음 — 그 밖은 `other`)으로 고른다.
+- **적재 규칙(11-02 — [pl-13](../prd/load.md#pl-13)):** 원본 경로(`file_path`)는 5벌을 통틀어 하나다 — 적재는 5벌 모두에서 찾아, `--replace` 없이 이미 있으면 건너뛰고, `--replace`면 다른 원천 스키마의 옛 사본을 지운 뒤 새 원천 스키마에 넣는다(원천이 바뀐 문서).
 - **지운 것(11-02):** `load_run` 표(실행 정보는 실행 기록에, 적재 시각은 ParsingMeta `loaded_at`) · `doc.clients`(본문 고객 — `clients_doc`으로 이름 바꿈)·`doc.run_id`·`doc.source_system`(스키마가 원천)·`doc.s3_key`(`file_path`가 원본 경로)·`doc.sf_acc_name`(`client_edw`와 같은 값) · `chunk.char_start`·`char_end`·`n_chars`·`embed_model`·`clients`·`source_system` · 색인 `ix_<스키마>_chunk_clients`.
 
 ### gold.doc
