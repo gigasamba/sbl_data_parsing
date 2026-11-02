@@ -74,9 +74,7 @@ LAYER_CODE = {
         "mcp_server/services/search/local.py",
         "mcp_server/services/search/pgsearch.py",
     ],
-    "a": [],  # S5(10-26, C-25 ① — 코디네이터 답 Q1 a) 빈 층: research.py는 S5a에 지움(D-025). 옛 stack_matrix(10-30 지움) answer 캐시 열쇠·audit이 층 a를 써서
-    # 층 이름은 남김 — 빈 층 해시 e3b0c44298fc는 S5a 뒤 값 그대로라 answer 캐시 열쇠도 그대로
-}
+}  # 빈 층 a(research.py — S5a에 지움)는 0.2.0에 이름도 지움(pl-46)
 
 
 def _layer_globs(layer):

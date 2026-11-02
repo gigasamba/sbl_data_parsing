@@ -6,7 +6,7 @@
   VLM_BASE_URL(OpenAI 호환 내부망 주소)·VLM_MODEL을 설정하면 /models 응답과 모델 이름도 확인.
 """
 
-import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settings.pin_env)를 첫 줄에서(S7e2 — 옛 옵션 카탈로그 채우기 자리)
+import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
 
 # isort: split
 import importlib.util

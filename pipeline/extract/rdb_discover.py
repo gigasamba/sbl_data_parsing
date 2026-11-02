@@ -14,7 +14,7 @@ size_bytes·size → size · updated_at·mod_seq·id → increment)으로 맞춰
 mssql(pymssql) common.connections.rdb(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_READ_USER·RDB_READ_PASSWORD·RDB_CONNECT_KWARGS) · pg는 common/pg.py 재사용.
 """
 
-import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settings.pin_env)를 첫 줄에서(S7e2 — 옛 옵션 카탈로그 채우기 자리)
+import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
 from common.core.console import utf8_stdout
 
 # isort: split

@@ -11,7 +11,7 @@
 산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서) · output/stack_test.md · output/RUNLOG.md(명령 요약)
 """
 
-import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settings.pin_env)를 첫 줄에서(S7e2 — 옛 옵션 카탈로그 채우기 자리)
+import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
 from common.core.console import utf8_stdout
 
 # isort: split

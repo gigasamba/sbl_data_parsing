@@ -10,7 +10,7 @@
     멈추지 않음). --workers N: 문서 N개를 동시에. --procs N: 문서를 N조각으로 나눠 프로세스 N개가 동시에(스레드는 코어 ÷ N).
   OCR 엔진(OCR_ENGINES — rapidocr_ko)은 파싱 엔진으로 돌지 않는다 — 이미지·스캔 문서는 VLM 엔진만(0.2.0 ocr_engine 스위치 지움 — pl-46).
     글자 PDF 안의 스캔 쪽은 여기서 OCR 엔진을 더하지 않고 대표 결과(represent)의 쪽 VLM이 그 쪽만 채운다.
-  진행 현황: 1건 끝날 때마다 <out>/PROGRESS.md 갱신(형식별·엔진별 표·남은 시간) — 서버에서 `watch -n 30 cat output/parse/PROGRESS.md`.
+  진행 현황: 콘솔 큐 줄만(PROGRESS.md 쓰기는 0.2.0에 지움 — pl-46)
   엔진 범위는 stack 하나(pl-03, 사용자 10-30 — 옛 PARSE_ENGINE_SCOPE all·--engines all 길은 지움): 문서마다 형식 키
     (.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록만 돈다. --engines는 그 안에서 더 좁힐 뿐(비교 실험은
     stack json을 고쳐서). stack.json에 그 키가 없으면 핵심 엔진 합집합으로 대체(누락 방지)+형식별 1회 로그.
@@ -44,10 +44,7 @@ from common.core.paths import (  # 폴더 재편 뒤 이 두 상수만 바뀌면
 from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
 from pipeline.extract.engines import registry
 from pipeline.shared import artifacts as P0  # P0 열쇠(엔진 버전·코드 지문) — 결과 출처 기록(실험 저장소 계약과 같은 규칙)
-from pipeline.shared.progress import (  # output/parse/PROGRESS.md 갱신 · 문서→형식 키(.pdf_text/.pdf_image, _types.json 캐시) · SI44③ 암호 오류 단서(한 곳)
-    doc_types,
-    write_progress,
-)
+from pipeline.shared.progress import doc_types  # 문서→형식 키(.pdf_text/.pdf_image, _types.json 캐시)
 
 _QUOTED = re.compile(r"""(['"])((?:(?!\1).){30,})\1""", re.S)
 
@@ -274,13 +271,9 @@ def main():
         print("건너뜀: " + " · ".join(f"{k} {v}" for k, v in skip.items()), flush=True)
     out.mkdir(parents=True, exist_ok=True)
     log, lock = RunLog(out / "runs.jsonl"), threading.Lock()
-    try:
-        write_progress(src, out, a.engines)
-    except Exception as ex:
-        print(f"(PROGRESS.md 갱신 실패: {type(ex).__name__}: {ex})", flush=True)
-    print(f"진행 현황: {out / 'PROGRESS.md'} (1건마다 갱신) · 이번 실행 {len(jobs)}건", flush=True)
+    print(f"이번 실행 {len(jobs)}건", flush=True)
 
-    done, tally, last_w = [0], Counter(), [0.0]
+    done, tally = [0], Counter()
 
     warmed = set()
     text_sem = threading.BoundedSemaphore(slots)  # 10-29 — 글자(CPU) 엔진 자식 동시 수 상한(VLM 엔진은 --workers만큼)
@@ -316,12 +309,6 @@ def main():
                     f"  [큐 {done[0]}/{len(jobs)} {done[0] / max(1, len(jobs)):.0%}] " + " · ".join(f"{k} {v}" for k, v in tally.items()),
                     flush=True,
                 )
-                try:
-                    if time.monotonic() - last_w[0] >= 2 or done[0] == len(jobs):
-                        write_progress(src, out, a.engines)
-                        last_w[0] = time.monotonic()
-                except Exception as ex:
-                    print(f"(PROGRESS.md 갱신 실패: {type(ex).__name__}: {ex})", flush=True)
             return
         t0, err = time.perf_counter(), None
         unset = registry.missing_env(eng)
@@ -374,14 +361,6 @@ def main():
                 f"  [큐 {done[0]}/{len(jobs)} {done[0] / max(1, len(jobs)):.0%}] " + " · ".join(f"{k} {v}" for k, v in tally.items()),
                 flush=True,
             )  # 큐 진행(콘솔)
-            try:
-                if time.monotonic() - last_w[0] >= 2 or done[0] == len(
-                    jobs
-                ):  # 1건마다 호출하되 2초 간격으로(문서×엔진이 많을 때 갱신 비용 억제)
-                    write_progress(src, out, a.engines)
-                    last_w[0] = time.monotonic()
-            except Exception as ex:  # 현황 파일 실패가 파싱을 멈추면 안 됨
-                print(f"(PROGRESS.md 갱신 실패: {type(ex).__name__}: {ex})", flush=True)
 
     _run_docs(jobs, run_job, a.workers)
     for doc, eng, dst, sha, first in deferred:  # 사본: 먼저 돈 결과가 성공이면 복사, 아니면 사본은 기록 안 함(다음 실행에서 다시 판단)
@@ -395,8 +374,6 @@ def main():
                 log.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 log.flush()
                 print(f"copy {eng:18s}          {doc.name}  ← {first.name[:-5]}", flush=True)
-    if deferred:
-        write_progress(src, out, a.engines)
     from common.core.runlog import note
 
     note(
@@ -446,7 +423,6 @@ def run_procs(a, docs):
 
     with ThreadPoolExecutor(max_workers=k) as ex:
         list(ex.map(one, range(k)))
-    write_progress(Path(a.src), Path(a.out), a.engines)
 
 
 def _run_docs(jobs, run_job, workers):

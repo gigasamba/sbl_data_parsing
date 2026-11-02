@@ -315,7 +315,7 @@ def test_run_procs_doc_shards():
     fake = mock.Mock(side_effect=lambda cmd, **kw: (cmds.append(cmd), mock.Mock(wait=lambda: 0))[1])
     a = argparse.Namespace(procs=4, src="s", out="o", engines="")
     argv = ["run_all", "--src", "s", "--procs", "4", "--engines", "pymupdf"]
-    with mock.patch.object(resources, "gated_popen", fake), mock.patch.object(RA, "write_progress"), mock.patch.object(sys, "argv", argv):
+    with mock.patch.object(resources, "gated_popen", fake), mock.patch.object(sys, "argv", argv):
         RA.run_procs(a, [Path("a.pdf"), Path("b.pdf"), Path("c.pdf")])
     shards = sorted(c[c.index("--shard") + 1] for c in cmds)
     assert shards == ["0/3", "1/3", "2/3"], shards
