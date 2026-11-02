@@ -132,55 +132,44 @@
 ## pl-33 · 분류 단계 — silver 뒤, gold 앞
 
 ### 무엇·왜
-- 문서마다 종류 라벨 `doc_class`를 붙인다. 대상은 SFDC와 LAS뿐이다(CRMS·FAQ·그 밖은 NULL — FAQ는 시트 이름 `FAQ_group`을 쓴다, [extract.md#pl-39](extract.md#pl-39)).
-- 사용자 11-02: **운영 분류와 결과가 같아야 한다.** 판단 논리(라벨 집합·지시문 구조·근거·경계 규칙·확신도 기준)는 운영 그대로 두고, 흐름·부르는 순서만 우리 파이프라인에 맞게 줄인다. 기준 자료: `reference/pipeline_261030/adjustments/`의 SFDC·LAS 분류 문서(.md — git 밖).
-- 자리: 파싱 결과 저장본(silver — Object Storage) 뒤, 검색 DB(gold — pgvector) 적재 전에 같은 흐름 안에서 한다. 적재가 `doc_class`를 함께 넣는다([ops.md#pl-24](ops.md#pl-24) 순서). 운영은 gold 적재 뒤 따로 분류하고 동기화 스크립트로 gold에 옮기는데, 그 동기화는 두지 않는다 — 입력이 같으면 라벨도 같다.
-- 결정 이력: 0.2.0에 유지(사용자 10-31), 같은 sha256 묶음은 LLM 한 번·라벨만 전파·고객은 전파 안 함(reference 비교 C1·C3~C9, 사용자 10-30), 운영 ParsingMeta의 옛 라벨은 쓰지 않고 0.2.0 전체 e2e에서 새로 분류.
+- 문서마다 종류 라벨 `doc_class`를 붙인다. 대상은 SFDC와 LAS뿐이다(CRMS·FAQ·그 밖은 NULL — FAQ는 시트 이름 `FAQ_group`, [extract.md#pl-39](extract.md#pl-39)).
+- 사용자 11-02: **운영 분류와 결과가 같아야 한다.** 판단(라벨 집합·지시문 구조·근거·경계 규칙)은 운영 그대로, 흐름만 줄였다. 운영 SFDC·LAS 분류 문서(`reference/pipeline_261030/adjustments/`, git 밖)를 우리 말로 옮겼다 — 운영 지시문 글자는 옮기지 않았다. LAS는 운영 표준(전체 근거 지시문)을 따르고, 옛 제목 규칙 분류기(phase1)는 옮기지 않는다.
+- 자리(사용자 11-02 최종): 분류는 적재 단계의 한 부분이고 보통 silver → gold 적재와 같은 규칙을 따른다 — 고르는 규칙을 따로 두지 않는다. 적재(`pipeline/load/pgvector_load.py` `load`)가 EDW 메타를 붙인 직후, gold에 넣기 전에 한다. 같은 내용(sha256)은 묶음이 한 문서만 남기고, 파싱되지 않은 문서는 gold에 오지 않아 라벨도 없다. 운영의 별도 분류 실행·gold 동기화는 두지 않는다 — 입력이 같으면 라벨도 같다.
 
 ### 규칙
-1. 모델은 서버 내부 GLM(운영과 같은 모델 이름)을 OpenAI 호환 대화 호출로, `reasoning_effort=high`, 답 길이 상한 4096 토큰으로 부른다. 호출은 `llm.chat`으로 예산 장부를 거친다(CLAUDE.md §7). 제한 시간은 SFDC 120초·LAS 180초(운영 값).
-2. 같은 sha256 묶음은 SFDC에서 LLM을 한 번만 부른다. 대표 행 = `parse_status` ok가 skipped_dup보다 먼저 → 늦은 `parsed_at` → `parse_meta_id`. 라벨은 묶음 안 같은 원천의 다른 문서에도 붙는다. LAS는 운영 문서에 묶음 규칙이 없다 — `[미정]`(아래 결정 대기).
-3. 본문 근거는 대표 결과 `.md`의 앞 8,000자(UTF-8, 깨진 바이트는 대체 문자)다. 대표 `.md`가 없으면 그 문서는 건너뛴다(NULL).
-4. **SFDC 지시문 구조:** 시스템 쪽에 라벨 정의(`RFI`·`RFP`·`RFI+RFP`·`Proposal`·`Other` — 글자 그대로), 회사 용어(견적 개체는 제안서 쪽, 기회 개체는 RFP 쪽, 보낸/받은 채널 방향, 로그·계약 개체는 Other 쪽, 한·영 용어 대응), 경계 규칙을 둔다. 경계 규칙(운영 규칙을 우리 말로):
-   - 회사 안에서 만든 입찰 평가·방어 자료는 RFP 계열이 아니라 Other.
-   - 우리가 채운 RFI 질문서는 RFI.
-   - 견적 보조 파일(원가 계산·일정)은 제안 묶음의 일부일 때만 Proposal, 아니면 Other.
-   - `RFI+RFP`는 한 문서가 두 요청을 정말 함께 담을 때만 — 이름만 그런 단일 단계 문서는 그 단계 라벨.
-   - 누가 쓴 문서인지는 파일 이름이 아니라 문서 안의 머리·연락처·표지로 정한다(고객 머리 + 입찰 안내 = RFP, "RFP"라는 이름의 파일 안 우리 제안 = Proposal).
-   - 고객 RFP를 인용하거나 답하는 우리 제안은 Proposal.
-5. **SFDC 사용자 쪽 근거:** 문서 제목·원본 파일 이름(늘), 개체 정보 묶음(개체 종류·채널 제목과 방향·기회 단계·키워드 묶음·파일 형식 — 운영 근거 파일과 이어질 때만, 안 이어지면 묶음째 뺌), 본문 8,000자.
-6. **LAS 지시문 구조:** 라벨 `MSA`·`PSA`·`QAG`·`LOI`·`Amendment`·`Assignment Letter`·`Other`. 규칙(우리 말로): 기존 계약을 바꾸는 것은 모두 Amendment(QAG·LOI·TTA/SoW 변경 포함), 자료만 더하는 QAG 추가분은 QAG, 경개(novation)는 Assignment Letter, SoW·NDA/CDA·MTA/TTA·MOU·검토 메모·부속 서한·공급/제조·해지·전자서명 감사 기록·LOU는 늘 Other(LOU는 LOI가 아님). 확신도 상한: 근거가 모두 맞으면 0.90 이상, 애매하면 0.80, 부딪히면 0.60, 검토 메모는 0.75.
-7. **LAS 사용자 쪽 근거:** "문서 정보" 묶음(원본 파일 이름·파일 형식, 계약 대장과 관리 번호로 이어질 때만 품의 제목·상대방 — 암호화된 대장 칸은 근거로 쓰지 않음), "키워드 근거" 묶음(코드가 정규식으로 미리 찾아 보여 줌: ① 본문 앞 300자의 자기 이름("THIS … AGREEMENT"), ② 공백을 정리한 앞 2,000자의 계약 종류 전체 이름, ③ 파일 이름 키워드(`_`는 공백 — QAG·PSA·LOI 약어는 허용, MSA는 전체 이름만), ④ 파일 이름의 변경 키워드, 보고서·메모 같은 제목 경고, 두 종류 이상이 걸리면 경고 + 확신도 0.80 이하), 본문 8,000자.
-8. 답은 JSON(`class`, `confidence` 0~1) 하나다. 코드 울타리를 벗기고 첫 JSON 객체를 읽는다. 라벨은 집합 안의 값만 받는다(대소문자·공백·`rfp+rfi` 같은 별칭은 바로잡음). 집합 밖·참거짓·NaN이면 다시 묻는다(최대 3번) — 그래도 틀리면 NULL.
-9. 확신도 0.70 미만이면 낮은 확신 표시(`low_conf`)를 붙인다. 라벨은 그래도 쓴다(사람 검토 대상 표시일 뿐).
-10. 모델 이름 글자(`doc_class_model`) = `<모델>-<effort>-<yyyymmdd>`(실행 시작 때 한 번 정함). 라벨·지시문·기준값·effort 중 하나라도 바뀌면 새 글자가 되어야 한다 — 되돌리기 열쇠.
-11. 이미 라벨이 있는 문서는 덮어쓰지 않는다(운영과 같음 — 다시 파싱한 문서도 옛 라벨 유지). NULL인 문서만 다시 분류 대상이다.
+1. 모델은 `llm.chat`(역할 llm — 예산 장부, CLAUDE.md §7)으로 부른다. 서버(dev부터)는 내부 GLM, PC는 외부 허용(`RUN_ENV=local`) 또는 시험의 가짜 LLM. effort는 설정 `common.models.llm.extra_body`(서버는 `{"reasoning_effort": "high"}`로 운영과 같게), 답 길이 상한 4096 토큰.
+2. 본문 근거 = 게시가 올리는 대표 결과 `.md`(`render_md` — silver와 같은 글)의 앞 8,000자. `run_docs`가 적재에 `--rep-dir <문서 폴더>/parse/_rep`를 넘긴다(없으면 묶음의 본문). 본문이 없으면 부르지 않고 실패.
+3. **SFDC 지시문**(`resources/prompts/pipeline/classify_sfdc/`): 라벨 `RFI`·`RFP`·`RFI+RFP`·`Proposal`·`Other`, 회사 용어(견적 개체 → 제안서 쪽, 기회 개체 → RFP 쪽, 보낸/받은 채널 방향, 로그·계약 개체 → Other 쪽, 한·영 용어), 경계 규칙 6개(내부 입찰 평가 자료는 Other · 우리가 채운 RFI 질문서는 RFI · 견적 보조 파일은 제안 묶음일 때만 Proposal · `RFI+RFP`는 한 문서가 두 요청을 정말 함께 담을 때만 · 작성자는 파일 이름이 아니라 문서 안의 머리·표지로 · 고객 RFP에 답하는 우리 제안은 Proposal).
+4. **SFDC 문서 정보**는 적재 때 EDW에서 문서마다 새로 만든다(사용자 11-02 — 운영의 10-21 고정 파일 대신, 사슬은 `pipeline/load/edw_meta.py` 적재 메타와 같다 — `classify_context`; Quote 표가 없어 견적 근거는 빠짐 — 받아들임): 제목(`ContentVersion.Title`)·원본 파일 이름·형식·연결된 SFDC 개체 종류·채널(Task/Event 제목)·영업 기회 이름·단계. 서버 EDW에 없는 칸은 그 근거만 빠진다(경고 한 줄). 운영의 "키워드 묶음"은 EDW에 없어 빠진다.
+5. **LAS 지시문**(`resources/prompts/pipeline/classify_las/`): 라벨 `MSA`·`PSA`·`QAG`·`LOI`·`Amendment`·`Assignment Letter`·`Other`, 규칙(기존 계약 변경은 모두 Amendment · 자료만 더하는 QAG 추가분은 QAG · 경개는 Assignment Letter · SoW·NDA/CDA·MTA/TTA·MOU·검토 메모·부속 서한·공급/제조·해지·전자서명 감사 기록·LOU는 Other), 확신도 기준(모두 맞음 0.90 이상·애매 0.80·부딪힘 0.60·메모 0.75).
+6. **LAS 근거**: 문서 정보(원본 파일 이름·형식, 계약 대장 최신 판의 품의 제목·상대방 — EDW에 칸이 있을 때만) + 키워드 근거(코드가 정규식으로 찾아 보여 주는 힌트일 뿐 — ① 본문 앞 300자 자기 이름 ② 공백 정리한 앞 2,000자의 계약 종류 이름 ③ 파일 이름 키워드(`_`는 공백, QAG·PSA·LOI 약어 허용·MSA는 전체 이름만) ④ 파일 이름 변경 키워드 · 보고서·메모 같은 제목 경고 · 두 종류 이상 경고) + 본문 8,000자. `pipeline/load/classify.py` `las_signals`.
+7. 답은 JSON `{"class", "confidence"}` 하나. 코드 울타리를 벗기고 첫 JSON 객체의 `class`를 읽는다 — 대소문자·공백·별칭(`RFP+RFI` → `RFI+RFP`)은 바로잡고, 집합 밖·참거짓·숫자면 실패. 확신도는 기록하지 않는다(낮은 확신 표시 없음 — 사용자 11-02).
+8. **재시도 없음·수동 명령 없음**(사용자 11-02): 호출 안에서 다시 묻지 않는다. 분류 실패(모델 장애·예산 초과·집합 밖·본문 없음)는 **그 문서의 적재 실패**다 — gold에 넣지 않아 gold_version이 적히지 않고, 다음 정상 실행에서 수집이 다시 고른다(EDW ParsingMeta에 silver/gold 결과가 없는 문서가 대상). 감사 한 줄.
+9. 같은 sha256은 라벨 하나: 묶음이 같은 sha256 문서를 하나만 남기므로(`build_bundle` — 다른 경로는 `aliases`) 한 번만 부른다. 파싱되지 않은 행(`not_parsed`)에는 라벨을 붙이지 않는다(gold에는 파싱된 문서만).
+10. 이미 라벨이 있는 문서(gold 또는 묶음)는 덮지 않는다 — `--replace`로 다시 적재해도 옛 라벨 유지.
 
 ### 예시
-- SFDC 파일 이름 `XX_RFP_response.pdf`, 본문 첫 장이 우리 회사 표지·제안 내용 → 규칙 4(작성자는 문서 안으로) → `Proposal`, 확신도 0.86 → `low_conf` 아님.
-- LAS 파일 이름 `QAG_Addendum_2.pdf`, 본문에 품질 합의서에 자료를 더한다는 내용만 → 규칙 6 → `QAG`. 같은 이름에 기존 조항을 바꾼다는 내용이면 `Amendment`.
-- 답이 `{"class": "RFP+RFI", "confidence": 0.65}` → 별칭 바로잡음 `RFI+RFP`, 0.65 < 0.70 → `low_conf`.
-- (시험 자료로 쓸 때는 합성 문서 — 실제 회사 문서가 아니다.)
+- SFDC `RFP_answer.pdf`, 본문 첫 장이 우리 회사 표지·제안 내용 → 규칙 3(작성자는 문서 안으로) → 모델 답 `{"class": "Proposal", "confidence": 0.86}` → `Proposal`.
+- 답이 `{"class": "RFP+RFI"}` → 별칭 → `RFI+RFP`. 답이 `{"class": "Others"}` → 집합 밖 → 실패 — 그 문서는 이번에 gold에 넣지 않고 다음 실행에 다시.
+- LAS `QAG_Addendum_2.pdf`, 본문이 품질 합의서에 자료만 더함 → `QAG`. 기존 조항을 바꾸면 `Amendment`.
+- (시험은 합성 문서·가짜 LLM — 실제 회사 문서 아님.)
 
 ### 데이터·약속
-- 지시문 파일은 `resources/prompts/pipeline/<이름>/`(SFDC·LAS 따로) — 지시문 지문(바이트 그대로, LF). 운영 지시문 글자를 그대로 옮기지 않고 위 규칙대로 새로 쓴다.
-- 검색 DB(gold) 시스템별 `doc.doc_class` 칸 — #86이 만든다([load-schema.md#pl-28](load-schema.md#pl-28)).
-- 결정 대기(사용자): `low_conf`·`doc_class_model`·분류 시각을 어디에 둘지 — 운영은 EDW `AI.ParsingMeta`의 `doc_class`·`doc_class_low_conf`·`doc_class_at`·`doc_class_model` 네 칸에 쓰고 gold에는 `doc_class`만 옮긴다. 우리는 10-30 결정(G19)으로 `doc_class`를 gold에만 둔다 — 나머지 셋을 EDW에 둘지, gold에 칸을 더할지, 감사 파일(JSONL — 묶음마다 라벨·확신도·토큰·지연·오류 한 줄)에만 둘지.
+- 검색 DB(gold) `<기준>_sfdc.doc.doc_class`·`<기준>_las.doc.doc_class`(#86).
+- 모델 이름·분류 시각은 어디에도 두지 않는다(사용자 11-02) — ParsingMeta의 silver_version·gold_version이 어떤 코드로 만든 결과인지 남긴다.
+- 감사 기록: `<묶음>/classify_audit.jsonl` — 문서마다 한 줄(시각·원본 키·원천·라벨·오류).
+- 지시문: `resources/prompts/pipeline/classify_sfdc/`·`classify_las/`(지시문 지문 — 바이트 그대로, LF). `output_schema`는 두지 않는다(어긋나면 자동으로 한 번 더 묻는 길이 있어서 — 재시도 없음).
 
 ### 단계
-1. 대상 고르기 — 이번 실행에서 silver를 올린 SFDC·LAS 문서 중 `doc_class`가 NULL인 것.
-2. SFDC는 sha256 묶음마다 대표 한 건, LAS는 문서마다(묶음 규칙 결정 전).
-3. 근거 모으기(규칙 5·7) → 부르기(규칙 1, 일시 오류 — 5xx·429·시간 초과 — 는 지수 대기로 3번까지 다시) → 답 읽기(규칙 8).
-4. 라벨·확신도·모델 글자를 문서 메타에 넣고 적재가 gold `doc`에 쓴다. 감사 파일에 한 줄.
-5. NULL로 남은 문서는 다음 실행에서 다시 대상이 된다(규칙 11 — 운영의 "NULL만 다시 쓸기"와 같음).
-- 결정 대기(사용자): 10-30 G10 결정("실패한 분류는 자동으로 다시 하지 않고 수동 명령으로만")이 운영(호출 안 3번 재시도 + 매 실행 NULL 다시 쓸기)과 다르다. 운영과 같게 하라는 11-02 결정을 따르면 G10을 바꿔야 한다 — 위 단계 3·5는 운영 쪽으로 적었다.
-- 결정 대기(사용자): 운영 SFDC의 개체 정보는 10-21에 고정한 근거 파일에서 온다(그 뒤 파싱한 문서는 제목·파일 이름만). 같은 결과를 내려면 그 고정 파일을 쓸지, 지금 EDW·SFDC 표에서 다시 만들지.
-- 결정 대기(사용자): LAS도 sha256 묶음으로 한 번만 부를지, 운영 LAS의 두 코드판(NULL 채우기용 짧은 근거·다시 분류용 전체 근거) 중 어느 쪽을 따를지, 대표 `.md` 고르기 규칙(SFDC는 `engine/` 밖 하나, LAS는 가장 늦은 시각)을 하나로 할지, 운영이 묶음의 `not_parsed` 행에도 라벨을 붙이는 것을 따를지.
-- 구현은 #86 병합 뒤(#86이 `doc_class` 칸을 만든다). 코드 자리: `pipeline/transform/structure/`(새 파일), `pipeline/load/`.
+1. 적재가 EDW 메타를 붙인 뒤 SFDC·LAS 문서를 고른다.
+2. gold에 이미 라벨이 있으면 그대로(규칙 10).
+3. 문서 정보(규칙 4·6) + 본문(규칙 2)으로 한 번 부르고 답을 읽는다(규칙 7).
+4. 라벨이 있으면 문서 행에 넣어 gold에 적재, 실패면 그 문서는 적재하지 않는다(규칙 8 — 다음 실행에 다시).
 
 ### QA
-- [미정] 시험 이름 — 구현 때 만든다: 라벨 별칭 바로잡기·집합 밖 NULL·0.70 경계·모델 글자 규칙·이미 있는 라벨 안 덮기를 표 행으로(가짜 LLM 답). 결과 비교는 [test.md#e2-20](test.md#e2-20) 분류 수용 보고서(개발 서버 정답 샘플과 일치율·혼동표).
-- Status: todo — 0.2.0, #86 병합 뒤 구현. 설계 11-02(`feature/ops-trim`).
+- `tests/server/pipeline/test_classify.py`(가짜 LLM): 답 읽기 표(별칭·대소문자·울타리·집합 밖·참거짓·빈 답), 모델 글자(effort 두 꼴·없음), LAS 키워드 근거 표, 사용자 쪽 글(묶음·8,000자), 분류 표(부른 횟수 — 재시도 없음 · 실패 집합 · gold·묶음 라벨 안 덮음 · 본문 없음 · 대상 아닌 원천 · `-test` 표기), 적재가 gold 라벨을 넣고 실패 문서는 넣지 않으며 `--replace`에도 안 덮음, EDW 분류 근거(칸이 없는 EDW 포함).
+- 운영과의 결과 비교는 [test.md#e2-20](test.md#e2-20) 분류 수용 보고서(개발 서버 정답 샘플과 일치율·혼동표).
+- Status: dev — 11-02 `feature/pl33-classify`(구현·시험).
 
 ## 코드와 다른 점 · 지울 코드
 

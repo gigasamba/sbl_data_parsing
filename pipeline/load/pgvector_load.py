@@ -137,7 +137,7 @@ def _kst(v):
     return (t if t.tzinfo else t.replace(tzinfo=timezone(timedelta(hours=9)))).isoformat()
 
 
-def load(db, bundle, replace=False):
+def load(db, bundle, replace=False, rep_dir=None):
     """묶음 → 원천 스키마별로(pl-28 — 문서의 source_system으로 고름: SFDC·CRMS·LAS·FAQ, 그 밖은 other) 적재. 실 PG는 기준 연결 한 트랜잭션
     (실패하면 5벌 모두 되돌림), 대역은 원천마다 따로. 저장된 문서(file_path 같음)는 건너뜀(replace면 지우고 다시 넣음 — 고치기). 묶음에 없는
     저장 문서는 그대로 둠(pl-13). 실행 정보(묶음 meta·건수·시간)는 실행 기록에 남긴다(load_run 표는 11-02에 지움). 적재가 끝나면(커밋 뒤)
@@ -158,8 +158,11 @@ def load(db, bundle, replace=False):
     edw, meta_missing = edw_meta.fetch([(d.get("source_system"), d["file_path"]) for d in docs])  # pl-29 — EDW 조인(트랜잭션 밖, 읽기 계정)
     for d in docs:
         d.update({k: v for k, v in (edw.get(d["file_path"]) or {}).items() if v is not None})
+    failed = _classify(db, B, docs, rep_dir)  # pl-33 — SFDC·LAS 라벨(gold 넣기 전 · 이미 있는 라벨은 덮지 않음)
     by_src = {}
     for i, d in enumerate(docs):
+        if d["file_path"] in failed:  # 분류 실패 = 이 문서의 적재 실패(gold에 안 넣음 — 다음 정상 실행이 다시 고름)
+            continue
         by_src.setdefault(ST.source_of(d.get("source_system")), []).append(i)
     dbs = src_dbs(db)
     elsewhere = _elsewhere(dbs, docs, by_src)  # 같은 원본 경로가 다른 원천 스키마에 있는지(원천이 바뀐 문서 — 리뷰 #86)
@@ -194,6 +197,31 @@ def load(db, bundle, replace=False):
 
     runlog.note(f"적재 {json.dumps({'bundle': str(B), 'meta': meta, 'counts': counts}, ensure_ascii=False, default=str)}")
     return counts
+
+
+def _classify(db, bundle, docs, rep_dir):
+    """pl-33(사용자 11-02) — SFDC·LAS 문서에 doc_class. 이미 gold에 라벨이 있는 문서는 그 라벨 그대로(덮지 않음). 본문은 게시가 올리는
+    .md와 같은 글(rep_dir의 대표 결과 → render_md, 없으면 묶음 full_text). 반환: 분류에 실패한 file_path 집합(적재하지 않음)."""
+    from common.store.db.models import search_tables as ST
+    from pipeline.load import classify as CL
+    from pipeline.load import edw_meta
+
+    targets = [d for d in docs if ST.source_of(d.get("source_system")) in CL.LABELS]
+    if not targets:
+        return set()
+    existing = {}
+    for src, sdb in src_dbs(db).items():
+        if src not in CL.LABELS:
+            continue
+        paths = sorted(d["file_path"] for d in targets if ST.source_of(d.get("source_system")) == src)
+        try:
+            rows = sdb.q(f"SELECT file_path, doc_class FROM {sdb.schema}.doc WHERE file_path = ANY(%s)", (paths,)) if paths else []
+        except Exception:  # 표가 아직 없음(처음 적재)
+            rows = []
+        existing.update({r["file_path"]: r["doc_class"] for r in rows if r["doc_class"]})
+    todo = [d for d in targets if d["file_path"] not in existing and not d.get("doc_class")]
+    ctx = edw_meta.classify_context([(d.get("source_system"), d["file_path"]) for d in todo]) if todo else {}
+    return CL.apply(targets, CL.rep_texts(todo, rep_dir), ctx, existing, audit_path=Path(bundle) / "classify_audit.jsonl")
 
 
 def _elsewhere(dbs, docs, by_src):
@@ -368,6 +396,7 @@ def main(argv=None):
     ap.add_argument("cmd", choices=["check", "deploy", "load"])
     ap.add_argument("--bundle", default="output/edw/bundle")
     ap.add_argument("--replace", action="store_true")
+    ap.add_argument("--rep-dir", default=None, help="대표 결과 폴더(_rep) — 분류 본문을 게시 .md와 같게(pl-33). 비우면 묶음 full_text")
     a = ap.parse_args(argv)
     db = pg_connect()
     print(
@@ -395,7 +424,7 @@ def main(argv=None):
             from common.store.db import dbtool
 
             dbtool.require_current(db.q, "search", db.schema)
-        print(json.dumps(load(db, a.bundle, a.replace), ensure_ascii=False))
+        print(json.dumps(load(db, a.bundle, a.replace, a.rep_dir), ensure_ascii=False))
 
 
 if __name__ == "__main__":
