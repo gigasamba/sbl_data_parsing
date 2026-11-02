@@ -1,11 +1,11 @@
-"""pipeline.check_env 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.check_env --selftest`."""
+"""common.check.checker env(옛 pipeline.check_env — 0.2.0 합침) 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.check_env --selftest`."""
 
 import tempfile
 from pathlib import Path
 
+from common.check.checker import _parse_requirements, check_path_bundle, check_pg_schema, check_requirements
 from common.config import settings as C
 from pipeline import config as pc
-from pipeline.check_env import _parse_requirements, check_path_bundle, check_pg_schema, check_requirements
 
 
 def selftest():

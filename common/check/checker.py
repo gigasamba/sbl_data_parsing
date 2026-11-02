@@ -1,29 +1,49 @@
 #!/usr/bin/env python3
-"""서버 환경 점검 — 시스템 도구 · 스택별 의존성 · 문서 폴더(DOC_DIR, 기본값 없음 — common/paths.py.doc_dir) · 디스크 · (선택) LLM 엔드포인트
-· 네이티브 ↔ Docker requirements 차이(SI28, 패키지 누락·버전 다름은 rc≠0) · 핵심 의존성 설치 여부.
-
-사용: python cli/check_env.py
-  VLM_BASE_URL(OpenAI 호환 내부망 주소)·VLM_MODEL을 설정하면 /models 응답과 모델 이름도 확인.
+"""점검기 하나(0.2.0 — pl-46: 옛 pipeline/check_env.py·common/store/services.py·common/check/ping_models.py를 합침).
+  python -m common.check.checker env        설치·스택·문서 폴더·경로 묶음·PG 스키마 권한·requirements 대조(옛 check_env — data-pipeline 이미지)
+  python -m common.check.checker services   PG·모델 연결 표(옛 services — /models만, 기본)
+  python -m common.check.checker ping       LLM·VLM·EMBED 실호출 1건씩(옛 ping_models — 실패가 있으면 종료 코드 1)
+pipeline 앱 칸은 importlib 문자열로 늦게 읽는다(common은 앱을 정적으로 import하지 않음 — check_modules ②, mcp-server 이미지엔 pipeline 없음).
+비밀값·키는 출력하지 않는다. 회사 데이터는 보내지 않는다(ping은 "ping"·1×1 PNG만).
 """
 
 import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
 
 # isort: split
+import base64
+import importlib
 import importlib.util
 import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
+import time
 import urllib.request
+import zlib
 from collections import Counter
 from pathlib import Path
 
+from common.ai import adk as A
+from common.ai import guard
+from common.ai.guard import external_allowed, is_internal
+from common.ai.guard import urlopen as guard_urlopen
 from common.config import settings as C  # common 칸(S7c — 설정 객체 · cfg()·given()·reveal()·COMMON.env())
+from common.config.settings import by_env, cfg, reveal  # S7b — 설정 객체(이름을 글자로 짓는 칸은 by_env)
 from common.core.console import utf8_stdout
 from common.core.paths import APP_ROOT, doc_dir  # output/·requirements·문서 폴더 등 런타임 경로용(C2, 독립 검토 10-13)
-from pipeline import config as pc  # pipeline 칸(S7c — 설정 객체 · cfg()·given()·PIPE.env())
+from common.store.pg import detect_pg
+
+
+def _pc():
+    """pipeline 칸 설정 모듈(pipeline.config) — 없으면(mcp-server 이미지) None."""
+    try:
+        return importlib.import_module("pipeline.config")
+    except ImportError:
+        return None
+
 
 # pipeline.extract.engines는 함수 안에서 늦게 import(rag-core 이미지엔 parse/가 없음 — 프리즈 전 감사 10-16,
 # 여기서 top-level import하면 rag-core에서 check_env 자체가 크래시한다).
@@ -105,8 +125,8 @@ PATH_BUNDLE = [
 def _bundle_value(name):
     """PATH_BUNDLE 이름의 준 값(없거나 빈 값이면 None) — 칸이 pipeline 절(GOLD_DIR 등)에 있거나 common 절(GLOSSARY_DIR 등)에 있음(S7c — 설정 객체)."""
     if name == "GOLD_DIR":
-        return pc.gold_dir() or None  # S7e2 — 이미지 안 /data/gold 마운트 기본(pc.gold_dir)
-    v = pc.given(name)
+        return _pc().gold_dir() or None  # S7e2 — 이미지 안 /data/gold 마운트 기본(pc.gold_dir)
+    v = _pc().given(name)
     return v if v is not None else C.given(name)
 
 
@@ -190,13 +210,16 @@ def check_pg_schema():
             pass
 
 
-def main():
+def env_main():
     print(f"Python {sys.version.split()[0]} ({sys.executable})")
-    from pipeline.tools.resources import py_env_problem  # 10-14 — common.core.resources에서 옮김(S만 씀, TOOL_IMAGE="structure")
+    if _pc() is None:  # mcp-server 이미지 — pipeline 앱이 없음(설치·스택 점검은 data-pipeline 이미지에서)
+        print("  pipeline 앱 없음 — env 점검은 data-pipeline 이미지에서(이 이미지는 services·ping)")
+        return 0
+    py_env_problem = importlib.import_module("pipeline.tools.resources").py_env_problem  # 10-14 — common.core.resources에서 옮김
 
     if bad := py_env_problem():  # SI29 — 시스템 python이면 아래 '누락'이 거짓 경보라 먼저 멈춤
         print(f"  [-- ] {bad}\n  → 멈춤: 다른 python으로는 패키지 점검 결과가 틀림(CHECK_ENV_ANY_PY=1이면 계속)")
-        if not pc.cfg().dev.check_env_any_py:  # S7c — 설정 객체(=1 계속)
+        if not _pc().cfg().dev.check_env_any_py:  # S7c — 설정 객체(=1 계속)
             return 2
     print("\n== 시스템 도구 ==")
     for tool, why in [
@@ -214,7 +237,7 @@ def main():
 
     print("\n== 스택 (pipeline/extract/engines/<스택>) ==")
     try:
-        from pipeline.extract.engines import registry  # rag-core 이미지엔 parse/가 없음
+        registry = importlib.import_module("pipeline.extract.engines.registry")  # mcp-server 이미지엔 pipeline이 없음
     except ImportError:
         line(True, "parse 없음(rag-core)", "이 이미지엔 parse/engines가 없음 — 스택 점검 건너뜀")
     else:
@@ -302,12 +325,170 @@ def main():
     return req_bad
 
 
-if __name__ == "__main__":
-    utf8_stdout()
+def model_status(prefix):
+    base, model = by_env(f"{prefix}_BASE_URL"), by_env(f"{prefix}_MODEL")  # S7b — 설정 객체(이름을 글자로 지음)
+    if not base:
+        return "미설정", "", ""
+    internal = (
+        "내부"
+        if is_internal(base)
+        else ("외부(허용 — 개발 PC)" if external_allowed(prefix) else "외부 — 거부됨(ALLOW_EXTERNAL=1 + RUN_ENV=local 필요)")
+    )
+    if internal.startswith("외부 — 거부"):  # 막힌 외부 주소에는 /models도 안 보냄(키가 헤더로 나감 — 재검증 10-02)
+        return internal, model or "(모델 미설정)", "확인 안 함(외부 거부)"
+    req = urllib.request.Request(base.rstrip("/") + "/models")
+    key = reveal(by_env(f"{prefix}_API_KEY"))
+    if key:
+        req.add_header("Authorization", f"Bearer {key}")
+    try:
+        with guard_urlopen(req, 5, prefix) as r:
+            ids = [m.get("id") for m in json.load(r).get("data", [])]
+        reach = "응답" + ("" if not model else (" · 모델 있음" if model in ids else f" · 모델 없음(서버: {', '.join(ids[:3])})"))
+    except Exception as e:
+        reach = f"응답 없음({type(e).__name__})"
+    return internal, model or "(모델 미설정)", reach
+
+
+def services_main():
+    print("| 항목 | 연결 |", "|---|---|", sep="\n")
+    try:
+        ok, why = detect_pg()
+    except SystemExit as e:  # 접속 칸이 빔 — 표에는 채울 자리를 적음
+        ok, why = False, str(e)
+    print(f"| pgvector | {'✓ ' if ok else '✗ '}{why} |")
+    print("\n| 모델 | 주소 구분 | 모델 | 상태 |", "|---|---|---|---|", sep="\n")
+    for p, label in (("LLM", "LLM(답변·분해·그래프)"), ("VLM", "VLM(이미지 파싱)"), ("EMBED", "임베딩")):
+        print(f"| {label} | " + " | ".join(model_status(p)) + " |")
+
+
+def png_1x1():
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(b"\x00\xff\xff\xff"))
+        + chunk(b"IEND", b"")
+    )
+
+
+def payload(prefix, model):
+    if prefix == "EMBED":
+        return "/embeddings", {"model": model, "input": ["ping"]}
+    content = "ping"
+    if prefix == "VLM":
+        url = "data:image/png;base64," + base64.b64encode(png_1x1()).decode()
+        content = [{"type": "text", "text": "ping"}, {"type": "image_url", "image_url": {"url": url}}]
+    return "/chat/completions", {"model": model, "messages": [{"role": "user", "content": content}], "max_tokens": 1}
+
+
+_NOT_FOUND_RE = ("404", "not found", "model_not_found")
+_NAME_HINTS = ("glm", "qwen", "vl", "embed")  # SI10 — 이름에 이것이 들어 있으면 역할별(LLM·VLM·EMBED) 후보로 추정
+
+
+def model_not_found(why):
+    w = (why or "").lower()
+    return any(k in w for k in _NOT_FOUND_RE)
+
+
+def candidates(prefix, base):
+    """FAIL이 '모델 없음'일 때 그 서버의 /v1/models에서 이름 힌트가 든 후보 — [(id, 일치 힌트)] (내부망 가드 경유, 키 출력 없음)."""
+    try:
+        guard.require_internal(base, prefix)
+        req = urllib.request.Request(base.rstrip("/") + "/models")
+        key = reveal(by_env(f"{prefix}_API_KEY"))
+        if key:
+            req.add_header("Authorization", f"Bearer {key}")
+        with guard.urlopen(req, cfg().models.transport.ping_timeout, prefix) as r:
+            ids = [m.get("id") for m in json.load(r).get("data", []) if m.get("id")]
+    except Exception:
+        return []
+    out = []
+    for i in ids:
+        hits = [h for h in _NAME_HINTS if h in i.lower()]
+        if hits:
+            out.append((i, "·".join(hits)))
+    return out
+
+
+def ping(prefix):
+    base, model = by_env(f"{prefix}_BASE_URL"), by_env(f"{prefix}_MODEL")
+    if not base:
+        return None
+    if prefix in ("LLM", "VLM"):  # common/adk.py complete() 경유(가드·재시도 공용) — EMBED은 GA6로 adk 역할 없음
+        try:
+            _, body = payload(prefix, model)
+            t = time.perf_counter()
+            A.complete(prefix.lower(), body["messages"], max_tokens=1, timeout=cfg().models.transport.ping_timeout)
+            return True, int((time.perf_counter() - t) * 1000), model, ""
+        except Exception as e:
+            return False, 0, model or "", f"{type(e).__name__}: {str(e)[:120]}"
+    try:
+        guard.require_internal(base, prefix)
+        path, body = payload(prefix, model)
+        req = urllib.request.Request(base.rstrip("/") + path, json.dumps(body).encode(), {"Content-Type": "application/json"})
+        key = reveal(by_env(f"{prefix}_API_KEY"))
+        if key:
+            req.add_header("Authorization", f"Bearer {key}")
+        t = time.perf_counter()
+        with guard.urlopen(req, cfg().models.transport.ping_timeout, prefix) as r:
+            d = json.load(r)
+        ms = int((time.perf_counter() - t) * 1000)
+        extra = ""
+        if prefix == "EMBED":
+            extra = f"dim {len(d['data'][0]['embedding'])}"  # 기대값 비교 없음(op-08 — 적재·검색은 받은 벡터 길이를 씀)
+        return True, ms, d.get("model", model), extra
+    except Exception as e:  # 오류 본문에 키가 섞일 수 있어 유형·짧은 메시지만
+        return False, 0, model or "", f"{type(e).__name__}: {str(e)[:120]}"
+
+
+def ping_main():
+    fail = 0
+    print("| 접두어 | 결과 | ms | 응답 모델 | 비고 |", "|---|---|---|---|---|", sep="\n")
+    not_found = []
+    for p in ("LLM", "VLM", "EMBED"):
+        r = ping(p)
+        if r is None:
+            print(f"| {p} | 미설정 | | | |")
+            continue
+        ok, ms, m, extra = r
+        fail += not ok
+        print(f"| {p} | {'OK' if ok else 'FAIL'} | {ms} | {m} | {extra} |")
+        if not ok and model_not_found(extra):
+            not_found.append(p)
+    for p in not_found:  # SI10 — 모델 없음(404 등)이면 그 서버에서 연결 가능한 후보를 재탐색
+        base = by_env(f"{p}_BASE_URL")
+        cands = candidates(p, base)
+        print(f"\n{p}: 모델 없음 — {base}의 /v1/models 후보(이름 힌트 일치, 키는 출력 안 함):")
+        if cands:
+            print("| 모델 id | 일치 힌트 |", "|---|---|", sep="\n")
+            for i, hits in cands:
+                print(f"| {i} | {hits} |")
+        else:
+            print("(후보 없음 — /v1/models 응답 확인 또는 내부망 가드 거부)")
+    return 1 if fail else 0
+
+
+CMDS = {"env": env_main, "services": services_main, "ping": ping_main}
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    cmd = argv[0] if argv else "services"
+    if cmd not in CMDS or argv[1:]:
+        raise SystemExit(f"사용: python -m common.check.checker [{'|'.join(CMDS)}] — 인자는 명령 하나만(기본 services)")
+    if cmd != "env":
+        return CMDS[cmd]() or 0
     from common.core.runlog import session
 
     with session("check_env"):
-        req_bad = main()
-    sys.exit(
+        req_bad = env_main()
+    return (
         2 if req_bad == 2 and req_bad is not True else 1 if req_bad else 0
-    )  # 2 = 잘못된 python(SI29)   # requirements 차이만 종료 코드에 반영(SI28) — 나머지 점검은 지금까지처럼 정보성
+    )  # 2 = 잘못된 python(SI29) · requirements 차이만 종료 코드에(SI28)
+
+
+if __name__ == "__main__":
+    utf8_stdout()
+    sys.exit(main())

@@ -43,7 +43,7 @@ EXCLUDED_FILES = (
     "core/__init__.py",  # 하위 패키지 입구(빈 파일)
     "store/__init__.py",  # 하위 패키지 입구(빈 파일)
     "check/check_modules.py",  # 모듈 경계 점검 — 개발·반입 점검 도구, 인계 내용과 무관
-    "check/ping_models.py",  # 모델 연결 확인 — 운영 도구
+    "check/checker.py",  # 점검기 하나(env·services·ping — 0.2.0 합침) — 운영 도구
     "core/exitclean.py",  # 종료 정리(pl-27 — 임시 파일 지우기·자식 회수) — 프로세스 관리, 인계 내용과 무관
     "core/console.py",  # CLI 표준 출력을 UTF-8로(S12 /simplify — utf8_stdout) — 화면 출력만, 인계 내용과 무관
     "core/fingerprint.py",  # 이 파일 자신(S3 — 옛 __init__.py) — CONTRACT는 따로 버전으로 확인, pipeline_version()은 인계 내용과 무관
@@ -74,7 +74,6 @@ EXCLUDED_FILES = (
     "store/pg_standin.py",  # AD41 — pg.py의 연결 정보 없을 때 스탠드인(sqlite) — 연결 방법만, 핸드오프 내용과 무관(pg.py가 shared라 같이 있음)
     "core/resources.py",  # 실행 자원(CPU·메모리) 판단 — 병렬 수 결정만
     "core/runlog.py",  # 실행 로그(output/RUNLOG.md 등)
-    "store/services.py",  # 외부 서비스 탐색(Docker pgvector 등) — 연결 방법만
     "store/db/",  # S8a — pgvector 표 정의·행 모양·Alembic 판·migrate 명령(폴더째 — "/"로 끝나면 그 아래 전부). DB 표 모양만,
     # _rep/bundle 내용과 무관 · 판을 더할 때마다 이 파일을 고치지 않게(이 파일은 모든 층의 공용 의존 — code_fp)
 )

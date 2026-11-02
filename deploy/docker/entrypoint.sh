@@ -80,9 +80,9 @@ fi
 case "$cmd" in
   help)
     sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//';;
-  check)         preflight; python -m common.store.services;;
+  check)         preflight; python -m common.check.checker services;;
   resources)     python -m common.core.resources "$@";;
-  services)      python -m common.store.services "$@";;
+  services)      python -m common.check.checker services "$@";;
   check-modules) exec python -m common.check.check_modules "$@";;
   tool)
     name="${1:?도구 이름(예: rdb_discover·check_env)}"; shift || true
@@ -98,7 +98,11 @@ case "$cmd" in
     # (pipeline 단계 모듈 run_all·dedup·stream 등을 preflight·잠금 없이 부르지 않게).
     # 이름은 sys.argv로 전달(소스 문자열에 끼워 넣지 않음). 찾기는 python 한 번에(VS3 R-7 — 전에는 패키지마다 프로세스 하나).
     [ "$name" = pipeline ] && name=cli
-    TOOL_PKGS="common.check pipeline:check_env,cli pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest"
+    case "$name" in  # 0.2.0 — 점검기 하나(common.check.checker)로 합침: 옛 도구 이름 그대로
+      check_env) exec python -m common.check.checker env "$@";;
+      ping_models) exec python -m common.check.checker ping "$@";;
+    esac
+    TOOL_PKGS="common.check pipeline:cli pipeline.extract:rdb_discover pipeline.transform.structure:gen_roster,glossary_suggest"
     # shellcheck disable=SC2086
     mod=$(python -c "
 import importlib.util, sys

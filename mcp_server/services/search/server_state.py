@@ -64,7 +64,7 @@ def check_store():
 
 
 def _build_retriever():
-    from common.store import services
+    from common.store import pg as PGC
     from mcp_server.services.search import pg_mcp_connect as PGM
     from mcp_server.services.search import retriever as RT
 
@@ -74,7 +74,7 @@ def _build_retriever():
     except SystemExit as e:  # 스레드·요청 안에서는 오류로(조용히 스레드만 죽지 않게)
         raise RuntimeError(str(e)) from None
     a = types.SimpleNamespace(pg=False, local=False, edw=False, edw_client=False)
-    services.connect(a)  # PC — Docker pgvector 주소 찾기(못 찾으면 SQLite 대역 — 검색은 PG 하나, mc-01)
+    PGC.connect(a)  # PC — Docker pgvector 주소 찾기(못 찾으면 SQLite 대역 — 검색은 PG 하나, mc-01)
     from common.store.db import cfgfile
 
     cur = cfgfile.active("stack")  # 엔진 구성 파일(서버·PC 같음 — 프로세스 시작 때 읽은 것, 사용자 11-01)

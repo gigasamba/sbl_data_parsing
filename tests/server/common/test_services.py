@@ -1,4 +1,4 @@
-"""common.store.services 자기 점검 — S9(D-018)에 모듈에서 옮김. 옛 사례 `python -m common.store.services --selftest`.
+"""PG 연결 고르기(common.store.pg — 0.2.0에 옛 common.store.services에서 옮김) 자기 점검 — S9(D-018)에 모듈에서 옮김.
 op-09 — docker ps·포트 자동 탐지를 지움: PG 접속 칸이 비면 거부(채울 자리를 적음), --local이 아니면 로컬로 빠지지 않음."""
 
 import types
@@ -6,8 +6,7 @@ import types
 import common.store.pg as _pgmod
 from common.ai.guard import require_internal
 from common.config.settings import isolated
-from common.store.pg import conf
-from common.store.services import _pg_capable, connect, detect_pg
+from common.store.pg import _pg_capable, conf, connect, detect_pg
 
 _FULL = dict(PG_HOST="h", PG_PORT="5432", PG_DB="d", PG_USER="u", PG_PASSWORD="x", PG_SCHEMA="ai", PG_CONN_FILE=None)
 

@@ -91,7 +91,7 @@ def doc_dir(required=True):
     """원본 문서 폴더 — 설정 DOC_DIR(common.paths.doc_dir — S7e2부터 옛 별칭 DOC_SRC env는 안 읽음, DOC_SRC는 호스트 마운트 원본 칸), 하드코딩 기본값 없음(10-14 — 옛
     data/unstructed/SFDC_dump/ 자리표시자는 지워짐, NM16 전까지는 대체 자리표시자도 없음). required=True(기본)면
     둘 다 없을 때 SystemExit(사람이 보는 안내 한 줄) · required=False면 조용히 None(호출부가 '미설정'을 크래시가
-    아니라 점검 결과 한 줄로만 보고할 때 — 예: cli/check_env.py)."""
+    아니라 점검 결과 한 줄로만 보고할 때 — 예: common.check.checker env)."""
     from common.config.settings import cfg  # S7b — 설정 객체(늦게 import: 이 파일은 거의 모든 프로세스가 import)
 
     v = cfg().paths.doc_dir

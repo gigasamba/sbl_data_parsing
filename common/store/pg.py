@@ -162,3 +162,41 @@ class PGPool:
 
 def vec(v):
     return "[" + ",".join(f"{float(x):.6f}" for x in v) + "]"
+
+
+# 연결 고르기(0.2.0 — 옛 common/store/services.py에서 옮김, pl-46: 점검 표는 common.check.checker)
+def _pg_capable(c):
+    """이름이 아니라 붙어서 능력 확인(XS1): SELECT 1 + vector 확장 존재 + PG_SCHEMA 접근 가능(있음 또는 만들 권한).
+    → (ok, 설명). 비밀값은 반환·로그에 내지 않는다."""
+    db = PG(c)
+    db.q("SELECT 1")
+    if not db.q("SELECT 1 FROM pg_extension WHERE extname='vector'"):
+        return False, "vector 확장 없음"
+    if not db.q("SELECT 1 FROM information_schema.schemata WHERE schema_name=%s", (c["PG_SCHEMA"],)):
+        priv = db.q("SELECT has_database_privilege(current_user, current_database(), 'CREATE') p")
+        if not (priv and priv[0].get("p")):
+            return False, f"스키마 {c['PG_SCHEMA']} 없음·만들 권한 없음"
+    return True, "능력 확인됨"
+
+
+def detect_pg():
+    """설정의 PG에 붙어 능력 확인 → (ok, 설명). 접속 칸이 비면 pg.conf()가 거부(SystemExit — 채울 자리를 적음)."""
+    c = conf()
+    try:
+        ok, why = _pg_capable(c)  # 이름이 아니라 붙어서 확인(vector 확장·스키마) — XS1
+    except Exception as e:
+        return False, f"{c['PG_HOST']}:{c['PG_PORT']}: 접속 실패({type(e).__name__})"
+    return ok, f"{c['PG_HOST']}:{c['PG_PORT']}" + ("" if ok else f": {why}")
+
+
+def connect(a):
+    """명령 인자 a(--pg·--local): --local이면 로컬 묶음, 아니면 PostgreSQL 필수(op-09 — 못 붙으면 거부, 로컬로 조용히 빠지지 않음)."""
+    if getattr(a, "local", False):
+        a.pg = False
+        print("[연결] 저장소: 로컬 묶음(--local)", flush=True)
+        return
+    ok, why = detect_pg()
+    if not ok:
+        raise SystemExit(f"[연결] PostgreSQL에 붙지 못함: {why}")
+    a.pg = True
+    print(f"[연결] 저장소: pgvector({why})", flush=True)

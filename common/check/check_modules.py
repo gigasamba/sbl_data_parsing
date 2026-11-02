@@ -148,7 +148,8 @@ ADK_HEAVY_ONLY = {"common/ai/adk.py"}  # google.adk·litellm은 여기서만(다
 # AGENT_PLATFORM_ONLY = {"common/ai/adk.py", "common/ai/llm.py"}   # CT1 — models.py가 llm.py로 병합되며 profile()의 agent_platform import도 같이 옮김
 # AGENT_PLATFORM_SUBMODULES = {"agent_platform.config", "agent_platform.models", "agent_platform.pipeline"}   # runtime·build·serving 금지(dev는 모델 호출만 씀)
 AGENT_KWARG_EXEMPT = {
-    "cli/ping_models.py"
+    "cli/ping_models.py",
+    "common/check/checker.py",
 }  # 연결 확인(ping) — 업무 프롬프트가 없음(GA2 ⑧) · S3부터 common/check/(common 영역이라 ⑧ 대상 밖) — 옛 자리 이름으로 둠
 
 
