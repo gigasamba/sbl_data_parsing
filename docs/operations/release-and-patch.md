@@ -364,7 +364,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 모델 | dev부터 내부망 GLM, PC(local)는 OpenRouter(유료 — CLAUDE.md §7 상한) | [pl-11](../prd/ops.md#pl-11) |
 | 배포 전 검토 | 판 전체를 grill-me로 한 번 검토한다(사용자) | — |
 | 새벽 배치 | 시작 시각·문서 수 상한·마감 시각이 settings.yaml 칸 `ops.nightly.time`·`max_docs`·`deadline` — 하나라도 비면 돌지 않는다(11-02 `feature/nightly-key` — 칸 이름은 설정 파일 기준 `ops.nightly.*` 하나) | [pl-23](../prd/ops.md#pl-23) |
-| Quote 표 · 고객 조인 사슬 | Quote 표는 지금 없다(기본 사슬에서 뺌 — 표가 생기면 설정 파일의 주석 줄을 켬). 고객 조인 사슬은 운영 쪽이 고칠 수 있는 설정 파일 `resources/config/edw_chain.yaml` | [pl-29](../prd/load.md#pl-29) |
+| Quote 표 · 고객 조인 사슬 | Quote 표는 지금 없다(기본 사슬에서 뺌 — 표가 생기면 설정 파일의 주석 줄을 켬). 고객 조인 사슬은 운영 쪽이 고칠 수 있는 설정 파일 `resources/config/edw_chain.yaml`(고치는 법: [server-guide §5-2](server-guide.md#5-2-edw-조인-사슬-고치기--edw_chainyaml)) | [pl-29](../prd/load.md#pl-29) |
 | `adk.py` | 지시문은 두고 장치는 `llm.py` 호출 하나로 줄인다 — 0.2.0 지문 배치에서 CPU 부하 고침과 함께 | [pl-46](../prd/transform-cleanup.md#pl-46) |
 | 설정 이관 | 0.1.0 settings.yaml → 0.2.0은 `common.config.migrate`의 옛 배치 바꾸기만 남긴다(env 파일 옮기기·`--compare`는 11-02에 지움 — `feature/migrate-trim`) | [op-08](../prd/ops-settings.md#op-08) |
 | 일회성 작업 컨테이너 | compose 작업 서비스(`parse`·`index_a`·`index_b`)와 `compose run --rm`을 지우고, 운영 작업·`dbtool`·`migrate`는 상주 `data-pipeline` 컨테이너에 `exec`로 돌린다. 빌드·반입 이미지 점검(`docker run --rm <새 이미지> selftest`)은 그대로(정리 3a) | [op-10](../prd/doc.md#op-10) |
