@@ -24,7 +24,7 @@ RUN_ENV: env RUN_ENV > YAML required.env.run_env. local·dev·prd. 없거나 dev
 설정 파일을 못 읽거나 그 앱 절 검증에 실패해도 이유(칸 경로·오류 종류만)를 찍고 종료 2(VS7e1 U-1 — 사용자 10-28). 틀린 파일은 import common 때도
 서버면 바로 실패(pin_env — STRICT, S7b c안), local이면 경고 뒤 기본값.
 비밀 칸은 SecretStr — 출력·로그·검증 오류에 값이 나오지 않는다.
-사용: python -m common.config.settings [--file 경로]   # 읽어서 요약(비밀 가림) — 앱별 요약은 python -m pipeline.config · mcp_server.config
+사용: python -m common.config.show [--file 경로]   # 읽어서 요약(비밀 가림 — 0.2.0에 이 파일 밖으로 옮김, pl-46) — 앱별 요약은 python -m pipeline.config · mcp_server.config
 """
 
 import contextlib
@@ -40,7 +40,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from common.config import layout as L
 from common.core import exitclean  # pl-27 — 맡은 덮기 파일은 프로세스가 끝날 때 지움
-from common.core.console import utf8_stdout
 
 REPO_ROOT = Path(__file__).resolve().parents[2]  # PC = 저장소 루트 · 이미지 = /app/deploy
 LOCAL_FILE = (
@@ -1622,13 +1621,3 @@ def reveal(v):
 
 
 _TApp = CommonAppSettings
-
-
-if __name__ == "__main__":
-    # import common이 이미 부른 모듈(common.config.settings)로 돌림 — 이 __main__ 사본의 COMMON·_CountingEnviron은 쓰지 않음(S7d — 두 사본이 판 번호를 나누지 않게)
-    from common.config import settings as _S
-
-    utf8_stdout()
-    from common.config import show
-
-    sys.exit(show.main(_S._TApp, sys.argv[1:]))

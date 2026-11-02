@@ -22,7 +22,7 @@ def _pin():
         _os.environ.get("SETTINGS_FILE") or root.name == "deploy" or (run in (None, "local") and local.is_file())
     ):  # env 남김 — 설정 파일 자리 신호
         return
-    import warnings  # python -m common.config.settings·pipeline.config·mcp_server.config — 영구 다리가 먼저 import해 runpy가 내는 경고(동작 무관)
+    import warnings  # python -m common.config.show·pipeline.config·mcp_server.config — 영구 다리가 먼저 import해 runpy가 내는 경고(동작 무관)
 
     warnings.filterwarnings(
         "ignore", r"'(common\.config\.settings|pipeline\.config|mcp_server\.config)' found in sys\.modules", RuntimeWarning
