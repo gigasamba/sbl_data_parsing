@@ -10,7 +10,6 @@ from unittest import mock
 from common.core.paths import STACK_FILE
 from pipeline.extract.engines import registry
 from pipeline.extract.run_all import engines_for_doc
-from pipeline.stackcfg import over_limit
 
 IMAGES = (".jpeg", ".tif", ".tiff", ".bmp")
 NEW = (*IMAGES, ".mhtml", ".hwpx")
@@ -22,9 +21,8 @@ def _stack_parse():
 
 
 def test_stack_lists_new_formats():
-    """엔진 구성 파일에 형식마다 엔진이 있고(형식당 2개 이하), 그 엔진이 형식을 읽는다고 선언한다(FORMATS)."""
+    """엔진 구성 파일에 형식마다 엔진이 있고, 그 엔진이 형식을 읽는다고 선언한다(FORMATS)."""
     sp = _stack_parse()
-    assert over_limit({"parse": sp}) == []
     for ext in NEW:
         assert ext in sp, ext
         assert sp[ext] and set(sp[ext]) <= set(registry.engines_for(ext)), (ext, sp[ext], registry.engines_for(ext))

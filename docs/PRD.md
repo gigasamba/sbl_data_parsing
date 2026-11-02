@@ -34,7 +34,7 @@
 | 파일 형식마다 형식별 엔진 목록(stack — `resources/config/pipeline_stack.json`)에 적힌 엔진을 **모두** 돌린다(하나씩 차례로 시도하지 않음) | 모든 형식을 잘 읽는 파서는 없다. 서버·PC가 같은 파일을 쓰고, 바꿀 때는 그 파일을 고쳐 오버레이 패치한다. 파일을 못 읽거나 모양이 틀리면 시작하지 않는다(종료 2) | done | [pl-03](prd/transform.md#pl-03) |
 | PDF는 두 갈래 — 글자층이 쪽당 평균 20자 미만이면 스캔(`.pdf_image` → 그림 읽는 모델 VLM만), 아니면 글자 PDF(`.pdf_text` → pymupdf·kreuzberg) | 스캔 PDF는 글자 엔진이 못 읽는다. 판정은 `_types.json`에 저장해 다시 쓴다 | done | [pl-03](prd/transform.md#pl-03) |
 | 지원 형식: pdf · doc(x) · ppt(x) · xls(x/m) · hwpx · txt · html/htm · mht/mhtml · eml · msg · png/jpg/jpeg/tif/tiff/bmp. 옛 `.hwp`·압축(zip)은 미지원 | stack의 형식 키 24개 | done | [pl-03](prd/transform.md#pl-03) · [pl-42](prd/transform.md#pl-42) |
-| 엔진은 형식당 최대 2개, 문서마다 동시에, 엔진마다 따로 떨어진 자식 프로세스 | 3개 넘으면 설정 오류(`stackcfg.MAX_PER_TYPE`). 옛 단계(phase)별 다시 돌리기는 없앰 | done | [pl-22](prd/transform.md#pl-22) |
+| 엔진은 문서마다 동시에, 엔진마다 따로 떨어진 자식 프로세스 | 형식당 상한(`MAX_PER_TYPE`)은 0.2.0에 지움(pl-46). 옛 단계(phase)별 다시 돌리기는 없앰 | done | [pl-22](prd/transform.md#pl-22) |
 | 시간 제한 = 쪽 수 × 10초(글자 엔진)·× 120초(VLM 엔진), 엔진 첫 문서는 최소 60초 + 시작 여유 10초. 넘으면 두 배로 한 번 더, 그래도 넘으면 실패 기록 | 큰 문서도 쪽 수만큼 시간을 받는다 | done | [pl-22](prd/transform.md#pl-22) |
 | 그림 글자 인식 엔진(OCR, `rapidocr_ko`)은 기본으로 끈다 — 이미지·스캔은 VLM만. 일괄 실행 엔진은 낮은 우선순위(nice +10) | OCR은 VLM과 겹치고 느리다. 검색 서비스 자원을 덜 뺏는다 | done | [pl-22](prd/transform.md#pl-22) |
 | VLM 동시 호출 수는 설정 키로 조절한다(`common.models.vlm.concurrency` 문서당 4, 전체 관문 12) | 엔진마다 따로 손잡이를 두지 않는다(허브 10-31). 실제 키는 여러 개 — 앵커 정리 필요 | done | [pl-43](prd/transform.md#pl-43) |

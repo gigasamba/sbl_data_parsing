@@ -17,7 +17,7 @@
 
 ## 2. 파일 모양
 
-- 엔진 구성: `name`(예 `dev-v1`) + `parse`(형식 → 엔진 목록, 형식당 최대 2개)·`source`·`embed`·`chunk`·`graph`·`retrieve`·`k`(+ 선택 `updated`·`client_aliases` · 비교 후보 `candidates` 칸은 0.2.0에 지움 — pl-46).
+- 엔진 구성: `name`(예 `dev-v1`) + `parse`(형식 → 엔진 목록 — 문서마다 그 엔진들이 동시에 돎)·`source`·`embed`·`chunk`·`graph`·`retrieve`·`k`(+ 선택 `updated`·`client_aliases` · 비교 후보 `candidates` 칸은 0.2.0에 지움 — pl-46).
 - 원천 목록: 항목 목록(`name`·`table`·`bucket`·`enabled`·`columns`).
 
 ## 3. 바꾸기·되돌리기·보기

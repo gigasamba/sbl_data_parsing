@@ -66,17 +66,6 @@ def selftest():
         assert set(engines_for_doc(Path("x.png"), png_stack, {"x.png": ".png"}, set())) == {"rapidocr_ko", "qwen_vlm"}
     print("[selftest] 10-29 — OCR 엔진 기본 끔(켜면 포함) 통과")
 
-    # 사용자 10-29 — 형식당 엔진 2개 넘으면 설정 오류(진입점 resolve·run_all 같은 검사)
-    from pipeline.stackcfg import over_limit
-
-    assert over_limit({"parse": {".pdf_text": ["pymupdf", "kreuzberg"], ".png": ["qwen_vlm"]}}) == []
-    bad = over_limit({"parse": {".docx": ["office", "anydoc", "kreuzberg"]}})
-    assert len(bad) == 1 and ".docx" in bad[0], bad
-
-    stack_file = json.loads(STACK_FILE.read_text(encoding="utf-8"))
-    assert over_limit(stack_file) == [], "PC 기본 stack 표가 형식당 2개를 넘음"
-    print("[selftest] 10-29 — 형식당 엔진 2개 상한(over_limit) 통과")
-
     # 사용자 10-29 — 쪽당 제한: 글자 엔진 10초·VLM 120초(설정) · 첫 문서 warmup 하한 · 별도 프로세스 여유 더함
     with pc.PIPE.env(PARSE_TEXT_PAGE_SEC="10", PARSE_VLM_PAGE_SEC="120", PARSE_WARMUP_SEC="60", PARSE_ISOLATE_OVERHEAD="10"):
         assert page_timeout("pymupdf", 3) == 3 * 10 + 10

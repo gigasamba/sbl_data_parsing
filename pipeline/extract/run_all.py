@@ -6,7 +6,7 @@
   제한 시간(사용자 10-29 — phase 없앰): 문서×엔진 1건 = 쪽 수 × 쪽당 초 — 글자 엔진 text_page_sec(PARSE_TEXT_PAGE_SEC, 기본 10) ·
     VLM 엔진 vlm_page_sec(PARSE_VLM_PAGE_SEC, 기본 120) + 엔진의 첫 문서는 warmup_sec 하한 + 별도 프로세스 시작 여유 isolate_overhead.
     넘으면 같은 실행에서 제한을 두 배로 한 번 더, 그래도 넘으면 실패로 기록.
-  문서마다 그 형식의 엔진(stack.json — 형식당 최대 2개)을 **동시에**(엔진마다 별도 프로세스 parse/parse_one.py — 세그폴트가 전체를
+  문서마다 그 형식의 엔진(stack.json)을 **동시에**(엔진마다 별도 프로세스 parse/parse_one.py — 세그폴트가 전체를
     멈추지 않음). --workers N: 문서 N개를 동시에. --procs N: 문서를 N조각으로 나눠 프로세스 N개가 동시에(스레드는 코어 ÷ N).
   OCR 엔진(OCR_ENGINES — rapidocr·rapidocr_ko)은 ocr_engine(PARSE_OCR_ENGINE, 기본 끔)일 때만 돈다 — 이미지·스캔 문서는 VLM 엔진만.
     글자 PDF 안의 스캔 쪽은 여기서 OCR 엔진을 더하지 않고 대표 결과(represent)의 쪽 VLM이 그 쪽만 채운다.
@@ -48,7 +48,6 @@ from pipeline.shared.progress import (  # output/parse/PROGRESS.md 갱신 · 문
     doc_types,
     write_progress,
 )
-from pipeline.stackcfg import MAX_PER_TYPE, over_limit  # 사용자 10-29 — 형식당 엔진 2개 상한(진입점 검사와 같은 함수)
 
 _QUOTED = re.compile(r"""(['"])((?:(?!\1).){30,})\1""", re.S)
 
@@ -193,11 +192,6 @@ def main():
 
     a.procs = 1 if a.shard else presources.resolve_procs(a.procs)  # --shard = run_procs가 띄운 하위 → 다시 나누지 않음
     # OC2(사용자 10-15) — 실제 동시 수로 CPU를 나눔(thread_share). 조각은 이 값을 setdefault로 물려받음. OC1 rapidocr 스레드도 OMP_NUM_THREADS를 따름.
-    # 10-29 — 동시 글자 엔진 자식 = 조각 × min(문서 workers × 형식당 엔진 2, 코어 ÷ 조각) — VLM 엔진(API 대기)은 이 상한 밖
-    slots = min(max(1, a.workers) * MAX_PER_TYPE, presources.text_slots(resources.cpus(), a.procs))
-    thr = C.cfg().runtime.pipe_threads  # S7c — 설정 객체(float, auto·빈 값 = None — 옛 `int(get or 계산)`: "0"은 0이라 None일 때만 계산)
-    for k, v in presources.thread_env(int(thr) if thr is not None else presources.thread_share(resources.cpus(), a.procs, slots)).items():
-        os.environ.setdefault(k, v)  # env 남김 — 라이브러리(5-3 H) · 단일 프로세스도 수치 라이브러리 스레드를 컨테이너 CPU 한도에 맞춤
     if a.src is None:
         a.src = str(doc_dir())
     src, out = Path(a.src), Path(a.out)
@@ -248,9 +242,13 @@ def main():
         json.loads(Path(a.stack).read_text(encoding="utf-8")) if a.stack else pc.stack()
     )  # 엔진 구성 파일(서버·PC 같음 — 사용자 11-01) · --stack은 시험·실험용 파일
     stack_parse = stack.get("parse") or {}
-    bad = over_limit({"parse": stack_parse})  # 사용자 10-29 — 형식당 엔진 2개 넘으면 설정 오류(진입점 resolve도 같은 검사)
-    if bad:
-        raise SystemExit(f"[엔진 구성] {stack.get('name')} — " + " · ".join(bad))
+    # 10-29 — 동시 글자 엔진 자식 = 조각 × min(문서 workers × 문서당 엔진 수, 코어 ÷ 조각) — VLM 엔진(API 대기)은 이 상한 밖.
+    # 문서당 엔진 수 = 구성에서 형식당 가장 많은 엔진 수(0.2.0 — 형식당 상한 MAX_PER_TYPE을 지움, pl-46 · 지금 구성은 2라 전과 같음)
+    per_doc = max((len(v) for v in stack_parse.values()), default=1)
+    slots = min(max(1, a.workers) * per_doc, presources.text_slots(resources.cpus(), a.procs))
+    thr = C.cfg().runtime.pipe_threads  # S7c — 설정 객체(float, auto·빈 값 = None — 옛 `int(get or 계산)`: "0"은 0이라 None일 때만 계산)
+    for k, v in presources.thread_env(int(thr) if thr is not None else presources.thread_share(resources.cpus(), a.procs, slots)).items():
+        os.environ.setdefault(k, v)  # env 남김 — 라이브러리(5-3 H) · 단일 프로세스도 수치 라이브러리 스레드를 컨테이너 CPU 한도에 맞춤
     types = doc_types(docs, out) if stack_parse else {}
     logged_missing = set()
     for doc in docs:
@@ -454,8 +452,7 @@ def run_procs(a, docs):
 
 
 def _run_docs(jobs, run_job, workers):
-    """사용자 10-29 — 문서 workers개를 동시에, 한 문서의 엔진들(형식당 최대 2개)도 동시에(엔진마다 별도 프로세스 — run_job).
-    ponytail: scope=all(실험 경로)은 엔진이 2개보다 많을 수 있어 문서 안 동시 수만 MAX_PER_TYPE으로 묶음."""
+    """사용자 10-29 — 문서 workers개를 동시에, 한 문서의 엔진들도 모두 동시에(엔진마다 별도 프로세스 — run_job)."""
     by_doc = {}
     for job in jobs:
         by_doc.setdefault(job[0], []).append(job)
@@ -463,7 +460,7 @@ def _run_docs(jobs, run_job, workers):
     def run_doc(doc_jobs):
         if len(doc_jobs) == 1:
             return run_job(doc_jobs[0])
-        with ThreadPoolExecutor(max_workers=min(len(doc_jobs), MAX_PER_TYPE)) as pool:
+        with ThreadPoolExecutor(max_workers=len(doc_jobs)) as pool:
             list(pool.map(run_job, doc_jobs))
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
