@@ -104,7 +104,7 @@ grep '^D ' <받은 폴더>/PATCH_MANIFEST.txt | cut -c3- | xargs -r -I{} rm -f /
 
 컨테이너는 이 코드 폴더를 읽기 전용으로 연결해서 띄운다(이미지는 그대로) — `deploy/host/compose/compose.patch.yml`을 덧붙여서(`live`에서):
 ```bash
-docker compose -f deploy/host/compose/compose.pipeline.yml -f deploy/host/compose/compose.patch.yml run --rm parse ...
+docker compose -f deploy/host/compose/compose.pipeline.yml -f deploy/host/compose/compose.patch.yml up -d   # 상주 컨테이너 둘 — 작업은 그 안에서(사용자 11-02)
 docker compose -f deploy/host/compose/compose.mcp.yml -f deploy/host/compose/compose.patch.mcp.yml up -d
 ```
 `PATCH_CODE`(기본 `/srv/rag/code/live`)가 `/app/deploy/*`·`/app/docker`를 덮는다 — entrypoint도 함께 덮이므로 기준 이미지에 없던 새 명령도 쓸 수 있다.
@@ -235,22 +235,21 @@ S8a(사용자 10-28, D-030) 버전부터 pgvector의 우리 스키마(검색 `PG
 - 새 이미지(SQLAlchemy·alembic — 폐쇄망 휠, §5-1)를 적재한 뒤, 다음 적재(새벽 배치) 전에 한다. 값·비밀은 찍지 않는다(카탈로그·버전 번호만).
 ```bash
 cd /srv/rag/code/live
-. deploy/host/scripts/settings_env.sh && load_settings && . deploy/host/scripts/image_vars.sh
-DC="docker compose -f deploy/host/compose/compose.pipeline.yml"   # 오버레이 패치 버전이면 -f deploy/host/compose/compose.patch.yml도(§3-2)
+# 상주 컨테이너(data-pipeline-structure)가 떠 있어야 한다 — run_tool.sh가 그 안에서 docker exec(사용자 11-02 — 1회 job 컨테이너 없음)
 # ⓪ (DB마다 처음 한 번 — DB 관리자) vector 확장: 서버 계정은 우리 스키마 권한만이라 직접 못 만든다(없으면 "vector 확장 없음"으로 멈춤)
 #    $DOCKER exec <pg 컨테이너> psql -U <관리자 계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
 # ① 지금 버전 — 처음엔 "판 없음"(옛 코드가 만든 DB)
-$DC run --rm load migrate current
+bash deploy/host/scripts/run_tool.sh migrate current
 # ② 비교(읽기만 — 잠금 없음) — 표 정의 ↔ 실제 DB: 표·컬럼·형식·NULL·기본값·키 + 색인 정의 글자 + 뷰 컬럼. 컬럼 순서·뷰 정의 글자(PostgreSQL 버전마다 꼴이 다름)는 "(알림)"만(판정 밖)
-$DC run --rm load migrate check --target all
+bash deploy/host/scripts/run_tool.sh migrate check --target all
 # ③-a 차이 0 → 실행 없이 버전만 기록
-$DC run --rm load migrate stamp --target search
+bash deploy/host/scripts/run_tool.sh migrate stamp --target search
 # ③-b 차이가 "표 없음·색인 없음·뷰 없음·뷰 칸 다름"뿐 → 없는 것만 만들고(뷰는 다시 만듦) 버전 기록(기준 리비전이 IF NOT EXISTS) — ③-a 대신
-#      $DC run --rm load migrate up --target search
+#      bash deploy/host/scripts/run_tool.sh migrate up --target search
 # ③-c 컬럼 이름·형식·NULL·기본값·키가 다르거나 남는 표·컬럼·색인 → stamp·up 모두 거부(종료 2) — 멈추고 출력(이름만)을 DB 담당과 협의
 # ⑤ 확인 — "판 끝 ['0002_search'] · 코드의 끝 판 0002_search … 비교: 차이 없음" + 엔진 구성 파일이 읽히는지
-$DC run --rm load migrate check --target all
-$DC run --rm load show-stack                           # 이름·sha·파일 경로 — 못 읽으면 종료 2
+bash deploy/host/scripts/run_tool.sh migrate check --target all
+bash deploy/host/scripts/run_tool.sh show-stack                           # 이름·sha·파일 경로 — 못 읽으면 종료 2
 ```
 - **버전 기록 전에 적재가 돌면:** `pgvector_load deploy`·`load`(trigger load·night·run_docs)는 "판 기록 없음" 경고를 찍고 계속한다(기준 리비전 = 지금 스키마 — 결과 같음). 코드보다 낮은 버전이면 적재 전에 `migrate up`을 하라고 종료 2, DB가 코드보다 새 버전(모르는 리비전)이면 이미지·코드 버전을 맞추라고 종료 2(D-030 ⑤). 검색 MCP(읽기)는 버전을 보지 않는다.
 - **새 검색 스키마(차원이 바뀜 — 새 `PG_SCHEMA`):** `migrate up --target search --schema <새 스키마> --bundle <번들>`(차원은 번들 meta.json — 또는 `--dim N`). vector 확장이 없으면 관리자 설치(공유 PG에서 `--create-extension`·`PG_CREATE_EXTENSION`을 켜지 않음).
@@ -288,11 +287,11 @@ mv /srv/rag/env/settings.yaml.new /srv/rag/env/settings.yaml
 - 운영 서버(구운 이미지)는 `-v …`·`-e PYTHONPATH` 없이 `data-pipeline:0.2.0`(코드가 이미지 안 `/app/deploy`).
 - 이미지 칸(`required.deploy.pipeline_image`·`mcp_image`)을 `…:0.2.0`으로 고친다. 새 판에서 생긴 필수 칸이 있으면 채운다(`python -m common.config.sample --where <이름>`으로 자리 확인).
 
-**4. DB** — 버전 차이 확인 → 올리기 → 다시 확인(README §5-3 ③과 같은 `dc`):
+**4. DB** — 상주 컨테이너를 새 판으로 띄운 뒤(`dc up -d data-pipeline-parse data-pipeline-structure`) 버전 차이 확인 → 올리기 → 다시 확인(README §5-3 ③과 같음):
 ```bash
-dc run --rm load migrate check --target all     # 차이·버전 확인(읽기만)
-dc run --rm load migrate up --target all        # 새 판 마이그레이션(없으면 아무것도 안 함)
-dc run --rm load migrate check --target all     # "차이 없음"
+bash deploy/host/scripts/run_tool.sh migrate check --target all     # 차이·버전 확인(읽기만)
+bash deploy/host/scripts/run_tool.sh migrate up --target all        # 새 판 마이그레이션(없으면 아무것도 안 함)
+bash deploy/host/scripts/run_tool.sh migrate check --target all     # "차이 없음"
 ```
 
 **5. 띄우기·확인** — README §5-3 ④ 연결 점검 · ⑤ 이미지 점검 → `mcp_up.sh` · 상주 트리거 `dc up -d …`(§5-5) → 시작 로그 첫 줄 `[image] … · 코드 <커밋> …`이 새 판인지 → 새벽 배치 다시 켬(`systemctl start data-pipeline-nightly.timer`).

@@ -1,19 +1,15 @@
 # 파이프라인 컨테이너(docs/operations/server-guide.md §0) — 수집 서버. S6b(10-27, D-020 — 옛 compose.modules.yml): 파이프라인 이미지를
 #   하나로 합쳐 서버 이미지는 2개 — data-pipeline(파싱·구조화·적재·게시, 옛 data-parsing+data-structure) · mcp-server(검색 MCP, 옛 data-retrieval).
-#   파싱·구조화·적재·게시는 트리거(1회 실행 후 종료), 검색 MCP만 상주. job 서비스 이름(parse·load(도구)·publish·
-#   mcp는 compose.mcp.yml 하나로 — 11-01 이 파일의 같은 mcp 서비스(중복)는 지움)은 그대로(색인 비교용 index_a·index_b·compose.index.yml은 11-01에 지움 — mc-16), 상주 컨테이너 이름은 새 이름(사용자 10-27): data-pipeline-parse·data-pipeline-structure(옛 data-parsing·
-#   data-structure — 같은 data-pipeline 이미지(11-01부터 둘 다 `idle` — trigger 서버 지움, pl-10), run_docs.py의 docker exec 대상) · mcp-server(옛 data-retrieval).
-#   준비(저장소 루트에서): docker build -f deploy/docker/Dockerfile --target pipeline -t data-pipeline:<태그> . ·
-#                          --target mcp -t mcp-server:<태그> .
-#   트리거(1회 job): bash deploy/host/scripts/trigger.sh parse|publish — 서버 입구는 run_docs(structure·load·all·night는 11-01에 지움)
-#   compose를 직접 부를 때(S7e1 — 셸에 설정 값을 먼저 export, 옛 --env-file pipeline.env 대신). 하위 셸 ( … )로 — 대화형 셸에 export해 두면
-#   그 뒤 settings.yaml을 고쳐도 그 셸에는 안 먹음(VS7e1 R-2):
-#     ( . deploy/host/scripts/settings_env.sh && load_settings && docker compose -f deploy/host/compose/compose.pipeline.yml run --rm parse )
-#       (인자를 주면 명령을 덮으므로: run --rm parse parse --max-new 100) · 같은 꼴로 run --rm publish(검색 MCP는 compose.mcp.yml — mcp_up.sh)
+#   상주 컨테이너 둘(사용자 11-02 — 1회 job 서비스 parse·load·publish 지움): data-pipeline-parse(원본 문서 폴더가 붙음)·data-pipeline-structure
+#   — 같은 data-pipeline 이미지, 둘 다 `idle`(일 없이 떠 있음). run_docs.py·trigger.sh(parse·publish)·run_tool.sh(도구·migrate·show-stack)가
+#   그 안에서 docker exec로 돈다(image_vars.sh in_pipeline). 검색 MCP는 compose.mcp.yml(mcp_up.sh).
+#   준비(저장소 루트에서): docker build -f deploy/docker/Dockerfile --target pipeline -t data-pipeline:<태그> .
+#   띄우기(하위 셸로 — 대화형 셸에 export해 두면 그 뒤 settings.yaml을 고쳐도 그 셸에는 안 먹음, VS7e1 R-2):
+#     ( . deploy/host/scripts/settings_env.sh && load_settings && $DOCKER compose -f deploy/host/compose/compose.pipeline.yml up -d )
 # 결과 폴더(RAG_OUT)를 모든 모듈이 같이 씀 — 모듈 사이 전달은 이 폴더의 파일(+ PostgreSQL)뿐, 서로 직접 부르지 않음.
 # 주의: `docker compose config`는 치환한 값을 그대로 출력함 — 확인은 `config --quiet`만(S7e1부터 비밀은 compose에 없지만 호스트 경로·이름이 나옴).
 # 이미지 변수: DATA_PIPELINE_IMAGE·MCP_SERVER_IMAGE(S6b 새 이름) — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE·DATA_RETRIEVAL_IMAGE·RAG_*_IMAGE·
-#   RAG_IMAGE는 별칭으로 읽지 않는다 — trigger.sh·run_tool.sh·mcp_up.sh(image_vars.sh)가 새 이름이 비고 옛 이름만 있으면 "새 이미지 판 필요"로
+#   RAG_IMAGE는 별칭으로 읽지 않는다 — mcp_up.sh(image_vars.sh need_image)가 새 이름이 비고 옛 이름만 있으면 "새 이미지 판 필요"로
 #   멈춘다(코디네이터 답 Q2 a). compose를 직접 부를 때는 image 줄의 `:?` 메시지가 같은 안내를 낸다(S6c — VS6b R-11).
 # S7e1(사용자 10-27 Q1·Q3, D-028 ⑭) — 옛 pipeline.env 통째 넘기기(비밀까지 컨테이너 env에)를 없앴다. 서비스마다 설정 파일 하나를 읽기 전용으로
 #   붙이고 env는 SETTINGS_FILE·RUN_ENV만 넘긴다(docker inspect에 비밀 없음). 앱이 붙인 파일에서 common + 자기 앱 절을 읽는다(전환 기간에는 다리가
@@ -24,28 +20,7 @@
 #   이름은 앱이 읽지 않고(S7e2), 덮기 파일 도구 `python -m common.config.overrides`는 PC 전용이라 서버에서는 종료 2(이 compose는 SETTINGS_FILE 한 파일만
 #   붙여 덮기 파일의 base가 컨테이너 안에 없음 — VS7e2 B-2). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지·자원·포트·호스트 경로)뿐.
 x-settings: &settings "${SETTINGS_FILE:?SETTINGS_FILE=<settings.yaml 절대 경로> 필요 — deploy/host/scripts/settings_env.sh load_settings가 export(refactor.md C-09)}:/etc/rag/settings.yaml:ro,z"
-x-job: &job
-  network_mode: host                       # PostgreSQL·모델 API에 서버 주소 그대로(NETWORK_HOST=1)
-  init: true
-  environment: {NETWORK_HOST: "1", SETTINGS_FILE: /etc/rag/settings.yaml, RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"}
-  profiles: ["job"]                        # `up`으로는 안 뜸 — run --rm(트리거)로만
-  pids_limit: 2048
-  logging:
-    options: {max-size: "50m", max-file: "3"}
-
 services:
-  parse:                                   # ① 파싱(1회 job): dedup → prepare → 파싱(문서마다 엔진 동시) → 채점 → 대표 결과(_rep) · 임베딩·DB 없음
-    <<: *job
-    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
-    command: ["parse"]
-    volumes:
-      - *settings
-      - ${DOC_SRC:?DOC_SRC=<원본 문서 폴더>}:/data/docs:ro,z
-      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
-    mem_limit: ${PARSE_MEM_LIMIT:-16g}
-    memswap_limit: ${PARSE_MEM_LIMIT:-16g}
-    cpus: ${PARSE_CPUS:-3}
-
   # 11-01(pl-10 — trigger 서버 지움) — 상주 컨테이너(일 없이 떠 있음, entrypoint `idle`): run_docs.py가 docker exec로 문서별 작업을,
   # MCP parse_document 작업 서비스(mcp_parse_service)도 이 안에서 돈다. 이름 data-pipeline-parse(S6b — 옛 data-parsing).
   data-pipeline-parse:
@@ -69,17 +44,6 @@ services:
     logging:
       options: {max-size: "50m", max-file: "3"}
 
-  load:                                    # 도구 job(run_tool.sh — rdb_discover·check_env·ping_models, migrate) — 옛 적재 명령 load는 11-01에 지움(적재는 run_docs가 pgvector_load를 부름)
-    <<: *job
-    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
-    command: ["help"]
-    volumes:
-      - *settings
-      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
-    mem_limit: ${LOAD_MEM_LIMIT:-4g}
-    memswap_limit: ${LOAD_MEM_LIMIT:-4g}
-    cpus: ${LOAD_CPUS:-1}
-
   # 11-01(pl-10) — 상주 컨테이너(일 없이 떠 있음, entrypoint `idle`) — run_docs.py가 docker exec로 구조화·적재. 이름 data-pipeline-structure(S6b — 옛 data-structure).
   data-pipeline-structure:
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
@@ -100,14 +64,3 @@ services:
     pids_limit: 2048
     logging:
       options: {max-size: "50m", max-file: "3"}
-
-  publish:                                 # SI39: 대표 결과(.md) Object Storage 업로드 + EDW AI.ParsingMeta — 맨 마지막 별도 단계, 자동 스케줄 없음(트리거만) · S6b: data-pipeline(옛 data-structure, load.parsing_meta)
-    <<: *job
-    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
-    command: ["publish"]
-    volumes:
-      - *settings
-      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
-    mem_limit: ${PUBLISH_MEM_LIMIT:-2g}
-    memswap_limit: ${PUBLISH_MEM_LIMIT:-2g}
-    cpus: ${PUBLISH_CPUS:-1}

@@ -54,7 +54,7 @@ export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.
 - 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지 태그·자원·포트·호스트 경로)뿐이다 — `load_settings`는 셸에 이미 있는 이름은 덮지 않는다.
 
 ### 1-3. 기동 확인
-README §5-3 ④ 연결 점검(`run_tool.sh ping_models`·`check_env`, `dc run --rm parse check`)과 ⑤ 이미지 점검(`check-modules`·`selftest_gate.sh` — 실행 이미지는 코드 폴더를 `-v`로 붙여)을 차례로 한다. `check`는 자원·쓰기 권한·`PG_HOST`가 컨테이너 자신(127.0.0.1)인지·디스크 여유를 본다. 통과하면 2절로.
+README §5-3 ④ 연결 점검(`run_tool.sh ping_models`·`check_env`, `run_tool.sh check`)과 ⑤ 이미지 점검(`check-modules`·`selftest_gate.sh` — 실행 이미지는 코드 폴더를 `-v`로 붙여)을 차례로 한다. `check`는 자원·쓰기 권한·`PG_HOST`가 컨테이너 자신(127.0.0.1)인지·디스크 여유를 본다. 통과하면 2절로.
 
 ## 2. 일상 실행 — run_docs(문서별 흐름)
 

@@ -9,7 +9,8 @@
 #   설정(S7e1 — 사용자 10-27 Q3·Q5): settings.yaml(SETTINGS_FILE, 기본 $SERVER_ENV_DIR/settings.yaml — SERVER_ENV_DIR 기본 배치 /srv/rag/env)의
 #     호스트 칸(이미지·RAG_OUT·DOC_SRC·자원·NIGHTLY_*·PARSE_DEADLINE 등)을 settings_env.sh load_settings가 셸 env로 — 이미 셸에 있는 이름은 그대로.
 #     옛 ENV_FILE(pipeline.env)은 읽지 않는다(settings.yaml이 없으면 종료 코드 2).
-#     S6b(D-020, 사용자 10-27): 이미지 변수 확인은 image_vars.sh — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE·DATA_RETRIEVAL_IMAGE·RAG_*만 있으면 "새 이미지 판 필요"로 멈춤
+#   parse·publish는 상주 data-pipeline 컨테이너 안에서 돈다(docker exec — 사용자 11-02, 1회 job 컨테이너 없음: parse는 data-pipeline-parse,
+#     publish는 data-pipeline-structure). 컨테이너가 안 떠 있으면 종료 코드 2.
 # 종료 코드: 모듈·run_docs 그대로(0 끝남·건너뜀 · 75 실행 중(잠금)·마감 · 그 밖 = 실패)
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트(S6b)
@@ -50,15 +51,12 @@ case "$mod" in
   parse|publish) ;;
   *) echo "[trigger] 모르는 모듈: $mod — parse|publish|scheduled (night·structure·load·all은 11-01에 지움 — 서버 입구는 run_docs)" >&2; exit 2 ;;
 esac
-. deploy/host/scripts/image_vars.sh   # S6b — 옛 이미지 변수만 있으면 종료 코드 2
-need_image pipeline || exit 2   # 11-01 — compose.pipeline.yml에 검색 MCP 서비스가 없어 mcp 이미지 변수는 안 봄
-code_dir_default DATA_PIPELINE_IMAGE   # op-06 — 실행 이미지면 이 코드 폴더 루트를 /app/deploy에(CODE_DIR 없을 때)
-DC="$DOCKER compose -f deploy/host/compose/compose.pipeline.yml"   # DOCKER — load_settings가 정함(셸 env > ops.host.docker > podman, 없으면 docker — op-10)
-[ -n "${CODE_DIR:-}" ] && DC="$DC -f deploy/host/compose/compose.code.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 /app/deploy에
-run() {
-  echo "[trigger] $(date '+%F %T') $1 시작"
-  $DC run --rm "$1" "$1" "${@:2}"; rc=$?          # compose run의 인자는 command를 덮음 → 모듈 이름을 다시 줌
-  echo "[trigger] $(date '+%F %T') $1 끝 (종료 코드 $rc)"
-  return $rc
-}
-run "$mod" "$@"
+. deploy/host/scripts/image_vars.sh   # in_pipeline — 상주 컨테이너 안에서(사용자 11-02 — 1회 job 컨테이너 없음)
+case "$mod" in
+  parse) ctr=data-pipeline-parse ;;        # 원본 문서 폴더(/data/docs)가 붙은 상주 컨테이너
+  *) ctr=data-pipeline-structure ;;
+esac
+echo "[trigger] $(date '+%F %T') $mod 시작($ctr 안에서)"
+in_pipeline "$ctr" "$mod" "$@"; rc=$?
+echo "[trigger] $(date '+%F %T') $mod 끝 (종료 코드 $rc)"
+exit $rc
