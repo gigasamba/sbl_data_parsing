@@ -22,7 +22,7 @@ Answer Agent 이미지는 없다(10-14 결정 — 개발 서버 네이티브. MC
 - `deploy/docker/entrypoint.sh`·`deploy/release/{selftest_gate.sh,known_fail.txt,assets.py}` → live `app/docker/`
 - `deploy/host/`·`deploy/release/` → live `deploy/…`(호스트 스크립트)
 
-**오버레이 패치로 못 바꾸는 것**(바꾸면 새 이미지 버전) — `deploy/docker/requirements*.txt`·`Dockerfile`·`wheels/`·시스템 패키지·`assets/` 모델 파일·**서버 배포 테스트 `tests/server`**(이미지 안 `/app/deploy/tests`에만 있고 compose.patch*.yml이 붙이지 않는다 — 앱 코드만 패치하면 이미지 안 테스트는 옛 버전이므로, 테스트가 바뀐 번들은 새 이미지 버전으로, `refactor.md` C-53). S6b 전 배치(옛 `docker/`·upstream `deploy/<폴더>`)에서 이 배치로 넘어가는 패치 번들은 만들지 않는다(§3-1).
+**오버레이 패치로 못 바꾸는 것**(바꾸면 새 이미지 버전) — `deploy/docker/requirements*.txt`·`Dockerfile`·`wheels/`·시스템 패키지·`assets/` 모델 파일·**서버 배포 테스트 `tests/server`**(이미지 안 `/app/deploy/tests`에만 있고 compose.patch*.yml이 붙이지 않는다 — 앱 코드만 패치하면 이미지 안 테스트는 옛 버전이므로, 테스트가 바뀐 번들은 새 이미지 버전으로 — 옛 C-53, [이력](../history/refactor_c_items.md) · 코드 폴더를 마운트하는 실행 이미지(op-06)에서는 해소됨, PRD [e2-14](../prd/test.md#e2-14)). S6b 전 배치(옛 `docker/`·upstream `deploy/<폴더>`)에서 이 배치로 넘어가는 패치 번들은 만들지 않는다(§3-1).
 
 ### 1-1. 개발 서버 — 실행 이미지 + 코드 폴더(op-06, 사용자 10-30)
 

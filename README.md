@@ -52,7 +52,7 @@ MCP 도구 4개의 이름과 입출력은 외부 클라이언트와의 계약이
 - 앞 결과를 **이미 처리했으면** → 아무것도 하지 않고 건너뜀(같은 명령을 여러 번 불러도 안전 — 다시 하려면 `--force`)
 - 마감 시각에 걸리거나 같은 결과 폴더에서 다른 작업이 실행 중이면 → 종료 코드 **75**
 
-> 파싱(엔진 실행)이 `extract`에 있는 것은 upstream 배치를 따른 결과다. 일반 ETL 기준(파싱 = transform)과 달라 위치를 옮길지 결정 대기 중이다(refactor.md C-61).
+> 파싱(엔진 실행)이 `extract`에 있는 것은 upstream 배치를 따른 결과다. 일반 ETL 기준(파싱 = transform)과 다르지만 옮기지 않기로 했다(사용자 10-31 범위 축소 — PRD [pl-17](docs/prd/transform.md#pl-17) dropped · 옛 논의는 [이력](docs/history/refactor_c_items.md) C-61).
 
 ### 1-3. 서버 이미지 2개와 버전
 
