@@ -352,6 +352,7 @@ ops:
   # ─── run_docs 레인 ───
   run_docs:
     warm: 20  # 진입 대기열 · 기본 20 · 값: 0 이상 정수
+    warm_workers: 2  # 미리 받기 동시 수 · 기본 2 · 값: 0 이상 정수
     struct_workers: 2  # 구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음) · 기본 2 · 값: 0 이상 정수
     struct_backlog:  # 중간 대기열 상한(파싱 끝·구조화 대기 문서 수) · 값: 0 이상 정수 (0 = 상한 없음)
     vlm_cap: 2  # vlm 레인 문서 동시 파싱 상한(gpu 예산) · 기본 2 · 값: 0 이상 정수

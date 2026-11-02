@@ -361,7 +361,10 @@ class PipelineHostRunDocs(Section):
     """문서별 flow 러너(deploy/host/scripts/run_docs.py — 호스트에서 글자 그대로 읽음) 레인·대기열(사용자 10-29, docs/prd/runner.md rn-01·rn-02).
     기본값은 run_docs.py RUN_DOCS_DEFAULTS와 같다(tests/general/deploy/test_run_docs.py가 대조)."""
 
-    warm: int | None = F(20, "RUN_DOCS_WARM", "진입 대기열 — 미리 받아 둘 문서 수(진행 중 제외, 명령 인자 --warm이 덮음)")
+    warm: int | None = F(20, "RUN_DOCS_WARM", "진입 대기열 — 미리 받아 둘 문서 수(받는 중 포함·파싱 중 제외, 명령 인자 --warm이 덮음)")
+    warm_workers: int | None = F(
+        2, "RUN_DOCS_WARM_WORKERS", "미리 받기 동시 수 — 실제 동시 받기 = min(이 값, 대기열 빈자리)(pl-48, 사용자 11-02)"
+    )
     struct_workers: int | None = F(2, "RUN_DOCS_STRUCT_WORKERS", "구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음)")
     struct_backlog: int | None = F(
         None, "RUN_DOCS_STRUCT_BACKLOG", "중간 대기열 상한(파싱 끝·구조화 대기 문서 수) — 비우면 구조화 스레드 × 2, 0이면 상한 없음"

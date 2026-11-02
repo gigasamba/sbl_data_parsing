@@ -26,10 +26,10 @@
 ## pl-48 · 병렬 다운로드 — Object Storage에서 여러 파일을 동시에 받기
 - 무엇: 목록 파일 하나에 든 여러 파일을 동시에 받는다 — `python -m pipeline.extract.source warm`(미리 받기, 동시 수 `extract.prefetch_workers` 기본 2 — `pipeline/extract/source.py` 스레드 풀)·`rdb:csv` 파싱 입력 받기(`extract.source.fetch_workers` 기본 1 = 차례대로).
 - 이유: 큰 목록을 빨리 받는다. 받기는 네트워크 대기라 CPU를 거의 쓰지 않는다.
-- 지금(11-02 확인): 서버 러너 `run_docs.py`는 문서마다 목록 파일 하나(한 줄)로 `source warm`을 부르고 받기 스레드도 하나라, 서버에서는 동시에 받지 않는다(파싱과는 겹쳐 돈다 — 미리 받기 20개, [pl-01](#pl-01)).
+- 전(11-02 확인): 서버 러너 `run_docs.py`는 문서마다 목록 파일 하나(한 줄)로 `source warm`을 부르고 받기 스레드도 하나라, 서버에서는 동시에 받지 않았다(파싱과는 겹쳐 돈다 — 미리 받기 20개, [pl-01](#pl-01)).
 - 파일: `pipeline/extract/source.py`, `deploy/host/scripts/run_docs.py`(`downloader`·`warm_one`).
 - 결정(사용자 11-02): 서버 러너도 병렬로 받는다. 받기 워커 수와 미리 받기 상한(`ops.run_docs.warm`, 기본 20 — 대기열 관리)은 함께 작동한다: 실제 동시 받기 수 = min(받기 워커 수, 미리 받기 빈자리). 빈자리가 없으면 워커가 있어도 받지 않는다. `run_docs.py` `downloader` 변경은 운영 고침 묶음에서.
-- Status: done — 코드(`source warm`·`rdb:csv` 받기)에 있음 · 서버 러너 병렬 받기는 todo(사용자 11-02)
+- Status: done — 코드(`source warm`·`rdb:csv` 받기) · 서버 러너 병렬 받기(`run_docs.py` `downloader`, `ops.run_docs.warm_workers` 기본 2 — 시험 `test_run_docs.test_parallel_warm_respects_free_slots`) 11-02 `feature/ops-fix`
 
 <a id="pl-39"></a>
 ## pl-39 · FAQ 원천 — 질의응답 엑셀을 행 단위로

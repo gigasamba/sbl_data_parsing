@@ -189,3 +189,41 @@ def test_done_keys_match_parsing_meta():
         ("s3://bkt", ""),
     ):
         assert RD.plain_key(raw) == want, (raw, RD.plain_key(raw))
+
+
+def test_parallel_warm_respects_free_slots():
+    """pl-48(사용자 11-02) — 미리 받기 워커 여럿이 동시에 받되, 실제 동시 받기 = min(워커 수, 대기열 빈자리). 시험용 가짜 받기만(docker 없음)."""
+    import threading
+    import time
+    from unittest import mock
+
+    def run(workers, target, n_docs):
+        RD.LANEQ.update({c: __import__("collections").deque() for c in RD.LANES})
+        RD._warming.clear()
+        now, peak, lock = [0], [0], threading.Lock()
+
+        def fake_warm(seq, row):
+            with lock:
+                now[0] += 1
+                peak[0] = max(peak[0], now[0])
+            time.sleep(0.05)
+            with lock:
+                now[0] -= 1
+            return True
+
+        rows = {i: {"s3_key": f"k{i}", "original_filename": f"f{i}.txt", "file_size": 1} for i in range(n_docs)}
+        with (
+            mock.patch.object(RD, "warm_one", fake_warm),
+            mock.patch.object(RD, "classify_doc", lambda seq, row, cache=None: "light"),
+            mock.patch.object(RD, "mark", lambda *a, **k: None),
+            mock.patch.object(RD, "depth", lambda *a, **k: None),
+            mock.patch.object(RD, "_class_cache", lambda: {}),
+            mock.patch.object(RD, "WARM_WORKERS", workers),
+            mock.patch.object(RD, "WARM_TARGET", target),
+        ):
+            RD.downloader(rows, list(range(n_docs)))
+        return peak[0], sum(len(q) for q in RD.LANEQ.values())
+
+    assert run(workers=3, target=20, n_docs=6) == (3, 6)  # 빈자리 넉넉 → 워커 수만큼 동시에
+    assert run(workers=3, target=2, n_docs=2) == (2, 2)  # 빈자리 2 → 워커가 3이어도 2개만
+    assert run(workers=1, target=20, n_docs=3) == (1, 3)  # 워커 1 = 옛 동작(하나씩)
