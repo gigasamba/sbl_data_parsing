@@ -43,15 +43,6 @@ preflight() {
 #   종료 코드 75 = 이미 실행 중. exec로 바꿔 띄워 docker stop 신호가 파이프라인까지 그대로 감(--init 권장)
 locked() { echo "[잠금] /app/output/.pipeline.lock (이미 실행 중이면 종료 코드 75로 바로 끝남)"; exec flock -n -E 75 /app/output/.pipeline.lock "$@"; }
 
-# 단계5(10-13, 이번 판까지만) — `tool` 인자로 옛 'cli/<이름>.py' 형태가 오면 경고 뒤 모듈 이름만 남김.
-legacy_tool_name() {
-  case "$1" in
-    cli/*.py) echo "[경고] 옛 형태 'cli/<이름>.py'는 이번 판까지만 지원 — 다음부터 이름만(예: score_gold)" >&2; n=${1#cli/}; echo "${n%.py}" ;;
-    *.py)     echo "${1%.py}" ;;
-    *)        echo "$1" ;;
-  esac
-}
-
 cmd="${1:-help}"; shift || true
 # 이미지마다 자기 앱만 들어 있음(S6b D-020 — RAG_MODULE pipeline·mcp, 사용자 10-27) — 없는 앱의 명령은 바로 거부(종료 코드 64)
 case "${RAG_MODULE:-}:$cmd" in
@@ -94,7 +85,7 @@ case "$cmd" in
   services)      python -m common.store.services "$@";;
   check-modules) exec python -m common.check.check_modules "$@";;
   tool)
-    name=$(legacy_tool_name "${1:?도구 이름(예: rdb_discover·check_env)}"); shift || true
+    name="${1:?도구 이름(예: rdb_discover·check_env)}"; shift || true
     # C3(독립 검토 10-13) — 이름을 python -c 소스 문자열에 그대로 끼워 넣으면 코드 주입 경로가 됨. 모듈 이름 문법만 허용.
     [[ "$name" =~ ^[a-z_][a-z0-9_]*$ ]] || { echo "bad tool name"; exit 64; }
     # ping_models·os_put·check_modules는 common/check/(S3 — 옛 common_tools/cli/) — common.check를 맨 먼저(덧씌우기 live에 옛 사본이 남아도 새 것이 이김), 그다음 이 순서로 시도.

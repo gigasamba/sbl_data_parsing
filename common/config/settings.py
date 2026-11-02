@@ -867,8 +867,7 @@ def _server_env(environ, path):
 
 def pin_env(environ=None):
     """import common 때 한 번(common/__init__.py가 부름): 설정 파일을 읽어 본다 — 서버(dev·prd)에서 못 읽거나 형식이 틀리면
-    SettingsError(시작 실패 — STRICT, S7b c안), local은 경고 뒤 계속. 옛 env 이름(설정 칸 — 호스트 칸 빼고)이 env에 있으면 읽지 않고 이름만
-    한 번 알린다. op-09 — env로 내주던 영구 다리(엔진·인계 칸)는 없앴다(그 파일들도 설정 객체로 읽음). 반환: 0(옛 호출 호환)."""
+    SettingsError(시작 실패 — STRICT, S7b c안), local은 경고 뒤 계속(env의 옛 설정 이름 알림은 0.2.0에 지움 — pl-46). 반환: 0(옛 호출 호환)."""
     environ = os.environ if environ is None else environ  # env 남김 — RUN_ENV 신호
     allowed = image_sections(environ)
     run = environ.get("RUN_ENV") or None
@@ -877,13 +876,6 @@ def pin_env(environ=None):
         if path is not None:
             _warn_once("[설정] RAG_MODULE 모름(pipeline·mcp가 아님 — 이미지 안 빈 글자 포함) — 설정 파일 점검 건너뜀")
         return 0
-    cls, _ = section_class(allowed)
-    legacy = sorted(n for n in _env_map(cls, False) if n in environ and n != "RUN_ENV") if environ else []
-    legacy = [
-        n for n in legacy if n not in _env_map(cls, True)
-    ]  # 호스트 칸 이름(load_settings가 셸에 냄)은 빼고 — 이 이미지 절만(다른 앱 설정 모듈 import 안 함, U-a)
-    if legacy:
-        _warn_once(f"[설정] env의 옛 설정 이름은 읽지 않음(S7e2 — settings.yaml 칸·덮기 파일로): {' '.join(legacy)}")
     if path is not None:
         try:
             read_settings(path)  # 파일을 읽을 수 있는지만(칸 검증은 앱 설정 객체·시작 관문 — 호스트 export가 다른 앱 절 오타로 멈추지 않게)

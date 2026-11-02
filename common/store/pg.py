@@ -70,7 +70,9 @@ def _warn_standin():
     if guard_run_env() not in (None, "local"):  # pl-12(사용자 10-30) — 서버(dev·prd·모르는 값)는 스탠드인으로 대체하지 않고 멈춤
         raise SystemExit(f"RUN_ENV={guard_run_env()} — PG 접속 정보 없음(common.connections.pg) · 서버는 로컬 대체 DB를 쓰지 않음(pl-12)")
     print(
-        "WARNING: PG 접속 정보 없음 → 로컬 대체 DB(output/pg_standin) 사용 — 서버면 pipeline.env의 PG_* 확인", file=sys.stderr, flush=True
+        "WARNING: PG 접속 정보 없음 → 로컬 대체 DB(output/pg_standin) 사용 — 서버면 settings.yaml required.pg 확인",
+        file=sys.stderr,
+        flush=True,
     )
 
 
