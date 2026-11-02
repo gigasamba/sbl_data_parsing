@@ -266,15 +266,8 @@ def env_main():
     check_pg_schema()
 
     print("\n== 폐쇄망 캐시 (prefetch_models.py로 미리 받은 것) ==")
-    home, hf = (
-        Path.home(),
-        Path(os.environ.get("HF_HOME") or Path.home() / ".cache" / "huggingface") / "hub",
-    )  # env 남김 — 라이브러리(5-3 H)
+    home = Path.home()  # HF 임베딩 모델 캐시 점검은 0.2.0에 지움(로컬 임베딩 길 — pl-46)
     for label, p in [
-        ("HF bge-m3 (임베딩)", hf / "models--BAAI--bge-m3"),
-        ("HF multilingual-e5-small", hf / "models--intfloat--multilingual-e5-small"),
-        ("HF multilingual-e5-base", hf / "models--intfloat--multilingual-e5-base"),
-        ("HF bge-reranker-v2-m3", hf / "models--BAAI--bge-reranker-v2-m3"),
         ("EasyOCR ko+en", home / ".EasyOCR"),
         ("PaddleX (PaddleOCR 한국어)", home / ".paddlex"),
     ]:

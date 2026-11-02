@@ -6,11 +6,11 @@
            쪽 안 위치(bbox, pt) = OCR 엔진은 글자 상자 합집합, 텍스트 PDF는 원본 PDF에서 청크 첫·끝 줄을 찾아 합집합
   요약   : 앞부분 발췌(LLM 요약은 op-08에 지움 · 같은 뜻 선택지 --summary auto|lead는 0.2.0에 지움 — pl-46)
   메타   : 고객사·계약 번호 — 파싱 모듈 교차 확인 값(_rep rep.meta)(서로 다른 계열 파서 2개+)만
-  임베딩 : --embed api(EMBED_BASE_URL·EMBED_MODEL — 서버 임베딩 전용 모델) · bge-m3 · e5-small … (L2 정규화 저장, 차원은 첫 응답에서)
+  임베딩 : --embed api(EMBED_BASE_URL·EMBED_MODEL — 서버 임베딩 전용 모델) · none(임베딩 없음 — 시험) (L2 정규화 저장, 차원은 첫 응답에서 · 로컬 모델은 0.2.0에 지움)
   (지식 그래프 kg_nodes·kg_edges · 개념→청크 concept_chunk · 그림 행 images.jsonl · 집계 사실 facts.jsonl은 11-01에 지움 — PRD pl-06:
    아무도 적재·조회하지 않음(facts.jsonl을 읽던 검색 쪽 집계는 mc-04에서 지움). 묶음 계약용 빈 kg 파일도 0.2.0에 지움 — pl-46)
 산출: docs.jsonl · chunks.jsonl · vectors.npy(float32, chunks 순서) · meta.json
-사용: python -m pipeline.transform.structure.build_bundle [--parse-dir output/parse] [--src output/prepared] [--embed api|bge-m3] [--out output/edw/bundle]
+사용: python -m pipeline.transform.structure.build_bundle [--parse-dir output/parse] [--src output/prepared] [--embed api|none] [--out output/edw/bundle]
 """
 
 import argparse
@@ -468,8 +468,8 @@ def main(argv=None):
         help="저장소(doc.file_path)에 기록할 원본 경로 접두(서버의 실제 보관 위치) — 없으면 --src 절대 경로",
     )
     ap.add_argument(
-        "--embed", default=pc.cfg().transform.structure.embed or ("api" if C.cfg().models.embed.base_url else "bge-m3")
-    )  # S7c — 설정 객체
+        "--embed", default=pc.cfg().transform.structure.embed or "api", choices=["api", "none"]
+    )  # S7c — 설정 객체 · 0.2.0 로컬 모델 기본값(bge-m3) 지움 — pl-46
     ap.add_argument("--chunk", default=None, help="기본 = stack.json chunk(없으면 structure)")
     ap.add_argument("--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file)")
     ap.add_argument("--no-rep", action="store_true", help="대표 파싱(output/parse/_rep) 대신 선정 엔진을 문서마다 고름(단계 1 실험용)")

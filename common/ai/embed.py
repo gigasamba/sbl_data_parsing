@@ -1,8 +1,7 @@
 """임베딩 호출 — 구조화(문서 청크 'passage')와 검색(질문 'query')이 같은 모델·접두·정규화를 써야 함.
-폐쇄망 전제: 로컬 모델은 미리 반입한 캐시에서만(HF_HUB_OFFLINE), API는 내부망 주소만."""
+API(OpenAI 호환 /embeddings, 내부망 주소만)만 쓴다 — 로컬 모델 길(sentence-transformers·bge-m3·e5)은 0.2.0에 지움(pl-46)."""
 
 import json
-import os
 from pathlib import Path
 
 import numpy as np
@@ -15,26 +14,6 @@ from common.config.settings import by_env, cfg, reveal
 from common.core.paths import APP_ROOT
 
 ROOT = APP_ROOT  # output/query_cache.sqlite 기준(옛 dev/)
-
-os.environ.setdefault("HF_HUB_OFFLINE", "1")  # env 남김 — 라이브러리(5-3 H)
-os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")  # env 남김 — 라이브러리(5-3 H)
-
-ST_MODELS = {"e5-small": "intfloat/multilingual-e5-small", "e5-base": "intfloat/multilingual-e5-base", "bge-m3": "BAAI/bge-m3"}
-_ST_CACHE: dict = {}
-
-
-def _load_st_model(name):
-    if name not in _ST_CACHE:
-        from sentence_transformers import SentenceTransformer
-
-        try:
-            _ST_CACHE[name] = SentenceTransformer(ST_MODELS[name], device="cpu")
-        except Exception as e:
-            raise RuntimeError(
-                f"임베딩 모델 '{name}'({ST_MODELS[name]}) 로드 실패 — 폐쇄망 로컬 캐시에 없음. "
-                f"HF_HUB_OFFLINE=1이며 미리 반입된 모델만 쓸 수 있다: {e}"
-            ) from e
-    return _ST_CACHE[name]
 
 
 def _embed_api(texts, kind="passage"):
@@ -109,8 +88,7 @@ def _evict_query_cache(db):
 
 
 def query_model_mismatch(meta):
-    """AD41 — 색인(묶음 meta)이 api 임베딩이면 이 프로세스의 EMBED_MODEL과 같은지. 다르면 사람이 읽을 이유(문자열), 같거나 로컬 모델이면 None.
-    로컬 모델(bge-m3 등)은 meta['embed']를 그대로 질의에 쓰므로 어긋날 수 없음."""
+    """AD41 — 색인(묶음 meta)이 api 임베딩이면 이 프로세스의 EMBED_MODEL과 같은지. 다르면 사람이 읽을 이유(문자열), 같거나 api가 아니면 None."""
     if meta.get("embed") != "api" or not meta.get("embed_model"):
         return None
     cur = cfg().models.embed.model or ""
@@ -123,7 +101,7 @@ def query_model_mismatch(meta):
 
 
 def embed_texts(embed, texts, kind):
-    """embed: e5-small·e5-base·bge-m3·api. e5는 query:/passage: 접두 필요."""
+    """embed: api(0.2.0 — 로컬 모델 이름은 지움). kind = query·passage."""
     if not texts:
         return np.zeros((0, 1), dtype=np.float32)
     if kind == "query":
@@ -160,9 +138,6 @@ def _embed_query_cached(embed, texts, kind):
 
 
 def _embed_uncached(embed, texts, kind):
-    if embed == "api":
-        return _embed_api(texts, kind)
-    model = _load_st_model(embed)
-    prefix = f"{kind}: " if embed.startswith("e5") else ""
-    vecs = model.encode([prefix + t for t in texts], normalize_embeddings=True, show_progress_bar=False)
-    return np.asarray(vecs, dtype=np.float32)
+    if embed != "api":
+        raise ValueError(f"임베딩 방식 {embed!r}는 지원하지 않음 — api만(로컬 모델 길은 0.2.0에 지움, pl-46)")
+    return _embed_api(texts, kind)

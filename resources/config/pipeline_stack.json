@@ -86,7 +86,7 @@
  },
  "source": "selection.json(단계 1 최종 엔진 조합)",
  "name": "dev-v1",
- "embed": "bge-m3",
+ "embed": "api",
  "chunk": "structure",
  "graph": "table+entity",
  "retrieve": "hybrid",

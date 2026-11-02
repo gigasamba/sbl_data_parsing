@@ -352,7 +352,7 @@ VALUES = {
     "pipeline.connections.rdb.engine": "mssql·pg 중 하나",
     "pipeline.transform.represent.post": "all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments)",
     "pipeline.transform.represent.rep_select": "first·acc·best 중 하나(그 밖 값 = best)",
-    "pipeline.transform.structure.embed": "api·bge-m3·e5-small·e5-base·none 중 하나",
+    "pipeline.transform.structure.embed": "api·none 중 하나",
     "pipeline.transform.structure.chunk_table": "rows 또는 비움(표 통째로)",
     "mcp.server.host": "127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부",
     "mcp.search.pg.vector_search": "exact 또는 비움(HNSW 근사)",

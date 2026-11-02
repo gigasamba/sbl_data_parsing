@@ -223,7 +223,7 @@ transform:
     chunk_size:  # [파라미터] 청크 목표 길이(글자) · 값: 0 이상 정수
     chunk_table:  # [파라미터] 'rows'이면 큰 표를 행 묶음 단위로 쪼갬(그 외 값·미설정은 표를 통째로 둠) · 값: rows 또는 비움(표 통째로)
     chunk_table_rows: 25  # [파라미터] 표를 쪼갤 때 청크당 행 수(CHUNK_TABLE=rows일 때만) · 기본 25 · 값: 0 이상 정수
-    embed:  # [파라미터] 구조화·적재에 쓸 임베딩 방식(api 등, none이면 임베딩 없음 — 이미지 안 기본 api: 옛 Dockerfile ENV, B-2) · 값: api·bge-m3·e5-small·e5-base·none 중 하나
+    embed:  # [파라미터] 구조화·적재에 쓸 임베딩 방식(api 등, none이면 임베딩 없음 — 이미지 안 기본 api: 옛 Dockerfile ENV, B-2) · 값: api·none 중 하나
     embed_cache:  # 임베딩 캐시 sqlite 경로(0 또는 빈 값이면 캐시 끔) · 값: 경로
     embed_concurrency: 4  # 임베딩 호출 병렬 수(EMBED_BATCH 묶음을 동시에 전송) · 기본 4 · 값: 0 이상 정수
     page_chunk_max:  # [파라미터] 쪽 청크 최대 글자 수(임베딩 입력 한도 초과 방지) · 값: 0 이상 정수

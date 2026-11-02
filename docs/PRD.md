@@ -51,7 +51,7 @@
 | 그림 부가 기능 줄이기 — 화살표·겹침·도형 연결·Mermaid 따로 만들기를 VLM 한 번의 종류별 출력(도표 Mermaid·표 HTML·차트 값)으로 | 결정 10-31. **코드는 아직 옛 기능을 씀**(`figures/figures.py:29-38`) — 0.2.0(대표 결과 지문 p1 바뀜) | todo | [pl-05](prd/transform.md#pl-05) |
 | 청크(검색 단위 조각) 나누기 — 기본 `structure`(800자, 제목 기준, 표는 통째). 큰 표 25행씩 나누기는 `CHUNK_TABLE=rows`일 때만 | 검색은 출처가 달린 짧은 조각 단위로 한다 | done | [pl-06](prd/transform.md#pl-06) |
 | 문서 요약 = 앞부분 300자 발췌, 고객·계약 이름은 엔진끼리 서로 확인된 것만 | LLM 요약은 지웠다(op-08) | done | [pl-06](prd/transform.md#pl-06) |
-| 임베딩(검색용 숫자 벡터) — 서버는 내부망 `api`(`EMBED_BASE_URL`·`EMBED_MODEL`), 로컬 모델(bge-m3·e5)은 PC용 | 로컬 모델 길은 0.2.0에 지운다([pl-46](prd/transform-cleanup.md#pl-46)) | done | [pl-06](prd/transform.md#pl-06) |
+| 임베딩(검색용 숫자 벡터) — 내부망 `api`(`EMBED_BASE_URL`·`EMBED_MODEL`)만(시험은 `none`) | 로컬 모델 길(bge-m3·e5 — sentence-transformers)은 0.2.0에 지움([pl-46](prd/transform-cleanup.md#pl-46)) — 패키지는 다음 이미지 빌드 때 requirements에서 뺌(todo) | done | [pl-06](prd/transform.md#pl-06) |
 | ~~지식 그래프·개념 청크·그림 행·집계 사실 만들기~~ | 아무도 적재·조회하지 않았다(11-01 지움) | done | [pl-06](prd/transform.md#pl-06) |
 | ~~구조화·적재 묶음 계약(`DOC_KEYS`) 고치기~~ | 서버가 이 검사를 쓰지 않는다. 0.2.0에 코드째 지운다(pl-46) | dropped | [pl-15](prd/transform.md#pl-15) |
 | 분류 — 파싱 결과 저장본(silver — Object Storage) 뒤, 검색 DB(gold — pgvector) 앞에서 SFDC·LAS 문서에 종류 라벨 `doc_class`를 붙인다. 같은 sha256 묶음은 LLM 한 번 | 운영 분류와 결과가 같게(사용자 11-02) — 같은 모델·effort high·본문 8,000자·경계 규칙·이미 있는 라벨 안 덮음(낮은 확신 표시 없음 — 11-02). 저장 자리는 11-02 결정(라벨만 gold — 모델·시각 칸 없음, 적재 안에서 분류 · 다시 시도 고리 없음 — 다음 실행이 다시 고름), LAS 묶음은 결정 대기. 0.2.0, #86 뒤 | todo | [pl-33](prd/transform.md#pl-33) |
