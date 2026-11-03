@@ -112,3 +112,20 @@ def test_check():
             lines = r.stdout.strip().splitlines()
             assert r.returncode == rc and lines[-1].startswith(last), (fail, nojudge, r.returncode, r.stdout, r.stderr)
             assert absent is None or absent not in r.stdout, (fail, r.stdout)
+
+
+def test_init_refuses_chain_dir():
+    """edw_chain.yaml 자리에 폴더(docker가 init 전에 띄운 마운트로 만든 것)가 있으면 지우지 않고 종료 4 — 그 안에 복사하지 않음(리뷰 #140)."""
+    bash = _bash()
+    if not bash:
+        print("[시험] bash 없음 — 건너뜀")
+        return
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d) / "rag"
+        code = Path(d) / "code_src"
+        (code / "deploy").mkdir(parents=True)
+        bad = root / "env" / "edw_chain.yaml"
+        bad.mkdir(parents=True)
+        r = _run(bash, ["init"], {"DC_ROOT": _posix(root), "DC_CODE": _posix(code)})
+        assert r.returncode == 4, (r.returncode, r.stdout, r.stderr)
+        assert "edw_chain.yaml 자리에 폴더가 있음" in r.stderr and bad.is_dir() and not any(bad.iterdir()), r.stderr
