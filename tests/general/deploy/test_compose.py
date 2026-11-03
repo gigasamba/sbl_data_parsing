@@ -45,14 +45,3 @@ def test_no_patch_overlay():
     assert not list(COMPOSE.glob("compose.patch*.yml"))
     entry = (DEPLOY_ROOT / "deploy" / "docker" / "entrypoint.sh").read_text(encoding="utf-8")
     assert "  parse-service)" in entry and "pipeline.mcp_parse_service" in entry
-
-
-def test_env_mount():
-    """서버 설정 폴더(EDW 사슬 사본 등 — 사용자 11-03)는 적재가 도는 data-pipeline에만 읽기 전용(:ro,z — RHEL SELinux)으로 /etc/rag/env."""
-    for f, (name, _, _) in FILES.items():
-        vols = [str(v) for v in _services(f)[name]["volumes"]]
-        env = [v for v in vols if v.startswith("${SERVER_ENV_DIR")]
-        if name == "data-pipeline":
-            assert len(env) == 1 and env[0].endswith(":/etc/rag/env:ro,z"), env
-        else:
-            assert not env, (name, env)

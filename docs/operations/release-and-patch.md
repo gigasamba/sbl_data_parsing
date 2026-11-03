@@ -427,7 +427,7 @@ $DOCKER run --rm -i --network none --entrypoint bash -v "$PWD:/app/deploy:ro,z" 
 - 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline`은 비워 둔다(8-4 3에서 켬).
 - 0.2.0에서 지운 칸(`common/config/layout.py` `REMOVED` — 예: 옛 오버레이 `ops.host.patch_code`, `ops.pipeline_host.structure_cpus`·`structure_mem_limit`, 옛 OCR·지문 배치 칸, pl-38로 지운 `ops.paths.glossary_dir`·`ops.paths.client_roster`(용어집·고객 명부는 이제 PG 마스터 표)·mc-19로 지운 `ops.paths.mcp_bundle`(검색은 묶음 없이 PG gold만)·`common.text.search_recency`(판 묶음·최신성 순위 지움)·`pipeline.transform.structure.draft_terms`(초안 용어는 오프라인 도구로))은 남아 있어도 경고 한 줄 뒤 무시된다 — 지워도 되고 두어도 된다.
 - 새 필수 칸 자리 확인: `python -m common.config.sample --where <칸 이름>`(위 이미지 안에서 같은 방법).
-- (선택) 서버 EDW의 사슬 표·칸 이름이 기본값과 다르면(Quote 표를 켜는 것 포함) 사본을 `$SERVER_ENV_DIR/edw_chain.yaml`(10001, 640)에 두고 `ops.pipeline_paths.edw_chain: /etc/rag/env/edw_chain.yaml`을 적는다 — [§8-6](#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29). 기본값 그대로면 비워 둔다.
+- (선택) 서버 EDW의 사슬 표·칸 이름이 기본값과 다르면(Quote 표를 켜는 것 포함) 사슬 파일 사본을 두고 `ops.pipeline_paths.edw_chain`을 적는다 — [§8-6](#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29). 기본값 그대로면 비워 둔다.
 ```bash
 chown 10001:<운영 그룹> "$SERVER_ENV_DIR/settings.yaml.new" && chmod 640 "$SERVER_ENV_DIR/settings.yaml.new"
 mv "$SERVER_ENV_DIR/settings.yaml.new" "$SERVER_ENV_DIR/settings.yaml"
@@ -510,12 +510,13 @@ cp -p "$BK/settings.yaml.0.1.0" "$SERVER_ENV_DIR/settings.yaml"               # 
 
 적재가 문서 메타(고객 `client_edw`·원천 전용 칸·등록 시각)를 EDW에서 채울 때 따라가는 표·칸 이름은 파일 하나다. 기본 파일은 코드 폴더의 `resources/config/edw_chain.yaml`이고, **각 줄의 뜻은 그 파일의 주석이 정본**이다(여기는 쓰는 법과 예시만). 서버 EDW 이름이 다르면 코드를 고치지 않고 사본을 고친다.
 
-**① 사본 두기 · 칸 적기** — 사본은 코드 폴더 밖, settings.yaml 옆(`$SERVER_ENV_DIR/edw_chain.yaml`)에 둔다. 이 폴더는 `data-pipeline`에만 `/etc/rag/env`로 **읽기 전용** 붙는다(`compose.pipeline.yml` — 폴더 주인 10001:<운영 그룹> 750은 `dc.sh init`이 맞춤).
+**① 사본 두기 · 칸 적기** — 컨테이너(`data-pipeline`)에서 보이는 자리여야 한다. settings.yaml은 파일 하나만 붙으므로 설정 폴더(`$SERVER_ENV_DIR`)에 두면 안 보인다 — 결과 폴더(컨테이너 `/app/output`) 아래에 둔다.
 ```bash
-cp -n /srv/rag/code/live/resources/config/edw_chain.yaml "$SERVER_ENV_DIR/edw_chain.yaml"
-chown 10001:<운영 그룹> "$SERVER_ENV_DIR/edw_chain.yaml" && chmod 640 "$SERVER_ENV_DIR/edw_chain.yaml"
-# settings.yaml(편집기로):  ops: { pipeline_paths: { edw_chain: /etc/rag/env/edw_chain.yaml } }
-bash deploy/host/scripts/dc.sh up -d data-pipeline     # 0.2.0 새 마운트(/etc/rag/env)를 처음 붙일 때 한 번 — 컨테이너를 다시 만듦
+OUT=<common.host.output_root 값 — 호스트 결과 폴더, 컨테이너 /app/output>
+install -d -o 10001 -g <운영 그룹> -m 2775 "$OUT/config"
+cp -n /srv/rag/code/live/resources/config/edw_chain.yaml "$OUT/config/edw_chain.yaml"
+chown 10001:<운영 그룹> "$OUT/config/edw_chain.yaml" && chmod 640 "$OUT/config/edw_chain.yaml"
+# settings.yaml(편집기로):  ops: { pipeline_paths: { edw_chain: /app/output/config/edw_chain.yaml } }
 ```
 
 **② 구조 — 원천마다 절 하나**
@@ -561,8 +562,8 @@ sfdc:
 **④ 실제 실행 전에 점검** — 파일만 읽고 검사한다(EDW·PG에 붙지 않음). 상주 컨테이너에서:
 ```bash
 $DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check                                     # 설정 칸이 가리키는 파일
-$DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check --file /etc/rag/env/edw_chain.yaml   # 칸을 적기 전에 사본만
-# 기대: [edw_meta] 사슬 설정 OK(/etc/rag/env/edw_chain.yaml) — 절 crms, files, las, sfdc · SFDC 단계 3개(006 > 00T > 00U)   (종료 코드 0)
+$DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check --file /app/output/config/edw_chain.yaml   # 칸을 적기 전에 사본만
+# 기대: [edw_meta] 사슬 설정 OK(/app/output/config/edw_chain.yaml) — 절 crms, files, las, sfdc · SFDC 단계 3개(006 > 00T > 00U)   (종료 코드 0)
 # 틀리면: [edw_meta] 사슬 설정 오류(…): sfdc.opportunity.table: 'SFDC.Opportunity; DROP' — 스키마.표만; …   (종료 코드 1 — 틀린 곳을 모두 적음)
 ```
 칸 이름이 EDW에 실제로 있는지는 이 점검이 보지 않는다 — `query_edw`나 DB 담당자로 확인한다(C-76 ⑦).
