@@ -378,7 +378,7 @@ def _selftest_contract():
         for filt, words in bad:
             err = M.do_search("단가는?", **filt).get("error") or ""
             assert all(w in err for w in words), (filt, err)
-        with mc.senv(MCP_EDW_CHAIN_FILE=str(Path(pgfix.__file__).with_name("nowhere.yaml"))):  # 사슬 파일 설정 — 없는 파일은 오류
+        with mc.senv(EDW_CHAIN_FILE=str(Path(pgfix.__file__).with_name("nowhere.yaml"))):  # 사슬 파일 설정 — 없는 파일은 오류
             assert "사슬 설정 파일을 못 읽음" in M.do_search("단가는?", source_system="SFDC").get("error", ""), "chain"
         for filt, want, scope in cases:
             o = M.do_search("단가는?", k=999, **filt)  # k 상한 50으로 줄임(오류 아님)

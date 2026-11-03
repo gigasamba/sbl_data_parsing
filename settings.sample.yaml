@@ -261,7 +261,6 @@ search:
     vector: 1.0  # [파라미터] RRF 융합에서 벡터 가중치 · 기본 1.0 · 값: 0 이상
   # ─── EDW 도구 ───
   edw_meta:
-    edw_chain:  # [파라미터] search attrs 거르기·근거 attrs·edw_meta 키 목록을 읽는 EDW 조인 사슬 파일 경로(적재와 같은 파일이어야 함 — 비우면 resources/config/edw_chain.yaml · 서버 사본은 컨테이너 안 /etc/rag/edw_chain.yaml) · 값: 경로
     dir:  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · 값: 경로
   edw_query:
     enabled: true  # query_edw 도구 스위치 · 기본 true · 값: true·false
@@ -304,12 +303,12 @@ ops:
     doc_dir:  # 원본 문서 폴더 · 값: 경로
     doc_dir_prepared:  # 준비(dedup·회전) 끝난 문서 폴더 · 값: 경로
     draft_terms_out:  # 용어 자동 초안 CSV 경로 · 값: 경로
+    edw_chain:  # EDW 조인 사슬 파일 경로 · 값: 경로
     output_root:  # 결과(output) 폴더 · 값: 경로
     runlog_dir:  # 실행 기록(output/logs) 루트 폴더 · 값: 경로
     source_manifest:  # 원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응) · 값: 경로
     stack_file:  # 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
   pipeline_paths:
-    edw_chain:  # EDW 조인 사슬 설정 파일 경로(적재만 읽음 — 비우면 resources/config/edw_chain.yaml · 서버 사본을 쓰려면 컨테이너 안 경로 /etc/rag/edw_chain.yaml(서버 원본 $SERVER_ENV_DIR/edw_chain.yaml — dc.sh init이 없을 때만 복사, 적었을 때만 쓰임) — pl-29, 사용자 11-03 · 점검: python -m pipeline.load.edw_meta --check) · 값: 경로
     gold_dir:  # 사람 정답(gold) 폴더 · 값: 경로
     images_root:  # 그림 PNG·index.jsonl 저장 루트 · 값: 경로
     out_root:  # 파이프라인 출력 루트(output) · 값: 경로

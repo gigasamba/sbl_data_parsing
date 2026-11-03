@@ -4,7 +4,7 @@
 client_edw·created, 머리 주석 참고), 읽기·검사는 common/store/edw_chain.py(검색 MCP와 함께 씀). 코드는 사슬을 따라가는 해석기 하나(_resolve)뿐이다:
 단계를 위에서 아래로 — 열쇠(file 또는 앞 단계 칸)로 표를 읽고, 열쇠 목록이면 앞 자리부터 후보가 있는 첫 자리에서 하나로 정하고(둘 이상이면 비움),
 when.prefix로 SFDC id 접두 갈래를 고른다. SFDC 분류 힌트의 연결 개체 종류는 접두 표 resources/mappings/sfdc_prefix.json(sfdc_entity 단계).
-서버에서 고친 사본은 설정 ops.pipeline_paths.edw_chain(비우면 기본 파일 — 사용자 11-03). 파일만 점검(EDW·PG 안 붙음): python -m pipeline.load.edw_meta --check [--file F].
+서버에서 고친 사본은 설정 ops.paths.edw_chain(검색 MCP와 같은 칸 — 비우면 기본 파일, 사용자 11-03). 파일만 점검(EDW·PG 안 붙음): python -m pipeline.load.edw_meta --check [--file F].
 EDW를 못 열면 빈 dict와 경고(적재는 메타를 비운 채 계속 — 사용자 11-02, 자동 갱신 없음: 나중에 --replace로 다시 적재해 채움). 한 단계의 칸을 못 읽으면
 그 칸만 비고 경고, 표를 못 읽으면 그 원천 메타가 빔(optional 단계면 그 단계만). 설정 파일이 틀리면 ValueError로 멈춘다(이름은 SQL 글자에 들어가므로 검사,
 값은 늘 바인딩)."""
@@ -19,14 +19,6 @@ from common.store import edw_chain as EC
 from common.store.db.models import search_tables as ST
 
 CHUNK = 500  # IN 목록 크기
-
-
-def chain_file():
-    """쓸 사슬 설정 파일 — 설정 pipeline.paths.edw_chain(서버에서 고친 사본), 비우면 기본 CHAIN_FILE."""
-    from pipeline import config as pc
-
-    p = pc.cfg().paths.edw_chain
-    return Path(p) if p else EC.CHAIN_FILE
 
 
 class _Edw:
@@ -63,8 +55,8 @@ class _Edw:
 
 
 def load_chain(path=None):
-    """사슬 설정 읽기 + 검사(common.store.edw_chain) — 틀리면 ValueError. path 없으면 chain_file()(설정 → 기본 파일)."""
-    return EC.load(path or chain_file())
+    """사슬 설정 읽기 + 검사(common.store.edw_chain) — 틀리면 ValueError. path 없으면 설정 칸(EC.chain_path() — 비우면 기본 파일)."""
+    return EC.load(path)
 
 
 def fetch(docs, edw=None, chain=None):
@@ -304,7 +296,7 @@ def check(path=None):
     per = " · ".join(
         f"{s} 단계 {len(c[s]['steps'])}·키 {len(c[s].get('fields') or {})}(거르기 {len(EC.filters(c, s))})" for s in ST.SOURCES
     )
-    return 0, f"[edw_meta] 사슬 설정 OK({Path(path) if path else chain_file()}) — {per}"
+    return 0, f"[edw_meta] 사슬 설정 OK({Path(path) if path else EC.chain_path()}) — {per}"
 
 
 def main(argv=None):
@@ -315,7 +307,7 @@ def main(argv=None):
     utf8_stdout()
     ap = argparse.ArgumentParser(description="EDW 조인 사슬 설정 점검(pl-29·pl-52) — 파일만 읽고 검사, EDW·PG에 붙지 않음")
     ap.add_argument("--check", action="store_true", required=True, help="설정 파일 검사(필수 — 이 모듈의 유일한 명령)")
-    ap.add_argument("--file", help="점검할 파일(없으면 settings.yaml ops.pipeline_paths.edw_chain → 비우면 기본 파일)")
+    ap.add_argument("--file", help="점검할 파일(없으면 settings.yaml ops.paths.edw_chain → 비우면 기본 파일)")
     a = ap.parse_args(argv)
     rc, msg = check(a.file)
     print(msg)  # 한 줄(성공·실패 모두 표준 출력 — 판정은 종료 코드)

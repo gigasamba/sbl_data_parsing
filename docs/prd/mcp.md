@@ -135,7 +135,7 @@
   - 옛 거르기 이름(`project_id`·`division`·`service_type`·`doc_class`·`sf_op_id`·`sf_op_name`·`contract_id`)은 그대로 받고 사슬의 `filter:`로 attrs 키에 잇는다(예 `project_id` → `project_code__c`). 그 원천에 잇는 키가 없으면 지금처럼 0건(④). `FAQ_group`은 청크 칸 그대로.
   - 근거 13칸 — 12칸 + `attrs`(사슬에서 `evidence: true`인 키 모두, 값이 없으면 null — 다른 근거 칸과 같은 규칙). `contract_no` = 사슬에서 `filter: contract_id`인 키의 값(없으면 null).
   - `edw_meta` 도구(인자 없이 부를 때) — 원천마다 거를 수 있는 키(`filter` 이름 → attrs 키)와 근거 키를 사슬 파일에서 `search_attrs`로 보여 준다.
-- Status: done(11-01 · 11-02 pl-28 원천 스키마·client_edw 반영 · 11-03 pl-52 `attrs` 거르기·근거 칸·`search_attrs` — `feature/attrs-jsonb`, 서버 확인 refactor.md C-88)
+- Status: done(11-01 · 11-02 pl-28 원천 스키마·client_edw 반영 · 11-03 pl-52 `attrs` 거르기·근거 칸·`search_attrs` — `feature/attrs-jsonb`, 서버 확인 refactor.md C-89)
 
 <a id="mc-17"></a>
 ## mc-17 · 원문 전송 도구 `list_doc_fulltext`·`get_doc_fulltext`

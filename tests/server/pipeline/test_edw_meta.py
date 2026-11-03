@@ -196,10 +196,10 @@ def test_chains():
 
 
 def test_chain_file_setting():
-    """pipeline.paths.edw_chain(사용자 11-03) — 고친 사본을 쓰고, 없거나 틀린 파일은 기본 파일로 돌아가지 않고 거부 · --check는 파일만 봄."""
+    """common.paths.edw_chain(= ops.paths.edw_chain — 적재·검색 MCP 같은 칸, 사용자 11-03) — 고친 사본을 쓰고, 없거나 틀린 파일은 기본 파일로 돌아가지 않고 거부 · --check는 파일만 봄."""
     import yaml
 
-    from pipeline import config as pc
+    from common.config.settings import COMMON
 
     d = Path(tempfile.mkdtemp())
     good, broken, notdict = d / "good.yaml", d / "broken.yaml", d / "list.yaml"
@@ -214,7 +214,7 @@ def test_chain_file_setting():
         (str(notdict), "최상위가 사전"),
     ]
     for val, want in cases:
-        with pc.PIPE.env(EDW_CHAIN_FILE=val):
+        with COMMON.env(EDW_CHAIN_FILE=val):
             try:
                 got = len(M.load_chain()["sfdc"]["steps"])
             except ValueError as e:

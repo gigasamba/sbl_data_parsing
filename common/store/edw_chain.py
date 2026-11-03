@@ -22,8 +22,16 @@ _STEP_KEYS = {"name", "table", "on", "when", "where", "latest", "optional", "tz"
 _FIELD_KEYS = {"from", "filter", "evidence", "type", "max"}
 
 
+def chain_path():
+    """쓸 사슬 파일 — 설정 common.paths.edw_chain(= settings.yaml ops.paths.edw_chain — 적재·검색 MCP가 같은 칸), 비우면 기본 CHAIN_FILE."""
+    from common.config.settings import cfg
+
+    p = cfg().paths.edw_chain
+    return Path(p) if p else CHAIN_FILE
+
+
 def load(path=None):
-    """사슬 파일 읽기 + 검사 → dict. path 없으면 기본 CHAIN_FILE. 파일이 없거나 YAML이 깨져도 ValueError(기본 파일로 조용히 돌아가지 않음)."""
+    """사슬 파일 읽기 + 검사 → dict. path 없으면 설정 칸(chain_path()). 파일이 없거나 YAML이 깨져도 ValueError(기본 파일로 조용히 돌아가지 않음)."""
     import yaml
 
     class Loader(yaml.SafeLoader):  # YAML 1.1의 on/off/yes/no 참거짓 읽기를 끔(`on:` 칸이 True가 되지 않게) — true/false만
@@ -32,7 +40,7 @@ def load(path=None):
         }
 
     Loader.add_implicit_resolver("tag:yaml.org,2002:bool", re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"), list("tTfF"))
-    path = Path(path) if path else CHAIN_FILE
+    path = Path(path) if path else chain_path()
     try:
         c = yaml.load(path.read_text(encoding="utf-8"), Loader=Loader)  # SafeLoader 바탕(참거짓 규칙만 좁힘)
     except OSError as e:

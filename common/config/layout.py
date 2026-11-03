@@ -381,6 +381,8 @@ REMOVED: dict[str, frozenset[str]] = {
     "CommonText": frozenset({"parse_token_norm", "search_recency"}),  # search_recency — pl-38: 판 묶음(family)·최신성 순위 지움
     # McpDev(mcp_server/config.py) — 11-01(e2-10 — mcp_eval 지움) — 지운 칸(남으면 경고만)
     "McpDev": frozenset({"eval_s_parts"}),
+    # McpEdwMeta(mcp_server/config.py) — edw_chain 11-03(pl-52 — 적재·검색이 함께 쓰는 common.paths.edw_chain = ops.paths.edw_chain으로) — 남으면 경고만
+    "McpEdwMeta": frozenset({"edw_chain"}),
     # McpEdwQuery(mcp_server/config.py) — 사용자 10-29 — 접속은 common.connections.rdb 읽기 계정(ops.md#op-03)
     "McpEdwQuery": frozenset({"conn_file", "database", "password", "port", "server", "sqlite", "user"}),
     # McpHost(mcp_server/config.py) — 11-01(e2-10 — 검색 도구 컨테이너 retrieval·mcp_eval 지움) — 지운 칸(남으면 경고만)
@@ -501,9 +503,10 @@ REMOVED: dict[str, frozenset[str]] = {
     "PipelineLoadPublish": frozenset({"source_system", "upload_raw"}),
     # PipelineNight(pipeline/config.py) — 11-01(night·trigger.sh night 지움) — 지운 칸(남으면 경고만)
     "PipelineNight": frozenset({"deadline", "parse_deadline"}),
-    # PipelinePaths(pipeline/config.py) — 0.2.0 index_conf(pl-46 — 이름 있는 색인) · 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) · file_meta_path 11-02(pl-29 — 적재가 EDW 조인) — 지운 칸·절(남으면 경고만)
+    # PipelinePaths(pipeline/config.py) — 0.2.0 index_conf(pl-46 — 이름 있는 색인) · 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) · file_meta_path 11-02(pl-29 — 적재가 EDW 조인) · edw_chain 11-03(pl-52 — 적재·검색이 함께 쓰는 common.paths.edw_chain = ops.paths.edw_chain으로) — 지운 칸·절(남으면 경고만)
     "PipelinePaths": frozenset(
         {
+            "edw_chain",
             "file_meta_path",
             "index_conf",
             "mineru_bin",

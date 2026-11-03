@@ -1443,6 +1443,13 @@ class CommonPaths(Section):
         "준비(dedup·회전) 끝난 문서 폴더 — 파싱의 --src 기본값(pipeline 이미지 안 기본 /app/output/prepared — 옛 Dockerfile ENV, B-2)",
     )
     draft_terms_out: str | None = F(None, "DRAFT_TERMS_OUT", "용어 자동 초안 CSV 경로")
+    edw_chain: str | None = F(
+        None,
+        "EDW_CHAIN_FILE",
+        "EDW 조인 사슬 파일 경로 — 적재(EDW 조인)와 검색 MCP(search attrs·edw_meta search_attrs)가 함께 읽음(pl-29·pl-52). 비우면 "
+        "resources/config/edw_chain.yaml · 서버 사본은 컨테이너 안 /etc/rag/edw_chain.yaml(원본 $SERVER_ENV_DIR/edw_chain.yaml — dc.sh init이 "
+        "없을 때만 복사, 적었을 때만 쓰임) · 점검: python -m pipeline.load.edw_meta --check",
+    )
     output_root: str | None = F(
         None,
         "RAG_OUT",

@@ -227,7 +227,7 @@ PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load
 ### 5-2. EDW 조인 사슬 고치기 — `edw_chain.yaml`
 적재가 문서마다 고객·등록 시각·원천 메타(`doc.attrs` — `sf_op_name`·`contract_date` 등)를 채울 때 따라가는 EDW 표·칸 이름, 그리고 검색 MCP가 쓰는 `attrs` 키의 거르기 이름·근거 표시는 코드가 아니라 사슬 파일 하나에 있다(PRD [pl-29](../prd/load.md#pl-29)·[pl-52](../prd/load-schema.md#pl-52)). 모든 원천이 같은 꼴(`steps`·`fields`·`client_edw`·`created`)이고, 각 줄의 뜻은 기본 파일 `resources/config/edw_chain.yaml`의 머리 주석이 정본이다.
 
-**고치는 곳·법·점검·되돌리기는 [release-and-patch §8-6](release-and-patch.md#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29) 하나에 있다** — 서버에서는 코드 폴더가 아니라 settings.yaml 옆 사본 `$SERVER_ENV_DIR/edw_chain.yaml`을 고치고, settings.yaml의 `ops.pipeline_paths.edw_chain`(적재)·`search.edw_meta.edw_chain`(검색)에 `/etc/rag/edw_chain.yaml`을 적는다. 바꿀 표·칸이 EDW에 있는지는 먼저 `edw_meta`·`query_edw`나 DB 담당자로 확인한다(refactor.md C-76 ⑦).
+**고치는 곳·법·점검·되돌리기는 [release-and-patch §8-6](release-and-patch.md#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29) 하나에 있다** — 서버에서는 코드 폴더가 아니라 settings.yaml 옆 사본 `$SERVER_ENV_DIR/edw_chain.yaml`을 고치고, settings.yaml의 `ops.paths.edw_chain`(적재·검색이 함께 읽는 칸 하나)에 `/etc/rag/edw_chain.yaml`을 적는다. 바꿀 표·칸이 EDW에 있는지는 먼저 `edw_meta`·`query_edw`나 DB 담당자로 확인한다(refactor.md C-76 ⑦).
 
 **이미 적재한 문서** — 사슬을 바꿔도 이미 gold에 있는 메타는 저절로 바뀌지 않는다. 바뀐 값이 필요한 문서는 `--replace`로 다시 적재한다(다시 파싱하지 않음 — 메타는 적재 때만 붙는다). 되돌리려면 복사해 둔 옛 파일을 제자리에 두고 같은 점검(`python -m pipeline.load.edw_meta --check`)을 다시 한다.
 

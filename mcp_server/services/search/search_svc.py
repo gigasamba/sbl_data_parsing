@@ -7,7 +7,6 @@ import functools
 import json
 import time
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
 
 from common.store import edw_chain as EC
 from common.store.db.models import search_tables as ST
@@ -25,9 +24,9 @@ NO_SOURCE = "source_system is required — exactly one of SFDC, CRMS, LAS, FAQ, 
 
 
 def chain():
-    """검색이 쓰는 EDW 사슬(pl-52) — 설정 search.edw_meta.edw_chain(적재와 같은 파일), 비우면 기본 파일. 파일이 바뀌면(수정 시각) 다시 읽음.
+    """검색이 쓰는 EDW 사슬(pl-52) — 설정 ops.paths.edw_chain(적재와 같은 칸), 비우면 기본 파일. 파일이 바뀌면(수정 시각) 다시 읽음.
     틀린 파일은 ValueError(common.store.edw_chain.load)."""
-    p = Path(mc.cfg().edw_meta.edw_chain or EC.CHAIN_FILE)
+    p = EC.chain_path()
     try:
         t = p.stat().st_mtime_ns
     except OSError:
