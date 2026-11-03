@@ -38,10 +38,10 @@ ROOT = Path(__file__).resolve().parent
 # S7e1(사용자 10-27 Q8 · D-028 ⑨ · C-29 ⑨) — 운영 접속 값·비밀·운영 고정값을 코드에서 지우고 서버 settings.yaml에서 읽는다(configure() — 시작 때 한 번).
 #   파일: --settings 또는 SETTINGS_FILE, 없으면 $SERVER_ENV_DIR/settings.yaml(기본 배치 /srv/rag/env). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
 #   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). required.env.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
-#   docker exec로 부르는 컨테이너(data-pipeline-parse·structure)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
+#   docker exec로 부르는 상주 컨테이너(data-pipeline — 11-03 하나로)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
 #   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.pipeline_host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더(옛 test_space/rfp_all_output)는
 #   required.deploy.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로, C-29 ⓑ를 코드로 보장 — 사용자 Q8 ⑤).
-TEST = PROG = DOCSPACE = DOCFLOW = WARM = ENVFILE = None  # configure()가 채움
+TEST = PROG = DOCSPACE = DOCFLOW = WARM = None  # configure()가 채움
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.docker(없으면 podman, 그것도 없으면 docker — op-10)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, op-10 · 기본 배치 경로 없음 — 사용자 11-02)
 _EDW: dict = {}  # parsing-meta EDW 접속(호스트 pymssql — edw_list·edw_done_keys)
@@ -149,7 +149,7 @@ def work_dir(doc):
 
 def configure(settings_file=None):
     """서버 settings.yaml을 한 번 읽어 모듈 값(경로·접속)을 채운다 — 문제 목록(빈 목록이면 통과). 값은 찍지 않는다."""
-    global TEST, PROG, DOCSPACE, DOCFLOW, WARM, ENVFILE, MCP_JOBS_DIR, WARM_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA
+    global TEST, PROG, DOCSPACE, DOCFLOW, WARM, MCP_JOBS_DIR, WARM_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA
     global DOCKER
     doc, err = read_settings(settings_file)
     if err:
@@ -165,7 +165,6 @@ def configure(settings_file=None):
     apply_policy(policy)
     TEST = work_dir(doc)
     PROG = TEST / "batch_progress"
-    ENVFILE = TEST / "batches" / "docflow_env.list"
     DOCSPACE = Path(_yget(doc, "common.host.output_root"))  # 컨테이너 /app/output 공유 볼륨
     DOCFLOW = DOCSPACE / "docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     WARM = DOCSPACE / "_warm"  # SOURCE_WARM 대기열 저장소
@@ -198,7 +197,8 @@ def _edw_connect():
 
 # 11-02 — 시작 때 코드 배치 확인(code_layout_problems·CODE_MARKER·PATCH_CODE)은 운영 마지막 버전에 없어 지움(사용자 규칙).
 # S6b(D-020, 사용자 10-27) — 파이프라인 이미지가 하나(data-pipeline)로 합쳐지고 상주 컨테이너 이름이 바뀜(옛 data-parsing·data-structure).
-PARSE_C, STRUCT_C = "data-pipeline-parse", "data-pipeline-structure"  # docker inspect·exec 대상(compose.pipeline.yml 상주 서비스)
+# 11-03(사용자) — 상주 컨테이너 둘(data-pipeline-parse·data-pipeline-structure)을 하나로 합침: warm·파싱·게시·구조화·정리 모두 이 안에서 docker exec.
+PIPE_C = "data-pipeline"  # docker exec 대상(compose.pipeline.yml 상주 서비스)
 
 # S9 Step A(VS8b U-1, 사용자 10-28) — 컨테이너 안 앱이 읽는 설정 칸(옛 env 이름)은 명령 인자 `--set 이름=값`으로 준다(common.config.setarg —
 # 그 python이 덮기 파일로 자기와 자식에게 넘김). 전에는 `bash -c 'X=값 python …'` env로 줬는데 S7e2부터 앱이 env의 옛 이름을 읽지 않아
@@ -221,6 +221,8 @@ PARSE_SET = (
 )
 LIB_ENV = "PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache"  # env 남김 — 라이브러리(파이썬 자체 env, 설정 칸 아님)
 DOC_MARK = "RUN_DOCS_DOC"  # 문서 표지 env(설정 칸 아님) — 고아 정리(sweep_cmd)가 /proc/*/environ에서 찾음(옛 PIPE_OUT_ROOT env 자리)
+#   파싱 명령에만 붙인다(11-03 — 컨테이너 하나): 정리는 그 문서 파싱이 실패한 직후에만 돌고, 그 문서의 게시·구조화는 파싱 성공 뒤에만 시작하므로
+#   정리 때 그 문서의 게시·구조화 프로세스는 없다. 다른 문서의 구조화·게시·파싱은 표지가 없거나 값이 달라(-zx 통째 비교) 끄지 않는다.
 
 
 def sets(*pairs):
@@ -230,10 +232,10 @@ def sets(*pairs):
 
 # ── 컨테이너 명령 줄(S9 Step A — 명령 글자를 시험으로 고정하려고 함수로 뗌, 글자는 뗀 전과 같음) ──
 def warm_cmd(seq):
-    """문서 1개 warm(프리페치) — 파싱 컨테이너 안 source warm."""
+    """문서 1개 warm(프리페치) — 상주 컨테이너 안 source warm."""
     o = _img("output_root")
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && mkdir -p {o}/_warm && cd {_app()} && "
+        f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && mkdir -p {o}/_warm && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
         f"python -m pipeline.extract.source{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {o}/docflow/{seq}/batch.csv'"
     )
@@ -271,7 +273,7 @@ def parse_cmd(seq, chan, scan, gate):
         f"CPU_MAX_LOAD={gate}",
     )
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && cd {_app()} && "
+        f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
         f"echo [envcheck] gate={gate} 채널={chan}; "
         f"{DOC_MARK}={inside} {LIB_ENV} "
         f"python -m pipeline.cli{doc} parse --source rdb:csv:{inside}/batch.csv'"
@@ -279,11 +281,11 @@ def parse_cmd(seq, chan, scan, gate):
 
 
 def struct_cmd(seq):
-    """문서 1개 구조화 + 적재(구조화 컨테이너). 엔진 구성은 파싱과 같은 파일(코드 폴더 — 사용자 11-01: 판 번호 없음, 실행 중에는 안 바뀜)."""
+    """문서 1개 구조화 + 적재. 엔진 구성은 파싱과 같은 파일(코드 폴더 — 사용자 11-01: 판 번호 없음, 실행 중에는 안 바뀜)."""
     inside = f"{_img('output_root')}/docflow/{seq}"
     st = sets(*EMBED_SET)  # 묶음·적재 python에(문서 메타는 적재가 EDW 조인으로 — pl-29 11-02, FILE_META_PATH 지움)
     return (
-        f"{DOCKER} exec {STRUCT_C} bash -c 'umask 0002 && cd {_app()} && "
+        f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
         f"python -m pipeline.transform.structure.build_bundle{st} --parse-dir {inside}/parse"
         f" --out {inside}/bundle && "
@@ -293,10 +295,10 @@ def struct_cmd(seq):
 
 
 def publish_cmd(seq):
-    """문서 1개 publish(OS + EDW — 파싱 컨테이너)."""
+    """문서 1개 publish(OS + EDW)."""
     inside = f"{_img('output_root')}/docflow/{seq}"
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && cd {_app()} && "
+        f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} python -m pipeline.load.publish_parse_result"
         f"{sets('PM_BUCKET_SKIP_OVERLAP_CHECK=1')} "  # 실행 방침(접속 값 아님) — 버킷·접두·표·EDW·Object Storage는 컨테이너가 설정 파일에서(S7e1 Q8)
         f"--out {inside} --source-system FileStorageMap --apply "
@@ -305,11 +307,11 @@ def publish_cmd(seq):
 
 
 def sweep_cmd(seq):
-    """고아 정리 — 이 문서 표지 env(DOC_MARK)를 가진 파싱 컨테이너 안 프로세스(bash·python·soffice까지 env 상속)를 모두 끔. environ 항목(NUL 구분)과
+    """고아 정리 — 이 문서 표지 env(DOC_MARK)를 가진 컨테이너 안 프로세스(bash·python·soffice까지 env 상속)를 모두 끔. environ 항목(NUL 구분)과
     통째로 같을 때만(-zx — 리뷰 S9: 앞부분만 맞추면 doc 1 정리가 doc 10~19·100…까지 끔, 옛 PIPE_OUT_ROOT 때부터)."""
     inside = f"{_img('output_root')}/docflow/{seq}"
     return (
-        f'{DOCKER} exec {PARSE_C} bash -c "for p in /proc/[0-9]*; do '
+        f'{DOCKER} exec {PIPE_C} bash -c "for p in /proc/[0-9]*; do '
         f"grep -aqzx '{DOC_MARK}={inside}' \\$p/environ 2>/dev/null && kill \\${{p##*/}} 2>/dev/null; done\""
     )
 
@@ -351,7 +353,7 @@ def _waiting():
     return _pub_q.qsize() + _struct_q.qsize()
 
 
-MCP_JOBS_DIR = None  # MCP parse_document 업로드 작업 경로 — configure()(mcp.host.jobs_dir, 없으면 결과 폴더/mcp_parse/jobs — data-pipeline-parse의 mcp_parse_service 공유 볼륨)
+MCP_JOBS_DIR = None  # MCP parse_document 업로드 작업 경로 — configure()(mcp.host.jobs_dir, 없으면 결과 폴더/mcp_parse/jobs — data-pipeline의 mcp_parse_service 공유 볼륨)
 _mcp_pause = False  # 2026-10-23 사용자 지정 — MCP 업로드 파싱 중 medium 레인 완보(사람 대기 응답 우선)
 _last_write: dict = dict()  # 방어용 마지막 활동 시각 저장
 _lane_inflight = {"light": 0, "medium": 0, "vlm": 0}
@@ -450,7 +452,7 @@ def stack_check():
     """엔진 구성 파일 확인 — 시작 때 한 번(파싱 컨테이너 안 show-stack — 파일을 못 읽거나 모양이 틀리면 종료 2, 시작하지 않음).
     없는 엔진은 파싱 입구가 거부한다(stackcfg.resolve)."""
     rc, _, err = sh(
-        f"{DOCKER} exec {PARSE_C} bash -c 'cd {_app()} && PYTHONPATH={_img('code_root')} python -m pipeline.cli show-stack'", timeout=120
+        f"{DOCKER} exec {PIPE_C} bash -c 'cd {_app()} && PYTHONPATH={_img('code_root')} python -m pipeline.cli show-stack'", timeout=120
     )
     if rc != 0:
         print(f"[중단] 엔진 구성 파일을 읽지 못함(종료 코드 {rc}) — {(err or '').strip()[-200:]}", flush=True)
@@ -530,23 +532,6 @@ def edw_done_keys():
     return keys
 
 
-def write_envfile():
-    """data-pipeline-parse 컨테이너(S6b — 옛 data-parsing) env → docker run용 --env-file. 여러 줄 값(PM_PATH_MAP)·HOSTNAME 제외 —
-    파싱 컨테이너는 publish를 안 돌고, publish는 docker exec(compose env 그대로)로 돌리므로 문제없음."""
-    rc, out, _ = sh(
-        f"{DOCKER} inspect " + PARSE_C + " --format '{{json .Config.Env}}'", timeout=30
-    )  # docker 템플릿 {{…}} 그대로(f-string 아님)
-    envs = json.loads(out.strip())
-    ENVFILE.parent.mkdir(parents=True, exist_ok=True)
-    with ENVFILE.open("w", encoding="utf-8") as fp:
-        for e in envs:
-            k, _, v = e.partition("=")
-            if k in ("HOSTNAME", "PM_PATH_MAP"):
-                continue
-            fp.write(f"{k}={v}\n")
-    return len(envs)
-
-
 def write_doc_csv(row, path):
     with path.open("w", newline="", encoding="utf-8-sig") as fp:
         w = csv.writer(fp)
@@ -555,7 +540,7 @@ def write_doc_csv(row, path):
 
 
 def warm_one(seq, row):
-    """문서 1개를 warm에 미리 받기(source warm CLI — 파싱 컨테이너 env 그대로)."""
+    """문서 1개를 warm에 미리 받기(source warm CLI — 상주 컨테이너 env 그대로)."""
     d = DOCFLOW / f"{seq}"
     d.mkdir(parents=True, exist_ok=True)
     write_doc_csv(row, d / "batch.csv")
@@ -615,7 +600,7 @@ def classify_doc(seq, row, cache=None):
         cls = "light"
     elif ext in probe_ext:
         rc, out, _ = sh(
-            f"{DOCKER} exec {PARSE_C} python3 {_img('code_root')}/pipeline/extract/docflow_probe.py {_img('output_root')}/_warm/{_warm_bin(row)}",
+            f"{DOCKER} exec {PIPE_C} python3 {_img('code_root')}/pipeline/extract/docflow_probe.py {_img('output_root')}/_warm/{_warm_bin(row)}",
             timeout=60,
         )
         probe = next((ln.strip() for ln in reversed((out or "").splitlines()) if ln.strip() in ("heavy", "light")), "heavy")
@@ -708,7 +693,7 @@ def _sweep_orphan(seq):
 
 
 def parse_one(seq, row):
-    """문서 1개 파싱 — 공유 파싱 컨테이너(PARSE_C) 안에서 워커별 분리(경로 격리).
+    """문서 1개 파싱 — 공유 상주 컨테이너(PIPE_C) 안에서 워커별 분리(경로 격리).
     PIPE_OUT_ROOT + DOC_DIR_PREPARED로 문서별 출력 루트 분리(pipeline이 두 env를 지원).
     문서당 VLM 6·OCR 쪽 2(쓰레드 1)·vlm_page off·OCR_DPI=120."""
     d = DOCFLOW / f"{seq}"
@@ -775,7 +760,7 @@ def drop_original(seq, row):
     if NO_CLEANUP:
         return
     o = _img("output_root")
-    sh(f"{DOCKER} exec {PARSE_C} bash -c 'rm -rf {o}/docflow/{seq}/_source_files ; rm -f {o}/_warm/{_warm_bin(row)}'", timeout=60)
+    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {o}/docflow/{seq}/_source_files ; rm -f {o}/_warm/{_warm_bin(row)}'", timeout=60)
     shutil.rmtree(DOCFLOW / f"{seq}" / "_source_files", ignore_errors=True)
     (WARM / _warm_bin(row)).unlink(missing_ok=True)
 
@@ -784,7 +769,7 @@ def drop_temp(seq):
     """문서 끝 — docflow 임시 폴더만 지움(어느 길이든). 원본(warm)은 drop_original만 지운다 — 파싱·게시 실패면 남음(pl-24)."""
     if NO_CLEANUP:
         return
-    sh(f"{DOCKER} exec {PARSE_C} bash -c 'rm -rf {_img('output_root')}/docflow/{seq}'", timeout=60)
+    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {_img('output_root')}/docflow/{seq}'", timeout=60)
     shutil.rmtree(DOCFLOW / f"{seq}", ignore_errors=True)
 
 
@@ -918,7 +903,6 @@ def main():
     WARM.mkdir(mode=0o777, parents=True, exist_ok=True)
     DOCFLOW.mkdir(mode=0o777, parents=True, exist_ok=True)
     rows = edw_list([k.strip() for k in a.filter.split(",") if k.strip()])
-    n_env = write_envfile()
     stack_check()
     start = a.start_offset
     if start >= len(rows):
@@ -927,7 +911,7 @@ def main():
     log(
         f"=== 문서별 flow 시작: offset={start} · 남은 {len(rows) - start}건 · 레인(전담/공유) "
         f"{' '.join(f'{c} {d}/{s}' for c, (d, s) in LANE_WORKERS.items())} · vlm 동시 {VLM_CAP} · "
-        f"warm {WARM_TARGET} · 구조화 {STRUCT_WORKERS}동시(대기 상한 {STRUCT_BACKLOG or '없음'}) · env {n_env}개 · {'제한 ' + str(a.limit) + '건' if a.limit else '제한 없음'} ==="
+        f"warm {WARM_TARGET} · 구조화 {STRUCT_WORKERS}동시(대기 상한 {STRUCT_BACKLOG or '없음'}) · {'제한 ' + str(a.limit) + '건' if a.limit else '제한 없음'} ==="
     )
 
     order = (

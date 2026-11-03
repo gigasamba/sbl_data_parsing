@@ -11,10 +11,10 @@
 
 | 이미지 | 역할 | `RAG_MODULE` | 돌리는 서비스(`deploy/host/compose/compose.pipeline.yml`) |
 |---|---|---|---|
-| `data-pipeline` | 파싱(dedup→prepare→파싱→대표 결과)·구조화(청킹·임베딩)·적재(PostgreSQL)·퍼블리시 | `pipeline` | 1회: `parse`·`structure`·`load`·`publish`·`index_a`·`index_b` · 상주 컨테이너(같은 이미지, 일 없이 떠 있음 — `run_docs.py`가 docker exec): `data-pipeline-parse`·`data-pipeline-structure` |
+| `data-pipeline` | 파싱(dedup→prepare→파싱→대표 결과)·구조화(청킹·임베딩)·적재(PostgreSQL)·퍼블리시 | `pipeline` | 상주 컨테이너 하나 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`가 docker exec, 사용자 11-03) · 1회 작업 컨테이너 없음(11-02 — 이미지 점검 `docker run --rm … selftest`만) |
 | `mcp-server` | 검색 MCP(상주) | `mcp` | `mcp`(상주, 컨테이너 이름 `mcp-server`) — 도구 job `retrieval`·`mcp_eval`은 11-01에 지움(e2-10) |
 
-옛 이름: `data-parsing`·`data-structure` → `data-pipeline`(컨테이너 `data-pipeline-parse`·`data-pipeline-structure`), `data-retrieval` → `mcp-server`.
+옛 이름: `data-parsing`·`data-structure` → `data-pipeline`(컨테이너 `data-pipeline-parse`·`data-pipeline-structure` → 11-03부터 `data-pipeline` 하나), `data-retrieval` → `mcp-server`.
 
 - 각 이미지의 `entrypoint.sh`는 받은 명령을 `RAG_MODULE`로 거른다. 다른 이미지의 명령이면 종료 코드 64(오류 메시지에 맞는 이미지를 알려 줌).
 - 서버 입구는 `run_docs.py` 하나다(사용자 10-31). 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`는 11-01에 지웠다.
@@ -46,8 +46,8 @@ export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.
 > ⚠️ **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` — 사용자 11-01, D-031). 바꾸려면 코드 폴더의 파일을 고쳐 오버레이 패치로 보낸다(다른 파일을 쓰려면 settings.yaml `ops.paths.stack_file` — [env-guide.md](env-guide.md) 1절). 원천 목록 `sources.json`은 11-01에 지웠다(원천은 폴더·`rdb:csv`만). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다.
 
 #### 값 바꾸기
-- 앱 설정 값은 `settings.yaml`을 직접 고친다. 고친 뒤 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`는 다시 띄운다.
-- **한 번 실행에만 다른 값은 명령 인자 `--set 이름=값`**. 받는 진입점: `pipeline.cli`·`pipeline.extract.source`·`pipeline.stackcfg`·`build_bundle`·`pgvector_load`·`publish_parse_result`. 예: `docker exec data-pipeline-parse python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 `settings.sample.yaml`의 `env=`. 모르는 이름·호스트 항목·비밀 항목은 종료 2, 형식 오류도 서버는 종료 2. 호스트 `run_docs.py`가 문서별 값을 이렇게 준다.
+- 앱 설정 값은 `settings.yaml`을 직접 고친다. 고친 뒤 상주 컨테이너 `data-pipeline`·`mcp-server`는 다시 띄운다.
+- **한 번 실행에만 다른 값은 명령 인자 `--set 이름=값`**. 받는 진입점: `pipeline.cli`·`pipeline.extract.source`·`pipeline.stackcfg`·`build_bundle`·`pgvector_load`·`publish_parse_result`. 예: `docker exec data-pipeline python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 `settings.sample.yaml`의 `env=`. 모르는 이름·호스트 항목·비밀 항목은 종료 2, 형식 오류도 서버는 종료 2. 호스트 `run_docs.py`가 문서별 값을 이렇게 준다.
 - 그 밖의 명령은 한 번만 다르게 돌릴 값도 고쳐 돌린 뒤 되돌린다.
 - `PIPE_PROCS=2 docker compose …`·`docker exec -e X=…` 같은 옛 env 이름 덮어쓰기는 효과가 없다(시작 때 이름만 경고).
 - 오버레이 설정 파일 도구 `python -m common.config.overrides`는 **PC 전용**이다. 서버(`RUN_ENV` dev·prd)에서는 안내 뒤 종료 2(compose는 설정 파일 하나만 컨테이너에 붙여 오버레이 파일의 `base`가 컨테이너 안에 없음 — [env-guide.md](env-guide.md) 0절 · `refactor.md` C-47 ⑥).
@@ -87,9 +87,9 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 - 지금 바로 돌리려면 run_docs를 직접 부른다(옛 `trigger.sh night`는 11-01에 지움).
 
 ### 2-3. 상주 컨테이너
-`data-pipeline-parse`·`data-pipeline-structure`는 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업을 돌리고, MCP `parse_document` 작업 서비스도 `data-pipeline-parse` 안에서 돈다. 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/ops.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
+`data-pipeline`(상주 컨테이너 하나 — 사용자 11-03, 옛 `data-pipeline-parse`·`data-pipeline-structure`를 합침)은 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업(warm·파싱·게시·구조화·적재)을 돌리고, MCP `parse_document` 작업 서비스도 그 안에서 돈다. 자원 상한은 settings.yaml `pipeline.host.parse_cpus`·`parse_mem_limit`(비우면 CPU 5·메모리 24g — 옛 두 컨테이너의 합. docker는 호스트 CPU 수보다 큰 `cpus`를 거부하므로 CPU 4개 서버는 `parse_cpus`를 3 이하로 적는다). 옛 `structure_cpus`·`structure_mem_limit`은 읽지 않는다(refactor.md C-82). 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/ops.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
 ```bash
-dc up -d data-pipeline-parse data-pipeline-structure   # dc = README §5-3 ①의 도우미(settings.yaml 값을 compose에 넘김 — 그냥 docker compose는 필수 칸 `${…:?}`에서 멈춤)
+dc up -d data-pipeline   # dc = README §5-3 ①의 도우미(settings.yaml 값을 compose에 넘김 — 그냥 docker compose는 필수 칸 `${…:?}`에서 멈춤)
 ```
 
 ### 2-4. 테스트 실행 스크립트(코드 폴더에서 네이티브, 이미지 밖)

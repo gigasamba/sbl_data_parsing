@@ -59,7 +59,7 @@ MCP 도구 4개의 이름과 입출력은 외부 클라이언트와의 계약이
 
 | 이미지             | 역할                                 | 컨테이너                                                                                                             |
 | --------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `data-pipeline` | parse · structure · load · publish | 1회 실행 job(`parse`, `structure`, `load`, `publish`) · 상주(일 없이 떠 있음 — `run_docs.py`가 docker exec) `data-pipeline-parse`, `data-pipeline-structure` |
+| `data-pipeline` | parse · structure · load · publish | 상주 컨테이너 하나 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`·`trigger.sh`·`run_tool.sh`가 docker exec, 11-03 옛 `data-pipeline-parse`·`data-pipeline-structure`를 합침) · 이미지 점검은 `docker run --rm … selftest` |
 | `mcp-server`    | 검색 MCP(상주)                         | 상주 `mcp-server`                                                                                                  |
 
 
@@ -472,7 +472,7 @@ bash deploy/release/ship_stage.sh pipeline-runtime mcp-runtime                 #
 5. DB 마이그레이션 — `migrate check` → `up`/`stamp`(③).
 6. 연결 점검 — 모델 주소 `run_tool.sh ping_models`(LLM·VLM·임베딩 — 하나라도 실패면 종료 1), `run_tool.sh check_env`, PG `migrate check`(④).
 7. 이미지 점검 — `check-modules`, `selftest`(⑤).
-8. 띄우는 순서 — pgvector → 파이프라인 상주 컨테이너(`dc up -d data-pipeline-parse data-pipeline-structure`, §5-5) → MCP 파싱 작업 서비스(§5-5 표) → 검색 MCP(`mcp_up.sh`, ⑥). 띄운 뒤 MCP `/health`가 200이고 `parse_document` 시험 파일 1건이 결과를 돌려주는지 본다.
+8. 띄우는 순서 — pgvector → 파이프라인 상주 컨테이너(`dc up -d data-pipeline`, §5-5) → MCP 파싱 작업 서비스(§5-5 표) → 검색 MCP(`mcp_up.sh`, ⑥). 띄운 뒤 MCP `/health`가 200이고 `parse_document` 시험 파일 1건이 결과를 돌려주는지 본다.
 
 **포트 — 모두 settings.yaml 칸(서버·사용자마다 다르게 둘 수 있음, 비우면 기본값)**
 
@@ -520,7 +520,7 @@ mkdir -p /srv/rag/output && chown 10001:<운영 그룹> /srv/rag/output && chmod
 
 모델 주소는 모두 내부망 주소여야 한다(서버는 외부 모델 호출을 거부). 옛 배치 settings.yaml(op-08 전)은 `python -m common.config.migrate <옛 settings.yaml> --out <새 파일>`로 바꾼다.
 
-**③ DB 마이그레이션** — 적재·검색을 하기 전에 끝낸다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다). 운영 작업(`run_tool.sh`·`trigger.sh`)은 상주 컨테이너 안에서 돌므로(사용자 11-02 — 1회 job 컨테이너 없음) 먼저 띄운다: `dc up -d data-pipeline-parse data-pipeline-structure`.
+**③ DB 마이그레이션** — 적재·검색을 하기 전에 끝낸다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다). 운영 작업(`run_tool.sh`·`trigger.sh`)은 상주 컨테이너 안에서 돌므로(사용자 11-02 — 1회 job 컨테이너 없음) 먼저 띄운다: `dc up -d data-pipeline`.
 
 ```bash
 # 0. (DB마다 처음 한 번 — DB 관리자) vector 확장 — 서버 계정은 보통 우리 스키마 권한만 있어 직접 못 만든다. 없으면 migrate·적재가 "vector 확장 없음"으로 멈춘다
@@ -581,7 +581,7 @@ bash deploy/host/scripts/mcp_up.sh     # 여러 번 실행해도 안전 — 꺼�
 서버 입구는 `run_docs` 하나다(사용자 10-31). 옛 1회 job 배치 `trigger.sh structure`·`load`·`all`·`night`와 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`는 11-01에 지웠다 — 구조화·적재는 run_docs가 `build_bundle`·`pgvector_load`를 문서마다 부른다.
 
 ```bash
-bash deploy/host/scripts/trigger.sh parse       # 파싱 → output/parse/_rep(data-pipeline-parse 안에서 — docker exec)
+bash deploy/host/scripts/trigger.sh parse       # 파싱 → output/parse/_rep(data-pipeline 안에서 — docker exec)
 bash deploy/host/scripts/trigger.sh publish     # Object Storage 업로드 + EDW 메타데이터(운영 시스템에 씀)
 ```
 
@@ -594,9 +594,9 @@ bash deploy/host/scripts/trigger.sh publish     # Object Storage 업로드 + EDW
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 검색 MCP 상주 확인                                       | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_up.sh`                                                                                             |
 | 새벽 배치                                              | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.time: "HH:MM"`(그 시각부터 5분 안에 시작 — 비우면 새벽 배치 없음, 기본 비움 · pl-32) |
-| 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음, 11-01 trigger 서버 지움) | `dc up -d data-pipeline-parse data-pipeline-structure`(§5-3의 `dc` — 실행 이미지면 코드 폴더를 붙임). 여러 번 불러도 안전 — 꺼진 것만 띄움 |
-| MCP `parse_document` 작업 서비스                        | compose가 띄우지 않으므로 파싱 컨테이너가 다시 시작될 때마다: `$DOCKER exec -d data-pipeline-parse bash -c 'umask 0002 && exec python -u -m pipeline.mcp_parse_service'`(`docker exec`는 entrypoint를 거치지 않아 umask를 여기서 준다) |
-| 재부팅 뒤 되살리기(podman)                                | `systemctl enable --now podman-restart` — podman은 docker처럼 데몬이 없어 `restart: unless-stopped` 컨테이너(검색 MCP·상주 컨테이너)를 부팅 때 다시 띄우지 않는다. 이 서비스가 그 컨테이너들을 되살린다. 검색 MCP는 keepalive 타이머가 한 번 더 본다. 상주 트리거는 keepalive 타이머가 없으니, 재부팅 뒤 `$DOCKER ps`로 `data-pipeline-parse`·`data-pipeline-structure`가 떠 있는지 보고, 없으면 위 `dc up -d …`를 다시 실행한 뒤 `parse_document` 작업 서비스도 다시 띄운다 |
+| 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음, 11-01 trigger 서버 지움) | `dc up -d data-pipeline`(§5-3의 `dc` — 실행 이미지면 코드 폴더를 붙임). 여러 번 불러도 안전 — 꺼진 것만 띄움 |
+| MCP `parse_document` 작업 서비스                        | compose가 띄우지 않으므로 `data-pipeline`이 다시 시작될 때마다: `$DOCKER exec -d data-pipeline bash -c 'umask 0002 && exec python -u -m pipeline.mcp_parse_service'`(`docker exec`는 entrypoint를 거치지 않아 umask를 여기서 준다) |
+| 재부팅 뒤 되살리기(podman)                                | `systemctl enable --now podman-restart` — podman은 docker처럼 데몬이 없어 `restart: unless-stopped` 컨테이너(검색 MCP·상주 컨테이너)를 부팅 때 다시 띄우지 않는다. 이 서비스가 그 컨테이너들을 되살린다. 검색 MCP는 keepalive 타이머가 한 번 더 본다. 상주 트리거는 keepalive 타이머가 없으니, 재부팅 뒤 `$DOCKER ps`로 `data-pipeline`이 떠 있는지 보고, 없으면 위 `dc up -d …`를 다시 실행한 뒤 `parse_document` 작업 서비스도 다시 띄운다 |
 
 
 systemd 설치(한 번 — DB 버전과 컨테이너를 확인한 뒤):
@@ -621,7 +621,7 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 
 | 바꿀 것                     | 방법                                                                                                                                                                         |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 설정 값                     | settings.yaml을 직접 고치고 상주 컨테이너(`data-pipeline-parse`, `data-pipeline-structure`, `mcp-server`)를 다시 띄운다                                                                      |
+| 설정 값                     | settings.yaml을 직접 고치고 상주 컨테이너(`data-pipeline`, `mcp-server`)를 다시 띄운다                                                                      |
 | 이번 실행만 다른 값              | `--set 이름=값`(오버레이 설정 파일 도구는 PC 전용 — 서버에서는 종료 코드 2)                                                                                                                         |
 | 엔진 구성(파일) | 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 오버레이 패치(5-8) — 되돌리기는 git, 확인은 `show-stack` — [docs/architecture/pipeline\_stack.md](docs/architecture/pipeline_stack.md) |
 

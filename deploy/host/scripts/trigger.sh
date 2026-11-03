@@ -9,8 +9,8 @@
 #   설정(S7e1 — 사용자 10-27 Q3·Q5): settings.yaml(SETTINGS_FILE, 기본 $SERVER_ENV_DIR/settings.yaml — SERVER_ENV_DIR 기본 배치 /srv/rag/env)의
 #     호스트 칸(이미지·RAG_OUT·DOC_SRC·자원·NIGHTLY_*·PARSE_DEADLINE 등)을 settings_env.sh load_settings가 셸 env로 — 이미 셸에 있는 이름은 그대로.
 #     settings.yaml이 없으면 종료 코드 2.
-#   parse·publish는 상주 data-pipeline 컨테이너 안에서 돈다(docker exec — 사용자 11-02, 1회 job 컨테이너 없음: parse는 data-pipeline-parse,
-#     publish는 data-pipeline-structure). 컨테이너가 안 떠 있으면 종료 코드 2.
+#   parse·publish는 상주 data-pipeline 컨테이너 안에서 돈다(docker exec — 사용자 11-02, 1회 job 컨테이너 없음 · 11-03 상주
+#     컨테이너 하나). 컨테이너가 안 떠 있으면 종료 코드 2.
 # 종료 코드: 모듈·run_docs 그대로(0 끝남·건너뜀·대상 0건 · 1 실패 문서 있음 · 75 실행 중(잠금)·마감 · 2 설정 문제 — run_docs는 pl-18)
 #   겹침 잠금은 run_docs.py 안(flock batch_progress/run_docs.lock) — 사람이 trigger 없이 run_docs를 돌려도 같은 잠금을 씀
 set -uo pipefail
@@ -53,11 +53,7 @@ case "$mod" in
   *) echo "[trigger] 모르는 모듈: $mod — parse|publish|scheduled (night·structure·load·all은 11-01에 지움 — 서버 입구는 run_docs)" >&2; exit 2 ;;
 esac
 . deploy/host/scripts/image_vars.sh   # in_pipeline — 상주 컨테이너 안에서(사용자 11-02 — 1회 job 컨테이너 없음)
-case "$mod" in
-  parse) ctr=data-pipeline-parse ;;        # 원본 문서 폴더(/data/docs)가 붙은 상주 컨테이너
-  *) ctr=data-pipeline-structure ;;
-esac
-echo "[trigger] $(date '+%F %T') $mod 시작($ctr 안에서)"
-in_pipeline "$ctr" "$mod" "$@"; rc=$?
+echo "[trigger] $(date '+%F %T') $mod 시작(data-pipeline 안에서)"
+in_pipeline data-pipeline "$mod" "$@"; rc=$?
 echo "[trigger] $(date '+%F %T') $mod 끝 (종료 코드 $rc)"
 exit $rc

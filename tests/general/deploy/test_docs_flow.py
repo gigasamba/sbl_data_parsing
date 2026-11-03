@@ -59,7 +59,6 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
 
     M.configure = configure
     M.edw_list = lambda keywords: rows
-    M.write_envfile = lambda: 0
     M.stack_check = lambda: None  # 엔진 구성 파일 확인(docker exec) 대신
     M.warm_one = lambda seq, row: True
     M.parse_one, M.publish_one, M.gold_one = parse_one, publish_one, gold_one

@@ -31,7 +31,7 @@ services:
       - *settings
       - ${RAG_OUT:?RAG_OUT=<결과 폴더(파이프라인 /app/output)>}:${APP_OUTPUT_ROOT:?APP_OUTPUT_ROOT 필요 — settings_env.sh load_settings가 냄}:ro,z
     mem_limit: ${MCP_MEM_LIMIT:-4g}
-    cpus: ${MCP_CPUS:-1}             # mcp(상주) + parse(최대 PARSE_CPUS 3) ≤ 4 vCPU 개발 서버
+    cpus: ${MCP_CPUS:-1}             # mcp(상주) + data-pipeline(PARSE_CPUS) — 4 vCPU 개발 서버는 parse_cpus 3 이하로(settings.yaml)
     pids_limit: 512
     healthcheck:                     # 이미지에 curl 없음 — python 한 줄(/health, 토큰 불필요)
       test: ["CMD", "python", "-c",

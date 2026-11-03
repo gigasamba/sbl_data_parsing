@@ -130,7 +130,7 @@ case "$cmd" in
     preflight; exec python -m mcp_server.cli.ask ask "$@";;
   show-stack|selftest)   # 실행 기록을 /app/output/logs에 씀 — mcp-server(/app/output:ro)에서는 안 됨(VS8b R-9 — data-pipeline 컨테이너에서)
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
-  # 11-01(pl-10 — trigger 서버 serve-trigger 지움) — 상주 컨테이너 data-pipeline-parse·data-pipeline-structure는 일을 하지 않고 떠 있기만 한다.
+  # 11-01(pl-10 — trigger 서버 serve-trigger 지움) — 상주 컨테이너 data-pipeline(11-03 — 옛 둘을 하나로)은 일을 하지 않고 떠 있기만 한다.
   # run_docs.py가 그 안에서 docker exec로 문서별 작업을 돌리고, MCP parse_document 작업 서비스(mcp_parse_service)도 그 안에 띄운다.
   idle)
     preflight

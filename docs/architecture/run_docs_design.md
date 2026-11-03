@@ -31,7 +31,7 @@
   │  ├─ VLM_CAP=2 (vlm 문서 동시 상한 — 전담도)          │
   │  ├─ 게시+구조화 대기 ≥ STRUCT_BACKLOG(구조화×2)면 새 파싱 대기 │
   │  ├─ MCP 우선: mcp_parse/jobs 활동 감지 시 medium 전담 쉼 │
-  │  └─ 단일 컨테이너(data-pipeline-parse) + 격리      │
+  │  └─ 단일 컨테이너(data-pipeline — 11-03) + 격리     │
   └─────────────────────────────────────────────────────┘
         │
   publish 1스레드 (silver — OS 업로드 + EDW INSERT) ── 실패면 원본 남기고 끝

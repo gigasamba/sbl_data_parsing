@@ -20,7 +20,7 @@ in_pipeline() {   # in_pipeline <상주 컨테이너> <명령> [인자…] — �
   shift
   # shellcheck disable=SC2086 — DOCKER는 낱말 나눔(sudo podman)
   if [ "$($DOCKER inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" != true ]; then
-    echo "[오류] 상주 컨테이너 $c가 떠 있지 않음 — 먼저 띄울 것: README §5-3 ①의 dc로 \`dc up -d data-pipeline-parse data-pipeline-structure\`(실행 이미지면 compose.code.yml, 오버레이 패치면 compose.patch.yml도 — dc가 붙임)" >&2
+    echo "[오류] 상주 컨테이너 $c가 떠 있지 않음 — 먼저 띄울 것: README §5-3 ①의 dc로 \`dc up -d data-pipeline\`(실행 이미지면 compose.code.yml, 오버레이 패치면 compose.patch.yml도 — dc가 붙임)" >&2
     return 2
   fi
   local tty=()

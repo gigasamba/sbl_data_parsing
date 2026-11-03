@@ -104,7 +104,7 @@ grep '^D ' <받은 폴더>/PATCH_MANIFEST.txt | cut -c3- | xargs -r -I{} rm -f /
 
 컨테이너는 이 코드 폴더를 읽기 전용으로 연결해서 띄운다(이미지는 그대로) — `deploy/host/compose/compose.patch.yml`을 덧붙여서(`live`에서):
 ```bash
-docker compose -f deploy/host/compose/compose.pipeline.yml -f deploy/host/compose/compose.patch.yml up -d   # 상주 컨테이너 둘 — 작업은 그 안에서(사용자 11-02)
+docker compose -f deploy/host/compose/compose.pipeline.yml -f deploy/host/compose/compose.patch.yml up -d   # 상주 컨테이너 하나(data-pipeline — 사용자 11-03) — 작업은 그 안에서(사용자 11-02)
 docker compose -f deploy/host/compose/compose.mcp.yml -f deploy/host/compose/compose.patch.mcp.yml up -d
 ```
 `PATCH_CODE`(settings.yaml `ops.host.patch_code` — 기본값 없음, 비우면 compose가 멈춤)가 컨테이너 코드 자리(`settings.py` `IMAGE_PATHS.code_root`)·`/app/docker`를 덮는다 — entrypoint도 함께 덮이므로 기준 이미지에 없던 새 명령도 쓸 수 있다.
@@ -189,20 +189,20 @@ bash deploy/release/ship_stage.sh pipeline mcp            # 태그 = VERSION(다
 3. 코드 폴더 전체 덮어쓰기(§4 — 호스트 스크립트가 `live/deploy/host/`로).
 4. 이미지 이름을 settings.yaml 항목 `required.deploy.pipeline_image`·`required.deploy.mcp_image`(op-08 배치 — 옛 `pipeline.host.image`·`mcp.host.image`)에 적는다(옛 env `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE`). S7e1 버전부터 `pipeline.env`만 있으면 종료 코드 2, 옛 `DATA_PARSING_IMAGE`·`DATA_STRUCTURE_IMAGE`·`DATA_RETRIEVAL_IMAGE`(·`RAG_*`)는 안내 뒤 종료 코드 2 — 0.1.0 → 0.2.0 설정 옮기기는 §5-7 3단계.
 5. systemd: 옛 `rag-nightly`·`data-retrieval-keepalive` unit disable·삭제, 새 `data-pipeline-nightly`·`mcp-server-keepalive` 설치(`daemon-reload`).
-6. 새 compose로 새 이름 컨테이너를 띄운다 — 파싱 상주 `data-pipeline-parse`·`data-pipeline-structure`는 `deploy/host/compose/compose.pipeline.yml`(+ `compose.patch.yml`), 검색 MCP `mcp-server`는 `compose.mcp.yml`(+ `compose.patch.mcp.yml` — `mcp_up.sh`가 씀, 11-01부터 검색 MCP 정의는 이 파일 하나).
-7. MCP `parse_document`의 작업 서비스를 손으로 띄운다: `docker exec -d data-pipeline-parse bash -c 'umask 0002 && exec python -u -m pipeline.mcp_parse_service'`(`-e` 없이 · umask는 결과를 운영 계정도 고치게, 토큰은 settings.yaml `pipeline.service.parse_mcp.token`). compose·keepalive가 띄우지 않으므로 `data-pipeline-parse`가 다시 시작될 때마다 다시 띄운다.
+6. 새 compose로 새 이름 컨테이너를 띄운다 — 파이프라인 상주 `data-pipeline`(11-03부터 하나 — 그 전 판은 `data-pipeline-parse`·`data-pipeline-structure`)은 `deploy/host/compose/compose.pipeline.yml`(+ `compose.patch.yml`), 검색 MCP `mcp-server`는 `compose.mcp.yml`(+ `compose.patch.mcp.yml` — `mcp_up.sh`가 씀, 11-01부터 검색 MCP 정의는 이 파일 하나).
+7. MCP `parse_document`의 작업 서비스를 손으로 띄운다: `docker exec -d data-pipeline bash -c 'umask 0002 && exec python -u -m pipeline.mcp_parse_service'`(`-e` 없이 · umask는 결과를 운영 계정도 고치게, 토큰은 settings.yaml `pipeline.service.parse_mcp.token`). compose·keepalive가 띄우지 않으므로 `data-pipeline`이 다시 시작될 때마다 다시 띄운다.
 
-**배포 전 확인(V4 R1)** — `run_docs.py`·compose·systemd가 보는 `PATCH_CODE`(settings.yaml `ops.host.patch_code` — 기본값 없음)가 파싱 상주 컨테이너(S6b 배포 전에는 옛 이름 `data-parsing`, 뒤에는 `data-pipeline-parse`)가 지금 실제로 마운트하는 코드 폴더와 같은지 본다. 출력의 원본이 `<PATCH_CODE>/app/deploy/pipeline`(옛 버전이면 `…/data_etl`, 옛 배치 컨테이너면 `data_parsing`·`common_tools` 줄)이 아니면(예: `<운영자 작업 폴더>/patch_code/…`) 운영 절차에서 `run_docs.py`를 `PATCH_CODE=<원본에서 /app/deploy/<폴더>를 뺀 앞부분>`으로 띄운다. 출력이 비면 오버레이 패치 마운트 없이 이미지 안 코드로 떠 있는 것이다 — 배포 때 `compose.patch.yml`로 다시 띄운다:
+**배포 전 확인(V4 R1)** — `run_docs.py`·compose·systemd가 보는 `PATCH_CODE`(settings.yaml `ops.host.patch_code` — 기본값 없음)가 파싱 상주 컨테이너(S6b 배포 전에는 옛 이름 `data-parsing`, 뒤에는 `data-pipeline-parse`, 0.2.0부터 `data-pipeline`)가 지금 실제로 마운트하는 코드 폴더와 같은지 본다. 출력의 원본이 `<PATCH_CODE>/app/deploy/pipeline`(옛 버전이면 `…/data_etl`, 옛 배치 컨테이너면 `data_parsing`·`common_tools` 줄)이 아니면(예: `<운영자 작업 폴더>/patch_code/…`) 운영 절차에서 `run_docs.py`를 `PATCH_CODE=<원본에서 /app/deploy/<폴더>를 뺀 앞부분>`으로 띄운다. 출력이 비면 오버레이 패치 마운트 없이 이미지 안 코드로 떠 있는 것이다 — 배포 때 `compose.patch.yml`로 다시 띄운다:
 ```bash
-docker inspect data-parsing --format '{{range .Mounts}}{{if eq .Destination "/app/deploy/pipeline" "/app/deploy/data_etl" "/app/deploy/data_parsing" "/app/deploy/common" "/app/deploy/common_tools"}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}{{end}}'   # 배포 전 = 옛 컨테이너 이름(S6b 뒤는 data-pipeline-parse)
+docker inspect data-parsing --format '{{range .Mounts}}{{if eq .Destination "/app/deploy/pipeline" "/app/deploy/data_etl" "/app/deploy/data_parsing" "/app/deploy/common" "/app/deploy/common_tools"}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}{{end}}'   # 배포 전 = 옛 컨테이너 이름(S6b 뒤는 data-pipeline-parse, 0.2.0부터 data-pipeline)
 ```
 
 **배포 뒤 확인**(`<코드 폴더>` = `PATCH_CODE`(settings.yaml `ops.host.patch_code`) — compose·systemd·`mcp_up.sh`·`run_docs.py`가 모두 같은 값을 본다). 폴더가 아니라 파일로 본다 — docker는 bind 마운트 원본이 없으면 빈 폴더를 만들어 붙이므로 `test -d`는 빈 폴더도 통과한다(V4 R2):
 ```bash
 D=<코드 폴더>/app/deploy; test -f $D/pipeline/extract/run_all.py && test ! -e $D/data_etl && test ! -e $D/data_parsing && test ! -e $D/data_structure && echo "배치 OK(pipeline)" || echo "배치 어긋남 — pipeline 코드 없음 또는 옛 폴더 남음"
-for c in data-pipeline-parse data-pipeline-structure; do docker exec $c test -f /app/deploy/pipeline/extract/run_all.py && echo "$c OK" || echo "$c 코드 없음(빈 마운트?)"; done
+for c in data-pipeline; do docker exec $c test -f /app/deploy/pipeline/extract/run_all.py && echo "$c OK" || echo "$c 코드 없음(빈 마운트?)"; done
 ```
-`run_docs.py`도 시작할 때 같은 확인(코드 폴더 `$PATCH_CODE/app/deploy` + 컨테이너 `data-pipeline-parse`·`data-pipeline-structure` 안 `/app/deploy/pipeline/extract/run_all.py` 파일)을 하고, 어긋나면 이유를 찍고 종료 코드 2로 멈춘다(EDW·Object Storage 접속 전). 코드 폴더를 그 호스트에서 볼 수 없으면 폴더 확인은 건너뛰고(`[안내]` 한 줄) 컨테이너 확인(실제 마운트, `test -f` — 빈 마운트 폴더에서도 멈춤)만 믿는다.
+`run_docs.py`도 시작할 때 같은 확인(코드 폴더 `$PATCH_CODE/app/deploy` + 컨테이너 `data-pipeline` 안 `/app/deploy/pipeline/extract/run_all.py` 파일)을 하고, 어긋나면 이유를 찍고 종료 코드 2로 멈춘다(EDW·Object Storage 접속 전). 코드 폴더를 그 호스트에서 볼 수 없으면 폴더 확인은 건너뛰고(`[안내]` 한 줄) 컨테이너 확인(실제 마운트, `test -f` — 빈 마운트 폴더에서도 멈춤)만 믿는다.
 
 **`run_docs.py` 자리와 설정** — 서버에서 `<운영자 작업 폴더>/run_docs.py`로 두고 그 아래 `test_space/`(진행 기록 `batch_progress/`)를 쓴다(지금 예: `/home/<운영 계정>/dev/parsing_module/`). 설정은 서버 settings.yaml(`--settings`·`SETTINGS_FILE`·`$SERVER_ENV_DIR/settings.yaml`, 호스트 python에 PyYAML 필요)에서 읽는다(S7e1, 사용자 10-27 Q8) — 운영 EDW·Object Storage 접속 값·비밀은 코드와 docker exec 명령 줄에 없고(컨테이너는 붙인 설정 파일에서 읽음) 필요한 항목이 없으면 항목 경로만 찍고 종료 코드 2(목록 `refactor.md` C-45 ③).
 - 작업 폴더 `pipeline.host.run_docs_dir`(비우면 스크립트 옆 `test_space/`)
@@ -235,7 +235,7 @@ S8a(사용자 10-28, D-030) 버전부터 pgvector의 우리 스키마(검색 `PG
 - 새 이미지(SQLAlchemy·alembic — 폐쇄망 휠, §5-1)를 적재한 뒤, 다음 적재(새벽 배치) 전에 한다. 값·비밀은 찍지 않는다(카탈로그·버전 번호만).
 ```bash
 cd /srv/rag/code/live
-# 상주 컨테이너(data-pipeline-structure)가 떠 있어야 한다 — run_tool.sh가 그 안에서 docker exec(사용자 11-02 — 1회 job 컨테이너 없음)
+# 상주 컨테이너(data-pipeline)가 떠 있어야 한다 — run_tool.sh가 그 안에서 docker exec(사용자 11-02 — 1회 job 컨테이너 없음)
 # ⓪ (DB마다 처음 한 번 — DB 관리자) vector 확장: 서버 계정은 우리 스키마 권한만이라 직접 못 만든다(없으면 "vector 확장 없음"으로 멈춤)
 #    $DOCKER exec <pg 컨테이너> psql -U <관리자 계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
 # ① 지금 버전 — 처음엔 "판 없음"(옛 코드가 만든 DB)
@@ -287,7 +287,7 @@ mv /srv/rag/env/settings.yaml.new /srv/rag/env/settings.yaml
 - 운영 서버(구운 이미지)는 `-v …`·`-e PYTHONPATH` 없이 `data-pipeline:0.2.0`(코드가 이미지 안 `/app/deploy`).
 - 이미지 칸(`required.deploy.pipeline_image`·`mcp_image`)을 `…:0.2.0`으로 고친다. 새 판에서 생긴 필수 칸이 있으면 채운다(`python -m common.config.sample --where <이름>`으로 자리 확인).
 
-**4. DB** — 상주 컨테이너를 새 판으로 띄운 뒤(`dc up -d data-pipeline-parse data-pipeline-structure`) 버전 차이 확인 → 올리기 → 다시 확인(README §5-3 ③과 같음):
+**4. DB** — 옛 상주 컨테이너 둘을 지우고(`$DOCKER rm -f data-pipeline-parse data-pipeline-structure` — 0.2.0부터 `data-pipeline` 하나, 사용자 11-03) 새 판으로 띄운 뒤(`dc up -d data-pipeline`) 버전 차이 확인 → 올리기 → 다시 확인(README §5-3 ③과 같음):
 ```bash
 bash deploy/host/scripts/run_tool.sh migrate check --target all     # 차이·버전 확인(읽기만)
 bash deploy/host/scripts/run_tool.sh migrate up --target all        # 새 판 마이그레이션(없으면 아무것도 안 함)
@@ -297,7 +297,7 @@ bash deploy/host/scripts/run_tool.sh migrate check --target all     # "차이 �
 **5. 띄우기·확인** — README §5-3 ④ 연결 점검 · ⑤ 이미지 점검 → `mcp_up.sh` · 상주 트리거 `dc up -d …`(§5-5) → 시작 로그 첫 줄 `[image] … · 코드 <커밋> …`이 새 판인지 → 새벽 배치 다시 켬(`systemctl start data-pipeline-nightly.timer`).
 
 **되돌리기(0.2.0 → 0.1.0)**
-1. 새벽 배치·상주 컨테이너를 멈춘다(`systemctl stop data-pipeline-nightly.timer`, `$DOCKER stop data-pipeline-parse data-pipeline-structure mcp-server`).
+1. 새벽 배치·상주 컨테이너를 멈춘다(`systemctl stop data-pipeline-nightly.timer`, `$DOCKER rm -f data-pipeline mcp-server` — 0.1.0 compose는 옛 둘 `data-pipeline-parse`·`data-pipeline-structure`를 띄운다).
 2. `ln -sfn /srv/rag/sbl_data_parsing-0.1.0 /srv/rag/code/live` · `cp -p /srv/rag/env/settings.yaml.0.1.0 /srv/rag/env/settings.yaml`(이미지 칸이 `…:0.1.0` 그대로).
 3. 4단계 `migrate up`이 무언가를 바꿨으면 DB를 백업으로 되돌린다(`pg_restore --clean -d <db> pg-0.1.0.dump` — DB 담당자와 같이). 되돌림 명령(downgrade)은 없다.
 4. 5단계와 같이 띄우고 시작 로그로 0.1.0인지 확인한다. 0.2.0에서 새로 만든 결과(`output_root` 아래)는 옛 판이 낡음으로 보고 다시 만든다.
@@ -393,7 +393,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 4 | 설정 옮기기 — `python -m common.config.migrate <0.1.0 settings.yaml> --out <새 파일>`(이미지 안에서) → 화면 보고서(옮긴 칸 수·지운 칸 이름)를 확인 → 새 파일로 바꿈(주인 UID 10001·권한 640) → 새 필수 칸·이미지 칸(`…:0.2.0`)을 채움 | 서버 운영 | §5-7 3 |
 | 5 | DB — settings.yaml의 `PG_SCHEMA`를 새 이름으로 → `migrate check` → `migrate up --target all` → `check`(차이 없음) | 서버 운영·DB 담당 | §5-7 4 · C-74 |
 | 6 | `selftest_gate.sh` — `[판정] 통과 — FAIL 0`(알려진 실패 목록 빔) | 서버 운영 | §3-3 · C-54 |
-| 7 | 띄우기·확인 — 시작 로그 첫 줄의 판 · MCP `search`(원천 필수)와 원문 도구 한 번 | 서버 운영 | §5-7 5 · C-75 |
+| 7 | 띄우기·확인 — 상주 컨테이너가 둘(`data-pipeline-parse`·`data-pipeline-structure`)에서 하나(`data-pipeline`)로 바뀐다(사용자 11-03): 옛 둘을 멈추고 지운 뒤(`$DOCKER rm -f data-pipeline-parse data-pipeline-structure` — 5에서 이미 했으면 건너뜀) `dc up -d data-pipeline` · `parse_document` 작업 서비스를 `data-pipeline` 안에 다시 띄움 · 시작 로그 첫 줄의 판 · MCP `search`(원천 필수)와 원문 도구 한 번 | 서버 운영 | §5-7 5 · C-75 |
 | 8 | 전체 e2e — dev: settings.yaml이 가리키는 대상으로 · prd: 전체 문서를 새 원천별 스키마로 → 검색 MCP를 새 스키마로 | 서버 운영·사용자 | 8-1 · [pl-23](../prd/ops.md#pl-23) |
 
 되돌리기는 §5-7 "되돌리기(0.2.0 → 0.1.0)".
