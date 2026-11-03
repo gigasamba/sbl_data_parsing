@@ -1484,6 +1484,12 @@ class CommonRuntime(Section):
     mem_start_pct: float | None = F(
         90.0, "MEM_START_PCT", "wait_mem 기본 상한 — 실험 도구가 새 프로세스를 띄우는 메모리 사용률(%)", unset=("auto",)
     )
+    parse_max_mb: float = F(
+        100.0,
+        "PARSE_MCP_MAX_MB",
+        "parse_document 파일 1건 크기 상한(MB = 1024×1024바이트) — 검색 MCP(content_b64)와 parse 서비스(path·content_b64)가 같은 값으로 거름(사용자 11-03)",
+        gt=0,
+    )
     pipe_max_procs: float | None = F(8, "PIPE_MAX_PROCS", "파싱 엔진 프로세스 수 자동 결정의 상한(개)", unset=("auto",))
     pipe_proc_gb: float | None = F(3.0, "PIPE_PROC_GB", "엔진 프로세스 1개당 메모리 가정(GB) — 자동 프로세스 수 계산용", unset=("auto",))
     pipe_procs: float | AutoWord | None = F(

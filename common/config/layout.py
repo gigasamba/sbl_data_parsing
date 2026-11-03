@@ -484,8 +484,9 @@ REMOVED: dict[str, frozenset[str]] = {
     ),
     # PipelineService(pipeline/config.py) — 11-01(pl-10 — trigger 서버 지움) — 지운 절(남으면 경고만)
     "PipelineService": frozenset({"trigger"}),
-    # PipelineServiceParseMcp(pipeline/config.py) — 10-29 PARSE_MCP_OCR → extract.ocr_engine으로 합침(그 스위치도 0.2.0에 지움) — 남으면 경고만
-    "PipelineServiceParseMcp": frozenset({"ocr"}),
+    # PipelineServiceParseMcp(pipeline/config.py) — 10-29 PARSE_MCP_OCR → extract.ocr_engine으로 합침(그 스위치도 0.2.0에 지움) · max_mb 11-03
+    # (파일 크기 상한은 검색 MCP와 함께 쓰는 common.runtime.parse_max_mb = ops.runtime.parse_max_mb로 옮김, 기본 100) — 남으면 경고만
+    "PipelineServiceParseMcp": frozenset({"max_mb", "ocr"}),
     # PipelineTransform(pipeline/config.py) — 사용자 10-29 — 지운 칸·절(남으면 경고만)
     "PipelineTransform": frozenset({"agent"}),
     # PipelineTransformFigures(pipeline/config.py) — 사용자 10-30(pl-31 — ocr_vlm 엔진과 함께 지움) — 지운 칸(남으면 경고만)

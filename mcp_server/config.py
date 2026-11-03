@@ -55,7 +55,7 @@ class McpEdwMeta(Section):
 class McpEdwQuery(Section):
     enabled: bool | None = F(True, "EDW_QUERY", "query_edw 도구 스위치 — 0이면 끔", off=("0",))
     max_bytes: int | None = F(2000000, "EDW_QUERY_MAX_BYTES", "query_edw 응답 크기 상한(바이트)")
-    max_rows: int | None = F(2000, "EDW_QUERY_MAX_ROWS", "query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽)")
+    max_rows: int | None = F(1000, "EDW_QUERY_MAX_ROWS", "query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽)")
     tables: CsvList | None = F(
         None,
         "EDW_QUERY_TABLES",

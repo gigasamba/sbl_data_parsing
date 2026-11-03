@@ -5,7 +5,7 @@ S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/m
 from mcp_server.services.search.server_state import CALLER
 
 
-def do_query_edw(sql, max_rows=2000):
+def do_query_edw(sql, max_rows=1000):
     """EQ1 — thin controller wrapper over mcp_server.services.edw_query.query() (all SQL-guard/backend/
     size-cap logic lives there, not here)."""
     from mcp_server.services import edw_query as EQ

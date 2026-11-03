@@ -4,7 +4,7 @@
 #   없으면 compose가 `${…:?}` 필수 안내로 멈춘다(옛 이미지 이름 안내는 0.2.0에 지움 — pl-46). 값은 출력하지 않는다.
 #   S7e1 — 새 이름은 settings.yaml(pipeline.host.image·mcp.host.image)에서 settings_env.sh load_settings가 셸 env로 낸다. 부르기 전에 load_settings.
 #   need_image pipeline   — 파이프라인 이미지(compose.pipeline.yml의 상주 컨테이너)
-#   need_image mcp        — 검색 MCP 이미지(compose.mcp.yml의 mcp 서비스)
+#   need_image mcp        — 검색 MCP 이미지(compose.mcp-server.yml의 mcp 서비스)
 # op-06(사용자 10-30) — 실행 이미지(*-runtime:태그)인데 CODE_DIR가 비면 이 코드 폴더 루트(부른 스크립트가 cd한 곳 —
 #   git zip을 푼 폴더 그대로)를 코드 폴더로 쓴다. 이미 CODE_DIR가 있으면 그 값(옛 live 링크 배치). 코드가 든 이미지는 손대지 않음.
 code_dir_default() {   # code_dir_default <이미지 변수 이름>
@@ -20,7 +20,7 @@ in_pipeline() {   # in_pipeline <상주 컨테이너> <명령> [인자…] — �
   shift
   # shellcheck disable=SC2086 — DOCKER는 낱말 나눔(sudo podman)
   if [ "$($DOCKER inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" != true ]; then
-    echo "[오류] 상주 컨테이너 $c가 떠 있지 않음 — 먼저 띄울 것: README §5-3 ①의 dc로 \`dc up -d data-pipeline-parse data-pipeline-structure\`(실행 이미지면 compose.code.yml, 오버레이 패치면 compose.patch.yml도 — dc가 붙임)" >&2
+    echo "[오류] 상주 컨테이너 $c가 떠 있지 않음 — 먼저 띄울 것: README §5-3 ①의 dc로 \`dc up -d data-pipeline\`(실행 이미지면 compose.code.yml도 — dc가 붙임)" >&2
     return 2
   fi
   local tty=()

@@ -24,6 +24,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from common.config.settings import cfg as common_cfg
 from common.config.settings import child_env as settings_env
 from common.config.settings import reveal
 from common.core import exitclean
@@ -81,7 +82,6 @@ PROCS = str(
     max(1, _PM.procs if _PM.procs is not None else min(3, (os.cpu_count() or 2) - 1))
 )  # 엔진 묶음 병렬(2026-10-21) — 30쪽 PDF 순차 시 120초+ 걸리던 것 대폭 단축
 ROOTS = [Path(p).resolve() for p in (_PM.roots or [str(SERVICE_DIR / "inbox")])]  # 쉼표 목록은 객체가 strip·빈 것 버림
-MAX_MB = _PM.max_mb
 JOB_TIMEOUT = _PM.job_timeout_sec
 QUEUE_MAX = _PM.queue_max
 JOBS_DIR = Path(_PM.jobs_dir or SERVICE_DIR / "jobs")
@@ -199,6 +199,19 @@ def empty_note(run_log):
     return SCAN_NOTE if NO_JOB_MARK in (run_log or "") else DRM_NOTE
 
 
+def _max_bytes():
+    """파일 1건 크기 상한(바이트) — common.runtime.parse_max_mb(검색 MCP와 같은 칸 — 사용자 11-03, 기본 100MB), 요청마다 읽음."""
+    return int(common_cfg().runtime.parse_max_mb * 1048576)
+
+
+def _check_size(n):
+    """path·content_b64 두 길 모두 같은 상한 — 넘으면 ValueError(400, 크기와 상한을 MB로)."""
+    if n > _max_bytes():
+        raise ValueError(
+            f"파일이 크기 상한({common_cfg().runtime.parse_max_mb:g}MB)보다 큼({n / 1048576:.1f}MB) — ops.runtime.parse_max_mb"
+        )
+
+
 def _submit(source):
     """작업 등록 — source: {"path": 컨테이너 경로} 또는 {"content_b64": ..., "filename": ...}."""
     with _lock:
@@ -215,11 +228,11 @@ def _submit(source):
             raw = base64.b64decode(b64, validate=False)
         except Exception as e:
             raise ValueError(f"base64 디코딩 실패: {e}") from e
-        if len(raw) > MAX_MB * 1024 * 1024:
-            raise ValueError(f"파일이 상한({MAX_MB}MB)보다 큼")
+        _check_size(len(raw))
     else:
         p = _jail(path)
         fname = p.name
+        _check_size(p.stat().st_size)  # 11-03 — 경로로 준 파일도 같은 상한(전에는 content_b64만 봄)
     if Path(fname).suffix.lower() not in ALLOWED_EXTS:
         raise ValueError(f"지원하지 않는 확장자({Path(fname).suffix or '없음'}) — {sorted(ALLOWED_EXTS)}")
     job_id = time.strftime("%Y%m%d") + "-" + uuid.uuid4().hex[:12]
@@ -467,8 +480,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(404, {"error": "not found"})
         try:
             n = int(self.headers.get("Content-Length") or 0)
-            if n > MAX_MB * 1024 * 1024 + 65536:
-                raise ValueError("본문 크기 상한 초과")
+            # 본문 = JSON 속 base64(파일의 4/3배, 줄바꿈 이스케이프 여유 포함 1.5배 — 검색 MCP 본문 상한과 같은 식) + 1MiB — 11-03: 전에는
+            # 파일 상한 + 64KB라 base64 본문은 파일 상한의 3/4에서 막혔음. 상한 안 파일이면 크기 판정은 아래 _check_size가 함
+            if n > _max_bytes() * 3 // 2 + 1048576:
+                raise ValueError(
+                    f"요청 본문이 크기 상한보다 큼 — 파일 상한 {common_cfg().runtime.parse_max_mb:g}MB(ops.runtime.parse_max_mb)"
+                )
             source = json.loads(self.rfile.read(n) or b"{}")
             job_id, ahead = _submit(source)
             return self._json(202, {"job_id": job_id, "queue_position": ahead})
@@ -511,7 +528,7 @@ if __name__ == "__main__":
                 "pid": os.getpid(),
                 "started": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "procs": PROCS,
-                "max_mb": MAX_MB,
+                "max_mb": common_cfg().runtime.parse_max_mb,
                 "job_timeout": JOB_TIMEOUT,
                 "queue_max": QUEUE_MAX,
             },

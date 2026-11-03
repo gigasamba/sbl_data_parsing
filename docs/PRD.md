@@ -5,8 +5,8 @@
 
 ## 지금 진행 중
 - pl-25 DB 스키마 명세 — dev: `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인 대기(ParsingMeta 판 칸은 11-02 결정 — `silver_version`·`gold_version`, `stack_version` 없음).
-- 0.2.0 묶음(todo — 순서는 허브가 정함): 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 원천별 gold 스키마 [pl-28](prd/load-schema.md#pl-28) · run_docs 순서 [pl-24](prd/ops.md#pl-24) · 게시 필수 [pl-26](prd/load.md#pl-26) · 분류 [pl-33](prd/transform.md#pl-33) · FAQ [pl-39](prd/extract.md#pl-39)·[pl-41](prd/load.md#pl-41) · 지문 배치 [pl-46](prd/transform-cleanup.md#pl-46)·[pl-47](prd/transform-cleanup.md#pl-47) · 확장자 2차 [pl-45](prd/transform.md#pl-45) · `search` 계약 [mc-16](prd/mcp.md#mc-16) · 원문 도구 [mc-17](prd/mcp.md#mc-17).
-- 운영 고침 묶음(todo — 사용자 11-02 결정, 코드는 따로): 회전 판정 병렬·기본 적용 끄기 [pl-02](prd/extract.md#pl-02) · 서버 러너 병렬 받기 [pl-48](prd/extract.md#pl-48) · `run_docs` 끝난 문서에 `skipped_dup` 넣기 · EDW 고객 매핑 적재로 옮김 [pl-29](prd/load.md#pl-29).
+- 0.2.0 묶음(todo — 순서는 허브가 정함): 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 원천별 gold 스키마 [pl-28](prd/load-schema.md#pl-28) · run_docs 순서 [pl-24](prd/ops.md#pl-24)(done 11-03 — `gold_status` 칸만 C-81) · 게시 필수 [pl-26](prd/load.md#pl-26)(done) · 분류 [pl-33](prd/transform.md#pl-33) · FAQ [pl-39](prd/extract.md#pl-39)·[pl-41](prd/load.md#pl-41) · 지문 배치 [pl-46](prd/transform-cleanup.md#pl-46)·[pl-47](prd/transform-cleanup.md#pl-47) · 확장자 2차 [pl-45](prd/transform.md#pl-45) · `search` 계약 [mc-16](prd/mcp.md#mc-16) · 원문 도구 [mc-17](prd/mcp.md#mc-17).
+- 운영 고침 묶음(todo — 사용자 11-02 결정, 코드는 따로): 회전 판정 병렬·기본 적용 끄기 [pl-02](prd/extract.md#pl-02) · 서버 러너 병렬 받기 [pl-48](prd/extract.md#pl-48) · `run_docs` 끝난 문서에 `skipped_dup` 넣기(done — `DONE_STATUSES`) · EDW 고객 매핑 적재로 옮김 [pl-29](prd/load.md#pl-29).
 - 검색 — PG만, 실행 중 묶음 없음 [mc-19](prd/mcp.md#mc-19)(todo, 자기 PR + 평가).
 - do-04 문서 재구성 — 4부: PRD 표를 요건 한 줄씩 다시 씀 `feature/do04-prd-rows`(이 PR).
 
@@ -81,7 +81,7 @@
 | ParsingMeta에는 INSERT만 — 키 (`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뜀, UPDATE 없음 | 상태를 고쳐 쓰는 길은 10-31에 지웠다 | done | [pl-09](prd/load.md#pl-09) |
 | DRM(`skipped_drm`)·실패(`failed`) 문서는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만. 업로드 대상 상태는 `load.publish.upload_statuses`(기본 ok·partial) | 깨진 결과가 다른 팀에 넘어가지 않게 | done | [pl-09](prd/load.md#pl-09) |
 | 게시 버킷이 원천 원본 버킷과 같으면 게시를 거부한다 | 원본 덮어쓰기를 막는다. 단, `run_docs`가 이 검사를 끈다(`PM_BUCKET_SKIP_OVERLAP_CHECK=1`) — 확인 필요 | done | [pl-09](prd/load.md#pl-09) |
-| 게시는 늘 하고 게시 대상(버킷·접두)은 필수 — `local`·`dev`는 로컬 대역이나 실제 접속, `prd`는 실제 접속만 | `run_docs`는 버킷·접두가 없으면 이미 시작을 거부한다. 남은 일은 실행 환경별 규칙 | todo | [pl-26](prd/load.md#pl-26) |
+| 게시는 늘 하고 게시 대상(버킷·접두)은 필수 — `local`·`dev`는 로컬 대역이나 실제 접속, `prd`는 실제 접속만 | `run_docs`는 문서마다 늘 게시하고 버킷·접두가 없으면 시작을 거부한다 | done | [pl-26](prd/load.md#pl-26) |
 | FAQ 파일을 다시 올리면 그 FAQ 문서의 청크를 통째로 지우고 다시 적재(청크 0개가 된 옛 `doc` 행도 지움) | pl-13 "지우지 않음"의 FAQ 예외(등급 A). 10-31에 행 단위 비교 → 통째 교체로 바뀜 | todo | [pl-41](prd/load.md#pl-41) |
 | ~~수동 갱신 명령 2개(분류만 / EDW 메타만)~~ | `load --replace`나 다시 실행으로 대신(사용자 10-31) | dropped | [pl-40](prd/load.md#pl-40) |
 | 정형 DB `struct` 스키마(마스터·문서 대장·표·칸)를 코드에서 모두 없앤다. 엔진 구성은 파일만 | 쓰이지 않았다(서버 `doc_registry` 0행). 서버에 남은 표는 DB 담당자가 정리 | done | [pl-08](prd/load.md#pl-08) |
@@ -119,9 +119,9 @@
 | 출력 줄이기 — 맨 위 `question`·`evidence[]`·`evidence_status`·`filter`·`scope_docs`, 근거 키 `chunk_key` = `<doc_id>:<seq>` | `file_path`·`index_id`·`subs`·`images`·`notes`·`ms` 등을 지운다 | done | [mc-16](prd/mcp.md#mc-16) |
 | 원문 도구 2개 — `list_doc_fulltext`(목록)·`get_doc_fulltext`(원문). 거르기는 원천 스키마 `doc`, 대표 결과 위치·`doc_key`는 부를 때 ParsingMeta에서 | 사용자 11-01 — 검색 DB에는 거르기 메타만(EDW를 못 읽으면 `registry_unavailable`). 새 도구라 등급 A, 0.2.0 | done | [mc-17](prd/mcp.md#mc-17) |
 | 검색이 실행 중에 묶음 파일(`docs.jsonl`·`chunks.jsonl`·`meta.json`)을 읽지 않고 문서 메타·임베딩 정보·청크 키를 PG에서 읽는다 | 서버에서 묶음 경로를 맞출 필요가 없어진다. 검색 동작이 바뀌는 일이라 자기 PR + 평가 | todo | [mc-19](prd/mcp.md#mc-19) |
-| `query_edw` — EDW 읽기 전용 SQL(SELECT/WITH 한 문장, 읽기 계정), 2,000행·20초·2 MB 상한 | 정형 숫자는 EDW에서 답한다. 표 허용 목록은 `tables_strict`를 켤 때만(기본 꺼짐) | done | [mc-06](prd/mcp.md#mc-06) |
+| `query_edw` — EDW 읽기 전용 SQL(SELECT/WITH 한 문장, 읽기 계정), 1,000행(운영 서버와 같음 — 사용자 11-03)·20초·2 MB 상한 | 정형 숫자는 EDW에서 답한다. 표 허용 목록은 `tables_strict`를 켤 때만(기본 꺼짐) | done | [mc-06](prd/mcp.md#mc-06) |
 | `edw_meta` — 정적 자료(`catalog.json`+`columns.jsonl`)로 스키마 → 표 → 칸 찾기, 모르는 이름은 비슷한 이름 제안, 응답 200 KB 상한 | SQL을 쓰기 전에 이름 확인. 표본 값은 내지 않는다 | done | [mc-07](prd/mcp.md#mc-07) |
-| `parse_document` — 파일 1건(inbox 경로 또는 base64, 64 MB까지)을 파싱 서비스(127.0.0.1:8766, 토큰)로 넘겨 대표 본문·표를 받음. 300초 넘으면 `job_id` | 아직 적재되지 않은 파일을 바로 물을 때 | done | [mc-08](prd/mcp.md#mc-08) |
+| `parse_document` — 파일 1건(inbox 경로 또는 base64, 100 MB까지 — 두 길 같은 칸 `ops.runtime.parse_max_mb`, 사용자 11-03)을 파싱 서비스(127.0.0.1:8766, 토큰)로 넘겨 대표 본문·표를 받음. 300초 넘으면 `job_id` | 아직 적재되지 않은 파일을 바로 물을 때 | done | [mc-08](prd/mcp.md#mc-08) |
 | 스캔 PDF(글자층 20자 미만) 파싱 다시 지원 — 지금은 빈 결과 + 안내만 | 어떤 엔진(OCR·VLM)을 쓸지와 응답 시간을 정해야 함(등급 A) | todo | [mc-18](prd/mcp.md#mc-18) |
 | 서버는 `/mcp`(기본 127.0.0.1:8765) 또는 `--stdio`로 뜬다. 내부망 주소만, 0.0.0.0 거부, 루프백이 아니면 `MCP_TOKEN` 필수 + DNS 리바인딩 막기. 서버에서 PG 접속 칸이 비면 시작 거부 | 공용 내부 서비스라 위험한 노출을 거부 | done | [mc-09](prd/mcp.md#mc-09) |
 | 과부하 보호 — 동시 8개, 대기 32개(동시 × 4) 넘으면 바로 `busy`, 도구당 30초(`parse_document`는 자기 시간 + 10초) | 늘 떠 있게. `/health`는 예열 중 503, 새 적재는 30초마다 확인 | done | [mc-09](prd/mcp.md#mc-09) |
@@ -131,20 +131,20 @@
 |---|---|---|---|
 | 서버 입구는 호스트의 `run_docs.py` 하나 — 상주 컨테이너 안에서 `docker exec`로 일을 시킨다. 이미지 명령은 `parse`·`publish`·`migrate`·`show-stack`·`idle`·`selftest` 등 | night·full·structure·load·trigger 서버는 11-01에 지웠다 | done | [pl-10](prd/ops.md#pl-10) |
 | run_docs 흐름 — 문서마다 미리 받기 → 파싱 → 구조화+적재 → 게시 → 임시 폴더 삭제, 배치 장벽(앞 묶음이 다 끝날 때까지 기다리기) 없음 | 문서 수천 건을 사람 없이 처리 | done | [pl-10](prd/ops.md#pl-10) |
-| 새 문서만 처리(목록 − ParsingMeta 끝난 행) — 파싱 입구는 구현됨(수집 표). 전체 재파싱은 사람이 전체 e2e로만 | 지문이 바뀔 때 전체 자동 재파싱을 하면 밤 시간을 넘긴다 | todo | [pl-23](prd/ops.md#pl-23) |
-| run_docs 대상 고르기를 위 규칙에 맞춘다 — 지금은 파일 이름 키워드(`--filter RFP,proposal`)·`--start-offset`·`--skip-done`(ok·partial만)으로 고른다 | 지금 새벽 배치는 이름에 RFP·proposal이 든 문서만 처리한다 | todo | [pl-23](prd/ops.md#pl-23) |
-| 새벽 배치는 `ops.nightly.time`·`max_docs`·`deadline` 셋이 모두 있을 때만 돈다(하나라도 비면 안 돎 — 사용자 11-02) — systemd 타이머가 5분마다 `trigger.sh scheduled` → `run_docs.py --start-offset 0 --skip-done --max-docs --deadline` | 지금 서버는 비워 둠(꺼짐) | todo | [pl-23](prd/ops.md#pl-23) |
+| 새 문서만 처리(목록 − ParsingMeta 끝난 행) — 파싱 입구는 구현됨(수집 표). 전체 재파싱은 사람이 전체 e2e로만 | 지문이 바뀔 때 전체 자동 재파싱을 하면 밤 시간을 넘긴다 | done | [pl-23](prd/ops.md#pl-23) |
+| run_docs 대상 고르기를 위 규칙에 맞춘다 — 파일 이름 키워드(`--filter RFP,proposal`)·`--start-offset` 뒤 `--skip-done`이 ParsingMeta 끝난 행(ok·partial — gold_version도, skipped_dup)을 뺀다 | 새벽 배치는 이름에 RFP·proposal이 든 문서만 처리한다(키워드가 정기 운영에 맞는지는 C-72 ③) | done | [pl-23](prd/ops.md#pl-23) |
+| 새벽 배치는 `ops.nightly.time`·`max_docs`·`deadline` 셋이 모두 있을 때만 돈다(하나라도 비면 안 돎 — 사용자 11-02) — systemd 타이머가 5분마다 `trigger.sh scheduled` → `run_docs.py --start-offset 0 --skip-done --max-docs --deadline` | 지금 서버는 비워 둠(꺼짐) — 켜는 것은 사람(C-72) | done | [pl-23](prd/ops.md#pl-23) |
 | 전체 e2e는 local·dev·prd 셋에서 — 전체 문서 실행은 prd에서만 새 원천별 스키마 이름(새 `PG_SCHEMA`)으로, 옛 gold·`struct` 스키마는 2주 뒤 DB 담당자가 백업하고 지움 | 판 0002가 기준 스키마의 옛 표를 지운다. 사용자 11-02 | todo | [pl-23](prd/ops.md#pl-23) |
 | 새벽 배치 칸 — 시작 시각·문서 수 상한·마감 시각(비면 안 돎), 칸 이름 하나로(`pipeline.host.nightly.time` ↔ `ops.nightly.time` 어긋남 고침) | 사용자 11-02 | done | [pl-23](prd/ops.md#pl-23) |
-| 문서별 순서를 파싱 → silver 게시 → 원본 임시 파일 삭제 → gold로 | 지금은 게시가 gold 성공을 기다리고, 실패해도 임시 원본을 지운다 | todo | [pl-24](prd/ops.md#pl-24) |
-| gold 실패면 ParsingMeta 행은 남기고 새 칸 `gold_status`=failed·이유. 파싱이 통째로 실패하면 EDW에 쓰지 않고 로그에만 — 다음 실행이 다시 고른다 | gold는 silver에서 다시 만들 수 있다. 칸 추가는 DB 담당자 몫(등급 A) | todo | [pl-24](prd/ops.md#pl-24) |
-| run_docs 종료 코드 — 대상 0건 = 0, 실패 있음 = 1, 마감 도달 = 75 | 지금은 실패가 있어도 0으로 끝나 스케줄러가 실패를 못 본다(C-33) | todo | [pl-18](prd/ops.md#pl-18) |
-| 새벽 run_docs에 문서 수 상한·마감 시각·겹침 막는 잠금 | 지금 상한은 systemd `TimeoutStartSec=6h`뿐이라 넘으면 문서 중간에 끊긴다 | todo | [pl-18](prd/ops.md#pl-18) |
+| 문서별 순서를 파싱 → silver 게시 → 원본 임시 파일 삭제 → gold로 | 게시가 gold를 기다리지 않고(게시 스레드 따로), 원본은 게시가 성공했을 때만 지운다(11-03) | done | [pl-24](prd/ops.md#pl-24) |
+| gold 실패면 ParsingMeta 행은 남기고 새 칸 `gold_status`=failed·이유. 파싱이 통째로 실패하면 EDW에 쓰지 않고 로그에만 — 다음 실행이 다시 고른다 | gold는 silver에서 다시 만들 수 있다. 행 남김·로그·파싱 실패 길은 됨(11-03). 칸 추가는 DB 담당자 몫(등급 A — C-81) | partly done | [pl-24](prd/ops.md#pl-24) |
+| run_docs 종료 코드 — 대상 0건 = 0, 실패 있음 = 1, 마감 도달 = 75 | 스케줄러가 실패를 본다(C-33). 실패와 마감이 함께면 1 · 다른 run_docs가 도는 중도 75(11-03) | done | [pl-18](prd/ops.md#pl-18) |
+| 새벽 run_docs에 문서 수 상한·마감 시각·겹침 막는 잠금 | `--max-docs`·`--deadline`(11-02) + `run_docs.py` 안 `flock` 잠금(`batch_progress/run_docs.lock`, 11-03). `TimeoutStartSec=6h`는 마지막 안전판 | done | [pl-18](prd/ops.md#pl-18) |
 | 레인 3개(light·medium·vlm, 수집 표의 나누기 기준)마다 전담 워커(자기 레인만)·공유 워커(자기 레인 먼저, 비면 가장 긴 다른 레인) — `ops.run_docs.<레인>_dedicated`·`_shared` 기본 각 1 | 규칙을 표 하나(`pick_lane`)로 모으고 설정으로 조정 | done | [rn-01](prd/ops.md#rn-01) |
 | vlm 레인 동시 파싱 상한 `ops.run_docs.vlm_cap` = 2. `warm`·`vlm_cap`이 1 미만이거나 워커가 없는 레인이 있으면 시작 거부 | GPU 예산을 지키고 끝나지 않을 설정을 막는다 | done | [rn-01](prd/ops.md#rn-01) |
 | 미리 받기 상한 `ops.run_docs.warm` = 20, 구조화 워커 `struct_workers` = 2, 중간 대기열 상한 `struct_backlog`(기본 구조화 워커 × 2, 0이면 없음) | 구조화가 느릴 때 파싱 결과가 디스크에 쌓이지 않게 | done | [rn-02](prd/ops.md#rn-02) |
 | 대기열 길이를 상태가 바뀔 때마다 `batch_progress/queue_depth.jsonl`에 한 줄 | 대기열 길이와 구조화 대기 시간의 관계를 잰다 | done | [rn-02](prd/ops.md#rn-02) |
-| MCP `parse_document`(사람이 기다리는 요청)에 CPU를 먼저 준다 — 전용 컨테이너 + cgroup CPU 가중치 최고(10-31 결정). 지금은 엔진 자식 nice +10뿐 | nice는 컨테이너끼리는 효과가 없다(C-65 ⑥) | todo | [rn-03](prd/ops.md#rn-03) |
+| MCP `parse_document`(사람이 기다리는 요청)에 CPU를 먼저 준다 — 전용 컨테이너 + cgroup CPU 가중치 최고(10-31 결정). 11-03 재확인: 일괄 `data-pipeline`과 뗀 전용 `data-pipeline-mcp`(cpu_shares 4096 > 1024) | nice는 컨테이너끼리는 효과가 없다(C-65 ⑥) | dev | [rn-03](prd/ops.md#rn-03) |
 | MCP 업로드 작업이 있으면 medium 전담 워커를 쉬게 한다(이름 날짜가 어제·오늘·내일인 작업 폴더만 감시) | 5초마다 폴더 전체를 훑던 부담을 줄인다 | done | [rn-04](prd/ops.md#rn-04) |
 | 프로세스가 끝날 때(정상·오류·SIGTERM) 임시 설정 덮기 파일·PID 기록을 지우고 자식을 끝내 회수(SIGTERM → 10초 → SIGKILL, 종료 143) — `common/core/exitclean.py` 한 곳 | 임시 파일이 쌓이고 soffice 좀비가 남던 문제 | done | [pl-27](prd/ops.md#pl-27) |
 | ~~강제 종료(SIGKILL·OOM)로 남은 임시 설정 파일을 다음 시작 때 지우기~~ | 남아 있어도 된다(사용자 10-31) | dropped | [pl-44](prd/ops.md#pl-44) |

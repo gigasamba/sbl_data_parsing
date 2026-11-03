@@ -13,7 +13,7 @@
 #     common.store.db.dbtool) — data-pipeline 이미지만, up·stamp는 load와 같은 잠금(current·check는 읽기만 — 잠금 없음). 서버 절차 docs/operations/release-and-patch.md §5-5
 #   show-stack = 지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01: 판 표·set-stack 없앰 · 원천 목록 show-sources는 sources.json과 함께 지움) — 두 이미지. docs/architecture/pipeline_stack.md
 #   S6b(D-020) — 이미지 2개: RAG_MODULE마다 쓸 수 있는 명령이 다름(아래 case가 거름):
-#     pipeline(data-pipeline — 옛 data-parsing+data-structure, 두 이미지가 받던 명령의 합 + full(S6c))=parse·publish·show-stack·idle·migrate ·
+#     pipeline(data-pipeline — 옛 data-parsing+data-structure, 두 이미지가 받던 명령의 합 + full(S6c))=parse·publish·show-stack·idle·migrate·parse-service ·
 #     mcp(mcp-server — 옛 data-retrieval)=mcp·ask·show-stack · 공통(모든 이미지) = help·check·resources·services·
 #     check-modules·tool·selftest(S9 — 서버 반입 시험 /app/deploy/tests/server를 파일마다, 다른 이미지(RAG_MODULE) 폴더 사례·다른 이미지 패키지가 없어서만 실패한 사례는 SKIP,
 #     서드파티 패키지가 없으면 FAIL(I2c) — 반입 판정은 /app/docker/selftest_gate.sh)  (smoke는 11-01에 지움 — 실문서 점검은 run_docs·trigger.sh parse로)
@@ -48,8 +48,8 @@ cmd="${1:-help}"; shift || true
 case "${RAG_MODULE:-}:$cmd" in
   # 옛 parse·structure 이미지가 거르던 명령의 교집합만 거른다(합친 이미지 = 두 이미지가 받던 명령의 합). full·night·structure·load는 11-01에 지움.
   pipeline:mcp|pipeline:ask)
-    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask)은 mcp-server. 이 이미지는 parse·publish·show-stack·idle·migrate"; exit 64;;
-  mcp:parse|mcp:publish|mcp:idle|mcp:migrate)
+    echo "[오류] '$cmd'는 이 이미지(data-pipeline)에 없음 — 검색/질문(mcp·ask)은 mcp-server. 이 이미지는 parse·publish·show-stack·idle·migrate·parse-service"; exit 64;;
+  mcp:parse|mcp:publish|mcp:idle|mcp:migrate|mcp:parse-service)
     echo "[오류] '$cmd'는 이 이미지(mcp-server)에 없음 — 파싱·구조화·적재·판 관리(migrate)는 data-pipeline. 이 이미지는 mcp·ask·show-stack만"; exit 64;;
 esac
 # S7a(D-028 ②, 사용자 10-27) — 실행 환경(RUN_ENV) 없이는 앱 명령을 시작하지 않음. 이미지 ENV에는 넣지 않는다(서버가 dev·prd를
@@ -102,7 +102,7 @@ case "$cmd" in
     python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1].rsplit('.', 1)[0]) else 2)" "$1" 2>/dev/null \
       || { echo "[tool] 이 이미지에 없는 도구: $name ($1)" >&2; exit 2; }
     exec python -m "$@";;
-  mcp)        exec python -m mcp_server.main "$@";;        # 검색 MCP(deploy/host/compose/compose.mcp.yml) — 잠금 없음(읽기 전용)
+  mcp)        exec python -m mcp_server.main "$@";;        # 검색 MCP(deploy/host/compose/compose.mcp-server.yml) — 잠금 없음(읽기 전용)
   # 모듈(트리거 1회 실행 — docs/architecture.md). 종료 코드: 0 끝남·건너뜀 · 3 앞 모듈 결과 없음 · 4 PostgreSQL 없음 · 75 실행 중·마감
   parse)
     preflight
@@ -130,8 +130,10 @@ case "$cmd" in
     preflight; exec python -m mcp_server.cli.ask ask "$@";;
   show-stack|selftest)   # 실행 기록을 /app/output/logs에 씀 — mcp-server(/app/output:ro)에서는 안 됨(VS8b R-9 — data-pipeline 컨테이너에서)
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
-  # 11-01(pl-10 — trigger 서버 serve-trigger 지움) — 상주 컨테이너 data-pipeline-parse·data-pipeline-structure는 일을 하지 않고 떠 있기만 한다.
-  # run_docs.py가 그 안에서 docker exec로 문서별 작업을 돌리고, MCP parse_document 작업 서비스(mcp_parse_service)도 그 안에 띄운다.
+  # 11-01(pl-10 — trigger 서버 serve-trigger 지움) — 상주 컨테이너 data-pipeline(11-03 — 옛 둘을 하나로)은 일을 하지 않고 떠 있기만 한다.
+  # run_docs.py가 그 안에서 docker exec로 문서별 작업을 돌린다. MCP parse_document 작업 서비스는 위 parse-service(전용 컨테이너 data-pipeline-mcp — 여기에 띄우지 않음, 8766 겹침).
+  parse-service)   # 11-03(사용자 — PRD rn-03) — MCP parse_document 작업 서비스(127.0.0.1:8766), 전용 상주 컨테이너 data-pipeline-mcp의 주 프로세스
+    preflight; exec python -u -m pipeline.mcp_parse_service;;
   idle)
     preflight
     exec sleep infinity;;

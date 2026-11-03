@@ -264,7 +264,7 @@ search:
     dir:  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · 값: 경로
   edw_query:
     enabled: true  # query_edw 도구 스위치 · 기본 true · 값: true·false
-    max_rows: 2000  # query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽) · 기본 2000 · 값: 0 이상 정수
+    max_rows: 1000  # query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽) · 기본 1000 · 값: 0 이상 정수
     tables:  # query_edw 허용 표 목록(쉼표) · 값: 쉼표 목록 또는 YAML 목록
     tables_strict: false  # 1이면 허용 표 목록(EDW_QUERY_TABLES) 검사를 켬 · 기본 false · 값: true·false
   # ─── 출력·기록·파싱 프록시 ───
@@ -283,6 +283,7 @@ ops:
   runtime:
     lib_env: {}  # 라이브러리 env(이름: 글자 — TZ·OMP_NUM_THREADS·HF_HUB_OFFLINE 등 허용 목록만, 비밀 아님) · 기본 {} · 값: 사전(이름: 글자)
     log_retention_days: 30  # output/logs/*.log 보존 일수 · 기본 30 · 값: 0 이상 정수 (0 = 삭제 안 함)
+    parse_max_mb: 100.0  # parse_document 파일 1건 크기 상한(MB = 1024×1024바이트) · 기본 100.0 · 값: 0 이상
     pipe_procs:  # CPU 엔진 프로세스 수 · 값: 1 이상 정수 · auto 또는 비우면 자동 계산
     pipe_workers:  # VLM API 동시 처리 문서 수(개) · 기본 4 · 값: 0 이상 · auto 또는 비우면 자동 계산
   # ─── 로그 — JSON·DB 기록 ───
@@ -339,7 +340,6 @@ ops:
   services:
     parse_mcp:
       jobs_dir:  # parse MCP 서비스 작업 기록 폴더 · 값: 경로
-      max_mb: 64.0  # parse MCP 서비스가 받는 파일 크기 상한(MB) · 기본 64.0 · 값: 0 이상
       port: 8766  # parse MCP 서비스 포트 · 기본 8766 · 값: 1~65535
       roots:  # parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) · 값: 쉼표 목록 또는 YAML 목록
   # ─── 새벽 배치 ───
