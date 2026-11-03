@@ -60,9 +60,9 @@
 <a id="e2-21"></a>
 ## e2-21 · 옛 오버레이 패치 흔적 정리
 - 이유: `deploy/release/make_patch.sh`를 지웠다(사용자 11-03 `feature/drift-followup` — 코드 폴더 바꾸기로 대체). 그 스크립트만 만들거나 읽던 것이 남았다.
-- 무엇: `common/core/fingerprint.py` `pipeline_version()`의 `common/PATCH_VERSION` 후보(와 `tests/server/common/test_fingerprint.py`의 그 사례·`keyscan.py` `PIPELINE_VERSION` 설명), `deploy/host/scripts/run_docs.py`·`host_env.py`의 옛 `app/deploy/common` 찾기 갈래, `deploy/docker/IMAGE_BASE`(+ `.gitattributes` 줄)를 지운다.
-- 남긴 이유: `fingerprint.py`는 레이어 지문(code_fp) 파일이라 고치면 서버 문서가 모두 다시 처리된다 — 다음 지문 배치에서 함께(사람 검토). `IMAGE_BASE`는 지울지 사람이 정한다.
-- 파일: `common/core/fingerprint.py`, `deploy/host/scripts/run_docs.py`, `deploy/host/scripts/host_env.py`, `deploy/docker/IMAGE_BASE`.
+- 한 것(11-03 `feature/drift-followup`): `deploy/host/scripts/run_docs.py`·`host_env.py`의 옛 `app/deploy/common` 찾기 갈래를 지움(호스트 스크립트 — 레이어 지문 밖).
+- 남은 것: ① `common/core/fingerprint.py` `pipeline_version()`의 `common/PATCH_VERSION` 후보(와 `tests/server/common/test_fingerprint.py`의 그 사례·`keyscan.py` `PIPELINE_VERSION` 설명) — 레이어 지문(code_fp) 파일이라 허브가 릴리스 지문 배치에서 지운다. ② `deploy/docker/IMAGE_BASE`(+ `.gitattributes` 줄) — 읽는 곳이 없다, 지울지 사용자가 정한다.
+- 파일: `common/core/fingerprint.py`, `deploy/docker/IMAGE_BASE`.
 - Status: todo
 
 <a id="e2-01"></a>

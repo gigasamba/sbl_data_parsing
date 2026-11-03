@@ -175,7 +175,7 @@
 | 코드만 바뀌면 코드 폴더 바꾸기(이미지는 그대로 — 옛 오버레이 패치·`make_patch.sh`는 11-03에 지움) | 이미지를 다시 만들지 않는다 | done | [e2-08](prd/test.md#e2-08) |
 | ~~시험을 바꾸면 새 이미지가 필요~~ | 이미지에 코드 폴더를 붙이는 방식(op-06)이라 시험도 코드 폴더에서 돌아 해소 | done | [e2-14](prd/test.md#e2-14) |
 | PC 일반 시험의 옛 실패 정리 — 공용 PG를 읽던 3개는 고치고, 지운 모듈의 시험은 지움 | 리팩토링 전부터 있던 실패. 남은 실패 0(`GENERAL_KNOWN_FAIL = {}`, `known_fail.txt` 빔) | done | [e2-11](prd/test.md#e2-11) |
-| 옛 오버레이 패치 흔적 — `common/core/fingerprint.py`의 `common/PATCH_VERSION` 읽기·`run_docs.py`·`host_env.py`의 `app/deploy/common` 갈래·`deploy/docker/IMAGE_BASE`(만들거나 읽는 곳이 `make_patch.sh`뿐이었음) | `fingerprint.py`는 레이어 지문 파일이라 다음 지문 배치에 | todo | [e2-21](prd/test.md#e2-21) |
+| 옛 오버레이 패치 흔적 둘 — `common/core/fingerprint.py`의 `common/PATCH_VERSION` 후보(허브가 릴리스 지문 배치에서 지움)·`deploy/docker/IMAGE_BASE`(읽는 곳 없음 — 지울지 사용자가 정함) | `fingerprint.py`는 레이어 지문 파일이라 고치면 서버 문서가 모두 다시 처리된다 | todo | [e2-21](prd/test.md#e2-21) |
 | 지시서 폴더 찾기에서 없는 `dev_tools/unit_test/fixtures/` 갈래 지우기(`run_agent`·`test_adk`는 pl-46에 지움 — 죽은 갈래만 남음) | `paths.py`를 고치면 레이어 지문이 모두 바뀌어 다음 지문 배치에 | todo | [e2-15](prd/test.md#e2-15) |
 | PC 스모크 — 문서 2~3건으로 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색(README §4-4) | 릴리스 전에 사슬 전체를 증명 | done | [e2-01](prd/test.md#e2-01) |
 | PC Docker 스모크(`valid_env/docker/smoke_test.sh`)를 다시 돌려 검색까지 가는지 확인 | mc-10은 고쳐졌고 다시 돌려 보기만 남음 | todo | [e2-13](prd/test.md#e2-13) |

@@ -75,11 +75,10 @@ def _yget(doc, path):
 
 def _code_root():
     """코드 폴더 — 찾는 순서(op-10): --code 폴더 > 이 스크립트가 든 코드 폴더(기본 배치 경로는 없음 — 사용자 11-02). 반환 (루트, common 폴더) —
-    common은 저장소 배치(<루트>/common) 또는 서버 코드 폴더 배치(<루트>/app/deploy/common — 옛 오버레이 패치 배치, 11-03 지움)."""
+    common은 <루트>/common(코드 폴더 = 저장소 트리 — 옛 app/deploy 배치는 11-03 지움)."""
     for r in (CODE_DIR, ROOT.parents[2] if len(ROOT.parents) > 2 else None):
-        for p in (Path(r) / "common", Path(r) / "app" / "deploy" / "common") if r is not None else ():
-            if (p / "config" / "layout.py").is_file():
-                return Path(r), p
+        if r is not None and (Path(r) / "common" / "config" / "layout.py").is_file():
+            return Path(r), Path(r) / "common"
     sys.exit("run_docs: common/config/layout.py 없음 — 코드 폴더 안에서 부르거나 --code <코드 폴더>로 알려 줄 것")
 
 
