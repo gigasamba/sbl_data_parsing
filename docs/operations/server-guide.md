@@ -2,9 +2,8 @@
 
 대상: 서버 운영자, 그리고 이미지 안에서 이 문서를 읽는 서버 LLM.
 - env 이름·기본값: [env-guide.md](env-guide.md)
-- 코드 패치·새 이미지 절차: [release-and-patch.md](release-and-patch.md) · 긴급 패치 이력(날짜·시각): [patch-history.md](../history/patch-history.md)
-- 전체 구조: upstream `docs/architecture.md`(이 저장소에는 없음 — 목표 구조는 [refactor_plan.md](../refactoring/refactor_plan.md) 4절)
-- 테스트 기준: upstream `docs/testing.md`(이 저장소에는 없음 — 점검 명령은 [CLAUDE.md](../../CLAUDE.md) §6)
+- 코드 폴더 바꾸기·새 이미지 절차: [release-and-patch.md](release-and-patch.md) · 지난 긴급 패치 이력: [patch-history.md](../history/patch-history.md)
+- 점검 명령: [CLAUDE.md](../../CLAUDE.md) §6
 
 ## 0. 이미지 2개 — 역할 (D-020)
 
@@ -62,7 +61,7 @@ bash deploy/host/scripts/trigger.sh parse       # dedup→prepare→파싱→채
 bash deploy/host/scripts/trigger.sh publish     # 대표 결과(.md) Object Storage 업로드 + EDW 메타
 ```
 - 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock` 때문에 뒤쪽이 즉시 종료 코드 75(실행 중). 재시도는 다음 트리거에서.
-- 우선순위 낮추기(`pipeline.extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 **같은 세션·autogroup 안에서만** 효과가 있다. Linux가 `sched_autogroup_enabled=1`이면 CPU를 autogroup끼리 먼저 나누므로 다른 컨테이너·세션의 parse MCP 서비스와는 nice로 겨루지 않고, 컨테이너끼리는 cgroup CPU 가중치(`cpu.weight`)가 정한다. 확인: `cat /proc/sys/kernel/sched_autogroup_enabled`, 일괄 파싱과 `parse_document`를 동시에 걸어 응답 시간 비교(refactor.md C-65 ⑥).
+- 우선순위 낮추기(settings.yaml `extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 **같은 세션·autogroup 안에서만** 효과가 있다. Linux가 `sched_autogroup_enabled=1`이면 CPU를 autogroup끼리 먼저 나누므로 다른 컨테이너·세션의 parse MCP 서비스와는 nice로 겨루지 않고, 컨테이너끼리는 cgroup CPU 가중치(`cpu.weight`)가 정한다. 확인: `cat /proc/sys/kernel/sched_autogroup_enabled`, 일괄 파싱과 `parse_document`를 동시에 걸어 응답 시간 비교(refactor.md C-65 ⑥).
 
 특정 도구만 따로 돌릴 때(`rdb_discover`·`check_env`·`ping_models` — data-pipeline 이미지):
 ```bash
@@ -77,7 +76,7 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 
 ### 2-2. 새벽 배치(선택)
 `sudo cp deploy/host/systemd/data-pipeline-nightly.* /etc/systemd/system/ && sudo systemctl enable --now data-pipeline-nightly.timer`.
-- 스케줄은 settings.yaml `ops.nightly.time`·`ops.nightly.max_docs`·`ops.nightly.deadline`(env 이름 `NIGHTLY_TIME`·`NIGHTLY_MAX_DOCS`·`NIGHTLY_DEADLINE` — 시작 시각 HH:MM·새 문서 수 상한·마감 시각 HH:MM, 기본 비움 = 새벽 배치 없음, 셋이 모두 있어야 돎 — pl-32·사용자 11-02). 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시작 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받기 시작하지 않고, 받은 문서는 끝까지)(그 밖에는 말없이 끝).
+- 스케줄은 settings.yaml `ops.nightly.time`·`ops.nightly.max_docs`·`ops.nightly.deadline`(env 이름 `NIGHTLY_TIME`·`NIGHTLY_MAX_DOCS`·`NIGHTLY_DEADLINE` — 시작 시각 HH:MM·새 문서 수 상한·마감 시각 HH:MM, 기본 비움 = 새벽 배치 없음, 셋이 모두 있어야 돎 — pl-23·사용자 11-02). 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시작 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받기 시작하지 않고, 받은 문서는 끝까지)(그 밖에는 말없이 끝).
 - 지금 바로 돌리려면 run_docs를 직접 부른다.
 
 ### 2-3. 상주 컨테이너
@@ -91,7 +90,7 @@ bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp   # setting
 - 답변 생성: `PYTHONPATH=. python -m validation.e2e.answer_gen --url http://<검색 MCP>:8765/mcp --q "<질문>"`.
   - 코드 폴더(저장소 배치 — `validation/`은 이미지 밖)에서 검색 MCP로 호출. `--concurrency N` 병렬. 결과(답·인용·인용 검증·지연)는 `output/eval/answer_gen/`.
   - Answer Agent(`valid_env/answer_test/rag_qa/` — PC 전용 데이터)도 이것으로 점검한다.
-  - MCP 토큰은 settings.yaml `required.tokens.mcp`, 모델은 `common.models.llm`(서버는 내부 모델만 — guard).
+  - MCP 토큰은 settings.yaml `required.tokens.mcp`, 모델은 `required.models.llm_*`(서버는 내부 모델만 — guard).
 
 ## 3. 결과 확인
 
@@ -110,15 +109,15 @@ bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp   # setting
 - 연결 테스트: `PYTHONPATH=. python -m mcp_server.cli.mcp_smoke --url <주소> --token <토큰> --source <원천> --q "<질문>"`(원천은 `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other` 중 하나 — 근거가 있는 원천).
 
 ### 4-1. EDW 쿼리 도구(EQ1) 설정 — `edw_meta`·`query_edw`
-LLM 에이전트가 표·칸 설명(`edw_meta` — 정적 자료, DB 접속 없음)을 보고 직접 SELECT(`query_edw`)를 보내 EDW(SQL Server)를 읽는다. 집계·가공은 에이전트 몫이고, 이 도구는 원본 행만 돌려준다. 보안 경계(읽기 전용·표 허용 목록·상한)는 코드([mcp_server/services/edw_query.py](../../mcp_server/services/edw_query.py))가 강제하지만, **운영자가 아래를 준비해야 실제로 안전**하다.
+LLM 에이전트가 표·칸 설명(`edw_meta` — 정적 자료, DB 접속 없음)을 보고 직접 SELECT(`query_edw`)를 보내 EDW(SQL Server)를 읽는다. 집계·가공은 에이전트 몫이고, 이 도구는 원본 행만 돌려준다. 보안 경계(읽기 전용·시스템 표 차단·상한, 켜면 표 허용 목록)는 코드([mcp_server/services/edw_query.py](../../mcp_server/services/edw_query.py))가 강제하지만, **운영자가 아래를 준비해야 실제로 안전**하다.
 
-1. **EDW 읽기 계정**(`common.connections.rdb.read` — [ops.md#op-03](../prd/ops.md#op-03)) — 파이프라인 원천 조회(원천 목록·`AI.FileStorageMap`·`AI.ParsingMeta`)와 함께 쓰는 계정.
+1. **EDW 읽기 계정**(settings.yaml `required.edw.read_user`·`read_password` — [ops.md#op-03](../prd/ops.md#op-03)) — 파이프라인 원천 조회(원천 목록·`AI.FileStorageMap`·`AI.ParsingMeta`)와 함께 쓰는 계정.
    - `SELECT` 권한만 준다. 그 밖의 권한은 주지 않는다(DDL·DML·`EXEC`·시스템 프로시저 전부 거부).
-   - 검색 MCP 프로세스는 시작할 때 쓰기 계정 항목(`common.connections.rdb.write`)을 설정 객체에서 비운다(`edw_read_only()` — 공용 settings.yaml에 있어도 쓰지 않음). 파일 자체는 컨테이너가 읽을 수 있으므로, 완전히 떼려면 mcp-server에 쓰기 항목이 없는 설정 파일을 따로 붙인다.
-   - ⚠️ 같은 계정이라 `query_edw`도 파이프라인이 읽는 표(`AI.FileStorageMap`·`AI.ParsingMeta`)를 읽을 수 있다. 막으려면 `EDW_QUERY_TABLES_STRICT=1`과 `EDW_QUERY_TABLES`로 좁힌다.
-2. **`EDW_QUERY_TABLES`** — 에이전트가 볼 수 있는 `schema.table` 쉼표 목록(기본값은 PC 대역 표 9개뿐 — 서버는 반드시 실제 표 이름으로 바꿔 적는다). 여기 없는 표·뷰는 코드가 `FROM`/`JOIN`을 정규식으로 찾아 전부 거부한다. `sys.*`·`INFORMATION_SCHEMA.*`는 목록에 있어도 거부.
+   - 검색 MCP 프로세스는 시작할 때 쓰기 계정 항목(`required.edw.write_user`·`write_password`)을 설정 객체에서 비운다(`edw_read_only()` — 공용 settings.yaml에 있어도 쓰지 않음). 파일 자체는 컨테이너가 읽을 수 있으므로, 완전히 떼려면 mcp-server에 쓰기 항목이 없는 설정 파일을 따로 붙인다.
+   - ⚠️ 같은 계정이라 `query_edw`도 파이프라인이 읽는 표(`AI.FileStorageMap`·`AI.ParsingMeta`)를 읽을 수 있다. 막으려면 아래 2의 표 허용 목록을 켠다.
+2. **표 허용 목록(기본 꺼짐)** — 기본은 읽기 계정이 볼 수 있는 모든 스키마·표를 허용한다(`sys.*`·`INFORMATION_SCHEMA.*`는 늘 거부). 좁히려면 settings.yaml `search.edw_query.tables_strict: true`와 `search.edw_query.tables`(`schema.table` 쉼표 목록 — 실제 EDW 표 이름)를 적는다. 켜면 목록에 없는 표·뷰는 코드가 `FROM`/`JOIN`을 정규식으로 찾아 전부 거부하고, `tables`를 빈 글자로 두면 모두 거부한다.
    - DBA가 이 계정에 추가로(보안 재검토 10-15): `DENY VIEW DEFINITION`(FROM 없이 메타데이터 함수로 표 정의를 읽는 길 차단) · 다른 데이터베이스·연결 서버(linked server) 권한 없음 · 가능하면 Resource Governor 등으로 질의 시간·CPU 상한(코드 상한 `EDW_QUERY_TIMEOUT_SEC`은 드라이버 쪽이라 서버에서 실제로 취소되는지 확인 필요).
-3. 켠 뒤 확인: 허용 목록 밖 표를 읽는 `query_edw` 호출과 `query_edw({"sql": "DROP TABLE ..."})` 같은 호출이 `rejected:*`로 막히는지 한 번 확인(`edw_meta`는 정적 설명이라 허용 목록을 보여 주지 않는다).
+3. 켠 뒤 확인: `query_edw({"sql": "DROP TABLE ..."})`·`sys.*`를 읽는 호출(허용 목록을 켰으면 목록 밖 표도)이 `rejected:*`로 막히는지 한 번 확인(`edw_meta`는 정적 설명이라 허용 목록을 보여 주지 않는다).
 
 PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`common.connections.rdb.sqlite` — 모든 대역 표를 한 파일에, `python -m validation.e2e.edw_standin`으로 다시 만듦). SQL Server와 같은 `AI.<표>` 이름으로 ATTACH되어 같은 SQL 문이 그대로 돈다.
 
@@ -129,11 +128,11 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 | 무엇 | 위치 |
 |---|---|
 | 용어집(동의어·약어) · 고객 명부 · 제품 코드 규칙 | PG 마스터 표 `<PG_SCHEMA>_master`(pl-38 — 구조화 고객 판별·검색이 읽음). 원본 CSV `resources/vocab/glossary/{domain_terms,client_roster,id_patterns,…}.csv`(또는 서버 폴더)를 고친 뒤 `run_tool.sh migrate master load [--dir <폴더>]`(아래 5-1) |
-| 원천 표·열(문서 위치) | 원천은 `run_docs`가 EDW에서 만든 `rdb:csv`. 열 이름이 다른 표는 `RDB_COL_*` |
+| 원천 표·열(문서 위치) | 원천은 `run_docs`가 EDW에서 만든 `rdb:csv`. 열 이름이 다른 표는 settings.yaml `extract.connections.rdb.columns.*` |
 | 엔진 구성 | `resources/config/pipeline_stack.json`(서버·PC 같음 · `ops.paths.stack_file` · 확인 `show-stack`) — 바꾸기 = 파일을 고쳐 코드 폴더째 바꿈 |
 | 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성) · 서버 정답 폴더(settings.yaml `ops.pipeline_host.gold_dir` 칸은 있지만 지금 compose·`run_tool.sh`는 컨테이너 `/data/gold`로 붙이지 않는다 — 붙일지 아직 안 정함) |
 | 집계 지표 단서어 | 코드 기본값(`mcp_server/services/search/qtype.py` `_AGG_VOCAB_DEFAULT`) |
-| MCP 안내 문구 | settings.yaml `mcp.server.instructions` |
+| MCP 안내 문구 | settings.yaml `search.server.instructions` |
 | EDW 조인 사슬(고객·원천 메타·검색 attrs 키) | 서버 사본 `$SERVER_ENV_DIR/edw_chain.yaml`(기본 `resources/config/edw_chain.yaml` — 아래 5-2) |
 
 기밀(실고객·실제품·계약 값)은 **서버 폴더에만** 둔다 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤에는 같은 질문 세트로 검색 결과를 전/후 비교한다(PC 검증 페이지 `validation/search_ui`·답변 점검 `valid_env/answer_test`).
@@ -185,7 +184,7 @@ SFDC·EDW 내보내기(예 `client_master.csv`)에서 명부를 만든다. 손�
 ```bash
 PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --kind client \
   --source csv:/srv/rag/env/client_master.csv --mapping /srv/rag/env/client_master_map.json \
-  --out /srv/rag/env/client_roster.csv          # EDW 표에서 바로: --source rdb:<스키마.표>(접속은 settings.yaml common.connections.rdb 읽기 계정)
+  --out /srv/rag/env/client_roster.csv          # EDW 표에서 바로: --source rdb:<스키마.표>(접속은 settings.yaml `required.edw` 읽기 계정)
 PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --check /srv/rag/env/client_roster.csv   # 오류 0 확인 후 반영
 ```
 
@@ -230,13 +229,13 @@ PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load
 
 | 증상 | 원인 | 조치 |
 |---|---|---|
-| `check`가 "컨테이너 안의 PG_HOST는 컨테이너 자신" 경고 | `PG_HOST=127.0.0.1`인데 호스트의 PostgreSQL을 보려 함 | `--network host`(+`NETWORK_HOST=1`) 또는 `PG_HOST=<서버 IP>` |
+| `check`가 "컨테이너 안의 PG_HOST는 컨테이너 자신" 경고 | `required.pg.host`가 `127.0.0.1`. compose로 띄운 세 컨테이너는 `network_mode: host`라 127.0.0.1이 서버 자신이다 | compose로 띄웠으면 무시한다. `docker run`으로 따로 띄울 때만 `--network host`(+`-e NETWORK_HOST=1`로 경고 끔) 또는 `required.pg.host`에 서버 IP |
 | 적재·검색이 PostgreSQL에 못 붙음 | PG 접속 칸이 비었거나 틀림 | settings.yaml `required.pg`(호스트·포트·계정) 확인 — 검색은 PG만 읽으므로 고칠 때까지 적재·검색이 안 된다 |
-| 파싱이 종료 코드 4 | 서버에서 EDW `AI.ParsingMeta`를 못 읽음(pl-12 — 전체 재파싱을 막으려고 멈춤) | `common.connections.rdb.read` 접속 칸·EDW 연결 확인 |
+| 파싱이 종료 코드 4 | 서버에서 EDW `AI.ParsingMeta`를 못 읽음(pl-12 — 전체 재파싱을 막으려고 멈춤) | settings.yaml `required.edw`(주소·읽기 계정)·EDW 연결 확인 |
 | 구조화·적재가 "인계 형식(핑거프린트) 다름"으로 거부 | 공통 핑거프린트가 바뀐 옛 파싱 결과 | 그 문서를 다시 파싱(새 판의 "재파싱 필요?" 안내 — [release-and-patch.md](release-and-patch.md)) |
 | 같은 결과 폴더에서 두 작업이 종료 코드 75 | 다른 실행이 `.pipeline.lock`을 잡고 있음 | 끝날 때까지 기다리거나 다음 트리거에서 재시도(겹침이 아니라 정상 동작) |
-| 메모리 터짐(OOM), 큰 스캔 PDF | 쪽 이미지를 문서 전체만큼 한꺼번에 올림 | `OCR_DPI` 낮추기(150)·`OCR_MAX_PAGES`·`MAX_FILE_MB`·컨테이너 `--memory`/`mem_limit` 확인 |
-| CPU 폭주 | 컨테이너가 호스트 전체 코어로 스레드를 늘림 | `PIPE_PROCS`는 `auto`로 두기(cgroup 한도 기준 자동 계산), 컨테이너 `--cpus` 지정 |
+| 메모리 터짐(OOM), 큰 스캔 PDF | 쪽 이미지를 문서 전체만큼 한꺼번에 올림 | settings.yaml `extract.ocr.dpi` 낮추기(150)·`extract.ocr.max_pages`·`extract.max_file_mb`·컨테이너 `--memory`/`mem_limit` 확인 |
+| CPU 폭주 | 컨테이너가 호스트 전체 코어로 스레드를 늘림 | `ops.runtime.pipe_procs`는 `auto`로 두기(cgroup 한도 기준 자동 계산), 컨테이너 `--cpus` 지정 |
 | MCP `/health` 준비 안 됨 | 기동 직후 저장소 연결 중(예열) | 잠시 뒤 재시도 |
 | MCP 401 | 호출 쪽 토큰이 없거나 서버 settings.yaml `required.tokens.mcp`와 다름 | 호출 쪽 `Authorization: Bearer <토큰>`을 서버 값과 같게(토큰은 코드·로그에 쓰지 않음) |
 | MCP가 안 뜸(이미지 버전인데) | settings.yaml에 `required.embed`(질의 임베딩) 없음 · 컨테이너가 설정 파일을 못 읽음(권한 — C-09) | [env-guide.md](env-guide.md)로 필수 값 채우기 |
@@ -249,23 +248,23 @@ PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load
 코드는 코드 폴더를 통째로 바꾼다([release-and-patch.md](release-and-patch.md) §1-1). 지난 긴급 패치 이력은 [patch-history.md](../history/patch-history.md).
 
 ### 서버 버전 기록
-적용·업데이트마다 한 줄: `/srv/rag/reports/versions.md`에 `날짜 · 서버 · 이미지 버전 · patch 커밋(또는 전체 덮어쓰기) · 확인 결과`.
+적용·업데이트마다 한 줄: `/srv/rag/reports/versions.md`에 `날짜 · 서버 · 이미지 버전 · 코드 커밋 · 확인 결과`.
 
 ### 서버 자체 개발 기록
 서버에서 코드를 직접 고치거나 새로 만들었거나(급한 수정·서버 전용 스크립트 등) 옵션 값을 바꿨으면(settings.yaml·코드 안 기본값 — 어떤 값을 왜) 그때마다:
 - `/srv/rag/reports/server-changes.md`에 한 행
 - 변경 diff를 `/srv/rag/reports/server-changes/<ID>.diff`로(`diff -u <고치기 전> <고친 뒤>`, 새 파일이면 `diff -u /dev/null <파일>`)
 
-패치·전체 덮어쓰기 때 이 기록을 가장 먼저 읽고, 서버에서 자체로 진행한 것을 살린 채 패치를 그 위에 합친다([release-and-patch.md](release-and-patch.md) §3-2·§3-4):
+코드 폴더를 바꾸거나 전체 덮어쓸 때 이 기록을 가장 먼저 읽고, 서버에서 자체로 진행한 것을 살린 채 새 판을 그 위에 합친다([release-and-patch.md](release-and-patch.md) §3-2·§3-4):
 ```
-| ID(SC-<MMDD>-<n>) | 날짜·시각 | 서버(수집/개발) | 바뀐 파일(코드 폴더 기준 경로 — 예 `pipeline/…`·`deploy/host/…`) | 무엇·왜 한 줄 | 기준 버전(이미지+patch) | 테스트(명령·결과) | 상태(서버에만/PC 보냄/다시 얹음 <패치>/PC 반영됨 <커밋>/폐기) |
+| ID(SC-<MMDD>-<n>) | 날짜·시각 | 서버(수집/개발) | 바뀐 파일(코드 폴더 기준 경로 — 예 `pipeline/…`·`deploy/host/…`) | 무엇·왜 한 줄 | 기준 버전(이미지+코드 커밋) | 테스트(명령·결과) | 상태(서버에만/PC 보냄/다시 얹음 <커밋>/PC 반영됨 <커밋>/폐기) |
 ```
 지우지 않고 상태만 바꾼다. diff에는 코드만 — 비밀값·문서 본문·고객명은 넣지 않는다(이슈 반출 규칙과 같음).
 
 ### 이슈 기록
 문제가 나면 `/srv/rag/reports/issues.md`에 한 행(지우지 않고 상태만 바꿈):
 ```
-| ID(SI-<MMDD>-<n>) | 버전(이미지+patch 또는 커밋) | 서버(수집/개발) | 단계·명령 | 증상 한 줄 | 종료 코드 | 로그 위치 | 상태(열림/수정됨/재확인 통과) |
+| ID(SI-<MMDD>-<n>) | 버전(이미지+코드 커밋) | 서버(수집/개발) | 단계·명령 | 증상 한 줄 | 종료 코드 | 로그 위치 | 상태(열림/수정됨/재확인 통과) |
 ```
 반출 규칙: **오류 메시지·종료 코드·숫자·해시 이름만** — 문서 본문·고객명·원본 경로·키 값은 적지 않는다(로그를 옮길 때 비밀값·본문을 가린다).
 

@@ -12,7 +12,7 @@
 - 호출: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"<도구>","arguments":{…}}}`. 결과는 `result.content[0].text`의 JSON 글자다(클라이언트가 파싱).
 - 상태 확인: `GET /health`(토큰 없음). 기동 직후 예열하는 동안은 503 `{"warming": true}`, 끝나면 200 `{"ready": true}`.
 - 토큰이 없거나 틀리면 HTTP 401 `{"error":"unauthorized"}`.
-- 도구 하나의 시간 상한은 서버 설정 `MCP_TOOL_TIMEOUT_SEC`(기본 30초)다. 넘으면 `{"error":"timeout"}`. **⚠ 운영과 다름:** 운영 안내서는 60초라고 적었다. 클라이언트 쪽 제한 시간은 60초 이상으로 넉넉히 둔다.
+- 도구 하나의 시간 상한은 서버 설정 `tuning.search.server.tool_timeout_sec`(기본 30초 — 운영 서버 기본값과 같다. 운영 안내서의 60초는 틀린 값)다. 넘으면 `{"error":"timeout"}`. 클라이언트 쪽 제한 시간은 60초 이상으로 넉넉히 둔다.
 - 동시에 돌 수 있는 수를 넘어 대기열까지 차면 바로 `{"error":"busy"}` — 잠시 뒤 다시 부른다.
 
 ## 2. 도구 목록
@@ -36,6 +36,7 @@
   - `.pdf`는 글자 PDF와 스캔(이미지) PDF를 따로 판정해 다른 엔진으로 읽는다. 압축 파일(`.zip` 등)과 위 목록 밖 형식은 파싱 대상이 아니다.
 - **`parse_document`가 받는 형식** — `pipeline/mcp_parse_service.py`의 `allowed_exts()`(검색 대상 − 이미지): `.csv` `.doc` `.docm` `.docx` `.dot` `.dotx` `.eml` `.htm` `.html` `.hwpx` `.json` `.log` `.md` `.mht` `.mhtml` `.msg` `.odp` `.ods` `.odt` `.pdf` `.pot` `.potx` `.ppsx` `.ppt` `.pptm` `.pptx` `.rtf` `.tsv` `.txt` `.xls` `.xlsb` `.xlsm` `.xlsx` `.xlt` `.xltx` `.xml`
   - 이미지 파일은 받지 않는다(그림 VLM 단계를 돌리지 않음). 스캔 PDF는 내부망 VLM으로 읽는다(쪽마다 VLM 호출이라 글자 PDF보다 오래 걸림 — 작업 제한 시간 하나). VLM 설정(주소·모델)이 없으면 text가 비고 "스캔 PDF — VLM 미설정", VLM이 실패하면 "스캔 PDF — VLM 파싱 실패"가 붙는다.
+  - **⚠ 운영과 다름:** 받는 확장자가 운영보다 많고(위 2차 확장자), 운영은 스캔 PDF를 VLM으로 읽지 않는다.
 
 ## 4. `search`
 
@@ -229,7 +230,7 @@ EDW 읽기 전용 SQL. 요약 없이 원래 행만 돌려준다(집계는 SQL에
 | 이름 | 형식 | 필수 | 기본 | 규칙 |
 |---|---|---|---|---|
 | `sql` | 글자 | 예 | — | `SELECT` 또는 `WITH`로 시작하는 한 문장. 시스템 표, DML·DDL·EXEC 단어(글자 안이라도), `@` 변수, 큰따옴표 이름(대괄호만), 여러 문장은 거부 |
-| `max_rows` | 정수 | 아니요 | 1000 | 서버 상한(`EDW_QUERY_MAX_ROWS`, 기본 1000 — 운영 서버와 같음, 사용자 11-03)을 넘을 수 없음 |
+| `max_rows` | 정수 | 아니요 | 1000 | 서버 상한(`EDW_QUERY_MAX_ROWS`, 기본 1000)을 넘을 수 없음 — 운영 서버 실측도 1000이다(운영 안내서의 2,000은 틀린 값, 사용자 11-03) |
 
 - 한도: 질의 20초(`EDW_QUERY_TIMEOUT_SEC` — 넘으면 `timeout`) · 응답 2MB(`EDW_QUERY_MAX_BYTES` — 넘으면 끝 행을 버리고 `truncated: true`) · 칸 글자 2,000자(넘으면 ` …(truncated)` 표시, `truncated` 깃발은 안 바뀜).
 - 돌려주는 모양(성공·실패 같은 9칸): `ok` · `columns`(`[{name, type}]`, type은 `int`·`float`·`decimal`·`str`·`date`·`datetime`·`time`·`bool`·`binary`·`unknown`) · `rows`(칸 순서대로 값 목록) · `row_count` · `truncated` · `elapsed_ms` · `dialect`(`tsql`) · `source`(`mssql`) · `error`(성공이면 null, 실패면 `"<코드>: <설명>"`).
@@ -252,7 +253,7 @@ EDW 읽기 전용 SQL. 요약 없이 원래 행만 돌려준다(집계는 SQL에
 | `time_out_threshold` | 정수 | 아니요 | 300 | 초. 이 안에 끝나면 결과, 못 끝내면 `{"error": "시간 안에 수행 못했습니다", "job_id": …}` — 같은 파일을 바로 다시 내면 새 작업이 생긴다 |
 | `max_chars` | 정수 | 아니요 | 200000 | 응답 `text` 상한 — 넘으면 잘리고 `text_truncated` |
 
-- 파일 크기 상한 100 MB(`path`·`content_b64` 같음 — 설정 `ops.runtime.parse_max_mb`). 넘으면 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — …"}`. `content_b64`는 검색 MCP가 서비스로 보내기 전에 거른다. base64라 요청 본문은 파일의 약 1.33배(100 MB 파일 ≈ 134 MB) — 검색 MCP 앞에 리버스 프록시를 두면 그 본문 상한(nginx `client_max_body_size` 기본 1 MB 등)과 클라이언트 쪽 제한 시간을 그만큼 늘린다.
+- 파일 크기 상한 100 MB(`path`·`content_b64` 같음 — 설정 `ops.runtime.parse_max_mb`). **⚠ 운영과 다름:** 운영은 64 MB. 넘으면 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — …"}`. `content_b64`는 검색 MCP가 서비스로 보내기 전에 거른다. base64라 요청 본문은 파일의 약 1.33배(100 MB 파일 ≈ 134 MB) — 검색 MCP 앞에 리버스 프록시를 두면 그 본문 상한(nginx `client_max_body_size` 기본 1 MB 등)과 클라이언트 쪽 제한 시간을 그만큼 늘린다.
 
 돌려주는 모양(완료): `text`(대표 본문, 표 포함) · `tables_std` · `tables` · `facts` · `fields` · `engine`(대표 엔진) · `rep_path`(전체 대표 결과 JSON 경로) · `ms`. 대기열이 차면 HTTP 429.
 
@@ -275,7 +276,7 @@ EDW 표·칸의 한글 설명을 정적 자료에서 3단으로 찾는다(DB 접
 인자 없이 부르면 스키마 요약에 `search_attrs`가 붙는다 — `search`의 원천별 `attrs` 키(EDW 사슬 파일 그대로, [pl-52](../prd/load-schema.md#pl-52)):
 `{"SFDC": {"filter": {"project_id": "project_code__c", …, "doc_class": "doc_class"}, "attrs": ["contract_date", …], "evidence": ["sf_op_id", …]}, "CRMS": …}`.
 `filter`는 `search` 인자 이름 → `attrs` 키(`search` 인자에 없는 사슬 `filter:` 이름은 여기 나오지 않고 `attrs` 키로만 쓴다), `attrs`는 `attrs` 거르기에 줄 수 있는 키 전부,
-`evidence`는 근거 `attrs`에 나오는 키다. 요약이 오류(데이터셋 미구성 등)면 `search_attrs`를 붙이지 않는다.
+`evidence`는 근거 `attrs`에 나오는 키다. 요약이 오류(데이터셋 미구성 등)면 `search_attrs`를 붙이지 않는다. **⚠ 운영과 다름:** 운영 `edw_meta`에는 `search_attrs`가 없다(이 저장소가 더함).
 
 ```json
 {"name": "edw_meta", "arguments": {}}

@@ -2,7 +2,7 @@
 
 사내 문서(PDF, Office, HWPX, 이미지, 메일 등)를 파싱하고, 청킹·임베딩해 PostgreSQL(pgvector)에 적재한 뒤, **검색 MCP 서버**로 근거를 찾아 주는 파이프라인이다. 개발은 macOS·Windows PC에서 하고, 실행은 내부망(폐쇄망) RHEL 서버의 Docker/podman 이미지 2개로 한다.
 
-> 이 저장소는 서버 코드 사본을 리팩토링한 결과다(10-26~~10-29, 단계 S0~~S12). 무엇이 왜 바뀌었는지는 [docs/history/refactor_plan.md](docs/history/refactor_plan.md)에, **0.2.0을 서버에 배포할 때 사람이 할 일**은 [release-and-patch.md §8](docs/operations/release-and-patch.md#8-020-배포--사람이-할-일)에 있다.
+> 이 저장소는 서버 코드 사본을 리팩토링한 결과다(10-26부터 10-29까지, 단계 S0부터 S12까지). 무엇이 왜 바뀌었는지는 [docs/history/refactor_plan.md](docs/history/refactor_plan.md)에, **0.2.0을 서버에 배포할 때 사람이 할 일**은 [release-and-patch.md §8](docs/operations/release-and-patch.md#8-020-배포--사람이-할-일)에 있다.
 
 ### 0. 읽기 전에 — 꼭 알아 둘 것
 
@@ -93,7 +93,7 @@
 
 ### 1-4. DB — Alembic 마이그레이션
 
-pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는다.** 모두 Alembic 마이그레이션(`common/store/db/migrations/versions/`)으로 만들고, 명령은 `dbtool`(PC: `python -m common.store.db.dbtool`, 서버: `bash deploy/host/scripts/run_tool.sh migrate` — 상주 컨테이너 안에서) 하나다. 스키마는 검색 스키마 하나다(`struct` 스키마는 사용자 11-01 결정으로 코드에서 없앴다 — pl-08).
+pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는다.** 모두 Alembic 마이그레이션(`common/store/db/migrations/versions/`)으로 만들고, 명령은 `dbtool`(PC: `python -m common.store.db.dbtool`, 서버: `bash deploy/host/scripts/run_tool.sh migrate` — 상주 컨테이너 안에서) 하나다. 스키마는 검색 스키마 하나다.
 
 | 마이그레이션 | 스키마 | 만드는 것 |
 |---|---|---|
@@ -120,7 +120,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 
 **언제 실행하나**
 - **처음 설치할 때** — PC 4-4 ④, 서버 5-3 ④.
-- **마이그레이션이 바뀐 릴리스** — 패치 노트의 "DB 버전" 줄을 보고 적재 전에 `up`. 테이블·컬럼을 바꾸는 마이그레이션은 데이터 계약 변경이라 DB 담당 협의가 먼저다.
+- **마이그레이션이 바뀐 릴리스** — 릴리스 설명서(`RELEASE_NOTES.md`)의 "DB 버전" 줄을 보고 적재 전에 `up`. 테이블·컬럼을 바꾸는 마이그레이션은 데이터 계약 변경이라 DB 담당 협의가 먼저다.
 - **새 검색 스키마**(임베딩 차원이 바뀌어 새 `db_schema`를 쓸 때) — `up --target search --schema <새 스키마> --bundle <번들>`.
 
 **자동으로 되는 것과 아닌 것**
@@ -143,7 +143,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 ├─ pipeline/            데이터 파이프라인 앱(data-pipeline 이미지)
 │  ├─ cli.py            실행기 — parse · show-stack · selftest(구조화·적재는 build_bundle·pgvector_load를 직접 부름)
 │  ├─ config.py         pipeline 섹션 설정 모델
-│  ├─ extract/          원천 읽기 · dedup · prepare · 엔진별 파싱(engines/ — 엔진 18개, 바이트가 캐시 키라 건드리지 않음)
+│  ├─ extract/          원천 읽기 · dedup · prepare · 엔진별 파싱(engines/ — 엔진 13개, 바이트가 캐시 키라 건드리지 않음)
 │  ├─ transform/        represent(대표 결과) · figures(그림) · structure(청킹·임베딩·번들)
 │  ├─ load/             pgvector 적재 · publish · 회사 DB 메타데이터 · 문서 분류
 │  ├─ shared/ · tools/  단계 공용 모듈 · 운영 도구
@@ -161,7 +161,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  ├─ mappings/         문서 메타데이터 매핑
 │  └─ vocab/            질문 유형(qtype_labels.json) · glossary/(마스터 표의 원본 CSV — 용어집·고객 명부)
 ├─ deploy/              배포
-│  ├─ docker/           Dockerfile(타깃 pipeline, mcp) · requirements · entrypoint.sh · IMAGE_BASE · wheels/(폐쇄망용 휠)
+│  ├─ docker/           Dockerfile(타깃 pipeline, mcp) · requirements · entrypoint.sh · DEPS_HASH(의존성 지문) · wheels/(폐쇄망용 휠)
 │  ├─ release/          빌드·전송(build_ship, ship_stage, load) · 굽기(bake) · 배포 판정(selftest_gate, known_fail.txt) · 커밋 전 점검(lint_changed.sh)
 │  └─ host/             서버 호스트에서 쓰는 것 — compose/ · scripts/(dc, trigger, run_tool, mcp_up, settings_env, run_docs 등) · systemd/(새벽 배치, keepalive)
 ├─ tests/               server/(이미지에 포함, 배포 판정) · general/(PC 전용) · runner.py
@@ -272,7 +272,7 @@ export PYTHONPATH=$PWD                                   # 명령은 저장소 �
 .venv/bin/python -m pytest -q tests/                      # 전체 테스트 — 실패 0(개수는 PRD e2-02 기준선)
 ```
 
-배포 판정의 알려진 실패는 0개다(11-02 — `deploy/release/known_fail.txt`는 빈 목록). PC 일반 테스트의 알려진 실패는 `tests/conftest.py`(이유: refactor.md C-54·C-58).
+배포 판정의 알려진 실패는 0개다(11-02 — `deploy/release/known_fail.txt`는 빈 목록). PC 일반 테스트의 알려진 실패도 0개다(`tests/conftest.py` `GENERAL_KNOWN_FAIL`은 빈 목록).
 
 ### 4-4. 파이프라인 실행 — 문서 몇 건(①~⑥)
 
@@ -394,7 +394,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 ```
 
 - 왼쪽 "검색 설정"에서 **원천**(SFDC·CRMS·LAS·FAQ·Other)을 하나 고른다 — search는 원천 하나를 꼭 받는다.
-- `allow_external: false`면 질의 임베딩도 막혀 키워드·ID 검색만 된다(근거의 via에 `v`가 없음). 벡터 검색까지 보려면 `true`로 바꾸고 MCP를 다시 띄우고, 끝나면 되돌린다.
+- `allow_external: false`면 질의 임베딩도 막혀 키워드·ID 검색만 된다. 벡터 검색까지 보려면 `true`로 바꾸고 MCP를 다시 띄우고, 끝나면 되돌린다.
 - 다른 적재 결과를 보려면 `required.pg.db_schema`를 바꾸고 다시 띄운다.
 
 ### 4-7. 그 밖
@@ -582,7 +582,7 @@ bash deploy/host/scripts/dc.sh init --group <운영 그룹>   # 아래를 한 �
 | 칸 | 무엇 | 어디서 받나 | 형식 예(가짜) | 환경 | 같아야 하는 칸 | 틀리면 어디서 잡나 |
 |---|---|---|---|---|---|---|
 | `required.env.run_env` | 실행 환경 | 정해진 값 | `dev` · `prd` | PC·dev·prd | — | 모든 명령이 시작 거부(`dc.sh`도 설정을 못 읽음) |
-| `required.env.run_mode` | 실행 모드 | 정해진 값 | `prod` | PC·dev·prd | — | ⚠️ 빠지면 조용히 다르게 돈다(PRD pl-12) — 손으로 확인 |
+| `required.env.run_mode` | 실행 모드 | 정해진 값 | `prod` | PC·dev·prd | — | 서버(dev·prd)는 빠져도 같게 돈다(EDW를 못 읽으면 `run_env`만으로도 종료 4) |
 | `required.pg.host`·`port`·`db`·`user`·`password`·`db_schema` | 검색 DB(pgvector) 접속 | DB 담당자 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · `ai` | PC·dev·prd | — | `dc.sh check` ① check_env · ③ migrate check |
 | `required.embed.base_url`·`model`·`api_key` | 임베딩 모델 | 모델 담당자(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델 이름>` · `<비밀>` | PC·dev·prd | `model`은 적재 때와 검색 때 같아야 함 | `dc.sh check` ② ping_models |
 | `required.models.llm_*`·`vlm_*` | LLM·VLM 모델 | 모델 담당자 | `http://llm.example.local:8001/v1` · `<모델 이름>` | dev·prd | — | `dc.sh check` ② ping_models |
@@ -630,7 +630,7 @@ bash deploy/host/scripts/run_tool.sh check                  # PG·모델 요약(
 ```
 
 - EDW 읽기·쓰기 로그인과 Object Storage 버킷을 따로 확인하는 명령은 아직 없다. 첫 파싱 뒤 publish 미리보기(`bash deploy/host/scripts/trigger.sh publish --dry-run`)로 확인한다.
-- ⚠️ publish 실제 실행(`trigger.sh publish`)은 한 번만 한다. 다시 돌리면 Object Storage에 같은 파일을 또 올린다(PRD pl-12 ② — 고치기 전까지). EDW는 이미 있는 행을 건너뛴다.
+- ⚠️ publish 실제 실행(`trigger.sh publish`)은 한 번만 한다. 다시 돌리면 Object Storage에 같은 결과를 새 시각 이름으로 또 올린다(이미 올린 문서를 다시 고르지 않는 것은 run_docs 고르기가 맡는다 — pl-25). EDW는 이미 있는 행을 건너뛴다.
 
 **⑤ 이미지 점검**
 
@@ -680,7 +680,7 @@ tail -n 50 <결과 폴더>/docflow/<seq>/structure.log                     # 그
 
 `dc.sh logs`는 컨테이너 주 프로세스의 출력만 보인다. run_docs가 `docker exec`로 부르는 구조화·적재의 출력은 `structure.log`에 남지만, 이 파일은 문서 처리가 끝나면 `docflow/<seq>` 폴더와 함께 지워진다. 끝난 뒤에 남는 것은 `progress.log` 줄과(켜져 있으면) 아래 `applog.pipe_event` 행이다.
 
-**적재 거부 — 임베딩 모델이 다른 묶음(pl-51).** 묶음의 임베딩 모델이 검색 스키마에 이미 적재된 문서의 모델과 다르면 적재는 아무것도 쓰지 않고 종료 코드 2로 멈춘다(`[load] 임베딩 모델이 다름 — 적재 거부 …`). `common.log.db_enabled`가 켜져 있으면 거부가 시각과 함께 `applog.pipe_event`에 남는다:
+**적재 거부 — 임베딩 모델이 다른 묶음(pl-51).** 묶음의 임베딩 모델이 검색 스키마에 이미 적재된 문서의 모델과 다르면 적재는 아무것도 쓰지 않고 종료 코드 2로 멈춘다(`[load] 임베딩 모델이 다름 — 적재 거부 …`). `ops.log.db_enabled`가 켜져 있으면 거부가 시각과 함께 `applog.pipe_event`에 남는다:
 
 ```sql
 -- 최근 7일 적재 거부(임베딩 모델 불일치) — 시각·실행 ID·기존 모델 대 묶음 모델
@@ -725,7 +725,7 @@ sudo systemctl enable --now data-pipeline-nightly.timer      # 새벽 배치를 
 | run_docs 진행 | `<run_docs 작업 폴더>/batch_progress/progress.log`(작업 폴더 = `ops.pipeline_host.run_docs_dir`) |
 | 끄기 | **타이머부터 끈다** — 켜 두면 keepalive가 2분 안에 MCP를 다시 띄운다: `systemctl stop mcp-server-keepalive.timer data-pipeline-nightly.timer` → `bash deploy/host/scripts/dc.sh stop` |
 | 켜기 | `bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp` → `systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer` |
-| 설정을 바꾼 뒤 | `bash deploy/host/scripts/dc.sh up -d …`(바뀐 컨테이너만 다시 만듦 — §5-7) |
+| 설정을 바꾼 뒤 | `bash deploy/host/scripts/dc.sh up -d --force-recreate data-pipeline data-pipeline-mcp mcp`(settings.yaml은 붙인 파일이라 그냥 `up -d`로는 다시 만들지 않음) |
 
 ### 5-6. 서버 — 결과 확인과 도구
 
@@ -751,7 +751,7 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 
 | 바꿀 것                     | 방법                                                                                                                                                                         |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 설정 값                     | settings.yaml을 직접 고치고 상주 컨테이너(`data-pipeline`, `data-pipeline-mcp`, `mcp-server`)를 다시 띄운다                                                                      |
+| 설정 값                     | settings.yaml을 직접 고치고 상주 컨테이너를 다시 띄운다(`dc.sh up -d --force-recreate data-pipeline data-pipeline-mcp mcp` — 서비스 이름 `mcp`, 컨테이너 이름 `mcp-server`)                                                                      |
 | 이번 실행만 다른 값              | `--set 이름=값`(오버레이 설정 파일 도구는 PC 전용 — 서버에서는 종료 코드 2)                                                                                                                         |
 | 엔진 구성(파일) | 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 코드 폴더 바꾸기(5-8) — 되돌리기는 git, 확인은 `show-stack` — [docs/architecture/pipeline\_stack.md](docs/architecture/pipeline_stack.md) |
 
@@ -796,12 +796,14 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 | [CLAUDE.md](CLAUDE.md)                                                       | 개발 규칙 · 로컬 하네스 · 점검 명령 · 핑거프린트 기준값                                     |
 | [refactor.md](docs/refactoring/refactor.md)                                                   | 서버·사람이 확인할 사항(C-xx) — 배포 순서는 [release-and-patch §8](docs/operations/release-and-patch.md#8-020-배포--사람이-할-일) |
 | [docs/operations/server-guide.md](docs/operations/server-guide.md)           | 서버 설치 · 운영 · 문제 해결                                                     |
-| [docs/operations/release-and-patch.md](docs/operations/release-and-patch.md) | 버전 · 빌드 · 전송 · 패치 번들(설명서) · DB 버전 관리(migrate) · 배포 판정                     |
+| [docs/operations/release-and-patch.md](docs/operations/release-and-patch.md) | 버전 · 빌드 · 전송 · 코드 폴더 바꾸기 · DB 버전 관리(migrate) · 배포 판정                     |
 | [docs/operations/env-guide.md](docs/operations/env-guide.md)                 | 설정 항목 작성 가이드                                                           |
+| [docs/operations/mcp-guide.md](docs/operations/mcp-guide.md)                 | 검색 MCP 클라이언트 안내 — 도구 6개의 입력·출력·한도·오류 |
+| [docs/operations/gitea-guide.md](docs/operations/gitea-guide.md)             | 내부망 코드 관리(gitea) |
 | [docs/architecture/](docs/architecture/)                                     | 프롬프트 패키지(prompts.md) · 엔진 구성 파일(pipeline\_stack.md) · run\_docs 설계 |
 | [docs/history/refactor\_plan.md](docs/history/refactor_plan.md)      | 리팩토링 가이드 · 결정 기록(D-xxx) · 파일 이동표                                       |
 
 
-**알려진 문제·미개발 항목** — [docs/PRD.md](docs/PRD.md) 표(축소 스키마 일부 반영 `mc-10`·`mc-11` · 테스트 알려진 실패 `e2-11` 등).
+**알려진 문제·미개발 항목** — [docs/PRD.md](docs/PRD.md) 표의 상태 `todo` 행.
 
-> 옛 문서와 코드 주석에는 리팩토링 중에 쓰던 용어가 남아 있다(시험=테스트, 반입=배포, 칸=항목·컬럼, 판=버전, 지문=핑거프린트, 열쇠=키, 층=레이어, 묶음=번들, 대장=레지스트리, 인계=핸드오프, 덧씌우기=오버레이 패치, 게시=퍼블리시, 지시서=프롬프트). 대응표는 CLAUDE.md 끝에 있다.
+> 옛 문서와 코드 주석에는 리팩토링 중에 쓰던 용어가 남아 있다(시험=테스트, 반입=배포, 칸=항목·컬럼, 판=버전, 지문=핑거프린트, 열쇠=키, 층=레이어, 묶음=번들, 대장=레지스트리, 인계=핸드오프, 게시=퍼블리시, 지시서=프롬프트). 대응표는 [docs/INDEX.md](docs/INDEX.md#glossary) Glossary에 있다.

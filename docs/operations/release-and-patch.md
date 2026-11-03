@@ -1,4 +1,4 @@
-# 릴리스 · 패치 — 실행 이미지 + 코드 폴더 바꾸기
+# 릴리스 — 실행 이미지 + 코드 폴더 바꾸기
 
 ↑ [server-guide.md](server-guide.md) · [env-guide.md](env-guide.md) · 스크립트: `deploy/release/{build_ship,ship_stage,selftest_gate}.sh` · `deploy/host/scripts/prune_old.sh`
 
@@ -51,7 +51,7 @@
 | C5 | LLM·VLM·임베딩 호출은 `common/ai/llm.py`(HTTP 한 길, pl-46)·`embed.py`를 고친다 |
 | C6 | 새 모듈 폴더를 만들면 §1 표의 어느 이미지에 들어가는지 정한다(코드 폴더는 저장소 트리째 붙으므로 개발 서버는 따로 할 일 없음 — 코드가 든 이미지는 Dockerfile의 COPY 확인) |
 | C7 | 설정 기본값을 바꿀 때는 settings.yaml 항목으로(코드 상수 변경도 코드 폴더 바꾸기로 되지만 커밋 메시지에 이유 한 줄) |
-| C8 | 커밋 메시지에 **'오버레이 패치 가능' / '새 이미지 버전 필요'** |
+| C8 | 커밋 메시지에 **'코드 폴더 바꾸기 가능' / '새 이미지 버전 필요'** |
 
 ## 3. 코드만 바뀐 판 — 바뀐 것 정리 → 서버 변경과 합치기 → 확인
 
@@ -64,20 +64,20 @@
 
 ### 3-2. 서버에서 적용
 
-**원칙 — 서버에서 자체로 진행한 것이 먼저다.** 서버는 실데이터로 돌려 보고 고친 곳이라, 서버 쪽 코드 수정·옵션 값·서버 전용 스크립트는 그대로 살리고 패치의 새 코드를 그 위에 합친다(패치가 서버 변경을 덮어 없애지 않게). 병합은 서버 LLM이 끝까지 한다 — 충돌이 나도 멈추지 않고 아래 기준으로 합친 뒤, 무엇을 어떻게 합쳤는지 기록에 남긴다.
+**원칙 — 서버에서 자체로 진행한 것이 먼저다.** 서버는 실데이터로 돌려 보고 고친 곳이라, 서버 쪽 코드 수정·옵션 값·서버 전용 스크립트는 그대로 살리고 새 판의 코드를 그 위에 합친다(새 판이 서버 변경을 덮어 없애지 않게). 병합은 서버 LLM이 끝까지 한다 — 충돌이 나도 멈추지 않고 아래 기준으로 합친 뒤, 무엇을 어떻게 합쳤는지 기록에 남긴다.
 
 **먼저 서버 자체 개발 기록을 읽는다** — `/srv/rag/reports/server-changes.md`(서버에서 코드를 고치거나 옵션을 바꾼 건마다 한 행 + `server-changes/<ID>.diff`, 형식 [server-guide.md](server-guide.md) §7)와 서버 설정 파일 `/srv/rag/env/settings.yaml`. 상태가 `서버에만`·`PC 보냄`인 행마다:
 
 | 그 행의 파일이 이번 판의 바뀐 파일 목록(§3-1)에 | 할 일 |
 |---|---|
-| 없음 | 그대로 둔다(패치가 안 건드림) |
-| `M`(교체)로 있음 | 새 파일에 그 변경이 이미 들어 있으면(PC가 반영 — `RELEASE_NOTES.md` 커밋 목적에 그 ID) 새 파일로 교체하고 `PC 반영됨 <커밋>`. 없으면 **새 파일 위에 서버 변경을 다시 얹는다**: `<ID>.diff`가 그대로 안 얹히면 그 변경의 뜻(행의 '무엇·왜')을 새 코드 구조에 맞게 손으로 옮긴다. 패치와 서버가 같은 줄·같은 동작을 다르게 바꿨으면 **서버 쪽 동작을 남기고**, 패치의 나머지 새 기능은 그 둘레에 붙인다. 행에 `다시 얹음 <패치 커밋>` + 합친 방법 한 줄 |
-| `D`(삭제)로 있음 | 패치 노트에서 그 코드가 어디로 옮겨졌는지 보고, 옮겨진 곳에 서버 변경을 다시 얹는다. 옮겨진 곳이 없으면(기능 삭제) 서버가 그 파일을 쓰는지 보고 쓰면 남긴다. 행에 처리 한 줄 |
+| 없음 | 그대로 둔다(새 판이 안 건드림) |
+| `M`(교체)로 있음 | 새 파일에 그 변경이 이미 들어 있으면(PC가 반영 — `RELEASE_NOTES.md` 커밋 목적에 그 ID) 새 파일로 교체하고 `PC 반영됨 <커밋>`. 없으면 **새 파일 위에 서버 변경을 다시 얹는다**: `<ID>.diff`가 그대로 안 얹히면 그 변경의 뜻(행의 '무엇·왜')을 새 코드 구조에 맞게 손으로 옮긴다. 새 판과 서버가 같은 줄·같은 동작을 다르게 바꿨으면 **서버 쪽 동작을 남기고**, 새 판의 나머지 새 기능은 그 둘레에 붙인다. 행에 `다시 얹음 <새 판 커밋>` + 합친 방법 한 줄 |
+| `D`(삭제)로 있음 | `RELEASE_NOTES.md`에서 그 코드가 어디로 옮겨졌는지 보고, 옮겨진 곳에 서버 변경을 다시 얹는다. 옮겨진 곳이 없으면(기능 삭제) 서버가 그 파일을 쓰는지 보고 쓰면 남긴다. 행에 처리 한 줄 |
 
-**옵션(설정) 변경도 같은 원칙** — 서버에서 바꾼 옵션 값이 패치 뒤에도 그대로 동작해야 한다:
-- 서버 `settings.yaml`에 적은 값은 패치가 기본값을 바꿔도 그대로 둔다(설정 파일이 코드 기본값보다 우선).
-- 서버가 코드 안 기본값(상수·설정 모델 기본값 등)을 직접 바꿨다면 그 값을 `settings.yaml`의 같은 항목(자리는 저장소 `settings.sample.yaml` — 옛 env 이름으로 찾음)으로 옮긴 뒤 새 파일로 교체한다(다음 패치부터 코드 안 값이 덮여도 유지됨). 설정 항목이 없는 값이면 위 표대로 코드에 다시 얹는다.
-- 패치가 설정 항목 이름·자리를 바꾸거나 없앴으면(`RELEASE_NOTES.md` '바뀐 설정'·`settings.sample.yaml` 차이) 서버가 쓰던 옛 항목의 값을 새 항목으로 옮긴다. 새로 생긴 항목은 기본값으로 두되, 서버에서 일부러 끈 기능(false)과 겹치면 끈 상태를 유지한다.
+**옵션(설정) 변경도 같은 원칙** — 서버에서 바꾼 옵션 값이 새 판에서도 그대로 동작해야 한다:
+- 서버 `settings.yaml`에 적은 값은 새 판이 기본값을 바꿔도 그대로 둔다(설정 파일이 코드 기본값보다 우선).
+- 서버가 코드 안 기본값(상수·설정 모델 기본값 등)을 직접 바꿨다면 그 값을 `settings.yaml`의 같은 항목(자리는 저장소 `settings.sample.yaml` — 옛 env 이름으로 찾음)으로 옮긴 뒤 새 파일로 교체한다(다음 판부터 코드 안 값이 덮여도 유지됨). 설정 항목이 없는 값이면 위 표대로 코드에 다시 얹는다.
+- 새 판이 설정 항목 이름·자리를 바꾸거나 없앴으면(`RELEASE_NOTES.md` '바뀐 설정'·`settings.sample.yaml` 차이) 서버가 쓰던 옛 항목의 값을 새 항목으로 옮긴다. 새로 생긴 항목은 기본값으로 두되, 서버에서 일부러 끈 기능(false)과 겹치면 끈 상태를 유지한다.
 - 옮기거나 유지한 옵션은 모두 `server-changes.md` 행(또는 새 행)에 적는다.
 
 기록이 없는데 `live`와 직전 판 코드 묶음이 다른 파일(기록 안 된 서버 수정)이 나오면 그것도 서버 자체 변경으로 보고 같은 방식으로 합치고, 그 자리에서 기록에 행을 추가한다.
@@ -98,13 +98,13 @@ bash <코드 폴더>/deploy/release/selftest_gate.sh docker run --rm <연결 옵
 - 한 사례만: `docker run --rm <태그> selftest --only <이름 조각>`.
 - 이미지 안 목록으로 판정: `docker run --rm --entrypoint bash <태그> /app/docker/selftest_gate.sh /app/docker/entrypoint.sh selftest`.
 
-통과하면 `/srv/rag/reports/versions.md`에 한 줄: `날짜 · 서버 · 이미지 버전 + patch <커밋> · 확인 결과`(다시 얹은 서버 변경 ID·유지한 옵션도). 실패하면 먼저 합친 곳을 다시 본다 — 서버 변경은 살린 채 패치 쪽 연결(새 함수 이름·인자·import)을 맞춰 고치고 다시 확인. 그래도 안 되면 그 패치 항목만 빼고(서버 쪽 버전 유지) 나머지를 적용한 뒤 뺀 항목과 이유를 `issues.md`에 적는다. **서버 변경을 버려서 통과시키지는 않는다.**
+통과하면 `/srv/rag/reports/versions.md`에 한 줄: `날짜 · 서버 · 이미지 버전 · 코드 커밋 · 확인 결과`(다시 얹은 서버 변경 ID·유지한 옵션도). 실패하면 먼저 합친 곳을 다시 본다 — 서버 변경은 살린 채 새 판 쪽 연결(새 함수 이름·인자·import)을 맞춰 고치고 다시 확인. 그래도 안 되면 새 판의 그 항목만 빼고(서버 쪽 버전 유지) 나머지를 적용한 뒤 뺀 항목과 이유를 `issues.md`에 적는다. **서버 변경을 버려서 통과시키지는 않는다.**
 
 ### 3-4. 서버 자체 개발을 PC(main)로 가져오기
-서버에서만 고친 코드는 다음 패치·전체 덮어쓰기 때마다 다시 얹어야 하므로, PC가 main에 받아들이는 것이 기본이다.
+서버에서만 고친 코드는 다음 판·전체 덮어쓰기 때마다 다시 얹어야 하므로, PC가 main에 받아들이는 것이 기본이다.
 1. 서버 → PC: `server-changes.md`의 `서버에만` 행과 `<ID>.diff`를 보낸다(반출 규칙은 이슈와 같음 — 코드·숫자·오류만, 문서 본문·고객명·키 값 없음). 보낸 행은 `PC 보냄`.
 2. PC: 외부 PR처럼 읽고 검토하되 **서버가 실데이터로 고친 것이라 받아들이는 쪽이 기본** — diff·이유·서버 테스트 결과를 보고 그대로 또는 PC 구조에 맞게 고쳐 받아들이고, 버리는 것은 같은 문제를 PC 코드가 이미 다르게 풀었을 때만. 서버가 바꾼 옵션 값은 기본값으로 올릴지(모든 서버에 맞는지) 따로 판단. 받아들이면 `jh/<ID>` 브랜치 → 테스트 → main. 판단과 근거는 그 PR 본문에 남긴다.
-3. 다음 패치의 커밋 메시지에 그 서버 변경 ID를 적는다(`RELEASE_NOTES.md` 커밋 목적에 나옴 → 서버가 §3-2에서 `PC 반영됨`으로 닫음). 버린 변경은 이유와 함께 서버에 알리고 행을 `폐기`로.
+3. 다음 판의 커밋 메시지에 그 서버 변경 ID를 적는다(`RELEASE_NOTES.md` 커밋 목적에 나옴 → 서버가 §3-2에서 `PC 반영됨`으로 닫음). 버린 변경은 이유와 함께 서버에 알리고 행을 `폐기`로.
 
 ## 4. 전체 덮어쓰기 — 경로가 크게 바뀌었을 때(서버 기본값보다 단순)
 
@@ -123,12 +123,10 @@ PC 쪽: push 전에 **RELEASE_NOTES.md**(이번 판 목적·바뀐 코드·바�
 
 **0.2.0은 §8 "0.2.0 배포 — 사람이 할 일"**(사람 할 일의 정본 — 결정·배포 전·당일·뒤, 누가·`C-xx`)을 따른다 — §5-1~§5-7은 그 안의 단계별 명령이다(0.1.0 판은 [history/deploy_0_1_0.md](../history/deploy_0_1_0.md)).
 
-**`deploy/docker/IMAGE_BASE`** — 옛 `make_patch.sh`(11-03 지움)의 기준 파일. 지금은 읽는 곳이 없다(정리는 PRD [e2-21](../prd/test.md#e2-21)).
-
 **버전(D-036, 10-29)** — 두 이미지(`data-pipeline`·`mcp-server`)는 같은 버전을 쓴다. 정본은 저장소 루트 `VERSION` 한 줄(SemVer `MAJOR.MINOR.PATCH`, 첫 배포 `0.1.0`).
 - 올리는 규칙(D-009): MAJOR = MCP 도구 계약·DB 스키마·핸드오프 형식처럼 서로 맞춰야 하는 것이 깨질 때(1.0 전에는 예외 — MINOR에서도 계약·스키마를 깰 수 있고, 운영이 안정되면 1.0.0으로 올림, 사용자 10-30 PRD grill C2) · MINOR = 새 이미지 버전(의존성·Dockerfile·마운트 경로) 또는 큰 기능 · PATCH = 코드만 교체(코드 폴더 바꾸기). `release/<버전>` 브랜치에서 `VERSION`을 고치고, main 머지 커밋에 git 태그 `v<버전>`(annotated)을 붙인다.
 - 이미지 태그 = 버전(`data-pipeline:0.1.0`·`mcp-server:0.1.0`). `build_ship.sh`·`ship_stage.sh`는 태그를 안 주면 `VERSION`을 쓰고, 빌드한 커밋은 이미지 라벨 `org.opencontainers.image.revision`(커밋 안 한 변경이 섞이면 `-dirty`)에 남긴다 — `docker inspect -f '{{json .Config.Labels}}' data-pipeline:0.1.0`. 같은 태그가 이미 있으면 `build_ship.sh`가 멈춘다(다시 만들 때만 `FORCE_TAG=1`).
-- 버전 표기(`common.pipeline_version()` — 회사 DB `AI.ParsingMeta.silver_version`(지금 이름 `pipeline_version`)·`gold_version` — 사용자 11-02)는 이미지 안 `/app/deploy/VERSION`(코드 폴더면 그 루트 `VERSION`)이다 — 코드의 옛 후보 `common/PATCH_VERSION`은 만들던 `make_patch.sh`를 11-03에 지워 쓰이지 않는다(PRD [e2-21](../prd/test.md#e2-21)).
+- 버전 표기(`common.pipeline_version()` — 회사 DB `AI.ParsingMeta.silver_version`(지금 이름 `pipeline_version`)·`gold_version` — 사용자 11-02)는 이미지 안 `/app/deploy/VERSION`(코드 폴더면 그 루트 `VERSION`)이다.
 
 ### 5-1. 빌드 → 전송 → 적재
 ```bash
@@ -140,9 +138,6 @@ docker build -f deploy/docker/Dockerfile --target mcp      --build-arg APP_VERSI
 
 # 빌드만(빌드→selftest 판정→resources→비밀값 흔적 점검, 저장·전송 없음 — PC 확인용)
 BUILD_ONLY=1 IMAGE_TARGET=pipeline bash deploy/release/build_ship.sh            # 태그 = data-pipeline:<VERSION> · 테스트 빌드는 TAG=data-pipeline:<다른 태그>
-
-# 한 번에(빌드→점검→저장→전송→적재→원격 점검, SSH 쪽으로)
-TARGET=user@수집서버 IMAGE_TARGET=pipeline bash deploy/release/build_ship.sh
 
 # 또는 저장만(45MB 조각 + sha256 — output/ship/sbl_images/, 저장소 push는 사람이 따로)
 bash deploy/release/ship_stage.sh pipeline mcp            # 태그 = VERSION(다른 태그면 첫 인자로: ship_stage.sh <태그> pipeline mcp)
@@ -191,7 +186,7 @@ for c in data-pipeline data-pipeline-mcp; do docker exec $c test -f /app/deploy/
 
 S8a(사용자 10-28, D-030) 버전부터 pgvector의 우리 스키마(검색 `PG_SCHEMA`와 원천별 스키마, 로그 `applog`, 마스터 `<PG_SCHEMA>_master`)의 표·색인·뷰는 **Alembic 리비전**으로 만든다. 실행 중 자동 DDL은 없다.
 - `pgvector_load deploy`(run_docs가 문서마다 부르는 적재): 새 스키마면 만들고 버전 기록, 버전 기록 있는 스키마면 버전 올리기(migrate up — 끝이면 그대로), **버전 기록 없는 기존 스키마면 비교·DDL 없이 경고만 찍고 적재를 계속**한다(빠진 표·색인은 ②의 check가 보여 주고 ③-b의 up이 만듦 — D-030 ④).
-- `--target`은 `search`·`applog`·`master`·`all`(= 셋 모두)이고, 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다(그대로 두거나 DB 담당자가 지움). 엔진 구성·원천 목록은 코드 폴더의 파일이다([pipeline_stack.md](../architecture/pipeline_stack.md)).
+- `--target`은 `search`·`applog`·`master`·`all`(= 셋 모두)이고, 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다(그대로 두거나 DB 담당자가 지움). 엔진 구성은 코드 폴더의 파일이다([pipeline_stack.md](../architecture/pipeline_stack.md)).
 - 버전 기록 표는 스키마마다 `<스키마>.alembic_version`(DB 담당 협의 — `refactor.md` C-48).
 - 새 이미지(SQLAlchemy·alembic — 폐쇄망 휠, §5-1)를 적재한 뒤, 다음 적재(새벽 배치) 전에 한다. 값·비밀은 찍지 않는다(카탈로그·버전 번호만).
 ```bash
@@ -214,7 +209,7 @@ bash deploy/host/scripts/run_tool.sh show-stack                           # 이�
 ```
 - **버전 기록 전에 적재가 돌면:** `pgvector_load deploy`·`load`(run_docs가 부름)는 "판 기록 없음" 경고를 찍고 계속한다(기준 리비전 = 지금 스키마 — 결과 같음). 코드보다 낮은 버전이면 적재 전에 `migrate up`을 하라고 종료 2, DB가 코드보다 새 버전(모르는 리비전)이면 이미지·코드 버전을 맞추라고 종료 2(D-030 ⑤). 검색 MCP(읽기)는 버전을 보지 않는다.
 - **새 검색 스키마(차원이 바뀜 — 새 `PG_SCHEMA`):** `migrate up --target all --schema <새 스키마> --dim <임베딩 차원>`(또는 `--bundle <번들>` — 차원을 번들 meta.json에서 읽음). 표가 아직 없는 새 스키마는 차원을 주지 않으면 "차원을 모름"으로 멈춘다 — 차원 = 임베딩 모델 출력 크기(모델 담당자에게 확인). vector 확장이 없으면 관리자 설치(공유 PG에서 `--create-extension`·`PG_CREATE_EXTENSION`을 켜지 않음).
-- **버전이 바뀌는 릴리스:** 패치 노트의 "DB 판" 줄을 보고 적재 전에 `migrate up --target <갈래>` — 표·컬럼을 바꾸는 리비전은 데이터 계약 변경(검토 등급 A·DB 담당 협의 — D-008).
+- **버전이 바뀌는 릴리스:** `RELEASE_NOTES.md`의 "DB 판" 줄을 보고 적재 전에 `migrate up --target <갈래>` — 표·컬럼을 바꾸는 리비전은 데이터 계약 변경(검토 등급 A·DB 담당 협의 — D-008).
 - **엔진 구성 바꾸기(사용자 11-01):** 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 코드 폴더째 바꾼다(§1-1 — 되돌리기 = git·앞 판 폴더). 이미지에 없는 엔진이 있으면 파이프라인 진입점이 시작하지 않는다(종료 2). 오래 도는 검색 MCP는 시작 때 읽으므로 바꾼 뒤 다시 띄운다(`mcp_up.sh`) — 파싱 MCP 서비스는 작업마다 다시 읽는다.
 - **계정의 기본 스키마가 우리 스키마여도 같음(VS8a B-1):** DB 계정의 `search_path`가 우리 스키마로 정해져 있거나(`ALTER ROLE … SET search_path`), 계정 이름 = 스키마 이름(`"$user"`), `PG_SCHEMA=public`이어도 ②가 표·컬럼을 그대로 비교한다. S8a 버전으로 버전을 기록했다면(그때는 "표 없음"만 보이고 ③-b가 컬럼이 다른 스키마도 기록했음) 지금 버전에서 ②를 다시 돌려 차이 0인지 확인한다.
 - **모르는 리비전:** 버전 표에 코드가 모르는 리비전이 하나라도 있으면(새 이미지 → 옛 이미지로 되돌린 뒤 등) 적재·`up`·`stamp` 모두 종료 2.
@@ -224,15 +219,11 @@ bash deploy/host/scripts/run_tool.sh show-stack                           # 이�
 
 폐쇄망 서버는 첫 실행 때 모델을 인터넷에서 받을 수 없다. 그래서 pipeline 이미지를 빌드하기 전에 저장소 루트 `assets/`를 채운다. `build_ship.sh`는 `IMAGE_TARGET=pipeline`에서 `assets/rapidocr/*.onnx`가 없으면 멈춘다(`ALLOW_NO_ASSETS=1`이면 경고만 — PC 확인 빌드용, 서버에 올릴 이미지에는 쓰지 않음).
 
-**지금 이미지가 쓰는 것은 `assets/rapidocr/*.onnx` 하나뿐이다**(Dockerfile이 `/app/assets/rapidocr/`를 rapidocr 패키지의 `models/`로 복사). 나머지 항목은 옛 서버 설치 길(`assets.py install`)에만 쓰이고 이미지 빌드에는 들어가지 않는다.
+**이미지가 쓰는 자산은 `assets/rapidocr/*.onnx` 하나뿐이다**(Dockerfile이 `/app/assets/rapidocr/`를 rapidocr 패키지의 `models/`로 복사). `assets.py`가 아는 나머지 항목(tessdata·글꼴·휠)은 이미지에 들어가지 않는다 — 원본이 없으면 `pack`이 건너뛴다.
 
-| `assets/` 안 | 무엇·누가 쓰나 | 받는 곳(공식 공개 배포) | 원본을 둘 자리(`assets.py pack`이 읽음) | 0.1.0 |
-|---|---|---|---|---|
-| `rapidocr/*.onnx` | RapidOCR 검출·방향·**한국어 PP-OCRv5 인식** 모델 — `rapidocr_ko` 엔진([PRD pl-22](../prd/transform.md#pl-22) — OCR 엔진은 기본 꺼짐)과 준비 단계 쪽 회전 판정([pl-02](../prd/extract.md#pl-02)) | `pip install rapidocr==3.9.2`(검출·방향·중국어 인식은 패키지에 들어 있음) → 한국어 인식 모델은 **첫 실행 때 받음**: 인터넷이 되는 PC에서 `python -c "from rapidocr import RapidOCR, LangRec, OCRVersion, ModelType; RapidOCR(params={'Rec.lang_type': LangRec.KOREAN, 'Rec.ocr_version': OCRVersion.PPOCRV5, 'Rec.model_type': ModelType.MOBILE})"` 한 번 | 설치된 rapidocr 패키지의 `models/`(자동 — `PP-OCRv6_rec_small.onnx` 중국어 인식은 뺌) | **필요** |
-| `tessdata/{kor,eng,osd}.traineddata` | Tesseract 한국어·영어·방향(LSTM 정확도 우선 `tessdata_best`) — 지금 이 자산을 쓰는 엔진 없음(`TESSDATA_PREFIX`) | GitHub `tesseract-ocr/tessdata_best` | `tessdata_best/` | 필요 없음 — `kreuzberg_ocr`은 스택에 없고 [pl-31](../prd/transform-cleanup.md#pl-31)에서 지움 |
-| `fonts/GoNotoCurrent-Regular.ttf` | marker 렌더링 글꼴 | GitHub `satbyy/go-noto-universal` 릴리스 | `dl/` | 필요 없음 — marker 엔진은 이 저장소에 없음 |
-| `wheels/en_core_web_sm-3.8.0-py3-none-any.whl` | spaCy 영어 모델 — `unstructured` 토큰화 | GitHub `explosion/spacy-models` 릴리스 `en_core_web_sm-3.8.0` | `dl/` | 필요 없음 — `unstructured`는 pl-31에서 지움 |
-| `wheels/psycopg*.whl` 등 | PostgreSQL 드라이버(Linux x86_64·Python 3.12) | `pip download "psycopg[binary]==3.3.6" --platform manylinux2014_x86_64 --python-version 3.12 --only-binary=:all: -d dl/wheels_pg` | `dl/wheels_pg/` | 이미지 빌드에는 필요 없음 — 이미지는 `deploy/docker/wheels/`(폐쇄망 휠, §5-1)에서 설치 |
+| `assets/` 안 | 무엇·누가 쓰나 | 받는 곳(공식 공개 배포) | 원본을 둘 자리(`assets.py pack`이 읽음) |
+|---|---|---|---|
+| `rapidocr/*.onnx` | RapidOCR 검출·방향·**한국어 PP-OCRv5 인식** 모델 — `rapidocr_ko` 엔진([PRD pl-22](../prd/transform.md#pl-22) — OCR 엔진은 기본 꺼짐)과 준비 단계 쪽 회전 판정([pl-02](../prd/extract.md#pl-02)) | `pip install rapidocr==3.9.2`(검출·방향·중국어 인식은 패키지에 들어 있음) → 한국어 인식 모델은 **첫 실행 때 받음**: 인터넷이 되는 PC에서 `python -c "from rapidocr import RapidOCR, LangRec, OCRVersion, ModelType; RapidOCR(params={'Rec.lang_type': LangRec.KOREAN, 'Rec.ocr_version': OCRVersion.PPOCRV5, 'Rec.model_type': ModelType.MOBILE})"` 한 번 | 설치된 rapidocr 패키지의 `models/`(자동 — `PP-OCRv6_rec_small.onnx` 중국어 인식은 뺌) |
 
 ```bash
 # 1) (인터넷 되는 PC) rapidocr 한국어 모델을 한 번 받는다 — 위 표의 python -c 한 줄
@@ -251,7 +242,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 
 **0. 미리 정할 것**
 - 새벽 배치를 멈춘다: `systemctl stop data-pipeline-nightly.timer`(끝나면 `start`). 진행 중인 배치·`run_docs.py`는 끝날 때까지 기다린다.
-- 전체 재처리 시간·디스크를 잡는다 — 판에 따라 후보정(p1)·구조화(s) 지문이 바뀌면 서버 문서 전부가 다시 처리된다(바뀐 지문은 릴리스 노트·PRD e2-02). 시간은 지난 run_docs `progress.log`의 문서당 시간 × 문서 수(실행 보드 `run_board`는 11-01에 지움), 디스크는 `required.deploy.output_root`의 `parse/_rep`·묶음 크기만큼 여유를 더 둔다(옛 결과는 다 돌 때까지 남김).
+- 전체 재처리 시간·디스크를 잡는다 — 판에 따라 후보정(p1)·구조화(s) 지문이 바뀌면 서버 문서 전부가 다시 처리된다(바뀐 지문은 릴리스 노트·PRD e2-02). 시간은 지난 run_docs `progress.log`의 문서당 시간 × 문서 수, 디스크는 `required.deploy.output_root`의 `parse/_rep`·묶음 크기만큼 여유를 더 둔다(옛 결과는 다 돌 때까지 남김).
 
 **1. 백업(되돌리기용)**
 ```bash
@@ -294,8 +285,7 @@ bash deploy/host/scripts/run_tool.sh migrate check --target all     # "차이 �
 | 대상 | 남길 것 | 명령 |
 |---|---|---|
 | 이미지(2개 — `data-pipeline`·`mcp-server`) | 지금 버전 + 직전 버전(새 버전 검증 중 되돌리기용) | `bash deploy/host/scripts/prune_old.sh --apply`(기본 dry-run, `--keep N`은 새 이름에만) — `docker system prune`·`-a`는 쓰지 않음(남의 이미지 보호) |
-| 업데이트 폴더 `/srv/rag/code/updates/*` | 최근 2개 | 적용·확인 끝난 뒤 지움 |
-| 코드 백업 `/srv/rag/code/backup-*` | 최근 2개 | 새 버전이 단계 1(샘플 기능)을 통과한 뒤 |
+| 코드 판 폴더 `/srv/rag/code/<버전>-<커밋>` | `live`가 가리키는 판 + 바로 앞 판(되돌리기용, §1-1 5) | 새 판 확인이 끝난 뒤 그보다 오래된 판 폴더를 손으로 지움 |
 
 ## 7. 릴리스 체크리스트 (고정 단계)
 
@@ -309,7 +299,7 @@ bash deploy/host/scripts/run_tool.sh migrate check --target all     # "차이 �
    4. DB 버전: `migrate check --target all` — 버전 기록 전이면 §5-5 처음 한 번, 버전이 바뀌는 릴리스면 `migrate up`. **적재·selftest 앞에** 한다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다).
    5. `selftest` 1개(`selftest_gate.sh` 판정 — 알려진 FAIL 밖 0, §3-3) → 로그·종료 코드 확인.
 4. `/srv/rag/reports/versions.md`에 버전 기록 한 줄.
-5. 문제가 있으면 [server-guide.md](server-guide.md) §7 형식으로 이슈 기록 → PC가 수정 → 다음 패치로.
+5. 문제가 있으면 [server-guide.md](server-guide.md) §7 형식으로 이슈 기록 → PC가 수정 → 다음 판으로.
 
 ## 8. 0.2.0 배포 — 사람이 할 일
 
@@ -339,7 +329,7 @@ bash deploy/host/scripts/run_tool.sh migrate check --target all     # "차이 �
 | 1 | 판 전체 grill-me 검토 — 지문 전후(릴리스 노트·PRD [e2-02](../prd/test.md#e2-02) — 바뀌면 서버 문서 재처리)·DB 스키마(판 0002·ParsingMeta DDL)·prd 비밀 굽기(8-1) | 사용자 | 등급 A |
 | 2 | ParsingMeta DDL 한 번 — 칸 이름 바꾸기·`loaded_at`·판 칸·운영이 더한 분류·고객 칸 지우기(운영 분류 스크립트가 멈추므로 운영 담당에게 알림) | DB 담당·EDW 담당 | C-76 |
 | 3 | PG — 새 `PG_SCHEMA` 이름(50자 이하) · 권한(DB 수준 CREATE, 원천 스키마 5벌의 읽기·쓰기, `doc_id_seq`) | DB 담당 | C-74 |
-| 4 | 서버 settings.yaml 준비 — 필수 경로·접속(코드 기본값 없음 — 8-1) · EDW 읽기·쓰기 계정 · `search.server.fulltext_secret`·mcp-server의 Object Storage 읽기와 EDW 읽기 · `extract.input_source` 꼴 · 예전에 `-e`로 주던 값은 settings.yaml 칸으로 · 새벽 배치 칸은 비워 둠 | 서버 운영 | C-70·C-73·C-75·C-76 |
+| 4 | 서버 settings.yaml 준비 — 필수 경로·접속(코드 기본값 없음 — 8-1) · EDW 읽기·쓰기 계정 · `search.server.fulltext_secret`·mcp-server의 Object Storage 읽기와 EDW 읽기 · `required.source.input_source` 꼴 · 예전에 `-e`로 주던 값은 settings.yaml 칸으로 · 새벽 배치 칸은 비워 둠 | 서버 운영 | C-70·C-73·C-75·C-76 |
 | 5 | 노출됐던 운영 키 교체(아직 안 했으면) — 새 값은 settings.yaml에만 | 서버 운영(보안) | C-10 |
 | 6 | 덮기 설정 임시 파일 보안 검토 — 서버 `/tmp` 정리 주기·권한 600 | 사용자·서버 운영 | C-46 |
 | 7 | 폐쇄망 휠·반입 자산(`assets/`) 채우고 빌드(§5-6 — `ALLOW_NO_ASSETS=1` 금지) | devops | — |
@@ -406,7 +396,7 @@ $DOCKER run --rm -i --network none --entrypoint bash -v "$PWD:/app/deploy:ro,z" 
 - 이미지 칸 `required.deploy.pipeline_image`·`required.deploy.mcp_image` → **[dev]** 그대로 `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0`(0.2.0 코드는 0.1.0 실행 이미지에서 돈다 — DEPS_HASH 같음) · **[prd]** `data-pipeline:0.2.0`·`mcp-server:0.2.0`.
 - 검색 스키마 `required.pg.db_schema` → `$NEW_SCHEMA`(판 0002가 기준 스키마의 옛 표를 지우므로 **반드시 새 이름** — 8-1·C-74).
 - 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline`은 비워 둔다(8-4 3에서 켬).
-- 0.2.0에서 지운 칸(`common/config/layout.py` `REMOVED` — 예: 옛 오버레이 `ops.host.patch_code`, `ops.pipeline_host.structure_cpus`·`structure_mem_limit`, 옛 OCR·지문 배치 칸, pl-38로 지운 `ops.paths.glossary_dir`·`ops.paths.client_roster`(용어집·고객 명부는 이제 PG 마스터 표)·mc-19로 지운 `ops.paths.mcp_bundle`(검색은 묶음 없이 PG gold만)·`common.text.search_recency`(판 묶음·최신성 순위 지움)·`pipeline.transform.structure.draft_terms`(초안 용어는 오프라인 도구로))은 남아 있어도 경고 한 줄 뒤 무시된다 — 지워도 되고 두어도 된다.
+- 0.2.0에서 지운 칸(`common/config/layout.py` `REMOVED` — 예: `ops.pipeline_host.structure_cpus`·`structure_mem_limit`, 옛 OCR·지문 배치 칸, pl-38로 지운 `ops.paths.glossary_dir`·`ops.paths.client_roster`(용어집·고객 명부는 이제 PG 마스터 표)·mc-19로 지운 `ops.paths.mcp_bundle`(검색은 묶음 없이 PG gold만)·`common.text.search_recency`(판 묶음·최신성 순위 지움)·`pipeline.transform.structure.draft_terms`(초안 용어는 오프라인 도구로))은 남아 있어도 경고 한 줄 뒤 무시된다 — 지워도 되고 두어도 된다.
 - 새 필수 칸 자리 확인: `python -m common.config.sample --where <칸 이름>`(위 이미지 안에서 같은 방법).
 - (선택) 서버 EDW의 사슬 표·칸 이름이 기본값과 다르면(Quote 표를 켜는 것 포함) `$SERVER_ENV_DIR/edw_chain.yaml`(init이 둔 사본)을 고치고 `ops.paths.edw_chain`(적재·검색 같은 칸)에 `/etc/rag/edw_chain.yaml`을 적는다 — [§8-6](#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29). 0.1.x 때 고친 사본을 쓰던 서버는 새 꼴로 옮겨 적는다(§8-6 ① 상자). 기본값 그대로면 칸을 비워 둔다(사본은 있어도 안 쓰임).
 ```bash
@@ -468,8 +458,8 @@ tail -f <작업 폴더>/batch_progress/progress.log                             
 | 3 | 새벽 배치 — `ops.nightly.time`·`max_docs`·`deadline`을 모두 채울 때만 켬(마감은 시작보다 5분 넘게 뒤), `journalctl -u data-pipeline-nightly` | 서버 운영 | C-72 |
 | 4 | 2주 뒤 옛 gold 스키마·옛 `struct` 스키마를 백업한 뒤 지움 | DB 담당 | C-74 |
 | 5 | `versions.md`에 판 한 줄 · 되돌리기가 필요 없어진 뒤 옛 이미지 정리(`prune_old.sh --apply`) | 서버 운영·devops | §6·§7 |
-| 6 | 문제는 `server-changes.md`에 이슈로 → PC가 고침 → 다음 코드 폴더 판(§1-1) | 서버 운영·개발자 | [server-guide.md](server-guide.md) §7 |
-| 7 | `query_edw` 오탐(T14 — [mc-06](../prd/mcp.md#mc-06)) — **확인:** 서버 MCP에서 실제 업무 SELECT 몇 개(JOIN·`WITH`·대괄호 이름·한글 별칭·`TOP`이 든 것)를 `query_edw`로 부른다. **기대:** 모두 행이 오거나 행·시간 상한 안내만 나온다 — 정상 SELECT가 `error`(`unterminated_*`·판단 못 함·허용 목록 밖)로 거부되면 그 SQL과 오류 코드를 `server-changes.md`에 적는다 | 서버 운영 | — |
+| 6 | 문제는 `issues.md`에 이슈로(서버에서 직접 고친 것은 `server-changes.md`) → PC가 고침 → 다음 코드 폴더 판(§1-1) | 서버 운영·개발자 | [server-guide.md](server-guide.md) §7 |
+| 7 | `query_edw` 오탐(T14 — [mc-06](../prd/mcp.md#mc-06)) — **확인:** 서버 MCP에서 실제 업무 SELECT 몇 개(JOIN·`WITH`·대괄호 이름·한글 별칭·`TOP`이 든 것)를 `query_edw`로 부른다. **기대:** 모두 행이 오거나 행·시간 상한 안내만 나온다 — 정상 SELECT가 `error`(`unterminated_*`·판단 못 함·허용 목록을 켰으면 목록 밖)로 거부되면 그 SQL과 오류 코드를 `issues.md`에 적는다 | 서버 운영 | — |
 | 8 | `edw_meta` 표 이름 끝 공백(T14 — [mc-07](../prd/mcp.md#mc-07)) — **확인:** 서버 카탈로그(`search.edw_meta.dir`의 `catalog.json`)에서 이름 끝에 공백이 있는 표를 찾아, `edw_meta`를 그 이름 그대로와 공백을 뺀 이름으로 각각 부른다. **기대:** 둘 다 같은 표의 칸 목록이 나온다(조회 키는 앞뒤 공백을 빼고 소문자로 맞춤 — `mcp_server/services/edw_meta.py`). "모르는 이름" 제안이 나오면 실패 | 서버 운영 | — |
 | 9 | 질의 기록 쓰기(T14 — [mc-09](../prd/mcp.md#mc-09)) — **확인:** settings.yaml `search.query_log.dir`(비우면 이미지 안 `output/qa_log`) 폴더가 mcp-server 컨테이너에서 UID 10001로 쓰이는지 — `docker exec <mcp 컨테이너> sh -c 'id -u; touch <폴더>/.w && rm <폴더>/.w && echo ok'`, 그다음 `search`를 한 번 부르고 `qa_log.jsonl` 줄 수를 본다. **기대:** `10001`·`ok`가 나오고 줄이 하나 늘어난다. 권한 오류면 호스트 폴더 주인을 10001로(bind 마운트는 `:z`) | 서버 운영 | — |
 
@@ -600,6 +590,6 @@ $DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check --file /etc/
 - **뒤에 더해질 것:** 분류 힌트 칸 대응(attrs 매핑) 파일도 같은 설정 폴더에 같은 방식(예시 복사·없을 때만·읽기 전용 파일 마운트)으로 들어온다 — 그 PR에서 이 표에 한 줄을 더한다.
 
 
-## 9. (옮김 — 옛 §8·§9)
+## 9. 지난 기록
 
-10-16 버전 설치 순서(옛 §8 — AI.ParsingMeta DDL `parsing_meta_mssql.sql` DBA 1회 실행, OCR OS 차이 측정, 이미지 크기 포함)와 10-21 오버레이 패치 번들(옛 §9)은 [docs/history/release_history.md](../history/release_history.md)로, 긴급 패치 이력은 [docs/history/patch-history.md](../history/patch-history.md)로 옮겼다(10-30, do-04).
+지난 판의 설치 순서(OCR OS 차이 측정·이미지 크기 포함)는 [docs/history/release_history.md](../history/release_history.md), 긴급 패치 이력은 [docs/history/patch-history.md](../history/patch-history.md)에 있다.
