@@ -30,6 +30,23 @@ DOC_EXTRA = {
     "faq": (),
     "other": (),
 }
+# 분류 힌트 doc 칸(pl-33, 판 0003 — 사용자 11-02): 적재 때 edw_meta가 EDW에서 채우고 분류가 읽는다. 이름 = 원본 칸 이름의 소문자
+# (project_code__c처럼). 검색 뷰 v_chunk_source에는 넣지 않는다(검색 출력·거르기와 무관).
+DOC_HINTS = {
+    "sfdc": (
+        ("title", Text),
+        ("entity_type", Text),
+        ("entity_class", Text),
+        ("entity_id", Text),
+        ("sent_received__c", Text),
+        ("subject", Text),
+        ("stagename", Text),
+        ("real_rfp__c", Text),
+        ("rfp_received_start_date__c", Date),
+        ("rfp_received_end_date__c", Date),
+    ),
+    "las": (("approvalname", Text),),
+}
 CHUNK_EXTRA = {"faq": (("faq_group", Text),)}  # C4 — faq.chunk만 시트 이름
 
 
@@ -65,7 +82,11 @@ class Vector(UserDefinedType):
 
 
 def doc_columns(src):
-    """doc 표 칸 이름 순서(공용 + 원천 전용)."""
+    """doc 표 칸 이름 순서(공용 + 원천 전용 + 분류 힌트)."""
+    return _doc_base(src) + [n for n, _ in DOC_HINTS.get(src, ())]
+
+
+def _doc_base(src):
     return ["doc_id", "file_path", "summary", "created_at", "client_edw", "clients_doc"] + [n for n, _ in DOC_EXTRA[src]]
 
 
@@ -92,7 +113,7 @@ def search_metadata(schema, dim, shared_seq=True):
         Column("created_at", TIMESTAMP(timezone=True)),  # 원천 등록 시각(FileStorageMap.created_at, KST)
         Column("client_edw", Text),  # EDW 조인 사슬의 고객 하나 — client 거르기는 이 칸 정확 일치만(C6)
         Column("clients_doc", Text),  # 본문에서 찾은 고객 라벨(JSON 글자) — 참고만, 거르기·순위에 안 씀
-        *(Column(n, t) for n, t in DOC_EXTRA[src]),
+        *(Column(n, t) for n, t in (*DOC_EXTRA[src], *DOC_HINTS.get(src, ()))),
     )
     chunk = Table(
         "chunk",
@@ -152,13 +173,13 @@ _VIEW_CHUNK = ("chunk_id", "doc_id", "file_path", "file_name", "page", "line_sta
 
 def view_columns(src):
     """v_chunk_source 칸 순서 — 청크 칸 + 문서 칸(공용·원천 전용) + (faq) faq_group."""
-    doc_cols = [c for c in doc_columns(src) if c not in ("doc_id", "file_path")]
+    doc_cols = [c for c in _doc_base(src) if c not in ("doc_id", "file_path")]
     return [*_VIEW_CHUNK, *doc_cols, *(n for n, _ in CHUNK_EXTRA.get(src, ()))]
 
 
 def view_sql(src):
     """CREATE VIEW 본문(`{S}` = 원천 스키마) — 판 0002와 SQLite 대역이 같은 글자를 쓴다."""
-    doc_cols = [c for c in doc_columns(src) if c not in ("doc_id", "file_path")]
+    doc_cols = [c for c in _doc_base(src) if c not in ("doc_id", "file_path")]
     sel = (
         ["c.chunk_id", "c.doc_id", "d.file_path", "regexp_replace(d.file_path, '^.*/', '') AS file_name"]
         + [f"c.{c}" for c in _VIEW_CHUNK[4:]]

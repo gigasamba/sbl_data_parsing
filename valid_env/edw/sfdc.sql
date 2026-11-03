@@ -68,3 +68,29 @@ INSERT INTO ContentDocumentLink (ContentDocumentId, LinkedEntityId)
 SELECT cd, CASE rn % 5 WHEN 0 THEN '006202601400000000' WHEN 1 THEN '00T000000000000001' WHEN 2 THEN '00U000000000000001'
                        WHEN 3 THEN '0Q0000000000000001' ELSE '001900200000000000' END
 FROM (SELECT ContentDocumentId AS cd, ROW_NUMBER() OVER (ORDER BY ContentDocumentId) AS rn FROM ContentVersion);
+
+-- [SYNTHETIC] 11-02(pl-33) — 분류 힌트 칸(운영 노트의 칸 이름, 값은 가짜). 힌트 갈래마다 문서 하나 이상:
+-- 제목 있음·비어 있음(파일 이름으로) · 연결 개체 Opportunity(단계·Real_RFP__c·RFP 기간)·Task(방향 있음·없음)·Event·Quote·Account·
+-- Contract·IF_Log__c(a14)·모르는 접두(a99 → Unknown:a99) · User + Task(User는 건너뜀) · User만(user_only) · 연결 없음(unlinked).
+ALTER TABLE ContentVersion ADD COLUMN Title TEXT;
+UPDATE ContentVersion SET Title = (SELECT replace(substr(f.original_filename, 1, instr(f.original_filename, '.') - 1), '_', ' ') FROM FileStorageMap f WHERE CAST(f.content_version_id AS TEXT) = ContentVersion.Id);
+UPDATE ContentVersion SET Title = NULL WHERE ContentDocumentId = '06926';
+ALTER TABLE Task ADD COLUMN Subject TEXT;
+ALTER TABLE Task ADD COLUMN Sent_Received__c TEXT;
+ALTER TABLE Event ADD COLUMN Subject TEXT;
+ALTER TABLE Event ADD COLUMN Sent_Received__c TEXT;
+UPDATE Task SET Subject = 'RE: RFP package and Q&A for ANB-SYN-VAC-03', Sent_Received__c = 'Received';
+UPDATE Event SET Subject = 'Proposal review call with AstraNova', Sent_Received__c = 'Sent';
+INSERT INTO Task VALUES ('00T000000000000002', '006202603300000000', 'Internal follow-up', NULL);
+ALTER TABLE Opportunity ADD COLUMN Real_RFP__c INTEGER;
+ALTER TABLE Opportunity ADD COLUMN RFP_Received_Start_Date__c TEXT;
+ALTER TABLE Opportunity ADD COLUMN RFP_Received_End_Date__c TEXT;
+UPDATE Opportunity SET Real_RFP__c = 1, RFP_Received_Start_Date__c = '2026-03-02', RFP_Received_End_Date__c = '2026-03-20' WHERE Id = '006202601400000000';
+UPDATE Opportunity SET Real_RFP__c = 0 WHERE Id <> '006202601400000000';
+UPDATE ContentDocumentLink SET LinkedEntityId = '00T000000000000002' WHERE ContentDocumentId = '06932';
+UPDATE ContentDocumentLink SET LinkedEntityId = 'a14000000000000001' WHERE ContentDocumentId = '06938';
+UPDATE ContentDocumentLink SET LinkedEntityId = 'a99000000000000001' WHERE ContentDocumentId = '06939';
+DELETE FROM ContentDocumentLink WHERE ContentDocumentId = '06940';
+UPDATE ContentDocumentLink SET LinkedEntityId = '005000000000000001' WHERE ContentDocumentId = '06941';
+INSERT INTO ContentDocumentLink (ContentDocumentId, LinkedEntityId) VALUES ('06942', '005000000000000001');
+UPDATE ContentDocumentLink SET LinkedEntityId = '800000000000000001' WHERE ContentDocumentId = '06943';
