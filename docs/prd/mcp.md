@@ -160,13 +160,13 @@
   - 최신성 4칸(`doc_date`·`version`·`superseded`·`family`)을 gold `doc`(원천 스키마 5벌)에 더한다 — 새 Alembic 마이그레이션 0004, 적재(`pgvector_load`)가 묶음 `docs.jsonl` 값으로 채운다. 순위는 지금과 같아야 한다. 검색 뷰 계약(MCP 출력)은 바꾸지 않는다. 검토 등급 A(DB 스키마).
   - 설정 `paths.mcp_bundle`은 지운다 — 남아 있으면 경고만(시작은 함).
   - 통과 기준: 바꾸기 전후 같은 PC 평가 세트에서 질문마다 상위 근거 목록이 같아야 한다(다르면 원인을 보고).
-- 열린 질문(사용자 11-03 되물음 — "corpus_stat이 어디 있는 표야? EDW에 적을까? pgvector doc이나 chunk에 embed model 칸도 됨"): 임베딩 모델 이름을 어디에 둘까.
-  - 사실: `corpus_stat`은 pgvector 검색 DB의 원천 스키마마다 있는 한 행짜리 통계 표(청크 수·평균 길이·차원)다. EDW가 아니다.
-  - 안 A(추천): `corpus_stat`에 `embed_model` 한 칸 — 차원과 같은 자리, 스키마마다 한 값, 적재가 씀. 검색은 PG만 읽는다.
-  - 안 B: gold `doc`(또는 `chunk`)에 칸 — 문서(청크)마다 같은 값이 반복되고, 섞이면 어느 값을 믿을지 규칙이 따로 필요하다.
-  - 안 C: EDW(ParsingMeta 등)에 — 검색이 EDW에 기대게 되어(검색 MCP는 지금 EDW 없이 뜸) 이 행의 목적(PG만)과 어긋난다.
-- 할 일(결정 뒤): 마이그레이션 0004(최신성 4칸 + 임베딩 정보) · 적재가 채움 · `Retriever`가 PG에서 문서 메타·임베딩 정보를 읽음(`BundleDocs`·`key_local`·`meta.json` 읽기 지움) · `paths.mcp_bundle` 지움(경고) · 평가 전후 비교. code_fp r 바뀜(retriever·local).
-- Status: todo — 설계 중(11-03, 열린 질문 1개)
+- 결정(사용자 11-03 grill 2차 — 임베딩 정보 자리):
+  - 임베딩 모델 이름은 gold `doc`(원천 스키마 5벌)에 `embed_model` 칸으로 둔다 — 적재가 문서마다 묶음 `meta.json` 값으로 채운다. 이유(사용자): 나중 guard(섞인 모델 거부·그 문서만 다시 임베딩)가 문서 단위로 판단해야 해서. 한 문서의 청크는 늘 같은 모델로 임베딩되므로 `chunk`에는 두지 않는다.
+  - `corpus_stat`은 남긴다 — 키워드 검색(BM25)이 검색마다 전체 청크 수·평균 길이를 읽는다(`pgsearch.py`). 없애면 검색마다 청크 표 전체를 세야 해 문서가 늘수록 느려진다.
+  - `corpus_stat.dim`은 지운다 — 차원은 `chunk.embedding`의 칸 형식 `vector(차원)`에 이미 고정돼 있어 거기서 읽는다(지금 `dim`을 읽는 곳: `pgvector_load`의 차원 확인·`faq_sync`·`_drop_docs`, 시험 대역 `tests/server/mcp/pgfix.py`).
+  - (제안 — 구현 때 확인) 검색의 모델 확인: 질의 임베딩 모델 ≠ 그 스키마 gold `doc.embed_model`(값이 둘 이상이면 섞임 — 거부하고 알림)이면 지금처럼 거부한다.
+- 할 일: 새 Alembic 마이그레이션(최신성 4칸 + `doc.embed_model` 추가, `corpus_stat.dim` 삭제 — 번호는 develop 최신 다음) · 적재가 채움 · 차원은 `vector` 칸 형식에서 읽음 · `Retriever`가 PG에서 문서 메타·임베딩 정보를 읽음(`BundleDocs`·`key_local`·`meta.json` 읽기 지움) · `paths.mcp_bundle` 지움(경고) · 평가 전후 비교. code_fp r 바뀜(retriever·local). 검토 등급 A(DB 스키마 — DB 담당자 협의).
+- Status: todo — 설계 끝(11-03 grill 2차, 열린 질문 0개) — 0.2.0 범위는 허브 확인 뒤
 
 <a id="mc-18"></a>
 ## mc-18 · `parse_document` 스캔 PDF 다시 지원
