@@ -165,6 +165,15 @@ svg.profile { width: 100%; height: 120px; display: block; }
 
     <div id="searchOpts">
       <div class="sec-title">검색 설정</div>
+      <div class="field" style="margin-bottom:8px"><span>원천</span>
+        <select id="source">
+          <option value="SFDC">SFDC</option>
+          <option value="CRMS">CRMS</option>
+          <option value="LAS">LAS</option>
+          <option value="FAQ">FAQ</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
       <div class="field" style="margin-bottom:8px"><span>top-k</span><input type="number" id="k" min="1" max="20" value="5"></div>
       <label class="opt"><input type="checkbox" name="m" value="vector" checked> vector (임베딩 코사인)</label>
       <label class="opt"><input type="checkbox" name="m" value="bm25" checked> bm25 (키워드)</label>
@@ -233,6 +242,7 @@ svg.profile { width: 100%; height: 120px; display: block; }
   $("closeDrawer").addEventListener("click", closeDrawer);
   $("tool").addEventListener("change", updateMode);
   $("k").addEventListener("input", updateMode);
+  $("source").addEventListener("change", updateMode);
   document.querySelectorAll("input[name=m]").forEach((c) => c.addEventListener("change", updateMode));
 
   function methods() { return [...document.querySelectorAll("input[name=m]:checked")].map((c) => c.value); }
@@ -240,7 +250,7 @@ svg.profile { width: 100%; height: 120px; display: block; }
     const tool = $("tool").value;
     $("searchOpts").style.display = tool === "search" ? "" : "none";
     input.placeholder = tool === "search" ? "질문을 입력하세요" : "SELECT id, s3_key FROM AI.FileStorageMap LIMIT 5  (읽기 전용 · PC 대역은 sqlite라 LIMIT)";
-    $("modeHint").textContent = tool === "search" ? `search · k=${$("k").value} · ${methods().join("+") || "기본"}` : "query_edw · SELECT만";
+    $("modeHint").textContent = tool === "search" ? `search · ${$("source").value} · k=${$("k").value} · ${methods().join("+") || "기본"}` : "query_edw · SELECT만";
   }
 
   async function api(path, body) {
@@ -295,7 +305,7 @@ svg.profile { width: 100%; height: 120px; display: block; }
     addUser(text);
     const body = addBot();
     const args = tool === "search"
-      ? { question: text, k: Math.max(1, Math.min(20, +$("k").value || 5)), ...(methods().length ? { methods: methods() } : {}) }
+      ? { question: text, source_system: $("source").value, k: Math.max(1, Math.min(20, +$("k").value || 5)), ...(methods().length ? { methods: methods() } : {}) }
       : { sql: text };
     try {
       const d = await api("api/call", { tool, args });

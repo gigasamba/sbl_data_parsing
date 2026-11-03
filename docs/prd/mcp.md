@@ -9,7 +9,7 @@
 ## mc-01 · `search` 도구 — 적재된 문서에서 근거 찾기
 - 결정(사용자 10-31 범위 축소 grill): PC 전용 검색 우회로(PG 없이 묶음 검색 local.py, SQLite PG 대역 pg_standin)를 **지운다** — 검색은 PG 하나(op-09와 같음). 단 이미지 selftest가 pg_standin을 쓰면 그것만 남김(확인 후).
 - 이유: 클라이언트가 출처 달린 근거를 얻는 단 하나의 입구.
-- 무엇: 세 방식 — 질문만(혼합 검색), 거르기만(맞는 문서의 모든 청크, 점수 없음), 질문 + 거르기(저장소 질의에서 범위를 걸고 후보 `min(50, max(3k, 30))`을 거른 뒤 번호를 다시 매김 — 재순위 단계 없음). 거르기 `client`, `client_like`, `source_system`, `project_id`, `division`, `service_type`은 PG 저장소에서만 동작(로컬 묶음: 거르기만이면 오류, 질문 + 거르기면 거르지 않고 검색). `index_id`는 이름 붙은 색인을 고른다. `limit`은 거르기만 방식에 적용.
+- 무엇: `question`과 원천 하나(`source_system` — SFDC·CRMS·LAS·FAQ·Other, 없으면 오류 — G20)는 필수. 질문만이면 그 원천 스키마 전체에서 혼합 검색, 거르기(13칸 `SEARCH_FILTERS` — 모두 AND, 같은 칸의 목록은 OR)를 더하면 범위를 먼저 구해 후보 `min(50, max(3k, 30))`을 찾은 뒤 번호를 다시 매김(재순위 단계 없음). 맞는 문서가 없으면 빈 결과(`evidence_status` none). 질문 없이 문서 고르기는 `list_doc_fulltext`. 옛 입력 `methods`·`decompose`·`limit`·`index_id`와 로컬 묶음 검색은 지움(mc-16·mc-19 — 검색은 PG만).
 - 찾기: 방법은 `vector`·`bm25`·`id`만(graph·concept·image·openviking은 10-29에 지움 — 다른 값은 메모와 함께 무시). vector(pgvector 코사인, HNSW. HNSW 차원을 넘으면 binary quantize + 상위 200 다시 점수) + BM25(`chunk_term`·`term_stat`·`corpus_stat`) + 드문 ID 정규식을 가중 RRF로 합친다(질문 유형별 가중치).
 - 출력: 근거 항목(`chunk_id`, `source_uri`, `page`, `bbox`, `section`, `text`, `score`, `via`, `rank`, …), `evidence_status` found/weak/none(라벨만, 빼는 것 없음), `notes`.
 - `file_path` 키 제거는 [mc-16](#mc-16)에서 다룬다(사용자 10-30 PRD grill D1).
@@ -20,7 +20,7 @@
 <a id="mc-02"></a>
 ## mc-02 · 질문 이해 — 넓히기
 - 이유: 사용자는 동의어, 약어, 여러 고객을 한꺼번에 넣어 묻는다.
-- 무엇: BM25용 용어집 넓히기(동의어 1.0 / 약어 0.8 / 약한 것 0.3, 고객 목록 별칭, 최대 20), vector 질의에 별칭 글 붙이기, 비교 질문은 고객별로 나눠 찾기(번갈아 합치기 `search_svc._gather`), 가중치용 규칙 기반 질문 유형. LLM 질문 분해는 10-29에 지움(`decompose` 입력은 받고 무시, `subs`는 늘 `[]`).
+- 무엇: BM25용 용어집 넓히기(동의어 1.0 / 약어 0.8 / 약한 것 0.3, 고객 명부 별칭, 최대 20 — 용어집·명부는 PG 마스터 표, pl-38), vector 질의에 별칭 글 붙이기, 가중치용 규칙 기반 질문 유형. 고객별 하위 검색(BR23)은 11-02에, LLM 질문 분해(`decompose` 입력·`subs` 출력)는 10-29·mc-16에 지움.
 - 파일: `mcp_server/services/search/terms.py`, `qtype.py`, `search_svc.py`.
 - Status: done
 
@@ -28,15 +28,15 @@
 ## mc-05 · 고객 범위, 판, 중복
 - 결정(사용자 10-31 범위 축소 grill): 본문 글자로 판·개정·구판을 추정하는 기능(docmeta 추정, version·superseded 출력 칸)을 **지운다**. 최신성 정렬·날짜 필터는 EDW `created_at`(문서가 생긴 시각). 도구 출력 변경 — 0.2.0.
 - 이유: 답이 고객을 섞거나 옛 판을 인용하면 안 된다.
-- 무엇: 부드러운/하드 고객 범위, 숨김 문서 제외, 최신을 묻는 질문에서는 새 판을 옛 판보다 위로(`SEARCH_RECENCY=1` 기본, `2` = 늘. 옛 판은 남기고 `superseded` 표시), 사본 묶음이 이름 바뀐 사본을 합친다.
-- 파일: `mcp_server/services/search/clientscope.py`, `supersede.py`, `common/core/docmeta.py`.
+- 무엇(지금): 고객 거르기는 `client_edw` 정확 일치(`client_like`면 부분 일치, 목록은 OR), 사본 묶음이 이름 바뀐 사본을 한 자리로 합친다. 근거의 `version`은 수집 manifest 값만, `superseded`는 늘 null. 본문 고객 라벨 순위(`clientscope`)·최신성 순위(`SEARCH_RECENCY`·`supersede`)는 지움(11-02·11-03).
+- 파일: `mcp_server/services/search/search_svc.py`, `shaping.py`.
 - 고칠 것(reference 비교(사용자 grill 10-30, 원본은 git 밖) M3·T2 — 버그): `client` 판정을 운영 10-28 방식으로 — 별칭 그룹으로 정확히 일치, `sf_acc_name`이 비었을 때만 라벨로 판정, 목록은 OR로 받는다. 파일: `mcp_server/services/search/search_svc.py`, `clientscope.py`.
 - 결정(사용자 10-30 PRD grill): C6 — 검색의 고객 거르기는 EDW에서 조인한 고객(`client_edw`)만 쓴다. 본문에서 찾은 고객(`clients_doc`)은 참고용으로만 둔다. LAS는 EDW 고객이 비어 고객 거르기에서 늘 빠진다(원천별 스키마라 LAS는 따로 검색됨).
 - 결정(허브 10-31, 최신 결정 우선): C6이 이긴다 — 고객 거르기는 `client_edw`만. 위 T2의 '`sf_acc_name`이 비었을 때만 라벨로 판정'은 없앤다(별칭 그룹 정확 일치·목록 OR은 남김 — 별칭 CSV는 [load.md#pl-38](load.md#pl-38) 0.2.0 몫). 근거의 `client` = `client_edw`, `clients_doc`은 따로 둔 참고 칸.
 - 구현(11-01 `feature/mcp-ops-parity`, 허브 지시 "운영이 version/superseded를 아직 내면 칸은 두고 추정만 멈춤"): 운영 계약(05 §2.4)에 `version`·`superseded`·`doc_date`가 남아 있어 칸은 둔다. 운영 예시 값은 모두 null이라 운영도 본문 추정을 하지 않는 것으로 본다 → `search` 근거의 `version`은 수집 manifest 값만(없으면 null), `superseded`는 늘 null(`shaping._evidence`). `doc_date`는 이 결정 밖이라 그대로. 본문 추정값(`common/core/docmeta.py`)은 안쪽 최신성 순위(L3-1)에만 남는다 — 순위를 EDW `created_at`으로 바꾸는 일은 남음. 시험: `test_search_svc` `_selftest_evidence_rdb_meta`.
 - 11-02(사용자 C6): 고객 판정 고침 — 본문 고객 라벨로 앞으로 올리던 길(AD38·BR50 `clientscope`)·고객별 하위 검색(BR23)·설정 `SEARCH_CLIENT_HARD`/`STRICT`를 지우고, `client` 거르기는 `client_edw` 정확 일치(`client_like`면 부분 일치)만. 별칭 묶음은 [pl-38](load.md#pl-38) 몫.
 - 결정(사용자 11-03 — [load.md#pl-38](load.md#pl-38)): 판 묶음(family)과 그것으로 옛 판을 뒤로 밀던 최신성 순위(`recency_rerank`·설정 `SEARCH_RECENCY`)를 지운다. `doc_date`·`version`·`superseded` 칸은 남김. 잠재 문제(같은 문서의 다른 판이 `s3_key`가 달라 '최신' 질문에서 옛 판이 위로 올 수 있음)는 pl-38에 기록 — 필요해지면 `created_at`으로 다시 설계.
-- Status: todo — 최신성 순위는 11-03에 지움(다시 설계는 잠재 문제로). 고객 판정·version·superseded 출력은 done(11-01·11-02)
+- Status: done — 고객 판정·version·superseded 출력(11-01·11-02), 최신성 순위 지움(11-03). 같은 문서 다른 판 묶기는 잠재 문제 — [load.md#pl-38](load.md#pl-38) todo 행.
 
 <a id="mc-04"></a>
 ## mc-04 · 집계 답
@@ -219,24 +219,22 @@
 
 ## 코드와 다른 점 · 지울 코드
 
-### 요건과 다르게 동작(ID 있는 행은 열린 결함, 나머지는 알아 둘 동작)
+### 요건과 다르게 동작(알아 둘 동작 — 열린 결함 없음)
 | 요건 | 코드가 하는 일 | 위치 | ID |
 |---|---|---|---|
-| 숨김 문서는 검색에서 빠짐 | 숨김 키(sha256)를 검색 키(`file_path`)와 비교 → 안 빠짐 | `pgsearch.py`, `local.py` | mc-14 |
-| 근거에 파싱 결과 경로(`rep_uri`) | ParsingMeta를 `file_path`로 찾음(그쪽 키는 sha256) → 늘 비어 있음 | `shaping.py` | mc-15 |
-| `query_edw` 표 허용 목록 | mssql에서 기본 꺼짐(`EDW_QUERY_TABLES_STRICT=0` → 시스템 카탈로그를 뺀 모든 스키마) | `edw_query.py` | mc-06 |
-| 모든 저장소에서 하드 거르기 | PG 저장소만. 로컬 묶음: 거르기만이면 오류, 질문 + 거르기면 거르지 않고 검색 | `search_svc.py` | mc-01 |
+| `query_edw` 표 허용 목록 | mssql에서 기본 꺼짐(`EDW_QUERY_TABLES_STRICT=0` → 시스템 카탈로그를 뺀 모든 스키마) | `edw_query.py` | — (mc-06 done) |
+
+(정리 11-03: 숨김 문서 키 비교 mc-14는 dropped, 파싱 결과 경로 mc-15는 11-01에 칸째 지움, 로컬 묶음 거르기 mc-01은 검색이 PG만이 되며 없어짐.)
 
 ### 요건 없는 코드 — 남길지(앵커를 씀) 지울지([test.md#e2-18](test.md#e2-18))
 - (11-01 지움 — [mc-15](#mc-15)) `AI.ParsingMeta`에서 근거의 파싱 결과 경로(`MCP_EVIDENCE_PATHS`).
 - 질문 개체로 동점 가르기(늘 켬 — 스위치는 op-08에 지움). `search_svc.py`.
-- PG 대역(PG 설정이 없으면 SQLite — PC). `common/store/pg_standin.py`.
-- 문서 대장 CLI. `mcp_server/cli/registry_cli.py`.
+- PG 대역(PG 접속 칸이 없으면 SQLite — PC·이미지 selftest). `common/store/pg_standin.py`.
+- (지움) 문서 대장 CLI `mcp_server/cli/registry_cli.py` — 지금 `mcp_server/cli/`에는 `ask`·`mcp_smoke`만.
 
 ### 기본 꺼짐·설정 필요
 | 기능 | 스위치 = 기본값 | 필요한 것 |
 |---|---|---|
-| 하드 고객 격리 | `SEARCH_CLIENT_HARD=0`, `SEARCH_CLIENT_STRICT=0` | — |
 | `query_edw` | `EDW_QUERY=1` | `common.connections.rdb` + 읽기 계정, 또는 `RDB_SQLITE` |
 | `edw_meta` | — | `EDW_META_DIR`의 자료(기본 `/app/config/edw_meta`) |
 | `parse_document` | OCR/VLM 엔진 없음(OCR 스위치는 0.2.0에 지움 — pl-46) · 제한 글자 쪽당 1초, VLM 쪽당 60초 | `mcp_parse_service` 실행 + `PARSE_SERVICE_TOKEN` |
