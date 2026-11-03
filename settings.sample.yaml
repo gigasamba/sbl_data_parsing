@@ -261,6 +261,7 @@ search:
     vector: 1.0  # [파라미터] RRF 융합에서 벡터 가중치 · 기본 1.0 · 값: 0 이상
   # ─── EDW 도구 ───
   edw_meta:
+    edw_chain:  # [파라미터] search attrs 거르기·근거 attrs·edw_meta 키 목록을 읽는 EDW 조인 사슬 파일 경로(적재와 같은 파일이어야 함 — 비우면 resources/config/edw_chain.yaml · 서버 사본은 컨테이너 안 /etc/rag/edw_chain.yaml) · 값: 경로
     dir:  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · 값: 경로
   edw_query:
     enabled: true  # query_edw 도구 스위치 · 기본 true · 값: true·false

@@ -2,10 +2,10 @@
 """검색 MCP — 질문 하나로 근거(원문·원본 경로·쪽·위치·그림)를 돌려주는 한 창구(백로그 G1~G5). 답변 생성은 클라이언트(GLM 등) 몫.
 
 도구(G2):
-  search(question, k=8, 거르기 13칸) — 11-01(mc-16, 등급 A) 운영 계약: question 필수(비면 {"error"}) · k 기본 8·상한 50 ·
+  search(question, k=8, 거르기 13칸 + attrs — pl-52) — 11-01(mc-16, 등급 A) 운영 계약: question 필수(비면 {"error"}) · k 기본 8·상한 50 ·
     거르기 source_system·client(+client_like)·project_id·division·service_type·FAQ_group·doc_class·sf_op_id·sf_op_name·contract_id·
     created_since/created_until(모두 AND, 같은 거르기의 목록은 OR, 맞는 것이 없으면 빈 결과) · 거르기에 맞는 문서(v_chunk_source) 범위 안에서만
-    하이브리드 검색(vector·bm25·id — 서버 설정만) · 응답 {question, evidence[12칸], evidence_status, filter, scope_docs}
+    하이브리드 검색(vector·bm25·id — 서버 설정만) · 응답 {question, evidence[13칸 — attrs 포함], evidence_status, filter, scope_docs}
     (mcp_server/schemas/evidence.py). 덤프 방식·이름 있는 색인(index_id)·옛 입력(methods·decompose·limit)·옛 출력(subs·store·images·notes·ms)은 지움.
   MCP 노출 도구는 search·query_edw·parse_document·edw_meta·list_doc_fulltext·get_doc_fulltext(2026-10-20 사용자 결정 · 10-21 파싱 도구 · 11-01 원문 도구 mc-17).
   (EQ1, English docstrings per 10-15 user rule)

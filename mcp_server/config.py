@@ -48,6 +48,12 @@ class McpDev(Section):
 
 
 class McpEdwMeta(Section):
+    edw_chain: str | None = F(
+        None,
+        "MCP_EDW_CHAIN_FILE",
+        "search attrs 거르기·근거 attrs·edw_meta 키 목록을 읽는 EDW 조인 사슬 파일 경로(적재와 같은 파일이어야 함 — 비우면 resources/config/edw_chain.yaml · "
+        "서버 사본은 컨테이너 안 /etc/rag/edw_chain.yaml) — pl-52, 바뀌면 다음 호출부터 다시 읽음",
+    )
     dir: str | None = F(None, "EDW_META_DIR", "edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더")
     max_bytes: int | None = F(200000, "EDW_META_MAX_BYTES", "edw_meta 응답 크기 상한(바이트) — 넘으면 목록 꼬리를 자름")
 

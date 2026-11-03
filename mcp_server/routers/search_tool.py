@@ -1,6 +1,6 @@
 """search 도구 등록 — 입력을 받아 서비스(do_search)를 스레드 창구(_bg)로 부르기만.
 함수 이름·독스트링·서명·반환 형식은 MCP 도구 계약(🔒 CLAUDE.md §4 — tools/list 바이트)이다. 11-01(mc-16, 등급 A) 운영 계약으로 바꿈 —
-question 필수, 거르기 13칸(운영 이름 그대로), 옛 입력 methods·decompose·limit·index_id 지움.
+question 필수, 거르기 13칸(운영 이름 그대로) + attrs(pl-52 11-03, 등급 A), 옛 입력 methods·decompose·limit·index_id 지움.
 """
 
 from mcp_server.routers.dispatch import _bg
@@ -25,6 +25,7 @@ def register(m):
         contract_id: str | list[str] | None = None,
         created_since: str | None = None,
         created_until: str | None = None,
+        attrs: dict[str, str | list[str]] | None = None,
     ) -> dict:
         """Natural-language top-k evidence search inside hard filters (vector + bm25 + id, fused server-side).
         question is required (empty -> {"error"}). k: default 8, max 50 (larger is clamped).
@@ -33,10 +34,13 @@ def register(m):
         project_id, division, service_type, FAQ_group, doc_class (within its source system's taxonomy), sf_op_id, sf_op_name,
         contract_id, created_since/created_until (source registration time; YYYY-MM-DD or ISO 8601, no time zone = KST,
         date-only until includes that whole day; docs without created_at are excluded).
+        attrs: {key: value or list} on the source's metadata keys (keys differ per source_system; an unknown key returns
+        {"error"} listing the valid keys — edw_meta with no arguments lists them). project_id, division, service_type,
+        doc_class, sf_op_id, sf_op_name and contract_id are named shortcuts for attrs keys of that source.
         A filter that matches nothing returns an empty result (scope_docs 0, evidence_status "none"), not an error.
         Returns {question, evidence[], evidence_status (found/weak/none), filter, scope_docs} — filter/scope_docs only when a
         filter was given. Each evidence item has exactly: text, file_name, file_path, page, line, section, client, contract_no,
-        doc_date, version, superseded, chunk_key (missing values are null)."""
+        doc_date, version, superseded, chunk_key, attrs (missing values are null; attrs holds the source's evidence keys)."""
         return await _bg(
             do_search,
             question,
@@ -54,4 +58,5 @@ def register(m):
             contract_id=contract_id,
             created_since=created_since,
             created_until=created_until,
+            attrs=attrs,
         )

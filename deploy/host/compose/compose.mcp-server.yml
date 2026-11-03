@@ -29,6 +29,8 @@ services:
       #   EMBED_QUERY_CACHE — 질의 캐시는 이미지 안 기본 /tmp/mcp_query_cache.sqlite). 저장소는 PG 하나(mc-01 — 옛 store 칸·MCP_STORE 없음)
     volumes:
       - *settings
+      # EDW 조인 사슬 서버 사본(pl-52 — data-pipeline과 같은 파일): search attrs 거르기·근거 attrs 키. 앱은 search.edw_meta.edw_chain에 이 경로를 적었을 때만 씀.
+      - ${SERVER_ENV_DIR:?SERVER_ENV_DIR 필요 — settings_env.sh load_settings가 냄}/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z
       - ${RAG_OUT:?RAG_OUT=<결과 폴더(파이프라인 /app/output)>}:${APP_OUTPUT_ROOT:?APP_OUTPUT_ROOT 필요 — settings_env.sh load_settings가 냄}:ro,z
     mem_limit: ${MCP_MEM_LIMIT:-4g}
     cpus: ${MCP_CPUS:-1}             # mcp(상주) + data-pipeline(PARSE_CPUS) — 4 vCPU 개발 서버는 parse_cpus 3 이하로(settings.yaml)

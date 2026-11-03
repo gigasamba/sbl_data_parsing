@@ -33,7 +33,8 @@ def register_edw_meta(m):
         inventory stats) from a PII-sanitized static dataset as-of the build date (2026-10-22 user
         decision — no vector search, no embedding, no LLM calls, no live DB; the single-column view
         and the `query` keyword search were removed by the user).
-        - No args: schema summary (5 schemas, table/column counts, excluded-BCMS note).
+        - No args: schema summary (5 schemas, table/column counts, excluded-BCMS note) plus
+          `search_attrs`: per source_system, the `search` attrs keys — {filter: {filter name: attrs key}, evidence: [keys]}.
         - `schema` only: ALL tables of that schema, column list EXCLUDED — name, Korean description,
           row_count, data_period, column_count, qualified_name.
         - `schema`+`table`: table meta + FULL column list with Korean descriptions (type, nullability,

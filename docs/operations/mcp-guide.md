@@ -60,6 +60,7 @@
 | `contract_id` | 글자 또는 목록 | 아니요 | — | 계약 코드 — CRMS(계약 코드)·LAS(관리 번호) |
 | `created_since` | 글자 | 아니요 | — | 원천 등록 시각부터. `YYYY-MM-DD`(그날 00:00 KST부터) 또는 ISO 8601 시각(시간대 없으면 KST) |
 | `created_until` | 글자 | 아니요 | — | 원천 등록 시각까지. 날짜만 주면 그날 전체 포함(다음 날 00:00 미만) |
+| `attrs` | 객체 `{키: 값 또는 목록}` | 아니요 | — | 원천 메타 키로 거르기, 정확 일치(목록은 OR, 키끼리 AND). 쓸 수 있는 키는 **원천마다 다르다** — `edw_meta`를 인자 없이 부르면 `search_attrs`에 원천별 목록(`filter`의 값들). 모르는 키는 오류(`{"error": "attrs 키 … 거를 수 있는 키: …"}`) — 조용히 0건이 되지 않는다 |
 <!-- /guide:search-inputs -->
 
 규칙:
@@ -67,7 +68,8 @@
 - 모르는 인자(예 `"year": 2025`)는 오류 없이 무시한다.
 - 거르기에 맞는 문서가 없으면 오류가 아니라 빈 결과다(`evidence: []`, `scope_docs: 0`, `evidence_status: "none"`).
 - `created_since`·`created_until`을 주면 등록 시각이 없는 문서는 빠진다. 날짜 형식이 틀리면 `{"error": "created_since/created_until 형식 — …"}`.
-- 고른 원천에 없는 칸의 거르기(예: `source_system: "CRMS"`에 `sf_op_id`)는 오류가 아니라 0건이다(위 표의 "…만").
+- 고른 원천에 없는 칸의 거르기(예: `source_system: "CRMS"`에 `sf_op_id`)는 오류가 아니라 0건이다(위 표의 "…만"). `attrs`만 다르다 — 모르는 키는 오류.
+- `project_id`·`division`·`service_type`·`doc_class`·`sf_op_id`·`sf_op_name`·`contract_id`는 그 원천 `attrs` 키의 줄임 이름이다(예 SFDC `project_id` = `attrs: {"project_code__c": …}`). 어느 키로 이어지는지는 서버의 EDW 사슬 파일(`edw_chain.yaml`의 `filter:`)이 정하고 `edw_meta` `search_attrs.<원천>.filter`에 나온다([pl-52](../prd/load-schema.md#pl-52)).
 - `source_system` 말고 거르기를 더 주면 범위가 좁아져 근거가 촘촘하고 빠르다.
 - **⚠ 운영과 다름:** ① **`source_system`이 필수·값 하나**다(운영은 선택) — 원천마다 따로 색인해 점수를 섞지 않는다. 여러 원천은 여러 번 부른다. ② 운영은 `client`만 목록을 받는다 — 여기서는 모든 거르기가 목록을 받는다. ③ `client`는 EDW 고객(`client_edw`)만 본다 — 운영의 문서 고객 라벨 대체·별칭 묶음은 없다. ④ `FAQ_group`은 FAQ를 적재한 뒤에 결과가 나온다([pl-39](../prd/extract.md#pl-39)). ⑤ 응답 크기가 상한(`MCP_MAX_CHARS`)을 넘으면 낮은 순위 근거부터 줄이되 표시 칸은 붙이지 않는다.
 
@@ -83,7 +85,7 @@
 | `scope_docs` | 정수 | 늘 | 거르기에 맞은 문서 수(`source_system`만 주면 그 원천의 문서 수) — 검색은 이 문서들 안에서만 했다 |
 <!-- /guide:search-top -->
 
-근거 한 건(`evidence[]`)은 늘 12칸이다. 값이 없으면 `null`.
+근거 한 건(`evidence[]`)은 늘 13칸이다. 값이 없으면 `null`.
 
 <!-- guide:evidence -->
 | 칸 | 형식 | 뜻 |
@@ -95,11 +97,12 @@
 | `line` | 글자 또는 null | 줄 범위(예 `"27-28"`) |
 | `section` | 글자 또는 null | 절 제목 |
 | `client` | 글자 또는 null | EDW 고객(`client_edw`) |
-| `contract_no` | 글자 또는 null | 계약 번호 |
+| `contract_no` | 글자 또는 null | 계약 번호 — 그 원천의 `contract_id` 거르기 키 값(CRMS 계약 코드·LAS 관리 번호, SFDC는 null) |
 | `doc_date` | 글자 또는 null | 문서 날짜 |
 | `version` | 글자 또는 null | 문서 판 — 수집 목록(manifest)에 값이 있을 때만 |
 | `superseded` | null | 구판 표시 — 지금은 늘 null([mc-05](../prd/mcp.md#mc-05): 본문 글자로 추정한 값은 내보내지 않음) |
 | `chunk_key` | 글자 | 청크를 다시 가리키는 키 `<doc_id>:<seq>` ⚠ 운영은 `<file_path>:<순번>` |
+| `attrs` | 객체 | 원천 메타 `{키: 값}` — 그 원천의 근거 키(`edw_meta` `search_attrs.<원천>.evidence`) 모두, 값이 없으면 null. 예 SFDC `sf_op_id`·`sf_op_name`·`project_code__c`·`service_type`·`contract_date` |
 <!-- /guide:evidence -->
 
 ### 4-3. 예
@@ -115,6 +118,7 @@
 {"name": "search", "arguments": {"question": "<주제>", "source_system": "SFDC", "sf_op_name": "<영업 기회 이름 전체>"}}
 {"name": "search", "arguments": {"question": "<FAQ 질문>", "source_system": "FAQ", "FAQ_group": "DP"}}
 {"name": "search", "arguments": {"question": "<주제>", "source_system": "CRMS", "created_since": "2025-01-01", "created_until": "2025-06-30"}}
+{"name": "search", "arguments": {"question": "<주제>", "source_system": "SFDC", "attrs": {"project_code__c": "<코드>", "service_type": ["CDO", "ADC"]}}}
 ```
 
 응답 예(값은 꾸민 것):
@@ -122,7 +126,8 @@
 ```json
 {"question": "<주제> 단가", "evidence": [
   {"text": "… 단가 100 USD …", "file_name": "<파일>.pdf", "file_path": "SFDC/<uuid>/<파일>.pdf", "page": 3, "line": "27-28",
-   "section": "가격", "client": null, "contract_no": null, "doc_date": null, "version": null, "superseded": null, "chunk_key": "<doc_id>:<seq>"}],
+   "section": "가격", "client": null, "contract_no": null, "doc_date": null, "version": null, "superseded": null, "chunk_key": "<doc_id>:<seq>",
+   "attrs": {"sf_op_id": "006<…>", "sf_op_name": "<영업 기회>", "project_code__c": null, "service_type": "CDO", "contract_date": null}}],
  "evidence_status": "found", "filter": {"source_system": "SFDC"}, "scope_docs": 1234}
 ```
 
@@ -265,6 +270,10 @@ EDW 표·칸의 한글 설명을 정적 자료에서 3단으로 찾는다(DB 접
 | `column_filter` | 글자 | 아니요 | 칸 이름 부분 일치로 넓은 표를 줄임 |
 
 모르는 이름은 `{"error": …, "suggestions": [...]}`. SQL을 쓸 때는 결과의 `qualified_name`을 쓴다.
+
+인자 없이 부르면 스키마 요약에 `search_attrs`가 붙는다 — `search`의 원천별 `attrs` 키(EDW 사슬 파일 그대로, [pl-52](../prd/load-schema.md#pl-52)):
+`{"SFDC": {"filter": {"project_id": "project_code__c", …, "doc_class": "doc_class"}, "evidence": ["sf_op_id", …]}, "CRMS": …}`.
+`filter`는 줄임 이름 → `attrs` 키(값들이 `attrs` 거르기에 쓸 수 있는 키), `evidence`는 근거 `attrs`에 나오는 키다.
 
 ```json
 {"name": "edw_meta", "arguments": {}}
