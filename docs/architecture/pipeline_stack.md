@@ -35,6 +35,7 @@
 ### 3-1. 지원 형식 더하기(pl-42, 사용자 10-30)
 
 - `resources/config/pipeline_stack.json`에 `.jpeg`·`.tif`·`.tiff`·`.bmp`(`.png`·`.jpg`와 같은 엔진 — 0.2.0부터 `qwen_vlm` 하나, OCR 스위치 지움 — pl-46)·`.mhtml`(`.mht`와 같은 `mhtml`·`kreuzberg`)을 더했다. `.hwpx`(`hwpx`)는 원래 있었다. 엔진 코드는 바꾸지 않았다(다섯 형식 모두 엔진이 이미 읽음).
+- 2차(pl-45, 사용자 11-01·11-03): `.docm`·`.pptm`(kreuzberg·anydoc), `.rtf`·`.odt`·`.ods`(anydoc·kreuzberg), `.odp`(anydoc), `.csv`(markitdown·kreuzberg), `.tsv`(plaintext·kreuzberg), `.md`(plaintext·markitdown), `.xlsb`·`.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg), `.json`·`.xml`·`.log`(plaintext — 글 그대로). 엔진 `parser.py`의 `FORMATS`는 그대로 두고(엔진 지문 유지) 등록부 `pipeline/extract/engines/registry.py`의 `EXTRA_FORMATS` 표에 더했다 — `engines_for()`가 둘을 함께 읽는다. 새 형식을 엔진에 더할 때도 이 표에 둔다. `.hwp`는 아직 아니다(pl-45).
 - 서버도 같은 파일을 읽으므로 따로 할 일이 없다(옛 `set-stack` 단계 없음 — `refactor.md` C-69 닫음).
 - 파일에 없는 형식은 핵심 엔진 합집합으로 대체돼 돌기는 한다(+형식별 1회 로그).
 
