@@ -152,7 +152,7 @@
 | EDW 접속 설정은 `common.connections.rdb` 하나(settings `required.edw`)에 계정 둘 — 읽기(목록·FileStorageMap·ParsingMeta 조회·MCP), 쓰기(ParsingMeta 게시만). MCP 프로세스에서는 쓰기 계정을 비운다 | 같은 값이 설정 블록 넷에 반복되던 것을 없앰. 등급 A | done | [op-03](prd/ops.md#op-03) |
 | PC 대역 EDW는 sqlite 파일 하나(`valid_env/edw/edw.sqlite`)를 `AI`·`CRMS`·`LAS`·`SFDC`로 붙여 같은 SQL이 돌게 | PC에서 운영 EDW에 접속하지 않는다 | done | [op-03](prd/ops.md#op-03) |
 | 모델 역할 llm·vlm·embed(OpenAI 호환). 외부 주소는 `common.models.<역할>.allow_external`이 켜지고 `RUN_ENV=local`일 때만, 서버는 거부. 내부 판정 = 해석된 주소가 사설 IP(또는 `internal_ip_ranges`) + 호스트 접미(`internal_host_suffixes`) | 폐쇄망 밖으로 데이터를 보내지 않는다. 접미 목록에는 전체 호스트 이름이 아니라 상위 도메인을 적어야 맞는다(운영 고침 묶음) | done | [pl-11](prd/ops.md#pl-11) |
-| 비용 상한 — `common.models.guard.budget_usd`(누적 $)·지출 장부 `spend_file`(호출 수 상한·유료 차단 스위치는 11-03에 없앰) | PC 호출을 싸게 유지. 응답 캐시·가짜 LLM도 여기 | done | [pl-11](prd/ops.md#pl-11) |
+| 비용 상한 — `common.models.guard.budget_usd`(외부 모델 하루 지출 $, 기본 0.1 — PC 사용자마다)·하루 장부(`spend_file` + 날짜, 비우면 `output/llm_spend/<날짜>.txt`)(호출 수 상한·유료 차단 스위치는 11-03에 없앰) | PC 호출을 싸게 유지. 응답 캐시·가짜 LLM도 여기 | done | [pl-11](prd/ops.md#pl-11) |
 | 모델 — 개발 서버부터 내부망 GLM, PC는 OpenRouter | 사용자 11-02 | done | [pl-11](prd/ops.md#pl-11) |
 | JSON Lines 사건 기록(공통 키·로그 수준·비밀 가림) + DB 감사·성능 로그 — 두 앱 `common.core.jsonlog`, MCP 도구 호출마다 `applog.mcp_call`, 파이프라인 실행·단계 `applog.pipe_run`·`pipe_event`(`dbtool up --target applog`) | 사건·감사·성능을 같은 형식으로 남긴다(코드 #87 병합 — 서버 적용은 C-79·C-80) | done | [op-01](prd/ops.md#op-01) |
 | 실행 환경 `RUN_ENV`(`required.env.run_env`)는 `local`·`dev`·`prd`만, 어디서나 필수 — `stage`나 모르는 값이면 시작 거부 | `stage`는 `prd`와 똑같이 동작했다 | done | [op-02](prd/ops-settings.md#op-02) |

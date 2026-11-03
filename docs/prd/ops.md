@@ -152,6 +152,7 @@
 - 파일: `common/ai/guard.py`, `common/ai/llm.py`(옛 `adk.py` 합침 — 0.2.0), `common/config/settings.py`.
 - 결정(사용자 11-02): 개발 서버(dev)부터 내부망 GLM, PC(local)는 OpenRouter(유료 — 상한은 CLAUDE.md §7).
 - 11-03(사용자): PC 비용 스위치 `no_paid_calls`(NO_PAID_CALLS)·`max_calls`(LLM_MAX_CALLS)·`external_max_docs`·`external_max_questions`·`external_scope`를 지움 — 코드·설정·sample·시험·문서. 옛 설정 파일의 칸은 경고만(`layout.REMOVED`). 남긴 것: 지출 상한 `budget_usd`와 장부 `spend_file`(자식 프로세스·검증 페이지가 같은 장부를 나눠 쓰는 유일한 길이라 설정으로 둠), 모든 `*_ALLOW_EXTERNAL`, 서버(dev/prd)의 외부 모델 거부. answer_gen의 "외부 호출이면 예산 필수" 범위 검사(check_scope)도 함께 없어짐. 호출 수는 `usage()` 집계로만 센다.
+- 11-03(사용자 — 기본 지출 상한): `budget_usd` 기본 0.1달러, 뜻은 "하루(현지 날짜) 동안 PC 사용자 한 명". 장부는 날짜마다 새 파일 — `spend_file`이 있으면 그 이름 뒤에 날짜(`spend.json` → `spend-2026-11-03.json`), 비우면 `<저장소>/output/llm_spend/<날짜>.txt`(`common.core.paths.SPEND_DIR`)라 그 작업 폴더(저장소 체크아웃)에서 도는 모든 프로세스가 하루 합계 하나를 나눠 씀 — worktree·다른 체크아웃은 장부가 따로(옛 프로세스 안 장부 `_SPEND_LOCAL`은 지움). "사람마다" = PC·OS 사용자마다로 본다 — 외부 호출은 `RUN_ENV=local`에서만 되고 서버(dev·prd)는 외부 모델을 거부한다. 비운 칸은 기본 0.1(상한 없음은 없음 — 더 쓰려면 큰 값을 적음). 그래서 answer_gen의 따로 둔 예산 검사는 필요 없다(P1-4 — 기본 상한이 대신함). 외부 LLM의 단가를 모르면 상한을 지킬 수 없어 호출을 거부한다(`llm.chat` 기존 규칙 — 이제 늘 적용). 시험 자식(`case_env`)은 임시 장부를 쓴다. 정산·반환은 선차감한 날의 장부로 감(스레드마다 선차감 날짜를 기억 — 자정을 넘겨 돌아온 환불이 다음 날 상한을 늘리지 않게). 여러 턴 도구 왕복(`admit_turn` — answer_gen)도 단가를 모르면 거부하고, 턴 정산은 role=llm 단가(`LLM_PRICE_IN·OUT` 포함)로 함. 한 번의 호출이 사후 정산으로 상한을 조금 넘을 수는 있다(다음 호출부터 거부).
 - Status: done
 
 <a id="op-01"></a>

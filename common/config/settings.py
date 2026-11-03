@@ -1351,16 +1351,20 @@ class CommonModelsEmbed(Section):
 
 class CommonModelsGuard(Section):
     budget_usd: float | None = F(
-        None,
+        0.1,
         "LLM_BUDGET_USD",
-        "유료(외부) 모델 호출 누적 비용 상한($) — 넘으면 호출 안 함, 비우면 상한 없음(nan·inf는 형식 오류)",
+        "외부 모델 호출 하루(현지 날짜·PC 사용자마다) 지출 상한($), 넘으면 호출 안 함 — 사용자 11-03, 비우면 기본 0.1, nan·inf는 형식 오류",
         allow_inf_nan=False,
     )
     internal_host_suffixes: CsvList | None = F(
         [], "INTERNAL_HOST_SUFFIXES", "내부망으로 인정할 호스트 이름 접미사 목록(쉼표 구분, 실제 주소가 사설일 때만)"
     )
     internal_ip_ranges: CsvList | None = F([], "INTERNAL_IP_RANGES", "사설(RFC1918) 밖의 사내 IP 대역 CIDR 목록(쉼표 구분)")
-    spend_file: str | None = F(None, "LLM_SPEND_FILE", "지출 장부 파일 경로(호출마다 금액 한 줄 — 프로세스·실행 전체가 공유)")
+    spend_file: str | None = F(
+        None,
+        "LLM_SPEND_FILE",
+        "지출 장부 파일 경로(이름 뒤에 날짜를 붙여 하루마다 새 파일, 비우면 <저장소>/output/llm_spend/<날짜>.txt) — 호출마다 금액 한 줄, 프로세스 전체가 공유",
+    )
 
 
 class CommonModelsLlm(Section):

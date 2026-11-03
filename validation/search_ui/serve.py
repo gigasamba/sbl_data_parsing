@@ -79,13 +79,9 @@ def mcp_call(tool, args):
 
 
 def spend():
-    f = cfg().models.guard.spend_file
-    used = None
-    if f and Path(f).exists():
-        try:  # 장부 = 호출마다 금액 한 줄(공백 구분) — common.ai.guard._ledger_sum과 같은 방식으로 합산
-            used = sum(float(x) for x in Path(f).read_text(encoding="utf-8").split() if x)
-        except ValueError:
-            used = None
+    from common.ai import guard as G
+
+    used = G.spend_total()  # 오늘(현지 날짜) 장부 합계 — 상한은 하루 단위(11-03)
     budget = cfg().models.guard.budget_usd
     return {"used_usd": used, "budget_usd": float(budget) if budget is not None else None}
 

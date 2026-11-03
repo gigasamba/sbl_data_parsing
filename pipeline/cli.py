@@ -375,10 +375,16 @@ def case_env(mod):
     fake = mod in _FAKE_LLM_CASES
     own = not C.IN_IMAGE and mod not in _PC_SETTINGS_CASES  # PC 시험은 시험 전용 바탕 설정(아래 _case_settings)
     if (fake, own) not in _CASE_ENVS:
-        blank = dict.fromkeys(("LLM_BASE_URL", "VLM_BASE_URL", "EMBED_BASE_URL", "LLM_BUDGET_USD"))
-        blank.update(
-            dict.fromkeys(("LLM_ALLOW_EXTERNAL", "VLM_ALLOW_EXTERNAL", "EMBED_ALLOW_EXTERNAL"), "0")
-        )  # 외부 전송 늘 끔(옛 NO_PAID_CALLS 대신 — 11-03)
+        import tempfile
+
+        blank: dict[str, str | None] = {
+            **dict.fromkeys(("LLM_BASE_URL", "VLM_BASE_URL", "EMBED_BASE_URL", "LLM_BUDGET_USD")),
+            **dict.fromkeys(
+                ("LLM_ALLOW_EXTERNAL", "VLM_ALLOW_EXTERNAL", "EMBED_ALLOW_EXTERNAL"), "0"
+            ),  # 외부 전송 늘 끔(옛 NO_PAID_CALLS 대신 — 11-03)
+            # 하루 장부(11-03)를 시험마다 따로 — 개발자의 output/llm_spend 장부에 섞이지 않게
+            "LLM_SPEND_FILE": str(Path(tempfile.mkdtemp(prefix="selftest_spend_")) / "spend.txt"),
+        }
         base = child_env({"PYTHONUTF8": "1"})
         if own:  # PC — 개발자 루트 settings.yaml(실 PG·모델 키) 대신 시험 전용 최소 설정 위에 덮음(10-29 — 시험 격리)
             base["SETTINGS_FILE"] = _case_settings()

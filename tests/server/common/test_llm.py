@@ -97,7 +97,10 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
             LLM_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai",
             LLM_MODEL="x-ext",
             LLM_CACHE_DIR=str(Path(_tmp3) / "cache"),
-            LLM_BUDGET_USD=None,
+            LLM_BUDGET_USD=None,  # 기본 하루 상한 0.1(11-03) — 단가를 알아야 외부 호출이 됨
+            LLM_PRICE_IN="1",
+            LLM_PRICE_OUT="1",
+            LLM_SPEND_FILE=str(Path(_tmp3) / "spend.txt"),
         )
         for _env in (None, "dev", "stage", "prd", "prod", "Local"):  # 없음·모르는 글자도 서버로 보고 거부(allow_external=True여도)
             with COMMON.env(RUN_ENV=_env, **_ext):

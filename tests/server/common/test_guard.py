@@ -2,6 +2,7 @@
 
 import os
 import socket
+import tempfile
 
 from common.ai.guard import (
     BudgetExceeded,
@@ -21,7 +22,7 @@ def selftest():
     from common.config.settings import COMMON
 
     with COMMON.env(
-        LLM_SPEND_FILE=None,
+        LLM_SPEND_FILE=os.path.join(tempfile.mkdtemp(), "spend.txt"),  # 하루 장부(11-03)는 임시 자리
         LLM_BUDGET_USD=None,
         INTERNAL_HOST_SUFFIXES=None,
         INTERNAL_IP_RANGES=None,
@@ -76,8 +77,6 @@ def _selftest_body(COMMON):
     finally:
         socket.getaddrinfo = socket_getaddrinfo
     # 외부 허용(스위치 + RUN_ENV=local) — 옛 시험은 가짜 접두 X(X_ALLOW_EXTERNAL=1)였으나 설정 객체에는 가짜 접두 칸이 없어 진짜 접두 EMBED로 같은 것을 시험
-    import tempfile
-
     EXTU = "https://openrouter.ai/api/v1"
     with COMMON.env(EMBED_ALLOW_EXTERNAL=None):  # 허용 없음 → 거부
         try:
@@ -141,9 +140,44 @@ def _selftest_body(COMMON):
         # precheck — 외부 EMBED·VLM만 고정 예상액 선차감(LLM은 llm.chat이, 내부망은 0)
         assert precheck("https://api.example.com/v1", "EMBED") > 0 and abs(spend_total() - 0.701) < 1e-6, spend_total()
         assert precheck("https://api.example.com/v1", "LLM") == 0.0 and precheck("http://127.0.0.1:9/v1", "VLM") == 0.0
-    with COMMON.env(LLM_SPEND_FILE=None, LLM_BUDGET_USD=None):
-        assert precheck("https://api.example.com/v1", "EMBED") == 0.0  # 상한 없으면 선차감 없음
     print("[selftest] 비용 관문 — 공유 장부 선차감(동시 20건 중 상한까지 10건만)·정산·precheck 선차감 통과")
+    # 하루 상한(사용자 11-03 — 기본 0.1달러/하루/PC 사용자): (상한 칸, 날짜, 선차감, 통과?, 그날 합계)
+    from pathlib import Path
+    from unittest import mock
+
+    from common.ai import guard as G
+    from common.core.paths import SPEND_DIR
+
+    rows = [
+        (None, "2026-11-03", 0.06, True, 0.06),  # 기본 0.1 적용
+        (None, "2026-11-03", 0.03, True, 0.09),  # 같은 날은 쌓임
+        (None, "2026-11-03", 0.02, False, 0.09),  # 0.11 > 0.1 — 거부, 장부 그대로
+        (None, "2026-11-04", 0.08, True, 0.08),  # 새 날짜는 0부터
+        ("0.05", "2026-11-05", 0.06, False, 0.0),  # 적은 상한도 지킴
+        ("0.5", "2026-11-05", 0.3, True, 0.3),  # 큰 상한도 지킴
+    ]
+    led = Path(tempfile.mkdtemp()) / "spend.txt"
+    for budget, day, usd, ok, total in rows:
+        with COMMON.env(LLM_SPEND_FILE=str(led), LLM_BUDGET_USD=budget), mock.patch.object(G.time, "strftime", return_value=day):
+            assert G.budget_usd() == (float(budget) if budget else 0.1)
+            try:
+                spend_reserve(usd, "T")
+                got = True
+            except BudgetExceeded:
+                got = False
+            assert got is ok and abs(spend_total() - total) < 1e-9, (budget, day, usd, got, spend_total())
+            assert G.ledger_file().name == f"spend-{day}.txt"
+    # 자정을 넘긴 반환은 선차감한 날 장부로(리뷰 11-03 — 다음 날 상한을 늘리지 않게)
+    with COMMON.env(LLM_SPEND_FILE=str(led), LLM_BUDGET_USD=None):
+        with mock.patch.object(G.time, "strftime", return_value="2026-11-06"):
+            spend_reserve(0.09, "T")
+        with mock.patch.object(G.time, "strftime", return_value="2026-11-07"):
+            G.release_reserve(0.09)
+            assert spend_total() == 0.0, spend_total()  # 새 날 장부는 그대로 0(-0.09가 안 들어옴)
+        assert abs(G._ledger_sum(G.ledger_file("2026-11-06"))) < 1e-9
+    with COMMON.env(LLM_SPEND_FILE=None), mock.patch.object(G.time, "strftime", return_value="2026-11-03"):
+        assert G.ledger_file() == SPEND_DIR / "2026-11-03.txt"  # 장부 칸이 비면 PC 기본 자리(쓰지는 않음)
+    print("[selftest] 하루 상한 — 기본 0.1·같은 날 누적·새 날짜 0부터·설정한 상한 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

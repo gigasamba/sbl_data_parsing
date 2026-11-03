@@ -2,7 +2,7 @@
 
 설정(.env): LLM_BASE_URL(…/v1) · LLM_MODEL · LLM_API_KEY(있을 때만) · LLM_TIMEOUT(초, 기본 120) · LLM_RPM(분당 호출 상한, 기본 0=무제한)
           · LLM_CACHE_DIR(기본 output/eval/llm_cache)
-          · LLM_BUDGET_USD(이번 프로세스 추정 지출 상한 — 넘으면 이후 호출을 보내기 전에 거부) · LLM_PRICE_IN·LLM_PRICE_OUT($/M 토큰, 기본 PRICES[모델])
+          · LLM_BUDGET_USD(외부 모델 하루 지출 상한, 기본 0.1 — 넘으면 이후 호출을 보내기 전에 거부) · LLM_PRICE_IN·LLM_PRICE_OUT($/M 토큰, 기본 PRICES[모델])
 - **응답 캐시**: (모델, 메시지, 온도) 해시가 같으면 다시 부르지 않는다 — 재실행·다른 조합이 같은 질문을 해도 토큰 0.
 - **비용 관문(2026-10, OpenRouter 85% 소진 이후)**: LLM_FAKE=1이면 네트워크 호출 없이 모의 응답(마지막 user 메시지 앞 200자+"[FAKE]") —
   캐시에 안 쓰고 usage()에 fake_calls·prompt_chars만 쌈(추정기가 이걸로 호출 수·글자 수를 모음). 실호출은 LLM_BUDGET_USD로 상한.
@@ -657,10 +657,14 @@ class _Turn:
         self.model, self.usd = model, usd
 
     def settle(self, usage):
-        if self.usd:
+        """응답 usage를 role=llm 단가(price — LLM_PRICE_IN·OUT 포함)로 계산해 차이를 정산(리뷰 11-03 — 옛 settle_tokens는 PRICES 표만 봐
+        표에 없는 모델은 고정 추정액에 머묾). 한 턴이 상한을 넘을 수는 있다(사후 정산) — 다음 턴의 admit_turn이 거부."""
+        if self.usd and usage:
             from common.ai import guard as G
 
-            G.settle_tokens(self.usd, self.model, usage)
+            pin, pout = price(self.model)
+            if pin is not None and pout is not None:
+                G.spend_settle((usage.get("prompt_tokens", 0) * pin + usage.get("completion_tokens", 0) * pout) / 1e6 - self.usd)
 
     def release(self):
         if self.usd:
@@ -676,6 +680,8 @@ def admit_turn(role="llm"):
 
     prof = profile(role)
     budget = G.budget_usd() if prof is not None and not is_internal(prof.base_url) else None  # 예산 읽기(형식 오류)는 세기 앞에서
+    if budget is not None and price(prof.model)[0] is None:  # _do_call과 같은 규칙 — 단가를 모르면 하루 상한을 지킬 수 없음
+        raise LLMUnavailable(f"모델 {prof.model} 단가 미상 — LLM_PRICE_IN·LLM_PRICE_OUT 지정 전엔 예산 상한을 지킬 수 없어 호출 안 함")
     reserve_call()
     if budget is None:
         return _Turn(prof.model if prof else "", 0.0)

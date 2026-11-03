@@ -243,8 +243,8 @@ common:
   models:
     embed: {allow_external: false}               # 평소에는 false(외부 호출 차단) — 임베딩이 필요한 실행 동안만 true
     guard:
-      budget_usd: 0.1                            # 비용 상한(누적 $)
-      spend_file: output/spend-ledger.json
+      budget_usd: 0.1                            # 외부 모델 하루 지출 상한($) — 비우면 기본 0.1(11-03)
+                                                 # 장부는 output/llm_spend/<날짜>.txt(spend_file을 주면 그 이름 뒤에 날짜)
 ops:
   pipeline_paths: {out_root: output/demo}        # 파이프라인 결과 폴더
 search:

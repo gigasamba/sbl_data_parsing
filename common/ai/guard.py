@@ -7,11 +7,15 @@ import http.client
 import ipaddress
 import os
 import socket
+import threading
+import time
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 from common.config import layout as L
 from common.config.settings import by_env, cfg, checked, external_models_allowed, guard_run_env
+from common.core.paths import SPEND_DIR
 
 _SUFFIX = (".local", ".internal", ".corp", ".lan")
 
@@ -128,12 +132,6 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
-_SPEND_LOCAL = [0.0]  # LLM_SPEND_FILE이 없을 때 이 프로세스 장부
-import threading as _threading  # noqa: E402
-
-_LOCAL_LOCK = _threading.Lock()  # 프로세스 안 스레드 간 확인+가산 원자화(10-05 재검증)
-
-
 class _FileLock:
     """장부 파일 옆 .lock — 확인+예약을 프로세스 간 원자적으로(10-05 독립 검토: 확인·기록 사이 틈으로 동시 호출이 상한 초과)."""
 
@@ -186,40 +184,49 @@ def budget_usd():
     return cfg().models.guard.budget_usd
 
 
-def spend_total():
+def ledger_file(day=None):
+    """오늘(현지 날짜) 지출 장부 파일 — 상한은 하루 단위(사용자 11-03 — PC 사용자마다 하루 0.1달러 기본). spend_file이 있으면 그 이름 뒤에
+    날짜를 붙이고(`spend.json` → `spend-2026-11-03.json`), 없으면 <저장소>/output/llm_spend/<날짜>.txt — 그 작업 폴더의 모든 프로세스가 공유
+    (worktree·다른 체크아웃은 따로).
+    외부 호출은 RUN_ENV=local(PC)에서만 되므로 "사람마다" = PC·OS 사용자마다(서버는 외부 모델을 거부)."""
+    day = day or time.strftime("%Y-%m-%d")
     f = cfg().models.guard.spend_file
-    return _ledger_sum(f) if f else _SPEND_LOCAL[0]
+    return Path(f).with_name(f"{Path(f).stem}-{day}{Path(f).suffix}") if f else SPEND_DIR / f"{day}.txt"
+
+
+def spend_total():
+    return _ledger_sum(ledger_file())
+
+
+# 선차감한 날짜(스레드마다) — 정산·반환은 선차감과 같은 날 장부로(자정을 넘겨 돌아온 환불이 다음 날 상한을 늘리지 않게 — 리뷰 11-03).
+# ponytail: 한 스레드가 정산 전에 다른 선차감을 하면 마지막 날짜를 씀 — 지금 호출 길(선차감→호출→정산)은 스레드마다 하나씩, 겹치면
+# spend_reserve가 장부 파일을 돌려주고 호출자가 들고 다니게 바꿈.
+_DAY = threading.local()
 
 
 def spend_reserve(usd, label):
-    """유료 호출 전 예상 최대 비용을 먼저 장부에 씀(선차감) — 상한(LLM_BUDGET_USD)을 넘으면 BudgetExceeded(호출 안 함).
-    LLM_SPEND_FILE(실행 전체가 공유)이 있으면 파일 잠금 안에서 합계 확인+기록."""
-    budget, f = budget_usd(), cfg().models.guard.spend_file  # S7b — 예산은 float|None(옛 글자 "0"도 참이었으므로 is not None)
-    if f:
-        with _FileLock(f):
-            total = _ledger_sum(f)
-            if budget is not None and total + usd > budget:
-                raise BudgetExceeded(f"LLM_BUDGET_USD={budget} — 누적 ${total:.2f} + 이번 {label} 예상 ${usd:.4f} 초과, 호출 안 함")
-            with open(f, "a", encoding="utf-8") as fh:
-                fh.write(f"{usd:.6f}\n")
-        return
-    with _LOCAL_LOCK:
-        if budget is not None and _SPEND_LOCAL[0] + usd > budget:
-            raise BudgetExceeded(f"LLM_BUDGET_USD={budget} — 누적 ${_SPEND_LOCAL[0]:.2f} + {label} ${usd:.4f} 초과, 호출 안 함")
-        _SPEND_LOCAL[0] += usd
+    """유료 호출 전 예상 최대 비용을 먼저 오늘 장부에 씀(선차감) — 하루 상한(LLM_BUDGET_USD)을 넘으면 BudgetExceeded(호출 안 함).
+    파일 잠금 안에서 합계 확인+기록(프로세스·스레드 사이 원자적)."""
+    _DAY.d = time.strftime("%Y-%m-%d")
+    budget, f = budget_usd(), ledger_file(_DAY.d)  # S7b — 예산은 float|None(옛 글자 "0"도 참이었으므로 is not None)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    with _FileLock(f):
+        total = _ledger_sum(f)
+        if budget is not None and total + usd > budget:
+            raise BudgetExceeded(f"LLM_BUDGET_USD={budget}(하루) — 오늘 누적 ${total:.2f} + 이번 {label} 예상 ${usd:.4f} 초과, 호출 안 함")
+        with open(f, "a", encoding="utf-8") as fh:
+            fh.write(f"{usd:.6f}\n")
 
 
 def spend_settle(delta):
-    """호출 뒤 실제−예상 정산(음수 가능). 사용량을 모르면 부르지 않음 = 예상 최대치가 그대로 남음(보수적)."""
+    """호출 뒤 실제−예상 정산(음수 가능) — 이 스레드가 선차감한 날의 장부에(없으면 오늘). 사용량을 모르면 부르지 않음 = 예상 최대치가
+    그대로 남음(보수적)."""
     if not delta:
         return
-    f = cfg().models.guard.spend_file
-    if f:
-        with _FileLock(f), open(f, "a", encoding="utf-8") as fh:
-            fh.write(f"{delta:.6f}\n")
-    else:
-        with _LOCAL_LOCK:
-            _SPEND_LOCAL[0] += delta
+    f = ledger_file(getattr(_DAY, "d", None))
+    f.parent.mkdir(parents=True, exist_ok=True)
+    with _FileLock(f), open(f, "a", encoding="utf-8") as fh:
+        fh.write(f"{delta:.6f}\n")
 
 
 # llm.chat 밖에서 바로 부르는 유료 호출(VLM 그림·쪽, 임베딩, 재랭크)의 호출당 예상 비용($) — 예산 선차감용(보수적 고정값, env로 덮어씀)
