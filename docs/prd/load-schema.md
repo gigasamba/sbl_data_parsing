@@ -39,8 +39,8 @@
 <a id="pl-25"></a>
 ## pl-25 · DB 스키마 명세 — pl-26·pl-23·pl-24를 만들기 전에 먼저
 - 결정(사용자 10-31 범위 축소 grill): EDW 추가 기록은 **계획대로**(SupersededRow 표 + ParsingMeta 단계별 열). silver·gold 생성 시각 칸 이름은 `silver_at`·`gold_at`(gold doc·ParsingMeta 같은 이름) — `created_at`은 문서가 생긴 시각(원천)으로만.
-- 이유: 표·칸 정의가 Alembic 마이그레이션(`common/store/db/migrations/versions/`), `docs/operations/parsing_meta_mssql.sql`(ParsingMeta만), `AI.FileStorageMap`을 읽는 코드(정의 없음)에 흩어져 있다. 10-20 축소 스키마는 코드에 반만 반영됐다(mc-10, mc-11, pl-14).
-- 결정(사용자 10-29 grill): 문서 하나 `docs/architecture/db_schema.md` — 표마다 칸, 타입, 뜻, 어느 코드가 쓰고 읽는지. 대상: EDW `AI.FileStorageMap`(id, s3_key, original_filename, file_size, `last_modified_time` 가정), `AI.ParsingMeta`(+ `gold_status`), pgvector 검색 스키마. 10-20 축소 스키마가 정답이고 다른 코드는 mc-10/mc-11/pl-14에서 고친다. 시험 하나가 문서의 칸을 마이그레이션·mssql SQL과 대조한다. 구현 전에 사용자와 DB 담당자가 승인하고, DB 담당자는 이 문서를 받는다.
+- 이유: 표·칸 정의가 Alembic 마이그레이션(`common/store/db/migrations/versions/`), `docs/operations/parsing_meta_mssql.sql`(ParsingMeta만), `AI.FileStorageMap`을 읽는 코드(정의 없음)에 흩어져 있다. 10-20 축소 스키마는 코드에 반만 반영됐다(mc-10, mc-11).
+- 결정(사용자 10-29 grill): 문서 하나 `docs/architecture/db_schema.md` — 표마다 칸, 타입, 뜻, 어느 코드가 쓰고 읽는지. 대상: EDW `AI.FileStorageMap`(id, s3_key, original_filename, file_size, `last_modified_time` 가정), `AI.ParsingMeta`(+ `gold_status`), pgvector 검색 스키마. 10-20 축소 스키마가 정답이고 다른 코드는 mc-10/mc-11에서 고친다. 시험 하나가 문서의 칸을 마이그레이션·mssql SQL과 대조한다. 구현 전에 사용자와 DB 담당자가 승인하고, DB 담당자는 이 문서를 받는다.
 - 결정(사용자 10-30 grill — gold 스키마):
   - 키: 문서 키는 `s3_key` 하나(gold `doc.file_path` = 원본 경로 — 아래). sha256 `doc_key`는 검색 DB에 두지 않는다([mcp.md#mc-15](mcp.md#mc-15)). chunk는 `doc_id`만.
   - gold: 0.2.0에 원천 시스템별 PG 스키마 5벌(`sfdc`·`crms`·`las`·`faq`·`other` — [pl-28](#pl-28), A2), 스키마마다 `doc`, `chunk`, `chunk_term`, `term_stat`, `corpus_stat`. MCP `search`는 원천을 필수·값 하나로 받는다(G20, 계약 변경 — 등급 A).
