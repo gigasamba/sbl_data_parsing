@@ -772,13 +772,14 @@ def edw_faq():
 
 
 def faq_first(rows, order):
-    """pl-41(사용자 11-03) — FAQ는 판을 잇지 않고 통째로 교체. 새 FAQ(ParsingMeta에도 faq_seen.txt에도 없던 키)가 있으면 구조화 컨테이너의
+    """pl-41(사용자 11-03) — FAQ는 판을 잇지 않고 통째로 교체. 새 FAQ(교체를 마친 키 목록 faq_seen.txt에 없는 키)가 있으면 구조화 컨테이너의
     `pgvector_load faq-sync --reset`으로 gold faq를 비우고 FAQ 전체를 이번 처리 맨 앞에 넣는다(--filter·--skip-done과 상관없이 — 없는 FAQ 행은
     rows 뒤에 덧붙임). 새 FAQ가 없으면 지우지 않고 gold에 없는 FAQ만 넣는다(중간에 멈춘 교체·파싱 실패를 채움 — 완전 중복 skipped_dup은 gold에
-    안 올라가므로 뺌). faq-sync 결과를 못 읽으면(실패·시간 초과 — 지웠는지 모름) FAQ 전체를 넣는다(적재는 이미 있는 문서를 건너뜀)."""
+    안 올라가므로 뺌). faq-sync 결과를 못 읽으면(실패·시간 초과 — 지웠는지 모름) FAQ 전체를 넣고 faq_seen.txt는 그대로 둬 다음 실행이 교체를
+    다시 시도한다(적재는 이미 있는 문서를 건너뜀). ParsingMeta는 새 FAQ 판정에 쓰지 않는다(--seqs·--limit 실행이 교체 없이 기록할 수 있어서)."""
     faq_rows, status = edw_faq()
-    seen_f = PROG / "faq_seen.txt"  # 교체를 일으킨 키 — 파싱에 계속 실패해 ParsingMeta에 안 남는 FAQ가 매 실행 교체를 다시 일으키지 않게
-    seen = set(status) | (set(seen_f.read_text(encoding="utf-8").splitlines()) if seen_f.exists() else set())
+    seen_f = PROG / "faq_seen.txt"  # 교체를 마친 FAQ 키 — 처음 실행(파일 없음)은 FAQ 전체가 새 FAQ라 한 번 교체함
+    seen = set(seen_f.read_text(encoding="utf-8").splitlines()) if seen_f.exists() else set()
     seq = {r["s3_key"]: i for i, r in enumerate(rows)}
     for r in faq_rows:
         if r["s3_key"] not in seq:
@@ -786,8 +787,6 @@ def faq_first(rows, order):
             rows.append(r)
     faq = [seq[r["s3_key"]] for r in faq_rows]
     new = [r["s3_key"] for r in faq_rows if r["s3_key"] not in seen]
-    if new:  # 지우기 전에 적음 — 지운 뒤 결과를 못 읽어도 같은 키로 다시 지우지 않게
-        seen_f.write_text("".join(f"{k}\n" for k in sorted(seen | set(new))), encoding="utf-8")
     res = DOCFLOW / "faq_sync.json"
     res.unlink(missing_ok=True)
     rc, _, err = sh(
@@ -797,6 +796,8 @@ def faq_first(rows, order):
         got = json.loads(res.read_text(encoding="utf-8")) if rc == 0 else None
     except (OSError, ValueError):
         got = None
+    if got is not None and new:  # 교체가 끝난 뒤에만 적음 — 실패하면 다음 실행이 다시 교체
+        seen_f.write_text("".join(f"{k}\n" for k in sorted(seen | set(new))), encoding="utf-8")
     if got is None or new:
         log(
             f"[경고] FAQ 교체 확인(faq-sync) 결과 없음(rc={rc}: {err[-200:]}) — FAQ {len(faq)}건 전체를 넣음(이미 있는 문서는 적재가 건너뜀)"
@@ -924,9 +925,9 @@ def main():
     n_env = write_envfile()
     stack_check()
     start = a.start_offset
-    if start >= len(rows):
-        log(f"start-offset {start} ≥ 대상 {len(rows)}건 — 종료")
-        return
+    if start >= len(rows):  # 대상은 없어도 FAQ 교체(pl-41)는 확인 — 할 일이 없으면 아래 '처리할 문서 없음'에서 끝남
+        log(f"start-offset {start} ≥ 대상 {len(rows)}건")
+        start = len(rows)
     log(
         f"=== 문서별 flow 시작: offset={start} · 남은 {len(rows) - start}건 · 레인(전담/공유) "
         f"{' '.join(f'{c} {d}/{s}' for c, (d, s) in LANE_WORKERS.items())} · vlm 동시 {VLM_CAP} · "

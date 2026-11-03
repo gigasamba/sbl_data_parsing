@@ -240,8 +240,8 @@ def test_parallel_warm_respects_free_slots():
 
 
 def test_faq_first(tmp_path):
-    """pl-41 — 새 FAQ(ParsingMeta에도 faq_seen에도 없던 키)면 --reset + FAQ 전체를 맨 앞에(--filter에 없던 FAQ 행은 덧붙임) · 새 FAQ가 없으면
-    gold에 없는 FAQ만(지우지 않음, 완전 중복 skipped_dup은 뺌) · faq-sync 결과가 없으면 FAQ 전체(이미 있는 문서는 적재가 건너뜀)."""
+    """pl-41 — 새 FAQ(faq_seen에 없던 키)면 --reset + FAQ 전체를 맨 앞에(--filter에 없던 FAQ 행은 덧붙임), faq_seen은 교체가 끝난 뒤에만 ·
+    새 FAQ가 없으면 gold에 없는 FAQ만(지우지 않음, 완전 중복 skipped_dup은 뺌) · faq-sync 결과가 없으면 FAQ 전체(이미 있는 문서는 적재가 건너뜀)."""
     import json as J
     from unittest.mock import patch
 
@@ -267,15 +267,17 @@ def test_faq_first(tmp_path):
         ):
             return RD.faq_first(rows, [0, 2]), len(rows)
 
-    assert run({U1: "ok"}, {"faq_reset": 1, "gold": []}) == ([1, 3, 0, 2], 4)  # u2가 새 FAQ — 전체, u2 행 덧붙임
-    assert cmds[-1] == RD.faq_sync_cmd(True)
+    seen = tmp_path / "faq_seen.txt"
+    seen.write_text(U1 + "\n", encoding="utf-8")
+    assert run({U1: "ok"}, None, rc=2) == ([1, 3, 0, 2], 4)  # u2가 새 FAQ인데 교체 실패(판 확인 등) — 전체, 다음 실행이 다시 교체
+    assert cmds[-1] == RD.faq_sync_cmd(True) and U2 not in seen.read_text(encoding="utf-8")
+    assert run({U1: "ok", U2: "ok"}, {"faq_reset": 1, "gold": []}) == ([1, 3, 0, 2], 4)  # ParsingMeta에 있어도(--seqs 실행) 새 FAQ — 교체
+    assert cmds[-1] == RD.faq_sync_cmd(True) and U2 in seen.read_text(encoding="utf-8")  # 교체가 끝난 뒤에만 적음
     assert run({U1: "ok", U2: "ok"}, {"faq_reset": 0, "gold": [U1]}) == ([3, 0, 2], 4)  # gold에 없는 u2만
-    assert "--reset" not in cmds[-1]
+    assert cmds[-1] == RD.faq_sync_cmd(False)
     assert run({U1: "ok", U2: "ok"}, {"faq_reset": 0, "gold": [U1, U2]}) == ([0, 2], 4)  # 그대로
-    # u2는 파싱 실패로 ParsingMeta에 없지만 이미 교체를 일으킴(faq_seen) — 다시 안 지우고 gold에 없는 u2만 채움
-    assert run({U1: "ok"}, {"faq_reset": 0, "gold": [U1]}) == ([3, 0, 2], 4)
-    assert "--reset" not in cmds[-1]
+    assert run({U1: "ok"}, {"faq_reset": 0, "gold": [U1]}) == ([3, 0, 2], 4)  # u2 파싱 실패(ParsingMeta 없음) — 지우지 않고 채움
     assert run({U1: "ok", U2: "skipped_dup"}, {"faq_reset": 0, "gold": [U1]}) == ([0, 2], 4)  # 완전 중복은 gold에 안 올라감 — 안 채움
-    (tmp_path / "faq_seen.txt").unlink()
-    assert run({U1: "ok"}, None, rc=124) == ([1, 3, 0, 2], 4)  # 결과 없음(시간 초과) — 전체
-    assert U2 in (tmp_path / "faq_seen.txt").read_text(encoding="utf-8")  # 지우기 전에 적어 둠 — 다음 실행이 다시 안 지움
+    seen.unlink()
+    assert run({U1: "ok", U2: "ok"}, {"faq_reset": 2, "gold": []}) == ([1, 3, 0, 2], 4)  # 처음 실행(파일 없음) — 한 번 교체
+    assert seen.read_text(encoding="utf-8") == f"{U1}\n{U2}\n"
