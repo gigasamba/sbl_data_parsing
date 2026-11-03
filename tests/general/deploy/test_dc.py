@@ -1,6 +1,7 @@
 """dc.sh(사용자 11-03 — 옛 README dc() 셸 함수를 대신함) — 상주 컨테이너 3개의 compose 파일을 늘 함께 붙이고, 실행 이미지(*-runtime)거나
 CODE_DIR를 주면 compose.code*.yml 셋을 더한 뒤 인자를 그대로 넘기는지. DOCKER=echo로 명령 줄만 본다(docker·설정 읽기 없음 — PC 전용)."""
 
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -31,7 +32,7 @@ def test_dc_command():
         sp = f"/{p[0].lower()}{p[2:]}" if p[1:2] == ":" else p  # Git Bash(Windows)가 절대 경로로 보는 꼴
         for image, code, overlay in CASES:
             env = {  # env 남김 — 하위 프로세스(호스트 셸이 load_settings로 받는 이름 — 시험)
-                "PATH": subprocess.os.environ.get("PATH", ""),
+                "PATH": os.environ.get("PATH", ""),
                 "SETTINGS_FILE": sp,
                 "SETTINGS_LOADED": sp,  # 이미 읽은 것으로 — host_env.py(PyYAML)를 부르지 않음
                 "DOCKER": "echo",
