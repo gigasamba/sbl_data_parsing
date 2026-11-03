@@ -353,3 +353,43 @@ def chunk_all(corpus, method, used=None):
             c["text"] = strip_page_numbers(c["text"]).replace("\f", "\n")
             out.append(c)
     return out
+
+
+# FAQ 머리글 → 칸(수정일 칸은 gold에 자리가 없어 읽지 않음)
+FAQ_HEAD = {"type": "type", "client question": "question", "question": "question", "answer": "answer"}
+
+
+def faq_rows(path):
+    """FAQ 엑셀(pl-39) → 행마다 {group(시트 이름), type, question, answer, row(엑셀 행 번호)}.
+    시트의 첫 비지 않은 행이 머리글 — 질문·답 머리글이 없는 시트는 건너뛰고 경고. 빈 칸은 None(행은 남김, 사용자 11-03),
+    질문·답이 모두 빈 행은 건너뜀. 엑셀이 아니거나 못 열거나 남는 행이 없으면 None(일반 문서처럼 청킹)."""
+    if Path(path).suffix.lower() not in (".xlsx", ".xlsm"):
+        return None
+    from openpyxl import load_workbook
+
+    try:
+        book = load_workbook(path, read_only=True, data_only=True)
+    except Exception as e:  # 암호·깨진 파일 — 이 문서만 일반 청킹(묶음 전체를 멈추지 않음)
+        print(f"[faq] 경고: 엑셀을 못 열어 일반 청킹 — {path}: {type(e).__name__}", flush=True)
+        return None
+    out = []
+    try:
+        for sh in book:
+            cols = None
+            for n, vals in enumerate(sh.iter_rows(values_only=True), 1):
+                cells = [(str(v).strip() or None) if v is not None else None for v in vals]
+                if not any(cells):
+                    continue
+                if cols is None:
+                    names = [FAQ_HEAD.get(re.sub(r"[\s_]+", " ", (c or "").lower())) for c in cells]
+                    if not {"question", "answer"} <= set(names):
+                        print(f"[faq] 경고: 시트 {sh.title!r}에 질문·답 머리글이 없어 건너뜀 — {path}", flush=True)
+                        break
+                    cols = {k: i for i, k in reversed(list(enumerate(names))) if k}  # 같은 머리글이 둘이면 앞의 것
+                    continue
+                row = {k: (cells[cols[k]] if k in cols and cols[k] < len(cells) else None) for k in ("type", "question", "answer")}
+                if row["question"] or row["answer"]:  # 유형만 있는 구분 행은 청크로 만들지 않음
+                    out.append({"group": sh.title, **row, "row": n})
+    finally:
+        book.close()
+    return out or None
