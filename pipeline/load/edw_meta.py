@@ -35,8 +35,8 @@ _REQ = {  # 설정 자리 → 꼭 있어야 하는 이름
     ("sfdc",): ("opp_prefix", "account_prefix", "steps"),
     ("sfdc", "opportunity"): ("table", "id", "account", "out"),
     ("sfdc", "account"): ("table", "id", "name"),
-    ("crms", "map"): ("table", "key", "contract", "gate", "gate_version", "seq"),
-    ("crms", "project"): ("table", "contract"),
+    ("crms", "map"): ("table", "key", "contract", "gate", "gate_version", "seq", "out"),
+    ("crms", "project"): ("table", "contract", "out"),  # out을 빠뜨리면 CRMS 고객·칸이 조용히 비지 않게(#98 리뷰)
     ("crms", "docu"): ("table", "contract", "gate", "gate_version", "seq", "created"),
     ("las", "map"): ("table", "key", "manage_no", "signed", "file_id"),
     ("las", "file"): ("table", "id", "created"),
@@ -406,7 +406,7 @@ def _sfdc_hints(edw, files, links, S):
 
 def _crms(edw, paths, c):
     F, M, P, D = c["files"], c["crms"]["map"], c["crms"]["project"], c["crms"]["docu"]
-    mo, po = M.get("out") or {}, P.get("out") or {}
+    mo, po = M["out"], P["out"]
     sel = [f"m.{col} AS m_{g}" for g, col in mo.items()] + [f"p.{col} AS p_{g}" for g, col in po.items()]
     rows = edw.q_in(
         f"SELECT m.{M['key']} AS k, f.{F['created']} AS created_at, d.{D['created']} AS docu_dt{''.join(', ' + x for x in sel)} "

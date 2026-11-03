@@ -69,7 +69,7 @@ MCP 도구 4개의 이름과 입출력은 외부 클라이언트와의 계약이
 
 ### 1-4. DB — Alembic 마이그레이션
 
-pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는다.** 모두 Alembic 마이그레이션(`common/store/db/migrations/versions/`)으로 만들고, 명령은 `dbtool`(PC: `python -m common.store.db.dbtool`, 서버: `compose run --rm load migrate`) 하나다. 스키마는 검색 스키마 하나다(`struct` 스키마는 사용자 11-01 결정으로 코드에서 없앴다 — pl-08).
+pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는다.** 모두 Alembic 마이그레이션(`common/store/db/migrations/versions/`)으로 만들고, 명령은 `dbtool`(PC: `python -m common.store.db.dbtool`, 서버: `bash deploy/host/scripts/run_tool.sh migrate` — 상주 컨테이너 안에서) 하나다. 스키마는 검색 스키마 하나다(`struct` 스키마는 사용자 11-01 결정으로 코드에서 없앴다 — pl-08).
 
 | 마이그레이션 | 스키마 | 만드는 것 |
 |---|---|---|
@@ -238,11 +238,11 @@ export PYTHONPATH=$PWD                                   # 명령은 저장소 �
 .venv/bin/python -m pipeline.config                      # 어느 settings.yaml을 읽는지와 요약(비밀은 가림)
 .venv/bin/python -m common.check.check_modules           # "모듈 경계 통과"
 .venv/bin/python -m common.config.keyscan --check        # "빠진 키 0개"
-.venv/bin/python -m pipeline.cli selftest                # 서버 배포 테스트 — 93개 중 92개 통과(알려진 실패 1개 — 기준선 PRD e2-02)
-.venv/bin/python -m pytest -q tests/                      # 전체 테스트 — 146 passed · 3 xfailed(알려진 실패)
+.venv/bin/python -m pipeline.cli selftest                # 서버 배포 테스트 — 모두 통과(알려진 실패 0 — 기준선 PRD e2-02)
+.venv/bin/python -m pytest -q tests/                      # 전체 테스트 — 실패 0(개수는 PRD e2-02 기준선)
 ```
 
-알려진 실패는 모두 리팩토링 전부터 있던 것이다(이유: refactor.md C-54·C-58 · 목록: `deploy/release/known_fail.txt`, `tests/conftest.py`).
+배포 판정의 알려진 실패는 0개다(11-02 — `deploy/release/known_fail.txt`는 빈 목록). PC 일반 테스트의 알려진 실패는 `tests/conftest.py`(이유: refactor.md C-54·C-58).
 
 ### 4-4. 파이프라인 실행 — 문서 몇 건(①~⑥)
 
@@ -520,19 +520,19 @@ mkdir -p /srv/rag/output && chown 10001:<운영 그룹> /srv/rag/output && chmod
 
 모델 주소는 모두 내부망 주소여야 한다(서버는 외부 모델 호출을 거부). 옛 배치 settings.yaml(op-08 전)은 `python -m common.config.migrate <옛 settings.yaml> --out <새 파일>`로 바꾼다.
 
-**③ DB 마이그레이션** — 적재·검색을 하기 전에 끝낸다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다).
+**③ DB 마이그레이션** — 적재·검색을 하기 전에 끝낸다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다). 운영 작업(`run_tool.sh`·`trigger.sh`)은 상주 컨테이너 안에서 돌므로(사용자 11-02 — 1회 job 컨테이너 없음) 먼저 띄운다: `dc up -d data-pipeline-parse data-pipeline-structure`.
 
 ```bash
 # 0. (DB마다 처음 한 번 — DB 관리자) vector 확장 — 서버 계정은 보통 우리 스키마 권한만 있어 직접 못 만든다. 없으면 migrate·적재가 "vector 확장 없음"으로 멈춘다
 #    $DOCKER exec <pg 컨테이너> psql -U <관리자 계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
-dc run --rm load migrate current
-dc run --rm load migrate check --target all                # a. 지금 버전과 차이 확인(읽기만)
+bash deploy/host/scripts/run_tool.sh migrate current
+bash deploy/host/scripts/run_tool.sh migrate check --target all                # a. 지금 버전과 차이 확인(읽기만)
 
 # b. 검색 스키마 — 옛 코드가 만든 스키마가 있고 차이가 0이면 실행 없이 기록만, 없거나 빠진 것만 있으면 up
-#      dc run --rm load migrate stamp --target search     또는     dc run --rm load migrate up --target search
+#      bash deploy/host/scripts/run_tool.sh migrate stamp --target search     또는     bash deploy/host/scripts/run_tool.sh migrate up --target search
 # c. 확인 — "차이 없음", 엔진 구성 파일이 읽히는지
-#      dc run --rm load migrate check --target all
-#      dc run --rm load show-stack                          # 엔진 구성 파일(이름·sha·경로)이 보이면 정상
+#      bash deploy/host/scripts/run_tool.sh migrate check --target all
+#      bash deploy/host/scripts/run_tool.sh show-stack                          # 엔진 구성 파일(이름·sha·경로)이 보이면 정상
 ```
 
 - 컬럼 이름·형식·NULL·키가 다르거나 남는 테이블이 있으면 `stamp`·`up` 모두 거부된다(종료 코드 2). 멈추고 출력(이름만)을 DB 담당자와 협의한다.
@@ -542,18 +542,18 @@ dc run --rm load migrate check --target all                # a. 지금 버전과
 ```bash
 bash deploy/host/scripts/run_tool.sh ping_models     # 모델 주소(LLM·VLM·임베딩) — 하나라도 실패면 종료 코드 1
 bash deploy/host/scripts/run_tool.sh check_env       # PG·VLM·설정 요약(⚠️ PG 연결 실패를 "건너뜀"으로 보일 수 있음 — 출력을 읽는다)
-dc run --rm load migrate check --target all          # PG 스키마(③ d와 같음)
-dc run --rm parse check                              # PG·모델 요약(⚠️ 실패해도 종료 코드 0 — 출력을 읽는다)
+bash deploy/host/scripts/run_tool.sh migrate check --target all          # PG 스키마(③ d와 같음)
+bash deploy/host/scripts/run_tool.sh check                  # PG·모델 요약(⚠️ 실패해도 종료 코드 0 — 출력을 읽는다)
 ```
 
-- EDW 읽기·쓰기 로그인과 Object Storage 버킷을 따로 확인하는 명령은 아직 없다. 첫 파싱 뒤 publish 미리보기(`dc run --rm publish publish --dry-run`)로 확인한다.
+- EDW 읽기·쓰기 로그인과 Object Storage 버킷을 따로 확인하는 명령은 아직 없다. 첫 파싱 뒤 publish 미리보기(`bash deploy/host/scripts/trigger.sh publish --dry-run`)로 확인한다.
 - ⚠️ publish 실제 실행(`trigger.sh publish`)은 한 번만 한다. 다시 돌리면 Object Storage에 같은 파일을 또 올린다(PRD pl-12 ② — 고치기 전까지). EDW는 이미 있는 행을 건너뛴다.
 
 **⑤ 이미지 점검**
 
 ```bash
 $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> check-modules
-bash deploy/release/selftest_gate.sh $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> selftest   # 기대: 알려진 실패 test_publish_guard 1개만
+bash deploy/release/selftest_gate.sh $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" data-pipeline-runtime:<판> selftest   # 기대: [판정] 통과 — FAIL 0
 bash deploy/release/selftest_gate.sh $DOCKER run --rm -v "$PWD:/app/deploy:ro,z" mcp-server-runtime:<판> selftest      # 기대: 실패 0
 ```
 
@@ -576,12 +576,12 @@ bash deploy/host/scripts/mcp_up.sh     # 여러 번 실행해도 안전 — 꺼�
 | ------ | ---------------------------------------------------- | ---------------------------------------------- | ------ |
 | 문서별 흐름 | `python3 deploy/host/scripts/run_docs.py …`(nohup)   | 문서마다 파싱 → 구조화 → 적재 → publish(스트리밍)             | 대량 처리 |
 | 새벽 배치  | systemd `data-pipeline-nightly.timer` → `trigger.sh scheduled` | `nightly.time` 시각에 `run_docs.py --start-offset 0 --skip-done` | 정기 운영 |
-| 파싱·게시만 | `trigger.sh parse` · `trigger.sh publish`             | 1회 job(파싱 → `_rep` / 대표 결과 게시)                   | 단계 확인 |
+| 파싱·게시만 | `trigger.sh parse` · `trigger.sh publish`             | 상주 컨테이너 안에서 한 번(파싱 → `_rep` / 대표 결과 게시)  | 단계 확인 |
 
 서버 입구는 `run_docs` 하나다(사용자 10-31). 옛 1회 job 배치 `trigger.sh structure`·`load`·`all`·`night`와 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`는 11-01에 지웠다 — 구조화·적재는 run_docs가 `build_bundle`·`pgvector_load`를 문서마다 부른다.
 
 ```bash
-bash deploy/host/scripts/trigger.sh parse       # 파싱 → output/parse/_rep(1회 job)
+bash deploy/host/scripts/trigger.sh parse       # 파싱 → output/parse/_rep(data-pipeline-parse 안에서 — docker exec)
 bash deploy/host/scripts/trigger.sh publish     # Object Storage 업로드 + EDW 메타데이터(운영 시스템에 씀)
 ```
 

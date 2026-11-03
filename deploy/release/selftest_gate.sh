@@ -7,7 +7,7 @@
 #   KNOWN_FAIL=<파일>로 목록을 바꿀 수 있다(기본: 이 스크립트 옆 known_fail.txt — 이미지에는 /app/docker/known_fail.txt).
 # 통과 조건: 요약 줄("N/M 통과")이 있고 · selftest 종료 코드가 0, 또는 1이면서 FAIL 줄이 모두 목록 안.
 #   (종료 코드 1인데 FAIL 줄이 없으면 — PC의 단계 4 도구 목록 어긋남 등 — 실패로 본다.)
-#   S6b(D-020) — 이미지 2개: data-pipeline(옛 parse+structure 사례의 합 — 알려진 FAIL 1개(S9b, 전에는 2개)라 늘 종료 코드 1)·mcp-server(FAIL 0).
+#   S6b(D-020) — 이미지 2개: data-pipeline·mcp-server — 둘 다 FAIL 0(11-02 — 알려진 FAIL 목록 비움, 기대 줄 "[판정] 통과 — FAIL 0").
 set -uo pipefail
 [ $# -gt 0 ] || { echo "사용: bash selftest_gate.sh <selftest 명령…>" >&2; exit 2; }
 KNOWN_FAIL=${KNOWN_FAIL:-$(dirname "$0")/known_fail.txt}

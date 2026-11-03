@@ -32,7 +32,7 @@
 - **서버(dev·prd)는 바꿀 값이 있으면 `settings.yaml`을 직접 고친다.** 한 번만 다르게 돌릴 값도 고쳐 돌린 뒤 되돌리고, 고친 뒤 상주 컨테이너는 다시 띄운다(또는 아래 `--set`).
 - 오버레이 설정 파일 도구(`python -m common.config.overrides 이름=값 …` — 원본을 `base`로 가리키고 바뀐 항목만 든 임시 yaml)는 **PC 전용**이다. 서버에서는 안내 뒤 종료 2(compose는 그 파일만 컨테이너에 붙여 `base`가 컨테이너 안에 없음). 코드가 컨테이너 안에서 자식 프로세스에 값을 넘기는 오버레이 설정 파일(`settings.put`·`child_env` — 컨테이너 `/tmp`)은 그대로 쓰인다(`refactor.md` C-46).
 - 서버(dev·prd)에서 설정 파일을 못 읽거나(권한) 그 이미지 절이 틀리면 컨테이너가 이유(항목 경로·오류 종류만)를 찍고 **시작하지 않는다**(종료 2).
-- 호스트 항목만 꺼내 보기(비밀 없음 — 인자는 모델 경로): `bash deploy/host/scripts/settings_env.sh pipeline.host common.host`. 호스트 python에 pydantic·PyYAML이 없으면 `SETTINGS_IMAGE=data-pipeline:<태그>`(이미지 안에서 — C-36).
+- 호스트 항목만 꺼내 보기(비밀 없음 — 인자는 모델 경로): `bash deploy/host/scripts/settings_env.sh pipeline.host common.host`. 호스트 python에는 PyYAML만 있으면 된다(`deploy/host/scripts/host_env.py` — 칸 목록은 설정 모델에서 만든 `host_keys.tsv`, 설정 모델을 고치면 `PYTHONPATH=. python deploy/release/hostkeys.py`로 다시 만듦 — 사용자 11-02).
 - `deploy/host/scripts/run_docs.py`(문서별 flow 러너 — 서버 전용)도 같은 파일을 읽는다(호스트 python에 PyYAML 필요). 필요한 항목이 없으면 항목 경로만 찍고 종료 코드 2 — 목록은 `refactor.md` C-45 ③.
 - 라이브러리가 읽는 env(`TZ`·`OMP_NUM_THREADS`·`HF_HUB_OFFLINE`·`TESSDATA_PREFIX`·`PIPELINE_VERSION` 등 — 허용 목록 `common.config.settings.LIB_ENV_NAMES`, 비밀 아님)는 `ops.runtime.lib_env` 사전에 적는다. 컨테이너 entrypoint가 시작 때 env로 낸다(이미지 ENV 값은 덮고 `docker run -e`로 준 값은 안 덮음 — `refactor.md` C-47 ③). 목록 밖 이름은 검증 오류(이름만).
 
@@ -150,11 +150,13 @@
 (상주 트리거 서버의 `TRIGGER_*`·`CHAIN_STRUCTURE_URL`은 11-01에 지움 — PRD pl-10. 옛 서버 settings.yaml의 `ops.services.trigger` 절은 남아 있으면 경고만.)
 
 ### 새벽 배치 (systemd `data-pipeline-nightly`)
-코드 주석의 "env-guide 1-3"이 이 절이다(스케줄은 `NIGHTLY_TIME` 하나 — 비우면 없음, pl-32 10-30).
+코드 주석의 "env-guide 1-3"이 이 절이다(settings.yaml `ops.nightly.*` — 아래 셋이 모두 있어야 돎, 하나라도 비면 없음 — pl-32 10-30·사용자 11-02).
 
 | 이름 | 켜면 | 기본 |
 |---|---|---|
-| `NIGHTLY_TIME` | 그 시각(HH:MM, 서버 시간)에 새벽 배치(`run_docs.py --start-offset 0 --skip-done`) 시작 — 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시각을 봄 | 비움(새벽 배치 없음) |
+| `NIGHTLY_TIME`(`ops.nightly.time`) | 그 시각(HH:MM, 서버 시간)에 새벽 배치(`run_docs.py --start-offset 0 --skip-done`) 시작 — 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시각을 봄 | 비움(새벽 배치 없음) |
+| `NIGHTLY_MAX_DOCS`(`ops.nightly.max_docs`) | 한 번에 처리할 새 문서 수 상한(끝난 문서를 뺀 뒤 앞에서 — `--max-docs`) | 비움(새벽 배치 없음) |
+| `NIGHTLY_DEADLINE`(`ops.nightly.deadline`) | 마감 시각(HH:MM — 시작보다 이르면 다음 날) — 지나면 새 문서를 받기 시작하지 않음, 받은 문서는 끝까지(`--deadline`) | 비움(새벽 배치 없음) |
 
 (11-01 지움 — 남아 있으면 경고만: `NIGHTLY_MODULES`·`NIGHTLY_PUBLISH`·`NIGHTLY_MAX_NEW`(`ops.nightly.*`)·`NIGHT_DEADLINE`·`PARSE_DEADLINE`(`ops.nightly_run.*`)·`ALLOW_COMMON_MISMATCH` — night 모듈 배치·structure·load 모듈과 함께.)
 
