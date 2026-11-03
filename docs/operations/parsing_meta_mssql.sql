@@ -2,7 +2,7 @@
 -- 쓰는 곳: pipeline/load/publish_parse_result.py(INSERT만 — 쓰기 계정 settings.yaml required.edw.write_*) ·
 --   pipeline/load/pgvector_load.py(적재 때 loaded_at·gold_version UPDATE) · mcp_server/services/fulltext.py(list_doc_fulltext — 읽기 계정)
 -- 열 이름·순서 = common/store/parsing_meta_db.py COLUMNS(tests/server/common/test_db_schema.py가 같은지 고정).
--- ⚠ 0.2.0 칸 바꾸기(칸 이름·loaded_at·gold_version 등 — refactor.md C-76)는 아직 이 파일에 없다 — DB 담당·EDW 담당과 정한다.
+-- ⚠ 0.2.0 칸 바꾸기(칸 이름·loaded_at·gold_version 등 — refactor.md C-76)는 이 파일에 없다 — DB 담당·EDW 담당과 정한다.
 -- rep_key = 문서 폴더 `.../Parsing-Result/<출처>/<UUID>/<원본파일명>/`(끝 '/'),
 --   parse_date = 'YYYY-MM-DD_HHMMSS'(같은 이름 충돌 시 '-2'… 접미) — 날짜형이 아니라 글자.
 -- 필수 열은 doc_key 하나(그 밖은 비어도 됨). 쓰인 파싱 엔진(VLM·OCR 포함) 전부를 engines_used·engines_summary에 기록.
