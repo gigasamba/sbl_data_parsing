@@ -15,7 +15,7 @@ Answer Agent 이미지는 없다(10-14 결정 — 개발 서버 네이티브. MC
 
 두 이미지 모두 `/app/docker`에는 이미지 안에서 쓰는 것만 든다 — `entrypoint.sh`(저장소 `deploy/docker/`)·`selftest_gate.sh`·`known_fail.txt`·`assets.py`(저장소 `deploy/release/`). compose·systemd·호스트 스크립트는 저장소 `deploy/host/`에 있고 이미지에 들어가지 않는다.
 
-**서버 코드 폴더(live, `PATCH_CODE` — 기본 `/srv/rag/code/live`)** — `live/app/` = 컨테이너 마운트 원본(`app/deploy/<폴더>`·`app/docker` — 이미지 안과 같은 모양) · `live/deploy/{host,release}/` = 호스트에서 부르는 것(compose·systemd·`trigger.sh`·`mcp_up.sh`·`run_tool.sh`·`selftest_gate.sh` 등 — 저장소와 같은 자리). 사람·systemd는 `live`에서 `bash deploy/host/scripts/trigger.sh …`처럼 부른다.
+**서버 코드 폴더(live — 오버레이 패치 때 settings.yaml `ops.host.patch_code`(`PATCH_CODE`)에 적음, 기본값 없음 — 사용자 11-02)** — `live/app/` = 컨테이너 마운트 원본(`app/deploy/<폴더>`·`app/docker` — 이미지 안과 같은 모양) · `live/deploy/{host,release}/` = 호스트에서 부르는 것(compose·systemd·`trigger.sh`·`mcp_up.sh`·`run_tool.sh`·`selftest_gate.sh` 등 — 저장소와 같은 자리). 사람·systemd는 `live`에서 `bash deploy/host/scripts/trigger.sh …`처럼 부른다.
 
 **오버레이 패치가 바꿀 수 있는 것**(이미지는 그대로, 코드 폴더만 교체):
 - 저장소 `common/`·`pipeline/`·`mcp_server/`·`resources/` → live `app/deploy/<폴더>/`
@@ -107,7 +107,7 @@ grep '^D ' <받은 폴더>/PATCH_MANIFEST.txt | cut -c3- | xargs -r -I{} rm -f /
 docker compose -f deploy/host/compose/compose.pipeline.yml -f deploy/host/compose/compose.patch.yml up -d   # 상주 컨테이너 둘 — 작업은 그 안에서(사용자 11-02)
 docker compose -f deploy/host/compose/compose.mcp.yml -f deploy/host/compose/compose.patch.mcp.yml up -d
 ```
-`PATCH_CODE`(기본 `/srv/rag/code/live`)가 `/app/deploy/*`·`/app/docker`를 덮는다 — entrypoint도 함께 덮이므로 기준 이미지에 없던 새 명령도 쓸 수 있다.
+`PATCH_CODE`(settings.yaml `ops.host.patch_code` — 기본값 없음, 비우면 compose가 멈춤)가 컨테이너 코드 자리(`settings.py` `IMAGE_PATHS.code_root`)·`/app/docker`를 덮는다 — entrypoint도 함께 덮이므로 기준 이미지에 없던 새 명령도 쓸 수 있다.
 
 ### 3-3. 확인
 ```bash
@@ -192,12 +192,12 @@ bash deploy/release/ship_stage.sh pipeline mcp            # 태그 = VERSION(다
 6. 새 compose로 새 이름 컨테이너를 띄운다 — 파싱 상주 `data-pipeline-parse`·`data-pipeline-structure`는 `deploy/host/compose/compose.pipeline.yml`(+ `compose.patch.yml`), 검색 MCP `mcp-server`는 `compose.mcp.yml`(+ `compose.patch.mcp.yml` — `mcp_up.sh`가 씀, 11-01부터 검색 MCP 정의는 이 파일 하나).
 7. MCP `parse_document`의 작업 서비스를 손으로 띄운다: `docker exec -d data-pipeline-parse bash -c 'umask 0002 && exec python -u -m pipeline.mcp_parse_service'`(`-e` 없이 · umask는 결과를 운영 계정도 고치게, 토큰은 settings.yaml `pipeline.service.parse_mcp.token`). compose·keepalive가 띄우지 않으므로 `data-pipeline-parse`가 다시 시작될 때마다 다시 띄운다.
 
-**배포 전 확인(V4 R1)** — `run_docs.py`·compose·systemd가 보는 `PATCH_CODE`(기본 `/srv/rag/code/live`)가 파싱 상주 컨테이너(S6b 배포 전에는 옛 이름 `data-parsing`, 뒤에는 `data-pipeline-parse`)가 지금 실제로 마운트하는 코드 폴더와 같은지 본다. 출력의 원본이 `<PATCH_CODE>/app/deploy/pipeline`(옛 버전이면 `…/data_etl`, 옛 배치 컨테이너면 `data_parsing`·`common_tools` 줄)이 아니면(예: `<운영자 작업 폴더>/patch_code/…`) 운영 절차에서 `run_docs.py`를 `PATCH_CODE=<원본에서 /app/deploy/<폴더>를 뺀 앞부분>`으로 띄운다. 출력이 비면 오버레이 패치 마운트 없이 이미지 안 코드로 떠 있는 것이다 — 배포 때 `compose.patch.yml`로 다시 띄운다:
+**배포 전 확인(V4 R1)** — `run_docs.py`·compose·systemd가 보는 `PATCH_CODE`(settings.yaml `ops.host.patch_code` — 기본값 없음)가 파싱 상주 컨테이너(S6b 배포 전에는 옛 이름 `data-parsing`, 뒤에는 `data-pipeline-parse`)가 지금 실제로 마운트하는 코드 폴더와 같은지 본다. 출력의 원본이 `<PATCH_CODE>/app/deploy/pipeline`(옛 버전이면 `…/data_etl`, 옛 배치 컨테이너면 `data_parsing`·`common_tools` 줄)이 아니면(예: `<운영자 작업 폴더>/patch_code/…`) 운영 절차에서 `run_docs.py`를 `PATCH_CODE=<원본에서 /app/deploy/<폴더>를 뺀 앞부분>`으로 띄운다. 출력이 비면 오버레이 패치 마운트 없이 이미지 안 코드로 떠 있는 것이다 — 배포 때 `compose.patch.yml`로 다시 띄운다:
 ```bash
 docker inspect data-parsing --format '{{range .Mounts}}{{if eq .Destination "/app/deploy/pipeline" "/app/deploy/data_etl" "/app/deploy/data_parsing" "/app/deploy/common" "/app/deploy/common_tools"}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}{{end}}'   # 배포 전 = 옛 컨테이너 이름(S6b 뒤는 data-pipeline-parse)
 ```
 
-**배포 뒤 확인**(`<코드 폴더>` = `PATCH_CODE`, 서버 기본 `/srv/rag/code/live` — compose·systemd·`mcp_up.sh`·`run_docs.py`가 모두 같은 값을 본다). 폴더가 아니라 파일로 본다 — docker는 bind 마운트 원본이 없으면 빈 폴더를 만들어 붙이므로 `test -d`는 빈 폴더도 통과한다(V4 R2):
+**배포 뒤 확인**(`<코드 폴더>` = `PATCH_CODE`(settings.yaml `ops.host.patch_code`) — compose·systemd·`mcp_up.sh`·`run_docs.py`가 모두 같은 값을 본다). 폴더가 아니라 파일로 본다 — docker는 bind 마운트 원본이 없으면 빈 폴더를 만들어 붙이므로 `test -d`는 빈 폴더도 통과한다(V4 R2):
 ```bash
 D=<코드 폴더>/app/deploy; test -f $D/pipeline/extract/run_all.py && test ! -e $D/data_etl && test ! -e $D/data_parsing && test ! -e $D/data_structure && echo "배치 OK(pipeline)" || echo "배치 어긋남 — pipeline 코드 없음 또는 옛 폴더 남음"
 for c in data-pipeline-parse data-pipeline-structure; do docker exec $c test -f /app/deploy/pipeline/extract/run_all.py && echo "$c OK" || echo "$c 코드 없음(빈 마운트?)"; done
@@ -377,7 +377,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 1 | 판 전체 grill-me 검토 — 지문 전후(릴리스 노트·PRD [e2-02](../prd/test.md#e2-02) — 바뀌면 서버 문서 재처리)·DB 스키마(판 0002·ParsingMeta DDL)·prd 비밀 굽기(8-1) | 사용자 | 등급 A |
 | 2 | ParsingMeta DDL 한 번 — 칸 이름 바꾸기·`loaded_at`·판 칸·운영이 더한 분류·고객 칸 지우기(운영 분류 스크립트가 멈추므로 운영 담당에게 알림) | DB 담당·EDW 담당 | C-76 |
 | 3 | PG — 새 `PG_SCHEMA` 이름(50자 이하) · 권한(DB 수준 CREATE, 원천 스키마 5벌의 읽기·쓰기, `doc_id_seq`) | DB 담당 | C-74 |
-| 4 | 서버 settings.yaml 준비 — 필수 경로·접속(코드 기본값 없음 — 8-1) · EDW 읽기·쓰기 계정 · `search.server.fulltext_secret`·mcp-server의 Object Storage 읽기와 EDW 읽기 · `extract.input_source` 꼴 · 예전에 `-e`로 주던 값은 settings.yaml 칸으로 · 새벽 배치 칸은 비워 둠 | 서버 운영 | C-70·C-73·C-75·C-76 |
+| 4 | 서버 settings.yaml 준비 — 필수 경로·접속(코드 기본값 없음 — 8-1) · 오버레이 패치를 쓰면 `ops.host.patch_code`(옛 기본값 `/srv/rag/code/live`는 11-02에 지움 — 비우면 compose·`mcp_up.sh`가 멈춤) · EDW 읽기·쓰기 계정 · `search.server.fulltext_secret`·mcp-server의 Object Storage 읽기와 EDW 읽기 · `extract.input_source` 꼴 · 예전에 `-e`로 주던 값은 settings.yaml 칸으로 · 새벽 배치 칸은 비워 둠 | 서버 운영 | C-70·C-73·C-75·C-76 |
 | 5 | 노출됐던 운영 키 교체(아직 안 했으면) — 새 값은 settings.yaml에만 | 서버 운영(보안) | C-10 |
 | 6 | 덮기 설정 임시 파일 보안 검토 — 서버 `/tmp` 정리 주기·권한 600 | 사용자·서버 운영 | C-46 |
 | 7 | 폐쇄망 휠·반입 자산(`assets/`) 채우고 빌드(§5-6 — `ALLOW_NO_ASSETS=1` 금지) | devops | — |

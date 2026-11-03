@@ -35,8 +35,8 @@ services:
       RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
     volumes:
       - *settings
-      - ${DOC_SRC:?DOC_SRC=<원본 문서 폴더>}:/data/docs:ro,z
-      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
+      - ${DOC_SRC:?DOC_SRC=<원본 문서 폴더>}:${APP_DOCS_MOUNT:?APP_DOCS_MOUNT 필요 — settings_env.sh load_settings가 냄}:ro,z
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:${APP_OUTPUT_ROOT:?APP_OUTPUT_ROOT 필요 — settings_env.sh load_settings가 냄}:z
     mem_limit: ${PARSE_MEM_LIMIT:-16g}
     memswap_limit: ${PARSE_MEM_LIMIT:-16g}
     cpus: ${PARSE_CPUS:-3}
@@ -57,7 +57,7 @@ services:
       RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
     volumes:
       - *settings
-      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:/app/output:z
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:${APP_OUTPUT_ROOT:?APP_OUTPUT_ROOT 필요 — settings_env.sh load_settings가 냄}:z
     mem_limit: ${STRUCTURE_MEM_LIMIT:-8g}
     memswap_limit: ${STRUCTURE_MEM_LIMIT:-8g}
     cpus: ${STRUCTURE_CPUS:-2}

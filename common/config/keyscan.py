@@ -62,6 +62,13 @@ NOT_SETTINGS = {
         "env로 남김",
         "내부 신호 — entrypoint가 점검 명령(check·selftest 등)에만 줌: 서버에서도 틀린 설정 파일을 경고만(원인을 볼 수 있게 — S7e2)",
     ),
+    **{
+        f"APP_{k.upper()}": (
+            "env로 남김",
+            "컨테이너 안 약속 경로 — settings.IMAGE_PATHS 고정값(settings_env.sh가 냄, compose 마운트 자리 — 사용자 11-02)",
+        )
+        for k in ("output_root", "code_root", "docs_mount")
+    },
     "SETTINGS_LOADED": (
         "env로 남김",
         "내부 신호 — settings_env.sh load_settings가 이미 낸 설정 파일(하위 스크립트가 다시 안 읽게, 새 — S7e1)",

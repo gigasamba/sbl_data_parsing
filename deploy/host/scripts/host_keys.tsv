@@ -39,3 +39,9 @@ mcp.host.jobs_dir	MCP_JOBS_DIR	text
 mcp.host.mem_limit	MCP_MEM_LIMIT	text
 mcp.server.host	MCP_HOST	text
 mcp.server.port	MCP_PORT	num
+image.code_root	APP_CODE_ROOT	const	/app/deploy
+image.docs_mount	APP_DOCS_MOUNT	const	/data/docs
+image.gold_mount	APP_GOLD_MOUNT	const	/data/gold
+image.image_env	APP_IMAGE_ENV	const	/app/docker/image_env.txt
+image.output_root	APP_OUTPUT_ROOT	const	/app/output
+image.prepared_out	APP_PREPARED_OUT	const	/app/output/prepared

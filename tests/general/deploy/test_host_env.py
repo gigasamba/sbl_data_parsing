@@ -43,7 +43,9 @@ def _value(path, name, kind):
 
 def test_host_env_matches_export():
     assert K.main(["--check"]) == 0, "host_keys.tsv가 설정 모델과 다름 — PYTHONPATH=. python deploy/release/hostkeys.py"
-    rows = [r.split("\t") for r in K.HOST_TABLE.read_text(encoding="utf-8").splitlines() if r and not r.startswith("#")]
+    table = [r.split("\t") for r in K.HOST_TABLE.read_text(encoding="utf-8").splitlines() if r and not r.startswith("#")]
+    rows = [r for r in table if r[2] != "const"]
+    consts = {r[1]: r[3] for r in table if r[2] == "const"}  # 컨테이너 안 약속 경로(settings.IMAGE_PATHS — 사용자 11-02)
     model = {}
     for path, name, kind in rows:
         L.set_path(model, path, _value(path, name, kind))
@@ -59,6 +61,9 @@ def test_host_env_matches_export():
         doc = L.to_model(yaml.load(f.read_text(encoding="utf-8"), Loader=yaml.BaseLoader), str(f))
         got = sorted(H.lines(doc, SECTIONS, "sh"))
     assert got == want and len(got) == len(rows), (sorted(set(got) ^ set(want)), len(got), len(rows))
+    every = H.lines(doc, [], "sh")  # 절 없이(settings_env.sh load_settings) — 설정 칸 + 약속 경로 APP_*
+    assert sorted(every) == sorted(want + [f"export {k}='{v}'" for k, v in consts.items()]), sorted(set(every) ^ set(want))
+    assert consts["APP_OUTPUT_ROOT"] == "/app/output" and consts["APP_CODE_ROOT"] == "/app/deploy", consts
     cases = [  # (값, 종류, 기대)
         ("4.0", "num", "4"),
         ("2.5", "num", "2.5"),

@@ -327,7 +327,7 @@ ops:
   host:
     docker: docker  # 호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등) · 기본 docker · 값: docker·podman 중 하나
     image_stage_dir:  # prune_old.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값) · 값: 경로
-    patch_code: /srv/rag/code/live  # 덧씌우기 코드 폴더(호스트) · 기본 /srv/rag/code/live · 값: 호스트 이름·IP
+    patch_code:  # 덧씌우기 코드 폴더(호스트) · 값: 호스트 이름·IP
     prune_keep: 2  # prune_old.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값) · 기본 2 · 값: 0 이상 정수
   # ─── 서버 컨테이너 — CPU·메모리 한도·폴더 ───
   pipeline_host:

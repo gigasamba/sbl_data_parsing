@@ -6,11 +6,11 @@
 #   /app/docker도 덮음(S6b — 이미지 안 /app/docker = entrypoint.sh·selftest_gate.sh·known_fail.txt·assets.py만, live/app/docker도 같은 4개) — entrypoint.sh의 새 모듈(예: SI39 publish)이 기준 이미지 안 entrypoint에는 없어서(샘플 세션 지적 10-08).
 #   entrypoint는 bash로 직접 실행 — ZIP을 풀면 실행 비트가 빠질 수 있음(make_patch는 git 저장본 그대로 = LF라 CRLF 문제 없음).
 x-code: &code
-  - ${PATCH_CODE:-/srv/rag/code/live}/app/deploy/common:/app/deploy/common:ro,z   # S3 — 공용 코드(refactor.md C-22: live에 폴더가 먼저 있어야 함)
-  - ${PATCH_CODE:-/srv/rag/code/live}/app/deploy/pipeline:/app/deploy/pipeline:ro,z
-  - ${PATCH_CODE:-/srv/rag/code/live}/app/deploy/mcp_server:/app/deploy/mcp_server:ro,z
-  - ${PATCH_CODE:-/srv/rag/code/live}/app/deploy/resources:/app/deploy/resources:ro,z   # S2 — 지시서·설정 기본값·어휘(refactor.md C-20: live에 폴더가 먼저 있어야 함)
-  - ${PATCH_CODE:-/srv/rag/code/live}/app/docker:/app/docker:ro,z
+  - ${PATCH_CODE:?PATCH_CODE=<덧씌우기 코드 폴더> 필요 — settings.yaml ops.host.patch_code(기본값 없음, 사용자 11-02)}/app/deploy/common:${APP_CODE_ROOT:?APP_CODE_ROOT 필요}/common:ro,z   # S3 — 공용 코드(refactor.md C-22: live에 폴더가 먼저 있어야 함)
+  - ${PATCH_CODE:?PATCH_CODE=<덧씌우기 코드 폴더> 필요 — settings.yaml ops.host.patch_code(기본값 없음, 사용자 11-02)}/app/deploy/pipeline:${APP_CODE_ROOT:?APP_CODE_ROOT 필요}/pipeline:ro,z
+  - ${PATCH_CODE:?PATCH_CODE=<덧씌우기 코드 폴더> 필요 — settings.yaml ops.host.patch_code(기본값 없음, 사용자 11-02)}/app/deploy/mcp_server:${APP_CODE_ROOT:?APP_CODE_ROOT 필요}/mcp_server:ro,z
+  - ${PATCH_CODE:?PATCH_CODE=<덧씌우기 코드 폴더> 필요 — settings.yaml ops.host.patch_code(기본값 없음, 사용자 11-02)}/app/deploy/resources:${APP_CODE_ROOT:?APP_CODE_ROOT 필요}/resources:ro,z   # S2 — 지시서·설정 기본값·어휘(refactor.md C-20: live에 폴더가 먼저 있어야 함)
+  - ${PATCH_CODE:?PATCH_CODE=<덧씌우기 코드 폴더> 필요 — settings.yaml ops.host.patch_code(기본값 없음, 사용자 11-02)}/app/docker:/app/docker:ro,z
 x-entry: &entry ["bash", "/app/docker/entrypoint.sh"]
 
 services:

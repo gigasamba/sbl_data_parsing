@@ -158,7 +158,7 @@
 | 배치 — 맨 위 `required`(필수·비밀) → 역할 절 7개 → `tuning`(내부 조정값). 옛 배치는 시작 거부, `python -m common.config.migrate`로 변환 | sample과 실제 파일의 차이를 줄였다 | done | [op-08](prd/ops-settings.md#op-08) |
 | 설정 이관은 옛 배치 settings.yaml → 새 배치만 — env 파일 옮기기·`--compare` 지움 | 운영 서버는 0.1.0(settings.yaml 하나). 사용자 11-02 | todo | [op-08](prd/ops-settings.md#op-08) |
 | 하드코딩 0 — 설정 값은 settings.yaml이나 이미지 기본값 표(`settings.py`)에서만, 호스트 셸은 `settings_env.sh`가 준 값만, PG 자동 찾기 없앰(PG 접속 필수) | 한 곳을 바꾸면 나머지가 어긋나던 문제. 남은 복사본 있음(`/srv/rag/code/live` 기본값 등) | done | [op-09](prd/ops-settings.md#op-09) |
-| 환경마다 다른 경로·접속은 settings.yaml 필수(코드 기본값 없음) — 컨테이너 안 경로는 이미지 기본값 표 하나만, 호스트 `PATCH_CODE` 기본값 지움 | 사용자 11-02 | todo | [op-09](prd/ops-settings.md#op-09) |
+| 환경마다 다른 경로·접속은 settings.yaml 필수(코드 기본값 없음) — 컨테이너 안 경로는 이미지 기본값 표 하나만, 호스트 `PATCH_CODE` 기본값 지움 | 사용자 11-02 | dev | [op-09](prd/ops-settings.md#op-09) |
 | 은퇴한 설정 지우기 — `common.paths.korean_font`·`eval_sets_dir` 등(남아 있으면 경고만) | 지문이 바뀌어 0.1.0 묶음에 | done | [pl-21](prd/ops-settings.md#pl-21) |
 | 아무도 안 읽는 env 4개(`FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`)를 run_docs 명령에서 뺌 | C-51 | done | [pl-30](prd/ops-settings.md#pl-30) |
 
