@@ -138,6 +138,18 @@ def _kst(v):
     return (t if t.tzinfo else t.replace(tzinfo=timezone(timedelta(hours=9)))).isoformat()
 
 
+def require_vectors(meta):
+    """pl-16(사용자 10-30 A6) — 임베딩 없는 묶음(`--embed none` · dim 0)은 적재·배포를 시작하지 않는다(검색에 벡터 필수 — 옛 동작은
+    vector(0) 표를 만들려다 PG 오류로 끝남). 종료 코드 2 + 무엇을 하라는 한 줄."""
+    if not meta.get("dim") or meta.get("embed") == "none":
+        print(
+            f"[load] 임베딩 없는 묶음(embed={meta.get('embed')!r}, dim={meta.get('dim')!r}) — 적재 거부: build_bundle을 --embed api로 다시 만든다(pl-16)",
+            file=sys.stderr,
+            flush=True,
+        )
+        raise SystemExit(2)
+
+
 def load(db, bundle, replace=False, rep_dir=None):
     """묶음 → 원천 스키마별로(pl-28 — 문서의 source_system으로 고름: SFDC·CRMS·LAS·FAQ, 그 밖은 other) 적재. 실 PG는 기준 연결 한 트랜잭션
     (실패하면 5벌 모두 되돌림), 대역은 원천마다 따로. 저장된 문서(file_path 같음)는 건너뜀(replace면 지우고 다시 넣음 — 고치기). 묶음에 없는
@@ -151,6 +163,7 @@ def load(db, bundle, replace=False, rep_dir=None):
 
     B = Path(bundle)
     meta = json.loads((B / "meta.json").read_text(encoding="utf-8"))
+    require_vectors(meta)
     docs, chunks = _nonul(jl(B / "docs.jsonl")), _nonul(jl(B / "chunks.jsonl"))
     vecs = np.load(B / "vectors.npy", mmap_mode="r")  # 필요한 청크만 읽음(전체를 메모리에 올리지 않음)
     t0 = time.time()
@@ -432,6 +445,7 @@ def main(argv=None):
         )
         return
     meta = json.loads((Path(a.bundle) / "meta.json").read_text(encoding="utf-8"))
+    require_vectors(meta)  # pl-16 — 판 확인·배포·적재 전에
     if a.cmd == "deploy":
         with SP.span("load.deploy", "load"):
             idx = deploy(db, meta["dim"])

@@ -55,7 +55,8 @@
 - 이유: 차원 0으로는 표를 만들 수 없어 임베딩 없는 구조화가 실패한다.
 - 파일: `pipeline/transform/structure/build_bundle.py`, `pipeline/load/pgvector_load.py`.
 - 결정(사용자 10-30 PRD grill): A6 — `PIPE_EMBED=none`(임베딩 없음)은 적재 시작 때 거부한다(검색에 벡터가 필수). 0.2.0.
-- Status: todo
+- 한 것(11-03 `feature/fp-perf`): `pipeline/load/pgvector_load.py` `require_vectors(meta)` — 묶음 `meta.json`의 `dim`이 0·없음이거나 `embed`가 `none`이면 한 줄 안내(`build_bundle --embed api`로 다시) 뒤 종료 코드 2. `main()`(배포·적재 — 판 확인 전)과 `load()` 첫머리에서. 시험 `tests/server/pipeline/test_pgvector_load.py` `test_require_vectors`.
+- Status: done — 11-03
 
 <a id="pl-19"></a>
 ## pl-19 · compose `index_a`/`index_b`가 끝까지 돌면 실패
