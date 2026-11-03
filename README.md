@@ -398,12 +398,14 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 - 코드: `gigasamba/sbl_data_parsing`의 `main`. 받을 판의 태그나 커밋으로 받는다.
 - 이미지: 비공개 `jehunlee302/sbl_images`. 판마다 폴더가 있고, 실행 이미지를 분할한 조각이 들어 있다.
 
-코드는 zip을 푼 폴더가 그대로 코드 폴더다(tar 묶음·`live` 링크·`CODE_DIR` 불필요).
+코드는 zip을 푼 폴더가 그대로 코드 폴더다(tar 묶음·`CODE_DIR` 불필요). 폴더 이름은 받은 zip에 따라 `sbl_data_parsing-main`(`main` 브랜치 zip) 또는 `sbl_data_parsing-<판>`(태그 zip)이다 — 이름은 상관없고, 지금 쓰는 판을 가리키는 링크 `/srv/rag/code/live`가 중요하다(systemd unit·명령이 이 경로를 씀).
 
 ```
 /srv/rag/                                    ← 작업 폴더(아무 곳이나 — 두 zip을 여기 풂)
 ├── env/settings.yaml                        ← $SERVER_ENV_DIR · image: data-pipeline-runtime:<판> · mcp-server-runtime:<판>
-├── sbl_data_parsing-<판>/                    ← 코드 zip을 푼 폴더 = 코드 폴더(컨테이너 /app/deploy에 읽기 전용)
+├── output/  output/mcp_parse/jobs/  backup/   ← dc.sh init이 만듦(결과 폴더 UID 10001 · 2775)
+├── code/live → sbl_data_parsing-main/        ← 지금 쓰는 판(dc.sh init이 없을 때만 만듦 · 판을 바꿀 때는 ln -sfn)
+├── sbl_data_parsing-main/ (또는 -<판>/)      ← 코드 zip을 푼 폴더 = 코드 폴더(컨테이너 /app/deploy에 읽기 전용)
 │   ├── common/   pipeline/   mcp_server/   resources/
 │   ├── deploy/host/scripts/trigger.sh · mcp_up.sh · run_tool.sh   ← 여기서 실행
 │   ├── deploy/docker/DEPS_HASH                ← 실행 이미지 지문과 같아야 시작
@@ -421,19 +423,19 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 - compose 실행기(`podman-compose`나 `docker-compose` 플러그인)가 깔려 있어야 한다. `podman compose version`으로 확인한다.
   - 폐쇄망에서 없으면: 사내 RHEL 저장소에 있으면 `dnf install podman-compose`. 없으면 인터넷 PC에서 서버와 같은 python 판으로 `pip download podman-compose -d pc-wheels`(의존 휠 `python-dotenv`·`PyYAML` 포함)로 휠을 받아 옮긴 뒤 서버에서 `python3 -m pip install --no-index --find-links pc-wheels podman-compose` → `podman compose version`으로 확인.
 
-설치 순서(처음 한 번):
-1. 두 zip을 같은 폴더에 푼다.
-2. 코드 폴더를 준비한다.
-   - 컨테이너 사용자(UID 10001)가 읽을 수 있게 한다: `chmod -R a+rX sbl_data_parsing-<판>`
-   - 지금 쓰는 판을 링크로 건다: `mkdir -p /srv/rag/code && ln -sfn /srv/rag/sbl_data_parsing-<판> /srv/rag/code/live`. systemd unit과 아래 명령은 이 경로를 쓴다.
-3. 이미지를 불러온다: `DOCKER=podman bash sbl_images-main/load.sh <판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH)를 보여 준다.
-4. 설정을 채운다(§5-3 ②). `required.deploy.pipeline_image`·`required.deploy.mcp_image`에는 실행 이미지 태그(`data-pipeline-runtime:<판>`, `mcp-server-runtime:<판>`)를 적는다.
-5. DB를 만들고, 연결을 점검하고, 이미지를 점검한다(§5-3 ③~⑤).
-6. 실행한다: `bash /srv/rag/code/live/deploy/host/scripts/mcp_up.sh`, `… trigger.sh parse` 등.
+설치 순서(처음 한 번 — root 셸, `<코드>` = `sbl_data_parsing-main` 또는 `sbl_data_parsing-<판>`):
+1. 두 zip을 같은 폴더(`/srv/rag`)에 푼다.
+2. 이미지를 불러온다: `DOCKER=podman bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH)를 보여 준다.
+   - **이미지 판 = 코드 판이 아닐 수 있다.** 코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같으면 옛 실행 이미지에서 새 코드가 돈다 — 0.2.0 코드는 0.1.0 실행 이미지(DEPS_HASH `f0fcc30bd067bc2f`)를 그대로 쓴다: `load.sh 0.1.0`, 설정의 이미지 칸은 `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0`.
+3. 서버 폴더를 만든다: `bash /srv/rag/<코드>/deploy/host/scripts/dc.sh init --group <운영 그룹>` — env(700)·결과 폴더·`mcp_parse/jobs`(UID 10001, 2775)·`code`·`backup` 폴더, 코드 폴더 읽기 권한(a+rX), `/srv/rag/code/live` 링크(없을 때만), `settings.sample.yaml` → `env/settings.yaml`(없을 때만 — 덮지 않음). 끝에 아직 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
+4. 설정을 채운다(§5-3 ②). `required.deploy.pipeline_image`·`required.deploy.mcp_image`에는 2에서 불러온 실행 이미지 태그를 적는다.
+5. DB를 만든다(§5-3 ③ — `migrate up --target all` → `migrate master load`).
+6. 점검한다: `cd /srv/rag/code/live && bash deploy/host/scripts/dc.sh check` — 모델·환경·DB·두 이미지 selftest·검색 MCP를 차례로 보고 처음 실패에서 멈춘다. 기대 마지막 줄: `[dc check] 통과 — 6개`.
+7. 띄운다: `bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp`(그 뒤 `… trigger.sh parse` 등).
    - 이미지 태그가 `*-runtime`이면 스크립트가 자기 코드 폴더 루트를 `/app/deploy`에 붙인다(`image_vars.sh`의 `code_dir_default`).
    - 셸이나 systemd에 `CODE_DIR`가 있으면 그 값이 우선한다.
    - 호스트 python이 설정을 읽지 못하면(RHEL 9 기본 python 3.9 등), 실행 이미지 `data-pipeline-runtime:<VERSION>` 안에서 이 코드 폴더를 붙여 읽는다(`settings_env.sh`).
-7. 확인: 시작 로그 첫 줄 `[image] 이미지 … · 코드 <커밋> · 의존성 …`으로 어느 판이 도는지 본다.
+8. 확인: 시작 로그 첫 줄 `[image] 이미지 … · 코드 <커밋> · 의존성 …`으로 어느 판이 도는지 본다.
 
 - 코드만 바뀐 판: 새 코드 zip을 옆에 풀고, `live` 링크를 새 폴더로 옮긴 뒤 다시 띄운다. 의존성(`DEPS_HASH`)이 같으면 이미지는 그대로 둔다. 되돌리기는 링크를 옛 폴더로 되돌리면 된다.
 - systemd unit(`deploy/host/systemd/`)은 `/srv/rag/code/live` 경로를 쓰므로 판을 바꿀 때 고칠 필요가 없다.
@@ -469,9 +471,9 @@ bash deploy/release/ship_stage.sh pipeline-runtime mcp-runtime                 #
 **새 서버 첫 설치 순서(한눈에 — 자세한 명령은 아래 ①~⑥)**
 
 1. pgvector 준비 — PG 16 + pgvector가 떠 있고, 우리 DB·계정이 있어야 한다(DB 담당자). 그 DB에 `vector` 확장을 관리자가 한 번 만든다(③ 0번).
-2. 이미지와 코드 폴더 — 이미지 적재(`load.sh`), 코드 zip을 판 폴더에 풀고 `live` 링크(§5-0 1~3).
-3. settings.yaml 만들기 — `settings.sample.yaml`을 복사해 `required:` 칸을 채운다(②). 언제: 컨테이너를 띄우기 전, 이미지·코드를 놓은 직후. 어디: ② 경로(소유 UID 10001, 권한 640). 칸마다 뜻은 sample의 주석과 [env-guide](docs/operations/env-guide.md) §1.
-4. 결과 폴더 — UID 10001 · 운영 그룹 · `chmod 2775`(②).
+2. 이미지와 코드 폴더 — 이미지 적재(`load.sh`), 코드 zip 풀기(§5-0 1~2).
+3. 서버 폴더·settings.yaml·`live` 링크 — `dc.sh init --group <운영 그룹>`(②, §5-0 3). 그다음 `required:` 칸을 채운다. 언제: 컨테이너를 띄우기 전, 이미지·코드를 놓은 직후. 칸마다 뜻은 sample의 주석과 [env-guide](docs/operations/env-guide.md) §1.
+4. (3에 포함 — 결과 폴더 UID 10001 · 운영 그룹 · 2775)
 5. DB 마이그레이션 — `migrate check` → `up`/`stamp`(③).
 6. 연결 점검 — 모델 주소 `run_tool.sh ping_models`(LLM·VLM·임베딩 — 하나라도 실패면 종료 1), `run_tool.sh check_env`, PG `migrate check`(④).
 7. 이미지 점검 — `check-modules`, `selftest`(⑤).
@@ -501,11 +503,13 @@ bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp   # 서
 **② 설정 파일과 결과 폴더**
 
 ```bash
-mkdir -p /srv/rag/env && chmod 700 /srv/rag/env
-cp settings.sample.yaml /srv/rag/env/settings.yaml                  # 필요한 항목만 값을 채움
-chown 10001:<운영 그룹> /srv/rag/env/settings.yaml && chmod 640 /srv/rag/env/settings.yaml
-mkdir -p /srv/rag/output && chown 10001:<운영 그룹> /srv/rag/output && chmod 2775 /srv/rag/output   # 컨테이너 UID 10001 · 그룹 = 운영 계정 그룹 · setgid(2) — 새 파일이 그 그룹을 물려받고, 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지울 수 있다
+bash deploy/host/scripts/dc.sh init --group <운영 그룹>   # 아래를 한 번에(여러 번 불러도 안전 — 있는 것은 "있음", settings.yaml은 덮지 않음)
+#   /srv/rag/env(700) · env/settings.yaml ← settings.sample.yaml(없을 때만, 10001:<운영 그룹> 640)
+#   /srv/rag/output · output/mcp_parse/jobs(10001:<운영 그룹> 2775 — setgid: 새 파일이 그룹을 물려받고, 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지움)
+#   /srv/rag/code/live → 이 코드 폴더(없을 때만) · /srv/rag/backup(700) · 코드 폴더 a+rX
+#   끝에 아직 빈 required 칸 이름(값은 안 찍음) — 그 칸을 편집기로 채운다
 ```
+결과 폴더를 다른 곳에 두면 settings.yaml `required.deploy.output_root`를 먼저 적거나 `RAG_OUT=<폴더> bash … dc.sh init …`.
 
 서버 settings.yaml에 **반드시 적을 항목**이다. 빠지면 시작을 거부하거나 동작이 조용히 바뀐다(0.2.0 배포 할 일은 [release-and-patch §8](docs/operations/release-and-patch.md#8-020-배포--사람이-할-일)).
 
