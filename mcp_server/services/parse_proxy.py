@@ -6,6 +6,7 @@ S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/m
 import json
 import time
 
+from common.config.settings import cfg as common_cfg
 from mcp_server import config as mc
 from mcp_server.config import CFG
 
@@ -13,6 +14,17 @@ _NO_TOKEN = (
     "parse 서비스 토큰 없음 — settings.yaml required.tokens.parse_proxy 또는 MCP_TOKEN을 설정"
     "(data-pipeline-parse의 PARSE_MCP_TOKEN과 같은 값, refactor.md C-44)"
 )
+
+
+def max_bytes():
+    """parse_document 파일 1건 크기 상한(바이트) — common.runtime.parse_max_mb(parse 서비스와 같은 칸 — 사용자 11-03, 기본 100MB)."""
+    return int(common_cfg().runtime.parse_max_mb * 1048576)
+
+
+def body_cap():
+    """HTTP 요청 본문 상한(main.build → FastMCP max_request_body_size, SDK 기본 4MiB) — base64는 파일의 4/3배라 1.5배 + 1MiB:
+    상한을 조금 넘는 파일도 413이 아니라 도구까지 와서 크기를 알려 주는 오류를 받는다."""
+    return max_bytes() * 3 // 2 + 1048576
 
 
 class NoToken(RuntimeError):
@@ -69,8 +81,16 @@ def do_parse_document(path=None, content_b64=None, filename=None, time_out_thres
     payload = {"path": path, "content_b64": content_b64, "filename": filename}
     if not path and not content_b64:
         return {"error": "path 또는 content_b64(+filename) 필요"}
+    if content_b64:  # 11-03 — 상한을 넘으면 서비스로 보내지 않고 여기서 거름(path는 서비스가 같은 칸으로 거름)
+        # 원래 바이트 수 — 서비스(b64decode validate=False)처럼 줄바꿈·공백·'='는 빼고 셈(MIME 줄바꿈 base64도 같은 값)
+        n = (len(content_b64) - sum(map(content_b64.count, ("\r", "\n", " ", "\t", "=")))) * 3 // 4
+        if n > max_bytes():
+            return {
+                "error": f"파일이 크기 상한({common_cfg().runtime.parse_max_mb:g}MB)보다 큼({n / 1048576:.1f}MB) — ops.runtime.parse_max_mb"
+            }
+    t0 = time.time()  # 등록(큰 본문 전송) 시간도 time_out_threshold 안 — 바깥 창구(_bg_long, 기준 + 10초)보다 먼저 job_id를 돌려주게
     try:
-        job = _parse_service("POST", "/jobs", payload)
+        job = _parse_service("POST", "/jobs", payload, timeout=60)  # 11-03 — 100MB(base64 약 133MB) 본문을 받아 풀고 쓰는 동안 기다림
     except NoToken as e:
         return {"error": str(e)}  # S7d — 설정 없음(연결 실패와 가름, 값 없음)
     except urllib.error.HTTPError as e:
@@ -87,7 +107,6 @@ def do_parse_document(path=None, content_b64=None, filename=None, time_out_thres
         return {"error": f"작업 등록 실패: {job}"}
     ahead = job.get("queue_position", 0)  # 2026-10-22 — 클대기 순번(지연 원인 추적용)
     thr = max(2.0, float(time_out_threshold or 0))
-    t0 = time.time()
     while time.time() - t0 < thr:
         time.sleep(1.0)
         try:

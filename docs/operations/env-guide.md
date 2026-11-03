@@ -114,6 +114,7 @@ MCP args/result는 문서 원문을 포함할 수 있다. settings에서 비밀 
 | `FULLTEXT_SIGN_SECRET`(`search.server.fulltext_secret`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 파일 손잡이 sfid 서명 키 — 비밀 칸(settings.yaml에만). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 sfid가 모두 무효(사용자에게 먼저 알림 — mc-17, refactor.md C-75) |
 | `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 호출부 env에만 · 공백만인 토큰은 없음과 같음 · `MCP_PORT` 형식이 틀리면 시작 실패(값은 안 찍음) |
 | `PARSE_SERVICE_TOKEN` | 비움(→ `MCP_TOKEN`) | `parse_document`가 parse 작업 서비스를 부를 때 쓰는 토큰 — data-pipeline-mcp(11-03 — 옛 data-pipeline-parse)의 `PARSE_MCP_TOKEN`과 같은 값. 이것도 `MCP_TOKEN`도 없으면(공백만 포함) `parse_document`가 "parse 서비스 토큰 없음" 오류를 돌려줌(코드 대체 토큰 없음 — `refactor.md` C-44) |
+| `PARSE_MCP_MAX_MB`(`ops.runtime.parse_max_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음(두 컨테이너의 settings.yaml에 같은 값). 옛 `ops.services.parse_mcp.max_mb`(기본 64)는 지움 |
 | `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음 |
 | `MCP_ALLOWED_HOSTS` | 비움 | `MCP_HOST`가 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |
 
@@ -126,7 +127,7 @@ MCP args/result는 문서 원문을 포함할 수 있다. settings에서 비밀 
 | `RDB_SQLITE` | 비움 | PC 테스트용 SQLite 대역 파일 하나(모든 표 — `valid_env/edw/edw.sqlite`, `python -m validation.e2e.edw_standin`으로 다시 만듦) — 설정돼 있으면 원천 조회·퍼블리시·`query_edw` 모두 이게 먼저 |
 | `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_READ_USER`·`RDB_READ_PASSWORD` | 비움·`1433`·비움·비움·비움 | 서버 EDW 접속(pymssql) — `common.connections.rdb` |
 | `EDW_QUERY_TABLES` | 비움(PC 대역은 그 안의 표 9개) | 읽기 허용 `schema.table` 쉼표 목록 — 서버는 실제 EDW 표 이름으로 반드시 바꿔 적음 |
-| `EDW_QUERY_MAX_ROWS` | `2000` | `query_edw(max_rows=)` 호출값의 상한 |
+| `EDW_QUERY_MAX_ROWS` | `1000` | `query_edw(max_rows=)` 호출값의 상한 |
 | `EDW_QUERY_TIMEOUT_SEC` | `20` | 넘으면 `{"ok": false, "error": "timeout: ..."}`  |
 | `EDW_QUERY_MAX_BYTES` | `2000000`(2MB) | 응답 JSON 크기 상한 — 넘으면 뒤에서부터 행을 줄이고 `truncated: true` |
 
@@ -202,6 +203,7 @@ python -m common.check.checker ping   # LLM·VLM·EMBED 실호출(OK/FAIL·지�
 
 | 판 | 바뀐 것 | 서버 할 일 |
 |---|---|---|
+| MCP 도구 상한(사용자 11-03 — mc-06·mc-08, 등급 A) | ① `query_edw` 행 상한 기본 2000 → 1000(`search.edw_query.max_rows`·도구 기본값 `max_rows` 함께) ② `parse_document` 파일 크기 상한 칸을 `ops.services.parse_mcp.max_mb`(기본 64) → `ops.runtime.parse_max_mb`(기본 100, 검색 MCP와 파싱 서비스가 같이 읽음)로 옮김 — 옛 칸은 남아 있으면 경고만 | 서버 settings.yaml에 `ops.services.parse_mcp.max_mb`가 있으면 지우고, 100이 아닌 값을 쓰려면 `ops.runtime.parse_max_mb`에 적음 · `search.edw_query.max_rows`를 적어 두었으면 그 값이 이김 · 리버스 프록시 본문 상한(refactor.md C-85) |
 | struct 스키마 코드에서 모두 없앰 — 엔진 구성·원천 목록은 파일만(사용자 11-01 — pl-08·D-031) | ① Alembic struct 갈래(`0001_struct`·`0002_struct`·`0003_struct`)·시드 `resources/sql/` 지움 — `migrate --target`은 `search`·`all`만 ② 서버도 `resources/config/pipeline_stack.json`·`resources/mappings/sources.json`을 읽음(`ops.paths.stack_file`·`sources_file`로 바꿀 수 있음 — 못 읽거나 모양이 틀리면 종료 2) ③ 명령 `set-stack`·`set-sources` 없앰(`show-stack`·`show-sources`는 파일을 보여 줌) ④ 내부 칸 `pipeline.paths.stack_version`(`STACK_VERSION`)·`represent`·`build_bundle`의 `--stack-version` 지움(`Section.REMOVED` — 남아 있어도 경고만) — `run_docs.py`는 시작 때 `show-stack`으로 확인만 ⑤ 파싱·검색 MCP 컨테이너는 PG 없이 시작(종료 4 "판 표 없음" 없음) | 서버에 남은 `struct` 스키마는 그대로 두거나 DB 담당자가 지움(코드는 읽지 않음) · 엔진 구성·원천 목록을 바꿀 때는 코드 폴더의 파일을 고쳐 오버레이 패치 · settings.yaml에 `stack_version`을 적었으면 지움 |
 | 정형 저장소·struct 표 10개 지움(사용자 10-31 — pl-08, 11-01에 struct 스키마 전체 없앰으로 바뀜 — 위 줄) | ① `pipeline/load/structured.py`(계약 연결 `load`·`link`)·`common/store/structdb.py`(SQLite 대체 포함) 지움 ② struct 표 10개(`contract_master`·`client_master`·`prod_master`·`doc_contract_link`·`doc_location`·`doc_registry`·`doc_registry_seen`·`doc_hidden`·`doc_table`·`doc_cell`)를 쓰는 코드 지움 ③ 칸 지움(`Section.REMOVED` — 남아 있어도 경고만): `common.store.struct_backend`(`STRUCT_BACKEND`)·`common.store.struct_db`(`STRUCT_DB`) | settings.yaml에서 두 칸을 지움(안 지워도 경고만) · struct 마이그레이션은 없음(위 줄) |
 | 문서 대장·숨김 지움(사용자 10-31 — pl-12 C10) | ① 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·`registry_cli`(hide·unhide) 지움 — 검색은 숨김 필터 없음, publish는 EDW에 INSERT만(status UPDATE 없음) ② 파싱 `--max-new`·`--source` 고르기 = FileStorageMap ∖ ParsingMeta(ok·partial 행이 있는 원본 키는 안 고름) — 파싱 입구가 EDW ParsingMeta를 읽기 계정으로 한 번 읽음, 못 읽으면 서버는 종료 4 ③ 칸 지움(`Section.REMOVED` — 남아 있어도 경고만): `common.store.doc_registry`(`DOC_REGISTRY`)·`common.store.registry_etag_md5`(`REGISTRY_ETAG_MD5`) | settings.yaml에서 두 칸을 지움(안 지워도 경고만) · 파싱 컨테이너에 EDW 읽기 계정(`common.connections.rdb` 읽기)이 있어야 함 · PG 표는 다음 마이그레이션(0003)이 지움 |
