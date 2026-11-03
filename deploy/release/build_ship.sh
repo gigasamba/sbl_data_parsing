@@ -1,6 +1,6 @@
 #!/bin/bash
-# 개발 서버에서: 파이프라인 이미지 빌드 → 점검 → 압축 저장(sha256) → ssh로 수집 서버에 전송·적재 → 원격 점검.
-#   [IMAGE_TARGET=pipeline|mcp — S6b(D-020) 이미지 2개, 기본 pipeline]
+# PC에서: 이미지 빌드 → 점검 → 압축 저장(sha256) → ssh로 수집 서버에 전송·적재 → 원격 점검(운영 이미지는 개발 서버 bake.sh가 기본 — release-and-patch §1-2).
+#   [IMAGE_TARGET=pipeline|mcp|pipeline-runtime|mcp-runtime — S6b(D-020) 이미지 2개, *-runtime = 코드 없는 실행 이미지(op-06 — 코드 폴더 묶음도 만듦), 기본 pipeline]
 #   TARGET=user@수집서버 [TAG=data-pipeline:0.1.0] [REMOTE_DIR=/var/tmp] [DOCKER=docker|podman] [REMOTE_DOCKER=docker] \
 #   [BUILD_ARGS="--build-arg BASE=<사내 기반 이미지> --build-arg APT=0"] bash deploy/release/build_ship.sh
 #   BUILD_ONLY=1 — 빌드·로컬 점검(selftest 판정·resources·비밀값 흔적)까지만(TARGET·ssh 없음, 저장·전송 안 함 — PC 로컬 빌드, I3)

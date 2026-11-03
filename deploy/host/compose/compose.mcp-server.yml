@@ -1,4 +1,4 @@
-# 검색 MCP 서버(백로그 G1) — mcp-server 이미지(S6b), 명령 mcp. 결과 폴더(묶음·그림 기록·준비된 원본)는 읽기 전용.
+# 검색 MCP 서버(백로그 G1) — mcp-server 이미지(S6b), 명령 mcp. 결과 폴더는 읽기 전용(검색은 PG만 — 묶음 폴더는 안 읽음, mc-19).
 #   bash deploy/host/scripts/mcp_up.sh(상주 확인·기동) · 직접(하위 셸로 — VS7e1 R-2): ( . deploy/host/scripts/settings_env.sh && load_settings && docker compose -f deploy/host/compose/compose.mcp-server.yml up -d )
 #   (S7e1 — 옛 --env-file /srv/rag/env/pipeline.env 대신 셸 env · S6b — 옛 docker/compose.mcp-server.yml)
 # 네트워크: 호스트 네트워크(Linux) — PostgreSQL·임베딩 API에 서버 주소 그대로 붙고, MCP는 MCP_HOST(127.0.0.1 또는 사내 대역 IP)에만 열림.
@@ -25,8 +25,8 @@ services:
     environment:
       SETTINGS_FILE: /etc/rag/settings.yaml      # S7e1 — 붙인 설정 파일(x-settings)
       RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
-      # S7e2(사용자 10-28) — 바인드·포트·저장소·질의 캐시는 settings.yaml search.server.host·port · common.models.embed.query_cache(op-08)(옛 env MCP_HOST·MCP_PORT·MCP_STORE·
-      #   EMBED_QUERY_CACHE — 질의 캐시는 이미지 안 기본 /tmp/mcp_query_cache.sqlite). 서버 yaml에 store: pg를 적음(없으면 자동 탐지 — C-45)
+      # S7e2(사용자 10-28) — 바인드·포트·질의 캐시는 settings.yaml search.server.host·port · common.models.embed.query_cache(op-08)(옛 env MCP_HOST·MCP_PORT·
+      #   EMBED_QUERY_CACHE — 질의 캐시는 이미지 안 기본 /tmp/mcp_query_cache.sqlite). 저장소는 PG 하나(mc-01 — 옛 store 칸·MCP_STORE 없음)
     volumes:
       - *settings
       - ${RAG_OUT:?RAG_OUT=<결과 폴더(파이프라인 /app/output)>}:${APP_OUTPUT_ROOT:?APP_OUTPUT_ROOT 필요 — settings_env.sh load_settings가 냄}:ro,z

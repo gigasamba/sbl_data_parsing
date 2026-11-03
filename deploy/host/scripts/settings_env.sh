@@ -3,8 +3,8 @@
 #   source: . deploy/host/scripts/settings_env.sh && load_settings || exit $?   — trigger.sh·run_tool.sh·mcp_up.sh·systemd nightly가 씀
 #     설정 파일: SETTINGS_FILE(있으면) > $SERVER_ENV_DIR/settings.yaml(서버 기본 배치 /srv/rag/env) > (RUN_ENV=local) 저장소 루트 settings.yaml
 #     없으면 종료 코드 2
-#     호스트 칸(host_keys.tsv 전부 — deploy/release/hostkeys.py HOST_SECTIONS: 이미지·자원·포트·호스트 경로·RUN_ENV·새벽 배치 PARSE_DEADLINE, compose healthcheck·mcp_up.sh가 쓰는 앱 칸 MCP_HOST·MCP_PORT·
-#     TRIGGER_PARSE_PORT·TRIGGER_STRUCTURE_PORT)을 export한다. 이미 셸 env에 있는 이름은 덮지 않는다(옛 compose의 "셸 env > --env-file"과 같음).
+#     호스트 칸(host_keys.tsv 전부 — deploy/release/hostkeys.py HOST_SECTIONS: 이미지·자원·포트·호스트 경로·RUN_ENV·새벽 배치 PARSE_DEADLINE, compose healthcheck·mcp_up.sh가 쓰는 앱 칸 MCP_HOST·MCP_PORT)을
+#     export한다(옛 TRIGGER_PARSE_PORT·TRIGGER_STRUCTURE_PORT는 trigger 서버와 함께 11-01에 지움 — host_keys.tsv에 없음). 이미 셸 env에 있는 이름은 덮지 않는다(옛 compose의 "셸 env > --env-file"과 같음).
 #     S7e2 — 컨테이너는 이 값을 env로 받지 않는다(앱이 붙인 settings.yaml에서 직접 — compose environment의 덮기 줄 없앰).
 #     YAML에 없는 칸은 내지 않으므로 compose 파일 기본값(${X:-…})이 그대로 걸린다(R-h). SETTINGS_FILE은 절대 경로로 export(compose 마운트 원본).
 #   실행: bash deploy/host/scripts/settings_env.sh [--sh] <절>...     예: pipeline.host  common.host  mcp.host

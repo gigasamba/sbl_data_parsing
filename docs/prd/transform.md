@@ -110,7 +110,7 @@
 - 무엇: 이미지 VLM 설명(pdf, docx, xlsx, pptx, eml), VLM 없이 원본 차트 XML과 벡터 차트 값, 규칙 기반 도식 연결선, Mermaid 출력, 겹친 그룹, 중첩 그림, 스캔은 쪽 전체 VLM, 도형·슬라이드는 soffice 렌더, 전체 VLM 관문(기본 12).
 - 파일: `pipeline/transform/figures/figures.py`, `charts.py`, `pptx_render.py`, `vgate.py`, `resources/prompts/pipeline/`.
 - 11-01(`feature/scope-cut-unused`, 허브 지시): 그림 기록 검토 루프 `pipeline/transform/figures/figure_review.py`(독립 재추출 → 대조 → VLM 판정)와 그것만 쓰던 지시서 `figure_extract`·`figure_judge`, 시험, 이미지 `tool` 목록 자리, 설정 `pipeline.eval.review_max_rounds`(남으면 경고만)를 지움 — 파싱 흐름은 부르지 않던 도구. `common/ai`의 `vlm_judge` 역할 표는 code_fp 파일이라 남김.
-- Status: done
+- Status: todo (코드 남음) — 그림 설명(VLM·차트 값)은 done. 부가 기능 줄이기(10-31 결정)는 아직: `figures.py`가 화살표·겹침·중첩·pptx 도형 연결·Mermaid 모듈을 그대로 부른다(0.2.0 p1 지문).
 
 <a id="pl-06"></a>
 ## pl-06 · 구조화 — 청크·메타데이터·임베딩
@@ -171,7 +171,7 @@
 ### QA
 - `tests/server/pipeline/test_classify.py`(가짜 LLM): 답 읽기 표(운영 별칭·울타리·`doc_class` 키·LAS 대소문자·집합 밖·참거짓·빈 답), 제목 키워드 묶음 표, LAS 키워드 근거(운영 글과 바이트 같음), 사용자 쪽 글(SFDC 힌트 줄·제목 없음 → 파일 이름·힌트 없음 · LAS 품의 제목·상대방 · 8,000자), 분류 표(부른 횟수 — 재시도 없음 · 실패 집합 · gold·묶음 라벨 안 덮음 · 본문 없음 · 대상 아닌 원천 · `-test` 표기), 적재가 gold 라벨을 넣고 실패 문서는 넣지 않으며 `--replace`에도 안 덮음, EDW 힌트 칸(unlinked·user_only·User + Task·영업 기회·모르는 접두·120자 · 힌트 칸이 없는 EDW — `tests/server/pipeline/test_edw_meta.py` `test_hints`, 실제 SQLite EDW). 힌트 조회 이름은 `resources/config/edw_chain.yaml` `sfdc.hints`·`las.hints`(#98 사슬 설정). EDW 대역 `valid_env/edw/sfdc.sql`이 갈래마다 문서를 둔다(LAS 대역 문서는 아직 없음).
 - 운영과의 결과 비교는 [test.md#e2-20](test.md#e2-20) 분류 수용 보고서(개발 서버 정답 샘플과 일치율·혼동표).
-- Status: dev — 11-02 `feature/pl33-classify`(구현·시험).
+- Status: done — `feature/pl33-classify`(#102) 병합. 운영 결과 비교는 [test.md#e2-20](test.md#e2-20).
 
 ## 코드와 다른 점 · 지울 코드
 
