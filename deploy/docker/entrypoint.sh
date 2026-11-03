@@ -4,19 +4,19 @@
 # data_pipeline.<패키지>.<이름>`으로 부른다(운영자가 쓰는 명령 이름 자체는 그대로).
 #   docker run --rm --init -v <settings.yaml>:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -e RUN_ENV=<dev|prd> \
 #     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>   (S7e1·S7e2 — 옛 --env-file pipeline.env 대신 설정 파일 하나)
-# 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp ·  (이미지 명령 dedup·prepare는 11-01에 지움 — parse가 안에서 부름)
-#       ask --q …  (test-stack·night·run-stack·full·structure·load는 11-01에 지움 — 서버 입구는 run_docs 하나, 사용자 10-31)
+# 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp ·
+#       ask --q …  (서버 입구는 run_docs 하나, 사용자 10-31)
 #   tool <이름> = 고정 표의 도구 하나(check_env·ping_models·check_modules·cli·rdb_discover·gen_roster·glossary_suggest — run_tool.sh가 쓰는 자리)
-#     이름만 받는다(옛 `tool cli/<이름>.py` 형태는 0.2.0에 지움 — 종료 64).
+#     이름만 받는다(다른 형태는 종료 64).
 #   모듈(트리거 1회): parse(= 가져오기(폴더·rdb:csv, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타, SI39 — cli/publish_parse.py --apply) — docs/architecture.md
 #   migrate up|stamp|current|check [--target search|all] [--schema S] [--dim N|--bundle B] = pgvector 우리 스키마 판 관리(S8a — Alembic,
 #     common.store.db.dbtool) — data-pipeline 이미지만, up·stamp는 load와 같은 잠금(current·check는 읽기만 — 잠금 없음). 서버 절차 docs/operations/release-and-patch.md §5-5
-#   show-stack = 지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 오버레이 패치 · 사용자 11-01: 판 표·set-stack 없앰 · 원천 목록 show-sources는 sources.json과 함께 지움) — 두 이미지. docs/architecture/pipeline_stack.md
+#   show-stack = 지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 코드 폴더 바꾸기) — 두 이미지. docs/architecture/pipeline_stack.md
 #   S6b(D-020) — 이미지 2개: RAG_MODULE마다 쓸 수 있는 명령이 다름(아래 case가 거름):
 #     pipeline(data-pipeline — 옛 data-parsing+data-structure, 두 이미지가 받던 명령의 합 + full(S6c))=parse·publish·show-stack·idle·migrate·parse-service ·
 #     mcp(mcp-server — 옛 data-retrieval)=mcp·ask·show-stack · 공통(모든 이미지) = help·check·resources·services·
 #     check-modules·tool·selftest(S9 — 서버 반입 시험 /app/deploy/tests/server를 파일마다, 다른 이미지(RAG_MODULE) 폴더 사례·다른 이미지 패키지가 없어서만 실패한 사례는 SKIP,
-#     서드파티 패키지가 없으면 FAIL(I2c) — 반입 판정은 /app/docker/selftest_gate.sh)  (smoke는 11-01에 지움 — 실문서 점검은 run_docs·trigger.sh parse로)
+#     서드파티 패키지가 없으면 FAIL(I2c) — 반입 판정은 /app/docker/selftest_gate.sh)
 set -euo pipefail
 cd /app
 umask 0002   # 그룹도 쓸 수 있게(파일 664·폴더 775) — 서버 운영 계정이 UID 10001이 쓴 결과를 고치고 지우게(결과 폴더 그룹·setgid는 server-guide §1-2)
