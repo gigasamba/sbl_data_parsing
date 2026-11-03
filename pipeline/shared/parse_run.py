@@ -1,6 +1,7 @@
 """파싱 실행 공용(0.2.0에 옛 pipeline/shared/artifacts.py·progress.py를 합침, pl-46): P0 원본 캐시 경로·지시문 id·엔진 버전·중간 캐시 정리 ·
 환경 실패 단서(is_env_error)·문서 → 형식 키(doc_types)."""
 
+import functools
 import importlib.metadata
 import json
 import os
@@ -39,8 +40,10 @@ ENGINE_PKG = {
 }
 
 
+@functools.cache
 def engine_version(engine):
-    """엔진 이름 → 설치된 패키지 버전(importlib.metadata). 매핑에 없으면 엔진 이름을 패키지 이름으로 시도. 못 찾으면 "unknown"."""
+    """엔진 이름 → 설치된 패키지 버전(importlib.metadata). 매핑에 없으면 엔진 이름을 패키지 이름으로 시도. 못 찾으면 "unknown".
+    프로세스마다 엔진당 한 번(fp-perf B5 — 실행 중 설치 버전은 안 바뀜)."""
     pkg = ENGINE_PKG.get(engine, engine)
     if not pkg:
         return "stdlib"

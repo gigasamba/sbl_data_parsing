@@ -169,12 +169,39 @@ def _fill_glossary_blanks(rows):
     return out
 
 
+def _mtime(p):
+    """파일 (크기, 고친 시각 ns) — 없으면 None. 읽은 결과 캐시 열쇠(파일이 바뀌면 다시 읽음 — fp-perf B2, contract.file_hash와 같은 열쇠)."""
+    try:
+        st = os.stat(p)
+        return (st.st_size, st.st_mtime_ns)
+    except OSError:
+        return None
+
+
+_CACHE = {}  # (종류, 경로·크기·고친 시각…) → 읽은 결과 — 문서마다 명부·사전을 다시 읽지 않게(fp-perf B2, 0.2.0)
+_CACHE_MAX = 4  # ponytail: 상주 검색 서버에서 파일을 바꿀 때마다 옛 결과가 쌓이지 않게 — 넘으면 가장 오래된 것부터 버림
+
+
+def _cached(key, build):
+    if key not in _CACHE:
+        while len(_CACHE) >= _CACHE_MAX:
+            _CACHE.pop(next(iter(_CACHE)))
+        _CACHE[key] = build()
+    return _CACHE[key]
+
+
 def load_glossary(dir=None):
     """용어 사전 로더(X3) — dir(없으면 GLOSSARY_DIR)의 domain_terms.csv를 읽어 검증 후 approved만 {concept_id: row}로.
-    사전 없음(인자도 GLOSSARY_DIR도 없음)이면 빈 사전(확장 없이 동작 — 사전이 선택 장치임을 보장)."""
+    사전 없음(인자도 GLOSSARY_DIR도 없음)이면 빈 사전(확장 없이 동작 — 사전이 선택 장치임을 보장).
+    같은 폴더·같은 파일(고친 시각)이면 한 번만 읽는다(fp-perf B2) — 돌려주는 사전은 얕은 사본(호출부가 고쳐도 캐시는 그대로)."""
     d = dir or _cfg().paths.glossary_dir
     if not d:
         return {}
+    key = ("glossary", str(d), _mtime(Path(d) / "domain_terms.csv"), _mtime(Path(d) / "id_patterns.csv"))  # 검증이 id_patterns도 읽음
+    return dict(_cached(key, lambda: _load_glossary(d)))
+
+
+def _load_glossary(d):
     import csv
     rows = _fill_glossary_blanks(csv.DictReader(_read_text(Path(d) / "domain_terms.csv")[0].splitlines()))
     errs = validate_glossary(rows, d)
@@ -456,16 +483,23 @@ def read_roster(path):
 
 def _aliases():
     """고객 명부 = stack.json client_aliases + CLIENT_ROSTER 파일(수집 서버: SFDC 고객 마스터 내보내기) + GLOSSARY_DIR 용어 사전 org_client.
-    CLIENT_ROSTER: JSON {"정식 이름": ["별칭", ...]} 또는 CSV(1열 정식 이름, 2열 별칭을 ; 또는 | 로 구분, 머리글 줄 'name'/'고객'은 건너뜀)."""
+    CLIENT_ROSTER: JSON {"정식 이름": ["별칭", ...]} 또는 CSV(1열 정식 이름, 2열 별칭을 ; 또는 | 로 구분, 머리글 줄 'name'/'고객'은 건너뜀).
+    세 파일(경로·고친 시각)이 같으면 한 번만 만든다(fp-perf B2 — 문서마다·호출마다 다시 읽던 것) — 돌려주는 사전은 얕은 사본."""
+    stack = RES_ROOT / "config" / "pipeline_stack.json"
+    f, g = _cfg().paths.client_roster, _cfg().paths.glossary_dir
+    key = ("aliases", _mtime(stack), f, f and _mtime(f), g, g and _mtime(Path(g) / "domain_terms.csv"), g and _mtime(Path(g) / "id_patterns.csv"))
+    return dict(_cached(key, lambda: _build_aliases(stack, f, g)))
+
+
+def _build_aliases(stack, f, g):
     try:
-        out = dict(json.loads((RES_ROOT / "config" / "pipeline_stack.json").read_text(encoding="utf-8")).get("client_aliases") or {})
+        out = dict(json.loads(stack.read_text(encoding="utf-8")).get("client_aliases") or {})
     except (OSError, ValueError):
         out = {}
-    f = _cfg().paths.client_roster
     if f:                                                   # 지정했는데 없으면 멈춤(조용히 빈 명부로 돌지 않게)
         for c, al in read_roster(f).items():
             out[c] = sorted(set(out.get(c, [])) | set(al))
-    g = _cfg().paths.glossary_dir                           # 용어 사전(T3, docs/architecture.md) — org_*(client 태그)·approved의 동의어·약어(로더는 load_glossary 한 곳)
+    # 용어 사전(T3, docs/architecture.md) — org_*(client 태그)·approved의 동의어·약어(로더는 load_glossary 한 곳)
     if g:
         for r in load_glossary(g).values():
             if "org_client" in split_terms(r.get("category")):   # SI43① category는 `|` 구분 다중 태그 가능(예 org_client|org_cdmo) — 기존 한 칸 값도 그대로 맞음

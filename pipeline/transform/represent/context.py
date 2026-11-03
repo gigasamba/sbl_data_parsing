@@ -8,8 +8,14 @@ FIGWORD = re.compile(r"그림|figure|fig\.|차트|그래프|흐름도|절차|도
 PAIR = re.compile(r"(?<![A-Za-z0-9])([A-Z]{1,3}-\d{1,4})(?!\d)[^0-9A-Z]{0,12}?(\d+(?:\.\d+)?)")  # ID 바로 뒤 한글 조사(B-05가)도
 
 
-def link_context(f, doc_text):
-    """캡션 1개 + 본문 언급 문장 → 그림 기록에 붙일 근처 맥락. 캡션 출처를 함께. f = figures.figures()가 낸 기록 하나."""
+def sentences(doc_text):
+    """문서 본문 → 문장 목록 — 부르는 쪽이 문서마다 한 번 만들어 link_context에 넘긴다(fp-perf B4: 그림마다 문서 전체를 다시 나누던 것)."""
+    return tuple(s.strip() for s in re.split(r"(?<=[.!?。])\s+|\n", doc_text) if s.strip())
+
+
+def link_context(f, doc_text, sents=None):
+    """캡션 1개 + 본문 언급 문장 → 그림 기록에 붙일 근처 맥락. 캡션 출처를 함께. f = figures.figures()가 낸 기록 하나.
+    sents — sentences(doc_text)(없으면 여기서 만듦)."""
     cand = [("아래 줄", x) for x in f["after"]] + [("위 줄", x) for x in f["before"]]
     cap = next(((src, x) for src, x in cand if CAP.match(x)), None)
     if not cap:
@@ -24,9 +30,9 @@ def link_context(f, doc_text):
         ]
         cap = near[0] if near else None
     num = re.search(r"(그림|Figure|Fig\.?)\s*(\d+)", cap[1]) if cap else None
-    sents = [s.strip() for s in re.split(r"(?<=[.!?。])\s+|\n", doc_text) if s.strip()]
     mentions = []
     if num:
+        sents = sents if sents is not None else sentences(doc_text)
         mentions = [s for s in sents if re.search(rf"(그림|Figure|Fig\.?)\s*{num.group(2)}(?!\d)", s) and not CAP.match(s)]
     mentions += [x for x in f["before"] + f["after"] if FIGWORD.search(x) and not CAP.match(x) and x not in mentions]
     mentions += [x for x in f["near"] if PAIR.search(x) and x not in mentions]

@@ -13,7 +13,6 @@ from pipeline.extract.run_all import (
     VLM_ENGINES,
     _default_procs,
     _sha,
-    _stamp_provenance,
     engine_code_fp,
     engines_for_doc,
     p0_key,
@@ -83,12 +82,11 @@ def selftest():
     assert p0_key("pymupdf", sha, ver) == p0_key("pymupdf", sha, ver) and p0_key("pymupdf", sha, ver) != p0_key("pymupdf", "b" * 64, ver)
     print("[selftest] P0 열쇠(출처 기록 — 엔진 폴더 코드·sha·버전만) 통과")
 
-    import tempfile
+    from pipeline.extract import parse_one
 
-    dst = Path(tempfile.mkdtemp()) / "x.json"
-    dst.write_text(json.dumps({"text": "본문"}), encoding="utf-8")
-    _stamp_provenance(dst, "pymupdf", "1.2.3", "deadbeef", "default")
-    d = json.loads(dst.read_text(encoding="utf-8"))
+    d = parse_one.stamp(
+        {"text": "본문"}, {"engine": "pymupdf", "engine_version": "1.2.3", "p0_key": "deadbeef", "params": {"profile": "default"}}
+    )  # fp-perf C4 — 자식(parse_one)이 쓰기 전에 넣음(옛 run_all._stamp_provenance 다시 쓰기 대신)
     assert d["text"] == "본문" and d["provenance"]["engine"] == "pymupdf" and d["provenance"]["engine_version"] == "1.2.3"
     assert d["provenance"]["p0_key"] == "deadbeef" and d["provenance"]["params"] == {"profile": "default"}
     print("[selftest] 엔진 결과 JSON에 provenance 블록 추가 통과")
@@ -396,3 +394,15 @@ def test_vlm_child_env_caps_timeout():
         assert over.get("VLM_TIMEOUT") == "60", over
     with COMMON.env(VLM_TIMEOUT="100"), pc.PIPE.env(PARSE_VLM_PAGE_SEC="120"):
         assert _vlm_child_env() is None
+
+
+def test_p0_layer_covers_every_engine_folder():
+    """pl-47 — p0 층 지문 범위에 등록부의 모든 엔진 파서 폴더가 든다(이름과 폴더가 다른 html_stdlib·msg_extract·office·rapidocr_ko 포함)."""
+    from common.core import artifacts as A
+    from common.core.paths import DEPLOY_ROOT, PARSING_ROOT
+    from pipeline.extract.engines import registry
+
+    covered = {p for g in A.LAYER_CODE["p0"] for p in DEPLOY_ROOT.glob(g) if p.is_file()}
+    for eng, (stack, _) in registry.engines().items():
+        files = set((PARSING_ROOT / "engines" / stack).glob("**/*.py"))
+        assert files and files <= covered, (eng, stack, sorted(str(f) for f in files - covered)[:3])

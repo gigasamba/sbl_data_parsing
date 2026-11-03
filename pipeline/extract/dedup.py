@@ -11,12 +11,13 @@ keep.txt를 줄이지 않았다 — keep은 늘 해시로만 정해짐. 사용�
 
 import argparse
 import csv
-import hashlib
+import functools
 import os
 import re
 from pathlib import Path
 
 from common.core.console import utf8_stdout
+from common.core.contract import file_hash
 from common.core.paths import APP_ROOT, doc_dir  # 폴더 재편 뒤 이 상수만 바뀌면 됨
 
 ROOT = APP_ROOT
@@ -26,11 +27,7 @@ _NOISE = re.compile(
 
 
 def sha(p):
-    h = hashlib.sha256()
-    with open(p, "rb") as f:
-        for b in iter(lambda: f.read(1 << 20), b""):
-            h.update(b)
-    return h.hexdigest()
+    return file_hash(p)  # fp-perf C2 — 한 곳(같은 프로세스 안에서는 파일당 한 번 읽음)
 
 
 def fingerprint_one(p, source_id=None):
@@ -194,17 +191,27 @@ def load_manifest(manifest_path):
     경로·접두의 "다른" 문서가 하나로 뭉개지는 문제)는 source_id 우선 규칙 그대로 유지.
     알려진 한계: 코퍼스에서 완전히 빠진(삭제된) 이름은 이 함수만으로는 못 가려낸다 — 가지치기가 필요하면
     호출 쪽이 살아있는 이름 목록과 대조해야 한다."""
+    manifest_path = Path(manifest_path)
+    try:
+        st = manifest_path.stat()
+    except OSError:
+        return []
+    return list(_load_manifest(str(manifest_path.resolve()), st.st_size, st.st_mtime_ns))
+
+
+@functools.lru_cache(maxsize=8)
+def _load_manifest(path, size, mtime_ns):
+    """load_manifest 본체 — 파일(경로·크기·고친 시각)이 같으면 다시 읽지 않음(fp-perf C5: 문서마다 받기 전·받은 뒤 두 번 읽던 것).
+    다른 프로세스가 덧붙이면 크기·시각이 바뀌어 다시 읽는다."""
     import json
 
-    manifest_path = Path(manifest_path)
     last = {}
-    if manifest_path.exists():
-        for ln in manifest_path.read_text(encoding="utf-8").splitlines():
-            if ln.strip():
-                r = json.loads(ln)
-                key = r.get("source_id") or r.get("sha")
-                last[key] = r
-    return list(last.values())
+    for ln in Path(path).read_text(encoding="utf-8").splitlines():
+        if ln.strip():
+            r = json.loads(ln)
+            key = r.get("source_id") or r.get("sha")
+            last[key] = r
+    return tuple(last.values())
 
 
 def _rep_select(members, info):

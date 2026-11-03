@@ -50,4 +50,4 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 | `do_search` / `do_aggregate` | 벡터·BM25·그래프 검색·SQL 집계 | `mcp_server/services/search/search_svc.py` · `internal_docs.py`(도구 등록은 `mcp_server/routers/` — MCP 도구 계약, CLAUDE.md §4) |
 | `split_question` / `keep_context` / `gather` | 하위 질문 검색어 만들기·병합(LLM 없이) | `mcp_server/services/search/decompose.py` |
 | `compare` / `value_check` | 그림 기록 ↔ VLM 추출 결정적 대조 | (`figure_review.py`는 11-01에 지움) · `pipeline/transform/represent/context.py` |
-| `embed_texts` | 임베딩 호출(역할 `embed` — ADK 역할 아님) | `common/ai/embed.py` |
+| `embed_texts` | 임베딩 호출(역할 `embed` — `llm.complete` 역할 아님) | `common/ai/embed.py` |

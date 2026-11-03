@@ -159,3 +159,25 @@ def _selftest_deploy(ups):
 
 def test_main():  # 옛 main()의 `if "--selftest" in args:` 갈래
     _selftest()
+
+
+def test_require_vectors():
+    """pl-16 — 임베딩 없는 묶음은 적재·배포 시작 거부(종료 코드 2 — 글자 메시지), 벡터가 있으면 통과."""
+    from pipeline.load.pgvector_load import require_vectors
+
+    cases = [  # (meta, 거부?)
+        ({"dim": 0, "embed": "none"}, True),
+        ({"dim": 1024, "embed": "none"}, True),
+        ({"embed": "api", "chunks": 3}, True),  # 청크는 있는데 dim 없음
+        ({"embed": "api", "dim": 0, "chunks": 0}, False),  # 청크 0건 문서(빈·스캔만) — 문서 행만 적재(run_docs 문서별 흐름)
+        ({"dim": 1024, "embed": "api"}, False),
+        ({"dim": 4, "embed_model": "test"}, False),  # 옛 묶음(embed 칸 없음)
+    ]
+    for meta, refused in cases:
+        try:
+            require_vectors(meta)
+            got = False
+        except SystemExit as e:
+            got = True
+            assert e.code == 2, e.code
+        assert got == refused, (meta, got)

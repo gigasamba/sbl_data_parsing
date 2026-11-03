@@ -230,7 +230,20 @@ def parse_module(a):
             )  # S7e2 — 덮기 파일 + 인계 키라 env에도(contract.py) · 원본 위치 주소 = 이 폴더의 file:///
         sel = OUT / "parse" / "_source" / "selected.txt"
         sel.write_text("\n".join(names) + "\n", encoding="utf-8")
-        rc = _run_until(["pipeline.extract.dedup", "--src", local, "--out", OUT / "dedup"], child_env(), _left(a) - 120)
+        # fp-perf B7 — 문서 1건(run_docs 문서별 흐름)은 자식 프로세스 없이 같은 함수로(결과 파일 같음)
+        if sum(1 for f in Path(local).iterdir() if f.is_file() and f.name != ".gitkeep") <= 1:
+            from common.core.runlog import session
+            from pipeline.extract import dedup
+
+            try:
+                with session("dedup"):  # 자식이 남기던 실행 기록 그대로
+                    dedup.run_folder(local, OUT / "dedup")
+                rc = 0
+            except Exception as e:  # 자식 실패와 같게 종료 코드로(아래 SystemExit)
+                print(f"[dedup] 실패: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+                rc = 1
+        else:
+            rc = _run_until(["pipeline.extract.dedup", "--src", local, "--out", OUT / "dedup"], child_env(), _left(a) - 120)
         _tstep("t_dedup")
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)
