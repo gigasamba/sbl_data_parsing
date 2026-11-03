@@ -190,7 +190,7 @@ def test_usage_line_roundtrip():
 
 
 def test_model_call_hook():
-    from common.ai import adk
+    from common.ai import llm
 
     def fake(role, messages, **kw):
         if kw.get("boom"):
@@ -198,7 +198,7 @@ def test_model_call_hook():
         time.sleep(0.02)  # 성공 2번 ≥ 40ms — Windows 타이머 해상도(~15ms)에서도 아래 ≥ 20 판정이 흔들리지 않게
         return "ok", {"prompt_tokens": 7, "completion_tokens": 3}
 
-    wrapped = adk._traced(fake)
+    wrapped = llm._traced(fake)
     assert wrapped("vlm", []) == ("ok", {"prompt_tokens": 7, "completion_tokens": 3})  # span 없으면 그대로
     rows, patched = _capture()
     with patched, jsonlog.context(run_id=str(uuid.uuid4())):

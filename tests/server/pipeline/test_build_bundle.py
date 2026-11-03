@@ -284,12 +284,10 @@ def selftest():
     ]  # 빠진 그림 B의 image_id는 텍스트 청크 하나에 연결(get_image 조회용)
     print("[selftest] 독립 검토 MAJOR① — 빠진 그림도 seq 소비(결정성) · image_ids 텍스트 청크 연결 통과")
 
-    # pl-06(11-01) — 그림 행·사실·개념 파일은 안 만들고, kg 파일은 묶음 계약용 빈 파일만
-    for gone in ("images.jsonl", "facts.jsonl", "concept_chunk.jsonl"):
+    # pl-06(11-01) · pl-46(0.2.0) — 그림 행·사실·개념·그래프(kg) 파일은 안 만듦
+    for gone in ("images.jsonl", "facts.jsonl", "concept_chunk.jsonl", "kg_nodes.jsonl", "kg_edges.jsonl"):
         assert not (out_empty / gone).exists(), gone
-    assert (out_empty / "kg_nodes.jsonl").read_text(encoding="utf-8") == ""
-    assert (out_empty / "kg_edges.jsonl").read_text(encoding="utf-8") == ""
-    print("[selftest] pl-06 — 그래프·개념·그림 행·사실 파일 없음(kg 파일은 빈 파일) 통과")
+    print("[selftest] pl-06·pl-46 — 그래프·개념·그림 행·사실 파일 없음 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

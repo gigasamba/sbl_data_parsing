@@ -452,8 +452,8 @@ def selftest():
         finally:
             sys.stderr = saved_err
         check(
-            "옛 이름 경고(R-5): 셸이 늘 export하는 SERVER_ENV_DIR는 빼고 알림",
-            "PIPE_PROCS" in buf.getvalue() and "SERVER_ENV_DIR" not in buf.getvalue(),
+            "env의 옛 설정 이름 알림 없음(0.2.0 — pl-46: 알림을 지움)",
+            "PIPE_PROCS" not in buf.getvalue() and "SERVER_ENV_DIR" not in buf.getvalue(),
         )
         check(
             "overridden()(R-11): 지금 덮기 파일의 overrides 이름만(공유 settings.yaml 값은 아님)",

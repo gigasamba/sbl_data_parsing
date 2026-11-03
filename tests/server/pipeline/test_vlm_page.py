@@ -8,7 +8,7 @@ from pathlib import Path
 import pipeline.transform.figures.vlm_page as M
 from common.config.settings import COMMON
 from pipeline import config as pc
-from pipeline.shared.artifacts import raw_vlm_path
+from pipeline.shared.parse_run import raw_vlm_path
 from pipeline.shared.postprocess import raw_root
 from pipeline.transform.figures.vlm_page import (
     MAX_SIDE,
@@ -23,7 +23,6 @@ from pipeline.transform.figures.vlm_page import (
     _signals_path,
     det_key,
     det_path,
-    hidden_overlap_spans,
     is_scan,
     page_text,
     pages_of,
@@ -278,15 +277,6 @@ def selftest():
         print(
             "[selftest] AD47 — 쪽 전체 비율로는 못 잡는 국소 숨은 글자-그림 겹침 → scan_pages_detail reason='hidden_overlap' · PARSE_HIDDEN_OVERLAP_MAX=0으로 끔 통과"
         )
-
-        # AD47 검토자 반영 — hidden_overlap_spans()(reason='hidden_overlap' 쪽만 다시 열어 겹친 숨은 글자 상자의
-        # bbox·text를 돌려줌, represent.fill_scan_pages가 국소 일치도 확인에 씀) 자체 확인
-        spans = hidden_overlap_spans(mismatch_doc, 1)
-        assert len(spans) == 1, spans
-        bbox, span_text = spans[0]
-        assert len(bbox) == 4 and "430.000" in span_text, (bbox, span_text)
-        assert hidden_overlap_spans(mismatch_doc, 99) == []  # 없는 쪽 번호 — 빈 목록(죽지 않음)
-        print("[selftest] AD47 — hidden_overlap_spans(): 겹친 숨은 글자 상자의 bbox·text 재추출 통과")
 
         _selftest_scan_wide()
 

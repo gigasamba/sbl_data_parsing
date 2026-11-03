@@ -8,7 +8,7 @@
 #   (11-01 지움: night(NIGHTLY_MODULES 순서 배치)·structure·load·all — 옛 1회 job 배치 입구. 구조화·적재는 run_docs가 문서마다 부름)
 #   설정(S7e1 — 사용자 10-27 Q3·Q5): settings.yaml(SETTINGS_FILE, 기본 $SERVER_ENV_DIR/settings.yaml — SERVER_ENV_DIR 기본 배치 /srv/rag/env)의
 #     호스트 칸(이미지·RAG_OUT·DOC_SRC·자원·NIGHTLY_*·PARSE_DEADLINE 등)을 settings_env.sh load_settings가 셸 env로 — 이미 셸에 있는 이름은 그대로.
-#     옛 ENV_FILE(pipeline.env)은 읽지 않는다(settings.yaml이 없으면 종료 코드 2).
+#     settings.yaml이 없으면 종료 코드 2.
 #   parse·publish는 상주 data-pipeline 컨테이너 안에서 돈다(docker exec — 사용자 11-02, 1회 job 컨테이너 없음: parse는 data-pipeline-parse,
 #     publish는 data-pipeline-structure). 컨테이너가 안 떠 있으면 종료 코드 2.
 # 종료 코드: 모듈·run_docs 그대로(0 끝남·건너뜀 · 75 실행 중(잠금)·마감 · 그 밖 = 실패)

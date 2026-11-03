@@ -53,7 +53,7 @@ Answer Agent 이미지는 없다(10-14 결정 — 개발 서버 네이티브. MC
 | C2 | `requirements*.txt`·`Dockerfile`·`wheels`·`assets/` 모델 파일은 바꾸지 않는다(바꾸면 `make_patch.sh`가 종료 코드 3) |
 | C3 | 이미지 경계를 넘는 import 금지 — `mcp_server`(mcp-server)와 `pipeline`(data-pipeline)은 서로 import하지 않는다. `python -m common.check.check_modules`가 잡음 |
 | C4 | 절대 경로 금지 — 저장소 안은 `common/core/paths.py` 기준 상수, 환경마다 다른 경로는 settings.yaml 항목([CLAUDE.md](../../CLAUDE.md) §2). 쓰기는 `output/`(볼륨)에만 |
-| C5 | `agent_platform/`은 10-26에 지웠다(I5, D-013) — LLM·VLM·임베딩 호출은 `common/ai/adk.py`·`llm.py`(임시 대체 구현, I6)를 고친다. 서버 live에 남은 옛 `agent_platform`·`common_tools`·`data_*` 폴더는 새 이미지 버전의 전체 덮어쓰기(§4)로 지운다(오버레이 패치 번들은 S6b 배치 뒤부터) |
+| C5 | `agent_platform/`은 10-26에 지웠다(I5, D-013) — LLM·VLM·임베딩 호출은 `common/ai/llm.py`(0.2.0 — ADK 장치를 지우고 HTTP 한 길, pl-46)·`embed.py`를 고친다. 서버 live에 남은 옛 `agent_platform`·`common_tools`·`data_*` 폴더는 새 이미지 버전의 전체 덮어쓰기(§4)로 지운다(오버레이 패치 번들은 S6b 배치 뒤부터) |
 | C6 | 새 모듈 폴더를 만들면 §1 표의 어느 이미지 경로인지 정하고, 서버 연결 옵션(§3-2)이 그 폴더를 덮는지 확인 |
 | C7 | 설정 기본값을 바꿀 때는 settings.yaml 항목으로(코드 상수 변경도 오버레이 패치로 되지만 커밋 메시지에 이유 한 줄) |
 | C8 | 커밋 메시지에 **'오버레이 패치 가능' / '새 이미지 버전 필요'** |

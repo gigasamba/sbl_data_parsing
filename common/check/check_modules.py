@@ -10,9 +10,8 @@
    것이라 분할 전후로 안 바뀜(옛 rag-core={structure,load,search}는 별칭으로 남음, Dockerfile 참고)
 ② common/ 은 parse/·structure/·load/·search/·cli/·evaluation/·(저장소 루트) tools/ 를 import하지 않음(표준 라이브러리·numpy·선택 드라이버만)
 ③ 계약 함수(토큰·ID 토큰·색인 본문·정규화·임베딩 호출·내부망 확인·원본 위치·고객 명부)는 common/ 에만 정의 — 복사본이 갈라지는 것 방지
-④ (GA) litellm 직접 import는 common/ai/adk.py 한 파일만 · google.adk는 common/ai/adk.py 또는 prompts/<id>/agent.py·
-   parse/agent/<id>/agent.py에서만(무거운 의존 — 그 밖의 파일은 common/adk.complete 경유. agent.py는 GA2 패키지
-   정의 자체가 google.adk.agents.LlmAgent)
+④ (GA) litellm·google.adk 직접 import 금지 — 0.2.0에 common/ai/adk.py(ADK 장치)를 지움(pl-46, 모델 호출은 common.ai.llm.complete HTTP).
+   예외는 지시서 패키지의 옛 agent.py(prompts/<id>/agent.py — 바이트 그대로 두는 정의 파일, 코드가 읽지 않음)뿐
 ⑤ (GA) agent_platform import는 common/ai/adk.py·common/ai/llm.py에서만, 서브모듈은 config·models·pipeline만(runtime·build·serving 금지)
 ⑥ (GA) parse/·structure/·load/·search/ 아래 "openai/" 문자열 금지 — 모델 접두어는 common/ai/llm.py profile()(CT1 — 옛 models.py 병합)에서만 만듦(캐시 열쇠 불변 — I1)
 ⑦ (GA2) prompts/<id>/agent.py·parse/agent/<id>/agent.py는 data_pipeline.* 를 import하지 않음(모델·ADK만 — 패키지는
@@ -143,13 +142,10 @@ SAME_NAME_OK = {
 # parse/agent/agent_tools.py로 옮겨 parse 영역 **안**이 되어 더 이상 경계 위반이 아님(ALLOW 자체가 필요 없어짐).
 # I2 — 옛 예외 ("structure/build_bundle.py", "data_pipeline.parse")(--no-rep 실험 경로의 지연 import)는 두 영역이 etl 하나가 되어 필요 없어짐.
 ALLOW: set = set()
-ADK_HEAVY_ONLY = {"common/ai/adk.py"}  # google.adk·litellm은 여기서만(다른 곳은 느려짐 — 지연 import도 이 파일 안에서)
 # TODO: 리팩토링 후 구현 필요
 # AGENT_PLATFORM_ONLY = {"common/ai/adk.py", "common/ai/llm.py"}   # CT1 — models.py가 llm.py로 병합되며 profile()의 agent_platform import도 같이 옮김
 # AGENT_PLATFORM_SUBMODULES = {"agent_platform.config", "agent_platform.models", "agent_platform.pipeline"}   # runtime·build·serving 금지(dev는 모델 호출만 씀)
-AGENT_KWARG_EXEMPT = {
-    "cli/ping_models.py"
-}  # 연결 확인(ping) — 업무 프롬프트가 없음(GA2 ⑧) · S3부터 common/check/(common 영역이라 ⑧ 대상 밖) — 옛 자리 이름으로 둠
+AGENT_KWARG_EXEMPT = {"common/check/checker.py"}  # 연결 확인(ping) — 업무 프롬프트가 없음(GA2 ⑧)
 
 
 def _agent_kwarg_missing(tree):
@@ -320,12 +316,10 @@ def check():
                 bad.append(f"{rel}:{ln}: L.chat()/A.complete() 호출에 agent= 없음(GA2 ⑧ — gamma 패키지 지정 필수)")
         for m in mods:
             top = m.split(".")[0]
-            if top == "litellm" and rel not in ADK_HEAVY_ONLY:
-                bad.append(f"{rel}: {m} import — litellm은 common/ai/adk.py에서만(GA ④)")
-            if (m == "google.adk" or m.startswith("google.adk.")) and rel not in ADK_HEAVY_ONLY and not is_agent_py:
-                bad.append(
-                    f"{rel}: {m} import — google.adk는 common/ai/adk.py 또는 prompts/<id>/agent.py·parse/agent/<id>/agent.py에서만(GA ④)"
-                )
+            if top == "litellm":
+                bad.append(f"{rel}: {m} import — litellm은 쓰지 않음(GA ④ — 0.2.0 ADK 장치 지움)")
+            if (m == "google.adk" or m.startswith("google.adk.")) and not is_agent_py:
+                bad.append(f"{rel}: {m} import — google.adk는 지시서 패키지 agent.py에서만(GA ④ — 0.2.0 ADK 장치 지움)")
             # TODO: 리팩토링 후 구현 필요
             # if top == "agent_platform":
             #     if rel not in AGENT_PLATFORM_ONLY:

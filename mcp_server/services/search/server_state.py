@@ -10,6 +10,7 @@ import types
 
 from common.config import settings as C  # common 칸(S7e1 — MCP_BUNDLE)
 from common.core.paths import APP_ROOT
+from common.store.pg import PGPool, _standin_schema, _warn_standin, conf, has_conn  # 옛 pg_mcp_connect — 시험이 has_conn을 바꿔 끼움
 from mcp_server import config as mc  # 설정 객체(S7d)
 
 CALLER = contextvars.ContextVar("caller", default="mcp:stdio")
@@ -64,8 +65,7 @@ def check_store():
 
 
 def _build_retriever():
-    from common.store import services
-    from mcp_server.services.search import pg_mcp_connect as PGM
+    from common.store import pg as PGC
     from mcp_server.services.search import retriever as RT
 
     old = _STATE.get("Rs")
@@ -74,13 +74,13 @@ def _build_retriever():
     except SystemExit as e:  # 스레드·요청 안에서는 오류로(조용히 스레드만 죽지 않게)
         raise RuntimeError(str(e)) from None
     a = types.SimpleNamespace(pg=False, local=False, edw=False, edw_client=False)
-    services.connect(a)  # PC — Docker pgvector 주소 찾기(못 찾으면 SQLite 대역 — 검색은 PG 하나, mc-01)
+    PGC.connect(a)  # PC — Docker pgvector 주소 찾기(못 찾으면 SQLite 대역 — 검색은 PG 하나, mc-01)
     from common.store.db import cfgfile
 
     cur = cfgfile.active("stack")  # 엔진 구성 파일(서버·PC 같음 — 프로세스 시작 때 읽은 것, 사용자 11-01)
     st = cur.named()
     bundle = C.cfg().paths.mcp_bundle or str(APP_ROOT / "output" / "edw" / "bundle")  # S7e1 — common 칸(옛 mcp.server.bundle)
-    dbs = PGM.connect_sources()  # 원천 스키마 5벌(pl-28) — 실 PG는 풀 하나를 함께 씀
+    dbs = connect_sources()  # 원천 스키마 5벌(pl-28) — 실 PG는 풀 하나를 함께 씀
     import copy
 
     base = RT.Retriever(bundle, st.get("retrieve", "hybrid"))  # 묶음(문서 메타)은 한 번만 읽고 원천마다 연결만 바꿔 씀
@@ -167,3 +167,40 @@ def _health():
     elif _STATE.get("warmup_ok") is False:
         out["warning"] = "warmup_failed"
     return out
+
+
+# ---- PG 상주 풀 연결 전환점(0.2.0 — 옛 mcp_server/services/search/pg_mcp_connect.py, pl-46)
+def connect_pool(c=None, pg_schema=None, max_size=None):
+    """connect()와 같은 전환점 — 검색 MCP 상주 Retriever(PGPool 자리). 스탠드인은 연결 1개뿐이라 풀이 필요 없어
+    StandinPG를 그대로(스레드 여러 개가 같은 스탠드인을 동시에 쓰는 경우는 PC 시험 범위 밖 — ponytail)."""
+    if has_conn():
+        c = c or conf()
+        if pg_schema:
+            c = {**c, "PG_SCHEMA": pg_schema}
+        return PGPool(c, max_size=max_size)
+    _warn_standin()
+    from common.store.pg_standin import StandinPG
+
+    return StandinPG(_standin_schema(pg_schema or (c or {}).get("PG_SCHEMA")))
+
+
+class SchemaView:
+    """연결 풀 하나로 원천 스키마 하나를 가리킴(pl-28 — 5벌이 풀 하나를 함께 씀, 스키마 이름만 다름). q·scope는 풀 그대로."""
+
+    def __init__(self, pool, schema):
+        self.pool_obj, self.schema = pool, schema
+        self.q, self.scope = pool.q, pool.scope
+
+
+def connect_sources():
+    """원천 이름 → 그 원천 스키마 연결(`<PG_SCHEMA>_<원천>`). 실 PG는 풀 하나 + SchemaView, 대역은 스키마마다 파일 하나(StandinPG)."""
+    from common.store.db.models import search_tables as ST
+
+    if has_conn():
+        pool = PGPool(conf())
+        return {src: SchemaView(pool, ST.src_schema(pool.schema, src)) for src in ST.SOURCES}
+    _warn_standin()
+    from common.store.pg_standin import StandinPG
+
+    base = _standin_schema(None)
+    return {src: StandinPG(ST.src_schema(base, src)) for src in ST.SOURCES}

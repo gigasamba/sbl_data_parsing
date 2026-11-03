@@ -5,13 +5,11 @@ import json
 from pathlib import Path
 
 from common import CONTRACT
-from common.core.contract import DOC_KEYS, check_bundle, check_parse
+from common.core.contract import check_parse
 
 
 def selftest():
     import tempfile
-
-    import numpy as np
 
     d = Path(tempfile.mkdtemp())
     rep = d / "_rep"
@@ -37,18 +35,7 @@ def selftest():
         encoding="utf-8",
     )
     assert check_parse(rep) == []
-    b = d / "bundle"
-    b.mkdir()
-    (b / "meta.json").write_text(json.dumps({"dim": 4}), encoding="utf-8")
-    (b / "docs.jsonl").write_text(json.dumps({k: "v" for k in DOC_KEYS}) + "\n", encoding="utf-8")
-    (b / "chunks.jsonl").write_text(json.dumps({"doc": 0, "seq": 0, "chunk_text": "t", "n_terms": 1}) + "\n", encoding="utf-8")
-    for f in ("kg_nodes.jsonl", "kg_edges.jsonl"):
-        (b / f).write_text("", encoding="utf-8")
-    np.save(b / "vectors.npy", np.zeros((2, 4), np.float32))
-    assert any("벡터 2행" in x for x in check_bundle(b))  # 벡터·청크 수 어긋남 → 잡힘
-    np.save(b / "vectors.npy", np.zeros((1, 4), np.float32))
-    assert check_bundle(b) == []
-    print("[selftest] 인계 계약 점검(파싱 _rep · 구조화 묶음) 통과")
+    print("[selftest] 인계 계약 점검(파싱 _rep) 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

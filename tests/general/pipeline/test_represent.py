@@ -7,8 +7,6 @@ from common.config.settings import COMMON
 from common.core.contract import source_record
 from pipeline import config as pc
 from pipeline.transform.represent.represent import (
-    _number_fixes,
-    _unique_on_page,
     apply_post,
     fill_scan_pages,
     fix_tables,
@@ -197,7 +195,8 @@ def selftest():
     print("[selftest] AD25(b)(c) — fuse 충돌(행 라벨 자리) → _rep/conflicts.jsonl 통과")
 
     # PE1 후속(2026-10-07) — 스캔 쪽 채움: fill_scan_pages() 단위 — 혼합 3쪽(.pdf_text) 중 스캔 쪽(2쪽)만
-    # OCR 엔진(.pdf_image 계열)의 쪽 글로 채움(글자층 쪽은 그대로).
+    # 쪽 VLM 글로 채움(글자층 쪽은 그대로). 0.2.0(pl-46) — 옛 OCR 엔진(.pdf_image) 대체 길은 지움.
+    import io as _io
     import tempfile as _tf
 
     import fitz as _fitz
@@ -207,7 +206,6 @@ def selftest():
     d4 = Path(_tf.mkdtemp())
     pd4 = d4 / "parse"
     (pd4 / "pymupdf").mkdir(parents=True)
-    (pd4 / "rapidocr_ko").mkdir(parents=True)
     doc4 = "mixed.pdf"
     pdf4 = d4 / doc4
     mdoc4 = _fitz.open()
@@ -218,231 +216,85 @@ def selftest():
     mdoc4.close()
     base_rep4 = {"text": "1쪽 글자\f\f3쪽 글자", "facts": [], "tables": []}  # 2쪽은 스캔이라 글자층이 비어 있음
     (pd4 / "pymupdf" / f"{doc4}.json").write_text(json.dumps(base_rep4, ensure_ascii=False), encoding="utf-8")
-    ocr_out4 = {
-        "text": "",
-        "boxes": [{"page": 1, "text": "OCR 1쪽"}, {"page": 2, "text": "OCR 2쪽 스캔 글"}, {"page": 3, "text": "OCR 3쪽"}],
-    }
-    (pd4 / "rapidocr_ko" / f"{doc4}.json").write_text(json.dumps(ocr_out4, ensure_ascii=False), encoding="utf-8")
-    dd4 = {"format": ".pdf_text", "engines": {"pymupdf": {"ok": True}, "rapidocr_ko": {"ok": True}}, "ref": None}
-    stack4 = {"parse": {".pdf_text": ["pymupdf"], ".pdf_image": ["rapidocr_ko"]}}
+    dd4 = {"format": ".pdf_text", "engines": {"pymupdf": {"ok": True}}, "ref": None}
+    stack4 = {"parse": {".pdf_text": ["pymupdf"]}}
+    vl = lambda t2: lambda p: [(2, t2, {"cached": True})]  # 쪽 VLM 가짜(2쪽 글, 모델 호출 없음)
     orig_scan_pages_detail = _vp.scan_pages_detail
     try:
         _vp.scan_pages_detail = lambda p: {2: "chars"}  # 2쪽만 스캔(page_signals 재계산 생략, 신호만 가짜로)
         rep4 = dict(base_rep4)
-        fill4 = fill_scan_pages(rep4, doc4, dd4, stack4, pd4, pdf4)
-        assert fill4 == {"filled": {"2": "rapidocr_ko"}, "skip": None}, fill4
-        assert rep4["text"] == "1쪽 글자\fOCR 2쪽 스캔 글\f3쪽 글자", rep4["text"]  # 글자 쪽(1·3)은 그대로, 스캔 쪽(2)만 OCR 글로
+        fill4 = fill_scan_pages(rep4, dd4, pdf4, page_vlm=vl("VLM 2쪽 스캔 글"))
+        assert fill4 == {"filled": {"2": "vlm_page"}, "skip": None}, fill4
+        assert rep4["text"] == "1쪽 글자\fVLM 2쪽 스캔 글\f3쪽 글자", rep4["text"]  # 글자 쪽(1·3)은 그대로, 스캔 쪽(2)만
 
         # 쪽 번호 불명(대표 쪽 \f 개수 ≠ 실제 쪽 수, boxes 없음) → 건너뜀(원문 그대로, 기록만)
         rep4b = {"text": "1쪽 글자\f3쪽 글자", "facts": [], "tables": []}  # \f 1개(2조각) — 실제는 3쪽
-        fill4b = fill_scan_pages(rep4b, doc4, dd4, stack4, pd4, pdf4)
+        fill4b = fill_scan_pages(rep4b, dd4, pdf4, page_vlm=vl("VLM 2쪽 스캔 글"))
         assert fill4b["skip"] and "확정 불가" in fill4b["skip"] and rep4b["text"] == "1쪽 글자\f3쪽 글자"
 
-        # OCR(.pdf_image) 후보가 하나도 성공 못 하면 채울 것 없음 — 건너뜀 기록
-        dd4c = {"format": ".pdf_text", "engines": {"pymupdf": {"ok": True}, "rapidocr_ko": {"ok": False}}, "ref": None}
-        rep4c = dict(base_rep4)
-        fill4c = fill_scan_pages(rep4c, doc4, dd4c, stack4, pd4, pdf4)
-        assert fill4c == {"filled": {}, "skip": "OCR 엔진(.pdf_image) 성공 결과 없음"} and rep4c["text"] == base_rep4["text"]
+        # 쪽 VLM 글이 없으면(꺼짐·빈 글) 채울 것 없음 — 건너뜀 기록(옛 OCR 대체 길 없음)
+        for pv in (None, vl("")):
+            rep4c = dict(base_rep4)
+            assert fill_scan_pages(rep4c, dd4, pdf4, page_vlm=pv) == {"filled": {}, "skip": "쪽 VLM 글 없음"}
+            assert rep4c["text"] == base_rep4["text"]
 
-        # 형식이 .pdf_text 아니면(이미 OCR이 대표) 호출 대상 없음 — None
-        assert fill_scan_pages(dict(base_rep4), doc4, {**dd4, "format": ".pdf_image"}, stack4, pd4, pdf4) is None
+        # 형식이 .pdf_text 아니면(이미 VLM이 대표) 호출 대상 없음 — None
+        assert fill_scan_pages(dict(base_rep4), {**dd4, "format": ".pdf_image"}, pdf4, page_vlm=vl("x")) is None
 
-        # 쪽 단위 품질 검사(독립 검토 보강) — 그 쪽 OCR 글이 깨져 있으면(garbage_ratio > 0.1, scan_dedup.pick과 같은
-        # 기준) 덮지 않고 원래 글 유지 + page_skip에 기록
-        (pd4 / "rapidocr_ko" / f"{doc4}.json").write_text(
-            json.dumps(
-                {"text": "", "boxes": [{"page": 1, "text": "OCR 1쪽"}, {"page": 2, "text": "�" * 30}, {"page": 3, "text": "OCR 3쪽"}]},
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
+        # 쪽 단위 품질 검사 — 그 쪽 글이 깨져 있으면(garbage_ratio > 0.1) 덮지 않고 원래 글 유지 + page_skip에 기록
         rep4d = dict(base_rep4)
-        fill4d = fill_scan_pages(rep4d, doc4, dd4, stack4, pd4, pdf4)
-        assert fill4d == {"filled": {}, "skip": None, "page_skip": {"2": "OCR 글 품질 낮음(garbage_ratio > 0.1) — 원래 글 유지"}}, fill4d
-        assert rep4d["text"] == base_rep4["text"]  # 깨진 OCR 글로 안 덮음 — 원래 글(2쪽 빈 글자층) 유지
+        fill4d = fill_scan_pages(rep4d, dd4, pdf4, page_vlm=vl("\ufffd" * 30))
+        assert fill4d == {"filled": {}, "skip": None, "page_skip": {"2": "쪽 VLM 글 품질 낮음(garbage_ratio > 0.1) — 원래 글 유지"}}, fill4d
+        assert rep4d["text"] == base_rep4["text"]
 
-        # AD31 독립 검토 MAJOR 후속 — reason='hidden'인 쪽만: 원래 글(숨은 층)과 OCR 글의 일치도(_page_agreement,
-        # 정규화 후 글자 2-gram Jaccard) 검사. 독립 검토자 경계 사례 그대로.
+        # AD31 — reason='hidden'인 쪽만: 원래 글(숨은 층)과 쪽 VLM 글의 일치도(_page_agreement, 정규화 후 글자 2-gram Jaccard)
         _vp.scan_pages_detail = lambda p: {2: "hidden"}
         hidden_a = "창고 코드 MX-H99 입고량 500개 단가 430,000원 입고일 2026-10-02"
+        cases = [  # (원래 2쪽 글, 쪽 VLM 2쪽 글, 채움?, page_skip에 들어갈 말)
+            (hidden_a, "창고코드 MX-H99 입고량 500개 단가 430.000원 입고일 2026-10-02", False, "hidden-agree"),  # 표기만 다름
+            (hidden_a, "창고코드 MX-H99 입고량 508개 단가 430.000원 입고일 2026-10-02", False, "hidden-agree"),  # 1~2자 다름
+            (
+                "잡음 글자층 임의 문자열 QZV204 XK930 깨짐 테스트 무관함 완전 다른 내용",
+                "점검 ID MX-Q21의 결과는 재검토이며 측정값은 5.8 mg/L이다",
+                True,
+                None,
+            ),  # 무관한 숨은 층 → 채움
+            ("MX-H1", "완전히 다른 긴 내용의 텍스트인데 짧은 쪽 기준으로 판단 불가라서 원래 글 유지되어야 함", False, "판단 불가"),
+        ]
+        for orig, vtext, fills, why in cases:
+            rep_h = {"text": f"1쪽 글자\f{orig}\f3쪽 글자", "facts": [], "tables": []}
+            fill_h = fill_scan_pages(rep_h, dd4, pdf4, page_vlm=vl(vtext))
+            if fills:
+                assert fill_h == {"filled": {"2": "vlm_page"}, "skip": None} and vtext in rep_h["text"], fill_h
+            else:
+                assert fill_h["filled"] == {} and why in (fill_h.get("page_skip") or {}).get("2", ""), fill_h
+                assert rep_h["text"] == f"1쪽 글자\f{orig}\f3쪽 글자"
 
-        # (a) 검색 가능 스캔 PDF — 공백·구분자 표기만 다름(430,000 vs 430.000·"창고 코드" vs "창고코드") → 정규화하면
-        # 같은 글 → 일치도 1.0 → 원래 글(숨은 층) 유지, OCR로 안 덮음
-        rep_h1 = {"text": f"1쪽 글자\f{hidden_a}\f3쪽 글자", "facts": [], "tables": []}
-        (pd4 / "rapidocr_ko" / f"{doc4}.json").write_text(
-            json.dumps(
-                {
-                    "text": "",
-                    "boxes": [
-                        {"page": 1, "text": "OCR 1쪽"},
-                        {"page": 2, "text": "창고코드 MX-H99 입고량 500개 단가 430.000원 입고일 2026-10-02"},
-                        {"page": 3, "text": "OCR 3쪽"},
-                    ],
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-        fill_h1 = fill_scan_pages(rep_h1, doc4, dd4, stack4, pd4, pdf4)
-        assert fill_h1["filled"] == {} and "hidden-agree" in (fill_h1.get("page_skip") or {}).get("2", ""), fill_h1
-        assert rep_h1["text"] == f"1쪽 글자\f{hidden_a}\f3쪽 글자"  # 원래 글(숨은 층) 그대로 — OCR로 안 덮음
-
-        # (b) 같은 내용인데 OCR이 1~2자를 다르게 읽음(500개→508개) — 글자 2-gram 대부분 겹쳐 일치도 ≥ 0.6 → 원래 글 유지
-        rep_h2 = {"text": f"1쪽 글자\f{hidden_a}\f3쪽 글자", "facts": [], "tables": []}
-        (pd4 / "rapidocr_ko" / f"{doc4}.json").write_text(
-            json.dumps(
-                {
-                    "text": "",
-                    "boxes": [
-                        {"page": 1, "text": "OCR 1쪽"},
-                        {"page": 2, "text": "창고코드 MX-H99 입고량 508개 단가 430.000원 입고일 2026-10-02"},
-                        {"page": 3, "text": "OCR 3쪽"},
-                    ],
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-        fill_h2 = fill_scan_pages(rep_h2, doc4, dd4, stack4, pd4, pdf4)
-        assert fill_h2["filled"] == {} and "hidden-agree" in (fill_h2.get("page_skip") or {}).get("2", ""), fill_h2
-        assert rep_h2["text"] == f"1쪽 글자\f{hidden_a}\f3쪽 글자"
-
-        # (c) garbled_layer처럼 그림과 무관한 숨은 글자층(길이는 충분하되 일치도 낮음) → OCR로 채움(지금 동작 그대로)
-        rep_h3 = {
-            "text": "1쪽 글자\f잡음 글자층 임의 문자열 QZV204 XK930 깨짐 테스트 무관함 완전 다른 내용\f3쪽 글자",
-            "facts": [],
-            "tables": [],
-        }
-        (pd4 / "rapidocr_ko" / f"{doc4}.json").write_text(
-            json.dumps(
-                {
-                    "text": "",
-                    "boxes": [
-                        {"page": 1, "text": "OCR 1쪽"},
-                        {"page": 2, "text": "점검 ID MX-Q21의 결과는 재검토이며 측정값은 5.8 mg/L이다"},
-                        {"page": 3, "text": "OCR 3쪽"},
-                    ],
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-        fill_h3 = fill_scan_pages(rep_h3, doc4, dd4, stack4, pd4, pdf4)
-        assert fill_h3 == {"filled": {"2": "rapidocr_ko"}, "skip": None}, fill_h3
-        assert "MX-Q21" in rep_h3["text"] and "5.8" in rep_h3["text"]  # 무관한 숨은 글자층 대신 OCR 글로 채워짐(값 복원)
-
-        # (d) 짧은 쪽 가드 — 정규화한 글이 둘 중 하나라도 짧으면(HIDDEN_AGREE_MIN_LEN 미만) 판단 불가 → 원래 글 유지
-        rep_h4 = {"text": "1쪽 글자\fMX-H1\f3쪽 글자", "facts": [], "tables": []}
-        (pd4 / "rapidocr_ko" / f"{doc4}.json").write_text(
-            json.dumps(
-                {
-                    "text": "",
-                    "boxes": [
-                        {"page": 1, "text": "OCR 1쪽"},
-                        {"page": 2, "text": "완전히 다른 긴 내용의 텍스트인데 짧은 쪽 기준으로 판단 불가라서 원래 글 유지되어야 함"},
-                        {"page": 3, "text": "OCR 3쪽"},
-                    ],
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-        fill_h4 = fill_scan_pages(rep_h4, doc4, dd4, stack4, pd4, pdf4)
-        assert fill_h4["filled"] == {} and "판단 불가" in (fill_h4.get("page_skip") or {}).get("2", ""), fill_h4
-        assert rep_h4["text"] == "1쪽 글자\fMX-H1\f3쪽 글자"
-    finally:
-        _vp.scan_pages_detail = orig_scan_pages_detail
-        (pd4 / "rapidocr_ko" / f"{doc4}.json").write_text(
-            json.dumps(ocr_out4, ensure_ascii=False), encoding="utf-8"
-        )  # 되돌림(아래 통합 테스트가 씀)
-    print(
-        "[selftest] PE1 후속 — fill_scan_pages(): 스캔 쪽만 OCR 글로 채움·쪽 번호 불명 건너뜀·OCR 후보 없음 건너뜀·.pdf_text 아니면 대상 없음·깨진 OCR 글 건너뜀(page_skip)·AD31 reason='hidden' 정규화 후 글자 2-gram 일치도 — 표기만 다름·오타 1~2자는 유지·무관한 내용은 채움·짧으면 판단 불가로 유지 통과"
-    )
-
-    # AD47 검토자 반영(10-08, CONCERN) — reason='hidden_overlap'은 쪽 전체가 아니라 겹친 숨은 글자 상자
-    # 주변(국소)만 보고 교체 여부를 정한다(_hidden_overlap_conflict) — 겹침만으로 쪽 전체를 바꾸던 설계는
-    # 워터마크·접근성용 숨은 글자처럼 우연히 겹친 정상 쪽까지 바꿀 위험이 있었다. 합성 회귀 사례 2개(겹치지만
-    # 맞는 쪽·워터마크형) + 확인된 충돌 1개 — 실제 PDF(image·render_mode=3)로 hidden_overlap_spans()까지 통째로.
-    import io as _io
-
-    from PIL import Image as _PILImage
-
-    def _make_ho_doc(name, hidden_text):
-        """vlm_page.py selftest의 mismatch_doc과 같은 모양(그림 rect(100,110,433,160) 위에 숨은 글자)."""
-        pg_doc = _fitz.open()
-        pg = pg_doc.new_page(width=595, height=842)
-        pg.insert_text((50, 50), "분기 정산 메모 " * 8)
-        buf = _io.BytesIO()
-        _PILImage.new("RGB", (333, 50), "white").save(buf, "PNG")
-        pg.insert_image(_fitz.Rect(100, 110, 433, 160), stream=buf.getvalue())
-        pg.insert_text((110, 140), hidden_text, render_mode=3)
-        path = d4 / name
-        pg_doc.save(path)
-        pg_doc.close()
-        return path
-
-    _ocr_box = {"page": 1, "text": "430,000", "bbox": [104.8, 122.7, 230.8, 143.5]}  # 그림 속 OCR 결과(세 사례 공통)
-    try:
-        _vp.scan_pages_detail = lambda p: {1: "hidden_overlap"}
-
-        # (e) 겹치지만 숨은 글자가 이미 맞는 쪽(표기까지 같음) — 교체 0
-        pdf_ho1 = _make_ho_doc("ho_match.pdf", "430,000")
-        (pd4 / "rapidocr_ko" / "ho_match.pdf.json").write_text(
-            json.dumps({"text": "", "boxes": [_ocr_box]}, ensure_ascii=False), encoding="utf-8"
-        )
-        rep_ho1 = {"text": "분기 정산 메모 430,000", "facts": [], "tables": []}
-        fill_ho1 = fill_scan_pages(rep_ho1, "ho_match.pdf", dd4, stack4, pd4, pdf_ho1)
-        assert fill_ho1["filled"] == {} and "hidden-overlap-local" in (fill_ho1.get("page_skip") or {}).get("1", ""), fill_ho1
-        assert rep_ho1["text"] == "분기 정산 메모 430,000"  # 교체 안 됨 — 원래 글 유지
-
-        # (f) 워터마크형 — 겹치지만 숨은 글자가 그림과 무관(국소 느슨 일치가 낮음) → 교체 0(회귀 방지가 목적)
-        pdf_ho2 = _make_ho_doc("ho_watermark.pdf", "DRAFT COPY ONLY")
-        (pd4 / "rapidocr_ko" / "ho_watermark.pdf.json").write_text(
-            json.dumps({"text": "", "boxes": [_ocr_box]}, ensure_ascii=False), encoding="utf-8"
-        )
-        rep_ho2 = {"text": "분기 정산 메모 DRAFT COPY ONLY", "facts": [], "tables": []}
-        fill_ho2 = fill_scan_pages(rep_ho2, "ho_watermark.pdf", dd4, stack4, pd4, pdf_ho2)
-        assert fill_ho2["filled"] == {} and "hidden-overlap-local" in (fill_ho2.get("page_skip") or {}).get("1", ""), fill_ho2
-        assert rep_ho2["text"] == "분기 정산 메모 DRAFT COPY ONLY"  # 교체 안 됨 — 그림과 무관(워터마크류)
-
-        # (g) 확인된 충돌 — 내용은 같은데 숫자 구분자만 다름(430.000 vs 430,000) → 이 쪽만 OCR 글로 교체
-        pdf_ho3 = _make_ho_doc("ho_conflict.pdf", "430.000")
-        (pd4 / "rapidocr_ko" / "ho_conflict.pdf.json").write_text(
-            json.dumps({"text": "", "boxes": [_ocr_box]}, ensure_ascii=False), encoding="utf-8"
-        )
-        rep_ho3 = {"text": "분기 정산 메모 430.000", "facts": [], "tables": []}
-        fill_ho3 = fill_scan_pages(rep_ho3, "ho_conflict.pdf", dd4, stack4, pd4, pdf_ho3)
-        assert fill_ho3 == {"filled": {"1": "rapidocr_ko"}, "skip": None}, fill_ho3
-        assert rep_ho3["text"] == "분기 정산 메모 430,000"  # AD47② 충돌 숫자만 OCR 표기로(나머지 글자층 유지)
-        assert _number_fixes("합계 430.000 · 1.5", "합계 430,000 1.5") == {"430.000": "430,000"}  # 같은 숫자열 후보 하나만
-        assert _number_fixes("430.000", "430,000 4300.00") == {}  # 후보 2개 — 애매하면 안 바꿈
-        assert _unique_on_page({"430.000": "430,000"}, "합계 430.000\n소계 430.000") == {}  # 쪽에 두 번 — 어느 것인지 몰라 안 바꿈
-        assert _unique_on_page({"430.000": "430,000"}, "합계 ４３０.０００") == {"430.000": "430,000"}  # 전각 숫자도 같은 값으로 셈
+        # AD47 — reason='hidden_overlap'은 쪽 VLM에 글자 상자가 없어 국소 확인을 못 하므로 원래 글 유지(옛 OCR 국소 충돌 확인은 지움)
+        _vp.scan_pages_detail = lambda p: {2: "hidden_overlap"}
+        rep_ho = {"text": "1쪽 글자\f분기 정산 메모 430.000\f3쪽 글자", "facts": [], "tables": []}
+        fill_ho = fill_scan_pages(rep_ho, dd4, pdf4, page_vlm=vl("분기 정산 메모 430,000"))
+        assert fill_ho["filled"] == {} and "hidden-overlap" in (fill_ho.get("page_skip") or {}).get("2", ""), fill_ho
+        assert "430.000" in rep_ho["text"]
     finally:
         _vp.scan_pages_detail = orig_scan_pages_detail
     print(
-        "[selftest] AD47 검토자 반영 — fill_scan_pages() reason='hidden_overlap': 국소(겹친 상자 주변)만 보고 "
-        "표기까지 일치·내용이 그림과 무관(워터마크)이면 유지, 숫자 구분자만 다르면 확인된 충돌로 그 쪽만 교체 통과"
+        "[selftest] PE1 후속 — fill_scan_pages(): 스캔 쪽만 쪽 VLM 글로 채움·쪽 번호 불명 건너뜀·VLM 글 없으면 건너뜀·.pdf_text 아니면 대상 없음·깨진 글 건너뜀(page_skip)·AD31 reason='hidden' 일치도 — 표기만 다름·오타 1~2자는 유지·무관한 내용은 채움·짧으면 판단 불가로 유지·hidden_overlap은 유지 통과"
     )
 
     # 통합 — represent() 안에서 스캔 쪽 채움이 .pdf_text 대표에 적용됨
-    qa4 = {
-        "docs": {doc4: {"format": ".pdf_text", "engines": {"pymupdf": {"ok": True}, "rapidocr_ko": {"ok": True}}, "ref": None, "pages": 3}}
-    }
+    qa4 = {"docs": {doc4: {"format": ".pdf_text", "engines": {"pymupdf": {"ok": True}}, "ref": None, "pages": 3}}}
     (pd4 / "qa.json").write_text(json.dumps(qa4, ensure_ascii=False), encoding="utf-8")
     (pd4 / "_rep").mkdir(exist_ok=True)
     try:
         _vp.scan_pages_detail = lambda p: {2: "chars"}
-        with pc.PIPE.env(PARSE_POST="none"):  # apply_post를 그대로 통과시켜 본문만 확인
+        with pc.PIPE.env(PARSE_POST="none"):  # 쪽 VLM 꺼짐 — 채울 글 없음(옛 OCR 대체 길 없음, pl-46)
             represent(stack4, pd4, src=d4)
         on4 = json.loads((pd4 / "_rep" / f"{doc4}.json").read_text(encoding="utf-8"))
-        assert on4["text"] == "1쪽 글자\fOCR 2쪽 스캔 글\f3쪽 글자" and on4["rep"]["scan_fill"] == {
-            "filled": {"2": "rapidocr_ko"},
-            "skip": None,
-        }
+        assert on4["text"] == "1쪽 글자\f\f3쪽 글자" and on4["rep"]["scan_fill"] == {"filled": {}, "skip": "쪽 VLM 글 없음"}
     finally:
         _vp.scan_pages_detail = orig_scan_pages_detail
-    print("[selftest] PE1 후속 — represent(): 스캔 쪽만 채움(rep.rep.scan_fill 기록) 통과")
+    print("[selftest] PE1 후속 — represent(): 쪽 VLM 꺼짐이면 채우지 않음(rep.rep.scan_fill 기록) 통과")
 
     # 독립 검토 보강 — 스캔 쪽 채움 × 쪽 VLM(vlm_page): 스캔 쪽을 채운 뒤 apply_post가 같은 쪽을 다시 봐도
     # 쪽 번호가 안 섞이고 값이 안 없어진다(옛 PARSE_DEDUP_SCAN 조합 시험 — dedup은 pl-34 10-30에 지움).
@@ -457,23 +309,16 @@ def selftest():
         assert combo["rep"]["scan_fill"] == {"filled": {"2": "vlm_page"}, "skip": None}  # 10-29 — 쪽 VLM 글이 있으면 그것으로 채움
         parts = combo["text"].split("\f")
         assert len(parts) == 3 and parts[0] == "1쪽 글자" and parts[2] == "3쪽 글자"  # 쪽 번호 안 섞임(1·3쪽 그대로)
-        assert "OCR 2쪽 스캔 글" in combo["text"] or "정돈된 VLM 글" in combo["text"]  # 2쪽 글 중 하나는 남음(값 손실 없음)
+        assert "정돈된 VLM 글" in combo["text"]  # 2쪽 글이 남음(값 손실 없음)
         assert "page_alt" not in combo["post"]
     finally:
         _vp.scan_pages_detail = orig_scan_pages_detail
         _vp.vlm_page = orig_vlm_page
     print("[selftest] PE1 후속 — 스캔 쪽 채움 × 쪽 VLM: 쪽 번호 안 섞임·값 손실 없음 통과")
 
-    # 10-29 — 스캔 쪽은 쪽 VLM 글로 채움(OCR 엔진 결과보다 먼저) · VLM 글이 비면 옛 OCR 경로 · apply_post는 채운 쪽을 다시 안 덧붙임
+    # 10-29 — apply_post는 쪽 VLM으로 채운 쪽을 다시 안 덧붙임
     try:
         _vp.scan_pages_detail = lambda p: {2: "chars"}
-        fake_vlm = lambda p: [(2, "VLM 2쪽 스캔 글", {"cached": True})]  # 쪽 VLM 가짜(모델 호출 없음)
-        rep_v = dict(base_rep4)
-        assert fill_scan_pages(rep_v, doc4, dd4, stack4, pd4, pdf4, page_vlm=fake_vlm) == {"filled": {"2": "vlm_page"}, "skip": None}
-        assert rep_v["text"] == "1쪽 글자\fVLM 2쪽 스캔 글\f3쪽 글자", rep_v["text"]
-        rep_e = dict(base_rep4)  # VLM 글이 비면(호출 실패 등) 옛 OCR 엔진 결과로
-        fill_e = fill_scan_pages(rep_e, doc4, dd4, stack4, pd4, pdf4, page_vlm=lambda p: [(2, "", {})])
-        assert fill_e == {"filled": {"2": "rapidocr_ko"}, "skip": None}, fill_e
         _vp.vlm_page = lambda img, det=None: ("VLM 2쪽 스캔 글", {"cached": True})
         with pc.PIPE.env(PARSE_POST="vlm_page"):
             represent(stack4, pd4, src=d4)
@@ -483,7 +328,7 @@ def selftest():
     finally:
         _vp.scan_pages_detail = orig_scan_pages_detail
         _vp.vlm_page = orig_vlm_page
-    print("[selftest] 10-29 — 스캔 쪽 쪽 VLM 글로 채움·VLM 빈 글이면 OCR 경로·채운 쪽 중복 덧붙임 없음 통과")
+    print("[selftest] 10-29 — 스캔 쪽 쪽 VLM 글로 채움·채운 쪽 중복 덧붙임 없음 통과")
 
     # 10-29 P1-1·M4 — 쪽 VLM은 PARSE_POST에 vlm_page가 있을 때만(supsub만이면 호출 0) · 실패한 쪽도 한 represent에서 한 번만 부름
     calls = []
@@ -556,7 +401,7 @@ def selftest():
     for rep_x, fmt, want in (
         (_r("qwen_vlm", "글"), ".pdf_image", True),  # 글자 쪽이 몇 장 섞인 .pdf_image도(is_scan과 달리)
         (_r("qwen_vlm", "글"), ".png", True),
-        (_r("rapidocr_ko", "글"), ".pdf_image", False),  # OCR 엔진이 대표(ocr_engine 켬)
+        (_r("rapidocr_ko", "글"), ".pdf_image", False),  # OCR 엔진이 대표(옛 결과 — 0.2.0부터 OCR 엔진은 파싱에 안 돎)
         (_r("qwen_vlm", "  "), ".pdf_image", False),  # 빈 VLM 글은 쪽 VLM을 막지 않음
         (_r("qwen_vlm", "글"), ".pdf_text", False),
     ):

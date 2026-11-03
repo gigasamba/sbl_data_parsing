@@ -80,7 +80,7 @@
 ```bash
 PYTHONPATH=. .venv/bin/python -c "import common as c; from common.core import artifacts as a; print(c.FINGERPRINT, {l: a.code_fp(l) for l in sorted(a.LAYER_CODE)})"
 ```
-지금 기준값은 PRD [e2-02](docs/prd/test.md#e2-02)에 있다(바뀐 과정과 되돌리는 방법은 [refactor.md](docs/refactoring/refactor.md) 부록 1~3).
+지금 기준값은 PRD [e2-02](docs/prd/test.md#e2-02)에 있다(0.1.0 때 바뀐 과정과 되돌리는 방법은 [docs/history/deploy_0_1_0.md](docs/history/deploy_0_1_0.md) §2 부록 1~3).
 
 **운영 접속 가드(필수):**
 - `deploy/host/scripts/run_docs.py`는 **PC에서 실행하지 않는다**(운영 EDW와 Object Storage에 접속한다). PC에서는 문법 확인, `--help`, `configure()`까지만 확인한다.
@@ -91,7 +91,7 @@ PYTHONPATH=. .venv/bin/python -c "import common as c; from common.core import ar
 ## 5. 작업 흐름 — 커밋 전과 push 전
 
 ### 5-1. 브랜치(외부망 git flow — D-009)
-`main`(내부망에 배포할 최종 코드 — `release/*`에서만 머지하고 버전 태그를 붙인다), `develop`(통합 브랜치 — PR로만 머지), `feature/<기능명>`(develop에서 분기해 develop으로 머지), `release/<버전>`(빌드·배포 오류 수정만). `main`과 `develop`에는 직접 push하지 않는다. 내부망 쪽 코드 관리 방식(P-08)은 아직 정하지 않았다 — `refactor.md` "최종" ⑤.
+`main`(내부망에 배포할 최종 코드 — `release/*`에서만 머지하고 버전 태그를 붙인다), `develop`(통합 브랜치 — PR로만 머지), `feature/<기능명>`(develop에서 분기해 develop으로 머지), `release/<버전>`(빌드·배포 오류 수정만). `main`과 `develop`에는 직접 push하지 않는다. 내부망 쪽 코드 관리 방식(P-08)은 내부망 gitea로 정했다 — [docs/operations/gitea-guide.md](docs/operations/gitea-guide.md).
 
 ### 5-2. 커밋 전 점검(필수)
 ```bash
@@ -172,7 +172,7 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 - 기본값은 유료 호출 차단(`no_paid_calls: true`)이다. 개발 중에는 **기능 확인만** 한다(문서 2~3건, 질문 몇 개).
 - 실행할 때마다 상한을 건다 — `LLM_BUDGET_USD`, `LLM_MAX_CALLS`, `LLM_SPEND_FILE`(비용 장부). 외부 전송은 `<PREFIX>_ALLOW_EXTERNAL`(예 `EMBED_ALLOW_EXTERNAL`)이 켜지고 `RUN_ENV=local`일 때만 된다.
 - 외부 허용은 루트 settings.yaml에 둬도 된다. 그때는 `no_paid_calls: true`를 기본으로 두고, 외부 호출이 필요한 동안만 `false`로 바꾼 뒤 되돌린다(평소 테스트가 외부를 호출하지 않도록). 한 번만 풀 때는 `--set`을 쓴다.
-- `role=llm`을 `adk.complete`로 직접 호출하면 예산 장부를 거치지 않는다. 실제 호출은 `llm.chat`이나 `run_agent(per_turn_admit=True)`로 한다.
+- 모델 호출은 `llm.chat`·`llm.complete`만 쓴다(예산 장부·가드를 거침). PC 답변 점검의 여러 턴 도구 반복은 `validation/e2e/tool_loop.py`가 맡는다(턴마다 예산 확인 — `llm.admit_turn()`).
 - 기술 스택 비교처럼 호출이 많은 작업은 예상 비용(호출 수 × 평균 토큰 × 단가)을 먼저 보고하고 승인을 받는다. 서버는 내부망 모델만 쓴다(외부 모델은 거부).
 - (바뀐 과정: [pl-11](docs/prd/ops.md#pl-11))
 
@@ -182,7 +182,7 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 
 - 기능 요건·미개발 항목은 [docs/PRD.md](docs/PRD.md)와 `docs/prd/<카테고리>.md`에 있다(§10).
 - 문서 지도는 [docs/INDEX.md](docs/INDEX.md)다. 문서를 추가하거나 옮기면 같은 커밋에서 이 지도를 고친다. 새 문서는 꼭 필요할 때만 만들고, 먼저 기존 문서의 섹션으로 넣을 수 있는지 본다.
-- 서버나 사람이 확인해야 하는 일(저장소 안에서 끝낼 수 없는 것)은 [refactor.md](docs/refactoring/refactor.md)에 `C-xx`로 추가하고, 배포 순서는 그 파일의 "최종 — 사람이 할 일"에 둔다.
+- 서버나 사람이 확인해야 하는 일(저장소 안에서 끝낼 수 없는 것)은 [refactor.md](docs/refactoring/refactor.md)에 `C-xx`로 추가하고, 배포 순서는 [release-and-patch.md](docs/operations/release-and-patch.md) §8(0.2.0 배포 — 사람이 할 일)에 둔다.
 - 결정 사항(`D-xxx`)·미정 사항은 PRD 행과 refactor.md에 둔다(옛 결정 장부는 [docs/history/refactor_plan.md](docs/history/refactor_plan.md) 7·8절). 지난 기록은 `docs/history/`에 둔다. 운영 절차는 `docs/operations/`(서버 가이드, 릴리스, 설정 가이드)에 있다.
 
 ## 9. Claude로 작업할 때
