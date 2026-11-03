@@ -26,13 +26,15 @@ def test_applog_migration():
     schema = f"test_applog_{uuid.uuid4().hex[:10]}"
     eng = dbtool.engine()
     try:
-        with settings.isolated(NO_PAID_CALLS="1"):
+        with settings.isolated():
             for cmd in ("up", "up", "check", "maintain", "check"):
                 result = subprocess.run(
                     [sys.executable, "-m", "common.store.db.dbtool", cmd, "--target", "applog", "--schema", schema],
                     env=settings.child_env(),
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",  # Windows PC: 자식의 stderr(libpq 등)가 cp949일 수 있음
                     timeout=30,
                 )
                 assert result.returncode == 0, result.stdout + result.stderr

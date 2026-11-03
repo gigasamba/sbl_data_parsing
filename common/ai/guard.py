@@ -7,11 +7,15 @@ import http.client
 import ipaddress
 import os
 import socket
+import threading
+import time
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 from common.config import layout as L
 from common.config.settings import by_env, cfg, checked, external_models_allowed, guard_run_env
+from common.core.paths import SPEND_DIR
 
 _SUFFIX = (".local", ".internal", ".corp", ".lan")
 
@@ -128,12 +132,6 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
-_SPEND_LOCAL = [0.0]  # LLM_SPEND_FILE이 없을 때 이 프로세스 장부
-import threading as _threading  # noqa: E402
-
-_LOCAL_LOCK = _threading.Lock()  # 프로세스 안 스레드 간 확인+가산 원자화(10-05 재검증)
-
-
 class _FileLock:
     """장부 파일 옆 .lock — 확인+예약을 프로세스 간 원자적으로(10-05 독립 검토: 확인·기록 사이 틈으로 동시 호출이 상한 초과)."""
 
@@ -186,98 +184,62 @@ def budget_usd():
     return cfg().models.guard.budget_usd
 
 
-def spend_total():
+def ledger_file(day=None):
+    """오늘(현지 날짜) 지출 장부 파일 — 상한은 하루 단위(사용자 11-03 — PC 사용자마다 하루 0.1달러 기본). spend_file이 있으면 그 이름 뒤에
+    날짜를 붙이고(`spend.json` → `spend-2026-11-03.json`), 없으면 <저장소>/output/llm_spend/<날짜>.txt — 그 작업 폴더의 모든 프로세스가 공유
+    (worktree·다른 체크아웃은 따로).
+    외부 호출은 RUN_ENV=local(PC)에서만 되므로 "사람마다" = PC·OS 사용자마다(서버는 외부 모델을 거부)."""
+    day = day or time.strftime("%Y-%m-%d")
     f = cfg().models.guard.spend_file
-    return _ledger_sum(f) if f else _SPEND_LOCAL[0]
+    return Path(f).with_name(f"{Path(f).stem}-{day}{Path(f).suffix}") if f else SPEND_DIR / f"{day}.txt"
+
+
+def spend_total():
+    return _ledger_sum(ledger_file())
+
+
+# 선차감한 날짜(스레드마다) — 정산·반환은 선차감과 같은 날 장부로(자정을 넘겨 돌아온 환불이 다음 날 상한을 늘리지 않게 — 리뷰 11-03).
+# ponytail: 한 스레드가 정산 전에 다른 선차감을 하면 마지막 날짜를 씀 — 지금 호출 길(선차감→호출→정산)은 스레드마다 하나씩, 겹치면
+# spend_reserve가 장부 파일을 돌려주고 호출자가 들고 다니게 바꿈.
+_DAY = threading.local()
 
 
 def spend_reserve(usd, label):
-    """유료 호출 전 예상 최대 비용을 먼저 장부에 씀(선차감) — 상한(LLM_BUDGET_USD)을 넘으면 BudgetExceeded(호출 안 함).
-    LLM_SPEND_FILE(실행 전체가 공유)이 있으면 파일 잠금 안에서 합계 확인+기록."""
-    budget, f = budget_usd(), cfg().models.guard.spend_file  # S7b — 예산은 float|None(옛 글자 "0"도 참이었으므로 is not None)
-    if f:
-        with _FileLock(f):
-            total = _ledger_sum(f)
-            if budget is not None and total + usd > budget:
-                raise BudgetExceeded(f"LLM_BUDGET_USD={budget} — 누적 ${total:.2f} + 이번 {label} 예상 ${usd:.4f} 초과, 호출 안 함")
-            with open(f, "a", encoding="utf-8") as fh:
-                fh.write(f"{usd:.6f}\n")
-        return
-    with _LOCAL_LOCK:
-        if budget is not None and _SPEND_LOCAL[0] + usd > budget:
-            raise BudgetExceeded(f"LLM_BUDGET_USD={budget} — 누적 ${_SPEND_LOCAL[0]:.2f} + {label} ${usd:.4f} 초과, 호출 안 함")
-        _SPEND_LOCAL[0] += usd
+    """유료 호출 전 예상 최대 비용을 먼저 오늘 장부에 씀(선차감) — 하루 상한(LLM_BUDGET_USD)을 넘으면 BudgetExceeded(호출 안 함).
+    파일 잠금 안에서 합계 확인+기록(프로세스·스레드 사이 원자적)."""
+    _DAY.d = time.strftime("%Y-%m-%d")
+    budget, f = budget_usd(), ledger_file(_DAY.d)  # S7b — 예산은 float|None(옛 글자 "0"도 참이었으므로 is not None)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    with _FileLock(f):
+        total = _ledger_sum(f)
+        if budget is not None and total + usd > budget:
+            raise BudgetExceeded(f"LLM_BUDGET_USD={budget}(하루) — 오늘 누적 ${total:.2f} + 이번 {label} 예상 ${usd:.4f} 초과, 호출 안 함")
+        with open(f, "a", encoding="utf-8") as fh:
+            fh.write(f"{usd:.6f}\n")
 
 
 def spend_settle(delta):
-    """호출 뒤 실제−예상 정산(음수 가능). 사용량을 모르면 부르지 않음 = 예상 최대치가 그대로 남음(보수적)."""
+    """호출 뒤 실제−예상 정산(음수 가능) — 이 스레드가 선차감한 날의 장부에(없으면 오늘). 사용량을 모르면 부르지 않음 = 예상 최대치가
+    그대로 남음(보수적)."""
     if not delta:
         return
-    f = cfg().models.guard.spend_file
-    if f:
-        with _FileLock(f), open(f, "a", encoding="utf-8") as fh:
-            fh.write(f"{delta:.6f}\n")
-    else:
-        with _LOCAL_LOCK:
-            _SPEND_LOCAL[0] += delta
+    f = ledger_file(getattr(_DAY, "d", None))
+    f.parent.mkdir(parents=True, exist_ok=True)
+    with _FileLock(f), open(f, "a", encoding="utf-8") as fh:
+        fh.write(f"{delta:.6f}\n")
 
 
 # llm.chat 밖에서 바로 부르는 유료 호출(VLM 그림·쪽, 임베딩, 재랭크)의 호출당 예상 비용($) — 예산 선차감용(보수적 고정값, env로 덮어씀)
 _EST_USD = {"VLM": 0.02, "EMBED": 0.001}
 
 
-class ScopeExceeded(RuntimeError):
-    pass
-
-
-def external_scope():
-    """EXTERNAL_SCOPE(기본 func) — "e2e"가 아니면 전부 func로 본다(미지값도 안전하게 보수적인 쪽, AD43)."""
-    return cfg().models.guard.external_scope  # 빈 글자는 그대로(옛 get(X, "func")처럼 — blank="keep")
-
-
-def check_scope(urls, *, n_combos=None, n_docs=None, n_questions=None):
-    """AD43 — 외부(OpenRouter 등) 모델 사용 '범위' 가드(require_internal·precheck의 두 겹·예산·NO_PAID_CALLS와
-    별개의 세 번째 겹, 여기서 그 가드들을 느슨하게 하지 않는다). urls: 이번 실행이 쓰는 모델 엔드포인트 주소들
-    (LLM·VLM·EMBED 등 — None·빈 문자열 섞여도 됨). 전부 내부망이면 바로 통과(내부 실행은 영향 없음).
-    외부 주소가 하나라도 있으면:
-      ① 조합(n_combos) ≥2 — scope 무관 항상 거부(스택 조합별 성능 비교는 서버 내부 모델로 돌리세요 · 전체 E2E
-         점검은 조합 1개로 끝까지 도는 것만 EXTERNAL_SCOPE=e2e로 허용).
-      ② external_scope() != "e2e"(기본 func) — 기능 시험만:
-         - LLM_BUDGET_USD 미설정이면 거부(예산 상한 없는 외부 호출 금지)
-         - n_docs > EXTERNAL_MAX_DOCS(기본 10) 또는 n_questions > EXTERNAL_MAX_QUESTIONS(기본 20)면 거부
-      scope=="e2e"면 ②는 건너뜀(①이 이미 조합 1개로 막아 둠)."""
-    if not any(u and not is_internal(u) for u in urls):
-        return
-    if n_combos is not None and n_combos >= 2:
-        raise ScopeExceeded(
-            f"조합 {n_combos}개 + 외부 주소 — 스택 조합별 성능 비교는 서버 내부 모델로 돌리세요"
-            f"(전체 E2E 점검은 EXTERNAL_SCOPE=e2e로 조합 1개만 허용)"
-        )
-    if external_scope() != "e2e":
-        if budget_usd() is None:
-            raise ScopeExceeded("EXTERNAL_SCOPE=func(기본) — LLM_BUDGET_USD 없이 외부 호출 금지. 성능 비교는 서버 내부 모델로 돌리세요")
-        max_docs = cfg().models.guard.external_max_docs
-        max_q = cfg().models.guard.external_max_questions
-        if n_docs is not None and n_docs > max_docs:
-            raise ScopeExceeded(
-                f"EXTERNAL_SCOPE=func — 문서 {n_docs}개 > 상한 {max_docs}(EXTERNAL_MAX_DOCS). 성능 비교는 서버 내부 모델로 돌리세요"
-            )
-        if n_questions is not None and n_questions > max_q:
-            raise ScopeExceeded(
-                f"EXTERNAL_SCOPE=func — 질문 {n_questions}개 > 상한 {max_q}(EXTERNAL_MAX_QUESTIONS). 성능 비교는 서버 내부 모델로 돌리세요"
-            )
-
-
 def precheck(url, prefix):
     """모델 호출 전 비용 관문(원래 urlopen 안에 있던 사전 검사 — GA, urlopen·common.ai.llm이 공유하게 뽑음).
-    require_internal(외부 주소 거부)은 별개로 호출자가 먼저 부른다. 비용 관문(10-05): NO_PAID_CALLS=1이면 외부 주소
-    호출 자체를 거부(추정·preflight·context-only) · LLM_BUDGET_USD가 있으면 llm.chat 밖 호출(VLM·EMBED·RERANK)도
+    require_internal(외부 주소 거부)은 별개로 호출자가 먼저 부른다. 비용 관문: LLM_BUDGET_USD가 있으면 llm.chat 밖 호출(VLM·EMBED·RERANK)도
     호출 전 고정 예상액을 선차감(LLM은 llm.chat이 토큰 기준으로 함).
     반환: 이번 호출이 선차감한 금액(0.0이면 내부망·LLM_BUDGET_USD 미설정 등 정산 대상 아님) — BR45, 호출자가 응답의
     실제 토큰 usage를 알게 된 뒤 settle_tokens(이 값, ...)로 사후 정산한다(선차감 당시엔 토큰 수를 모르니 고정값)."""
     external = not is_internal(url)
-    if external and cfg().models.guard.no_paid_calls:
-        raise BudgetExceeded(f"NO_PAID_CALLS=1 — 외부 유료 호출 차단({prefix}: {urllib.parse.urlparse(url).hostname})")
     if external and prefix != "LLM" and budget_usd() is not None:
         usd = by_env(f"{prefix}_EST_USD", _EST_USD.get(prefix, 0.01))  # 칸 없는 접두·값 없음은 _EST_USD 표
         spend_reserve(usd, prefix)

@@ -43,7 +43,7 @@ class McpSearchWeights(Section):
 
 
 class McpDev(Section):
-    mcp_url: str | None = F("http://127.0.0.1:18765/mcp", "MCP_URL", "검증 페이지가 붙을 MCP 서버 URL", blank="keep")
+    mcp_url: str | None = F("http://127.0.0.1:8765/mcp", "MCP_URL", "검증 페이지가 붙을 MCP 서버 URL", blank="keep")
     ui_port: Port | None = F(8790, "UI_PORT", "검증 페이지(validation/search_ui) 서버 포트")
 
 

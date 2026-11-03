@@ -27,17 +27,19 @@ def test_run_spans_reach_pg_and_perf_reads_them(tmp_path):
     schema = f"test_t2perf_{uuid.uuid4().hex[:8]}"
     eng = dbtool.engine()
     try:
-        with settings.isolated(NO_PAID_CALLS="1"):
+        with settings.isolated():
             result = subprocess.run(
                 [sys.executable, "-m", "common.store.db.dbtool", "up", "--target", "applog", "--schema", schema],
                 env=settings.child_env(),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",  # Windows PC: 자식의 stderr(libpq 등)가 cp949일 수 있음
                 timeout=60,
             )
             assert result.returncode == 0, result.stdout + result.stderr
         with (
-            settings.isolated(NO_PAID_CALLS="1", APPLOG_DB_ENABLED="1", APPLOG_DIR=str(tmp_path), APPLOG_FALLBACK_DIR=str(tmp_path / "fb")),
+            settings.isolated(APPLOG_DB_ENABLED="1", APPLOG_DIR=str(tmp_path), APPLOG_FALLBACK_DIR=str(tmp_path / "fb")),
             mock.patch.object(logsink, "_write_db", partial(logsink._write_db, schema=schema)),
             mock.patch.object(runtrace, "_code_fp", lambda: {"p0": "t2"}),
         ):

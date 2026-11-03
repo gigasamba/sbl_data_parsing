@@ -152,9 +152,7 @@ def test_tool_loop_http():  # 0.2.0(pl-46) — 실제 HTTP 길(가짜 로컬 모
         return {"evidence": [_EV]}
 
     try:
-        with settings.isolated(
-            LLM_BASE_URL=f"http://127.0.0.1:{srv.server_address[1]}/v1", LLM_MODEL="mock", LLM_FAKE=None, LLM_MAX_CALLS=None
-        ):
+        with settings.isolated(LLM_BASE_URL=f"http://127.0.0.1:{srv.server_address[1]}/v1", LLM_MODEL="mock", LLM_FAKE=None):
             before = L.usage()["calls"]
             text, traj, usage = tool_loop.run(AG.AGENT_ID, "pH?", AG.make_tools(call, _contracts(), pool, 3), timeout=30)
             used = L.usage()["calls"] - before

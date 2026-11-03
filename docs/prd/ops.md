@@ -131,10 +131,13 @@
 <a id="pl-11"></a>
 ## pl-11 · 모델 호출, 비용, 외부 전송 가드(공용)
 - 이유: 폐쇄망 서버는 외부 모델을 절대 부르면 안 되고, PC 호출은 싸게 유지해야 한다.
-- 무엇: OpenAI 호환 역할 llm/vlm/embed. 서버(dev/prd)는 외부 모델 거부. 외부 전송은 `*_ALLOW_EXTERNAL` + `RUN_ENV=local`이어야 함. 예산, 호출 상한, RPM, 비용 장부, 응답 캐시, 시험용 가짜 LLM.
+- 무엇: OpenAI 호환 역할 llm/vlm/embed. 서버(dev/prd)는 외부 모델 거부. 외부 전송은 `*_ALLOW_EXTERNAL` + `RUN_ENV=local`이어야 함. 하루 지출 상한, RPM, 비용 장부, 응답 캐시, 시험용 가짜 LLM.
 - 10-29(사용자): 외부 허용은 루트 settings.yaml에 둬도 됨(설정 창구는 하나).
 - 파일: `common/ai/guard.py`, `common/ai/llm.py`, `common/config/settings.py`.
 - 결정(사용자 11-02): 개발 서버(dev)부터 내부망 GLM, PC(local)는 OpenRouter(유료 — 상한은 CLAUDE.md §7).
+- 하루 지출 상한(사용자 11-03): `common.models.guard.budget_usd` 기본 0.1달러 — 외부 모델 호출의 하루(현지 날짜) 합계, PC 사용자마다. 비운 칸은 기본값. 외부 호출은 `RUN_ENV=local`에서만 되고 서버(dev·prd)는 외부 모델을 거부하므로 "사람마다" = PC·OS 사용자마다.
+- 장부: 날짜마다 파일 하나 — `spend_file`이 있으면 그 이름 뒤에 날짜(`spend.json` → `spend-<날짜>.json`), 비우면 `<저장소>/output/llm_spend/<날짜>.txt`(`common.core.paths.SPEND_DIR`). 그 작업 폴더의 모든 프로세스가 파일 잠금으로 하루 합계 하나를 나눠 쓴다(worktree·다른 체크아웃은 장부가 따로). 정산·반환은 선차감한 날의 장부로 간다(스레드마다 선차감 날짜를 기억). 시험 자식(`case_env`)은 임시 장부를 쓴다.
+- 외부 LLM은 단가(`PRICES` 또는 `LLM_PRICE_IN·OUT`)를 알아야 부른다 — 모르면 상한을 지킬 수 없어 거부(`llm.chat`·여러 턴 도구 왕복 `admit_turn` 같음). 턴 정산은 role=llm 단가로. 한 번의 호출이 사후 정산으로 상한을 조금 넘을 수 있고, 다음 호출부터 거부된다. 호출 수는 `usage()` 집계로만 센다.
 - Status: done
 
 <a id="op-01"></a>

@@ -22,17 +22,7 @@ def selftest():
         except RuntimeError as ex:
             assert "외부 주소" in str(ex), ex
 
-    # NO_PAID_CALLS=1 — 외부 호출 차단(외부 허용이 있어도, require_internal은 통과하지만 precheck가 막음)
-    from common.ai.guard import BudgetExceeded
-
-    # (옛 시험은 위 블록의 VLM_BASE_URL·VLM_MODEL을 지우지 않고 이어 씀 — 같은 값을 다시 준다)
-    with COMMON.env(VLM_BASE_URL="https://openrouter.ai/api/v1", VLM_MODEL="x", VLM_ALLOW_EXTERNAL="1", NO_PAID_CALLS="1"):
-        try:
-            complete("vlm", [{"role": "user", "content": "x"}])
-            raise AssertionError("NO_PAID_CALLS인데 통과됨")
-        except BudgetExceeded:
-            pass
-    print("[selftest] 외부 주소 거부 · NO_PAID_CALLS 차단 통과")
+    print("[selftest] 외부 주소 거부 통과")  # 옛 NO_PAID_CALLS 차단 사례는 11-03에 스위치와 함께 지움
 
     # BLOCK(보안 독립 검토 2026-10-06) — preguarded 기본값은 항상 가드, 예외는 명시한 호출자만.
     # ① role="llm"이어도 기본값(preguarded=False)이면 외부 주소는 전송 전에 거부(cli/ping_models.py가 이 경로로 복귀 — 전환
@@ -296,7 +286,7 @@ def selftest():
             text, u = complete("vlm", [{"role": "user", "content": "x"}], max_tokens=500, agent="page_transcribe")
             assert text == "실제 답" and len(hitsD) == 2, (text, hitsD)
             assert u.get("calls") == 2 and u.get("completion_tokens") == 110, u
-            assert _L16.usage()["calls"] - before16 == 2, "재요청도 공유 장부(LLM_MAX_CALLS)에 집계돼야 함(counted)"
+            assert _L16.usage()["calls"] - before16 == 2, "재요청도 공유 장부(호출 수)에 집계돼야 함(counted)"
     finally:
         srvD.shutdown()
 

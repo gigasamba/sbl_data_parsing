@@ -80,7 +80,7 @@ def _upgrade(schema, dim):
 
 def deploy(db, dim):
     """S8a(5-4, 사용자 10-28 Q4 a) — 표·색인·뷰는 migrate(Alembic 기준판 — 옛 schema.sql + 이 함수의 색인 DDL 글자 그대로)가 만든다.
-    확인(vector 확장 — PG_CREATE_EXTENSION 옵트인·남의 스키마 거부·차원)과 backfill은 전처럼. SQLite 대역(pg_standin)은 판 관리 밖 —
+    확인(vector 확장 — PG_CREATE_EXTENSION 옵트인·남의 스키마 거부·차원)은 이 함수가. SQLite 대역(pg_standin)은 판 관리 밖 —
     표 정의에서 만든 DDL로(HNSW·GIN 색인은 대역이 흉내 내지 않음). 실측(30k×4096, 개발 PC): 정확 180~220 ms · 이진 양자화 HNSW+재정렬
     5~7 ms(색인 24 MB, 생성 6.6 s)."""
     from common.store.db import dbtool

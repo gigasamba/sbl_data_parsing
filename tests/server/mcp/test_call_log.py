@@ -391,7 +391,7 @@ build("127.0.0.1", 8765).run(transport="stdio")
             "-c",
             script,
             cwd=paths.PROJ_ROOT,
-            env=settings.child_env(NO_PAID_CALLS="1", APPLOG_DIR="", APPLOG_DB_ENABLED="0"),
+            env=settings.child_env(APPLOG_DIR="", APPLOG_DB_ENABLED="0"),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
