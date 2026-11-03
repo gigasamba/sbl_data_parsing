@@ -89,7 +89,7 @@ NOT_LAYER = (
     "pipeline/transform/structure/glossary_suggest.py",
 )
 # 지문 계산에서 따라가지 않는 common 파일·폴더(결과와 무관 — 기록·DB 연결·표 정의·설정 도구). 11-03 구조 검토: 로그 → DB 기록 → 표 정의로
-# 이어져 DB 표 칸 하나만 고쳐도 모든 층 지문이 바뀌었음. 설정 모델(config/settings.py)은 기본값이 결과를 바꿀 수 있어 그대로 둔다.
+# 이어져 DB 표 칸 하나만 고쳐도 모든 층 지문이 바뀌었음. 설정 모델(config/settings.py)은 기본값이 결과를 바꿀 수 있어, store/pg.py는 검색(r)이 벡터 글자(vec)를 만들어 그대로 둔다.
 CODE_FP_SKIP = (
     "core/artifacts.py",
     "core/jsonlog.py",
@@ -97,7 +97,6 @@ CODE_FP_SKIP = (
     "core/span.py",
     "core/resources.py",
     "store/logsink.py",
-    "store/pg.py",
     "store/pg_standin.py",
     "store/mssql.py",
     "store/objectstore.py",
