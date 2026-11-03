@@ -113,7 +113,7 @@ MCP args/result는 문서 원문을 포함할 수 있다. settings에서 비밀 
 | `MCP_HOST` | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부 |
 | `FULLTEXT_SIGN_SECRET`(`search.server.fulltext_secret`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 파일 손잡이 sfid 서명 키 — 비밀 칸(settings.yaml에만). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 sfid가 모두 무효(사용자에게 먼저 알림 — mc-17, refactor.md C-75) |
 | `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 호출부 env에만 · 공백만인 토큰은 없음과 같음 · `MCP_PORT` 형식이 틀리면 시작 실패(값은 안 찍음) |
-| `PARSE_SERVICE_TOKEN` | 비움(→ `MCP_TOKEN`) | `parse_document`가 parse 작업 서비스를 부를 때 쓰는 토큰 — data-pipeline-parse의 `PARSE_MCP_TOKEN`과 같은 값. 이것도 `MCP_TOKEN`도 없으면(공백만 포함) `parse_document`가 "parse 서비스 토큰 없음" 오류를 돌려줌(코드 대체 토큰 없음 — `refactor.md` C-44) |
+| `PARSE_SERVICE_TOKEN` | 비움(→ `MCP_TOKEN`) | `parse_document`가 parse 작업 서비스를 부를 때 쓰는 토큰 — data-pipeline-mcp(11-03 — 옛 data-pipeline-parse)의 `PARSE_MCP_TOKEN`과 같은 값. 이것도 `MCP_TOKEN`도 없으면(공백만 포함) `parse_document`가 "parse 서비스 토큰 없음" 오류를 돌려줌(코드 대체 토큰 없음 — `refactor.md` C-44) |
 | `PARSE_MCP_MAX_MB`(`ops.runtime.parse_max_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음(두 컨테이너의 settings.yaml에 같은 값). 옛 `ops.services.parse_mcp.max_mb`(기본 64)는 지움 |
 | `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음 |
 | `MCP_ALLOWED_HOSTS` | 비움 | `MCP_HOST`가 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |

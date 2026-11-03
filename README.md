@@ -59,7 +59,7 @@ MCP 도구 4개의 이름과 입출력은 외부 클라이언트와의 계약이
 
 | 이미지             | 역할                                 | 컨테이너                                                                                                             |
 | --------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `data-pipeline` | parse · structure · load · publish | 1회 실행 job(`parse`, `structure`, `load`, `publish`) · 상주(일 없이 떠 있음 — `run_docs.py`가 docker exec) `data-pipeline-parse`, `data-pipeline-structure` |
+| `data-pipeline` | parse · structure · load · publish | 상주 컨테이너 둘 — 일괄 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`·`trigger.sh`·`run_tool.sh`가 docker exec, 11-03 옛 `data-pipeline-parse`·`data-pipeline-structure`를 합침) · MCP `parse_document` 전용 `data-pipeline-mcp`(작업 서비스, CPU 우선 — rn-03) · 이미지 점검은 `docker run --rm … selftest` |
 | `mcp-server`    | 검색 MCP(상주)                         | 상주 `mcp-server`                                                                                                  |
 
 
@@ -387,7 +387,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 - run_env는 `local`(PC)·`dev`(개발 서버)·`prd`(운영 서버) 셋뿐(`stage`는 10-29에 없앰).
 - 어느 코드인가: ①은 PC의 git 커밋(묶음 안 `CODE_COMMIT`, 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`), ②는 개발 서버에서 시험한 코드 폴더 그대로(구운 이미지 라벨에 커밋·실행 이미지 ID).
 - 의존성(`requirements*`·휠·Dockerfile·assets)이 바뀌면 ①에서 새 실행 이미지가 필요하다(코드의 `deploy/docker/DEPS_HASH`와 이미지 지문이 다르면 시작·굽기 모두 거부).
-- PC에서 `IMAGE_TARGET=pipeline`·`mcp`로 코드가 든 이미지를 직접 빌드하는 길은 PC 시험(이미지 관문)·비상용으로만 남긴다 — 운영 반입은 ②(개발에서 시험한 그대로). 오버레이 패치(§5-8)도 운영 서버 비상 수정용.
+- PC에서 `IMAGE_TARGET=pipeline`·`mcp`로 코드가 든 이미지를 직접 빌드하는 길은 PC 시험(이미지 관문)·비상용으로만 남긴다 — 운영 반입은 ②(개발에서 시험한 그대로). 옛 오버레이 패치(덧씌우기 compose)는 11-03에 지웠다(§5-8).
 
 #### 개발 서버 설치 — 코드 git·이미지 git을 zip으로 받아 한 폴더에(①, 사용자 10-30)
 
@@ -440,7 +440,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 ### 5-1. 버전 올리기
 
 - `release/<버전>` 브랜치에서 `VERSION`을 고치고, main 머지 커밋에 git 태그 `v<버전>`(annotated)을 붙인다. 이미지 태그는 `v` 없이 버전만 쓴다.
-- **MAJOR** — MCP 도구 계약 · DB 스키마 · 핸드오프 형식이 깨질 때 / **MINOR** — 새 이미지 버전(의존성·Dockerfile·마운트 경로) 또는 큰 기능 / **PATCH** — 오버레이 패치(코드만 교체)
+- **MAJOR** — MCP 도구 계약 · DB 스키마 · 핸드오프 형식이 깨질 때 / **MINOR** — 새 이미지 버전(의존성·Dockerfile·마운트 경로) 또는 큰 기능 / **PATCH** — 코드만 교체(개발 서버 코드 폴더 → 굽기)
 - 자세한 규칙: [release-and-patch.md](docs/operations/release-and-patch.md) §5
 
 ### 5-2. PC에서 — 이미지 만들기와 이미지 저장소에 올리기
@@ -472,7 +472,7 @@ bash deploy/release/ship_stage.sh pipeline-runtime mcp-runtime                 #
 5. DB 마이그레이션 — `migrate check` → `up`/`stamp`(③).
 6. 연결 점검 — 모델 주소 `run_tool.sh ping_models`(LLM·VLM·임베딩 — 하나라도 실패면 종료 1), `run_tool.sh check_env`, PG `migrate check`(④).
 7. 이미지 점검 — `check-modules`, `selftest`(⑤).
-8. 띄우는 순서 — pgvector → 파이프라인 상주 컨테이너(`dc up -d data-pipeline-parse data-pipeline-structure`, §5-5) → MCP 파싱 작업 서비스(§5-5 표) → 검색 MCP(`mcp_up.sh`, ⑥). 띄운 뒤 MCP `/health`가 200이고 `parse_document` 시험 파일 1건이 결과를 돌려주는지 본다.
+8. 띄우는 순서 — pgvector → 파이프라인 상주 컨테이너(`dc up -d data-pipeline data-pipeline-mcp`, §5-5 — 파싱 작업 서비스는 `data-pipeline-mcp`가 스스로 띄움) → 검색 MCP(`mcp_up.sh`, ⑥). 띄운 뒤 MCP `/health`가 200이고 `parse_document` 시험 파일 1건이 결과를 돌려주는지 본다.
 
 **포트 — 모두 settings.yaml 칸(서버·사용자마다 다르게 둘 수 있음, 비우면 기본값)**
 
@@ -493,7 +493,8 @@ bash deploy/release/ship_stage.sh pipeline-runtime mcp-runtime                 #
 ```bash
 export SERVER_ENV_DIR=/srv/rag/env DOCKER=podman
 dc() { ( . deploy/host/scripts/settings_env.sh && load_settings && . deploy/host/scripts/image_vars.sh && code_dir_default DATA_PIPELINE_IMAGE && \
-         $DOCKER compose -f deploy/host/compose/compose.pipeline.yml ${CODE_DIR:+-f deploy/host/compose/compose.code.yml} "$@" ); }
+         $DOCKER compose -f deploy/host/compose/compose.pipeline.yml -f deploy/host/compose/compose.pipeline-mcp.yml \
+         ${CODE_DIR:+-f deploy/host/compose/compose.code.yml -f deploy/host/compose/compose.code.pipeline-mcp.yml} "$@" ); }
 ```
 
 **② 설정 파일과 결과 폴더**
@@ -520,7 +521,7 @@ mkdir -p /srv/rag/output && chown 10001:<운영 그룹> /srv/rag/output && chmod
 
 모델 주소는 모두 내부망 주소여야 한다(서버는 외부 모델 호출을 거부). 옛 배치 settings.yaml(op-08 전)은 `python -m common.config.migrate <옛 settings.yaml> --out <새 파일>`로 바꾼다.
 
-**③ DB 마이그레이션** — 적재·검색을 하기 전에 끝낸다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다). 운영 작업(`run_tool.sh`·`trigger.sh`)은 상주 컨테이너 안에서 돌므로(사용자 11-02 — 1회 job 컨테이너 없음) 먼저 띄운다: `dc up -d data-pipeline-parse data-pipeline-structure`.
+**③ DB 마이그레이션** — 적재·검색을 하기 전에 끝낸다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다). 운영 작업(`run_tool.sh`·`trigger.sh`)은 상주 컨테이너 안에서 돌므로(사용자 11-02 — 1회 job 컨테이너 없음) 먼저 띄운다: `dc up -d data-pipeline`.
 
 ```bash
 # 0. (DB마다 처음 한 번 — DB 관리자) vector 확장 — 서버 계정은 보통 우리 스키마 권한만 있어 직접 못 만든다. 없으면 migrate·적재가 "vector 확장 없음"으로 멈춘다
@@ -581,7 +582,7 @@ bash deploy/host/scripts/mcp_up.sh     # 여러 번 실행해도 안전 — 꺼�
 서버 입구는 `run_docs` 하나다(사용자 10-31). 옛 1회 job 배치 `trigger.sh structure`·`load`·`all`·`night`와 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`는 11-01에 지웠다 — 구조화·적재는 run_docs가 `build_bundle`·`pgvector_load`를 문서마다 부른다.
 
 ```bash
-bash deploy/host/scripts/trigger.sh parse       # 파싱 → output/parse/_rep(data-pipeline-parse 안에서 — docker exec)
+bash deploy/host/scripts/trigger.sh parse       # 파싱 → output/parse/_rep(data-pipeline 안에서 — docker exec)
 bash deploy/host/scripts/trigger.sh publish     # Object Storage 업로드 + EDW 메타데이터(운영 시스템에 씀)
 ```
 
@@ -594,9 +595,9 @@ bash deploy/host/scripts/trigger.sh publish     # Object Storage 업로드 + EDW
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 검색 MCP 상주 확인                                       | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_up.sh`                                                                                             |
 | 새벽 배치                                              | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.time: "HH:MM"`(그 시각부터 5분 안에 시작 — 비우면 새벽 배치 없음, 기본 비움 · pl-32) |
-| 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음, 11-01 trigger 서버 지움) | `dc up -d data-pipeline-parse data-pipeline-structure`(§5-3의 `dc` — 실행 이미지면 코드 폴더를 붙임). 여러 번 불러도 안전 — 꺼진 것만 띄움 |
-| MCP `parse_document` 작업 서비스                        | compose가 띄우지 않으므로 파싱 컨테이너가 다시 시작될 때마다: `$DOCKER exec -d data-pipeline-parse bash -c 'umask 0002 && exec python -u -m pipeline.mcp_parse_service'`(`docker exec`는 entrypoint를 거치지 않아 umask를 여기서 준다) |
-| 재부팅 뒤 되살리기(podman)                                | `systemctl enable --now podman-restart` — podman은 docker처럼 데몬이 없어 `restart: unless-stopped` 컨테이너(검색 MCP·상주 컨테이너)를 부팅 때 다시 띄우지 않는다. 이 서비스가 그 컨테이너들을 되살린다. 검색 MCP는 keepalive 타이머가 한 번 더 본다. 상주 트리거는 keepalive 타이머가 없으니, 재부팅 뒤 `$DOCKER ps`로 `data-pipeline-parse`·`data-pipeline-structure`가 떠 있는지 보고, 없으면 위 `dc up -d …`를 다시 실행한 뒤 `parse_document` 작업 서비스도 다시 띄운다 |
+| 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음, 11-01 trigger 서버 지움) | `dc up -d data-pipeline data-pipeline-mcp`(§5-3의 `dc` — 실행 이미지면 코드 폴더를 붙임). 여러 번 불러도 안전 — 꺼진 것만 띄움 |
+| MCP `parse_document` 작업 서비스                        | 전용 상주 컨테이너 `data-pipeline-mcp`의 주 프로세스(entrypoint `parse-service`, 127.0.0.1:8766 — 사용자 11-03 rn-03). 죽으면 `restart: unless-stopped`가, 꺼져 있으면 `mcp_up.sh`(keepalive 타이머)가 다시 띄운다 — 손 기동 없음 |
+| 재부팅 뒤 되살리기(podman)                                | `systemctl enable --now podman-restart` — podman은 docker처럼 데몬이 없어 `restart: unless-stopped` 컨테이너(검색 MCP·상주 컨테이너)를 부팅 때 다시 띄우지 않는다. 이 서비스가 그 컨테이너들을 되살린다. 검색 MCP와 `data-pipeline-mcp`(parse_document 작업 서비스)는 keepalive 타이머(`mcp_up.sh`)가 한 번 더 본다. 일괄 `data-pipeline`은 keepalive 타이머가 없으니, 재부팅 뒤 `$DOCKER ps`로 떠 있는지 보고, 없으면 위 `dc up -d …`를 다시 실행한다 |
 
 
 systemd 설치(한 번 — DB 버전과 컨테이너를 확인한 뒤):
@@ -621,18 +622,18 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 
 | 바꿀 것                     | 방법                                                                                                                                                                         |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 설정 값                     | settings.yaml을 직접 고치고 상주 컨테이너(`data-pipeline-parse`, `data-pipeline-structure`, `mcp-server`)를 다시 띄운다                                                                      |
+| 설정 값                     | settings.yaml을 직접 고치고 상주 컨테이너(`data-pipeline`, `data-pipeline-mcp`, `mcp-server`)를 다시 띄운다                                                                      |
 | 이번 실행만 다른 값              | `--set 이름=값`(오버레이 설정 파일 도구는 PC 전용 — 서버에서는 종료 코드 2)                                                                                                                         |
-| 엔진 구성(파일) | 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 오버레이 패치(5-8) — 되돌리기는 git, 확인은 `show-stack` — [docs/architecture/pipeline\_stack.md](docs/architecture/pipeline_stack.md) |
+| 엔진 구성(파일) | 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 코드 폴더 바꾸기(5-8) — 되돌리기는 git, 확인은 `show-stack` — [docs/architecture/pipeline\_stack.md](docs/architecture/pipeline_stack.md) |
 
 
-### 5-8. 코드만 고쳤을 때 — 오버레이 패치
+### 5-8. 코드만 고쳤을 때 — 코드 폴더 바꾸기
 
 의존성 · Dockerfile · 마운트 경로가 그대로라면 이미지를 다시 만들지 않고 코드 폴더만 바꾼다.
 
 1. `VERSION`의 PATCH 자리를 올린다(예: `0.1.0` → `0.1.1` — 이미지 태그와 같으면 `make_patch.sh`가 멈춤).
 2. PC에서 `bash deploy/release/make_patch.sh <시작점> <출력 폴더>`로 패치 번들을 만든다(바뀐 파일 + 매니페스트 + 설명서 + 재파싱 필요 판정).
-3. 서버에서 적용한 뒤 `check-modules`와 `selftest_gate`로 확인한다(compose는 `compose.patch.yml`로 코드 폴더를 덮어 붙인다).
+3. 서버에 덧씌우는 compose(`compose.patch*.yml`)는 11-03에 지웠다 — 코드 바꾸기는 개발 서버 코드 폴더 바꾸기(release-and-patch §1-1) → 운영 굽기(§1-2)이고, 번들은 바뀐 파일·재파싱 판정 설명서로 쓴다. 바꾼 뒤 `check-modules`와 `selftest_gate`로 확인한다.
 
 새 이미지 버전이 필요한지와 자세한 순서는 [release-and-patch.md](docs/operations/release-and-patch.md) §1~§5에 있다.
 
@@ -662,7 +663,7 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 | [CLAUDE.md](CLAUDE.md)                                                       | 개발 규칙 · 로컬 하네스 · 점검 명령 · 핑거프린트 기준값                                     |
 | [refactor.md](docs/refactoring/refactor.md)                                                   | 서버·사람이 확인할 사항(C-xx) · **"최종 — 사람이 할 일"**(첫 배포 순서)                      |
 | [docs/operations/server-guide.md](docs/operations/server-guide.md)           | 서버 설치 · 운영 · 문제 해결                                                     |
-| [docs/operations/release-and-patch.md](docs/operations/release-and-patch.md) | 버전 · 빌드 · 전송 · 오버레이 패치 · DB 버전 관리(migrate) · 배포 판정                     |
+| [docs/operations/release-and-patch.md](docs/operations/release-and-patch.md) | 버전 · 빌드 · 전송 · 패치 번들(설명서) · DB 버전 관리(migrate) · 배포 판정                     |
 | [docs/operations/env-guide.md](docs/operations/env-guide.md)                 | 설정 항목 작성 가이드                                                           |
 | [docs/architecture/](docs/architecture/)                                     | 프롬프트 패키지(prompts.md) · 엔진 구성 파일(pipeline\_stack.md) · run\_docs 설계 |
 | [docs/history/refactor\_plan.md](docs/history/refactor_plan.md)      | 리팩토링 가이드 · 결정 기록(D-xxx) · 파일 이동표                                       |
