@@ -45,7 +45,8 @@ def test_proxy_limit():
 
 
 def test_http_body_cap():
-    """HTTP 길 끝까지 — 본문 상한이 SDK 기본(4MiB)이 아니라 설정에서 오고, 1.1MB 파일은 413이 아니라 도구가 이유를 답한다."""
+    """HTTP 길 끝까지 — 본문 상한이 SDK 기본(4MiB)이 아니라 설정에서 오고, 1.1MB 파일은 413이 아니라 도구가 이유를 답한다.
+    큰 본문은 동시 2개 자리 하나를 쥐고 처리된다(PR #110 — 기준을 1000바이트로 낮춰 봄)."""
     assert main.build("127.0.0.1", 8765).settings.max_request_body_size == parse_proxy.body_cap() > 133 * MB  # 기본 100MB의 base64
 
     async def call(client, n):
@@ -59,6 +60,7 @@ def test_http_body_cap():
         app_main = main.build("127.0.0.1", 8765)
         with patch.object(main, "build", return_value=app_main):
             app = main.build_guarded_app("127.0.0.1", 8765, "")
+        holder.append(app.big_slots)
         headers = {"Accept": "application/json, text/event-stream"}
         async with (
             app_main.session_manager.run(),
@@ -68,9 +70,19 @@ def test_http_body_cap():
             assert "크기 상한(1MB)" in (await call(client, int(1.1 * MB)))["error"]
 
     sent: list = []
-    with COMMON.env(PARSE_MCP_MAX_MB="1"), patch.object(parse_proxy, "_parse_service", _stub(sent)):
+    holder: list = []
+    free: list = []
+    stub = _stub(sent)
+
+    def watched(method, path, payload=None, timeout=10):
+        free.append(holder[0].value)
+        return stub(method, path, payload, timeout)
+
+    with COMMON.env(PARSE_MCP_MAX_MB="1"), patch.object(parse_proxy, "_parse_service", watched), patch.object(main, "_BIG_BODY", 1000):
         try:
             asyncio.run(run())
         finally:
             dispatch._LIMITER = None
     assert [m for m, _ in sent].count("POST") == 1, sent  # 1.1MB는 서비스로 안 감
+    assert free and set(free) == {main._BIG_SLOTS - 1}, free  # 처리 중엔 자리 하나를 쥠
+    assert holder[0].value == main._BIG_SLOTS  # 끝나면 돌려줌

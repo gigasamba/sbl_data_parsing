@@ -47,6 +47,7 @@
 (검색 services/search/search_svc.py) · 출력 모양 schemas/ · 시작 때 읽는 설정 config.py(CFG). 위 설명의 함수 이름은 그대로다.
 """
 
+import contextlib
 import hmac
 import ipaddress
 import json
@@ -106,6 +107,10 @@ def _sdk_logging():
     sdk.propagate = False  # root의 기본 핸들러로 예외 글이 가림 없이 나가는 길을 막는다
 
 
+_BIG_BODY = 4 * 1048576  # SDK 기본 본문 상한 — 이보다 큰(또는 길이를 안 밝힌) POST만 동시 수를 묶는다
+_BIG_SLOTS = 2  # ponytail: 고정 2개(4g 컨테이너에서 100MB 파일 base64·디코드 사본 기준) — 메모리를 바꾸면 설정 항목으로
+
+
 # ── MCP 서버 ─────────────────────────────────────────────────────
 def build(host, port):
     from mcp.server.fastmcp import FastMCP
@@ -159,6 +164,8 @@ def build_guarded_app(host, port, token):
     health.register(app)
 
     inner = app
+    # 본문 상한(약 151MB)은 /mcp 하나라 모든 도구에 걸림 — 큰 요청은 본문을 읽기 전에 줄 세워 메모리를 묶는다(PR #110 리뷰)
+    big_slots = anyio.Semaphore(_BIG_SLOTS)
 
     async def guarded(scope, receive, send):
         if scope["type"] != "http" or scope.get("path") == "/health":
@@ -209,8 +216,11 @@ def build_guarded_app(host, port, token):
                     response_body.extend(message.get("body", b"")[: max(0, metadata_limit - len(response_body))])
                 await send(message)
 
+            size = hdr.get("content-length", "")
+            big = scope.get("method") == "POST" and (not size.isdigit() or int(size) > _BIG_BODY)  # 길이 모름 = 큰 것
             try:
-                await inner(scope, observed_receive, correlated_send)
+                async with big_slots if big else contextlib.nullcontext():
+                    await inner(scope, observed_receive, correlated_send)
             except BaseException as exc:
                 if init_call is not None:
                     init_call.finish(status="error", err=str(exc))
@@ -219,6 +229,7 @@ def build_guarded_app(host, port, token):
                 if init_call is not None:
                     await anyio.to_thread.run_sync(call_log.finish_initialize, init_call, response_body, response_status)
 
+    guarded.big_slots = big_slots  # 시험이 대기 수를 본다
     return guarded
 
 
