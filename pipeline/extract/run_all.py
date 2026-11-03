@@ -547,13 +547,9 @@ def _chars(dst):
 
 
 def _sha(p):
-    import hashlib
+    from common.core.contract import file_hash  # fp-perf C2 — 한 곳(같은 프로세스 안에서는 파일당 한 번 읽음)
 
-    h = hashlib.sha256()
-    with open(p, "rb") as f:
-        for b in iter(lambda: f.read(1 << 20), b""):
-            h.update(b)
-    return h.hexdigest()[:16]
+    return file_hash(p)[:16]
 
 
 @functools.cache  # fp-perf B5 — 엔진 폴더 해시는 프로세스마다 엔진당 한 번(실행 중 코드는 안 바뀜)

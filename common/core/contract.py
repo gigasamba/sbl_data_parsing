@@ -10,7 +10,9 @@ source_uri = 원본 위치(file:/// · 나중 s3://). 파싱(만듦)·구조화(
 사용: python -m common.core.contract parse output/parse/_rep
 """
 import csv
+import functools
 import hashlib
+import os
 import json
 import re
 import sys
@@ -26,6 +28,14 @@ WIN_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL"} | {f"COM{i}" for i in range(1,
 
 
 def file_hash(path):
+    """파일 sha256(16진 64자). 같은 프로세스에서 같은 파일(경로·크기·고친 시각 ns)은 한 번만 읽는다(fp-perf C2 — 원천 → 중복 확인 →
+    파싱 → 대표 결과 → 게시가 문서마다 5~6번 다시 해시하던 것). 파일이 바뀌면 크기·시각이 달라 다시 읽음."""
+    st = os.stat(path)
+    return _file_hash(os.path.abspath(path), st.st_size, st.st_mtime_ns)
+
+
+@functools.lru_cache(maxsize=4096)  # ponytail: 프로세스당 파일 4096개까지 기억 — 더 큰 배치면 오래된 것부터 다시 읽음
+def _file_hash(path, size, mtime_ns):
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for b in iter(lambda: f.read(1 << 20), b""):

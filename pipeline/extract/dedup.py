@@ -11,12 +11,12 @@ keep.txt를 줄이지 않았다 — keep은 늘 해시로만 정해짐. 사용�
 
 import argparse
 import csv
-import hashlib
 import os
 import re
 from pathlib import Path
 
 from common.core.console import utf8_stdout
+from common.core.contract import file_hash
 from common.core.paths import APP_ROOT, doc_dir  # 폴더 재편 뒤 이 상수만 바뀌면 됨
 
 ROOT = APP_ROOT
@@ -26,11 +26,7 @@ _NOISE = re.compile(
 
 
 def sha(p):
-    h = hashlib.sha256()
-    with open(p, "rb") as f:
-        for b in iter(lambda: f.read(1 << 20), b""):
-            h.update(b)
-    return h.hexdigest()
+    return file_hash(p)  # fp-perf C2 — 한 곳(같은 프로세스 안에서는 파일당 한 번 읽음)
 
 
 def fingerprint_one(p, source_id=None):
