@@ -142,14 +142,10 @@ SAME_NAME_OK = {
 # parse/agent/agent_tools.py로 옮겨 parse 영역 **안**이 되어 더 이상 경계 위반이 아님(ALLOW 자체가 필요 없어짐).
 # I2 — 옛 예외 ("structure/build_bundle.py", "data_pipeline.parse")(--no-rep 실험 경로의 지연 import)는 두 영역이 etl 하나가 되어 필요 없어짐.
 ALLOW: set = set()
-ADK_HEAVY_ONLY: set = set()  # google.adk·litellm은 여기서만(다른 곳은 느려짐 — 지연 import도 이 파일 안에서)
 # TODO: 리팩토링 후 구현 필요
 # AGENT_PLATFORM_ONLY = {"common/ai/adk.py", "common/ai/llm.py"}   # CT1 — models.py가 llm.py로 병합되며 profile()의 agent_platform import도 같이 옮김
 # AGENT_PLATFORM_SUBMODULES = {"agent_platform.config", "agent_platform.models", "agent_platform.pipeline"}   # runtime·build·serving 금지(dev는 모델 호출만 씀)
-AGENT_KWARG_EXEMPT = {
-    "cli/ping_models.py",
-    "common/check/checker.py",
-}  # 연결 확인(ping) — 업무 프롬프트가 없음(GA2 ⑧) · S3부터 common/check/(common 영역이라 ⑧ 대상 밖) — 옛 자리 이름으로 둠
+AGENT_KWARG_EXEMPT = {"common/check/checker.py"}  # 연결 확인(ping) — 업무 프롬프트가 없음(GA2 ⑧)
 
 
 def _agent_kwarg_missing(tree):
@@ -320,9 +316,9 @@ def check():
                 bad.append(f"{rel}:{ln}: L.chat()/A.complete() 호출에 agent= 없음(GA2 ⑧ — gamma 패키지 지정 필수)")
         for m in mods:
             top = m.split(".")[0]
-            if top == "litellm" and rel not in ADK_HEAVY_ONLY:
+            if top == "litellm":
                 bad.append(f"{rel}: {m} import — litellm은 쓰지 않음(GA ④ — 0.2.0 ADK 장치 지움)")
-            if (m == "google.adk" or m.startswith("google.adk.")) and rel not in ADK_HEAVY_ONLY and not is_agent_py:
+            if (m == "google.adk" or m.startswith("google.adk.")) and not is_agent_py:
                 bad.append(f"{rel}: {m} import — google.adk는 지시서 패키지 agent.py에서만(GA ④ — 0.2.0 ADK 장치 지움)")
             # TODO: 리팩토링 후 구현 필요
             # if top == "agent_platform":

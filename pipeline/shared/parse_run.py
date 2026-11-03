@@ -211,26 +211,3 @@ def doc_types(docs, out):
         Path(out).mkdir(parents=True, exist_ok=True)
         cache_f.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
     return res
-
-
-def _fill_chars(runs, out):
-    """글자 수 없는 옛 기록(성공)은 출력 JSON에서 한 번 읽어 <out>/_chars.json에 캐시."""
-    cache_f = Path(out) / "_chars.json"
-    try:
-        cache = json.loads(cache_f.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        cache = {}
-    dirty = False
-    for (doc, eng), r in runs.items():
-        if "chars" in r or r.get("error"):
-            continue
-        k = f"{eng}|{doc}"
-        if k not in cache:
-            try:
-                cache[k] = len((json.loads((Path(out) / eng / (doc + ".json")).read_text(encoding="utf-8")).get("text") or "").strip())
-            except (OSError, ValueError):
-                cache[k] = 0
-            dirty = True
-        r["chars"] = cache[k]
-    if dirty:
-        cache_f.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")

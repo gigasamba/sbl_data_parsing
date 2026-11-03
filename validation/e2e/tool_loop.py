@@ -1,7 +1,7 @@
 """PC 답변 점검(answer_gen)만 쓰는 도구 왕복 — 지시문 패키지(rag_qa: agent.json·instructions.md, 바이트 그대로) + 모델이 도구를 골라 부르는
 OpenAI 호환 /chat/completions 다중 턴(0.2.0 — 옛 common.ai.adk.run_agent의 ADK 장치를 지우고 이리로, pl-46).
 모델 호출은 common.ai.llm.complete(tools=)로(가드·재시도·회로 차단기 그대로). 턴마다 공유 장부를 거친다(옛 per_turn_admit):
-try_reserve_call()(LLM_MAX_CALLS) + 외부 LLM이면 LLM_BUDGET_USD 턴 선차감 → 응답 usage로 정산(못 받으면 반환).
+common.ai.llm.admit_turn() — LLM_MAX_CALLS 예약 + 외부 LLM이면 LLM_BUDGET_USD 턴 선차감 → 응답 usage로 정산(못 받으면 반환).
 멈춤 글자(answer_gen STOPS와 같음): "공유 호출 상한"(장부 거부) · "예산 초과"(매니페스트 턴·도구 호출 수) · "시간 상한"(budget.seconds·timeout).
 LLM_FAKE=1이면 네트워크 없이: fake_policy가 있으면 결정적 정책으로 도구까지 돌리고, 없으면 모의 글자 한 줄(도구 0)."""
 
@@ -53,24 +53,6 @@ def _call_tool(fn, args):
         return {"error": f"인자 오류 — {e}"}
 
 
-def _admit(prof):
-    """턴 하나 장부 — 호출 수 예약(원자적) + 외부 LLM이면 고정 추정액 선차감. → (통과?, 선차감액)."""
-    from common.ai import guard as G
-
-    budget = G.budget_usd() if not L.is_internal(prof.base_url) else None  # 상한 읽기(형식 오류)는 예약 앞에서
-    if not L.try_reserve_call():
-        return False, 0.0
-    if budget is None:
-        return True, 0.0
-    usd = L.cfg().models.llm.est_usd
-    try:
-        G.spend_reserve(usd, "LLM")
-    except G.BudgetExceeded:
-        L.release_call()
-        return False, 0.0
-    return True, usd
-
-
 def run(agent_id, question, tools, *, timeout=None, fake_policy=None):
     """→ (최종 글자 또는 멈춤 글자, 도구 궤적 [{"tool", "args"}], usage{model_calls, tool_calls, prompt_tokens, completion_tokens})."""
     pkg = resolve_agent_dir(agent_id)
@@ -113,23 +95,17 @@ def run(agent_id, question, tools, *, timeout=None, fake_policy=None):
                 else {"role": "assistant", "content": act[1]}
             )
         else:
-            ok, usd = _admit(prof)
-            if not ok:
+            turn = L.admit_turn("llm")
+            if turn is None:
                 return STOP_CALLS, traj, usage
             try:
                 msg, u = L.complete(
                     "llm", messages, max_tokens=None, timeout=left, tools=specs, retries=1, agent=agent_id, call_reserved=True
-                )  # 이 턴 자리는 _admit이 예약
+                )  # 이 턴 자리는 admit_turn이 예약
             except Exception:
-                if usd:
-                    from common.ai import guard as G
-
-                    G.release_reserve(usd)  # 응답을 못 받은 턴의 선차감 반환(옛 GA9)
+                turn.release()  # 응답을 못 받은 턴의 선차감 반환(옛 GA9)
                 raise
-            if usd:
-                from common.ai import guard as G
-
-                G.settle_tokens(usd, prof.model, u)
+            turn.settle(u)
             usage["prompt_tokens"] += u.get("prompt_tokens", 0)
             usage["completion_tokens"] += u.get("completion_tokens", 0)
         usage["model_calls"] += 1

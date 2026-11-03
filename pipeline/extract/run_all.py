@@ -569,8 +569,7 @@ def _isolated(eng, doc, dst, profile, tmo, py=None, env=None):
 def _isolated_once(eng, doc, dst, profile, tmo, py, env=None):
     import subprocess
 
-    from common.core import resources as PR  # 우선순위 OS 분기 한 곳
-    from common.core import resources as RS
+    from common.core import resources as RS  # 우선순위 OS 분기 한 곳
     from common.core.paths import child_env
 
     low = bool(pc.cfg().extract.low_priority)  # 10-29 — 일괄 파싱은 낮은 우선순위(parse MCP 서비스는 끔 — 요청이 CPU를 먼저)
@@ -583,9 +582,9 @@ def _isolated_once(eng, doc, dst, profile, tmo, py, env=None):
         text=True,
         encoding="utf-8",
         errors="replace",
-        **PR.low_priority_kw(low),
+        **RS.low_priority_kw(low),
     )
-    PR.renice_low(pr.pid, low)
+    RS.renice_low(pr.pid, low)
     try:
         _, err = pr.communicate(timeout=tmo)
     except subprocess.TimeoutExpired as tmo_err:

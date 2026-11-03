@@ -29,7 +29,6 @@ from pathlib import Path
 from common.ai import guard
 from common.ai import llm as A  # 모델 호출(0.2.0 — 옛 common.ai.adk, pl-46)
 from common.ai.guard import external_allowed, is_internal
-from common.ai.guard import urlopen as guard_urlopen
 from common.config import settings as C  # common 칸(S7c — 설정 객체 · cfg()·given()·reveal()·COMMON.env())
 from common.config.settings import by_env, cfg, reveal  # S7b — 설정 객체(이름을 글자로 짓는 칸은 by_env)
 from common.core.console import utf8_stdout
@@ -329,13 +328,8 @@ def model_status(prefix):
     )
     if internal.startswith("외부 — 거부"):  # 막힌 외부 주소에는 /models도 안 보냄(키가 헤더로 나감 — 재검증 10-02)
         return internal, model or "(모델 미설정)", "확인 안 함(외부 거부)"
-    req = urllib.request.Request(base.rstrip("/") + "/models")
-    key = reveal(by_env(f"{prefix}_API_KEY"))
-    if key:
-        req.add_header("Authorization", f"Bearer {key}")
     try:
-        with guard_urlopen(req, 5, prefix) as r:
-            ids = [m.get("id") for m in json.load(r).get("data", [])]
+        ids = _list_model_ids(prefix, base)
         reach = "응답" + ("" if not model else (" · 모델 있음" if model in ids else f" · 모델 없음(서버: {', '.join(ids[:3])})"))
     except Exception as e:
         reach = f"응답 없음({type(e).__name__})"
@@ -385,16 +379,21 @@ def model_not_found(why):
     return any(k in w for k in _NOT_FOUND_RE)
 
 
+def _list_model_ids(prefix, base):
+    """그 서버 /v1/models의 모델 id 목록(내부망 가드·리다이렉트 가드 경유, 키는 헤더로만 — 출력 안 함). 시간 상한 PING_TIMEOUT."""
+    guard.require_internal(base, prefix)
+    req = urllib.request.Request(base.rstrip("/") + "/models")
+    key = reveal(by_env(f"{prefix}_API_KEY"))
+    if key:
+        req.add_header("Authorization", f"Bearer {key}")
+    with guard.urlopen(req, cfg().models.transport.ping_timeout, prefix) as r:
+        return [m.get("id") for m in json.load(r).get("data", []) if m.get("id")]
+
+
 def candidates(prefix, base):
     """FAIL이 '모델 없음'일 때 그 서버의 /v1/models에서 이름 힌트가 든 후보 — [(id, 일치 힌트)] (내부망 가드 경유, 키 출력 없음)."""
     try:
-        guard.require_internal(base, prefix)
-        req = urllib.request.Request(base.rstrip("/") + "/models")
-        key = reveal(by_env(f"{prefix}_API_KEY"))
-        if key:
-            req.add_header("Authorization", f"Bearer {key}")
-        with guard.urlopen(req, cfg().models.transport.ping_timeout, prefix) as r:
-            ids = [m.get("id") for m in json.load(r).get("data", []) if m.get("id")]
+        ids = _list_model_ids(prefix, base)
     except Exception:
         return []
     out = []

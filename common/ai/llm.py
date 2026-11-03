@@ -20,6 +20,7 @@
 """
 
 import dataclasses
+import functools
 import hashlib
 import json
 import threading
@@ -348,8 +349,7 @@ from common.ai.guard import open_guarded as _g_open  # noqa: E402 — precheck�
 from common.ai.guard import precheck  # noqa: E402
 from common.core.paths import resolve_agent_dir  # noqa: E402
 
-_ROLE_GUARD_PREFIX = {"llm": "LLM", "vlm": "VLM", "embed": "EMBED"}
-_PIPELINE_MODEL_ROLES = frozenset({"llm", "vlm"})
+_ROLE_GUARD_PREFIX = {"llm": "LLM", "vlm": "VLM"}
 
 
 class ModelUnavailable(RuntimeError):
@@ -469,6 +469,7 @@ def _merged_extra(role, extra):
     return {**env_extra, **(extra or {})} if env_extra else extra
 
 
+@functools.cache
 def _manifest(agent_id):
     """지시문 패키지 agent.json(그대로 — 글자는 agent_prompts가 읽음) → model_role·output_schema 등 사전."""
     return json.loads((resolve_agent_dir(agent_id) / "agent.json").read_text(encoding="utf-8"))
@@ -637,3 +638,42 @@ def complete(
 
         G.spend_settle(-reserved)  # 끝내 못 쓴 flat 선차감을 되돌림(BR45 후속)
     raise ModelUnavailable(f"모델 호출 실패(재시도 {retries}회): {type(last_err).__name__}: {str(last_err)[:200]}") from last_err
+
+
+class _Turn:
+    """admit_turn()의 턴 하나 — 통과했으면 응답 usage로 settle(), 응답을 못 받았으면 release()(선차감 반환 — 옛 GA9)."""
+
+    def __init__(self, model, usd):
+        self.model, self.usd = model, usd
+
+    def settle(self, usage):
+        if self.usd:
+            from common.ai import guard as G
+
+            G.settle_tokens(self.usd, self.model, usage)
+
+    def release(self):
+        if self.usd:
+            from common.ai import guard as G
+
+            G.release_reserve(self.usd)
+
+
+def admit_turn(role="llm"):
+    """여러 턴 도구 왕복의 턴 하나 장부(옛 run_agent per_turn_admit) — 호출 수 예약(원자적) + 외부 주소면 고정 추정액(LLM_EST_USD) 선차감.
+    → _Turn(통과) 또는 None(장부 거부 — 호출 상한·예산). 통과하면 이 턴 호출은 complete(call_reserved=True)로."""
+    from common.ai import guard as G
+
+    prof = profile(role)
+    budget = G.budget_usd() if prof is not None and not is_internal(prof.base_url) else None  # 상한 읽기(형식 오류)는 예약 앞에서
+    if not try_reserve_call():
+        return None
+    if budget is None:
+        return _Turn(prof.model if prof else "", 0.0)
+    usd = cfg().models.llm.est_usd
+    try:
+        G.spend_reserve(usd, "LLM")
+    except G.BudgetExceeded:
+        release_call()
+        return None
+    return _Turn(prof.model, usd)

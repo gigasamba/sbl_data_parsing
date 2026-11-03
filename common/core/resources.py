@@ -29,6 +29,7 @@ CPU 문(gated_popen이 메모리 문 다음에 같이 거침 — 측정 못 하�
       python common/resources.py --env     → export 줄(셸에서 eval)
 """
 
+import functools
 import math
 import os
 import subprocess
@@ -49,19 +50,33 @@ def _read(p):
         return None
 
 
-def cpus(cg=CG):
-    """사용 가능한 CPU 수(정수, cgroup·친화도 반영)."""
+def _host_cpus():
+    """호스트 코어 수(CPU 친화도 반영, cgroup 한도는 안 봄)."""
     n = os.cpu_count() or 1
     if hasattr(os, "sched_getaffinity"):
         n = min(n, len(os.sched_getaffinity(0)))
-    q = _read(cg / "cpu.max")  # cgroup v2: "<quota> <period>" 또는 "max <period>"
-    if q and not q.startswith("max"):
-        quota, period = q.split()[:2]
-        n = min(n, max(1, math.ceil(int(quota) / int(period))))
-    quota, period = _read(cg / "cpu" / "cpu.cfs_quota_us"), _read(cg / "cpu" / "cpu.cfs_period_us")  # cgroup v1
-    if quota and period and int(quota) > 0:
-        n = min(n, max(1, math.ceil(int(quota) / int(period))))
     return max(1, n)
+
+
+def _quota_ratio(cg):
+    """cgroup CPU 한도(코어 수, 소수 가능) — v2 cpu.max "<quota> <period>"·v1 cpu.cfs_quota_us/cfs_period_us. 없거나("max", -1) 못 읽으면 None."""
+    try:
+        q = _read(cg / "cpu.max")
+        if q and not q.startswith("max"):
+            quota, period = q.split()[:2]
+            return int(quota) / int(period)
+        quota, period = _read(cg / "cpu" / "cpu.cfs_quota_us"), _read(cg / "cpu" / "cpu.cfs_period_us")
+        if quota and period and int(quota) > 0:
+            return int(quota) / int(period)
+    except ValueError:
+        pass
+    return None
+
+
+def cpus(cg=CG):
+    """사용 가능한 CPU 수(정수, cgroup·친화도 반영)."""
+    r = _quota_ratio(cg)
+    return min(_host_cpus(), max(1, math.ceil(r))) if r else _host_cpus()
 
 
 def mem_gb(cg=CG, meminfo="/proc/meminfo"):
@@ -163,19 +178,10 @@ def wait_mem(start_pct=None, poll=5, log=print):
     return mem_used_pct()
 
 
+@functools.lru_cache(maxsize=16)
 def cpu_limit(cg=CG):
-    """cgroup CPU 한도(코어 수, 소수 가능) — v2 cpu.max "<quota> <period>"·v1 cpu.cfs_quota_us/cfs_period_us. 없거나("max", -1) 못 읽으면 None."""
-    try:
-        q = _read(cg / "cpu.max")
-        if q and not q.startswith("max"):
-            quota, period = q.split()[:2]
-            return int(quota) / int(period)
-        quota, period = _read(cg / "cpu" / "cpu.cfs_quota_us"), _read(cg / "cpu" / "cpu.cfs_period_us")
-        if quota and period and int(quota) > 0:
-            return int(quota) / int(period)
-    except ValueError:
-        pass
-    return None
+    """cgroup CPU 한도(코어 수) — _quota_ratio를 cg 경로마다 한 번만 읽음(컨테이너가 사는 동안 그대로)."""
+    return _quota_ratio(cg)
 
 
 def _cg_usage_usec(cg=CG):
@@ -190,13 +196,6 @@ def _cg_usage_usec(cg=CG):
         if v and v.isdigit():
             return int(v) / 1000
     return None
-
-
-def _host_cpus():
-    n = os.cpu_count() or 1
-    if hasattr(os, "sched_getaffinity"):
-        n = min(n, len(os.sched_getaffinity(0)))
-    return max(1, n)
 
 
 _LAST: dict[str, tuple] = {}  # cg 경로 → (시각, usage_usec) — 앞 측정을 재사용해 매번 기다리지 않게
