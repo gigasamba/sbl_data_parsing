@@ -133,6 +133,7 @@
 - 이유: 폐쇄망 서버는 외부 모델을 절대 부르면 안 되고, PC 호출은 싸게 유지해야 한다.
 - 무엇: OpenAI 호환 역할 llm/vlm/embed. 서버(dev/prd)는 외부 모델 거부. 외부 전송은 `*_ALLOW_EXTERNAL` + `RUN_ENV=local`이어야 함. 하루 지출 상한, RPM, 비용 장부, 응답 캐시, 시험용 가짜 LLM.
 - 10-29(사용자): 외부 허용은 루트 settings.yaml에 둬도 됨(설정 창구는 하나).
+- 규칙(사용자 11-04): 역할마다 설정 `common.models.<llm|vlm|embed>.allow_external` 하나로 외부 허용을 정한다 — `llm.chat`을 부르는 모든 곳(분류 포함)이 `LLM_ALLOW_EXTERNAL`을 따른다(호출 인자 `allow_external=True`는 같은 효과). 내부망 서버(dev·prd)의 settings.yaml은 셋 다 `false`. 시험: `tests/server/common/test_llm.py`(local+1 허용 · local+없음 거부 · dev·prd+1 거부).
 - 파일: `common/ai/guard.py`, `common/ai/llm.py`, `common/config/settings.py`.
 - 결정(사용자 11-02): 개발 서버(dev)부터 내부망 GLM, PC(local)는 OpenRouter(유료 — 상한은 CLAUDE.md §7).
 - 하루 지출 상한(사용자 11-03): `common.models.guard.budget_usd` 기본 0.1달러 — 외부 모델 호출의 하루(현지 날짜) 합계, PC 사용자마다. 비운 칸은 기본값. 외부 호출은 `RUN_ENV=local`에서만 되고 서버(dev·prd)는 외부 모델을 거부하므로 "사람마다" = PC·OS 사용자마다.
