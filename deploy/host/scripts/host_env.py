@@ -67,10 +67,10 @@ def lines(doc, sections, fmt="sh"):
     for row in (HERE / "host_keys.tsv").read_text(encoding="utf-8").splitlines():
         if not row or row.startswith("#"):
             continue
-        path, name, kind = row.split("\t")
+        path, name, kind, *const = row.split("\t")
         if sections and not any(path == s or path.startswith(s + ".") for s in sections):
             continue
-        v = _get(doc, path)
+        v = const[0] if kind == "const" else _get(doc, path)  # const = 컨테이너 안 약속 경로(settings.IMAGE_PATHS — 설정 파일과 무관)
         if v is None:
             continue
         try:

@@ -5,10 +5,9 @@ CT1 — 둘 다 "모듈 사이 계약"이라 한 파일로 합침, docs/architec
 ID·위치 규칙: doc_key = 원본 내용 sha256(64자, 같은 내용 사본은 같은 ID) · chunk_key = doc_key:순번 ·
 source_uri = 원본 위치(file:/// · 나중 s3://). 파싱(만듦)·구조화(옮김)·적재(저장)·검색(돌려줌)이 같아야 함.
 
-인계 점검: 넘겨받은 폴더가 다음 모듈이 쓸 수 있는 모양인지 — 구조화는 시작 전에 파싱 인계(_rep)를, 적재는
-묶음을 점검하고 어긋나면 종료 코드 3으로 멈춘다(조용히 품질이 떨어지지 않게).
-사용: python -m common.core.contract parse output/parse/_rep ·
-      python -m common.core.contract structure output/edw/bundle ·
+인계 점검: 넘겨받은 파싱 인계 폴더(_rep)가 구조화가 쓸 수 있는 모양인지 — 어긋나면 종료 코드 3으로 멈춘다(조용히 품질이 떨어지지 않게).
+묶음 점검(DOC_KEYS·check_bundle)은 0.2.0에 지웠다(서버가 안 씀 — pl-15·pl-46).
+사용: python -m common.core.contract parse output/parse/_rep
 """
 import csv
 import hashlib
@@ -22,8 +21,6 @@ from common import CONTRACT
 
 REP_KEYS = ("engine", "source", "format", "meta", "tried")                 # _rep/<문서>.json의 rep
 SOURCE_KEYS = ("doc_key", "uri", "sha256")                                  # rep.source — 문서 ID·원본 위치
-DOC_KEYS = ("file_path", "source_uri", "file_name", "file_sha256", "doc_format", "parse_engine")
-CHUNK_KEYS = ("doc", "seq", "chunk_text", "n_terms")
 
 WIN_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL"} | {f"COM{i}" for i in range(1, 10)} | {f"LPT{i}" for i in range(1, 10)}
 
@@ -171,36 +168,11 @@ def check_parse(rep_dir, sample=0):
     return bad
 
 
-def check_bundle(bundle_dir):
-    """구조화 → 적재·검색 인계(output/edw/bundle): 파일·필드·벡터 행 수·차원."""
-    import numpy as np
-    d, bad = Path(bundle_dir), []
-    for f in ("meta.json", "docs.jsonl", "chunks.jsonl", "vectors.npy", "kg_nodes.jsonl", "kg_edges.jsonl"):
-        if not (d / f).exists():
-            bad.append(f"{f} 없음")
-    if bad:
-        return bad
-    meta, docs, chunks = json.loads((d / "meta.json").read_text(encoding="utf-8")), jl(d / "docs.jsonl"), jl(d / "chunks.jsonl")
-    v = np.load(d / "vectors.npy", mmap_mode="r")
-    if v.shape[0] != len(chunks):
-        bad.append(f"벡터 {v.shape[0]}행 ≠ 청크 {len(chunks)}개")
-    if (v.shape[1] if v.ndim == 2 else 0) != meta.get("dim"):
-        bad.append(f"벡터 차원 {v.shape[1] if v.ndim == 2 else '?'} ≠ meta.dim {meta.get('dim')}")
-    for i, x in enumerate(docs):
-        miss = [k for k in DOC_KEYS if not x.get(k)]
-        if miss:
-            bad.append(f"docs[{i}] {x.get('file_name')}: {', '.join(miss)} 없음")
-            break
-    for i, c in enumerate(chunks):
-        if any(k not in c for k in CHUNK_KEYS) or not 0 <= c["doc"] < len(docs):
-            bad.append(f"chunks[{i}]: 필드 없음 또는 문서 번호 범위 밖")
-            break
-    return bad
-
-
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     kind, path = sys.argv[1], sys.argv[2]
-    errs = check_parse(path) if kind == "parse" else check_bundle(path)
+    if kind != "parse":
+        sys.exit(f"알 수 없는 점검 {kind!r} — parse만(묶음 점검은 0.2.0에 지움)")
+    errs = check_parse(path)
     print("계약 일치" if not errs else "계약 불일치:\n- " + "\n- ".join(errs[:50]))
     sys.exit(3 if errs else 0)

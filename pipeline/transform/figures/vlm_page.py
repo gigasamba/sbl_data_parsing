@@ -17,12 +17,12 @@ import time
 import urllib.parse
 from pathlib import Path
 
-from common.ai import adk as A
+from common.ai import llm as A  # 모델 호출(0.2.0 — 옛 common.ai.adk, pl-46)
 from common.ai.agent_prompts import load as _load_prompt
 from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
 from common.core import span as SP  # op-01 성능 span(풀 스레드 컨텍스트 전달)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
-from pipeline.shared.artifacts import prompt_id, raw_vlm_path
+from pipeline.shared.parse_run import prompt_id, raw_vlm_path
 from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
 from pipeline.transform.figures.vector import vector_regions  # 쪽 벡터 도형 군집 수(page_signals)
 
@@ -88,7 +88,7 @@ PAGE_SIGNALS_VERSION = "v3"  # 독립 검토 A — 알고리즘·상수(PAGE_SCA
 
 def _signals_path(file_sha256):
     """쪽 신호 캐시 파일 — raw_root()/signals/page_signals@<버전>/<파일 sha256 앞 16자>.json(content-addressed,
-    `<name>@<version>` 관례는 pipeline.shared.artifacts.raw_engine_path·raw_vlm_path와 같음 — 기존 VLM 캐시 원칙 그대로.
+    `<name>@<version>` 관례는 pipeline.shared.parse_run.raw_engine_path·raw_vlm_path와 같음 — 기존 VLM 캐시 원칙 그대로.
     tools/parse_agent_tools.inspect_document도 이걸 읽고/채운다, AD46 '한 번 계산해 저장, 판단들이 읽음')."""
     return Path(raw_root()) / "signals" / f"page_signals@{PAGE_SIGNALS_VERSION}" / f"{file_sha256[:16]}.json"
 
@@ -118,8 +118,7 @@ def _hidden_ratio(pg):
 
 def _hidden_overlap_detail(pg, img_rects):
     """AD47 — 보이지 않는 글자 상자 중 삽입 그림(img_rects)과 겹치는 것만 [(bbox, text), ...]로.
-    page_signals의 hidden_over_image(bool)와 represent.fill_scan_pages의 국소 일치도 확인(검토자 반영,
-    10-08 CONCERN) 둘 다 이 함수를 쓴다 — 쪽 전체 비율(_hidden_ratio·image_area_ratio)로는 못 잡는 국소
+    page_signals의 hidden_over_image(bool)가 쓴다(represent의 국소 일치도 확인은 0.2.0에 지움 — pl-46) — 쪽 전체 비율(_hidden_ratio·image_area_ratio)로는 못 잡는 국소
     겹침(쪽 대부분은 정상 글자인데 값 하나만 그림 위에 숨음)을 찾는 것이 목적. img_rects가 비면 항상 []."""
     if not img_rects:
         return []
@@ -144,38 +143,8 @@ def _hidden_overlap_detail(pg, img_rects):
 
 
 def _hidden_image_overlap(pg, img_rects):
-    """AD47 — page_signals용 bool(겹친 숨은 글자 상자가 하나라도 있나). 실제 text·bbox가 필요하면
-    hidden_overlap_spans()(문서 경로로 다시 열어 계산)를 쓴다."""
+    """AD47 — page_signals용 bool(겹친 숨은 글자 상자가 하나라도 있나)."""
     return bool(_hidden_overlap_detail(pg, img_rects))
-
-
-def hidden_overlap_spans(path, page_no):
-    """AD47 검토자 반영(10-08) — scan_pages_detail이 reason='hidden_overlap'로 고른 쪽의 실제 겹친 숨은
-    글자 상자들(bbox·text) — represent.fill_scan_pages가 국소(쪽 전체가 아니라 그 상자 주변만) 일치도를
-    보는 데 쓴다. page_signals 캐시는 bool만 들고 있어(내용을 캐시에 안 넣음) 그 쪽 하나만 다시 연다(문서
-    전체를 다시 열거나 매 쪽을 다시 계산하지 않음 — reason='hidden_overlap' 쪽만, 상한 PARSE_HIDDEN_OVERLAP_MAX로
-    이미 적은 수)."""
-    import fitz
-
-    p = Path(path)
-    if p.suffix.lower() != ".pdf":
-        return []
-    doc = fitz.open(p)
-    try:
-        if page_no < 1 or page_no > len(doc):
-            return []
-        pg = doc[page_no - 1]
-        page_rect = pg.rect
-        img_rects = []
-        for x in pg.get_images(full=True):
-            rects = pg.get_image_rects(x[0])
-            if rects:
-                r = fitz.Rect(rects[0]) & page_rect
-                if not r.is_empty:
-                    img_rects.append(r)
-        return _hidden_overlap_detail(pg, img_rects)
-    finally:
-        doc.close()
 
 
 def page_signals(path):
@@ -239,10 +208,8 @@ def scan_pages_detail(path):
                결과 선택, represent.py) 몫. 이 함수는 이유만 남기고 그 판단은 안 한다.
     'garbage' = 글자층 깨짐 비율 높음(>= PAGE_SCAN_GARBAGE) + 이미지 면적 큼(>= PAGE_SCAN_AREA)
     'hidden_overlap' = AD47 — 위 둘 다 쪽 전체 비율이라 못 잡는 국소 사례: 쪽 대부분은 정상 글자인데 숨은 글자
-               상자 하나가 그림과 겹친다(hidden_over_image). 'hidden'과 달리 **_page_agreement로 "원래 글 유지"
-               판단을 거치지 않고** represent.fill_scan_pages가 그 쪽을 곧바로 OCR 글로 바꾼다 — 숨은 글자층과
-               보이는 값이 쉼표/마침표만 다르면(430.000 vs 430,000) _page_agreement의 정규화가 그 차이를 지워
-               버려 "일치"로 오판(원래 틀린 글을 유지)하기 때문(synth-mixedpdf textlayer_mismatch.pdf로 확인). 문서당
+               상자 하나가 그림과 겹친다(hidden_over_image) — 쪽 VLM 후보로 넓힌다. 대표 결과의 스캔 쪽 채움(represent.fill_scan_pages)은
+               이 쪽의 원래 글을 유지한다(쪽 VLM은 글자 상자가 없어 국소 확인 불가 — 옛 OCR 국소 충돌 확인은 0.2.0에 지움, pl-46). 문서당
                상한 PARSE_HIDDEN_OVERLAP_MAX(env, 기본 20, 0=꺼짐 — 이 조건 자체를 안 봐 이전과 바이트 동일).
     'rotated' = AD31(10-08) — prepare.py가 돌린 쪽(rotation.csv의 angle≠0, rotation_info 재사용) — 회전 전
                OCR 점수로 방향을 골랐어도 회전 자체가 쪽의 글자층 추출 신뢰도를 낮출 수 있어 쪽 VLM 후보로 넓힌다.

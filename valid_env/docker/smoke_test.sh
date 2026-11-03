@@ -2,7 +2,7 @@
 # 모듈 컨테이너 연결 시험 — 시험용 pg → parse → structure → load(트리거 1회씩) → mcp 상주 → 밖(호스트)에서 MCP HTTP 호출 → 정리.
 #   DATA_PIPELINE_IMAGE=data-pipeline:<태그> MCP_SERVER_IMAGE=mcp-server:<태그> DOC_SRC=<시험 문서 폴더> RAG_OUT=<빈 결과 폴더> \
 #   SMOKE_SETTINGS=<settings.yaml: mcp.server.token · common.models.embed(base_url·model — 내부망)> SMOKE_PG_PASSWORD=<시험용> \
-#   [SMOKE_LIMIT=10] [SMOKE_MODE=test] [SMOKE_KEEP=1 — 끝나도 pg 남김] bash valid_env/docker/smoke_test.sh [질문]   (S6b — 옛 docker/server_sim/, PC 시험 Docker)
+#   [SMOKE_LIMIT=10] [SMOKE_KEEP=1 — 끝나도 pg 남김] bash valid_env/docker/smoke_test.sh [질문]   (S6b — 옛 docker/server_sim/, PC 시험 Docker)
 #   [PY=호스트 python(PYTHONPATH=저장소 루트로 mcp_server.cli.mcp_smoke 등 -m 호출)]
 #   원본은 DOC_SRC 폴더 하나(/data/docs) — 11-01 사용자: 원천 s3://를 지워 SMOKE_SOURCE(s3:// — MinIO 대역·원본 삭제 확인·결과 게시 ⑥)와
 #   SMOKE_NIGHTLY(자정 배치 모양 — s3:// 원천 필요)도 지움. 게시(publish)는 서버 run_docs·trigger.sh publish로 확인.
@@ -37,7 +37,7 @@ import os, sys, yaml
 from pathlib import Path
 d, e = Path(sys.argv[1]), os.environ
 job = {"PG_HOST": "pg", "PG_PORT": "5432", "PG_PASSWORD": e["SMOKE_PG_PASSWORD"], "PARSE_SOURCE": "/data/docs",
-       "RUN_MODE": e.get("SMOKE_MODE") or "prod", "PARSE_SOURCE_LIMIT": e.get("SMOKE_LIMIT") or "0"}
+       "RUN_MODE": "prod", "PARSE_SOURCE_LIMIT": e.get("SMOKE_LIMIT") or "0"}
 files = {"job": {"base": "/etc/rag/base.yaml", "overrides": job},
          "load": {"base": "/etc/rag/smoke/job.yaml", "overrides": {"PG_CREATE_EXTENSION": "1"}},
          "mcp": {"base": "/etc/rag/smoke/job.yaml", "overrides": {"MCP_HOST": "auto", "MCP_PORT": "8765",

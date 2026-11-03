@@ -34,7 +34,7 @@
 | 파일 형식마다 형식별 엔진 목록(stack — `resources/config/pipeline_stack.json`)에 적힌 엔진을 **모두** 돌린다(하나씩 차례로 시도하지 않음) | 모든 형식을 잘 읽는 파서는 없다. 서버·PC가 같은 파일을 쓰고, 바꿀 때는 그 파일을 고쳐 오버레이 패치한다. 파일을 못 읽거나 모양이 틀리면 시작하지 않는다(종료 2) | done | [pl-03](prd/transform.md#pl-03) |
 | PDF는 두 갈래 — 글자층이 쪽당 평균 20자 미만이면 스캔(`.pdf_image` → 그림 읽는 모델 VLM만), 아니면 글자 PDF(`.pdf_text` → pymupdf·kreuzberg) | 스캔 PDF는 글자 엔진이 못 읽는다. 판정은 `_types.json`에 저장해 다시 쓴다 | done | [pl-03](prd/transform.md#pl-03) |
 | 지원 형식: pdf · doc(x) · ppt(x) · xls(x/m) · hwpx · txt · html/htm · mht/mhtml · eml · msg · png/jpg/jpeg/tif/tiff/bmp. 옛 `.hwp`·압축(zip)은 미지원 | stack의 형식 키 24개 | done | [pl-03](prd/transform.md#pl-03) · [pl-42](prd/transform.md#pl-42) |
-| 엔진은 형식당 최대 2개, 문서마다 동시에, 엔진마다 따로 떨어진 자식 프로세스 | 3개 넘으면 설정 오류(`stackcfg.MAX_PER_TYPE`). 옛 단계(phase)별 다시 돌리기는 없앰 | done | [pl-22](prd/transform.md#pl-22) |
+| 엔진은 문서마다 동시에, 엔진마다 따로 떨어진 자식 프로세스 | 형식당 상한(`MAX_PER_TYPE`)은 0.2.0에 지움(pl-46). 옛 단계(phase)별 다시 돌리기는 없앰 | done | [pl-22](prd/transform.md#pl-22) |
 | 시간 제한 = 쪽 수 × 10초(글자 엔진)·× 120초(VLM 엔진), 엔진 첫 문서는 최소 60초 + 시작 여유 10초. 넘으면 두 배로 한 번 더, 그래도 넘으면 실패 기록 | 큰 문서도 쪽 수만큼 시간을 받는다 | done | [pl-22](prd/transform.md#pl-22) |
 | 그림 글자 인식 엔진(OCR, `rapidocr_ko`)은 기본으로 끈다 — 이미지·스캔은 VLM만. 일괄 실행 엔진은 낮은 우선순위(nice +10) | OCR은 VLM과 겹치고 느리다. 검색 서비스 자원을 덜 뺏는다 | done | [pl-22](prd/transform.md#pl-22) |
 | VLM 동시 호출 수는 설정 키로 조절한다(`common.models.vlm.concurrency` 문서당 4, 전체 관문 12) | 엔진마다 따로 손잡이를 두지 않는다(허브 10-31). 실제 키는 여러 개 — 앵커 정리 필요 | done | [pl-43](prd/transform.md#pl-43) |
@@ -51,7 +51,7 @@
 | 그림 부가 기능 줄이기 — 화살표·겹침·도형 연결·Mermaid 따로 만들기를 VLM 한 번의 종류별 출력(도표 Mermaid·표 HTML·차트 값)으로 | 결정 10-31. **코드는 아직 옛 기능을 씀**(`figures/figures.py:29-38`) — 0.2.0(대표 결과 지문 p1 바뀜) | todo | [pl-05](prd/transform.md#pl-05) |
 | 청크(검색 단위 조각) 나누기 — 기본 `structure`(800자, 제목 기준, 표는 통째). 큰 표 25행씩 나누기는 `CHUNK_TABLE=rows`일 때만 | 검색은 출처가 달린 짧은 조각 단위로 한다 | done | [pl-06](prd/transform.md#pl-06) |
 | 문서 요약 = 앞부분 300자 발췌, 고객·계약 이름은 엔진끼리 서로 확인된 것만 | LLM 요약은 지웠다(op-08) | done | [pl-06](prd/transform.md#pl-06) |
-| 임베딩(검색용 숫자 벡터) — 서버는 내부망 `api`(`EMBED_BASE_URL`·`EMBED_MODEL`), 로컬 모델(bge-m3·e5)은 PC용 | 로컬 모델 길은 0.2.0에 지운다([pl-46](prd/transform-cleanup.md#pl-46)) | done | [pl-06](prd/transform.md#pl-06) |
+| 임베딩(검색용 숫자 벡터) — 내부망 `api`(`EMBED_BASE_URL`·`EMBED_MODEL`)만(시험은 `none`) | 로컬 모델 길(bge-m3·e5 — sentence-transformers)은 0.2.0에 지움([pl-46](prd/transform-cleanup.md#pl-46)) — 패키지는 다음 이미지 빌드 때 requirements에서 뺌(todo) | done | [pl-06](prd/transform.md#pl-06) |
 | ~~지식 그래프·개념 청크·그림 행·집계 사실 만들기~~ | 아무도 적재·조회하지 않았다(11-01 지움) | done | [pl-06](prd/transform.md#pl-06) |
 | ~~구조화·적재 묶음 계약(`DOC_KEYS`) 고치기~~ | 서버가 이 검사를 쓰지 않는다. 0.2.0에 코드째 지운다(pl-46) | dropped | [pl-15](prd/transform.md#pl-15) |
 | 분류 — 적재 때 gold에 넣기 전 SFDC·LAS 문서에 종류 라벨 `doc_class`(SFDC 5종·LAS 7종). 근거 = gold 분류 힌트 칸(판 0003 — 적재 때 EDW 조인) + 게시 .md 앞 8,000자 | 운영 분류와 결과가 같게(사용자 11-02) — 지시문·사용자 쪽 글 운영 글자 그대로, 적재와 같은 규칙(따로 고르지 않음), 내부 모델·`llm.chat`, 집합 밖·장애는 그 문서의 적재 실패(다음 실행에 다시), 재시도·수동 명령 없음, 이미 있는 라벨 안 덮음 | dev | [pl-33](prd/transform.md#pl-33) |
@@ -158,7 +158,7 @@
 | 배치 — 맨 위 `required`(필수·비밀) → 역할 절 7개 → `tuning`(내부 조정값). 옛 배치는 시작 거부, `python -m common.config.migrate`로 변환 | sample과 실제 파일의 차이를 줄였다 | done | [op-08](prd/ops-settings.md#op-08) |
 | 설정 이관은 옛 배치 settings.yaml → 새 배치만 — env 파일 옮기기·`--compare` 지움 | 운영 서버는 0.1.0(settings.yaml 하나). 사용자 11-02 | todo | [op-08](prd/ops-settings.md#op-08) |
 | 하드코딩 0 — 설정 값은 settings.yaml이나 이미지 기본값 표(`settings.py`)에서만, 호스트 셸은 `settings_env.sh`가 준 값만, PG 자동 찾기 없앰(PG 접속 필수) | 한 곳을 바꾸면 나머지가 어긋나던 문제. 남은 복사본 있음(`/srv/rag/code/live` 기본값 등) | done | [op-09](prd/ops-settings.md#op-09) |
-| 환경마다 다른 경로·접속은 settings.yaml 필수(코드 기본값 없음) — 컨테이너 안 경로는 이미지 기본값 표 하나만, 호스트 `PATCH_CODE` 기본값 지움 | 사용자 11-02 | todo | [op-09](prd/ops-settings.md#op-09) |
+| 환경마다 다른 경로·접속은 settings.yaml 필수(코드 기본값 없음) — 컨테이너 안 경로는 이미지 기본값 표 하나만, 호스트 `PATCH_CODE` 기본값 지움 | 사용자 11-02 | dev | [op-09](prd/ops-settings.md#op-09) |
 | 은퇴한 설정 지우기 — `common.paths.korean_font`·`eval_sets_dir` 등(남아 있으면 경고만) | 지문이 바뀌어 0.1.0 묶음에 | done | [pl-21](prd/ops-settings.md#pl-21) |
 | 아무도 안 읽는 env 4개(`FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`)를 run_docs 명령에서 뺌 | C-51 | done | [pl-30](prd/ops-settings.md#pl-30) |
 

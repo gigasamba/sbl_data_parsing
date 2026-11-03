@@ -11,7 +11,7 @@
 산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서) · output/stack_test.md · output/RUNLOG.md(명령 요약)
 """
 
-import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settings.pin_env)를 첫 줄에서(S7e2 — 옛 옵션 카탈로그 채우기 자리)
+import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
 from common.core.console import utf8_stdout
 
 # isort: split
@@ -81,8 +81,8 @@ def _run_until(args, env, sec):
     args[0] = 모듈 점 표기(예: pipeline.extract.run_all)."""
     cmd = [PY, "-m", str(args[0]), *map(str, args[1:])]
     print("$ " + " ".join(cmd), flush=True)
+    from common.core import resources as PR  # 프로세스 묶음(OS 분기 한 곳)
     from common.core import resources as RS
-    from pipeline.extract import resources as PR  # 프로세스 묶음(OS 분기 한 곳)
 
     def call():
         # cwd=APP_ROOT(런타임 루트) — ROOT(코드 루트)로 하면 --src 상대경로가 거기 기준으로 풀려 못 찾음(FS v4 회귀)
@@ -98,7 +98,7 @@ def _run_until(args, env, sec):
 
 # ── 단계 2 ───────────────────────────────────────────────────
 def _engines_of(st):
-    """parse ∪ candidates 엔진(정렬) — stackcfg.engines_of 하나로(VS8b R-8)."""
+    """parse 엔진(정렬) — stackcfg.engines_of 하나로(VS8b R-8)."""
     from pipeline.stackcfg import engines_of
 
     return engines_of(st)
@@ -114,10 +114,7 @@ def show_stack(a=None):
     print("| 형식 | 파싱 엔진(우선순위) |\n|---|---|")
     for f, es in sorted(st["parse"].items()):
         print(f"| {f} | {' → '.join(es)} |")
-    print(
-        f"청킹 {st['chunk']} · 임베딩 {st['embed']} · 그래프 {st['graph']} · 검색 {st['retrieve']} · 상위 k {st['k']}"
-        + (f" · 비교 후보 {', '.join(st['candidates'])}" if st.get("candidates") else "")
-    )
+    print(f"청킹 {st['chunk']} · 임베딩 {st['embed']} · 그래프 {st['graph']} · 검색 {st['retrieve']} · 상위 k {st['k']}")
 
 
 # ── 파싱 모듈(run_docs가 문서마다 부름 — 서버 입구는 run_docs 하나, 사용자 10-31) ──────────

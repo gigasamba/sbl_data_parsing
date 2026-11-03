@@ -25,7 +25,7 @@ def _kind(f):
 
 
 def host_table():
-    """host_keys.tsv 글자 — 줄마다 `모델 경로<TAB>옛 env 이름<TAB>종류`(text·num·bool·list·words·json). 비밀 칸은 넣지 않는다."""
+    """host_keys.tsv 글자 — 줄마다 `모델 경로<TAB>옛 env 이름<TAB>종류`(text·num·bool·list·words·json), 이미지 약속 경로는 `…<TAB>const<TAB>값`. 비밀 칸은 넣지 않는다."""
     rows, seen = [], set()
     for cls in S.app_classes().values():
         for path, f, _ in S.walk(cls):
@@ -34,6 +34,9 @@ def host_table():
                 continue
             seen.add(e)
             rows.append(f"{path}\t{e}\t{_kind(f)}")
+    # 컨테이너 안 약속 경로(사용자 11-02 — settings.IMAGE_PATHS 한 곳): 고정값 줄 `image.<이름><TAB>APP_<이름><TAB>const<TAB>값` — settings_env.sh가
+    # APP_* env로 내 compose가 쓰고, run_docs.py가 읽는다.
+    rows += [f"image.{k}\tAPP_{k.upper()}\tconst\t{v}" for k, v in sorted(S.IMAGE_PATHS.items())]
     return "# 자동 생성 — PYTHONPATH=. python deploy/release/hostkeys.py(고치지 말 것)\n" + "\n".join(rows) + "\n"
 
 

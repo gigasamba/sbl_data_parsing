@@ -15,10 +15,10 @@ AD25(a)(e) 토큰 정규화(늘 켬 — 끄는 스위치는 op-08에 지움):
       하이픈 자리(2026-07-13·D-2024-122·Q-77)·퍼센트는 글자 양쪽 조건이 아니라서 그대로 붙어 있다.
   (a) 숫자 정규화 한 곳: 공백·작은따옴표 천 단위(430 000·1'000)는 쉼표로 통일 → 유효 3자리 쉼표 묶음만 숫자로 합친다
       (4,30,000처럼 묶음이 무효면 조용히 같아지지 않게 그대로 둔다) · 숫자에 바로 붙은 단위 글자(430,000원)는 떼어
-      단위 토큰으로. 마침표 묶음(430.000)은 천 단위·소수점 구분이 안 돼 합치지 않는다(pipeline.shared.meaning.
+      단위 토큰으로. 마침표 묶음(430.000)은 천 단위·소수점 구분이 안 돼 합치지 않는다(pipeline.shared.canon.
       canon_num_key가 충돌 탐지만).
 
-10-14 함수별 분리(사용자) — pipeline에서만 쓰는 canon_num_key는 pipeline/shared/meaning.py로 옮김(로직
+10-14 함수별 분리(사용자) — pipeline에서만 쓰는 canon_num_key는 pipeline/shared/canon.py로 옮김(로직
 바이트 동일). tokens·chars·strip_page_numbers는 계획과 달리 여기 남긴다: tokens는 check_modules.py
 CONTRACT_FUNCS(계약 함수는 common/에만 정의)에 걸리고, chars·strip_page_numbers는 pipeline/eval/stages.py(여러
 이미지 공용)가 그대로 부른다 — 재검증 결과 이 셋은 "공통에서 호출" 규칙으로 못 옮긴다(engine-dev 10-14).

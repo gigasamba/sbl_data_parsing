@@ -85,7 +85,7 @@
 - 고칠 곳(허브 점검 10-31 — 줄 번호는 그날 기준):
   - `/srv/rag/code/live`가 15곳에 복사됨 — `deploy/host/compose/compose.patch*.yml`, `deploy/host/scripts/mcp_up.sh:15`, `run_docs.py:141`, systemd unit.
   - `SERVER_ENV_DIR` 기본 `/srv/rag/env`가 4곳 — `settings_env.sh:54` 하나만 기본값으로 남긴다.
-  - PG 기본값·자동 찾기 — `common/store/pg.py:37-41`, `common/store/services.py:34/132/138`, `pipeline/cli.py:854`(위 결정).
+  - PG 기본값·자동 찾기 — `common/store/pg.py:37-41`, `common/store/pg.py`(`detect_pg`·`connect` — 0.2.0에 services.py에서 옮김), `pipeline/cli.py:854`(위 결정).
   - MCP 호스트·포트·주소 중복 — `mcp_server/main.py:104/192`, `mcp_server/cli/mcp_eval.py:896`, `mcp_server/cli/mcp_smoke.py:54`, `validation/search_ui/serve.py:32/119`.
   - `RERANK_MODEL` 글자 그대로 — `pipeline/eval/stages.py:40` → 설정 칸.
   - soffice 경로 추측 — `pipeline/transform/figures/pptx_render.py:63-69` → PATH와 `SOFFICE_BIN`만(§2).
@@ -97,6 +97,7 @@
   - systemd `User=root` — 그대로 둘지 확인.
 - 파일: 위 목록, `common/config/settings.py`(이미지 기본값 표), `common/config/keyscan.py`, `deploy/host/`, `pipeline/extract/engines/`(등급 A), `common/core/`.
 - 결정(사용자 11-02): 환경마다 다른 경로·접속(게시 대상·Object Storage·EDW·PG·호스트 경로)은 settings.yaml 필수 — 코드 기본값 없음(비면 시작 거부). todo(정리 3b): 컨테이너 안 경로는 이미지 기본값 표(`common/config/settings.py`) 한 곳만 원본으로 — `run_docs.py`·compose·셸이 그 표를 읽고, 다른 곳의 `/app/output`·`/app/deploy` 글자는 없앤다. 호스트 기본값 `PATCH_CODE=/srv/rag/code/live`(`settings.py`·`compose.patch*.yml`)는 지운다.
+- 한 것(11-02 `feature/image-paths` — 등급 A: 공용 `settings.py`를 고쳐 code_fp가 바뀜): ① `settings.IMAGE_PATHS`에 `output_root`(`/app/output`)·`code_root`(`/app/deploy`)를 더하고 `prepared_out`은 그 아래로 만든다. ② `deploy/release/hostkeys.py`가 이 표를 `deploy/host/scripts/host_keys.tsv`의 고정값 줄(`image.<이름>`·`APP_<이름>`)로 내고, `settings_env.sh` load_settings가 `APP_*` env로 낸다 — compose는 컨테이너 쪽 자리를 `${APP_OUTPUT_ROOT}`·`${APP_CODE_ROOT}`·`${APP_DOCS_MOUNT}`로 쓰고, `run_docs.py`는 코드 폴더의 표를 읽는다(`_img` — 명령 글자는 그대로, 시험 `test_run_docs`). ③ `ops.host.patch_code` 기본값 지움 — `compose.patch*.yml`은 `${PATCH_CODE:?}`, `mcp_up.sh`는 칸을 적었을 때만 패치 compose를 붙임, keepalive unit의 `Environment=PATCH_CODE` 지움, `run_docs.py`의 기본 코드 폴더(`/srv/rag/code/live`)도 지움(`--code` 또는 코드 폴더 안에서). 남김: 이미지 쪽(`Dockerfile`·`entrypoint.sh`·`runtime_entry.sh`·`build_ship.sh`·`make_patch.sh`)의 `/app/…` 글자 — 이미지 배치를 정하는 쪽이라 그대로, 설명 주석의 경로 글자도 그대로.
 - Status: done (11-01, PR #77 병합 — stage 1·2a·2b). 남은 고칠 곳 중 지울 도구(`mcp_eval`·`pipeline/eval/stages.py`·`parse_trigger_test.py`)에 걸린 것은 범위 축소(10-31) 삭제로 사라짐.
 
 <a id="pl-21"></a>
@@ -116,6 +117,6 @@
 ## 코드와 다른 점 · 지울 코드
 
 ### 요건 없는 코드 — 남길지 지울지([test.md#e2-18](test.md#e2-18))
-- 공용 도구 — 설정 CLI `common/config/`, DB 도구 `common/store/db/`, 점검 `pipeline/check_env.py`, `common/check/`.
+- 공용 도구 — 설정 CLI `common/config/`, DB 도구 `common/store/db/`, 점검 `common/check/checker.py`(env·services·ping — 0.2.0 합침), `common/check/`.
 
 전체 스위치와 기본값: `settings.sample.yaml` 2부, "[기능 켬/끔]" 묶음.

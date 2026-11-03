@@ -24,7 +24,7 @@ RUN_ENV: env RUN_ENV > YAML required.env.run_env. local·dev·prd. 없거나 dev
 설정 파일을 못 읽거나 그 앱 절 검증에 실패해도 이유(칸 경로·오류 종류만)를 찍고 종료 2(VS7e1 U-1 — 사용자 10-28). 틀린 파일은 import common 때도
 서버면 바로 실패(pin_env — STRICT, S7b c안), local이면 경고 뒤 기본값.
 비밀 칸은 SecretStr — 출력·로그·검증 오류에 값이 나오지 않는다.
-사용: python -m common.config.settings [--file 경로]   # 읽어서 요약(비밀 가림) — 앱별 요약은 python -m pipeline.config · mcp_server.config
+사용: python -m common.config.show [--file 경로]   # 읽어서 요약(비밀 가림 — 0.2.0에 이 파일 밖으로 옮김, pl-46) — 앱별 요약은 python -m pipeline.config · mcp_server.config
 """
 
 import contextlib
@@ -35,7 +35,7 @@ import re
 import sys
 import weakref
 from pathlib import Path
-from typing import Annotated, ClassVar, Literal, get_args, get_origin
+from typing import Annotated, Literal, get_args, get_origin
 from urllib.parse import unquote, urlsplit
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PrivateAttr, SecretStr, ValidationError, model_validator
@@ -43,7 +43,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from common.config import layout as L
 from common.core import exitclean  # pl-27 — 맡은 덮기 파일은 프로세스가 끝날 때 지움
-from common.core.console import utf8_stdout
 
 REPO_ROOT = Path(__file__).resolve().parents[2]  # PC = 저장소 루트 · 이미지 = /app/deploy
 LOCAL_FILE = (
@@ -59,11 +58,15 @@ IN_IMAGE = REPO_ROOT.name == "deploy"  # 코드가 이미지 배치(/app/deploy/
 # ── 이미지 배치 약속 경로 — 코드에 둔 컨테이너 안 자리는 이 두 표에만(CLAUDE.md 3절 경로 규칙의 예외, 사용자 10-28 — VS7e2 R-12 · D-029) ──
 # 이미지(Dockerfile·compose 마운트·entrypoint)가 만드는 자리라 서버 설정 값이 아니라 이미지와 함께 바뀐다. 동작은 S7e2와 같음.
 IMAGE_PATHS = {
-    "gold_mount": "/data/gold",  # run_tool.sh가 사람 정답 폴더를 붙이는 자리(pipeline.config.gold_dir — 옛 `-e GOLD_DIR=/data/gold`)
+    # 사용자 11-02 — 컨테이너 안 약속 경로는 이 표 하나(두 이미지 공통). 호스트 쪽(compose·run_docs·스크립트)은 deploy/release/hostkeys.py가
+    # 이 표로 만든 deploy/host/scripts/image_paths.json을 읽는다(호스트 python엔 pydantic이 없음 — settings_env.sh가 APP_* env로도 냄).
+    "output_root": "/app/output",  # 결과 폴더를 붙이는 자리(compose RAG_OUT → 이 자리)
+    "code_root": "/app/deploy",  # 코드 자리(PYTHONPATH — 실행 이미지는 서버 코드 폴더를 여기에 붙임)
+    "gold_mount": "/data/gold",  # 사람 정답 폴더가 붙는 자리(pipeline.config.gold_dir — 옛 run_tool.sh `-e GOLD_DIR=/data/gold`, 붙이는 방식은 결정 대기 — doc.md)
     "image_env": "/app/docker/image_env.txt",  # 빌드 때 이미지 ENV를 적어 둔 파일(common.config.boot — 라이브러리 env가 이미지 값만 덮게)
     "docs_mount": "/data/docs",  # 원본 폴더를 읽기 전용으로 붙이는 자리(compose DOC_SRC → 이 자리 · pipeline DOC_DIR 기본값)
-    "prepared_out": "/app/output/prepared",  # 원본 사본(prepare) 자리(pipeline DOC_DIR_PREPARED 기본값)
 }
+IMAGE_PATHS["prepared_out"] = IMAGE_PATHS["output_root"] + "/prepared"  # 원본 사본(prepare) 자리(pipeline DOC_DIR_PREPARED 기본값)
 # VS7e1 B-2(사용자 10-28 ①) — 옛 Dockerfile ENV로 굽던 값은 이미지 안 모델 기본값으로(규칙은 "settings.yaml > 코드 기본값" 하나 — 옛 ENV는
 # 다리가 사용자 env로 봐 settings.yaml이 못 덮었음). 이미지 신호 RAG_MODULE(5-3 H)로 그 이미지가 굽던 것만. PC·시험 하위 프로세스(RAG_MODULE 없음)는 PC 기본값.
 _IMAGE_DEFAULTS = {
@@ -344,9 +347,7 @@ class Section(BaseModel):
     """설정 절 공통 — 모르는 칸은 거부(오타 잡기), 비운 칸은 기본값, YAML 스칼라는 칸 종류에 맞게(위 모듈 설명)."""
 
     model_config = ConfigDict(extra="forbid", validate_default=False)
-    REMOVED: ClassVar[frozenset[str]] = (
-        frozenset()
-    )  # 지운 칸 — 설정 파일에 남으면 경고만 하고 무시(시작 거부 막기 · migrate는 "삭제됨"으로 알림)
+    # 지운 칸 — 표 하나 common.config.layout.REMOVED(절 클래스 이름 → 칸 이름, 0.2.0 pl-46): 설정 파일에 남으면 경고만 하고 무시
 
     @model_validator(mode="before")
     @classmethod
@@ -357,7 +358,7 @@ class Section(BaseModel):
         for k, v in data.items():
             if v is None:
                 continue
-            if k in cls.REMOVED:
+            if k in L.REMOVED.get(cls.__name__, ()):
                 sys.stderr.write(f"[settings] 지운 칸 무시: {k} — 설정 파일에서 지울 것(값은 출력 안 함)\n")
                 continue
             f = cls.model_fields.get(k)
@@ -877,8 +878,7 @@ def _server_env(environ, path):
 
 def pin_env(environ=None):
     """import common 때 한 번(common/__init__.py가 부름): 설정 파일을 읽어 본다 — 서버(dev·prd)에서 못 읽거나 형식이 틀리면
-    SettingsError(시작 실패 — STRICT, S7b c안), local은 경고 뒤 계속. 옛 env 이름(설정 칸 — 호스트 칸 빼고)이 env에 있으면 읽지 않고 이름만
-    한 번 알린다. op-09 — env로 내주던 영구 다리(엔진·인계 칸)는 없앴다(그 파일들도 설정 객체로 읽음). 반환: 0(옛 호출 호환)."""
+    SettingsError(시작 실패 — STRICT, S7b c안), local은 경고 뒤 계속(env의 옛 설정 이름 알림은 0.2.0에 지움 — pl-46). 반환: 0(옛 호출 호환)."""
     environ = os.environ if environ is None else environ  # env 남김 — RUN_ENV 신호
     allowed = image_sections(environ)
     run = environ.get("RUN_ENV") or None
@@ -887,13 +887,6 @@ def pin_env(environ=None):
         if path is not None:
             _warn_once("[설정] RAG_MODULE 모름(pipeline·mcp가 아님 — 이미지 안 빈 글자 포함) — 설정 파일 점검 건너뜀")
         return 0
-    cls, _ = section_class(allowed)
-    legacy = sorted(n for n in _env_map(cls, False) if n in environ and n != "RUN_ENV") if environ else []
-    legacy = [
-        n for n in legacy if n not in _env_map(cls, True)
-    ]  # 호스트 칸 이름(load_settings가 셸에 냄)은 빼고 — 이 이미지 절만(다른 앱 설정 모듈 import 안 함, U-a)
-    if legacy:
-        _warn_once(f"[설정] env의 옛 설정 이름은 읽지 않음(S7e2 — settings.yaml 칸·덮기 파일로): {' '.join(legacy)}")
     if path is not None:
         try:
             read_settings(path)  # 파일을 읽을 수 있는지만(칸 검증은 앱 설정 객체·시작 관문 — 호스트 export가 다른 앱 절 오타로 멈추지 않게)
@@ -1264,9 +1257,6 @@ class CommonConnectionsObjectStorage(Section):
 
 
 class CommonConnectionsParsingMeta(Section):
-    REMOVED = frozenset(
-        {"connect_kwargs", "database", "host", "password", "port", "sqlite", "user"}
-    )  # 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)
     table: str | None = F("AI.ParsingMeta", "PM_TABLE", "parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_)", blank="keep")
 
 
@@ -1320,10 +1310,7 @@ class CommonConnectionsPg(Section):
 
 
 class CommonDevDocker(Section):
-    REMOVED = frozenset({"postgres_db", "postgres_user"})  # 사용자 10-30(op-08) — compose는 PG_DB·PG_USER로 채움(남으면 경고만)
     mcp_publish_port: Port | None = F(18765, "MCP_PUBLISH_PORT", "시험 compose에서 MCP를 호스트에 게시할 포트")
-    minio_image: str | None = F("bitnamilegacy/minio:latest", "MINIO_IMAGE", "시험용 minio 이미지")
-    minio_publish_port: Port | None = F(19000, "MINIO_PUBLISH_PORT", "시험 minio를 호스트에 게시할 포트")
     pg_bind: str | None = F("127.0.0.1", "PG_BIND", "시험 PostgreSQL 컨테이너를 호스트에 게시할 바인드 주소")
     pg_effective_cache: str | None = F("12GB", "PG_EFFECTIVE_CACHE", "시험 PG effective_cache_size")
     pg_image: str | None = F("pgvector/pgvector:pg16", "PG_IMAGE", "시험 PostgreSQL(pgvector) 이미지")
@@ -1339,19 +1326,14 @@ class CommonDevDocker(Section):
         "SMOKE_SETTINGS",
         "스모크 시험 컨테이너가 붙여 읽는 설정 파일(settings.yaml) 경로 — MCP 토큰·임베딩·Object Storage 키 등(S7e1 — 옛 SMOKE_ENV env 파일)",
     )
-    smoke_keep: bool | None = F(False, "SMOKE_KEEP", "1이면 시험 끝나도 pg·minio 컨테이너를 남김")
+    smoke_keep: bool | None = F(False, "SMOKE_KEEP", "1이면 시험 끝나도 pg 컨테이너를 남김")
     smoke_limit: int | None = F(0, "SMOKE_LIMIT", "시험에서 파싱할 문서 수 상한(0이면 제한 없음)")
-    smoke_mode: str | None = F("prod", "SMOKE_MODE", "시험 파싱 모드(prod|test — test는 형식별 표본)")
-    smoke_nightly: bool | None = F(False, "SMOKE_NIGHTLY", "1이면 자정 배치 모양(parse·publish만, pg·구조화·적재·MCP 생략)")
     smoke_pg_password: SecretStr | None = F(
         None, "SMOKE_PG_PASSWORD", "시험 PostgreSQL 비밀번호(compose.test.yml이 컨테이너 PG_PASSWORD로 넘김 — S7e1)"
     )
-    smoke_pm_bucket: str | None = F("rag-publish", "SMOKE_PM_BUCKET", "시험 결과 게시용 minio 버킷 이름")
-    smoke_source: str | None = F(IMAGE_PATHS["docs_mount"], "SMOKE_SOURCE", "시험 원천 위치(원본 폴더 자리 또는 s3://버킷/접두)")
 
 
 class CommonModelsEmbed(Section):
-    REMOVED = frozenset({"dim"})  # 사용자 10-30(op-08) — ping_models는 받은 차원만 보여 줌(남으면 경고만)
     allow_external: bool | None = F(False, "EMBED_ALLOW_EXTERNAL", "임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "EMBED_API_KEY", "임베딩 엔드포인트 API 키(있을 때만 Authorization 헤더로 보냄)")
     base_url: str | None = F(None, "EMBED_BASE_URL", "임베딩 엔드포인트 주소(OpenAI 호환 …/v1)")
@@ -1368,7 +1350,6 @@ class CommonModelsEmbed(Section):
 
 
 class CommonModelsGuard(Section):
-    REMOVED = frozenset({"synthetic_truth"})  # 사용자 10-29 — 합성 문서 선언 잠금 삭제(옛 migrate C-35가 옮겨 둔 서버 파일 보호)
     budget_usd: float | None = F(
         None,
         "LLM_BUDGET_USD",
@@ -1390,9 +1371,6 @@ class CommonModelsGuard(Section):
 
 
 class CommonModelsLlm(Section):
-    REMOVED = frozenset(
-        {"empty_retry", "max_concurrency"}
-    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(남으면 경고만)
     allow_external: bool | None = F(False, "LLM_ALLOW_EXTERNAL", "LLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "LLM_API_KEY", "LLM 엔드포인트 API 키(있을 때만 사용)")
     base_url: str | None = F(None, "LLM_BASE_URL", "LLM 엔드포인트 주소(OpenAI 호환 …/v1)")
@@ -1414,11 +1392,9 @@ class CommonModelsTransport(Section):
     down_after: int | None = F(3, "MODEL_DOWN_AFTER", "연속 연결 실패 몇 번이면 그 주소를 '다운'으로 보는가(회)")
     down_cooldown: float | None = F(300.0, "MODEL_DOWN_COOLDOWN", "'다운' 판정 뒤 네트워크를 보내지 않고 즉시 거부하는 시간(초)")
     ping_timeout: int | None = F(60, "PING_TIMEOUT", "ping_models 점검의 호출 제한 시간(초)")
-    transport: str | None = F("adk", "MODEL_TRANSPORT", "모델 호출 전송 방식 — adk(기본) 또는 http(urllib 롤백 경로)")
 
 
 class CommonModelsVlm(Section):
-    REMOVED = frozenset({"model_alt"})  # 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(남으면 경고만)
     allow_external: bool | None = F(False, "VLM_ALLOW_EXTERNAL", "VLM 외부 주소 허용(=1, RUN_ENV=local일 때만)", on=("1",))
     api_key: SecretStr | None = F(None, "VLM_API_KEY", "VLM 엔드포인트 API 키(있을 때만)")
     base_url: str | None = F(None, "VLM_BASE_URL", "VLM 엔드포인트 주소(OpenAI 호환 …/v1)")
@@ -1434,9 +1410,6 @@ class CommonModelsVlm(Section):
 
 
 class CommonDev(Section):
-    REMOVED = frozenset(
-        {"exp_store", "llm_est_in_tokens", "llm_est_out_tokens", "min_gold_coverage"}
-    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(남으면 경고만)
     llm_fake: bool | None = F(False, "LLM_FAKE", "1이면 LLM 호출을 네트워크·캐시 없는 모의 응답으로 대체(시험·비용 추정용)", on=("1",))
     docker: CommonDevDocker = Field(default_factory=CommonDevDocker)
 
@@ -1451,7 +1424,7 @@ class CommonHost(Section):
         "호스트의 결과(output) 폴더(서버 경로) — compose가 컨테이너 /app/output으로 마운트하는 원본(T-21 — 코드가 읽는 칸은 common.paths.output_root)",
     )
     patch_code: str | None = F(
-        "/srv/rag/code/live", "PATCH_CODE", "덧씌우기 코드 폴더(호스트) — compose.patch*.yml이 컨테이너 /app/deploy/*로 마운트"
+        None, "PATCH_CODE", "덧씌우기 코드 폴더(호스트) — compose.patch*.yml이 컨테이너 코드 자리로 마운트(기본값 없음, 사용자 11-02)"
     )
     pg_container: str | None = F(
         None,
@@ -1462,9 +1435,6 @@ class CommonHost(Section):
 
 
 class CommonPaths(Section):
-    REMOVED = frozenset(
-        {"eval_sets_dir", "korean_font", "config_dir", "criteria_file"}
-    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치 · op-08) — 지운 칸(남으면 경고만)
     client_roster: str | None = F(None, "CLIENT_ROSTER", "고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) — 용어·별칭에 합침")
     doc_dir: str | None = F(
         image_default("DOC_DIR"),
@@ -1478,7 +1448,6 @@ class CommonPaths(Section):
     )
     draft_terms_out: str | None = F(None, "DRAFT_TERMS_OUT", "용어 자동 초안 CSV 경로")
     glossary_dir: str | None = F(None, "GLOSSARY_DIR", "용어 사전 폴더(domain_terms.csv·id_patterns.csv 등)")
-    index_root: str | None = F(None, "INDEX_ROOT", "이름 있는 색인 폴더 루트(<index_id>/bundle)")
     mcp_bundle: str | None = F(
         None,
         "MCP_BUNDLE",
@@ -1491,11 +1460,6 @@ class CommonPaths(Section):
     )
     runlog_dir: str | None = F(None, "RUNLOG_DIR", "실행 기록(output/logs) 루트 폴더")
     source_manifest: str | None = F(None, "SOURCE_MANIFEST", "원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응)")
-    sources_file: str | None = F(
-        None,
-        "SOURCES_FILE",
-        "원천 목록 파일 경로(비우면 resources/mappings/sources.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰)",
-    )
     stack_file: str | None = F(
         None,
         "PIPELINE_STACK_FILE",
@@ -1504,9 +1468,6 @@ class CommonPaths(Section):
 
 
 class CommonRuntime(Section):
-    REMOVED = frozenset(
-        {"exp_max_workers", "exp_proc_gb_answer", "exp_proc_gb_build", "exp_proc_gb_run", "exp_reserve_gb"}
-    )  # 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(남으면 경고만)
     cpu_max_load: float | None = F(0.9, "CPU_MAX_LOAD", "새 하위 프로세스를 띄우는 CPU 부하 상한(1분 부하 평균 ÷ 코어 수)", unset=("auto",))
     draft_terms_lock_timeout: float | None = F(
         5.0, "DRAFT_TERMS_LOCK_TIMEOUT", "용어 초안 CSV 쓰기 잠금 대기 시간(초) — 못 얻으면 이번엔 포기"
@@ -1544,18 +1505,14 @@ class CommonRuntime(Section):
 
 
 class CommonStore(Section):
-    REMOVED = frozenset(
-        {"registry_editions", "registry_retry_max", "doc_registry", "registry_etag_md5", "struct_backend", "struct_db"}
-    )  # 사용자 10-30(pl-32 — 재시도 횟수 없음) · 10-31(pl-12 C10 — 문서 대장·숨김 통째로 지움 · pl-08 — 정형 저장소 통째로 지움) — 옛 파일에 남아도 경고만
-    run_mode: Annotated[Literal["prod", "test"] | None, BeforeValidator(lambda v: v or None)] = F(  # "" = 설정 안 함(옛 str 칸과 같게)
+    run_mode: Annotated[Literal["prod"] | None, BeforeValidator(lambda v: v or None)] = F(  # "" = 설정 안 함(옛 str 칸과 같게)
         None,
         "RUN_MODE",
-        "실행 모드 prod|test — pipeline --mode 기본, prod이면 EDW를 못 읽을 때 종료 4·VLM 시간 완화. dev·prd 서버는 prod(pl-12)",
+        "실행 모드 prod — prod이면 EDW를 못 읽을 때 종료 4·VLM 시간 완화. dev·prd 서버는 prod(pl-12 · test 값은 0.2.0에 지움 — 11-01 표본 모드 없앰)",
     )
 
 
 class CommonText(Section):
-    REMOVED = frozenset({"parse_token_norm"})  # 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
     draft_terms_max: int | None = F(500, "DRAFT_TERMS_MAX", "용어 자동 초안 파일 행 수 상한(개) — 넘으면 가장 빈번한 것만 유지")
     search_recency: str | None = F(
         "1",
@@ -1575,7 +1532,6 @@ class CommonText(Section):
 
 
 class CommonConnections(Section):
-    REMOVED = frozenset({"openviking", "edw"})  # 사용자 10-29 — 지운 칸·절(남으면 경고만) · edw = EDW 벡터 경로(ops.md#op-03)
     object_storage: CommonConnectionsObjectStorage = Field(default_factory=CommonConnectionsObjectStorage)
     parsing_meta: CommonConnectionsParsingMeta = Field(default_factory=CommonConnectionsParsingMeta)
     pg: CommonConnectionsPg = Field(default_factory=CommonConnectionsPg)
@@ -1583,7 +1539,6 @@ class CommonConnections(Section):
 
 
 class CommonModels(Section):
-    REMOVED = frozenset({"ocrvlm", "rerank"})  # 사용자 10-29 · ocrvlm 10-30(pl-31) — 지운 칸·절(남으면 경고만)
     embed: CommonModelsEmbed = Field(default_factory=CommonModelsEmbed)
     guard: CommonModelsGuard = Field(default_factory=CommonModelsGuard)
     llm: CommonModelsLlm = Field(default_factory=CommonModelsLlm)
@@ -1722,13 +1677,3 @@ def reveal(v):
 
 
 _TApp = CommonAppSettings
-
-
-if __name__ == "__main__":
-    # import common이 이미 부른 모듈(common.config.settings)로 돌림 — 이 __main__ 사본의 COMMON·_CountingEnviron은 쓰지 않음(S7d — 두 사본이 판 번호를 나누지 않게)
-    from common.config import settings as _S
-
-    utf8_stdout()
-    from common.config import show
-
-    sys.exit(show.main(_S._TApp, sys.argv[1:]))

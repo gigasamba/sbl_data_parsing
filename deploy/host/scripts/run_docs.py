@@ -41,8 +41,7 @@ ROOT = Path(__file__).resolve().parent
 #   required.deploy.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로, C-29 ⓑ를 코드로 보장 — 사용자 Q8 ⑤).
 TEST = PROG = DOCSPACE = DOCFLOW = WARM = ENVFILE = None  # configure()가 채움
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.docker(없으면 podman, 그것도 없으면 docker — op-10)로 채움
-CODE_DIR = None  # --code(설정 배치 모듈 layout.py를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, op-10)
-DEFAULT_CODE = Path("/srv/rag/code/live")  # 코드 폴더 기본 배치(common.host.patch_code 기본값과 같음)
+CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, op-10 · 기본 배치 경로 없음 — 사용자 11-02)
 _EDW: dict = {}  # parsing-meta EDW 접속(호스트 pymssql — edw_list·edw_done_keys)
 WARM_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # warm 파일 이름의 원천 버킷 · 문서 수 세기(psql)
 SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거부
@@ -72,20 +71,40 @@ def _yget(doc, path):
     return doc
 
 
+def _code_root():
+    """코드 폴더 — 찾는 순서(op-10): --code 폴더 > 이 스크립트가 든 코드 폴더(기본 배치 경로는 없음 — 사용자 11-02). 반환 (루트, common 폴더) —
+    common은 저장소 배치(<루트>/common) 또는 서버 코드 폴더 배치(<루트>/app/deploy/common — make_patch 오버레이)."""
+    for r in (CODE_DIR, ROOT.parents[2] if len(ROOT.parents) > 2 else None):
+        for p in (Path(r) / "common", Path(r) / "app" / "deploy" / "common") if r is not None else ():
+            if (p / "config" / "layout.py").is_file():
+                return Path(r), p
+    sys.exit("run_docs: common/config/layout.py 없음 — 코드 폴더 안에서 부르거나 --code <코드 폴더>로 알려 줄 것")
+
+
+@functools.cache
+def _img(name):
+    """컨테이너 안 약속 경로(사용자 11-02 — settings.IMAGE_PATHS 한 곳): 코드 폴더 deploy/host/scripts/host_keys.tsv(없으면 이 스크립트 옆)의 const 줄(deploy/release/hostkeys.py가 만듦)."""
+    f = next((p for p in (_code_root()[0] / "deploy" / "host" / "scripts" / "host_keys.tsv", ROOT / "host_keys.tsv") if p.is_file()), None)
+    if f is None:
+        sys.exit("run_docs: host_keys.tsv 없음 — 코드 폴더(deploy/host/scripts/) 또는 이 스크립트 옆에 둘 것(--code)")
+    rows = f.read_text(encoding="utf-8").splitlines()
+    for row in rows:
+        path, _, kind, *val = row.split("\t") if "\t" in row else ("", "", "")
+        if kind == "const" and path == f"image.{name}":
+            return val[0]
+    sys.exit(f"run_docs: host_keys.tsv에 image.{name} 없음 — PYTHONPATH=. python deploy/release/hostkeys.py로 다시 만들 것")
+
+
+def _app():
+    return _img("code_root").rsplit("/", 1)[0]  # 컨테이너 작업 자리(코드 자리의 부모 — 이미지 WORKDIR)
+
+
 @functools.cache
 def _layout():
     """설정 배치 모듈(common/config/layout.py — 표준 라이브러리만)을 파일로 읽음 — 호스트 python은 pydantic이 없어 common 패키지를 import하지 않는다."""
     import importlib.util
 
-    # 찾는 순서(op-10): --code 폴더 > 이 스크립트가 든 코드 폴더 > 기본 배치 /srv/rag/code/live — 각각 저장소 배치(<루트>/common)·
-    # 서버 코드 폴더 배치(<루트>/app/deploy/common — make_patch 오버레이)
-    roots = [r for r in (CODE_DIR, ROOT.parents[2], DEFAULT_CODE) if r is not None]
-    path = next(
-        (p for r in roots for p in (Path(r) / "common", Path(r) / "app" / "deploy" / "common") if (p / "config" / "layout.py").is_file()),
-        None,
-    )
-    if path is None:
-        sys.exit("run_docs: common/config/layout.py 없음 — --code <코드 폴더>(기본 /srv/rag/code/live)로 코드 폴더를 알려 줄 것")
+    path = _code_root()[1]
     spec = importlib.util.spec_from_file_location("settings_layout", path / "config" / "layout.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -148,7 +167,7 @@ def configure(settings_file=None):
     DOCSPACE = Path(_yget(doc, "common.host.output_root"))  # 컨테이너 /app/output 공유 볼륨
     DOCFLOW = DOCSPACE / "docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     WARM = DOCSPACE / "_warm"  # SOURCE_WARM 대기열 저장소
-    # 컨테이너가 마운트하는 코드 폴더 — compose.patch*.yml·systemd·mcp_up.sh와 같은 칸(ops.host.patch_code — 기본 배치 /srv/rag/code/live).
+    # 컨테이너가 마운트하는 코드 폴더 — compose.patch*.yml·mcp_up.sh와 같은 칸(ops.host.patch_code — 기본값 없음, 사용자 11-02).
     DOCKER = _yget(doc, "common.host.docker") or (
         "podman" if shutil.which("podman") else "docker"
     )  # op-10 — 셸 스크립트와 같은 순서(env 대신 설정)
@@ -193,7 +212,7 @@ PARSE_SET = (
     "RAPIDOCR_PAGE_WORKERS=2",
     "OCR_THREADS=1",
     "PIPE_PROCS=4",
-    "SOURCE_WARM=/app/output/_warm",
+    "SOURCE_WARM={out}/_warm",  # {out} = 컨테이너 결과 자리(_img — parse_cmd가 채움)
     "SOURCE_FETCH_WORKERS=2",
     "PARSE_REP_SELECT=first",
     "PARSE_QA_LIGHT=1",
@@ -210,16 +229,17 @@ def sets(*pairs):
 # ── 컨테이너 명령 줄(S9 Step A — 명령 글자를 시험으로 고정하려고 함수로 뗌, 글자는 뗀 전과 같음) ──
 def warm_cmd(seq):
     """문서 1개 warm(프리페치) — 파싱 컨테이너 안 source warm."""
+    o = _img("output_root")
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && mkdir -p /app/output/_warm && cd /app && "
-        f"PYTHONPATH=/app/deploy "
-        f"python -m pipeline.extract.source{sets('SOURCE_WARM=/app/output/_warm')} warm --csv /app/output/docflow/{seq}/batch.csv'"
+        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && mkdir -p {o}/_warm && cd {_app()} && "
+        f"PYTHONPATH={_img('code_root')} "
+        f"python -m pipeline.extract.source{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {o}/docflow/{seq}/batch.csv'"
     )
 
 
 def parse_cmd(seq, chan, scan, gate):
     """문서 1개 파싱 — chan(light·medium·vlm), scan(스캔 PDF), gate(CPU 게이트 글자)."""
-    inside = f"/app/output/docflow/{seq}"
+    inside = f"{_img('output_root')}/docflow/{seq}"
     # 2026-10-23 사용자 지정 — heavy(스캔·이미지 다수) 판정 문서만 vlm_page 켬(스캔 쪽만 VLM 전사,
     # 내부 스캔판정이 이중 필터) · light는 종전대로 off. 같은 이름은 뒤 --set이 이기므로 뒤에 붙여 덮어씀.
     # 2026-10-23 사용자 지정 — 채널별 파라미터: heavy는 VLM 6(3동시 × 6 = 글로벌 18으로 gpu02 쏠림 제한),
@@ -243,13 +263,13 @@ def parse_cmd(seq, chan, scan, gate):
         f"DOC_DIR_PREPARED={inside}/prepared",
         f"PARSE_IMAGES_ROOT={inside}/parse/_images",
         f"PARSE_RAW_ROOT={inside}/parse",
-        *PARSE_SET,
+        *(p.format(out=_img("output_root")) for p in PARSE_SET),
         *heavy_on,
         *scan_set,
         f"CPU_MAX_LOAD={gate}",
     )
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && cd /app && "
+        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && cd {_app()} && "
         f"echo [envcheck] gate={gate} 채널={chan}; "
         f"{DOC_MARK}={inside} {LIB_ENV} "
         f"python -m pipeline.cli{doc} parse --source rdb:csv:{inside}/batch.csv'"
@@ -258,34 +278,34 @@ def parse_cmd(seq, chan, scan, gate):
 
 def struct_cmd(seq):
     """문서 1개 구조화 + 적재(구조화 컨테이너). 엔진 구성은 파싱과 같은 파일(코드 폴더 — 사용자 11-01: 판 번호 없음, 실행 중에는 안 바뀜)."""
-    inside = f"/app/output/docflow/{seq}"
+    inside = f"{_img('output_root')}/docflow/{seq}"
     st = sets(*EMBED_SET)  # 묶음·적재 python에(문서 메타는 적재가 EDW 조인으로 — pl-29 11-02, FILE_META_PATH 지움)
     return (
-        f"{DOCKER} exec {STRUCT_C} bash -c 'umask 0002 && cd /app && "
-        f"PYTHONPATH=/app/deploy "
+        f"{DOCKER} exec {STRUCT_C} bash -c 'umask 0002 && cd {_app()} && "
+        f"PYTHONPATH={_img('code_root')} "
         f"python -m pipeline.transform.structure.build_bundle{st} --parse-dir {inside}/parse"
         f" --out {inside}/bundle && "
         f"python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle --rep-dir {inside}/parse/_rep "
-        f">> /app/output/docflow/{seq}/structure.log 2>&1'"
+        f">> {inside}/structure.log 2>&1'"
     )
 
 
 def publish_cmd(seq):
     """문서 1개 publish(OS + EDW — 파싱 컨테이너)."""
-    inside = f"/app/output/docflow/{seq}"
+    inside = f"{_img('output_root')}/docflow/{seq}"
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && cd /app && "
-        "PYTHONPATH=/app/deploy python -m pipeline.load.publish_parse_result"
+        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && cd {_app()} && "
+        f"PYTHONPATH={_img('code_root')} python -m pipeline.load.publish_parse_result"
         f"{sets('PM_BUCKET_SKIP_OVERLAP_CHECK=1')} "  # 실행 방침(접속 값 아님) — 버킷·접두·표·EDW·Object Storage는 컨테이너가 설정 파일에서(S7e1 Q8)
         f"--out {inside} --source-system FileStorageMap --apply "
-        f">> /app/output/docflow/{seq}/publish.log 2>&1'"
+        f">> {inside}/publish.log 2>&1'"
     )
 
 
 def sweep_cmd(seq):
     """고아 정리 — 이 문서 표지 env(DOC_MARK)를 가진 파싱 컨테이너 안 프로세스(bash·python·soffice까지 env 상속)를 모두 끔. environ 항목(NUL 구분)과
     통째로 같을 때만(-zx — 리뷰 S9: 앞부분만 맞추면 doc 1 정리가 doc 10~19·100…까지 끔, 옛 PIPE_OUT_ROOT 때부터)."""
-    inside = f"/app/output/docflow/{seq}"
+    inside = f"{_img('output_root')}/docflow/{seq}"
     return (
         f'{DOCKER} exec {PARSE_C} bash -c "for p in /proc/[0-9]*; do '
         f"grep -aqzx '{DOC_MARK}={inside}' \\$p/environ 2>/dev/null && kill \\${{p##*/}} 2>/dev/null; done\""
@@ -417,7 +437,9 @@ def apply_policy(vals):
 def stack_check():
     """엔진 구성 파일 확인 — 시작 때 한 번(파싱 컨테이너 안 show-stack — 파일을 못 읽거나 모양이 틀리면 종료 2, 시작하지 않음).
     없는 엔진은 파싱 입구가 거부한다(stackcfg.resolve)."""
-    rc, _, err = sh(f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && PYTHONPATH=/app/deploy python -m pipeline.cli show-stack'", timeout=120)
+    rc, _, err = sh(
+        f"{DOCKER} exec {PARSE_C} bash -c 'cd {_app()} && PYTHONPATH={_img('code_root')} python -m pipeline.cli show-stack'", timeout=120
+    )
     if rc != 0:
         raise SystemExit(f"[run_docs] 엔진 구성 파일을 읽지 못함(종료 코드 {rc}) — {(err or '').strip()[-200:]}")
 
@@ -571,7 +593,8 @@ def classify_doc(seq, row, cache=None):
     elif ext in probe_ext:
         bin_name = hashlib.sha1(f"{WARM_BUCKET}|{row['s3_key']}".encode()).hexdigest() + ".bin"
         rc, out, _ = sh(
-            f"{DOCKER} exec {PARSE_C} python3 /app/deploy/pipeline/extract/docflow_probe.py /app/output/_warm/{bin_name}", timeout=60
+            f"{DOCKER} exec {PARSE_C} python3 {_img('code_root')}/pipeline/extract/docflow_probe.py {_img('output_root')}/_warm/{bin_name}",
+            timeout=60,
         )
         probe = next((ln.strip() for ln in reversed((out or "").splitlines()) if ln.strip() in ("heavy", "light")), "heavy")
         if ext == ".pdf" and probe == "heavy":
@@ -717,7 +740,8 @@ def cleanup_doc(seq, row):
     if NO_CLEANUP:
         return
     bin_name = hashlib.sha1(f"{WARM_BUCKET}|{row['s3_key']}".encode()).hexdigest() + ".bin"
-    sh(f"{DOCKER} exec {PARSE_C} bash -c 'rm -rf /app/output/docflow/{seq} ; rm -f /app/output/_warm/{bin_name}'", timeout=60)
+    o = _img("output_root")
+    sh(f"{DOCKER} exec {PARSE_C} bash -c 'rm -rf {o}/docflow/{seq} ; rm -f {o}/_warm/{bin_name}'", timeout=60)
     shutil.rmtree(DOCFLOW / f"{seq}", ignore_errors=True)
     (WARM / bin_name).unlink(missing_ok=True)
 
@@ -804,7 +828,7 @@ def main():
     ap.add_argument(
         "--code",
         default=None,
-        help="코드 폴더(설정 배치 모듈을 찾음 — 기본: 이 스크립트가 든 코드 폴더, 없으면 /srv/rag/code/live · op-10)",
+        help="코드 폴더(설정 배치 모듈·이미지 경로 표를 찾음 — 기본: 이 스크립트가 든 코드 폴더 · op-10, 기본 배치 경로 없음 — 사용자 11-02)",
     )
     a = ap.parse_args()
     CODE_DIR = Path(a.code) if a.code else None

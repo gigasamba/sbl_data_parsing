@@ -67,7 +67,7 @@ def _demo():
     assert resolve_agent_dir("nested_figure") == RES_ROOT / "prompts" / "pipeline" / "nested_figure"
     assert (
         RES_ROOT / "prompts" / "common" / "_common" / "tail.md"
-    ).is_file() and CRITERIA_FILE.is_file()  # 보고서 틀 폴더(TEMPLATES_DIR)는 11-01에 지움 — 상수는 pl-46
+    ).is_file() and CRITERIA_FILE.is_file()  # 보고서 틀 폴더·TEMPLATES_DIR 상수는 지움(11-01·pl-46)
     assert STACK_FILE.is_file() and (GLOSSARY_ROOT / "domain_terms.csv").is_file()
     if (PROJ_ROOT / "dev_tools").is_dir():  # 저장소 체크아웃에서만(이미지엔 dev_tools 없음)
         assert resolve_agent_dir("example_agentic") == PROJ_ROOT / "dev_tools" / "unit_test" / "fixtures" / "example_agentic"

@@ -9,13 +9,8 @@ common.host.pg_container	PG_CONTAINER	text
 common.host.prune_keep	PRUNE_KEEP	num
 pipeline.host.gold_dir	GOLD_DIR	text
 pipeline.host.image	DATA_PIPELINE_IMAGE	text
-pipeline.host.index_conf_dir	INDEX_CONF_DIR	text
-pipeline.host.load_cpus	LOAD_CPUS	num
-pipeline.host.load_mem_limit	LOAD_MEM_LIMIT	text
 pipeline.host.parse_cpus	PARSE_CPUS	num
 pipeline.host.parse_mem_limit	PARSE_MEM_LIMIT	text
-pipeline.host.publish_cpus	PUBLISH_CPUS	num
-pipeline.host.publish_mem_limit	PUBLISH_MEM_LIMIT	text
 pipeline.host.run_docs_dir	RUN_DOCS_DIR	text
 pipeline.host.structure_cpus	STRUCTURE_CPUS	num
 pipeline.host.structure_mem_limit	STRUCTURE_MEM_LIMIT	text
@@ -39,3 +34,9 @@ mcp.host.jobs_dir	MCP_JOBS_DIR	text
 mcp.host.mem_limit	MCP_MEM_LIMIT	text
 mcp.server.host	MCP_HOST	text
 mcp.server.port	MCP_PORT	num
+image.code_root	APP_CODE_ROOT	const	/app/deploy
+image.docs_mount	APP_DOCS_MOUNT	const	/data/docs
+image.gold_mount	APP_GOLD_MOUNT	const	/data/gold
+image.image_env	APP_IMAGE_ENV	const	/app/docker/image_env.txt
+image.output_root	APP_OUTPUT_ROOT	const	/app/output
+image.prepared_out	APP_PREPARED_OUT	const	/app/output/prepared

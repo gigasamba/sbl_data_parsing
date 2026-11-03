@@ -1,7 +1,7 @@
 """엔진 구성 파일 읽기 — 서버·PC 같은 길(사용자 11-01: struct 판 표 없앰, 파일만 — D-031·pl-08).
 · 파일 자리: 설정 common.paths.stack_file — 비우면 resources/config/pipeline_stack.json(두 이미지에 다 있음).
   (원천 목록 sources.json은 11-01에 지움 — 원천은 폴더·rdb:csv만.) 바꾸기 = 파일을 고쳐 오버레이 패치(코드 폴더) — 되돌리기는 git.
-· 읽을 때 모양 검사(pydantic — schemas/config_body.py). 못 읽거나 모양이 틀리면 한 줄 안내 + 종료 2(시작하지 않음).
+· 읽을 때 모양 검사(pydantic — 아래 StackFile, 0.2.0에 schemas/config_body.py에서 옮김 — pl-46). 못 읽거나 모양이 틀리면 한 줄 안내 + 종료 2(시작하지 않음).
 · body_sha = 정규 JSON(키 정렬·공백 없음·UTF-8)의 sha256 — 같은 구성이면 서버·PC 같은 값.
 · 층 파일은 이 모듈을 import하지 않는다(code_fp — D-030 ⑦): 층은 pipeline.config.stack()으로 읽는다.
 · 값·비밀은 찍지 않는다(이름·sha·파일 경로만)."""
@@ -12,6 +12,56 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict, field_validator
+
+STACK_BODY_KEYS = ("parse", "source", "embed", "chunk", "graph", "retrieve", "k")  # 파일 body 칸(name은 따로, 메모는 docs)
+
+
+class StackBody(BaseModel):
+    """엔진 구성 설정 칸 — parse = 형식(.pdf_text·.docx …) → 엔진 우선순위(비교 후보 candidates 칸은 0.2.0에 지움 — pl-46)."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    parse: dict[str, list[str]]
+    source: str | None = None
+    embed: str
+    chunk: str
+    graph: str
+    retrieve: str
+    k: int
+
+    @field_validator("parse")
+    @classmethod
+    def _parse(cls, v):
+        if not v:
+            raise ValueError("parse가 비어 있음 — 형식마다 엔진 목록")
+        for fmt, engines in v.items():
+            if not fmt.startswith(".") or not engines or not all(e.strip() for e in engines):
+                raise ValueError(f"parse[{fmt!r}] — 형식은 '.'으로 시작, 엔진 목록은 비지 않은 이름")
+        return v
+
+    @field_validator("k")
+    @classmethod
+    def _k(cls, v):
+        if v < 1:
+            raise ValueError("k는 1 이상")
+        return v
+
+
+class StackFile(StackBody):
+    """PC 파일 모양 — body 칸 + 이름 + 고친 시각 + client_aliases(인계 파일 terms.py가 파일에서만 읽음 —
+    엔진 구성 body 밖)."""
+
+    name: str
+    updated: str | None = None
+    client_aliases: dict[str, list[str]] | None = None
+
+
+def stack_body(doc):
+    """PC 파일 dict → (name, body) — body는 STACK_BODY_KEYS만(있는 것만, 파일 순서), 모양 검사 뒤."""
+    StackFile.model_validate(doc)
+    return doc["name"], {k: doc[k] for k in doc if k in STACK_BODY_KEYS}
+
 
 KINDS = {"stack": "엔진 구성"}  # kind 인자는 옛 호출 호환(지금은 "stack" 하나)
 _CACHE: dict = {}
@@ -54,14 +104,12 @@ def file_of(kind="stack"):
 
 def read_file(kind, path=None):
     """파일 → Active. 엔진 구성 파일 = body 칸 + name(+ updated·client_aliases)."""
-    from common.store.db.schemas import config_body as CB
-
     p = Path(path) if path else file_of(kind)
     doc = json.loads(p.read_text(encoding="utf-8"))
     from pydantic import ValidationError
 
     try:
-        name, body = CB.stack_body(doc)
+        name, body = stack_body(doc)
     except ValidationError as e:  # 칸 이름·이유만(값은 안 찍음) — 메모 칸(storage·*_note)은 docs/architecture/pipeline_stack.md로
         raise ValueError(
             f"{p}: 엔진 구성 파일 모양이 틀림 — {_errors(e)} · 메모 칸(storage·*_note)은 이 파일에 두지 않음(docs/architecture/pipeline_stack.md)"

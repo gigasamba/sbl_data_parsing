@@ -38,7 +38,6 @@ CATALOG_VALUES = {
     "EMBED_MODEL": "",
     "EMBED_QUERY_CACHE": "",
     "EMBED_QUERY_PREFIX": "",
-    "INDEX_CONF": "",
     "LLM_MODEL": "",
     "LLM_SPEND_FILE": "",
     "MCP_BUNDLE": "",
@@ -97,7 +96,7 @@ CATEGORIES = {
                 "extract.warmup_sec",
             ),
         ),
-        ("OCR·표", ("extract.ocr", "extract.ocr_engine", "extract.rapidocr_page_workers", "extract.table_grid_max_rows")),
+        ("OCR·표", ("extract.ocr", "extract.rapidocr_page_workers", "extract.table_grid_max_rows")),
         ("첨부·중복", ("extract.attach", "extract.dedup")),
     ),
     "transform": (
@@ -140,7 +139,6 @@ _OPS = re.compile(
 HYPER = {  # 이름 규칙으로는 운영값이지만 결과(파싱·청크·검색 순위)를 바꾸는 칸
     "common.models.llm.extra_body",  # 생각 켬/끔 등 — 답 글자가 바뀜
     "common.models.vlm.extra_body",
-    "pipeline.extract.ocr_engine",  # 이미지·스캔 문서에 OCR 엔진도 돌림(파싱 결과가 바뀜)
     "pipeline.extract.table_grid_max_rows",
     "pipeline.extract.ocr.dpi",
     "pipeline.transform.structure.page_chunk_max",
@@ -346,16 +344,15 @@ _PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|
 # 설명 글자로는 선택지를 못 뽑는 칸 — 코드가 받는 값(읽는 코드·설명 기준).
 VALUES = {
     "common.run_env": "local·dev·prd 중 하나",
-    "common.store.run_mode": "prod·test 중 하나",
+    "common.store.run_mode": "prod 하나(비우면 설정 안 함 — test는 0.2.0에 지움)",
     "common.text.search_recency": "0(끔)·1(최신을 묻는 질문만)·2(항상) 중 하나",
     "common.connections.object_storage.verify_tls": "1(검증)·0(끔)·CA 파일 경로",
     "common.models.guard.external_scope": "func·e2e 중 하나",
-    "common.models.transport.transport": "adk·http 중 하나",
     "common.runtime.pipe_procs": "1 이상 정수 · auto 또는 비우면 자동 계산",
     "pipeline.connections.rdb.engine": "mssql·pg 중 하나",
     "pipeline.transform.represent.post": "all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments)",
     "pipeline.transform.represent.rep_select": "first·acc·best 중 하나(그 밖 값 = best)",
-    "pipeline.transform.structure.embed": "api·bge-m3·e5-small·e5-base·none 중 하나",
+    "pipeline.transform.structure.embed": "api·none 중 하나",
     "pipeline.transform.structure.chunk_table": "rows 또는 비움(표 통째로)",
     "mcp.server.host": "127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부",
     "mcp.search.pg.vector_search": "exact 또는 비움(HNSW 근사)",
