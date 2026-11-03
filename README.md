@@ -75,6 +75,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 |---|---|---|
 | `0001_search` | 기준 스키마(`required.pg.db_schema`, 예: `ai`) — `--target search` | 옛 한 벌 표(0002가 지움) |
 | `0002_search` | 기준 스키마 + 원천 스키마 5벌(11-02 — pl-28) | 기준 `ai`: 판 표·공용 `doc_id_seq` · 원천마다 `ai_sfdc`·`ai_crms`·`ai_las`·`ai_faq`·`ai_other`: `doc` · `chunk` · `chunk_term` · `term_stat` · `corpus_stat` 테이블, 색인, 뷰 `v_chunk_source`(벡터 차원은 번들 `meta.json` 또는 `--dim`) |
+| `0003_search` | 원천 스키마 `ai_sfdc`·`ai_las`(11-02 — pl-33) | `doc`에 분류 힌트 칸(sfdc: `title`·`entity_*`·`subject` 등 10개, las: `approvalname`) — 검색 뷰는 그대로 |
 
 - **엔진 구성은 DB가 아니라 파일이다** — 서버·PC 모두 `resources/config/pipeline_stack.json`을 읽는다(5-7). 원천 목록 `sources.json`은 11-01에 지웠다(원천은 폴더·`rdb:csv`만). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다(그대로 두거나 DB 담당자가 지움).
 - **실행 기록은 파일이 아니라 DB에 남는다** — 스키마마다 `<스키마>.alembic_version`.
@@ -281,11 +282,11 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 
 ```bash
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle output/demo/bundle --create-extension
-.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0002_search
+.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0003_search
 .venv/bin/python -m common.store.db.dbtool check --target all      # 기대: 차이 없음
 ```
 
-- 이 한 번으로 검색 테이블(`0001_search` → `0002_search`)이 만들어진다.
+- 이 한 번으로 검색 테이블(`0001_search` → `0002_search` → `0003_search`)이 만들어진다.
 - `--bundle`은 벡터 차원을 `meta.json`에서 읽기 위해 준다. `--create-extension`은 새 PG일 때만 필요하다.
 - 결과는 파일이 아니라 DB 안에 남는다(테이블 + `<스키마>.alembic_version`).
 

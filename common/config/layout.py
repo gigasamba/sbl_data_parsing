@@ -92,6 +92,7 @@ RETIRED = frozenset(
 # 역할 절 — (모델 접두, 파일 접두). 긴 접두가 먼저 맞는다. 파일 접두도 서로 1:1(거꾸로 바꿀 때 가장 긴 파일 접두).
 ROLES = (
     ("common.runtime.", "ops.runtime."),
+    ("common.log.", "ops.log."),
     ("common.paths.", "ops.paths."),
     ("common.host.", "ops.host."),
     ("common.dev.", "dev."),
@@ -115,6 +116,7 @@ ROLES = (
     ("mcp.output.", "search.output."),
     ("mcp.parse_proxy.", "search.parse_proxy."),
     ("mcp.query_log.", "search.query_log."),
+    ("mcp.audit.", "search.audit."),
     ("mcp.host.", "ops.mcp_host."),
     ("mcp.dev.", "dev.mcp."),
 )

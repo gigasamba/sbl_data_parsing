@@ -12,6 +12,7 @@ import json
 import sys
 from pathlib import Path
 
+from common.core import span as SP
 from pipeline.extract.engines import registry
 
 
@@ -37,6 +38,7 @@ def main():
         ap.error("--engine, 입력, 출력 필요")
     out = registry.run(a.engine, a.input, a.profile, a.fields)
     Path(a.output).write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    print(SP.usage_line(), flush=True)  # op-01 — 이 프로세스의 cpu·최대 메모리 한 줄(부모 run_all의 extract.parse span이 읽음)
 
 
 if __name__ == "__main__":

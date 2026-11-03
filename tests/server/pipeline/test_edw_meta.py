@@ -170,3 +170,72 @@ def test_chains():
     print(
         f"[시험] pl-29 EDW 조인 — 사례 {len(cases)}개(SFDC 4단계·계정 직접·동률 비움·CRMS·LAS 최신 판·FAQ) · Quote 표 없음 · EDW 없음 · 기본 설정(Quote 없음) · 틀린 설정 {len(bad)}개 거부 통과"
     )
+
+
+HINT_SQL = """
+ALTER TABLE SFDC.ContentVersion ADD COLUMN Title TEXT;
+ALTER TABLE SFDC.Task ADD COLUMN Subject TEXT;
+ALTER TABLE SFDC.Task ADD COLUMN Sent_Received__c TEXT;
+ALTER TABLE SFDC.Event ADD COLUMN Subject TEXT;
+ALTER TABLE SFDC.Event ADD COLUMN Sent_Received__c TEXT;
+ALTER TABLE SFDC.Opportunity ADD COLUMN StageName TEXT;
+ALTER TABLE SFDC.Opportunity ADD COLUMN Real_RFP__c INT;
+ALTER TABLE SFDC.Opportunity ADD COLUMN RFP_Received_Start_Date__c TEXT;
+ALTER TABLE SFDC.Opportunity ADD COLUMN RFP_Received_End_Date__c TEXT;
+ALTER TABLE LAS.Contract ADD COLUMN ApprovalName TEXT;
+UPDATE SFDC.ContentVersion SET Title = 'RFP reply' WHERE Id = 'cv2';
+UPDATE SFDC.Task SET Subject = 'RE: ' || substr(hex(zeroblob(100)), 1, 196), Sent_Received__c = 'Received';
+UPDATE SFDC.Opportunity SET StageName = 'RFP', Real_RFP__c = 1, RFP_Received_Start_Date__c = '2026-03-02' WHERE Id = '006A';
+UPDATE LAS.Contract SET ApprovalName = 'QAG 승인' WHERE ContractID = 2;
+INSERT INTO AI.FileStorageMap VALUES ('SFDC/d7/none.pdf', 'SFDC', 'cv7', NULL), ('SFDC/d8/user.pdf', 'SFDC', 'cv8', NULL),
+    ('SFDC/d9/unk.pdf', 'SFDC', 'cv9', NULL);
+INSERT INTO SFDC.ContentVersion (Id, ContentDocumentId, CreatedDate) VALUES ('cv7', 'cd7', NULL), ('cv8', 'cd8', NULL), ('cv9', 'cd9', NULL);
+INSERT INTO SFDC.ContentDocumentLink VALUES ('cd8', '005USER', 0), ('cd9', 'a99X1', 0);
+"""
+HINT_KEYS = (
+    "title",
+    "entity_type",
+    "entity_class",
+    "entity_id",
+    "sent_received__c",
+    "subject",
+    "stagename",
+    "real_rfp__c",
+    "rfp_received_start_date__c",
+)
+
+
+def test_hints():
+    """분류 힌트 칸(pl-33, 운영 analyze_clues 규칙 — 사용자 11-02): 첫 User 아닌 연결(접두 순서 — User는 건너뜀) · 연결 없음 unlinked ·
+    User만 user_only · 모르는 접두 Unknown:<접두>/other · Task 방향·제목 120자 · 연결 개체가 영업 기회일 때만 단계·RFP · LAS 품의 제목.
+    힌트 칸이 없는 EDW(test_chains의 표)는 힌트만 비고 적재 메타는 그대로."""
+    d = Path(tempfile.mkdtemp())
+    e = _edw(str(d / "edw.sqlite"))
+    try:
+        e.cn.executescript(HINT_SQL)
+        docs = [*DOCS, ("SFDC", "SFDC/d7/none.pdf"), ("SFDC", "SFDC/d8/user.pdf"), ("SFDC", "SFDC/d9/unk.pdf")]
+        out, _ = M.fetch(docs, e, _chain())
+    finally:
+        e.close()
+    subj = "RE: " + "0" * 116
+    want = {  # (원본 경로) → HINT_KEYS 차례의 값
+        "SFDC/d1/opp.pdf": (None, "Opportunity", "opportunity", "006A", None, None, "RFP", "1", "2026-03-02"),  # 005USER 건너뜀
+        "SFDC/d2/task.pdf": ("RFP reply", "Task", "task", "00TT1", "Received", subj, None, None, None),
+        "SFDC/d3/event.pdf": (None, "Event", "event", "00UE1", None, "", None, None, None),
+        "SFDC/d4/quote.pdf": (None, "Quote", "quote", "0Q0Q1", None, None, None, None, None),
+        "SFDC/d6/tie.pdf": (None, "Account", "account", "001ACC1", None, None, None, None, None),  # 첫 연결(정렬) = 001
+        "SFDC/d7/none.pdf": (None, None, "unlinked", None, None, None, None, None, None),
+        "SFDC/d8/user.pdf": (None, None, "user_only", None, None, None, None, None, None),
+        "SFDC/d9/unk.pdf": (None, "Unknown:a99", "other", "a99X1", None, None, None, None, None),
+    }
+    for key, vals in want.items():
+        got = tuple(None if out[key].get(k) is None else str(out[key].get(k)) for k in HINT_KEYS)
+        assert got == vals, (key, got)
+    assert out["LAS/l1/m.pdf"]["approvalname"] == "QAG 승인" and out["SFDC/d1/opp.pdf"]["sf_op_id"] == "006A", out["LAS/l1/m.pdf"]
+    e = _edw(str(d / "edw2.sqlite"))  # 힌트 칸 없는 EDW
+    try:
+        bare, _ = M.fetch(DOCS, e, _chain())
+    finally:
+        e.close()
+    assert bare["SFDC/d2/task.pdf"]["entity_class"] == "task" and bare["SFDC/d2/task.pdf"].get("subject") is None, bare["SFDC/d2/task.pdf"]
+    assert bare["SFDC/d1/opp.pdf"]["sf_op_id"] == "006A" and bare["LAS/l1/m.pdf"]["approvalname"] is None

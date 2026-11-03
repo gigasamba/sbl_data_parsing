@@ -3,6 +3,7 @@
 
 import json
 import os
+import time
 from pathlib import Path
 
 import numpy as np
@@ -12,6 +13,7 @@ from common.ai.guard import settle_tokens as _g_settle_tokens
 from common.ai.guard import urlopen_metered as _g_urlopen_metered
 from common.ai.llm import profile as _profile
 from common.config.settings import by_env, cfg, reveal
+from common.core import span as _span
 from common.core.paths import APP_ROOT
 
 ROOT = APP_ROOT  # output/query_cache.sqlite 기준(옛 dev/)
@@ -65,6 +67,7 @@ def _embed_api(texts, kind="passage"):
         data = json.load(r)
     finally:
         r.close()
+    _span.add_current(embed_tokens=(data.get("usage") or {}).get("total_tokens") or 0)  # op-01 — 열린 span이 없으면(MCP 검색) no-op
     _g_settle_tokens(reserved, prof.model, data.get("usage"))  # BR45 — 응답에 토큰 수 있으면 실제 비용으로(없으면 flat 유지)
     v = np.asarray([d["embedding"] for d in sorted(data["data"], key=lambda d: d.get("index", 0))], dtype=np.float32)
     return v / np.maximum(np.linalg.norm(v, axis=1, keepdims=True), 1e-12)
@@ -160,9 +163,16 @@ def _embed_query_cached(embed, texts, kind):
 
 
 def _embed_uncached(embed, texts, kind):
+    sp = _span.current()  # op-01 — 열린 span(구조화 임베딩)이 있을 때만 호출 수·지연을 쌓음. 없으면 이 한 줄만 비용
+    t0 = time.monotonic() if sp is not None else 0.0
     if embed == "api":
-        return _embed_api(texts, kind)
-    model = _load_st_model(embed)
-    prefix = f"{kind}: " if embed.startswith("e5") else ""
-    vecs = model.encode([prefix + t for t in texts], normalize_embeddings=True, show_progress_bar=False)
-    return np.asarray(vecs, dtype=np.float32)
+        out = _embed_api(texts, kind)
+    else:
+        model = _load_st_model(embed)
+        prefix = f"{kind}: " if embed.startswith("e5") else ""
+        vecs = model.encode([prefix + t for t in texts], normalize_embeddings=True, show_progress_bar=False)
+        out = np.asarray(vecs, dtype=np.float32)
+    if sp is not None:
+        ms = (time.monotonic() - t0) * 1000
+        sp.add(embed_calls=1).observe("embed_call_ms", ms).ext_call(ms)
+    return out

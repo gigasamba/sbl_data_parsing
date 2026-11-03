@@ -46,6 +46,7 @@ import json
 import time
 from pathlib import Path
 
+from common.core import span as SP  # op-01 성능 span
 from common.core.console import utf8_stdout
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 
@@ -636,6 +637,7 @@ def tried_of(doc, last, pd):
 from common.core.artifacts import code_fp  # noqa: E402
 from common.core.contract import source_record  # noqa: E402 — 문서 ID·원본 위치 규칙(모듈 계약)
 from pipeline.shared import postprocess as post_cfg  # noqa: E402 — PARSE_POST 해석(W1~W3·W9·W11 후보정 패키지)
+from pipeline.shared import runtrace  # noqa: E402 — op-01 run.progress
 from pipeline.transform.represent import fuse as fuse_mod  # noqa: E402 — AD29 P1 조각 단위 융합
 from pipeline.transform.represent import table_inline  # noqa: E402 — TA1(사용자 10-15) 엔진별 표 그리드를 본문 제자리에 GFM 표로
 from pipeline.transform.represent import trace as trace_mod  # noqa: E402 — PA0 맥락 기록
@@ -845,6 +847,7 @@ def represent(stack, parse_dir, src=None):
                 try:
                     old = json.loads(prev.read_text(encoding="utf-8"))
                     old_rep = old.get("rep") or {}
+                    SP.result_current("reused")  # op-01 — 이전 대표 결과를 그대로 올림
                     old_sha = (old_rep.get("source") or {}).get("sha256")  # 64자 — run_all 기록(last)의 sha는 앞 16자
                     cur_sha = _current_sha16(doc, last)
                     if old_sha and cur_sha and old_sha[:16] == cur_sha:
@@ -969,9 +972,10 @@ def represent(stack, parse_dir, src=None):
             rep["rep"]["scan_fill"] = fill
         _t["scanfill"] = time.time() - _t0
         _t0 = time.time()  # 2026-10-22 — scan_fill 완료
-        rep["post"] = apply_post(
-            rep, doc, doc_path, feats, vp_pages=vp_pages, page_covered=covered
-        )  # W1~W3·W9·W11 후보정(rep["text"]에 덧붙임)
+        with SP.span("transform.figures", doc_id=doc, ext=Path(doc).suffix.lower()):  # op-01 — 쪽 VLM·그림 VLM/OCR 호출 지표가 이 span에
+            rep["post"] = apply_post(
+                rep, doc, doc_path, feats, vp_pages=vp_pages, page_covered=covered
+            )  # W1~W3·W9·W11 후보정(rep["text"]에 덧붙임)
         _t["post"] = time.time() - _t0
         _t0 = time.time()  # 2026-10-22 — apply_post(그림 추출·쪽 VLM) 완료
         # TA1(사용자 10-15) — apply_post·scan_fill 뒤, 즉 이 문서가 실제로 내보낼 rep["text"]가 다 정해진 뒤에 부른다:
@@ -982,6 +986,7 @@ def represent(stack, parse_dir, src=None):
         _t["table"] = time.time() - _t0
         _t0 = time.time()  # 2026-10-22 — table_inline+trace 완료
         rep["rep"]["stage_times"] = {k: round(v, 2) for k, v in _t.items()}  # 2026-10-22 — 단계별 소요(초) 기록
+        SP.add_current(stage_s=rep["rep"]["stage_times"])  # op-01 — 같은 값을 span.metrics에도
         _pdt = (rep.get("post") or {}).get("post_times") or {}
         _pdetail = (
             " | post["
@@ -1008,18 +1013,34 @@ def represent(stack, parse_dir, src=None):
             "figures_capped": rep["post"].get("figures_capped", False),
         }
 
+    _done = [0]
+
+    def _doc_traced(_pair):
+        """문서 1개 = transform.represent span 1행(op-01) — 단계별 시간·모델 호출 지표는 span.metrics에."""
+        _doc, _dd = _pair
+        with SP.span("transform.represent", doc_id=_doc, ext=Path(_doc).suffix.lower(), cpu=_par == 1) as _sp:
+            _r = _doc_one(_pair)
+            if _r is None:
+                _sp.result("skip", None, SP.safe("대표 결과 없음"))
+            elif not _r.get("engine"):
+                _sp.result("fail", "doc", SP.safe(_r.get("reason")))
+            _sp.add(pages=_dd.get("pages"), format=_dd.get("format"))
+            _done[0] += 1
+            return _r
+
     _pairs = sorted(qa["docs"].items())
     _par = max(1, pc.cfg().extract.doc_parallel)  # S7c — 설정 객체 · 2026-10-22 사용자 지정 — 문서 병렬(기본 1=기존 순차와 동일)
-    if _par > 1:
-        import concurrent.futures as _cf  # 문서간 병렬 — ex.map 회수는 제출 순서라 index·engines.csv 순서 불변
+    with runtrace.Progress(total=len(_pairs), done=lambda: _done[0], unit="doc"):  # op-01 — 60초마다 run.progress
+        if _par > 1:
+            import concurrent.futures as _cf  # 문서간 병렬 — ex.map 회수는 제출 순서라 index·engines.csv 순서 불변
 
-        with _cf.ThreadPoolExecutor(max_workers=_par) as _ex:
-            index.extend(r for r in _ex.map(_doc_one, _pairs) if r is not None)
-    else:
-        for _p in _pairs:
-            _r = _doc_one(_p)
-            if _r is not None:
-                index.append(_r)
+            with _cf.ThreadPoolExecutor(max_workers=_par) as _ex:
+                index.extend(r for r in _ex.map(SP.carry(_doc_traced), _pairs) if r is not None)
+        else:
+            for _p in _pairs:
+                _r = _doc_traced(_p)
+                if _r is not None:
+                    index.append(_r)
     with (out_dir / "sources.jsonl").open("w", encoding="utf-8") as f:  # 문서 ID ↔ 원본 위치 표(인계용 — 검색 결과에서 원본 찾기)
         for r in index:
             if r.get("doc_key"):
@@ -1096,5 +1117,8 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    import sys
+
     utf8_stdout()
-    main()
+    with runtrace.run("represent", sys.argv[1:]):  # op-01 — 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
+        main()

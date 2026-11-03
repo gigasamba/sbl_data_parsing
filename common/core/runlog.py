@@ -55,14 +55,15 @@ _LABEL = (
     r"|pwd"
 )
 _SECRET_PATTERNS = (
-    re.compile(r"(?i)authorization\s*:\s*bearer\s+(?P<val>\S+)"),
+    re.compile(r"(?i)[\"']?authorization[\"']?\s*:\s*[\"']?bearer\s+(?P<val>[^\"'\s,;}]+)"),
     # 따옴표로 감싼 값은 닫는 따옴표까지 통째로("p@ss w"처럼 공백이 있어도) — 아래 따옴표 없는 패턴보다 먼저
     re.compile(r"(?i)[\"']?(?:" + _LABEL + r")[\"']?\s*[=:]\s*\"(?P<val>[^\"]*)\""),
     re.compile(r"(?i)[\"']?(?:" + _LABEL + r")[\"']?\s*[=:]\s*'(?P<val>[^']*)'"),
     # key=value · "key": "value"(따옴표는 키·값 어느 쪽에 있어도, 서로 짝이 안 맞아도 넉넉히 받음)
     re.compile(r"(?i)[\"']?(?:" + _LABEL + r")[\"']?\s*[=:]\s*[\"']?(?P<val>[^,;&\s\"']+)"),
     # scheme://user:password@host — DSN의 비밀번호 부분만(스킴·계정은 안 가림)
-    re.compile(r"(?i)[a-z][a-z0-9+.\-]*://[^:/@\s]+:(?P<val>[^@\s]+)@"),
+    # 스킴 중간에서 다시 시작하지 않는다: 긴 본문에서 실패할 때 제곱 시간 역추적 방지.
+    re.compile(r"(?i)(?<![a-z0-9+.\-])[0-9+.\-]*[a-z][a-z0-9+.\-]*://[^:/@\s]+:(?P<val>[^@\s]+)@"),
 )
 
 

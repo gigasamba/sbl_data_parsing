@@ -27,6 +27,7 @@ import urllib.parse
 from pathlib import Path
 
 from common.config.settings import by_env, cfg, checked, reveal
+from common.core import span as _span
 from common.core.paths import APP_ROOT
 
 ROOT = APP_ROOT
@@ -236,6 +237,7 @@ def _do_call(messages, temperature, max_tokens, json_mode, base, model, agent, t
         if rpm:
             wait = _last[0] + 60 / rpm - time.monotonic()
             if wait > 0:
+                _span.add_current(llm_rpm_wait_ms=int(wait * 1000))  # op-01 — 분당 상한 때문에 기다린 시간
                 time.sleep(wait)
             _last[0] = time.monotonic()
     # 예산(10-05 독립 검토 반영) — 호출 전 예상 최대 비용(입력 글자/3 토큰 + max_tokens 출력)을 공유 장부에 선차감(잠금 안 확인+기록),
@@ -322,6 +324,7 @@ def chat(messages, temperature=0.0, max_tokens=1024, json_mode=False, allow_exte
     if cp.exists():
         with _lock:
             _stats["cache_hits"] += 1
+        _span.add_current(llm_cache_hit=1)  # op-01 — 열린 span(문서×단계)에 응답 캐시 적중 수
         return json.loads(cp.read_text(encoding="utf-8"))["text"]
     text, u = _do_call(messages, temperature, max_tokens, json_mode, base, model, agent, timeout)
     if _empty_truncated(text, u):
