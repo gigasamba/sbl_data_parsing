@@ -59,11 +59,15 @@
   - 문서: `.hwp`(kreuzberg만 — 실제 문서 품질 시험 필요) · `.docm`·`.pptm`(kreuzberg, anydoc — **office 아님**: `office_stdlib/parser.py:242`가 `.docx`가 아니면 xlsx로 다룸) · `.rtf`(anydoc, kreuzberg).
   - 글자 자료: `.csv`(markitdown, kreuzberg) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown).
   - 오픈문서·서식 파일: `.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.xlsb`(kreuzberg) · `.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg).
-  - 데이터·기록: `.json`·`.xml`·`.log`(markitdown 또는 plaintext, kreuzberg).
+  - 데이터·기록: `.json`·`.xml`·`.log`(~~markitdown 또는 plaintext, kreuzberg~~ → 11-03: plaintext 하나 — 아래).
   - 뺀 것: `.gif`·`.webp`(이미지 확장자 목록 — 11-03에 `pipeline/shared/exts.py` `IMG_EXTS` 한 곳으로 모음, 넣으려면 그 묶음과 엔진 구성) · `.heic`(새 패키지 필요) · 압축 파일([pl-02](extract.md#pl-02) 결정).
 - 방법: `pipeline/extract/engines/registry.py`에 "엔진별 추가 확장자" 표를 두고 `engines_for()`가 함께 읽는다 — 엔진 `parser.py`의 `FORMATS`와 엔진 지문(p0 code_fp)은 그대로(핑거프린트 명령으로 확인). 그다음 `resources/config/pipeline_stack.json`, `tests/.../test_ext_formats`와 시험 표본. `pipeline/mcp_parse_service.py`의 받는 확장자(`allowed_exts()`)는 11-03부터 엔진 구성의 `parse` 키에서 만든다(이미지 뺌) — 따로 고치지 않는다.
+- 결정(사용자 11-03): `.json`·`.xml`·`.log`는 **글 그대로**(plaintext — markitdown 아님). 구성에 plaintext 하나만 둔다(kreuzberg는 구조를 풀어 써서 글이 달라짐).
+- 한 것(11-03, `feature/pl45-ext2`): `registry.py`에 `EXTRA_FORMATS`(엔진별 추가 확장자)와 `formats(엔진)`(FORMATS + 추가분) — `engines_for()`·`parse_one --list`가 읽는다. `pipeline_stack.json`에 20개 형식(위 표 순서). 엔진 지문(`run_all.engine_code_fp`) 13개 그대로, 층 지문 p0만 바뀜(`registry.py`가 p0 범위 `engines/**` 안 — 실행 기록용, 문서 재사용 열쇠 아님). 시험 `tests/server/pipeline/test_ext_formats.py` `EXT2` 표 — 형식마다 임시 견본을 만들어 구성의 엔진마다 파싱(옛 이진 `.xlsb`·`.dot`·`.xlt`·`.pot`은 순수 파이썬으로 견본을 못 만들어 구성·등록부만 봄 — 11-03 PC에서 LibreOffice·Excel로 만든 견본을 kreuzberg가 읽음을 확인).
+- 남은 것: `.hwp` — kreuzberg 4.10에 HWP 판독기가 있으나 직접 만든 HWP5 견본(압축·비압축)에서 글이 빈 채로 나와 읽힘을 확인하지 못해 뺐다. 실제 `.hwp` 문서로 시험한 뒤 `EXTRA_FORMATS["kreuzberg"]`와 구성에 더한다.
+- 열린 것(코드 검토 11-03 — 사람 결정 필요): ① 암호·DRM 사전 판정(`prepare.py` — `OOXML_EXTS`·OLE 목록)에 서식 파일·`.xlsb`·오픈문서가 없음(`pipeline/shared/exts.py`는 p1 지문 파일) ② `.pptm`·`.ppsx`·`.potx`·`.docm`·`.dotx`·`.xltx`는 그림 추출·쪽 수·FAQ 행 등 `.docx`·`.pptx`·`.xlsx` 정확 비교 분기를 못 탐(p1·s 지문 파일) ③ `resources/config/criteria.json` `groups.native`에 새 형식이 없어 파싱 QA 판정이 비어 있음 ④ `parse_document` 도구 설명(`mcp_server/routers/parse_tool.py` — MCP 계약)의 형식 목록이 옛것 ⑤ plaintext가 `.log`·`.json`의 `|`·탭 줄을 표로 볼 수 있음(엔진 파일) ⑥ 옛 이진 4종 자동 파싱 시험 없음. `run_docs.py` 레인 분류는 글자 형식(`.tsv`·`.md`·`.json`·`.xml`·`.log`·`.rtf`)만 light로 더함(오픈문서·서식 파일은 모르는 형식 = vlm 그대로).
 - 검토 등급 A(엔진 폴더) · 0.2.0 묶음.
-- Status: todo — 0.2.0.
+- Status: todo — `.hwp`·위 열린 것만 남음(실제 `.hwp` 문서로 시험한 뒤). 나머지 20개 형식은 끝(11-03).
 
 <a id="pl-20"></a>
 ## pl-20 · 엔진 스택 사본 파일 방식 검토

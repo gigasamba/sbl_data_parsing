@@ -605,7 +605,8 @@ def classify_doc(seq, row, cache=None):
     meta_heavy_kb = {".mht": 300, ".docx": 300, ".doc": 300, ".xlsx": 500, ".xlsm": 500, ".xls": 500, ".pdf": 1024}
     size_kb = (row.get("file_size") or 0) // 1024
     meta_heavy = ext in (".pptx", ".ppt") or size_kb >= meta_heavy_kb.get(ext, 1 << 30)
-    if ext in (".txt", ".hwpx", ".hwp", ".csv", ".eml", ".msg", ".html", ".htm"):
+    # pl-45 — 글자 형식(.tsv·.md·.json·.xml·.log·.rtf)도 light(그림 없음). 오픈문서·서식 파일은 아직 모르는 형식(vlm)
+    if ext in (".txt", ".hwpx", ".hwp", ".csv", ".eml", ".msg", ".html", ".htm", ".tsv", ".md", ".json", ".xml", ".log", ".rtf"):
         cls = "light"
     elif ext in probe_ext:
         rc, out, _ = sh(

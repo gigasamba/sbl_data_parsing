@@ -39,7 +39,7 @@ def main():
     a = ap.parse_args()
     if a.list:
         for e, (s, m) in registry.engines().items():
-            print(f"{e:18s} {s:15s} {' '.join(m.FORMATS[e])}" + ("  (미실측)" if e in m.UNVERIFIED else ""))
+            print(f"{e:18s} {s:15s} {' '.join(registry.formats(e))}" + ("  (미실측)" if e in m.UNVERIFIED else ""))
         return
     if not (a.engine and a.input and a.output):
         ap.error("--engine, 입력, 출력 필요")

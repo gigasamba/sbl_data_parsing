@@ -33,13 +33,13 @@
 |---|---|---|---|
 | 파일 형식마다 형식별 엔진 목록(stack — `resources/config/pipeline_stack.json`)에 적힌 엔진을 **모두** 돌린다(하나씩 차례로 시도하지 않음) | 모든 형식을 잘 읽는 파서는 없다. 서버·PC가 같은 파일을 쓰고, 바꿀 때는 그 파일을 고쳐 오버레이 패치한다. 파일을 못 읽거나 모양이 틀리면 시작하지 않는다(종료 2) | done | [pl-03](prd/transform.md#pl-03) |
 | PDF는 두 갈래 — 글자층이 쪽당 평균 20자 미만이면 스캔(`.pdf_image` → 그림 읽는 모델 VLM만), 아니면 글자 PDF(`.pdf_text` → pymupdf·kreuzberg) | 스캔 PDF는 글자 엔진이 못 읽는다. 판정은 `_types.json`에 저장해 다시 쓴다 | done | [pl-03](prd/transform.md#pl-03) |
-| 지원 형식: pdf · doc(x) · ppt(x) · xls(x/m) · hwpx · txt · html/htm · mht/mhtml · eml · msg · png/jpg/jpeg/tif/tiff/bmp. 옛 `.hwp`·압축(zip)은 미지원 | stack의 형식 키 24개 | done | [pl-03](prd/transform.md#pl-03) · [pl-42](prd/transform.md#pl-42) |
+| 지원 형식: pdf · doc(x) · ppt(x) · xls(x/m) · hwpx · txt · html/htm · mht/mhtml · eml · msg · png/jpg/jpeg/tif/tiff/bmp · (11-03 pl-45) docm/pptm · rtf · csv/tsv/md · odt/ods/odp · xlsb · dotx/xltx/potx/ppsx/dot/xlt/pot · json/xml/log. 옛 `.hwp`·압축(zip)은 미지원 | stack의 형식 키 43개 | done | [pl-03](prd/transform.md#pl-03) · [pl-42](prd/transform.md#pl-42) · [pl-45](prd/transform.md#pl-45) |
 | 엔진은 문서마다 동시에, 엔진마다 따로 떨어진 자식 프로세스 | 형식당 상한(`MAX_PER_TYPE`)은 0.2.0에 지움(pl-46). 옛 단계(phase)별 다시 돌리기는 없앰 | done | [pl-22](prd/transform.md#pl-22) |
 | 시간 제한 = 쪽 수 × 10초(글자 엔진)·× 120초(VLM 엔진), 엔진 첫 문서는 최소 60초 + 시작 여유 10초. 넘으면 두 배로 한 번 더, 그래도 넘으면 실패 기록 | 큰 문서도 쪽 수만큼 시간을 받는다 | done | [pl-22](prd/transform.md#pl-22) |
 | 그림 글자 인식 엔진(OCR, `rapidocr_ko`)은 기본으로 끈다 — 이미지·스캔은 VLM만. 일괄 실행 엔진은 낮은 우선순위(nice +10) | OCR은 VLM과 겹치고 느리다. 검색 서비스 자원을 덜 뺏는다 | done | [pl-22](prd/transform.md#pl-22) |
 | VLM 동시 호출 수는 설정 키로 조절한다(`common.models.vlm.concurrency` 문서당 4, 전체 관문 12) | 엔진마다 따로 손잡이를 두지 않는다(허브 10-31). 실제 키는 여러 개 — 앵커 정리 필요 | done | [pl-43](prd/transform.md#pl-43) |
 | 확장자 추가 1차: `.jpeg`·`.tif`·`.tiff`·`.bmp`(엔진은 `.jpg`와 같음), `.mhtml`(`.mht`와 같음), `.hwpx` 시험 | 형식마다 임시 견본으로 파싱 시험(`test_ext_formats.py`) | done | [pl-42](prd/transform.md#pl-42) |
-| 확장자 추가 2차: `.hwp`·`.docm`·`.pptm`·`.rtf`·`.csv`·`.tsv`·`.md`·오픈문서·서식 파일·`.json`·`.xml`·`.log` | 엔진 파일은 그대로 두고 등록부(`registry.py`)에 "엔진별 추가 확장자" 표를 둬 엔진 지문을 지킨다. 0.2.0 · 사람 검토(등급 A) | todo | [pl-45](prd/transform.md#pl-45) |
+| 확장자 추가 2차: `.hwp`·`.docm`·`.pptm`·`.rtf`·`.csv`·`.tsv`·`.md`·오픈문서·서식 파일·`.json`·`.xml`·`.log` | 엔진 파일은 그대로 두고 등록부(`registry.py`)에 "엔진별 추가 확장자" 표를 둬 엔진 지문을 지킨다. `.json`·`.xml`·`.log`는 글 그대로(11-03). 나머지는 끝(11-03) — `.hwp`만 남음: 견본으로 읽힘을 확인 못 해 뺌(실제 `.hwp` 문서로 시험한 뒤 더함). 0.2.0 · 사람 검토(등급 A) | todo | [pl-45](prd/transform.md#pl-45) |
 | ~~엔진 구성 사본 파일(`stack-v*.json`)~~ | 대체됨 — 저장 구조 [pl-32](prd/load-schema.md#pl-32) | done | [pl-20](prd/transform.md#pl-20) |
 | ~~파싱 코드를 `transform/parse/`로 옮기기~~ | 속도·품질 이득 없이 레이어 코드 지문(code_fp — 바뀌면 재처리)만 바뀐다(사용자 10-31) | dropped | [pl-17](prd/transform.md#pl-17) |
 | 대표 결과 고르기(represent): 엔진 결과 중 정확하고 풍부한 것을 대표로 고르고, 줄 단위 투표로 합치고, 엔진 사이 라벨·값을 서로 확인한다(`represent.py`·`fuse.py`·`crosscheck.py`) | 엔진마다 결과가 다르다. 다음 단계로 넘기는 글은 가장 정확해야 한다 | done | [pl-04](prd/transform.md#pl-04) |
