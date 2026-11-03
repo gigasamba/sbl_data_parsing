@@ -1,11 +1,8 @@
-"""검색 공용 도우미(pgsearch·retriever) — 질의 임베딩·가중치·동점 처리·ID 문턱 + 묶음 문서 목록(BundleDocs).
+"""검색 공용 도우미(pgsearch·retriever) — 질의 임베딩·가중치·동점 처리·ID 문턱.
 mc-01(사용자 10-31) — PC 전용 로컬 묶음 검색(numpy 코사인·BM25 — 옛 Local.search·bm25)은 지움: 검색은 PG 하나(PC는 SQLite 대역 pg_standin).
-묶음은 아직 실행 중에 읽는다(문서 메타·청크 키 — PG만·묶음 없음은 mc-19)."""
-
-from pathlib import Path
+mc-19(사용자 11-03) — 묶음 문서 목록(BundleDocs)도 지움: 검색은 실행 중에 묶음 파일을 읽지 않는다(색인 정보·문서 날짜는 PG)."""
 
 from common.ai.embed import embed_texts, query_model_mismatch
-from common.core.contract import jl
 from common.core.terms import load_id_patterns_typed, match_clients  # BR41 tie-break 엔티티(고객 명부·ID 모양)
 from mcp_server import config as mc  # 설정 객체(S7d)
 
@@ -95,11 +92,11 @@ def weights(question=None):
 
 
 class IndexMismatch(ValueError):
-    """AD41 — 질의 임베딩 모델이 색인(묶음 meta)과 다름. RuntimeError·OSError가 아니라서 '키워드·ID만'으로 조용히 떨어지지 않고 오류로 드러남."""
+    """AD41 — 질의 임베딩 모델이 색인(gold doc.embed_model — mc-19)과 다름. RuntimeError·OSError가 아니라서 '키워드·ID만'으로 조용히 떨어지지 않고 오류로 드러남."""
 
 
 def embed_query(meta, text):
-    """질의 임베딩 — 모델은 색인 meta(embed·embed_model)에서, 차원도 meta와 맞아야 함(AD41: 불일치면 거부)."""
+    """질의 임베딩 — 모델은 색인 meta(embed·embed_model — pgsearch.index_meta)에서, 차원도 meta와 맞아야 함(AD41: 불일치면 거부)."""
     import numpy as np
 
     bad = query_model_mismatch(meta)  # api는 모델 이름이 이 프로세스 env(EMBED_MODEL) — 색인과 다르면 거부
@@ -108,23 +105,6 @@ def embed_query(meta, text):
     v = embed_texts(meta["embed"], [text], "query")[0]
     if len(v) != meta["dim"]:  # 적재 뒤 임베딩 모델(EMBED_MODEL)을 바꾸면 차원이 달라 검색이 깨짐 — 다시 적재
         raise SystemExit(
-            f"질의 임베딩 {len(v)}차원 ≠ 적재 {meta['dim']}차원(모델 {meta.get('embed_model')}) — 같은 모델로 묻거나 run-stack으로 다시 적재"
+            f"질의 임베딩 {len(v)}차원 ≠ 적재 {meta['dim']}차원(모델 {meta.get('embed_model')}) — 같은 모델로 묻거나 다시 적재"
         )
     return (v / (np.linalg.norm(v) or 1)).astype("float32")
-
-
-def file_name_of(file_path):
-    """파일 이름 = file_path의 마지막 '/' 뒤 — v_chunk_source 뷰(`regexp_replace(file_path, '^.*/', '')`)와 같은 규칙(PG doc 행용 — mc-10)."""
-    return file_path.rsplit("/", 1)[-1]
-
-
-class BundleDocs:
-    """묶음(docs.jsonl·chunks.jsonl)의 문서·청크 목록 — Retriever가 문서 메타(최신성 순위)·청크 키에 쓴다(검색은 PG — mc-01).
-    mc-10 — 축소 스키마 묶음(doc_key·file_path·doc_name만)과 옛 묶음(file_sha256·file_name)을 읽는 곳마다 가르지 않게 여기서 채움."""
-
-    def __init__(self, bundle):
-        B = Path(bundle)
-        self.chunks, self.docs = jl(B / "chunks.jsonl"), jl(B / "docs.jsonl")
-        for d in self.docs:
-            d.setdefault("doc_key", d.get("file_sha256") or d["file_path"])
-            d.setdefault("file_name", d.get("doc_name") or file_name_of(d["file_path"]))

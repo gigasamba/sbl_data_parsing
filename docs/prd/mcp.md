@@ -151,7 +151,29 @@
 - 결정(허브·사용자 11-01, [mc-01](#mc-01) B안): 서버 검색 MCP가 묶음 파일(`docs.jsonl`·`chunks.jsonl`·`meta.json`)을 실행 중에 읽지 않게 — 문서 메타(최신성 순위 L3-1)·임베딩 정보·청크 키를 PG에서 읽는다.
 - 왜 따로: 검색 동작이 바뀌는 일(r 층) — 자기 PR + 평가(e2e)로.
 - 파일: `mcp_server/services/search/{retriever,local,pgsearch,server_state}.py`.
-- Status: todo
+- 사실(11-03 조사 — `feature/mc19-pg-search`): 검색이 실행 중에 묶음에서 읽는 것은 세 가지뿐이다.
+  - ① `meta.json`의 `embed`·`embed_model`·`dim`: 질의 임베딩과 모델·차원 불일치 거부(`local.embed_query`·`common.ai.embed.query_model_mismatch`). PG에는 차원만 있다(원천 스키마마다 `corpus_stat.dim` — 한 행짜리 BM25 통계 표).
+  - ② `docs.jsonl`의 `doc_date`·`version`·`superseded`·`family`: 최신성 순위(`docmeta.recency_rerank` — 구조화 때 `docmeta.doc_meta(파일 이름, 본문)`이 만듦). gold `doc`에는 이 칸이 없다.
+  - ③ `chunks.jsonl`: `Retriever.key_local`을 만들지만 아무도 읽지 않는다(죽은 코드). 청크 키는 이미 PG(`<doc_id>:<seq>`).
+  - 설정 `paths.mcp_bundle`(묶음 위치)은 검색만 쓴다. 고객 명부·용어 사전(`terms.py`)은 묶음이 아니라 resources 파일 — [pl-38](load.md#pl-38)(마스터를 PG `<PG_SCHEMA>_master`로)이 맡고 mc-19 범위가 아니다.
+- 결정(사용자 11-03 grill 1차):
+  - 최신성 4칸(`doc_date`·`version`·`superseded`·`family`)을 gold `doc`(원천 스키마 5벌)에 더한다 — 새 Alembic 마이그레이션 0004, 적재(`pgvector_load`)가 묶음 `docs.jsonl` 값으로 채운다. 순위는 지금과 같아야 한다. 검색 뷰 계약(MCP 출력)은 바꾸지 않는다. 검토 등급 A(DB 스키마).
+  - 설정 `paths.mcp_bundle`은 지운다 — 남아 있으면 경고만(시작은 함).
+  - 통과 기준: 바꾸기 전후 같은 PC 평가 세트에서 질문마다 상위 근거 목록이 같아야 한다(다르면 원인을 보고).
+- 결정(사용자 11-03 grill 2차 — 임베딩 정보 자리):
+  - 임베딩 모델 이름은 gold `doc`(원천 스키마 5벌)에 `embed_model` 칸으로 둔다 — 적재가 문서마다 묶음 `meta.json` 값으로 채운다. 이유(사용자): 나중 guard(섞인 모델 거부·그 문서만 다시 임베딩)가 문서 단위로 판단해야 해서. 한 문서의 청크는 늘 같은 모델로 임베딩되므로 `chunk`에는 두지 않는다.
+  - `corpus_stat`은 남긴다 — 키워드 검색(BM25)이 검색마다 전체 청크 수·평균 길이를 읽는다(`pgsearch.py`). 없애면 검색마다 청크 표 전체를 세야 해 문서가 늘수록 느려진다.
+  - `corpus_stat.dim`은 지운다 — 차원은 `chunk.embedding`의 칸 형식 `vector(차원)`에 이미 고정돼 있어 거기서 읽는다(지금 `dim`을 읽는 곳: `pgvector_load`의 차원 확인·`faq_sync`·`_drop_docs`, 시험 대역 `tests/server/mcp/pgfix.py`).
+  - (제안 — 구현 때 확인) 검색의 모델 확인: 질의 임베딩 모델 ≠ 그 스키마 gold `doc.embed_model`(값이 둘 이상이면 섞임 — 거부하고 알림)이면 지금처럼 거부한다.
+- 범위(사용자 11-03 — 허브 전달): 0.2.0에 넣는다.
+- 구현(11-03 `feature/mc19-pg-search`):
+  - 최신성 칸은 `doc_date` 하나만 더했다 — 1차 결정(4칸) 뒤 최신성 순위가 [pl-38](load.md#pl-38)에 지워져(`retriever.py` 주석·`CommonText.search_recency` 지운 칸), 묶음에서 근거로 나가는 값은 `doc_date`뿐이었다. `version`은 근거에서 원천 manifest 값만(`shaping._evidence`), `superseded`는 늘 null(mc-05), `family`는 pl-38에 지움 — 셋 다 검색이 읽지 않아 칸을 만들지 않는다(필요해지면 새 판).
+  - 판 `0004_doc_embed.py`: 5벌 `doc`에 `content_date TEXT`(문서에 적힌 날짜 — docmeta가 본문·파일 이름에서 찾은 ISO 글자, `YYYY-MM`·`YYYY`도 있어 DATE가 아님. 사용자 11-03: DB 칸 이름은 무슨 날짜인지 드러나게 — 파일 생성·수정 시각이 아니고 원천에 수정 날짜도 없어 `doc_created_at`이 아닌 `content_date`, 등록 시각 `created_at`과 다름. MCP 근거 이름은 `doc_date` 그대로)·`embed_model TEXT` 더함, `corpus_stat.dim` 지움. 모델 `search_tables.DOC_META`. 검색 뷰 `v_chunk_source`는 그대로.
+  - 적재(`pgvector_load._load_src`)가 `content_date`(묶음 docs.jsonl `doc_date`)·`embed_model`(묶음 meta.json)을 채움. BM25 통계는 `_corpus_stat_sql` 한 곳(차원 없음).
+  - 검색: `pgsearch.index_meta(db)` — 모델 = 그 스키마 `doc.embed_model`(여럿이면 쉼표로 이어 질의 모델과 같을 수 없어 `embed_query`가 거부 — 섞인 색인), 차원 = 벡터 칸 형식(벡터가 없으면 0 — 키워드·ID만). 근거 `doc_date`는 `pgsearch.search`가 `doc.content_date`를 JOIN해 읽음. `Retriever(retrieve, pg)` — 묶음 인자·`BundleDocs`·`doc_meta`·`key_local` 지움. `server_state`는 원천마다 Retriever를 만듦(적재 판이 바뀌면 다시 — 색인 정보도 새로 읽음).
+  - 설정 `common.paths.mcp_bundle` 지움 — 지운 칸 표(`common.config.layout.REMOVED`)라 남아 있으면 경고만, `migrate`는 "삭제됨"으로 알림. `mcp_server.cli.ask --bundle`·`pgsearch search --bundle`은 받기만(옛 호출 호환).
+  - 통과 확인: 같은 묶음(문서 5건·청크 165)·같은 질문(rag_qa 4 + 문서마다 1 = 9) × 원천 4 × 방법 3(전체·벡터·키워드+ID) = 검색 108번 — develop `479f7cc`와 이 판의 상위 8 근거(순위·경로·청크 키·쪽·`doc_date`·via·점수)가 모두 같음(SQLite 대역, 유료 호출 없이 토큰 해시 임베딩 — 벡터 경로 포함). 서버 확인은 refactor.md C-87.
+- Status: done — 0.2.0(11-03)
 
 <a id="mc-18"></a>
 ## mc-18 · `parse_document` 스캔 PDF 다시 지원

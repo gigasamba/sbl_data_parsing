@@ -48,7 +48,7 @@ def _selftest_copy_group():
     ]
     d = pgfix.mk_bundle(docs, chunks)
     _STATE.clear()
-    _env = pgfix.use(d, MCP_BUNDLE=str(d))
+    _env = pgfix.use(d)
     try:
         out = do_search("단가는?", k=5)
         assert [e["file_name"] for e in out["evidence"]] == ["MAIL-X.eml"], out["evidence"]
@@ -111,7 +111,7 @@ def _selftest_copy_group_rep_text():
     ]
     d = pgfix.mk_bundle(docs, chunks)
     _STATE.clear()
-    _env = pgfix.use(d, MCP_BUNDLE=str(d))
+    _env = pgfix.use(d)
     try:
         out = do_search("단가는?", k=5)
         rep = out["evidence"][0]
@@ -148,7 +148,7 @@ def _selftest_query_log():
     )
     logdir = Path(tempfile.mkdtemp())
     _STATE.clear()
-    _env = pgfix.use(d, MCP_BUNDLE=str(d), MCP_QUERY_LOG_DIR=str(logdir))  # 설정 객체 덮기(S7d)
+    _env = pgfix.use(d, MCP_QUERY_LOG_DIR=str(logdir))  # 설정 객체 덮기(S7d)
     tok = CALLER.set("mcp:selftest")
     try:
         do_search("단가는?", k=3)
@@ -196,7 +196,7 @@ def _selftest_evidence_gate():
         ],
     )
     _STATE.clear()
-    _env = pgfix.use(d, MCP_BUNDLE=str(d))  # 설정 객체 덮기(S7d)
+    _env = pgfix.use(d)  # 설정 객체 덮기(S7d)
     try:
         none = do_search("색인에 없는 XYZ999-계약은?", k=3)  # BM25 0건
         assert none["evidence_status"] == "none", none
@@ -265,7 +265,7 @@ def _selftest_evidence_rdb_meta():
     )
 
     _STATE.clear()
-    _env = pgfix.use(d, MCP_BUNDLE=str(d), MCP_MANIFEST=str(man_path))  # 설정 객체 덮기(S7d)
+    _env = pgfix.use(d, MCP_MANIFEST=str(man_path))  # 설정 객체 덮기(S7d)
     try:
         on = do_search("계약기준금액은?", k=5)
         by_name = {e["file_name"]: e for e in on["evidence"]}
@@ -326,7 +326,7 @@ def _selftest_contract():
     chunks[4]["faq_group"] = "DP"
     d = pgfix.mk_bundle(docs, chunks)
     _STATE.clear()
-    _env = pgfix.use(d, MCP_BUNDLE=str(d))
+    _env = pgfix.use(d)
     names = lambda o: sorted(e["file_name"] for e in o["evidence"])
     cases = [  # (거르기, 기대 문서, 기대 scope_docs)
         ({"source_system": "SFDC"}, ["s1.txt", "s2.txt"], 2),

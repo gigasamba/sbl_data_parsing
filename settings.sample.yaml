@@ -303,7 +303,6 @@ ops:
     doc_dir:  # 원본 문서 폴더 · 값: 경로
     doc_dir_prepared:  # 준비(dedup·회전) 끝난 문서 폴더 · 값: 경로
     draft_terms_out:  # 용어 자동 초안 CSV 경로 · 값: 경로
-    mcp_bundle:  # 검색할 로컬 묶음(bundle) 폴더 경로 · 값: 경로
     output_root:  # 결과(output) 폴더 · 값: 경로
     runlog_dir:  # 실행 기록(output/logs) 루트 폴더 · 값: 경로
     source_manifest:  # 원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응) · 값: 경로

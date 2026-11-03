@@ -233,7 +233,7 @@ bash deploy/host/scripts/run_tool.sh migrate stamp --target search
 # ③-b 차이가 "표 없음·색인 없음·뷰 없음·뷰 칸 다름"뿐 → 없는 것만 만들고(뷰는 다시 만듦) 버전 기록(기준 리비전이 IF NOT EXISTS) — ③-a 대신
 #      bash deploy/host/scripts/run_tool.sh migrate up --target search
 # ③-c 컬럼 이름·형식·NULL·기본값·키가 다르거나 남는 표·컬럼·색인 → stamp·up 모두 거부(종료 2) — 멈추고 출력(이름만)을 DB 담당과 협의
-# ⑤ 확인 — "판 끝 ['0003_search'] · 코드의 끝 판 0003_search … 비교: 차이 없음" + 엔진 구성 파일이 읽히는지
+# ⑤ 확인 — "판 끝 ['0004_search'] · 코드의 끝 판 0004_search … 비교: 차이 없음" + 엔진 구성 파일이 읽히는지
 bash deploy/host/scripts/run_tool.sh migrate check --target all
 bash deploy/host/scripts/run_tool.sh show-stack                           # 이름·sha·파일 경로 — 못 읽으면 종료 2
 ```
@@ -431,7 +431,7 @@ $DOCKER run --rm -i --network none --entrypoint bash -v "$PWD:/app/deploy:ro,z" 
 - 이미지 칸 `required.deploy.pipeline_image`·`required.deploy.mcp_image` → **[dev]** 그대로 `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0`(0.2.0 코드는 0.1.0 실행 이미지에서 돈다 — DEPS_HASH 같음) · **[prd]** `data-pipeline:0.2.0`·`mcp-server:0.2.0`.
 - 검색 스키마 `required.pg.db_schema` → `$NEW_SCHEMA`(판 0002가 기준 스키마의 옛 표를 지우므로 **반드시 새 이름** — 8-1·C-74).
 - 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline`은 비워 둔다(8-4 3에서 켬).
-- 0.2.0에서 지운 칸(`common/config/layout.py` `REMOVED` — 예: 옛 오버레이 `common.host.patch_code`, `pipeline.host.structure_cpus`·`structure_mem_limit`, 옛 OCR·지문 배치 칸, pl-38로 지운 `ops.paths.glossary_dir`·`ops.paths.client_roster`(용어집·고객 명부는 이제 PG 마스터 표)·`common.text.search_recency`(판 묶음·최신성 순위 지움)·`pipeline.transform.structure.draft_terms`(초안 용어는 오프라인 도구로))은 남아 있어도 경고 한 줄 뒤 무시된다 — 지워도 되고 두어도 된다.
+- 0.2.0에서 지운 칸(`common/config/layout.py` `REMOVED` — 예: 옛 오버레이 `common.host.patch_code`, `pipeline.host.structure_cpus`·`structure_mem_limit`, 옛 OCR·지문 배치 칸, pl-38로 지운 `ops.paths.glossary_dir`·`ops.paths.client_roster`(용어집·고객 명부는 이제 PG 마스터 표)·mc-19로 지운 `common.paths.mcp_bundle`(검색은 묶음 없이 PG gold만)·`common.text.search_recency`(판 묶음·최신성 순위 지움)·`pipeline.transform.structure.draft_terms`(초안 용어는 오프라인 도구로))은 남아 있어도 경고 한 줄 뒤 무시된다 — 지워도 되고 두어도 된다.
 - 새 필수 칸 자리 확인: `python -m common.config.sample --where <칸 이름>`(위 이미지 안에서 같은 방법).
 - (선택) 서버 EDW의 사슬 표·칸 이름이 기본값과 다르면(Quote 표를 켜는 것 포함) 사슬 파일 사본을 두고 `ops.pipeline_paths.edw_chain`을 적는다 — [§8-6](#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29). 기본값 그대로면 비워 둔다.
 ```bash
@@ -446,7 +446,7 @@ $DOCKER rm data-pipeline-parse data-pipeline-structure mcp-server            # �
 bash deploy/host/scripts/dc.sh up -d data-pipeline                           # 기대: data-pipeline Started(또는 Running)
 bash deploy/host/scripts/run_tool.sh migrate check --target all              # 읽기만 — 새 스키마는 "… · 표 없음(새 스키마 — up으로 만듦)", 종료 코드 1이 정상
 bash deploy/host/scripts/run_tool.sh migrate up --target all                 # 종료 코드 0 — 기대(갈래 셋):
-#   [migrate] search <NEW_SCHEMA>: 판 ['0003_search'] (끝 0003_search)          ← 새 스키마는 0001→0002→0003을 차례로 올림(원천 스키마 5벌 포함)
+#   [migrate] search <NEW_SCHEMA>: 판 ['0004_search'] (끝 0004_search)          ← 새 스키마는 0001→0004를 차례로 올림(원천 스키마 5벌 포함 — 0004: gold doc `content_date`·`embed_model` 칸, `corpus_stat.dim` 지움, mc-19)
 #   [migrate] applog applog: 판 ['0001_applog'] (끝 0001_applog)
 #   [migrate] master <NEW_SCHEMA>_master: 판 ['0001_master'] (끝 0001_master)
 #   "올린 뒤에도 차이:"가 나오면 멈추고 DB 담당과
@@ -518,9 +518,10 @@ cp -p "$BK/settings.yaml.0.1.0" "$SERVER_ENV_DIR/settings.yaml"               # 
 
 **① 사본 두기 · 칸 적기** — 컨테이너(`data-pipeline`)에서 보이는 자리여야 한다. settings.yaml은 파일 하나만 붙으므로 설정 폴더(`$SERVER_ENV_DIR`)에 두면 안 보인다 — 결과 폴더(컨테이너 `/app/output`) 아래에 둔다.
 ```bash
-install -d -o 10001 -g <운영 그룹> -m 2775 "$RAG_OUT/config"
-cp -n /srv/rag/code/live/resources/config/edw_chain.yaml "$RAG_OUT/config/edw_chain.yaml"
-chown 10001:<운영 그룹> "$RAG_OUT/config/edw_chain.yaml" && chmod 640 "$RAG_OUT/config/edw_chain.yaml"
+OUT=<common.host.output_root 값 — 호스트 결과 폴더, 컨테이너 /app/output>
+install -d -o 10001 -g <운영 그룹> -m 2775 "$OUT/config"
+cp -n /srv/rag/code/live/resources/config/edw_chain.yaml "$OUT/config/edw_chain.yaml"
+chown 10001:<운영 그룹> "$OUT/config/edw_chain.yaml" && chmod 640 "$OUT/config/edw_chain.yaml"
 # settings.yaml(편집기로):  ops: { pipeline_paths: { edw_chain: /app/output/config/edw_chain.yaml } }
 ```
 

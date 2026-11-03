@@ -1,7 +1,7 @@
 """검색 MCP 설정 — settings.yaml의 common + mcp 절(S7a 모델, refactor_plan 5-2 · D-015). 칸 표는 refactor_plan 부록 D.
 mcp_server 코드가 읽는 객체는 설정 파일 기반 캐시 MCP다(S7e2 — 전환 다리 없앰: env의 옛 이름은 읽지 않음, 신호 SETTINGS_FILE·RUN_ENV만):
   `from mcp_server import config as mc` → `mc.cfg().search.methods`(mcp 절) · `mc.given("MCP_METHODS")`(준 값만) · `mc.checked(X)` ·
-  시험 `with mc.senv(SEARCH_MIN_SCORE="0.5", MCP_BUNDLE=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
+  시험 `with mc.senv(SEARCH_MIN_SCORE="0.5", MCP_METHODS=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
   env로 읽는 칸만 env에 씀). common 칸은 `common.config.settings.cfg()`로(COMMON).
 요청마다 읽던 값(MCP_TOOL_TIMEOUT_SEC·SEARCH_* 등)은 쓰는 자리에서 요청마다 cfg()로 읽고, 시작 때 한 번 읽던 상수는 CFG(아래)에
 모은다(S5 — 이름·기본값은 옛 mcp_server.py 모듈 상수 그대로, 읽는 시점도 같음 — 이 모듈 import 때).

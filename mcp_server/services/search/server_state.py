@@ -8,8 +8,6 @@ import threading
 import time
 import types
 
-from common.config import settings as C  # common 칸(S7e1 — MCP_BUNDLE)
-from common.core.paths import APP_ROOT
 from common.store.pg import PGPool, _standin_schema, _warn_standin, conf, has_conn  # 옛 pg_mcp_connect — 시험이 has_conn을 바꿔 끼움
 from mcp_server import config as mc  # 설정 객체(S7d)
 
@@ -83,16 +81,11 @@ def _build_retriever():
 
     cur = cfgfile.active("stack")  # 엔진 구성 파일(서버·PC 같음 — 프로세스 시작 때 읽은 것, 사용자 11-01)
     st = cur.named()
-    bundle = C.cfg().paths.mcp_bundle or str(APP_ROOT / "output" / "edw" / "bundle")  # S7e1 — common 칸(옛 mcp.server.bundle)
     dbs = connect_sources()  # 원천 스키마 5벌(pl-28) — 실 PG는 풀 하나를 함께 씀
-    import copy
-
-    base = RT.Retriever(bundle, st.get("retrieve", "hybrid"))  # 묶음(문서 메타)은 한 번만 읽고 원천마다 연결만 바꿔 씀
-    Rs = {}
-    for src, db in dbs.items():
-        Rs[src] = copy.copy(base)
-        Rs[src].pg = db
-    _STATE["Rs"], _STATE["dbs"], _STATE["bundle"], _STATE["stack"] = Rs, dbs, bundle, st
+    Rs = {
+        src: RT.Retriever(st.get("retrieve", "hybrid"), pg=db) for src, db in dbs.items()
+    }  # 색인 정보는 원천마다 PG에서(mc-19 — 묶음 없음)
+    _STATE["Rs"], _STATE["dbs"], _STATE["stack"] = Rs, dbs, st
     _STATE["version"], _STATE["checked_at"] = _version_of(dbs), time.time()
     old_pool, _STATE["pool"] = _STATE.get("pool"), getattr(next(iter(dbs.values())), "pool_obj", None)
     if old is not None and old_pool is not None and old_pool is not _STATE["pool"]:
@@ -107,7 +100,7 @@ def _retriever(src):
             if "Rs" not in _STATE:
                 _build_retriever()
         return _STATE["Rs"][src]
-    if "bundle" not in _STATE:  # 시험이 Retriever를 직접 넣은 경우 — 재적재 대상 아님
+    if "dbs" not in _STATE:  # 시험이 Retriever를 직접 넣은 경우 — 재적재 대상 아님
         return _STATE["Rs"][src]
     interval = mc.cfg().server.reload_check_sec
     if time.time() - _STATE.get("checked_at", 0) >= interval and _RELOAD_LOCK.acquire(blocking=False):

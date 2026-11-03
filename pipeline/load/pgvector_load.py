@@ -193,7 +193,7 @@ def load(db, bundle, replace=False, rep_dir=None):
         for src, ids in _drop_plan(elsewhere, replace).items():
             sdb = dbs[src]
             with sdb.cn.transaction(), sdb.cn.cursor() as cur:
-                _drop_docs(cur, sdb.schema, ids, meta["dim"])
+                _drop_docs(cur, sdb.schema, ids)
         for src, idx in by_src.items():
             sdb = dbs[src]
             with sdb.cn.transaction(), sdb.cn.cursor() as cur:
@@ -204,7 +204,7 @@ def load(db, bundle, replace=False, rep_dir=None):
     else:
         with db.cn.transaction(), db.cn.cursor() as cur:  # 한 트랜잭션 — 실패하면 5벌 모두 되돌림
             for src, ids in _drop_plan(elsewhere, replace).items():
-                _drop_docs(cur, dbs[src].schema, ids, meta["dim"])
+                _drop_docs(cur, dbs[src].schema, ids)
             for src, idx in by_src.items():
                 c, ld, kp = _load_src(cur, dbs[src].schema, src, docs, idx, chunks, vecs, meta, replace)
                 _add(counts, src, c)
@@ -268,17 +268,17 @@ def _drop_plan(elsewhere, replace):
     return plan
 
 
-def _drop_docs(cur, s, ids, dim):
+def _drop_docs(cur, s, ids):
     """원천 스키마 s에서 문서들을 지움(키워드 색인·문서 빈도 포함, chunk는 CASCADE) — 그 스키마의 BM25 통계도 다시 셈."""
     drop_terms(cur, s, ids)
     cur.execute(f"DELETE FROM {_tbl(s, 'doc')} WHERE doc_id = ANY(%s)", (ids,))
-    if dim is None:  # 통계 행이 없던 스키마(faq_sync) — 차원을 모르면 통계는 다음 적재가 씀
-        return
-    cur.execute(
-        f"""INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len, dim) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0), %s FROM {s}.chunk
-                    ON CONFLICT (id) DO UPDATE SET n_chunks = EXCLUDED.n_chunks, avg_len = EXCLUDED.avg_len, dim = EXCLUDED.dim""",
-        (dim,),
-    )
+    cur.execute(_corpus_stat_sql(s))
+
+
+def _corpus_stat_sql(s):
+    """BM25 통계 한 행(청크 수·평균 길이) 다시 셈 — 차원은 판 0004에 지움(mc-19 — chunk.embedding 칸 형식)."""
+    return f"""INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0) FROM {s}.chunk
+                    ON CONFLICT (id) DO UPDATE SET n_chunks = EXCLUDED.n_chunks, avg_len = EXCLUDED.avg_len"""
 
 
 def faq_sync(db, reset):
@@ -289,13 +289,12 @@ def faq_sync(db, reset):
     if not reset:
         return 0, sorted(r["file_path"] for r in sdb.q(f"SELECT file_path FROM {sdb.schema}.doc"))
     _require_marked_schema(db, "faq-sync --reset")
-    dim = (sdb.q(f"SELECT dim FROM {sdb.schema}.corpus_stat WHERE id = 1") or [{"dim": None}])[0]["dim"]
     cn = (sdb if getattr(db, "is_standin", False) else db).cn  # 대역은 원천마다 파일
     with cn.transaction(), cn.cursor() as cur:
         cur.execute(f"SELECT doc_id FROM {sdb.schema}.doc")  # 트랜잭션 안에서 — 그사이 들어온 FAQ도 지움
         ids = [r[0] for r in cur.fetchall()]
         if ids:
-            _drop_docs(cur, sdb.schema, ids, dim)
+            _drop_docs(cur, sdb.schema, ids)
     return len(ids), []
 
 
@@ -339,6 +338,8 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
                 "doc_id": nxt[0] if nxt is not None else None,
                 "created_at": _kst(d.get("created_at")),
                 "clients_doc": json.dumps(d["clients"], ensure_ascii=False) if d.get("clients") else None,
+                "content_date": d.get("doc_date"),  # mc-19 — 묶음 doc_date(문서에 적힌 날짜) → gold content_date
+                "embed_model": meta.get("embed_model"),  # mc-19 — 묶음의 임베딩 모델(검색의 질의 모델 확인 · 문서 단위 guard)
             }
             cur.execute(
                 f"INSERT INTO {s}.doc({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))}) RETURNING doc_id",
@@ -408,11 +409,7 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
                             ON CONFLICT (term) DO UPDATE SET df = {s}.term_stat.df + EXCLUDED.df""",
                 (list(ci_db.values()),),
             )
-        cur.execute(
-            f"""INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len, dim) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0), %s FROM {s}.chunk
-                        ON CONFLICT (id) DO UPDATE SET n_chunks = EXCLUDED.n_chunks, avg_len = EXCLUDED.avg_len, dim = EXCLUDED.dim""",
-            (meta["dim"],),
-        )
+        cur.execute(_corpus_stat_sql(s))
     return {"docs": len(doc_id), "chunks": len(sel), "terms": n_terms}, loaded, kept
 
 

@@ -3,10 +3,9 @@
 명령: search --q(옛 bench — 로컬 대 pgvector 비교는 mc-01 11-01에 지움). 적재·배포는 modules/load/pgstore.py."""
 
 import argparse
-import json
 from collections import Counter
-from pathlib import Path
 
+from common.ai.embed import model_key
 from common.core.console import utf8_stdout
 from common.core.text import id_terms, tokens  # 토큰 규칙(모듈 계약)
 from common.store.pg import HNSW_MAX, PG, conf, vec
@@ -23,6 +22,19 @@ def dim_of(db):
             "SELECT atttypmod AS d FROM pg_attribute WHERE attrelid = %s::regclass AND attname = 'embedding'", (f"{db.schema}.chunk",)
         )[0]["d"]
     return db._dim
+
+
+def index_meta(db):
+    """질의 임베딩에 쓸 색인 정보(mc-19 — 묶음 meta.json 대신 PG): 모델 = 그 스키마 gold doc.embed_model(값이 여럿이면 쉼표로 이어
+    질의 모델과 같을 수 없어 embed_query가 거부 — 섞인 색인), 차원 = chunk.embedding 칸 형식(벡터가 하나도 없으면 0 — 키워드·ID만).
+    모델 이름은 embed.model_key로 비교(query_model_mismatch와 같은 규칙). 모델 칸이 빈 옛 문서가 이름 있는 문서와 섞이면 그것도 섞인 색인."""
+    s = db.schema
+    got = {r["m"] for r in db.q(f"SELECT DISTINCT embed_model AS m FROM {s}.doc")}
+    models = sorted({model_key(m) for m in got if m})
+    if models and None in got:
+        models.append("(모델 없음)")
+    has_vec = db.q(f"SELECT 1 AS x FROM {s}.chunk WHERE embedding IS NOT NULL LIMIT 1")
+    return {"embed": "api", "embed_model": ",".join(models) or None, "dim": dim_of(db) if has_vec else 0}
 
 
 def _scope_restrict(db, scope):
@@ -155,7 +167,13 @@ def search(
     top = [cid for cid, _ in sorted(rrf.items(), key=lambda x: (-x[1], x[0]))[:k]]
     if not top:
         return []
-    rows = {r["chunk_id"]: r for r in db.q(f"SELECT * FROM {s}.v_chunk_source WHERE chunk_id = ANY(%s)", (top,))}
+    rows = {  # mc-19 — 문서 날짜는 gold doc.content_date(근거 이름은 doc_date — 검색 뷰는 출력 계약이라 그대로 두고 JOIN)
+        r["chunk_id"]: r
+        for r in db.q(
+            f"SELECT v.*, d.content_date AS doc_date FROM {s}.v_chunk_source v JOIN {s}.doc d ON d.doc_id = v.doc_id WHERE v.chunk_id = ANY(%s)",
+            (top,),
+        )
+    }
     top = [c for c in top if c in rows]  # BR41 — rows를 이미 가져온 뒤 재배열(추가 질의 없음), local.py와 같은 tie_break
     # v_chunk_source에 product_code·contract_no 열이 없음 — rows[c].get()은 그대로 None(죽지 않음, 그 축은 안 씀)
     docmeta = {
@@ -168,14 +186,12 @@ def search(
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["search"])
-    ap.add_argument("--bundle", default="output/edw/bundle")
     ap.add_argument("--q")
     ap.add_argument("--k", type=int, default=10)
     ap.add_argument("--retrieve", default="cosine", choices=["cosine", "hybrid"])
     a = ap.parse_args(argv)
     db = PG(conf())
-    meta = json.loads((Path(a.bundle) / "meta.json").read_text(encoding="utf-8"))
-    for r in search(db, embed_query(meta, a.q), tokens(a.q), a.k, retrieve=a.retrieve):
+    for r in search(db, embed_query(index_meta(db), a.q), tokens(a.q), a.k, retrieve=a.retrieve):
         print(
             f"[{r['rrf']:.4f} {r['via']}] {r['file_path']} p.{r['page']} L.{r['line_start']} bbox={r['bbox']} · {r['chunk_text'][:120]!r}"
         )

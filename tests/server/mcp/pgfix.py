@@ -3,7 +3,7 @@ mcp-server image). Row building copies the minimum of pipeline/load/pgvector_loa
 
     d = mk_bundle(docs, chunks)      # bundle files + stand-in file under d/"pg"
     with use(d):                     # settings: stand-in dir d/"pg", no PG connection values
-        R = Retriever(d)
+        R = Retriever(pg=...)          # the search reads only the stand-in (mc-19 — no bundle files)
 """
 
 import contextlib
@@ -60,6 +60,8 @@ def load(bundle, schema=SCHEMA, standin=None):
                     d = dict(docs[i])
                     names = [n for n in (d.get("clients") or ([d["client"]] if d.get("client") else [])) if n]
                     d.setdefault("clients_doc", json.dumps(names, ensure_ascii=False) if names else None)
+                    d.setdefault("content_date", d.get("doc_date"))  # mc-19 — bundle doc_date → gold content_date
+                    d.setdefault("embed_model", meta.get("embed_model"))  # mc-19 — load writes the bundle's model on every doc
                     d["doc_id"] = i + 1  # 공용 시퀀스 흉내(서버는 5벌이 시퀀스 하나 — 묶음 줄 순서대로 겹치지 않는 번호)
                     cols = ["doc_id"] + [k for k in dcols if d.get(k) is not None]
                     cur.execute(
@@ -95,8 +97,7 @@ def load(bundle, schema=SCHEMA, standin=None):
                         cur.execute(f"INSERT INTO {s}.chunk_term(term, chunk_id, tf) VALUES (%s,%s,%s)", (term, cid, tf))
                 cur.execute(f"INSERT INTO {s}.term_stat SELECT term, COUNT(*) FROM {s}.chunk_term GROUP BY term")
                 cur.execute(
-                    f"INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len, dim) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0), %s FROM {s}.chunk",
-                    (meta.get("dim") or 0,),
+                    f"INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0) FROM {s}.chunk"
                 )
         finally:
             db.sqlite.close()
@@ -155,4 +156,4 @@ def retriever(bundle, *args, **names):
 
     src = names.pop("src", "other")
     with use(bundle, **names):
-        yield Retriever(bundle, *args, pg=PGM.connect_sources()[src])
+        yield Retriever(*args, pg=PGM.connect_sources()[src])
