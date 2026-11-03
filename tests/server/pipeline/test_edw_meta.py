@@ -84,13 +84,6 @@ def _edw(path, quote=True):
 
 
 DOCS = [(r[1], r[0]) for r in ROWS["AI.FileStorageMap"]]
-QUOTE_STEP = {
-    "prefix": "0Q0",
-    "table": "SFDC.Quote",
-    "id": "Id",
-    "value": "OpportunityId",
-    "optional": True,
-}  # 옛 꼴 Quote 단계(대조 시험만)
 
 
 def _chain(quote=True):
@@ -303,38 +296,3 @@ def test_hints():
     ta = bare["SFDC/d2/task.pdf"]["attrs"]
     assert ta["entity_class"] == "task" and "subject" not in ta, ta
     assert bare["SFDC/d1/opp.pdf"]["attrs"]["sf_op_id"] == "006A" and "approvalname" not in bare["LAS/l1/m.pdf"]["attrs"]
-
-
-OLD_CHAIN = Path(__file__).with_name("edw_chain_old.yaml")  # pl-52 — 옛 꼴 사슬(옛 해석기와 대조한 뒤 지움)
-
-
-def _flat_old(m):
-    return {k: v for k, v in m.items() if v not in (None, "")}
-
-
-def test_same_as_legacy():
-    """pl-52 — 새 꼴 사슬 + 해석기 하나가 옛 원천별 코드와 같은 값을 내는지(가짜 EDW: 힌트 칸 있음·없음 × Quote 표 있음·없음 ×
-    Quote 단계 켬·끔). 비교는 값 있는 칸만(옛 코드는 빈 글자도 냈음 — 새 코드는 빈 값을 뺌)."""
-    old_c = M.legacy_load_chain(OLD_CHAIN)
-    old_q = copy.deepcopy(old_c)
-    old_q["sfdc"]["steps"].append(QUOTE_STEP)
-    docs = [*DOCS, ("SFDC", "SFDC/d7/none.pdf"), ("SFDC", "SFDC/d8/user.pdf"), ("SFDC", "SFDC/d9/unk.pdf"), ("SFDC", "SFDC/zz/absent.pdf")]
-    d = Path(tempfile.mkdtemp())
-    n = 0
-    for hints in (True, False):
-        for quote_tbl in (True, False):
-            for quote_step in (True, False):
-                e = _edw(str(d / f"e{n}.sqlite"), quote=quote_tbl)
-                n += 1
-                try:
-                    if hints:
-                        e.cn.executescript(HINT_SQL)
-                    old, old_miss = M.legacy_fetch(docs, e, old_q if quote_step else old_c)
-                    new, new_miss = M.fetch(docs, e, _chain(quote_step))
-                finally:
-                    e.close()
-                case = (hints, quote_tbl, quote_step)
-                assert old_miss == new_miss and set(old) == set(new), (case, old_miss, new_miss, set(old) ^ set(new))
-                for k in old:
-                    assert _flat_old(old[k]) == _flat(new[k]), (case, k, _flat_old(old[k]), _flat(new[k]))
-    print(f"[시험] pl-52 새 사슬 = 옛 해석기 — 가짜 EDW {n}가지 × 문서 {len(docs)}개 통과")
