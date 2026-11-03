@@ -291,6 +291,9 @@ def parse_module(a):
     if _run_until(args, env, _left(a) - 120) is None:
         raise SystemExit(75)  # 마감 — 끝 표시 안 바꿈, 다음 실행이 이어 감
     _tstep("t_parse")
+    if not (OUT / "parse" / "runs.jsonl").exists():  # F1(11-03 PC 시험) — 돈 엔진·문서 0건: 채점·대표 결과가 없는 runs.jsonl로 죽지 않게
+        print("[parse] 이번 실행 0건 — 파싱한 문서 없음(runs.jsonl 없음) · 채점·대표 결과·끝 표시 건너뜀", flush=True)
+        return
     for args in (
         ["pipeline.transform.represent.parse_qa", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
         ["pipeline.transform.represent.represent", "--src", a.src, "--parse-dir", OUT / "parse"],
