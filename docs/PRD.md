@@ -1,7 +1,7 @@
 # sbl_data_parsing — PRD
 
 목표: 폐쇄망 회사 문서에서 출처 달린 근거를 찾는다 — 파싱 → 구조화 → 적재(pgvector) → 검색 MCP, 서버와 PC에서 같게.
-행 = 요건 하나(끝난 것 포함) — 칸은 요건(무엇을, 어디서) · 기준·이유 · 상태 · ID. ID 하나가 여러 행에 나올 수 있다(상세는 ID 링크의 앵커). 상태: todo · dev · done(그 밖에 partly done). ID는 그대로 두고 카테고리 파일이 자리를 정한다(do-04 3부 11-01 — 수집·변환·적재·검색·운영·테스트·문서, 2만 자 넘는 카테고리는 `<분류>-<하위>.md`). 상세는 ID 링크.
+행 = 요건 하나(끝난 것 포함) — 칸은 요건(무엇을, 어디서) · 기준·이유 · 상태 · ID. ID 하나가 여러 행에 나올 수 있다(상세는 ID 링크의 앵커). 상태: todo · dev · done.
 
 ## 지금 진행 중
 - pl-25 DB 스키마 명세 — dev: 검색 DB(gold)·마스터·applog는 구현됨, EDW 쪽 DDL(ParsingMeta 칸 정리)은 DB 담당자 승인·실행 대기(refactor.md C-76).
@@ -14,86 +14,80 @@
 |---|---|---|---|
 | 문서 목록은 EDW 표 `AI.FileStorageMap`에서 읽는다(`id`·`s3_key`·`original_filename`·`file_size`) — 서버 러너 `run_docs.py`가 파일 이름 키워드(`--filter`)로 거르고 작은 파일부터 | 목록의 기준은 EDW다. Object Storage를 직접 훑지 않는다 | done | [pl-01](prd/extract.md#pl-01) |
 | 새 문서만 고른다 — 목록에서 EDW `AI.ParsingMeta`에 끝난 행(`ok`·`partial`·`skipped_dup`)이 있는 원본 키(`s3_key`)를 뺀다. 파싱 입구(`pipeline/cli.py` `_unparsed`)가 EDW를 읽기 계정으로 한 번 읽음 | 끝난 문서를 다시 파싱하지 않는다. `not_parsed`·`skipped_disk_cap`·실패·기록 없음은 다시 고른다(사용자 11-01). 서버에서 EDW를 못 읽으면 시작하지 않는다(종료 4) | done | [pl-23](prd/ops.md#pl-23) |
-| 파일은 Object Storage 버킷에서 `s3_key`로 받는다. 파싱 입력은 폴더 또는 목록 파일(`rdb:csv:<경로>`) 둘뿐 | 길을 하나로(사용자 11-01) | done | [pl-01](prd/extract.md#pl-01) |
+| 파일은 Object Storage 버킷에서 `s3_key`로 받는다. 파싱 입력은 폴더 또는 목록 파일(`rdb:csv:<경로>`) 둘뿐 | 길을 하나로 | done | [pl-01](prd/extract.md#pl-01) |
 | 미리 받기(warm) — `run_docs`가 파싱보다 앞서 문서를 최대 20개(`ops.run_docs.warm`)까지 받아 임시 폴더(`_warm`)에 둔다 | 다운로드를 기다리느라 파싱 워커가 놀지 않게. 받기 실패면 파싱 때 직접 받는다 | done | [pl-01](prd/extract.md#pl-01) |
-| 병렬 다운로드 — 목록 파일의 여러 파일을 동시에 받는다(`source warm` 기본 2개 `extract.prefetch_workers` · `rdb:csv` 받기 기본 1개 `extract.source.fetch_workers`) | 큰 목록을 빨리 받는다. 받기는 네트워크 대기라 CPU를 거의 안 쓴다 | done | [pl-48](prd/extract.md#pl-48) |
-| 서버 러너도 병렬로 받는다 — 받기 워커 `ops.run_docs.warm_workers`(기본 2)개가 차례대로 집어 동시에 받는다. 실제 동시 받기 수 = min(받기 워커 수, 미리 받기 빈자리) | 미리 받기 상한 `ops.run_docs.warm`(받는 중 포함)과 함께 작동 — 빈자리가 없으면 워커가 있어도 받지 않는다(사용자 11-02) | done | [pl-48](prd/extract.md#pl-48) |
+| 병렬 다운로드 — 목록 파일의 여러 파일을 동시에 받는다(`source warm` 기본 2개 `pipeline.extract.prefetch_workers` · `rdb:csv` 받기 기본 1개 `pipeline.extract.source.fetch_workers`) | 큰 목록을 빨리 받는다. 받기는 네트워크 대기라 CPU를 거의 안 쓴다 | done | [pl-48](prd/extract.md#pl-48) |
+| 서버 러너도 병렬로 받는다 — 받기 워커 `ops.run_docs.warm_workers`(기본 2)개. 실제 동시 받기 수 = min(받기 워커 수, 미리 받기 빈자리) | 미리 받기 상한 `ops.run_docs.warm`(받는 중 포함)과 함께 작동 — 빈자리가 없으면 워커가 있어도 받지 않는다 | done | [pl-48](prd/extract.md#pl-48) |
 | 레인 나누기 — 받은 직후 셋으로. **vlm**: 스캔 PDF(첫 3쪽 글자 평균 300자 미만)·그림 많은 오피스(내장 그림 8개 이상 또는 800 KB 이상)·pptx·ppt·검사 목록 밖 형식(mht·mhtml·이미지 등). **medium**: 검사한 pdf·오피스 중 가벼운데 큰 파일(docx·doc 300 KB, xlsx·xls·xlsm 500 KB, pdf 1 MB 이상). **light**: 글자형(txt·hwp·hwpx·csv·eml·msg·html)과 나머지 | 그림 읽는 모델(VLM)이 필요한 무거운 문서가 가벼운 문서를 막지 않게 — 레인마다 전담·공유 워커, vlm은 동시 2개(GPU), light는 CPU 부하 대기를 건너뜀(`run_docs.py` `classify_doc`, `docflow_probe.py`) | done | [rn-01](prd/ops.md#rn-01) |
 | 완전히 같은 파일(sha256 같음)은 한 번만 파싱하고 결과를 재사용한다. 문서는 S3 키마다 따로 둔다 | 비싼 파싱을 중복하지 않는다. 키마다 메타(고객 등)가 달라 문서는 따로. 남길 사본: 사본 표시 없는 이름 → 최신 → 큰 파일(`dedup.py` `_rep_select`) | done | [pl-02](prd/extract.md#pl-02) |
-| 회전 바로잡기 — 켜면(`extract.prepare.rotate`) 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) OCR 점수를 스레드 4개로 동시에 재 가장 높은 방향으로 돌린다(같으면 0도). 기록 `rotation.csv` | 돌아간 스캔은 엔진이 읽지 못한다. `rotation.csv`는 쪽 VLM·원본 sha 확인이 읽어 남김 | done | [pl-02](prd/extract.md#pl-02) |
-| 회전은 기본으로 끈다(`extract.prepare.rotate: false`) — 꺼지면 회전용 OCR을 전혀 하지 않고 그대로 놓는다 | 사용자 11-02 | done | [pl-02](prd/extract.md#pl-02) |
-| DRM·암호 파일 감지 — 감지해서 표시만 | 복호화는 흐름 안에서 하지 않고 수동 명령(`python -m pipeline.extract.secure_docs decrypt`)으로 — 요건과 다르게 동작(앵커 표) | done | [pl-02](prd/extract.md#pl-02) |
+| 회전 바로잡기 — 켜면(`pipeline.extract.prepare.rotate`, 기본 꺼짐) 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) OCR 점수를 스레드 4개로 동시에 재 가장 높은 방향으로 돌린다(같으면 0도). 기록 `rotation.csv` | 돌아간 스캔은 엔진이 읽지 못한다. 꺼져 있으면 회전용 OCR을 하지 않는다 | done | [pl-02](prd/extract.md#pl-02) |
+| DRM·암호 파일 감지 — 감지해서 표시만(`skipped_drm`) | 복호화는 흐름 안에서 하지 않고 수동 명령(`python -m pipeline.extract.secure_docs decrypt`)으로 | done | [pl-02](prd/extract.md#pl-02) |
 | 압축 파일은 지원하지 않는다고 표시 | — | done | [pl-02](prd/extract.md#pl-02) |
-| FAQ 원천 — 질의응답 엑셀을 행 단위로(시트 = FAQ 묶음, 행 하나 = 청크 하나). `FAQ/<uuid>/<파일>`을 FileStorageMap `source_system='FAQ'`로 등록 | 질의응답을 문서 통째가 아니라 질문 하나 단위로 찾는다. 0.2.0 | done | [pl-39](prd/extract.md#pl-39) |
+| FAQ 원천 — 질의응답 엑셀을 행 단위로(시트 = FAQ 묶음, 행 하나 = 청크 하나). `FAQ/<uuid>/<파일>`을 FileStorageMap에 등록 | 질의응답을 문서 통째가 아니라 질문 하나 단위로 찾는다 | done | [pl-39](prd/extract.md#pl-39) |
 
 ## 변환 (transform) — 파싱·대표 결과 고르기·그림·구조화
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
 |---|---|---|---|
-| 파일 형식마다 형식별 엔진 목록(stack — `resources/config/pipeline_stack.json`)에 적힌 엔진을 **모두** 돌린다(하나씩 차례로 시도하지 않음) | 모든 형식을 잘 읽는 파서는 없다. 서버·PC가 같은 파일을 쓰고, 바꿀 때는 그 파일을 고쳐 오버레이 패치한다. 파일을 못 읽거나 모양이 틀리면 시작하지 않는다(종료 2) | done | [pl-03](prd/transform.md#pl-03) |
-| PDF는 두 갈래 — 글자층이 쪽당 평균 20자 미만이면 스캔(`.pdf_image` → 그림 읽는 모델 VLM만), 아니면 글자 PDF(`.pdf_text` → pymupdf·kreuzberg) | 스캔 PDF는 글자 엔진이 못 읽는다. 판정은 `_types.json`에 저장해 다시 쓴다 | done | [pl-03](prd/transform.md#pl-03) |
-| 지원 형식: pdf · doc(x) · ppt(x) · xls(x/m) · hwpx · txt · html/htm · mht/mhtml · eml · msg · png/jpg/jpeg/tif/tiff/bmp · (11-03 pl-45) docm/pptm · rtf · csv/tsv/md · odt/ods/odp · xlsb · dotx/xltx/potx/ppsx/dot/xlt/pot · json/xml/log. 옛 `.hwp`·압축(zip)은 미지원 | stack의 형식 키 43개 | done | [pl-03](prd/transform.md#pl-03) · [pl-42](prd/transform.md#pl-42) · [pl-45](prd/transform.md#pl-45) |
-| 엔진은 문서마다 동시에, 엔진마다 따로 떨어진 자식 프로세스 | — | done | [pl-22](prd/transform.md#pl-22) |
-| 시간 제한 = 쪽 수 × 10초(글자 엔진)·× 120초(VLM 엔진), 엔진 첫 문서는 최소 60초 + 시작 여유 10초. 넘으면 두 배로 한 번 더, 그래도 넘으면 실패 기록 | 큰 문서도 쪽 수만큼 시간을 받는다 | done | [pl-22](prd/transform.md#pl-22) |
-| 그림 글자 인식 엔진(OCR, `rapidocr_ko`)은 기본으로 끈다 — 이미지·스캔은 VLM만. 일괄 실행 엔진은 낮은 우선순위(nice +10) | OCR은 VLM과 겹치고 느리다. 검색 서비스 자원을 덜 뺏는다 | done | [pl-22](prd/transform.md#pl-22) |
-| VLM 동시 호출 수는 설정 키로 조절한다(`common.models.vlm.concurrency` 문서당 4, 전체 관문 12) | 엔진마다 따로 손잡이를 두지 않는다(허브 10-31). 실제 키는 여러 개 — 앵커 정리 필요 | done | [pl-43](prd/transform.md#pl-43) |
-| 확장자 추가 1차: `.jpeg`·`.tif`·`.tiff`·`.bmp`(엔진은 `.jpg`와 같음), `.mhtml`(`.mht`와 같음), `.hwpx` 시험 | 형식마다 임시 견본으로 파싱 시험(`test_ext_formats.py`) | done | [pl-42](prd/transform.md#pl-42) |
-| 확장자 추가 2차: `.hwp`·`.docm`·`.pptm`·`.rtf`·`.csv`·`.tsv`·`.md`·오픈문서·서식 파일·`.json`·`.xml`·`.log` | 엔진 파일은 그대로 두고 등록부(`registry.py`)에 "엔진별 추가 확장자" 표를 둬 엔진 지문을 지킨다. `.json`·`.xml`·`.log`는 글 그대로(11-03). 나머지는 끝(11-03) — `.hwp`만 남음: 견본으로 읽힘을 확인 못 해 뺌(실제 `.hwp` 문서로 시험한 뒤 더함). 0.2.0 · 사람 검토(등급 A) | todo | [pl-45](prd/transform.md#pl-45) |
-| ~~엔진 구성 사본 파일(`stack-v*.json`)~~ | 대체됨 — 저장 구조 [pl-32](prd/load-schema.md#pl-32) | done | [pl-20](prd/transform.md#pl-20) |
+| 파일 형식마다 엔진 구성 파일(`resources/config/pipeline_stack.json`)에 적힌 엔진을 **모두** 돌린다(하나씩 차례로 시도하지 않음) | 모든 형식을 잘 읽는 파서는 없다. 서버·PC가 같은 파일을 쓰고, 바꿀 때는 그 파일을 고쳐 코드 폴더를 바꾼다. 파일을 못 읽거나 모양이 틀리면 시작하지 않는다(종료 2) | done | [pl-03](prd/transform.md#pl-03) |
+| PDF는 두 갈래 — 글자층이 쪽당 평균 20자 미만이면 스캔(`.pdf_image` → VLM 엔진만), 아니면 글자 PDF(`.pdf_text` → pymupdf·kreuzberg) | 스캔 PDF는 글자 엔진이 못 읽는다. 판정은 `_types.json`에 저장해 다시 쓴다 | done | [pl-03](prd/transform.md#pl-03) |
+| 지원 형식 = 구성의 형식 키 43개(목록은 앵커). `.hwp`·압축(zip)은 미지원 | 구성 파일이 정본 | done | [pl-03](prd/transform.md#pl-03) · [pl-42](prd/transform.md#pl-42) |
+| 엔진은 문서마다 동시에, 엔진마다 따로 떨어진 자식 프로세스 | 엔진 하나가 죽어도 다른 엔진을 막지 않는다 | done | [pl-22](prd/transform.md#pl-22) |
+| 시간 제한 = 쪽 수 × 10초(글자 엔진)·× 120초(VLM 엔진), 엔진 첫 문서는 최소 60초, 여기에 시작 여유 10초. 넘으면 두 배로 한 번 더, 그래도 넘으면 실패 기록 | 큰 문서도 쪽 수만큼 시간을 받는다 | done | [pl-22](prd/transform.md#pl-22) |
+| 그림 글자 인식 엔진(OCR, `rapidocr_ko`)은 파싱에 돌지 않는다 — 이미지·스캔은 VLM만. 일괄 실행 엔진은 낮은 우선순위(nice +10) | OCR은 VLM과 겹치고 느리다. 검색 서비스 자원을 덜 뺏는다 | done | [pl-22](prd/transform.md#pl-22) |
+| VLM 동시 호출 — 전체 합 상한 `pipeline.transform.vlm.global_concurrency`(12), 문서 하나 안 기본 `common.models.vlm.concurrency`(4) | 공유 VLM 서버를 넘치게 하지 않는다. 엔진마다 손잡이를 두지 않는다 | done | [pl-43](prd/transform.md#pl-43) |
+| 확장자 추가 1차: `.jpeg`·`.tif`·`.tiff`·`.bmp`(`.jpg`와 같은 엔진), `.mhtml`(`.mht`와 같음), `.hwpx` 시험 | 형식마다 임시 견본으로 파싱 시험(`test_ext_formats.py`) | done | [pl-42](prd/transform.md#pl-42) |
+| 확장자 추가 2차: `.docm`·`.pptm`·`.rtf`·`.csv`·`.tsv`·`.md`·오픈문서·서식 파일·`.json`·`.xml`·`.log`는 끝, `.hwp`만 남음(실제 `.hwp` 문서로 시험한 뒤 더함) | 엔진 파일은 그대로 두고 등록부(`registry.py`)의 "엔진별 추가 확장자" 표에 더해 엔진 지문을 지킨다. `.json`·`.xml`·`.log`는 글 그대로. 사람 검토(등급 A) | todo | [pl-45](prd/transform.md#pl-45) |
 | 대표 결과 고르기(represent): 엔진 결과 중 정확하고 풍부한 것을 대표로 고르고, 줄 단위 투표로 합치고, 엔진 사이 라벨·값을 서로 확인한다(`represent.py`·`fuse.py`·`crosscheck.py`) | 엔진마다 결과가 다르다. 다음 단계로 넘기는 글은 가장 정확해야 한다 | done | [pl-04](prd/transform.md#pl-04) |
 | 표·기호 다듬기 — 여러 엔진의 표를 본문 제자리에 넣고(`table_inline.py`), 표준 표·윗첨자 `^`·아래첨자 `_`, 파싱 품질 점검(`parse_qa.py`) | 표가 문서 끝에 따로 붙으면 검색 근거가 끊긴다 | done | [pl-04](prd/transform.md#pl-04) |
 | 글자 PDF 속 스캔 쪽만 쪽 전체를 VLM으로 읽어 채운다(회전된 쪽·숨은 글자 겹친 쪽 각각 최대 20쪽) | 스캔 쪽 몇 장 때문에 스캔용 엔진을 통째로 돌리지 않는다 | done | [pl-22](prd/transform.md#pl-22) |
 | 메일 첨부 — `.eml`·`.msg`의 첨부를 깊이 1·20 MB·10개까지 파싱해 본문에 `[첨부 <파일명>]` 절로 붙이고, 인용 스레드는 접는다(`attachments.py`) | 메일의 핵심 내용이 첨부에 있는 경우가 많다 | done | [pl-36](prd/transform.md#pl-36) |
 | 그림 근처 맥락 — 캡션·본문 언급을 연결하고 값이 맞는지 표시한다(`context.py`) | 그림 설명을 본문과 함께 찾게 한다 | done | [pl-37](prd/transform.md#pl-37) |
-| 그림 설명 — 그림마다 VLM 한 번(문서당 최대 20개, 짧은 변 64 px 미만은 뺌). 차트 XML·벡터 차트 값은 VLM 없이, 슬라이드·도형은 soffice로 그려 읽는다 | 차트·도식에는 글자 추출이 놓치는 값이 있다. 앵커 상태는 아래 줄이기 행 때문에 todo(코드 남음) | done | [pl-05](prd/transform.md#pl-05) |
-| 그림 부가 기능 줄이기 — 화살표·겹침·도형 연결·Mermaid 따로 만들기를 VLM 한 번의 종류별 출력(도표 Mermaid·표 HTML·차트 값)으로 | 결정 10-31. **코드는 아직 옛 기능을 씀**(`figures/figures.py:29-38`) — 0.2.0(대표 결과 지문 p1 바뀜) | todo (코드 남음) | [pl-05](prd/transform.md#pl-05) |
-| 청크(검색 단위 조각) 나누기 — 기본 `structure`(800자, 제목 기준, 표는 통째). 큰 표 25행씩 나누기는 `CHUNK_TABLE=rows`일 때만 | 검색은 출처가 달린 짧은 조각 단위로 한다 | done | [pl-06](prd/transform.md#pl-06) |
-| 문서 요약 = 앞부분 300자 발췌, 고객·계약 이름은 엔진끼리 서로 확인된 것만 | — | done | [pl-06](prd/transform.md#pl-06) |
-| 임베딩(검색용 숫자 벡터) — 내부망 `api`(`EMBED_BASE_URL`·`EMBED_MODEL`)만(시험은 `none`) | 로컬 임베딩(`sentence-transformers`)은 지웠다([pl-46](prd/transform-cleanup.md#pl-46)) | done | [pl-06](prd/transform.md#pl-06) |
-| ~~지식 그래프·개념 청크·그림 행·집계 사실 만들기~~ | 아무도 적재·조회하지 않았다(11-01 지움) | done | [pl-06](prd/transform.md#pl-06) |
-| 분류 — 적재 때 gold에 넣기 전 SFDC·LAS 문서에 종류 라벨 `doc_class`(SFDC 5종·LAS 7종). 근거 = gold `doc.attrs`의 분류 힌트 키(사슬 파일 `edw_chain.yaml` — 적재 때 EDW 조인) + 게시 .md 앞 8,000자 | 운영 분류와 결과가 같게(사용자 11-02) — 지시문·사용자 쪽 글 운영 글자 그대로, 적재와 같은 규칙(따로 고르지 않음), 내부 모델·`llm.chat`, 집합 밖·장애는 그 문서의 적재 실패(다음 실행에 다시), 재시도·수동 명령 없음, 이미 있는 라벨 안 덮음 | done | [pl-33](prd/transform.md#pl-33) |
-| ~~`ocr_vlm` 엔진·`vlm.model_alt`·안 쓰는 엔진 8개~~ 지움(엔진 18개 남음) | stack에 없어 안 쓰였다. 엔진 지문 바뀜(0.1.0, 등급 A) | done | [pl-31](prd/transform-cleanup.md#pl-31) |
-| ~~다시 읽기(P2·P3)·스캔 중복 제거·렌더 OCR 신호~~ 지움 | 대표 결과 단계 정리. p1 지문 바뀜(0.1.0, 등급 A) | done | [pl-34](prd/transform-cleanup.md#pl-34) |
-| ~~`parse_parallel`·`AUTO_REPARSE_CHANGED`·`figures_resume`~~ 지움 | 지문에 영향 없는 잔재. 증분 처리만 남긴다 | done | [pl-35](prd/transform-cleanup.md#pl-35) |
-| 0.2.0 지문 묶음 정리 — 안 쓰는 엔진 5개(pdfplumber·pypdf·calamine·python_pptx·pymupdf4llm)·묶음 계약·OCR 대체 길·로컬 임베딩·첫 이관 호환 코드를 한 번에 지운다 | 지문이 바뀌는 정리를 서버 재처리 한 번에 모은다. 등급 A. 남은 것은 [pl-53](prd/transform-cleanup.md#pl-53) | done | [pl-46](prd/transform-cleanup.md#pl-46) |
-| `adk.py` — 지시문은 두고 장치는 `llm.py` 호출 하나로 줄임 · CPU 부하 고침 | 0.2.0 지문 배치(p1·s·r 지문). 사용자 11-02. `adk.py`는 지움(`llm.complete` HTTP 한 길) — 패키지 정리는 [pl-53](prd/transform-cleanup.md#pl-53) | done | [pl-46](prd/transform-cleanup.md#pl-46) |
-| 엔진 지문(p0) 범위 확인 — 엔진 이름과 폴더 이름이 다른 엔진(html_stdlib·msg_extract·rapidocr_ko·office·pptx)을 고치면 다시 파싱되는지 | 놓치면 엔진을 고쳐도 낡은 결과가 남는다. 0.2.0 · 등급 A. 11-03: 문서별 재사용 열쇠(`engine_code_fp`)는 이미 맞았고, 층 지문 p0 범위만 엔진 파일을 하나도 안 담고 있었음 — 고침 | done | [pl-47](prd/transform-cleanup.md#pl-47) |
-| 0.2.0 지문 배치 후속 — 같은 결과로 덜 읽고 덜 띄우기: 명부·사전·원본 해시·매니페스트·엔진 지문을 한 번만, 엔진 결과 한 번에 쓰기, 1건 중복 확인 자식 없이, 문 기다림을 잠금 밖에서 | 결과는 바이트 그대로(전·후 비교). 지문이 바뀌는 파일이라 pl-46과 같은 판 · 등급 A | done | [pl-49](prd/transform-cleanup.md#pl-49) |
-| 층 지문 범위 바로잡기 + 단계 방향 자동 점검 — 결과를 바꾸는 파일 2개가 층 목록에서 빠졌고, DB 표 정의 한 줄에도 모든 층 지문이 바뀌었음. extract → transform → load 방향을 자동 점검 | 빠지면 고쳐도 옛 결과를 다시 쓰고, 넘치면 상관없는 수정에도 재처리 경보가 남. 0.2.0 · 등급 A | done | [pl-50](prd/transform-cleanup.md#pl-50) |
+| 그림 설명 — 그림마다 VLM 한 번(문서당 최대 20개, 짧은 변 64 px 미만은 뺌). 차트 XML·벡터 차트 값은 VLM 없이, 슬라이드·도형은 soffice로 그려 읽는다 | 차트·도식에는 글자 추출이 놓치는 값이 있다 | todo | [pl-05](prd/transform.md#pl-05) |
+| 그림 부가 기능 줄이기 — 화살표·겹침·도형 연결·Mermaid 따로 만들기를 VLM 한 번의 종류별 출력(도표 Mermaid·표 HTML·차트 값)으로 | 코드는 아직 부가 기능을 따로 만든다(`figures/figures.py`). 대표 결과 지문 p1이 바뀐다 | todo | [pl-05](prd/transform.md#pl-05) |
+| 청크(검색 단위 조각) 나누기 — 구성의 `chunk`(지금 `structure` — 800자, 제목 기준, 표는 통째). 큰 표 25행씩 나누기는 `CHUNK_TABLE=rows`일 때만 | 검색은 출처가 달린 짧은 조각 단위로 한다 | done | [pl-06](prd/transform.md#pl-06) |
+| 문서 요약 = 앞부분 300자 발췌. 본문 고객(`clients_doc`)은 명부 이름·별칭이 2번 이상 또는 제목·첫 400자에 나온 것 | 요약은 지어내지 않는다 | done | [pl-06](prd/transform.md#pl-06) |
+| 임베딩(검색용 숫자 벡터) — 내부망 `api`(`required.embed`의 주소·모델)만(시험은 `none`) | 폐쇄망 안 모델 하나로 질의·문서를 같게 | done | [pl-06](prd/transform.md#pl-06) |
+| 분류 — 적재 때 gold에 넣기 전 SFDC·LAS 문서에 종류 라벨 `doc_class`(SFDC 5종·LAS 7종). 근거 = gold `doc.attrs`의 분류 힌트 키(사슬 파일 `edw_chain.yaml` — 적재 때 EDW 조인) + 대표 결과 .md 앞 8,000자 | 운영 분류와 결과가 같게 — 지시문·사용자 쪽 글 운영 글자 그대로, 내부 모델·`llm.chat`, 집합 밖·장애는 그 문서의 적재 실패(다음 실행에 다시), 재시도·수동 명령 없음, 이미 있는 라벨 안 덮음 | done | [pl-33](prd/transform.md#pl-33) |
+| 안 쓰는 엔진·`ocr_vlm`·`vlm.model_alt` 지우기 | 엔진 목록의 정본은 등록부. `docx2python`은 남김. 등급 A | done | [pl-31](prd/transform-cleanup.md#pl-31) |
+| 대표 결과 다시 읽기(P2·P3)·스캔 중복 제거·렌더 OCR 신호 지우기 | 대표 결과는 융합 결과를 그대로 쓴다. 등급 A | done | [pl-34](prd/transform-cleanup.md#pl-34) |
+| 지문에 영향 없는 잔재(문서 단위 병렬 실행기·자동 재파싱 스위치·그림 이어 하기) 지우기 | 처리는 새 문서만 고르는 증분 하나 | done | [pl-35](prd/transform-cleanup.md#pl-35) |
+| 0.2.0 지문 배치 정리 — 안 쓰는 엔진·묶음 계약·OCR 대체 길·로컬 임베딩·첫 이관 호환 코드·ADK 장치를 한 번에 지운다. 모델 호출은 `llm.complete` HTTP 한 길 | 지문이 바뀌는 정리를 서버 재처리 한 번에 모은다. 등급 A. 남은 것은 [pl-53](prd/transform-cleanup.md#pl-53) | done | [pl-46](prd/transform-cleanup.md#pl-46) |
+| 엔진 지문(p0) 범위 = 엔진 폴더 전부(`pipeline/extract/engines/**/*.py` + `run_all.py`) | 이름과 폴더가 다른 엔진(html_stdlib·msg_extract·rapidocr_ko·office)을 고쳐도 지문이 바뀌게. 등급 A | done | [pl-47](prd/transform-cleanup.md#pl-47) |
+| 같은 결과로 덜 읽고 덜 띄우기 — 명부·사전·원본 해시·매니페스트·엔진 지문을 한 번만, 엔진 결과 한 번에 쓰기, 1건 중복 확인 자식 없이 | 결과는 바이트 그대로. 등급 A | done | [pl-49](prd/transform-cleanup.md#pl-49) |
+| 층 지문 범위 바로잡기 + 단계 방향 자동 점검 — 결과를 바꾸는 파일은 층 목록에, 기록·DB 표 정의는 지문 계산에서 뺌. extract → transform → load 방향을 자동 점검 | 빠지면 고쳐도 옛 결과를 다시 쓰고, 넘치면 상관없는 수정에도 재처리 경보가 남. 등급 A | done | [pl-50](prd/transform-cleanup.md#pl-50) |
 | pl-46 남은 정리 — 0.2.0 배포 뒤 `dbcompare`·`stamp` 지우기 · `google-adk`·`litellm` 패키지를 뺄지 정하기(지시서 `agent.py`만 import) | 첫 이관용 도구와 안 쓰는 패키지. 빼면 새 이미지 버전 | todo | [pl-53](prd/transform-cleanup.md#pl-53) |
 
 ## 적재 (load) — 검색 DB(pgvector)·게시·저장 구조·DB 스키마
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
 |---|---|---|---|
-| 문서마다 고객·원천 메타를 EDW 조인으로 붙인다 — SFDC `FileStorageMap.content_version_id → ContentVersion → ContentDocumentLink`로 영업 기회(직접 > Task > Event, + 계정 직접 — 같은 단계 동률은 비움 · Quote 표는 지금 없음, 생기면 설정 한 줄) → `Account.Name`, CRMS `FileStorageMap_CRMS.rm_contract_code → RM_CM_PJTLIST`, LAS `FileStorageMap_LAS.manage_no → LAS.Contract`. 적재 때(`pipeline/load/edw_meta.py`, 표·칸 이름·단계는 설정 파일 `resources/config/edw_chain.yaml` — 운영 쪽이 고침, 사용자 11-02) 원천 스키마 `doc`(`client_edw`·`attrs`·`created_at`)에 쓴다 | 파싱·구조화는 이 값을 안 쓴다 — 매핑이 바뀌어도 다시 파싱하지 않는다(사용자 11-02). EDW를 못 읽으면 메타 없이 적재(`meta_missing`) — `--replace`로 다시 채움 | done | [pl-29](prd/load.md#pl-29) |
-| 고객 조인 사슬을 운영 쪽이 고칠 수 있는 설정 파일로 — Quote 표는 지금 없음 | `resources/config/edw_chain.yaml`(사용자 11-02 — `feature/edw-chain-config`) · 서버 사본 자리 설정 `ops.paths.edw_chain`(적재·검색 MCP가 함께 읽음)·점검 `python -m pipeline.load.edw_meta --check`(사용자 11-03 — `feature/edw-chain-path`) | done | [pl-29](prd/load.md#pl-29) |
-| 원천마다 다른 문서 메타는 `doc.attrs`(JSONB) 한 칸에 — 고정 칸은 `doc_id`·`file_path`·`summary`·`created_at`·`client_edw`·`clients_doc`·`content_date`·`embed_model`뿐. 키·EDW 칸·검색 거르기 이름·근거 표시는 사슬 파일 `edw_chain.yaml`(모든 원천이 같은 꼴 — `steps`·`fields`·`client_edw`·`created`)이 정하고, `search`는 `attrs: {키: 값}` 거르기와 근거 `attrs`를 낸다 | 원천 칸을 더할 때마다 판(Alembic)·코드를 고치지 않게. 판 0005(GIN 색인) · MCP 계약 — 등급 A, 0.2.0(MINOR) · 사용자 11-03 | done | [pl-52](prd/load-schema.md#pl-52) |
+| 문서마다 고객·원천 메타를 EDW 조인으로 붙인다 — SFDC 영업 기회(직접 > Task > Event, + 계정 직접 — 같은 단계 동률은 비움) → `Account.Name`, CRMS `RM_CM_PJTLIST`, LAS `LAS.Contract`. 적재 때(`pipeline/load/edw_meta.py`) 원천 스키마 `doc`(`client_edw`·`attrs`·`created_at`)에 쓴다 | 파싱·구조화는 이 값을 안 쓴다 — 매핑이 바뀌어도 다시 파싱하지 않는다. EDW를 못 읽으면 메타 없이 적재(`meta_missing`) — `--replace`로 다시 채움 | done | [pl-29](prd/load.md#pl-29) |
+| 고객 조인 사슬은 운영 쪽이 고칠 수 있는 설정 파일 `resources/config/edw_chain.yaml` — 서버 사본 자리 `ops.paths.edw_chain`(적재·검색 MCP가 함께 읽음), 점검 `python -m pipeline.load.edw_meta --check`. Quote 표는 지금 없음 | 표·칸 이름이 바뀌어도 코드를 고치지 않는다 | done | [pl-29](prd/load.md#pl-29) |
+| 원천마다 다른 문서 메타는 `doc.attrs`(JSONB) 한 칸에 — 고정 칸은 `doc_id`·`file_path`·`summary`·`created_at`·`client_edw`·`clients_doc`·`content_date`·`embed_model`뿐. 키·EDW 칸·검색 거르기 이름·근거 표시는 사슬 파일이 정하고, `search`는 `attrs: {키: 값}` 거르기와 근거 `attrs`를 낸다 | 원천 칸을 더할 때마다 판(Alembic)·코드를 고치지 않게. 판 0005(GIN 색인) · MCP 계약 — 등급 A | done | [pl-52](prd/load-schema.md#pl-52) |
 | 검색 DB(gold — pgvector) 표 5개(`doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` — 원천 스키마마다 한 벌)와 뷰 1개(`v_chunk_source`)는 Alembic(DB 판 관리 도구)으로만 만든다 | 검색 MCP는 PG만 읽는다. 실행 중 DDL 금지 | done | [pl-07](prd/load.md#pl-07) |
 | 문서 묶음 하나를 한 트랜잭션으로 적재한다(`pgvector_load load`) — 하나라도 실패하면 전부 되돌림 | 반쯤 들어간 문서가 검색에 보이지 않게 | done | [pl-07](prd/load.md#pl-07) |
 | 이미 있는 문서는 `doc.file_path`가 같으면 건너뛴다. 바뀐 내용은 `--replace`로 | 내용 지문(sha) 칸이 없어 같은 경로에서 내용이 바뀌어도 건너뛴다(알려진 한계) | done | [pl-07](prd/load.md#pl-07) |
 | 적재 전에 DB 판을 확인 — 판 기록이 없으면 경고 후 계속, 낮거나 모르는 판이면 종료 2. `--replace`는 판 표(`alembic_version`)가 있는 우리 스키마에서만 | 남의 스키마나 옛 판 DB를 망가뜨리지 않게 | done | [pl-07](prd/load.md#pl-07) |
 | 처음 쓰는 PG에는 `vector` 확장을 관리자가 한 번 만든다(`CREATE EXTENSION vector`) — 없으면 적재가 멈춘다 | 서버 계정은 보통 우리 스키마 권한만 있다. 절차는 release-and-patch §5-5 ⓪ | done | [pl-07](prd/load.md#pl-07) |
-| 적재는 더하고 고치기만 하고 지우지 않는다. 원천에서 지워진 문서·실패 문서는 로그에만. 원본 경로는 원천 스키마 5벌을 통틀어 하나 — `--replace` 없이 이미 있으면 건너뛰고, `--replace`면 다른 원천 스키마의 옛 사본을 지우고 옮긴다 | 건너뛴 문서까지 지워지던 문제(C-60). 경로가 바뀐 옛 행은 사람이 지운다 | done | [pl-13](prd/load.md#pl-13) |
-| 임베딩 없음(`PIPE_EMBED=none`)이면 적재를 시작할 때 거부한다 | 검색에는 벡터가 필수. 11-03 — `pgvector_load`가 판 확인·배포·적재 전에 종료 코드 2로 거부 | done | [pl-16](prd/load.md#pl-16) |
-| 묶음의 임베딩 모델(`meta.json` `embed_model`)이 검색 스키마(원천 5벌)에 이미 있는 문서의 모델(`doc.embed_model`)과 다르면 그 묶음 적재를 거부한다 — 아무것도 쓰지 않고 종료 2, 거부는 `applog.pipe_event`에 시각과 함께(`stage` `load.embed_guard`) | 모델이 섞이면 검색이 그 원천의 벡터 검색을 거부한다(질의 모델이 하나라서). 사용자 11-03 — 0.2.0 | done | [pl-51](prd/load.md#pl-51) |
-| 색인 비교 예시 `index_a`·`index_b`(`compose.index.yml`) 지우기 | 끝까지 돌리면 실패한다(C-32) — 11-01 이름 있는 색인째 지움(mc-16) | done | [pl-19](prd/load.md#pl-19) |
+| 적재는 더하고 고치기만 하고 지우지 않는다. 원천에서 지워진 문서·실패 문서는 로그에만. 원본 경로는 원천 스키마 5벌을 통틀어 하나 — `--replace` 없이 이미 있으면 건너뛰고, `--replace`면 다른 원천 스키마의 옛 사본을 지우고 옮긴다 | 건너뛴 문서가 지워지면 안 된다. 경로가 바뀐 옛 행은 사람이 지운다 | done | [pl-13](prd/load.md#pl-13) |
+| 임베딩 없음(`embed` `none` 또는 청크가 있는데 차원 0)이면 적재를 시작할 때 거부한다 — 판 확인·배포·적재 전에 종료 2 | 검색에는 벡터가 필수 | done | [pl-16](prd/load.md#pl-16) |
+| 묶음의 임베딩 모델(`meta.json` `embed_model`)이 검색 스키마(원천 5벌)에 이미 있는 문서의 모델(`doc.embed_model`)과 다르면 그 묶음 적재를 거부한다 — 아무것도 쓰지 않고 종료 2, 거부는 `applog.pipe_event`에(`stage` `load.embed_guard`) | 모델이 섞이면 검색이 그 원천의 벡터 검색을 거부한다(질의 모델이 하나라서) | done | [pl-51](prd/load.md#pl-51) |
+| 이름 있는 색인 비교 예시(`index_a`·`index_b`)를 두지 않는다 | 검색 색인은 원천 스키마의 표 하나뿐 | done | [pl-19](prd/load.md#pl-19) |
 | 게시(publish — 파싱 결과를 Object Storage에 올리고 EDW `AI.ParsingMeta`에 기록) — 대표 `.md`와 엔진별 원결과를 올리고 원본 파일은 올리지 않는다 | 다른 팀은 결과를 Object Storage와 ParsingMeta에서 읽는다 | done | [pl-09](prd/load.md#pl-09) |
-| ParsingMeta에는 INSERT만 — 키 (`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뜀, UPDATE 없음 | — | done | [pl-09](prd/load.md#pl-09) |
+| ParsingMeta에는 INSERT만 — 키 (`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뜀. UPDATE는 적재 때 `loaded_at`·`gold_version`뿐 | — | done | [pl-09](prd/load.md#pl-09) |
 | DRM(`skipped_drm`)·실패(`failed`) 문서는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만. 업로드 대상 상태는 `load.publish.upload_statuses`(기본 ok·partial) | 깨진 결과가 다른 팀에 넘어가지 않게 | done | [pl-09](prd/load.md#pl-09) |
-| 게시 버킷이 원천 원본 버킷과 같으면 게시를 거부한다 | 원본 덮어쓰기를 막는다. 단, `run_docs`가 이 검사를 끈다(`PM_BUCKET_SKIP_OVERLAP_CHECK=1`) — 확인 필요 | done | [pl-09](prd/load.md#pl-09) |
+| 게시 버킷이 원천 원본 버킷과 같으면 게시를 거부한다 — 단 `run_docs`는 이 검사를 끄고 넘긴다(`PM_BUCKET_SKIP_OVERLAP_CHECK=1`) | 원본 덮어쓰기를 막는다 | done | [pl-09](prd/load.md#pl-09) |
 | 게시는 늘 하고 게시 대상(버킷·접두)은 필수 — `local`·`dev`는 로컬 대역이나 실제 접속, `prd`는 실제 접속만 | `run_docs`는 문서마다 늘 게시하고 버킷·접두가 없으면 시작을 거부한다 | done | [pl-26](prd/load.md#pl-26) |
-| FAQ를 다시 올리면 gold faq의 문서·청크를 모두 지우고 지금 FAQ 파일 전체를 다시 적재(판을 잇지 않음) | pl-13 "지우지 않음"의 FAQ 예외(등급 A). 11-03 사용자 — 판 잇기 없이 전체 교체 | done | [pl-41](prd/load.md#pl-41) |
-| 정형 DB `struct` 스키마(마스터·문서 대장·표·칸)를 코드에서 모두 없앤다. 엔진 구성은 파일만 | 쓰이지 않았다(서버 `doc_registry` 0행). 서버에 남은 표는 DB 담당자가 정리 | done | [pl-08](prd/load.md#pl-08) |
-| 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·원천 삭제 처리를 모두 지운다. 서버는 PG가 없으면 로컬 대체 DB로 바꿔 타지 않고 멈춘다 | 빼야 할 문서는 원천에서 지우거나 사람이 SQL로. | done | [pl-12](prd/load.md#pl-12) |
-| 알려진 실패 0 — 쓰이지 않는 게시 가드와 `test_publish_guard` 지우고 `known_fail.txt` 비움 | 사용자 11-02 | done | [pl-12](prd/load.md#pl-12) |
-| 마스터 표 — 용어집·고객 명부 CSV 여섯 개를 검색 PG `<PG_SCHEMA>_master`로(Alembic 갈래 `master` · `dbtool master load`가 git CSV로 통째로 바꿈). 구조화 고객 판별과 검색이 PG에서 읽고, `gold_version` = `<VERSION>+m<마스터 해시 8자>` | 원본은 git CSV. 대표 결과(silver)는 마스터를 읽지 않는다(ETL 규칙, 사용자 11-03). 서버는 마스터를 못 읽으면 시작 안 함 | done | [pl-38](prd/load.md#pl-38) |
-| (잠재 문제) 같은 문서의 다른 판(`s3_key` 다름) 묶기 — 검색 '최신' 질문에서 옛 판이 위로 올 수 있음, 필요해지면 다시 설계 | 사용자 11-03 | todo | [pl-56](prd/load.md#pl-56) |
-| 저장 자리 셋 — 파싱 결과 저장본(silver)은 Object Storage 문서 폴더(이름 = `s3_key`로 만든 uuid5), 메타는 EDW ParsingMeta, 검색 DB(gold)는 pgvector | 로컬에는 로그·임베딩 캐시만. 다시 처리하면 같은 폴더를 덮어쓴다 | todo | [pl-32](prd/load-schema.md#pl-32) |
+| FAQ를 다시 올리면 gold faq의 문서·청크를 모두 지우고 지금 FAQ 파일 전체를 다시 적재(판을 잇지 않음) | pl-13 "지우지 않음"의 FAQ 예외(등급 A) | done | [pl-41](prd/load.md#pl-41) |
+| 정형 DB(`struct` 스키마 — 마스터·문서 대장·표·칸)를 두지 않는다. 엔진 구성은 파일만 | 쓰이지 않았다. 서버에 남은 표는 DB 담당자가 정리 | done | [pl-08](prd/load.md#pl-08) |
+| 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·원천 삭제 처리를 두지 않는다. 서버는 PG가 없으면 로컬 대체 DB로 바꿔 타지 않고 멈춘다 | 빼야 할 문서는 원천에서 지우거나 사람이 SQL로 | done | [pl-12](prd/load.md#pl-12) |
+| 마스터 표 — 용어집·고객 명부 CSV 여섯 개를 검색 PG `<PG_SCHEMA>_master`로(Alembic 갈래 `master` · `dbtool master load`가 git CSV로 통째로 바꿈). 구조화 고객 판별과 검색이 PG에서 읽고, `gold_version` = `<VERSION>+m<마스터 해시 8자>` | 원본은 git CSV. 대표 결과(silver)는 마스터를 읽지 않는다. 서버는 마스터를 못 읽으면 시작 안 함 | done | [pl-38](prd/load.md#pl-38) |
+| (잠재 문제) 같은 문서의 다른 판(`s3_key` 다름) 묶기 — 검색 '최신' 질문에서 옛 판이 위로 올 수 있음, 필요해지면 다시 설계 | — | todo | [pl-56](prd/load.md#pl-56) |
+| 저장 자리 셋 — 파싱 결과 저장본(silver)은 Object Storage 문서 폴더(이름 = `s3_key`로 만든 uuid5), 메타는 EDW ParsingMeta, 검색 DB(gold)는 pgvector | 로컬에는 로그·임베딩 캐시만. 다시 처리하면 같은 폴더를 덮어쓴다(지금 게시는 실행마다 새 날짜 폴더) | todo | [pl-32](prd/load-schema.md#pl-32) |
 | 같은 `s3_key`가 FileStorageMap에 여러 행이면 `created_at`이 가장 늦은 행만. 새 행은 `file_size`가 같으면 건너뛰고 다르면 같은 `doc_id`로 다시 처리, 밀려난 행은 EDW `SupersededRow`에 | 원본을 받지 않고 판별한다(같은 크기로 덮어쓴 경우는 놓침 — 받아들임) | todo | [pl-32](prd/load-schema.md#pl-32) |
-| 실행을 넘어 남는 로컬 완료 표시(`_DONE`, `runs.jsonl` 재사용)를 없애고 실패 문서는 다음 실행이 다시 고르게 | 저장 자리는 하나라는 원칙 | todo | [pl-32](prd/load-schema.md#pl-32) |
-| DB 스키마 명세는 `docs/architecture/db_schema.md` 하나(검색 DB·EDW·마스터 표(PG `<PG_SCHEMA>_master`, 원본 CSV)의 칸·타입·쓰고 읽는 코드), `test_db_schema.py`가 대조 | 정의가 흩어져 있었다. 사용자·DB 담당자 승인 대기 | dev | [pl-25](prd/load-schema.md#pl-25) |
-| ParsingMeta에는 파싱 정보만(원천 키·상태·silver 위치·엔진·`gold_status`·`silver_version`·`gold_version`·`sha256`), 고객·분류 라벨 같은 파일 메타는 검색 DB `doc`에만 | 중복 적재를 없앤다. 운영이 더한 칸은 0.2.0에 지운다(D-3). | dev | [pl-25](prd/load-schema.md#pl-25) |
-| 문서 키는 원본 경로 하나 — 검색 DB `doc.file_path` = Object Storage 원본 경로 = EDW `s3_key`(청크는 `doc_id`만), ParsingMeta와 이 값으로 잇는다 | sha256 `doc_key`는 검색 DB에 안 둔다(ParsingMeta `sha256`만). 사용자 11-02 — 경로 칸 하나 | dev | [pl-25](prd/load-schema.md#pl-25) |
-| 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타 칸이 다르다. 판 0002 — 전체 다시 적재·MCP `source_system` 필수(등급 A, 11-02) | done | [pl-28](prd/load-schema.md#pl-28) |
+| DB 스키마 명세는 `docs/architecture/db_schema.md` 하나(검색 DB·EDW·마스터·applog 표의 칸·타입·쓰고 읽는 코드), `test_db_schema.py`가 대조 | 정의를 한 곳에. EDW 쪽 DDL은 DB 담당자 승인 대기 | dev | [pl-25](prd/load-schema.md#pl-25) |
+| ParsingMeta에는 파싱 정보만(원천 키·상태·silver 위치·엔진·`gold_status`·`silver_version`·`gold_version`·`sha256`), 고객·분류 라벨 같은 파일 메타는 검색 DB `doc`에만 | 중복 적재를 없앤다. 운영이 더한 칸은 DB 담당자가 지운다 | dev | [pl-25](prd/load-schema.md#pl-25) |
+| 문서 키는 원본 경로 하나 — 검색 DB `doc.file_path` = Object Storage 원본 경로 = EDW `s3_key`(청크는 `doc_id`만), ParsingMeta와 이 값으로 잇는다 | sha256 `doc_key`는 검색 DB에 안 둔다(ParsingMeta `sha256`만) | dev | [pl-25](prd/load-schema.md#pl-25) |
+| 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타가 다르고 BM25 점수를 섞지 않는다. MCP `source_system` 필수(등급 A) | done | [pl-28](prd/load-schema.md#pl-28) |
 | 원천 = 원본 경로(`s3_key`) 첫 마디 — `SFDC`·`CRMS`·`LAS`·`FAQ`(대소문자 무관)이거나 `SFDC-`·`SFDC_`·`CRMS-`·`CRMS_`·`las_`·`LAS_`로 시작하면 그 원천, 아니면 `other`(`build_bundle`). `faq` 스키마만 `chunk.faq_group` 칸 | `AI.FileStorageMap.source_system` 칸은 읽지 않는다 — 경로만으로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |
 
 ## 검색 MCP (mcp) — AI 클라이언트가 부르는 도구 서버(이미지 `mcp-server`)

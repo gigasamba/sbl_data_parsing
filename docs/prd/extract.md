@@ -1,54 +1,77 @@
 # 수집 — 원천·가져오기·준비
 
-[PRD.md](../PRD.md) 카테고리. 원천(폴더·`rdb:csv`)에서 문서를 가져오고(pl-01), 준비(중복·회전·DRM — pl-02), FAQ 원천(pl-39). 다음 단계는 [transform.md](transform.md).
-항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
+[PRD.md](../PRD.md) 카테고리. 원천에서 문서를 받아(pl-01·pl-48) 준비(중복·회전·DRM — pl-02)하기까지와 FAQ 원천(pl-39). 다음 단계는 [transform.md](transform.md).
 
 순서: pl-01 · pl-02 · pl-48 · pl-39.
 
 <a id="pl-01"></a>
 ## pl-01 · 원천과 가져오기
-- 이유: 문서는 폴더, Object Storage, 회사 RDB 목록에서 온다.
-- 무엇: `input_source` = 폴더 · `rdb:csv:<경로>`(사용자 11-01). RDB 열 대응(`RDB_COL_*`), 미리 받기(warm).
-- 파일: `pipeline/extract/source.py`, `pipeline/extract/rdb_discover.py`.
+
+### 무엇·왜
+파싱 입력을 정한다. 문서 목록의 기준은 EDW `AI.FileStorageMap`이고, 파일은 Object Storage에서 `s3_key`로 받는다.
+
+### 규칙
+1. 파싱 입력(`--source`, 설정 `pipeline.extract.input_source`)은 둘 중 하나여야 한다 — 폴더, 또는 `rdb:csv:<경로>`(문서 위치 표 CSV). 그 밖의 값이면 → 오류로 멈춘다.
+2. `rdb:csv`의 칸 이름은 설정 `pipeline.connections.rdb.columns`가 정한다 — 기본 `doc_id`=`id`, `key`=`s3_key`, `filename`=`original_filename`, `size`=`file_size`, `content_version`=`content_version_id`.
+3. 서버 러너 `run_docs.py`가 FileStorageMap에서 대상(파일 이름 키워드 `--filter`, 작은 파일부터)을 골라 `batch.csv`를 만들고 `rdb:csv`로 넘긴다(대상 고르기 규칙은 [ops.md#pl-23](ops.md#pl-23)).
+4. 미리 받기: `python -m pipeline.extract.source warm`이 표의 파일을 `pipeline.extract.source.warm` 폴더에 먼저 받는다(비면 미리 받기 꺼짐). 받기에 실패한 파일은 파싱 때 직접 받는다.
+
+### QA
+- `tests/server/pipeline/test_source.py` · `tests/server/pipeline/test_rdb_discover.py`.
 - Status: done
 
 <a id="pl-02"></a>
-## pl-02 · 준비
-- 결정(사용자 10-31): 완전히 같은 파일(sha256)은 **파싱만 한 번**(결과 재사용)하고 문서는 S3 키마다 따로 둔다(U-7 — 메타가 키마다 다름). 이 경우는 별도로 적어 둔다(같은 sha256 다른 키 → 파싱 재사용 기록).
-- 이유: 비싼 파싱 전에 쓸모없는 것을 거른다.
-- 무엇: sha256 중복 제거, RapidOCR 점수로 스캔 쪽 회전, DRM·암호 감지(msoffcrypto/pikepdf 복호화는 수동 CLI — `python -m pipeline.extract.secure_docs decrypt`, prepare·stream에 들어 있지 않음), 압축 파일은 미지원 표시.
-- 파일: `pipeline/extract/prepare.py`, `pipeline/extract/dedup.py`, `pipeline/extract/secure_docs.py`.
-- 같은 내용 사본 중 남길 파일은 해시마다 `dedup.py` `_rep_select`(사본 표시 없는 이름 → 최신 → 큰 파일)로 고른다.
-- 결정(사용자 11-02 — 회전): 기본으로 끈다(`extract.prepare.rotate`, 기본 false — 꺼지면 회전용 OCR 없이 그대로 놓음). 기능만 남긴다: 켜면 쪽마다 4방향(0·90·180·270도) OCR 점수를 스레드 4개(스레드마다 RapidOCR 하나, CPU 몫을 4로 나눔)로 동시에 재 가장 높은 방향으로 돌린다(같으면 0도, 모두 0이면 그대로). `rotation.csv`는 남김(쪽 VLM `vlm_page`·원본 sha `contract.py`가 읽음). 11-02 `feature/ops-fix`.
-- PC 실측(11-02, A4 200 dpi 합성 쪽 하나, OCR 스레드 상한 4): 4방향 동시(스레드 4 × 엔진 스레드 1) 8.2초/쪽, 같은 조건에서 차례 계산 11.6초/쪽. CPU 상한이 작으면 동시 계산이 빨라지지 않는다.
-- Status: done — 회전 기본 꺼짐·4방향 동시 판정(사용자 11-02, `feature/ops-fix`)
+## pl-02 · 준비 — 중복·회전·DRM
+
+### 무엇·왜
+비싼 파싱 전에 같은 파일·읽을 수 없는 파일을 거르고, 돌아간 스캔을 바로잡는다.
+
+### 규칙
+1. 완전히 같은 파일(sha256 같음)은 한 번만 파싱하고 결과를 재사용한다. 문서는 S3 키마다 따로 둔다(키마다 메타가 다름).
+2. 같은 해시 묶음에서 남길 파일은 `dedup.py` `_rep_select` 순서로 고른다: 이름에 사본 표시(`(1)`·`사본` 등)가 없는 것 → 수정 시각이 늦은 것 → 큰 파일.
+3. 회전 바로잡기는 `pipeline.extract.prepare.rotate`(기본 `false`)가 켜졌을 때만 한다. 꺼져 있으면 회전용 OCR을 하지 않고 파일을 그대로 놓는다.
+4. 켜져 있으면 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) RapidOCR 점수를 스레드 4개로 동시에 재고 가장 높은 방향으로 돌린다 — 같으면 0도, 모두 0이면 그대로. 기록은 `output/prepared/rotation.csv`(파일·쪽·각도·네 방향 점수·회전 전 원본 sha256 `orig_sha256`).
+5. DRM·암호 파일은 감지해서 표시만 한다(상태 `skipped_drm`). 복호화는 흐름 안에서 하지 않고 수동 명령 `python -m pipeline.extract.secure_docs decrypt`로만 한다.
+6. 압축 파일(zip)은 지원하지 않는다고 표시한다.
+
+### QA
+- `tests/server/pipeline/test_prepare.py`(`test_rotation_off_by_default` 등) · `tests/general/pipeline/test_dedup.py`.
+- Status: done
 
 <a id="pl-48"></a>
-## pl-48 · 병렬 다운로드 — Object Storage에서 여러 파일을 동시에 받기
-- 무엇: 목록 파일 하나에 든 여러 파일을 동시에 받는다 — `python -m pipeline.extract.source warm`(미리 받기, 동시 수 `extract.prefetch_workers` 기본 2 — `pipeline/extract/source.py` 스레드 풀)·`rdb:csv` 파싱 입력 받기(`extract.source.fetch_workers` 기본 1 = 차례대로).
-- 이유: 큰 목록을 빨리 받는다. 받기는 네트워크 대기라 CPU를 거의 쓰지 않는다.
-- 파일: `pipeline/extract/source.py`, `deploy/host/scripts/run_docs.py`(`downloader`·`warm_one`).
-- 결정(사용자 11-02): 서버 러너도 병렬로 받는다. 받기 워커 수와 미리 받기 상한(`ops.run_docs.warm`, 기본 20 — 대기열 관리)은 함께 작동한다: 실제 동시 받기 수 = min(받기 워커 수, 미리 받기 빈자리). 빈자리가 없으면 워커가 있어도 받지 않는다.
-- Status: done — 코드(`source warm`·`rdb:csv` 받기) · 서버 러너 병렬 받기(`run_docs.py` `downloader`, `ops.run_docs.warm_workers` 기본 2 — 시험 `test_run_docs.test_parallel_warm_respects_free_slots`) 11-02 `feature/ops-fix`
+## pl-48 · 병렬 다운로드
+
+### 무엇·왜
+큰 목록을 빨리 받는다. 받기는 네트워크 대기라 CPU를 거의 쓰지 않는다.
+
+### 규칙
+1. `source warm`은 `pipeline.extract.prefetch_workers`(기본 2)개 스레드로 동시에 받는다.
+2. `rdb:csv` 파싱 입력 받기는 `pipeline.extract.source.fetch_workers`(기본 1 = 차례대로)개 스레드로 받는다.
+3. 서버 러너 `run_docs.py`는 받기 워커 `ops.run_docs.warm_workers`(기본 2)개가 차례대로 집어 받는다. 실제 동시 받기 수 = min(받기 워커 수, 미리 받기 빈자리). 미리 받기 상한은 `ops.run_docs.warm`(기본 20, 받는 중 포함) — 빈자리가 없으면 워커가 있어도 받지 않는다.
+
+### QA
+- `tests/general/deploy/test_run_docs.py::test_parallel_warm_respects_free_slots`.
+- Status: done
 
 <a id="pl-39"></a>
 ## pl-39 · FAQ 원천 — 질의응답 엑셀을 행 단위로
-- 결정(G3·G8·T15 — 2차 grill(사용자 10-30, 원본은 git 밖)): FAQ를 이번 범위에 넣는다.
-  - 질의응답 엑셀: 시트 이름 = `FAQ_group`, 행 하나 = 청크 하나(칸: type, client question, answer, last modified date). 청크 메타에 `FAQ_group`, `search` 필터로 쓸 수 있게.
-  - Object Storage에 `FAQ/<uuid>/<파일>`로 올리고 `AI.FileStorageMap`에 `source_system='FAQ'`로 등록 — 다른 원천과 같은 길로 파싱·적재(EDW 담당자 협의, DB 담당자 D-8).
-  - 분류(C7)·고객 연결은 하지 않는다. `created_at`은 FileStorageMap 등록 시각.
-  - PC 예제: `valid_env/object_storage/FAQ/`(지금은 로컬에만 — 이 PR에는 넣지 않음).
-  - 옮겨 올 참고 코드: GitHub `gigasamba/bio_data_parsing` 브랜치 `feature/qna-dataset-embedding`의 `_qna_rows.py`·`test_qna_rows.py`.
-- 파일: `pipeline/transform/structure/{chunking,build_bundle}.py`(행 단위 엑셀 → 청크·`faq_group`), `pipeline/load/pgvector_load.py`·`mcp_server/services/search/search_svc.py`(이미 있던 적재·필터).
-- 선행: PR 3a(gold 칸) 뒤([pl-32](load-schema.md#pl-32)).
-- 결정(사용자 11-03): 행을 자르는 곳은 묶음 단계(`build_bundle` — code_fp s가 바뀜, 0.2.0 전체 재처리라 받아들임). 청크 본문은 `Q: <질문>` 줄 + `A: <답>` 줄, 절(section)은 `<시트> / <type>`(type·수정일은 본문에 넣지 않음). 빈 칸은 그 값만 비우고(null) 행은 남긴다(질문·답이 모두 빈 행은 건너뜀). 질문·답 머리글이 없는 시트는 건너뛰고 경고한다.
-- 한 것(11-03 `feature/faq-source`): `chunking.faq_rows`(openpyxl — 시트의 첫 비지 않은 행이 머리글, 별칭 `client question`/`question`) → `build_bundle`이 원천이 FAQ인 `.xlsx`·`.xlsm`을 행마다 청크로 만들고 `faq_group`(= 시트 이름)을 넣는다. `line_start`·`line_end` = 엑셀 행 번호, 쪽·문자 범위·bbox는 비움. 적재(`_load_src`)와 `search`의 `FAQ_group` 필터는 이미 있던 길을 그대로 쓴다. 엑셀이 아니거나, 못 열거나(암호·깨짐), 남는 행이 없거나, 원본이 그 서버에 없으면 일반 청킹(그때는 `faq_group`이 비어 필터에 안 걸림 — 경고를 찍음). 시험 `tests/server/pipeline/test_faq_rows.py`.
-- 하지 않은 것: 머리글은 시트의 첫 비지 않은 행만 보고 영어 이름만 안다(제목 줄·한글 머리글 FAQ가 오면 넓힘). `last modified date`는 gold에 칸이 없어 읽지 않는다(필요하면 faq.chunk 칸 추가 — DB 스키마 등급 A). 다시 올렸을 때 교체는 [pl-41](load.md#pl-41).
-- Status: done (11-03 `feature/faq-source`)
 
-## 코드와 다른 점 · 지울 코드
+### 무엇·왜
+질의응답을 문서 통째가 아니라 질문 하나 단위로 찾는다. FAQ 파일은 Object Storage `FAQ/<uuid>/<파일>`에 올리고 `AI.FileStorageMap`에 등록한다 — 다른 원천과 같은 길로 파싱·적재. 분류·고객 연결은 하지 않는다. 다시 올렸을 때 교체는 [load.md#pl-41](load.md#pl-41).
 
-### 요건과 다르게 동작
-| 요건 | 코드가 하는 일 | 위치 | ID |
-|---|---|---|---|
-| DRM·암호 파일을 흐름 안에서 복호화 | 복호화는 수동 CLI(`python -m pipeline.extract.secure_docs decrypt`) | `secure_docs.py` | pl-02 |
+### 규칙
+1. 원천이 FAQ이고 원본이 `.xlsx`·`.xlsm`이면 묶음 단계(`build_bundle` → `chunking.faq_rows`)가 엑셀 행 하나를 청크 하나로 만든다.
+2. 시트마다 첫 비지 않은 행이 머리글이다. 머리글 이름은 소문자로 바꾸고 공백·`_`를 공백 하나로 모은 뒤 대응한다: `type` → 유형, `client question`·`question` → 질문, `answer` → 답. 같은 머리글이 둘이면 앞의 것.
+3. 질문·답 머리글이 없는 시트는 건너뛰고 경고한다. 질문·답이 모두 빈 행은 건너뛴다. 빈 칸은 그 값만 빈다.
+4. 청크 본문 = `Q: <질문>` 줄 + `A: <답>` 줄(빈 값은 빈 글자). 절(section) = `<시트 이름> / <유형>`(유형이 없으면 시트 이름만). `faq_group` = 시트 이름. `line_start`·`line_end` = 엑셀 행 번호, 쪽·bbox는 비운다.
+5. 만약 엑셀이 아니거나, 열 수 없거나(암호·깨짐), 남는 행이 없거나, 원본 파일이 없으면 → 일반 청킹으로 처리하고 경고한다(그때 `faq_group`은 비어 `FAQ_group` 거르기에 걸리지 않는다).
+6. `created_at`은 FileStorageMap 등록 시각이다.
+
+### 예시
+- 시트 `DS`, 머리글 `type | client question | answer | last modified date`, 2행 = `capability | Q1? | A1 | 2026-09-14` → 청크 `Q: Q1?
+A: A1`, 절 `DS / capability`, `faq_group` `DS`, 줄 2–2. 4행 = `(빈) | Q2? | (빈)` → `Q: Q2?
+A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo` → 건너뜀(시험 픽스처 `test_faq_rows.py`).
+
+### QA
+- `tests/server/pipeline/test_faq_rows.py`.
+- Status: done
