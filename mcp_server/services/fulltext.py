@@ -189,10 +189,10 @@ def do_list(
         if source_system and str(source_system).upper().removesuffix("-TEST") not in {s.upper() for s in ST.SOURCES}:
             raise BadRequest("source_system은 SFDC·CRMS·LAS·FAQ·Other 중 하나(-test 붙어도 됨)")
         srcs = [ST.source_of(source_system)] if source_system else list(ST.SOURCES)  # 원천 스키마 고르기(pl-28) — 안 주면 5벌 모두
-        for col, v in (("doc_class", doc_class), ("sf_op_id", sf_op_id)):
+        for col, v in (("doc_class", doc_class), ("sf_op_id", sf_op_id)):  # pl-52 — doc.attrs 키(없는 원천은 0건)
             if v:
-                conds.append(f"{col} = %s")
-                vals.append(str(v))
+                conds.append("attrs @> %s::jsonb")  # 담김 — GIN 색인을 탐
+                vals.append(json.dumps({col: str(v)}))
         for name, v, upper in (("created_since", created_since, False), ("created_until", created_until, True)):
             if v:
                 op, t = _when(v, upper, name)
@@ -330,17 +330,14 @@ _SYS_LABEL = {s: "Other" if s == "other" else s.upper() for s in ST.SOURCES}
 
 
 def _select(pg, src, conds, vals, has_cursor, lim):
-    """원천 스키마 하나 — (이 쪽 행 lim+1개, 쪽과 무관한 matched). cursor 조건·값은 늘 맨 끝. 그 스키마에 없는 칸(doc_class·sf_op_id)을
-    거르면 0건, 출력은 NULL. source_system 출력 = 스키마의 원천 이름(저장값 — 사용자 11-01 승인)."""
-    have = set(ST.doc_columns(src))
-    if any(c.split()[0] not in have for c in conds if c.split()[0] in ("doc_class", "sf_op_id")):
-        return [], 0
+    """원천 스키마 하나 — (이 쪽 행 lim+1개, 쪽과 무관한 matched). cursor 조건·값은 늘 맨 끝. doc_class·sf_op_id는 doc.attrs 키(pl-52) —
+    그 키가 없는 원천은 거르면 0건, 출력은 NULL. source_system 출력 = 스키마의 원천 이름(저장값 — 사용자 11-01 승인)."""
     s = pg.schema
     where = (" WHERE " + " AND ".join(conds)) if conds else ""
     base = conds[:-1] if has_cursor else conds
     bwhere = (" WHERE " + " AND ".join(base)) if base else ""
     matched = pg.q(f"SELECT COUNT(*) AS n FROM {s}.doc{bwhere}", tuple(vals[:-1] if has_cursor else vals))[0]["n"]
-    sel = ", ".join(c if c in have else f"NULL AS {c}" for c in ("doc_class", "sf_op_id"))
+    sel = ", ".join(f"attrs->>'{c}' AS {c}" for c in ("doc_class", "sf_op_id"))
     rows = pg.q(f"SELECT doc_id, file_path, {sel}, created_at FROM {s}.doc{where} ORDER BY doc_id LIMIT %s", (*vals, lim + 1))
     return [{**r, "source_system": _SYS_LABEL[src]} for r in rows], matched
 

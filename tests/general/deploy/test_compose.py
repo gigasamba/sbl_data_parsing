@@ -48,11 +48,12 @@ def test_no_patch_overlay():
 
 
 def test_edw_chain_mount():
-    """EDW 사슬 서버 사본(사용자 11-03) — 파일 하나를 data-pipeline에만 읽기 전용(:ro,z)으로 /etc/rag/edw_chain.yaml(settings.yaml과 같은 방식)."""
+    """EDW 사슬 서버 사본(사용자 11-03) — 파일 하나를 data-pipeline(적재)·mcp-server(search attrs — pl-52)에 읽기 전용(:ro,z)으로
+    /etc/rag/edw_chain.yaml(settings.yaml과 같은 방식). parse_document 전용 컨테이너는 안 씀."""
     for f, (name, _, _) in FILES.items():
         vols = [str(v) for v in _services(f)[name]["volumes"]]
         chain = [v for v in vols if "edw_chain.yaml" in v]
-        if name == "data-pipeline":
+        if name in ("data-pipeline", "mcp"):
             assert chain == [
                 "${SERVER_ENV_DIR:?SERVER_ENV_DIR 필요 — settings_env.sh load_settings가 냄}/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z"
             ], chain

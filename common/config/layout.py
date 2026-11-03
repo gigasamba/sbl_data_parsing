@@ -504,9 +504,10 @@ REMOVED: dict[str, frozenset[str]] = {
     "PipelineLoadPublish": frozenset({"source_system", "upload_raw"}),
     # PipelineNight(pipeline/config.py) — 11-01(night·trigger.sh night 지움) — 지운 칸(남으면 경고만)
     "PipelineNight": frozenset({"deadline", "parse_deadline"}),
-    # PipelinePaths(pipeline/config.py) — 0.2.0 index_conf(pl-46 — 이름 있는 색인) · 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) · file_meta_path 11-02(pl-29 — 적재가 EDW 조인) — 지운 칸·절(남으면 경고만)
+    # PipelinePaths(pipeline/config.py) — 0.2.0 index_conf(pl-46 — 이름 있는 색인) · 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) · file_meta_path 11-02(pl-29 — 적재가 EDW 조인) · edw_chain 11-03(pl-52 — 적재·검색이 함께 쓰는 common.paths.edw_chain = ops.paths.edw_chain으로) — 지운 칸·절(남으면 경고만)
     "PipelinePaths": frozenset(
         {
+            "edw_chain",
             "file_meta_path",
             "index_conf",
             "mineru_bin",

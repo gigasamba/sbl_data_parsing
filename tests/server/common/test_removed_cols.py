@@ -19,6 +19,7 @@ ops:
   paths: {korean_font: /f.ttf, eval_sets_dir: /x}
   runtime: {exp_max_workers: 4, exp_proc_gb_answer: 1, exp_proc_gb_build: 1, exp_proc_gb_run: 1, exp_reserve_gb: 4}
   nightly: {enabled: true}
+  pipeline_paths: {edw_chain: /etc/rag/edw_chain.yaml}  # pl-52 — ops.paths.edw_chain 하나로
 dev:
   exp_store: /s
   llm_est_in_tokens: 1
@@ -51,9 +52,10 @@ def test_old_removed_settings_only_warn():
         y = Path(d) / "removed.yaml"
         y.write_text(COMMON_NEW, encoding="utf-8")
         assert load(CommonAppSettings, file=y, environ={}).common.run_env == "dev"
-        pipe = app_classes(("pipeline",)).get("pipeline")
-        if pipe is not None:  # mcp 이미지에는 pipeline 앱이 없음
-            load(pipe, file=y, environ={})
+        apps = app_classes(("pipeline", "mcp"))
+        for app in ("pipeline", "mcp"):  # 이미지마다 한 앱만 있음
+            if apps.get(app) is not None:
+                load(apps[app], file=y, environ={})
 
 
 def test_old_layout_rejected_and_migrated():

@@ -114,7 +114,7 @@ def _run_twice(S, tmp):
             docs = sorted(str(r["file_path"]) for r in sf.q(f"SELECT file_path FROM {S2}.doc"))
             meta = {
                 (r["doc_class"], str(r["created_at"]), r["clients_doc"])
-                for r in sf.q(f"SELECT doc_class, created_at, clients_doc FROM {S2}.doc")
+                for r in sf.q(f"SELECT attrs->>'doc_class' AS doc_class, created_at, clients_doc FROM {S2}.doc")  # pl-52 — attrs 키
             }
             n_chunks = _count(sf, f"SELECT COUNT(*) AS n FROM {S2}.chunk")
             b_terms = _count(

@@ -1,4 +1,4 @@
-"""pl-29 — 적재 때 EDW 조인(pipeline/load/edw_meta.py): 원천별 사슬로 client_edw·원천 칸·등록 시각. 임시 SQLite EDW(가짜 데이터만,
+"""pl-29·pl-52 — 적재 때 EDW 조인(pipeline/load/edw_meta.py): 사슬 파일(steps·fields)로 client_edw·등록 시각·attrs. 임시 SQLite EDW(가짜 데이터만,
 스키마 AI·SFDC·CRMS·LAS를 ATTACH — 질의 글자는 서버 T-SQL과 같음) · 외부 접속 없음."""
 
 import copy
@@ -19,10 +19,10 @@ CREATE TABLE SFDC.Task (Id TEXT, WhatId TEXT);
 CREATE TABLE SFDC.Event (Id TEXT, WhatId TEXT);
 CREATE TABLE SFDC.Opportunity (Id TEXT, Name TEXT, AccountId TEXT, Project_Code__c TEXT, Record_Type__c TEXT, X1st_Contract_Execution_Date__c TEXT);
 CREATE TABLE SFDC.Account (Id TEXT, Name TEXT);
-CREATE TABLE CRMS.RM_CM_PJTLIST (RM_CONTRACT_CODE TEXT, SF_ACC_NAME TEXT, DIVISION TEXT, RM_CONTRACT_NAME TEXT, INIT_DTTM TEXT);
+CREATE TABLE CRMS.RM_CM_PJTLIST (RM_CONTRACT_CODE TEXT COLLATE NOCASE, SF_ACC_NAME TEXT, DIVISION TEXT, RM_CONTRACT_NAME TEXT, INIT_DTTM TEXT);
 CREATE TABLE CRMS.RM_CM_DOCU (RM_CONTRACT_CODE TEXT, GATE_CODE TEXT, GATE_VERSION TEXT, DOCU_SEQ INT, INIT_DTTM TEXT);
 CREATE TABLE LAS.Contract (ManageNo TEXT, ContractID INT, IsActive INT, ContractDate TEXT, PartnerCorpName TEXT);
-CREATE TABLE LAS.FileManager (FileID TEXT, CreateDate TEXT);
+CREATE TABLE LAS.FileManager (FileID INT, CreateDate TEXT);
 """
 QUOTE = "CREATE TABLE SFDC.Quote (Id TEXT, OpportunityId TEXT, AccountId TEXT);"
 
@@ -37,6 +37,8 @@ ROWS: dict[str, list[tuple]] = {  # 가짜 데이터 — 사슬 단계마다 문
         ("CRMS/c1/a.docx", "CRMS", None, "2025-02-01 00:00:00"),
         ("LAS/l1/m.pdf", "LAS", None, "2025-03-01 00:00:00"),
         ("FAQ/f1/q.xlsx", "FAQ", None, "2025-04-01 00:00:00"),
+        ("CRMS/c2/b.docx", "CRMS", None, None),  # 열쇠 꼴(P1-2): CHAR 채움·소문자 — 서버 MSSQL(CI 정렬)과 같은 짝
+        ("LAS/l2/n.pdf", "LAS", None, None),  # 열쇠 꼴: 채움 · int 칸(FileID)에 글자 열쇠
     ],
     "SFDC.ContentVersion": [(f"cv{i}", f"cd{i}", f"2024-12-0{i} 09:00:00") for i in range(1, 7)],
     "SFDC.ContentDocumentLink": [
@@ -58,12 +60,18 @@ ROWS: dict[str, list[tuple]] = {  # 가짜 데이터 — 사슬 단계마다 문
         ("006B", "Opp B", "001ACC2", "P002", "ADC", None),
     ],
     "SFDC.Account": [("001ACC1", "Acme"), ("001ACC2", "Beta")],
-    "AI.FileStorageMap_CRMS": [("CRMS/c1/a.docx", "RC-9", "G1", "1", 3)],
-    "CRMS.RM_CM_PJTLIST": [("RC-9", "Gamma", "DS", "Contract X", "2025-02-10")],
+    "AI.FileStorageMap_CRMS": [("CRMS/c1/a.docx", "RC-9", "G1", "1", 3), ("CRMS/c2/b.docx", "rc-8   ", "G1", "1", 4)],
+    "CRMS.RM_CM_PJTLIST": [("RC-9", "Gamma", "DS", "Contract X", "2025-02-10"), ("RC-8", "Delta  ", "CD", "Contract Y", "2025-02-12")],
     "CRMS.RM_CM_DOCU": [("RC-9", "G1", "1", 3, "2025-02-11 08:00:00")],
-    "AI.FileStorageMap_LAS": [("LAS/l1/m.pdf", "M-1", "F1", "2025-03-05")],
-    "LAS.Contract": [("M-1", 1, 0, "2025-03-02", None), ("M-1", 2, 1, "2025-03-03", "")],  # 최신 판 = IsActive 1
-    "LAS.FileManager": [("F1", "2025-03-04 10:00:00")],
+    "AI.FileStorageMap_LAS": [("LAS/l1/m.pdf", "M-1", "F1", "2025-03-05"), ("LAS/l2/n.pdf", "M-2   ", "7", None)],
+    "LAS.Contract": [
+        ("M-1", 1, 0, "2025-03-02", None),
+        ("M-1", 2, 1, "2025-03-03", ""),  # 최신 판 = IsActive 1
+        ("M-2", 9, 1, "2025-06-01", None),
+        ("M-2", 10, 1, "2025-06-02", None),  # latest — ContractID 수로 비교(10 > 9, 글자면 "9"가 큼)
+        ("M-2", 11, None, "2025-06-03", None),  # IsActive NULL — None은 가장 작음(TypeError 없음)
+    ],
+    "LAS.FileManager": [("F1", "2025-03-04 10:00:00"), (7, "2025-06-05 00:00:00")],
 }
 
 
@@ -84,14 +92,29 @@ def _edw(path, quote=True):
 
 
 DOCS = [(r[1], r[0]) for r in ROWS["AI.FileStorageMap"]]
-QUOTE_STEP = {"prefix": "0Q0", "table": "SFDC.Quote", "id": "Id", "value": "OpportunityId", "optional": True}  # 설정 파일의 주석 줄 그대로
 
 
 def _chain(quote=True):
-    c = copy.deepcopy(M.load_chain())  # 기본 설정 파일(Quote 단계 없음 — 사용자 11-02)
+    """기본 사슬(Quote 단계 없음 — 사용자 11-02) + (quote) Quote 단계를 켠 사본 — 설정 파일 주석대로 단계 한 줄 + 기회 열쇠 목록 끝에
+    quote.OpportunityId."""
+    c = copy.deepcopy(M.load_chain())
     if quote:
-        c["sfdc"]["steps"].append(QUOTE_STEP)
+        steps = c["sfdc"]["steps"]
+        at = next(i for i, s in enumerate(steps) if s["name"] == "opportunity")
+        steps.insert(
+            at, {"name": "quote", "table": "SFDC.Quote", "on": {"Id": "link.LinkedEntityId"}, "when": {"prefix": "0Q0"}, "optional": True}
+        )
+        steps[at + 1]["on"]["Id"].append("quote.OpportunityId")
     return c
+
+
+def _flat(m):
+    """fetch 결과 한 문서 → {created_at, client_edw, attrs 키…}(값 있는 것만)."""
+    return {k: v for k, v in {"created_at": m["created_at"], "client_edw": m["client_edw"], **m["attrs"]}.items() if v not in (None, "")}
+
+
+def _step(c, src, name):
+    return next(s for s in c[src]["steps"] if s["name"] == name)
 
 
 def test_chains():
@@ -127,33 +150,63 @@ def test_chains():
         ("LAS/l1/m.pdf", "client_edw", None),  # PartnerCorpName 비어 있음 — G2
         ("LAS/l1/m.pdf", "created_at", "2025-03-04 10:00:00"),  # FileManager.CreateDate
         ("FAQ/f1/q.xlsx", "created_at", "2025-04-01 00:00:00"),
+        ("CRMS/c2/b.docx", "client_edw", "Delta"),  # 'rc-8   ' ↔ 'RC-8' — 채움·대소문자 무시(값도 앞뒤 공백 뺌)
+        ("CRMS/c2/b.docx", "contract_id", "rc-8"),
+        ("LAS/l2/n.pdf", "contract_id", "M-2"),  # 채움 뺀 값
+        ("LAS/l2/n.pdf", "contract_date", "2025-06-02"),  # latest(IsActive, ContractID) — 10 > 9, None 행은 뒤
+        ("LAS/l2/n.pdf", "created_at", "2025-06-05 00:00:00"),  # FileID INT 7 ↔ 글자 '7'
     ]
     for key, col, want in cases:
-        got = out[key].get(col)
+        got = _flat(out[key]).get(col)
         assert (None if got is None else str(got)) == want, (key, col, out[key])
     assert missing == 0, missing
-    assert base["SFDC/d4/quote.pdf"]["sf_op_id"] is None and base["SFDC/d1/opp.pdf"] == out["SFDC/d1/opp.pdf"], base["SFDC/d4/quote.pdf"]
+    assert "sf_op_id" not in base["SFDC/d4/quote.pdf"]["attrs"] and base["SFDC/d1/opp.pdf"] == out["SFDC/d1/opp.pdf"], base[
+        "SFDC/d4/quote.pdf"
+    ]
     assert str(M._date("20250210")) == "2025-02-10" and M._date("bad") is None and M._ts("20250211080000").hour == 8  # EDW 글자 꼴
+    import json
+    import uuid
+    from decimal import Decimal
+
+    u = uuid.UUID(int=1)
+    values = [  # (EDW 값, 칸 꼴, 기대 attrs 값) — text는 늘 글자(JSON 수·Decimal 오류 없음 — P1-1)
+        (123, {}, "123"),
+        (Decimal("12.50"), {}, "12.50"),
+        (u, {}, str(u)),
+        ("  A  ", {}, "A"),
+        ("   ", {}, None),
+        (1234567, {"max": 3}, "123"),
+        (True, {"type": "flag"}, "1"),
+    ]
+    for v, f, want in values:
+        got = M._field({"s": [{"c": v}]}, "p", {"from": "s.c", **f})
+        assert got == want and json.loads(json.dumps({"k": got})) == {"k": want}, (v, f, got)
     # Quote 표가 없는 EDW(서버 지금) — 그 단계만 건너뜀, 나머지는 그대로
     e2 = _edw(str(d / "edw2.sqlite"), quote=False)
     try:
         out2, _ = M.fetch(DOCS, e2, _chain())
     finally:
         e2.close()
-    assert out2["SFDC/d4/quote.pdf"]["sf_op_id"] is None and out2["SFDC/d1/opp.pdf"]["sf_op_id"] == "006A", out2
+    assert "sf_op_id" not in out2["SFDC/d4/quote.pdf"]["attrs"] and out2["SFDC/d1/opp.pdf"]["attrs"]["sf_op_id"] == "006A", out2
     # EDW를 못 엶 — 빈 결과와 전부 메타 없음(적재는 계속)
     with patch.object(M, "_Edw", side_effect=RuntimeError("no account")):
         assert M.fetch(DOCS) == ({}, len(DOCS))
-    bad = [  # (설정 고치기, 오류 글자에 들어갈 말) — 이름은 SQL에 들어가므로 검사
-        (lambda c: c["sfdc"]["opportunity"].__setitem__("table", "SFDC.Opportunity; DROP"), "sfdc.opportunity.table"),
-        (lambda c: c["crms"]["docu"].pop("created"), "crms.docu.created: 없음"),
-        (lambda c: c["crms"]["map"].pop("out"), "crms.map.out: 없음"),  # 빠뜨리면 CRMS 칸이 조용히 빔(#98 리뷰)
-        (lambda c: c["crms"]["project"].pop("out"), "crms.project.out: 없음"),
-        (lambda c: c["crms"]["project"]["out"].__setitem__("sf_op_id", "X"), "crms에서 설정으로 채울 수 없는 칸"),
-        (lambda c: c["crms"]["project"]["out"].__setitem__("file_path", "X"), "crms에서 설정으로 채울 수 없는 칸"),  # 문서 키 덮어쓰기 막음
-        (lambda c: c["sfdc"]["opportunity"]["out"].__setitem__("client_edw", "Name"), "sfdc에서 설정으로 채울 수 없는 칸"),
-        (lambda c: c["sfdc"]["steps"].append({"prefix": "0Q0", "table": "SFDC.Quote"}), "sfdc.steps[3].id: 없음"),
-        (lambda c: c["sfdc"].__setitem__("opp_prefix", "06"), "sfdc.opp_prefix"),
+    bad = [  # (설정 고치기, 오류 글자에 들어갈 말) — 이름은 SQL에 들어가므로 검사 · 참조·거르기 이름·형식(pl-52)
+        (lambda c: _step(c, "sfdc", "opportunity").__setitem__("table", "SFDC.Opportunity; DROP"), "sfdc.steps[5].table"),
+        (lambda c: _step(c, "crms", "docu").pop("on"), "crms.steps[3].on"),
+        (lambda c: _step(c, "crms", "docu")["on"].__setitem__("DOCU_SEQ", "project.X"), "칸이 여럿이면"),
+        (lambda c: _step(c, "sfdc", "link")["on"].__setitem__("ContentDocumentId", "nowhere.Id"), "앞에 없는 단계"),
+        (lambda c: _step(c, "sfdc", "ent_task")["on"].__setitem__("Id", "entity.Name"), "칸 이름이 틀림"),  # sfdc_entity 칸은 Id·Type·Class
+        (lambda c: _step(c, "sfdc", "task")["when"].__setitem__("prefix", "06"), "sfdc.steps[3].when"),
+        (lambda c: c["sfdc"]["steps"][0]["on"].__setitem__("s3_key", "version.Id"), "첫 단계의 열쇠는 file"),
+        (lambda c: c["crms"]["fields"]["division"].__setitem__("filter", "contract_id"), "겹침"),  # 원천 안 거르기 이름 하나
+        (lambda c: c["crms"]["fields"]["division"].__setitem__("filter", "client"), "crms.fields.division.filter"),  # 고정 거르기
+        (lambda c: c["las"]["fields"].__setitem__("doc_class", {"from": "map.manage_no"}), "attrs 키로 쓸 수 없는"),  # 분류가 쓰는 키
+        (lambda c: c["crms"]["fields"].__setitem__("file_path", {"from": "map.s3_key"}), "attrs 키로 쓸 수 없는"),  # 고정 칸
+        (lambda c: c["crms"]["fields"]["division"].__setitem__("type", "number"), "crms.fields.division.type"),
+        (lambda c: c["crms"]["fields"]["division"].__setitem__("from", "project.DIVISION; --"), "칸 이름이 틀림"),
+        (lambda c: c["las"].pop("created"), "las.created: 없음"),
+        (lambda c: c.pop("faq"), "faq: 없음"),
     ]
     import yaml
 
@@ -168,15 +221,15 @@ def test_chains():
         except ValueError as e:
             assert want in str(e), (want, str(e))
     print(
-        f"[시험] pl-29 EDW 조인 — 사례 {len(cases)}개(SFDC 4단계·계정 직접·동률 비움·CRMS·LAS 최신 판·FAQ) · Quote 표 없음 · EDW 없음 · 기본 설정(Quote 없음) · 틀린 설정 {len(bad)}개 거부 통과"
+        f"[시험] pl-29·pl-52 EDW 조인 — 사례 {len(cases)}개(SFDC 4단계·계정 직접·동률 비움·CRMS·LAS 최신 판·FAQ) · Quote 표 없음 · EDW 없음 · 기본 설정(Quote 없음) · 틀린 설정 {len(bad)}개 거부 통과"
     )
 
 
 def test_chain_file_setting():
-    """pipeline.paths.edw_chain(사용자 11-03) — 고친 사본을 쓰고, 없거나 틀린 파일은 기본 파일로 돌아가지 않고 거부 · --check는 파일만 봄."""
+    """common.paths.edw_chain(= ops.paths.edw_chain — 적재·검색 MCP 같은 칸, 사용자 11-03) — 고친 사본을 쓰고, 없거나 틀린 파일은 기본 파일로 돌아가지 않고 거부 · --check는 파일만 봄."""
     import yaml
 
-    from pipeline import config as pc
+    from common.config.settings import COMMON
 
     d = Path(tempfile.mkdtemp())
     good, broken, notdict = d / "good.yaml", d / "broken.yaml", d / "list.yaml"
@@ -184,14 +237,14 @@ def test_chain_file_setting():
     broken.write_text("sfdc: [", encoding="utf-8")
     notdict.write_text("- a", encoding="utf-8")
     cases = [  # (설정 값, 기대 — SFDC 단계 수 또는 오류 글자)
-        (None, 3),  # 비움 — 기본 파일(Quote 없음)
-        (str(good), 4),  # 고친 사본이 쓰임
+        (None, 11),  # 비움 — 기본 파일(Quote 없음)
+        (str(good), 12),  # 고친 사본이 쓰임
         (str(d / "none.yaml"), "못 읽음"),  # 없는 파일 — 조용히 기본으로 안 감
         (str(broken), "YAML 오류"),
         (str(notdict), "최상위가 사전"),
     ]
     for val, want in cases:
-        with pc.PIPE.env(EDW_CHAIN_FILE=val):
+        with COMMON.env(EDW_CHAIN_FILE=val):
             try:
                 got = len(M.load_chain()["sfdc"]["steps"])
             except ValueError as e:
@@ -252,7 +305,7 @@ def test_hints():
     want = {  # (원본 경로) → HINT_KEYS 차례의 값
         "SFDC/d1/opp.pdf": (None, "Opportunity", "opportunity", "006A", None, None, "RFP", "1", "2026-03-02"),  # 005USER 건너뜀
         "SFDC/d2/task.pdf": ("RFP reply", "Task", "task", "00TT1", "Received", subj, None, None, None),
-        "SFDC/d3/event.pdf": (None, "Event", "event", "00UE1", None, "", None, None, None),
+        "SFDC/d3/event.pdf": (None, "Event", "event", "00UE1", None, None, None, None, None),  # 빈 제목은 빼고 둠(pl-52 — 분류 글은 같음)
         "SFDC/d4/quote.pdf": (None, "Quote", "quote", "0Q0Q1", None, None, None, None, None),
         "SFDC/d6/tie.pdf": (None, "Account", "account", "001ACC1", None, None, None, None, None),  # 첫 연결(정렬) = 001
         "SFDC/d7/none.pdf": (None, None, "unlinked", None, None, None, None, None, None),
@@ -260,13 +313,16 @@ def test_hints():
         "SFDC/d9/unk.pdf": (None, "Unknown:a99", "other", "a99X1", None, None, None, None, None),
     }
     for key, vals in want.items():
-        got = tuple(None if out[key].get(k) is None else str(out[key].get(k)) for k in HINT_KEYS)
+        got = tuple(None if _flat(out[key]).get(k) is None else str(_flat(out[key]).get(k)) for k in HINT_KEYS)
         assert got == vals, (key, got)
-    assert out["LAS/l1/m.pdf"]["approvalname"] == "QAG 승인" and out["SFDC/d1/opp.pdf"]["sf_op_id"] == "006A", out["LAS/l1/m.pdf"]
+    assert out["LAS/l1/m.pdf"]["attrs"]["approvalname"] == "QAG 승인" and out["SFDC/d1/opp.pdf"]["attrs"]["sf_op_id"] == "006A", out[
+        "LAS/l1/m.pdf"
+    ]
     e = _edw(str(d / "edw2.sqlite"))  # 힌트 칸 없는 EDW
     try:
         bare, _ = M.fetch(DOCS, e, _chain())
     finally:
         e.close()
-    assert bare["SFDC/d2/task.pdf"]["entity_class"] == "task" and bare["SFDC/d2/task.pdf"].get("subject") is None, bare["SFDC/d2/task.pdf"]
-    assert bare["SFDC/d1/opp.pdf"]["sf_op_id"] == "006A" and bare["LAS/l1/m.pdf"]["approvalname"] is None
+    ta = bare["SFDC/d2/task.pdf"]["attrs"]
+    assert ta["entity_class"] == "task" and "subject" not in ta, ta
+    assert bare["SFDC/d1/opp.pdf"]["attrs"]["sf_op_id"] == "006A" and "approvalname" not in bare["LAS/l1/m.pdf"]["attrs"]

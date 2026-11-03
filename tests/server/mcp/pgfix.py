@@ -32,7 +32,7 @@ def standin_of(bundle):
 def load(bundle, schema=SCHEMA, standin=None):
     """bundle (meta.json, docs.jsonl, chunks.jsonl, optional vectors.npy) → new stand-in source schemas `<schema>_<src>` in `standin`
     (pl-28 — a doc goes to the schema of its source_system: SFDC·CRMS·LAS·FAQ, anything else → other). Doc columns given in the doc dict
-    are written when that schema has them (clients → clients_doc as JSON)."""
+    are written when that schema has them (clients → clients_doc as JSON; attrs = the doc's `attrs` + doc_class — pl-52)."""
     B = Path(bundle)
     meta = json.loads((B / "meta.json").read_text(encoding="utf-8"))
     docs, chunks = jl(B / "docs.jsonl"), jl(B / "chunks.jsonl")
@@ -62,6 +62,8 @@ def load(bundle, schema=SCHEMA, standin=None):
                     d.setdefault("clients_doc", json.dumps(names, ensure_ascii=False) if names else None)
                     d.setdefault("content_date", d.get("doc_date"))  # mc-19 — bundle doc_date → gold content_date
                     d.setdefault("embed_model", meta.get("embed_model"))  # mc-19 — load writes the bundle's model on every doc
+                    a = {**(d.get("attrs") or {}), **{k: d[k] for k in ST.LOAD_ATTRS.get(src, ()) if d.get(k) is not None}}
+                    d["attrs"] = json.dumps(a, ensure_ascii=False)  # pl-52 — 적재 _attrs와 같게(사슬 키 attrs + 분류 doc_class)
                     d["doc_id"] = i + 1  # 공용 시퀀스 흉내(서버는 5벌이 시퀀스 하나 — 묶음 줄 순서대로 겹치지 않는 번호)
                     cols = ["doc_id"] + [k for k in dcols if d.get(k) is not None]
                     cur.execute(

@@ -59,7 +59,7 @@ def _docs():
             "file_path": "SFDC/u1/A.pdf",
             "source_system": "SFDC",
             "doc_class": "RFP",
-            "sf_op_id": "006A",
+            "attrs": {"sf_op_id": "006A"},  # pl-52 — 사슬 키는 attrs
             "created_at": "2025-03-01T10:00:00+09:00",
         },
         {

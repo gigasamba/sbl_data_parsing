@@ -1,11 +1,14 @@
 """검색 서비스 — do_search(하드 거르기 범위 안의 하이브리드 근거 검색·질의 기록). 계약 모양은 mcp_server/schemas/evidence.py.
-S5(10-26)에 mcp_server/main.py에서 옮김 · 11-01(mc-16) 운영 계약으로 — question 필수(덤프 방식 지움), 거르기 13칸, 맨 위 5칸·근거 12칸,
+S5(10-26)에 mcp_server/main.py에서 옮김 · 11-01(mc-16) 운영 계약으로 — question 필수(덤프 방식 지움), 거르기 14칸(attrs — pl-52), 맨 위 5칸·근거 13칸,
 이름 있는 색인(index_id·AD41)·옛 입력(methods·decompose·limit)·옛 출력(subs·store·images·notes·ms) 지움.
 """
 
+import functools
+import json
 import time
 from datetime import date, datetime, timedelta, timezone
 
+from common.store import edw_chain as EC
 from common.store.db.models import search_tables as ST
 from mcp_server import config as mc  # mcp 설정 객체(S7d)
 from mcp_server.config import CFG
@@ -15,20 +18,25 @@ from mcp_server.services.search.server_state import _STATE, CALLER, _retriever
 from mcp_server.services.search.shaping import _evidence, cap, evidence_status
 
 KST = timezone(timedelta(hours=9))  # 시간대 없는 등록 시각은 KST(운영 계약)
-# 정확 일치 거르기 → v_chunk_source 칸
-_EXACT_COLS = {
-    "project_id": "project_code__c",
-    "division": "division",
-    "service_type": "service_type",
-    "doc_class": "doc_class",
-    "sf_op_id": "sf_op_id",
-    "sf_op_name": "sf_op_name",
-    "contract_id": "contract_id",
-    "FAQ_group": "faq_group",  # faq.chunk만(C4)
-}
 _SYSTEMS = tuple(s.upper() for s in ST.SOURCES)
 NO_QUESTION = "question is required — 질문 없이 문서를 고르려면 list_doc_fulltext, 원천 값 조회는 query_edw"
 NO_SOURCE = "source_system is required — exactly one of SFDC, CRMS, LAS, FAQ, Other(원천마다 따로 찾음 — 여러 원천은 여러 번 부름, G20)"
+
+
+def chain():
+    """검색이 쓰는 EDW 사슬(pl-52) — 설정 ops.paths.edw_chain(적재와 같은 칸), 비우면 기본 파일. 파일이 바뀌면(수정 시각) 다시 읽음.
+    틀린 파일은 ValueError(common.store.edw_chain.load)."""
+    p = EC.chain_path()
+    try:
+        t = p.stat().st_mtime_ns
+    except OSError:
+        t = None  # 없는 파일 — load가 오류 글로
+    return _chain_at(str(p), t)
+
+
+@functools.lru_cache(maxsize=4)
+def _chain_at(path, _mtime):
+    return EC.load(path)
 
 
 def _log(question, evidence, ms):
@@ -42,8 +50,8 @@ def _log(question, evidence, ms):
 
 
 def _vals(v):
-    """거르기 값 → 목록(문자열 하나 또는 목록, 빈 값 뺌)."""
-    return [str(x) for x in (v if isinstance(v, list | tuple) else [v]) if x not in (None, "")]
+    """거르기 값 → 목록(문자열 하나 또는 목록, 앞뒤 공백 뺌 — 적재 값과 같게(edw_meta._text), 빈 값 뺌)."""
+    return [s for x in (v if isinstance(v, list | tuple) else [v]) if x is not None and (s := str(x).strip())]
 
 
 def _when(v, upper):
@@ -73,7 +81,7 @@ def _norm_filters(args):
     hard = {}
     for name in SEARCH_FILTERS:
         v = args.get(name)
-        if name == "client_like":
+        if name in ("client_like", "attrs"):  # attrs는 원천이 정해진 뒤(_norm_attrs)
             continue
         vs = _vals(v)
         if name == "source_system":
@@ -85,9 +93,31 @@ def _norm_filters(args):
     return hard
 
 
-def _scope_sql(hard, src):
+def _norm_attrs(raw, sysv, fmap):
+    """attrs 거르기 {키: 값 또는 목록} → (정규화한 dict, 오류 글). 키는 그 원천 사슬의 거를 수 있는 키(fmap 값)만 — 모르는 키는 오류(조용한 0건 아님)."""
+    if raw in (None, {}):
+        return {}, None
+    ok = sorted(set(fmap.values()))
+    if not isinstance(raw, dict):
+        return {}, f"attrs는 {{키: 값 또는 값 목록}} — {sysv}에서 거를 수 있는 키: {', '.join(ok) or '없음'}"
+    bad = sorted(str(k) for k in raw if k not in ok)
+    if bad:
+        return (
+            {},
+            f"attrs 키 {', '.join(bad)}는 {sysv}에 없음 — 거를 수 있는 키: {', '.join(ok) or '없음'}(edw_meta 인자 없이 부르면 원천별 목록)",
+        )
+    out = {}
+    for k, v in raw.items():
+        vs = _vals(v)
+        if vs:
+            out[k] = vs if isinstance(v, list | tuple) else vs[0]
+    return out, None
+
+
+def _scope_sql(hard, src, fmap):
     """정규화한 거르기 → (WHERE 글자, 값) — 원천 스키마 src의 v_chunk_source 칸에서. 다른 거르기는 AND, 같은 거르기의 목록은 OR, 모두 정확 일치
-    (client_like만 부분 일치). 그 원천 스키마에 칸이 없는 거르기(예: crms에서 sf_op_id)는 0건(오류 아님). 고객은 client_edw만(C6, 사용자 11-02)."""
+    (client_like만 부분 일치). 이름 있는 거르기는 fmap(사슬의 filter → attrs 키, pl-52)으로 doc.attrs 키에 — 그 원천에 이어진 키가 없는 거르기
+    (예: crms에서 sf_op_id)는 0건(오류 아님). attrs 거르기는 키 그대로(_norm_attrs가 검사한 키만). 고객은 client_edw만(C6, 사용자 11-02)."""
     have = set(ST.view_columns(src))
     conds, vals = [], []
 
@@ -105,25 +135,38 @@ def _scope_sql(hard, src):
                 any_of("client_edw LIKE %s ESCAPE '!'", vs, lambda x: [f"%{_like(x)}%"])
             else:
                 any_of("client_edw = %s", vs, lambda x: [x])
-        elif name in _EXACT_COLS:
-            col = _EXACT_COLS[name]
-            if col in have:
-                any_of(f"{col} = %s", vs, lambda x: [x])
-            else:
-                conds.append("1 = 0")
+        elif name == "FAQ_group":  # 청크 칸(faq만 — C4)
+            any_of("faq_group = %s", vs, lambda x: [x]) if "faq_group" in have else conds.append("1 = 0")
         elif name in ("created_since", "created_until"):
             op, t = _when(v, name == "created_until")
             conds.append(f"created_at {op} %s")  # created_at이 없는 문서는 빠짐
             vals.append(t)
+        elif name == "attrs":  # 담김(@>) — GIN(jsonb_ops) 색인을 탐(->> 비교는 못 탐). 값은 글자(attrs는 늘 글자 — P1-1)
+            for key, xs in v.items():
+                any_of("attrs @> %s::jsonb", _vals(xs), lambda x, key=key: [json.dumps({key: str(x)})])
+        elif fmap.get(name):  # 옛 이름 → 사슬의 attrs 키
+            any_of("attrs @> %s::jsonb", vs, lambda x, key=fmap[name]: [json.dumps({key: str(x)})])
+        else:  # 이 원천에 이어진 키가 없음
+            conds.append("1 = 0")
     return (" WHERE " + " AND ".join(conds)) if conds else "", vals
 
 
-def _hard_filter_scope(hard, src):
+def _hard_filter_scope(hard, src, fmap):
     """하드 거르기에 정확히 맞는 문서 file_path 집합과 문서 수 — 검색 범위(원천 스키마 src 안). SQL 실패는 그대로 올림."""
     R = _retriever(src)
-    where, vals = _scope_sql(hard, src)
+    where, vals = _scope_sql(hard, src, fmap)
     rows = R.pg.q(f"SELECT DISTINCT file_path FROM {R.pg.schema}.v_chunk_source{where}", tuple(vals))
     return {r["file_path"] for r in rows}, len(rows)
+
+
+def _doc_attrs(src, paths):
+    """근거 문서 file_path → doc.attrs dict(pl-52 — PG는 dict, SQLite 대역은 JSON 글자)."""
+    paths = sorted(p for p in paths if p)
+    if not paths:
+        return {}
+    R = _retriever(src)
+    rows = R.pg.q(f"SELECT file_path, attrs FROM {R.pg.schema}.doc WHERE file_path = ANY(%s)", (paths,))
+    return {r["file_path"]: json.loads(r["attrs"]) if isinstance(r["attrs"], str) else r["attrs"] for r in rows}
 
 
 def _source_docs(src):
@@ -134,7 +177,7 @@ def _source_docs(src):
 
 
 def _out(question, evidence, status, hard, scope_docs):
-    """계약 모양으로 — 근거는 12칸만, 맨 위 5칸(filter·scope_docs는 거르기를 줬을 때만). cap이 줄이면 근거 글·개수만 줄고 표시 칸은 뺀다(계약 밖)."""
+    """계약 모양으로 — 근거는 13칸만, 맨 위 5칸(filter·scope_docs는 거르기를 줬을 때만). cap이 줄이면 근거 글·개수만 줄고 표시 칸은 뺀다(계약 밖)."""
     obj = {
         "question": question,
         "evidence": [{k: e.get(k) for k in EVIDENCE_KEYS} for e in evidence],
@@ -170,10 +213,20 @@ def do_search(question=None, k=8, **filters):
         return {"error": NO_SOURCE}
 
     src = ST.source_of(sysv)
+    try:
+        ch = chain()
+    except ValueError as bad:  # 틀린 사슬 파일 — 거르기·근거 attrs를 정할 수 없음
+        return {"error": str(bad)}
+    fmap = EC.filters(ch, src)
+    attrs, bad_attrs = _norm_attrs(filters.get("attrs"), sysv, fmap)
+    if bad_attrs:
+        return {"error": bad_attrs}
+    if attrs:
+        hard["attrs"] = attrs
     k, scope, scope_docs = user_k, None, None
     if len(hard) > 1:  # source_system 말고 거르기가 있을 때만 범위를 구함(원천 스키마 전체면 범위 없이)
         try:
-            scope, scope_docs = _hard_filter_scope(hard, src)
+            scope, scope_docs = _hard_filter_scope(hard, src, fmap)
         except ValueError as bad:  # created_since/until 형식 틀림
             return {"error": f"created_since/created_until 형식 — YYYY-MM-DD 또는 ISO 8601 시각: {bad}"}
         if scope_docs == 0:  # 조건에 맞는 문서가 없음 — 검색할 범위 자체가 없다
@@ -202,8 +255,13 @@ def do_search(question=None, k=8, **filters):
     if scope is not None:  # 하드 거르기 범위 안 문서만 남기고 다시 1..n — 요청한 k개로
         evidence = [e for e in evidence if (e.get("file_path") or "") in scope]
     evidence = evidence[:user_k]
+    # 근거 attrs = evidence: true 키 · contract_no = contract_id 거르기의 키 값 — 문서 attrs는 여기서 한 번에 읽음(검색 층 r 코드는 그대로)
+    ev_keys, cno, by_doc = EC.evidence(ch, src), fmap.get("contract_id"), _doc_attrs(src, {e.get("file_path") for e in evidence})
     for i, e in enumerate(evidence):
         e["rank"] = i + 1
+        a = by_doc.get(e.get("file_path")) or {}
+        e["attrs"] = {x: a.get(x) for x in ev_keys} if ev_keys else None  # 근거 키가 없는 원천(FAQ·Other)은 null
+        e["contract_no"] = a.get(cno) if cno else None
     status, _ = evidence_status(question, evidence, mc.cfg().search.min_score)  # R3(AD42) — 표시만, 근거 목록은 안 줄임
     _log(question, evidence, (time.perf_counter() - t0) * 1000)
     return _out(question, evidence, status, hard, scope_docs)

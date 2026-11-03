@@ -37,8 +37,8 @@ services:
       RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
     volumes:
       - *settings
-      # EDW 조인 사슬 서버 사본(사용자 11-03 — 파일 하나, settings.yaml과 같은 방식). 적재가 도는 이 컨테이너에만. dc.sh init이 없을 때만 기본 파일을 복사해 둠
-      #   (원본 파일이 없으면 podman은 마운트를 거부하고 docker는 폴더를 만듦). 앱은 ops.pipeline_paths.edw_chain에 이 경로를 적었을 때만 이 사본을 씀.
+      # EDW 조인 사슬 서버 사본(사용자 11-03 — 파일 하나, settings.yaml과 같은 방식). 적재가 도는 이 컨테이너와 mcp-server(pl-52). dc.sh init이 없을 때만 기본 파일을 복사해 둠
+      #   (원본 파일이 없으면 podman은 마운트를 거부하고 docker는 폴더를 만듦). 앱은 ops.paths.edw_chain에 이 경로를 적었을 때만 이 사본을 씀.
       - ${SERVER_ENV_DIR:?SERVER_ENV_DIR 필요 — settings_env.sh load_settings가 냄}/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z
       - ${DOC_SRC:?DOC_SRC=<원본 문서 폴더>}:${APP_DOCS_MOUNT:?APP_DOCS_MOUNT 필요 — settings_env.sh load_settings가 냄}:ro,z
       - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:${APP_OUTPUT_ROOT:?APP_OUTPUT_ROOT 필요 — settings_env.sh load_settings가 냄}:z

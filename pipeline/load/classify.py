@@ -184,24 +184,25 @@ def _s(v):
 
 
 def sfdc_user(doc, rep):
-    """운영 build_user_prompt와 같은 글 — 힌트는 문서 행(gold 칸). 제목이 비면 원본 파일 이름. rep = {text, format, engine}."""
+    """운영 build_user_prompt와 같은 글 — 힌트는 문서 attrs(pl-52 — EDW 사슬 키). 제목이 비면 원본 파일 이름. rep = {text, format, engine}."""
     fn = Path(doc["file_path"]).name
-    title = doc.get("title") or fn
+    h = doc.get("attrs") or {}  # 힌트 키(title·entity_*·sent_received__c·subject·stagename·real_rfp__c·rfp_*)
+    title = h.get("title") or fn
     lines = [
         "## Document metadata",
         f"- Title: {title}",
         f"- Original filename: {fn}",
         f"- File format: {_s(rep.get('format'))} (representative parse engine: {_s(rep.get('engine'))})",
     ]
-    if doc.get("entity_class"):  # 운영 `if f:` — EDW 사슬이 이 파일을 찾았으면 늘 있음(연결 없음도 unlinked)
-        lines.append(f"- SFDC entity: type={_s(doc.get('entity_type'))} class={doc['entity_class']} id={_s(doc.get('entity_id'))}")
-        direction = _s(doc.get("sent_received__c")).strip()
+    if h.get("entity_class"):  # 운영 `if f:` — EDW 사슬이 이 파일을 찾았으면 늘 있음(연결 없음도 unlinked)
+        lines.append(f"- SFDC entity: type={_s(h.get('entity_type'))} class={h['entity_class']} id={_s(h.get('entity_id'))}")
+        direction = _s(h.get("sent_received__c")).strip()
         if direction:
-            lines.append(f"- Communication channel: direction={direction}, subject={_s(doc.get('subject'))[:300]}")
-        if _s(doc.get("stagename")).strip():
+            lines.append(f"- Communication channel: direction={direction}, subject={_s(h.get('subject'))[:300]}")
+        if _s(h.get("stagename")).strip():
             lines.append(
-                f"- Opportunity: stage={doc['stagename']}, Real_RFP__c={_s(doc.get('real_rfp__c'))}, "
-                f"rfp_window={_s(doc.get('rfp_received_start_date__c'))}~{_s(doc.get('rfp_received_end_date__c'))}"
+                f"- Opportunity: stage={h['stagename']}, Real_RFP__c={_s(h.get('real_rfp__c'))}, "
+                f"rfp_window={_s(h.get('rfp_received_start_date__c'))}~{_s(h.get('rfp_received_end_date__c'))}"
             )
         kw = "|".join(fams(title))
         if kw:
@@ -214,8 +215,9 @@ def las_user(doc, rep):
     """운영 LAS 사용자 쪽 글과 같은 모양 — 상대방은 gold client_edw(LAS.Contract.PartnerCorpName)."""
     fn = doc["file_path"].split("/")[-1]
     up = ["## Document metadata", f"- Original filename: {fn}", f"- File format: {_s(rep.get('format'))}"]
-    if doc.get("approvalname"):
-        up.append(f"- Approval title: {doc['approvalname']}")
+    appr = (doc.get("attrs") or {}).get("approvalname")  # pl-52 — 힌트는 attrs
+    if appr:
+        up.append(f"- Approval title: {appr}")
     if doc.get("client_edw"):
         up.append(f"- Counterparty: {doc['client_edw']}")
     body = rep["text"]

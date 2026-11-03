@@ -70,6 +70,7 @@ EXCLUDED_FILES = (
     "store/parsing_meta_db.py",  # EDW AI.ParsingMeta 메타 저장 — 운영 기록, 핸드오프 내용 아님
     "core/paths.py",  # cli 평가 도구 경로 기본값 + 원자적 파일 쓰기 헬퍼(CT1 — 옛 atomic.py 병합, 쓰는 방식만·내용은 안 바꿈)
     "store/pg.py",  # PostgreSQL 연결 설정
+    "store/edw_chain.py",  # pl-52 — EDW 조인 사슬 파일 읽기·검사(적재 edw_meta·검색 거르기 이름) — 인계 형식과 무관
     "store/pg_standin.py",  # AD41 — pg.py의 연결 정보 없을 때 스탠드인(sqlite) — 연결 방법만, 핸드오프 내용과 무관(pg.py가 shared라 같이 있음)
     "store/master.py",  # pl-38 — 마스터 표(용어집·고객 명부) 읽기·채우기 — DB 연결·표 내용, 인계 형식과 무관(terms.py가 읽은 값으로 판별)
     "core/resources.py",  # 실행 자원(CPU·메모리) 판단 — 병렬 수 결정만

@@ -2,11 +2,11 @@
 (원천 = sfdc·crms·las·faq·other) — 스키마마다 같은 표 doc·chunk·chunk_term·term_stat·corpus_stat + 뷰 v_chunk_source, 그 원천 전용 칸만 다름.
 기준 스키마 `<PG_SCHEMA>`에는 Alembic 판 표와 5벌이 함께 쓰는 doc_id 시퀀스(`doc_id_seq`)만 있다(load_run은 지움 — 실행 정보는 실행 기록에).
 임베딩 차원은 실행 값이라 함수로 만든다. 색인 정의 글자(index_defs)·뷰(views_expected — 칸 이름 순서 + 정의 글자)는 PostgreSQL이 돌려주는 꼴
-(pg_get_indexdef·pg_get_viewdef — `{S}` = 원천 스키마) — 비교용(dbcompare). Alembic 판(migrations/versions/0002_search_doc_meta.py)이 같은 DDL을 글자로 갖고,
+(pg_get_indexdef·pg_get_viewdef — `{S}` = 원천 스키마) — 비교용(dbcompare). Alembic 판(migrations/versions/0002~0005)이 같은 DDL을 글자로 갖고,
 PC PG 시험이 둘이 같은지 본다."""
 
-from sqlalchemy import Column, Date, ForeignKey, Index, Integer, MetaData, PrimaryKeyConstraint, SmallInteger, String, Table, Text, text
-from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, TIMESTAMP
+from sqlalchemy import Column, ForeignKey, Index, Integer, MetaData, PrimaryKeyConstraint, SmallInteger, String, Table, Text, text
+from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, JSONB, TIMESTAMP
 from sqlalchemy.types import UserDefinedType
 
 from common.store.pg import HNSW_MAX  # pgvector HNSW는 vector 2,000차원까지 — 적재·검색과 같은 기준(판 파일만 숫자를 굳혀 둠)
@@ -15,38 +15,10 @@ SOURCES = ("sfdc", "crms", "las", "faq", "other")
 SEQ = "doc_id_seq"  # 기준 스키마에 하나 — 5벌이 함께 써서 doc_id가 겹치지 않음(chunk_key `<doc_id>:<seq>`)
 _SYSTEM = {"SFDC": "sfdc", "CRMS": "crms", "LAS": "las", "FAQ": "faq"}
 
-# 원천 전용 doc 칸 — (이름, 형식). EDW 조인 사슬이 정해진 것만(pl-29·db_schema §1 원천별 표). 공용 칸은 search_metadata.
-DOC_EXTRA = {
-    "sfdc": (
-        ("doc_class", Text),
-        ("sf_op_id", Text),
-        ("sf_op_name", Text),
-        ("project_code__c", Text),
-        ("service_type", Text),
-        ("contract_date", Date),
-    ),
-    "crms": (("division", Text), ("prod_name", Text), ("contract_id", Text), ("contract_date", Date)),
-    "las": (("doc_class", Text), ("contract_id", Text), ("contract_date", Date)),
-    "faq": (),
-    "other": (),
-}
-# 분류 힌트 doc 칸(pl-33, 판 0003 — 사용자 11-02): 적재 때 edw_meta가 EDW에서 채우고 분류가 읽는다. 이름 = 원본 칸 이름의 소문자
-# (project_code__c처럼). 검색 뷰 v_chunk_source에는 넣지 않는다(검색 출력·거르기와 무관).
-DOC_HINTS = {
-    "sfdc": (
-        ("title", Text),
-        ("entity_type", Text),
-        ("entity_class", Text),
-        ("entity_id", Text),
-        ("sent_received__c", Text),
-        ("subject", Text),
-        ("stagename", Text),
-        ("real_rfp__c", Text),
-        ("rfp_received_start_date__c", Date),
-        ("rfp_received_end_date__c", Date),
-    ),
-    "las": (("approvalname", Text),),
-}
+# 원천마다 다른 문서 메타는 doc.attrs(JSONB) 한 칸의 키(pl-52, 판 0005 — 사용자 11-03). 옛 원천 전용 칸(판 0002)·분류 힌트 칸(판 0003)은 지웠다.
+# 키·EDW 칸·검색 거르기 이름·근거 표시는 사슬 파일(resources/config/edw_chain.yaml — common/store/edw_chain.py). 날짜 값은 'YYYY-MM-DD' 글자.
+ATTRS = "attrs"
+LOAD_ATTRS = {"sfdc": ("doc_class",), "las": ("doc_class",)}  # 사슬이 아니라 적재(분류 pl-33)가 쓰는 attrs 키 — 검색 거르기 doc_class
 CHUNK_EXTRA = {"faq": (("faq_group", Text),)}  # C4 — faq.chunk만 시트 이름
 # 5벌 공용 doc 칸(mc-19, 판 0004 — 사용자 11-03): 적재가 묶음에서 채우고 검색이 읽는다(묶음 파일 없이 PG만). 검색 뷰에는 넣지 않는다(출력 계약).
 # content_date = 문서에 적힌 날짜(docmeta.extract_date — 본문 앞 2000자, 없으면 파일 이름에서 찾은 ISO 글자; 묶음·근거 이름은 doc_date).
@@ -87,12 +59,11 @@ class Vector(UserDefinedType):
 
 
 def doc_columns(src):
-    """doc 표 칸 이름 순서(공용 + 원천 전용 + 분류 힌트 + 판 0004 칸 — 판이 더한 순서)."""
-    return _doc_base(src) + [n for n, _ in (*DOC_HINTS.get(src, ()), *DOC_META)]
+    """doc 표 칸 이름 순서(고정 칸 + 판 0004 칸 + 판 0005 attrs — 판이 더한 순서, 5벌 같음)."""
+    return [*_DOC_BASE, *(n for n, _ in DOC_META), ATTRS]
 
 
-def _doc_base(src):
-    return ["doc_id", "file_path", "summary", "created_at", "client_edw", "clients_doc"] + [n for n, _ in DOC_EXTRA[src]]
+_DOC_BASE = ("doc_id", "file_path", "summary", "created_at", "client_edw", "clients_doc")
 
 
 def search_metadata(schema, dim, shared_seq=True):
@@ -118,7 +89,8 @@ def search_metadata(schema, dim, shared_seq=True):
         Column("created_at", TIMESTAMP(timezone=True)),  # 원천 등록 시각(FileStorageMap.created_at, KST)
         Column("client_edw", Text),  # EDW 조인 사슬의 고객 하나 — client 거르기는 이 칸 정확 일치만(C6)
         Column("clients_doc", Text),  # 본문에서 찾은 고객 라벨(JSON 글자) — 참고만, 거르기·순위에 안 씀
-        *(Column(n, t) for n, t in (*DOC_EXTRA[src], *DOC_HINTS.get(src, ()), *DOC_META)),
+        *(Column(n, t) for n, t in DOC_META),
+        Column(ATTRS, JSONB),  # 원천 메타 {키: 값}(pl-52 — 사슬 파일 fields + LOAD_ATTRS) · GIN 색인은 index_defs(판 0005)
     )
     chunk = Table(
         "chunk",
@@ -160,6 +132,7 @@ def search_metadata(schema, dim, shared_seq=True):
 def index_defs(dim):
     """색인 이름 → pg_get_indexdef 글자(`{S}` = 원천 스키마) — 기본 키 색인 빼고. 차원 ≤2,000이면 HNSW 코사인, 넘으면 이진 양자화 HNSW."""
     out = {
+        "ix_{S}_doc_attrs": "CREATE INDEX ix_{S}_doc_attrs ON {S}.doc USING gin (attrs)",  # 판 0005(pl-52)
         "ix_{S}_chunk_doc": "CREATE INDEX ix_{S}_chunk_doc ON {S}.chunk USING btree (doc_id, seq)",
         "ix_{S}_chunk_term_chunk": "CREATE INDEX ix_{S}_chunk_term_chunk ON {S}.chunk_term USING btree (chunk_id)",
     }
@@ -175,15 +148,18 @@ def index_defs(dim):
 _VIEW_CHUNK = ("chunk_id", "doc_id", "file_path", "file_name", "page", "line_start", "line_end", "bbox", "section", "seq", "chunk_text")
 
 
+# 판 0005 — 원천 메타는 attrs 하나(content_date·embed_model은 뷰 밖)
+_VIEW_DOC = ("summary", "created_at", "client_edw", "clients_doc", ATTRS)
+
+
 def view_columns(src):
-    """v_chunk_source 칸 순서 — 청크 칸 + 문서 칸(공용·원천 전용) + (faq) faq_group."""
-    doc_cols = [c for c in _doc_base(src) if c not in ("doc_id", "file_path")]
-    return [*_VIEW_CHUNK, *doc_cols, *(n for n, _ in CHUNK_EXTRA.get(src, ()))]
+    """v_chunk_source 칸 순서 — 청크 칸 + 문서 칸(고정 + attrs) + (faq) faq_group."""
+    return [*_VIEW_CHUNK, *_VIEW_DOC, *(n for n, _ in CHUNK_EXTRA.get(src, ()))]
 
 
 def view_sql(src):
-    """CREATE VIEW 본문(`{S}` = 원천 스키마) — 판 0002와 SQLite 대역이 같은 글자를 쓴다."""
-    doc_cols = [c for c in _doc_base(src) if c not in ("doc_id", "file_path")]
+    """CREATE VIEW 본문(`{S}` = 원천 스키마) — 판 0005와 SQLite 대역이 같은 글자를 쓴다."""
+    doc_cols = _VIEW_DOC
     sel = (
         ["c.chunk_id", "c.doc_id", "d.file_path", "regexp_replace(d.file_path, '^.*/', '') AS file_name"]
         + [f"c.{c}" for c in _VIEW_CHUNK[4:]]

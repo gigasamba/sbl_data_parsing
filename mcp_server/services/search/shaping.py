@@ -11,7 +11,7 @@ from mcp_server.config import CFG
 
 
 def _evidence(h, man=None):
-    """검색 결과 한 건 → 근거 dict(안쪽 칸 chunk_id·score·via·rank 포함 — 응답에는 schemas.evidence.EVIDENCE_KEYS 12칸만 나감).
+    """검색 결과 한 건 → 근거 dict(안쪽 칸 chunk_id·score·via·rank 포함 — 응답에는 schemas.evidence.EVIDENCE_KEYS 13칸만 나감).
     man(AD44 rdb 수집 manifest, _manifest_by_name()): version은 그 문서(file_name)의 manifest 값만(없으면 null).
     mc-05(사용자 10-31·11-01): 본문 글자로 판·구판을 추정한 값은 내보내지 않는다 — 운영 계약에 칸은 남아 있어 version·superseded 칸은
     두되 superseded는 늘 null(원천에 구판 표시가 생기면 그 값으로). 추정값은 안쪽 최신성 순위(L3-1)에만 남음.

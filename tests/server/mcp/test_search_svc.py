@@ -275,16 +275,16 @@ def _selftest_evidence_rdb_meta():
             by_name
         )  # mc-05 — 본문 추정값은 안 나감
         for e in on["evidence"]:
-            assert tuple(e) == EVIDENCE_KEYS, e  # 근거는 12칸만(mc-16 — manifest의 다른 칸은 계약 밖)
+            assert tuple(e) == EVIDENCE_KEYS, e  # 근거는 13칸만(mc-16·pl-52 — manifest의 다른 칸은 계약 밖)
     finally:
         _STATE.clear()
         _env.close()
-    print("[selftest] AD44 _evidence — manifest version 우선 · 근거 12칸 통과")
+    print("[selftest] AD44 _evidence — manifest version 우선 · 근거 13칸 통과")
 
 
 def _selftest_contract():
     """mc-16·pl-28 — search 계약(사례 표 한 곳): question 필수 · source_system 필수·값 하나(원천 스키마 고르기, G20 — 운영과 다름) · k 상한 50 ·
-    맨 위 5칸·근거 12칸 · 거르기(AND, 목록은 OR, -test 별칭, 등록 시각 KST·날짜만이면 그날 전체, 고객은 client_edw 정확 일치만) ·
+    맨 위 5칸·근거 13칸 · 거르기(AND, 목록은 OR, -test 별칭, 등록 시각 KST·날짜만이면 그날 전체, 고객은 client_edw 정확 일치만) ·
     그 원천 스키마에 없는 칸 거르기는 0건 · 모르는 인자 무시 · 맞는 것 없으면 빈 결과."""
     docs = [
         {
@@ -292,21 +292,19 @@ def _selftest_contract():
             "client_edw": "Acme",
             "clients": ["Beta"],
             "source_system": "SFDC",
-            "sf_op_id": "006A",
+            "attrs": {"sf_op_id": "006A", "service_type": "CDO"},
             "doc_class": "RFP",
-            "service_type": "CDO",
             "created_at": "2025-03-01T10:00:00+09:00",
         },
         {
             "file_path": "SFDC/u2/s2.txt",
             "source_system": "SFDC",
-            "sf_op_id": "006B",
+            "attrs": {"sf_op_id": "006B", "service_type": "ADC"},
             "doc_class": "RFI",
-            "service_type": "ADC",
             "created_at": "2025-03-02T23:30:00+09:00",
         },
-        {"file_path": "LAS/u3/l1.txt", "source_system": "LAS", "doc_class": "MSA", "contract_id": "M-1"},
-        {"file_path": "CRMS/u4/c1.txt", "source_system": "CRMS", "division": "DS", "contract_id": "C-9", "client_edw": "Acme"},
+        {"file_path": "LAS/u3/l1.txt", "source_system": "LAS", "doc_class": "MSA", "attrs": {"contract_id": "M-1"}},
+        {"file_path": "CRMS/u4/c1.txt", "source_system": "CRMS", "attrs": {"division": "DS", "contract_id": "C-9"}, "client_edw": "Acme"},
         {"file_path": "FAQ/u5/f.xlsx", "source_system": "FAQ"},
     ]
     chunks = [
@@ -351,6 +349,18 @@ def _selftest_contract():
         ({"source_system": "FAQ", "FAQ_group": "DS"}, [], 0),
         ({"source_system": "Other"}, [], 0),
         ({"source_system": "SFDC", "year": 2025}, ["s1.txt", "s2.txt"], 2),  # 모르는 인자 무시
+        ({"source_system": "SFDC", "attrs": {"service_type": "CDO"}}, ["s1.txt"], 1),  # pl-52 — attrs 키 그대로
+        (
+            {"source_system": "SFDC", "attrs": {"sf_op_id": ["006A", "006B"]}, "doc_class": "RFI"},
+            ["s2.txt"],
+            1,
+        ),  # 목록 OR · 이름 거르기와 AND
+        ({"source_system": "SFDC", "attrs": {"project_code__c": "P-1"}}, [], 0),  # 옛 이름 project_id의 키 — 값 없음 0건
+        ({"source_system": "LAS", "attrs": {"contract_id": "M-1", "doc_class": "MSA"}}, ["l1.txt"], 1),  # doc_class도 attrs 키
+        ({"source_system": "CRMS", "attrs": {"division": "XX"}}, [], 0),
+        ({"source_system": "SFDC", "attrs": {}}, ["s1.txt", "s2.txt"], 2),  # 빈 attrs = 거르기 없음
+        ({"source_system": "SFDC", "attrs": {"sf_op_id": " 006A  "}, "doc_class": " RFP "}, ["s1.txt"], 1),  # 앞뒤 공백 뺌(적재 값과 같게)
+        ({"source_system": "SFDC", "attrs": {"sf_op_id": ["  ", "006B "]}}, ["s2.txt"], 1),  # 공백만 = 빈 값
     ]
     try:
         assert M.do_search("") == {"error": M.NO_QUESTION} and M.do_search("  ", source_system="SFDC") == {"error": M.NO_QUESTION}
@@ -358,6 +368,20 @@ def _selftest_contract():
             "error": M.NO_SOURCE
         }
         assert "error" in M.do_search("단가는?", source_system="SFDC", created_since="2025/03/01")  # 날짜 형식 틀림
+        bad = [  # pl-52 — attrs 모르는 키·꼴 틀림은 오류(조용한 0건 아님) · 오류 글에 그 원천의 키 목록
+            (
+                {"source_system": "SFDC", "attrs": {"title": "x"}},
+                ["title", "sf_op_id", "project_code__c", "doc_class"],
+            ),  # 힌트 키는 거르기 아님
+            ({"source_system": "CRMS", "attrs": {"sf_op_id": "006A"}}, ["sf_op_id", "division", "contract_id"]),  # 다른 원천의 키
+            ({"source_system": "FAQ", "attrs": {"x": "1"}}, ["없음"]),
+            ({"source_system": "SFDC", "attrs": "sf_op_id=006A"}, ["{키: 값"]),
+        ]
+        for filt, words in bad:
+            err = M.do_search("단가는?", **filt).get("error") or ""
+            assert all(w in err for w in words), (filt, err)
+        with mc.senv(EDW_CHAIN_FILE=str(Path(pgfix.__file__).with_name("nowhere.yaml"))):  # 사슬 파일 설정 — 없는 파일은 오류
+            assert "사슬 설정 파일을 못 읽음" in M.do_search("단가는?", source_system="SFDC").get("error", ""), "chain"
         for filt, want, scope in cases:
             o = M.do_search("단가는?", k=999, **filt)  # k 상한 50으로 줄임(오류 아님)
             assert names(o) == want, (filt, o)
@@ -373,11 +397,21 @@ def _selftest_contract():
             and e["file_path"] == "SFDC/u1/s1.txt"
             and e["client"] == "Acme"
         ), e
+        none5 = dict.fromkeys(("sf_op_id", "sf_op_name", "project_code__c", "service_type", "contract_date"))
+        assert e["attrs"] == {**none5, "sf_op_id": "006A", "service_type": "CDO"} and e["contract_no"] is None, (
+            e
+        )  # 근거 attrs = evidence 키
+        o = M.do_search("단가는?", source_system="LAS", attrs={"contract_id": "M-1"})
+        assert o["filter"] == {"source_system": "LAS", "attrs": {"contract_id": "M-1"}}, o
+        e = o["evidence"][0]
+        assert e["contract_no"] == "M-1" and e["attrs"] == {"contract_id": "M-1", "contract_date": None}, e  # contract_no = contract_id 키
+        e = M.do_search("단가는?", source_system="FAQ")["evidence"][0]
+        assert e["attrs"] is None and e["contract_no"] is None, e  # 근거 키가 없는 원천은 attrs null
     finally:
         _env.close()
         _STATE.clear()
     print(
-        f"[selftest] mc-16·pl-28 search 계약 — 사례 {len(cases)}개(원천 스키마·거르기·빈 결과·모르는 인자)·question·source_system 필수·5칸·12칸 통과"
+        f"[selftest] mc-16·pl-28·pl-52 search 계약 — 사례 {len(cases)}개(원천 스키마·거르기·attrs·빈 결과·모르는 인자)·attrs 오류 {len(bad)}개·question·source_system 필수·5칸·13칸 통과"
     )
 
 
@@ -399,3 +433,33 @@ def _cases():
     _selftest_query_log()
     _selftest_copy_group()
     _selftest_copy_group_rep_text()
+    _selftest_search_attrs()
+
+
+def _selftest_search_attrs():
+    """pl-52 — edw_meta 인자 없음의 search_attrs: 원천별 거르기 이름 → attrs 키·근거 키(사슬 파일 그대로) · 인자가 있으면 안 붙음."""
+    from mcp_server.services import edw_calls
+
+    sa = edw_calls.search_attrs()
+    assert sorted(sa) == ["CRMS", "FAQ", "LAS", "Other", "SFDC"], sa
+    assert sa["SFDC"]["filter"]["project_id"] == "project_code__c" and sa["SFDC"]["filter"]["doc_class"] == "doc_class", sa["SFDC"]
+    assert sa["SFDC"]["evidence"] == ["sf_op_id", "sf_op_name", "project_code__c", "service_type", "contract_date"], sa["SFDC"]
+    assert sa["CRMS"]["filter"] == {"contract_id": "contract_id", "division": "division"}, sa
+    assert sa["CRMS"]["attrs"] == ["contract_id", "division"] and sa["FAQ"] == {"filter": {}, "attrs": [], "evidence": []}, sa
+    assert "search_attrs" not in edw_calls.do_edw_meta(schema="NOPE")
+    # P2-8 — 사슬의 filter 이름이 search 인자가 아니면 filter에 안 나오고 attrs 키로만
+    from common.store import edw_chain as EC
+    from mcp_server.services.search import search_svc
+
+    ch = EC.load()
+    ch["crms"]["fields"]["prod_name"]["filter"] = "product"
+    with patch.object(search_svc, "chain", lambda: ch):
+        c = edw_calls.search_attrs()["CRMS"]
+    assert "product" not in c["filter"] and "prod_name" in c["attrs"], c
+    # 요약이 오류면 search_attrs를 붙이지 않음 · 성공이면 붙임
+    from mcp_server.services import edw_meta as EM
+
+    with patch.object(EM, "lookup", lambda *a: {"error": "x"}):
+        assert edw_calls.do_edw_meta() == {"error": "x"}
+    with patch.object(EM, "lookup", lambda *a: {"schemas": []}):
+        assert edw_calls.do_edw_meta() == {"schemas": [], "search_attrs": sa}

@@ -208,7 +208,7 @@ bash deploy/host/scripts/run_tool.sh migrate stamp --target search
 # ③-b 차이가 "표 없음·색인 없음·뷰 없음·뷰 칸 다름"뿐 → 없는 것만 만들고(뷰는 다시 만듦) 버전 기록(기준 리비전이 IF NOT EXISTS) — ③-a 대신
 #      bash deploy/host/scripts/run_tool.sh migrate up --target search
 # ③-c 컬럼 이름·형식·NULL·기본값·키가 다르거나 남는 표·컬럼·색인 → stamp·up 모두 거부(종료 2) — 멈추고 출력(이름만)을 DB 담당과 협의
-# ⑤ 확인 — "판 끝 ['0004_search'] · 코드의 끝 판 0004_search … 비교: 차이 없음" + 엔진 구성 파일이 읽히는지
+# ⑤ 확인 — "판 끝 ['0005_search'] · 코드의 끝 판 0005_search … 비교: 차이 없음" + 엔진 구성 파일이 읽히는지
 bash deploy/host/scripts/run_tool.sh migrate check --target all
 bash deploy/host/scripts/run_tool.sh show-stack                           # 이름·sha·파일 경로 — 못 읽으면 종료 2
 ```
@@ -408,7 +408,7 @@ $DOCKER run --rm -i --network none --entrypoint bash -v "$PWD:/app/deploy:ro,z" 
 - 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline`은 비워 둔다(8-4 3에서 켬).
 - 0.2.0에서 지운 칸(`common/config/layout.py` `REMOVED` — 예: 옛 오버레이 `ops.host.patch_code`, `ops.pipeline_host.structure_cpus`·`structure_mem_limit`, 옛 OCR·지문 배치 칸, pl-38로 지운 `ops.paths.glossary_dir`·`ops.paths.client_roster`(용어집·고객 명부는 이제 PG 마스터 표)·mc-19로 지운 `ops.paths.mcp_bundle`(검색은 묶음 없이 PG gold만)·`common.text.search_recency`(판 묶음·최신성 순위 지움)·`pipeline.transform.structure.draft_terms`(초안 용어는 오프라인 도구로))은 남아 있어도 경고 한 줄 뒤 무시된다 — 지워도 되고 두어도 된다.
 - 새 필수 칸 자리 확인: `python -m common.config.sample --where <칸 이름>`(위 이미지 안에서 같은 방법).
-- (선택) 서버 EDW의 사슬 표·칸 이름이 기본값과 다르면(Quote 표를 켜는 것 포함) `$SERVER_ENV_DIR/edw_chain.yaml`(init이 둔 사본)을 고치고 `ops.pipeline_paths.edw_chain: /etc/rag/edw_chain.yaml`을 적는다 — [§8-6](#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29). 기본값 그대로면 칸을 비워 둔다(사본은 있어도 안 쓰임).
+- (선택) 서버 EDW의 사슬 표·칸 이름이 기본값과 다르면(Quote 표를 켜는 것 포함) `$SERVER_ENV_DIR/edw_chain.yaml`(init이 둔 사본)을 고치고 `ops.paths.edw_chain`(적재·검색 같은 칸)에 `/etc/rag/edw_chain.yaml`을 적는다 — [§8-6](#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29). 0.1.x 때 고친 사본을 쓰던 서버는 새 꼴로 옮겨 적는다(§8-6 ① 상자). 기본값 그대로면 칸을 비워 둔다(사본은 있어도 안 쓰임).
 ```bash
 chown 10001:<운영 그룹> "$SERVER_ENV_DIR/settings.yaml.new" && chmod 640 "$SERVER_ENV_DIR/settings.yaml.new"
 mv "$SERVER_ENV_DIR/settings.yaml.new" "$SERVER_ENV_DIR/settings.yaml"
@@ -421,7 +421,7 @@ $DOCKER rm data-pipeline-parse data-pipeline-structure mcp-server            # �
 bash deploy/host/scripts/dc.sh up -d data-pipeline                           # 기대: data-pipeline Started(또는 Running)
 bash deploy/host/scripts/run_tool.sh migrate check --target all              # 읽기만 — 새 스키마는 "… · 표 없음(새 스키마 — up으로 만듦)", 종료 코드 1이 정상
 bash deploy/host/scripts/run_tool.sh migrate up --target all --dim <임베딩 차원>   # 새 스키마는 차원 필수(없으면 "차원을 모름"으로 멈춤 — 차원 = 임베딩 모델 출력 크기, 모델 담당자에게 확인) · 종료 코드 0 — 기대(갈래 셋):
-#   [migrate] search <NEW_SCHEMA>: 판 ['0004_search'] (끝 0004_search)          ← 새 스키마는 0001→0004를 차례로 올림(원천 스키마 5벌 포함 — 0004: gold doc `content_date`·`embed_model` 칸, `corpus_stat.dim` 지움, mc-19)
+#   [migrate] search <NEW_SCHEMA>: 판 ['0005_search'] (끝 0005_search)          ← 새 스키마는 0001→0005를 차례로 올림(원천 스키마 5벌 포함 — 0004: gold doc `content_date`·`embed_model` 칸, `corpus_stat.dim` 지움, mc-19 · 0005: 원천 칸 → `attrs` JSONB, pl-52)
 #   [migrate] applog applog: 판 ['0001_applog'] (끝 0001_applog)
 #   [migrate] master <NEW_SCHEMA>_master: 판 ['0001_master'] (끝 0001_master)
 #   "올린 뒤에도 차이:"가 나오면 멈추고 DB 담당과
@@ -489,67 +489,100 @@ cp -p "$BK/settings.yaml.0.1.0" "$SERVER_ENV_DIR/settings.yaml"               # 
 
 ### 8-6. EDW 조인 사슬 파일 고쳐 쓰기(서버 — pl-29)
 
-적재가 문서 메타(고객 `client_edw`·원천 전용 칸·등록 시각)를 EDW에서 채울 때 따라가는 표·칸 이름은 파일 하나다. 기본 파일은 코드 폴더의 `resources/config/edw_chain.yaml`이고, **각 줄의 뜻은 그 파일의 주석이 정본**이다(여기는 쓰는 법과 예시만). 서버 EDW 이름이 다르면 코드를 고치지 않고 사본을 고친다.
+적재가 문서 메타(고객 `client_edw`·등록 시각 `created_at`·원천 메타 `doc.attrs`)를 EDW에서 채울 때 따라가는 표·칸 이름과, 검색 MCP가 쓰는 `attrs` 키의 거르기 이름·근거 표시는 파일 하나에 있다([pl-52](../prd/load-schema.md#pl-52)). 기본 파일은 코드 폴더의 `resources/config/edw_chain.yaml`이고, **각 줄의 뜻은 그 파일의 머리 주석이 정본**이다(여기는 쓰는 법과 예시만 둔다). 서버 EDW 이름이 다르거나 메타 키를 더하려면 코드를 고치지 않고 사본을 고친다.
 
-**① 사본 고치기 · 칸 적기** — 사본은 코드 폴더 밖, settings.yaml 옆 `$SERVER_ENV_DIR/edw_chain.yaml`이다(`dc.sh init`이 기본 파일에서 **없을 때만** 복사 — 10001, 640 · [8-7 표](#8-7-서버에서-직접-만드는-파일)). 이 파일 하나가 `data-pipeline`에만 `/etc/rag/edw_chain.yaml`로 읽기 전용(`:ro,z`) 붙는다(settings.yaml과 같은 방식). **칸을 적었을 때만 사본이 쓰이고**, 비워 두면 코드의 기본 파일을 쓴다.
+**① 사본 고치기 · 칸 적기** — 사본은 코드 폴더 밖, settings.yaml 옆 `$SERVER_ENV_DIR/edw_chain.yaml`이다(`dc.sh init`이 기본 파일에서 **없을 때만** 복사 — 10001, 640 · [8-7 표](#8-7-서버에서-직접-만드는-파일)). 이 파일 하나가 `data-pipeline`(적재)과 `mcp-server`(검색)에 `/etc/rag/edw_chain.yaml`로 읽기 전용(`:ro,z`) 붙는다(settings.yaml과 같은 방식). 설정 칸은 **하나**(`ops.paths.edw_chain` — 적재와 검색이 같은 칸을 읽음)이고, **칸을 적었을 때만 사본이 쓰이며** 비워 두면 코드의 기본 파일을 쓴다.
 ```bash
 vi "$SERVER_ENV_DIR/edw_chain.yaml"                                  # 아래 ②·③대로 고침(주인·권한은 그대로 10001, 640)
-# settings.yaml(편집기로):  ops: { pipeline_paths: { edw_chain: /etc/rag/edw_chain.yaml } }
+# settings.yaml(편집기로):  ops: { paths: { edw_chain: /etc/rag/edw_chain.yaml } }
+# 검색 MCP는 파일이 바뀌면 다음 호출부터 다시 읽음 · 적재는 다음 실행부터
 ```
 
-**② 구조 — 원천마다 절 하나**
+**② 구조 — 다섯 원천(`sfdc`·`crms`·`las`·`faq`·`other`)이 모두 같은 꼴**
+```yaml
+<원천>:
+  steps:            # 위에서 아래로 — 단계마다 표 하나를 열쇠 값으로 읽음
+    - {name: <단계>, table: <스키마.표>, on: {<이 표 칸>: <열쇠>}}
+  fields:           # doc.attrs 키
+    <키>: {from: <단계>.<칸>}
+  client_edw: <단계>.<칸>   # 고객(선택)
+  created: <단계>.<칸>      # 등록 시각(꼭)
+```
 
-| 절 | 무엇 | 꼭 있는 이름 |
+**단계(`steps`) 칸 — 하나씩 예시**
+
+| 칸 | 뜻 | 예 |
 |---|---|---|
-| `files` | 모든 원천 공통 — 원본 경로 표(`AI.FileStorageMap`)와 등록 시각. FAQ·그 밖은 이것만 | `table`·`key`·`created` |
-| `sfdc.version` · `sfdc.link` | 파일 → 문서(ContentVersion) → 연결 개체(ContentDocumentLink, 지운 연결 빼고) | `table`·`file_col`·`id`·`doc`·`created` / `table`·`doc`·`entity`·`deleted` |
-| `sfdc.opp_prefix` · `account_prefix` | 영업 기회·계정 id 접두(3자) | — |
-| `sfdc.steps` | 영업 기회를 찾는 **순서**. `{prefix}`만 있으면 연결 개체가 곧 기회, `table`이 있으면 그 표의 `id`로 찾아 `value` 칸이 기회 id. 앞 단계에 후보가 있으면 거기서 정하고, 같은 단계에 후보가 둘 이상이면 비운다. `optional: true` = 표를 못 읽으면 그 단계만 건너뜀 | 표가 있는 단계는 `prefix`·`id`·`value` |
-| `sfdc.opportunity` · `account` | 기회 표(→ `out`), 계정 표(이름 → `client_edw`) | `table`·`id`·`account`·`out` / `table`·`id`·`name` |
-| `sfdc.hints` | 분류 힌트(pl-33) — 칸이 없으면 그 힌트만 비고 경고 | `title`·`channel`·`opportunity` |
-| `crms.map` · `project` · `docu` | 파일 → 계약 코드 → 계약 목록(→ `out`), 등록 시각(키 4개) | 기본 파일 그대로 |
-| `las.map` · `file` · `contract` | 파일 → 관리 번호 → 최신 판 계약(`active` 큰 것 → `id` 큰 것), 등록 시각 | 기본 파일 그대로 |
+| `name` | 단계 이름(영문·숫자·`_`, 원천 안에서 겹치지 않게). 뒤 단계·`fields`가 `<이름>.<칸>`으로 씀 | `name: version` |
+| `table` | 읽을 EDW 표 `스키마.표` | `table: SFDC.ContentVersion` |
+| `on` (열쇠 `file`) | 문서 원본 경로(= `FileStorageMap.s3_key`)로 찾음. **첫 단계는 꼭 `file`** — 첫 단계에 행이 없는 문서는 메타가 없다 | `on: {s3_key: file}` |
+| `on` (앞 단계 칸) | 앞 단계에서 읽은 칸 값으로 찾음 | `on: {Id: file.content_version_id}` |
+| `on` (칸 여럿) | 칸이 모두 맞는 행 — 열쇠는 모두 **한** 앞 단계의 칸, 목록은 못 씀 | `on: {RM_CONTRACT_CODE: map.rm_contract_code, GATE_CODE: map.gate_code}` |
+| `on` (열쇠 목록) | 앞 자리부터 — 후보가 있는 첫 자리에서 하나로 정함(그 자리 값이 둘 이상 서로 다르면 비움) | `on: {Id: [link.LinkedEntityId, task.WhatId, event.WhatId]}` |
+| `on` (안쪽 목록) | 여러 열쇠를 **한 자리**로 합침(합친 값이 둘 이상이면 비움) | `on: {Id: [opportunity.AccountId, [task.WhatId, event.WhatId]]}` |
+| `when.prefix` | 열쇠 값이 이 3자로 시작할 때만(SFDC id 접두 — 006 기회·00T 할 일·00U 일정·001 계정) | `when: {prefix: "00T"}` |
+| `where` | 고정 값 조건(값은 바인딩) | `where: {IsDeleted: 0}` |
+| `latest` | 열쇠 하나에 행이 여럿이면 이 칸들이 가장 큰 행 하나(앞 칸부터 비교) | `latest: [IsActive, ContractID]` |
+| `optional` | 표를 못 읽으면 이 단계만 건너뜀(경고) — 없으면 그 원천 메타 전체가 빈다 | `optional: true` |
+| `tz` | 이 표의 시간대 없는 시각을 UTC로 읽음(빼면 KST) — `created`에만 영향 | `tz: UTC` |
+| `sfdc_entity` | (SFDC 분류 힌트 전용) 표 대신 — 그 값들 중 첫 User 아닌 연결 개체. 낼 칸 `Id`·`Type`(접두 표 `resources/mappings/sfdc_prefix.json`)·`Class` | `- {name: entity, sfdc_entity: link.LinkedEntityId}` |
 
-**`out: {gold 칸: EDW 칸}` 규칙** — 왼쪽은 검색 DB(gold) `doc` 칸, 오른쪽은 EDW 칸 이름.
-- 왼쪽에 쓸 수 있는 칸(코드가 검사): **sfdc** `sf_op_id`·`sf_op_name`·`project_code__c`·`service_type`·`contract_date` · **crms** `client_edw`·`contract_id`·`division`·`prod_name`·`contract_date` · **las** `client_edw`·`contract_id`·`contract_date`. 문서 키(`file_path`·`doc_id`)·`created_at`·`doc_class`는 안 된다.
-- `contract_date`는 **날짜**로, 등록 시각(`created`)은 **시각**으로 읽는다(시간대 없는 값은 KST).
-- 표는 `스키마.표`, 칸은 영문·숫자·`_`만 — SQL에 그대로 들어가므로 어긋나면 적재가 이유를 말하고 멈춘다(값은 늘 바인딩).
+**키(`fields`) 칸 — 하나씩 예시**
+
+| 칸 | 뜻 | 예 |
+|---|---|---|
+| `from` | 값을 가져올 `<단계>.<칸>` | `sf_op_name: {from: opportunity.Name}` |
+| `from` (목록) | 앞에서 값이 있는 첫 칸 | `contract_id: {from: [map.manage_no, contract.ContractID]}` |
+| `filter` | `search`에서 이 키를 거르는 이름 — 이름 있는 인자(`project_id` 등 7개)와 `attrs={키: 값}` 모두 이 칸이 있는 키만 받음. 원천 안에서 겹치지 않게. `source_system`·`client`·`client_like`·`created_since`·`created_until`·`FAQ_group`·`attrs`·`doc_class`는 못 씀 | `project_code__c: {from: opportunity.Project_Code__c, filter: project_id}` |
+| `evidence` | `true`면 검색 근거의 `attrs`에 이 키가 나옴(값 없으면 null). `filter: contract_id`인 키의 값은 근거 `contract_no`도 됨 | `division: {from: project.DIVISION, evidence: true}` |
+| `type` | `text`(기본) · `date`(`YYYY-MM-DD` 글자) · `flag`(`'1'`/`'0'`) | `contract_date: {from: project.INIT_DTTM, type: date}` · `real_rfp__c: {from: ent_opp.Real_RFP__c, type: flag}` |
+| `max` | 앞 몇 자만(`type: text`만) | `subject: {from: [ent_task.Subject, ent_event.Subject], max: 120}` |
+
+- 키 이름은 영문·숫자·`_`. 고정 칸 이름(`file_path`·`client_edw`·`created_at` 등)과 `doc_class`(분류가 씀)는 키로 못 쓴다.
+- **이름을 바꾸면 안 되는 키:** `doc_class`(분류가 쓰는 키 — 사슬에 없음)와 SFDC `sf_op_id`는 `list_doc_fulltext`가 키 이름 그대로 읽는다. `sf_op_id` 키 이름을 바꾸면 그 도구의 `sf_op_id` 거르기·출력이 비게 된다(EDW 칸 `from`만 바꾼다). 분류 힌트 키(`title`·`entity_*`·`sent_received__c`·`subject`·`stagename`·`real_rfp__c`·`rfp_received_*`·LAS `approvalname`)도 분류가 이름으로 읽으므로 이름은 그대로 둔다.
+- 표·칸·키 이름은 SQL 글자에 들어가므로 검사한다(어긋나면 적재·검색이 이유를 말하고 멈춤, 값은 늘 바인딩). 원천별 키 목록은 `edw_meta`를 인자 없이 부르면 `search_attrs`에 나온다(검색 MCP가 실제로 읽은 파일 그대로).
 
 **③ 자주 하는 고침**
 ```yaml
-# (가) EDW 표·칸 이름이 다를 때 — 이름만 바꾼다
+# (가) EDW 표·칸 이름이 다를 때 — 단계의 table·on, fields의 from만 바꾼다(키 이름·filter는 그대로 → 검색 호출도 그대로)
 sfdc:
-  opportunity:
-    table: SFDC.Opportunity_v2
-    out: {sf_op_id: Id, sf_op_name: OpportunityName, project_code__c: Project_Code__c, service_type: Record_Type__c, contract_date: X1st_Contract_Execution_Date__c}
-
-# (나) Quote 표가 EDW에 생겼을 때 — steps 끝의 주석 줄을 켠다(optional: 표를 못 읽으면 그 단계만 건너뜀)
   steps:
-    - {prefix: "006"}
-    - {prefix: "00T", table: SFDC.Task, id: Id, value: WhatId}
-    - {prefix: "00U", table: SFDC.Event, id: Id, value: WhatId}
-    - {prefix: "0Q0", table: SFDC.Quote, id: Id, value: OpportunityId, optional: true}
+    ...
+    - name: opportunity
+      table: SFDC.Opportunity_v2
+      on: {Id: [link.LinkedEntityId, task.WhatId, event.WhatId]}
+      when: {prefix: "006"}
+  fields:
+    sf_op_name: {from: opportunity.OpportunityName, filter: sf_op_name, evidence: true}
 
-# (다) 단계 순서 바꾸기 — 목록 순서가 곧 우선순위(예: 일정을 할 일보다 먼저)
-  steps:
-    - {prefix: "006"}
-    - {prefix: "00U", table: SFDC.Event, id: Id, value: WhatId}
-    - {prefix: "00T", table: SFDC.Task, id: Id, value: WhatId}
+# (나) Quote 표가 EDW에 생겼을 때 — 주석 줄을 켜고 opportunity 열쇠 목록 끝에 quote.OpportunityId를 더한다
+    - {name: quote, table: SFDC.Quote, on: {Id: link.LinkedEntityId}, when: {prefix: "0Q0"}, optional: true}
+    - name: opportunity
+      on: {Id: [link.LinkedEntityId, task.WhatId, event.WhatId, quote.OpportunityId]}
+
+# (다) 우선순위 바꾸기 — 열쇠 목록 순서가 곧 우선순위(예: 일정을 할 일보다 먼저)
+      on: {Id: [link.LinkedEntityId, event.WhatId, task.WhatId]}
+
+# (라) 메타 키 더하기 — 이미 읽는 단계의 칸이면 fields에 한 줄(새 표면 steps에 단계도 한 줄). 다시 적재해야 값이 찬다(--replace)
+crms:
+  fields:
+    pm_name: {from: project.PM_NAME, filter: pm_name, evidence: true}   # search(attrs={"pm_name": "…"}) · 근거 attrs.pm_name
 ```
+새 `filter` 이름은 `search`의 이름 있는 인자가 아니라 `attrs` 거르기로 쓴다(이름 있는 인자는 계약에 고정된 7개뿐).
 
 **④ 실제 실행 전에 점검** — 파일만 읽고 검사한다(EDW·PG에 붙지 않음). 상주 컨테이너에서:
 ```bash
 $DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check                                     # 설정 칸이 가리키는 파일
 $DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check --file /etc/rag/edw_chain.yaml   # 칸을 적기 전에 사본만
-# 기대: [edw_meta] 사슬 설정 OK(/etc/rag/edw_chain.yaml) — 절 crms, files, las, sfdc · SFDC 단계 3개(006 > 00T > 00U)   (종료 코드 0)
-# 틀리면: [edw_meta] 사슬 설정 오류(…): sfdc.opportunity.table: 'SFDC.Opportunity; DROP' — 스키마.표만; …   (종료 코드 1 — 틀린 곳을 모두 적음)
+# 기대: [edw_meta] 사슬 설정 OK(/etc/rag/edw_chain.yaml) — sfdc 단계 11·키 15(거르기 5) · crms 단계 4·키 4(거르기 2) · las 단계 4·키 3(거르기 2) · faq 단계 1·키 0(거르기 0) · other 단계 1·키 0(거르기 0)   (종료 코드 0)
+# 틀리면: [edw_meta] 사슬 설정 오류(…): sfdc.steps[5].table: 'SFDC.Opportunity; DROP' — …; crms.fields.division.filter: …   (종료 코드 1 — 틀린 곳을 모두 적음)
 ```
-칸 이름이 EDW에 실제로 있는지는 이 점검이 보지 않는다 — `query_edw`나 DB 담당자로 확인한다(C-76 ⑦).
+("거르기 5"에는 분류가 쓰는 `doc_class`가 들어 있다.) 칸 이름이 EDW에 실제로 있는지는 이 점검이 보지 않는다 — `query_edw`나 DB 담당자로 확인한다(C-76 ⑦). 검색 쪽은 `edw_meta`를 인자 없이 불러 `search_attrs`가 고친 키를 보이는지 본다.
 
 **⑤ 오류가 나면 · 되돌리기**
-- 적재 시작 때 `[edw_meta] 사슬 설정 파일을 못 읽음(…)`·`사슬 설정 오류(…)`·`사슬 설정 YAML 오류(…)`로 멈춘다 — 기본 파일로 조용히 돌아가지 않는다(문서 메타가 엉뚱하게 채워지지 않게). ④로 고친 뒤 다시 돌린다.
-- 칸 이름이 EDW에 없으면 적재는 계속되고 그 조회의 메타만 비며 경고와 실행 기록 `meta_missing`이 남는다 — 고친 뒤 `--replace`로 다시 적재해 채운다.
-- 되돌리기: settings.yaml의 `ops.pipeline_paths.edw_chain`을 **비우면** 코드의 기본 파일로 돌아간다. 사본 파일은 지우지 않는다(마운트 원본 — 없으면 `data-pipeline`이 안 뜸).
+- 적재 시작 때 `[edw_meta] 사슬 설정 파일을 못 읽음(…)`·`사슬 설정 오류(…)`·`사슬 설정 YAML 오류(…)`로 멈춘다 — 기본 파일로 조용히 돌아가지 않는다(문서 메타가 엉뚱하게 채워지지 않게). 검색은 같은 글을 `search`의 `{"error"}`로 돌려준다. ④로 고친 뒤 다시 돌린다.
+- 칸 이름이 EDW에 없으면 적재는 계속되고 그 칸의 메타만 비며(표를 못 읽으면 그 원천 메타 전체 — `optional` 단계면 그 단계만) 경고와 실행 기록 `meta_missing`이 남는다 — 고친 뒤 `--replace`로 다시 적재해 채운다.
+- 되돌리기: settings.yaml의 `ops.paths.edw_chain`을 **비우면** 코드의 기본 파일로 돌아간다. 사본 파일은 지우지 않는다(마운트 원본 — 없으면 `data-pipeline`·`mcp-server`가 안 뜸).
 
 
 ### 8-7. 서버에서 직접 만드는 파일
@@ -559,7 +592,7 @@ $DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check --file /etc/
 | 파일 | 자리(호스트 → 컨테이너) | git의 예시(복사 원본) | 읽는 곳 | 주인·권한 |
 |---|---|---|---|---|
 | `settings.yaml` | `$SERVER_ENV_DIR/settings.yaml` → `/etc/rag/settings.yaml`(읽기 전용 — 세 컨테이너) | `settings.sample.yaml`(코드 폴더 루트) | 모든 앱·호스트 스크립트(`load_settings`) | 10001:<운영 그룹> 640(운영 계정 UID가 10001이면 600) |
-| `edw_chain.yaml` | `$SERVER_ENV_DIR/edw_chain.yaml` → `/etc/rag/edw_chain.yaml`(읽기 전용 — `data-pipeline`만) | `resources/config/edw_chain.yaml` | 적재(EDW 조인 — pl-29). **`ops.pipeline_paths.edw_chain: /etc/rag/edw_chain.yaml`을 적었을 때만** 쓰임, 비우면 기본 파일 | 10001:<운영 그룹> 640 |
+| `edw_chain.yaml` | `$SERVER_ENV_DIR/edw_chain.yaml` → `/etc/rag/edw_chain.yaml`(읽기 전용 — `data-pipeline`·`mcp-server`) | `resources/config/edw_chain.yaml` | 적재(EDW 조인 — pl-29)·검색 MCP(attrs 거르기·근거 — pl-52). **`ops.paths.edw_chain: /etc/rag/edw_chain.yaml`을 적었을 때만** 쓰임, 비우면 기본 파일 | 10001:<운영 그룹> 640 |
 | `settings.yaml.0.1.0` | `$SERVER_ENV_DIR/settings.yaml.0.1.0`(컨테이너에 안 붙음) | — (0.1.0 설정의 사본 — §8-3 2) | 되돌리기(§8-5)·설정 옮기기(§8-3 4) | `cp -p` — 원본 그대로 |
 
 - 백업 묶음 `/srv/rag/backup/0.2.0-<시각>/`(§8-3 0·2 — settings.yaml 사본·PG 덤프·이미지 목록, 700)은 설정 폴더 밖이다.

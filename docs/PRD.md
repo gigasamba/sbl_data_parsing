@@ -63,8 +63,9 @@
 ## 적재 (load) — 검색 DB(pgvector)·게시·저장 구조·DB 스키마
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
 |---|---|---|---|
-| 문서마다 고객·원천 메타를 EDW 조인으로 붙인다 — SFDC `FileStorageMap.content_version_id → ContentVersion → ContentDocumentLink`로 영업 기회(직접 > Task > Event, + 계정 직접 — 같은 단계 동률은 비움 · Quote 표는 지금 없음, 생기면 설정 한 줄) → `Account.Name`, CRMS `FileStorageMap_CRMS.rm_contract_code → RM_CM_PJTLIST`, LAS `FileStorageMap_LAS.manage_no → LAS.Contract`. 적재 때(`pipeline/load/edw_meta.py`, 표·칸 이름·단계는 설정 파일 `resources/config/edw_chain.yaml` — 운영 쪽이 고침, 사용자 11-02) 원천 스키마 `doc`(`client_edw`·원천 칸·`created_at`)에 쓴다 | 파싱·구조화는 이 값을 안 쓴다 — 매핑이 바뀌어도 다시 파싱하지 않는다(사용자 11-02). EDW를 못 읽으면 메타 없이 적재(`meta_missing`) — `--replace`로 다시 채움 | done | [pl-29](prd/load.md#pl-29) |
-| 고객 조인 사슬을 운영 쪽이 고칠 수 있는 설정 파일로 — Quote 표는 지금 없음 | `resources/config/edw_chain.yaml`(사용자 11-02 — `feature/edw-chain-config`) · 서버 사본 자리 설정 `ops.pipeline_paths.edw_chain`·점검 `python -m pipeline.load.edw_meta --check`(사용자 11-03 — `feature/edw-chain-path`) | done | [pl-29](prd/load.md#pl-29) |
+| 문서마다 고객·원천 메타를 EDW 조인으로 붙인다 — SFDC `FileStorageMap.content_version_id → ContentVersion → ContentDocumentLink`로 영업 기회(직접 > Task > Event, + 계정 직접 — 같은 단계 동률은 비움 · Quote 표는 지금 없음, 생기면 설정 한 줄) → `Account.Name`, CRMS `FileStorageMap_CRMS.rm_contract_code → RM_CM_PJTLIST`, LAS `FileStorageMap_LAS.manage_no → LAS.Contract`. 적재 때(`pipeline/load/edw_meta.py`, 표·칸 이름·단계는 설정 파일 `resources/config/edw_chain.yaml` — 운영 쪽이 고침, 사용자 11-02) 원천 스키마 `doc`(`client_edw`·`attrs`·`created_at`)에 쓴다 | 파싱·구조화는 이 값을 안 쓴다 — 매핑이 바뀌어도 다시 파싱하지 않는다(사용자 11-02). EDW를 못 읽으면 메타 없이 적재(`meta_missing`) — `--replace`로 다시 채움 | done | [pl-29](prd/load.md#pl-29) |
+| 고객 조인 사슬을 운영 쪽이 고칠 수 있는 설정 파일로 — Quote 표는 지금 없음 | `resources/config/edw_chain.yaml`(사용자 11-02 — `feature/edw-chain-config`) · 서버 사본 자리 설정 `ops.paths.edw_chain`(적재·검색 MCP가 함께 읽음)·점검 `python -m pipeline.load.edw_meta --check`(사용자 11-03 — `feature/edw-chain-path`) | done | [pl-29](prd/load.md#pl-29) |
+| 원천마다 다른 문서 메타는 `doc.attrs`(JSONB) 한 칸에 — 고정 칸은 `doc_id`·`file_path`·`summary`·`created_at`·`client_edw`·`clients_doc`·`content_date`·`embed_model`뿐. 키·EDW 칸·검색 거르기 이름·근거 표시는 사슬 파일 `edw_chain.yaml`(모든 원천이 같은 꼴 — `steps`·`fields`·`client_edw`·`created`)이 정하고, `search`는 `attrs: {키: 값}` 거르기와 근거 `attrs`를 낸다 | 원천 칸을 더할 때마다 판(Alembic)·코드를 고치지 않게. 판 0005(GIN 색인) · MCP 계약 — 등급 A, 0.2.0(MINOR) · 사용자 11-03 | done | [pl-52](prd/load-schema.md#pl-52) |
 | 검색 DB(gold — pgvector) 표 5개(`doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` — 원천 스키마마다 한 벌)와 뷰 1개(`v_chunk_source`)는 Alembic(DB 판 관리 도구)으로만 만든다 | 검색 MCP는 PG만 읽는다. 실행 중 DDL 금지 | done | [pl-07](prd/load.md#pl-07) |
 | 문서 묶음 하나를 한 트랜잭션으로 적재한다(`pgvector_load load`) — 하나라도 실패하면 전부 되돌림 | 반쯤 들어간 문서가 검색에 보이지 않게 | done | [pl-07](prd/load.md#pl-07) |
 | 이미 있는 문서는 `doc.file_path`가 같으면 건너뛴다. 바뀐 내용은 `--replace`로 | 내용 지문(sha) 칸이 없어 같은 경로에서 내용이 바뀌어도 건너뛴다(알려진 한계) | done | [pl-07](prd/load.md#pl-07) |
@@ -98,7 +99,7 @@
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
 |---|---|---|---|
 | `search` — 질문으로 근거 찾기. 혼합 검색 = 뜻이 비슷한 글(벡터) + 낱말 점수(BM25) + 드문 ID 일치를 순위 합치기(RRF)로 묶음 | 클라이언트가 출처 달린 근거를 얻는 단 하나의 입구. 가중치 벡터 1·BM25 1·ID 2(`search.weights.*`) | done | [mc-01](prd/mcp.md#mc-01) |
-| `search` 입력 `k` 기본 8·상한 50, 근거 12칸 `text`·`file_name`·`file_path`·`page`·`line`·`section`·`client`·`contract_no`·`doc_date`·`version`·`superseded`·`chunk_key`(`mcp_server/schemas/evidence.py`), 근거 상태 `evidence_status` found·weak·none. 응답은 20,000바이트까지(낮은 순위부터 줄임) | 근거 상태는 표시만 하고 근거를 빼지 않는다. 최고 점수가 `search.min_score` 미만이면 weak | done | [mc-01](prd/mcp.md#mc-01) |
+| `search` 입력 `k` 기본 8·상한 50, 근거 13칸 `text`·`file_name`·`file_path`·`page`·`line`·`section`·`client`·`contract_no`·`doc_date`·`version`·`superseded`·`chunk_key`·`attrs`(`mcp_server/schemas/evidence.py`), 근거 상태 `evidence_status` found·weak·none. 응답은 20,000바이트까지(낮은 순위부터 줄임) | 근거 상태는 표시만 하고 근거를 빼지 않는다. 최고 점수가 `search.min_score` 미만이면 weak | done | [mc-01](prd/mcp.md#mc-01) |
 | 검색 저장소는 검색 DB(gold — pgvector) 하나. PC는 SQLite 대역(`pg_standin`) | 서버·PC가 같은 SQL | done | [mc-01](prd/mcp.md#mc-01) |
 | 질문 + 하드 거르기(`client`·`client_like`·`source_system`·`project_id`·`division`·`service_type`) — 후보 `min(50, max(3k,30))`개에서 범위 안만 남김 | 조건 밖 문서가 근거에 섞이지 않게 | done | [mc-01](prd/mcp.md#mc-01) |
 | 질문 넓히기 — 용어집으로 BM25 낱말을 더함(동의어 1.0·약어 0.8·약한 것 0.3), 고객 별칭 최대 20토큰 | 동의어·약어로 물어도 찾게 | done | [mc-02](prd/mcp.md#mc-02) |
@@ -108,7 +109,7 @@
 | ~~집계 답(건수·합계·환율 메모·LLM 라우터)과 그 길이 읽던 지운 칸·표~~ | 11-01 지움 — 숫자 질문은 `query_edw`로 | done | [mc-04](prd/mcp.md#mc-04) · [mc-11](prd/mcp.md#mc-11) · [mc-12](prd/mcp.md#mc-12) |
 | 검색기가 지운 칸(`file_sha256` 등) 대신 문서 키 `doc_key`(= `file_path`)로 읽음 | 새 묶음으로 검색기를 만들면 실패하던 문제 | done | [mc-10](prd/mcp.md#mc-10) |
 | 질의 기록은 파일 `qa_log.jsonl`만(호출자·질문·근거·지연), 90일 보관·24시간마다 정리 | 토큰·원문은 남기지 않는다 | done | [mc-13](prd/mcp.md#mc-13) · [mc-09](prd/mcp.md#mc-09) |
-| 대표 파싱 결과 주소 `rep_uri`(`s3://<bucket>/<key>`)는 원문 도구가 부를 때 ParsingMeta에서 읽는다(검색 근거 12칸에는 없음) | 사용자 11-01 — 검색 DB에는 거르기 메타만(C8 바뀜) | done | [mc-15](prd/mcp.md#mc-15) |
+| 대표 파싱 결과 주소 `rep_uri`(`s3://<bucket>/<key>`)는 원문 도구가 부를 때 ParsingMeta에서 읽는다(검색 근거 13칸에는 없음) | 사용자 11-01 — 검색 DB에는 거르기 메타만(C8 바뀜) | done | [mc-15](prd/mcp.md#mc-15) |
 | `search` 운영 계약 — `question` 필수, `source_system` 필수·값 하나(`SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`, `-test` 별칭도) | 운영 명세와 같게. 계약 변경이라 사람 검토(등급 A), 0.2.0 | done | [mc-16](prd/mcp.md#mc-16) |
 | 거르기 추가 — `FAQ_group`·`doc_class`·`sf_op_id`·`sf_op_name`·`contract_id`·`created_since/until`(시간대 없으면 한국 시간) | 모두 AND, 목록은 OR. 맞는 값이 없으면 오류가 아니라 빈 결과 | done | [mc-16](prd/mcp.md#mc-16) |
 | 출력 줄이기 — 맨 위 `question`·`evidence[]`·`evidence_status`·`filter`·`scope_docs`, 근거 키 `chunk_key` = `<doc_id>:<seq>` | `index_id`·`subs`·`images`·`notes`·`ms` 등을 지운다(`file_path`는 남김 — 사용자 11-03) | done | [mc-16](prd/mcp.md#mc-16) |

@@ -1,9 +1,9 @@
 # 적재 — 저장 구조·DB 스키마
 
-[PRD.md](../PRD.md) 카테고리. [load.md](load.md)의 하위 문서. 저장 구조(pl-32 — 파싱 결과 저장본은 Object Storage, 메타는 EDW, 검색 DB는 pgvector), DB 스키마 명세(pl-25 — 정본 `docs/architecture/db_schema.md`)와 원천 시스템별 gold 스키마(pl-28).
+[PRD.md](../PRD.md) 카테고리. [load.md](load.md)의 하위 문서. 저장 구조(pl-32 — 파싱 결과 저장본은 Object Storage, 메타는 EDW, 검색 DB는 pgvector), DB 스키마 명세(pl-25 — 정본 `docs/architecture/db_schema.md`)와 원천 시스템별 gold 스키마(pl-28), 원천 메타 한 칸 `attrs`(pl-52).
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서: pl-32 · pl-25 · pl-28.
+순서: pl-32 · pl-25 · pl-28 · pl-52.
 
 <a id="pl-32"></a>
 ## pl-32 · 저장 구조 — silver는 Object Storage uuid 폴더, 메타는 EDW, gold는 pgvector
@@ -91,6 +91,25 @@
 - 결정(사용자 10-31 grill): `chunk_key` = `<doc_id>:<seq>`(gold `doc.doc_id` 자동 번호), 청크는 `doc_id`만(FK). 스키마 5벌이 **시퀀스 하나를 함께 써서** `doc_id`가 겹치지 않는다 — 허브 제안을 사용자가 확인(11-01). 적재는 `s3_key`로 upsert해 `doc_id`가 바뀌지 않는다. `doc.source_system`도 지운다. 원천 id 칸은 스키마마다 EDW 원본 칸 이름.
 - 구현(11-02 `feature/mcp-ops-parity`, 등급 A — DB 스키마·MCP 계약): 판 0002를 고쳐(배포 전) 기준 스키마 `<PG_SCHEMA>`(판 표·공용 `doc_id_seq`) + 원천 스키마 5벌 `<PG_SCHEMA>_<원천>`. 원천 전용 칸·EDW 사슬은 [db_schema.md](../architecture/db_schema.md) §1·§2. 적재는 문서의 `source_system`으로 스키마를 고르고(실 PG는 한 트랜잭션), 검색 MCP는 원천마다 Retriever(풀 하나), `search`는 `source_system` 필수·값 하나. 다시 읽기 신호는 원천마다 (MAX(doc_id), COUNT(*)), 우리 스키마 표식은 판 표. 시험: `test_dbtool`·`test_db_schema`·`test_search_svc`·`test_pl13_no_prune`·`test_server_state`.
 - Status: done(11-02 — 서버는 판 올리기·전체 다시 적재, refactor.md C-74·C-76)
+
+<a id="pl-52"></a>
+## pl-52 · 원천 메타 한 칸 `doc.attrs`(JSONB) — 사슬 파일이 키·거르기·근거를 정함
+- 결정(사용자 11-03 grill — 0.2.0에 함께):
+  - 고정 칸(5벌 모두): `doc_id`·`file_path`·`summary`·`created_at`·`client_edw`(고객 거르기는 이 칸 정확 일치 — C6)·`clients_doc`·`content_date`·`embed_model`. 그 밖의 원천 메타(영업 기회·계약·분류 힌트 등)는 모두 `doc.attrs JSONB`(GIN 색인)의 키다. `faq.chunk.faq_group`은 청크 칸이라 그대로 둔다(시트 이름은 청크마다 — `FAQ_group` 거르기도 그대로).
+  - 판 0005(Alembic만, 실행 중 DDL 없음): 5벌에 `attrs` + GIN 색인, `v_chunk_source`가 `attrs`를 낸다. 올리기는 판 0002·0003의 원천 칸 값을 같은 이름 키로 옮기고 그 칸을 뺀다(값이 없는 키는 넣지 않음, 날짜는 `YYYY-MM-DD` 글자). 되돌리기는 그 칸을 최선만 되살린다(칸 순서가 다르고, 실제 날짜가 아닌 글자는 NULL — C-89).
+  - 사슬 파일 `edw_chain.yaml` — 모든 원천이 같은 꼴: `steps`(이름·`table`·`on`·선택 `when: {prefix}`) → `fields`(attrs 키마다 `from`·선택 `filter`·`evidence`·`type`) · `client_edw` · `created`. LAS 대응·SFDC 힌트·SFDC 접두 갈래도 이 파일에 있고, 코드는 사슬을 따라가는 해석기 하나다. 점검(`python -m pipeline.load.edw_meta --check`)은 단계·칸 참조, 원천마다 거르기 이름이 겹치지 않는지, 형식을 본다.
+  - MCP(등급 A — 0.2.0 MINOR, 사람 검토): `search`에 `attrs: {키: 값}` 거르기(원천마다 — 모르는 키는 그 원천의 키 목록과 함께 오류, 조용한 0건 아님). 이름 있는 거르기는 사슬의 `filter:`로 attrs 키에 잇는다(`project_id` → `project_code__c` 등). 근거마다 `attrs`(사슬에서 `evidence: true`인 키만) — 근거 13칸. `contract_no`는 사슬이 잇는 계약 키의 값(없으면 null). `edw_meta` 도구가 원천마다 거를 수 있는 키·근거 키를 사슬 파일에서 보여 준다.
+  - 분류(`pgvector_load._classify`)는 힌트를 `attrs`에서 읽는다.
+  - 서버 사본은 settings.yaml 옆 `$SERVER_ENV_DIR/edw_chain.yaml`(파일 마운트 — #140), 기본 파일은 `resources/config/edw_chain.yaml`. 쓰는 법은 [release-and-patch §8-6](../operations/release-and-patch.md).
+- 이유: 원천 칸을 더하거나 이름을 바꿀 때마다 Alembic 판·적재·검색 코드를 함께 고쳐야 했다. 사슬 파일 하나가 EDW 칸 → attrs 키 → 거르기 이름 → 근거 표시를 정하면 운영 쪽이 파일만 고친다.
+- 구현(11-03 `feature/attrs-jsonb`):
+  - 사슬 꼴의 그 밖 칸 — 단계 `where`(고정 값)·`latest`(최신 행)·`optional`·`tz`, 열쇠 목록(앞 자리부터 — 동률이면 비움), SFDC 힌트용 `sfdc_entity` 단계(접두 표·`ENTITY_CLASS`는 코드), 칸 `type: flag`·`max`. 첫 단계는 `file`이어야 하고 그 단계에 행이 없는 문서는 메타가 없다. 한 단계의 칸을 못 읽으면 그 칸만 빈다.
+  - `doc_class`는 적재(분류)가 쓰는 attrs 키(`search_tables.LOAD_ATTRS` — 사슬 키로 못 씀), `doc_class` 거르기는 그 키 그대로.
+  - 검색: `attrs` 거르기는 그 원천에서 `filter`가 있는 키만 받는다(힌트 키는 못 거름). 근거 `attrs`는 `evidence: true` 키 모두(값 없으면 null), `contract_no` = `filter: contract_id` 키의 값. 문서 attrs는 `search_svc`가 한 번에 읽는다(검색 층 r 코드 지문 그대로). 사슬 파일 칸은 적재·검색이 함께 읽는 하나 — `ops.paths.edw_chain`(`common.paths.edw_chain`, env 이름 `EDW_CHAIN_FILE`, 검색은 파일이 바뀌면 다음 호출부터 다시 읽음). 공용 설정 모델에 두어 모든 레이어 code_fp가 바뀌지만 0.2.0은 어차피 전체를 다시 처리한다(코디네이터 11-03). `mcp-server` compose도 사본을 붙인다. 이름을 바꾸면 안 되는 키(`doc_class`·`sf_op_id`·분류 힌트 키)는 release-and-patch §8-6에 적었다. `list_doc_fulltext`의 `doc_class`·`sf_op_id`는 attrs 키 이름 그대로 읽는다(사슬을 거치지 않음).
+  - 시험: `tests/server/common/test_dbtool.py`(0005 — 옮기는 칸 = 0002+0003, 뷰·되돌리기·GIN) · `tests/server/pipeline/test_edw_meta.py`(사슬 사례·틀린 설정 15개) · `tests/server/pipeline/test_classify.py`(EDW attrs → `doc.attrs` · 힌트) · `tests/server/mcp/test_search_svc.py`(attrs 거르기·오류·근거 attrs·`contract_no`·`search_attrs`) · `tests/server/mcp/test_call_log.py`(tools/list 바이트 12725).
+  - 서버 확인: [refactor.md C-89](../refactoring/refactor.md).
+- 파일: `common/store/db/models/search_tables.py` · `common/store/db/migrations/versions/0005_doc_attrs.py` · `common/store/edw_chain.py`(사슬 읽기·검사 — 두 앱) · `pipeline/load/edw_meta.py`(해석기) · `pipeline/load/pgvector_load.py` · `pipeline/load/classify.py` · `mcp_server/services/search/search_svc.py` · `mcp_server/services/edw_calls.py` · `mcp_server/schemas/evidence.py` · `mcp_server/routers/search_tool.py` · `mcp_server/routers/edw_tools.py` · `common/config/settings.py`(`CommonPaths.edw_chain`) · `resources/config/edw_chain.yaml` · `deploy/host/compose/compose.mcp-server.yml`.
+- Status: done(11-03 — `feature/attrs-jsonb`, 서버 확인 C-89)
 
 ## 코드와 다른 점 · 지울 코드
 

@@ -84,15 +84,17 @@ def test_las_evidence_table():
 def test_user_message_shapes():
     text = "y" * 9000
     rep = {"text": text, "format": "pdf", "engine": "docling"}
-    doc = {
+    doc = {  # pl-52 — 힌트는 attrs
         "file_path": "SFDC/u1/RFP_answer.pdf",
-        "title": "RFP answer pricing",
-        "entity_type": "Opportunity",
-        "entity_class": "opportunity",
-        "entity_id": "006A",
-        "stagename": "Proposal",
-        "real_rfp__c": "1",
-        "rfp_received_start_date__c": date(2026, 3, 2),
+        "attrs": {
+            "title": "RFP answer pricing",
+            "entity_type": "Opportunity",
+            "entity_class": "opportunity",
+            "entity_id": "006A",
+            "stagename": "Proposal",
+            "real_rfp__c": "1",
+            "rfp_received_start_date__c": date(2026, 3, 2),
+        },
     }
     m = CL.sfdc_user(doc, rep)
     assert m.startswith(
@@ -105,10 +107,7 @@ def test_user_message_shapes():
     m = CL.sfdc_user(
         {
             "file_path": "SFDC/u2/Bid v1.pdf",
-            "entity_class": "task",
-            "entity_type": "Task",
-            "sent_received__c": "Sent",
-            "subject": "s" * 400,
+            "attrs": {"entity_class": "task", "entity_type": "Task", "sent_received__c": "Sent", "subject": "s" * 400},
         },
         rep,
     )
@@ -119,7 +118,7 @@ def test_user_message_shapes():
     m = CL.sfdc_user({"file_path": "SFDC/u3/a.pdf"}, rep)  # EDW 사슬 없음 — 힌트 줄 없음(운영의 FEATURES 행 없음)
     assert "- SFDC entity" not in m and "keyword families" not in m
     m = CL.las_user(
-        {"file_path": "LAS/u4/QAG_v1.pdf", "approvalname": "QAG 승인", "client_edw": "A사"},
+        {"file_path": "LAS/u4/QAG_v1.pdf", "attrs": {"approvalname": "QAG 승인"}, "client_edw": "A사"},
         {"text": "THIS QUALITY AGREEMENT", "format": "pdf"},
     )
     assert m.startswith(
@@ -168,7 +167,7 @@ def test_apply_table():
 
 
 def test_load_labels_and_skips_failed():
-    """적재(pgvector_load.load)가 SFDC 문서를 분류해 gold doc.doc_class에 넣는다. 분류에 실패한 문서는 그 문서의 적재 실패로 gold에 넣지
+    """적재(pgvector_load.load)가 SFDC 문서를 분류해 gold doc.attrs의 doc_class 키에 넣는다(pl-52). 분류에 실패한 문서는 그 문서의 적재 실패로 gold에 넣지
     않는다(다음 정상 실행이 다시 고름 — 사용자 11-02). 다시 적재(--replace)해도 이미 있는 라벨은 덮지 않는다. 검색 스키마는 SQLite 대역."""
     import numpy as np
 
@@ -202,16 +201,26 @@ def test_load_labels_and_skips_failed():
             sf = PS.StandinPG(f"{S}_sfdc")
             with sf.cn.cursor() as cur:
                 cur.execute(standin_script(f"{S}_sfdc", dim))
-            with patch.object(CL, "_system", lambda src: "system"), patch("common.ai.llm.chat", chat):
+            edw = {"SFDC/u/rfp.pdf": {"created_at": None, "client_edw": "Acme", "attrs": {"sf_op_id": "006A", "title": "RFP reply"}}}
+            seen = []  # 분류 글 — 힌트는 EDW attrs에서(pl-52)
+            with (
+                patch.object(CL, "_system", lambda src: "system"),
+                patch("common.ai.llm.chat", lambda m, **k: seen.append(m[-1]["content"]) or chat(m, **k)),
+                patch("pipeline.load.edw_meta.fetch", return_value=(edw, 1)),
+            ):
                 counts = M.load(db, bundle(["SFDC/u/rfp.pdf", "SFDC/u/bad.pdf"]))
+                r0 = sf.q(f"SELECT client_edw, attrs FROM {S}_sfdc.doc")[0]
+                first = (r0["client_edw"], json.loads(r0["attrs"]))
                 with patch("common.ai.llm.chat", lambda *a, **k: '{"class": "Proposal"}'):
                     M.load(db, bundle(["SFDC/u/rfp.pdf"]), replace=True)
                 calls = []
                 with patch("common.ai.llm.chat", lambda *a, **k: calls.append(1) or '{"class": "RFP"}'):
                     M.load(db, bundle(["SFDC/u/rfp.pdf"]))  # --replace 없이 이미 저장된 문서 — 적재가 건너뛰므로 부르지 않음
                 assert calls == [], calls
-            rows = {r["file_path"]: r["doc_class"] for r in sf.q(f"SELECT file_path, doc_class FROM {S}_sfdc.doc")}
+            rows = {r["file_path"]: r["doc_class"] for r in sf.q(f"SELECT file_path, attrs->>'doc_class' AS doc_class FROM {S}_sfdc.doc")}
         assert rows == {"SFDC/u/rfp.pdf": "RFP"}, rows  # 실패한 bad.pdf는 안 들어감 · 두 번째 답(Proposal)으로 덮지 않음
         assert counts["by_source"]["sfdc"]["docs"] == 1, counts
+        assert first == ("Acme", {"sf_op_id": "006A", "title": "RFP reply", "doc_class": "RFP"}), first  # attrs = EDW 키 + 분류(pl-52)
+        assert any("RFP reply" in s for s in seen), seen  # 분류 힌트를 attrs에서 읽음
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
