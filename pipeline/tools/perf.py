@@ -232,9 +232,8 @@ def load_db(run_id, schema=None):
     return (run_rows[0] if run_rows else {}), events
 
 
-def load_file(run_id, paths):
-    """logsink 대체 기록({"table","row"} JSON Lines)에서 — pipe_run은 같은 run_id 행들을 시간순으로 합친다(UPSERT와 같은 결과)."""
-    run, events = {}, []
+def _file_items(paths):
+    """logsink 대체 기록({"table","row"} JSON Lines) — 깨진 줄은 건너뜀."""
     for path in paths:
         with open(path, encoding="utf-8") as fh:
             for line in fh:
@@ -242,13 +241,19 @@ def load_file(run_id, paths):
                     item = json.loads(line)
                 except ValueError:
                     continue
-                row = item.get("row") or {}
-                if str(row.get("run_id")) != str(run_id):
-                    continue
-                if item.get("table") == "pipe_run":
-                    run.update({k: v for k, v in row.items() if v is not None})
-                elif item.get("table") == "pipe_event":
-                    events.append(row)
+                yield item.get("table"), item.get("row") or {}
+
+
+def load_file(run_id, paths):
+    """pipe_run은 같은 run_id 행들을 시간순으로 합친다(UPSERT와 같은 결과)."""
+    run, events = {}, []
+    for table, row in _file_items(paths):
+        if str(row.get("run_id")) != str(run_id):
+            continue
+        if table == "pipe_run":
+            run.update({k: v for k, v in row.items() if v is not None})
+        elif table == "pipe_event":
+            events.append(row)
     return run, events
 
 
@@ -261,21 +266,11 @@ def load_since_db(hours, schema=None):
 
 
 def load_since_file(hours, paths, now=None):
-    """logsink 대체 기록에서 최근 hours시간의 pipe_event — 실행(run_id)을 가리지 않음."""
+    """대체 기록에서 최근 hours시간의 pipe_event — 실행(run_id)을 가리지 않음."""
     cutoff = (now or datetime.now(UTC)) - timedelta(hours=float(hours))
-    events = []
-    for path in paths:
-        with open(path, encoding="utf-8") as fh:
-            for line in fh:
-                try:
-                    item = json.loads(line)
-                except ValueError:
-                    continue
-                row = item.get("row") or {}
-                ts = _ts(row.get("ts_start"))
-                if item.get("table") == "pipe_event" and ts and ts >= cutoff:
-                    events.append(row)
-    return events
+    return [
+        row for table, row in _file_items(paths) if table == "pipe_event" and (ts := _ts(row.get("ts_start"))) is not None and ts >= cutoff
+    ]
 
 
 def latest_run_id():
@@ -311,9 +306,13 @@ def _table(headers, rows):
 
 def render(summary):
     run = summary["run"]
+
+    def count(name):  # DB 행은 키가 있고 값이 None일 수 있다 — None은 -, 0은 그대로
+        return "-" if run.get(name) is None else run[name]
+
     out = [
         f"실행 {run.get('run_id', '?')} · {run.get('command', '?')} · {run.get('status', '?')} · {_ms(summary['wall_ms'])} · "
-        f"문서 {run.get('docs_total', '-')}(성공 {run.get('docs_ok', '-')} 실패 {run.get('docs_fail', '-')} 재사용 {run.get('docs_reused', '-')}) · "
+        f"문서 {count('docs_total')}(성공 {count('docs_ok')} 실패 {count('docs_fail')} 재사용 {count('docs_reused')}) · "
         f"스택 {run.get('stack') or '-'} · 설정 {run.get('settings_hash') or '-'} · 이벤트 {summary['n_events']}행",
         "",
         "■ 단계·엔진별 (wall 대비는 병렬이면 100%를 넘음 · wait = 메모리/CPU 문·슬롯 대기)",

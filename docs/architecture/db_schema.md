@@ -306,13 +306,13 @@ MCP 호출 1건당 1행. 인증 실패(`tool=http`)와 `initialize`도 행으로
 | pid | INTEGER | 프로세스 ID | 〃 | 없음 | 새로 |
 | app_version | TEXT | 앱 버전 | 〃 | perf | 새로 |
 | run_env | TEXT | 실행 환경 | 〃 | 〃 | 새로 |
-| code_fp | JSONB | 레이어별 code_fp | 〃 | 〃(실행 비교) | 새로 |
+| code_fp | JSONB | 레이어별 code_fp(DB 기록이 켜졌을 때만 계산) | 〃 | 〃(실행 비교) | 새로 |
 | stack | TEXT | 스택 이름 | 〃 | 〃 | 새로 |
-| settings_hash | TEXT | 설정 해시 | 〃 | 〃 | 새로 |
+| settings_hash | TEXT | 설정 해시(DB 기록이 켜졌을 때만 계산) | 〃 | 〃 | 새로 |
 | docs_total | INTEGER | 문서 수 | 〃 | 〃 | 새로 |
 | docs_ok | INTEGER | 성공 문서 수 | 〃 | 〃 | 새로 |
 | docs_fail | INTEGER | 실패 문서 수 | 〃 | 〃 | 새로 |
-| docs_reused | INTEGER | 재사용 문서 수(parse만 채움) | 〃 | 〃 | 새로 |
+| docs_reused | INTEGER | 재사용 문서 수. 지금은 비어 있음(실행마다 새로 파싱 — pl-32) | 〃 | 〃 | 새로 |
 | workers | INTEGER | 작업자 수 | 〃 | 〃 | 새로 |
 | cpu_max_load | FLOAT | CPU 문턱값 | 〃 | 〃 | 새로 |
 | mem_start_pct | FLOAT | 메모리 문턱값 | 〃 | 없음 | 새로 |

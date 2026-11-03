@@ -89,13 +89,13 @@ def test_stream_preserved():
             log = jsonlog.setup("teststream", stream=stream)
             log.info("first")
             jsonlog.setup("teststream")  # 재설정에도 명시 스트림을 유지한다.
-            logging.getLogger("teststream.sdk").info("child")  # 부모 logger Filter에 기대지 않는다.
+            logging.getLogger("applog.teststream.sdk").info("child")  # 부모 logger Filter에 기대지 않는다.
             assert not stdout.getvalue()
             jsonlog.setup("testdefault").info("default")
         assert [json.loads(line)["msg"] for line in stream.getvalue().splitlines()] == ["first", "child"]
         assert json.loads(stdout.getvalue())["msg"] == "default"
         for name in ("teststream", "testdefault"):
-            log = logging.getLogger(name)
+            log = logging.getLogger(f"applog.{name}")
             for handler in log.handlers[:]:
                 log.removeHandler(handler)
                 handler.close()
@@ -194,3 +194,18 @@ def test_short_and_json_options():
     for secret in ("a", "ab"):
         with settings.isolated(PG_PASSWORD=secret):
             assert jsonlog.masked([secret, "x=" + secret + ";", secret + "d"]) == ["***", "x=***;", secret + "d"]
+
+
+def test_secret_key_cache_bounded():
+    """긴 키는 캐시에 남기지 않되 판정은 같다. 짧은 키는 캐시한다."""
+    long_secret = "password" + "x" * 300  # 라벨 판정은 키 이름 전체 모양으로
+    long_plain = "k" * 5000
+    jsonlog._secret_key_cached.cache_clear()
+    for key in ("api_key", "password", "model", "Authorization", "id", long_secret, long_plain, "x" * 257):
+        assert jsonlog._secret_key(key) == jsonlog._secret_key_probe(key)
+    assert jsonlog._secret_key("api_key") is True and jsonlog._secret_key("model") is False
+    assert jsonlog._secret_key("x" * 257) is False
+    info = jsonlog._secret_key_cached.cache_info()
+    assert info.currsize == 5  # 긴 키 3개(257·300+·5000자)는 캐시를 거치지 않았다
+    assert jsonlog.masked({long_plain: {"api_key": "v"}}) == {long_plain: {"api_key": "***"}}
+    assert jsonlog._secret_key_cached.cache_info().currsize == 5

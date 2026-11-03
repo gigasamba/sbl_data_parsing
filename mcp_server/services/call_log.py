@@ -11,7 +11,6 @@ import hashlib
 import inspect
 import itertools
 import json
-import logging
 import queue
 import sys
 import threading
@@ -19,9 +18,7 @@ import time
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from common import pipeline_version
-from common.config.settings import cfg
-from common.core import exitclean, jsonlog
+from common.core import exitclean, jsonlog, span
 from common.store import logsink
 from mcp_server import config as mc
 from mcp_server.services.search.server_state import CALLER
@@ -94,17 +91,11 @@ def _debug(event, **fields):
         pass
 
 
-def _quiet_sdk():
-    """앱 logger 이름이 "mcp"라 SDK(mcp.server.*)의 요청마다 나오는 INFO 줄이 같은 로그에 섞인다. 감사 행과 겹치므로 DEBUG일 때만 남긴다."""
-    logging.getLogger("mcp.server").setLevel(logging.DEBUG if cfg().log.level == "DEBUG" else logging.WARNING)
-
-
 def _logger():
     global _LOG
     if _LOG is None:
         with _LOG_LOCK:
             if _LOG is None:
-                _quiet_sdk()
                 _LOG = jsonlog.setup("mcp")
     return _LOG
 
@@ -114,7 +105,6 @@ def configure_stdio():
     global _LOG
     try:
         with _LOG_LOCK:
-            _quiet_sdk()
             _LOG = jsonlog.setup("mcp", stream=sys.stderr)
     except Exception:
         pass
@@ -203,13 +193,8 @@ def _status(result):
 
 
 @contextlib.contextmanager
-def request_context(headers, payload=None):
-    """ASGI 요청 범위. 헤더 우선 user, 없으면 tools/call params._meta.user."""
-    payload = payload if isinstance(payload, dict) else {}
-    params = payload.get("params") or {}
-    params = params if isinstance(params, dict) else {}
-    meta = params.get("_meta") or {}
-    meta = meta if isinstance(meta, dict) else {}
+def request_context(headers):
+    """ASGI 요청 범위. 헤더 우선 user, 없으면 본문을 받은 뒤 update_request가 tools/call params._meta.user로 채운다."""
     request_id = headers.get("x-request-id")
     try:
         request_id = str(UUID(request_id))
@@ -218,10 +203,9 @@ def request_context(headers, payload=None):
     data = {
         "request_id": request_id,
         "agent": (headers.get("x-mcp-client") or "http")[:60],
-        "user_id": headers.get("x-mcp-user") or meta.get("user"),
+        "user_id": headers.get("x-mcp-user"),
         "session_id": headers.get("mcp-session-id"),
     }
-    update_request(data, payload)
     token = _REQUEST.set(data)
     caller_token = CALLER.set("mcp:" + data["agent"])
     try:
@@ -268,16 +252,13 @@ class Call:
         self.output_limit = conf.max_output_bytes
         self.input_limit = conf.max_input_bytes
         self.arguments = arguments
-        self.prepared = False
 
     def _prepare(self):
-        if not self.prepared:
-            try:
-                text, size, truncated, _ = _body(_input(self.row["tool"], self.arguments), self.input_limit)
-                self.row.update(args=text, args_bytes=size, args_truncated=truncated)
-            except Exception:
-                _debug("mcp.audit.failed", tool=self.row.get("tool"))
-            self.prepared = True
+        try:
+            text, size, truncated, _ = _body(_input(self.row["tool"], self.arguments), self.input_limit)
+            self.row.update(args=text, args_bytes=size, args_truncated=truncated)
+        except Exception:
+            _debug("mcp.audit.failed", tool=self.row.get("tool"))
 
     def run(self, fn, *args, **kwargs):
         """실제 스레드 시작 시각으로 큐 대기를 측정, 취소 후 종료는 DEBUG만."""
@@ -308,7 +289,7 @@ class Call:
                     "err": _text(err) or inferred_err,
                     "duration_ms": round((now - self.started) * 1000),
                     "queue_wait_ms": round(((self.thread_started or now) - self.started) * 1000),
-                    "app_version": pipeline_version(),
+                    "app_version": span.app_version(),
                 }
             _worker().submit(self, result, row)
         except Exception:
@@ -473,9 +454,6 @@ def stats():
 
 
 class _NoLog:
-    def _prepare(self):
-        pass
-
     def run(self, fn, *args, **kwargs):
         return fn(*args, **kwargs)
 
@@ -491,17 +469,13 @@ def start(fn, args=(), kwargs=None):
         return _NoLog()
 
 
-def finish(call, *args, **kwargs):
-    """감사 처리를 대기하지 않고 전용 워커에 제출한다(anyio limiter와 독립)."""
-    call.finish(*args, **kwargs)
+def http():
+    """인증 거부 행의 tool 이름(본문을 받지 않아 도구를 모름)."""
 
 
 def unauthorized():
     """HTTP 인증 거부도 한 행. tools/call 외에는 tool=http로 기록한다."""
-    call = start(lambda: None)
-    if isinstance(call, Call) and call.row["tool"] == "<lambda>":
-        call.row["tool"] = "http"
-    call.finish({"error": "unauthorized"}, status="unauthorized")
+    start(http).finish({"error": "unauthorized"}, status="unauthorized")
 
 
 def initialize_call(payload):

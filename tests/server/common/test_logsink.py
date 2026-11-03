@@ -42,7 +42,7 @@ def test_full_queue():
         finished.set()
 
     with tempfile.TemporaryDirectory() as directory:
-        sink = logsink.Sink(writer=slow, fallback_dir=directory, queue_size=1, batch_size=1, flush_sec=0.01, shutdown_sec=0.02)
+        sink = logsink.Sink(writer=slow, fallback_dir=directory, queue_size=1, batch_size=1, flush_sec=0.01, shutdown_sec=1.0)
         assert sink.emit("pipe_event", {"stage": "first"})
         assert started.wait(3)
         assert sink.emit("pipe_event", {"stage": "second"})

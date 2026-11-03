@@ -7,6 +7,7 @@ import uuid
 from pathlib import Path
 from unittest import mock
 
+from common.config import settings
 from common.core import jsonlog, span
 from common.core import resources as RS
 from pipeline.shared import runtrace
@@ -21,7 +22,7 @@ def _runs():
 
 def test_run_start_end_rows():
     rows, patched = _runs()
-    with patched, mock.patch.object(runtrace, "_code_fp", lambda: {"p0": "aaa", "s": "bbb"}):
+    with patched, mock.patch.object(runtrace, "_code_fp", lambda: {"p0": "aaa", "s": "bbb"}), settings.isolated(APPLOG_DB_ENABLED="1"):
         with runtrace.run("parse", ["parse", "--set", "X=1", "token=secret-value"]) as run_id:
             assert run_id and jsonlog.get_context()["run_id"] == run_id
             runtrace.info(stack="s1", workers=4)

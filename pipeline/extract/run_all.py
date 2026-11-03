@@ -22,7 +22,6 @@
 """
 
 import argparse
-import contextlib
 import json
 import os
 import sys
@@ -243,35 +242,35 @@ def main():
     # pl-32(사용자 10-30) — 앞 실행의 runs.jsonl로 건너뛰거나 결과를 복사하지 않는다(실행마다 새 작업 폴더 — runs.jsonl은 이번 실행 기록만).
     # 같은 실행 안의 같은 내용 사본은 한 번만 파싱 후 복사(planned·deferred).
     jobs, skip, planned, deferred = [], Counter(), {}, []
-    plan_stack = contextlib.ExitStack()  # op-01 — 계획 단계 시간과 결정 요약을 span 1행으로(문서×엔진마다 행을 만들지 않음)
-    plan_sp = plan_stack.enter_context(SP.span("extract.plan", docs=len(docs)))
-    # pl-03(사용자 10-30) — 엔진 범위는 stack 하나: 문서 형식별 stack.json 목록만
-    stack = (
-        json.loads(Path(a.stack).read_text(encoding="utf-8")) if a.stack else pc.stack()
-    )  # 엔진 구성 파일(서버·PC 같음 — 사용자 11-01) · --stack은 시험·실험용 파일
-    stack_parse = stack.get("parse") or {}
-    bad = over_limit({"parse": stack_parse})  # 사용자 10-29 — 형식당 엔진 2개 넘으면 설정 오류(진입점 resolve도 같은 검사)
-    if bad:
-        raise SystemExit(f"[엔진 구성] {stack.get('name')} — " + " · ".join(bad))
-    types = doc_types(docs, out) if stack_parse else {}
-    logged_missing = set()
-    for doc in docs:
-        sha = _sha(doc)
-        cand = engines_for_doc(doc, stack_parse, types, logged_missing)
-        for eng in cand:
-            if want and eng not in want:
-                continue
-            dst = out / eng / (doc.name + ".json")
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            if (eng, sha) in planned:  # 같은 실행 안의 같은 내용 사본 — 먼저 도는 것 결과를 끝나고 복사
-                deferred.append((doc, eng, dst, sha, planned[(eng, sha)]))
-                continue
-            planned[(eng, sha)] = dst
-            jobs.append((doc, eng, dst, sha))
-    if deferred:
-        skip["같은 내용 사본(1번만 파싱 후 복사)"] += len(deferred)
-    plan_sp.add(jobs=len(jobs), skipped=dict(skip), deferred=len(deferred))
-    plan_stack.close()
+    with SP.span(
+        "extract.plan", docs=len(docs)
+    ) as plan_sp:  # op-01 — 계획 단계 시간과 결정 요약을 span 1행으로(문서×엔진마다 행을 만들지 않음)
+        # pl-03(사용자 10-30) — 엔진 범위는 stack 하나: 문서 형식별 stack.json 목록만
+        stack = (
+            json.loads(Path(a.stack).read_text(encoding="utf-8")) if a.stack else pc.stack()
+        )  # 엔진 구성 파일(서버·PC 같음 — 사용자 11-01) · --stack은 시험·실험용 파일
+        stack_parse = stack.get("parse") or {}
+        bad = over_limit({"parse": stack_parse})  # 사용자 10-29 — 형식당 엔진 2개 넘으면 설정 오류(진입점 resolve도 같은 검사)
+        if bad:
+            raise SystemExit(f"[엔진 구성] {stack.get('name')} — " + " · ".join(bad))
+        types = doc_types(docs, out) if stack_parse else {}
+        logged_missing = set()
+        for doc in docs:
+            sha = _sha(doc)
+            cand = engines_for_doc(doc, stack_parse, types, logged_missing)
+            for eng in cand:
+                if want and eng not in want:
+                    continue
+                dst = out / eng / (doc.name + ".json")
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                if (eng, sha) in planned:  # 같은 실행 안의 같은 내용 사본 — 먼저 도는 것 결과를 끝나고 복사
+                    deferred.append((doc, eng, dst, sha, planned[(eng, sha)]))
+                    continue
+                planned[(eng, sha)] = dst
+                jobs.append((doc, eng, dst, sha))
+        if deferred:
+            skip["같은 내용 사본(1번만 파싱 후 복사)"] += len(deferred)
+        plan_sp.add(jobs=len(jobs), skipped=dict(skip), deferred=len(deferred))
     # pl-03 — 범위는 stack 하나: 명시 --engines 중 stack 형식별 목록 밖(또는 이 문서들 형식에 없음)은 안 돎 — 조용히 빠지지 않게 1줄
     idle = sorted(set(want or ()) - {e for _, e, _, _ in jobs} - {e for _, e, _, _, _ in deferred})
     if idle:

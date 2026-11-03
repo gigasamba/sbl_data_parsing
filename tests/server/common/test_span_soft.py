@@ -119,7 +119,6 @@ def test_handler_raising_does_not_leak():
         with redirect_stderr(io.StringIO()), jsonlog.context(run_id=str(uuid.uuid4())):
             with span.span("extract.parse") as sp:
                 sp.add(pages=1)
-            span.instant("extract.plan", "reused")
     finally:
         span._STATE["log"] = saved
         log.handlers[:] = []

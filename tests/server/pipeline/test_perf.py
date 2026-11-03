@@ -140,3 +140,12 @@ def test_since_merges_runs():
         with contextlib.redirect_stdout(out):
             assert perf.main(["--since", "100000", "--file", str(path)]) == 0
         assert "전체 실행" in out.getvalue() and "load.pgvector" in out.getvalue()
+
+
+def test_render_null_counts():
+    """DB 행은 문서 수 키가 있고 값이 None일 수 있다 — None은 -, 0은 그대로."""
+    db_run = {**RUN, "docs_total": None, "docs_ok": None, "docs_fail": None, "docs_reused": None}
+    head = perf.render(perf.summarize(db_run, _events())).splitlines()[0]
+    assert "None" not in head and "문서 -(성공 - 실패 - 재사용 -)" in head
+    zero_run = {**RUN, "docs_total": 3, "docs_ok": 3, "docs_fail": 0, "docs_reused": 0}
+    assert "문서 3(성공 3 실패 0 재사용 0)" in perf.render(perf.summarize(zero_run, _events())).splitlines()[0]

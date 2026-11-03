@@ -12,6 +12,7 @@ setup은 같은 앱에 멱등이며 기존 앱 밖 logger는 건드리지 않는
 
 import contextlib
 import contextvars
+import functools
 import json
 import logging
 import os
@@ -22,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote, quote_plus
 
-from common.config.settings import cfg, secret_parts, secret_values
+from common.config.settings import Cache, cfg, secret_parts, secret_values
 from common.core import paths
 from common.core.runlog import _mask
 
@@ -37,6 +38,7 @@ _CONTEXT: contextvars.ContextVar[dict | None] = contextvars.ContextVar("applog_c
 _LOGGERS: dict[str, logging.Logger] = {}
 _STREAMS: dict = {}
 _SHORT_WARNED = False
+_VARIANTS = None  # (설정 객체들, 비밀값 표기 목록) — _secret_variants
 _SECRET_LOCK = threading.Lock()
 
 
@@ -66,6 +68,17 @@ def context(**ids):
 
 
 def _secret_variants():
+    """설정 객체가 그대로면 지난 결과를 쓴다(masked는 로그 줄마다 불림). put·override는 객체를 바꾸므로 그때만 다시 만든다."""
+    global _VARIANTS
+    state = tuple(cache.get() for cache in list(Cache._instances))  # 복사본 순회 — 다른 스레드가 설정 캐시를 만들어도 안전
+    if _VARIANTS is not None and len(_VARIANTS[0]) == len(state) and all(a is b for a, b in zip(_VARIANTS[0], state)):
+        return _VARIANTS[1]
+    variants = _build_variants()
+    _VARIANTS = (state, variants)
+    return variants
+
+
+def _build_variants():
     global _SHORT_WARNED
     fields = secret_values(named=True)
     values = set(fields.values())
@@ -105,15 +118,29 @@ def masked(value):
     return _masked(value, _secret_variants())
 
 
+_KEY_CACHE_MAX = 256  # 이보다 긴 키는 캐시하지 않는다 — 클라이언트가 보낸 긴 키가 메모리에 남지 않게
+
+
+def _secret_key(key):
+    """키 이름이 비밀 라벨인지 — 값이 아니라 키 글자로만 정해져 짧은 키는 캐시한다(EDW 행은 같은 키가 반복됨)."""
+    key = str(key)
+    return _secret_key_cached(key) if len(key) <= _KEY_CACHE_MAX else _secret_key_probe(key)
+
+
+def _secret_key_probe(key):
+    probe = f"{key}=applog_secret_probe"
+    auth_probe = f"{key}: Bearer applog_secret_probe"
+    return _mask(probe) != probe or _mask(auth_probe) != auth_probe
+
+
+_secret_key_cached = functools.lru_cache(maxsize=4096)(_secret_key_probe)
+
+
 def _masked(value, secrets):
     if isinstance(value, dict):
         result = {}
         for key, item in value.items():
-            probe = f"{key}=applog_secret_probe"
-            auth_probe = f"{key}: Bearer applog_secret_probe"
-            result[_masked(str(key), secrets)] = (
-                "***" if _mask(probe) != probe or _mask(auth_probe) != auth_probe else _masked(item, secrets)
-            )
+            result[_masked(str(key), secrets)] = "***" if _secret_key(key) else _masked(item, secrets)
         return result
     if isinstance(value, (list, tuple)):
         return [_masked(item, secrets) for item in value]
@@ -162,7 +189,7 @@ def setup(app, *, stream=None):
 
     if stream is not None:
         _STREAMS[app] = stream
-    log = logging.getLogger(app)
+    log = logging.getLogger(f"applog.{app}")  # 라이브러리 logger(mcp.server.* 등) 계층과 겹치지 않게
     for handler in log.handlers[:]:
         log.removeHandler(handler)
         handler.close()

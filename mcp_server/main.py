@@ -68,11 +68,13 @@
 import hmac
 import ipaddress
 import json
+import logging
 import sys
 import threading
 
 import anyio
 
+from common.core import jsonlog
 from common.core.console import utf8_stdout
 from mcp_server import config as mc  # 설정 객체(S7d)
 from mcp_server.routers import edw_tools, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
@@ -104,6 +106,24 @@ def _transport_security(host):
     return TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=hosts, allowed_origins=origins)
 
 
+def _sdk_logging():
+    """FastMCP가 만들어질 때 root에 거는 기본 처리(INFO, 일반 글자, stderr)를 SDK(mcp.*) 줄에서 끊는다.
+    요청마다 나오는 INFO는 감사 행(mcp.call)과 겹치므로 common.log.level이 DEBUG일 때만 남기고, 그 밖의 줄(WARNING 이상,
+    예외)은 비밀값을 가린 JSON으로 stderr에 낸다 — stdio의 stdout은 JSON-RPC 전용이고 감사 로그(logs/mcp.jsonl)와도 섞지 않는다."""
+    from common.config.settings import cfg
+
+    level = cfg().log.level
+    sdk = logging.getLogger("mcp")
+    for handler in sdk.handlers[:]:
+        sdk.removeHandler(handler)
+        handler.close()
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(jsonlog.JsonFormatter("mcp"))
+    sdk.addHandler(handler)
+    sdk.setLevel(logging.DEBUG if level == "DEBUG" else max(logging.WARNING, logging.getLevelName(level)))
+    sdk.propagate = False  # root의 기본 핸들러로 예외 글이 가림 없이 나가는 길을 막는다
+
+
 # ── MCP 서버 ─────────────────────────────────────────────────────
 def build(host, port):
     from mcp.server.fastmcp import FastMCP
@@ -118,6 +138,7 @@ def build(host, port):
         json_response=True,
         transport_security=None if loop else _transport_security(host),
     )
+    _sdk_logging()  # FastMCP가 로깅을 설정한 뒤에 덮는다
 
     search_tool.register(m)  # 등록 순서 = tools/list 순서(MCP 계약 바이트) — search · query_edw · parse_document · edw_meta
     edw_tools.register_query_edw(m)
@@ -206,7 +227,7 @@ def build_guarded_app(host, port, token):
                 await inner(scope, observed_receive, correlated_send)
             except BaseException as exc:
                 if init_call is not None:
-                    await call_log.finish(init_call, status="error", err=str(exc))
+                    init_call.finish(status="error", err=str(exc))
                 raise
             finally:
                 if init_call is not None:

@@ -35,7 +35,6 @@ def test_no_run_is_noop():
             assert sp is span.NULL
             sp.add(pages=3).observe("x", 1).set(engine="e").result("fail", "doc", "ignored")
         span.add_current(x=1)
-        span.instant("extract.plan", "reused")
         assert span.current() is None
         with mock.patch.object(embed, "_embed_api", lambda texts, kind="passage": np.ones((len(texts), 3), dtype=np.float32)):
             vec = embed.embed_texts("api", ["질문"], "query")
@@ -119,7 +118,7 @@ def test_observe_rows_and_carry():
         with span.span("embed.bundle", "embed", model="api") as sp:
             for ms in (10, 20, 30, 40, 100):
                 sp.observe("embed_call_ms", ms)
-            sp.rows(50, 1000)
+            sp.rows(50)
             sp.set(cpu_ms=5).set(cpu_ms=7, rss_peak_mb=3).set(rss_peak_mb=2)
             sp.ext_call(12)
         with span.span("transform.figures") as parent:
@@ -137,7 +136,7 @@ def test_observe_rows_and_carry():
     first = rows[0]
     m = first["metrics"]
     assert (m["embed_call_ms_n"], m["embed_call_ms_sum"], m["embed_call_ms_max"], m["embed_call_ms_p50"]) == (5, 200.0, 100.0, 30.0)
-    assert m["rows"] == 50 and m["rows_per_sec"] > 0 and m["bytes"] == 1000
+    assert m["rows"] == 50 and m["rows_per_sec"] > 0
     assert first["cpu_ms"] == 12 and first["rss_peak_mb"] == 3 and first["ext_call_ms"] == 12 and first["model"] == "api"
     children = [r for r in rows if r["stage"] == "transform.structure"]
     assert len(children) == 3 and {c["parent_id"] for c in children} == {rows[-1]["span_id"]}

@@ -26,7 +26,6 @@ import errno
 import functools
 import json
 import logging
-import os
 import re
 import subprocess
 import sys
@@ -184,7 +183,7 @@ def classify(ex):
     return "fail", "doc"
 
 
-def _app_version():
+def app_version():
     if _STATE["version"] is None:
         from common.core.fingerprint import pipeline_version
 
@@ -204,7 +203,7 @@ def _load1_per_cpu():
     return round(load / max(1, _STATE["cpus"]), 3)
 
 
-def _mem_pct():
+def mem_pct():
     from common.core import resources as RS
 
     pct = RS.mem_used_pct()
@@ -301,7 +300,7 @@ class _Null:
     def add_wait(self, mem_ms=0, cpu_ms=0):
         return self
 
-    def rows(self, count, nbytes=None):
+    def rows(self, count):
         return self
 
     def ext_call(self, ms):
@@ -372,12 +371,10 @@ class Span:
         return self
 
     @_soft_method
-    def rows(self, count, nbytes=None):
-        """적재·내보내기 처리량 — rows·rows_per_sec(span 시작부터)·bytes."""
+    def rows(self, count):
+        """적재·내보내기 처리량 — rows·rows_per_sec(span 시작부터)."""
         elapsed = max(1e-6, time.monotonic() - self._t0)
         self.add(rows=count, rows_per_sec=round(count / elapsed, 1))
-        if nbytes is not None:
-            self.add(bytes=nbytes)
         return self
 
     @_soft_method
@@ -511,24 +508,17 @@ def _finish(sp, start_wall, start_mono, usage0, load0):
         "duration_ms": int((time.monotonic() - start_mono) * 1000),
         "load1_per_cpu_start": load0,
         "load1_per_cpu_end": _try("load1", _load1_per_cpu),
-        "mem_used_pct": _try("mem_pct", _mem_pct),
+        "mem_used_pct": _try("mem_pct", mem_pct),
         "inflight": sp.inflight,
         "metrics": jsonlog.masked(_try("metrics", sp._finish_metrics) or {}) or None,
         "status": sp._status,
         "err_kind": sp._err_kind,
         "err": jsonlog.masked(sp._err),
-        "app_version": _try("app_version", _app_version),
+        "app_version": _try("app_version", app_version),
     }
     for key in COLUMNS:
         row[key] = cols.get(key)
     _emit(row)
-
-
-@_soft_fn
-def instant(stage, status, layer=None, err_kind=None, err=None, **cols):
-    """시간이 안 드는 결정 하나(reused·skip) — 시작=끝인 span 1행. run_id 없으면 아무것도 안 함."""
-    with span(stage, layer, **cols) as sp:
-        sp.result(status, err_kind, err)
 
 
 @_soft_fn
@@ -584,12 +574,11 @@ def carry(fn):
 def with_context(kwargs):
     """Popen kwargs에 현재 run/span ID(내부 신호 APPLOG_CONTEXT)를 env로 이어 붙인 사본 — run_id 없으면 그대로. 실패하면 원래 kwargs."""
     try:
-        ids = jsonlog.get_context()
-        if not ids.get("run_id"):
+        if not jsonlog.get_context().get("run_id"):
             return kwargs
-        env = dict(kwargs.get("env") or os.environ)  # env 남김 — 하위 프로세스용(상관 ID 전달, 설정 아님)
-        env["APPLOG_CONTEXT"] = json.dumps(ids)  # env 남김 — 내부 신호(상관 ID, 설정 아님)
-        return {**kwargs, "env": env}
+        from common.config import settings
+
+        return {**kwargs, "env": settings.child_env(kwargs.get("env"))}  # 상관 ID는 child_env가 싣는다
     except Exception as ex:
         soft_fail("with_context", ex)
         return kwargs

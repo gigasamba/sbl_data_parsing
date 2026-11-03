@@ -73,11 +73,8 @@ def _code_fp():
 
 
 def _start_row(run_id, command, argv):
-    from common.core import resources as RS
-    from common.core.fingerprint import pipeline_version
-
     cfg = C.cfg()
-    pct = RS.mem_used_pct()
+    db_on = cfg.log.db_enabled  # 켜져 있을 때만 씀 — code_fp는 층마다 파일을 다시 읽어 run_docs 프로세스마다 시작을 늦춘다
     return {
         "run_id": run_id,
         "command": command,
@@ -86,12 +83,12 @@ def _start_row(run_id, command, argv):
         "status": "running",
         "host": socket.gethostname(),
         "pid": os.getpid(),
-        "app_version": pipeline_version(),
+        "app_version": span.app_version(),
         "run_env": cfg.run_env,
-        "code_fp": _code_fp(),
-        "settings_hash": settings_hash(),
+        "code_fp": _code_fp() if db_on else None,
+        "settings_hash": settings_hash() if db_on else None,
         "cpu_max_load": cfg.runtime.cpu_max_load,
-        "mem_start_pct": None if pct is None else round(pct, 1),
+        "mem_start_pct": span.mem_pct(),
     }
 
 

@@ -3,7 +3,11 @@
 import asyncio
 import base64
 import hashlib
+import io
 import json
+import logging
+import sys
+import tempfile
 import threading
 import time
 from unittest.mock import patch
@@ -70,7 +74,8 @@ def test_result_keys():
     result = {"evidence": hits, "evidence_status": "found", "total_docs": 3, "total_chunks": 2000}
     rows = []
     with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
-        with audit.request_context({}, {"method": "tools/call", "params": {"name": "search"}}):
+        with audit.request_context({}) as context:
+            audit.update_request(context, {"method": "tools/call", "params": {"name": "search"}})
             audit.start(lambda: None).finish(result)
             assert audit.drain()
     keys = rows[0]["result_keys"]
@@ -127,6 +132,25 @@ def test_dispatch_audit():
         await asyncio.sleep(0.1)
         assert audit.drain()
         assert rows[-1]["status"] == "timeout"
+        count = len(rows)
+        assert await dispatch._bg_long(slow, -10) == {"error": "timeout"}  # 상한 0.0초 = 바로 시간 초과, 무제한이 아님
+        await asyncio.sleep(0.1)
+        assert audit.drain()
+        assert len(rows) == count + 1 and rows[-1]["status"] == "timeout"
+        assert await dispatch._dispatch(slow, None, (), {}) == {"answer": 1}  # None만 무제한
+        assert audit.drain()
+        assert rows[-1]["status"] == "ok"
+
+        def slow_error():
+            raise TimeoutError("tool says so")
+
+        try:
+            await dispatch._dispatch(slow_error, None, (), {})  # 무제한 모드의 도구 TimeoutError는 그대로 올라온다
+            raise AssertionError("TimeoutError expected")
+        except TimeoutError:
+            pass
+        assert audit.drain()
+        assert rows[-1]["status"] == "error"
 
         def broken():
             raise ValueError("api_key=do-not-store")
@@ -211,23 +235,62 @@ def test_http_context():
             dispatch._LIMITER = None
 
 
-def test_sdk_info_lines_quiet():
-    import logging
+def test_sdk_logs_stay_out_of_audit_log():
+    """SDK(mcp.*) 줄: INFO는 DEBUG일 때만, 그 밖의 줄은 비밀값을 가려 stderr로만 — root·stdout·감사 로그에는 안 감."""
+    from pathlib import Path
 
     from common.config import settings
 
+    secret = "SDK_SECRET_VALUE_9f3a"
     sdk = logging.getLogger("mcp.server.lowlevel.server")  # 요청마다 INFO를 내는 SDK logger
-    root = logging.getLogger("mcp.server")
-    level = root.level
+    root, base = logging.getLogger(), logging.getLogger("mcp")
+    saved = (base.handlers[:], base.level, base.propagate)
+
+    class Spy(logging.Handler):
+        def __init__(self):
+            super().__init__()
+            self.seen = []
+
+        def emit(self, record):
+            self.seen.append(record)
+
+    spy = Spy()
+    root.addHandler(spy)
     try:
-        with settings.isolated(LOG_LEVEL="INFO"):
-            audit._quiet_sdk()
-            assert not sdk.isEnabledFor(logging.INFO) and sdk.isEnabledFor(logging.WARNING)
-        with settings.isolated(LOG_LEVEL="DEBUG"):
-            audit._quiet_sdk()
-            assert sdk.isEnabledFor(logging.DEBUG)
+        for level in ("INFO", "DEBUG"):
+            err, out = io.StringIO(), io.StringIO()
+            with (
+                tempfile.TemporaryDirectory() as directory,
+                settings.isolated(PG_PASSWORD=secret, LOG_LEVEL=level, APPLOG_DIR=directory, APPLOG_DB_ENABLED="0"),
+                patch.object(sys, "stderr", err),
+                patch.object(sys, "stdout", out),
+            ):
+                main.build("127.0.0.1", 0)
+                app = jsonlog.setup("mcp")
+                sdk.info("Processing request of type CallToolRequest")
+                try:
+                    raise ValueError(f"boom password={secret}")
+                except ValueError:
+                    sdk.exception("handler failed %s", secret)
+                for handler in app.handlers:
+                    handler.flush()
+                audit_text = (Path(directory) / "mcp.jsonl").read_text(encoding="utf-8") if (Path(directory) / "mcp.jsonl").exists() else ""
+                for handler in app.handlers[:]:
+                    app.removeHandler(handler)
+                    handler.close()
+            lines = [json.loads(line) for line in err.getvalue().splitlines()]
+            assert secret not in err.getvalue() and "***" in err.getvalue()
+            assert any(row["level"] == "ERROR" and "ValueError" in row["err"] for row in lines)  # 예외는 항상
+            assert any("Processing request" in row["msg"] for row in lines) == (level == "DEBUG")
+            assert out.getvalue() == "" and audit_text == "" and not spy.seen
     finally:
-        root.setLevel(level)
+        root.removeHandler(spy)
+        for handler in base.handlers[:]:
+            base.removeHandler(handler)
+        for handler in saved[0]:
+            base.addHandler(handler)
+        base.setLevel(saved[1])
+        base.propagate = saved[2]
 
 
 def test_initialize_contract():
