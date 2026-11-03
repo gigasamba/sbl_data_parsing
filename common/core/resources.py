@@ -269,7 +269,8 @@ def gated_popen(args, settle=None, log=print, **kwargs):
 
     lim = _f("MEM_MAX_PCT", 90)
     # fp-perf C6 — 긴 기다림(메모리·CPU 문)은 잠금 밖에서: 한 launcher가 문 앞에서 기다리는 동안 다른 launcher의 Popen·span 기록이
-    # 막히지 않게. 잠금 안에서 한 번 더 보는 것은 "한 번에 하나씩" 규칙(동시에 문을 통과해 한꺼번에 띄우지 않게) — 대개 바로 통과.
+    # 막히지 않게. 잠금 안에서는 메모리만 한 번 더 본다("한 번에 하나씩" — 대개 바로 통과). CPU는 다시 재지 않는다 — 컨테이너 CPU 측정은
+    # 새 표본에 0.25초를 쉬어 잠금을 그만큼 잡게 되므로(리뷰 11-03).
     t0 = time.monotonic()
     wait_mem(start_pct=lim, log=log)
     t1 = time.monotonic()
@@ -279,8 +280,6 @@ def gated_popen(args, settle=None, log=print, **kwargs):
         t_locked = time.monotonic()
         u = wait_mem(start_pct=lim, log=log)
         t_mem = time.monotonic()
-        wait_cpu(log=log)
-        t_cpu = time.monotonic()
         pr = exitclean.track(
             subprocess.Popen(args, **SP.with_context(kwargs)), group=bool(kwargs.get("start_new_session"))
         )  # pl-27 — 끝날 때 아직 돌면 끝내고 회수 · op-01 — 현재 run/span ID를 자식에 이어줌
@@ -291,7 +290,7 @@ def gated_popen(args, settle=None, log=print, **kwargs):
     # op-01 — 대기를 작업 시간과 분리해 현재 span에: 메모리 문·CPU 문·다른 launcher 기다림(lock)·settle
     sp = SP.current()
     if sp is not None:
-        sp.add_wait(mem_ms=int((t1 - t0 + t_mem - t_locked) * 1000), cpu_ms=int((t2 - t1 + t_cpu - t_mem) * 1000))
+        sp.add_wait(mem_ms=int((t1 - t0 + t_mem - t_locked) * 1000), cpu_ms=int((t2 - t1) * 1000))
         sp.add(wait_launch_ms=int((t_locked - t2) * 1000), settle_ms=int(settled * 1000), launches=1)
     return pr
 

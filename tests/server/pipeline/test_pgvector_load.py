@@ -168,7 +168,8 @@ def test_require_vectors():
     cases = [  # (meta, 거부?)
         ({"dim": 0, "embed": "none"}, True),
         ({"dim": 1024, "embed": "none"}, True),
-        ({"embed": "api"}, True),  # dim 없음
+        ({"embed": "api", "chunks": 3}, True),  # 청크는 있는데 dim 없음
+        ({"embed": "api", "dim": 0, "chunks": 0}, False),  # 청크 0건 문서(빈·스캔만) — 문서 행만 적재(run_docs 문서별 흐름)
         ({"dim": 1024, "embed": "api"}, False),
         ({"dim": 4, "embed_model": "test"}, False),  # 옛 묶음(embed 칸 없음)
     ]

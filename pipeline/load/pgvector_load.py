@@ -141,7 +141,7 @@ def _kst(v):
 def require_vectors(meta):
     """pl-16(사용자 10-30 A6) — 임베딩 없는 묶음(`--embed none` · dim 0)은 적재·배포를 시작하지 않는다(검색에 벡터 필수 — 옛 동작은
     vector(0) 표를 만들려다 PG 오류로 끝남). 종료 코드 2 + 무엇을 하라는 한 줄."""
-    if not meta.get("dim") or meta.get("embed") == "none":
+    if meta.get("embed") == "none" or (not meta.get("dim") and meta.get("chunks")):  # 청크 0건 문서(빈·스캔만)는 dim 0이어도 문서 행은 적재
         print(
             f"[load] 임베딩 없는 묶음(embed={meta.get('embed')!r}, dim={meta.get('dim')!r}) — 적재 거부: build_bundle을 --embed api로 다시 만든다(pl-16)",
             file=sys.stderr,

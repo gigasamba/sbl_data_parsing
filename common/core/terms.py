@@ -187,7 +187,7 @@ def load_glossary(dir=None):
     d = dir or _cfg().paths.glossary_dir
     if not d:
         return {}
-    key = ("glossary", str(d), _mtime(Path(d) / "domain_terms.csv"))
+    key = ("glossary", str(d), _mtime(Path(d) / "domain_terms.csv"), _mtime(Path(d) / "id_patterns.csv"))  # 검증이 id_patterns도 읽음
     if key not in _CACHE:
         _CACHE[key] = _load_glossary(d)
     return dict(_CACHE[key])
@@ -479,7 +479,7 @@ def _aliases():
     세 파일(경로·고친 시각)이 같으면 한 번만 만든다(fp-perf B2 — 문서마다·호출마다 다시 읽던 것) — 돌려주는 사전은 얕은 사본."""
     stack = RES_ROOT / "config" / "pipeline_stack.json"
     f, g = _cfg().paths.client_roster, _cfg().paths.glossary_dir
-    key = ("aliases", _mtime(stack), f, f and _mtime(f), g, g and _mtime(Path(g) / "domain_terms.csv"))
+    key = ("aliases", _mtime(stack), f, f and _mtime(f), g, g and _mtime(Path(g) / "domain_terms.csv"), g and _mtime(Path(g) / "id_patterns.csv"))
     if key not in _CACHE:
         _CACHE[key] = _build_aliases(stack, f, g)
     return dict(_CACHE[key])
