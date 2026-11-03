@@ -480,7 +480,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 1. 두 zip을 같은 폴더(`/srv/rag`)에 푼다.
 2. 이미지를 불러온다: `DOCKER=podman bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH)를 보여 준다.
    - **이미지 판 = 코드 판이 아닐 수 있다.** 코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같으면 옛 실행 이미지에서 새 코드가 돈다 — 0.2.0 코드는 0.1.0 실행 이미지(DEPS_HASH `f0fcc30bd067bc2f`)를 그대로 쓴다: `load.sh 0.1.0`, 설정의 이미지 칸은 `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0`.
-3. 서버 폴더를 만든다: `bash /srv/rag/<코드>/deploy/host/scripts/dc.sh init --group <운영 그룹>`(`<운영 그룹>`은 위 표의 `id -gn` 결과) — env(700)·결과 폴더·`mcp_parse/jobs`(UID 10001, 2775)·`code`·`backup` 폴더, 코드 폴더 읽기 권한(a+rX), `/srv/rag/code/live` 링크(없을 때만), `settings.sample.yaml` → `env/settings.yaml`(없을 때만 — 덮지 않음). 끝에 아직 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
+3. 서버 폴더를 만든다: `bash /srv/rag/<코드>/deploy/host/scripts/dc.sh init --group <운영 그룹>`(`<운영 그룹>`은 위 표의 `id -gn` 결과) — env(700)·결과 폴더·`mcp_parse/jobs`(UID 10001, 2775)·`code`·`backup` 폴더, 코드 폴더 읽기 권한(a+rX), `/srv/rag/code/live` 링크(없을 때만), `settings.sample.yaml` → `env/settings.yaml`, `resources/config/edw_chain.yaml` → `env/edw_chain.yaml`(둘 다 없을 때만 — 덮지 않음). 끝에 아직 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다. 서버에서 직접 만드는 파일(자리·예시·읽는 곳·권한)은 [release-and-patch §8-7 표](docs/operations/release-and-patch.md#8-7-서버에서-직접-만드는-파일) 하나에 모았다.
 4. 설정을 채운다 — 칸마다 무엇을 어디서 받는지는 §5-3 ② "꼭 채울 값" 표. `required.deploy.pipeline_image`·`required.deploy.mcp_image`에는 2에서 불러온 실행 이미지 태그를 적는다. 자원 상한도 이때 본다(아래 "자원").
 5. 파이프라인 상주 컨테이너를 띄운다(DB 도구가 그 안에서 돈다): `cd /srv/rag/code/live && bash deploy/host/scripts/dc.sh up -d data-pipeline`.
 6. DB를 만든다(§5-3 ③): `bash deploy/host/scripts/run_tool.sh migrate check --target all`(읽기만) → `… migrate up --target all --dim <임베딩 차원>`(새 스키마는 차원이 필요 — 임베딩 모델의 출력 크기, 모델 담당자에게 확인) → `… migrate master load` → 다시 `… migrate check --target all`(기대: 차이 없음).
@@ -570,7 +570,7 @@ bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp   # 서
 
 ```bash
 bash deploy/host/scripts/dc.sh init --group <운영 그룹>   # 아래를 한 번에(여러 번 불러도 안전 — 있는 것은 "있음", settings.yaml은 덮지 않음)
-#   /srv/rag/env(700) · env/settings.yaml ← settings.sample.yaml(없을 때만, 10001:<운영 그룹> 640)
+#   /srv/rag/env(700) · env/settings.yaml ← settings.sample.yaml · env/edw_chain.yaml ← resources/config/edw_chain.yaml(둘 다 없을 때만, 10001:<운영 그룹> 640)
 #   /srv/rag/output · output/mcp_parse/jobs(10001:<운영 그룹> 2775 — setgid: 새 파일이 그룹을 물려받고, 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지움)
 #   /srv/rag/code/live → 이 코드 폴더(없을 때만) · /srv/rag/backup(700) · 코드 폴더 a+rX
 #   끝에 아직 빈 required 칸 이름(값은 안 찍음) — 그 칸을 편집기로 채운다

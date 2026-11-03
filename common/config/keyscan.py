@@ -103,6 +103,7 @@ NOT_SETTINGS = {
     },
     "NF": ("인자", "awk 내장 변수($NF — build_ship.sh tar 권한 점검), 설정 아님"),
     "SMOKE_OVERLAY_DIR": ("인자", "PC 시험 Docker 덮기 파일 폴더 — smoke_test.sh가 mktemp로 만들어 compose에 넘김(S7e2)"),
+    "SMOKE_SYSTEM": ("인자", "PC 시험 Docker 원천 이름 — smoke_test.sh 인자(search는 원천 하나 필수 — mc-16)"),
     "ASSET_SRC": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "BUILDKIT_SYNTAX": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "BUILD_ARGS": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
@@ -141,7 +142,7 @@ NOT_SETTINGS = {
     "POSTGRES_USER": ("env로 남김", "PG 컨테이너 env — compose가 PG_USER로 채움(설정 칸은 op-08에 지움)"),
 }
 # 모은 키가 아닌 것(셸 문법·Dockerfile ARG·selftest 가짜 이름)
-IGNORE = {"BASE", "X_ALLOW_EXTERNAL", "NF"}  # NF — awk의 `$NF`(마지막 칸)를 셸 변수로 잘못 잡음(op-09)
+IGNORE = {"BASE", "X_ALLOW_EXTERNAL", "NF", "PATH", "DC_ROOT", "DC_CODE", "DC_FAKE"}  # NF=awk `$NF`(op-09) · PATH·DC_*=dc.sh 시험용(#138)
 
 _K = r"([A-Z][A-Z0-9_]{1,})"
 _PY = [

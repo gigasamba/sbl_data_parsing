@@ -427,6 +427,7 @@ $DOCKER run --rm -i --network none --entrypoint bash -v "$PWD:/app/deploy:ro,z" 
 - 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline`은 비워 둔다(8-4 3에서 켬).
 - 0.2.0에서 지운 칸(`common/config/layout.py` `REMOVED` — 예: 옛 오버레이 `ops.host.patch_code`, `ops.pipeline_host.structure_cpus`·`structure_mem_limit`, 옛 OCR·지문 배치 칸, pl-38로 지운 `ops.paths.glossary_dir`·`ops.paths.client_roster`(용어집·고객 명부는 이제 PG 마스터 표)·mc-19로 지운 `ops.paths.mcp_bundle`(검색은 묶음 없이 PG gold만)·`common.text.search_recency`(판 묶음·최신성 순위 지움)·`pipeline.transform.structure.draft_terms`(초안 용어는 오프라인 도구로))은 남아 있어도 경고 한 줄 뒤 무시된다 — 지워도 되고 두어도 된다.
 - 새 필수 칸 자리 확인: `python -m common.config.sample --where <칸 이름>`(위 이미지 안에서 같은 방법).
+- (선택) 서버 EDW의 사슬 표·칸 이름이 기본값과 다르면(Quote 표를 켜는 것 포함) `$SERVER_ENV_DIR/edw_chain.yaml`(init이 둔 사본)을 고치고 `ops.pipeline_paths.edw_chain: /etc/rag/edw_chain.yaml`을 적는다 — [§8-6](#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29). 기본값 그대로면 칸을 비워 둔다(사본은 있어도 안 쓰임).
 ```bash
 chown 10001:<운영 그룹> "$SERVER_ENV_DIR/settings.yaml.new" && chmod 640 "$SERVER_ENV_DIR/settings.yaml.new"
 mv "$SERVER_ENV_DIR/settings.yaml.new" "$SERVER_ENV_DIR/settings.yaml"
@@ -503,6 +504,86 @@ cp -p "$BK/settings.yaml.0.1.0" "$SERVER_ENV_DIR/settings.yaml"               # 
 - 0.1.0 컨테이너는 그 판의 방법(되돌린 0.1.0 코드 폴더의 README §5-3 — 그때의 `dc()` 함수·compose 파일)으로 `data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`를 다시 띄우고, 시작 로그 첫 줄로 0.1.0인지 본다 **<확인 필요 — 0.1.0 코드 폴더의 띄우는 명령>**.
 - 옛 스키마를 0.2.0이 바꿨다면(새 이름을 안 썼을 때만) 백업으로: `$DOCKER exec -i "$PG_C" pg_restore -U "$PG_U" -d "$PG_D" --clean < "$BK/pg-0.1.0.dump"`(DB 담당자와 같이 — downgrade 명령은 없다).
 - ParsingMeta에 0.2.0이 쓴 행·`gold_version`은 그대로 남는다(0.1.0은 그 칸을 읽지 않음).
+
+
+### 8-6. EDW 조인 사슬 파일 고쳐 쓰기(서버 — pl-29)
+
+적재가 문서 메타(고객 `client_edw`·원천 전용 칸·등록 시각)를 EDW에서 채울 때 따라가는 표·칸 이름은 파일 하나다. 기본 파일은 코드 폴더의 `resources/config/edw_chain.yaml`이고, **각 줄의 뜻은 그 파일의 주석이 정본**이다(여기는 쓰는 법과 예시만). 서버 EDW 이름이 다르면 코드를 고치지 않고 사본을 고친다.
+
+**① 사본 고치기 · 칸 적기** — 사본은 코드 폴더 밖, settings.yaml 옆 `$SERVER_ENV_DIR/edw_chain.yaml`이다(`dc.sh init`이 기본 파일에서 **없을 때만** 복사 — 10001, 640 · [8-7 표](#8-7-서버에서-직접-만드는-파일)). 이 파일 하나가 `data-pipeline`에만 `/etc/rag/edw_chain.yaml`로 읽기 전용(`:ro,z`) 붙는다(settings.yaml과 같은 방식). **칸을 적었을 때만 사본이 쓰이고**, 비워 두면 코드의 기본 파일을 쓴다.
+```bash
+vi "$SERVER_ENV_DIR/edw_chain.yaml"                                  # 아래 ②·③대로 고침(주인·권한은 그대로 10001, 640)
+# settings.yaml(편집기로):  ops: { pipeline_paths: { edw_chain: /etc/rag/edw_chain.yaml } }
+```
+
+**② 구조 — 원천마다 절 하나**
+
+| 절 | 무엇 | 꼭 있는 이름 |
+|---|---|---|
+| `files` | 모든 원천 공통 — 원본 경로 표(`AI.FileStorageMap`)와 등록 시각. FAQ·그 밖은 이것만 | `table`·`key`·`created` |
+| `sfdc.version` · `sfdc.link` | 파일 → 문서(ContentVersion) → 연결 개체(ContentDocumentLink, 지운 연결 빼고) | `table`·`file_col`·`id`·`doc`·`created` / `table`·`doc`·`entity`·`deleted` |
+| `sfdc.opp_prefix` · `account_prefix` | 영업 기회·계정 id 접두(3자) | — |
+| `sfdc.steps` | 영업 기회를 찾는 **순서**. `{prefix}`만 있으면 연결 개체가 곧 기회, `table`이 있으면 그 표의 `id`로 찾아 `value` 칸이 기회 id. 앞 단계에 후보가 있으면 거기서 정하고, 같은 단계에 후보가 둘 이상이면 비운다. `optional: true` = 표를 못 읽으면 그 단계만 건너뜀 | 표가 있는 단계는 `prefix`·`id`·`value` |
+| `sfdc.opportunity` · `account` | 기회 표(→ `out`), 계정 표(이름 → `client_edw`) | `table`·`id`·`account`·`out` / `table`·`id`·`name` |
+| `sfdc.hints` | 분류 힌트(pl-33) — 칸이 없으면 그 힌트만 비고 경고 | `title`·`channel`·`opportunity` |
+| `crms.map` · `project` · `docu` | 파일 → 계약 코드 → 계약 목록(→ `out`), 등록 시각(키 4개) | 기본 파일 그대로 |
+| `las.map` · `file` · `contract` | 파일 → 관리 번호 → 최신 판 계약(`active` 큰 것 → `id` 큰 것), 등록 시각 | 기본 파일 그대로 |
+
+**`out: {gold 칸: EDW 칸}` 규칙** — 왼쪽은 검색 DB(gold) `doc` 칸, 오른쪽은 EDW 칸 이름.
+- 왼쪽에 쓸 수 있는 칸(코드가 검사): **sfdc** `sf_op_id`·`sf_op_name`·`project_code__c`·`service_type`·`contract_date` · **crms** `client_edw`·`contract_id`·`division`·`prod_name`·`contract_date` · **las** `client_edw`·`contract_id`·`contract_date`. 문서 키(`file_path`·`doc_id`)·`created_at`·`doc_class`는 안 된다.
+- `contract_date`는 **날짜**로, 등록 시각(`created`)은 **시각**으로 읽는다(시간대 없는 값은 KST).
+- 표는 `스키마.표`, 칸은 영문·숫자·`_`만 — SQL에 그대로 들어가므로 어긋나면 적재가 이유를 말하고 멈춘다(값은 늘 바인딩).
+
+**③ 자주 하는 고침**
+```yaml
+# (가) EDW 표·칸 이름이 다를 때 — 이름만 바꾼다
+sfdc:
+  opportunity:
+    table: SFDC.Opportunity_v2
+    out: {sf_op_id: Id, sf_op_name: OpportunityName, project_code__c: Project_Code__c, service_type: Record_Type__c, contract_date: X1st_Contract_Execution_Date__c}
+
+# (나) Quote 표가 EDW에 생겼을 때 — steps 끝의 주석 줄을 켠다(optional: 표를 못 읽으면 그 단계만 건너뜀)
+  steps:
+    - {prefix: "006"}
+    - {prefix: "00T", table: SFDC.Task, id: Id, value: WhatId}
+    - {prefix: "00U", table: SFDC.Event, id: Id, value: WhatId}
+    - {prefix: "0Q0", table: SFDC.Quote, id: Id, value: OpportunityId, optional: true}
+
+# (다) 단계 순서 바꾸기 — 목록 순서가 곧 우선순위(예: 일정을 할 일보다 먼저)
+  steps:
+    - {prefix: "006"}
+    - {prefix: "00U", table: SFDC.Event, id: Id, value: WhatId}
+    - {prefix: "00T", table: SFDC.Task, id: Id, value: WhatId}
+```
+
+**④ 실제 실행 전에 점검** — 파일만 읽고 검사한다(EDW·PG에 붙지 않음). 상주 컨테이너에서:
+```bash
+$DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check                                     # 설정 칸이 가리키는 파일
+$DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check --file /etc/rag/edw_chain.yaml   # 칸을 적기 전에 사본만
+# 기대: [edw_meta] 사슬 설정 OK(/etc/rag/edw_chain.yaml) — 절 crms, files, las, sfdc · SFDC 단계 3개(006 > 00T > 00U)   (종료 코드 0)
+# 틀리면: [edw_meta] 사슬 설정 오류(…): sfdc.opportunity.table: 'SFDC.Opportunity; DROP' — 스키마.표만; …   (종료 코드 1 — 틀린 곳을 모두 적음)
+```
+칸 이름이 EDW에 실제로 있는지는 이 점검이 보지 않는다 — `query_edw`나 DB 담당자로 확인한다(C-76 ⑦).
+
+**⑤ 오류가 나면 · 되돌리기**
+- 적재 시작 때 `[edw_meta] 사슬 설정 파일을 못 읽음(…)`·`사슬 설정 오류(…)`·`사슬 설정 YAML 오류(…)`로 멈춘다 — 기본 파일로 조용히 돌아가지 않는다(문서 메타가 엉뚱하게 채워지지 않게). ④로 고친 뒤 다시 돌린다.
+- 칸 이름이 EDW에 없으면 적재는 계속되고 그 조회의 메타만 비며 경고와 실행 기록 `meta_missing`이 남는다 — 고친 뒤 `--replace`로 다시 적재해 채운다.
+- 되돌리기: settings.yaml의 `ops.pipeline_paths.edw_chain`을 **비우면** 코드의 기본 파일로 돌아간다. 사본 파일은 지우지 않는다(마운트 원본 — 없으면 `data-pipeline`이 안 뜸).
+
+
+### 8-7. 서버에서 직접 만드는 파일
+
+서버마다 값이 다른 파일은 코드 폴더 밖 **설정 폴더 `$SERVER_ENV_DIR`(예 `/srv/rag/env`)** 에 함께 둔다(사용자 11-03). git에는 예시만 있고, `dc.sh init`이 **없을 때만** 예시를 복사한다(있으면 절대 덮지 않음). 고친 뒤 판을 올려도 이 파일들은 그대로 남는다.
+
+| 파일 | 자리(호스트 → 컨테이너) | git의 예시(복사 원본) | 읽는 곳 | 주인·권한 |
+|---|---|---|---|---|
+| `settings.yaml` | `$SERVER_ENV_DIR/settings.yaml` → `/etc/rag/settings.yaml`(읽기 전용 — 세 컨테이너) | `settings.sample.yaml`(코드 폴더 루트) | 모든 앱·호스트 스크립트(`load_settings`) | 10001:<운영 그룹> 640(운영 계정 UID가 10001이면 600) |
+| `edw_chain.yaml` | `$SERVER_ENV_DIR/edw_chain.yaml` → `/etc/rag/edw_chain.yaml`(읽기 전용 — `data-pipeline`만) | `resources/config/edw_chain.yaml` | 적재(EDW 조인 — pl-29). **`ops.pipeline_paths.edw_chain: /etc/rag/edw_chain.yaml`을 적었을 때만** 쓰임, 비우면 기본 파일 | 10001:<운영 그룹> 640 |
+| `settings.yaml.0.1.0` | `$SERVER_ENV_DIR/settings.yaml.0.1.0`(컨테이너에 안 붙음) | — (0.1.0 설정의 사본 — §8-3 2) | 되돌리기(§8-5)·설정 옮기기(§8-3 4) | `cp -p` — 원본 그대로 |
+
+- 백업 묶음 `/srv/rag/backup/0.2.0-<시각>/`(§8-3 0·2 — settings.yaml 사본·PG 덤프·이미지 목록, 700)은 설정 폴더 밖이다.
+- 고객 명부·용어집은 서버 파일이 아니라 PG 마스터 표다(git CSV → `migrate master load` — §8-3 5).
+- **뒤에 더해질 것:** 분류 힌트 칸 대응(attrs 매핑) 파일도 같은 설정 폴더에 같은 방식(예시 복사·없을 때만·읽기 전용 파일 마운트)으로 들어온다 — 그 PR에서 이 표에 한 줄을 더한다.
 
 
 ## 9. (옮김 — 옛 §8·§9)
