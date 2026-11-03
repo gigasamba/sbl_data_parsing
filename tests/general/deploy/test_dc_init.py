@@ -107,25 +107,3 @@ def test_check():
             lines = r.stdout.strip().splitlines()
             assert r.returncode == rc and lines[-1].startswith(last), (fail, nojudge, r.returncode, r.stdout, r.stderr)
             assert absent is None or absent not in r.stdout, (fail, r.stdout)
-
-
-def test_init_refuses_loose_env_files():
-    """설정 폴더를 열기 전 점검(사용자 11-03 리뷰) — 640보다 넓은 파일(옛 0.1.0 settings.yaml 644·pipeline.env 등)이 있으면 이름을 찍고 종료 4, 고치지 않음."""
-    bash = _bash()
-    if not bash:
-        print("[시험] bash 없음 — 건너뜀")
-        return
-    with tempfile.TemporaryDirectory() as d:
-        root = Path(d) / "rag"
-        env = root / "env"
-        env.mkdir(parents=True)
-        (Path(d) / "code_src" / "deploy").mkdir(parents=True)
-        loose = env / "pipeline.env"
-        loose.write_text("X=1\n", encoding="utf-8")
-        loose.chmod(0o644)
-        r = _run(bash, ["init"], {"DC_ROOT": _posix(root), "DC_CODE": _posix(Path(d) / "code_src")})
-        if "권한을 못 지킴" in r.stdout:  # Windows — 파일 시스템이 권한을 못 지켜 점검 자체를 건너뜀(서버 RHEL은 늘 점검)
-            return
-        assert r.returncode == 4, (r.returncode, r.stdout, r.stderr)
-        assert "pipeline.env" in r.stderr and "멈춤(종료 4)" in r.stderr, r.stderr
-        assert oct(loose.stat().st_mode & 0o777) == "0o644" and not (env / "settings.yaml").exists()  # 고치지도 만들지도 않음

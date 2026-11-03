@@ -22,7 +22,7 @@
 | 기계 | 파일 | 적용 | 모델 엔드포인트 |
 |---|---|---|---|
 | PC(개발) | 저장소 루트 `settings.yaml`(git 밖, 권한 600). 구조·설명은 루트 `settings.sample.yaml`. 임베딩 키(`EMBED_*`)도 여기(CLAUDE.md §7) | `RUN_ENV`가 없거나 `local`이면 코드가 이 파일을 찾음(파일 안 `required.env.run_env: local`). 한 번 실행에 몇 항목만 바꿀 때는 오버레이 설정 파일: `SETTINGS_FILE=$(python -m common.config.overrides PIPE_OUT_ROOT=… EMBED_ALLOW_EXTERNAL=1 …)`(**PC 전용**) | 내부망 또는 OpenRouter(기능 테스트만) |
-| 수집·개발 서버 | `$SERVER_ENV_DIR/settings.yaml` = `/srv/rag/env/settings.yaml`(코드 폴더 밖). **주인 UID 10001(컨테이너 사용자)·그룹 운영 계정 그룹·권한 640**(운영 계정 UID가 10001이면 600 — `refactor.md` C-09) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고(+ `data-pipeline`에만 settings.yaml이 있는 폴더 통째로 `/etc/rag/env`에 읽기 전용 — EDW 사슬 사본 등, 폴더 root:10001 750·안 파일 640 이하, 사용자 11-03) env는 `SETTINGS_FILE`·`RUN_ENV`만 준다(비밀은 `docker inspect`에 안 나옴). **값을 바꿀 때는 이 파일을 직접 고친다**(오버레이 설정 파일 도구는 서버에서 막힘). 셸·systemd: `deploy/host/scripts/settings_env.sh`의 `load_settings`가 호스트 항목(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다(`--env-file` 없음) | 내부망만 |
+| 수집·개발 서버 | `$SERVER_ENV_DIR/settings.yaml` = `/srv/rag/env/settings.yaml`(코드 폴더 밖). **주인 UID 10001(컨테이너 사용자)·그룹 운영 계정 그룹·권한 640**(운영 계정 UID가 10001이면 600 — `refactor.md` C-09) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고(+ `data-pipeline`에만 설정 폴더 통째로 `/etc/rag/env`에 읽기 전용 — EDW 사슬 사본 등, 폴더 10001:<그룹> 750, 사용자 11-03) env는 `SETTINGS_FILE`·`RUN_ENV`만 준다(비밀은 `docker inspect`에 안 나옴). **값을 바꿀 때는 이 파일을 직접 고친다**(오버레이 설정 파일 도구는 서버에서 막힘). 셸·systemd: `deploy/host/scripts/settings_env.sh`의 `load_settings`가 호스트 항목(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다(`--env-file` 없음) | 내부망만 |
 
 ### 0-0. JSON 사건·DB 감사/성능 기록(op-01)
 
