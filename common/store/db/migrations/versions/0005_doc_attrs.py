@@ -2,6 +2,8 @@
 원천 스키마 5벌의 doc에 `attrs` + GIN 색인을 더하고, 옛 원천 전용 칸(판 0002)·분류 힌트 칸(판 0003)의 값을 `attrs`의 같은 이름 키로 옮긴 뒤
 (NULL은 넣지 않음 — jsonb_strip_nulls, 날짜는 'YYYY-MM-DD' 글자) 그 칸을 지운다. 뷰 v_chunk_source는 옛 칸 대신 `attrs`를 낸다.
 0.2.0은 새 PG_SCHEMA·전체 다시 적재지만 올리기는 값을 잃지 않는다. 되돌리기는 attrs에서 옛 칸을 되살리고(형식 그대로) attrs·색인을 지운다.
+되돌리기는 최선만(best-effort): 되살린 칸은 표 끝에 붙어 칸 순서가 0004와 다르고(이름으로 읽으면 같음), 옛 칸에 없던 attrs 키는 버려지며,
+DATE 칸은 'YYYY-MM-DD' 꼴 글자만 날짜로 바꾸고 그 밖은 NULL(새 사슬이 날짜 키에 글자를 넣었어도 되돌리기가 멈추지 않게 — C-89).
 칸·뷰는 common/store/db/models/search_tables.py와 같은 글자로 굳혀 둔다(한 번 배포한 판은 고치지 않음 — 시험이 대조)."""
 
 from alembic import context, op
@@ -71,6 +73,12 @@ def upgrade():
         bind.exec_driver_sql(f"CREATE VIEW {s}.v_chunk_source AS " + view(src, ("attrs",)).replace("{S}", s))
 
 
+def _back(n, t):
+    """attrs 키 → 옛 칸 값. DATE는 꼴이 맞는 글자만(안전한 형 바꾸기 — 그 밖은 NULL)."""
+    v = f"(attrs->>'{n}')"
+    return f"CASE WHEN {v} ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$' THEN {v}::DATE END" if t == "DATE" else v
+
+
 def downgrade():
     b = context.config.attributes["schema"]
     bind = op.get_bind()
@@ -80,7 +88,7 @@ def downgrade():
         bind.exec_driver_sql(f"DROP VIEW IF EXISTS {s}.v_chunk_source")
         if cols:
             bind.exec_driver_sql(f"ALTER TABLE {s}.doc " + ", ".join(f"ADD COLUMN IF NOT EXISTS {n} {t}" for n, t in cols))
-            bind.exec_driver_sql(f"UPDATE {s}.doc SET " + ", ".join(f"{n} = (attrs->>'{n}')::{t}" for n, t in cols))
+            bind.exec_driver_sql(f"UPDATE {s}.doc SET " + ", ".join(f"{n} = {_back(n, t)}" for n, t in cols))
         bind.exec_driver_sql(f"DROP INDEX IF EXISTS {s}.ix_{s}_doc_attrs")
         bind.exec_driver_sql(f"ALTER TABLE {s}.doc DROP COLUMN IF EXISTS attrs")
         bind.exec_driver_sql(f"CREATE VIEW {s}.v_chunk_source AS " + view(src, [n for n, _ in OLD_EXTRA.get(src, ())]).replace("{S}", s))

@@ -141,11 +141,11 @@ def _scope_sql(hard, src, fmap):
             op, t = _when(v, name == "created_until")
             conds.append(f"created_at {op} %s")  # created_at이 없는 문서는 빠짐
             vals.append(t)
-        elif name == "attrs":  # 키 이름은 사슬 검사(영문·숫자·_)를 거친 것만 — 글자에 넣어도 됨
+        elif name == "attrs":  # 담김(@>) — GIN(jsonb_ops) 색인을 탐(->> 비교는 못 탐). 값은 글자(attrs는 늘 글자 — P1-1)
             for key, xs in v.items():
-                any_of(f"attrs->>'{key}' = %s", _vals(xs), lambda x: [x])
+                any_of("attrs @> %s::jsonb", _vals(xs), lambda x, key=key: [json.dumps({key: str(x)})])
         elif fmap.get(name):  # 옛 이름 → 사슬의 attrs 키
-            any_of(f"attrs->>'{fmap[name]}' = %s", vs, lambda x: [x])
+            any_of("attrs @> %s::jsonb", vs, lambda x, key=fmap[name]: [json.dumps({key: str(x)})])
         else:  # 이 원천에 이어진 키가 없음
             conds.append("1 = 0")
     return (" WHERE " + " AND ".join(conds)) if conds else "", vals
@@ -260,7 +260,7 @@ def do_search(question=None, k=8, **filters):
     for i, e in enumerate(evidence):
         e["rank"] = i + 1
         a = by_doc.get(e.get("file_path")) or {}
-        e["attrs"] = {x: a.get(x) for x in ev_keys}
+        e["attrs"] = {x: a.get(x) for x in ev_keys} if ev_keys else None  # 근거 키가 없는 원천(FAQ·Other)은 null
         e["contract_no"] = a.get(cno) if cno else None
     status, _ = evidence_status(question, evidence, mc.cfg().search.min_score)  # R3(AD42) — 표시만, 근거 목록은 안 줄임
     _log(question, evidence, (time.perf_counter() - t0) * 1000)

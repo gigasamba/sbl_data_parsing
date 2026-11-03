@@ -19,10 +19,10 @@ CREATE TABLE SFDC.Task (Id TEXT, WhatId TEXT);
 CREATE TABLE SFDC.Event (Id TEXT, WhatId TEXT);
 CREATE TABLE SFDC.Opportunity (Id TEXT, Name TEXT, AccountId TEXT, Project_Code__c TEXT, Record_Type__c TEXT, X1st_Contract_Execution_Date__c TEXT);
 CREATE TABLE SFDC.Account (Id TEXT, Name TEXT);
-CREATE TABLE CRMS.RM_CM_PJTLIST (RM_CONTRACT_CODE TEXT, SF_ACC_NAME TEXT, DIVISION TEXT, RM_CONTRACT_NAME TEXT, INIT_DTTM TEXT);
+CREATE TABLE CRMS.RM_CM_PJTLIST (RM_CONTRACT_CODE TEXT COLLATE NOCASE, SF_ACC_NAME TEXT, DIVISION TEXT, RM_CONTRACT_NAME TEXT, INIT_DTTM TEXT);
 CREATE TABLE CRMS.RM_CM_DOCU (RM_CONTRACT_CODE TEXT, GATE_CODE TEXT, GATE_VERSION TEXT, DOCU_SEQ INT, INIT_DTTM TEXT);
 CREATE TABLE LAS.Contract (ManageNo TEXT, ContractID INT, IsActive INT, ContractDate TEXT, PartnerCorpName TEXT);
-CREATE TABLE LAS.FileManager (FileID TEXT, CreateDate TEXT);
+CREATE TABLE LAS.FileManager (FileID INT, CreateDate TEXT);
 """
 QUOTE = "CREATE TABLE SFDC.Quote (Id TEXT, OpportunityId TEXT, AccountId TEXT);"
 
@@ -37,6 +37,8 @@ ROWS: dict[str, list[tuple]] = {  # 가짜 데이터 — 사슬 단계마다 문
         ("CRMS/c1/a.docx", "CRMS", None, "2025-02-01 00:00:00"),
         ("LAS/l1/m.pdf", "LAS", None, "2025-03-01 00:00:00"),
         ("FAQ/f1/q.xlsx", "FAQ", None, "2025-04-01 00:00:00"),
+        ("CRMS/c2/b.docx", "CRMS", None, None),  # 열쇠 꼴(P1-2): CHAR 채움·소문자 — 서버 MSSQL(CI 정렬)과 같은 짝
+        ("LAS/l2/n.pdf", "LAS", None, None),  # 열쇠 꼴: 채움 · int 칸(FileID)에 글자 열쇠
     ],
     "SFDC.ContentVersion": [(f"cv{i}", f"cd{i}", f"2024-12-0{i} 09:00:00") for i in range(1, 7)],
     "SFDC.ContentDocumentLink": [
@@ -58,12 +60,18 @@ ROWS: dict[str, list[tuple]] = {  # 가짜 데이터 — 사슬 단계마다 문
         ("006B", "Opp B", "001ACC2", "P002", "ADC", None),
     ],
     "SFDC.Account": [("001ACC1", "Acme"), ("001ACC2", "Beta")],
-    "AI.FileStorageMap_CRMS": [("CRMS/c1/a.docx", "RC-9", "G1", "1", 3)],
-    "CRMS.RM_CM_PJTLIST": [("RC-9", "Gamma", "DS", "Contract X", "2025-02-10")],
+    "AI.FileStorageMap_CRMS": [("CRMS/c1/a.docx", "RC-9", "G1", "1", 3), ("CRMS/c2/b.docx", "rc-8   ", "G1", "1", 4)],
+    "CRMS.RM_CM_PJTLIST": [("RC-9", "Gamma", "DS", "Contract X", "2025-02-10"), ("RC-8", "Delta  ", "CD", "Contract Y", "2025-02-12")],
     "CRMS.RM_CM_DOCU": [("RC-9", "G1", "1", 3, "2025-02-11 08:00:00")],
-    "AI.FileStorageMap_LAS": [("LAS/l1/m.pdf", "M-1", "F1", "2025-03-05")],
-    "LAS.Contract": [("M-1", 1, 0, "2025-03-02", None), ("M-1", 2, 1, "2025-03-03", "")],  # 최신 판 = IsActive 1
-    "LAS.FileManager": [("F1", "2025-03-04 10:00:00")],
+    "AI.FileStorageMap_LAS": [("LAS/l1/m.pdf", "M-1", "F1", "2025-03-05"), ("LAS/l2/n.pdf", "M-2   ", "7", None)],
+    "LAS.Contract": [
+        ("M-1", 1, 0, "2025-03-02", None),
+        ("M-1", 2, 1, "2025-03-03", ""),  # 최신 판 = IsActive 1
+        ("M-2", 9, 1, "2025-06-01", None),
+        ("M-2", 10, 1, "2025-06-02", None),  # latest — ContractID 수로 비교(10 > 9, 글자면 "9"가 큼)
+        ("M-2", 11, None, "2025-06-03", None),  # IsActive NULL — None은 가장 작음(TypeError 없음)
+    ],
+    "LAS.FileManager": [("F1", "2025-03-04 10:00:00"), (7, "2025-06-05 00:00:00")],
 }
 
 
@@ -142,6 +150,11 @@ def test_chains():
         ("LAS/l1/m.pdf", "client_edw", None),  # PartnerCorpName 비어 있음 — G2
         ("LAS/l1/m.pdf", "created_at", "2025-03-04 10:00:00"),  # FileManager.CreateDate
         ("FAQ/f1/q.xlsx", "created_at", "2025-04-01 00:00:00"),
+        ("CRMS/c2/b.docx", "client_edw", "Delta"),  # 'rc-8   ' ↔ 'RC-8' — 채움·대소문자 무시(값도 앞뒤 공백 뺌)
+        ("CRMS/c2/b.docx", "contract_id", "rc-8"),
+        ("LAS/l2/n.pdf", "contract_id", "M-2"),  # 채움 뺀 값
+        ("LAS/l2/n.pdf", "contract_date", "2025-06-02"),  # latest(IsActive, ContractID) — 10 > 9, None 행은 뒤
+        ("LAS/l2/n.pdf", "created_at", "2025-06-05 00:00:00"),  # FileID INT 7 ↔ 글자 '7'
     ]
     for key, col, want in cases:
         got = _flat(out[key]).get(col)
@@ -151,6 +164,23 @@ def test_chains():
         "SFDC/d4/quote.pdf"
     ]
     assert str(M._date("20250210")) == "2025-02-10" and M._date("bad") is None and M._ts("20250211080000").hour == 8  # EDW 글자 꼴
+    import json
+    import uuid
+    from decimal import Decimal
+
+    u = uuid.UUID(int=1)
+    values = [  # (EDW 값, 칸 꼴, 기대 attrs 값) — text는 늘 글자(JSON 수·Decimal 오류 없음 — P1-1)
+        (123, {}, "123"),
+        (Decimal("12.50"), {}, "12.50"),
+        (u, {}, str(u)),
+        ("  A  ", {}, "A"),
+        ("   ", {}, None),
+        (1234567, {"max": 3}, "123"),
+        (True, {"type": "flag"}, "1"),
+    ]
+    for v, f, want in values:
+        got = M._field({"s": [{"c": v}]}, "p", {"from": "s.c", **f})
+        assert got == want and json.loads(json.dumps({"k": got})) == {"k": want}, (v, f, got)
     # Quote 표가 없는 EDW(서버 지금) — 그 단계만 건너뜀, 나머지는 그대로
     e2 = _edw(str(d / "edw2.sqlite"), quote=False)
     try:

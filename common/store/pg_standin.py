@@ -11,6 +11,7 @@ has_conn() 단일 분기). bm25·그래프·집계가 필요한 검증은 실 PG
 """
 
 import datetime
+import json
 import math
 import re
 import sqlite3
@@ -22,6 +23,7 @@ from common.config.settings import cfg
 from common.core.paths import APP_ROOT
 
 _UNNEST_RE = re.compile(r"unnest\(%s::text\[\], %s::float8\[\]\) AS w\(term, weight\)")
+_CONTAINS_RE = re.compile(r"(\w+) @> %s::jsonb")  # jsonb 담김(attrs 거르기 — pl-52) → jsonb_contains(칸, %s)
 _CAST_RE = re.compile(r"%s::\w+(\[\])?(\(\d+\))?")
 _ANY_OR_PH = re.compile(r"(\S+)\s*=\s*ANY\(%s\)|%s")
 _SELECT_ONCONFLICT_RE = re.compile(r"(\bFROM\s+\w+)(\s+ON CONFLICT)")
@@ -59,6 +61,14 @@ def _cosine(a, b):
     return num / (da * db_) if da and db_ else 0.0
 
 
+def _contains(a, b):
+    """jsonb @> (한 단계 — 키마다 값이 같음). attrs 거르기만 씀."""
+    if a is None or b is None:
+        return None
+    a, b = json.loads(a), json.loads(b)
+    return int(isinstance(a, dict) and all(k in a and a[k] == v for k, v in b.items()))
+
+
 def _xlat(sql, params, schema):
     """%s→? · X = ANY(%s)→X IN (...) · %s::TYPE 캐스트 제거 · unnest(...) 2-배열 CTE→제거(한 곳, X4-BM25는 스탠드인
     미지원이라 호출 전에 걸러짐) — 한 번에(파라미터 위치가 꼬이지 않게, enforcement §2 — 번역은 이 함수 하나)."""
@@ -77,6 +87,7 @@ def _xlat(sql, params, schema):
         for t, w in zip(terms, weights):
             prefix += [t, w]
         params = params[2:]
+    sql = _CONTAINS_RE.sub(r"jsonb_contains(\1, %s)", sql)
     sql = _CAST_RE.sub("%s", sql)
     out, new_params, pi, i = [], [], 0, 0
     for m in _ANY_OR_PH.finditer(sql):
@@ -298,6 +309,7 @@ class StandinPG:
         # mc-01(11-01) — PG 검색 SQL을 대역에서 그대로 돌리게: v_chunk_source 뷰의 regexp_replace · BM25의 ln(이미지 sqlite에 수학 함수가 없을 수도)
         self.sqlite.create_function("regexp_replace", 3, lambda s, p, r: None if s is None else re.sub(p, r, s))
         self.sqlite.create_function("ln", 1, lambda x: None if x is None or x <= 0 else math.log(x))
+        self.sqlite.create_function("jsonb_contains", 2, _contains)
         self.cn = _Conn(self)
 
     def q(self, sql, params=None):

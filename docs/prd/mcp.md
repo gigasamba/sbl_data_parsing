@@ -133,8 +133,9 @@
 - 11-03(사용자 grill — [load-schema.md#pl-52](load-schema.md#pl-52), 등급 A·0.2.0 MINOR): 원천 메타가 `doc.attrs`(JSONB) 한 칸으로 모인다.
   - 입력 `attrs: {키: 값 또는 목록}` — 원천(`source_system`)의 attrs 키로 정확 일치(키끼리 AND, 목록은 OR). 모르는 키는 `{"error"}`에 그 원천의 키 목록을 담는다(조용한 0건 아님). 받는 키는 사슬 파일 `fields`에서 `filter`가 있는 키 + 적재가 쓰는 `doc_class`(SFDC·LAS) — `filter`가 없는 키(분류 힌트 등)는 거를 수 없다(사슬 꼴의 "filter 없음 = 거르기 아님").
   - 옛 거르기 이름(`project_id`·`division`·`service_type`·`doc_class`·`sf_op_id`·`sf_op_name`·`contract_id`)은 그대로 받고 사슬의 `filter:`로 attrs 키에 잇는다(예 `project_id` → `project_code__c`). 그 원천에 잇는 키가 없으면 지금처럼 0건(④). `FAQ_group`은 청크 칸 그대로.
-  - 근거 13칸 — 12칸 + `attrs`(사슬에서 `evidence: true`인 키 모두, 값이 없으면 null — 다른 근거 칸과 같은 규칙). `contract_no` = 사슬에서 `filter: contract_id`인 키의 값(없으면 null).
-  - `edw_meta` 도구(인자 없이 부를 때) — 원천마다 거를 수 있는 키(`filter` 이름 → attrs 키)와 근거 키를 사슬 파일에서 `search_attrs`로 보여 준다.
+  - 근거 13칸 — 12칸 + `attrs`(사슬에서 `evidence: true`인 키 모두, 값이 없으면 null — 다른 근거 칸과 같은 규칙. 근거 키가 없는 원천(FAQ·Other)은 `attrs` 자체가 null). `contract_no` = 사슬에서 `filter: contract_id`인 키의 값(없으면 null).
+  - `edw_meta` 도구(인자 없이 부를 때) — 원천마다 `filter`(`search` 인자 이름 → attrs 키 — 인자가 아닌 사슬 `filter:` 이름은 빼고), `attrs`(attrs 거르기 키 전부), `evidence`(근거 키)를 사슬 파일에서 `search_attrs`로 보여 준다. 요약이 오류면 붙이지 않는다.
+  - 거르기 SQL은 `attrs @> %s::jsonb`(값 `{"키": "값"}`, 바인딩) — GIN(jsonb_ops) 색인을 탄다(`attrs->>'키' = …`는 못 탐).
 - Status: done(11-01 · 11-02 pl-28 원천 스키마·client_edw 반영 · 11-03 pl-52 `attrs` 거르기·근거 칸·`search_attrs` — `feature/attrs-jsonb`, 서버 확인 refactor.md C-89)
 
 <a id="mc-17"></a>

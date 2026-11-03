@@ -191,8 +191,8 @@ def do_list(
         srcs = [ST.source_of(source_system)] if source_system else list(ST.SOURCES)  # 원천 스키마 고르기(pl-28) — 안 주면 5벌 모두
         for col, v in (("doc_class", doc_class), ("sf_op_id", sf_op_id)):  # pl-52 — doc.attrs 키(없는 원천은 0건)
             if v:
-                conds.append(f"attrs->>'{col}' = %s")
-                vals.append(str(v))
+                conds.append("attrs @> %s::jsonb")  # 담김 — GIN 색인을 탐
+                vals.append(json.dumps({col: str(v)}))
         for name, v, upper in (("created_since", created_since, False), ("created_until", created_until, True)):
             if v:
                 op, t = _when(v, upper, name)

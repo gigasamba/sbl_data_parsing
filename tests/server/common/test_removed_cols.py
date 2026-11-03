@@ -20,8 +20,6 @@ ops:
   runtime: {exp_max_workers: 4, exp_proc_gb_answer: 1, exp_proc_gb_build: 1, exp_proc_gb_run: 1, exp_reserve_gb: 4}
   nightly: {enabled: true}
   pipeline_paths: {edw_chain: /etc/rag/edw_chain.yaml}  # pl-52 — ops.paths.edw_chain 하나로
-search:
-  edw_meta: {edw_chain: /etc/rag/edw_chain.yaml}
 dev:
   exp_store: /s
   llm_est_in_tokens: 1

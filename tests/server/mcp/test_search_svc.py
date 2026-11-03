@@ -403,6 +403,8 @@ def _selftest_contract():
         assert o["filter"] == {"source_system": "LAS", "attrs": {"contract_id": "M-1"}}, o
         e = o["evidence"][0]
         assert e["contract_no"] == "M-1" and e["attrs"] == {"contract_id": "M-1", "contract_date": None}, e  # contract_no = contract_id 키
+        e = M.do_search("단가는?", source_system="FAQ")["evidence"][0]
+        assert e["attrs"] is None and e["contract_no"] is None, e  # 근거 키가 없는 원천은 attrs null
     finally:
         _env.close()
         _STATE.clear()
@@ -440,8 +442,22 @@ def _selftest_search_attrs():
     assert sorted(sa) == ["CRMS", "FAQ", "LAS", "Other", "SFDC"], sa
     assert sa["SFDC"]["filter"]["project_id"] == "project_code__c" and sa["SFDC"]["filter"]["doc_class"] == "doc_class", sa["SFDC"]
     assert sa["SFDC"]["evidence"] == ["sf_op_id", "sf_op_name", "project_code__c", "service_type", "contract_date"], sa["SFDC"]
-    assert sa["CRMS"]["filter"] == {"contract_id": "contract_id", "division": "division"} and sa["FAQ"] == {"filter": {}, "evidence": []}, (
-        sa
-    )
-    assert edw_calls.do_edw_meta()["search_attrs"] == sa
+    assert sa["CRMS"]["filter"] == {"contract_id": "contract_id", "division": "division"}, sa
+    assert sa["CRMS"]["attrs"] == ["contract_id", "division"] and sa["FAQ"] == {"filter": {}, "attrs": [], "evidence": []}, sa
     assert "search_attrs" not in edw_calls.do_edw_meta(schema="NOPE")
+    # P2-8 — 사슬의 filter 이름이 search 인자가 아니면 filter에 안 나오고 attrs 키로만
+    from common.store import edw_chain as EC
+    from mcp_server.services.search import search_svc
+
+    ch = EC.load()
+    ch["crms"]["fields"]["prod_name"]["filter"] = "product"
+    with patch.object(search_svc, "chain", lambda: ch):
+        c = edw_calls.search_attrs()["CRMS"]
+    assert "product" not in c["filter"] and "prod_name" in c["attrs"], c
+    # 요약이 오류면 search_attrs를 붙이지 않음 · 성공이면 붙임
+    from mcp_server.services import edw_meta as EM
+
+    with patch.object(EM, "lookup", lambda *a: {"error": "x"}):
+        assert edw_calls.do_edw_meta() == {"error": "x"}
+    with patch.object(EM, "lookup", lambda *a: {"schemas": []}):
+        assert edw_calls.do_edw_meta() == {"schemas": [], "search_attrs": sa}

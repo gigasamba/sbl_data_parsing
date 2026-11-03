@@ -40,7 +40,7 @@ def register(m):
         A filter that matches nothing returns an empty result (scope_docs 0, evidence_status "none"), not an error.
         Returns {question, evidence[], evidence_status (found/weak/none), filter, scope_docs} — filter/scope_docs only when a
         filter was given. Each evidence item has exactly: text, file_name, file_path, page, line, section, client, contract_no,
-        doc_date, version, superseded, chunk_key, attrs (missing values are null; attrs holds the source's evidence keys)."""
+        doc_date, version, superseded, chunk_key, attrs (missing values are null; attrs holds the source's evidence keys, null if it has none)."""
         return await _bg(
             do_search,
             question,

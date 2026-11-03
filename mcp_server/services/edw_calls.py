@@ -4,6 +4,7 @@ S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/m
 
 from common.store import edw_chain as EC
 from common.store.db.models import search_tables as ST
+from mcp_server.schemas.evidence import SEARCH_FILTERS
 from mcp_server.services.search.server_state import CALLER
 
 
@@ -26,20 +27,28 @@ def do_edw_meta(schema=None, table=None, column_filter=None):
         return {"error": "edw_meta 도구 파일 미적용(EM1) — 패치·마운트 적용 후 재시도"}
     if schema is None and table is None and column_filter is None:  # 인자 없음 — 스키마 요약 + search attrs 키(pl-52)
         out = _lookup(EM, schema, table, column_filter)
-        return {**out, "search_attrs": search_attrs()}
+        return out if "error" in out else {**out, "search_attrs": search_attrs()}  # 오류 응답에는 붙이지 않음
     return _lookup(EM, schema, table, column_filter)
 
 
 def search_attrs():
-    """원천별 search attrs 키(사슬 파일 — search와 같은 파일): {SFDC: {filter: {거르기 이름: attrs 키}, evidence: [근거 attrs 키]}}.
-    filter 값 키들이 attrs 거르기에 줄 수 있는 키다. 사슬 파일이 틀리면 {"error"}."""
+    """원천별 search attrs 키(사슬 파일 — search와 같은 파일): {SFDC: {filter: {search 인자: attrs 키}, attrs: [attrs 거르기 키],
+    evidence: [근거 attrs 키]}}. filter에는 search 인자(SEARCH_FILTERS)인 이름만 — 사슬의 다른 filter 이름은 attrs 키로만 쓴다. 사슬 파일이 틀리면 {"error"}."""
     from mcp_server.services.search.search_svc import chain
 
     try:
         ch = chain()
     except ValueError as e:
         return {"error": str(e)}
-    return {("Other" if s == "other" else s.upper()): {"filter": EC.filters(ch, s), "evidence": EC.evidence(ch, s)} for s in ST.SOURCES}
+    out = {}
+    for s in ST.SOURCES:
+        fm = EC.filters(ch, s)
+        out["Other" if s == "other" else s.upper()] = {
+            "filter": {n: k for n, k in fm.items() if n in SEARCH_FILTERS},
+            "attrs": sorted(set(fm.values())),
+            "evidence": EC.evidence(ch, s),
+        }
+    return out
 
 
 def _lookup(EM, schema, table, column_filter):

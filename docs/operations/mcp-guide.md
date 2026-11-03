@@ -61,7 +61,7 @@
 | `contract_id` | 글자 또는 목록 | 아니요 | — | 계약 코드 — CRMS(계약 코드)·LAS(관리 번호) |
 | `created_since` | 글자 | 아니요 | — | 원천 등록 시각부터. `YYYY-MM-DD`(그날 00:00 KST부터) 또는 ISO 8601 시각(시간대 없으면 KST) |
 | `created_until` | 글자 | 아니요 | — | 원천 등록 시각까지. 날짜만 주면 그날 전체 포함(다음 날 00:00 미만) |
-| `attrs` | 객체 `{키: 값 또는 목록}` | 아니요 | — | 원천 메타 키로 거르기, 정확 일치(목록은 OR, 키끼리 AND). 쓸 수 있는 키는 **원천마다 다르다** — `edw_meta`를 인자 없이 부르면 `search_attrs`에 원천별 목록(`filter`의 값들). 모르는 키는 오류(`{"error": "attrs 키 … 거를 수 있는 키: …"}`) — 조용히 0건이 되지 않는다 |
+| `attrs` | 객체 `{키: 값 또는 목록}` | 아니요 | — | 원천 메타 키로 거르기, 정확 일치(목록은 OR, 키끼리 AND). 쓸 수 있는 키는 **원천마다 다르다** — `edw_meta`를 인자 없이 부르면 `search_attrs.<원천>.attrs`에 원천별 목록. 모르는 키는 오류(`{"error": "attrs 키 … 거를 수 있는 키: …"}`) — 조용히 0건이 되지 않는다 |
 <!-- /guide:search-inputs -->
 
 규칙:
@@ -103,7 +103,7 @@
 | `version` | 글자 또는 null | 문서 판 — 수집 목록(manifest)에 값이 있을 때만 |
 | `superseded` | null | 구판 표시 — 지금은 늘 null([mc-05](../prd/mcp.md#mc-05): 본문 글자로 추정한 값은 내보내지 않음) |
 | `chunk_key` | 글자 | 청크를 다시 가리키는 키 `<doc_id>:<seq>` ⚠ 운영은 `<file_path>:<순번>` |
-| `attrs` | 객체 | 원천 메타 `{키: 값}` — 그 원천의 근거 키(`edw_meta` `search_attrs.<원천>.evidence`) 모두, 값이 없으면 null. 예 SFDC `sf_op_id`·`sf_op_name`·`project_code__c`·`service_type`·`contract_date` |
+| `attrs` | 객체 | 원천 메타 `{키: 값}` — 그 원천의 근거 키(`edw_meta` `search_attrs.<원천>.evidence`) 모두, 값이 없으면 null. 근거 키가 없는 원천(FAQ·Other)은 `attrs` 자체가 null. 예 SFDC `sf_op_id`·`sf_op_name`·`project_code__c`·`service_type`·`contract_date` |
 <!-- /guide:evidence -->
 
 ### 4-3. 예
@@ -273,8 +273,9 @@ EDW 표·칸의 한글 설명을 정적 자료에서 3단으로 찾는다(DB 접
 모르는 이름은 `{"error": …, "suggestions": [...]}`. SQL을 쓸 때는 결과의 `qualified_name`을 쓴다.
 
 인자 없이 부르면 스키마 요약에 `search_attrs`가 붙는다 — `search`의 원천별 `attrs` 키(EDW 사슬 파일 그대로, [pl-52](../prd/load-schema.md#pl-52)):
-`{"SFDC": {"filter": {"project_id": "project_code__c", …, "doc_class": "doc_class"}, "evidence": ["sf_op_id", …]}, "CRMS": …}`.
-`filter`는 줄임 이름 → `attrs` 키(값들이 `attrs` 거르기에 쓸 수 있는 키), `evidence`는 근거 `attrs`에 나오는 키다.
+`{"SFDC": {"filter": {"project_id": "project_code__c", …, "doc_class": "doc_class"}, "attrs": ["contract_date", …], "evidence": ["sf_op_id", …]}, "CRMS": …}`.
+`filter`는 `search` 인자 이름 → `attrs` 키(`search` 인자에 없는 사슬 `filter:` 이름은 여기 나오지 않고 `attrs` 키로만 쓴다), `attrs`는 `attrs` 거르기에 줄 수 있는 키 전부,
+`evidence`는 근거 `attrs`에 나오는 키다. 요약이 오류(데이터셋 미구성 등)면 `search_attrs`를 붙이지 않는다.
 
 ```json
 {"name": "edw_meta", "arguments": {}}

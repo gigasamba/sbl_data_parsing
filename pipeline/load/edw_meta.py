@@ -12,6 +12,7 @@ EDW를 못 열면 빈 dict와 경고(적재는 메타를 비운 채 계속 — �
 import json
 import sys
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from common.core.paths import RES_ROOT
@@ -97,6 +98,16 @@ def _found(m):
     return bool(m) and (m["created_at"] is not None or m["client_edw"] is not None or bool(m["attrs"]))
 
 
+def _key(v):
+    """열쇠 값 → 글자(앞뒤 공백 뺌 — MSSQL CHAR 채움·int 칸). SQL IN에 넘기는 값."""
+    return str(v).strip()
+
+
+def _norm(v):
+    """열쇠 맞추기 — _key + 대소문자 무시(MSSQL 기본 정렬 규칙 CI와 같게 — 옛 SQL 조인과 같은 짝)."""
+    return _key(v).casefold()
+
+
 def _vals(rows, ref, path):
     """열쇠 하나 → 값 목록(빈 값 뺌) — file = 문서 원본 경로, <단계>.<칸> = 그 단계 행들의 칸 값(행 순서)."""
     if ref == EC.FILE:
@@ -110,9 +121,9 @@ def _pick(rows, path, alts, prefix, decided):
     가리키면 후보가 없어도 거기서 정함(그 단계가 비었으면 이것도 빔 — 다른 사슬의 값을 붙이지 않음)."""
     for a in alts:
         a = a if isinstance(a, list) else [a]
-        cand = {str(v) for r in a for v in _vals(rows, r, path) if str(v).startswith(prefix)}
+        cand = {_norm(v): _key(v) for r in a for v in _vals(rows, r, path) if _key(v).startswith(prefix)}
         if cand or any(r.partition(".")[0] in decided for r in a):
-            return (next(iter(cand)) if len(cand) == 1 else None), True
+            return (next(iter(cand.values())) if len(cand) == 1 else None), True
     return None, False
 
 
@@ -165,13 +176,13 @@ def _keys(s, rows, path, decided):
     if len(on) > 1:  # 키 여러 개 — 한 단계의 행마다 칸 값 묶음
         cols = [s["on"][k].partition(".") for k in on]
         tups = [tuple(r.get(cc) for _, _, cc in cols) for r in rows.get(cols[0][0], [])]
-        return [tuple(map(str, t)) for t in tups if all(v not in (None, "") for v in t)]
+        return [tuple(map(_key, t)) for t in tups if all(v not in (None, "") and _key(v) for v in t)]
     if isinstance(ref, list):
         k, done = _pick(rows, path, ref, prefix, decided)
         if done:
             decided.add(s["name"])
         return [(k,)] if k else []
-    return [(str(v),) for v in dict.fromkeys(_vals(rows, ref, path)) if str(v).startswith(prefix)]
+    return [(k,) for k in dict.fromkeys(_key(v) for v in _vals(rows, ref, path)) if k and k.startswith(prefix)]
 
 
 def _resolve(edw, paths, c):
@@ -193,11 +204,11 @@ def _resolve(edw, paths, c):
         firsts = sorted({k[0] for ks in keys.values() for k in ks})
         by_key = {}
         for r in sorted(_read(edw, s, firsts, core, extra) if firsts else [], key=lambda r: tuple(str(v) for v in r.values())):
-            by_key.setdefault(tuple(str(r.get(k)) for k in on), []).append(r)
+            by_key.setdefault(tuple(_norm(r.get(k)) for k in on), []).append(r)  # 양쪽 모두 _norm(옛 SQL 조인 — CHAR 채움·CI)
         if s.get("latest"):  # 열쇠마다 가장 큰 행 하나(같으면 앞)
-            by_key = {k: [max(v, key=lambda r: tuple(r.get(x) or 0 for x in s["latest"]))] for k, v in by_key.items()}
+            by_key = {k: [max(v, key=lambda r: tuple(_rank(r.get(x)) for x in s["latest"]))] for k, v in by_key.items()}
         for p in paths:
-            rows[p][name] = [r for k in keys[p] for r in by_key.get(k, [])]
+            rows[p][name] = [r for k in dict.fromkeys(tuple(map(_norm, k)) for k in keys[p]) for r in by_key.get(k, [])]
         if i == 0:
             paths = [p for p in paths if rows[p][name]]
     out = {}
@@ -212,15 +223,29 @@ def _resolve(edw, paths, c):
     return out
 
 
+def _rank(v):
+    """latest 비교 값 — None이 가장 작고, 수는 수로(ContractID 10 > 9), 그 밖은 글자로(날짜·시각은 ISO 글자 순서 = 시간 순서)."""
+    if v is None:
+        return (0, 0, "")
+    if isinstance(v, (int, float, Decimal)) and not isinstance(v, bool):
+        return (1, 0, v)
+    return (1, 1, str(v))
+
+
 def _field(rows, path, f):
-    """attrs 키 하나 — from 열쇠들에서 앞부터 첫 값(형식 바꾼 뒤 빈 값이 아닌 것). type date = 날짜, flag = '1'/'0', max = 앞 몇 자."""
-    conv = {"date": _date, "flag": _flag}.get(f.get("type", "text"), lambda v: v)
+    """attrs 키 하나 — from 열쇠들에서 앞부터 첫 값(형식 바꾼 뒤 빈 값이 아닌 것). type text = 글자(앞뒤 공백 뺌 — int·Decimal·UUID도 글자로,
+    JSON에 수로 새지 않게), date = 날짜, flag = '1'/'0', max = 앞 몇 자."""
+    conv = {"date": _date, "flag": _flag}.get(f.get("type", "text"), _text)
     for r in EC.refs(f["from"]):
         for v in _vals(rows, r, path):
             v = conv(v)
             if v not in (None, ""):
                 return str(v)[: f["max"]] if f.get("max") else v
     return None
+
+
+def _text(v):
+    return None if v is None else str(v).strip()
 
 
 def _entity(ents):
