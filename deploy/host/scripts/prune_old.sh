@@ -1,8 +1,8 @@
 #!/bin/bash
-# OP18 — 디스크·판 보관 기준(image-patch-process.md §7) 그대로: 이미지(S6b — data-pipeline·mcp-server)는
+# OP18 — 디스크·판 보관 기준(docs/operations/release-and-patch.md §6) 그대로: 이미지(S6b — data-pipeline·mcp-server)는
 #   지금 판 + 직전 판 1개만 남기고 나머지 rmi + `docker image prune -f`(이름 없는 층만) · 조각·tar 폴더가
 #   있으면 남은 것 정리(load.sh가 보통 성공 직후 지움 — 여긴 안전망). 남의 이미지·컨테이너는 안 건드림
-#   (이름 필터는 아래 REPOS 목록만, `docker system prune`·`-a` 금지 — §7 그대로).
+#   (이름 필터는 아래 REPOS 목록만, `docker system prune`·`-a` 금지 — §6 그대로).
 #   S6c(사용자 10-27, C-30 ③) — 옛 이름 이미지(옛 3분할 data-parsing·data-structure·data-retrieval, 그 전 rag-parse·rag-structure·
 #   rag-retrieval·rag-core·rag-all)는 하나도 남기지 않는다(남김 수 0). 옛 이미지는 S6b 전환의 되돌리기(refactor.md C-29)에 쓰므로
 #   --apply는 새 판 전환을 확인한 뒤에만 — dry-run은 지울 목록만 보여 준다.

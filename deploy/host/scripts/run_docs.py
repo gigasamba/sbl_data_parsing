@@ -4,7 +4,7 @@
 1) 대기열 — 앞으로 나올 문서 WARM_TARGET(기본 20)개를 미리 warm 다운로드. 진행중 문서는 대기 개수에서 제외.
    파싱이 하나 시작되면 다음 문서를 즉시 받아 개수를 유지. 문서 flow가 끝나면 docflow 임시 디렉토리·warm 잔여 삭제.
 2) 파싱 flow — 레인 light·medium·vlm(warm 때 분류)마다 전담 워커(자기 레인만)·공유 워커(자기 레인 먼저, 비면 가장 긴
-   다른 레인에서 가져옴) — 기본 레인마다 1·1(사용자 10-29, docs/prd/runner.md rn-01). vlm 문서는 동시 VLM_CAP(2)까지.
+   다른 레인에서 가져옴) — 기본 레인마다 1·1(사용자 10-29, docs/prd/ops.md rn-01). vlm 문서는 동시 VLM_CAP(2)까지.
    구조화 대기 문서가 STRUCT_BACKLOG(기본 구조화 워커 × 2)개 이상이면 새 파싱을 시작하지 않고 기다림(rn-02).
    레인·대기 길이는 상태가 바뀔 때마다 batch_progress/queue_depth.jsonl에 한 줄(rn-02).
    값은 settings.yaml ops.run_docs(비우면 아래 RUN_DOCS_DEFAULTS) — --warm·--struct-workers 인자가 그 위를 덮음.
@@ -323,7 +323,7 @@ def sweep_cmd(seq):
     )
 
 
-# ── 레인·대기열 정책(사용자 10-29 — docs/prd/runner.md rn-01·rn-02) — settings.yaml ops.run_docs(configure()가 읽음).
+# ── 레인·대기열 정책(사용자 10-29 — docs/prd/ops.md rn-01·rn-02) — settings.yaml ops.run_docs(configure()가 읽음).
 # 기본값은 설정 모델 pipeline.config.PipelineHostRunDocs와 같다(이 스크립트는 호스트 python이라 모델을 import하지 않음 — 시험이 둘을 대조).
 RUN_DOCS_DEFAULTS = {
     "warm": 20,  # 진입 대기열 — 미리 받아 둘 문서 수(받는 중 포함 · 파싱 중 제외)

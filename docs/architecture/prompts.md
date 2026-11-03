@@ -1,6 +1,6 @@
 # AI 지시서(지시서 패키지)
 
-LLM·VLM을 **부르는** 단계의 지시서 패키지 16개(`resources/prompts/` 15개 + `valid_env/answer_test/`의 `rag_qa` — 10-29 파싱 판단 에이전트 4개·`query_decompose`, S11 `research_check`, 10-30 `wiki_term_draft`·`triple_extract`·`figure_chart_raster`·`diagram_arrows`를 지움 — e2-18)를 한 표로 모았다. 검색·집계·청킹처럼 모델을 부르지 않는 결정적 단계는 지시서가 아니라 코드다(맨 아래 "도구" 표).
+LLM·VLM을 **부르는** 단계의 지시서 패키지 7개(`resources/prompts/` 6개 — 공용 꼬리 `_common` 따로 + `valid_env/answer_test/`의 `rag_qa` · 11-02 분류 `classify_sfdc`·`classify_las` 더함(pl-33) — 10-29 파싱 판단 에이전트 4개·`query_decompose`, S11 `research_check`, 10-30 `wiki_term_draft`·`triple_extract`·`figure_chart_raster`·`diagram_arrows`를 지움 — e2-18)를 한 표로 모았다. 검색·집계·청킹처럼 모델을 부르지 않는 결정적 단계는 지시서가 아니라 코드다(맨 아래 "도구" 표).
 S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26개와 폴더 설명(`common_tools/prompts/README.md`)을 이 문서 하나로 합쳤고, `cases.json`은 `tests/fixtures/prompts/<앱>/<패키지>.json`으로 옮겼다(읽는 곳이 없어 10-29에 지움 — `refactor.md` C-63). 호출부 경로는 S2 시점 코드 자리로 고쳤다(옛 README의 `dev/…`·`modules/…`·`deploy/data_parsing/…`는 낡은 경로였다).
 
 ## 1. 자리와 찾는 순서
@@ -32,9 +32,10 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 |---|---|---|---|---|---|---|
 | `figure_describe` | `common/` | vlm | 그림 1장 → 검색용 기록(종류·요약·글자·값·연결·표) | 그림 PNG(data: URL) + 지시문(사용자, 생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figures.py` `vlm_fig()`(`P_FIGJ`) | 기본 · 있음 |
 | `page_transcribe` | `common/` | vlm | 스캔·이미지 쪽 1장 → 마크다운(OCR 교차 확인용) | 쪽 PNG + 지시문(사용자, 출력 상한 없음) → 마크다운 | `pipeline/transform/figures/vlm_page.py` `vlm_page()`(`P_PAGE`) | free · 없음 |
-| `rag_qa` | (`valid_env/answer_test/` — PC 전용, S10에 `validation/e2e/`로 옮겼다가 10-29 되돌림) | llm | 검색 MCP 도구(`search`·`edw_meta`·`query_edw`)를 스스로 골라 근거를 찾고 숫자마다 인용을 붙여 답함(agentic — `max_turns` 12, 로컬 도구 `verify_citations`: 답의 숫자가 인용 `quote`에 있고 그 quote가 이번 질문의 검색 근거에 있는지) | 질문(사용자) → `{answer, status: found\|partial\|not_found, citations}` | `validation/e2e/answer_gen.py`(`common.ai.adk.run_agent(per_turn_admit=True)` — 도구 함수·근거 pool은 호출자, 지시문 `instructions.md` + 출력 스키마, 옛 패키지 README는 S10에 지움) | 없음(instruction에 지시문) · 있음 |
+| `rag_qa` | (`valid_env/answer_test/` — PC 전용, S10에 `validation/e2e/`로 옮겼다가 10-29 되돌림) | llm | 검색 MCP 도구(`search`·`edw_meta`·`query_edw`)를 스스로 골라 근거를 찾고 숫자마다 인용을 붙여 답함(agentic — `max_turns` 12, 로컬 도구 `verify_citations`: 답의 숫자가 인용 `quote`에 있고 그 quote가 이번 질문의 검색 근거에 있는지) | 질문(사용자) → `{answer, status: found\|partial\|not_found, citations}` | `validation/e2e/answer_gen.py`(`validation.e2e.tool_loop.run("rag_qa", …)` — 턴마다 예산 확인 `llm.admit_turn()`, `common/ai/adk.py`는 지움 · 도구 함수·근거 pool은 호출자, 지시문 `instructions.md` + 출력 스키마, 옛 패키지 README는 S10에 지움) | 없음(instruction에 지시문) · 있음 |
 | `figure_overlay` | `pipeline/` | vlm | 겹친 개체 묶음(그림 + 글상자·화살표·도형) 1장 → 검색용 기록(F12) | 묶음 union bbox 크롭 + 지시문(생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figures.py` `vlm_fig_overlay()`(`P_FIGOVERLAY`) | 기본 · 있음 |
 | `nested_figure` | `pipeline/` | vlm | 쪽 전체 그림 안의 자식 그림 bbox 찾기(F7) | 쪽 그림 + 지시문 → `{"regions": [{bbox, kind, …}]}` | `pipeline/transform/figures/nested.py` `bbox_regions()`(`P_BBOX`) | 기본 · 있음 |
+| `classify_sfdc` · `classify_las` | `pipeline/` | llm | SFDC·LAS 문서 하나 → 종류 라벨 하나(`doc_class` — pl-33, 운영 지시문 그대로) | 문서 정보 + 본문 앞 8,000자(LAS는 키워드 근거 더함) → JSON `class` | `pipeline/load/classify.py` `classify_one()`(적재 중 — `llm.chat`) | 없음 · 없음 |
 
 (옛 `run_agent` 시험 고정물 `example_agentic`·`example_agentic_vlm_sub`는 `run_agent`와 함께 0.2.0에 쓰임이 없어졌다 — pl-46. 모델 호출 시험은 `tests/server/common/test_llm_call.py`, 도구 왕복은 `tests/general/e2e/test_answer_gen.py`.)
 
