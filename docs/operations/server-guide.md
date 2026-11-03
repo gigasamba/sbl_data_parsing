@@ -9,7 +9,7 @@
 
 ## 0. 이미지 2개 — 역할 (D-020)
 
-| 이미지 | 역할 | `RAG_MODULE` | 돌리는 서비스(`deploy/host/compose/compose.pipeline.yml`) |
+| 이미지 | 역할 | `RAG_MODULE` | 돌리는 서비스(`deploy/host/compose/` — 컨테이너마다 파일 하나: `compose.pipeline.yml` data-pipeline · `compose.pipe-mcp.yml` data-pipeline-mcp · `compose.mcp.yml` mcp-server) |
 |---|---|---|---|
 | `data-pipeline` | 파싱(dedup→prepare→파싱→대표 결과)·구조화(청킹·임베딩)·적재(PostgreSQL)·퍼블리시 | `pipeline` | 상주 컨테이너 하나 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`가 docker exec, 사용자 11-03) · 1회 작업 컨테이너 없음(11-02 — 이미지 점검 `docker run --rm … selftest`만) |
 | `mcp-server` | 검색 MCP(상주) | `mcp` | `mcp`(상주, 컨테이너 이름 `mcp-server`) — 도구 job `retrieval`·`mcp_eval`은 11-01에 지움(e2-10) |

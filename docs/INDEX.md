@@ -25,6 +25,10 @@
 - 설정 작성 가이드(refactor_plan 4-1·6-1 — S7 D-015)는 [operations/env-guide.md](operations/env-guide.md)다(S7에 그 문서를 settings.yaml 기준으로 고침 — 새 문서 없음).
 - 작업 보고서(`output/orca/`)는 git 밖이라 이 표에 넣지 않는다.
 
+## 예외
+
+- `deploy/host/compose/compose.code.pipe-mcp.yml` — 25자(CLAUDE.md §1 "새 파일 이름 20자 이하"의 예외): 컨테이너 파일 `compose.pipe-mcp.yml`과 짝 이름을 맞춘다(`compose.code.yml`·`compose.code.mcp.yml`과 같은 꼴, 사용자 11-03 — 컨테이너마다 compose 파일 하나).
+
 ## Glossary
 
 **약어**

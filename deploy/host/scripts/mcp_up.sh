@@ -21,7 +21,7 @@ DC="$DOCKER compose $files"
 if [ "$($DOCKER inspect -f '{{.State.Running}}' data-pipeline-mcp 2>/dev/null)" != true ]; then
   echo "[mcp_up] $(date '+%F %T') data-pipeline-mcp 꺼짐 — 띄움"
   # shellcheck disable=SC2086 — 파일 인자(낱말 나눔)
-  (CODE_DIR=$code0 && code_dir_default DATA_PIPELINE_IMAGE && $DOCKER compose -f deploy/host/compose/compose.pipeline.yml ${CODE_DIR:+-f deploy/host/compose/compose.code.yml} up -d data-pipeline-mcp) ||
+  (CODE_DIR=$code0 && code_dir_default DATA_PIPELINE_IMAGE && $DOCKER compose -f deploy/host/compose/compose.pipe-mcp.yml ${CODE_DIR:+-f deploy/host/compose/compose.code.pipe-mcp.yml} up -d data-pipeline-mcp) ||
     echo "[mcp_up] data-pipeline-mcp 띄우기 실패 — parse_document는 '연결 실패'를 돌려줌(검색은 그대로)" >&2
 fi
 URL="http://${MCP_HOST:-127.0.0.1}:${MCP_PORT:-8765}/health"

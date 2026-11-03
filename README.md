@@ -493,7 +493,7 @@ bash deploy/release/ship_stage.sh pipeline-runtime mcp-runtime                 #
 ```bash
 export SERVER_ENV_DIR=/srv/rag/env DOCKER=podman
 dc() { ( . deploy/host/scripts/settings_env.sh && load_settings && . deploy/host/scripts/image_vars.sh && code_dir_default DATA_PIPELINE_IMAGE && \
-         $DOCKER compose -f deploy/host/compose/compose.pipeline.yml ${CODE_DIR:+-f deploy/host/compose/compose.code.yml} "$@" ); }
+         $DOCKER compose -f deploy/host/compose/compose.pipeline.yml -f deploy/host/compose/compose.pipe-mcp.yml \n         ${CODE_DIR:+-f deploy/host/compose/compose.code.yml -f deploy/host/compose/compose.code.pipe-mcp.yml} "$@" ); }
 ```
 
 **② 설정 파일과 결과 폴더**

@@ -88,7 +88,7 @@
 - 서버 확인(C-65 ⑥): 일괄 파싱만 / + `parse_document` 동시의 응답 시간 비교 — 효과 없으면 선택지 1.
 - 파일: `deploy/host/compose/`, `pipeline/mcp_parse_service.py`, `common/core/resources.py`.
 - 결정 다시(사용자 11-03): 일괄 컨테이너를 하나(`data-pipeline` — 파싱·구조화·적재)로 합친 뒤에도 parse_document는 **전용 컨테이너**로 뗀다(선택지 1 재확인).
-- 한 것(11-03 `feature/rundocs-flow`): `compose.pipeline.yml`에 `data-pipeline-mcp`(같은 이미지, entrypoint `parse-service` = `pipeline.mcp_parse_service`가 주 프로세스, 127.0.0.1:8766) — `cpu_shares` 4096(일괄 `data-pipeline` 1024 — cgroup v2는 `cpu.weight`로), 상한 CPU 2·메모리 8g, 결과 폴더만 붙임(작업 폴더 `mcp_parse/jobs`는 `run_docs.py`가 보고 medium 레인 양보). 옛 손 기동 `docker exec -d … mcp_parse_service` 없음 — 죽으면 `restart`, 꺼지면 `mcp_up.sh`(keepalive 타이머)가 띄움. 시험 `tests/general/deploy/test_compose.py`.
+- 한 것(11-03 `feature/rundocs-flow` · 파일 나눔 `feature/compose-split` — 사용자 11-03 "컨테이너마다 compose로 각각 띄우기"): `compose.pipe-mcp.yml`(개발 서버 짝 `compose.code.pipe-mcp.yml`)에 `data-pipeline-mcp`(같은 이미지, entrypoint `parse-service` = `pipeline.mcp_parse_service`가 주 프로세스, 127.0.0.1:8766) — `cpu_shares` 4096(일괄 `data-pipeline` 1024 — cgroup v2는 `cpu.weight`로), 상한 CPU 2·메모리 8g, 결과 폴더만 붙임(작업 폴더 `mcp_parse/jobs`는 `run_docs.py`가 보고 medium 레인 양보). 옛 손 기동 `docker exec -d … mcp_parse_service` 없음 — 죽으면 `restart`, 꺼지면 `mcp_up.sh`(keepalive 타이머)가 띄움. 시험 `tests/general/deploy/test_compose.py`.
 - 남은 것: ① 자원 칸(`PARSE_MCP_CPUS`·`PARSE_MCP_MEM_LIMIT`·`PARSE_MCP_CPU_SHARES`)은 settings.yaml 칸이 아직 없다 — 설정 모델이 지문 파일이라 0.2.0 지문 배치에서(refactor.md C-83). ② "extract 단계 없이 파싱 함수만"(10-31 결정)은 앱 코드 몫이라 안 함. ③ 서버 확인(C-65 ⑥): 일괄 파싱 중 `parse_document` 응답 시간.
 - Status: dev — 컨테이너·CPU 비율 한 것, 서버 확인·자원 칸 남음.
 
