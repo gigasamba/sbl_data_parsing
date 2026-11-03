@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """검색 MCP 바깥 호출 점검 — 컨테이너 밖(호스트·다른 서버)에서 HTTP로 붙어 도구 목록·search.
 사용: python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:18765/mcp [--token <MCP_TOKEN>] [--q "질문"]
-통과 기준: 도구 4종(search·query_edw·parse_document·edw_meta — 지금 MCP 계약, S9 C-38 — 옛 5종 get_document·get_image·get_evidence_image·aggregate는
-없어짐) · search 근거 1건+ · 근거마다 doc_key·chunk_key·source_uri. query_edw·edw_meta·parse_document는 회사 DB·파싱 서비스가 있어야 해서 목록만 본다.
+통과 기준: 도구 목록이 mcp_server.routers.TOOL_NAMES(지금 MCP 계약 6종 — search·query_edw·parse_document·edw_meta·list_doc_fulltext·
+get_doc_fulltext, 0.2.0)와 같음 · search 근거 1건+ · 근거마다 doc_key·chunk_key·source_uri. 그 밖 도구는 회사 DB·파싱 서비스·저장소가 있어야 해서 목록만 본다.
 실패면 종료 코드 1."""
 
 import argparse
@@ -10,7 +10,9 @@ import asyncio
 import json
 import sys
 
-TOOLS = {"search", "query_edw", "parse_document", "edw_meta"}
+from mcp_server.routers import TOOL_NAMES
+
+TOOLS = set(TOOL_NAMES)  # 서버가 등록하는 이름 한 곳(routers.TOOL_NAMES — main.build와 시험이 대조)
 
 
 async def run(url, token, q):
@@ -25,7 +27,7 @@ async def run(url, token, q):
             tools = sorted(t.name for t in (await s.list_tools()).tools)
             print("도구:", tools)
             if set(tools) != TOOLS:
-                bad.append(f"도구 4종({', '.join(sorted(TOOLS))})과 다름")
+                bad.append(f"도구 {len(TOOLS)}종({', '.join(TOOL_NAMES)})과 다름")
             res = await s.call_tool("search", {"question": q, "k": 5})
             text = res.content[0].text if res.content else ""
             try:
