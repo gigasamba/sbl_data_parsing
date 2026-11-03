@@ -157,14 +157,22 @@ def result_keys(tool, result):
         return {}
     if tool == "search":
         hits = [x for x in result.get("evidence", []) if isinstance(x, dict)]
-        for doc in result.get("docs", []):
-            if isinstance(doc, dict):
-                hits.extend(x for x in doc.get("chunks", []) if isinstance(x, dict))
         return {
-            "chunk_ids": [x.get("chunk_id") for x in hits],
-            "rank": [x.get("rank") for x in hits],
-            "via": [x.get("via") for x in hits],
-            **{k: result[k] for k in ("evidence_status", "total_docs", "total_chunks") if k in result},
+            "chunk_keys": [x.get("chunk_key") for x in hits],  # 목록 순서 = 순위(mc-16 — rank·via 칸 없음)
+            **{k: result[k] for k in ("evidence_status", "filter", "scope_docs") if k in result},
+        }
+    if tool == "list_doc_fulltext":
+        b = result.get("batch") or {}
+        return {
+            **{k: b[k] for k in ("matched", "returned", "next_cursor", "files_total_bytes") if k in b},
+            "doc_keys": [d.get("doc_key") for d in result.get("documents", []) if isinstance(d, dict)],
+        }
+    if tool == "get_doc_fulltext":  # 본문(content)은 빼고 파일 요약만 — 본문은 args/result 상한 안에서 따로 남음
+        b = result.get("batch") or {}
+        files = [f for f in result.get("files", []) if isinstance(f, dict)]
+        return {
+            **{k: b[k] for k in ("requested", "ok", "skipped", "total_bytes", "truncated", "json_section") if k in b},
+            "files": [{k: f.get(k) for k in ("name", "kind", "size", "sha256", "skip_reason") if f.get(k) is not None} for f in files],
         }
     if tool == "query_edw":
         return {k: result[k] for k in ("row_count", "columns") if k in result}

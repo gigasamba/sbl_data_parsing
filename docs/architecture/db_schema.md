@@ -214,7 +214,7 @@ PC 대역 예시 — [pl-29](../prd/load.md#pl-29) 10-31. 고객 연결 4단계�
 | D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 `source_system='FAQ'`로 등록(G3, 사용자 10-30 — [pl-39](../prd/extract.md#pl-39)) | EDW 담당자 협의 필요 — FAQ 행을 누가 어떻게 넣나 |
 | D-9 | 밀려난 `FileStorageMap` 행의 예외 이력 표(새 EDW 표 — §3 `edw.SupersededRow` 안) — 표 이름·칸·누가 쓰나 | 사용자 10-31: 같은 `s3_key`의 더 새 행이 오면 같은 `doc_id`(`file_size`가 다를 때만 다시 파싱)이고 옛 행을 이력에 남김 |
 | D-10 | `applog` 스키마 추가(§7) — `up`의 `CREATE SCHEMA`, `maintain`의 파티션 생성·DROP, 앱의 INSERT와 `pipe_run` UPDATE 권한. 호출량 기준 용량(`mcp_call` 행 본문 최대 약 80KB) | 새 스키마이고 로그 쓰기가 기존 PG 접속 정보를 함께 씀 |
-| D-11 | `applog.mcp_call`의 `args`·`result` 읽기 권한 분리 | 문서 본문·EDW 결과가 들어가는데 판에 GRANT가 없어 지금은 앱 계정이 읽을 수 있음 |
+| D-11 | `applog.mcp_call`의 `args`·`result` 읽기 권한 분리 | 문서 본문·EDW 결과가 들어가는데(`get_doc_fulltext` 응답은 문서 원문 전체 — 원본 문서와 같은 접근 제한 필요) 판에 GRANT가 없어 지금은 앱 계정이 읽을 수 있음 |
 | D-12 | 실제 보존 기간 약 90~120일(월 단위 DROP)이 감사·개인정보 기준에 맞는지, `dbtool maintain` 매일 예약 | 예약이 약 2개월 이상 멈추면 새 달 파티션이 없어 DB 쓰기가 실패하고 대체 파일로만 쌓임 |
 
 ## 6. 사용자 결정 (10-30 grill 7차)
@@ -262,7 +262,7 @@ MCP 호출 1건당 1행. 인증 실패(`tool=http`)와 `initialize`도 행으로
 | result_bytes | INTEGER | 출력 원본 크기 | 〃 | 없음 | 새로 |
 | result_truncated | BOOLEAN | 출력이 잘렸는지 | 〃 | 없음 | 새로 |
 | result_sha256 | TEXT | 출력 원본 전체의 해시 | 〃 | 없음 | 새로 |
-| result_keys | JSONB | 자르지 않는 응답 식별 정보(`chunk_ids`, `row_count` 등) | 〃 | 없음 | 새로 |
+| result_keys | JSONB | 자르지 않는 응답 식별 정보(search `chunk_keys`, 원문 도구 `doc_keys`·파일 요약, `row_count` 등) | 〃 | 없음 | 새로 |
 | status | TEXT CHECK | ok·error·busy·timeout·unauthorized | 〃 | 없음 | 새로 |
 | err | TEXT | 오류 내용(비밀값 가림) | 〃 | 없음 | 새로 |
 | queue_wait_ms | INTEGER | 실행 전 대기 시간 | 〃 | 없음 | 새로 |

@@ -70,8 +70,8 @@ def test_payload():
 
 
 def test_result_keys():
-    hits = [{"chunk_id": f"c{i}", "rank": i, "via": ["bm25"], "text": "body"} for i in range(2000)]
-    result = {"evidence": hits, "evidence_status": "found", "total_docs": 3, "total_chunks": 2000}
+    hits = [{"text": "body", "file_name": "a.pdf", "page": 1, "chunk_key": f"k{i}"} for i in range(2000)]
+    result = {"question": "q", "evidence": hits, "evidence_status": "found", "filter": {"source_system": ["SFDC"]}, "scope_docs": 3}
     rows = []
     with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
         with audit.request_context({}) as context:
@@ -79,10 +79,23 @@ def test_result_keys():
             audit.start(lambda: None).finish(result)
             assert audit.drain()
     keys = rows[0]["result_keys"]
-    assert keys["chunk_ids"] == [h["chunk_id"] for h in hits]
-    assert keys["rank"] == list(range(2000)) and keys["total_chunks"] == 2000
+    assert keys == {"chunk_keys": [f"k{i}" for i in range(2000)], "evidence_status": "found", "filter": result["filter"], "scope_docs": 3}
     assert rows[0]["result_truncated"]
-    assert audit.result_keys("search", {"docs": [{"chunks": hits[:1]}]})["chunk_ids"] == ["c0"]
+    listed = {"batch": {"matched": 2, "returned": 1, "next_cursor": "7"}, "documents": [{"doc_key": "d1", "files": []}], "ms": 1}
+    assert audit.result_keys("list_doc_fulltext", listed) == {"matched": 2, "returned": 1, "next_cursor": "7", "doc_keys": ["d1"]}
+    got = {
+        "batch": {"requested": 2, "ok": 1, "skipped": 1, "total_bytes": 4, "truncated": False, "json_section": None},
+        "files": [
+            {"sfid": "s1", "name": "a.md", "kind": "md", "size": 4, "sha256": "h", "status": "ok", "content": "body"},
+            {"sfid": "s2", "name": "b.md", "kind": "md", "skip_reason": "too_large"},
+        ],
+    }
+    keys = audit.result_keys("get_doc_fulltext", got)
+    assert keys["files"] == [
+        {"name": "a.md", "kind": "md", "size": 4, "sha256": "h"},
+        {"name": "b.md", "kind": "md", "skip_reason": "too_large"},
+    ]
+    assert keys["ok"] == 1 and "body" not in str(keys)  # 본문은 요약 키에 없음
     assert audit.result_keys("query_edw", {"row_count": 2, "columns": [{"name": "id"}], "rows": [[1]]}) == {
         "row_count": 2,
         "columns": [{"name": "id"}],
