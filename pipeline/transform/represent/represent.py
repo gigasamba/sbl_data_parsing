@@ -49,6 +49,7 @@ from pathlib import Path
 from common.core import span as SP  # op-01 성능 span
 from common.core.console import utf8_stdout
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.shared.exts import IMG_EXTS
 
 
 def load_stack(path):
@@ -614,15 +615,7 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     return info
 
 
-IMAGE_TYPES = {
-    ".pdf_image",
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".tif",
-    ".tiff",
-    ".bmp",
-}  # run_all과 같은 형식 키(qa.json format — progress.doc_types)
+IMAGE_TYPES = IMG_EXTS | {".pdf_image"}  # run_all과 같은 형식 키(qa.json format — progress.doc_types)
 
 
 def _vlm_transcribed(rep, dd):

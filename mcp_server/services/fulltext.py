@@ -186,7 +186,7 @@ def do_list(
         names = [str(x) for x in docs or [] if not _HEX64.fullmatch(str(x)) and "/" not in str(x)]
         p_lo = _utc_text(_when(since, False, "since")) if since else None
         p_hi = _utc_text(_when(until, True, "until")) if until else None
-        if source_system and str(source_system).upper().removesuffix("-TEST") not in ("SFDC", "CRMS", "LAS", "FAQ", "OTHER"):
+        if source_system and str(source_system).upper().removesuffix("-TEST") not in {s.upper() for s in ST.SOURCES}:
             raise BadRequest("source_system은 SFDC·CRMS·LAS·FAQ·Other 중 하나(-test 붙어도 됨)")
         srcs = [ST.source_of(source_system)] if source_system else list(ST.SOURCES)  # 원천 스키마 고르기(pl-28) — 안 주면 5벌 모두
         for col, v in (("doc_class", doc_class), ("sf_op_id", sf_op_id)):
@@ -326,7 +326,7 @@ def _esc(x):
     return x.replace("!", "!!").replace("%", "!%").replace("_", "!_")
 
 
-_SYS_LABEL = {"sfdc": "SFDC", "crms": "CRMS", "las": "LAS", "faq": "FAQ", "other": "Other"}
+_SYS_LABEL = {s: "Other" if s == "other" else s.upper() for s in ST.SOURCES}
 
 
 def _select(pg, src, conds, vals, has_cursor, lim):

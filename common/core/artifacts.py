@@ -32,6 +32,7 @@ LAYER_CODE = {
         "pipeline/transform/represent/crosscheck.py",
         "pipeline/transform/represent/parse_qa.py",
         "pipeline/shared/postprocess.py",
+        "pipeline/shared/exts.py",  # 확장자 묶음(이미지 — parse_qa·represent·figures·vlm_page)
     ]
     + [
         f"pipeline/transform/represent/{n}.py"
