@@ -921,19 +921,12 @@ def represent(stack, parse_dir, src=None):
     with (out_dir / "conflicts.jsonl").open("w", encoding="utf-8") as f:  # AD25(b)(c) — 표 행(자리)에서 값은 같은데 표기가
         for r in conflicts_out:  # 갈린 엔진들(승자·패자·원문 표기) 문서 밖 한 파일로
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    _agg = {}
-    for k in ("load", "merge", "fuse", "scanfill", "post", "table"):
-        _agg[k] = round(
-            sum(
-                (
-                    json.loads((out_dir / f"{r['doc']}.json").read_text(encoding="utf-8")).get("rep", {}).get("stage_times", {}).get(k, 0)
-                    for r in index
-                    if r.get("engine")
-                )
-                or [0]
-            ),
-            1,
-        )
+    _times = [  # 문서마다 _rep/<문서>.json을 한 번만 읽음(fp-perf B6 — 단계 칸마다 6번 다시 읽던 것)
+        json.loads((out_dir / f"{r['doc']}.json").read_text(encoding="utf-8")).get("rep", {}).get("stage_times", {})
+        for r in index
+        if r.get("engine")
+    ]
+    _agg = {k: round(sum(t.get(k, 0) for t in _times), 1) for k in ("load", "merge", "fuse", "scanfill", "post", "table")}
     print(
         "[represent] 단계별 누적: " + " ".join(f"{k}={_agg[k]:.0f}s" for k in ("load", "merge", "fuse", "scanfill", "post", "table")),
         flush=True,
