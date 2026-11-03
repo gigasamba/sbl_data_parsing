@@ -15,10 +15,12 @@ cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
 #   폴더: <ENV>(700) · <결과 폴더>(UID 10001:<그룹>, 2775 — setgid) · <결과 폴더>/mcp_parse/jobs(같음) · /srv/rag/code·/srv/rag/backup(700)
 #   코드 폴더(이 스크립트의 폴더): chmod -R a+rX · /srv/rag/code/live 링크 → 이 폴더(없을 때만 — 있으면 가리키는 곳만 찍고 그대로)
 #   settings.yaml: 코드 폴더의 settings.sample.yaml을 <ENV>/settings.yaml로 — **없을 때만**(있으면 절대 덮지 않음), 10001:<그룹> 640.
+#   edw_chain.yaml: resources/config/edw_chain.yaml을 <ENV>/edw_chain.yaml로 — 같은 규칙(없을 때만, 10001:<그룹> 640). data-pipeline이 이 파일을
+#     /etc/rag/edw_chain.yaml로 붙이므로(compose.pipeline.yml) 파일이 늘 있어야 함 — 앱은 ops.pipeline_paths.edw_chain을 적었을 때만 씀.
 #   경로: SERVER_ENV_DIR(기본 /srv/rag/env) · RAG_OUT(셸 env > settings.yaml common.host.output_root > /srv/rag/output) ·
 #         MCP_JOBS_DIR(셸 env > settings.yaml mcp.host.jobs_dir > <결과 폴더>/mcp_parse/jobs). DC_ROOT=<폴더>는 /srv/rag 대신 · DC_CODE=<폴더>는 live가 가리킬 코드 폴더(기본 이 코드 폴더) — 둘 다 시험용.
 #   root가 아니면 거부(종료 코드 3 — 주인을 10001로 못 바꿔 반쯤 만든 폴더가 남지 않게). 단 DC_ROOT 시험은 주인 바꾸기만 건너뜀.
-#   끝에 settings.yaml `required:` 중 빈 칸 이름(값은 안 찍음). 종료 코드: 0 · 2 인자 틀림 · 3 root 아님.
+#   끝에 settings.yaml `required:` 중 빈 칸 이름(값은 안 찍음). 종료 코드: 0 · 2 인자 틀림 · 3 root 아님 · 4 edw_chain.yaml 자리에 폴더(init 전에 컨테이너를 띄움).
 dc_init() {
   local group="" root=${DC_ROOT:-/srv/rag} test=${DC_ROOT:+1} env out jobs sf src
   while [ $# -gt 0 ]; do
@@ -65,6 +67,14 @@ dc_init() {
   else
     cp settings.sample.yaml "$sf" && chmod 640 "$sf" && echo "  만듦  $sf(settings.sample.yaml에서)"
     if [ -z "$test" ]; then chown "10001:$group" "$sf"; fi
+  fi
+  if [ -d "$env/edw_chain.yaml" ]; then   # docker가 init 전에 띄운 마운트로 빈 폴더를 만든 경우 — 지우지 않고 멈춤(앱은 IsADirectoryError)
+    echo "[dc init] $env/edw_chain.yaml 자리에 폴더가 있음 — 컨테이너를 init 전에 띄운 흔적: 비어 있으면 rmdir 뒤 다시(종료 4 — 지우지 않음)" >&2; return 4
+  elif [ -e "$env/edw_chain.yaml" ]; then
+    echo "  있음  $env/edw_chain.yaml(덮지 않음)"
+  else
+    cp resources/config/edw_chain.yaml "$env/edw_chain.yaml" && chmod 640 "$env/edw_chain.yaml" && echo "  만듦  $env/edw_chain.yaml(resources/config/edw_chain.yaml에서 — 쓰려면 ops.pipeline_paths.edw_chain)"
+    if [ -z "$test" ]; then chown "10001:$group" "$env/edw_chain.yaml"; fi
   fi
   echo "[dc init] settings.yaml에서 아직 비어 있는 필수 칸(값을 채울 것 — 이름만):"
   PYTHONIOENCODING=utf-8 "${PY:-python3}" - "$sf" <<'PY' || echo "  (확인 못 함 — 호스트 python3에 PyYAML 필요)"

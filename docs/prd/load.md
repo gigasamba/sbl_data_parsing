@@ -1,9 +1,9 @@
 # 적재 — pgvector·게시·저장 구조
 
-[PRD.md](../PRD.md) 카테고리. [transform.md](transform.md) 다음: pgvector 적재(pl-07·pl-13·pl-14·pl-16·pl-19) → 게시(silver — pl-09·pl-26) → FAQ 다시 올리기(pl-41) → 지운 정형 DB·문서 대장(pl-08·pl-12)·마스터 CSV(pl-38). 저장 구조·DB 스키마는 [load-schema.md](load-schema.md).
+[PRD.md](../PRD.md) 카테고리. [transform.md](transform.md) 다음: pgvector 적재(pl-07·pl-13·pl-14·pl-16·pl-51·pl-19) → 게시(silver — pl-09·pl-26) → FAQ 다시 올리기(pl-41) → 지운 정형 DB·문서 대장(pl-08·pl-12)·마스터 CSV(pl-38). 저장 구조·DB 스키마는 [load-schema.md](load-schema.md).
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서: pl-29 · pl-07 · pl-13 · pl-14 · pl-16 · pl-19 · pl-09 · pl-26 · pl-41 · pl-40 · pl-08 · pl-12 · pl-38. (저장 구조 pl-32는 [load-schema.md](load-schema.md#pl-32))
+순서: pl-29 · pl-07 · pl-13 · pl-14 · pl-16 · pl-51 · pl-19 · pl-09 · pl-26 · pl-41 · pl-40 · pl-08 · pl-12 · pl-38. (저장 구조 pl-32는 [load-schema.md](load-schema.md#pl-32))
 
 <a id="pl-29"></a>
 ## pl-29 · EDW 고객 매핑을 파이프라인이 직접 만든다
@@ -12,7 +12,7 @@
 - 이유: 문서마다 EDW 고객 하나(`client_edw` — MCP 고객 거르기의 유일한 키, [pl-25](load-schema.md#pl-25))와 SFDC 칸(`sf_acc_name`·`sf_op_id`·`sf_op_name`·`project_code__c` 등)을 지금은 외부에서 뽑은 `file_meta_new.jsonl`(`pipeline.paths.file_meta_path`)에서 읽는데, 그 파일을 만드는 코드가 저장소에 없다(db_schema.md D-2).
 - 결정(사용자 10-30 grill 7차): 파이프라인이 EDW 읽기 계정(`common.connections.rdb.read`)으로 조인을 직접 만든다. SFDC: `AI.FileStorageMap.sf_op_id → SFDC.Opportunity → SFDC.Account`(고객 = Account 이름). CRMS·LAS 경로는 DB 담당자 확인(D-2). `file_meta_new.jsonl` 읽기를 대신한다.
 - 결정(사용자 10-30 grill — pl-25 검토): 고객뿐 아니라 나머지 문서 메타(`sf_*`, `project_code__c`, `contract_id`, `contract_date`, `prod_name`, `division`, `service_type`)도 같은 자리에서 EDW에서 직접 읽는다 — 외부 파일 `file_meta_new.jsonl`은 없어진다.
-- 파일: `pipeline/extract/source.py`(FileStorageMap 읽기), `pipeline/transform/structure/build_bundle.py`(`_file_meta` → 조인 결과), `pipeline/config.py`(`file_meta_path`), `deploy/host/scripts/run_docs.py`(`FILE_META_PATH`), `docs/architecture/db_schema.md`.
+- 파일: `pipeline/extract/source.py`(FileStorageMap 읽기), `pipeline/load/pgvector_load.py`(적재 때 EDW 조인 — 옛 `file_meta_path`·`FILE_META_PATH`는 11-02에 지움, pl-29), `docs/architecture/db_schema.md`.
 - 선행: [pl-25](load-schema.md#pl-25)(스키마 — `client_edw` 칸), [pl-32](load-schema.md#pl-32)(저장 구조).
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) C6·T7): 고객 연결은 운영 4단계를 따른다 — 출발점 `FileStorageMap`, 순서 기회 직접 > `Task.WhatId` > `Event.WhatId` > Quote 스냅샷, 계정 직접 연결도 포함. 결과는 pgvector doc에만. 같은 sha256 묶음에도 고객은 전파하지 않는다(C3).
 - 열린 점: Quote 단계는 레플리카에 Quote 표가 없어 SFDC REST 스냅샷에 기댄다 — 서버에서 스냅샷을 어떻게 공급할지 정해야 함. → 해소(10-31 결정 — PC 대역 Quote 표, 아래).
@@ -22,12 +22,13 @@
 - 결정(사용자 10-31 grill): A3 — Quote 단계도 0.2.0에 넣는다. PC 대역 EDW(`valid_env/edw`)에 SFDC Quote 표를 예시 칸으로 새로 만들어 4단계(기회 직접 > Task > Event > Quote, +계정 직접)로 구현한다. 실제 표·칸 이름은 DB 담당자 답으로 맞춘다(A4 `created_at`과 같은 방식).
 - 구현(11-02 `feature/mcp-ops-parity`): 사용자 11-02 — 매핑은 적재 몫. `pipeline/load/edw_meta.py`가 적재 때(PG 트랜잭션 밖, 읽기 계정) 원천별 사슬로 `client_edw`·원천 칸·`created_at`을 채운다(사슬은 [db_schema.md](../architecture/db_schema.md) §1 — 운영 gold 스키마 노트 기준, 칸 이름은 D-1 확인). SFDC 4단계(기회 직접 > Task > Event > Quote, +계정 직접 — 같은 단계 동률은 비움), CRMS(`RM_CM_PJTLIST`·`RM_CM_DOCU`), LAS(`LAS.Contract` 최신 판·`FileManager`). Quote는 운영처럼 EDW 표로 재현(사용자 11-02) — 서버 EDW에 표가 없으면 그 단계만 건너뜀(C-76: DB 담당자가 표를 만들고 REST 스냅샷으로 채움, 누가·언제는 미정). 외부 `file_meta_new.jsonl`·`FILE_META_PATH`·build_bundle의 `_file_meta`를 지웠다. EDW를 못 읽으면 메타 없이 적재(경고·`meta_missing`) — 자동 갱신 없음, `--replace`로 다시 적재해 채움. PC 가짜 EDW(`valid_env/edw`)에 가짜 사슬 표를 더했다. 시험: `tests/server/pipeline/test_edw_meta.py`.
 - 결정·구현(사용자 11-02, `feature/edw-chain-config`): Quote 표는 지금 없다 — 기본 사슬은 기회 직접 > Task > Event(+계정 직접). 사슬의 표·칸 이름·SFDC 단계 순서·gold 칸 대응은 설정 파일 `resources/config/edw_chain.yaml`(운영 쪽이 고침 — 이미지·코드 폴더에 들어감)로 옮겼다(운영 서버에서 고치는 법: [server-guide §5-2](../operations/server-guide.md#5-2-edw-조인-사슬-고치기--edw_chainyaml)). Quote 표가 생기면 그 파일의 주석 줄 하나를 켠다(`optional: true` — 표를 못 읽으면 그 단계만 건너뜀). 적재 때 파일을 읽어 검사한다 — 빠진 이름·SQL에 넣을 수 없는 이름(표 `스키마.표`, 칸 영문·숫자·_, 접두 3자)·설정으로 채울 수 없는 gold 칸(원천 전용 칸과 `client_edw`만 — 문서 키·`created_at`은 안 됨)이면 이유를 모두 말하고 멈춤(값은 늘 바인딩). 사슬의 모양(단계 동률은 비움, 기회가 없을 때만 계정, LAS 최신 판·대체 값)은 코드(`pipeline/load/edw_meta.py`). 시험 `tests/server/pipeline/test_edw_meta.py`(Quote 켠 설정으로 24사례 그대로 + 기본 설정 Quote 없음 + 틀린 설정 7가지 거부).
-- Status: done(11-02)
+- 결정·구현(사용자 11-03, `feature/edw-chain-path`): 사슬 파일 자리를 설정으로 — `ops.pipeline_paths.edw_chain`(`EDW_CHAIN_FILE`, 적재만 읽는 pipeline 칸 — 레이어 code_fp 안 바뀜). 비우면 기본 `resources/config/edw_chain.yaml`, 경로면 그 파일(같은 `load_chain` 검사). 없거나 틀린 파일이면 적재 시작 때 멈춤(기본 파일로 안 돌아감). 파일만 점검: `python -m pipeline.load.edw_meta --check [--file F]`(EDW·PG에 안 붙음). 서버 사본은 settings.yaml 옆 `$SERVER_ENV_DIR/edw_chain.yaml`(사용자 11-03 — 서버마다 다른 파일은 설정 폴더에 함께) — `dc.sh init`이 없을 때만 기본 파일을 복사하고(10001, 640), 파일 하나를 `data-pipeline`에만 `/etc/rag/edw_chain.yaml`로 읽기 전용 마운트(settings.yaml과 같은 방식 — 폴더는 붙이지 않음). 칸을 적었을 때만 사본이 쓰임. 서버에서 만드는 파일 표: release-and-patch §8-7. 쓰는 법은 [release-and-patch §8-6](../operations/release-and-patch.md#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29). 시험 `tests/server/pipeline/test_edw_meta.py::test_chain_file_setting`.
+- Status: done(11-03)
 
 <a id="pl-07"></a>
 ## pl-07 · pgvector 적재
 - 이유: 검색 서버는 PG를 읽는다.
-- 무엇: 원천 스키마 5벌마다 표 `doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + 뷰 `v_chunk_source`(Alembic으로만 — 11-02 판 0002, `load_run`은 지움). 이미 적재된 문서는 `file_path`로 건너뛴다(sha 열 없음 — 같은 경로에서 내용이 바뀌어도 `--replace` 없이는 건너뜀). (`--prune`은 10-30에 없앰 — [pl-13](#pl-13).) 이름 붙은 색인(`index_id`). 벡터는 pgvector에만 둔다(EDW 벡터 적재는 10-29에 지움 — [ops.md#op-03](ops.md#op-03)).
+- 무엇: 원천 스키마 5벌마다 표 `doc`·`chunk`·`chunk_term`·`term_stat`·`corpus_stat` + 뷰 `v_chunk_source`(Alembic으로만 — 11-02 판 0002, `load_run`은 지움). 이미 적재된 문서는 `file_path`로 건너뛴다(sha 열 없음 — 같은 경로에서 내용이 바뀌어도 `--replace` 없이는 건너뜀). (`--prune`은 10-30에 없앰 — [pl-13](#pl-13).) (이름 붙은 색인 `index_id`는 11-01에 지움 — mc-16.) 벡터는 pgvector에만 둔다(EDW 벡터 적재는 10-29에 지움 — [ops.md#op-03](ops.md#op-03)).
 - 파일: `pipeline/load/pgvector_load.py`, `common/store/db/migrations/`.
 - 결정(허브 10-31, 최신 결정 우선): 이름 붙은 색인(`index_id`)은 0.2.0에 없앤다 — 원천(`source_system`)이 gold 스키마를 고르므로 색인 이름이 필요 없다(선택지 줄이기 원칙). 구현은 [pl-28](load-schema.md#pl-28)과 함께.
 - 결정(사용자 10-31): PG 자동 찾기(`docker ps` pgvector·대체 포트·코드 기본 `127.0.0.1`/`5432`/`rag`)를 없애고 PG 접속은 필수 — [ops-settings.md#op-09](ops-settings.md#op-09).
@@ -58,6 +59,18 @@
 - 한 것(11-03 `feature/fp-perf`): `pipeline/load/pgvector_load.py` `require_vectors(meta)` — 묶음 `meta.json`의 `dim`이 0·없음이거나 `embed`가 `none`이면 한 줄 안내(`build_bundle --embed api`로 다시) 뒤 종료 코드 2. `main()`(배포·적재 — 판 확인 전)과 `load()` 첫머리에서. 시험 `tests/server/pipeline/test_pgvector_load.py` `test_require_vectors`.
 - Status: done — 11-03
 
+<a id="pl-51"></a>
+## pl-51 · 임베딩 모델이 다른 묶음은 적재 거부
+- 결정(사용자 11-03 — 0.2.0에 넣음): 적재할 묶음의 임베딩 모델(`meta.json` `embed_model`)이 그 검색 스키마에 이미 적재된 문서의 모델과 다르면 그 묶음을 적재하지 않는다(아무것도 쓰지 않음). 종료 코드는 0이 아니고(2) 한국어 한 줄로 이유를 알린다. 거부는 시각과 함께 PostgreSQL `applog.pipe_event`에 남긴다(새 표·새 판 없음).
+- 이유: 검색은 원천 스키마마다 `doc.embed_model`이 하나여야 질의를 임베딩한다(`pgsearch.index_meta` — 여럿이면 섞인 색인으로 보고 벡터 검색 거부, [mc-19](mcp.md#mc-19)). 검색 MCP 하나가 한 질의 모델로 원천 5벌을 모두 보므로, 기준은 설정(`required.embed.model`)이 아니라 **이미 적재된 문서의 모델**(5벌 전체)이다. 설정과 적재 문서가 다를 때는 검색 쪽 확인(`query_model_mismatch`)이 이미 거부한다.
+- 한 것(11-03 `feature/embed-guard`): `pipeline/load/pgvector_load.py` `require_same_model(dbs, meta, bundle)` — `load()`에서 `require_vectors` 바로 뒤(EDW 조인·분류·쓰기 전). 원천 5벌의 `doc.embed_model`(빈 칸 제외, 표가 없는 스키마는 건너뜀)을 모아 묶음 모델과 `embed.model_key`로 비교한다(`openai/` 앞붙이는 같게 봄 — 검색과 같은 규칙). 비어 있으면(처음 적재) 통과.
+  - 거부하면 stderr에 `[load] 임베딩 모델이 다름 — 적재 거부(…)` 한 줄(run_docs 실행에서는 `docflow/<seq>/structure.log`와 `progress.log`의 `구조화+적재 FAIL`), `common.log.db_enabled`가 켜져 있으면 `logsink.emit("pipe_event", …)` 한 행: `layer` `load` · `stage` `load.embed_guard` · `model` 묶음 모델 · `status` `fail` · `err_kind` `env` · `err` `embed_model_mismatch: expected <기존>, got <묶음> (bundle <경로>)`.
+  - `status`·`err_kind`는 표의 CHECK 값(`ok·fail·timeout·skip·reused` · `env·timeout·doc·external·db`) 안에서 고른다 — `refused`·`embed_model_mismatch`를 그대로 넣으면 INSERT가 실패해 같은 배치 전체가 jsonl 대체 기록으로 빠진다. 그래서 종류 이름은 `err` 글 맨 앞에 둔다.
+  - 남는 한계: 모델 칸이 빈 옛 문서는 비교하지 않는다. 모델을 바꾸려면 새 검색 스키마에 적재한다(`--replace`도 거부 — 다른 문서가 옛 모델로 남음).
+  - 시험: `tests/server/pipeline/test_pgvector_load.py::test_embed_guard`(SQLite 대역 — 같은 모델·표기만 다른 같은 모델은 적재, 다른 모델은 거부 + `pipe_event` 한 행).
+- 파일: `pipeline/load/pgvector_load.py`, README §5-4(진행 보기).
+- Status: done — 11-03
+
 <a id="pl-19"></a>
 ## pl-19 · compose `index_a`/`index_b`가 끝까지 돌면 실패
 - 이유: C-32.
@@ -79,7 +92,7 @@
 - 이유: 도움말은 "EDW 적재 없음"이라 했지만 `full`은 게시했고 `NIGHTLY_PUBLISH`를 무시했다(C-31).
 - 결정(사용자 10-29 grill): 게시(silver → Object Storage + EDW)가 기본이자 유일한 방식 — `--no-publish`와 `pipeline.host.nightly.publish`를 없앤다. 게시 대상은 필수 설정이고 없으면 시작을 거부한다.
 - `RUN_ENV`별 대상: `local`·`dev`는 (a) 로컬 경로(Object Storage는 폴더, EDW는 파일 DB) 또는 (b) 실제 접속 정보(API·DB) 중 하나. `prd`는 실제 접속만(`stage`는 RUN_ENV에서 없앰 — op-02). PC는 CLAUDE.md §4 가드를 그대로 지킨다(PC에서 운영 EDW·OS 접속 금지).
-- 파일: `pipeline/cli.py`(`night`, `full`), `deploy/docker/entrypoint.sh`, `pipeline/load/`의 게시, `pipeline/config.py`, `docs/operations/server-guide.md`.
+- 파일: `deploy/host/scripts/run_docs.py`(`night`·`full` 입구는 11-01에 지움), `deploy/docker/entrypoint.sh`(`publish`), `pipeline/load/`의 게시, `pipeline/config.py`, `docs/operations/server-guide.md`.
 - Status: done (11-03 확인) — 11-01 `full`·`night` 입구는 지움([pl-18](ops.md#pl-18)). run_docs는 문서마다 늘 게시하고([pl-24](ops.md#pl-24) — gold 전), 게시 버킷·접두(`pipeline.load.publish.bucket`·`prefix`)가 없으면 시작을 거부한다(`SETTINGS_REQUIRED`).
 
 <a id="pl-41"></a>
@@ -155,24 +168,23 @@
 - 결정(사용자 10-30): "contract_master, client_master 등 활용하는 방안 같이 설계하자. 후순위로 해줘." — 표로 옮기는 것까지 0.2.0, 쓰는 곳 넓히기(검색 거르기·분류 단서)는 후순위 그대로.
 - 결정(허브 10-31): 고객 별칭 몫(고객 명부·별칭 그룹 — [mcp.md#mc-05](mcp.md#mc-05))은 0.2.0 — 위 읽는 곳에 포함.
 - 잠재 문제(사용자 11-03): 같은 문서의 다른 판(`s3_key` 다름) 묶기 — 검색 '최신' 질문에서 옛 판이 위로 올 수 있음, 필요해지면 다시 설계.
-- Status: dev — `feature/pl38-master`(fp-perf 위, 0.2.0 지문 배치).
+- Status: done — `feature/pl38-master`(#135) 병합(0.2.0 지문 배치). 잠재 문제(판 묶기)는 위 줄 — PRD 표 todo 행.
 
 ## 코드와 다른 점 · 지울 코드
 
-### 요건과 다르게 동작
+### 요건과 다르게 동작(알아 둘 동작 — 열린 결함 없음)
 | 요건 | 코드가 하는 일 | 위치 | ID |
 |---|---|---|---|
-| 문서 대장 upsert, 게시 가드 | upsert에 PG 문법 오류, 가드 꺼짐(서버에 `source.json` 없음) | `structdb.py`, `publish_parse_result.py` | pl-12 |
-| 임베딩 없이 구조화 | `PIPE_EMBED=none` → `vector(0)` 표 실패 | `build_bundle.py`, `pgvector_load.py` | pl-16 |
-| compose `index_a`/`index_b`가 끝까지 돎 | 실패 | `deploy/host/` | pl-19 |
-| 적재는 안 바뀐 문서만 건너뜀 | `file_path`로 건너뜀(sha 칸 없음) — 같은 경로에서 내용이 바뀌어도 `--replace` 없이는 건너뜀 | `pgvector_load.py` | pl-07 |
+| 적재는 안 바뀐 문서만 건너뜀 | `file_path`로 건너뜀(sha 칸 없음) — 같은 경로에서 내용이 바뀌어도 `--replace` 없이는 건너뜀 | `pgvector_load.py` | — (pl-07 done) |
+
+(정리 11-03: 문서 대장·게시 가드 pl-12, 임베딩 없는 구조화 pl-16, compose `index_a`/`index_b` pl-19는 모두 done — 코드째 지웠거나 고침.)
 
 ### 요건 없는 코드 — 남길지 지울지([test.md#e2-18](test.md#e2-18))
-- Object Storage 시험 업로드(MinIO). `common/check/os_put.py`.
+- (없음 — MinIO 시험 업로드 `common/check/os_put.py`는 0.2.0에 지움, pl-46.)
 
 ### 기본 꺼짐·설정 필요
 | 기능 | 스위치 = 기본값 | 필요한 것 |
 |---|---|---|
-| Object Storage + `AI.ParsingMeta` 게시 | `night`, run_docs, 이미지 `publish` 단계에서 기본 실행(모두 `--apply`, `NIGHTLY_PUBLISH=1`) | `PM_BUCKET`, `common.connections.rdb` 쓰기 계정(`PM_BUCKET` 없으면 종료) |
+| Object Storage + `AI.ParsingMeta` 게시 | run_docs가 문서마다 늘 게시(끌 수 없음 — pl-26), 이미지 `publish` 명령도 있음 | 게시 버킷·접두(`pipeline.load.publish.bucket`·`prefix` — 없으면 시작 거부), EDW 쓰기 계정 |
 
 10-29 요청 "EDW와 Object Storage 적재를 기본으로 켬": 게시(Object Storage + `AI.ParsingMeta`)는 `PM_BUCKET`과 EDW 쓰기 계정만 있으면 이미 기본으로 돈다. 꺼져 있는 것은 밤 일정(`NIGHTLY_TIME` 비움 — 10-30 pl-32, 켤 때 시각을 적음). EDW 벡터 적재는 10-29에 지웠다(벡터는 pgvector에만 — [ops.md#op-03](ops.md#op-03)).

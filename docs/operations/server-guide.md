@@ -24,7 +24,7 @@
 **코드 폴더 배치** — `live`는 저장소 트리 그대로(개발 서버는 실행 이미지에 이 폴더를 붙임 — `compose.code*.yml`, 옛 오버레이 패치 `compose.patch*.yml`·`ops.host.patch_code`는 11-03에 지움). `live/deploy/host/`·`live/deploy/release/`는 호스트에서 부르는 스크립트·compose·systemd 파일이다. 아래 명령은 모두 `live`(코드 폴더 루트)에서 실행한다.
 
 ### 0-1. 개발 서버는 실행 이미지 + 코드 폴더(op-06, 사용자 10-30)
-개발 서버(폐쇄망)는 코드 없는 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`을 쓰고, 코드 폴더(저장소 트리 그대로)를 `/app/deploy`에 읽기 전용으로 붙인다 — 셸·systemd에 `CODE_DIR=/srv/rag/code/live`(판 폴더를 가리키는 링크)를 주면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`가 `compose.code.yml`·`compose.code.mcp-server.yml`을 덧붙인다. settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`는 실행 이미지 태그. 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 설치·바꾸기·되돌리기는 README §5-0(배포 단계 표)과 [release-and-patch.md](release-and-patch.md) §1-1. 수집(운영) 서버는 코드가 든 이미지 — 개발 서버에서 `bake.sh`로 구운 것(release-and-patch §1-2), 띄우는 법은 아래 그대로.
+개발 서버(폐쇄망)는 코드 없는 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`을 쓰고, 코드 폴더(저장소 트리 그대로)를 `/app/deploy`에 읽기 전용으로 붙인다 — `dc.sh`·`mcp_up.sh`가 실행 이미지(`*-runtime`)를 보면 자기가 든 코드 폴더를 `CODE_DIR`로 잡고(셸에 `CODE_DIR`가 있으면 그 값 — 서버 배치는 판 폴더를 가리키는 링크 `/srv/rag/code/live`) `compose.code.yml`·`compose.code.pipeline-mcp.yml`·`compose.code.mcp-server.yml`을 덧붙인다(`trigger.sh`·`run_tool.sh`는 이미 뜬 `data-pipeline` 안에서 `docker exec`만 한다). settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`는 실행 이미지 태그. 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 설치·바꾸기·되돌리기는 README §5-0(배포 단계 표)과 [release-and-patch.md](release-and-patch.md) §1-1. 수집(운영) 서버는 코드가 든 이미지 — 개발 서버에서 `bake.sh`로 구운 것(release-and-patch §1-2), 띄우는 법은 아래 그대로.
 
 ## 1. 설치 · 첫 실행
 
@@ -34,7 +34,7 @@
 ### 1-2. 설정 파일
 ```bash
 sudo bash <코드 폴더>/deploy/host/scripts/dc.sh init --group <운영 계정 그룹>   # 서버 폴더 한 번에(README §5-3 ② — 여러 번 불러도 안전)
-#   /srv/rag/env(700) · env/settings.yaml ← settings.sample.yaml(없을 때만, 10001:<그룹> 640 — 운영 계정 UID가 10001이면 600, refactor.md C-09)
+#   /srv/rag/env(700) · env/settings.yaml ← settings.sample.yaml · env/edw_chain.yaml ← resources/config/edw_chain.yaml(없을 때만, 10001:<그룹> 640 — 운영 계정 UID가 10001이면 600, refactor.md C-09)
 #   /srv/rag/output · output/mcp_parse/jobs(10001:<그룹> 2775 — setgid, 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지운다) · code/live 링크(없을 때만) · backup(700)
 # 값 채우기 — init이 찍은 빈 필수 칸부터. 항목·설명은 settings.sample.yaml·env-guide.md, env-guide "옛 서버 값" 표의 항목은 그 값으로(C-39), 값은 문서·채팅·로그에 쓰지 않는다 · 0.1.0 settings.yaml은 release-and-patch.md §5-7 3단계(옮기기)
 # 이미 있는 결과 폴더(옛 판이 644·755로 쓴 것)는 한 번: sudo chgrp -R <운영 그룹> /srv/rag/output && sudo chmod -R g+w /srv/rag/output && sudo find /srv/rag/output -type d -exec chmod g+s {} +
@@ -42,10 +42,10 @@ export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.
 ```
 - `export`는 그 셸에서만 유효하다. 운영 계정 셸 설정(예: `~/.bashrc`)에 `export SERVER_ENV_DIR=/srv/rag/env`를 영구로 두거나 명령 앞에 붙인다. `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd unit은 스스로 이 값을 넘긴다. 컨테이너는 이 폴더를 마운트하지 않는다.
 
-> ⚠️ **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` — 사용자 11-01, D-031). 바꾸려면 코드 폴더의 파일을 고쳐 오버레이 패치로 보낸다(다른 파일을 쓰려면 settings.yaml `ops.paths.stack_file` — [env-guide.md](env-guide.md) 1절). 원천 목록 `sources.json`은 11-01에 지웠다(원천은 폴더·`rdb:csv`만). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다.
+> ⚠️ **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` — 사용자 11-01, D-031). 바꾸려면 코드 폴더의 파일을 고쳐 코드 폴더째 바꾼다(옛 오버레이 패치 대신 — [release-and-patch.md](release-and-patch.md) §1-1, 다른 파일을 쓰려면 settings.yaml `ops.paths.stack_file` — [env-guide.md](env-guide.md) 1절). 원천 목록 `sources.json`은 11-01에 지웠다(원천은 폴더·`rdb:csv`만). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다.
 
 #### 값 바꾸기
-- 앱 설정 값은 `settings.yaml`을 직접 고친다. 고친 뒤 상주 컨테이너 `data-pipeline`·`mcp-server`는 다시 띄운다.
+- 앱 설정 값은 `settings.yaml`을 직접 고친다. 고친 뒤 상주 컨테이너 `data-pipeline`·`data-pipeline-mcp`·`mcp-server`는 다시 띄운다(`dc.sh up -d --force-recreate <서비스>`).
 - **한 번 실행에만 다른 값은 명령 인자 `--set 이름=값`**. 받는 진입점: `pipeline.cli`·`pipeline.extract.source`·`pipeline.stackcfg`·`build_bundle`·`pgvector_load`·`publish_parse_result`. 예: `docker exec data-pipeline python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 `settings.sample.yaml`의 `env=`. 모르는 이름·호스트 항목·비밀 항목은 종료 2, 형식 오류도 서버는 종료 2. 호스트 `run_docs.py`가 문서별 값을 이렇게 준다.
 - 그 밖의 명령은 한 번만 다르게 돌릴 값도 고쳐 돌린 뒤 되돌린다.
 - `PIPE_PROCS=2 docker compose …`·`docker exec -e X=…` 같은 옛 env 이름 덮어쓰기는 효과가 없다(시작 때 이름만 경고).
@@ -86,7 +86,7 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 - 지금 바로 돌리려면 run_docs를 직접 부른다(옛 `trigger.sh night`는 11-01에 지움).
 
 ### 2-3. 상주 컨테이너
-`data-pipeline`(일괄 상주 컨테이너 — 사용자 11-03, 옛 `data-pipeline-parse`·`data-pipeline-structure`를 합침)은 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업(warm·파싱·게시·구조화·적재)을 돌린다. MCP `parse_document` 작업 서비스는 전용 상주 컨테이너 `data-pipeline-mcp`의 주 프로세스다(entrypoint `parse-service` — 사용자 11-03 rn-03: 사람이 기다리는 요청이라 일괄과 떼고 CPU 나눔 비율 `cpu_shares` 4096 > 일괄 1024, 상한 CPU 2·메모리 8g — 아직 settings.yaml 칸 없음, refactor.md C-83). 꺼지면 `mcp_up.sh`(keepalive 타이머)가 다시 띄운다. 자원 상한은 settings.yaml `pipeline.host.parse_cpus`·`parse_mem_limit`(비우면 CPU 5·메모리 24g — 옛 두 컨테이너의 합. docker는 호스트 CPU 수보다 큰 `cpus`를 거부하므로 CPU 4개 서버는 `parse_cpus`를 3 이하로 적는다). 옛 `structure_cpus`·`structure_mem_limit`은 읽지 않는다(refactor.md C-82). 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/ops.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
+`data-pipeline`(일괄 상주 컨테이너 — 사용자 11-03, 옛 `data-pipeline-parse`·`data-pipeline-structure`를 합침)은 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업(warm·파싱·게시·구조화·적재)을 돌린다. MCP `parse_document` 작업 서비스는 전용 상주 컨테이너 `data-pipeline-mcp`의 주 프로세스다(entrypoint `parse-service` — 사용자 11-03 rn-03: 사람이 기다리는 요청이라 일괄과 떼고 CPU 나눔 비율 `cpu_shares` 4096 > 일괄 1024, 상한 CPU 3·메모리 8g — settings.yaml `ops.pipeline_host.parse_mcp_cpus`·`parse_mcp_mem_limit`·`parse_mcp_cpu_shares`로 바꿈). 꺼지면 `mcp_up.sh`(keepalive 타이머)가 다시 띄운다. 일괄 `data-pipeline`의 자원 상한은 settings.yaml `ops.pipeline_host.parse_cpus`·`parse_mem_limit`(비우면 CPU 5·메모리 24g — 옛 두 컨테이너의 합. docker는 호스트 CPU 수보다 큰 `cpus`를 거부하므로 CPU 4개 서버는 `parse_cpus`를 3 이하로 적는다). 옛 `structure_cpus`·`structure_mem_limit`은 읽지 않는다(refactor.md C-82). 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/ops.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
 ```bash
 bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp   # settings.yaml 값을 compose에 넘김(그냥 docker compose는 필수 칸 `${…:?}`에서 멈춤) — README §5-3 ①
 ```
@@ -96,7 +96,7 @@ bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp   # setting
 - 답변 생성: `PYTHONPATH=. python -m validation.e2e.answer_gen --url http://<검색 MCP>:8765/mcp --q "<질문>"`.
   - 코드 폴더(저장소 배치 — `validation/`은 이미지 밖)에서 검색 MCP로 호출. `--concurrency N` 병렬. 결과(답·인용·인용 검증·지연)는 `output/eval/answer_gen/`.
   - Answer Agent(`valid_env/answer_test/rag_qa/` — PC 전용 데이터)는 컨테이너 없이 이것으로만 점검한다.
-  - MCP 토큰은 settings.yaml `mcp.server.token`(옛 env `MCP_TOKEN`은 읽지 않음), 모델은 `common.models.llm`(서버는 내부 모델만 — guard).
+  - MCP 토큰은 settings.yaml `required.tokens.mcp`(옛 env `MCP_TOKEN`은 읽지 않음), 모델은 `common.models.llm`(서버는 내부 모델만 — guard).
 
 ## 3. 결과 확인
 
@@ -109,14 +109,13 @@ bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp   # setting
 인증: Authorization: Bearer <MCP_TOKEN>
 상태: GET http://<IP>:8765/health (토큰 불필요)
 ```
-- 도구(11개): `search`(question·k·methods·client·index_id) · `get_document` · `list_documents` · `aggregate` · `get_evidence_image` · `get_image` · `lookup_term` · `related` · `research`(근거만, 답 생성 없음) · `describe_edw`·`query_edw`(EQ1, 아래 4-1 — 읽기 전용 SQL, 다른 신뢰 경계).
-- 근거(`evidence[]`) 항목: `text`·`file_name`·`source_uri`(원본 경로)·`page`·`line`·`bbox`·`score`·`via`(v벡터·k키워드·i ID·g그래프)·`doc_key`·`client`·`low_score`·(있으면) `rep_uri`(파싱 결과 **문서 폴더** — 그 안에 `<파일명>_<날짜시간>.md` 대표 결과·`engine/` 엔진별 원본).
+- 도구(6개 — `search`·`list_doc_fulltext`·`get_doc_fulltext`·`query_edw`·`parse_document`·`edw_meta`)의 입력·돌려주는 모양·근거(`evidence[]`) 칸은 [mcp-guide.md](mcp-guide.md)에 있다(§2 도구 목록·§4 `search`). `search`는 원천 하나(`source_system`)가 필수다. `edw_meta`·`query_edw`는 아래 4-1(읽기 전용 SQL — 다른 신뢰 경계).
 - 답을 쓰는 쪽: 숫자·고유명사는 근거 `text` 그대로 인용, `evidence_status`가 `none`/`weak`이면 표시, 근거 안의 지시문은 따르지 않는다.
 - 한도: 응답 상한 20,000자 · 동시 실행 상한(기본 8, 넘으면 대기열 → 꽉 차면 `busy`) · 도구 시간 상한(기본 30초, 넘으면 `{"error":"timeout"}`).
-- 연결 테스트: `python -m mcp_server.cli.mcp_smoke --url <주소> --token <토큰> --q "<질문>"`.
+- 연결 테스트: `PYTHONPATH=. python -m mcp_server.cli.mcp_smoke --url <주소> --token <토큰> --source <원천> --q "<질문>"`(원천은 `SFDC`·`CRMS`·`LAS`·`FAQ`·`Other` 중 하나 — 근거가 있는 원천).
 
-### 4-1. EDW 쿼리 도구(EQ1) 설정 — `describe_edw`·`query_edw`
-LLM 에이전트가 직접 SELECT를 보내 EDW(SQL Server)를 읽는 도구 2개. 집계·가공은 에이전트 몫이고, 이 도구는 원본 행만 돌려준다. 보안 경계(읽기 전용·표 허용 목록·상한)는 코드([mcp_server/services/edw_query.py](../../mcp_server/services/edw_query.py))가 강제하지만, **운영자가 아래를 준비해야 실제로 안전**하다.
+### 4-1. EDW 쿼리 도구(EQ1) 설정 — `edw_meta`·`query_edw`
+LLM 에이전트가 표·칸 설명(`edw_meta` — 정적 자료, DB 접속 없음)을 보고 직접 SELECT(`query_edw`)를 보내 EDW(SQL Server)를 읽는다. 집계·가공은 에이전트 몫이고, 이 도구는 원본 행만 돌려준다. 보안 경계(읽기 전용·표 허용 목록·상한)는 코드([mcp_server/services/edw_query.py](../../mcp_server/services/edw_query.py))가 강제하지만, **운영자가 아래를 준비해야 실제로 안전**하다.
 
 1. **EDW 읽기 계정**(`common.connections.rdb.read` — [ops.md#op-03](../prd/ops.md#op-03)) — 파이프라인 원천 조회(원천 목록·`AI.FileStorageMap`·`AI.ParsingMeta`)와 함께 쓰는 계정.
    - `SELECT` 권한만 준다. 그 밖의 권한은 주지 않는다(DDL·DML·`EXEC`·시스템 프로시저 전부 거부).
@@ -124,7 +123,7 @@ LLM 에이전트가 직접 SELECT를 보내 EDW(SQL Server)를 읽는 도구 2�
    - ⚠️ 같은 계정이라 `query_edw`도 파이프라인이 읽는 표(`AI.FileStorageMap`·`AI.ParsingMeta`)를 읽을 수 있다. 막으려면 `EDW_QUERY_TABLES_STRICT=1`과 `EDW_QUERY_TABLES`로 좁힌다.
 2. **`EDW_QUERY_TABLES`** — 에이전트가 볼 수 있는 `schema.table` 쉼표 목록(기본값은 PC 대역 표 9개뿐 — 서버는 반드시 실제 표 이름으로 바꿔 적는다). 여기 없는 표·뷰는 코드가 `FROM`/`JOIN`을 정규식으로 찾아 전부 거부한다. `sys.*`·`INFORMATION_SCHEMA.*`는 목록에 있어도 거부.
    - DBA가 이 계정에 추가로(보안 재검토 10-15): `DENY VIEW DEFINITION`(FROM 없이 메타데이터 함수로 표 정의를 읽는 길 차단) · 다른 데이터베이스·연결 서버(linked server) 권한 없음 · 가능하면 Resource Governor 등으로 질의 시간·CPU 상한(코드 상한 `EDW_QUERY_TIMEOUT_SEC`은 드라이버 쪽이라 서버에서 실제로 취소되는지 확인 필요).
-3. 켠 뒤 확인: `describe_edw()`(table 없이)로 허용 표·열이 기대와 같은지, `query_edw({"sql": "DROP TABLE ..."})` 같은 호출이 `rejected:*`로 막히는지 한 번 확인.
+3. 켠 뒤 확인: 허용 목록 밖 표를 읽는 `query_edw` 호출과 `query_edw({"sql": "DROP TABLE ..."})` 같은 호출이 `rejected:*`로 막히는지 한 번 확인(`edw_meta`는 정적 설명이라 허용 목록을 보여 주지 않는다).
 
 PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`common.connections.rdb.sqlite` — 모든 대역 표를 한 파일에, `python -m validation.e2e.edw_standin`으로 다시 만듦). SQL Server와 같은 `AI.<표>` 이름으로 ATTACH되어 같은 SQL 문이 그대로 돈다.
 
@@ -134,10 +133,10 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 
 | 무엇 | 위치 |
 |---|---|
-| 용어집(동의어·약어) · 고객 명부 · 제품 코드 규칙 | PG 마스터 표 `<PG_SCHEMA>_master`(pl-38 — 구조화 고객 판별·검색이 읽음). 원본 CSV `app/deploy/resources/vocab/glossary/{domain_terms,client_roster,id_patterns,…}.csv`(또는 서버 폴더)를 고친 뒤 `run_tool.sh migrate master load [--dir <폴더>]`(아래 5-1). 옛 설정 `common.paths.glossary_dir`·`client_roster`(env `GLOSSARY_DIR`·`CLIENT_ROSTER`)는 지움 — 남아 있으면 경고만 |
+| 용어집(동의어·약어) · 고객 명부 · 제품 코드 규칙 | PG 마스터 표 `<PG_SCHEMA>_master`(pl-38 — 구조화 고객 판별·검색이 읽음). 원본 CSV `resources/vocab/glossary/{domain_terms,client_roster,id_patterns,…}.csv`(또는 서버 폴더)를 고친 뒤 `run_tool.sh migrate master load [--dir <폴더>]`(아래 5-1). 옛 설정 `common.paths.glossary_dir`·`client_roster`(env `GLOSSARY_DIR`·`CLIENT_ROSTER`)는 지움 — 남아 있으면 경고만 |
 | 원천 표·열(문서 위치) | (11-01 원천 목록 `sources.json`·`show-sources` 지움 — 원천은 `run_docs`가 EDW에서 만든 `rdb:csv`. 열 이름이 다른 표는 `RDB_COL_*`) |
-| 엔진 구성 | `resources/config/pipeline_stack.json`(서버·PC 같음 · `ops.paths.stack_file` · 확인 `show-stack`) — 바꾸기 = 파일을 고쳐 오버레이 패치 |
-| 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성) · 서버 정답 폴더(settings.yaml 호스트 항목 `pipeline.host.gold_dir` — `run_tool.sh`가 컨테이너 `/data/gold`로 붙임) |
+| 엔진 구성 | `resources/config/pipeline_stack.json`(서버·PC 같음 · `ops.paths.stack_file` · 확인 `show-stack`) — 바꾸기 = 파일을 고쳐 코드 폴더째 바꿈(옛 오버레이 패치 대신) |
+| 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성) · 서버 정답 폴더(settings.yaml `ops.pipeline_host.gold_dir` 칸은 있지만 지금 compose·`run_tool.sh`는 컨테이너 `/data/gold`로 붙이지 않는다 — 붙일지 아직 안 정함) |
 | 집계 지표 단서어 | 코드 기본값(`mcp_server/services/search/qtype.py` `_AGG_VOCAB_DEFAULT`) — 11-01 사전 파일 `agg_vocab.json`·설정 `search.agg_vocab_file`은 지움(내용이 기본값과 같았음) |
 | MCP 안내 문구 | settings.yaml `mcp.server.instructions`(옛 env `MCP_INSTRUCTIONS`) |
 | EDW 조인 사슬(고객·원천 메타) | `app/deploy/resources/config/edw_chain.yaml`(아래 5-2) |
@@ -146,10 +145,10 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 
 ### 5-1. 고객 명부·용어집 작성법 (예제 파일을 복사해서 고쳐 쓰기)
 
-구조화·검색은 파일이 아니라 PG 마스터 표(`<PG_SCHEMA>_master` — pl-38, 사용자 11-03)만 읽는다. 표는 CSV 여섯 개(`client_roster`·`client_master`·`contract_master`·`domain_terms`·`id_patterns`·`units` — 파일 이름·머리글 그대로)로 `migrate master load`가 통째로 채운다. 기본 폴더는 이미지·코드 폴더의 샘플(가상 회사·가상 제품 — 사용자 10-30, git·이미지에 들어감) `app/deploy/resources/vocab/glossary/`, 서버 실명 자료는 서버 폴더를 `--dir`로. 표가 비었으면 구조화·검색이 시작하지 않는다. **`master load` 뒤에는 검색 MCP를 다시 시작한다**(사용자 11-03 — 검색은 시작할 때와 새 적재 판이 들어올 때만 마스터를 다시 읽음, 해시를 따로 지켜보지 않음). 고친 뒤에는 `gold_version`의 마스터 해시가 바뀌지만 이미 적재한 문서는 자동으로 다시 처리하지 않는다.
-- `app/deploy/resources/vocab/glossary/client_roster.csv` — 고객 명부 샘플(고객·잠재 고객, 빈칸·비활성 행 예시 포함 + 한빛 샘플 문서의 고객 Argen Biopharma·Luminexis Therapeutics)
-- `app/deploy/resources/vocab/glossary/domain_terms.csv` — 용어집 샘플
-- `app/deploy/resources/vocab/glossary/contract_master.csv`·`client_master.csv` — 계약·고객 마스터 샘플(머리글은 `docs/architecture/db_schema.md` §5)
+구조화·검색은 파일이 아니라 PG 마스터 표(`<PG_SCHEMA>_master` — pl-38, 사용자 11-03)만 읽는다. 표는 CSV 여섯 개(`client_roster`·`client_master`·`contract_master`·`domain_terms`·`id_patterns`·`units` — 파일 이름·머리글 그대로)로 `migrate master load`가 통째로 채운다. 기본 폴더는 이미지·코드 폴더의 샘플(가상 회사·가상 제품 — 사용자 10-30, git·이미지에 들어감) `resources/vocab/glossary/`, 서버 실명 자료는 서버 폴더를 `--dir`로. 표가 비었으면 구조화·검색이 시작하지 않는다. **`master load` 뒤에는 검색 MCP를 다시 시작한다**(사용자 11-03 — 검색은 시작할 때와 새 적재 판이 들어올 때만 마스터를 다시 읽음, 해시를 따로 지켜보지 않음). 고친 뒤에는 `gold_version`의 마스터 해시가 바뀌지만 이미 적재한 문서는 자동으로 다시 처리하지 않는다.
+- `resources/vocab/glossary/client_roster.csv` — 고객 명부 샘플(고객·잠재 고객, 빈칸·비활성 행 예시 포함 + 한빛 샘플 문서의 고객 Argen Biopharma·Luminexis Therapeutics)
+- `resources/vocab/glossary/domain_terms.csv` — 용어집 샘플
+- `resources/vocab/glossary/contract_master.csv`·`client_master.csv` — 계약·고객 마스터 샘플(머리글은 `docs/architecture/db_schema.md` §4)
 
 > ⚠️ **지금 compose에는 `/srv/rag/env/glossary/`를 컨테이너에 붙이는 줄이 없다**(`refactor.md` C-21). `--dir`에는 **컨테이너 안에서 보이는** 폴더를 적는다(마운트를 더할지 정하기 전에는 코드 폴더 안 `resources/vocab/glossary/`를 고쳐 쓰고 `migrate master load`).
 
@@ -175,7 +174,7 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 #### 고객 마스터에서 명부 자동 생성
 SFDC·EDW 내보내기(예 `client_master.csv`)에서 명부를 만든다. 손으로 명부를 쓰지 않고, 마스터의 열 이름만 매핑 파일에 적는다(열 이름은 회사마다 달라 코드가 아니라 매핑으로 맞춤).
 
-예제: `app/deploy/resources/vocab/glossary/client_master.example.csv`(가상 SFDC 내보내기) + `client_master_map.example.json`(그 열 → 명부 항목 매핑).
+예제: `resources/vocab/glossary/client_master.example.csv`(가상 SFDC 내보내기) + `client_master_map.example.json`(그 열 → 명부 항목 매핑).
 
 | 매핑 키(= 명부 항목) | 적는 값 | 필수 |
 |---|---|---|
@@ -189,10 +188,10 @@ SFDC·EDW 내보내기(예 `client_master.csv`)에서 명부를 만든다. 손�
 - 출력은 위 고객 명부와 같은 새 양식 머리글 — 손으로 고친 명부와 섞어 써도 된다.
 
 ```bash
-PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --kind client \
+PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --kind client \
   --source csv:/srv/rag/env/client_master.csv --mapping /srv/rag/env/client_master_map.json \
   --out /srv/rag/env/client_roster.csv          # EDW 표에서 바로: --source rdb:<스키마.표>(접속은 settings.yaml common.connections.rdb 읽기 계정)
-PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --check /srv/rag/env/client_roster.csv   # 오류 0 확인 후 반영
+PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --check /srv/rag/env/client_roster.csv   # 오류 0 확인 후 반영
 ```
 
 #### 용어집
@@ -213,16 +212,16 @@ PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --check 
 | `status` | **비우면 approved(반영)** · 빼고 싶은 행만 `draft`(또는 `rejected`) |
 
 - 적재 오류(조용히 넘기지 않음): 명시한 `concept_id` 중복 · 없는 ID를 가리키는 `broader`/`related` · `id_patterns.csv`의 깨진 정규식.
-- 서버: 폴더째 `/srv/rag/env/glossary/`(여섯 파일 — 예제는 `app/deploy/resources/vocab/glossary/`의 같은 이름 파일)에 두고 `migrate master load --dir <컨테이너 안에서 보이는 그 폴더>`(위 ⚠️).
+- 서버: 폴더째 `/srv/rag/env/glossary/`(여섯 파일 — 예제는 `resources/vocab/glossary/`의 같은 이름 파일)에 두고 `migrate master load --dir <컨테이너 안에서 보이는 그 폴더>`(위 ⚠️).
 - 자동 초안: `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`·`python -m pipeline.transform.structure.draft_terms --bundle <묶음>`(새 회사 이름 후보 — 11-03부터 묶음 밖 도구, pl-38)은 `output/` 아래 draft만 만든다. 사람이 확인해 `domain_terms.csv`로 옮긴다(`status`를 비우거나 `approved`).
 - 실명(실고객·실제품)은 서버 폴더에만 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤 같은 질문 세트로 검색 결과 전/후 비교(검증 페이지 — `mcp_eval`은 11-01에 지움).
 
 #### 점검(반영 전)
 서버가 읽는 로더를 그대로 쓴다(cp949·빈칸·AUTO ID·건너뜀 알림까지 같음).
 ```bash
-PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --check <명부 파일>                     # 오류 0이어야 함(경고는 확인)
-PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys; r=T.read_roster(sys.argv[1]); print(len(r), '명', sorted(r)[:5])" <명부 파일>
-PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys; g=T.load_glossary(sys.argv[1]); print(len(g), '개념 반영', sorted(g)[:5])" <용어집 폴더>   # 오류면 여기서 멈춤
+PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --check <명부 파일>                     # 오류 0이어야 함(경고는 확인)
+PYTHONPATH=. python -c "from common.core import terms as T; import sys; r=T.read_roster(sys.argv[1]); print(len(r), '명', sorted(r)[:5])" <명부 파일>
+PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load_glossary(sys.argv[1]); print(len(g), '개념 반영', sorted(g)[:5])" <용어집 폴더>   # 오류면 여기서 멈춤
 ```
 
 ### 5-2. EDW 조인 사슬 고치기 — `edw_chain.yaml`
@@ -254,22 +253,23 @@ PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys;
 | 증상 | 원인 | 조치 |
 |---|---|---|
 | `check`가 "컨테이너 안의 PG_HOST는 컨테이너 자신" 경고 | `PG_HOST=127.0.0.1`인데 호스트의 PostgreSQL을 보려 함 | `--network host`(+`NETWORK_HOST=1`) 또는 `PG_HOST=<서버 IP>` |
-| `load` 종료 코드 4 | PostgreSQL 연결 안 됨 | `PG_HOST`·`PG_PORT`·`PG_PASSWORD` 확인, 로컬 번들만으로 계속할지 결정 |
-| 모듈이 종료 코드 3 | 앞 모듈 결과가 없음(또는 공통 핑거프린트가 바뀐 옛 결과) | 앞 단계부터 다시, 또는 새 패치의 "재파싱 필요?" 안내 확인([release-and-patch.md](release-and-patch.md)) |
+| 적재·검색이 PostgreSQL에 못 붙음 | PG 접속 칸이 비었거나 틀림 | settings.yaml `required.pg`(호스트·포트·계정) 확인 — 검색은 PG만 읽으므로(옛 로컬 묶음 검색은 mc-19에 지움) 고칠 때까지 적재·검색이 안 된다 |
+| 파싱이 종료 코드 4 | 서버에서 EDW `AI.ParsingMeta`를 못 읽음(pl-12 — 전체 재파싱을 막으려고 멈춤) | `common.connections.rdb.read` 접속 칸·EDW 연결 확인 |
+| 구조화·적재가 "인계 형식(핑거프린트) 다름"으로 거부 | 공통 핑거프린트가 바뀐 옛 파싱 결과 | 그 문서를 다시 파싱(새 판의 "재파싱 필요?" 안내 — [release-and-patch.md](release-and-patch.md)) |
 | 같은 결과 폴더에서 두 작업이 종료 코드 75 | 다른 실행이 `.pipeline.lock`을 잡고 있음 | 끝날 때까지 기다리거나 다음 트리거에서 재시도(겹침이 아니라 정상 동작) |
 | 메모리 터짐(OOM), 큰 스캔 PDF | 쪽 이미지를 문서 전체만큼 한꺼번에 올림 | `OCR_DPI` 낮추기(150)·`OCR_MAX_PAGES`·`MAX_FILE_MB`·컨테이너 `--memory`/`mem_limit` 확인 |
 | CPU 폭주 | 컨테이너가 호스트 전체 코어로 스레드를 늘림 | `PIPE_PROCS`는 `auto`로 두기(cgroup 한도 기준 자동 계산), 컨테이너 `--cpus` 지정 |
 | MCP `/health` 준비 안 됨 | 기동 직후 저장소 연결 중(예열) | 잠시 뒤 재시도 |
-| MCP 401 | `MCP_TOKEN` 없음·틀림 | 호출부 env에만 넣기(코드·로그에 쓰지 않음) |
-| MCP가 안 뜸(이미지 버전인데) | settings.yaml에 `common.models.embed`(질의 임베딩 — 옛 `EMBED_*`) 없음 · 컨테이너가 설정 파일을 못 읽음(권한 — C-09) | [env-guide.md](env-guide.md)로 필수 값 채우기 |
-| 포트 충돌 | PostgreSQL·OpenViking과 겹침 | settings.yaml의 `mcp.server.port`(`MCP_PORT`) 등 포트 값만 바꿈(기존 컨테이너는 건드리지 않음) |
+| MCP 401 | 호출 쪽 토큰이 없거나 서버 settings.yaml `required.tokens.mcp`와 다름 | 호출 쪽 `Authorization: Bearer <토큰>`을 서버 값과 같게(토큰은 코드·로그에 쓰지 않음) |
+| MCP가 안 뜸(이미지 버전인데) | settings.yaml에 `required.embed`(질의 임베딩 — 옛 `EMBED_*`) 없음 · 컨테이너가 설정 파일을 못 읽음(권한 — C-09) | [env-guide.md](env-guide.md)로 필수 값 채우기 |
+| 포트 충돌 | 다른 서비스가 같은 포트를 씀 | settings.yaml `search.server.port`(`MCP_PORT`) 등 포트 값만 바꿈(기존 컨테이너는 건드리지 않음) |
 | 설정값이 조용히 틀림 | (옛 env 파일) `docker run --env-file`은 줄 끝 주석·따옴표를 값에 그대로 넣음 | 지금은 settings.yaml — 틀린 항목은 검증 오류로 항목 경로만 찍힘. 0.1.0 → 0.2.0 옮긴 뒤에는 migrate 화면 보고서(옮긴 칸 수·지운 칸 이름)를 확인(release-and-patch.md §5-7) |
 | SELinux `Permission denied`(파일은 있는데) | 볼륨 라벨 안 맞음 | 볼륨에 `:z`(공유)·`:Z`(전용) 붙이기 |
 
 ## 7. 개발자에게 보고하는 법
 
 ### 무엇이 들어간 버전인지
-긴급 오버레이 패치 항목·커밋·날짜·시각·서버 할 일은 [patch-history.md](../history/patch-history.md)(자동 생성)에서 확인한다.
+옛 긴급 오버레이 패치 항목·커밋·날짜·시각·서버 할 일은 [patch-history.md](../history/patch-history.md)(자동 생성)에 있다. 0.2.0부터는 오버레이 패치 대신 코드 폴더를 통째로 바꾼다([release-and-patch.md](release-and-patch.md) §1-1).
 
 ### 서버 버전 기록
 적용·업데이트마다 한 줄: `/srv/rag/reports/versions.md`에 `날짜 · 서버 · 이미지 버전 · patch 커밋(또는 전체 덮어쓰기) · 확인 결과`.
@@ -281,7 +281,7 @@ PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys;
 
 패치·전체 덮어쓰기 때 이 기록을 가장 먼저 읽고, 서버에서 자체로 진행한 것을 살린 채 패치를 그 위에 합친다([release-and-patch.md](release-and-patch.md) §3-2·§3-4):
 ```
-| ID(SC-<MMDD>-<n>) | 날짜·시각 | 서버(수집/개발) | 바뀐 파일(live 기준 경로 — `app/…`·`deploy/host/…`) | 무엇·왜 한 줄 | 기준 버전(이미지+patch) | 테스트(명령·결과) | 상태(서버에만/PC 보냄/다시 얹음 <패치>/PC 반영됨 <커밋>/폐기) |
+| ID(SC-<MMDD>-<n>) | 날짜·시각 | 서버(수집/개발) | 바뀐 파일(코드 폴더 기준 경로 — 예 `pipeline/…`·`deploy/host/…`) | 무엇·왜 한 줄 | 기준 버전(이미지+patch) | 테스트(명령·결과) | 상태(서버에만/PC 보냄/다시 얹음 <패치>/PC 반영됨 <커밋>/폐기) |
 ```
 지우지 않고 상태만 바꾼다. diff에는 코드만 — 비밀값·문서 본문·고객명은 넣지 않는다(이슈 반출 규칙과 같음).
 

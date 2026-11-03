@@ -24,26 +24,35 @@ def test_job_env_overrides():
     assert float(seen["PARSE_WARMUP_SEC"]) == 20 and seen["PARSE_POST"] == "supsub", seen
 
 
-def test_no_ocr_engines():
-    from pipeline import mcp_parse_service as S
-
-    args = S._engines_no_ocr_arg()
-    assert not args or not {"rapidocr_ko", "qwen_vlm"} & set(args[1].split(","))
-
-
 def test_scan_pdf_note():
-    """pl-03(사용자 10-31) — 스캔 PDF는 파이프라인 없이 임시 안내(돌 엔진이 없음), 표본보다 스캔으로 분류돼 엔진이 하나도 못 돌면
-    run_all의 NO_JOB_MARK 줄로 같은 안내 — 엔진이 돌다 다 실패했을 때만 DRM 추정."""
-    from pipeline import mcp_parse_service as S
-    from pipeline.extract.run_all import IDLE_MARK, NO_JOB_MARK
+    """mc-18(사용자 11-03) — 스캔 판정은 run_all과 같은 pdf_kind · VLM 설정(VLM_BASE_URL·VLM_MODEL)이 비면 파이프라인 없이 '미설정' 안내,
+    있으면 파이프라인(VLM)으로 · 대표 결과가 없으면 스캔은 'VLM 파싱 실패', 그 밖은 DRM 추정."""
+    import tempfile
+    from pathlib import Path
 
-    assert S.skip_note("a.pdf", 0) == S.SCAN_NOTE and S.skip_note("a.pdf", 19) == S.SCAN_NOTE
-    assert S.skip_note("a.pdf", 20) is None and S.skip_note("a.pdf", -1) is None and S.skip_note("a.pdf", None) is None
-    assert S.skip_note("a.docx", None) is None
-    assert "추후 지원 예정" in S.SCAN_NOTE
-    assert S.empty_note(f"== run_all\n{IDLE_MARK}(비교하려면 stack json을 고침): docling\n{NO_JOB_MARK}\n") == S.SCAN_NOTE
-    assert S.empty_note(f"== run_all\n{IDLE_MARK}(비교하려면 stack json을 고침): docling\n") == S.DRM_NOTE  # 일부만 안 돎
-    assert S.empty_note("== run_all\nTraceback …") == S.DRM_NOTE and S.empty_note(None) == S.DRM_NOTE
+    import fitz
+
+    from common.config.settings import COMMON
+    from pipeline import mcp_parse_service as S
+
+    # pdf_kind는 pdfium 문서를 닫지 않음(GC가 닫음) — Windows에서는 임시 폴더 지우기가 막힐 수 있어 정리 오류는 무시
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+        scan, text = Path(d) / "scan.pdf", Path(d) / "text.pdf"
+        doc = fitz.open()
+        doc.new_page().draw_rect(fitz.Rect(50, 50, 300, 200))  # 글자층 없음
+        doc.save(str(scan))
+        doc = fitz.open()
+        doc.new_page().insert_text((50, 72), "pH 7.2 buffer solution text layer " * 3)
+        doc.save(str(text))
+        assert S._is_scan(scan) is True and S._is_scan(text) is False
+        assert S._is_scan(Path(d) / "a.docx") is False
+    with COMMON.env(VLM_BASE_URL=None, VLM_MODEL=None):
+        assert S.skip_note(True) == S.VLM_UNSET_NOTE and S.skip_note(False) is None
+    with COMMON.env(VLM_BASE_URL="http://10.0.0.5:8000/v1", VLM_MODEL=None):
+        assert S.skip_note(True) == S.VLM_UNSET_NOTE  # 모델 이름도 있어야 qwen_vlm이 돎(REQUIRES_ENV)
+    with COMMON.env(VLM_BASE_URL="http://10.0.0.5:8000/v1", VLM_MODEL="qwen-vl"):
+        assert S.skip_note(True) is None  # VLM이 있으면 파이프라인으로
+    assert S.empty_note(True) == S.VLM_FAIL_NOTE and S.empty_note(False) == S.DRM_NOTE
 
 
 def test_size_limit():
