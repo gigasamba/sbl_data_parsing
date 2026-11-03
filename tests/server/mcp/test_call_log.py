@@ -316,9 +316,10 @@ def test_initialize_contract():
     async def run():
         m = main.build("127.0.0.1", 8765)
         wire = ListToolsResult(tools=await m.list_tools()).model_dump_json(by_alias=True, exclude_none=True)
-        # develop 28ad892(원문 도구 2개·search 계약 mc-16 포함)와 직렬화 바이트를 비교해 고정(로깅은 도구 계약을 바꾸지 않음). 계약 변경 시 별도 협의 필요.
-        assert len(wire.encode()) == 11886
-        assert hashlib.sha256(wire.encode()).hexdigest() == "7d24d8679fb146e4cf5fbae2989ffad329612c912b2a7219c956102e3c22a7a1"
+        # 직렬화 바이트 고정(로깅은 도구 계약을 바꾸지 않음). 계약 변경 시 별도 협의 필요. 11-03(사용자 결정, 등급 A): query_edw 기본
+        # max_rows 2000→1000·설명 "default 1000", parse_document 설명 "64MB 상한"→"기본 100MB 상한" — 전 develop 8c4e078 11886바이트·7d24d867…
+        assert len(wire.encode()) == 11894
+        assert hashlib.sha256(wire.encode()).hexdigest() == "80ab2acee027d0a50c6a8f3be005ec3a58d38a069fcf1c95b49291f44d234ac4"
         with patch.object(main, "build", return_value=m):
             app = main.build_guarded_app("127.0.0.1", 8765, "")
         headers = {"Accept": "application/json, text/event-stream", "X-MCP-Client": "test", "X-MCP-User": "test"}

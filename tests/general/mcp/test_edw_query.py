@@ -81,11 +81,11 @@ def _demo():
     assert _top_n("SELECT TOP 99 * FROM AI.client", 5, "tsql")[1] == "plain_top_too_high"  # never lower someone else's TOP
     assert _top_n("SELECT TOP 50 PERCENT * FROM AI.client", 100, "tsql")[1] == "top_percent"  # rows unbounded — fail closed
     assert _cap_cte_tsql("WITH c AS (SELECT 1 x) SELECT TOP 50 PERCENT * FROM c", 5)[1] == "top_percent"  # CTE same rule
-    # 2026-10-22 사용자(기본 2000행) — 실효 상한: env 우선, 폴백 2000, 0은 무제한이 아니라 1행
+    # 사용자 11-03(기본 1000행 — 운영 서버와 같음) — 실효 상한: 설정 우선, 기본 1000, 0은 무제한이 아니라 1행
     with mc.senv(EDW_QUERY_MAX_ROWS="1500"):
         assert _row_budget(9999) == 1500  # env override wins
-    with mc.senv(EDW_QUERY_MAX_ROWS=None):  # 옛 시험은 env를 지운 채(del) 이어 감 — 기본값(2000) 확인
-        assert _row_budget(5000) == 2000 and _row_budget(2000) == 2000 and _row_budget(100) == 100
+    with mc.senv(EDW_QUERY_MAX_ROWS=None):  # 옛 시험은 env를 지운 채(del) 이어 감 — 기본값(1000) 확인
+        assert _row_budget(5000) == 1000 and _row_budget(1000) == 1000 and _row_budget(100) == 100
         assert _row_budget(0) == 1  # max(1, …) — 0은 무제한 아님
     ok_p, err_p = _top_n("SELECT * FROM AI.client", 5, "tsql")  # no TOP — old injection, byte-identical
     assert err_p is None and ok_p == "SELECT TOP (6) * FROM AI.client"

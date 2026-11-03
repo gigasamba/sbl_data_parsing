@@ -9,14 +9,14 @@
     (mcp_server/schemas/evidence.py). 덤프 방식·이름 있는 색인(index_id)·옛 입력(methods·decompose·limit)·옛 출력(subs·store·images·notes·ms)은 지움.
   MCP 노출 도구는 search·query_edw·parse_document·edw_meta·list_doc_fulltext·get_doc_fulltext(2026-10-20 사용자 결정 · 10-21 파싱 도구 · 11-01 원문 도구 mc-17).
   (EQ1, English docstrings per 10-15 user rule)
-  query_edw(sql, max_rows=2000) Read-only SQL against EDW: SELECT/WITH only, one statement, table allowlist
+  query_edw(sql, max_rows=1000) Read-only SQL against EDW: SELECT/WITH only, one statement, table allowlist
     (EDW_QUERY_TABLES), row/time/response-size caps. Returns raw rows only — no summarization, the
     calling agent does its own post-processing. See mcp_server/services/edw_query.py for the full guard.
   (2026-10-21 사용자 요청·같은 날 단일화) parse_document(path, content_b64, filename, time_out_threshold=300, max_chars=200000) —
     비정형 파일 1건의 text 파싱 대표 결과: data-pipeline-parse 컨테이너(S6b — 옛 data-parsing)의 작업 서비스(PARSE_URL, 기본 http://127.0.0.1:8766 ·
     docker exec -d data-pipeline-parse python -m pipeline.mcp_parse_service — 토큰은 그 컨테이너 settings.yaml required.tokens.parse_mcp)가
     prepare → run_all( phase 1·2만 — 그림[VLM] 파싱은 phase 3이라 실행 안 됨, 표 인식 유지) → parse_qa → represent(대표 결과)만
-    수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/mcp_parse/inbox) 하위만(jail) · content_b64 상한 100MB ·
+    수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/mcp_parse/inbox) 하위만(jail) · 파일 상한 100MB(path·content_b64 같음 — ops.runtime.parse_max_mb, 11-03) ·
     time_out_threshold(기본 300초) 안에 끝나야 결과를 돌려주고 못 끝내면 {"error": "시간 안에 수행 못했습니다", "job_id": …}만 반환 —
     노출 도구는 parse_document 하나뿐(사용자 결정: 결과 수령 도구 parse_result는 등록하지 않는다), 이 도구만 MCP_TOOL_TIMEOUT_SEC(기본 30초)
     대신 자체 예산으로 기다린다(_bg_long) · 응답 text는 max_chars(기본 20만자) 상한(초과 시 잘리고 text_truncated, 전체는 rep_path 파일에).
@@ -60,7 +60,7 @@ from common.core import jsonlog
 from common.core.console import utf8_stdout
 from mcp_server import config as mc  # 설정 객체(S7d)
 from mcp_server.routers import edw_tools, fulltext_tool, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
-from mcp_server.services import call_log
+from mcp_server.services import call_log, parse_proxy
 from mcp_server.services.search.server_state import _warmup_bg
 
 _DEFAULT_MCP_INSTRUCTIONS = (
@@ -119,6 +119,7 @@ def build(host, port):
         stateless_http=True,
         json_response=True,
         transport_security=None if loop else _transport_security(host),
+        max_request_body_size=parse_proxy.body_cap(),  # 11-03 — SDK 기본 4MiB면 parse_document content_b64가 약 3MB에서 413
     )
     _sdk_logging()  # FastMCP가 로깅을 설정한 뒤에 덮는다
 
