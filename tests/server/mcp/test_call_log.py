@@ -320,8 +320,9 @@ def test_initialize_contract():
         # max_rows 2000→1000·설명 "default 1000", parse_document 설명 "64MB 상한"→"기본 100MB 상한" — 전 develop 8c4e078 11886바이트·7d24d867…
         # 11-03 pl-52(사용자 결정, 등급 A): search에 attrs 인자·근거 attrs 칸, edw_meta 인자 없음에 search_attrs — 전 11894바이트·80ab2ace…
         # (검토 고침: 근거 attrs null·search_attrs의 attrs 목록·오류면 안 붙음 설명 — 12608바이트·f7845fd7… 다음)
-        assert len(wire.encode()) == 12725
-        assert hashlib.sha256(wire.encode()).hexdigest() == "1f4d4a53a9854042b5b8f8e82ec4b3fc29b442f440a92fc10f22abfb8af7c726"
+        # 11-04(사용자 결정, 등급 A): search 설명을 실제 동작으로 — source_system 필수·Other 포함, filter·scope_docs 늘 있음 — 전 12725바이트·1f4d4a53…
+        assert len(wire.encode()) == 12810
+        assert hashlib.sha256(wire.encode()).hexdigest() == "c458eda7512a8e1dc330279ea7da4bf84686e3bceacb2ab59174f31967860b52"
         with patch.object(main, "build", return_value=m):
             app = main.build_guarded_app("127.0.0.1", 8765, "")
         headers = {"Accept": "application/json, text/event-stream", "X-MCP-Client": "test", "X-MCP-User": "test"}
