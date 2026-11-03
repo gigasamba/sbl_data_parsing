@@ -40,7 +40,7 @@ required:
     endpoint:  # Object Storage(S3 호환) 엔드포인트 URL · 값: URL
     access_key:  # Object Storage(S3) 액세스 키 · 값: 비밀 글자 [비밀]
     secret_key:  # Object Storage(S3) 시크릿 키 · 값: 비밀 글자 [비밀]
-  # ─── LLM·VLM 모델 [서버만] ───
+  # ─── LLM·VLM 모델 [PC·서버] ───
   models:
     llm_base_url:  # LLM 엔드포인트 주소(OpenAI 호환 …/v1) · 값: URL
     llm_model:  # LLM 모델 이름 · 값: 글자
@@ -90,12 +90,12 @@ common:
   # ─── 모델 호출 — 임베딩·LLM·VLM·전송 ───
   models:
     embed:
-      allow_external:  # 임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만) · 기본 false · 값: true·false
+      allow_external:  # 임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만 — 내부망 서버 시험·운영은 0) · 기본 false · 값: true·false
       est_usd: 0.001  # 임베딩 호출 1건당 예상 비용($) · 기본 0.001 · 값: 0 이상
       query_cache:  # 질의 임베딩 캐시 sqlite 경로(0이면 캐시 끔 — mcp 이미지 안 기본 /tmp/mcp_query_cache.sqlite: 결과 폴더가 읽기 전용) · 값: 경로
       query_prefix:  # [파라미터] 질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …\nQuery: ') · 값: 글자
     llm:
-      allow_external:  # LLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · 기본 false · 값: true·false
+      allow_external:  # LLM(분류 등) 외부 주소 허용(=1, RUN_ENV=local일 때만 — 내부망 서버 시험·운영은 0) · 기본 false · 값: true·false
       cache_dir:  # LLM 응답 캐시 폴더(요청 해시별 json) · 값: 경로
       est_usd: 0.01  # 외부 LLM 도구 왕복 한 턴(admit_turn)당 예상 비용($) · 기본 0.01 · 값: 0 이상
       extra_body:  # [파라미터] LLM 요청 본문에 합칠 JSON 객체(예: 생각 끄기 {'reasoning':{'enabled':false}}) · 값: JSON 객체
@@ -103,7 +103,7 @@ common:
       price_out:  # LLM 출력 단가($/백만 토큰) · 값: 0 이상
       rpm: 0  # LLM 분당 호출 상한(건) · 기본 0 · 값: 0 이상 정수 (0 = 무제한)
     vlm:
-      allow_external:  # VLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · 기본 false · 값: true·false
+      allow_external:  # VLM(그림·스캔 쪽) 외부 주소 허용(=1, RUN_ENV=local일 때만 — 내부망 서버 시험·운영은 0) · 기본 false · 값: true·false
       concurrency: 4  # 한 문서의 쪽(그림) VLM 동시 요청 수(개) · 기본 4 · 값: 0 이상 정수
       est_usd: 0.02  # VLM 호출 1건당 예상 비용($) · 기본 0.02 · 값: 0 이상
       extra_body:  # [파라미터] VLM 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기) · 값: JSON 객체

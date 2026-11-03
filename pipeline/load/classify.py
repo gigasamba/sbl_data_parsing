@@ -2,7 +2,7 @@
 (resources/prompts/pipeline/classify_sfdc·classify_las), 사용자 쪽 글(문서 정보·LAS 키워드 근거·본문 8,000자)도 운영 코드와 같은 모양.
 흐름은 적재와 하나다 — 적재(pgvector_load)가 EDW 메타(edw_meta — 분류 힌트 칸 포함)를 붙인 직후, gold에 넣기 전. 힌트는 그 문서 행의
 gold 칸에서 읽는다. 고르는 규칙을 따로 두지 않는다(같은 내용은 묶음이 한 문서만 · 파싱 안 된 문서는 gold에 안 옴).
-· 모델은 `llm.chat`(역할 llm — 예산 장부, 서버는 내부 GLM, PC는 외부 허용·가짜 LLM). effort는 설정 `common.models.llm.extra_body`.
+· 모델은 `llm.chat`(역할 llm — 예산 장부, 서버는 내부 GLM, PC는 LLM_ALLOW_EXTERNAL=1이면 외부 모델·또는 가짜 LLM). effort는 설정 `common.models.llm.extra_body`.
 · 답은 JSON의 class만 읽는다(확신도는 쓰지 않음 — 사용자 11-02). 라벨 집합 밖이면 실패. 다시 묻지 않는다. 실패한 문서는 그 문서의
   적재 실패 — gold에 넣지 않아 gold_version이 안 적히고 다음 정상 실행이 다시 고른다. 감사 한 줄.
 · 이미 라벨이 있는 문서는 덮지 않는다."""

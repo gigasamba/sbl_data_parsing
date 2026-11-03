@@ -111,6 +111,21 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
                     assert ("RUN_ENV 없음" if _env is None else f"RUN_ENV={_env}") in str(_e), str(_e)
         with COMMON.env(RUN_ENV="local", **_ext):
             assert chat([{"role": "user", "content": "q"}], allow_external=True, agent="x") == "외부 답"
+        # 11-04(사용자): 설정 LLM_ALLOW_EXTERNAL=1만으로도 허용(분류처럼 인자를 안 넘기는 호출) — local만, 서버는 거부 · 0이면 거부
+        for _env, _allow, _ok in (
+            ("local", "1", True),
+            ("local", None, False),
+            ("dev", "1", False),
+            ("prd", "1", False),
+            (None, "1", False),
+        ):
+            with COMMON.env(RUN_ENV=_env, LLM_ALLOW_EXTERNAL=_allow, **_ext):
+                try:
+                    _got = chat([{"role": "user", "content": "q"}], agent="x")
+                except LLMUnavailable as _e:
+                    assert "DONT 13" in str(_e), str(_e)  # 다른 이유(예산·단가)의 거부가 통과로 보이지 않게
+                    _got = None
+                assert (_got == "외부 답") is _ok, (_env, _allow, _got)
     finally:
         _adk.complete = _orig_complete
         shutil.rmtree(_tmp3, ignore_errors=True)

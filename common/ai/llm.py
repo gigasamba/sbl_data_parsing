@@ -1,13 +1,13 @@
 """LLM 공통 클라이언트 — OpenAI 호환 /chat/completions (서버 GLM-5.2 · 나중에 Gemini OpenAI 호환 주소 · 개발 PC 모의 서버).
 
-설정(.env): LLM_BASE_URL(…/v1) · LLM_MODEL · LLM_API_KEY(있을 때만) · LLM_TIMEOUT(초, 기본 120) · LLM_RPM(분당 호출 상한, 기본 0=무제한)
+설정(settings.yaml): LLM_BASE_URL(…/v1) · LLM_MODEL · LLM_API_KEY(있을 때만) · LLM_TIMEOUT(초, 기본 120) · LLM_RPM(분당 호출 상한, 기본 0=무제한)
           · LLM_CACHE_DIR(기본 output/eval/llm_cache)
           · LLM_BUDGET_USD(외부 모델 하루 지출 상한, 기본 0.1 — 넘으면 이후 호출을 보내기 전에 거부) · LLM_PRICE_IN·LLM_PRICE_OUT($/M 토큰, 기본 PRICES[모델])
 - **응답 캐시**: (모델, 메시지, 온도) 해시가 같으면 다시 부르지 않는다 — 재실행·다른 조합이 같은 질문을 해도 토큰 0.
 - **비용 관문(2026-10, OpenRouter 85% 소진 이후)**: LLM_FAKE=1이면 네트워크 호출 없이 모의 응답(마지막 user 메시지 앞 200자+"[FAKE]") —
   캐시에 안 쓰고 usage()에 fake_calls·prompt_chars만 쌈(추정기가 이걸로 호출 수·글자 수를 모음). 실호출은 LLM_BUDGET_USD로 상한.
 - **외부 전송 가드(DONT 13, 여기 한 곳에서 강제)**: LLM_BASE_URL이 내부 주소(사설 IP·localhost·.local/.internal/.corp·단일 이름)가 아니면
-  `allow_external=True` **그리고** RUN_ENV=local일 때만 호출한다(서버 dev·prd는 외부 호출 불가).
+  설정 `LLM_ALLOW_EXTERNAL=1`(또는 호출 인자 `allow_external=True`) **그리고** RUN_ENV=local일 때만 호출한다(서버 dev·prd는 외부 호출 불가).
 - 호출·토큰 수는 usage()로 — 도구가 결과 파일에 함께 남긴다.
 - **빈 응답 안전망(RV12, 2026-10-09 재순위 실측 — glm-5.2가 생각에 max_tokens를 다 써 ~45% 빈 응답)**: 응답이 비어 있고(공백만
   포함) 토큰을 썼다면(completion_tokens>0 — 생각이 출력 상한을 다 썼다는 신호, finish_reason을 3개 전송 경로 모두에서
@@ -220,7 +220,7 @@ def _do_call(messages, temperature, max_tokens, json_mode, base, model, agent, t
                 raise LLMUnavailable(str(e)) from e
             reserved = est
         try:
-            # preguarded=True — chat()이 이미 자기 allow_external 매개변수로 가드를 통과시켰음(GA3).
+            # preguarded=True — chat()이 이미 allow_external 인자·LLM_ALLOW_EXTERNAL 설정으로 가드를 통과시켰음(GA3).
             # call_reserved=True — 위 reserve_call()이 이 1차 호출의 자리를 이미 예약함(GH1-08d — 이중 집계 방지). 형식 재요청(AD33)의
             # 2차 호출은 complete()가 그 자리에서 reserve_call()로 직접 센다(GH1-08c) — 여기서 다시 더하지 않는다.
             handed = True
@@ -275,12 +275,12 @@ def chat(messages, temperature=0.0, max_tokens=1024, json_mode=False, allow_exte
         return last_user[:200] + "[FAKE]"
     base, model = cfg().models.llm.base_url, cfg().models.llm.model
     if not (base and model):
-        raise LLMUnavailable("LLM_BASE_URL·LLM_MODEL 미설정(.env)")
-    if not is_internal(base) and not external_ok(allow_external):
+        raise LLMUnavailable("LLM_BASE_URL·LLM_MODEL 미설정(settings.yaml required.models.llm_base_url·llm_model)")
+    if not is_internal(base) and not external_ok(allow_external or cfg().models.llm.allow_external):
         why = run_env_block()
         raise LLMUnavailable(
             f"외부 LLM 주소({urllib.parse.urlparse(base).hostname}) — 회사 문서는 내부망 LLM만(DONT 13). "
-            "개발 PC 가상 문서 실험이면 도구의 --allow-external" + (f" ({why})" if why else "")
+            "개발 PC 합성 문서 실험이면 LLM_ALLOW_EXTERNAL=1(RUN_ENV=local)" + (f" ({why})" if why else "")
         )
     key = cache_key(model, messages, temperature, max_tokens, json_mode)
     cp = _cache_path(key)
@@ -528,7 +528,7 @@ def complete(
     tools=None,
 ):
     """역할(llm·vlm) → (응답 글자, usage) — tools=를 주면 (응답 message 사전, usage). 위 섹션 설명의 규칙 그대로.
-    preguarded=True는 chat()만(자기 allow_external로 이미 가드를 통과) — 그 밖은 매번 require_internal.
+    preguarded=True는 chat()만(allow_external 인자·LLM_ALLOW_EXTERNAL 설정으로 이미 가드를 통과) — 그 밖은 매번 require_internal.
     agent=(지시문 패키지 id)면 model_role이 role과 같아야 하고, 아직 예약 안 됐으면(call_reserved=False — 직접 호출자) 1차 호출을
     재시도 루프 전에 딱 한 번 공유 장부에 예약한다(GH1-08d). call_reserved=True는 호출자가 이미 예약한 경우(chat()의 _do_call).
     max_tokens=None이면 그 필드를 안 보냄."""
