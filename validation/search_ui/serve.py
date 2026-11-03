@@ -96,10 +96,10 @@ def health():
         "spend": spend(),
         "config": {
             "EMBED_MODEL": cfg().models.embed.model,
+            "EMBED_ALLOW_EXTERNAL": cfg().models.embed.allow_external,  # 꺼져 있으면 질의 임베딩 없음(키워드·ID만)
             "PG_HOST": _PG.host,
             "PG_PORT": _PG.port,
             "PG_SCHEMA": _PG.db_schema,
-            "NO_PAID_CALLS": "1" if cfg().models.guard.no_paid_calls else None,
         },
         "vlm_configured": bool(cfg().models.vlm.base_url),
         "llm_configured": bool(cfg().models.llm.base_url),

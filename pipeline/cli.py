@@ -368,7 +368,7 @@ _CASE_ENVS: dict = {}
 
 
 def case_env(mod):
-    """사례 자식 env(새 dict) — 유료 호출 잠금·모델 주소 비움·LLM_FAKE(_FAKE_LLM_CASES만)는 덮기 파일로(S7e3 B-1 — env dict의 설정 이름은 자식이
+    """사례 자식 env(새 dict) — 모델 주소·예산 비움(외부 호출 없음)·LLM_FAKE(_FAKE_LLM_CASES만)는 덮기 파일로(S7e3 B-1 — env dict의 설정 이름은 자식이
     안 읽음). 두 벌만 만든다(임시 파일 수 — R-4). PC pytest(tests/conftest.py)도 이것을 쓴다 — 이미지 selftest와 같은 env."""
     from common.core.paths import child_env
 
@@ -376,10 +376,13 @@ def case_env(mod):
     own = not C.IN_IMAGE and mod not in _PC_SETTINGS_CASES  # PC 시험은 시험 전용 바탕 설정(아래 _case_settings)
     if (fake, own) not in _CASE_ENVS:
         blank = dict.fromkeys(("LLM_BASE_URL", "VLM_BASE_URL", "EMBED_BASE_URL", "LLM_BUDGET_USD"))
+        blank.update(
+            dict.fromkeys(("LLM_ALLOW_EXTERNAL", "VLM_ALLOW_EXTERNAL", "EMBED_ALLOW_EXTERNAL"), "0")
+        )  # 외부 전송 늘 끔(옛 NO_PAID_CALLS 대신 — 11-03)
         base = child_env({"PYTHONUTF8": "1"})
         if own:  # PC — 개발자 루트 settings.yaml(실 PG·모델 키) 대신 시험 전용 최소 설정 위에 덮음(10-29 — 시험 격리)
             base["SETTINGS_FILE"] = _case_settings()
-        _CASE_ENVS[(fake, own)] = C.child_env(base, NO_PAID_CALLS="1", LLM_FAKE="1" if fake else None, **blank)
+        _CASE_ENVS[(fake, own)] = C.child_env(base, LLM_FAKE="1" if fake else None, **blank)
     return dict(_CASE_ENVS[(fake, own)])
 
 

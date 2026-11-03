@@ -1,7 +1,7 @@
 """LLM 공통 클라이언트 — OpenAI 호환 /chat/completions (서버 GLM-5.2 · 나중에 Gemini OpenAI 호환 주소 · 개발 PC 모의 서버).
 
 설정(.env): LLM_BASE_URL(…/v1) · LLM_MODEL · LLM_API_KEY(있을 때만) · LLM_TIMEOUT(초, 기본 120) · LLM_RPM(분당 호출 상한, 기본 0=무제한)
-          · LLM_MAX_CALLS(이번 프로세스 호출 상한, 기본 0=무제한 — 무료 등급 토큰 보호) · LLM_CACHE_DIR(기본 output/eval/llm_cache)
+          · LLM_CACHE_DIR(기본 output/eval/llm_cache)
           · LLM_BUDGET_USD(이번 프로세스 추정 지출 상한 — 넘으면 이후 호출을 보내기 전에 거부) · LLM_PRICE_IN·LLM_PRICE_OUT($/M 토큰, 기본 PRICES[모델])
 - **응답 캐시**: (모델, 메시지, 온도) 해시가 같으면 다시 부르지 않는다 — 재실행·다른 조합이 같은 질문을 해도 토큰 0.
 - **비용 관문(2026-10, OpenRouter 85% 소진 이후)**: LLM_FAKE=1이면 네트워크 호출 없이 모의 응답(마지막 user 메시지 앞 200자+"[FAKE]") —
@@ -12,7 +12,7 @@
 - **빈 응답 안전망(RV12, 2026-10-09 재순위 실측 — glm-5.2가 생각에 max_tokens를 다 써 ~45% 빈 응답)**: 응답이 비어 있고(공백만
   포함) 토큰을 썼다면(completion_tokens>0 — 생각이 출력 상한을 다 썼다는 신호, finish_reason을 3개 전송 경로 모두에서
   따로 끌어오지 않고 이미 있는 값으로 판정) `max_tokens`를 4배(`LLM_EMPTY_RETRY_MAX` 상한, 기본 8000)로 올려 **딱 한 번**
-  재요청한다. 재요청도 공유 장부(LLM_BUDGET_USD·LLM_MAX_CALLS)를 그대로 거친다.
+  재요청한다. 재요청도 공유 장부(LLM_BUDGET_USD·호출 수)를 그대로 거친다.
   빈 응답(재요청 뒤에도 빈 경우 포함)은 캐시에 쓰지 않는다 — 전에는 빈 응답이 캐시에 고착돼 다음 호출도 계속 빈 응답을 받았음.
 - **생각 끄기(RV12)**: env `LLM_EXTRA_BODY`(JSON 객체)가 OpenRouter·vLLM 요청 본문에 그대로 섞여 들어간다 — 실제 머지는
   이 파일 complete()(VLM도 `VLM_EXTRA_BODY`로 같은 메커니즘, 역할별 분리) 한 곳.
@@ -116,43 +116,16 @@ def usage():
     return dict(_stats)
 
 
-def _max_calls():
-    """LLM_MAX_CALLS(0 = 무제한) — 형식이 틀리면 옛 int() 오류처럼 ValueError(이름만, S7b). 읽는 곳은 모두 이것으로(VS7b R-5)."""
-    checked("LLM_MAX_CALLS")
-    return cfg().models.guard.max_calls
-
-
 def reserve_call():
-    """LLM_MAX_CALLS 공유 집계(AG4) — chat()·complete()·PC 도구 왕복(validation/e2e/tool_loop) 모두 같은 _stats["calls"] 장부·같은 상한을
-    쓴다(한쪽만 호출해도 다른 쪽의 남은 예산이 줄어듦). cap 도달이면 LLMUnavailable(실제로 세지 않음)."""
+    """호출 1건을 공유 장부(_stats["calls"])에 센다(AG4) — chat()·complete()·PC 도구 왕복(validation/e2e/tool_loop) 모두 같은 장부.
+    호출 수 상한(옛 LLM_MAX_CALLS)은 11-03에 지웠다(사용자 — 지출 상한 LLM_BUDGET_USD만 남김) — 세기만 한다(usage())."""
     with _lock:
-        cap = _max_calls()
-        if cap and _stats["calls"] >= cap:
-            raise LLMUnavailable(f"LLM_MAX_CALLS={cap} 도달 — 캐시에 없는 요청은 더 보내지 않음")
         _stats["calls"] += 1
-
-
-def try_reserve_call():
-    """GH1-08c — reserve_call()과 같은 확인+예약을 **같은 잠금 한 번**으로(원자적): remaining_calls()로 읽고 나중에
-    reserve_call()하면 그 사이에 다른 스레드가 끼어들 수 있다(run_all --procs 동시 재요청이 상한을 넘김, 실측).
-    cap 도달이면 예외 대신 False(예약 안 됨) — 호출자가 그 자리에서 거부 처리(네트워크 요청 없이)."""
-    with _lock:
-        cap = _max_calls()
-        if cap and _stats["calls"] >= cap:
-            return False
-        _stats["calls"] += 1
-        return True
 
 
 def release_call():
-    """GH1-08e — try_reserve_call()로 예약한 자리를 같은 잠금 안에서 돌려준다. _complete_agent의 스키마 재요청이
-    429/5xx/연결 오류로 끝까지 못 가면(_Retryable) complete()의 전송 재시도 루프가 1건을 처음부터
-    다시 돌리는데, 그때 재요청이 다시 try_reserve_call()을 불러 같은 논리적 1회 재요청이 슬롯 2개를 먹는다(독립
-    검토 CONCERN) — 실패한 재요청을 여기로 반환해 둔 뒤 다시 돌면 슬롯 1개만 쓴다. calls가 이미 0이면 더 깎지
-    않음(음수 방지 — try_reserve_call() 호출 없이 잘못 불려도 장부가 깨지지 않게).
-    가정(독립 검토 10-12): 실패한 재요청은 과금되지 않았다고 본다. 요청은 갔는데 응답만 잃은 시간 초과·일부 5xx는
-    실제로 과금됐을 수 있어 그때는 LLM_MAX_CALLS를 1 적게 센다(위험한 쪽, 드묾) — complete() 바깥 재시도가 1차 호출을
-    다시 예약하지 않는 기존 관례와 같은 가정. 금액 상한은 guard.py(LLM_BUDGET_USD)가 따로 지킨다."""
+    """GH1-08e — reserve_call()로 센 1건을 같은 잠금 안에서 되돌린다(실패한 재요청이 바깥 재시도에서 두 번 세지 않게).
+    calls가 이미 0이면 더 깎지 않음(음수 방지). 금액 상한은 guard.py(LLM_BUDGET_USD)가 따로 지킨다."""
     with _lock:
         if _stats["calls"] > 0:
             _stats["calls"] -= 1
@@ -179,15 +152,6 @@ def fake_reply(messages):
     last_user = next((text_of(m.get("content")) for m in reversed(messages) if m.get("role") == "user"), "")
     record_fake_call(sum(len(text_of(m.get("content"))) for m in messages))
     return last_user[:200] + "[FAKE]", {"prompt_tokens": 0, "completion_tokens": 0, "fake": True}
-
-
-def remaining_calls():
-    """LLM_MAX_CALLS 남은 수(AG4 후속 F3) — None이면 무제한(LLM_MAX_CALLS 미설정). run_agent()가 reserve_call()로
-    1건을 예약한 **뒤**에 불러 "그 1건 포함 지금부터 몇 건을 더 쓸 수 있는지"를 run_agentic의 max_turns 상한에
-    반영한다 — 다중 턴 1회 실행이 실제로는 여러 번 모델을 불러도 공유 장부의 남은 수를 넘지 않게."""
-    with _lock:
-        cap = _max_calls()
-        return None if not cap else max(0, cap - _stats["calls"])
 
 
 def settle_calls(extra):
@@ -226,7 +190,7 @@ def cache_key(model, messages, temperature=0.0, max_tokens=1024, json_mode=False
 
 
 def _do_call(messages, temperature, max_tokens, json_mode, base, model, agent, timeout):
-    """실호출 1건 — 호출 상한·분당 상한·예산 상한·공유 장부(_stats) 갱신까지(chat()의 비-캐시 경로 공용, RV12로 빈
+    """실호출 1건 — 분당 상한·예산 상한·공유 장부(_stats) 갱신까지(chat()의 비-캐시 경로 공용, RV12로 빈
     응답 재요청이 2건째를 같은 방식으로 치르도록 분리). 캐시는 호출자(chat())가 처리."""
     reserve_call()
     # 실패 출구마다 돌려준다(한 곳 — try/finally): complete()에 넘기기 전 실패면 위 자리, 성공 전 실패면 예산 선차감(reserved).
@@ -258,7 +222,7 @@ def _do_call(messages, temperature, max_tokens, json_mode, base, model, agent, t
         try:
             # preguarded=True — chat()이 이미 자기 allow_external 매개변수로 가드를 통과시켰음(GA3).
             # call_reserved=True — 위 reserve_call()이 이 1차 호출의 자리를 이미 예약함(GH1-08d — 이중 집계 방지). 형식 재요청(AD33)의
-            # 2차 호출은 complete()가 그 자리에서 try_reserve_call()로 직접 예약한다(GH1-08c) — 여기서 다시 더하지 않는다.
+            # 2차 호출은 complete()가 그 자리에서 reserve_call()로 직접 센다(GH1-08c) — 여기서 다시 더하지 않는다.
             handed = True
             text, u = complete(
                 "llm",
@@ -298,7 +262,7 @@ def _empty_truncated(text, u):
 
 
 def chat(messages, temperature=0.0, max_tokens=1024, json_mode=False, allow_external=False, agent=None, timeout=None):
-    """메시지 목록 → 응답 텍스트. 설정 없으면 LLMUnavailable. 캐시·호출 상한·분당 상한·예산 상한·외부 가드 적용.
+    """메시지 목록 → 응답 텍스트. 설정 없으면 LLMUnavailable. 캐시·분당 상한·예산 상한·외부 가드 적용.
     LLM_FAKE=1이면 그 무엇도 거치지 않고 네트워크 없는 모의 응답(캐시에 안 씀) — 비용 추정·preflight 전용.
     agent=dev/agents/<agent_id> — 지시문 패키지 id를 그대로 complete()에 전달(GA2, 호출부는 agent= 필수 —
     cli/check_modules.py 정적 검사). 캐시 열쇠(messages·temperature 등)는 agent와 무관 — 요청 본문만 바뀐다.
@@ -349,7 +313,7 @@ def parse_json(text):
 # ── 모델 호출(0.2.0 — 옛 common/ai/adk.py의 ADK·litellm 장치를 지우고 OpenAI 호환 HTTP 한 길로, pl-46) ──────────────────
 # complete(role, messages) — 역할(llm·vlm) 하나에 단일 턴 1건. 가드(require_internal·precheck — 매 호출 URL을 그 자리에서 다시 확인)·
 # 재시도(429·5xx·연결·타임아웃만, 마지막 실패 뒤 대기 없음, Retry-After 존중)·base_url별 "모델 다운" 회로 차단기(RV24)·
-# 공유 호출 장부(LLM_MAX_CALLS — GH1-08d)·agent=의 출력 형식 1회 재요청(AD33 ⓑ, 패키지 agent.json output_schema)·직접 호출자의
+# 공유 호출 장부(호출 수 — GH1-08d)·agent=의 출력 형식 1회 재요청(AD33 ⓑ, 패키지 agent.json output_schema)·직접 호출자의
 # 빈 응답 1회 재요청(RV16)·LLM_EXTRA_BODY/VLM_EXTRA_BODY 병합(RV12)은 옛 adk.complete와 같은 규칙이다. 지시문 패키지(resources/prompts/…)는
 # 그대로 — 글자는 common.ai.agent_prompts가 읽고, 여기서는 agent.json의 model_role·output_schema만 본다.
 # tools=를 주면(OpenAI 함수 도구 목록) 응답 message 사전을 그대로 돌려준다 — PC 답변 점검의 도구 왕복(validation/e2e/tool_loop.py)만 쓴다.
@@ -369,7 +333,7 @@ class ModelUnavailable(RuntimeError):
 
 
 class GuardBlocked(ModelUnavailable, _BudgetExceeded):
-    """가드가 호출을 막음(외부 주소 거부·NO_PAID_CALLS·예산) — 호출은 안 나감. ModelUnavailable이기도 해서 '모델 없음'처럼
+    """가드가 호출을 막음(외부 주소 거부·예산) — 호출은 안 나감. ModelUnavailable이기도 해서 '모델 없음'처럼
     그 단계만 건너뛰는 호출부(그림·쪽 VLM 등)가 파싱을 멈추지 않음. BudgetExceeded를 기대하는 호출부도 그대로 잡힘."""
 
 
@@ -528,9 +492,7 @@ def _once(agent, role, prof, messages, temperature, max_tokens, json_mode, extra
         return text, usage
     _bump_schema_stat("invalid")
     first = usage or {}
-    if not try_reserve_call():  # 상한 도달 — 2차 호출을 내보내지 않음
-        _bump_schema_stat("retry_failed")
-        return text, {**first, "schema_failed": True}
+    reserve_call()
     try:
         msg, usage = _post_chat(
             prof, _append_retry_note(messages, _SCHEMA_RETRY_NOTE), temperature, max_tokens, json_mode, extra, timeout, guard_prefix
@@ -599,8 +561,7 @@ def complete(
         deadline = float(timeout) if timeout else 120.0
         direct = agent is not None and not call_reserved  # RV16·GH1-08d — chat()은 call_reserved=True(자기 안전망을 따로 가짐)
         if direct:
-            if not try_reserve_call():
-                raise ModelUnavailable("LLM_MAX_CALLS 도달 — 호출 보내지 않음(GH1-08d, 직접 호출자)")
+            reserve_call()
             call_reserved = True
         last_err, last_elapsed = None, None
         for attempt in range(retries):
@@ -613,7 +574,8 @@ def complete(
                     if direct and _empty_truncated(out, u):  # RV16 — 생각이 max_tokens를 다 써 빈 응답 → 4배로 딱 한 번
                         cap = cfg().models.llm.empty_retry_max
                         retry_tokens = cap if max_tokens is None else min(max_tokens * 4, cap)
-                        if retry_tokens > (max_tokens or 0) and try_reserve_call():
+                        if retry_tokens > (max_tokens or 0):
+                            reserve_call()
                             first = dict(u)
                             try:
                                 out, u = _once(
@@ -648,7 +610,7 @@ def complete(
 
 
 def _refund(slot, usd):
-    """실패한 호출이 쥔 것을 돌려준다 — slot이면 LLM_MAX_CALLS 자리, usd면 예산 선차감(_do_call·complete 공용, 리뷰 11-03)."""
+    """실패한 호출이 쥔 것을 돌려준다 — slot이면 호출 수 1건, usd면 예산 선차감(_do_call·complete 공용, 리뷰 11-03)."""
     if slot:
         release_call()
     if usd:
@@ -708,14 +670,13 @@ class _Turn:
 
 
 def admit_turn(role="llm"):
-    """여러 턴 도구 왕복의 턴 하나 장부(옛 run_agent per_turn_admit) — 호출 수 예약(원자적) + 외부 주소면 고정 추정액(LLM_EST_USD) 선차감.
-    → _Turn(통과) 또는 None(장부 거부 — 호출 상한·예산). 통과하면 이 턴 호출은 complete(call_reserved=True)로."""
+    """여러 턴 도구 왕복의 턴 하나 장부(옛 run_agent per_turn_admit) — 호출 수 세기 + 외부 주소면 고정 추정액(LLM_EST_USD) 선차감.
+    → _Turn(통과) 또는 None(장부 거부 — 예산). 통과하면 이 턴 호출은 complete(call_reserved=True)로."""
     from common.ai import guard as G
 
     prof = profile(role)
-    budget = G.budget_usd() if prof is not None and not is_internal(prof.base_url) else None  # 상한 읽기(형식 오류)는 예약 앞에서
-    if not try_reserve_call():
-        return None
+    budget = G.budget_usd() if prof is not None and not is_internal(prof.base_url) else None  # 예산 읽기(형식 오류)는 세기 앞에서
+    reserve_call()
     if budget is None:
         return _Turn(prof.model if prof else "", 0.0)
     usd = cfg().models.llm.est_usd

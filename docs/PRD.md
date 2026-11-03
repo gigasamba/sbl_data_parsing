@@ -152,7 +152,7 @@
 | EDW 접속 설정은 `common.connections.rdb` 하나(settings `required.edw`)에 계정 둘 — 읽기(목록·FileStorageMap·ParsingMeta 조회·MCP), 쓰기(ParsingMeta 게시만). MCP 프로세스에서는 쓰기 계정을 비운다 | 같은 값이 설정 블록 넷에 반복되던 것을 없앰. 등급 A | done | [op-03](prd/ops.md#op-03) |
 | PC 대역 EDW는 sqlite 파일 하나(`valid_env/edw/edw.sqlite`)를 `AI`·`CRMS`·`LAS`·`SFDC`로 붙여 같은 SQL이 돌게 | PC에서 운영 EDW에 접속하지 않는다 | done | [op-03](prd/ops.md#op-03) |
 | 모델 역할 llm·vlm·embed(OpenAI 호환). 외부 주소는 `common.models.<역할>.allow_external`이 켜지고 `RUN_ENV=local`일 때만, 서버는 거부. 내부 판정 = 해석된 주소가 사설 IP(또는 `internal_ip_ranges`) + 호스트 접미(`internal_host_suffixes`) | 폐쇄망 밖으로 데이터를 보내지 않는다. 접미 목록에는 전체 호스트 이름이 아니라 상위 도메인을 적어야 맞는다(운영 고침 묶음) | done | [pl-11](prd/ops.md#pl-11) |
-| 비용 상한 — `common.models.guard.budget_usd`(누적 $)·`max_calls`·지출 장부 `spend_file`·`no_paid_calls` | PC 호출을 싸게 유지. 응답 캐시·가짜 LLM도 여기 | done | [pl-11](prd/ops.md#pl-11) |
+| 비용 상한 — `common.models.guard.budget_usd`(누적 $)·지출 장부 `spend_file`(호출 수 상한·유료 차단 스위치는 11-03에 없앰) | PC 호출을 싸게 유지. 응답 캐시·가짜 LLM도 여기 | done | [pl-11](prd/ops.md#pl-11) |
 | 모델 — 개발 서버부터 내부망 GLM, PC는 OpenRouter | 사용자 11-02 | done | [pl-11](prd/ops.md#pl-11) |
 | JSON Lines 사건 기록(공통 키·로그 수준·비밀 가림) + DB 감사·성능 로그 — 두 앱 `common.core.jsonlog`, MCP 도구 호출마다 `applog.mcp_call`, 파이프라인 실행·단계 `applog.pipe_run`·`pipe_event`(`dbtool up --target applog`) | 사건·감사·성능을 같은 형식으로 남긴다(feature/logging, 서버 적용 전 — C-79·C-80) | dev | [op-01](prd/ops.md#op-01) |
 | 실행 환경 `RUN_ENV`(`required.env.run_env`)는 `local`·`dev`·`prd`만, 어디서나 필수 — `stage`나 모르는 값이면 시작 거부 | `stage`는 `prd`와 똑같이 동작했다 | done | [op-02](prd/ops-settings.md#op-02) |
@@ -185,7 +185,7 @@
 | `query_edw` 값을 인용한 답은 인용 점검 실패로 기록하고 그대로 둔다 | 사용자 결정(바꾸지 않음) | done | [e2-12](prd/test.md#e2-12) |
 | answer_gen 인용 버그 고침 — 오류 구분·JSON으로 못 바꾸는 값·객체가 아닌 답·다시 직렬화 | 시험 `tests/general/e2e/test_answer_gen.py` | done | [e2-19](prd/test.md#e2-19) |
 | 분류 수용 보고서(개발 서버) — 사람 정답 CSV(`s3_key`·정답 분류)와 비교해 원천·라벨별 일치율·혼동표 | 회사 데이터라 git 밖. 통과 기준은 첫 결과를 본 뒤 정한다 | todo | [e2-20](prd/test.md#e2-20) |
-| 검색 점검 페이지 `validation/search_ui`(기본 포트 8790, MCP `127.0.0.1:18765/mcp`) | 사람이 브라우저로 근거를 본다 | done | [e2-07](prd/test.md#e2-07) |
+| 검색 점검 페이지 `validation/search_ui`(기본 포트 8790, MCP `127.0.0.1:8765/mcp`) | 사람이 브라우저로 근거를 본다 | done | [e2-07](prd/test.md#e2-07) |
 | ~~점검 페이지 고정 글 "10 documents (20 chunks)" 고치기~~ | 범위 축소로 뺌 | dropped | [e2-16](prd/test.md#e2-16) |
 | PC 평가 도구는 검색 점검 페이지·답변 점검 둘만 남기고 나머지 도구·설정을 지움 | PC 전용 설정 약 50개의 관리 비용 | done | [e2-10](prd/test.md#e2-10) |
 | 안 쓰는 함수·요건 없는 코드(시험만 부르는 것 포함)를 지움 | 죽은 코드 비용. MCP 도구 이름·입출력은 그대로 | done | [e2-17](prd/test.md#e2-17) · [e2-18](prd/test.md#e2-18) |

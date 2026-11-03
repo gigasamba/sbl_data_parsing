@@ -186,14 +186,14 @@ def selftest():
         yb = d / "yesno.yaml"
         bad_y = []
         for word in ("yes", "off", "on", "no", "'yes'", "Y"):
-            yb.write_text(_new(f"common:\n  run_env: local\n  models:\n    guard:\n      no_paid_calls: {word}\n"), encoding="utf-8")
-            ok_y, msg_y = raises(lambda: load(_TApp, file=yb, environ={}), "no_paid_calls", "true·false·0·1")
+            yb.write_text(_new(f"common:\n  run_env: local\n  dev:\n    llm_fake: {word}\n"), encoding="utf-8")
+            ok_y, msg_y = raises(lambda: load(_TApp, file=yb, environ={}), "llm_fake", "true·false·0·1")
             if not ok_y or "Value error" not in msg_y and "value_error" not in msg_y:
                 bad_y.append(word)
         good_y = []
         for word, want in (("true", True), ("False", False), ("1", True), ("0", False), ("'1'", True), ('"0"', False)):
-            yb.write_text(_new(f"common:\n  run_env: local\n  models:\n    guard:\n      no_paid_calls: {word}\n"), encoding="utf-8")
-            good_y.append(load(_TApp, file=yb, environ={}).common.models.guard.no_paid_calls is want)
+            yb.write_text(_new(f"common:\n  run_env: local\n  dev:\n    llm_fake: {word}\n"), encoding="utf-8")
+            good_y.append(load(_TApp, file=yb, environ={}).common.dev.llm_fake is want)
         check(
             "YAML 판정 꼴 켜기 칸(코디네이터 10-27): yes·on·off·no 등은 검증 오류(칸 이름만) · true·false·0·1('1' 포함)만 받음 · env 글자는 옛 판정"
             + (" 실패: " + " ".join(bad_y) if bad_y else ""),
@@ -224,10 +224,10 @@ def selftest():
             and bl.common.models.embed.timeout == 60
             and bl.common.models.guard.internal_ip_ranges == [],
         )
-        bk = load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"OS_VERIFY_TLS": "", "EXTERNAL_SCOPE": ""})
+        bk = load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"OS_VERIFY_TLS": "", "PM_TABLE": ""})
         check(
-            "빈 글자: blank=keep 칸(옛 os.environ.get(X, 기본) — OS_VERIFY_TLS·EXTERNAL_SCOPE)은 '' 유지(S7a2 (b))",
-            (bk.common.connections.object_storage.verify_tls, bk.common.models.guard.external_scope) == ("", ""),
+            "빈 글자: blank=keep 칸(옛 os.environ.get(X, 기본) — OS_VERIFY_TLS·PM_TABLE)은 '' 유지(S7a2 (b))",
+            (bk.common.connections.object_storage.verify_tls, bk.common.connections.parsing_meta.table) == ("", ""),
         )
         check(
             "PG_HOST·PG_PORT 기본값 None(필수 칸 — 비면 pg.conf가 거부, op-09)",
@@ -277,8 +277,8 @@ def selftest():
         # VS7a2 R-c — 켜기 칸은 키마다 옛 판정 꼴(env 글자 그대로 · 빈 글자 포함)
         cases = [
             (
-                "NO_PAID_CALLS",
-                "models.guard.no_paid_calls",
+                "LLM_FAKE",
+                "dev.llm_fake",
                 {"1": True, "yes": False, "true": False, "on": False, "": False, "0": False, " 1": False},
             ),
             (
@@ -410,16 +410,16 @@ def selftest():
             blocked and srv_child,
         )
         (d / "ovb.yaml").write_text(
-            f"base: {tf}\noverrides:\n  NO_PAID_CALLS: true\n  EMBED_TIMEOUT: 9\n  LLM_MODEL: true\n  VLM_MODEL: 1.10\n  PM_PREFIX: 0123\n",
+            f"base: {tf}\noverrides:\n  LLM_FAKE: true\n  EMBED_TIMEOUT: 9\n  LLM_MODEL: true\n  VLM_MODEL: 1.10\n  PM_PREFIX: 0123\n",
             encoding="utf-8",
         )
         ovb = load(CommonAppSettings, file=d / "ovb.yaml", environ={})
         ovb_flat = load(CommonAppSettings, file=overlay_file({"LLM_TIMEOUT": "5"}, base=d / "ovb.yaml"), environ={})
         same_rule = [
-            (o.common.models.guard.no_paid_calls, o.common.models.embed.timeout, o.common.models.llm.model, o.common.models.vlm.model)
+            (o.common.dev.llm_fake, o.common.models.embed.timeout, o.common.models.llm.model, o.common.models.vlm.model)
             for o in (ovb, ovb_flat)
         ]
-        (d / "ovy.yaml").write_text(f"base: {tf}\noverrides:\n  NO_PAID_CALLS: yes\n", encoding="utf-8")
+        (d / "ovy.yaml").write_text(f"base: {tf}\noverrides:\n  LLM_FAKE: yes\n", encoding="utf-8")
         check(
             "덮기 파일 손으로 쓴 YAML 값(R-2): 절 안과 같은 규칙(true → 켬·글자 칸은 쓴 글자) — 직접 읽기·펼쳐 쓰기 같음 · yes·on은 거부",
             same_rule == [(True, 9, "true", "1.10")] * 2
@@ -457,7 +457,7 @@ def selftest():
         )
         check(
             "overridden()(R-11): 지금 덮기 파일의 overrides 이름만(공유 settings.yaml 값은 아님)",
-            overridden({"SETTINGS_FILE": str(d / "ovb.yaml")}) == {"NO_PAID_CALLS", "EMBED_TIMEOUT", "LLM_MODEL", "VLM_MODEL", "PM_PREFIX"}
+            overridden({"SETTINGS_FILE": str(d / "ovb.yaml")}) == {"LLM_FAKE", "EMBED_TIMEOUT", "LLM_MODEL", "VLM_MODEL", "PM_PREFIX"}
             and overridden({"SETTINGS_FILE": str(tf)}) == frozenset(),
         )
         check(
@@ -465,13 +465,13 @@ def selftest():
             load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"LOG_RETENTION_DAYS": "x"})._dropped
             == {"LOG_RETENTION_DAYS"},
         )
-        with COMMON.env(LLM_BUDGET_USD="abc", LLM_MAX_CALLS="5"):
+        with COMMON.env(LLM_BUDGET_USD="abc", LLM_TIMEOUT="5"):
             try:
                 checked("LLM_BUDGET_USD")
                 chk = False
             except ValueError as e:
                 chk = "LLM_BUDGET_USD" in str(e) and "abc" not in str(e)
-            checked("LLM_MAX_CALLS")
+            checked("LLM_TIMEOUT")
             ok_other = cfg().runtime.cpu_max_load is not None  # 다른 칸 읽기는 그대로
         check("checked(): 형식 틀린 지출 상한은 읽는 자리에서 ValueError(이름만) · 다른 칸·맞는 값은 그대로", chk and ok_other)
         check(
@@ -528,7 +528,8 @@ def selftest():
             environ={"RUN_ENV": "local"},
             data={
                 "common": {
-                    "models": {"guard": {"no_paid_calls": True, "internal_ip_ranges": ["10.1.0.0/16", "10.2.0.0/16"]}},
+                    "dev": {"llm_fake": True},
+                    "models": {"guard": {"internal_ip_ranges": ["10.1.0.0/16", "10.2.0.0/16"]}},
                     "connections": {"pg": {"password": secret}},
                 }
             },
@@ -536,7 +537,7 @@ def selftest():
         items = {k: v for k, v, _ in env_items(st3)}
         check(
             "env_items: 켜기 → '1', 목록 → 쉼표",
-            items.get("NO_PAID_CALLS") == "1" and items.get("INTERNAL_IP_RANGES") == "10.1.0.0/16,10.2.0.0/16",
+            items.get("LLM_FAKE") == "1" and items.get("INTERNAL_IP_RANGES") == "10.1.0.0/16,10.2.0.0/16",
         )
         check("env_items: 비밀은 기본으로 안 냄 · 기본값 칸은 안 냄", "PG_PASSWORD" not in items and "PG_PORT" not in items)
         cache = Cache(_TApp)

@@ -126,7 +126,7 @@ fp_of() {   # fp_of <판> → JSON 한 줄(실패하면 빈 출력)
   # shellcheck disable=SC2086
   git archive "$1" $specs | tar -x -C "$d" 2>/dev/null || return 0
   # 서버처럼 계산 — 신호(RUN_ENV·SETTINGS_FILE)를 빼고, S7b 전 판(옛 env LOCAL_RUN을 읽음)이면 그것도 뺀다. S7e2 — 코드가 읽은 적 없는 ENV_AUTOLOAD=0·
-  # 옛 NO_PAID_CALLS env(이제 settings.yaml 칸 — 지문 계산은 모델을 부르지 않음)는 지움(VS7e1 흔적 정리)
+  # 옛 NO_PAID_CALLS env(11-03에 칸도 지움 — 지문 계산은 모델을 부르지 않음)는 지움(VS7e1 흔적 정리)
   (cd "$d" && env -u LOCAL_RUN -u RUN_ENV -u SETTINGS_FILE PYTHONPATH=. "$PY" -c "$FP_CODE" 2>/dev/null | tail -1) || true
 }
 FP_OLD=$(fp_of "$SINCE_C"); FP_NEW=$(fp_of "$HEAD_C")

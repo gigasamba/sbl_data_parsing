@@ -77,7 +77,7 @@ def test_embed_span_cache_batches_retries():
     rows, patched = _capture()
     with tempfile.TemporaryDirectory() as tmp, patched, jsonlog.context(run_id=str(uuid.uuid4())):
         cache = str(Path(tmp) / "cache.sqlite")
-        with settings.isolated(EMBED_BASE_URL="http://127.0.0.1:9/v1", EMBED_MODEL="m", NO_PAID_CALLS="1"):
+        with settings.isolated(EMBED_BASE_URL="http://127.0.0.1:9/v1", EMBED_MODEL="m"):
             with mock.patch.object(embed, "_embed_api", fake_api), mock.patch.object(time, "sleep", lambda s: None):
                 with span.span("embed.bundle", "embed", model="api") as sp:
                     first = build_bundle.embed_all("api", texts, batch=2, cache=cache)

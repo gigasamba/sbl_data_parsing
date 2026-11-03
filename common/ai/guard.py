@@ -226,58 +226,13 @@ def spend_settle(delta):
 _EST_USD = {"VLM": 0.02, "EMBED": 0.001}
 
 
-class ScopeExceeded(RuntimeError):
-    pass
-
-
-def external_scope():
-    """EXTERNAL_SCOPE(기본 func) — "e2e"가 아니면 전부 func로 본다(미지값도 안전하게 보수적인 쪽, AD43)."""
-    return cfg().models.guard.external_scope  # 빈 글자는 그대로(옛 get(X, "func")처럼 — blank="keep")
-
-
-def check_scope(urls, *, n_combos=None, n_docs=None, n_questions=None):
-    """AD43 — 외부(OpenRouter 등) 모델 사용 '범위' 가드(require_internal·precheck의 두 겹·예산·NO_PAID_CALLS와
-    별개의 세 번째 겹, 여기서 그 가드들을 느슨하게 하지 않는다). urls: 이번 실행이 쓰는 모델 엔드포인트 주소들
-    (LLM·VLM·EMBED 등 — None·빈 문자열 섞여도 됨). 전부 내부망이면 바로 통과(내부 실행은 영향 없음).
-    외부 주소가 하나라도 있으면:
-      ① 조합(n_combos) ≥2 — scope 무관 항상 거부(스택 조합별 성능 비교는 서버 내부 모델로 돌리세요 · 전체 E2E
-         점검은 조합 1개로 끝까지 도는 것만 EXTERNAL_SCOPE=e2e로 허용).
-      ② external_scope() != "e2e"(기본 func) — 기능 시험만:
-         - LLM_BUDGET_USD 미설정이면 거부(예산 상한 없는 외부 호출 금지)
-         - n_docs > EXTERNAL_MAX_DOCS(기본 10) 또는 n_questions > EXTERNAL_MAX_QUESTIONS(기본 20)면 거부
-      scope=="e2e"면 ②는 건너뜀(①이 이미 조합 1개로 막아 둠)."""
-    if not any(u and not is_internal(u) for u in urls):
-        return
-    if n_combos is not None and n_combos >= 2:
-        raise ScopeExceeded(
-            f"조합 {n_combos}개 + 외부 주소 — 스택 조합별 성능 비교는 서버 내부 모델로 돌리세요"
-            f"(전체 E2E 점검은 EXTERNAL_SCOPE=e2e로 조합 1개만 허용)"
-        )
-    if external_scope() != "e2e":
-        if budget_usd() is None:
-            raise ScopeExceeded("EXTERNAL_SCOPE=func(기본) — LLM_BUDGET_USD 없이 외부 호출 금지. 성능 비교는 서버 내부 모델로 돌리세요")
-        max_docs = cfg().models.guard.external_max_docs
-        max_q = cfg().models.guard.external_max_questions
-        if n_docs is not None and n_docs > max_docs:
-            raise ScopeExceeded(
-                f"EXTERNAL_SCOPE=func — 문서 {n_docs}개 > 상한 {max_docs}(EXTERNAL_MAX_DOCS). 성능 비교는 서버 내부 모델로 돌리세요"
-            )
-        if n_questions is not None and n_questions > max_q:
-            raise ScopeExceeded(
-                f"EXTERNAL_SCOPE=func — 질문 {n_questions}개 > 상한 {max_q}(EXTERNAL_MAX_QUESTIONS). 성능 비교는 서버 내부 모델로 돌리세요"
-            )
-
-
 def precheck(url, prefix):
     """모델 호출 전 비용 관문(원래 urlopen 안에 있던 사전 검사 — GA, urlopen·common.ai.llm이 공유하게 뽑음).
-    require_internal(외부 주소 거부)은 별개로 호출자가 먼저 부른다. 비용 관문(10-05): NO_PAID_CALLS=1이면 외부 주소
-    호출 자체를 거부(추정·preflight·context-only) · LLM_BUDGET_USD가 있으면 llm.chat 밖 호출(VLM·EMBED·RERANK)도
+    require_internal(외부 주소 거부)은 별개로 호출자가 먼저 부른다. 비용 관문: LLM_BUDGET_USD가 있으면 llm.chat 밖 호출(VLM·EMBED·RERANK)도
     호출 전 고정 예상액을 선차감(LLM은 llm.chat이 토큰 기준으로 함).
     반환: 이번 호출이 선차감한 금액(0.0이면 내부망·LLM_BUDGET_USD 미설정 등 정산 대상 아님) — BR45, 호출자가 응답의
     실제 토큰 usage를 알게 된 뒤 settle_tokens(이 값, ...)로 사후 정산한다(선차감 당시엔 토큰 수를 모르니 고정값)."""
     external = not is_internal(url)
-    if external and cfg().models.guard.no_paid_calls:
-        raise BudgetExceeded(f"NO_PAID_CALLS=1 — 외부 유료 호출 차단({prefix}: {urllib.parse.urlparse(url).hostname})")
     if external and prefix != "LLM" and budget_usd() is not None:
         usd = by_env(f"{prefix}_EST_USD", _EST_USD.get(prefix, 0.01))  # 칸 없는 접두·값 없음은 _EST_USD 표
         spend_reserve(usd, prefix)

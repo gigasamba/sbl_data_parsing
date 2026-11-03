@@ -26,7 +26,7 @@ PC_NEW = """required:
 common:
   models:
     guard:
-      no_paid_calls: true
+      budget_usd: 1.5
 transform:
   structure:
     embed: api
@@ -54,7 +54,7 @@ PC_OLD = """common:
       db_schema: rag_test
   models:
     guard:
-      no_paid_calls: true
+      budget_usd: 1.5
     embed:
       base_url: http://127.0.0.1:9/v1
       model: test-embed
@@ -106,12 +106,22 @@ def test_pc_file_new_layout_and_migrate():
             c = st.common
             assert c.run_env == "local" and c.store.run_mode == "prod" and c.connections.pg.port == 55433, name
             assert c.connections.pg.password.get_secret_value() == "dummy-pg" and c.models.embed.model == "test-embed", name
-            assert c.models.guard.no_paid_calls is True and c.runtime.cpu_max_load == 4.0, name
+            assert c.models.guard.budget_usd == 1.5 and c.runtime.cpu_max_load == 4.0, name
             assert not hasattr(c.paths, "mcp_bundle"), name  # mc-19 — 지운 칸: 남아 있어도 경고만(시작은 함)
             if name == "pipeline":
                 assert st.pipeline.transform.structure.embed == "api"
             if name == "mcp":
                 assert st.mcp.server.port == 8765 and st.mcp.dev.mcp_url == "http://127.0.0.1:8765/mcp"
+        gone = Path(d) / "gone.yaml"  # 11-03 지운 PC 비용 칸 5개 — 남아 있어도 경고만(시작은 함)
+        gone.write_text(
+            PC_NEW.replace(
+                "      budget_usd: 1.5\n",
+                "      budget_usd: 1.5\n      no_paid_calls: true\n      max_calls: 40\n      external_max_docs: 3\n      external_max_questions: 3\n      external_scope: x\n",
+            ),
+            encoding="utf-8",
+        )
+        g = load(next(iter(classes.values())), file=gone, environ={}).common.models.guard
+        assert g.budget_usd == 1.5 and not any(hasattr(g, k) for k in ("no_paid_calls", "max_calls", "external_scope")), g
         old = Path(d) / "old.yaml"
         old.write_text(PC_OLD, encoding="utf-8")
         assert _raises(lambda: load(next(iter(classes.values())), file=old, environ={}), "common.config.migrate")

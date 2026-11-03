@@ -207,11 +207,9 @@ required:
   embed: {base_url: <OpenAI 호환 주소>, model: <임베딩 모델>, api_key: <키>}
 common:
   models:
-    embed: {allow_external: true}
+    embed: {allow_external: false}               # 평소에는 false(외부 호출 차단) — 임베딩이 필요한 실행 동안만 true
     guard:
-      no_paid_calls: true                        # 평소에는 true(외부 호출 차단) — 임베딩이 필요한 실행 동안만 false
-      budget_usd: 0.1                            # 비용 상한
-      max_calls: 40
+      budget_usd: 0.1                            # 비용 상한(누적 $)
       spend_file: output/spend-ledger.json
 ops:
   pipeline_paths: {out_root: output/demo}        # 파이프라인 결과 폴더
@@ -227,7 +225,7 @@ tuning:
 - 옛 배치(최상위 `common`·`pipeline`·`mcp` — op-08 전) 파일은 읽지 않는다. `python -m common.config.migrate settings.yaml --out settings.new.yaml`로 바꾼 뒤 새 파일로 바꿔 넣는다(지운 칸은 "삭제됨"으로 이름만 알림).
 - PG 접속값은 서버에서 꼭 채운다 — 비우면 시작을 거부한다(사용자 10-31, op-09 — 자동 탐지 없음). PC는 비우면 SQLite 대역으로 돈다. 검색 저장소는 PG 하나라 종류 칸은 없다(옛 `required.deploy.mcp_store`가 남아 있으면 경고만 — mc-01, 11-01).
 - 같은 절(`search:` 등)이나 같은 칸을 두 번 쓰면 시작을 거부한다 — 칸을 더할 때는 이미 있는 절 안에 넣는다.
-- **외부 임베딩은 세 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `run_env: local` · `no_paid_calls: false`. 하나라도 빠지면 호출하지 않는다(서버 dev·prd는 늘 거부).
+- **외부 임베딩은 두 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `run_env: local`. 하나라도 빠지면 호출하지 않는다(서버 dev·prd는 늘 거부). 옛 `no_paid_calls`·`max_calls` 칸은 11-03에 없앴다(남아 있으면 경고만).
 - PG 접속 항목(`required.pg`의 host·port·db·user·password·db_schema)은 모두 필수다 — 비우면 채울 자리를 알려 주고 멈춘다(op-09, `docker ps` 자동 탐지와 코드 기본값은 없앰). 로컬 묶음만 쓸 때는 명령에 `--local`.
 
 ### 4-3. 점검
@@ -245,7 +243,7 @@ export PYTHONPATH=$PWD                                   # 명령은 저장소 �
 
 ### 4-4. 파이프라인 실행 — 문서 몇 건(①~⑥)
 
-먼저 `settings.yaml`의 `no_paid_calls`를 `false`로 바꾼다(외부 임베딩 허용). 끝나면 ⑥에서 되돌린다.
+먼저 `settings.yaml`의 `common.models.embed.allow_external`을 `true`로 바꾼다(외부 임베딩 허용). 끝나면 ⑥에서 되돌린다.
 
 **① 테스트 문서 고르기 — `valid_env/object_storage`에서 몇 건을 한 폴더로 모음**
 
@@ -306,16 +304,16 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 .venv/bin/python -m mcp_server.cli.ask ask --k 3 --q "<질문>"   # 검색은 required.pg.db_schema의 PG만(mc-19 — 묶음 폴더 안 읽음)
 ```
 
-**⑥ 정리** — 4-5에서 MCP까지 확인한 뒤 `settings.yaml`의 `no_paid_calls`를 `true`로 되돌린다(평소 테스트가 외부를 호출하지 않게).
+**⑥ 정리** — 4-5에서 MCP까지 확인한 뒤 `settings.yaml`의 `allow_external`을 `false`로 되돌린다(평소 테스트가 외부를 호출하지 않게).
 
 <details>
 <summary><b>방법 B — settings.yaml을 바꾸지 않고 <code>--set</code>으로 넘기기</b>(되돌릴 필요 없음)</summary>
 
-`settings.yaml`은 `no_paid_calls: true`인 채로 두고, 이번 실행에만 필요한 값을 명령 인자로 준다.
+`settings.yaml`은 `allow_external: false`인 채로 두고, 이번 실행에만 필요한 값을 명령 인자로 준다.
 ```bash
 O=$PWD/output/demo; SRC=$O/src     # ①과 같은 문서 폴더
 SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
-      --set NO_PAID_CALLS=0 --set LLM_BUDGET_USD=0.10 --set LLM_MAX_CALLS=10 --set LLM_SPEND_FILE=$O/spend.json)
+      --set LLM_BUDGET_USD=0.10 --set LLM_SPEND_FILE=$O/spend.json)
 
 .venv/bin/python -m pipeline.cli "${SETS[@]}" parse --src $SRC
 .venv/bin/python -m pipeline.transform.structure.build_bundle "${SETS[@]}" \
@@ -326,7 +324,7 @@ SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
 
 # ask·MCP는 --set을 받지 않으므로 오버레이 설정 파일(방법 C)로 같은 값을 넘긴다
 SF=$(.venv/bin/python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 \
-     NO_PAID_CALLS=0 LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_PORT=18769)
+     LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_PORT=18769)
 SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.ask ask --k 3 --q "<질문>"
 SETTINGS_FILE=$SF nohup .venv/bin/python -m mcp_server.main > $O/mcp.log 2>&1 & echo $! > $O/mcp.pid
 ```
@@ -355,7 +353,7 @@ nohup bash validation/search_ui/start_ui.sh  > output/validation/ui.log  2>&1 & 
 kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 ```
 
-- `no_paid_calls: true`면 질의 임베딩도 막혀 키워드·ID 검색만 된다(근거의 via에 `v`가 없음). 벡터 검색까지 보려면 `false`로 바꾸고 MCP를 다시 띄우고, 끝나면 되돌린다.
+- `allow_external: false`면 질의 임베딩도 막혀 키워드·ID 검색만 된다(근거의 via에 `v`가 없음). 벡터 검색까지 보려면 `true`로 바꾸고 MCP를 다시 띄우고, 끝나면 되돌린다.
 - 다른 적재 결과를 보려면 `required.pg.db_schema`를 바꾸고 다시 띄운다.
 
 ### 4-7. 그 밖

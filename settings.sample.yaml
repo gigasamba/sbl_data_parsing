@@ -93,11 +93,11 @@ common:
       allow_external:  # 임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만) · 기본 false · 값: true·false
       est_usd: 0.001  # 임베딩 호출 1건당 예상 비용($) · 기본 0.001 · 값: 0 이상
       query_cache:  # 질의 임베딩 캐시 sqlite 경로(0이면 캐시 끔 — mcp 이미지 안 기본 /tmp/mcp_query_cache.sqlite: 결과 폴더가 읽기 전용) · 값: 경로
-      query_prefix:  # [파라미터] 질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …/nQuery: ') · 값: 글자
+      query_prefix:  # [파라미터] 질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …\nQuery: ') · 값: 글자
     llm:
       allow_external:  # LLM 외부 주소 허용(=1, RUN_ENV=local일 때만) · 기본 false · 값: true·false
       cache_dir:  # LLM 응답 캐시 폴더(요청 해시별 json) · 값: 경로
-      est_usd: 0.01  # LLM 한 턴(run_agent)당 예상 비용($) · 기본 0.01 · 값: 0 이상
+      est_usd: 0.01  # 외부 LLM 도구 왕복 한 턴(admit_turn)당 예상 비용($) · 기본 0.01 · 값: 0 이상
       extra_body:  # [파라미터] LLM 요청 본문에 합칠 JSON 객체(예: 생각 끄기 {'reasoning':{'enabled':false}}) · 값: JSON 객체
       price_in:  # LLM 입력 단가($/백만 토큰) · 값: 0 이상
       price_out:  # LLM 출력 단가($/백만 토큰) · 값: 0 이상
@@ -112,13 +112,8 @@ common:
     # ─── 비용·외부 가드 ───
     guard:
       budget_usd:  # 유료(외부) 모델 호출 누적 비용 상한($) · 값: 0 이상
-      external_max_docs: 10  # 외부 모델 사용 시(scope=func) 허용 문서 수 상한(개) · 기본 10 · 값: 0 이상 정수
-      external_max_questions: 20  # 외부 모델 사용 시(scope=func) 허용 질문 수 상한(개) · 기본 20 · 값: 0 이상 정수
-      external_scope: func  # 외부 모델 사용 범위 · 기본 func · 값: func·e2e 중 하나
       internal_host_suffixes: []  # 내부망으로 인정할 호스트 이름 접미사 목록(쉼표 구분, 실제 주소가 사설일 때만) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
       internal_ip_ranges: []  # 사설(RFC1918) 밖의 사내 IP 대역 CIDR 목록(쉼표 구분) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
-      max_calls: 0  # LLM 호출 수 상한(개) · 기본 0 · 값: 0 이상 정수 (0 = 무제한)
-      no_paid_calls: false  # =1이면 외부(유료) 주소 호출 자체를 거부 · 기본 false · 값: true·false
       spend_file:  # 지출 장부 파일 경로(호출마다 금액 한 줄 — 프로세스·실행 전체가 공유) · 값: 경로
   # ─── 검색 토큰 정규화 ───
   text:
@@ -316,7 +311,7 @@ ops:
     soffice_bin:  # LibreOffice soffice 실행 파일 경로 · 값: 경로
   # ─── 호스트 — 컨테이너 도구·패치·정리 ───
   host:
-    docker: docker  # 호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등) · 기본 docker · 값: docker·podman 중 하나
+    docker:  # 호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — 비우면 podman, 없으면 docker — op-10) · 값: docker·podman 중 하나
     image_stage_dir:  # prune_old.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값) · 값: 경로
     prune_keep: 2  # prune_old.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값) · 기본 2 · 값: 0 이상 정수
   # ─── 서버 컨테이너 — CPU·메모리 한도·폴더 ───
@@ -364,7 +359,7 @@ dev:
     check_env_any_py: false  # check_env가 시스템 python에서도 멈추지 않고 계속할지(=1 계속 / 그 외 중단) · 기본 false · 값: true·false
   # ─── 평가 ───
   mcp:
-    mcp_url: http://127.0.0.1:18765/mcp  # 검증 페이지가 붙을 MCP 서버 URL · 기본 http://127.0.0.1:18765/mcp · 값: URL
+    mcp_url: http://127.0.0.1:8765/mcp  # 검증 페이지가 붙을 MCP 서버 URL · 기본 http://127.0.0.1:8765/mcp · 값: URL
     ui_port: 8790  # 검증 페이지(validation/search_ui) 서버 포트 · 기본 8790 · 값: 1~65535
   # ─── PC 시험 Docker ───
   docker:

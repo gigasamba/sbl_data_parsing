@@ -37,7 +37,7 @@ def test_selftest_without_pipeline_stages():
                 "RAG_MODULE": "mcp",  # env 남김 — 이미지 종류 내부 신호: 최소 MCP 배치를 재현
             }
         )
-        env = settings.child_env(base, RUN_ENV="local", NO_PAID_CALLS="1", PIPE_OUT_ROOT=str(root / "output"))
+        env = settings.child_env(base, RUN_ENV="local", PIPE_OUT_ROOT=str(root / "output"))
         proc = subprocess.Popen(
             [sys.executable, "-m", "pipeline.cli", "selftest"],
             cwd=root,

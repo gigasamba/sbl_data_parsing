@@ -1,4 +1,4 @@
-"""common.ai.llm — 실패 출구에서 호출 자리(LLM_MAX_CALLS 장부)와 예산 선차감(LLM_BUDGET_USD 장부)이 늘 돌아오는지(허브 A — #106 뒤 누수 3건).
+"""common.ai.llm — 실패 출구에서 호출 수 장부와 예산 선차감(LLM_BUDGET_USD 장부)이 늘 돌아오는지(허브 A — #106 뒤 누수 3건).
 가짜 주소·가짜 _once만 — 네트워크 없음."""
 
 from unittest import mock
@@ -10,7 +10,6 @@ from common.config.settings import COMMON
 MSGS = [{"role": "user", "content": "hello"}]
 ENV = dict(
     RUN_ENV="local",
-    NO_PAID_CALLS="0",
     LLM_BUDGET_USD="10",
     LLM_SPEND_FILE=None,
     LLM_BASE_URL="https://llm.example.com/v1",

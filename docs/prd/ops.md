@@ -147,10 +147,11 @@
 <a id="pl-11"></a>
 ## pl-11 · 모델 호출, 비용, 외부 전송 가드(공용)
 - 이유: 폐쇄망 서버는 외부 모델을 절대 부르면 안 되고, PC 호출은 싸게 유지해야 한다.
-- 무엇: OpenAI 호환 역할 llm/vlm/embed(rerank는 10-29에, ocr_vlm은 10-30에 지움 — [transform-cleanup.md#pl-31](transform-cleanup.md#pl-31)). 서버(dev/prd)는 외부 모델 거부. 외부 전송은 `*_ALLOW_EXTERNAL` + `RUN_ENV=local`이어야 함. 예산, 호출 상한, RPM, 비용 장부, 응답 캐시, 시험용 가짜 LLM.
+- 무엇: OpenAI 호환 역할 llm/vlm/embed(rerank는 10-29에, ocr_vlm은 10-30에 지움 — [transform-cleanup.md#pl-31](transform-cleanup.md#pl-31)). 서버(dev/prd)는 외부 모델 거부. 외부 전송은 `*_ALLOW_EXTERNAL` + `RUN_ENV=local`이어야 함. 예산, RPM, 비용 장부, 응답 캐시, 시험용 가짜 LLM.
 - 10-29(사용자): 합성 문서 선언 `LLM_SYNTHETIC_TRUTH` 잠금 삭제 · 외부 허용은 루트 settings.yaml에 둬도 됨(설정 창구는 하나).
 - 파일: `common/ai/guard.py`, `common/ai/llm.py`(옛 `adk.py` 합침 — 0.2.0), `common/config/settings.py`.
 - 결정(사용자 11-02): 개발 서버(dev)부터 내부망 GLM, PC(local)는 OpenRouter(유료 — 상한은 CLAUDE.md §7).
+- 11-03(사용자): PC 비용 스위치 `no_paid_calls`(NO_PAID_CALLS)·`max_calls`(LLM_MAX_CALLS)·`external_max_docs`·`external_max_questions`·`external_scope`를 지움 — 코드·설정·sample·시험·문서. 옛 설정 파일의 칸은 경고만(`layout.REMOVED`). 남긴 것: 지출 상한 `budget_usd`와 장부 `spend_file`(자식 프로세스·검증 페이지가 같은 장부를 나눠 쓰는 유일한 길이라 설정으로 둠), 모든 `*_ALLOW_EXTERNAL`, 서버(dev/prd)의 외부 모델 거부. answer_gen의 "외부 호출이면 예산 필수" 범위 검사(check_scope)도 함께 없어짐. 호출 수는 `usage()` 집계로만 센다.
 - Status: done
 
 <a id="op-01"></a>

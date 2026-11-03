@@ -41,7 +41,7 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 ## 4. 패키지별 메모 (옛 README에서 표에 안 들어간 것)
 
 - **`figure_overlay`** — 출력 스키마는 `figure_describe`와 같고(kind/summary/text/values/edges/table_md), 지시문이 "위 개체는 아래 그림을 설명할 수 있다"는 관계를 읽게 한다. 캐시 이름 `figoverlay` — 같은 그림이라도 `figure_describe`와 다른 열쇠.
-- **`table_struct_judge`** — 결정적 결과를 먼저 계산하고 판정자는 **승격만**(0 → 1) 한다. 가드(`NO_PAID_CALLS`·`LLM_FAKE`·내부망 전용)는 `common.ai.llm.chat()`이 집행(`allow_external`을 주지 않아 내부망 LLM만). 판정자 호출 실패는 조용히 "승격 안 함". `vlm` 모드는 아직 TODO.
+- **`table_struct_judge`** — 결정적 결과를 먼저 계산하고 판정자는 **승격만**(0 → 1) 한다. 가드(`LLM_FAKE`·지출 상한·내부망 전용)는 `common.ai.llm.chat()`이 집행(`allow_external`을 주지 않아 내부망 LLM만). 판정자 호출 실패는 조용히 "승격 안 함". `vlm` 모드는 아직 TODO.
 
 ## 5. 도구(결정적 — 모델 호출 없음)
 

@@ -44,7 +44,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
             assert text == "실제 답", text
             assert _seen_mt == [500, 2000], _seen_mt  # 재요청 1회 · max_tokens 4배(상한 8000 안 걸림)
             after = dict(_stats)
-            assert after["calls"] - before["calls"] == 2, (before, after)  # 두 호출 다 공유 장부(LLM_MAX_CALLS)에
+            assert after["calls"] - before["calls"] == 2, (before, after)  # 두 호출 다 공유 장부(호출 수)에
             assert after["tokens_out"] - before["tokens_out"] == 110, after  # 50+60 — 재요청 비용도 집계
             _seen_mt.clear()
             text2 = chat([{"role": "user", "content": "질문"}], max_tokens=500, agent="x")  # 캐시 적중 — 재호출 없음

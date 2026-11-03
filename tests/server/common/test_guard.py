@@ -2,20 +2,17 @@
 
 import os
 import socket
-import urllib.request
 
 from common.ai.guard import (
     BudgetExceeded,
-    ScopeExceeded,
-    check_scope,
     external_allowed,
     fake_llm,
     is_internal,
+    precheck,
     require_internal,
     spend_reserve,
     spend_settle,
     spend_total,
-    urlopen,
 )
 
 
@@ -24,12 +21,8 @@ def selftest():
     from common.config.settings import COMMON
 
     with COMMON.env(
-        NO_PAID_CALLS=None,
         LLM_SPEND_FILE=None,
         LLM_BUDGET_USD=None,
-        EXTERNAL_SCOPE=None,
-        EXTERNAL_MAX_DOCS=None,
-        EXTERNAL_MAX_QUESTIONS=None,
         INTERNAL_HOST_SUFFIXES=None,
         INTERNAL_IP_RANGES=None,
         EMBED_ALLOW_EXTERNAL=None,
@@ -126,15 +119,9 @@ def _selftest_body(COMMON):
     print(
         "[selftest] 내부망 가드 — 외부 허용 잠금·점 없는 이름 주소 확인·리다이렉트 가드·RUN_ENV(없음·dev·prd·모르는 글자 거부, local만 허용) 통과"
     )
-    # 비용 관문(10-05 독립 검토) — NO_PAID_CALLS 차단 · 공유 장부 선차감이 동시 호출에도 상한을 넘지 않음
+    # 비용 관문(10-05 독립 검토) — 공유 장부 선차감이 동시 호출에도 상한을 넘지 않음(옛 NO_PAID_CALLS 차단은 11-03에 지움)
     import threading
 
-    with COMMON.env(NO_PAID_CALLS="1"):
-        try:
-            urlopen(urllib.request.Request("https://openrouter.ai/api/v1/x"), 1, "EMBED")
-            raise AssertionError("NO_PAID_CALLS인데 외부 호출 통과")
-        except BudgetExceeded:
-            pass
     with COMMON.env(LLM_SPEND_FILE=os.path.join(tempfile.mkdtemp(), "spend.txt"), LLM_BUDGET_USD="1.0"):
         passed = []
 
@@ -151,61 +138,12 @@ def _selftest_body(COMMON):
         assert len(passed) == 10 and abs(spend_total() - 1.0) < 1e-6, (len(passed), spend_total())
         spend_settle(-0.3)
         assert abs(spend_total() - 0.7) < 1e-6
-    print("[selftest] 비용 관문 — NO_PAID_CALLS 외부 차단 · 공유 장부 선차감(동시 20건 중 상한까지 10건만)·정산 통과")
-    # AD43 — 외부 사용 '범위' 가드(EXTERNAL_SCOPE=func|e2e)
-    EXT, INT = "https://openrouter.ai/api/v1", "http://10.0.0.5:8000/v1"
-    check_scope([INT], n_combos=99, n_docs=9999, n_questions=9999)  # 내부 주소 — 조합·문서·질문 수 전부 영향 없음
-    with COMMON.env(LLM_BUDGET_USD="1.0"):  # 예산은 있되 조합 2개 — func든 e2e든 거부
-        try:
-            check_scope([EXT], n_combos=2)
-            raise AssertionError("외부+조합2+func가 통과됨")
-        except ScopeExceeded:
-            pass
-        with COMMON.env(EXTERNAL_SCOPE="e2e"):
-            try:
-                check_scope([EXT], n_combos=2)
-                raise AssertionError("외부+조합2+e2e가 통과됨")
-            except ScopeExceeded:
-                pass
-            check_scope([EXT], n_combos=1)  # 외부+조합1+e2e — 허용(캡 검사 안 함)
-            check_scope([EXT], n_combos=1, n_docs=9999, n_questions=9999)  # e2e는 문서·질문 상한도 안 봄
-    try:  # 외부+func(기본)+예산 없음 — 거부
-        check_scope([EXT], n_combos=1)
-        raise AssertionError("외부+func+예산 없음이 통과됨")
-    except ScopeExceeded:
-        pass
-    with COMMON.env(LLM_BUDGET_USD="1.0"):
-        check_scope([EXT], n_combos=1, n_docs=10, n_questions=20)  # 기본 상한 그대로(문서 10·질문 20) — 통과
-        try:
-            check_scope([EXT], n_combos=1, n_docs=11)
-            raise AssertionError("문서 상한 초과가 통과됨")
-        except ScopeExceeded:
-            pass
-        try:
-            check_scope([EXT], n_combos=1, n_questions=21)
-            raise AssertionError("질문 상한 초과가 통과됨")
-        except ScopeExceeded:
-            pass
-        # 보안 검토 10-07 — 호출 지점마다 urls에 그 축의 외부 주소가 빠지면 새는 경로 확인(LLM만 보던 자리에 VLM·EMBED·RERANK)
-        try:  # stack_matrix.py cmd_run — post(VLM) 2조합, LLM은 내부
-            check_scope([INT, EXT], n_combos=2)
-            raise AssertionError("post(VLM) 외부+조합2가 통과됨")
-        except ScopeExceeded:
-            pass
-    try:  # run_combo.py run — embed=api 외부, 조합 1개(예산 없음)
-        check_scope([INT, EXT], n_combos=1)
-        raise AssertionError("embed=api 외부+예산 없음이 통과됨")
-    except ScopeExceeded:
-        pass
-    with COMMON.env(LLM_BUDGET_USD="1.0"):
-        try:  # eval_rerank.py — off+top_n 후보 3조건(rerank API 외부)
-            check_scope([INT, EXT], n_combos=3, n_questions=5)
-            raise AssertionError("rerank 외부+조건 3개가 통과됨")
-        except ScopeExceeded:
-            pass
-    print(
-        "[selftest] AD43 범위 가드 — 외부+조합2+func·e2e 거부 · 외부+조합1+e2e 허용 · 외부+func+예산 없음 거부 · 내부 주소 영향 없음 통과"
-    )
+        # precheck — 외부 EMBED·VLM만 고정 예상액 선차감(LLM은 llm.chat이, 내부망은 0)
+        assert precheck("https://api.example.com/v1", "EMBED") > 0 and abs(spend_total() - 0.701) < 1e-6, spend_total()
+        assert precheck("https://api.example.com/v1", "LLM") == 0.0 and precheck("http://127.0.0.1:9/v1", "VLM") == 0.0
+    with COMMON.env(LLM_SPEND_FILE=None, LLM_BUDGET_USD=None):
+        assert precheck("https://api.example.com/v1", "EMBED") == 0.0  # 상한 없으면 선차감 없음
+    print("[selftest] 비용 관문 — 공유 장부 선차감(동시 20건 중 상한까지 10건만)·정산·precheck 선차감 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

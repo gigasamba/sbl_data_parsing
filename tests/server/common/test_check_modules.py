@@ -64,7 +64,7 @@ def selftest():
 
 def _child_env_selftest():
     """⑪(S7e3 — VS7e2 B-1 다섯 갈래 꼴) — 심은 자리는 잡히고, 덮기 파일·설정 밖 이름·설정 칸 사전·연결 사전·분류 주석은 통과."""
-    names = frozenset({"PG_SCHEMA", "EDW_SUMMARY_LLM", "LLM_BASE_URL", "NO_PAID_CALLS", "LLM_FAKE", "PARSE_SKIPPED_LOG"})
+    names = frozenset({"PG_SCHEMA", "EDW_SUMMARY_LLM", "LLM_BASE_URL", "LLM_BUDGET_USD", "LLM_FAKE", "PARSE_SKIPPED_LOG"})
     src = """import os
 import os as _o
 import subprocess
@@ -83,7 +83,7 @@ def night(vlm):
     env = {**child_env(), "VLM_CONCURRENCY": vlm, "EDW_SUMMARY_LLM": "0"}  # 14 bad EDW_SUMMARY_LLM(설정 밖 이름 VLM_CONCURRENCY는 통과)
     env.pop("LLM_BASE_URL", None)                                          # 15 bad
     penv = {**env_for({}), "PG_SCHEMA": "idx"}                              # 16 bad(저장소 함수 env_for — 별칭 settings_env 사슬)
-    e2 = child_env({"PYTHONUTF8": "1", "NO_PAID_CALLS": "1"})               # 17 bad(위치 인자 dict)
+    e2 = child_env({"PYTHONUTF8": "1", "LLM_BUDGET_USD": "1"})               # 17 bad(위치 인자 dict)
     for k in ("LLM_BASE_URL", "VLM_BASE_URL", "OTHER"):
         e2.pop(k, None)                                                    # 19 bad LLM_BASE_URL(설정 밖 이름 VLM_BASE_URL은 통과)
     e2["PARSE_SKIPPED_LOG"] = "x"                                          # 20 bad
@@ -117,7 +117,7 @@ def ok(c, Names, MM):
 def more(c):
     env = dict(os.environ)
     env["PG_SCHEMA"], env["LLM_FAKE"] = c, "1"                             # bad 튜플 대상 PG_SCHEMA·LLM_FAKE
-    env |= {"NO_PAID_CALLS": "1"}                                          # bad |=
+    env |= {"LLM_BUDGET_USD": "1"}                                          # bad |=
     e3: dict = {**os.environ, "EDW_SUMMARY_LLM": "0"}                      # bad 형 주석 대입
     sp.run(["x"], env=e3)
     p = {"LLM_BASE_URL": "x"}                                              # bad subprocess 별칭 env=로 넘김
@@ -131,7 +131,7 @@ def blind(base, key, conn):
     _C[key] = child_env()
     e4 = dict(_C[key])
     e4["LLM_FAKE"] = "1"                                                   # bad 캐시 감싸개 사전
-    e5 = {**base, "NO_PAID_CALLS": "1"}                                    # bad 매개변수 base
+    e5 = {**base, "LLM_BUDGET_USD": "1"}                                    # bad 매개변수 base
     e6 = child_env(extra={"EDW_SUMMARY_LLM": "0"})                         # bad child_env(extra=…)
     e7 = {**os.environ, **{"PARSE_SKIPPED_LOG": "x"}}                      # bad 겹친 사전
     os.putenv("LLM_BASE_URL", "x")                                         # bad putenv
@@ -162,7 +162,7 @@ def use_cached():
         (14, "EDW_SUMMARY_LLM"),
         (15, "LLM_BASE_URL"),
         (16, "PG_SCHEMA"),
-        (17, "NO_PAID_CALLS"),
+        (17, "LLM_BUDGET_USD"),
         (19, "LLM_BASE_URL"),
         (20, "PARSE_SKIPPED_LOG"),
         (21, "LLM_FAKE"),
