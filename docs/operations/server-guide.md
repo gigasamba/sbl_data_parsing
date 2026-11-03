@@ -5,23 +5,19 @@
 - 코드 패치·새 이미지 절차: [release-and-patch.md](release-and-patch.md) · 긴급 패치 이력(날짜·시각): [patch-history.md](../history/patch-history.md)
 - 전체 구조: upstream `docs/architecture.md`(이 저장소에는 없음 — 목표 구조는 [refactor_plan.md](../refactoring/refactor_plan.md) 4절)
 - 테스트 기준: upstream `docs/testing.md`(이 저장소에는 없음 — 점검 명령은 [CLAUDE.md](../../CLAUDE.md) §6)
-- 지금 운영에 영향이 없는 옛 동작 설명: [server_guide_history.md](../history/server_guide_history.md)
 
 ## 0. 이미지 2개 — 역할 (D-020)
 
 | 이미지 | 역할 | `RAG_MODULE` | 돌리는 서비스(`deploy/host/compose/` — 컨테이너마다 파일 하나: `compose.pipeline.yml` data-pipeline · `compose.pipeline-mcp.yml` data-pipeline-mcp · `compose.mcp-server.yml` mcp-server) |
 |---|---|---|---|
-| `data-pipeline` | 파싱(dedup→prepare→파싱→대표 결과)·구조화(청킹·임베딩)·적재(PostgreSQL)·퍼블리시 | `pipeline` | 상주 컨테이너 하나 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`가 docker exec, 사용자 11-03) · 1회 작업 컨테이너 없음(11-02 — 이미지 점검 `docker run --rm … selftest`만) |
-| `mcp-server` | 검색 MCP(상주) | `mcp` | `mcp`(상주, 컨테이너 이름 `mcp-server`) — 도구 job `retrieval`·`mcp_eval`은 11-01에 지움(e2-10) |
-
-옛 이름: `data-parsing`·`data-structure` → `data-pipeline`(컨테이너 `data-pipeline-parse`·`data-pipeline-structure` → 11-03부터 `data-pipeline` 하나), `data-retrieval` → `mcp-server`.
+| `data-pipeline` | 파싱(dedup→prepare→파싱→대표 결과)·구조화(청킹·임베딩)·적재(PostgreSQL)·퍼블리시 | `pipeline` | 상주 컨테이너 하나 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`가 docker exec, 사용자 11-03) |
+| `mcp-server` | 검색 MCP(상주) | `mcp` | `mcp`(상주, 컨테이너 이름 `mcp-server`) |
 
 - 각 이미지의 `entrypoint.sh`는 받은 명령을 `RAG_MODULE`로 거른다. 다른 이미지의 명령이면 종료 코드 64(오류 메시지에 맞는 이미지를 알려 줌).
-- 서버 입구는 `run_docs.py` 하나다(사용자 10-31). 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`는 11-01에 지웠다.
-- (`tool index` — AD41 색인 빌더 `index_a`·`index_b`는 11-01에 지웠다 — mc-16.)
+- 서버 입구는 `run_docs.py` 하나다(사용자 10-31).
 - 공통 명령(어느 이미지에서나): `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`.
 
-**코드 폴더 배치** — `live`는 저장소 트리 그대로(개발 서버는 실행 이미지에 이 폴더를 붙임 — `compose.code*.yml`, 옛 오버레이 패치 `compose.patch*.yml`·`ops.host.patch_code`는 11-03에 지움). `live/deploy/host/`·`live/deploy/release/`는 호스트에서 부르는 스크립트·compose·systemd 파일이다. 아래 명령은 모두 `live`(코드 폴더 루트)에서 실행한다.
+**코드 폴더 배치** — `live`는 저장소 트리 그대로(개발 서버는 실행 이미지에 이 폴더를 붙임 — `compose.code*.yml`). `live/deploy/host/`·`live/deploy/release/`는 호스트에서 부르는 스크립트·compose·systemd 파일이다. 아래 명령은 모두 `live`(코드 폴더 루트)에서 실행한다.
 
 ### 0-1. 개발 서버는 실행 이미지 + 코드 폴더(op-06, 사용자 10-30)
 개발 서버(폐쇄망)는 코드 없는 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`을 쓰고, 코드 폴더(저장소 트리 그대로)를 `/app/deploy`에 읽기 전용으로 붙인다 — `dc.sh`·`mcp_up.sh`가 실행 이미지(`*-runtime`)를 보면 자기가 든 코드 폴더를 `CODE_DIR`로 잡고(셸에 `CODE_DIR`가 있으면 그 값 — 서버 배치는 판 폴더를 가리키는 링크 `/srv/rag/code/live`) `compose.code.yml`·`compose.code.pipeline-mcp.yml`·`compose.code.mcp-server.yml`을 덧붙인다(`trigger.sh`·`run_tool.sh`는 이미 뜬 `data-pipeline` 안에서 `docker exec`만 한다). settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`는 실행 이미지 태그. 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 설치·바꾸기·되돌리기는 README §5-0(배포 단계 표)과 [release-and-patch.md](release-and-patch.md) §1-1. 수집(운영) 서버는 코드가 든 이미지 — 개발 서버에서 `bake.sh`로 구운 것(release-and-patch §1-2), 띄우는 법은 아래 그대로.
@@ -42,7 +38,7 @@ export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.
 ```
 - `export`는 그 셸에서만 유효하다. 운영 계정 셸 설정(예: `~/.bashrc`)에 `export SERVER_ENV_DIR=/srv/rag/env`를 영구로 두거나 명령 앞에 붙인다. `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd unit은 스스로 이 값을 넘긴다. 컨테이너는 이 폴더를 마운트하지 않는다.
 
-> ⚠️ **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` — 사용자 11-01, D-031). 바꾸려면 코드 폴더의 파일을 고쳐 코드 폴더째 바꾼다(옛 오버레이 패치 대신 — [release-and-patch.md](release-and-patch.md) §1-1, 다른 파일을 쓰려면 settings.yaml `ops.paths.stack_file` — [env-guide.md](env-guide.md) 1절). 원천 목록 `sources.json`은 11-01에 지웠다(원천은 폴더·`rdb:csv`만). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다.
+> ⚠️ **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` — 사용자 11-01, D-031). 바꾸려면 코드 폴더의 파일을 고쳐 코드 폴더째 바꾼다([release-and-patch.md](release-and-patch.md) §1-1, 다른 파일을 쓰려면 settings.yaml `ops.paths.stack_file` — [env-guide.md](env-guide.md) 1절). 원천은 폴더·`rdb:csv`만.
 
 #### 값 바꾸기
 - 앱 설정 값은 `settings.yaml`을 직접 고친다. 고친 뒤 상주 컨테이너 `data-pipeline`·`data-pipeline-mcp`·`mcp-server`는 다시 띄운다(`dc.sh up -d --force-recreate <서비스>`).
@@ -60,7 +56,7 @@ README §5-3 ④ 연결 점검(`run_tool.sh ping_models`·`check_env`, `run_tool
 서버 입구는 `deploy/host/scripts/run_docs.py` 하나다(사용자 10-31) — 문서마다 파싱 → publish(silver — Object Storage + EDW) → 원본 삭제 → 구조화·적재(gold)를 상주 컨테이너 안에서 `docker exec`로 돌린다(PRD [pl-24](../prd/ops.md#pl-24), 설계 `docs/architecture/run_docs_design.md`).
 - 원본(받아 둔 `_warm/*.bin`·`docflow/<seq>/_source_files`)은 **publish가 성공한 뒤에만** 지운다. 파싱·publish가 실패한 문서는 원본이 남고 `batch_progress/progress.log`에만 적힌다(EDW에 안 씀 — 다음 `--skip-done` 실행이 다시 고름). gold(구조화·적재)가 실패하면 publish한 silver·EDW 행은 그대로이고 로그에만 적힌다(`gold_status` 칸은 DB 담당자 — refactor.md C-81).
 - **종료 코드**(PRD [pl-18](../prd/ops.md#pl-18)): `0` 대상 0건·모두 끝 · `1` 실패 문서가 하나라도(파싱·publish·gold) · `75` 마감(`--deadline`) 도달(실패 없음) 또는 다른 run_docs가 도는 중 · `2` 설정 문제(칸 없음·형식·엔진 구성 파일). 실패와 마감이 함께면 `1`. 새벽 배치 unit은 `75`를 성공으로 친다(`SuccessExitStatus=75`).
-- **겹침 잠금:** run_docs는 시작 때 `batch_progress/run_docs.lock`을 `flock`으로 잡는다 — 새벽 배치(`trigger.sh scheduled`)와 사람이 직접 돌린 run_docs가 함께 돌지 않는다(뒤에 온 쪽이 75로 바로 끝). 프로세스가 죽으면 잠금은 저절로 풀린다(파일을 지울 필요 없음). 작업 폴더(`ops.pipeline_host.run_docs_dir`)가 같아야 같은 잠금이다. 옛 1회 job 배치(`trigger.sh structure`·`load`·`all`·`night`)는 11-01에 지웠다. 파싱·게시만 따로 볼 때:
+- **겹침 잠금:** run_docs는 시작 때 `batch_progress/run_docs.lock`을 `flock`으로 잡는다 — 새벽 배치(`trigger.sh scheduled`)와 사람이 직접 돌린 run_docs가 함께 돌지 않는다(뒤에 온 쪽이 75로 바로 끝). 프로세스가 죽으면 잠금은 저절로 풀린다(파일을 지울 필요 없음). 작업 폴더(`ops.pipeline_host.run_docs_dir`)가 같아야 같은 잠금이다. 파싱·게시만 따로 볼 때:
 ```bash
 bash deploy/host/scripts/trigger.sh parse       # dedup→prepare→파싱→채점→대표 결과(_rep). 임베딩·DB 없음
 bash deploy/host/scripts/trigger.sh publish     # 대표 결과(.md) Object Storage 업로드 + EDW 메타
@@ -72,21 +68,20 @@ bash deploy/host/scripts/trigger.sh publish     # 대표 결과(.md) Object Stor
 ```bash
 bash deploy/host/scripts/run_tool.sh check_env
 ```
-평가 도구(`score_gold`·`run_board`·`mcp_eval`)는 11-01에 지웠다(PRD [e2-10](../prd/test.md#e2-10)).
 
 ### 2-1. 검색 MCP는 늘 켜 둠
 ```bash
 bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무것도 안 함, 꺼졌으면 up -d, 응답 없으면 restart
 ```
-2분마다 확인하는 systemd 타이머(설치 1회): `sudo cp deploy/host/systemd/mcp-server-keepalive.* /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now mcp-server-keepalive.timer`. 옛 `data-retrieval-keepalive.*`가 있으면 disable 뒤 지운다(`refactor.md` C-29).
+2분마다 확인하는 systemd 타이머(설치 1회): `sudo cp deploy/host/systemd/mcp-server-keepalive.* /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now mcp-server-keepalive.timer`.
 
 ### 2-2. 새벽 배치(선택)
-`sudo cp deploy/host/systemd/data-pipeline-nightly.* /etc/systemd/system/ && sudo systemctl enable --now data-pipeline-nightly.timer`. 옛 `rag-nightly.*`가 있으면 disable 뒤 지운다.
-- 스케줄은 settings.yaml `ops.nightly.time`·`ops.nightly.max_docs`·`ops.nightly.deadline`(env 이름 `NIGHTLY_TIME`·`NIGHTLY_MAX_DOCS`·`NIGHTLY_DEADLINE` — 시작 시각 HH:MM·새 문서 수 상한·마감 시각 HH:MM, 기본 비움 = 새벽 배치 없음, 셋이 모두 있어야 돎 — pl-32·사용자 11-02). 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시작 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받기 시작하지 않고, 받은 문서는 끝까지)(그 밖에는 말없이 끝 — 11-01부터 새벽 배치 = run_docs, 사용자 10-31). 옛 `nightly.enabled`는 지움(남아 있으면 경고만).
-- 지금 바로 돌리려면 run_docs를 직접 부른다(옛 `trigger.sh night`는 11-01에 지움).
+`sudo cp deploy/host/systemd/data-pipeline-nightly.* /etc/systemd/system/ && sudo systemctl enable --now data-pipeline-nightly.timer`.
+- 스케줄은 settings.yaml `ops.nightly.time`·`ops.nightly.max_docs`·`ops.nightly.deadline`(env 이름 `NIGHTLY_TIME`·`NIGHTLY_MAX_DOCS`·`NIGHTLY_DEADLINE` — 시작 시각 HH:MM·새 문서 수 상한·마감 시각 HH:MM, 기본 비움 = 새벽 배치 없음, 셋이 모두 있어야 돎 — pl-32·사용자 11-02). 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시작 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받기 시작하지 않고, 받은 문서는 끝까지)(그 밖에는 말없이 끝).
+- 지금 바로 돌리려면 run_docs를 직접 부른다.
 
 ### 2-3. 상주 컨테이너
-`data-pipeline`(일괄 상주 컨테이너 — 사용자 11-03, 옛 `data-pipeline-parse`·`data-pipeline-structure`를 합침)은 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업(warm·파싱·게시·구조화·적재)을 돌린다. MCP `parse_document` 작업 서비스는 전용 상주 컨테이너 `data-pipeline-mcp`의 주 프로세스다(entrypoint `parse-service` — 사용자 11-03 rn-03: 사람이 기다리는 요청이라 일괄과 떼고 CPU 나눔 비율 `cpu_shares` 4096 > 일괄 1024, 상한 CPU 3·메모리 8g — settings.yaml `ops.pipeline_host.parse_mcp_cpus`·`parse_mcp_mem_limit`·`parse_mcp_cpu_shares`로 바꿈). 꺼지면 `mcp_up.sh`(keepalive 타이머)가 다시 띄운다. 일괄 `data-pipeline`의 자원 상한은 settings.yaml `ops.pipeline_host.parse_cpus`·`parse_mem_limit`(비우면 CPU 5·메모리 24g — 옛 두 컨테이너의 합. docker는 호스트 CPU 수보다 큰 `cpus`를 거부하므로 CPU 4개 서버는 `parse_cpus`를 3 이하로 적는다). 옛 `structure_cpus`·`structure_mem_limit`은 읽지 않는다(refactor.md C-82). 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/ops.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
+`data-pipeline`(일괄 상주 컨테이너 — 사용자 11-03)은 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업(warm·파싱·게시·구조화·적재)을 돌린다. MCP `parse_document` 작업 서비스는 전용 상주 컨테이너 `data-pipeline-mcp`의 주 프로세스다(entrypoint `parse-service` — 사용자 11-03 rn-03: 사람이 기다리는 요청이라 일괄과 떼고 CPU 나눔 비율 `cpu_shares` 4096 > 일괄 1024, 상한 CPU 3·메모리 8g — settings.yaml `ops.pipeline_host.parse_mcp_cpus`·`parse_mcp_mem_limit`·`parse_mcp_cpu_shares`로 바꿈). 꺼지면 `mcp_up.sh`(keepalive 타이머)가 다시 띄운다. 일괄 `data-pipeline`의 자원 상한은 settings.yaml `ops.pipeline_host.parse_cpus`·`parse_mem_limit`(비우면 CPU 5·메모리 24g. docker는 호스트 CPU 수보다 큰 `cpus`를 거부하므로 CPU 4개 서버는 `parse_cpus`를 3 이하로 적는다). 새 문서는 `run_docs` 정기 실행이 고른다.
 ```bash
 bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp   # settings.yaml 값을 compose에 넘김(그냥 docker compose는 필수 칸 `${…:?}`에서 멈춤) — README §5-3 ①
 ```
@@ -95,12 +90,12 @@ bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp   # setting
 - 네이티브 실행 전 셸에 `SERVER_ENV_DIR`(settings.yaml 위치)이 있는지 본다: `echo "$SERVER_ENV_DIR"`(§1-2).
 - 답변 생성: `PYTHONPATH=. python -m validation.e2e.answer_gen --url http://<검색 MCP>:8765/mcp --q "<질문>"`.
   - 코드 폴더(저장소 배치 — `validation/`은 이미지 밖)에서 검색 MCP로 호출. `--concurrency N` 병렬. 결과(답·인용·인용 검증·지연)는 `output/eval/answer_gen/`.
-  - Answer Agent(`valid_env/answer_test/rag_qa/` — PC 전용 데이터)는 컨테이너 없이 이것으로만 점검한다.
-  - MCP 토큰은 settings.yaml `required.tokens.mcp`(옛 env `MCP_TOKEN`은 읽지 않음), 모델은 `common.models.llm`(서버는 내부 모델만 — guard).
+  - Answer Agent(`valid_env/answer_test/rag_qa/` — PC 전용 데이터)도 이것으로 점검한다.
+  - MCP 토큰은 settings.yaml `required.tokens.mcp`, 모델은 `common.models.llm`(서버는 내부 모델만 — guard).
 
 ## 3. 결과 확인
 
-실행 보드(`run_board`)·파싱 정답률(`score_gold`)·검색 평가(`mcp_eval`)는 11-01에 지웠다(PC 평가 도구 삭제 — PRD [e2-10](../prd/test.md#e2-10)). 서버 결과는 단계별 종료 코드·로그와 EDW `AI.ParsingMeta`로 본다. 검색 결과는 PC의 검증 페이지(`validation/search_ui`)와 답변 점검(`valid_env/answer_test`)으로 본다.
+서버 결과는 단계별 종료 코드·로그와 EDW `AI.ParsingMeta`로 본다. 검색 결과는 PC의 검증 페이지(`validation/search_ui`)와 답변 점검(`valid_env/answer_test`)으로 본다.
 
 ## 4. 검색 MCP 사용
 
@@ -133,15 +128,15 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 
 | 무엇 | 위치 |
 |---|---|
-| 용어집(동의어·약어) · 고객 명부 · 제품 코드 규칙 | PG 마스터 표 `<PG_SCHEMA>_master`(pl-38 — 구조화 고객 판별·검색이 읽음). 원본 CSV `resources/vocab/glossary/{domain_terms,client_roster,id_patterns,…}.csv`(또는 서버 폴더)를 고친 뒤 `run_tool.sh migrate master load [--dir <폴더>]`(아래 5-1). 옛 설정 `common.paths.glossary_dir`·`client_roster`(env `GLOSSARY_DIR`·`CLIENT_ROSTER`)는 지움 — 남아 있으면 경고만 |
-| 원천 표·열(문서 위치) | (11-01 원천 목록 `sources.json`·`show-sources` 지움 — 원천은 `run_docs`가 EDW에서 만든 `rdb:csv`. 열 이름이 다른 표는 `RDB_COL_*`) |
-| 엔진 구성 | `resources/config/pipeline_stack.json`(서버·PC 같음 · `ops.paths.stack_file` · 확인 `show-stack`) — 바꾸기 = 파일을 고쳐 코드 폴더째 바꿈(옛 오버레이 패치 대신) |
+| 용어집(동의어·약어) · 고객 명부 · 제품 코드 규칙 | PG 마스터 표 `<PG_SCHEMA>_master`(pl-38 — 구조화 고객 판별·검색이 읽음). 원본 CSV `resources/vocab/glossary/{domain_terms,client_roster,id_patterns,…}.csv`(또는 서버 폴더)를 고친 뒤 `run_tool.sh migrate master load [--dir <폴더>]`(아래 5-1) |
+| 원천 표·열(문서 위치) | 원천은 `run_docs`가 EDW에서 만든 `rdb:csv`. 열 이름이 다른 표는 `RDB_COL_*` |
+| 엔진 구성 | `resources/config/pipeline_stack.json`(서버·PC 같음 · `ops.paths.stack_file` · 확인 `show-stack`) — 바꾸기 = 파일을 고쳐 코드 폴더째 바꿈 |
 | 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성) · 서버 정답 폴더(settings.yaml `ops.pipeline_host.gold_dir` 칸은 있지만 지금 compose·`run_tool.sh`는 컨테이너 `/data/gold`로 붙이지 않는다 — 붙일지 아직 안 정함) |
-| 집계 지표 단서어 | 코드 기본값(`mcp_server/services/search/qtype.py` `_AGG_VOCAB_DEFAULT`) — 11-01 사전 파일 `agg_vocab.json`·설정 `search.agg_vocab_file`은 지움(내용이 기본값과 같았음) |
-| MCP 안내 문구 | settings.yaml `mcp.server.instructions`(옛 env `MCP_INSTRUCTIONS`) |
+| 집계 지표 단서어 | 코드 기본값(`mcp_server/services/search/qtype.py` `_AGG_VOCAB_DEFAULT`) |
+| MCP 안내 문구 | settings.yaml `mcp.server.instructions` |
 | EDW 조인 사슬(고객·원천 메타) | `app/deploy/resources/config/edw_chain.yaml`(아래 5-2) |
 
-기밀(실고객·실제품·계약 값)은 **서버 폴더에만** 둔다 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤에는 같은 질문 세트로 검색 결과를 전/후 비교한다(PC 검증 페이지 `validation/search_ui`·답변 점검 `valid_env/answer_test` — `score_gold`·`mcp_eval`은 11-01에 지움).
+기밀(실고객·실제품·계약 값)은 **서버 폴더에만** 둔다 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤에는 같은 질문 세트로 검색 결과를 전/후 비교한다(PC 검증 페이지 `validation/search_ui`·답변 점검 `valid_env/answer_test`).
 
 ### 5-1. 고객 명부·용어집 작성법 (예제 파일을 복사해서 고쳐 쓰기)
 
@@ -214,7 +209,7 @@ PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --check /srv/rag/
 - 적재 오류(조용히 넘기지 않음): 명시한 `concept_id` 중복 · 없는 ID를 가리키는 `broader`/`related` · `id_patterns.csv`의 깨진 정규식.
 - 서버: 폴더째 `/srv/rag/env/glossary/`(여섯 파일 — 예제는 `resources/vocab/glossary/`의 같은 이름 파일)에 두고 `migrate master load --dir <컨테이너 안에서 보이는 그 폴더>`(위 ⚠️).
 - 자동 초안: `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`·`python -m pipeline.transform.structure.draft_terms --bundle <묶음>`(새 회사 이름 후보 — 11-03부터 묶음 밖 도구, pl-38)은 `output/` 아래 draft만 만든다. 사람이 확인해 `domain_terms.csv`로 옮긴다(`status`를 비우거나 `approved`).
-- 실명(실고객·실제품)은 서버 폴더에만 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤 같은 질문 세트로 검색 결과 전/후 비교(검증 페이지 — `mcp_eval`은 11-01에 지움).
+- 실명(실고객·실제품)은 서버 폴더에만 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤 같은 질문 세트로 검색 결과 전/후 비교(검증 페이지).
 
 #### 점검(반영 전)
 서버가 읽는 로더를 그대로 쓴다(cp949·빈칸·AUTO ID·건너뜀 알림까지 같음).
@@ -253,7 +248,7 @@ PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load
 | 증상 | 원인 | 조치 |
 |---|---|---|
 | `check`가 "컨테이너 안의 PG_HOST는 컨테이너 자신" 경고 | `PG_HOST=127.0.0.1`인데 호스트의 PostgreSQL을 보려 함 | `--network host`(+`NETWORK_HOST=1`) 또는 `PG_HOST=<서버 IP>` |
-| 적재·검색이 PostgreSQL에 못 붙음 | PG 접속 칸이 비었거나 틀림 | settings.yaml `required.pg`(호스트·포트·계정) 확인 — 검색은 PG만 읽으므로(옛 로컬 묶음 검색은 mc-19에 지움) 고칠 때까지 적재·검색이 안 된다 |
+| 적재·검색이 PostgreSQL에 못 붙음 | PG 접속 칸이 비었거나 틀림 | settings.yaml `required.pg`(호스트·포트·계정) 확인 — 검색은 PG만 읽으므로 고칠 때까지 적재·검색이 안 된다 |
 | 파싱이 종료 코드 4 | 서버에서 EDW `AI.ParsingMeta`를 못 읽음(pl-12 — 전체 재파싱을 막으려고 멈춤) | `common.connections.rdb.read` 접속 칸·EDW 연결 확인 |
 | 구조화·적재가 "인계 형식(핑거프린트) 다름"으로 거부 | 공통 핑거프린트가 바뀐 옛 파싱 결과 | 그 문서를 다시 파싱(새 판의 "재파싱 필요?" 안내 — [release-and-patch.md](release-and-patch.md)) |
 | 같은 결과 폴더에서 두 작업이 종료 코드 75 | 다른 실행이 `.pipeline.lock`을 잡고 있음 | 끝날 때까지 기다리거나 다음 트리거에서 재시도(겹침이 아니라 정상 동작) |
@@ -261,15 +256,14 @@ PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load
 | CPU 폭주 | 컨테이너가 호스트 전체 코어로 스레드를 늘림 | `PIPE_PROCS`는 `auto`로 두기(cgroup 한도 기준 자동 계산), 컨테이너 `--cpus` 지정 |
 | MCP `/health` 준비 안 됨 | 기동 직후 저장소 연결 중(예열) | 잠시 뒤 재시도 |
 | MCP 401 | 호출 쪽 토큰이 없거나 서버 settings.yaml `required.tokens.mcp`와 다름 | 호출 쪽 `Authorization: Bearer <토큰>`을 서버 값과 같게(토큰은 코드·로그에 쓰지 않음) |
-| MCP가 안 뜸(이미지 버전인데) | settings.yaml에 `required.embed`(질의 임베딩 — 옛 `EMBED_*`) 없음 · 컨테이너가 설정 파일을 못 읽음(권한 — C-09) | [env-guide.md](env-guide.md)로 필수 값 채우기 |
+| MCP가 안 뜸(이미지 버전인데) | settings.yaml에 `required.embed`(질의 임베딩) 없음 · 컨테이너가 설정 파일을 못 읽음(권한 — C-09) | [env-guide.md](env-guide.md)로 필수 값 채우기 |
 | 포트 충돌 | 다른 서비스가 같은 포트를 씀 | settings.yaml `search.server.port`(`MCP_PORT`) 등 포트 값만 바꿈(기존 컨테이너는 건드리지 않음) |
-| 설정값이 조용히 틀림 | (옛 env 파일) `docker run --env-file`은 줄 끝 주석·따옴표를 값에 그대로 넣음 | 지금은 settings.yaml — 틀린 항목은 검증 오류로 항목 경로만 찍힘. 0.1.0 → 0.2.0 옮긴 뒤에는 migrate 화면 보고서(옮긴 칸 수·지운 칸 이름)를 확인(release-and-patch.md §5-7) |
 | SELinux `Permission denied`(파일은 있는데) | 볼륨 라벨 안 맞음 | 볼륨에 `:z`(공유)·`:Z`(전용) 붙이기 |
 
 ## 7. 개발자에게 보고하는 법
 
 ### 무엇이 들어간 버전인지
-옛 긴급 오버레이 패치 항목·커밋·날짜·시각·서버 할 일은 [patch-history.md](../history/patch-history.md)(자동 생성)에 있다. 0.2.0부터는 오버레이 패치 대신 코드 폴더를 통째로 바꾼다([release-and-patch.md](release-and-patch.md) §1-1).
+코드는 코드 폴더를 통째로 바꾼다([release-and-patch.md](release-and-patch.md) §1-1). 지난 긴급 패치 이력은 [patch-history.md](../history/patch-history.md).
 
 ### 서버 버전 기록
 적용·업데이트마다 한 줄: `/srv/rag/reports/versions.md`에 `날짜 · 서버 · 이미지 버전 · patch 커밋(또는 전체 덮어쓰기) · 확인 결과`.
@@ -294,5 +288,4 @@ PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load
 
 ### 날짜·버전 요약
 파싱이 끝날 때마다 수집 서버가 요약을 만들고 개발 서버가 가져간다:
-(실행 보드 요약 `run_board --digest`는 11-01에 지웠다 — e2-10. 아래 보고서는 로그·종료 코드로 직접 쓴다.)
 보고서(`/srv/rag/reports/<날짜>.md`)에는 버전(`versions.md` 줄)·단계·종료 코드·핵심 숫자(정답률·시간·건수)·실행판 판정 한 줄·막힌 곳·멈춤 사유와 로그 마지막 20줄(비밀값 가림)을 적는다. 본문·숫자 표를 그대로 복사하지 않는다.
