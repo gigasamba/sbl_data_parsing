@@ -1,9 +1,9 @@
 # 적재 — pgvector·게시·저장 구조
 
-[PRD.md](../PRD.md) 카테고리. [transform.md](transform.md) 다음: pgvector 적재(pl-07·pl-13·pl-14·pl-16·pl-51·pl-19) → 게시(silver — pl-09·pl-26) → FAQ 다시 올리기(pl-41) → 지운 정형 DB·문서 대장(pl-08·pl-12)·마스터 CSV(pl-38). 저장 구조·DB 스키마는 [load-schema.md](load-schema.md).
+[PRD.md](../PRD.md) 카테고리. [transform.md](transform.md) 다음: pgvector 적재(pl-07·pl-13·pl-16·pl-51·pl-19) → 게시(silver — pl-09·pl-26) → FAQ 다시 올리기(pl-41) → 지운 정형 DB·문서 대장(pl-08·pl-12)·마스터 CSV(pl-38). 저장 구조·DB 스키마는 [load-schema.md](load-schema.md).
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서: pl-29 · pl-07 · pl-13 · pl-14 · pl-16 · pl-51 · pl-19 · pl-09 · pl-26 · pl-41 · pl-08 · pl-12 · pl-38. (저장 구조 pl-32는 [load-schema.md](load-schema.md#pl-32))
+순서: pl-29 · pl-07 · pl-13 · pl-16 · pl-51 · pl-19 · pl-09 · pl-26 · pl-41 · pl-08 · pl-12 · pl-38. (저장 구조 pl-32는 [load-schema.md](load-schema.md#pl-32))
 
 <a id="pl-29"></a>
 ## pl-29 · EDW 고객 매핑을 파이프라인이 직접 만든다
@@ -39,13 +39,6 @@
 - 한 것(10-30 병합, #17): `feature/load-no-prune`: `prune`·`--prune`·`PRUNE_*` 설정 없앰(옛 설정 칸은 경고만). 남은 한계: `file_path`가 바뀐 같은 내용은 옛 행이 남음(사람이 지움 — 사용자 확인). 시험 `tests/server/pipeline/test_pl13_no_prune.py`. 검토 등급 A(서버 적재 동작).
 - 11-02(pl-28, 리뷰 #86): 원천 스키마 5벌을 함께 본다 — 적재는 묶음 문서의 원본 경로(`file_path`)를 5벌 모두에서 찾는다. `--replace` 없이 어느 스키마에든 이미 있으면 건너뛴다(두 스키마에 같은 문서가 생기지 않게). `--replace`면 다른 원천 스키마에 남은 옛 사본을 먼저 지우고(키워드 색인·문서 빈도·그 스키마 `corpus_stat` 포함, 실 PG는 같은 트랜잭션) 새 원천 스키마에 넣는다 — 원천(`source_system`)이 바뀐 문서가 옮겨 간다. 시험: `test_pl13_no_prune`.
 - Status: done — 남은 서버 확인은 refactor.md C-68.
-
-<a id="pl-14"></a>
-## pl-14 · 배포 backfill이 지운 `doc.client`를 읽음
-- 이유: 10-20 축소 스키마 뒤 `pgvector_load deploy`의 `backfill_chunk_clients`가 실패한다(표와 색인은 그래도 만들어짐).
-- 파일: `pipeline/load/pgvector_load.py`.
-- 11-02(pl-28): `chunk.clients`·`doc.clients`와 backfill(`backfill_chunk_clients`)·그 시험을 지웠다 — 고객은 `client_edw` 거르기만(C6).
-- Status: done (10-30) · 11-02 backfill 길 지움(pl-28)
 
 <a id="pl-16"></a>
 ## pl-16 · `PIPE_EMBED=none`이면 `vector(0)`을 만든다
