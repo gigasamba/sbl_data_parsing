@@ -220,7 +220,7 @@ def _do_call(messages, temperature, max_tokens, json_mode, base, model, agent, t
                 raise LLMUnavailable(str(e)) from e
             reserved = est
         try:
-            # preguarded=True — chat()이 이미 자기 allow_external 매개변수로 가드를 통과시켰음(GA3).
+            # preguarded=True — chat()이 이미 allow_external 인자·LLM_ALLOW_EXTERNAL 설정으로 가드를 통과시켰음(GA3).
             # call_reserved=True — 위 reserve_call()이 이 1차 호출의 자리를 이미 예약함(GH1-08d — 이중 집계 방지). 형식 재요청(AD33)의
             # 2차 호출은 complete()가 그 자리에서 reserve_call()로 직접 센다(GH1-08c) — 여기서 다시 더하지 않는다.
             handed = True
@@ -528,7 +528,7 @@ def complete(
     tools=None,
 ):
     """역할(llm·vlm) → (응답 글자, usage) — tools=를 주면 (응답 message 사전, usage). 위 섹션 설명의 규칙 그대로.
-    preguarded=True는 chat()만(자기 allow_external로 이미 가드를 통과) — 그 밖은 매번 require_internal.
+    preguarded=True는 chat()만(allow_external 인자·LLM_ALLOW_EXTERNAL 설정으로 이미 가드를 통과) — 그 밖은 매번 require_internal.
     agent=(지시문 패키지 id)면 model_role이 role과 같아야 하고, 아직 예약 안 됐으면(call_reserved=False — 직접 호출자) 1차 호출을
     재시도 루프 전에 딱 한 번 공유 장부에 예약한다(GH1-08d). call_reserved=True는 호출자가 이미 예약한 경우(chat()의 _do_call).
     max_tokens=None이면 그 필드를 안 보냄."""
