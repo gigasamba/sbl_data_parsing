@@ -142,6 +142,12 @@ SAME_NAME_OK = {
 # parse/agent/agent_tools.py로 옮겨 parse 영역 **안**이 되어 더 이상 경계 위반이 아님(ALLOW 자체가 필요 없어짐).
 # I2 — 옛 예외 ("structure/build_bundle.py", "data_pipeline.parse")(--no-rep 실험 경로의 지연 import)는 두 영역이 etl 하나가 되어 필요 없어짐.
 ALLOW: set = set()
+# ⑫ 단계 방향(CLAUDE.md §1 — pipeline 안 extract → transform → load, 거꾸로 import 금지 · 11-03 사용자: 리뷰에만 맡기지 않고 자동 점검).
+#   함수 안 늦은 import도 셈. STAGE_ALLOW = 지금 있는 예외(파일, 가져오는 단계) — 엔진 파일은 바이트를 바꾸면 엔진 지문이 바뀌어(등급 A) 옮기지 않고 적어 둔다.
+STAGES = ("extract", "transform", "load")
+STAGE_ALLOW = {
+    ("etl/extract/engines/qwen_vlm/parser.py", "transform")
+}  # 쪽 VLM 문턱(vgate) — 옮기면 엔진 지문이 바뀜(0.3.0 지문 배치 때 pipeline/shared로)
 AGENT_KWARG_EXEMPT = {"common/check/checker.py"}  # 연결 확인(ping) — 업무 프롬프트가 없음(GA2 ⑧)
 
 
@@ -250,6 +256,23 @@ def _key_of(m):
     return top[0]
 
 
+def _stage_violations(rel, mods):
+    """⑫ etl/<단계>/… 파일이 뒤 단계(data_pipeline.etl.<뒤 단계>)를 import하면 위반 — STAGE_ALLOW에 적힌 것만 통과."""
+    parts = rel.split("/")
+    if parts[0] != "etl" or len(parts) < 3 or parts[1] not in STAGES:
+        return []
+    own = STAGES.index(parts[1])
+    out = []
+    for m in sorted(mods):
+        seg = m.split(".")
+        if seg[:2] == ["data_pipeline", "etl"] and len(seg) > 2 and seg[2] in STAGES and STAGES.index(seg[2]) > own:
+            if (rel, seg[2]) not in STAGE_ALLOW:
+                out.append(
+                    f"{rel}: {m} import — 단계 방향 위반(extract → transform → load, 거꾸로 import 금지 — 함께 쓸 것은 pipeline/shared·common)"
+                )
+    return out
+
+
 def check():
     bad = []
     flat = {
@@ -290,6 +313,7 @@ def check():
                 foreign = key in ("data_pipeline.cli", "data_pipeline.evaluation", "tools", "dev_tools", "pipeline") or (m in flat)
                 if (other or foreign) and (rel, key) not in ALLOW:
                     bad.append(f"{rel}: {m} import — 모듈 경계 위반(함께 쓸 것은 common/)")
+        bad.extend(_stage_violations(rel, mods))
         if rel.startswith("common/"):
             for m in mods:
                 key = _key_of(m)
