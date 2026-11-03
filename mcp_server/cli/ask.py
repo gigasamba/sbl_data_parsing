@@ -5,7 +5,7 @@
   ask   질문 → 근거 청크 + 원본 경로·쪽·줄·쪽 안 위치(bbox) — mcp_server.services.search.search_svc.do_search()에 위임(AR10) — MCP와 같은 결과.
         답변은 만들지 않음(답변은 서빙되는 Answer Agent rag_qa — valid_env/answer_test/rag_qa, 점검 validation/e2e/answer_gen.py).
 (11-01 지움 — 문항 세트 시험 test-stack, 예전 검색 경로 --retrieve cosine, 로컬 묶음 --local: 검색은 PG 하나, PRD mc-01·e2-10.)
-사용: python -m mcp_server.cli.ask ask --bundle output/<이름>/bundle --k 3 --q "<질문>"
+사용: python -m mcp_server.cli.ask ask --k 3 --q "<질문>"(검색은 settings.yaml의 PG 스키마 — mc-19부터 묶음 폴더를 읽지 않음)
 (이미지 안: 엔트리포인트 명령 ask가 이 모듈을 부름 — deploy/docker/entrypoint.sh)
 """
 
@@ -15,7 +15,6 @@ import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 �
 import argparse
 import json
 
-from common.config import settings as C  # 설정 객체(S7d)
 from common.core.console import utf8_stdout
 
 
@@ -29,9 +28,8 @@ def _stack():
 
 def ask(a):
     """질문 → 근거(파일·쪽·줄·bbox·점수·via). AR10(구조 리뷰 10-12 round4 QA095) — MCP search의 do_search()에 그대로 위임.
-    MCP_BUNDLE만 --bundle에 맞춰 세팅한다. 질의 기록은 do_search() 안 _log()가 함(qa_log.append — 파일만, mc-13)."""
+    질의 기록은 do_search() 안 _log()가 함(qa_log.append — 파일만, mc-13)."""
     st = _stack()
-    C.put(MCP_BUNDLE=str(a.bundle))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스)
     from mcp_server.services.search import search_svc as MCP
 
     k = a.k or st.get("k", 8)
@@ -61,7 +59,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("ask")
-    p.add_argument("--bundle", default="output/edw/bundle")
+    p.add_argument("--bundle", help=argparse.SUPPRESS)  # 옛 호출 호환 — 검색은 PG만(mc-19), 받기만
     p.add_argument("--pg", action="store_true", help=argparse.SUPPRESS)  # 옛 호출 호환 — 검색은 늘 PG(mc-01), 받기만
     p.add_argument("--k", type=int, default=8, help="근거 수 — MCP search 기본과 같게 8(AR5 측정: k=8이 k=10과 같거나 나음, 잘림 적음)")
     p.add_argument("--q", required=True)

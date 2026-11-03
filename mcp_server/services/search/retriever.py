@@ -1,16 +1,11 @@
 """검색(모듈 ④) — 같은 질의 → 저장소(PostgreSQL+pgvector 또는 로컬 묶음)에서 하이브리드(벡터 + BM25 + 드문 ID → RRF) + 그래프 이웃.
 pipeline.py(ask·test-stack)와 검색 MCP(modules/search/mcp_server.py)가 같이 씀. 오케스트레이터(pipeline.py)를 import하지 않음(모듈 분리)."""
 
-import json
 import sys
 import time
-from pathlib import Path
 
-from common.core.contract import (
-    make_chunk_key,
-    uri_from_path,  # 원본 위치 규칙(모듈 계약)
-)
-from mcp_server.services.search.local import BundleDocs, embed_query
+from common.core.contract import uri_from_path  # 원본 위치 규칙(모듈 계약)
+from mcp_server.services.search.local import embed_query
 from mcp_server.services.search.terms import (  # 용어 사전(X3·X4, 구조화와 같은 규칙) · SI43⑤ 벡터 질의 별칭 덧붙이기(10-16 검색 전용으로 분리)
     expand_query,
     vector_alias_text,
@@ -18,26 +13,15 @@ from mcp_server.services.search.terms import (  # 용어 사전(X3·X4, 구조�
 
 
 class Retriever:
-    """같은 질의 → 본문·출처 저장소(pgvector 또는 로컬 묶음)에서 하이브리드(벡터 + BM25 + 드문 ID → RRF).
-    벡터는 pgvector에만 둔다(사용자 10-29 — EDW 벡터 경로 삭제, docs/prd/ops.md#op-03)."""
+    """같은 질의 → 원천 스키마 하나(PostgreSQL + pgvector)에서 하이브리드(벡터 + BM25 + 드문 ID → RRF).
+    벡터는 pgvector에만 둔다(사용자 10-29 — EDW 벡터 경로 삭제, docs/prd/ops.md#op-03). 묶음 파일은 읽지 않는다(mc-19 — 색인 정보·문서 날짜는 PG)."""
 
-    def __init__(self, bundle, retrieve="cosine", pg=None):
-        self.bundle, self.retrieve = Path(bundle), retrieve
-        self.meta = json.loads((self.bundle / "meta.json").read_text(encoding="utf-8"))
-        self.local = BundleDocs(bundle)  # 문서·청크 목록만(검색은 PG — mc-01 11-01)
-        self.key_local = {make_chunk_key(self.local.docs[c["doc"]]["doc_key"], c["seq"]): i for i, c in enumerate(self.local.chunks)}
-        self.doc_meta = {
-            d["doc_key"]: {
-                "doc_date": d.get("doc_date"),
-                "version": d.get("version"),
-                "superseded": bool(d.get("superseded")),
-            }
-            for d in self.local.docs
-        }  # L3-1: pgvector 저장소도 이 로컬 묶음 문서 메타로 최신성 순위(항상 로드됨)
-        # 저장소는 PostgreSQL + pgvector(mc-01). pg = 원천 스키마 하나의 연결(pl-28 — server_state가 connect_sources.connect_sources로 만들어 줌).
+    def __init__(self, retrieve="cosine", *, pg):
+        # pg = 원천 스키마 하나의 연결(pl-28 — server_state가 connect_sources로 만들어 줌)
         from mcp_server.services.search import pgsearch
 
-        self.pgmod, self.pg = pgsearch, pg
+        self.retrieve, self.pgmod, self.pg = retrieve, pgsearch, pg
+        self.meta = pgsearch.index_meta(pg)  # 임베딩 모델·차원(검색기를 다시 만들 때 — 적재 판이 바뀌면 — 새로 읽음)
         self._g = None
 
     def search(self, q, k, methods=None):
@@ -56,17 +40,14 @@ class Retriever:
         hits, ms, notes = self._search_ex(q, k, methods, scope=scope)
         if scope:  # 안전망 — 범위 밖 청크가 새지 않게
             hits = [h for h in hits if (h.get("file_path") or "") in scope]
-        for h in hits:  # 로컬 묶음 문서 메타로(같은 규칙, 묶음은 항상 로드됨)
-            m = self.doc_meta.get(h.get("doc_key")) or {}
-            h["doc_date"], h["version"], h["superseded"] = m.get("doc_date"), m.get("version"), m.get("superseded")
         return hits[:k], ms, notes
 
     def _search_ex(self, q, k, methods=None, scope=None):
         # X3: BM25 쪽만 용어 사전으로 확장({토큰: 가중치}) — 벡터 질의(qv)는 원문 q 그대로 임베딩(아래, 바뀌지 않음)
         terms, expand_notes = expand_query(q)
         qv, note = None, None
-        if not self.meta.get("dim"):  # 임베딩 없는 묶음(PIPE_EMBED=none)이면 키워드·ID만
-            note = "임베딩 없는 묶음 — 키워드·ID 검색만"
+        if not self.meta.get("dim"):  # 벡터가 없는 스키마(빈 원천)면 키워드·ID만
+            note = "임베딩 없는 색인 — 키워드·ID 검색만"
         elif methods and "vector" not in methods:  # 벡터를 안 쓰는 요청은 질의 임베딩도 안 함(S85 — 임베딩 없는 이미지·비용)
             pass
         else:
@@ -114,6 +95,7 @@ class Retriever:
                     "source_uri": uri_from_path(r["file_path"]),
                     "client": r.get("client_edw"),
                     "via": r.get("via"),
+                    "doc_date": r.get("doc_date"),
                 }
                 for i, r in enumerate(rows)
             ]

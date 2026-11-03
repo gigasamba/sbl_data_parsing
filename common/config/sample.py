@@ -40,7 +40,6 @@ CATALOG_VALUES = {
     "EMBED_QUERY_PREFIX": "",
     "LLM_MODEL": "",
     "LLM_SPEND_FILE": "",
-    "MCP_BUNDLE": "",
     "PARSE_POST": "all",
     "PIPE_EMBED": "",
     "RUNLOG_FILE": "",

@@ -61,7 +61,7 @@ def _selftest_reload():
     안 바뀌면 그대로. --replace처럼 개수는 같고 doc_id만 커진 경우도 잡는다. SQLite 대역(pgfix, 임시 폴더) — 원천 other."""
     c = {"doc": 0, "seq": 0, "page": 1, "line_start": 1, "line_end": 1, "chunk_text": "x", "n_terms": 1, "bbox": None, "section": None}
     d = pgfix.mk_bundle([{"file_path": "a.txt"}], [c])
-    _env = pgfix.use(d, MCP_BUNDLE=str(d), MCP_RELOAD_CHECK_SEC="0")  # 설정 객체 덮기(S7d) · 늘 대역
+    _env = pgfix.use(d, MCP_RELOAD_CHECK_SEC="0")  # 설정 객체 덮기(S7d) · 늘 대역
     try:
         r1 = _retriever("other")
         assert r1.pg.is_standin and _health()["store"] == "pgvector"

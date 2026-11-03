@@ -116,7 +116,7 @@ def test_fulltext():
     _STATE.clear()
     s3 = FakeS3(dict(OBJS))
     pm = lambda: PMDB.SqliteStore(str(pm_path))  # 부를 때마다 새 연결(서비스가 닫음)
-    with pgfix.use(d, MCP_BUNDLE=str(d)), patch.object(M, "_storage", return_value=s3), patch.object(M, "_pm", pm):
+    with pgfix.use(d), patch.object(M, "_storage", return_value=s3), patch.object(M, "_pm", pm):
         # 서명 키 없음 → not_configured
         with mc.senv(FULLTEXT_SIGN_SECRET=None):
             assert M.do_list(source_system="SFDC")["error"] == "not_configured"

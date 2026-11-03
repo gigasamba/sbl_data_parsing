@@ -36,6 +36,40 @@ def test_bm25_no_embedding():
 # test_recency(L3-1 최신성 순위)는 pl-38(사용자 11-03)에 판 묶음(family)과 함께 지움
 
 
+def test_index_from_pg():
+    """mc-19 — 색인 정보·문서 날짜는 PG에서(묶음 파일 없음): 모델 = gold doc.embed_model, 차원 = 벡터 칸(벡터 없으면 0), 근거 doc_date = doc 칸.
+    모델이 섞이면 질의 모델과 같을 수 없어 embed_query가 거부(IndexMismatch)."""
+    from mcp_server.services.search import pgsearch
+    from mcp_server.services.search.local import IndexMismatch, embed_query
+
+    docs = [{"file_path": "a.txt", "doc_date": "2026-05"}, {"file_path": "b.txt"}]
+    d = pgfix.mk_bundle(
+        docs,
+        [_chunk(0, "바이러스 불활화"), _chunk(1, "다른 내용")],
+        meta={"dim": 2, "embed": "api", "embed_model": "m1"},
+        vectors=[[1, 0], [0, 1]],
+    )
+    (d / "meta.json").unlink()  # 검색은 묶음 파일을 읽지 않음
+    with pgfix.retriever(d) as R:
+        assert R.meta == {"embed": "api", "embed_model": "m1", "dim": 2}, R.meta
+        hits, _ = R.search("바이러스", 5, methods=["bm25"])
+        assert [(h["file_name"], h["doc_date"]) for h in hits] == [("a.txt", "2026-05")], hits
+        R.pg.q(f"UPDATE {R.pg.schema}.doc SET embed_model = 'm2' WHERE file_path = 'b.txt'")
+        mixed = pgsearch.index_meta(R.pg)
+        assert mixed["embed_model"] == "m1,m2", mixed
+        try:
+            embed_query(mixed, "q")
+            raise AssertionError("섞인 색인인데 질의 임베딩을 함")
+        except IndexMismatch:
+            pass
+        R.pg.q(f"UPDATE {R.pg.schema}.doc SET embed_model = 'openai/m1' WHERE file_path = 'b.txt'")
+        assert pgsearch.index_meta(R.pg)["embed_model"] == "m1"  # 같은 모델의 다른 표기 — 섞인 것 아님
+        R.pg.q(f"UPDATE {R.pg.schema}.doc SET embed_model = NULL WHERE file_path = 'b.txt'")
+        assert pgsearch.index_meta(R.pg)["embed_model"] == "m1,(모델 없음)"  # 모델 칸이 빈 옛 문서와 섞임 — 거부 대상
+    with pgfix.retriever(pgfix.mk_bundle([{"file_path": "c.txt"}], [_chunk(0, "본문")])) as R:  # 벡터 없음 — 키워드·ID만
+        assert R.meta["dim"] == 0 and R.meta["embed_model"] is None, R.meta
+
+
 def test_bm25_weights():
     """X3 — 가중 질의어({토큰: 가중치}): 전부 1.0이면 목록과 같고, b 가중을 올리면 b만 있는 청크가 1위(옛 Local.bm25 시험을 PG로)."""
     from mcp_server.services.search import pgsearch

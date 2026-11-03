@@ -26,13 +26,14 @@
 | 원천별 EDW 사슬(pl-29, 사용자 11-02 — 적재 때, 읽기 계정) | 표·칸 이름·SFDC 단계 순서·gold 칸 대응은 설정 파일 `resources/config/edw_chain.yaml`(운영 쪽이 고침 — 적재가 읽어 검사, 아래 이름은 그 기본값). **Quote 표는 지금 없다**(사용자 11-02) — 기본 단계에서 빠졌고, 표가 생기면 설정 파일의 주석 줄을 켠다. **SFDC:** `FileStorageMap.content_version_id → ContentVersion.Id`(→ `ContentDocumentId`, 등록 시각 `CreatedDate`) `→ ContentDocumentLink.ContentDocumentId`(`IsDeleted=0`)`.LinkedEntityId` 접두로 영업 기회 — `006` 직접 > `00T` `Task.WhatId` > `00U` `Event.WhatId` > (`0Q0` `Quote.OpportunityId` — 설정에서 켤 때만, `optional`이면 표가 없을 때 그 단계만 건너뜀) · 고객 `Opportunity.AccountId → Account.Name`, 기회가 없으면 `Task`/`Event.WhatId` `001` > `LinkedEntityId` `001` · 같은 단계 후보 둘 이상이면 비움. 칸: `sf_op_name`=`Opportunity.Name`, `project_code__c`=`Project_Code__c`, `service_type`=`Record_Type__c`, `contract_date`=`X1st_Contract_Execution_Date__c`. **CRMS:** `FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST.RM_CONTRACT_CODE` — `client_edw`=`SF_ACC_NAME`, `division`=`DIVISION`, `prod_name`=`RM_CONTRACT_NAME`, `contract_date`=`INIT_DTTM`, `contract_id`=`rm_contract_code` · 등록 시각 `RM_CM_DOCU.INIT_DTTM`(키 4개 `rm_contract_code`·`gate_code`·`gate_version`·`docu_seq`). **LAS:** `FileStorageMap_LAS.manage_no → LAS.Contract.ManageNo`(최신 판 — `IsActive`·`ContractID` 내림차순) — `contract_id`=`manage_no`(없으면 `ContractID`), `contract_date`=`ContractDate`(없으면 `signed_date`), `client_edw`=`PartnerCorpName`(지금 모두 비어 있음 — G2) · 등록 시각 `FileStorageMap_LAS.las_file_id → LAS.FileManager.CreateDate`. **FAQ·Other:** `FileStorageMap.created_at`만. EDW를 못 읽으면 메타를 비운 채 적재(경고·실행 기록 `meta_missing`) — 자동 갱신 없음, 나중에 `--replace`로 다시 적재해 채움(C-76). 칸 이름은 운영 gold 스키마 노트 기준(D-1 — DB 담당자 확인). |
 | 원천 id 칸 | 원천 전용 칸은 §2 `gold.doc` 표의 "원천" 칸대로(sfdc: `sf_op_id`·`sf_op_name`·`project_code__c`·`service_type` · crms: `division`·`prod_name` · crms·las: `contract_id` · sfdc·crms·las: `contract_date` · sfdc·las: `doc_class`). 값은 적재 때 EDW 조인으로(아래 원천별 사슬 — pl-29). |
 
-## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌, 판 0003)
+## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌, 판 0004)
 
-판: `common/store/db/migrations/versions/0001_search_base.py`(옛 한 벌) + `0002_search_doc_meta.py`(11-02 — 원천별 5벌로 나누고 옛 한 벌 표·`load_run`을 지움) + `0003_doc_hints.py`(11-02 — pl-33 분류 힌트 칸, sfdc·las doc) · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_EXTRA`·`DOC_HINTS`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인(`pipeline/load/edw_meta.py` — pl-29).
+판: `common/store/db/migrations/versions/0001_search_base.py`(옛 한 벌) + `0002_search_doc_meta.py`(11-02 — 원천별 5벌로 나누고 옛 한 벌 표·`load_run`을 지움) + `0003_doc_hints.py`(11-02 — pl-33 분류 힌트 칸, sfdc·las doc) + `0004_doc_embed.py`(11-03 — [mc-19](../prd/mcp.md#mc-19) `doc_date`·`embed_model` 칸, `corpus_stat.dim` 지움) · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_EXTRA`·`DOC_HINTS`·`DOC_META`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인(`pipeline/load/edw_meta.py` — pl-29).
 
 - **스키마 배치:** 기준 스키마 `<PG_SCHEMA>`(예 `ai`)에는 Alembic 판 표 `alembic_version`과 공용 doc_id 시퀀스 `doc_id_seq`만 둔다. 원천마다 스키마 `<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`에 아래 표 다섯 개와 뷰 `v_chunk_source`가 같은 꼴로 있다(원천 전용 칸만 다름 — 표의 "원천" 칸). 원천은 문서의 `source_system`(SFDC·CRMS·LAS·FAQ, `-test` 붙어도 같음 — 그 밖은 `other`)으로 고른다.
 - **적재 규칙(11-02 — [pl-13](../prd/load.md#pl-13)):** 원본 경로(`file_path`)는 5벌을 통틀어 하나다 — 적재는 5벌 모두에서 찾아, `--replace` 없이 이미 있으면 건너뛰고, `--replace`면 다른 원천 스키마의 옛 사본을 지운 뒤 새 원천 스키마에 넣는다(원천이 바뀐 문서).
 - **지운 것(11-02):** `load_run` 표(실행 정보는 실행 기록에, 적재 시각은 ParsingMeta `loaded_at`) · `doc.clients`(본문 고객 — `clients_doc`으로 이름 바꿈)·`doc.run_id`·`doc.source_system`(스키마가 원천)·`doc.s3_key`(`file_path`가 원본 경로)·`doc.sf_acc_name`(`client_edw`와 같은 값) · `chunk.char_start`·`char_end`·`n_chars`·`embed_model`·`clients`·`source_system` · 색인 `ix_<스키마>_chunk_clients`.
+- **지운 것(11-03 — 판 0004, mc-19):** `corpus_stat.dim`(차원은 `chunk.embedding`의 칸 형식 `vector(n)`에서 읽음). 검색 MCP는 실행 중에 묶음 파일(`meta.json`·`docs.jsonl`·`chunks.jsonl`)을 읽지 않는다 — 임베딩 모델·문서 날짜는 아래 `doc` 칸.
 
 ### gold.doc
 
@@ -64,6 +65,8 @@
 | rfp_received_start_date__c | DATE | 분류 힌트 — 같은 기회의 `RFP_Received_Start_Date__c` | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
 | rfp_received_end_date__c | DATE | 분류 힌트 — 같은 기회의 `RFP_Received_End_Date__c` | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
 | approvalname | TEXT | 분류 힌트 — 품의 제목(`LAS.Contract.ApprovalName`, 최신 판) | las | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
+| doc_date | TEXT | 문서 날짜(ISO 글자 `YYYY-MM-DD`·`YYYY-MM`·`YYYY` — 본문 먼저, 없으면 파일 이름, `common/core/docmeta.py`) | 모두 | build_bundle(`docmeta.doc_meta`) → 적재(판 0004) | pgsearch → 근거 `doc_date` — 검색 뷰엔 없음 | 유지 |
+| embed_model | TEXT | 그 문서를 임베딩한 모델 이름(묶음 `meta.json` `embed_model`) | 모두 | 적재(판 0004) | pgsearch `index_meta` — 질의 모델 확인(섞이면 거부), 나중 guard(문서 단위) — 검색 뷰엔 없음 | 유지 |
 
 ### gold.chunk
 
@@ -103,14 +106,13 @@
 
 ### gold.corpus_stat
 
-왜 필요한가: `pgsearch.py` BM25의 전체 청크 수(N)와 평균 길이(avgdl) — 한 행. 차원(dim)은 대역·확인용.
+왜 필요한가: `pgsearch.py` BM25의 전체 청크 수(N)와 평균 길이(avgdl) — 한 행(검색마다 읽음 — 없애면 검색마다 청크 표 전체를 셈, 사용자 11-03 유지). 차원(dim)은 판 0004에 지움(mc-19).
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
 | id | SMALLINT PK | 늘 1 | pgvector_load | pgsearch | 유지 |
 | n_chunks | INT | 청크 수 N | pgvector_load | pgsearch BM25 | 유지 |
 | avg_len | DOUBLE | 평균 n_terms(avgdl) | pgvector_load | pgsearch BM25 | 유지 |
-| dim | INT | 임베딩 차원 | pgvector_load | pg_standin(대역 차원) | 유지 |
 
 뷰 `v_chunk_source`는 `chunk`↔`doc`을 이은 읽기 전용 뷰다(원천 스키마마다 — 칸 = 청크 칸 + `file_name`(= `file_path` 끝 조각) + 그 원천의 doc 칸 + (faq) `faq_group`). 판 0002가 만들고, 모델 `views_expected(원천)`이 비교 기준이다.
 

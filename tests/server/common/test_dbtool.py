@@ -14,8 +14,8 @@ def selftest():
     assert base.HNSW_MAX == ST.HNSW_MAX  # 판 파일이 굳혀 둔 숫자 = 지금 pg.HNSW_MAX
     assert (
         TARGETS == ("search", "applog", "master")
-        and head("search") == "0003_search"
-        and known("search") == ["0003_search", "0002_search", "0001_search"]
+        and head("search") == "0004_search"
+        and known("search") == ["0004_search", "0003_search", "0002_search", "0001_search"]
     )
     assert head("applog") == "0001_applog" and known("applog") == ["0001_applog"]
     assert head("master") == "0001_master" and known("master") == ["0001_master"]
@@ -36,6 +36,11 @@ def selftest():
     sp.loader.exec_module(m3)
     assert m3.DOC_HINTS_COLS == {k: [n for n, _ in v] for k, v in ST.DOC_HINTS.items()}
     print("[selftest] dbtool — 판 0003 분류 힌트 칸 = 표 정의 통과")
+    sp = importlib.util.spec_from_file_location("s_0004", MIGRATIONS / "versions" / "0004_doc_embed.py")
+    m4 = importlib.util.module_from_spec(sp)
+    sp.loader.exec_module(m4)
+    assert m4.SOURCES == ST.SOURCES and m4.DOC_META_COLS == [n for n, _ in ST.DOC_META]
+    print("[selftest] dbtool — 판 0004 문서 날짜·임베딩 모델 칸 = 표 정의 통과")
     # 원천 스키마 SQLite 대역 — 표 정의에서 만든 DDL을 pg_standin이 받음(칸 순서·차원 글자 vector(n) 그대로)
     import tempfile
 
@@ -70,11 +75,12 @@ def selftest():
     for have, want in (
         (None, "없음"),
         ([], "없음"),
-        (["0003_search"], "끝"),
+        (["0004_search"], "끝"),
+        (["0003_search"], "낮음"),
         (["0002_search"], "낮음"),
         (["0001_search"], "낮음"),
         (["9999_x"], "모름"),
-        (["0003_search", "9999_x"], "모름"),
+        (["0004_search", "9999_x"], "모름"),
     ):
         fq = (
             lambda h: lambda sql, p=None: ([{"x": 1}] if h is not None else []) if "to_regclass" in sql else [{"version_num": v} for v in h]

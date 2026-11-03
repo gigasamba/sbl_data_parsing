@@ -165,8 +165,15 @@
   - `corpus_stat`은 남긴다 — 키워드 검색(BM25)이 검색마다 전체 청크 수·평균 길이를 읽는다(`pgsearch.py`). 없애면 검색마다 청크 표 전체를 세야 해 문서가 늘수록 느려진다.
   - `corpus_stat.dim`은 지운다 — 차원은 `chunk.embedding`의 칸 형식 `vector(차원)`에 이미 고정돼 있어 거기서 읽는다(지금 `dim`을 읽는 곳: `pgvector_load`의 차원 확인·`faq_sync`·`_drop_docs`, 시험 대역 `tests/server/mcp/pgfix.py`).
   - (제안 — 구현 때 확인) 검색의 모델 확인: 질의 임베딩 모델 ≠ 그 스키마 gold `doc.embed_model`(값이 둘 이상이면 섞임 — 거부하고 알림)이면 지금처럼 거부한다.
-- 할 일: 새 Alembic 마이그레이션(최신성 4칸 + `doc.embed_model` 추가, `corpus_stat.dim` 삭제 — 번호는 develop 최신 다음) · 적재가 채움 · 차원은 `vector` 칸 형식에서 읽음 · `Retriever`가 PG에서 문서 메타·임베딩 정보를 읽음(`BundleDocs`·`key_local`·`meta.json` 읽기 지움) · `paths.mcp_bundle` 지움(경고) · 평가 전후 비교. code_fp r 바뀜(retriever·local). 검토 등급 A(DB 스키마 — DB 담당자 협의).
-- Status: todo — 설계 끝(11-03 grill 2차, 열린 질문 0개) — 0.2.0 범위는 허브 확인 뒤
+- 범위(사용자 11-03 — 허브 전달): 0.2.0에 넣는다.
+- 구현(11-03 `feature/mc19-pg-search`):
+  - 최신성 칸은 `doc_date` 하나만 더했다 — 1차 결정(4칸) 뒤 최신성 순위가 [pl-38](load.md#pl-38)에 지워져(`retriever.py` 주석·`CommonText.search_recency` 지운 칸), 묶음에서 근거로 나가는 값은 `doc_date`뿐이었다. `version`은 근거에서 원천 manifest 값만(`shaping._evidence`), `superseded`는 늘 null(mc-05), `family`는 pl-38에 지움 — 셋 다 검색이 읽지 않아 칸을 만들지 않는다(필요해지면 새 판).
+  - 판 `0004_doc_embed.py`: 5벌 `doc`에 `doc_date TEXT`(docmeta의 ISO 글자 — `YYYY-MM`·`YYYY`도 있어 DATE가 아님)·`embed_model TEXT` 더함, `corpus_stat.dim` 지움. 모델 `search_tables.DOC_META`. 검색 뷰 `v_chunk_source`는 그대로.
+  - 적재(`pgvector_load._load_src`)가 `doc_date`(묶음 docs.jsonl)·`embed_model`(묶음 meta.json)을 채움. BM25 통계는 `_corpus_stat_sql` 한 곳(차원 없음).
+  - 검색: `pgsearch.index_meta(db)` — 모델 = 그 스키마 `doc.embed_model`(여럿이면 쉼표로 이어 질의 모델과 같을 수 없어 `embed_query`가 거부 — 섞인 색인), 차원 = 벡터 칸 형식(벡터가 없으면 0 — 키워드·ID만). 근거 `doc_date`는 `pgsearch.search`가 doc에서 읽음. `Retriever(retrieve, pg)` — 묶음 인자·`BundleDocs`·`doc_meta`·`key_local` 지움. `server_state`는 원천마다 Retriever를 만듦(적재 판이 바뀌면 다시 — 색인 정보도 새로 읽음).
+  - 설정 `common.paths.mcp_bundle` 지움 — 지운 칸 표(`common.config.layout.REMOVED`)라 남아 있으면 경고만, `migrate`는 "삭제됨"으로 알림. `mcp_server.cli.ask --bundle`·`pgsearch search --bundle`은 받기만(옛 호출 호환).
+  - 통과 확인: 같은 묶음(문서 5건·청크 165)·같은 질문(rag_qa 4 + 문서마다 1 = 9) × 원천 4 × 방법 3(전체·벡터·키워드+ID) = 검색 108번 — develop `479f7cc`와 이 판의 상위 8 근거(순위·경로·청크 키·쪽·`doc_date`·via·점수)가 모두 같음(SQLite 대역, 유료 호출 없이 토큰 해시 임베딩 — 벡터 경로 포함). 서버 확인은 refactor.md C-87.
+- Status: done — 0.2.0(11-03)
 
 <a id="mc-18"></a>
 ## mc-18 · `parse_document` 스캔 PDF 다시 지원

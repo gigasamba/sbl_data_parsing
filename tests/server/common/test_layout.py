@@ -27,9 +27,6 @@ common:
   models:
     guard:
       no_paid_calls: true
-ops:
-  paths:
-    mcp_bundle: output/bundle
 transform:
   structure:
     embed: api
@@ -110,7 +107,7 @@ def test_pc_file_new_layout_and_migrate():
             assert c.run_env == "local" and c.store.run_mode == "prod" and c.connections.pg.port == 55433, name
             assert c.connections.pg.password.get_secret_value() == "dummy-pg" and c.models.embed.model == "test-embed", name
             assert c.models.guard.no_paid_calls is True and c.runtime.cpu_max_load == 4.0, name
-            assert str(c.paths.mcp_bundle) == "output/bundle", name
+            assert not hasattr(c.paths, "mcp_bundle"), name  # mc-19 — 지운 칸: 남아 있어도 경고만(시작은 함)
             if name == "pipeline":
                 assert st.pipeline.transform.structure.embed == "api"
             if name == "mcp":
@@ -124,7 +121,7 @@ def test_pc_file_new_layout_and_migrate():
             doc, report = migrate.convert_yaml(old, classes)
             out = Path(d) / "migrated.yaml"
             out.write_text(migrate.dump_yaml(doc), encoding="utf-8")
-            assert report["칸"] == 18 and not report["삭제됨"] and not report["모름"], report
+            assert report["칸"] == 17 and report["삭제됨"] == ["common.paths.mcp_bundle"] and not report["모름"], report  # mc-19 지운 칸
             assert read_settings(out) == read_settings(new)
 
 

@@ -233,7 +233,7 @@ bash deploy/host/scripts/run_tool.sh migrate stamp --target search
 # ③-b 차이가 "표 없음·색인 없음·뷰 없음·뷰 칸 다름"뿐 → 없는 것만 만들고(뷰는 다시 만듦) 버전 기록(기준 리비전이 IF NOT EXISTS) — ③-a 대신
 #      bash deploy/host/scripts/run_tool.sh migrate up --target search
 # ③-c 컬럼 이름·형식·NULL·기본값·키가 다르거나 남는 표·컬럼·색인 → stamp·up 모두 거부(종료 2) — 멈추고 출력(이름만)을 DB 담당과 협의
-# ⑤ 확인 — "판 끝 ['0003_search'] · 코드의 끝 판 0003_search … 비교: 차이 없음" + 엔진 구성 파일이 읽히는지
+# ⑤ 확인 — "판 끝 ['0004_search'] · 코드의 끝 판 0004_search … 비교: 차이 없음" + 엔진 구성 파일이 읽히는지
 bash deploy/host/scripts/run_tool.sh migrate check --target all
 bash deploy/host/scripts/run_tool.sh show-stack                           # 이름·sha·파일 경로 — 못 읽으면 종료 2
 ```
@@ -377,8 +377,8 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 1 | 새벽 배치 멈춤, 진행 중인 `run_docs.py`가 끝나길 기다림 | 서버 운영 | §5-7 0 |
 | 2 | 백업 — `settings.yaml.0.1.0` · `pg_dump` · 옛 코드 폴더·옛 이미지는 남김 | 서버 운영·DB 담당 | §5-7 1 |
 | 3 | 새 판 받기 — dev: 실행 이미지 + 코드 폴더 · prd: 구운 이미지(8-1) | 서버 운영 | §5-7 2 · README §5-0 |
-| 4 | 설정 옮기기 — `python -m common.config.migrate <0.1.0 settings.yaml> --out <새 파일>`(이미지 안에서) → 화면 보고서(옮긴 칸 수·지운 칸 이름)를 확인 → 새 파일로 바꿈(주인 UID 10001·권한 640) → 새 필수 칸·이미지 칸(`…:0.2.0`)을 채움 | 서버 운영 | §5-7 3 |
-| 5 | DB — settings.yaml의 `PG_SCHEMA`를 새 이름으로 → `migrate check` → `migrate up --target all`(search·applog·master) → `migrate master load`(용어집·고객 명부를 마스터 표 `<PG_SCHEMA>_master`로 — 비어 있으면 구조화·검색이 시작하지 않음) → `check`(차이 없음) | 서버 운영·DB 담당 | §5-7 4 · C-74 · [pl-38](../prd/load.md#pl-38) |
+| 4 | 설정 옮기기 — `python -m common.config.migrate <0.1.0 settings.yaml> --out <새 파일>`(이미지 안에서) → 화면 보고서(옮긴 칸 수·지운 칸 이름 — `common.paths.mcp_bundle`은 mc-19에 지움: 검색은 묶음 없이 PG만)를 확인 → 새 파일로 바꿈(주인 UID 10001·권한 640) → 새 필수 칸·이미지 칸(`…:0.2.0`)을 채움 | 서버 운영 | §5-7 3 |
+| 5 | DB — settings.yaml의 `PG_SCHEMA`를 새 이름으로 → `migrate check` → `migrate up --target all`(search — 판 0004까지: gold doc `doc_date`·`embed_model` 칸, `corpus_stat.dim` 지움 [mc-19](../prd/mcp.md#mc-19) · applog · master) → `migrate master load`(용어집·고객 명부를 마스터 표 `<PG_SCHEMA>_master`로 — 비어 있으면 구조화·검색이 시작하지 않음) → `check`(차이 없음) | 서버 운영·DB 담당 | §5-7 4 · C-74 · [pl-38](../prd/load.md#pl-38) |
 | 6 | `selftest_gate.sh` — `[판정] 통과 — FAIL 0`(알려진 실패 목록 빔) | 서버 운영 | §3-3 · C-54 |
 | 7 | 띄우기·확인 — 파이프라인 상주 컨테이너가 `data-pipeline-parse`·`data-pipeline-structure`에서 일괄 `data-pipeline` + parse_document 전용 `data-pipeline-mcp`로 바뀐다(사용자 11-03 — rn-03): 옛 둘을 멈추고 지운 뒤(`$DOCKER rm -f data-pipeline-parse data-pipeline-structure` — 5에서 이미 했으면 건너뜀) `dc up -d data-pipeline data-pipeline-mcp`(parse_document 작업 서비스는 `data-pipeline-mcp`가 스스로 띄움 — rn-03) · 시작 로그 첫 줄의 판 · MCP `search`(원천 필수)와 원문 도구 한 번 | 서버 운영 | §5-7 5 · C-75 |
 | 8 | 전체 e2e — dev: settings.yaml이 가리키는 대상으로 · prd: 전체 문서를 새 원천별 스키마로 → 검색 MCP를 새 스키마로 | 서버 운영·사용자 | 8-1 · [pl-23](../prd/ops.md#pl-23) |

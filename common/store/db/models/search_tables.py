@@ -48,6 +48,9 @@ DOC_HINTS = {
     "las": (("approvalname", Text),),
 }
 CHUNK_EXTRA = {"faq": (("faq_group", Text),)}  # C4 — faq.chunk만 시트 이름
+# 5벌 공용 doc 칸(mc-19, 판 0004 — 사용자 11-03): 적재가 묶음에서 채우고 검색이 읽는다(묶음 파일 없이 PG만). doc_date = 문서 날짜(ISO 글자 —
+# 근거 칸), embed_model = 그 문서를 임베딩한 모델(질의 모델 확인 — 나중 guard가 문서 단위로 판단). 검색 뷰에는 넣지 않는다(출력 계약).
+DOC_META = (("doc_date", Text), ("embed_model", Text))
 
 
 def source_of(system):
@@ -82,8 +85,8 @@ class Vector(UserDefinedType):
 
 
 def doc_columns(src):
-    """doc 표 칸 이름 순서(공용 + 원천 전용 + 분류 힌트)."""
-    return _doc_base(src) + [n for n, _ in DOC_HINTS.get(src, ())]
+    """doc 표 칸 이름 순서(공용 + 원천 전용 + 분류 힌트 + 판 0004 칸 — 판이 더한 순서)."""
+    return _doc_base(src) + [n for n, _ in (*DOC_HINTS.get(src, ()), *DOC_META)]
 
 
 def _doc_base(src):
@@ -113,7 +116,7 @@ def search_metadata(schema, dim, shared_seq=True):
         Column("created_at", TIMESTAMP(timezone=True)),  # 원천 등록 시각(FileStorageMap.created_at, KST)
         Column("client_edw", Text),  # EDW 조인 사슬의 고객 하나 — client 거르기는 이 칸 정확 일치만(C6)
         Column("clients_doc", Text),  # 본문에서 찾은 고객 라벨(JSON 글자) — 참고만, 거르기·순위에 안 씀
-        *(Column(n, t) for n, t in (*DOC_EXTRA[src], *DOC_HINTS.get(src, ()))),
+        *(Column(n, t) for n, t in (*DOC_EXTRA[src], *DOC_HINTS.get(src, ()), *DOC_META)),
     )
     chunk = Table(
         "chunk",
@@ -145,8 +148,7 @@ def search_metadata(schema, dim, shared_seq=True):
         md,
         Column("id", SmallInteger, primary_key=True, autoincrement=False, server_default=text("1")),
         Column("n_chunks", Integer, nullable=False),
-        Column("avg_len", DOUBLE_PRECISION, nullable=False),
-        Column("dim", Integer, nullable=False),
+        Column("avg_len", DOUBLE_PRECISION, nullable=False),  # 차원(dim)은 판 0004에 지움 — chunk.embedding 칸 형식에서 읽음
     )
     Index(f"ix_{schema}_chunk_doc", chunk.c.doc_id, chunk.c.seq)
     Index(f"ix_{schema}_chunk_term_chunk", chunk_term.c.chunk_id)
