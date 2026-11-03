@@ -121,8 +121,15 @@
   - 분류(`pgvector_load._classify`)는 힌트를 `attrs`에서 읽는다.
   - 서버 사본은 settings.yaml 옆 `$SERVER_ENV_DIR/edw_chain.yaml`(파일 마운트 — #140), 기본 파일은 `resources/config/edw_chain.yaml`. 쓰는 법은 [release-and-patch §8-6](../operations/release-and-patch.md).
 - 이유: 원천 칸을 더하거나 이름을 바꿀 때마다 Alembic 판·적재·검색 코드를 함께 고쳐야 했다. 사슬 파일 하나가 EDW 칸 → attrs 키 → 거르기 이름 → 근거 표시를 정하면 운영 쪽이 파일만 고친다.
-- 파일: `common/store/db/models/search_tables.py` · `common/store/db/migrations/versions/0005_doc_attrs.py` · `common/store/edw_chain.py`(사슬 읽기·검사 — 두 앱) · `pipeline/load/edw_meta.py`(해석기) · `pipeline/load/pgvector_load.py` · `pipeline/load/classify.py` · `mcp_server/services/search/search_svc.py` · `mcp_server/schemas/evidence.py` · `mcp_server/routers/search_tool.py` · `resources/config/edw_chain.yaml`.
-- Status: todo(11-03 — `feature/attrs-jsonb`)
+- 구현(11-03 `feature/attrs-jsonb`):
+  - 사슬 꼴은 위 결정에 몇 가지를 더했다 — 단계 `where`(고정 값)·`latest`(최신 행)·`optional`·`tz`, 열쇠 목록(앞 자리부터 — 동률이면 비움), SFDC 힌트용 `sfdc_entity` 단계(접두 표·`ENTITY_CLASS`는 코드), 칸 `type: flag`·`max`. 첫 단계는 `file`이어야 하고 그 단계에 행이 없는 문서는 메타가 없다. 한 단계의 칸을 못 읽으면 그 칸만 빈다.
+  - 옛 해석기와 새 해석기의 결과가 같음을 시험 자료(EDW 8벌 × 문서 13건)와 `valid_env/edw/edw.sqlite`(문서 80건 — 차이 0)로 보인 뒤 옛 코드를 지웠다. 빈 글자 값은 키를 뺀다(옛 코드는 `""`).
+  - `doc_class`는 적재(분류)가 쓰는 attrs 키(`search_tables.LOAD_ATTRS` — 사슬 키로 못 씀), `doc_class` 거르기는 그 키 그대로.
+  - 검색: `attrs` 거르기는 그 원천에서 `filter`가 있는 키만 받는다(힌트 키는 못 거름). 근거 `attrs`는 `evidence: true` 키 모두(값 없으면 null), `contract_no` = `filter: contract_id` 키의 값. 문서 attrs는 `search_svc`가 한 번에 읽는다(검색 층 r 코드 지문 그대로). 검색 MCP의 사슬 파일 칸은 `search.edw_meta.edw_chain`(`MCP_EDW_CHAIN_FILE` — 바뀌면 다음 호출부터 다시 읽음), `mcp-server` compose도 사본을 붙인다. `list_doc_fulltext`의 `doc_class`·`sf_op_id`는 attrs 키 이름 그대로 읽는다(사슬을 거치지 않음).
+  - 시험: `tests/server/common/test_dbtool.py`(0005 — 지운 칸 = 0002+0003, 뷰·되돌리기·GIN) · `tests/server/pipeline/test_edw_meta.py`(사슬 사례·틀린 설정 15개) · `tests/server/pipeline/test_classify.py`(EDW attrs → `doc.attrs` · 힌트) · `tests/server/mcp/test_search_svc.py`(attrs 거르기·오류·근거 attrs·`contract_no`·`search_attrs`) · `tests/server/mcp/test_call_log.py`(tools/list 바이트 11894 → 12608).
+  - 서버 확인: [refactor.md C-88](../refactoring/refactor.md).
+- 파일: `common/store/db/models/search_tables.py` · `common/store/db/migrations/versions/0005_doc_attrs.py` · `common/store/edw_chain.py`(사슬 읽기·검사 — 두 앱) · `pipeline/load/edw_meta.py`(해석기) · `pipeline/load/pgvector_load.py` · `pipeline/load/classify.py` · `mcp_server/services/search/search_svc.py` · `mcp_server/services/edw_calls.py` · `mcp_server/schemas/evidence.py` · `mcp_server/routers/search_tool.py` · `mcp_server/routers/edw_tools.py` · `mcp_server/config.py` · `resources/config/edw_chain.yaml` · `deploy/host/compose/compose.mcp-server.yml`.
+- Status: done(11-03 — `feature/attrs-jsonb`, 서버 확인 C-88)
 
 ## 코드와 다른 점 · 지울 코드
 

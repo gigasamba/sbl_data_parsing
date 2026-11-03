@@ -103,6 +103,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 | `0002_search` | 기준 스키마 + 원천 스키마 5벌(11-02 — pl-28) | 기준 `ai`: 판 표·공용 `doc_id_seq` · 원천마다 `ai_sfdc`·`ai_crms`·`ai_las`·`ai_faq`·`ai_other`: `doc` · `chunk` · `chunk_term` · `term_stat` · `corpus_stat` 테이블, 색인, 뷰 `v_chunk_source`(벡터 차원은 번들 `meta.json` 또는 `--dim`) |
 | `0003_search` | 원천 스키마 `ai_sfdc`·`ai_las`(11-02 — pl-33) | `doc`에 분류 힌트 칸(sfdc: `title`·`entity_*`·`subject` 등 10개, las: `approvalname`) — 검색 뷰는 그대로 |
 | `0004_search` | 원천 스키마 5벌(11-03 — mc-19) | `doc`에 `content_date`·`embed_model` 칸, `corpus_stat.dim` 지움 — 검색이 번들 파일 없이 PG만 읽게. 있는 행은 비어 있으니 0.2.0은 전체 다시 적재 |
+| `0005_search` | 원천 스키마 5벌(11-03 — pl-52) | 원천 전용 칸·분류 힌트 칸을 `doc.attrs`(JSONB, GIN 색인) 한 칸으로 — 옛 칸 값을 같은 이름 키로 옮긴 뒤 지움(되돌리기는 칸을 되살림), 뷰 `v_chunk_source`가 `attrs`를 냄. 키는 EDW 사슬 파일 `edw_chain.yaml`의 `fields` |
 | `0001_applog` | `applog`(고정 이름) — `--target applog` | 감사 호출·실행 요약·단계 사건 표(월 파티션 — `maintain --target applog`, op-01) |
 | `0001_master` | `<기준 스키마>_master` — `--target master` | 마스터 표(용어집·고객 명부 — pl-38). 채우기는 `master load` |
 
@@ -319,11 +320,11 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 ```bash
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle output/demo/bundle --create-extension
 .venv/bin/python -m common.store.db.dbtool master load --schema demo   # 마스터 표(용어집·고객 명부)를 git CSV로 채움(pl-38)
-.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0004_search · applog 0001_applog · master 0001_master
+.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0005_search · applog 0001_applog · master 0001_master
 .venv/bin/python -m common.store.db.dbtool check --target all      # 기대: 차이 없음
 ```
 
-- 이 한 번으로 검색 테이블(`0001_search` → `0002_search` → `0003_search` → `0004_search`)·로그 테이블(`applog`)·마스터 테이블(`demo_master` — `0001_master`)이 만들어진다.
+- 이 한 번으로 검색 테이블(`0001_search` → `0002_search` → `0003_search` → `0004_search` → `0005_search`)·로그 테이블(`applog`)·마스터 테이블(`demo_master` — `0001_master`)이 만들어진다.
 - **초기화 순서(pl-38):** `dbtool up`(search·applog·master) → `dbtool master load` → 파싱·구조화·적재. 구조화의 고객 판별과 검색이 마스터 표를 읽고, 서버는 표가 비었으면 시작하지 않는다. `resources/vocab/glossary/*.csv`를 고치면 `dbtool master load`를 다시 돌린다(`gold_version`에 새 마스터 해시가 붙음 — 자동 재처리는 없음).
 - `--bundle`은 벡터 차원을 `meta.json`에서 읽기 위해 준다. `--create-extension`은 새 PG일 때만 필요하다.
 - 결과는 파일이 아니라 DB 안에 남는다(테이블 + `<스키마>.alembic_version`).
