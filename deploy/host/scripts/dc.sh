@@ -12,19 +12,39 @@ set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
 
 # init — release-and-patch §8-3·server-guide §1-2가 손으로 만들던 서버 폴더를 한 번에(값·파일 내용은 찍지 않음).
-#   폴더: <ENV>(10001:<그룹> 750 — data-pipeline이 /etc/rag/env로 읽음, 사용자 11-03) · <결과 폴더>(UID 10001:<그룹>, 2775 — setgid) · <결과 폴더>/mcp_parse/jobs(같음) · /srv/rag/code·/srv/rag/backup(700)
+#   폴더: <ENV>(root:10001 750 — data-pipeline이 /etc/rag/env로 읽음, 사용자 11-03 · 컨테이너 사용자는 주인이 아니라 그룹으로) · <결과 폴더>(UID 10001:<그룹>, 2775 — setgid) · <결과 폴더>/mcp_parse/jobs(같음) · /srv/rag/code·/srv/rag/backup(700)
 #   코드 폴더(이 스크립트의 폴더): chmod -R a+rX · /srv/rag/code/live 링크 → 이 폴더(없을 때만 — 있으면 가리키는 곳만 찍고 그대로)
 #   settings.yaml: 코드 폴더의 settings.sample.yaml을 <ENV>/settings.yaml로 — **없을 때만**(있으면 절대 덮지 않음), 10001:<그룹> 640.
 #   경로: SERVER_ENV_DIR(기본 /srv/rag/env) · RAG_OUT(셸 env > settings.yaml common.host.output_root > /srv/rag/output) ·
 #         MCP_JOBS_DIR(셸 env > settings.yaml mcp.host.jobs_dir > <결과 폴더>/mcp_parse/jobs). DC_ROOT=<폴더>는 /srv/rag 대신 · DC_CODE=<폴더>는 live가 가리킬 코드 폴더(기본 이 코드 폴더) — 둘 다 시험용.
 #   root가 아니면 거부(종료 코드 3 — 주인을 10001로 못 바꿔 반쯤 만든 폴더가 남지 않게). 단 DC_ROOT 시험은 주인 바꾸기만 건너뜀.
-#   끝에 settings.yaml `required:` 중 빈 칸 이름(값은 안 찍음). 종료 코드: 0 · 2 인자 틀림 · 3 root 아님.
+#   <ENV>를 열기 전에 안 파일을 점검 — 640보다 넓게 읽히거나(그룹 쓰기·다른 사용자) 주인이 root·10001이 아니면 이름을 찍고 멈춤(종료 4 —
+#   고치지도 지우지도 않음, 운영자가 고침: release-and-patch §8-3 1-1). 끝에 settings.yaml `required:` 중 빈 칸 이름(값은 안 찍음).
+#   종료 코드: 0 · 2 인자 틀림 · 3 root 아님 · 4 설정 폴더 안 파일 권한.
+_env_files_ok() {   # _env_files_ok <설정 폴더> — 열기 전에 안 파일 점검(사용자 11-03 리뷰): 640보다 넓음·주인 다름이면 찍고 1
+  local d=$1 bad probe
+  [ -d "$d" ] || return 0
+  if [ -n "$test" ]; then   # 시험 — 권한을 지키지 못하는 파일 시스템(Windows)이면 점검을 건너뜀(서버에서는 늘 점검)
+    probe=$d/.dc_probe; : > "$probe" && chmod 600 "$probe"
+    if [ "$(stat -c %a "$probe" 2>/dev/null)" != 600 ]; then rm -f "$probe"; echo "  (시험 — 이 파일 시스템은 권한을 못 지킴, 설정 폴더 점검 건너뜀)"; return 0; fi
+    rm -f "$probe"
+  fi
+  # 파일: 그룹 쓰기·실행·다른 사용자 비트가 있으면(= 640보다 넓음) · 하위 폴더: 그룹 쓰기·다른 사용자 비트 · 주인: root 또는 10001만
+  bad=$(find "$d" -mindepth 1 \( \( -type f -perm /037 \) -o \( -type d -perm /027 \) -o \( ! -type l ! -uid 0 ! -uid 10001 \) \) -exec stat -c '%a %u %n' {} + 2>/dev/null)
+  [ -n "$test" ] && bad=$(find "$d" -mindepth 1 \( \( -type f -perm /037 \) -o \( -type d -perm /027 \) \) -exec stat -c '%a %u %n' {} + 2>/dev/null)   # 시험은 주인을 못 바꿈
+  [ -z "$bad" ] && return 0
+  echo "[dc init] 설정 폴더를 열기 전에 고칠 파일 — 640보다 넓게 읽히거나 주인이 root·10001이 아님(권한 주인 이름):" >&2
+  printf '%s\n' "$bad" | sed 's/^/  /' >&2
+  echo "[dc init] 멈춤(종료 4) — 바꾸지 않았다. 필요 없는 파일(옛 pipeline.env·*.bak·옛 사본)은 지우고, 남길 파일은 chmod 640(하위 폴더 750) · chown 10001 또는 root 뒤 다시(release-and-patch §8-3 1-1)" >&2
+  return 1
+}
+
 dc_init() {
   local group="" root=${DC_ROOT:-/srv/rag} test=${DC_ROOT:+1} env out jobs sf src
   while [ $# -gt 0 ]; do
     case "$1" in
       --group) group=${2:-}; shift 2 || true ;;
-      *) echo "[dc init] 모르는 인자: $1 — 사용: dc.sh init --group <운영 그룹>" >&2; return 2 ;;
+      *) echo "[dc init] 모르는 인자: $1 — 사용: dc.sh init --group <운영 그룹>(결과 폴더·settings.yaml 그룹)" >&2; return 2 ;;
     esac
   done
   if [ "$(id -u)" != 0 ] && [ -z "$test" ]; then
@@ -32,6 +52,7 @@ dc_init() {
   fi
   [ -n "$group" ] || [ -n "$test" ] || { echo "[dc init] --group <운영 그룹> 필요(결과 폴더·settings.yaml 그룹 — 운영 계정이 고치고 지움)" >&2; return 2; }
   env=${SERVER_ENV_DIR:-$root/env}
+  [ -z "${SETTINGS_FILE:-}" ] || env=$(dirname "$SETTINGS_FILE")   # settings.yaml이 실제로 있는 폴더(load_settings의 SETTINGS_DIR와 같음)
   sf=$env/settings.yaml
   if [ -f "$sf" ] && [ -z "${RAG_OUT:-}${MCP_JOBS_DIR:-}" ]; then
     . deploy/host/scripts/settings_env.sh
@@ -48,7 +69,9 @@ dc_init() {
       if [ -z "$test" ]; then chown "10001:$group" "$1"; else echo "  (시험 — 주인 바꾸기 건너뜀)"; fi
     fi
   }
-  _mk "$env" 750 1   # 컨테이너 UID 10001이 열어야 함(EDW 사슬 사본 등 — /etc/rag/env:ro) · 그 밖 사용자는 못 봄(비밀 — settings.yaml 640)
+  _env_files_ok "$env" || return 4
+  _mk "$env" 750 0   # 컨테이너 UID 10001이 그룹 10001로 열어야 함(EDW 사슬 사본 등 — /etc/rag/env:ro) · 주인은 root(10001이 권한·파일을 못 바꾸게)
+  if [ -z "$test" ]; then chown root:10001 "$env"; else echo "  (시험 — 주인 바꾸기 건너뜀)"; fi
   _mk "$out" 2775 1
   _mk "$jobs" 2775 1
   _mk "$root/code" 755 0

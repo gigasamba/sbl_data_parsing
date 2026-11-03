@@ -391,6 +391,15 @@ $DOCKER ps --format '{{.Names}}'                                              # 
 $DOCKER stop data-pipeline-parse data-pipeline-structure mcp-server          # 기대: 이름 세 줄
 ```
 
+**1-1. 설정 폴더 정리(0.2.0 — `dc.sh init` 전에, C-88)** — 0.2.0부터 settings.yaml이 있는 폴더(`$SERVER_ENV_DIR`)를 `data-pipeline`에 읽기 전용으로 통째로 붙인다(EDW 사슬 사본 — §8-6). 그래서 그 안 파일은 모두 640 이하·주인 root 또는 10001이어야 하고, `dc.sh init`은 어긋난 파일이 있으면 바꾸지 않고 이름을 찍고 멈춘다(종료 4). 옛 파일을 먼저 치운다(지우기 전에 백업 폴더로).
+```bash
+ls -la "$SERVER_ENV_DIR"                                                      # 옛 pipeline.env·*.bak·settings.yaml 사본 등이 있는지
+mv "$SERVER_ENV_DIR"/pipeline.env "$SERVER_ENV_DIR"/*.bak "$BK"/ 2>/dev/null  # 필요 없는 옛 파일은 백업 폴더로(없으면 조용히 넘어감)
+chown 10001:<운영 그룹> "$SERVER_ENV_DIR/settings.yaml" && chmod 640 "$SERVER_ENV_DIR/settings.yaml"
+find "$SERVER_ENV_DIR" -mindepth 1 \( \( -type f -perm /037 \) -o \( -type d -perm /027 \) -o \( ! -type l ! -uid 0 ! -uid 10001 \) \) -exec stat -c '%a %u %n' {} +   # 기대: 아무것도 안 나옴
+$DOCKER run --rm --entrypoint id <data-pipeline 이미지> -g                    # 기대: 10001(컨테이너 사용자 rag의 그룹 — 폴더 root:10001 750을 그룹으로 읽음)
+```
+
 **2. 백업** — 되돌리기용. 옛 코드 폴더·옛 이미지는 지우지 않는다.
 ```bash
 cp -p "$SERVER_ENV_DIR/settings.yaml" "$BK/settings.yaml.0.1.0"
@@ -408,6 +417,7 @@ $DOCKER exec -i "$PG_C" pg_restore -l < "$BK/pg-0.1.0.dump" | head -5           
 cd /srv/rag && unzip -q <코드 zip>                                         # 기대: /srv/rag/<코드>/
 DOCKER=$DOCKER bash sbl_images-main/load.sh 0.1.0                        # 0.1.0 실행 이미지가 이미 있으면 건너뜀 — 기대: 조각 sha256 확인 → load → BUILD.txt(DEPS_HASH f0fcc30bd067bc2f)
 bash /srv/rag/<코드>/deploy/host/scripts/dc.sh init --group <운영 그룹>   # 기대: 폴더마다 "있음" · settings.yaml "있음(덮지 않음)" · live "있음 … (옮기지 않음)"
+# 멈추면(종료 4): [dc init] 설정 폴더를 열기 전에 고칠 파일 — … 아래 줄의 파일을 1-1처럼 고친 뒤 다시
 ln -sfn /srv/rag/<코드> /srv/rag/code/live && cd /srv/rag/code/live && cat CODE_COMMIT   # 판 바꾸기는 손으로(init은 있는 링크를 옮기지 않음) — 기대: 그 커밋
 ```
 - 0.2.0은 **새 실행 이미지가 필요 없다** — `deploy/docker/DEPS_HASH`가 v0.1.0과 develop 모두 `f0fcc30bd067bc2f`(의존성 그대로). 서버 실행 이미지의 지문이 다르면 6단계 시작 로그가 `의존성 지문이 다름`으로 멈춘다(§1-1 4).
@@ -516,7 +526,7 @@ cp -p "$BK/settings.yaml.0.1.0" "$SERVER_ENV_DIR/settings.yaml"               # 
 
 적재가 문서 메타(고객 `client_edw`·원천 전용 칸·등록 시각)를 EDW에서 채울 때 따라가는 표·칸 이름은 파일 하나다. 기본 파일은 코드 폴더의 `resources/config/edw_chain.yaml`이고, **각 줄의 뜻은 그 파일의 주석이 정본**이다(여기는 쓰는 법과 예시만). 서버 EDW 이름이 다르면 코드를 고치지 않고 사본을 고친다.
 
-**① 사본 두기 · 칸 적기** — 사본은 코드 폴더 밖, settings.yaml 옆(`$SERVER_ENV_DIR/edw_chain.yaml`)에 둔다. 이 폴더는 `data-pipeline`에만 `/etc/rag/env`로 **읽기 전용** 붙는다(`compose.pipeline.yml` — 폴더 주인 10001:<운영 그룹> 750은 `dc.sh init`이 맞춤).
+**① 사본 두기 · 칸 적기** — 사본은 코드 폴더 밖, settings.yaml 옆(`$SERVER_ENV_DIR/edw_chain.yaml`)에 둔다. settings.yaml이 실제로 있는 폴더가 `data-pipeline`에만 `/etc/rag/env`로 **읽기 전용** 붙는다(`compose.pipeline.yml` — 폴더 root:10001 750은 `dc.sh init`이 맞춤, 컨테이너 사용자는 그룹 10001로 읽음).
 ```bash
 cp -n /srv/rag/code/live/resources/config/edw_chain.yaml "$SERVER_ENV_DIR/edw_chain.yaml"
 chown 10001:<운영 그룹> "$SERVER_ENV_DIR/edw_chain.yaml" && chmod 640 "$SERVER_ENV_DIR/edw_chain.yaml"

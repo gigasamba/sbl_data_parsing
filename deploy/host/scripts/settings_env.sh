@@ -37,6 +37,7 @@ load_settings() {   # 위 설명(source) — 성공 0 · 설정 파일 없음·�
   fi
   case "$SETTINGS_FILE" in /*) ;; *) SETTINGS_FILE=$PWD/$SETTINGS_FILE ;; esac
   export SETTINGS_FILE
+  SETTINGS_DIR=$(dirname "$SETTINGS_FILE"); export SETTINGS_DIR   # settings.yaml이 실제로 있는 폴더 — data-pipeline이 /etc/rag/env로 읽기 전용(EDW 사슬 사본 등, 사용자 11-03)
   if [ "${SETTINGS_LOADED:-}" = "$SETTINGS_FILE" ]; then   # 이 셸(또는 부른 부모 — systemd nightly → trigger.sh)이 같은 파일로 이미 냄
     DOCKER=${DOCKER:-$(docker_default)}; export DOCKER
     return 0

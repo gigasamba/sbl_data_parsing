@@ -39,9 +39,9 @@ services:
       RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
     volumes:
       - *settings
-      # 서버 설정 폴더 읽기 전용(사용자 11-03 — 적재가 읽는 EDW 사슬 사본 등, settings.yaml 옆 파일). 적재가 도는 이 컨테이너에만(data-pipeline-mcp·mcp-server는 안 붙임).
-      #   폴더는 10001:<운영 그룹> 750(dc.sh init) — 컨테이너 UID 10001이 열 수 있게.
-      - ${SERVER_ENV_DIR:?SERVER_ENV_DIR 필요 — settings_env.sh load_settings가 냄}:/etc/rag/env:ro,z
+      # settings.yaml이 실제로 있는 폴더를 읽기 전용으로(사용자 11-03 — 적재가 읽는 EDW 사슬 사본 등, settings.yaml 옆 파일). 적재가 도는 이 컨테이너에만
+      #   (data-pipeline-mcp·mcp-server는 안 붙임). 폴더는 root:10001 750(dc.sh init — 컨테이너 사용자는 그룹으로 읽음), 안 파일은 640 이하.
+      - ${SETTINGS_DIR:?SETTINGS_DIR 필요 — settings_env.sh load_settings가 냄(settings.yaml이 있는 폴더)}:/etc/rag/env:ro,z
       - ${DOC_SRC:?DOC_SRC=<원본 문서 폴더>}:${APP_DOCS_MOUNT:?APP_DOCS_MOUNT 필요 — settings_env.sh load_settings가 냄}:ro,z
       - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:${APP_OUTPUT_ROOT:?APP_OUTPUT_ROOT 필요 — settings_env.sh load_settings가 냄}:z
     mem_limit: ${PARSE_MEM_LIMIT:-24g}
