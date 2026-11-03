@@ -290,6 +290,14 @@ def struct_cmd(seq):
     )
 
 
+def faq_sync_cmd(reset):
+    """pl-41 FAQ 교체 확인(구조화 컨테이너) — 결과는 docflow/faq_sync.json(지운 수·남은 gold faq)."""
+    return (
+        f"{DOCKER} exec {STRUCT_C} bash -c 'umask 0002 && cd {_app()} && PYTHONPATH={_img('code_root')} "
+        f"python -m pipeline.load.pgvector_load faq-sync{' --reset' if reset else ''} --out {_img('output_root')}/docflow/faq_sync.json'"
+    )
+
+
 def publish_cmd(seq):
     """문서 1개 publish(OS + EDW — 파싱 컨테이너)."""
     inside = f"{_img('output_root')}/docflow/{seq}"
@@ -783,20 +791,18 @@ def faq_first(rows, order):
     res = DOCFLOW / "faq_sync.json"
     res.unlink(missing_ok=True)
     rc, _, err = sh(
-        f"{DOCKER} exec {STRUCT_C} bash -c 'cd {_app()} && PYTHONPATH={_img('code_root')} "
-        f"python -m pipeline.load.pgvector_load faq-sync{' --reset' if new else ''} --out {_img('output_root')}/docflow/faq_sync.json'"
+        faq_sync_cmd(bool(new))
     )  # ponytail: 시간 초과(기본 1800초)면 컨테이너 안 명령은 계속 돌 수 있음 — 다음 실행의 채움이 메움
     try:
         got = json.loads(res.read_text(encoding="utf-8")) if rc == 0 else None
     except (OSError, ValueError):
         got = None
-    if got is None:
+    if got is None or new:
         log(
             f"[경고] FAQ 교체 확인(faq-sync) 결과 없음(rc={rc}: {err[-200:]}) — FAQ {len(faq)}건 전체를 넣음(이미 있는 문서는 적재가 건너뜀)"
+            if got is None
+            else f"FAQ 교체: 새 FAQ {len(new)}건 — gold faq 문서 {got['faq_reset']}건을 지우고 지금 FAQ {len(faq)}건 전체를 맨 앞에서 다시 처리"
         )
-        want = faq
-    elif new:
-        log(f"FAQ 교체: 새 FAQ {len(new)}건 — gold faq 문서 {got['faq_reset']}건을 지우고 지금 FAQ {len(faq)}건 전체를 맨 앞에서 다시 처리")
         want = faq
     else:
         gold = set(got["gold"])

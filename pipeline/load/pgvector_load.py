@@ -273,16 +273,16 @@ def faq_sync(db, reset):
     모두 지운다(새 FAQ가 올라온 실행 — 그 뒤 run_docs가 지금 FAQ 파일 전체를 다시 파싱·적재). 반환 = (지운 문서 수, 남은 gold faq file_path 목록).
     검토 등급 A(gold 지우기)."""
     sdb = src_dbs(db)["faq"]
-    rows = sdb.q(f"SELECT doc_id, file_path FROM {sdb.schema}.doc")
-    if not (reset and rows):
-        return 0, sorted(r["file_path"] for r in rows)
+    if not reset:
+        return 0, sorted(r["file_path"] for r in sdb.q(f"SELECT file_path FROM {sdb.schema}.doc"))
     _require_marked_schema(db, "faq-sync --reset")
     dim = (sdb.q(f"SELECT dim FROM {sdb.schema}.corpus_stat WHERE id = 1") or [{"dim": None}])[0]["dim"]
     cn = (sdb if getattr(db, "is_standin", False) else db).cn  # 대역은 원천마다 파일
     with cn.transaction(), cn.cursor() as cur:
-        cur.execute(f"SELECT doc_id FROM {sdb.schema}.doc")  # 트랜잭션 안에서 다시 — 그사이 들어온 FAQ도 지움
+        cur.execute(f"SELECT doc_id FROM {sdb.schema}.doc")  # 트랜잭션 안에서 — 그사이 들어온 FAQ도 지움
         ids = [r[0] for r in cur.fetchall()]
-        _drop_docs(cur, sdb.schema, ids, dim)
+        if ids:
+            _drop_docs(cur, sdb.schema, ids, dim)
     return len(ids), []
 
 
@@ -454,13 +454,14 @@ def main(argv=None):
             )
         )
         return
-    if a.cmd == "faq-sync":
-        if not a.out:
-            ap.error("faq-sync는 --out이 필요함")
-        if not getattr(db, "is_standin", False):  # load와 같은 판 확인 — 모르는 판의 스키마에서는 지우지 않음
-            from common.store.db import dbtool
+    if a.cmd == "faq-sync" and not a.out:
+        ap.error("faq-sync는 --out이 필요함")
+    if a.cmd in ("load", "faq-sync") and not getattr(db, "is_standin", False):
+        # S8a(Q5) — 판 기록 없음은 경고 뒤 계속, 끝보다 낮거나 모르는 판은 거부(종료 2) · faq-sync도 모르는 판에서는 지우지 않음
+        from common.store.db import dbtool
 
-            dbtool.require_current(db.q, "search", db.schema)
+        dbtool.require_current(db.q, "search", db.schema)
+    if a.cmd == "faq-sync":
         n, gold = faq_sync(db, a.reset)
         Path(a.out).write_text(json.dumps({"faq_reset": n, "gold": gold}, ensure_ascii=False), encoding="utf-8")
         return
@@ -470,10 +471,6 @@ def main(argv=None):
             idx = deploy(db, meta["dim"])
         print(f"배포 완료: PostgreSQL 스키마 {db.schema} · vector({meta['dim']}) · {idx} 색인")
     elif a.cmd == "load":
-        if not getattr(db, "is_standin", False):  # S8a(Q5) — 판 기록 없음은 경고 뒤 계속, 끝보다 낮거나 모르는 판은 거부(종료 2)
-            from common.store.db import dbtool
-
-            dbtool.require_current(db.q, "search", db.schema)
         with SP.span("load.pgvector", "load", cpu=True) as sp:  # op-01 — 적재 전체 1행(표별 하위 span이 이 밑에)
             counts = load(db, a.bundle, a.replace, a.rep_dir)
             sp.add(**{k: v for k, v in counts.items() if k in ("docs", "chunks", "terms", "sec")})
