@@ -476,7 +476,7 @@ bash deploy/release/selftest_gate.sh $DOCKER run --rm <dev면: -v "$PWD:/app/dep
 
 **8. 첫 실행 — FAQ 교체와 전체 재처리**
 - **FAQ:** 첫 `run_docs.py` 실행은 FAQ 교체 기록(`<작업 폴더>/batch_progress/faq_seen.txt`)이 없으므로 FAQ 전체를 새 FAQ로 보고 **한 번** gold `faq`를 비운 뒤(`pgvector_load faq-sync --reset`) FAQ 전체를 맨 앞에서 처리한다(pl-41). `progress.log` 기대 줄: `FAQ 교체: 새 FAQ <N>건 — gold faq 문서 <M>건을 지우고 지금 FAQ <K>건 전체를 맨 앞에서 다시 처리`(새 스키마라 M=0). `--seqs`·`--limit` 실행은 교체를 건너뛴다(`FAQ 교체 확인(pl-41) 건너뜀`).
-- **전체 재처리:** 0.2.0은 지문이 모두 바뀐다(FINGERPRINT·레이어 code_fp·엔진 — develop `479f7cc`(#134·#135 병합 뒤) 기준 FINGERPRINT `18142592accca442` · p0 `192776ff62fa` · p1 `bbfe25546eba` · r `2fe85b6d2686` · s `5f8b5333f713` — 0.1.0 값과 모두 다름, 기준선 기록은 PRD [e2-02](../prd/test.md#e2-02)). 모든 문서가 다시 파싱·적재된다 — 시간·디스크는 §5-7 0으로 잡는다.
+- **전체 재처리:** 0.2.0은 지문이 모두 바뀐다(FINGERPRINT·레이어 code_fp·엔진 — 0.1.0 값과 모두 다름. 값은 PRD [e2-02](../prd/test.md#e2-02)의 **0.2.0 기준값**(release/0.2.0 브랜치가 적음) — 배포 뒤 서버 값과 대조). 모든 문서가 다시 파싱·적재된다 — 시간·디스크는 §5-7 0으로 잡는다.
 - **[dev]** settings.yaml이 가리키는 대상으로 e2e 한 번. **[prd]** 전체 문서를 새 원천별 스키마로(8-1):
 ```bash
 cp /srv/rag/code/live/deploy/host/scripts/run_docs.py <운영자 작업 폴더>/ && cd <운영자 작업 폴더>
