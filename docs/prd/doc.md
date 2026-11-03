@@ -75,3 +75,17 @@
 - 이유: 상주 `data-pipeline`에 사람 정답 폴더(`GOLD_DIR` → 컨테이너 `/data/gold`)가 붙지 않아 점검기(`common/check/checker.py`)의 `GOLD_DIR` 이름 짝 점검이 건너뛰어진다.
 - 할 일: compose에 선택 마운트로 붙일지, 칸 `ops.pipeline_host.gold_dir`과 이미지 약속 경로(`IMAGE_PATHS.gold_mount`)를 지울지 사람이 정한다(`settings.py`는 code_fp 파일 — 지문 배치에).
 - Status: todo
+
+<a id="op-13"></a>
+## op-13 · 서버 루트 폴더 하나 — 판마다 새 루트, `/srv/rag`·`env/`·`code/live` 없음
+- 이유: 서버 아무 자리에 폴더 하나(예 `/home/dev/`)를 만들어 그 안에서 실행한다. 판(버전)마다 루트를 새로 만들어 판끼리 섞이지 않게 하고, 검색 DB(pgvector — 따로 떠 있는 PG 컨테이너)만 함께 본다(사용자 11-04).
+- 규칙:
+  1. 루트 = 코드 zip을 푼 폴더의 부모. 호스트 스크립트는 자기 위치에서 루트를 구한다(env·고정 경로 없음).
+  2. 루트 바로 아래: `settings.yaml`(git의 `settings.sample.yaml`을 복사해 이름을 바꾸고, 맨 위 `required`의 빈 필수값을 직접 채움) · `edw_chain.yaml` · 코드 폴더(`sbl_data_parsing-<판>/`) · 이미지 폴더(`sbl_images-main/`) · `output/`(결과 — `output/mcp_parse/jobs` 포함) · `backup/`.
+  3. `/srv/rag`, `env/`(`SERVER_ENV_DIR`), `code/live` 링크를 만들거나 쓰지 않는다.
+  4. 새 판 = 새 루트: 앞 루트의 `settings.yaml`·`edw_chain.yaml`을 복사해 오고 새 코드·이미지를 푼다. 검색 DB는 같은 PG를 그대로 본다. 새 문서 판정은 EDW 기준(pl-23)이라 `output/`이 비어도 이어서 돈다. 되돌리기 = 앞 루트에서 다시 띄움.
+  5. 컨테이너는 compose로 띄운다(`dc.sh up`). 상태 보기는 둘 다 안내 — 서버 전체는 `podman ps`·`docker ps`(root로 띄웠으면 `sudo`), 우리 묶음만은 `dc.sh ps`.
+  6. systemd 타이머(새벽 배치·MCP 살리기)의 경로는 루트 기준으로 채운다 — 새 루트에서 한 번 다시 설치하면 그 루트로 바뀐다.
+- 파일: `deploy/host/{scripts,compose,systemd}/`, `deploy/release/{bake.sh,build_ship.sh,load.sh}`, `common/config/settings.py`(설명 글자 — code_fp 파일), README §5, `docs/operations/*`.
+- QA: `tests/general/deploy/test_compose.py`·`test_dc_init.py`·`test_host_env.py` — 루트 아래 배치. 서버 확인은 refactor.md에 C 항목으로.
+- Status: todo

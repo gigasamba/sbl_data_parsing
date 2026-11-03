@@ -194,3 +194,4 @@
 | 0.2.0 올리기·되돌리기(release-and-patch §8-3·§8-5) — DB 백업 → `migrate check` → `up`, 되돌릴 땐 `settings.yaml.0.1.0` 복원, 재처리 동안 밤 타이머 멈춤 | DB·EDW·전체 재처리가 함께 바뀐다 | done | [op-10](prd/doc.md#op-10) |
 | 일회성 작업 컨테이너 지움 — 운영 작업·`dbtool`·`migrate`는 상주 `data-pipeline`에 `exec`, 이미지 점검(`docker run --rm … selftest`)은 그대로 | 사용자 11-02 | done | [op-10](prd/doc.md#op-10) |
 | 사람 정답 폴더(`GOLD_DIR` → `/data/gold`)를 상주 컨테이너에 붙일지, 칸을 지울지 정하기 | 일회성 컨테이너를 지운 뒤 점검기의 GOLD_DIR 점검이 건너뛰어짐 | todo | [op-11](prd/doc.md#op-11) |
+| 서버 루트 폴더 하나(예 `/home/dev/`) — `settings.yaml`·`edw_chain.yaml`·코드·이미지·`output/`가 그 아래, 판마다 새 루트(검색 PG는 공유), `/srv/rag`·`env/`·`code/live` 없음 | 사용자 11-04 | todo | [op-13](prd/doc.md#op-13) |
