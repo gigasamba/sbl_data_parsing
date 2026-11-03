@@ -72,6 +72,9 @@ EXCLUDED_FILES = (
     "store/pg.py",  # PostgreSQL 연결 설정
     "store/pg_standin.py",  # AD41 — pg.py의 연결 정보 없을 때 스탠드인(sqlite) — 연결 방법만, 핸드오프 내용과 무관(pg.py가 shared라 같이 있음)
     "core/resources.py",  # 실행 자원(CPU·메모리) 판단 — 병렬 수 결정만
+    "core/jsonlog.py",  # op-01 JSON 사건 기록·상관 ID — 인계 내용과 무관
+    "store/logsink.py",  # op-01 비동기 DB 기록 — 인계 내용과 무관
+    "core/span.py",  # op-01 파이프라인 성능 span — 인계 내용과 무관
     "core/runlog.py",  # 실행 로그(output/RUNLOG.md 등)
     "store/db/",  # S8a — pgvector 표 정의·행 모양·Alembic 판·migrate 명령(폴더째 — "/"로 끝나면 그 아래 전부). DB 표 모양만,
     # _rep/bundle 내용과 무관 · 판을 더할 때마다 이 파일을 고치지 않게(이 파일은 모든 층의 공용 의존 — code_fp)

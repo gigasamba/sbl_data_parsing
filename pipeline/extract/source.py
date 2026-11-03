@@ -37,6 +37,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from common.config import settings as C  # S7c: 설정 객체(common 칸 SOURCE_MANIFEST·비밀 꺼내기)
+from common.core import span as SP  # op-01 성능 span
 from common.core.console import utf8_stdout
 from common.core.contract import jl
 from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
@@ -504,13 +505,15 @@ def _warm_cmd(argv):
             print(f"[source] warm: 실패(무시·폴백) — {t['bucket']}/{t['key']}: {type(e).__name__}: {str(e)[:120]}", flush=True)
             return False
 
-    if a.workers > 1 and len(targets) > 1:
-        import concurrent.futures as _cf
+    with SP.span("extract.warm", "extract", total=len(targets)) as sp:  # op-01 — 프리페치 1회 = 1행(받은 수·실패 수)
+        if a.workers > 1 and len(targets) > 1:
+            import concurrent.futures as _cf
 
-        with _cf.ThreadPoolExecutor(max_workers=a.workers) as ex:
-            done = sum(1 for r in ex.map(_one, targets) if r)
-    else:
-        done = sum(1 for r in (_one(t) for t in targets) if r)
+            with _cf.ThreadPoolExecutor(max_workers=a.workers) as ex:
+                done = sum(1 for r in ex.map(_one, targets) if r)
+        else:
+            done = sum(1 for r in (_one(t) for t in targets) if r)
+        sp.add(done=done, failed=len(targets) - done)
     print(f"[source] warm: {done}/{len(targets)}건 · {time.time() - t0:.1f}s → {wd}", flush=True)
     return 0
 
@@ -788,4 +791,7 @@ if __name__ == "__main__":
     setarg.apply()  # --set 이름=값(S9 Step A — 호스트 run_docs.py의 warm이 SOURCE_WARM을 넘김)
     utf8_stdout()
     if len(sys.argv) > 1 and sys.argv[1] == "warm":
-        raise SystemExit(_warm_cmd(sys.argv[2:]))  # 프리페치 — 다음 배치 원본을 SOURCE_WARM에 미리 받아 둠
+        from pipeline.shared import runtrace
+
+        with runtrace.run("source_warm", sys.argv[1:]):  # op-01 — run_docs가 부르는 자기 실행 1건
+            raise SystemExit(_warm_cmd(sys.argv[2:]))  # 프리페치 — 다음 배치 원본을 SOURCE_WARM에 미리 받아 둠

@@ -265,15 +265,28 @@ def gated_popen(args, settle=None, log=print, **kwargs):
     import subprocess
     import time
 
+    from common.core import span as SP
+
     lim = _f("MEM_MAX_PCT", 90)
+    t_enter = time.monotonic()
     with _LAUNCH:
+        t_locked = time.monotonic()
         u = wait_mem(start_pct=lim, log=log)
+        t_mem = time.monotonic()
         wait_cpu(log=log)
+        t_cpu = time.monotonic()
         pr = exitclean.track(
-            subprocess.Popen(args, **kwargs), group=bool(kwargs.get("start_new_session"))
-        )  # pl-27 — 끝날 때 아직 돌면 끝내고 회수
+            subprocess.Popen(args, **SP.with_context(kwargs)), group=bool(kwargs.get("start_new_session"))
+        )  # pl-27 — 끝날 때 아직 돌면 끝내고 회수 · op-01 — 현재 run/span ID를 자식에 이어줌
+        settled = 0.0
         if u is not None and u >= lim - _f("MEM_SETTLE_MARGIN", 5):
-            time.sleep(settle if settle is not None else _f("MEM_SETTLE_SEC", 2))
+            settled = settle if settle is not None else _f("MEM_SETTLE_SEC", 2)
+            time.sleep(settled)
+    # op-01 — 대기를 작업 시간과 분리해 현재 span에: 메모리 문·CPU 문·다른 launcher 기다림(lock)·settle
+    sp = SP.current()
+    if sp is not None:
+        sp.add_wait(mem_ms=int((t_mem - t_locked) * 1000), cpu_ms=int((t_cpu - t_mem) * 1000))
+        sp.add(wait_launch_ms=int((t_locked - t_enter) * 1000), settle_ms=int(settled * 1000), launches=1)
     return pr
 
 

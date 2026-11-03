@@ -29,6 +29,7 @@ import urllib.parse
 from pathlib import Path
 
 from common.config.settings import by_env, cfg, checked, reveal
+from common.core import span as _span
 from common.core.paths import APP_ROOT
 
 ROOT = APP_ROOT
@@ -233,6 +234,7 @@ def _do_call(messages, temperature, max_tokens, json_mode, base, model, agent, t
         if rpm:
             wait = _last[0] + 60 / rpm - time.monotonic()
             if wait > 0:
+                _span.add_current(llm_rpm_wait_ms=int(wait * 1000))  # op-01 — 분당 상한 때문에 기다린 시간
                 time.sleep(wait)
             _last[0] = time.monotonic()
     # 예산(10-05 독립 검토 반영) — 호출 전 예상 최대 비용(입력 글자/3 토큰 + max_tokens 출력)을 공유 장부에 선차감(잠금 안 확인+기록),
@@ -312,6 +314,7 @@ def chat(messages, temperature=0.0, max_tokens=1024, json_mode=False, allow_exte
     if cp.exists():
         with _lock:
             _stats["cache_hits"] += 1
+        _span.add_current(llm_cache_hit=1)  # op-01 — 열린 span(문서×단계)에 응답 캐시 적중 수
         return json.loads(cp.read_text(encoding="utf-8"))["text"]
     text, u = _do_call(messages, temperature, max_tokens, json_mode, base, model, agent, timeout)
     if _empty_truncated(text, u):
@@ -618,6 +621,7 @@ def complete(
             return out, u
         except _Retryable as ex:
             last_err, last_elapsed = ex.inner, time.monotonic() - t0
+            _span.add_current(**{f"{role}_retries": 1})  # op-01 — 열린 span(문서×단계)에 재시도 수(span 없으면 no-op)
             if attempt < retries - 1:
                 time.sleep(ex.retry_after if ex.retry_after else 2**attempt * 2)
         except ModelUnavailable:  # 재시도 대상 아닌 실패(HTTP 400·리다이렉트 거부 등) — 예약 자리·선차감을 돌려주고 그대로
@@ -638,6 +642,37 @@ def complete(
 
         G.spend_settle(-reserved)  # 끝내 못 쓴 flat 선차감을 되돌림(BR45 후속)
     raise ModelUnavailable(f"모델 호출 실패(재시도 {retries}회): {type(last_err).__name__}: {str(last_err)[:200]}") from last_err
+
+
+def _traced(fn):
+    """op-01 — 열린 span(문서×단계)이 있으면 모델 호출 수·지연·토큰·실패를 그 span의 metrics에 쌓는다(개별 호출 기록은 DEBUG만).
+    span이 없으면(MCP 검색 등) 원래 함수를 그대로 부른다."""
+
+    @functools.wraps(fn)
+    def wrapper(role, messages, **kwargs):
+        sp = _span.current()
+        if sp is None:
+            return fn(role, messages, **kwargs)
+        t0 = time.monotonic()
+        try:
+            text, usage = fn(role, messages, **kwargs)
+        except Exception:
+            ms = (time.monotonic() - t0) * 1000
+            sp.add(**{f"{role}_calls": 1, f"{role}_fail": 1}).observe(f"{role}_ms", ms).ext_call(ms)
+            raise
+        ms = (time.monotonic() - t0) * 1000
+        sp.add(**{f"{role}_calls": 1}).observe(f"{role}_ms", ms).ext_call(ms)
+        usage = usage or {}
+        sp.add(**{f"{role}_tok_in": usage.get("prompt_tokens") or 0, f"{role}_tok_out": usage.get("completion_tokens") or 0})
+        _span.debug_event(
+            f"model.{role}", role=role, ms=round(ms), tokens_in=usage.get("prompt_tokens"), tokens_out=usage.get("completion_tokens")
+        )
+        return text, usage
+
+    return wrapper
+
+
+complete = _traced(complete)
 
 
 class _Turn:

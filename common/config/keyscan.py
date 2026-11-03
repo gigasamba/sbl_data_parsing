@@ -56,6 +56,7 @@ NAME_LIST = {
 # YAML에 넣지 않는 이름(refactor_plan 부록 D "처리") — env로 남김(5-3 H·라이브러리가 읽음) · 인자(5-3 B 빌드·반입·시험 스크립트) ·
 # (옛 이름 '삭제 후보' 목록은 0.2.0에 지움 — pl-46: 코드가 읽지 않는 이름은 대조하지 않음)
 NOT_SETTINGS = {
+    "APPLOG_CONTEXT": ("env로 남김", "내부 신호 — 부모 → 자식 request/run/span ID(JSON), 설정 아님"),
     "SETTINGS_FILE": ("env로 남김", "설정 파일 위치(새 — D-015)"),
     "SETTINGS_LENIENT": (
         "env로 남김",

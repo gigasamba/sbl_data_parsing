@@ -8,9 +8,13 @@
 - CRMS: FileStorageMap_CRMS → 계약 목록(RM_CM_PJTLIST) · 등록 시각 문서 표(RM_CM_DOCU, 키 4개).
 - LAS: FileStorageMap_LAS → 계약(최신 판 — active·id 내림차순) · 등록 시각 FileManager.
 - FAQ·Other: FileStorageMap 등록 시각만.
+분류 힌트(pl-33, 사용자 11-02 — 운영 analyze_clues 규칙, 설정 sfdc.hints·las.hints): SFDC는 제목 + 첫 User 아닌 연결 개체(종류·갈래·id —
+접두 표 resources/mappings/sfdc_prefix.json) + 그 개체가 Task/Event면 방향·제목(120자), 영업 기회면 단계·Real_RFP__c·RFP 기간. LAS는 품의 제목.
+gold 칸 이름 = 원본 칸 이름의 소문자(search_tables.DOC_HINTS). 힌트 조회는 따로 — 서버 EDW에 칸이 없으면 그 힌트만 비움(경고).
 EDW를 못 열면 빈 dict와 경고(적재는 메타를 비운 채 계속 — 사용자 11-02, 자동 갱신 없음: 나중에 --replace로 다시 적재해 채움).
 설정 파일이 틀리면(빠진 이름·SQL에 넣을 수 없는 이름·doc 표에 없는 gold 칸) ValueError로 멈춘다 — 이름은 SQL 글자에 들어가므로 검사, 값은 늘 바인딩."""
 
+import json
 import re
 import sys
 from datetime import UTC, date, datetime
@@ -37,7 +41,11 @@ _REQ = {  # 설정 자리 → 꼭 있어야 하는 이름
     ("las", "map"): ("table", "key", "manage_no", "signed", "file_id"),
     ("las", "file"): ("table", "id", "created"),
     ("las", "contract"): ("table", "manage_no", "active", "id", "date", "client"),
+    ("sfdc", "hints"): ("title", "channel", "opportunity"),
+    ("sfdc", "hints", "opportunity"): ("stage", "real_rfp", "rfp_start", "rfp_end"),
+    ("las", "hints"): ("approval",),
 }
+_CHANNEL = ("type", "table", "id", "direction", "subject")  # sfdc.hints.channel 항목마다
 
 
 def load_chain(path=CHAIN_FILE):
@@ -61,6 +69,10 @@ def load_chain(path=CHAIN_FILE):
     for i, st in enumerate(steps if isinstance(steps, list) else []):
         need = ("prefix", "id", "value") if isinstance(st, dict) and "table" in st else ("prefix",)
         errs += [f"sfdc.steps[{i}].{n}: 없음" for n in need if not isinstance(st, dict) or n not in st]
+    hs = sf.get("hints") if isinstance(sf, dict) else None
+    ch = hs.get("channel") if isinstance(hs, dict) else None
+    for i, st in enumerate(ch if isinstance(ch, list) else []):
+        errs += [f"sfdc.hints.channel[{i}].{n}: 없음" for n in _CHANNEL if not isinstance(st, dict) or n not in st]
     _check(c, "", "", None, errs)
     if errs:
         raise ValueError(f"[edw_meta] 사슬 설정 오류({path}): " + "; ".join(errs))
@@ -222,13 +234,15 @@ def _sfdc(edw, paths, c):
     F, S = c["files"], c["sfdc"]
     V, L, Op, A = S["version"], S["link"], S["opportunity"], S["account"]
     files = edw.q_in(
-        f"SELECT f.{F['key']} AS k, f.{F['created']} AS created_at, cv.{V['doc']} AS doc_id, cv.{V['created']} AS cv_created "
+        f"SELECT f.{F['key']} AS k, f.{F['created']} AS created_at, f.{V['file_col']} AS cv_id, cv.{V['doc']} AS doc_id, "
+        f"cv.{V['created']} AS cv_created "
         f"FROM {F['table']} f LEFT JOIN {V['table']} cv ON cv.{V['id']} = f.{V['file_col']} WHERE f.{F['key']} IN ({{IN}})",
         paths,
     )
     links = {}
     for r in edw.q_in(
-        f"SELECT {L['doc']} AS d, {L['entity']} AS e FROM {L['table']} WHERE {L['deleted']} = 0 AND {L['doc']} IN ({{IN}})",
+        f"SELECT {L['doc']} AS d, {L['entity']} AS e FROM {L['table']} WHERE {L['deleted']} = 0 AND {L['doc']} IN ({{IN}}) "
+        f"ORDER BY {L['doc']}, {L['entity']}",
         [f["doc_id"] for f in files],
     ):
         links.setdefault(r["d"], []).append(str(r["e"] or ""))
@@ -291,7 +305,103 @@ def _sfdc(edw, paths, c):
             **{g: _conv(g, o.get(f"o_{g}")) for g in Op["out"]},
             "client_edw": accs.get(o.get("a") or acc),
         }
+    for key, h in _sfdc_hints(edw, files, links, S).items():
+        out.setdefault(key, {}).update(h)
     return out
+
+
+ENTITY_CLASS = {  # 운영 analyze_clues 그대로 — 개체 종류 → 분류 힌트 갈래(표에 없으면 other)
+    "IF_Log__c": "if_log",
+    "EventLogFile__c": "event_log",
+    "Task": "task",
+    "Event": "event",
+    "Quote": "quote",
+    "Opportunity": "opportunity",
+    "Account": "account",
+    "Contract": "contract",
+    "Dashboard": "dashboard",
+    "User": "user_only",
+    "Organization": "organization",
+}
+
+
+def _prefixes():
+    return json.loads((RES_ROOT / "mappings" / "sfdc_prefix.json").read_text(encoding="utf-8"))["prefixes"]
+
+
+def _try_rows(edw, sql, values, what):
+    """분류 힌트 조회 — 서버 EDW에 칸·표가 없으면 빈 목록 + 경고(그 힌트만 빠지고 적재 메타는 그대로)."""
+    try:
+        return edw.q_in(sql, values)
+    except Exception as e:
+        print(f"[edw_meta] 경고: 분류 힌트 {what}를 못 읽음 — 그 힌트 없이: {type(e).__name__}", file=sys.stderr, flush=True)
+        return []
+
+
+def _flag(v):
+    """SFDC 체크박스(BIT·bool·글자) → 글자('1'/'0' — 운영 프롬프트의 Real_RFP__c=1과 같게)."""
+    return None if v in (None, "") else str(int(v)) if isinstance(v, (bool, int)) else str(v)
+
+
+def _sfdc_hints(edw, files, links, S):
+    """운영 analyze_clues와 같은 규칙 — 연결 없음 unlinked · 모두 User면 user_only · 아니면 첫 User 아닌 연결(운영 확인: 문서마다 ≤1개)."""
+    V, H, Op = S["version"], S["hints"], S["opportunity"]
+    pmap = _prefixes()
+    titles = {
+        str(r["i"]): r["t"]
+        for r in _try_rows(
+            edw,
+            f"SELECT {V['id']} AS i, {H['title']} AS t FROM {V['table']} WHERE {V['id']} IN ({{IN}})",
+            [str(f["cv_id"]) for f in files],
+            "제목",
+        )
+    }
+    pick = {}
+    for f in files:
+        le = [e for e in links.get(f["doc_id"], []) if e]
+        other = [e for e in le if pmap.get(e[:3], "") != "User"]
+        h = {"title": titles.get(str(f["cv_id"])), "entity_class": "unlinked" if not le else "user_only"}
+        if other:
+            e = other[0]
+            etype = pmap.get(e[:3], "Unknown:" + e[:3])
+            h.update(entity_id=e, entity_type=etype, entity_class=ENTITY_CLASS.get(etype, "other"))
+        pick[f["k"]] = h
+    by_type = {}
+    for h in pick.values():
+        by_type.setdefault(h.get("entity_type"), []).append(h.get("entity_id"))
+    chan = {}
+    for ch in H["channel"]:
+        for r in _try_rows(
+            edw,
+            f"SELECT {ch['id']} AS i, {ch['subject']} AS s, {ch['direction']} AS d FROM {ch['table']} WHERE {ch['id']} IN ({{IN}})",
+            by_type.get(ch["type"], []),
+            f"{ch['type']} 방향·제목",
+        ):
+            chan[r["i"]] = r
+    Oh = H["opportunity"]
+    opp = {
+        r["i"]: r
+        for r in _try_rows(
+            edw,
+            f"SELECT {Op['id']} AS i, {Oh['stage']} AS st, {Oh['real_rfp']} AS rr, {Oh['rfp_start']} AS rs, {Oh['rfp_end']} AS re "
+            f"FROM {Op['table']} WHERE {Op['id']} IN ({{IN}})",
+            by_type.get("Opportunity", []),
+            "영업 기회 단계",
+        )
+    }
+    for h in pick.values():  # chan·opp는 그 종류의 id로만 물었으므로 id가 맞으면 종류도 맞음
+        c = chan.get(h.get("entity_id"))
+        if c:
+            h.update(subject=(c["s"] or "")[:120], sent_received__c=c["d"])
+        o = opp.get(h.get("entity_id"))
+        if o:
+            h.update(
+                stagename=o["st"],
+                real_rfp__c=_flag(o["rr"]),
+                rfp_received_start_date__c=_date(o["rs"]),
+                rfp_received_end_date__c=_date(o["re"]),
+            )
+    return pick
 
 
 def _crms(edw, paths, c):
@@ -342,4 +452,15 @@ def _las(edw, paths, c):
             "contract_date": _date(k.get("dt")) or _date(r["signed_date"]),
             "client_edw": k.get("cl") or None,  # 지금은 모두 비어 있음(상대사 출처 미정 — G2)
         }
+    appr = {  # 분류 힌트(pl-33) — 최신 판 계약의 품의 제목(따로 조회 — 칸이 없으면 이것만 빔)
+        r["i"]: r["a"]
+        for r in _try_rows(
+            edw,
+            f"SELECT {C['id']} AS i, {c['las']['hints']['approval']} AS a FROM {C['table']} WHERE {C['id']} IN ({{IN}})",
+            [k["cid"] for k in contracts.values()],
+            "품의 제목",
+        )
+    }
+    for r in rows:
+        out[r["k"]]["approvalname"] = appr.get((contracts.get(r["manage_no"]) or {}).get("cid"))
     return out

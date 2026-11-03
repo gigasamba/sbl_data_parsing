@@ -26,9 +26,9 @@
 | 원천별 EDW 사슬(pl-29, 사용자 11-02 — 적재 때, 읽기 계정) | 표·칸 이름·SFDC 단계 순서·gold 칸 대응은 설정 파일 `resources/config/edw_chain.yaml`(운영 쪽이 고침 — 적재가 읽어 검사, 아래 이름은 그 기본값). **Quote 표는 지금 없다**(사용자 11-02) — 기본 단계에서 빠졌고, 표가 생기면 설정 파일의 주석 줄을 켠다. **SFDC:** `FileStorageMap.content_version_id → ContentVersion.Id`(→ `ContentDocumentId`, 등록 시각 `CreatedDate`) `→ ContentDocumentLink.ContentDocumentId`(`IsDeleted=0`)`.LinkedEntityId` 접두로 영업 기회 — `006` 직접 > `00T` `Task.WhatId` > `00U` `Event.WhatId` > (`0Q0` `Quote.OpportunityId` — 설정에서 켤 때만, `optional`이면 표가 없을 때 그 단계만 건너뜀) · 고객 `Opportunity.AccountId → Account.Name`, 기회가 없으면 `Task`/`Event.WhatId` `001` > `LinkedEntityId` `001` · 같은 단계 후보 둘 이상이면 비움. 칸: `sf_op_name`=`Opportunity.Name`, `project_code__c`=`Project_Code__c`, `service_type`=`Record_Type__c`, `contract_date`=`X1st_Contract_Execution_Date__c`. **CRMS:** `FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST.RM_CONTRACT_CODE` — `client_edw`=`SF_ACC_NAME`, `division`=`DIVISION`, `prod_name`=`RM_CONTRACT_NAME`, `contract_date`=`INIT_DTTM`, `contract_id`=`rm_contract_code` · 등록 시각 `RM_CM_DOCU.INIT_DTTM`(키 4개 `rm_contract_code`·`gate_code`·`gate_version`·`docu_seq`). **LAS:** `FileStorageMap_LAS.manage_no → LAS.Contract.ManageNo`(최신 판 — `IsActive`·`ContractID` 내림차순) — `contract_id`=`manage_no`(없으면 `ContractID`), `contract_date`=`ContractDate`(없으면 `signed_date`), `client_edw`=`PartnerCorpName`(지금 모두 비어 있음 — G2) · 등록 시각 `FileStorageMap_LAS.las_file_id → LAS.FileManager.CreateDate`. **FAQ·Other:** `FileStorageMap.created_at`만. EDW를 못 읽으면 메타를 비운 채 적재(경고·실행 기록 `meta_missing`) — 자동 갱신 없음, 나중에 `--replace`로 다시 적재해 채움(C-76). 칸 이름은 운영 gold 스키마 노트 기준(D-1 — DB 담당자 확인). |
 | 원천 id 칸 | 원천 전용 칸은 §2 `gold.doc` 표의 "원천" 칸대로(sfdc: `sf_op_id`·`sf_op_name`·`project_code__c`·`service_type` · crms: `division`·`prod_name` · crms·las: `contract_id` · sfdc·crms·las: `contract_date` · sfdc·las: `doc_class`). 값은 적재 때 EDW 조인으로(아래 원천별 사슬 — pl-29). |
 
-## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌, 판 0002)
+## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌, 판 0003)
 
-판: `common/store/db/migrations/versions/0001_search_base.py`(옛 한 벌) + `0002_search_doc_meta.py`(11-02 — 원천별 5벌로 나누고 옛 한 벌 표·`load_run`을 지움) · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_EXTRA`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인(`pipeline/load/edw_meta.py` — pl-29).
+판: `common/store/db/migrations/versions/0001_search_base.py`(옛 한 벌) + `0002_search_doc_meta.py`(11-02 — 원천별 5벌로 나누고 옛 한 벌 표·`load_run`을 지움) + `0003_doc_hints.py`(11-02 — pl-33 분류 힌트 칸, sfdc·las doc) · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_EXTRA`·`DOC_HINTS`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인(`pipeline/load/edw_meta.py` — pl-29).
 
 - **스키마 배치:** 기준 스키마 `<PG_SCHEMA>`(예 `ai`)에는 Alembic 판 표 `alembic_version`과 공용 doc_id 시퀀스 `doc_id_seq`만 둔다. 원천마다 스키마 `<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`에 아래 표 다섯 개와 뷰 `v_chunk_source`가 같은 꼴로 있다(원천 전용 칸만 다름 — 표의 "원천" 칸). 원천은 문서의 `source_system`(SFDC·CRMS·LAS·FAQ, `-test` 붙어도 같음 — 그 밖은 `other`)으로 고른다.
 - **적재 규칙(11-02 — [pl-13](../prd/load.md#pl-13)):** 원본 경로(`file_path`)는 5벌을 통틀어 하나다 — 적재는 5벌 모두에서 찾아, `--replace` 없이 이미 있으면 건너뛰고, `--replace`면 다른 원천 스키마의 옛 사본을 지운 뒤 새 원천 스키마에 넣는다(원천이 바뀐 문서).
@@ -53,6 +53,17 @@
 | prod_name | TEXT | 제품·계약 이름(`RM_CM_PJTLIST.RM_CONTRACT_NAME`) | crms | 적재(EDW 조인) | 없음(근거 메타) | 유지 |
 | contract_id | TEXT | 계약 번호 — CRMS `rm_contract_code` · LAS `manage_no`(없으면 `Contract.ContractID`) | crms·las | 적재(EDW 조인) | `search` 거르기 | 유지 |
 | contract_date | DATE | 계약일 — SFDC `Opportunity.X1st_Contract_Execution_Date__c` · CRMS `RM_CM_PJTLIST.INIT_DTTM` · LAS `Contract.ContractDate`(없으면 `FileStorageMap_LAS.signed_date`) | sfdc·crms·las | 적재(EDW 조인) | 없음(근거 메타) | 유지 |
+| title | TEXT | 분류 힌트 — 파일 제목(`ContentVersion.Title`). 비면 분류 지시문은 원본 파일 이름 | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
+| entity_type | TEXT | 분류 힌트 — 첫 User 아닌 연결 개체 종류(`ContentDocumentLink.LinkedEntityId` 앞 3자 → `resources/mappings/sfdc_prefix.json`, 표에 없으면 `Unknown:<접두>`) | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
+| entity_class | TEXT | 분류 힌트 — 개체 갈래(운영 analyze_clues 그대로): 연결 없음 `unlinked` · 모두 User면 `user_only` · 아니면 개체 종류의 갈래(if_log·event_log·task·event·quote·opportunity·account·contract·dashboard·organization, 그 밖 other) | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
+| entity_id | TEXT | 분류 힌트 — 그 연결 개체 id(`LinkedEntityId`) | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
+| sent_received__c | TEXT | 분류 힌트 — 연결 개체가 Task/Event일 때 방향(`Sent_Received__c`) | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
+| subject | TEXT | 분류 힌트 — 연결 개체가 Task/Event일 때 제목(`Subject` 앞 120자) | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
+| stagename | TEXT | 분류 힌트 — 연결 개체가 영업 기회 자체일 때 단계(`Opportunity.StageName` — 사슬이 고른 기회가 아님) | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
+| real_rfp__c | TEXT | 분류 힌트 — 같은 기회의 `Real_RFP__c`(글자 '1'/'0') | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
+| rfp_received_start_date__c | DATE | 분류 힌트 — 같은 기회의 `RFP_Received_Start_Date__c` | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
+| rfp_received_end_date__c | DATE | 분류 힌트 — 같은 기회의 `RFP_Received_End_Date__c` | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
+| approvalname | TEXT | 분류 힌트 — 품의 제목(`LAS.Contract.ApprovalName`, 최신 판) | las | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
 
 ### gold.chunk
 
@@ -213,6 +224,9 @@ PC 대역 예시 — [pl-29](../prd/load.md#pl-29) 10-31. 고객 연결 4단계�
 | D-6 | 판 0002(11-02 구현) — 원천별 gold 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`) + 기준 스키마의 공용 `doc_id_seq`, 옛 한 벌 표·`load_run` 삭제(§2) — 기존 서버 데이터는 다시 적재(백업 뒤) | DB 담당자 승인 한 번([pl-25](../prd/load-schema.md#pl-25)·[pl-28](../prd/load-schema.md#pl-28)) · 첫 적재가 전체 e2e([pl-23](../prd/ops.md#pl-23))와 함께 · refactor.md C-74·C-76 |
 | D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 `source_system='FAQ'`로 등록(G3, 사용자 10-30 — [pl-39](../prd/extract.md#pl-39)) | EDW 담당자 협의 필요 — FAQ 행을 누가 어떻게 넣나 |
 | D-9 | 밀려난 `FileStorageMap` 행의 예외 이력 표(새 EDW 표 — §3 `edw.SupersededRow` 안) — 표 이름·칸·누가 쓰나 | 사용자 10-31: 같은 `s3_key`의 더 새 행이 오면 같은 `doc_id`(`file_size`가 다를 때만 다시 파싱)이고 옛 행을 이력에 남김 |
+| D-10 | `applog` 스키마 추가(§7) — `up`의 `CREATE SCHEMA`, `maintain`의 파티션 생성·DROP, 앱의 INSERT와 `pipe_run` UPDATE 권한. 호출량 기준 용량(`mcp_call` 행 본문 최대 약 80KB) | 새 스키마이고 로그 쓰기가 기존 PG 접속 정보를 함께 씀 |
+| D-11 | `applog.mcp_call`의 `args`·`result` 읽기 권한 분리 | 문서 본문·EDW 결과가 들어가는데(`get_doc_fulltext` 응답은 문서 원문 전체 — 원본 문서와 같은 접근 제한 필요) 판에 GRANT가 없어 지금은 앱 계정이 읽을 수 있음 |
+| D-12 | 실제 보존 기간 약 90~120일(월 단위 DROP)이 감사·개인정보 기준에 맞는지, `dbtool maintain` 매일 예약 | 예약이 약 2개월 이상 멈추면 새 달 파티션이 없어 DB 쓰기가 실패하고 대체 파일로만 쌓임 |
 
 ## 6. 사용자 결정 (10-30 grill 7차)
 
@@ -226,3 +240,110 @@ U-1~U-6은 이 문서의 안대로, U-7은 아래 결정대로 한다.
 | U-5 | 출처 표시 이름을 붙일 값 — 지금은 고객만. 계약 id(`contract_id`)·제품 이름은 EDW에서만 옴 | 고객만 `_edw`·`_doc`로 나눔, 나머지는 그대로 |
 | U-6 | `ParsingMeta.status_at`은 SELECT하는 코드가 없음(운영자가 봄) · `parse_meta_id`·`source_key_hash`는 DB 키 | 셋 다 유지 |
 | U-7 | 같은 내용이 여러 `s3_key`로 들어온 문서 — 지금은 첫 키만 `doc` 행, 나머지는 `aliases`(묶음 안). 키가 하나뿐인 설계라 둘째 키는 숨김·ParsingMeta 조회가 안 맞음 | `s3_key`마다 `doc` 행 하나 — `doc_alias` 없음. `build_bundle`의 내용 해시 합치기(첫 키로 `aliases`)를 없앰 — 같은 내용이 두 키면 문서 둘(임베딩은 캐시가 다시 씀) |
+
+## 7. applog — 로그 저장소 (pgvector PG, 스키마 `applog`, [op-01](../prd/ops.md#op-01))
+
+위 §2~§6의 pl-25 설계안과 별개인 표다. 기존 gold·EDW 표는 바꾸지 않는다. 서버에는 아직 없어서 칸의 결정은 모두 `새로`다(적용 절차는 refactor.md C-79).
+
+판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/applog/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: 파일 자리 `ops.log.db_enabled`(모델 `common.log.db_enabled`, 기본 꺼짐). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — 판과 실제 DB 대조는 `dbtool check --target applog`.
+
+- **파티션:** `mcp_call`(`ts`)·`pipe_event`(`ts_start`)는 월 단위(UTC). 이름은 `<표>_YYYYMM`. `dbtool up`과 `dbtool maintain`이 현재 달부터 3개월 치를 만든다.
+- **보존:** `dbtool maintain --target applog`를 매일 실행한다. `ops.log.retention_days`(기본 90)가 지난 달의 파티션을 DROP하고 `pipe_run`은 DELETE한다. 달이 통째로 지나야 DROP되므로 파티션 표의 행은 약 90~120일 남는다.
+- **되돌리기:** `downgrade`는 막혀 있다. 지우려면 DB 담당자가 직접 한다.
+- **연결:** `pipe_event.run_id` → `pipe_run.run_id`는 외래 키가 없다(지우는 시점이 달라 짝 없는 행이 생길 수 있음). 파티션 표의 `id`는 기본 키가 시각과 묶여 있어 그것만으로는 고유하지 않다.
+- **기록하지 않는 값:** 접속 IP와 MCP `clientInfo`(사용자 11-02, `args`에서도 뺌).
+
+### applog.mcp_call
+
+MCP 호출 1건당 1행. 인증 실패(`tool=http`)와 `initialize`도 행으로 남는다. 기본 키 `(id, ts)`. 색인: `ts`(BRIN) · `(user_id, ts)` · `(tool, ts)` · `request_id`. 쓰는 곳: `mcp_server/services/call_log.py`. 읽는 코드는 없다(감사 조회용). 질의 기록 `qa_log.jsonl`은 그대로 따로 있다.
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| id | BIGSERIAL | 일련번호(PK 일부) | DB | 없음 | 새로 |
+| ts | TIMESTAMPTZ NOT NULL | 호출 시각(기본 now, 파티션 키) | call_log | 없음 | 새로 |
+| request_id | UUID | 요청 ID(`X-Request-Id`, 없으면 서버가 만듦) | 〃 | 없음 | 새로 |
+| session_id | TEXT | `Mcp-Session-Id`. 없으면 NULL | 〃 | 없음 | 새로 |
+| tool | TEXT | 도구 이름 | 〃 | 없음 | 새로 |
+| agent | TEXT | `X-MCP-Client`(자기 신고 값) | 〃 | 없음 | 새로 |
+| user_id | TEXT | `X-MCP-User`, 없으면 `_meta.user`(자기 신고 값, 검증 안 함) | 〃 | 없음 | 새로 |
+| args | TEXT | 입력 JSON 앞부분(`search.audit.max_input_bytes`, 기본 16KB). 비밀값 가림. `content_b64`는 해시와 크기로 바꿈 | 〃 | 없음 | 새로 |
+| args_bytes | INTEGER | 입력 원본 크기 | 〃 | 없음 | 새로 |
+| args_truncated | BOOLEAN | 입력이 잘렸는지. 잘리면 JSON으로 안 읽힐 수 있음 | 〃 | 없음 | 새로 |
+| result | TEXT | 출력 JSON 앞부분(`search.audit.max_output_bytes`, 기본 64KB). 문서 본문·EDW 결과 포함 가능 | 〃 | 없음 | 새로 |
+| result_bytes | INTEGER | 출력 원본 크기 | 〃 | 없음 | 새로 |
+| result_truncated | BOOLEAN | 출력이 잘렸는지 | 〃 | 없음 | 새로 |
+| result_sha256 | TEXT | 출력 원본 전체의 해시 | 〃 | 없음 | 새로 |
+| result_keys | JSONB | 자르지 않는 응답 식별 정보(search `chunk_keys`, 원문 도구 `doc_keys`·파일 요약, `row_count` 등) | 〃 | 없음 | 새로 |
+| status | TEXT CHECK | ok·error·busy·timeout·unauthorized | 〃 | 없음 | 새로 |
+| err | TEXT | 오류 내용(비밀값 가림) | 〃 | 없음 | 새로 |
+| queue_wait_ms | INTEGER | 실행 전 대기 시간 | 〃 | 없음 | 새로 |
+| duration_ms | INTEGER | 걸린 시간 | 〃 | 없음 | 새로 |
+| app_version | TEXT | 앱 버전 | 〃 | 없음 | 새로 |
+
+과부하로 감사 대기열이 차면 `args`·`result` 없는 행이 남고, 기록기 큐까지 차면 행 없이 건수로만 집계된다(호출 1건 = 1행의 예외, 사용자 11-01).
+
+### applog.pipe_run
+
+파이프라인 실행 1건당 1행. 기본 키 `run_id`. 색인: `started_at`. 시작할 때 `status=running`으로 쓰고 끝날 때 같은 `run_id`로 덮어쓴다(UPSERT — 이 표만). 강제 종료된 실행은 `running`으로 남는다. 쓰는 곳: `pipeline/shared/runtrace.py`. 읽는 곳: `pipeline/tools/perf.py`.
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| run_id | UUID PK | 실행 ID | runtrace | perf | 새로 |
+| command | TEXT | 명령 | 〃 | 〃 | 새로 |
+| args | TEXT | 인자(비밀값 가림) | 〃 | 없음 | 새로 |
+| started_at | TIMESTAMPTZ NOT NULL | 시작 시각(기본 now) | 〃 | perf | 새로 |
+| ended_at | TIMESTAMPTZ | 끝 시각 | 〃 | 없음 | 새로 |
+| duration_ms | INTEGER | 걸린 시간 | 〃 | perf | 새로 |
+| status | TEXT | 실행 상태(CHECK 없음) | 〃 | 〃 | 새로 |
+| host | TEXT | 서버 이름 | 〃 | 없음 | 새로 |
+| pid | INTEGER | 프로세스 ID | 〃 | 없음 | 새로 |
+| app_version | TEXT | 앱 버전 | 〃 | perf | 새로 |
+| run_env | TEXT | 실행 환경 | 〃 | 〃 | 새로 |
+| code_fp | JSONB | 레이어별 code_fp(DB 기록이 켜졌을 때만 계산) | 〃 | 〃(실행 비교) | 새로 |
+| stack | TEXT | 스택 이름 | 〃 | 〃 | 새로 |
+| settings_hash | TEXT | 설정 해시(DB 기록이 켜졌을 때만 계산) | 〃 | 〃 | 새로 |
+| docs_total | INTEGER | 문서 수 | 〃 | 〃 | 새로 |
+| docs_ok | INTEGER | 성공 문서 수 | 〃 | 〃 | 새로 |
+| docs_fail | INTEGER | 실패 문서 수 | 〃 | 〃 | 새로 |
+| docs_reused | INTEGER | 재사용 문서 수. 지금은 비어 있음(실행마다 새로 파싱 — pl-32) | 〃 | 〃 | 새로 |
+| workers | INTEGER | 작업자 수 | 〃 | 〃 | 새로 |
+| cpu_max_load | FLOAT | CPU 문턱값 | 〃 | 〃 | 새로 |
+| mem_start_pct | FLOAT | 메모리 문턱값 | 〃 | 없음 | 새로 |
+
+### applog.pipe_event
+
+문서×단계 1건당 1행. 60초마다 남는 진행 상황도 `stage=run.progress`로 들어온다. 기본 키 `(id, ts_start)`. 색인: `ts_start`(BRIN) · `run_id` · `(stage, ts_start)`. `doc_id` 색인은 없다(보통 `run_id`로 먼저 좁힌다). 쓰는 곳: `common/core/span.py`(진행 상황은 `pipeline/shared/runtrace.py`). 읽는 곳: `pipeline/tools/perf.py`.
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| id | BIGSERIAL | 일련번호(PK 일부) | DB | 없음 | 새로 |
+| ts_start | TIMESTAMPTZ NOT NULL | 시작 시각(기본 now, 파티션 키) | span | perf | 새로 |
+| ts_end | TIMESTAMPTZ | 끝 시각 | 〃 | 〃 | 새로 |
+| run_id | UUID | 실행 ID | 〃 | 〃 | 새로 |
+| span_id | UUID | 단계 ID | 〃 | 없음 | 새로 |
+| parent_id | UUID | 부모 단계 ID | 〃 | 없음 | 새로 |
+| layer | TEXT | 레이어(extract·transform·load 등) | 〃 | perf | 새로 |
+| stage | TEXT | 단계(`extract.parse`, `run.progress` 등) | 〃 | 〃 | 새로 |
+| engine | TEXT | 엔진 | 〃 | 〃 | 새로 |
+| model | TEXT | 모델 | 〃 | 없음 | 새로 |
+| attempt | INTEGER | 시도 번호(1부터, 시간 초과로 다시 돌면 2 — `extract.parse`만 채움) | 〃 | 없음 | 새로 |
+| doc_id | TEXT | 문서 ID | 〃 | perf | 새로 |
+| ext | TEXT | 확장자 | 〃 | 없음 | 새로 |
+| file_bytes | BIGINT | 파일 크기 | 〃 | 없음 | 새로 |
+| seq | INTEGER | 실행 안에서 몇 번째 | 〃 | perf | 새로 |
+| total | INTEGER | 전체 개수 | 〃 | 〃 | 새로 |
+| duration_ms | INTEGER | 전체 시간 | 〃 | 〃 | 새로 |
+| wait_mem_ms | INTEGER | 메모리 문 대기 | 〃 | 〃 | 새로 |
+| wait_cpu_ms | INTEGER | CPU 문 대기 | 〃 | 〃 | 새로 |
+| cpu_ms | INTEGER | CPU 시간(회수된 자식 포함). 다른 단계와 겹쳐 정확히 못 재면 NULL | 〃 | 〃 | 새로 |
+| ext_call_ms | INTEGER | 외부 모델 호출 시간의 합. 병렬 호출은 더해지므로 `duration_ms`보다 클 수 있음 | 〃 | 없음 | 새로 |
+| rss_peak_mb | FLOAT | 최대 메모리 | 〃 | perf | 새로 |
+| load1_per_cpu_start | FLOAT | 시작 때 코어당 부하 | 〃 | 없음 | 새로 |
+| load1_per_cpu_end | FLOAT | 끝날 때 코어당 부하 | 〃 | 없음 | 새로 |
+| mem_used_pct | FLOAT | 메모리 사용률(`/proc` 없는 macOS는 빔) | 〃 | 없음 | 새로 |
+| inflight | INTEGER | 같은 단계에서 동시에 돌던 작업 수 | 〃 | 없음 | 새로 |
+| metrics | JSONB | 단계별 지표(쪽 수, 청크 수, 캐시 적중, 표별 적재 행 수 등) | 〃 | perf | 새로 |
+| status | TEXT CHECK | ok·fail·timeout·skip·reused | 〃 | 〃 | 새로 |
+| err_kind | TEXT CHECK | env·timeout·doc·external·db | 〃 | 〃 | 새로 |
+| err | TEXT | 예외 타입과 고정 문구만. 외부 예외 원문은 저장 안 함 | 〃 | 없음 | 새로 |
+| app_version | TEXT | 앱 버전 | 〃 | perf | 새로 |

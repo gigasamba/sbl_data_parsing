@@ -1,0 +1,16 @@
+{
+  "agent_id": "classify_sfdc",
+  "owner": "developer",
+  "description": "pl-33 분류 — SFDC 문서 하나를 종류 라벨 하나로 — 운영 지시문 그대로(사용자 11-02)",
+  "kind": "pipeline",
+  "model_role": "llm",
+  "classification": "internal",
+  "budget": {
+    "model_calls": 1
+  },
+  "local_tools": [],
+  "prompt_ids": [
+    "classify_sfdc"
+  ],
+  "common_tail": false
+}

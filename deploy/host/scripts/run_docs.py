@@ -285,7 +285,7 @@ def struct_cmd(seq):
         f"PYTHONPATH={_img('code_root')} "
         f"python -m pipeline.transform.structure.build_bundle{st} --parse-dir {inside}/parse"
         f" --out {inside}/bundle && "
-        f"python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle "
+        f"python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle --rep-dir {inside}/parse/_rep "
         f">> {inside}/structure.log 2>&1'"
     )
 

@@ -49,13 +49,19 @@
 
 import hmac
 import ipaddress
+import json
+import logging
 import sys
 import threading
 
+import anyio
+
+from common.core import jsonlog
 from common.core.console import utf8_stdout
 from mcp_server import config as mc  # 설정 객체(S7d)
 from mcp_server.routers import edw_tools, fulltext_tool, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
-from mcp_server.services.search.server_state import CALLER, _warmup_bg
+from mcp_server.services import call_log
+from mcp_server.services.search.server_state import _warmup_bg
 
 _DEFAULT_MCP_INSTRUCTIONS = (
     "CDMO 문서 검색 — search로 근거를 찾는다(하드 필터 조건을 함께 주면 그 범위 안에서 검색, "
@@ -82,6 +88,24 @@ def _transport_security(host):
     return TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=hosts, allowed_origins=origins)
 
 
+def _sdk_logging():
+    """FastMCP가 만들어질 때 root에 거는 기본 처리(INFO, 일반 글자, stderr)를 SDK(mcp.*) 줄에서 끊는다.
+    요청마다 나오는 INFO는 감사 행(mcp.call)과 겹치므로 common.log.level이 DEBUG일 때만 남기고, 그 밖의 줄(WARNING 이상,
+    예외)은 비밀값을 가린 JSON으로 stderr에 낸다 — stdio의 stdout은 JSON-RPC 전용이고 감사 로그(logs/mcp.jsonl)와도 섞지 않는다."""
+    from common.config.settings import cfg
+
+    level = cfg().log.level
+    sdk = logging.getLogger("mcp")
+    for handler in sdk.handlers[:]:
+        sdk.removeHandler(handler)
+        handler.close()
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(jsonlog.JsonFormatter("mcp"))
+    sdk.addHandler(handler)
+    sdk.setLevel(logging.DEBUG if level == "DEBUG" else max(logging.WARNING, logging.getLevelName(level)))
+    sdk.propagate = False  # root의 기본 핸들러로 예외 글이 가림 없이 나가는 길을 막는다
+
+
 # ── MCP 서버 ─────────────────────────────────────────────────────
 def build(host, port):
     from mcp.server.fastmcp import FastMCP
@@ -96,6 +120,7 @@ def build(host, port):
         json_response=True,
         transport_security=None if loop else _transport_security(host),
     )
+    _sdk_logging()  # FastMCP가 로깅을 설정한 뒤에 덮는다
 
     search_tool.register(
         m
@@ -135,16 +160,63 @@ def build_guarded_app(host, port, token):
     inner = app
 
     async def guarded(scope, receive, send):
-        if scope["type"] == "http":
-            if scope.get("path") == "/health":
-                return await inner(scope, receive, send)
-            hdr = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
-            if token and not hmac.compare_digest(
-                (hdr.get("authorization") or "").encode(), f"Bearer {token}".encode()
-            ):  # 상수 시간 비교(보안 검토 10-02)
-                return await JSONResponse({"error": "unauthorized"}, status_code=401)(scope, receive, send)
-            CALLER.set("mcp:" + (hdr.get("x-mcp-client") or "http")[:60])
-        await inner(scope, receive, send)
+        if scope["type"] != "http" or scope.get("path") == "/health":
+            return await inner(scope, receive, send)
+        hdr = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
+        if token and not hmac.compare_digest(
+            (hdr.get("authorization") or "").encode(), f"Bearer {token}".encode()
+        ):  # 인증 실패는 본문 수신을 기다리지 않고 바로 거부한다.
+            with call_log.request_context(hdr) as context:
+                await anyio.to_thread.run_sync(call_log.unauthorized)
+                return await JSONResponse({"error": "unauthorized"}, status_code=401, headers={"X-Request-Id": context["request_id"]})(
+                    scope, receive, send
+                )
+        with call_log.request_context(hdr) as context:
+            # SDK가 받는 ASGI 청크를 즉시 그대로 전달한다. 감사용 사본은 최대 1MiB.
+            # 큰 요청은 _meta/initialize 추출만 생략하며 도구 입력/제한은 바꾸지 않는다.
+            metadata_limit = 1024 * 1024
+            body, body_size = bytearray(), 0
+            init_call = None
+            response_body, response_status = bytearray(), 200
+
+            async def observed_receive():
+                nonlocal body_size, init_call
+                message = await receive()
+                if scope.get("method") == "POST" and message["type"] == "http.request":
+                    chunk = message.get("body", b"")
+                    body_size += len(chunk)
+                    if body_size <= metadata_limit:
+                        body.extend(chunk)
+                        if not message.get("more_body", False):
+                            try:
+                                payload = await anyio.to_thread.run_sync(json.loads, body)
+                            except (ValueError, UnicodeError):
+                                payload = None  # 기존 MCP 오류는 SDK가 처리한다.
+                            call_log.update_request(context, payload)
+                            init_call = call_log.initialize_call(payload)
+                            body.clear()
+                    else:
+                        body.clear()
+                return message
+
+            async def correlated_send(message):
+                nonlocal response_status
+                if message["type"] == "http.response.start":
+                    response_status = message["status"]
+                    message = {**message, "headers": [*message.get("headers", []), (b"x-request-id", context["request_id"].encode())]}
+                elif init_call is not None and message["type"] == "http.response.body":
+                    response_body.extend(message.get("body", b"")[: max(0, metadata_limit - len(response_body))])
+                await send(message)
+
+            try:
+                await inner(scope, observed_receive, correlated_send)
+            except BaseException as exc:
+                if init_call is not None:
+                    init_call.finish(status="error", err=str(exc))
+                raise
+            finally:
+                if init_call is not None:
+                    await anyio.to_thread.run_sync(call_log.finish_initialize, init_call, response_body, response_status)
 
     return guarded
 
@@ -159,6 +231,8 @@ def serve_http(host, port, token):
 
 if __name__ == "__main__":
     utf8_stdout()
+    if "--stdio" in sys.argv:
+        call_log.configure_stdio()
     from common.config.settings import edw_read_only, require_run_env
 
     edw_read_only()  # 검색 MCP는 EDW 읽기 계정만 — 공용 설정 파일의 쓰기 계정 칸은 이 프로세스에서 비움(사용자 10-29, ops.md#op-03)

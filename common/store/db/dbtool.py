@@ -5,6 +5,7 @@
   python -m common.store.db.dbtool current --target …   — 지금 판·코드의 끝 판
   python -m common.store.db.dbtool check   --target …   — 표 정의 ↔ 실제 DB 비교(차이·판이 끝이 아니면 종료 코드 1)
   python -m common.store.db.dbtool --pg-cases orca_<이름>  — PC 전용 PG 시험(새 시험 DB — 기본 스키마·vector 확장 자리, VS8a B-1·R-9)
+  python -m common.store.db.dbtool maintain --target applog  — 현재+2개월 파티션 생성/만료 기록 정리(매일 예약)
   이미지: `migrate up --target all --bundle …`(entrypoint — pipeline 이미지, load와 같은 잠금).
 · 갈래 search = 기준 스키마(PG_SCHEMA — --schema로 바꿈) 하나 + 원천 스키마 5벌 `<기준>_sfdc|crms|las|faq|other`(pl-28 — 판 0002가 만듦).
   판 기록 표·공용 doc_id 시퀀스는 기준 스키마에(<기준>.alembic_version).
@@ -27,7 +28,7 @@ from common.core.console import utf8_stdout
 from common.core.paths import PKG_ROOT
 
 MIGRATIONS = PKG_ROOT / "store" / "db" / "migrations"  # op-09 — paths 상수 기준
-TARGETS = ("search",)  # struct 갈래는 사용자 11-01에 없앰(서버에 남은 struct 스키마는 코드가 읽지 않음 — DB 담당자가 두거나 지움)
+TARGETS = ("search", "applog")  # struct 갈래는 사용자 11-01에 없앰(서버에 남은 struct 스키마는 코드가 읽지 않음 — DB 담당자가 두거나 지움)
 _SCHEMA_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}")  # common/store/pg.conf()의 PG_SCHEMA 규칙(그 함수 안 정규식)과 같음
 _SCRIPTS: dict = {}
 
@@ -69,6 +70,11 @@ def known(target):
 
 # ── 판 상태 — q는 SQL 글자 → [dict] 함수(psycopg PG.q·SQLAlchemy 연결 둘레) ───────────────────
 def schema_of(target, schema=None):
+    if target == "applog":
+        schema = schema or "applog"
+        if not _SCHEMA_RE.fullmatch(schema) or schema == "public":
+            raise DbToolError("applog 스키마 이름이 틀림")
+        return schema
     if schema is None:
         from common.store.pg import conf
 
@@ -241,7 +247,29 @@ def upgrade(target, schema, dim=None, conn=None):
                 file=sys.stderr,
             )
     command.upgrade(_config(conn, target=target, schema=schema, dim=dim, create_schema=True), f"{target}@head")
+    if target == "applog":
+        maintain_applog(schema, conn=conn, prune=False)
     return before
+
+
+def maintain_applog(schema="applog", *, conn=None, prune=True, now=None):
+    """명시적 Alembic 유지 관리: 현재+2개월 생성, 만료 월 DROP/pipe_run DELETE. sink에서는 호출 금지."""
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from common.config.settings import cfg
+    from common.store.db.migrations import applog_parts
+
+    schema = schema_of("applog", schema)
+    if conn is None:
+        with engine().begin() as c:
+            return maintain_applog(schema, conn=c, prune=prune, now=now)
+    if status(_q(conn), "applog", schema)[0] != "끝":
+        raise DbToolError("applog up --target applog 먼저 적용 필요")
+    with Operations.context(MigrationContext.configure(conn)) as op:
+        if prune:
+            return applog_parts.maintain(op, schema, cfg().log.retention_days, now)
+        return applog_parts.ensure_partitions(op, schema, now)
 
 
 def stamp(target, schema, dim=None, conn=None):
@@ -318,9 +346,14 @@ def _targets(a):
     return TARGETS if a.target == "all" else (a.target,)
 
 
+def _schema_arg(a, target):
+    """--schema는 검색 기준 스키마 — applog는 --target applog로 따로 줄 때만 받는다(all이면 고정 이름 applog)."""
+    return a.schema if target == "search" or a.target == target else None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    ap.add_argument("cmd", nargs="?", choices=["up", "stamp", "current", "check"])
+    ap.add_argument("cmd", nargs="?", choices=["up", "stamp", "current", "check", "maintain"])
     ap.add_argument("--target", choices=[*TARGETS, "all"], default="all")
     ap.add_argument("--schema", help="기준 스키마(기본 settings PG_SCHEMA — 원천 스키마는 <기준>_<원천>)")
     ap.add_argument("--dim", type=int, help="임베딩 차원(새 검색 스키마 — 있는 스키마는 DB 차원)")
@@ -334,6 +367,8 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.pg_cases:
         return 1 if pg_cases(a.pg_cases) else 0
+    if a.cmd == "maintain" and a.target != "applog":
+        ap.error("maintain은 --target applog만 지원")
     if not a.cmd:
         ap.error("명령: up·stamp·current·check")
     from common.store.pg import has_conn
@@ -342,8 +377,10 @@ def main(argv=None):
         raise DbToolError("PG 접속 정보 없음(settings.yaml required.pg) — SQLite 대역은 판 관리 밖(표 정의에서 바로 만듦)")
     dim, rc = _dim_arg(a), 0
     for target in _targets(a):
-        schema = schema_of(target, a.schema)
-        if a.cmd == "up":
+        schema = schema_of(target, _schema_arg(a, target))
+        if a.cmd == "maintain":
+            print(maintain_applog(schema))
+        elif a.cmd == "up":
             if target == "search":
                 with engine().begin() as conn:
                     precheck_search(_q(conn), schema, dim, a.create_extension)
