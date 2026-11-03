@@ -11,6 +11,9 @@ pipeline.host.gold_dir	GOLD_DIR	text
 pipeline.host.image	DATA_PIPELINE_IMAGE	text
 pipeline.host.parse_cpus	PARSE_CPUS	num
 pipeline.host.parse_mem_limit	PARSE_MEM_LIMIT	text
+pipeline.host.parse_mcp_cpus	PARSE_MCP_CPUS	num
+pipeline.host.parse_mcp_mem_limit	PARSE_MCP_MEM_LIMIT	text
+pipeline.host.parse_mcp_cpu_shares	PARSE_MCP_CPU_SHARES	num
 pipeline.host.run_docs_dir	RUN_DOCS_DIR	text
 pipeline.host.structure_cpus	STRUCTURE_CPUS	num
 pipeline.host.structure_mem_limit	STRUCTURE_MEM_LIMIT	text

@@ -309,6 +309,19 @@ class PipelineHost(Section):
     image: str | None = F(None, "DATA_PIPELINE_IMAGE", "data-pipeline 이미지 이름:태그(compose 필수 변수)")
     parse_cpus: float | None = F(3.0, "PARSE_CPUS", "상주 파싱 컨테이너(data-pipeline-parse) CPU 개수 상한(개)")
     parse_mem_limit: str | None = F("16g", "PARSE_MEM_LIMIT", "parse 컨테이너 메모리·스왑 상한(docker 형식)")
+    parse_mcp_cpus: float | None = F(
+        3.0,
+        "PARSE_MCP_CPUS",
+        "parse_document 작업 컨테이너(data-pipeline-mcp — #107) CPU 개수 상한(개) — 줄이면 pipeline.service.parse_mcp.procs도 그 이하로",
+    )
+    parse_mcp_mem_limit: str | None = F(
+        "8g", "PARSE_MCP_MEM_LIMIT", "parse_document 작업 컨테이너(data-pipeline-mcp) 메모리·스왑 상한(docker 형식)"
+    )
+    parse_mcp_cpu_shares: int | None = F(
+        4096,
+        "PARSE_MCP_CPU_SHARES",
+        "parse_document 작업 컨테이너 CPU 나눔 비율(data-pipeline 1024의 4배 — CPU가 모자랄 때 먼저 받음, rn-03)",
+    )
     run_docs_dir: str | None = F(
         None,
         "RUN_DOCS_DIR",
