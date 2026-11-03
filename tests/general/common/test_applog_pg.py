@@ -26,7 +26,7 @@ def test_applog_migration():
     schema = f"test_applog_{uuid.uuid4().hex[:10]}"
     eng = dbtool.engine()
     try:
-        with settings.isolated(EMBED_ALLOW_EXTERNAL="0"):
+        with settings.isolated():
             for cmd in ("up", "up", "check", "maintain", "check"):
                 result = subprocess.run(
                     [sys.executable, "-m", "common.store.db.dbtool", cmd, "--target", "applog", "--schema", schema],

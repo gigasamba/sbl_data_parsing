@@ -2,7 +2,7 @@
 """답변 생성 점검(PC 전용) — 검색 MCP에 붙어 질문마다 rag_qa 에이전트(valid_env/answer_test/rag_qa/ — PC 전용 데이터는 valid_env에, 사용자 10-29)를 한 번씩 돌린다.
 S10(10-28 — D-021 T-14): 옛 루트 answer_gen_test.py(agent_platform — D-013에 삭제)를 common/ai 임시 구현(I6)으로 되살림.
 
-에이전트 루프 = validation.e2e.tool_loop.run("rag_qa", …) — 턴마다 LLM_MAX_CALLS·LLM_BUDGET_USD 장부를
+에이전트 루프 = validation.e2e.tool_loop.run("rag_qa", …) — 턴마다 호출 수·LLM_BUDGET_USD 장부를
 거친다(CLAUDE.md 5절). 도구는 MCP tools/list의 search·edw_meta·query_edw를 이 파일의 함수로 감싸 넘기고(설명은 MCP 계약 그대로,
 parse_document는 QA와 무관해 뺌), 로컬 verify_citations는 이번 질문에 실제로 돌아온 근거(pool)로 인용을 검증한다 — 옛 agent.py
 콜백 대신, 질문마다 새 pool이라 옛 턴 경계 문제도 없다.
@@ -33,7 +33,7 @@ from common.core.paths import APP_ROOT, resolve_agent_dir
 AGENT_ID = "rag_qa"
 MCP_TOOLS = ("search", "edw_meta", "query_edw")  # 지금 검색 MCP 도구 중 QA가 쓰는 것(옛 6개 — aggregate 등은 search 근거로 흡수)
 STOPS = {"예산 초과": "stopped_budget", "공유 호출 상한": "stopped_calls", "시간 상한": "stopped_time"}  # tool_loop.run의 정상 멈춤 글자
-#   ("공유 호출 상한" = 턴마다 장부 admit 거부 — LLM_MAX_CALLS와 LLM_BUDGET_USD 둘 다 · "예산 초과" = 매니페스트 턴·토큰 예산, VS10 L-3)
+#   ("공유 호출 상한" = 턴마다 장부 admit 거부 — LLM_BUDGET_USD · "예산 초과" = 매니페스트 턴·토큰 예산, VS10 L-3)
 EDW_NOTE = (
     "이 답은 query_edw를 씀 — EDW 값은 인용 검증 대상이 아니라(pool은 search 근거만, 모델이 쓴 SQL은 근거가 못 됨 — "
     "refactor.md C-56) 수치·인용 실패가 EDW 값 때문일 수 있음: problems를 보고 판단"
@@ -293,7 +293,6 @@ def main(argv=None):
         prof = profile("llm")
         if prof is None:
             raise SystemExit("LLM 모델 설정 없음 — settings.yaml required.models.llm_base_url·llm_model·llm_api_key 또는 --fake")
-        G.check_scope([prof.base_url], n_combos=1, n_questions=len(qs))  # 외부 모델 범위 가드(옛과 같음 — 예산 없으면 거부)
     token = mc.token_text(mc.cfg().server.token)  # 공백만이면 토큰 없음(C-42·C-44) — 출력하지 않음
     contracts = asyncio.run(_mcp(a.url, token, None))
     missing = [n for n in MCP_TOOLS if n not in contracts]

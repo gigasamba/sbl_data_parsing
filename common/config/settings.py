@@ -148,7 +148,7 @@ def keeps_blank(field):
 
 
 # 판정 꼴이 있는 켜기 칸에 YAML로 쓸 수 있는 표기 — true·false(대소문자 무관)·0·1('0'·'1' 포함). 그 밖(yes·no·on·off 등)은
-# 검증 오류(코디네이터 10-27 — 안전 스위치 NO_PAID_CALLS: yes가 옛 판정(=="1")으로 조용히 꺼지지 않게). env 글자는 옛 판정 꼴 그대로(VS7a2 R-c).
+# 검증 오류(코디네이터 10-27 — 안전 스위치(옛 NO_PAID_CALLS — 11-03 지움): yes가 옛 판정(=="1")으로 조용히 꺼지지 않게). env 글자는 옛 판정 꼴 그대로(VS7a2 R-c).
 YAML_BOOL_WORDS = ("true", "false")
 
 
@@ -621,7 +621,7 @@ def read_settings(path, _depth=0):
 def _override_value(k, v, path):
     """덮기 파일 overrides 값 하나 → load()가 칸에 얹을 값. 따옴표 글자(overlay_file이 쓰는 꼴)는 옛 env 글자 꼴로 판정하고(켜기 '1'·'0' 등),
     손으로 쓴 따옴표 없는 YAML 값(true·false·숫자)은 절 안에 쓴 것과 같은 규칙으로 판정한다(YamlScalar 그대로 — VS7e2 R-2: 옛 판은
-    `NO_PAID_CALLS: true`를 글자 'true'로 봐 꺼짐, 펼쳐 쓰면 켜짐). 켜기 낱말은 true·false만(yes·on 등은 거부 — 펼쳐 쓸 때 바뀌지 않게)."""
+    옛 `NO_PAID_CALLS: true`를 글자 'true'로 봐 꺼짐, 펼쳐 쓰면 켜짐). 켜기 낱말은 true·false만(yes·on 등은 거부 — 펼쳐 쓸 때 바뀌지 않게)."""
     if isinstance(v, (dict, list)):
         raise SettingsError(f"overrides {k}: 한 줄 값만: {path}")
     if v is None:
@@ -900,7 +900,7 @@ def pin_env(environ=None):
 
 
 def external_models_allowed(run_env):
-    """RUN_ENV 기준 외부 모델 허용 — 정확히 local일 때만 지금 가드(외부 허용 스위치·NO_PAID_CALLS·상한)대로. 없음(env·설정 파일 모두 —
+    """RUN_ENV 기준 외부 모델 허용 — 정확히 local일 때만 지금 가드(외부 허용 스위치·지출 상한)대로. 없음(env·설정 파일 모두 —
     이미지 selftest·관문 면제 점검 명령·관문 없는 스크립트)·dev·prd·모르는 글자(prod·PRD·' local' 등)는 서버로 보고 거부
     (VS7b U-1 — 코디네이터 답 b, 안전한 쪽). guard.py가 guard_run_env()(모르는 글자 그대로)로 부른다(S7b·S7c1)."""
     return run_env == "local"
@@ -1162,7 +1162,7 @@ class Cache:
 
     @contextlib.contextmanager
     def env(self, **names):
-        """with COMMON.env(LLM_MODEL="mock", NO_PAID_CALLS=None): — 시험용. 설정 파일 위에 옛 env 이름 값을 덮어(None = 그 칸 비움 — 기본값,
+        """with COMMON.env(LLM_MODEL="mock", LLM_BUDGET_USD=None): — 시험용. 설정 파일 위에 옛 env 이름 값을 덮어(None = 그 칸 비움 — 기본값,
         겹쳐 쓰면 바깥 env() 값 포함, 값은 옛 env 글자 꼴로 판정) 만든 객체를 그동안 바꿔 끼운다. RUN_ENV는 신호로 덮는다.
         os.environ은 건드리지 않는다(이 객체를 읽는 코드만 바뀜)."""
         base = dict(self._names or {})
@@ -1345,29 +1345,26 @@ class CommonModelsEmbed(Section):
         "질의 임베딩 캐시 sqlite 경로(0이면 캐시 끔 — mcp 이미지 안 기본 /tmp/mcp_query_cache.sqlite: 결과 폴더가 읽기 전용)",
     )
     query_cache_max: int | None = F(20000, "EMBED_QUERY_CACHE_MAX", "질의 임베딩 캐시 최대 행 수(넘으면 오래된 것부터 삭제, 0이면 무제한)")
-    query_prefix: str | None = F(None, "EMBED_QUERY_PREFIX", "질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …/nQuery: ')")
+    query_prefix: str | None = F(None, "EMBED_QUERY_PREFIX", "질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …\\nQuery: ')")
     timeout: int | None = F(60, "EMBED_TIMEOUT", "임베딩 API 호출 제한 시간(초)")
 
 
 class CommonModelsGuard(Section):
     budget_usd: float | None = F(
-        None,
+        0.1,
         "LLM_BUDGET_USD",
-        "유료(외부) 모델 호출 누적 비용 상한($) — 넘으면 호출 안 함, 비우면 상한 없음(nan·inf는 형식 오류)",
+        "외부 모델 호출 하루(현지 날짜·PC 사용자마다) 지출 상한($), 넘으면 호출 안 함 — 사용자 11-03, 비우면 기본 0.1, nan·inf는 형식 오류",
         allow_inf_nan=False,
-    )
-    external_max_docs: int | None = F(10, "EXTERNAL_MAX_DOCS", "외부 모델 사용 시(scope=func) 허용 문서 수 상한(개)")
-    external_max_questions: int | None = F(20, "EXTERNAL_MAX_QUESTIONS", "외부 모델 사용 시(scope=func) 허용 질문 수 상한(개)")
-    external_scope: str | None = F(
-        "func", "EXTERNAL_SCOPE", "외부 모델 사용 범위 — 'e2e'가 아니면 전부 func(기능 시험, 문서·질문 수 상한 적용)", blank="keep"
     )
     internal_host_suffixes: CsvList | None = F(
         [], "INTERNAL_HOST_SUFFIXES", "내부망으로 인정할 호스트 이름 접미사 목록(쉼표 구분, 실제 주소가 사설일 때만)"
     )
     internal_ip_ranges: CsvList | None = F([], "INTERNAL_IP_RANGES", "사설(RFC1918) 밖의 사내 IP 대역 CIDR 목록(쉼표 구분)")
-    max_calls: int | None = F(0, "LLM_MAX_CALLS", "LLM 호출 수 상한(개) — 0이면 무제한")
-    no_paid_calls: bool | None = F(False, "NO_PAID_CALLS", "=1이면 외부(유료) 주소 호출 자체를 거부", on=("1",))
-    spend_file: str | None = F(None, "LLM_SPEND_FILE", "지출 장부 파일 경로(호출마다 금액 한 줄 — 프로세스·실행 전체가 공유)")
+    spend_file: str | None = F(
+        None,
+        "LLM_SPEND_FILE",
+        "지출 장부 파일 경로(이름 뒤에 날짜를 붙여 하루마다 새 파일, 비우면 <저장소>/output/llm_spend/<날짜>.txt) — 호출마다 금액 한 줄, 프로세스 전체가 공유",
+    )
 
 
 class CommonModelsLlm(Section):
@@ -1376,7 +1373,7 @@ class CommonModelsLlm(Section):
     base_url: str | None = F(None, "LLM_BASE_URL", "LLM 엔드포인트 주소(OpenAI 호환 …/v1)")
     cache_dir: str | None = F(None, "LLM_CACHE_DIR", "LLM 응답 캐시 폴더(요청 해시별 json)")
     empty_retry_max: int | None = F(8000, "LLM_EMPTY_RETRY_MAX", "빈 응답 재요청 때 max_tokens 상한(토큰)")
-    est_usd: float | None = F(0.01, "LLM_EST_USD", "LLM 한 턴(run_agent)당 예상 비용($) — 예산 선차감용")
+    est_usd: float | None = F(0.01, "LLM_EST_USD", "외부 LLM 도구 왕복 한 턴(admit_turn)당 예상 비용($) — 예산 선차감용")
     extra_body: JsonValue | None = F(
         None, "LLM_EXTRA_BODY", "LLM 요청 본문에 합칠 JSON 객체(예: 생각 끄기 {'reasoning':{'enabled':false}})"
     )
@@ -1416,7 +1413,7 @@ class CommonDev(Section):
 
 class CommonHost(Section):
     doc_src: str | None = F(None, "DOC_SRC", "원본 문서 폴더(DOC_DIR의 옛 별칭) — compose에선 /data/docs로 마운트할 호스트 폴더")
-    docker: str | None = F("docker", "DOCKER", "호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등)")
+    docker: str | None = F(None, "DOCKER", "호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — 비우면 podman, 없으면 docker — op-10)")
     image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_old.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
     output_root: str | None = F(
         None,
@@ -1643,7 +1640,7 @@ def dropped(name):
 
 def checked(name):
     """형식이 틀려 버린 값을 읽는 자리에서 옛 코드처럼 실패(ValueError — 이름만, 값은 안 찍음). 기본값이 '제한 없음'이라 조용히
-    넘어가면 위험한 칸(지출 상한 LLM_BUDGET_USD·LLM_MAX_CALLS)·요청 모양이 바뀌는 칸(*_EXTRA_BODY)·접속 포트(VS7b R-7)를
+    넘어가면 위험한 칸(지출 상한 LLM_BUDGET_USD)·요청 모양이 바뀌는 칸(*_EXTRA_BODY)·접속 포트(VS7b R-7)를
     읽기 바로 앞에서 부른다(S7b)."""
     _COMMON_VIEW.checked(name)
 

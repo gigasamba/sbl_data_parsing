@@ -27,7 +27,7 @@ def test_run_spans_reach_pg_and_perf_reads_them(tmp_path):
     schema = f"test_t2perf_{uuid.uuid4().hex[:8]}"
     eng = dbtool.engine()
     try:
-        with settings.isolated(EMBED_ALLOW_EXTERNAL="0"):
+        with settings.isolated():
             result = subprocess.run(
                 [sys.executable, "-m", "common.store.db.dbtool", "up", "--target", "applog", "--schema", schema],
                 env=settings.child_env(),
@@ -39,9 +39,7 @@ def test_run_spans_reach_pg_and_perf_reads_them(tmp_path):
             )
             assert result.returncode == 0, result.stdout + result.stderr
         with (
-            settings.isolated(
-                EMBED_ALLOW_EXTERNAL="0", APPLOG_DB_ENABLED="1", APPLOG_DIR=str(tmp_path), APPLOG_FALLBACK_DIR=str(tmp_path / "fb")
-            ),
+            settings.isolated(APPLOG_DB_ENABLED="1", APPLOG_DIR=str(tmp_path), APPLOG_FALLBACK_DIR=str(tmp_path / "fb")),
             mock.patch.object(logsink, "_write_db", partial(logsink._write_db, schema=schema)),
             mock.patch.object(runtrace, "_code_fp", lambda: {"p0": "t2"}),
         ):

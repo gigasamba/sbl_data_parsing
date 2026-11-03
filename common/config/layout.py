@@ -352,7 +352,10 @@ REMOVED: dict[str, frozenset[str]] = {
     # CommonModelsEmbed(common/config/settings.py) — 사용자 10-30(op-08) — ping_models는 받은 차원만 보여 줌(남으면 경고만)
     "CommonModelsEmbed": frozenset({"dim"}),
     # CommonModelsGuard(common/config/settings.py) — 사용자 10-29 — 합성 문서 선언 잠금 삭제(옛 migrate C-35가 옮겨 둔 서버 파일 보호)
-    "CommonModelsGuard": frozenset({"synthetic_truth"}),
+    # · 사용자 11-03 — PC 비용 스위치 삭제(지출 상한 budget_usd·외부 허용 스위치·서버의 외부 거부는 남김)
+    "CommonModelsGuard": frozenset(
+        {"external_max_docs", "external_max_questions", "external_scope", "max_calls", "no_paid_calls", "synthetic_truth"}
+    ),
     # CommonModelsLlm(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(남으면 경고만)
     "CommonModelsLlm": frozenset({"empty_retry", "max_concurrency"}),
     # CommonModelsVlm(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(남으면 경고만)

@@ -131,7 +131,7 @@ CATEGORIES = {
 SPLIT = {"common", "extract", "transform", "load", "search"}  # [파라미터] 표시를 다는 절(결과를 바꾸는 값 — _kind 0)
 _OPS = re.compile(
     r"concurrency|parallel|workers|procs|threads|timeout|_sec$|^sec$|deadline|retry|batch$|cache|_gb$|warn|port$|dir$|root|path|"
-    r"file$|_bin$|url$|host$|queue|lock|log|^keep_|fetch|warm|slow|rpm|max_calls|budget|est_usd|price|token$|_mb$|max_bytes|max_chars|"
+    r"file$|_bin$|url$|host$|queue|lock|log|^keep_|fetch|warm|slow|rpm|budget|est_usd|price|token$|_mb$|max_bytes|max_chars|"
     r"^dim$|^user$|^account$|^root$|^prefix$|^bucket$|^sqlite$|^server$|^database$|^images$|^manifest$|instructions|warmup|^store$|"
     r"stale|max_new|source_limit|^limit$|^tables$|max_rows$|max_px$|parse_date|source_system|text_max|catalog|vocab_file|agg_today"
 )
@@ -149,9 +149,6 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "pipeline.extract.isolate_overhead",
     "mcp.server.allowed_hosts",
     "common.models.transport.transport",
-    "common.models.guard.external_scope",
-    "common.models.guard.external_max_docs",
-    "common.models.guard.external_max_questions",
     "common.models.guard.internal_host_suffixes",
     "common.models.guard.internal_ip_ranges",
     "common.models.embed.query_cache_max",
@@ -345,7 +342,6 @@ VALUES = {
     "common.run_env": "local·dev·prd 중 하나",
     "common.store.run_mode": "prod 하나(비우면 설정 안 함 — test는 0.2.0에 지움)",
     "common.connections.object_storage.verify_tls": "1(검증)·0(끔)·CA 파일 경로",
-    "common.models.guard.external_scope": "func·e2e 중 하나",
     "common.runtime.pipe_procs": "1 이상 정수 · auto 또는 비우면 자동 계산",
     "pipeline.connections.rdb.engine": "mssql·pg 중 하나",
     "pipeline.transform.represent.post": "all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments)",

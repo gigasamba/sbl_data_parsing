@@ -2,20 +2,18 @@
 
 import os
 import socket
-import urllib.request
+import tempfile
 
 from common.ai.guard import (
     BudgetExceeded,
-    ScopeExceeded,
-    check_scope,
     external_allowed,
     fake_llm,
     is_internal,
+    precheck,
     require_internal,
     spend_reserve,
     spend_settle,
     spend_total,
-    urlopen,
 )
 
 
@@ -24,12 +22,8 @@ def selftest():
     from common.config.settings import COMMON
 
     with COMMON.env(
-        NO_PAID_CALLS=None,
-        LLM_SPEND_FILE=None,
+        LLM_SPEND_FILE=os.path.join(tempfile.mkdtemp(), "spend.txt"),  # 하루 장부(11-03)는 임시 자리
         LLM_BUDGET_USD=None,
-        EXTERNAL_SCOPE=None,
-        EXTERNAL_MAX_DOCS=None,
-        EXTERNAL_MAX_QUESTIONS=None,
         INTERNAL_HOST_SUFFIXES=None,
         INTERNAL_IP_RANGES=None,
         EMBED_ALLOW_EXTERNAL=None,
@@ -83,8 +77,6 @@ def _selftest_body(COMMON):
     finally:
         socket.getaddrinfo = socket_getaddrinfo
     # 외부 허용(스위치 + RUN_ENV=local) — 옛 시험은 가짜 접두 X(X_ALLOW_EXTERNAL=1)였으나 설정 객체에는 가짜 접두 칸이 없어 진짜 접두 EMBED로 같은 것을 시험
-    import tempfile
-
     EXTU = "https://openrouter.ai/api/v1"
     with COMMON.env(EMBED_ALLOW_EXTERNAL=None):  # 허용 없음 → 거부
         try:
@@ -126,15 +118,9 @@ def _selftest_body(COMMON):
     print(
         "[selftest] 내부망 가드 — 외부 허용 잠금·점 없는 이름 주소 확인·리다이렉트 가드·RUN_ENV(없음·dev·prd·모르는 글자 거부, local만 허용) 통과"
     )
-    # 비용 관문(10-05 독립 검토) — NO_PAID_CALLS 차단 · 공유 장부 선차감이 동시 호출에도 상한을 넘지 않음
+    # 비용 관문(10-05 독립 검토) — 공유 장부 선차감이 동시 호출에도 상한을 넘지 않음(옛 NO_PAID_CALLS 차단은 11-03에 지움)
     import threading
 
-    with COMMON.env(NO_PAID_CALLS="1"):
-        try:
-            urlopen(urllib.request.Request("https://openrouter.ai/api/v1/x"), 1, "EMBED")
-            raise AssertionError("NO_PAID_CALLS인데 외부 호출 통과")
-        except BudgetExceeded:
-            pass
     with COMMON.env(LLM_SPEND_FILE=os.path.join(tempfile.mkdtemp(), "spend.txt"), LLM_BUDGET_USD="1.0"):
         passed = []
 
@@ -151,61 +137,47 @@ def _selftest_body(COMMON):
         assert len(passed) == 10 and abs(spend_total() - 1.0) < 1e-6, (len(passed), spend_total())
         spend_settle(-0.3)
         assert abs(spend_total() - 0.7) < 1e-6
-    print("[selftest] 비용 관문 — NO_PAID_CALLS 외부 차단 · 공유 장부 선차감(동시 20건 중 상한까지 10건만)·정산 통과")
-    # AD43 — 외부 사용 '범위' 가드(EXTERNAL_SCOPE=func|e2e)
-    EXT, INT = "https://openrouter.ai/api/v1", "http://10.0.0.5:8000/v1"
-    check_scope([INT], n_combos=99, n_docs=9999, n_questions=9999)  # 내부 주소 — 조합·문서·질문 수 전부 영향 없음
-    with COMMON.env(LLM_BUDGET_USD="1.0"):  # 예산은 있되 조합 2개 — func든 e2e든 거부
-        try:
-            check_scope([EXT], n_combos=2)
-            raise AssertionError("외부+조합2+func가 통과됨")
-        except ScopeExceeded:
-            pass
-        with COMMON.env(EXTERNAL_SCOPE="e2e"):
+        # precheck — 외부 EMBED·VLM만 고정 예상액 선차감(LLM은 llm.chat이, 내부망은 0)
+        assert precheck("https://api.example.com/v1", "EMBED") > 0 and abs(spend_total() - 0.701) < 1e-6, spend_total()
+        assert precheck("https://api.example.com/v1", "LLM") == 0.0 and precheck("http://127.0.0.1:9/v1", "VLM") == 0.0
+    print("[selftest] 비용 관문 — 공유 장부 선차감(동시 20건 중 상한까지 10건만)·정산·precheck 선차감 통과")
+    # 하루 상한(사용자 11-03 — 기본 0.1달러/하루/PC 사용자): (상한 칸, 날짜, 선차감, 통과?, 그날 합계)
+    from pathlib import Path
+    from unittest import mock
+
+    from common.ai import guard as G
+    from common.core.paths import SPEND_DIR
+
+    rows = [
+        (None, "2026-11-03", 0.06, True, 0.06),  # 기본 0.1 적용
+        (None, "2026-11-03", 0.03, True, 0.09),  # 같은 날은 쌓임
+        (None, "2026-11-03", 0.02, False, 0.09),  # 0.11 > 0.1 — 거부, 장부 그대로
+        (None, "2026-11-04", 0.08, True, 0.08),  # 새 날짜는 0부터
+        ("0.05", "2026-11-05", 0.06, False, 0.0),  # 적은 상한도 지킴
+        ("0.5", "2026-11-05", 0.3, True, 0.3),  # 큰 상한도 지킴
+    ]
+    led = Path(tempfile.mkdtemp()) / "spend.txt"
+    for budget, day, usd, ok, total in rows:
+        with COMMON.env(LLM_SPEND_FILE=str(led), LLM_BUDGET_USD=budget), mock.patch.object(G.time, "strftime", return_value=day):
+            assert G.budget_usd() == (float(budget) if budget else 0.1)
             try:
-                check_scope([EXT], n_combos=2)
-                raise AssertionError("외부+조합2+e2e가 통과됨")
-            except ScopeExceeded:
-                pass
-            check_scope([EXT], n_combos=1)  # 외부+조합1+e2e — 허용(캡 검사 안 함)
-            check_scope([EXT], n_combos=1, n_docs=9999, n_questions=9999)  # e2e는 문서·질문 상한도 안 봄
-    try:  # 외부+func(기본)+예산 없음 — 거부
-        check_scope([EXT], n_combos=1)
-        raise AssertionError("외부+func+예산 없음이 통과됨")
-    except ScopeExceeded:
-        pass
-    with COMMON.env(LLM_BUDGET_USD="1.0"):
-        check_scope([EXT], n_combos=1, n_docs=10, n_questions=20)  # 기본 상한 그대로(문서 10·질문 20) — 통과
-        try:
-            check_scope([EXT], n_combos=1, n_docs=11)
-            raise AssertionError("문서 상한 초과가 통과됨")
-        except ScopeExceeded:
-            pass
-        try:
-            check_scope([EXT], n_combos=1, n_questions=21)
-            raise AssertionError("질문 상한 초과가 통과됨")
-        except ScopeExceeded:
-            pass
-        # 보안 검토 10-07 — 호출 지점마다 urls에 그 축의 외부 주소가 빠지면 새는 경로 확인(LLM만 보던 자리에 VLM·EMBED·RERANK)
-        try:  # stack_matrix.py cmd_run — post(VLM) 2조합, LLM은 내부
-            check_scope([INT, EXT], n_combos=2)
-            raise AssertionError("post(VLM) 외부+조합2가 통과됨")
-        except ScopeExceeded:
-            pass
-    try:  # run_combo.py run — embed=api 외부, 조합 1개(예산 없음)
-        check_scope([INT, EXT], n_combos=1)
-        raise AssertionError("embed=api 외부+예산 없음이 통과됨")
-    except ScopeExceeded:
-        pass
-    with COMMON.env(LLM_BUDGET_USD="1.0"):
-        try:  # eval_rerank.py — off+top_n 후보 3조건(rerank API 외부)
-            check_scope([INT, EXT], n_combos=3, n_questions=5)
-            raise AssertionError("rerank 외부+조건 3개가 통과됨")
-        except ScopeExceeded:
-            pass
-    print(
-        "[selftest] AD43 범위 가드 — 외부+조합2+func·e2e 거부 · 외부+조합1+e2e 허용 · 외부+func+예산 없음 거부 · 내부 주소 영향 없음 통과"
-    )
+                spend_reserve(usd, "T")
+                got = True
+            except BudgetExceeded:
+                got = False
+            assert got is ok and abs(spend_total() - total) < 1e-9, (budget, day, usd, got, spend_total())
+            assert G.ledger_file().name == f"spend-{day}.txt"
+    # 자정을 넘긴 반환은 선차감한 날 장부로(리뷰 11-03 — 다음 날 상한을 늘리지 않게)
+    with COMMON.env(LLM_SPEND_FILE=str(led), LLM_BUDGET_USD=None):
+        with mock.patch.object(G.time, "strftime", return_value="2026-11-06"):
+            spend_reserve(0.09, "T")
+        with mock.patch.object(G.time, "strftime", return_value="2026-11-07"):
+            G.release_reserve(0.09)
+            assert spend_total() == 0.0, spend_total()  # 새 날 장부는 그대로 0(-0.09가 안 들어옴)
+        assert abs(G._ledger_sum(G.ledger_file("2026-11-06"))) < 1e-9
+    with COMMON.env(LLM_SPEND_FILE=None), mock.patch.object(G.time, "strftime", return_value="2026-11-03"):
+        assert G.ledger_file() == SPEND_DIR / "2026-11-03.txt"  # 장부 칸이 비면 PC 기본 자리(쓰지는 않음)
+    print("[selftest] 하루 상한 — 기본 0.1·같은 날 누적·새 날짜 0부터·설정한 상한 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

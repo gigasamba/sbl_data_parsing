@@ -1,6 +1,6 @@
 """PC 시험(pytest — S9, D-018): `PYTHONPATH=$PWD .venv/bin/python -m pytest tests/`(서버 반입 시험 + 일반 시험) · `pytest tests/general`(일반만).
 시험 파일(test_*.py)은 파일마다 자식 프로세스 `python -m tests.runner <시험 모듈>`로 돈다 — 이미지 명령 selftest와 같은 길·같은 env
-(pipeline.cli.case_env: 유료 호출 잠금·모델 주소 비움). 옛 자기 점검은 모듈마다 따로 프로세스였고 설정·env·캐시를 바꾸므로 한 프로세스에 섞지
+(pipeline.cli.case_env: 가짜 LLM·모델 주소 비움). 옛 자기 점검은 모듈마다 따로 프로세스였고 설정·env·캐시를 바꾸므로 한 프로세스에 섞지
 않는다. 파일 안에 `INPROCESS = True` 줄이 있는 시험만 pytest가 그대로 모은다(함수마다 결과 — 상태를 바꾸지 않는 시험)."""
 
 import functools

@@ -101,12 +101,11 @@ def selftest():
 
     # 검토자 반영(10-08) — 이 selftest는 모델·네트워크를 안 써야 하는데(VLM_BASE_URL·VLM_MODEL을 지우는 것만으로
     # vlm_page()가 조용히 "미설정" 경로로 빠지게 짜여 있음), 혹시 이 프로세스에 그 두 값이 다시 생기는 경로가
-    # 있어도(다른 코드·환경 상속 등) 실제 접속을 시도하지 않도록 이중으로 막는다: NO_PAID_CALLS=1(외부 주소면
-    # common.ai.guard.precheck가 접속 전에 즉시 막음) + 짧은 VLM_DEADLINE(그래도 접속을 시도하면 몇 분이 아니라
-    # 몇 초 안에 실패) — 끝나면 원래 값으로 되돌린다(이 프로세스가 끝나면 사라질 값이라도 명시적으로).
-    # S7c — 설정 객체만 바꿔 끼움(os.environ 안 건드림): NO_PAID_CALLS·VLM_BASE_URL·VLM_MODEL은 common 칸, VLM_DEADLINE은 pipeline 칸
+    # 있어도(다른 코드·환경 상속 등) 오래 붙잡히지 않게 짧은 VLM_DEADLINE(접속을 시도하면 몇 분이 아니라 몇 초 안에 실패)을 둔다
+    # (옛 NO_PAID_CALLS 겹은 11-03에 스위치와 함께 지움) — 끝나면 원래 값으로 되돌린다.
+    # S7c — 설정 객체만 바꿔 끼움(os.environ 안 건드림): VLM_BASE_URL·VLM_MODEL은 common 칸, VLM_DEADLINE은 pipeline 칸
     _top = contextlib.ExitStack()
-    _top.enter_context(COMMON.env(NO_PAID_CALLS="1", VLM_BASE_URL=None, VLM_MODEL=None))
+    _top.enter_context(COMMON.env(VLM_BASE_URL=None, VLM_MODEL=None))
     _top.enter_context(pc.PIPE.env(VLM_DEADLINE="5"))
     try:
         d = Path(tempfile.mkdtemp())
