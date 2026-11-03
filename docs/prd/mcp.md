@@ -150,7 +150,22 @@
 - 결정(허브·사용자 11-01, [mc-01](#mc-01) B안): 서버 검색 MCP가 묶음 파일(`docs.jsonl`·`chunks.jsonl`·`meta.json`)을 실행 중에 읽지 않게 — 문서 메타(최신성 순위 L3-1)·임베딩 정보·청크 키를 PG에서 읽는다.
 - 왜 따로: 검색 동작이 바뀌는 일(r 층) — 자기 PR + 평가(e2e)로.
 - 파일: `mcp_server/services/search/{retriever,local,pgsearch,server_state}.py`.
-- Status: todo
+- 사실(11-03 조사 — `feature/mc19-pg-search`): 검색이 실행 중에 묶음에서 읽는 것은 세 가지뿐이다.
+  - ① `meta.json`의 `embed`·`embed_model`·`dim`: 질의 임베딩과 모델·차원 불일치 거부(`local.embed_query`·`common.ai.embed.query_model_mismatch`). PG에는 차원만 있다(원천 스키마마다 `corpus_stat.dim` — 한 행짜리 BM25 통계 표).
+  - ② `docs.jsonl`의 `doc_date`·`version`·`superseded`·`family`: 최신성 순위(`docmeta.recency_rerank` — 구조화 때 `docmeta.doc_meta(파일 이름, 본문)`이 만듦). gold `doc`에는 이 칸이 없다.
+  - ③ `chunks.jsonl`: `Retriever.key_local`을 만들지만 아무도 읽지 않는다(죽은 코드). 청크 키는 이미 PG(`<doc_id>:<seq>`).
+  - 설정 `paths.mcp_bundle`(묶음 위치)은 검색만 쓴다. 고객 명부·용어 사전(`terms.py`)은 묶음이 아니라 resources 파일 — [pl-38](load.md#pl-38)(마스터를 PG `<PG_SCHEMA>_master`로)이 맡고 mc-19 범위가 아니다.
+- 결정(사용자 11-03 grill 1차):
+  - 최신성 4칸(`doc_date`·`version`·`superseded`·`family`)을 gold `doc`(원천 스키마 5벌)에 더한다 — 새 Alembic 마이그레이션 0004, 적재(`pgvector_load`)가 묶음 `docs.jsonl` 값으로 채운다. 순위는 지금과 같아야 한다. 검색 뷰 계약(MCP 출력)은 바꾸지 않는다. 검토 등급 A(DB 스키마).
+  - 설정 `paths.mcp_bundle`은 지운다 — 남아 있으면 경고만(시작은 함).
+  - 통과 기준: 바꾸기 전후 같은 PC 평가 세트에서 질문마다 상위 근거 목록이 같아야 한다(다르면 원인을 보고).
+- 열린 질문(사용자 11-03 되물음 — "corpus_stat이 어디 있는 표야? EDW에 적을까? pgvector doc이나 chunk에 embed model 칸도 됨"): 임베딩 모델 이름을 어디에 둘까.
+  - 사실: `corpus_stat`은 pgvector 검색 DB의 원천 스키마마다 있는 한 행짜리 통계 표(청크 수·평균 길이·차원)다. EDW가 아니다.
+  - 안 A(추천): `corpus_stat`에 `embed_model` 한 칸 — 차원과 같은 자리, 스키마마다 한 값, 적재가 씀. 검색은 PG만 읽는다.
+  - 안 B: gold `doc`(또는 `chunk`)에 칸 — 문서(청크)마다 같은 값이 반복되고, 섞이면 어느 값을 믿을지 규칙이 따로 필요하다.
+  - 안 C: EDW(ParsingMeta 등)에 — 검색이 EDW에 기대게 되어(검색 MCP는 지금 EDW 없이 뜸) 이 행의 목적(PG만)과 어긋난다.
+- 할 일(결정 뒤): 마이그레이션 0004(최신성 4칸 + 임베딩 정보) · 적재가 채움 · `Retriever`가 PG에서 문서 메타·임베딩 정보를 읽음(`BundleDocs`·`key_local`·`meta.json` 읽기 지움) · `paths.mcp_bundle` 지움(경고) · 평가 전후 비교. code_fp r 바뀜(retriever·local).
+- Status: todo — 설계 중(11-03, 열린 질문 1개)
 
 <a id="mc-18"></a>
 ## mc-18 · `parse_document` 스캔 PDF 다시 지원
