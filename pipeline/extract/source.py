@@ -701,9 +701,41 @@ def resolve(source, out, limit=0):
             raise RuntimeError("[source] rdb 모드인데 SOURCE_MANIFEST 파일이 없음 — 원본 위치가 조용히 file://로 떨어질 수 있어 멈춤")
         return local, ok, state
     src = Path(source)
-    names = sorted(p.name for p in src.iterdir() if p.is_file() and p.name != ".gitkeep")[: limit or None]
-    print(f"[source] 폴더 {src} · 대상 {len(names)}개", flush=True)
-    return src, names, state
+    files = sorted(p for p in src.rglob("*") if p.is_file() and p.name != ".gitkeep")
+    if all(p.parent == src for p in files):  # 평평한 폴더 — 그대로(키 = 파일 이름)
+        names = [p.name for p in files][: limit or None]
+        print(f"[source] 폴더 {src} · 대상 {len(names)}개", flush=True)
+        return src, names, state
+    return _folder_tree(src, files[: limit or None], Path(out), state)
+
+
+def _folder_tree(src, files, out, state):
+    """PC 폴더 원천이 원천별 하위 폴더(`SFDC/<uuid>/<파일>` — Object Storage 키 모양)면(F2, 11-03 PC 시험): rdb 배치와 같게
+    평평한 폴더(`<out>/_source_files`)에 복사하고 manifest.jsonl에 상대 키(`key`)·원본 주소(`uri`)·원천을 적는다 — 구조화가 키 첫 마디로
+    원천을 고르고(build_bundle), 원본 주소가 원래 파일을 가리키게. 같은 이름은 rdb와 같은 규칙(`<상위 폴더>__<이름>`)."""
+    local = out / "_source_files"
+    local.mkdir(parents=True, exist_ok=True)
+    rows = [{"key": p.relative_to(src).as_posix(), "filename": p.name, "doc_id": p.parent.name, "path": p} for p in files]
+    name_of = _rdb_names(rows)
+    man = []
+    for r in rows:
+        name = name_of[r["key"]]
+        shutil.copy2(r["path"], _safe_join(local, name))
+        man.append(
+            {
+                "file_name": name,
+                "uri": r["path"].resolve().as_uri(),
+                "key": r["key"],
+                "original_filename": r["filename"],
+                "source_system": _derive_source_from_key(r["key"]),
+            }
+        )
+    man_f = state / "manifest.jsonl"
+    man_f.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in man), encoding="utf-8")
+    C.put(SOURCE_MANIFEST=str(man_f))  # rdb 배치와 같은 인계(원본 위치 주소 — contract.make_source_uri)
+    names = [m["file_name"] for m in man]
+    print(f"[source] 폴더 {src}(하위 폴더 {len(names)}개 파일 — 상대 키로 manifest) · 대상 {len(names)}개", flush=True)
+    return local, names, state
 
 
 def _record_sha_before_delete(state, local, done, field="sha256"):
