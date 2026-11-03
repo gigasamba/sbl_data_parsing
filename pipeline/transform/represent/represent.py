@@ -119,6 +119,7 @@ def _merge_paragraphs(rep_text, other_texts, other_docs=None):
         docs_list = list(other_docs.values())
         scored = sorted(zip(other_texts, docs_list), key=lambda pair: _richness(pair[1]), reverse=True)
         sorted_texts = [t for t, _ in scored]
+    split_others = [other.split("\n\n") for other in sorted_texts if other]  # 엔진마다 한 번만 나눔(fp-perf B3 — 문단마다 나누던 것)
     for i, para in enumerate(rep_paras):
         if not para.strip():
             continue
@@ -126,10 +127,7 @@ def _merge_paragraphs(rep_text, other_texts, other_docs=None):
         best_para = para
         best_len = len(para.strip())
         best_has_struct = rep_has_struct
-        for other in sorted_texts:
-            if not other:
-                continue
-            other_paras = other.split("\n\n")
+        for other_paras in split_others:
             if i < len(other_paras):
                 cand = other_paras[i].strip()
                 if not cand:
