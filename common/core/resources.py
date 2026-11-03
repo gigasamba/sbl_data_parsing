@@ -268,7 +268,13 @@ def gated_popen(args, settle=None, log=print, **kwargs):
     from common.core import span as SP
 
     lim = _f("MEM_MAX_PCT", 90)
-    t_enter = time.monotonic()
+    # fp-perf C6 — 긴 기다림(메모리·CPU 문)은 잠금 밖에서: 한 launcher가 문 앞에서 기다리는 동안 다른 launcher의 Popen·span 기록이
+    # 막히지 않게. 잠금 안에서 한 번 더 보는 것은 "한 번에 하나씩" 규칙(동시에 문을 통과해 한꺼번에 띄우지 않게) — 대개 바로 통과.
+    t0 = time.monotonic()
+    wait_mem(start_pct=lim, log=log)
+    t1 = time.monotonic()
+    wait_cpu(log=log)
+    t2 = time.monotonic()
     with _LAUNCH:
         t_locked = time.monotonic()
         u = wait_mem(start_pct=lim, log=log)
@@ -285,8 +291,8 @@ def gated_popen(args, settle=None, log=print, **kwargs):
     # op-01 — 대기를 작업 시간과 분리해 현재 span에: 메모리 문·CPU 문·다른 launcher 기다림(lock)·settle
     sp = SP.current()
     if sp is not None:
-        sp.add_wait(mem_ms=int((t_mem - t_locked) * 1000), cpu_ms=int((t_cpu - t_mem) * 1000))
-        sp.add(wait_launch_ms=int((t_locked - t_enter) * 1000), settle_ms=int(settled * 1000), launches=1)
+        sp.add_wait(mem_ms=int((t1 - t0 + t_mem - t_locked) * 1000), cpu_ms=int((t2 - t1 + t_cpu - t_mem) * 1000))
+        sp.add(wait_launch_ms=int((t_locked - t2) * 1000), settle_ms=int(settled * 1000), launches=1)
     return pr
 
 

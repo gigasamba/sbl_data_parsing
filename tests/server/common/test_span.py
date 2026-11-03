@@ -174,7 +174,8 @@ def test_gated_popen_wait_split_and_child_context():
             assert proc.returncode == 0
             outer_id = sp.span_id
     row = rows[0]
-    assert (row["wait_mem_ms"], row["wait_cpu_ms"]) == (125, 250), row  # 합계 375가 아니라 두 문의 대기가 따로 쌓임
+    # 합계가 아니라 두 문의 대기가 따로 쌓임 · 문마다 잠금 밖 기다림 + 잠금 안 재확인 두 번(fp-perf C6) — 가짜 문은 부를 때마다 시간이 감
+    assert (row["wait_mem_ms"], row["wait_cpu_ms"]) == (250, 500), row
     assert row["metrics"]["launches"] == 1 and "wait_launch_ms" in row["metrics"] and "settle_ms" in row["metrics"]
     child = json.loads(out.strip().splitlines()[-1])
     assert child["run_id"] == run_id and child["span_id"] == outer_id  # 자식이 run_id와 부모 span을 이어받음
