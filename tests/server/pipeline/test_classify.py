@@ -215,17 +215,3 @@ def test_load_labels_and_skips_failed():
         assert counts["by_source"]["sfdc"]["docs"] == 1, counts
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-
-
-def test_fake_llm_placeholder():
-    """PC 가짜 LLM(local) — 모델을 부르지 않고 자리 라벨 Other(두 집합 모두에 있음)로 SFDC·LAS가 적재되게. 서버 RUN_ENV에서는 가짜 LLM 거부 그대로."""
-    assert all(CL.FAKE_LABEL in labs for labs in CL.LABELS.values())
-    for run_env, want in ((None, "ok"), ("local", "ok"), ("dev", "refuse"), ("prd", "refuse")):
-        with COMMON.env(LLM_FAKE="1", RUN_ENV=run_env), patch.object(CL, "_system", lambda src: "system"):
-            for src in ("sfdc", "las"):
-                lab, note = CL.classify_one(src, {"file_path": "x"}, {"text": "body"})
-                if lab == CL.FAKE_LABEL and "가짜 LLM" in (note or ""):
-                    got = "ok"
-                else:  # 서버 — 가짜 LLM 거부는 그 문서만 실패(적재 전체를 멈추지 않음)
-                    got = "refuse" if lab is None and (note or "").startswith("RuntimeError") else f"label {lab}"
-                assert got == want, (run_env, src, got, note)

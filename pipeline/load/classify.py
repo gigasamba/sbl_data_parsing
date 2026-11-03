@@ -20,7 +20,6 @@ LABELS = {
     "las": ("MSA", "PSA", "QAG", "LOI", "Amendment", "Assignment Letter", "Other"),
 }
 AGENT = {"sfdc": "classify_sfdc", "las": "classify_las"}
-FAKE_LABEL = "Other"  # 가짜 LLM(PC)일 때 붙이는 자리 라벨 — 두 집합 모두에 있음
 SFDC_ALIASES = {
     "rfi": "RFI",
     "rfp": "RFP",
@@ -236,15 +235,11 @@ def _system(src):
 
 def classify_one(src, doc, rep, chat=None):
     """문서 하나 → (라벨 또는 None, 오류 글 또는 None). LLM 한 번, 다시 묻지 않음."""
-    try:
-        if chat is None:
-            from common.ai import guard, llm
+    if chat is None:
+        from common.ai import llm
 
-            # PC(local)의 가짜 LLM — 모의 답은 라벨이 아니라 SFDC·LAS가 적재되지 않으므로 자리 라벨. 서버(dev·prd)면 fake_llm()이
-            # RuntimeError — 아래 except가 그 문서만 실패로(전과 같음). 자리 라벨은 gold에 남아 덮이지 않으니 버리는 스키마에서만 쓴다.
-            if guard.fake_llm():
-                return FAKE_LABEL, f"가짜 LLM(local) — 자리 라벨 {FAKE_LABEL}, 모델 안 부름"
-            chat = llm.chat
+        chat = llm.chat
+    try:
         out = chat(
             [{"role": "system", "content": _system(src)}, {"role": "user", "content": USER[src](doc, rep)}],
             max_tokens=MAX_TOKENS,
