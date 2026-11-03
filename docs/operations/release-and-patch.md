@@ -403,12 +403,12 @@ $DOCKER exec -i "$PG_C" pg_restore -l < "$BK/pg-0.1.0.dump" | head -5           
 - 옛 `struct` 스키마도 백업 대상이면 `-n <옛 struct 스키마 이름>`을 더한다 **<확인 필요 — 0.1.0 서버의 struct 스키마 이름>**. `pg_dump`가 암호를 물으면 DB 담당자와 함께 한다(컨테이너 안 접속 방법 **<확인 필요>**).
 
 **3. 새 판 놓기**
-- **[dev]** 실행 이미지 + 코드 폴더(§1-1):
+- **[dev]** 0.1.0 실행 이미지 + 0.2.0 코드 zip(README §5-0 — `<코드>` = zip을 푼 폴더 `sbl_data_parsing-main` 또는 `sbl_data_parsing-<판>`):
 ```bash
-mkdir -p /srv/rag/code/0.2.0-<커밋> && tar -xzf code-0.2.0-<커밋>.tar.gz --no-same-owner -C /srv/rag/code/0.2.0-<커밋>
-chown -R 10001:10001 /srv/rag/code/0.2.0-<커밋>          # root가 아니면 chmod -R a+rX
-DOCKER=$DOCKER bash sbl_images/load.sh <실행 이미지 판>   # 새 실행 이미지가 있을 때만 — 기대: 조각 sha256 확인 뒤 load 완료와 BUILD.txt
-ln -sfn /srv/rag/code/0.2.0-<커밋> /srv/rag/code/live && cd /srv/rag/code/live && cat CODE_COMMIT   # 기대: 그 커밋
+cd /srv/rag && unzip -q <코드 zip>                                         # 기대: /srv/rag/<코드>/
+DOCKER=$DOCKER bash sbl_images-main/load.sh 0.1.0                        # 0.1.0 실행 이미지가 이미 있으면 건너뜀 — 기대: 조각 sha256 확인 → load → BUILD.txt(DEPS_HASH f0fcc30bd067bc2f)
+bash /srv/rag/<코드>/deploy/host/scripts/dc.sh init --group <운영 그룹>   # 기대: 폴더마다 "있음" · settings.yaml "있음(덮지 않음)" · live "있음 … (옮기지 않음)"
+ln -sfn /srv/rag/<코드> /srv/rag/code/live && cd /srv/rag/code/live && cat CODE_COMMIT   # 판 바꾸기는 손으로(init은 있는 링크를 옮기지 않음) — 기대: 그 커밋
 ```
 - 0.2.0은 **새 실행 이미지가 필요 없다** — `deploy/docker/DEPS_HASH`가 v0.1.0과 develop 모두 `f0fcc30bd067bc2f`(의존성 그대로). 서버 실행 이미지의 지문이 다르면 6단계 시작 로그가 `의존성 지문이 다름`으로 멈춘다(§1-1 4).
 - **[prd]** 개발 서버에서 굽고(§1-2 — `bash /srv/rag/code/live/deploy/release/bake.sh <실행 이미지 판>`, 기대: `[판정] 통과` 뒤 `/var/tmp/bake/sbl_images/`) 운영 서버로 옮겨:
@@ -428,7 +428,7 @@ $DOCKER run --rm -i --network none --entrypoint bash -v "$PWD:/app/deploy:ro,z" 
 # 기대(화면): [migrate] 옛 배치 → 새 배치(op-08 ②): 옮긴 칸 N개 · 지운 칸 줄 "  <종류> k(새 파일에 넣지 않음): <이름…>" · [migrate] 씀: /tmp/new.yaml (권한 600)
 ```
 그다음 `settings.yaml.new`에서 손으로 고칠 것(편집기로 — 화면에 통째로 띄우지 않는다):
-- 이미지 칸 `required.deploy.pipeline_image`·`required.deploy.mcp_image` → **[dev]** `data-pipeline-runtime:<판>`·`mcp-server-runtime:<판>` · **[prd]** `data-pipeline:0.2.0`·`mcp-server:0.2.0`.
+- 이미지 칸 `required.deploy.pipeline_image`·`required.deploy.mcp_image` → **[dev]** 그대로 `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0`(0.2.0 코드는 0.1.0 실행 이미지에서 돈다 — DEPS_HASH 같음) · **[prd]** `data-pipeline:0.2.0`·`mcp-server:0.2.0`.
 - 검색 스키마 `required.pg.db_schema` → `$NEW_SCHEMA`(판 0002가 기준 스키마의 옛 표를 지우므로 **반드시 새 이름** — 8-1·C-74).
 - 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline`은 비워 둔다(8-4 3에서 켬).
 - 0.2.0에서 지운 칸(`common/config/layout.py` `REMOVED` — 예: 옛 오버레이 `common.host.patch_code`, `pipeline.host.structure_cpus`·`structure_mem_limit`, 옛 OCR·지문 배치 칸, pl-38로 지운 `ops.paths.glossary_dir`·`ops.paths.client_roster`(용어집·고객 명부는 이제 PG 마스터 표)·`common.text.search_recency`(판 묶음·최신성 순위 지움)·`pipeline.transform.structure.draft_terms`(초안 용어는 오프라인 도구로))은 남아 있어도 경고 한 줄 뒤 무시된다 — 지워도 되고 두어도 된다.
@@ -464,14 +464,11 @@ $DOCKER logs data-pipeline 2>&1 | grep -m1 '\[image\]'                        # 
 ```
 - `master load`를 다시 하면(명부·용어집을 고친 뒤) 검색 MCP를 다시 띄운다: `$DOCKER restart mcp-server` — 검색은 시작할 때와 새 적재 판이 들어올 때만 마스터를 읽는다(사용자 11-03). 이미 적재한 문서는 자동으로 다시 처리하지 않는다(새로 적재하는 문서의 `gold_version` `<VERSION>+m<해시 8자>`만 바뀜).
 
-**7. 점검**
+**7. 점검** — 5(DB)·6(세 컨테이너 띄우기) 뒤에 한 명령으로(사용자 11-03 — 상주 `data-pipeline`이 안 떠 있으면 `[dc check] 실패 — check_env: data-pipeline 컨테이너가 안 떠 있음 → dc.sh up -d data-pipeline`으로 멈춤): check_env → ping_models → `migrate check --target all` → 두 이미지 selftest(`[판정] 통과` 줄로 판정 — 실행 이미지면 코드 폴더를 붙임) → `mcp_up.sh`(/health). 처음 실패에서 그 단계 이름과 안내를 찍고 멈춘다.
 ```bash
-bash deploy/host/scripts/mcp_up.sh; echo rc=$?                                # 기대: rc=0(/health 응답 — 아무것도 안 찍고 끝나면 정상)
-bash deploy/host/scripts/run_tool.sh ping_models                              # 기대: 종료 코드 0(LLM·VLM·임베딩 — 내부망 GLM)
-bash deploy/host/scripts/run_tool.sh check_env                                # 출력을 읽는다(PG 실패가 "건너뜀"으로 보일 수 있음)
-bash deploy/release/selftest_gate.sh $DOCKER run --rm <dev면: -v "$PWD:/app/deploy:ro,z"> <pipeline 이미지> selftest   # 기대: [판정] 통과 — FAIL 0
-bash deploy/release/selftest_gate.sh $DOCKER run --rm <dev면: -v "$PWD:/app/deploy:ro,z"> <mcp 이미지> selftest        # 기대: [판정] 통과 — FAIL 0
+bash deploy/host/scripts/dc.sh check                                          # 기대 마지막 줄: [dc check] 통과 — 6개
 ```
+- 실패하면(`[dc check] 실패 — <단계>: <안내>`) 그 단계 출력을 읽고 고친 뒤 다시 부른다. check_env 출력은 PG 실패가 "건너뜀"으로 보일 수 있다.
 그다음 MCP 클라이언트로 `search` 한 번(원천 `source_system` 필수 — mc-16)과 원문 도구(`list_doc_fulltext`) 한 번, `parse_document`에 시험 파일 하나(C-75·C-83). 배포 뒤 T14 확인 셋은 8-4 7~9.
 
 **8. 첫 실행 — FAQ 교체와 전체 재처리**

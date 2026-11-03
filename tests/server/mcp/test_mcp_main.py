@@ -51,3 +51,16 @@ def selftest():
 
 def test_main():  # 옛 `--selftest` 갈래(`selftest()` 뒤 `sys.exit(0)`)
     selftest()
+
+
+def test_tool_names():
+    """main.build()가 등록한 도구 이름·순서 = routers.TOOL_NAMES(mcp_smoke가 기대 목록으로 씀 — 0.2.0 6종)."""
+    import asyncio
+
+    from mcp_server.routers import TOOL_NAMES
+
+    got = tuple(t.name for t in asyncio.run(build(host="127.0.0.1", port=8765).list_tools()))
+    assert got == TOOL_NAMES, got
+    from mcp_server.cli import mcp_smoke
+
+    assert mcp_smoke.TOOLS == set(TOOL_NAMES)
