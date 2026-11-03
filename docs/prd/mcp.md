@@ -178,10 +178,11 @@
 <a id="mc-18"></a>
 ## mc-18 · `parse_document` 스캔 PDF 다시 지원
 - 결정(사용자 10-31): 지금은 스캔 PDF를 건너뛰고 안내만 보내지만 추후 다시 살린다. 이 행이 그 기억이다.
-- 지금(11-01 — [pl-03](transform.md#pl-03)): 엔진 범위가 stack 하나라 `.pdf_image`(OCR·VLM 엔진뿐)는 이 서비스(OCR·VLM 안 돎)에서 돌 엔진이 없다 — `pipeline/mcp_parse_service.py` `skip_note`(글자층 표본 < 20자)·`empty_note`(run_all `NO_JOB_MARK`)가 빈 결과 + 임시 안내를 돌려준다.
-- 할 일(정할 것): 스캔 PDF에 어떤 엔진을 돌릴지(OCR·VLM — 응답 시간·자원, [rn-03](ops.md#rn-03) CPU 우선과 함께) · 안내 문구 지우기 · MCP 출력 계약(등급 A).
+- 옛(11-01 — [pl-03](transform.md#pl-03)): 엔진 범위가 stack 하나라 `.pdf_image`(VLM 엔진뿐)를 서비스가 돌리지 않아 빈 결과 + "추후 지원 예정" 안내만 보냈다(아래 11-03에 바꿈).
+- 결정(사용자 11-03): 내부망 VLM(`qwen_vlm` — stack `.pdf_image`)으로 파싱한다. ① 시간 상한은 작업 제한 시간(`pipeline.service.parse_mcp.job_timeout_sec`, 기본 600초) 하나 — 쪽 수 상한 없음, 넘으면 지금의 시간 초과 오류. ② 큐는 하나 그대로(긴 스캔 작업 뒤의 글자 문서는 기다림). ③ VLM 설정(`common.models.vlm` 주소·모델)이 비면 파이프라인 없이 빈 결과 + "스캔 PDF — VLM 미설정". ④ VLM이 돌았는데 결과가 없으면 "스캔 PDF — VLM 파싱 실패"(DRM 추정 아님). ⑤ 글자층과 스캔 쪽이 섞인 PDF는 범위 밖(pl-03 10-29 결정).
+- 한 것(`feature/mc18-scan-vlm`): ① 스캔 판정은 run_all과 같은 `parse_qa.pdf_kind`(전체 쪽 글자층이 쪽당 평균 20자 미만)를 서비스도 빌려 씀(`_is_scan` — 안내가 실제로 돈 엔진과 같게, 옛 첫 5쪽 표본 `_pdf_text_chars` 지움). ② 서비스가 run_all에 주던 `--engines` 목록(OCR·VLM 뺌) 지움 — OCR은 run_all이 이미 빼고(`OCR_ENGINES`) 기본은 설치된 핵심 엔진이라 `qwen_vlm`이 stack `.pdf_image`로 돎. ③ VLM 설정(`qwen_vlm`이 요구하는 VLM_BASE_URL·VLM_MODEL — `registry.missing_env`)이 비면 파이프라인 없이 "스캔 PDF — VLM 미설정". ④ 대표 결과가 없으면 스캔은 "스캔 PDF — VLM 파싱 실패", 그 밖은 옛 DRM 추정 그대로. ⑤ 작업 제한 시간을 단계마다 남은 시간으로 나눠 줌(옛: prepare·run_all·parse_qa·represent가 저마다 전체 시간 — 결정 ①을 지키게). 옛 안내 `SCAN_NOTE` 지움. MCP 출력 칸은 그대로(스캔 PDF의 `engine`이 `qwen_vlm`, `text`가 채워짐, `note` 글자가 바뀜 — 사람 검토). 엔진·핸드오프 파일은 안 건드림. 외부 전송 없음 — `qwen_vlm`이 `require_internal`로 내부망 주소만 부름.
 - 파일: `pipeline/mcp_parse_service.py`, `tests/server/pipeline/test_parse_svc.py`.
-- Status: todo
+- Status: done
 
 <a id="mc-06"></a>
 ## mc-06 · `query_edw` 도구 — 읽기 전용 EDW SQL
@@ -205,7 +206,7 @@
 - 이유: 클라이언트가 아직 적재되지 않은 파일을 묻는다.
 - 무엇: 경로(inbox 루트 아래) 또는 base64 내용을 127.0.0.1:8766의 파싱 서비스에 Bearer 토큰으로 넘긴다. 글, 표준 표, 사실, 엔진, 시간을 돌려주고 시간 초과면 `job_id`.
 - 파일: `mcp_server/services/parse_proxy.py`, `pipeline/mcp_parse_service.py`.
-- 스캔 PDF(11-01 — [pl-03](transform.md#pl-03) stack 하나): 파이프라인 없이 빈 결과 + 안내 "스캔 PDF — 지금은 text 파싱 결과 없음(OCR·VLM 미실행, 추후 지원 예정)" — 다시 지원은 [mc-18](#mc-18).
+- 스캔 PDF: 내부망 VLM으로 파싱한다([mc-18](#mc-18), 11-03). VLM 설정이 없으면 빈 결과 + "스캔 PDF — VLM 미설정", 실패면 "스캔 PDF — VLM 파싱 실패".
 - 결정(사용자 11-03): 파일 크기 상한 100 MB, 처음부터 끝까지. 한 것(`feature/mcp-limits`): ① 상한은 칸 하나 `common.runtime.parse_max_mb`(파일 자리 `ops.runtime.parse_max_mb`, 옛 env 이름 `PARSE_MCP_MAX_MB`, 기본 100 — MB = 1024×1024바이트)를 검색 MCP와 파싱 서비스가 같이 읽는다(옛 `ops.services.parse_mcp.max_mb` 기본 64는 지움 — 남아 있으면 경고만). ② 검색 MCP: 상한을 넘는 `content_b64`는 서비스로 보내지 않고 바로 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — ops.runtime.parse_max_mb"}`. HTTP 요청 본문 상한(MCP SDK 기본 4 MiB — 그동안 base64 길은 약 3 MB에서 413으로 막혀 있었음)을 상한의 1.5배 + 1 MiB로 올림. 본문 상한은 `/mcp` 주소 하나라 모든 도구에 걸리므로, 4 MiB보다 크거나 길이를 밝히지 않은 요청은 동시에 2개까지만 처리하고 나머지는 본문을 읽기 전에 기다린다(거부 아님 — 4g 컨테이너 메모리 보호, `mcp_server/main.py` `_BIG_SLOTS`, PR #110 리뷰). 서비스 등록 요청 대기 10초 → 60초(등록 시간도 `time_out_threshold` 안에 셈). base64 크기는 줄바꿈·공백을 빼고 셈(MIME 줄바꿈 base64도 같은 값). ③ 파싱 서비스: 경로(`path`)로 준 파일도 같은 상한으로 거름(전에는 base64만), 본문 상한을 파일 상한의 1.5배 + 1 MiB로(검색 MCP와 같은 식)(전에는 파일 상한 + 64 KB라 base64 본문이 상한의 3/4에서 막힘). 시험 `tests/server/mcp/test_parse_limit.py`·`tests/server/pipeline/test_parse_svc.py`(상한 1 MB로 덮고 0.9 MB 받음·1.1 MB 거부, 두 길). PC 실측(99 MB·101 MB PDF, 실제 서비스+MCP HTTP)은 커밋 메시지·refactor.md C-85. 도구 설명의 "64MB 상한" → "기본 100MB 상한"으로 도구 계약(tools/list) 바뀜 — 등급 A.
 - Status: done
 
