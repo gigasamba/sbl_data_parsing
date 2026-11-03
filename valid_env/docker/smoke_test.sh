@@ -1,8 +1,8 @@
 #!/bin/bash
-# 모듈 컨테이너 연결 시험 — 시험용 pg → parse → structure → load(트리거 1회씩) → mcp 상주 → 밖(호스트)에서 MCP HTTP 호출 → 정리.
+# 모듈 컨테이너 연결 시험 — 시험용 pg → 마스터 표 → parse → structure(build_bundle) → migrate·load(pgvector_load) → mcp 상주 → 밖(호스트)에서 MCP HTTP 호출 → 정리.
 #   DATA_PIPELINE_IMAGE=data-pipeline:<태그> MCP_SERVER_IMAGE=mcp-server:<태그> DOC_SRC=<시험 문서 폴더> RAG_OUT=<빈 결과 폴더> \
 #   SMOKE_SETTINGS=<settings.yaml: mcp.server.token · common.models.embed(base_url·model — 내부망)> SMOKE_PG_PASSWORD=<시험용> \
-#   [SMOKE_LIMIT=10] [SMOKE_KEEP=1 — 끝나도 pg 남김] bash valid_env/docker/smoke_test.sh [질문]   (S6b — 옛 docker/server_sim/, PC 시험 Docker)
+#   SMOKE_SYSTEM=<원천 — 예 SFDC> [SMOKE_LIMIT=10] [SMOKE_KEEP=1 — 끝나도 pg 남김] bash valid_env/docker/smoke_test.sh [질문]   (S6b — 옛 docker/server_sim/, PC 시험 Docker)
 #   [PY=호스트 python(PYTHONPATH=저장소 루트로 mcp_server.cli.mcp_smoke 등 -m 호출)]
 #   원본은 DOC_SRC 폴더 하나(/data/docs) — 11-01 사용자: 원천 s3://를 지워 SMOKE_SOURCE(s3:// — MinIO 대역·원본 삭제 확인·결과 게시 ⑥)와
 #   SMOKE_NIGHTLY(자정 배치 모양 — s3:// 원천 필요)도 지움. 게시(publish)는 서버 run_docs·trigger.sh publish로 확인.
@@ -31,6 +31,7 @@ for k in sys.argv[2].split("."):
 print("" if d is None else d)' "$SMOKE_SETTINGS" "$1"
 }
 : "${SMOKE_PG_PASSWORD:?SMOKE_PG_PASSWORD=<시험용 PG 비밀번호> 필요}"
+: "${SMOKE_SYSTEM:?SMOKE_SYSTEM=<DOC_SRC 문서의 원천 — SFDC·CRMS·LAS·FAQ·Other> 필요(search는 원천 하나 필수)}"
 SMOKE_OVERLAY_DIR=$(mktemp -d); export SMOKE_OVERLAY_DIR   # S7e2 — 시험망 덮기 파일(지우지 않음 — OS 임시 폴더)
 $PY - "$SMOKE_OVERLAY_DIR" <<'PYEOF' || { echo "[실패] 덮기 파일 만들기"; exit 2; }
 import os, sys, yaml
@@ -54,14 +55,17 @@ cleanup() { [ "${SMOKE_KEEP:-0}" = 1 ] || $DC --profile job down -v --remove-orp
 trap cleanup EXIT
 step() { echo "== $1"; shift; "$@"; rc=$?; [ $rc -eq 0 ] || { echo "[실패] 종료 코드 $rc"; exit $rc; }; }
 step "시험용 PostgreSQL" $DC up -d --wait pg               # 적재(load)·검색이 씀(엔진 구성·원천 목록은 파일 — 사용자 11-01)
+# ⓪ 마스터 표(용어집·고객 명부 — pl-38): 구조화의 고객 판별이 읽고 비었으면 멈추므로 파싱 전에 판을 올리고 git CSV로 채운다.
+step "⓪ 마스터 판(migrate up --target master)" $DC run --rm load migrate up --target master
+step "⓪ 마스터 표 채우기(migrate master load)" $DC run --rm load migrate master load
 step "① 파싱(data-pipeline)" $DC run --rm parse parse
 step "② 구조화(data-pipeline — run_docs와 같은 build_bundle)" $DC run --rm --entrypoint python structure -m pipeline.transform.structure.build_bundle --parse-dir /app/output/parse --out /app/output/edw/bundle
-# S9(C-38 — 사용자 10-28 a): 적재는 서버 실제 길(run_docs.py와 같은 pgvector_load load — `pipeline.cli load`는 축소 스키마 묶음을 인계 계약
-#   DOC_KEYS로 거부하는 알려진 문제, CLAUDE.md §10). 표·vector 확장은 migrate가 먼저(S8a — 실행 중 DDL 없음, 차원은 묶음 meta.json).
-step "③-0 검색 판(migrate — 묶음 차원·vector 확장)" $DC run --rm load migrate up --target search --bundle /app/output/edw/bundle --create-extension
+# 적재는 서버 실제 길(run_docs.py와 같은 `python -m pipeline.load.pgvector_load load` — 옛 `pipeline.cli load`는 11-01에 지움, README §4-4).
+#   표·vector 확장은 migrate가 먼저(S8a — 실행 중 DDL 없음, 차원은 묶음 meta.json). 마스터 표는 맨 앞(⓪ — 구조화가 읽음).
+step "③-0 판(migrate up --target all — 묶음 차원·vector 확장)" $DC run --rm load migrate up --target all --bundle /app/output/edw/bundle --create-extension
 step "③ 적재(data-pipeline → pg — pgvector_load load)" $DC run --rm --entrypoint python load -m pipeline.load.pgvector_load load --bundle /app/output/edw/bundle
 step "④ 검색 MCP 띄우기" $DC up -d mcp
 for i in $(seq 1 30); do $DC logs mcp 2>/dev/null | grep -q "검색 MCP http" && break; sleep 1; done
 TOKEN=$(setting required.tokens.mcp)   # S7e1 — 설정 파일(옛 SMOKE_ENV의 MCP_TOKEN)
-step "⑤ 밖에서 MCP 호출" $PY -m mcp_server.cli.mcp_smoke --url "http://127.0.0.1:${MCP_PUBLISH_PORT:-18765}/mcp" --token "$TOKEN" --q "$Q"
+step "⑤ 밖에서 MCP 호출" $PY -m mcp_server.cli.mcp_smoke --url "http://127.0.0.1:${MCP_PUBLISH_PORT:-18765}/mcp" --token "$TOKEN" --source "$SMOKE_SYSTEM" --q "$Q"
 echo "모듈 컨테이너 연결 시험 통과"

@@ -64,3 +64,25 @@ def test_tool_names():
     from mcp_server.cli import mcp_smoke
 
     assert mcp_smoke.TOOLS == set(TOOL_NAMES)
+
+
+def test_smoke_check():
+    """mcp_smoke 판정 — 근거 칸은 계약(EVIDENCE_KEYS) 그대로 · 오류·0건·옛 칸(doc_key·source_uri)은 실패 · --source 필수."""
+    from mcp_server.cli import mcp_smoke
+    from mcp_server.schemas.evidence import EVIDENCE_KEYS
+
+    ok = {k: None for k in EVIDENCE_KEYS} | {"chunk_key": "c1", "file_path": "SFDC/a.pdf"}
+    old = {"doc_key": "d", "chunk_key": "c1", "source_uri": "s3://x"}
+    for d, want_ok in [
+        ({"evidence": [ok]}, True),
+        ({"evidence": [ok | {"file_path": None}]}, False),
+        ({"evidence": [old]}, False),
+        ({"evidence": []}, False),
+        ({"error": "source_system is required"}, False),
+    ]:
+        assert (mcp_smoke.check_search(d) == []) is want_ok, d
+    try:
+        mcp_smoke.main(["--url", "http://127.0.0.1:1/mcp"])
+        raise AssertionError("--source 없이 통과")
+    except SystemExit as e:
+        assert e.code == 2, e.code

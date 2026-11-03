@@ -27,7 +27,7 @@ WorkingDirectory=/srv/rag/code/live
 # 서버 배치 값(I4) — WorkingDirectory는 systemd가 변수를 못 받아 직접 적고, 설정 폴더는 SERVER_ENV_DIR로 넘김(settings_env.sh)
 # S6b — WorkingDirectory는 코드 폴더 루트(호스트 스크립트 deploy/host/scripts/, 옛 live/app/docker/). trigger.sh는 git에서 실행 비트가 없어 bash로 부른다.
 Environment=SERVER_ENV_DIR=/srv/rag/env
-# $$ = 셸에 넘기는 $ — systemd가 ExecStart의 $변수를 먼저 바꿔 버림. %% = 셸에 넘기는 %(date 형식 — systemd 지정자 %F 등으로 읽혀 unit이 안 올라가던 것, S7e1 systemd-analyze). 시각 게이트는 trigger.sh scheduled만(trigger.sh night 자체는 시각을 안 봄 — 요청 실행과 공유).
+# $$ = 셸에 넘기는 $ — systemd가 ExecStart의 $변수를 먼저 바꿔 버림. %% = 셸에 넘기는 %(date 형식 — systemd 지정자 %F 등으로 읽혀 unit이 안 올라가던 것, S7e1 systemd-analyze). 시각 게이트는 trigger.sh scheduled가 본다(옛 trigger.sh night는 11-01에 지움).
 ExecStart=/bin/bash -c '. deploy/host/scripts/settings_env.sh && load_settings || exit $$?; exec /bin/bash deploy/host/scripts/trigger.sh scheduled'
 TimeoutStartSec=6h
 # 75 = 마감 도달·다른 run_docs가 도는 중(pl-18) — 예정된 끝이라 unit 실패로 치지 않음. 1(실패 문서)·2(설정)는 실패.
