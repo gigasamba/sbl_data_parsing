@@ -23,13 +23,13 @@ def _load():
 RD = _load()
 
 GOLDEN = {
-    "warm": "docker exec data-pipeline-parse bash -c 'umask 0002 && mkdir -p /app/output/_warm && cd /app && PYTHONPATH=/app/deploy python -m pipeline.extract.source --set SOURCE_WARM=/app/output/_warm warm --csv /app/output/docflow/9/batch.csv'",
-    "parse_light": "docker exec data-pipeline-parse bash -c 'umask 0002 && cd /app && echo [envcheck] gate=9 채널=light; RUN_DOCS_DOC=/app/output/docflow/7 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/docflow/7 --set DOC_DIR_PREPARED=/app/output/docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/docflow/7/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --source rdb:csv:/app/output/docflow/7/batch.csv'",
-    "parse_vlm_scan": "docker exec data-pipeline-parse bash -c 'umask 0002 && cd /app && echo [envcheck] gate=1.3 채널=vlm; RUN_DOCS_DOC=/app/output/docflow/9 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/docflow/9 --set DOC_DIR_PREPARED=/app/output/docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/docflow/9/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set VLM_GLOBAL_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set FIGURES_VLM_PARALLEL=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set VLM_PAGE_SLOW=45 --set PREPARE_ROTATE=0 --set CPU_MAX_LOAD=1.3 parse --source rdb:csv:/app/output/docflow/9/batch.csv'",
-    "struct": "docker exec data-pipeline-structure bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy python -m pipeline.transform.structure.build_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --parse-dir /app/output/docflow/9/parse --out /app/output/docflow/9/bundle && python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 load --bundle /app/output/docflow/9/bundle --rep-dir /app/output/docflow/9/parse/_rep >> /app/output/docflow/9/structure.log 2>&1'",
-    "faq_sync": "docker exec data-pipeline-structure bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy python -m pipeline.load.pgvector_load faq-sync --reset --out /app/output/docflow/faq_sync.json'",
-    "publish": "docker exec data-pipeline-parse bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy python -m pipeline.load.publish_parse_result --set PM_BUCKET_SKIP_OVERLAP_CHECK=1 --out /app/output/docflow/9 --source-system FileStorageMap --apply >> /app/output/docflow/9/publish.log 2>&1'",
-    "sweep": "docker exec data-pipeline-parse bash -c \"for p in /proc/[0-9]*; do grep -aqzx 'RUN_DOCS_DOC=/app/output/docflow/9' \\$p/environ 2>/dev/null && kill \\${p##*/} 2>/dev/null; done\"",
+    "warm": "docker exec data-pipeline bash -c 'umask 0002 && mkdir -p /app/output/_warm && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.extract.source --set SOURCE_WARM=/app/output/_warm warm --csv /app/output/docflow/9/batch.csv'",
+    "parse_light": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && echo [envcheck] gate=9 채널=light; RUN_DOCS_DOC=/app/output/docflow/7 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/docflow/7 --set DOC_DIR_PREPARED=/app/output/docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/docflow/7/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --source rdb:csv:/app/output/docflow/7/batch.csv'",
+    "parse_vlm_scan": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && echo [envcheck] gate=1.3 채널=vlm; RUN_DOCS_DOC=/app/output/docflow/9 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/docflow/9 --set DOC_DIR_PREPARED=/app/output/docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/docflow/9/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set VLM_GLOBAL_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set FIGURES_VLM_PARALLEL=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set VLM_PAGE_SLOW=45 --set PREPARE_ROTATE=0 --set CPU_MAX_LOAD=1.3 parse --source rdb:csv:/app/output/docflow/9/batch.csv'",
+    "struct": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.transform.structure.build_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --parse-dir /app/output/docflow/9/parse --out /app/output/docflow/9/bundle && PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 load --bundle /app/output/docflow/9/bundle --rep-dir /app/output/docflow/9/parse/_rep >> /app/output/docflow/9/structure.log 2>&1'",
+    "publish": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.load.publish_parse_result --set PM_BUCKET_SKIP_OVERLAP_CHECK=1 --out /app/output/docflow/9 --source-system FileStorageMap --apply >> /app/output/docflow/9/publish.log 2>&1'",
+    "sweep": "docker exec data-pipeline bash -c \"for p in /proc/[0-9]*; do grep -aqzx 'RUN_DOCS_DOC=/app/output/docflow/9' \\$p/environ 2>/dev/null && kill \\${p##*/} 2>/dev/null; done\"",
+    "faq_sync": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.load.pgvector_load faq-sync --reset --out /app/output/docflow/faq_sync.json'",
 }
 
 
@@ -281,3 +281,24 @@ def test_faq_first(tmp_path):
     seen.unlink()
     assert run({U1: "ok", U2: "ok"}, {"faq_reset": 2, "gold": []}) == ([1, 3, 0, 2], 4)  # 처음 실행(파일 없음) — 한 번 교체
     assert seen.read_text(encoding="utf-8") == f"{U1}\n{U2}\n"
+
+
+def test_classify_cache_skips_probe():
+    """A3 — 분류 캐시에 있으면 probe(docker exec)를 부르지 않는다. 캐시는 레인만 담으므로 PDF의 vlm은 스캔으로 되살린다(probe heavy일 때만 PDF가 vlm)."""
+    from unittest import mock
+
+    cases = [  # (파일 이름, 캐시 값, 기대 레인, 스캔?)
+        ("a.pdf", "vlm", "vlm", True),
+        ("a.pdf", "medium", "medium", False),
+        ("a.pptx", "vlm", "vlm", False),
+    ]
+    for name, cached, want, scan in cases:
+        RD._scan.clear()
+        row = {"s3_key": "k", "original_filename": name, "file_size": 1}
+        with (
+            mock.patch.object(RD, "sh", side_effect=AssertionError("probe 불림")),
+            mock.patch.object(RD, "mark", lambda *a, **k: None),
+            mock.patch.object(RD, "_class_save", lambda c: None),
+        ):
+            assert RD.classify_doc(5, row, cache={"k": cached}) == want, name
+        assert (5 in RD._scan) is scan, name
