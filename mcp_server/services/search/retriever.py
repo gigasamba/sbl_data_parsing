@@ -6,7 +6,6 @@ import sys
 import time
 from pathlib import Path
 
-from common.core import docmeta as DM  # 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
 from common.core.contract import (
     make_chunk_key,
     uri_from_path,  # 원본 위치 규칙(모듈 계약)
@@ -32,7 +31,6 @@ class Retriever:
                 "doc_date": d.get("doc_date"),
                 "version": d.get("version"),
                 "superseded": bool(d.get("superseded")),
-                "family": d.get("family"),
             }
             for d in self.local.docs
         }  # L3-1: pgvector 저장소도 이 로컬 묶음 문서 메타로 최신성 순위(항상 로드됨)
@@ -44,16 +42,14 @@ class Retriever:
 
     def search(self, q, k, methods=None):
         """methods ⊂ {vector, bm25, id}(없으면 retrieve 설정대로) — 검색 MCP가 방법을 골라 씀(G3).
-        L3-1: 마지막으로 같은 문서군(family) 최신성 순위(demote, 안 지움) — self.recency_note에 결과(SEARCH_RECENCY=0이면 끔).
         단일 스레드 호출부용 — note류를 self 속성에도 채운다. 공유 인스턴스를 여러 스레드가 쓰면(검색 MCP) search_ex를 쓴다(S12)."""
         hits, ms, notes = self.search_ex(q, k, methods)
         self.expand_notes, self.note = notes.get("expand_notes"), notes.get("note")
-        self.recency_note = notes.get("recency_note")
         return hits, ms
 
-    def search_ex(self, q, k, methods=None, recency=None, scope=None):
-        """search()와 같은 동작이지만 note류(expand_notes·note·recency_note)를 반환값 notes(dict)로 준다 — 검색 MCP처럼 같은 Retriever를
-        여러 스레드가 동시에 쓸 때 A 요청 응답에 B의 note가 섞이는 것을 막음(S12). recency: 이 질의 1건만 docmeta.recency_rerank 모드를 강제.
+    def search_ex(self, q, k, methods=None, scope=None):
+        """search()와 같은 동작이지만 note류(expand_notes·note)를 반환값 notes(dict)로 준다 — 검색 MCP처럼 같은 Retriever를
+        여러 스레드가 동시에 쓸 때 A 요청 응답에 B의 note가 섞이는 것을 막음(S12). (최신성 순위 recency_rerank는 pl-38에 지움.)
         scope = 하드 거르기 범위 **안** 문서 file_path 집합 — 주어지면 저장소 질의 단계부터 그 문서의 청크만 후보로(pgsearch._scope_restrict).
         고객은 거르기(client_edw 정확 일치 — search_svc 범위)로만 — 본문 고객 라벨로 앞으로 올리던 길(AD38·BR50)은 11-02에 지움(사용자 C6).
         반환: (hits, ms, notes)."""
@@ -63,9 +59,7 @@ class Retriever:
         for h in hits:  # 로컬 묶음 문서 메타로(같은 규칙, 묶음은 항상 로드됨)
             m = self.doc_meta.get(h.get("doc_key")) or {}
             h["doc_date"], h["version"], h["superseded"] = m.get("doc_date"), m.get("version"), m.get("superseded")
-        hits = hits[:k]
-        hits, notes["recency_note"] = DM.recency_rerank(hits, self.doc_meta, q, mode=recency)
-        return hits, ms, notes
+        return hits[:k], ms, notes
 
     def _search_ex(self, q, k, methods=None, scope=None):
         # X3: BM25 쪽만 용어 사전으로 확장({토큰: 가중치}) — 벡터 질의(qv)는 원문 q 그대로 임베딩(아래, 바뀌지 않음)

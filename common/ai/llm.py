@@ -229,47 +229,56 @@ def _do_call(messages, temperature, max_tokens, json_mode, base, model, agent, t
     """실호출 1건 — 호출 상한·분당 상한·예산 상한·공유 장부(_stats) 갱신까지(chat()의 비-캐시 경로 공용, RV12로 빈
     응답 재요청이 2건째를 같은 방식으로 치르도록 분리). 캐시는 호출자(chat())가 처리."""
     reserve_call()
-    with _lock:
-        rpm = cfg().models.llm.rpm
-        if rpm:
-            wait = _last[0] + 60 / rpm - time.monotonic()
-            if wait > 0:
-                _span.add_current(llm_rpm_wait_ms=int(wait * 1000))  # op-01 — 분당 상한 때문에 기다린 시간
-                time.sleep(wait)
-            _last[0] = time.monotonic()
-    # 예산(10-05 독립 검토 반영) — 호출 전 예상 최대 비용(입력 글자/3 토큰 + max_tokens 출력)을 공유 장부에 선차감(잠금 안 확인+기록),
-    # 호출 뒤 실제 사용량으로 정산 — 사용량이 없으면 예상치 그대로(보수적). 외부 호출이고 단가 미상이면 상한을 지킬 수 없어 거부.
+    # 실패 출구마다 돌려준다(한 곳 — try/finally): complete()에 넘기기 전 실패면 위 자리, 성공 전 실패면 예산 선차감(reserved).
+    # complete()가 시작된 뒤의 자리는 complete()가 실패할 때 스스로 돌려준다(call_reserved=True).
     from common.ai import guard as G
 
-    reserved = 0.0
-    pin, pout = price(model)
-    if not is_internal(base) and G.budget_usd() is not None:
-        if pin is None:
-            raise LLMUnavailable(f"모델 {model} 단가 미상 — LLM_PRICE_IN·LLM_PRICE_OUT 지정 전엔 예산 상한을 지킬 수 없어 호출 안 함")
-        reserved = (sum(len(m.get("content") or "") for m in messages) / 3 * pin + max_tokens * pout) / 1e6
-        try:
-            G.spend_reserve(reserved, "LLM")
-        except G.BudgetExceeded as e:
-            raise LLMUnavailable(str(e)) from e
+    reserved, handed, done = 0.0, False, False
     try:
-        # preguarded=True — chat()이 이미 자기 allow_external 매개변수로 가드를 통과시켰음(GA3).
-        # call_reserved=True — 위 reserve_call()이 이 1차 호출의 자리를 이미 예약함(GH1-08d — 이중 집계 방지). 형식 재요청(AD33)의
-        # 2차 호출은 complete()가 그 자리에서 try_reserve_call()로 직접 예약한다(GH1-08c) — 여기서 다시 더하지 않는다.
-        text, u = complete(
-            "llm",
-            messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            json_mode=json_mode,
-            timeout=float(timeout or cfg().models.llm.timeout),
-            preguarded=True,
-            agent=agent,
-            call_reserved=True,
-        )  # timeout: 호출별 상한(검색 경로처럼 지연 민감한 곳)
-    except ModelUnavailable as ex:
         with _lock:
-            _stats["errors"] += 1
-        raise RuntimeError(f"LLM 호출 실패: {ex}") from ex
+            rpm = cfg().models.llm.rpm
+            if rpm:
+                wait = _last[0] + 60 / rpm - time.monotonic()
+                if wait > 0:
+                    _span.add_current(llm_rpm_wait_ms=int(wait * 1000))  # op-01 — 분당 상한 때문에 기다린 시간
+                    time.sleep(wait)
+                _last[0] = time.monotonic()
+        # 예산(10-05 독립 검토 반영) — 호출 전 예상 최대 비용(입력 글자/3 토큰 + max_tokens 출력)을 공유 장부에 선차감(잠금 안 확인+기록),
+        # 호출 뒤 실제 사용량으로 정산 — 사용량이 없으면 예상치 그대로(보수적). 외부 호출이고 단가 미상이면 상한을 지킬 수 없어 거부.
+        pin, pout = price(model)
+        if not is_internal(base) and G.budget_usd() is not None:
+            if pin is None:
+                raise LLMUnavailable(f"모델 {model} 단가 미상 — LLM_PRICE_IN·LLM_PRICE_OUT 지정 전엔 예산 상한을 지킬 수 없어 호출 안 함")
+            est = (sum(len(m.get("content") or "") for m in messages) / 3 * pin + max_tokens * pout) / 1e6
+            try:
+                G.spend_reserve(est, "LLM")
+            except G.BudgetExceeded as e:
+                raise LLMUnavailable(str(e)) from e
+            reserved = est
+        try:
+            # preguarded=True — chat()이 이미 자기 allow_external 매개변수로 가드를 통과시켰음(GA3).
+            # call_reserved=True — 위 reserve_call()이 이 1차 호출의 자리를 이미 예약함(GH1-08d — 이중 집계 방지). 형식 재요청(AD33)의
+            # 2차 호출은 complete()가 그 자리에서 try_reserve_call()로 직접 예약한다(GH1-08c) — 여기서 다시 더하지 않는다.
+            handed = True
+            text, u = complete(
+                "llm",
+                messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                json_mode=json_mode,
+                timeout=float(timeout or cfg().models.llm.timeout),
+                preguarded=True,
+                agent=agent,
+                call_reserved=True,
+            )  # timeout: 호출별 상한(검색 경로처럼 지연 민감한 곳)
+        except ModelUnavailable as ex:
+            with _lock:
+                _stats["errors"] += 1
+            raise RuntimeError(f"LLM 호출 실패: {ex}") from ex
+        done = True
+    finally:
+        if not done:
+            _refund(not handed, reserved)  # 호출이 안 나갔거나 실패 — 자리·선차감을 돌려줌
     usd = ((u.get("prompt_tokens", 0) * pin + u.get("completion_tokens", 0) * pout) / 1e6) if (pin is not None and u) else reserved
     if reserved and u:
         G.spend_settle(usd - reserved)  # 실제로 정산(사용량 없으면 선차감액이 그대로 지출로 남음)
@@ -561,87 +570,91 @@ def complete(
     agent=(지시문 패키지 id)면 model_role이 role과 같아야 하고, 아직 예약 안 됐으면(call_reserved=False — 직접 호출자) 1차 호출을
     재시도 루프 전에 딱 한 번 공유 장부에 예약한다(GH1-08d). call_reserved=True는 호출자가 이미 예약한 경우(chat()의 _do_call).
     max_tokens=None이면 그 필드를 안 보냄."""
-    prof = profile(role)
-    if prof is None:
-        raise ModelUnavailable(f"{role.upper()}_BASE_URL·{role.upper()}_MODEL 미설정")
-    if agent is not None:
-        mr = _manifest(agent).get("model_role")
-        if mr != role:
-            raise ModelUnavailable(f"{agent}: model_role={mr!r} != 호출 role={role!r}")
-    guard_prefix = _ROLE_GUARD_PREFIX[role]
-    if _model_down(prof.base_url):
-        if call_reserved:
-            release_call()
-        host = urllib.parse.urlparse(prof.base_url).hostname or prof.base_url
-        raise ModelUnavailable(
-            f"모델 다운({role}_down) — {host} 연속 {cfg().models.transport.down_after}회 이상 실패, 쿨다운 중(MODEL_DOWN_COOLDOWN) — 호출 안 보냄"
-        )
+    # 실패 출구마다 자리·선차감을 돌려준다(한 곳 — try/finally): 성공(ok=True)이면 그대로 쓰고, 그 밖의 모든 출구(가드 거부·설정 없음·
+    # 재시도 소진·_Retryable 아닌 예외)에서 call_reserved 자리(chat()의 _do_call이 예약했거나 아래 direct가 예약)와 flat 선차감(reserved)을 되돌림.
+    ok, reserved = False, 0.0
     try:
-        if not preguarded:
-            require_internal(prof.base_url, guard_prefix)
-        reserved = precheck(prof.base_url, guard_prefix)  # role!=llm 외부 호출의 flat 선차감액(내부망·llm이면 0.0)
-    except GuardBlocked:
-        raise
-    except RuntimeError as ex:  # 외부 주소·BudgetExceeded — 호출 전에 막힘
-        raise GuardBlocked(str(ex)) from ex
-    extra = _merged_extra(role, extra)
-    deadline = float(timeout) if timeout else 120.0
-    direct = agent is not None and not call_reserved  # RV16·GH1-08d — chat()은 call_reserved=True(자기 안전망을 따로 가짐)
-    if direct:
-        if not try_reserve_call():
-            raise ModelUnavailable("LLM_MAX_CALLS 도달 — 호출 보내지 않음(GH1-08d, 직접 호출자)")
-        call_reserved = True
-    last_err, last_elapsed = None, None
-    for attempt in range(retries):
-        t0 = time.monotonic()
+        prof = profile(role)
+        if prof is None:
+            raise ModelUnavailable(f"{role.upper()}_BASE_URL·{role.upper()}_MODEL 미설정")
+        if agent is not None:
+            mr = _manifest(agent).get("model_role")
+            if mr != role:
+                raise ModelUnavailable(f"{agent}: model_role={mr!r} != 호출 role={role!r}")
+        guard_prefix = _ROLE_GUARD_PREFIX[role]
+        if _model_down(prof.base_url):
+            host = urllib.parse.urlparse(prof.base_url).hostname or prof.base_url
+            raise ModelUnavailable(
+                f"모델 다운({role}_down) — {host} 연속 {cfg().models.transport.down_after}회 이상 실패, 쿨다운 중(MODEL_DOWN_COOLDOWN) — 호출 안 보냄"
+            )
         try:
-            if tools:
-                out, u = _post_chat(prof, messages, temperature, max_tokens, json_mode, extra, deadline, guard_prefix, tools=tools)
-            else:
-                out, u = _once(agent, role, prof, messages, temperature, max_tokens, json_mode, extra, deadline, guard_prefix)
-                if direct and _empty_truncated(out, u):  # RV16 — 생각이 max_tokens를 다 써 빈 응답 → 4배로 딱 한 번
-                    cap = cfg().models.llm.empty_retry_max
-                    retry_tokens = cap if max_tokens is None else min(max_tokens * 4, cap)
-                    if retry_tokens > (max_tokens or 0) and try_reserve_call():
-                        first = dict(u)
-                        try:
-                            out, u = _once(agent, role, prof, messages, temperature, retry_tokens, json_mode, extra, deadline, guard_prefix)
-                        except _Retryable:
-                            release_call()
-                            raise
-                        u = dict(u or {})
-                        for k in ("prompt_tokens", "completion_tokens"):
-                            u[k] = (first.get(k) or 0) + (u.get(k) or 0)
-                        u["calls"] = 2
-            if reserved:  # 실제 토큰 usage로 사후 정산(BR45)
-                from common.ai import guard as G
-
-                G.settle_tokens(reserved, prof.model, u)
-            _model_down_reset(prof.base_url)
-            return out, u
-        except _Retryable as ex:
-            last_err, last_elapsed = ex.inner, time.monotonic() - t0
-            _span.add_current(**{f"{role}_retries": 1})  # op-01 — 열린 span(문서×단계)에 재시도 수(span 없으면 no-op)
-            if attempt < retries - 1:
-                time.sleep(ex.retry_after if ex.retry_after else 2**attempt * 2)
-        except ModelUnavailable:  # 재시도 대상 아닌 실패(HTTP 400·리다이렉트 거부 등) — 예약 자리·선차감을 돌려주고 그대로
-            if call_reserved:
-                release_call()
-            if reserved:
-                from common.ai import guard as G
-
-                G.spend_settle(-reserved)
+            if not preguarded:
+                require_internal(prof.base_url, guard_prefix)
+            reserved = precheck(prof.base_url, guard_prefix)  # role!=llm 외부 호출의 flat 선차감액(내부망·llm이면 0.0)
+        except GuardBlocked:
             raise
-    # 빨리 끝난 실패(연결 자체가 안 됨)만 회로 실패로 센다 — 느린 응답(살아있지만 느림)은 안 셈(RV24 BLOCK)
-    if last_elapsed is not None and last_elapsed <= min(cfg().models.transport.connect_timeout * 1.5, deadline * 0.5):
-        _model_down_mark_failure(prof.base_url)
-    if call_reserved:
+        except RuntimeError as ex:  # 외부 주소·BudgetExceeded — 호출 전에 막힘
+            raise GuardBlocked(str(ex)) from ex
+        extra = _merged_extra(role, extra)
+        deadline = float(timeout) if timeout else 120.0
+        direct = agent is not None and not call_reserved  # RV16·GH1-08d — chat()은 call_reserved=True(자기 안전망을 따로 가짐)
+        if direct:
+            if not try_reserve_call():
+                raise ModelUnavailable("LLM_MAX_CALLS 도달 — 호출 보내지 않음(GH1-08d, 직접 호출자)")
+            call_reserved = True
+        last_err, last_elapsed = None, None
+        for attempt in range(retries):
+            t0 = time.monotonic()
+            try:
+                if tools:
+                    out, u = _post_chat(prof, messages, temperature, max_tokens, json_mode, extra, deadline, guard_prefix, tools=tools)
+                else:
+                    out, u = _once(agent, role, prof, messages, temperature, max_tokens, json_mode, extra, deadline, guard_prefix)
+                    if direct and _empty_truncated(out, u):  # RV16 — 생각이 max_tokens를 다 써 빈 응답 → 4배로 딱 한 번
+                        cap = cfg().models.llm.empty_retry_max
+                        retry_tokens = cap if max_tokens is None else min(max_tokens * 4, cap)
+                        if retry_tokens > (max_tokens or 0) and try_reserve_call():
+                            first = dict(u)
+                            try:
+                                out, u = _once(
+                                    agent, role, prof, messages, temperature, retry_tokens, json_mode, extra, deadline, guard_prefix
+                                )
+                            except BaseException:
+                                release_call()  # 2차(빈 응답 재요청) 자리 — 1차 자리는 아래 finally가
+                                raise
+                            u = dict(u or {})
+                            for k in ("prompt_tokens", "completion_tokens"):
+                                u[k] = (first.get(k) or 0) + (u.get(k) or 0)
+                            u["calls"] = 2
+                ok = True
+                if reserved:  # 실제 토큰 usage로 사후 정산(BR45)
+                    from common.ai import guard as G
+
+                    G.settle_tokens(reserved, prof.model, u)
+                _model_down_reset(prof.base_url)
+                return out, u
+            except _Retryable as ex:
+                last_err, last_elapsed = ex.inner, time.monotonic() - t0
+                _span.add_current(**{f"{role}_retries": 1})  # op-01 — 열린 span(문서×단계)에 재시도 수(span 없으면 no-op)
+                if attempt < retries - 1:
+                    time.sleep(ex.retry_after if ex.retry_after else 2**attempt * 2)
+        # 빨리 끝난 실패(연결 자체가 안 됨)만 회로 실패로 센다 — 느린 응답(살아있지만 느림)은 안 셈(RV24 BLOCK)
+        if last_elapsed is not None and last_elapsed <= min(cfg().models.transport.connect_timeout * 1.5, deadline * 0.5):
+            _model_down_mark_failure(prof.base_url)
+        raise ModelUnavailable(f"모델 호출 실패(재시도 {retries}회): {type(last_err).__name__}: {str(last_err)[:200]}") from last_err
+    finally:
+        if not ok:
+            _refund(call_reserved, reserved)  # 끝내 못 쓴 자리·flat 선차감을 되돌림(BR45 후속)
+
+
+def _refund(slot, usd):
+    """실패한 호출이 쥔 것을 돌려준다 — slot이면 LLM_MAX_CALLS 자리, usd면 예산 선차감(_do_call·complete 공용, 리뷰 11-03)."""
+    if slot:
         release_call()
-    if reserved:
+    if usd:
         from common.ai import guard as G
 
-        G.spend_settle(-reserved)  # 끝내 못 쓴 flat 선차감을 되돌림(BR45 후속)
-    raise ModelUnavailable(f"모델 호출 실패(재시도 {retries}회): {type(last_err).__name__}: {str(last_err)[:200]}") from last_err
+        G.spend_settle(-usd)
 
 
 def _traced(fn):

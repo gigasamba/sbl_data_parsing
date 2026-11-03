@@ -68,6 +68,14 @@ def test_schema_doc_matches():
     for name, real in sorted(actual.items()):
         now = {c for c, d in doc[name].items() if d != "새로"}
         assert now == real, f"{name} — 문서의 지금 칸과 실제가 다름: 문서에만 {sorted(now - real)} · 실제에만 {sorted(real - now)}"
+    from common.store.db.models.master_tables import master_metadata  # pl-38 — 마스터 표(§4, 결정 모두 새로)는 칸 전부를 모델과 대조
+
+    for tbl in master_metadata("m").tables.values():
+        name = f"master.{tbl.name}"
+        assert name in doc, f"문서에 없는 마스터 표: {name}"
+        assert set(doc[name]) == {c.name for c in tbl.columns}, (
+            f"{name} — 문서 칸 {sorted(doc[name])} · 모델 칸 {sorted(c.name for c in tbl.columns)}"
+        )
     targets = []
     for name, cols in sorted(doc.items()):
         new = sorted(c for c, d in cols.items() if d == "새로")

@@ -114,15 +114,13 @@ def _parse_source_path(v):
 
 PATH_BUNDLE = [
     ("GOLD_DIR", Path),
-    ("CLIENT_ROSTER", Path),
-    ("GLOSSARY_DIR", Path),
     ("SOURCES_FILE", Path),
     ("PARSE_SOURCE", _parse_source_path),
 ]
 
 
 def _bundle_value(name):
-    """PATH_BUNDLE 이름의 준 값(없거나 빈 값이면 None) — 칸이 pipeline 절(GOLD_DIR 등)에 있거나 common 절(GLOSSARY_DIR 등)에 있음(S7c — 설정 객체)."""
+    """PATH_BUNDLE 이름의 준 값(없거나 빈 값이면 None) — 칸이 pipeline 절(GOLD_DIR 등)에 있거나 common 절에 있음(S7c — 설정 객체 · GLOSSARY_DIR은 pl-38에 지움 — 마스터 표)."""
     if name == "GOLD_DIR":
         return _pc().gold_dir() or None  # S7e2 — 이미지 안 /data/gold 마운트 기본(pc.gold_dir)
     v = _pc().given(name)
@@ -153,10 +151,13 @@ def check_path_bundle(dump_dir=None):
             matched = golds & docs
             line(bool(matched), "GOLD_DIR 이름 짝", f"문서 {len(docs)}건 중 정답 짝 {len(matched)}건(정답 파일 {len(golds)}개)")
 
-    glossary_dir = _bundle_value("GLOSSARY_DIR")
-    if glossary_dir and Path(glossary_dir).exists():
-        for fn in ("domain_terms.csv", "id_patterns.csv", "units.csv"):
-            line((Path(glossary_dir) / fn).exists(), f"  {fn}")
+    try:  # pl-38 — 용어집·고객 명부는 PG 마스터 표(<PG_SCHEMA>_master)
+        from common.store import master
+
+        m = master.get()
+        line(True, "마스터 표", f"해시 {m.hash[:8]} · " + " · ".join(f"{n} {len(r)}행" for n, r in m.tables.items()))
+    except SystemExit as ex:
+        line(False, "마스터 표", str(ex))
 
 
 def check_pg_schema():

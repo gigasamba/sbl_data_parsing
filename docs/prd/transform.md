@@ -86,6 +86,7 @@
 - 이유: 엔진마다 결과가 다르다. 핸드오프는 가장 정확한 글이어야 한다.
 - 무엇: 대표 엔진 고르기(정확도 + 풍부함), 투표로 줄 단위 합치기, 다투는 곳 OCR/VLM 다시 읽기, 엔진 사이 라벨·값 교차 확인, 글자 PDF 안 스캔 쪽 채우기, 표준 표(`tables_std`), 기호·위첨자/아래첨자 표준화, 표 잇기, 파싱 QA.
 - 파일: `pipeline/transform/represent/represent.py`, `fuse.py`, `crosscheck.py`, `table_std.py`, `parse_qa.py`(재판독 `reread.py`·`reread_stage3.py`는 [pl-34](transform-cleanup.md#pl-34)에 지움).
+- 결정(사용자 11-03 — [load.md#pl-38](load.md#pl-38) ETL 규칙): 융합의 용어집·고객 명부 그럴듯함 가산(`fuse.py` `term_plausibility` — 근소한 차이만 깨던 것, 글은 안 바꿈)을 지운다. 대표 결과(silver)는 마스터를 읽지 않고 `silver_version`에 마스터 해시가 없다. 바뀌는 것: `_rep` `fused`의 동점 점수·`resolved_by`만.
 - Status: done
 
 <a id="pl-36"></a>
@@ -117,6 +118,7 @@
 - 이유: 검색에는 출처가 달린 청크와 메타데이터가 필요하다.
 - 무엇: 청크 나누기 structure(기본, 800자, 제목, 표는 통째) / fixed 512+64 / sentence / page, 큰 표는 25행씩. 요약(앞부분 발췌 — OpenViking 요약은 10-29, LLM 요약은 op-08에 지움). 고객·계약은 교차 확인된 것만 남긴다. (묶음의 지식 그래프·개념 청크·그림 행·집계 사실은 11-01에 지움 — 아래 Status. 사실 추출 `facts.py`는 `parse_document`가 돌려주므로 남김.) 임베딩은 로컬(e5, bge-m3) 또는 내부 `api`.
 - 파일: `pipeline/transform/structure/build_bundle.py`, `chunking.py`, `facts.py`, `draft_terms.py`, `common/ai/embed.py`.
+- 결정(사용자 11-03 — [load.md#pl-38](load.md#pl-38)): 고객 판별(`infer_clients`)은 구조화에 남는다(청크 머리의 고객이 임베딩 입력) — 고객 명부·용어 사전은 PG 마스터(`<PG_SCHEMA>_master`)에서 읽고, 읽은 마스터 해시를 묶음 `meta.json` `master_hash`로 남긴다(적재가 `gold_version` `<VERSION>+m<해시 8자>`로). 묶음 `family`(판 묶음)와 용어 초안 수집(`collect_draft_terms`)은 지움 — 초안은 PG를 읽는 오프라인 도구로.
 - Status: done — 11-01(`feature/scope-cut-pipeline`) `build_bundle.py`가 `kg_nodes`·`kg_edges`(그래프)·`concept_chunk.jsonl`(개념 청크)·`images.jsonl`(그림 행)·`facts.jsonl`(집계 사실)을 더 만들지 않는다(`build_graph`·`build_concept_chunk`·`image_record`·`doc_facts` 지움). `facts.jsonl`을 읽던 검색 쪽 집계(`aggregate.py`)는 [mcp.md#mc-04](mcp.md#mc-04)(`feature/scope-cut-search`)가 지운다 — 이 행의 PR은 그 뒤에 병합(그 사이 합계가 0으로 나오지 않게). 그림 청크와 청크의 `image_ids`는 남김(검색 근거가 읽음). `kg_nodes.jsonl`·`kg_edges.jsonl`은 **빈 파일**로만 쓴다 — 묶음 계약 `common/core/contract.py` `check_bundle`의 파일 목록이 요구하고, 그 파일은 핸드오프 지문 파일이라 이번에 고치지 않음(0.2.0 배치에서 목록과 빈 파일을 함께 지움 — 허브에 넘김). 구조화 code_fp `s`: develop `94dd9d5` 0d9aa10b1bb5 → 이 브랜치 397296fe358b(나머지 지문은 develop과 같음).
 
 <a id="pl-15"></a>

@@ -1,6 +1,5 @@
 """mcp_server.services.search.local 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.local`."""
 
-from common.core.paths import GLOSSARY_ROOT
 from mcp_server import config as mc
 from mcp_server.services.search.local import IndexMismatch, embed_query, entity_hints, tie_break, weights
 
@@ -47,27 +46,21 @@ def _selftest_tie_break():
 
     # 실측 회귀(QA093·R2Q005) 재현 방지 — 질문의 제품코드가 다른 문서의 파일명에 그대로 적혀 있어도(구조화
     # product_code 필드가 그 값이 아니면) 안 끌려옴. 구조화 필드 정확 일치만(파일명 부분 일치 없음).
-    # id_patterns.csv(product_code 정규식)는 실제 사전 폴더에서(GLOSSARY_DIR 임시로 — load_id_patterns_typed가 읽음).
-    _env = mc.senv(
-        GLOSSARY_DIR=str(GLOSSARY_ROOT)
-    )  # 인계 파일(load_id_patterns_typed)이 env로 읽음 — senv가 os.environ에도 쓰고 되돌림(S7d)
-    try:
-        fn_trap = tie_break(
-            [10, 11],
-            {10: 1.0, 11: 0.9995},
-            {10: ("hub_data.xlsx", None, None, None), 11: ("hub_report_LUX-VAC-03.docx", None, None, None)},
-            "LUX-VAC-03 제품의 배치 수는?",
-        )
-        assert fn_trap == [10, 11], fn_trap  # 파일명에 코드가 있어도 product_code 필드가 비어 있으면 그대로(안 끌림)
-        fn_real = tie_break(
-            [10, 11],
-            {10: 1.0, 11: 0.9995},
-            {10: ("hub_data.xlsx", None, None, None), 11: ("hub_report_LUX-VAC-03.docx", None, None, "LUX-VAC-03")},
-            "LUX-VAC-03 제품의 배치 수는?",
-        )
-        assert fn_real == [11, 10], fn_real  # product_code 필드가 실제로 맞으면(구조화 메타) 앞으로
-    finally:
-        _env.close()
+    # id_patterns(product_code 정규식)는 마스터 표(pl-38 — PC는 git CSV로 채운 SQLite 대역)에서 load_id_patterns_typed가 읽음.
+    fn_trap = tie_break(
+        [10, 11],
+        {10: 1.0, 11: 0.9995},
+        {10: ("hub_data.xlsx", None, None, None), 11: ("hub_report_LUX-VAC-03.docx", None, None, None)},
+        "LUX-VAC-03 제품의 배치 수는?",
+    )
+    assert fn_trap == [10, 11], fn_trap  # 파일명에 코드가 있어도 product_code 필드가 비어 있으면 그대로(안 끌림)
+    fn_real = tie_break(
+        [10, 11],
+        {10: 1.0, 11: 0.9995},
+        {10: ("hub_data.xlsx", None, None, None), 11: ("hub_report_LUX-VAC-03.docx", None, None, "LUX-VAC-03")},
+        "LUX-VAC-03 제품의 배치 수는?",
+    )
+    assert fn_real == [11, 10], fn_real  # product_code 필드가 실제로 맞으면(구조화 메타) 앞으로
 
     # entity_hints — 계약번호·제품코드(id_patterns.csv)도 질문 문자열에서 그대로 집음(사전 있는 환경에서만, 없으면 빈 집합)
     m_cl, mi = entity_hints("C-PFE-2024-02 계약 배치 수는?", [])

@@ -1423,9 +1423,6 @@ class CommonHost(Section):
         "RAG_OUT",
         "호스트의 결과(output) 폴더(서버 경로) — compose가 컨테이너 /app/output으로 마운트하는 원본(T-21 — 코드가 읽는 칸은 common.paths.output_root)",
     )
-    patch_code: str | None = F(
-        None, "PATCH_CODE", "덧씌우기 코드 폴더(호스트) — compose.patch*.yml이 컨테이너 코드 자리로 마운트(기본값 없음, 사용자 11-02)"
-    )
     pg_container: str | None = F(
         None,
         "PG_CONTAINER",
@@ -1435,7 +1432,6 @@ class CommonHost(Section):
 
 
 class CommonPaths(Section):
-    client_roster: str | None = F(None, "CLIENT_ROSTER", "고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) — 용어·별칭에 합침")
     doc_dir: str | None = F(
         image_default("DOC_DIR"),
         "DOC_DIR",
@@ -1447,7 +1443,6 @@ class CommonPaths(Section):
         "준비(dedup·회전) 끝난 문서 폴더 — 파싱의 --src 기본값(pipeline 이미지 안 기본 /app/output/prepared — 옛 Dockerfile ENV, B-2)",
     )
     draft_terms_out: str | None = F(None, "DRAFT_TERMS_OUT", "용어 자동 초안 CSV 경로")
-    glossary_dir: str | None = F(None, "GLOSSARY_DIR", "용어 사전 폴더(domain_terms.csv·id_patterns.csv 등)")
     mcp_bundle: str | None = F(
         None,
         "MCP_BUNDLE",
@@ -1520,12 +1515,6 @@ class CommonStore(Section):
 
 class CommonText(Section):
     draft_terms_max: int | None = F(500, "DRAFT_TERMS_MAX", "용어 자동 초안 파일 행 수 상한(개) — 넘으면 가장 빈번한 것만 유지")
-    search_recency: str | None = F(
-        "1",
-        "SEARCH_RECENCY",
-        "같은 문서군의 최신 판 우선 모드 — 0 끔·1 최신을 묻는 질문에서만·2 항상(common/core/docmeta.py — S7b에 mcp.search에서 옮김)",
-        blank="keep",
-    )
     search_en_stem: bool | None = F(True, "SEARCH_EN_STEM", "검색 토큰의 영어 복수→단수 정규화(G16, 가산만) — =0이면 끔", off=("0",))
     source_uri_prefix: str | None = F(None, "SOURCE_URI_PREFIX", "원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///srv/rag/docs)")
     token_num_norm: bool | None = F(

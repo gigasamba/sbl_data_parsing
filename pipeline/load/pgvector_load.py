@@ -211,7 +211,7 @@ def load(db, bundle, replace=False, rep_dir=None):
                 loaded += ld
                 kept += kp
     counts["sec"] = round(time.time() - t0, 1)
-    counts["loaded_at_failed"] = _mark_loaded(loaded, kept)
+    counts["loaded_at_failed"] = _mark_loaded(loaded, kept, gold_version(meta))
     from common.core import runlog
 
     runlog.note(f"적재 {json.dumps({'bundle': str(B), 'meta': meta, 'counts': counts}, ensure_ascii=False, default=str)}")
@@ -416,7 +416,16 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
     return {"docs": len(doc_id), "chunks": len(sel), "terms": n_terms}, loaded, kept
 
 
-def _mark_loaded(loaded, kept=()):
+def gold_version(meta):
+    """gold_version(pl-38, 사용자 11-03) = `<VERSION>+m<마스터 해시 앞 8자>` — 구조화가 읽은 마스터 표 해시(묶음 meta.json master_hash).
+    master_hash가 없는 묶음(옛 묶음)은 `<VERSION>`만. 캐시 열쇠·code_fp에는 넣지 않는다(마스터가 바뀌어도 자동 재처리 없음)."""
+    from pipeline.load.parsing_meta import pipeline_version  # 게시(silver_version)와 같은 자리
+
+    h = (meta or {}).get("master_hash")
+    return f"{pipeline_version()}+m{h[:8]}" if h else pipeline_version()
+
+
+def _mark_loaded(loaded, kept=(), version=None):
     """C10 예외(사용자 11-02) — 새로 적재한 문서의 ParsingMeta.loaded_at·gold_version을 적는다(쓰기 계정, PG 커밋 뒤). 못 열거나 실패하면 경고 한 줄과
     실패 건수만 돌려준다(적재는 그대로 — gold가 검색의 정본, loaded_at은 기록용. DB 담당자가 칸을 더하기 전에도 적재가 멈추지 않게)."""
     if not loaded and not kept:
@@ -431,9 +440,7 @@ def _mark_loaded(loaded, kept=()):
         )
         return len(loaded)
     try:
-        from pipeline.load.parsing_meta import pipeline_version  # 게시(silver_version)와 같은 자리
-
-        return PM.mark_loaded(pm, loaded, pipeline_version(), kept)  # gold_version = 적재한 코드 판(사용자 11-02)
+        return PM.mark_loaded(pm, loaded, version or gold_version(None), kept)  # gold_version = 적재한 코드 판 + 마스터 해시(pl-38)
     except Exception as e:
         print(f"[pgstore] 경고: ParsingMeta loaded_at 못 적음 — {len(loaded)}건: {type(e).__name__}", file=sys.stderr, flush=True)
         return len(loaded)

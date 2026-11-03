@@ -81,14 +81,14 @@ def match_concepts(q, glossary=None):
 def expand_query(q, glossary=None, aliases=None, draft_glossary=None):
     """BM25 질의 확장(X3 용어 사전 + SI43 명부 별칭) — 벡터 질의는 바꾸지 않음(호출부가 원문 q를 따로 임베딩).
     {토큰: 가중치}, 적용 노트 목록.
-    SI43(XL008): 용어집에 없는 순수 명부(roster, stack.json client_aliases·CLIENT_ROSTER) 전용 별칭도 — 질문에
+    SI43(XL008): 용어집에 없는 순수 명부(roster — stack.json client_aliases·PG 마스터 client_roster) 전용 별칭도 — 질문에
     한쪽 표기가 나오면(SI43⑦ 조사 규칙 포함, _name_hit) 같은 고객의 다른 표기를 가중치 1.0으로(용어집 쪽은 위
     루프가 이미 처리, 겹치면 추가 토큰 없음 → 중복 note 없음) — ALIAS_EXPAND_MAX로 토큰 수 상한, 결정적 순서
     (길이 내림·이름 오름).
     SI43④ draft_glossary(기본 None → load_draft_glossary(), 즉 output/ 자동 draft CSV의 status=draft 행 — GLOSSARY_DIR/
-    domain_terms.csv가 아님, 독립 검토 BLOCK 1) — 사람 승인 없이 쌓인 새 이름 후보도 BM25에 weak(0.3)로만(승격
-    전엔 approved 취급 안 함 — match_clients·하드 필터에는 안 들어간다, _aliases()는 GLOSSARY_DIR approved
-    org_client만 봄)."""
+    마스터 domain_terms가 아님, 독립 검토 BLOCK 1) — 사람 승인 없이 쌓인 새 이름 후보도 BM25에 weak(0.3)로만(승격
+    전엔 approved 취급 안 함 — match_clients·하드 필터에는 안 들어간다, _aliases()는 마스터 domain_terms approved
+    org_client만 봄 — pl-38)."""
     terms = {t: 1.0 for t in tokens(q)}
     notes = []
     glossary = load_glossary() if glossary is None else glossary

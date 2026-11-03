@@ -282,11 +282,13 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 
 ```bash
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle output/demo/bundle --create-extension
-.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0003_search
+.venv/bin/python -m common.store.db.dbtool master load --schema demo   # 마스터 표(용어집·고객 명부)를 git CSV로 채움(pl-38)
+.venv/bin/python -m common.store.db.dbtool current --target all    # 기대: search 0003_search · applog 0001_applog · master 0001_master
 .venv/bin/python -m common.store.db.dbtool check --target all      # 기대: 차이 없음
 ```
 
-- 이 한 번으로 검색 테이블(`0001_search` → `0002_search` → `0003_search`)이 만들어진다.
+- 이 한 번으로 검색 테이블(`0001_search` → `0002_search` → `0003_search`)·로그 테이블(`applog`)·마스터 테이블(`demo_master` — `0001_master`)이 만들어진다.
+- **초기화 순서(pl-38):** `dbtool up`(search·applog·master) → `dbtool master load` → 파싱·구조화·적재. 구조화의 고객 판별과 검색이 마스터 표를 읽고, 서버는 표가 비었으면 시작하지 않는다. `resources/vocab/glossary/*.csv`를 고치면 `dbtool master load`를 다시 돌린다(`gold_version`에 새 마스터 해시가 붙음 — 자동 재처리는 없음).
 - `--bundle`은 벡터 차원을 `meta.json`에서 읽기 위해 준다. `--create-extension`은 새 PG일 때만 필요하다.
 - 결과는 파일이 아니라 DB 안에 남는다(테이블 + `<스키마>.alembic_version`).
 
@@ -320,6 +322,7 @@ SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
 .venv/bin/python -m pipeline.transform.structure.build_bundle "${SETS[@]}" \
     --parse-dir $O/parse --src $SRC --embed api --out $O/bundle
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle $O/bundle --create-extension
+.venv/bin/python -m common.store.db.dbtool master load --schema demo
 .venv/bin/python -m pipeline.load.pgvector_load "${SETS[@]}" load --bundle $O/bundle
 
 # ask·MCP는 --set을 받지 않으므로 오버레이 설정 파일(방법 C)로 같은 값을 넘긴다
