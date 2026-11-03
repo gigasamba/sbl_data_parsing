@@ -250,8 +250,8 @@ export PYTHONPATH=$PWD                                   # 명령은 저장소 �
 **① 테스트 문서 고르기 — `valid_env/object_storage`에서 몇 건을 한 폴더로 모음**
 
 ```bash
-mkdir -p output/demo/src && find valid_env/object_storage -type f ! -name '*.md' | head -10 | xargs -I{} cp {} output/demo/src/
-SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 모아 넘긴다
+for s in SFDC CRMS; do mkdir -p output/demo/src/$s; for d in $(ls -d valid_env/object_storage/$s/*/ | head -2); do cp -r "$d" output/demo/src/$s/; done; done
+SRC=output/demo/src     # 원천 하위 폴더(<원천>/<uuid>/<파일>) 그대로 — 파싱이 상대 키로 원천을 알아본다(F2)
 ```
 
 - 문서는 서버 버킷 모양 `valid_env/object_storage/<원천>/<uuid>/<파일>`에 있다 — `CRMS/`(어려운 사례 21건) · `SFDC/`(RFP 12건). 정답·목록 세트(`valid_env/eval_sets/`)는 10-30 지웠다(사용자 — e2-10: 남기는 평가 도구는 검색 확인 페이지와 답변 점검뿐). 문서마다 왜 있는지는 [valid_env/object_storage/test_doc_purpose.md](valid_env/object_storage/test_doc_purpose.md), 전체 구조는 [valid_env/README.md](valid_env/README.md).
@@ -260,17 +260,20 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 **② 파싱 — 문서 → 대표 결과**
 
 ```bash
-.venv/bin/python -m pipeline.cli parse --src $SRC
+cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본 — 파싱이 끝난 문서 기록(ParsingMeta)을 읽고 씀(valid_env는 쓰지 않게 사본)
+.venv/bin/python -m pipeline.cli --set RDB_SQLITE=output/demo/edw.sqlite parse --source $SRC --src output/demo/prepared
 ```
 
-- 처리: 중복 제거 → 쪽 방향 보정 → 엔진별 파싱 → 대표 결과
+- 처리: 가져오기 → 중복 제거 → 쪽 방향 보정(`--src` 폴더에 준비) → 엔진별 파싱 → 대표 결과. `--source`가 원본 폴더, `--src`는 준비된 파일이 놓이는 곳이다(`--src`만 주면 이미 준비된 폴더로 보고 가져오기·중복 제거를 건너뛴다).
+- `run_mode: prod`면 EDW(`AI.ParsingMeta`)를 못 읽을 때 종료 4로 멈춘다 — PC는 위처럼 `--set RDB_SQLITE=<사본>`을 준다(F3).
+- 돌 문서가 없으면 `[parse] 이번 실행 0건 …` 한 줄을 남기고 끝난다(종료 0).
 - 결과: `output/demo/parse/<엔진>/`(엔진별), `output/demo/parse/_rep/`(문서마다 하나 + `_DONE.json`)
 
 **③ 구조화·임베딩 — 대표 결과 → 번들**
 
 ```bash
 .venv/bin/python -m pipeline.transform.structure.build_bundle \
-  --parse-dir output/demo/parse --src $SRC --embed api --out output/demo/bundle
+  --parse-dir output/demo/parse --src output/demo/prepared --embed api --out output/demo/bundle
 ```
 
 - 결과: `output/demo/bundle/`(docs.jsonl · chunks.jsonl · vectors.npy · kg\_*.jsonl · meta.json)
@@ -317,9 +320,10 @@ O=$PWD/output/demo; SRC=$O/src     # ①과 같은 문서 폴더
 SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
       --set NO_PAID_CALLS=0 --set LLM_BUDGET_USD=0.10 --set LLM_MAX_CALLS=10 --set LLM_SPEND_FILE=$O/spend.json)
 
-.venv/bin/python -m pipeline.cli "${SETS[@]}" parse --src $SRC
+cp valid_env/edw/edw.sqlite $O/edw.sqlite
+.venv/bin/python -m pipeline.cli "${SETS[@]}" --set RDB_SQLITE=$O/edw.sqlite parse --source $SRC --src $O/prepared
 .venv/bin/python -m pipeline.transform.structure.build_bundle "${SETS[@]}" \
-    --parse-dir $O/parse --src $SRC --embed api --out $O/bundle
+    --parse-dir $O/parse --src $O/prepared --embed api --out $O/bundle
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle $O/bundle --create-extension
 .venv/bin/python -m common.store.db.dbtool master load --schema demo
 .venv/bin/python -m pipeline.load.pgvector_load "${SETS[@]}" load --bundle $O/bundle
