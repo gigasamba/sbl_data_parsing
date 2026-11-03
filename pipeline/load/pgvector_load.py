@@ -5,8 +5,9 @@ PostgreSQL은 Docker로(이미지 = dev_server_pgvector 브랜치의 pgvector/pg
 접속: PG_CONN_FILE=<KEY=VALUE 파일> 또는 환경변수 PG_HOST(127.0.0.1) · PG_PORT(5432) · PG_DB(rag) · PG_USER(rag) · PG_PASSWORD · PG_SCHEMA(ai)
 드라이버: psycopg 3(반입 휠 assets/wheels/psycopg*) — 비밀번호는 파일·환경변수에만.
 
-명령: check · deploy · load(묶음 → 한 트랜잭션, 같은 문서 건너뜀, --replace) — 검색은 modules/search/pgsearch.py
+명령: check · deploy · load(묶음 → 한 트랜잭션, 같은 문서 건너뜀, --replace) · faq-sync(pl-41) — 검색은 modules/search/pgsearch.py
 load는 더하고 고치기만 한다 — 이번 묶음에 없는 문서를 지우지 않는다(pl-13, 사용자 10-29: 원천에서 지운 문서·파싱 실패는 로컬 기록만).
+예외 faq-sync --reset(pl-41, 사용자 11-03): 새 FAQ가 올라오면 gold faq를 통째로 비우고 run_docs가 FAQ 전체를 다시 넣는다.
 S8a — deploy는 확인(vector 확장·남의 스키마·차원) 뒤 migrate(common.store.db.dbtool up --target search — Alembic 기준판)를 부른다.
 load는 판 기록을 먼저 본다(없으면 경고 뒤 계속, 끝보다 낮거나 모르는 판이면 종료 2).
 """
@@ -42,11 +43,11 @@ def _has_marker(db):
     return bool(db.q("SELECT 1 FROM information_schema.tables WHERE table_schema=%s AND table_name='alembic_version'", (db.schema,)))
 
 
-def _require_marked_schema(db):
-    """--replace는 우리가 만든 스키마(판 표가 있음)에서만(XS3) — 표식 없는 기존 스키마는 남의 것일 수 있어 거부."""
+def _require_marked_schema(db, what="--replace"):
+    """--replace·faq-sync --reset은 우리가 만든 스키마(판 표가 있음)에서만(XS3) — 표식 없는 기존 스키마는 남의 것일 수 있어 거부."""
     if not _has_marker(db):
         raise SystemExit(
-            f"--replace 거부: 스키마 {db.schema}에 우리 표식(판 표 alembic_version)이 없음 — "
+            f"{what} 거부: 스키마 {db.schema}에 우리 표식(판 표 alembic_version)이 없음 — "
             "남의 기존 스키마일 수 있음(deploy로 먼저 만들거나 다른 PG_SCHEMA 사용 · 판 기록 전 옛 우리 스키마면 migrate stamp)"
         )
 
@@ -271,11 +272,31 @@ def _drop_docs(cur, s, ids, dim):
     """원천 스키마 s에서 문서들을 지움(키워드 색인·문서 빈도 포함, chunk는 CASCADE) — 그 스키마의 BM25 통계도 다시 셈."""
     drop_terms(cur, s, ids)
     cur.execute(f"DELETE FROM {_tbl(s, 'doc')} WHERE doc_id = ANY(%s)", (ids,))
+    if dim is None:  # 통계 행이 없던 스키마(faq_sync) — 차원을 모르면 통계는 다음 적재가 씀
+        return
     cur.execute(
         f"""INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len, dim) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0), %s FROM {s}.chunk
                     ON CONFLICT (id) DO UPDATE SET n_chunks = EXCLUDED.n_chunks, avg_len = EXCLUDED.avg_len, dim = EXCLUDED.dim""",
         (dim,),
     )
+
+
+def faq_sync(db, reset):
+    """pl-41(사용자 11-03) — FAQ는 판을 잇지 않고 통째로 바꾼다. reset이면 gold faq 스키마의 문서·청크·키워드 색인을 한 트랜잭션에서
+    모두 지운다(새 FAQ가 올라온 실행 — 그 뒤 run_docs가 지금 FAQ 파일 전체를 다시 파싱·적재). 반환 = (지운 문서 수, 남은 gold faq file_path 목록).
+    검토 등급 A(gold 지우기)."""
+    sdb = src_dbs(db)["faq"]
+    if not reset:
+        return 0, sorted(r["file_path"] for r in sdb.q(f"SELECT file_path FROM {sdb.schema}.doc"))
+    _require_marked_schema(db, "faq-sync --reset")
+    dim = (sdb.q(f"SELECT dim FROM {sdb.schema}.corpus_stat WHERE id = 1") or [{"dim": None}])[0]["dim"]
+    cn = (sdb if getattr(db, "is_standin", False) else db).cn  # 대역은 원천마다 파일
+    with cn.transaction(), cn.cursor() as cur:
+        cur.execute(f"SELECT doc_id FROM {sdb.schema}.doc")  # 트랜잭션 안에서 — 그사이 들어온 FAQ도 지움
+        ids = [r[0] for r in cur.fetchall()]
+        if ids:
+            _drop_docs(cur, sdb.schema, ids, dim)
+    return len(ids), []
 
 
 def _max_doc_id(sdb):
@@ -429,9 +450,11 @@ def _mark_loaded(loaded, kept=(), version=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["check", "deploy", "load"])
+    ap.add_argument("cmd", choices=["check", "deploy", "load", "faq-sync"])
     ap.add_argument("--bundle", default="output/edw/bundle")
     ap.add_argument("--replace", action="store_true")
+    ap.add_argument("--reset", action="store_true", help="faq-sync — gold faq 문서·청크를 모두 지움(pl-41 — 새 FAQ가 올라온 실행)")
+    ap.add_argument("--out", default=None, help="faq-sync 결과 JSON 파일(지운 수·남은 gold faq file_path)")
     ap.add_argument("--rep-dir", default=None, help="대표 결과 폴더(_rep) — 분류 본문을 게시 .md와 같게(pl-33). 비우면 묶음 full_text")
     a = ap.parse_args(argv)
     db = pg_connect()
@@ -451,6 +474,17 @@ def main(argv=None):
             )
         )
         return
+    if a.cmd == "faq-sync" and not a.out:
+        ap.error("faq-sync는 --out이 필요함")
+    if a.cmd in ("load", "faq-sync") and not getattr(db, "is_standin", False):
+        # S8a(Q5) — 판 기록 없음은 경고 뒤 계속, 끝보다 낮거나 모르는 판은 거부(종료 2) · faq-sync도 모르는 판에서는 지우지 않음
+        from common.store.db import dbtool
+
+        dbtool.require_current(db.q, "search", db.schema)
+    if a.cmd == "faq-sync":
+        n, gold = faq_sync(db, a.reset)
+        Path(a.out).write_text(json.dumps({"faq_reset": n, "gold": gold}, ensure_ascii=False), encoding="utf-8")
+        return
     meta = json.loads((Path(a.bundle) / "meta.json").read_text(encoding="utf-8"))
     require_vectors(meta)  # pl-16 — 판 확인·배포·적재 전에
     if a.cmd == "deploy":
@@ -458,10 +492,6 @@ def main(argv=None):
             idx = deploy(db, meta["dim"])
         print(f"배포 완료: PostgreSQL 스키마 {db.schema} · vector({meta['dim']}) · {idx} 색인")
     elif a.cmd == "load":
-        if not getattr(db, "is_standin", False):  # S8a(Q5) — 판 기록 없음은 경고 뒤 계속, 끝보다 낮거나 모르는 판은 거부(종료 2)
-            from common.store.db import dbtool
-
-            dbtool.require_current(db.q, "search", db.schema)
         with SP.span("load.pgvector", "load", cpu=True) as sp:  # op-01 — 적재 전체 1행(표별 하위 span이 이 밑에)
             counts = load(db, a.bundle, a.replace, a.rep_dir)
             sp.add(**{k: v for k, v in counts.items() if k in ("docs", "chunks", "terms", "sec")})

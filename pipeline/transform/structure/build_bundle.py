@@ -541,7 +541,31 @@ def main(argv=None):
         with SP.span(
             "transform.structure", doc_id=doc, ext=Path(doc).suffix.lower(), cpu=False
         ) as sp:  # op-01 — 청킹+위치(bbox) 계산 1문서
-            for c in S.chunk_all({doc: text}, a.chunk, {doc: eng}):
+            rows = S.faq_rows(orig) if _src_sys == "FAQ" and orig else None
+            if _src_sys == "FAQ" and not orig:
+                print(f"[bundle] 경고: FAQ 원본이 없어 행 단위로 못 자름 — 일반 청킹: {doc}", flush=True)
+            for r in rows or []:  # pl-39 — FAQ 엑셀 1행 = 청크 1개(질문+답), 시트 이름 = faq_group
+                ct = f"Q: {r['question'] or ''}\nA: {r['answer'] or ''}"
+                chunks.append(
+                    {
+                        "doc": di,
+                        "seq": seq,
+                        "page": None,
+                        "line_start": r["row"],  # 엑셀 행 번호
+                        "line_end": r["row"],
+                        "char_start": None,
+                        "char_end": None,
+                        "bbox": None,
+                        "section": " / ".join(x for x in (r["group"], r["type"]) if x),
+                        "chunk_text": ct,
+                        "n_chars": len(ct),
+                        "n_terms": len(tokens(ct)),
+                        "source_system": _src_sys,
+                        "faq_group": r["group"],
+                    }
+                )
+                seq += 1
+            for c in [] if rows is not None else S.chunk_all({doc: text}, a.chunk, {doc: eng}):
                 m = c["meta"]
                 bbox = None
                 if raw.get("boxes"):

@@ -40,9 +40,12 @@
   - 분류(C7)·고객 연결은 하지 않는다. `created_at`은 FileStorageMap 등록 시각.
   - PC 예제: `valid_env/object_storage/FAQ/`(지금은 로컬에만 — 이 PR에는 넣지 않음).
   - 옮겨 올 참고 코드: GitHub `gigasamba/bio_data_parsing` 브랜치 `feature/qna-dataset-embedding`의 `_qna_rows.py`·`test_qna_rows.py`.
-- 파일: `pipeline/extract/`(행 단위 엑셀 처리), `pipeline/transform/structure/`(청크 메타), `mcp_server/services/search/`(필터).
+- 파일: `pipeline/transform/structure/{chunking,build_bundle}.py`(행 단위 엑셀 → 청크·`faq_group`), `pipeline/load/pgvector_load.py`·`mcp_server/services/search/search_svc.py`(이미 있던 적재·필터).
 - 선행: PR 3a(gold 칸) 뒤([pl-32](load-schema.md#pl-32)).
-- Status: todo — 0.2.0.
+- 결정(사용자 11-03): 행을 자르는 곳은 묶음 단계(`build_bundle` — code_fp s가 바뀜, 0.2.0 전체 재처리라 받아들임). 청크 본문은 `Q: <질문>` 줄 + `A: <답>` 줄, 절(section)은 `<시트> / <type>`(type·수정일은 본문에 넣지 않음). 빈 칸은 그 값만 비우고(null) 행은 남긴다(질문·답이 모두 빈 행은 건너뜀). 질문·답 머리글이 없는 시트는 건너뛰고 경고한다.
+- 한 것(11-03 `feature/faq-source`): `chunking.faq_rows`(openpyxl — 시트의 첫 비지 않은 행이 머리글, 별칭 `client question`/`question`) → `build_bundle`이 원천이 FAQ인 `.xlsx`·`.xlsm`을 행마다 청크로 만들고 `faq_group`(= 시트 이름)을 넣는다. `line_start`·`line_end` = 엑셀 행 번호, 쪽·문자 범위·bbox는 비움. 적재(`_load_src`)와 `search`의 `FAQ_group` 필터는 이미 있던 길을 그대로 쓴다. 엑셀이 아니거나, 못 열거나(암호·깨짐), 남는 행이 없거나, 원본이 그 서버에 없으면 일반 청킹(그때는 `faq_group`이 비어 필터에 안 걸림 — 경고를 찍음). 시험 `tests/server/pipeline/test_faq_rows.py`.
+- 하지 않은 것: 머리글은 시트의 첫 비지 않은 행만 보고 영어 이름만 안다(제목 줄·한글 머리글 FAQ가 오면 넓힘). `last modified date`는 gold에 칸이 없어 읽지 않는다(필요하면 faq.chunk 칸 추가 — DB 스키마 등급 A). 다시 올렸을 때 교체는 [pl-41](load.md#pl-41).
+- Status: done (11-03 `feature/faq-source`)
 
 ## 코드와 다른 점 · 지울 코드
 

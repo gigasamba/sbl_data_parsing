@@ -26,7 +26,7 @@
 | 회전은 기본으로 끈다(`extract.prepare.rotate: false`) — 꺼지면 회전용 OCR을 전혀 하지 않고 그대로 놓는다 | 사용자 11-02. 옛 기본은 켬(이미지·스캔 PDF 쪽마다 OCR 점수 2~4번) | done | [pl-02](prd/extract.md#pl-02) |
 | DRM·암호 파일 감지 — 감지해서 표시만 | 복호화는 흐름 안에서 하지 않고 수동 명령(`python -m pipeline.extract.secure_docs decrypt`)으로 — 요건과 다르게 동작(앵커 표) | done | [pl-02](prd/extract.md#pl-02) |
 | 압축 파일은 지원하지 않는다고 표시 | — | done | [pl-02](prd/extract.md#pl-02) |
-| FAQ 원천 — 질의응답 엑셀을 행 단위로(시트 = FAQ 묶음, 행 하나 = 청크 하나). `FAQ/<uuid>/<파일>`을 FileStorageMap `source_system='FAQ'`로 등록 | 질의응답을 문서 통째가 아니라 질문 하나 단위로 찾는다. 0.2.0 | todo | [pl-39](prd/extract.md#pl-39) |
+| FAQ 원천 — 질의응답 엑셀을 행 단위로(시트 = FAQ 묶음, 행 하나 = 청크 하나). `FAQ/<uuid>/<파일>`을 FileStorageMap `source_system='FAQ'`로 등록 | 질의응답을 문서 통째가 아니라 질문 하나 단위로 찾는다. 0.2.0 | done | [pl-39](prd/extract.md#pl-39) |
 
 ## 변환 (transform) — 파싱·대표 결과 고르기·그림·구조화
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
@@ -82,7 +82,7 @@
 | DRM(`skipped_drm`)·실패(`failed`) 문서는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만. 업로드 대상 상태는 `load.publish.upload_statuses`(기본 ok·partial) | 깨진 결과가 다른 팀에 넘어가지 않게 | done | [pl-09](prd/load.md#pl-09) |
 | 게시 버킷이 원천 원본 버킷과 같으면 게시를 거부한다 | 원본 덮어쓰기를 막는다. 단, `run_docs`가 이 검사를 끈다(`PM_BUCKET_SKIP_OVERLAP_CHECK=1`) — 확인 필요 | done | [pl-09](prd/load.md#pl-09) |
 | 게시는 늘 하고 게시 대상(버킷·접두)은 필수 — `local`·`dev`는 로컬 대역이나 실제 접속, `prd`는 실제 접속만 | `run_docs`는 문서마다 늘 게시하고 버킷·접두가 없으면 시작을 거부한다 | done | [pl-26](prd/load.md#pl-26) |
-| FAQ 파일을 다시 올리면 그 FAQ 문서의 청크를 통째로 지우고 다시 적재(청크 0개가 된 옛 `doc` 행도 지움) | pl-13 "지우지 않음"의 FAQ 예외(등급 A). 10-31에 행 단위 비교 → 통째 교체로 바뀜 | todo | [pl-41](prd/load.md#pl-41) |
+| FAQ를 다시 올리면 gold faq의 문서·청크를 모두 지우고 지금 FAQ 파일 전체를 다시 적재(판을 잇지 않음) | pl-13 "지우지 않음"의 FAQ 예외(등급 A). 11-03 사용자 — 판 잇기 없이 전체 교체 | done | [pl-41](prd/load.md#pl-41) |
 | ~~수동 갱신 명령 2개(분류만 / EDW 메타만)~~ | `load --replace`나 다시 실행으로 대신(사용자 10-31) | dropped | [pl-40](prd/load.md#pl-40) |
 | 정형 DB `struct` 스키마(마스터·문서 대장·표·칸)를 코드에서 모두 없앤다. 엔진 구성은 파일만 | 쓰이지 않았다(서버 `doc_registry` 0행). 서버에 남은 표는 DB 담당자가 정리 | done | [pl-08](prd/load.md#pl-08) |
 | 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·원천 삭제 처리를 모두 지운다. 서버는 PG가 없으면 로컬 대체 DB로 바꿔 타지 않고 멈춘다 | 빼야 할 문서는 원천에서 지우거나 사람이 SQL로. 늘 꺼져 있던 source.json 게시 가드는 11-02에 지움(알려진 실패 0) | done | [pl-12](prd/load.md#pl-12) |
