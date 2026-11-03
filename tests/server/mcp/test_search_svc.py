@@ -359,6 +359,8 @@ def _selftest_contract():
         ({"source_system": "LAS", "attrs": {"contract_id": "M-1", "doc_class": "MSA"}}, ["l1.txt"], 1),  # doc_class도 attrs 키
         ({"source_system": "CRMS", "attrs": {"division": "XX"}}, [], 0),
         ({"source_system": "SFDC", "attrs": {}}, ["s1.txt", "s2.txt"], 2),  # 빈 attrs = 거르기 없음
+        ({"source_system": "SFDC", "attrs": {"sf_op_id": " 006A  "}, "doc_class": " RFP "}, ["s1.txt"], 1),  # 앞뒤 공백 뺌(적재 값과 같게)
+        ({"source_system": "SFDC", "attrs": {"sf_op_id": ["  ", "006B "]}}, ["s2.txt"], 1),  # 공백만 = 빈 값
     ]
     try:
         assert M.do_search("") == {"error": M.NO_QUESTION} and M.do_search("  ", source_system="SFDC") == {"error": M.NO_QUESTION}

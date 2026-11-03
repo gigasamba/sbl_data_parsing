@@ -3,7 +3,8 @@
 (NULL은 넣지 않음 — jsonb_strip_nulls, 날짜는 'YYYY-MM-DD' 글자) 그 칸을 지운다. 뷰 v_chunk_source는 옛 칸 대신 `attrs`를 낸다.
 0.2.0은 새 PG_SCHEMA·전체 다시 적재지만 올리기는 값을 잃지 않는다. 되돌리기는 attrs에서 옛 칸을 되살리고(형식 그대로) attrs·색인을 지운다.
 되돌리기는 최선만(best-effort): 되살린 칸은 표 끝에 붙어 칸 순서가 0004와 다르고(이름으로 읽으면 같음), 옛 칸에 없던 attrs 키는 버려지며,
-DATE 칸은 'YYYY-MM-DD' 꼴 글자만 날짜로 바꾸고 그 밖은 NULL(새 사슬이 날짜 키에 글자를 넣었어도 되돌리기가 멈추지 않게 — C-89).
+DATE 칸은 실제 날짜인 'YYYY-MM-DD' 글자만 날짜로 바꾸고 그 밖(꼴이 틀림·2024-99-99·2024-02-30)은 NULL(새 사슬이 날짜 키에 글자를 넣었어도
+되돌리기가 멈추지 않게 — plpgsql 없이 CASE 두 겹, _back · C-89).
 칸·뷰는 common/store/db/models/search_tables.py와 같은 글자로 굳혀 둔다(한 번 배포한 판은 고치지 않음 — 시험이 대조)."""
 
 from alembic import context, op
@@ -74,9 +75,15 @@ def upgrade():
 
 
 def _back(n, t):
-    """attrs 키 → 옛 칸 값. DATE는 꼴이 맞는 글자만(안전한 형 바꾸기 — 그 밖은 NULL)."""
+    """attrs 키 → 옛 칸 값. DATE는 실제 날짜만(그 밖은 NULL — 오류로 멈추지 않음): 바깥 CASE가 꼴(해 1000~9999·달 01~12·날 01~31)을
+    걸러야 안쪽이 돌고(CASE는 앞 조건이 참일 때만 THEN을 셈), 안쪽은 그 달의 마지막 날(make_date(해, 달, 1) + 1달 - 1일 — 윤년 포함)과
+    날을 견줌 — 2024-99-99·2024-02-30·2023-02-29는 NULL, 2024-02-29는 날짜."""
     v = f"(attrs->>'{n}')"
-    return f"CASE WHEN {v} ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$' THEN {v}::DATE END" if t == "DATE" else v
+    if t != "DATE":
+        return v
+    shape = "'^[1-9][0-9]{3}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'"
+    last = f"extract(day FROM make_date(substr({v}, 1, 4)::int, substr({v}, 6, 2)::int, 1) + interval '1 month' - interval '1 day')"
+    return f"CASE WHEN {v} ~ {shape} THEN CASE WHEN substr({v}, 9, 2)::int <= {last} THEN {v}::DATE END END"
 
 
 def downgrade():

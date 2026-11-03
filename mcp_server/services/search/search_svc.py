@@ -50,8 +50,8 @@ def _log(question, evidence, ms):
 
 
 def _vals(v):
-    """거르기 값 → 목록(문자열 하나 또는 목록, 빈 값 뺌)."""
-    return [str(x) for x in (v if isinstance(v, list | tuple) else [v]) if x not in (None, "")]
+    """거르기 값 → 목록(문자열 하나 또는 목록, 앞뒤 공백 뺌 — 적재 값과 같게(edw_meta._text), 빈 값 뺌)."""
+    return [s for x in (v if isinstance(v, list | tuple) else [v]) if x is not None and (s := str(x).strip())]
 
 
 def _when(v, upper):
