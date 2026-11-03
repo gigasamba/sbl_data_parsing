@@ -11,16 +11,10 @@
 - 무엇: `tests/server/`(이미지 반입 관문, `pipeline.cli selftest`가 `tests/runner.py`로 실행), `tests/general/`(PC 전용: PG, Docker, 느린 것). 알려진 실패는 목록에 두고, XPASS면 지우라고 경고.
 - 파일: `tests/runner.py`, `tests/conftest.py`, `deploy/release/known_fail.txt`.
 - 기준선(CLAUDE.md §4·§6-3에서 옮김, 10-30):
-  - (11-03 `feature/pl38-master` — 마스터 표 pl-38 + 허브 A~D, develop `20275a0` 위) `selftest` **95개 모두 통과** · `pytest tests/` **147 passed · 3 skipped** · FINGERPRINT `18142592accca442` · p0 `3140f2862dd5` · p1 `31410c2e064b` · r `2571b9cef18f` · s `48506182409f`(엔진 지문 13개는 그대로 — 핸드오프 `terms.py`가 바뀜).
-  - (11-03 `feature/one-list` — develop `479f7cc`(#134·#135) 합친 뒤, Windows PC·PG 없음) `selftest` **96개 모두 통과** · `pytest tests/` **148 passed · 3 skipped** · FINGERPRINT `18142592accca442` · p0 `192776ff62fa` · p1 `a71fa6d2f88b` · r `2fe85b6d2686` · s `5f8b5333f713`(develop 대비 p1만 다름 — 확장자 묶음을 한 곳에서 읽음 — 결과는 같음, p1만 0.2.0 재처리에 포함).
-  - (11-03 `feature/mcp-limits` — develop `8c4e078` 위, Windows PC·PG 없음) `selftest` **92개 모두 통과** · `pytest tests/` **141 passed · 3 skipped** · FINGERPRINT `543ade95fde0fcae`(그대로) · p0 `fbafe72ef838` · p1 `263e49aebc8e` · r `b6869a58ef9c` · s `eda833f70fb9`(공용 `settings.py`·`layout.py`·`pipeline/config.py`가 바뀜 — 0.2.0 재처리에 포함) · MCP tools/list 11894바이트·SHA-256 `80ab2ace…`(전 11886·`7d24d867…` — 사용자 11-03 도구 상한, 등급 A).
-  - (11-03 `feature/fp-perf` — 0.2.0 지문 배치 후속 pl-49, develop `e5ea409` 위) `selftest` **92개 모두 통과** · `pytest tests/` **143 passed · 3 skipped** · FINGERPRINT `dbdecec04862c89f` · p0 `f1b80a4d6557` · p1 `a12b05d307c5` · r `37485f60bd70` · s `0d9f494ffe9d`(엔진 지문 13개는 그대로 — 엔진 파일 안 건드림).
-  - (11-03 `feature/pl46-fp-batch` — 0.2.0 지문 배치, develop `e3c803c`(#104·#102·#87) 위) `selftest` **91개 모두 통과** · `pytest tests/` **140 passed · 3 skipped** · FINGERPRINT `543ade95fde0fcae` · p0 `39f4dc7e1231` · p1 `2e1e9dd3814a` · r `3ac22cd1c74e` · s `5eb430cc1cff`(층 a 지움).
-  - (11-02 `feature/publish-guard` — 사용자 11-02 known_fail 0) `selftest` **79개 모두 통과**(`selftest_gate.sh` → `[판정] 통과 — FAIL 0`, 알려진 실패 목록 빔 — `test_publish_guard`를 source.json 게시 가드와 함께 지움) · `pytest tests/` **126 passed · 1 skipped**(develop e6a625f를 합친 뒤 · xfail 0 — 일반 테스트 알려진 실패는 `tests/conftest.py` `GENERAL_KNOWN_FAIL`) · 핑거프린트 `FINGERPRINT` `2f1da6a1567d24a8` · a `e3b0c44298fc` · p0 `1b137bdd8de2` · p1 `3e673ee31e56` · r `1f1138777df2` · s `8e2c3b5c8907`.
-  - (11-03 `feature/logging` — develop `28ad892`을 합친 상태, Windows PC·PG 없음) `selftest` **90개 모두 통과**(`selftest_gate.sh` → `[판정] 통과 — FAIL 0`) · `pytest tests/` **140 passed · 3 skipped**(PG 필요 사례) · 핑거프린트 `FINGERPRINT 2f1da6a1567d24a8`(그대로) · a `e3b0c44298fc` · p0 `44417554ef91` · p1 `7a02ff0b3fc5` · r `e8a8fed0de61` · s `028e8415cd6e`(로깅 공용 파일·적재 span 때문에 develop과 다름) · MCP tools/list 11886바이트·SHA-256 `7d24d867…`(develop과 같음).
+  - 지금(11-04, develop `191666d`, Windows PC·PG 없음): `selftest` **99개 모두 통과** · 알려진 실패 0(`deploy/release/known_fail.txt`·`tests/conftest.py` `GENERAL_KNOWN_FAIL` 모두 빔) · FINGERPRINT `18142592accca442` · p0 `e99101f19627` · p1 `9e2dcfd20f1e` · r `cd05c8301501` · s `179ef4cb0a4d`. `pytest tests/` 개수는 이번에 다시 재지 않았다 — 다음에 PC에서 잴 때 이 줄에 적는다.
+  - 지난 기준선(0.1.0 반입 판정·11-02~11-03 브랜치별 값)은 [history/refactor_c_items.md](../history/refactor_c_items.md) "PRD에서 옮긴 옛 기록".
   - 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다(CLAUDE.md §4). 0.1.0 때 값과 바뀐 과정은 [history/deploy_0_1_0.md](../history/deploy_0_1_0.md).
   - PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕 설정(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `pipeline/cli.py`의 `_PC_SETTINGS_CASES`에 넣는다(지금은 비어 있음).
-  - 0.1.0 반입 판정(10-30, develop `0ef807f` 코드를 실행 이미지에 붙여 실행): `data-pipeline-runtime:0.1.0` **75개 중 74개 통과**(SKIP 19, 알려진 실패 1) · `mcp-server-runtime:0.1.0` **47개 모두 통과** · 의존성 지문 `f0fcc30bd067bc2f` 일치.
 - Status: done
 
 <a id="e2-08"></a>
@@ -39,15 +33,15 @@
 
 <a id="e2-11"></a>
 ## e2-11 · PC 일반 시험의 알려진 실패
-- 이유: 일반 시험 7개가 리팩토링 전부터 실패한다(C-54 ①, C-58): 3개는 공용 개발 PG를 읽음(임시 SQLite·스키마를 쓸 것), 2개는 없는 패키지·모듈이 필요(건너뜀 표시 또는 고침), 1개는 EDW 필요, 1개는 `test_structured`의 `find_table_cells` 단언.
+- 이유: 일반 시험 7개가 리팩토링 전부터 실패한다([C-54](../history/refactor_c_items.md) ①, C-58): 3개는 공용 개발 PG를 읽음(임시 SQLite·스키마를 쓸 것), 2개는 없는 패키지·모듈이 필요(건너뜀 표시 또는 고침), 1개는 EDW 필요, 1개는 `test_structured`의 `find_table_cells` 단언.
 - 파일: `tests/conftest.py`(`GENERAL_KNOWN_FAIL`), `tests/general/`.
-- 진행 10-29(`feature/test-cleanup`): 공용 개발 PG 실패 3개를 고쳤다 — PC 시험 자식 프로세스가 더는 개발 루트 `settings.yaml`을 읽지 않음(`pipeline/cli.py` `case_env`가 시험 전용 바탕 `run_env: local`을 줌). `test_structured`, `test_structdb`, `test_aggregate`를 목록에서 뺐다. 남음: `test_kg_external`, `test_run_combo`, `test_edwdb`, `test_pub_registry`(일부러 실 PG, C-54 ①).
+- 진행 10-29(`feature/test-cleanup`): 공용 개발 PG 실패 3개를 고쳤다 — PC 시험 자식 프로세스가 더는 개발 루트 `settings.yaml`을 읽지 않음(`pipeline/cli.py` `case_env`가 시험 전용 바탕 `run_env: local`을 줌). `test_structured`, `test_structdb`, `test_aggregate`를 목록에서 뺐다. 남음: `test_kg_external`, `test_run_combo`, `test_edwdb`, `test_pub_registry`(일부러 실 PG, [C-54](../history/refactor_c_items.md) ①).
 - 결정(사용자 10-30 PRD grill): S4 — 이미 지운 모듈의 시험(`test_kg_external`, `test_edwdb`)은 목록과 함께 지운다. `test_run_combo`는 C7(e2-10, 평가 도구 둘만)에 따라 도구와 함께 지운다.
 - Status: done — 남은 알려진 실패 0(`tests/conftest.py` `GENERAL_KNOWN_FAIL = {}`, `deploy/release/known_fail.txt` 빔).
 
 <a id="e2-15"></a>
 ## e2-15 · 에이전트 시험 패키지 경로가 상류를 가리킴
-- 이유: `resolve_agent_dir`가 마지막에 `dev_tools/unit_test/fixtures/`(이 저장소에 없음)도 보고, `test_paths`가 그 경로를 단언한다.
+- 이유: `resolve_agent_dir`가 폴더가 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`(`triple_extract` 지움)·`dev_tools/unit_test/fixtures`)도 본다(늘 못 찾음). `test_paths`가 그 경로를 단언한다.
 - 파일: `common/core/paths.py`(모든 레이어 의존 → code_fp), `tests/server/common/test_paths.py`.
 - Status: todo — 죽은 갈래 지우기. `paths.py`를 고치면 레이어 지문이 모두 바뀌므로 다음 지문 배치에서(사용자 10-30 PRD grill C1).
 
@@ -77,7 +71,7 @@
 ## e2-09 · PwC_Structure `valid_env`의 PC 시험 자료
 - 이유: PwC는 시험 자료를 서버처럼 배치한다 — 문서는 `object_storage/<시스템>/<uuid>/<파일>`, 정답·실행 목록은 `eval_sets/`, 합성 EDW sqlite는 `edw/`. 이 저장소에는 EDW 대역이 없었다.
 - 무엇(10-29): `valid_env/unstructured/` 삭제(파일 781개, 40 MB). PwC HEAD에서 `git archive`로 `edw/`(sql + sqlite), `eval_sets/`, `object_storage/{CRMS,SFDC}` + `test_doc_purpose.md`를 가져옴(문서 33건, `object_keys.csv`와 sha256 일치). 서버 시험 셋이 읽어서 `unstructured/synth-meta-rdb/meta/`는 `edw/meta_rdb/`로 옮김.
-- 파일: `valid_env/README.md`, `.gitattributes`, `tests/server/mcp/test_internal_docs.py`, `tests/server/mcp/test_search_svc.py`, `tests/server/pipeline/test_source.py`, README §4-4.
+- 파일: `valid_env/README.md`, `.gitattributes`, `tests/server/mcp/test_search_svc.py`, `tests/server/pipeline/test_source.py`, README §4-4.
 - 서버 배포 테스트는 데이터를 임시 폴더에 만든다.
 - Status: done
 
@@ -90,7 +84,7 @@
 <a id="e2-04"></a>
 ## e2-04 · 검색 평가
 - 이유: 찾기를 바꿔도 적중률이 떨어지면 안 된다.
-- 평가 도구는 [e2-10](#e2-10)에 따라 지웠다 — 비교는 필요할 때 다시 만든다. 남은 스모크 `mcp_server/cli/mcp_smoke.py` — `--source <원천>` 필수(search가 원천 하나를 요구)이고 근거 칸은 `EVIDENCE_KEYS` 12칸을 본다.
+- 평가 도구는 [e2-10](#e2-10)에 따라 지웠다 — 비교는 필요할 때 다시 만든다. 남은 스모크 `mcp_server/cli/mcp_smoke.py` — `--source <원천>` 필수(search가 원천 하나를 요구)이고 근거 칸은 `EVIDENCE_KEYS` 13칸을 본다.
 - Status: done
 
 <a id="e2-05"></a>
@@ -147,7 +141,7 @@
 - 이유: 설정 약 50개가 PC 시험·실험에만 있다(`common.dev.*`, `pipeline.dev.*`, `pipeline.eval.*`, `mcp.dev.*`, `runtime.exp_*`, `graphiti.*`).
 - 파일: `validation/e2e/`, `pipeline/eval/`, `mcp_server/cli/`, `common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`.
 - 결정(사용자 10-30 grill): `validation/search_ui`(검색 점검 페이지)와 `valid_env/answer_test`(답변 점검)**만** 남긴다. 스택 비교, 자동 질문 만들기, 지운 묶음용 채점기(예: `chart_values_score.py`)와 그 설정은 지운다.
-- Status: done (11-01, `feature/scope-cut-pipeline`) — 남김: `validation/search_ui`, `valid_env/answer_test`, `validation/e2e/answer_gen`, `mcp_server/cli/mcp_smoke.py`, `check_env`의 `GOLD_DIR` 점검.
+- Status: done (11-01, `feature/scope-cut-pipeline`) — 남김: `validation/search_ui`, `valid_env/answer_test`, `validation/e2e/answer_gen`, `mcp_server/cli/mcp_smoke.py`, 점검기 `common/check/checker.py`의 `GOLD_DIR` 점검.
 
 <a id="e2-17"></a>
 ## e2-17 · 10-29 감사에서 찾은 안 쓰는 함수 지우기
@@ -173,7 +167,7 @@
 |---|---|---|---|
 | `query_edw` 값을 인용한 답이 인용 점검 통과 | 검증 실패로 기록 | `valid_env/answer_test/rag_qa/` | e2-12 |
 | PC Docker 스모크가 검색까지 감 | retriever에서 멈춤(mc-10 — 10-30 고침, 다시 돌려 확인 필요) | `valid_env/docker/` | e2-13 |
-| 에이전트 지시서 폴더는 저장소 안에서만 찾음 | 없는 `dev_tools/unit_test/fixtures/`도 봄(죽은 갈래 — 시험이 단언) | `common/core/paths.py` | e2-15 |
+| 에이전트 지시서 폴더는 저장소 안에서만 찾음 | 폴더가 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`(`triple_extract` 지움)·`dev_tools/unit_test/fixtures`)도 봄(죽은 갈래 — 시험이 단언) | `common/core/paths.py` | e2-15 |
 
 ### 요건 없는 코드 — 남길지 지울지([e2-10](#e2-10)과 함께 결정, [e2-18](#e2-18))
 - (없음)

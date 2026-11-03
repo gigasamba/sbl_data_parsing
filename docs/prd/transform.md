@@ -8,9 +8,9 @@
 <a id="pl-03"></a>
 ## pl-03 · 엔진 스택 파싱
 - 이유: 모든 형식을 잘 다루는 파서 하나는 없다.
-- 무엇: 파일 형식마다 스택의 모든 엔진이 돈다(대체 사슬이 아님). 문서마다 병렬([pl-22](#pl-22)). 엔진마다 격리. 엔진 스택은 서버·PC 모두 파일 `resources/config/pipeline_stack.json`이다(사용자 11-01 — [load.md#pl-08](load.md#pl-08)). 형식: pdf(글자/이미지), doc(x), ppt(x), xls(x/m), hwpx, txt, html/htm, mht, eml, msg, png, jpg. 미지원: 옛 `.hwp`, zip.
+- 무엇: 파일 형식마다 스택의 모든 엔진이 돈다(대체 사슬이 아님). 문서마다 병렬([pl-22](#pl-22)). 엔진마다 격리. 엔진 스택은 서버·PC 모두 파일 `resources/config/pipeline_stack.json`이다(사용자 11-01 — [load.md#pl-08](load.md#pl-08)). 형식은 구성 파일의 `parse` 키가 정한다 — pdf(글자/이미지), doc(x), ppt(x), xls(x/m), hwpx, txt, html/htm, mht, eml, msg, png, jpg와 [pl-42](#pl-42)·[pl-45](#pl-45)에서 더한 형식. 미지원: 옛 `.hwp`(pl-45 남은 것), zip.
 - 파일: `pipeline/extract/run_all.py`, `pipeline/extract/engines/`(엔진 핑거프린트 — 바꾸려면 사람 검토), `resources/config/pipeline_stack.json`, `docs/architecture/pipeline_stack.md`.
-- 결정(사용자 10-30): 엔진 범위는 `stack` 하나(형식당 2개) — 형식별 엔진은 `resources/config/pipeline_stack.json`에 명시한다. 비교 실험은 stack json을 고쳐서 한다.
+- 결정(사용자 10-30): 엔진 범위는 `stack` 하나(형식당 최대 2개 — 이미지 형식·일부 형식은 1개) — 형식별 엔진은 `resources/config/pipeline_stack.json`에 명시한다. 비교 실험은 stack json을 고쳐서 한다.
 - Status: done (11-01 `feature/pl03-stack-only`)
 
 <a id="pl-22"></a>
@@ -22,15 +22,15 @@
 - 글자 PDF 안 스캔 쪽: 더는 `.pdf_image` 엔진이 없다. represent가 그 쪽을 쪽 VLM으로 채운다(`vlm_page.page_text_pages`, 스캔 신호가 있는 쪽만, 병렬).
 - 이미지·스캔 문서: 쪽마다 VLM 한 번. 대표가 이미지·스캔 형식(`.pdf_image`, png, jpg — run_all과 같은 형식 키)에서 글이 비지 않은 VLM 엔진이면 represent는 쪽 VLM을 건너뛰고 쪽 전체 그림을 처리된 것으로 표시한다(그림 VLM 없음, `vlm_page`가 없어도). 쪽 VLM은 `PARSE_POST`에 `vlm_page`가 있을 때만, 문서당 한 번(실패한 쪽은 다시 부르지 않음).
 - VLM 엔진 자식의 `VLM_TIMEOUT` = min(`models.vlm.timeout`, `vlm_page_sec`).
-- 우선순위: 일괄 엔진 자식은 낮은 우선순위로 돈다(`pipeline.extract.low_priority` — nice +10 / Windows BELOW_NORMAL. 한 세션·autogroup 안에서만 효과, 컨테이너끼리는 cgroup CPU 가중치 — C-65 ⑥).
+- 우선순위: 일괄 엔진 자식은 낮은 우선순위로 돈다(`pipeline.extract.low_priority` — nice +10 / Windows BELOW_NORMAL. 한 세션·autogroup 안에서만 효과, 컨테이너끼리는 cgroup CPU 가중치 — [ops.md#rn-03](ops.md#rn-03)).
 - 파싱 서비스(`parse_document`)는 우선순위 낮추기를 끄고 자기 제한을 쓴다(`pipeline.service.parse_mcp.text_page_sec` 1, `vlm_page_sec` 60, `warmup_sec` 20 — 엔진 첫 기동). 작업 시간 초과면 프로세스 그룹 전체를 죽인다.
 - 알려진 손실: 'hidden_overlap' 쪽의 AD47 숫자 고치기(아래 "코드와 다른 점"). "처리됨"은 문서 단위라, 그 조건이 맞으면 VLM 엔진이 비워 둔 쪽은 쪽 VLM을 받지 않고, 섞인 `.pdf_image`의 글자 쪽에 들어 있는 그림은 그림 VLM을 받지 않는다.
 - 파일: `pipeline/extract/run_all.py`, `pipeline/stackcfg.py`, `pipeline/config.py`, `pipeline/cli.py`, `pipeline/mcp_parse_service.py`, `pipeline/transform/represent/represent.py`, `pipeline/transform/figures/vlm_page.py`, `deploy/host/scripts/run_docs.py`.
 - 시험: `tests/server/pipeline/test_run_all.py`(OCR 스위치, page_timeout, 옛 phase 시간 초과), `tests/server/pipeline/test_vlm_page.py`(`pick_pages`), `tests/general/pipeline/test_represent.py`(쪽 VLM 채우기).
 - 열린 것: 글자 엔진은 쪽으로 나누지 않는다(문서×엔진마다 자식 하나, 쪽 병렬은 VLM 엔진 안에서만 `VLM_CONCURRENCY`로).
-- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P7·P8): 실행 구성(D-2~14)은 pl-22·rn-01·rn-02·mc-08 결정대로, 워커 6은 서버 실측(C-65) 뒤 조정.
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P7·P8): 실행 구성(D-2~14)은 pl-22·rn-01·rn-02·mc-08 결정대로, 워커 6은 서버 실측([C-65](../history/refactor_c_items.md)) 뒤 조정.
 - 결정(사용자 10-30 PRD grill): S1 — done으로 닫는다. 서버 확인은 refactor.md C 항목, 후속(VLM 동시 수 손잡이)은 새 todo 행으로.
-- Status: done — `feature/r2-phase` 병합. 서버 확인은 refactor.md C-65·C-68, VLM 동시 수 손잡이는 [pl-43](#pl-43).
+- Status: done — `feature/r2-phase` 병합. 서버 확인은 refactor.md C-68, VLM 동시 수 손잡이는 [pl-43](#pl-43).
 
 <a id="pl-43"></a>
 ## pl-43 · VLM 동시 수 손잡이
@@ -44,7 +44,7 @@
 - 결정(사용자 10-30(-c5 전달)): `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.mhtml`을 지원 형식에 더하고 시험한다. `.hwpx`도 시험에 넣는다.
 - 확장자마다 `tests/server`에 파싱 시험 하나 — `valid_env`에 그 형식 파일이 없으므로 시험이 임시 폴더에 샘플을 만든다(CLAUDE.md §6-4).
 - 형식별 엔진은 `resources/config/pipeline_stack.json`에 명시([pl-03](#pl-03) — stack 하나). 스택 변경은 `resources/config/pipeline_stack.json`을 고쳐 오버레이 패치(서버·PC 같은 파일 — 사용자 11-01).
-- 한 것(10-31): `pipeline_stack.json`에 `.jpeg`·`.tif`·`.tiff`·`.bmp` = `rapidocr_ko`·`qwen_vlm`(`.jpg`와 같음), `.mhtml` = `mhtml`·`kreuzberg`(`.mht`와 같음). 엔진 코드·형식 판별 코드는 그대로(다섯 형식 모두 엔진 `FORMATS`와 represent·그림 목록에 이미 있음). 시험 `tests/server/pipeline/test_ext_formats.py` — 형식마다 임시 견본을 만들어 파싱(이미지는 VLM 호출만 가짜), 엔진 구성 목록·형식당 2개·고르는 엔진 확인.
+- 한 것(10-31): `pipeline_stack.json`에 `.jpeg`·`.tif`·`.tiff`·`.bmp` = `.jpg`와 같은 구성(지금 `qwen_vlm` 하나 — [transform-cleanup.md#pl-46](transform-cleanup.md#pl-46)), `.mhtml` = `mhtml`·`kreuzberg`(`.mht`와 같음). 엔진 코드·형식 판별 코드는 그대로(다섯 형식 모두 엔진 `FORMATS`와 represent·그림 목록에 이미 있음). 시험 `tests/server/pipeline/test_ext_formats.py` — 형식마다 임시 견본을 만들어 파싱(이미지는 VLM 호출만 가짜), 엔진 구성 목록·고르는 엔진 확인.
 - 서버: 따로 할 일 없음 — 서버도 같은 파일을 읽고 그 파일에 이미 pl-42 확장자가 있다(사용자 11-01, [load.md#pl-08](load.md#pl-08)).
 - 파일: `resources/config/pipeline_stack.json`, `tests/server/pipeline/test_ext_formats.py`, `docs/architecture/pipeline_stack.md` §3-1.
 - Status: done (10-31, feature/pl42-more-ext)
@@ -107,7 +107,7 @@
 - 무엇: 청크 나누기 structure(기본, 800자, 제목, 표는 통째) / fixed 512+64 / sentence / page, 큰 표는 25행씩. 요약(앞부분 발췌). 고객·계약은 교차 확인된 것만 남긴다. 사실 추출 `facts.py`는 `parse_document`가 돌려준다. 임베딩은 내부 `api`.
 - 파일: `pipeline/transform/structure/build_bundle.py`, `chunking.py`, `facts.py`, `draft_terms.py`, `common/ai/embed.py`.
 - 결정(사용자 11-03 — [load.md#pl-38](load.md#pl-38)): 고객 판별(`infer_clients`)은 구조화에 남는다(청크 머리의 고객이 임베딩 입력) — 고객 명부·용어 사전은 PG 마스터(`<PG_SCHEMA>_master`)에서 읽고, 읽은 마스터 해시를 묶음 `meta.json` `master_hash`로 남긴다(적재가 `gold_version` `<VERSION>+m<해시 8자>`로).
-- Status: done — 11-01(`feature/scope-cut-pipeline`). 그림 청크와 청크의 `image_ids`는 검색 근거가 읽는다.
+- Status: done — 11-01(`feature/scope-cut-pipeline`). 그림 설명은 그림 청크로 검색된다. 빈 그림의 `image_ids`는 묶음 청크에만 남고 적재·검색 근거에는 나오지 않는다(근거 칸 — [mcp.md#mc-16](mcp.md#mc-16)).
 
 <a id="pl-33"></a>
 ## pl-33 · 분류 단계 — silver 뒤, gold 앞
@@ -121,9 +121,9 @@
 1. 모델은 `llm.chat`(역할 llm — 예산 장부, CLAUDE.md §7)으로 부른다. 서버(dev부터)는 내부 GLM, PC는 외부 허용(`RUN_ENV=local`) 또는 시험의 가짜 LLM. effort는 설정 `common.models.llm.extra_body`(서버는 `{"reasoning_effort": "high"}`로 운영과 같게), 답 길이 상한 4096 토큰.
 2. 본문 근거 = 게시가 올리는 대표 결과 `.md`(`render_md` — silver와 같은 글)의 앞 8,000자. `run_docs`가 적재에 `--rep-dir <문서 폴더>/parse/_rep`를 넘긴다(없으면 묶음의 본문). 본문이 없으면 부르지 않고 실패.
 3. **SFDC 지시문**(`resources/prompts/pipeline/classify_sfdc/` — 운영 `SYSTEM_PROMPT` 글자 그대로, 공용 꼬리 없음 `common_tail: false`): 라벨 `RFI`·`RFP`·`RFI+RFP`·`Proposal`·`Other`, 회사 용어(견적 개체 → 제안서 쪽, 기회 개체 → RFP 쪽, 보낸/받은 채널 방향, 로그·계약 개체 → Other 쪽, 한·영 용어), 경계 규칙 6개(내부 입찰 평가 자료는 Other · 우리가 채운 RFI 질문서는 RFI · 견적 보조 파일은 제안 묶음일 때만 Proposal · `RFI+RFP`는 한 문서가 두 요청을 정말 함께 담을 때만 · 작성자는 파일 이름이 아니라 문서 안의 머리·표지로 · 고객 RFP에 답하는 우리 제안은 Proposal).
-4. **SFDC 문서 정보** = gold `<기준>_sfdc.doc`의 분류 힌트 칸(판 0003 — 사용자 11-02: 운영의 10-21 고정 파일 대신 적재 때 EDW 조인으로 채움, `pipeline/load/edw_meta.py` — 표·칸 이름은 `resources/config/edw_chain.yaml` `sfdc.hints`, 칸 뜻은 [db_schema §2](../architecture/db_schema.md)): 제목 `title`(`ContentVersion.Title`, 비면 원본 파일 이름) · 첫 User 아닌 연결 개체 `entity_type`·`entity_class`·`entity_id`(운영 analyze_clues 규칙 — 연결 없음 `unlinked`, 모두 User면 `user_only`, 접두 표 `resources/mappings/sfdc_prefix.json`, 모르는 접두는 `Unknown:<접두>`/other — 사용자 정의 개체 접두 확인은 refactor.md C-77) · 그 개체가 Task/Event면 `sent_received__c`·`subject`(120자) · 영업 기회 자체면 `stagename`·`real_rfp__c`·`rfp_received_start/end_date__c` · 원본 파일 이름 · 형식과 대표 엔진(대표 결과의 `format`·`engine` = ParsingMeta `file_format`·`rep_engine`) · 제목 키워드 묶음(분류 때 제목으로 계산 — `classify.fams`). 서버 EDW에 힌트 칸이 없으면 그 힌트만 빈다(경고 한 줄).
+4. **SFDC 문서 정보** = gold `<기준>_sfdc.doc.attrs`의 분류 힌트 키(판 0005 — [load-schema.md#pl-52](load-schema.md#pl-52) · 사용자 11-02: 운영의 10-21 고정 파일 대신 적재 때 EDW 조인으로 채움, `pipeline/load/edw_meta.py` — 표·칸 이름은 `resources/config/edw_chain.yaml` `sfdc.fields`, 키 뜻은 [db_schema §2](../architecture/db_schema.md)): 제목 `title`(`ContentVersion.Title`, 비면 원본 파일 이름) · 첫 User 아닌 연결 개체 `entity_type`·`entity_class`·`entity_id`(운영 analyze_clues 규칙 — 연결 없음 `unlinked`, 모두 User면 `user_only`, 접두 표 `resources/mappings/sfdc_prefix.json`, 모르는 접두는 `Unknown:<접두>`/other — 사용자 정의 개체 접두 확인은 refactor.md C-77) · 그 개체가 Task/Event면 `sent_received__c`·`subject`(120자) · 영업 기회 자체면 `stagename`·`real_rfp__c`·`rfp_received_start/end_date__c` · 원본 파일 이름 · 형식과 대표 엔진(대표 결과의 `format`·`engine` = ParsingMeta `file_format`·`rep_engine`) · 제목 키워드 묶음(분류 때 제목으로 계산 — `classify.fams`). 서버 EDW에 힌트 칸이 없으면 그 힌트만 빈다(경고 한 줄).
 5. **LAS 지시문**(`resources/prompts/pipeline/classify_las/` — 운영 `SYSTEM` 글자 그대로, PSA = Product Specific Agreement): 라벨 `MSA`·`PSA`·`QAG`·`LOI`·`Amendment`·`Assignment Letter`·`Other`, 규칙(기존 계약 변경은 모두 Amendment · 자료만 더하는 QAG 추가분은 QAG · 경개는 Assignment Letter · SoW·NDA/CDA·MTA/TTA·MOU·검토 메모·부속 서한·공급/제조·해지·전자서명 감사 기록·LOU는 Other), 확신도 기준(모두 맞음 0.90 이상·애매 0.80·부딪힘 0.60·메모 0.75).
-6. **LAS 근거**: 문서 정보(원본 파일 이름·형식, 품의 제목 = gold `<기준>_las.doc.approvalname`(`LAS.Contract.ApprovalName` 최신 판, 판 0003), 상대방 = `client_edw`(`PartnerCorpName`)) + 키워드 근거(운영 `extract_evidence` 그대로 — Signal ① 본문 앞 300자 자기 이름 ② 앞 2,000자의 계약 종류 전체 이름·경개·Other 종류 ③ 파일 이름 키워드(전체 이름·약어)·DR ④ 변경 키워드 · 두 종류 이상·변경·보고서·메모 경고) + 본문 8,000자. `pipeline/load/classify.py` `las_evidence`·`las_user`.
+6. **LAS 근거**: 문서 정보(원본 파일 이름·형식, 품의 제목 = gold `<기준>_las.doc.attrs` `approvalname`(`LAS.Contract.ApprovalName` 최신 판, 판 0005), 상대방 = `client_edw`(`PartnerCorpName`)) + 키워드 근거(운영 `extract_evidence` 그대로 — Signal ① 본문 앞 300자 자기 이름 ② 앞 2,000자의 계약 종류 전체 이름·경개·Other 종류 ③ 파일 이름 키워드(전체 이름·약어)·DR ④ 변경 키워드 · 두 종류 이상·변경·보고서·메모 경고) + 본문 8,000자. `pipeline/load/classify.py` `las_evidence`·`las_user`.
 7. 답은 운영과 같은 찾기로 읽는다 — 코드 울타리를 벗기고 `class`(SFDC는 `doc_class`도)가 있는 첫 JSON 객체. SFDC는 운영 별칭표(소문자·공백 뺌 — `RFP+RFI` → `RFI+RFP`), LAS는 앞뒤 공백만 정리한 글자가 집합 안이어야 한다. 집합 밖·참거짓·숫자면 실패. 확신도는 읽지 않는다(지시문의 확신도 줄은 운영 글자 그대로 두고 무시 — 사용자 11-02).
 8. **재시도 없음·수동 명령 없음**(사용자 11-02): 호출 안에서 다시 묻지 않는다. 분류 실패(모델 장애·예산 초과·집합 밖·본문 없음)는 **그 문서의 적재 실패**다 — gold에 넣지 않아 gold_version이 적히지 않고, 다음 정상 실행에서 수집이 다시 고른다(EDW ParsingMeta에 silver/gold 결과가 없는 문서가 대상 — 추출의 유일한 선택 규칙, [load-schema.md#pl-25](load-schema.md#pl-25)). 감사 한 줄.
 9. 같은 sha256은 라벨 하나: 묶음이 같은 sha256 문서를 하나만 남기므로(`build_bundle` — 다른 경로는 `aliases`) 한 번만 부른다. 파싱되지 않은 행(`not_parsed`)에는 라벨을 붙이지 않는다(gold에는 파싱된 문서만).
@@ -136,7 +136,7 @@
 - (시험은 합성 문서·가짜 LLM — 실제 회사 문서 아님.)
 
 ### 데이터·약속
-- 검색 DB(gold) `<기준>_sfdc.doc.doc_class`·`<기준>_las.doc.doc_class`(#86 — [load-schema.md#pl-28](load-schema.md#pl-28)) + 분류 힌트 칸(판 `0003_search` — sfdc 10칸·las `approvalname`, 검색 뷰에는 없음, 등급 A DB 스키마). PC 검색 대역(`output/pg_standin/<스키마>_sfdc|las.sqlite`)이 0003 전에 만든 것이면 힌트 칸이 없어 적재가 멈춘다 — 그 파일을 지우고 다시 만든다(대역은 `CREATE TABLE IF NOT EXISTS`만).
+- 검색 DB(gold) `<기준>_sfdc.doc.doc_class`·`<기준>_las.doc.doc_class`(#86 — [load-schema.md#pl-28](load-schema.md#pl-28)) + 분류 힌트는 `doc.attrs`의 키(판 `0005_search` — sfdc 10개·las `approvalname`, 근거 표시 없음 — 사슬 파일에 `evidence`가 없음, 등급 A DB 스키마).
 - 결정(사용자 11-02): 라벨 `doc_class`만 gold 원천별 `doc`에 둔다. 모델 글자·분류 시각·`low_conf` 칸은 어디에도 두지 않는다 — 판은 ParsingMeta `silver_version`·`gold_version`이 대신한다(되돌리기 열쇠 — [load-schema.md#pl-25](load-schema.md#pl-25)). 운영이 ParsingMeta에 쓰던 분류 네 칸(`doc_class`·`doc_class_low_conf`·`doc_class_at`·`doc_class_model`)은 0.2.0에 지운다(refactor.md C-76).
 - 감사 기록: `<묶음>/classify_audit.jsonl` — 문서마다 한 줄(시각·원본 키·원천·라벨·오류).
 - 지시문: `resources/prompts/pipeline/classify_sfdc/`·`classify_las/`(지시문 지문 — 바이트 그대로, LF). `output_schema`는 두지 않는다(어긋나면 자동으로 한 번 더 묻는 길이 있어서 — 재시도 없음).
@@ -148,7 +148,7 @@
 4. 라벨이 있으면 문서 행에 넣어 gold에 적재, 실패면 그 문서는 적재하지 않는다(규칙 8 — 다음 실행에 다시).
 
 ### QA
-- `tests/server/pipeline/test_classify.py`(가짜 LLM): 답 읽기 표(운영 별칭·울타리·`doc_class` 키·LAS 대소문자·집합 밖·참거짓·빈 답), 제목 키워드 묶음 표, LAS 키워드 근거(운영 글과 바이트 같음), 사용자 쪽 글(SFDC 힌트 줄·제목 없음 → 파일 이름·힌트 없음 · LAS 품의 제목·상대방 · 8,000자), 분류 표(부른 횟수 — 재시도 없음 · 실패 집합 · gold·묶음 라벨 안 덮음 · 본문 없음 · 대상 아닌 원천 · `-test` 표기), 적재가 gold 라벨을 넣고 실패 문서는 넣지 않으며 `--replace`에도 안 덮음, EDW 힌트 칸(unlinked·user_only·User + Task·영업 기회·모르는 접두·120자 · 힌트 칸이 없는 EDW — `tests/server/pipeline/test_edw_meta.py` `test_hints`, 실제 SQLite EDW). 힌트 조회 이름은 `resources/config/edw_chain.yaml` `sfdc.hints`·`las.hints`(#98 사슬 설정). EDW 대역 `valid_env/edw/sfdc.sql`이 갈래마다 문서를 둔다(LAS 대역 문서는 아직 없음).
+- `tests/server/pipeline/test_classify.py`(가짜 LLM): 답 읽기 표(운영 별칭·울타리·`doc_class` 키·LAS 대소문자·집합 밖·참거짓·빈 답), 제목 키워드 묶음 표, LAS 키워드 근거(운영 글과 바이트 같음), 사용자 쪽 글(SFDC 힌트 줄·제목 없음 → 파일 이름·힌트 없음 · LAS 품의 제목·상대방 · 8,000자), 분류 표(부른 횟수 — 재시도 없음 · 실패 집합 · gold·묶음 라벨 안 덮음 · 본문 없음 · 대상 아닌 원천 · `-test` 표기), 적재가 gold 라벨을 넣고 실패 문서는 넣지 않으며 `--replace`에도 안 덮음, EDW 힌트 칸(unlinked·user_only·User + Task·영업 기회·모르는 접두·120자 · 힌트 칸이 없는 EDW — `tests/server/pipeline/test_edw_meta.py` `test_hints`, 실제 SQLite EDW). 힌트 조회 이름은 `resources/config/edw_chain.yaml` `sfdc.fields`·`las.fields`(사슬 설정 — [load-schema.md#pl-52](load-schema.md#pl-52)). EDW 대역 `valid_env/edw/sfdc.sql`이 갈래마다 문서를 둔다(LAS 대역 문서는 아직 없음).
 - 운영과의 결과 비교는 [test.md#e2-20](test.md#e2-20) 분류 수용 보고서(개발 서버 정답 샘플과 일치율·혼동표).
 - Status: done — `feature/pl33-classify`(#102) 병합. 운영 결과 비교는 [test.md#e2-20](test.md#e2-20).
 

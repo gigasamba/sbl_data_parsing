@@ -1,4 +1,4 @@
-"""원문 도구 응답 모양·한도(MCP 계약 — 운영 05 §3, mc-17 11-01): list_doc_fulltext → get_doc_fulltext 두 단계.
+"""원문 도구 응답 모양·한도(MCP 계약 — 운영 05 §6, mc-17 11-01): list_doc_fulltext → get_doc_fulltext 두 단계.
 바꾸면 계약이 바뀐다(등급 A). 운영과 다른 점: documents[]에 rep_engine 없음(사용자 11-01 — 대표 엔진 칸 삭제와 맞춤).
 """
 

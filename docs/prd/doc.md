@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나 — 문서 배치와 릴리스 표시.
 do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 표준 — `agent-ops/docs/project-review.md#s_bio_data_parsing`).
 
-순서(주제별): 문서 정리 do-04·do-02·do-03·do-01 → 릴리스 op-04 → 이미지 op-06·op-07 → 서버 설치·업그레이드 op-10.
+순서(주제별): 문서 정리 do-04·do-02·do-03·do-01 → 릴리스 op-04 → 이미지 op-06·op-07·op-12 → 서버 설치·업그레이드 op-10·op-11.
 
 <a id="do-04"></a>
 ## do-04 · 문서 재구성 · `docs/history/` · 한국어
@@ -12,7 +12,7 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 1부(10-30): PRD를 카테고리로 — ID는 그대로, ID마다 한글 이름(`<a id>` + `## pl-24 · 이름`), `docs/PRD.md`와 `docs/prd/`를 카테고리 파일 6개(etl, parse, mcp, settings, test, doc)로 나누고 gaps.md는 각 파일 끝 "코드와 다른 점 · 지울 코드"로 흩음.
 - 2부(10-30, `feature/doc-cleanup-2`): CLAUDE.md는 규칙·하네스 명령만(기준선·핑거프린트 값 → [test.md#e2-02](test.md#e2-02), 옛 절 번호 → `docs/INDEX.md` Glossary, 지난 기록 → `docs/history/`). `docs/requirements/run_docs_req.md` → [ops.md#pl-10](ops.md#pl-10) 요약 + `docs/history/run_docs_req.md` 원문. `docs/operations/*` 압축(절 번호 유지 — 코드 주석이 가리킴). `refactor_plan.md`·run_docs 버그·속도 이력·patch-history·release §8–9 → `docs/history/`.
 - 결정(사용자 10-31 grill): 3부 카테고리 재편(etl·parse → extract·transform·load, settings·실행 관리 → ops — ID 그대로, 위치·링크만)은 열린 문서 브랜치(op-08, prd-grill-1031, gold-per-system)가 develop에 들어간 직후 한 PR로 한다. 새 행(op-08, pl-42·43·44)도 그때 배정한다. -3a의 pl-03은 그 뒤 rebase. CLAUDE.md §6-5 스모크 경로는 S5(10-30)로 이미 고침 — 확인 대기 아님.
-- Status: done — 1부 병합(PR #21) · 4부(PRD 표를 요건 한 줄씩) `feature/do04-prd-rows`(#90) 병합. 2부는 `feature/doc-cleanup-2`. 3부(카테고리 재편) 11-01 `feature/do04-reorg` — etl·parse·settings → extract·transform(+ transform-cleanup)·load(+ load-schema)·ops(+ ops-settings), ID 그대로. CLAUDE.md §6-5(`list-smoke10`)는 사용자 확인 대기로 그대로.
+- Status: done — 1부 병합(PR #21) · 4부(PRD 표를 요건 한 줄씩) `feature/do04-prd-rows`(#90) 병합. 2부는 `feature/doc-cleanup-2`. 3부(카테고리 재편) 11-01 `feature/do04-reorg` — etl·parse·settings → extract·transform(+ transform-cleanup)·load(+ load-schema)·ops(+ ops-settings), ID 그대로.
 
 <a id="do-02"></a>
 ## do-02 · `docs/INDEX.md`의 `## Glossary`
@@ -74,8 +74,8 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
 - 검토 반영(10-30): `ship_stage.sh` 저장 실패를 실패로(전에는 `if stage_one` 안이라 잘린 조각에 sha256을 만들고 성공으로 끝남) · 태그 = 코드 VERSION만(D-036) · 저장 기본 `/var/tmp/bake`(코드 폴더 밖) · 운영 서버 호스트 스크립트용으로 시험한 코드 폴더 묶음도 같이 저장(컨테이너엔 마운트 안 함).
 - 같이 고친 것(허브 10-30): `build_ship.sh` 코드 묶음 기본 위치 `output/ship/`(옛 `/var/tmp`는 Windows Git Bash에 없음) · `ship_stage.sh`가 실행 이미지(`pipeline-runtime`·`mcp-runtime`)와 `CODE_BUNDLE`(코드 묶음 + sha256)도 받음 · README §5-0 배포 단계 표(사용자 10-30).
 - 파일: `deploy/docker/Dockerfile.bake`, `deploy/release/{bake.sh,build_ship.sh,ship_stage.sh}`, `.gitattributes`, README §5-0, `docs/operations/release-and-patch.md` §1-1·§1-2, `docs/operations/server-guide.md` §0-1.
-- 결정(사용자 11-02 — 🔒 검토 등급 A, 비밀 처리): 운영(prd) 이미지에는 settings.yaml(비밀 포함)도 굽는다. 다루는 규칙: ① 구운 이미지 파일(저장한 `.tar`·조각 포함)은 비밀과 같다 — 운영 서버와 권한 있는 반입 경로에만 두고 공용 레지스트리·공유 폴더·메일·채팅에 올리지 않는다 ② 키를 바꿀 때마다 다시 굽고 옛 키가 든 이미지·조각은 지운다 ③ 굽고 나서 이미지 이력·`inspect`·시작 로그에 값이 보이지 않는지 본다 ④ 굽는 데 쓴 settings.yaml 사본은 지운다. todo: `bake.sh`·`Dockerfile.bake`에 settings.yaml 굽기(코드는 따로 — 사람 검토).
-- Status: done (10-30 `feature/bake-image`)
+- 결정(사용자 11-02 — 🔒 검토 등급 A, 비밀 처리): 운영(prd) 이미지에는 settings.yaml(비밀 포함)도 굽는다. 다루는 규칙: ① 구운 이미지 파일(저장한 `.tar`·조각 포함)은 비밀과 같다 — 운영 서버와 권한 있는 반입 경로에만 두고 공용 레지스트리·공유 폴더·메일·채팅에 올리지 않는다 ② 키를 바꿀 때마다 다시 굽고 옛 키가 든 이미지·조각은 지운다 ③ 굽고 나서 이미지 이력·`inspect`·시작 로그에 값이 보이지 않는지 본다 ④ 굽는 데 쓴 settings.yaml 사본은 지운다. 구현은 [op-12](#op-12).
+- Status: done (10-30 `feature/bake-image`) — settings.yaml 굽기는 [op-12](#op-12).
 
 <a id="op-10"></a>
 ## op-10 · 서버 설치·업그레이드 절차 — 길 하나, podman 기본, 0.2.0 업그레이드·되돌리기
@@ -104,6 +104,20 @@ do-01~03의 출처: COMPANY 거버넌스 프로젝트별 검토, 10-29(임시 �
   - 문서: README §5-0·§5-2·§5-3·§5-5(설치 길 하나 · `mkdir -p /srv/rag/code` · podman-compose 폐쇄망 설치 · `podman-restart` · 상주 트리거 재부팅 뒤 확인), server-guide·env-guide·release-and-patch는 링크, release-and-patch §5-7 0.2.0 올리기·되돌리기(이미지 안 migrate 표준 입력·출력 — PC에서 확인), refactor.md C-71.
   - 재부팅은 `podman-restart`, 그 뒤 확인 절차 · `NIGHTLY_PUBLISH`는 [pl-26](load.md#pl-26) 몫.
 - 결정(사용자 11-02): 일회성 작업 컨테이너를 지운다 — todo(정리 3a): compose 작업 서비스 `parse`·`index_a`·`index_b`, `trigger.sh`·`run_tool.sh`의 `compose run --rm`. `settings_env --image`는 PyYAML만 있는 호스트 python으로. 운영 작업·`dbtool`·`migrate`는 상주 `data-pipeline` 컨테이너에 `exec`로 돌린다. 빌드·반입 이미지 점검(`build_ship`·`bake`·`selftest_gate`의 `docker run --rm <새 이미지> selftest`)은 그대로.
-- 한 것(11-02 `feature/job-containers`): compose 작업 서비스 `parse`·`load`·`publish` 지움(`index_a`·`index_b`는 11-01에 이미 없음) — 상주 `data-pipeline-parse`·`data-pipeline-structure`만(11-03 하나로 — 아래). `trigger.sh parse|publish`·`run_tool.sh <도구>|migrate|show-stack|check`는 상주 컨테이너 안에서 `docker exec`(`image_vars.sh` `in_pipeline` — 안 떠 있으면 종료 2). `settings_env.sh`는 `deploy/host/scripts/host_env.py`(PyYAML만) + 설정 모델에서 만든 `host_keys.tsv`(`PYTHONPATH=. python deploy/release/hostkeys.py`, 시험 `tests/general/deploy/test_host_env.py`)로 — 이미지 안 export 길·`SETTINGS_IMAGE` 지움. 이미지 점검(`docker run --rm … selftest`)은 그대로. **todo(남은 것):** ① 옛 `run_tool.sh`가 붙이던 사람 정답 폴더(`GOLD_DIR` → `/data/gold`)는 상주 컨테이너에 없어 서버 `check_env`의 GOLD_DIR 이름 짝 점검이 건너뛰어진다 — compose에 선택 마운트로 할지 칸(`ops.pipeline_host.gold_dir`)을 지울지 결정. ② 설정 설명에 남은 지운 서비스 이름(`pipeline/config.py` `load_*`·`publish_*` 자원 칸, `common/config/settings.py` `IMAGE_PATHS.gold_mount` 주석)은 code_fp 파일이라 0.2.0 지문 배치([pl-46](transform-cleanup.md#pl-46))에서 고친다.
-- 결정·한 것(사용자 11-03 `feature/rundocs-flow`): 서버 상주 컨테이너는 일괄 `data-pipeline`(옛 `data-pipeline-parse`·`data-pipeline-structure`를 하나로) + `mcp-server`, 그리고 parse_document 전용 `data-pipeline-mcp`(같은 날 사용자 결정 — [rn-03](ops.md#rn-03)). pgvector·redis는 우리 것이 아님. `compose.pipeline.yml` 서비스 하나(문서 폴더 읽기 전용 + 결과 폴더), 자원은 옛 파싱 칸 `parse_cpus`·`parse_mem_limit`(비우면 5·24g — 옛 둘의 합), `run_docs.py`·`trigger.sh`·`run_tool.sh`·`image_vars.sh`가 모두 `data-pipeline`에 exec. 남김: 설정 칸 `structure_cpus`·`structure_mem_limit`와 `parse_cpus` 설명·기본값(3·16g)은 code_fp 파일(`pipeline/config.py`)이라 0.2.0 지문 배치에서(refactor.md C-82). 0.2.0 배포 때 옛 둘을 지우고 새 둘을 띄운다(release-and-patch §8-3). 같은 날(사용자 결정 A): 오버레이 패치 compose `compose.patch.yml`·`compose.patch.mcp.yml`과 그 길(`mcp_up.sh`의 `PATCH_CODE`·`app/` 확인, 문서의 덮어 붙이기 단계)을 지움 — 코드 바꾸기는 코드 폴더(개발)·굽기(운영)만. `make_patch.sh`도 지움(사용자 11-03 — 남은 흔적은 [e2-21](test.md#e2-21)).
+- 한 것(11-02 `feature/job-containers`): compose 작업 서비스 `parse`·`load`·`publish` 지움(`index_a`·`index_b`는 11-01에 이미 없음) — 상주 `data-pipeline-parse`·`data-pipeline-structure`만(11-03 하나로 — 아래). `trigger.sh parse|publish`·`run_tool.sh <도구>|migrate|show-stack|check`는 상주 컨테이너 안에서 `docker exec`(`image_vars.sh` `in_pipeline` — 안 떠 있으면 종료 2). `settings_env.sh`는 `deploy/host/scripts/host_env.py`(PyYAML만) + 설정 모델에서 만든 `host_keys.tsv`(`PYTHONPATH=. python deploy/release/hostkeys.py`, 시험 `tests/general/deploy/test_host_env.py`)로 — 이미지 안 export 길·`SETTINGS_IMAGE` 지움. 이미지 점검(`docker run --rm … selftest`)은 그대로. `load_*`·`publish_*` 자원 칸은 0.2.0 지문 배치([pl-46](transform-cleanup.md#pl-46))에서 지운 칸 목록(`common/config/layout.py` `REMOVED`)으로 옮겼다. 사람 정답 폴더 마운트는 [op-11](#op-11).
+- 결정·한 것(사용자 11-03 `feature/rundocs-flow`): 서버 상주 컨테이너는 일괄 `data-pipeline`(옛 `data-pipeline-parse`·`data-pipeline-structure`를 하나로) + `mcp-server`, 그리고 parse_document 전용 `data-pipeline-mcp`(같은 날 사용자 결정 — [rn-03](ops.md#rn-03)). pgvector·redis는 우리 것이 아님. `compose.pipeline.yml` 서비스 하나(문서 폴더 읽기 전용 + 결과 폴더), 자원은 옛 파싱 칸 `parse_cpus`·`parse_mem_limit`(비우면 5·24g — 옛 둘의 합), `run_docs.py`·`trigger.sh`·`run_tool.sh`·`image_vars.sh`가 모두 `data-pipeline`에 exec. 설정 칸 `structure_cpus`·`structure_mem_limit`는 지운 칸 목록(`REMOVED`)으로, `parse_cpus`·`parse_mem_limit` 기본값은 5·24g(옛 둘의 합)으로 0.2.0 지문 배치에서 고쳤다(서버 할 일은 refactor.md C-82). 0.2.0 배포 때 옛 둘을 지우고 새 둘을 띄운다(release-and-patch §8-3). 같은 날(사용자 결정 A): 오버레이 패치 compose `compose.patch.yml`·`compose.patch.mcp.yml`과 그 길(`mcp_up.sh`의 `PATCH_CODE`·`app/` 확인, 문서의 덮어 붙이기 단계)을 지움 — 코드 바꾸기는 코드 폴더(개발)·굽기(운영)만. `make_patch.sh`도 지움(사용자 11-03 — 남은 흔적은 [e2-21](test.md#e2-21)).
 - Status: done (11-01, feature/op10-server-install)
+
+<a id="op-11"></a>
+## op-11 · 사람 정답 폴더(`GOLD_DIR`) 마운트 — 붙일지 칸을 지울지
+- 이유: [op-10](#op-10)에서 일회성 작업 컨테이너를 지운 뒤, 옛 `run_tool.sh`가 붙이던 사람 정답 폴더(`GOLD_DIR` → 컨테이너 `/data/gold`)가 상주 `data-pipeline`에 붙지 않는다. 그래서 점검기(`common/check/checker.py`)의 `GOLD_DIR` 이름 짝 점검이 건너뛰어진다.
+- 할 일: compose에 선택 마운트로 붙일지, 칸(`ops.pipeline_host.gold_dir`)과 이미지 약속 경로(`common/config/settings.py` `IMAGE_PATHS.gold_mount`)를 지울지 사람이 정한다. 설정 설명의 "결정 대기 — doc.md"가 이 행을 가리킨다(code_fp 파일 — 고치면 지문 배치에).
+- 파일: `pipeline/config.py`(`PipelineHost.gold_dir`), `common/config/settings.py`(`IMAGE_PATHS`), `deploy/host/compose/compose.pipeline.yml`, `common/check/checker.py`.
+- Status: todo
+
+<a id="op-12"></a>
+## op-12 · 운영(prd) 이미지에 settings.yaml 굽기
+- 이유: 사용자 11-02 결정([op-07](#op-07)) — 운영 이미지는 settings.yaml(비밀 포함)까지 담아 코드 폴더·설정 파일 없이 뜬다.
+- 할 일: `deploy/release/bake.sh`·`deploy/docker/Dockerfile.bake`에 settings.yaml 굽기를 더한다. 다루는 규칙은 op-07의 ①~④. 지금 `bake.sh`는 호스트용 코드 묶음에서 settings.yaml을 일부러 뺀다(그대로 둠).
+- 🔒 검토 등급 A(비밀 처리) — 사람 검토.
+- Status: todo

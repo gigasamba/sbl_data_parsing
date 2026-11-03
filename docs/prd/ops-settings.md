@@ -20,20 +20,20 @@
 - 서버 할 일: `run_env: stage`인 서버 `settings.yaml`은 이 릴리스 전에 `prd`로 바꾼다(env-guide 행).
 - 위험: `common/config/settings.py`는 모든 레이어의 code_fp에 들어간다 → 서버 재처리. 핑거프린트 전후를 기록. settings.py 변경은 작게(92와 r2-phase도 고침).
 - 수용 기준: `RUN_ENV=stage`는 시작 거부(모르는 값). `RUN_ENV=dev`/`prd` + `LLM_FAKE=1`이면 앱 시작이 0이 아닌 코드로 끝남. `local` + `LLM_FAKE=1`은 시작. 외부 모델은 dev/prd에서 거부, local에서 허용. 이미지 안 selftest 통과. 전체 pytest + 린트 통과.
-- Status: done (10-30, PR #6 병합 — 사용자 승인) — 서버 할 일은 refactor.md C-66.
+- Status: done (10-30, PR #6 병합 — 사용자 승인) — 서버 할 일(C-66)은 0.1.0 배포로 끝남 — [이력](../history/refactor_c_items.md).
 
 <a id="op-05"></a>
 ## op-05 · settings.yaml 하나 — sample에 모든 키·기본값을 카테고리별로
 - 결정(사용자 10-30): "resources/config로 분리하지 말고 그냥 하나의 settings.yaml로 관리하고, 아래 option, default 값 넣고, 카테고리 분류해서 넣으면 될 것 같아. 주석처리도 다 해제하고."
 - 무엇:
   - `resources/config` 파라미터 파일은 만들지 않는다. 설정은 settings.yaml 하나에 모두 둔다.
-  - `settings.sample.yaml` §2(옵션)·§3(파라미터)를 주석이 아닌 실제 YAML로 쓴다 — 모든 키를 기본값과 함께 섹션(`common`·`pipeline`·`mcp`) 아래에 넣고, 지금 2-1·2-2 … 묶음처럼 카테고리 제목 블록으로 묶는다. 설명·선택지·옛 env 이름은 줄 끝 주석으로 남긴다.
+  - `settings.sample.yaml`을 주석이 아닌 실제 YAML로 쓴다 — 모든 키를 기본값과 함께 절 아래에 넣고 카테고리 제목 블록으로 묶는다. 설명·선택지·옛 env 이름은 줄 끝 주석으로 남긴다. 절 배치는 [op-08](#op-08)(`required` → 역할 절 → `tuning`).
   - 서버·PC의 settings.yaml = sample을 복사해 필수값·비밀값을 채운 것.
   - 모델 연결 정보(모델별 값 — `common.models.embed.query_prefix`, `llm.extra_body`, `vlm.extra_body`)도 그 연결 블록과 함께 settings.yaml에 둔다.
 - 결과(알아 둘 것): settings.yaml에 적힌 값이 코드 기본값보다 이긴다. 나중에 코드 기본값을 바꿔도 settings.yaml(또는 sample을 다시 복사)을 고치지 않으면 반영되지 않는다. "키는 한 곳에만" 규칙은 이제 settings.yaml 안에서만의 뜻이다.
 - 핑거프린트: 설정 값은 code_fp에 들어가지 않는다 — 값을 바꿔도 자동 재처리는 없고, 필요하면 사람이 재처리한다(10-30 결정 그대로).
 - 파일: `common/config/sample.py`(생성기), `settings.sample.yaml`, `common/config/{settings,keyscan}.py`, `pipeline/config.py`, `mcp_server/config.py`, `docs/operations/env-guide.md`.
-- Status: done (10-30 · 파일 배치는 [op-08](#op-08)로 대체 — 10-31) — `python -m common.config.sample`이 모든 칸을 코드 기본값과 함께 `common`·`pipeline`·`mcp` 아래 카테고리 순서(제목 주석 `─── N. … ───`)로 낸다. 비우는 칸: 필수·비밀·기본 없음·빈 글자·이미지 기본값 칸(DOC_DIR 등 — 이미지·PC 값이 다름)·적었는지로 동작이 갈리는 칸(`sample.SET_MATTERS`)·핑거프린트 칸(pinned — 적으면 `pin_env`가 env로 내어 자식 프로세스 설정을 덮음). 결과를 바꾸는 칸은 `[파라미터]` 표시. 시험: `tests/server/common/test_sample_yaml.py`(복사한 sample로 서버 STRICT 시작 · 적힌 값 = 코드 기본값), `appcheck`(sample 파일 대조).
+- Status: done (10-30 · 파일 배치는 [op-08](#op-08)로 대체 — 10-31) — `python -m common.config.sample`이 모든 칸을 코드 기본값과 함께 `required` → 역할 절(`common`·`extract`·`transform`·`load`·`search`·`ops`·`dev`) → `tuning` 순서, 절 안은 카테고리 제목 주석(`─── … ───`)으로 낸다. 비우는 칸: 필수·비밀·기본 없음·빈 글자·이미지 기본값 칸(DOC_DIR 등 — 이미지·PC 값이 다름)·적었는지로 동작이 갈리는 칸(`sample.SET_MATTERS`)·저장소 경로가 든 기본값(PC마다 다름). 결과를 바꾸는 칸은 `[파라미터]` 표시. 시험: `tests/server/common/test_sample_yaml.py`(복사한 sample로 서버 STRICT 시작 · 적힌 값 = 코드 기본값), `appcheck`(sample 파일 대조).
 
 <a id="op-08"></a>
 ## op-08 · 설정 구조 재편 — 필수 묶음 + 역할별 파라미터
@@ -110,4 +110,4 @@
 ### 요건 없는 코드 — 남길지 지울지([test.md#e2-18](test.md#e2-18))
 - 공용 도구 — 설정 CLI `common/config/`, DB 도구 `common/store/db/`, 점검 `common/check/checker.py`(env·services·ping — 0.2.0 합침), `common/check/`.
 
-전체 스위치와 기본값: `settings.sample.yaml` 2부, "[기능 켬/끔]" 묶음.
+전체 칸과 기본값: `settings.sample.yaml`(`python -m common.config.sample`이 만듦).

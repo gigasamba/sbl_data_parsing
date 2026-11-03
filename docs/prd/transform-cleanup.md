@@ -1,9 +1,9 @@
 # 변환 — 파싱 정리·지문 배치
 
-[PRD.md](../PRD.md) 카테고리. [transform.md](transform.md)의 하위 문서. 엔진·p1 지문이 바뀌는 정리 묶음(pl-31·pl-34·pl-35)과 0.2.0 지문 배치(pl-46·pl-47) — 모두 검토 등급 A(CLAUDE.md §4).
+[PRD.md](../PRD.md) 카테고리. [transform.md](transform.md)의 하위 문서. 엔진·p1 지문이 바뀌는 정리 묶음(pl-31·pl-34·pl-35)과 0.2.0 지문 배치(pl-46·pl-53·pl-47) — 모두 검토 등급 A(CLAUDE.md §4).
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서: pl-31 · pl-34 · pl-35 · pl-46 · pl-47 · pl-49 · pl-50.
+순서: pl-31 · pl-34 · pl-35 · pl-46 · pl-53 · pl-47 · pl-49 · pl-50.
 
 <a id="pl-31"></a>
 ## pl-31 · ocr_vlm·vlm.model_alt 삭제
@@ -17,7 +17,7 @@
 - 파일(10-30 당시 grep — ocr_vlm·ocrvlm·model_alt가 나오는 곳. 그 뒤 `adk.py`·`ping_models.py`·`services.py`·`pipeline/eval/`·`summarize.py`·`model_matrix.py` 등은 지움 — 지금 위치는 코드에서 찾을 것): `common/config/{settings,keyscan}.py`, `pipeline/config.py`, `common/ai/{adk,llm,guard}.py`, `common/check/ping_models.py`, `common/store/services.py`, `pipeline/extract/engines/{registry.py,qwen_vlm/parser.py}`, `pipeline/extract/run_all.py`, `pipeline/mcp_parse_service.py`, `pipeline/cli.py`, `pipeline/shared/{phase_report,summarize}.py`, `pipeline/eval/report.py`, `pipeline/transform/figures/figure_review.py`, `pipeline/transform/represent/parse_qa.py`, `pipeline/load/parsing_meta.py`, `resources/config/report_templates/catalog.json`, `deploy/docker/Dockerfile`, `validation/e2e/model_matrix.py`, `validation/search_ui/{serve.py,start_mcp.sh}`, `tests/server/common/test_settings.py`, `settings.sample.yaml`.
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) P3·T11): 같은 0.1.0 엔진 묶음에서 설치·사용하지 않는 엔진도 지운다 — rapidocr v1, docling, unstructured, kreuzberg_ocr(+ ocr_vlm). **docx2python은 남김**(e2-06 비교용 — C7로 비교 도구는 지우므로 남길 이유는 다시 볼 것). 검토 등급 A. 파일: `pipeline/extract/engines/{docling,unstructured,rapidocr,kreuzberg,qwen_vlm}`, registry `CORE`, `pipeline/check_env.py`.
 - Status: done (10-30) — `vlm.model_alt`는 `feature/fp-batch`(#27), ocr_vlm은 `feature/drop-ocrvlm`: 엔진·설정(`common.models.ocrvlm`·`ocrvlm_prompt` → `Section.REMOVED`)·역할 표·라벨·`catalog.json` 행 지움. 엔진 재파싱 키(`run_all.engine_code_fp`): `qwen_vlm` `52ca47bc4c6e` → `7381bf2b79d2`, 나머지 25개 그대로, `ocr_vlm` 없어짐(27 → 26). 레이어 code_fp도 바뀜(공용·레이어 파일 — `engines/registry.py`의 CORE 목록 포함): p0 `840199fcacb6` → `2a828b0470c1` · p1 `08cd37047cbd` → `deb6efc4a5f0` · r `b706f28ce48e` → `0d4fcc7a4cbc` · s `eb0597ed7f7b` → `bd154d04467a`(FINGERPRINT `abe9b7b0799ceaae`·a 그대로). 검토 등급 A(엔진 파일·`engines/registry.py` — 사용자). · 남은 정리(`feature/ocrvlm-leftovers`, 등급 A): qwen_vlm 파서의 ocr_vlm용 인자 `pre`·`prompt` 지움(`qwen_vlm` `7381bf2b79d2` → `06f937fcc39e`) · fuse `_OCR_FAMS`의 `ocr-vlm` 지움(p1 `deb6efc4a5f0` → `9ee173300a82`) · VLM 엔진 집합은 `run_all.VLM_ENGINES` 한 곳(phase_report·report가 가져다 씀).
-- 남은 일 — 끝(10-30 `feature/pl31-engines`, 등급 A): 엔진 8개 지움(18개 남음) · `marker_llm` 이름 정리 · 등록부 도구 API 지움 · CORE 정리 — refactor.md 부록 2.
+- 남은 일 — 끝(10-30 `feature/pl31-engines`, 등급 A): 엔진 8개 지움(18개 남음) · `marker_llm` 이름 정리 · 등록부 도구 API 지움 · CORE 정리 — [deploy_0_1_0.md](../history/deploy_0_1_0.md) 부록 2.
 
 <a id="pl-34"></a>
 ## pl-34 · 파싱 p1 묶음 — 재판독(P2·P3)·scan_dedup·렌더 OCR 신호 지우기
@@ -48,7 +48,7 @@
   - `common/core/paths.py:112` 주석의 `parse_shadow` 언급(11-01 지시서 지움 — 고치면 레이어 code_fp가 바뀌어 미룸), `common/ai/{adk,llm}.py`의 `vlm_judge` 역할 표(11-01 `figure_review` 지움 — 부르는 곳 없음).
 - 결정(사용자 11-01, reference ↔ 저장소 2차 비교 — 같은 0.2.0 지문 배치):
   - `common/core/fingerprint.py`의 `_LEGACY_NAMES`·`_HANDOFF_LEGACY` 옛 이름 대응을 정리(이름 바꾸기 — 핸드오프 지문이 바뀜).
-  - 첫 이관용 호환 코드를 지운다 — (11-02 한 것: `common/config/migrate.py`의 env 변환·`--compare`·`settings_env.sh`의 `pipeline.env` 안내 — `feature/migrate-trim`) `keyscan`의 지울 후보, `image_vars.sh`의 옛 이미지 이름, `trigger.sh`의 `pipeline.env` 거부, entrypoint `legacy_tool_name`, 절마다 둔 `REMOVED` 목록, `pin_env`의 옛 env 경고. **두 서버가 settings.yaml로 옮긴 뒤**(refactor.md 37행 — 이관 확인)에만.
+  - 첫 이관용 호환 코드를 지운다 — (11-02 한 것: `common/config/migrate.py`의 env 변환·`--compare`·`settings_env.sh`의 `pipeline.env` 안내 — `feature/migrate-trim`) `keyscan`의 지울 후보, `image_vars.sh`의 옛 이미지 이름, `trigger.sh`의 `pipeline.env` 거부, entrypoint `legacy_tool_name`, 절마다 둔 `REMOVED` 목록, `pin_env`의 옛 env 경고. **두 서버가 settings.yaml로 옮긴 뒤**에만(옮김 끝 — 운영 서버는 0.1.0 settings.yaml로 돎, 사용자 11-02).
   - 로컬 임베딩 모델 길 — `common/ai/embed.py`의 sentence-transformers, `build_bundle`의 `bge-m3` 기본값, `check_env`의 HF 점검.
   - `common/core/paths.py`의 `TEMPLATES_DIR`·`PIPELINE_ROOT`·`RETRIEVAL_ROOT` 상수(11-01 보고서 틀 폴더는 지움).
   - `pipeline/transform/structure/facts.py`의 `contract_facts`·`MONEY_RE`·`DATE_RE`·`L_*`.
@@ -77,9 +77,15 @@
 - 더할 것(사용자 11-02): `common/ai/adk.py` — 지시문(프롬프트)은 두고 장치(에이전트 실행 틀)는 `llm.py` 호출 하나로 줄인다(`adk.py`는 p1·s·r 지문에 들어가 이 배치에서). CPU 부하 고침도 이 배치에 함께 싣는다.
 - 한 것(11-03 `feature/pl46-fp-batch` — #104 위, 허브 지시 · 등급 A): 안 쓰는 엔진 5개·`candidates` 칸 · `MAX_PER_TYPE`·`over_limit` · `extract.ocr_engine` 스위치·대표 결과의 OCR 대체 길(`_ocr_pages`·`_hidden_overlap_conflict`·`vlm_page.hidden_overlap_spans`)·구성의 이미지 행 `qwen_vlm` 하나 · 묶음 계약 `DOC_KEYS`·`CHUNK_KEYS`·`check_bundle`·빈 kg 파일·`capped.jsonl` · 죽은 설정 칸(`sources_file`·`index_root`·`INDEX_CONF`·`INDEX_CONF_DIR`·`smoke_source`·`smoke_nightly`·`minio_image`·`minio_publish_port`·`smoke_pm_bucket`·load·publish 컨테이너 자원 칸 — `REMOVED`로, 남으면 경고만)·`os_put.py`·`run_mode` 값 `test` · `settings.py` `__main__` → `python -m common.config.show` · `paths.py` 상수 3개·`parse_shadow` 주석·`vlm_judge` · `_LEGACY_NAMES`·`_HANDOFF_LEGACY`·`legacy_names` · `contract_facts` 등·`--summary`·`PROGRESS.md` 쓰기·낡은 영구 다리 주석·빈 층 `a` · 엔진 구성 모양 검사를 `cfgfile.py` 한 곳으로·`stackcfg.snapshot_bytes`. 지문(전 develop `e3c803c` — #104·#102·#87 → 후): FINGERPRINT `2f1da6a1567d24a8` → `543ade95fde0fcae` · p0 `49a4f1ef727b` → `39f4dc7e1231` · p1 `00f70a8d23b4` → `2e1e9dd3814a` · r `b0c120bd58ec` → `3ac22cd1c74e` · s `53d3357d2208` → `5eb430cc1cff` · 층 a 지움 · 엔진 지문 13개 모두 바뀜(표는 PR 본문).
 - 한 것 2(11-03 — 사용자 답, 허브 전달): CPU 부하 고침(`common/core/resources.py` `cpu_load` — cgroup CPU 한도가 있으면 그 컨테이너 사용량, 없으면 부하 평균 ÷ 호스트 코어) · 첫 이관용 호환 코드 지움(`image_vars.sh` 옛 이미지 이름·`pipeline.env` 문구·entrypoint `legacy_tool_name`·`pin_env` 옛 env 알림·`keyscan` 지울 후보) · 절마다 두던 `REMOVED`를 `common/config/layout.py` `REMOVED` 표 하나로(0.1.0 settings.yaml은 여전히 경고만) · 점검기 하나 `common/check/checker.py`(env·services·ping — 옛 `check_env`·`services`·`ping_models`, PG 연결 고르기는 `common/store/pg.py`) · entrypoint `tool` 고정 표 · 작은 파일 합침(`pipeline/shared/canon.py`·`parse_run.py`, `pipeline/extract/resources.py` → `common/core/resources.py`, `pg_load_connect` → `pgvector_load`, `pg_mcp_connect` → `server_state`) · 로컬 임베딩 길 지움 · `common/ai/adk.py` 지움 — 모델 호출은 `common/ai/llm.py` `complete()` HTTP 한 길, PC 답변 점검의 도구 왕복은 `validation/e2e/tool_loop.py`.
-- 남은 것: 0.2.0 배포 뒤 `dbcompare`·`stamp` 지우기(todo).
-- 할 일(todo, 다음 이미지 빌드 때 — 사용자 11-03): `deploy/docker/requirements*`에서 `sentence-transformers`(로컬 임베딩 길 지움)와, 쓰지 않게 되면 `google-adk`·`litellm`(`adk.py` 장치 지움 — 아래)을 뺀다. `deps_hash`가 바뀌어 새 이미지 버전이 필요하다(지금 브랜치는 requirements를 건드리지 않음).
-- Status: done — `feature/pl46-fp-batch`(#106) 병합(0.2.0 — 엔진·핸드오프·레이어 지문 바뀜, 사람 검토). 남은 것(todo): 0.2.0 배포 뒤 `dbcompare`·`stamp` 지우기 · 다음 이미지 빌드 때 requirements에서 `sentence-transformers`·`google-adk`·`litellm` 빼기(`deps_hash` 바뀜 — 새 이미지 버전).
+- Status: done — `feature/pl46-fp-batch`(#106) 병합(0.2.0 — 엔진·핸드오프·레이어 지문 바뀜, 사람 검토). 남은 정리는 [pl-53](#pl-53).
+
+<a id="pl-53"></a>
+## pl-53 · pl-46 남은 정리 — 첫 이관 DB 도구·안 쓰는 패키지
+- 이유: [pl-46](#pl-46)(0.2.0 지문 배치)을 닫을 때 뒤로 미룬 두 가지.
+- 할 일:
+  - 0.2.0이 서버에 배포된 뒤 `dbtool`의 비교(`common/store/db/dbcompare.py`)와 `stamp`(옛 코드가 만든 스키마에 판만 기록 — 첫 이관용)를 지운다.
+  - 다음 이미지 빌드 때 `deploy/docker/requirements*`의 `google-adk`·`litellm`을 뺄지 정한다(사용자 11-03). 앱 코드는 둘 다 import하지 않는다(모델 호출은 `common/ai/llm.py` HTTP 한 길, check_modules ④). 지시서 패키지 `resources/prompts/**/agent.py`만 `google-adk`를 import한다 — 빼려면 그 파일을 어떻게 할지 함께 정한다(지시문 지문 파일). 빼면 `deps_hash`가 바뀌어 새 이미지 버전이 필요하다. `sentence-transformers`는 이미 빠졌다.
+- Status: todo
 
 <a id="pl-47"></a>
 ## pl-47 · 엔진 지문(p0) 범위가 다른 이름 폴더의 엔진을 놓치는지 확인
