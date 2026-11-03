@@ -1,9 +1,9 @@
 # 적재 — pgvector·게시·저장 구조
 
-[PRD.md](../PRD.md) 카테고리. [transform.md](transform.md) 다음: pgvector 적재(pl-07·pl-13·pl-14·pl-16·pl-19) → 게시(silver — pl-09·pl-26) → FAQ 다시 올리기(pl-41) → 지운 정형 DB·문서 대장(pl-08·pl-12)·마스터 CSV(pl-38). 저장 구조·DB 스키마는 [load-schema.md](load-schema.md).
+[PRD.md](../PRD.md) 카테고리. [transform.md](transform.md) 다음: pgvector 적재(pl-07·pl-13·pl-14·pl-16·pl-51·pl-19) → 게시(silver — pl-09·pl-26) → FAQ 다시 올리기(pl-41) → 지운 정형 DB·문서 대장(pl-08·pl-12)·마스터 CSV(pl-38). 저장 구조·DB 스키마는 [load-schema.md](load-schema.md).
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서: pl-29 · pl-07 · pl-13 · pl-14 · pl-16 · pl-19 · pl-09 · pl-26 · pl-41 · pl-40 · pl-08 · pl-12 · pl-38. (저장 구조 pl-32는 [load-schema.md](load-schema.md#pl-32))
+순서: pl-29 · pl-07 · pl-13 · pl-14 · pl-16 · pl-51 · pl-19 · pl-09 · pl-26 · pl-41 · pl-40 · pl-08 · pl-12 · pl-38. (저장 구조 pl-32는 [load-schema.md](load-schema.md#pl-32))
 
 <a id="pl-29"></a>
 ## pl-29 · EDW 고객 매핑을 파이프라인이 직접 만든다
@@ -57,6 +57,18 @@
 - 파일: `pipeline/transform/structure/build_bundle.py`, `pipeline/load/pgvector_load.py`.
 - 결정(사용자 10-30 PRD grill): A6 — `PIPE_EMBED=none`(임베딩 없음)은 적재 시작 때 거부한다(검색에 벡터가 필수). 0.2.0.
 - 한 것(11-03 `feature/fp-perf`): `pipeline/load/pgvector_load.py` `require_vectors(meta)` — 묶음 `meta.json`의 `dim`이 0·없음이거나 `embed`가 `none`이면 한 줄 안내(`build_bundle --embed api`로 다시) 뒤 종료 코드 2. `main()`(배포·적재 — 판 확인 전)과 `load()` 첫머리에서. 시험 `tests/server/pipeline/test_pgvector_load.py` `test_require_vectors`.
+- Status: done — 11-03
+
+<a id="pl-51"></a>
+## pl-51 · 임베딩 모델이 다른 묶음은 적재 거부
+- 결정(사용자 11-03 — 0.2.0에 넣음): 적재할 묶음의 임베딩 모델(`meta.json` `embed_model`)이 그 검색 스키마에 이미 적재된 문서의 모델과 다르면 그 묶음을 적재하지 않는다(아무것도 쓰지 않음). 종료 코드는 0이 아니고(2) 한국어 한 줄로 이유를 알린다. 거부는 시각과 함께 PostgreSQL `applog.pipe_event`에 남긴다(새 표·새 판 없음).
+- 이유: 검색은 원천 스키마마다 `doc.embed_model`이 하나여야 질의를 임베딩한다(`pgsearch.index_meta` — 여럿이면 섞인 색인으로 보고 벡터 검색 거부, [mc-19](mcp.md#mc-19)). 검색 MCP 하나가 한 질의 모델로 원천 5벌을 모두 보므로, 기준은 설정(`required.embed.model`)이 아니라 **이미 적재된 문서의 모델**(5벌 전체)이다. 설정과 적재 문서가 다를 때는 검색 쪽 확인(`query_model_mismatch`)이 이미 거부한다.
+- 한 것(11-03 `feature/embed-guard`): `pipeline/load/pgvector_load.py` `require_same_model(dbs, meta, bundle)` — `load()`에서 `require_vectors` 바로 뒤(EDW 조인·분류·쓰기 전). 원천 5벌의 `doc.embed_model`(빈 칸 제외, 표가 없는 스키마는 건너뜀)을 모아 묶음 모델과 `embed.model_key`로 비교한다(`openai/` 앞붙이는 같게 봄 — 검색과 같은 규칙). 비어 있으면(처음 적재) 통과.
+  - 거부하면 stderr에 `[load] 임베딩 모델이 다름 — 적재 거부(…)` 한 줄(run_docs 실행에서는 `docflow/<seq>/structure.log`와 `progress.log`의 `구조화+적재 FAIL`), `common.log.db_enabled`가 켜져 있으면 `logsink.emit("pipe_event", …)` 한 행: `layer` `load` · `stage` `load.embed_guard` · `model` 묶음 모델 · `status` `fail` · `err_kind` `env` · `err` `embed_model_mismatch: expected <기존>, got <묶음> (bundle <경로>)`.
+  - `status`·`err_kind`는 표의 CHECK 값(`ok·fail·timeout·skip·reused` · `env·timeout·doc·external·db`) 안에서 고른다 — `refused`·`embed_model_mismatch`를 그대로 넣으면 INSERT가 실패해 같은 배치 전체가 jsonl 대체 기록으로 빠진다. 그래서 종류 이름은 `err` 글 맨 앞에 둔다.
+  - 남는 한계: 모델 칸이 빈 옛 문서는 비교하지 않는다. 모델을 바꾸려면 새 검색 스키마에 적재한다(`--replace`도 거부 — 다른 문서가 옛 모델로 남음).
+  - 시험: `tests/server/pipeline/test_pgvector_load.py::test_embed_guard`(SQLite 대역 — 같은 모델·표기만 다른 같은 모델은 적재, 다른 모델은 거부 + `pipe_event` 한 행).
+- 파일: `pipeline/load/pgvector_load.py`, README §5-4(진행 보기).
 - Status: done — 11-03
 
 <a id="pl-19"></a>

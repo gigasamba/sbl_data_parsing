@@ -671,6 +671,28 @@ bash deploy/host/scripts/trigger.sh publish     # Object Storage 업로드 + EDW
 
 - **문서별 흐름 `run_docs.py`** 는 `<운영자 작업 폴더>/run_docs.py`에 두고 실행한다(코드 폴더 안의 사본이 아니다). 설정 배치 모듈·컨테이너 안 경로 표(`deploy/host/scripts/host_keys.tsv`)를 찾을 코드 폴더는 `--code`(기본값 없음 — 운영자 폴더에서 돌릴 때 꼭 준다, 사용자 11-02), 컨테이너 명령은 settings.yaml `ops.host.docker`(없으면 podman). 서버 settings.yaml의 운영 접속 항목을 읽고, 문서별 값은 상주 컨테이너에 `--set`으로 넘긴다 — 설계: [docs/architecture/run_docs_design.md](docs/architecture/run_docs_design.md). **PC에서는 실행하지 않는다**(운영 EDW·Object Storage에 접속).
 
+#### 진행 보기 — 모니터 없이 서버 셸에서
+
+```bash
+bash deploy/host/scripts/dc.sh logs -f data-pipeline                  # 상주 컨테이너 로그를 따라 봄(Ctrl+C로 멈춤 — 컨테이너는 그대로)
+tail -f <run_docs 작업 폴더>/batch_progress/progress.log              # run_docs 문서별 줄("doc#<seq> 구조화+적재 OK|FAIL")
+tail -n 50 <결과 폴더>/docflow/<seq>/structure.log                     # 그 문서의 구조화·적재 출력 — 문서가 끝나면 폴더째 지워짐(남기려면 run_docs --no-cleanup)
+```
+
+`dc.sh logs`는 컨테이너 주 프로세스의 출력만 보인다. run_docs가 `docker exec`로 부르는 구조화·적재의 출력은 `structure.log`에 남지만, 이 파일은 문서 처리가 끝나면 `docflow/<seq>` 폴더와 함께 지워진다. 끝난 뒤에 남는 것은 `progress.log` 줄과(켜져 있으면) 아래 `applog.pipe_event` 행이다.
+
+**적재 거부 — 임베딩 모델이 다른 묶음(pl-51).** 묶음의 임베딩 모델이 검색 스키마에 이미 적재된 문서의 모델과 다르면 적재는 아무것도 쓰지 않고 종료 코드 2로 멈춘다(`[load] 임베딩 모델이 다름 — 적재 거부 …`). `common.log.db_enabled`가 켜져 있으면 거부가 시각과 함께 `applog.pipe_event`에 남는다:
+
+```sql
+-- 최근 7일 적재 거부(임베딩 모델 불일치) — 시각·실행 ID·기존 모델 대 묶음 모델
+SELECT ts_start, run_id, model, err
+FROM applog.pipe_event
+WHERE stage = 'load.embed_guard' AND ts_start > now() - interval '7 days'
+ORDER BY ts_start DESC;
+```
+
+해결: 기존 문서와 같은 모델(`required.embed.model`)로 묶음을 다시 만들거나, 모델을 바꾸려면 새 검색 스키마에 적재한다.
+
 ### 5-5. 서버 — 상주 서비스와 자동 실행
 
 
