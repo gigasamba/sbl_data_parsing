@@ -957,7 +957,8 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, ocr_fn=Non
         figures_max if figures_max is not None else pc.cfg().transform.vlm.figures_max
     )  # S7c — 설정 객체(옛 int(get(X) or 20)) · 인자가 이김
     cap = int(_fm if _fm is not None else 20)  # 문서당 VLM에 보낼 그림 상한(야간 배치 비용·시간 가드, 독립 검토 10-03) — 0이면 VLM 안 부름
-    ctxs = [C.link_context(f, doc_text) for f in figs]
+    sents = C.sentences(doc_text)  # 문서마다 한 번(fp-perf B4)
+    ctxs = [C.link_context(f, doc_text, sents) for f in figs]
     _mp = pc.cfg().transform.vlm.fig_min_px  # S7c — 설정 객체(옛 int(get(X) or 64))
     min_px = int(_mp if _mp is not None else 64)
     order, skip_reason = select_figures(figs, ctxs, min_px)

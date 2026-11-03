@@ -170,14 +170,24 @@ def _fill_glossary_blanks(rows):
 
 
 def _mtime(p):
-    """파일 고친 시각(ns) — 없으면 None. 읽은 결과 캐시 열쇠(파일이 바뀌면 다시 읽음 — fp-perf B2)."""
+    """파일 (크기, 고친 시각 ns) — 없으면 None. 읽은 결과 캐시 열쇠(파일이 바뀌면 다시 읽음 — fp-perf B2, contract.file_hash와 같은 열쇠)."""
     try:
-        return os.stat(p).st_mtime_ns
+        st = os.stat(p)
+        return (st.st_size, st.st_mtime_ns)
     except OSError:
         return None
 
 
-_CACHE = {}  # (종류, 경로·고친 시각…) → 읽은 결과 — 문서마다 명부·사전을 다시 읽지 않게(fp-perf B2, 0.2.0)
+_CACHE = {}  # (종류, 경로·크기·고친 시각…) → 읽은 결과 — 문서마다 명부·사전을 다시 읽지 않게(fp-perf B2, 0.2.0)
+_CACHE_MAX = 4  # ponytail: 상주 검색 서버에서 파일을 바꿀 때마다 옛 결과가 쌓이지 않게 — 넘으면 가장 오래된 것부터 버림
+
+
+def _cached(key, build):
+    if key not in _CACHE:
+        while len(_CACHE) >= _CACHE_MAX:
+            _CACHE.pop(next(iter(_CACHE)))
+        _CACHE[key] = build()
+    return _CACHE[key]
 
 
 def load_glossary(dir=None):
@@ -188,9 +198,7 @@ def load_glossary(dir=None):
     if not d:
         return {}
     key = ("glossary", str(d), _mtime(Path(d) / "domain_terms.csv"), _mtime(Path(d) / "id_patterns.csv"))  # 검증이 id_patterns도 읽음
-    if key not in _CACHE:
-        _CACHE[key] = _load_glossary(d)
-    return dict(_CACHE[key])
+    return dict(_cached(key, lambda: _load_glossary(d)))
 
 
 def _load_glossary(d):
@@ -480,9 +488,7 @@ def _aliases():
     stack = RES_ROOT / "config" / "pipeline_stack.json"
     f, g = _cfg().paths.client_roster, _cfg().paths.glossary_dir
     key = ("aliases", _mtime(stack), f, f and _mtime(f), g, g and _mtime(Path(g) / "domain_terms.csv"), g and _mtime(Path(g) / "id_patterns.csv"))
-    if key not in _CACHE:
-        _CACHE[key] = _build_aliases(stack, f, g)
-    return dict(_CACHE[key])
+    return dict(_cached(key, lambda: _build_aliases(stack, f, g)))
 
 
 def _build_aliases(stack, f, g):
