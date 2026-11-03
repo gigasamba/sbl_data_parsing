@@ -12,7 +12,7 @@ set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
 
 # init — release-and-patch §8-3·server-guide §1-2가 손으로 만들던 서버 폴더를 한 번에(값·파일 내용은 찍지 않음).
-#   폴더: <ENV>(700) · <결과 폴더>(UID 10001:<그룹>, 2775 — setgid) · <결과 폴더>/mcp_parse/jobs(같음) · /srv/rag/code·/srv/rag/backup(700)
+#   폴더: <ENV>(10001:<그룹> 750 — data-pipeline이 /etc/rag/env로 읽음, 사용자 11-03) · <결과 폴더>(UID 10001:<그룹>, 2775 — setgid) · <결과 폴더>/mcp_parse/jobs(같음) · /srv/rag/code·/srv/rag/backup(700)
 #   코드 폴더(이 스크립트의 폴더): chmod -R a+rX · /srv/rag/code/live 링크 → 이 폴더(없을 때만 — 있으면 가리키는 곳만 찍고 그대로)
 #   settings.yaml: 코드 폴더의 settings.sample.yaml을 <ENV>/settings.yaml로 — **없을 때만**(있으면 절대 덮지 않음), 10001:<그룹> 640.
 #   경로: SERVER_ENV_DIR(기본 /srv/rag/env) · RAG_OUT(셸 env > settings.yaml common.host.output_root > /srv/rag/output) ·
@@ -48,7 +48,7 @@ dc_init() {
       if [ -z "$test" ]; then chown "10001:$group" "$1"; else echo "  (시험 — 주인 바꾸기 건너뜀)"; fi
     fi
   }
-  _mk "$env" 700 0
+  _mk "$env" 750 1   # 컨테이너 UID 10001이 열어야 함(EDW 사슬 사본 등 — /etc/rag/env:ro) · 그 밖 사용자는 못 봄(비밀 — settings.yaml 640)
   _mk "$out" 2775 1
   _mk "$jobs" 2775 1
   _mk "$root/code" 755 0

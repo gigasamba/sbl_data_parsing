@@ -40,7 +40,7 @@ def test_init():
         assert sf.read_bytes() == (SCRIPT.parents[3] / "settings.sample.yaml").read_bytes()
         assert (root / "code" / "live").exists() and "만듦" in r1.stdout and "required.env.run_env" in r1.stdout, r1.stdout
         if os.name != "nt":  # Windows(Git Bash)는 권한·심볼릭 링크를 POSIX처럼 안 둠
-            assert oct((root / "env").stat().st_mode & 0o7777) == "0o700" and oct(sf.stat().st_mode & 0o777) == "0o640"
+            assert oct((root / "env").stat().st_mode & 0o7777) == "0o750" and oct(sf.stat().st_mode & 0o777) == "0o640"
             assert oct((root / "output").stat().st_mode & 0o7777) == "0o2775"
             assert os.path.realpath(root / "code" / "live") == os.path.realpath(code)
         sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")  # 사람이 채운 설정 — 다시 불러도 그대로여야

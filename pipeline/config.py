@@ -352,8 +352,8 @@ class PipelinePaths(Section):
     edw_chain: str | None = F(
         None,
         "EDW_CHAIN_FILE",
-        "EDW 조인 사슬 설정 파일 경로(적재만 읽음 — 비우면 resources/config/edw_chain.yaml · 서버에서 고친 사본은 컨테이너에서 보이는 자리, 예 "
-        "/app/output/config/edw_chain.yaml — pl-29, 사용자 11-03 · 점검: python -m pipeline.load.edw_meta --check)",
+        "EDW 조인 사슬 설정 파일 경로(적재만 읽음 — 비우면 resources/config/edw_chain.yaml · 서버 사본은 settings.yaml 옆 $SERVER_ENV_DIR/edw_chain.yaml, "
+        "컨테이너 안 /etc/rag/env/edw_chain.yaml — pl-29, 사용자 11-03 · 점검: python -m pipeline.load.edw_meta --check)",
     )
     gold_dir: str | None = F(
         None,

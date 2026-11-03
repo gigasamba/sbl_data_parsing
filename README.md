@@ -504,7 +504,7 @@ bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp   # 서
 
 ```bash
 bash deploy/host/scripts/dc.sh init --group <운영 그룹>   # 아래를 한 번에(여러 번 불러도 안전 — 있는 것은 "있음", settings.yaml은 덮지 않음)
-#   /srv/rag/env(700) · env/settings.yaml ← settings.sample.yaml(없을 때만, 10001:<운영 그룹> 640)
+#   /srv/rag/env(10001:<운영 그룹> 750 — data-pipeline이 /etc/rag/env로 읽음) · env/settings.yaml ← settings.sample.yaml(없을 때만, 10001:<운영 그룹> 640)
 #   /srv/rag/output · output/mcp_parse/jobs(10001:<운영 그룹> 2775 — setgid: 새 파일이 그룹을 물려받고, 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지움)
 #   /srv/rag/code/live → 이 코드 폴더(없을 때만) · /srv/rag/backup(700) · 코드 폴더 a+rX
 #   끝에 아직 빈 required 칸 이름(값은 안 찍음) — 그 칸을 편집기로 채운다
