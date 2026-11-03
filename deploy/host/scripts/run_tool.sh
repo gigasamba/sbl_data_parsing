@@ -1,6 +1,6 @@
 #!/bin/bash
 # OP18 — 서버에서 cli 도구·판 관리를 돌리는 얇은 래퍼. 사용자 11-02 — 1회 job 컨테이너(compose run --rm)를 없애고 상주 컨테이너
-#   data-pipeline-structure 안에서 이미지 시작 스크립트로 돈다(docker exec — image_vars.sh in_pipeline). 컨테이너가 안 떠 있으면 종료 코드 2.
+#   data-pipeline 안에서 이미지 시작 스크립트로 돈다(docker exec — image_vars.sh in_pipeline). 컨테이너가 안 떠 있으면 종료 코드 2.
 #   bash deploy/host/scripts/run_tool.sh <도구 이름(.py 생략 가능)> [도구 인자…]   (코드 폴더 루트에서)
 #     도구: rdb_discover·check_env·ping_models(엔트리포인트 `tool <이름>`) · migrate(pgvector 판 관리 — `migrate current|check|up|stamp …`)
 #           · show-stack(엔진 구성 파일) · check(PG·모델 요약)
@@ -19,7 +19,7 @@ case "$tool" in
   *) echo "[run_tool] 모르는 도구: $tool — rdb_discover·check_env·ping_models·migrate·show-stack·check 중 하나" >&2; exit 2 ;;
 esac
 
-echo "[run_tool] $(date '+%F %T') $tool 시작(data-pipeline-structure 안에서)"
-in_pipeline data-pipeline-structure "$@"; rc=$?
+echo "[run_tool] $(date '+%F %T') $tool 시작(data-pipeline 안에서)"
+in_pipeline data-pipeline "$@"; rc=$?
 echo "[run_tool] $(date '+%F %T') $tool 끝 (종료 코드 $rc)"
 exit $rc

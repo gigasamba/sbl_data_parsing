@@ -17,7 +17,7 @@
   - 3클래스: warm에서 무게 평가(과거 소요 시간 규칙), vlm_page는 스캔 PDF처럼 꼭 필요한 문서만, 1/2/1 + 빈 레인 가져가기, light 1개 강하게 점유, 전담 분류 먼저, light 전용 executor. MCP 업로드가 오면 medium 전담 1개를 멈추고 먼저.
   - 속도: phase 1 건너뛰기(→ pl-22), 끝난 문서 건너뛰기, parse_qa 가볍게, 10-23 OCR 끔. SSH가 끊겨도 작업은 계속(nohup 확인).
 - 파일: `pipeline/cli.py`, `deploy/host/scripts/run_docs.py`(서버 전용 — PC에서 실행 금지), `docs/history/run_docs_req.md`, `docs/architecture/run_docs_design.md`.
-- Status: done — trigger 서버 지움 11-01(`feature/scope-cut-pipeline`): `pipeline/trigger_server.py`·시험 `test_trigger_server`, entrypoint `serve-trigger`(→ `idle` — 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`는 run_docs의 docker exec 대상이라 남기고 떠 있기만), compose의 `TRIGGER_MODULE`·`/health` 검사, `deploy/host/scripts/parse_trigger_test.py`, 설정 절 `pipeline.service.trigger`(`required.tokens.trigger` 포함 — 남으면 경고만: `common/config/layout.py`의 자리는 옛 settings.yaml이 거부되지 않게 남기고 sample 대조에서만 뺌(`sample.LAYOUT_GONE`) — layout.py는 code_fp에 들어가 손대지 않음), `settings_env.sh`의 trigger 포트. `common/core/exitclean.py`의 SIGTERM 처리는 모든 프로세스가 쓰는 일반 처리라 그대로(주석의 trigger_server 예시만 남음 — 고치면 code_fp가 바뀜).
+- Status: done — trigger 서버 지움 11-01(`feature/scope-cut-pipeline`): `pipeline/trigger_server.py`·시험 `test_trigger_server`, entrypoint `serve-trigger`(→ `idle` — 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`(11-03부터 `data-pipeline` 하나)는 run_docs의 docker exec 대상이라 남기고 떠 있기만), compose의 `TRIGGER_MODULE`·`/health` 검사, `deploy/host/scripts/parse_trigger_test.py`, 설정 절 `pipeline.service.trigger`(`required.tokens.trigger` 포함 — 남으면 경고만: `common/config/layout.py`의 자리는 옛 settings.yaml이 거부되지 않게 남기고 sample 대조에서만 뺌(`sample.LAYOUT_GONE`) — layout.py는 code_fp에 들어가 손대지 않음), `settings_env.sh`의 trigger 포트. `common/core/exitclean.py`의 SIGTERM 처리는 모든 프로세스가 쓰는 일반 처리라 그대로(주석의 trigger_server 예시만 남음 — 고치면 code_fp가 바뀜).
 
 <a id="pl-23"></a>
 ## pl-23 · 증분 실행만, 전체 재파싱은 명시적인 전체 e2e
@@ -33,7 +33,7 @@
 - 결정(사용자 11-02): 전체 e2e는 local·dev·prd 셋에서 돈다. dev는 settings.yaml이 가리키는 대상(가짜 폴더든 실제든)에 쓴다. **전체 문서 실행은 prd에서만, 새 원천별 스키마 이름으로**(새 `PG_SCHEMA`) — 판 0002가 기준 스키마의 옛 표를 지우므로 prd는 반드시 새 `PG_SCHEMA`를 쓴다(refactor.md C-74). 옛 gold 스키마는 2주 남긴 뒤 DB 담당자가 백업하고 지운다. 옛 `struct` 스키마도 DB 담당자가 백업하고 지운다. 절차: [release-and-patch.md §8](../operations/release-and-patch.md#8-020-배포--사람이-할-일).
 - 결정(사용자 11-02 — 새벽 배치): 시작 시각·문서 수 상한·마감 시각이 settings.yaml 칸이고, 비면 돌지 않는다. 칸 이름 어긋남 고침(아래 한 것) — 호스트 셸·systemd·시험은 `ops.nightly.time`, 설정 모델·시험(`tests/server/pipeline/test_nightly_time.py`)은 `pipeline.host.nightly.time`을 쓴다. 상한·마감 칸은 [pl-18](#pl-18)의 상한·마감과 함께.
 - 한 것(11-02 `feature/nightly-key` — 사용자 11-02): 새벽 배치 칸 셋 — settings.yaml `ops.nightly.time`(시작)·`max_docs`(새 문서 수 상한)·`deadline`(마감, HH:MM) — 하나라도 비면 `trigger.sh scheduled`가 조용히 끝. `run_docs.py`에 `--max-docs`(끝난 문서를 뺀 뒤 앞에서 — 옛 `--limit`은 그 전에 잘라 시험용)·`--deadline`(지나면 새 문서를 받지 않음)을 더함. 칸 이름은 설정 파일 기준 `ops.nightly.*` 하나(모델 안 이름 `pipeline.host.nightly`는 코드만 — 문서·시험 문구를 맞춤). 시험 `test_trigger_gate`·`test_nightly_time`·`test_run_docs`(`deadline_at`).
-- Status: todo
+- Status: done (11-03 `feature/rundocs-flow` 확인) — 고르기는 `pipeline/cli.py` `_unparsed`, run_docs `--skip-done`은 `DONE_STATUSES`(ok·partial — gold_version도, skipped_dup — `test_done_keys_match_parsing_meta`). 남은 서버 일(전체 e2e prd 실행·새벽 배치 켜기)은 사람 — refactor.md C-72·C-74.
 
 <a id="pl-24"></a>
 ## pl-24 · `run_docs` 문서별 순서: 파싱 → silver 게시 → 원본 삭제 → gold
@@ -44,7 +44,9 @@
 - 파일: `deploy/host/scripts/run_docs.py`(`doc_flow`, `cleanup_doc`, 처리 끝난 질의), `docs/operations/parsing_meta_mssql.sql`, 게시(`parsing_meta`).
 - 결정(사용자 10-30 PRD grill): C3 — 파싱이 통째로 실패하면 ParsingMeta에 쓰지 않는다(이 행 그대로). (허브 10-31 고침 — 아래) 실패는 로그·문서 대장에만 남고 다음 실행에서 다시 후보가 된다.
 - 결정(허브 10-31, 최신 결정 우선): 문서 대장도 성공했을 때만 쓴다([pl-12](load.md#pl-12)·[pl-32](load-schema.md#pl-32) — 실패 횟수 없앰). 실패는 **로그에만** 남고, ParsingMeta에 행이 없으니 다음 실행에서 다시 후보가 된다(C10).
-- Status: todo — [pl-25](load-schema.md#pl-25) 뒤.
+- 한 것(11-03 `feature/rundocs-flow`): `run_docs.py` 문서마다 파싱 → 게시 대기열(게시 스레드 1개 — 구조화가 업로드·EDW 쓰기를 기다리지 않음) → 게시 성공이면 원본(warm `.bin`·`docflow/<seq>/_source_files`) 삭제 → 구조화 대기열(gold — build_bundle·pgvector_load) → `docflow/<seq>` 임시 삭제. 파싱 실패·게시 실패 = 원본을 남기고 로그에만(gold로 안 감, EDW에 안 씀). gold 실패 = 게시한 silver·EDW 행은 그대로, 로그에만 — `gold_version` 칸(C-76 ③)이 있으면 비어 있어 다음 `--skip-done`이 다시 고른다(칸이 없으면 못 고름 — 이 판은 칸이 생긴 뒤 배포, C-81). 새 파싱을 멈추는 상한 `struct_backlog`는 게시 대기 + 구조화 대기를 본다(`queue_depth.jsonl`에 `pub_wait` 더함). 시험 `test_docs_flow.test_doc_order_and_exit_code`(표).
+- 남음: `gold_status` 칸(DDL — DB 담당자, refactor.md C-81). 칸이 생기면 `gold_one()` 옆 TODO 자리에서 failed·이유를 적는다.
+- Status: done — `gold_status` 칸 쓰기만 남음(C-81 — DB 담당자 DDL 뒤).
 
 <a id="pl-18"></a>
 ## pl-18 · 중간에 멈춰도 `night`/`full`이 종료 코드 0
@@ -53,7 +55,8 @@
 - 결정(사용자 10-30 grill): 종료 코드 — 대상 0건 = 0, 실패 = 1, 마감 시각 도달 = 75.
 - 파일: `pipeline/cli.py`(`night`), `deploy/docker/entrypoint.sh`(`full`).
 - 결정(사용자 11-01 기본값 — 허브 11-01): 새벽 run_docs에 문서 수 상한 · 마감 시각 · 사람이 따로 돌린 run_docs와 겹치지 않게 하는 잠금을 둔다(지금은 systemd `TimeoutStartSec=6h`뿐 — #83).
-- Status: todo — 11-01(`feature/scope-cut-unused`) 옛 입구를 지움: `pipeline.cli`의 `night`·`run-stack`·`structure`·`load`(+ 끝 표시 확인 `need()`), 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`, `trigger.sh` `night`·`structure`·`load`·`all`, compose job `structure`(`load` 서비스는 `run_tool.sh` 도구용으로 남김 — 명령 `help`), 죽은 설정(`ops.nightly.max_new`·`modules`·`publish`, `ops.nightly_run.deadline`·`parse_deadline`, `dev.pipeline.allow_common_mismatch` — 남으면 경고만). 새벽 배치는 systemd 타이머 → `trigger.sh scheduled` → `run_docs.py --start-offset 0 --skip-done`(서버 확인 refactor.md C-72). 남음: 종료 코드 규칙(대상 0건 = 0, 실패 = 1, 마감 = 75)을 run_docs에 만든다.
+- Status: done(11-03) — 11-01(`feature/scope-cut-unused`) 옛 입구를 지움: `pipeline.cli`의 `night`·`run-stack`·`structure`·`load`(+ 끝 표시 확인 `need()`), 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`, `trigger.sh` `night`·`structure`·`load`·`all`, compose job `structure`(`load` 서비스는 `run_tool.sh` 도구용으로 남김 — 명령 `help`), 죽은 설정(`ops.nightly.max_new`·`modules`·`publish`, `ops.nightly_run.deadline`·`parse_deadline`, `dev.pipeline.allow_common_mismatch` — 남으면 경고만). 새벽 배치는 systemd 타이머 → `trigger.sh scheduled` → `run_docs.py --start-offset 0 --skip-done`(서버 확인 refactor.md C-72). 남음: 종료 코드 규칙(대상 0건 = 0, 실패 = 1, 마감 = 75)을 run_docs에 만든다.
+- 한 것(11-03 `feature/rundocs-flow`): `run_docs.py`가 종료 코드를 돌려준다 — 0 = 대상 0건·모두 끝, 1 = 실패 문서(파싱·게시·gold) 하나라도, 75 = 마감 도달(실패 없음) 또는 다른 run_docs가 도는 중, 2 = 설정 문제(전과 같음). 실패와 마감이 함께면 1. 겹침 잠금은 `run_docs.py` 안 한 곳(`flock` `batch_progress/run_docs.lock` — 프로세스가 죽으면 커널이 풂, 사람이 trigger 없이 돌려도 같은 잠금). 문서 수 상한·마감은 11-02 `--max-docs`·`--deadline`. 시험 `test_docs_flow.test_exit_codes`·`test_lock_blocks_second_run`(Linux·macOS·WSL — Windows는 건너뜀).
 
 <a id="rn-01"></a>
 ## rn-01 · 레인 정책을 표 하나로 — 담당 레인 먼저, 허용한 레인만 가져오기
@@ -84,7 +87,10 @@
   2. 같은 컨테이너(`data-pipeline-parse`) 안에서 nice(지금 결정 — 사용자 10-30). 장점: 구성 변경 없음, `low_priority` 재사용. 단점: 다른 컨테이너·세션과는 안 겨룸(`sched_autogroup_enabled=1`), 효과는 서버에서 재 봐야 앎.
 - 서버 확인(C-65 ⑥): 일괄 파싱만 / + `parse_document` 동시의 응답 시간 비교 — 효과 없으면 선택지 1.
 - 파일: `deploy/host/compose/`, `pipeline/mcp_parse_service.py`, `common/core/resources.py`.
-- Status: todo — 논의 대상(지금 2).
+- 결정 다시(사용자 11-03): 일괄 컨테이너를 하나(`data-pipeline` — 파싱·구조화·적재)로 합친 뒤에도 parse_document는 **전용 컨테이너**로 뗀다(선택지 1 재확인).
+- 한 것(11-03 `feature/rundocs-flow`): `compose.pipeline.yml`에 `data-pipeline-mcp`(같은 이미지, entrypoint `parse-service` = `pipeline.mcp_parse_service`가 주 프로세스, 127.0.0.1:8766) — `cpu_shares` 4096(일괄 `data-pipeline` 1024 — cgroup v2는 `cpu.weight`로), 상한 CPU 2·메모리 8g, 결과 폴더만 붙임(작업 폴더 `mcp_parse/jobs`는 `run_docs.py`가 보고 medium 레인 양보). 옛 손 기동 `docker exec -d … mcp_parse_service` 없음 — 죽으면 `restart`, 꺼지면 `mcp_up.sh`(keepalive 타이머)가 띄움. 시험 `tests/general/deploy/test_compose.py`.
+- 남은 것: ① 자원 칸(`PARSE_MCP_CPUS`·`PARSE_MCP_MEM_LIMIT`·`PARSE_MCP_CPU_SHARES`)은 settings.yaml 칸이 아직 없다 — 설정 모델이 지문 파일이라 0.2.0 지문 배치에서(refactor.md C-83). ② "extract 단계 없이 파싱 함수만"(10-31 결정)은 앱 코드 몫이라 안 함. ③ 서버 확인(C-65 ⑥): 일괄 파싱 중 `parse_document` 응답 시간.
+- Status: dev — 컨테이너·CPU 비율 한 것, 서버 확인·자원 칸 남음.
 
 <a id="rn-04"></a>
 ## rn-04 · run_docs 작은 수정·레인 테스트
