@@ -122,7 +122,7 @@ def _merge_paragraphs(rep_text, other_texts, other_docs=None):
         sorted_texts = [t for t, _ in scored]
     split_others = [other.split("\n\n") for other in sorted_texts if other]  # 엔진마다 한 번만 나눔(fp-perf B3 — 문단마다 나누던 것)
     for i, para in enumerate(rep_paras):
-        if not para.strip():
+        if not para.strip() or "\x0c" in para.lstrip():  # F6(리뷰) — 문단 안·끝 쪽 나눔은 다른 엔진 글에서 자리를 못 맞춤 → 그대로 둔다
             continue
         rep_has_struct = _para_has_structure(para)
         best_para = para
@@ -151,7 +151,9 @@ def _merge_paragraphs(rep_text, other_texts, other_docs=None):
                 if not best_has_struct and not cand_has_struct and len(cand) > best_len:
                     best_para = cand
                     best_len = len(cand)
-        rep_paras[i] = best_para
+        # F6(11-03) — 문단 첫머리 쪽 나눔(\f)은 대표 본문의 쪽 시작: 다른 엔진 문단으로 바꿔도 앞에 남긴다(안 남기면 청크 page가 비고 bbox만 남음)
+        lost = para.count("\x0c") - best_para.count("\x0c")
+        rep_paras[i] = "\x0c" * lost + best_para if lost > 0 else best_para
     return "\n\n".join(rep_paras), replaced
 
 

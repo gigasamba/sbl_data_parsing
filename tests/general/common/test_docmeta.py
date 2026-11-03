@@ -22,6 +22,8 @@ def selftest():
     assert extract_date("spec.docx", "Rev. May 2026") == "2026-05"
     assert extract_date("spec_2026.docx", "") == "2026"
     assert extract_date("spec.docx", "본 문서는 2026년 작성됨") == "2026"
+    assert extract_date("faq.xlsx", "commercial perfusion is planned for 2027. | 46236 |") is None  # F6 — 본문 맨 연도는 날짜 아님
+    assert extract_date("plan_2027.xlsx", "planned for 2030") == "2027"  # 파일명의 연도는 그대로
     assert extract_date("spec.docx", "") is None
     # 본문 우선(파일명이 속일 수 있음 — holdout 실측 패턴)
     assert extract_date("final_v2.docx", "작성일 2025-09-01") == "2025-09-01"

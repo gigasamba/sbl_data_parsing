@@ -567,17 +567,18 @@ def main(argv=None):
                 seq += 1
             for c in [] if rows is not None else S.chunk_all({doc: text}, a.chunk, {doc: eng}):
                 m = c["meta"]
+                page = m["page"] or (1 if dd.get("pages") == 1 else None)  # 한 쪽짜리 문서는 1
                 bbox = None
                 if raw.get("boxes"):
                     bbox = ocr_bbox(raw["boxes"], text, m["span"])
-                elif dd["format"] == ".pdf_text" and orig:  # 글자 PDF 위치는 원본에서 찾음 — 원본이 없으면 비워 둠
-                    bbox = pdf_bbox(str(orig), m["page"] or 1, c["text"])
+                elif dd["format"] == ".pdf_text" and orig and page:  # 글자 PDF 위치는 원본 그 쪽에서 — 쪽·원본을 모르면 비워 둠
+                    bbox = pdf_bbox(str(orig), page, c["text"])  # F6(11-03) — 전에는 쪽 모름을 1쪽으로 찾아 page=None·bbox만 남음
                 toks = tokens(c["text"])
                 chunks.append(
                     {
                         "doc": di,
                         "seq": seq,
-                        "page": m["page"] or (1 if dd.get("pages") == 1 else None),  # 한 쪽짜리 문서는 1
+                        "page": page,
                         "line_start": m["line"],
                         "line_end": m["line_end"],
                         "char_start": m["span"][0],

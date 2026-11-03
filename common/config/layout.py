@@ -273,6 +273,16 @@ def is_old(doc):
     )
 
 
+_WARNED: set[str] = set()
+
+
+def warn_removed(name):
+    """지운 칸이 설정 파일에 남았다는 경고 — 프로세스마다 이름 하나에 한 번(F7, 11-03 PC 시험: 설정을 읽을 때마다 5~10번 나오던 것)."""
+    if name not in _WARNED:
+        _WARNED.add(name)
+        sys.stderr.write(f"[settings] 지운 칸 무시: {name} — 설정 파일에서 지울 것(값은 출력 안 함)\n")
+
+
 def to_model(doc, source=""):
     """파일 사전(새 배치) → 모델 배치 사전. 옛 배치·모르는 절·자리가 바뀐 칸이면 LayoutError(칸 자리만, 값 없음)."""
     if not doc:
@@ -286,7 +296,7 @@ def to_model(doc, source=""):
     out, bad, moved = {}, [], []
     for y, v in _leaves(doc):
         if y in RETIRED:
-            sys.stderr.write(f"[settings] 지운 칸 무시: {y} — 설정 파일에서 지울 것(값은 출력 안 함)\n")
+            warn_removed(y)
             continue
         m = to_model_path(y)
         if m is None:

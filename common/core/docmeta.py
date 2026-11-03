@@ -25,6 +25,8 @@ _RE_YM = re.compile(r"(20\d{2})[-_./](\d{1,2})(?!\d)")
 _RE_KO_YM = re.compile(r"(20\d{2})\s*년\s*(\d{1,2})\s*월")
 _RE_MY_EN = re.compile(rf"\b({_MON_RE})\.?\s+(20\d{{2}})\b", re.I)
 _RE_Y = re.compile(r"(20\d{2})(?!\d)")
+# 본문의 연도만은 "2026년"처럼 날짜로 적은 것만(F6 — 본문 속 맨 연도 "planned for 2027"은 문서 날짜가 아님)
+_RE_KO_Y = re.compile(r"(20\d{2})\s*년")
 
 _VER_WORD = r"(?:rev(?:ision)?|version|ver|amendment|개정판?|수정판?)"
 _SEP = r"[.\s_-]*"  # 키워드·숫자 사이 구분자(파일명은 보통 밑줄·하이픈, 본문은 점·공백) — 0개도 허용(Version2026 류)
@@ -65,11 +67,13 @@ _DATE_PATTERNS = (
 )
 
 
-def _date_in(s):
-    """가장 구체적인 패턴부터 — 문자열 안 어디든 먼저 맞는 것(연도만 있는 것보다 전체 날짜를 우선)."""
+def _date_in(s, bare_year=True):
+    """가장 구체적인 패턴부터 — 문자열 안 어디든 먼저 맞는 것(연도만 있는 것보다 전체 날짜를 우선).
+    bare_year=False(본문)면 맨 연도(_RE_Y) 대신 "2026년" 꼴만 연도로 본다 — 본문의 맨 연도는 계획·이력 글이 많아 문서 날짜가 아님."""
     if not s:
         return None
-    for rx, fn in _DATE_PATTERNS:
+    pats = _DATE_PATTERNS if bare_year else (*_DATE_PATTERNS[:-1], (_RE_KO_Y, lambda m: _fmt(m[1])))
+    for rx, fn in pats:
         m = rx.search(s)
         if m:
             r = fn(m)
@@ -80,7 +84,7 @@ def _date_in(s):
 
 def extract_date(filename, text):
     """문서 날짜(ISO YYYY-MM-DD·YYYY-MM·YYYY) — **본문 먼저, 파일명은 본문에 없을 때만**(파일명은 내용과 다를 수 있음)."""
-    return _date_in((text or "")[:2000]) or _date_in(filename or "")
+    return _date_in((text or "")[:2000], bare_year=False) or _date_in(filename or "")
 
 
 def extract_version(filename, text):
