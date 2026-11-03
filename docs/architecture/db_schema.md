@@ -65,7 +65,7 @@
 | rfp_received_start_date__c | DATE | 분류 힌트 — 같은 기회의 `RFP_Received_Start_Date__c` | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
 | rfp_received_end_date__c | DATE | 분류 힌트 — 같은 기회의 `RFP_Received_End_Date__c` | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
 | approvalname | TEXT | 분류 힌트 — 품의 제목(`LAS.Contract.ApprovalName`, 최신 판) | las | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
-| content_date | TEXT | 문서에 적힌 날짜(ISO 글자 `YYYY-MM-DD`·`YYYY-MM`·`YYYY` — 본문 앞 2000자 먼저, 없으면 파일 이름, `common/core/docmeta.py`). `created_at`(원천 등록 시각)과 다르고, 파일 생성·수정 시각도 아니다 | 모두 | build_bundle(`docmeta.doc_meta`의 `doc_date`) → 적재(판 0004) | pgsearch → 근거 `doc_date`(출력 이름은 그대로) — 검색 뷰엔 없음 | 유지 |
+| content_date | TEXT | 문서에 적힌 날짜(ISO 글자 `YYYY-MM-DD`·`YYYY-MM`·`YYYY` — 본문 앞 2000자 먼저, 없으면 파일 이름, `common/core/docmeta.py`. 연도만 있는 `YYYY`는 본문에서는 `2026년`처럼 날짜로 적힌 것만 — 맨 연도 숫자("2027년 계획"이 아닌 "planned for 2027")는 안 셈, 파일 이름의 연도는 그대로 셈(11-03 dry-run F6b)). `created_at`(원천 등록 시각)과 다르고, 파일 생성·수정 시각도 아니다 | 모두 | build_bundle(`docmeta.doc_meta`의 `doc_date`) → 적재(판 0004) | pgsearch → 근거 `doc_date`(출력 이름은 그대로) — 검색 뷰엔 없음 | 유지 |
 | embed_model | TEXT | 그 문서를 임베딩한 모델 이름(묶음 `meta.json` `embed_model`) | 모두 | 적재(판 0004) | pgsearch `index_meta` — 질의 모델 확인(섞이면 거부), 나중 guard(문서 단위) — 검색 뷰엔 없음 | 유지 |
 
 ### gold.chunk
