@@ -27,7 +27,7 @@
 
 ## 예외
 
-- `deploy/host/compose/compose.code.pipe-mcp.yml` — 25자(CLAUDE.md §1 "새 파일 이름 20자 이하"의 예외): 컨테이너 파일 `compose.pipe-mcp.yml`과 짝 이름을 맞춘다(`compose.code.yml`·`compose.code.mcp.yml`과 같은 꼴, 사용자 11-03 — 컨테이너마다 compose 파일 하나).
+- `deploy/host/compose/` compose 파일 이름(파일 이름 글자 수 규칙의 예외 — 사용자 11-03 결정): 컨테이너 이름을 그대로 쓴다 — `compose.pipeline.yml`(data-pipeline) · `compose.pipeline-mcp.yml`(data-pipeline-mcp) · `compose.mcp-server.yml`(mcp-server), 개발 서버 코드 폴더 짝은 `compose.code.yml` · `compose.code.pipeline-mcp.yml` · `compose.code.mcp-server.yml`.
 
 ## Glossary
 

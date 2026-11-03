@@ -9,7 +9,7 @@
 
 ## 0. 이미지 2개 — 역할 (D-020)
 
-| 이미지 | 역할 | `RAG_MODULE` | 돌리는 서비스(`deploy/host/compose/` — 컨테이너마다 파일 하나: `compose.pipeline.yml` data-pipeline · `compose.pipe-mcp.yml` data-pipeline-mcp · `compose.mcp.yml` mcp-server) |
+| 이미지 | 역할 | `RAG_MODULE` | 돌리는 서비스(`deploy/host/compose/` — 컨테이너마다 파일 하나: `compose.pipeline.yml` data-pipeline · `compose.pipeline-mcp.yml` data-pipeline-mcp · `compose.mcp-server.yml` mcp-server) |
 |---|---|---|---|
 | `data-pipeline` | 파싱(dedup→prepare→파싱→대표 결과)·구조화(청킹·임베딩)·적재(PostgreSQL)·퍼블리시 | `pipeline` | 상주 컨테이너 하나 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`가 docker exec, 사용자 11-03) · 1회 작업 컨테이너 없음(11-02 — 이미지 점검 `docker run --rm … selftest`만) |
 | `mcp-server` | 검색 MCP(상주) | `mcp` | `mcp`(상주, 컨테이너 이름 `mcp-server`) — 도구 job `retrieval`·`mcp_eval`은 11-01에 지움(e2-10) |
@@ -24,7 +24,7 @@
 **코드 폴더 배치** — `live`는 저장소 트리 그대로(개발 서버는 실행 이미지에 이 폴더를 붙임 — `compose.code*.yml`, 옛 오버레이 패치 `compose.patch*.yml`·`ops.host.patch_code`는 11-03에 지움). `live/deploy/host/`·`live/deploy/release/`는 호스트에서 부르는 스크립트·compose·systemd 파일이다. 아래 명령은 모두 `live`(코드 폴더 루트)에서 실행한다.
 
 ### 0-1. 개발 서버는 실행 이미지 + 코드 폴더(op-06, 사용자 10-30)
-개발 서버(폐쇄망)는 코드 없는 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`을 쓰고, 코드 폴더(저장소 트리 그대로)를 `/app/deploy`에 읽기 전용으로 붙인다 — 셸·systemd에 `CODE_DIR=/srv/rag/code/live`(판 폴더를 가리키는 링크)를 주면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`가 `compose.code.yml`·`compose.code.mcp.yml`을 덧붙인다. settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`는 실행 이미지 태그. 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 설치·바꾸기·되돌리기는 README §5-0(배포 단계 표)과 [release-and-patch.md](release-and-patch.md) §1-1. 수집(운영) 서버는 코드가 든 이미지 — 개발 서버에서 `bake.sh`로 구운 것(release-and-patch §1-2), 띄우는 법은 아래 그대로.
+개발 서버(폐쇄망)는 코드 없는 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`을 쓰고, 코드 폴더(저장소 트리 그대로)를 `/app/deploy`에 읽기 전용으로 붙인다 — 셸·systemd에 `CODE_DIR=/srv/rag/code/live`(판 폴더를 가리키는 링크)를 주면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`가 `compose.code.yml`·`compose.code.mcp-server.yml`을 덧붙인다. settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`는 실행 이미지 태그. 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 설치·바꾸기·되돌리기는 README §5-0(배포 단계 표)과 [release-and-patch.md](release-and-patch.md) §1-1. 수집(운영) 서버는 코드가 든 이미지 — 개발 서버에서 `bake.sh`로 구운 것(release-and-patch §1-2), 띄우는 법은 아래 그대로.
 
 ## 1. 설치 · 첫 실행
 

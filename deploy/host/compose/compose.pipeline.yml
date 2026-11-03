@@ -3,7 +3,7 @@
 #   상주 컨테이너 둘(사용자 11-03 — 11-02에 1회 job 서비스 지움): data-pipeline(일괄 — 옛 data-pipeline-parse·data-pipeline-structure를 합침,
 #   `idle` — 일 없이 떠 있음) · data-pipeline-mcp(MCP parse_document 작업 서비스 전용 — CPU 우선, PRD rn-03). run_docs.py·trigger.sh(parse·publish)·run_tool.sh(도구·migrate·show-stack)가
 #   그 안에서 docker exec로 돈다(image_vars.sh in_pipeline). 컨테이너마다 compose 파일 하나(사용자 11-03): 이 파일 = data-pipeline ·
-#   compose.pipe-mcp.yml = data-pipeline-mcp · compose.mcp.yml = 검색 MCP mcp-server(mcp_up.sh). 개발 서버 코드 폴더 덧붙임은 짝 파일 compose.code*.yml.
+#   compose.pipeline-mcp.yml = data-pipeline-mcp · compose.mcp-server.yml = 검색 MCP mcp-server(mcp_up.sh). 개발 서버 코드 폴더 덧붙임은 짝 파일 compose.code*.yml.
 #   준비(저장소 루트에서): docker build -f deploy/docker/Dockerfile --target pipeline -t data-pipeline:<태그> .
 #   띄우기(하위 셸로 — 대화형 셸에 export해 두면 그 뒤 settings.yaml을 고쳐도 그 셸에는 안 먹음, VS7e1 R-2):
 #     ( . deploy/host/scripts/settings_env.sh && load_settings && $DOCKER compose -f deploy/host/compose/compose.pipeline.yml up -d )

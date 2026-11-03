@@ -1,5 +1,5 @@
 """상주 컨테이너 배치(사용자 11-03 — rn-03·op-10): 컨테이너마다 compose 파일 하나 — compose.pipeline.yml = 일괄 data-pipeline,
-compose.pipe-mcp.yml = parse_document 전용 data-pipeline-mcp, compose.mcp.yml = mcp-server(코드 폴더 덧붙임도 파일마다 짝 하나),
+compose.pipeline-mcp.yml = parse_document 전용 data-pipeline-mcp, compose.mcp-server.yml = mcp-server(코드 폴더 덧붙임도 파일마다 짝 하나),
 전용 컨테이너가 CPU 나눔 비율이 더 높고 작업 서비스를 주 프로세스로 돌린다. 오버레이 패치 compose(compose.patch*.yml)는 없다."""
 
 import re
@@ -19,8 +19,8 @@ def _default(v):
 
 FILES = {  # compose 파일 → (서비스, 컨테이너 이름, 코드 폴더 짝)
     "compose.pipeline.yml": ("data-pipeline", "data-pipeline", "compose.code.yml"),
-    "compose.pipe-mcp.yml": ("data-pipeline-mcp", "data-pipeline-mcp", "compose.code.pipe-mcp.yml"),
-    "compose.mcp.yml": ("mcp", "mcp-server", "compose.code.mcp.yml"),
+    "compose.pipeline-mcp.yml": ("data-pipeline-mcp", "data-pipeline-mcp", "compose.code.pipeline-mcp.yml"),
+    "compose.mcp-server.yml": ("mcp", "mcp-server", "compose.code.mcp-server.yml"),
 }
 
 
@@ -38,7 +38,7 @@ def test_resident_containers():
     assert svc["data-pipeline"]["command"] == ["idle"] and svc["data-pipeline-mcp"]["command"] == ["parse-service"]
     assert _default(svc["data-pipeline-mcp"]["cpu_shares"]) > _default(svc["data-pipeline"]["cpu_shares"])
     up = (DEPLOY_ROOT / "deploy" / "host" / "scripts" / "mcp_up.sh").read_text(encoding="utf-8")
-    assert "compose.pipe-mcp.yml" in up and "compose.code.pipe-mcp.yml" in up
+    assert "compose.pipeline-mcp.yml" in up and "compose.code.pipeline-mcp.yml" in up
 
 
 def test_no_patch_overlay():

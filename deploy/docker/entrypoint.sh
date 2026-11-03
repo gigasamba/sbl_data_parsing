@@ -102,7 +102,7 @@ case "$cmd" in
     python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1].rsplit('.', 1)[0]) else 2)" "$1" 2>/dev/null \
       || { echo "[tool] 이 이미지에 없는 도구: $name ($1)" >&2; exit 2; }
     exec python -m "$@";;
-  mcp)        exec python -m mcp_server.main "$@";;        # 검색 MCP(deploy/host/compose/compose.mcp.yml) — 잠금 없음(읽기 전용)
+  mcp)        exec python -m mcp_server.main "$@";;        # 검색 MCP(deploy/host/compose/compose.mcp-server.yml) — 잠금 없음(읽기 전용)
   # 모듈(트리거 1회 실행 — docs/architecture.md). 종료 코드: 0 끝남·건너뜀 · 3 앞 모듈 결과 없음 · 4 PostgreSQL 없음 · 75 실행 중·마감
   parse)
     preflight
