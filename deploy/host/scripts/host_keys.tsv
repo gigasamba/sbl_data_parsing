@@ -4,7 +4,6 @@ common.host.doc_src	DOC_SRC	text
 common.host.docker	DOCKER	text
 common.host.image_stage_dir	IMAGE_STAGE_DIR	text
 common.host.output_root	RAG_OUT	text
-common.host.patch_code	PATCH_CODE	text
 common.host.pg_container	PG_CONTAINER	text
 common.host.prune_keep	PRUNE_KEEP	num
 pipeline.host.gold_dir	GOLD_DIR	text
@@ -15,8 +14,6 @@ pipeline.host.parse_mcp_cpus	PARSE_MCP_CPUS	num
 pipeline.host.parse_mcp_mem_limit	PARSE_MCP_MEM_LIMIT	text
 pipeline.host.parse_mcp_cpu_shares	PARSE_MCP_CPU_SHARES	num
 pipeline.host.run_docs_dir	RUN_DOCS_DIR	text
-pipeline.host.structure_cpus	STRUCTURE_CPUS	num
-pipeline.host.structure_mem_limit	STRUCTURE_MEM_LIMIT	text
 pipeline.host.nightly.time	NIGHTLY_TIME	text
 pipeline.host.nightly.max_docs	NIGHTLY_MAX_DOCS	num
 pipeline.host.nightly.deadline	NIGHTLY_DEADLINE	text

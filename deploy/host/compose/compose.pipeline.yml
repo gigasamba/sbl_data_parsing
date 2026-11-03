@@ -26,7 +26,7 @@ services:
   # 일괄 상주 컨테이너(일 없이 떠 있음, entrypoint `idle`): run_docs.py가 docker exec로 문서별 warm·파싱·게시·구조화·적재를 돌린다.
   # 11-03(사용자) — 옛 data-pipeline-parse·data-pipeline-structure를 하나로. MCP parse_document 작업 서비스는 아래 data-pipeline-mcp.
   # 자원 상한: 옛 파싱 칸 PARSE_CPUS·PARSE_MEM_LIMIT(settings.yaml pipeline.host.parse_cpus·parse_mem_limit)을 이 컨테이너 상한으로 쓴다 —
-  #   기본값은 옛 두 컨테이너의 합(CPU 3+2=5 · 메모리 16g+8g=24g). 옛 STRUCTURE_CPUS·STRUCTURE_MEM_LIMIT은 읽지 않는다(칸 정리는 0.2.0 지문 배치 — refactor.md C-82).
+  #   기본값은 옛 두 컨테이너의 합(CPU 3+2=5 · 메모리 16g+8g=24g — 설정 모델 기본값도 같음). 옛 칸 structure_cpus·structure_mem_limit은 지움(남으면 경고만).
   data-pipeline:
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
     container_name: data-pipeline

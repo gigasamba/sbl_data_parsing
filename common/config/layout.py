@@ -458,7 +458,19 @@ REMOVED: dict[str, frozenset[str]] = {
     # PipelineExtractPrepare(pipeline/config.py) — 사용자 10-30(op-08) · ocr 11-01(rapidocr 1.x 길 지움 — 늘 3.x) · rotate_lead·rotate_probe_fast·rotate_s0_min 11-02(회전 판단 규칙 지움 — 켬/끔만) — 지운 칸(남으면 경고만)
     "PipelineExtractPrepare": frozenset({"ocr", "rotate_fast", "rotate_lead", "rotate_probe_fast", "rotate_s0_min"}),
     # PipelineHost(pipeline/config.py) — 0.2.0(pl-46) — 이름 있는 색인·1회 job 컨테이너(load·publish — #100에서 지움) 칸(남으면 경고만)
-    "PipelineHost": frozenset({"index_conf_dir", "load_cpus", "load_mem_limit", "publish_cpus", "publish_mem_limit"}),
+    # CommonHost(common/config/settings.py) — 11-03(사용자) 오버레이 패치 compose 지움(refactor.md C-83) — 남으면 경고만
+    "CommonHost": frozenset({"patch_code"}),
+    "PipelineHost": frozenset(
+        {
+            "index_conf_dir",
+            "load_cpus",
+            "load_mem_limit",
+            "publish_cpus",
+            "publish_mem_limit",
+            "structure_cpus",
+            "structure_mem_limit",
+        }
+    ),  # structure_* — 11-03(사용자) 상주 컨테이너 하나(data-pipeline — refactor.md C-82)
     # PipelineHostNightly(pipeline/config.py) — 사용자 10-30(pl-32) — 켬/끔은 time 하나로 · max_new·modules·publish 11-01(night 모듈 배치 지움 — 새벽 배치는 run_docs)
     "PipelineHostNightly": frozenset({"enabled", "max_new", "modules", "publish"}),
     # PipelineLoad(pipeline/config.py) — 사용자 10-29(prune_* — 적재가 안 지움, pl-13 · edw_load — EDW 벡터 경로 삭제, ops.md#op-03) · index_lock_stale_sec 11-01(mc-16 — 이름 있는 색인 AD41 지움) — 지운 칸·절(남으면 경고만)

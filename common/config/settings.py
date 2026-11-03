@@ -1423,9 +1423,6 @@ class CommonHost(Section):
         "RAG_OUT",
         "호스트의 결과(output) 폴더(서버 경로) — compose가 컨테이너 /app/output으로 마운트하는 원본(T-21 — 코드가 읽는 칸은 common.paths.output_root)",
     )
-    patch_code: str | None = F(
-        None, "PATCH_CODE", "덧씌우기 코드 폴더(호스트) — compose.patch*.yml이 컨테이너 코드 자리로 마운트(기본값 없음, 사용자 11-02)"
-    )
     pg_container: str | None = F(
         None,
         "PG_CONTAINER",

@@ -13,8 +13,8 @@
     (EDW_QUERY_TABLES), row/time/response-size caps. Returns raw rows only — no summarization, the
     calling agent does its own post-processing. See mcp_server/services/edw_query.py for the full guard.
   (2026-10-21 사용자 요청·같은 날 단일화) parse_document(path, content_b64, filename, time_out_threshold=300, max_chars=200000) —
-    비정형 파일 1건의 text 파싱 대표 결과: data-pipeline-parse 컨테이너(S6b — 옛 data-parsing)의 작업 서비스(PARSE_URL, 기본 http://127.0.0.1:8766 ·
-    docker exec -d data-pipeline-parse python -m pipeline.mcp_parse_service — 토큰은 그 컨테이너 settings.yaml required.tokens.parse_mcp)가
+    비정형 파일 1건의 text 파싱 대표 결과: data-pipeline-mcp 컨테이너(11-03 — 옛 data-pipeline-parse)의 작업 서비스(PARSE_URL, 기본 http://127.0.0.1:8766 ·
+    그 컨테이너의 주 프로세스 — 토큰은 그 컨테이너 settings.yaml required.tokens.parse_mcp)가
     prepare → run_all( phase 1·2만 — 그림[VLM] 파싱은 phase 3이라 실행 안 됨, 표 인식 유지) → parse_qa → represent(대표 결과)만
     수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/mcp_parse/inbox) 하위만(jail) · 파일 상한 100MB(path·content_b64 같음 — ops.runtime.parse_max_mb, 11-03) ·
     time_out_threshold(기본 300초) 안에 끝나야 결과를 돌려주고 못 끝내면 {"error": "시간 안에 수행 못했습니다", "job_id": …}만 반환 —
