@@ -348,7 +348,9 @@ REMOVED: dict[str, frozenset[str]] = {
     # CommonModelsVlm(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(남으면 경고만)
     "CommonModelsVlm": frozenset({"model_alt"}),
     # CommonPaths(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치 · op-08) · 0.2.0(pl-46) 이름 있는 색인·원천 목록 파일 — 지운 칸(남으면 경고만)
-    "CommonPaths": frozenset({"config_dir", "criteria_file", "eval_sets_dir", "index_root", "korean_font", "sources_file"}),
+    "CommonPaths": frozenset(
+        {"client_roster", "config_dir", "criteria_file", "eval_sets_dir", "glossary_dir", "index_root", "korean_font", "sources_file"}
+    ),  # client_roster·glossary_dir — pl-38(사용자 11-03): 용어집·고객 명부는 PG 마스터 표(<PG_SCHEMA>_master)
     # CommonRuntime(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(남으면 경고만)
     "CommonRuntime": frozenset({"exp_max_workers", "exp_proc_gb_answer", "exp_proc_gb_build", "exp_proc_gb_run", "exp_reserve_gb"}),
     # CommonStore(common/config/settings.py) — 사용자 10-30(pl-32 — 재시도 횟수 없음) · 10-31(pl-12 C10 — 문서 대장·숨김 통째로 지움 · pl-08 — 정형 저장소 통째로 지움) — 옛 파일에 남아도 경고만
@@ -356,7 +358,7 @@ REMOVED: dict[str, frozenset[str]] = {
         {"doc_registry", "registry_editions", "registry_etag_md5", "registry_retry_max", "struct_backend", "struct_db"}
     ),
     # CommonText(common/config/settings.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
-    "CommonText": frozenset({"parse_token_norm"}),
+    "CommonText": frozenset({"parse_token_norm", "search_recency"}),  # search_recency — pl-38: 판 묶음(family)·최신성 순위 지움
     # McpDev(mcp_server/config.py) — 11-01(e2-10 — mcp_eval 지움) — 지운 칸(남으면 경고만)
     "McpDev": frozenset({"eval_s_parts"}),
     # McpEdwQuery(mcp_server/config.py) — 사용자 10-29 — 접속은 common.connections.rdb 읽기 계정(ops.md#op-03)

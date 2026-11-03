@@ -209,7 +209,7 @@ def test_load_table_spans():
         rows, patched = _capture()
         db = _DB()
         no_edw = mock.patch.object(edw_meta, "fetch", lambda docs: ({}, 0))  # EDW 조인·ParsingMeta 쓰기는 이 시험 밖(pl-29)
-        no_pm = mock.patch.object(pgvector_load, "_mark_loaded", lambda loaded, kept=(): 0)
+        no_pm = mock.patch.object(pgvector_load, "_mark_loaded", lambda loaded, kept=(), version=None: 0)
         with patched, no_edw, no_pm, jsonlog.context(run_id=str(uuid.uuid4())):
             with span.span("load.pgvector", "load") as top:
                 counts = pgvector_load.load(db, bundle)

@@ -132,9 +132,7 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 
 | 무엇 | 위치 |
 |---|---|
-| 용어집(동의어·약어) | `app/deploy/resources/vocab/glossary/domain_terms.csv`(다른 폴더는 settings.yaml `common.paths.glossary_dir` — 옛 env `GLOSSARY_DIR`, 아래 5-1) |
-| 고객 명부 | settings.yaml `common.paths.client_roster`(옛 env `CLIENT_ROSTER` — CSV `이름,별칭\|별칭` 또는 JSON) |
-| 제품 코드 규칙 | `app/deploy/resources/vocab/glossary/id_patterns.csv` |
+| 용어집(동의어·약어) · 고객 명부 · 제품 코드 규칙 | PG 마스터 표 `<PG_SCHEMA>_master`(pl-38 — 구조화 고객 판별·검색이 읽음). 원본 CSV `app/deploy/resources/vocab/glossary/{domain_terms,client_roster,id_patterns,…}.csv`(또는 서버 폴더)를 고친 뒤 `run_tool.sh migrate master load [--dir <폴더>]`(아래 5-1). 옛 설정 `common.paths.glossary_dir`·`client_roster`(env `GLOSSARY_DIR`·`CLIENT_ROSTER`)는 지움 — 남아 있으면 경고만 |
 | 원천 표·열(문서 위치) | (11-01 원천 목록 `sources.json`·`show-sources` 지움 — 원천은 `run_docs`가 EDW에서 만든 `rdb:csv`. 열 이름이 다른 표는 `RDB_COL_*`) |
 | 엔진 구성 | `resources/config/pipeline_stack.json`(서버·PC 같음 · `ops.paths.stack_file` · 확인 `show-stack`) — 바꾸기 = 파일을 고쳐 오버레이 패치 |
 | 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성) · 서버 정답 폴더(settings.yaml 호스트 항목 `pipeline.host.gold_dir` — `run_tool.sh`가 컨테이너 `/data/gold`로 붙임) |
@@ -146,15 +144,15 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 
 ### 5-1. 고객 명부·용어집 작성법 (예제 파일을 복사해서 고쳐 쓰기)
 
-샘플(가상 회사·가상 제품 — 사용자 10-30, git·이미지에 들어감)은 경로를 설정하지 않으면 아무 데도 반영되지 않는다. 로더는 `common.paths.client_roster`로 지정한 파일과 `common.paths.glossary_dir` 폴더의 `domain_terms.csv`만 읽는다(옛 env `CLIENT_ROSTER`·`GLOSSARY_DIR`은 읽지 않음).
+구조화·검색은 파일이 아니라 PG 마스터 표(`<PG_SCHEMA>_master` — pl-38, 사용자 11-03)만 읽는다. 표는 CSV 여섯 개(`client_roster`·`client_master`·`contract_master`·`domain_terms`·`id_patterns`·`units` — 파일 이름·머리글 그대로)로 `migrate master load`가 통째로 채운다. 기본 폴더는 이미지·코드 폴더의 샘플(가상 회사·가상 제품 — 사용자 10-30, git·이미지에 들어감) `app/deploy/resources/vocab/glossary/`, 서버 실명 자료는 서버 폴더를 `--dir`로. 표가 비었으면 구조화·검색이 시작하지 않는다(채운 뒤 검색 MCP는 다음 적재 판에서 다시 읽음). 고친 뒤에는 `gold_version`의 마스터 해시가 바뀌지만 이미 적재한 문서는 자동으로 다시 처리하지 않는다.
 - `app/deploy/resources/vocab/glossary/client_roster.csv` — 고객 명부 샘플(고객·잠재 고객, 빈칸·비활성 행 예시 포함 + 한빛 샘플 문서의 고객 Argen Biopharma·Luminexis Therapeutics)
 - `app/deploy/resources/vocab/glossary/domain_terms.csv` — 용어집 샘플
 - `app/deploy/resources/vocab/glossary/contract_master.csv`·`client_master.csv` — 계약·고객 마스터 샘플(머리글은 `docs/architecture/db_schema.md` §5)
 
-> ⚠️ **지금 compose에는 `/srv/rag/env/`(명부 `client_roster.csv`, 용어집 `glossary/`)를 컨테이너에 붙이는 줄이 없다**(`refactor.md` C-21). settings.yaml에 호스트 경로를 그대로 적으면 파일 없음 오류가 난다 — 경로는 **컨테이너 안에서 보이는** 경로로 적는다. 마운트를 더할지 정하기 전에는 이미지 안 예제 폴더를 쓴다.
+> ⚠️ **지금 compose에는 `/srv/rag/env/glossary/`를 컨테이너에 붙이는 줄이 없다**(`refactor.md` C-21). `--dir`에는 **컨테이너 안에서 보이는** 폴더를 적는다(마운트를 더할지 정하기 전에는 코드 폴더 안 `resources/vocab/glossary/`를 고쳐 쓰고 `migrate master load`).
 
 #### 고객 명부
-settings.yaml `common.paths.client_roster`. 한 줄 = 고객 하나 · 머리글 그대로 · 필수는 `canonical_name` 또는 `name_ko` 하나뿐, 나머지는 비워도 됨.
+마스터 표 `client_roster`(파일 `client_roster.csv` — 위 `migrate master load`). 한 줄 = 고객 하나 · 머리글 그대로 · 필수는 `canonical_name` 또는 `name_ko` 하나뿐, 나머지는 비워도 됨.
 
 | 항목 | 쓰는 법 |
 |---|---|
@@ -168,9 +166,9 @@ settings.yaml `common.paths.client_roster`. 한 줄 = 고객 하나 · 머리글
 | `description`·`source`·`updated` | 메모·출처·수정일 — 비워도 됨 |
 
 - 영문 3자 이하 별칭(예: `PFE`)은 부분 일치 오탐 때문에 자동으로 무시된다 — 4자 이상이나 한글로 적는다. 같은 별칭을 두 고객에 쓰지 않는다.
-- 옛 형식(`이름,별칭;별칭` 2열 CSV, JSON `{"이름": [별칭]}`)도 그대로 읽힌다.
+- 마스터 표에 넣는 파일은 위 새 양식 머리글이어야 한다(`master load`가 머리글이 다르면 거부). 옛 형식(`이름,별칭;별칭` 2열 CSV, JSON `{"이름": [별칭]}`)은 `gen_roster --check`·`read_roster` 점검으로만 읽힌다.
 - UTF-8로 저장(Excel이면 "CSV UTF-8"). Excel 기본 cp949도 읽힌다.
-- 서버: `/srv/rag/env/client_roster.csv`에 두고 settings.yaml `common.paths.client_roster`에 **컨테이너 안에서 보이는** 그 파일 경로를 적는다(위 ⚠️).
+- 서버: 실명 명부는 서버 폴더(예 `/srv/rag/env/glossary/client_roster.csv` — 나머지 다섯 파일도 같은 폴더에)에 두고 `migrate master load --dir <컨테이너 안에서 보이는 그 폴더>`(위 ⚠️).
 
 #### 고객 마스터에서 명부 자동 생성
 SFDC·EDW 내보내기(예 `client_master.csv`)에서 명부를 만든다. 손으로 명부를 쓰지 않고, 마스터의 열 이름만 매핑 파일에 적는다(열 이름은 회사마다 달라 코드가 아니라 매핑으로 맞춤).
@@ -196,7 +194,7 @@ PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --check 
 ```
 
 #### 용어집
-`<glossary_dir>/domain_terms.csv`. 한 줄 = 개념 하나, 여러 값 항목은 `\|` 구분 · 빈칸 허용.
+`domain_terms.csv`(마스터 표 `domain_terms`). 한 줄 = 개념 하나, 여러 값 항목은 `\|` 구분 · 빈칸 허용.
 
 | 항목 | 쓰는 법 |
 |---|---|
@@ -213,8 +211,8 @@ PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --check 
 | `status` | **비우면 approved(반영)** · 빼고 싶은 행만 `draft`(또는 `rejected`) |
 
 - 적재 오류(조용히 넘기지 않음): 명시한 `concept_id` 중복 · 없는 ID를 가리키는 `broader`/`related` · `id_patterns.csv`의 깨진 정규식.
-- 서버: 폴더째 `/srv/rag/env/glossary/`(같은 폴더에 `id_patterns.csv`·`units.csv`도 — 예제는 `app/deploy/resources/vocab/glossary/`의 같은 이름 파일)에 두고 settings.yaml `common.paths.glossary_dir`에 **컨테이너 안에서 보이는** 그 폴더 경로를 적는다(위 ⚠️).
-- 자동 초안: `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`는 `output/` 아래 draft만 만든다. 사람이 확인해 `domain_terms.csv`로 옮긴다(`status`를 비우거나 `approved`).
+- 서버: 폴더째 `/srv/rag/env/glossary/`(여섯 파일 — 예제는 `app/deploy/resources/vocab/glossary/`의 같은 이름 파일)에 두고 `migrate master load --dir <컨테이너 안에서 보이는 그 폴더>`(위 ⚠️).
+- 자동 초안: `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`·`python -m pipeline.transform.structure.draft_terms --bundle <묶음>`(새 회사 이름 후보 — 11-03부터 묶음 밖 도구, pl-38)은 `output/` 아래 draft만 만든다. 사람이 확인해 `domain_terms.csv`로 옮긴다(`status`를 비우거나 `approved`).
 - 실명(실고객·실제품)은 서버 폴더에만 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤 같은 질문 세트로 검색 결과 전/후 비교(검증 페이지 — `mcp_eval`은 11-01에 지움).
 
 #### 점검(반영 전)

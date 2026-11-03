@@ -192,25 +192,133 @@ PC 대역 예시 — [pl-29](../prd/load.md#pl-29) 10-31. 고객 연결 4단계�
 | gold_reason | NVARCHAR(2000) | gold 상태 이유(실패 원인 등) | (pl-24) | (운영자) | 새로 |
 | engines_failed | NVARCHAR(MAX) | 실패한 엔진(JSON — 이름·이유·걸린 시간), 없으면 NULL | (파싱 단계 — 사용자 10-30 "EDW에도") | (운영자·재시도 판단) | 새로 |
 | loaded_at | DATETIME2(0) | (사용자 11-02 — C10 예외) gold에 적재한 시각(UTC) — 적재가 PG 커밋 뒤 쓸 행(active 중 최신)에 UPDATE. 칸이 없으면 그 칸만 빼고 쓰고(`gold_version`과 따로 — 리뷰 #95), 쓰기 계정이 없거나 실패하면 경고와 건수만(적재는 그대로) | pgvector_load `_mark_loaded` → parsing_meta_db `mark_loaded`·`set_loaded` | (운영자 — 적재 확인) | 새로 |
-| gold_version | NVARCHAR(64) | (사용자 11-02) 이 문서를 gold에 올린 코드 판(`VERSION`) — 다시 올릴지 판단(C9). `loaded_at`과 같은 UPDATE로 쓴다. 칸이 없으면 그 칸만 빼고 `loaded_at`만 | pgvector_load `_mark_loaded` → parsing_meta_db `set_loaded` | parsing_meta_db `done_source_keys`·run_docs `edw_done_keys`(비면 다시 대상 — ok·partial만) | 새로 |
+| gold_version | NVARCHAR(64) | (사용자 11-02) 이 문서를 gold에 올린 코드 판 — `<VERSION>+m<마스터 해시 앞 8자>`(pl-38 — 구조화가 읽은 마스터 표, §4) · 다시 올릴지 판단(C9). `loaded_at`과 같은 UPDATE로 쓴다. 칸이 없으면 그 칸만 빼고 `loaded_at`만 | pgvector_load `_mark_loaded` → parsing_meta_db `set_loaded` | parsing_meta_db `done_source_keys`·run_docs `edw_done_keys`(비면 다시 대상 — ok·partial만) | 새로 |
 
 **운영이 더한 분류·고객 칸(G19 — 4차 grill, G1·G9를 뒤집음):** 운영이 ParsingMeta에 더한 분류·고객 칸(`doc_class`·`doc_class_low_conf`·`doc_class_at`·`doc_class_model`·`sf_op_id`·`created_at`·`sf_acc_name` 등 — 이 저장소의 DDL에는 없음)은 0.2.0에 모두 지운다(DB 담당자 D-3·C-76, 등급 A — 분류 모델·시각도 두지 않음, 사용자 11-02). 분류 라벨·고객·등록 시각은 시스템별 gold `doc`에만 둔다([pl-33](../prd/transform.md#pl-33), [pl-29](../prd/load.md#pl-29)). 그때 운영 분류 스크립트가 멈추므로 운영 담당자에게 알린다.
 
 **단계별 기록(사용자 10-30 grill — 등급 A, DB 담당자 D-3):** 단계마다 성공했을 때만 쓴다(파싱이 통째로 실패하면 행 없음 — C3) — 파싱: 성공한 엔진(`engines_used`)·실패한 엔진(`engines_failed`)·`parsed_at` · silver: `silver_version` · gold: `gold_version`·`loaded_at`·`gold_status`(사용자 11-02). `stack_version`·`rep_engine`은 두지 않는다(사용자 11-01). 3차의 "읽는 칸만" 안에 칸을 다시 더한 것이다. 저장 구조(silver = Object Storage uuid5 폴더 · gold = pgvector)는 [pl-32](../prd/load-schema.md#pl-32).
 
-## 4. master — CSV 파일 (`resources/vocab/glossary/`, 사용자 10-30)
+## 4. master — 마스터 표 (검색 PG, 스키마 `<PG_SCHEMA>_master`, [pl-38](../prd/load.md#pl-38) — 사용자 11-03)
 
-마스터 성격 자료(용어집, 고객 명부, `contract_master`, `client_master`)는 **DB가 아니라 CSV 파일**이다. 별도 마스터 PostgreSQL도, 용어집용 SQLite 대역도 없다(10-30 grill 9~10차의 "마스터 PG + PC SQLite 대역" 결정을 뒤집음). CSV(샘플 데이터)는 git의 `resources/vocab/glossary/`(지금 폴더)에 두어 이미지에 함께 들어간다 — 서버 폴더·마운트 없음, `glossary_dir`는 이미지 경로. 샘플 CSV 넷이 들어 있다(10-30 — `client_roster.example.csv`·`domain_terms.example.csv`를 대신함, 한빛 샘플 문서의 고객·제품 포함). git의 CSV는 샘플 데이터(사용자 10-30) — server-guide §5 기밀 규칙과 충돌 없음.
+원본은 git CSV `resources/vocab/glossary/<표>.csv`(샘플 데이터 — server-guide §5 기밀 규칙과 충돌 없음). 실행 중에는 이 표만 읽는다 — `dbtool up --target master`로 표를 만들고 `dbtool master load`가 CSV로 내용을 한 트랜잭션에 통째로 바꾼다(초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load`). CSV 하나 = 표 하나 — 칸은 CSV 머리글 그대로(모두 `TEXT`) + 파일 순서 `row_no`(`INTEGER`, 기본 키), 목록 칸은 지금처럼 `;`·`|` 글자. 머리글을 바꾸면 새 Alembic 판(갈래 `master`). 판: `common/store/db/migrations/versions/0001_master_base.py` · 모델: `common/store/db/models/master_tables.py` · 읽기·채우기: `common/store/master.py`(프로세스마다 한 번 — 서버(dev·prd)는 못 읽으면 멈춤, PC는 같은 CSV로 채운 SQLite 대역). 서버에는 아직 없어서 결정은 모두 `새로`다. `tests/server/common/test_db_schema.py`가 이 절의 칸을 모델과 대조한다.
 
-| 파일 | 무엇 | 머리글 | 읽는 곳 |
-|---|---|---|---|
-| `domain_terms.csv` | 용어 사전(C-21) | `concept_id,canonical,category,synonyms,abbreviations,weak_synonyms,broader,related,context_required,case_sensitive,definition_ko,definition_en,source,owner,status,updated` (`status`는 approved·draft) | `common.core.terms` |
-| `client_roster.csv` | 고객 명부(C-21, 새 형식) | `client_id,canonical_name,name_ko,aliases,client_type,segment,country,parent_client_id,status,description,source,updated` — 읽는 칸: `canonical_name`(비면 `name_ko`), `aliases`(`;`·`\|` 구분), `status`(inactive·deleted면 건너뜀) | `common.core.terms` 고객 별칭(초안은 `gen_roster`) |
-| `contract_master.csv` | 계약 마스터 | `contract_id,company,company_id,product_code,modality,site,line_id,batches_contracted,contract_value_usd,currency,term_months,signed_on,start_date,end_date,status` (옛 `struct.contract_master`와 같은 칸) | 계약 연결·고객 별칭 |
-| `client_master.csv` | 고객 마스터 | `company_id,company,aliases`(별칭 `\|` 구분) | 고객 별칭 |
+- **해시·판:** `master_meta.hash` = 표 이름·머리글·`row_no` 순서 행의 sha256(16진 64자). 구조화가 읽은 마스터 해시를 묶음 `meta.json` `master_hash`에 남기고 적재가 ParsingMeta `gold_version` = `<VERSION>+m<해시 앞 8자>`로 쓴다(`master_hash`가 없는 옛 묶음은 `<VERSION>`만). `silver_version`에는 붙이지 않는다. 마스터 해시는 캐시 열쇠·code_fp에 없다 — 마스터가 바뀌어도 자동 전체 재처리는 없고 `gold_version`으로 추적한다.
+- **파일로 남는 것:** `client_master.example.csv`·`client_master_map.example.json`(명부 초안 도구 `gen_roster` 입력·예시) · `client_roster_seed.json`(주요 바이오·제약사 공개 이름 seed — 구조화 `infer_clients`가 파일로 읽음).
 
-- `client_master.example.csv`(머리글 `Account_Id,Account_Name,Account_Name_KR,Alias_List,Account_Type,Billing_Country,Parent_Id,Account_Status`)는 EDW 모양 원본 — `gen_roster --kind client --source csv:client_master.csv --mapping …`이 명부 초안을 만들 때 읽는다.
-- 같이 있는 `id_patterns.csv`·`units.csv`·`client_roster_seed.json`·`client_master_map.example.json`은 그대로.
+### master.client_roster
+
+고객 명부(C-21, 새 형식) — 읽는 칸: `canonical_name`(비면 `name_ko`), `aliases`(`;`·`|` 구분), `status`(inactive·deleted면 건너뜀). 읽는 곳: `common.core.terms` `_aliases`(구조화 고객 판별 `infer_clients` · 검색 질문 고객·별칭).
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| row_no | INTEGER PK | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 새로 |
+| client_id | TEXT | CSV 칸 `client_id` | `dbtool master load` | 〃 | 새로 |
+| canonical_name | TEXT | CSV 칸 `canonical_name` | `dbtool master load` | 〃 | 새로 |
+| name_ko | TEXT | CSV 칸 `name_ko` | `dbtool master load` | 〃 | 새로 |
+| aliases | TEXT | CSV 칸 `aliases` | `dbtool master load` | 〃 | 새로 |
+| client_type | TEXT | CSV 칸 `client_type` | `dbtool master load` | 〃 | 새로 |
+| segment | TEXT | CSV 칸 `segment` | `dbtool master load` | 〃 | 새로 |
+| country | TEXT | CSV 칸 `country` | `dbtool master load` | 〃 | 새로 |
+| parent_client_id | TEXT | CSV 칸 `parent_client_id` | `dbtool master load` | 〃 | 새로 |
+| status | TEXT | CSV 칸 `status` | `dbtool master load` | 〃 | 새로 |
+| description | TEXT | CSV 칸 `description` | `dbtool master load` | 〃 | 새로 |
+| source | TEXT | CSV 칸 `source` | `dbtool master load` | 〃 | 새로 |
+| updated | TEXT | CSV 칸 `updated` | `dbtool master load` | 〃 | 새로 |
+
+### master.client_master
+
+고객 마스터(별칭 `|` 구분) — 지금 읽는 코드 없음(활용 설계는 후순위). 읽는 곳: 없음.
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| row_no | INTEGER PK | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 새로 |
+| company_id | TEXT | CSV 칸 `company_id` | `dbtool master load` | 〃 | 새로 |
+| company | TEXT | CSV 칸 `company` | `dbtool master load` | 〃 | 새로 |
+| aliases | TEXT | CSV 칸 `aliases` | `dbtool master load` | 〃 | 새로 |
+
+### master.contract_master
+
+계약 마스터(옛 `struct.contract_master`와 같은 칸) — 지금 읽는 코드 없음. 읽는 곳: 없음.
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| row_no | INTEGER PK | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 새로 |
+| contract_id | TEXT | CSV 칸 `contract_id` | `dbtool master load` | 〃 | 새로 |
+| company | TEXT | CSV 칸 `company` | `dbtool master load` | 〃 | 새로 |
+| company_id | TEXT | CSV 칸 `company_id` | `dbtool master load` | 〃 | 새로 |
+| product_code | TEXT | CSV 칸 `product_code` | `dbtool master load` | 〃 | 새로 |
+| modality | TEXT | CSV 칸 `modality` | `dbtool master load` | 〃 | 새로 |
+| site | TEXT | CSV 칸 `site` | `dbtool master load` | 〃 | 새로 |
+| line_id | TEXT | CSV 칸 `line_id` | `dbtool master load` | 〃 | 새로 |
+| batches_contracted | TEXT | CSV 칸 `batches_contracted` | `dbtool master load` | 〃 | 새로 |
+| contract_value_usd | TEXT | CSV 칸 `contract_value_usd` | `dbtool master load` | 〃 | 새로 |
+| currency | TEXT | CSV 칸 `currency` | `dbtool master load` | 〃 | 새로 |
+| term_months | TEXT | CSV 칸 `term_months` | `dbtool master load` | 〃 | 새로 |
+| signed_on | TEXT | CSV 칸 `signed_on` | `dbtool master load` | 〃 | 새로 |
+| start_date | TEXT | CSV 칸 `start_date` | `dbtool master load` | 〃 | 새로 |
+| end_date | TEXT | CSV 칸 `end_date` | `dbtool master load` | 〃 | 새로 |
+| status | TEXT | CSV 칸 `status` | `dbtool master load` | 〃 | 새로 |
+
+### master.domain_terms
+
+용어 사전(C-21 — `status`는 approved·draft, approved만 씀). 읽는 곳: `common.core.terms` `load_glossary`(검색 질문 넓히기·근거 상태·고객 별칭의 org_client).
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| row_no | INTEGER PK | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 새로 |
+| concept_id | TEXT | CSV 칸 `concept_id` | `dbtool master load` | 〃 | 새로 |
+| canonical | TEXT | CSV 칸 `canonical` | `dbtool master load` | 〃 | 새로 |
+| category | TEXT | CSV 칸 `category` | `dbtool master load` | 〃 | 새로 |
+| synonyms | TEXT | CSV 칸 `synonyms` | `dbtool master load` | 〃 | 새로 |
+| abbreviations | TEXT | CSV 칸 `abbreviations` | `dbtool master load` | 〃 | 새로 |
+| weak_synonyms | TEXT | CSV 칸 `weak_synonyms` | `dbtool master load` | 〃 | 새로 |
+| broader | TEXT | CSV 칸 `broader` | `dbtool master load` | 〃 | 새로 |
+| related | TEXT | CSV 칸 `related` | `dbtool master load` | 〃 | 새로 |
+| context_required | TEXT | CSV 칸 `context_required` | `dbtool master load` | 〃 | 새로 |
+| case_sensitive | TEXT | CSV 칸 `case_sensitive` | `dbtool master load` | 〃 | 새로 |
+| definition_ko | TEXT | CSV 칸 `definition_ko` | `dbtool master load` | 〃 | 새로 |
+| definition_en | TEXT | CSV 칸 `definition_en` | `dbtool master load` | 〃 | 새로 |
+| source | TEXT | CSV 칸 `source` | `dbtool master load` | 〃 | 새로 |
+| owner | TEXT | CSV 칸 `owner` | `dbtool master load` | 〃 | 새로 |
+| status | TEXT | CSV 칸 `status` | `dbtool master load` | 〃 | 새로 |
+| updated | TEXT | CSV 칸 `updated` | `dbtool master load` | 〃 | 새로 |
+
+### master.id_patterns
+
+ID 모양 정규식(계약 번호·제품 코드 등). 읽는 곳: `common.core.terms` `load_id_patterns_typed`(검색 tie-break·엔티티 힌트).
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| row_no | INTEGER PK | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 새로 |
+| id_type | TEXT | CSV 칸 `id_type` | `dbtool master load` | 〃 | 새로 |
+| regex | TEXT | CSV 칸 `regex` | `dbtool master load` | 〃 | 새로 |
+| example | TEXT | CSV 칸 `example` | `dbtool master load` | 〃 | 새로 |
+| note | TEXT | CSV 칸 `note` | `dbtool master load` | 〃 | 새로 |
+| updated | TEXT | CSV 칸 `updated` | `dbtool master load` | 〃 | 새로 |
+
+### master.units
+
+단위 표기 — 지금 읽는 코드 없음(숫자+단위 나누기는 코드 규칙). 읽는 곳: 없음.
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| row_no | INTEGER PK | CSV 파일 순서(1부터) | `dbtool master load` | 읽기 순서(ORDER BY) | 새로 |
+| canonical | TEXT | CSV 칸 `canonical` | `dbtool master load` | 〃 | 새로 |
+| variants | TEXT | CSV 칸 `variants` | `dbtool master load` | 〃 | 새로 |
+| quantity | TEXT | CSV 칸 `quantity` | `dbtool master load` | 〃 | 새로 |
+| equivalent_to | TEXT | CSV 칸 `equivalent_to` | `dbtool master load` | 〃 | 새로 |
+| note | TEXT | CSV 칸 `note` | `dbtool master load` | 〃 | 새로 |
+| updated | TEXT | CSV 칸 `updated` | `dbtool master load` | 〃 | 새로 |
+
+### master.master_meta
+
+마스터 내용 해시 1행(`id` = 1). 쓰는 곳: `dbtool master load`. 읽는 곳: `common.store.master.read`(표가 비었으면 멈춤).
+
+| 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
+|---|---|---|---|---|---|
+| id | INTEGER PK | 늘 1 | `dbtool master load` | — | 새로 |
+| hash | TEXT | 내용 sha256(위 해시 규칙) | 〃 | `common.store.master.read` | 새로 |
+| loaded_at | TIMESTAMP WITH TIME ZONE | 채운 시각(UTC) | 〃 | (운영자) | 새로 |
 
 ## 5. DB 담당자 확인 필요
 

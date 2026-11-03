@@ -43,6 +43,10 @@ def expected(target, schema, dim=None):
         from common.store.db.models.log_tables import index_defs, log_metadata
 
         return log_metadata(schema), index_defs(), {}
+    if target == "master":
+        from common.store.db.models.master_tables import index_defs, master_metadata
+
+        return master_metadata(schema), index_defs(), {}
     _, src = ST.split_schema(schema)
     return ST.search_metadata(schema, dim), ST.index_defs(dim), ST.views_expected(src)
 
@@ -71,7 +75,7 @@ def _register_types(ext):
 def compare(conn, target, schema, dim=None):
     """기준 스키마 `schema`(PG_SCHEMA)와 원천 스키마 5벌(pl-28)을 표 정의와 비교해 보고 하나로 합친다. 기준 스키마에는 판 표와 공용 시퀀스만
     있어야 한다(남는 표 = 옛 한 벌 표 — 0002가 지움). 원천 스키마 보고의 항목에는 스키마 이름을 앞에 붙인다. applog는 스키마 하나라 바로 비교한다."""
-    if target == "applog":
+    if target in ("applog", "master"):
         return compare_one(conn, target, schema, dim)
     rep = Report()
     for t in _rows(

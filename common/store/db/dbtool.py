@@ -6,6 +6,7 @@
   python -m common.store.db.dbtool check   --target …   — 표 정의 ↔ 실제 DB 비교(차이·판이 끝이 아니면 종료 코드 1)
   python -m common.store.db.dbtool --pg-cases orca_<이름>  — PC 전용 PG 시험(새 시험 DB — 기본 스키마·vector 확장 자리, VS8a B-1·R-9)
   python -m common.store.db.dbtool maintain --target applog  — 현재+2개월 파티션 생성/만료 기록 정리(매일 예약)
+  python -m common.store.db.dbtool master load [--schema S] [--dir D]  — 마스터 표(`<S>_master`)를 CSV(기본 git resources/vocab/glossary)로 통째로 바꿈(pl-38 — up --target master 뒤)
   이미지: `migrate up --target all --bundle …`(entrypoint — pipeline 이미지, load와 같은 잠금).
 · 갈래 search = 기준 스키마(PG_SCHEMA — --schema로 바꿈) 하나 + 원천 스키마 5벌 `<기준>_sfdc|crms|las|faq|other`(pl-28 — 판 0002가 만듦).
   판 기록 표·공용 doc_id 시퀀스는 기준 스키마에(<기준>.alembic_version).
@@ -28,7 +29,11 @@ from common.core.console import utf8_stdout
 from common.core.paths import PKG_ROOT
 
 MIGRATIONS = PKG_ROOT / "store" / "db" / "migrations"  # op-09 — paths 상수 기준
-TARGETS = ("search", "applog")  # struct 갈래는 사용자 11-01에 없앰(서버에 남은 struct 스키마는 코드가 읽지 않음 — DB 담당자가 두거나 지움)
+TARGETS = (
+    "search",
+    "applog",
+    "master",
+)  # master = 용어집·고객 명부(pl-38, `<기준>_master`) · struct 갈래는 사용자 11-01에 없앰(서버에 남은 struct 스키마는 코드가 읽지 않음 — DB 담당자가 두거나 지움)
 _SCHEMA_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}")  # common/store/pg.conf()의 PG_SCHEMA 규칙(그 함수 안 정규식)과 같음
 _SCRIPTS: dict = {}
 
@@ -70,6 +75,11 @@ def known(target):
 
 # ── 판 상태 — q는 SQL 글자 → [dict] 함수(psycopg PG.q·SQLAlchemy 연결 둘레) ───────────────────
 def schema_of(target, schema=None):
+    """갈래의 스키마 — search는 기준 스키마 그대로, master는 `<기준>_master`(pl-38 — 개발자마다 기준이 다르니 이름도 따라감), applog는 고정 이름."""
+    if target == "master":
+        from common.store.master import schema_name
+
+        return schema_name(schema_of("search", schema))
     if target == "applog":
         schema = schema or "applog"
         if not _SCHEMA_RE.fullmatch(schema) or schema == "public":
@@ -347,17 +357,37 @@ def _targets(a):
 
 
 def _schema_arg(a, target):
-    """--schema는 검색 기준 스키마 — applog는 --target applog로 따로 줄 때만 받는다(all이면 고정 이름 applog)."""
-    return a.schema if target == "search" or a.target == target else None
+    """--schema는 검색 기준 스키마 — master는 그 기준에서 이름을 만듦(`<기준>_master`), applog는 --target applog로 따로 줄 때만(all이면 고정 이름 applog)."""
+    return a.schema if target in ("search", "master") or a.target == target else None
+
+
+def master_load(base=None, folder=None):
+    """pl-38 — 마스터 표를 CSV로 통째로 바꿈(한 트랜잭션) · 반환 (스키마, 해시). 판이 끝이 아니면 거부.
+    folder 기본 = git `resources/vocab/glossary` — 서버만의 기밀 명부는 서버 폴더를 --dir로(같은 파일 이름·머리글)."""
+    from common.store import master
+    from common.store.pg import PG, conf
+
+    c = conf()
+    schema = schema_of("master", base or c["PG_SCHEMA"])
+    db = PG({**c, "PG_SCHEMA": schema})
+    try:
+        st, have = status(db.q, "master", schema)
+        if st != "끝":
+            raise DbToolError(f"{schema} 판 {st} {have} — 먼저 `migrate up --target master`")
+        return schema, master.load(db, master.read_csvs(Path(folder)) if folder else None)
+    finally:
+        db.cn.close()
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    ap.add_argument("cmd", nargs="?", choices=["up", "stamp", "current", "check", "maintain"])
+    ap.add_argument("cmd", nargs="?", choices=["up", "stamp", "current", "check", "maintain", "master"])
+    ap.add_argument("sub", nargs="?", choices=["load"], help="master load — 마스터 표를 git CSV로 채움(pl-38)")
     ap.add_argument("--target", choices=[*TARGETS, "all"], default="all")
     ap.add_argument("--schema", help="기준 스키마(기본 settings PG_SCHEMA — 원천 스키마는 <기준>_<원천>)")
     ap.add_argument("--dim", type=int, help="임베딩 차원(새 검색 스키마 — 있는 스키마는 DB 차원)")
     ap.add_argument("--bundle", help="묶음 폴더 — meta.json의 dim")
+    ap.add_argument("--dir", help="master load — CSV 폴더(기본 git resources/vocab/glossary · 서버 기밀 명부는 서버 폴더)")
     ap.add_argument(
         "--create-extension", action="store_true", help="vector 확장이 없으면 만들기(옛 PG_CREATE_EXTENSION=1 — PC·단독 시험만)"
     )
@@ -369,12 +399,18 @@ def main(argv=None):
         return 1 if pg_cases(a.pg_cases) else 0
     if a.cmd == "maintain" and a.target != "applog":
         ap.error("maintain은 --target applog만 지원")
+    if (a.cmd == "master") != (a.sub == "load"):
+        ap.error("master는 `master load`로만")
     if not a.cmd:
         ap.error("명령: up·stamp·current·check")
     from common.store.pg import has_conn
 
     if not has_conn():
         raise DbToolError("PG 접속 정보 없음(settings.yaml required.pg) — SQLite 대역은 판 관리 밖(표 정의에서 바로 만듦)")
+    if a.cmd == "master":
+        schema, h = master_load(a.schema, a.dir)
+        print(f"[migrate] master {schema}: CSV로 채움 · 해시 {h[:8]}")
+        return 0
     dim, rc = _dim_arg(a), 0
     for target in _targets(a):
         schema = schema_of(target, _schema_arg(a, target))

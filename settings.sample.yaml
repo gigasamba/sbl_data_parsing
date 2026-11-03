@@ -122,7 +122,6 @@ common:
       spend_file:  # 지출 장부 파일 경로(호출마다 금액 한 줄 — 프로세스·실행 전체가 공유) · 값: 경로
   # ─── 검색 토큰 정규화 ───
   text:
-    search_recency: '1'  # [파라미터] 같은 문서군의 최신 판 우선 모드 · 기본 1 · 값: 0(끔)·1(최신을 묻는 질문만)·2(항상) 중 하나
     search_en_stem: true  # 검색 토큰의 영어 복수→단수 정규화(G16, 가산만) · 기본 true · 값: true·false
     token_num_norm: true  # 검색 토큰의 숫자·단위 정규화(T1) · 기본 true · 값: true·false
 
@@ -300,11 +299,9 @@ ops:
     shutdown_sec: 5.0  # 종료 flush 전체 상한(초) · 기본 5.0 · 값: 0 이상 초
   # ─── 경로 ───
   paths:
-    client_roster:  # 고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) · 값: 경로
     doc_dir:  # 원본 문서 폴더 · 값: 경로
     doc_dir_prepared:  # 준비(dedup·회전) 끝난 문서 폴더 · 값: 경로
     draft_terms_out:  # 용어 자동 초안 CSV 경로 · 값: 경로
-    glossary_dir:  # 용어 사전 폴더(domain_terms.csv·id_patterns.csv 등) · 값: 경로
     mcp_bundle:  # 검색할 로컬 묶음(bundle) 폴더 경로 · 값: 경로
     output_root:  # 결과(output) 폴더 · 값: 경로
     runlog_dir:  # 실행 기록(output/logs) 루트 폴더 · 값: 경로

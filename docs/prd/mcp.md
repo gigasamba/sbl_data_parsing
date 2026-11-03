@@ -35,7 +35,8 @@
 - 결정(허브 10-31, 최신 결정 우선): C6이 이긴다 — 고객 거르기는 `client_edw`만. 위 T2의 '`sf_acc_name`이 비었을 때만 라벨로 판정'은 없앤다(별칭 그룹 정확 일치·목록 OR은 남김 — 별칭 CSV는 [load.md#pl-38](load.md#pl-38) 0.2.0 몫). 근거의 `client` = `client_edw`, `clients_doc`은 따로 둔 참고 칸.
 - 구현(11-01 `feature/mcp-ops-parity`, 허브 지시 "운영이 version/superseded를 아직 내면 칸은 두고 추정만 멈춤"): 운영 계약(05 §2.4)에 `version`·`superseded`·`doc_date`가 남아 있어 칸은 둔다. 운영 예시 값은 모두 null이라 운영도 본문 추정을 하지 않는 것으로 본다 → `search` 근거의 `version`은 수집 manifest 값만(없으면 null), `superseded`는 늘 null(`shaping._evidence`). `doc_date`는 이 결정 밖이라 그대로. 본문 추정값(`common/core/docmeta.py`)은 안쪽 최신성 순위(L3-1)에만 남는다 — 순위를 EDW `created_at`으로 바꾸는 일은 남음. 시험: `test_search_svc` `_selftest_evidence_rdb_meta`.
 - 11-02(사용자 C6): 고객 판정 고침 — 본문 고객 라벨로 앞으로 올리던 길(AD38·BR50 `clientscope`)·고객별 하위 검색(BR23)·설정 `SEARCH_CLIENT_HARD`/`STRICT`를 지우고, `client` 거르기는 `client_edw` 정확 일치(`client_like`면 부분 일치)만. 별칭 묶음은 [pl-38](load.md#pl-38) 몫.
-- Status: todo — 최신성 순위를 `created_at`으로(남은 것). 고객 판정·version·superseded 출력은 done(11-01·11-02)
+- 결정(사용자 11-03 — [load.md#pl-38](load.md#pl-38)): 판 묶음(family)과 그것으로 옛 판을 뒤로 밀던 최신성 순위(`recency_rerank`·설정 `SEARCH_RECENCY`)를 지운다. `doc_date`·`version`·`superseded` 칸은 남김. 잠재 문제(같은 문서의 다른 판이 `s3_key`가 달라 '최신' 질문에서 옛 판이 위로 올 수 있음)는 pl-38에 기록 — 필요해지면 `created_at`으로 다시 설계.
+- Status: todo — 최신성 순위는 11-03에 지움(다시 설계는 잠재 문제로). 고객 판정·version·superseded 출력은 done(11-01·11-02)
 
 <a id="mc-04"></a>
 ## mc-04 · 집계 답
@@ -212,7 +213,6 @@
 | 기능 | 스위치 = 기본값 | 필요한 것 |
 |---|---|---|
 | 하드 고객 격리 | `SEARCH_CLIENT_HARD=0`, `SEARCH_CLIENT_STRICT=0` | — |
-| 늘 새 판 먼저 | `SEARCH_RECENCY=1`("최신" 질문만, `2` = 늘) | — |
 | `query_edw` | `EDW_QUERY=1` | `common.connections.rdb` + 읽기 계정, 또는 `RDB_SQLITE` |
 | `edw_meta` | — | `EDW_META_DIR`의 자료(기본 `/app/config/edw_meta`) |
 | `parse_document` | OCR/VLM 엔진 없음(OCR 스위치는 0.2.0에 지움 — pl-46) · 제한 글자 쪽당 1초, VLM 쪽당 60초 | `mcp_parse_service` 실행 + `PARSE_SERVICE_TOKEN` |

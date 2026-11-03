@@ -110,6 +110,9 @@ def _retriever(src):
         try:
             _STATE["checked_at"] = time.time()
             if _version_of(_STATE["dbs"]) != _STATE.get("version"):
+                from common.store import master
+
+                master.reset()  # pl-38 — 새 적재 판이면 마스터 표(용어집·고객 명부)도 다시 읽음(`dbtool master load` 뒤 반영)
                 _build_retriever()
         finally:
             _RELOAD_LOCK.release()

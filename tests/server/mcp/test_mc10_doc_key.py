@@ -27,7 +27,7 @@ def test_doc_key_bundle():
         ({"file_path": path, "file_name": "a.txt", "file_sha256": "a" * 64}, "a" * 64),  # 옛 묶음 — file_sha256만
     ]
     for doc, want in cases:
-        with pgfix.retriever(_bundle(doc), GLOSSARY_DIR=None) as R:
+        with pgfix.retriever(_bundle(doc)) as R:
             assert list(R.doc_meta) == [want] and list(R.key_local) == [f"{want}:0"]
             hits, _ = R.search("바이러스", 5, methods=["bm25"])
             assert hits and hits[0]["doc_key"] == path and hits[0]["chunk_key"] == f"{hits[0]['doc_id']}:0", (
@@ -41,9 +41,9 @@ def test_local_doc_fill():
     (이 dict를 읽던 internal_docs 목록·조회는 10-30 지움 — e2-18.)"""
     win = r"C:\docs\b.txt"  # PC(Windows) — build_bundle이 str(orig.resolve())를 file_path로 씀
     srv = "/data/docs/c.txt"
-    with pgfix.retriever(_bundle({"file_path": win, "doc_key": win, "doc_name": "b.txt"}), GLOSSARY_DIR=None) as R:
+    with pgfix.retriever(_bundle({"file_path": win, "doc_key": win, "doc_name": "b.txt"})) as R:
         a = R.local.docs[0]
-    with pgfix.retriever(_bundle({"file_path": srv, "doc_key": srv}), GLOSSARY_DIR=None) as R:
+    with pgfix.retriever(_bundle({"file_path": srv, "doc_key": srv})) as R:
         b = R.local.docs[0]
     assert (a["doc_key"], a["file_name"]) == (win, "b.txt"), a
     assert (b["doc_key"], b["file_name"]) == (srv, "c.txt"), b

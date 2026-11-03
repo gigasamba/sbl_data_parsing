@@ -4,13 +4,11 @@ import json
 from pathlib import Path
 
 import pipeline.transform.structure.build_bundle as M
-from common.config.settings import COMMON
 from common.core import docmeta as DM
 from common.core.paths import STACK_FILE
 from common.core.text import tokens
 from pipeline import config as pc
 from pipeline.transform.structure.build_bundle import (
-    canon_clients,
     embed_all,
     fig_empty,
     fig_host,
@@ -27,12 +25,10 @@ from pipeline.transform.structure.build_bundle import (
 def selftest():
     # L3-1: docs.jsonl에 날짜·개정·구판·문서군(DM.doc_meta)이 실제로 섞여 들어가는지(결합 지점) — 규칙 자체는 common/docmeta.py --selftest
     m = DM.doc_meta("msa_rev2.docx", "[구판] 작성일 2026-05-01")
-    assert m == {"doc_date": "2026-05-01", "version": "2", "superseded": True, "family": "msa"}
-    print("[selftest] docs 메타(날짜·개정·구판·문서군, L3-1) 결합 통과")
+    assert m == {"doc_date": "2026-05-01", "version": "2", "superseded": True}  # family는 pl-38에 지움
+    print("[selftest] docs 메타(날짜·개정·구판, L3-1) 결합 통과")
 
-    ds = [{"client": "Northfield Biologics", "meta_confirmed": True}, {"client": "Northfeld Biologics"}, {"client": "Contoso Pharma"}]
-    canon_clients(ds)
-    assert ds[1] == {"client": "Northfield Biologics", "client_raw": "Northfeld Biologics"} and ds[2]["client"] == "Contoso Pharma"
+    # canon_clients(OCR 오탈자 고객 이름 맞추기)는 pl-38에 지움 — 교차 확인 고객(meta_confirmed)을 묶음이 더 만들지 않아 늘 할 일이 없었음
     ds = [
         {"client": "Pfizer Inc.", "meta_confirmed": True},
         {"full_text": "Supply Agreement · Pfizer Inc. / PFE-MAB-02 (C-PFE-2024-03)"},
@@ -65,12 +61,15 @@ def selftest():
     # BR57 — warn_if_no_client_roster: 명부 없음 + client 전부 빈 채일 때만 경고 한 줄(동작은 안 바꿈).
     import contextlib
     import io
+    from unittest import mock
 
-    with COMMON.env(GLOSSARY_DIR=None, CLIENT_ROSTER=None):  # op-09 — 인계 파일(terms.py)도 설정 객체로 읽음
+    from common.store import master
+
+    with mock.patch.object(master, "get", lambda: master.Master({})):  # pl-38 — 빈 마스터(명부 없음)
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
             warn_if_no_client_roster([{"client": None}, {"client": ""}])
-        assert "ops.paths.glossary_dir" in buf.getvalue() and "WARNING" in buf.getvalue(), buf.getvalue()
+        assert "dbtool master load" in buf.getvalue() and "WARNING" in buf.getvalue(), buf.getvalue()
 
         buf = io.StringIO()  # 명부 없어도 client가 하나라도 있으면 경고 안 함
         with contextlib.redirect_stderr(buf):
