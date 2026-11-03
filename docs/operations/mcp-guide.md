@@ -2,7 +2,7 @@
 
 검색 MCP 서버(`mcp-server` 이미지)에 붙는 클라이언트(답변 agent·개발자)를 위한 안내다. 도구 6개의 입력, 돌려주는 모양, 한도, 오류, 쓰는 순서를 적는다. 서버 주소·토큰 같은 접속 값은 여기에 적지 않는다. 운영 담당자에게 받는다.
 
-- 기준: 운영 MCP 규약(05 §2~§6, 10-27 측정)을 따르고, 이 저장소의 코드(`mcp_server/routers/`·`schemas/`)와 맞춘다. 운영과 다른 곳은 **⚠ 운영과 다름**으로 표시했다.
+- 값은 이 저장소의 코드(`mcp_server/routers/`·`schemas/`)와 맞춘다. 운영 MCP와 다른 곳은 **⚠ 운영과 다름**으로 표시했다.
 - 이 문서의 입력·출력 표는 `tests/general/mcp/test_mcp_guide.py`가 코드(도구 서명·`schemas/`)와 대조한다. 지원 확장자 목록도 그 시험이 엔진 구성 파일·파싱 서비스 코드와 대조한다.
 - 관련 요건: [mc-16](../prd/mcp.md#mc-16)(search) · [mc-17](../prd/mcp.md#mc-17)(원문 도구) · [mc-15](../prd/mcp.md#mc-15)(대표 결과 위치) · [mc-05](../prd/mcp.md#mc-05)(판·구판 칸).
 
@@ -12,7 +12,7 @@
 - 호출: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"<도구>","arguments":{…}}}`. 결과는 `result.content[0].text`의 JSON 글자다(클라이언트가 파싱).
 - 상태 확인: `GET /health`(토큰 없음). 기동 직후 예열하는 동안은 503 `{"warming": true}`, 끝나면 200 `{"ready": true}`.
 - 토큰이 없거나 틀리면 HTTP 401 `{"error":"unauthorized"}`.
-- 도구 하나의 시간 상한은 서버 설정 `tuning.search.server.tool_timeout_sec`(기본 30초 — 운영 서버 기본값과 같다. 운영 안내서의 60초는 틀린 값)다. 넘으면 `{"error":"timeout"}`. 클라이언트 쪽 제한 시간은 60초 이상으로 넉넉히 둔다.
+- 도구 하나의 시간 상한은 서버 설정 `tuning.search.server.tool_timeout_sec`(기본 30초)다. 넘으면 `{"error":"timeout"}`. 클라이언트 쪽 제한 시간은 60초 이상으로 넉넉히 둔다.
 - 동시에 돌 수 있는 수를 넘어 대기열까지 차면 바로 `{"error":"busy"}` — 잠시 뒤 다시 부른다.
 
 ## 2. 도구 목록
@@ -32,7 +32,7 @@
 
 <!-- 시험이 대조하는 목록: 바꿀 때는 resources/config/pipeline_stack.json(parse)·pipeline/extract/engines/registry.py(EXTRA_FORMATS)를 먼저 고친다 -->
 - **검색 대상(파이프라인이 파싱해 적재하는 형식)** — 엔진 구성 파일 `resources/config/pipeline_stack.json`의 `parse` 표: `.bmp` `.csv` `.doc` `.docm` `.docx` `.dot` `.dotx` `.eml` `.htm` `.html` `.hwpx` `.jpeg` `.jpg` `.json` `.log` `.md` `.mht` `.mhtml` `.msg` `.odp` `.ods` `.odt` `.pdf` `.png` `.pot` `.potx` `.ppsx` `.ppt` `.pptm` `.pptx` `.rtf` `.tif` `.tiff` `.tsv` `.txt` `.xls` `.xlsb` `.xlsm` `.xlsx` `.xlt` `.xltx` `.xml`
-  - 2차 확장자(pl-45, 사용자 11-01·11-03): 매크로·서식·쇼 파일(`.docm` `.pptm` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.xlsb`), 오픈문서(`.odt` `.ods` `.odp`), `.rtf`, 글자 자료(`.csv` `.tsv` `.md`), 데이터·기록(`.json` `.xml` `.log` — 파일 글을 그대로 읽음). `.hwp`는 아직 아니다.
+  - 2차 확장자(pl-45): 매크로·서식·쇼 파일(`.docm` `.pptm` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.xlsb`), 오픈문서(`.odt` `.ods` `.odp`), `.rtf`, 글자 자료(`.csv` `.tsv` `.md`), 데이터·기록(`.json` `.xml` `.log` — 파일 글을 그대로 읽음). `.hwp`는 아직 아니다.
   - `.pdf`는 글자 PDF와 스캔(이미지) PDF를 따로 판정해 다른 엔진으로 읽는다. 압축 파일(`.zip` 등)과 위 목록 밖 형식은 파싱 대상이 아니다.
 - **`parse_document`가 받는 형식** — `pipeline/mcp_parse_service.py`의 `allowed_exts()`(검색 대상 − 이미지): `.csv` `.doc` `.docm` `.docx` `.dot` `.dotx` `.eml` `.htm` `.html` `.hwpx` `.json` `.log` `.md` `.mht` `.mhtml` `.msg` `.odp` `.ods` `.odt` `.pdf` `.pot` `.potx` `.ppsx` `.ppt` `.pptm` `.pptx` `.rtf` `.tsv` `.txt` `.xls` `.xlsb` `.xlsm` `.xlsx` `.xlt` `.xltx` `.xml`
   - 이미지 파일은 받지 않는다(그림 VLM 단계를 돌리지 않음). 스캔 PDF는 내부망 VLM으로 읽는다(쪽마다 VLM 호출이라 글자 PDF보다 오래 걸림 — 작업 제한 시간 하나). VLM 설정(주소·모델)이 없으면 text가 비고 "스캔 PDF — VLM 미설정", VLM이 실패하면 "스캔 PDF — VLM 파싱 실패"가 붙는다.
@@ -180,7 +180,7 @@
 | `ms` | 걸린 시간(밀리초) |
 <!-- /guide:list-output -->
 
-**⚠ 운영과 다름:** ① 운영 목록에 있는 대표 엔진 칸 `rep_engine`은 없다(사용자 11-01 — 대표 엔진 칸을 지운 결정과 맞춤). ② `source_system`은 저장값(`SFDC`)으로 나간다 — 운영은 EDW 값(`SFDC-test`). ③ 문서 고르기는 검색 DB(gold `doc` — 분류·영업 기회·등록 시각·원본 경로)에서, 결과 위치·파싱 시각·`doc_key`는 그때 EDW ParsingMeta에서 읽는다 — 적재 전 문서는 나오지 않고, ParsingMeta 행이 없는 적재 문서는 `no_files`로 나온다(운영은 ParsingMeta에서 고름). ParsingMeta를 못 읽으면 `registry_unavailable`.
+**⚠ 운영과 다름:** ① 운영 목록에 있는 대표 엔진 칸 `rep_engine`은 없다. ② `source_system`은 저장값(`SFDC`)으로 나간다 — 운영은 EDW 값(`SFDC-test`). ③ 문서 고르기는 검색 DB(gold `doc` — 분류·영업 기회·등록 시각·원본 경로)에서, 결과 위치·파싱 시각·`doc_key`는 그때 EDW ParsingMeta에서 읽는다 — 적재 전 문서는 나오지 않고, ParsingMeta 행이 없는 적재 문서는 `no_files`로 나온다(운영은 ParsingMeta에서 고름). ParsingMeta를 못 읽으면 `registry_unavailable`.
 
 ### 5-3. `get_doc_fulltext` 입력
 
@@ -230,7 +230,7 @@ EDW 읽기 전용 SQL. 요약 없이 원래 행만 돌려준다(집계는 SQL에
 | 이름 | 형식 | 필수 | 기본 | 규칙 |
 |---|---|---|---|---|
 | `sql` | 글자 | 예 | — | `SELECT` 또는 `WITH`로 시작하는 한 문장. 시스템 표, DML·DDL·EXEC 단어(글자 안이라도), `@` 변수, 큰따옴표 이름(대괄호만), 여러 문장은 거부 |
-| `max_rows` | 정수 | 아니요 | 1000 | 서버 상한(`EDW_QUERY_MAX_ROWS`, 기본 1000)을 넘을 수 없음 — 운영 서버 실측도 1000이다(운영 안내서의 2,000은 틀린 값, 사용자 11-03) |
+| `max_rows` | 정수 | 아니요 | 1000 | 서버 상한(`EDW_QUERY_MAX_ROWS`, 기본 1000)을 넘을 수 없음 |
 
 - 한도: 질의 20초(`EDW_QUERY_TIMEOUT_SEC` — 넘으면 `timeout`) · 응답 2MB(`EDW_QUERY_MAX_BYTES` — 넘으면 끝 행을 버리고 `truncated: true`) · 칸 글자 2,000자(넘으면 ` …(truncated)` 표시, `truncated` 깃발은 안 바뀜).
 - 돌려주는 모양(성공·실패 같은 9칸): `ok` · `columns`(`[{name, type}]`, type은 `int`·`float`·`decimal`·`str`·`date`·`datetime`·`time`·`bool`·`binary`·`unknown`) · `rows`(칸 순서대로 값 목록) · `row_count` · `truncated` · `elapsed_ms` · `dialect`(`tsql`) · `source`(`mssql`) · `error`(성공이면 null, 실패면 `"<코드>: <설명>"`).
@@ -276,7 +276,7 @@ EDW 표·칸의 한글 설명을 정적 자료에서 3단으로 찾는다(DB 접
 인자 없이 부르면 스키마 요약에 `search_attrs`가 붙는다 — `search`의 원천별 `attrs` 키(EDW 사슬 파일 그대로, [pl-52](../prd/load-schema.md#pl-52)):
 `{"SFDC": {"filter": {"project_id": "project_code__c", …, "doc_class": "doc_class"}, "attrs": ["contract_date", …], "evidence": ["sf_op_id", …]}, "CRMS": …}`.
 `filter`는 `search` 인자 이름 → `attrs` 키(`search` 인자에 없는 사슬 `filter:` 이름은 여기 나오지 않고 `attrs` 키로만 쓴다), `attrs`는 `attrs` 거르기에 줄 수 있는 키 전부,
-`evidence`는 근거 `attrs`에 나오는 키다. 요약이 오류(데이터셋 미구성 등)면 `search_attrs`를 붙이지 않는다. **⚠ 운영과 다름:** 운영 `edw_meta`에는 `search_attrs`가 없다(이 저장소가 더함).
+`evidence`는 근거 `attrs`에 나오는 키다. 요약이 오류(데이터셋 미구성 등)면 `search_attrs`를 붙이지 않는다. **⚠ 운영과 다름:** 운영 `edw_meta`에는 `search_attrs`가 없다.
 
 ```json
 {"name": "edw_meta", "arguments": {}}
