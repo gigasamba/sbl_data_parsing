@@ -22,10 +22,8 @@ import time
 from pathlib import Path
 
 from common.ai.embed import embed_texts
-from common.config import layout as L  # 안내 메시지의 settings.yaml 자리
 from common.config import settings as C  # S7c: 설정 객체(common 칸 EMBED_MODEL·EMBED_BASE_URL·LLM_ALLOW_EXTERNAL·GLOSSARY_DIR·OV_URL)
 from common.core import docmeta as DM  # 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
-from common.core import repfmt as AQ  # 대표 결과 형식 읽기(라벨 어휘·키-값 쌍·표 행)
 from common.core import span as SP  # op-01 성능 span
 from common.core import terms as T  # 고객 명부·이름 정규화·ID 모양(검색과 같은 규칙)
 from common.core.console import utf8_stdout
@@ -37,9 +35,9 @@ from common.core.meaning import strip_page_numbers
 from common.core.paths import APP_ROOT  # 폴더 재편 뒤 이 상수만 바뀌면 됨
 from common.core.text import (  # 색인 본문·토큰 규칙(모듈 계약)
     index_text,
-    normalize_value,
     tokens,
 )
+from common.store import master  # pl-38 — 마스터 표 해시(묶음 meta.json master_hash)
 from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
 from pipeline.shared import runtrace  # op-01 run.progress
 from pipeline.transform.structure import chunking as S  # 청킹·개체 정규식(구조화 모듈)
@@ -285,7 +283,7 @@ def infer_clients(docs, head=400, roster=None):
 
 
 def warn_if_no_client_roster(docs):
-    """BR57 — 명부(GLOSSARY_DIR org_client + stack.json client_aliases)가 비어 있어 canon_clients·infer_clients가
+    """BR57 — 명부(마스터 client_roster·용어 사전 org_client + stack.json client_aliases — pl-38)가 비어 있어 infer_clients가
     아무것도 못 채운 채(묶음에 문서가 있는데도 client가 전부 빈 채) 끝났으면 경고 한 줄만(동작은 안 바꿈 — 이
     묶음을 쓰는 검색 쪽 clientscope·BR23 엔티티 분해가 조용히 무동작이 되는 원인을 빌드 시점에 알린다. 실측:
     V11 풀 묶음이 GLOSSARY_DIR 없이 지어져 505건 전부 client 없음 → BR57에서 드러남)."""
@@ -295,54 +293,10 @@ def warn_if_no_client_roster(docs):
         return  # 명부는 있는데 이 묶음 문서들이 그냥 다 안 걸렸을 뿐 — 경고 대상 아님
     print(
         "WARNING: 고객 명부 없음 — client 메타가 비어 고객 필터·비교 분할이 동작 안 함"
-        f" (settings.yaml {L.to_yaml('common.paths.glossary_dir')}·{L.to_yaml('common.paths.client_roster')} 확인)",
+        " (마스터 표 확인: `dbtool master load` — resources/vocab/glossary/client_roster.csv·domain_terms.csv)",
         file=sys.stderr,
         flush=True,
     )
-
-
-def collect_draft_terms(docs, glossary_dir=None):
-    """SI43④ — 문서에서 새 회사 이름 후보(structure/draft_terms.py 휴리스틱)를 찾아 이미 아는 이름(명부·용어집
-    전 카테고리 — client든 CDMO든, approved만 — draft 자신은 빼지 않음: 여러 구조화 실행에 걸쳐 되풀이로 나온
-    이름일수록 write_draft_terms의 카운트가 올라가야 "가장 빈번한 것"이 의미가 있다)을 뺀 나머지를
-    **output/ 자동 draft CSV**(`terms.write_draft_terms` → `terms.draft_terms_path()`, GLOSSARY_DIR이 아님 — 독립
-    검토 BLOCK 1, 10-13: GLOSSARY_DIR은 서버에서 이미지 밖 실 운영 사전 폴더라 거기 쓰면 PermissionError로
-    구조화 전체가 깨진다)에 쌓는다 — 사람 승인 없이, BM25 weak 가중만(하드 필터·고객 판별엔 안 들어감).
-    glossary_dir 인자는 **읽기**(이미 아는 approved 이름 판별)에만 쓰고, 쓰기 경로는 항상 output/(또는
-    DRAFT_TERMS_OUT) — 둘을 혼동하지 않는다. 이 함수 전체(명부·
-    용어집 읽기 포함)를 try/except로 감싸 — 어떤 이유로든(디스크 가득·권한·잠긴 파일) 실패해도 WARNING만 찍고
-    빈 목록을 돌려준다(warn_if_no_client_roster와 같은 관례) — 구조화(build_bundle.py main())가 이 보조 기능 때문에
-    멈추지 않게. 반환: 새로 추가한 이름 목록(로그용, 실패하면 빈 목록)."""
-    d = glossary_dir or C.cfg().paths.glossary_dir  # S7c — 설정 객체(인계 칸 — terms.py는 아직 env로 읽음)
-    try:
-        from pipeline.transform.structure import draft_terms as DT
-
-        known = set(T._aliases()) | {a for al in T._aliases().values() for a in al}
-        if d:
-            for r in T.load_glossary(d).values():  # 모든 카테고리(org_client든 org_cdmo든) — approved만, draft는 안 뺌
-                known.add(r.get("canonical") or "")
-                known.update(T.split_terms(r.get("synonyms")))
-                known.update(T.split_terms(r.get("abbreviations")))
-        known_norm = {T.norm(n) for n in known if n}
-        cands = DT.collect_candidate_org_names(docs, known_norm, T.norm)
-        return T.write_draft_terms(cands, category="org_client")
-    except Exception as ex:  # 독립 검토 BLOCK 1: 보조 기능 실패가 구조화를 깨면 안 됨
-        print(f"WARNING: SI43④ 새 회사 이름 후보 draft 쓰기 실패(구조화는 계속) — {type(ex).__name__}: {ex}", file=sys.stderr, flush=True)
-        return []
-
-
-def canon_clients(docs, cut=0.9):
-    """OCR 오탈자 고객사 이름(Northfeld) → 교차 확인된 고객사 이름(Northfield)으로. 확인 안 된 값만, 유사도 cut 이상일 때만
-    바꾸고 원래 값은 client_raw에 남김. 개발 PC 실측: rapidocr_ko·paddleocr(같은 PP-OCR 계열)가 같은 글자를 같이 틀림."""
-    import difflib
-
-    known = {d["client"] for d in docs if d.get("meta_confirmed") and d.get("client")}
-    for d in docs:
-        c = d.get("client")
-        if c and not d.get("meta_confirmed") and c not in known:
-            m = difflib.get_close_matches(c, known, n=1, cutoff=cut)
-            if m:
-                d["client_raw"], d["client"] = c, m[0]
 
 
 def load_figures(images_dir):
@@ -499,16 +453,12 @@ def main(argv=None):
                 reps[r["doc"]] = json.loads(f.read_text(encoding="utf-8"))
     if use_rep and all("meta" in (x.get("rep") or {}) for x in reps.values()):
         items = [(doc, {"format": x["rep"]["format"], "pages": x["rep"].get("pages")}) for doc, x in sorted(reps.items())]
-        meta_docs = {doc: x["rep"]["meta"] for doc, x in reps.items()}
         route = sel = {}
     else:  # 예전 대표 결과·단계 1 실험: qa.json·엔진별 결과에서
         qa = json.loads((pd / "qa.json").read_text(encoding="utf-8"))
         items = sorted(qa["docs"].items())
         route = json.loads((pd / "route.json").read_text(encoding="utf-8")) if (pd / "route.json").exists() else {}
         sel = json.loads((pd / "selection.json").read_text(encoding="utf-8")) if (pd / "selection.json").exists() else {}
-        from pipeline.transform.represent.crosscheck import build  # 실험 경로(--no-rep·예전 대표 결과)만 — 기본 경로는 _rep의 rep.meta
-
-        meta_docs = build(a.parse_dir, a.src)  # 교차 확인 (라벨, 값)
     src = Path(a.src)
     n_fig_dropped = 0  # AD21③ — 빈 VLM 그림은 청크를 만들지 않음
 
@@ -523,13 +473,6 @@ def main(argv=None):
                 if r.get("file_name") and r.get("key"):
                     _manifest_keys[r["file_name"]] = r["key"]
     docs, chunks, n_sum, seen_sha = [], [], {"llm": 0, "lead": 0}, {}
-    alias = {}  # 견적·주문 번호 → 같은 문서의 (교차 확인된) 계약 번호
-    for md in meta_docs.values():
-        con = AQ.pick(md["pairs"], AQ.CONTRACT_FIRST)
-        if con:
-            for p in md["pairs"]:
-                if AQ.CONTRACT_RE.search(p["label"]) and " / " not in p["label"]:
-                    alias[normalize_value(p["value"])] = con["value"]
     progress = contextlib.ExitStack()  # op-01 — 60초마다 run.progress(처리한 문서/전체)
     progress.enter_context(runtrace.Progress(total=len(items), done=lambda: len(docs), unit="doc"))
     for doc, dd in items:
@@ -550,27 +493,6 @@ def main(argv=None):
             continue
         ab = lead_summary(text)
         n_sum["lead"] += 1
-        md = meta_docs.get(doc, {})
-        cl = AQ.pick(md.get("pairs", []), AQ.CLIENT_RE, AQ.SUPPLIER_RE)
-        co = AQ.pick(md.get("pairs", []), AQ.CONTRACT_RE)
-        cl = cl or AQ.pick(md.get("all", []), AQ.CLIENT_RE, AQ.SUPPLIER_RE)  # 교차 확인 못 하면 단일 엔진 값(meta_confirmed=False)
-        co = co or AQ.pick(md.get("all", []), AQ.CONTRACT_RE)
-        if not co:  # 라벨이 깨진 문서('··ID | C-MRH-2023-02') — 'ID·번호'로 끝나는 라벨의 값이 제목에도 있으면 계약 번호
-            head = T.norm(text[:200])
-            co = next(
-                (
-                    {**p, "src": "head"}
-                    for p in md.get("all", [])
-                    if re.search(r"(id|번호|no\.?)\s*$", p["label"].strip(), re.I)
-                    and len(T.norm(p["value"])) >= 6
-                    and T.norm(p["value"]) in head
-                ),
-                None,
-            )
-        if co and not T.ID_LIKE.fullmatch(co["value"].strip()):
-            co = None  # ID 모양이 아닌 값('3'·'Question')은 계약 번호로 쓰지 않음
-        if co and normalize_value(co["value"]) in alias:
-            co = {**co, "value": alias[normalize_value(co["value"])]}
         # 원본이 이 서버에 있으면 원본에서, 없으면 파싱 모듈이 남긴 원본 정보(rep.source)에서 — 구조화 모듈 분리(docs/architecture.md)
         orig = (src / doc) if (src / doc).exists() else None
         so = (raw.get("rep") or {}).get("source") or {}
@@ -684,12 +606,9 @@ def main(argv=None):
             seq += 1
     progress.close()
     runtrace.docs(total=len(docs))  # op-01 — pipe_run 문서 수(구조화에 들어간 문서)
-    canon_clients(docs)
     infer_clients(docs)
     warn_if_no_client_roster(docs)
-    added = collect_draft_terms(docs)  # SI43④ — 새 회사 이름 후보를 glossary draft로(약한 BM25만)
-    if added:
-        print(f"[bundle] 새 회사 이름 후보 {len(added)}건을 용어집 draft로 추가(사람 승인 전): {', '.join(added)}", flush=True)
+    # 새 회사 이름 후보(용어 초안)는 묶음 밖 도구로(pl-38 D3): python -m pipeline.transform.structure.draft_terms --bundle <묶음>
     for c in chunks:  # G9: 청크 머리말 [문서명 · 고객 · 절 제목] — 같은 양식 다른 고객·문서를 가름
         d = docs[c["doc"]]
         c["head"] = "[" + " · ".join(x for x in (Path(d["doc_name"]).stem, d.get("client"), c.get("section")) if x) + "]"
@@ -729,6 +648,7 @@ def main(argv=None):
         "fig_chunks": sum(1 for c in chunks if c.get("image_id")),  # L1
         "figure_chunks_dropped": n_fig_dropped,  # AD21③
         "sec": round(time.time() - t0, 1),
+        "master_hash": master.get().hash,  # pl-38 — 고객 판별이 읽은 마스터 표 해시(적재가 gold_version `<VERSION>+m<앞 8자>`로)
     }
     (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
     old = final.with_name(final.name + ".old")

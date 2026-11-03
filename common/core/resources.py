@@ -59,7 +59,8 @@ def _host_cpus():
 
 
 def _quota_ratio(cg):
-    """cgroup CPU 한도(코어 수, 소수 가능) — v2 cpu.max "<quota> <period>"·v1 cpu.cfs_quota_us/cfs_period_us. 없거나("max", -1) 못 읽으면 None."""
+    """cgroup CPU 한도(코어 수, 소수 가능) — v2 cpu.max "<quota> <period>"·v1 cpu.cfs_quota_us/cfs_period_us. 없거나("max", -1)
+    못 읽거나 period가 0이면 None(한도 없음 취급)."""
     try:
         q = _read(cg / "cpu.max")
         if q and not q.startswith("max"):
@@ -68,7 +69,7 @@ def _quota_ratio(cg):
         quota, period = _read(cg / "cpu" / "cpu.cfs_quota_us"), _read(cg / "cpu" / "cpu.cfs_period_us")
         if quota and period and int(quota) > 0:
             return int(quota) / int(period)
-    except ValueError:
+    except (ValueError, ZeroDivisionError):
         pass
     return None
 
@@ -216,10 +217,11 @@ def cpu_load(cg=CG, sample=0.25, now=None, sleep=None, loadavg=None):
         if u1 is not None:
             t1 = now()
             prev = _LAST.get(str(cg))
-            if not prev or not 0.2 <= t1 - prev[0] <= 10:
+            if not prev or prev[1] is None or not 0.2 <= t1 - prev[0] <= 10:
                 sleep(sample)
                 prev, (t1, u1) = (t1, u1), (now(), _cg_usage_usec(cg))
-            _LAST[str(cg)] = (t1, u1)
+            if u1 is not None:  # 다시 잰 값을 못 읽으면 남기지 않음(다음 호출이 None과 빼지 않게)
+                _LAST[str(cg)] = (t1, u1)
             if u1 is not None and t1 > prev[0]:
                 return max(0.0, (u1 - prev[1]) / (lim * (t1 - prev[0]) * 1e6))
     la = loadavg()

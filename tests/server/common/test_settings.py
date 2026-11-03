@@ -90,7 +90,7 @@ def selftest():
         good.write_text(
             _new(
                 "common:\n  run_env: local\n  connections:\n    pg:\n      host: 127.0.0.1\n      port: '55433'\n"
-                f"      password: {secret}\n  runtime:\n    cpu_max_load: ''\n  paths:\n    glossary_dir: ''\n"
+                f"      password: {secret}\n  runtime:\n    cpu_max_load: ''\n  paths:\n    draft_terms_out: ''\n"
                 "pipeline:\n  extract:\n    anything: 1\n"
             ),
             encoding="utf-8",
@@ -100,7 +100,7 @@ def selftest():
         check("파일 읽기: RUN_ENV는 YAML common.run_env", st.common.run_env == "local")
         check("다른 앱 절(pipeline)은 무시", not hasattr(st, "pipeline"))
         check("빈 값: 숫자 칸 ''은 기본값(cpu_max_load 0.9)", st.common.runtime.cpu_max_load == 0.9)
-        check("빈 값: 글자 칸 ''은 빈 글자로 남음", st.common.paths.glossary_dir == "")
+        check("빈 값: 글자 칸 ''은 빈 글자로 남음", st.common.paths.draft_terms_out == "")
         check(
             "비밀: SecretStr로 읽고 repr·model_dump_json에 값 없음",
             st.common.connections.pg.password.get_secret_value() == secret
@@ -560,13 +560,13 @@ def selftest():
             + (" 실패: " + " ".join(bad_b) if bad_b else ""),
             not bad_b,
         )
-        with COMMON.env(LLM_TIMEOUT="90.5", SEARCH_RECENCY=None):
+        with COMMON.env(LLM_TIMEOUT="90.5", OS_VERIFY_TLS=None):
             tm = cfg().models.llm.timeout
-            sb = cfg().text.search_recency
-        with COMMON.env(SEARCH_RECENCY=""):
-            sb_blank = cfg().text.search_recency
+            sb = cfg().connections.object_storage.verify_tls
+        with COMMON.env(OS_VERIFY_TLS=""):
+            sb_blank = cfg().connections.object_storage.verify_tls
         check(
-            "LLM_TIMEOUT float(R-1 — 옛 float()): '90.5' → 90.5 · SEARCH_RECENCY 기본 '1', ''은 ''(R-11 blank keep)",
+            "LLM_TIMEOUT float(R-1 — 옛 float()): '90.5' → 90.5 · OS_VERIFY_TLS 기본 '1', ''은 ''(R-11 blank keep — SEARCH_RECENCY는 pl-38에 지움)",
             tm == 90.5 and sb == "1" and sb_blank == "",
         )
         with COMMON.env(RUN_ENV="prod"):
@@ -580,7 +580,7 @@ def selftest():
         import subprocess
 
         badf = d / "strict_bad.yaml"
-        badf.write_text("common:\n  paths:\n    glossary_dir: [1\n", encoding="utf-8")
+        badf.write_text("common:\n  paths:\n    draft_terms_out: [1\n", encoding="utf-8")
         base_env = {
             k: v for k, v in os.environ.items() if k not in ("SETTINGS_FILE", "RAG_MODULE", "GLOSSARY_DIR", "SETTINGS_LENIENT")
         }  # env 남김 — 시험 · RAG_MODULE 빼고 — 세 절(U-a)
@@ -631,7 +631,7 @@ def selftest():
         # U-a(사용자 10-27) — import 때 점검은 파일 읽기만: mcp 이미지는 틀린 pipeline 절이어도 시작(op-09 — env로 내는 칸 없음)
         ua_bad = d / "ua_bad.yaml"
         ua_bad.write_text(
-            _new("common:\n  paths:\n    glossary_dir: /g\npipeline:\n  extract:\n    ocr:\n      dpi: abc\n"), encoding="utf-8"
+            _new("common:\n  paths:\n    draft_terms_out: /g\npipeline:\n  extract:\n    ocr:\n      dpi: abc\n"), encoding="utf-8"
         )
         env_e = {"SETTINGS_FILE": str(ua_bad), "RAG_MODULE": "mcp", "RUN_ENV": "dev"}
         check(

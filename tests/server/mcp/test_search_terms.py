@@ -2,7 +2,6 @@
 
 from common.core.terms import load_glossary
 from common.core.text import tokens
-from mcp_server import config as mc
 from mcp_server.services.search.terms import _exp_tokens, expand_query, match_concepts, vector_alias_text
 
 
@@ -148,11 +147,18 @@ def _selftest_alias_roster():
         w.writerows(rows)
     g = load_glossary(d)
 
-    f = Path(tempfile.mkdtemp()) / "roster.csv"
-    f.write_text("name,aliases\nCelltrion,CT Inc\n", encoding="utf-8")
-    _env = mc.senv(
-        GLOSSARY_DIR=str(d), CLIENT_ROSTER=str(f)
-    )  # 인계 파일(common.core.terms)이 env로 읽음 — senv가 os.environ에도 쓰고 되돌림(S7d)
+    from unittest import mock
+
+    from common.store import master
+
+    fake = master.Master(
+        {
+            "domain_terms": list(csv.DictReader((d / "domain_terms.csv").read_text(encoding="utf-8-sig").splitlines())),
+            "client_roster": [{"canonical_name": "Celltrion", "aliases": "CT Inc"}],
+        }
+    )  # pl-38 — 명부·용어 사전은 마스터 표(시험은 가짜 마스터)
+    _env = mock.patch.object(master, "get", lambda: fake)
+    _env.start()
     try:
         # ⑦ 한글 고유명사 뒤 조사 — '셀트리온과'(명부·용어집 둘 다)
         t, n = expand_query("셀트리온과 맺은 공급 계약", g)
@@ -164,7 +170,7 @@ def _selftest_alias_roster():
         t4, n4 = expand_query("CT Inc와 맺은 계약", g)
         assert t4.get("셀트리온") == 1.0 and any("alias" in x for x in n4), (t4, n4)
     finally:
-        _env.close()
+        _env.stop()
     print("[selftest] SI43⑦ — 한글 조사(조사 뒤 오탐 금지)·roster 전용 별칭(XL008) expand_query 통과")
 
 

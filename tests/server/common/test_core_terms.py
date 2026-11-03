@@ -5,9 +5,7 @@ import os
 from pathlib import Path
 
 from common.config.settings import COMMON
-from common.core.paths import RES_ROOT
 from common.core.terms import (
-    MODALITIES,
     _aliases,
     _draft_count,
     draft_terms_path,
@@ -16,7 +14,6 @@ from common.core.terms import (
     load_id_patterns,
     load_id_patterns_typed,
     match_clients,
-    modalities,
     read_roster,
     related_concepts,
     write_draft_terms,
@@ -188,32 +185,7 @@ def selftest():
     assert read_roster(rp) == {"Old Format Bio": ["올드"]}, read_roster(rp)  # OFB(영문 3자)는 뺌 — 기존 규칙
     print("[selftest] 10-15 빈칸 허용 — 용어집(status·concept_id 빈칸·cp949)·고객 명부 새 형식(name_ko 대체·inactive 제외)·옛 형식 통과")
 
-    # 모달리티(DT1 c1) — 용어집 없음/modality_code 카테고리 없음이면 코드 기본값과 바이트 동일, 있으면 용어집에서
-    assert modalities({}) == MODALITIES
-    assert modalities(g) == MODALITIES  # g(위 A~C)엔 modality_code 카테고리가 없음(category=modality와는 다른 값)
-    mg = {
-        "X": {
-            "concept_id": "X",
-            "canonical": "fusion protein",
-            "category": "modality_code",
-            "synonyms": "융합단백질",
-            "abbreviations": "FP",
-        }
-    }
-    assert modalities(mg) == {"fusion protein": "fusion protein", "융합단백질": "fusion protein", "fp": "fusion protein"}
-    # 실제 기본 사전(dev/glossary/domain_terms.csv, 서버 기본 GLOSSARY_DIR=glossary)도 MODCODE.* 4행이 코드 기본값과
-    # 바이트 동일한 매핑을 내는지(데이터 파일을 바꿨을 때 실제로 반영되는지의 역검증 — 바꾸면 당연히 값이 달라짐을
-    # 가짜 회사 예시로 확인)
-    real_g = load_glossary(RES_ROOT / "vocab" / "glossary")
-    assert modalities(real_g) == MODALITIES, modalities(real_g)
-    fake_company_g = dict(real_g)
-    fake_company_g["MODCODE.ADC"] = {**real_g["MODCODE.ADC"], "canonical": "항체약물복합체코드"}  # 가짜 회사 예시(c1 반영 확인용)
-    assert modalities(fake_company_g)["항체약물복합체코드".lower()] == "항체약물복합체코드"
-    assert modalities(fake_company_g)["mab"] == "mAb"  # 다른 MODCODE 행은 그대로(데이터 파일 부분 교체가 바로 반영)
-    print(
-        "[selftest] modalities() — 용어집 modality_code 카테고리·빈 용어집 기본값·실제 기본 사전 바이트 동일·"
-        "가짜 회사 예시 반영 통과(DT1 c1)"
-    )
+    # modalities()·MODALITIES는 pl-38(사용자 11-03)에 지움(부르는 곳 없음)
 
     _selftest_si43()
     _selftest_si43_draft_blocker()
@@ -266,7 +238,12 @@ def _selftest_si43():
         w.writerows(rows)
 
     # ① 다중 태그 — org_client|org_cdmo는 고객 명부에 들어가고(기존 org_cdmo 한 칸은 안 들어감) ② 동의어(한·영) 병합
-    with COMMON.env(GLOSSARY_DIR=str(d)):  # op-09 — 인계 파일도 설정 객체로 읽음
+    from unittest import mock
+
+    from common.store import master
+
+    fake = master.Master({"domain_terms": list(csv.DictReader((d / "domain_terms.csv").read_text(encoding="utf-8-sig").splitlines()))})
+    with mock.patch.object(master, "get", lambda: fake):  # pl-38 — 명부·용어 사전은 마스터 표에서(시험은 가짜 마스터)
         al = _aliases()
         assert al.get("Celltrion") == ["셀트리온"], al  # org_client 태그 있음 — 명부에
         assert "Lonza" not in al, al  # org_cdmo 한 칸만 — 명부에 안 들어감(기존 동작 호환)
@@ -327,7 +304,7 @@ def _selftest_si43_draft_blocker():
 
     # GLOSSARY_DIR이 아니라 output/ 기본 경로를 쓰는지(인자·설정 둘 다 안 주면)
     tmp_out = Path(tempfile.mkdtemp()) / "auto.csv"
-    with COMMON.env(GLOSSARY_DIR=None, DRAFT_TERMS_OUT=str(tmp_out)):
+    with COMMON.env(DRAFT_TERMS_OUT=str(tmp_out)):
         assert draft_terms_path() == tmp_out
         write_draft_terms(["Epsilon Biologics Inc."], category="org_client")
         assert tmp_out.exists()

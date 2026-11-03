@@ -150,6 +150,21 @@ def test_cpu_load_table():
         ("한도 없음(max) — 부하 평균", {"cpu.max": "max 100000"}, {}, 2.0, 2.0 / host),
         ("한도는 있는데 사용량 못 읽음 — 부하 평균", {"cpu.max": "200000 100000"}, {}, 4.0, 4.0 / host),
         ("아무것도 못 읽음(Windows 등) — 통과", {}, {}, None, None),
+        ("v2 period 0 — 한도 없음 취급(부하 평균)", {"cpu.max": "200000 0", "cpu.stat": "usage_usec 1\n"}, {}, 3.0, 3.0 / host),
+        (
+            "v1 period 0 — 한도 없음 취급(부하 평균)",
+            {"cpu/cpu.cfs_quota_us": "100000", "cpu/cpu.cfs_period_us": "0", "cpuacct/cpuacct.usage": "0"},
+            {},
+            3.0,
+            3.0 / host,
+        ),
+        (
+            "sample 뒤 사용량 못 읽음 — 부하 평균",
+            {"cpu.max": "200000 100000", "cpu.stat": "usage_usec 1000000\n"},
+            {"cpu.stat": None},
+            5.0,
+            5.0 / host,
+        ),
     ]
     for name, before, after, la, want in cases:
         d = Path(tempfile.mkdtemp())
@@ -161,7 +176,23 @@ def test_cpu_load_table():
         def fake_sleep(sec, d=d, after=after, clock=clock):
             clock[0] += sec
             for rel, txt in after.items():
-                (d / rel).write_text(txt)
+                if txt is None:
+                    (d / rel).unlink()
+                else:
+                    (d / rel).write_text(txt)
 
         got = M.cpu_load(cg=d, sample=0.5, now=lambda clock=clock: clock[0], sleep=fake_sleep, loadavg=lambda la=la: la)
         assert (got is None and want is None) or (got is not None and want is not None and abs(got - want) < 1e-9), (name, got, want)
+        if after.get("cpu.stat", "") is None:  # 허브 B — 못 읽은 값은 남기지 않음: 다음 호출(0.2~10초 안)이 None과 빼지 않고 다시 잰다
+            assert str(d) not in M._LAST, (name, M._LAST.get(str(d)))
+            (d / "cpu.stat").write_text("usage_usec 2000000\n")
+            M._LAST[str(d)] = (clock[0], None)  # 옛 코드가 남기던 꼴 — 무시돼야 함
+            clock[0] += 1.0
+            again = M.cpu_load(
+                cg=d,
+                sample=0.5,
+                now=lambda clock=clock: clock[0],
+                sleep=lambda s, clock=clock: clock.__setitem__(0, clock[0] + s),
+                loadavg=lambda: 5.0,
+            )
+            assert again == 0.0, (name, again)  # 같은 사용량 두 번 — 0, TypeError 없음

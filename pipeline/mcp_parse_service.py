@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""텍스트 파싱 작업 서비스 — data-pipeline-parse 컨테이너(S6b — 옛 data-parsing) 안에서 상주하며 검색 MCP(mcp-server — 옛 data-retrieval)의 parse_document
+"""텍스트 파싱 작업 서비스 — data-pipeline-mcp 컨테이너(11-03 — 옛 data-pipeline-parse; 작업 서비스가 주 프로세스, compose.pipeline-mcp.yml) 안에서 상주하며 검색 MCP(mcp-server — 옛 data-retrieval)의 parse_document
 도구가 localhost HTTP로 호출한다(비정형 파일[base64] → text 파싱 대표 결과 반환).
 범위 — prepare → run_all(문서의 엔진들 동시에 · VLM/OCR 엔진 제외) → parse_qa → represent까지.
 구조화·임베딩·적재 없음 · 표 인식 유지 · 이미지/스캔 문서는 빈 결과(OCR·VLM 미실행).
 [패치 2026-10-22] ① 기본 time_out_threshold 300초 ② 큐 대기 순번을 제출 응답과 시작 시점에 표시(지연 원인 파악)
   ③ 서비스 PID 로그 파일 남김(docker exec -d 로그 없음 문제) ④ _purge_old에서 방금 만든 작업 보호(버그 수정)
-실행: docker exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service
+실행: data-pipeline-mcp 컨테이너의 주 프로세스(compose.pipeline-mcp.yml — 죽으면 restart가 다시 띄움 · 옛 손 기동 `docker exec -d …` 없음)
   토큰은 설정 필수(컨테이너에 붙인 settings.yaml required.tokens.parse_mcp — 검색 MCP의 MCP_TOKEN과 같은 값, 없으면 시작 거부, D-028 ⑨ · S7c ·
   S7e2부터 env PARSE_MCP_TOKEN은 읽지 않음 — `docker exec -e PARSE_MCP_TOKEN=…`은 효과 없음, VS7e2 R-6)
 API(127.0.0.1:8766 · Bearer):  POST /jobs {content_b64+filename} → 202 {job_id, queue_position}

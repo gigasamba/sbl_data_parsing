@@ -122,7 +122,6 @@ common:
       spend_file:  # 지출 장부 파일 경로(호출마다 금액 한 줄 — 프로세스·실행 전체가 공유) · 값: 경로
   # ─── 검색 토큰 정규화 ───
   text:
-    search_recency: '1'  # [파라미터] 같은 문서군의 최신 판 우선 모드 · 기본 1 · 값: 0(끔)·1(최신을 묻는 질문만)·2(항상) 중 하나
     search_en_stem: true  # 검색 토큰의 영어 복수→단수 정규화(G16, 가산만) · 기본 true · 값: true·false
     token_num_norm: true  # 검색 토큰의 숫자·단위 정규화(T1) · 기본 true · 값: true·false
 
@@ -301,11 +300,9 @@ ops:
     shutdown_sec: 5.0  # 종료 flush 전체 상한(초) · 기본 5.0 · 값: 0 이상 초
   # ─── 경로 ───
   paths:
-    client_roster:  # 고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) · 값: 경로
     doc_dir:  # 원본 문서 폴더 · 값: 경로
     doc_dir_prepared:  # 준비(dedup·회전) 끝난 문서 폴더 · 값: 경로
     draft_terms_out:  # 용어 자동 초안 CSV 경로 · 값: 경로
-    glossary_dir:  # 용어 사전 폴더(domain_terms.csv·id_patterns.csv 등) · 값: 경로
     mcp_bundle:  # 검색할 로컬 묶음(bundle) 폴더 경로 · 값: 경로
     output_root:  # 결과(output) 폴더 · 값: 경로
     runlog_dir:  # 실행 기록(output/logs) 루트 폴더 · 값: 경로
@@ -322,16 +319,16 @@ ops:
   host:
     docker: docker  # 호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등) · 기본 docker · 값: docker·podman 중 하나
     image_stage_dir:  # prune_old.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값) · 값: 경로
-    patch_code:  # 덧씌우기 코드 폴더(호스트) · 값: 호스트 이름·IP
     prune_keep: 2  # prune_old.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값) · 기본 2 · 값: 0 이상 정수
   # ─── 서버 컨테이너 — CPU·메모리 한도·폴더 ───
   pipeline_host:
     gold_dir:  # 호스트의 사람 정답(gold) 폴더(서버 경로) · 값: 호스트 이름·IP
-    parse_cpus: 3.0  # 상주 파싱 컨테이너(data-pipeline-parse) CPU 개수 상한(개) · 기본 3.0 · 값: 0 이상
-    parse_mem_limit: 16g  # parse 컨테이너 메모리·스왑 상한(docker 형식) · 기본 16g · 값: 글자
+    parse_cpus: 5.0  # 일괄 상주 컨테이너(data-pipeline — compose.pipeline.yml) CPU 개수 상한(개) · 기본 5.0 · 값: 0 이상
+    parse_mem_limit: 24g  # 일괄 상주 컨테이너(data-pipeline) 메모리·스왑 상한(docker 형식) · 기본 24g · 값: 글자
+    parse_mcp_cpus: 3.0  # parse_document 작업 컨테이너(data-pipeline-mcp — #107) CPU 개수 상한(개) · 기본 3.0 · 값: 0 이상
+    parse_mcp_mem_limit: 8g  # parse_document 작업 컨테이너(data-pipeline-mcp) 메모리·스왑 상한(docker 형식) · 기본 8g · 값: 글자
+    parse_mcp_cpu_shares: 4096  # parse_document 작업 컨테이너 CPU 나눔 비율(data-pipeline 1024의 4배 — CPU가 모자랄 때 먼저 받음, rn-03) · 기본 4096 · 값: 0~1
     run_docs_dir:  # 문서별 flow 러너(deploy/host/scripts/run_docs.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) · 값: 호스트 이름·IP
-    structure_cpus: 2.0  # structure 컨테이너(job·상주 트리거·색인) CPU 개수 상한(개) · 기본 2.0 · 값: 0 이상
-    structure_mem_limit: 8g  # structure 컨테이너 메모리·스왑 상한(docker 형식) · 기본 8g · 값: 글자
   mcp_host:
     cpus: 1.0  # mcp-server 컨테이너 CPU 한도(compose cpus) · 기본 1.0 · 값: 0 이상
     jobs_dir:  # MCP parse_document 업로드 작업 폴더(공유 볼륨) · 값: 경로
