@@ -935,7 +935,7 @@ def main():
 
     # 문서별 순서(pl-24): 파싱 → silver 게시(pub_q, 게시 스레드) → 원본 삭제 → gold(struct_q, 구조화 스레드) → 임시 삭제.
     # 게시를 따로 두어 구조화가 업로드·EDW 쓰기를 기다리지 않는다. 파싱 실패·게시 실패면 원본을 남기고 gold로 가지 않는다.
-    cnt = {"ok": 0, "parse_fail": 0, "pub_fail": 0, "gold_fail": 0}
+    cnt = {"ok": 0, "parse_fail": 0, "pub_fail": 0, "gold_fail": 0, "thread_err": 0}  # thread_err — 집계 전에 스레드 예외(종료 코드 1로)
     struct_q, pub_q = _struct_q, _pub_q
 
     def _queue_loop(q, stage, work):
@@ -953,6 +953,8 @@ def main():
                 work(*item)
             except Exception as ex:
                 _thread_error(stage, item[0], ex)
+                with _warm_lock:
+                    cnt["thread_err"] += 1
             finally:
                 q.task_done()
 
@@ -977,11 +979,11 @@ def main():
         except Exception as ex:
             log(f"doc#{seq} 구조화 예외 — silver는 남김 · {type(ex).__name__}: {str(ex)[:120]}")
             ok = False
-        _safe(drop_temp, seq)
-        mark(seq, "done")
-        with _warm_lock:
+        with _warm_lock:  # 집계를 기록(mark — 디스크 가득이면 예외)보다 먼저
             cnt["ok" if ok else "gold_fail"] += 1
             report = ok and cnt["ok"] % 5 == 0
+        _safe(drop_temp, seq)
+        mark(seq, "done")
         if report:  # psql(최대 60초)은 잠금 밖에서 — 레인·받기 워커를 막지 않게
             nd, nc = pg_count()
             log(f"PG 누적: doc={nd} chunk={nc}")
@@ -1037,6 +1039,8 @@ def main():
                 Exception
             ) as ex:  # 예외 처리·기록 중 예외도 레인을 죽이지 않게 — 죽으면 큐가 안 비어 _flow_done() 대기가 안 끝남(S12 리뷰)
                 _thread_error("파싱", seq, ex)
+                with _warm_lock:
+                    cnt["thread_err"] += 1
             finally:
                 with _warm_lock:
                     _lane_inflight[_class.get(seq) or "light"] -= 1
@@ -1067,11 +1071,11 @@ def main():
         _warm_lock.notify_all()
     tf.join(timeout=5)
     nd, nc = pg_count()
-    failed = cnt["parse_fail"] + cnt["pub_fail"] + cnt["gold_fail"]
+    failed = cnt["parse_fail"] + cnt["pub_fail"] + cnt["gold_fail"] + cnt["thread_err"]
     done = cnt["ok"] + failed
     rc = EXIT_FAIL if failed else (EXIT_DEADLINE if _deadline_hit.is_set() else 0)
     log(
-        f"=== 문서별 flow 끝: {done}건(완료 {cnt['ok']} · 파싱실패 {cnt['parse_fail']} · 게시실패 {cnt['pub_fail']} · gold실패 {cnt['gold_fail']}) · "
+        f"=== 문서별 flow 끝: {done}건(완료 {cnt['ok']} · 파싱실패 {cnt['parse_fail']} · 게시실패 {cnt['pub_fail']} · gold실패 {cnt['gold_fail']} · 스레드 예외 {cnt['thread_err']}) · "
         f"{(time.time() - t_all) / 60:.1f}분 · PG doc={nd} chunk={nc} · 문서당 평균 {(time.time() - t_all) / max(done, 1) / 60:.1f}분 · 종료 코드 {rc} ==="
     )
     return rc

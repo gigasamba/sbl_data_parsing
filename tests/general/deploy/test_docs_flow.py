@@ -105,7 +105,7 @@ def test_main_runs_lanes_to_end():
         assert sorted(calls["struct"]) == [0, 1], calls  # 파싱 OK → 게시 → 구조화 대기열 → gold_one
         assert M._lane_inflight == {"light": 0, "medium": 0, "vlm": 0}
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "문서별 flow 끝: 2건(완료 2 · 파싱실패 0 · 게시실패 0 · gold실패 0)" in log, log
+        assert "문서별 flow 끝: 2건(완료 2 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0)" in log, log
         assert M.rc == 0
 
 
@@ -130,7 +130,29 @@ def test_main_survives_errors_in_failure_path():
         M = _run_main(work, rows, parse_one, gold_one, setup=setup)
         assert M._lane_inflight == {"light": 0, "medium": 0, "vlm": 0}
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "문서별 flow 끝: 2건(완료 0 · 파싱실패 1 · 게시실패 0 · gold실패 1)" in log, log
+        assert "문서별 flow 끝: 2건(완료 0 · 파싱실패 1 · 게시실패 0 · gold실패 1 · 스레드 예외 0)" in log, log
+        assert M.rc == 1
+
+
+def test_thread_error_fails_the_run():
+    """gold 뒤 기록(mark — 디스크 가득 등)이 예외를 내도 집계는 먼저 되고, 스레드 예외는 실패로 세어 종료 코드 1(PR #107 리뷰 P1)."""
+    rows = [{"id": 0, "s3_key": "k0", "original_filename": "doc0.txt", "file_size": 10}]
+    with tempfile.TemporaryDirectory(prefix="orca_thr_") as tmp:
+        work = Path(tmp)
+
+        def setup(M):
+            real = M.mark
+
+            def mark(seq, event, **extra):
+                if event == "done":
+                    raise OSError("기록 실패(시험 — 디스크 가득 흉내)")
+                return real(seq, event, **extra)
+
+            M.mark = mark
+
+        M = _run_main(work, rows, lambda seq, row: (True, work / f"{seq}"), setup=setup)
+        log = (M.PROG / "progress.log").read_text(encoding="utf-8")
+        assert "완료 1 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
         assert M.rc == 1
 
 
