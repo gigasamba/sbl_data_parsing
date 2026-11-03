@@ -329,7 +329,7 @@ def model_status(prefix):
     if internal.startswith("외부 — 거부"):  # 막힌 외부 주소에는 /models도 안 보냄(키가 헤더로 나감 — 재검증 10-02)
         return internal, model or "(모델 미설정)", "확인 안 함(외부 거부)"
     try:
-        ids = _list_model_ids(prefix, base)
+        ids = _list_model_ids(prefix, base, 5, internal_only=False)  # 상태 표는 짧게(5초) · 허용된 외부(PC)도 봄 — 옛 동작 그대로
         reach = "응답" + ("" if not model else (" · 모델 있음" if model in ids else f" · 모델 없음(서버: {', '.join(ids[:3])})"))
     except Exception as e:
         reach = f"응답 없음({type(e).__name__})"
@@ -379,14 +379,15 @@ def model_not_found(why):
     return any(k in w for k in _NOT_FOUND_RE)
 
 
-def _list_model_ids(prefix, base):
-    """그 서버 /v1/models의 모델 id 목록(내부망 가드·리다이렉트 가드 경유, 키는 헤더로만 — 출력 안 함). 시간 상한 PING_TIMEOUT."""
-    guard.require_internal(base, prefix)
+def _list_model_ids(prefix, base, timeout=None, internal_only=True):
+    """그 서버 /v1/models의 모델 id 목록(리다이렉트 가드 경유, internal_only면 내부망 가드도 — 키는 헤더로만, 출력 안 함). 시간 상한 기본 PING_TIMEOUT."""
+    if internal_only:
+        guard.require_internal(base, prefix)
     req = urllib.request.Request(base.rstrip("/") + "/models")
     key = reveal(by_env(f"{prefix}_API_KEY"))
     if key:
         req.add_header("Authorization", f"Bearer {key}")
-    with guard.urlopen(req, cfg().models.transport.ping_timeout, prefix) as r:
+    with guard.urlopen(req, timeout or cfg().models.transport.ping_timeout, prefix) as r:
         return [m.get("id") for m in json.load(r).get("data", []) if m.get("id")]
 
 
