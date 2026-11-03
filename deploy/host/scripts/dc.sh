@@ -101,6 +101,10 @@ dc_check() {
     out=$("$@" 2>&1); rc=$?
     printf '%s\n' "$out"
     case "$name" in selftest*) printf '%s\n' "$out" | grep -q '^\[판정\] 통과' || rc=1 ;; esac
+    # run_tool.sh(image_vars.sh in_pipeline)는 상주 컨테이너가 안 떠 있으면 종료 코드 2와 "떠 있지 않음" 안내 — 띄우지 않고 그 안내로 멈춤
+    if [ $rc -eq 2 ] && printf '%s\n' "$out" | grep -q '떠 있지 않음'; then
+      echo "[dc check] 실패 — $name: data-pipeline 컨테이너가 안 떠 있음 → dc.sh up -d data-pipeline"; return 1
+    fi
     if [ $rc -ne 0 ]; then echo "[dc check] 실패 — $name: $hint"; return 1; fi
     n=$((n + 1))
   }

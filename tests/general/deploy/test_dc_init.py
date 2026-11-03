@@ -60,16 +60,26 @@ def test_init():
 
 
 FAKE = """case "$1" in
+  "$DOWN") echo "[오류] 상주 컨테이너 data-pipeline가 떠 있지 않음 — 먼저 띄울 것"; exit 2 ;;
   "$FAIL") echo boom; exit 1 ;;
   selftest*) [ -n "${NOJUDGE:-}" ] && { echo "N/M 통과"; exit 0; }; echo "[판정] 통과 — FAIL 0" ;;
   *) echo "ok $1" ;;
 esac
 """
-# (FAIL 단계, NOJUDGE, 기대 종료 코드, 마지막 줄 시작, 나오면 안 되는 단계)
+# (FAIL 단계, NOJUDGE, 컨테이너가 꺼진 단계, 기대 종료 코드, 마지막 줄 시작, 나오면 안 되는 단계)
 CHECK_CASES = [
-    ("", "", 0, "[dc check] 통과 — 6개", None),
-    ("migrate check", "", 1, "[dc check] 실패 — migrate check:", "── selftest data-pipeline"),
-    ("", "1", 1, "[dc check] 실패 — selftest data-pipeline:", "── selftest mcp-server"),  # [판정] 줄이 없으면 종료 코드 0이어도 실패
+    ("", "", "", 0, "[dc check] 통과 — 6개", None),
+    ("migrate check", "", "", 1, "[dc check] 실패 — migrate check:", "── selftest data-pipeline"),
+    ("", "1", "", 1, "[dc check] 실패 — selftest data-pipeline:", "── selftest mcp-server"),  # [판정] 줄이 없으면 종료 코드 0이어도 실패
+    # run_tool.sh가 "상주 컨테이너가 떠 있지 않음"(종료 코드 2) — 띄우지 않고 안내로 멈춤
+    (
+        "",
+        "",
+        "check_env",
+        1,
+        "[dc check] 실패 — check_env: data-pipeline 컨테이너가 안 떠 있음 → dc.sh up -d data-pipeline",
+        "── ping_models",
+    ),
 ]
 
 
@@ -83,7 +93,7 @@ def test_check():
         fake.write_text(FAKE, encoding="utf-8", newline="\n")
         sf = Path(d) / "settings.yaml"
         sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
-        for fail, nojudge, rc, last, absent in CHECK_CASES:
+        for fail, nojudge, down, rc, last, absent in CHECK_CASES:
             env = {
                 "SETTINGS_FILE": _posix(sf),
                 "SETTINGS_LOADED": _posix(sf),  # 이미 읽은 것으로 — host_env.py를 부르지 않음
@@ -91,6 +101,7 @@ def test_check():
                 "DC_FAKE": f"bash {_posix(fake)}",
                 "FAIL": fail,
                 "NOJUDGE": nojudge,
+                "DOWN": down or "-",
             }
             r = _run(bash, ["check"], env)
             lines = r.stdout.strip().splitlines()

@@ -429,13 +429,14 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
    - **이미지 판 = 코드 판이 아닐 수 있다.** 코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같으면 옛 실행 이미지에서 새 코드가 돈다 — 0.2.0 코드는 0.1.0 실행 이미지(DEPS_HASH `f0fcc30bd067bc2f`)를 그대로 쓴다: `load.sh 0.1.0`, 설정의 이미지 칸은 `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0`.
 3. 서버 폴더를 만든다: `bash /srv/rag/<코드>/deploy/host/scripts/dc.sh init --group <운영 그룹>` — env(700)·결과 폴더·`mcp_parse/jobs`(UID 10001, 2775)·`code`·`backup` 폴더, 코드 폴더 읽기 권한(a+rX), `/srv/rag/code/live` 링크(없을 때만), `settings.sample.yaml` → `env/settings.yaml`(없을 때만 — 덮지 않음). 끝에 아직 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
 4. 설정을 채운다(§5-3 ②). `required.deploy.pipeline_image`·`required.deploy.mcp_image`에는 2에서 불러온 실행 이미지 태그를 적는다.
-5. DB를 만든다(§5-3 ③ — `migrate up --target all` → `migrate master load`).
-6. 점검한다: `cd /srv/rag/code/live && bash deploy/host/scripts/dc.sh check` — 모델·환경·DB·두 이미지 selftest·검색 MCP를 차례로 보고 처음 실패에서 멈춘다. 기대 마지막 줄: `[dc check] 통과 — 6개`.
-7. 띄운다: `bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp`(그 뒤 `… trigger.sh parse` 등).
+5. 파이프라인 상주 컨테이너를 띄운다(DB 도구가 그 안에서 돈다): `cd /srv/rag/code/live && bash deploy/host/scripts/dc.sh up -d data-pipeline`.
+6. DB를 만든다(§5-3 ③ — `run_tool.sh migrate up --target all` → `run_tool.sh migrate master load`).
+7. 나머지를 띄운다: `bash deploy/host/scripts/dc.sh up -d data-pipeline-mcp mcp`(검색 MCP는 시작할 때 마스터 표를 읽으므로 6 뒤).
+8. 점검한다: `bash deploy/host/scripts/dc.sh check` — 환경·모델·DB·두 이미지 selftest·검색 MCP `/health`를 차례로 보고 처음 실패에서 멈춘다. 기대 마지막 줄: `[dc check] 통과 — 6개`. 그 뒤 `… trigger.sh parse` 등.
    - 이미지 태그가 `*-runtime`이면 스크립트가 자기 코드 폴더 루트를 `/app/deploy`에 붙인다(`image_vars.sh`의 `code_dir_default`).
    - 셸이나 systemd에 `CODE_DIR`가 있으면 그 값이 우선한다.
    - 호스트 python이 설정을 읽지 못하면(RHEL 9 기본 python 3.9 등), 실행 이미지 `data-pipeline-runtime:<VERSION>` 안에서 이 코드 폴더를 붙여 읽는다(`settings_env.sh`).
-8. 확인: 시작 로그 첫 줄 `[image] 이미지 … · 코드 <커밋> · 의존성 …`으로 어느 판이 도는지 본다.
+9. 확인: 시작 로그 첫 줄 `[image] 이미지 … · 코드 <커밋> · 의존성 …`으로 어느 판이 도는지 본다.
 
 - 코드만 바뀐 판: 새 코드 zip을 옆에 풀고, `live` 링크를 새 폴더로 옮긴 뒤 다시 띄운다. 의존성(`DEPS_HASH`)이 같으면 이미지는 그대로 둔다. 되돌리기는 링크를 옛 폴더로 되돌리면 된다.
 - systemd unit(`deploy/host/systemd/`)은 `/srv/rag/code/live` 경로를 쓰므로 판을 바꿀 때 고칠 필요가 없다.

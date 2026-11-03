@@ -464,7 +464,7 @@ $DOCKER logs data-pipeline 2>&1 | grep -m1 '\[image\]'                        # 
 ```
 - `master load`를 다시 하면(명부·용어집을 고친 뒤) 검색 MCP를 다시 띄운다: `$DOCKER restart mcp-server` — 검색은 시작할 때와 새 적재 판이 들어올 때만 마스터를 읽는다(사용자 11-03). 이미 적재한 문서는 자동으로 다시 처리하지 않는다(새로 적재하는 문서의 `gold_version` `<VERSION>+m<해시 8자>`만 바뀜).
 
-**7. 점검** — 한 명령으로(사용자 11-03): check_env → ping_models → `migrate check --target all` → 두 이미지 selftest(`[판정] 통과` 줄로 판정 — 실행 이미지면 코드 폴더를 붙임) → `mcp_up.sh`(/health). 처음 실패에서 그 단계 이름과 안내를 찍고 멈춘다.
+**7. 점검** — 5(DB)·6(세 컨테이너 띄우기) 뒤에 한 명령으로(사용자 11-03 — 상주 `data-pipeline`이 안 떠 있으면 `[dc check] 실패 — check_env: data-pipeline 컨테이너가 안 떠 있음 → dc.sh up -d data-pipeline`으로 멈춤): check_env → ping_models → `migrate check --target all` → 두 이미지 selftest(`[판정] 통과` 줄로 판정 — 실행 이미지면 코드 폴더를 붙임) → `mcp_up.sh`(/health). 처음 실패에서 그 단계 이름과 안내를 찍고 멈춘다.
 ```bash
 bash deploy/host/scripts/dc.sh check                                          # 기대 마지막 줄: [dc check] 통과 — 6개
 ```
