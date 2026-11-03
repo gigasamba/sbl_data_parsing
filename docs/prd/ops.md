@@ -87,8 +87,10 @@
   2. 같은 컨테이너(`data-pipeline-parse`) 안에서 nice(지금 결정 — 사용자 10-30). 장점: 구성 변경 없음, `low_priority` 재사용. 단점: 다른 컨테이너·세션과는 안 겨룸(`sched_autogroup_enabled=1`), 효과는 서버에서 재 봐야 앎.
 - 서버 확인(C-65 ⑥): 일괄 파싱만 / + `parse_document` 동시의 응답 시간 비교 — 효과 없으면 선택지 1.
 - 파일: `deploy/host/compose/`, `pipeline/mcp_parse_service.py`, `common/core/resources.py`.
-- 11-03 상주 컨테이너 하나로 — 설계 다시(사용자 grill 대기). (선택지 2의 `data-pipeline-parse`는 이제 `data-pipeline` — 일괄 파싱·구조화와 같은 컨테이너)
-- Status: todo — 논의 대상(지금 2).
+- 결정 다시(사용자 11-03): 일괄 컨테이너를 하나(`data-pipeline` — 파싱·구조화·적재)로 합친 뒤에도 parse_document는 **전용 컨테이너**로 뗀다(선택지 1 재확인).
+- 한 것(11-03 `feature/rundocs-flow`): `compose.pipeline.yml`에 `data-pipeline-mcp`(같은 이미지, entrypoint `parse-service` = `pipeline.mcp_parse_service`가 주 프로세스, 127.0.0.1:8766) — `cpu_shares` 4096(일괄 `data-pipeline` 1024 — cgroup v2는 `cpu.weight`로), 상한 CPU 2·메모리 8g, 결과 폴더만 붙임(작업 폴더 `mcp_parse/jobs`는 `run_docs.py`가 보고 medium 레인 양보). 옛 손 기동 `docker exec -d … mcp_parse_service` 없음 — 죽으면 `restart`, 꺼지면 `mcp_up.sh`(keepalive 타이머)가 띄움. 시험 `tests/general/deploy/test_compose.py`.
+- 남은 것: ① 자원 칸(`PARSE_MCP_CPUS`·`PARSE_MCP_MEM_LIMIT`·`PARSE_MCP_CPU_SHARES`)은 settings.yaml 칸이 아직 없다 — 설정 모델이 지문 파일이라 0.2.0 지문 배치에서(refactor.md C-83). ② "extract 단계 없이 파싱 함수만"(10-31 결정)은 앱 코드 몫이라 안 함. ③ 서버 확인(C-65 ⑥): 일괄 파싱 중 `parse_document` 응답 시간.
+- Status: dev — 컨테이너·CPU 비율 한 것, 서버 확인·자원 칸 남음.
 
 <a id="rn-04"></a>
 ## rn-04 · run_docs 작은 수정·레인 테스트
