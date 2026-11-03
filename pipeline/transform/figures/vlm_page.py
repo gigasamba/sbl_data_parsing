@@ -22,6 +22,7 @@ from common.ai.agent_prompts import load as _load_prompt
 from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
 from common.core import span as SP  # op-01 성능 span(풀 스레드 컨텍스트 전달)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.shared.exts import IMG_EXTS
 from pipeline.shared.parse_run import prompt_id, raw_vlm_path
 from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
 from pipeline.transform.figures.vector import vector_regions  # 쪽 벡터 도형 군집 수(page_signals)
@@ -72,7 +73,7 @@ def is_scan(p):
     """스캔·이미지 문서 판정(원본: eval_hard_parse.one_doc) — png·jpg류 또는 글자층 20자 미만 쪽만 있는 PDF."""
     p = Path(p)
     ext = p.suffix.lower()
-    if ext in (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"):
+    if ext in IMG_EXTS:
         return True
     if ext != ".pdf":
         return False

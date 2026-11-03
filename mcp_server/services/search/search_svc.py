@@ -6,6 +6,7 @@ S5(10-26)에 mcp_server/main.py에서 옮김 · 11-01(mc-16) 운영 계약으로
 import time
 from datetime import date, datetime, timedelta, timezone
 
+from common.store.db.models import search_tables as ST
 from mcp_server import config as mc  # mcp 설정 객체(S7d)
 from mcp_server.config import CFG
 from mcp_server.schemas.evidence import EVIDENCE_KEYS, K_MAX, SEARCH_FILTERS
@@ -25,8 +26,8 @@ _EXACT_COLS = {
     "contract_id": "contract_id",
     "FAQ_group": "faq_group",  # faq.chunk만(C4)
 }
+_SYSTEMS = tuple(s.upper() for s in ST.SOURCES)
 NO_QUESTION = "question is required — 질문 없이 문서를 고르려면 list_doc_fulltext, 원천 값 조회는 query_edw"
-_SYSTEMS = ("SFDC", "CRMS", "LAS", "FAQ", "OTHER")
 NO_SOURCE = "source_system is required — exactly one of SFDC, CRMS, LAS, FAQ, Other(원천마다 따로 찾음 — 여러 원천은 여러 번 부름, G20)"
 
 
@@ -87,8 +88,6 @@ def _norm_filters(args):
 def _scope_sql(hard, src):
     """정규화한 거르기 → (WHERE 글자, 값) — 원천 스키마 src의 v_chunk_source 칸에서. 다른 거르기는 AND, 같은 거르기의 목록은 OR, 모두 정확 일치
     (client_like만 부분 일치). 그 원천 스키마에 칸이 없는 거르기(예: crms에서 sf_op_id)는 0건(오류 아님). 고객은 client_edw만(C6, 사용자 11-02)."""
-    from common.store.db.models import search_tables as ST
-
     have = set(ST.view_columns(src))
     conds, vals = [], []
 
@@ -169,7 +168,6 @@ def do_search(question=None, k=8, **filters):
         hard["source_system"] = sysv = sysv[0]
     if str(sysv).upper() not in _SYSTEMS:  # 다섯 값 밖은 거부(조용히 other로 찾지 않음)
         return {"error": NO_SOURCE}
-    from common.store.db.models import search_tables as ST
 
     src = ST.source_of(sysv)
     k, scope, scope_docs = user_k, None, None
