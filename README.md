@@ -375,7 +375,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 서버는 **이미지 2개 · 코드 폴더**(`/srv/rag/code/live`) **· 설정 파일**(`/srv/rag/env/settings.yaml`) **· 결과 폴더**(`RAG_OUT`, 예: `/srv/rag/output`)로 동작한다. 서버 명령은 모두 코드 폴더 루트에서 실행한다.
 
-> **0.2.0 배포는 [release-and-patch.md §8](docs/operations/release-and-patch.md#8-020-배포--사람이-할-일) "0.2.0 배포 — 사람이 할 일"의 순서(결정 → 배포 전 → 당일 → 뒤)를 그대로 따른다.** 운영 서버는 지금 0.1.0(settings.yaml 하나)이다. 요약: 판 전체 grill-me 검토 → EDW `AI.ParsingMeta` DDL(DB 담당) → 설정 옮기기(`python -m common.config.migrate <0.1.0 settings.yaml> --out <새 파일>`) → 새 `PG_SCHEMA`로 판 0002 → 전체 e2e(전체 문서는 prd에서만, 새 원천별 스키마로). 0.1.0 배포 기록은 [history/deploy_0_1_0.md](docs/history/deploy_0_1_0.md).
+> **0.2.0 배포는 [release-and-patch.md §8](docs/operations/release-and-patch.md#8-020-배포--사람이-할-일)의 실행 순서(8-3 — 그대로 복사해 붙이는 명령과 기대 출력)를 따른다.** 운영 서버는 지금 0.1.0(settings.yaml 하나)이다. 0.1.0 배포 기록은 [history/deploy_0_1_0.md](docs/history/deploy_0_1_0.md).
 
 ### 5-0. 배포 단계 — 어디서 어디로, 어떤 이미지·코드로(op-06·op-07, 사용자 10-30)
 
@@ -472,7 +472,7 @@ bash deploy/release/ship_stage.sh pipeline-runtime mcp-runtime                 #
 5. DB 마이그레이션 — `migrate check` → `up`/`stamp`(③).
 6. 연결 점검 — 모델 주소 `run_tool.sh ping_models`(LLM·VLM·임베딩 — 하나라도 실패면 종료 1), `run_tool.sh check_env`, PG `migrate check`(④).
 7. 이미지 점검 — `check-modules`, `selftest`(⑤).
-8. 띄우는 순서 — pgvector → 파이프라인 상주 컨테이너(`dc up -d data-pipeline data-pipeline-mcp`, §5-5 — 파싱 작업 서비스는 `data-pipeline-mcp`가 스스로 띄움) → 검색 MCP(`mcp_up.sh`, ⑥). 띄운 뒤 MCP `/health`가 200이고 `parse_document` 시험 파일 1건이 결과를 돌려주는지 본다.
+8. 띄우는 순서 — pgvector → 파이프라인 상주 컨테이너(`bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp`, §5-5 — 파싱 작업 서비스는 `data-pipeline-mcp`가 스스로 띄움) → 검색 MCP(`mcp_up.sh`, ⑥). 띄운 뒤 MCP `/health`가 200이고 `parse_document` 시험 파일 1건이 결과를 돌려주는지 본다.
 
 **포트 — 모두 settings.yaml 칸(서버·사용자마다 다르게 둘 수 있음, 비우면 기본값)**
 
@@ -488,13 +488,11 @@ bash deploy/release/ship_stage.sh pipeline-runtime mcp-runtime                 #
 
 **① 이미지와 코드 폴더** — §5-0 "개발 서버 설치" 1~3. 운영 서버(구운 이미지)는 §5-0 ②와 [release-and-patch](docs/operations/release-and-patch.md) §1-2.
 
-아래 명령은 root 셸의 코드 폴더(`cd /srv/rag/code/live`)에서 실행한다. 먼저 이 셸에서만 쓸 함수 하나를 정의한다. 이 함수는 settings.yaml을 읽고, 실행 이미지면 코드 폴더를 붙여 compose를 부른다.
+아래 명령은 root 셸의 코드 폴더(`cd /srv/rag/code/live`)에서 실행한다. 상주 컨테이너 3개(`data-pipeline`·`data-pipeline-mcp`·`mcp`)는 `deploy/host/scripts/dc.sh`로 띄운다 — settings.yaml을 읽고, 실행 이미지면 코드 폴더를 붙여(`compose.code*.yml`) compose 파일 셋을 함께 부른다(옛 셸 함수 `dc()`를 대신함, 사용자 11-03). compose 하위 명령을 그대로 넘긴다.
 
 ```bash
-export SERVER_ENV_DIR=/srv/rag/env DOCKER=podman
-dc() { ( . deploy/host/scripts/settings_env.sh && load_settings && . deploy/host/scripts/image_vars.sh && code_dir_default DATA_PIPELINE_IMAGE && \
-         $DOCKER compose -f deploy/host/compose/compose.pipeline.yml -f deploy/host/compose/compose.pipeline-mcp.yml \
-         ${CODE_DIR:+-f deploy/host/compose/compose.code.yml -f deploy/host/compose/compose.code.pipeline-mcp.yml} "$@" ); }
+export SERVER_ENV_DIR=/srv/rag/env
+bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp   # 서비스 하나만도 됨 · ps·logs·down도 같은 방법
 ```
 
 **② 설정 파일과 결과 폴더**
@@ -521,7 +519,7 @@ mkdir -p /srv/rag/output && chown 10001:<운영 그룹> /srv/rag/output && chmod
 
 모델 주소는 모두 내부망 주소여야 한다(서버는 외부 모델 호출을 거부). 옛 배치 settings.yaml(op-08 전)은 `python -m common.config.migrate <옛 settings.yaml> --out <새 파일>`로 바꾼다.
 
-**③ DB 마이그레이션** — 적재·검색을 하기 전에 끝낸다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다). 운영 작업(`run_tool.sh`·`trigger.sh`)은 상주 컨테이너 안에서 돌므로(사용자 11-02 — 1회 job 컨테이너 없음) 먼저 띄운다: `dc up -d data-pipeline`.
+**③ DB 마이그레이션** — 적재·검색을 하기 전에 끝낸다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다). 운영 작업(`run_tool.sh`·`trigger.sh`)은 상주 컨테이너 안에서 돌므로(사용자 11-02 — 1회 job 컨테이너 없음) 먼저 띄운다: `bash deploy/host/scripts/dc.sh up -d data-pipeline`.
 
 ```bash
 # 0. (DB마다 처음 한 번 — DB 관리자) vector 확장 — 서버 계정은 보통 우리 스키마 권한만 있어 직접 못 만든다. 없으면 migrate·적재가 "vector 확장 없음"으로 멈춘다
@@ -560,7 +558,7 @@ bash deploy/release/selftest_gate.sh $DOCKER run --rm -v "$PWD:/app/deploy:ro,z"
 
 selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다. 운영 서버(구운 이미지)는 `-v …` 없이 `data-pipeline:<판>`·`mcp-server:<판>`으로 실행한다.
 
-> 💡 `dc`는 하위 셸 `( … )` 안에서 settings.yaml을 읽는다. 그래서 settings.yaml을 고치면 다음 `dc`부터 바로 반영된다. `trigger.sh` 같은 스크립트는 설정을 스스로 읽는다.
+> 💡 `dc.sh`는 부를 때마다 settings.yaml을 다시 읽는다. 그래서 settings.yaml을 고치면 다음 `dc.sh`부터 바로 반영된다. `trigger.sh` 같은 스크립트는 설정을 스스로 읽는다.
 
 **⑥ 검색 MCP 띄우기**
 
@@ -595,9 +593,9 @@ bash deploy/host/scripts/trigger.sh publish     # Object Storage 업로드 + EDW
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 검색 MCP 상주 확인                                       | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_up.sh`                                                                                             |
 | 새벽 배치                                              | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.time: "HH:MM"`(그 시각부터 5분 안에 시작 — 비우면 새벽 배치 없음, 기본 비움 · pl-32) |
-| 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음, 11-01 trigger 서버 지움) | `dc up -d data-pipeline data-pipeline-mcp`(§5-3의 `dc` — 실행 이미지면 코드 폴더를 붙임). 여러 번 불러도 안전 — 꺼진 것만 띄움 |
+| 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음, 11-01 trigger 서버 지움) | `bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp`(§5-3 — 실행 이미지면 코드 폴더를 붙임). 여러 번 불러도 안전 — 꺼진 것만 띄움 |
 | MCP `parse_document` 작업 서비스                        | 전용 상주 컨테이너 `data-pipeline-mcp`의 주 프로세스(entrypoint `parse-service`, 127.0.0.1:8766 — 사용자 11-03 rn-03). 죽으면 `restart: unless-stopped`가, 꺼져 있으면 `mcp_up.sh`(keepalive 타이머)가 다시 띄운다 — 손 기동 없음 |
-| 재부팅 뒤 되살리기(podman)                                | `systemctl enable --now podman-restart` — podman은 docker처럼 데몬이 없어 `restart: unless-stopped` 컨테이너(검색 MCP·상주 컨테이너)를 부팅 때 다시 띄우지 않는다. 이 서비스가 그 컨테이너들을 되살린다. 검색 MCP와 `data-pipeline-mcp`(parse_document 작업 서비스)는 keepalive 타이머(`mcp_up.sh`)가 한 번 더 본다. 일괄 `data-pipeline`은 keepalive 타이머가 없으니, 재부팅 뒤 `$DOCKER ps`로 떠 있는지 보고, 없으면 위 `dc up -d …`를 다시 실행한다 |
+| 재부팅 뒤 되살리기(podman)                                | `systemctl enable --now podman-restart` — podman은 docker처럼 데몬이 없어 `restart: unless-stopped` 컨테이너(검색 MCP·상주 컨테이너)를 부팅 때 다시 띄우지 않는다. 이 서비스가 그 컨테이너들을 되살린다. 검색 MCP와 `data-pipeline-mcp`(parse_document 작업 서비스)는 keepalive 타이머(`mcp_up.sh`)가 한 번 더 본다. 일괄 `data-pipeline`은 keepalive 타이머가 없으니, 재부팅 뒤 `$DOCKER ps`로 떠 있는지 보고, 없으면 위 `bash deploy/host/scripts/dc.sh up -d …`를 다시 실행한다 |
 
 
 systemd 설치(한 번 — DB 버전과 컨테이너를 확인한 뒤):

@@ -7,7 +7,7 @@
 #   준비(저장소 루트에서): docker build -f deploy/docker/Dockerfile --target pipeline -t data-pipeline:<태그> .
 #   띄우기(하위 셸로 — 대화형 셸에 export해 두면 그 뒤 settings.yaml을 고쳐도 그 셸에는 안 먹음, VS7e1 R-2):
 #     ( . deploy/host/scripts/settings_env.sh && load_settings && $DOCKER compose -f deploy/host/compose/compose.pipeline.yml up -d )
-#   둘 다(README §5-3 ①의 dc): dc up -d data-pipeline data-pipeline-mcp
+#   상주 컨테이너 셋 함께(실행 이미지면 코드 폴더도): bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp
 # 결과 폴더(RAG_OUT)를 모든 모듈이 같이 씀 — 모듈 사이 전달은 이 폴더의 파일(+ PostgreSQL)뿐, 서로 직접 부르지 않음.
 # 주의: `docker compose config`는 치환한 값을 그대로 출력함 — 확인은 `config --quiet`만(S7e1부터 비밀은 compose에 없지만 호스트 경로·이름이 나옴).
 # 이미지 변수: DATA_PIPELINE_IMAGE·MCP_SERVER_IMAGE(S6b 새 이름) — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE·DATA_RETRIEVAL_IMAGE·RAG_*_IMAGE·

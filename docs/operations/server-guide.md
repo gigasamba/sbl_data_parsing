@@ -89,7 +89,7 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 ### 2-3. 상주 컨테이너
 `data-pipeline`(일괄 상주 컨테이너 — 사용자 11-03, 옛 `data-pipeline-parse`·`data-pipeline-structure`를 합침)은 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업(warm·파싱·게시·구조화·적재)을 돌린다. MCP `parse_document` 작업 서비스는 전용 상주 컨테이너 `data-pipeline-mcp`의 주 프로세스다(entrypoint `parse-service` — 사용자 11-03 rn-03: 사람이 기다리는 요청이라 일괄과 떼고 CPU 나눔 비율 `cpu_shares` 4096 > 일괄 1024, 상한 CPU 2·메모리 8g — 아직 settings.yaml 칸 없음, refactor.md C-83). 꺼지면 `mcp_up.sh`(keepalive 타이머)가 다시 띄운다. 자원 상한은 settings.yaml `pipeline.host.parse_cpus`·`parse_mem_limit`(비우면 CPU 5·메모리 24g — 옛 두 컨테이너의 합. docker는 호스트 CPU 수보다 큰 `cpus`를 거부하므로 CPU 4개 서버는 `parse_cpus`를 3 이하로 적는다). 옛 `structure_cpus`·`structure_mem_limit`은 읽지 않는다(refactor.md C-82). 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/ops.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
 ```bash
-dc up -d data-pipeline data-pipeline-mcp   # dc = README §5-3 ①의 도우미(settings.yaml 값을 compose에 넘김 — 그냥 docker compose는 필수 칸 `${…:?}`에서 멈춤)
+bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp   # settings.yaml 값을 compose에 넘김(그냥 docker compose는 필수 칸 `${…:?}`에서 멈춤) — README §5-3 ①
 ```
 
 ### 2-4. 테스트 실행 스크립트(코드 폴더에서 네이티브, 이미지 밖)
