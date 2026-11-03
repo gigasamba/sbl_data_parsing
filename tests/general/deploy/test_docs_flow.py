@@ -176,6 +176,21 @@ def test_warm_error_does_not_hang():
         assert M.rc == 1 and not M._warming
 
 
+def test_depth_write_error_does_not_hang():
+    """대기열 깊이 기록(depth)이 디스크 오류를 내도 main()이 멈추지 않고 정상 끝(관찰용 기록 — PR #107 재리뷰 P1)."""
+    rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"doc{i}.txt", "file_size": 10} for i in range(2)]
+    with tempfile.TemporaryDirectory(prefix="orca_depth_") as tmp:
+        work = Path(tmp)
+
+        def setup(M):
+            (M.PROG / "queue_depth.jsonl").mkdir(parents=True)  # 파일 자리에 폴더 — open("a")가 OSError
+
+        M = _run_main(work, rows, lambda seq, row: (True, work / f"{seq}"), setup=setup)
+        log = (M.PROG / "progress.log").read_text(encoding="utf-8")
+        assert "완료 2 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0" in log, log
+        assert M.rc == 0
+
+
 def test_struct_backlog_holds_new_parses():
     """중간 대기(파싱 끝·구조화 대기)가 상한이면 레인 워커가 새 파싱을 시작하지 않는다(rn-02) — pick 순간의 대기 길이 < 상한."""
     import json

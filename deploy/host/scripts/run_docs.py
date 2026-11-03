@@ -391,9 +391,12 @@ def depth(event):
             "pub_wait": _pub_q.qsize(),
             "struct_wait": _struct_q.qsize(),
         }
-    with _stats_lock:
-        with (PROG / "queue_depth.jsonl").open("a", encoding="utf-8") as fp:
-            fp.write(json.dumps(rec) + "\n")
+    try:  # 관찰용 기록 — 못 써도(디스크 가득 등) 예외를 내지 않는다: 스레드·대기열 집계 사이에서 불려, 죽으면 main()이 멈춤(PR #107 리뷰)
+        with _stats_lock:
+            with (PROG / "queue_depth.jsonl").open("a", encoding="utf-8") as fp:
+                fp.write(json.dumps(rec) + "\n")
+    except OSError as ex:
+        _thread_error("대기열 기록", event, ex)
 
 
 def pick_lane(own, shared, queues, inflight, vlm_cap):
