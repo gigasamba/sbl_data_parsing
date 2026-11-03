@@ -18,10 +18,12 @@ DEV = DEPLOY_ROOT  # deploy/(op-09 — paths 상수) · 10-14 이미지별 폴�
 # 층 코드는 형제 패키지(engine-qa 10-14 BLOCKER 1: HERE로 두면 글롭이 빈 집합 = 늘 같은 빈 해시)
 
 # 층별 소스 파일 glob(deploy/ 기준) — common은 그 층 파일이 실제로 import하는 모듈만 더함(_common_deps, 10-05).
-# p0은 엔진마다 다름 — code_fp("p0:<engine>")로 호출(그 엔진 파서 폴더 + run_all.py만).
+# p0 = 엔진 폴더 전부(pipeline/extract/engines/** — 이름과 폴더가 다른 엔진 html_stdlib·msg_extract(mhtml/)·office(office_stdlib/)·
+# rapidocr_ko(rapidocr/)도 들어감, pl-47) + run_all.py. 엔진 하나의 재사용 열쇠는 run_all.engine_code_fp(등록부의 스택 폴더 + _common)가
+# 따로 맡는다 — 옛 code_fp("p0:<엔진>") 형태(엔진 이름을 폴더 이름으로 넣어 다른 이름 폴더를 놓침)는 쓰는 곳이 없어 지웠다.
 # 10-14 분리로 paths·structdb 등 공용 코드가 실제로 바뀌어 p1·s·r·a 지문은 한 번 바뀜(저장본 1회 재생성) — 인계 지문·엔진 지문은 legacy_names로 유지.
 LAYER_CODE = {
-    "p0": ["pipeline/extract/engines/{engine}/**/*.py", "pipeline/extract/run_all.py"],
+    "p0": ["pipeline/extract/engines/**/*.py", "pipeline/extract/run_all.py"],
     # 후보정(represent)이 실제로 쓰는 코드만 — 원문 파싱 관리(run_all·prepare·dedup·source·보고·진행)는 빼서 그 코드를 고쳐도 P1 이상이 다시 지어지지 않게(10-04).
     # ponytail: postprocess/attachments가 run_all._isolated를 씀 — 그 함수가 바뀌면 PARSE_POST 첨부 결과가 달라질 수 있으나 드묾(바뀌면 P1_LAYOUT 올림)
     # I2(data_etl 단계 폴더 — S4부터 pipeline/, 접두어만 바뀜) — 옛 postprocess/ 패키지(26개)가 represent/·figures/·shared/로 나뉘어 글로브 대신 파일 목록(옮기기 전과 같은 집합)
@@ -75,13 +77,6 @@ LAYER_CODE = {
         "mcp_server/services/search/pgsearch.py",
     ],
 }  # 빈 층 a(research.py — S5a에 지움)는 0.2.0에 이름도 지움(pl-46)
-
-
-def _layer_globs(layer):
-    if layer.startswith("p0:"):
-        engine = layer.split(":", 1)[1]
-        return [g.format(engine=engine) for g in LAYER_CODE["p0"]]
-    return LAYER_CODE[layer]
 
 
 def _common_deps(files, base):
@@ -162,7 +157,7 @@ def code_fp(layer, root=None):
     """그 층을 만드는 소스 파일(글로브) + 그 파일들이 실제로 import하는 common 모듈의 정렬된 내용 → sha256[:12].
     root(기본 DEV) — selftest가 임시 복사본으로 건드려 보게 받을 수 있다(실제 코드 수정 없이)."""
     base = Path(root) if root else DEV
-    own = {p for g in _layer_globs(layer) for p in base.glob(g) if p.is_file()}
+    own = {p for g in LAYER_CODE[layer] for p in base.glob(g) if p.is_file()}
     files = sorted(own | _common_deps(own, base))
     h = hashlib.sha256()
     for p in files:  # 경로도 해시에 넣음 — 파일 추가/삭제도 지문을 바꾸게

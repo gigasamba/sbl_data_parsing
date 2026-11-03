@@ -88,4 +88,6 @@
 - 이유(허브 점검 11-01): `common/core/artifacts.py:24` p0 범위는 `pipeline/extract/engines/{engine}/**`다. 엔진 이름과 폴더 이름이 다른 엔진 — `html_stdlib`·`msg_extract`(`mhtml/` 안), `rapidocr_ko`, `office`, `pptx` — 은 그 엔진 파일을 고쳐도 다시 파싱되지 않을 수 있다.
 - 할 일: 엔진마다 실제 파서 파일이 p0 범위에 드는지 확인하고, 빠지면 범위를 고친다(엔진 지문이 바뀜).
 - 검토 등급 A · 0.2.0.
-- Status: todo — 0.2.0.
+- 확인(11-03 `feature/fp-perf`): 문서×엔진 재사용 열쇠(`run_all.engine_code_fp` — 등록부의 스택 폴더 + `_common`)는 이름이 다른 엔진도 제 폴더(`mhtml/`·`office_stdlib/`·`rapidocr/`)를 이미 해시하고 있었다(`pptx` 엔진은 pl-46에 지움). 문제는 층 지문 p0 범위였다 — `pipeline/extract/engines/{engine}/**`의 `{engine}`이 글자 그대로 남아 엔진 파일을 **하나도** 담지 않았다(`run_all.py`·common 의존만).
+- 한 것: p0 범위를 `pipeline/extract/engines/**/*.py` + `run_all.py`로 고쳤다(엔진 파일은 그대로 — 층 지문 p0만 바뀜). 쓰는 곳이 없던 `code_fp("p0:<엔진>")` 형태는 지웠다. 시험: `tests/server/pipeline/test_run_all.py` `test_p0_layer_covers_every_engine_folder`(등록부의 모든 엔진 스택 폴더가 p0 범위 안).
+- Status: done — 11-03 `feature/fp-perf`(0.2.0 지문 배치 후속, 등급 A).

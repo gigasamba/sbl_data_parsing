@@ -394,3 +394,15 @@ def test_vlm_child_env_caps_timeout():
         assert over.get("VLM_TIMEOUT") == "60", over
     with COMMON.env(VLM_TIMEOUT="100"), pc.PIPE.env(PARSE_VLM_PAGE_SEC="120"):
         assert _vlm_child_env() is None
+
+
+def test_p0_layer_covers_every_engine_folder():
+    """pl-47 — p0 층 지문 범위에 등록부의 모든 엔진 파서 폴더가 든다(이름과 폴더가 다른 html_stdlib·msg_extract·office·rapidocr_ko 포함)."""
+    from common.core import artifacts as A
+    from common.core.paths import DEPLOY_ROOT, PARSING_ROOT
+    from pipeline.extract.engines import registry
+
+    covered = {p for g in A.LAYER_CODE["p0"] for p in DEPLOY_ROOT.glob(g) if p.is_file()}
+    for eng, (stack, _) in registry.engines().items():
+        files = set((PARSING_ROOT / "engines" / stack).glob("**/*.py"))
+        assert files and files <= covered, (eng, stack, sorted(str(f) for f in files - covered)[:3])

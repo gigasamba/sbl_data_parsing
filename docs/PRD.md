@@ -60,7 +60,7 @@
 | ~~`parse_parallel`·`AUTO_REPARSE_CHANGED`·`figures_resume`~~ 지움 | 지문에 영향 없는 잔재. 증분 처리만 남긴다 | done | [pl-35](prd/transform-cleanup.md#pl-35) |
 | 0.2.0 지문 묶음 정리 — 안 쓰는 엔진 5개(pdfplumber·pypdf·calamine·python_pptx·pymupdf4llm)·묶음 계약·OCR 대체 길·로컬 임베딩·첫 이관 호환 코드를 한 번에 지운다 | 지문이 바뀌는 정리를 서버 재처리 한 번에 모은다. 등급 A | todo | [pl-46](prd/transform-cleanup.md#pl-46) |
 | `adk.py` — 지시문은 두고 장치는 `llm.py` 호출 하나로 줄임 · CPU 부하 고침 | 0.2.0 지문 배치(p1·s·r 지문). 사용자 11-02 | todo | [pl-46](prd/transform-cleanup.md#pl-46) |
-| 엔진 지문(p0) 범위 확인 — 엔진 이름과 폴더 이름이 다른 엔진(html_stdlib·msg_extract·rapidocr_ko·office·pptx)을 고치면 다시 파싱되는지 | 놓치면 엔진을 고쳐도 낡은 결과가 남는다. 0.2.0 · 등급 A | todo | [pl-47](prd/transform-cleanup.md#pl-47) |
+| 엔진 지문(p0) 범위 확인 — 엔진 이름과 폴더 이름이 다른 엔진(html_stdlib·msg_extract·rapidocr_ko·office·pptx)을 고치면 다시 파싱되는지 | 놓치면 엔진을 고쳐도 낡은 결과가 남는다. 0.2.0 · 등급 A. 11-03: 문서별 재사용 열쇠(`engine_code_fp`)는 이미 맞았고, 층 지문 p0 범위만 엔진 파일을 하나도 안 담고 있었음 — 고침 | done | [pl-47](prd/transform-cleanup.md#pl-47) |
 
 ## 적재 (load) — 검색 DB(pgvector)·게시·저장 구조·DB 스키마
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
