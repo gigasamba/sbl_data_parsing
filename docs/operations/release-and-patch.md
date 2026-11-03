@@ -409,7 +409,7 @@ chown -R 10001:10001 /srv/rag/code/0.2.0-<커밋>          # root가 아니면 c
 DOCKER=$DOCKER bash sbl_images/load.sh <실행 이미지 판>   # 새 실행 이미지가 있을 때만 — 기대: 조각 sha256 확인 뒤 load 완료와 BUILD.txt
 ln -sfn /srv/rag/code/0.2.0-<커밋> /srv/rag/code/live && cd /srv/rag/code/live && cat CODE_COMMIT   # 기대: 그 커밋
 ```
-- 0.2.0이 새 실행 이미지 판을 쓰는지(코드의 `deploy/docker/DEPS_HASH`가 서버 실행 이미지의 의존성 지문과 같은지)는 **<확인 필요>** — 다르면 6단계 시작 로그가 `의존성 지문이 다름`으로 멈춘다(§1-1 4).
+- 0.2.0은 **새 실행 이미지가 필요 없다** — `deploy/docker/DEPS_HASH`가 v0.1.0과 develop 모두 `f0fcc30bd067bc2f`(의존성 그대로). 서버 실행 이미지의 지문이 다르면 6단계 시작 로그가 `의존성 지문이 다름`으로 멈춘다(§1-1 4).
 - **[prd]** 개발 서버에서 굽고(§1-2 — `bash /srv/rag/code/live/deploy/release/bake.sh <실행 이미지 판>`, 기대: `[판정] 통과` 뒤 `/var/tmp/bake/sbl_images/`) 운영 서버로 옮겨:
 ```bash
 DOCKER=$DOCKER bash sbl_images/load.sh 0.2.0                 # 기대: 조각 sha256 확인 → load → BUILD.txt
