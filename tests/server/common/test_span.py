@@ -182,7 +182,10 @@ def test_gated_popen_wait_split_and_child_context():
 
 def test_usage_line_roundtrip():
     usage = span.read_usage("engine noise\n" + span.usage_line() + "\n")
-    assert usage["cpu_ms"] >= 0 and usage["rss_peak_mb"] > 0
+    if span.resource is None:  # Windows — resource 모듈이 없어 측정값 없음(NULL, span.py 머리말)
+        assert usage == {}
+    else:
+        assert usage["cpu_ms"] >= 0 and usage["rss_peak_mb"] > 0
     assert span.read_usage("no usage here") == {} and span.read_usage(span.USAGE_PREFIX + "{broken") == {}
 
 
@@ -192,7 +195,7 @@ def test_model_call_hook():
     def fake(role, messages, **kw):
         if kw.get("boom"):
             raise RuntimeError("down")
-        time.sleep(0.01)
+        time.sleep(0.02)  # 성공 2번 ≥ 40ms — Windows 타이머 해상도(~15ms)에서도 아래 ≥ 20 판정이 흔들리지 않게
         return "ok", {"prompt_tokens": 7, "completion_tokens": 3}
 
     wrapped = adk._traced(fake)
