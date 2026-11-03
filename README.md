@@ -74,24 +74,22 @@
 | **load**      | 번들 → pgvector                           | `load/pgvector_load`                            | (PostgreSQL 안)           |
 
 
-**순서는 `run_docs.py`가 정한다.** DAG 엔진(Airflow 등)은 없다. 파싱만 끝 표시 `output/parse/_rep/_DONE.json`을 남기고, 구조화(`build_bundle`)와 적재(`pgvector_load`)는 run_docs가 문서마다 직접 부른다(옛 `_DONE`·`_LOADED` 확인 `need()`와 종료 코드 3은 11-01에 지웠다).
+**순서는 `run_docs.py`가 정한다.** DAG 엔진(Airflow 등)은 없다. 파싱만 끝 표시 `output/parse/_rep/_DONE.json`을 남기고, 구조화(`build_bundle`)와 적재(`pgvector_load`)는 run_docs가 문서마다 직접 부른다.
 
 - 마감 시각에 걸리거나 다른 run_docs가 실행 중이면 → 종료 코드 **75**(run_docs 종료 코드: 0 끝 · 1 실패 문서 있음 · 2 설정 문제 · 75 마감·실행 중)
-
-> 파싱(엔진 실행)이 `extract`에 있는 것은 upstream 배치를 따른 결과다. 일반 ETL 기준(파싱 = transform)과 다르지만 옮기지 않기로 했다(사용자 10-31 범위 축소 — PRD [pl-17](docs/prd/transform.md#pl-17) dropped · 옛 논의는 [이력](docs/history/refactor_c_items.md) C-61).
 
 ### 1-3. 서버 이미지 2개와 버전
 
 
 | 이미지             | 역할                                 | 컨테이너                                                                                                             |
 | --------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `data-pipeline` | parse · structure · load · publish | 상주 컨테이너 둘 — 일괄 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`·`trigger.sh`·`run_tool.sh`가 docker exec, 11-03 옛 `data-pipeline-parse`·`data-pipeline-structure`를 합침) · MCP `parse_document` 전용 `data-pipeline-mcp`(작업 서비스, CPU 우선 — rn-03) · 이미지 점검은 `docker run --rm … selftest` |
+| `data-pipeline` | parse · structure · load · publish | 상주 컨테이너 둘 — 일괄 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`·`trigger.sh`·`run_tool.sh`가 docker exec) · MCP `parse_document` 전용 `data-pipeline-mcp`(작업 서비스, CPU 우선 — rn-03) · 이미지 점검은 `docker run --rm … selftest` |
 | `mcp-server`    | 검색 MCP(상주)                         | 상주 `mcp-server`                                                                                                  |
 
 
 - **버전은 저장소 루트 `VERSION` 하나**(SemVer, 지금 `0.1.0`)이고 두 이미지가 함께 쓴다(D-036).
 - 이미지 태그 = 버전(`data-pipeline:0.1.0`, `mcp-server:0.1.0`). 빌드한 커밋은 이미지 라벨 `org.opencontainers.image.revision`에 남는다.
-- 회사 DB `AI.ParsingMeta`에도 이 버전이 기록된다 — silver를 만든 판 `silver_version`(지금 칸 이름 `pipeline_version`), gold에 올린 판 `gold_version`(사용자 11-02, refactor.md C-76)(옛 값은 git 커밋 — DB 담당 협의 필요, refactor.md C-62).
+- 회사 DB `AI.ParsingMeta`에도 이 버전이 기록된다 — silver를 만든 판 `silver_version`(지금 칸 이름 `pipeline_version`), gold에 올린 판 `gold_version`(사용자 11-02, refactor.md C-76).
 
 ### 1-4. DB — Alembic 마이그레이션
 
@@ -108,7 +106,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 
 > **⚠️ 0.1.0이 만든 스키마에 `up`하면 `0002_search`가 옛 한 벌 표를 지운다.** 운영 DB는 새 `db_schema`를 쓰고 먼저 `pg_dump`로 백업한다(§0 상자).
 
-- **엔진 구성은 DB가 아니라 파일이다** — 서버·PC 모두 `resources/config/pipeline_stack.json`을 읽는다(5-7). 원천 목록 `sources.json`은 11-01에 지웠다(원천은 폴더·`rdb:csv`만). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다(그대로 두거나 DB 담당자가 지움).
+- **엔진 구성은 DB가 아니라 파일이다** — 서버·PC 모두 `resources/config/pipeline_stack.json`을 읽는다(5-7). 원천은 폴더·`rdb:csv`만.
 - **실행 기록은 파일이 아니라 DB에 남는다** — 스키마마다 `<스키마>.alembic_version`.
 
 | 명령 | 하는 일 |
@@ -259,12 +257,10 @@ tuning:
 ```
 
 - 옛 배치(최상위 `common`·`pipeline`·`mcp` — op-08 전) 파일은 읽지 않는다. `python -m common.config.migrate settings.yaml --out settings.new.yaml`로 바꾼 뒤 새 파일로 바꿔 넣는다(지운 칸은 "삭제됨"으로 이름만 알림).
-- 검색 저장소는 PG 하나라 종류 칸은 없다(옛 `required.deploy.mcp_store`가 남아 있으면 경고만 — mc-01, 11-01).
 - 같은 절(`search:` 등)이나 같은 칸을 두 번 쓰면 시작을 거부한다 — 칸을 더할 때는 이미 있는 절 안에 넣는다.
 - **외부 임베딩은 세 조건이 모두 맞을 때만 호출된다:** `allow_external: true` · `run_env: local` · `no_paid_calls: false`. 하나라도 빠지면 호출하지 않는다(서버 dev·prd는 늘 거부).
-- PG 접속 항목(`required.pg`의 host·port·db·user·password·db_schema)은 **모두 채우거나 모두 비운다.** 일부만 채우면 채울 자리를 알려 주고 멈춘다(op-09 — `docker ps` 자동 탐지와 코드 기본값은 없앰).
+- PG 접속 항목(`required.pg`의 host·port·db·user·password·db_schema)은 **모두 채우거나 모두 비운다.** 일부만 채우면 채울 자리를 알려 주고 멈춘다(op-09).
   - PC(`run_env: local`)에서 host와 password가 둘 다 비어 있을 때만 SQLite 대역(`output/pg_standin/`)으로 돌고, 첫 줄에 `WARNING: PG 접속 정보 없음`을 찍는다. 서버(dev·prd)는 대역을 쓰지 않고 멈춘다(pl-12).
-  - 옛 `--local`(로컬 묶음) 옵션은 없다 — 검색은 PG만 읽는다(mc-19).
 
 ### 4-3. 점검
 
@@ -290,7 +286,7 @@ for s in SFDC CRMS; do mkdir -p output/demo/src/$s; for d in $(ls -d valid_env/o
 SRC=output/demo/src     # 원천 하위 폴더(<원천>/<uuid>/<파일>) 그대로 — 파싱이 상대 키로 원천을 알아본다(F2)
 ```
 
-- 문서는 서버 버킷 모양 `valid_env/object_storage/<원천>/<uuid>/<파일>`에 있다 — `CRMS/`(어려운 사례 21건) · `SFDC/`(RFP 12건). 정답·목록 세트(`valid_env/eval_sets/`)는 10-30 지웠다(사용자 — e2-10: 남기는 평가 도구는 검색 확인 페이지와 답변 점검뿐). 문서마다 왜 있는지는 [valid_env/object_storage/test_doc_purpose.md](valid_env/object_storage/test_doc_purpose.md), 전체 구조는 [valid_env/README.md](valid_env/README.md).
+- 문서는 서버 버킷 모양 `valid_env/object_storage/<원천>/<uuid>/<파일>`에 있다 — `CRMS/`(어려운 사례 21건) · `SFDC/`(RFP 12건). 문서마다 왜 있는지는 [valid_env/object_storage/test_doc_purpose.md](valid_env/object_storage/test_doc_purpose.md), 전체 구조는 [valid_env/README.md](valid_env/README.md).
 - `valid_env`에는 아무것도 쓰지 않는다(결과는 모두 `out_root` 아래). 내 문서로 하려면 `SRC=<문서 폴더>`.
 
 **② 파싱 — 문서 → 대표 결과**
@@ -314,7 +310,7 @@ cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본 — 파
 
 - 결과: `output/demo/bundle/`(docs.jsonl · chunks.jsonl · vectors.npy · meta.json)
 - 같은 청크는 임베딩 캐시(`output/edw/embed_cache.sqlite`) 덕분에 다시 호출하지 않는다.
-- 구조화는 `build_bundle`을 직접 부른다(서버 run_docs와 같은 길 — 옛 `pipeline.cli structure`는 11-01에 지웠다).
+- 구조화는 `build_bundle`을 직접 부른다(서버 run_docs와 같은 길).
 - 구조화의 고객 판별이 마스터 표를 읽는다. 새 스키마라면 ③ 전에 마스터 표만 먼저 만들어 채운다(아래 "초기화 순서"): `.venv/bin/python -m common.store.db.dbtool up --target master --schema demo` → `.venv/bin/python -m common.store.db.dbtool master load --schema demo`.
 
 **④ DB 테이블 — Alembic 마이그레이션(스키마마다 처음 한 번 — 1-4)**
@@ -338,7 +334,7 @@ cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본 — 파
 ```
 
 - 이미 적재한 문서를 다시 넣을 때는 `--replace`를 붙인다.
-- 적재는 더하고 고치기만 한다 — 이번 묶음에 없는 문서(원천에서 지운 문서 포함)를 PostgreSQL에서 지우지 않는다(`--prune` 없앰 — pl-13, 사용자 10-29). 지워야 하면 사람이 따로 한다.
+- 적재는 더하고 고치기만 한다 — 이번 묶음에 없는 문서(원천에서 지운 문서 포함)를 PostgreSQL에서 지우지 않는다(pl-13). 지워야 하면 사람이 따로 한다.
 
 **(선택) MCP 없이 검색만 확인**
 
@@ -430,10 +426,10 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | ① 개발 반입 | PC → 개발 서버(폐쇄망) | `local` → `dev` | PC: `IMAGE_TARGET=pipeline-runtime`·`mcp-runtime bash deploy/release/build_ship.sh` → 이미지 git(`sbl_images`)에 분할 조각 | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`(코드 없음) | `main`(release 병합)의 커밋 — 코드 git zip을 푼 폴더(`CODE_COMMIT`) | 그 코드 폴더를 `/app/deploy`에 읽기 전용 마운트(스크립트가 자기 루트를 자동으로 — 아래). 코드만 바꿀 때 = 새 코드 zip + 다시 띄움 |
 | ② 운영 반입 | 개발 서버 → 운영(수집) 서버 | `dev` → `prd` | 개발 서버: `bash <코드 폴더>/deploy/release/bake.sh <실행 이미지 판>` | 코드가 든 이미지 `data-pipeline`·`mcp-server`(개발에서 쓴 실행 이미지 그 판 + 코드) | 개발 서버에서 시험한 코드 폴더(코드 커밋은 이미지 라벨 `org.opencontainers.image.revision`) | 컨테이너에 코드 폴더 마운트 없음(`CODE_DIR` 두지 않음) — 호스트 스크립트(`deploy/host/`)만 같이 온 코드 묶음에서. 바꿀 때 = 새로 구운 이미지 |
 
-- run_env는 `local`(PC)·`dev`(개발 서버)·`prd`(운영 서버) 셋뿐(`stage`는 10-29에 없앰).
+- run_env는 `local`(PC)·`dev`(개발 서버)·`prd`(운영 서버) 셋뿐.
 - 어느 코드인가: ①은 PC의 git 커밋(묶음 안 `CODE_COMMIT`, 시작 로그 첫 줄 `[image] 이미지 … · 코드 … · 의존성 …`), ②는 개발 서버에서 시험한 코드 폴더 그대로(구운 이미지 라벨에 커밋·실행 이미지 ID).
 - 의존성(`requirements*`·휠·Dockerfile·assets)이 바뀌면 ①에서 새 실행 이미지가 필요하다. 다만 자동으로 막는 것은 `deploy/docker/requirements-core.txt`·`requirements-image.txt`뿐이다 — 이 둘로 만든 `DEPS_HASH`가 이미지 지문과 다르면 시작·굽기 모두 거부한다. 휠·Dockerfile·assets만 바뀐 경우는 사람이 판을 올려 새로 빌드한다.
-- PC에서 `IMAGE_TARGET=pipeline`·`mcp`로 코드가 든 이미지를 직접 빌드하는 길은 PC 시험(이미지 관문)·비상용으로만 남긴다 — 운영 반입은 ②(개발에서 시험한 그대로). 옛 오버레이 패치(덧씌우기 compose)는 11-03에 지웠다(§5-8).
+- PC에서 `IMAGE_TARGET=pipeline`·`mcp`로 코드가 든 이미지를 직접 빌드하는 길은 PC 시험(이미지 관문)·비상용으로만 남긴다 — 운영 반입은 ②(개발에서 시험한 그대로).
 
 #### 개발 서버 설치 — 코드 git·이미지 git을 zip으로 받아 한 폴더에(①, 사용자 10-30)
 
@@ -666,7 +662,7 @@ bash deploy/host/scripts/mcp_up.sh     # 여러 번 실행해도 안전 — 꺼�
 | 새벽 배치  | systemd `data-pipeline-nightly.timer` → `trigger.sh scheduled` | `ops.nightly.time` 시각에 `run_docs.py --start-offset 0 --skip-done` | 정기 운영 |
 | 파싱·게시만 | `trigger.sh parse` · `trigger.sh publish`             | 상주 컨테이너 안에서 한 번(파싱 → `_rep` / 대표 결과 게시)  | 단계 확인 |
 
-서버 입구는 `run_docs` 하나다(사용자 10-31). 옛 1회 job 배치 `trigger.sh structure`·`load`·`all`·`night`와 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`는 11-01에 지웠다 — 구조화·적재는 run_docs가 `build_bundle`·`pgvector_load`를 문서마다 부른다.
+서버 입구는 `run_docs` 하나다(사용자 10-31) — 구조화·적재는 run_docs가 `build_bundle`·`pgvector_load`를 문서마다 부른다.
 
 ```bash
 bash deploy/host/scripts/trigger.sh parse       # 파싱 → output/parse/_rep(data-pipeline 안에서 — docker exec)
@@ -704,7 +700,7 @@ ORDER BY ts_start DESC;
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 검색 MCP 상주 확인                                       | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_up.sh`                                                                                             |
 | 새벽 배치                                              | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly`의 세 칸 `time: "HH:MM"`(시작 시각 — 그 시각부터 5분 안에 시작) · `max_docs`(한 번에 처리할 새 문서 수 상한) · `deadline: "HH:MM"`(마감 시각). **셋 중 하나라도 비면 새벽 배치는 돌지 않는다**(기본 비움 · pl-32) |
-| 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음, 11-01 trigger 서버 지움) | `bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp`(§5-3 — 실행 이미지면 코드 폴더를 붙임). 여러 번 불러도 안전 — 꺼진 것만 띄움 |
+| 상주 컨테이너(`run_docs.py`가 docker exec — 일 없이 떠 있음) | `bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp`(§5-3 — 실행 이미지면 코드 폴더를 붙임). 여러 번 불러도 안전 — 꺼진 것만 띄움 |
 | MCP `parse_document` 작업 서비스                        | 전용 상주 컨테이너 `data-pipeline-mcp`의 주 프로세스(entrypoint `parse-service`, 127.0.0.1:8766 — 사용자 11-03 rn-03). 죽으면 `restart: unless-stopped`가, 꺼져 있으면 `mcp_up.sh`(keepalive 타이머)가 다시 띄운다 — 손 기동 없음 |
 | 재부팅 뒤 되살리기(podman)                                | `systemctl enable --now podman-restart` — podman은 docker처럼 데몬이 없어 `restart: unless-stopped` 컨테이너(검색 MCP·상주 컨테이너)를 부팅 때 다시 띄우지 않는다. 이 서비스가 그 컨테이너들을 되살린다. 검색 MCP와 `data-pipeline-mcp`(parse_document 작업 서비스)는 keepalive 타이머(`mcp_up.sh`)가 한 번 더 본다. 일괄 `data-pipeline`은 keepalive 타이머가 없으니, 재부팅 뒤 `$DOCKER ps`로 떠 있는지 보고, 없으면 위 `bash deploy/host/scripts/dc.sh up -d …`를 다시 실행한다 |
 
@@ -736,7 +732,6 @@ sudo systemctl enable --now data-pipeline-nightly.timer      # 새벽 배치를 
 
 ```bash
 bash deploy/host/scripts/run_tool.sh <도구> [인자]                                                    # rdb_discover · check_env · ping_models
-# 실행 보드(run_board)·정답률(score_gold)·검색 평가(mcp_eval)는 11-01에 지움(PRD e2-10)
 ```
 
 **생기는 파일 — 지워도 되나**
@@ -766,15 +761,13 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 
 의존성 · Dockerfile · 마운트 경로가 그대로라면 이미지를 다시 만들지 않고 코드 폴더만 바꾼다.
 
-옛 오버레이 패치(바뀐 파일만 덧씌우는 compose `compose.patch*.yml`)는 11-03에 지웠고, 이 **코드 폴더 바꾸기**가 그 자리를 대신한다.
-
 1. `release/<버전>` 브랜치에서 `VERSION`의 PATCH 자리를 올린다(예: `0.2.0` → `0.2.1`).
 2. 개발 서버: 새 코드 zip을 `/srv/rag` 옆에 풀고 → `ln -sfn /srv/rag/<새 코드 폴더> /srv/rag/code/live` → `bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp`(release-and-patch §1-1). `DEPS_HASH`가 같으면 이미지는 그대로다.
 3. 확인: `bash deploy/host/scripts/dc.sh check`(마지막 줄 `[dc check] 통과 — 6개`)와 시작 로그 첫 줄의 코드 커밋.
 4. 운영 서버: 개발 서버에서 시험한 코드 폴더를 굽는다(`bake.sh` — release-and-patch §1-2).
 5. 되돌리기: `live` 링크를 옛 폴더로 되돌리고 다시 `dc.sh up -d …`.
 
-- 옛 번들 스크립트 `deploy/release/make_patch.sh`는 11-03에 지웠다. 바뀐 파일 목록은 `git diff --name-status <직전 판 커밋> <새 판 커밋>`, 재파싱 판정은 두 커밋에서 핑거프린트 값을 비교한다(CLAUDE.md §4).
+- 바뀐 파일 목록은 `git diff --name-status <직전 판 커밋> <새 판 커밋>`, 재파싱 판정은 두 커밋에서 핑거프린트 값을 비교한다(CLAUDE.md §4).
 
 새 이미지 버전이 필요한지와 자세한 순서는 [release-and-patch.md](docs/operations/release-and-patch.md) §1~§5에 있다.
 

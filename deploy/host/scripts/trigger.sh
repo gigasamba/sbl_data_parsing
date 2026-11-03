@@ -5,7 +5,7 @@
 #   scheduled = 타이머용 — NIGHTLY_TIME 시각(5분 창)에만 run_docs.py(문서별 flow — 서버 입구 하나, 사용자 10-31 "night = run_docs를 바깥에서 부르는 것")
 #     run_docs 인자: --start-offset 0 --skip-done(EDW ParsingMeta에 끝난 문서는 건너뜀) --max-docs NIGHTLY_MAX_DOCS --deadline NIGHTLY_DEADLINE
 #     (사용자 11-02 — 시작 시각·문서 수 상한·마감 시각 셋이 모두 있어야 돈다, 하나라도 비면 조용히 끝)
-#   (11-01 지움: night(NIGHTLY_MODULES 순서 배치)·structure·load·all — 옛 1회 job 배치 입구. 구조화·적재는 run_docs가 문서마다 부름)
+#   구조화·적재는 run_docs가 문서마다 부른다.
 #   설정(S7e1 — 사용자 10-27 Q3·Q5): settings.yaml(SETTINGS_FILE, 기본 $SERVER_ENV_DIR/settings.yaml — SERVER_ENV_DIR 기본 배치 /srv/rag/env)의
 #     호스트 칸(이미지·RAG_OUT·DOC_SRC·자원·NIGHTLY_*·PARSE_DEADLINE 등)을 settings_env.sh load_settings가 셸 env로 — 이미 셸에 있는 이름은 그대로.
 #     settings.yaml이 없으면 종료 코드 2.

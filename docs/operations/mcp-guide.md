@@ -26,7 +26,7 @@
 | `list_doc_fulltext` | 문서의 대표 파싱 결과 파일(.md·.json) 목록 + 받기 손잡이(`sfid`) 발급 |
 | `get_doc_fulltext` | `sfid`로 파일 내용을 받기 |
 
-모르는 도구 이름은 JSON-RPC 오류(`isError: true`, "Unknown tool")다. 옛 이름 `list_rep_files`·`get_rep_files`는 없다.
+모르는 도구 이름은 JSON-RPC 오류(`isError: true`, "Unknown tool")다.
 
 ## 3. 지원 확장자
 
