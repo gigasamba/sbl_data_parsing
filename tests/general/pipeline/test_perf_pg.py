@@ -33,6 +33,8 @@ def test_run_spans_reach_pg_and_perf_reads_them(tmp_path):
                 env=settings.child_env(),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",  # Windows PC: 자식의 stderr(libpq 등)가 cp949일 수 있음
                 timeout=60,
             )
             assert result.returncode == 0, result.stdout + result.stderr
