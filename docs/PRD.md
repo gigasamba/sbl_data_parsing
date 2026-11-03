@@ -101,7 +101,6 @@
 | 고객 2명 이상 비교 질문은 고객별(최대 4명)로 나눠 찾고 번갈아 합침. 집계형 질문은 BM25 가중치 0.2 | 한 고객이 근거 자리를 독차지하지 않게 | done | [mc-02](prd/mcp.md#mc-02) |
 | 고객 거르기는 EDW에서 붙인 고객(`client_edw`)만 본다(정확 일치, 목록은 OR, `client_like`는 부분 일치) | 답이 고객을 섞으면 안 된다(C6, 11-02). 별칭 그룹은 pl-38 | done | [mc-05](prd/mcp.md#mc-05) |
 | 이름만 다른 사본은 하나로(사본 묶음) | 같은 문서의 다른 판 문제는 pl-56 행 | done | [mc-05](prd/mcp.md#mc-05) |
-| ~~집계 답(건수·합계·환율 메모·LLM 라우터)과 그 길이 읽던 지운 칸·표~~ | 11-01 지움 — 숫자 질문은 `query_edw`로 | done | [mc-04](prd/mcp.md#mc-04) · [mc-11](prd/mcp.md#mc-11) · [mc-12](prd/mcp.md#mc-12) |
 | 검색기가 지운 칸(`file_sha256` 등) 대신 문서 키 `doc_key`(= `file_path`)로 읽음 | 새 묶음으로 검색기를 만들면 실패하던 문제 | done | [mc-10](prd/mcp.md#mc-10) |
 | 질의 기록은 파일 `qa_log.jsonl`만(호출자·질문·근거·지연), 90일 보관·24시간마다 정리 | 토큰·원문은 남기지 않는다 | done | [mc-13](prd/mcp.md#mc-13) · [mc-09](prd/mcp.md#mc-09) |
 | 대표 파싱 결과 주소 `rep_uri`(`s3://<bucket>/<key>`)는 원문 도구가 부를 때 ParsingMeta에서 읽는다(검색 근거 13칸에는 없음) | 사용자 11-01 — 검색 DB에는 거르기 메타만(C8 바뀜) | done | [mc-15](prd/mcp.md#mc-15) |
@@ -164,16 +163,14 @@
 | PC 시험 자식 프로세스는 개발자 `settings.yaml` 대신 시험 전용 바탕(`run_env: local`만)을 쓴다 | 공용 개발 PG를 건드리지 않게 | done | [e2-02](prd/test.md#e2-02) · [e2-11](prd/test.md#e2-11) |
 | 이미지 반입 관문 — `build_ship.sh`로 빌드하고 `selftest_gate.sh`가 종료 코드가 아니라 `[판정]` 줄로 판단(알려진 실패 밖 FAIL 0) | 서버는 반입 시험을 통과한 이미지만 받는다 | done | [e2-08](prd/test.md#e2-08) |
 | 코드만 바뀌면 코드 폴더 바꾸기(이미지는 그대로) | 이미지를 다시 만들지 않는다 | done | [e2-08](prd/test.md#e2-08) |
-| ~~시험을 바꾸면 새 이미지가 필요~~ | 이미지에 코드 폴더를 붙이는 방식(op-06)이라 시험도 코드 폴더에서 돌아 해소 | done | [e2-14](prd/test.md#e2-14) |
 | PC 일반 시험의 옛 실패 정리 — 공용 PG를 읽던 3개는 고치고, 지운 모듈의 시험은 지움 | 리팩토링 전부터 있던 실패. 남은 실패 0(`GENERAL_KNOWN_FAIL = {}`, `known_fail.txt` 빔) | done | [e2-11](prd/test.md#e2-11) |
 | 옛 오버레이 패치 흔적 둘 — `common/core/fingerprint.py`의 `common/PATCH_VERSION` 후보(허브가 릴리스 지문 배치에서 지움)·`deploy/docker/IMAGE_BASE`(읽는 곳 없음 — 지울지 사용자가 정함) | `fingerprint.py`는 레이어 지문 파일이라 고치면 서버 문서가 모두 다시 처리된다 | todo | [e2-21](prd/test.md#e2-21) |
 | 지시서 폴더 찾기(`paths.resolve_agent_dir`)에서 폴더가 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`(`triple_extract` 지움)·`dev_tools/unit_test/fixtures`)과 그 설명 주석 지우기 | `paths.py`를 고치면 레이어 지문이 모두 바뀌어 다음 지문 배치에 | todo | [e2-15](prd/test.md#e2-15) |
 | PC 스모크 — 문서 2~3건으로 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색(README §4-4) | 릴리스 전에 사슬 전체를 증명 | done | [e2-01](prd/test.md#e2-01) |
 | PC Docker 스모크(`valid_env/docker/smoke_test.sh`)를 다시 돌려 검색까지 가는지 확인 | mc-10은 고쳐졌고 다시 돌려 보기만 남음 | todo | [e2-13](prd/test.md#e2-13) |
 | 시험 자료 `valid_env/` — 문서 `object_storage/{SFDC,CRMS}/<uuid>/<파일>`, 합성 EDW `edw/` | 서버와 같은 배치. 서버 반입 시험은 자료를 임시 폴더에 만들어 쓴다 | done | [e2-09](prd/test.md#e2-09) |
-| ~~파싱 품질 평가·검색 평가(hit@k)·스택·모델 비교 도구~~ | e2-10에서 도구를 지움 — 필요할 때 다시 만든다 | done | [e2-03](prd/test.md#e2-03) · [e2-04](prd/test.md#e2-04) · [e2-06](prd/test.md#e2-06) |
+| 배포 뒤 검색 스모크 — `mcp_smoke`로 도구 목록·`search` 근거 1건 이상·근거 칸 확인 | 서버에서 검색이 실제로 답하는지 한 번에 본다 | done | [e2-04](prd/test.md#e2-04) |
 | 답변 점검(PC 전용) — `validation/e2e/answer_gen.py`가 `rag_qa` 에이전트로 `search`·`edw_meta`·`query_edw`를 불러 답하고 인용을 규칙으로 점검 | MCP는 근거만 준다. 유료 호출은 예산 장부를 거친다 | done | [e2-05](prd/test.md#e2-05) |
-| `query_edw` 값을 인용한 답은 인용 점검 실패로 기록하고 그대로 둔다 | 사용자 결정(바꾸지 않음) | done | [e2-12](prd/test.md#e2-12) |
 | answer_gen 인용 버그 고침 — 오류 구분·JSON으로 못 바꾸는 값·객체가 아닌 답·다시 직렬화 | 시험 `tests/general/e2e/test_answer_gen.py` | done | [e2-19](prd/test.md#e2-19) |
 | 분류 수용 보고서(개발 서버) — 사람 정답 CSV(`s3_key`·정답 분류)와 비교해 원천·라벨별 일치율·혼동표 | 회사 데이터라 git 밖. 통과 기준은 첫 결과를 본 뒤 정한다 | todo | [e2-20](prd/test.md#e2-20) |
 | 검색 점검 페이지 `validation/search_ui`(기본 포트 8790, MCP `127.0.0.1:8765/mcp`) | 사람이 브라우저로 근거를 본다 | done | [e2-07](prd/test.md#e2-07) |
@@ -194,6 +191,6 @@
 | 개발 → 운영 굽기 `bake.sh` — 개발에서 쓴 실행 이미지 + 시험한 코드 폴더로 `Dockerfile.bake`(네트워크 없이), 반입 판정 뒤 저장·분할 | 운영에는 개발에서 시험한 그대로 올라간다 | done | [op-07](prd/doc.md#op-07) |
 | 운영(prd) 이미지에 settings.yaml(비밀 포함)도 굽는다 — 🔒 검토 등급 A(비밀 처리) | 이미지 파일 = 비밀(반입 경로만), 키를 바꿀 때마다 다시 굽기. 사용자 11-02 | todo | [op-12](prd/doc.md#op-12) |
 | 서버 설치 길은 하나(README §5-0·§5-3). 컨테이너 도구는 셸 env > `ops.host.docker` > podman > docker. 이미지는 `load.sh`로(45 MB 조각) | 문서마다 절차가 달랐다. 서버 기본 도구는 podman | done | [op-10](prd/doc.md#op-10) |
-| 0.2.0 올리기·되돌리기(release-and-patch §5-7) — DB 백업 → `migrate check` → `up`, 되돌릴 땐 `settings.yaml.0.1.0` 복원, 재처리 동안 밤 타이머 멈춤 | DB·EDW·전체 재처리가 함께 바뀐다 | done | [op-10](prd/doc.md#op-10) |
+| 0.2.0 올리기·되돌리기(release-and-patch §8-3·§8-5) — DB 백업 → `migrate check` → `up`, 되돌릴 땐 `settings.yaml.0.1.0` 복원, 재처리 동안 밤 타이머 멈춤 | DB·EDW·전체 재처리가 함께 바뀐다 | done | [op-10](prd/doc.md#op-10) |
 | 일회성 작업 컨테이너 지움 — 운영 작업·`dbtool`·`migrate`는 상주 `data-pipeline`에 `exec`, 이미지 점검(`docker run --rm … selftest`)은 그대로 | 사용자 11-02 | done | [op-10](prd/doc.md#op-10) |
 | 사람 정답 폴더(`GOLD_DIR` → `/data/gold`)를 상주 컨테이너에 붙일지, 칸을 지울지 정하기 | 일회성 컨테이너를 지운 뒤 점검기의 GOLD_DIR 점검이 건너뛰어짐 | todo | [op-11](prd/doc.md#op-11) |

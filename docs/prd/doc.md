@@ -60,7 +60,7 @@
 <a id="op-10"></a>
 ## op-10 · 서버 설치·업그레이드 — 길 하나, podman 기본
 - 규칙:
-  1. 설치 길은 README §5-0·§5-3에만 쓰고 다른 문서는 링크한다. 0.2.0 올리기·되돌리기는 [release-and-patch.md §5-7](../operations/release-and-patch.md), 배포 사람 할 일은 §8.
+  1. 설치 길은 README §5-0·§5-3에만 쓰고 다른 문서는 링크한다. 0.2.0 올리기·되돌리기는 [release-and-patch.md §8-3·§8-5](../operations/release-and-patch.md), 배포 사람 할 일은 §8.
   2. 컨테이너 도구 = 셸 `DOCKER` > settings.yaml `ops.host.docker` > podman > docker(`settings_env.sh` `docker_default`, 설정을 읽은 뒤 정함). `ship_stage.sh`·`load.sh`도 podman 우선.
   3. 서버 상주 컨테이너 셋: 일괄 `data-pipeline`(파싱·구조화·적재 — 문서 폴더 읽기 전용 + 결과 폴더, 자원 `ops.pipeline_host.parse_cpus` 5·`parse_mem_limit` 24g), `data-pipeline-mcp`([ops.md#rn-03](ops.md#rn-03)), `mcp-server`. pgvector·redis는 우리 것이 아니다.
   4. 운영 작업(`trigger.sh parse|publish`, `run_tool.sh <도구>|migrate|show-stack|check`, `dbtool`)은 상주 `data-pipeline` 안에서 `docker exec`(`image_vars.sh` `in_pipeline` — 안 떠 있으면 종료 2). 일회성 작업 컨테이너는 없다. 이미지 점검(`docker run --rm … selftest`)만 예외.

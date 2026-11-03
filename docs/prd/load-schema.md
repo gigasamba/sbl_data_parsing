@@ -80,6 +80,7 @@ SFDC·CRMS·LAS·FAQ·Other는 메타가 다르고 BM25 통계도 원천마다 �
 6. MCP `search`: `attrs: {키: 값}` 거르기는 그 원천에서 `filter`가 있는 키만 받는다 — 모르는 키는 그 원천의 키 목록과 함께 오류(빈 결과 아님). 이름 있는 거르기는 사슬의 `filter:`로 attrs 키에 잇는다(`project_id` → `project_code__c` 등). 근거 `attrs`는 `evidence: true` 키 모두(값 없으면 null), `contract_no` = `filter: contract_id` 키의 값. `edw_meta` 도구가 원천마다 거를 수 있는 키·근거 키를 보여 준다.
 7. `list_doc_fulltext`의 `doc_class`·`sf_op_id`는 attrs 키 이름 그대로 읽는다(사슬을 거치지 않음). 이 키와 분류 힌트 키는 서버 사본에서 이름을 바꾸면 안 된다.
 8. 검색은 사슬 파일이 바뀌면 다음 호출부터 다시 읽는다.
+9. 사슬 `fields`에 `filter:`가 있는 칸을 더하면 코드 수정 없이 그 원천의 이름 거르기·`attrs` 거르기·`edw_meta` `search_attrs`가 함께 열린다(사용자 11-04 — CRMS `sf_op_id`는 지금 사슬에 없어 그 거르기는 0건, 칸이 생기면 이 길로 더한다). 시험: `tests/server/mcp/test_search_svc.py`(`_selftest_search_attrs`).
 
 ### QA
   - 시험: `tests/server/common/test_dbtool.py`(0005 — 옮기는 칸 = 0002+0003, 뷰·되돌리기·GIN) · `tests/server/pipeline/test_edw_meta.py`(사슬 사례·틀린 설정 15개) · `tests/server/pipeline/test_classify.py`(EDW attrs → `doc.attrs` · 힌트) · `tests/server/mcp/test_search_svc.py`(attrs 거르기·오류·근거 attrs·`contract_no`·`search_attrs`) · `tests/server/mcp/test_call_log.py`(tools/list 바이트 — 지금 값은 시험 파일).

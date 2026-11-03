@@ -1,31 +1,14 @@
 #!/usr/bin/env python3
-"""SI39 — 파싱이 끝난 뒤 별도로: 대표 결과(.md)를 Object Storage에 올리고 EDW `AI.ParsingMeta`에 행을 기록한다.
-**맨 마지막 별도 단계**(설계 docs/architecture.md) — 앞 단계(파싱·구조화·적재·검색)는 Object
-Storage·EDW를 **읽기만** 한다. 공용 로직은 modules/load/parsing_meta.py(이 CLI는 그 모듈의 함수만 부른다).
+"""게시(publish — PRD pl-09): 파싱이 끝난 문서의 대표 결과(.md)와 엔진별 원결과를 Object Storage에 올리고 EDW `AI.ParsingMeta`에 행을 쓴다.
+공용 로직은 pipeline/load/parsing_meta.py — 이 CLI는 그 함수만 부른다.
 
-요건(SI39, 사용자 10-08 — backlog/server.md SI39): ① 올리는 것은 **대표 결과(.md)**, 원본 파일은 올리지 않는다
-(원천 원본은 읽기만, 수정·삭제 금지) ② 겹침/건너뜀 키 = (source_system, 원본 전체 키) ③ Object Storage 키는
-항상 `<PM_PREFIX>/<source_system 또는 PM_PATH_MAP 새 앞부분>/<원본 폴더>/<파일명>/<파일명>_<parse_date>.md`(사용자 10-14) — 이미 있으면 건너뜀, `--reparse`로 명시한
-키만 새 날짜 폴더(옛 결과 안 덮음) ④ EDW는 INSERT만 ⑤ PM_BUCKET이 원천 원본 버킷과 같으면 거부 ⑥ DRM·파싱 실패는 EDW에 안 넣고
-`output/publish/excluded_<날짜>.md` 보고서로만.
+규칙: 원본 파일은 올리지 않는다 · 겹침 키 = (source_system, 원본 전체 키) — 있으면 건너뜀, `--reparse` 목록만 새 날짜 폴더 ·
+EDW는 INSERT만 · 게시 버킷이 원천 원본 버킷과 같으면 거부 · DRM·실패 문서는 EDW에 안 쓰고 `output/publish/excluded_<날짜>.md`에만.
 
-문서 대장(OP1/OP9 — 원천 변경 탐지·EDW status UPDATE)은 C10(pl-12, 사용자 10-31)에 지움 — EDW는 INSERT만.
-
-사용(기본 --out의 하위 경로를 그대로 — pipeline.py와 같은 레이아웃):
-  python cli/publish_parse.py [--out out] [--source-system FileStorageMap] [--version <판>] [--parse-date <날짜>]
-                              [--reparse <키 목록 파일>] [--apply]
-  기본은 **dry-run**(무엇을 올리고 쓸지 표만 출력, 실제 업로드·EDW 쓰기 0) — 실제로 쓰려면 --apply 명시.
-
-env(전부 PM1 결정 대기 — 사람, docs/operations/server-guide.md 단계 6):
-  PM_TABLE(기본 AI.ParsingMeta) · PM_BUCKET(업로드 버킷 — "file://<폴더>"면 로컬 폴더를 가짜 Object Storage로) ·
-  PM_PREFIX(버킷 안 경로 접두, 선택) · common.connections.rdb 쓰기 계정(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_WRITE_USER·RDB_WRITE_PASSWORD
-  — 사용자 10-29 ops.md#op-03) · RDB_SQLITE(설정하면 SQLite를 가짜 EDW로, 접속 칸 안 봄) ·
-  OS_ENDPOINT·OS_ACCESS_KEY·OS_SECRET_KEY·OS_REGION·OS_VERIFY_TLS(업로드 접속 — source.py·os_put.py와 같음) ·
-  PM_UPLOAD_STATUSES(콤마 목록, 기본 "ok,partial"만 올림) · PM_PARSE_DATE(--parse-date 대신 env로, 선택).
-원본 로컬 보존·즉시 삭제는 이제 modules/parse/source.py(SI39⑧ — 파싱이 끝나면 바로 지움, KEEP_LOCAL_ORIGINALS=1만
-디버그 보존)가 맡는다 — 이 CLI는 원본 삭제를 하지 않는다(올리지도 않으므로, SI37 때와 달리 X2 책임이 없음).
-DDL은 이 코드가 실행하지 않는다(설계 §2 초안 — 사람이 만듦). SQL은 식별자 화이트리스트·값 바인딩(AD44 관례),
-비밀값(RDB_WRITE_PASSWORD 등)은 어떤 모드에서도 출력하지 않는다.
+사용: python -m pipeline.load.publish_parse_result [--out output] [--parse-date YYYY-MM-DD] [--reparse <키 목록 파일>] [--apply]
+기본은 dry-run(표만 출력, 업로드·EDW 쓰기 0). 설정은 settings.yaml(게시 버킷·접두·표, EDW 쓰기 계정, Object Storage 접속 —
+settings.sample.yaml `load.publish`·`required`). PC는 버킷 `file://<폴더>`·`RDB_SQLITE`로 로컬 대역을 쓴다.
+DDL은 실행하지 않는다. SQL은 식별자 화이트리스트·값 바인딩, 비밀값은 출력하지 않는다.
 """
 
 import argparse
