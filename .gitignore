@@ -47,3 +47,6 @@ output/applog/
 assets/
 dl/
 tessdata_best/
+
+# A tool run with an unexpanded %SystemDrive% cwd once wrote Windows cache files here (#136)
+/%SystemDrive%/

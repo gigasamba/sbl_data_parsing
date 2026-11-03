@@ -33,11 +33,10 @@
 
 ### 1-2. 설정 파일
 ```bash
-sudo mkdir -p /srv/rag/env && sudo chmod 700 /srv/rag/env
-cp <받은 저장소 ZIP>/settings.sample.yaml /srv/rag/env/settings.yaml   # 설정 파일은 이것 하나
-sudo chown 10001:<운영 계정 그룹> /srv/rag/env/settings.yaml && sudo chmod 640 /srv/rag/env/settings.yaml   # 컨테이너 사용자 UID 10001이 읽음(운영 계정 UID가 10001이면 600 — refactor.md C-09)
-# 값 채우기 — 항목·설명은 settings.sample.yaml·env-guide.md, env-guide "옛 서버 값" 표의 항목은 그 값으로(C-39), 값은 문서·채팅·로그에 쓰지 않는다 · 0.1.0 settings.yaml은 release-and-patch.md §5-7 3단계(옮기기)
-sudo mkdir -p /srv/rag/output && sudo chown 10001:<운영 그룹> /srv/rag/output && sudo chmod 2775 /srv/rag/output    # UID 10001 · 운영 그룹 · setgid — 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지운다
+sudo bash <코드 폴더>/deploy/host/scripts/dc.sh init --group <운영 계정 그룹>   # 서버 폴더 한 번에(README §5-3 ② — 여러 번 불러도 안전)
+#   /srv/rag/env(700) · env/settings.yaml ← settings.sample.yaml(없을 때만, 10001:<그룹> 640 — 운영 계정 UID가 10001이면 600, refactor.md C-09)
+#   /srv/rag/output · output/mcp_parse/jobs(10001:<그룹> 2775 — setgid, 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지운다) · code/live 링크(없을 때만) · backup(700)
+# 값 채우기 — init이 찍은 빈 필수 칸부터. 항목·설명은 settings.sample.yaml·env-guide.md, env-guide "옛 서버 값" 표의 항목은 그 값으로(C-39), 값은 문서·채팅·로그에 쓰지 않는다 · 0.1.0 settings.yaml은 release-and-patch.md §5-7 3단계(옮기기)
 # 이미 있는 결과 폴더(옛 판이 644·755로 쓴 것)는 한 번: sudo chgrp -R <운영 그룹> /srv/rag/output && sudo chmod -R g+w /srv/rag/output && sudo find /srv/rag/output -type d -exec chmod g+s {} +
 export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.yaml을 읽음
 ```
@@ -89,7 +88,7 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 ### 2-3. 상주 컨테이너
 `data-pipeline`(일괄 상주 컨테이너 — 사용자 11-03, 옛 `data-pipeline-parse`·`data-pipeline-structure`를 합침)은 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업(warm·파싱·게시·구조화·적재)을 돌린다. MCP `parse_document` 작업 서비스는 전용 상주 컨테이너 `data-pipeline-mcp`의 주 프로세스다(entrypoint `parse-service` — 사용자 11-03 rn-03: 사람이 기다리는 요청이라 일괄과 떼고 CPU 나눔 비율 `cpu_shares` 4096 > 일괄 1024, 상한 CPU 2·메모리 8g — 아직 settings.yaml 칸 없음, refactor.md C-83). 꺼지면 `mcp_up.sh`(keepalive 타이머)가 다시 띄운다. 자원 상한은 settings.yaml `pipeline.host.parse_cpus`·`parse_mem_limit`(비우면 CPU 5·메모리 24g — 옛 두 컨테이너의 합. docker는 호스트 CPU 수보다 큰 `cpus`를 거부하므로 CPU 4개 서버는 `parse_cpus`를 3 이하로 적는다). 옛 `structure_cpus`·`structure_mem_limit`은 읽지 않는다(refactor.md C-82). 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/ops.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
 ```bash
-dc up -d data-pipeline data-pipeline-mcp   # dc = README §5-3 ①의 도우미(settings.yaml 값을 compose에 넘김 — 그냥 docker compose는 필수 칸 `${…:?}`에서 멈춤)
+bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp   # settings.yaml 값을 compose에 넘김(그냥 docker compose는 필수 칸 `${…:?}`에서 멈춤) — README §5-3 ①
 ```
 
 ### 2-4. 테스트 실행 스크립트(코드 폴더에서 네이티브, 이미지 밖)
