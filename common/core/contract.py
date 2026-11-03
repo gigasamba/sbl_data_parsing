@@ -12,8 +12,8 @@ source_uri = 원본 위치(file:/// · 나중 s3://). 파싱(만듦)·구조화(
 import csv
 import functools
 import hashlib
-import os
 import json
+import os
 import re
 import sys
 import unicodedata
