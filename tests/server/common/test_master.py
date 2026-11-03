@@ -153,3 +153,32 @@ def test_gold_version():
     for meta, want in cases:
         assert L.gold_version(meta) == want, (meta, L.gold_version(meta))
     assert len(f"{v}+m12345678") <= 64  # ParsingMeta gold_version NVARCHAR(64)
+
+
+def test_standin_follows_csv_and_mcp_preload():
+    """리뷰 — PC 대역은 git CSV가 바뀌면 다시 채움(옛 명부로 남지 않게) · 검색 MCP는 검색기를 만들 때 마스터를 미리 읽어, 못 읽으면 RuntimeError."""
+    d = Path(tempfile.mkdtemp())
+    st = _standin(d)
+    try:
+        h1 = M.get().hash
+        g = d / "g"
+        shutil.copytree(GLOSSARY_ROOT, g)
+        p = g / "units.csv"
+        p.write_text(p.read_text(encoding="utf-8-sig") + "zz,zz,length,,,\n", encoding="utf-8")
+        changed = M.read_csvs(g)
+        with mock.patch.object(M, "read_csvs", lambda folder=None: changed):
+            M.reset()
+            h2 = M.get().hash
+        assert h2 != h1 and h2 == M.content_hash(changed), (h1, h2)
+        M.reset()
+        assert M.get().hash == h1  # 원래 CSV로 돌아오면 다시 맞춤
+    finally:
+        _close(st)
+    from mcp_server.services.search import server_state as SS
+
+    with mock.patch.object(SS, "check_store", lambda: None), mock.patch.object(M, "get", side_effect=SystemExit("[master] 비어 있음")):
+        try:
+            SS._build_retriever()
+            raise AssertionError("마스터 못 읽는데 검색기를 만듦")
+        except RuntimeError as e:
+            assert "master" in str(e)

@@ -6,12 +6,14 @@
 import datetime
 import hashlib
 import json
+import threading
 
 from common.core.paths import RES_ROOT
 from common.store.db.models.master_tables import META, TABLES
 
 GLOSSARY = RES_ROOT / "vocab" / "glossary"
 _GOT: dict = {}  # 프로세스마다 한 번 — {"m": Master}
+_GOT_LOCK = threading.Lock()  # 검색 MCP는 여러 스레드 — 확인·채우기·비우기를 한 잠금으로
 
 
 class Master:
@@ -71,11 +73,15 @@ def load(db, tables=None):
 
 
 def read(db):
-    """마스터 표 → Master. 표가 없거나 비었으면(master load 전) SystemExit."""
+    """마스터 표 → Master. 표가 없거나 비었으면(master load 전) SystemExit.
+    master_meta와 표 6개를 한 트랜잭션(PG는 REPEATABLE READ)으로 읽는다 — 그 사이 `master load`가 커밋돼도 옛·새 내용이 섞이지 않게."""
     s = db.schema
     try:
-        meta = db.q(f"SELECT hash FROM {s}.{META}")
-        tables = {n: db.q(f"SELECT {', '.join(cols)} FROM {s}.{n} ORDER BY row_no") for n, cols in TABLES.items()}
+        with db.cn.transaction():
+            if not getattr(db, "is_standin", False):
+                db.q("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            meta = db.q(f"SELECT hash FROM {s}.{META}")
+            tables = {n: db.q(f"SELECT {', '.join(cols)} FROM {s}.{n} ORDER BY row_no") for n, cols in TABLES.items()}
     except Exception as e:  # 표 없음·권한 등 — 원인은 메시지에
         raise SystemExit(
             f"[master] 마스터 표를 못 읽음({s} — {type(e).__name__}): `dbtool up --target master` 뒤 `dbtool master load`"
@@ -98,29 +104,37 @@ def _standin(base):
         d = postgresql.dialect()
         for t in master_metadata(db.schema).tables.values():
             db.q(str(CreateTable(t).compile(dialect=d)).strip())
-    if not db.q(f"SELECT hash FROM {db.schema}.{META}"):
-        load(db)
+    have = db.q(f"SELECT hash FROM {db.schema}.{META}")
+    tables = read_csvs()
+    if not have or have[0]["hash"] != content_hash(
+        tables
+    ):  # 비었거나 git CSV가 바뀌었으면 다시 채움(PC 대역만 — 서버는 `dbtool master load`)
+        load(db, tables)
     return db
 
 
 def get():
     """이 프로세스의 마스터(처음 한 번 읽음). 실 PG(common.store.pg 접속)는 `<PG_SCHEMA>_master`, 접속 정보가 없으면 PC 대역 — 서버는 대역을 쓰지 않고 멈춤."""
-    if "m" not in _GOT:
-        from common.store.pg import PG, _standin_schema, _warn_standin, conf, has_conn
+    with _GOT_LOCK:
+        m = _GOT.get("m")
+        if m is None:
+            from common.store.pg import PG, _standin_schema, _warn_standin, conf, has_conn
 
-        if has_conn():
-            c = conf()
-            db = PG({**c, "PG_SCHEMA": schema_name(c["PG_SCHEMA"])})
-            try:
-                _GOT["m"] = read(db)
-            finally:
-                db.cn.close()
-        else:
-            _warn_standin()  # 서버(dev·prd)는 여기서 SystemExit
-            _GOT["m"] = read(_standin(_standin_schema(None)))
-    return _GOT["m"]
+            if has_conn():
+                c = conf()
+                db = PG({**c, "PG_SCHEMA": schema_name(c["PG_SCHEMA"])})
+                try:
+                    m = read(db)
+                finally:
+                    db.cn.close()
+            else:
+                _warn_standin()  # 서버(dev·prd)는 여기서 SystemExit
+                m = read(_standin(_standin_schema(None)))
+            _GOT["m"] = m
+        return m
 
 
 def reset():
     """다시 읽게(검색 서버가 적재 판 바뀜을 볼 때·시험)."""
-    _GOT.clear()
+    with _GOT_LOCK:
+        _GOT.clear()
