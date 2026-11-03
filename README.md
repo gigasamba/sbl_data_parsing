@@ -676,10 +676,10 @@ bash deploy/host/scripts/trigger.sh publish     # Object Storage 업로드 + EDW
 ```bash
 bash deploy/host/scripts/dc.sh logs -f data-pipeline                  # 상주 컨테이너 로그를 따라 봄(Ctrl+C로 멈춤 — 컨테이너는 그대로)
 tail -f <run_docs 작업 폴더>/batch_progress/progress.log              # run_docs 문서별 줄("doc#<seq> 구조화+적재 OK|FAIL")
-tail -n 50 <결과 폴더>/docflow/<seq>/structure.log                     # 그 문서의 구조화·적재 출력(적재 거부 이유 한 줄도 여기)
+tail -n 50 <결과 폴더>/docflow/<seq>/structure.log                     # 그 문서의 구조화·적재 출력 — 문서가 끝나면 폴더째 지워짐(남기려면 run_docs --no-cleanup)
 ```
 
-`dc.sh logs`는 컨테이너 주 프로세스의 출력만 보인다. run_docs가 `docker exec`로 부르는 구조화·적재의 출력은 위 두 파일에 남는다.
+`dc.sh logs`는 컨테이너 주 프로세스의 출력만 보인다. run_docs가 `docker exec`로 부르는 구조화·적재의 출력은 `structure.log`에 남지만, 이 파일은 문서 처리가 끝나면 `docflow/<seq>` 폴더와 함께 지워진다. 끝난 뒤에 남는 것은 `progress.log` 줄과(켜져 있으면) 아래 `applog.pipe_event` 행이다.
 
 **적재 거부 — 임베딩 모델이 다른 묶음(pl-51).** 묶음의 임베딩 모델이 검색 스키마에 이미 적재된 문서의 모델과 다르면 적재는 아무것도 쓰지 않고 종료 코드 2로 멈춘다(`[load] 임베딩 모델이 다름 — 적재 거부 …`). `common.log.db_enabled`가 켜져 있으면 거부가 시각과 함께 `applog.pipe_event`에 남는다:
 
