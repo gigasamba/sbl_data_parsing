@@ -288,10 +288,14 @@ def parse_module(a):
         engines,
         *lim,
     ]
-    if _run_until(args, env, _left(a) - 120) is None:
+    rc = _run_until(args, env, _left(a) - 120)
+    if rc is None:
         raise SystemExit(75)  # 마감 — 끝 표시 안 바꿈, 다음 실행이 이어 감
     _tstep("t_parse")
-    if not (OUT / "parse" / "runs.jsonl").exists():  # F1(11-03 PC 시험) — 돈 엔진·문서 0건: 채점·대표 결과가 없는 runs.jsonl로 죽지 않게
+    if not (OUT / "parse" / "runs.jsonl").exists():  # F1(11-03 PC 시험) — runs.jsonl 없음: 채점·대표 결과로 넘어가 죽지 않게
+        if rc != 0:  # run_all이 죽어 못 씀 — 성공으로 덮지 않는다(리뷰)
+            print(f"[parse] 파싱 실패 — run_all 종료 {rc}, runs.jsonl 없음", file=sys.stderr, flush=True)
+            raise SystemExit(rc)
         print("[parse] 이번 실행 0건 — 파싱한 문서 없음(runs.jsonl 없음) · 채점·대표 결과·끝 표시 건너뜀", flush=True)
         return
     for args in (

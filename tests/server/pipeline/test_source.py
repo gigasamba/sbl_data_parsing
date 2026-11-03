@@ -417,8 +417,17 @@ def test_folder_tree():
     for n, r in man.items():
         assert (local / n).read_text(encoding="utf-8") == r["key"], r  # 복사본 = 그 키의 원본
         assert r["uri"] == (src / r["key"]).resolve().as_uri(), r
+        assert r["source_system"] == r["key"].split("/", 1)[0], r  # SFDC·CRMS(키 첫 마디)
     flat = root / "flat"
     flat.mkdir()
     (flat / "c.txt").write_text("c", encoding="utf-8")
+    (flat / "sub").mkdir()
+    (flat / "sub" / ".DS_Store").write_text("x", encoding="utf-8")  # 흘린 하위 파일 — 평평한 폴더 그대로
+    (flat / "__MACOSX").mkdir()
+    (flat / "__MACOSX" / "c.txt").write_text("x", encoding="utf-8")
     local2, names2, _ = resolve(str(flat), root / "out2")
     assert local2 == flat and names2 == ["c.txt"], (local2, names2)  # 평평한 폴더는 키 = 파일 이름(옛 그대로)
+    odd = root / "odd"  # 원천 이름이 아닌 하위 폴더 — 평평한 폴더로(맨 위 파일만 = 0개)
+    (odd / "_archive" / "u").mkdir(parents=True)
+    (odd / "_archive" / "u" / "d.txt").write_text("d", encoding="utf-8")
+    assert resolve(str(odd), root / "out3")[:2] == (odd, [])
