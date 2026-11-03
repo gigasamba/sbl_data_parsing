@@ -456,6 +456,17 @@ def _selftest_search_attrs():
     with patch.object(search_svc, "chain", lambda: ch):
         c = edw_calls.search_attrs()["CRMS"]
     assert "product" not in c["filter"] and "prod_name" in c["attrs"], c
+    # 사용자 11-04 — CRMS 영업 기회(sf_op_id)는 지금 사슬에 없어 0건 · 사슬에 filter 칸을 더하면 코드 수정 없이 이름 거르기·attrs·search_attrs가 함께 열림
+    h = {"source_system": "CRMS", "sf_op_id": "OP1"}
+    ch = EC.load()
+    assert search_svc._scope_sql(h, "crms", EC.filters(ch, "crms")) == (" WHERE 1 = 0", [])
+    ch["crms"]["fields"]["sf_op_id"] = {"from": "map.rm_contract_code", "filter": "sf_op_id", "evidence": True}
+    fm = EC.filters(ch, "crms")
+    assert search_svc._scope_sql(h, "crms", fm) == (" WHERE (attrs @> %s::jsonb)", ['{"sf_op_id": "OP1"}'])
+    assert search_svc._norm_attrs({"sf_op_id": "OP1"}, "CRMS", fm) == ({"sf_op_id": "OP1"}, None)
+    with patch.object(search_svc, "chain", lambda: ch):
+        c = edw_calls.search_attrs()["CRMS"]
+    assert c["filter"]["sf_op_id"] == "sf_op_id" and "sf_op_id" in c["attrs"] and "sf_op_id" in c["evidence"], c
     # 요약이 오류면 search_attrs를 붙이지 않음 · 성공이면 붙임
     from mcp_server.services import edw_meta as EM
 
