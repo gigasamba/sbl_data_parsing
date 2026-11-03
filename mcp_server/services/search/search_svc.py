@@ -177,7 +177,7 @@ def _source_docs(src):
 
 
 def _out(question, evidence, status, hard, scope_docs):
-    """계약 모양으로 — 근거는 13칸만, 맨 위 5칸(filter·scope_docs는 거르기를 줬을 때만). cap이 줄이면 근거 글·개수만 줄고 표시 칸은 뺀다(계약 밖)."""
+    """계약 모양으로 — 근거는 13칸만, 맨 위 5칸(source_system이 필수라 filter·scope_docs도 늘 있음). cap이 줄이면 근거 글·개수만 줄고 표시 칸은 뺀다(계약 밖)."""
     obj = {
         "question": question,
         "evidence": [{k: e.get(k) for k in EVIDENCE_KEYS} for e in evidence],

@@ -29,8 +29,9 @@ def register(m):
     ) -> dict:
         """Natural-language top-k evidence search inside hard filters (vector + bm25 + id, fused server-side).
         question is required (empty -> {"error"}). k: default 8, max 50 (larger is clamped).
-        Filters are optional; different filters AND together, a list inside one filter is OR, all exact match:
-        source_system (SFDC/CRMS/LAS/FAQ; '-test' suffix accepted), client (account name; client_like=true -> substring),
+        source_system is required: exactly one of SFDC/CRMS/LAS/FAQ/Other ('-test' suffix accepted); each call searches that one
+        source only (call again for another source; missing -> {"error"}). Other filters are optional; different filters AND
+        together, a list inside one filter is OR, all exact match: client (account name; client_like=true -> substring),
         project_id, division, service_type, FAQ_group, doc_class (within its source system's taxonomy), sf_op_id, sf_op_name,
         contract_id, created_since/created_until (source registration time; YYYY-MM-DD or ISO 8601, no time zone = KST,
         date-only until includes that whole day; docs without created_at are excluded).
@@ -38,8 +39,7 @@ def register(m):
         {"error"} listing the valid keys — edw_meta with no arguments lists them). project_id, division, service_type,
         doc_class, sf_op_id, sf_op_name and contract_id are named shortcuts for attrs keys of that source.
         A filter that matches nothing returns an empty result (scope_docs 0, evidence_status "none"), not an error.
-        Returns {question, evidence[], evidence_status (found/weak/none), filter, scope_docs} — filter/scope_docs only when a
-        filter was given. Each evidence item has exactly: text, file_name, file_path, page, line, section, client, contract_no,
+        Returns {question, evidence[], evidence_status (found/weak/none), filter, scope_docs}. Each evidence item has exactly: text, file_name, file_path, page, line, section, client, contract_no,
         doc_date, version, superseded, chunk_key, attrs (missing values are null; attrs holds the source's evidence keys, null if it has none)."""
         return await _bg(
             do_search,
