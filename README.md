@@ -163,7 +163,7 @@ pgvector(PostgreSQL)의 테이블은 **코드가 실행 중에 만들지 않는�
 │  └─ vocab/            질문 유형(qtype_labels.json) · glossary/(마스터 표의 원본 CSV — 용어집·고객 명부)
 ├─ deploy/              배포
 │  ├─ docker/           Dockerfile(타깃 pipeline, mcp) · requirements · entrypoint.sh · IMAGE_BASE · wheels/(폐쇄망용 휠)
-│  ├─ release/          빌드·전송(build_ship, ship_stage, load) · 굽기(bake) · 변경 목록 번들(make_patch — 옛 오버레이 길은 코드 폴더 바꾸기로 대체) · 배포 판정(selftest_gate, known_fail.txt) · 커밋 전 점검(lint_changed.sh)
+│  ├─ release/          빌드·전송(build_ship, ship_stage, load) · 굽기(bake) · 배포 판정(selftest_gate, known_fail.txt) · 커밋 전 점검(lint_changed.sh)
 │  └─ host/             서버 호스트에서 쓰는 것 — compose/ · scripts/(dc, trigger, run_tool, mcp_up, settings_env, run_docs 등) · systemd/(새벽 배치, keepalive)
 ├─ tests/               server/(이미지에 포함, 배포 판정) · general/(PC 전용) · runner.py
 ├─ validation/          PC 전용 검증 도구 — search_ui/(검증 페이지) · e2e/(평가·비교, answer_gen)
@@ -748,7 +748,7 @@ bash deploy/host/scripts/run_tool.sh <도구> [인자]                          
 4. 운영 서버: 개발 서버에서 시험한 코드 폴더를 굽는다(`bake.sh` — release-and-patch §1-2).
 5. 되돌리기: `live` 링크를 옛 폴더로 되돌리고 다시 `dc.sh up -d …`.
 
-- `deploy/release/make_patch.sh`는 아직 저장소에 남아 있다. 서버에 덧씌우는 데는 쓰지 않는다(바뀐 파일 목록·재파싱 판정을 보는 참고용).
+- 옛 번들 스크립트 `deploy/release/make_patch.sh`는 11-03에 지웠다. 바뀐 파일 목록은 `git diff --name-status <직전 판 커밋> <새 판 커밋>`, 재파싱 판정은 두 커밋에서 핑거프린트 값을 비교한다(CLAUDE.md §4).
 
 새 이미지 버전이 필요한지와 자세한 순서는 [release-and-patch.md](docs/operations/release-and-patch.md) §1~§5에 있다.
 

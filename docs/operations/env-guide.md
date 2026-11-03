@@ -196,7 +196,7 @@ python -m common.check.checker ping   # LLM·VLM·EMBED 실호출(OK/FAIL·지�
 ```
 - 덮어쓰기 뒤 설정 파일이 그대로인지: `ls -l /srv/rag/env/settings.yaml`(수정 시각이 덮어쓰기 전인지 · 주인 10001·권한 640 — C-09).
 
-## 5. 이번 판에서 바뀐 env (판마다 위에 한 줄씩 추가 — `deploy/release/make_patch.sh`가 이 표의 새 줄을 PATCH_NOTES에 옮김)
+## 5. 이번 판에서 바뀐 env (판마다 위에 한 줄씩 추가 — 배포 설명서 `RELEASE_NOTES.md`에 새 줄을 옮겨 적음)
 
 | 판 | 바뀐 것 | 서버 할 일 |
 |---|---|---|

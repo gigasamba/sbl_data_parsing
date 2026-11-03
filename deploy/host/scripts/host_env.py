@@ -18,13 +18,12 @@ ROOT = HERE.parents[2]  # 배치 루트(PC 저장소 · 서버 live/)
 
 
 def _layout():
-    for p in (ROOT / "common", ROOT / "app" / "deploy" / "common"):  # 저장소 배치 · 서버 코드 폴더 배치(make_patch 오버레이)
-        f = p / "config" / "layout.py"
-        if f.is_file():
-            spec = importlib.util.spec_from_file_location("settings_layout", f)
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-            return mod
+    f = ROOT / "common" / "config" / "layout.py"  # 코드 폴더 = 저장소 트리(옛 app/deploy 배치는 11-03 지움)
+    if f.is_file():
+        spec = importlib.util.spec_from_file_location("settings_layout", f)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
     raise SystemExit("[host_env] common/config/layout.py 없음 — 코드 폴더 안의 deploy/host/scripts에서 부를 것")
 
 
