@@ -473,10 +473,10 @@ def log(msg):
         fp.write(f"[{now():%Y-%m-%d %H:%M:%S}] {msg}\n")
 
 
-def edw_list(keywords):
-    """EDW FileStorageMap 전체(파일 크기 오름차순) — make_batch.py와 같은 질의·순서."""
+def edw_list(keywords=(), where=None):
+    """EDW FileStorageMap 전체(파일 크기 오름차순) — make_batch.py와 같은 질의·순서. where(코드 상수)를 주면 이름 키워드 대신 그 조건(pl-41 FAQ)."""
 
-    conds = " OR ".join(f"LOWER(original_filename) LIKE '%{k.lower()}%'" for k in keywords)
+    conds = where or " OR ".join(f"LOWER(original_filename) LIKE '%{k.lower()}%'" for k in keywords)
     sql = (
         f"SELECT id, s3_key, original_filename, file_size FROM AI.FileStorageMap "
         f"WHERE ({conds}) AND file_size IS NOT NULL ORDER BY file_size ASC"
@@ -502,8 +502,7 @@ def edw_done_keys():
 
     conn = _edw_connect()  # S7e1 — 설정 파일의 parsing-meta 접속(옛 코드 기본값 — 운영 접속 값·비밀 삭제, D-028 ⑨)
     cur = conn.cursor()
-    cur.execute("SELECT COL_LENGTH('AI.ParsingMeta', 'source_key')")  # 11-02 — 원본 키 칸 이름 바꾸기(source_key → s3_key, C-76) 전후 모두
-    kc = "source_key" if cur.fetchone()[0] is not None else "s3_key"
+    kc = _pm_key_col(cur)
     cur.execute("SELECT COL_LENGTH('AI.ParsingMeta', 'gold_version')")
     gold = cur.fetchone()[0] is not None
     q = lambda xs: ", ".join(f"'{s}'" for s in xs)  # 코드 상수만 SQL에 넣음(값 바인딩 없음)
@@ -746,6 +745,68 @@ def cleanup_doc(seq, row):
     (WARM / bin_name).unlink(missing_ok=True)
 
 
+def _pm_key_col(cur):
+    """ParsingMeta 원본 키 칸 이름 — 11-02 칸 이름 바꾸기(source_key → s3_key, C-76) 전후 모두(튜플 커서)."""
+    cur.execute("SELECT COL_LENGTH('AI.ParsingMeta', 'source_key')")
+    return "source_key" if cur.fetchone()[0] is not None else "s3_key"
+
+
+def edw_faq():
+    """pl-41 — FileStorageMap의 FAQ 전체(--filter와 상관없이, edw_list와 같은 질의)와 ParsingMeta의 FAQ 키 → 상태(한 번이라도 기록된 것)."""
+    rows = edw_list(where="s3_key LIKE 'FAQ/%'")
+    conn = _edw_connect()
+    cur = conn.cursor()
+    kc = _pm_key_col(cur)
+    cur.execute(f"SELECT {kc}, parse_status FROM AI.ParsingMeta WHERE {kc} LIKE 'FAQ/%'")
+    status = {k: st for k, st in cur.fetchall()}
+    conn.close()
+    return rows, status
+
+
+def faq_first(rows, order):
+    """pl-41(사용자 11-03) — FAQ는 판을 잇지 않고 통째로 교체. 새 FAQ(ParsingMeta에도 faq_seen.txt에도 없던 키)가 있으면 구조화 컨테이너의
+    `pgvector_load faq-sync --reset`으로 gold faq를 비우고 FAQ 전체를 이번 처리 맨 앞에 넣는다(--filter·--skip-done과 상관없이 — 없는 FAQ 행은
+    rows 뒤에 덧붙임). 새 FAQ가 없으면 지우지 않고 gold에 없는 FAQ만 넣는다(중간에 멈춘 교체·파싱 실패를 채움 — 완전 중복 skipped_dup은 gold에
+    안 올라가므로 뺌). faq-sync 결과를 못 읽으면(실패·시간 초과 — 지웠는지 모름) FAQ 전체를 넣는다(적재는 이미 있는 문서를 건너뜀)."""
+    faq_rows, status = edw_faq()
+    seen_f = PROG / "faq_seen.txt"  # 교체를 일으킨 키 — 파싱에 계속 실패해 ParsingMeta에 안 남는 FAQ가 매 실행 교체를 다시 일으키지 않게
+    seen = set(status) | (set(seen_f.read_text(encoding="utf-8").splitlines()) if seen_f.exists() else set())
+    seq = {r["s3_key"]: i for i, r in enumerate(rows)}
+    for r in faq_rows:
+        if r["s3_key"] not in seq:
+            seq[r["s3_key"]] = len(rows)
+            rows.append(r)
+    faq = [seq[r["s3_key"]] for r in faq_rows]
+    new = [r["s3_key"] for r in faq_rows if r["s3_key"] not in seen]
+    if new:  # 지우기 전에 적음 — 지운 뒤 결과를 못 읽어도 같은 키로 다시 지우지 않게
+        seen_f.write_text("".join(f"{k}\n" for k in sorted(seen | set(new))), encoding="utf-8")
+    res = DOCFLOW / "faq_sync.json"
+    res.unlink(missing_ok=True)
+    rc, _, err = sh(
+        f"{DOCKER} exec {STRUCT_C} bash -c 'cd {_app()} && PYTHONPATH={_img('code_root')} "
+        f"python -m pipeline.load.pgvector_load faq-sync{' --reset' if new else ''} --out {_img('output_root')}/docflow/faq_sync.json'"
+    )  # ponytail: 시간 초과(기본 1800초)면 컨테이너 안 명령은 계속 돌 수 있음 — 다음 실행의 채움이 메움
+    try:
+        got = json.loads(res.read_text(encoding="utf-8")) if rc == 0 else None
+    except (OSError, ValueError):
+        got = None
+    if got is None:
+        log(
+            f"[경고] FAQ 교체 확인(faq-sync) 결과 없음(rc={rc}: {err[-200:]}) — FAQ {len(faq)}건 전체를 넣음(이미 있는 문서는 적재가 건너뜀)"
+        )
+        want = faq
+    elif new:
+        log(f"FAQ 교체: 새 FAQ {len(new)}건 — gold faq 문서 {got['faq_reset']}건을 지우고 지금 FAQ {len(faq)}건 전체를 맨 앞에서 다시 처리")
+        want = faq
+    else:
+        gold = set(got["gold"])
+        want = [seq[r["s3_key"]] for r in faq_rows if r["s3_key"] not in gold and status.get(r["s3_key"]) != "skipped_dup"]
+        if want:
+            log(f"FAQ 채움: gold에 없는 FAQ {len(want)}건을 다시 처리(지우지 않음)")
+    keep = set(want)
+    return want + [s for s in order if s not in keep]
+
+
 def pg_count():
     rc, out, _ = sh(
         f"{DOCKER} exec {PG_CONTAINER} psql -U {PG_USER} -d {PG_DB} -Atc "
@@ -876,6 +937,10 @@ def main():
         before = len(order)
         order = [s for s in order if rows[s]["s3_key"] not in done]
         log(f"skip-done: {before - len(order)}건 이미 완료({'·'.join(DONE_STATUSES)}) — 남은 {len(order)}건 처리")
+    if a.seqs or a.limit:  # 골라 돌리기·시험은 FAQ 교체 안 함
+        log("FAQ 교체 확인(pl-41) 건너뜀 — --seqs·--limit 실행")
+    else:
+        order = faq_first(rows, order)
     if a.max_docs and len(order) > a.max_docs:
         log(f"max-docs: {len(order)}건 중 앞 {a.max_docs}건만(나머지는 다음 실행)")
         order = order[: a.max_docs]

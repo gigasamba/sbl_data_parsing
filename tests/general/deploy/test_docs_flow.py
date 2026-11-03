@@ -49,6 +49,7 @@ def _run_main(work, rows, parse_one, structure_one, cleanup_doc, setup=None):
 
     M.configure = configure
     M.edw_list = lambda keywords: rows
+    M.faq_first = lambda rows, order: order  # FAQ 교체(pl-41)는 test_run_docs.test_faq_first에서
     M.write_envfile = lambda: 0
     M.stack_check = lambda: None  # 엔진 구성 파일 확인(docker exec) 대신
     M.warm_one = lambda seq, row: True
