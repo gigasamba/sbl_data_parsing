@@ -223,7 +223,7 @@ EDW 읽기 전용 SQL. 요약 없이 원래 행만 돌려준다(집계는 SQL에
 | 이름 | 형식 | 필수 | 기본 | 규칙 |
 |---|---|---|---|---|
 | `sql` | 글자 | 예 | — | `SELECT` 또는 `WITH`로 시작하는 한 문장. 시스템 표, DML·DDL·EXEC 단어(글자 안이라도), `@` 변수, 큰따옴표 이름(대괄호만), 여러 문장은 거부 |
-| `max_rows` | 정수 | 아니요 | 2000 | 서버 상한(`EDW_QUERY_MAX_ROWS`, 기본 2000)을 넘을 수 없음 |
+| `max_rows` | 정수 | 아니요 | 1000 | 서버 상한(`EDW_QUERY_MAX_ROWS`, 기본 1000 — 운영 서버와 같음, 사용자 11-03)을 넘을 수 없음 |
 
 - 한도: 질의 20초(`EDW_QUERY_TIMEOUT_SEC` — 넘으면 `timeout`) · 응답 2MB(`EDW_QUERY_MAX_BYTES` — 넘으면 끝 행을 버리고 `truncated: true`) · 칸 글자 2,000자(넘으면 ` …(truncated)` 표시, `truncated` 깃발은 안 바뀜).
 - 돌려주는 모양(성공·실패 같은 9칸): `ok` · `columns`(`[{name, type}]`, type은 `int`·`float`·`decimal`·`str`·`date`·`datetime`·`time`·`bool`·`binary`·`unknown`) · `rows`(칸 순서대로 값 목록) · `row_count` · `truncated` · `elapsed_ms` · `dialect`(`tsql`) · `source`(`mssql`) · `error`(성공이면 null, 실패면 `"<코드>: <설명>"`).
@@ -245,6 +245,8 @@ EDW 읽기 전용 SQL. 요약 없이 원래 행만 돌려준다(집계는 SQL에
 | `content_b64` + `filename` | 글자 | 둘 중 하나 | — | 파일 내용(base64)과 파일 이름(확장자로 형식을 정함 — 3절 목록만) |
 | `time_out_threshold` | 정수 | 아니요 | 300 | 초. 이 안에 끝나면 결과, 못 끝내면 `{"error": "시간 안에 수행 못했습니다", "job_id": …}` — 같은 파일을 바로 다시 내면 새 작업이 생긴다 |
 | `max_chars` | 정수 | 아니요 | 200000 | 응답 `text` 상한 — 넘으면 잘리고 `text_truncated` |
+
+- 파일 크기 상한 100 MB(`path`·`content_b64` 같음 — 설정 `ops.runtime.parse_max_mb`). 넘으면 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — …"}`. `content_b64`는 검색 MCP가 서비스로 보내기 전에 거른다. base64라 요청 본문은 파일의 약 1.33배(100 MB 파일 ≈ 134 MB) — 검색 MCP 앞에 리버스 프록시를 두면 그 본문 상한(nginx `client_max_body_size` 기본 1 MB 등)과 클라이언트 쪽 제한 시간을 그만큼 늘린다.
 
 돌려주는 모양(완료): `text`(대표 본문, 표 포함) · `tables_std` · `tables` · `facts` · `fields` · `engine`(대표 엔진) · `rep_path`(전체 대표 결과 JSON 경로) · `ms`. 대기열이 차면 HTTP 429.
 

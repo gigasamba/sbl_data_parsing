@@ -80,7 +80,7 @@
 - 결정(사용자 10-29 grill): 게시(silver → Object Storage + EDW)가 기본이자 유일한 방식 — `--no-publish`와 `pipeline.host.nightly.publish`를 없앤다. 게시 대상은 필수 설정이고 없으면 시작을 거부한다.
 - `RUN_ENV`별 대상: `local`·`dev`는 (a) 로컬 경로(Object Storage는 폴더, EDW는 파일 DB) 또는 (b) 실제 접속 정보(API·DB) 중 하나. `prd`는 실제 접속만(`stage`는 RUN_ENV에서 없앰 — op-02). PC는 CLAUDE.md §4 가드를 그대로 지킨다(PC에서 운영 EDW·OS 접속 금지).
 - 파일: `pipeline/cli.py`(`night`, `full`), `deploy/docker/entrypoint.sh`, `pipeline/load/`의 게시, `pipeline/config.py`, `docs/operations/server-guide.md`.
-- Status: todo — 11-01 `full`·`night` 입구는 지움([pl-18](ops.md#pl-18)) — 항상 게시·게시 대상 필수는 run_docs에 만든다.
+- Status: done (11-03 확인) — 11-01 `full`·`night` 입구는 지움([pl-18](ops.md#pl-18)). run_docs는 문서마다 늘 게시하고([pl-24](ops.md#pl-24) — gold 전), 게시 버킷·접두(`pipeline.load.publish.bucket`·`prefix`)가 없으면 시작을 거부한다(`SETTINGS_REQUIRED`).
 
 <a id="pl-41"></a>
 ## pl-41 · FAQ 다시 올리기 — 행 단위 비교 적재

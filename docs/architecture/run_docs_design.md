@@ -6,7 +6,7 @@
 → **문서 단위 flow + warm 대기열 + 3클래스 레인 워커** 구조로 전환.
 
 ### 핵심 원칙
-- 문서 1개가 파싱 끝나면 **즉시** 구조화→적재→publish 진행 (배치 장벽 제거)
+- 문서 1개가 파싱 끝나면 **즉시** publish(silver) → 원본 삭제 → 구조화→적재(gold) 진행 (배치 장벽 제거 — 순서는 11-03 [pl-24](../prd/ops.md#pl-24))
 - 다운로드는 미리 warm 대기열로 12개 유지 (파싱과 비동기)
 - 분류(probe)로 문서별 자원 특성 파악 → 워커 배분 최적화
 
@@ -29,14 +29,16 @@
   │  ├─ 전담: 자기 레인 문서만                            │
   │  ├─ 공유: 자기 레인 먼저, 비면 가장 긴 다른 레인       │
   │  ├─ VLM_CAP=2 (vlm 문서 동시 상한 — 전담도)          │
-  │  ├─ 구조화 대기 ≥ STRUCT_BACKLOG(구조화×2)면 새 파싱 대기 │
+  │  ├─ 게시+구조화 대기 ≥ STRUCT_BACKLOG(구조화×2)면 새 파싱 대기 │
   │  ├─ MCP 우선: mcp_parse/jobs 활동 감지 시 medium 전담 쉼 │
-  │  └─ 단일 컨테이너(data-pipeline-parse) + 격리      │
+  │  └─ 단일 컨테이너(data-pipeline — 11-03) + 격리     │
   └─────────────────────────────────────────────────────┘
         │
-  구조화+적재 2스레드 (EMBED_BATCH=32 · EMBED_CONCURRENCY=6 · BM25_THREADS=3)
+  publish 1스레드 (silver — OS 업로드 + EDW INSERT) ── 실패면 원본 남기고 끝
+        │ 성공 → 원본(warm·_source_files) 삭제
+  구조화+적재 2스레드 (gold — EMBED_BATCH=32 · EMBED_CONCURRENCY=6 · BM25_THREADS=3)
         │
-  publish (OS 업로드 + EDW INSERT) → docflow/warm 임시 즉시 삭제
+  docflow 임시 삭제 · 종료 코드 0(끝·대상 0건)/1(실패 있음)/75(마감·잠금) — pl-18
 ```
 
 ---

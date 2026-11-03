@@ -149,7 +149,6 @@ class PipelineLoadPublish(Section):
 class PipelineServiceParseMcp(Section):
     job_timeout_sec: float | None = F(600.0, "PARSE_MCP_JOB_TIMEOUT_SEC", "parse MCP 서비스 작업 1건 제한 시간(초)")
     jobs_dir: str | None = F(None, "PARSE_MCP_JOBS_DIR", "parse MCP 서비스 작업 기록 폴더")
-    max_mb: float | None = F(64.0, "PARSE_MCP_MAX_MB", "parse MCP 서비스가 받는 파일 크기 상한(MB)")
     port: Port | None = F(8766, "PARSE_MCP_PORT", "parse MCP 서비스 포트")
     procs: int | None = F(None, "PARSE_MCP_PROCS", "parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개)")
     queue_max: int | None = F(8, "PARSE_MCP_QUEUE_MAX", "parse MCP 서비스 대기 작업 상한(건)")
