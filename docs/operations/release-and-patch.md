@@ -372,7 +372,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 
 ### 8-3. 실행 순서 — 복사해 붙이는 명령(dev 먼저, 그다음 prd)
 
-개발 서버(dev)에서 끝까지 한 번 돌린 뒤 운영 수집 서버(prd)에서 같은 순서로 한다. 다른 곳은 **[dev]**·**[prd]**로 적었다. 명령은 root 셸. `<…>`는 그 서버 값으로 바꾸고, 값·비밀은 화면·기록에 남기지 않는다. 각 단계 아래 `# 기대:` 줄이 나오지 않으면 다음 단계로 가지 않는다. **(#135 병합 뒤 확정)**·**(#134 병합 뒤 확정)** 표시는 그 PR이 병합된 뒤 명령·출력을 다시 맞출 곳이다.
+개발 서버(dev)에서 끝까지 한 번 돌린 뒤 운영 수집 서버(prd)에서 같은 순서로 한다. 다른 곳은 **[dev]**·**[prd]**로 적었다. 명령은 root 셸. `<…>`는 그 서버 값으로 바꾸고, 값·비밀은 화면·기록에 남기지 않는다. 각 단계 아래 `# 기대:` 줄이 나오지 않으면 다음 단계로 가지 않는다. 기대 출력 예시는 11-03 PC PostgreSQL 실행(develop `479f7cc` — #134·#135 병합 뒤)에서 옮겼고, 스키마 이름은 `<NEW_SCHEMA>`로 바꿔 적었다.
 
 **0. 셸 준비** — 셸 변수는 settings.yaml에서 옮겨 적는다(파일을 화면에 띄우지 않는다).
 ```bash
@@ -431,7 +431,7 @@ $DOCKER run --rm -i --network none --entrypoint bash -v "$PWD:/app/deploy:ro,z" 
 - 이미지 칸 `required.deploy.pipeline_image`·`required.deploy.mcp_image` → **[dev]** `data-pipeline-runtime:<판>`·`mcp-server-runtime:<판>` · **[prd]** `data-pipeline:0.2.0`·`mcp-server:0.2.0`.
 - 검색 스키마 `required.pg.db_schema` → `$NEW_SCHEMA`(판 0002가 기준 스키마의 옛 표를 지우므로 **반드시 새 이름** — 8-1·C-74).
 - 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline`은 비워 둔다(8-4 3에서 켬).
-- 0.2.0에서 지운 칸(`common/config/layout.py` `REMOVED` — 예: 옛 오버레이 `common.host.patch_code`, `pipeline.host.structure_cpus`·`structure_mem_limit`, 옛 OCR·지문 배치 칸 **(#135 병합 뒤 확정: `common.paths.glossary_dir`·`client_roster`·`search_recency`)**)은 남아 있어도 경고 한 줄 뒤 무시된다 — 지워도 되고 두어도 된다.
+- 0.2.0에서 지운 칸(`common/config/layout.py` `REMOVED` — 예: 옛 오버레이 `common.host.patch_code`, `pipeline.host.structure_cpus`·`structure_mem_limit`, 옛 OCR·지문 배치 칸, pl-38로 지운 `ops.paths.glossary_dir`·`ops.paths.client_roster`(용어집·고객 명부는 이제 PG 마스터 표)·`common.text.search_recency`(판 묶음·최신성 순위 지움)·`pipeline.transform.structure.draft_terms`(초안 용어는 오프라인 도구로))은 남아 있어도 경고 한 줄 뒤 무시된다 — 지워도 되고 두어도 된다.
 - 새 필수 칸 자리 확인: `python -m common.config.sample --where <칸 이름>`(위 이미지 안에서 같은 방법).
 ```bash
 chown 10001:<운영 그룹> "$SERVER_ENV_DIR/settings.yaml.new" && chmod 640 "$SERVER_ENV_DIR/settings.yaml.new"
@@ -444,12 +444,17 @@ bash deploy/host/scripts/settings_env.sh common.host >/dev/null && echo 설정-�
 $DOCKER rm data-pipeline-parse data-pipeline-structure mcp-server            # 기대: 이름 세 줄(1에서 멈춘 것)
 bash deploy/host/scripts/dc.sh up -d data-pipeline                           # 기대: data-pipeline Started(또는 Running)
 bash deploy/host/scripts/run_tool.sh migrate check --target all              # 읽기만 — 새 스키마는 "… · 표 없음(새 스키마 — up으로 만듦)", 종료 코드 1이 정상
-bash deploy/host/scripts/run_tool.sh migrate up --target all                 # 기대: 갈래마다 "[migrate] <갈래> <스키마>: 판 <판> (끝 <판>)" — "올린 뒤에도 차이:"가 나오면 멈추고 DB 담당과
-bash deploy/host/scripts/run_tool.sh migrate master load                     # (#135 병합 뒤 확정) 기대: "[migrate] master <NEW_SCHEMA>_master: CSV로 채움 · 해시 <8자>"
-bash deploy/host/scripts/run_tool.sh migrate check --target all              # 기대: 갈래마다 "  비교: 차이 없음", 종료 코드 0
+bash deploy/host/scripts/run_tool.sh migrate up --target all                 # 종료 코드 0 — 기대(갈래 셋):
+#   [migrate] search <NEW_SCHEMA>: 판 ['0003_search'] (끝 0003_search)          ← 새 스키마는 0001→0002→0003을 차례로 올림(원천 스키마 5벌 포함)
+#   [migrate] applog applog: 판 ['0001_applog'] (끝 0001_applog)
+#   [migrate] master <NEW_SCHEMA>_master: 판 ['0001_master'] (끝 0001_master)
+#   "올린 뒤에도 차이:"가 나오면 멈추고 DB 담당과
+bash deploy/host/scripts/run_tool.sh migrate master load                     # 종료 코드 0 — 기대: "[migrate] master <NEW_SCHEMA>_master: CSV로 채움 · 해시 <8자>"(예: 58a24b02)
+bash deploy/host/scripts/run_tool.sh migrate check --target all              # 종료 코드 0 — 기대: 갈래마다 "  비교: 차이 없음"(뷰 정의 글자 "(알림)" 줄은 판정 밖)
 ```
 - vector 확장이 없다고 멈추면 DB 관리자가 한 번 만든다: `$DOCKER exec "$PG_C" psql -U <관리자 계정> -d "$PG_D" -c 'CREATE EXTENSION IF NOT EXISTS vector'`(§5-5 ⓪).
-- `--target all` = 검색(`$NEW_SCHEMA` + 원천 스키마 5벌)·applog **(#135 병합 뒤 확정: + master `$NEW_SCHEMA`_master)**. 서버 기밀 명부를 쓰면 `migrate master load --dir <컨테이너 안에서 보이는 폴더>`(server-guide §5).
+- `--target all` = 검색(`$NEW_SCHEMA` + 원천 스키마 5벌)·applog(고정 이름 `applog`)·master(`$NEW_SCHEMA`_master — pl-38). 서버 기밀 명부를 쓰면 `migrate master load --dir <컨테이너 안에서 보이는 폴더>`(server-guide §5).
+- 마스터 표 행 수(확인용 — `$DOCKER exec "$PG_C" psql -U "$PG_U" -d "$PG_D" -c "SELECT count(*) FROM ${NEW_SCHEMA}_master.client_roster"`처럼): git 샘플 CSV 기준 `client_master` 6 · `client_roster` 10 · `contract_master` 4 · `domain_terms` 124 · `id_patterns` 9 · `units` 23 · `master_meta` 1. **실제 명부(서버 폴더 `--dir`)를 넣은 서버는 수가 다르다** — `master_meta` 1행만 같다.
 
 **6. 띄우기**
 ```bash
@@ -457,7 +462,7 @@ bash deploy/host/scripts/dc.sh up -d data-pipeline-mcp mcp                   # �
 bash deploy/host/scripts/dc.sh ps                                             # 기대: data-pipeline·data-pipeline-mcp·mcp-server 세 줄 Up(mcp-server는 잠시 뒤 healthy)
 $DOCKER logs data-pipeline 2>&1 | grep -m1 '\[image\]'                        # 기대: "[image] 이미지 <이름 판 커밋> · 코드 <커밋> · 의존성 <지문>"(새 판인지)
 ```
-- `master load`를 다시 하면 검색 MCP를 다시 띄운다(`$DOCKER restart mcp-server` — 검색은 시작할 때와 새 적재 판에서만 마스터를 읽음) **(#135 병합 뒤 확정)**.
+- `master load`를 다시 하면(명부·용어집을 고친 뒤) 검색 MCP를 다시 띄운다: `$DOCKER restart mcp-server` — 검색은 시작할 때와 새 적재 판이 들어올 때만 마스터를 읽는다(사용자 11-03). 이미 적재한 문서는 자동으로 다시 처리하지 않는다(새로 적재하는 문서의 `gold_version` `<VERSION>+m<해시 8자>`만 바뀜).
 
 **7. 점검**
 ```bash
@@ -471,7 +476,7 @@ bash deploy/release/selftest_gate.sh $DOCKER run --rm <dev면: -v "$PWD:/app/dep
 
 **8. 첫 실행 — FAQ 교체와 전체 재처리**
 - **FAQ:** 첫 `run_docs.py` 실행은 FAQ 교체 기록(`<작업 폴더>/batch_progress/faq_seen.txt`)이 없으므로 FAQ 전체를 새 FAQ로 보고 **한 번** gold `faq`를 비운 뒤(`pgvector_load faq-sync --reset`) FAQ 전체를 맨 앞에서 처리한다(pl-41). `progress.log` 기대 줄: `FAQ 교체: 새 FAQ <N>건 — gold faq 문서 <M>건을 지우고 지금 FAQ <K>건 전체를 맨 앞에서 다시 처리`(새 스키마라 M=0). `--seqs`·`--limit` 실행은 교체를 건너뛴다(`FAQ 교체 확인(pl-41) 건너뜀`).
-- **전체 재처리:** 0.2.0은 지문이 모두 바뀐다(FINGERPRINT·레이어 code_fp·엔진 — PRD [e2-02](../prd/test.md#e2-02) 기준값 **(#134 병합 뒤 확정)**). 모든 문서가 다시 파싱·적재된다 — 시간·디스크는 §5-7 0으로 잡는다.
+- **전체 재처리:** 0.2.0은 지문이 모두 바뀐다(FINGERPRINT·레이어 code_fp·엔진 — develop `479f7cc`(#134·#135 병합 뒤) 기준 FINGERPRINT `18142592accca442` · p0 `192776ff62fa` · p1 `bbfe25546eba` · r `2fe85b6d2686` · s `5f8b5333f713` — 0.1.0 값과 모두 다름, 기준선 기록은 PRD [e2-02](../prd/test.md#e2-02)). 모든 문서가 다시 파싱·적재된다 — 시간·디스크는 §5-7 0으로 잡는다.
 - **[dev]** settings.yaml이 가리키는 대상으로 e2e 한 번. **[prd]** 전체 문서를 새 원천별 스키마로(8-1):
 ```bash
 cp /srv/rag/code/live/deploy/host/scripts/run_docs.py <운영자 작업 폴더>/ && cd <운영자 작업 폴더>
