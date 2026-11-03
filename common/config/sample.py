@@ -128,6 +128,7 @@ CATEGORIES = {
     ),
     "tuning": tuple((f"{sec}의 조정값", (f"tuning.{sec}",)) for sec in ("common", "extract", "transform", "load", "search", "ops")),
 }
+NOTE_COL = 42  # 칸 설명 주석이 시작하는 열(사용자 11-04 — 값 자리와 주석을 떼어 놓음)
 SPLIT = {"common", "extract", "transform", "load", "search"}  # [파라미터] 표시를 다는 절(결과를 바꾸는 값 — _kind 0)
 _OPS = re.compile(
     r"concurrency|parallel|workers|procs|threads|timeout|_sec$|^sec$|deadline|retry|batch$|cache|_gb$|warn|port$|dir$|root|path|"
@@ -263,7 +264,8 @@ def _emit(node, depth, path, lines, last):
         sec = y.split(".", 1)[0]
         tag = "[파라미터] " if sec in SPLIT and _kind(p, f) == 0 else "(자원) " if p in L.TUNING_RESOURCE else ""
         val = _value(p, f)
-        lines.append(f"{pad}{name}:{' ' + val if val else ''}  # {tag}{_note(p, f)}")
+        head = f"{pad}{name}:{' ' + val if val else ''}"
+        lines.append(f"{head.ljust(NOTE_COL - 2)}  # {tag}{_note(p, f)}")  # 주석을 한 열로 — 값 넣을 자리가 보이게
 
 
 def _first_leaf(y, node):
@@ -340,6 +342,9 @@ _PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|
 # 설명 글자로는 선택지를 못 뽑는 칸 — 코드가 받는 값(읽는 코드·설명 기준).
 VALUES = {
     "common.run_env": "local·dev·prd 중 하나",
+    "pipeline.load.publish.bucket": "버킷 이름 · PC는 file://<폴더>",
+    "pipeline.load.publish.prefix": "글자(버킷 안 경로 접두)",
+    "common.dev.docker.pg_effective_cache": "PG 크기 글자(예 12GB)",
     "common.store.run_mode": "prod 하나(비우면 설정 안 함 — test는 0.2.0에 지움)",
     "common.connections.object_storage.verify_tls": "1(검증)·0(끔)·CA 파일 경로",
     "common.runtime.pipe_procs": "1 이상 정수 · auto 또는 비우면 자동 계산",
@@ -387,10 +392,12 @@ def _values(p, f):
             return "YYYY-MM-DD"
         if leaf.endswith("url") or "URL" in desc or "주소(" in desc and "호스트" not in desc:
             return "URL"
-        if leaf in ("host", "server", "endpoint") or "호스트" in desc:
+        if leaf in ("host", "server", "endpoint"):
             return "호스트 이름·IP"
-        if _PATHY.search(leaf) or "경로" in desc or "폴더" in desc:
+        if _PATHY.search(leaf) or "경로" in desc or "폴더" in desc:  # 호스트 쪽 폴더(gold_dir 등)는 경로
             return "경로"
+        if "호스트" in desc:
+            return "호스트 이름·IP"
         return "글자"
     is_int = lab.startswith("int")
     if "%" in desc or leaf.endswith("_pct"):
