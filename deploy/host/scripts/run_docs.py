@@ -636,6 +636,9 @@ def deadline_at(hhmm, now=None):
     return t.timestamp()
 
 
+_WARM_ERR = [0]  # 받기 워커 스레드 예외 수 — main()이 실패 수(thread_err)에 더함(PR #107 리뷰)
+
+
 def downloader(rows, order):
     """대기열 유지 — 지정 문서 순서대로 WARM_TARGET개(받는 중 포함)까지 미리 받아 둔다(파싱 중 제외). 받기 워커 WARM_WORKERS개가
     차례(order)를 하나씩 집어 동시에 받는다(pl-48 — 사용자 11-02): 실제 동시 받기 = min(WARM_WORKERS, 대기열 빈자리).
@@ -668,14 +671,22 @@ def downloader(rows, order):
                 _warming.add(seq)
             row = rows[seq]
             t_w = time.time()
-            ok = warm_one(seq, row)
-            mark(seq, "warm_end", ok=ok, sec=round(time.time() - t_w, 1))
-            classify_doc(seq, row, cache=cache)  # OCR 필요도 사전 분류(캐시 우선) → 워커 배분용
-            with _warm_lock:
-                LANEQ[_class.get(seq) or "light"].append(seq)
+            try:
+                ok = warm_one(seq, row)
+                mark(seq, "warm_end", ok=ok, sec=round(time.time() - t_w, 1))
+                classify_doc(seq, row, cache=cache)  # OCR 필요도 사전 분류(캐시 우선) → 워커 배분용
+                with _warm_lock:
+                    LANEQ[_class.get(seq) or "light"].append(seq)
+                    _warming.discard(seq)
+                    _warm_lock.notify_all()
                 mark(seq, "dispatched")
-                _warming.discard(seq)
-                _warm_lock.notify_all()
+            except Exception as ex:  # 받기·분류·기록 예외(디스크 가득 등) — 워커가 죽으면 _warming에 남아 _flow_done()이 안 끝남
+                _thread_error("받기", seq, ex)
+                with _warm_lock:
+                    _WARM_ERR[0] += 1
+                    _warming.discard(seq)
+                    _warm_lock.notify_all()
+                continue
             depth("dispatch")
 
     ts = [threading.Thread(target=worker, daemon=True) for _ in range(max(1, WARM_WORKERS))]
@@ -1071,6 +1082,7 @@ def main():
         _warm_lock.notify_all()
     tf.join(timeout=5)
     nd, nc = pg_count()
+    cnt["thread_err"] += _WARM_ERR[0]
     failed = cnt["parse_fail"] + cnt["pub_fail"] + cnt["gold_fail"] + cnt["thread_err"]
     done = cnt["ok"] + failed
     rc = EXIT_FAIL if failed else (EXIT_DEADLINE if _deadline_hit.is_set() else 0)

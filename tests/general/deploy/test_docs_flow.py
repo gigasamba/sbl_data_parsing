@@ -156,6 +156,26 @@ def test_thread_error_fails_the_run():
         assert M.rc == 1
 
 
+def test_warm_error_does_not_hang():
+    """받기 워커에서 예외가 나도 main()이 끝나고(_warming에 남지 않음) 실패로 세어 종료 코드 1(PR #107 재리뷰 P1)."""
+    rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"doc{i}.txt", "file_size": 10} for i in range(2)]
+    with tempfile.TemporaryDirectory(prefix="orca_warm_") as tmp:
+        work = Path(tmp)
+
+        def setup(M):
+            def warm_one(seq, row):
+                if seq == 0:
+                    raise OSError("받기 실패(시험 — 디스크 가득 흉내)")
+                return True
+
+            M.warm_one = warm_one
+
+        M = _run_main(work, rows, lambda seq, row: (True, work / f"{seq}"), setup=setup)
+        log = (M.PROG / "progress.log").read_text(encoding="utf-8")
+        assert "완료 1 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
+        assert M.rc == 1 and not M._warming
+
+
 def test_struct_backlog_holds_new_parses():
     """중간 대기(파싱 끝·구조화 대기)가 상한이면 레인 워커가 새 파싱을 시작하지 않는다(rn-02) — pick 순간의 대기 길이 < 상한."""
     import json
