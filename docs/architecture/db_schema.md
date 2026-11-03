@@ -343,7 +343,7 @@ gold·EDW와 별개인 로그 표다. 서버 적용 절차는 refactor.md C-79.
 
 ### applog.mcp_log
 
-MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. 기본 키 `(id, requested_at)`. 색인: `requested_at`(BRIN) · `(agent_id, requested_at)` · `(session_id, requested_at)` · `(knox_id, requested_at)` · `(tool_name, requested_at)` · `request_id`. 쓰는 곳: `mcp_server/services/call_log.py`(내부 행을 `_columns`가 이 칸 이름으로 바꿈). 읽는 코드는 없다(감사 조회용). 질의 기록 `qa_log.jsonl`은 그대로 따로 있다. 이 표는 이전 이름 `mcp_call`에 인증·권한 설계안(DBML: `agent`·`agent_api_key`·`source`·`agent_source_mapping`)의 칸을 합친 것이다. 그 표들은 아직 없어서 `agent_id`는 FK 없이 자리만 있다.
+MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. 기본 키 `(id, requested_at)`. 색인: `requested_at`(BRIN) · `(agent_id, requested_at)` · `(session_id, requested_at)` · `(knox_id, requested_at)` · `(tool_name, requested_at)` · `request_id`. 쓰는 곳: `mcp_server/services/call_log.py`(내부 행을 `_columns`가 이 칸 이름으로 바꿈). 읽는 코드는 없다(감사 조회용). 질의 기록 `qa_log.jsonl`은 그대로 따로 있다. 이 표는 이전 이름 `mcp_call`에 인증·권한 설계안(DBML: `agent`·`agent_api_key`·`source`·`agent_source_mapping`)의 칸을 합친 것이다. 그 표들은 아직 없어서 `agent_id`·`api_key_id`는 FK 없이 자리만 있다.
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
@@ -352,7 +352,7 @@ MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. �
 | session_id | VARCHAR(128) | `Mcp-Session-Id`. 없으면 NULL | 〃 | 없음 | 새로 |
 | turn_id | VARCHAR(128) | 대화 턴 ID. 아직 채우는 코드 없음 | (없음) | 없음 | 새로 |
 | agent_id | SMALLINT | 인증된 Agent. `agent` 표가 생기면 FK 추가, 그 전까지 NULL | (없음) | 없음 | 새로 |
-| api_key_prefix | TEXT | 요청에 쓴 API 키의 식별용 앞부분. 키 전체는 저장 금지. 키 표가 생기면 `api_key_id` FK로 교체. 이름에 `key`만 쓰면(`api_key`) 로그 마스킹이 값을 `***`로 바꿔서 `_prefix`를 붙임. 아직 채우는 코드 없음 | (없음) | 없음 | 새로 |
+| api_key_id | INTEGER | 요청에 쓴 API 키. `agent_api_key` 표가 생기면 `agent_api_key.id` FK 추가, 그 전까지 NULL. 키 문자열은 로그에 남기지 않음. 아직 채우는 코드 없음 | (없음) | 없음 | 새로 |
 | knox_id | VARCHAR(64) | `X-MCP-User`, 없으면 `_meta.user`(자기 신고 값, 검증 안 함) | call_log | 없음 | 새로 |
 | requested_at | TIMESTAMPTZ NOT NULL | 호출 시각(기본 now, 파티션 키) | 〃 | 없음 | 새로 |
 | finished_at | TIMESTAMPTZ | 끝난 시각 | 〃 | 없음 | 새로 |

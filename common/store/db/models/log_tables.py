@@ -35,7 +35,7 @@ def log_metadata(schema="applog"):
             "session_id": String(128),
             "turn_id": String(128),
             "agent_id": SmallInteger,
-            "api_key_prefix": Text,
+            "api_key_id": Integer,
             "knox_id": String(64),
             "requested_at": DateTime(timezone=True),
             "finished_at": DateTime(timezone=True),

@@ -18,7 +18,7 @@ DDL = (
     session_id VARCHAR(128),
     turn_id VARCHAR(128),
     agent_id SMALLINT,
-    api_key_prefix TEXT,
+    api_key_id INTEGER,
     knox_id VARCHAR(64),
     requested_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     finished_at TIMESTAMP WITH TIME ZONE,
