@@ -83,7 +83,16 @@
 - Status: done (11-03 확인) — 11-01 `full`·`night` 입구는 지움([pl-18](ops.md#pl-18)). run_docs는 문서마다 늘 게시하고([pl-24](ops.md#pl-24) — gold 전), 게시 버킷·접두(`pipeline.load.publish.bucket`·`prefix`)가 없으면 시작을 거부한다(`SETTINGS_REQUIRED`).
 
 <a id="pl-41"></a>
-## pl-41 · FAQ 다시 올리기 — 행 단위 비교 적재
+## pl-41 · FAQ 다시 올리기 — 통째 교체
+- 결정(사용자 11-03 — 최신 결정 우선): 판을 잇지 않는다(`content_id`·`content_version_id`·uuid 경로로 같은 FAQ를 찾지 않음). FAQ를 다시 올리면 gold faq 스키마의 **문서·청크를 모두** 지우고, 지금 FileStorageMap에 있는 FAQ 파일 **전체**를 다시 파싱·적재한다. 검토 등급 A(gold 지우기).
+- 한 것(11-03 `feature/faq-source`):
+  - 새 FAQ = FileStorageMap의 `FAQ/…` 키 중 호스트 진행 폴더의 `faq_seen.txt`(교체를 마친 키 목록)에 없는 것. `faq-sync --reset` 결과를 읽은 **뒤에만** 적는다 — 교체가 실패하면 다음 실행이 다시 시도한다. ParsingMeta는 판정에 쓰지 않는다(`--seqs`·`--limit` 실행이 교체 없이 기록할 수 있어서). 처음 실행(파일 없음)은 FAQ 전체를 한 번 교체한다. `--start-offset`이 대상 수보다 커도 FAQ 교체는 확인한다.
+  - `run_docs.py` `faq_first`(처리 순서를 정한 뒤 — `--skip-done` 뒤, `--max-docs` 앞): FAQ 목록은 `--filter`와 상관없이 FileStorageMap에서 따로 읽는다(`edw_faq` — `edw_list`와 같은 질의, 없는 FAQ 행은 대상 목록 뒤에 덧붙임). 새 FAQ가 있으면 구조화 컨테이너에서 `pgvector_load faq-sync --reset`으로 gold faq의 문서·청크·키워드 색인을 한 트랜잭션에서 모두 지우고, FAQ 전체를 이번 처리 맨 앞에 넣는다(이미 끝난 FAQ도). 새 FAQ가 없으면 지우지 않고 gold에 없는 FAQ만 넣는다(완전 중복 `skipped_dup`은 gold에 안 올라가므로 뺌) — 중간에 멈춘 교체(`--max-docs`·`--deadline`·장애)와 파싱 실패는 다음 실행이 지우지 않고 채운다.
+  - `faq-sync` 결과(`--out` JSON 파일 — 지운 수·남은 gold faq `file_path`)를 못 읽으면(실패·시간 초과 — 지웠는지 모름) 경고(오류 끝 200자)와 함께 FAQ 전체를 넣는다(적재는 이미 있는 문서를 건너뛰므로 어느 쪽이든 안전). `faq-sync --reset`은 우리 표식이 있는 스키마에서만, 실 PG는 `load`와 같은 판 확인 뒤에만 지운다.
+  - `--seqs`·`--limit`(골라 돌리기·시험)에서는 FAQ 교체를 하지 않는다(로그 한 줄).
+  - 남는 한계: 지우고 다시 넣는 사이(같은 실행 안)에는 검색에서 FAQ가 일부만 보인다. 시간 초과(1800초)면 컨테이너 안 명령이 늦게 지울 수 있다(다음 실행의 채움이 메움). FileStorageMap에서 사라진 FAQ는 지우지 않는다(pl-13 — 다음 새 FAQ 교체 때 함께 빠짐). 파싱에 계속 실패하는 FAQ는 매 실행 다시 시도한다.
+  - 시험: `tests/server/pipeline/test_faq_rows.py::test_faq_sync`(SQLite 대역), `tests/general/deploy/test_run_docs.py::test_faq_first`. 서버 확인은 refactor.md C-84.
+- 아래 10-30·10-31 결정(행 단위 비교, 같은 uuid 통째 교체)은 이 결정으로 대신한다.
 - 결정(사용자 10-31 범위 축소 grill): 행 단위 비교 대신 **통째 교체** — FAQ 파일을 다시 올리면 그 FAQ 문서의 청크를 지우고 다시 적재.
 - 결정(G13·T18 — 3차 grill(사용자 10-30, 원본은 git 밖)): FAQ를 고쳐 새 `s3_key`로 올리면 기존 FAQ 청크와 **행(청크) 단위로** 비교한다.
   - 같은 항목 = `FAQ_group`과 질문 글이 같음.
@@ -91,7 +100,7 @@
   - [pl-13](#pl-13)("적재는 지우지 않음")의 **FAQ 한정 예외** — 검토 등급 A(서버 적재 동작).
 - 관련: [pl-39](extract.md#pl-39)(FAQ 원천).
 - 결정(사용자 10-30 PRD grill): A7 — FAQ를 다시 올려 청크가 0개가 된 옛 `doc` 행은 적재 때 지운다(pl-13 '적재는 지우지 않음'의 FAQ 예외).
-- Status: todo
+- Status: done (11-03 `feature/faq-source`)
 
 <a id="pl-40"></a>
 ## pl-40 · 수동 갱신 명령 — 분류·시스템 메타를 따로

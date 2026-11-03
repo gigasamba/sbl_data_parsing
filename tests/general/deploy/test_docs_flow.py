@@ -58,7 +58,8 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
         return []
 
     M.configure = configure
-    M.edw_list = lambda keywords: rows
+    M.edw_list = lambda keywords=(), where=None: rows
+    M.faq_first = lambda rows, order: order  # FAQ 교체(pl-41)는 test_run_docs.test_faq_first에서
     M.stack_check = lambda: None  # 엔진 구성 파일 확인(docker exec) 대신
     M.warm_one = lambda seq, row: True
     M.parse_one, M.publish_one, M.gold_one = parse_one, publish_one, gold_one

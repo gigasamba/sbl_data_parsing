@@ -29,6 +29,7 @@ GOLDEN = {
     "struct": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.transform.structure.build_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --parse-dir /app/output/docflow/9/parse --out /app/output/docflow/9/bundle && PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 load --bundle /app/output/docflow/9/bundle --rep-dir /app/output/docflow/9/parse/_rep >> /app/output/docflow/9/structure.log 2>&1'",
     "publish": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.load.publish_parse_result --set PM_BUCKET_SKIP_OVERLAP_CHECK=1 --out /app/output/docflow/9 --source-system FileStorageMap --apply >> /app/output/docflow/9/publish.log 2>&1'",
     "sweep": "docker exec data-pipeline bash -c \"for p in /proc/[0-9]*; do grep -aqzx 'RUN_DOCS_DOC=/app/output/docflow/9' \\$p/environ 2>/dev/null && kill \\${p##*/} 2>/dev/null; done\"",
+    "faq_sync": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.load.pgvector_load faq-sync --reset --out /app/output/docflow/faq_sync.json'",
 }
 
 
@@ -38,6 +39,7 @@ def _built():
         "parse_light": RD.parse_cmd(7, "light", False, "9"),
         "parse_vlm_scan": RD.parse_cmd(9, "vlm", True, "1.3"),
         "struct": RD.struct_cmd(9),
+        "faq_sync": RD.faq_sync_cmd(True),
         "publish": RD.publish_cmd(9),
         "sweep": RD.sweep_cmd(9),
     }
@@ -235,6 +237,50 @@ def test_parallel_warm_respects_free_slots():
     assert run(workers=3, target=20, n_docs=6) == (3, 6)  # 빈자리 넉넉 → 워커 수만큼 동시에
     assert run(workers=3, target=2, n_docs=2) == (2, 2)  # 빈자리 2 → 워커가 3이어도 2개만
     assert run(workers=1, target=20, n_docs=3) == (1, 3)  # 워커 1 = 옛 동작(하나씩)
+
+
+def test_faq_first(tmp_path):
+    """pl-41 — 새 FAQ(faq_seen에 없던 키)면 --reset + FAQ 전체를 맨 앞에(--filter에 없던 FAQ 행은 덧붙임), faq_seen은 교체가 끝난 뒤에만 ·
+    새 FAQ가 없으면 gold에 없는 FAQ만(지우지 않음, 완전 중복 skipped_dup은 뺌) · faq-sync 결과가 없으면 FAQ 전체(이미 있는 문서는 적재가 건너뜀)."""
+    import json as J
+    from unittest.mock import patch
+
+    U1, U2 = "FAQ/u1/q.xlsx", "FAQ/u2/r.xlsx"
+    faq = [{"s3_key": U1}, {"s3_key": U2}]
+    cmds = []
+
+    def run(status, out, rc=0):
+        rows = [{"s3_key": "SFDC/u/a.pdf"}, {"s3_key": U1}, {"s3_key": "LAS/u/b.pdf"}]
+
+        def sh(c, **k):
+            cmds.append(c)
+            if out is not None:
+                (tmp_path / "faq_sync.json").write_text(J.dumps(out), encoding="utf-8")
+            return rc, "", "boom"
+
+        with (
+            patch.object(RD, "DOCFLOW", tmp_path),
+            patch.object(RD, "PROG", tmp_path),
+            patch.object(RD, "log", print),
+            patch.object(RD, "sh", sh),
+            patch.object(RD, "edw_faq", lambda: (faq, status)),
+        ):
+            return RD.faq_first(rows, [0, 2]), len(rows)
+
+    seen = tmp_path / "faq_seen.txt"
+    seen.write_text(U1 + "\n", encoding="utf-8")
+    assert run({U1: "ok"}, None, rc=2) == ([1, 3, 0, 2], 4)  # u2가 새 FAQ인데 교체 실패(판 확인 등) — 전체, 다음 실행이 다시 교체
+    assert cmds[-1] == RD.faq_sync_cmd(True) and U2 not in seen.read_text(encoding="utf-8")
+    assert run({U1: "ok", U2: "ok"}, {"faq_reset": 1, "gold": []}) == ([1, 3, 0, 2], 4)  # ParsingMeta에 있어도(--seqs 실행) 새 FAQ — 교체
+    assert cmds[-1] == RD.faq_sync_cmd(True) and U2 in seen.read_text(encoding="utf-8")  # 교체가 끝난 뒤에만 적음
+    assert run({U1: "ok", U2: "ok"}, {"faq_reset": 0, "gold": [U1]}) == ([3, 0, 2], 4)  # gold에 없는 u2만
+    assert cmds[-1] == RD.faq_sync_cmd(False)
+    assert run({U1: "ok", U2: "ok"}, {"faq_reset": 0, "gold": [U1, U2]}) == ([0, 2], 4)  # 그대로
+    assert run({U1: "ok"}, {"faq_reset": 0, "gold": [U1]}) == ([3, 0, 2], 4)  # u2 파싱 실패(ParsingMeta 없음) — 지우지 않고 채움
+    assert run({U1: "ok", U2: "skipped_dup"}, {"faq_reset": 0, "gold": [U1]}) == ([0, 2], 4)  # 완전 중복은 gold에 안 올라감 — 안 채움
+    seen.unlink()
+    assert run({U1: "ok", U2: "ok"}, {"faq_reset": 2, "gold": []}) == ([1, 3, 0, 2], 4)  # 처음 실행(파일 없음) — 한 번 교체
+    assert seen.read_text(encoding="utf-8") == f"{U1}\n{U2}\n"
 
 
 def test_classify_cache_skips_probe():
