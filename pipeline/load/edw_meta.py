@@ -1,6 +1,7 @@
 """적재 때 EDW 조인으로 문서 메타 채우기(pl-29, 사용자 11-02 — 매핑은 적재 몫). 원본 경로(gold doc.file_path = FileStorageMap.s3_key)마다
 원천별 사슬을 따라 고객(client_edw)·원천 전용 칸·등록 시각(created_at)을 구한다 — 외부 파일 file_meta는 쓰지 않는다. 읽기 계정만(SELECT).
 사슬의 표·칸 이름·SFDC 단계 순서·gold 칸 대응은 설정 파일 resources/config/edw_chain.yaml(운영 쪽이 고침 — 사용자 11-02, load_chain이 검사).
+서버에서 고친 사본은 설정 ops.pipeline_paths.edw_chain(비우면 기본 파일 — 사용자 11-03). 파일만 점검(EDW·PG 안 붙음): python -m pipeline.load.edw_meta --check [--file F].
 사슬의 모양(코드):
 - SFDC: FileStorageMap → ContentVersion(문서 id·등록 시각 UTC) → ContentDocumentLink(지우지 않은 연결) → 연결 개체 접두로 영업 기회 — 설정의
   steps 순서(지금: 006 직접 > 00T Task > 00U Event; Quote 표는 없음 — 생기면 설정 한 줄, optional이면 표를 못 읽을 때 그 단계만 건너뜀) ·
@@ -48,11 +49,30 @@ _REQ = {  # 설정 자리 → 꼭 있어야 하는 이름
 _CHANNEL = ("type", "table", "id", "direction", "subject")  # sfdc.hints.channel 항목마다
 
 
-def load_chain(path=CHAIN_FILE):
-    """사슬 설정 읽기 + 검사 — 틀리면 ValueError(어디가 왜 틀렸는지 모두)."""
+def chain_file():
+    """쓸 사슬 설정 파일 — 설정 pipeline.paths.edw_chain(서버에서 고친 사본), 비우면 기본 CHAIN_FILE."""
+    from pipeline import config as pc
+
+    p = pc.cfg().paths.edw_chain
+    return Path(p) if p else CHAIN_FILE
+
+
+def load_chain(path=None):
+    """사슬 설정 읽기 + 검사 — 틀리면 ValueError(어디가 왜 틀렸는지 모두). path 없으면 chain_file()(설정 → 기본 파일).
+    파일이 없거나 YAML이 깨져도 ValueError — 기본 파일로 조용히 돌아가지 않는다(적재가 시작할 때 멈춤)."""
     import yaml
 
-    c = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    path = Path(path) if path else chain_file()
+    try:
+        c = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except OSError as e:
+        raise ValueError(
+            f"[edw_meta] 사슬 설정 파일을 못 읽음({path}): {type(e).__name__} — settings.yaml ops.pipeline_paths.edw_chain을 확인(비우면 기본 파일)"
+        ) from e
+    except yaml.YAMLError as e:
+        raise ValueError(f"[edw_meta] 사슬 설정 YAML 오류({path}): {e}") from e
+    if not isinstance(c, dict):
+        raise ValueError(f"[edw_meta] 사슬 설정 오류({path}): 최상위가 사전(원천: …)이 아님")
     errs = []
     for where, names in _REQ.items():
         sec = c
@@ -464,3 +484,36 @@ def _las(edw, paths, c):
     for r in rows:
         out[r["k"]]["approvalname"] = appr.get((contracts.get(r["manage_no"]) or {}).get("cid"))
     return out
+
+
+def check(path=None):
+    """설정 파일만 점검(EDW·PG 안 붙음) — (종료 코드, 한 줄 요약)."""
+    try:
+        c = load_chain(path)
+    except ValueError as e:
+        return 1, str(e)
+    srcs = sorted(k for k, v in c.items() if isinstance(v, dict))
+    steps = " > ".join(st["prefix"] for st in c["sfdc"]["steps"])
+    return (
+        0,
+        f"[edw_meta] 사슬 설정 OK({Path(path) if path else chain_file()}) — 절 {', '.join(srcs)} · SFDC 단계 {len(c['sfdc']['steps'])}개({steps})",
+    )
+
+
+def main(argv=None):
+    import argparse
+
+    from common.core.console import utf8_stdout
+
+    utf8_stdout()
+    ap = argparse.ArgumentParser(description="EDW 조인 사슬 설정 점검(pl-29) — 파일만 읽고 검사, EDW·PG에 붙지 않음")
+    ap.add_argument("--check", action="store_true", required=True, help="설정 파일 검사(필수 — 이 모듈의 유일한 명령)")
+    ap.add_argument("--file", help="점검할 파일(없으면 settings.yaml ops.pipeline_paths.edw_chain → 비우면 기본 파일)")
+    a = ap.parse_args(argv)
+    rc, msg = check(a.file)
+    print(msg)  # 한 줄(성공·실패 모두 표준 출력 — 판정은 종료 코드)
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -141,7 +141,7 @@ NOT_SETTINGS = {
     "POSTGRES_USER": ("env로 남김", "PG 컨테이너 env — compose가 PG_USER로 채움(설정 칸은 op-08에 지움)"),
 }
 # 모은 키가 아닌 것(셸 문법·Dockerfile ARG·selftest 가짜 이름)
-IGNORE = {"BASE", "X_ALLOW_EXTERNAL", "NF"}  # NF — awk의 `$NF`(마지막 칸)를 셸 변수로 잘못 잡음(op-09)
+IGNORE = {"BASE", "X_ALLOW_EXTERNAL", "NF", "PATH", "DC_ROOT", "DC_CODE", "DC_FAKE"}  # NF=awk `$NF`(op-09) · PATH·DC_*=dc.sh 시험용(#138)
 
 _K = r"([A-Z][A-Z0-9_]{1,})"
 _PY = [
