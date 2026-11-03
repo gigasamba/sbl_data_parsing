@@ -40,6 +40,7 @@ LAYER_CODE = {
             "attachments",
             "context",
             "fuse",
+            "repfmt",  # 11-03 — 대표 결과 점수(doc_accuracy, represent.py:658 늦은 import)가 빠져 있었음(구조 검토)
             "supsub",
             "table_inline",
             "table_std",
@@ -71,6 +72,7 @@ LAYER_CODE = {
         "pipeline/transform/structure/chunking.py",
         "pipeline/transform/structure/draft_terms.py",
         "pipeline/transform/structure/facts.py",
+        "pipeline/transform/structure/terms.py",  # 11-03 — 고객 이름 찾기(build_bundle ST)가 빠져 있었음(구조 검토)
     ],
     "r": [
         "mcp_server/services/search/retriever.py",
@@ -78,6 +80,42 @@ LAYER_CODE = {
         "mcp_server/services/search/pgsearch.py",
     ],
 }  # 빈 층 a(research.py — S5a에 지움)는 0.2.0에 이름도 지움(pl-46)
+
+# 층에 넣지 않는 transform 파일 — 결과를 만들지 않는 오프라인 도구(사람이 따로 돌림). 새 transform 파일은 위 층 목록이나 여기 둘 중 하나에
+# 적는다(tests/server/common/test_code_fp.py가 빠진 파일을 잡음 — 11-03 구조 검토: 결과를 바꾸는 파일이 목록에서 빠져 옛 결과를 다시 씀).
+NOT_LAYER = (
+    "pipeline/transform/represent/__init__.py",
+    "pipeline/transform/structure/__init__.py",  # 빈 파일 — s는 따로 적어 둠(옛 판과 같은 집합)
+    "pipeline/transform/structure/gen_roster.py",
+    "pipeline/transform/structure/glossary_suggest.py",
+)
+# 지문 계산에서 따라가지 않는 common 파일·폴더(결과와 무관 — 기록·DB 연결·표 정의·설정 도구). 11-03 구조 검토: 로그 → DB 기록 → 표 정의로
+# 이어져 DB 표 칸 하나만 고쳐도 모든 층 지문이 바뀌었음. 설정 모델(config/settings.py)은 기본값이 결과를 바꿀 수 있어, store/pg.py는 검색(r)이 벡터 글자(vec)를 만들어 그대로 둔다.
+CODE_FP_SKIP = (
+    "core/artifacts.py",
+    "core/jsonlog.py",
+    "core/runlog.py",
+    "core/span.py",
+    "core/resources.py",
+    "store/logsink.py",
+    "store/pg_standin.py",
+    "store/mssql.py",
+    "store/objectstore.py",
+    "store/parsing_meta_db.py",
+    "store/db/",
+    "config/boot.py",
+    "config/export.py",
+    "config/keyscan.py",
+    "config/migrate.py",
+    "config/overrides.py",
+    "config/sample.py",
+    "config/setarg.py",
+    "config/show.py",
+)
+
+
+def _skipped(rel):
+    return any(rel == s or (s.endswith("/") and rel.startswith(s)) for s in CODE_FP_SKIP)
 
 
 def _common_deps(files, base):
@@ -148,7 +186,7 @@ def _common_deps(files, base):
                             candidates.add(tail)
         for dotted in candidates:
             p = _resolve(dotted)
-            if p and p not in seen:
+            if p and p not in seen and not _skipped(p.relative_to(root).as_posix()):
                 seen.add(p)
                 todo.append(p)
     return seen
