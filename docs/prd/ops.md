@@ -150,6 +150,7 @@
   3. 장부: 날짜마다 파일 하나 — `spend_file`이 있으면 이름 뒤에 날짜(`spend.json` → `spend-<날짜>.json`), 비우면 `<저장소>/output/llm_spend/<날짜>.txt`. 같은 작업 폴더의 모든 프로세스가 파일 잠금으로 합계 하나를 나눠 쓴다. 정산·반환은 선차감한 날의 장부로 간다. 시험 자식(`case_env`)은 임시 장부.
   4. 외부 LLM은 단가(`PRICES` 또는 `LLM_PRICE_IN·OUT`)를 모르면 거부한다(`llm.chat`·`admit_turn` 같음). 한 번의 호출이 사후 정산으로 상한을 조금 넘을 수 있고, 다음 호출부터 거부된다.
   5. 응답 캐시, RPM, 시험용 가짜 LLM(`dev.llm_fake` — local만).
+  6. 역할마다 설정 `common.models.<llm|vlm|embed>.allow_external` 하나로 외부 허용을 정한다 — `llm.chat`을 부르는 모든 곳(분류 포함)이 `LLM_ALLOW_EXTERNAL`을 따른다(호출 인자 `allow_external=True`는 같은 효과). 내부망 서버(dev·prd)의 settings.yaml은 셋 다 `false`. 시험: `tests/server/common/test_llm.py`(local+1 허용 · local+없음 거부 · dev·prd+1 거부).
 - 파일: `common/ai/guard.py`, `common/ai/llm.py`, `common/config/settings.py`.
 - QA: `tests/server/common/test_guard.py`·`test_llm.py` · 통과. 서버 확인 refactor.md C-88.
 - Status: done

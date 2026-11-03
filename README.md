@@ -169,6 +169,8 @@ tuning:
 
 - 옛 배치(최상위 `common`·`pipeline`·`mcp`) 파일은 읽지 않는다 — `python -m common.config.migrate settings.yaml --out settings.new.yaml`로 바꿔 넣는다.
 - **외부 임베딩은 `allow_external: true`이고 `run_env: local`일 때만** 호출된다(서버 dev·prd는 늘 거부).
+- **LLM·VLM도 같다:** `required.models`의 `llm_*`·`vlm_*`(주소·모델·키)를 채우고 `common.models.llm.allow_external`·`common.models.vlm.allow_external`을 `true`로 두면 PC에서 분류(SFDC·LAS)와 그림·스캔 쪽 VLM이 외부 모델을 부른다(`run_env: local`일 때만). 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
+- **내부망 서버(dev·prd)에서 시험·운영할 때는 세 `allow_external`을 모두 `false`(0)로 둔다.** 서버는 `run_env`가 dev·prd라 켜 두어도 외부 호출을 거부하지만, 서버 settings.yaml에는 외부 허용을 남기지 않는다.
 - PG 접속 칸(`required.pg`의 여섯 칸)은 **모두 채우거나 모두 비운다.** 일부만 채우면 채울 자리를 알려 주고 멈춘다. PC에서 host·password가 둘 다 비면 SQLite 대역(`output/pg_standin/`)으로 돌고 첫 줄에 `WARNING: PG 접속 정보 없음`을 찍는다(서버는 멈춤).
 
 ### 4-3. 점검

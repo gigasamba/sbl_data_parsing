@@ -45,7 +45,7 @@ REQUIRED_GROUPS = (
     (
         "models",
         "LLM·VLM 모델",
-        "서버만",
+        "PC·서버",
         tuple((f"{r}_{k}", f"common.models.{r}.{k}") for r in ("llm", "vlm") for k in ("base_url", "model", "api_key")),
     ),
     (

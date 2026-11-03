@@ -98,7 +98,7 @@ def fake_llm():
 
 def external_ok(allow):
     """외부 모델 허용 규칙 한 곳 — 허용 스위치가 켜지고 RUN_ENV=local일 때만(합성 문서 선언 잠금은 사용자 10-29에 삭제).
-    external_allowed(설정 칸)·llm.chat(allow_external 인자)이 이 한 곳을 거친다."""
+    external_allowed(설정 칸)·llm.chat(allow_external 인자·LLM_ALLOW_EXTERNAL 설정)이 이 한 곳을 거친다."""
     return bool(allow) and not run_env_block()
 
 
