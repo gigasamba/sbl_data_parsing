@@ -3,20 +3,20 @@
 [PRD.md](../PRD.md) 카테고리. [transform.md](transform.md) 다음: pgvector 적재(pl-07·pl-13·pl-16·pl-51·pl-19) → 게시(silver — pl-09·pl-26) → FAQ 다시 올리기(pl-41) → 지운 정형 DB·문서 대장(pl-08·pl-12)·마스터 CSV(pl-38). 저장 구조·DB 스키마는 [load-schema.md](load-schema.md).
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서: pl-29 · pl-07 · pl-13 · pl-16 · pl-51 · pl-19 · pl-09 · pl-26 · pl-41 · pl-08 · pl-12 · pl-38. (저장 구조 pl-32는 [load-schema.md](load-schema.md#pl-32))
+순서: pl-29 · pl-07 · pl-13 · pl-16 · pl-51 · pl-19 · pl-09 · pl-26 · pl-41 · pl-08 · pl-12 · pl-38 · pl-56. (저장 구조 pl-32는 [load-schema.md](load-schema.md#pl-32))
 
 <a id="pl-29"></a>
 ## pl-29 · EDW 고객 매핑을 파이프라인이 직접 만든다
-- 자리(사용자 11-02): 수집(extract)에서 적재(load)로 옮김 — 매핑 결과는 검색 DB `doc` 행(`client_edw`·`sf_*` 칸)을 쓸 때와 검색 필터만 쓰고, 파싱·구조화는 쓰지 않는다. 적재 때 붙이면 매핑이 바뀌어도 다시 파싱·구조화하지 않는다.
-- 이유: 문서마다 EDW 고객 하나(`client_edw` — MCP 고객 거르기의 유일한 키, [pl-25](load-schema.md#pl-25))와 SFDC 칸(`sf_acc_name`·`sf_op_id`·`sf_op_name`·`project_code__c` 등)이 필요하다(db_schema.md D-2).
+- 자리(사용자 11-02): 수집(extract)에서 적재(load)로 옮김 — 매핑 결과는 검색 DB `doc` 행(`client_edw`·`attrs` 키)을 쓸 때와 검색 필터만 쓰고, 파싱·구조화는 쓰지 않는다. 적재 때 붙이면 매핑이 바뀌어도 다시 파싱·구조화하지 않는다.
+- 이유: 문서마다 EDW 고객 하나(`client_edw` — MCP 고객 거르기의 유일한 키, [pl-25](load-schema.md#pl-25))와 원천 메타(SFDC `sf_op_id`·`sf_op_name`·`project_code__c` 등 — `doc.attrs` 키, [pl-52](load-schema.md#pl-52))가 필요하다(db_schema.md D-2).
 - 결정(사용자 10-30 grill 7차): 파이프라인이 EDW 읽기 계정(`common.connections.rdb.read`)으로 조인을 직접 만든다(사슬은 아래 구현).
 - 결정(사용자 10-30 grill — pl-25 검토): 고객뿐 아니라 나머지 문서 메타(`sf_*`, `project_code__c`, `contract_id`, `contract_date`, `prod_name`, `division`, `service_type`)도 같은 자리에서 EDW에서 직접 읽는다.
-- 파일: `pipeline/extract/source.py`(FileStorageMap 읽기), `pipeline/load/pgvector_load.py`·`pipeline/load/edw_meta.py`(적재 때 EDW 조인), `docs/architecture/db_schema.md`.
+- 파일: `pipeline/load/pgvector_load.py`·`pipeline/load/edw_meta.py`(적재 때 EDW 조인), `resources/config/edw_chain.yaml`(사슬), `docs/architecture/db_schema.md`.
 - 선행: [pl-25](load-schema.md#pl-25)(스키마 — `client_edw` 칸), [pl-32](load-schema.md#pl-32)(저장 구조).
 - 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) C6·T7): 고객 연결은 운영 4단계를 따른다 — 출발점 `FileStorageMap`, 순서 기회 직접 > `Task.WhatId` > `Event.WhatId` > Quote 스냅샷, 계정 직접 연결도 포함. 결과는 pgvector doc에만. 같은 sha256 묶음에도 고객은 전파하지 않는다(C3).
 - 결정(G2·T16 — 2차 grill(사용자 10-30, 원본은 git 밖)): `client_edw`(문서당 고객 하나)는 SFDC(4단계 연결)와 **CRMS**(`FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST` — DB 담당자 확인, D-2)에서 채운다. LAS는 상대사 출처가 정해질 때까지 비워 둔다. FAQ는 고객 연결 없음([pl-39](extract.md#pl-39)).
 - 결정(G11 — 3차 grill(사용자 10-30, 원본은 git 밖)): 적재 뒤 바뀐 SFDC 연결(고객·`sf_op_id` 등)은 자동으로 갱신하지 않는다. `--replace`로 다시 적재해 갱신한다.
-- 구현(11-02 `feature/mcp-ops-parity`): 사용자 11-02 — 매핑은 적재 몫. `pipeline/load/edw_meta.py`가 적재 때(PG 트랜잭션 밖, 읽기 계정) 원천별 사슬로 `client_edw`·원천 메타(`doc.attrs`)·`created_at`을 채운다(사슬은 [db_schema.md](../architecture/db_schema.md) §1 — 운영 gold 스키마 노트 기준, 칸 이름은 D-1 확인). SFDC 4단계(기회 직접 > Task > Event > Quote, +계정 직접 — 같은 단계 동률은 비움), CRMS(`RM_CM_PJTLIST`·`RM_CM_DOCU`), LAS(`LAS.Contract` 최신 판·`FileManager`). Quote는 운영처럼 EDW 표로 재현(사용자 11-02) — 서버 EDW에 표가 없으면 그 단계만 건너뜀(C-76: DB 담당자가 표를 만들고 REST 스냅샷으로 채움, 누가·언제는 미정). EDW를 못 읽으면 메타 없이 적재(경고·`meta_missing`) — 자동 갱신 없음, `--replace`로 다시 적재해 채움. PC 가짜 EDW(`valid_env/edw`)에 가짜 사슬 표를 더했다. 시험: `tests/server/pipeline/test_edw_meta.py`.
+- 구현(11-02 `feature/mcp-ops-parity`): 사용자 11-02 — 매핑은 적재 몫. `pipeline/load/edw_meta.py`가 적재 때(PG 트랜잭션 밖, 읽기 계정) 원천별 사슬로 `client_edw`·원천 메타(`doc.attrs`)·`created_at`을 채운다(사슬은 [db_schema.md](../architecture/db_schema.md) §1 — 운영 gold 스키마 노트 기준, 칸 이름은 D-1 확인). SFDC(기회 직접 > Task > Event, +계정 직접 — 같은 단계 동률은 비움 · Quote는 아래 사슬 파일 줄), CRMS(`RM_CM_PJTLIST`·`RM_CM_DOCU`), LAS(`LAS.Contract` 최신 판·`FileManager`). EDW를 못 읽으면 메타 없이 적재(경고·`meta_missing`) — 자동 갱신 없음, `--replace`로 다시 적재해 채움. PC 가짜 EDW(`valid_env/edw`)에 가짜 사슬 표를 더했다. 시험: `tests/server/pipeline/test_edw_meta.py`.
 - 결정·구현(사용자 11-02 `feature/edw-chain-config` · 11-03 `feature/edw-chain-path` · [pl-52](load-schema.md#pl-52)): 사슬의 표·칸 이름·단계·`attrs` 키 대응은 설정 파일 `resources/config/edw_chain.yaml`에 있다(운영 쪽이 고침 — 모든 원천이 같은 `steps`·`fields`·`client_edw`·`created`, 꼴은 [pl-52](load-schema.md#pl-52)). 코드는 사슬을 따라가는 해석기 하나(`edw_meta._resolve`). Quote 표는 지금 없다 — 기본 사슬은 기회 직접 > Task > Event(+계정 직접), 표가 생기면 주석 줄 하나를 켠다(`optional: true` — 표를 못 읽으면 그 단계만 건너뜀). 파일을 읽을 때 검사한다 — 빠진 이름·SQL에 넣을 수 없는 이름(표 `스키마.표`, 칸 영문·숫자·_, 접두 3자)이면 이유를 모두 말하고 멈춤(값은 늘 바인딩).
 - 사슬 파일 자리: 설정 `ops.paths.edw_chain`(`common.paths.edw_chain`, `EDW_CHAIN_FILE` — 적재·검색 MCP가 함께 읽음). 비우면 기본 `resources/config/edw_chain.yaml`, 경로면 그 파일(같은 검사). 없거나 틀린 파일이면 적재는 시작 때 멈추고 검색은 오류(기본 파일로 안 돌아감). 파일만 점검: `python -m pipeline.load.edw_meta --check [--file F]`(EDW·PG에 안 붙음). 서버 사본은 settings.yaml 옆 `$SERVER_ENV_DIR/edw_chain.yaml` — `dc.sh init`이 없을 때만 기본 파일을 복사하고(10001, 640), 파일 하나를 `data-pipeline`·`mcp-server`에 `/etc/rag/edw_chain.yaml`로 읽기 전용 마운트(폴더는 붙이지 않음). 칸을 적었을 때만 사본이 쓰임. 서버에서 만드는 파일 표: release-and-patch §8-7, 쓰는 법: [release-and-patch §8-6](../operations/release-and-patch.md#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29). 시험 `tests/server/pipeline/test_edw_meta.py`.
 - Status: done(11-03)
@@ -82,7 +82,7 @@
 - 결정(사용자 10-29 grill): 게시(silver → Object Storage + EDW)가 기본이자 유일한 방식 — `--no-publish`와 `pipeline.host.nightly.publish`를 없앤다. 게시 대상은 필수 설정이고 없으면 시작을 거부한다.
 - `RUN_ENV`별 대상: `local`·`dev`는 (a) 로컬 경로(Object Storage는 폴더, EDW는 파일 DB) 또는 (b) 실제 접속 정보(API·DB) 중 하나. `prd`는 실제 접속만. PC는 CLAUDE.md §4 가드를 그대로 지킨다(PC에서 운영 EDW·OS 접속 금지).
 - 파일: `deploy/host/scripts/run_docs.py`, `deploy/docker/entrypoint.sh`(`publish`), `pipeline/load/`의 게시, `pipeline/config.py`, `docs/operations/server-guide.md`.
-- Status: done (11-03 확인) — run_docs는 문서마다 늘 게시하고([pl-24](ops.md#pl-24) — gold 전), 게시 버킷·접두(`pipeline.load.publish.bucket`·`prefix`)가 없으면 시작을 거부한다(`SETTINGS_REQUIRED`).
+- Status: done (11-03 확인) — run_docs는 문서마다 늘 게시하고([pl-24](ops.md#pl-24) — gold 전), 게시 버킷·접두(`required.source.publish_bucket`·`publish_prefix`)가 없으면 시작을 거부한다(`SETTINGS_REQUIRED`).
 
 <a id="pl-41"></a>
 ## pl-41 · FAQ 다시 올리기 — 통째 교체
@@ -112,12 +112,12 @@
 <a id="pl-12"></a>
 ## pl-12 · 문서 대장 upsert와 게시 가드
 - 결정(사용자 10-31 범위 축소 grill): 문서 대장(doc_registry)·숨김(doc_hidden)·숨김 명령을 **모두 지운다**(hidden 열도 두지 않음). 빼야 할 문서는 원천에서 지우거나 사람이 SQL로. ① PG upsert 번역 문제는 대장과 함께 닫힘.
-- 이유: 문서 대장 upsert에 PG 문법 오류가 있다(C-54 ①). 서버가 `source.json`을 올리지 않아 게시 가드가 꺼져 있다(C-54 ②).
-- 파일: `common/store/structdb.py`, `pipeline/load/publish_parse_result.py`, `pipeline/load/parsing_meta.py`.
-- 결정(사용자 10-30 grill 12~13차): 원천에서 사라진 문서(deleted) 처리 길은 통째로 없앤다 — 지우기·숨기기·EDW `deleted` 표시 모두 없음, 로컬 기록만(refactor.md C-54).
-- 한 것(10-30, B1 — 개발 서버 반입 전 검토): deleted 길 없앰 — `registry.apply`가 관측에 없는 문서에 `status='deleted'`·자동 숨김을 쓰지 않고, `parsing_meta.apply_registry_status`가 EDW에 `deleted`를 쓰지 않는다(`diff["deleted"]`는 판 잇기 정보로만). 서버(dev·prd)는 SQLite·PG 스탠드인으로 대체하지 않고 멈춘다(`structdb.open_backend` — `run_mode: prod`·`struct_backend` pg/tsql 필수, `pg._warn_standin`). `common.store.run_mode`는 `prod`·`test`만. 시험 `tests/server/common/test_no_deleted.py`. code_fp p0·p1·r·s 바뀜(공용 `settings.py`·`pg.py`·`structdb.py`).
+- 이유: 문서 대장 upsert에 PG 문법 오류가 있다([C-54](../history/refactor_c_items.md) ①). 서버가 `source.json`을 올리지 않아 게시 가드가 꺼져 있다([C-54](../history/refactor_c_items.md) ②).
+- 파일: `pipeline/load/publish_parse_result.py`, `pipeline/load/parsing_meta.py`.
+- 결정(사용자 10-30 grill 12~13차): 원천에서 사라진 문서(deleted) 처리 길은 통째로 없앤다 — 지우기·숨기기·EDW `deleted` 표시 모두 없음, 로컬 기록만([C-54](../history/refactor_c_items.md)).
+- 한 것(10-30, B1): deleted 길 없앰 — 게시·적재는 EDW에 `deleted`를 쓰지 않는다. 서버(dev·prd)는 PG 스탠드인으로 대체하지 않고 멈춘다(`pg._warn_standin`). 시험 `tests/server/common/test_no_deleted.py`.
 - 한 것(11-01 `feature/scope-cut-search`): `common/store/registry.py`·`registry_cli`·검색 `registry.py`·숨김 거르기(retriever·pgsearch)·게시의 대장 상태 갱신·ParsingMeta 상태 갱신 길 지움. 표는 struct 스키마와 함께 코드에서 없앰([pl-08](#pl-08)). 설정 `common.store.doc_registry`·`registry_etag_md5` 지움(남으면 경고).
-- 11-02 C10 예외(사용자): ParsingMeta `loaded_at` 한 칸만 적재 때 UPDATE(`parsing_meta_db.mark_loaded`) — 다른 칸은 그대로 INSERT만(`test_no_deleted`가 UPDATE는 `SET loaded_at`뿐인지 본다).
+- 11-02 C10 예외(사용자): ParsingMeta `loaded_at`·`gold_version` 두 칸만 적재 때 UPDATE(`parsing_meta_db.mark_loaded` — `LOADED_COLS`) — 다른 칸은 그대로 INSERT만(`test_no_deleted`가 UPDATE 칸을 본다).
 - 결정(사용자 11-02): 알려진 실패를 0으로 — (아래 한 것) 쓰이지 않는 게시 가드(`source.json` `skip_exists`·키 충돌 거부)와 `tests/server/pipeline/test_publish_guard.py`를 지우고 `deploy/release/known_fail.txt`를 비운다.
 - 한 것(11-02 `feature/publish-guard` — 사용자 11-02 known_fail 0): `source.json` 사이드카 가드(`apply()`의 `skip_exists`·`error_key_collision`·`key_collision_*` 건수·저장소 `get_text`)와 그 시험 `test_publish_guard`를 지웠다 — 서버가 source.json을 올리지 않아 늘 꺼져 있었다. 같은 문서를 다시 고르지 않는 것은 고르기([pl-25](load-schema.md#pl-25) — silver·gold 결과)가 맡고, 결과 파일 이름에 시각이 들어가 덮어쓰지 않는다. 남는 이론상 충돌(원본 키 sha1 10자)은 막지 않는다(`rep_md_key` 주석). `deploy/release/known_fail.txt`는 빈 목록.
 - Status: done (11-01 `feature/scope-cut-search`)
@@ -134,7 +134,13 @@
 - 결정(사용자 10-30): "contract_master, client_master 등 활용하는 방안 같이 설계하자. 후순위로 해줘." — 표로 옮기는 것까지 0.2.0, 쓰는 곳 넓히기(검색 거르기·분류 단서)는 후순위 그대로.
 - 결정(허브 10-31): 고객 별칭 몫(고객 명부·별칭 그룹 — [mcp.md#mc-05](mcp.md#mc-05))은 0.2.0 — 위 읽는 곳에 포함.
 - 잠재 문제(사용자 11-03): 같은 문서의 다른 판(`s3_key` 다름) 묶기 — 검색 '최신' 질문에서 옛 판이 위로 올 수 있음, 필요해지면 다시 설계.
-- Status: done — `feature/pl38-master`(#135) 병합(0.2.0 지문 배치). 잠재 문제(판 묶기)는 위 줄 — PRD 표 todo 행.
+- Status: done — `feature/pl38-master`(#135) 병합(0.2.0 지문 배치). 잠재 문제(판 묶기)는 [pl-56](#pl-56).
+
+<a id="pl-56"></a>
+## pl-56 · (잠재 문제) 같은 문서의 다른 판 묶기
+- 이유: 같은 문서의 다른 판은 `s3_key`가 달라 따로 적재된다 — 검색 '최신' 질문에서 옛 판이 위로 올 수 있다(사용자 11-03 — pl-38에서 나눔).
+- 무엇: 필요해지면 `created_at`으로 다시 설계한다. 지금 근거의 `version`은 수집 manifest 값만, `superseded`는 늘 null([mcp.md#mc-05](mcp.md#mc-05)).
+- Status: todo — 필요해질 때.
 
 ## 코드와 다른 점 · 지울 코드
 
@@ -149,6 +155,6 @@
 ### 기본 꺼짐·설정 필요
 | 기능 | 스위치 = 기본값 | 필요한 것 |
 |---|---|---|
-| Object Storage + `AI.ParsingMeta` 게시 | run_docs가 문서마다 늘 게시(끌 수 없음 — pl-26), 이미지 `publish` 명령도 있음 | 게시 버킷·접두(`pipeline.load.publish.bucket`·`prefix` — 없으면 시작 거부), EDW 쓰기 계정 |
+| Object Storage + `AI.ParsingMeta` 게시 | run_docs가 문서마다 늘 게시(끌 수 없음 — pl-26), 이미지 `publish` 명령도 있음 | 게시 버킷·접두(`required.source.publish_bucket`·`publish_prefix` — 없으면 시작 거부), EDW 쓰기 계정 |
 
-10-29 요청 "EDW와 Object Storage 적재를 기본으로 켬": 게시(Object Storage + `AI.ParsingMeta`)는 `PM_BUCKET`과 EDW 쓰기 계정만 있으면 이미 기본으로 돈다. 꺼져 있는 것은 밤 일정(`NIGHTLY_TIME` 비움 — 10-30 pl-32, 켤 때 시각을 적음).
+새벽 배치는 `ops.nightly.time`·`max_docs`·`deadline` 셋이 모두 있어야 돈다(기본은 비어 있어 꺼짐 — [pl-32](load-schema.md#pl-32)).

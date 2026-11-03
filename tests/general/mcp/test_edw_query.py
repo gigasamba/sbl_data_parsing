@@ -71,7 +71,7 @@ def _demo():
     wrapped, cap_err = _top_n(cte_q, 5, "sqlite")
     assert cap_err is None
     assert len(_mem.execute(wrapped).fetchall()) == 6  # n+1, so query() can detect truncation
-    # 2026-10-22, live-measured (docs/mcp-retrieval-access-guide.md TOP queries) — plain SELECT explicit TOP
+    # 2026-10-22, live-measured (운영 접속 안내서(git 밖)의 TOP 질의) — plain SELECT explicit TOP
     ok_p, err_p = _top_n("SELECT TOP 3 * FROM AI.client", 5, "tsql")
     assert err_p is None and ok_p == "SELECT TOP 3 * FROM AI.client"  # already capped — left alone (was double-TOP death)
     ok_p, err_p = _top_n("SELECT TOP (3) * FROM AI.client", 5, "tsql")  # parenthesized form equally fine

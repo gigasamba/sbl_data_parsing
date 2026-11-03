@@ -1,7 +1,7 @@
 # AI 지시서(지시서 패키지)
 
-LLM·VLM을 **부르는** 단계의 지시서 패키지 7개(`resources/prompts/` 6개 — 공용 꼬리 `_common` 따로 + `valid_env/answer_test/`의 `rag_qa` · 11-02 분류 `classify_sfdc`·`classify_las` 더함(pl-33))를 한 표로 모았다. 검색·집계·청킹처럼 모델을 부르지 않는 결정적 단계는 지시서가 아니라 코드다(맨 아래 "도구" 표).
-S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26개와 폴더 설명(`common_tools/prompts/README.md`)을 이 문서 하나로 합쳤고, `cases.json`은 `tests/fixtures/prompts/<앱>/<패키지>.json`으로 옮겼다(읽는 곳이 없어 10-29에 지움 — `refactor.md` C-63). 호출부 경로는 S2 시점 코드 자리로 고쳤다(옛 README의 `dev/…`·`modules/…`·`deploy/data_parsing/…`는 낡은 경로였다).
+LLM·VLM을 **부르는** 단계의 지시서 패키지 7개(`resources/prompts/` 6개 — 공용 꼬리 `_common` 따로 + `valid_env/answer_test/`의 `rag_qa` · 11-02 분류 `classify_sfdc`·`classify_las` 더함(pl-33))를 한 표로 모았다. 검색·청킹처럼 모델을 부르지 않는 결정적 단계는 지시서가 아니라 코드다(맨 아래 "도구" 표).
+S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26개와 폴더 설명(`common_tools/prompts/README.md`)을 이 문서 하나로 합쳤고, 호출부 경로는 S2 시점 코드 자리로 고쳤다(옛 README의 `dev/…`·`modules/…`·`deploy/data_parsing/…`는 낡은 경로였다).
 
 ## 1. 자리와 찾는 순서
 
@@ -10,7 +10,7 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 | `resources/prompts/common/<패키지>/` | 여러 단계·이미지가 함께 쓰는 지시서, 공용 꼬리 `_common/` | 모든 이미지(`resources/` 폴더째) |
 | `resources/prompts/pipeline/<패키지>/` | 파싱·구조화·평가 지시서 | 모든 이미지 |
 
-- 찾는 자리는 `common/core/paths.py` `resolve_agent_dir()` 한 곳이다. 순서는 ① `resources/prompts/common` ② `resources/prompts/pipeline` ③ `resources/prompts/mcp` ④ `validation/e2e`(`triple_extract` — PC 전용, S6a · 이미지에는 폴더가 없어 건너뜀) ⑤ `valid_env/answer_test`(`rag_qa` — PC 전용 데이터 · 이미지에 없음) ⑥ 시험 고정물(`dev_tools/unit_test/fixtures` — 이 저장소에는 없음). 패키지 이름은 겹치지 않아 순서가 결과를 바꾸지는 않지만, 결정적이어야 캐시·로그가 재현된다.
+- 찾는 자리는 `common/core/paths.py` `resolve_agent_dir()` 한 곳이다. 순서는 ① `resources/prompts/common` ② `resources/prompts/pipeline` ③ `valid_env/answer_test`(`rag_qa` — PC 전용 데이터 · 이미지에 없음). 코드에는 폴더가 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`·`dev_tools/unit_test/fixtures`)이 더 있어 늘 건너뛴다 — 지우기는 PRD [e2-15](../prd/test.md#e2-15)(`paths.py`라 다음 지문 배치). 패키지 이름은 겹치지 않아 순서가 결과를 바꾸지는 않지만, 결정적이어야 캐시·로그가 재현된다.
 - `resources/`는 저장소 루트 바로 아래이고, 이미지 안에서는 `/app/deploy/resources`다(`paths.RES_ROOT` = 코드 패키지들이 import되는 자리의 `resources/`).
 
 ## 2. 패키지 구성
@@ -45,6 +45,6 @@ S2(10-26, refactor_plan D-019 — T-01)에 패키지마다 있던 `README.md` 26
 
 | 이름 | 역할 | 위치 |
 |---|---|---|
-| `do_search` | 벡터·BM25 검색 | `mcp_server/services/search/search_svc.py` · `internal_docs.py`(도구 등록은 `mcp_server/routers/` — MCP 도구 계약, CLAUDE.md §4) |
+| `do_search` | 벡터·BM25·ID 검색 | `mcp_server/services/search/search_svc.py`(도구 등록은 `mcp_server/routers/` — MCP 도구 계약, CLAUDE.md §4) |
 | `value_check` | 그림 기록 ↔ 본문 값 결정적 대조 | `pipeline/transform/represent/context.py` |
 | `embed_texts` | 임베딩 호출(역할 `embed` — `llm.complete` 역할 아님) | `common/ai/embed.py` |

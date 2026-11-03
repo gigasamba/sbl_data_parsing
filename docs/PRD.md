@@ -4,10 +4,10 @@
 행 = 요건 하나(끝난 것 포함) — 칸은 요건(무엇을, 어디서) · 기준·이유 · 상태 · ID. ID 하나가 여러 행에 나올 수 있다(상세는 ID 링크의 앵커). 상태: todo · dev · done(그 밖에 partly done). ID는 그대로 두고 카테고리 파일이 자리를 정한다(do-04 3부 11-01 — 수집·변환·적재·검색·운영·테스트·문서, 2만 자 넘는 카테고리는 `<분류>-<하위>.md`). 상세는 ID 링크.
 
 ## 지금 진행 중
-- pl-25 DB 스키마 명세 — dev: `docs/architecture/db_schema.md` 병합됨 → 사용자·DB 담당자 승인 대기(ParsingMeta 판 칸은 11-02 결정 — `silver_version`·`gold_version`).
-- 0.2.0 묶음(todo — 순서는 허브가 정함): 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 원천별 gold 스키마 [pl-28](prd/load-schema.md#pl-28) · run_docs 순서 [pl-24](prd/ops.md#pl-24)(done 11-03 — `gold_status` 칸만 C-81) · 게시 필수 [pl-26](prd/load.md#pl-26)(done) · 분류 [pl-33](prd/transform.md#pl-33) · FAQ [pl-39](prd/extract.md#pl-39)·[pl-41](prd/load.md#pl-41) · 지문 배치 [pl-46](prd/transform-cleanup.md#pl-46)·[pl-47](prd/transform-cleanup.md#pl-47) · 확장자 2차 [pl-45](prd/transform.md#pl-45) · `search` 계약 [mc-16](prd/mcp.md#mc-16) · 원문 도구 [mc-17](prd/mcp.md#mc-17).
-- 운영 고침 묶음(todo — 사용자 11-02 결정, 코드는 따로): 회전 판정 병렬·기본 적용 끄기 [pl-02](prd/extract.md#pl-02) · 서버 러너 병렬 받기 [pl-48](prd/extract.md#pl-48) · `run_docs` 끝난 문서에 `skipped_dup` 넣기(done — `DONE_STATUSES`) · EDW 고객 매핑 적재로 옮김 [pl-29](prd/load.md#pl-29).
-- 검색 — PG만, 실행 중 묶음 없음 [mc-19](prd/mcp.md#mc-19)(done 11-03 — 판 0004).
+- pl-25 DB 스키마 명세 — dev: 검색 DB(gold)·마스터·applog는 구현됨, EDW 쪽 DDL(ParsingMeta 칸 정리)은 DB 담당자 승인·실행 대기(refactor.md C-76).
+- 열린 요건(todo): 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · `gold_status` 칸 쓰기 [pl-55](prd/ops.md#pl-55) · pl-46 남은 정리 [pl-53](prd/transform-cleanup.md#pl-53) · `GOLD_DIR` 마운트 [op-11](prd/doc.md#op-11) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
+- 서버 확인만 남음(dev): parse_document CPU 우선 [rn-03](prd/ops.md#rn-03).
+- 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-15](prd/test.md#e2-15) · [e2-20](prd/test.md#e2-20) · [e2-21](prd/test.md#e2-21).
 
 ## 수집 (extract) — 서버에서 문서 목록을 정하고 받아 오기까지
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
@@ -48,17 +48,18 @@
 | 그림 부가 기능 줄이기 — 화살표·겹침·도형 연결·Mermaid 따로 만들기를 VLM 한 번의 종류별 출력(도표 Mermaid·표 HTML·차트 값)으로 | 결정 10-31. **코드는 아직 옛 기능을 씀**(`figures/figures.py:29-38`) — 0.2.0(대표 결과 지문 p1 바뀜) | todo (코드 남음) | [pl-05](prd/transform.md#pl-05) |
 | 청크(검색 단위 조각) 나누기 — 기본 `structure`(800자, 제목 기준, 표는 통째). 큰 표 25행씩 나누기는 `CHUNK_TABLE=rows`일 때만 | 검색은 출처가 달린 짧은 조각 단위로 한다 | done | [pl-06](prd/transform.md#pl-06) |
 | 문서 요약 = 앞부분 300자 발췌, 고객·계약 이름은 엔진끼리 서로 확인된 것만 | — | done | [pl-06](prd/transform.md#pl-06) |
-| 임베딩(검색용 숫자 벡터) — 내부망 `api`(`EMBED_BASE_URL`·`EMBED_MODEL`)만(시험은 `none`) | `sentence-transformers` 패키지는 다음 이미지 빌드 때 requirements에서 뺌(todo — [pl-46](prd/transform-cleanup.md#pl-46)) | done | [pl-06](prd/transform.md#pl-06) |
+| 임베딩(검색용 숫자 벡터) — 내부망 `api`(`EMBED_BASE_URL`·`EMBED_MODEL`)만(시험은 `none`) | 로컬 임베딩(`sentence-transformers`)은 지웠다([pl-46](prd/transform-cleanup.md#pl-46)) | done | [pl-06](prd/transform.md#pl-06) |
 | ~~지식 그래프·개념 청크·그림 행·집계 사실 만들기~~ | 아무도 적재·조회하지 않았다(11-01 지움) | done | [pl-06](prd/transform.md#pl-06) |
-| 분류 — 적재 때 gold에 넣기 전 SFDC·LAS 문서에 종류 라벨 `doc_class`(SFDC 5종·LAS 7종). 근거 = gold 분류 힌트 칸(판 0003 — 적재 때 EDW 조인) + 게시 .md 앞 8,000자 | 운영 분류와 결과가 같게(사용자 11-02) — 지시문·사용자 쪽 글 운영 글자 그대로, 적재와 같은 규칙(따로 고르지 않음), 내부 모델·`llm.chat`, 집합 밖·장애는 그 문서의 적재 실패(다음 실행에 다시), 재시도·수동 명령 없음, 이미 있는 라벨 안 덮음 | done | [pl-33](prd/transform.md#pl-33) |
+| 분류 — 적재 때 gold에 넣기 전 SFDC·LAS 문서에 종류 라벨 `doc_class`(SFDC 5종·LAS 7종). 근거 = gold `doc.attrs`의 분류 힌트 키(사슬 파일 `edw_chain.yaml` — 적재 때 EDW 조인) + 게시 .md 앞 8,000자 | 운영 분류와 결과가 같게(사용자 11-02) — 지시문·사용자 쪽 글 운영 글자 그대로, 적재와 같은 규칙(따로 고르지 않음), 내부 모델·`llm.chat`, 집합 밖·장애는 그 문서의 적재 실패(다음 실행에 다시), 재시도·수동 명령 없음, 이미 있는 라벨 안 덮음 | done | [pl-33](prd/transform.md#pl-33) |
 | ~~`ocr_vlm` 엔진·`vlm.model_alt`·안 쓰는 엔진 8개~~ 지움(엔진 18개 남음) | stack에 없어 안 쓰였다. 엔진 지문 바뀜(0.1.0, 등급 A) | done | [pl-31](prd/transform-cleanup.md#pl-31) |
 | ~~다시 읽기(P2·P3)·스캔 중복 제거·렌더 OCR 신호~~ 지움 | 대표 결과 단계 정리. p1 지문 바뀜(0.1.0, 등급 A) | done | [pl-34](prd/transform-cleanup.md#pl-34) |
 | ~~`parse_parallel`·`AUTO_REPARSE_CHANGED`·`figures_resume`~~ 지움 | 지문에 영향 없는 잔재. 증분 처리만 남긴다 | done | [pl-35](prd/transform-cleanup.md#pl-35) |
-| 0.2.0 지문 묶음 정리 — 안 쓰는 엔진 5개(pdfplumber·pypdf·calamine·python_pptx·pymupdf4llm)·묶음 계약·OCR 대체 길·로컬 임베딩·첫 이관 호환 코드를 한 번에 지운다 | 지문이 바뀌는 정리를 서버 재처리 한 번에 모은다. 등급 A. 남은 것: 배포 뒤 `dbcompare`·`stamp` 지우기, 다음 이미지에서 requirements 정리 | done | [pl-46](prd/transform-cleanup.md#pl-46) |
-| `adk.py` — 지시문은 두고 장치는 `llm.py` 호출 하나로 줄임 · CPU 부하 고침 | 0.2.0 지문 배치(p1·s·r 지문). 사용자 11-02. `adk.py`는 지움(`llm.complete` HTTP 한 길) — `google-adk`·`litellm` 패키지는 다음 이미지에서 뺌(todo) | done | [pl-46](prd/transform-cleanup.md#pl-46) |
+| 0.2.0 지문 묶음 정리 — 안 쓰는 엔진 5개(pdfplumber·pypdf·calamine·python_pptx·pymupdf4llm)·묶음 계약·OCR 대체 길·로컬 임베딩·첫 이관 호환 코드를 한 번에 지운다 | 지문이 바뀌는 정리를 서버 재처리 한 번에 모은다. 등급 A. 남은 것은 [pl-53](prd/transform-cleanup.md#pl-53) | done | [pl-46](prd/transform-cleanup.md#pl-46) |
+| `adk.py` — 지시문은 두고 장치는 `llm.py` 호출 하나로 줄임 · CPU 부하 고침 | 0.2.0 지문 배치(p1·s·r 지문). 사용자 11-02. `adk.py`는 지움(`llm.complete` HTTP 한 길) — 패키지 정리는 [pl-53](prd/transform-cleanup.md#pl-53) | done | [pl-46](prd/transform-cleanup.md#pl-46) |
 | 엔진 지문(p0) 범위 확인 — 엔진 이름과 폴더 이름이 다른 엔진(html_stdlib·msg_extract·rapidocr_ko·office·pptx)을 고치면 다시 파싱되는지 | 놓치면 엔진을 고쳐도 낡은 결과가 남는다. 0.2.0 · 등급 A. 11-03: 문서별 재사용 열쇠(`engine_code_fp`)는 이미 맞았고, 층 지문 p0 범위만 엔진 파일을 하나도 안 담고 있었음 — 고침 | done | [pl-47](prd/transform-cleanup.md#pl-47) |
 | 0.2.0 지문 배치 후속 — 같은 결과로 덜 읽고 덜 띄우기: 명부·사전·원본 해시·매니페스트·엔진 지문을 한 번만, 엔진 결과 한 번에 쓰기, 1건 중복 확인 자식 없이, 문 기다림을 잠금 밖에서 | 결과는 바이트 그대로(전·후 비교). 지문이 바뀌는 파일이라 pl-46과 같은 판 · 등급 A | done | [pl-49](prd/transform-cleanup.md#pl-49) |
 | 층 지문 범위 바로잡기 + 단계 방향 자동 점검 — 결과를 바꾸는 파일 2개가 층 목록에서 빠졌고, DB 표 정의 한 줄에도 모든 층 지문이 바뀌었음. extract → transform → load 방향을 자동 점검 | 빠지면 고쳐도 옛 결과를 다시 쓰고, 넘치면 상관없는 수정에도 재처리 경보가 남. 0.2.0 · 등급 A | done | [pl-50](prd/transform-cleanup.md#pl-50) |
+| pl-46 남은 정리 — 0.2.0 배포 뒤 `dbcompare`·`stamp` 지우기 · `google-adk`·`litellm` 패키지를 뺄지 정하기(지시서 `agent.py`만 import) | 첫 이관용 도구와 안 쓰는 패키지. 빼면 새 이미지 버전 | todo | [pl-53](prd/transform-cleanup.md#pl-53) |
 
 ## 적재 (load) — 검색 DB(pgvector)·게시·저장 구조·DB 스키마
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
@@ -70,7 +71,7 @@
 | 문서 묶음 하나를 한 트랜잭션으로 적재한다(`pgvector_load load`) — 하나라도 실패하면 전부 되돌림 | 반쯤 들어간 문서가 검색에 보이지 않게 | done | [pl-07](prd/load.md#pl-07) |
 | 이미 있는 문서는 `doc.file_path`가 같으면 건너뛴다. 바뀐 내용은 `--replace`로 | 내용 지문(sha) 칸이 없어 같은 경로에서 내용이 바뀌어도 건너뛴다(알려진 한계) | done | [pl-07](prd/load.md#pl-07) |
 | 적재 전에 DB 판을 확인 — 판 기록이 없으면 경고 후 계속, 낮거나 모르는 판이면 종료 2. `--replace`는 판 표(`alembic_version`)가 있는 우리 스키마에서만 | 남의 스키마나 옛 판 DB를 망가뜨리지 않게 | done | [pl-07](prd/load.md#pl-07) |
-| 처음 쓰는 PG에는 `vector` 확장을 관리자가 한 번 만든다(`CREATE EXTENSION vector`) — 없으면 적재가 멈춘다 | 서버 계정은 보통 우리 스키마 권한만 있다. 서버 절차 문서에 이 단계가 빠져 있다(운영 고침 묶음) | done | [pl-07](prd/load.md#pl-07) |
+| 처음 쓰는 PG에는 `vector` 확장을 관리자가 한 번 만든다(`CREATE EXTENSION vector`) — 없으면 적재가 멈춘다 | 서버 계정은 보통 우리 스키마 권한만 있다. 절차는 release-and-patch §5-5 ⓪ | done | [pl-07](prd/load.md#pl-07) |
 | 적재는 더하고 고치기만 하고 지우지 않는다. 원천에서 지워진 문서·실패 문서는 로그에만. 원본 경로는 원천 스키마 5벌을 통틀어 하나 — `--replace` 없이 이미 있으면 건너뛰고, `--replace`면 다른 원천 스키마의 옛 사본을 지우고 옮긴다 | 건너뛴 문서까지 지워지던 문제(C-60). 경로가 바뀐 옛 행은 사람이 지운다 | done | [pl-13](prd/load.md#pl-13) |
 | 임베딩 없음(`PIPE_EMBED=none`)이면 적재를 시작할 때 거부한다 | 검색에는 벡터가 필수. 11-03 — `pgvector_load`가 판 확인·배포·적재 전에 종료 코드 2로 거부 | done | [pl-16](prd/load.md#pl-16) |
 | 묶음의 임베딩 모델(`meta.json` `embed_model`)이 검색 스키마(원천 5벌)에 이미 있는 문서의 모델(`doc.embed_model`)과 다르면 그 묶음 적재를 거부한다 — 아무것도 쓰지 않고 종료 2, 거부는 `applog.pipe_event`에 시각과 함께(`stage` `load.embed_guard`) | 모델이 섞이면 검색이 그 원천의 벡터 검색을 거부한다(질의 모델이 하나라서). 사용자 11-03 — 0.2.0 | done | [pl-51](prd/load.md#pl-51) |
@@ -85,15 +86,15 @@
 | 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·원천 삭제 처리를 모두 지운다. 서버는 PG가 없으면 로컬 대체 DB로 바꿔 타지 않고 멈춘다 | 빼야 할 문서는 원천에서 지우거나 사람이 SQL로. | done | [pl-12](prd/load.md#pl-12) |
 | 알려진 실패 0 — 쓰이지 않는 게시 가드와 `test_publish_guard` 지우고 `known_fail.txt` 비움 | 사용자 11-02 | done | [pl-12](prd/load.md#pl-12) |
 | 마스터 표 — 용어집·고객 명부 CSV 여섯 개를 검색 PG `<PG_SCHEMA>_master`로(Alembic 갈래 `master` · `dbtool master load`가 git CSV로 통째로 바꿈). 구조화 고객 판별과 검색이 PG에서 읽고, `gold_version` = `<VERSION>+m<마스터 해시 8자>` | 원본은 git CSV. 대표 결과(silver)는 마스터를 읽지 않는다(ETL 규칙, 사용자 11-03). 서버는 마스터를 못 읽으면 시작 안 함 | done | [pl-38](prd/load.md#pl-38) |
-| (잠재 문제) 같은 문서의 다른 판(`s3_key` 다름) 묶기 — 검색 '최신' 질문에서 옛 판이 위로 올 수 있음, 필요해지면 다시 설계 | 사용자 11-03 | todo | [pl-38](prd/load.md#pl-38) |
+| (잠재 문제) 같은 문서의 다른 판(`s3_key` 다름) 묶기 — 검색 '최신' 질문에서 옛 판이 위로 올 수 있음, 필요해지면 다시 설계 | 사용자 11-03 | todo | [pl-56](prd/load.md#pl-56) |
 | 저장 자리 셋 — 파싱 결과 저장본(silver)은 Object Storage 문서 폴더(이름 = `s3_key`로 만든 uuid5), 메타는 EDW ParsingMeta, 검색 DB(gold)는 pgvector | 로컬에는 로그·임베딩 캐시만. 다시 처리하면 같은 폴더를 덮어쓴다 | todo | [pl-32](prd/load-schema.md#pl-32) |
 | 같은 `s3_key`가 FileStorageMap에 여러 행이면 `created_at`이 가장 늦은 행만. 새 행은 `file_size`가 같으면 건너뛰고 다르면 같은 `doc_id`로 다시 처리, 밀려난 행은 EDW `SupersededRow`에 | 원본을 받지 않고 판별한다(같은 크기로 덮어쓴 경우는 놓침 — 받아들임) | todo | [pl-32](prd/load-schema.md#pl-32) |
 | 실행을 넘어 남는 로컬 완료 표시(`_DONE`, `runs.jsonl` 재사용)를 없애고 실패 문서는 다음 실행이 다시 고르게 | 저장 자리는 하나라는 원칙 | todo | [pl-32](prd/load-schema.md#pl-32) |
-| DB 스키마 명세는 `docs/architecture/db_schema.md` 하나(검색 DB·EDW·마스터 CSV의 칸·타입·쓰고 읽는 코드), `test_db_schema.py`가 대조 | 정의가 흩어져 있었다. 사용자·DB 담당자 승인 대기 | dev | [pl-25](prd/load-schema.md#pl-25) |
+| DB 스키마 명세는 `docs/architecture/db_schema.md` 하나(검색 DB·EDW·마스터 표(PG `<PG_SCHEMA>_master`, 원본 CSV)의 칸·타입·쓰고 읽는 코드), `test_db_schema.py`가 대조 | 정의가 흩어져 있었다. 사용자·DB 담당자 승인 대기 | dev | [pl-25](prd/load-schema.md#pl-25) |
 | ParsingMeta에는 파싱 정보만(원천 키·상태·silver 위치·엔진·`gold_status`·`silver_version`·`gold_version`·`sha256`), 고객·분류 라벨 같은 파일 메타는 검색 DB `doc`에만 | 중복 적재를 없앤다. 운영이 더한 칸은 0.2.0에 지운다(D-3). | dev | [pl-25](prd/load-schema.md#pl-25) |
 | 문서 키는 원본 경로 하나 — 검색 DB `doc.file_path` = Object Storage 원본 경로 = EDW `s3_key`(청크는 `doc_id`만), ParsingMeta와 이 값으로 잇는다 | sha256 `doc_key`는 검색 DB에 안 둔다(ParsingMeta `sha256`만). 사용자 11-02 — 경로 칸 하나 | dev | [pl-25](prd/load-schema.md#pl-25) |
 | 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타 칸이 다르다. 판 0002 — 전체 다시 적재·MCP `source_system` 필수(등급 A, 11-02) | done | [pl-28](prd/load-schema.md#pl-28) |
-| 원천 = `FileStorageMap.source_system`(`SFDC`·`CRMS`·`LAS`·`FAQ`, `-test` 붙어도 같음), 비었거나 다른 값이면 `other`. `faq` 스키마만 `chunk.faq_group` 칸 | 원본 경로 첫 마디로도 정함 | done | [pl-28](prd/load-schema.md#pl-28) |
+| 원천 = 원본 경로(`s3_key`) 첫 마디 — `SFDC`·`CRMS`·`LAS`·`FAQ`(대소문자 무관)이거나 `SFDC-`·`SFDC_`·`CRMS-`·`CRMS_`·`las_`·`LAS_`로 시작하면 그 원천, 아니면 `other`(`build_bundle`). `faq` 스키마만 `chunk.faq_group` 칸 | `AI.FileStorageMap.source_system` 칸은 읽지 않는다 — 경로만으로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |
 
 ## 검색 MCP (mcp) — AI 클라이언트가 부르는 도구 서버(이미지 `mcp-server`)
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
@@ -105,7 +106,7 @@
 | 질문 넓히기 — 용어집으로 BM25 낱말을 더함(동의어 1.0·약어 0.8·약한 것 0.3), 고객 별칭 최대 20토큰 | 동의어·약어로 물어도 찾게 | done | [mc-02](prd/mcp.md#mc-02) |
 | 고객 2명 이상 비교 질문은 고객별(최대 4명)로 나눠 찾고 번갈아 합침. 집계형 질문은 BM25 가중치 0.2 | 한 고객이 근거 자리를 독차지하지 않게 | done | [mc-02](prd/mcp.md#mc-02) |
 | 고객 거르기는 EDW에서 붙인 고객(`client_edw`)만 본다(정확 일치, 목록은 OR, `client_like`는 부분 일치) | 답이 고객을 섞으면 안 된다(C6, 11-02). 별칭 그룹은 pl-38 | done | [mc-05](prd/mcp.md#mc-05) |
-| 이름만 다른 사본은 하나로(사본 묶음) | 같은 문서의 다른 판 문제는 pl-38 행 | done | [mc-05](prd/mcp.md#mc-05) |
+| 이름만 다른 사본은 하나로(사본 묶음) | 같은 문서의 다른 판 문제는 pl-56 행 | done | [mc-05](prd/mcp.md#mc-05) |
 | ~~집계 답(건수·합계·환율 메모·LLM 라우터)과 그 길이 읽던 지운 칸·표~~ | 11-01 지움 — 숫자 질문은 `query_edw`로 | done | [mc-04](prd/mcp.md#mc-04) · [mc-11](prd/mcp.md#mc-11) · [mc-12](prd/mcp.md#mc-12) |
 | 검색기가 지운 칸(`file_sha256` 등) 대신 문서 키 `doc_key`(= `file_path`)로 읽음 | 새 묶음으로 검색기를 만들면 실패하던 문제 | done | [mc-10](prd/mcp.md#mc-10) |
 | 질의 기록은 파일 `qa_log.jsonl`만(호출자·질문·근거·지연), 90일 보관·24시간마다 정리 | 토큰·원문은 남기지 않는다 | done | [mc-13](prd/mcp.md#mc-13) · [mc-09](prd/mcp.md#mc-09) |
@@ -130,17 +131,18 @@
 | 새 문서만 처리(목록 − ParsingMeta 끝난 행) — 파싱 입구는 구현됨(수집 표). 전체 재파싱은 사람이 전체 e2e로만 | 지문이 바뀔 때 전체 자동 재파싱을 하면 밤 시간을 넘긴다 | done | [pl-23](prd/ops.md#pl-23) |
 | run_docs 대상 고르기를 위 규칙에 맞춘다 — 파일 이름 키워드(`--filter RFP,proposal`)·`--start-offset` 뒤 `--skip-done`이 ParsingMeta 끝난 행(ok·partial — gold_version도, skipped_dup)을 뺀다 | 새벽 배치는 이름에 RFP·proposal이 든 문서만 처리한다(키워드가 정기 운영에 맞는지는 C-72 ③) | done | [pl-23](prd/ops.md#pl-23) |
 | 새벽 배치는 `ops.nightly.time`·`max_docs`·`deadline` 셋이 모두 있을 때만 돈다(하나라도 비면 안 돎 — 사용자 11-02) — systemd 타이머가 5분마다 `trigger.sh scheduled` → `run_docs.py --start-offset 0 --skip-done --max-docs --deadline` | 지금 서버는 비워 둠(꺼짐) — 켜는 것은 사람(C-72) | done | [pl-23](prd/ops.md#pl-23) |
-| 전체 e2e는 local·dev·prd 셋에서 — 전체 문서 실행은 prd에서만 새 원천별 스키마 이름(새 `PG_SCHEMA`)으로, 옛 gold·`struct` 스키마는 2주 뒤 DB 담당자가 백업하고 지움 | 판 0002가 기준 스키마의 옛 표를 지운다. 사용자 11-02 | todo | [pl-23](prd/ops.md#pl-23) |
+| 전체 e2e는 local·dev·prd 셋에서 — 전체 문서 실행은 prd에서만 새 원천별 스키마 이름(새 `PG_SCHEMA`)으로, 옛 gold·`struct` 스키마는 2주 뒤 DB 담당자가 백업하고 지움 | 판 0002가 기준 스키마의 옛 표를 지운다. 사용자 11-02 | todo | [pl-54](prd/ops.md#pl-54) |
 | 새벽 배치 칸 — 시작 시각·문서 수 상한·마감 시각(비면 안 돎), 칸 이름 하나로(`pipeline.host.nightly.time` ↔ `ops.nightly.time` 어긋남 고침) | 사용자 11-02 | done | [pl-23](prd/ops.md#pl-23) |
 | 문서별 순서를 파싱 → silver 게시 → 원본 임시 파일 삭제 → gold로 | 게시가 gold를 기다리지 않고(게시 스레드 따로), 원본은 게시가 성공했을 때만 지운다(11-03) | done | [pl-24](prd/ops.md#pl-24) |
-| gold 실패면 ParsingMeta 행은 남기고 새 칸 `gold_status`=failed·이유. 파싱이 통째로 실패하면 EDW에 쓰지 않고 로그에만 — 다음 실행이 다시 고른다 | gold는 silver에서 다시 만들 수 있다. 행 남김·로그·파싱 실패 길은 됨(11-03). 칸 추가는 DB 담당자 몫(등급 A — C-81) | partly done | [pl-24](prd/ops.md#pl-24) |
+| gold 실패면 ParsingMeta 행은 남긴다. 파싱이 통째로 실패하면 EDW에 쓰지 않고 로그에만 — 다음 실행이 다시 고른다 | gold는 silver에서 다시 만들 수 있다(11-03) | done | [pl-24](prd/ops.md#pl-24) |
+| gold 실패를 ParsingMeta 새 칸 `gold_status`=failed·이유로 적기 | 칸 추가는 DB 담당자 몫(등급 A — C-81), 칸이 생긴 뒤 코드 | todo | [pl-55](prd/ops.md#pl-55) |
 | run_docs 종료 코드 — 대상 0건 = 0, 실패 있음 = 1, 마감 도달 = 75 | 스케줄러가 실패를 본다(C-33). 실패와 마감이 함께면 1 · 다른 run_docs가 도는 중도 75(11-03) | done | [pl-18](prd/ops.md#pl-18) |
 | 새벽 run_docs에 문서 수 상한·마감 시각·겹침 막는 잠금 | `--max-docs`·`--deadline`(11-02) + `run_docs.py` 안 `flock` 잠금(`batch_progress/run_docs.lock`, 11-03). `TimeoutStartSec=6h`는 마지막 안전판 | done | [pl-18](prd/ops.md#pl-18) |
 | 레인 3개(light·medium·vlm, 수집 표의 나누기 기준)마다 전담 워커(자기 레인만)·공유 워커(자기 레인 먼저, 비면 가장 긴 다른 레인) — `ops.run_docs.<레인>_dedicated`·`_shared` 기본 각 1 | 규칙을 표 하나(`pick_lane`)로 모으고 설정으로 조정 | done | [rn-01](prd/ops.md#rn-01) |
 | vlm 레인 동시 파싱 상한 `ops.run_docs.vlm_cap` = 2. `warm`·`vlm_cap`이 1 미만이거나 워커가 없는 레인이 있으면 시작 거부 | GPU 예산을 지키고 끝나지 않을 설정을 막는다 | done | [rn-01](prd/ops.md#rn-01) |
 | 미리 받기 상한 `ops.run_docs.warm` = 20, 구조화 워커 `struct_workers` = 2, 중간 대기열 상한 `struct_backlog`(기본 구조화 워커 × 2, 0이면 없음) | 구조화가 느릴 때 파싱 결과가 디스크에 쌓이지 않게 | done | [rn-02](prd/ops.md#rn-02) |
 | 대기열 길이를 상태가 바뀔 때마다 `batch_progress/queue_depth.jsonl`에 한 줄 | 대기열 길이와 구조화 대기 시간의 관계를 잰다 | done | [rn-02](prd/ops.md#rn-02) |
-| MCP `parse_document`(사람이 기다리는 요청)에 CPU를 먼저 준다 — 전용 컨테이너 + cgroup CPU 가중치 최고(10-31 결정). 11-03 재확인: 일괄 `data-pipeline`과 뗀 전용 `data-pipeline-mcp`(cpu_shares 4096 > 1024) | nice는 컨테이너끼리는 효과가 없다(C-65 ⑥) | dev | [rn-03](prd/ops.md#rn-03) |
+| MCP `parse_document`(사람이 기다리는 요청)에 CPU를 먼저 준다 — 전용 컨테이너 + cgroup CPU 가중치 최고(10-31 결정). 11-03 재확인: 일괄 `data-pipeline`과 뗀 전용 `data-pipeline-mcp`(cpu_shares 4096 > 1024) | nice는 컨테이너끼리는 효과가 없다(옛 C-65 ⑥ — [이력](history/refactor_c_items.md)) | dev | [rn-03](prd/ops.md#rn-03) |
 | MCP 업로드 작업이 있으면 medium 전담 워커를 쉬게 한다(이름 날짜가 어제·오늘·내일인 작업 폴더만 감시) | 5초마다 폴더 전체를 훑던 부담을 줄인다 | done | [rn-04](prd/ops.md#rn-04) |
 | 프로세스가 끝날 때(정상·오류·SIGTERM) 임시 설정 덮기 파일·PID 기록을 지우고 자식을 끝내 회수(SIGTERM → 10초 → SIGKILL, 종료 143) — `common/core/exitclean.py` 한 곳 | 임시 파일이 쌓이고 soffice 좀비가 남던 문제 | done | [pl-27](prd/ops.md#pl-27) |
 | EDW 접속 설정은 `common.connections.rdb` 하나(settings `required.edw`)에 계정 둘 — 읽기(목록·FileStorageMap·ParsingMeta 조회·MCP), 쓰기(ParsingMeta 게시만). MCP 프로세스에서는 쓰기 계정을 비운다 | 같은 값이 설정 블록 넷에 반복되던 것을 없앰. 등급 A | done | [op-03](prd/ops.md#op-03) |
@@ -163,7 +165,7 @@
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
 |---|---|---|---|
 | 시험 층 둘 — `tests/server/`(이미지 안 반입 시험, `python -m pipeline.cli selftest`, 네트워크 없음)와 `tests/general/`(PC 전용 — PG·Docker·느린 것) | 반입 판정은 폐쇄망 이미지 안에서 돌아야 한다 | done | [e2-02](prd/test.md#e2-02) |
-| 기준선 — 바꾼 뒤 시험 결과가 기준선보다 나빠지면 안 된다(값은 앵커) | 기준선 숫자는 11-01 삭제 뒤 다시 재야 함 | done | [e2-02](prd/test.md#e2-02) |
+| 기준선 — 바꾼 뒤 시험 결과가 기준선보다 나빠지면 안 된다(값은 앵커) | 지금 기준선은 11-04 selftest(pytest 수는 다시 잴 것 — 앵커) | done | [e2-02](prd/test.md#e2-02) |
 | 알려진 실패 목록(`deploy/release/known_fail.txt`·`GENERAL_KNOWN_FAIL`) — 통과하면 "XPASS — 지울 수 있음" 경고 | 새 실패를 목록에 넣는 것은 고장을 숨기는 일 — 사람 승인 필요 | done | [e2-02](prd/test.md#e2-02) |
 | PC 시험 자식 프로세스는 개발자 `settings.yaml` 대신 시험 전용 바탕(`run_env: local`만)을 쓴다 | 공용 개발 PG를 건드리지 않게 | done | [e2-02](prd/test.md#e2-02) · [e2-11](prd/test.md#e2-11) |
 | 이미지 반입 관문 — `build_ship.sh`로 빌드하고 `selftest_gate.sh`가 종료 코드가 아니라 `[판정]` 줄로 판단(알려진 실패 밖 FAIL 0) | 서버는 반입 시험을 통과한 이미지만 받는다 | done | [e2-08](prd/test.md#e2-08) |
@@ -171,7 +173,7 @@
 | ~~시험을 바꾸면 새 이미지가 필요~~ | 이미지에 코드 폴더를 붙이는 방식(op-06)이라 시험도 코드 폴더에서 돌아 해소 | done | [e2-14](prd/test.md#e2-14) |
 | PC 일반 시험의 옛 실패 정리 — 공용 PG를 읽던 3개는 고치고, 지운 모듈의 시험은 지움 | 리팩토링 전부터 있던 실패. 남은 실패 0(`GENERAL_KNOWN_FAIL = {}`, `known_fail.txt` 빔) | done | [e2-11](prd/test.md#e2-11) |
 | 옛 오버레이 패치 흔적 둘 — `common/core/fingerprint.py`의 `common/PATCH_VERSION` 후보(허브가 릴리스 지문 배치에서 지움)·`deploy/docker/IMAGE_BASE`(읽는 곳 없음 — 지울지 사용자가 정함) | `fingerprint.py`는 레이어 지문 파일이라 고치면 서버 문서가 모두 다시 처리된다 | todo | [e2-21](prd/test.md#e2-21) |
-| 지시서 폴더 찾기에서 없는 `dev_tools/unit_test/fixtures/` 갈래 지우기(`run_agent`·`test_adk`는 pl-46에 지움 — 죽은 갈래만 남음) | `paths.py`를 고치면 레이어 지문이 모두 바뀌어 다음 지문 배치에 | todo | [e2-15](prd/test.md#e2-15) |
+| 지시서 폴더 찾기(`paths.resolve_agent_dir`)에서 폴더가 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`(`triple_extract` 지움)·`dev_tools/unit_test/fixtures`)과 그 설명 주석 지우기 | `paths.py`를 고치면 레이어 지문이 모두 바뀌어 다음 지문 배치에 | todo | [e2-15](prd/test.md#e2-15) |
 | PC 스모크 — 문서 2~3건으로 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색(README §4-4) | 릴리스 전에 사슬 전체를 증명 | done | [e2-01](prd/test.md#e2-01) |
 | PC Docker 스모크(`valid_env/docker/smoke_test.sh`)를 다시 돌려 검색까지 가는지 확인 | mc-10은 고쳐졌고 다시 돌려 보기만 남음 | todo | [e2-13](prd/test.md#e2-13) |
 | 시험 자료 `valid_env/` — 문서 `object_storage/{SFDC,CRMS}/<uuid>/<파일>`, 합성 EDW `edw/` | 서버와 같은 배치. 서버 반입 시험은 자료를 임시 폴더에 만들어 쓴다 | done | [e2-09](prd/test.md#e2-09) |
@@ -196,7 +198,8 @@
 | 코드 없는 실행 이미지(`data-pipeline-runtime`·`mcp-server-runtime`)에 코드 폴더를 `/app/deploy`로 읽기 전용 마운트 | 개발 서버에서 이미지를 다시 만들지 않고 코드만 바꿔 시험 | done | [op-06](prd/doc.md#op-06) |
 | 시작 검사 `runtime_entry.sh` — 코드 폴더가 없거나 의존성 지문(`DEPS_HASH`)이 다르면 종료 2, 이미지 판·코드 커밋을 한 줄 기록 | 의존성 어긋남이 나중에 조용한 오류로 터지지 않게 | done | [op-06](prd/doc.md#op-06) |
 | 개발 → 운영 굽기 `bake.sh` — 개발에서 쓴 실행 이미지 + 시험한 코드 폴더로 `Dockerfile.bake`(네트워크 없이), 반입 판정 뒤 저장·분할 | 운영에는 개발에서 시험한 그대로 올라간다 | done | [op-07](prd/doc.md#op-07) |
-| 운영(prd) 이미지에 settings.yaml(비밀 포함)도 굽는다 — 🔒 검토 등급 A(비밀 처리) | 이미지 파일 = 비밀(반입 경로만), 키를 바꿀 때마다 다시 굽기. 사용자 11-02 | todo | [op-07](prd/doc.md#op-07) |
+| 운영(prd) 이미지에 settings.yaml(비밀 포함)도 굽는다 — 🔒 검토 등급 A(비밀 처리) | 이미지 파일 = 비밀(반입 경로만), 키를 바꿀 때마다 다시 굽기. 사용자 11-02 | todo | [op-12](prd/doc.md#op-12) |
 | 서버 설치 길은 하나(README §5-0·§5-3). 컨테이너 도구는 셸 env > `ops.host.docker` > podman > docker. 이미지는 `load.sh`로(45 MB 조각) | 문서마다 절차가 달랐다. 서버 기본 도구는 podman | done | [op-10](prd/doc.md#op-10) |
 | 0.2.0 올리기·되돌리기(release-and-patch §5-7) — DB 백업 → `migrate check` → `up`, 되돌릴 땐 `settings.yaml.0.1.0` 복원, 재처리 동안 밤 타이머 멈춤 | DB·EDW·전체 재처리가 함께 바뀐다 | done | [op-10](prd/doc.md#op-10) |
-| 일회성 작업 컨테이너 지움 — 운영 작업·`dbtool`·`migrate`는 상주 `data-pipeline`에 `exec`, 이미지 점검(`docker run --rm … selftest`)은 그대로 | 사용자 11-02 | dev | [op-10](prd/doc.md#op-10) |
+| 일회성 작업 컨테이너 지움 — 운영 작업·`dbtool`·`migrate`는 상주 `data-pipeline`에 `exec`, 이미지 점검(`docker run --rm … selftest`)은 그대로 | 사용자 11-02 | done | [op-10](prd/doc.md#op-10) |
+| 사람 정답 폴더(`GOLD_DIR` → `/data/gold`)를 상주 컨테이너에 붙일지, 칸을 지울지 정하기 | 일회성 컨테이너를 지운 뒤 점검기의 GOLD_DIR 점검이 건너뛰어짐 | todo | [op-11](prd/doc.md#op-11) |

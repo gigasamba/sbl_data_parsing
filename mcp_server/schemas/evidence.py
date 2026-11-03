@@ -1,9 +1,9 @@
-"""search 응답 모양(MCP 계약 — 운영 05 §2.3·§2.4, mc-16 11-01·pl-52 11-03): 맨 위 5칸·근거 13칸·거르기 이름. 바꾸면 계약이 바뀐다(등급 A).
+"""search 응답 모양(MCP 계약 — 운영 05 §2.3, mc-16 11-01·pl-52 11-03): 맨 위 5칸·근거 13칸·거르기 이름. 바꾸면 계약이 바뀐다(등급 A).
 S5(10-26)에 mcp_server/main.py에서 옮김 · 11-01(mc-16) 운영 계약으로 줄임 — 옛 근거 칸(chunk_id·doc_key·source_uri·bbox·score·via·
 rank·image_ids·doc_summary·AD44 manifest 칸·rep_uri)과 맨 위 subs·store·methods·images·notes·ms·index_id를 뺐다.
 """
 
-# 맨 위 — filter·scope_docs는 거르기를 하나라도 줬을 때만
+# 맨 위 — filter·scope_docs도 늘 나온다(source_system이 필수라 거르기가 늘 하나 이상)
 SEARCH_TOP_KEYS = ("question", "evidence", "evidence_status", "filter", "scope_docs")
 
 # 근거 한 건 — 늘 13칸 모두(값이 없으면 null). attrs = 원천 메타 {키: 값}(사슬 파일에서 evidence: true인 키 모두 — 없으면 null, pl-52)

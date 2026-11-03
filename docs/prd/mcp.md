@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나 — 이미지 `mcp-server`. 항목마다 무엇·왜·관련 파일. 끝난 항목은 `Status: done`, 열린 항목은 `Status:` 줄에 진행 상황.
 도구 계약(이름, 입력, 출력, `tools/list` 순서)은 고정이다 — 협의와 새 판으로만 바꾼다([CLAUDE.md](../../CLAUDE.md) §4).
 
-순서(주제별): `search` 도구 mc-01·mc-02·mc-05 → 집계 mc-04·mc-11·mc-12 → 문서 키·기록 결함 mc-10·mc-13·mc-15 → 운영 계약 mc-16·mc-17 → 다른 도구 mc-06·mc-07·mc-08 → 서버 실행 mc-09 → 코드와 다른 점.
+순서(주제별): `search` 도구 mc-01·mc-02·mc-05 → 집계 mc-04·mc-11·mc-12 → 문서 키·기록 결함 mc-10·mc-13·mc-15 → 운영 계약 mc-16·mc-17 → 검색 PG mc-19 → 스캔 PDF mc-18 → 다른 도구 mc-06·mc-07·mc-08 → 서버 실행 mc-09 → 코드와 다른 점.
 
 <a id="mc-01"></a>
 ## mc-01 · `search` 도구 — 적재된 문서에서 근거 찾기
@@ -30,10 +30,10 @@
 - 파일: `mcp_server/services/search/search_svc.py`, `shaping.py`.
 - 결정(사용자 10-30 PRD grill): C6 — 검색의 고객 거르기는 EDW에서 조인한 고객(`client_edw`)만 쓴다. 본문에서 찾은 고객(`clients_doc`)은 참고용으로만 둔다. LAS는 EDW 고객이 비어 고객 거르기에서 늘 빠진다(원천별 스키마라 LAS는 따로 검색됨).
 - 결정(허브 10-31, 최신 결정 우선): C6 — 고객 거르기는 `client_edw`만(별칭 그룹 정확 일치·목록 OR — 별칭 CSV는 [load.md#pl-38](load.md#pl-38) 0.2.0 몫). 근거의 `client` = `client_edw`, `clients_doc`은 따로 둔 참고 칸.
-- 구현(11-01 `feature/mcp-ops-parity`, 허브 지시 "운영이 version/superseded를 아직 내면 칸은 두고 추정만 멈춤"): 운영 계약(05 §2.4)에 `version`·`superseded`·`doc_date`가 남아 있어 칸은 둔다. 운영 예시 값은 모두 null이라 운영도 본문 추정을 하지 않는 것으로 본다 → `search` 근거의 `version`은 수집 manifest 값만(없으면 null), `superseded`는 늘 null(`shaping._evidence`). `doc_date`는 이 결정 밖이라 그대로. 시험: `test_search_svc` `_selftest_evidence_rdb_meta`.
+- 구현(11-01 `feature/mcp-ops-parity`, 허브 지시 "운영이 version/superseded를 아직 내면 칸은 두고 추정만 멈춤"): 운영 계약(05 §2.3)에 `version`·`superseded`·`doc_date`가 남아 있어 칸은 둔다. 운영 예시 값은 모두 null이라 운영도 본문 추정을 하지 않는 것으로 본다 → `search` 근거의 `version`은 수집 manifest 값만(없으면 null), `superseded`는 늘 null(`shaping._evidence`). `doc_date`는 이 결정 밖이라 그대로. 시험: `test_search_svc` `_selftest_evidence_rdb_meta`.
 - 11-02(사용자 C6): `client` 거르기는 `client_edw` 정확 일치(`client_like`면 부분 일치)만. 별칭 묶음은 [pl-38](load.md#pl-38) 몫.
-- 결정(사용자 11-03 — [load.md#pl-38](load.md#pl-38)): `doc_date`·`version`·`superseded` 칸은 남김. 잠재 문제(같은 문서의 다른 판이 `s3_key`가 달라 '최신' 질문에서 옛 판이 위로 올 수 있음)는 pl-38에 기록 — 필요해지면 `created_at`으로 다시 설계.
-- Status: done — 고객 판정·version·superseded 출력(11-01·11-02). 같은 문서 다른 판 묶기는 잠재 문제 — [load.md#pl-38](load.md#pl-38) todo 행.
+- 결정(사용자 11-03 — [load.md#pl-38](load.md#pl-38)): `doc_date`·`version`·`superseded` 칸은 남김. 잠재 문제(같은 문서의 다른 판이 `s3_key`가 달라 '최신' 질문에서 옛 판이 위로 올 수 있음)는 [pl-56](load.md#pl-56)에 기록 — 필요해지면 `created_at`으로 다시 설계.
+- Status: done — 고객 판정·version·superseded 출력(11-01·11-02). 같은 문서 다른 판 묶기는 잠재 문제 — [load.md#pl-56](load.md#pl-56).
 
 <a id="mc-04"></a>
 ## mc-04 · 집계 답
@@ -54,15 +54,15 @@
 <a id="mc-12"></a>
 ## mc-12 · 사실 집계가 지운 표를 질의
 - 이유: `kg_node`·`kg_edge`·`doc_fact`·`concept_chunk`·`doc_image`·`chunk_image`는 더는 만들거나 적재하지 않는다(`pipeline/load/pgvector_load.py`). 그 표를 읽던 graph·concept 검색 방법은 10-29에 지웠지만 `aggregate.py`의 `doc_fact` 기반 집계 길은 아직 `doc_fact`를 질의해 PG에서는 아무것도 돌려주지 않는다.
-- 끝남 10-30(사용자 결정): 그 길을 지움 — `aggregate.pg()` 삭제. PG 저장소에서 `do_aggregate`는 "집계 질문이 아님 — search를 쓰세요" 메모를 돌려주고, `ask --pg`는 문서 집계를 보이지 않는다(`--pg` 옵션 자체는 남음 — PG 검색을 고름). 숫자 질문은 `query_edw`로. MCP 도구 계약·DB 변경 없음.
-- 파일: `mcp_server/services/search/{aggregate,internal_docs}.py`, `mcp_server/cli/ask.py`, `pipeline/load/pgvector_load.py`.
+- 끝남 10-30(사용자 결정): 그 길을 지움 — 집계 전체(`aggregate.py`·`do_aggregate`)는 [mc-04](#mc-04)에서 지웠다. `ask --pg`는 받기만 한다(옛 호출 호환 — 검색은 늘 PG). 숫자 질문은 `query_edw`로. MCP 도구 계약·DB 변경 없음.
+- 파일: `mcp_server/cli/ask.py`, `pipeline/load/pgvector_load.py`.
 - Status: done
 
 <a id="mc-10"></a>
 ## mc-10 · retriever가 지운 칸 `file_sha256`을 읽음
 - 이유: 10-20 축소 스키마가 `file_sha256`·`client`·`file_name`·`s3_key`를 지웠는데 retriever는 아직 `doc.file_sha256`(`hidden_names`)과 `doc.client`·`doc.file_name`(`_client_rows`)을 읽어 새 묶음으로 retriever를 만들면 실패한다.
 - 파일: `mcp_server/services/search/retriever.py`.
-- Status: done (10-30, `feature/search-path-fixes`) — 묶음 `docs.jsonl`을 읽을 때(`local.Local`) 문서마다 `doc_key`(새 묶음 `file_path`, 옛 묶음 `file_sha256`)와 `file_name`(`doc_name`, 없으면 `file_path`의 마지막 `/` 뒤 — `v_chunk_source` 뷰와 같은 규칙)을 한 번 채운다 — 검색 근거·`client_map`·`internal_docs`의 문서 목록·조회·용어 찾기가 같은 값을 봄. PG `doc` 조회는 남은 열(`file_path`·`clients`)만 고름(`_client_rows`). 시험 `tests/server/mcp/test_mc10_doc_key.py`(새·옛 묶음, Windows 경로, 목록·조회). 범위 밖으로 남은 것: `internal_docs`의 PG 쪽 문서 조회·목록(없는 열 `file_name`·`file_sha256`·`client`를 고름 — 별도 항목) · `get_document`는 `:` 앞을 문서 키로 봐서 Windows 경로(`C:\…`)로는 못 찾음(서버 경로는 해당 없음)
+- Status: done (10-30, `feature/search-path-fixes`) — 지금 검색은 묶음을 읽지 않고([mc-19](#mc-19)) 문서 키·이름을 PG 뷰 `v_chunk_source`에서 읽는다(`file_path`, `file_name` = 경로의 마지막 `/` 뒤). 묶음 문서 목록(`local.Local`)·`internal_docs`의 문서 조회·목록은 지웠다(mc-01·mc-19, [test.md#e2-18](test.md#e2-18)). 시험 `tests/server/mcp/test_mc10_doc_key.py`.
 
 <a id="mc-13"></a>
 ## mc-13 · PG 질의 기록이 마이그레이션에 없는 표에 씀
@@ -75,13 +75,13 @@
 - 이유: `shaping._rep_uri`가 근거의 `doc_key`(= `file_path`)로 `AI.ParsingMeta`를 찾는데(`parsing_meta_db.find_rep_path` → `find_by_doc_key`), ParsingMeta의 `doc_key`는 원본 sha256이다(`docs/operations/parsing_meta_mssql.sql` — 유일한 필수 열). 그래서 한 번도 맞지 않는다.
 - 조사(10-30): ParsingMeta에서 원본을 가리키는 열은 `doc_key`(sha256)·`source_key`(Object Storage 원본 전체 키)·`source_uri`·`original_filename`이다. 검색 `doc` 표에는 sha256도 원본 키도 없어서(10-20 축소 스키마가 `s3_key`를 뺌, `build_bundle`의 `_meta`에도 안 남음) 정확히 맞출 열이 없다. `original_filename`으로 맞추면 같은 이름 문서가 섞인다.
 - 파일: `mcp_server/services/search/shaping.py`, `common/store/parsing_meta_db.py`.
-- 결정(사용자 11-01): pgvector에는 거르기 메타만 — 대표 결과 위치(`rep_bucket`·`rep_key`)·파싱 시각·원본 sha256은 EDW ParsingMeta에만 두고 원문 도구가 부를 때 읽는다. 연결은 `source_system` + `source_key`(원본 전체 경로 = gold `doc.s3_key`, 사용자 선택 C — 경로 그대로).
+- 결정(사용자 11-01): pgvector에는 거르기 메타만 — 대표 결과 위치(`rep_bucket`·`rep_key`)·파싱 시각·원본 sha256은 EDW ParsingMeta에만 두고 원문 도구가 부를 때 읽는다. 연결은 `source_system` + `source_key`(원본 전체 경로 = gold `doc.file_path`, 사용자 선택 C — 경로 그대로).
 - 구현(11-01 `feature/mcp-ops-parity`): `search` 근거에는 `rep_uri`가 없고(운영 12칸), 결과 위치는 `list_doc_fulltext`가 ParsingMeta에서 읽어 `rep_uri`로 낸다([mc-17](#mc-17)). 읽기 함수: `common/store/parsing_meta_db.py` `rows_where`·`rows_parsed`·`pick_rep`.
 - Status: done(11-01)
 
 <a id="mc-16"></a>
 ## mc-16 · `search` 운영 계약 구현
-- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) M1·T1): `search`를 운영 계약 그대로 구현한다 — `question` 필수, 필터 11종, 출력 축소. 기준 명세는 운영 `05_mcp_tools_schema.md` §2(git 밖). MCP 계약 변경이라 검토 등급 A, 새 판.
+- 결정(reference 비교(사용자 grill 10-30, 원본은 git 밖) M1·T1): `search`를 운영 계약 그대로 구현한다 — `question` 필수, 거르기(지금 14칸 — [mc-01](#mc-01)), 출력 축소. 기준 명세는 운영 `05_mcp_tools_schema.md` §2(git 밖). MCP 계약 변경이라 검토 등급 A, 새 판.
 - 운영 계약(사용자 10-30 PRD grill A9 — 사용자 로컬 reference의 MCP 규약 최신판에서 필터 이름·뜻·출력 칸만 옮김):
   - 입력: `question` 필수(비면 오류 — 거르기만 하는 방식은 없음) · `k` 기본 8, 상한 50(넘으면 50으로 줄임).
   - 거르기(모두 AND, 같은 거르기의 목록은 OR, 맞는 값이 없으면 오류가 아니라 빈 결과, 모르는 인자는 무시):
@@ -97,9 +97,9 @@
     - `created_since`·`created_until` — 원천 등록 시각(시간대 없으면 KST). `created_at`이 없는 문서는 빠진다.
   - "하드 거르기 최소 1개"는 권고만(G5).
   - 출력 맨 위: `question` · `evidence[]`(길이 k) · `evidence_status`(`found`·`weak`·`none`) · `filter`(정규화한 거르기 메아리) · `scope_docs`(맞은 문서 수, 0도 정상).
-  - `evidence[]` 항목: `text` · `file_name`(`list_doc_fulltext`로 잇는 다리 — [mc-17](#mc-17)) · `page` · `line` · `section` · `client` · `contract_no` · `doc_date` · `version` · `superseded` · `chunk_key`, 그리고 `file_path`(Object Storage 원본 경로 — 아래 '운영과 다른 점' ⑤) — 모두 12칸(`EVIDENCE_KEYS`).
+  - `evidence[]` 항목: `text` · `file_name`(`list_doc_fulltext`로 잇는 다리 — [mc-17](#mc-17)) · `page` · `line` · `section` · `client` · `contract_no` · `doc_date` · `version` · `superseded` · `chunk_key`, 그리고 `file_path`(Object Storage 원본 경로 — 아래 '운영과 다른 점' ⑤)·`attrs`(원천 메타 — 아래 11-03) — 모두 13칸(`EVIDENCE_KEYS`).
 - 결정(허브 10-31, 최신 결정 우선): 거르기 이름은 위 그대로 고정(계약). 스키마마다 거르기 이름 → 그 EDW 원본 칸 이름(D-1) 대응표를 코드에 하나씩 둔다. 근거 `client` = `client_edw`, `clients_doc`은 따로 참고 칸([mc-05](#mc-05)). 목록 값(`division` 등)은 예 — EDW에 있는 값을 받는다.
-- 필터용 칸 `doc_class`·`created_at`은 gold `doc`에 Alembic으로 더한다(M4 — [load-schema.md#pl-25](load-schema.md#pl-25)).
+- 거르기용 값: `created_at`은 gold `doc` 칸, `doc_class`는 gold `doc.attrs` 키(판 0005 — [load-schema.md#pl-52](load-schema.md#pl-52)).
 - 남은 확인: 운영 MCP 서버 소스는 없음 — 명세 기준으로 새로 구현, 구하면 대조.
 - 파일: `mcp_server/routers/`, `mcp_server/schemas/`, `mcp_server/services/search/`.
 - 결정(2차 grill(사용자 10-30, 원본은 git 밖)):
@@ -110,8 +110,8 @@
   - G7 → 사용자 10-30 PRD grill C1·C2로 바뀜: 0.1.0(10-30 릴리스)에는 들어가지 않았고 0.2.0에 싣는다. 1.0 전에는 MINOR에서도 계약·스키마를 깰 수 있다(버전 규칙 — 운영이 안정되면 1.0.0).
 - 결정(사용자 10-30 PRD grill): A9 — 필터·출력 축소 기준은 사용자 로컬 `reference/`(git 밖, 비밀값 포함 — 커밋·인용 금지)의 MCP 규약 문서를 보고 운영 최신판으로 이 행에 옮겨 적는다(필터 이름·뜻·출력 칸만, 접속 정보·회사 데이터 없이).
 - 결정(사용자 10-31 grill): 근거 `chunk_key`는 `<doc_id>:<seq>`(gold `doc.doc_id` 자동 번호). 스키마 5벌이 시퀀스 하나를 함께 써서 겹치지 않는다(허브 제안 — 사용자 확인 11-01).
-- 구현(11-01 `feature/mcp-ops-parity`, 등급 A — MCP 계약·DB 스키마): 운영 계약 그대로 — `question` 필수(빈 글자 → `{"error"}`, 빠지면 MCP 스키마 오류) · `k` 기본 8·상한 50 · 거르기 13칸(`source_system`·`client`+`client_like`·`project_id`·`division`·`service_type`·`FAQ_group`·`doc_class`·`sf_op_id`·`sf_op_name`·`contract_id`·`created_since`·`created_until`, 모두 AND·목록은 OR·정확 일치) · 맨 위 5칸·근거 12칸(`mcp_server/schemas/evidence.py`). Alembic 판 `0002_search`가 한 벌 `doc`에 `doc_class`·`created_at`·`rep_key`(mc-15용 — DB 변경 한 번에)를 더하고 뷰 끝에 같은 칸을 붙인다. 적재가 `created_at`(EDW 파일 메타 또는 `rdb:csv` 배치의 `created_at` 칸 — 시간대 없으면 KST)·`doc_class`(EDW 파일 메타에 있을 때만 — 분류 단계 [pl-33](transform.md#pl-33) 전)를 채운다. 시험: `tests/server/mcp/test_search_svc.py` `_selftest_contract`(사례 표).
-- 운영과 다른 점(11-02 갱신): ① 거르기 값은 문자열 하나 또는 목록(운영은 `client`만 목록). ② `source_system`은 **필수·값 하나**(G20 — 그 원천 스키마만 찾음, 빠지면 `{"error": "source_system is required …"}`, 여러 원천은 여러 번 부름 — 사용자 11-02, 원천끼리 결과를 섞지 않음). ③ `client`는 EDW 고객 `client_edw` 정확 일치만(C6) — 운영의 본문 라벨 대체·별칭 묶음 없음. ④ 원천 스키마에 없는 칸의 거르기는 0건(예: `division`은 crms만, `sf_op_id`는 sfdc만 — db_schema §2). ⑤ `chunk_key` = `<doc_id>:<seq>`(운영은 `<file_path>:<순번>`), `file_path` = Object Storage 원본 경로(운영은 서버 안 경로). ⑥ 결과가 크기 상한을 넘으면 낮은 순위 근거부터 줄이되 표시 칸은 붙이지 않는다. ⑦ 운영 결함인 `notes` 칸은 없다. ⑧ `FAQ_group`은 FAQ 적재([pl-39](extract.md#pl-39)) 뒤에 결과가 나온다.
+- 구현(11-01 `feature/mcp-ops-parity`, 등급 A — MCP 계약·DB 스키마): 운영 계약 그대로 — `question` 필수(빈 글자 → `{"error"}`, 빠지면 MCP 스키마 오류) · `k` 기본 8·상한 50 · 거르기(지금 14칸 — [mc-01](#mc-01), 모두 AND·목록은 OR·정확 일치) · 맨 위 5칸·근거 13칸(`mcp_server/schemas/evidence.py`). 맨 위 `filter`·`scope_docs`는 늘 나온다(`source_system`이 필수라 거르기가 늘 하나 이상). 적재가 gold `doc`의 `created_at`(EDW 사슬 — 시간대 없으면 KST, [pl-29](load.md#pl-29))과 `attrs`(`doc_class`는 분류 [pl-33](transform.md#pl-33))를 채운다. 시험: `tests/server/mcp/test_search_svc.py` `_selftest_contract`(사례 표).
+- 운영과 다른 점(11-02 갱신): ① 거르기 값은 모두 문자열 하나 또는 목록(운영 명세는 `client`만 목록으로 적음). ② `source_system`은 **필수·값 하나**(G20 — 그 원천 스키마만 찾음, 빠지면 `{"error": "source_system is required …"}`, 여러 원천은 여러 번 부름 — 사용자 11-02, 원천끼리 결과를 섞지 않음). ③ `client`는 EDW 고객 `client_edw` 정확 일치만(C6) — 운영의 본문 라벨 대체·별칭 묶음 없음. ④ 원천 스키마에 없는 칸의 거르기는 0건(예: `division`은 crms만, `sf_op_id`는 sfdc만 — db_schema §2). ⑤ `chunk_key` = `<doc_id>:<seq>`(운영은 `<file_path>:<순번>`), `file_path` = Object Storage 원본 경로(운영은 서버 안 경로). ⑥ 결과가 크기 상한을 넘으면 낮은 순위 근거부터 줄이되 표시 칸은 붙이지 않는다. ⑦ 운영 결함인 `notes` 칸은 없다. ⑧ `FAQ_group`은 FAQ 적재([pl-39](extract.md#pl-39)) 뒤에 결과가 나온다.
 - 11-03(사용자 grill — [load-schema.md#pl-52](load-schema.md#pl-52), 등급 A·0.2.0 MINOR): 원천 메타가 `doc.attrs`(JSONB) 한 칸으로 모인다.
   - 입력 `attrs: {키: 값 또는 목록}` — 원천(`source_system`)의 attrs 키로 정확 일치(키끼리 AND, 목록은 OR). 모르는 키는 `{"error"}`에 그 원천의 키 목록을 담는다(조용한 0건 아님). 받는 키는 사슬 파일 `fields`에서 `filter`가 있는 키 + 적재가 쓰는 `doc_class`(SFDC·LAS) — `filter`가 없는 키(분류 힌트 등)는 거를 수 없다(사슬 꼴의 "filter 없음 = 거르기 아님").
   - 이름 있는 거르기(`project_id`·`division`·`service_type`·`doc_class`·`sf_op_id`·`sf_op_name`·`contract_id`)는 사슬의 `filter:`로 attrs 키에 잇는다(예 `project_id` → `project_code__c`). 그 원천에 잇는 키가 없으면 0건(④). `FAQ_group`은 청크 칸 그대로.
@@ -128,8 +128,8 @@
 - 결정(2차 grill(사용자 10-30, 원본은 git 밖)): G4 — `source_system` 통일·`-test` 별칭.
 - 결정(G19·G20 — 4차 grill(사용자 10-30)): 목록·거르기(`doc_class`·`sf_op_id`·`created_since/until`)는 **시스템별 gold `doc`**에서 읽는다. `get_doc_fulltext`의 등록 시각 가드도 `doc.created_at`. 대표 결과 위치는 부를 때 ParsingMeta에서 읽는다([mc-15](#mc-15)).
 - 결정(사용자 11-01): rep_engine 출력 없음 — 사용자 11-01, 대표 엔진 칸 삭제와 맞춤(운영과 다른 칸 하나).
-- 구현(11-01 `feature/mcp-ops-parity`, 등급 A — MCP 계약 추가·DB 스키마): `mcp_server/routers/fulltext_tool.py`(등록) · `services/fulltext.py`(일) · `schemas/fulltext.py`(모양·한도). 목록: gold `doc`에서 거르기(`source_system`·`doc_class`·`sf_op_id`·`created_since/until`·`docs`, 원본 경로 `s3_key`가 있는 문서만, `doc_id` 순 — `cursor` = 마지막 `doc_id`) → 그 쪽 문서의 `s3_key`로 ParsingMeta를 한 번 읽어(active 중 최신, 원천 표기가 다르면 한 원천일 때만 대체) `rep_bucket`·`rep_key`·`parse_date`·`sha256`을 얻고, 결과 폴더 바로 아래 최신 `<이름>_<parse_date>.md`·`.json`만(`engine/`·`source.json` 제외). `docs`: 파일 이름(확장자 포함 — 경로 끝 조각) · 원본 전체 경로(정확히 하나) · 64자 `doc_key`(ParsingMeta `sha256` → 원본 경로). `since`/`until`(파싱 시각)은 ParsingMeta `parsed_at`(UTC)에서 먼저 원본 경로 집합을 구해 좁힌다(IN 목록은 500개씩 나눠 물음 — ponytail). 출력 `doc_key` = ParsingMeta `sha256`. ParsingMeta를 못 읽으면 `registry_unavailable`. sfid = `sf1.<base64url(버킷/키)>.<HMAC-SHA256>` — 서명 키 `search.server.fulltext_secret`(비면 `not_configured`, 바꾸면 발급된 sfid 전부 `bad_sfid`). 한도: docs 200 · limit 기본 50·상한 200 · get 20개 · 파일 16MB(`too_large`) · 합계 24MB(`batch_full`) · 파일 60초. 등록 시각 가드: sfid의 폴더 → ParsingMeta 원본 경로 → gold `doc.created_at`(가드를 걸 때만 EDW를 읽음). 판 0002 = `doc_class`·`created_at`·`s3_key`. 시험: `tests/server/mcp/test_fulltext.py`(ParsingMeta는 SQLite 대역).
-- 운영과 다른 점: ① `rep_engine` 없음. ② `source_system` 출력은 저장값(`SFDC`) — 운영은 EDW 값(`SFDC-test`), 입력은 둘 다 받음(G4, 사용자 11-01 승인). ③ 시간대 없는 시각은 KST로 읽음(운영은 기본 시간대를 밝히지 않음). ④ 건너뜀 행에 `status` 칸 없음(운영 예시와 같음). ⑤ 목록은 gold `doc`에서 고른다 — 적재 전 문서는 나오지 않고, ParsingMeta 행이 없는 적재 문서는 `no_files`로 나온다(운영은 ParsingMeta에서 고름). ⑥ `source_system`은 선택 — G20 "필수·값 하나"는 스키마 나누기([pl-28](load-schema.md#pl-28)) 때.
+- 구현(11-01 `feature/mcp-ops-parity`, 등급 A — MCP 계약 추가·DB 스키마): `mcp_server/routers/fulltext_tool.py`(등록) · `services/fulltext.py`(일) · `schemas/fulltext.py`(모양·한도). 목록: gold `doc`에서 거르기(`source_system`·`doc_class`·`sf_op_id`·`created_since/until`·`docs` — `doc_class`·`sf_op_id`는 `attrs` 키, `doc_id` 순 — `cursor` = 마지막 `doc_id`) → 그 쪽 문서의 원본 경로(`file_path`)로 ParsingMeta를 한 번 읽어(`pick_rep` — active 중 최신, active가 없으면 전체 중 최신, 원천 표기가 다르면 한 원천일 때만 대체) `rep_bucket`·`rep_key`·`parse_date`·`sha256`을 얻고, 결과 폴더 바로 아래 최신 `<이름>_<parse_date>.md`·`.json`만(`engine/`·`source.json` 제외). `docs`: 파일 이름(확장자 포함 — 경로 끝 조각) · 원본 전체 경로(정확히 하나) · 64자 `doc_key`(ParsingMeta `sha256` → 원본 경로). `since`/`until`(파싱 시각)은 ParsingMeta `parsed_at`(UTC)에서 먼저 원본 경로 집합을 구해 좁힌다(IN 목록은 500개씩 나눠 물음 — ponytail). 출력 `doc_key` = ParsingMeta `sha256`. ParsingMeta를 못 읽으면 `registry_unavailable`. sfid = `sf1.<base64url(버킷/키)>.<HMAC-SHA256>` — 서명 키 `search.server.fulltext_secret`(비면 `not_configured`, 바꾸면 발급된 sfid 전부 `bad_sfid`). 한도: docs 200 · limit 기본 50·상한 200 · get 20개 · 파일 16MB(`too_large`) · 합계 24MB(`batch_full`) · 파일 60초. 등록 시각 가드: sfid의 폴더 → ParsingMeta 원본 경로 → gold `doc.created_at`(가드를 걸 때만 EDW를 읽음). 거르기 칸: `created_at`(판 0002)·`attrs`(판 0005). 시험: `tests/server/mcp/test_fulltext.py`(ParsingMeta는 SQLite 대역).
+- 운영과 다른 점: ① `rep_engine` 없음. ② `source_system` 출력은 저장값(`SFDC`) — 운영은 EDW 값(`SFDC-test`), 입력은 둘 다 받음(G4, 사용자 11-01 승인). ③ 시간대 없는 시각은 KST로 읽음(운영은 기본 시간대를 밝히지 않음). ④ `get_doc_fulltext`의 건너뜀 행에 `status` 칸 없음(`skip_reason`만 — 운영은 `status: "skip"`). ⑤ 목록은 gold `doc`에서 고른다 — 적재 전 문서는 나오지 않고, ParsingMeta 행이 없는 적재 문서는 `no_files`로 나온다(운영은 ParsingMeta에서 고름). ⑥ 쓸 ParsingMeta 행 고르기(`pick_rep`): 운영은 active·파싱 성공·대표 결과 위치가 있는 행만, 우리는 파싱 상태를 보지 않고(부분 성공도 받음) active가 없으면 active 아닌 행 중 최신으로 대체. ⑦ 등록 시각 가드는 검색 DB(gold `doc.created_at`)에서 읽는다. ⑧ `docs`에 원본 전체 경로도 받는다(운영에 없는 입력 — 더한 것).
 - 11-02(pl-28): 목록은 원천 스키마 5벌(또는 `source_system`이 고른 하나)에서 같은 조건으로 고르고 공용 `doc_id` 순으로 합쳐 쪽을 넘긴다. ParsingMeta와는 gold `doc.file_path`(= 원본 경로)로 잇는다. `source_system` 출력은 스키마의 원천 이름(`SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`).
 - Status: done(11-01)
 
@@ -142,7 +142,7 @@
   - ① `meta.json`의 `embed`·`embed_model`·`dim`: 질의 임베딩과 모델·차원 불일치 거부(`local.embed_query`·`common.ai.embed.query_model_mismatch`). PG에는 차원만 있다(원천 스키마마다 `corpus_stat.dim` — 한 행짜리 BM25 통계 표).
   - ② `docs.jsonl`의 `doc_date`·`version`·`superseded`·`family`: 최신성 순위(`docmeta.recency_rerank` — 구조화 때 `docmeta.doc_meta(파일 이름, 본문)`이 만듦). gold `doc`에는 이 칸이 없다.
   - ③ `chunks.jsonl`: `Retriever.key_local`을 만들지만 아무도 읽지 않는다(죽은 코드). 청크 키는 이미 PG(`<doc_id>:<seq>`).
-  - 설정 `paths.mcp_bundle`(묶음 위치)은 검색만 쓴다. 고객 명부·용어 사전(`terms.py`)은 묶음이 아니라 resources 파일 — [pl-38](load.md#pl-38)(마스터를 PG `<PG_SCHEMA>_master`로)이 맡고 mc-19 범위가 아니다.
+  - 설정 `paths.mcp_bundle`(묶음 위치)은 검색만 쓴다. 고객 명부·용어 사전(`terms.py`)은 묶음이 아니라 PG 마스터 표(`<PG_SCHEMA>_master` — [pl-38](load.md#pl-38))에서 읽어 mc-19 범위가 아니다.
 - 결정(사용자 11-03 grill 1차):
   - 최신성 4칸(`doc_date`·`version`·`superseded`·`family`)을 gold `doc`(원천 스키마 5벌)에 더한다 — 새 Alembic 마이그레이션 0004, 적재(`pgvector_load`)가 묶음 `docs.jsonl` 값으로 채운다. 순위는 지금과 같아야 한다. 검색 뷰 계약(MCP 출력)은 바꾸지 않는다. 검토 등급 A(DB 스키마).
   - 설정 `paths.mcp_bundle`은 지운다 — 남아 있으면 경고만(시작은 함).
@@ -184,6 +184,7 @@
 - 무엇: 정적 개인정보 제거 자료(`catalog.json` + `columns.jsonl`)에서 3단계 찾기(스키마 → 표 → 칸). 모르는 이름은 difflib 제안. LLM·벡터 없음.
 - 파일: `mcp_server/services/edw_meta.py`.
 - 배포 주의(reference 비교(사용자 grill 10-30, 원본은 git 밖) T14): `edw_meta` 표 이름 끝 공백 확인.
+- 운영과 다른 점: 인자 없이 부르면 원천별 거르기·근거 키 요약 `search_attrs`를 더 붙인다(더한 것 — [mc-16](#mc-16) 11-03).
 - Status: done
 
 <a id="mc-08"></a>
@@ -192,6 +193,7 @@
 - 무엇: 경로(inbox 루트 아래) 또는 base64 내용을 127.0.0.1:8766의 파싱 서비스에 Bearer 토큰으로 넘긴다. 글, 표준 표, 사실, 엔진, 시간을 돌려주고 시간 초과면 `job_id`.
 - 파일: `mcp_server/services/parse_proxy.py`, `pipeline/mcp_parse_service.py`.
 - 스캔 PDF: 내부망 VLM으로 파싱한다([mc-18](#mc-18), 11-03). VLM 설정이 없으면 빈 결과 + "스캔 PDF — VLM 미설정", 실패면 "스캔 PDF — VLM 파싱 실패".
+- 운영과 다른 점: 파일 크기 상한 기본 100MB(운영 64MB) · 스캔 PDF를 내부망 VLM으로 파싱([mc-18](#mc-18)) · 받는 확장자가 더 많음(엔진 구성의 parse 키 — `pipeline/mcp_parse_service.py` `allowed_exts()`).
 - 결정(사용자 11-03): 파일 크기 상한 100 MB, 처음부터 끝까지. 한 것(`feature/mcp-limits`): ① 상한은 칸 하나 `common.runtime.parse_max_mb`(파일 자리 `ops.runtime.parse_max_mb`, 옛 env 이름 `PARSE_MCP_MAX_MB`, 기본 100 — MB = 1024×1024바이트)를 검색 MCP와 파싱 서비스가 같이 읽는다. ② 검색 MCP: 상한을 넘는 `content_b64`는 서비스로 보내지 않고 바로 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — ops.runtime.parse_max_mb"}`. HTTP 요청 본문 상한(MCP SDK 기본 4 MiB)을 상한의 1.5배 + 1 MiB로 올림. 본문 상한은 `/mcp` 주소 하나라 모든 도구에 걸리므로, 4 MiB보다 크거나 길이를 밝히지 않은 요청은 동시에 2개까지만 처리하고 나머지는 본문을 읽기 전에 기다린다(거부 아님 — 4g 컨테이너 메모리 보호, `mcp_server/main.py` `_BIG_SLOTS`, PR #110 리뷰). 서비스 등록 요청 대기 10초 → 60초(등록 시간도 `time_out_threshold` 안에 셈). base64 크기는 줄바꿈·공백을 빼고 셈(MIME 줄바꿈 base64도 같은 값). ③ 파싱 서비스: 경로(`path`)로 준 파일도 같은 상한으로 거름, 본문 상한을 파일 상한의 1.5배 + 1 MiB로(검색 MCP와 같은 식). 시험 `tests/server/mcp/test_parse_limit.py`·`tests/server/pipeline/test_parse_svc.py`(상한 1 MB로 덮고 0.9 MB 받음·1.1 MB 거부, 두 길). PC 실측(99 MB·101 MB PDF, 실제 서비스+MCP HTTP)은 커밋 메시지·refactor.md C-85. 도구 설명의 "64MB 상한" → "기본 100MB 상한"으로 도구 계약(tools/list) 바뀜 — 등급 A.
 - Status: done
 
