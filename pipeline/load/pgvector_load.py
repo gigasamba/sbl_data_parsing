@@ -219,7 +219,7 @@ def load(db, bundle, replace=False, rep_dir=None):
     for d in docs:  # pl-52 — 고정 칸(created_at·client_edw)은 문서 행, 원천 메타는 attrs(분류 힌트 포함 — 분류가 attrs에서 읽음)
         m = edw.get(d["file_path"]) or {}
         d.update({k: m[k] for k in ("created_at", "client_edw") if m.get(k) is not None})
-        d["attrs"] = {k: v for k, v in m.items() if k not in ("created_at", "client_edw") and v is not None}
+        d["attrs"] = dict(m.get("attrs") or {})
     failed = _classify(db, B, docs, rep_dir, replace)  # pl-33 — SFDC·LAS 라벨(gold 넣기 전 · 이미 있는 라벨은 덮지 않음)
     by_src = {}
     for i, d in enumerate(docs):
