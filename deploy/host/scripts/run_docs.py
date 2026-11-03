@@ -265,7 +265,7 @@ def struct_cmd(seq):
         f"PYTHONPATH=/app/deploy "
         f"python -m pipeline.transform.structure.build_bundle{st} --parse-dir {inside}/parse"
         f" --out {inside}/bundle && "
-        f"python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle "
+        f"python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle --rep-dir {inside}/parse/_rep "
         f">> /app/output/docflow/{seq}/structure.log 2>&1'"
     )
 

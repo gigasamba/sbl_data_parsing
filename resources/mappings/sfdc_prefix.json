@@ -1,0 +1,18 @@
+{
+  "_note": "SFDC Id 앞 3자 → 개체 종류(분류 힌트 pl-33 — pipeline/load/edw_meta.py). 운영은 SFDC REST /sobjects 목록에서 만들었고 EDW에는 그 목록이 없어 여기서 고친다. 표준 개체 접두는 모든 조직이 같다. 사용자 정의 개체(__c) 접두는 조직마다 달라 'unconfirmed'에 둔다 — 운영 분류 지시문의 값(a14·a1G)이며 SFDC 관리자 확인 전(refactor.md C-77). 표에 없는 접두는 Unknown:<접두>(갈래 other).",
+  "prefixes": {
+    "001": "Account",
+    "005": "User",
+    "006": "Opportunity",
+    "00D": "Organization",
+    "00T": "Task",
+    "00U": "Event",
+    "01Z": "Dashboard",
+    "0AT": "EventLogFile",
+    "0Q0": "Quote",
+    "800": "Contract",
+    "a14": "IF_Log__c",
+    "a1G": "EventLogFile__c"
+  },
+  "unconfirmed": ["a14", "a1G"]
+}
