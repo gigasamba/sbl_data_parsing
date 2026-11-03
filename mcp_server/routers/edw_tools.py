@@ -13,10 +13,10 @@ from mcp_server.services.edw_calls import do_edw_meta, do_query_edw
 
 def register_query_edw(m):
     @m.tool()
-    async def query_edw(sql: str, max_rows: int = 2000) -> _EdwQueryResult:
+    async def query_edw(sql: str, max_rows: int = 1000) -> _EdwQueryResult:
         """Read-only SQL against EDW (EQ1) — exactly one SELECT/WITH statement, tables limited to the
         EDW_QUERY_TABLES allowlist, no DML/DDL/exec keywords anywhere (rejected even inside a comment).
-        max_rows is capped by EDW_QUERY_MAX_ROWS (default 2000). Returns raw rows only (no summarization —
+        max_rows is capped by EDW_QUERY_MAX_ROWS (default 1000). Returns raw rows only (no summarization —
         do that yourself): {ok, columns:[{name,type}], rows, row_count, truncated, elapsed_ms, dialect,
         source, error}. rows is a list of value lists in column order (JSON, not markdown). type is one of
         int|float|decimal|str|date|datetime|time|bool|binary|unknown; a "decimal" value with a fraction is an

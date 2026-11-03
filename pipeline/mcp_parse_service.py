@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""텍스트 파싱 작업 서비스 — data-pipeline-parse 컨테이너(S6b — 옛 data-parsing) 안에서 상주하며 검색 MCP(mcp-server — 옛 data-retrieval)의 parse_document
+"""텍스트 파싱 작업 서비스 — data-pipeline-mcp 컨테이너(11-03 — 옛 data-pipeline-parse; 작업 서비스가 주 프로세스, compose.pipeline-mcp.yml) 안에서 상주하며 검색 MCP(mcp-server — 옛 data-retrieval)의 parse_document
 도구가 localhost HTTP로 호출한다(비정형 파일[base64] → text 파싱 대표 결과 반환).
 범위 — prepare → run_all(문서의 엔진들 동시에 · VLM/OCR 엔진 제외) → parse_qa → represent까지.
 구조화·임베딩·적재 없음 · 표 인식 유지 · 이미지/스캔 문서는 빈 결과(OCR·VLM 미실행).
 [패치 2026-10-22] ① 기본 time_out_threshold 300초 ② 큐 대기 순번을 제출 응답과 시작 시점에 표시(지연 원인 파악)
   ③ 서비스 PID 로그 파일 남김(docker exec -d 로그 없음 문제) ④ _purge_old에서 방금 만든 작업 보호(버그 수정)
-실행: docker exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service
+실행: data-pipeline-mcp 컨테이너의 주 프로세스(compose.pipeline-mcp.yml — 죽으면 restart가 다시 띄움 · 옛 손 기동 `docker exec -d …` 없음)
   토큰은 설정 필수(컨테이너에 붙인 settings.yaml required.tokens.parse_mcp — 검색 MCP의 MCP_TOKEN과 같은 값, 없으면 시작 거부, D-028 ⑨ · S7c ·
   S7e2부터 env PARSE_MCP_TOKEN은 읽지 않음 — `docker exec -e PARSE_MCP_TOKEN=…`은 효과 없음, VS7e2 R-6)
 API(127.0.0.1:8766 · Bearer):  POST /jobs {content_b64+filename} → 202 {job_id, queue_position}
@@ -24,11 +24,13 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from common.config.settings import cfg as common_cfg
 from common.config.settings import child_env as settings_env
 from common.config.settings import reveal
 from common.core import exitclean
 from common.core.paths import APP_ROOT  # I4 — 컨테이너 경로(/app/…) 대신 런타임 루트 기준(이미지 안 값 같음)
 from pipeline import config as pc
+from pipeline.shared.exts import IMG_EXTS
 
 SERVICE_DIR = APP_ROOT / "output" / "mcp_parse"  # 이미지 안 /app/output/mcp_parse
 _JOB_ENVS: dict = {}  # (PARSE_POST, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
@@ -81,28 +83,17 @@ PROCS = str(
     max(1, _PM.procs if _PM.procs is not None else min(3, (os.cpu_count() or 2) - 1))
 )  # 엔진 묶음 병렬(2026-10-21) — 30쪽 PDF 순차 시 120초+ 걸리던 것 대폭 단축
 ROOTS = [Path(p).resolve() for p in (_PM.roots or [str(SERVICE_DIR / "inbox")])]  # 쉼표 목록은 객체가 strip·빈 것 버림
-MAX_MB = _PM.max_mb
 JOB_TIMEOUT = _PM.job_timeout_sec
 QUEUE_MAX = _PM.queue_max
 JOBS_DIR = Path(_PM.jobs_dir or SERVICE_DIR / "jobs")
-ALLOWED_EXTS = {
-    ".pdf",
-    ".docx",
-    ".doc",
-    ".pptx",
-    ".ppt",
-    ".xls",
-    ".xlsx",
-    ".xlsm",
-    ".hwpx",
-    ".txt",
-    ".html",
-    ".htm",
-    ".mht",
-    ".mhtml",
-    ".eml",
-    ".msg",
-}  # 이미지 파일(p·jpg 등)은 "이미지 파싱은 수행 안하고 꺼줘" 요구사항에 따라 원천 거부
+
+
+def allowed_exts():
+    """받는 확장자 = 엔진 구성의 parse 키(.pdf_text·.pdf_image → .pdf) − 이미지(IMG_EXTS — "이미지 파싱은 수행 안하고 꺼줘" 요구사항에
+    따라 원천 거부). 부를 때마다 읽는다(작업마다 다시 읽는 엔진 구성과 같게, 시작 점검보다 먼저 읽지 않게)."""
+    return {".pdf" if e.startswith(".pdf_") else e for e in pc.stack()["parse"]} - IMG_EXTS
+
+
 MAX_JOBS_KEPT = 30
 _lock = threading.Lock()
 JOBS: dict = {}
@@ -184,7 +175,7 @@ DRM_NOTE = "텍스트 추출 실패 — DRM/암호화 문서일 가능성(엔진
 
 def skip_note(fname, pdf_text_chars):
     """파이프라인 없이 바로 빈 결과로 끝낼 문서면 그 안내(글자층이 사실상 없는 PDF), 아니면 None.
-    (이미지 확장자는 ALLOWED_EXTS에 없어 여기 오지 않음 — 11-01에 도달 불가 갈래 _IMAGE_EXTS·IMAGE_NOTE 지움.)"""
+    (이미지 확장자는 allowed_exts()에 없어 여기 오지 않음 — 11-01에 도달 불가 갈래 _IMAGE_EXTS·IMAGE_NOTE 지움.)"""
     ext = Path(fname).suffix.lower()
     if ext == ".pdf" and 0 <= (pdf_text_chars if pdf_text_chars is not None else -1) < 20:
         return SCAN_NOTE
@@ -197,6 +188,19 @@ def empty_note(run_log):
     from pipeline.extract.run_all import NO_JOB_MARK
 
     return SCAN_NOTE if NO_JOB_MARK in (run_log or "") else DRM_NOTE
+
+
+def _max_bytes():
+    """파일 1건 크기 상한(바이트) — common.runtime.parse_max_mb(검색 MCP와 같은 칸 — 사용자 11-03, 기본 100MB), 요청마다 읽음."""
+    return int(common_cfg().runtime.parse_max_mb * 1048576)
+
+
+def _check_size(n):
+    """path·content_b64 두 길 모두 같은 상한 — 넘으면 ValueError(400, 크기와 상한을 MB로)."""
+    if n > _max_bytes():
+        raise ValueError(
+            f"파일이 크기 상한({common_cfg().runtime.parse_max_mb:g}MB)보다 큼({n / 1048576:.1f}MB) — ops.runtime.parse_max_mb"
+        )
 
 
 def _submit(source):
@@ -215,13 +219,13 @@ def _submit(source):
             raw = base64.b64decode(b64, validate=False)
         except Exception as e:
             raise ValueError(f"base64 디코딩 실패: {e}") from e
-        if len(raw) > MAX_MB * 1024 * 1024:
-            raise ValueError(f"파일이 상한({MAX_MB}MB)보다 큼")
+        _check_size(len(raw))
     else:
         p = _jail(path)
         fname = p.name
-    if Path(fname).suffix.lower() not in ALLOWED_EXTS:
-        raise ValueError(f"지원하지 않는 확장자({Path(fname).suffix or '없음'}) — {sorted(ALLOWED_EXTS)}")
+        _check_size(p.stat().st_size)  # 11-03 — 경로로 준 파일도 같은 상한(전에는 content_b64만 봄)
+    if Path(fname).suffix.lower() not in (ok := allowed_exts()):
+        raise ValueError(f"지원하지 않는 확장자({Path(fname).suffix or '없음'}) — {sorted(ok)}")
     job_id = time.strftime("%Y%m%d") + "-" + uuid.uuid4().hex[:12]
     ws = JOBS_DIR / job_id
     (ws / "in").mkdir(parents=True, exist_ok=True)
@@ -467,8 +471,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(404, {"error": "not found"})
         try:
             n = int(self.headers.get("Content-Length") or 0)
-            if n > MAX_MB * 1024 * 1024 + 65536:
-                raise ValueError("본문 크기 상한 초과")
+            # 본문 = JSON 속 base64(파일의 4/3배, 줄바꿈 이스케이프 여유 포함 1.5배 — 검색 MCP 본문 상한과 같은 식) + 1MiB — 11-03: 전에는
+            # 파일 상한 + 64KB라 base64 본문은 파일 상한의 3/4에서 막혔음. 상한 안 파일이면 크기 판정은 아래 _check_size가 함
+            if n > _max_bytes() * 3 // 2 + 1048576:
+                raise ValueError(
+                    f"요청 본문이 크기 상한보다 큼 — 파일 상한 {common_cfg().runtime.parse_max_mb:g}MB(ops.runtime.parse_max_mb)"
+                )
             source = json.loads(self.rfile.read(n) or b"{}")
             job_id, ahead = _submit(source)
             return self._json(202, {"job_id": job_id, "queue_position": ahead})
@@ -511,7 +519,7 @@ if __name__ == "__main__":
                 "pid": os.getpid(),
                 "started": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "procs": PROCS,
-                "max_mb": MAX_MB,
+                "max_mb": common_cfg().runtime.parse_max_mb,
                 "job_timeout": JOB_TIMEOUT,
                 "queue_max": QUEUE_MAX,
             },

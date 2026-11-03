@@ -1,0 +1,34 @@
+# parse_document 작업 서비스 전용 컨테이너 data-pipeline-mcp(사용자 11-03 — PRD rn-03) — 컨테이너마다 compose 파일 하나: 일괄 data-pipeline은
+#   compose.pipeline.yml, 검색 MCP는 compose.mcp-server.yml. 같은 이미지(DATA_PIPELINE_IMAGE)·같은 설정 파일·같은 결과 폴더.
+#   띄우기(하위 셸로 — 대화형 셸에 export해 두면 그 뒤 settings.yaml을 고쳐도 그 셸에는 안 먹음, VS7e1 R-2):
+#     ( . deploy/host/scripts/settings_env.sh && load_settings && $DOCKER compose -f deploy/host/compose/compose.pipeline-mcp.yml up -d )
+#   개발 서버(실행 이미지)는 -f deploy/host/compose/compose.code.pipeline-mcp.yml을 덧붙임 · mcp_up.sh(타이머 2분마다)가 꺼져 있으면 이 파일로 띄움.
+#   설정·env 규칙은 compose.pipeline.yml 머리말과 같다(설정 파일 읽기 전용 마운트 + SETTINGS_FILE·RUN_ENV만 — S7e1).
+x-settings: &settings "${SETTINGS_FILE:?SETTINGS_FILE=<settings.yaml 절대 경로> 필요 — deploy/host/scripts/settings_env.sh load_settings가 export(refactor.md C-09)}:/etc/rag/settings.yaml:ro,z"
+services:
+  # MCP parse_document 작업 서비스 전용(사용자 11-03 — PRD rn-03): 사람이 기다리는 요청이라 일괄 컨테이너와 떼고 CPU 나눔 비율을 높게 준다.
+  #   작업 서비스(pipeline.mcp_parse_service — 127.0.0.1:8766, 토큰 settings.yaml)가 이 컨테이너의 주 프로세스라 죽으면 restart가 다시 띄운다
+  #   (옛 손 기동 `docker exec -d … mcp_parse_service` 없음). 작업 폴더는 결과 폴더 mcp_parse/jobs(run_docs.py가 보고 medium 레인 양보).
+  #   8766을 쓰므로 옛 컨테이너(data-pipeline-parse 안 손 기동 서비스)를 먼저 지운 뒤 띄운다(release-and-patch §8-3 7).
+  #   자원 칸: settings.yaml pipeline.host.parse_mcp_cpus·parse_mcp_mem_limit·parse_mcp_cpu_shares(PARSE_MCP_* — 비우면 아래 기본값과 같은 값).
+  data-pipeline-mcp:
+    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
+    container_name: data-pipeline-mcp
+    command: ["parse-service"]
+    restart: unless-stopped
+    network_mode: host                      # 검색 MCP(mcp-server)가 127.0.0.1:8766으로 부름
+    init: true
+    environment:
+      SETTINGS_FILE: /etc/rag/settings.yaml
+      RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"
+    volumes:
+      - *settings
+      - ${DOC_SRC:?DOC_SRC=<원본 문서 폴더>}:${APP_DOCS_MOUNT:?APP_DOCS_MOUNT 필요 — settings_env.sh load_settings가 냄}:ro,z   # 옛 자리(data-pipeline-parse)와 같게 — parse_mcp.roots에 문서 폴더를 적은 서버
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:${APP_OUTPUT_ROOT:?APP_OUTPUT_ROOT 필요 — settings_env.sh load_settings가 냄}:z
+    mem_limit: ${PARSE_MCP_MEM_LIMIT:-8g}
+    memswap_limit: ${PARSE_MCP_MEM_LIMIT:-8g}
+    cpus: ${PARSE_MCP_CPUS:-3}                 # 작업 서비스 기본 병렬 수(min(3, CPU-1)) — 줄이면 settings.yaml pipeline.service.parse_mcp.procs도 그 이하로
+    cpu_shares: ${PARSE_MCP_CPU_SHARES:-4096}   # data-pipeline(1024)의 4배 — CPU가 모자랄 때 먼저 받음(cgroup v2는 cpu.weight로 바뀜)
+    pids_limit: 1024
+    logging:
+      options: {max-size: "50m", max-file: "3"}

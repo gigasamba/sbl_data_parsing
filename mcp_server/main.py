@@ -9,14 +9,14 @@
     (mcp_server/schemas/evidence.py). 덤프 방식·이름 있는 색인(index_id)·옛 입력(methods·decompose·limit)·옛 출력(subs·store·images·notes·ms)은 지움.
   MCP 노출 도구는 search·query_edw·parse_document·edw_meta·list_doc_fulltext·get_doc_fulltext(2026-10-20 사용자 결정 · 10-21 파싱 도구 · 11-01 원문 도구 mc-17).
   (EQ1, English docstrings per 10-15 user rule)
-  query_edw(sql, max_rows=2000) Read-only SQL against EDW: SELECT/WITH only, one statement, table allowlist
+  query_edw(sql, max_rows=1000) Read-only SQL against EDW: SELECT/WITH only, one statement, table allowlist
     (EDW_QUERY_TABLES), row/time/response-size caps. Returns raw rows only — no summarization, the
     calling agent does its own post-processing. See mcp_server/services/edw_query.py for the full guard.
   (2026-10-21 사용자 요청·같은 날 단일화) parse_document(path, content_b64, filename, time_out_threshold=300, max_chars=200000) —
-    비정형 파일 1건의 text 파싱 대표 결과: data-pipeline-parse 컨테이너(S6b — 옛 data-parsing)의 작업 서비스(PARSE_URL, 기본 http://127.0.0.1:8766 ·
-    docker exec -d data-pipeline-parse python -m pipeline.mcp_parse_service — 토큰은 그 컨테이너 settings.yaml required.tokens.parse_mcp)가
+    비정형 파일 1건의 text 파싱 대표 결과: data-pipeline-mcp 컨테이너(11-03 — 옛 data-pipeline-parse)의 작업 서비스(PARSE_URL, 기본 http://127.0.0.1:8766 ·
+    그 컨테이너의 주 프로세스 — 토큰은 그 컨테이너 settings.yaml required.tokens.parse_mcp)가
     prepare → run_all( phase 1·2만 — 그림[VLM] 파싱은 phase 3이라 실행 안 됨, 표 인식 유지) → parse_qa → represent(대표 결과)만
-    수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/mcp_parse/inbox) 하위만(jail) · content_b64 상한 100MB ·
+    수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/mcp_parse/inbox) 하위만(jail) · 파일 상한 100MB(path·content_b64 같음 — ops.runtime.parse_max_mb, 11-03) ·
     time_out_threshold(기본 300초) 안에 끝나야 결과를 돌려주고 못 끝내면 {"error": "시간 안에 수행 못했습니다", "job_id": …}만 반환 —
     노출 도구는 parse_document 하나뿐(사용자 결정: 결과 수령 도구 parse_result는 등록하지 않는다), 이 도구만 MCP_TOOL_TIMEOUT_SEC(기본 30초)
     대신 자체 예산으로 기다린다(_bg_long) · 응답 text는 max_chars(기본 20만자) 상한(초과 시 잘리고 text_truncated, 전체는 rep_path 파일에).
@@ -47,6 +47,7 @@
 (검색 services/search/search_svc.py) · 출력 모양 schemas/ · 시작 때 읽는 설정 config.py(CFG). 위 설명의 함수 이름은 그대로다.
 """
 
+import contextlib
 import hmac
 import ipaddress
 import json
@@ -60,7 +61,7 @@ from common.core import jsonlog
 from common.core.console import utf8_stdout
 from mcp_server import config as mc  # 설정 객체(S7d)
 from mcp_server.routers import edw_tools, fulltext_tool, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
-from mcp_server.services import call_log
+from mcp_server.services import call_log, parse_proxy
 from mcp_server.services.search.server_state import _warmup_bg
 
 _DEFAULT_MCP_INSTRUCTIONS = (
@@ -106,6 +107,10 @@ def _sdk_logging():
     sdk.propagate = False  # root의 기본 핸들러로 예외 글이 가림 없이 나가는 길을 막는다
 
 
+_BIG_BODY = 4 * 1048576  # SDK 기본 본문 상한 — 이보다 큰(또는 길이를 안 밝힌) POST만 동시 수를 묶는다
+_BIG_SLOTS = 2  # ponytail: 고정 2개(4g 컨테이너에서 100MB 파일 base64·디코드 사본 기준) — 메모리를 바꾸면 설정 항목으로
+
+
 # ── MCP 서버 ─────────────────────────────────────────────────────
 def build(host, port):
     from mcp.server.fastmcp import FastMCP
@@ -119,6 +124,7 @@ def build(host, port):
         stateless_http=True,
         json_response=True,
         transport_security=None if loop else _transport_security(host),
+        max_request_body_size=parse_proxy.body_cap(),  # 11-03 — SDK 기본 4MiB면 parse_document content_b64가 약 3MB에서 413
     )
     _sdk_logging()  # FastMCP가 로깅을 설정한 뒤에 덮는다
 
@@ -158,6 +164,8 @@ def build_guarded_app(host, port, token):
     health.register(app)
 
     inner = app
+    # 본문 상한(약 151MB)은 /mcp 하나라 모든 도구에 걸림 — 큰 요청은 본문을 읽기 전에 줄 세워 메모리를 묶는다(PR #110 리뷰)
+    big_slots = anyio.Semaphore(_BIG_SLOTS)
 
     async def guarded(scope, receive, send):
         if scope["type"] != "http" or scope.get("path") == "/health":
@@ -208,8 +216,11 @@ def build_guarded_app(host, port, token):
                     response_body.extend(message.get("body", b"")[: max(0, metadata_limit - len(response_body))])
                 await send(message)
 
+            size = hdr.get("content-length", "")
+            big = scope.get("method") == "POST" and (not size.isdigit() or int(size) > _BIG_BODY)  # 길이 모름 = 큰 것
             try:
-                await inner(scope, observed_receive, correlated_send)
+                async with big_slots if big else contextlib.nullcontext():
+                    await inner(scope, observed_receive, correlated_send)
             except BaseException as exc:
                 if init_call is not None:
                     init_call.finish(status="error", err=str(exc))
@@ -218,6 +229,7 @@ def build_guarded_app(host, port, token):
                 if init_call is not None:
                     await anyio.to_thread.run_sync(call_log.finish_initialize, init_call, response_body, response_status)
 
+    guarded.big_slots = big_slots  # 시험이 대기 수를 본다
     return guarded
 
 

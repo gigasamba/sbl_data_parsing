@@ -348,7 +348,9 @@ REMOVED: dict[str, frozenset[str]] = {
     # CommonModelsVlm(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐) — 지운 칸(남으면 경고만)
     "CommonModelsVlm": frozenset({"model_alt"}),
     # CommonPaths(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치 · op-08) · 0.2.0(pl-46) 이름 있는 색인·원천 목록 파일 — 지운 칸(남으면 경고만)
-    "CommonPaths": frozenset({"config_dir", "criteria_file", "eval_sets_dir", "index_root", "korean_font", "sources_file"}),
+    "CommonPaths": frozenset(
+        {"client_roster", "config_dir", "criteria_file", "eval_sets_dir", "glossary_dir", "index_root", "korean_font", "sources_file"}
+    ),  # client_roster·glossary_dir — pl-38(사용자 11-03): 용어집·고객 명부는 PG 마스터 표(<PG_SCHEMA>_master)
     # CommonRuntime(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(남으면 경고만)
     "CommonRuntime": frozenset({"exp_max_workers", "exp_proc_gb_answer", "exp_proc_gb_build", "exp_proc_gb_run", "exp_reserve_gb"}),
     # CommonStore(common/config/settings.py) — 사용자 10-30(pl-32 — 재시도 횟수 없음) · 10-31(pl-12 C10 — 문서 대장·숨김 통째로 지움 · pl-08 — 정형 저장소 통째로 지움) — 옛 파일에 남아도 경고만
@@ -356,7 +358,7 @@ REMOVED: dict[str, frozenset[str]] = {
         {"doc_registry", "registry_editions", "registry_etag_md5", "registry_retry_max", "struct_backend", "struct_db"}
     ),
     # CommonText(common/config/settings.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
-    "CommonText": frozenset({"parse_token_norm"}),
+    "CommonText": frozenset({"parse_token_norm", "search_recency"}),  # search_recency — pl-38: 판 묶음(family)·최신성 순위 지움
     # McpDev(mcp_server/config.py) — 11-01(e2-10 — mcp_eval 지움) — 지운 칸(남으면 경고만)
     "McpDev": frozenset({"eval_s_parts"}),
     # McpEdwQuery(mcp_server/config.py) — 사용자 10-29 — 접속은 common.connections.rdb 읽기 계정(ops.md#op-03)
@@ -456,7 +458,19 @@ REMOVED: dict[str, frozenset[str]] = {
     # PipelineExtractPrepare(pipeline/config.py) — 사용자 10-30(op-08) · ocr 11-01(rapidocr 1.x 길 지움 — 늘 3.x) · rotate_lead·rotate_probe_fast·rotate_s0_min 11-02(회전 판단 규칙 지움 — 켬/끔만) — 지운 칸(남으면 경고만)
     "PipelineExtractPrepare": frozenset({"ocr", "rotate_fast", "rotate_lead", "rotate_probe_fast", "rotate_s0_min"}),
     # PipelineHost(pipeline/config.py) — 0.2.0(pl-46) — 이름 있는 색인·1회 job 컨테이너(load·publish — #100에서 지움) 칸(남으면 경고만)
-    "PipelineHost": frozenset({"index_conf_dir", "load_cpus", "load_mem_limit", "publish_cpus", "publish_mem_limit"}),
+    # CommonHost(common/config/settings.py) — 11-03(사용자) 오버레이 패치 compose 지움(refactor.md C-83) — 남으면 경고만
+    "CommonHost": frozenset({"patch_code"}),
+    "PipelineHost": frozenset(
+        {
+            "index_conf_dir",
+            "load_cpus",
+            "load_mem_limit",
+            "publish_cpus",
+            "publish_mem_limit",
+            "structure_cpus",
+            "structure_mem_limit",
+        }
+    ),  # structure_* — 11-03(사용자) 상주 컨테이너 하나(data-pipeline — refactor.md C-82)
     # PipelineHostNightly(pipeline/config.py) — 사용자 10-30(pl-32) — 켬/끔은 time 하나로 · max_new·modules·publish 11-01(night 모듈 배치 지움 — 새벽 배치는 run_docs)
     "PipelineHostNightly": frozenset({"enabled", "max_new", "modules", "publish"}),
     # PipelineLoad(pipeline/config.py) — 사용자 10-29(prune_* — 적재가 안 지움, pl-13 · edw_load — EDW 벡터 경로 삭제, ops.md#op-03) · index_lock_stale_sec 11-01(mc-16 — 이름 있는 색인 AD41 지움) — 지운 칸·절(남으면 경고만)
@@ -482,8 +496,9 @@ REMOVED: dict[str, frozenset[str]] = {
     ),
     # PipelineService(pipeline/config.py) — 11-01(pl-10 — trigger 서버 지움) — 지운 절(남으면 경고만)
     "PipelineService": frozenset({"trigger"}),
-    # PipelineServiceParseMcp(pipeline/config.py) — 10-29 PARSE_MCP_OCR → extract.ocr_engine으로 합침(그 스위치도 0.2.0에 지움) — 남으면 경고만
-    "PipelineServiceParseMcp": frozenset({"ocr"}),
+    # PipelineServiceParseMcp(pipeline/config.py) — 10-29 PARSE_MCP_OCR → extract.ocr_engine으로 합침(그 스위치도 0.2.0에 지움) · max_mb 11-03
+    # (파일 크기 상한은 검색 MCP와 함께 쓰는 common.runtime.parse_max_mb = ops.runtime.parse_max_mb로 옮김, 기본 100) — 남으면 경고만
+    "PipelineServiceParseMcp": frozenset({"max_mb", "ocr"}),
     # PipelineTransform(pipeline/config.py) — 사용자 10-29 — 지운 칸·절(남으면 경고만)
     "PipelineTransform": frozenset({"agent"}),
     # PipelineTransformFigures(pipeline/config.py) — 사용자 10-30(pl-31 — ocr_vlm 엔진과 함께 지움) — 지운 칸(남으면 경고만)

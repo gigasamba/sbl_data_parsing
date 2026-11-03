@@ -34,9 +34,9 @@ from common.config import settings as C  # S7c — 설정 객체(공용 칸 DOC_
 from common.core.console import utf8_stdout
 from common.core.paths import APP_ROOT
 from pipeline import config as pc  # S7c — 설정 객체(pipeline 칸)
+from pipeline.shared.exts import OOXML_EXTS
 
 ROOT = APP_ROOT  # output/ 등 런타임 경로용(옛 dev/)
-OOXML = {".docx", ".docm", ".xlsx", ".xlsm", ".pptx", ".pptm"}
 LEGACY = {".doc", ".xls", ".ppt"}
 CFB = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 LOCK_PARTS = ("xl/workbook.xml", "word/settings.xml", "ppt/presentation.xml")
@@ -49,7 +49,7 @@ LOCK_RE = re.compile(
 def classify(p):
     """→ (보호 종류, 여는 방법, 비고)"""
     ext, head = p.suffix.lower(), p.read_bytes()[:8]
-    if ext in OOXML | LEGACY:
+    if ext in OOXML_EXTS | LEGACY:
         if head.startswith(b"PK"):
             try:
                 with zipfile.ZipFile(p) as z:

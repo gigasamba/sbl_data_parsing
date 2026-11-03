@@ -22,6 +22,7 @@
 """
 
 import argparse
+import functools
 import json
 import os
 import sys
@@ -38,7 +39,6 @@ from common.core.console import utf8_stdout
 from common.core.paths import (  # 폴더 재편 뒤 이 두 상수만 바뀌면 됨
     APP_ROOT,
     PARSING_ROOT,
-    atomic_write_text,  # RV6, tmp+os.replace 공용(아래 _write_atomic이 감쌈)
     doc_dir,
 )
 from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
@@ -193,7 +193,8 @@ def main():
         P0.purge_caches(out)
     files = sorted(p for p in src.iterdir() if p.is_file() and p.name not in (".gitkeep", "rotation.csv"))  # 평면 · prepare 기록 제외
     docs = [p for p in files if registry.engines_for(p.suffix)]
-    skipped = Counter(p.suffix.lower() or "(없음)" for p in files if p not in docs)
+    doc_set = set(docs)  # fp-perf B5 — 목록 안 찾기를 집합으로
+    skipped = Counter(p.suffix.lower() or "(없음)" for p in files if p not in doc_set)
     pc.checked("MAX_FILE_MB")  # 파일 크기 상한 — 형식 틀리면 옛 float()처럼 실패(조용히 '제한 없음'이 되지 않게 — S7c1 리뷰)
     max_mb = float(
         pc.cfg().extract.max_file_mb
@@ -202,7 +203,8 @@ def main():
         big = [p for p in docs if p.stat().st_size > max_mb * 1024 * 1024]
         if big:
             print(f"건너뜀(MAX_FILE_MB {max_mb:g} 초과) {len(big)}개: " + ", ".join(p.name for p in big[:10]), flush=True)
-            docs = [p for p in docs if p not in big]
+            big_set = set(big)
+            docs = [p for p in docs if p not in big_set]
     docs = docs[: a.limit] if a.limit else docs
     if a.docs_from:
         names = set(Path(a.docs_from).read_text(encoding="utf-8").splitlines())
@@ -332,25 +334,24 @@ def main():
         with lock:
             first = eng not in warmed
             warmed.add(eng)
+        ever = P0.engine_version(eng)
+        pkey = p0_key(eng, sha, ever)  # P0 열쇠(결과 출처 기록 — provenance·runs.jsonl)
+        prov = {"engine": eng, "engine_version": ever, "p0_key": pkey, "params": {"profile": a.profile}}  # 자식이 결과에 넣어 씀(C4)
         pages = n_pages(doc)
         tmo = page_timeout(eng, pages, first)
         sp.add(pages=pages, limit_s=tmo, first_of_engine=first)
         if eng in VLM_ENGINES:
-            err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, vlm_env)
+            err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, vlm_env, prov)
         else:
             t_slot = time.monotonic()
             with text_sem:
                 sp.add(wait_slot_ms=int((time.monotonic() - t_slot) * 1000))  # 글자 엔진 동시 수 상한(text_sem) 대기 — 작업 시간과 분리
-                err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, None)
+                err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, None, prov)
         if err:
             sp.result(
                 "timeout" if "Timeout" in err else "fail", "timeout" if "Timeout" in err else "env" if _env_error(err) else "doc", err
             )
-        ever = P0.engine_version(eng)
-        pkey = p0_key(eng, sha, ever)  # P0 열쇠(결과 출처 기록 — provenance·runs.jsonl)
-        if not err and dst.exists():
-            _stamp_provenance(dst, eng, ever, pkey, a.profile)
-        elif err and dst.exists():
+        if err and dst.exists():
             # 실패·시간 초과면 그 자리의 결과 파일은 이번 내용의 결과가 아님(내용이 바뀐 문서의 옛 결과 등) — 지움.
             # 10-04 결함: 옛 결과 파일이 남아 '이미 결과 있음'으로 보여 재시도에서 빠지고 대표에 옛 결과가 쓰일 수 있었음
             dst.unlink(missing_ok=True)
@@ -472,7 +473,7 @@ def _run_docs(jobs, run_job, workers):
         list(pool.map(SP.carry(run_doc), by_doc.values()))
 
 
-def _run_with_retry(eng, doc, dst, profile, tmo, unset, env):
+def _run_with_retry(eng, doc, dst, profile, tmo, unset, env, prov=None):
     """문서×엔진 1건 — 시간 초과면 같은 실행에서 제한 두 배로 한 번 더(사용자 10-29), 그래도 넘으면 실패. 반환: (오류 글자 또는 None, 마지막 제한)."""
     for attempt in range(2):
         err = None
@@ -482,7 +483,7 @@ def _run_with_retry(eng, doc, dst, profile, tmo, unset, env):
         try:
             if unset:
                 raise LookupError("환경변수 미설정: " + ", ".join(unset))
-            _isolated(eng, doc, dst, profile, tmo, env=env)
+            _isolated(eng, doc, dst, profile, tmo, env=env, **({"prov": prov} if prov else {}))
         except Exception as ex:
             err = redact(f"{type(ex).__name__}: {str(ex)[:300]}")
             if isinstance(ex, ImportError):
@@ -514,28 +515,6 @@ def _with_run_id(rec, run_id):
     return {**rec, "run_id": run_id} if run_id else rec
 
 
-def _write_atomic(dst, text):
-    """임시 파일에 다 쓰고 이름 바꿈 — 중간에 끊겨도 0바이트·반쪽 결과가 남지 않게(10-04 실측: 끊긴 실행이 0바이트 6건을 남겨 parse_qa가 죽음).
-    RV6(10-09) — common/atomic.atomic_write_text로 옮김(동작 그대로)."""
-    atomic_write_text(dst, text)
-
-
-def _stamp_provenance(dst, eng, engine_version, p0_key, profile):
-    """엔진 결과 JSON에 provenance 블록을 더함(W8) — engine·engine_version·p0_key·params·created_at. 실패해도 파싱 결과는 그대로 둠."""
-    try:
-        d = json.loads(dst.read_text(encoding="utf-8"))
-        d["provenance"] = {
-            "engine": eng,
-            "engine_version": engine_version,
-            "p0_key": p0_key,
-            "params": {"profile": profile},
-            "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        }
-        _write_atomic(dst, json.dumps(d, ensure_ascii=False))
-    except (OSError, ValueError):
-        pass
-
-
 def _chars(dst):
     try:
         return len((json.loads(Path(dst).read_text(encoding="utf-8")).get("text") or "").strip())
@@ -544,15 +523,12 @@ def _chars(dst):
 
 
 def _sha(p):
-    import hashlib
+    from common.core.contract import file_hash  # fp-perf C2 — 한 곳(같은 프로세스 안에서는 파일당 한 번 읽음)
 
-    h = hashlib.sha256()
-    with open(p, "rb") as f:
-        for b in iter(lambda: f.read(1 << 20), b""):
-            h.update(b)
-    return h.hexdigest()[:16]
+    return file_hash(p)[:16]
 
 
+@functools.cache  # fp-perf B5 — 엔진 폴더 해시는 프로세스마다 엔진당 한 번(실행 중 코드는 안 바뀜)
 def engine_code_fp(eng):
     """원문 파싱 결과를 정하는 코드 = 그 엔진 폴더(parse/engines/<엔진>)만 — common·run_all(실행 관리)이 바뀌어도 결과는 같으므로 넣지 않음."""
     import hashlib
@@ -588,21 +564,21 @@ def _env_error(err):
     return is_env_error(err)
 
 
-def _isolated(eng, doc, dst, profile, tmo, py=None, env=None):
+def _isolated(eng, doc, dst, profile, tmo, py=None, env=None, prov=None):
     py = py or sys.executable
     retries = int(
         pc.cfg().extract.engine_retry
     )  # S7c — 설정 객체(기본 1) · 비정상 종료만 바로 다시(10-14 rapidocr ResizeImgError 1회성 — 단독 재실행은 성공)
     for attempt in range(retries + 1):
         try:
-            return _isolated_once(eng, doc, dst, profile, tmo, py, env)
+            return _isolated_once(eng, doc, dst, profile, tmo, py, env, prov)
         except RuntimeError:
             if attempt == retries:
                 raise
             SP.add_current(proc_retries=1)
 
 
-def _isolated_once(eng, doc, dst, profile, tmo, py, env=None):
+def _isolated_once(eng, doc, dst, profile, tmo, py, env=None, prov=None):
     import subprocess
 
     from common.core import resources as RS  # 우선순위 OS 분기 한 곳
@@ -611,7 +587,9 @@ def _isolated_once(eng, doc, dst, profile, tmo, py, env=None):
     low = bool(pc.cfg().extract.low_priority)  # 10-29 — 일괄 파싱은 낮은 우선순위(parse MCP 서비스는 끔 — 요청이 CPU를 먼저)
     # PADDLE_PYTHON은 별도 venv(.venv-paddle)라 cwd 상속에 의존하지 않고 child_env()의 PYTHONPATH(deploy/)로 `-m pipeline.extract.parse_one`을 찾게 함
     pr = RS.gated_popen(
-        [py, "-m", "pipeline.extract.parse_one", "--engine", eng, "--profile", profile, str(doc), str(dst)],
+        [py, "-m", "pipeline.extract.parse_one", "--engine", eng, "--profile", profile]
+        + (["--provenance", json.dumps(prov, ensure_ascii=False)] if prov else [])
+        + [str(doc), str(dst)],
         env=env if env is not None else child_env(),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

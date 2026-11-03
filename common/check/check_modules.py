@@ -12,10 +12,10 @@
 ③ 계약 함수(토큰·ID 토큰·색인 본문·정규화·임베딩 호출·내부망 확인·원본 위치·고객 명부)는 common/ 에만 정의 — 복사본이 갈라지는 것 방지
 ④ (GA) litellm·google.adk 직접 import 금지 — 0.2.0에 common/ai/adk.py(ADK 장치)를 지움(pl-46, 모델 호출은 common.ai.llm.complete HTTP).
    예외는 지시서 패키지의 옛 agent.py(prompts/<id>/agent.py — 바이트 그대로 두는 정의 파일, 코드가 읽지 않음)뿐
-⑤ (GA) agent_platform import는 common/ai/adk.py·common/ai/llm.py에서만, 서브모듈은 config·models·pipeline만(runtime·build·serving 금지)
+⑤ (없음 — agent_platform은 I5·I6에 지움, 0.2.0에 남은 점검 주석도 지움)
 ⑥ (GA) parse/·structure/·load/·search/ 아래 "openai/" 문자열 금지 — 모델 접두어는 common/ai/llm.py profile()(CT1 — 옛 models.py 병합)에서만 만듦(캐시 열쇠 불변 — I1)
-⑦ (GA2) prompts/<id>/agent.py·parse/agent/<id>/agent.py는 data_pipeline.* 를 import하지 않음(모델·ADK만 — 패키지는
-   common.ai.adk가 모델을 주입해 부름, docs/architecture.md §1)
+⑦ (GA2) prompts/<id>/agent.py·parse/agent/<id>/agent.py는 data_pipeline.* 를 import하지 않음(모델·ADK만 — 0.2.0부터 코드가
+   읽지 않는 옛 정의 파일, 바이트 그대로 둠 — docs/architecture/prompts.md)
 ⑧ (GA2) parse/·structure/·load/·search/·cli/·evaluation/의 L.chat()·A.complete() 호출은 agent= 키워드 필수(지시문마다
    다른 gamma 패키지 — selftest류 함수 안·cli/ping_models.py의 연결 확인은 업무 프롬프트가 없어 예외)
 ⑨ (프리즈 전 감사 3b, 10-16 — 4분할 뒤 TOOL_IMAGE 갱신) cli/·evaluation/는 여러 이미지(rag-parse·rag-structure·
@@ -142,9 +142,12 @@ SAME_NAME_OK = {
 # parse/agent/agent_tools.py로 옮겨 parse 영역 **안**이 되어 더 이상 경계 위반이 아님(ALLOW 자체가 필요 없어짐).
 # I2 — 옛 예외 ("structure/build_bundle.py", "data_pipeline.parse")(--no-rep 실험 경로의 지연 import)는 두 영역이 etl 하나가 되어 필요 없어짐.
 ALLOW: set = set()
-# TODO: 리팩토링 후 구현 필요
-# AGENT_PLATFORM_ONLY = {"common/ai/adk.py", "common/ai/llm.py"}   # CT1 — models.py가 llm.py로 병합되며 profile()의 agent_platform import도 같이 옮김
-# AGENT_PLATFORM_SUBMODULES = {"agent_platform.config", "agent_platform.models", "agent_platform.pipeline"}   # runtime·build·serving 금지(dev는 모델 호출만 씀)
+# ⑫ 단계 방향(CLAUDE.md §1 — pipeline 안 extract → transform → load, 거꾸로 import 금지 · 11-03 사용자: 리뷰에만 맡기지 않고 자동 점검).
+#   함수 안 늦은 import도 셈. STAGE_ALLOW = 지금 있는 예외(파일, 가져오는 단계) — 엔진 파일은 바이트를 바꾸면 엔진 지문이 바뀌어(등급 A) 옮기지 않고 적어 둔다.
+STAGES = ("extract", "transform", "load")
+STAGE_ALLOW = {
+    ("etl/extract/engines/qwen_vlm/parser.py", "transform")
+}  # 쪽 VLM 문턱(vgate) — 옮기면 엔진 지문이 바뀜(0.3.0 지문 배치 때 pipeline/shared로)
 AGENT_KWARG_EXEMPT = {"common/check/checker.py"}  # 연결 확인(ping) — 업무 프롬프트가 없음(GA2 ⑧)
 
 
@@ -253,6 +256,23 @@ def _key_of(m):
     return top[0]
 
 
+def _stage_violations(rel, mods):
+    """⑫ etl/<단계>/… 파일이 뒤 단계(data_pipeline.etl.<뒤 단계>)를 import하면 위반 — STAGE_ALLOW에 적힌 것만 통과."""
+    parts = rel.split("/")
+    if parts[0] != "etl" or len(parts) < 3 or parts[1] not in STAGES:
+        return []
+    own = STAGES.index(parts[1])
+    out = []
+    for m in sorted(mods):
+        seg = m.split(".")
+        if seg[:2] == ["data_pipeline", "etl"] and len(seg) > 2 and seg[2] in STAGES and STAGES.index(seg[2]) > own:
+            if (rel, seg[2]) not in STAGE_ALLOW:
+                out.append(
+                    f"{rel}: {m} import — 단계 방향 위반(extract → transform → load, 거꾸로 import 금지 — 함께 쓸 것은 pipeline/shared·common)"
+                )
+    return out
+
+
 def check():
     bad = []
     flat = {
@@ -293,6 +313,7 @@ def check():
                 foreign = key in ("data_pipeline.cli", "data_pipeline.evaluation", "tools", "dev_tools", "pipeline") or (m in flat)
                 if (other or foreign) and (rel, key) not in ALLOW:
                     bad.append(f"{rel}: {m} import — 모듈 경계 위반(함께 쓸 것은 common/)")
+        bad.extend(_stage_violations(rel, mods))
         if rel.startswith("common/"):
             for m in mods:
                 key = _key_of(m)
@@ -320,12 +341,6 @@ def check():
                 bad.append(f"{rel}: {m} import — litellm은 쓰지 않음(GA ④ — 0.2.0 ADK 장치 지움)")
             if (m == "google.adk" or m.startswith("google.adk.")) and not is_agent_py:
                 bad.append(f"{rel}: {m} import — google.adk는 지시서 패키지 agent.py에서만(GA ④ — 0.2.0 ADK 장치 지움)")
-            # TODO: 리팩토링 후 구현 필요
-            # if top == "agent_platform":
-            #     if rel not in AGENT_PLATFORM_ONLY:
-            #         bad.append(f"{rel}: {m} import — agent_platform은 common/ai/adk.py·common/ai/llm.py에서만(GA ⑤)")
-            #     elif m != "agent_platform" and m not in AGENT_PLATFORM_SUBMODULES:
-            #         bad.append(f"{rel}: {m} import — agent_platform은 config·models 서브모듈만(runtime·build·serving 금지, GA ⑤)")
     bad.extend(env_violations())
     bad.extend(child_env_violations())
     return bad

@@ -9,22 +9,22 @@
 
 ## 0. 이미지 2개 — 역할 (D-020)
 
-| 이미지 | 역할 | `RAG_MODULE` | 돌리는 서비스(`deploy/host/compose/compose.pipeline.yml`) |
+| 이미지 | 역할 | `RAG_MODULE` | 돌리는 서비스(`deploy/host/compose/` — 컨테이너마다 파일 하나: `compose.pipeline.yml` data-pipeline · `compose.pipeline-mcp.yml` data-pipeline-mcp · `compose.mcp-server.yml` mcp-server) |
 |---|---|---|---|
-| `data-pipeline` | 파싱(dedup→prepare→파싱→대표 결과)·구조화(청킹·임베딩)·적재(PostgreSQL)·퍼블리시 | `pipeline` | 1회: `parse`·`structure`·`load`·`publish`·`index_a`·`index_b` · 상주 컨테이너(같은 이미지, 일 없이 떠 있음 — `run_docs.py`가 docker exec): `data-pipeline-parse`·`data-pipeline-structure` |
+| `data-pipeline` | 파싱(dedup→prepare→파싱→대표 결과)·구조화(청킹·임베딩)·적재(PostgreSQL)·퍼블리시 | `pipeline` | 상주 컨테이너 하나 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`가 docker exec, 사용자 11-03) · 1회 작업 컨테이너 없음(11-02 — 이미지 점검 `docker run --rm … selftest`만) |
 | `mcp-server` | 검색 MCP(상주) | `mcp` | `mcp`(상주, 컨테이너 이름 `mcp-server`) — 도구 job `retrieval`·`mcp_eval`은 11-01에 지움(e2-10) |
 
-옛 이름: `data-parsing`·`data-structure` → `data-pipeline`(컨테이너 `data-pipeline-parse`·`data-pipeline-structure`), `data-retrieval` → `mcp-server`.
+옛 이름: `data-parsing`·`data-structure` → `data-pipeline`(컨테이너 `data-pipeline-parse`·`data-pipeline-structure` → 11-03부터 `data-pipeline` 하나), `data-retrieval` → `mcp-server`.
 
 - 각 이미지의 `entrypoint.sh`는 받은 명령을 `RAG_MODULE`로 거른다. 다른 이미지의 명령이면 종료 코드 64(오류 메시지에 맞는 이미지를 알려 줌).
 - 서버 입구는 `run_docs.py` 하나다(사용자 10-31). 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`는 11-01에 지웠다.
 - (`tool index` — AD41 색인 빌더 `index_a`·`index_b`는 11-01에 지웠다 — mc-16.)
 - 공통 명령(어느 이미지에서나): `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`.
 
-**코드 폴더 배치(오버레이 패치 때 settings.yaml `ops.host.patch_code` — 기본값 없음, 사용자 11-02)** — `live/app/`은 컨테이너가 읽기 전용으로 붙이는 코드(`app/deploy/<폴더>`·`app/docker`), `live/deploy/host/`·`live/deploy/release/`는 호스트에서 부르는 스크립트·compose·systemd 파일이다. 아래 명령은 모두 `live`(코드 폴더 루트)에서 실행한다.
+**코드 폴더 배치** — `live`는 저장소 트리 그대로(개발 서버는 실행 이미지에 이 폴더를 붙임 — `compose.code*.yml`, 옛 오버레이 패치 `compose.patch*.yml`·`ops.host.patch_code`는 11-03에 지움). `live/deploy/host/`·`live/deploy/release/`는 호스트에서 부르는 스크립트·compose·systemd 파일이다. 아래 명령은 모두 `live`(코드 폴더 루트)에서 실행한다.
 
 ### 0-1. 개발 서버는 실행 이미지 + 코드 폴더(op-06, 사용자 10-30)
-개발 서버(폐쇄망)는 코드 없는 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`을 쓰고, 코드 폴더(저장소 트리 그대로)를 `/app/deploy`에 읽기 전용으로 붙인다 — 셸·systemd에 `CODE_DIR=/srv/rag/code/live`(판 폴더를 가리키는 링크)를 주면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`가 `compose.code.yml`·`compose.code.mcp.yml`을 덧붙인다. settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`는 실행 이미지 태그. 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 설치·바꾸기·되돌리기는 README §5-0(배포 단계 표)과 [release-and-patch.md](release-and-patch.md) §1-1. 수집(운영) 서버는 코드가 든 이미지 — 개발 서버에서 `bake.sh`로 구운 것(release-and-patch §1-2), 띄우는 법은 아래 그대로.
+개발 서버(폐쇄망)는 코드 없는 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`을 쓰고, 코드 폴더(저장소 트리 그대로)를 `/app/deploy`에 읽기 전용으로 붙인다 — 셸·systemd에 `CODE_DIR=/srv/rag/code/live`(판 폴더를 가리키는 링크)를 주면 `trigger.sh`·`run_tool.sh`·`mcp_up.sh`가 `compose.code.yml`·`compose.code.mcp-server.yml`을 덧붙인다. settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`는 실행 이미지 태그. 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 설치·바꾸기·되돌리기는 README §5-0(배포 단계 표)과 [release-and-patch.md](release-and-patch.md) §1-1. 수집(운영) 서버는 코드가 든 이미지 — 개발 서버에서 `bake.sh`로 구운 것(release-and-patch §1-2), 띄우는 법은 아래 그대로.
 
 ## 1. 설치 · 첫 실행
 
@@ -46,8 +46,8 @@ export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.
 > ⚠️ **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` — 사용자 11-01, D-031). 바꾸려면 코드 폴더의 파일을 고쳐 오버레이 패치로 보낸다(다른 파일을 쓰려면 settings.yaml `ops.paths.stack_file` — [env-guide.md](env-guide.md) 1절). 원천 목록 `sources.json`은 11-01에 지웠다(원천은 폴더·`rdb:csv`만). 서버에 남은 옛 `struct` 스키마는 코드가 읽지 않는다.
 
 #### 값 바꾸기
-- 앱 설정 값은 `settings.yaml`을 직접 고친다. 고친 뒤 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`는 다시 띄운다.
-- **한 번 실행에만 다른 값은 명령 인자 `--set 이름=값`**. 받는 진입점: `pipeline.cli`·`pipeline.extract.source`·`pipeline.stackcfg`·`build_bundle`·`pgvector_load`·`publish_parse_result`. 예: `docker exec data-pipeline-parse python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 `settings.sample.yaml`의 `env=`. 모르는 이름·호스트 항목·비밀 항목은 종료 2, 형식 오류도 서버는 종료 2. 호스트 `run_docs.py`가 문서별 값을 이렇게 준다.
+- 앱 설정 값은 `settings.yaml`을 직접 고친다. 고친 뒤 상주 컨테이너 `data-pipeline`·`mcp-server`는 다시 띄운다.
+- **한 번 실행에만 다른 값은 명령 인자 `--set 이름=값`**. 받는 진입점: `pipeline.cli`·`pipeline.extract.source`·`pipeline.stackcfg`·`build_bundle`·`pgvector_load`·`publish_parse_result`. 예: `docker exec data-pipeline python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 `settings.sample.yaml`의 `env=`. 모르는 이름·호스트 항목·비밀 항목은 종료 2, 형식 오류도 서버는 종료 2. 호스트 `run_docs.py`가 문서별 값을 이렇게 준다.
 - 그 밖의 명령은 한 번만 다르게 돌릴 값도 고쳐 돌린 뒤 되돌린다.
 - `PIPE_PROCS=2 docker compose …`·`docker exec -e X=…` 같은 옛 env 이름 덮어쓰기는 효과가 없다(시작 때 이름만 경고).
 - 오버레이 설정 파일 도구 `python -m common.config.overrides`는 **PC 전용**이다. 서버(`RUN_ENV` dev·prd)에서는 안내 뒤 종료 2(compose는 설정 파일 하나만 컨테이너에 붙여 오버레이 파일의 `base`가 컨테이너 안에 없음 — [env-guide.md](env-guide.md) 0절 · `refactor.md` C-47 ⑥).
@@ -58,7 +58,10 @@ README §5-3 ④ 연결 점검(`run_tool.sh ping_models`·`check_env`, `run_tool
 
 ## 2. 일상 실행 — run_docs(문서별 흐름)
 
-서버 입구는 `deploy/host/scripts/run_docs.py` 하나다(사용자 10-31) — 문서마다 파싱 → 구조화 → 적재 → publish를 상주 컨테이너 안에서 `docker exec`로 돌린다(설계 `docs/architecture/run_docs_design.md`). 옛 1회 job 배치(`trigger.sh structure`·`load`·`all`·`night`)는 11-01에 지웠다. 파싱·게시만 따로 볼 때:
+서버 입구는 `deploy/host/scripts/run_docs.py` 하나다(사용자 10-31) — 문서마다 파싱 → publish(silver — Object Storage + EDW) → 원본 삭제 → 구조화·적재(gold)를 상주 컨테이너 안에서 `docker exec`로 돌린다(PRD [pl-24](../prd/ops.md#pl-24), 설계 `docs/architecture/run_docs_design.md`).
+- 원본(받아 둔 `_warm/*.bin`·`docflow/<seq>/_source_files`)은 **publish가 성공한 뒤에만** 지운다. 파싱·publish가 실패한 문서는 원본이 남고 `batch_progress/progress.log`에만 적힌다(EDW에 안 씀 — 다음 `--skip-done` 실행이 다시 고름). gold(구조화·적재)가 실패하면 publish한 silver·EDW 행은 그대로이고 로그에만 적힌다(`gold_status` 칸은 DB 담당자 — refactor.md C-81).
+- **종료 코드**(PRD [pl-18](../prd/ops.md#pl-18)): `0` 대상 0건·모두 끝 · `1` 실패 문서가 하나라도(파싱·publish·gold) · `75` 마감(`--deadline`) 도달(실패 없음) 또는 다른 run_docs가 도는 중 · `2` 설정 문제(칸 없음·형식·엔진 구성 파일). 실패와 마감이 함께면 `1`. 새벽 배치 unit은 `75`를 성공으로 친다(`SuccessExitStatus=75`).
+- **겹침 잠금:** run_docs는 시작 때 `batch_progress/run_docs.lock`을 `flock`으로 잡는다 — 새벽 배치(`trigger.sh scheduled`)와 사람이 직접 돌린 run_docs가 함께 돌지 않는다(뒤에 온 쪽이 75로 바로 끝). 프로세스가 죽으면 잠금은 저절로 풀린다(파일을 지울 필요 없음). 작업 폴더(`ops.pipeline_host.run_docs_dir`)가 같아야 같은 잠금이다. 옛 1회 job 배치(`trigger.sh structure`·`load`·`all`·`night`)는 11-01에 지웠다. 파싱·게시만 따로 볼 때:
 ```bash
 bash deploy/host/scripts/trigger.sh parse       # dedup→prepare→파싱→채점→대표 결과(_rep). 임베딩·DB 없음
 bash deploy/host/scripts/trigger.sh publish     # 대표 결과(.md) Object Storage 업로드 + EDW 메타
@@ -84,9 +87,9 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 - 지금 바로 돌리려면 run_docs를 직접 부른다(옛 `trigger.sh night`는 11-01에 지움).
 
 ### 2-3. 상주 컨테이너
-`data-pipeline-parse`·`data-pipeline-structure`는 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업을 돌리고, MCP `parse_document` 작업 서비스도 `data-pipeline-parse` 안에서 돈다. 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/ops.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
+`data-pipeline`(일괄 상주 컨테이너 — 사용자 11-03, 옛 `data-pipeline-parse`·`data-pipeline-structure`를 합침)은 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업(warm·파싱·게시·구조화·적재)을 돌린다. MCP `parse_document` 작업 서비스는 전용 상주 컨테이너 `data-pipeline-mcp`의 주 프로세스다(entrypoint `parse-service` — 사용자 11-03 rn-03: 사람이 기다리는 요청이라 일괄과 떼고 CPU 나눔 비율 `cpu_shares` 4096 > 일괄 1024, 상한 CPU 2·메모리 8g — 아직 settings.yaml 칸 없음, refactor.md C-83). 꺼지면 `mcp_up.sh`(keepalive 타이머)가 다시 띄운다. 자원 상한은 settings.yaml `pipeline.host.parse_cpus`·`parse_mem_limit`(비우면 CPU 5·메모리 24g — 옛 두 컨테이너의 합. docker는 호스트 CPU 수보다 큰 `cpus`를 거부하므로 CPU 4개 서버는 `parse_cpus`를 3 이하로 적는다). 옛 `structure_cpus`·`structure_mem_limit`은 읽지 않는다(refactor.md C-82). 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/ops.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
 ```bash
-dc up -d data-pipeline-parse data-pipeline-structure   # dc = README §5-3 ①의 도우미(settings.yaml 값을 compose에 넘김 — 그냥 docker compose는 필수 칸 `${…:?}`에서 멈춤)
+dc up -d data-pipeline data-pipeline-mcp   # dc = README §5-3 ①의 도우미(settings.yaml 값을 compose에 넘김 — 그냥 docker compose는 필수 칸 `${…:?}`에서 멈춤)
 ```
 
 ### 2-4. 테스트 실행 스크립트(코드 폴더에서 네이티브, 이미지 밖)
@@ -132,9 +135,7 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 
 | 무엇 | 위치 |
 |---|---|
-| 용어집(동의어·약어) | `app/deploy/resources/vocab/glossary/domain_terms.csv`(다른 폴더는 settings.yaml `common.paths.glossary_dir` — 옛 env `GLOSSARY_DIR`, 아래 5-1) |
-| 고객 명부 | settings.yaml `common.paths.client_roster`(옛 env `CLIENT_ROSTER` — CSV `이름,별칭\|별칭` 또는 JSON) |
-| 제품 코드 규칙 | `app/deploy/resources/vocab/glossary/id_patterns.csv` |
+| 용어집(동의어·약어) · 고객 명부 · 제품 코드 규칙 | PG 마스터 표 `<PG_SCHEMA>_master`(pl-38 — 구조화 고객 판별·검색이 읽음). 원본 CSV `app/deploy/resources/vocab/glossary/{domain_terms,client_roster,id_patterns,…}.csv`(또는 서버 폴더)를 고친 뒤 `run_tool.sh migrate master load [--dir <폴더>]`(아래 5-1). 옛 설정 `common.paths.glossary_dir`·`client_roster`(env `GLOSSARY_DIR`·`CLIENT_ROSTER`)는 지움 — 남아 있으면 경고만 |
 | 원천 표·열(문서 위치) | (11-01 원천 목록 `sources.json`·`show-sources` 지움 — 원천은 `run_docs`가 EDW에서 만든 `rdb:csv`. 열 이름이 다른 표는 `RDB_COL_*`) |
 | 엔진 구성 | `resources/config/pipeline_stack.json`(서버·PC 같음 · `ops.paths.stack_file` · 확인 `show-stack`) — 바꾸기 = 파일을 고쳐 오버레이 패치 |
 | 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성) · 서버 정답 폴더(settings.yaml 호스트 항목 `pipeline.host.gold_dir` — `run_tool.sh`가 컨테이너 `/data/gold`로 붙임) |
@@ -146,15 +147,15 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 
 ### 5-1. 고객 명부·용어집 작성법 (예제 파일을 복사해서 고쳐 쓰기)
 
-샘플(가상 회사·가상 제품 — 사용자 10-30, git·이미지에 들어감)은 경로를 설정하지 않으면 아무 데도 반영되지 않는다. 로더는 `common.paths.client_roster`로 지정한 파일과 `common.paths.glossary_dir` 폴더의 `domain_terms.csv`만 읽는다(옛 env `CLIENT_ROSTER`·`GLOSSARY_DIR`은 읽지 않음).
+구조화·검색은 파일이 아니라 PG 마스터 표(`<PG_SCHEMA>_master` — pl-38, 사용자 11-03)만 읽는다. 표는 CSV 여섯 개(`client_roster`·`client_master`·`contract_master`·`domain_terms`·`id_patterns`·`units` — 파일 이름·머리글 그대로)로 `migrate master load`가 통째로 채운다. 기본 폴더는 이미지·코드 폴더의 샘플(가상 회사·가상 제품 — 사용자 10-30, git·이미지에 들어감) `app/deploy/resources/vocab/glossary/`, 서버 실명 자료는 서버 폴더를 `--dir`로. 표가 비었으면 구조화·검색이 시작하지 않는다. **`master load` 뒤에는 검색 MCP를 다시 시작한다**(사용자 11-03 — 검색은 시작할 때와 새 적재 판이 들어올 때만 마스터를 다시 읽음, 해시를 따로 지켜보지 않음). 고친 뒤에는 `gold_version`의 마스터 해시가 바뀌지만 이미 적재한 문서는 자동으로 다시 처리하지 않는다.
 - `app/deploy/resources/vocab/glossary/client_roster.csv` — 고객 명부 샘플(고객·잠재 고객, 빈칸·비활성 행 예시 포함 + 한빛 샘플 문서의 고객 Argen Biopharma·Luminexis Therapeutics)
 - `app/deploy/resources/vocab/glossary/domain_terms.csv` — 용어집 샘플
 - `app/deploy/resources/vocab/glossary/contract_master.csv`·`client_master.csv` — 계약·고객 마스터 샘플(머리글은 `docs/architecture/db_schema.md` §5)
 
-> ⚠️ **지금 compose에는 `/srv/rag/env/`(명부 `client_roster.csv`, 용어집 `glossary/`)를 컨테이너에 붙이는 줄이 없다**(`refactor.md` C-21). settings.yaml에 호스트 경로를 그대로 적으면 파일 없음 오류가 난다 — 경로는 **컨테이너 안에서 보이는** 경로로 적는다. 마운트를 더할지 정하기 전에는 이미지 안 예제 폴더를 쓴다.
+> ⚠️ **지금 compose에는 `/srv/rag/env/glossary/`를 컨테이너에 붙이는 줄이 없다**(`refactor.md` C-21). `--dir`에는 **컨테이너 안에서 보이는** 폴더를 적는다(마운트를 더할지 정하기 전에는 코드 폴더 안 `resources/vocab/glossary/`를 고쳐 쓰고 `migrate master load`).
 
 #### 고객 명부
-settings.yaml `common.paths.client_roster`. 한 줄 = 고객 하나 · 머리글 그대로 · 필수는 `canonical_name` 또는 `name_ko` 하나뿐, 나머지는 비워도 됨.
+마스터 표 `client_roster`(파일 `client_roster.csv` — 위 `migrate master load`). 한 줄 = 고객 하나 · 머리글 그대로 · 필수는 `canonical_name` 또는 `name_ko` 하나뿐, 나머지는 비워도 됨.
 
 | 항목 | 쓰는 법 |
 |---|---|
@@ -168,9 +169,9 @@ settings.yaml `common.paths.client_roster`. 한 줄 = 고객 하나 · 머리글
 | `description`·`source`·`updated` | 메모·출처·수정일 — 비워도 됨 |
 
 - 영문 3자 이하 별칭(예: `PFE`)은 부분 일치 오탐 때문에 자동으로 무시된다 — 4자 이상이나 한글로 적는다. 같은 별칭을 두 고객에 쓰지 않는다.
-- 옛 형식(`이름,별칭;별칭` 2열 CSV, JSON `{"이름": [별칭]}`)도 그대로 읽힌다.
+- 마스터 표에 넣는 파일은 위 새 양식 머리글이어야 한다(`master load`가 머리글이 다르면 거부). 옛 형식(`이름,별칭;별칭` 2열 CSV, JSON `{"이름": [별칭]}`)은 `gen_roster --check`·`read_roster` 점검으로만 읽힌다.
 - UTF-8로 저장(Excel이면 "CSV UTF-8"). Excel 기본 cp949도 읽힌다.
-- 서버: `/srv/rag/env/client_roster.csv`에 두고 settings.yaml `common.paths.client_roster`에 **컨테이너 안에서 보이는** 그 파일 경로를 적는다(위 ⚠️).
+- 서버: 실명 명부는 서버 폴더(예 `/srv/rag/env/glossary/client_roster.csv` — 나머지 다섯 파일도 같은 폴더에)에 두고 `migrate master load --dir <컨테이너 안에서 보이는 그 폴더>`(위 ⚠️).
 
 #### 고객 마스터에서 명부 자동 생성
 SFDC·EDW 내보내기(예 `client_master.csv`)에서 명부를 만든다. 손으로 명부를 쓰지 않고, 마스터의 열 이름만 매핑 파일에 적는다(열 이름은 회사마다 달라 코드가 아니라 매핑으로 맞춤).
@@ -196,7 +197,7 @@ PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --check 
 ```
 
 #### 용어집
-`<glossary_dir>/domain_terms.csv`. 한 줄 = 개념 하나, 여러 값 항목은 `\|` 구분 · 빈칸 허용.
+`domain_terms.csv`(마스터 표 `domain_terms`). 한 줄 = 개념 하나, 여러 값 항목은 `\|` 구분 · 빈칸 허용.
 
 | 항목 | 쓰는 법 |
 |---|---|
@@ -213,8 +214,8 @@ PYTHONPATH=app/deploy python -m pipeline.transform.structure.gen_roster --check 
 | `status` | **비우면 approved(반영)** · 빼고 싶은 행만 `draft`(또는 `rejected`) |
 
 - 적재 오류(조용히 넘기지 않음): 명시한 `concept_id` 중복 · 없는 ID를 가리키는 `broader`/`related` · `id_patterns.csv`의 깨진 정규식.
-- 서버: 폴더째 `/srv/rag/env/glossary/`(같은 폴더에 `id_patterns.csv`·`units.csv`도 — 예제는 `app/deploy/resources/vocab/glossary/`의 같은 이름 파일)에 두고 settings.yaml `common.paths.glossary_dir`에 **컨테이너 안에서 보이는** 그 폴더 경로를 적는다(위 ⚠️).
-- 자동 초안: `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`는 `output/` 아래 draft만 만든다. 사람이 확인해 `domain_terms.csv`로 옮긴다(`status`를 비우거나 `approved`).
+- 서버: 폴더째 `/srv/rag/env/glossary/`(여섯 파일 — 예제는 `app/deploy/resources/vocab/glossary/`의 같은 이름 파일)에 두고 `migrate master load --dir <컨테이너 안에서 보이는 그 폴더>`(위 ⚠️).
+- 자동 초안: `python -m pipeline.transform.structure.glossary_suggest`·`gen_roster --kind product`·`python -m pipeline.transform.structure.draft_terms --bundle <묶음>`(새 회사 이름 후보 — 11-03부터 묶음 밖 도구, pl-38)은 `output/` 아래 draft만 만든다. 사람이 확인해 `domain_terms.csv`로 옮긴다(`status`를 비우거나 `approved`).
 - 실명(실고객·실제품)은 서버 폴더에만 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤 같은 질문 세트로 검색 결과 전/후 비교(검증 페이지 — `mcp_eval`은 11-01에 지움).
 
 #### 점검(반영 전)

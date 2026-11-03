@@ -38,7 +38,7 @@ def _value(path, name, kind):
         return "01:30" if name == "NIGHTLY_TIME" else "06:00"  # HH:MM 칸(#99)
     if name == "DOCKER":
         return "podman"
-    return f"/srv/x/{name.lower()}" if "DIR" in name or name in ("DOC_SRC", "RAG_OUT", "PATCH_CODE") else f"v-{name.lower()}:0.2.0"
+    return f"/srv/x/{name.lower()}" if "DIR" in name or name in ("DOC_SRC", "RAG_OUT") else f"v-{name.lower()}:0.2.0"
 
 
 def test_host_env_matches_export():

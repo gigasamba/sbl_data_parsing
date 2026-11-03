@@ -646,13 +646,12 @@ def _top_n(sql, n, dialect):
 
 
 def _row_budget(max_rows):
-    """2026-10-22 사용자 결정 — 기본 행 예산 2000행: 실효 상한 = max(1, min(max_rows, EDW_QUERY_MAX_ROWS or 2000)).
-    도구 기본(max_rows=2000)과 폴백 상한을 같은 날 함께 인상해 "기본 2000행"이 실효로 성립하게 했다
-    (상한이 옛 1000이면 실효는 1000에 묶인다). env 우선·0은 1행(max(1,…))은 기존 규칙 그대로."""
+    """실효 상한 = max(1, min(max_rows, EDW_QUERY_MAX_ROWS)). 기본 1000행 — 사용자 11-03: 운영 서버와 같게 도구 기본(max_rows)과
+    설정 기본을 함께 1000으로(10-22에 둘 다 2000으로 올렸던 것을 되돌림). 설정 우선·0은 1행(max(1,…))은 그대로."""
     return max(1, min(int(max_rows), int(mc.cfg().edw_query.max_rows)))
 
 
-def query(sql, max_rows=2000, caller="mcp:stdio"):
+def query(sql, max_rows=1000, caller="mcp:stdio"):
     """Run one read-only SELECT/WITH against EDW and return a JSON-safe result (see QueryResult).
     Every call — accepted or rejected — is written to the MCP query log (mcp_server/services/search/qa_log.py)."""
     t0 = time.monotonic()

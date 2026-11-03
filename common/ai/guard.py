@@ -269,7 +269,7 @@ def check_scope(urls, *, n_combos=None, n_docs=None, n_questions=None):
 
 
 def precheck(url, prefix):
-    """모델 호출 전 비용 관문(원래 urlopen 안에 있던 사전 검사 — GA, urlopen·common/adk.py가 공유하게 뽑음).
+    """모델 호출 전 비용 관문(원래 urlopen 안에 있던 사전 검사 — GA, urlopen·common.ai.llm이 공유하게 뽑음).
     require_internal(외부 주소 거부)은 별개로 호출자가 먼저 부른다. 비용 관문(10-05): NO_PAID_CALLS=1이면 외부 주소
     호출 자체를 거부(추정·preflight·context-only) · LLM_BUDGET_USD가 있으면 llm.chat 밖 호출(VLM·EMBED·RERANK)도
     호출 전 고정 예상액을 선차감(LLM은 llm.chat이 토큰 기준으로 함).
@@ -325,8 +325,8 @@ def _connect_timeout():
 
 def _connect_with_split_timeout(conn, real_connect):
     """connect()만 _connect_timeout()으로 짧게 묻고, 연결되면 소켓 타임아웃을 호출자가 원래 요청한 전체 시간(읽기
-    상한)으로 되돌린다 — http·https 전송(MODEL_TRANSPORT=http, 어댑터 롤백 경로) 둘 다 adk/litellm 경로(RV24,
-    agent_platform.models.create_model)와 같은 connect/read 분리를 받는다. real_connect는 호출부가 넘기는 실제
+    상한)으로 되돌린다 — http·https 전송 둘 다 같은 connect/read 분리를 받는다(0.2.0 — 모델 호출은 common.ai.llm HTTP 한 길,
+    옛 ADK·litellm 경로는 pl-46에 지움). real_connect는 호출부가 넘기는 실제
     부모 클래스의 connect(HTTPConnection 또는 HTTPSConnection, TLS 핸드셰이크까지 포함)
     — zero-arg super()는 __class__ 셀이 정의 시점 클래스에 묶여 다른 클래스(HTTPS용)에 그대로 재사용 못 해
     (TypeError: super(type, obj) — obj must be instance of type) 두 클래스가 각자 자기 부모를 명시해서 넘긴다."""

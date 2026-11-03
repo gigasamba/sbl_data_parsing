@@ -49,6 +49,7 @@ from pathlib import Path
 from common.core import span as SP  # op-01 성능 span
 from common.core.console import utf8_stdout
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.shared.exts import IMG_EXTS
 
 
 def load_stack(path):
@@ -119,6 +120,7 @@ def _merge_paragraphs(rep_text, other_texts, other_docs=None):
         docs_list = list(other_docs.values())
         scored = sorted(zip(other_texts, docs_list), key=lambda pair: _richness(pair[1]), reverse=True)
         sorted_texts = [t for t, _ in scored]
+    split_others = [other.split("\n\n") for other in sorted_texts if other]  # 엔진마다 한 번만 나눔(fp-perf B3 — 문단마다 나누던 것)
     for i, para in enumerate(rep_paras):
         if not para.strip():
             continue
@@ -126,10 +128,7 @@ def _merge_paragraphs(rep_text, other_texts, other_docs=None):
         best_para = para
         best_len = len(para.strip())
         best_has_struct = rep_has_struct
-        for other in sorted_texts:
-            if not other:
-                continue
-            other_paras = other.split("\n\n")
+        for other_paras in split_others:
             if i < len(other_paras):
                 cand = other_paras[i].strip()
                 if not cand:
@@ -616,15 +615,7 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     return info
 
 
-IMAGE_TYPES = {
-    ".pdf_image",
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".tif",
-    ".tiff",
-    ".bmp",
-}  # run_all과 같은 형식 키(qa.json format — progress.doc_types)
+IMAGE_TYPES = IMG_EXTS | {".pdf_image"}  # run_all과 같은 형식 키(qa.json format — progress.doc_types)
 
 
 def _vlm_transcribed(rep, dd):
@@ -923,19 +914,12 @@ def represent(stack, parse_dir, src=None):
     with (out_dir / "conflicts.jsonl").open("w", encoding="utf-8") as f:  # AD25(b)(c) — 표 행(자리)에서 값은 같은데 표기가
         for r in conflicts_out:  # 갈린 엔진들(승자·패자·원문 표기) 문서 밖 한 파일로
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    _agg = {}
-    for k in ("load", "merge", "fuse", "scanfill", "post", "table"):
-        _agg[k] = round(
-            sum(
-                (
-                    json.loads((out_dir / f"{r['doc']}.json").read_text(encoding="utf-8")).get("rep", {}).get("stage_times", {}).get(k, 0)
-                    for r in index
-                    if r.get("engine")
-                )
-                or [0]
-            ),
-            1,
-        )
+    _times = [  # 문서마다 _rep/<문서>.json을 한 번만 읽음(fp-perf B6 — 단계 칸마다 6번 다시 읽던 것)
+        json.loads((out_dir / f"{r['doc']}.json").read_text(encoding="utf-8")).get("rep", {}).get("stage_times", {})
+        for r in index
+        if r.get("engine")
+    ]
+    _agg = {k: round(sum(t.get(k, 0) for t in _times), 1) for k in ("load", "merge", "fuse", "scanfill", "post", "table")}
     print(
         "[represent] 단계별 누적: " + " ".join(f"{k}={_agg[k]:.0f}s" for k in ("load", "merge", "fuse", "scanfill", "post", "table")),
         flush=True,

@@ -35,7 +35,8 @@
 - 결정(허브 10-31, 최신 결정 우선): C6이 이긴다 — 고객 거르기는 `client_edw`만. 위 T2의 '`sf_acc_name`이 비었을 때만 라벨로 판정'은 없앤다(별칭 그룹 정확 일치·목록 OR은 남김 — 별칭 CSV는 [load.md#pl-38](load.md#pl-38) 0.2.0 몫). 근거의 `client` = `client_edw`, `clients_doc`은 따로 둔 참고 칸.
 - 구현(11-01 `feature/mcp-ops-parity`, 허브 지시 "운영이 version/superseded를 아직 내면 칸은 두고 추정만 멈춤"): 운영 계약(05 §2.4)에 `version`·`superseded`·`doc_date`가 남아 있어 칸은 둔다. 운영 예시 값은 모두 null이라 운영도 본문 추정을 하지 않는 것으로 본다 → `search` 근거의 `version`은 수집 manifest 값만(없으면 null), `superseded`는 늘 null(`shaping._evidence`). `doc_date`는 이 결정 밖이라 그대로. 본문 추정값(`common/core/docmeta.py`)은 안쪽 최신성 순위(L3-1)에만 남는다 — 순위를 EDW `created_at`으로 바꾸는 일은 남음. 시험: `test_search_svc` `_selftest_evidence_rdb_meta`.
 - 11-02(사용자 C6): 고객 판정 고침 — 본문 고객 라벨로 앞으로 올리던 길(AD38·BR50 `clientscope`)·고객별 하위 검색(BR23)·설정 `SEARCH_CLIENT_HARD`/`STRICT`를 지우고, `client` 거르기는 `client_edw` 정확 일치(`client_like`면 부분 일치)만. 별칭 묶음은 [pl-38](load.md#pl-38) 몫.
-- Status: todo — 최신성 순위를 `created_at`으로(남은 것). 고객 판정·version·superseded 출력은 done(11-01·11-02)
+- 결정(사용자 11-03 — [load.md#pl-38](load.md#pl-38)): 판 묶음(family)과 그것으로 옛 판을 뒤로 밀던 최신성 순위(`recency_rerank`·설정 `SEARCH_RECENCY`)를 지운다. `doc_date`·`version`·`superseded` 칸은 남김. 잠재 문제(같은 문서의 다른 판이 `s3_key`가 달라 '최신' 질문에서 옛 판이 위로 올 수 있음)는 pl-38에 기록 — 필요해지면 `created_at`으로 다시 설계.
+- Status: todo — 최신성 순위는 11-03에 지움(다시 설계는 잠재 문제로). 고객 판정·version·superseded 출력은 done(11-01·11-02)
 
 <a id="mc-04"></a>
 ## mc-04 · 집계 답
@@ -181,6 +182,7 @@
 - 무엇: SELECT/WITH 하나만, 표 허용 목록(mssql: 기본 꺼짐 — `EDW_QUERY_TABLES_STRICT=0`이면 시스템 카탈로그를 뺀 모든 스키마 허용, sqlite 대역은 함께 든 목록), 행·시간·바이트 상한, 낮은 권한의 별도 로그인, PC 시험용 sqlite 대역.
 - 파일: `mcp_server/services/edw_query.py`, `mcp_server/services/edw_calls.py`.
 - 배포 주의(reference 비교(사용자 grill 10-30, 원본은 git 밖) T14): `query_edw` 가드의 오탐(정상 SELECT 거부)을 서버에서 확인.
+- 결정(사용자 11-03): 행 상한 1,000행 — 운영 서버와 같게. 설정 기본(`search.edw_query.max_rows`, `EDW_QUERY_MAX_ROWS`)과 도구 기본값 `max_rows`를 함께 2000 → 1000(10-22에 둘 다 2000으로 올렸던 것을 되돌림). 도구 계약(tools/list) 바뀜 — 등급 A(사람 검토), 바이트·SHA-256 전후는 `tests/server/mcp/test_call_log.py`(`feature/mcp-limits`).
 - Status: done
 
 <a id="mc-07"></a>
@@ -197,6 +199,7 @@
 - 무엇: 경로(inbox 루트 아래) 또는 base64 내용을 127.0.0.1:8766의 파싱 서비스에 Bearer 토큰으로 넘긴다. 글, 표준 표, 사실, 엔진, 시간을 돌려주고 시간 초과면 `job_id`.
 - 파일: `mcp_server/services/parse_proxy.py`, `pipeline/mcp_parse_service.py`.
 - 스캔 PDF(11-01 — [pl-03](transform.md#pl-03) stack 하나): 파이프라인 없이 빈 결과 + 안내 "스캔 PDF — 지금은 text 파싱 결과 없음(OCR·VLM 미실행, 추후 지원 예정)" — 다시 지원은 [mc-18](#mc-18).
+- 결정(사용자 11-03): 파일 크기 상한 100 MB, 처음부터 끝까지. 한 것(`feature/mcp-limits`): ① 상한은 칸 하나 `common.runtime.parse_max_mb`(파일 자리 `ops.runtime.parse_max_mb`, 옛 env 이름 `PARSE_MCP_MAX_MB`, 기본 100 — MB = 1024×1024바이트)를 검색 MCP와 파싱 서비스가 같이 읽는다(옛 `ops.services.parse_mcp.max_mb` 기본 64는 지움 — 남아 있으면 경고만). ② 검색 MCP: 상한을 넘는 `content_b64`는 서비스로 보내지 않고 바로 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — ops.runtime.parse_max_mb"}`. HTTP 요청 본문 상한(MCP SDK 기본 4 MiB — 그동안 base64 길은 약 3 MB에서 413으로 막혀 있었음)을 상한의 1.5배 + 1 MiB로 올림. 본문 상한은 `/mcp` 주소 하나라 모든 도구에 걸리므로, 4 MiB보다 크거나 길이를 밝히지 않은 요청은 동시에 2개까지만 처리하고 나머지는 본문을 읽기 전에 기다린다(거부 아님 — 4g 컨테이너 메모리 보호, `mcp_server/main.py` `_BIG_SLOTS`, PR #110 리뷰). 서비스 등록 요청 대기 10초 → 60초(등록 시간도 `time_out_threshold` 안에 셈). base64 크기는 줄바꿈·공백을 빼고 셈(MIME 줄바꿈 base64도 같은 값). ③ 파싱 서비스: 경로(`path`)로 준 파일도 같은 상한으로 거름(전에는 base64만), 본문 상한을 파일 상한의 1.5배 + 1 MiB로(검색 MCP와 같은 식)(전에는 파일 상한 + 64 KB라 base64 본문이 상한의 3/4에서 막힘). 시험 `tests/server/mcp/test_parse_limit.py`·`tests/server/pipeline/test_parse_svc.py`(상한 1 MB로 덮고 0.9 MB 받음·1.1 MB 거부, 두 길). PC 실측(99 MB·101 MB PDF, 실제 서비스+MCP HTTP)은 커밋 메시지·refactor.md C-85. 도구 설명의 "64MB 상한" → "기본 100MB 상한"으로 도구 계약(tools/list) 바뀜 — 등급 A.
 - Status: done
 
 <a id="mc-09"></a>
@@ -227,7 +230,6 @@
 | 기능 | 스위치 = 기본값 | 필요한 것 |
 |---|---|---|
 | 하드 고객 격리 | `SEARCH_CLIENT_HARD=0`, `SEARCH_CLIENT_STRICT=0` | — |
-| 늘 새 판 먼저 | `SEARCH_RECENCY=1`("최신" 질문만, `2` = 늘) | — |
 | `query_edw` | `EDW_QUERY=1` | `common.connections.rdb` + 읽기 계정, 또는 `RDB_SQLITE` |
 | `edw_meta` | — | `EDW_META_DIR`의 자료(기본 `/app/config/edw_meta`) |
 | `parse_document` | OCR/VLM 엔진 없음(OCR 스위치는 0.2.0에 지움 — pl-46) · 제한 글자 쪽당 1초, VLM 쪽당 60초 | `mcp_parse_service` 실행 + `PARSE_SERVICE_TOKEN` |

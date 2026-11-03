@@ -1,6 +1,8 @@
-"""고객 이름·별칭(명부)·모달리티 어휘·ID 모양·용어 사전(T2·X3·X4) — 구조화(고객 판별·사실)와 검색(질문 고객·집계·질문 확장)이 같은 규칙을 써야 함.
-명부 = stack.json client_aliases + CLIENT_ROSTER 파일 + GLOSSARY_DIR 용어 사전 org_*(category에 org_client 태그 포함).
-용어 사전(domain-glossary.md): GLOSSARY_DIR/domain_terms.csv — concept_id마다 canonical·synonyms·abbreviations·weak_synonyms·broader·related·
+"""고객 이름·별칭(명부)·ID 모양·용어 사전(T2·X3·X4) — 구조화(고객 판별)와 검색(질문 고객·질문 확장)이 같은 규칙을 써야 함.
+pl-38(사용자 11-03): 명부·용어 사전·ID 모양은 PG 마스터 표(`<PG_SCHEMA>_master` — common.store.master, 원본 git CSV)에서 읽는다(프로세스마다 한 번).
+dir 인자(오프라인 도구·시험)를 주면 그 폴더의 CSV를 읽는다.
+명부 = stack.json client_aliases + 마스터 client_roster + 용어 사전 org_*(category에 org_client 태그 포함).
+용어 사전(domain-glossary.md): 마스터 domain_terms — concept_id마다 canonical·synonyms·abbreviations·weak_synonyms·broader·related·
 context_required(동음이의 약어 문맥 조건)·case_sensitive·definition_ko/en·status(approved만 검색에 반영)·category(SI43① `|` 구분 다중 태그 가능,
 예 org_client|org_cdmo — 회사가 고객이면서 CDMO). SI43⑦: 이름·개념 표기 뒤 한글 조사가 붙어도 매칭(_name_pat — expand_query·match_clients 공유)."""
 import sys as _sys
@@ -16,7 +18,7 @@ from common.core.text import tokens
 
 
 def _cfg():
-    """common 설정 객체(op-09 — 옛 env 다리 GLOSSARY_DIR·CLIENT_ROSTER·DRAFT_TERMS_* 대신). import 순환을 피해 늦게 읽음."""
+    """common 설정 객체(op-09 — 옛 env 다리 DRAFT_TERMS_* 대신). import 순환을 피해 늦게 읽음."""
     from common.config.settings import cfg
     return cfg()
 
@@ -25,33 +27,6 @@ ROOT = PKG_ROOT
 
 
 ID_LIKE = re.compile(r"(?=.*\d)(?=.*[A-Za-z-])[A-Za-z0-9][A-Za-z0-9\-_/.]{4,}")
-
-MODALITIES = {"adc": "ADC", "mab": "mAb", "bispecific": "bispecific", "vaccine": "vaccine", "이중항체": "bispecific", "백신": "vaccine"}
-# ↑ 코드 기본값(DT1 c1) — modalities()가 용어집(category=modality)에서 못 찾으면 그대로 씀(바이트 동일 보장).
-
-
-def modalities(glossary=None):
-    """모달리티 표기(소문자/원문)→표준 코드 — 용어집(GLOSSARY_DIR) category=modality_code(approved) 항목의
-    canonical·synonyms·abbreviations에서 만든다(DT1 c1 — aggregate.py·structured.py·facts.py 공용). 용어집 없음
-    (GLOSSARY_DIR 미설정)이거나 modality_code 카테고리 항목이 하나도 없으면 코드 기본값 MODALITIES(CDMO 예제)와
-    바이트 동일 동작. category는 일부러 일반 어휘 category=modality(canonical이 'Antibody–Drug Conjugate'처럼 긴
-    정식명 — lookup_term·사람이 읽는 사전용)와 다른 값을 씀: 이 함수가 만드는 값은 structured.py/facts.py가 문서에서
-    뽑아 contract_master.modality 열에 그대로 쓰는 짧은 코드("ADC"·"mAb" 등)라 같은 category를 재사용하면 값이 달라져
-    집계 필터가 깨진다(실측: dev/glossary/domain_terms.csv의 기존 modality 카테고리를 그대로 썼다면 레코드의
-    "ADC"가 "Antibody–Drug Conjugate"와 안 맞아 모달리티별 집계가 전부 빠짐 — modality_code로 새 행 4개를 추가해
-    피함, MODCODE.*)."""
-    glossary = load_glossary() if glossary is None else glossary
-    out = {}
-    for r in glossary.values():
-        if "modality_code" not in split_terms(r.get("category")):
-            continue
-        canon = r.get("canonical") or ""
-        if not canon:
-            continue
-        for s in [canon] + split_terms(r.get("synonyms")) + split_terms(r.get("abbreviations")):
-            if s:
-                out[s.lower()] = canon
-    return out or MODALITIES
 
 PARTICLES = ("에서", "으로", "한테", "까지", "부터", "과", "와", "의", "은", "는", "이", "가", "을", "를", "에", "로", "도", "만", "께")
 # SI43⑦ — 한글 고유명사 뒤에 붙는 조사(실측: '셀트리온과'·'론자의'가 안 잡힘 — 긴 조사부터 시도, _name_pat 전용)
@@ -83,35 +58,38 @@ def _name_pat(name, flags=re.I):
     return re.compile(pat, flags)
 
 
-def load_id_patterns_typed(dir=None):
-    """id_patterns.csv(GLOSSARY_DIR, L4-7) 컴파일 — [(id_type, 정규식), …](대소문자 무시). 사전 없음(dir도 GLOSSARY_DIR도
-    없음)·파일 없음이면 빈 목록. load_id_patterns()가 이걸로 구현됨 — AD28② 업무 개체화(modules/structure/build_bundle.py)는
-    id_type이 필요해 이쪽을 직접 씀(계약 번호·배치/로트 등 kind 구분), 그 외(docmeta·research)는 정규식만 필요해 기존 함수 그대로."""
-    d = dir or _cfg().paths.glossary_dir
-    if not d:
-        return []
-    p = Path(d) / "id_patterns.csv"
+def _id_rows(dir=None):
+    """ID 모양 행 — dir(오프라인 도구·시험)이면 그 폴더 id_patterns.csv(없으면 빈 목록), 아니면 마스터 id_patterns(pl-38)."""
+    if dir is None:
+        from common.store import master
+        return master.get().rows("id_patterns")
+    p = Path(dir) / "id_patterns.csv"
     if not p.exists():
         return []
     import csv
-    pats = []
     with p.open(encoding="utf-8-sig") as fh:
-        for r in csv.DictReader(fh):
-            try:
-                pats.append((r["id_type"], re.compile(r["regex"], re.I)))
-            except re.error:
-                continue   # validate_glossary가 오류를 알림 — 매칭 용도로는 조용히 건너뜀
+        return list(csv.DictReader(fh))
+
+
+def load_id_patterns_typed(dir=None):
+    """ID 모양(L4-7) 컴파일 — [(id_type, 정규식), …](대소문자 무시). 마스터 id_patterns(pl-38) — dir을 주면 그 폴더 CSV(없으면 빈 목록).
+    검색 tie-break·엔티티 힌트(mcp local)가 id_type(계약 번호·제품 코드 등)으로 씀."""
+    pats = []
+    for r in _id_rows(dir):
+        try:
+            pats.append((r["id_type"], re.compile(r["regex"], re.I)))
+        except re.error:
+            continue   # validate_glossary가 오류를 알림 — 매칭 용도로는 조용히 건너뜀
     return pats
 
 
 def load_id_patterns(dir=None):
-    """id_patterns.csv(GLOSSARY_DIR, L4-7) 컴파일 — 파일명 속 ID 모양(계약 번호 등) 정규식 목록(대소문자 무시).
-    사전 없음(dir도 GLOSSARY_DIR도 없음)·파일 없음이면 빈 목록 — family_key(docmeta)·validate_glossary가 같은 로더를 씀."""
+    """ID 모양 정규식 목록(load_id_patterns_typed에서 id_type만 뺌)."""
     return [pat for _, pat in load_id_patterns_typed(dir)]
 
 
-def validate_glossary(rows, dir=None):
-    """용어 사전 검증(X3) — 개념 ID 중복 · broader·related 참조 해소 · (dir 주면) id_patterns.csv 정규식 컴파일. 오류 문자열 목록(없으면 통과)."""
+def validate_glossary(rows, dir=None, id_rows=None):
+    """용어 사전 검증(X3) — 개념 ID 중복 · broader·related 참조 해소 · ID 모양 정규식 컴파일(id_rows, 또는 dir의 id_patterns.csv). 오류 문자열 목록(없으면 통과)."""
     errs = []
     ids = [r["concept_id"] for r in rows]
     dup = sorted({i for i in ids if ids.count(i) > 1})
@@ -123,16 +101,13 @@ def validate_glossary(rows, dir=None):
             for ref in split_terms(r.get(field)):
                 if ref not in idset:
                     errs.append(f"{r.get('concept_id')}.{field} 참조 없음: {ref}")
-    if dir is not None:
-        p = Path(dir) / "id_patterns.csv"
-        if p.exists():
-            import csv
-            with p.open(encoding="utf-8-sig") as fh:
-                for r in csv.DictReader(fh):
-                    try:
-                        re.compile(r["regex"])
-                    except re.error as ex:
-                        errs.append(f"id_patterns {r.get('id_type')} 정규식 오류: {ex}")
+    if id_rows is None and dir is not None:
+        id_rows = _id_rows(dir)
+    for r in id_rows or ():
+        try:
+            re.compile(r["regex"])
+        except re.error as ex:
+            errs.append(f"id_patterns {r.get('id_type')} 정규식 오류: {ex}")
     return errs
 
 
@@ -169,15 +144,50 @@ def _fill_glossary_blanks(rows):
     return out
 
 
+def _mtime(p):
+    """파일 (크기, 고친 시각 ns) — 없으면 None. 읽은 결과 캐시 열쇠(파일이 바뀌면 다시 읽음 — fp-perf B2, contract.file_hash와 같은 열쇠)."""
+    try:
+        st = os.stat(p)
+        return (st.st_size, st.st_mtime_ns)
+    except OSError:
+        return None
+
+
+_CACHE = {}  # (종류, 경로·크기·고친 시각…) → 읽은 결과 — 문서마다 명부·사전을 다시 읽지 않게(fp-perf B2, 0.2.0)
+_CACHE_MAX = 4  # ponytail: 상주 검색 서버에서 파일을 바꿀 때마다 옛 결과가 쌓이지 않게 — 넘으면 가장 오래된 것부터 버림
+
+
+def _cached(key, build):
+    if key not in _CACHE:
+        while len(_CACHE) >= _CACHE_MAX:
+            _CACHE.pop(next(iter(_CACHE)))
+        _CACHE[key] = build()
+    return _CACHE[key]
+
+
 def load_glossary(dir=None):
-    """용어 사전 로더(X3) — dir(없으면 GLOSSARY_DIR)의 domain_terms.csv를 읽어 검증 후 approved만 {concept_id: row}로.
-    사전 없음(인자도 GLOSSARY_DIR도 없음)이면 빈 사전(확장 없이 동작 — 사전이 선택 장치임을 보장)."""
-    d = dir or _cfg().paths.glossary_dir
-    if not d:
-        return {}
+    """용어 사전 로더(X3) — 마스터 domain_terms(pl-38)를 검증 후 approved만 {concept_id: row}로. dir을 주면 그 폴더 domain_terms.csv
+    (오프라인 도구·시험). 같은 마스터 해시(또는 같은 파일)면 한 번만 만든다 — 돌려주는 사전은 얕은 사본(호출부가 고쳐도 캐시는 그대로)."""
+    if dir is None:
+        from common.store import master
+        return dict(_master_glossary(master.get()))
+    key = ("glossary", str(dir), _mtime(Path(dir) / "domain_terms.csv"), _mtime(Path(dir) / "id_patterns.csv"))  # 검증이 id_patterns도 읽음
+    return dict(_cached(key, lambda: _load_glossary(dir)))
+
+
+def _master_glossary(m):
+    """마스터(common.store.master.Master)의 용어 사전 — 같은 해시면 한 번만 만든다."""
+    return _cached(("glossary", m.hash), lambda: _build_glossary(m.rows("domain_terms"), None, m.rows("id_patterns")))
+
+
+def _load_glossary(d):
     import csv
-    rows = _fill_glossary_blanks(csv.DictReader(_read_text(Path(d) / "domain_terms.csv")[0].splitlines()))
-    errs = validate_glossary(rows, d)
+    return _build_glossary(csv.DictReader(_read_text(Path(d) / "domain_terms.csv")[0].splitlines()), d)
+
+
+def _build_glossary(rows, d=None, id_rows=None):
+    rows = _fill_glossary_blanks(rows)
+    errs = validate_glossary(rows, d, id_rows)
     if errs:
         raise ValueError("용어 사전 검증 실패:\n- " + "\n- ".join(errs))
     return {r["concept_id"]: r for r in rows if r.get("status") == "approved"}
@@ -427,52 +437,65 @@ def _roster_rows(path):
     lines = txt.splitlines()
     head = [h.strip().lower() for h in next(csv.reader(lines[:1]), [])]
     if "canonical_name" in head:   # 10-15 긴급 — 새 형식(docs: env-guide 'CLIENT_ROSTER' 표): 정식 이름 빈칸이면 name_ko로, 둘 다 빈칸이면 버림
-        out = []
-        for r in csv.DictReader(lines):
-            # extra cells (unquoted comma) land under key None as a list — skip them like _fill_glossary_blanks does
-            r = {k.strip().lower(): (v or "").strip() for k, v in r.items() if k is not None}
-            if r.get("status", "").lower() in ("inactive", "deleted"):   # SFDC exports write "Inactive"
-                continue
-            name = r.get("canonical_name") or r.get("name_ko")
-            if not name:
-                continue
-            al = [x.strip() for x in re.split(r"[;|]", r.get("aliases", "")) if x.strip()]
-            if r.get("name_ko") and r["name_ko"] != name:
-                al.append(r["name_ko"])
-            out.append((name, al))
-        return out, enc
+        return _roster_dicts(csv.DictReader(lines)), enc
     return [(r[0].strip(), [x.strip() for x in re.split(r"[;|]", r[1]) if x.strip()] if len(r) > 1 else [])
             for r in csv.reader(txt.splitlines())
             if r and r[0].strip() and r[0].strip().lower() not in ("name", "고객", "client")], enc
 
 
-def read_roster(path):
-    """E15 — CLIENT_ROSTER → {정식 이름: [별칭…]}(같은 이름 여러 줄은 합침 · 영문 3자 이하 별칭은 뺌 — 용어집 org_client와 같은 규칙)."""
+def _roster_dicts(rows):
+    """새 형식 명부 행(사전 — CSV DictReader·마스터 client_roster 같은 칸) → [(정식 이름, [별칭…]), …]."""
+    out = []
+    for r in rows:
+        # extra cells (unquoted comma) land under key None as a list — skip them like _fill_glossary_blanks does
+        r = {k.strip().lower(): (v or "").strip() for k, v in r.items() if k is not None}
+        if r.get("status", "").lower() in ("inactive", "deleted"):   # SFDC exports write "Inactive"
+            continue
+        name = r.get("canonical_name") or r.get("name_ko")
+        if not name:
+            continue
+        al = [x.strip() for x in re.split(r"[;|]", r.get("aliases", "")) if x.strip()]
+        if r.get("name_ko") and r["name_ko"] != name:
+            al.append(r["name_ko"])
+        out.append((name, al))
+    return out
+
+
+def _merge_roster(pairs):
+    """[(정식 이름, [별칭…])] → {정식 이름: [별칭…]}(같은 이름 여러 줄은 합침 · 영문 3자 이하 별칭은 뺌 — 용어집 org_client와 같은 규칙)."""
     out = {}
-    for name, al in _roster_rows(path)[0]:
+    for name, al in pairs:
         out[name] = sorted(set(out.get(name, [])) | {x for x in al if not _SHORT_EN.fullmatch(x)})
     return out
 
 
+def read_roster(path):
+    """E15 — 명부 파일(gen_roster·시험) → {정식 이름: [별칭…]}(같은 이름 여러 줄은 합침 · 영문 3자 이하 별칭은 뺌)."""
+    return _merge_roster(_roster_rows(path)[0])
+
+
 def _aliases():
-    """고객 명부 = stack.json client_aliases + CLIENT_ROSTER 파일(수집 서버: SFDC 고객 마스터 내보내기) + GLOSSARY_DIR 용어 사전 org_client.
-    CLIENT_ROSTER: JSON {"정식 이름": ["별칭", ...]} 또는 CSV(1열 정식 이름, 2열 별칭을 ; 또는 | 로 구분, 머리글 줄 'name'/'고객'은 건너뜀)."""
+    """고객 명부 = stack.json client_aliases + 마스터 client_roster(SFDC 고객 마스터 내보내기 — pl-38) + 마스터 용어 사전 org_client.
+    같은 마스터 해시·같은 stack 파일이면 한 번만 만든다(fp-perf B2) — 돌려주는 사전은 얕은 사본."""
+    from common.store import master
+    stack, m = RES_ROOT / "config" / "pipeline_stack.json", master.get()
+    return dict(_cached(("aliases", _mtime(stack), m.hash), lambda: _build_aliases(stack, m)))
+
+
+def _build_aliases(stack, m):
     try:
-        out = dict(json.loads((RES_ROOT / "config" / "pipeline_stack.json").read_text(encoding="utf-8")).get("client_aliases") or {})
+        out = dict(json.loads(stack.read_text(encoding="utf-8")).get("client_aliases") or {})
     except (OSError, ValueError):
         out = {}
-    f = _cfg().paths.client_roster
-    if f:                                                   # 지정했는데 없으면 멈춤(조용히 빈 명부로 돌지 않게)
-        for c, al in read_roster(f).items():
-            out[c] = sorted(set(out.get(c, [])) | set(al))
-    g = _cfg().paths.glossary_dir                           # 용어 사전(T3, docs/architecture.md) — org_*(client 태그)·approved의 동의어·약어(로더는 load_glossary 한 곳)
-    if g:
-        for r in load_glossary(g).values():
-            if "org_client" in split_terms(r.get("category")):   # SI43① category는 `|` 구분 다중 태그 가능(예 org_client|org_cdmo) — 기존 한 칸 값도 그대로 맞음
-                al = split_terms(r.get("synonyms")) + split_terms(r.get("abbreviations"))
-                # 영문 3자 이하 약어(PFE·SOL)는 뺌 — 여기 판별은 부분 문자열이라 solution·sold에 걸림. ponytail: 단어 경계 일치는 T2 질문 확장에서
-                al = [x for x in al if not _SHORT_EN.fullmatch(x)]
-                out[r["canonical"]] = sorted(set(out.get(r["canonical"], [])) | set(al))
+    for c, al in _merge_roster(_roster_dicts(m.rows("client_roster"))).items():
+        out[c] = sorted(set(out.get(c, [])) | set(al))
+    # 용어 사전(T3, docs/architecture.md) — org_*(client 태그)·approved의 동의어·약어(로더는 load_glossary 한 곳)
+    for r in _master_glossary(m).values():
+        if "org_client" in split_terms(r.get("category")):   # SI43① category는 `|` 구분 다중 태그 가능(예 org_client|org_cdmo) — 기존 한 칸 값도 그대로 맞음
+            al = split_terms(r.get("synonyms")) + split_terms(r.get("abbreviations"))
+            # 영문 3자 이하 약어(PFE·SOL)는 뺌 — 여기 판별은 부분 문자열이라 solution·sold에 걸림. ponytail: 단어 경계 일치는 T2 질문 확장에서
+            al = [x for x in al if not _SHORT_EN.fullmatch(x)]
+            out[r["canonical"]] = sorted(set(out.get(r["canonical"], [])) | set(al))
     return out
 
 
