@@ -1,4 +1,5 @@
-"""상주 컨테이너 배치(사용자 11-03 — rn-03·op-10): compose.pipeline.yml은 일괄 data-pipeline + parse_document 전용 data-pipeline-mcp 둘,
+"""상주 컨테이너 배치(사용자 11-03 — rn-03·op-10): 컨테이너마다 compose 파일 하나 — compose.pipeline.yml = 일괄 data-pipeline,
+compose.pipeline-mcp.yml = parse_document 전용 data-pipeline-mcp, compose.mcp-server.yml = mcp-server(코드 폴더 덧붙임도 파일마다 짝 하나),
 전용 컨테이너가 CPU 나눔 비율이 더 높고 작업 서비스를 주 프로세스로 돌린다. 오버레이 패치 compose(compose.patch*.yml)는 없다."""
 
 import re
@@ -16,14 +17,28 @@ def _default(v):
     return int(m.group(1)) if m else int(v)
 
 
+FILES = {  # compose 파일 → (서비스, 컨테이너 이름, 코드 폴더 짝)
+    "compose.pipeline.yml": ("data-pipeline", "data-pipeline", "compose.code.yml"),
+    "compose.pipeline-mcp.yml": ("data-pipeline-mcp", "data-pipeline-mcp", "compose.code.pipeline-mcp.yml"),
+    "compose.mcp-server.yml": ("mcp", "mcp-server", "compose.code.mcp-server.yml"),
+}
+
+
+def _services(name):
+    return yaml.safe_load((COMPOSE / name).read_text(encoding="utf-8"))["services"]
+
+
 def test_resident_containers():
-    svc = yaml.safe_load((COMPOSE / "compose.pipeline.yml").read_text(encoding="utf-8"))["services"]
-    assert set(svc) == {"data-pipeline", "data-pipeline-mcp"}
-    assert {s["container_name"] for s in svc.values()} == set(svc)
+    svc = {}
+    for f, (name, container, code) in FILES.items():
+        s = _services(f)
+        assert set(s) == {name} and s[name]["container_name"] == container, (f, set(s))
+        assert set(_services(code)) == {name}, code  # 짝 파일은 그 컨테이너만 — 혼자 띄워도 됨
+        svc[name] = s[name]
     assert svc["data-pipeline"]["command"] == ["idle"] and svc["data-pipeline-mcp"]["command"] == ["parse-service"]
     assert _default(svc["data-pipeline-mcp"]["cpu_shares"]) > _default(svc["data-pipeline"]["cpu_shares"])
-    code = yaml.safe_load((COMPOSE / "compose.code.yml").read_text(encoding="utf-8"))["services"]
-    assert set(code) == set(svc)  # 실행 이미지(코드 폴더)는 두 컨테이너 모두에 붙음
+    up = (DEPLOY_ROOT / "deploy" / "host" / "scripts" / "mcp_up.sh").read_text(encoding="utf-8")
+    assert "compose.pipeline-mcp.yml" in up and "compose.code.pipeline-mcp.yml" in up
 
 
 def test_no_patch_overlay():

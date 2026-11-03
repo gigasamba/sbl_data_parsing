@@ -25,6 +25,10 @@
 - 설정 작성 가이드(refactor_plan 4-1·6-1 — S7 D-015)는 [operations/env-guide.md](operations/env-guide.md)다(S7에 그 문서를 settings.yaml 기준으로 고침 — 새 문서 없음).
 - 작업 보고서(`output/orca/`)는 git 밖이라 이 표에 넣지 않는다.
 
+## 예외
+
+- `deploy/host/compose/` compose 파일 이름(파일 이름 글자 수 규칙의 예외 — 사용자 11-03 결정): 컨테이너 이름을 그대로 쓴다 — `compose.pipeline.yml`(data-pipeline) · `compose.pipeline-mcp.yml`(data-pipeline-mcp) · `compose.mcp-server.yml`(mcp-server), 개발 서버 코드 폴더 짝은 `compose.code.yml` · `compose.code.pipeline-mcp.yml` · `compose.code.mcp-server.yml`.
+
 ## Glossary
 
 **약어**

@@ -1,6 +1,6 @@
 # 검색 MCP 서버(백로그 G1) — mcp-server 이미지(S6b), 명령 mcp. 결과 폴더(묶음·그림 기록·준비된 원본)는 읽기 전용.
-#   bash deploy/host/scripts/mcp_up.sh(상주 확인·기동) · 직접(하위 셸로 — VS7e1 R-2): ( . deploy/host/scripts/settings_env.sh && load_settings && docker compose -f deploy/host/compose/compose.mcp.yml up -d )
-#   (S7e1 — 옛 --env-file /srv/rag/env/pipeline.env 대신 셸 env · S6b — 옛 docker/compose.mcp.yml)
+#   bash deploy/host/scripts/mcp_up.sh(상주 확인·기동) · 직접(하위 셸로 — VS7e1 R-2): ( . deploy/host/scripts/settings_env.sh && load_settings && docker compose -f deploy/host/compose/compose.mcp-server.yml up -d )
+#   (S7e1 — 옛 --env-file /srv/rag/env/pipeline.env 대신 셸 env · S6b — 옛 docker/compose.mcp-server.yml)
 # 네트워크: 호스트 네트워크(Linux) — PostgreSQL·임베딩 API에 서버 주소 그대로 붙고, MCP는 MCP_HOST(127.0.0.1 또는 사내 대역 IP)에만 열림.
 #   루프백이 아닌 주소면 MCP_TOKEN 필수(클라이언트 Authorization: Bearer). 0.0.0.0은 거부.
 # S6b(사용자 10-27): 이미지 mcp-server(옛 data-retrieval)·이미지 변수 MCP_SERVER_IMAGE·컨테이너 이름 mcp-server — 옛 DATA_RETRIEVAL_IMAGE·RAG_IMAGE는
