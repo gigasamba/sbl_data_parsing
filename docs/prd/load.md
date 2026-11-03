@@ -133,13 +133,20 @@
 - Status: done (11-01 `feature/scope-cut-search`)
 
 <a id="pl-38"></a>
-## pl-38 · 마스터 CSV 활용 방안 설계(후순위)
-- 결정(사용자 10-31 범위 축소 grill): 마스터는 **모두 별도 RDB로 관리**. 지금은 마스터용 SQLite 하나를 만들어 마스터 CSV를 모두 그리로 옮긴다 — 나중 logging 자리와 같은 DB. 명부 생성·용어 제안 도구는 그 DB를 읽게 바꾸거나 지움(구현 때).
-- 결정(사용자 10-30): "contract_master, client_master 등 활용하는 방안 같이 설계하자. 후순위로 해줘."
-- 사실: PR 3a 뒤에는 `resources/vocab/glossary/contract_master.csv`·`client_master.csv`를 읽는 코드가 없다. `client_master.example.csv`는 `gen_roster` 입력. 두 파일은 설계가 끝날 때까지 git에 남긴다 — 3a에서 지우지 않는다.
-- 열린 질문: 마스터마다 무엇에 쓰나(검색 거르기 / 분류 단서 / mc-05의 고객 별칭 그룹), EDW 고객 연결([pl-29](#pl-29))·분류 단계([pl-33](transform.md#pl-33))와 어떻게 이어지나.
-- 결정(허브 10-31, 최신 결정 우선): 고객 별칭 CSV 몫(고객 명부·별칭 그룹 — [mcp.md#mc-05](mcp.md#mc-05))은 0.2.0으로 당긴다 — struct 마스터 표를 지우기 전에 CSV로 읽을 수 있어야 한다. 나머지 활용 설계는 후순위 그대로.
-- Status: todo — 고객 별칭 CSV 몫은 0.2.0, 나머지는 후순위(사용자와 grill).
+## pl-38 · 마스터 표 — 용어집·고객 명부를 PostgreSQL로(0.2.0)
+- 결정(사용자 11-03 — 지문 배치와 같은 0.2.0 판, 등급 A: DB 스키마 + 핸드오프 지문):
+  - **ETL 규칙:** 변환(Transform) = 문서 내용 + 고객 명부로 고객 알아보기(청크 머리에 고객이 들어가 임베딩 입력이 되므로 변환에 남김). 적재(Load) = EDW 조인([pl-29](#pl-29))·분류([pl-33](transform.md#pl-33))·DB 쓰기. 검색도 마스터를 읽는다. 대표 결과(silver)는 마스터를 읽지 않는다.
+  - **옮기는 것:** `resources/vocab/glossary`의 데이터 CSV 여섯 개(`client_roster`·`client_master`·`contract_master`·`domain_terms`·`id_patterns`·`units`)를 검색 PG의 마스터 표로. `client_master.example.csv`·`client_master_map.example.json`·`client_roster_seed.json`(명부 초안 도구 입력·예시)은 파일로 남긴다(Q4).
+  - **스키마:** `<PG_SCHEMA>_master`(기준 스키마에서 이름을 만듦 — 개발자마다 스키마가 갈림, 고정 이름 아님 · Q2). 표·칸은 Alembic 갈래 `master`로만(`dbtool up --target master`, `--target all`에 포함). CSV 하나에 표 하나 — 칸은 CSV 머리글 그대로(글자) + 파일 순서 `row_no`, 목록 칸은 지금처럼 `;`·`|` 글자(Q3). 해시·적재 시각은 `master_meta`.
+  - **원본은 git CSV:** `dbtool master load`가 CSV로 표 내용을 한 트랜잭션에 통째로 바꾸고 내용 해시(표 이름·머리글·`row_no` 순서 행의 sha256)를 `master_meta`에 적는다. 초기화 순서 `dbtool up`(search·applog·master) → `dbtool master load` → …(README·release-and-patch §8·server-guide).
+  - **읽는 곳:** `common/core/terms.py`의 용어 사전·ID 모양·고객 명부 로더가 PG 마스터를 읽는다(프로세스마다 한 번, 마스터 해시가 바뀌면 다시) — 구조화의 고객 판별(`build_bundle` `infer_clients`)과 검색(`terms`·`local`·`shaping`). PC·시험은 같은 CSV로 채운 SQLite 대역. 서버(dev·prd)는 마스터를 못 읽으면 시작하지 않는다(Q5). 설정 `glossary_dir`·`client_roster`는 지움(옛 설정 파일에 남으면 경고 — Q8), `gen_roster`는 `--dir` 그대로.
+  - **지우는 것:** 대표 결과 융합의 용어집 그럴듯함 가산(`fuse.py` `term_plausibility` — [pl-04](transform.md#pl-04)) · 판 묶음(`docmeta.family_key`·묶음 `family`·검색 최신 순위의 family 사용 — `doc_date`·`version`·`superseded`는 남김, D2) · 묶음의 용어 초안 수집(`collect_draft_terms` → PG를 읽는 오프라인 도구, 검색은 초안 파일을 그대로 읽음 — D3) · 안 쓰는 `modalities()`·`build_bundle`의 쓰지 않는 고객·제품 값.
+  - **판:** `gold_version` = `<VERSION>+m<해시 8자>` — 구조화가 읽은 마스터 해시를 묶음 `meta.json` `master_hash`로 넘기고 적재가 ParsingMeta에 쓴다(`master_hash`가 없는 묶음은 `<VERSION>`만). `silver_version`에는 붙이지 않는다. 마스터 해시는 캐시 열쇠·code_fp에 넣지 않는다(마스터가 바뀌어도 자동 전체 재처리 없음 — `gold_version`으로 추적).
+- 결정(사용자 10-31 범위 축소 grill — 위로 고침): 마스터는 모두 별도 RDB로 관리 → 11-03: 별도 RDB가 아니라 검색 PG의 `<PG_SCHEMA>_master`.
+- 결정(사용자 10-30): "contract_master, client_master 등 활용하는 방안 같이 설계하자. 후순위로 해줘." — 표로 옮기는 것까지 0.2.0, 쓰는 곳 넓히기(검색 거르기·분류 단서)는 후순위 그대로.
+- 결정(허브 10-31): 고객 별칭 몫(고객 명부·별칭 그룹 — [mcp.md#mc-05](mcp.md#mc-05))은 0.2.0 — 위 읽는 곳에 포함.
+- 잠재 문제(사용자 11-03): 같은 문서의 다른 판(`s3_key` 다름) 묶기 — 검색 '최신' 질문에서 옛 판이 위로 올 수 있음, 필요해지면 다시 설계.
+- Status: dev — `feature/pl38-master`(fp-perf 위, 0.2.0 지문 배치).
 
 ## 코드와 다른 점 · 지울 코드
 
