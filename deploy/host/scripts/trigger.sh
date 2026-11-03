@@ -11,7 +11,8 @@
 #     옛 ENV_FILE(pipeline.env)은 읽지 않는다(settings.yaml이 없으면 종료 코드 2).
 #   parse·publish는 상주 data-pipeline 컨테이너 안에서 돈다(docker exec — 사용자 11-02, 1회 job 컨테이너 없음: parse는 data-pipeline-parse,
 #     publish는 data-pipeline-structure). 컨테이너가 안 떠 있으면 종료 코드 2.
-# 종료 코드: 모듈·run_docs 그대로(0 끝남·건너뜀 · 75 실행 중(잠금)·마감 · 그 밖 = 실패)
+# 종료 코드: 모듈·run_docs 그대로(0 끝남·건너뜀·대상 0건 · 1 실패 문서 있음 · 75 실행 중(잠금)·마감 · 2 설정 문제 — run_docs는 pl-18)
+#   겹침 잠금은 run_docs.py 안(flock batch_progress/run_docs.lock) — 사람이 trigger 없이 run_docs를 돌려도 같은 잠금을 씀
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트(S6b)
 # 서버 설정은 코드 폴더 밖 $SERVER_ENV_DIR/settings.yaml(전체 덮어쓰기에 안 지워짐, env-guide.md) — compose 치환 값은 셸 env로(--env-file 없음)

@@ -5,7 +5,8 @@
 # 11-01 — 옛 모듈 순서 배치(NIGHTLY_MODULES·NIGHTLY_PUBLISH·NIGHTLY_MAX_NEW·PARSE_DEADLINE, trigger.sh night)는 지움.
 #   스케줄 = NIGHTLY_TIME(settings.yaml ops.nightly.time, HH:MM — 비우면 새벽 배치 없음, pl-32) — 타이머가 5분마다 깨우고
 #   trigger.sh scheduled가 그 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done`을 부름(그 밖에는 말없이 끝).
-#   상한은 TimeoutStartSec(아래)뿐 — run_docs 안에는 문서 수 상한·마감이 없다(넘으면 문서 중간에 끊김 · 사람이 따로 돌린 run_docs와 겹치지 않게).
+#   상한: run_docs --max-docs·--deadline(ops.nightly.max_docs·deadline) + TimeoutStartSec(아래 — 마지막 안전판). 사람이 따로 돌린 run_docs와는
+#   run_docs 잠금(batch_progress/run_docs.lock — 도는 중이면 종료 코드 75)으로 겹치지 않는다(pl-18).
 # S7e1(사용자 10-27 Q4): 서버 설정은 settings.yaml 한 파일($SERVER_ENV_DIR/settings.yaml — 운영 가이드 env-guide.md §0). 옛 EnvironmentFile=pipeline.env를
 #   지웠다 — ExecStart가 settings_env.sh load_settings로 호스트 칸(NIGHTLY_TIME·DATA_PIPELINE_IMAGE·RAG_OUT·DOC_SRC·RUN_ENV 등)을
 #   셸 env로 받은 뒤 trigger.sh scheduled가 NIGHTLY_TIME을 본다(RUN_ENV는 settings.yaml required.env.run_env에만 — unit에 적지 않음). 설정 파일이 없거나 틀리면 종료 코드 2
@@ -29,6 +30,8 @@ Environment=SERVER_ENV_DIR=/srv/rag/env
 # $$ = 셸에 넘기는 $ — systemd가 ExecStart의 $변수를 먼저 바꿔 버림. %% = 셸에 넘기는 %(date 형식 — systemd 지정자 %F 등으로 읽혀 unit이 안 올라가던 것, S7e1 systemd-analyze). 시각 게이트는 trigger.sh scheduled만(trigger.sh night 자체는 시각을 안 봄 — 요청 실행과 공유).
 ExecStart=/bin/bash -c '. deploy/host/scripts/settings_env.sh && load_settings || exit $$?; exec /bin/bash deploy/host/scripts/trigger.sh scheduled'
 TimeoutStartSec=6h
+# 75 = 마감 도달·다른 run_docs가 도는 중(pl-18) — 예정된 끝이라 unit 실패로 치지 않음. 1(실패 문서)·2(설정)는 실패.
+SuccessExitStatus=75
 # 실패 알림(선택): OnFailure=rag-notify@%n.service  — 사내 메일·웹훅 단위 파일을 따로 만들 때
 # cron을 쓰면(systemd 대신 — cron 시각이 곧 일정, NIGHTLY_TIME은 안 봄):
 #   0 1 * * * cd /srv/rag/code/live && . deploy/host/scripts/settings_env.sh && load_settings && python3 deploy/host/scripts/run_docs.py --start-offset 0 --skip-done >> /srv/rag/output/batch.log 2>&1
