@@ -37,12 +37,11 @@ from common.core.paths import (  # 폴더 재편 뒤 이 상수만 바뀌면 됨
 )
 from pipeline import config as pc  # S7c: 설정 객체(옛 os.environ 읽기)
 from pipeline.extract.engines import registry  # SI44 '처리 엔진 없는 확장자' 판정(engines_for) 공용
+from pipeline.shared.exts import IMG_EXTS, OOXML_EXTS
 
-IMG = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 _OCR: list = []
 
 # D4 — DRM·암호 래핑 머리 바이트 판별(A11). 내용은 열지 않음(이름·종류·머리만), 네트워크 없음, 제조사 서명은 공개 포맷 기준만.
-OOXML_EXT = {".docx", ".docm", ".xlsx", ".xlsm", ".pptx", ".pptm"}
 ZIP_SIG = b"PK\x03\x04"  # 정상 OOXML(ZIP 컨테이너)
 CFB_SIG = bytes.fromhex("d0cf11e0a1b11ae1")  # OLE 복합 파일 — 옛 .doc·암호 걸린 OOXML이 이 컨테이너에 담김
 PDF_SIG = b"%PDF"
@@ -54,7 +53,7 @@ DRM_MARKERS = (  # 머리 바이트에 섞여 있으면 그 제품 래핑으로 
     (b"DocumentSecurity", "drm_unknown"),  # 제품 특정 안 되는 일반 DocumentSecurity/IRM 헤더
 )
 
-# SI44 — 옛 OLE(복합 파일) 암호: OOXML(zip 컨테이너)과 다른 신호라 _drm_reason이 못 봄(.doc·.xls·.ppt는 OOXML_EXT 밖).
+# SI44 — 옛 OLE(복합 파일) 암호: OOXML(zip 컨테이너)과 다른 신호라 _drm_reason이 못 봄(.doc·.xls·.ppt는 OOXML_EXTS 밖).
 OLE_EXT = {".doc", ".xls", ".ppt"}
 # SI44 — 압축·미지원 형식은 DRM·손상이 아니라 "파싱 대상이 아님"(사람이 다시 올리거나 풀어야 함).
 ARCHIVE_EXT = {".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2", ".xz"}
@@ -199,7 +198,7 @@ def _drm_reason(p):
     """OOXML·PDF 머리 바이트만으로 DRM·암호 래핑 의심 판정 — 내용은 안 읽음(머리만), None = 의심 없음(엔진이 각자 판정).
     OOXML인데 ZIP도 OLE도 아니거나, OLE인데 EncryptedPackage 스트림이 있으면(비밀번호 보호 OOXML) 걸러 낸다."""
     ext = p.suffix.lower()
-    if ext not in OOXML_EXT and ext != ".pdf":
+    if ext not in OOXML_EXTS and ext != ".pdf":
         return None
     try:
         head = p.open("rb").read(4096)
@@ -384,7 +383,7 @@ def main():
         if unsup:
             _record_skip(p, unsup, skipped, skipped_log)
             continue
-        if ext in IMG and rotate_on:
+        if ext in IMG_EXTS and rotate_on:
             osha = _sha256(p)  # 원본(회전 전) sha256 — post.vlm_page P0 열쇠가 렌더 바이트 대신 이걸 씀
             im = Image.open(p)
             ang, s = best_angle(im, a.probe_px)

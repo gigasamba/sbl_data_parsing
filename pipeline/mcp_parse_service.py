@@ -30,6 +30,7 @@ from common.config.settings import reveal
 from common.core import exitclean
 from common.core.paths import APP_ROOT  # I4 — 컨테이너 경로(/app/…) 대신 런타임 루트 기준(이미지 안 값 같음)
 from pipeline import config as pc
+from pipeline.shared.exts import IMG_EXTS
 
 SERVICE_DIR = APP_ROOT / "output" / "mcp_parse"  # 이미지 안 /app/output/mcp_parse
 _JOB_ENVS: dict = {}  # (PARSE_POST, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
@@ -85,24 +86,14 @@ ROOTS = [Path(p).resolve() for p in (_PM.roots or [str(SERVICE_DIR / "inbox")])]
 JOB_TIMEOUT = _PM.job_timeout_sec
 QUEUE_MAX = _PM.queue_max
 JOBS_DIR = Path(_PM.jobs_dir or SERVICE_DIR / "jobs")
-ALLOWED_EXTS = {
-    ".pdf",
-    ".docx",
-    ".doc",
-    ".pptx",
-    ".ppt",
-    ".xls",
-    ".xlsx",
-    ".xlsm",
-    ".hwpx",
-    ".txt",
-    ".html",
-    ".htm",
-    ".mht",
-    ".mhtml",
-    ".eml",
-    ".msg",
-}  # 이미지 파일(p·jpg 등)은 "이미지 파싱은 수행 안하고 꺼줘" 요구사항에 따라 원천 거부
+
+
+def allowed_exts():
+    """받는 확장자 = 엔진 구성의 parse 키(.pdf_text·.pdf_image → .pdf) − 이미지(IMG_EXTS — "이미지 파싱은 수행 안하고 꺼줘" 요구사항에
+    따라 원천 거부). 부를 때마다 읽는다(작업마다 다시 읽는 엔진 구성과 같게, 시작 점검보다 먼저 읽지 않게)."""
+    return {".pdf" if e.startswith(".pdf_") else e for e in pc.stack()["parse"]} - IMG_EXTS
+
+
 MAX_JOBS_KEPT = 30
 _lock = threading.Lock()
 JOBS: dict = {}
@@ -184,7 +175,7 @@ DRM_NOTE = "텍스트 추출 실패 — DRM/암호화 문서일 가능성(엔진
 
 def skip_note(fname, pdf_text_chars):
     """파이프라인 없이 바로 빈 결과로 끝낼 문서면 그 안내(글자층이 사실상 없는 PDF), 아니면 None.
-    (이미지 확장자는 ALLOWED_EXTS에 없어 여기 오지 않음 — 11-01에 도달 불가 갈래 _IMAGE_EXTS·IMAGE_NOTE 지움.)"""
+    (이미지 확장자는 allowed_exts()에 없어 여기 오지 않음 — 11-01에 도달 불가 갈래 _IMAGE_EXTS·IMAGE_NOTE 지움.)"""
     ext = Path(fname).suffix.lower()
     if ext == ".pdf" and 0 <= (pdf_text_chars if pdf_text_chars is not None else -1) < 20:
         return SCAN_NOTE
@@ -233,8 +224,8 @@ def _submit(source):
         p = _jail(path)
         fname = p.name
         _check_size(p.stat().st_size)  # 11-03 — 경로로 준 파일도 같은 상한(전에는 content_b64만 봄)
-    if Path(fname).suffix.lower() not in ALLOWED_EXTS:
-        raise ValueError(f"지원하지 않는 확장자({Path(fname).suffix or '없음'}) — {sorted(ALLOWED_EXTS)}")
+    if Path(fname).suffix.lower() not in (ok := allowed_exts()):
+        raise ValueError(f"지원하지 않는 확장자({Path(fname).suffix or '없음'}) — {sorted(ok)}")
     job_id = time.strftime("%Y%m%d") + "-" + uuid.uuid4().hex[:12]
     ws = JOBS_DIR / job_id
     (ws / "in").mkdir(parents=True, exist_ok=True)

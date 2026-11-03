@@ -60,8 +60,8 @@
   - 글자 자료: `.csv`(markitdown, kreuzberg) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown).
   - 오픈문서·서식 파일: `.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.xlsb`(kreuzberg) · `.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg).
   - 데이터·기록: `.json`·`.xml`·`.log`(markitdown 또는 plaintext, kreuzberg).
-  - 뺀 것: `.gif`·`.webp`(이미지 확장자 목록이 여러 곳에 박혀 있음) · `.heic`(새 패키지 필요) · 압축 파일([pl-02](extract.md#pl-02) 결정).
-- 방법: `pipeline/extract/engines/registry.py`에 "엔진별 추가 확장자" 표를 두고 `engines_for()`가 함께 읽는다 — 엔진 `parser.py`의 `FORMATS`와 엔진 지문(p0 code_fp)은 그대로(핑거프린트 명령으로 확인). 그다음 `resources/config/pipeline_stack.json`, `pipeline/mcp_parse_service.py`(`ALLOWED_EXTS`), `tests/.../test_ext_formats`와 시험 표본.
+  - 뺀 것: `.gif`·`.webp`(이미지 확장자 목록 — 11-03에 `pipeline/shared/exts.py` `IMG_EXTS` 한 곳으로 모음, 넣으려면 그 묶음과 엔진 구성) · `.heic`(새 패키지 필요) · 압축 파일([pl-02](extract.md#pl-02) 결정).
+- 방법: `pipeline/extract/engines/registry.py`에 "엔진별 추가 확장자" 표를 두고 `engines_for()`가 함께 읽는다 — 엔진 `parser.py`의 `FORMATS`와 엔진 지문(p0 code_fp)은 그대로(핑거프린트 명령으로 확인). 그다음 `resources/config/pipeline_stack.json`, `tests/.../test_ext_formats`와 시험 표본. `pipeline/mcp_parse_service.py`의 받는 확장자(`allowed_exts()`)는 11-03부터 엔진 구성의 `parse` 키에서 만든다(이미지 뺌) — 따로 고치지 않는다.
 - 검토 등급 A(엔진 폴더) · 0.2.0 묶음.
 - Status: todo — 0.2.0.
 

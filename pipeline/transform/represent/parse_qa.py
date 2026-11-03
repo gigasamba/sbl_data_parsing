@@ -26,6 +26,7 @@ from common.core.paths import APP_ROOT, CRITERIA_FILE, doc_dir  # 폴더 재편 
 from common.core.text import supsub_mark  # W6: norm()이 score_gold.canon()과 같은 첨자 정규화를 쓰게(AD37·SI17, 각자 맵 금지)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.extract.engines import registry
+from pipeline.shared.exts import IMG_EXTS
 from pipeline.shared.summarize import FAMILY, nums  # 계열 합의 로직 재사용(중복 금지)
 from pipeline.transform.represent.repfmt import (
     doc_accuracy,  # AG11 2단계 착수 조건(10-08), 10-14 함수별 분리로 pipeline/transform/represent/repfmt.py로
@@ -72,7 +73,6 @@ except ImportError:
 
 CER_CAP = 200_000
 SHEET = {".xlsx", ".xls", ".xlsm"}
-IMG = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 _ZW = re.compile(r"[​‌‍﻿]")
 _WS = re.compile(r"\s+")
 _KO = re.compile(r"[가-힣]")
@@ -270,7 +270,7 @@ def doc_format(path):
     if ext == ".pdf":
         kind, pages = pdf_kind(path)
         return "." + kind, pages
-    if ext in IMG:
+    if ext in IMG_EXTS:
         return ext, 1
     if ext == ".pptx":  # A9 — 슬라이드 수를 쪽 수로(zip 목록만 셈) — 한 장짜리면 청크 page=1(bundle 규칙), 보고서 쪽 수도 채워짐
         import re

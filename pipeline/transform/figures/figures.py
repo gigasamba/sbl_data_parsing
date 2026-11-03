@@ -23,6 +23,7 @@ from common.core.paths import (
     APP_ROOT,  # 폴더 재편 뒤 이 상수만 바뀌면 됨
 )
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.shared.exts import IMG_EXTS
 from pipeline.shared.parse_run import prompt_id, raw_vlm_path
 from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
 from pipeline.transform.figures import chart_values as CV  # F14(a)·(c) 벡터 차트 결정적 값·추세
@@ -470,14 +471,8 @@ def figures(p, page_covered=False):
                 out.extend(_pptx_shape_figure(p, pr, si, title, texts))  # (qc_workflow.pptx 2쪽류, IQ046) — 쪽 렌더를 그림 1건으로
             if pics:  # F12 — 그림 위에 글상자/연결선(화살표)이 겹치면 한 묶음으로
                 out.extend(_pptx_overlay_records(name, p, si, pr, s, pics, pic_recs, page_vlm))
-    elif ext in (
-        ".png",
-        ".jpg",
-        ".jpeg",
-        ".tif",
-        ".tiff",
-        ".bmp",
-    ):  # BR56 — 단독 이미지 문서 자체(위 분기들과 달리 지금까지 아무 분기도 없어 기록이 0건이었음, AD31/AD20과 무관한 기존 공백)
+    # BR56 — 단독 이미지 문서 자체(위 분기들과 달리 지금까지 아무 분기도 없어 기록이 0건이었음, AD31/AD20과 무관한 기존 공백)
+    elif ext in IMG_EXTS:
         from pipeline.transform.figures.vlm_page import (
             page_targets,
         )  # 문서 전체가 쪽 VLM(page_text) 대상이면(기본 — is_scan) 그림 VLM은 생략(중복 방지)
