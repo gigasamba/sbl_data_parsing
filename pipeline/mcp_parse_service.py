@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """텍스트 파싱 작업 서비스 — data-pipeline-mcp 컨테이너(11-03 — 옛 data-pipeline-parse; 작업 서비스가 주 프로세스, compose.pipeline-mcp.yml) 안에서 상주하며 검색 MCP(mcp-server — 옛 data-retrieval)의 parse_document
 도구가 localhost HTTP로 호출한다(비정형 파일[base64] → text 파싱 대표 결과 반환).
-범위 — prepare → run_all(문서의 엔진들 동시에 · VLM/OCR 엔진 제외) → parse_qa → represent까지.
-구조화·임베딩·적재 없음 · 표 인식 유지 · 이미지/스캔 문서는 빈 결과(OCR·VLM 미실행).
+범위 — prepare → run_all(문서의 엔진들 동시에 · OCR 엔진은 run_all이 뺌) → parse_qa → represent까지.
+구조화·임베딩·적재 없음 · 표 인식 유지 · 이미지 파일은 받지 않음 · 스캔 PDF는 내부망 VLM(qwen_vlm — mc-18, 11-03).
 [패치 2026-10-22] ① 기본 time_out_threshold 300초 ② 큐 대기 순번을 제출 응답과 시작 시점에 표시(지연 원인 파악)
   ③ 서비스 PID 로그 파일 남김(docker exec -d 로그 없음 문제) ④ _purge_old에서 방금 만든 작업 보호(버그 수정)
 실행: data-pipeline-mcp 컨테이너의 주 프로세스(compose.pipeline-mcp.yml — 죽으면 restart가 다시 띄움 · 옛 손 기동 `docker exec -d …` 없음)
@@ -133,61 +133,32 @@ def _run_group(cmd, timeout, env):
     return subprocess.CompletedProcess(p.args, p.returncode, out, err)
 
 
-def _engines_no_ocr_arg():
-    """run_all에 붙일 --engines 인자(2026-10-21 사용자: 이미지 비대상 — OCR 꺼짐 기본).
-    CORE에서 이미지·스캔 전용(rapidocr_ko·qwen_vlm)을 빼고 설치된 것만(OCR 스위치 ocr_engine은 0.2.0에 지움 — pl-46). 스캔 이미지 PDF는
-    글자층 엔진만 시도되어 텍스트가 안 나오면 빠르게 실패한다(수 분 OCR로 큐를 막던 원인 제거 — 실측 10-21)."""
-    try:
-        from pipeline.extract.engines import registry
+def _is_scan(path):
+    """스캔 PDF인지 — run_all과 같은 판정(parse_qa.pdf_kind: 전체 쪽 글자층이 쪽당 평균 20자 미만 → .pdf_image → qwen_vlm).
+    서비스 안내(VLM 미설정·실패)가 실제로 돈 엔진과 어긋나지 않게 판정을 한 곳에서 빌려 쓴다(mc-18 리뷰)."""
+    from pipeline.transform.represent.parse_qa import pdf_kind
 
-        ocr = {"rapidocr_ko", "qwen_vlm"}
-        picked = [e for e in sorted(registry.CORE - ocr) if registry.installed(e)]
-        return ["--engines", ",".join(picked)] if picked else []
-    except Exception as e:
-        _log(f"엔진 목록 산정 실패({type(e).__name__}: {e}) — OCR 제외 없이 run_all 기본으로")
-        return []
+    return Path(path).suffix.lower() == ".pdf" and pdf_kind(path)[0] == "pdf_image"
 
 
-_ENGINES_NO_OCR = _engines_no_ocr_arg
-
-
-def _pdf_text_chars(raw=None, p=None):
-    """글자층 샀플(pypdf, 첫 5쪽) — 2026-10-21 사용자: 스캔/이미지 문서도 거부하지 않고 OCR·VLM 없이 그 결과를
-    그대로(≈빈) 돌려준다. 이 값은 skip_note에만 쓴다: 글자층이 사실상 없는 PDF(<20자)는 파이프라인 없이 스캔 안내(pl-03 10-31 —
-    엔진 범위가 stack 하나라 그 문서에 돌 엔진이 없음, 옛: 글자층 엔진만 돌려 ≈빈 결과).
-    판독 자체에 실패하면 -1(특별 취급 없음 — 파이프라인이 제대로 된 오류를 냄)."""
-    try:
-        import io
-
-        from pypdf import PdfReader
-
-        r = PdfReader(io.BytesIO(raw) if raw is not None else str(p))
-        return len("".join((pg.extract_text() or "") for pg in r.pages[:5]).strip())
-    except Exception:
-        return -1
-
-
-# pl-03(사용자 10-31) — 엔진 범위가 stack 하나라 스캔 PDF(.pdf_image = OCR·VLM 엔진뿐)는 이 서비스(OCR·VLM 안 돎)에서 돌 엔진이 없다.
-#   지금은 건너뛰고 안내만 — 다시 지원은 PRD mc-18(todo).
-SCAN_NOTE = "스캔 PDF — 지금은 text 파싱 결과 없음(OCR·VLM 미실행, 추후 지원 예정)"
+# mc-18(사용자 11-03) — 스캔 PDF는 내부망 VLM(qwen_vlm — stack .pdf_image)으로 파싱한다. VLM 주소가 없으면 파이프라인 없이 빈 결과 + 안내,
+#   VLM이 돌았는데 결과가 없으면 실패 안내(DRM 추정 아님). 글자층과 스캔 쪽이 섞인 PDF는 범위 밖(pl-03 10-29 결정 그대로).
+VLM_UNSET_NOTE = "스캔 PDF — VLM 미설정"
+VLM_FAIL_NOTE = "스캔 PDF — VLM 파싱 실패"
 DRM_NOTE = "텍스트 추출 실패 — DRM/암호화 문서일 가능성(엔진 전부 파싱 실패)"
 
 
-def skip_note(fname, pdf_text_chars):
-    """파이프라인 없이 바로 빈 결과로 끝낼 문서면 그 안내(글자층이 사실상 없는 PDF), 아니면 None.
+def skip_note(scan):
+    """파이프라인 없이 바로 빈 결과로 끝낼 문서면 그 안내(VLM 설정 — qwen_vlm REQUIRES_ENV — 이 빈 스캔 PDF), 아니면 None.
     (이미지 확장자는 allowed_exts()에 없어 여기 오지 않음 — 11-01에 도달 불가 갈래 _IMAGE_EXTS·IMAGE_NOTE 지움.)"""
-    ext = Path(fname).suffix.lower()
-    if ext == ".pdf" and 0 <= (pdf_text_chars if pdf_text_chars is not None else -1) < 20:
-        return SCAN_NOTE
-    return None
+    from pipeline.extract.engines import registry
+
+    return VLM_UNSET_NOTE if scan and registry.missing_env("qwen_vlm") else None
 
 
-def empty_note(run_log):
-    """run_all이 결과를 하나도 안 남겼을 때(runs.jsonl 없음)의 안내 — 돌 엔진이 하나도 없었으면(run_all의 NO_JOB_MARK 줄 — 표본보다 스캔으로
-    분류된 PDF) 스캔 안내, 엔진이 돌다 다 실패했으면 DRM 추정."""
-    from pipeline.extract.run_all import NO_JOB_MARK
-
-    return SCAN_NOTE if NO_JOB_MARK in (run_log or "") else DRM_NOTE
+def empty_note(scan):
+    """파이프라인이 대표 결과를 못 남겼을 때의 안내 — 스캔 PDF면 VLM 실패, 아니면 DRM 추정(엔진 전부 실패)."""
+    return VLM_FAIL_NOTE if scan else DRM_NOTE
 
 
 def _max_bytes():
@@ -234,9 +205,7 @@ def _submit(source):
         meta = {"filename": fname, "mode": "base64", "bytes": len(raw)}
     else:
         meta = {"filename": fname, "mode": "path", "bytes": p.stat().st_size, "path": str(p)}
-    meta["pdf_text_chars"] = (
-        _pdf_text_chars(raw=raw if b64 else None, p=p if not b64 else None) if Path(fname).suffix.lower() == ".pdf" else None
-    )
+    meta["scan"] = _is_scan(ws / "in" / fname if b64 else p)  # mc-18 — run_all과 같은 판정
     open(ws / "job.json", "w", encoding="utf-8").write(json.dumps({"job_id": job_id, **meta}, ensure_ascii=False))
     with _lock:
         JOBS[job_id] = {"job_id": job_id, **meta, "status": "queued", "submitted": time.time()}
@@ -286,8 +255,8 @@ def _worker():
                 import shutil
 
                 shutil.copy2(Path(j["path"]), ws / "in" / fname)
-            note = skip_note(fname, j.get("pdf_text_chars"))
-            if note:  # 2026-10-21 사용자: 이미지 문서 · pl-03(10-31): 스캔 PDF — OCR·VLM 미실행, 파이프라인 없이 빈 결과 즉시
+            note = skip_note(j.get("scan"))
+            if note:  # mc-18(11-03): VLM 주소가 없는 스캔 PDF — 파이프라인 없이 빈 결과 즉시
                 j["result"] = {
                     "job_id": job_id,
                     "filename": fname,
@@ -304,7 +273,6 @@ def _worker():
                 }
                 j["status"] = "done"
             else:
-                engines = _ENGINES_NO_OCR()
                 only = ws / "only.txt"
                 only.write_text(fname + "\n", encoding="utf-8")
                 log = open(ws / "run.log", "w", encoding="utf-8")
@@ -314,7 +282,8 @@ def _worker():
                 job_env = _job_env(post or "supsub")  # 하위 프로세스 — 덮기 파일(S7e2), 같은 값이면 한 번 만든 것 재사용(VS7e2 R-4)
                 # 2026-10-22 병목 해소: post 기본 all→supsub — RapidOCR·figures·vlm_page·context·attachments를 끔
                 # 교차재현율(③)·table_inline(⑦)은 0.0초로 병목이 아니었으므로 그대로 유지 — 실측 47→~0.3초
-                _run = lambda cmd: _run_group(cmd, left, job_env)  # noqa: B023 — 같은 반복 안에서만 부름
+                # mc-18(11-03) — 작업 제한 시간 하나: 단계마다 남은 시간만(옛: 단계마다 전체 시간)
+                _run = lambda cmd: _run_group(cmd, max(1.0, left - (time.time() - t0)), job_env)  # noqa: B023 — 같은 반복 안에서만 부름
 
                 # ① prepare → run_all
                 for cmd in (
@@ -329,7 +298,6 @@ def _worker():
                         "1",
                         "--procs",
                         PROCS,
-                        *engines,
                     ],
                 ):
                     p = _run(cmd)
@@ -338,11 +306,12 @@ def _worker():
                     if p.returncode != 0:
                         raise RuntimeError(f"단계 실패({cmd[0]}): {(p.stdout + p.stderr).strip().splitlines()[-1:] or ['?']}")
 
-                # ② 결과 없음 → runs.jsonl 부재 → 빈 결과(돌 엔진이 없었으면 스캔 안내, 다 실패했으면 DRM 추정)
+                # ② 결과 없음 → runs.jsonl 부재 → 빈 결과(스캔 PDF면 VLM 실패 안내, 아니면 DRM 추정)
                 runs_file = ws / "parse" / "runs.jsonl"
+                scan = bool(j.get("scan"))
                 if not runs_file.exists():
-                    note = empty_note((ws / "run.log").read_text(encoding="utf-8", errors="replace"))
-                    _log(f"{job_id} · 결과 없음 → 빈 결과({'스캔' if note == SCAN_NOTE else 'DRM 추정'})")
+                    note = empty_note(scan)
+                    _log(f"{job_id} · 결과 없음 → 빈 결과({'VLM 실패' if note == VLM_FAIL_NOTE else 'DRM 추정'})")
                     j["result"] = {
                         "job_id": job_id,
                         "filename": fname,
@@ -399,7 +368,7 @@ def _worker():
                             "fields": {},
                             "rep_path": None,
                             "all_keys": [],
-                            "note": "텍스트 추출 결과 없음 — DRM/암호화 문서일 가능성",
+                            "note": VLM_FAIL_NOTE if scan else "텍스트 추출 결과 없음 — DRM/암호화 문서일 가능성",
                             "ms": round((time.time() - t0) * 1000, 1),
                         }
                     else:
