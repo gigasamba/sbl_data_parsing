@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나 — 변경을 어떻게 증명하나: 스모크 실행, 시험 층, 품질 평가, 답변 점검, 시험 자료, 이미지 반입 판정(PC + 반입 관문).
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서(주제별): 시험 층·반입 e2-02·e2-08·e2-14·e2-11·e2-15 → 스모크·시험 자료 e2-01·e2-13·e2-09 → 평가·점검 e2-03·e2-04·e2-05·e2-12·e2-19·e2-20·e2-06·e2-07·e2-16 → 정리 e2-10·e2-17·e2-18 → 코드와 다른 점.
+순서(주제별): 시험 층·반입 e2-02·e2-08·e2-14·e2-11·e2-15·e2-21 → 스모크·시험 자료 e2-01·e2-13·e2-09 → 평가·점검 e2-03·e2-04·e2-05·e2-12·e2-19·e2-20·e2-06·e2-07·e2-16 → 정리 e2-10·e2-17·e2-18 → 코드와 다른 점.
 
 <a id="e2-02"></a>
 ## e2-02 · 시험 층
@@ -31,7 +31,7 @@
 <a id="e2-08"></a>
 ## e2-08 · 이미지 빌드와 반입 관문
 - 이유: 서버는 selftest를 통과한 이미지만 받아야 한다.
-- 무엇: 빌드·전송 스크립트, selftest 관문은 `[판정]` 줄을 읽음, 코드만 바뀌면 오버레이 패치.
+- 무엇: 빌드·전송 스크립트, selftest 관문은 `[판정]` 줄을 읽음, 코드만 바뀌면 코드 폴더 바꾸기(옛 오버레이 패치 `make_patch.sh`는 11-03에 지움 — 사용자, 남은 흔적은 [e2-21](#e2-21)).
 - 파일: `deploy/release/build_ship.sh`, `deploy/release/selftest_gate.sh`, `docs/operations/release-and-patch.md`.
 - Status: done
 
@@ -56,6 +56,14 @@
 - 이유: `resolve_agent_dir`가 마지막에 `dev_tools/unit_test/fixtures/`(이 저장소에 없음)도 보고, `test_paths`가 그 경로를 단언한다. (`run_agent`·`common/ai/adk.py`·`test_adk.py`는 0.2.0 pl-46에 지움 — 건너뛰어지던 시험 묶음은 이제 없다. 남은 것은 없는 폴더를 보는 죽은 갈래뿐.)
 - 파일: `common/core/paths.py`(모든 레이어 의존 → code_fp), `tests/server/common/test_paths.py`.
 - Status: todo — 죽은 갈래 지우기. `paths.py`를 고치면 레이어 지문이 모두 바뀌므로 다음 지문 배치에서(사용자 10-30 PRD grill C1).
+
+<a id="e2-21"></a>
+## e2-21 · 옛 오버레이 패치 흔적 정리
+- 이유: `deploy/release/make_patch.sh`를 지웠다(사용자 11-03 `feature/drift-followup` — 코드 폴더 바꾸기로 대체). 그 스크립트만 만들거나 읽던 것이 남았다.
+- 무엇: `common/core/fingerprint.py` `pipeline_version()`의 `common/PATCH_VERSION` 후보(와 `tests/server/common/test_fingerprint.py`의 그 사례·`keyscan.py` `PIPELINE_VERSION` 설명), `deploy/host/scripts/run_docs.py`·`host_env.py`의 옛 `app/deploy/common` 찾기 갈래, `deploy/docker/IMAGE_BASE`(+ `.gitattributes` 줄)를 지운다.
+- 남긴 이유: `fingerprint.py`는 레이어 지문(code_fp) 파일이라 고치면 서버 문서가 모두 다시 처리된다 — 다음 지문 배치에서 함께(사람 검토). `IMAGE_BASE`는 지울지 사람이 정한다.
+- 파일: `common/core/fingerprint.py`, `deploy/host/scripts/run_docs.py`, `deploy/host/scripts/host_env.py`, `deploy/docker/IMAGE_BASE`.
+- Status: todo
 
 <a id="e2-01"></a>
 ## e2-01 · PC 스모크 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색

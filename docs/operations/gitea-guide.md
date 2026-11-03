@@ -18,7 +18,7 @@
 
 ## 2. 그대로 남기는 것
 
-- **코드 폴더 바꾸기** — 개발 서버(dev)는 코드 없는 실행 이미지 + 코드 폴더 마운트(`CODE_DIR` — `dc.sh`가 자기가 든 코드 폴더를 붙임, 서버 배치는 `/srv/rag/code/live` 링크)라서 코드 폴더를 바꾸면 반영된다. 옛 오버레이 패치 길(`make_patch.sh`)은 이 길로 바뀌었다([release-and-patch.md](release-and-patch.md) §1-1·§3).
+- **코드 폴더 바꾸기** — 개발 서버(dev)는 코드 없는 실행 이미지 + 코드 폴더 마운트(`CODE_DIR` — `dc.sh`가 자기가 든 코드 폴더를 붙임, 서버 배치는 `/srv/rag/code/live` 링크)라서 코드 폴더를 바꾸면 반영된다. 옛 오버레이 패치 길(`make_patch.sh` — 11-03 지움)은 이 길로 바뀌었다([release-and-patch.md](release-and-patch.md) §1-1·§3).
 - **`server-changes.md`** — 서버에서 생긴 문제·서버에서 직접 고친 것의 이슈 기록([server-guide.md](server-guide.md) §7 형식, [release-and-patch.md](release-and-patch.md) §3-4).
 - **`versions.md`** — 판마다 패치 노트 한 줄([release-and-patch.md](release-and-patch.md) §7).
 

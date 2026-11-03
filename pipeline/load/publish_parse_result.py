@@ -178,7 +178,7 @@ def main(argv=None):
         help="SI41 — manifest 행이 source_system을 들고 있으면(rdb:*·rdb:<이름>) 그 값을 쓰고, 이 값은 "
         "폴백(레거시 단일 표 소스)에만 쓰인다",
     )
-    ap.add_argument("--version", help="기본 저장소 루트 VERSION(오버레이 패치면 PATCH_VERSION — common.pipeline_version, D-036)")
+    ap.add_argument("--version", help="기본 저장소 루트 VERSION(옛 PATCH_VERSION이 더 높으면 그것 — common.pipeline_version, D-036)")
     ap.add_argument("--parse-date", help="기본 오늘(YYYY-MM-DD, 또는 env PM_PARSE_DATE) — Object Storage 키의 날짜 폴더(SI39③)")
     ap.add_argument("--reparse", help="사람 조치 뒤 재파싱 대상 원본 키 목록 파일(한 줄에 하나, SI39③) — 새 날짜 폴더로, 옛 결과는 안 지움")
     ap.add_argument("--apply", action="store_true", help="실제 업로드 + EDW 쓰기(기본은 dry-run — 표만 출력, 쓰기 0)")

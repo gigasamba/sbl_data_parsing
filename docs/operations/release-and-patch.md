@@ -1,6 +1,6 @@
 # 릴리스 · 패치 — 실행 이미지 + 코드 폴더 바꾸기
 
-↑ [server-guide.md](server-guide.md) · [env-guide.md](env-guide.md) · 스크립트: `deploy/release/{make_patch,build_ship,ship_stage,selftest_gate}.sh` · `deploy/host/scripts/prune_old.sh`
+↑ [server-guide.md](server-guide.md) · [env-guide.md](env-guide.md) · 스크립트: `deploy/release/{build_ship,ship_stage,selftest_gate}.sh` · `deploy/host/scripts/prune_old.sh`
 
 **전제**: 개발 서버에는 코드 없는 실행 이미지 2개를 한 번 넣고, 그 뒤 코드 수정은 **코드 폴더를 통째로 바꿔** 전달한다(§1-1 — 옛 오버레이 패치 길은 11-03에 이 길로 바뀌었다). 운영 서버는 개발 서버에서 시험한 코드를 구운 이미지를 쓴다(§1-2). 의존성(패키지·시스템 라이브러리·모델 파일)이 바뀔 때만 새 실행 이미지 버전을 만든다.
 
@@ -40,14 +40,14 @@ Answer Agent 이미지는 없다(10-14 결정 — 개발 서버 네이티브. MC
 3. 운영 서버: `sbl_images/` 폴더째 옮겨 `DOCKER=podman bash sbl_images/load.sh <태그>`(조각 sha256 확인 → 합치기 → load → BUILD.txt) → 태그 확인. 호스트 스크립트(`deploy/host/` — trigger.sh·compose·systemd)는 같이 온 코드 폴더 묶음을 `/srv/rag/code/<버전>-<커밋>`에 풀고 `live` 링크로(§1-1 2·3과 같은 방법 — 이미지와 같은 커밋). 컨테이너에는 코드 폴더를 붙이지 않는다 — 셸·unit에 `CODE_DIR`을 두지 않는다(두면 compose가 코드 폴더를 덮어 붙임). 띄우는 법은 §5-2.
 4. 어느 판이 운영에 있는지: `docker image inspect <태그> --format '{{json .Config.Labels}}'` — 코드 커밋·실행 이미지 ID.
 
-배포 단계 표(어디서 어디로·어떤 이미지·코드)는 README §5-0. 운영(수집) 서버의 새 이미지는 §1-2(개발 서버에서 굽기)가 기본이고, 아래 §3·§4(옛 패치 번들·손 복사)는 기록·비상용이고, §5는 새 실행 이미지가 필요할 때다.
+배포 단계 표(어디서 어디로·어떤 이미지·코드)는 README §5-0. 운영(수집) 서버의 새 이미지는 §1-2(개발 서버에서 굽기)가 기본이고, 아래 §3(서버 자체 변경과 합치기)·§4(전체 덮어쓰기)는 코드 폴더를 바꿀 때의 합치기 원칙이고, §5는 새 실행 이미지가 필요할 때다.
 
 ## 2. 코드를 고칠 때 지킬 것 (코드 폴더 바꾸기로 전달 가능하게)
 
 | # | 규칙 |
 |---|---|
 | C1 | 새 외부 패키지 import 금지(표준 라이브러리·이미 `requirements*.txt`에 있는 것만) |
-| C2 | `requirements*.txt`·`Dockerfile`·`wheels`·`assets/` 모델 파일은 바꾸지 않는다(바꾸면 `make_patch.sh`가 종료 코드 3) |
+| C2 | `requirements*.txt`·`Dockerfile`·`wheels`·`assets/` 모델 파일은 바꾸지 않는다(바꾸면 새 이미지 버전 — §5) |
 | C3 | 이미지 경계를 넘는 import 금지 — `mcp_server`(mcp-server)와 `pipeline`(data-pipeline)은 서로 import하지 않는다. `python -m common.check.check_modules`가 잡음 |
 | C4 | 절대 경로 금지 — 저장소 안은 `common/core/paths.py` 기준 상수, 환경마다 다른 경로는 settings.yaml 항목([CLAUDE.md](../../CLAUDE.md) §2). 쓰기는 `output/`(볼륨)에만 |
 | C5 | `agent_platform/`은 10-26에 지웠다(I5, D-013) — LLM·VLM·임베딩 호출은 `common/ai/llm.py`(0.2.0 — ADK 장치를 지우고 HTTP 한 길, pl-46)·`embed.py`를 고친다. 서버에 남은 옛 `agent_platform`·`common_tools`·`data_*` 폴더는 새 코드 폴더(§1-1 — 저장소 트리 그대로)로 바꾸면 없어진다 |
@@ -55,25 +55,14 @@ Answer Agent 이미지는 없다(10-14 결정 — 개발 서버 네이티브. MC
 | C7 | 설정 기본값을 바꿀 때는 settings.yaml 항목으로(코드 상수 변경도 코드 폴더 바꾸기로 되지만 커밋 메시지에 이유 한 줄) |
 | C8 | 커밋 메시지에 **'오버레이 패치 가능' / '새 이미지 버전 필요'** |
 
-## 3. 패치 번들(옛 오버레이 패치) — 만들기 → 서버 변경과 합치기 → 확인
+## 3. 코드만 바뀐 판 — 바뀐 것 정리 → 서버 변경과 합치기 → 확인
 
-> **11-03(사용자) — 서버에 덧씌우는 길(`compose.patch*.yml`)은 지웠다(§1).** 코드만 바뀐 배포는 §1-1(개발 서버 코드 폴더 바꾸기) → §1-2(운영 굽기). 아래 §3-1 번들(`make_patch.sh`)은 바뀐 파일 목록·재파싱 판정·설명서(`PATCH_NOTES.md`)를 만드는 데만 쓴다(번들의 `app/deploy/…` 배치를 붙여 주는 compose는 없다). §3-2의 "서버 자체 진행 우선" 원칙은 코드 폴더를 바꿀 때도 그대로, §3-3 확인도 그대로.
+> **11-03(사용자) — 서버에 덧씌우는 길(`compose.patch*.yml`)과 번들 스크립트 `make_patch.sh`는 지웠다(§1).** 코드만 바뀐 배포는 §1-1(개발 서버 코드 폴더 바꾸기) → §1-2(운영 굽기). 아래 §3-2의 "서버 자체 진행 우선" 원칙과 §3-3 확인은 코드 폴더를 바꿀 때도 그대로다.
 
-### 3-1. PC에서 번들 만들기
-```bash
-bash deploy/release/make_patch.sh last <출력 폴더> ["이유 한 줄"] [이번 번들 요약.md]
-#   last(기본) = 직전에 올린 패치 이후(증분) · image = 이미지 기준 버전 이후 전부 · <커밋> = 그 커밋 이후 누적
-```
-종료 코드 3 → §5(새 이미지 버전)·§4(전체 덮어쓰기)로: 의존성(§2 C2)이 기준 버전 뒤에 바뀌었거나, 기준 버전·시작점이 이 저장소 배치(`deploy/docker/Dockerfile`·`common/core/fingerprint.py`가 있는 버전)가 아닐 때(S6b 전 `docker/` 배치·upstream `deploy/<폴더>` 배치·이 저장소에 없는 기준 커밋). 이미지 COPY·compose 마운트·호스트 스크립트 자리가 달라 파일 교체·삭제로는 맞출 수 없다.
-
-성공하면 출력 폴더에(⚠ 번들 경로는 **옛 live 배치** `app/deploy/…`·`app/docker/…`다 — 지금 코드 폴더는 저장소 트리 그대로라 이 경로와 맞지 않는다. 번들은 무엇이 바뀌었는지 보는 데만 쓴다):
-- 바뀐 파일: `app/deploy/<common|pipeline|mcp_server|resources>/…`·`app/docker/…`(옛 컨테이너 마운트 원본 — 저장소의 `<폴더>/…`·`deploy/docker/…`) · `deploy/host/…`·`deploy/release/…`(호스트 스크립트)
-- `prev/`(바뀌기 직전 버전 — 서버가 그 파일을 직접 고쳤는지 비교용)
-- **`PATCH_MANIFEST.txt`** — `M <경로>`(교체)·`D <경로>`(삭제) 줄(live 기준) + 기준 버전·범위·전제(서버가 어느 커밋이어야 하는지)
-- **`PATCH_NOTES.md`** — 서버 LLM이 먼저 읽는 설명서: 적용 규칙·"재파싱 필요?"·바뀐 설정·커밋별 목적. "재파싱 필요?"는 **핑거프린트 값 비교**다: 시작점·HEAD 코드를 임시 폴더에 풀어 핸드오프 `FINGERPRINT`(다르면 parse부터 다시)·엔진 핑거프린트 27개(다르면 그 엔진 원문 재파싱)·참고로 code_fp 5개를 계산해 비교한다(계산에 `PY` — 기본 저장소 `.venv/bin/python`; 계산이 안 되면 "판정 불가")
-- `CHANGES.md` — 패치 브랜치의 누적 이력(이번 절 추가)
-
-`PATCH_COMMIT=1`이면 출력을 패치 브랜치(기본 `dev_server_patch`)에 새 커밋으로 쌓는다(push는 사람).
+### 3-1. PC에서 바뀐 것 정리
+- 바뀐 파일 목록: `git diff --name-status <직전 판 커밋> <새 판 커밋>` — `M`(교체)·`D`(삭제)·`A`(새 파일), 경로는 저장소 트리 그대로(= 코드 폴더).
+- 재파싱 필요?: 두 커밋에서 핑거프린트 값(CLAUDE.md §4 한 줄 명령 — 핸드오프 `FINGERPRINT`·레이어 code_fp)을 재서 비교한다. `FINGERPRINT`가 다르면 parse부터, code_fp가 다르면 그 층부터 다시 처리된다.
+- 설명서 `RELEASE_NOTES.md`(손으로 씀 — §4): 이번 판 목적 · 바뀐 파일 목록 · 바뀐 설정(env-guide §5의 새 줄) · 재파싱 필요 여부 · 커밋별 목적(반영한 서버 변경 ID 포함 — §3-4).
 
 ### 3-2. 서버에서 적용
 
@@ -81,19 +70,19 @@ bash deploy/release/make_patch.sh last <출력 폴더> ["이유 한 줄"] [이�
 
 **먼저 서버 자체 개발 기록을 읽는다** — `/srv/rag/reports/server-changes.md`(서버에서 코드를 고치거나 옵션을 바꾼 건마다 한 행 + `server-changes/<ID>.diff`, 형식 [server-guide.md](server-guide.md) §7)와 서버 설정 파일 `/srv/rag/env/settings.yaml`(옛 `pipeline.env`는 읽지 않음). 상태가 `서버에만`·`PC 보냄`인 행마다:
 
-| 그 행의 파일이 이번 `PATCH_MANIFEST.txt`에 | 할 일 |
+| 그 행의 파일이 이번 판의 바뀐 파일 목록(§3-1)에 | 할 일 |
 |---|---|
 | 없음 | 그대로 둔다(패치가 안 건드림) |
-| `M`(교체)로 있음 | 새 파일에 그 변경이 이미 들어 있으면(PC가 반영 — `PATCH_NOTES.md` 커밋 목적에 그 ID) 새 파일로 교체하고 `PC 반영됨 <커밋>`. 없으면 **새 파일 위에 서버 변경을 다시 얹는다**: `<ID>.diff`가 그대로 안 얹히면 그 변경의 뜻(행의 '무엇·왜')을 새 코드 구조에 맞게 손으로 옮긴다. 패치와 서버가 같은 줄·같은 동작을 다르게 바꿨으면 **서버 쪽 동작을 남기고**, 패치의 나머지 새 기능은 그 둘레에 붙인다. 행에 `다시 얹음 <패치 커밋>` + 합친 방법 한 줄 |
+| `M`(교체)로 있음 | 새 파일에 그 변경이 이미 들어 있으면(PC가 반영 — `RELEASE_NOTES.md` 커밋 목적에 그 ID) 새 파일로 교체하고 `PC 반영됨 <커밋>`. 없으면 **새 파일 위에 서버 변경을 다시 얹는다**: `<ID>.diff`가 그대로 안 얹히면 그 변경의 뜻(행의 '무엇·왜')을 새 코드 구조에 맞게 손으로 옮긴다. 패치와 서버가 같은 줄·같은 동작을 다르게 바꿨으면 **서버 쪽 동작을 남기고**, 패치의 나머지 새 기능은 그 둘레에 붙인다. 행에 `다시 얹음 <패치 커밋>` + 합친 방법 한 줄 |
 | `D`(삭제)로 있음 | 패치 노트에서 그 코드가 어디로 옮겨졌는지 보고, 옮겨진 곳에 서버 변경을 다시 얹는다. 옮겨진 곳이 없으면(기능 삭제) 서버가 그 파일을 쓰는지 보고 쓰면 남긴다. 행에 처리 한 줄 |
 
 **옵션(설정) 변경도 같은 원칙** — 서버에서 바꾼 옵션 값이 패치 뒤에도 그대로 동작해야 한다:
 - 서버 `settings.yaml`에 적은 값은 패치가 기본값을 바꿔도 그대로 둔다(설정 파일이 코드 기본값보다 우선).
 - 서버가 코드 안 기본값(상수·설정 모델 기본값 등)을 직접 바꿨다면 그 값을 `settings.yaml`의 같은 항목(자리는 저장소 `settings.sample.yaml` — 옛 env 이름으로 찾음)으로 옮긴 뒤 새 파일로 교체한다(다음 패치부터 코드 안 값이 덮여도 유지됨). 설정 항목이 없는 값이면 위 표대로 코드에 다시 얹는다.
-- 패치가 설정 항목 이름·자리를 바꾸거나 없앴으면(`PATCH_NOTES.md` '바뀐 env'·`settings.sample.yaml` 차이) 서버가 쓰던 옛 항목의 값을 새 항목으로 옮긴다. 새로 생긴 항목은 기본값으로 두되, 서버에서 일부러 끈 기능(false)과 겹치면 끈 상태를 유지한다.
+- 패치가 설정 항목 이름·자리를 바꾸거나 없앴으면(`RELEASE_NOTES.md` '바뀐 설정'·`settings.sample.yaml` 차이) 서버가 쓰던 옛 항목의 값을 새 항목으로 옮긴다. 새로 생긴 항목은 기본값으로 두되, 서버에서 일부러 끈 기능(false)과 겹치면 끈 상태를 유지한다.
 - 옮기거나 유지한 옵션은 모두 `server-changes.md` 행(또는 새 행)에 적는다.
 
-기록이 없는데 `live`와 `prev/`가 다른 파일(기록 안 된 서버 수정)이 나오면 그것도 서버 자체 변경으로 보고 같은 방식으로 합치고, 그 자리에서 기록에 행을 추가한다.
+기록이 없는데 `live`와 직전 판 코드 묶음이 다른 파일(기록 안 된 서버 수정)이 나오면 그것도 서버 자체 변경으로 보고 같은 방식으로 합치고, 그 자리에서 기록에 행을 추가한다.
 
 적용 순서(11-03부터 — 옛 `cp -a <번들>/app …`로 `live`에 덮어 쓰던 길과 `compose.patch*.yml`은 지움):
 1. 새 판의 코드 폴더 묶음(§1-1 1)을 새 판 폴더 `/srv/rag/code/<버전>-<커밋>`에 푼다(지금 `live`는 그대로 두어 되돌릴 수 있게).
@@ -117,7 +106,7 @@ bash <코드 폴더>/deploy/release/selftest_gate.sh docker run --rm <연결 옵
 서버에서만 고친 코드는 다음 패치·전체 덮어쓰기 때마다 다시 얹어야 하므로, PC가 main에 받아들이는 것이 기본이다.
 1. 서버 → PC: `server-changes.md`의 `서버에만` 행과 `<ID>.diff`를 보낸다(반출 규칙은 이슈와 같음 — 코드·숫자·오류만, 문서 본문·고객명·키 값 없음). 보낸 행은 `PC 보냄`.
 2. PC: 외부 PR처럼 읽고 검토하되 **서버가 실데이터로 고친 것이라 받아들이는 쪽이 기본** — diff·이유·서버 테스트 결과를 보고 그대로 또는 PC 구조에 맞게 고쳐 받아들이고, 버리는 것은 같은 문제를 PC 코드가 이미 다르게 풀었을 때만. 서버가 바꾼 옵션 값은 기본값으로 올릴지(모든 서버에 맞는지) 따로 판단. 받아들이면 `jh/<ID>` 브랜치 → 테스트 → main. 판단과 근거는 그 PR 본문에 남긴다(옛 `docs/backlog/dev_his.md`는 이 저장소에 없다).
-3. 다음 패치의 커밋 메시지에 그 서버 변경 ID를 적는다(`PATCH_NOTES.md` 커밋 목적에 나옴 → 서버가 §3-2에서 `PC 반영됨`으로 닫음). 버린 변경은 이유와 함께 서버에 알리고 행을 `폐기`로.
+3. 다음 패치의 커밋 메시지에 그 서버 변경 ID를 적는다(`RELEASE_NOTES.md` 커밋 목적에 나옴 → 서버가 §3-2에서 `PC 반영됨`으로 닫음). 버린 변경은 이유와 함께 서버에 알리고 행을 `폐기`로.
 
 ## 4. 전체 덮어쓰기 — 경로가 크게 바뀌었을 때(서버 기본값보다 단순)
 
@@ -128,7 +117,7 @@ Z=<받은 ZIP을 푼 저장소 루트>
 cp -a "$Z" /srv/rag/code/<버전>-<커밋>                      # 새 판 폴더(지금 live는 지우지 않음 — 되돌리기용)
 ln -sfn /srv/rag/code/<버전>-<커밋> /srv/rag/code/live     # 바꾸기 → 다시 띄우기는 §1-1 3
 ```
-PC 쪽: push 전에 **RELEASE_NOTES.md**(이번 번들 목적·바뀐 코드·바뀐 설정·재파싱 필요 여부)를 같이 커밋 — `NOTES_ONLY=1 NOTES_NAME=RELEASE_NOTES.md bash deploy/release/make_patch.sh <직전 배포 커밋> <출력>`로 설명서만 만든다(매니페스트·`prev/` 없음, 전체 모드). 시작점이 S6b 전 배치면 종료 코드 3이므로 S6b 첫 배포의 설명서는 손으로 쓴다.
+PC 쪽: push 전에 **RELEASE_NOTES.md**(이번 판 목적·바뀐 코드·바뀐 설정·재파싱 필요 여부)를 같이 커밋 — 손으로 쓴다(항목은 §3-1).
 
 ## 5. 새 이미지 버전이 필요할 때
 
@@ -136,12 +125,12 @@ PC 쪽: push 전에 **RELEASE_NOTES.md**(이번 번들 목적·바뀐 코드·�
 
 **0.2.0은 §8 "0.2.0 배포 — 사람이 할 일"**(사람 할 일의 정본 — 결정·배포 전·당일·뒤, 누가·`C-xx`)을 따른다 — §5-1~§5-7은 그 안의 단계별 명령이다(0.1.0 판은 [history/deploy_0_1_0.md](../history/deploy_0_1_0.md)).
 
-**`deploy/docker/IMAGE_BASE`** — 한 줄 `<커밋 7자> <이미지 태그>`, `make_patch.sh image`·`last`의 기준. 지금은 upstream 10-16 버전 `e305b14 20261016-e305b14`([release_history.md](../history/release_history.md) §8)라 이 저장소에 없는 커밋이다(`make_patch.sh`가 종료 코드 3 "새 이미지 버전 필요"). 새 이미지 버전을 서버에 넣은 뒤 그 버전을 만든 이 저장소 커밋·태그로 고쳐 커밋한다 — 그 뒤부터 오버레이 패치를 만들 수 있다. 둘째 항목(이미지 태그)은 버전으로 적는다(예 `<커밋 7자> 0.1.0`).
+**`deploy/docker/IMAGE_BASE`** — 옛 `make_patch.sh`(11-03 지움)의 기준 파일. 지금은 읽는 곳이 없다(정리는 PRD [e2-21](../prd/test.md#e2-21)).
 
 **버전(D-036, 10-29)** — 두 이미지(`data-pipeline`·`mcp-server`)는 같은 버전을 쓴다. 정본은 저장소 루트 `VERSION` 한 줄(SemVer `MAJOR.MINOR.PATCH`, 첫 배포 `0.1.0`).
 - 올리는 규칙(D-009): MAJOR = MCP 도구 계약·DB 스키마·핸드오프 형식처럼 서로 맞춰야 하는 것이 깨질 때(1.0 전에는 예외 — MINOR에서도 계약·스키마를 깰 수 있고, 운영이 안정되면 1.0.0으로 올림, 사용자 10-30 PRD grill C2) · MINOR = 새 이미지 버전(의존성·Dockerfile·마운트 경로) 또는 큰 기능 · PATCH = 코드만 교체(코드 폴더 바꾸기 — 옛 오버레이 패치). `release/<버전>` 브랜치에서 `VERSION`을 고치고, main 머지 커밋에 git 태그 `v<버전>`(annotated)을 붙인다.
 - 이미지 태그 = 버전(`data-pipeline:0.1.0`·`mcp-server:0.1.0`). `build_ship.sh`·`ship_stage.sh`는 태그를 안 주면 `VERSION`을 쓰고, 빌드한 커밋은 이미지 라벨 `org.opencontainers.image.revision`(커밋 안 한 변경이 섞이면 `-dirty`)에 남긴다 — `docker inspect -f '{{json .Config.Labels}}' data-pipeline:0.1.0`. 같은 태그가 이미 있으면 `build_ship.sh`가 멈춘다(다시 만들 때만 `FORCE_TAG=1`).
-- 버전 표기(`common.pipeline_version()` — 회사 DB `AI.ParsingMeta.silver_version`(지금 이름 `pipeline_version`)·`gold_version` — 사용자 11-02)는 이미지 안 `/app/deploy/VERSION`과 오버레이 패치의 `common/PATCH_VERSION`(`make_patch.sh`가 HEAD의 `VERSION`을 적음 — 이미지 태그와 같으면 종료 2) 중 높은 버전이다(10-29 전에는 git 짧은 커밋 — `refactor.md` C-62).
+- 버전 표기(`common.pipeline_version()` — 회사 DB `AI.ParsingMeta.silver_version`(지금 이름 `pipeline_version`)·`gold_version` — 사용자 11-02)는 이미지 안 `/app/deploy/VERSION`(코드 폴더면 그 루트 `VERSION`)이다 — 코드의 옛 후보 `common/PATCH_VERSION`은 만들던 `make_patch.sh`를 11-03에 지워 쓰이지 않는다(PRD [e2-21](../prd/test.md#e2-21))(10-29 전에는 git 짧은 커밋 — `refactor.md` C-62).
 
 ### 5-1. 빌드 → 전송 → 적재
 ```bash
@@ -167,7 +156,6 @@ bash deploy/release/ship_stage.sh pipeline mcp            # 태그 = VERSION(다
 
 ### 5-2. 서버에서
 이미지 불러오기는 README §5-0 "개발 서버 설치"(코드 zip + `sbl_images` zip → `load.sh`) 한 길이다(op-10). 운영 서버(구운 이미지)도 같은 `load.sh`(§1-2). 판을 올릴 때의 순서·되돌리기는 §5-7.
-그 뒤 패치 브랜치를 새 버전 기준으로 비운다(`make_patch.sh <새 기준 커밋>` — 바뀐 파일 0이어야 함).
 
 **이미지·코드 폴더·`run_docs.py`는 같은 때에 바꾼다.** 셋 중 하나만 바꾸면 나머지가 깨진다(이미지의 패키지 배치·코드 폴더·`run_docs.py`가 부르는 `python -m pipeline.…`가 서로 맞아야 함 — 확인 파일 `pipeline/extract/run_all.py`, `docflow_probe.py`는 이미지 안 `/app/deploy/pipeline/extract/`). 순서: 배치·상주 컨테이너 멈춤 → 이미지 적재 → 코드 폴더 전체 덮어쓰기(§4) → `run_docs.py` 교체 → 컨테이너를 새 이미지로 다시 띄움 — 한 번에 한다. 리팩토링 버전(I2·I4·S2~S11 — 패키지 `data_etl` → `pipeline`, 경로 정리)은 **한 이미지 버전으로만** 배포한다 — 나눠 배포하면 p1 code_fp가 두 번 바뀌어 서버 P1 캐시가 한 번 더 전부 빗나간다(refactor_plan 6-1 — `refactor.md` C-23). I4의 바뀐 설정·systemd 할 일은 [env_guide_history.md](../history/env_guide_history.md)의 I4 줄(env-guide §5에서 옮김).
 
@@ -327,7 +315,7 @@ bash deploy/host/scripts/run_tool.sh migrate check --target all     # "차이 �
    3. 적용(필요하면 서버 변경 다시 얹기·검토) → `check-modules`.
    4. DB 버전: `migrate check --target all` — 버전 기록 전이면 §5-5 처음 한 번, 버전이 바뀌는 릴리스면 `migrate up`. **적재·selftest 앞에** 한다(파싱·검색 MCP 컨테이너는 PG 없이도 시작한다).
    5. `selftest` 1개(`selftest_gate.sh` 판정 — 알려진 FAIL 밖 0, §3-3) → 로그·종료 코드 확인(실행 보드 `run_board`는 11-01에 지움 — e2-10).
-4. `/srv/rag/reports/versions.md`에 버전 기록 한 줄 · 새 이미지 버전이면 `deploy/docker/IMAGE_BASE`를 그 버전의 커밋·태그로(§5).
+4. `/srv/rag/reports/versions.md`에 버전 기록 한 줄.
 5. 문제가 있으면 [server-guide.md](server-guide.md) §7 형식으로 이슈 기록 → PC가 수정 → 다음 패치로.
 
 ## 8. 0.2.0 배포 — 사람이 할 일
@@ -485,7 +473,7 @@ tail -f <작업 폴더>/batch_progress/progress.log                             
 | 2 | 적재가 지우지 않는지·상주 컨테이너 `/tmp`·좀비 프로세스 | 서버 운영 | C-68 |
 | 3 | 새벽 배치 — `ops.nightly.time`·`max_docs`·`deadline`을 모두 채울 때만 켬(마감은 시작보다 5분 넘게 뒤), `journalctl -u data-pipeline-nightly` | 서버 운영 | C-72 |
 | 4 | 2주 뒤 옛 gold 스키마·옛 `struct` 스키마를 백업한 뒤 지움 | DB 담당 | C-74 |
-| 5 | `versions.md`에 판 한 줄 · `deploy/docker/IMAGE_BASE` · 되돌리기가 필요 없어진 뒤 옛 이미지 정리(`prune_old.sh --apply`) | 서버 운영·devops | §6·§7 |
+| 5 | `versions.md`에 판 한 줄 · 되돌리기가 필요 없어진 뒤 옛 이미지 정리(`prune_old.sh --apply`) | 서버 운영·devops | §6·§7 |
 | 6 | 문제는 `server-changes.md`에 이슈로 → PC가 고침 → 다음 코드 폴더 판(§1-1) | 서버 운영·개발자 | [server-guide.md](server-guide.md) §7 |
 | 7 | `query_edw` 오탐(T14 — [mc-06](../prd/mcp.md#mc-06)) — **확인:** 서버 MCP에서 실제 업무 SELECT 몇 개(JOIN·`WITH`·대괄호 이름·한글 별칭·`TOP`이 든 것)를 `query_edw`로 부른다. **기대:** 모두 행이 오거나 행·시간 상한 안내만 나온다 — 정상 SELECT가 `error`(`unterminated_*`·판단 못 함·허용 목록 밖)로 거부되면 그 SQL과 오류 코드를 `server-changes.md`에 적는다 | 서버 운영 | — |
 | 8 | `edw_meta` 표 이름 끝 공백(T14 — [mc-07](../prd/mcp.md#mc-07)) — **확인:** 서버 카탈로그(`search.edw_meta.dir`의 `catalog.json`)에서 이름 끝에 공백이 있는 표를 찾아, `edw_meta`를 그 이름 그대로와 공백을 뺀 이름으로 각각 부른다. **기대:** 둘 다 같은 표의 칸 목록이 나온다(조회 키는 앞뒤 공백을 빼고 소문자로 맞춤 — `mcp_server/services/edw_meta.py`). "모르는 이름" 제안이 나오면 실패 | 서버 운영 | — |

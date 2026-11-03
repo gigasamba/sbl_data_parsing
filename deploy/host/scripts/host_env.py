@@ -18,7 +18,7 @@ ROOT = HERE.parents[2]  # 배치 루트(PC 저장소 · 서버 live/)
 
 
 def _layout():
-    for p in (ROOT / "common", ROOT / "app" / "deploy" / "common"):  # 저장소 배치 · 서버 코드 폴더 배치(make_patch 오버레이)
+    for p in (ROOT / "common", ROOT / "app" / "deploy" / "common"):  # 저장소 배치 · 옛 오버레이 배치(11-03 지움)
         f = p / "config" / "layout.py"
         if f.is_file():
             spec = importlib.util.spec_from_file_location("settings_layout", f)
