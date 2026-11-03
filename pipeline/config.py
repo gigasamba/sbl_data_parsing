@@ -349,6 +349,12 @@ class PipelineNight(Section):
 
 
 class PipelinePaths(Section):
+    edw_chain: str | None = F(
+        None,
+        "EDW_CHAIN_FILE",
+        "EDW 조인 사슬 설정 파일 경로(적재만 읽음 — 비우면 resources/config/edw_chain.yaml · 서버 사본을 쓰려면 컨테이너 안 경로 /etc/rag/edw_chain.yaml"
+        "(서버 원본 $SERVER_ENV_DIR/edw_chain.yaml — dc.sh init이 없을 때만 복사, 적었을 때만 쓰임) — pl-29, 사용자 11-03 · 점검: python -m pipeline.load.edw_meta --check)",
+    )
     gold_dir: str | None = F(
         None,
         "GOLD_DIR",

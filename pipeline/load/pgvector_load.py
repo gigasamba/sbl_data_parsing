@@ -17,7 +17,7 @@ import json
 import sys
 import time
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 from common.core import span as SP  # op-01 성능 span
@@ -151,6 +151,49 @@ def require_vectors(meta):
         raise SystemExit(2)
 
 
+def require_same_model(dbs, meta, bundle):
+    """pl-51(사용자 11-03) — 묶음의 임베딩 모델이 검색 스키마(원천 5벌)에 이미 있는 문서의 모델(doc.embed_model)과 다르면 아무것도 쓰기 전에
+    거부(종료 코드 2). 검색은 원천마다 doc.embed_model이 하나여야 하고(pgsearch.index_meta — 섞이면 벡터 검색 거부) 한 MCP가 한 질의 모델로
+    5벌을 모두 보므로, 기준은 설정이 아니라 이미 적재된 문서다. 비교 규칙은 검색과 같다(embed.model_key). 모델 칸이 빈 옛 문서는 보지 않는다.
+    거부는 stderr 한 줄 + applog.pipe_event 한 행(common.log.db_enabled일 때 — 표의 CHECK 값 안: status fail · err_kind env)."""
+    from common.ai.embed import model_key
+
+    got = set()
+    for sdb in dbs.values():
+        try:
+            rows = sdb.q(f"SELECT DISTINCT embed_model AS m FROM {sdb.schema}.doc WHERE embed_model IS NOT NULL")
+        except Exception:  # 표가 아직 없음(처음 적재)
+            continue
+        got.update(model_key(r["m"]) for r in rows)
+    new = model_key(meta.get("embed_model"))
+    if not got or got == {new}:
+        return
+    expected = ",".join(sorted(got))
+    print(
+        f"[load] 임베딩 모델이 다름 — 적재 거부(아무것도 쓰지 않음): 검색 스키마의 문서는 {expected}, 묶음 {bundle}은 {new}. "
+        "같은 모델로 묶음을 다시 만들거나 새 검색 스키마에 적재한다(pl-51)",
+        file=sys.stderr,
+        flush=True,
+    )
+    from common.core import jsonlog
+    from common.store import logsink
+
+    logsink.emit(
+        "pipe_event",
+        {
+            "ts_start": datetime.now(UTC),
+            "run_id": jsonlog.get_context().get("run_id"),
+            "layer": "load",
+            "stage": "load.embed_guard",
+            "model": new,
+            "status": "fail",
+            "err_kind": "env",
+            "err": f"embed_model_mismatch: expected {expected}, got {new} (bundle {bundle})",
+        },
+    )
+    raise SystemExit(2)
+
+
 def load(db, bundle, replace=False, rep_dir=None):
     """묶음 → 원천 스키마별로(pl-28 — 문서의 source_system으로 고름: SFDC·CRMS·LAS·FAQ, 그 밖은 other) 적재. 실 PG는 기준 연결 한 트랜잭션
     (실패하면 5벌 모두 되돌림), 대역은 원천마다 따로. 저장된 문서(file_path 같음)는 건너뜀(replace면 지우고 다시 넣음 — 고치기). 묶음에 없는
@@ -165,6 +208,8 @@ def load(db, bundle, replace=False, rep_dir=None):
     B = Path(bundle)
     meta = json.loads((B / "meta.json").read_text(encoding="utf-8"))
     require_vectors(meta)
+    dbs = src_dbs(db)
+    require_same_model(dbs, meta, B)  # pl-51 — EDW 조인·분류·쓰기 전에
     docs, chunks = _nonul(jl(B / "docs.jsonl")), _nonul(jl(B / "chunks.jsonl"))
     vecs = np.load(B / "vectors.npy", mmap_mode="r")  # 필요한 청크만 읽음(전체를 메모리에 올리지 않음)
     t0 = time.time()
@@ -179,7 +224,6 @@ def load(db, bundle, replace=False, rep_dir=None):
         if d["file_path"] in failed:  # 분류 실패 = 이 문서의 적재 실패(gold에 안 넣음 — 다음 정상 실행이 다시 고름)
             continue
         by_src.setdefault(ST.source_of(d.get("source_system")), []).append(i)
-    dbs = src_dbs(db)
     elsewhere = _elsewhere(dbs, docs, by_src)  # 같은 원본 경로가 다른 원천 스키마에 있는지(원천이 바뀐 문서 — 리뷰 #86)
     kept = []  # 이미 gold에 있어 건너뛴 문서 — ParsingMeta gold_version이 비었으면 채움(_mark_loaded)
     if not replace:  # 어디든 이미 있으면 건너뜀(두 스키마에 같은 문서가 생기지 않게)

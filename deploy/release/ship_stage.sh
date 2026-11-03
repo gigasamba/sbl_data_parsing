@@ -1,5 +1,5 @@
 #!/bin/bash
-# 서버 이미지(S6b D-020 — 2개: pipeline·mcp) — 로컬 스테이징만(push 안 함·저장소 생성 안 함 — 사람 승인 뒤 수동 push, release-20261016.md §1-2).
+# 서버 이미지(S6b D-020 — 2개: pipeline·mcp) — 로컬 스테이징만(push 안 함·저장소 생성 안 함 — 사람 승인 뒤 수동 push, docs/operations/release-and-patch.md §1-1·§1-2).
 #   bash deploy/release/ship_stage.sh [태그 — 기본 저장소 루트 VERSION(D-036), 예: 0.1.0] [대상들… 기본 pipeline mcp]
 #   개발 서버(op-06): 대상 pipeline-runtime·mcp-runtime(코드 없는 실행 이미지 — 코드는 코드 저장소 zip, README §5-0)
 #   운영 서버(op-07): bake.sh가 pipeline·mcp + CODE_BUNDLE(시험한 코드 폴더 묶음 — 호스트 스크립트용, 판 폴더에 같이 놓음)

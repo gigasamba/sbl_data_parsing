@@ -172,6 +172,37 @@ def test_chains():
     )
 
 
+def test_chain_file_setting():
+    """pipeline.paths.edw_chain(사용자 11-03) — 고친 사본을 쓰고, 없거나 틀린 파일은 기본 파일로 돌아가지 않고 거부 · --check는 파일만 봄."""
+    import yaml
+
+    from pipeline import config as pc
+
+    d = Path(tempfile.mkdtemp())
+    good, broken, notdict = d / "good.yaml", d / "broken.yaml", d / "list.yaml"
+    good.write_text(yaml.safe_dump(_chain(quote=True), allow_unicode=True), encoding="utf-8")  # Quote 단계를 켠 사본
+    broken.write_text("sfdc: [", encoding="utf-8")
+    notdict.write_text("- a", encoding="utf-8")
+    cases = [  # (설정 값, 기대 — SFDC 단계 수 또는 오류 글자)
+        (None, 3),  # 비움 — 기본 파일(Quote 없음)
+        (str(good), 4),  # 고친 사본이 쓰임
+        (str(d / "none.yaml"), "못 읽음"),  # 없는 파일 — 조용히 기본으로 안 감
+        (str(broken), "YAML 오류"),
+        (str(notdict), "최상위가 사전"),
+    ]
+    for val, want in cases:
+        with pc.PIPE.env(EDW_CHAIN_FILE=val):
+            try:
+                got = len(M.load_chain()["sfdc"]["steps"])
+            except ValueError as e:
+                got = want if isinstance(want, str) and want in str(e) else str(e)
+            rc, msg = M.check()
+        assert got == want, (val, got)
+        assert (rc == 0) == isinstance(want, int), (val, rc, msg)
+    assert M.main(["--check", "--file", str(good)]) == 0 and M.main(["--check", "--file", str(broken)]) == 1
+    print(f"[시험] pl-29 사슬 설정 파일 칸 — {len(cases)}개(기본·사본·없음·YAML 깨짐·사전 아님) · --check 통과")
+
+
 HINT_SQL = """
 ALTER TABLE SFDC.ContentVersion ADD COLUMN Title TEXT;
 ALTER TABLE SFDC.Task ADD COLUMN Subject TEXT;

@@ -42,3 +42,17 @@ def test_ui_headers():
         assert asyncio.run(serve._mcp(call)) == "called"
     assert len(seen) == 1
     assert seen[0]["X-MCP-Client"] == seen[0]["X-MCP-User"] == "test"
+
+
+def test_ui_sends_source():
+    """검색 페이지의 search 호출에 source_system(필수 — search_svc G20)이 있고, 고르는 값이 다섯 원천과 같다."""
+    import re
+
+    from common.core.paths import DEPLOY_ROOT
+    from common.store.db.models.search_tables import SOURCES
+
+    html = (DEPLOY_ROOT / "validation" / "search_ui" / "index.html").read_text(encoding="utf-8")
+    assert 'source_system: $("source").value' in html
+    sel = re.search(r'<select id="source">(.*?)</select>', html, re.S)
+    assert sel, "원천 고르기 없음"
+    assert [v.lower() for v in re.findall(r'value="([^"]+)"', sel.group(1))] == list(SOURCES)

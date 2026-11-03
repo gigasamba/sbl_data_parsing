@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md)의 카테고리 하나 — 변경을 어떻게 증명하나: 스모크 실행, 시험 층, 품질 평가, 답변 점검, 시험 자료, 이미지 반입 판정(PC + 반입 관문).
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서(주제별): 시험 층·반입 e2-02·e2-08·e2-14·e2-11·e2-15 → 스모크·시험 자료 e2-01·e2-13·e2-09 → 평가·점검 e2-03·e2-04·e2-05·e2-12·e2-19·e2-20·e2-06·e2-07·e2-16 → 정리 e2-10·e2-17·e2-18 → 코드와 다른 점.
+순서(주제별): 시험 층·반입 e2-02·e2-08·e2-14·e2-11·e2-15·e2-21 → 스모크·시험 자료 e2-01·e2-13·e2-09 → 평가·점검 e2-03·e2-04·e2-05·e2-12·e2-19·e2-20·e2-06·e2-07·e2-16 → 정리 e2-10·e2-17·e2-18 → 코드와 다른 점.
 
 <a id="e2-02"></a>
 ## e2-02 · 시험 층
@@ -23,7 +23,7 @@
   - `selftest`는 **94개 중 93개 통과**다(10-30 `feature/pl12-no-deleted` — #58이 시험 3개를 지우고 `test_no_deleted` 1개를 더한 뒤). 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
   - `pytest tests/`는 **148 passed · 3 xfailed**다(10-30 `release/0.1.0` E2E — 루트 `settings.yaml`에 전용 PG가 있을 때. 없으면 `test_pl14_deploy`가 건너뛰어 146 passed · 1 skipped). 위 1개와 일반 테스트 2개(`tests/conftest.py`의 `GENERAL_KNOWN_FAIL` — `test_run_combo`·`test_pub_registry`(C-54 ①))이며, 모두 리팩토링 전부터 있던 실패다.
   - 핑거프린트 10-30 값(`feature/pl12-no-deleted` — 공용 `settings.py`·`pg.py`·`structdb.py`가 바뀌어 p0·p1·r·s 모두 바뀜. 그 전 `feature/pl34-p1-cleanup` 값: p0 `2b4ad090d25e` · p1 `81cfe39fd09e` · r `7901ef34500b` · s `bcac3fe53d14`): `FINGERPRINT abe9b7b0799ceaae` · a `e3b0c44298fc` · p0 `0e6a5bc155b1` · p1 `1df0ba57214b` · r `bce50575a881` · s `10f13083e536`. 엔진 18개(재파싱 키 `run_all.engine_code_fp` — `qwen_vlm` `06f937fcc39e` · `kreuzberg` `7e7c9ac44287` · `rapidocr_ko` `990ebae04429`, 나머지는 refactor.md 부록 2). 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다(CLAUDE.md §4).
-  - PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕 설정(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`에 넣는다(지금 `test_pub_registry`).
+  - PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕 설정(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `pipeline/cli.py`의 `_PC_SETTINGS_CASES`에 넣는다(지금은 비어 있음 — `test_pub_registry`는 지움).
   - 0.1.0 반입 판정(10-30, develop `0ef807f` 코드를 실행 이미지에 붙여 실행): `data-pipeline-runtime:0.1.0` **75개 중 74개 통과**(SKIP 19, 알려진 실패 1) · `mcp-server-runtime:0.1.0` **47개 모두 통과** · 의존성 지문 `f0fcc30bd067bc2f` 일치.
   - (`test_trigger_server`는 11-01에 trigger 서버와 함께 지움 — pl-10.)
 - Status: done
@@ -31,7 +31,7 @@
 <a id="e2-08"></a>
 ## e2-08 · 이미지 빌드와 반입 관문
 - 이유: 서버는 selftest를 통과한 이미지만 받아야 한다.
-- 무엇: 빌드·전송 스크립트, selftest 관문은 `[판정]` 줄을 읽음, 코드만 바뀌면 오버레이 패치.
+- 무엇: 빌드·전송 스크립트, selftest 관문은 `[판정]` 줄을 읽음, 코드만 바뀌면 코드 폴더 바꾸기(옛 오버레이 패치 `make_patch.sh`는 11-03에 지움 — 사용자, 남은 흔적은 [e2-21](#e2-21)).
 - 파일: `deploy/release/build_ship.sh`, `deploy/release/selftest_gate.sh`, `docs/operations/release-and-patch.md`.
 - Status: done
 
@@ -49,19 +49,27 @@
 - 파일: `tests/conftest.py`(`GENERAL_KNOWN_FAIL`), `tests/general/`.
 - 진행 10-29(`feature/test-cleanup`): 공용 개발 PG 실패 3개를 고쳤다 — PC 시험 자식 프로세스가 더는 개발 루트 `settings.yaml`을 읽지 않음(`pipeline/cli.py` `case_env`가 시험 전용 바탕 `run_env: local`을 줌). `test_structured`, `test_structdb`, `test_aggregate`를 목록에서 뺐다. 남음: `test_kg_external`, `test_run_combo`, `test_edwdb`, `test_pub_registry`(일부러 실 PG, C-54 ①).
 - 결정(사용자 10-30 PRD grill): S4 — 이미 지운 모듈의 시험(`test_kg_external`, `test_edwdb`)은 목록과 함께 지운다. `test_run_combo`는 C7(e2-10, 평가 도구 둘만)에 따라 도구와 함께 지운다.
-- Status: partly done
+- Status: done — 남은 알려진 실패 0(`tests/conftest.py` `GENERAL_KNOWN_FAIL = {}`, `deploy/release/known_fail.txt` 빔).
 
 <a id="e2-15"></a>
 ## e2-15 · 에이전트 시험 패키지 경로가 상류를 가리킴
-- 이유: `resolve_agent_dir`가 `example_agentic`을 `dev_tools/unit_test/fixtures/`(이 저장소에 없음)에서 찾아 `test_adk`의 `run_agent` 묶음이 건너뛰어지고, `test_paths`가 그 경로를 단언한다.
-- 파일: `common/core/paths.py`(모든 레이어 의존 → code_fp), `tests/server/common/test_adk.py`, `tests/server/common/test_paths.py`.
-- Status: todo — 0.2.0(사용자 10-30 PRD grill C1 — 다음 핑거프린트가 바뀌는 릴리스).
+- 이유: `resolve_agent_dir`가 마지막에 `dev_tools/unit_test/fixtures/`(이 저장소에 없음)도 보고, `test_paths`가 그 경로를 단언한다. (`run_agent`·`common/ai/adk.py`·`test_adk.py`는 0.2.0 pl-46에 지움 — 건너뛰어지던 시험 묶음은 이제 없다. 남은 것은 없는 폴더를 보는 죽은 갈래뿐.)
+- 파일: `common/core/paths.py`(모든 레이어 의존 → code_fp), `tests/server/common/test_paths.py`.
+- Status: todo — 죽은 갈래 지우기. `paths.py`를 고치면 레이어 지문이 모두 바뀌므로 다음 지문 배치에서(사용자 10-30 PRD grill C1).
+
+<a id="e2-21"></a>
+## e2-21 · 옛 오버레이 패치 흔적 정리
+- 이유: `deploy/release/make_patch.sh`를 지웠다(사용자 11-03 `feature/drift-followup` — 코드 폴더 바꾸기로 대체). 그 스크립트만 만들거나 읽던 것이 남았다.
+- 한 것(11-03 `feature/drift-followup`): `deploy/host/scripts/run_docs.py`·`host_env.py`의 옛 `app/deploy/common` 찾기 갈래를 지움(호스트 스크립트 — 레이어 지문 밖).
+- 남은 것: ① `common/core/fingerprint.py` `pipeline_version()`의 `common/PATCH_VERSION` 후보(와 `tests/server/common/test_fingerprint.py`의 그 사례·`keyscan.py` `PIPELINE_VERSION` 설명) — 레이어 지문(code_fp) 파일이라 허브가 릴리스 지문 배치에서 지운다. ② `deploy/docker/IMAGE_BASE`(+ `.gitattributes` 줄) — 읽는 곳이 없다, 지울지 사용자가 정한다.
+- 파일: `common/core/fingerprint.py`, `deploy/docker/IMAGE_BASE`.
+- Status: todo
 
 <a id="e2-01"></a>
 ## e2-01 · PC 스모크 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
 - 이유: 릴리스 전에 문서 2~3건으로 사슬 전체를 증명한다.
 - 무엇: README §4-4 단계, 실행마다 다른 값은 `--set`, 임베딩 캐시 `output/edw/embed_cache.sqlite`.
-- 파일: `pipeline/cli.py`(`smoke`), `mcp_server/cli/ask.py`, `valid_env/object_storage/`(시험 문서 — 목록 `list-smoke10.txt`는 10-30 `eval_sets/`와 함께 지움).
+- 파일: README §4-4 명령(`pipeline.cli parse` · `build_bundle` · `dbtool` · `pgvector_load` — `pipeline.cli smoke`는 11-01에 지움), `mcp_server/cli/ask.py`, `valid_env/object_storage/`(시험 문서 — 목록 `list-smoke10.txt`는 10-30 `eval_sets/`와 함께 지움).
 - Status: done
 
 <a id="e2-13"></a>
@@ -93,7 +101,7 @@
 - 이유: 찾기를 바꿔도 적중률이 떨어지면 안 된다.
 - 무엇: hit@1/5/k, value_in_evidence, p50/p95 지연, `via` 구성. 도구 4개의 스모크, HTML/xlsx 보고서.
 - 파일: `mcp_server/cli/mcp_eval.py`, `mcp_server/cli/mcp_smoke.py`, `mcp_server/cli/search_checks.py`(`qa_report.py`는 10-30 지움 — 사용자).
-- C7(사용자 10-30 PRD grill): 비교 도구(`model_matrix`·`score_gold`·`mcp_eval` 등)는 두지 않는다([e2-10](#e2-10)) — 비교는 필요할 때 다시 만든다. `mcp_eval`·`mcp_smoke`·`search_checks`는 e2-10에 따라 지운다.
+- C7(사용자 10-30 PRD grill): 비교 도구(`model_matrix`·`score_gold`·`mcp_eval` 등)는 두지 않는다([e2-10](#e2-10)) — 비교는 필요할 때 다시 만든다. `mcp_eval`·`search_checks`는 11-01에 지웠다(e2-10). `mcp_smoke`는 남긴다(10-31 결정 목록 밖 — [e2-10](#e2-10)) — 0.2.0부터 `--source <원천>` 필수(search가 원천 하나를 요구)이고 근거 칸은 `EVIDENCE_KEYS` 12칸을 본다.
 - Status: done
 
 <a id="e2-05"></a>
@@ -186,10 +194,9 @@
 ### 요건과 다르게 동작
 | 요건 | 코드가 하는 일 | 위치 | ID |
 |---|---|---|---|
-| PC 시험 통과 | 일반 시험 7개가 리팩토링 전부터 실패 | `tests/conftest.py` | e2-11 |
 | `query_edw` 값을 인용한 답이 인용 점검 통과 | 검증 실패로 기록 | `valid_env/answer_test/rag_qa/` | e2-12 |
 | PC Docker 스모크가 검색까지 감 | retriever에서 멈춤(mc-10 — 10-30 고침, 다시 돌려 확인 필요) | `valid_env/docker/` | e2-13 |
-| 에이전트 시험 패키지를 찾음 | 상류 `dev_tools/unit_test/fixtures/`에서 찾음 → `run_agent` 시험 묶음 건너뜀 | `common/core/paths.py` | e2-15 |
+| 에이전트 지시서 폴더는 저장소 안에서만 찾음 | 없는 `dev_tools/unit_test/fixtures/`도 봄(죽은 갈래 — 시험이 단언) | `common/core/paths.py` | e2-15 |
 | 검색 페이지가 실제 개수를 보임 | 고정 글 "10 documents (20 chunks)" | `validation/search_ui/index.html` | e2-16 |
 
 ### 요건 없는 코드 — 남길지 지울지([e2-10](#e2-10)과 함께 결정, [e2-18](#e2-18))

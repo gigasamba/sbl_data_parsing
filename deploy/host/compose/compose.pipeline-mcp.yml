@@ -10,7 +10,7 @@ services:
   #   작업 서비스(pipeline.mcp_parse_service — 127.0.0.1:8766, 토큰 settings.yaml)가 이 컨테이너의 주 프로세스라 죽으면 restart가 다시 띄운다
   #   (옛 손 기동 `docker exec -d … mcp_parse_service` 없음). 작업 폴더는 결과 폴더 mcp_parse/jobs(run_docs.py가 보고 medium 레인 양보).
   #   8766을 쓰므로 옛 컨테이너(data-pipeline-parse 안 손 기동 서비스)를 먼저 지운 뒤 띄운다(release-and-patch §8-3 7).
-  #   자원 칸: settings.yaml pipeline.host.parse_mcp_cpus·parse_mcp_mem_limit·parse_mcp_cpu_shares(PARSE_MCP_* — 비우면 아래 기본값과 같은 값).
+  #   자원 칸: settings.yaml ops.pipeline_host.parse_mcp_cpus·parse_mcp_mem_limit·parse_mcp_cpu_shares(PARSE_MCP_* — 비우면 아래 기본값과 같은 값).
   data-pipeline-mcp:
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
     container_name: data-pipeline-mcp
@@ -27,7 +27,7 @@ services:
       - ${RAG_OUT:?RAG_OUT=<결과 폴더>}:${APP_OUTPUT_ROOT:?APP_OUTPUT_ROOT 필요 — settings_env.sh load_settings가 냄}:z
     mem_limit: ${PARSE_MCP_MEM_LIMIT:-8g}
     memswap_limit: ${PARSE_MCP_MEM_LIMIT:-8g}
-    cpus: ${PARSE_MCP_CPUS:-3}                 # 작업 서비스 기본 병렬 수(min(3, CPU-1)) — 줄이면 settings.yaml pipeline.service.parse_mcp.procs도 그 이하로
+    cpus: ${PARSE_MCP_CPUS:-3}                 # 작업 서비스 기본 병렬 수(min(3, CPU-1)) — 줄이면 settings.yaml tuning.ops.services.parse_mcp.procs도 그 이하로
     cpu_shares: ${PARSE_MCP_CPU_SHARES:-4096}   # data-pipeline(1024)의 4배 — CPU가 모자랄 때 먼저 받음(cgroup v2는 cpu.weight로 바뀜)
     pids_limit: 1024
     logging:
