@@ -151,7 +151,9 @@ def _merge_paragraphs(rep_text, other_texts, other_docs=None):
                 if not best_has_struct and not cand_has_struct and len(cand) > best_len:
                     best_para = cand
                     best_len = len(cand)
-        rep_paras[i] = best_para
+        # F6(11-03) — 쪽 나눔(\f)은 대표 본문의 쪽 위치: 다른 엔진 문단으로 바꿔도 남긴다(안 남기면 청크 page가 비고 bbox만 남음)
+        lost = para.count("\x0c") - best_para.count("\x0c")
+        rep_paras[i] = "\x0c" * lost + best_para if lost > 0 else best_para
     return "\n\n".join(rep_paras), replaced
 
 
