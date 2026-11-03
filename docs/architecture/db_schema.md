@@ -24,15 +24,16 @@
 | 근거 키 | MCP 근거의 `chunk_key`는 `<doc_id>:<seq>`(11-02 구현) — `doc_id`는 5벌이 함께 쓰는 시퀀스라 스키마끼리 겹치지 않는다. 청크는 `doc_id`만 갖는다(FK). 적재는 `file_path`로 건너뛰기(`--replace`면 지우고 다시 넣어 새 `doc_id`). `make_chunk_key`·sha256 `doc_key`는 검색에서 쓰지 않는다. |
 | 원본 주소 | `source_uri`·근거 `file_name`은 gold `doc.file_path`(원본 경로)에서 만든다(`file_name` = 끝 조각 — 원본 파일 이름, 실제 EDW에서 확인은 C-76). 대표 결과 주소 `rep_uri`는 ParsingMeta에서(위 줄). |
 | 원천별 EDW 사슬(pl-29, 사용자 11-02 — 적재 때, 읽기 계정) | 표·칸 이름·SFDC 단계 순서·gold 칸 대응은 설정 파일 `resources/config/edw_chain.yaml`(운영 쪽이 고침 — 적재가 읽어 검사, 아래 이름은 그 기본값 · 서버에서 고친 사본은 설정 `ops.pipeline_paths.edw_chain`, 사용자 11-03 — release-and-patch §8-6). **Quote 표는 지금 없다**(사용자 11-02) — 기본 단계에서 빠졌고, 표가 생기면 설정 파일의 주석 줄을 켠다. **SFDC:** `FileStorageMap.content_version_id → ContentVersion.Id`(→ `ContentDocumentId`, 등록 시각 `CreatedDate`) `→ ContentDocumentLink.ContentDocumentId`(`IsDeleted=0`)`.LinkedEntityId` 접두로 영업 기회 — `006` 직접 > `00T` `Task.WhatId` > `00U` `Event.WhatId` > (`0Q0` `Quote.OpportunityId` — 설정에서 켤 때만, `optional`이면 표가 없을 때 그 단계만 건너뜀) · 고객 `Opportunity.AccountId → Account.Name`, 기회가 없으면 `Task`/`Event.WhatId` `001` > `LinkedEntityId` `001` · 같은 단계 후보 둘 이상이면 비움. 칸: `sf_op_name`=`Opportunity.Name`, `project_code__c`=`Project_Code__c`, `service_type`=`Record_Type__c`, `contract_date`=`X1st_Contract_Execution_Date__c`. **CRMS:** `FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST.RM_CONTRACT_CODE` — `client_edw`=`SF_ACC_NAME`, `division`=`DIVISION`, `prod_name`=`RM_CONTRACT_NAME`, `contract_date`=`INIT_DTTM`, `contract_id`=`rm_contract_code` · 등록 시각 `RM_CM_DOCU.INIT_DTTM`(키 4개 `rm_contract_code`·`gate_code`·`gate_version`·`docu_seq`). **LAS:** `FileStorageMap_LAS.manage_no → LAS.Contract.ManageNo`(최신 판 — `IsActive`·`ContractID` 내림차순) — `contract_id`=`manage_no`(없으면 `ContractID`), `contract_date`=`ContractDate`(없으면 `signed_date`), `client_edw`=`PartnerCorpName`(지금 모두 비어 있음 — G2) · 등록 시각 `FileStorageMap_LAS.las_file_id → LAS.FileManager.CreateDate`. **FAQ·Other:** `FileStorageMap.created_at`만. EDW를 못 읽으면 메타를 비운 채 적재(경고·실행 기록 `meta_missing`) — 자동 갱신 없음, 나중에 `--replace`로 다시 적재해 채움(C-76). 칸 이름은 운영 gold 스키마 노트 기준(D-1 — DB 담당자 확인). |
-| 원천 id 칸 | 원천 전용 칸은 §2 `gold.doc` 표의 "원천" 칸대로(sfdc: `sf_op_id`·`sf_op_name`·`project_code__c`·`service_type` · crms: `division`·`prod_name` · crms·las: `contract_id` · sfdc·crms·las: `contract_date` · sfdc·las: `doc_class`). 값은 적재 때 EDW 조인으로(아래 원천별 사슬 — pl-29). |
+| 원천 메타 키 | 원천마다 다른 메타는 §2 `gold.doc.attrs`(JSONB)의 키(판 0005 — [pl-52](../prd/load-schema.md#pl-52)): 키·EDW 칸·거르기 이름·근거 표시는 사슬 파일 `fields`, 지금 키는 §2 `gold.doc.attrs 키` 표. 값은 적재 때 EDW 조인으로(아래 원천별 사슬 — pl-29), `doc_class`는 분류(pl-33). |
 
-## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌, 판 0004)
+## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌, 판 0005)
 
-판: `common/store/db/migrations/versions/0001_search_base.py`(옛 한 벌) + `0002_search_doc_meta.py`(11-02 — 원천별 5벌로 나누고 옛 한 벌 표·`load_run`을 지움) + `0003_doc_hints.py`(11-02 — pl-33 분류 힌트 칸, sfdc·las doc) + `0004_doc_embed.py`(11-03 — [mc-19](../prd/mcp.md#mc-19) `content_date`·`embed_model` 칸, `corpus_stat.dim` 지움) · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_EXTRA`·`DOC_HINTS`·`DOC_META`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인(`pipeline/load/edw_meta.py` — pl-29).
+판: `common/store/db/migrations/versions/0001_search_base.py`(옛 한 벌) + `0002_search_doc_meta.py`(11-02 — 원천별 5벌로 나누고 옛 한 벌 표·`load_run`을 지움) + `0003_doc_hints.py`(11-02 — pl-33 분류 힌트 칸, sfdc·las doc) + `0004_doc_embed.py`(11-03 — [mc-19](../prd/mcp.md#mc-19) `content_date`·`embed_model` 칸, `corpus_stat.dim` 지움) + `0005_doc_attrs.py`(11-03 — [pl-52](../prd/load-schema.md#pl-52) 원천 칸·힌트 칸을 `attrs` JSONB 한 칸으로) · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_META`·`ATTRS`·`LOAD_ATTRS`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인(`pipeline/load/edw_meta.py` — pl-29).
 
-- **스키마 배치:** 기준 스키마 `<PG_SCHEMA>`(예 `ai`)에는 Alembic 판 표 `alembic_version`과 공용 doc_id 시퀀스 `doc_id_seq`만 둔다. 원천마다 스키마 `<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`에 아래 표 다섯 개와 뷰 `v_chunk_source`가 같은 꼴로 있다(원천 전용 칸만 다름 — 표의 "원천" 칸). 원천은 문서의 `source_system`(SFDC·CRMS·LAS·FAQ, `-test` 붙어도 같음 — 그 밖은 `other`)으로 고른다.
+- **스키마 배치:** 기준 스키마 `<PG_SCHEMA>`(예 `ai`)에는 Alembic 판 표 `alembic_version`과 공용 doc_id 시퀀스 `doc_id_seq`만 둔다. 원천마다 스키마 `<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`에 아래 표 다섯 개와 뷰 `v_chunk_source`가 같은 꼴로 있다(칸은 5벌 같고 원천마다 다른 메타는 `doc.attrs`의 키 — `faq.chunk.faq_group`만 원천 전용 칸). 원천은 문서의 `source_system`(SFDC·CRMS·LAS·FAQ, `-test` 붙어도 같음 — 그 밖은 `other`)으로 고른다.
 - **적재 규칙(11-02 — [pl-13](../prd/load.md#pl-13)):** 원본 경로(`file_path`)는 5벌을 통틀어 하나다 — 적재는 5벌 모두에서 찾아, `--replace` 없이 이미 있으면 건너뛰고, `--replace`면 다른 원천 스키마의 옛 사본을 지운 뒤 새 원천 스키마에 넣는다(원천이 바뀐 문서).
 - **지운 것(11-02):** `load_run` 표(실행 정보는 실행 기록에, 적재 시각은 ParsingMeta `loaded_at`) · `doc.clients`(본문 고객 — `clients_doc`으로 이름 바꿈)·`doc.run_id`·`doc.source_system`(스키마가 원천)·`doc.s3_key`(`file_path`가 원본 경로)·`doc.sf_acc_name`(`client_edw`와 같은 값) · `chunk.char_start`·`char_end`·`n_chars`·`embed_model`·`clients`·`source_system` · 색인 `ix_<스키마>_chunk_clients`.
+- **지운 것(11-03 — 판 0005, pl-52):** 원천 전용 칸(`doc_class`·`sf_op_id`·`sf_op_name`·`project_code__c`·`service_type`·`division`·`prod_name`·`contract_id`·`contract_date`)과 분류 힌트 칸(판 0003) — 값은 `attrs`의 같은 이름 키로. 뷰 `v_chunk_source`는 그 칸들 대신 `attrs`를 낸다.
 - **지운 것(11-03 — 판 0004, mc-19):** `corpus_stat.dim`(차원은 `chunk.embedding`의 칸 형식 `vector(n)`에서 읽음). 검색 MCP는 실행 중에 묶음 파일(`meta.json`·`docs.jsonl`·`chunks.jsonl`)을 읽지 않는다 — 임베딩 모델·문서 날짜는 아래 `doc` 칸.
 
 ### gold.doc
@@ -45,28 +46,36 @@
 | created_at | TIMESTAMPTZ | 원천 등록 시각(KST) — SFDC `ContentVersion.CreatedDate` 계열 · CRMS `RM_CM_DOCU.INIT_DTTM` · LAS `FileManager.CreateDate` · 그 밖 `FileStorageMap.created_at`(§1 원천별 사슬) | 모두 | 적재(EDW 조인 — pl-29) | `search` `created_since/until`, 원문 도구 거르기·출력·등록 시각 가드 | 유지 |
 | client_edw | TEXT | EDW 조인 사슬의 고객 하나 — MCP 고객 거르기는 이 칸 정확 일치만(C6) | 모두(채워지는 곳: sfdc·crms) | 적재(EDW 조인) | search_svc 범위, 근거 `client` | 유지 |
 | clients_doc | TEXT | 본문에서 찾은 고객 라벨(JSON 글자) — 참고만, 거르기·순위에 안 씀 | 모두 | build_bundle `infer_clients` → 적재 | 없음(참고) | 유지 |
-| doc_class | TEXT | 문서 분류 라벨 하나(SFDC: RFI/RFP/RFI+RFP/Proposal/Other, LAS: MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other) — [pl-33](../prd/transform.md#pl-33) | sfdc·las | (분류 단계 → 적재) | `search`·`list_doc_fulltext` 거르기 | 유지 |
-| sf_op_id | TEXT | 영업 기회 id(18자 `006…`) — 파일 → 영업 기회 사슬로 고른 것 | sfdc | 적재(EDW 조인) | `search`·`list_doc_fulltext` 거르기 | 유지 |
-| sf_op_name | TEXT | 영업 기회 이름(`Opportunity.Name`) | sfdc | 적재(EDW 조인) | `search` 거르기 | 유지 |
-| project_code__c | TEXT | 프로젝트 코드(`Opportunity.Project_Code__c`) | sfdc | 적재(EDW 조인) | `search` `project_id` | 유지 |
-| service_type | TEXT | 서비스 유형(`Opportunity.Record_Type__c`) | sfdc | 적재(EDW 조인) | `search` 거르기 | 유지 |
-| division | TEXT | 사업부(`RM_CM_PJTLIST.DIVISION`) | crms | 적재(EDW 조인) | `search` 거르기 | 유지 |
-| prod_name | TEXT | 제품·계약 이름(`RM_CM_PJTLIST.RM_CONTRACT_NAME`) | crms | 적재(EDW 조인) | 없음(근거 메타) | 유지 |
-| contract_id | TEXT | 계약 번호 — CRMS `rm_contract_code` · LAS `manage_no`(없으면 `Contract.ContractID`) | crms·las | 적재(EDW 조인) | `search` 거르기 | 유지 |
-| contract_date | DATE | 계약일 — SFDC `Opportunity.X1st_Contract_Execution_Date__c` · CRMS `RM_CM_PJTLIST.INIT_DTTM` · LAS `Contract.ContractDate`(없으면 `FileStorageMap_LAS.signed_date`) | sfdc·crms·las | 적재(EDW 조인) | 없음(근거 메타) | 유지 |
-| title | TEXT | 분류 힌트 — 파일 제목(`ContentVersion.Title`). 비면 분류 지시문은 원본 파일 이름 | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
-| entity_type | TEXT | 분류 힌트 — 첫 User 아닌 연결 개체 종류(`ContentDocumentLink.LinkedEntityId` 앞 3자 → `resources/mappings/sfdc_prefix.json`, 표에 없으면 `Unknown:<접두>`) | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
-| entity_class | TEXT | 분류 힌트 — 개체 갈래(운영 analyze_clues 그대로): 연결 없음 `unlinked` · 모두 User면 `user_only` · 아니면 개체 종류의 갈래(if_log·event_log·task·event·quote·opportunity·account·contract·dashboard·organization, 그 밖 other) | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
-| entity_id | TEXT | 분류 힌트 — 그 연결 개체 id(`LinkedEntityId`) | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
-| sent_received__c | TEXT | 분류 힌트 — 연결 개체가 Task/Event일 때 방향(`Sent_Received__c`) | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
-| subject | TEXT | 분류 힌트 — 연결 개체가 Task/Event일 때 제목(`Subject` 앞 120자) | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
-| stagename | TEXT | 분류 힌트 — 연결 개체가 영업 기회 자체일 때 단계(`Opportunity.StageName` — 사슬이 고른 기회가 아님) | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
-| real_rfp__c | TEXT | 분류 힌트 — 같은 기회의 `Real_RFP__c`(글자 '1'/'0') | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
-| rfp_received_start_date__c | DATE | 분류 힌트 — 같은 기회의 `RFP_Received_Start_Date__c` | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
-| rfp_received_end_date__c | DATE | 분류 힌트 — 같은 기회의 `RFP_Received_End_Date__c` | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
-| approvalname | TEXT | 분류 힌트 — 품의 제목(`LAS.Contract.ApprovalName`, 최신 판) | las | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
 | content_date | TEXT | 문서에 적힌 날짜(ISO 글자 `YYYY-MM-DD`·`YYYY-MM`·`YYYY` — 본문 앞 2000자 먼저, 없으면 파일 이름, `common/core/docmeta.py`). `created_at`(원천 등록 시각)과 다르고, 파일 생성·수정 시각도 아니다 | 모두 | build_bundle(`docmeta.doc_meta`의 `doc_date`) → 적재(판 0004) | pgsearch → 근거 `doc_date`(출력 이름은 그대로) — 검색 뷰엔 없음 | 유지 |
 | embed_model | TEXT | 그 문서를 임베딩한 모델 이름(묶음 `meta.json` `embed_model`) | 모두 | 적재(판 0004) | pgsearch `index_meta` — 질의 모델 확인(섞이면 거부), 나중 guard(문서 단위) — 검색 뷰엔 없음 | 유지 |
+| attrs | JSONB | 원천마다 다른 문서 메타 `{키: 값}`(GIN 색인 `ix_<스키마>_doc_attrs`) — 키·EDW 칸·검색 거르기 이름·근거 표시는 사슬 파일 `edw_chain.yaml`(`fields`)이 정하고, `doc_class`는 분류가 쓴다(SFDC·LAS). 값 없는 키는 넣지 않는다. 지금 키는 아래 표(판 0005 — [pl-52](../prd/load-schema.md#pl-52)) | 모두(키는 원천마다) | 적재(EDW 조인 `edw_meta` + 분류 `doc_class`) — 판 0005 | 뷰 → `search` `attrs`·옛 거르기 이름(사슬 `filter:`)·근거 `attrs`(`evidence: true`), `list_doc_fulltext` `doc_class`·`sf_op_id`, 분류 힌트(pl-33) | 유지 |
+
+#### gold.doc.attrs 키(기본 사슬 파일 `resources/config/edw_chain.yaml` 기준 — 서버 사본이 바꾸면 그쪽이 맞음)
+
+판 0005가 옛 칸 값을 같은 이름 키로 옮겼다(올리기는 값을 잃지 않음, 되돌리기는 칸을 되살림). 거르기 이름·근거 여부는 사슬 파일의 `filter`·`evidence`.
+
+| 키 | 값 | 뜻 | 원천 | 읽는 곳 |
+|---|---|---|---|---|
+| `doc_class` | 글자 | 문서 분류 라벨 하나(SFDC: RFI/RFP/RFI+RFP/Proposal/Other, LAS: MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other) — [pl-33](../prd/transform.md#pl-33) | sfdc·las | `search`·`list_doc_fulltext` 거르기 |
+| `sf_op_id` | 글자 | 영업 기회 id(18자 `006…`) — 파일 → 영업 기회 사슬로 고른 것 | sfdc | `search`·`list_doc_fulltext` 거르기 |
+| `sf_op_name` | 글자 | 영업 기회 이름(`Opportunity.Name`) | sfdc | `search` 거르기 |
+| `project_code__c` | 글자 | 프로젝트 코드(`Opportunity.Project_Code__c`) | sfdc | `search` `project_id` |
+| `service_type` | 글자 | 서비스 유형(`Opportunity.Record_Type__c`) | sfdc | `search` 거르기 |
+| `division` | 글자 | 사업부(`RM_CM_PJTLIST.DIVISION`) | crms | `search` 거르기 |
+| `prod_name` | 글자 | 제품·계약 이름(`RM_CM_PJTLIST.RM_CONTRACT_NAME`) | crms | 없음(근거 메타) |
+| `contract_id` | 글자 | 계약 번호 — CRMS `rm_contract_code` · LAS `manage_no`(없으면 `Contract.ContractID`) | crms·las | `search` 거르기 |
+| `contract_date` | 날짜 글자(YYYY-MM-DD) | 계약일 — SFDC `Opportunity.X1st_Contract_Execution_Date__c` · CRMS `RM_CM_PJTLIST.INIT_DTTM` · LAS `Contract.ContractDate`(없으면 `FileStorageMap_LAS.signed_date`) | sfdc·crms·las | 없음(근거 메타) |
+| `title` | 글자 | 분류 힌트 — 파일 제목(`ContentVersion.Title`). 비면 분류 지시문은 원본 파일 이름 | sfdc | 분류(pl-33) |
+| `entity_type` | 글자 | 분류 힌트 — 첫 User 아닌 연결 개체 종류(`ContentDocumentLink.LinkedEntityId` 앞 3자 → `resources/mappings/sfdc_prefix.json`, 표에 없으면 `Unknown:<접두>`) | sfdc | 분류(pl-33) |
+| `entity_class` | 글자 | 분류 힌트 — 개체 갈래(운영 analyze_clues 그대로): 연결 없음 `unlinked` · 모두 User면 `user_only` · 아니면 개체 종류의 갈래(if_log·event_log·task·event·quote·opportunity·account·contract·dashboard·organization, 그 밖 other) | sfdc | 분류(pl-33) |
+| `entity_id` | 글자 | 분류 힌트 — 그 연결 개체 id(`LinkedEntityId`) | sfdc | 분류(pl-33) |
+| `sent_received__c` | 글자 | 분류 힌트 — 연결 개체가 Task/Event일 때 방향(`Sent_Received__c`) | sfdc | 분류(pl-33) |
+| `subject` | 글자 | 분류 힌트 — 연결 개체가 Task/Event일 때 제목(`Subject` 앞 120자) | sfdc | 분류(pl-33) |
+| `stagename` | 글자 | 분류 힌트 — 연결 개체가 영업 기회 자체일 때 단계(`Opportunity.StageName` — 사슬이 고른 기회가 아님) | sfdc | 분류(pl-33) |
+| `real_rfp__c` | 글자 | 분류 힌트 — 같은 기회의 `Real_RFP__c`(글자 '1'/'0') | sfdc | 분류(pl-33) |
+| `rfp_received_start_date__c` | 날짜 글자(YYYY-MM-DD) | 분류 힌트 — 같은 기회의 `RFP_Received_Start_Date__c` | sfdc | 분류(pl-33) |
+| `rfp_received_end_date__c` | 날짜 글자(YYYY-MM-DD) | 분류 힌트 — 같은 기회의 `RFP_Received_End_Date__c` | sfdc | 분류(pl-33) |
+| `approvalname` | 글자 | 분류 힌트 — 품의 제목(`LAS.Contract.ApprovalName`, 최신 판) | las | 분류(pl-33) |
 
 ### gold.chunk
 

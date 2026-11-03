@@ -216,8 +216,10 @@ def load(db, bundle, replace=False, rep_dir=None):
     from pipeline.load import edw_meta
 
     edw, meta_missing = edw_meta.fetch([(d.get("source_system"), d["file_path"]) for d in docs])  # pl-29 — EDW 조인(트랜잭션 밖, 읽기 계정)
-    for d in docs:
-        d.update({k: v for k, v in (edw.get(d["file_path"]) or {}).items() if v is not None})
+    for d in docs:  # pl-52 — 고정 칸(created_at·client_edw)은 문서 행, 원천 메타는 attrs(분류 힌트 포함 — 분류가 attrs에서 읽음)
+        m = edw.get(d["file_path"]) or {}
+        d.update({k: m[k] for k in ("created_at", "client_edw") if m.get(k) is not None})
+        d["attrs"] = {k: v for k, v in m.items() if k not in ("created_at", "client_edw") and v is not None}
     failed = _classify(db, B, docs, rep_dir, replace)  # pl-33 — SFDC·LAS 라벨(gold 넣기 전 · 이미 있는 라벨은 덮지 않음)
     by_src = {}
     for i, d in enumerate(docs):
@@ -275,7 +277,7 @@ def _classify(db, bundle, docs, rep_dir, replace=False):
     paths = sorted(d["file_path"] for d in targets)
     existing, stored = {}, set()
     for src, sdb in src_dbs(db).items():
-        cols = "file_path, doc_class" if src in CL.LABELS else "file_path, NULL AS doc_class"
+        cols = "file_path, attrs->>'doc_class' AS doc_class" if src in CL.LABELS else "file_path, NULL AS doc_class"
         try:
             rows = sdb.q(f"SELECT {cols} FROM {sdb.schema}.doc WHERE file_path = ANY(%s)", (paths,))
         except Exception:  # 표가 아직 없음(처음 적재)
@@ -284,7 +286,7 @@ def _classify(db, bundle, docs, rep_dir, replace=False):
         existing.update({r["file_path"]: r["doc_class"] for r in rows if r["doc_class"]})
     if not replace:
         targets = [d for d in targets if d["file_path"] not in stored]
-    todo = [d for d in targets if d["file_path"] not in existing and not d.get("doc_class")]  # 힌트는 문서 행(edw_meta가 채운 칸)
+    todo = [d for d in targets if d["file_path"] not in existing and not d.get("doc_class")]  # 힌트는 문서 attrs(edw_meta가 채운 키)
     return CL.apply(targets, CL.rep_inputs(todo, rep_dir), existing, audit_path=Path(bundle) / "classify_audit.jsonl")
 
 
@@ -356,6 +358,14 @@ def _add(counts, src, c):
     counts["by_source"][src] = c
 
 
+def _attrs(d, src):
+    """문서 → doc.attrs JSON 글자(pl-52) — EDW 사슬이 채운 키(d["attrs"]) + 적재가 쓰는 키(분류 doc_class — LOAD_ATTRS). 값 없는 키는 뺌, 날짜는 ISO 글자."""
+    from common.store.db.models import search_tables as ST
+
+    a = {**(d.get("attrs") or {}), **{k: d.get(k) for k in ST.LOAD_ATTRS.get(src, ())}}
+    return json.dumps({k: v for k, v in a.items() if v is not None}, ensure_ascii=False, default=lambda v: v.isoformat())
+
+
 def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
     """원천 스키마 s 하나에 문서 idx(docs.jsonl 줄 번호)를 적재 — 반환 (건수, 새로 넣은 문서, 이미 있어 건너뛴 문서 — 둘 다 [(source_system, file_path)])."""
     from common.store.db.models import search_tables as ST
@@ -384,9 +394,10 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
                 "clients_doc": json.dumps(d["clients"], ensure_ascii=False) if d.get("clients") else None,
                 "content_date": d.get("doc_date"),  # mc-19 — 묶음 doc_date(문서에 적힌 날짜) → gold content_date
                 "embed_model": meta.get("embed_model"),  # mc-19 — 묶음의 임베딩 모델(검색의 질의 모델 확인 · 문서 단위 guard)
+                ST.ATTRS: _attrs(d, src),  # pl-52 — 원천 메타(사슬 fields + 분류 doc_class)
             }
             cur.execute(
-                f"INSERT INTO {s}.doc({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))}) RETURNING doc_id",
+                f"INSERT INTO {s}.doc({', '.join(cols)}) VALUES ({', '.join('%s::jsonb' if c == ST.ATTRS else '%s' for c in cols)}) RETURNING doc_id",
                 tuple(row[c] for c in cols),
             )
             doc_id[i] = cur.fetchone()[0]

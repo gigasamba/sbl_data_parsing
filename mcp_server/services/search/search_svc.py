@@ -15,7 +15,7 @@ from mcp_server.services.search.server_state import _STATE, CALLER, _retriever
 from mcp_server.services.search.shaping import _evidence, cap, evidence_status
 
 KST = timezone(timedelta(hours=9))  # 시간대 없는 등록 시각은 KST(운영 계약)
-# 정확 일치 거르기 → v_chunk_source 칸
+# 정확 일치 거르기 → doc.attrs 키(pl-52) · FAQ_group만 청크 칸
 _EXACT_COLS = {
     "project_id": "project_code__c",
     "division": "division",
@@ -107,10 +107,10 @@ def _scope_sql(hard, src):
                 any_of("client_edw = %s", vs, lambda x: [x])
         elif name in _EXACT_COLS:
             col = _EXACT_COLS[name]
-            if col in have:
-                any_of(f"{col} = %s", vs, lambda x: [x])
-            else:
-                conds.append("1 = 0")
+            if col == "faq_group":  # 청크 칸(faq만)
+                any_of(f"{col} = %s", vs, lambda x: [x]) if col in have else conds.append("1 = 0")
+            else:  # pl-52 — doc.attrs 키(그 원천에 없는 키는 0건)
+                any_of(f"attrs->>'{col}' = %s", vs, lambda x: [x])
         elif name in ("created_since", "created_until"):
             op, t = _when(v, name == "created_until")
             conds.append(f"created_at {op} %s")  # created_at이 없는 문서는 빠짐

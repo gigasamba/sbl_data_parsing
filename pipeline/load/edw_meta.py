@@ -102,9 +102,14 @@ def load_chain(path=None):
 def _out_cols(src):
     """설정 out으로 채울 수 있는 gold 칸 — 그 원천 전용 칸(분류 라벨 doc_class 빼고) + client_edw(SFDC는 코드가 계정에서 채움).
     키·경로(file_path·doc_id)·created_at(코드가 사슬에서 정함)은 안 됨 — 적재가 이 값으로 문서 행을 덮어쓰므로(리뷰)."""
-    if src not in ST.DOC_EXTRA:
+    out = {  # 원천 → attrs 키(pl-52 — 옛 원천 전용 칸 이름, 사슬 파일 새 꼴에서 fields로 바뀜)
+        "sfdc": {"sf_op_id", "sf_op_name", "project_code__c", "service_type", "contract_date"},
+        "crms": {"division", "prod_name", "contract_id", "contract_date"},
+        "las": {"contract_id", "contract_date"},
+    }
+    if src not in out:
         return set()
-    return {n for n, _ in ST.DOC_EXTRA[src] if n != "doc_class"} | (set() if src == "sfdc" else {"client_edw"})
+    return out[src] | (set() if src == "sfdc" else {"client_edw"})
 
 
 def _check(node, where, key, src, errs):
