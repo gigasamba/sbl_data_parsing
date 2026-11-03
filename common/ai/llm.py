@@ -278,10 +278,7 @@ def _do_call(messages, temperature, max_tokens, json_mode, base, model, agent, t
         done = True
     finally:
         if not done:
-            if not handed:
-                release_call()
-            if reserved:
-                G.spend_settle(-reserved)  # 못 쓴 선차감 환불(호출이 안 나갔거나 실패)
+            _refund(not handed, reserved)  # 호출이 안 나갔거나 실패 — 자리·선차감을 돌려줌
     usd = ((u.get("prompt_tokens", 0) * pin + u.get("completion_tokens", 0) * pout) / 1e6) if (pin is not None and u) else reserved
     if reserved and u:
         G.spend_settle(usd - reserved)  # 실제로 정산(사용량 없으면 선차감액이 그대로 지출로 남음)
@@ -647,12 +644,17 @@ def complete(
         raise ModelUnavailable(f"모델 호출 실패(재시도 {retries}회): {type(last_err).__name__}: {str(last_err)[:200]}") from last_err
     finally:
         if not ok:
-            if call_reserved:
-                release_call()
-            if reserved:
-                from common.ai import guard as G
+            _refund(call_reserved, reserved)  # 끝내 못 쓴 자리·flat 선차감을 되돌림(BR45 후속)
 
-                G.spend_settle(-reserved)  # 끝내 못 쓴 flat 선차감을 되돌림(BR45 후속)
+
+def _refund(slot, usd):
+    """실패한 호출이 쥔 것을 돌려준다 — slot이면 LLM_MAX_CALLS 자리, usd면 예산 선차감(_do_call·complete 공용, 리뷰 11-03)."""
+    if slot:
+        release_call()
+    if usd:
+        from common.ai import guard as G
+
+        G.spend_settle(-usd)
 
 
 def _traced(fn):

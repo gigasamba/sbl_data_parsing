@@ -9,6 +9,8 @@ TABLES = {
         "client_id", "canonical_name", "name_ko", "aliases", "client_type", "segment",
         "country", "parent_client_id", "status", "description", "source", "updated",
     ),
+    # client_master·contract_master·units — 지금 앱에서 읽는 곳은 없다(사용자 11-03 "여섯 파일 모두 PG로" — 내용 해시·gold_version에는 들어감,
+    # 원본 CSV는 gen_roster 등 오프라인 도구가 그대로 읽음). 읽는 곳이 생기면 Master.rows(<표>)로.
     "client_master": ("company_id", "company", "aliases"),
     "contract_master": (
         "contract_id", "company", "company_id", "product_code", "modality", "site", "line_id", "batches_contracted",

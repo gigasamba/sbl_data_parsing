@@ -120,7 +120,7 @@ PATH_BUNDLE = [
 
 
 def _bundle_value(name):
-    """PATH_BUNDLE 이름의 준 값(없거나 빈 값이면 None) — 칸이 pipeline 절(GOLD_DIR 등)에 있거나 common 절(GLOSSARY_DIR 등)에 있음(S7c — 설정 객체)."""
+    """PATH_BUNDLE 이름의 준 값(없거나 빈 값이면 None) — 칸이 pipeline 절(GOLD_DIR 등)에 있거나 common 절에 있음(S7c — 설정 객체 · GLOSSARY_DIR은 pl-38에 지움 — 마스터 표)."""
     if name == "GOLD_DIR":
         return _pc().gold_dir() or None  # S7e2 — 이미지 안 /data/gold 마운트 기본(pc.gold_dir)
     v = _pc().given(name)

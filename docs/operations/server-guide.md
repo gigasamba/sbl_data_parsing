@@ -144,7 +144,7 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 
 ### 5-1. 고객 명부·용어집 작성법 (예제 파일을 복사해서 고쳐 쓰기)
 
-구조화·검색은 파일이 아니라 PG 마스터 표(`<PG_SCHEMA>_master` — pl-38, 사용자 11-03)만 읽는다. 표는 CSV 여섯 개(`client_roster`·`client_master`·`contract_master`·`domain_terms`·`id_patterns`·`units` — 파일 이름·머리글 그대로)로 `migrate master load`가 통째로 채운다. 기본 폴더는 이미지·코드 폴더의 샘플(가상 회사·가상 제품 — 사용자 10-30, git·이미지에 들어감) `app/deploy/resources/vocab/glossary/`, 서버 실명 자료는 서버 폴더를 `--dir`로. 표가 비었으면 구조화·검색이 시작하지 않는다(채운 뒤 검색 MCP는 다음 적재 판에서 다시 읽음). 고친 뒤에는 `gold_version`의 마스터 해시가 바뀌지만 이미 적재한 문서는 자동으로 다시 처리하지 않는다.
+구조화·검색은 파일이 아니라 PG 마스터 표(`<PG_SCHEMA>_master` — pl-38, 사용자 11-03)만 읽는다. 표는 CSV 여섯 개(`client_roster`·`client_master`·`contract_master`·`domain_terms`·`id_patterns`·`units` — 파일 이름·머리글 그대로)로 `migrate master load`가 통째로 채운다. 기본 폴더는 이미지·코드 폴더의 샘플(가상 회사·가상 제품 — 사용자 10-30, git·이미지에 들어감) `app/deploy/resources/vocab/glossary/`, 서버 실명 자료는 서버 폴더를 `--dir`로. 표가 비었으면 구조화·검색이 시작하지 않는다. **`master load` 뒤에는 검색 MCP를 다시 시작한다**(사용자 11-03 — 검색은 시작할 때와 새 적재 판이 들어올 때만 마스터를 다시 읽음, 해시를 따로 지켜보지 않음). 고친 뒤에는 `gold_version`의 마스터 해시가 바뀌지만 이미 적재한 문서는 자동으로 다시 처리하지 않는다.
 - `app/deploy/resources/vocab/glossary/client_roster.csv` — 고객 명부 샘플(고객·잠재 고객, 빈칸·비활성 행 예시 포함 + 한빛 샘플 문서의 고객 Argen Biopharma·Luminexis Therapeutics)
 - `app/deploy/resources/vocab/glossary/domain_terms.csv` — 용어집 샘플
 - `app/deploy/resources/vocab/glossary/contract_master.csv`·`client_master.csv` — 계약·고객 마스터 샘플(머리글은 `docs/architecture/db_schema.md` §5)
