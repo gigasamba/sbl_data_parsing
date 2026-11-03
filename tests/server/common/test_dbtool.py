@@ -80,3 +80,13 @@ def selftest():
 
 def test_main():  # 옛 `--selftest` 갈래(`if a.selftest: return selftest()`)
     selftest()
+
+
+def test_all_keeps_applog_schema():  # PR #87 리뷰 — up --target all --schema demo가 applog 표를 검색 스키마에 만들지 않게
+    from argparse import Namespace
+
+    from common.store.db.dbtool import _schema_arg
+
+    a = Namespace(target="all", schema="demo")
+    assert _schema_arg(a, "search") == "demo" and _schema_arg(a, "applog") is None
+    assert _schema_arg(Namespace(target="applog", schema="test_x"), "applog") == "test_x"

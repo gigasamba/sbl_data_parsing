@@ -346,6 +346,11 @@ def _targets(a):
     return TARGETS if a.target == "all" else (a.target,)
 
 
+def _schema_arg(a, target):
+    """--schema는 검색 기준 스키마 — applog는 --target applog로 따로 줄 때만 받는다(all이면 고정 이름 applog)."""
+    return a.schema if target == "search" or a.target == target else None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("cmd", nargs="?", choices=["up", "stamp", "current", "check", "maintain"])
@@ -372,7 +377,7 @@ def main(argv=None):
         raise DbToolError("PG 접속 정보 없음(settings.yaml required.pg) — SQLite 대역은 판 관리 밖(표 정의에서 바로 만듦)")
     dim, rc = _dim_arg(a), 0
     for target in _targets(a):
-        schema = schema_of(target, a.schema)
+        schema = schema_of(target, _schema_arg(a, target))
         if a.cmd == "maintain":
             print(maintain_applog(schema))
         elif a.cmd == "up":
