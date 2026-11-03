@@ -53,7 +53,7 @@ def test_payload():
     assert row["result_sha256"] == hashlib.sha256(_encoded(result)).hexdigest()
     assert row["result_truncated"] and len(row["result"].encode()) <= 65536
     assert row["result_keys"] == {"engine": "plain", "job_id": "j1", "rep_path": "out/rep.json", "text_chars": 90000}
-    assert row["agent"] == "stdio"
+    assert "agent" not in row
     assert row["status"] == "ok" and row["duration_ms"] >= 0
 
     def do_search(question):
@@ -65,7 +65,7 @@ def test_payload():
         assert audit.drain()
     assert rows[-1]["args_truncated"] and len(rows[-1]["args"].encode()) <= 16384
     assert rows[-1]["args_bytes"] == len(_encoded({"question": "한" * 9000}))
-    assert rows[-1]["status"] == "error" and "do-not-store" not in rows[-1]["err"]
+    assert rows[-1]["status"] == "error" and "do-not-store" not in rows[-1]["error_message"]
     assert not row["args_truncated"]
 
 
@@ -175,7 +175,7 @@ def test_dispatch_audit():
         else:
             raise AssertionError("tool exception swallowed")
         assert audit.drain()
-        assert rows[-1]["status"] == "error" and "do-not-store" not in rows[-1]["err"]
+        assert rows[-1]["status"] == "error" and "do-not-store" not in rows[-1]["error_message"]
         with patch.object(audit.logsink, "emit", side_effect=RuntimeError("sink failed")):
             assert await dispatch._bg(lambda: 42) == 42
             # 실패 sink 모의를 유지한 채 이 감사까지 비워 다음 HTTP 시험에 행을 넘기지 않는다.
@@ -228,18 +228,18 @@ def test_http_context():
             r = await client.post("/mcp", json=payload, headers=hdr)
             assert r.status_code == 200 and r.headers["x-request-id"] == request_id
             assert audit.drain()
-            assert rows[-1]["request_id"] == request_id and rows[-1]["user_id"] == "header-user"
-            assert rows[-1]["agent"] == "test" and rows[-1]["tool"] == "query_edw"
+            assert rows[-1]["request_id"] == request_id and rows[-1]["knox_id"] == "header-user"
+            assert "agent" not in rows[-1] and rows[-1]["tool_name"] == "query_edw" and rows[-1]["rpc_method"] == "tools/call"
             assert json.loads(rows[-1]["args"]) == {"sql": "select 1"}
             assert observations[-1][1]["request_id"] == request_id
             assert observations[-1][2] == "mcp:test"
             del hdr["X-MCP-User"]
             r = await client.post("/mcp", json=payload, headers=hdr)
             assert audit.drain()
-            assert r.status_code == 200 and rows[-1]["user_id"] == "meta-user"
-            assert "remote_addr" not in rows[-1]
+            assert r.status_code == 200 and rows[-1]["knox_id"] == "meta-user"
+            assert "remote_addr" not in rows[-1] and rows[-1]["client_ip"] == "127.0.0.1" and rows[-1]["finished_at"]
         assert CALLER.get() == original and audit._REQUEST.get() is None
-        assert len(rows) == 3, (len(rows), [(row.get("tool"), row.get("status"), row.get("request_id")) for row in rows])
+        assert len(rows) == 3, (len(rows), [(row.get("tool_name"), row.get("status"), row.get("request_id")) for row in rows])
 
     with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
         try:
@@ -343,7 +343,7 @@ def test_initialize_contract():
             response = await client.post("/mcp", json=payload)
             assert response.status_code == 200, response.text
             assert audit.drain()
-            assert len(rows) == 1 and rows[0]["tool"] == "initialize"
+            assert len(rows) == 1 and rows[0]["rpc_method"] == "initialize" and rows[0]["tool_name"] is None
             assert "client_info" not in rows[0] and "audit-test" not in rows[0]["args"]
             assert json.loads(rows[0]["args"])["protocolVersion"] == LATEST_PROTOCOL_VERSION
             assert "serverInfo" in json.loads(rows[0]["result"])
@@ -353,7 +353,7 @@ def test_initialize_contract():
                 )
             assert audit.drain()
             assert response.status_code == 200 and len(rows) == 2
-            assert rows[-1]["tool"] == "edw_meta" and rows[-1]["status"] == "ok"
+            assert rows[-1]["tool_name"] == "edw_meta" and rows[-1]["status"] == "ok"
             assert rows[-1]["session_id"] is None
             assert audit._REQUEST.get() is None
 

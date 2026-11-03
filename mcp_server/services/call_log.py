@@ -1,5 +1,7 @@
 """MCP 감사 기록(op-01): 요청 컨텍스트, 바이트 상한, 결과 키, 비차단 공통 sink.
 
+내부 행(tool, user_id, err, ts)은 sink로 보내기 직전 `_columns`가 applog.mcp_log 칸 이름으로 바꾼다.
+
 모든 공개 진입점은 fail-soft다. 도구 반환/예외와 qa_log는 바꾸지 않는다.
 result_sha256/bytes는 마스킹 전 전체 JSON 기준, 저장 본문은 마스킹 후 UTF-8 앞부분이다.
 """
@@ -9,6 +11,7 @@ import contextlib
 import contextvars
 import hashlib
 import inspect
+import ipaddress
 import itertools
 import json
 import queue
@@ -81,6 +84,37 @@ def _metadata(row):
         if key in safe:
             safe[key] = _text(safe[key])
     return safe
+
+
+_ERROR_CODES = {"timeout": "tool_timeout", "busy": "busy", "unauthorized": "invalid_key"}
+_SIZES = {"session_id": 128, "knox_id": 64, "tool_name": 64, "app_version": 32}  # varchar 길이 — 넘으면 배치 INSERT가 통째로 실패한다
+
+
+def _columns(row):
+    """내부 행 → mcp_log 칸. rpc_method: initialize·tools/call, 인증 거부(본문 수신 전)는 NULL."""
+    row = dict(row)
+    row.pop("agent", None)  # X-MCP-Client는 CALLER·콘솔 로그에만 쓴다. DB는 agent_id로 구분(인증 체계가 생긴 뒤)
+    tool, err = row.pop("tool", None), row.pop("err", None)
+    method = "initialize" if tool == "initialize" else None if tool == "http" else "tools/call"
+    out = {"rpc_method": method, "tool_name": tool if method == "tools/call" else None}
+    for old, new in (("ts", "requested_at"), ("user_id", "knox_id")):
+        if old in row:
+            row[new] = row.pop(old)
+    queue_full = err == "audit_queue_full"
+    out["error_code"] = err if queue_full else _ERROR_CODES.get(row.get("status")) or ("tool_error" if err else None)
+    out["error_message"] = None if queue_full else err
+    out.update(row)
+    for key, size in _SIZES.items():
+        if isinstance(out.get(key), str):
+            out[key] = out[key][:size]
+    return out
+
+
+def _client_ip(value):
+    try:
+        return str(ipaddress.ip_address(value))
+    except ValueError:
+        return None  # inet 칸에 못 넣는 값은 비운다
 
 
 def _debug(event, **fields):
@@ -201,7 +235,7 @@ def _status(result):
 
 
 @contextlib.contextmanager
-def request_context(headers):
+def request_context(headers, client_ip=None):
     """ASGI 요청 범위. 헤더 우선 user, 없으면 본문을 받은 뒤 update_request가 tools/call params._meta.user로 채운다."""
     request_id = headers.get("x-request-id")
     try:
@@ -213,6 +247,7 @@ def request_context(headers):
         "agent": (headers.get("x-mcp-client") or "http")[:60],
         "user_id": headers.get("x-mcp-user"),
         "session_id": headers.get("mcp-session-id"),
+        "client_ip": _client_ip(client_ip),
     }
     token = _REQUEST.set(data)
     caller_token = CALLER.set("mcp:" + data["agent"])
@@ -293,6 +328,7 @@ class Call:
                 row = {
                     **self.row,
                     "ts": self.ts,
+                    "finished_at": datetime.now(UTC),
                     "status": status or inferred,
                     "err": _text(err) or inferred_err,
                     "duration_ms": round((now - self.started) * 1000),
@@ -317,7 +353,7 @@ class Call:
                 result_keys=result_keys(self.row["tool"], result),
             )
             # 원본 args/result는 읽기만 한다. 공통 sink가 DB/대체 파일을 맡는다.
-            emit(jsonlog.masked(row))
+            emit(jsonlog.masked(_columns(row)))
             if row["status"] == "timeout":
                 _debug("mcp.thread.abandoned", request_id=row["request_id"], running=self.abandoned, ended_at=self.thread_ended)
             with jsonlog.context(request_id=row["request_id"]):
@@ -367,7 +403,7 @@ class Worker:
             result_keys={"audit_body_omitted": "queue_full"},
             err="audit_queue_full",
         )
-        logsink.emit("mcp_call", jsonlog.masked(row))
+        logsink.emit("mcp_log", jsonlog.masked(_columns(row)))
 
     def _run(self):
         while True:
@@ -425,7 +461,7 @@ class Worker:
         with self.condition:
             if self.expired:
                 return
-        logsink.emit("mcp_call", row)
+        logsink.emit("mcp_log", row)
 
     def _close_at_exit(self, *, deadline):
         if self.close(deadline=deadline) is False:
