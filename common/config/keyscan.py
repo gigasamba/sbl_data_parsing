@@ -103,6 +103,7 @@ NOT_SETTINGS = {
     },
     "NF": ("인자", "awk 내장 변수($NF — build_ship.sh tar 권한 점검), 설정 아님"),
     "SMOKE_OVERLAY_DIR": ("인자", "PC 시험 Docker 덮기 파일 폴더 — smoke_test.sh가 mktemp로 만들어 compose에 넘김(S7e2)"),
+    "SMOKE_SYSTEM": ("인자", "PC 시험 Docker 원천 이름 — smoke_test.sh 인자(search는 원천 하나 필수 — mc-16)"),
     "ASSET_SRC": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "BUILDKIT_SYNTAX": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "BUILD_ARGS": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),

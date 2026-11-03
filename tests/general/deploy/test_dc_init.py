@@ -8,6 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from common.core.paths import DEPLOY_ROOT
 from tests.general.deploy.test_dc import SCRIPT
 from tests.general.deploy.test_trigger_gate import _bash
 
@@ -37,6 +38,8 @@ def test_init():
         for sub in ("env", "output", "output/mcp_parse/jobs", "code", "backup"):
             assert (root / sub).is_dir(), (sub, r1.stdout)
         sf = root / "env" / "settings.yaml"
+        chain = root / "env" / "edw_chain.yaml"  # 사슬 서버 사본(사용자 11-03) — 없을 때만 기본 파일에서
+        assert chain.read_bytes() == (DEPLOY_ROOT / "resources" / "config" / "edw_chain.yaml").read_bytes(), "init이 사슬 사본을 안 만듦"
         assert sf.read_bytes() == (SCRIPT.parents[3] / "settings.sample.yaml").read_bytes()
         assert (root / "code" / "live").exists() and "만듦" in r1.stdout and "required.env.run_env" in r1.stdout, r1.stdout
         if os.name != "nt":  # Windows(Git Bash)는 권한·심볼릭 링크를 POSIX처럼 안 둠
@@ -44,9 +47,11 @@ def test_init():
             assert oct((root / "output").stat().st_mode & 0o7777) == "0o2775"
             assert os.path.realpath(root / "code" / "live") == os.path.realpath(code)
         sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")  # 사람이 채운 설정 — 다시 불러도 그대로여야
+        chain.write_text("files: {}\n", encoding="utf-8")  # 사람이 고친 사슬 사본 — 다시 불러도 그대로여야
         r2 = _run(bash, ["init"], {**base, "RAG_OUT": _posix(root / "output")})
         assert r2.returncode == 0, r2.stderr + r2.stdout
         assert sf.read_text(encoding="utf-8") == "required:\n  env: {run_env: dev}\n", "init이 settings.yaml을 덮음"
+        assert chain.read_text(encoding="utf-8") == "files: {}\n", "init이 사슬 사본을 덮음"
         assert "덮지 않음" in r2.stdout and "만듦" not in r2.stdout, r2.stdout  # 멱등 — 두 번째는 모두 "있음"
     with tempfile.TemporaryDirectory() as d:  # live가 이미 있으면(옛 판을 가리킴) 옮기지 않음
         root = Path(d) / "rag"

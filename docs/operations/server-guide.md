@@ -34,7 +34,7 @@
 ### 1-2. 설정 파일
 ```bash
 sudo bash <코드 폴더>/deploy/host/scripts/dc.sh init --group <운영 계정 그룹>   # 서버 폴더 한 번에(README §5-3 ② — 여러 번 불러도 안전)
-#   /srv/rag/env(700) · env/settings.yaml ← settings.sample.yaml(없을 때만, 10001:<그룹> 640 — 운영 계정 UID가 10001이면 600, refactor.md C-09)
+#   /srv/rag/env(700) · env/settings.yaml ← settings.sample.yaml · env/edw_chain.yaml ← resources/config/edw_chain.yaml(없을 때만, 10001:<그룹> 640 — 운영 계정 UID가 10001이면 600, refactor.md C-09)
 #   /srv/rag/output · output/mcp_parse/jobs(10001:<그룹> 2775 — setgid, 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지운다) · code/live 링크(없을 때만) · backup(700)
 # 값 채우기 — init이 찍은 빈 필수 칸부터. 항목·설명은 settings.sample.yaml·env-guide.md, env-guide "옛 서버 값" 표의 항목은 그 값으로(C-39), 값은 문서·채팅·로그에 쓰지 않는다 · 0.1.0 settings.yaml은 release-and-patch.md §5-7 3단계(옮기기)
 # 이미 있는 결과 폴더(옛 판이 644·755로 쓴 것)는 한 번: sudo chgrp -R <운영 그룹> /srv/rag/output && sudo chmod -R g+w /srv/rag/output && sudo find /srv/rag/output -type d -exec chmod g+s {} +
