@@ -13,11 +13,12 @@ def selftest():
     sp.loader.exec_module(base)
     assert base.HNSW_MAX == ST.HNSW_MAX  # 판 파일이 굳혀 둔 숫자 = 지금 pg.HNSW_MAX
     assert (
-        TARGETS == ("search", "applog")
+        TARGETS == ("search", "applog", "master")
         and head("search") == "0003_search"
         and known("search") == ["0003_search", "0002_search", "0001_search"]
     )
     assert head("applog") == "0001_applog" and known("applog") == ["0001_applog"]
+    assert head("master") == "0001_master" and known("master") == ["0001_master"]
     assert not list((MIGRATIONS / "versions").glob("*struct*"))  # 사용자 11-01 — struct 갈래 없음(엔진 구성·원천 목록은 파일)
     print("[selftest] dbtool — 판 폴더 갈래 search 하나·끝 판·HNSW 2000 같음 통과")
     # 판 0002가 굳혀 둔 원천별 칸 = 지금 표 정의(pl-28 — 판 파일은 모델을 import하지 않으므로 여기서 대조)

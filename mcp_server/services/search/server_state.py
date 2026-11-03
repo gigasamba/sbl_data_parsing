@@ -71,6 +71,10 @@ def _build_retriever():
     old = _STATE.get("Rs")
     try:
         check_store()  # 시작 때 이미 확인(main) — 설정이 그 뒤 바뀐 경우만 여기서 걸림
+        from common.store import master
+
+        master.reset()  # pl-38 — 마스터 표(용어집·고객 명부)를 여기서 미리 읽음: 비었거나 권한이 없으면 검색기를 안 만들고 오류로
+        master.get()  # (요청 처리 중 처음 읽다 SystemExit로 예열 스레드만 조용히 죽지 않게 — 리뷰)
     except SystemExit as e:  # 스레드·요청 안에서는 오류로(조용히 스레드만 죽지 않게)
         raise RuntimeError(str(e)) from None
     a = types.SimpleNamespace(pg=False, local=False, edw=False, edw_client=False)
@@ -110,7 +114,7 @@ def _retriever(src):
         try:
             _STATE["checked_at"] = time.time()
             if _version_of(_STATE["dbs"]) != _STATE.get("version"):
-                _build_retriever()
+                _build_retriever()  # 마스터 표도 다시 읽음(pl-38 — `dbtool master load` 뒤 반영)
         finally:
             _RELOAD_LOCK.release()
     return _STATE["Rs"][src]

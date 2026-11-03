@@ -7,15 +7,10 @@
 
 ④(사전·그래프 타당성, AD29 ④)·AD26 2:2 동점 판정을 이 모듈(P1)에 더함(10-08 조각 대표값 마무리, engine-qa
 CONCERN 반영 10-08 2차):
-  - `term_plausibility()` — 조각이 용어 사전(`common/terms.load_glossary`)·고객 명부(`common/terms._aliases`)
-    표기와 근접(오탈자 수준)하면 가산점. 완전히 같으면(이미 정식 표기) 가산 없음 — **원문을 사전 표기로 바꿔
-    쓰지 않는다**(새 이름 오교정 방지, AD29 ④ 원칙), 투표 점수만 거든다. 업무 관계 그래프(AD28 ②③ 고객-계약
-    -제품 개체·관계)는 아직 없어(구조화 단계 과제 — 파싱이 그 결과를 당겨 쓰면 레이어 역행) 그 대신 **문서
-    안 교차 언급**(같은 정규화 값이 서로 다른 라벨 자리에도 나오면 우연한 오독일 확률이 낮다)을 그래프 타당성의
+  - (pl-38 사용자 11-03 — 용어 사전·고객 명부 근접 가산 `term_plausibility`를 지움: 대표 결과는 마스터를 읽지 않는다.) 업무 관계 그래프
+    대신 **문서 안 교차 언급**(같은 정규화 값이 서로 다른 라벨 자리에도 나오면 우연한 오독일 확률이 낮다)을 그래프 타당성의
     가벼운 대역으로 쓴다 — `_doc_value_graph()`. **한계(engine-qa 10-08 ③)**: 엔진 구분이 없어 같은 엔진이
-    자기 추출 오류를 여러 자리에 반복해도(예: 한 엔진이 같은 틀린 값을 표 세 칸에 똑같이 잘못 읽음) 교차 언급
-    으로 오인해 가산할 수 있다 — 독립적인 다른 엔진·다른 쪽 출처가 아니라 "같은 엔진의 자기 반복"과 "서로
-    다른 출처의 교차 확인"을 구분하지 않음(AD28 업무 그래프가 생기면 엔진이 아니라 개체 단위로 다시 판단).
+    자기 추출 오류를 여러 자리에 반복해도 교차 언급으로 오인해 가산할 수 있다.
   - `format_plausibility(text, locale_pref)` — AD26 (c) 문서 언어권 표기: 쉼표·마침표 3자리 묶음 둘 다 유효한
     '묶음 모양'으로 인정하되, 문서 안에서 더 흔한 구분자(`_doc_locale_pref()`, 다수 없으면 가산 없음)에 추가
     가산 — 두 표기(430,000/430.000)가 신뢰도·형식에서 똑같이 나올 때 로캘 관행으로 갈린다. **한계·일부 수정
@@ -46,14 +41,8 @@ CONCERN 반영 10-08 2차):
 그대로, fused는 새 칸으로만 추가된다(덮어쓰기 없음).
 """
 
-import difflib
 import re
 
-from common.core.terms import (  # 용어 사전·고객 명부(AD29 ④) — common은 parse·search 공용층(이미지에도 둘 다 포함), rag-core↔rag-parse 역행 아님
-    _aliases,
-    load_glossary,
-    split_terms,
-)
 from common.core.text import normalize_value  # NFKC·소문자·제로폭 제거·숫자 사이 쉼표 제거·공백 제거(조각 맞추기 키)
 from pipeline.shared.summarize import FAMILY  # 엔진 → 인식 계열(요약 모듈과 같은 매핑, 중복 정의 안 함)
 from pipeline.transform.represent.parse_qa import garbage_ratio  # 깨짐률(형식 타당성 신호 재사용)
@@ -115,37 +104,6 @@ def norm_key(text):
     return normalize_value(text)
 
 
-_TERM_FUZZY_MIN = 0.84  # 이 밑이면 '다른 말'로 보고 가산 없음(실험값 — OCR 한두 글자 오탈자 수준만 잡음)
-_TERM_BONUS = 0.08  # 가산 상한(트러스트 가중치 1.0 차이보다 작게 — 사전 신호가 신뢰도·형식을 뒤엎지 않게)
-
-
-def term_plausibility(text, glossary=None, aliases=None):
-    """AD29 ④ — 조각이 용어 사전(canonical·동의어·약어, `common.core.terms.load_glossary`)·고객 명부(별칭,
-    `common.core.terms._aliases`) 표기와 가까우면(오탈자 수준, 예 OCR `Pfzer` vs 정식 `Pfizer`) 가산점(최대
-    `_TERM_BONUS`, 비율이 가까울수록 커짐) — 이미 표기가 완전히 같으면(비교할 다른 후보와 차이가 없어) 가산
-    0. **원문은 바꾸지 않는다** — 이 함수는 점수만 매기고 호출부가 text를 고치는 일은 없다(새 이름 오교정
-    방지, AD29 ④ 원칙). 사전·명부가 둘 다 없으면(선택 장치) 0. 짧은 글(3자 미만)·너무 긴 글(60자 초과,
-    라벨:값 조각 범위 밖 — 자유 문장은 P1 대상이 아님)은 비교하지 않고 0."""
-    t = (text or "").strip()
-    if not t or len(t) < 3 or len(t) > 60:
-        return 0.0
-    names = []
-    for r in (glossary or {}).values():
-        names.append(r.get("canonical") or "")
-        names.extend(split_terms(r.get("synonyms")))
-    for canon, al in (aliases or {}).items():
-        names.append(canon)
-        names.extend(al)
-    names = [n for n in names if n and 3 <= len(n) <= 60]
-    if not names:
-        return 0.0
-    tk = norm_key(t)
-    best = max(difflib.SequenceMatcher(None, tk, norm_key(n)).ratio() for n in names)
-    if best >= 0.999 or best < _TERM_FUZZY_MIN:
-        return 0.0
-    return round(_TERM_BONUS * (best - _TERM_FUZZY_MIN) / (1 - _TERM_FUZZY_MIN), 4)
-
-
 _GROUPED_PERIOD_EVIDENCE = re.compile(r"\d{1,3}(?:\.\d{3}){2,}")  # 마침표 묶음이 **2묶음 이상**(1.234.567류) —
 # 1묶음(430.000·0.500)은 소수점인지 천 단위 구분자인지 그 자체로 모호해 로캘 **집계**(아래)에서는 증거로 안 센다
 # (engine-qa 10-08 ④ — 순수 소수 0.500까지 '마침표 관행 문서' 증거로 잘못 세는 문제의 1차 완화). 개별 조각
@@ -192,17 +150,16 @@ def _graph_bonus(key, value_graph):
     return round(min(_GRAPH_BONUS_STEP * (n - 1), _GRAPH_BONUS_MAX), 4) if n > 1 else 0.0
 
 
-def vote_fragment(candidates, rep_engine=None, tie_bonus=0.5, locale_pref=None, term_ctx=None, value_graph=None):
+def vote_fragment(candidates, rep_engine=None, tie_bonus=0.5, locale_pref=None, value_graph=None):
     """조각 하나(이미 같은 자리로 맞춰진 엔진별 후보) 투표.
     candidates: [{"engine": str, "text": str}, ...] — 같은 자리의 엔진별 원문(없으면/빈 문자열이면 그 엔진은
     후보에서 빠짐 — 한 계열만 낸 조각은 그 계열 혼자만의 그룹이 된다, AD29 ③ '한 계열만 낸 조각' 신호).
     rep_engine: 지금 대표 엔진 — 그 엔진이 든 그룹에 tie_bonus(동점 깨기·안정성, AD29 ⑤)를 더한다(이건
     "기본" 점수에 포함 — 사전·그래프·로캘처럼 이번에 더한 보조 신호가 아니라 원래 있던 안정화 장치).
-    locale_pref·term_ctx({"glossary","aliases"})·value_graph: AD29 ④·AD26 (c) 신호 — 전부 생략(None)하면
-    이 세 가산 없이 옛 동작과 점수가 같다(fuse_facts는 늘 넘긴다).
+    locale_pref·value_graph: AD29 ④·AD26 (c) 신호 — 둘 다 생략(None)하면 이 가산 없이 옛 동작과 점수가 같다(fuse_facts는 늘 넘긴다).
     그룹마다 두 점수를 매긴다 — **기본 점수**(base = trust_weight 합 × format_plausibility(locale_pref 없이)
     + rep_engine 보너스, = 신호가 전혀 없을 때와 같은 셈) · **전체 점수**(score = base + locale 가산(trust ×
-    (locale 있는 format_plausibility − 없는 쪽)) + term_plausibility 가산 + 문서 내 교차 언급 가산). 승자는
+    (locale 있는 format_plausibility − 없는 쪽)) + 문서 내 교차 언급 가산). 승자는
     전체 점수로 뽑는다(결정적 — 동점이면 candidates에 먼저 나온 그룹). "split"·"resolved_by"는 **신호 유무와
     무관하게 항상 계산**(engine-qa 10-08 ⑤) — 승자·최선 패자의 **기본** 점수까지 비교해서 셋 중 하나로 가른다:
     기본 점수로 이미 갈렸으면 resolved_by="trust"(split=False, 사전·그래프·로캘 없이도 확실) · 기본 점수는
@@ -231,10 +188,9 @@ def vote_fragment(candidates, rep_engine=None, tie_bonus=0.5, locale_pref=None, 
         fp_full = max(format_plausibility(text0, locale_pref), 0.01)
         trust = sum(trust_weight(m["engine"]) for m in members)
         bonus = tie_bonus if rep_engine and any(m["engine"] == rep_engine for m in members) else 0.0
-        term_b = term_plausibility(text0, **term_ctx) if term_ctx else 0.0
         graph_b = _graph_bonus(k, value_graph) if value_graph else 0.0
         base = round(trust * fp_base + bonus, 4)
-        full = round(base + trust * (fp_full - fp_base) + term_b + graph_b, 4)
+        full = round(base + trust * (fp_full - fp_base) + graph_b, 4)
         scored.append({"key": k, "text": text0, "engines": [m["engine"] for m in members], "base": base, "score": full})
     scored.sort(key=lambda g: (-g["score"], order.index(g["key"])))
     winner, losers = scored[0], scored[1:]
@@ -269,7 +225,7 @@ def fuse_facts(engine_docs, rep_engine, tie_bonus=0.5):
     보충해 만든 rep["facts"] 말고 엔진별 원본 — represent.py가 합치기 전 스냅샷을 넘긴다) → 라벨:값·표 칸
     조각(facts, cells 포함) 융합. 자리 맞추기 = _fact_key(라벨 정규화) 같은 키끼리(좌표·쪽 순서 정렬 없이도
     라벨 자체가 자리 열쇠 — AD29 ①의 '좌표가 없으면' 경로를 facts에서는 라벨 키로 대신한다).
-    AD29 ④ 사전·명부·문서 내 교차 언급 + AD26 (c) 로캘을 문서 전체(모든 facts) 기준
+    문서 내 교차 언급 + AD26 (c) 로캘을 문서 전체(모든 facts) 기준
     한 번만 계산해 매 자리의 vote_fragment에 넘긴다.
     반환: (facts, conflicts). facts = [{..원래 칸(from 빼고).., "value", "engines", "score"}] 승자만 —
     라벨 정렬(정렬 안정성) 순. conflicts = 같은 자리에서 승자 외 다른 값이 있던 자리만
@@ -277,8 +233,6 @@ def fuse_facts(engine_docs, rep_engine, tie_bonus=0.5):
     목록·검색 근거 '값 갈림' 꼬리표는 다른 모듈 몫, 여기는 플래그만 남긴다."""
     locale_pref = _doc_locale_pref(engine_docs)
     value_graph = _doc_value_graph(engine_docs)
-    glossary, aliases = load_glossary(), _aliases()
-    term_ctx = {"glossary": glossary, "aliases": aliases} if glossary or aliases else None
     by_key = {}
     for eng, d in engine_docs.items():
         for f in (d or {}).get("facts") or []:
@@ -286,9 +240,7 @@ def fuse_facts(engine_docs, rep_engine, tie_bonus=0.5):
     facts, conflicts = [], []
     for k in sorted(by_key, key=lambda kk: kk[1]):
         cands = by_key[k]
-        result = vote_fragment(
-            [{"engine": c["engine"], "text": c["text"]} for c in cands], rep_engine, tie_bonus, locale_pref, term_ctx, value_graph
-        )
+        result = vote_fragment([{"engine": c["engine"], "text": c["text"]} for c in cands], rep_engine, tie_bonus, locale_pref, value_graph)
         if not result:
             continue
         base_fact = next(c["fact"] for c in cands if c["text"] == result["text"])

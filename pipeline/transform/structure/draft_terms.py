@@ -7,7 +7,9 @@ ponytail: 정규식 휴리스틱(법인 접미사 뒤 한글·영문 이름만) 
 접미사 없음)은 못 찾음. 업그레이드 경로: 접미사 목록을 글로서리 category=org_suffix 같은 데이터로 옮기거나 LLM 음역
 후보(서버 쪼개서, 선택 — 백로그 ④ 노트)로."""
 
+import json
 import re
+import sys
 
 _SUFFIX_KO = ("바이오로직스", "테라퓨틱스", "헬스케어", "바이오", "제약", "파마")
 _ORG_RE_KO = re.compile(r"[가-힣]{2,12}(?:" + "|".join(_SUFFIX_KO) + r")(?:\(주\))?")
@@ -45,3 +47,40 @@ def collect_candidate_org_names(docs, known_norm, norm):
                 continue
             counts[name] = counts.get(name, 0) + 1
     return [name for name, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+
+
+def known_names():
+    """이미 아는 이름(norm 전) — 고객 명부 + 마스터 용어 사전 전 카테고리(org_client든 org_cdmo든, approved만 — draft 자신은 빼지 않음:
+    여러 실행에 걸쳐 되풀이로 나온 이름일수록 write_draft_terms의 카운트가 올라가야 "가장 빈번한 것"이 의미가 있다)."""
+    from common.core import terms as T
+
+    known = set(T._aliases()) | {a for al in T._aliases().values() for a in al}
+    for r in T.load_glossary().values():
+        known.add(r.get("canonical") or "")
+        known.update(T.split_terms(r.get("synonyms")))
+        known.update(T.split_terms(r.get("abbreviations")))
+    return {n for n in known if n}
+
+
+def main(argv=None):
+    """pl-38 D3(사용자 11-03) — 묶음 밖 도구: 묶음 docs.jsonl 본문에서 새 회사 이름 후보 → output/ 자동 draft CSV(terms.write_draft_terms,
+    사람 승인 전 · 검색은 BM25 약한 가중으로만 읽음). 옛 build_bundle collect_draft_terms를 옮김 — 이미 아는 이름은 PG 마스터에서."""
+    import argparse
+
+    from common.core import terms as T
+    from common.core.console import utf8_stdout
+
+    utf8_stdout()
+    ap = argparse.ArgumentParser(description=main.__doc__.split("\n", 1)[0])
+    ap.add_argument("--bundle", required=True, help="묶음 폴더(docs.jsonl)")
+    a = ap.parse_args(argv)
+    with open(f"{a.bundle}/docs.jsonl", encoding="utf-8") as f:
+        docs = [json.loads(ln) for ln in f if ln.strip()]
+    known_norm = {T.norm(n) for n in known_names()}
+    added = T.write_draft_terms(collect_candidate_org_names(docs, known_norm, T.norm), category="org_client")
+    print(f"[draft_terms] 새 회사 이름 후보 {len(added)}건을 용어집 draft로 추가(사람 승인 전): {', '.join(added)}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

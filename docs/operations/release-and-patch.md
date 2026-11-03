@@ -276,7 +276,8 @@ mv /srv/rag/env/settings.yaml.new /srv/rag/env/settings.yaml
 **4. DB** — 옛 상주 컨테이너 둘을 지우고(`$DOCKER rm -f data-pipeline-parse data-pipeline-structure` — 0.2.0부터 일괄 `data-pipeline` + parse_document 전용 `data-pipeline-mcp`, 사용자 11-03) 새 판으로 띄운 뒤(`bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp`) 버전 차이 확인 → 올리기 → 다시 확인(README §5-3 ③과 같음):
 ```bash
 bash deploy/host/scripts/run_tool.sh migrate check --target all     # 차이·버전 확인(읽기만)
-bash deploy/host/scripts/run_tool.sh migrate up --target all        # 새 판 마이그레이션(없으면 아무것도 안 함)
+bash deploy/host/scripts/run_tool.sh migrate up --target all        # 새 판 마이그레이션(없으면 아무것도 안 함 — search·applog·master)
+bash deploy/host/scripts/run_tool.sh migrate master load            # 마스터 표를 git CSV(이미지·코드 폴더의 resources/vocab/glossary)로 채움(pl-38)
 bash deploy/host/scripts/run_tool.sh migrate check --target all     # "차이 없음"
 ```
 

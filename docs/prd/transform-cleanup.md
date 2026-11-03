@@ -3,7 +3,7 @@
 [PRD.md](../PRD.md) 카테고리. [transform.md](transform.md)의 하위 문서. 엔진·p1 지문이 바뀌는 정리 묶음(pl-31·pl-34·pl-35)과 0.2.0 지문 배치(pl-46·pl-47) — 모두 검토 등급 A(CLAUDE.md §4).
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서: pl-31 · pl-34 · pl-35 · pl-46 · pl-47 · pl-49.
+순서: pl-31 · pl-34 · pl-35 · pl-46 · pl-47 · pl-49 · pl-50.
 
 <a id="pl-31"></a>
 ## pl-31 · ocr_vlm·vlm.model_alt 삭제
@@ -107,3 +107,14 @@
 - 하지 않은 것: 엔진 일부를 같은 프로세스에서 파싱(C1 — 시간 초과를 강제로 끊을 수 없어 격리가 필요) · `--set` 다시 띄우기 없애기(A5 — 진입 모듈이 import 때 설정을 읽어 둠) · `source` 받기의 manifest 문서마다 다시 쓰기(C5 일부 — 중간에 끊겨도 진행을 남기는 장치). 설계는 PR 본문.
 - 확인: 같은 문서 4건(docx·xlsx·eml·pdf)으로 파싱 → 묶음(임베딩 없음)을 전·후 돌려 대표 결과·엔진 결과·묶음 JSON을 비교(시각·지문 칸만 뺌) — 같음.
 - Status: done — 11-03 `feature/fp-perf`(0.2.0 지문 배치, 등급 A).
+
+<a id="pl-50"></a>
+## pl-50 · 층 지문 범위 바로잡기 + 단계 방향 자동 점검
+- 이유(구조 검토 11-03): ① 결과를 바꾸는 파일 2개 — 대표 결과 점수 `pipeline/transform/represent/repfmt.py`, 고객 이름 찾기 `pipeline/transform/structure/terms.py` — 가 층 목록(`common/core/artifacts.py` `LAYER_CODE`)에 없어 고쳐도 p1·s 지문이 그대로였다(임시 복사본에서 확인). ② 기록(`jsonlog`) → DB 기록(`logsink`) → 표 정의(`store/db/`)로 이어져 DB 표 칸 하나만 고쳐도 네 층 지문이 모두 바뀌었다. ③ extract → transform → load 방향은 리뷰에서만 확인했다.
+- 참고: 문서별 엔진 결과 재사용은 층 지문이 아니라 엔진 폴더만 보는 `run_all.engine_code_fp`로 정한다. 서버가 문서를 다시 처리할지는 `run_docs.py`가 ParsingMeta의 끝난 키로 정한다(코드가 바뀌어도 저절로 다시 처리하지 않음 — 전체 재처리는 판 올릴 때 사람이 정함). 층 지문은 실행 기록·대표 결과 정보에 남는 값이다.
+- 한 것:
+  - 층 목록에 두 파일을 넣음. 결과를 만들지 않는 오프라인 도구는 `NOT_LAYER`에 적음. `tests/server/common/test_code_fp.py`가 `pipeline/transform` 아래 빠진 파일을 잡는다.
+  - `CODE_FP_SKIP` — 기록·DB 연결·표 정의·설정 도구 파일은 지문 계산에서 따라가지 않음. 설정 모델(`config/settings.py`)은 기본값이 결과를 바꿀 수 있어 그대로 둠. 같은 시험이 "표 정의·기록 파일은 지문 그대로, 위 두 파일은 p1·s만 바뀜"을 확인한다.
+  - `common/check/check_modules.py` ⑫ — 뒤 단계를 import하면 위반(함수 안 늦은 import 포함). 지금 예외 1곳: `qwen_vlm` 엔진 → `transform.figures.vgate`(엔진 파일을 옮기면 엔진 지문이 바뀌어 0.3.0 지문 배치로).
+- 검토 등급 A(code_fp) · 0.2.0(어차피 전체 재처리).
+- Status: done — 11-03 `feature/stage-direction`.

@@ -1,4 +1,4 @@
-"""parse_document 서비스 — data-pipeline-parse 컨테이너(S6b — 옛 data-parsing)의 작업 서비스(mcp_parse_service)에 넘기는 프록시.
+"""parse_document 서비스 — data-pipeline-mcp 컨테이너(11-03 — 옛 data-pipeline-parse; 작업 서비스가 주 프로세스, compose.pipeline-mcp.yml)의 작업 서비스(mcp_parse_service)에 넘기는 프록시.
 S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/main.py(옛 data_retrieval/mcp_server.py)에서 옮김 — 내용 그대로
 (설정 상수만 mcp_server/config.py의 CFG로). S7d(D-028 ⑨): 토큰은 설정 객체에서, 코드에 박혀 있던 대체 토큰은 지움 — 설정 필수.
 """
@@ -12,7 +12,7 @@ from mcp_server.config import CFG
 
 _NO_TOKEN = (
     "parse 서비스 토큰 없음 — settings.yaml required.tokens.parse_proxy 또는 MCP_TOKEN을 설정"
-    "(data-pipeline-parse의 PARSE_MCP_TOKEN과 같은 값, refactor.md C-44)"
+    "(data-pipeline-mcp의 PARSE_MCP_TOKEN과 같은 값, refactor.md C-44)"
 )
 
 
@@ -41,8 +41,8 @@ def _token():
     return tok
 
 
-# ── 텍스트 파싱 프록시(2026-10-21 사용자 요청) — data-pipeline-parse 컨테이너(S6b — 옛 data-parsing)의 작업 서비스(mcp_parse_service,
-#    127.0.0.1:8766, docker exec -d data-pipeline-parse python -m pipeline.mcp_parse_service — 토큰은 그 컨테이너 settings.yaml
+# ── 텍스트 파싱 프록시(2026-10-21 사용자 요청) — data-pipeline-mcp 컨테이너(11-03 — 옛 data-pipeline-parse)의 작업 서비스(mcp_parse_service,
+#    127.0.0.1:8766, 그 컨테이너의 주 프로세스 — 토큰은 그 컨테이너 settings.yaml
 #    settings.yaml required.tokens.parse_mcp = MCP_TOKEN과 같은 값, S7e2부터 env PARSE_MCP_TOKEN은 안 읽음 — VS7e2 R-6)
 #    를 localhost HTTP로 호출 — 구조화·임베딩·EDW/OS 적재·그림[VLM] 파싱 없이 text 파싱 대표 결과만. ──
 def _parse_service(method, path, payload=None, timeout=10):
@@ -100,7 +100,7 @@ def do_parse_document(path=None, content_b64=None, filename=None, time_out_thres
             return {"error": f"parse 서비스 오류: HTTP {e.code}"}
     except Exception as e:
         return {
-            "error": f"parse 서비스 연결 실패({CFG.PARSE_URL}) — data-pipeline-parse 컨테이너의 mcp_parse_service 기동 확인: {type(e).__name__}: {e}"
+            "error": f"parse 서비스 연결 실패({CFG.PARSE_URL}) — data-pipeline-mcp 컨테이너(작업 서비스가 주 프로세스) 기동 확인: {type(e).__name__}: {e}"
         }
     job_id = job.get("job_id")
     if not job_id:

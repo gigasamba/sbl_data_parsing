@@ -345,7 +345,6 @@ _PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|
 VALUES = {
     "common.run_env": "local·dev·prd 중 하나",
     "common.store.run_mode": "prod 하나(비우면 설정 안 함 — test는 0.2.0에 지움)",
-    "common.text.search_recency": "0(끔)·1(최신을 묻는 질문만)·2(항상) 중 하나",
     "common.connections.object_storage.verify_tls": "1(검증)·0(끔)·CA 파일 경로",
     "common.models.guard.external_scope": "func·e2e 중 하나",
     "common.runtime.pipe_procs": "1 이상 정수 · auto 또는 비우면 자동 계산",
