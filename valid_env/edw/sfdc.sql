@@ -38,3 +38,33 @@ INSERT INTO Opportunity (Id, Name, AccountId, Project_Code__c, Service_Type__c, 
     ('OPP202603300000000', 'AstraNova Bio RFP P2026033', '001900400000000000', 'P2026033', 'CDO', 'DS', 'ANB-SYN-VAC-03', 'Proposal', '2026-12-01', 1500000.00, 0),
     ('OPP202605200000000', 'AstraNova Bio RFI P2026052', '001900400000000000', 'P2026052', 'CDO', 'DP', 'ANB-SYN-RSV-07', 'Proposal', '2027-01-15', 500000.00, 0),
     ('OPP202604700000000', 'Korvexa Life Sciences RFP P2026047', '001900500000000000', 'P2026047', 'CMO', 'DS', 'KVX-SYN-ADC-02', 'Proposal', '2026-12-15', 2200000.00, 0);
+
+-- [SYNTHETIC] 11-02(pl-29) — 파일 → 영업 기회 사슬 표(운영 노트의 칸 이름, 값은 가짜). 첫 SFDC 파일들은 기회 직접(006)·Task(00T)·Event(00U)·
+-- Quote(0Q0 — 운영 EDW 복사본에는 아직 없는 표, 사용자 11-02: 운영처럼 EDW 표로 재현)·계정 직접(001)으로 차례로 이어 둔다.
+ALTER TABLE Opportunity ADD COLUMN Record_Type__c TEXT;
+ALTER TABLE Opportunity ADD COLUMN X1st_Contract_Execution_Date__c TEXT;
+UPDATE Opportunity SET Record_Type__c = Service_Type__c, X1st_Contract_Execution_Date__c = CloseDate;
+CREATE TABLE ContentVersion (
+    Id                TEXT PRIMARY KEY,
+    ContentDocumentId TEXT,
+    CreatedDate       TEXT
+) STRICT;
+UPDATE FileStorageMap SET content_version_id = id WHERE source_system = 'SFDC';  -- 파일마다 다른 판 id(가짜 — 운영은 SFDC ContentVersion Id)
+INSERT INTO ContentVersion SELECT CAST(content_version_id AS TEXT), '069' || id, created_at FROM FileStorageMap WHERE source_system = 'SFDC';
+UPDATE Opportunity SET Id = '006' || substr(Id, 4);  -- 운영 SFDC id처럼 접두 006(영업 기회) — 사슬이 접두로 길을 고름
+UPDATE FileStorageMap SET sf_op_id = '006' || substr(sf_op_id, 4) WHERE sf_op_id LIKE 'OPP%';
+CREATE TABLE ContentDocumentLink (
+    ContentDocumentId TEXT,
+    LinkedEntityId    TEXT,
+    IsDeleted         INTEGER NOT NULL DEFAULT 0
+) STRICT;
+CREATE TABLE Task (Id TEXT PRIMARY KEY, WhatId TEXT) STRICT;
+CREATE TABLE Event (Id TEXT PRIMARY KEY, WhatId TEXT) STRICT;
+CREATE TABLE Quote (Id TEXT PRIMARY KEY, OpportunityId TEXT, AccountId TEXT) STRICT;
+INSERT INTO Task VALUES ('00T000000000000001', '006202603300000000');
+INSERT INTO Event VALUES ('00U000000000000001', '006202605200000000');
+INSERT INTO Quote VALUES ('0Q0000000000000001', '006202604700000000', '001900500000000000');
+INSERT INTO ContentDocumentLink (ContentDocumentId, LinkedEntityId)
+SELECT cd, CASE rn % 5 WHEN 0 THEN '006202601400000000' WHEN 1 THEN '00T000000000000001' WHEN 2 THEN '00U000000000000001'
+                       WHEN 3 THEN '0Q0000000000000001' ELSE '001900200000000000' END
+FROM (SELECT ContentDocumentId AS cd, ROW_NUMBER() OVER (ORDER BY ContentDocumentId) AS rn FROM ContentVersion);

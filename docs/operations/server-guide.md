@@ -18,7 +18,7 @@
 
 - 각 이미지의 `entrypoint.sh`는 받은 명령을 `RAG_MODULE`로 거른다. 다른 이미지의 명령이면 종료 코드 64(오류 메시지에 맞는 이미지를 알려 줌).
 - 서버 입구는 `run_docs.py` 하나다(사용자 10-31). 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`는 11-01에 지웠다.
-- `tool index`(AD41 색인 빌더 — `index_a`·`index_b`)도 data-pipeline에서 돈다.
+- (`tool index` — AD41 색인 빌더 `index_a`·`index_b`는 11-01에 지웠다 — mc-16.)
 - 공통 명령(어느 이미지에서나): `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`.
 
 **코드 폴더 배치(`PATCH_CODE`, 기본 `/srv/rag/code/live`)** — `live/app/`은 컨테이너가 읽기 전용으로 붙이는 코드(`app/deploy/<폴더>`·`app/docker`), `live/deploy/host/`·`live/deploy/release/`는 호스트에서 부르는 스크립트·compose·systemd 파일이다. 아래 명령은 모두 `live`(코드 폴더 루트)에서 실행한다.
@@ -36,8 +36,9 @@
 sudo mkdir -p /srv/rag/env && sudo chmod 700 /srv/rag/env
 cp <받은 저장소 ZIP>/settings.sample.yaml /srv/rag/env/settings.yaml   # 설정 파일은 이것 하나
 sudo chown 10001:<운영 계정 그룹> /srv/rag/env/settings.yaml && sudo chmod 640 /srv/rag/env/settings.yaml   # 컨테이너 사용자 UID 10001이 읽음(운영 계정 UID가 10001이면 600 — refactor.md C-09)
-# 값 채우기 — 항목·설명은 settings.sample.yaml·env-guide.md, env-guide "옛 서버 값" 표의 항목은 그 값으로(C-39), 값은 문서·채팅·로그에 쓰지 않는다 · 옛 pipeline.env가 있으면 release-and-patch.md §5-4(옮기기)
-sudo mkdir -p /srv/rag/output && sudo chown 10001 /srv/rag/output    # 컨테이너 사용자 UID 10001
+# 값 채우기 — 항목·설명은 settings.sample.yaml·env-guide.md, env-guide "옛 서버 값" 표의 항목은 그 값으로(C-39), 값은 문서·채팅·로그에 쓰지 않는다 · 0.1.0 settings.yaml은 release-and-patch.md §5-7 3단계(옮기기)
+sudo mkdir -p /srv/rag/output && sudo chown 10001:<운영 그룹> /srv/rag/output && sudo chmod 2775 /srv/rag/output    # UID 10001 · 운영 그룹 · setgid — 컨테이너가 umask 0002로 써서 운영 계정도 고치고 지운다
+# 이미 있는 결과 폴더(옛 판이 644·755로 쓴 것)는 한 번: sudo chgrp -R <운영 그룹> /srv/rag/output && sudo chmod -R g+w /srv/rag/output && sudo find /srv/rag/output -type d -exec chmod g+s {} +
 export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.yaml을 읽음
 ```
 - `export`는 그 셸에서만 유효하다. 운영 계정 셸 설정(예: `~/.bashrc`)에 `export SERVER_ENV_DIR=/srv/rag/env`를 영구로 두거나 명령 앞에 붙인다. `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd unit은 스스로 이 값을 넘긴다. 컨테이너는 이 폴더를 마운트하지 않는다.
@@ -53,7 +54,7 @@ export SERVER_ENV_DIR=/srv/rag/env   # 셸·systemd는 $SERVER_ENV_DIR/settings.
 - 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지 태그·자원·포트·호스트 경로)뿐이다 — `load_settings`는 셸에 이미 있는 이름은 덮지 않는다.
 
 ### 1-3. 기동 확인
-README §5-3 ④ 연결 점검(`run_tool.sh ping_models`·`check_env`, `dc run --rm parse check`)과 ⑤ 이미지 점검(`check-modules`·`selftest_gate.sh` — 실행 이미지는 코드 폴더를 `-v`로 붙여)을 차례로 한다. `check`는 자원·쓰기 권한·`PG_HOST`가 컨테이너 자신(127.0.0.1)인지·디스크 여유를 본다. 통과하면 2절로.
+README §5-3 ④ 연결 점검(`run_tool.sh ping_models`·`check_env`, `run_tool.sh check`)과 ⑤ 이미지 점검(`check-modules`·`selftest_gate.sh` — 실행 이미지는 코드 폴더를 `-v`로 붙여)을 차례로 한다. `check`는 자원·쓰기 권한·`PG_HOST`가 컨테이너 자신(127.0.0.1)인지·디스크 여유를 본다. 통과하면 2절로.
 
 ## 2. 일상 실행 — run_docs(문서별 흐름)
 
@@ -79,13 +80,13 @@ bash deploy/host/scripts/mcp_up.sh     # 멱등 — /health 응답하면 아무�
 
 ### 2-2. 새벽 배치(선택)
 `sudo cp deploy/host/systemd/data-pipeline-nightly.* /etc/systemd/system/ && sudo systemctl enable --now data-pipeline-nightly.timer`. 옛 `rag-nightly.*`가 있으면 disable 뒤 지운다.
-- 스케줄은 settings.yaml `pipeline.host.nightly.time`(env 이름 `NIGHTLY_TIME`, HH:MM — 기본 비움 = 새벽 배치 없음, pl-32). 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 그 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done`을 부른다(그 밖에는 말없이 끝 — 11-01부터 새벽 배치 = run_docs, 사용자 10-31). 옛 `nightly.enabled`는 지움(남아 있으면 경고만).
+- 스케줄은 settings.yaml `ops.nightly.time`·`ops.nightly.max_docs`·`ops.nightly.deadline`(env 이름 `NIGHTLY_TIME`·`NIGHTLY_MAX_DOCS`·`NIGHTLY_DEADLINE` — 시작 시각 HH:MM·새 문서 수 상한·마감 시각 HH:MM, 기본 비움 = 새벽 배치 없음, 셋이 모두 있어야 돎 — pl-32·사용자 11-02). 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시작 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받기 시작하지 않고, 받은 문서는 끝까지)(그 밖에는 말없이 끝 — 11-01부터 새벽 배치 = run_docs, 사용자 10-31). 옛 `nightly.enabled`는 지움(남아 있으면 경고만).
 - 지금 바로 돌리려면 run_docs를 직접 부른다(옛 `trigger.sh night`는 11-01에 지움).
 
 ### 2-3. 상주 컨테이너
 `data-pipeline-parse`·`data-pipeline-structure`는 일을 하지 않고 떠 있기만 한다(entrypoint `idle`). `run_docs.py`가 그 안에서 `docker exec`로 문서별 작업을 돌리고, MCP `parse_document` 작업 서비스도 `data-pipeline-parse` 안에서 돈다. 상주 트리거 서버(`serve-trigger`·`/jobs`·`/upload`·`CHAIN_STRUCTURE_URL`)는 11-01에 지웠다(PRD [pl-10](../prd/ops.md#pl-10)) — 새 문서는 `run_docs` 정기 실행이 고른다.
 ```bash
-docker compose -f deploy/host/compose/compose.pipeline.yml up -d data-pipeline-parse data-pipeline-structure
+dc up -d data-pipeline-parse data-pipeline-structure   # dc = README §5-3 ①의 도우미(settings.yaml 값을 compose에 넘김 — 그냥 docker compose는 필수 칸 `${…:?}`에서 멈춤)
 ```
 
 ### 2-4. 테스트 실행 스크립트(코드 폴더에서 네이티브, 이미지 밖)
@@ -139,6 +140,7 @@ PC 테스트(서버 연결 없이): `RDB_SQLITE=valid_env/edw/edw.sqlite`(`commo
 | 정답 세트·질문 세트 | `valid_env/object_storage/*`(합성) · 서버 정답 폴더(settings.yaml 호스트 항목 `pipeline.host.gold_dir` — `run_tool.sh`가 컨테이너 `/data/gold`로 붙임) |
 | 집계 지표 단서어 | 코드 기본값(`mcp_server/services/search/qtype.py` `_AGG_VOCAB_DEFAULT`) — 11-01 사전 파일 `agg_vocab.json`·설정 `search.agg_vocab_file`은 지움(내용이 기본값과 같았음) |
 | MCP 안내 문구 | settings.yaml `mcp.server.instructions`(옛 env `MCP_INSTRUCTIONS`) |
+| EDW 조인 사슬(고객·원천 메타) | `app/deploy/resources/config/edw_chain.yaml`(아래 5-2) |
 
 기밀(실고객·실제품·계약 값)은 **서버 폴더에만** 둔다 — git·PC·외부 모델로 보내지 않는다. 바꾼 뒤에는 같은 질문 세트로 검색 결과를 전/후 비교한다(PC 검증 페이지 `validation/search_ui`·답변 점검 `valid_env/answer_test` — `score_gold`·`mcp_eval`은 11-01에 지움).
 
@@ -223,6 +225,30 @@ PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys;
 PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys; g=T.load_glossary(sys.argv[1]); print(len(g), '개념 반영', sorted(g)[:5])" <용어집 폴더>   # 오류면 여기서 멈춤
 ```
 
+### 5-2. EDW 조인 사슬 고치기 — `edw_chain.yaml`
+적재가 문서마다 고객·원천 메타(`client_edw`·`sf_op_name`·`contract_date` 등)를 채울 때 따라가는 EDW 표·칸 이름과 SFDC 단계 순서는 코드가 아니라 파일 `resources/config/edw_chain.yaml`에 있다(PRD [pl-29](../prd/load.md#pl-29)). 운영 EDW의 표·칸 이름이 다르거나 단계를 바꿀 때 이 파일만 고친다. 사슬의 모양(같은 단계 후보가 둘 이상이면 비움, 기회가 없을 때만 계정, LAS 최신 판)은 코드에 있고 파일로 바꾸지 않는다.
+
+**어디서 고치나**
+- 개발 서버(dev): 코드 폴더의 `/srv/rag/code/live/app/deploy/resources/config/edw_chain.yaml`을 고친다(오버레이 — 다음 적재부터 읽음, 다시 띄울 필요 없음).
+- 운영 서버(prd): 이미지 안에 코드가 구워져 있어 서버에서 직접 고치지 않는다. 개발 서버에서 고치고 확인한 뒤 `bake.sh`로 이미지를 다시 구워 옮긴다(§0-1·release-and-patch §8). 저장소에도 같은 변경을 커밋한다(다음 판에서 덮어쓰이지 않게).
+
+**고치는 법**
+1. 바꿀 표·칸이 EDW에 있는지 먼저 본다 — 검색 MCP `describe_edw`(표 이름) 또는 `query_edw`로 `SELECT TOP 1 <칸들> FROM <스키마.표>`. 칸 이름은 DB 담당자에게 확인한다(refactor.md C-76 ⑦).
+2. 파일을 고친다. 지킬 것:
+   - 표는 `스키마.표`, 칸은 영문·숫자·`_`만(이 이름은 SQL 글자에 그대로 들어가므로 적재가 검사한다). 접두(`prefix`)는 3자.
+   - `out: {gold 칸: EDW 칸}`의 gold 칸은 그 원천 전용 칸과 `client_edw`만 — 문서 키·`created_at`은 안 된다.
+   - SFDC `steps`는 위에서부터 순서대로 본다. 앞 단계에 후보가 있으면 거기서 정한다.
+   - Quote 표가 EDW에 생기면 `steps`의 Quote 주석 줄(`# - {prefix: "0Q0", …}`) 앞의 `# `만 지운다(`optional: true` — 표를 못 읽으면 그 단계만 건너뜀).
+   - 옛 파일은 지우기 전에 `edw_chain.yaml.<날짜>`로 복사해 둔다.
+3. 검사 — 상주 data-pipeline 컨테이너 안에서(적재가 읽는 것과 같은 검사):
+   ```bash
+   docker exec <data-pipeline 상주 컨테이너> python -c "from pipeline.load.edw_meta import load_chain; load_chain(); print('사슬 설정 OK')"
+   ```
+   틀리면 `[edw_meta] 사슬 설정 오류(…)`에 틀린 곳이 모두 나온다. 이 상태로 적재하면 적재가 같은 이유로 멈춘다(빈 메타로 넘어가지 않음).
+4. 문서 몇 건으로 확인 — 다음 정기 실행(또는 `run_docs` 몇 건)의 적재 뒤 `query_edw`·검색 결과에서 그 문서의 `client_edw`·원천 칸이 채워졌는지 본다.
+
+**이미 적재한 문서** — 사슬을 바꿔도 이미 gold에 있는 메타는 저절로 바뀌지 않는다. 바뀐 값이 필요한 문서는 `--replace`로 다시 적재한다(다시 파싱하지 않음 — 메타는 적재 때만 붙는다). 되돌리려면 복사해 둔 옛 파일을 제자리에 두고 같은 검사를 다시 한다.
+
 ## 6. 문제 해결
 
 | 증상 | 원인 | 조치 |
@@ -237,7 +263,7 @@ PYTHONPATH=app/deploy python -c "from common.core import terms as T; import sys;
 | MCP 401 | `MCP_TOKEN` 없음·틀림 | 호출부 env에만 넣기(코드·로그에 쓰지 않음) |
 | MCP가 안 뜸(이미지 버전인데) | settings.yaml에 `common.models.embed`(질의 임베딩 — 옛 `EMBED_*`) 없음 · 컨테이너가 설정 파일을 못 읽음(권한 — C-09) | [env-guide.md](env-guide.md)로 필수 값 채우기 |
 | 포트 충돌 | PostgreSQL·OpenViking과 겹침 | settings.yaml의 `mcp.server.port`(`MCP_PORT`) 등 포트 값만 바꿈(기존 컨테이너는 건드리지 않음) |
-| 설정값이 조용히 틀림 | (옛 env 파일) `docker run --env-file`은 줄 끝 주석·따옴표를 값에 그대로 넣음 | 지금은 settings.yaml — 틀린 항목은 검증 오류로 항목 경로만 찍힘. 옮긴 뒤 `python -m common.config.migrate --compare`로 옛 값과 대조(release-and-patch.md §5-4) |
+| 설정값이 조용히 틀림 | (옛 env 파일) `docker run --env-file`은 줄 끝 주석·따옴표를 값에 그대로 넣음 | 지금은 settings.yaml — 틀린 항목은 검증 오류로 항목 경로만 찍힘. 0.1.0 → 0.2.0 옮긴 뒤에는 migrate 화면 보고서(옮긴 칸 수·지운 칸 이름)를 확인(release-and-patch.md §5-7) |
 | SELinux `Permission denied`(파일은 있는데) | 볼륨 라벨 안 맞음 | 볼륨에 `:z`(공유)·`:Z`(전용) 붙이기 |
 
 ## 7. 개발자에게 보고하는 법

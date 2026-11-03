@@ -12,7 +12,7 @@ import numpy as np
 from common.ai import embed
 from common.config import settings
 from common.core import jsonlog, span
-from pipeline.load import pgvector_load
+from pipeline.load import edw_meta, pgvector_load
 from pipeline.transform.structure import build_bundle
 
 
@@ -163,9 +163,13 @@ class _DB:
     def cursor(self):
         return _Cur(self.log)
 
+    def q(self, sql, params=None):  # 원천 스키마 조회(_elsewhere) — 다른 원천에 같은 문서 없음
+        return []
+
 
 def test_load_table_spans():
-    with tempfile.TemporaryDirectory() as tmp:
+    # Windows는 load()가 mmap으로 연 vectors.npy를 지우지 못함 — 정리 실패는 무시
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         bundle = Path(tmp)
         docs = [{"file_path": "a.txt", "summary": "s"}, {"file_path": "b.txt", "summary": "s"}]
         chunks = [
@@ -204,7 +208,9 @@ def test_load_table_spans():
         np.save(bundle / "vectors.npy", np.ones((2, 3), dtype=np.float32))
         rows, patched = _capture()
         db = _DB()
-        with patched, jsonlog.context(run_id=str(uuid.uuid4())):
+        no_edw = mock.patch.object(edw_meta, "fetch", lambda docs: ({}, 0))  # EDW 조인·ParsingMeta 쓰기는 이 시험 밖(pl-29)
+        no_pm = mock.patch.object(pgvector_load, "_mark_loaded", lambda loaded, kept=(): 0)
+        with patched, no_edw, no_pm, jsonlog.context(run_id=str(uuid.uuid4())):
             with span.span("load.pgvector", "load") as top:
                 counts = pgvector_load.load(db, bundle)
     assert counts["docs"] == 2 and counts["chunks"] == 2

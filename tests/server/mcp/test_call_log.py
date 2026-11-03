@@ -303,9 +303,9 @@ def test_initialize_contract():
     async def run():
         m = main.build("127.0.0.1", 8765)
         wire = ListToolsResult(tools=await m.list_tools()).model_dump_json(by_alias=True, exclude_none=True)
-        # develop 46327a3과 직렬화 바이트를 비교해 고정(로깅은 도구 계약을 바꾸지 않음). 계약 변경 시 별도 협의 필요.
-        assert len(wire.encode()) == 9170
-        assert hashlib.sha256(wire.encode()).hexdigest() == "7da1e1ca6836c6b1b8f485a77140783399fc3871d62c674f733eadea6db7590c"
+        # develop 28ad892(원문 도구 2개·search 계약 mc-16 포함)와 직렬화 바이트를 비교해 고정(로깅은 도구 계약을 바꾸지 않음). 계약 변경 시 별도 협의 필요.
+        assert len(wire.encode()) == 11886
+        assert hashlib.sha256(wire.encode()).hexdigest() == "7d24d8679fb146e4cf5fbae2989ffad329612c912b2a7219c956102e3c22a7a1"
         with patch.object(main, "build", return_value=m):
             app = main.build_guarded_app("127.0.0.1", 8765, "")
         headers = {"Accept": "application/json, text/event-stream", "X-MCP-Client": "test", "X-MCP-User": "test"}

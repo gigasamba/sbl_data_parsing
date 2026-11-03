@@ -16,3 +16,25 @@ def connect_pool(c=None, pg_schema=None, max_size=None):
     from common.store.pg_standin import StandinPG
 
     return StandinPG(_standin_schema(pg_schema or (c or {}).get("PG_SCHEMA")))
+
+
+class SchemaView:
+    """연결 풀 하나로 원천 스키마 하나를 가리킴(pl-28 — 5벌이 풀 하나를 함께 씀, 스키마 이름만 다름). q·scope는 풀 그대로."""
+
+    def __init__(self, pool, schema):
+        self.pool_obj, self.schema = pool, schema
+        self.q, self.scope = pool.q, pool.scope
+
+
+def connect_sources():
+    """원천 이름 → 그 원천 스키마 연결(`<PG_SCHEMA>_<원천>`). 실 PG는 풀 하나 + SchemaView, 대역은 스키마마다 파일 하나(StandinPG)."""
+    from common.store.db.models import search_tables as ST
+
+    if has_conn():
+        pool = PGPool(conf())
+        return {src: SchemaView(pool, ST.src_schema(pool.schema, src)) for src in ST.SOURCES}
+    _warn_standin()
+    from common.store.pg_standin import StandinPG
+
+    base = _standin_schema(None)
+    return {src: StandinPG(ST.src_schema(base, src)) for src in ST.SOURCES}

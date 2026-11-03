@@ -168,10 +168,7 @@ extract:
   # ─── 회전 준비(prepare) ───
   prepare:
     link: auto  # 회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy · 기본 auto · 값: auto·hardlink·symlink·copy 중 하나
-    rotate: true  # 스캔 PDF 회전 검토(OCR 점수) 켬/끔 · 기본 true · 값: true·false
-    rotate_lead: 3  # [파라미터] 빠른 회전 검토에서 기대 각도를 정하는 문서 맨 앞 쪽 수(개) · 기본 3 · 값: 0 이상 정수
-    rotate_probe_fast: 480  # [파라미터] 빠른 회전 검토의 축소 점검 이미지 크기(px) · 기본 480 · 값: 0 이상 정수
-    rotate_s0_min: 150.0  # [파라미터] 빠른 회전 검토에서 힌트 각도를 믿는 최소 OCR 점수 · 기본 150.0 · 값: 0 이상
+    rotate: false  # 이미지·스캔 PDF 쪽 방향 바로잡기 켬/끔 · 기본 false · 값: true·false
   # ─── 파싱 엔진·쪽 처리 ───
   doc_parallel: 1  # 대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개) · 기본 1 · 값: 0 이상 정수
   fill_merged: true  # 표에서 병합 셀이 덮은 빈 칸을 원본 칸 값으로 채울지 · 기본 true · 값: true·false
@@ -247,6 +244,7 @@ load:
 search:
   # ─── MCP 서버 ───
   server:
+    fulltext_secret:  # 원문 도구(list/get_doc_fulltext) 파일 손잡이 sfid 서명 키 · 값: 비밀 글자 [비밀]
     allowed_hosts: []  # 비루프백 바인드 때 추가로 허용할 Host(쉼표 목록, 리버스 프록시 이름 등) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
     host: 127.0.0.1  # MCP 서버 바인드 주소 · 기본 127.0.0.1 · 값: 127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부
     instructions:  # MCP 서버 instructions 글자(도구 안내문) 교체 · 값: 글자
@@ -265,10 +263,6 @@ search:
     bm25_table: 0.2  # [파라미터] 집계 질문일 때 BM25 가중치 · 기본 0.2 · 값: 0 이상
     id: 2.0  # [파라미터] RRF 융합에서 ID(드문 식별자) 가중치 · 기본 2.0 · 값: 0 이상
     vector: 1.0  # [파라미터] RRF 융합에서 벡터 가중치 · 기본 1.0 · 값: 0 이상
-  # ─── 고객 범위 ───
-  client:
-    hard: false  # 고객 범위를 하드 격리(다른 고객 문서 제외) · 기본 false · 값: true·false
-    strict: false  # 하드 격리에서 고객 미상 문서도 제외 · 기본 false · 값: true·false
   # ─── EDW 도구 ───
   edw_meta:
     dir:  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · 값: 경로
@@ -282,8 +276,6 @@ search:
     max_queue_bytes: 268435456  # 감사 대기/처리 중 본문 추정 바이트 합계 상한(기본 256MiB) · 기본 268435456 · 값: 0 이상 정수
     max_input_bytes: 16384  # [파라미터] 감사 로그 입력 원문 UTF-8 바이트 상한 · 기본 16384 · 값: 0 이상 정수
     max_output_bytes: 65536  # [파라미터] 감사 로그 출력 원문 UTF-8 바이트 상한 · 기본 65536 · 값: 0 이상 정수
-  output:
-    evidence_paths: true  # 근거의 '파싱 결과 경로' 조회(AI.ParsingMeta) 스위치 · 기본 true · 값: true·false
   parse_proxy:
     url: http://127.0.0.1:8766  # parse_document가 부르는 작업 서비스 주소 · 기본 http://127.0.0.1:8766 · 값: URL
   query_log:
@@ -303,9 +295,9 @@ ops:
     dir:  # JSON 로그 폴더 · 값: 경로
     db_enabled: false  # applog DB 비동기 기록(마이그레이션 적용 후 켬) · 기본 false · 값: true·false
     fallback_dir: output/applog  # DB 실패 시 JSON Lines 대체 기록 폴더 · 기본 output/applog · 값: 경로
-    retention_days: 90  # 월 파티션 보존 일수(월 끝이 만료된 파티션만 DROP) · 기본 90 · 값: 0 이상 정수
-    queue_size: 10000  # DB 기록 대기 큐 상한 · 기본 10000 · 값: 0 이상 정수
-    batch_size: 200  # DB INSERT 배치 최대 행 수 · 기본 200 · 값: 0 이상 정수
+    retention_days: 90  # 월 파티션 보존 일수(월 끝이 만료된 파티션만 DROP) · 기본 90 · 값: 1 이상 정수
+    queue_size: 10000  # DB 기록 대기 큐 상한 · 기본 10000 · 값: 1 이상 정수
+    batch_size: 200  # DB INSERT 배치 최대 행 수 · 기본 200 · 값: 1 이상 정수
     flush_sec: 1.0  # DB 배치 기록 간격(초) · 기본 1.0 · 값: 0 이상 초
     db_timeout_sec: 2  # 로그 DB 연결/문장 제한(초) · 기본 2 · 값: 0 이상 정수(초)
     shutdown_sec: 5.0  # 종료 flush 전체 상한(초) · 기본 5.0 · 값: 0 이상 초
@@ -324,7 +316,6 @@ ops:
     sources_file:  # 원천 목록 파일 경로(비우면 resources/mappings/sources.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
     stack_file:  # 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
   pipeline_paths:
-    file_meta_path:  # EDW 파일 메타 JSONL 경로(s3_key → 메타) · 값: 경로
     gold_dir:  # 사람 정답(gold) 폴더 · 값: 경로
     images_root:  # 그림 PNG·index.jsonl 저장 루트 · 값: 경로
     index_conf:  # 색인 설정 JSON 경로(있으면 색인 모듈로 구조화) · 값: 경로
@@ -365,9 +356,12 @@ ops:
   # ─── 새벽 배치 ───
   nightly:
     time:  # 새벽 배치 시작 시각(HH:MM, 서버 시간) · 값: HH:MM
+    max_docs:  # 새벽 배치 한 번에 처리할 새 문서 수 상한(이미 끝난 문서 뺀 뒤) · 값: 1 이상 정수
+    deadline:  # 새벽 배치 마감 시각(HH:MM, 서버 시간) · 값: HH:MM
   # ─── run_docs 레인 ───
   run_docs:
     warm: 20  # 진입 대기열 · 기본 20 · 값: 0 이상 정수
+    warm_workers: 2  # 미리 받기 동시 수 · 기본 2 · 값: 0 이상 정수
     struct_workers: 2  # 구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음) · 기본 2 · 값: 0 이상 정수
     struct_backlog:  # 중간 대기열 상한(파싱 끝·구조화 대기 문서 수) · 값: 0 이상 정수 (0 = 상한 없음)
     vlm_cap: 2  # vlm 레인 문서 동시 파싱 상한(gpu 예산) · 기본 2 · 값: 0 이상 정수
@@ -456,9 +450,6 @@ tuning:
       deadline: 360.0  # (자원) VLM 호출 1건 제한 시간(초) · 기본 360.0 · 값: 0 이상 초
       page_concurrency:  # (자원) 쪽 VLM 병렬 워커 수 최대값 · 값: 0 이상 정수
       page_min_concurrency: 2  # (자원) 쪽 VLM 적응형 병렬에서 느릴 때 줄일 수 있는 최소 워커 수 · 기본 2 · 값: 0 이상 정수
-  # ─── load의 조정값 ───
-  load:
-    index_lock_stale_sec: 21600.0  # 색인 빌드 잠금 파일을 죽은 빌드로 보고 회수하는 경과 시간(초) · 기본 21600.0 · 값: 0 이상 초
   # ─── search의 조정값 ───
   search:
     edw_meta:

@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parent
 #   docker exec로 부르는 컨테이너(data-pipeline-parse·structure)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
 #   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.pipeline_host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더(옛 test_space/rfp_all_output)는
 #   required.deploy.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로, C-29 ⓑ를 코드로 보장 — 사용자 Q8 ⑤).
-TEST = PROG = DOCSPACE = DOCFLOW = WARM = ENVFILE = PATCH_CODE = None  # configure()가 채움
+TEST = PROG = DOCSPACE = DOCFLOW = WARM = ENVFILE = None  # configure()가 채움
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.docker(없으면 podman, 그것도 없으면 docker — op-10)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, op-10)
 DEFAULT_CODE = Path("/srv/rag/code/live")  # 코드 폴더 기본 배치(common.host.patch_code 기본값과 같음)
@@ -128,7 +128,7 @@ def work_dir(doc):
 
 def configure(settings_file=None):
     """서버 settings.yaml을 한 번 읽어 모듈 값(경로·접속)을 채운다 — 문제 목록(빈 목록이면 통과). 값은 찍지 않는다."""
-    global TEST, PROG, DOCSPACE, DOCFLOW, WARM, ENVFILE, PATCH_CODE, MCP_JOBS_DIR, WARM_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA
+    global TEST, PROG, DOCSPACE, DOCFLOW, WARM, ENVFILE, MCP_JOBS_DIR, WARM_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA
     global DOCKER
     doc, err = read_settings(settings_file)
     if err:
@@ -149,7 +149,6 @@ def configure(settings_file=None):
     DOCFLOW = DOCSPACE / "docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     WARM = DOCSPACE / "_warm"  # SOURCE_WARM 대기열 저장소
     # 컨테이너가 마운트하는 코드 폴더 — compose.patch*.yml·systemd·mcp_up.sh와 같은 칸(ops.host.patch_code — 기본 배치 /srv/rag/code/live).
-    PATCH_CODE = Path(_yget(doc, "common.host.patch_code") or DEFAULT_CODE)
     DOCKER = _yget(doc, "common.host.docker") or (
         "podman" if shutil.which("podman") else "docker"
     )  # op-10 — 셸 스크립트와 같은 순서(env 대신 설정)
@@ -176,8 +175,7 @@ def _edw_connect():
     )
 
 
-# I4(V3 R1): 옛 DEPLOY(<이 폴더>/patch_code/app/deploy)·IMAGE는 pre-refactor에서 쓰는 곳이 없던 상수였고, I3 확인이 DEPLOY를
-# 처음 썼지만 컨테이너가 실제로 그 폴더를 마운트한다는 근거가 없어(V3 R1) 확인을 PATCH_CODE로 옮기고 둘 다 지움.
+# 11-02 — 시작 때 코드 배치 확인(code_layout_problems·CODE_MARKER·PATCH_CODE)은 운영 마지막 버전에 없어 지움(사용자 규칙).
 # S6b(D-020, 사용자 10-27) — 파이프라인 이미지가 하나(data-pipeline)로 합쳐지고 상주 컨테이너 이름이 바뀜(옛 data-parsing·data-structure).
 PARSE_C, STRUCT_C = "data-pipeline-parse", "data-pipeline-structure"  # docker inspect·exec 대상(compose.pipeline.yml 상주 서비스)
 
@@ -213,7 +211,7 @@ def sets(*pairs):
 def warm_cmd(seq):
     """문서 1개 warm(프리페치) — 파싱 컨테이너 안 source warm."""
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'mkdir -p /app/output/_warm && cd /app && "
+        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && mkdir -p /app/output/_warm && cd /app && "
         f"PYTHONPATH=/app/deploy "
         f"python -m pipeline.extract.source{sets('SOURCE_WARM=/app/output/_warm')} warm --csv /app/output/docflow/{seq}/batch.csv'"
     )
@@ -251,7 +249,7 @@ def parse_cmd(seq, chan, scan, gate):
         f"CPU_MAX_LOAD={gate}",
     )
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && "
+        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && cd /app && "
         f"echo [envcheck] gate={gate} 채널={chan}; "
         f"{DOC_MARK}={inside} {LIB_ENV} "
         f"python -m pipeline.cli{doc} parse --source rdb:csv:{inside}/batch.csv'"
@@ -261,11 +259,9 @@ def parse_cmd(seq, chan, scan, gate):
 def struct_cmd(seq):
     """문서 1개 구조화 + 적재(구조화 컨테이너). 엔진 구성은 파싱과 같은 파일(코드 폴더 — 사용자 11-01: 판 번호 없음, 실행 중에는 안 바뀜)."""
     inside = f"/app/output/docflow/{seq}"
-    st = sets(
-        *EMBED_SET, "FILE_META_PATH=/app/output/file_meta_new.jsonl"
-    )  # 묶음·적재 python에(stackcfg는 이 칸을 안 읽어 뺌 — 덮기 파일 하나 덜, 리뷰 S9)
+    st = sets(*EMBED_SET)  # 묶음·적재 python에(문서 메타는 적재가 EDW 조인으로 — pl-29 11-02, FILE_META_PATH 지움)
     return (
-        f"{DOCKER} exec {STRUCT_C} bash -c 'cd /app && "
+        f"{DOCKER} exec {STRUCT_C} bash -c 'umask 0002 && cd /app && "
         f"PYTHONPATH=/app/deploy "
         f"python -m pipeline.transform.structure.build_bundle{st} --parse-dir {inside}/parse"
         f" --out {inside}/bundle && "
@@ -278,7 +274,7 @@ def publish_cmd(seq):
     """문서 1개 publish(OS + EDW — 파싱 컨테이너)."""
     inside = f"/app/output/docflow/{seq}"
     return (
-        f"{DOCKER} exec {PARSE_C} bash -c 'cd /app && "
+        f"{DOCKER} exec {PARSE_C} bash -c 'umask 0002 && cd /app && "
         "PYTHONPATH=/app/deploy python -m pipeline.load.publish_parse_result"
         f"{sets('PM_BUCKET_SKIP_OVERLAP_CHECK=1')} "  # 실행 방침(접속 값 아님) — 버킷·접두·표·EDW·Object Storage는 컨테이너가 설정 파일에서(S7e1 Q8)
         f"--out {inside} --source-system FileStorageMap --apply "
@@ -299,7 +295,8 @@ def sweep_cmd(seq):
 # ── 레인·대기열 정책(사용자 10-29 — docs/prd/runner.md rn-01·rn-02) — settings.yaml ops.run_docs(configure()가 읽음).
 # 기본값은 설정 모델 pipeline.config.PipelineHostRunDocs와 같다(이 스크립트는 호스트 python이라 모델을 import하지 않음 — 시험이 둘을 대조).
 RUN_DOCS_DEFAULTS = {
-    "warm": 20,  # 진입 대기열 — 미리 받아 둘 문서 수(진행 중 제외)
+    "warm": 20,  # 진입 대기열 — 미리 받아 둘 문서 수(받는 중 포함 · 파싱 중 제외)
+    "warm_workers": 2,  # 미리 받기 동시 수(pl-48 — 사용자 11-02) — 실제 동시 받기 = min(이 값, 대기열 빈자리)
     "struct_workers": 2,  # 구조화·적재 스레드 수
     "struct_backlog": None,  # 중간 대기열 상한(파싱 끝·구조화 대기) — 비우면 구조화 워커 × 2, 0 = 상한 없음
     "vlm_cap": 2,  # vlm 문서 동시 파싱 상한(gpu 예산)
@@ -312,6 +309,7 @@ RUN_DOCS_DEFAULTS = {
 }
 LANES = ("light", "medium", "vlm")
 WARM_TARGET, STRUCT_WORKERS, VLM_CAP = RUN_DOCS_DEFAULTS["warm"], RUN_DOCS_DEFAULTS["struct_workers"], RUN_DOCS_DEFAULTS["vlm_cap"]
+WARM_WORKERS = RUN_DOCS_DEFAULTS["warm_workers"]
 LANE_WORKERS = {c: (RUN_DOCS_DEFAULTS[f"{c}_dedicated"], RUN_DOCS_DEFAULTS[f"{c}_shared"]) for c in LANES}  # 레인 → (전담, 공유)
 _BACKLOG_SETTING = RUN_DOCS_DEFAULTS["struct_backlog"]  # main()이 STRUCT_BACKLOG로 풂(구조화 워커 수 인자가 덮은 뒤)
 STRUCT_BACKLOG = 0
@@ -393,7 +391,11 @@ def run_docs_policy(doc):
             probs.append(f"pipeline.host.run_docs.{k} 형식 오류 — 0 이상 정수만")
     if probs:
         return vals, probs
-    for k in ("warm", "vlm_cap"):  # 0이면 문서를 안 받거나(warm) vlm 레인을 아무도 안 집어 배치가 끝나지 않음(PR #7 리뷰)
+    for k in (
+        "warm",
+        "warm_workers",
+        "vlm_cap",
+    ):  # 0이면 문서를 안 받거나(warm·warm_workers) vlm 레인을 아무도 안 집어 배치가 끝나지 않음(PR #7 리뷰)
         if vals[k] < 1:
             probs.append(f"pipeline.host.run_docs.{k} — 1 이상만")
     shared = sum(vals[f"{c}_shared"] for c in LANES)
@@ -405,8 +407,9 @@ def run_docs_policy(doc):
 
 def apply_policy(vals):
     """run_docs_policy() 값 → 모듈 값(configure()가 부름)."""
-    global WARM_TARGET, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING
+    global WARM_TARGET, WARM_WORKERS, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING
     WARM_TARGET, STRUCT_WORKERS, VLM_CAP = vals["warm"], vals["struct_workers"], vals["vlm_cap"]
+    WARM_WORKERS = vals["warm_workers"]
     LANE_WORKERS = {c: (vals[f"{c}_dedicated"], vals[f"{c}_shared"]) for c in LANES}
     _BACKLOG_SETTING = vals["struct_backlog"]
 
@@ -464,12 +467,29 @@ def edw_list(keywords):
     return rows
 
 
+DONE_STATUSES = (
+    "ok",
+    "partial",
+    "skipped_dup",
+)  # 끝난 문서 = common/store/parsing_meta_db.DONE_STATUSES와 같게(C10 — 사용자 11-01, 운영 고침 11b)
+GOLD_STATUSES = ("ok", "partial")  # parsing_meta_db.GOLD_STATUSES와 같게 — gold_version도 있어야 끝(사용자 11-02)
+
+
 def edw_done_keys():
-    """EDW AI.ParsingMeta에서 ok·parallel 종료된 source_key 집합(2026-10-22 사용자 지정 — 재실행 skip용)."""
+    """EDW AI.ParsingMeta에서 끝난(DONE_STATUSES — ok·partial은 gold_version도, 11-02) source_key 집합(2026-10-22 사용자 지정 — 재실행 skip용 · 키는 FileStorageMap s3_key와 글자 그대로 비교)."""
 
     conn = _edw_connect()  # S7e1 — 설정 파일의 parsing-meta 접속(옛 코드 기본값 — 운영 접속 값·비밀 삭제, D-028 ⑨)
     cur = conn.cursor()
-    cur.execute("SELECT source_key FROM AI.ParsingMeta WHERE parse_status IN ('ok','partial')")
+    cur.execute("SELECT COL_LENGTH('AI.ParsingMeta', 'source_key')")  # 11-02 — 원본 키 칸 이름 바꾸기(source_key → s3_key, C-76) 전후 모두
+    kc = "source_key" if cur.fetchone()[0] is not None else "s3_key"
+    cur.execute("SELECT COL_LENGTH('AI.ParsingMeta', 'gold_version')")
+    gold = cur.fetchone()[0] is not None
+    q = lambda xs: ", ".join(f"'{s}'" for s in xs)  # 코드 상수만 SQL에 넣음(값 바인딩 없음)
+    cond = f"parse_status IN ({q(DONE_STATUSES)})"
+    if gold:  # 11-02 — ok·partial은 gold에도 올라가야 끝(gold_version) · 칸이 생기기 전(C-76 ③)에는 parse_status만
+        rest = [s for s in DONE_STATUSES if s not in GOLD_STATUSES]
+        cond = f"(parse_status IN ({q(rest)}) OR (parse_status IN ({q(GOLD_STATUSES)}) AND gold_version IS NOT NULL))"
+    cur.execute(f"SELECT {kc} FROM AI.ParsingMeta WHERE {cond}")
     keys = {r[0] for r in cur.fetchall()}
     conn.close()
     return keys
@@ -523,7 +543,11 @@ def _class_cache():
         return {}
 
 
+_class_lock = threading.Lock()  # 분류 캐시 — 미리 받기 워커 여럿(pl-48)이 같은 사전·파일을 씀
+
+
 def _class_save(cache):
+    """호출자가 _class_lock을 잡은 채로 부른다(사전을 글자로 바꾸는 동안 다른 워커가 넣지 않게)."""
     p = PROG / "docflow_class.json"
     p.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
 
@@ -557,48 +581,77 @@ def classify_doc(seq, row, cache=None):
         cls = (
             "vlm"  # 모르는 형식 — 보수적으로 vlm(예산 캡 안에서 처리)                                     # 모르는 형식 — 보수적으로 heavy
         )
-    if cache is not None and row["s3_key"] in cache:
-        cls = cache[row["s3_key"]]
-    elif cache is not None:
-        cache[row["s3_key"]] = cls
-        _class_save(cache)
+    if cache is not None:
+        with _class_lock:
+            if row["s3_key"] in cache:
+                cls = cache[row["s3_key"]]
+            else:
+                cache[row["s3_key"]] = cls
+                _class_save(cache)
     _class[seq] = cls
     mark(seq, "classify", ocr=cls)
     return cls
 
 
+DEADLINE_AT = None  # --deadline(새벽 배치 마감, 사용자 11-02) — 이 시각(epoch 초)이 지나면 새 문서를 받기 시작하지 않음
+
+
+def deadline_at(hhmm, now=None):
+    """HH:MM → 다음 그 시각(epoch 초) — 지금보다 이르거나 같으면 다음 날(자정을 넘는 배치 — 23:00 시작·05:00 마감)."""
+    now = datetime.datetime.now() if now is None else now
+    h, m = (int(x) for x in hhmm.split(":"))
+    t = now.replace(hour=h, minute=m, second=0, microsecond=0)
+    if t <= now:
+        t += datetime.timedelta(days=1)
+    return t.timestamp()
+
+
 def downloader(rows, order):
-    """대기열 유지 스레드 — 지정 문서 순서대로 WARM_TARGET개까지 미리 받아 둔다(진행중 제외)."""
+    """대기열 유지 — 지정 문서 순서대로 WARM_TARGET개(받는 중 포함)까지 미리 받아 둔다(파싱 중 제외). 받기 워커 WARM_WORKERS개가
+    차례(order)를 하나씩 집어 동시에 받는다(pl-48 — 사용자 11-02): 실제 동시 받기 = min(WARM_WORKERS, 대기열 빈자리).
+    빈자리가 없으면 워커가 있어도 받지 않는다. 다 집으면 워커가 끝나고, 모두 끝나면 이 함수도 끝난다."""
     global _next_warm
-    _cache = _class_cache()
-    ptr = 0
+    cache = _class_cache()
+    pos = {"ptr": 0}
     with _warm_lock:
-        _next_warm = order[ptr] if order else 10**12
-    while not _stop.is_set():
-        with _warm_lock:
-            if ptr >= len(order):
-                if _lane_total() == 0 and not any(_lane_inflight.values()):
+        _next_warm = order[0] if order else 10**12
+
+    def worker():
+        global _next_warm
+        while not _stop.is_set():
+            with _warm_lock:
+                if pos["ptr"] >= len(order):
                     return
-                _warm_lock.wait(5)
-                continue
-            if _lane_total() >= WARM_TARGET:
-                _warm_lock.wait(5)
-                continue
-            seq = order[ptr]
-            ptr += 1
-            _next_warm = order[ptr] if ptr < len(order) else 10**12
-            _warming.add(seq)
-        row = rows[seq]
-        t_w = time.time()
-        ok = warm_one(seq, row)
-        mark(seq, "warm_end", ok=ok, sec=round(time.time() - t_w, 1))
-        classify_doc(seq, row, cache=_cache)  # OCR 필요도 사전 분류(캐시 우선) → 워커 배분용
-        with _warm_lock:
-            LANEQ[_class.get(seq) or "light"].append(seq)
-            mark(seq, "dispatched")
-            _warming.discard(seq)
-            _warm_lock.notify_all()
-        depth("dispatch")
+                if DEADLINE_AT is not None and time.time() >= DEADLINE_AT:  # 마감 — 남은 차례는 다음 새벽 배치가 다시 고름
+                    if pos["ptr"] < len(order):
+                        log(f"마감 — 남은 {len(order) - pos['ptr']}건은 받지 않음(받은 문서는 끝까지)")
+                        pos["ptr"] = len(order)
+                        _next_warm = 10**12
+                    return
+                if _lane_total() + len(_warming) >= WARM_TARGET:  # 빈자리 없음 — 파싱이 하나 시작되면 notify
+                    _warm_lock.wait(5)
+                    continue
+                seq = order[pos["ptr"]]
+                pos["ptr"] += 1
+                _next_warm = order[pos["ptr"]] if pos["ptr"] < len(order) else 10**12
+                _warming.add(seq)
+            row = rows[seq]
+            t_w = time.time()
+            ok = warm_one(seq, row)
+            mark(seq, "warm_end", ok=ok, sec=round(time.time() - t_w, 1))
+            classify_doc(seq, row, cache=cache)  # OCR 필요도 사전 분류(캐시 우선) → 워커 배분용
+            with _warm_lock:
+                LANEQ[_class.get(seq) or "light"].append(seq)
+                mark(seq, "dispatched")
+                _warming.discard(seq)
+                _warm_lock.notify_all()
+            depth("dispatch")
+
+    ts = [threading.Thread(target=worker, daemon=True) for _ in range(max(1, WARM_WORKERS))]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
 
 
 def _sweep_orphan(seq):
@@ -682,38 +735,6 @@ def pg_count():
         return 0, 0
 
 
-CODE_MARKER = Path("pipeline") / "extract" / "run_all.py"  # pipeline 배치(S4)에 늘 있는 파일(컨테이너 안 /app/deploy/ 아래 같은 자리)
-
-
-def code_layout_problems(code=None, containers=(PARSE_C, STRUCT_C)):
-    """I3(V2-R4) — 이 러너는 pipeline 배치(S4 10-26, 새 이미지 판 — 그 전 I2 data_etl 배치)를 전제로 `docker exec … python -m pipeline.…`를 부른다.
-    컨테이너가 마운트하는 코드 폴더(PATCH_CODE/app/deploy)와 떠 있는 컨테이너가 그 배치인지 시작 전에 본다 — 문제 목록(빈 목록이면 통과).
-    I4(V3 R1): PATCH_CODE 폴더를 이 호스트에서 볼 수 없으면 폴더 확인은 건너뛰고 컨테이너 확인(실제 마운트)만 믿는다.
-    I4b(V4 R2): 폴더가 아니라 파일(CODE_MARKER)로 본다 — docker는 bind 마운트 원본이 없으면 빈 폴더를 만들어 붙여 `test -d`가 통과한다."""
-    code = Path(code) if code else PATCH_CODE
-    probs = []
-    if code.is_dir():
-        deploy = code / "app" / "deploy"
-        if not deploy.is_dir():  # op-06(10-30) — 개발 서버 코드 폴더는 저장소 트리 그대로(실행 이미지가 /app/deploy에 붙임)
-            deploy = code
-        if not (deploy / CODE_MARKER).is_file():
-            probs.append(
-                f"코드 폴더 {deploy}에 {CODE_MARKER.as_posix()} 없음 — 새 이미지 판(S4 pipeline)과 코드 폴더를 같은 때에 반입했는지 확인"
-            )
-        old = [d for d in ("data_parsing", "data_structure") if (deploy / d).exists()]
-        if old:
-            probs.append(f"코드 폴더 {deploy}에 옛 폴더 {', '.join(old)}가 남아 있음 — I2 전 배치가 섞임(반입 절차 확인)")
-    else:
-        log(f"[안내] 코드 폴더 {code}(PATCH_CODE)를 이 호스트에서 볼 수 없음 — 폴더 확인은 건너뛰고 컨테이너 확인만")
-    for c in containers:
-        rc, _, _ = sh(f"{DOCKER} exec {c} test -f /app/deploy/{CODE_MARKER.as_posix()}", timeout=60)
-        if rc != 0:
-            probs.append(
-                f"컨테이너 {c}에 /app/deploy/{CODE_MARKER.as_posix()} 없음(rc {rc}) — 새 이미지·compose.patch.yml 마운트로 다시 띄웠는지 확인"
-            )
-    return probs
-
-
 def mcp_busy():
     """MCP 업로드 처리 중이면 True(공유 볼륨 mcp_parse/jobs/<id>의 파일 mtime이 30초 내 갱신).
     5초마다 불리므로 작업 폴더 전체가 아니라 이름 날짜(<YYYYMMDD>-…, mcp_parse_service)가 어제·오늘·내일인 폴더만 본다(rn-04 —
@@ -760,7 +781,7 @@ def _safe_cleanup(seq, row):
 
 
 def main():
-    global WARM_TARGET, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE, STRUCT_BACKLOG, CODE_DIR
+    global WARM_TARGET, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE, STRUCT_BACKLOG, CODE_DIR, DEADLINE_AT
     ap = argparse.ArgumentParser()
     ap.add_argument("--start-offset", type=int, default=1072)
     ap.add_argument(
@@ -773,6 +794,8 @@ def main():
     ap.add_argument("--struct-workers", type=int, default=None, help="구조화 스레드 수 — 기본 settings.yaml ops.run_docs.struct_workers(2)")
     ap.add_argument("--filter", default="RFP,proposal")
     ap.add_argument("--limit", type=int, default=0, help="시험 — 이 개수만 처리")
+    ap.add_argument("--max-docs", type=int, default=0, help="새벽 배치 — 끝난 문서를 뺀 뒤 앞에서 이 개수만(0 = 상한 없음, 사용자 11-02)")
+    ap.add_argument("--deadline", default="", help="새벽 배치 마감(HH:MM) — 지나면 새 문서를 받기 시작하지 않음(사용자 11-02)")
     ap.add_argument("--seqs", default="", help="임의 문서 집합(쉼표 seq 목록) — 지정 시 연속 범위 대신 이 목록만 처리")
     ap.add_argument("--cpu-gate", type=float, default=1.3, help="파이프라인 CPU 게이트(CPU_MAX_LOAD) — 기본 1.3, 조정할 때 --cpu-gate 1.1")
     ap.add_argument("--skip-done", action="store_true", help="EDW ParsingMeta에 ok·partial로 이미 끝난 문서는 건너뜀(재실행 시간 절약)")
@@ -791,6 +814,7 @@ def main():
             print(f"[중단] {msg}", flush=True)
         raise SystemExit(2)
     NO_CLEANUP, CPU_GATE = a.no_cleanup, a.cpu_gate
+    DEADLINE_AT = deadline_at(a.deadline) if a.deadline else None
     if a.warm is not None:
         WARM_TARGET = a.warm
     if a.struct_workers is not None:
@@ -798,15 +822,10 @@ def main():
     STRUCT_BACKLOG = _BACKLOG_SETTING if _BACKLOG_SETTING is not None else 2 * max(1, STRUCT_WORKERS)
 
     PROG.mkdir(parents=True, exist_ok=True)
-    probs = code_layout_problems()
     if not MCP_JOBS_DIR.is_dir():
         log(
             f"[안내] MCP 업로드 작업 폴더 {MCP_JOBS_DIR} 없음 — MCP 업로드 감지(medium 레인 양보) 꺼짐, 다른 자리면 settings.yaml ops.mcp_host.jobs_dir"
         )
-    if probs:
-        for msg in probs:
-            log(f"[중단] {msg}")
-        raise SystemExit(2)
     os.umask(0)  # 컨테이너( uid 10001 rag )가 /app/output(=docflow/<seq>)에 쓰려면 777 필요
     WARM.mkdir(mode=0o777, parents=True, exist_ok=True)
     DOCFLOW.mkdir(mode=0o777, parents=True, exist_ok=True)
@@ -832,7 +851,10 @@ def main():
         done = edw_done_keys()
         before = len(order)
         order = [s for s in order if rows[s]["s3_key"] not in done]
-        log(f"skip-done: {before - len(order)}건 이미 완료(ok·partial) — 남은 {len(order)}건 처리")
+        log(f"skip-done: {before - len(order)}건 이미 완료({'·'.join(DONE_STATUSES)}) — 남은 {len(order)}건 처리")
+    if a.max_docs and len(order) > a.max_docs:
+        log(f"max-docs: {len(order)}건 중 앞 {a.max_docs}건만(나머지는 다음 실행)")
+        order = order[: a.max_docs]
     if not order:
         log("처리할 문서 없음 — 종료")
         return

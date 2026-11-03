@@ -66,7 +66,6 @@ NOT_SETTINGS = {
         "env로 남김",
         "내부 신호 — settings_env.sh load_settings가 이미 낸 설정 파일(하위 스크립트가 다시 안 읽게, 새 — S7e1)",
     ),
-    "SETTINGS_IMAGE": ("env로 남김", "호스트 python에 pydantic이 없을 때 settings_env.sh가 설정 값을 꺼낼 이미지(새 — S7e1, C-36)"),
     "PYTHONUTF8": ("env로 남김", "파이썬 실행 옵션(이미지·셸)"),
     "DO_NOT_TRACK": ("env로 남김", "외부 라이브러리 원격 측정 끄기 — Dockerfile ENV(U-1, S7a2) · settings·빈 틀에서만 뺌(S7e)"),
     "HF_HOME": ("env로 남김", "라이브러리(huggingface)가 읽음"),

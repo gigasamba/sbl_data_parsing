@@ -50,7 +50,7 @@
   - `common/core/paths.py:112` 주석의 `parse_shadow` 언급(11-01 지시서 지움 — 고치면 레이어 code_fp가 바뀌어 미룸), `common/ai/{adk,llm}.py`의 `vlm_judge` 역할 표(11-01 `figure_review` 지움 — 부르는 곳 없음).
 - 결정(사용자 11-01, reference ↔ 저장소 2차 비교 — 같은 0.2.0 지문 배치):
   - `common/core/fingerprint.py`의 `_LEGACY_NAMES`·`_HANDOFF_LEGACY` 옛 이름 대응을 정리(이름 바꾸기 — 핸드오프 지문이 바뀜).
-  - 첫 이관용 호환 코드를 지운다 — `common/config/migrate.py`의 env 변환·`--compare`, `keyscan`의 지울 후보, `image_vars.sh`의 옛 이미지 이름, `trigger.sh`의 `pipeline.env` 거부, entrypoint `legacy_tool_name`, 절마다 둔 `REMOVED` 목록, `pin_env`의 옛 env 경고. **두 서버가 settings.yaml로 옮긴 뒤**(refactor.md 37행 — 이관 확인)에만.
+  - 첫 이관용 호환 코드를 지운다 — (11-02 한 것: `common/config/migrate.py`의 env 변환·`--compare`·`settings_env.sh`의 `pipeline.env` 안내 — `feature/migrate-trim`) `keyscan`의 지울 후보, `image_vars.sh`의 옛 이미지 이름, `trigger.sh`의 `pipeline.env` 거부, entrypoint `legacy_tool_name`, 절마다 둔 `REMOVED` 목록, `pin_env`의 옛 env 경고. **두 서버가 settings.yaml로 옮긴 뒤**(refactor.md 37행 — 이관 확인)에만.
   - 로컬 임베딩 모델 길 — `common/ai/embed.py`의 sentence-transformers, `build_bundle`의 `bge-m3` 기본값, `check_env`의 HF 점검.
   - `common/core/paths.py`의 `TEMPLATES_DIR`·`PIPELINE_ROOT`·`RETRIEVAL_ROOT` 상수(11-01 보고서 틀 폴더는 지움).
   - `pipeline/transform/structure/facts.py`의 `contract_facts`·`MONEY_RE`·`DATE_RE`·`L_*`.
@@ -68,6 +68,15 @@
   - compose 덧씌우기 파일을 4개에서 2개로.
 - 11-01(`feature/scope-cut-unused2`): 원천 목록 `sources.json`을 지우며 설정 칸 `common.paths.sources_file`은 남겼다 — `common/config/settings.py`를 고치면 레이어 code_fp 4개가 바뀌어 이 배치에서 지운다. `common/core/fingerprint.py` `EXCLUDED_FILES`의 `core/sources.py` 줄도 같이.
 - 11-01(같은 브랜치): PC Docker 스모크에서 `s3://` 원천(MinIO 대역·게시 ⑥)과 자정 배치 모양을 지우며 쓰이지 않게 된 설정 칸 `smoke_source`·`smoke_nightly`(`common/config/settings.py`)와 MinIO 올리기 도구 `common/check/os_put.py`도 이 배치에서 지운다.
+- 11-01(`feature/mcp-ops-parity`, mc-16): 이름 있는 색인(AD41)을 지우며 설정 칸 `common.paths.index_root`(`INDEX_ROOT`)·`INDEX_CONF`·`INDEX_CONF_DIR`은 남겼다(`common/config/settings.py`를 고치면 레이어 code_fp 4개가 바뀜 — 이 배치에서). `common/core/fingerprint.py` `EXCLUDED_FILES`의 `core/index_cfg.py` 줄도 같이.
+- 결정(사용자 11-02 — 허브 전달, 같은 0.2.0 지문 배치):
+  - 죽은 설정 칸 `minio_image`·`minio_publish_port`·`smoke_pm_bucket`(`common/config/settings.py:1244·1245·1268` — 11-01 PC 스모크에서 MinIO를 지운 뒤 읽는 곳 없음).
+  - `settings.py`의 `__main__`(설정 확인 명령)이 `common.config.show`를 import하고 `show`가 `export`를 import해서(`settings.py:1637`, `show.py:11`), 두 도구 파일이 모든 레이어의 code_fp 의존이 된다 — 명령 입구를 `settings.py` 밖으로 옮겨 이 import를 끊는다(그 뒤 `show`·`export`를 고쳐도 레이어 지문이 바뀌지 않음).
+  - 형식당 엔진 수 상한 `MAX_PER_TYPE`·`over_limit`를 지운다(`pipeline/stackcfg.py:9·17`, `pipeline/extract/run_all.py:51·197·251·466` — run_all은 p0 지문 의존).
+- 할 일(#86 병합 뒤 — todo):
+  - 엔진 구성 읽기를 `pipeline.config.stack()` 하나로 — `stackcfg.snapshot_bytes`, `cfgfile`의 `body_sha`·`label`, `schemas/config_body.py` 모양 검사를 그 안으로 합친다.
+  - 0.2.0이 서버에 배포된 뒤: `dbtool`의 비교(`dbcompare`)와 `stamp`(옛 코드가 만든 스키마에 실행 없이 판만 기록 — 첫 이관용)를 지운다.
+- 더할 것(사용자 11-02): `common/ai/adk.py` — 지시문(프롬프트)은 두고 장치(에이전트 실행 틀)는 `llm.py` 호출 하나로 줄인다(`adk.py`는 p1·s·r 지문에 들어가 이 배치에서). CPU 부하 고침도 이 배치에 함께 싣는다.
 - Status: todo — 0.2.0(엔진·핸드오프·레이어 지문이 바뀜 — 사람 검토).
 
 <a id="pl-47"></a>

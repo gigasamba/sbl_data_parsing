@@ -27,7 +27,6 @@ from common.config.settings import (
     WordList,
     _get,
     _is_set,
-    _peek,
     _raw_dumper,
     _TApp,
     _warned,
@@ -479,16 +478,6 @@ def selftest():
             "Cache.env(): 겹쳐 쓰기·None = 비움(기본값)·os.environ 안 건드림·끝나면 파일 기반으로",
             nest == (12, 5) and in_env and after == 9,
         )
-        # VS7a2 R-e — migrate 여러 파일: 틀의 자리표시가 앞 파일의 실제 값을 덮지 않음
-        from common.config import migrate
-
-        (d / "a.env").write_text("MCP_TOKEN=real\nRUN_ENV=dev\n", encoding="utf-8")
-        (d / "b.env").write_text("MCP_TOKEN=<여기에 기입>\nRUN_ENV=<실행 환경>\nPG_DB=<DB 이름>\n", encoding="utf-8")
-        env_m, holders = migrate.read_files([d / "a.env", d / "b.env"])
-        check(
-            "migrate 여러 파일(R-e): 자리표시는 앞 파일 값을 안 덮음 · 끝까지 값 없는 것만 자리표시로 보고",
-            env_m == {"MCP_TOKEN": "real", "RUN_ENV": "dev"} and holders == {"PG_DB"},
-        )
         (d / "syntax.yaml").write_text("common:\n  a: [1\n", encoding="utf-8")
         check("YAML 형식 오류: 행 번호", raises(lambda: load(_TApp, file=d / "syntax.yaml", environ={}), "형식 오류", "행")[0])
         (d / "top.yaml").write_text("commn:\n  x: 1\n", encoding="utf-8")
@@ -679,13 +668,12 @@ def selftest():
         and _TW().mods == ["a", "b"],
     )
 
-    if {"pipeline", "mcp"} <= set(
-        app_classes()
-    ):  # S7e1 — export(호스트 스크립트 다리)·migrate --compare(서버 이관 확인) — 두 앱 모델이 있는 곳(PC·두 이미지)
+    if (
+        {"pipeline", "mcp"} <= set(app_classes())
+    ):  # S7e1 — export(호스트 스크립트 다리) — 두 앱 모델이 있는 곳(PC·두 이미지) · migrate env 파일·--compare 시험은 11-02에 기능과 함께 지움
         import io
 
         from common.config import export as E
-        from common.config import migrate as M
 
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
@@ -727,62 +715,6 @@ def selftest():
                 and "$x" not in e2
                 and rc3 == 2
                 and "dummy" not in o1 + o2 + e2 + e3,
-            )
-            old = d / "old.env"
-            old.write_text(
-                "RUN_ENV=dev\nDATA_PIPELINE_IMAGE=p:1\nCHUNK_SIZE=800\nPG_PASSWORD=dummy-a\nOMP_NUM_THREADS=2\n", encoding="utf-8"
-            )
-            new = d / "new.yaml"
-            new.write_text(
-                _new("common:\n  run_env: dev\n  connections:\n    pg:\n      password: dummy-b\npipeline:\n  host:\n    image: 'p:1'\n"),
-                encoding="utf-8",
-            )
-            old.write_text(
-                "RUN_ENV=dev\nDATA_PIPELINE_IMAGE=p:1\nCHUNK_SIZE=800\nPG_PASSWORD=dummy-a\nOMP_NUM_THREADS=2\nNETWORK_HOST=1\n",
-                encoding="utf-8",
-            )
-            res, outside, _ = M.compare([old], new, app_classes(), catalog=False)
-            got = {k: sorted(n for n, _ in v) for k, v in res.items() if k != "같음"}
-            check(
-                f"migrate --compare(S7e1·S7e2): 같음·다름(비밀도 값 없이)·옛에만·라이브러리 env 칸·모델 밖 이름 {got} {outside}",
-                got == {"다름": ["PG_PASSWORD"], "옛에만": ["CHUNK_SIZE", "common.runtime.lib_env.OMP_NUM_THREADS"], "새에만": []}
-                and outside == ["NETWORK_HOST"]
-                and ("DATA_PIPELINE_IMAGE", "pipeline.host.image") in res["같음"],
-            )
-            # VS7e1 B-3 — compose env_file 규칙(compose-go dotenv): 큰따옴표 이스케이프·$ 치환, 작은따옴표 글자 그대로 · 확인 필요는 이름만
-            vals, why = M.parse_env_text(
-                'A=x #c\nB="a\\nb"\nC=\'l\\n\'\nD=$A-y\nE="${A}z"\nF="\\$A"\nG="${NOPE:-d}"\nH=$$q\nM="two\nlines"\nP=plain\n'
-            )
-            check(
-                f"migrate B-3: compose env_file 규칙 {sorted(why)}",
-                vals
-                == {
-                    "A": "x",
-                    "B": "a\nb",
-                    "C": "l\\n",
-                    "D": "x-y",
-                    "E": "xz",
-                    "F": "$A",
-                    "G": "d",
-                    "H": "$q",
-                    "M": "two\nlines",
-                    "P": "plain",
-                }
-                and set(why) == {"B", "C", "D", "E", "F", "G", "H", "M"}
-                and "x" not in " ".join(why.values()),
-            )
-            # C-45 ⑤ — 라이브러리 env는 lib_env로, 목록 밖은 모델 밖
-            doc_m, rep_m = M.convert(
-                {
-                    "TZ": "Asia/Seoul",
-                    "OMP_NUM_THREADS": "2",
-                },
-                app_classes(),
-            )
-            check(
-                f"migrate C-35·C-45 ⑤: 옛 별칭 옮김·라이브러리 env {rep_m['옛 이름 옮김']} {rep_m['라이브러리 env']}",
-                _peek(doc_m, "common.runtime.lib_env") == {"OMP_NUM_THREADS": "2", "TZ": "Asia/Seoul"}
-                and not rep_m["옛 이름 옮김"],  # 10-29: 옛 별칭(QA_CHAT_DECOMPOSE·SYNTHETIC_TRUTH)은 기능과 함께 지움
             )
             # 사용자 10-29 — 지운 칸 synthetic_truth(옛 migrate C-35가 서버 파일에 옮겨 둠)는 경고만 하고 무시 · 다른 모르는 칸은 그대로 거부
             from common.config.settings import CommonModelsGuard
@@ -826,18 +758,6 @@ def selftest():
             _of.write_text(_yaml.safe_dump(to_file(_old), allow_unicode=True), encoding="utf-8")
             _loaded = [_S.load(cls, file=_of, environ={}, strict=False) for cls in app_classes().values()]
             check("10-29 지운 칸·절 17개: 옛 설정 파일에 남아도 앱마다 읽힘(경고만)", len(_loaded) == len(app_classes()))
-            if (
-                "pipeline" in app_classes()
-            ):  # B-3(VS7e2) — 서버 env 파일의 GOLD_DIR는 호스트 칸에만(앱 칸 비움 → 이미지 안 /data/gold), PC 파일은 두 칸
-                gs, gr = M.convert({"RUN_ENV": "dev", "GOLD_DIR": "/srv/gold"}, app_classes())
-                gp, _ = M.convert({"RUN_ENV": "local", "GOLD_DIR": "/pc/gold"}, app_classes())
-                check(
-                    "migrate B-3: 서버 env 파일 GOLD_DIR → pipeline.host.gold_dir만 · PC 파일은 앱·호스트 두 칸",
-                    _peek(gs, "pipeline.host.gold_dir") == "/srv/gold"
-                    and _peek(gs, "pipeline.paths.gold_dir") is None
-                    and gr["호스트 칸만"] == ["GOLD_DIR"]
-                    and _peek(gp, "pipeline.paths.gold_dir") == "/pc/gold",
-                )
             lb = d / "lib.yaml"
             lb.write_text(
                 _new("common:\n  runtime:\n    lib_env:\n      TZ: Asia/Seoul\n      HF_HUB_OFFLINE: 1\n      OMP_NUM_THREADS: 02\n"),

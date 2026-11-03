@@ -45,7 +45,7 @@ class _FakeDB:
             return [{"x": 1}] if self.has_vector else []
         if "information_schema.schemata" in low:
             return [{"x": 1}] if self.schema_exists else []
-        if "information_schema.tables" in low and "load_run" in sql:
+        if "information_schema.tables" in low and "alembic_version" in sql:
             return [{"x": 1}] if self.has_marker else []
         if "information_schema.tables" in low:
             return [{"x": 1}] if self.has_other_tables else []
@@ -84,14 +84,14 @@ def _selftest_deploy(ups):
         assert ups == [("ai", 768)] and _n_create_ext(db2) == 0  # 확장 있음 — 판 올리기만(S8a — 옛 schema.sql 실행 자리)
         assert idx == "HNSW 코사인", idx
 
-        db3 = _FakeDB("ai", has_vector=True, has_marker=False)  # 확장은 있지만 표식(load_run) 없는 기존 스키마
+        db3 = _FakeDB("ai", has_vector=True, has_marker=False)  # 확장은 있지만 표식(판 표 alembic_version) 없는 기존 스키마
         try:
             load(db3, "no-such-bundle", replace=True)
             raise AssertionError("표식 없는 스키마에서 --replace가 거부되지 않음")
         except SystemExit as e:
             assert "표식" in str(e), str(e)
 
-        db4 = _FakeDB("ai", has_vector=True, has_marker=True)  # 우리가 만든 스키마(load_run 있음)
+        db4 = _FakeDB("ai", has_vector=True, has_marker=True)  # 우리가 만든 스키마(판 표 있음)
         try:
             load(db4, "no-such-bundle", replace=True)
             raise AssertionError("번들이 없는데 통과함")

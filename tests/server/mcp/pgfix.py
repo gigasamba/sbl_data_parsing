@@ -18,6 +18,7 @@ from common.core.contract import jl
 from common.core.text import index_text, tokens
 from common.store import pg_standin as PS
 from common.store.db.dbtool import standin_script
+from common.store.db.models import search_tables as ST
 from common.store.pg import vec
 from mcp_server import config as mc
 
@@ -29,7 +30,9 @@ def standin_of(bundle):
 
 
 def load(bundle, schema=SCHEMA, standin=None):
-    """bundle (meta.json, docs.jsonl, chunks.jsonl, optional vectors.npy) → new stand-in schema `schema` in `standin`."""
+    """bundle (meta.json, docs.jsonl, chunks.jsonl, optional vectors.npy) → new stand-in source schemas `<schema>_<src>` in `standin`
+    (pl-28 — a doc goes to the schema of its source_system: SFDC·CRMS·LAS·FAQ, anything else → other). Doc columns given in the doc dict
+    are written when that schema has them (clients → clients_doc as JSON)."""
     B = Path(bundle)
     meta = json.loads((B / "meta.json").read_text(encoding="utf-8"))
     docs, chunks = jl(B / "docs.jsonl"), jl(B / "chunks.jsonl")
@@ -38,58 +41,65 @@ def load(bundle, schema=SCHEMA, standin=None):
         import numpy as np
 
         vecs = np.load(B / "vectors.npy")
-    with mc.senv(PG_STANDIN_DIR=str(standin or standin_of(B))):
-        db = PS.StandinPG(schema)
-    try:
-        with db.cn.cursor() as cur:
-            cur.execute(standin_script(schema, meta.get("dim") or 1))
-        s = schema
-        with db.cn.transaction(), db.cn.cursor() as cur:
-            cur.execute(f"INSERT INTO {s}.load_run(params) VALUES (%s) RETURNING run_id", (json.dumps(meta),))
-            run = cur.fetchone()[0]
-            doc_id = {}
-            for i, d in enumerate(docs):
-                names = [n for n in (d.get("clients") or ([d["client"]] if d.get("client") else [])) if n]
-                cl = json.dumps(names, ensure_ascii=False) if names else None
+    by_src = {}
+    for i, d in enumerate(docs):
+        by_src.setdefault(ST.source_of(d.get("source_system")), []).append(i)
+    for src in ST.SOURCES:  # 5벌 모두 만듦(빈 원천도 표는 있음 — 서버의 판 0002와 같게)
+        idx = by_src.get(src, [])
+        s = ST.src_schema(schema, src)
+        with mc.senv(PG_STANDIN_DIR=str(standin or standin_of(B))):
+            db = PS.StandinPG(s)
+        try:
+            with db.cn.cursor() as cur:
+                cur.execute(standin_script(s, meta.get("dim") or 1))
+            dcols = ST.doc_columns(src)[1:]
+            ccols = [n for n, _ in ST.CHUNK_EXTRA.get(src, ())]
+            with db.cn.transaction(), db.cn.cursor() as cur:
+                doc_id = {}
+                for i in idx:
+                    d = dict(docs[i])
+                    names = [n for n in (d.get("clients") or ([d["client"]] if d.get("client") else [])) if n]
+                    d.setdefault("clients_doc", json.dumps(names, ensure_ascii=False) if names else None)
+                    d["doc_id"] = i + 1  # 공용 시퀀스 흉내(서버는 5벌이 시퀀스 하나 — 묶음 줄 순서대로 겹치지 않는 번호)
+                    cols = ["doc_id"] + [k for k in dcols if d.get(k) is not None]
+                    cur.execute(
+                        f"INSERT INTO {s}.doc({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))}) RETURNING doc_id",
+                        tuple(d[k] for k in cols),
+                    )
+                    doc_id[i] = cur.fetchone()[0]
+                for ci, c in enumerate(chunks):
+                    if c["doc"] not in doc_id:
+                        continue
+                    text = c["chunk_text"]
+                    emb = vec(vecs[ci]) if vecs is not None else None
+                    extra = [n for n in ccols if c.get(n) is not None]
+                    cur.execute(
+                        f"""INSERT INTO {s}.chunk(doc_id, seq, page, line_start, line_end, bbox, section, chunk_text, n_terms, embedding{"".join(", " + n for n in extra)})
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::vector{",%s" * len(extra)}) RETURNING chunk_id""",
+                        (
+                            doc_id[c["doc"]],
+                            c["seq"],
+                            c["page"],
+                            c["line_start"],
+                            c["line_end"],
+                            c.get("bbox"),
+                            c.get("section"),
+                            text,
+                            c.get("n_terms") or len(tokens(text)),
+                            emb,
+                            *(c[n] for n in extra),
+                        ),
+                    )
+                    cid = cur.fetchone()[0]
+                    for term, tf in Counter(tokens(index_text(c))).items():
+                        cur.execute(f"INSERT INTO {s}.chunk_term(term, chunk_id, tf) VALUES (%s,%s,%s)", (term, cid, tf))
+                cur.execute(f"INSERT INTO {s}.term_stat SELECT term, COUNT(*) FROM {s}.chunk_term GROUP BY term")
                 cur.execute(
-                    f"INSERT INTO {s}.doc(file_path, summary, clients, run_id) VALUES (%s,%s,%s,%s) RETURNING doc_id",
-                    (d["file_path"], d.get("summary"), cl, run),
+                    f"INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len, dim) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0), %s FROM {s}.chunk",
+                    (meta.get("dim") or 0,),
                 )
-                doc_id[i] = (cur.fetchone()[0], json.dumps(names, ensure_ascii=False))
-            for ci, c in enumerate(chunks):
-                did, cl = doc_id[c["doc"]]
-                text = c["chunk_text"]
-                emb = vec(vecs[ci]) if vecs is not None else None
-                cur.execute(
-                    f"""INSERT INTO {s}.chunk(doc_id, seq, page, line_start, line_end, char_start, char_end, bbox, section,
-                        chunk_text, n_chars, n_terms, embedding, clients) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::vector,%s) RETURNING chunk_id""",
-                    (
-                        did,
-                        c["seq"],
-                        c["page"],
-                        c["line_start"],
-                        c["line_end"],
-                        c.get("char_start", 0),
-                        c.get("char_end", len(text)),
-                        c.get("bbox"),
-                        c.get("section"),
-                        text,
-                        len(text),
-                        c.get("n_terms") or len(tokens(text)),
-                        emb,
-                        cl,
-                    ),
-                )
-                cid = cur.fetchone()[0]
-                for term, tf in Counter(tokens(index_text(c))).items():
-                    cur.execute(f"INSERT INTO {s}.chunk_term(term, chunk_id, tf) VALUES (%s,%s,%s)", (term, cid, tf))
-            cur.execute(f"INSERT INTO {s}.term_stat SELECT term, COUNT(*) FROM {s}.chunk_term GROUP BY term")
-            cur.execute(
-                f"INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len, dim) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0), %s FROM {s}.chunk",
-                (meta.get("dim") or 0,),
-            )
-    finally:
-        db.sqlite.close()
+        finally:
+            db.sqlite.close()
 
 
 def mk_bundle(docs, chunks, meta=None, vectors=None, load_pg=True):
@@ -140,7 +150,9 @@ def use(bundle, **names):
 @contextlib.contextmanager
 def retriever(bundle, *args, **names):
     """Retriever on the stand-in of `bundle` under use() (connections closed and temp dir removed after)."""
+    from mcp_server.services.search import pg_mcp_connect as PGM
     from mcp_server.services.search.retriever import Retriever
 
+    src = names.pop("src", "other")
     with use(bundle, **names):
-        yield Retriever(bundle, *args)
+        yield Retriever(bundle, *args, pg=PGM.connect_sources()[src])

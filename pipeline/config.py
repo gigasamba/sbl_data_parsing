@@ -100,12 +100,16 @@ class PipelineExtractOcr(Section):
 
 
 class PipelineExtractPrepare(Section):
-    REMOVED = frozenset({"rotate_fast", "ocr"})  # 사용자 10-30(op-08) · ocr 11-01(rapidocr 1.x 길 지움 — 늘 3.x) — 지운 칸(남으면 경고만)
+    REMOVED = frozenset(
+        {"rotate_fast", "ocr", "rotate_lead", "rotate_probe_fast", "rotate_s0_min"}
+    )  # 사용자 10-30(op-08) · ocr 11-01(rapidocr 1.x 길 지움 — 늘 3.x) · rotate_lead·rotate_probe_fast·rotate_s0_min 11-02(회전 판단 규칙 지움 — 켬/끔만) — 지운 칸(남으면 경고만)
     link: str | None = F("auto", "PREPARE_LINK", "회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy")
-    rotate: bool | None = F(True, "PREPARE_ROTATE", "스캔 PDF 회전 검토(OCR 점수) 켬/끔 — 0이면 생략하고 그대로 복사", off=("0",))
-    rotate_lead: int | None = F(3, "PREPARE_ROTATE_LEAD", "빠른 회전 검토에서 기대 각도를 정하는 문서 맨 앞 쪽 수(개)")
-    rotate_probe_fast: int | None = F(480, "PREPARE_ROTATE_PROBE_FAST", "빠른 회전 검토의 축소 점검 이미지 크기(px)")
-    rotate_s0_min: float | None = F(150.0, "PREPARE_ROTATE_S0_MIN", "빠른 회전 검토에서 힌트 각도를 믿는 최소 OCR 점수")
+    rotate: bool | None = F(
+        False,
+        "PREPARE_ROTATE",
+        "이미지·스캔 PDF 쪽 방향 바로잡기 켬/끔 — 켜면 4방향 OCR 점수를 동시에 재 가장 높은 방향으로 돌림, 끄면 회전용 OCR 없이 그대로(사용자 11-02 기본 꺼짐)",
+        off=("0",),
+    )
 
 
 class PipelineExtractSource(Section):
@@ -123,8 +127,18 @@ class PipelineHostNightly(Section):
         "새벽 배치 시작 시각(HH:MM, 서버 시간) — 비우면 새벽 배치 없음. 타이머가 5분마다 깨워 이 시각부터 5분 안이면 시작(trigger.sh scheduled)",
         pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$",  # 틀린 꼴은 설정을 읽을 때 거부(타이머가 5분마다 실패로 남기지 않게)
     )
+    # 사용자 11-02 — 시작 시각·문서 수 상한·마감 시각 셋이 모두 있어야 새벽 배치가 돈다(하나라도 비면 trigger.sh scheduled가 조용히 끝)
+    max_docs: int | None = F(
+        None, "NIGHTLY_MAX_DOCS", "새벽 배치 한 번에 처리할 새 문서 수 상한(이미 끝난 문서 뺀 뒤) — 비우면 새벽 배치 없음", ge=1
+    )
+    deadline: str | None = F(
+        None,
+        "NIGHTLY_DEADLINE",
+        "새벽 배치 마감 시각(HH:MM, 서버 시간) — 지나면 새 문서를 받기 시작하지 않음(받은 문서는 끝까지). 비우면 새벽 배치 없음",
+        pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$",
+    )
 
-    @field_validator("time", mode="before")
+    @field_validator("time", "deadline", "max_docs", mode="before")
     @classmethod
     def _blank_is_off(cls, v):
         """빈 글자·공백만 = 새벽 배치 없음(None) — sample·손으로 쓴 settings.yaml의 `time: ""`가 꼴 검사에 걸려 시작을 막지 않게(PR #44 리뷰)."""
@@ -361,7 +375,10 @@ class PipelineHostRunDocs(Section):
     """문서별 flow 러너(deploy/host/scripts/run_docs.py — 호스트에서 글자 그대로 읽음) 레인·대기열(사용자 10-29, docs/prd/runner.md rn-01·rn-02).
     기본값은 run_docs.py RUN_DOCS_DEFAULTS와 같다(tests/general/deploy/test_run_docs.py가 대조)."""
 
-    warm: int | None = F(20, "RUN_DOCS_WARM", "진입 대기열 — 미리 받아 둘 문서 수(진행 중 제외, 명령 인자 --warm이 덮음)")
+    warm: int | None = F(20, "RUN_DOCS_WARM", "진입 대기열 — 미리 받아 둘 문서 수(받는 중 포함·파싱 중 제외, 명령 인자 --warm이 덮음)")
+    warm_workers: int | None = F(
+        2, "RUN_DOCS_WARM_WORKERS", "미리 받기 동시 수 — 실제 동시 받기 = min(이 값, 대기열 빈자리)(pl-48, 사용자 11-02)"
+    )
     struct_workers: int | None = F(2, "RUN_DOCS_STRUCT_WORKERS", "구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음)")
     struct_backlog: int | None = F(
         None, "RUN_DOCS_STRUCT_BACKLOG", "중간 대기열 상한(파싱 끝·구조화 대기 문서 수) — 비우면 구조화 스레드 × 2, 0이면 상한 없음"
@@ -404,11 +421,10 @@ class PipelineHost(Section):
 
 class PipelineLoad(Section):
     REMOVED = frozenset(
-        {"bm25_stat_rebuild", "structure_target", "edw_load", "prune_force", "prune_min_ratio"}
-    )  # 사용자 10-29(prune_* — 적재가 안 지움, pl-13 · edw_load — EDW 벡터 경로 삭제, ops.md#op-03) — 지운 칸·절(남으면 경고만)
+        {"bm25_stat_rebuild", "structure_target", "edw_load", "prune_force", "prune_min_ratio", "index_lock_stale_sec"}
+    )  # 사용자 10-29(prune_* — 적재가 안 지움, pl-13 · edw_load — EDW 벡터 경로 삭제, ops.md#op-03) · index_lock_stale_sec 11-01(mc-16 — 이름 있는 색인 AD41 지움) — 지운 칸·절(남으면 경고만)
     bm25_threads: int | None = F(4, "BM25_THREADS", "BM25 항목(term,tf) 계산 병렬 스레드 수(개)")
     edw_path_prefix: str | None = F(None, "EDW_PATH_PREFIX", "저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치)")
-    index_lock_stale_sec: float | None = F(21600.0, "INDEX_LOCK_STALE_SEC", "색인 빌드 잠금 파일을 죽은 빌드로 보고 회수하는 경과 시간(초)")
     pg_create_extension: bool | None = F(
         False, "PG_CREATE_EXTENSION", "deploy 때 vector 확장 직접 생성 시도 — 1이면 켬(공유 PG에서는 금지)", on=("1",)
     )
@@ -423,9 +439,8 @@ class PipelineNight(Section):
 
 class PipelinePaths(Section):
     REMOVED = frozenset(
-        {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot", "stack_version", "report_digest_dir"}
-    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) — 지운 칸·절(남으면 경고만)
-    file_meta_path: str | None = F(None, "FILE_META_PATH", "EDW 파일 메타 JSONL 경로(s3_key → 메타)")
+        {"mineru_bin", "paddle_python", "soffice_candidates", "stack_snapshot", "stack_version", "report_digest_dir", "file_meta_path"}
+    )  # 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) · file_meta_path 11-02(pl-29 — 적재가 EDW 조인) — 지운 칸·절(남으면 경고만)
     gold_dir: str | None = F(
         None,
         "GOLD_DIR",

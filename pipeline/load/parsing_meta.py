@@ -14,11 +14,10 @@
    safe_name>/<parse_date>/rep.md`. 이미 있으면 건너뜀(덮어쓰지 않음) — 사람이 명시한 재파싱(`--reparse` 목록)만
    예외로, 그때도 같은 날짜가 이미 있으면 접미사를 붙여(`_unique_parse_date`) **새 폴더**를 만들지 덮어쓰지 않는다.
    독립 검토 BLOCK(10-09) — 세그먼트별 safe_name만으로는 서로 다른 원본 키가 같은 결과 키로 접힐 수 있어, 정리로
-   뭔가 바뀌면 원본 키의 짧은 해시를 덧붙인다(`rep_md_key()` 안 주석) — 그래도 남는 이론상 충돌은 매 업로드 때
-   같이 쓰는 sidecar(`source.json`, `_sidecar_key()`)로 "이미 있는 키가 정말 같은 문서인가"를 대조해 다르면(또는
-   sidecar가 없으면) 조용히 건너뛰지 않고 그 문서만 에러로 거부한다(`apply()`의 `error_key_collision`).
-④ EDW = INSERT만(이름 아니라 KEY가 이미 있으면 건너뜀, 재파싱 행은 예외 · 업로드가 거부된(`error_key_collision`)
-   문서는 저장이 안 됐으므로 EDW에도 안 들어감 — "저장 안 됐는데 성공"을 EDW가 보고하면 안 된다). UPDATE 없음
+   뭔가 바뀌면 원본 키의 짧은 해시를 덧붙인다(`rep_md_key()` 안 주석). 옛 sidecar(`source.json`) 대조 방어선은
+   서버가 source.json을 올리지 않아 늘 꺼져 있었으므로 11-02에 지웠다(C-54 ② — 파일 이름에 시각이 들어가 매 실행 새 키,
+   같은 문서를 다시 고르지 않는 것은 ParsingMeta 고르기가 맡음).
+④ EDW = INSERT만(이름 아니라 KEY가 이미 있으면 건너뜀, 재파싱 행은 예외). UPDATE 없음
    (상태 열 UPDATE 길은 C10 10-31에 문서 대장과 함께 지움).
 ⑤ `check_bucket_overlap()` — PM_BUCKET이 원천 원본이 실제로 있는 버킷과 같으면 거부. `file://`(로컬 가짜 Object
    Storage, 시험 전용)는 이 검사를 건너뛴다. manifest에 s3 URI가 하나도 없으면(예: 폴더 전용 소스 등) 비교할
@@ -60,7 +59,7 @@ from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 _CROSS_ACC_FULL = json.loads(CRITERIA_FILE.read_text(encoding="utf-8"))["run"][
     "cross_acc_full"
 ]  # RB3 — partial 사유 글자도 같은 정본(판정은 parse_qa가 이미 함)
-# EDW AI.ParsingMeta 저장소 클래스(MssqlStore·SqliteStore)·find_rep_path는 common/parsing_meta_db.py로 승격
+# EDW AI.ParsingMeta 저장소 클래스(MssqlStore·SqliteStore)는 common/parsing_meta_db.py로 승격
 # (OP21 — cli/check_modules.py 경계①: modules/search가 modules/load를 직접 import 못 함, 함께 쓸 것은 common/만).
 # 이 모듈은 그대로 다시 가져와 쓴다(동작 바이트 동일).
 from common.store.parsing_meta_db import (  # noqa: E402,F401
@@ -72,7 +71,6 @@ from common.store.parsing_meta_db import (  # noqa: E402,F401
     MssqlStore,
     SqliteStore,
     _insert_new_rows,
-    find_rep_path,
     make_db,
 )
 
@@ -111,12 +109,11 @@ def rep_md_key(prefix, source_system, source_key, parse_date):
 
     독립 검토 BLOCK(10-09) — 세그먼트별 safe_name만으로는 서로 다른 원본 키가 같은 결과 키로 접힐 수 있다
     (예: "a:b/c"의 safe_name 결과가 "a__b/c"가 되는데, 원본 키가 이미 "a__b/c"인 문서와 같아짐 — 두 번째
-    문서는 storage.head()가 "이미 있음"으로 보고 조용히 skip_exists가 돼 결과가 영영 안 올라간다). 정리로
+    문서의 결과가 다른 문서 폴더에 섞인다). 정리로
     세그먼트 중 하나라도 원본과 달라지면 마지막 세그먼트에 **원본 전체 키의 sha1 앞 10자**(`__h<hex10>`)를
     붙여 구분한다 — 정리가 필요 없는 흔한 경로(사용자가 읽는 대부분)는 그대로 둔다. 원본 키 자체가 이미 이
     해시 접미사 모양으로 끝나면(드물지만 가능) 그것도 해시를 붙여 "해시 붙은 키"와 "우연히 그렇게 생긴
-    원본 키"가 서로 안 겹치게 한다. 이래도 남는 이론상 충돌(예: sha1 10자 충돌)은 `apply()`의 sidecar
-    (`source.json`) 대조가 마지막 방어선 — 겹치면 조용히 건너뛰지 않고 그 문서를 에러로 보고한다."""
+    원본 키"가 서로 안 겹치게 한다. ponytail: 남는 이론상 충돌(sha1 10자 충돌)은 막지 않음 — 옛 source.json 대조는 서버에서 늘 꺼져 있어 11-02에 지움."""
     mapped, key = _map_source_path(str(source_key))
     raw_segs = [s for s in key.strip("/").split("/") if s not in ("", ".", "..")]
     segs = [safe_filename(s, "") for s in raw_segs] or [safe_filename(key, "")]
@@ -134,8 +131,7 @@ def rep_md_key(prefix, source_system, source_key, parse_date):
 def _map_source_path(key):
     """PM_PATH_MAP(쉼표 목록 '이전 앞부분=새 앞부분', 사용자 10-14 — 예 'synth-meta-rdb/docs=SFDC') — 원본 키가 이전
     앞부분으로 시작하면 그 부분을 새 앞부분으로 바꾼다 → (새 앞부분, 나머지 키). 맞는 짝이 없으면 (None, 원본 키) —
-    호출부가 출처(source_system)를 맨 앞에 둔다(옛 동작). 서로 다른 원본이 같은 결과 키로 접히면 sidecar 대조가
-    error_key_collision으로 거부(조용히 덮지 않음)."""
+    호출부가 출처(source_system)를 맨 앞에 둔다(옛 동작)."""
     for pair in pc.cfg().load.publish.path_map:  # S7c — 설정 객체(쉼표 목록, 항목 strip·빈 것 버림)
         old, sep, new = pair.partition("=")
         old = old.strip().strip("/")
@@ -154,13 +150,6 @@ def _dir_key(file_key):
     """대표 결과 파일 키 → 문서 폴더 키(끝 '/' 포함) — EDW rep_key에는 이 폴더를 넣는다(사용자 10-14
     '.../Parsing-Result/<UUID>/<원본파일명>/ 여기까지'). 폴더 안 최신 결과는 parse_date(날짜+시간) 열로 가린다."""
     return file_key.rsplit("/", 1)[0] + "/"
-
-
-def _sidecar_key(rep_key):
-    """rep_key와 같은 폴더의 source.json — 어떤 (source_system, source_key)가 이 rep.md를 만들었는지 적어
-    둔다. apply()가 "이미 있음"을 보면 덮어쓰기 전에(또는 건너뛰기 전에) 이 값과 지금 처리 중인 문서가
-    같은지 대조 — 다르면(해시가 겹치는 등) 조용히 건너뛰지 않고 에러로 거부한다(독립 검토 BLOCK 10-09)."""
-    return rep_key.rsplit("/", 1)[0] + "/source.json"
 
 
 def _unique_parse_date(storage, prefix, source_system, source_key, parse_date):
@@ -547,18 +536,13 @@ def render_excluded_report(entries):
 
 
 def apply(entries, storage, db, md_dir, prefix=""):
-    """업로드(.md, SI39① — 키가 이미 있으면 덮어쓰지 않고 건너뜀, 재파싱 지정 행만 새 날짜 폴더) + EDW INSERT(KEY가
+    """업로드(.md, SI39① — 같은 이름이 이미 있으면 덮어쓰지 않고 접미사로 새 이름) + EDW INSERT(KEY가
     이미 있으면 건너뜀 — db.insert_new, UPDATE·MERGE 없음 · DRM·실패는 EDW_EXCLUDED_STATUSES라 아예 안 보냄, SI39⑥).
-    entries = plan()의 반환값 그대로. md_dir: .md·sidecar(source.json)를 잠깐 썼다가 올린 뒤 바로 지우는 로컬 폴더
+    entries = plan()의 반환값 그대로. md_dir: .md를 잠깐 썼다가 올린 뒤 바로 지우는 로컬 폴더
     (요건⑥ 둘째 항목 — "올린 결과 파일"의 삭제 대상).
-    각 행에 "upload_result"를 채운다: "uploaded"(이 실행이 새로 올림) · "skip_exists"(키가 이미 있고 sidecar가 같은
-    문서임을 확인 — 덮어쓰지 않음) · "excluded"(PM_UPLOAD_STATUSES 밖이거나 렌더할 대표 결과가 없음) ·
-    "error_key_collision"(독립 검토 BLOCK 10-09 — 키가 이미 있는데 sidecar의 원본 키가 다름. rep_md_key의 세그먼트
-    정리가 서로 다른 원본 키를 같은 결과 키로 접었다는 뜻이라, 조용히 건너뛰지 않고 그 문서만 거부한다 — EDW에도
-    안 들어간다, 저장이 안 됐는데 EDW가 성공을 보고하면 안 되므로).
+    각 행에 "upload_result"를 채운다: "uploaded"(이 실행이 새로 올림) · "excluded"(PM_UPLOAD_STATUSES 밖이거나 렌더할 대표 결과가 없음).
     --apply일 때만 부른다(네트워크·쓰기)."""
-    uploaded = skip_exists = excluded = collisions = 0
-    collision_details = []
+    uploaded = excluded = 0
     for e in entries:
         row = e["row"]
         if not e["upload"]:
@@ -566,38 +550,13 @@ def apply(entries, storage, db, md_dir, prefix=""):
             excluded += 1
             continue
         fkey = e.get("file_key") or rep_md_key(prefix, row["source_system"], row["source_key"], row["parse_date"])
-        # 사용자 10-14 — 파일 이름에 시각이 들어가 매 실행 키가 달라지므로 '이미 올림' 판단은 문서 폴더의 source.json
-        # (완료 표시 — 맨 마지막에 씀)으로: 있고 같은 문서 → 건너뜀 · 있고 다른 문서 → 거부(키 충돌) · 없음 → 전부 씀.
-        sidecar_raw = storage.get_text(_sidecar_key(fkey))
-        if sidecar_raw is not None:
-            sidecar = json.loads(sidecar_raw) if sidecar_raw else None
-            same_doc = (
-                isinstance(sidecar, dict)
-                and sidecar.get("source_system") == row["source_system"]
-                and sidecar.get("source_key") == row["source_key"]
-            )
-            if not same_doc:  # 독립 검토 BLOCK 10-09 — 키 충돌 — 조용히 건너뛰지 않고 거부
-                e["upload_result"] = "error_key_collision"
-                e["error"] = (
-                    f"폴더({_dir_key(fkey)})에 다른 문서의 source.json={sidecar!r} — 이 문서"
-                    f"({row['source_system']}, {row['source_key']})와 다름. 건너뛰지 않고 거부"
-                )
-                collision_details.append(
-                    {"source_system": row["source_system"], "source_key": row["source_key"], "rep_key": _dir_key(fkey), "sidecar": sidecar}
-                )
-                collisions += 1
-                continue
-            if not e["reparse"]:
-                e["upload_result"] = "skip_exists"
-                skip_exists += 1
-                continue
         if storage.head(fkey) is not None:  # 같은 시각 이름이 이미 있으면(드묾) 접미사로 새 이름 — 덮어쓰지 않음
             row["parse_date"] = _unique_parse_date(storage, prefix, row["source_system"], row["source_key"], row["parse_date"])
             fkey = rep_md_key(prefix, row["source_system"], row["source_key"], row["parse_date"])
         row["rep_key"] = _dir_key(fkey)
         folder = fkey.rsplit("/", 1)[0]
         Path(md_dir).mkdir(parents=True, exist_ok=True)
-        for fname, src in e.get("raw") or []:  # 엔진별 원본(engine/)·후보정 대표 원본·meta — .md·source.json보다 먼저
+        for fname, src in e.get("raw") or []:  # 엔진별 원본(engine/)·후보정 대표 원본·meta — .md보다 먼저
             fname = fname.replace("<date>", row["parse_date"]).replace("<stem>", doc_stem(row["source_key"]))
             if isinstance(src, Path):
                 storage.put(src, f"{folder}/{fname}")
@@ -611,14 +570,11 @@ def apply(entries, storage, db, md_dir, prefix=""):
         md_path.write_text(e["md_text"] or "", encoding="utf-8")
         row["rep_etag"] = storage.put(md_path, fkey)
         md_path.unlink()
-        # source.json 업로드 생략 — 내부용
         e["upload_result"] = "uploaded"
         uploaded += 1
     rows_for_db = []
     for e in entries:
         if e["row"]["parse_status"] in EDW_EXCLUDED_STATUSES:  # SI39⑥ — DRM·실패는 EDW에 안 넣음(render_excluded_report로만)
-            continue
-        if e.get("upload_result") == "error_key_collision":  # 저장이 안 됐으니 EDW에도 안 넣음(성공 거짓 보고 방지)
             continue
         row = dict(e["row"])
         row["_reparse"] = e["reparse"]
@@ -627,13 +583,10 @@ def apply(entries, storage, db, md_dir, prefix=""):
     edw_excluded = sum(1 for e in entries if e["row"]["parse_status"] in EDW_EXCLUDED_STATUSES)
     return {
         "uploaded": uploaded,
-        "skip_exists": skip_exists,
         "upload_excluded": excluded,
         "inserted": inserted,
         "edw_skip_existing": key_skipped,
         "edw_excluded_drm_failed": edw_excluded,
-        "key_collision_errors": collisions,
-        "key_collision_details": collision_details,
         "rows": len(entries),
     }
 
@@ -655,11 +608,6 @@ class LocalFolderStore:
 
     def exists(self, key):
         return self.head(key) is not None
-
-    def get_text(self, key):
-        """키의 내용(UTF-8 텍스트) — 없으면 None. apply()가 sidecar(source.json) 대조에 쓴다(독립 검토 BLOCK 10-09)."""
-        p = safe_path_join(self.root, key)
-        return p.read_text(encoding="utf-8") if p.exists() else None
 
     def put(self, local_path, key):
         dst = safe_path_join(self.root, key)
@@ -704,18 +652,6 @@ class S3Store:
 
     def exists(self, key):
         return self.head(key) is not None
-
-    def get_text(self, key):
-        """키의 내용(UTF-8 텍스트) — 없으면 None. apply()가 sidecar(source.json) 대조에 쓴다(독립 검토 BLOCK 10-09)."""
-        from botocore.exceptions import ClientError
-
-        try:
-            r = self.cli.get_object(Bucket=self.bucket, Key=key)
-            return r["Body"].read().decode("utf-8")
-        except ClientError as e:
-            if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
-                return None
-            raise
 
     def put(self, local_path, key):
         self.cli.upload_file(str(local_path), self.bucket, key)

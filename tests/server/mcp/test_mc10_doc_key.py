@@ -30,7 +30,9 @@ def test_doc_key_bundle():
         with pgfix.retriever(_bundle(doc), GLOSSARY_DIR=None) as R:
             assert list(R.doc_meta) == [want] and list(R.key_local) == [f"{want}:0"]
             hits, _ = R.search("바이러스", 5, methods=["bm25"])
-            assert hits and hits[0]["doc_key"] == path and hits[0]["chunk_key"] == f"{path}:0", hits  # PG 키 = file_path
+            assert hits and hits[0]["doc_key"] == path and hits[0]["chunk_key"] == f"{hits[0]['doc_id']}:0", (
+                hits
+            )  # 문서 키 = file_path · 청크 키 <doc_id>:<seq>(11-02)
             assert hits[0]["file_name"] == "a.txt", hits
 
 

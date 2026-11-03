@@ -1,5 +1,5 @@
 # 덧씌우기 코드 연결(image-patch-process.md §2) — 이미지는 그대로, 코드 폴더만 PATCH_CODE(기준 코드+덧씌우기)로 덮음.
-#   docker compose -f compose.pipeline.yml -f compose.patch.yml run --rm parse ...   (MCP만 compose.mcp.yml로 띄우면 compose.patch.mcp.yml)
+#   docker compose -f compose.pipeline.yml -f compose.patch.yml up -d   (상주 컨테이너 둘 — 작업은 그 안에서 docker exec, 사용자 11-02 · MCP는 compose.patch.mcp.yml)
 #   S6b — compose 파일은 저장소 deploy/host/compose/(옛 docker/, compose.modules.yml → compose.pipeline.yml). 마운트 원본(live/app/…)은 그대로.
 #   PATCH_CODE 기본 /srv/rag/code/live — 구조 개편 v4 단계5(10-13)부터 live/app 가 컨테이너 /app 과 그대로 거울
 #   (agent_platform은 I5 10-26에 삭제 — 마운트 없음, D-013). 읽기 전용 — 쓰기는 output/만(C4).
@@ -14,8 +14,5 @@ x-code: &code
 x-entry: &entry ["bash", "/app/docker/entrypoint.sh"]
 
 services:
-  parse: {volumes: *code, entrypoint: *entry}
-  load: {volumes: *code, entrypoint: *entry}
-  publish: {volumes: *code, entrypoint: *entry}
   data-pipeline-parse: {volumes: *code, entrypoint: *entry}       # 상주 컨테이너(11-01부터 `idle` — run_docs.py가 docker exec, S6b — 옛 data-parsing·data-structure)
   data-pipeline-structure: {volumes: *code, entrypoint: *entry}

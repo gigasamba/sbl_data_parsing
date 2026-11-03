@@ -11,7 +11,7 @@
 - 무엇: `tests/server/`(이미지 반입 관문, `pipeline.cli selftest`가 `tests/runner.py`로 실행), `tests/general/`(PC 전용: PG, Docker, 느린 것). 알려진 실패는 목록에 두고, XPASS면 지우라고 경고.
 - 파일: `tests/runner.py`, `tests/conftest.py`, `deploy/release/known_fail.txt`.
 - 기준선(CLAUDE.md §4·§6-3에서 옮김, 10-30):
-  - (11-02 `feature/logging` — develop `46327a3`을 합친 상태) `selftest` **93개 중 92개 통과**(알려진 실패 `test_publish_guard`) · `pytest tests/` **140 passed · 1 xfailed**(루트 설정을 새 배치로 바꾼 임시 파일 + `NO_PAID_CALLS=1`) · 핑거프린트 `FINGERPRINT 2f1da6a1567d24a8`(그대로) · a `e3b0c44298fc` · p0 `a660b235942e` · p1 `3c686d035931` · r `ac046e7363fb` · s `b308b706f19c` · MCP tools/list 9170바이트·SHA-256 `7da1e1ca…`(develop과 같음). 공식 이미지 판정(`b851025`): `mcp-server` 49/49·SKIP 1 · `data-pipeline` 74/75·SKIP 1(알려진 `test_publish_guard`) — 둘 다 통과. 같은 조건의 develop `46327a3`: 42/42 · 65/66·SKIP 1.
+  - (11-02 `feature/publish-guard` — 사용자 11-02 known_fail 0) `selftest` **79개 모두 통과**(`selftest_gate.sh` → `[판정] 통과 — FAIL 0`, 알려진 실패 목록 빔 — `test_publish_guard`를 source.json 게시 가드와 함께 지움) · `pytest tests/` **126 passed · 1 skipped**(develop e6a625f를 합친 뒤 · xfail 0 — 일반 테스트 알려진 실패는 `tests/conftest.py` `GENERAL_KNOWN_FAIL`) · 핑거프린트 `FINGERPRINT` `2f1da6a1567d24a8` · a `e3b0c44298fc` · p0 `1b137bdd8de2` · p1 `3e673ee31e56` · r `1f1138777df2` · s `8e2c3b5c8907`.
   - (10-31 `feature/op09-no-hardcode` — op-08 병합 뒤 develop을 합친 상태) `selftest` **94개 중 93개 통과**(알려진 실패 `test_publish_guard`) · `pytest tests/` **146 passed · 1 skipped(PG 설정 없는 작업 폴더 — `test_pl14_deploy`) · 3 xfailed** · 핑거프린트 `FINGERPRINT` `2f1da6a1567d24a8` · p0 `d7367309a2a8` · p1 `131b90a90659` · r `060344a6f429` · s `5db77013648f` · a `e3b0c44298fc`(엔진 18개 지문도 2a에서 바뀜 — 0.2.0 전체 재처리)
   - (10-31 `feature/op08-settings-layout` — op-08이 스트리밍·그림자·실험 기능과 그 시험을 지운 뒤) `selftest` **93개 중 92개 통과** · `pytest tests/` **146 passed · 3 xfailed**(작업 폴더 `settings.yaml`에 전용 PG) · 핑거프린트 `FINGERPRINT abe9b7b0799ceaae`(그대로) · a `e3b0c44298fc` · p0 `35df8d19cba6` · p1 `068c126e7a83` · r `8bfca1b178e8` · s `72dfe4177e78`(공용 `settings.py`·`paths.py` 등이 바뀜 — 0.2.0 전체 재처리). 아래는 그 전(10-30) 값.
   - `selftest`는 **94개 중 93개 통과**다(10-30 `feature/pl12-no-deleted` — #58이 시험 3개를 지우고 `test_no_deleted` 1개를 더한 뒤). 알려진 실패는 `tests.server.pipeline.test_publish_guard` 1개다(`deploy/release/known_fail.txt`, refactor.md C-54).
@@ -107,7 +107,7 @@
 
 <a id="e2-19"></a>
 ## e2-19 · answer_gen 인용 버그 고치기
-- 결정(사용자 10-30): 답변 점검(`answer_gen`)의 인용 버그를 지금 고친다(e2-12의 EDW 값 인용 규칙은 그대로). 출처: [refactor.md](../refactoring/refactor.md) "최종" ⑤ 행(원 보고서 VS10-verify K-1·S11-impl·VS11-verify는 git 밖).
+- 결정(사용자 10-30): 답변 점검(`answer_gen`)의 인용 버그를 지금 고친다(e2-12의 EDW 값 인용 규칙은 그대로). 출처: [history/deploy_0_1_0.md](../history/deploy_0_1_0.md) §1 ⑤ 행(옛 refactor.md "최종")(원 보고서 VS10-verify K-1·S11-impl·VS11-verify는 git 밖).
   - L-2·P-2·CR-2~4: `verify_note`가 문제 글의 앞부분(접두어)에 기댄다.
   - CR-5: `answer_gen.verify`가 JSON으로 못 바꾸는 인자에서 TypeError.
   - CR-6: `python -O`이면 `verify_citations.py`의 `assert`가 빠진다.
@@ -168,7 +168,7 @@
 ## e2-18 · 요건 없는 코드 지우기
 - 이유(사용자 10-30 grill): 안 쓰는 길이 아직 지운 칸을 읽고 관리 비용을 든다. 대상은 각 카테고리 파일 끝 "요건 없는 코드"(옛 gaps §2).
 - 지움: `internal_docs.py` 숨김 문서 함수(6개, 지운 doc 칸을 아직 SELECT하는 문서 조회·목록 포함), 위키 도구, 외부 KG 어댑터, 시험만 부르는 함수([e2-17](#e2-17)), 지운 평가 묶음용 채점기([e2-10](#e2-10)).
-- 남김: `MCP_EVIDENCE_PATHS`, SQLite 대체, 문서 대장 CLI, 메일 첨부, 용어집·고객 목록 도구, 밤 타이머, `os_put`, 서버 점검.
+- 남김: SQLite 대체(`MCP_EVIDENCE_PATHS`는 11-01 mc-15에 지움), 문서 대장 CLI, 메일 첨부, 용어집·고객 목록 도구, 밤 타이머, `os_put`, 서버 점검.
 - 규칙: MCP 도구 이름과 입출력은 그대로. 하나라도 바뀌면 멈추고 묻는다.
 - 남김 목록 고침(허브 10-31): `PARSE_STREAM`·그림자 모드·`SEARCH_TIE_BREAK` 스위치는 op-08에서 지워 남김에서 뺐다. 카테고리 파일 끝 '요건 없는 코드' 목록에서 이미 지운 것(이 행·fp-batch)을 뺐다(mcp·etl·test, 10-31).
 - 11-01(`feature/scope-cut-unused`, 허브 지시): 호출부 없는 지시서 `pipeline/parse_shadow`·`mcp/research_judge`·`mcp/agg_llm_route`를 지움 — 지시서 시험(`test_agent_prompts`·`test_adk`의 output_schema 재요청)은 `nested_figure`로, `test_paths`는 남은 패키지로 바꿈. `common/core/paths.py:112` 주석의 `parse_shadow` 언급은 고치면 레이어 code_fp 4개가 모두 바뀌어 남김(0.2.0 배치에서).

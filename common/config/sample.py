@@ -110,7 +110,6 @@ CATEGORIES = {
     "search": (
         ("MCP 서버", ("search.server",)),
         ("검색 순위·방식", ("search.methods", "search.min_score", "search.weights", "search.pg")),
-        ("고객 범위", ("search.client",)),
         ("EDW 도구", ("search.edw_meta", "search.edw_query")),
         ("출력·기록·파싱 프록시", ("search.output", "search.query_log", "search.parse_proxy", "search.audit")),
     ),
@@ -199,6 +198,7 @@ LAYOUT_GONE = frozenset(
         "pipeline.service.trigger.shutdown_timeout_sec",
         "pipeline.service.trigger.socket_timeout_sec",
         "pipeline.extract.dedup.fuzzy_max",  # 11-01(pl-02 — 유사 후보 지움)
+        "pipeline.load.index_lock_stale_sec",  # 11-01(mc-16 — 이름 있는 색인 AD41 지움)
     }
 )
 
@@ -409,7 +409,8 @@ def _values(p, f):
     elif re.search(r"\(초\)|시간\(초\)|제한 시간|상한\(초\)|_sec$|timeout", desc + " " + leaf):
         rng = "0 이상 초" if not is_int else "0 이상 정수(초)"
     else:
-        rng = "0 이상 정수" if is_int else "0 이상"
+        lo = next((m.ge for m in f.metadata if getattr(m, "ge", None) is not None), 0)  # 모델의 아래 한계(ge) — 없으면 0
+        rng = f"{lo} 이상 정수" if is_int else f"{lo} 이상"
     z = re.search(r"0(?:이면| ?= ?| 이하면)\s*([^,·)—(]+)", desc)
     if z:
         rng += f" (0 = {z.group(1).strip()})"

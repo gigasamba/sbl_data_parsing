@@ -309,6 +309,7 @@ def _rdb_rows(table):
                 "supersedes_doc_id": r.get(cols["supersedes"]) or None,  # AD38 list_documents 출처
                 "is_deleted": str(r.get(cols["is_deleted"]) if r.get(cols["is_deleted"]) is not None else "0").strip().lower()
                 in ("1", "true", "t"),
+                "created_at": r.get("created_at") or None,  # 11-01(mc-16) 원천 등록 시각 — 표에 칸이 있을 때만
             }
         )
     return mapped
@@ -643,6 +644,7 @@ def _rdb_plan(table, state, limit=0):
                 "is_deleted": o.get("is_deleted", False),
                 "original_filename": o.get("filename"),
                 "content_version_id": o.get("content_version"),  # AD44(c) FileStorageMap 고유 칸
+                "created_at": o.get("created_at"),  # 11-01(mc-16) 원천 등록 시각 → build_bundle → gold doc.created_at
                 "source_system": _derive_source_from_key(o["key"]),
             }  # SI41 — publish_parse가 문서별로 이 값 사용(없으면 --source-system 폴백)
             man_f.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in man.values()), encoding="utf-8")

@@ -18,6 +18,9 @@ TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")
 # C10(사용자 10-31 · skipped_dup 11-01 — 완전 중복은 매일 밤 다시 안 고름) — 이 parse_status 행이 있으면 "파싱 끝난 문서"
 # (not_parsed·skipped_disk_cap·실패는 다시 고름 · 통째 실패는 ParsingMeta에 안 씀 — C3)
 DONE_STATUSES = ("ok", "partial", "skipped_dup")
+# 11-02(사용자) — ok·partial은 gold에도 올라가야(gold_version) 끝난 문서 — 적재(분류 포함)가 실패하면 다음 실행이 다시 고름.
+# skipped_dup(완전 중복)은 gold에 안 올리므로 그대로 끝. gold_version 칸이 생기기 전(C-76 ③)에는 parse_status만 본다.
+GOLD_STATUSES = ("ok", "partial")
 # 열 순서 — EDW DDL docs/operations/parsing_meta_mssql.sql과 같음(parse_meta_id·parsed_at·source_key_hash는 표가 자동으로 채움, test_parsing_meta_ddl.py가 고정)
 # PM2(10-15, 사용자) — 열·키를 최소로: doc_key(원본 sha256)만 필수, 그 밖은 전부 비어도 됨. engines_used·
 # engines_summary는 맨 끝에 더함(기존 열 자리는 안 바꿔 디프를 작게).
@@ -45,6 +48,9 @@ COLUMNS = (
     "engines_used",
     "engines_summary",
 )
+# 11-02(사용자) — DB 담당자가 칸 이름을 바꾼다(C-76): 코드 안 이름 → 새 실제 이름. 새 이름만 있으면 그것을 쓰고, 옛 이름이 남아 있으면 옛 이름(바꾸기 전후 모두 돎).
+# pipeline_version = 이 행의 silver를 만든 코드 판(게시 때 씀) → silver_version. gold에 올린 판은 gold_version(적재 때 loaded_at과 함께 UPDATE).
+RENAMES = {"source_key": "s3_key", "pipeline_version": "silver_version"}
 KEY = ("source_system", "source_key")  # SI39② — source_key가 있을 때의 겹침/건너뜀 키(이름이 아니라 원본 전체 키).
 # PM2 — source_key가 없으면(요건 "최소 키") doc_key 하나로 대신(_insert_new_rows).
 _SQLITE_TYPE = {"file_size": "INTEGER", "page_count": "INTEGER", "rep_acc": "REAL"}
@@ -57,6 +63,11 @@ SET_OPTIONS_SQL = (
 )
 
 
+def renames(found):
+    """RENAMES 중 표에 새 이름만 있는 것 {코드 안 이름: 실제 이름} — 둘 다 있으면(바꾸는 중간) 옛 이름을 씀."""
+    return {old: new for old, new in RENAMES.items() if new in found and old not in found}
+
+
 def _today_date():
     """PM2 — parse_date 기본값(처리 시각) — pipeline.load.parsing_meta.today()와 같은 글자 형식
     ('YYYY-MM-DD_HHMMSS', 파일 이름에도 쓰여 콜론 없음). 그 모듈을 여기서 import하면 common→pipeline
@@ -64,7 +75,7 @@ def _today_date():
     return datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
 
 
-def _insert_new_rows(cur, table, ph, rows, integrity_error, columns=None):
+def _insert_new_rows(cur, table, ph, rows, integrity_error, columns=None, ren=None):
     """rows 전부를 같은 트랜잭션 안에서 — KEY(source_system, source_key)가 이미 있으면(또는 PM2 — source_key가
     없으면 doc_key 하나) 그 행은 건너뜀(SI39④: UPDATE·MERGE 없음, INSERT만) — 단, row["_reparse"]가 참이면
     (사람이 명시한 재파싱) 이 사전 확인을 건너뛰어 새 parse_date로 그대로 INSERT한다(그 행의 rep_key·parse_date는
@@ -73,8 +84,12 @@ def _insert_new_rows(cur, table, ph, rows, integrity_error, columns=None):
     위반(integrity_error)으로 실패할 수 있다 — 그것도 "건너뜀"으로 세고 배치 전체는 중단하지 않는다(독립 검토
     MAJOR-2 선례). 테이블·열 이름은 상수·화이트리스트만 SQL에 끼워 넣고 값은 전부 파라미터 바인딩.
     columns — 실제 INSERT에 쓸 열 목록(None=COLUMNS 전부). MssqlStore가 옛 표(PM2 DDL을 아직 안 돌린 EDW)에
-    새 열이 없으면 이 목록을 줄여 와 그 열 없이도 INSERT가 깨지지 않게(요건 "DDL 미실행이어도 안 죽음")."""
+    새 열이 없으면 이 목록을 줄여 와 그 열 없이도 INSERT가 깨지지 않게(요건 "DDL 미실행이어도 안 죽음").
+    ren — 바뀐 칸 이름 {코드 안 이름: 실제 이름}(RENAMES 중 표에 새 이름만 있는 것 — 11-02, DB 담당자 DDL 전후 모두 돌게)."""
+    ren = ren or {}
+    kc = ren.get("source_key", "source_key")
     cols_list = list(columns) if columns is not None else list(COLUMNS)
+    phys = [ren.get(c, c) for c in cols_list]
     inserted = skipped = 0
     for row in rows:
         row = {
@@ -84,13 +99,13 @@ def _insert_new_rows(cur, table, ph, rows, integrity_error, columns=None):
         }  # PM2 요건(a) — 비었으면 처리 시각
         if not row.get("_reparse"):
             if row.get("source_key") is not None:
-                cur.execute(f"SELECT 1 FROM {table} WHERE source_system={ph} AND source_key={ph}", tuple(row[k] for k in KEY))
+                cur.execute(f"SELECT 1 FROM {table} WHERE source_system={ph} AND {kc}={ph}", tuple(row[k] for k in KEY))
             else:  # PM2 — source_key 없음(최소 키) → doc_key로 대신 확인
-                cur.execute(f"SELECT 1 FROM {table} WHERE doc_key={ph} AND source_key IS NULL", (row["doc_key"],))
+                cur.execute(f"SELECT 1 FROM {table} WHERE doc_key={ph} AND {kc} IS NULL", (row["doc_key"],))
             if cur.fetchone() is not None:
                 skipped += 1
                 continue
-        cols = ",".join(cols_list)
+        cols = ",".join(phys)
         phs = ",".join([ph] * len(cols_list))
         try:
             cur.execute(f"INSERT INTO {table} ({cols}) VALUES ({phs})", tuple(row.get(c) for c in cols_list))
@@ -101,42 +116,106 @@ def _insert_new_rows(cur, table, ph, rows, integrity_error, columns=None):
     return inserted, skipped
 
 
-def _find_by_doc_key_rows(cur, table, ph, doc_key):
-    """doc_key의 EDW 행(source_system·source_key·parse_date·status·rep_bucket·rep_key) — 읽기만(SELECT).
-    OP21 — 검색 MCP 근거 '파싱 결과 경로' 칸(find_rep_path())이 쓴다."""
-    cur.execute(f"SELECT source_system, source_key, parse_date, status, rep_bucket, rep_key FROM {table} WHERE doc_key={ph}", (doc_key,))
-    cols = ["source_system", "source_key", "parse_date", "status", "rep_bucket", "rep_key"]
-    return [dict(zip(cols, r)) for r in cur.fetchall()]
+REP_COLS = ("parse_meta_id", "source_system", "source_key", "parse_date", "status", "rep_bucket", "rep_key", "parsed_at", "sha256")
+IN_CHUNK = 500  # ponytail: IN 목록을 이만큼씩 나눠 묻는다 — 아주 넓은 범위(수만 건)는 느림, 필요하면 임시 표 조인으로
 
 
-def _done_keys_rows(cur, table):
-    """C10(pl-12, 사용자 10-31) — 파싱이 끝난 원본 키(source_key) 집합 — parse_status가 DONE_STATUSES(ok·partial·skipped_dup — 사용자 11-01)인 행만.
+def _sel(kc):
+    """REP_COLS 고르기 글자 — 원본 키 칸은 실제 이름(kc)을 source_key로 읽음."""
+    return ", ".join(f"{kc} AS source_key" if c == "source_key" else c for c in REP_COLS)
+
+
+def _rows_where(cur, table, ph, col, values, kc="source_key"):
+    """col IN (values)인 행(REP_COLS) — 읽기만(SELECT). 값은 IN_CHUNK개씩 나눠 묻는다. col은 코드 상수만(source_key는 실제 칸 kc로)."""
+    out, values = [], list(values)
+    col = kc if col == "source_key" else col
+    for k in range(0, len(values), IN_CHUNK):
+        part = values[k : k + IN_CHUNK]
+        cur.execute(f"SELECT {_sel(kc)} FROM {table} WHERE {col} IN ({', '.join([ph] * len(part))})", tuple(part))
+        out += [dict(zip(REP_COLS, r)) for r in cur.fetchall()]
+    return out
+
+
+def _rows_parsed(cur, table, ph, lo, hi, kc="source_key"):
+    """parsed_at(UTC)이 [lo, hi] 범위인 행 — lo·hi는 (연산자, 시각 글자) 또는 None."""
+    conds, vals = [], []
+    for b in (lo, hi):
+        if b:
+            conds.append(f"parsed_at {b[0]} {ph}")
+            vals.append(b[1])
+    cur.execute(f"SELECT {_sel(kc)} FROM {table} WHERE {' AND '.join(conds)}", tuple(vals))
+    return [dict(zip(REP_COLS, r)) for r in cur.fetchall()]
+
+
+def _done_keys_rows(cur, table, kc="source_key", gold=False):
+    """C10(pl-12, 사용자 10-31) — 끝난 원본 키(source_key) 집합 — parse_status가 DONE_STATUSES(ok·partial·skipped_dup — 사용자 11-01)인 행,
+    gold=True(gold_version 칸이 있음)면 ok·partial은 gold_version도 있어야(사용자 11-02 — silver나 gold 결과가 없으면 다시 대상).
     파싱 입구(pipeline.cli `_unparsed`)가 "FileStorageMap ∖ ParsingMeta"로 새 문서를 고를 때 쓴다(읽기만, SELECT).
     상수 글자만 SQL에 끼우고(DONE_STATUSES는 코드 상수) 값 바인딩은 없음."""
-    done = ", ".join(f"'{v}'" for v in DONE_STATUSES)
-    cur.execute(f"SELECT DISTINCT source_key FROM {table} WHERE source_key IS NOT NULL AND parse_status IN ({done})")
+    q = lambda xs: ", ".join(f"'{v}'" for v in xs)
+    cond = f"parse_status IN ({q(DONE_STATUSES)})"
+    if gold:
+        rest = [s for s in DONE_STATUSES if s not in GOLD_STATUSES]
+        cond = f"(parse_status IN ({q(rest)}) OR (parse_status IN ({q(GOLD_STATUSES)}) AND gold_version IS NOT NULL))"
+    cur.execute(f"SELECT DISTINCT {kc} FROM {table} WHERE {kc} IS NOT NULL AND {cond}")
     return {r[0] for r in cur.fetchall()}
 
 
-def find_rep_path(db, doc_key):
-    """OP21(S78) — doc_key(원본 파일 sha256)로 EDW `AI.ParsingMeta`에서 대표 결과의 Object Storage **문서 폴더** 경로(사용자 10-14 — rep_key = `.../Parsing-Result/<출처>/<UUID>/<원본파일명>/`, 그 안 `<파일명>_<날짜시간>.md`·`engine/`)를 찾는다
-    (find_by_doc_key 재사용, 읽기만) — mcp_server.py 근거의 '파싱 결과 경로' 칸. 같은 doc_key가 재파싱으로 여러
-    parse_date 행이 있으면 status='active'인 것 중(없으면 전체 중) parse_date가 가장 늦은 행을 쓴다.
-    rep_bucket·rep_key가 비어 있으면(업로드 제외 상태 — DRM·실패는 EDW에 안 들어가므로 이 경우는 드묾) None.
-    db 없음(설정 안 됨)·조회 실패는 호출부(mcp_server._pm_db)가 처리 — 이 함수는 조회만, 예외를 삼키지 않는다.
-    rep_bucket이 이미 "file://<폴더>"(parsing_meta.plan()이 PM_BUCKET 값 그대로 저장 — 폴더 저장소 환경 시험,
-    사용자 결정 10-08)로 시작하면 그 값 그대로 rep_key를 이어 붙인다(실제 버킷 이름이면 전처럼 "s3://" 접두)."""
-    rows = db.find_by_doc_key(doc_key)
+def pick_rep(rows, source_system):
+    """같은 원본(source_key)의 행들 → 쓸 행 하나 또는 None(mc-17 — 원문 도구가 부를 때 읽음, C8은 11-01에 '적재 때 복사'에서 바뀜).
+    연결 키는 source_system + source_key(사용자 11-01). 재파싱으로 여러 행이면 status='active'인 것 중(없으면 전체 중) parse_date가 가장 늦은 행.
+    source_system이 맞는 행이 없으면, 남은 행이 모두 한 원천일 때만 그것으로 대체(게시가 원천 이름을 다르게 적은 옛 행) — ponytail:
+    원천 표기가 하나로 정리되면(pl-28) 이 대체를 뺀다. 조회 예외는 호출부가 처리."""
+    same = [r for r in rows if r.get("source_system") == source_system]
+    rows = same or (rows if len({r.get("source_system") for r in rows}) == 1 else [])
     if not rows:
         return None
     active = [r for r in rows if r.get("status") == "active"]
-    pick = max(active or rows, key=lambda r: r.get("parse_date") or "")
-    bucket, key = pick.get("rep_bucket"), pick.get("rep_key")
-    if not bucket or not key:
-        return None
-    if bucket.startswith("file://"):
-        return f"{bucket.rstrip('/')}/{key}"
-    return f"s3://{bucket}/{key}"
+    return max(active or rows, key=lambda r: r.get("parse_date") or "")
+
+
+def mark_loaded(db, loaded, version, kept=()):
+    """C10 예외(사용자 11-02) — 적재한 문서 [(source_system, 원본 키)]마다 쓸 행(pick_rep: active 중 최신)의 loaded_at을 지금(UTC)으로,
+    gold_version을 version(적재한 코드 판)으로(칸이 있을 때만).
+    kept — 이미 gold에 있어 건너뛴 문서: gold_version이 빈 행만 채운다(loaded_at은 비었을 때만). 안 채우면 고르기(done_source_keys)가
+    그 문서를 매일 밤 다시 고른다(gold_version 칸을 더한 날의 옛 행·loaded_at 쓰기 실패·원천이 바뀐 문서 — 리뷰 11-02).
+    ParsingMeta 행이 없는 문서는 건너뜀(실패 아님). 반환: 실패 건수(늘 0 — 실패는 예외로 올림, 호출부가 경고·건수 처리)."""
+    pairs = [*loaded, *kept]
+    by_key = {}
+    for r in db.rows_where("source_key", sorted({k for _, k in pairs if k})):
+        by_key.setdefault(r["source_key"], []).append(r)
+    ids = lambda docs: sorted({p["parse_meta_id"] for sys_, k in docs if (p := pick_rep(by_key.get(k, []), sys_))})
+    db.set_loaded(ids(loaded), version)
+    if kept:
+        db.set_loaded(ids(kept), version, kept=True)
+    return 0
+
+
+LOADED_COLS = ("loaded_at", "gold_version")  # C10 예외 — 적재 때 UPDATE하는 칸은 이 둘뿐(test_no_deleted가 봄)
+
+
+def _set_loaded(cur, table, ph, now, ids, version, cols, kept):
+    """set_loaded 공용 — UPDATE 글자(상수·칸 이름만 끼움, 값은 바인딩). 칸마다 있을 때만 쓴다(DB 담당자가 둘 중 하나만 먼저 더해도 —
+    리뷰 #95: gold_version만 있고 loaded_at이 없으면 UPDATE가 통째로 실패해 gold_version이 늘 비고 매일 밤 다시 골라짐).
+    kept면 gold_version이 빈 행만(gold_version 칸이 없으면 할 일 없음)."""
+    has_gold = "gold_version" in cols
+    if kept and not has_gold:
+        return
+    sets, vals = [], ()
+    if "loaded_at" in cols:
+        sets.append(f"loaded_at = COALESCE(loaded_at, {now})" if kept else f"loaded_at = {now}")
+    if has_gold:
+        sets.append(f"gold_version = {ph}")
+        vals = (version,)
+    if not sets:
+        return
+    only = " AND gold_version IS NULL" if kept else ""
+    for k in range(0, len(ids), IN_CHUNK):
+        part = ids[k : k + IN_CHUNK]
+        cur.execute(
+            f"UPDATE {table} SET {', '.join(sets)} WHERE parse_meta_id IN ({', '.join([ph] * len(part))}){only}",
+            vals + tuple(part),
+        )
 
 
 class MssqlStore:
@@ -156,6 +235,8 @@ class MssqlStore:
         self.ident = ".".join(f"[{p}]" for p in table.split("."))
         self.schema, self.table_name = table.split(".", 1) if "." in table else (None, table)
         self._cols = None  # 지연 조회(_available_columns) — 연결하자마자 바로 안 봄, 첫 insert_new에서만
+        self._ren: dict[str, str] = {}  # 바뀐 칸 이름(_available_columns가 정함 — RENAMES)
+        self._found: set[str] = set()
         from common.store import (
             mssql,
         )  # S8b(5-4) — SQLAlchemy가 연 연결(인자 그대로) · 쓰기 도우미가 SQLite 대역과 같은 DBAPI 커서 코드라 커서 그대로
@@ -178,6 +259,10 @@ class MssqlStore:
             else:
                 cur.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=%s", (self.table_name,))
             found = {r[0] for r in cur.fetchall()}
+            self._found = {c.lower() for c in found}  # SQL Server 칸 이름은 대소문자 무관(gold_version 확인용)
+            # 11-02 — 바꾸기 전후 모두(둘 다 있는 중간 상태는 옛 칸) · 코드 안 이름 → 실제 칸(_insert_new_rows가 바꿔 씀)
+            self._ren = renames(found)
+            found |= set(self._ren)
             self._cols = [c for c in COLUMNS if c in found]
             missing = [c for c in COLUMNS if c not in found]
             if missing:
@@ -190,19 +275,42 @@ class MssqlStore:
         cur = self.cn.cursor()
         try:
             cols = self._available_columns(cur)
-            counts = _insert_new_rows(cur, self.ident, "%s", rows, pymssql.IntegrityError, columns=cols)
+            counts = _insert_new_rows(cur, self.ident, "%s", rows, pymssql.IntegrityError, columns=cols, ren=self._ren)
             self.cn.commit()
             return counts
         except Exception:
             self.cn.rollback()
             raise
 
-    def find_by_doc_key(self, doc_key):
-        cur = self.cn.cursor()
-        return _find_by_doc_key_rows(cur, self.ident, "%s", doc_key)
+    def key_col(self):
+        """원본 키 칸의 실제 이름 — s3_key가 있으면 그것(DB 담당자가 바꾼 뒤), 없으면 source_key(11-02 cutover)."""
+        if self._cols is None:
+            self._available_columns(self.cn.cursor())
+        return self._ren.get("source_key", "source_key")
+
+    def rows_where(self, col, values):
+        return _rows_where(self.cn.cursor(), self.ident, "%s", col, values, self.key_col())
+
+    def rows_parsed(self, lo, hi):
+        return _rows_parsed(self.cn.cursor(), self.ident, "%s", lo, hi, self.key_col())
 
     def done_source_keys(self):
-        return _done_keys_rows(self.cn.cursor(), self.ident)
+        if self._cols is None:
+            self._available_columns(self.cn.cursor())
+        return _done_keys_rows(self.cn.cursor(), self.ident, self.key_col(), "gold_version" in self._found)
+
+    def set_loaded(self, ids, version, kept=False):
+        """loaded_at = SYSUTCDATETIME()·gold_version = version(C10 예외 — 칸은 DB 담당자가 더함, C-76). loaded_at이 없으면 예외(호출부가 경고),
+        gold_version이 없으면 그 칸만 빼고 씀. kept — mark_loaded 참고."""
+        if self._cols is None:
+            self._available_columns(self.cn.cursor())
+        cur = self.cn.cursor()
+        try:
+            _set_loaded(cur, self.ident, "%s", "SYSUTCDATETIME()", ids, version, self._found, kept)
+            self.cn.commit()
+        except Exception:
+            self.cn.rollback()
+            raise
 
     def close(self):
         self.cn.close()
@@ -228,7 +336,7 @@ class SqliteStore:
         cols_sql = ", ".join(f"{c} {_SQLITE_TYPE.get(c, 'TEXT')}" + (" NOT NULL" if c == "doc_key" else "") for c in COLUMNS)
         self.cn.execute(
             f"CREATE TABLE IF NOT EXISTS {table} (parse_meta_id INTEGER PRIMARY KEY AUTOINCREMENT, {cols_sql}, "
-            f"parsed_at TEXT NOT NULL DEFAULT (datetime('now')))"
+            f"parsed_at TEXT NOT NULL DEFAULT (datetime('now')), loaded_at TEXT, gold_version TEXT)"
         )
         self.cn.execute(
             f"CREATE UNIQUE INDEX IF NOT EXISTS ux_{table}_key ON {table}(source_system, source_key, parse_date) "
@@ -242,12 +350,26 @@ class SqliteStore:
         self.cn.commit()
         return counts
 
-    def find_by_doc_key(self, doc_key):
-        cur = self.cn.cursor()
-        return _find_by_doc_key_rows(cur, self.table, "?", doc_key)
+    def _colset(self):
+        return {r[1].lower() for r in self.cn.execute(f"PRAGMA table_info({self.table})")}
+
+    def key_col(self):
+        return renames(self._colset()).get("source_key", "source_key")
+
+    def rows_where(self, col, values):
+        return _rows_where(self.cn.cursor(), self.table, "?", col, values, self.key_col())
+
+    def rows_parsed(self, lo, hi):
+        return _rows_parsed(self.cn.cursor(), self.table, "?", lo, hi, self.key_col())
 
     def done_source_keys(self):
-        return _done_keys_rows(self.cn.cursor(), self.table)
+        cols = self._colset()
+        return _done_keys_rows(self.cn.cursor(), self.table, renames(cols).get("source_key", "source_key"), "gold_version" in cols)
+
+    def set_loaded(self, ids, version, kept=False):
+        cols = self._colset()
+        _set_loaded(self.cn.cursor(), self.table, "?", "datetime('now')", ids, version, cols, kept)
+        self.cn.commit()
 
     def count(self):
         return self.cn.execute(f"SELECT COUNT(*) FROM {self.table}").fetchone()[0]

@@ -22,7 +22,7 @@ Answer Agent 이미지는 없다(10-14 결정 — 개발 서버 네이티브. MC
 - `deploy/docker/entrypoint.sh`·`deploy/release/{selftest_gate.sh,known_fail.txt,assets.py}` → live `app/docker/`
 - `deploy/host/`·`deploy/release/` → live `deploy/…`(호스트 스크립트)
 
-**오버레이 패치로 못 바꾸는 것**(바꾸면 새 이미지 버전) — `deploy/docker/requirements*.txt`·`Dockerfile`·`wheels/`·시스템 패키지·`assets/` 모델 파일·**서버 배포 테스트 `tests/server`**(이미지 안 `/app/deploy/tests`에만 있고 compose.patch*.yml이 붙이지 않는다 — 앱 코드만 패치하면 이미지 안 테스트는 옛 버전이므로, 테스트가 바뀐 번들은 새 이미지 버전으로, `refactor.md` C-53). S6b 전 배치(옛 `docker/`·upstream `deploy/<폴더>`)에서 이 배치로 넘어가는 패치 번들은 만들지 않는다(§3-1).
+**오버레이 패치로 못 바꾸는 것**(바꾸면 새 이미지 버전) — `deploy/docker/requirements*.txt`·`Dockerfile`·`wheels/`·시스템 패키지·`assets/` 모델 파일·**서버 배포 테스트 `tests/server`**(이미지 안 `/app/deploy/tests`에만 있고 compose.patch*.yml이 붙이지 않는다 — 앱 코드만 패치하면 이미지 안 테스트는 옛 버전이므로, 테스트가 바뀐 번들은 새 이미지 버전으로 — 옛 C-53, [이력](../history/refactor_c_items.md) · 코드 폴더를 마운트하는 실행 이미지(op-06)에서는 해소됨, PRD [e2-14](../prd/test.md#e2-14)). S6b 전 배치(옛 `docker/`·upstream `deploy/<폴더>`)에서 이 배치로 넘어가는 패치 번들은 만들지 않는다(§3-1).
 
 ### 1-1. 개발 서버 — 실행 이미지 + 코드 폴더(op-06, 사용자 10-30)
 
@@ -104,7 +104,7 @@ grep '^D ' <받은 폴더>/PATCH_MANIFEST.txt | cut -c3- | xargs -r -I{} rm -f /
 
 컨테이너는 이 코드 폴더를 읽기 전용으로 연결해서 띄운다(이미지는 그대로) — `deploy/host/compose/compose.patch.yml`을 덧붙여서(`live`에서):
 ```bash
-docker compose -f deploy/host/compose/compose.pipeline.yml -f deploy/host/compose/compose.patch.yml run --rm parse ...
+docker compose -f deploy/host/compose/compose.pipeline.yml -f deploy/host/compose/compose.patch.yml up -d   # 상주 컨테이너 둘 — 작업은 그 안에서(사용자 11-02)
 docker compose -f deploy/host/compose/compose.mcp.yml -f deploy/host/compose/compose.patch.mcp.yml up -d
 ```
 `PATCH_CODE`(기본 `/srv/rag/code/live`)가 `/app/deploy/*`·`/app/docker`를 덮는다 — entrypoint도 함께 덮이므로 기준 이미지에 없던 새 명령도 쓸 수 있다.
@@ -114,8 +114,8 @@ docker compose -f deploy/host/compose/compose.mcp.yml -f deploy/host/compose/com
 docker run --rm <연결 옵션> <태그> check-modules
 bash <코드 폴더>/deploy/release/selftest_gate.sh docker run --rm <연결 옵션> <태그> selftest
 ```
-**selftest는 종료 코드로 판정하지 않는다.** selftest는 FAIL이 하나라도 있으면 종료 코드 1인데, data-pipeline 이미지는 리팩토링 전부터 있던 알려진 FAIL 때문에 늘 1이라 고장과 구별이 안 된다. `selftest_gate.sh`가 selftest를 돌린 뒤 FAIL 줄을 알려진 목록 `deploy/release/known_fail.txt`(git 안, 이미지 안 `/app/docker/known_fail.txt`, 사례 이름 한 줄씩 + 이유 주석)와 대조해 마지막 `[판정]` 줄과 종료 코드를 낸다 — **목록 밖 FAIL 0이면 통과(0)**, 하나라도 있거나 요약 줄이 없으면 실패(1).
-- 지금 기대값: data-pipeline FAIL 1(목록 안 `test_publish_guard` — 서버가 source.json을 안 올려 꺼진 방어선, `refactor.md` C-54 ②. PG 문서 레지스트리 갱신 실패(C-54 ①)는 배포 판정 밖 일반 테스트 `test_pub_registry`) · mcp-server FAIL 0.
+**selftest는 종료 코드로 판정하지 않는다.** selftest는 FAIL이 하나라도 있으면 종료 코드 1인데, 알려진 FAIL이 있던 때는 늘 1이라 고장과 구별이 안 됐다(11-02부터 목록은 비어 있음). `selftest_gate.sh`가 selftest를 돌린 뒤 FAIL 줄을 알려진 목록 `deploy/release/known_fail.txt`(git 안, 이미지 안 `/app/docker/known_fail.txt`, 사례 이름 한 줄씩 + 이유 주석)와 대조해 마지막 `[판정]` 줄과 종료 코드를 낸다 — **목록 밖 FAIL 0이면 통과(0)**, 하나라도 있거나 요약 줄이 없으면 실패(1).
+- 지금 기대값: data-pipeline·mcp-server 모두 `[판정] 통과 — FAIL 0`(11-02 — 늘 꺼져 있던 source.json 게시 가드와 그 시험 `test_publish_guard`를 지워 알려진 FAIL 목록이 비었음, `refactor.md` C-54 ②).
 - 사례 = 서버 배포 테스트 파일(`tests/server/<common|pipeline|mcp>/test_*.py` — 이미지 안 `/app/deploy/tests/server`, 사례 이름 = 테스트 모듈 이름 예 `tests.server.pipeline.test_build_bundle`). 옛 `python -m <모듈> --selftest`는 없다.
 - 한 사례만: `docker run --rm <태그> selftest --only <이름 조각>`.
 - 이미지 안 목록으로 판정: `docker run --rm --entrypoint bash <태그> /app/docker/selftest_gate.sh /app/docker/entrypoint.sh selftest`.
@@ -146,14 +146,14 @@ PC 쪽: push 전에 **RELEASE_NOTES.md**(이번 번들 목적·바뀐 코드·�
 
 의존성(§2 C1·C2)이 바뀌었거나 오버레이 패치가 너무 커졌을 때.
 
-**리팩토링 버전(I6·I7·S2~S11 한 이미지 버전)은 [refactor.md](../refactoring/refactor.md) 머리의 "최종 — 사람이 할 일" 절**(사람 할 일의 정본 — 검토 등급 A·배포 전·때·뒤·다음 버전, 누가·언제·`C-xx`)을 따른다 — §5-1~§5-5는 그 안의 단계별 명령이다.
+**0.2.0은 §8 "0.2.0 배포 — 사람이 할 일"**(사람 할 일의 정본 — 결정·배포 전·당일·뒤, 누가·`C-xx`)을 따른다 — §5-1~§5-7은 그 안의 단계별 명령이다(0.1.0 판은 [history/deploy_0_1_0.md](../history/deploy_0_1_0.md)).
 
 **`deploy/docker/IMAGE_BASE`** — 한 줄 `<커밋 7자> <이미지 태그>`, `make_patch.sh image`·`last`의 기준. 지금은 upstream 10-16 버전 `e305b14 20261016-e305b14`([release_history.md](../history/release_history.md) §8)라 이 저장소에 없는 커밋이다(`make_patch.sh`가 종료 코드 3 "새 이미지 버전 필요"). 새 이미지 버전을 서버에 넣은 뒤 그 버전을 만든 이 저장소 커밋·태그로 고쳐 커밋한다 — 그 뒤부터 오버레이 패치를 만들 수 있다. 둘째 항목(이미지 태그)은 버전으로 적는다(예 `<커밋 7자> 0.1.0`).
 
 **버전(D-036, 10-29)** — 두 이미지(`data-pipeline`·`mcp-server`)는 같은 버전을 쓴다. 정본은 저장소 루트 `VERSION` 한 줄(SemVer `MAJOR.MINOR.PATCH`, 첫 배포 `0.1.0`).
 - 올리는 규칙(D-009): MAJOR = MCP 도구 계약·DB 스키마·핸드오프 형식처럼 서로 맞춰야 하는 것이 깨질 때(1.0 전에는 예외 — MINOR에서도 계약·스키마를 깰 수 있고, 운영이 안정되면 1.0.0으로 올림, 사용자 10-30 PRD grill C2) · MINOR = 새 이미지 버전(의존성·Dockerfile·마운트 경로) 또는 큰 기능 · PATCH = 오버레이 패치(코드만 교체). `release/<버전>` 브랜치에서 `VERSION`을 고치고, main 머지 커밋에 git 태그 `v<버전>`(annotated)을 붙인다.
 - 이미지 태그 = 버전(`data-pipeline:0.1.0`·`mcp-server:0.1.0`). `build_ship.sh`·`ship_stage.sh`는 태그를 안 주면 `VERSION`을 쓰고, 빌드한 커밋은 이미지 라벨 `org.opencontainers.image.revision`(커밋 안 한 변경이 섞이면 `-dirty`)에 남긴다 — `docker inspect -f '{{json .Config.Labels}}' data-pipeline:0.1.0`. 같은 태그가 이미 있으면 `build_ship.sh`가 멈춘다(다시 만들 때만 `FORCE_TAG=1`).
-- 버전 표기(`common.pipeline_version()` — 회사 DB `AI.ParsingMeta.pipeline_version`·실행 보드)는 이미지 안 `/app/deploy/VERSION`과 오버레이 패치의 `common/PATCH_VERSION`(`make_patch.sh`가 HEAD의 `VERSION`을 적음 — 이미지 태그와 같으면 종료 2) 중 높은 버전이다(10-29 전에는 git 짧은 커밋 — `refactor.md` C-62).
+- 버전 표기(`common.pipeline_version()` — 회사 DB `AI.ParsingMeta.silver_version`(지금 이름 `pipeline_version`)·`gold_version` — 사용자 11-02)는 이미지 안 `/app/deploy/VERSION`과 오버레이 패치의 `common/PATCH_VERSION`(`make_patch.sh`가 HEAD의 `VERSION`을 적음 — 이미지 태그와 같으면 종료 2) 중 높은 버전이다(10-29 전에는 git 짧은 커밋 — `refactor.md` C-62).
 
 ### 5-1. 빌드 → 전송 → 적재
 ```bash
@@ -187,10 +187,10 @@ bash deploy/release/ship_stage.sh pipeline mcp            # 태그 = VERSION(다
 1. 새 이미지 2개(`data-pipeline`·`mcp-server`) 적재.
 2. 옛 상주 컨테이너(`data-parsing`·`data-structure`·`data-retrieval`) 멈춤·삭제.
 3. 코드 폴더 전체 덮어쓰기(§4 — 호스트 스크립트가 `live/deploy/host/`로).
-4. 이미지 이름을 settings.yaml 항목 `required.deploy.pipeline_image`·`required.deploy.mcp_image`(op-08 배치 — 옛 `pipeline.host.image`·`mcp.host.image`)에 적는다(옛 env `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE`). S7e1 버전부터 `pipeline.env`만 있으면 종료 코드 2, 옛 `DATA_PARSING_IMAGE`·`DATA_STRUCTURE_IMAGE`·`DATA_RETRIEVAL_IMAGE`(·`RAG_*`)는 안내 뒤 종료 코드 2 — 설정 옮기기는 §5-4.
+4. 이미지 이름을 settings.yaml 항목 `required.deploy.pipeline_image`·`required.deploy.mcp_image`(op-08 배치 — 옛 `pipeline.host.image`·`mcp.host.image`)에 적는다(옛 env `DATA_PIPELINE_IMAGE`·`MCP_SERVER_IMAGE`). S7e1 버전부터 `pipeline.env`만 있으면 종료 코드 2, 옛 `DATA_PARSING_IMAGE`·`DATA_STRUCTURE_IMAGE`·`DATA_RETRIEVAL_IMAGE`(·`RAG_*`)는 안내 뒤 종료 코드 2 — 0.1.0 → 0.2.0 설정 옮기기는 §5-7 3단계.
 5. systemd: 옛 `rag-nightly`·`data-retrieval-keepalive` unit disable·삭제, 새 `data-pipeline-nightly`·`mcp-server-keepalive` 설치(`daemon-reload`).
 6. 새 compose로 새 이름 컨테이너를 띄운다 — 파싱 상주 `data-pipeline-parse`·`data-pipeline-structure`는 `deploy/host/compose/compose.pipeline.yml`(+ `compose.patch.yml`), 검색 MCP `mcp-server`는 `compose.mcp.yml`(+ `compose.patch.mcp.yml` — `mcp_up.sh`가 씀, 11-01부터 검색 MCP 정의는 이 파일 하나).
-7. MCP `parse_document`의 작업 서비스를 손으로 띄운다: `docker exec -d data-pipeline-parse python -u -m pipeline.mcp_parse_service`(`-e` 없이, 토큰은 settings.yaml `pipeline.service.parse_mcp.token`). compose·keepalive가 띄우지 않으므로 `data-pipeline-parse`가 다시 시작될 때마다 다시 띄운다.
+7. MCP `parse_document`의 작업 서비스를 손으로 띄운다: `docker exec -d data-pipeline-parse bash -c 'umask 0002 && exec python -u -m pipeline.mcp_parse_service'`(`-e` 없이 · umask는 결과를 운영 계정도 고치게, 토큰은 settings.yaml `pipeline.service.parse_mcp.token`). compose·keepalive가 띄우지 않으므로 `data-pipeline-parse`가 다시 시작될 때마다 다시 띄운다.
 
 **배포 전 확인(V4 R1)** — `run_docs.py`·compose·systemd가 보는 `PATCH_CODE`(기본 `/srv/rag/code/live`)가 파싱 상주 컨테이너(S6b 배포 전에는 옛 이름 `data-parsing`, 뒤에는 `data-pipeline-parse`)가 지금 실제로 마운트하는 코드 폴더와 같은지 본다. 출력의 원본이 `<PATCH_CODE>/app/deploy/pipeline`(옛 버전이면 `…/data_etl`, 옛 배치 컨테이너면 `data_parsing`·`common_tools` 줄)이 아니면(예: `<운영자 작업 폴더>/patch_code/…`) 운영 절차에서 `run_docs.py`를 `PATCH_CODE=<원본에서 /app/deploy/<폴더>를 뺀 앞부분>`으로 띄운다. 출력이 비면 오버레이 패치 마운트 없이 이미지 안 코드로 떠 있는 것이다 — 배포 때 `compose.patch.yml`로 다시 띄운다:
 ```bash
@@ -222,33 +222,9 @@ for c in data-pipeline-parse data-pipeline-structure; do docker exec $c test -f 
 | 시스템 프로그램(바이너리) | 위 추가 레이어에 오프라인 rpm/deb 설치 |
 | 큰 프레임워크(torch 등 수 GB) | 새 이미지 버전(§5-1) |
 
-### 5-4. 설정 이관 — 옛 `pipeline.env` → `settings.yaml`(S7e1 버전, 한 번)
+### 5-4. (옮김) 옛 `pipeline.env` → `settings.yaml` 이관
 
-S7e1(사용자 10-27, D-028) 버전부터 compose·셸·systemd·`run_docs.py`는 `$SERVER_ENV_DIR/settings.yaml`만 읽는다(옛 `pipeline.env`가 있고 settings.yaml이 없으면 "설정 이관 필요"로 종료 코드 2). **새 이미지 적재 뒤·컨테이너를 새로 띄우기 전에** 한다. 호스트 python에 pydantic·PyYAML이 없으면 `python -m …` 대신 이미지 안에서(아래 `docker run` 꼴).
-```bash
-cd /srv/rag/code/live
-# ① 옮기기 — 화면에는 비밀을 가림, 파일은 실제 값
-PYTHONPATH=app/deploy python -m common.config.migrate /srv/rag/env/pipeline.env --out /srv/rag/env/settings.yaml   # 서버 배치 코드 폴더 live/app/deploy(저장소 배치면 PYTHONPATH=.)
-#   이미지 안: docker run --rm -i --network none --entrypoint bash data-pipeline:<태그> -c 'cat > /tmp/p.env && python -m common.config.migrate /tmp/p.env --out /tmp/s.yaml >&2 && cat /tmp/s.yaml' < /srv/rag/env/pipeline.env > /srv/rag/env/settings.yaml
-# ② env-guide.md "옛 서버 값" 표의 항목(옛 options.conf가 채우던 값 — run_mode: prod·parse_post: all·max_rows: 1000 등, C-39·C-43
-#    + 옛 compose 기본값 chain_structure_url — C-47 · mcp.server.store는 11-01에 없앰) 중 pipeline.env에 같은 이름이 없던 것만 settings.yaml에 옮겨 적는다 ·
-#    특히 common.store.run_mode: prod — 빠뜨리면 PG 연결 실패 때 문서 레지스트리가 SQLite로 조용히 대체돼 run_docs 문서별 publish가 그 전 문서를 deleted·숨김으로 만든다(C-54) ·
-#    EDW를 쓰면 common.connections.rdb의 read·write 계정(필수 — C-67, 옛 common.connections.edw는 없앰) · run_docs.py를 쓰면 C-45 ③의 항목도
-# ③ 대조 — 옛 실효 값(옛 카탈로그 값 + pipeline.env) ↔ 새 파일, 값은 안 찍음. "다름 0 · 옛에만 0 · 확인 필요 0"(종료 코드 0)일 때까지 ②를 고침
-PYTHONPATH=app/deploy python -m common.config.migrate --compare /srv/rag/env/pipeline.env --settings /srv/rag/env/settings.yaml
-# ④ 권한(C-09): 컨테이너 사용자 UID 10001이 읽어야 함
-sudo chown 10001:<운영 계정 그룹> /srv/rag/env/settings.yaml && sudo chmod 640 /srv/rag/env/settings.yaml
-# ⑤ 호스트 값 확인(비밀 없음) · 옛 파일은 되돌리기용으로 이름만 바꿔 남김
-bash deploy/host/scripts/settings_env.sh common.run_env pipeline.host mcp.host common.host
-sudo mv /srv/rag/env/pipeline.env /srv/rag/env/pipeline.env.before-s7e1
-```
-- **env 파일 읽는 규칙(VS7e1 B-3):** migrate는 옛 서버 컨테이너가 받던 값 그대로 옮기려고 docker compose v2의 `env_file` 규칙(compose-spec/compose-go `dotenv/parser.go`)으로 읽는다 — 따옴표 없음: 줄 끝까지·` #` 뒤 주석·`$` 치환 · 작은따옴표: 글자 그대로 · 큰따옴표: `\n`·`\t`·`\"`·`\\`·`\$` 등을 푼 뒤 `$` 치환. `$` 치환 값(같은 파일 앞 줄·compose를 띄운 셸 env)·podman-compose와 다른 꼴(`$X`)은 도구가 확실히 알 수 없어 **"확인 필요 <이름>: <이유>"**(값 없음)로 내고 `--compare`가 종료 1 — 그 이름의 옛 컨테이너 값(`docker exec <컨테이너> printenv <이름>` — 화면에 찍지 말고 견주기만)과 settings.yaml 값이 같은지 사람이 확인한다.
-- **옛 이름 옮김(C-35):** `QA_CHAT_DECOMPOSE`·`SYNTHETIC_TRUTH`는 새 항목(`mcp.search.decompose_llm`·`common.models.guard.synthetic_truth`)으로 옮기고 "옛 이름 옮김" 줄에 이름만 낸다(새 이름이 같이 있으면 새 이름 값).
-- **라이브러리 env(C-47 ③):** `TZ`·`OMP_NUM_THREADS`·`HF_HUB_OFFLINE` 등 허용 목록 이름은 `common.runtime.lib_env`로 옮긴다("라이브러리 env" 줄). 그 밖 "모델 밖" 줄은 settings.yaml로 옮길 수 없는 이름 — 서버가 쓰던 이름이면 알린다.
-- **호스트 항목만(VS7e2 B-3):** 옛 env 파일에 `RUN_ENV=dev·stage·prd` 줄이 있으면(C-34 — 서버 env 파일 필수) `GOLD_DIR`는 "호스트 칸만" 줄로 `pipeline.host.gold_dir`에만 옮긴다. `RUN_ENV` 줄이 없는 파일이면 두 항목 모두에 넣고 "확인 필요(RUN_ENV 없는 파일 …)"로 알린다(`--compare`도 확인 필요로 종료 1 — VS7e3 R-3) — 서버가 `RUN_ENV`를 셸·systemd로만 주었다면 옛 env 파일 사본에 `RUN_ENV=<dev|stage|prd>` 줄을 적고 다시 옮긴다(앱 항목 `pipeline.paths.gold_dir`는 비움 — 컨테이너 앱은 `run_tool.sh`가 붙인 `/data/gold`를 읽음). `--compare`도 같은 규칙이라 "같음". S7e2 버전 migrate로 앱 항목까지 적었다면 지운다(`refactor.md` C-47 ⑨).
-- 이관 뒤 값을 바꿀 때는 settings.yaml을 직접 고친다 — 오버레이 설정 파일 도구(`common.config.overrides`)는 PC 전용이라 서버에서 종료 2(D-029 ①).
-- systemd unit 2개를 새 버전으로 다시 복사하고 `daemon-reload`(옛 `EnvironmentFile` 줄이 빠짐 — 호스트 python에 pydantic이 없으면 `Environment=SETTINGS_IMAGE=data-pipeline:<태그>`를 더함).
-- 되돌리기: 옛 버전 코드 폴더(backup)·옛 이미지로 돌아갈 때 `pipeline.env.before-s7e1`을 `pipeline.env`로 되돌린다.
+0.1.0 전 서버용(S7e1 버전에서 한 번)이었다. 운영 서버는 0.1.0(settings.yaml 하나)으로 돌아 더 쓰지 않는다 — 옛 절은 [history/deploy_0_1_0.md](../history/deploy_0_1_0.md) §3. 0.1.0 → 0.2.0 설정 옮기기는 §5-7 3단계.
 
 ### 5-5. DB 버전 관리 — `migrate`(처음 한 번 버전 기록 + 버전이 바뀔 때)
 
@@ -259,21 +235,21 @@ S8a(사용자 10-28, D-030) 버전부터 pgvector의 우리 스키마(검색 `PG
 - 새 이미지(SQLAlchemy·alembic — 폐쇄망 휠, §5-1)를 적재한 뒤, 다음 적재(새벽 배치) 전에 한다. 값·비밀은 찍지 않는다(카탈로그·버전 번호만).
 ```bash
 cd /srv/rag/code/live
-. deploy/host/scripts/settings_env.sh && load_settings && . deploy/host/scripts/image_vars.sh
-DC="docker compose -f deploy/host/compose/compose.pipeline.yml"   # 오버레이 패치 버전이면 -f deploy/host/compose/compose.patch.yml도(§3-2)
+# 상주 컨테이너(data-pipeline-structure)가 떠 있어야 한다 — run_tool.sh가 그 안에서 docker exec(사용자 11-02 — 1회 job 컨테이너 없음)
+# ⓪ (DB마다 처음 한 번 — DB 관리자) vector 확장: 서버 계정은 우리 스키마 권한만이라 직접 못 만든다(없으면 "vector 확장 없음"으로 멈춤)
+#    $DOCKER exec <pg 컨테이너> psql -U <관리자 계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
 # ① 지금 버전 — 처음엔 "판 없음"(옛 코드가 만든 DB)
-$DC run --rm load migrate current
+bash deploy/host/scripts/run_tool.sh migrate current
 # ② 비교(읽기만 — 잠금 없음) — 표 정의 ↔ 실제 DB: 표·컬럼·형식·NULL·기본값·키 + 색인 정의 글자 + 뷰 컬럼. 컬럼 순서·뷰 정의 글자(PostgreSQL 버전마다 꼴이 다름)는 "(알림)"만(판정 밖)
-$DC run --rm load migrate check --target all
+bash deploy/host/scripts/run_tool.sh migrate check --target all
 # ③-a 차이 0 → 실행 없이 버전만 기록
-$DC run --rm load migrate stamp --target search
+bash deploy/host/scripts/run_tool.sh migrate stamp --target search
 # ③-b 차이가 "표 없음·색인 없음·뷰 없음·뷰 칸 다름"뿐 → 없는 것만 만들고(뷰는 다시 만듦) 버전 기록(기준 리비전이 IF NOT EXISTS) — ③-a 대신
-#      $DC run --rm load migrate up --target search
+#      bash deploy/host/scripts/run_tool.sh migrate up --target search
 # ③-c 컬럼 이름·형식·NULL·기본값·키가 다르거나 남는 표·컬럼·색인 → stamp·up 모두 거부(종료 2) — 멈추고 출력(이름만)을 DB 담당과 협의
-# ④ 색인 빌더 스키마(index_a·index_b)도 스키마마다: migrate check|stamp|up --target search --schema <PG_SCHEMA>_<index_id>
-# ⑤ 확인 — "판 끝 ['0001_search'] · 코드의 끝 판 0001_search … 비교: 차이 없음" + 엔진 구성 파일이 읽히는지
-$DC run --rm load migrate check --target all
-$DC run --rm load show-stack                           # 이름·sha·파일 경로 — 못 읽으면 종료 2
+# ⑤ 확인 — "판 끝 ['0002_search'] · 코드의 끝 판 0002_search … 비교: 차이 없음" + 엔진 구성 파일이 읽히는지
+bash deploy/host/scripts/run_tool.sh migrate check --target all
+bash deploy/host/scripts/run_tool.sh show-stack                           # 이름·sha·파일 경로 — 못 읽으면 종료 2
 ```
 - **버전 기록 전에 적재가 돌면:** `pgvector_load deploy`·`load`(trigger load·night·run_docs)는 "판 기록 없음" 경고를 찍고 계속한다(기준 리비전 = 지금 스키마 — 결과 같음). 코드보다 낮은 버전이면 적재 전에 `migrate up`을 하라고 종료 2, DB가 코드보다 새 버전(모르는 리비전)이면 이미지·코드 버전을 맞추라고 종료 2(D-030 ⑤). 검색 MCP(읽기)는 버전을 보지 않는다.
 - **새 검색 스키마(차원이 바뀜 — 새 `PG_SCHEMA`):** `migrate up --target search --schema <새 스키마> --bundle <번들>`(차원은 번들 meta.json — 또는 `--dim N`). vector 확장이 없으면 관리자 설치(공유 PG에서 `--create-extension`·`PG_CREATE_EXTENSION`을 켜지 않음).
@@ -289,7 +265,7 @@ $DC run --rm load show-stack                           # 이름·sha·파일 경
 
 **0. 미리 정할 것**
 - 새벽 배치를 멈춘다: `systemctl stop data-pipeline-nightly.timer`(끝나면 `start`). 진행 중인 배치·`run_docs.py`는 끝날 때까지 기다린다.
-- 전체 재처리 시간·디스크를 잡는다 — 판에 따라 후보정(p1)·구조화(s) 지문이 바뀌면 서버 문서 전부가 다시 처리된다(바뀐 지문은 릴리스 노트·PRD e2-02). 시간은 지난 실행 보드(`run_tool.sh run_board`)의 문서당 시간 × 문서 수, 디스크는 `required.deploy.output_root`의 `parse/_rep`·묶음 크기만큼 여유를 더 둔다(옛 결과는 다 돌 때까지 남김).
+- 전체 재처리 시간·디스크를 잡는다 — 판에 따라 후보정(p1)·구조화(s) 지문이 바뀌면 서버 문서 전부가 다시 처리된다(바뀐 지문은 릴리스 노트·PRD e2-02). 시간은 지난 run_docs `progress.log`의 문서당 시간 × 문서 수(실행 보드 `run_board`는 11-01에 지움), 디스크는 `required.deploy.output_root`의 `parse/_rep`·묶음 크기만큼 여유를 더 둔다(옛 결과는 다 돌 때까지 남김).
 
 **1. 백업(되돌리기용)**
 ```bash
@@ -311,11 +287,11 @@ mv /srv/rag/env/settings.yaml.new /srv/rag/env/settings.yaml
 - 운영 서버(구운 이미지)는 `-v …`·`-e PYTHONPATH` 없이 `data-pipeline:0.2.0`(코드가 이미지 안 `/app/deploy`).
 - 이미지 칸(`required.deploy.pipeline_image`·`mcp_image`)을 `…:0.2.0`으로 고친다. 새 판에서 생긴 필수 칸이 있으면 채운다(`python -m common.config.sample --where <이름>`으로 자리 확인).
 
-**4. DB** — 버전 차이 확인 → 올리기 → 다시 확인(README §5-3 ③과 같은 `dc`):
+**4. DB** — 상주 컨테이너를 새 판으로 띄운 뒤(`dc up -d data-pipeline-parse data-pipeline-structure`) 버전 차이 확인 → 올리기 → 다시 확인(README §5-3 ③과 같음):
 ```bash
-dc run --rm load migrate check --target all     # 차이·버전 확인(읽기만)
-dc run --rm load migrate up --target all        # 새 판 마이그레이션(없으면 아무것도 안 함)
-dc run --rm load migrate check --target all     # "차이 없음"
+bash deploy/host/scripts/run_tool.sh migrate check --target all     # 차이·버전 확인(읽기만)
+bash deploy/host/scripts/run_tool.sh migrate up --target all        # 새 판 마이그레이션(없으면 아무것도 안 함)
+bash deploy/host/scripts/run_tool.sh migrate check --target all     # "차이 없음"
 ```
 
 **5. 띄우기·확인** — README §5-3 ④ 연결 점검 · ⑤ 이미지 점검 → `mcp_up.sh` · 상주 트리거 `dc up -d …`(§5-5) → 시작 로그 첫 줄 `[image] … · 코드 <커밋> …`이 새 판인지 → 새벽 배치 다시 켬(`systemctl start data-pipeline-nightly.timer`).
@@ -355,7 +331,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 
 | 대상 | 남길 것 | 명령 |
 |---|---|---|
-| 이미지(2개 — `data-pipeline`·`mcp-server`) | 지금 버전 + 직전 버전(새 버전 검증 중 되돌리기용) · 옛 이름(`data-parsing`·`data-structure`·`data-retrieval`·`rag-*`)은 S6b 전환 확인 뒤 0개(S6c, `refactor.md` C-29 ⑬) | `bash deploy/host/scripts/prune_old.sh --apply`(기본 dry-run, `--keep N`은 새 이름에만) — `docker system prune`·`-a`는 쓰지 않음(남의 이미지 보호) |
+| 이미지(2개 — `data-pipeline`·`mcp-server`) | 지금 버전 + 직전 버전(새 버전 검증 중 되돌리기용) · 옛 이름(`data-parsing`·`data-structure`·`data-retrieval`·`rag-*`)은 S6b 전환 확인 뒤 0개(S6c, 이력 C-29 ⑬ — [refactor_c_items.md](../history/refactor_c_items.md)) | `bash deploy/host/scripts/prune_old.sh --apply`(기본 dry-run, `--keep N`은 새 이름에만) — `docker system prune`·`-a`는 쓰지 않음(남의 이미지 보호) |
 | 업데이트 폴더 `/srv/rag/code/updates/*` | 최근 2개 | 적용·확인 끝난 뒤 지움 |
 | 코드 백업 `/srv/rag/code/backup-*` | 최근 2개 | 새 버전이 단계 1(샘플 기능)을 통과한 뒤 |
 
@@ -373,6 +349,69 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 4. `/srv/rag/reports/versions.md`에 버전 기록 한 줄 · 새 이미지 버전이면 `deploy/docker/IMAGE_BASE`를 그 버전의 커밋·태그로(§5).
 5. 문제가 있으면 [server-guide.md](server-guide.md) §7 형식으로 이슈 기록 → PC가 수정 → 다음 패치로.
 
-## 8–9. (옮김)
+## 8. 0.2.0 배포 — 사람이 할 일
+
+옛 refactor.md "최종 — 사람이 할 일"(0.1.0 — [history/deploy_0_1_0.md](../history/deploy_0_1_0.md))을 0.2.0에 맞게 다시 썼다(11-02). **지금 운영 서버는 0.1.0(settings.yaml 하나)으로 돈다**(사용자 11-02). 항목별 근거·상태는 [refactor.md](../refactoring/refactor.md)의 C 표다. 값·비밀은 이 문서에 쓰지 않는다. 누가: 사용자 · 서버 운영 · DB 담당(공유 PostgreSQL) · EDW 담당(회사 DB) · devops(빌드·반입).
+
+### 8-1. 결정(사용자 11-02)
+
+| 결정 | 내용 | PRD |
+|---|---|---|
+| 환경마다 다른 경로·접속은 settings.yaml 필수 | 게시 대상·Object Storage·EDW·PG·호스트 경로는 코드 기본값 없이 settings.yaml에만 적는다(비면 시작 거부). 컨테이너 안 경로는 이미지 기본값 표(`common/config/settings.py`) 한 곳만 — 호스트 기본값 `PATCH_CODE=/srv/rag/code/live`는 지운다(정리 3b) | [op-09](../prd/ops-settings.md#op-09) |
+| 전체 e2e는 local·dev·prd 셋에서 | dev는 settings.yaml이 가리키는 대상(가짜 폴더든 실제든)에 쓴다. **전체 문서 실행은 prd에서만, 새 원천별 스키마 이름으로**(새 `PG_SCHEMA`). 판 0002가 기준 스키마의 옛 표를 지우므로 prd는 반드시 새 `PG_SCHEMA`를 쓴다(C-74). 옛 gold 스키마는 2주 남긴 뒤 DB 담당자가 백업하고 지운다. 옛 `struct` 스키마도 DB 담당자가 백업하고 지운다 | [pl-23](../prd/ops.md#pl-23) |
+| 알려진 실패 0 | 배포 판정의 알려진 실패(`deploy/release/known_fail.txt`)를 비운다 — 쓰이지 않는 게시 가드(`source.json` 대조)와 `test_publish_guard`를 지움(11-02 `feature/publish-guard` — 한 것, C-54) | [pl-12](../prd/load.md#pl-12) |
+| 이미지와 코드 | dev까지는 코드 없는 실행 이미지 + 코드 폴더. dev → prd는 이미지 + 시험한 코드를 굽는다(`bake.sh`). **prd는 settings.yaml(비밀 포함)도 이미지에 굽는다(사용자 선택) — 🔒 검토 등급 A(비밀 처리).** 다루는 규칙: ① 구운 이미지 파일(저장한 `.tar`·45 MB 조각 포함)은 비밀과 같다 — 운영 서버와 권한 있는 반입 경로에만 두고, 공용 레지스트리·공유 폴더·메일·채팅에 올리지 않는다 ② 키를 바꿀 때마다 다시 굽고, 옛 키가 든 이미지·조각은 지운다 ③ 굽고 나서 이미지 이력(`history`)·`inspect`·시작 로그에 값이 보이지 않는지 본다 ④ 굽는 데 쓴 settings.yaml 사본은 굽고 나서 지운다 | [op-07](../prd/doc.md#op-07) |
+| 모델 | dev부터 내부망 GLM, PC(local)는 OpenRouter(유료 — CLAUDE.md §7 상한) | [pl-11](../prd/ops.md#pl-11) |
+| 배포 전 검토 | 판 전체를 grill-me로 한 번 검토한다(사용자) | — |
+| 새벽 배치 | 시작 시각·문서 수 상한·마감 시각이 settings.yaml 칸 `ops.nightly.time`·`max_docs`·`deadline` — 하나라도 비면 돌지 않는다(11-02 `feature/nightly-key` — 칸 이름은 설정 파일 기준 `ops.nightly.*` 하나) | [pl-23](../prd/ops.md#pl-23) |
+| Quote 표 · 고객 조인 사슬 | Quote 표는 지금 없다(기본 사슬에서 뺌 — 표가 생기면 설정 파일의 주석 줄을 켬). 고객 조인 사슬은 운영 쪽이 고칠 수 있는 설정 파일 `resources/config/edw_chain.yaml`(고치는 법: [server-guide §5-2](server-guide.md#5-2-edw-조인-사슬-고치기--edw_chainyaml)) | [pl-29](../prd/load.md#pl-29) |
+| `adk.py` | 지시문은 두고 장치는 `llm.py` 호출 하나로 줄인다 — 0.2.0 지문 배치에서 CPU 부하 고침과 함께 | [pl-46](../prd/transform-cleanup.md#pl-46) |
+| 설정 이관 | 0.1.0 settings.yaml → 0.2.0은 `common.config.migrate`의 옛 배치 바꾸기만 남긴다(env 파일 옮기기·`--compare`는 11-02에 지움 — `feature/migrate-trim`) | [op-08](../prd/ops-settings.md#op-08) |
+| 일회성 작업 컨테이너 | compose 작업 서비스(`parse`·`index_a`·`index_b`)와 `compose run --rm`을 지우고, 운영 작업·`dbtool`·`migrate`는 상주 `data-pipeline` 컨테이너에 `exec`로 돌린다. 빌드·반입 이미지 점검(`docker run --rm <새 이미지> selftest`)은 그대로(정리 3a) | [op-10](../prd/doc.md#op-10) |
+| 내부망 코드 관리(P-08) | 내부망 gitea — [gitea-guide.md](gitea-guide.md) | — |
+
+### 8-2. 배포 전
+
+| # | 할 일 | 누가 | C |
+|---|---|---|---|
+| 1 | 판 전체 grill-me 검토 — 지문 전후(릴리스 노트·PRD [e2-02](../prd/test.md#e2-02) — 바뀌면 서버 문서 재처리)·DB 스키마(판 0002·ParsingMeta DDL)·prd 비밀 굽기(8-1) | 사용자 | 등급 A |
+| 2 | ParsingMeta DDL 한 번 — 칸 이름 바꾸기·`loaded_at`·판 칸·운영이 더한 분류·고객 칸 지우기(운영 분류 스크립트가 멈추므로 운영 담당에게 알림) | DB 담당·EDW 담당 | C-76 |
+| 3 | PG — 새 `PG_SCHEMA` 이름(50자 이하) · 권한(DB 수준 CREATE, 원천 스키마 5벌의 읽기·쓰기, `doc_id_seq`) | DB 담당 | C-74 |
+| 4 | 서버 settings.yaml 준비 — 필수 경로·접속(코드 기본값 없음 — 8-1) · EDW 읽기·쓰기 계정 · `search.server.fulltext_secret`·mcp-server의 Object Storage 읽기와 EDW 읽기 · `extract.input_source` 꼴 · 예전에 `-e`로 주던 값은 settings.yaml 칸으로 · 새벽 배치 칸은 비워 둠 | 서버 운영 | C-70·C-73·C-75·C-76 |
+| 5 | 노출됐던 운영 키 교체(아직 안 했으면) — 새 값은 settings.yaml에만 | 서버 운영(보안) | C-10 |
+| 6 | 덮기 설정 임시 파일 보안 검토 — 서버 `/tmp` 정리 주기·권한 600 | 사용자·서버 운영 | C-46 |
+| 7 | 폐쇄망 휠·반입 자산(`assets/`) 채우고 빌드(§5-6 — `ALLOW_NO_ASSETS=1` 금지) | devops | — |
+| 8 | 서버 이슈 기록(`server-changes.md`)을 읽고 새 코드에 들어 있는지 대조(§3-4) | 서버 운영(대조는 개발자) | — |
+
+### 8-3. 배포 당일 — 개발 서버(dev) 먼저, 그다음 운영 서버(prd)
+
+| # | 할 일 | 누가 | 명령 · C |
+|---|---|---|---|
+| 1 | 새벽 배치 멈춤, 진행 중인 `run_docs.py`가 끝나길 기다림 | 서버 운영 | §5-7 0 |
+| 2 | 백업 — `settings.yaml.0.1.0` · `pg_dump` · 옛 코드 폴더·옛 이미지는 남김 | 서버 운영·DB 담당 | §5-7 1 |
+| 3 | 새 판 받기 — dev: 실행 이미지 + 코드 폴더 · prd: 구운 이미지(8-1) | 서버 운영 | §5-7 2 · README §5-0 |
+| 4 | 설정 옮기기 — `python -m common.config.migrate <0.1.0 settings.yaml> --out <새 파일>`(이미지 안에서) → 화면 보고서(옮긴 칸 수·지운 칸 이름)를 확인 → 새 파일로 바꿈(주인 UID 10001·권한 640) → 새 필수 칸·이미지 칸(`…:0.2.0`)을 채움 | 서버 운영 | §5-7 3 |
+| 5 | DB — settings.yaml의 `PG_SCHEMA`를 새 이름으로 → `migrate check` → `migrate up --target all` → `check`(차이 없음) | 서버 운영·DB 담당 | §5-7 4 · C-74 |
+| 6 | `selftest_gate.sh` — `[판정] 통과 — FAIL 0`(알려진 실패 목록 빔) | 서버 운영 | §3-3 · C-54 |
+| 7 | 띄우기·확인 — 시작 로그 첫 줄의 판 · MCP `search`(원천 필수)와 원문 도구 한 번 | 서버 운영 | §5-7 5 · C-75 |
+| 8 | 전체 e2e — dev: settings.yaml이 가리키는 대상으로 · prd: 전체 문서를 새 원천별 스키마로 → 검색 MCP를 새 스키마로 | 서버 운영·사용자 | 8-1 · [pl-23](../prd/ops.md#pl-23) |
+
+되돌리기는 §5-7 "되돌리기(0.2.0 → 0.1.0)".
+
+### 8-4. 배포 뒤
+
+| # | 할 일 | 누가 | C |
+|---|---|---|---|
+| 1 | 적재 기록 — 실행 기록의 `meta_missing`·`loaded_at_failed`가 0인지, ParsingMeta에 판·적재 시각이 채워지는지 | 서버 운영 | C-76 |
+| 2 | 적재가 지우지 않는지·상주 컨테이너 `/tmp`·좀비 프로세스 | 서버 운영 | C-68 |
+| 3 | 새벽 배치 — `ops.nightly.time`·`max_docs`·`deadline`을 모두 채울 때만 켬(마감은 시작보다 5분 넘게 뒤), `journalctl -u data-pipeline-nightly` | 서버 운영 | C-72 |
+| 4 | 2주 뒤 옛 gold 스키마·옛 `struct` 스키마를 백업한 뒤 지움 | DB 담당 | C-74 |
+| 5 | `versions.md`에 판 한 줄 · `deploy/docker/IMAGE_BASE` · 되돌리기가 필요 없어진 뒤 옛 이미지 정리(`prune_old.sh --apply`) | 서버 운영·devops | §6·§7 |
+| 6 | 문제는 `server-changes.md`에 이슈로 → PC가 고침 → 다음 오버레이 패치 | 서버 운영·개발자 | [server-guide.md](server-guide.md) §7 |
+| 7 | `query_edw` 오탐(T14 — [mc-06](../prd/mcp.md#mc-06)) — **확인:** 서버 MCP에서 실제 업무 SELECT 몇 개(JOIN·`WITH`·대괄호 이름·한글 별칭·`TOP`이 든 것)를 `query_edw`로 부른다. **기대:** 모두 행이 오거나 행·시간 상한 안내만 나온다 — 정상 SELECT가 `error`(`unterminated_*`·판단 못 함·허용 목록 밖)로 거부되면 그 SQL과 오류 코드를 `server-changes.md`에 적는다 | 서버 운영 | — |
+| 8 | `edw_meta` 표 이름 끝 공백(T14 — [mc-07](../prd/mcp.md#mc-07)) — **확인:** 서버 카탈로그(`search.edw_meta.dir`의 `catalog.json`)에서 이름 끝에 공백이 있는 표를 찾아, `edw_meta`를 그 이름 그대로와 공백을 뺀 이름으로 각각 부른다. **기대:** 둘 다 같은 표의 칸 목록이 나온다(조회 키는 앞뒤 공백을 빼고 소문자로 맞춤 — `mcp_server/services/edw_meta.py`). "모르는 이름" 제안이 나오면 실패 | 서버 운영 | — |
+| 9 | 질의 기록 쓰기(T14 — [mc-09](../prd/mcp.md#mc-09)) — **확인:** settings.yaml `search.query_log.dir`(비우면 이미지 안 `output/qa_log`) 폴더가 mcp-server 컨테이너에서 UID 10001로 쓰이는지 — `docker exec <mcp 컨테이너> sh -c 'id -u; touch <폴더>/.w && rm <폴더>/.w && echo ok'`, 그다음 `search`를 한 번 부르고 `qa_log.jsonl` 줄 수를 본다. **기대:** `10001`·`ok`가 나오고 줄이 하나 늘어난다. 권한 오류면 호스트 폴더 주인을 10001로(bind 마운트는 `:z`) | 서버 운영 | — |
+
+## 9. (옮김 — 옛 §8·§9)
 
 10-16 버전 설치 순서(옛 §8 — AI.ParsingMeta DDL `parsing_meta_mssql.sql` DBA 1회 실행, OCR OS 차이 측정, 이미지 크기 포함)와 10-21 오버레이 패치 번들(옛 §9)은 [docs/history/release_history.md](../history/release_history.md)로, 긴급 패치 이력은 [docs/history/patch-history.md](../history/patch-history.md)로 옮겼다(10-30, do-04).

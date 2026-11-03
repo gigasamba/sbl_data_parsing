@@ -456,6 +456,17 @@ def fig_host(doc_chunks, page):
     return doc_chunks[0]
 
 
+def _rel_to_source(path):
+    """PC 폴더 원천의 원본 경로 → 원천 폴더(PARSE_SOURCE) 기준 상대 경로(posix). 그 폴더 밖이거나 폴더 원천이 아니면 None."""
+    root = pc.cfg().extract.input_source
+    if not root or root.startswith("rdb:"):
+        return None
+    try:
+        return Path(path).resolve().relative_to(Path(root).resolve()).as_posix()
+    except (ValueError, OSError):
+        return None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--parse-dir", default="output/parse")
@@ -502,18 +513,7 @@ def main(argv=None):
     src = Path(a.src)
     n_fig_dropped = 0  # AD21③ — 빈 VLM 그림은 청크를 만들지 않음
 
-    # EDW 파일 메타 로드 (FILE_META_PATH env 또는 --file-meta 인자)
-    _file_meta = {}
-    _fmp = getattr(a, "file_meta", None) or pc.cfg().paths.file_meta_path  # S7c — 설정 객체
-    if _fmp and Path(_fmp).exists():
-        import json as _json
-
-        for line in Path(_fmp).read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                d = _json.loads(line)
-                k = d.get("s3_key")
-                if k:
-                    _file_meta[k] = d
+    # EDW 파일 메타(고객·원천 칸·등록 시각)는 적재가 EDW 조인으로 채운다(pl-29, 11-02 — 외부 file_meta 파일 지움)
     # rdb:csv 배치 — prepared 파일명 → 원본 s3_key 매핑 (source.py가 남긴 manifest.jsonl)
     _manifest_keys = {}
     _mf = Path(a.parse_dir) / "_source" / "manifest.jsonl"
@@ -588,53 +588,30 @@ def main(argv=None):
         _s3_key = uri.split("/", 3)[-1] if uri.startswith("s3://") and uri.count("/") >= 3 else None
         if not _s3_key:  # rdb:csv 배치 — rep.source.uri가 file://이면 manifest에서 파일명으로 s3_key를 찾는다
             _s3_key = _manifest_keys.get(doc) or _manifest_keys.get(Path(path).name)
+        if not _s3_key:  # PC 폴더 원천(사용자 11-02 Q4) — 원천 폴더 기준 상대 경로(`SFDC/<uuid>/<이름>` — s3_key와 같은 모양)
+            _s3_key = _rel_to_source(path)
         _src_sys = None
-        if _s3_key:
+        _seg = _s3_key.split("/", 1)[0].upper() if _s3_key else ""
+        if _seg in ("SFDC", "CRMS", "LAS", "FAQ"):  # 원본 키 첫 마디 = 원천(pl-28 스키마 고르기)
+            _src_sys = _seg
+        elif _s3_key:
             if _s3_key.startswith(("SFDC-", "SFDC_")):
                 _src_sys = "SFDC"
             elif _s3_key.startswith(("CRMS-", "CRMS_")):
                 _src_sys = "CRMS"
             elif _s3_key.startswith(("las_", "LAS_")):
                 _src_sys = "LAS"
-        _edw = _file_meta.get(_s3_key, {}) if _s3_key else {}
-        if _edw and _edw.get("source_system"):
-            _src_sys = _src_sys or _edw["source_system"]
-        _meta_keys = (
-            "source_system",
-            "content_version_id",
-            "s3_key",
-            "sf_acc_name",
-            "sf_op_id",
-            "sf_op_name",
-            "project_code__c",
-            "contract_id",
-            "contract_date",
-            "service_type",
-            "division",
-            "prod_name",
-        )
-        _meta = (
-            {k: v for k, v in {"s3_key": _s3_key, **_edw}.items() if k not in _meta_keys and v is not None} if (_s3_key or _edw) else None
-        )
         # 2026-10-20 축소 스키마 — pgvector doc에는 검색에 필요한 최소만(EDW 식별 + clients + summary).
         # clients는 main의 infer_clients(docs)가 이후에 채움(기존 흐름 그대로). file_name은 file_path에서 유도.
         docs.append(
             {
-                "file_path": path,
+                "file_path": _s3_key
+                or path,  # 11-02(pl-28) Object Storage 원본 경로 = EDW s3_key(ParsingMeta와 잇는 키) — 개발 서버 로컬 경로는 안 씀
                 "doc_name": doc,  # doc_name은 번들 JSONL 로컬용(파일명) — db 적재 안 함
                 "summary": ab,
                 "full_text": text,  # full_text는 본문 매칭(client) 내부용 — db 적재 안 함
                 "source_system": _src_sys,
-                "doc_key": path,  # doc_key(file_sha256 대신 file_path) — 로컬 키
-                "sf_acc_name": _edw.get("sf_acc_name"),
-                "sf_op_id": _edw.get("sf_op_id"),
-                "sf_op_name": _edw.get("sf_op_name"),
-                "project_code__c": _edw.get("project_code__c"),
-                "contract_id": _edw.get("contract_id"),
-                "contract_date": _edw.get("contract_date"),
-                "service_type": _edw.get("service_type"),
-                "division": _edw.get("division"),
-                "prod_name": _edw.get("prod_name"),
+                "doc_key": _s3_key or path,  # doc_key = file_path(검색 근거의 문서 키와 같은 값)
                 **DM.doc_meta(doc, text),
             }
         )
