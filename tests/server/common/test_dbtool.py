@@ -12,7 +12,12 @@ def selftest():
     base = importlib.util.module_from_spec(sp)
     sp.loader.exec_module(base)
     assert base.HNSW_MAX == ST.HNSW_MAX  # 판 파일이 굳혀 둔 숫자 = 지금 pg.HNSW_MAX
-    assert TARGETS == ("search",) and head("search") == "0003_search" and known("search") == ["0003_search", "0002_search", "0001_search"]
+    assert (
+        TARGETS == ("search", "applog")
+        and head("search") == "0003_search"
+        and known("search") == ["0003_search", "0002_search", "0001_search"]
+    )
+    assert head("applog") == "0001_applog" and known("applog") == ["0001_applog"]
     assert not list((MIGRATIONS / "versions").glob("*struct*"))  # 사용자 11-01 — struct 갈래 없음(엔진 구성·원천 목록은 파일)
     print("[selftest] dbtool — 판 폴더 갈래 search 하나·끝 판·HNSW 2000 같음 통과")
     # 판 0002가 굳혀 둔 원천별 칸 = 지금 표 정의(pl-28 — 판 파일은 모델을 import하지 않으므로 여기서 대조)
@@ -85,3 +90,13 @@ def selftest():
 
 def test_main():  # 옛 `--selftest` 갈래(`if a.selftest: return selftest()`)
     selftest()
+
+
+def test_all_keeps_applog_schema():  # PR #87 리뷰 — up --target all --schema demo가 applog 표를 검색 스키마에 만들지 않게
+    from argparse import Namespace
+
+    from common.store.db.dbtool import _schema_arg
+
+    a = Namespace(target="all", schema="demo")
+    assert _schema_arg(a, "search") == "demo" and _schema_arg(a, "applog") is None
+    assert _schema_arg(Namespace(target="applog", schema="test_x"), "applog") == "test_x"

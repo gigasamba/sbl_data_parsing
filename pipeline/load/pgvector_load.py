@@ -19,12 +19,14 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from common.core import span as SP  # op-01 성능 span
 from common.core.console import utf8_stdout
 from common.core.contract import jl  # 묶음 읽기
 from common.core.text import index_text, tokens  # 색인·토큰 규칙(모듈 계약)
 from common.store.pg import HNSW_MAX, PG, conf, has_conn, vec  # noqa: F401
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.load.pg_load_connect import connect as pg_connect
+from pipeline.shared import runtrace  # op-01 pipe_run 문서 수·직접 실행 run_id
 
 # DROP/TRUNCATE/DELETE 대상 식별자 화이트리스트(XS3) — 우리 스키마의 우리 표만. 스키마명 자체는 common/pg.conf()가 이미 정규식으로 검증.
 _OUR_TABLES = {"doc", "chunk", "chunk_term", "term_stat", "corpus_stat"}  # 원천 스키마마다 같은 표(pl-28 — load_run은 11-02에 지움)
@@ -289,88 +291,95 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
     cur.execute(f"SELECT file_path, doc_id FROM {s}.doc")
     have = {r[0]: r[1] for r in cur.fetchall()}
     doc_id, loaded, kept = {}, [], []
-    for i in idx:
-        d = docs[i]
-        old = have.get(d["file_path"])
-        if old and not replace:
-            kept.append((d.get("source_system"), d["file_path"]))
-            continue
-        if old:
-            drop_terms(cur, s, [old])
-            cur.execute(f"DELETE FROM {_tbl(s, 'doc')} WHERE doc_id=%s", (old,))  # chunk는 ON DELETE CASCADE
-        row = {
-            **{c: d.get(c) for c in cols},
-            "doc_id": nxt[0] if nxt is not None else None,
-            "created_at": _kst(d.get("created_at")),
-            "clients_doc": json.dumps(d["clients"], ensure_ascii=False) if d.get("clients") else None,
-        }
-        cur.execute(
-            f"INSERT INTO {s}.doc({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))}) RETURNING doc_id",
-            tuple(row[c] for c in cols),
-        )
-        doc_id[i] = cur.fetchone()[0]
-        if nxt is not None:
-            nxt[0] += 1
-        loaded.append((d.get("source_system"), d["file_path"]))
+    with SP.span("load.doc", "load", table="doc", source=src) as sp:  # op-01 — 표별 행 수·rows/sec
+        for i in idx:
+            d = docs[i]
+            old = have.get(d["file_path"])
+            if old and not replace:
+                kept.append((d.get("source_system"), d["file_path"]))
+                continue
+            if old:
+                drop_terms(cur, s, [old])
+                cur.execute(f"DELETE FROM {_tbl(s, 'doc')} WHERE doc_id=%s", (old,))  # chunk는 ON DELETE CASCADE
+            row = {
+                **{c: d.get(c) for c in cols},
+                "doc_id": nxt[0] if nxt is not None else None,
+                "created_at": _kst(d.get("created_at")),
+                "clients_doc": json.dumps(d["clients"], ensure_ascii=False) if d.get("clients") else None,
+            }
+            cur.execute(
+                f"INSERT INTO {s}.doc({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))}) RETURNING doc_id",
+                tuple(row[c] for c in cols),
+            )
+            doc_id[i] = cur.fetchone()[0]
+            if nxt is not None:
+                nxt[0] += 1
+            loaded.append((d.get("source_system"), d["file_path"]))
+        sp.rows(len(doc_id))
     sel = [ci for ci, c in enumerate(chunks) if c["doc"] in doc_id]
     ci_db = {}
     ccols = ["doc_id", "seq", "page", "line_start", "line_end", "bbox", "section", "chunk_text", "n_terms", "embedding", *chunk_extra]
     ph = ["%s"] * 9 + ["%s::vector"] + ["%s"] * len(chunk_extra)
-    for ci in sel:
-        c = chunks[ci]
-        cur.execute(
-            f"INSERT INTO {s}.chunk({', '.join(ccols)}) VALUES ({', '.join(ph)}) RETURNING chunk_id",
-            (
-                doc_id[c["doc"]],
-                c["seq"],
-                c["page"],
-                c["line_start"],
-                c["line_end"],
-                c["bbox"],
-                c["section"],
-                c["chunk_text"],
-                c["n_terms"],
-                vec(vecs[ci]),
-                *(c.get(n) for n in chunk_extra),
-            ),
-        )
-        ci_db[ci] = cur.fetchone()[0]
-    # 2026-10-22 사용자 지정 — BM25 항목(term,tf) 계산 문서당 BM25_THREADS(기본 4) 병렬 선처리, COPY는 그대로 단일 트랜잭션
-    bthreads = max(1, int(pc.cfg().load.bm25_threads))
-    sel_terms = {}
-    if bthreads > 1 and len(sel) > 1:
-        from concurrent.futures import ThreadPoolExecutor
-
-        def _toks(ci):
-            return ci, Counter(tokens(index_text(chunks[ci]))).items()
-
-        with ThreadPoolExecutor(max_workers=bthreads) as ex:
-            for ci, items in ex.map(_toks, sel):
-                sel_terms[ci] = items
-    n_terms = 0
-    with cur.copy(f"COPY {s}.chunk_term(term, chunk_id, tf) FROM STDIN") as cp:  # 키워드 색인 — 대량은 COPY
+    with SP.span("load.chunk", "load", table="chunk", source=src) as sp:
         for ci in sel:
-            for term, tf in (
-                sel_terms.get(ci) or Counter(tokens(index_text(chunks[ci]))).items()
-            ):  # 머리말 포함(G9) — 규칙은 common.core.text
-                cp.write_row((term, ci_db[ci], min(tf, 32767)))
-                n_terms += 1
+            c = chunks[ci]
+            cur.execute(
+                f"INSERT INTO {s}.chunk({', '.join(ccols)}) VALUES ({', '.join(ph)}) RETURNING chunk_id",
+                (
+                    doc_id[c["doc"]],
+                    c["seq"],
+                    c["page"],
+                    c["line_start"],
+                    c["line_end"],
+                    c["bbox"],
+                    c["section"],
+                    c["chunk_text"],
+                    c["n_terms"],
+                    vec(vecs[ci]),
+                    *(c.get(n) for n in chunk_extra),
+                ),
+            )
+            ci_db[ci] = cur.fetchone()[0]
+        sp.rows(len(ci_db)).add(chars=sum(len(chunks[ci]["chunk_text"]) for ci in sel))
+    # 2026-10-22 사용자 지정 — BM25 항목(term,tf) 계산 문서당 BM25_THREADS(기본 4) 병렬 선처리, COPY는 그대로 단일 트랜잭션
+    with SP.span("load.chunk_term", "load", table="chunk_term", source=src) as sp:  # 키워드 색인 토큰화(병렬) + COPY
+        bthreads = max(1, int(pc.cfg().load.bm25_threads))
+        sel_terms = {}
+        if bthreads > 1 and len(sel) > 1:
+            from concurrent.futures import ThreadPoolExecutor
+
+            def _toks(ci):
+                return ci, Counter(tokens(index_text(chunks[ci]))).items()
+
+            with ThreadPoolExecutor(max_workers=bthreads) as ex:
+                for ci, items in ex.map(_toks, sel):
+                    sel_terms[ci] = items
+        n_terms = 0
+        with cur.copy(f"COPY {s}.chunk_term(term, chunk_id, tf) FROM STDIN") as cp:  # 키워드 색인 — 대량은 COPY
+            for ci in sel:
+                for term, tf in (
+                    sel_terms.get(ci) or Counter(tokens(index_text(chunks[ci]))).items()
+                ):  # 머리말 포함(G9) — 규칙은 common.core.text
+                    cp.write_row((term, ci_db[ci], min(tf, 32767)))
+                    n_terms += 1
+        sp.rows(n_terms)
     # 문서 빈도: 새 청크 단어만 더함(지운 문서는 drop_terms에서 뺌). 비었으면 전체 다시 셈
-    cur.execute(f"SELECT NOT EXISTS (SELECT 1 FROM {s}.term_stat)")
-    if cur.fetchone()[0]:
-        cur.execute(f"DELETE FROM {_tbl(s, 'term_stat')}")
-        cur.execute(f"INSERT INTO {s}.term_stat SELECT term, COUNT(*) FROM {s}.chunk_term GROUP BY term")
-    elif ci_db:
+    with SP.span("load.stats", "load", table="term_stat/corpus_stat", source=src):
+        cur.execute(f"SELECT NOT EXISTS (SELECT 1 FROM {s}.term_stat)")
+        if cur.fetchone()[0]:
+            cur.execute(f"DELETE FROM {_tbl(s, 'term_stat')}")
+            cur.execute(f"INSERT INTO {s}.term_stat SELECT term, COUNT(*) FROM {s}.chunk_term GROUP BY term")
+        elif ci_db:
+            cur.execute(
+                f"""INSERT INTO {s}.term_stat SELECT term, COUNT(*) FROM {s}.chunk_term WHERE chunk_id = ANY(%s) GROUP BY term
+                            ON CONFLICT (term) DO UPDATE SET df = {s}.term_stat.df + EXCLUDED.df""",
+                (list(ci_db.values()),),
+            )
         cur.execute(
-            f"""INSERT INTO {s}.term_stat SELECT term, COUNT(*) FROM {s}.chunk_term WHERE chunk_id = ANY(%s) GROUP BY term
-                        ON CONFLICT (term) DO UPDATE SET df = {s}.term_stat.df + EXCLUDED.df""",
-            (list(ci_db.values()),),
+            f"""INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len, dim) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0), %s FROM {s}.chunk
+                        ON CONFLICT (id) DO UPDATE SET n_chunks = EXCLUDED.n_chunks, avg_len = EXCLUDED.avg_len, dim = EXCLUDED.dim""",
+            (meta["dim"],),
         )
-    cur.execute(
-        f"""INSERT INTO {s}.corpus_stat(id, n_chunks, avg_len, dim) SELECT 1, COUNT(*), COALESCE(AVG(n_terms), 0), %s FROM {s}.chunk
-                    ON CONFLICT (id) DO UPDATE SET n_chunks = EXCLUDED.n_chunks, avg_len = EXCLUDED.avg_len, dim = EXCLUDED.dim""",
-        (meta["dim"],),
-    )
     return {"docs": len(doc_id), "chunks": len(sel), "terms": n_terms}, loaded, kept
 
 
@@ -425,14 +434,19 @@ def main(argv=None):
         return
     meta = json.loads((Path(a.bundle) / "meta.json").read_text(encoding="utf-8"))
     if a.cmd == "deploy":
-        idx = deploy(db, meta["dim"])
+        with SP.span("load.deploy", "load"):
+            idx = deploy(db, meta["dim"])
         print(f"배포 완료: PostgreSQL 스키마 {db.schema} · vector({meta['dim']}) · {idx} 색인")
     elif a.cmd == "load":
         if not getattr(db, "is_standin", False):  # S8a(Q5) — 판 기록 없음은 경고 뒤 계속, 끝보다 낮거나 모르는 판은 거부(종료 2)
             from common.store.db import dbtool
 
             dbtool.require_current(db.q, "search", db.schema)
-        print(json.dumps(load(db, a.bundle, a.replace, a.rep_dir), ensure_ascii=False))
+        with SP.span("load.pgvector", "load", cpu=True) as sp:  # op-01 — 적재 전체 1행(표별 하위 span이 이 밑에)
+            counts = load(db, a.bundle, a.replace, a.rep_dir)
+            sp.add(**{k: v for k, v in counts.items() if k in ("docs", "chunks", "terms", "sec")})
+            runtrace.docs(total=counts["docs"])  # op-01 — pipe_run 문서 수(이번에 새로 넣은 문서)
+        print(json.dumps(counts, ensure_ascii=False))
 
 
 if __name__ == "__main__":
@@ -440,4 +454,5 @@ if __name__ == "__main__":
 
     setarg.apply()  # --set 이름=값(S9 Step A — 호스트 run_docs.py 적재가 BM25_THREADS를 넘김)
     utf8_stdout()
-    main()
+    with runtrace.run("pgvector_load", sys.argv[1:]):  # op-01 — 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
+        main()

@@ -31,9 +31,12 @@ import contextlib
 import functools
 import json
 import os
+import re
 import sys
+import weakref
 from pathlib import Path
 from typing import Annotated, ClassVar, Literal, get_args, get_origin
+from urllib.parse import unquote, urlsplit
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PrivateAttr, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -48,6 +51,7 @@ LOCAL_FILE = (
 )  # RUN_ENV=local 기본 자리 — 저장소 루트, settings.sample.yaml 옆(git 밖 — .gitignore · 사용자 10-29)
 RUN_ENVS = ("local", "dev", "prd")  # 사용자 10-29(op-02) — stage 삭제(동작이 prd와 같았음), 입력도 거부
 SERVER_ENVS = ("dev", "prd")
+MIN_SECRET_LENGTH = 8  # 서버 시작 관문만 적용; local 마스킹 경계 정책은 유지
 SECTIONS = ("common", "pipeline", "mcp")
 OVERLAY_KEYS = ("base", "overrides")  # 덮기 파일의 최상위 열쇠(위 모듈 설명 — S7e2)
 STRICT = True  # RUN_ENV가 없으면 거부(사용자 10-27, D-028 ②)
@@ -811,6 +815,15 @@ def require_run_env(app="", environ=None, sections=None):
         names = image_sections(environ) if sections is None else ("common", *sections)
         try:
             st = load(section_class(names)[0], environ=environ, require_file=True)
+            invalid = []
+            for path in _secret_paths(type(st)):
+                secret = _get(st, path)
+                if isinstance(secret, SecretStr):
+                    for suffix, raw in secret_parts(secret.get_secret_value(), json_options=path.endswith(".connect_kwargs")).items():
+                        if raw and len(raw) < MIN_SECRET_LENGTH:
+                            invalid.append(path + suffix)
+            if invalid:
+                raise SettingsError("비밀 설정 정책 위반: " + ", ".join(sorted(invalid)))
         except SettingsError as e:
             print(f"{tag}서버(RUN_ENV={value}) — 설정을 읽지 못해 시작하지 않음: {e}", file=sys.stderr)
             raise SystemExit(2) from None
@@ -1074,6 +1087,9 @@ def child_env(base=None, **names):
     if names:
         _check_names(names)
         env["SETTINGS_FILE"] = str(exitclean.remove_at_exit(overlay_file(names, environ=env)))  # pl-27 — 이 프로세스가 끝날 때 지움
+    from common.core.jsonlog import get_context
+
+    env["APPLOG_CONTEXT"] = json.dumps(get_context())  # env 남김 — 내부 신호(상관 ID, 설정 아님)
     return env
 
 
@@ -1114,12 +1130,15 @@ class Cache:
     """앱 설정 캐시 — get()은 처음 한 번 읽고, 신호(SETTINGS_FILE·RUN_ENV)가 바뀌거나 put()이 부르면 다시 읽는다. override()·env()는
     시험 동안만 바꿔 끼운다(os.environ은 건드리지 않음)."""
 
+    _instances: weakref.WeakSet = weakref.WeakSet()
+
     def __init__(self, app_cls):
         self.app_cls = app_cls
         self._value = None
         self._key = None
         self._fixed = False
         self._names = None
+        self._instances.add(self)
 
     def get(self):
         if self._fixed:
@@ -1168,6 +1187,68 @@ class Cache:
                 yield st
         finally:
             self._names = saved
+
+
+@functools.cache
+def _secret_paths(model_cls):
+    return tuple(path for path, field, _ in walk(model_cls) if is_secret(field))
+
+
+def secret_parts(value, *, json_options=True):
+    """비밀 칸의 검사/마스킹 대상(상대 경로→값). 반환값은 출력하지 않는다.
+
+    JSON은 비밀 라벨 문자열만, URL DSN은 디코딩한 password만 검사한다.
+    일반 비밀 칸은 전체 값, ODBC 연결 문자열은 password/pwd 부분을 검사한다.
+    """
+    from common.core.runlog import _LABEL
+
+    label = re.compile(r"(?:" + _LABEL + r")$", re.IGNORECASE)
+    if json_options and value.lstrip().startswith(("{", "[")):
+        try:
+            pending, parts = [("", json.loads(value))], {}
+            while pending:
+                path, item = pending.pop()
+                if isinstance(item, dict):
+                    for key, child in item.items():
+                        child_path = path + "." + key
+                        if isinstance(child, str) and label.search(key):
+                            parts[child_path] = child
+                        elif isinstance(child, (dict, list)):
+                            pending.append((child_path, child))
+                elif isinstance(item, list):
+                    pending.extend((f"{path}[{i}]", child) for i, child in enumerate(item) if isinstance(child, (dict, list)))
+            return parts
+        except (ValueError, TypeError):
+            pass
+    if "://" in value:
+        try:
+            password = urlsplit(value).password
+            if password is not None:
+                return {".password": unquote(password)}
+        except ValueError:
+            pass
+    passwords = list(re.finditer(r"(?i)(?:password|pwd)\s*=\s*([^;]+)", value))
+    if passwords:
+        return {f".password[{i}]": match.group(1).strip("\"'{}") for i, match in enumerate(passwords)}
+    return {"": value}
+
+
+def secret_values(*, named=False):
+    """로깅 마스킹 전용: 등록된 설정 객체의 비밀 칸 값. 반환값은 출력/저장하지 않는다.
+
+    앱을 import하지 않으며 Cache.get()으로 덮기/시험 설정 변경도 반영한다.
+    named=True는 경고용 설정 경로→값 사전이며 값은 출력하지 않는다.
+    """
+    values, names = set(), {}
+    for cache in list(Cache._instances):
+        model = cache.get()
+        for path in _secret_paths(cache.app_cls):
+            value = _get(model, path)
+            if isinstance(value, SecretStr):
+                raw = value.get_secret_value()
+                values.add(raw)
+                names[f"{cache.app_cls.__module__}.{path}"] = raw
+    return names if named else values
 
 
 # ── common 절 모델 ─────────────────────────────────────────────────────────────────────────
@@ -1510,6 +1591,19 @@ class CommonModels(Section):
     vlm: CommonModelsVlm = Field(default_factory=CommonModelsVlm)
 
 
+class CommonLog(Section):
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = F("INFO", "LOG_LEVEL", "JSON 사건 기록 최소 수준")
+    dir: str | None = F(None, "APPLOG_DIR", "JSON 로그 폴더 — 비우면 PC logs/, 서버 stdout")
+    db_enabled: bool = F(False, "APPLOG_DB_ENABLED", "applog DB 비동기 기록(마이그레이션 적용 후 켬)")
+    fallback_dir: str = F("output/applog", "APPLOG_FALLBACK_DIR", "DB 실패 시 JSON Lines 대체 기록 폴더")
+    retention_days: int = F(90, "APPLOG_RETENTION_DAYS", "월 파티션 보존 일수(월 끝이 만료된 파티션만 DROP)", ge=1)
+    queue_size: int = F(10000, "APPLOG_QUEUE_SIZE", "DB 기록 대기 큐 상한 — 넘으면 드롭 집계", ge=1)
+    batch_size: int = F(200, "APPLOG_BATCH_SIZE", "DB INSERT 배치 최대 행 수", ge=1)
+    flush_sec: float = F(1.0, "APPLOG_FLUSH_SEC", "DB 배치 기록 간격(초)", gt=0)
+    db_timeout_sec: int = F(2, "APPLOG_DB_TIMEOUT_SEC", "로그 DB 연결/문장 제한(초)", ge=1)
+    shutdown_sec: float = F(5.0, "APPLOG_SHUTDOWN_SEC", "종료 flush 전체 상한(초) — DB 대기+파일 기록, 초과 행은 dropped", ge=0)
+
+
 class CommonSettings(Section):
     run_env: Literal["local", "dev", "prd"] | None = F(
         None, "RUN_ENV", "실행 환경 — local(PC·valid_env 기준)·dev·prd(서버, 외부 모델 거부). env RUN_ENV가 이 값을 이김"
@@ -1518,6 +1612,7 @@ class CommonSettings(Section):
     dev: CommonDev = Field(default_factory=CommonDev)
     host: CommonHost = Field(default_factory=CommonHost)
     models: CommonModels = Field(default_factory=CommonModels)
+    log: CommonLog = Field(default_factory=CommonLog)
     paths: CommonPaths = Field(default_factory=CommonPaths)
     runtime: CommonRuntime = Field(default_factory=CommonRuntime)
     store: CommonStore = Field(default_factory=CommonStore)

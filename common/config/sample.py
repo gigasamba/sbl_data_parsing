@@ -111,10 +111,11 @@ CATEGORIES = {
         ("MCP 서버", ("search.server",)),
         ("검색 순위·방식", ("search.methods", "search.min_score", "search.weights", "search.pg")),
         ("EDW 도구", ("search.edw_meta", "search.edw_query")),
-        ("출력·기록·파싱 프록시", ("search.output", "search.query_log", "search.parse_proxy")),
+        ("출력·기록·파싱 프록시", ("search.output", "search.query_log", "search.parse_proxy", "search.audit")),
     ),
     "ops": (
         ("실행 자원 — 비우면 CPU·메모리로 자동", ("ops.runtime",)),
+        ("로그 — JSON·DB 기록", ("ops.log",)),
         ("경로", ("ops.paths", "ops.pipeline_paths")),
         ("호스트 — 컨테이너 도구·패치·정리", ("ops.host",)),
         ("서버 컨테이너 — CPU·메모리 한도·폴더", ("ops.pipeline_host", "ops.mcp_host")),

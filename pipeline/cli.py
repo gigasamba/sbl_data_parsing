@@ -16,6 +16,7 @@ from common.core.console import utf8_stdout
 
 # isort: split
 import argparse
+import contextlib
 import json
 import os
 import subprocess
@@ -47,18 +48,19 @@ def _stack():
     return _STACK["v"]
 
 
-def sh(module, *args, check=True):
-    cmd = [PY, "-m", module, *map(str, args)]
-    print("$ " + " ".join(cmd), flush=True)
-    from common.core import resources as RS
-    from common.core.paths import child_env
+def _traced(module, call):
+    """하위 프로세스 1개 = proc.run span(op-01) — 자식이 이어받는 parent span이 되고, 메모리·CPU 문 대기가 이 span에 쌓임.
+    call()은 종료 코드(마감으로 끝냈으면 None)를 돌려준다."""
+    from common.core.span import safe, span
 
-    rc = RS.gated_popen(
-        cmd, cwd=APP_ROOT, env=child_env()
-    ).wait()  # child_env() — PYTHONPATH(deploy/)로 `-m data_pipeline.x.y` 해석 보장 · cwd=APP_ROOT(런타임 루트) — ROOT(data_pipeline/ 코드 루트)로 하면 --src 상대경로가 거기 기준으로 풀려 못 찾음(FS v4 회귀)
-    if check and rc:
-        raise SystemExit(f"실패({rc}): {' '.join(cmd)}")
-    return rc
+    with span("proc.run", "run", module=module) as sp:
+        rc = call()
+        sp.add(rc=-1 if rc is None else rc)
+        if rc is None:
+            sp.result("timeout", "timeout", safe("마감 시각 도달"))
+        elif rc:
+            sp.result("fail", None, safe(f"종료 코드 {rc}"))
+        return rc
 
 
 # ── 마감 시각(parse --deadline) ─────────
@@ -82,12 +84,16 @@ def _run_until(args, env, sec):
     from common.core import resources as RS
     from pipeline.extract import resources as PR  # 프로세스 묶음(OS 분기 한 곳)
 
-    p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **PR.group_kw())  # cwd=APP_ROOT(런타임 루트) — sh()와 같은 이유
-    try:
-        return p.wait(timeout=max(1, sec))
-    except subprocess.TimeoutExpired:
-        PR.kill_group(p)
-        return None
+    def call():
+        # cwd=APP_ROOT(런타임 루트) — ROOT(코드 루트)로 하면 --src 상대경로가 거기 기준으로 풀려 못 찾음(FS v4 회귀)
+        p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **PR.group_kw())
+        try:
+            return p.wait(timeout=max(1, sec))
+        except subprocess.TimeoutExpired:
+            PR.kill_group(p)
+            return None
+
+    return _traced(str(args[0]), call)
 
 
 # ── 단계 2 ───────────────────────────────────────────────────
@@ -209,6 +215,9 @@ def parse_module(a):
         run_id  # env 남김 — 하위 프로세스·엔진에 넘김 · 이후 모든 하위 호출(dedup·prepare·run_all)이 os.environ 상속으로 받음
     )
     st = _stack()
+    from pipeline.shared import runtrace
+
+    runtrace.info(stack=st.get("name"), workers=int(a.workers) if str(a.workers).isdigit() else None)
     engines = a.engines or ",".join(_engines_of(st))
     # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) · 스트리밍 파싱은 op-08에 지움
     lim, src_info = [], None
@@ -284,6 +293,8 @@ def parse_module(a):
 
     print(f"[docflow-step] {_tdone()}", flush=True)  # 2026-10-22 — resolve~represent까지 docflow 기타 분해 로그
     idx = json.loads((OUT / "parse" / "_rep" / "index.json").read_text(encoding="utf-8"))["docs"]
+    ok = sum(1 for r in idx if r.get("engine"))
+    runtrace.docs(total=len(idx), ok=ok, fail=len(idx) - ok)  # 재사용 수는 없음 — 실행마다 새로 파싱(pl-32)
     core = [{k: v for k, v in r.items() if k != "tried"} for r in idx]  # 시도 기록(시각)은 빼고 대표 결과만 비교
     content = []  # GH1-05 — core는 chars·facts_added(길이·개수)만 있어 길이·개수가 같은 내용 교체를 못 잡음 → 본문·facts 자체의 sha256
     for r in idx:
@@ -522,5 +533,16 @@ if __name__ == "__main__":
     utf8_stdout()
     from common.core.runlog import session
 
-    with session("pipeline"):
+    subcommand = next((x for x in sys.argv[1:] if not x.startswith("-")), "")
+    trace: contextlib.AbstractContextManager = contextlib.nullcontext()
+    if (
+        subcommand == "parse"
+    ):  # 점검·설정 명령은 추적하지 않음(시작 0.5초 절약) · MCP 이미지는 cli.py·config.py만 포함 — 문서 처리 명령에서만 단계 코드를 import
+        from pipeline.shared import runtrace
+
+        trace = runtrace.run(subcommand, sys.argv[1:])
+    with (
+        session("pipeline"),
+        trace,
+    ):  # op-01 — run_id 생성·pipe_run, 하위 프로세스가 이어받음
         main()

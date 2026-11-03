@@ -272,6 +272,10 @@ search:
     tables:  # query_edw 허용 표 목록(쉼표) · 값: 쉼표 목록 또는 YAML 목록
     tables_strict: false  # 1이면 허용 표 목록(EDW_QUERY_TABLES) 검사를 켬 · 기본 false · 값: true·false
   # ─── 출력·기록·파싱 프록시 ───
+  audit:
+    max_queue_bytes: 268435456  # 감사 대기/처리 중 본문 추정 바이트 합계 상한(기본 256MiB) · 기본 268435456 · 값: 0 이상 정수
+    max_input_bytes: 16384  # [파라미터] 감사 로그 입력 원문 UTF-8 바이트 상한 · 기본 16384 · 값: 0 이상 정수
+    max_output_bytes: 65536  # [파라미터] 감사 로그 출력 원문 UTF-8 바이트 상한 · 기본 65536 · 값: 0 이상 정수
   parse_proxy:
     url: http://127.0.0.1:8766  # parse_document가 부르는 작업 서비스 주소 · 기본 http://127.0.0.1:8766 · 값: URL
   query_log:
@@ -285,6 +289,18 @@ ops:
     log_retention_days: 30  # output/logs/*.log 보존 일수 · 기본 30 · 값: 0 이상 정수 (0 = 삭제 안 함)
     pipe_procs:  # CPU 엔진 프로세스 수 · 값: 1 이상 정수 · auto 또는 비우면 자동 계산
     pipe_workers:  # VLM API 동시 처리 문서 수(개) · 기본 4 · 값: 0 이상 · auto 또는 비우면 자동 계산
+  # ─── 로그 — JSON·DB 기록 ───
+  log:
+    level: INFO  # JSON 사건 기록 최소 수준 · 기본 INFO · 값: 0 이상
+    dir:  # JSON 로그 폴더 · 값: 경로
+    db_enabled: false  # applog DB 비동기 기록(마이그레이션 적용 후 켬) · 기본 false · 값: true·false
+    fallback_dir: output/applog  # DB 실패 시 JSON Lines 대체 기록 폴더 · 기본 output/applog · 값: 경로
+    retention_days: 90  # 월 파티션 보존 일수(월 끝이 만료된 파티션만 DROP) · 기본 90 · 값: 1 이상 정수
+    queue_size: 10000  # DB 기록 대기 큐 상한 · 기본 10000 · 값: 1 이상 정수
+    batch_size: 200  # DB INSERT 배치 최대 행 수 · 기본 200 · 값: 1 이상 정수
+    flush_sec: 1.0  # DB 배치 기록 간격(초) · 기본 1.0 · 값: 0 이상 초
+    db_timeout_sec: 2  # 로그 DB 연결/문장 제한(초) · 기본 2 · 값: 0 이상 정수(초)
+    shutdown_sec: 5.0  # 종료 flush 전체 상한(초) · 기본 5.0 · 값: 0 이상 초
   # ─── 경로 ───
   paths:
     client_roster:  # 고객 명부 파일 경로(JSON {이름:[별칭]} 또는 CSV) · 값: 경로

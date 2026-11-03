@@ -20,6 +20,7 @@ from pathlib import Path
 from common.ai import adk as A
 from common.ai.agent_prompts import load as _load_prompt
 from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
+from common.core import span as SP  # op-01 성능 span(풀 스레드 컨텍스트 전달)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared.artifacts import prompt_id, raw_vlm_path
 from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
@@ -562,7 +563,7 @@ def page_text_pages(doc_path):
             out.append(_one(batch[0]))
             continue
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(batch)) as ex:
-            batch_out = list(ex.map(_one, batch))  # ex.map은 입력 순서 보존
+            batch_out = list(ex.map(SP.carry(_one), batch))  # ex.map은 입력 순서 보존 · op-01 — run/span ID를 풀 스레드에 실음
         out.extend(batch_out)
         # 적응적: 이 배치에서 가장 느린 call이 _slow를 넘었으면 워커 수 절반 (최소 n_min)
         slowest = 0.0

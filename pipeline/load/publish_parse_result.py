@@ -32,6 +32,7 @@ import argparse
 import json
 from pathlib import Path
 
+from common.core import span as SP  # op-01 성능 span
 from common.core.console import utf8_stdout
 from common.core.paths import APP_ROOT
 
@@ -142,7 +143,11 @@ def run(a):
     storage, db = PM.make_storage(), PM.make_db("write")
     md_dir = Path(a.out) / "publish" / "_md_tmp"
     try:
-        result = PM.apply(rows, storage, db, md_dir, prefix)
+        with SP.span("load.publish", "load", cpu=True) as sp:  # op-01 — Object Storage 업로드 + EDW 쓰기 1행(대상 문서 수·결과 숫자)
+            result = PM.apply(rows, storage, db, md_dir, prefix)
+            sp.rows(len(rows)).add(
+                eligible=out["upload_plan"]["eligible"], **{k: v for k, v in (result or {}).items() if isinstance(v, (int, float))}
+            )
     finally:
         if hasattr(db, "close"):
             db.close()
@@ -186,4 +191,9 @@ if __name__ == "__main__":
 
     setarg.apply()  # --set 이름=값(S9 Step A — 호스트 run_docs.py publish가 PM_BUCKET_SKIP_OVERLAP_CHECK를 넘김)
     utf8_stdout()
-    main()
+    import sys
+
+    from pipeline.shared import runtrace
+
+    with runtrace.run("publish_parse_result", sys.argv[1:]):  # op-01 — 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
+        main()
