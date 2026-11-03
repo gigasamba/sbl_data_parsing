@@ -90,12 +90,17 @@ def _evict_query_cache(db):
         db.commit()
 
 
+def model_key(name):
+    """비교용 모델 이름 — `openai/` 앞붙이를 뗀 것(같은 모델의 두 표기를 같게 봄)."""
+    return str(name).removeprefix("openai/")
+
+
 def query_model_mismatch(meta):
     """AD41 — 색인(묶음 meta)이 api 임베딩이면 이 프로세스의 EMBED_MODEL과 같은지. 다르면 사람이 읽을 이유(문자열), 같거나 api가 아니면 None."""
     if meta.get("embed") != "api" or not meta.get("embed_model"):
         return None
     cur = cfg().models.embed.model or ""
-    if cur.removeprefix("openai/") == str(meta["embed_model"]).removeprefix("openai/"):
+    if model_key(cur) == model_key(meta["embed_model"]):
         return None
     return (
         f"질의 임베딩 모델 {cur or '(EMBED_MODEL 없음)'} ≠ 색인 {meta['embed_model']} — "

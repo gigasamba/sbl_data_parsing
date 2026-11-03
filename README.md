@@ -214,7 +214,6 @@ common:
       max_calls: 40
       spend_file: output/spend-ledger.json
 ops:
-  paths: {mcp_bundle: output/demo/bundle}        # MCP가 읽을 번들(검증 페이지 §4-6도 이 값)
   pipeline_paths: {out_root: output/demo}        # 파이프라인 결과 폴더
 search:
   server: {host: 127.0.0.1, port: 18769, warmup: false}
@@ -304,7 +303,7 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 **(선택) MCP 없이 검색만 확인**
 
 ```bash
-.venv/bin/python -m mcp_server.cli.ask ask --bundle output/demo/bundle --k 3 --q "<질문>"
+.venv/bin/python -m mcp_server.cli.ask ask --k 3 --q "<질문>"   # 검색은 required.pg.db_schema의 PG만(mc-19 — 묶음 폴더 안 읽음)
 ```
 
 **⑥ 정리** — 4-5에서 MCP까지 확인한 뒤 `settings.yaml`의 `no_paid_calls`를 `true`로 되돌린다(평소 테스트가 외부를 호출하지 않게).
@@ -327,8 +326,8 @@ SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
 
 # ask·MCP는 --set을 받지 않으므로 오버레이 설정 파일(방법 C)로 같은 값을 넘긴다
 SF=$(.venv/bin/python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 \
-     NO_PAID_CALLS=0 LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_BUNDLE=$O/bundle MCP_PORT=18769)
-SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.ask ask --bundle $O/bundle --k 3 --q "<질문>"
+     NO_PAID_CALLS=0 LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_PORT=18769)
+SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.ask ask --k 3 --q "<질문>"
 SETTINGS_FILE=$SF nohup .venv/bin/python -m mcp_server.main > $O/mcp.log 2>&1 & echo $! > $O/mcp.pid
 ```
 실제 임베딩 호출을 확인하려면 `--set EMBED_CACHE=<빈 sqlite 경로>`를 더한다.
@@ -347,7 +346,7 @@ kill $(cat output/demo/mcp.pid)              # 끄기 — PID로만(pkill -f 금
 
 ### 4-6. 검증 페이지(브라우저로 검색 확인)
 
-검색 MCP와 pgvector를 브라우저로 보여 주는 PC 전용 페이지다. 설정은 루트 `settings.yaml` 하나이고(전용 설정 파일 없음), §4-2 예시의 `ops.paths.mcp_bundle`·`search.server`·`dev.mcp`를 그대로 쓴다(따로 더할 절 없음 — 다른 번들을 보려면 그 칸 값만 바꾼다).
+검색 MCP와 pgvector를 브라우저로 보여 주는 PC 전용 페이지다. 설정은 루트 `settings.yaml` 하나이고(전용 설정 파일 없음), §4-2 예시의 `search.server`·`dev.mcp`와 PG 접속(`required.pg`)을 그대로 쓴다(따로 더할 절 없음 — 검색은 PG만, mc-19).
 
 ```bash
 nohup bash validation/search_ui/start_mcp.sh > output/validation/mcp.log 2>&1 & echo $! > output/validation/mcp.pid
@@ -357,7 +356,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 ```
 
 - `no_paid_calls: true`면 질의 임베딩도 막혀 키워드·ID 검색만 된다(근거의 via에 `v`가 없음). 벡터 검색까지 보려면 `false`로 바꾸고 MCP를 다시 띄우고, 끝나면 되돌린다.
-- 다른 번들을 보려면 `ops.paths.mcp_bundle`(스키마가 다르면 `required.pg.db_schema`도)을 바꾸고 다시 띄운다.
+- 다른 적재 결과를 보려면 `required.pg.db_schema`를 바꾸고 다시 띄운다.
 
 ### 4-7. 그 밖
 

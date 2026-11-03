@@ -1443,11 +1443,6 @@ class CommonPaths(Section):
         "준비(dedup·회전) 끝난 문서 폴더 — 파싱의 --src 기본값(pipeline 이미지 안 기본 /app/output/prepared — 옛 Dockerfile ENV, B-2)",
     )
     draft_terms_out: str | None = F(None, "DRAFT_TERMS_OUT", "용어 자동 초안 CSV 경로")
-    mcp_bundle: str | None = F(
-        None,
-        "MCP_BUNDLE",
-        "검색할 로컬 묶음(bundle) 폴더 경로 — 검색 MCP 로컬 저장소·평가(server_checks)가 읽음(S7e1 — 두 앱이 읽어 common, 옛 mcp.server.bundle)",
-    )
     output_root: str | None = F(
         None,
         "RAG_OUT",
