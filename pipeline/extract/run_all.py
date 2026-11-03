@@ -22,6 +22,7 @@
 """
 
 import argparse
+import functools
 import json
 import os
 import sys
@@ -193,7 +194,8 @@ def main():
         P0.purge_caches(out)
     files = sorted(p for p in src.iterdir() if p.is_file() and p.name not in (".gitkeep", "rotation.csv"))  # 평면 · prepare 기록 제외
     docs = [p for p in files if registry.engines_for(p.suffix)]
-    skipped = Counter(p.suffix.lower() or "(없음)" for p in files if p not in docs)
+    doc_set = set(docs)  # fp-perf B5 — 목록 안 찾기를 집합으로
+    skipped = Counter(p.suffix.lower() or "(없음)" for p in files if p not in doc_set)
     pc.checked("MAX_FILE_MB")  # 파일 크기 상한 — 형식 틀리면 옛 float()처럼 실패(조용히 '제한 없음'이 되지 않게 — S7c1 리뷰)
     max_mb = float(
         pc.cfg().extract.max_file_mb
@@ -202,7 +204,8 @@ def main():
         big = [p for p in docs if p.stat().st_size > max_mb * 1024 * 1024]
         if big:
             print(f"건너뜀(MAX_FILE_MB {max_mb:g} 초과) {len(big)}개: " + ", ".join(p.name for p in big[:10]), flush=True)
-            docs = [p for p in docs if p not in big]
+            big_set = set(big)
+            docs = [p for p in docs if p not in big_set]
     docs = docs[: a.limit] if a.limit else docs
     if a.docs_from:
         names = set(Path(a.docs_from).read_text(encoding="utf-8").splitlines())
@@ -553,6 +556,7 @@ def _sha(p):
     return h.hexdigest()[:16]
 
 
+@functools.cache  # fp-perf B5 — 엔진 폴더 해시는 프로세스마다 엔진당 한 번(실행 중 코드는 안 바뀜)
 def engine_code_fp(eng):
     """원문 파싱 결과를 정하는 코드 = 그 엔진 폴더(parse/engines/<엔진>)만 — common·run_all(실행 관리)이 바뀌어도 결과는 같으므로 넣지 않음."""
     import hashlib
