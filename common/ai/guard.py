@@ -300,7 +300,7 @@ def settle_tokens(reserved, model, usage):
     오버라이드라 그대로 재사용하면 VLM·EMBED에 LLM 쪽 단가가 잘못 섞여 들어갈 수 있다)로 실제 비용을 계산해 차이를
     정산한다(llm.py _do_call의 토큰 정산과 같은 방식 — 10-11 실측: VLM 15회가 flat $0.02×15=$0.30으로 잡혀 실제
     약 $0.02보다 과하게 일찍 상한이 걸림). reserved<=0(정산 대상 아님)·usage 없음·단가 모름(이 모델이 PRICES에
-    없음 — 예: 로컬 e5-small 같은 비-API 임베딩이나 미등록 VLM)이면 아무것도 안 하고 기존 고정값이 그대로 남는다 —
+    없음 — 예: 미등록 VLM)이면 아무것도 안 하고 기존 고정값이 그대로 남는다 —
     llm.chat처럼 단가를 모르면 호출 자체를 거부하지 않는다(이미 끝난 호출의 사후 정산이라 조용히 보수적인 값에
     머무는 쪽이 안전)."""
     if not (reserved and usage):
@@ -363,11 +363,17 @@ class _ConnectTimeoutHTTPSHandler(urllib.request.HTTPSHandler):
         return self.do_open(_SplitTimeoutHTTPSConnection, req, context=self._context)
 
 
+def open_guarded(req, timeout, prefix):
+    """precheck 없이 여는 길 — 리다이렉트 가드(_Redirect)·연결 시간 상한은 같음. 호출자가 이미 precheck로 선차감한 경우만
+    (common.ai.llm.complete — 시도마다 다시 선차감하면 정산되지 않는 몫이 장부에 쌓임, 0.2.0 리뷰)."""
+    opener = urllib.request.build_opener(_Redirect(prefix), _ConnectTimeoutHTTPHandler(), _ConnectTimeoutHTTPSHandler())
+    return opener.open(req, timeout=timeout)
+
+
 def _precheck_and_open(req, timeout, prefix):
     url = req.full_url if hasattr(req, "full_url") else str(req)
     reserved = precheck(url, prefix)
-    opener = urllib.request.build_opener(_Redirect(prefix), _ConnectTimeoutHTTPHandler(), _ConnectTimeoutHTTPSHandler())
-    return opener.open(req, timeout=timeout), reserved
+    return open_guarded(req, timeout, prefix), reserved
 
 
 def urlopen(req, timeout, prefix):

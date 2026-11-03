@@ -5,7 +5,7 @@ import io
 import json
 from pathlib import Path
 
-from common.ai import adk as A
+from common.ai import llm as A  # 모델 호출(0.2.0 — 옛 common.ai.adk, pl-46)
 from common.config.settings import COMMON
 from pipeline import config as pc
 from pipeline.transform.figures.nested import MAX_CHILDREN_TOTAL, _parse_regions, bbox_regions, child_crops, find_children

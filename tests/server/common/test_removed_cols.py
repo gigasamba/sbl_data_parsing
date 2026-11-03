@@ -76,3 +76,24 @@ def test_old_layout_rejected_and_migrated():
         if "mcp" in classes:
             gone.add("mcp.search.agg")  # mc-04(11-01) — 절째 지움(옛 llm_min 칸 대신 절 이름으로 보고)
         assert gone <= set(report["삭제됨"]), report
+
+
+def test_removed_table_names():
+    """0.2.0(pl-46) — 지운 칸 표(layout.REMOVED)의 열쇠는 실제 설정 절 클래스 이름이고, 지운 칸 이름이 그 절의 살아 있는 칸과 겹치지 않는다."""
+    from common.config import layout as L
+    from common.config.settings import Section, _section_type
+
+    seen = {}
+
+    def walk(cls):
+        seen[cls.__name__] = cls
+        for f in cls.model_fields.values():
+            sub = _section_type(f.annotation)
+            if sub is not None:
+                walk(sub)
+
+    for app in app_classes().values():
+        walk(app)
+    assert set(L.REMOVED) <= set(seen), sorted(set(L.REMOVED) - set(seen))
+    clash = {k: sorted(v & set(seen[k].model_fields)) for k, v in L.REMOVED.items() if v & set(seen[k].model_fields)}
+    assert not clash and all(issubclass(seen[k], Section) for k in L.REMOVED), clash

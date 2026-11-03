@@ -150,7 +150,7 @@ MCP args/result는 문서 원문을 포함할 수 있다. settings에서 비밀 
 | `GLOSSARY_DIR` | 용어집 폴더 | `domain_terms.csv`(머리글 `concept_id,canonical,category,synonyms,abbreviations,weak_synonyms,broader,related,context_required,case_sensitive,definition_ko,definition_en,source,owner,status,updated`)·`id_patterns.csv`·`units.csv` — **빈칸 허용**: `status` 빈칸 = approved(빼고 싶은 행은 `draft`라고 적음) · `concept_id` 빈칸 = `AUTO.<canonical>` 자동(같은 정식 이름이 ID 없이 또 나오면 뒤 줄은 건너뜀·알림 한 줄) · 설명·카테고리 등 나머지 빈칸 그대로 · 없는 열도 됨 · UTF-8 또는 cp949 · 단 명시한 ID 중복·없는 ID를 가리키는 broader/related·깨진 정규식은 적재 오류(조용히 넘기지 않음) · 고객은 `category`에 `org_client`를 넣으면 고객 명부에도 합쳐짐 · 예시 `resources/vocab/glossary/domain_terms.example.csv`(이미지 안 `/app/deploy/resources/…` — 작성법 server-guide §5-1) |
 | `PG_FILTER_EXACT_MAX` | 고객 필터 검색 | 적재(`structure`·`load`) 한 번이면 `chunk.clients`(고객 라벨 배열)·GIN 색인·옛 행 채우기가 자동 — **그 뒤 검색 MCP를 재시작**(빠른 경로 사용 여부를 프로세스마다 한 번만 확인) · 고객으로 좁힌 청크가 `PG_FILTER_EXACT_MAX`(기본 20000) 이하면 정확 검색(HNSW 거르기로 결과가 빠지지 않게). `OV_TAGS`는 OpenViking과 함께 지워져 읽지 않는다(§5 10-29 줄) |
 | `REPORT_DIGEST_DIR` | 날짜·버전 요약 폴더 | 예 `/srv/rag/reports/parse_digest` |
-| 변경 뒤 확인 | — | `python -m pipeline.check_env`(경로 존재까지 점검, 값은 안 찍힘) |
+| 변경 뒤 확인 | — | `python -m common.check.checker env`(경로 존재까지 점검, 값은 안 찍힘 — 서버는 `run_tool.sh check_env`) |
 
 ### 원천 Object Storage·EDW (선택, 승인 뒤)
 | 이름 | 메모 |
@@ -193,8 +193,8 @@ MCP args/result는 문서 원문을 포함할 수 있다. settings에서 비밀 
 ## 4. 확인
 
 ```bash
-python -m pipeline.check_env     # 빠진 필수 값·사내망 판정·경로 존재(값은 안 찍음)
-python -m common.check.ping_models   # LLM·VLM·EMBED 실호출(OK/FAIL·지연·응답 모델) — 실패 있으면 종료 코드 1
+python -m common.check.checker env    # 빠진 필수 값·사내망 판정·경로 존재(값은 안 찍음)
+python -m common.check.checker ping   # LLM·VLM·EMBED 실호출(OK/FAIL·지연·응답 모델) — 실패 있으면 종료 코드 1
 ```
 - 덮어쓰기 뒤 설정 파일이 그대로인지: `ls -l /srv/rag/env/settings.yaml`(수정 시각이 덮어쓰기 전인지 · 주인 10001·권한 640 — C-09).
 

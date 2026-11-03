@@ -271,7 +271,7 @@ def standardize_rep(d):
     """SI20·AD46⑤ — 표 칸 재현율 저하 원인(기호 정형화 부재)을 산출 쪽에서 메움: 엔진 묶음 직후·융합(facts 합치기) 전에
     본문·facts·표 칸에 common.core.text.standardize_text(기호 맵 + 첨자 표기 통일)을 적용. 원문(pd/<엔진>/<문서>.json)은
     여기서 손대지 않고 대표 결과(_rep)에만 적용 — 되돌릴 수 있게 바뀐 개수만 돌려준다(rep.rep.standardize)."""
-    from pipeline.shared.text import standardize_text as _std
+    from pipeline.shared.canon import standardize_text as _std
 
     n = 0
     if d.get("text"):
@@ -312,7 +312,7 @@ def _norm_agree(text):
     import re
 
     from common.core.text import normalize_value
-    from pipeline.shared.text import canon_symbols
+    from pipeline.shared.canon import canon_symbols
 
     return re.sub(r"(?<=\d)\.(?=\d)", "", normalize_value(canon_symbols(text or "")))
 
@@ -335,103 +335,6 @@ def _page_agreement(text_a, text_b, min_len=HIDDEN_AGREE_MIN_LEN):
     if not ga or not gb:
         return 0.0
     return round(len(ga & gb) / len(ga | gb), 4)
-
-
-# AD47 검토자 반영(10-08, CONCERN) — hidden_overlap은 '겹친 숨은 글자 상자 1개 ∩ 그림 1개'만으로 쪽 전체를
-# OCR로 바꾸면 워터마크·접근성용 숨은 글자처럼 우연히 겹친 정상 쪽까지 바뀔 위험이 있다. 아래는 쪽 전체가 아니라
-# 그 상자 주변(국소)만 보고, '내용은 같은데 숫자 구분자(쉼표·마침표)만 다른' 경우만 확인된 충돌로 본다.
-LOCAL_AGREE_MIN_LEN = 4  # 국소 비교는 원래 짧다(상자 하나 분량) — HIDDEN_AGREE_MIN_LEN(20)은 쪽 전체용이라
-# 그대로 쓰면 항상 "판단 불가"가 나옴. 그래도 극단적으로 짧은 조각(숫자 1~2자)은 거름.
-LOCAL_PAD_PT = 20.0  # 겹친 숨은 글자 상자 둘레 여백(pt) — 그 상자와 겹치는 OCR 줄만 "주변"으로 본다
-# (여긴 그림 하나 안에서만 비교).
-_NUM_TOK = __import__("re").compile(r"\d[\d.,]*\d|\d")
-
-
-def _num_tokens(text):
-    """AD47 검토자 반영 — 구분자(쉼표·마침표)를 그대로 유지한 숫자 토큰(전각 숫자·쉼표는 canon_symbols로 반각화
-    만 하고 그 이상은 정규화하지 않는다 — _norm_agree와 반대로 숫자 표기 차이를 지우지 않는 게 목적)."""
-    from pipeline.shared.text import canon_symbols
-
-    return _NUM_TOK.findall(canon_symbols(text or ""))
-
-
-def _rects_overlap(a, b, pad=0.0):
-    """두 bbox([x0,y0,x1,y1])가 pad(pt)만큼 넓혀서라도 겹치는지."""
-    ax0, ay0, ax1, ay1 = a
-    bx0, by0, bx1, by1 = b
-    return not (ax1 + pad < bx0 or bx1 < ax0 - pad or ay1 + pad < by0 or by1 < ay0 - pad)
-
-
-def _local_ocr_text(ocr_boxes, page_no, hidden_bboxes):
-    """AD47 검토자 반영 — hidden_bboxes(겹친 숨은 글자 상자들, 쪽 좌표 pt) 둘레 LOCAL_PAD_PT 안의 OCR 줄 글자만
-    모은다(쪽 전체가 아니라 그 상자 주변만 — "주변 토큰만 비교"). 겹치는 OCR 줄이 없으면 빈 문자열."""
-    out = []
-    for b in ocr_boxes or []:
-        if b.get("page") != page_no or not b.get("bbox"):
-            continue
-        if any(_rects_overlap(hb, b["bbox"], LOCAL_PAD_PT) for hb in hidden_bboxes):
-            out.append(b.get("text") or "")
-    return " ".join(out)
-
-
-def _hidden_overlap_conflict(doc_path, page_no, ocr_boxes):
-    """AD47 검토자 반영(10-08, CONCERN) — reason='hidden_overlap'인 쪽을 쪽 전체가 아니라 겹친 숨은 글자
-    상자 주변(국소)만 보고 '진짜 숫자 구분자 충돌'인지 확인한다(represent.fill_scan_pages가 호출).
-    ① 국소 느슨 일치(_page_agreement, 쉼표·마침표 둘 다 지움)가 낮거나 판단 불가면 → 내용 자체가 다름
-       (워터마크·접근성용 숨은 글자처럼 그림과 무관) → 교체 안 함.
-    ② 느슨 일치는 높은데 숫자 토큰 리터럴(구분자 유지)이 서로 다르면 → 내용(라벨 등)은 같고 숫자 표기만
-       다름(430.000 vs 430,000) → **확인된 충돌**(교체).
-    ③ 느슨 일치도 높고 숫자 토큰 리터럴도 같으면(또는 숫자가 없으면) → 표기까지 같음 → 교체 안 함.
-    반환: (bool 충돌 확인, 이유 문자열, {숨은 숫자: OCR 숫자} — AD47② 그 숫자만 바꿀 대응표, 못 맞추면 빈 dict)."""
-    from pipeline.transform.figures.vlm_page import hidden_overlap_spans
-
-    spans = hidden_overlap_spans(doc_path, page_no)
-    if not spans:
-        return False, "겹친 숨은 글자 상자를 다시 찾지 못함", {}
-    hidden_bboxes = [s[0] for s in spans]
-    hidden_text = " ".join(s[1] for s in spans)
-    local_ocr = _local_ocr_text(ocr_boxes, page_no, hidden_bboxes)
-    loose = _page_agreement(hidden_text, local_ocr, min_len=LOCAL_AGREE_MIN_LEN)
-    if loose is None or loose < HIDDEN_AGREE_MIN:
-        return False, f"국소 내용 불일치(loose={loose}) — 그림과 무관한 숨은 글자로 봄(워터마크 등)", {}
-    if not _numbers_conflict(hidden_text, local_ocr):
-        return False, f"표기까지 일치(loose={loose}, 숫자 리터럴도 같음) — 원래 글이 이미 맞음", {}
-    return True, f"내용은 같은데 숫자 구분자만 다름(loose={loose}) — 확인된 충돌", _number_fixes(hidden_text, local_ocr)
-
-
-def _canon_num(tok):
-    from pipeline.shared.text import canon_symbols
-
-    return canon_symbols(tok)
-
-
-def _unique_on_page(fixes, page_text):
-    """AD47② 검토 반영 — 쪽 안에 한 번만 나오는 숫자만 바꾼다(같은 값이 다른 곳에도 있으면 그쪽은 글자층이 맞을 수
-    있어 어느 것인지 몰라 안 바꿈). 전각 숫자도 canon_symbols로 맞춰 셈."""
-    seen = [_canon_num(t) for t in _NUM_TOK.findall(page_text or "")]
-    return {h: o for h, o in fixes.items() if seen.count(h) == 1}
-
-
-def _number_fixes(hidden_text, ocr_text):
-    """AD47② — 숨은 숫자 토큰 → 같은 숫자열(구분자 뺀)의 OCR 토큰이 딱 하나일 때만 대응(430.000 → 430,000).
-    애매하면(후보 0개·2개+) 그 숫자는 빼고, 하나도 못 맞추면 빈 dict(호출부가 옛 동작=쪽 전체 교체)."""
-    strip = lambda t: t.replace(",", "").replace(".", "")
-    o = set(_num_tokens(ocr_text))
-    fixes = {}
-    for h in set(_num_tokens(hidden_text)) - o:
-        c = [x for x in o if strip(x) == strip(h)]
-        if len(c) == 1:
-            fixes[h] = c[0]
-    return fixes
-
-
-def _numbers_conflict(hidden_text, ocr_text):
-    """둘 다에 숫자 토큰(구분자 포함 리터럴)이 있고 그 집합이 다르면 True. 숫자가 한쪽에만 있거나 아예
-    없으면(판단 재료 없음) False — 그런 경우는 '교체 안 함' 쪽으로(애매하면 안 덮는 쪽이 정답률을 더 보호)."""
-    h, o = set(_num_tokens(hidden_text)), set(_num_tokens(ocr_text))
-    if not h or not o:
-        return False
-    return h != o
 
 
 def _doc_page_count(doc_path):
@@ -476,31 +379,15 @@ def _page_texts(base, doc_path, boxes):
     return {i + 1: p for i, p in enumerate(parts)}
 
 
-def fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=None):
-    """PE1 후속(2026-10-07) — .pdf_text 대표 문서(rep) 안 스캔 쪽만 그 쪽의 OCR 엔진(.pdf_image 계열, stack 순서로
-    정확도 가장 높은 성공 후보) 결과로 채운다(글자층 쪽은 그대로 — 쪽 전체를 OCR 글로 바꾸지 않음).
-    사용자 10-29 — page_vlm(쪽 VLM 함수, vlm_page.page_text_pages — 스캔 신호 쪽만 병렬 호출)을 주면 그 쪽 글을 먼저 쓴다
-    (기록 엔진 이름 "vlm_page" — OCR 엔진은 기본으로 안 돌고 .pdf_text 문서에 .pdf_image 엔진도 안 합침). 쪽 VLM 글이 하나도
-    없을 때만 옛 OCR 엔진 결과로. 쪽 VLM은 글자 상자(boxes)가 없어 'hidden_overlap' 쪽의 국소 확인은 늘 '원래 글 유지'.
-    쪽 경계는 _page_texts(boxes 있으면 그걸로, 없으면 \f 개수가 문서의 실제
-    쪽 수와 같을 때만) — 대표·OCR 어느 쪽이든 쪽 번호를 확정할 수 없으면 건너뛴다(틀린 쪽끼리 바꿔치기하는 것보다 안전).
-    쪽 단위 품질 검사(독립 검토 보강) — 그 쪽 OCR 글의 garbage_ratio가 기준(OCR 신뢰도
-    0.9, 즉 garbage_ratio ≤ 0.1)을 넘으면 깨진 OCR 글로 덮지 않고 건너뛴다(원래 글 유지) — page_skip에 기록.
-    AD31 reason='hidden'(독립 검토 MAJOR, 10-07 2차) — 그림과 같은 내용을 옮긴 양질의 숨은 글자층('검색 가능
-    스캔 PDF')은 scan_pages_detail이 reason='chars'인 쪽과 똑같이 스캔 후보에 들어오지만, 원래 글(숨은 층)이
-    이미 정답이면 우리 OCR로 덮으면 오히려 정확도가 떨어질 수 있다 — 원래 글과 OCR 글의 일치도(_page_agreement)가
-    HIDDEN_AGREE_MIN 이상이면 원래 글을 유지(page_skip에 'hidden-agree' 표시), 미만이면(그림과 무관한 쓰레기
-    글자층 등) 지금처럼 OCR로 채운다. 정규화한 글이 짧으면(HIDDEN_AGREE_MIN_LEN 미만, _page_agreement가 None)
-    판단 불가로도 원래 글을 유지(애매하면 안 덮는 쪽이 정답률을 더 보호). reason='chars'·'garbage'는 이 검사를
-    안 한다(쪽 전체가 스캔·깨짐이라 agreement 자체가 의미 없음, 지금 동작 그대로).
-    AD47 reason='hidden_overlap'(검토자 반영, 10-08 CONCERN) — 'hidden'(쪽 전체 비율)과 같은 _page_agreement를
-    그대로 쓰면 안 된다: 그 정규화(_norm_agree)가 숫자 사이 쉼표·마침표를 **둘 다** 지워 "430.000"(숨은 틀린 값)과
-    "430,000"(OCR이 그림에서 읽은 맞는 값)을 "일치"로 오판해 틀린 숨은 글을 그대로 유지해 버린다(synth-mixedpdf
-    textlayer_mismatch.pdf로 확인 — 이 문서가 바로 이 사례). 대신 겹친 숨은 글자 상자 **주변(국소)만**(쪽 전체
-    아님) `_hidden_overlap_conflict()`로 확인한다: 국소 느슨 일치가 낮으면(워터마크·접근성용 숨은 글자처럼 그림과
-    무관한 내용) 원래 글 유지, 느슨 일치는 높은데 숫자 토큰 리터럴(구분자 유지)이 다르면 그때만 "확인된 충돌"로
-    보고 OCR 글로 채운다(쪽 전체를 바꾸는 게 아니라 이 쪽의 OCR 결과로 교체 — AD29 조각 단위 융합(P1~P3)으로
-    조각만 바꿔 넣는 것은 fuse.py가 facts 중심이라 쪽 전체 본문까지는 못 미쳐 범위 밖, 아래 한계 참고).
+def fill_scan_pages(rep, dd, doc_path, page_vlm=None):
+    """PE1 후속 — .pdf_text 대표 결과의 스캔 쪽(scan_pages_detail)만 쪽 VLM 글로 채운다(글자층 쪽은 그대로 — 쪽 전체를 바꾸지 않음).
+    page_vlm(쪽 VLM 함수, vlm_page.page_text_pages — 스캔 신호 쪽만 병렬 호출)의 글을 쓴다(기록 엔진 이름 "vlm_page").
+    0.2.0(pl-46, 사용자 11-01) — 옛 OCR 엔진(.pdf_image) 대체 길과 숨은 글자 국소 충돌 확인(AD47)은 지웠다: 쪽 VLM 글이 없으면 채우지 않는다.
+    쪽 경계는 _page_texts(boxes 있으면 그걸로, 없으면 \f 개수가 문서의 실제 쪽 수와 같을 때만) — 쪽 번호를 확정할 수 없으면 건너뛴다.
+    쪽 단위 품질 검사 — 그 쪽 글의 garbage_ratio가 0.1을 넘으면 덮지 않고 건너뛴다(원래 글 유지) — page_skip에 기록.
+    AD31 reason='hidden' — 그림과 같은 내용을 옮긴 숨은 글자층('검색 가능 스캔 PDF')은 원래 글과 쪽 VLM 글의 일치도(_page_agreement)가
+    HIDDEN_AGREE_MIN 이상이거나 판단 불가(짧음)면 원래 글을 유지, 미만이면 쪽 VLM 글로 채운다.
+    reason='hidden_overlap'(그림과 겹친 숨은 글자) — 쪽 VLM은 글자 상자가 없어 국소 확인을 못 하므로 늘 원래 글을 유지한다(전과 같은 결과).
     반환: {"filled": {쪽(문자열): 엔진}, "skip": 이유 또는 None, "page_skip": {쪽: 이유}(있을 때만)} — 채울 스캔
     쪽이 없으면(형식이 .pdf_text 아님·스캔 쪽 없음) None."""
     if dd.get("format") != ".pdf_text" or not doc_path or not Path(doc_path).exists():
@@ -513,42 +400,32 @@ def fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=None):
     if not pages:
         return None
     vlm = {i: t for i, t, _ in page_vlm(doc_path) if (t or "").strip()} if page_vlm else {}
-    if vlm:
-        src_engine, ocr_pages, ocr_boxes = "vlm_page", vlm, None
-    else:
-        picked = _ocr_pages(doc, dd, stack, pd, doc_path)
-        if isinstance(picked, dict):
-            return picked
-        src_engine, ocr_pages, ocr_boxes = picked
+    if not vlm:
+        return {"filled": {}, "skip": "쪽 VLM 글 없음"}
     base_pages = _page_texts(rep.get("text") or "", doc_path, rep.get("boxes"))
     if base_pages is None:
         return {"filled": {}, "skip": "대표 쪽 번호 확정 불가(\\f 개수 ≠ 문서 쪽 수, boxes 없음)"}
     filled, page_skip = {}, {}
     for p in pages:
-        text = ocr_pages.get(p, "")
+        text = vlm.get(p, "")
         if not text.strip():
             continue
-        if garbage_ratio(text) > 0.1:  # "OCR 신뢰도 0.9" 기준 — 깨진 OCR 글로 덮지 않음
-            page_skip[p] = "OCR 글 품질 낮음(garbage_ratio > 0.1) — 원래 글 유지"
+        if garbage_ratio(text) > 0.1:  # 깨진 글로 덮지 않음
+            page_skip[p] = "쪽 VLM 글 품질 낮음(garbage_ratio > 0.1) — 원래 글 유지"
             continue
         if pages_detail.get(p) == "hidden":
             agree = _page_agreement(base_pages.get(p, ""), text)
             if agree is None:  # 정규화한 글이 너무 짧아 판단 불가 — 애매하면 원래 글 유지(정답률 보호)
                 page_skip[p] = "hidden-agree(정규화한 글이 짧아 일치도 판단 불가) — 원래 글(숨은 층) 유지"
                 continue
-            if agree >= HIDDEN_AGREE_MIN:  # 검색 가능 스캔 PDF — 숨은 층이 이미 OCR과 같은 내용 → 원래 글 유지
+            if agree >= HIDDEN_AGREE_MIN:  # 검색 가능 스캔 PDF — 숨은 층이 이미 같은 내용 → 원래 글 유지
                 page_skip[p] = f"hidden-agree(원래 글과 일치 {agree} ≥ {HIDDEN_AGREE_MIN}) — 원래 글(숨은 층) 유지"
                 continue
-        elif pages_detail.get(p) == "hidden_overlap":  # AD47 검토자 반영 — 쪽 전체가 아니라 국소(겹친 상자 주변)만
-            conflict, why, fixes = _hidden_overlap_conflict(doc_path, p, ocr_boxes)
-            if not conflict:
-                page_skip[p] = f"hidden-overlap-local({why}) — 원래 글(숨은 층) 유지"
-                continue
-            fixes = _unique_on_page(fixes, base_pages.get(p, ""))
-            if fixes:  # AD47② — 쪽 전체가 아니라 충돌 숫자만 OCR 표기로(나머지 글자층 그대로)
-                text = _NUM_TOK.sub(lambda m: fixes.get(_canon_num(m.group()), m.group()), base_pages.get(p, ""))  # noqa: B023 — sub 안에서 바로 부름
+        elif pages_detail.get(p) == "hidden_overlap":
+            page_skip[p] = "hidden-overlap(쪽 VLM은 글자 상자가 없어 국소 확인 불가) — 원래 글(숨은 층) 유지"
+            continue
         base_pages[p] = text
-        filled[p] = src_engine
+        filled[p] = "vlm_page"
     if not filled:
         out = {"filled": {}, "skip": None}
         if page_skip:
@@ -560,33 +437,6 @@ def fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=None):
     if page_skip:
         out["page_skip"] = {str(p): r for p, r in page_skip.items()}
     return out
-
-
-def _ocr_pages(doc, dd, stack, pd, doc_path):
-    """옛 경로 — .pdf_image 계열 OCR 엔진 중 정확도 가장 높은 성공 후보의 쪽별 글. 반환: (엔진, {쪽: 글}, boxes) 또는 건너뜀 dict."""
-    from pipeline.transform.represent.repfmt import doc_accuracy
-
-    ocr_list = stack["parse"].get(".pdf_image", [])
-    ocr_cands = [
-        {
-            "engine": e,
-            "ok": bool((dd["engines"].get(e) or {}).get("ok")),
-            "acc": doc_accuracy(dd["engines"][e], dd.get("ref")) if e in dd["engines"] else None,
-        }
-        for e in ocr_list
-    ]
-    ocr_ok = [c for c in ocr_cands if c["ok"]]
-    if not ocr_ok:
-        return {"filled": {}, "skip": "OCR 엔진(.pdf_image) 성공 결과 없음"}
-    best = max(ocr_ok, key=lambda c: ((c["acc"] if c["acc"] is not None else -1), -ocr_ok.index(c)))
-    f = pd / best["engine"] / f"{doc}.json"
-    if not f.exists():
-        return {"filled": {}, "skip": "OCR 엔진(.pdf_image) 성공 결과 없음"}
-    ocr_rep = json.loads(f.read_text(encoding="utf-8"))
-    ocr_pages = _page_texts(ocr_rep.get("text") or "", doc_path, ocr_rep.get("boxes"))
-    if ocr_pages is None:
-        return {"filled": {}, "skip": "OCR 쪽 번호 확정 불가(\\f 개수 ≠ 문서 쪽 수, boxes 없음)"}
-    return best["engine"], ocr_pages, ocr_rep.get("boxes")
 
 
 def status(r):
@@ -721,7 +571,7 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     if "figures" in feats:
         doc_sha = (rep.get("rep") or {}).get("source", {}).get("sha256") or fig_mod.sha(Path(doc_path).read_bytes())
         records, plain, enriched = fig_mod.build_records(
-            doc, doc_path, doc_text, doc_sha, out_images=out_images, figures_max=figures_max, page_covered=page_covered
+            doc, doc_path, doc_text, doc_sha, figures_max=figures_max, page_covered=page_covered
         )
         use_context = "context" in feats
         blocks += enriched if use_context else plain
@@ -966,8 +816,8 @@ def represent(stack, parse_dir, src=None):
             from pipeline.transform.figures import vlm_page as vp_mod
 
             vp_pages = [] if covered else vp_mod.page_text_pages(doc_path)
-        # PE1 후속 — .pdf_text 대표의 스캔 쪽만 쪽 VLM(없으면 OCR) 글로 채움(apply_post 전, 후보정이 채운 본문을 기준으로 돌게)
-        fill = fill_scan_pages(rep, doc, dd, stack, pd, doc_path, page_vlm=(lambda _p: vp_pages) if vp_pages is not None else None)
+        # PE1 후속 — .pdf_text 대표의 스캔 쪽만 쪽 VLM 글로 채움(apply_post 전, 후보정이 채운 본문을 기준으로 돌게)
+        fill = fill_scan_pages(rep, dd, doc_path, page_vlm=(lambda _p: vp_pages) if vp_pages is not None else None)
         if fill is not None:
             rep["rep"]["scan_fill"] = fill
         _t["scanfill"] = time.time() - _t0

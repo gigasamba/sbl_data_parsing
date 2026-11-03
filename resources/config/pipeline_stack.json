@@ -15,27 +15,21 @@
    "hwpx"
   ],
   ".png": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".jpg": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".jpeg": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".tif": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".tiff": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".bmp": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".eml": [
@@ -92,18 +86,10 @@
  },
  "source": "selection.json(단계 1 최종 엔진 조합)",
  "name": "dev-v1",
- "embed": "bge-m3",
+ "embed": "api",
  "chunk": "structure",
  "graph": "table+entity",
  "retrieve": "hybrid",
  "k": 10,
- "updated": "2026-10-07 19:29",
- "candidates": [
-  "kreuzberg",
-  "qwen_vlm",
-  "anydoc",
-  "docx2python",
-  "pymupdf4llm",
-  "markitdown"
- ]
+ "updated": "2026-10-07 19:29"
 }

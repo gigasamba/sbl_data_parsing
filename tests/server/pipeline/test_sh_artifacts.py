@@ -1,10 +1,10 @@
-"""pipeline.shared.artifacts 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.shared.artifacts --selftest`."""
+"""pipeline.shared.parse_run 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.shared.parse_run --selftest`."""
 
 import os
 from pathlib import Path
 
 from common.core.artifacts import sha8
-from pipeline.shared.artifacts import engine_version, prompt_id, purge_caches, raw_engine_path, raw_vlm_path
+from pipeline.shared.parse_run import engine_version, prompt_id, purge_caches, raw_engine_path, raw_vlm_path
 
 
 def selftest():

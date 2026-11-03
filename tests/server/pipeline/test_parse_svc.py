@@ -24,11 +24,9 @@ def test_job_env_overrides():
     assert float(seen["PARSE_WARMUP_SEC"]) == 20 and seen["PARSE_POST"] == "supsub", seen
 
 
-def test_ocr_follows_pipeline_switch():
+def test_no_ocr_engines():
     from pipeline import mcp_parse_service as S
 
-    with pc.PIPE.env(PARSE_OCR_ENGINE="1"):
-        assert S._engines_no_ocr_arg() == []  # 켜면 run_all 기본(OCR·VLM 포함)
     args = S._engines_no_ocr_arg()
     assert not args or not {"rapidocr_ko", "qwen_vlm"} & set(args[1].split(","))
 

@@ -9,13 +9,8 @@ common.host.pg_container	PG_CONTAINER	text
 common.host.prune_keep	PRUNE_KEEP	num
 pipeline.host.gold_dir	GOLD_DIR	text
 pipeline.host.image	DATA_PIPELINE_IMAGE	text
-pipeline.host.index_conf_dir	INDEX_CONF_DIR	text
-pipeline.host.load_cpus	LOAD_CPUS	num
-pipeline.host.load_mem_limit	LOAD_MEM_LIMIT	text
 pipeline.host.parse_cpus	PARSE_CPUS	num
 pipeline.host.parse_mem_limit	PARSE_MEM_LIMIT	text
-pipeline.host.publish_cpus	PUBLISH_CPUS	num
-pipeline.host.publish_mem_limit	PUBLISH_MEM_LIMIT	text
 pipeline.host.run_docs_dir	RUN_DOCS_DIR	text
 pipeline.host.structure_cpus	STRUCTURE_CPUS	num
 pipeline.host.structure_mem_limit	STRUCTURE_MEM_LIMIT	text

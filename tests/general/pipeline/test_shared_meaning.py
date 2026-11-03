@@ -1,6 +1,6 @@
-"""pipeline.shared.meaning 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.shared.meaning`."""
+"""pipeline.shared.canon 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.shared.canon`."""
 
-from pipeline.shared.meaning import canon_num_key
+from pipeline.shared.canon import canon_num_key
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통(인라인 점검)

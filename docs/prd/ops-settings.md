@@ -85,7 +85,7 @@
 - 고칠 곳(허브 점검 10-31 — 줄 번호는 그날 기준):
   - `/srv/rag/code/live`가 15곳에 복사됨 — `deploy/host/compose/compose.patch*.yml`, `deploy/host/scripts/mcp_up.sh:15`, `run_docs.py:141`, systemd unit.
   - `SERVER_ENV_DIR` 기본 `/srv/rag/env`가 4곳 — `settings_env.sh:54` 하나만 기본값으로 남긴다.
-  - PG 기본값·자동 찾기 — `common/store/pg.py:37-41`, `common/store/services.py:34/132/138`, `pipeline/cli.py:854`(위 결정).
+  - PG 기본값·자동 찾기 — `common/store/pg.py:37-41`, `common/store/pg.py`(`detect_pg`·`connect` — 0.2.0에 services.py에서 옮김), `pipeline/cli.py:854`(위 결정).
   - MCP 호스트·포트·주소 중복 — `mcp_server/main.py:104/192`, `mcp_server/cli/mcp_eval.py:896`, `mcp_server/cli/mcp_smoke.py:54`, `validation/search_ui/serve.py:32/119`.
   - `RERANK_MODEL` 글자 그대로 — `pipeline/eval/stages.py:40` → 설정 칸.
   - soffice 경로 추측 — `pipeline/transform/figures/pptx_render.py:63-69` → PATH와 `SOFFICE_BIN`만(§2).
@@ -117,6 +117,6 @@
 ## 코드와 다른 점 · 지울 코드
 
 ### 요건 없는 코드 — 남길지 지울지([test.md#e2-18](test.md#e2-18))
-- 공용 도구 — 설정 CLI `common/config/`, DB 도구 `common/store/db/`, 점검 `pipeline/check_env.py`, `common/check/`.
+- 공용 도구 — 설정 CLI `common/config/`, DB 도구 `common/store/db/`, 점검 `common/check/checker.py`(env·services·ping — 0.2.0 합침), `common/check/`.
 
 전체 스위치와 기본값: `settings.sample.yaml` 2부, "[기능 켬/끔]" 묶음.

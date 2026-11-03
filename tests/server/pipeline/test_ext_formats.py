@@ -10,7 +10,6 @@ from unittest import mock
 from common.core.paths import STACK_FILE
 from pipeline.extract.engines import registry
 from pipeline.extract.run_all import engines_for_doc
-from pipeline.stackcfg import over_limit
 
 IMAGES = (".jpeg", ".tif", ".tiff", ".bmp")
 NEW = (*IMAGES, ".mhtml", ".hwpx")
@@ -22,13 +21,12 @@ def _stack_parse():
 
 
 def test_stack_lists_new_formats():
-    """엔진 구성 파일에 형식마다 엔진이 있고(형식당 2개 이하), 그 엔진이 형식을 읽는다고 선언한다(FORMATS)."""
+    """엔진 구성 파일에 형식마다 엔진이 있고, 그 엔진이 형식을 읽는다고 선언한다(FORMATS)."""
     sp = _stack_parse()
-    assert over_limit({"parse": sp}) == []
     for ext in NEW:
         assert ext in sp, ext
         assert sp[ext] and set(sp[ext]) <= set(registry.engines_for(ext)), (ext, sp[ext], registry.engines_for(ext))
-    for ext in IMAGES:  # 이미지는 .jpg와 같은 엔진 — OCR 엔진은 ocr_engine 켤 때만이라 기본은 VLM 하나
+    for ext in IMAGES:  # 이미지는 .jpg와 같은 엔진 — VLM 하나(0.2.0 — 구성에서 OCR 엔진을 뺌, pl-46)
         assert sp[ext] == sp[".jpg"], ext
         assert engines_for_doc(Path("x" + ext), sp, {}, set()) == ["qwen_vlm"], ext
     assert sp[".mhtml"] == sp[".mht"]

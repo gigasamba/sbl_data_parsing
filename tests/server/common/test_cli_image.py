@@ -24,7 +24,7 @@ def test_selftest_without_pipeline_stages():
         package.mkdir()
         # deploy/docker/Dockerfile의 MCP COPY와 같은 세 파일. shared·extract 등은 없다.
         for name in ("__init__.py", "cli.py", "config.py"):
-            shutil.copyfile(paths.PIPELINE_ROOT / name, package / name)
+            shutil.copyfile(paths.DEPLOY_ROOT / "pipeline" / name, package / name)
         for relative in ("tests", "tests/server", "tests/server/common"):
             folder = root / relative
             folder.mkdir(exist_ok=True)

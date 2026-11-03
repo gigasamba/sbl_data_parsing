@@ -59,20 +59,15 @@ PKG_ROOT = (
 )  # 공용 패키지 루트(S6a — 옛 deploy/common_tools/와 같은 깊이, 위 설명) — 하위 프로세스 cwd·표시 기준(데이터 파일은 S2부터 RES_ROOT)
 # 10-14 이미지 단위 분리(사용자) — 모듈 패키지 루트. 각 이미지엔 자기 모듈 + common만 있으므로 없는 폴더일 수 있다.
 # I2(10-23) — 파싱·구조화 두 모듈 폴더가 data_etl/ 단계 폴더(extract·transform·load…)로 합쳐짐. data-parsing·data-structure 이미지 둘 다 data_etl/ 전체를 넣는다.
-# S4(10-26, refactor_plan 9-1) — data_etl/ → pipeline/(ETL_ROOT → PIPELINE_ROOT). 엔진 폴더 기준 상대 경로('engines/…')는 그대로.
-PIPELINE_ROOT = (
-    DEPLOY_ROOT / "pipeline"
-)  # data-parsing·data-structure 이미지(파싱·구조화·적재) — 지시서 패키지는 S2부터 RES_ROOT/prompts/pipeline/
+# S4(10-26, refactor_plan 9-1) — data_etl/ → pipeline/. 엔진 폴더 기준 상대 경로('engines/…')는 그대로(0.2.0 PIPELINE_ROOT·RETRIEVAL_ROOT 상수 지움 — pl-46).
 PARSING_ROOT = (
-    PIPELINE_ROOT / "extract"
+    DEPLOY_ROOT / "pipeline" / "extract"
 )  # 엔진 폴더(engines/)의 부모 — run_all.engine_code_fp가 'parse/' + 이 기준 상대 경로로 해시(옮기기 전과 같은 'engines/…' 글자 — 엔진 지문 유지)
-RETRIEVAL_ROOT = DEPLOY_ROOT / "mcp_server"  # data-retrieval 이미지(근거 MCP) — S5 전 data_retrieval/
 E2E_ROOT = DEPLOY_ROOT / "validation" / "e2e"  # S6a — PC 전용 평가 도구·triple_extract 지시서(이미지에는 없음)
 # S2(10-26, refactor_plan 4-1·D-011) — 코드가 읽는 데이터(지시서·설정 기본값·원천 표·어휘)를 패키지 폴더에서 resources/로 모음.
 # 패키지들과 같은 자리(PC=저장소 루트/resources, 이미지=/app/deploy/resources) — 모든 이미지에 폴더째 들어간다.
 RES_ROOT = DEPLOY_ROOT / "resources"
 CRITERIA_FILE = RES_ROOT / "config" / "criteria.json"  # 판정 문턱값 정본(D-022 — 서버 사본 우선은 S7)
-TEMPLATES_DIR = RES_ROOT / "config" / "report_templates"  # 보고서 틀(T-17)
 STACK_FILE = RES_ROOT / "config" / "pipeline_stack.json"  # 엔진 구성(D-017 — S8에 DB 판 표의 시드·PC 대체)
 GLOSSARY_ROOT = RES_ROOT / "vocab" / "glossary"  # 용어집·명부 예시·고객 seed(운영 사전은 env GLOSSARY_DIR — 이 값은 코드 기본·selftest용)
 APP_ROOT = PROJ_ROOT  # 런타임 루트(output/·assets/·docker/가 있는 곳) — PC=저장소 루트, 이미지=/app(둘 다 PROJ_ROOT와 같음, 위 설명)
@@ -96,7 +91,7 @@ def doc_dir(required=True):
     """원본 문서 폴더 — 설정 DOC_DIR(common.paths.doc_dir — S7e2부터 옛 별칭 DOC_SRC env는 안 읽음, DOC_SRC는 호스트 마운트 원본 칸), 하드코딩 기본값 없음(10-14 — 옛
     data/unstructed/SFDC_dump/ 자리표시자는 지워짐, NM16 전까지는 대체 자리표시자도 없음). required=True(기본)면
     둘 다 없을 때 SystemExit(사람이 보는 안내 한 줄) · required=False면 조용히 None(호출부가 '미설정'을 크래시가
-    아니라 점검 결과 한 줄로만 보고할 때 — 예: cli/check_env.py)."""
+    아니라 점검 결과 한 줄로만 보고할 때 — 예: common.check.checker env)."""
     from common.config.settings import cfg  # S7b — 설정 객체(늦게 import: 이 파일은 거의 모든 프로세스가 import)
 
     v = cfg().paths.doc_dir
@@ -109,7 +104,7 @@ def doc_dir(required=True):
 
 def resolve_agent_dir(agent_id):
     """단계 4(10-13) — 옛 dev/agents/<id>/는 prompts/<id>/(단일 호출 프롬프트 묶음)와 parse/agent/<id>/(여러
-    턴 파싱 agent: parse_agent·parse_decide·parse_decide_vlm·parse_shadow)로 나뉨. 패키지 이름으로 어느 쪽인지
+    턴 파싱 agent)로 나뉨. 패키지 이름으로 어느 쪽인지
     찾는 자리를 여기 한 곳으로 묶음(common/adk.py._load_pipeline·common/agent_prompts.py 둘 다 거침) — 새
     agent_id를 추가할 때 두 파일을 따로 안 고쳐도 되게.
 

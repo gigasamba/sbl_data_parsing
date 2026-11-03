@@ -146,7 +146,7 @@
 - 이유: 폐쇄망 서버는 외부 모델을 절대 부르면 안 되고, PC 호출은 싸게 유지해야 한다.
 - 무엇: OpenAI 호환 역할 llm/vlm/embed(rerank는 10-29에, ocr_vlm은 10-30에 지움 — [transform-cleanup.md#pl-31](transform-cleanup.md#pl-31)). 서버(dev/prd)는 외부 모델 거부. 외부 전송은 `*_ALLOW_EXTERNAL` + `RUN_ENV=local`이어야 함. 예산, 호출 상한, RPM, 비용 장부, 응답 캐시, 시험용 가짜 LLM.
 - 10-29(사용자): 합성 문서 선언 `LLM_SYNTHETIC_TRUTH` 잠금 삭제 · 외부 허용은 루트 settings.yaml에 둬도 됨(설정 창구는 하나).
-- 파일: `common/ai/guard.py`, `common/ai/llm.py`, `common/ai/adk.py`, `common/config/settings.py`.
+- 파일: `common/ai/guard.py`, `common/ai/llm.py`(옛 `adk.py` 합침 — 0.2.0), `common/config/settings.py`.
 - 결정(사용자 11-02): 개발 서버(dev)부터 내부망 GLM, PC(local)는 OpenRouter(유료 — 상한은 CLAUDE.md §7).
 - Status: done
 

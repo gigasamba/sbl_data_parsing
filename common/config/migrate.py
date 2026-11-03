@@ -20,8 +20,8 @@ MASK = "<가림>"
 
 
 def _removed(model, prefix=""):
-    """지운 칸(Section.REMOVED)의 모델 경로 — 옛 파일에 남아 있으면 "삭제됨"으로 알린다."""
-    out = {prefix + n for n in getattr(model, "REMOVED", ())}
+    """지운 칸(layout.REMOVED — 절 클래스 이름으로)의 모델 경로 — 옛 파일에 남아 있으면 "삭제됨"으로 알린다."""
+    out = {prefix + n for n in L.REMOVED.get(model.__name__, ())}
     for name, f in model.model_fields.items():
         sub = S._section_type(f.annotation)
         if sub is not None:

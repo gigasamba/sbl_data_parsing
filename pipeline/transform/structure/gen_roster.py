@@ -20,7 +20,7 @@ mapping.json(필수 name, 선택 aliases·category): {"name": "<열 이름>", "a
 10-13 — GLOSSARY_DIR에 바로 쓰면 서버에서 이미지 밖 실 운영 사전 폴더라 권한 오류가 날 수 있다). 사람이 검토해
 domain_terms.csv로 옮겨야 검색에 반영된다(cli/glossary_suggest.py T6와 같은 관례)."""
 
-import common  # noqa: F401 — 영구 다리(엔진·인계 칸 → env, settings.pin_env)를 첫 줄에서(S7e2 — 옛 옵션 카탈로그 채우기 자리)
+import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
 from common.core.console import utf8_stdout
 
 # isort: split

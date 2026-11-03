@@ -1,7 +1,7 @@
-"""인계 지문(FINGERPRINT)·지문용 옛 이름 대응표(legacy_names)·인계 형식 버전(CONTRACT)·판 표기(pipeline_version).
+"""인계 지문(FINGERPRINT)·인계 형식 버전(CONTRACT)·판 표기(pipeline_version).
 S3(10-26, refactor_plan 4-3·D-001) — 옛 common_tools/__init__.py에서 그대로 옮김(값·동작 그대로 — FINGERPRINT 87588ce7c88d70ee).
 HANDOFF_FILES·_unclassified의 기준 폴더는 이 파일의 폴더(core/)가 아니라 공용 패키지 루트(common/) — 이름은 'core/…'.
-common/__init__.py가 CONTRACT·FINGERPRINT·legacy_names·pipeline_version을 다시 내보낸다(`from common import CONTRACT` —
+common/__init__.py가 CONTRACT·FINGERPRINT·pipeline_version을 다시 내보낸다(`from common import CONTRACT` —
 HANDOFF 파일 core/contract.py의 import 줄이 그대로여야 지문이 같다).
 
 FINGERPRINT = HANDOFF_FILES(이 폴더의 일부 .py만) 내용의 지문 — 모듈 끝 표시(_DONE.json)에 남기고 다음 모듈이
@@ -43,8 +43,7 @@ EXCLUDED_FILES = (
     "core/__init__.py",  # 하위 패키지 입구(빈 파일)
     "store/__init__.py",  # 하위 패키지 입구(빈 파일)
     "check/check_modules.py",  # 모듈 경계 점검 — 개발·반입 점검 도구, 인계 내용과 무관
-    "check/os_put.py",  # 시험용 Object Storage 올리기 — 운영 도구
-    "check/ping_models.py",  # 모델 연결 확인 — 운영 도구
+    "check/checker.py",  # 점검기 하나(env·services·ping — 0.2.0 합침) — 운영 도구
     "core/exitclean.py",  # 종료 정리(pl-27 — 임시 파일 지우기·자식 회수) — 프로세스 관리, 인계 내용과 무관
     "core/console.py",  # CLI 표준 출력을 UTF-8로(S12 /simplify — utf8_stdout) — 화면 출력만, 인계 내용과 무관
     "core/fingerprint.py",  # 이 파일 자신(S3 — 옛 __init__.py) — CONTRACT는 따로 버전으로 확인, pipeline_version()은 인계 내용과 무관
@@ -58,14 +57,12 @@ EXCLUDED_FILES = (
     "config/migrate.py",  # 옛 env 파일 → settings.yaml(S7a) — 운영 도구
     "config/sample.py",  # settings.sample.yaml 만들기·대조(S7a) — 개발 도구
     "config/show.py",  # 앱 설정 확인 명령(S7a) — 운영 도구
-    "ai/adk.py",  # LLM·VLM 호출 메커니즘(세션·재시도) — 생성된 글자 자체는 agent_prompts(별도로 agent_platform._package_digest가 추적)·모델 설정이 결정
     "ai/agent_prompts.py",  # 지시문 글자 변경은 agent_platform.pipeline._package_digest가 이미 따로 추적(여기서 또 볼 필요 없음)
     "core/artifacts.py",  # 실험 저장소 계약(code_fp·캐시 정리) — 파싱 이식 도구 전용, parse↔structure↔load 런타임 핸드오프 밖
     "core/docmeta.py",  # structure(build_bundle.py)↔search(retriever.py) 전용(날짜·구판 판정) — parse·load는 안 씀, 이 FINGERPRINT가 보는 두 경계(parse→structure·structure→load) 밖
     "ai/embed.py",  # 임베딩 계산은 structure(쓰기)·search(질의)가 맞아야 하지만 search는 이 FINGERPRINT 경계 밖(MARK에 없음)이라 넣어도 그 위험을 못 막고,
     # 질의 캐시 코드(RV1)가 내용과 무관하게 자주 바뀌어 넣으면 그 캐시 수정마다 재파싱을 유발(10-09 사고). structure 쪽 재사용 판정은 common/artifacts.code_fp("s")가 이미 embed.py를 따로 잡음(cli/index.py)
     "ai/guard.py",  # 내부망 확인(허용/거부) — 통과하면 호출 내용을 바꾸지 않음, _rep/bundle 바이트·해석과 무관
-    "core/index_cfg.py",  # 색인 설정·주소(index_id·PG 스키마) — search·cli/index.py 전용, parse·structure·load 경계 밖
     "ai/llm.py",  # LLM 클라이언트(재시도·캐시·예산) — 호출 메커니즘 + 모델 프로필(주소·이름) env 조회(CT1 — 옛 models.py 병합)
     "core/meaning.py",  # 유의미 토큰 — parse 내부(대표 선정·QA)·structure 내부(쪽 번호 제거) 각자 전용, 서로 맞출 공유 값이 없음(CT1 — text.py와 tokens() 이름이 겹쳐 병합 안 하고 그대로 둠)
     "store/mssql.py",  # S8b — 회사 DB(SQL Server) SQLAlchemy 연결 — 연결 방법만
@@ -79,8 +76,6 @@ EXCLUDED_FILES = (
     "store/logsink.py",  # op-01 비동기 DB 기록 — 인계 내용과 무관
     "core/span.py",  # op-01 파이프라인 성능 span — 인계 내용과 무관
     "core/runlog.py",  # 실행 로그(output/RUNLOG.md 등)
-    "store/services.py",  # 외부 서비스 탐색(Docker pgvector 등) — 연결 방법만
-    "core/sources.py",  # 수집(ingest) 원천 표 목록 — parse 이전 단계(수집 서버), 모듈 핸드오프 밖
     "store/db/",  # S8a — pgvector 표 정의·행 모양·Alembic 판·migrate 명령(폴더째 — "/"로 끝나면 그 아래 전부). DB 표 모양만,
     # _rep/bundle 내용과 무관 · 판을 더할 때마다 이 파일을 고치지 않게(이 파일은 모든 층의 공용 의존 — code_fp)
 )
@@ -89,19 +84,11 @@ EXCLUDED_FILES = (
 # CT1(10-16) — common_tools 하위를 역할 묶음(model/·store/·contract/·runtime/)으로 재편, 경로만 바뀜(§_unclassified는
 # 최상위 *.py만 보므로 옮긴 파일은 더 이상 거기 잡히지 않음 — 위 목록은 fingerprint() 읽기 경로 용으로 계속 정확히 유지).
 # S3(10-26, refactor_plan 9-1·9-2) — common_tools → common/{core,ai,store,check}. 위 두 목록은 새 자리(이 폴더 기준)이고,
-# 지문에 넣는 이름은 아래 _HANDOFF_LEGACY의 옛 상대 경로 그대로(경로 글자만 바뀐 것으로 FINGERPRINT가 바뀌지 않게).
+# 지문에 넣는 이름은 0.2.0부터 지금 상대 경로(옛 경로 대응표 _HANDOFF_LEGACY는 지움 — pl-46).
 # store/objectstore.py 등 store/·check/ 아래 나머지는 처음부터 이 목록 밖이었다(최상위만 _unclassified가 봄).
 # S4(10-26, VS3 R-1 — 코디네이터 Task) — _unclassified가 common/ 하위 폴더까지 본다(S3 전에는 최상위 common_tools/*.py
 # 4개를 봤는데, S3로 그 파일들이 core/로 내려가 최상위에는 __init__.py만 남아 검사가 사실상 비어 있었음). 빠져 있던
 # 하위 패키지 __init__.py 5개·check/ 도구 3개를 EXCLUDED_FILES에 더함 — FINGERPRINT는 HANDOFF_FILES만 보므로 그대로.
-
-# 지문 계산용 옛 상대 경로(새 자리 → 옛 common_tools/ 기준 이름) — 지우지 않는다(CLAUDE.md 3절 인계 지문).
-_HANDOFF_LEGACY = {
-    "core/contract.py": "contract/contract.py",
-    "core/repfmt.py": "contract/repfmt.py",
-    "core/terms.py": "terms.py",
-    "core/text.py": "text.py",
-}
 
 
 def _unclassified(root=None, handoff=HANDOFF_FILES, excluded=EXCLUDED_FILES):
@@ -121,65 +108,14 @@ if _missing:
     )
 
 
-# 앞에서부터 차례로 바꾸므로 순서가 결과를 정한다 — 뒤 쌍은 앞 쌍이 바꾼 글자를 다시 본다(먼저 맞은 쌍이 이기는 게 아니라
-# 이어서 적용됨). I2(10-23) 맨 앞 두 쌍: data_etl 이름을 10-14 이름(data_parsing.*)으로 먼저 되돌리면 바로 뒤
-# data_parsing. 쌍이 이어서 옛 data_pipeline.parse.로 바꿔 엔진 지문(run_all.engine_code_fp)이 옮기기 전과 같다.
-# 이 두 쌍은 반드시 data_parsing. 쌍보다 앞에 둔다(뒤에 두면 data_etl.* 글자가 그대로 남아 지문이 바뀜).
-# S2(10-26, 사용자 1a) 맨 앞 세 쌍: HANDOFF 파일 terms.py의 데이터 경로 글자만 resources/로 바뀐 것(엔진 구성·용어집 이동)을
-# 옛 글자로 되돌려 인계 FINGERPRINT를 옮기기 전과 같게 둔다(엔진 파일에는 이 글자가 없어 엔진 지문 영향 없음).
-# S3(10-26, 사용자 원칙 — 경로·모듈 이름 글자만 바뀐 것은 지문 유지) 맨 앞 일곱 쌍: common_tools → common/{core,ai} 이름을
-# S3 전 글자(common_tools.*)로 먼저 되돌린다 — 그 뒤 S2 쌍·옛 쌍이 S3 전과 똑같이 이어서 적용된다. 앞 다섯 쌍은 HANDOFF 파일
-# (contract·repfmt·terms·text의 import 줄·사용 안내 글자), 뒤 두 쌍은 엔진 import 줄(docling·qwen_vlm의 guard, rapidocr의 resources).
-# 반드시 common_tools. 쌍보다 앞에 둔다(뒤에 두면 common.* 글자가 그대로 남아 지문이 바뀜) — VS3 실험으로 확인한 실제 제약은
-# 이것뿐이다(S2 쌍과는 글자가 겹치지 않아 순서가 결과를 바꾸지 않음 — 그래도 지금처럼 맨 앞에 두면 안전).
-# S4(10-26, 같은 사용자 원칙) 맨 앞 두 쌍: data_etl/ → pipeline/ 이동으로 엔진 import 줄(…extract.engines._common 18곳·등록부
-# import_module 글자 1·qwen_vlm의 …figures.vgate 1)에 생긴 새 이름을 I2 글자(data_etl.*)로 먼저 되돌린다 — 바로 뒤가 아니라
-# 아래 I2 쌍(data_etl.* → data_parsing.*)보다 앞이기만 하면 된다(그 뒤 쌍들은 S4 전과 똑같이 이어서 적용). HANDOFF 파일에는
-# 이 글자가 없어 인계 지문 영향 없음.
-_LEGACY_NAMES = (
-    (b"pipeline.extract.engines.", b"data_etl.extract.engines."),
-    (b"pipeline.transform.figures.vgate", b"data_etl.transform.figures.vgate"),
-    (b"from common import CONTRACT", b"from common_tools import CONTRACT"),
-    (b"common.core.contract", b"common_tools.contract.contract"),
-    (b"common.core.paths", b"common_tools.contract.paths"),
-    (b"common.core.terms", b"common_tools.terms"),
-    (b"common.core.text", b"common_tools.text"),
-    (b"common.ai.guard", b"common_tools.model.guard"),
-    (b"from common.core import resources", b"from common_tools.runtime import resources"),
-    (b"paths import PKG_ROOT, RES_ROOT", b"paths import PKG_ROOT"),
-    (b'RES_ROOT / "config" / "pipeline_stack.json"', b'ROOT / "pipeline_stack.json"'),
-    (b'RES_ROOT / "vocab" / "glossary"', b'ROOT / "glossary"'),
-    (b"data_etl.extract.engines.", b"data_parsing.engines."),
-    (b"data_etl.transform.figures.vgate", b"data_parsing.postprocess.vgate"),
-    (b"data_parsing.", b"data_pipeline.parse."),
-    (b"data_structure.", b"data_pipeline.structure."),
-    (b"data_retrieval.", b"data_pipeline.search."),
-    (b"common_tools.evaluation", b"data_pipeline.evaluation"),
-    (b"common_tools.cli", b"data_pipeline.cli"),
-    (b"common_tools.", b"data_pipeline.common."),
-    (b"from common_tools import", b"from data_pipeline.common import"),
-    (b"data_parsing ", b"data_pipeline.parse "),
-)
-
-
-def legacy_names(data):
-    """10-14 이미지별 폴더 분리 — 지문(인계 FINGERPRINT·run_all 엔진 코드 지문)을 옛 패키지 이름으로 되돌려 계산:
-    import 이름만 바뀐 것으로 서버의 멀쩡한 결과가 낡음 처리(전 문서 재파싱·종료 코드 3)되지 않게.
-    ponytail: 바이트 치환 — 해당 파일 내용이 실제로 바뀌면 지문은 어차피 바뀌므로 그 판 이후엔 지워도 됨."""
-    for new, old in _LEGACY_NAMES:
-        data = data.replace(new, old)
-    return data
-
-
 def fingerprint(root=None, handoff=HANDOFF_FILES):
-    """HANDOFF_FILES(기본)만 — 줄 끝(CRLF/LF) 차이는 무시(Windows 사본과 Linux 사본이 같은 지문).
-    해시에 넣는 이름은 옛 상대 경로(_HANDOFF_LEGACY, S3) — 대응표에 없는 이름(selftest 가짜 파일)은 그대로."""
+    """HANDOFF_FILES(기본)만 — 줄 끝(CRLF/LF) 차이는 무시(Windows 사본과 Linux 사본이 같은 지문). 해시에 넣는 이름은 지금 상대 경로
+    (0.2.0 — 옛 이름 대응표 _HANDOFF_LEGACY·_LEGACY_NAMES·legacy_names를 지움, 지문이 한 번 바뀜 — pl-46)."""
     folder = Path(root) if root else _ROOT
     h = hashlib.sha256()
-    for name in sorted(handoff, key=lambda n: _HANDOFF_LEGACY.get(n, n)):
-        f = folder / name
-        h.update(_HANDOFF_LEGACY.get(name, name).encode())
-        h.update(legacy_names(f.read_bytes().replace(b"\r\n", b"\n")))
+    for name in sorted(handoff):
+        h.update(name.encode())
+        h.update((folder / name).read_bytes().replace(b"\r\n", b"\n"))
     return h.hexdigest()[:16]
 
 

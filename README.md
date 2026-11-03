@@ -271,7 +271,7 @@ SRC=output/demo/src     # --src는 폴더만 받음 — 문서를 한 폴더로 
 
 ```bash
 .venv/bin/python -m pipeline.transform.structure.build_bundle \
-  --parse-dir output/demo/parse --src $SRC --embed api --summary lead --out output/demo/bundle
+  --parse-dir output/demo/parse --src $SRC --embed api --out output/demo/bundle
 ```
 
 - 결과: `output/demo/bundle/`(docs.jsonl · chunks.jsonl · vectors.npy · kg\_*.jsonl · meta.json)
@@ -318,7 +318,7 @@ SETS=(--set PIPE_OUT_ROOT=$O --set PG_SCHEMA=demo --set EMBED_ALLOW_EXTERNAL=1
 
 .venv/bin/python -m pipeline.cli "${SETS[@]}" parse --src $SRC
 .venv/bin/python -m pipeline.transform.structure.build_bundle "${SETS[@]}" \
-    --parse-dir $O/parse --src $SRC --embed api --summary lead --out $O/bundle
+    --parse-dir $O/parse --src $SRC --embed api --out $O/bundle
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle $O/bundle --create-extension
 .venv/bin/python -m pipeline.load.pgvector_load "${SETS[@]}" load --bundle $O/bundle
 

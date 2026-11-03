@@ -1,4 +1,5 @@
-"""앱 설정 확인 명령 — `python -m pipeline.config`·`python -m mcp_server.config`가 부른다(S7a).
+"""앱 설정 확인 명령 — `python -m pipeline.config`·`python -m mcp_server.config`가 부른다(S7a). common 절만: `python -m common.config.show`
+(0.2.0 — 옛 `python -m common.config.settings` 입구를 settings.py 밖으로 옮김: settings.py가 모든 레이어의 code_fp 의존이라 이 파일·export가 같이 묶이지 않게, pl-46).
 [--file 경로]                         설정을 읽어 요약 — 파일·RUN_ENV·절마다 채운 칸 수, 채운 비밀 칸은 이름만
 [--file 경로] export --section … [--format env|sh]   그 절을 KEY=VALUE로(common.config.export와 같음 — 이 앱 모델로)
 --file: 읽을 파일(없으면 SETTINGS_FILE·RUN_ENV 규칙) — export 앞·뒤 어디에 줘도 됨
@@ -49,3 +50,7 @@ def main(app_cls, argv, prog=None):
     except S.SettingsError as e:
         print(f"[설정] {e}", file=sys.stderr)
         return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(S._TApp, sys.argv[1:], prog="python -m common.config.show"))

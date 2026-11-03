@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""실행 자원 — pipeline(S) 전용 점검(10-14 common.core.resources에서 옮김 — cli/check_env.py(TOOL_IMAGE
+"""실행 자원 — pipeline(S) 전용 점검(10-14 common.core.resources에서 옮김 — common.check.checker env(TOOL_IMAGE
 "structure")·dev_tools/pipeline_e2e_test/e2e.py만 쓴다). CPU·메모리 감지·plan() 등 공용 핵심은 common.core.resources에
 그대로 남아 있다.
 

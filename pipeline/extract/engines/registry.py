@@ -32,10 +32,11 @@ def engines():
 # 핵심 평가 엔진(기본 실행 대상, 2026-09-29 사용자 확정) — 타입별 담당·실측 성능·라이선스로 추림. 나머지는 --engines all이거나 이름을 명시할 때만.
 # 제외(사용자 10-07, 스택에서 뺌 — backlog DP6): paddleocr · docling_ocr(EasyOCR 내장).
 # openviking_import·cognee_import 엔진 어댑터는 삭제됨(SI33, 10-07) — OpenViking은 서버의 기존 컨테이너를 직접 쓰고(구조화 요약 fallback은 OV_DOC_ROOT), Cognee는 스택에서 제외(DP6).
-CORE = {"pdfplumber", "pymupdf", "kreuzberg",                                  # 텍스트 PDF(+ kreuzberg는 doc·html·eml 등 폭넓게)
+CORE = {"pymupdf", "kreuzberg",                                                # 텍스트 PDF(+ kreuzberg는 doc·html·eml 등 폭넓게)
         "rapidocr_ko", "qwen_vlm",                                              # 이미지·스캔(ocr_vlm은 10-30 지움 — pl-31)
-        "office", "calamine", "pptx", "plaintext", "mhtml", "html_stdlib", "msg_extract", "markitdown", "hwpx",   # 오피스·웹·메일
-        "anydoc", "pypdf"}   # 올인원 내부 파서 단독 — OpenViking 오피스(anydoc) · Cognee 기본 PDF(pypdf) — 올인원 결과가 파서 탓인지 요약·추출 탓인지 가르기
+        "office", "plaintext", "mhtml", "html_stdlib", "msg_extract", "markitdown", "hwpx",   # 오피스·웹·메일
+        "anydoc"}   # 올인원 내부 파서 단독 — OpenViking 오피스(anydoc)
+# 0.2.0(pl-46, 사용자 11-01) 엔진 지움: pdfplumber·pypdf·calamine·pptx(python_pptx)·pymupdf4llm — 한 번도 안 돈 엔진. docx2python은 비교용으로 남김.
 # 10-30(pl-31) 엔진 지움: docling·docling_ocr·docling_vlm·unstructured·unstructured_auto·unstructured_ocr·rapidocr(1.x)·kreuzberg_ocr·marker_llm(이름만 남아 있던 것).
 
 

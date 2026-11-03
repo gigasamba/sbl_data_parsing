@@ -24,7 +24,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
     import shutil
     import tempfile
 
-    import common.ai.adk as _adk
+    import common.ai.llm as _adk  # 모델 호출(0.2.0 — 옛 common.ai.adk)
 
     _orig_complete = _adk.complete
     _tmp1 = tempfile.mkdtemp()
