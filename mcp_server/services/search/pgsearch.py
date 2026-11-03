@@ -167,10 +167,11 @@ def search(
     top = [cid for cid, _ in sorted(rrf.items(), key=lambda x: (-x[1], x[0]))[:k]]
     if not top:
         return []
-    rows = {  # mc-19 — 문서 날짜는 gold doc 칸(검색 뷰는 출력 계약이라 그대로 두고 JOIN)
+    rows = {  # mc-19 — 문서 날짜는 gold doc.content_date(근거 이름은 doc_date — 검색 뷰는 출력 계약이라 그대로 두고 JOIN)
         r["chunk_id"]: r
         for r in db.q(
-            f"SELECT v.*, d.doc_date FROM {s}.v_chunk_source v JOIN {s}.doc d ON d.doc_id = v.doc_id WHERE v.chunk_id = ANY(%s)", (top,)
+            f"SELECT v.*, d.content_date AS doc_date FROM {s}.v_chunk_source v JOIN {s}.doc d ON d.doc_id = v.doc_id WHERE v.chunk_id = ANY(%s)",
+            (top,),
         )
     }
     top = [c for c in top if c in rows]  # BR41 — rows를 이미 가져온 뒤 재배열(추가 질의 없음), local.py와 같은 tie_break

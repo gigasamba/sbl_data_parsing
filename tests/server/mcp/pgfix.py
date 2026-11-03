@@ -60,6 +60,7 @@ def load(bundle, schema=SCHEMA, standin=None):
                     d = dict(docs[i])
                     names = [n for n in (d.get("clients") or ([d["client"]] if d.get("client") else [])) if n]
                     d.setdefault("clients_doc", json.dumps(names, ensure_ascii=False) if names else None)
+                    d.setdefault("content_date", d.get("doc_date"))  # mc-19 — bundle doc_date → gold content_date
                     d.setdefault("embed_model", meta.get("embed_model"))  # mc-19 — load writes the bundle's model on every doc
                     d["doc_id"] = i + 1  # 공용 시퀀스 흉내(서버는 5벌이 시퀀스 하나 — 묶음 줄 순서대로 겹치지 않는 번호)
                     cols = ["doc_id"] + [k for k in dcols if d.get(k) is not None]

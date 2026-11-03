@@ -168,9 +168,9 @@
 - 범위(사용자 11-03 — 허브 전달): 0.2.0에 넣는다.
 - 구현(11-03 `feature/mc19-pg-search`):
   - 최신성 칸은 `doc_date` 하나만 더했다 — 1차 결정(4칸) 뒤 최신성 순위가 [pl-38](load.md#pl-38)에 지워져(`retriever.py` 주석·`CommonText.search_recency` 지운 칸), 묶음에서 근거로 나가는 값은 `doc_date`뿐이었다. `version`은 근거에서 원천 manifest 값만(`shaping._evidence`), `superseded`는 늘 null(mc-05), `family`는 pl-38에 지움 — 셋 다 검색이 읽지 않아 칸을 만들지 않는다(필요해지면 새 판).
-  - 판 `0004_doc_embed.py`: 5벌 `doc`에 `doc_date TEXT`(docmeta의 ISO 글자 — `YYYY-MM`·`YYYY`도 있어 DATE가 아님)·`embed_model TEXT` 더함, `corpus_stat.dim` 지움. 모델 `search_tables.DOC_META`. 검색 뷰 `v_chunk_source`는 그대로.
-  - 적재(`pgvector_load._load_src`)가 `doc_date`(묶음 docs.jsonl)·`embed_model`(묶음 meta.json)을 채움. BM25 통계는 `_corpus_stat_sql` 한 곳(차원 없음).
-  - 검색: `pgsearch.index_meta(db)` — 모델 = 그 스키마 `doc.embed_model`(여럿이면 쉼표로 이어 질의 모델과 같을 수 없어 `embed_query`가 거부 — 섞인 색인), 차원 = 벡터 칸 형식(벡터가 없으면 0 — 키워드·ID만). 근거 `doc_date`는 `pgsearch.search`가 doc에서 읽음. `Retriever(retrieve, pg)` — 묶음 인자·`BundleDocs`·`doc_meta`·`key_local` 지움. `server_state`는 원천마다 Retriever를 만듦(적재 판이 바뀌면 다시 — 색인 정보도 새로 읽음).
+  - 판 `0004_doc_embed.py`: 5벌 `doc`에 `content_date TEXT`(문서에 적힌 날짜 — docmeta가 본문·파일 이름에서 찾은 ISO 글자, `YYYY-MM`·`YYYY`도 있어 DATE가 아님. 사용자 11-03: DB 칸 이름은 무슨 날짜인지 드러나게 — 파일 생성·수정 시각이 아니고 원천에 수정 날짜도 없어 `doc_created_at`이 아닌 `content_date`, 등록 시각 `created_at`과 다름. MCP 근거 이름은 `doc_date` 그대로)·`embed_model TEXT` 더함, `corpus_stat.dim` 지움. 모델 `search_tables.DOC_META`. 검색 뷰 `v_chunk_source`는 그대로.
+  - 적재(`pgvector_load._load_src`)가 `content_date`(묶음 docs.jsonl `doc_date`)·`embed_model`(묶음 meta.json)을 채움. BM25 통계는 `_corpus_stat_sql` 한 곳(차원 없음).
+  - 검색: `pgsearch.index_meta(db)` — 모델 = 그 스키마 `doc.embed_model`(여럿이면 쉼표로 이어 질의 모델과 같을 수 없어 `embed_query`가 거부 — 섞인 색인), 차원 = 벡터 칸 형식(벡터가 없으면 0 — 키워드·ID만). 근거 `doc_date`는 `pgsearch.search`가 `doc.content_date`를 JOIN해 읽음. `Retriever(retrieve, pg)` — 묶음 인자·`BundleDocs`·`doc_meta`·`key_local` 지움. `server_state`는 원천마다 Retriever를 만듦(적재 판이 바뀌면 다시 — 색인 정보도 새로 읽음).
   - 설정 `common.paths.mcp_bundle` 지움 — 지운 칸 표(`common.config.layout.REMOVED`)라 남아 있으면 경고만, `migrate`는 "삭제됨"으로 알림. `mcp_server.cli.ask --bundle`·`pgsearch search --bundle`은 받기만(옛 호출 호환).
   - 통과 확인: 같은 묶음(문서 5건·청크 165)·같은 질문(rag_qa 4 + 문서마다 1 = 9) × 원천 4 × 방법 3(전체·벡터·키워드+ID) = 검색 108번 — develop `479f7cc`와 이 판의 상위 8 근거(순위·경로·청크 키·쪽·`doc_date`·via·점수)가 모두 같음(SQLite 대역, 유료 호출 없이 토큰 해시 임베딩 — 벡터 경로 포함). 서버 확인은 refactor.md C-87.
 - Status: done — 0.2.0(11-03)

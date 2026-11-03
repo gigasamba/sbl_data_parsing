@@ -37,7 +37,7 @@ def test_bm25_no_embedding():
 
 
 def test_index_from_pg():
-    """mc-19 — 색인 정보·문서 날짜는 PG에서(묶음 파일 없음): 모델 = gold doc.embed_model, 차원 = 벡터 칸(벡터 없으면 0), 근거 doc_date = doc 칸.
+    """mc-19 — 색인 정보·문서 날짜는 PG에서(묶음 파일 없음): 모델 = gold doc.embed_model, 차원 = 벡터 칸(벡터 없으면 0), 근거 doc_date = doc.content_date.
     모델이 섞이면 질의 모델과 같을 수 없어 embed_query가 거부(IndexMismatch)."""
     from mcp_server.services.search import pgsearch
     from mcp_server.services.search.local import IndexMismatch, embed_query

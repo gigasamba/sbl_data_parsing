@@ -338,6 +338,7 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
                 "doc_id": nxt[0] if nxt is not None else None,
                 "created_at": _kst(d.get("created_at")),
                 "clients_doc": json.dumps(d["clients"], ensure_ascii=False) if d.get("clients") else None,
+                "content_date": d.get("doc_date"),  # mc-19 — 묶음 doc_date(문서에 적힌 날짜) → gold content_date
                 "embed_model": meta.get("embed_model"),  # mc-19 — 묶음의 임베딩 모델(검색의 질의 모델 확인 · 문서 단위 guard)
             }
             cur.execute(

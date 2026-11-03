@@ -48,9 +48,11 @@ DOC_HINTS = {
     "las": (("approvalname", Text),),
 }
 CHUNK_EXTRA = {"faq": (("faq_group", Text),)}  # C4 — faq.chunk만 시트 이름
-# 5벌 공용 doc 칸(mc-19, 판 0004 — 사용자 11-03): 적재가 묶음에서 채우고 검색이 읽는다(묶음 파일 없이 PG만). doc_date = 문서 날짜(ISO 글자 —
-# 근거 칸), embed_model = 그 문서를 임베딩한 모델(질의 모델 확인 — 나중 guard가 문서 단위로 판단). 검색 뷰에는 넣지 않는다(출력 계약).
-DOC_META = (("doc_date", Text), ("embed_model", Text))
+# 5벌 공용 doc 칸(mc-19, 판 0004 — 사용자 11-03): 적재가 묶음에서 채우고 검색이 읽는다(묶음 파일 없이 PG만). 검색 뷰에는 넣지 않는다(출력 계약).
+# content_date = 문서에 적힌 날짜(docmeta.extract_date — 본문 앞 2000자, 없으면 파일 이름에서 찾은 ISO 글자; 묶음·근거 이름은 doc_date).
+#   created_at(원천 등록 시각)과 다르다 — 파일 생성·수정 시각이 아니다.
+# embed_model = 그 문서를 임베딩한 모델(질의 모델 확인 — 나중 guard가 문서 단위로 판단).
+DOC_META = (("content_date", Text), ("embed_model", Text))
 
 
 def source_of(system):

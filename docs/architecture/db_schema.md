@@ -28,7 +28,7 @@
 
 ## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌, 판 0004)
 
-판: `common/store/db/migrations/versions/0001_search_base.py`(옛 한 벌) + `0002_search_doc_meta.py`(11-02 — 원천별 5벌로 나누고 옛 한 벌 표·`load_run`을 지움) + `0003_doc_hints.py`(11-02 — pl-33 분류 힌트 칸, sfdc·las doc) + `0004_doc_embed.py`(11-03 — [mc-19](../prd/mcp.md#mc-19) `doc_date`·`embed_model` 칸, `corpus_stat.dim` 지움) · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_EXTRA`·`DOC_HINTS`·`DOC_META`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인(`pipeline/load/edw_meta.py` — pl-29).
+판: `common/store/db/migrations/versions/0001_search_base.py`(옛 한 벌) + `0002_search_doc_meta.py`(11-02 — 원천별 5벌로 나누고 옛 한 벌 표·`load_run`을 지움) + `0003_doc_hints.py`(11-02 — pl-33 분류 힌트 칸, sfdc·las doc) + `0004_doc_embed.py`(11-03 — [mc-19](../prd/mcp.md#mc-19) `content_date`·`embed_model` 칸, `corpus_stat.dim` 지움) · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_EXTRA`·`DOC_HINTS`·`DOC_META`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`, `deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인(`pipeline/load/edw_meta.py` — pl-29).
 
 - **스키마 배치:** 기준 스키마 `<PG_SCHEMA>`(예 `ai`)에는 Alembic 판 표 `alembic_version`과 공용 doc_id 시퀀스 `doc_id_seq`만 둔다. 원천마다 스키마 `<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`에 아래 표 다섯 개와 뷰 `v_chunk_source`가 같은 꼴로 있다(원천 전용 칸만 다름 — 표의 "원천" 칸). 원천은 문서의 `source_system`(SFDC·CRMS·LAS·FAQ, `-test` 붙어도 같음 — 그 밖은 `other`)으로 고른다.
 - **적재 규칙(11-02 — [pl-13](../prd/load.md#pl-13)):** 원본 경로(`file_path`)는 5벌을 통틀어 하나다 — 적재는 5벌 모두에서 찾아, `--replace` 없이 이미 있으면 건너뛰고, `--replace`면 다른 원천 스키마의 옛 사본을 지운 뒤 새 원천 스키마에 넣는다(원천이 바뀐 문서).
@@ -65,7 +65,7 @@
 | rfp_received_start_date__c | DATE | 분류 힌트 — 같은 기회의 `RFP_Received_Start_Date__c` | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
 | rfp_received_end_date__c | DATE | 분류 힌트 — 같은 기회의 `RFP_Received_End_Date__c` | sfdc | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
 | approvalname | TEXT | 분류 힌트 — 품의 제목(`LAS.Contract.ApprovalName`, 최신 판) | las | 적재(EDW 조인 — 판 0003) | 분류(pl-33) — 검색 뷰엔 없음 | 유지 |
-| doc_date | TEXT | 문서 날짜(ISO 글자 `YYYY-MM-DD`·`YYYY-MM`·`YYYY` — 본문 먼저, 없으면 파일 이름, `common/core/docmeta.py`) | 모두 | build_bundle(`docmeta.doc_meta`) → 적재(판 0004) | pgsearch → 근거 `doc_date` — 검색 뷰엔 없음 | 유지 |
+| content_date | TEXT | 문서에 적힌 날짜(ISO 글자 `YYYY-MM-DD`·`YYYY-MM`·`YYYY` — 본문 앞 2000자 먼저, 없으면 파일 이름, `common/core/docmeta.py`). `created_at`(원천 등록 시각)과 다르고, 파일 생성·수정 시각도 아니다 | 모두 | build_bundle(`docmeta.doc_meta`의 `doc_date`) → 적재(판 0004) | pgsearch → 근거 `doc_date`(출력 이름은 그대로) — 검색 뷰엔 없음 | 유지 |
 | embed_model | TEXT | 그 문서를 임베딩한 모델 이름(묶음 `meta.json` `embed_model`) | 모두 | 적재(판 0004) | pgsearch `index_meta` — 질의 모델 확인(섞이면 거부), 나중 guard(문서 단위) — 검색 뷰엔 없음 | 유지 |
 
 ### gold.chunk
