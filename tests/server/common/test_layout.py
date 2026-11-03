@@ -161,3 +161,15 @@ def test_duplicate_key_rejected():
         assert read_settings(f)[0]["mcp"]["dev"]["ui_port"] == "1"  # 병합 열쇠는 거부하지 않음
         f.write_text("required:\n  env: {run_env: local}\n? [a]\n: 1\n", encoding="utf-8")
         assert _raises(lambda: read_settings(f), "YAML 형식 오류")  # 못 쓰는 열쇠도 TypeError가 아닌 설정 오류
+
+
+def test_removed_warned_once():
+    """F7(11-03 PC 시험) — 지운 칸 경고는 프로세스마다 이름 하나에 한 번(설정을 여러 번 읽어도)."""
+    import contextlib
+    import io
+
+    buf = io.StringIO()
+    with contextlib.redirect_stderr(buf):
+        for _ in range(3):
+            layout.warn_removed("test.once.key")
+    assert buf.getvalue().count("지운 칸 무시: test.once.key") == 1, buf.getvalue()

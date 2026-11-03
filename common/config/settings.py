@@ -359,7 +359,7 @@ class Section(BaseModel):
             if v is None:
                 continue
             if k in L.REMOVED.get(cls.__name__, ()):
-                sys.stderr.write(f"[settings] 지운 칸 무시: {k} — 설정 파일에서 지울 것(값은 출력 안 함)\n")
+                L.warn_removed(k)
                 continue
             f = cls.model_fields.get(k)
             if f is None or _section_type(f.annotation) is not None:

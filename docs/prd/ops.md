@@ -1,15 +1,15 @@
 # 운영 — 실행 관리·러너·계정·종료·로그
 
-[PRD.md](../PRD.md) 카테고리. 실행 관리(pl-10·pl-23·pl-24·pl-18), 서버 러너 `run_docs.py` 레인·대기열(rn-01~04), 종료 정리(pl-27·pl-44), EDW 계정(op-03), 모델 호출 가드(pl-11), 로그(op-01). 설정 파일은 [ops-settings.md](ops-settings.md).
+[PRD.md](../PRD.md) 카테고리. 실행 관리(pl-10·pl-23·pl-24·pl-18), 서버 러너 `run_docs.py` 레인·대기열(rn-01~04), 종료 정리(pl-27), EDW 계정(op-03), 모델 호출 가드(pl-11), 로그(op-01). 설정 파일은 [ops-settings.md](ops-settings.md).
 항목마다 무엇·왜·관련 파일. 끝나지 않은 항목은 `Status:` 줄에 진행 상황을 적는다.
 
-순서: pl-10 · pl-23 · pl-24 · pl-18 · rn-01 · rn-02 · rn-03 · rn-04 · pl-27 · pl-44 · op-03 · pl-11 · op-01.
+순서: pl-10 · pl-23 · pl-24 · pl-18 · rn-01 · rn-02 · rn-03 · rn-04 · pl-27 · op-03 · pl-11 · op-01.
 
 <a id="pl-10"></a>
 ## pl-10 · 실행 관리(오케스트레이션)
-- 결정(사용자 10-31 범위 축소 grill): trigger 서버(/jobs·/upload·CHAIN_STRUCTURE_URL·serve-trigger)를 **지운다** — 새 문서는 run_docs 정기 실행이 FileStorageMap으로 고름(C10). DRM과 무관(DRM 자동 복호화 기능은 없음).
+- 결정(사용자 10-31): 새 문서는 run_docs 정기 실행이 FileStorageMap으로 고른다(C10).
 - 이유: 서버는 문서 수천 건을 사람 없이 돌린다.
-- 무엇: CLI `pipeline.cli`는 `parse`·`show-stack`·`selftest`만(`structure`·`load`·`night`·`run-stack`·`smoke`는 11-01에 지움 — 구조화·적재는 run_docs가 `build_bundle`·`pgvector_load`를 직접 부름). 이미지 entrypoint가 `publish`·`migrate`·`check`·`services`·`resources`·`tool`·`ask`·`mcp`·`parse-service`·`idle`(상주 컨테이너가 떠 있기만 — run_docs가 docker exec)을 더한다(`deploy/docker/entrypoint.sh`). 서버 flow 러너(EDW 목록, 12개 미리 받기, light/medium/vlm 레인, 문서마다 컨테이너, `parse_document` 작업에 양보). (trigger 서버 `/jobs`·`/upload`·`serve-trigger`·`CHAIN_STRUCTURE_URL`은 11-01에 지움 · `compare-parse`·`compare-all`은 11-01에 지움 — [test.md#e2-10](test.md#e2-10).) (문서별 병렬 파싱 `parse_parallel.py`는 10-30에 지움 — [transform-cleanup.md#pl-35](transform-cleanup.md#pl-35).)
+- 무엇: CLI `pipeline.cli`는 `parse`·`show-stack`·`selftest`(구조화·적재는 run_docs가 `build_bundle`·`pgvector_load`를 직접 부름). 이미지 entrypoint가 `publish`·`migrate`·`check`·`services`·`resources`·`tool`·`ask`·`mcp`·`parse-service`·`idle`(상주 컨테이너가 떠 있기만 — run_docs가 docker exec)을 더한다(`deploy/docker/entrypoint.sh`). 서버 flow 러너(EDW 목록, 미리 받기(기본 20), light/medium/vlm 레인, 문서마다 컨테이너, `parse_document` 작업에 양보).
 - 서버 flow 러너 요구(사용자 10-22·10-23 — 원문 [../history/run_docs_req.md](../history/run_docs_req.md), 바뀐 값은 rn-01·rn-02·[transform.md#pl-22](transform.md#pl-22)):
   - 문서별 flow(배치 장벽 없음) · warm 12(진행 중 제외, 끝나면 tmp 지움 — 10-29부터 20) · 컨테이너 하나에 worker 4.
   - VLM 동시 12(figure·vlm_page 포함), 문서 병렬 4, 문서당 VLM 4·OCR 1, vlm_page 끔, OCR dpi 150. 구조화+적재도 문서 단위 — 임베딩 묶음 호출(32 → 12)·문서당 병렬 4, BM25 병렬 4, 단계별 시간 기록.
@@ -17,33 +17,32 @@
   - 3클래스: warm에서 무게 평가(과거 소요 시간 규칙), vlm_page는 스캔 PDF처럼 꼭 필요한 문서만, 1/2/1 + 빈 레인 가져가기, light 1개 강하게 점유, 전담 분류 먼저, light 전용 executor. MCP 업로드가 오면 medium 전담 1개를 멈추고 먼저.
   - 속도: phase 1 건너뛰기(→ pl-22), 끝난 문서 건너뛰기, parse_qa 가볍게, 10-23 OCR 끔. SSH가 끊겨도 작업은 계속(nohup 확인).
 - 파일: `pipeline/cli.py`, `deploy/host/scripts/run_docs.py`(서버 전용 — PC에서 실행 금지), `docs/history/run_docs_req.md`, `docs/architecture/run_docs_design.md`.
-- Status: done — trigger 서버 지움 11-01(`feature/scope-cut-pipeline`): `pipeline/trigger_server.py`·시험 `test_trigger_server`, entrypoint `serve-trigger`(→ `idle` — 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`(11-03부터 `data-pipeline` 하나)는 run_docs의 docker exec 대상이라 남기고 떠 있기만), compose의 `TRIGGER_MODULE`·`/health` 검사, `deploy/host/scripts/parse_trigger_test.py`, 설정 절 `pipeline.service.trigger`(`required.tokens.trigger` 포함 — 남으면 경고만: `common/config/layout.py`의 자리는 옛 settings.yaml이 거부되지 않게 남기고 sample 대조에서만 뺌(`sample.LAYOUT_GONE`) — layout.py는 code_fp에 들어가 손대지 않음), `settings_env.sh`의 trigger 포트. `common/core/exitclean.py`의 SIGTERM 처리는 모든 프로세스가 쓰는 일반 처리라 그대로(주석의 trigger_server 예시만 남음 — 고치면 code_fp가 바뀜).
+- Status: done (11-01 `feature/scope-cut-pipeline`) — 상주 컨테이너 `data-pipeline`(entrypoint `idle`)은 run_docs의 docker exec 대상.
 
 <a id="pl-23"></a>
 ## pl-23 · 증분 실행만, 전체 재파싱은 명시적인 전체 e2e
 - 결정(사용자 10-31 범위 축소 grill): run_docs 하나로 합침(pl-18 결정).
 - 이유: 엔진·핸드오프·코드 핑거프린트가 모든 문서에서 바뀌었다. 전체 자동 재파싱은 밤 작업 시간을 넘긴다(C-52, C-08).
 - 결정(사용자 10-29 grill): 밤 작업과 `run_docs`는 핑거프린트가 바뀌어도 **새** 문서만 처리한다. "새" = `AI.FileStorageMap.s3_key`가 아직 `AI.ParsingMeta`에 없음(s3 키만 — 갱신 시각 확인 없음, `run_docs`는 이미 이렇게 동작). 전체 재파싱은 사람이 전체 e2e를 시작할 때만(가끔 — 로직을 바꾼 뒤, 결과를 검토). 이 판의 첫 적재는 전체 e2e 한 번.
-- 결정(사용자 10-30 grill): 밤 배치는 꺼 둔다(systemd 타이머는 켜지 않음). 나중에 사람이 settings.yaml에서 켠다. → 켜기·끄기와 시각은 아래 새벽 일정 키 하나가 정한다(null = 끔) — 그 키를 구현하면 지금의 `pipeline.host.nightly.enabled`는 없어진다(그때까지 서버 절차는 enabled false).
-- 결정(사용자 10-30): 새벽 배치 계획을 settings.yaml 키(파라미터)로 — null이면 새벽 배치 안 함, 값이 있으면 돈다([pl-32](load-schema.md#pl-32)). 켜기·끄기 스위치와 시각을 이 한 값이 정한다 — 구현(10-30 `feature/registry-success-only`): `pipeline.host.nightly.time`(`NIGHTLY_TIME`, HH:MM — 비우면 없음, 꼴이 틀리면 설정 읽기에서 거부) · 타이머 5분마다 + `trigger.sh scheduled` · `nightly.enabled` 지움(남아 있으면 경고만).
+- 결정(사용자 10-30): 새벽 배치 계획은 settings.yaml 칸 — 비면 새벽 배치 안 함, 값이 있으면 돈다([pl-32](load-schema.md#pl-32)). 칸은 아래 11-02 결정. 타이머 5분마다 + `trigger.sh scheduled`.
 - 지금 안 씀: FileStorageMap 갱신 시각 — 가정한 칸 `last_modified_time`, 나중에 EDW 예시에 추가([pl-25](load-schema.md#pl-25)).
-- 파일: `deploy/host/scripts/run_docs.py`(처리 끝난 집합 — `night` 입구는 11-01에 지움, 새벽 배치도 run_docs), `pipeline/cli.py`(`_unparsed`).
-- 결정(사용자 10-30 PRD grill): C10 — '새 문서' 후보는 모든 입구(run_docs·night)에서 EDW `FileStorageMap`에 있고 `ParsingMeta`에 없는 것. 문서 대장은 숨김·판 관리에만 쓴다.
-- C10 구현(11-01 `feature/scope-cut-search` — 사용자 11-01 Q1(a)): 파싱 `--source`·`--max-new` 고르기 = 원천 이름(FileStorageMap) 중 `s3_key`(manifest — 없으면 이름)에 ParsingMeta 끝난 행이 없는 것(`pipeline/cli.py` `_unparsed` · `parsing_meta_db.done_source_keys` — 읽기 계정, PC는 `RDB_SQLITE` 대역). **파싱 입구에 EDW 읽기가 생김** — 서버에서 못 읽으면 종료 4, PC는 받은 목록 그대로 + 로그 한 줄. 실패 문서(행 없음)는 다음 실행에 다시. 문서 대장 고르기(pl-32 2c)는 지움. "끝남" = `parse_status` ok·partial·skipped_dup(사용자 11-01) — not_parsed·skipped_disk_cap·실패·행 없음은 다시 고름. ParsingMeta 상태 갱신 길은 지운 채(게시는 넣기만 — 사용자 11-01).
+- 파일: `deploy/host/scripts/run_docs.py`(처리 끝난 집합 — 새벽 배치도 run_docs), `pipeline/cli.py`(`_unparsed`).
+- 결정(사용자 10-30 PRD grill): C10 — '새 문서' 후보는 EDW `FileStorageMap`에 있고 `ParsingMeta`에 없는 것.
+- C10 구현(11-01 `feature/scope-cut-search` — 사용자 11-01 Q1(a)): 파싱 `--source`·`--max-new` 고르기 = 원천 이름(FileStorageMap) 중 `s3_key`(manifest — 없으면 이름)에 ParsingMeta 끝난 행이 없는 것(`pipeline/cli.py` `_unparsed` · `parsing_meta_db.done_source_keys` — 읽기 계정, PC는 `RDB_SQLITE` 대역). **파싱 입구에 EDW 읽기가 생김** — 서버에서 못 읽으면 종료 4, PC는 받은 목록 그대로 + 로그 한 줄. 실패 문서(행 없음)는 다음 실행에 다시. "끝남" = `parse_status` ok·partial·skipped_dup(사용자 11-01) — not_parsed·skipped_disk_cap·실패·행 없음은 다시 고름. 게시는 넣기만(사용자 11-01).
 - 결정(사용자 11-02): 전체 e2e는 local·dev·prd 셋에서 돈다. dev는 settings.yaml이 가리키는 대상(가짜 폴더든 실제든)에 쓴다. **전체 문서 실행은 prd에서만, 새 원천별 스키마 이름으로**(새 `PG_SCHEMA`) — 판 0002가 기준 스키마의 옛 표를 지우므로 prd는 반드시 새 `PG_SCHEMA`를 쓴다(refactor.md C-74). 옛 gold 스키마는 2주 남긴 뒤 DB 담당자가 백업하고 지운다. 옛 `struct` 스키마도 DB 담당자가 백업하고 지운다. 절차: [release-and-patch.md §8](../operations/release-and-patch.md#8-020-배포--사람이-할-일).
 - 결정(사용자 11-02 — 새벽 배치): 시작 시각·문서 수 상한·마감 시각이 settings.yaml 칸이고, 비면 돌지 않는다. 칸 이름 어긋남 고침(아래 한 것) — 호스트 셸·systemd·시험은 `ops.nightly.time`, 설정 모델·시험(`tests/server/pipeline/test_nightly_time.py`)은 `pipeline.host.nightly.time`을 쓴다. 상한·마감 칸은 [pl-18](#pl-18)의 상한·마감과 함께.
-- 한 것(11-02 `feature/nightly-key` — 사용자 11-02): 새벽 배치 칸 셋 — settings.yaml `ops.nightly.time`(시작)·`max_docs`(새 문서 수 상한)·`deadline`(마감, HH:MM) — 하나라도 비면 `trigger.sh scheduled`가 조용히 끝. `run_docs.py`에 `--max-docs`(끝난 문서를 뺀 뒤 앞에서 — 옛 `--limit`은 그 전에 잘라 시험용)·`--deadline`(지나면 새 문서를 받지 않음)을 더함. 칸 이름은 설정 파일 기준 `ops.nightly.*` 하나(모델 안 이름 `pipeline.host.nightly`는 코드만 — 문서·시험 문구를 맞춤). 시험 `test_trigger_gate`·`test_nightly_time`·`test_run_docs`(`deadline_at`).
+- 한 것(11-02 `feature/nightly-key` — 사용자 11-02): 새벽 배치 칸 셋 — settings.yaml `ops.nightly.time`(시작)·`max_docs`(새 문서 수 상한)·`deadline`(마감, HH:MM) — 하나라도 비면 `trigger.sh scheduled`가 조용히 끝. `run_docs.py`에 `--max-docs`(끝난 문서를 뺀 뒤 앞에서 — `--limit`은 그 전에 잘라 시험용)·`--deadline`(지나면 새 문서를 받지 않음)을 더함. 칸 이름은 설정 파일 기준 `ops.nightly.*` 하나(모델 안 이름 `pipeline.host.nightly`는 코드만 — 문서·시험 문구를 맞춤). 시험 `test_trigger_gate`·`test_nightly_time`·`test_run_docs`(`deadline_at`).
 - Status: done (11-03 `feature/rundocs-flow` 확인) — 고르기는 `pipeline/cli.py` `_unparsed`, run_docs `--skip-done`은 `DONE_STATUSES`(ok·partial — gold_version도, skipped_dup — `test_done_keys_match_parsing_meta`). 남은 서버 일(전체 e2e prd 실행·새벽 배치 켜기)은 사람 — refactor.md C-72·C-74.
 
 <a id="pl-24"></a>
 ## pl-24 · `run_docs` 문서별 순서: 파싱 → silver 게시 → 원본 삭제 → gold
-- 이유: 지금은 게시가 gold를 기다리고, `cleanup_doc`이 실패해도 원본을 지운다.
+- 이유: 게시가 gold를 기다리지 않고, 원본은 게시가 성공했을 때만 지운다.
 - 결정(사용자 10-29 grill): 원본은 Object Storage에서 수집 서버로 받아 파싱하고, silver 게시가 성공한 뒤에만 지운다. 파싱 실패 → 원본은 남기고 원인 + 걸린 시간을 로컬에만 기록, EDW에는 아무것도 안 씀. gold 실패 → EDW 행은 남고 `gold_status` = failed(+ 이유). gold는 silver에서 다시 만들 수 있다.
 - 새 EDW 칸 `AI.ParsingMeta.gold_status`(pending · ok · failed) + 이유 — DDL은 DB 담당자에게(회사 DB, Alembic 아님) — 검토 등급 A. 줄인 ParsingMeta 칸 목록은 [pl-25](load-schema.md#pl-25).
 - `valid_env/`로 하는 로컬 시험은 문서를 먼저 임시 폴더로 복사해 거기서 돌린다(제자리에서 돌리지 않음).
 - 파일: `deploy/host/scripts/run_docs.py`(`doc_flow`, `cleanup_doc`, 처리 끝난 질의), `docs/operations/parsing_meta_mssql.sql`, 게시(`parsing_meta`).
-- 결정(사용자 10-30 PRD grill): C3 — 파싱이 통째로 실패하면 ParsingMeta에 쓰지 않는다(이 행 그대로). (허브 10-31 고침 — 아래) 실패는 로그·문서 대장에만 남고 다음 실행에서 다시 후보가 된다.
-- 결정(허브 10-31, 최신 결정 우선): 문서 대장도 성공했을 때만 쓴다([pl-12](load.md#pl-12)·[pl-32](load-schema.md#pl-32) — 실패 횟수 없앰). 실패는 **로그에만** 남고, ParsingMeta에 행이 없으니 다음 실행에서 다시 후보가 된다(C10).
+- 결정(사용자 10-30 PRD grill): C3 — 파싱이 통째로 실패하면 ParsingMeta에 쓰지 않는다(이 행 그대로).
+- 결정(허브 10-31, 최신 결정 우선): 실패는 **로그에만** 남고, ParsingMeta에 행이 없으니 다음 실행에서 다시 후보가 된다(C10).
 - 한 것(11-03 `feature/rundocs-flow`): `run_docs.py` 문서마다 파싱 → 게시 대기열(게시 스레드 1개 — 구조화가 업로드·EDW 쓰기를 기다리지 않음) → 게시 성공이면 원본(warm `.bin`·`docflow/<seq>/_source_files`) 삭제 → 구조화 대기열(gold — build_bundle·pgvector_load) → `docflow/<seq>` 임시 삭제. 파싱 실패·게시 실패 = 원본을 남기고 로그에만(gold로 안 감, EDW에 안 씀). gold 실패 = 게시한 silver·EDW 행은 그대로, 로그에만 — `gold_version` 칸(C-76 ③)이 있으면 비어 있어 다음 `--skip-done`이 다시 고른다(칸이 없으면 못 고름 — 이 판은 칸이 생긴 뒤 배포, C-81). 새 파싱을 멈추는 상한 `struct_backlog`는 게시 대기 + 구조화 대기를 본다(`queue_depth.jsonl`에 `pub_wait` 더함). 시험 `test_docs_flow.test_doc_order_and_exit_code`(표).
 - 남음: `gold_status` 칸(DDL — DB 담당자, refactor.md C-81). 칸이 생기면 `gold_one()` 옆 TODO 자리에서 failed·이유를 적는다.
 - Status: done — `gold_status` 칸 쓰기만 남음(C-81 — DB 담당자 DDL 뒤).
@@ -53,21 +52,19 @@
 - 결정(사용자 10-31 범위 축소 grill): 서버 입구는 **run_docs 하나**. night·full 입구를 없애고, 정기 실행(새벽 배치)은 타이머가 run_docs를 부르는 꼴로(night = run_docs를 바깥에서 부르는 것).
 - 이유: 스케줄러가 실패를 못 본다(C-33).
 - 결정(사용자 10-30 grill): 종료 코드 — 대상 0건 = 0, 실패 = 1, 마감 시각 도달 = 75.
-- 파일: `deploy/host/scripts/run_docs.py`(종료 코드), `deploy/host/scripts/trigger.sh`(`scheduled`) — 옛 `night`·`full` 입구는 11-01에 지움.
-- 결정(사용자 11-01 기본값 — 허브 11-01): 새벽 run_docs에 문서 수 상한 · 마감 시각 · 사람이 따로 돌린 run_docs와 겹치지 않게 하는 잠금을 둔다(지금은 systemd `TimeoutStartSec=6h`뿐 — #83).
-- Status: done(11-03) — 11-01(`feature/scope-cut-unused`) 옛 입구를 지움: `pipeline.cli`의 `night`·`run-stack`·`structure`·`load`(+ 끝 표시 확인 `need()`), 이미지 명령 `night`·`run-stack`·`full`·`structure`·`load`, `trigger.sh` `night`·`structure`·`load`·`all`, compose job `structure`(`load` 서비스는 `run_tool.sh` 도구용으로 남김 — 명령 `help`), 죽은 설정(`ops.nightly.max_new`·`modules`·`publish`, `ops.nightly_run.deadline`·`parse_deadline`, `dev.pipeline.allow_common_mismatch` — 남으면 경고만). 새벽 배치는 systemd 타이머 → `trigger.sh scheduled` → `run_docs.py --start-offset 0 --skip-done`(서버 확인 refactor.md C-72). 남음: 종료 코드 규칙(대상 0건 = 0, 실패 = 1, 마감 = 75)을 run_docs에 만든다.
+- 파일: `deploy/host/scripts/run_docs.py`(종료 코드), `deploy/host/scripts/trigger.sh`(`scheduled`).
+- 결정(사용자 11-01 기본값 — 허브 11-01): 새벽 run_docs에 문서 수 상한 · 마감 시각 · 사람이 따로 돌린 run_docs와 겹치지 않게 하는 잠금을 둔다(systemd `TimeoutStartSec=6h`는 마지막 안전판 — #83).
+- Status: done(11-03) — 새벽 배치는 systemd 타이머 → `trigger.sh scheduled` → `run_docs.py --start-offset 0 --skip-done`(서버 확인 refactor.md C-72).
 - 한 것(11-03 `feature/rundocs-flow`): `run_docs.py`가 종료 코드를 돌려준다 — 0 = 대상 0건·모두 끝, 1 = 실패 문서(파싱·게시·gold) 하나라도, 75 = 마감 도달(실패 없음) 또는 다른 run_docs가 도는 중, 2 = 설정 문제(전과 같음). 실패와 마감이 함께면 1. 겹침 잠금은 `run_docs.py` 안 한 곳(`flock` `batch_progress/run_docs.lock` — 프로세스가 죽으면 커널이 풂, 사람이 trigger 없이 돌려도 같은 잠금). 문서 수 상한·마감은 11-02 `--max-docs`·`--deadline`. 시험 `test_docs_flow.test_exit_codes`·`test_lock_blocks_second_run`(Linux·macOS·WSL — Windows는 건너뜀).
 
 <a id="rn-01"></a>
 ## rn-01 · 레인 정책을 표 하나로 — 담당 레인 먼저, 허용한 레인만 가져오기
 - 범위: `deploy/host/scripts/run_docs.py`(서버 호스트에서 이미지 밖으로 실행 — 핑거프린트 영향 없음). 설계 [../architecture/run_docs_design.md](../architecture/run_docs_design.md), 발화 기록 [../history/run_docs_req.md](../history/run_docs_req.md).
 - 사용자 10-29: "data-pipeline 하는데 3개 lane으로 해서, light/medium/vlm 구분해서 배분하고, 특정 lane은 담당, 일부 lane은 steal 허용하는 대신 우선순위는 담당 lane으로 지정. queue 관리해서 진입 시점 개수와 중간 개수 등을 관리."
-- rn-01 전 러너(3레인 1/2/1·warm·MCP 멈춤): [../history/run_docs_history.md](../history/run_docs_history.md) 끝.
 - 이유: 규칙이 `lane_worker()`에 하드코딩돼 있었다(light/vlm은 medium을 안 가져감, 가장 긴 다른 대기열 먼저, vlm은 `VLM_CAP` 상한) — 죽은 분기도 있고 워커 수가 상수라 조정하려면 코드를 고쳐야 했다.
 - 파일: `deploy/host/scripts/run_docs.py`, `tests/general/deploy/test_run_docs.py`, `docs/architecture/run_docs_design.md`.
-- 겹침: 파싱 phase 없애기([transform.md#pl-22](transform.md#pl-22), `feature/r2-phase`)는 러너에서 `PARSE_PHASES` `--set`만 뺐고 레인은 건드리지 않았다.
 - 처음 계획(단계·수용 기준): [../history/run_docs_history.md](../history/run_docs_history.md) 끝.
-- 끝남 10-29(사용자 grill): settings.yaml `pipeline.host.run_docs` — 레인마다 `<레인>_dedicated`(자기 레인만)와 `<레인>_shared`(자기 레인 먼저, 비면 가장 긴 다른 레인), 기본 각 1 + 1(워커 6개). `vlm_cap` 2는 전담 워커에도 적용. 배치가 끝나지 않을 설정은 시작 때 거부(`warm`이나 `vlm_cap`이 1 미만, 또는 전담·공유 워커가 하나도 없는 레인). MCP 멈춤은 medium 전담 워커를 잡아 둔다. `pick_lane()`은 순수 함수이고 표 시험이 있다. 죽은 상수는 지웠고 `--workers`는 받기만 하고 쓰지 않는다.
+- 끝남 10-29(사용자 grill): settings.yaml `pipeline.host.run_docs` — 레인마다 `<레인>_dedicated`(자기 레인만)와 `<레인>_shared`(자기 레인 먼저, 비면 가장 긴 다른 레인), 기본 각 1 + 1(워커 6개). `vlm_cap` 2는 전담 워커에도 적용. 배치가 끝나지 않을 설정은 시작 때 거부(`warm`이나 `vlm_cap`이 1 미만, 또는 전담·공유 워커가 하나도 없는 레인). MCP 멈춤은 medium 전담 워커를 잡아 둔다. `pick_lane()`은 순수 함수이고 표 시험이 있다. `--workers`는 받기만 하고 쓰지 않는다.
 - Status: done
 
 <a id="rn-02"></a>
@@ -80,16 +77,12 @@
 
 <a id="rn-03"></a>
 ## rn-03 · MCP `parse_document`에 CPU 먼저 주기
-- 결정(사용자 10-31 범위 축소 grill): 선택지 1로 바꾼다(사용자): MCP parse_document 전용 컨테이너를 따로 띄우고(같은 이미지), extract 단계 없이 파싱 함수만 부르며, CPU 가중치(cpu_shares/cpu.weight)를 가장 높게 준다. nice는 그대로 둬도 됨.
+- 결정(사용자 10-31): MCP parse_document 전용 컨테이너를 따로 띄우고(같은 이미지), CPU 가중치(cpu_shares/cpu.weight)를 가장 높게 준다. nice는 그대로 둬도 됨.
 - 이유: 일괄 파싱이 CPU를 다 쓰면 `parse_document`(사람이 기다리는 요청)가 느려진다. 일괄 엔진 자식은 nice +10(`pipeline.extract.low_priority`, [transform.md#pl-22](transform.md#pl-22))이지만 nice는 한 세션·autogroup 안에서만 듣고, 컨테이너끼리는 cgroup CPU 가중치가 정한다(refactor.md C-65 ⑥).
-- 선택지:
-  1. 같은 이미지로 컨테이너를 따로 띄우고 cgroup `cpu.weight`로 나눔(허브 추천). 장점: 컨테이너끼리도 확실히 먼저, 서버에서 숫자로 조정. 단점: 컨테이너·compose·systemd 하나 더, 메모리 더, 서버 설정 일.
-  2. 같은 컨테이너(`data-pipeline-parse`) 안에서 nice(지금 결정 — 사용자 10-30). 장점: 구성 변경 없음, `low_priority` 재사용. 단점: 다른 컨테이너·세션과는 안 겨룸(`sched_autogroup_enabled=1`), 효과는 서버에서 재 봐야 앎.
-- 서버 확인(C-65 ⑥): 일괄 파싱만 / + `parse_document` 동시의 응답 시간 비교 — 효과 없으면 선택지 1.
 - 파일: `deploy/host/compose/`, `pipeline/mcp_parse_service.py`, `common/core/resources.py`.
-- 결정 다시(사용자 11-03): 일괄 컨테이너를 하나(`data-pipeline` — 파싱·구조화·적재)로 합친 뒤에도 parse_document는 **전용 컨테이너**로 뗀다(선택지 1 재확인).
-- 한 것(11-03 `feature/rundocs-flow` · 파일 나눔 `feature/compose-split` — 사용자 11-03 "컨테이너마다 compose로 각각 띄우기"): `compose.pipeline-mcp.yml`(개발 서버 짝 `compose.code.pipeline-mcp.yml`)에 `data-pipeline-mcp`(같은 이미지, entrypoint `parse-service` = `pipeline.mcp_parse_service`가 주 프로세스, 127.0.0.1:8766) — `cpu_shares` 4096(일괄 `data-pipeline` 1024 — cgroup v2는 `cpu.weight`로), 상한 CPU 3·메모리 8g, 결과 폴더만 붙임(작업 폴더 `mcp_parse/jobs`는 `run_docs.py`가 보고 medium 레인 양보). 옛 손 기동 `docker exec -d … mcp_parse_service` 없음 — 죽으면 `restart`, 꺼지면 `mcp_up.sh`(keepalive 타이머)가 띄움. 시험 `tests/general/deploy/test_compose.py`.
-- 남은 것: ① (끝) 자원 칸은 settings.yaml에 있다 — `ops.pipeline_host.parse_mcp_cpus`(기본 3)·`parse_mcp_mem_limit`(8g)·`parse_mcp_cpu_shares`(4096), 옛 env 이름 `PARSE_MCP_*`(`pipeline/config.py`, C-83). ② "extract 단계 없이 파싱 함수만"(10-31 결정)은 앱 코드 몫이라 안 함. ③ 서버 확인(C-65 ⑥): 일괄 파싱 중 `parse_document` 응답 시간.
+- 결정 다시(사용자 11-03): 일괄 컨테이너를 하나(`data-pipeline` — 파싱·구조화·적재)로 합친 뒤에도 parse_document는 **전용 컨테이너**로 뗀다.
+- 한 것(11-03 `feature/rundocs-flow` · 파일 나눔 `feature/compose-split` — 사용자 11-03 "컨테이너마다 compose로 각각 띄우기"): `compose.pipeline-mcp.yml`(개발 서버 짝 `compose.code.pipeline-mcp.yml`)에 `data-pipeline-mcp`(같은 이미지, entrypoint `parse-service` = `pipeline.mcp_parse_service`가 주 프로세스, 127.0.0.1:8766) — `cpu_shares` 4096(일괄 `data-pipeline` 1024 — cgroup v2는 `cpu.weight`로), 상한 CPU 3·메모리 8g, 결과 폴더만 붙임(작업 폴더 `mcp_parse/jobs`는 `run_docs.py`가 보고 medium 레인 양보). 죽으면 `restart`, 꺼지면 `mcp_up.sh`(keepalive 타이머)가 띄움. 시험 `tests/general/deploy/test_compose.py`.
+- 남은 것: ① (끝) 자원 칸은 settings.yaml에 있다 — `ops.pipeline_host.parse_mcp_cpus`(기본 3)·`parse_mcp_mem_limit`(8g)·`parse_mcp_cpu_shares`(4096), 옛 env 이름 `PARSE_MCP_*`(`pipeline/config.py`, C-83). ③ 서버 확인(C-65 ⑥): 일괄 파싱 중 `parse_document` 응답 시간.
 - Status: dev — 컨테이너·CPU 비율·자원 칸 한 것, 서버 확인(C-65 ⑥)만 남음.
 
 <a id="rn-04"></a>
@@ -102,44 +95,35 @@
 ## pl-27 · 프로세스 종료 정리 — 임시 설정 파일·PID 기록 지움, 자식 회수
 - 이유: 덮기 설정 파일(`settings-*.yaml`, refactor.md C-46)이 OS 임시 폴더에 쌓이고, 시간 초과로 끝낸 자식의 손자(soffice 등)가 고아·좀비로 남았다(사용자 10-30에 좀비 PID를 봄). 파이썬은 SIGTERM을 받으면 `finally`·`atexit` 없이 바로 끝나 아무것도 못 지웠다.
 - 결정(사용자 10-30): ① 덮기 설정 파일은 그 파일을 만든 프로세스가 끝날 때 지운다 — 정상 종료·오류·SIGTERM 모두 ② 프로세스가 끝날 때 그 프로세스가 띄운 자식도 끝내고 회수한다(좀비 없음) · PID 기록 파일도 지운다.
-- 한 곳: `common/core/exitclean.py` — `remove_at_exit(경로)`(이 프로세스가 끝날 때 지움) · `track(Popen, group)`(끝날 때 아직 돌면 끝내고 `wait`로 회수) · `stop(p, group)`(group=새 묶음으로 띄운 자식 — POSIX는 묶음째 SIGTERM → 10초 → SIGKILL, Windows는 `taskkill /T`). import 때 SIGTERM 처리기를 단다(기본값일 때만 — `trigger_server`처럼 이미 단 곳은 그대로): 처리기 안에서 바로 정리(작업 스레드 join보다 먼저)한 뒤 `SystemExit(143)`, 정리 중 두 번째 SIGTERM은 무시. 정리 순서: 자식 전부 SIGTERM → 한 마감(10초) → 남은 것 SIGKILL·회수 → 파일 지움. 정리를 시작한 뒤 띄운 자식은 바로 끝낸다.
+- 한 곳: `common/core/exitclean.py` — `remove_at_exit(경로)`(이 프로세스가 끝날 때 지움) · `track(Popen, group)`(끝날 때 아직 돌면 끝내고 `wait`로 회수) · `stop(p, group)`(group=새 묶음으로 띄운 자식 — POSIX는 묶음째 SIGTERM → 10초 → SIGKILL, Windows는 `taskkill /T`). import 때 SIGTERM 처리기를 단다(기본값일 때만 — 이미 단 곳은 그대로): 처리기 안에서 바로 정리(작업 스레드 join보다 먼저)한 뒤 `SystemExit(143)`, 정리 중 두 번째 SIGTERM은 무시. 정리 순서: 자식 전부 SIGTERM → 한 마감(10초) → 남은 것 SIGKILL·회수 → 파일 지움. 정리를 시작한 뒤 띄운 자식은 바로 끝낸다.
 - 누가 파일을 맡나: `settings.put`·`child_env`가 만든 덮기 파일 = 그 프로세스 · `settings.isolated` = 블록이 끝날 때 · `--set`(`setarg`, POSIX는 `execve`로 다시 뜸 — atexit가 안 돎) = 다시 뜬 프로세스(내부 신호 env로 넘김) · `python -m common.config.overrides` 출력 파일 = 지우지 않음(다른 프로세스가 읽음 — 사용법 `SETTINGS_FILE=$(…)`).
 - 연결한 곳: `resources.gated_popen`(파이프라인 자식 전부 — `start_new_session`으로 띄웠으면 묶음째) · `pipeline/extract/resources.kill_group`(→ `stop(group=True)`) · `mcp_parse_service` 작업 자식과 PID 기록 `service.json`. 자식을 새 세션으로 옮기지는 않음 — 바깥 `kill_group`(`cli._run_until`·parse 서비스)의 묶음 SIGKILL이 손자까지 닿게(코드 리뷰 10-30).
-- 남은 한계: `subprocess.run`으로 띄운 짧은 자식(`load/index.py`·`eval/server_checks`·`cli selftest` 등)은 추적 안 함 — SIGTERM 때 부모가 먼저 끝나면 그 자식이 읽던 덮기 파일이 먼저 지워질 수 있음 · 주 스레드가 아닌 곳에서 처음 import되면 SIGTERM 처리기를 못 닮(정상·오류 종료 정리만) · SIGKILL·OOM은 정리 못 함 · 컨테이너 PID 1 고아 회수는 compose `init: true`(이미 있음) · 호스트 `run_docs.py`는 파이썬 공용 코드를 안 씀(systemd가 cgroup째 정리) · `run_all`·`pptx_render`의 시간 초과는 전처럼 그 자식만 끝냄(손자는 바깥 묶음 정리·`init`이 맡음).
+- 남은 한계: `subprocess.run`으로 띄운 짧은 자식(`cli selftest` 등)은 추적 안 함 — SIGTERM 때 부모가 먼저 끝나면 그 자식이 읽던 덮기 파일이 먼저 지워질 수 있음 · 주 스레드가 아닌 곳에서 처음 import되면 SIGTERM 처리기를 못 닮(정상·오류 종료 정리만) · SIGKILL·OOM은 정리 못 함 · 컨테이너 PID 1 고아 회수는 compose `init: true`(이미 있음) · 호스트 `run_docs.py`는 파이썬 공용 코드를 안 씀(systemd가 cgroup째 정리) · `run_all`·`pptx_render`의 시간 초과는 전처럼 그 자식만 끝냄(손자는 바깥 묶음 정리·`init`이 맡음).
 - 파일: `common/core/exitclean.py`, `common/config/settings.py`, `common/config/setarg.py`, `common/core/resources.py`, `common/core/fingerprint.py`(분류 목록), `pipeline/extract/resources.py`, `pipeline/mcp_parse_service.py`.
 - 시험: `tests/server/common/test_exitclean.py` — 정상·오류 종료(모든 OS) · SIGTERM과 `--set`(execve)(POSIX 전용, Windows는 건너뜀 — python:3.12-slim에서 확인) · overrides 출력 파일은 남고 isolated는 블록 끝에서 지움.
-- 결정(사용자 10-30 PRD grill): S1 — done으로 닫는다. 후속(임시 파일 정리)은 새 todo 행으로.
+- 결정(사용자 10-30 PRD grill): S1 — done으로 닫는다.
 - 한 것: `feature/exit-cleanup` 병합. code_fp 모든 레이어가 바뀜(`common/` 공용 의존).
-- Status: done — 서버 확인은 refactor.md C-68, 강제 종료로 남은 임시 파일 정리는 [pl-44](#pl-44).
-
-<a id="pl-44"></a>
-## pl-44 · 강제 종료로 남은 임시 설정 파일 정리
-- 결정(사용자 10-31 범위 축소 grill): **요건에서 지운다** — 남은 임시 파일은 두어도 된다. 다시 돌릴 때는 Object Storage의 silver와 EDW의 silver 성공 시각으로 재사용(사용자).
-- 이유: pl-27은 정상·오류·SIGTERM 종료 때 덮기 설정 임시 파일을 지우지만, SIGKILL·OOM으로 끝나면 남는다(사용자 10-30 PRD grill S1 — pl-27은 done으로 닫음).
-- 결정(사용자 10-30 grill 12~13차 — refactor.md C-46): 다음 시작 때, 만든 프로세스가 더는 없는 임시 설정 파일(`settings-*.yaml`)을 지운다.
-- 파일: `common/core/exitclean.py`, `common/config/settings.py`.
-- Status: dropped (사용자 10-31 범위 축소)
+- Status: done — 서버 확인은 refactor.md C-68.
 
 <a id="op-03"></a>
 ## op-03 · EDW 접속 하나, 공용 계정 둘(읽기·쓰기)
 - 이유: 사용자 10-29 "계정 하나로 합침" — 블록 넷(`common.connections.edw`, `common.connections.parsing_meta`, `pipeline.connections.rdb`, `mcp.edw_query`)이 EDW 하나에 대해 저마다 서버/포트/DB/사용자/비밀번호를 들고 있어 서버 파일에 같은 값이 네 번 반복된다.
 - 정한 것(사용자 10-29, grill 1~2차):
-  - 벡터는 pgvector에만, EDW에는 절대 안 넣음. EDW 벡터 길을 지운다: `pipeline/load/edw_insert.py`(`usp_vec_load`), `mcp_server/services/search/edw_search.py`, `retriever.py`의 EDW 분기, `common/store/edwdb.py`, 설정 블록 `common.connections.edw`(+ `EDW_LOAD`).
+  - 벡터는 pgvector에만, EDW에는 절대 안 넣음.
   - ParsingMeta, FileStorageMap, RDB 원천 표, `query_edw`는 같은 EDW 서버·DB에 있다 → 접속 블록 하나.
   - 공용 계정 둘: **읽기**와 **쓰기**. MCP 서버는 읽기만. 파이프라인은 기능별로 고른다: 읽기(RDB 원천 목록, discover, 고객 목록, FileStorageMap, ParsingMeta 상태) → 읽기, ParsingMeta 게시(INSERT/UPDATE) → 쓰기. 호스트 러너 `run_docs.py`의 읽기 → 읽기.
   - PC 대역: 모든 표(AI, CRMS, LAS, SFDC 표를 함께)를 담은 sqlite 파일 하나. `query_edw`는 계속 읽기 전용으로 연다.
   - 옛 키: 옮겨 주는 기능 없음 — sample을 다시 만들고 서버 파일을 다시 채운다. 옛 칸은 `Section.REMOVED`로(한 판 동안 경고만, 시작 거부 없음). env-guide + refactor.md C-xx에 서버 할 일을 적는다.
 - 규칙에서 정한 것(묻지 않음):
-  - 블록 `common.connections.rdb`(두 앱이 씀 → `common`, CLAUDE.md §1): `host`, `port`, `database`, `connect_kwargs`, `sqlite`, `read.{user,password}`, `write.{user,password}`. 드라이버는 pymssql만(pyodbc 선택지는 지운 벡터 길 것).
+  - 블록 `common.connections.rdb`(두 앱이 씀 → `common`, CLAUDE.md §1): `host`, `port`, `database`, `connect_kwargs`, `sqlite`, `read.{user,password}`, `write.{user,password}`. 드라이버는 pymssql만.
   - 목적별 항목은 제자리: `PM_TABLE`, RDB `engine`/`bucket`/`columns`/거르기, `query_edw` `enabled`/`tables`/`tables_strict`/상한.
-  - `CONN_FILE`(`EDW_CONN_FILE`, `EDW_QUERY_CONN_FILE`) 없앰 — 비밀값은 settings.yaml에만(§3).
+  - 비밀값은 settings.yaml에만(§3).
   - sqlite: 코드가 파일 하나를 스키마 별칭(`AI`, `CRMS`, `LAS`, `SFDC`)마다 ATTACH해 `AI.ParsingMeta` 같은 SQL이 그대로 돈다. RDB 원천에 PC 시험용 `engine: sqlite`를 더한다(지금은 csv만).
   - code_fp: `settings.py`와 `retriever.py`(레이어 r)가 바뀜 → 모든 레이어 code_fp가 바뀜. 이번 차례의 핑거프린트 변경에 함께 싣고 전후를 커밋에 적는다.
   - 검토 등급 A(DB 계정, 운영 접속): PR에서 사람 검토, Claude 검토로 대신하지 않음.
-- 겹침: `deploy/host/scripts/run_docs.py` 116~134줄 근처가 PM 키를 날 YAML에서 읽는다 — parse-phase 작업 몫, 새 키 이름을 그 담당에게 넘긴다.
 - 수용 기준: 길마다 표 시험 하나(읽기·쓰기 계정 선택, MCP는 쓰기 비밀을 받지 않음, sqlite 파일이 PM 쓰기 + query_edw 읽기 전용 + RDB 원천 읽기를 모두 받음). `common.config.sample --check`, `keyscan --check`, 전체 `pytest tests/`와 `selftest`가 기준선. `EDW_SERVER|PM_DB_|RDB_USER\b|EDW_QUERY_SERVER|usp_vec_load` grep = REMOVED·이력 밖에서 0.
 - 파일: `common/config/settings.py`, `pipeline/config.py`, `mcp_server/config.py`, `common/store/{parsing_meta_db,edwdb,mssql}.py`, `pipeline/extract/{source,rdb_discover}.py`, `pipeline/transform/structure/gen_roster.py`, `pipeline/load/{parsing_meta,edw_insert}.py`, `mcp_server/services/{edw_query,search/edw_search,search/retriever,search/shaping}.py`, `valid_env/edw/`, 시험, `docs/operations/{env-guide,server-guide}.md`.
-- 만든 것: `common.store.mssql.login(role)`(계정) · `mssql.standin(path)`(파일 하나를 AI·CRMS·LAS·SFDC로 ATTACH, 기본 읽기 전용) · 빌더 `python -m validation.e2e.edw_standin` → `valid_env/edw/edw.sqlite`(스키마별 .sqlite 넷은 지움, .sql 원본은 유지) · `query_edw` sqlite 허용 목록 = 대역 표 아홉. 안 한 것(필요 없음): `rdb_discover`/`gen_roster`용 sqlite(서버 도구).
+- 만든 것: `common.store.mssql.login(role)`(계정) · `mssql.standin(path)`(파일 하나를 AI·CRMS·LAS·SFDC로 ATTACH, 기본 읽기 전용) · 빌더 `python -m validation.e2e.edw_standin` → `valid_env/edw/edw.sqlite`(.sql 원본에서) · `query_edw` sqlite 허용 목록 = 대역 표 아홉.
 - MCP 프로세스: `mcp_server.main`이 먼저 `settings.edw_read_only()`를 불러, 공용 settings.yaml 하나여도 그 설정 객체의 쓰기 계정은 비어 있다(사용자 10-29 "정해진 항목만", 검토 P1). 파일 자체는 컨테이너 안에서 여전히 읽힌다.
 - 시험: `tests/server/common/test_edw_login.py`, `tests/general/common/test_edw_standin.py`.
 - Status: done (10-30, PR #5 병합) — 서버 설정 다시 채우기와 DBA 계정 준비는 refactor.md C-67.
@@ -147,12 +131,13 @@
 <a id="pl-11"></a>
 ## pl-11 · 모델 호출, 비용, 외부 전송 가드(공용)
 - 이유: 폐쇄망 서버는 외부 모델을 절대 부르면 안 되고, PC 호출은 싸게 유지해야 한다.
-- 무엇: OpenAI 호환 역할 llm/vlm/embed(rerank는 10-29에, ocr_vlm은 10-30에 지움 — [transform-cleanup.md#pl-31](transform-cleanup.md#pl-31)). 서버(dev/prd)는 외부 모델 거부. 외부 전송은 `*_ALLOW_EXTERNAL` + `RUN_ENV=local`이어야 함. 예산, RPM, 비용 장부, 응답 캐시, 시험용 가짜 LLM.
-- 10-29(사용자): 합성 문서 선언 `LLM_SYNTHETIC_TRUTH` 잠금 삭제 · 외부 허용은 루트 settings.yaml에 둬도 됨(설정 창구는 하나).
-- 파일: `common/ai/guard.py`, `common/ai/llm.py`(옛 `adk.py` 합침 — 0.2.0), `common/config/settings.py`.
+- 무엇: OpenAI 호환 역할 llm/vlm/embed. 서버(dev/prd)는 외부 모델 거부. 외부 전송은 `*_ALLOW_EXTERNAL` + `RUN_ENV=local`이어야 함. 하루 지출 상한, RPM, 비용 장부, 응답 캐시, 시험용 가짜 LLM.
+- 10-29(사용자): 외부 허용은 루트 settings.yaml에 둬도 됨(설정 창구는 하나).
+- 파일: `common/ai/guard.py`, `common/ai/llm.py`, `common/config/settings.py`.
 - 결정(사용자 11-02): 개발 서버(dev)부터 내부망 GLM, PC(local)는 OpenRouter(유료 — 상한은 CLAUDE.md §7).
-- 11-03(사용자): PC 비용 스위치 `no_paid_calls`(NO_PAID_CALLS)·`max_calls`(LLM_MAX_CALLS)·`external_max_docs`·`external_max_questions`·`external_scope`를 지움 — 코드·설정·sample·시험·문서. 옛 설정 파일의 칸은 경고만(`layout.REMOVED`). 남긴 것: 지출 상한 `budget_usd`와 장부 `spend_file`(자식 프로세스·검증 페이지가 같은 장부를 나눠 쓰는 유일한 길이라 설정으로 둠), 모든 `*_ALLOW_EXTERNAL`, 서버(dev/prd)의 외부 모델 거부. answer_gen의 "외부 호출이면 예산 필수" 범위 검사(check_scope)도 함께 없어짐. 호출 수는 `usage()` 집계로만 센다.
-- 11-03(사용자 — 기본 지출 상한): `budget_usd` 기본 0.1달러, 뜻은 "하루(현지 날짜) 동안 PC 사용자 한 명". 장부는 날짜마다 새 파일 — `spend_file`이 있으면 그 이름 뒤에 날짜(`spend.json` → `spend-2026-11-03.json`), 비우면 `<저장소>/output/llm_spend/<날짜>.txt`(`common.core.paths.SPEND_DIR`)라 그 작업 폴더(저장소 체크아웃)에서 도는 모든 프로세스가 하루 합계 하나를 나눠 씀 — worktree·다른 체크아웃은 장부가 따로(옛 프로세스 안 장부 `_SPEND_LOCAL`은 지움). "사람마다" = PC·OS 사용자마다로 본다 — 외부 호출은 `RUN_ENV=local`에서만 되고 서버(dev·prd)는 외부 모델을 거부한다. 비운 칸은 기본 0.1(상한 없음은 없음 — 더 쓰려면 큰 값을 적음). 그래서 answer_gen의 따로 둔 예산 검사는 필요 없다(P1-4 — 기본 상한이 대신함). 외부 LLM의 단가를 모르면 상한을 지킬 수 없어 호출을 거부한다(`llm.chat` 기존 규칙 — 이제 늘 적용). 시험 자식(`case_env`)은 임시 장부를 쓴다. 정산·반환은 선차감한 날의 장부로 감(스레드마다 선차감 날짜를 기억 — 자정을 넘겨 돌아온 환불이 다음 날 상한을 늘리지 않게). 여러 턴 도구 왕복(`admit_turn` — answer_gen)도 단가를 모르면 거부하고, 턴 정산은 role=llm 단가(`LLM_PRICE_IN·OUT` 포함)로 함. 한 번의 호출이 사후 정산으로 상한을 조금 넘을 수는 있다(다음 호출부터 거부).
+- 하루 지출 상한(사용자 11-03): `common.models.guard.budget_usd` 기본 0.1달러 — 외부 모델 호출의 하루(현지 날짜) 합계, PC 사용자마다. 비운 칸은 기본값. 외부 호출은 `RUN_ENV=local`에서만 되고 서버(dev·prd)는 외부 모델을 거부하므로 "사람마다" = PC·OS 사용자마다.
+- 장부: 날짜마다 파일 하나 — `spend_file`이 있으면 그 이름 뒤에 날짜(`spend.json` → `spend-<날짜>.json`), 비우면 `<저장소>/output/llm_spend/<날짜>.txt`(`common.core.paths.SPEND_DIR`). 그 작업 폴더의 모든 프로세스가 파일 잠금으로 하루 합계 하나를 나눠 쓴다(worktree·다른 체크아웃은 장부가 따로). 정산·반환은 선차감한 날의 장부로 간다(스레드마다 선차감 날짜를 기억). 시험 자식(`case_env`)은 임시 장부를 쓴다.
+- 외부 LLM은 단가(`PRICES` 또는 `LLM_PRICE_IN·OUT`)를 알아야 부른다 — 모르면 상한을 지킬 수 없어 거부(`llm.chat`·여러 턴 도구 왕복 `admit_turn` 같음). 턴 정산은 role=llm 단가로. 한 번의 호출이 사후 정산으로 상한을 조금 넘을 수 있고, 다음 호출부터 거부된다. 호출 수는 `usage()` 집계로만 센다.
 - Status: done
 
 <a id="op-01"></a>
@@ -175,16 +160,15 @@
 - 위험: 공용 의존 변경으로 code_fp 변경(이번 판 pl-25와 묶음), 핸드오프/엔진 바이트 유지. 검토 등급 A(비밀값·DB 스키마). 서버 DBA 협의·마이그레이션·maintain 예약은 refactor.md C-79.
 - 파일: `common/core/{jsonlog,exitclean}.py`, `common/store/logsink.py`, `common/store/db/`, 설정 모델/sample, `tests/server/common/test_{jsonlog,logsink}.py`, `tests/general/common/test_applog_pg.py`, `mcp_server/services/call_log.py`, `mcp_server/{main.py,routers/dispatch.py}`, `tests/server/mcp/test_call_log.py`, `validation/search_ui/serve.py`.
 - 진행(10-30, T2 — 파이프라인 성능·추적): 기록 단위 3개. ① 실행 1건 = `applog.pipe_run`(`pipeline/cli.py` `__main__`의 `runtrace.run`이 `run_id`를 만들고 시작 `running`·종료 UPSERT, code_fp·stack·settings_hash·문서 수·workers·cpu_max_load·mem_start_pct — 부모가 이어준 run_id가 있는 자식은 새로 시작하지 않음). ② 문서×단계 span = `applog.pipe_event`(`common/core/span.py` — `with span("extract.parse", doc_id=…, engine=…) as s: s.add(pages=…)`; 중첩 `parent_id`, 오류는 `status`·`err_kind`(env/timeout/doc/external/db)로 기록하고 다시 던짐 — `err`는 예외 타입 이름(+OSError는 errno 이름)과 `span.safe()`로 표시한 우리 코드의 고정 문구만 저장하는 allowlist이며 외부 라이브러리·파서 예외 문자열 원문은 저장하지 않는다(`run_all.redact`의 `redact_text`는 runs.jsonl용으로만 남음)). ③ 60초마다 `stage='run.progress'`(`runtrace.Progress` — 완료/전체·docs/min·남은 시간 추정·단계별 진행 중 개수·부하·메모리). `run_id`가 없으면(MCP 검색·시험) span은 아무것도 안 하는 가짜라 DB·스레드·지연이 0이다(서버 시험으로 고정).
-- 계측 지점: `common/core/resources.gated_popen`(메모리 문 `wait_mem_ms`·CPU 문 `wait_cpu_ms`를 열로, 다른 launcher 대기·settle은 metrics, 자식에 `APPLOG_CONTEXT`로 run/span ID 전달 — 스레드 풀은 `span.carry`) · `pipeline/cli.py`(`proc.run` — 하위 프로세스 1개) · `run_all.py`(`extract.plan`, 문서×엔진 `extract.parse`, 조각 `extract.shard`; 자식 `parse_one`이 stdout 끝에 남기는 cpu_ms·rss_peak_mb 한 줄을 부모 span이 옮김 — 엔진 파일은 그대로) · `represent.py`(`transform.represent`, `transform.figures`: VLM/OCR 호출 수·재시도·지연 p50/최대·토큰은 `common/ai/adk.complete` 래퍼가 열린 span의 metrics에 쌓음) · `build_bundle.py`(`transform.structure`: 청크 수·길이, `embed.bundle`: 캐시 적중/실패·배치 수·호출 지연·재시도·토큰 — `embed.py`) · `llm.py`(응답 캐시 적중·분당 상한 대기) · `pgvector_load.py`(`load.pgvector` + 표별 `load.doc/chunk/chunk_term/stats`: 행 수·rows/sec) · `publish_parse_result.py`(`load.publish`). INFO는 문서×단계 span까지, 개별 호출은 span.metrics 요약과 DEBUG만. 기존 `runs.jsonl`·`RUNLOG`·`PROGRESS.md`는 그대로. 최상위 진입점은 `pipeline.cli parse`와, 직접 실행하는 `run_all`·`represent`·`build_bundle`·`pgvector_load`·`publish_parse_result`(부모가 `run_id`를 이어주지 않았을 때만 자기 `pipe_run`을 시작 — 서버 호스트 `run_docs.py`의 구조화+적재는 `build_bundle`·`pgvector_load`를 직접 불러 실행 2건으로 남는다). 점검·설정 명령(selftest·smoke·set-*·show-*)은 추적하지 않는다.
+- 계측 지점: `common/core/resources.gated_popen`(메모리 문 `wait_mem_ms`·CPU 문 `wait_cpu_ms`를 열로, 다른 launcher 대기·settle은 metrics, 자식에 `APPLOG_CONTEXT`로 run/span ID 전달 — 스레드 풀은 `span.carry`) · `pipeline/cli.py`(`proc.run` — 하위 프로세스 1개) · `run_all.py`(`extract.plan`, 문서×엔진 `extract.parse`, 조각 `extract.shard`; 자식 `parse_one`이 stdout 끝에 남기는 cpu_ms·rss_peak_mb 한 줄을 부모 span이 옮김 — 엔진 파일은 그대로) · `represent.py`(`transform.represent`, `transform.figures`: VLM/OCR 호출 수·재시도·지연 p50/최대·토큰은 `common/ai/llm.complete`가 열린 span의 metrics에 쌓음) · `build_bundle.py`(`transform.structure`: 청크 수·길이, `embed.bundle`: 캐시 적중/실패·배치 수·호출 지연·재시도·토큰 — `embed.py`) · `llm.py`(응답 캐시 적중·분당 상한 대기) · `pgvector_load.py`(`load.pgvector` + 표별 `load.doc/chunk/chunk_term/stats`: 행 수·rows/sec) · `publish_parse_result.py`(`load.publish`). INFO는 문서×단계 span까지, 개별 호출은 span.metrics 요약과 DEBUG만. 기존 `runs.jsonl`·`RUNLOG`·`PROGRESS.md`는 그대로. 최상위 진입점은 `pipeline.cli parse`와, 직접 실행하는 `run_all`·`represent`·`build_bundle`·`pgvector_load`·`publish_parse_result`(부모가 `run_id`를 이어주지 않았을 때만 자기 `pipe_run`을 시작 — 서버 호스트 `run_docs.py`의 구조화+적재는 `build_bundle`·`pgvector_load`를 직접 불러 실행 2건으로 남는다). 점검·설정 명령(selftest·show-*)은 추적하지 않는다.
 - 분석: `python -m pipeline.tools.perf [<run_id>]` — 단계·엔진별 p50/p95/최대·건수·실패율·wall/층 비율·wait 비율, 쪽당 시간, 느린 문서 N개(`--top`), 캐시 적중률·재시도율·실패율, `--compare <run_id>…`로 code_fp·stack·settings_hash 차이와 단계별 p50 비교, `--runs`로 최근 목록, DB가 꺼진 PC는 `--file output/applog/*.jsonl`. 읽기 전용.
 - 검증(10-30 T2): 서버 시험 `test_span`·`test_runtrace`·`test_perf`·`test_span_stages` 4개(span 중첩·parent_id, 오류 status/err_kind, wait_mem/cpu 분리와 자식 프로세스 run/span ID 전달, run.progress 주기, perf 집계, 임베딩 캐시/배치/재시도·적재 표별 span — 임베딩은 `patch.object`, 적재는 가짜 커서, 검색 경로 no-op 고정)와 PC 시험 `tests/general/pipeline/test_perf_pg.py`(임시 스키마 `test_t2perf_*`). 실데이터 스모크는 `valid_env` 문서 3건으로 `pipeline.cli parse`(→ `build_bundle --embed none`)까지: `pipe_run`·`pipe_event`에 extract/transform 단계 행, `perf.py` 출력 확인. **사용자 결정(10-30): 외부 임베딩 호출 금지 — 캐시 적중이 1/27이라 임베딩·pgvector 적재의 PC 실데이터 스모크는 하지 않음(미검증).**
 - 계측 fail-soft(10-30 F2, 교차 검토 P1-2): span 시작 측정·종료 기록·`pipe_run` 시작/종료·`run.progress` 스레드의 모든 예외는 계측 안에서 삼킨다 — 업무 코드의 정상 결과를 바꾸지 않고, 업무 예외가 있으면 원래 예외를 그대로 다시 던진다. 로그 디렉터리 권한 오류로 `jsonlog.setup`이 실패하면 30초간 다시 열지 않고 span을 가짜로 대체한다. 실패는 프로세스당 1회 stderr 경고(`[applog] 계측 실패…`, 예외 타입만)와 `span.failure_count()` 카운터로만 남는다. `Span.result()`의 status/err_kind 값 검증(프로그래머 오류)만 예외로 남김.
 - 오류 필드(10-30 F2, P2-5): `pipe_event.err`와 JSON 로그의 `err`는 allowlist — 예외 타입 이름(+errno 이름·CalledProcessError 종료 코드)과 `span.safe(...)` 고정 문구. `sp.result(…, err)`에 그냥 글자를 주면 맨 앞 예외 클래스 이름만 남고 나머지는 버린다. 로컬 DEBUG에도 원문을 남기지 않는다. `err`와 `metrics`의 글자, `pipe_run.args`(인자별)는 저장 전에 `jsonlog.masked`를 거친다.
 - 한계: `cpu_ms`는 이 프로세스(RUSAGE_SELF)와 span 안에서 끝나 회수(wait)된 자식 프로세스(RUSAGE_CHILDREN)의 CPU 시간 합이다(10-30 F2, P2-6 — subprocess 작업 포함). 서로 조상이 아닌 `cpu=True` span이 같은 프로세스에서 겹치면 둘 다 NULL(0으로 채우지 않음). `cpu=False` span과 겹치는 자식은 구분하지 못하므로 `cpu=True`는 호출부가 직렬일 때만 쓴다. span이 끝날 때까지 안 끝난 자식·손자의 CPU, Windows(`resource` 없음)·측정 실패는 NULL이다. `rss_peak_mb`는 이 프로세스만이다. `cpu_ms`·`rss_peak_mb`는 프로세스에서 하나만 도는 span(자식 프로세스 루트·represent 문서 직렬 실행·적재)과 `parse_one` 자식 값만 정확하다(스레드로 겹치는 span은 비움). macOS는 `mem_used_pct`가 비고(`/proc` 없음) Windows는 cpu_ms·부하가 빈다. `docs_reused`는 비어 있다(실행마다 새로 파싱 — pl-32).
-- 파일(T2·F2): `common/core/span.py`, `common/core/resources.py`, `common/ai/{adk,embed,llm}.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf.py`, `pipeline/cli.py`, `pipeline/extract/{run_all,parse_one}.py`, `pipeline/transform/{represent/represent,figures/figures,figures/vlm_page,structure/build_bundle}.py`, `pipeline/load/{pgvector_load,publish_parse_result}.py`, `tests/server/common/test_span{,_soft}.py`, `tests/server/pipeline/test_{runtrace,perf}.py`.
+- 파일(T2·F2): `common/core/span.py`, `common/core/resources.py`, `common/ai/{embed,llm}.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf.py`, `pipeline/cli.py`, `pipeline/extract/{run_all,parse_one}.py`, `pipeline/transform/{represent/represent,figures/figures,figures/vlm_page,structure/build_bundle}.py`, `pipeline/load/{pgvector_load,publish_parse_result}.py`, `tests/server/common/test_span{,_soft}.py`, `tests/server/pipeline/test_{runtrace,perf}.py`.
 - 결정(사용자 10-30 grill): gold DB 변경([load-schema.md#pl-25](load-schema.md#pl-25))과 같은 판에 싣는다 — 재처리 한 번.
 - 로그 점검 후속(11-02): `extract.parse`의 `attempt`를 채운다(시간 초과 재시도면 2). 앱 logger 이름을 `applog.<앱>`으로 두어 SDK(`mcp.*`) 줄이 감사 로그에 섞이지 않는다. SDK 줄은 `mcp_server.main.build()`가 FastMCP 기본 처리(root의 INFO·일반 글자·stderr)에서 떼어 stderr JSON(`jsonlog.JsonFormatter`)으로만 낸다 — 요청마다의 INFO는 `common.log.level=DEBUG`일 때만, WARNING 이상·예외 줄은 항상 `jsonlog.masked`를 거쳐 비밀값이 가려진다(stdio의 stdout은 JSON-RPC 전용 그대로). 임베딩 호출 중에도 `run.progress`(unit=chunk)를 남긴다. `ext_call_ms`는 호출 시간의 합이라 병렬이면 `duration_ms`보다 클 수 있다.
 - develop 병합(11-02): 서버 입구가 `run_docs`로 하나가 되어 파싱·구조화·적재·게시·warm이 문서마다 따로 실행된다. 그래서 실행(`pipe_run`)도 문서·단계마다 생기고 부모 run_id로 묶이지 않는다. 전체를 볼 때는 `python -m pipeline.tools.perf --since <시간>`을, 문서 하나는 `pipe_event.doc_id`를 쓴다. `source warm`에 `extract.warm`을 더했다. 설정 파일 자리는 `ops.log.*`·`search.audit.*`(모델 경로 `common.log.*`·`mcp.audit.*`).
-- 결정(사용자 10-31 범위 축소 grill → 11-02): JSON Lines 사건 기록을 이 행에서 지우고 logging 시스템을 따로 만들기로 했던 것이 `feature/logging` 작업이다 — 그 구현을 이 행에 적는다.
 - Status: done — 코드는 `feature/logging`(#87, 11-02) 병합. 서버 적용(DB 담당자 협의·마이그레이션·`maintain` 예약)은 refactor.md C-79·C-80에 남음.
 

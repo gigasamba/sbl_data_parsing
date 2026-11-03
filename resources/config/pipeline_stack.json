@@ -82,6 +82,74 @@
   ".msg": [
    "msg_extract",
    "kreuzberg"
+  ],
+  ".docm": [
+   "kreuzberg",
+   "anydoc"
+  ],
+  ".pptm": [
+   "kreuzberg",
+   "anydoc"
+  ],
+  ".rtf": [
+   "anydoc",
+   "kreuzberg"
+  ],
+  ".csv": [
+   "markitdown",
+   "kreuzberg"
+  ],
+  ".tsv": [
+   "plaintext",
+   "kreuzberg"
+  ],
+  ".md": [
+   "plaintext",
+   "markitdown"
+  ],
+  ".odt": [
+   "anydoc",
+   "kreuzberg"
+  ],
+  ".ods": [
+   "anydoc",
+   "kreuzberg"
+  ],
+  ".odp": [
+   "anydoc"
+  ],
+  ".xlsb": [
+   "kreuzberg"
+  ],
+  ".dotx": [
+   "kreuzberg"
+  ],
+  ".xltx": [
+   "kreuzberg"
+  ],
+  ".potx": [
+   "kreuzberg"
+  ],
+  ".ppsx": [
+   "kreuzberg"
+  ],
+  ".dot": [
+   "kreuzberg"
+  ],
+  ".xlt": [
+   "kreuzberg"
+  ],
+  ".pot": [
+   "kreuzberg"
+  ],
+  ".json": [
+   "plaintext"
+  ],
+  ".xml": [
+   "plaintext"
+  ],
+  ".log": [
+   "plaintext"
   ]
  },
  "source": "selection.json(단계 1 최종 엔진 조합)",

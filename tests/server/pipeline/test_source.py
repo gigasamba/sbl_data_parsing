@@ -398,3 +398,36 @@ def _selftest_finish_keep():
 
 def test_main():  # 옛 `if "--selftest" in sys.argv:` 갈래
     selftest()
+
+
+def test_folder_tree():
+    """F2(11-03 PC 시험) — 원천별 하위 폴더(`SFDC/<uuid>/<파일>`)면 평평한 폴더에 복사하고 manifest에 상대 키·원본 주소. 평평한 폴더는 그대로."""
+    import tempfile
+
+    root = Path(tempfile.mkdtemp())
+    src, out = root / "src", root / "out"
+    for rel in ("SFDC/u1/a.txt", "CRMS/u2/b.txt", "CRMS/u3/a.txt"):  # a.txt 이름 겹침 → `<상위 폴더>__a.txt`
+        (src / rel).parent.mkdir(parents=True)
+        (src / rel).write_text(rel, encoding="utf-8")
+    with pc.PIPE.env(SOURCE_MANIFEST=None):
+        local, names, state = resolve(str(src), out)
+    man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")}
+    assert local == out / "_source_files" and sorted(names) == sorted(man), (local, names)
+    assert sorted(r["key"] for r in man.values()) == ["CRMS/u2/b.txt", "CRMS/u3/a.txt", "SFDC/u1/a.txt"], man
+    for n, r in man.items():
+        assert (local / n).read_text(encoding="utf-8") == r["key"], r  # 복사본 = 그 키의 원본
+        assert r["uri"] == (src / r["key"]).resolve().as_uri(), r
+        assert r["source_system"] == r["key"].split("/", 1)[0], r  # SFDC·CRMS(키 첫 마디)
+    flat = root / "flat"
+    flat.mkdir()
+    (flat / "c.txt").write_text("c", encoding="utf-8")
+    (flat / "sub").mkdir()
+    (flat / "sub" / ".DS_Store").write_text("x", encoding="utf-8")  # 흘린 하위 파일 — 평평한 폴더 그대로
+    (flat / "__MACOSX").mkdir()
+    (flat / "__MACOSX" / "c.txt").write_text("x", encoding="utf-8")
+    local2, names2, _ = resolve(str(flat), root / "out2")
+    assert local2 == flat and names2 == ["c.txt"], (local2, names2)  # 평평한 폴더는 키 = 파일 이름(옛 그대로)
+    odd = root / "odd"  # 원천 이름이 아닌 하위 폴더 — 평평한 폴더로(맨 위 파일만 = 0개)
+    (odd / "_archive" / "u").mkdir(parents=True)
+    (odd / "_archive" / "u" / "d.txt").write_text("d", encoding="utf-8")
+    assert resolve(str(odd), root / "out3")[:2] == (odd, [])

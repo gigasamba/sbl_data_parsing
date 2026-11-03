@@ -26,14 +26,15 @@
 | `list_doc_fulltext` | 문서의 대표 파싱 결과 파일(.md·.json) 목록 + 받기 손잡이(`sfid`) 발급 |
 | `get_doc_fulltext` | `sfid`로 파일 내용을 받기 |
 
-모르는 도구 이름은 JSON-RPC 오류(`isError: true`, "Unknown tool")다. 옛 이름 `list_rep_files`·`get_rep_files`는 없다.
+모르는 도구 이름은 JSON-RPC 오류(`isError: true`, "Unknown tool")다.
 
 ## 3. 지원 확장자
 
-<!-- 시험이 대조하는 목록: 바꿀 때는 resources/config/pipeline_stack.json(parse)·pipeline/mcp_parse_service.py(ALLOWED_EXTS)를 먼저 고친다 -->
-- **검색 대상(파이프라인이 파싱해 적재하는 형식)** — 엔진 구성 파일 `resources/config/pipeline_stack.json`의 `parse` 표: `.bmp` `.doc` `.docx` `.eml` `.htm` `.html` `.hwpx` `.jpeg` `.jpg` `.mht` `.mhtml` `.msg` `.pdf` `.png` `.ppt` `.pptx` `.tif` `.tiff` `.txt` `.xls` `.xlsm` `.xlsx`
+<!-- 시험이 대조하는 목록: 바꿀 때는 resources/config/pipeline_stack.json(parse)·pipeline/extract/engines/registry.py(EXTRA_FORMATS)를 먼저 고친다 -->
+- **검색 대상(파이프라인이 파싱해 적재하는 형식)** — 엔진 구성 파일 `resources/config/pipeline_stack.json`의 `parse` 표: `.bmp` `.csv` `.doc` `.docm` `.docx` `.dot` `.dotx` `.eml` `.htm` `.html` `.hwpx` `.jpeg` `.jpg` `.json` `.log` `.md` `.mht` `.mhtml` `.msg` `.odp` `.ods` `.odt` `.pdf` `.png` `.pot` `.potx` `.ppsx` `.ppt` `.pptm` `.pptx` `.rtf` `.tif` `.tiff` `.tsv` `.txt` `.xls` `.xlsb` `.xlsm` `.xlsx` `.xlt` `.xltx` `.xml`
+  - 2차 확장자(pl-45, 사용자 11-01·11-03): 매크로·서식·쇼 파일(`.docm` `.pptm` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.xlsb`), 오픈문서(`.odt` `.ods` `.odp`), `.rtf`, 글자 자료(`.csv` `.tsv` `.md`), 데이터·기록(`.json` `.xml` `.log` — 파일 글을 그대로 읽음). `.hwp`는 아직 아니다.
   - `.pdf`는 글자 PDF와 스캔(이미지) PDF를 따로 판정해 다른 엔진으로 읽는다. 압축 파일(`.zip` 등)과 위 목록 밖 형식은 파싱 대상이 아니다.
-- **`parse_document`가 받는 형식** — `pipeline/mcp_parse_service.py`의 `ALLOWED_EXTS`: `.doc` `.docx` `.eml` `.htm` `.html` `.hwpx` `.mht` `.mhtml` `.msg` `.pdf` `.ppt` `.pptx` `.txt` `.xls` `.xlsm` `.xlsx`
+- **`parse_document`가 받는 형식** — `pipeline/mcp_parse_service.py`의 `allowed_exts()`(검색 대상 − 이미지): `.csv` `.doc` `.docm` `.docx` `.dot` `.dotx` `.eml` `.htm` `.html` `.hwpx` `.json` `.log` `.md` `.mht` `.mhtml` `.msg` `.odp` `.ods` `.odt` `.pdf` `.pot` `.potx` `.ppsx` `.ppt` `.pptm` `.pptx` `.rtf` `.tsv` `.txt` `.xls` `.xlsb` `.xlsm` `.xlsx` `.xlt` `.xltx` `.xml`
   - 이미지 파일은 받지 않는다(그림 VLM 단계를 돌리지 않음). 스캔 PDF는 내부망 VLM으로 읽는다(쪽마다 VLM 호출이라 글자 PDF보다 오래 걸림 — 작업 제한 시간 하나). VLM 설정(주소·모델)이 없으면 text가 비고 "스캔 PDF — VLM 미설정", VLM이 실패하면 "스캔 PDF — VLM 파싱 실패"가 붙는다.
 
 ## 4. `search`
