@@ -124,7 +124,9 @@ def test_retry_and_page_cap():
             with ce, pe, mock.patch.object(llm.time, "sleep"):
                 try:
                     out = parse_qwen_vlm(str(pdf))
-                    assert ok and out["trace"]["pages"] == 1, out  # 쪽 상한 transform.vlm.page_max(엔진도)
+                    assert ok and out["trace"]["pages"] == 1 and out["trace"]["pages_total"] == 3, (
+                        out
+                    )  # 쪽 상한 transform.vlm.page_max(엔진도)
                 except RuntimeError as ex:
                     assert not ok and "VLM 실패" in str(ex), ex  # 재시도 소진 → 엔진 실패(반쪽 결과를 성공으로 남기지 않음)
             assert len(seen) == fail_first + (1 if ok else 0), (retry, len(seen))

@@ -38,7 +38,9 @@ from common.core import span as SP  # op-01 — 문서×엔진 span(run_id 없�
 from common.core.console import utf8_stdout
 from common.core.paths import (  # 폴더 재편 뒤 이 두 상수만 바뀌면 됨
     APP_ROOT,
+    DEPLOY_ROOT,
     PARSING_ROOT,
+    RES_ROOT,
     doc_dir,
 )
 from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
@@ -522,6 +524,13 @@ def engine_code_fp(eng):
     for p in files:
         h.update(("parse/" + p.relative_to(PARSING_ROOT).as_posix()).encode("utf-8"))
         h.update(p.read_bytes())  # 0.2.0 — 옛 import 이름 되돌리기(legacy_names) 지움(pl-46)
+    if eng in VLM_ENGINES:  # 11-04(pl-43) — VLM 엔진 결과는 공용 쪽 옮기기 코드·지시문(page_transcribe)에도 달림
+        for p in [
+            DEPLOY_ROOT / "pipeline" / "shared" / "vlmcall.py",
+            *sorted((RES_ROOT / "prompts" / "common" / "page_transcribe").glob("*")),
+        ]:
+            h.update(p.relative_to(DEPLOY_ROOT).as_posix().encode("utf-8"))
+            h.update(p.read_bytes())
     return h.hexdigest()[:12]
 
 

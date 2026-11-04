@@ -220,13 +220,13 @@ def vlm_page(img_bytes, det=None):
         )
         dpath = det_path(raw_root(), model_dir, "page", "v1", P_PAGE, k16)
         if dpath.exists():
-            rec = json.loads(dpath.read_text(encoding="utf-8"))
-            return rec["text"], {**rec["provenance"], "cached": True, "via": "det"}
-    if legacy.exists():  # 읽기 대체 경로 — 프로토타입(또는 예전 운영) 캐시가 맞으면 그대로 쓰고 승격
-        rec = json.loads(legacy.read_text(encoding="utf-8"))
+            rec = _read(dpath)
+            if rec:
+                return rec["text"], {**rec["provenance"], "cached": True, "via": "det"}
+    rec = _read(legacy) if legacy.exists() else None  # 읽기 대체 경로 — 프로토타입(또는 예전 운영) 캐시가 맞으면 그대로 쓰고 승격
+    if rec:
         if dpath is not None:
-            dpath.parent.mkdir(parents=True, exist_ok=True)
-            dpath.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")  # 결정적 열쇠로 복사 — 다음부터 렌더 sha 안 봐도 됨
+            _write(dpath, rec)  # 결정적 열쇠로 복사 — 다음부터 렌더 sha 안 봐도 됨
         return rec["text"], {**rec["provenance"], "cached": True, "via": "legacy_image_sha"}
     if not (base and model):
         return "", {"error": "VLM_BASE_URL·VLM_MODEL 미설정 — 쪽 옮기기 없이 OCR만", "cached": False}
@@ -263,9 +263,29 @@ def vlm_page(img_bytes, det=None):
     rec = {"text": text, "provenance": {k: v for k, v in prov.items() if k != "cached"}}
     # 결정적 열쇠가 있으면 그쪽에 저장(앞으로 재사용), 없으면 예전처럼 렌더 sha 경로에(대체 경로)
     dest = dpath if dpath is not None else legacy
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
+    _write(dest, rec)
     return text, prov
+
+
+def _read(path):
+    """캐시 파일 → 기록 사전, 못 읽으면(깨진 JSON·권한) None = 캐시 없음으로(엔진·후보정·parse MCP가 같은 파일을 씀 — 11-04)."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _write(path, rec):
+    """캐시 쓰기 — 임시 파일 뒤 os.replace(읽는 쪽이 반쯤 쓴 파일을 보지 않게). 못 쓰면(디스크·권한) 건너뜀 — VLM 답은 이미 받았다."""
+    import os
+
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        tmp.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError as ex:
+        print(f"[vlm] 캐시 저장 실패(건너뜀): {type(ex).__name__}", flush=True)
 
 
 def transcribe(path, idxs):
