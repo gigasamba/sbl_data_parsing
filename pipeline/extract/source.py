@@ -397,16 +397,38 @@ def _warm_cmd(argv):
     t0 = time.time()
 
     def _one(t):
+        """파일(=문서) 1건 = extract.download span 1행(op-01, 이슈 #117) — doc_id는 extract.parse와 같은 파일 이름."""
+        name = t["filename"] or t["key"]
+        with SP.span("extract.download", "extract", doc_id=name, ext=Path(name).suffix.lower(), file_bytes=t["size"]) as sp:
+            return _fetch(t, sp)
+
+    def _fetch(t, sp):
         p = _warm_key_path(wd, t["bucket"], t["key"])
         p.unlink(missing_ok=True)  # 인덱스엔 없는데 파일만 남은 잔여도 이번에 갈아치움
         tmp = wd / (p.name + ".part")
+        on_wire = False  # head·전송 중의 실패는 원인이 외부(스토리지·네트워크)라 err_kind=external — botocore 예외는 이름으로 못 가림
         try:
+            on_wire = True
+            t_head = time.monotonic()
             actual = cli.head_object(Bucket=t["bucket"], Key=t["key"]).get("ContentLength")
+            head_ms = (time.monotonic() - t_head) * 1000
             if t["size"] is not None and actual is not None and int(actual) != int(t["size"]):
                 print(f"[source] warm: 크기 불일치(참고) — RDB({t['size']}) ≠ OS({actual}): {t['bucket']}/{t['key']}", flush=True)
+            t_dl = time.monotonic()
             cli.download_file(t["bucket"], t["key"], str(tmp))
+            download_ms = (time.monotonic() - t_dl) * 1000
+            on_wire = False
             os.replace(tmp, p)  # 인덱스에 보이는 파일은 항상 완전한 내용
+            size = int(actual) if actual is not None else t["size"]
+            if size is not None:
+                sp.set(file_bytes=size)
+            # 순수 전송 속도(head·잠금 대기 제외) — 네트워크 문제인지 코드 문제인지 가르는 값
+            sp.add(head_ms=round(head_ms), download_ms=round(download_ms))
+            if size and download_ms > 0:
+                sp.add(mbps=round(size * 8 / 1e6 / (download_ms / 1000), 2))
+            t_lock = time.monotonic()
             with _warm_locked(wd):
+                sp.add(lock_wait_ms=round((time.monotonic() - t_lock) * 1000))
                 rs = _warm_read(wd)
                 rs.append(
                     {
@@ -424,6 +446,8 @@ def _warm_cmd(argv):
         except Exception as e:
             p.unlink(missing_ok=True)
             tmp.unlink(missing_ok=True)
+            code, kind = SP.classify(e)
+            sp.result(code, "external" if on_wire and code == "fail" else kind, e)
             print(f"[source] warm: 실패(무시·폴백) — {t['bucket']}/{t['key']}: {type(e).__name__}: {str(e)[:120]}", flush=True)
             return False
 
@@ -432,7 +456,7 @@ def _warm_cmd(argv):
             import concurrent.futures as _cf
 
             with _cf.ThreadPoolExecutor(max_workers=a.workers) as ex:
-                done = sum(1 for r in ex.map(_one, targets) if r)
+                done = sum(1 for r in ex.map(SP.carry(_one), targets) if r)  # 풀 스레드에 run_id·부모 span을 이어줌
         else:
             done = sum(1 for r in (_one(t) for t in targets) if r)
         sp.add(done=done, failed=len(targets) - done)
