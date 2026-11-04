@@ -5,11 +5,13 @@
       settings.yaml ops.pipeline_host.run_docs_dir(SETTINGS_FILE 또는 <루트>/settings.yaml — 호스트 PyYAML 있을 때), 없으면 이 스크립트 옆 test_space/(S7e1)
 출력: 문서별 — 파싱 wall · 엔진 Σ(엔진별 상세) · represent 내부(load/merge/fuse/scanfill/post/table/agent + post[figures·charts·dedup·supsub])
       · 나머지(prepare+qa+기동) · 구조화 대기(queue_wait) · 구조·pub 소요 · 대기열 여부
-사용: python3 analyze_docflow.py [세부표:--detail]
+      --db [시간]: 위 표 뒤에 DB(applog.pipe_event) 최근 N시간(기본 24)의 단계별 p50/p95·다운로드 속도 표(컨테이너의 pipeline.tools.perf — 순수 전송 mbps는 여기)
+사용: python3 analyze_docflow.py [세부표:--detail] [--db [시간]]
 """
 
 import json
 import re
+import shutil
 import sys
 from collections import defaultdict
 
@@ -20,6 +22,13 @@ if _err:
     print(f"[안내] {_err} — 작업 폴더는 스크립트 옆 test_space/", file=sys.stderr)
 PROG = run_docs.work_dir(_doc) / "batch_progress"
 DET = "--detail" in sys.argv
+DB_HOURS = None  # --db [시간] — DB 기록 분석을 덧붙임
+if "--db" in sys.argv:
+    _i = sys.argv.index("--db") + 1
+    try:
+        DB_HOURS = float(sys.argv[_i]) if _i < len(sys.argv) else 24.0
+    except ValueError:
+        DB_HOURS = 24.0
 
 ev: defaultdict = defaultdict(dict)
 try:
@@ -105,6 +114,35 @@ for seq in sorted(ev):
     if "pub_end" in e:
         n_done += 1
 
+# 다운로드·분류 표(이슈 #117) — 파싱 전 단계. warm sec은 컨테이너 기동·head·전송을 합친 값이라 유효 속도는 순수 네트워크 속도보다 낮다.
+dl_rows = [(seq, ev[seq]) for seq in sorted(ev) if "warm_end" in ev[seq] or "classify" in ev[seq]]
+if dl_rows:
+    print()
+    dh = f"{'seq':>5} {'크기MB':>8} {'받기s':>7} {'유효Mbps':>9} {'재사용':>5} | {'분류s':>6} {'probe s':>7} {'캐시':>4} {'클래스':>6}"
+    print("다운로드·분류 (받기s = 컨테이너 기동 포함 단계 전체)")
+    print(dh)
+    print("-" * len(dh) * 2)
+    dl_sum = cl_sum = 0.0
+    n_dl = n_cl = 0
+    for seq, e in dl_rows:
+        w, c = e.get("warm_end", {}), e.get("classify", {})
+        size, wsec = w.get("bytes") or 0, w.get("sec") or 0
+        reused = bool(w.get("reused"))
+        mbps = f"{size * 8 / 1e6 / wsec:9.1f}" if size and wsec and not reused and w.get("ok") else f"{'-':>9}"
+        print(
+            f"{seq:>5} {size / 1e6:8.2f} {wsec:7.1f} {mbps} {'예' if reused else '':>5} | "
+            f"{c.get('sec', 0):6.2f} {c.get('probe_sec', 0):7.2f} {'예' if c.get('cached') else '':>4} {c.get('ocr', ''):>6}"
+            + (" *받기FAIL" if w and not w.get("ok") else "")
+        )
+        if w and not reused:
+            dl_sum += wsec
+            n_dl += 1
+        if c:
+            cl_sum += c.get("sec") or 0
+            n_cl += 1
+    print("-" * len(dh) * 2)
+    print(f"받기 평균 {dl_sum / n_dl:.1f}s({n_dl}건, 재사용 제외) · 분류 평균 {cl_sum / n_cl:.2f}s({n_cl}건)" if n_dl and n_cl else "")
+
 if n_eng:
     print("-" * 90)
     print(
@@ -116,3 +154,11 @@ if n_eng:
             else ""
         )
     )
+
+if DB_HOURS is not None:
+    print()
+    print(f"DB 성능 기록(최근 {DB_HOURS:g}시간) — 컨테이너 pipeline.tools.perf")
+    _docker = run_docs._yget(_doc, "common.host.docker") if _doc else None
+    _docker = _docker or ("podman" if shutil.which("podman") else "docker")  # configure()와 같은 순서(op-10)
+    _rc, _out, _err2 = run_docs.sh(run_docs.perf_cmd(DB_HOURS, _docker), timeout=120)
+    print(_out if _rc == 0 else f"[실패] rc={_rc} — {(_err2 or '').strip()[-300:]}")

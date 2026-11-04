@@ -27,6 +27,7 @@ import hashlib
 import json
 import os
 import queue
+import shlex
 import shutil
 import subprocess
 import sys
@@ -250,6 +251,14 @@ def warm_cmd(seq):
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && mkdir -p {o}/_warm && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
         f"python -m pipeline.extract.source{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {_inside(seq, 'batch.csv')}'"
+    )
+
+
+def perf_cmd(hours, docker=None):
+    """DB 성능 기록(applog.pipe_event) 분석 — 상주 컨테이너 안 pipeline.tools.perf(읽기 전용). 호스트 python은 DB·common을 못 쓰므로 컨테이너가 읽는다."""
+    return (
+        f"{docker or DOCKER} exec {PIPE_C} bash -c 'cd {_app()} && "
+        f"PYTHONPATH={_img('code_root')} {LIB_ENV} python -m pipeline.tools.perf --since {float(hours):g}'"
     )
 
 
@@ -561,12 +570,16 @@ def write_doc_csv(row, path):
         w.writerow([row["id"], row["s3_key"], row["original_filename"], row["file_size"]])
 
 
+_warm_reused: set = set()  # 이미 받아 둔 파일이라 컨테이너를 부르지 않은 문서(소요 기록의 reused)
+
+
 def warm_one(seq, row):
     """문서 1개를 warm에 미리 받기(source warm CLI — 상주 컨테이너 env 그대로)."""
     d = DOCFLOW / f"{seq}"
     d.mkdir(parents=True, exist_ok=True)
     write_doc_csv(row, d / "batch.csv")
     if (WARM / _warm_bin(row)).exists() and (d / ".warmed").exists():
+        _warm_reused.add(seq)
         return True
     rc, _, err = sh(warm_cmd(seq), timeout=900, log=PROG / "warm.log")
     if rc == 0:
@@ -603,6 +616,8 @@ def classify_doc(seq, row, cache=None):
     캐시는 레인만 담는다: PDF의 vlm은 probe heavy일 때뿐이라 캐시의 PDF vlm = 스캔(_scan)으로 되살린다."""
     import pathlib
 
+    t_c = time.time()  # 소요 기록(pl-op01 — 이슈 #117): 분류 전체 · probe(컨테이너 호출)만
+    probe_sec = 0.0
     ext = pathlib.Path(row["original_filename"].rsplit("/", 1)[-1]).suffix.lower()
     if cache is not None:
         with _class_lock:
@@ -611,7 +626,7 @@ def classify_doc(seq, row, cache=None):
             if ext == ".pdf" and hit == "vlm":
                 _scan.add(seq)
             _class[seq] = hit
-            mark(seq, "classify", ocr=hit, cached=True)
+            mark(seq, "classify", doc=_doc_name(row), ocr=hit, cached=True, sec=round(time.time() - t_c, 2))
             return hit
     probe_ext = (".pdf", ".docx", ".doc", ".xlsx", ".xls", ".xlsm", ".pptx", ".ppt", ".docm")
     # 2026-10-23 3클래스(사용자 지정) — vlm(GPU집중: 스캔/미디어/pptx) · medium(CPU집중: probe light + 크기 초과) · light
@@ -622,10 +637,13 @@ def classify_doc(seq, row, cache=None):
     if ext in (".txt", ".hwpx", ".hwp", ".csv", ".eml", ".msg", ".html", ".htm", ".tsv", ".md", ".json", ".xml", ".log", ".rtf"):
         cls = "light"
     elif ext in probe_ext:
+        t_p = time.time()
         rc, out, _ = sh(
-            f"{DOCKER} exec {PIPE_C} python3 {_img('code_root')}/pipeline/extract/docflow_probe.py {_img('output_root')}/_warm/{_warm_bin(row)}",
+            f"{DOCKER} exec -e PYTHONPATH={_img('code_root')} {PIPE_C} python3 {_img('code_root')}/pipeline/extract/docflow_probe.py "
+            f"{_img('output_root')}/_warm/{_warm_bin(row)} {shlex.quote(_doc_name(row))}",  # 문서 이름 = pipe_event.doc_id(이슈 #117)
             timeout=60,
         )
+        probe_sec = time.time() - t_p
         probe = next((ln.strip() for ln in reversed((out or "").splitlines()) if ln.strip() in ("heavy", "light")), "heavy")
         if ext == ".pdf" and probe == "heavy":
             _scan.add(seq)  # 2026-10-23 — OCR 대체가 필요한 스캔 PDF 표시
@@ -639,7 +657,7 @@ def classify_doc(seq, row, cache=None):
             cls = cache.setdefault(row["s3_key"], cls)  # 다른 워커가 먼저 넣었으면 그 값(옛 동작과 같음)
             _class_save(cache)
     _class[seq] = cls
-    mark(seq, "classify", ocr=cls)
+    mark(seq, "classify", doc=_doc_name(row), ocr=cls, cached=False, sec=round(time.time() - t_c, 2), probe_sec=round(probe_sec, 2))
     return cls
 
 
@@ -697,7 +715,16 @@ def downloader(rows, order):
             t_w = time.time()
             try:
                 ok = warm_one(seq, row)
-                mark(seq, "warm_end", ok=ok, sec=round(time.time() - t_w, 1))
+                # sec = 컨테이너 기동·head·전송·기록을 모두 합친 단계 전체 시간(순수 전송 속도 아님 — 그건 source.py 쪽 계측, 2단계)
+                mark(
+                    seq,
+                    "warm_end",
+                    ok=ok,
+                    sec=round(time.time() - t_w, 1),
+                    bytes=row.get("file_size"),
+                    doc=_doc_name(row),
+                    reused=seq in _warm_reused,
+                )
                 classify_doc(seq, row, cache=cache)  # OCR 필요도 사전 분류(캐시 우선) → 워커 배분용
                 with _warm_lock:
                     LANEQ[_class.get(seq) or "light"].append(seq)
@@ -782,6 +809,11 @@ def gold_one(seq, row, enq_t=None):
     #   지금은 칸이 없어 로그에만. gold_version 칸(C-76 ③)이 있으면 비어 있으므로 다음 --skip-done이 다시 고른다(C10) —
     #   칸이 없으면 게시한 행(parse_status ok)만 보고 끝난 문서로 친다 → 이 순서는 gold_version 칸이 생긴 뒤에 배포(C-81).
     return ok
+
+
+def _doc_name(row):
+    """pipe_event.doc_id와 맞추는 파일 이름 — 호스트 기록(seq)과 DB 행(doc_id)을 잇는 열쇠."""
+    return row["original_filename"].rsplit("/", 1)[-1]
 
 
 def _warm_bin(row):
