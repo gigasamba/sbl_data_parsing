@@ -170,13 +170,13 @@ def configure(settings_file=None):
     DOCSPACE = Path(
         _yget(doc, "common.host.output_root") or _root() / "output"
     )  # 컨테이너 /app/output 공유 볼륨(op-13 — 비우면 <루트>/output)
-    DOCFLOW = DOCSPACE / "docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
+    DOCFLOW = DOCSPACE / "_docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     WARM = DOCSPACE / "_warm"  # SOURCE_WARM 대기열 저장소
     DOCKER = _yget(doc, "common.host.docker") or (
         "podman" if shutil.which("podman") else "docker"
     )  # op-10 — 셸 스크립트와 같은 순서(env 대신 설정)
     jobs = _yget(doc, "mcp.host.jobs_dir")
-    MCP_JOBS_DIR = Path(jobs) if jobs else DOCSPACE / "mcp_parse" / "jobs"
+    MCP_JOBS_DIR = Path(jobs) if jobs else DOCSPACE / "_mcp_parse" / "jobs"
     rdb = _yget(doc, "common.connections.rdb")  # 조회만 — 읽기 계정(사용자 10-29 ops.md#op-03)
     try:
         port = int(rdb.get("port") or 1433)
@@ -240,13 +240,13 @@ def warm_cmd(seq):
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && mkdir -p {o}/_warm && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
-        f"python -m pipeline.extract.source{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {o}/docflow/{seq}/batch.csv'"
+        f"python -m pipeline.extract.source{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {o}/_docflow/{seq}/batch.csv'"
     )
 
 
 def parse_cmd(seq, chan, scan, gate):
     """문서 1개 파싱 — chan(light·medium·vlm), scan(스캔 PDF), gate(CPU 게이트 글자)."""
-    inside = f"{_img('output_root')}/docflow/{seq}"
+    inside = f"{_img('output_root')}/_docflow/{seq}"
     # 2026-10-23 사용자 지정 — heavy(스캔·이미지 다수) 판정 문서만 vlm_page 켬(스캔 쪽만 VLM 전사,
     # 내부 스캔판정이 이중 필터) · light는 종전대로 off. 같은 이름은 뒤 --set이 이기므로 뒤에 붙여 덮어씀.
     # 2026-10-23 사용자 지정 — 채널별 파라미터: heavy는 VLM 6(3동시 × 6 = 글로벌 18으로 gpu02 쏠림 제한),
@@ -285,7 +285,7 @@ def parse_cmd(seq, chan, scan, gate):
 
 def struct_cmd(seq):
     """문서 1개 구조화 + 적재. 엔진 구성은 파싱과 같은 파일(코드 폴더 — 사용자 11-01: 판 번호 없음, 실행 중에는 안 바뀜)."""
-    inside = f"{_img('output_root')}/docflow/{seq}"
+    inside = f"{_img('output_root')}/_docflow/{seq}"
     st = sets(*EMBED_SET)  # 묶음·적재 python에(문서 메타는 적재가 EDW 조인으로 — pl-29 11-02, FILE_META_PATH 지움)
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
@@ -298,16 +298,16 @@ def struct_cmd(seq):
 
 
 def faq_sync_cmd(reset):
-    """pl-41 FAQ 교체 확인(파이프라인 컨테이너) — 결과는 docflow/faq_sync.json(지운 수·남은 gold faq)."""
+    """pl-41 FAQ 교체 확인(파이프라인 컨테이너) — 결과는 _docflow/faq_sync.json(지운 수·남은 gold faq)."""
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && PYTHONPATH={_img('code_root')} {LIB_ENV} "
-        f"python -m pipeline.load.pgvector_load faq-sync{' --reset' if reset else ''} --out {_img('output_root')}/docflow/faq_sync.json'"
+        f"python -m pipeline.load.pgvector_load faq-sync{' --reset' if reset else ''} --out {_img('output_root')}/_docflow/faq_sync.json'"
     )
 
 
 def publish_cmd(seq):
     """문서 1개 publish(OS + EDW)."""
-    inside = f"{_img('output_root')}/docflow/{seq}"
+    inside = f"{_img('output_root')}/_docflow/{seq}"
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} python -m pipeline.load.publish_parse_result"
@@ -320,7 +320,7 @@ def publish_cmd(seq):
 def sweep_cmd(seq):
     """고아 정리 — 이 문서 표지 env(DOC_MARK)를 가진 컨테이너 안 프로세스(bash·python·soffice까지 env 상속)를 모두 끔. environ 항목(NUL 구분)과
     통째로 같을 때만(-zx — 리뷰 S9: 앞부분만 맞추면 doc 1 정리가 doc 10~19·100…까지 끔, 옛 PIPE_OUT_ROOT 때부터)."""
-    inside = f"{_img('output_root')}/docflow/{seq}"
+    inside = f"{_img('output_root')}/_docflow/{seq}"
     return (
         f'{DOCKER} exec {PIPE_C} bash -c "for p in /proc/[0-9]*; do '
         f"grep -aqzx '{DOC_MARK}={inside}' \\$p/environ 2>/dev/null && kill \\${{p##*/}} 2>/dev/null; done\""
@@ -364,7 +364,7 @@ def _waiting():
     return _pub_q.qsize() + _struct_q.qsize()
 
 
-MCP_JOBS_DIR = None  # MCP parse_document 업로드 작업 경로 — configure()(mcp.host.jobs_dir, 없으면 결과 폴더/mcp_parse/jobs — data-pipeline-mcp의 mcp_parse_service와 공유 볼륨, rn-03)
+MCP_JOBS_DIR = None  # MCP parse_document 업로드 작업 경로 — configure()(mcp.host.jobs_dir, 없으면 결과 폴더/_mcp_parse/jobs — data-pipeline-mcp의 mcp_parse_service와 공유 볼륨, rn-03)
 _mcp_pause = False  # 2026-10-23 사용자 지정 — MCP 업로드 파싱 중 medium 레인 완보(사람 대기 응답 우선)
 _last_write: dict = dict()  # 방어용 마지막 활동 시각 저장
 _lane_inflight = {"light": 0, "medium": 0, "vlm": 0}
@@ -785,7 +785,7 @@ def drop_original(seq, row):
     if NO_CLEANUP:
         return
     o = _img("output_root")
-    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {o}/docflow/{seq}/_source_files ; rm -f {o}/_warm/{_warm_bin(row)}'", timeout=60)
+    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {o}/_docflow/{seq}/_source_files ; rm -f {o}/_warm/{_warm_bin(row)}'", timeout=60)
     shutil.rmtree(DOCFLOW / f"{seq}" / "_source_files", ignore_errors=True)
     (WARM / _warm_bin(row)).unlink(missing_ok=True)
 
@@ -794,7 +794,7 @@ def drop_temp(seq):
     """문서 끝 — docflow 임시 폴더만 지움(어느 길이든). 원본(warm)은 drop_original만 지운다 — 파싱·게시 실패면 남음(pl-24)."""
     if NO_CLEANUP:
         return
-    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {_img('output_root')}/docflow/{seq}'", timeout=60)
+    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {_img('output_root')}/_docflow/{seq}'", timeout=60)
     shutil.rmtree(DOCFLOW / f"{seq}", ignore_errors=True)
 
 
@@ -887,7 +887,7 @@ def pg_count():
 
 
 def mcp_busy():
-    """MCP 업로드 처리 중이면 True(공유 볼륨 mcp_parse/jobs/<id>의 파일 mtime이 30초 내 갱신).
+    """MCP 업로드 처리 중이면 True(공유 볼륨 _mcp_parse/jobs/<id>의 파일 mtime이 30초 내 갱신).
     5초마다 불리므로 작업 폴더 전체가 아니라 이름 날짜(<YYYYMMDD>-…, mcp_parse_service)가 어제·오늘·내일인 폴더만 본다(rn-04 —
     지난 날의 끝난 작업 파일까지 stat하지 않게, 호스트·컨테이너 시간대가 달라도 걸리게 앞뒤 하루)."""
     # ponytail: 날짜 이름 거르기 — 하루 넘게 도는 MCP 작업은 놓침(작업은 분 단위), 필요하면 작업 서비스가 심장 박동 파일을 씀
@@ -985,7 +985,7 @@ def main():
         log(
             f"[안내] MCP 업로드 작업 폴더 {MCP_JOBS_DIR} 없음 — MCP 업로드 감지(medium 레인 양보) 꺼짐, 다른 자리면 settings.yaml ops.mcp_host.jobs_dir"
         )
-    os.umask(0)  # 컨테이너( uid 10001 rag )가 /app/output(=docflow/<seq>)에 쓰려면 777 필요
+    os.umask(0)  # 컨테이너( uid 10001 rag )가 /app/output(=_docflow/<seq>)에 쓰려면 777 필요
     WARM.mkdir(mode=0o777, parents=True, exist_ok=True)
     DOCFLOW.mkdir(mode=0o777, parents=True, exist_ok=True)
     rows = edw_list([k.strip() for k in a.filter.split(",") if k.strip()])

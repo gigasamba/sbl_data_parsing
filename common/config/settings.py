@@ -1365,7 +1365,7 @@ class CommonModelsGuard(Section):
     spend_file: str | None = F(
         None,
         "LLM_SPEND_FILE",
-        "지출 장부 파일 경로(이름 뒤에 날짜를 붙여 하루마다 새 파일, 비우면 <저장소>/output/llm_spend/<날짜>.txt) — 호출마다 금액 한 줄, 프로세스 전체가 공유",
+        "지출 장부 파일 경로(이름 뒤에 날짜를 붙여 하루마다 새 파일, 비우면 <저장소>/output/_llm_spend/<날짜>.txt) — 호출마다 금액 한 줄, 프로세스 전체가 공유",
     )
 
 

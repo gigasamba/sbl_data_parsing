@@ -389,7 +389,7 @@ def case_env(mod):
             **dict.fromkeys(
                 ("LLM_ALLOW_EXTERNAL", "VLM_ALLOW_EXTERNAL", "EMBED_ALLOW_EXTERNAL"), "0"
             ),  # 외부 전송 늘 끔(옛 NO_PAID_CALLS 대신 — 11-03)
-            # 하루 장부(11-03)를 시험마다 따로 — 개발자의 output/llm_spend 장부에 섞이지 않게
+            # 하루 장부(11-03)를 시험마다 따로 — 개발자의 output/_llm_spend 장부에 섞이지 않게
             "LLM_SPEND_FILE": str(Path(tempfile.mkdtemp(prefix="selftest_spend_")) / "spend.txt"),
         }
         base = child_env({"PYTHONUTF8": "1"})
