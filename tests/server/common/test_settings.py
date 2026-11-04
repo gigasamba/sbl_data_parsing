@@ -4,6 +4,7 @@ import contextlib
 import os
 import sys
 from pathlib import Path
+from unittest import mock
 
 from pydantic import ValidationError
 
@@ -697,7 +698,9 @@ def selftest():
 
             def run(*argv):
                 out, err = io.StringIO(), io.StringIO()
-                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                # 부른 셸의 RUN_ENV 신호(PC export RUN_ENV=local)는 YAML을 이김 — 파일 값(dev)만 보게 뺀다
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), mock.patch.dict(os.environ):  # env 남김 — 시험
+                    os.environ.pop("RUN_ENV", None)  # env 남김 — 시험
                     rc = E.main(["--file", str(f), *argv])
                 return rc, out.getvalue(), err.getvalue()
 
