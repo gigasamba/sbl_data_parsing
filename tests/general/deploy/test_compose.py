@@ -44,7 +44,7 @@ def test_resident_containers():
 def test_no_patch_overlay():
     assert not list(COMPOSE.glob("compose.patch*.yml"))
     entry = (DEPLOY_ROOT / "deploy" / "docker" / "entrypoint.sh").read_text(encoding="utf-8")
-    assert "  parse-service)" in entry and "pipeline.mcp_parse_service" in entry
+    assert "  parse-service)" in entry and "pipeline.parse_service" in entry
 
 
 def test_edw_chain_mount():

@@ -27,12 +27,12 @@ LLM·VLM을 **부르는** 단계의 지시서 패키지 7개 — `resources/prom
 
 | 패키지 | 자리(`resources/prompts/…`) | 모델 역할 | 무엇 | 입력 → 출력 | 호출부 | 꼬리 · 스키마 |
 |---|---|---|---|---|---|---|
-| `figure_describe` | `common/` | vlm | 그림 1장 → 검색용 기록(종류·요약·글자·값·연결·표) | 그림 PNG(data: URL) + 지시문(사용자, 생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figures.py` `vlm_fig()`(`P_FIGJ`) | 기본 · 있음 |
-| `page_transcribe` | `common/` | vlm | 스캔·이미지 쪽 1장 → 마크다운(OCR 교차 확인용) | 쪽 PNG + 지시문(사용자, 출력 상한 없음) → 마크다운 | `pipeline/transform/figures/vlm_page.py` `vlm_page()`(`P_PAGE`) | free · 없음 |
+| `figure_describe` | `common/` | vlm | 그림 1장 → 검색용 기록(종류·요약·글자·값·연결·표) | 그림 PNG(data: URL) + 지시문(사용자, 생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figure_extract.py` `vlm_fig()`(`P_FIGJ`) | 기본 · 있음 |
+| `page_transcribe` | `common/` | vlm | 스캔·이미지 쪽 1장 → 마크다운(OCR 교차 확인용) | 쪽 PNG + 지시문(사용자, 출력 상한 없음) → 마크다운 | `pipeline/transform/figures/scan_page_vlm.py` `vlm_page()`(`P_PAGE`) | free · 없음 |
 | `rag_qa` | (`valid_env/answer_test/` — PC 전용) | llm | 검색 MCP 도구(`search`·`edw_meta`·`query_edw`)를 스스로 골라 근거를 찾고 숫자마다 인용을 붙여 답함(agentic — `max_turns` 12, 로컬 도구 `verify_citations`: 답의 숫자가 인용 `quote`에 있고 그 quote가 이번 질문의 검색 근거에 있는지) | 질문(사용자) → `{answer, status: found\|partial\|not_found, citations}` | `validation/e2e/answer_gen.py`(`validation.e2e.tool_loop.run("rag_qa", …)` — 턴마다 예산 확인 `llm.admit_turn()` · 도구 함수·근거 pool은 호출자, 지시문 `instructions.md` + 출력 스키마) | 없음(instruction에 지시문) · 있음 |
-| `figure_overlay` | `pipeline/` | vlm | 겹친 개체 묶음(그림 + 글상자·화살표·도형) 1장 → 검색용 기록 | 묶음 union bbox 크롭 + 지시문(생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figures.py` `vlm_fig_overlay()`(`P_FIGOVERLAY`) | 기본 · 있음 |
-| `nested_figure` | `pipeline/` | vlm | 쪽 전체 그림 안의 자식 그림 bbox 찾기 | 쪽 그림 + 지시문 → `{"regions": [{bbox, kind, …}]}` | `pipeline/transform/figures/nested.py` `bbox_regions()`(`P_BBOX`) | 기본 · 있음 |
-| `classify_sfdc` · `classify_las` | `pipeline/` | llm | SFDC·LAS 문서 하나 → 종류 라벨 하나(`doc_class` — pl-33, 운영 지시문 그대로) | 문서 정보 + 본문 앞 8,000자(LAS는 키워드 근거 더함) → JSON `class` | `pipeline/load/classify.py` `classify_one()`(적재 중 — `llm.chat`) | 없음 · 없음 |
+| `figure_overlay` | `pipeline/` | vlm | 겹친 개체 묶음(그림 + 글상자·화살표·도형) 1장 → 검색용 기록 | 묶음 union bbox 크롭 + 지시문(생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figure_extract.py` `vlm_fig_overlay()`(`P_FIGOVERLAY`) | 기본 · 있음 |
+| `nested_figure` | `pipeline/` | vlm | 쪽 전체 그림 안의 자식 그림 bbox 찾기 | 쪽 그림 + 지시문 → `{"regions": [{bbox, kind, …}]}` | `pipeline/transform/figures/nested_figures.py` `bbox_regions()`(`P_BBOX`) | 기본 · 있음 |
+| `classify_sfdc` · `classify_las` | `pipeline/` | llm | SFDC·LAS 문서 하나 → 종류 라벨 하나(`doc_class` — pl-33, 운영 지시문 그대로) | 문서 정보 + 본문 앞 8,000자(LAS는 키워드 근거 더함) → JSON `class` | `pipeline/load/doc_classify.py` `classify_one()`(적재 중 — `llm.chat`) | 없음 · 없음 |
 
 모델 호출 시험은 `tests/server/common/test_llm_call.py`, 도구 왕복은 `tests/general/e2e/test_answer_gen.py`.
 
@@ -45,5 +45,5 @@ LLM·VLM을 **부르는** 단계의 지시서 패키지 7개 — `resources/prom
 | 이름 | 역할 | 위치 |
 |---|---|---|
 | `do_search` | 벡터·BM25·ID 검색 | `mcp_server/services/search/search_svc.py`(도구 등록은 `mcp_server/routers/` — MCP 도구 계약, CLAUDE.md §4) |
-| `value_check` | 그림 기록 ↔ 본문 값 결정적 대조 | `pipeline/transform/represent/context.py` |
+| `value_check` | 그림 기록 ↔ 본문 값 결정적 대조 | `pipeline/transform/represent/figure_context.py` |
 | `embed_texts` | 임베딩 호출(역할 `embed` — `llm.complete` 역할 아님) | `common/ai/embed.py` |

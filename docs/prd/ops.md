@@ -103,8 +103,8 @@
 <a id="rn-03"></a>
 ## rn-03 · MCP `parse_document`에 CPU 먼저 주기
 - 이유: 일괄 파싱이 CPU를 다 쓰면 사람이 기다리는 `parse_document`가 느려진다. 컨테이너끼리는 cgroup CPU 가중치가 정한다(nice는 한 세션 안에서만).
-- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `data-pipeline-mcp`(같은 이미지, entrypoint `parse-service` = `pipeline.mcp_parse_service`, 127.0.0.1:8766). 자원 = settings.yaml `ops.pipeline_host.parse_mcp_cpus`(기본 3)·`parse_mcp_mem_limit`(8g)·`parse_mcp_cpu_shares`(4096 — 일괄 `data-pipeline`은 1024). 결과 폴더만 붙인다. 죽으면 `restart`, 꺼지면 `mcp_up.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
-- 파일: `deploy/host/compose/compose.pipeline-mcp.yml`(개발 서버 짝 `compose.code.pipeline-mcp.yml`), `pipeline/mcp_parse_service.py`, `common/core/resources.py`.
+- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `data-pipeline-mcp`(같은 이미지, entrypoint `parse-service` = `pipeline.parse_service`, 127.0.0.1:8766). 자원 = settings.yaml `ops.pipeline_host.parse_mcp_cpus`(기본 3)·`parse_mcp_mem_limit`(8g)·`parse_mcp_cpu_shares`(4096 — 일괄 `data-pipeline`은 1024). 결과 폴더만 붙인다. 죽으면 `restart`, 꺼지면 `mcp_up.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
+- 파일: `deploy/host/compose/compose.pipeline-mcp.yml`(개발 서버 짝 `compose.code.pipeline-mcp.yml`), `pipeline/parse_service.py`, `common/core/resources.py`.
 - QA: `tests/general/deploy/test_compose.py` · 통과.
 - Status: dev — 서버에서 일괄 파싱 중 `parse_document` 응답 시간 확인(refactor.md C-83 ①)만 남음.
 
@@ -122,9 +122,9 @@
   1. `remove_at_exit(경로)` — 이 프로세스가 끝날 때(정상·오류·SIGTERM) 지운다. `track(Popen, group)` — 끝날 때 아직 돌면 끝내고 `wait`로 회수. `stop(p, group)` — POSIX는 (묶음째) SIGTERM → 10초 → SIGKILL, Windows는 `taskkill /T`.
   2. import 때 SIGTERM 처리기를 단다(기본 처리기일 때만): 바로 정리한 뒤 `SystemExit(143)`. 정리 중 두 번째 SIGTERM은 무시. 순서: 자식 전부 SIGTERM → 10초 → 남은 것 SIGKILL·회수 → 파일 지움. 정리를 시작한 뒤 띄운 자식은 바로 끝낸다.
   3. 파일 주인: `settings.put`·`child_env`의 덮기 파일 = 만든 프로세스 · `settings.isolated` = 블록 끝 · `--set`(`setarg` — POSIX는 `execve`로 다시 뜸) = 다시 뜬 프로세스 · `python -m common.config.overrides` 출력 = 지우지 않음.
-  4. 연결: `resources.gated_popen`(파이프라인 자식 전부), `resources.kill_group`(→ `stop(group=True)`), `mcp_parse_service` 작업 자식과 PID 기록 `service.json`.
+  4. 연결: `resources.gated_popen`(파이프라인 자식 전부), `resources.kill_group`(→ `stop(group=True)`), `parse_service` 작업 자식과 PID 기록 `service.json`.
   5. 한계: `subprocess.run`의 짧은 자식은 추적 안 함 · 주 스레드가 아닌 곳에서 처음 import되면 SIGTERM 처리기 없음 · SIGKILL·OOM은 정리 못 함 · 컨테이너 PID 1 고아 회수는 compose `init: true`.
-- 파일: `common/core/exitclean.py`, `common/config/{settings,setarg}.py`, `common/core/resources.py`, `pipeline/mcp_parse_service.py`.
+- 파일: `common/core/exitclean.py`, `common/config/{settings,setarg}.py`, `common/core/resources.py`, `pipeline/parse_service.py`.
 - QA: `tests/server/common/test_exitclean.py`(SIGTERM·`--set` 사례는 POSIX만) · 통과. 서버 확인 refactor.md C-68.
 - Status: done
 
@@ -180,7 +180,7 @@
   3. 60초마다 `stage='run.progress'`(완료/전체·docs/min·남은 시간·부하·메모리, 임베딩 중에는 unit=chunk).
   4. `run_id`가 없으면(MCP 검색·시험) span은 아무것도 하지 않는다. 계측 안의 예외는 삼키고 업무 결과를 바꾸지 않는다(프로세스당 stderr 경고 한 번).
   5. `cpu_ms`·`rss_peak_mb`는 Linux에서 프로세스에 하나만 도는 span만 채우고, 겹치거나 측정 못 하면 NULL.
-  6. 분석: `python -m pipeline.tools.perf [<run_id>] [--since <시간>] [--top N] [--compare <run_id>…] [--runs] [--file output/logs/*.jsonl]` — 읽기 전용.
-- 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf.py`.
+  6. 분석: `python -m pipeline.tools.perf_report [<run_id>] [--since <시간>] [--top N] [--compare <run_id>…] [--runs] [--file output/logs/*.jsonl]` — 읽기 전용.
+- 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf_report.py`.
 - QA: `tests/server/common/test_{jsonlog,logsink,span,span_soft}.py`·`tests/server/mcp/test_call_log.py`·`tests/server/pipeline/test_{runtrace,perf,span_stages}.py`·`tests/general/common/test_applog_pg.py`(PC 임시 PG 스키마) · 통과. 서버 적용 refactor.md C-79·C-80.
 - Status: done

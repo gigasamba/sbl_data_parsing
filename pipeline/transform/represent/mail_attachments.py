@@ -3,7 +3,7 @@
 (stack.json "parse" 순서, 예: .xlsx → kreuzberg/office)으로 파싱한다. 결과는 P0 원본 층(pipeline.shared.parse_run.
 raw_engine_path, 첨부 sha256 + 엔진@버전 키)에 캐시해 다시 안 돎. 대표 본문에는 `[첨부 <파일명>]` 절로 덧붙인다
 (블록으로만 덧붙임 — base_text 자체는 안 건드려 PARSE_POST=none·이 기능 OFF 시 바이트 동일 보장).
-인라인 그림(cid)은 그림 기능(figures.py)이 담당 — 여기서는 image/* 첨부를 건너뛴다.
+인라인 그림(cid)은 그림 기능(figure_extract.py)이 담당 — 여기서는 image/* 첨부를 건너뛴다.
 zip 첨부는 ATTACH_MAX_DEPTH(기본 1)만큼만 풀고, 크기(ATTACH_MAX_MB 기본 20)·개수(ATTACH_MAX_N 기본 10) 상한을 넘으면 건너뜀.
 """
 
@@ -20,7 +20,7 @@ from pathlib import Path
 from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared import parse_run as P0
-from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
+from pipeline.shared.post_features import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
 
 
 def attach_dir():
@@ -155,7 +155,7 @@ def parse_attachment(entry, store=None):
         try:
             tmp.write_bytes(entry["bytes"])
             # 별도 프로세스 + 시간 제한(독립 검토 10-04 — 같은 프로세스에서 멈추는 엔진이 represent 전체를 세우던 위험)
-            from pipeline.extract.run_all import _isolated
+            from pipeline.extract.run_engines import _isolated
 
             _isolated(eng, tmp, out_json, "default", pc.cfg().extract.attach.timeout)  # S7c — 설정 객체
             res = json.loads(out_json.read_text(encoding="utf-8"))

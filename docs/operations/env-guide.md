@@ -38,7 +38,7 @@
 - 서버는 매일 `bash deploy/host/scripts/run_tool.sh migrate maintain --target applog`(PC: `python -m common.store.db.dbtool maintain --target applog`)를 예약한다 — 앞으로 2개월 파티션 준비, 보존 기한이 지난 파티션 삭제.
 - ⚠️ MCP 감사 행(`applog.mcp_call`)과 대체 파일에는 문서 원문이 들어간다(`get_doc_fulltext` 결과는 파일당 `max_output_bytes`까지). `applog` DB·표와 `ops.log.fallback_dir`은 원본 문서와 같은 수준으로 접근을 제한한다(C-79). 대체 파일은 지우지 않으므로 디스크 회수도 운영에서 정한다.
 - 서버(dev·prd)는 값이 있는 비밀 칸이 8자 미만이면 시작을 거부한다(종료 2, 칸 경로만 찍음).
-- 파이프라인 성능 분석: `python -m pipeline.tools.perf [<run_id>]`(`--runs` 목록, `--compare` 비교, DB가 꺼져 있으면 `--file output/logs/*.jsonl`).
+- 파이프라인 성능 분석: `python -m pipeline.tools.perf_report [<run_id>]`(`--runs` 목록, `--compare` 비교, DB가 꺼져 있으면 `--file output/logs/*.jsonl`).
 
 ### 0-1. 읽는 규칙
 - **비밀값**(비밀번호·키·토큰)과 **접속 정보**(주소·포트·DB 이름)는 전부 이 파일 하나에만. 각 컨테이너는 common + 자기 앱 절만 읽는다.

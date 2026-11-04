@@ -128,10 +128,10 @@ MCP 토큰은 settings.yaml `required.tokens.mcp`, 모델은 `required.models.ll
 #### 고객 마스터에서 명부 만들기
 SFDC·EDW 내보내기에서 명부를 만든다. 열 이름만 매핑 파일에 적는다(예제: `resources/vocab/glossary/client_master.example.csv` + `client_master_map.example.json`). 매핑 키 = 명부 칸: `name`(필수 → `canonical_name`) · `aliases`(`;`·`|`) · `client_id`·`name_ko`·`client_type`·`segment`·`country`·`parent_client_id`·`status`·`description`·`updated`(선택). 열 이름은 영문·숫자·`_`만. 같은 고객 여러 줄은 하나로 합친다(별칭은 합치고 다른 칸은 처음 값).
 ```bash
-PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --kind client \
+PYTHONPATH=. python -m pipeline.transform.structure.roster_from_edw --kind client \
   --source csv:<루트>/client_master.csv --mapping <루트>/client_master_map.json \
   --out <루트>/client_roster.csv          # EDW 표에서 바로: --source rdb:<스키마.표>(읽기 계정)
-PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --check <루트>/client_roster.csv   # 오류 0 확인 후 반영
+PYTHONPATH=. python -m pipeline.transform.structure.roster_from_edw --check <루트>/client_roster.csv   # 오류 0 확인 후 반영
 ```
 
 #### 용어집 `domain_terms.csv`
@@ -155,7 +155,7 @@ PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --check <루트>/
 
 #### 점검(반영 전)
 ```bash
-PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --check <명부 파일>      # 오류 0이어야 함
+PYTHONPATH=. python -m pipeline.transform.structure.roster_from_edw --check <명부 파일>      # 오류 0이어야 함
 PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load_glossary(sys.argv[1]); print(len(g), '개념 반영', sorted(g)[:5])" <용어집 폴더>   # 오류면 여기서 멈춤
 ```
 

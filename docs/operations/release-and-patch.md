@@ -76,7 +76,7 @@ PC 명령은 [README §5-2](../../README.md#5-2-pc에서--이미지-만들기와
 - 이미지 이름은 settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`에 적는다.
 - 배포 뒤, 컨테이너 안 코드가 있는지 파일로 본다(bind 마운트 원본이 없으면 빈 폴더가 붙어 `test -d`는 통과하므로):
 ```bash
-for c in data-pipeline data-pipeline-mcp; do $DOCKER exec $c test -f /app/deploy/pipeline/extract/run_all.py && echo "$c OK" || echo "$c 코드 없음(빈 마운트?)"; done
+for c in data-pipeline data-pipeline-mcp; do $DOCKER exec $c test -f /app/deploy/pipeline/extract/run_engines.py && echo "$c OK" || echo "$c 코드 없음(빈 마운트?)"; done
 ```
 
 ### 5-3. 상주 컨테이너
@@ -377,8 +377,8 @@ crms:
 
 **③ 실제 실행 전에 점검** — 파일만 읽고 검사한다(EDW·PG에 붙지 않음).
 ```bash
-$DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check                                   # 설정 칸이 가리키는 파일
-$DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check --file /etc/rag/edw_chain.yaml   # 칸을 적기 전에 사본만
+$DOCKER exec data-pipeline python -m pipeline.load.edw_doc_meta --check                                   # 설정 칸이 가리키는 파일
+$DOCKER exec data-pipeline python -m pipeline.load.edw_doc_meta --check --file /etc/rag/edw_chain.yaml   # 칸을 적기 전에 사본만
 # 기대(기본 파일): [edw_meta] 사슬 설정 OK(…) — sfdc 단계 11·키 15(거르기 5) · crms 단계 4·키 4(거르기 2) · las 단계 4·키 3(거르기 2) · faq 단계 1·키 0(거르기 0) · other 단계 1·키 0(거르기 0)   (종료 코드 0)
 # 틀리면: [edw_meta] 사슬 설정 오류(…): <원천>.<자리>: … — 틀린 곳을 모두 적음   (종료 코드 1)
 ```

@@ -21,7 +21,7 @@ from common.ai.agent_prompts import load as _load_prompt
 from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared.parse_run import prompt_id, raw_vlm_path
-from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
+from pipeline.shared.post_features import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
 
 _LOCK = threading.Lock()
 _SEM: dict = {}

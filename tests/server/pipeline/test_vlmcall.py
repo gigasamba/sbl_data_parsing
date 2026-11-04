@@ -68,8 +68,9 @@ def _env(base, raw, common=(), pipe=()):
 def test_one_vlm_path():
     from pipeline.extract.engines.qwen_vlm.parser import parse_qwen_vlm
     from pipeline.shared import vlmcall as V
-    from pipeline.transform.figures import nested, vlm_page
-    from pipeline.transform.figures.figures import vlm_fig
+    from pipeline.transform.figures import nested_figures as nested
+    from pipeline.transform.figures import scan_page_vlm as vlm_page
+    from pipeline.transform.figures.figure_extract import vlm_fig
 
     d = Path(tempfile.mkdtemp())
     pdf = d / "scan.pdf"

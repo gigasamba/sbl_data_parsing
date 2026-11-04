@@ -193,7 +193,7 @@ def is_env_error(err):
 
 def doc_types(docs, out):
     """문서 → 타입(.pdf는 .pdf_text / .pdf_image — 쪽당 글자 레이어 20자 기준). 판정은 <out>/_types.json에 캐시(크기·수정 시각)."""
-    from pipeline.transform.represent.parse_qa import pdf_kind
+    from pipeline.transform.represent.parse_scoring import pdf_kind
 
     cache_f = Path(out) / "_types.json"
     try:

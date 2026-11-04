@@ -78,7 +78,7 @@ def _until(deadline):
 
 def _run_until(args, env, sec):
     """마감까지만 실행 — 넘으면 프로세스 묶음(--procs 자식 포함)을 끝냄. 다음 밤은 문서 대장에 파싱 성공 행이 없는 문서를 다시 고른다(pl-32 — 마감에 걸린 밤의 문서는 PR 4 전까지 반복될 수 있음).
-    args[0] = 모듈 점 표기(예: pipeline.extract.run_all)."""
+    args[0] = 모듈 점 표기(예: pipeline.extract.run_engines)."""
     cmd = [PY, "-m", str(args[0]), *map(str, args[1:])]
     print("$ " + " ".join(cmd), flush=True)
     from common.core import resources as PR  # 프로세스 묶음(OS 분기 한 곳)
@@ -267,7 +267,7 @@ def parse_module(a):
         keep &= set(_unparsed(names))  # C10 — ParsingMeta에 성공 행이 있는 문서는 다시 파싱 안 함
         only = OUT / "parse" / "_source" / "only.txt"
         only.write_text("\n".join(n for n in names if n in keep) + "\n", encoding="utf-8")
-        rc = _run_until(["pipeline.extract.prepare", "--src", local, "--out", a.src, "--only", only], child_env(), _left(a) - 120)
+        rc = _run_until(["pipeline.extract.filter_and_rotate", "--src", local, "--out", a.src, "--only", only], child_env(), _left(a) - 120)
         _tstep("t_prepare")
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)
@@ -288,7 +288,7 @@ def parse_module(a):
         child_env(), VLM_CONCURRENCY=str(_vlm_doc_concurrency(a, lim)), LLM_BASE_URL=None
     )  # 파싱 모듈은 LLM을 부르지 않음(S7e3 B-1)
     args = [
-        "pipeline.extract.run_all",
+        "pipeline.extract.run_engines",
         "--src",
         a.src,
         "--out",
@@ -312,8 +312,8 @@ def parse_module(a):
         print("[parse] 이번 실행 0건 — 파싱한 문서 없음(runs.jsonl 없음) · 채점·대표 결과·끝 표시 건너뜀", flush=True)
         return
     for args in (
-        ["pipeline.transform.represent.parse_qa", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
-        ["pipeline.transform.represent.represent", "--src", a.src, "--parse-dir", OUT / "parse"],
+        ["pipeline.transform.represent.parse_scoring", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
+        ["pipeline.transform.represent.build_rep", "--src", a.src, "--parse-dir", OUT / "parse"],
     ):
         rc = _run_until(args, env, _left(a) - 60)
         _tstep("t_" + args[0].rsplit(".", 1)[-1])  # 2026-10-22 — qa·represent 분리 계측(docflow 기타 분해)

@@ -3,7 +3,7 @@
 
 문서마다:
   후보 = 스택이 그 형식에 지정한 엔진 중 파싱에 성공한 것(15자+, parse_qa ok)
-  대표 = 후보 중 정확도(pipeline.transform.represent.repfmt.doc_accuracy — 정답 없으면 교차 재현율, AG11 2단계 착수 조건으로 parse_qa에서 옮김)가 가장 높은 것, 같으면 스택 순서
+  대표 = 후보 중 정확도(pipeline.transform.represent.rep_accuracy.doc_accuracy — 정답 없으면 교차 재현율, AG11 2단계 착수 조건으로 parse_qa에서 옮김)가 가장 높은 것, 같으면 스택 순서
   추합 = 대표 본문 + 다른 후보의 구조 사실(표 행·키-값, 대표에 없는 것만) · OCR 글자 상자는 대표 것만(위치가 대표 본문과 맞아야 함)
   후보가 하나도 성공 못 하면 스택 밖 성공 엔진으로 대체하고 표시(fallback) — 빠진 문서가 생기지 않게
 아래 단계는 늘 켬(되돌리기 스위치 PARSE_STANDARDIZE·SCAN_FILL·CONTEXT·TABLE_INLINE·TABLE_STD·FUSE·MERGE_PAGES는 op-08에 지움):
@@ -11,7 +11,7 @@
   (common.core.text.standardize_text)를 본문·facts·표 칸에 적용(SI20·AD46⑤, 표 칸 재현율 저하 원인인 기호 정형화
   부재를 산출 쪽에서 메움). rep.rep.standardize에 바뀐 조각 수 표시, 원문은 output/parse/<엔진>/ 그대로.
 스캔 쪽 채움 — PE1 후속(2026-10-07, 정답률 1순위): .pdf_text 대표 문서 안에 스캔 쪽
-  (pipeline.transform.figures.vlm_page.scan_pages_detail — reason chars/hidden/garbage/hidden_overlap, AD31·AD47)이 있고 그 쪽의 OCR 엔진
+  (pipeline.transform.figures.scan_page_vlm.scan_pages_detail — reason chars/hidden/garbage/hidden_overlap, AD31·AD47)이 있고 그 쪽의 OCR 엔진
   (.pdf_image 계열, stack.json 순서) 결과가 있으면 그 쪽만 대표 본문을 OCR 쪽 글로 채운다(글자층 쪽은 그대로) —
   기존 한계(대표가 .pdf_text 엔진이면 스캔 쪽 값이 아예 안 들어가던 것, backlog PE1 "후속 과제"). 쪽 경계는
   _page_texts(boxes 있으면 그걸로, 없으면 \f 개수가 문서 실제 쪽 수와 맞을 때만) — 쪽 번호를
@@ -20,7 +20,7 @@
   글(숨은 글자층)과 OCR 글의 일치도(HIDDEN_AGREE_MIN)가 높으면 원래 글을 유지(독립 검토 MAJOR, AD31) — 모두
   rep.rep.scan_fill.page_skip에 기록.
 맥락 기록 — PA0(2026-10-08): 이미 계산된 문서·쪽 신호
-  (pipeline.transform.represent.trace)를 rep["context"]·규칙 결정과 이유를 rep["decisions"]로 남긴다(새 엔진 실행·VLM 호출
+  (pipeline.transform.represent.decision_log)를 rep["context"]·규칙 결정과 이유를 rep["decisions"]로 남긴다(새 엔진 실행·VLM 호출
   없음, 나중 파싱 에이전트 PA2의 바탕).
 표 제자리 넣기 — TA1(사용자 10-15): 대표 엔진 하나의 표만 쓰던 것을, 이 문서를
   표로 인식한 엔진 전부(대표 + other_docs)의 그리드를 모아(pipeline.transform.represent.table_inline) 표 자리마다
@@ -49,7 +49,7 @@ from pathlib import Path
 from common.core import span as SP  # op-01 성능 span
 from common.core.console import utf8_stdout
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
-from pipeline.shared.exts import IMG_EXTS
+from pipeline.shared.ext_groups import IMG_EXTS
 
 
 def load_stack(path):
@@ -272,7 +272,7 @@ def standardize_rep(d):
     """SI20·AD46⑤ — 표 칸 재현율 저하 원인(기호 정형화 부재)을 산출 쪽에서 메움: 엔진 묶음 직후·융합(facts 합치기) 전에
     본문·facts·표 칸에 common.core.text.standardize_text(기호 맵 + 첨자 표기 통일)을 적용. 원문(pd/<엔진>/<문서>.json)은
     여기서 손대지 않고 대표 결과(_rep)에만 적용 — 되돌릴 수 있게 바뀐 개수만 돌려준다(rep.rep.standardize)."""
-    from pipeline.shared.canon import standardize_text as _std
+    from pipeline.shared.text_normalize import standardize_text as _std
 
     n = 0
     if d.get("text"):
@@ -313,7 +313,7 @@ def _norm_agree(text):
     import re
 
     from common.core.text import normalize_value
-    from pipeline.shared.canon import canon_symbols
+    from pipeline.shared.text_normalize import canon_symbols
 
     return re.sub(r"(?<=\d)\.(?=\d)", "", normalize_value(canon_symbols(text or "")))
 
@@ -393,8 +393,8 @@ def fill_scan_pages(rep, dd, doc_path, page_vlm=None):
     쪽이 없으면(형식이 .pdf_text 아님·스캔 쪽 없음) None."""
     if dd.get("format") != ".pdf_text" or not doc_path or not Path(doc_path).exists():
         return None
-    from pipeline.transform.figures.vlm_page import scan_pages_detail
-    from pipeline.transform.represent.parse_qa import garbage_ratio
+    from pipeline.transform.figures.scan_page_vlm import scan_pages_detail
+    from pipeline.transform.represent.parse_scoring import garbage_ratio
 
     pages_detail = scan_pages_detail(doc_path)
     pages = list(pages_detail.keys())
@@ -487,11 +487,11 @@ def tried_of(doc, last, pd):
 
 from common.core.artifacts import code_fp  # noqa: E402
 from common.core.contract import source_record  # noqa: E402 — 문서 ID·원본 위치 규칙(모듈 계약)
-from pipeline.shared import postprocess as post_cfg  # noqa: E402 — PARSE_POST 해석(W1~W3·W9·W11 후보정 패키지)
+from pipeline.shared import post_features as post_cfg  # noqa: E402 — PARSE_POST 해석(W1~W3·W9·W11 후보정 패키지)
 from pipeline.shared import runtrace  # noqa: E402 — op-01 run.progress
-from pipeline.transform.represent import fuse as fuse_mod  # noqa: E402 — AD29 P1 조각 단위 융합
+from pipeline.transform.represent import decision_log as trace_mod  # noqa: E402 — PA0 맥락 기록
+from pipeline.transform.represent import fragment_vote as fuse_mod  # noqa: E402 — AD29 P1 조각 단위 융합
 from pipeline.transform.represent import table_inline  # noqa: E402 — TA1(사용자 10-15) 엔진별 표 그리드를 본문 제자리에 GFM 표로
-from pipeline.transform.represent import trace as trace_mod  # noqa: E402 — PA0 맥락 기록
 
 
 def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_pages=None, page_covered=False):
@@ -530,10 +530,10 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     _pt0 = time.time()
     if not feats or not doc_path or not Path(doc_path).exists():
         return info
-    from pipeline.transform.figures import charts
-    from pipeline.transform.figures import figures as fig_mod
-    from pipeline.transform.figures import vlm_page as vp_mod
-    from pipeline.transform.represent import supsub
+    from pipeline.transform.figures import figure_extract as fig_mod
+    from pipeline.transform.figures import office_charts as charts
+    from pipeline.transform.figures import scan_page_vlm as vp_mod
+    from pipeline.transform.represent import superscripts as supsub
 
     base = rep.get("text") or ""
     blocks = []
@@ -586,7 +586,7 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
             from collections import Counter as _Counter
 
             info["figures_skip_reasons"] = dict(_Counter(skips))
-        # PM2 — 그림 VLM 모델 이름(각 그림의 vlm.model, figures.py build_records가 이미 채움 — 새 계산 없음)
+        # PM2 — 그림 VLM 모델 이름(각 그림의 vlm.model, figure_extract.py build_records가 이미 채움 — 새 계산 없음)
         fig_models = sorted({(r.get("vlm") or {}).get("model") for r in records if (r.get("vlm") or {}).get("model")})
         if fig_models:
             info.setdefault("vlm_models", {})["figure"] = "+".join(fig_models)
@@ -605,7 +605,7 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     _pt["charts"] = time.time() - _pt0
     _pt0 = time.time()
     if "attachments" in feats:
-        from pipeline.transform.represent import attachments as att_mod
+        from pipeline.transform.represent import mail_attachments as att_mod
 
         att_blocks, att_stats = att_mod.mail_blocks(doc_path, base)
         blocks += att_blocks
@@ -623,7 +623,7 @@ IMAGE_TYPES = IMG_EXTS | {".pdf_image"}  # run_all과 같은 형식 키(qa.json 
 def _vlm_transcribed(rep, dd):
     """이미지·스캔 형식(run_all과 같은 형식 키 — 글자 쪽이 몇 장 섞인 .pdf_image 포함) 문서의 대표가 VLM 엔진(run_all.VLM_ENGINES)이고
     본문이 비어 있지 않음 = 쪽을 이미 VLM으로 옮김(10-29 C). OCR 엔진이 대표거나 VLM 글이 비면 False(쪽 VLM을 막지 않음)."""
-    from pipeline.extract.run_all import VLM_ENGINES
+    from pipeline.extract.run_engines import VLM_ENGINES
 
     return dd.get("format") in IMAGE_TYPES and (rep.get("rep") or {}).get("engine") in VLM_ENGINES and bool((rep.get("text") or "").strip())
 
@@ -647,8 +647,8 @@ def _old_source(out_dir, doc):
 
 
 def represent(stack, parse_dir, src=None):
-    from pipeline.transform.represent.parse_qa import LOW_N
-    from pipeline.transform.represent.repfmt import doc_accuracy
+    from pipeline.transform.represent.parse_scoring import LOW_N
+    from pipeline.transform.represent.rep_accuracy import doc_accuracy
 
     pd = Path(parse_dir)
     qa = json.loads((pd / "qa.json").read_text(encoding="utf-8"))
@@ -806,7 +806,7 @@ def represent(stack, parse_dir, src=None):
         # covered는 vlm_page 기능과 무관하게(그림 VLM 생략에도 씀 — run_docs light 레인처럼 vlm_page 없이 figures만 켠 경우)
         covered, vp_pages = _vlm_transcribed(rep, dd), None
         if "vlm_page" in feats and doc_path and Path(doc_path).exists():
-            from pipeline.transform.figures import vlm_page as vp_mod
+            from pipeline.transform.figures import scan_page_vlm as vp_mod
 
             vp_pages = [] if covered else vp_mod.page_text_pages(doc_path)
         # PE1 후속 — .pdf_text 대표의 스캔 쪽만 쪽 VLM 글로 채움(apply_post 전, 후보정이 채운 본문을 기준으로 돌게)

@@ -1,6 +1,6 @@
-"""pipeline.transform.represent.fuse 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.fuse`."""
+"""pipeline.transform.represent.fragment_vote 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.fragment_vote`."""
 
-from pipeline.transform.represent.fuse import (
+from pipeline.transform.represent.fragment_vote import (
     _doc_locale_pref,
     _doc_value_graph,
     _graph_bonus,

@@ -94,8 +94,8 @@ case "$cmd" in
       ping_models)      set -- common.check.checker ping "$@";;
       check_modules)    set -- common.check.check_modules "$@";;
       cli|pipeline)     set -- pipeline.cli "$@";;
-      rdb_discover)     set -- pipeline.extract.rdb_discover "$@";;
-      gen_roster)       set -- pipeline.transform.structure.gen_roster "$@";;
+      rdb_discover)     set -- pipeline.extract.discover_columns "$@";;
+      gen_roster)       set -- pipeline.transform.structure.roster_from_edw "$@";;
       glossary_suggest) set -- pipeline.transform.structure.glossary_suggest "$@";;
       *) echo "[tool] 모르는 도구: $name (check_env·ping_models·check_modules·cli·rdb_discover·gen_roster·glossary_suggest 중 하나)" >&2; exit 2;;
     esac
@@ -133,7 +133,7 @@ case "$cmd" in
   # 11-01(pl-10 — trigger 서버 serve-trigger 지움) — 상주 컨테이너 data-pipeline(11-03 — 옛 둘을 하나로)은 일을 하지 않고 떠 있기만 한다.
   # run_docs.py가 그 안에서 docker exec로 문서별 작업을 돌린다. MCP parse_document 작업 서비스는 위 parse-service(전용 컨테이너 data-pipeline-mcp — 여기에 띄우지 않음, 8766 겹침).
   parse-service)   # 11-03(사용자 — PRD rn-03) — MCP parse_document 작업 서비스(127.0.0.1:8766), 전용 상주 컨테이너 data-pipeline-mcp의 주 프로세스
-    preflight; exec python -u -m pipeline.mcp_parse_service;;
+    preflight; exec python -u -m pipeline.parse_service;;
   idle)
     preflight
     exec sleep infinity;;

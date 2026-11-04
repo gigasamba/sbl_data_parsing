@@ -34,7 +34,7 @@ from common.config import settings as C  # S7c — 설정 객체(공용 칸 DOC_
 from common.core.console import utf8_stdout
 from common.core.paths import APP_ROOT
 from pipeline import config as pc  # S7c — 설정 객체(pipeline 칸)
-from pipeline.shared.exts import OOXML_EXTS
+from pipeline.shared.ext_groups import OOXML_EXTS
 
 ROOT = APP_ROOT  # output/ 등 런타임 경로용(옛 dev/)
 LEGACY = {".doc", ".xls", ".ppt"}

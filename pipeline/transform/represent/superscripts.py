@@ -66,7 +66,7 @@ def merge_supsub(base, doc_path):
     full = supsub_text(doc_path)
     if not full.strip():
         return base, full, 0
-    from pipeline.transform.represent.parse_qa import _best, norm, norm_nows  # 지연 import — 무거운 모듈(채점과 기준 공유, AD37)
+    from pipeline.transform.represent.parse_scoring import _best, norm, norm_nows  # 지연 import — 무거운 모듈(채점과 기준 공유, AD37)
 
     # A9(10-13) — split("\n"): str.splitlines()는 쪽 나눔 문자(\f)도 줄 경계로 보고 지워, 첨자 후처리를 거친 모든 대표
     # 본문에서 쪽 경계가 사라졌다(청크 meta.page 빈칸 — 합본 PDF 31/114). \f는 제 줄에 남고 norm()이 비워 매칭에 안 걸림.

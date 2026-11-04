@@ -1,9 +1,9 @@
-"""pipeline.transform.structure.gen_roster 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.structure.gen_roster --selftest`."""
+"""pipeline.transform.structure.roster_from_edw 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.structure.roster_from_edw --selftest`."""
 
 from pathlib import Path
 
 from common.core import terms as T
-from pipeline.transform.structure.gen_roster import (
+from pipeline.transform.structure.roster_from_edw import (
     ROSTER_COLS,
     build_client_extra,
     build_roster,

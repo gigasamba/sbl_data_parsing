@@ -1,10 +1,10 @@
-"""pipeline.transform.represent.parse_qa 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.parse_qa --selftest`."""
+"""pipeline.transform.represent.parse_scoring 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.parse_scoring --selftest`."""
 
 import json
 import tempfile
 from pathlib import Path
 
-from pipeline.transform.represent.parse_qa import clean_commas, flags, norm_nows, run, value_recall
+from pipeline.transform.represent.parse_scoring import clean_commas, flags, norm_nows, run, value_recall
 
 
 def selftest():

@@ -13,8 +13,8 @@ mapping.json(필수 name, 선택 aliases·category): {"name": "<열 이름>", "a
   그 열을 옮겨 적고, 안 적은 칸은 빈칸. source 칸은 --source 값. 예시 resources/vocab/glossary/client_master_map.example.json.
 
 사용:
-  python -m pipeline.transform.structure.gen_roster --kind client  --source csv:client_master.csv  --mapping map.json --out CLIENT_ROSTER.csv
-  python -m pipeline.transform.structure.gen_roster --kind product --source csv:product_master.csv --mapping map.json --out output/glossary_draft/domain_terms_draft_product.csv
+  python -m pipeline.transform.structure.roster_from_edw --kind client  --source csv:client_master.csv  --mapping map.json --out CLIENT_ROSTER.csv
+  python -m pipeline.transform.structure.roster_from_edw --kind product --source csv:product_master.csv --mapping map.json --out output/glossary_draft/domain_terms_draft_product.csv
 
 --kind product의 --out은 **GLOSSARY_DIR이 아니라 draft CSV 파일**(terms.write_draft_terms, 독립 검토 BLOCK 1,
 10-13 — GLOSSARY_DIR에 바로 쓰면 서버에서 이미지 밖 실 운영 사전 폴더라 권한 오류가 날 수 있다). 사람이 검토해

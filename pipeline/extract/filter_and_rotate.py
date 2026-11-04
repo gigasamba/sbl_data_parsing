@@ -37,7 +37,7 @@ from common.core.paths import (  # 폴더 재편 뒤 이 상수만 바뀌면 됨
 )
 from pipeline import config as pc  # S7c: 설정 객체(옛 os.environ 읽기)
 from pipeline.extract.engines import registry  # SI44 '처리 엔진 없는 확장자' 판정(engines_for) 공용
-from pipeline.shared.exts import IMG_EXTS, OOXML_EXTS
+from pipeline.shared.ext_groups import IMG_EXTS, OOXML_EXTS
 
 _OCR: list = []
 

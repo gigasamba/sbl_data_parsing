@@ -10,12 +10,12 @@ MAX_PAGES = 200  # 쪽 신호 상한(쪽이 아주 많은 문서에서 rep 크�
 
 
 def _page_signals(doc_path):
-    """AD12·AD31·AD46 쪽 신호 재사용(pipeline.transform.figures.vlm_page.page_signals — 원본 sha 캐시라 다시 불러도
-    cheap) + scan_pages_detail(AD12 스캔 판정 이유)·rotation_info(prepare.py 회전 기록)를 쪽마다 합침.
+    """AD12·AD31·AD46 쪽 신호 재사용(pipeline.transform.figures.scan_page_vlm.page_signals — 원본 sha 캐시라 다시 불러도
+    cheap) + scan_pages_detail(AD12 스캔 판정 이유)·rotation_info(filter_and_rotate.py 회전 기록)를 쪽마다 합침.
     PDF가 아니거나 원본이 없으면 빈 목록."""
     if not doc_path or not Path(doc_path).exists():
         return [], False
-    from pipeline.transform.figures.vlm_page import page_signals, rotation_info, scan_pages_detail
+    from pipeline.transform.figures.scan_page_vlm import page_signals, rotation_info, scan_pages_detail
 
     sig = page_signals(doc_path)
     if not sig:
@@ -65,13 +65,13 @@ def build_context(doc_path, dd, cands, rep):
 
 
 def _ocr_fallback(doc_path, dd, stack):
-    """AD12 스캔 쪽 신호(10-29부터 run_all은 OCR 엔진을 안 합치고 대표 결과의 쪽 VLM이 그 쪽을 채움)(pipeline.transform.figures.vlm_page.scan_pages, 캐시 재사용) —
+    """AD12 스캔 쪽 신호(10-29부터 run_all은 OCR 엔진을 안 합치고 대표 결과의 쪽 VLM이 그 쪽을 채움)(pipeline.transform.figures.scan_page_vlm.scan_pages, 캐시 재사용) —
     .pdf_text 문서 안에 스캔 쪽이 있으면 True. registry(엔진 등록,
     무거운 임포트)는 건드리지 않고 stack.json에 이미 적힌 .pdf_image 목록만 본다."""
     if dd.get("format") != ".pdf_text" or not stack["parse"].get(".pdf_image") or not doc_path:
         return None
     try:
-        from pipeline.transform.figures.vlm_page import scan_pages
+        from pipeline.transform.figures.scan_page_vlm import scan_pages
 
         return bool(scan_pages(doc_path))
     except Exception:

@@ -1,4 +1,4 @@
-"""pipeline.mcp_parse_service — 작업 자식 설정(10-29): 서비스 쪽당 제한·첫 시도 하한·보통 우선순위."""
+"""pipeline.parse_service — 작업 자식 설정(10-29): 서비스 쪽당 제한·첫 시도 하한·보통 우선순위."""
 
 from unittest import mock
 
@@ -6,7 +6,7 @@ from pipeline import config as pc
 
 
 def test_job_env_overrides():
-    from pipeline import mcp_parse_service as S
+    from pipeline import parse_service as S
 
     seen = {}
 
@@ -33,7 +33,7 @@ def test_scan_pdf_note():
     import fitz
 
     from common.config.settings import COMMON
-    from pipeline import mcp_parse_service as S
+    from pipeline import parse_service as S
 
     # pdf_kind는 pdfium 문서를 닫지 않음(GC가 닫음) — Windows에서는 임시 폴더 지우기가 막힐 수 있어 정리 오류는 무시
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
@@ -68,7 +68,7 @@ def test_size_limit():
     from pathlib import Path
 
     from common.config.settings import COMMON
-    from pipeline import mcp_parse_service as S
+    from pipeline import parse_service as S
 
     mb = 1048576
     with tempfile.TemporaryDirectory() as td:

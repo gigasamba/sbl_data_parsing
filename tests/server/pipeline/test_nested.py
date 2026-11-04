@@ -1,4 +1,4 @@
-"""pipeline.transform.figures.nested 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.nested`."""
+"""pipeline.transform.figures.nested_figures 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.nested_figures`."""
 
 import contextlib
 import io
@@ -8,7 +8,7 @@ from pathlib import Path
 from common.ai import llm as A  # 모델 호출(0.2.0 — 옛 common.ai.adk, pl-46)
 from common.config.settings import COMMON
 from pipeline import config as pc
-from pipeline.transform.figures.nested import MAX_CHILDREN_TOTAL, _parse_regions, bbox_regions, child_crops, find_children
+from pipeline.transform.figures.nested_figures import MAX_CHILDREN_TOTAL, _parse_regions, bbox_regions, child_crops, find_children
 
 
 def selftest():

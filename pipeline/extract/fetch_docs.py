@@ -222,8 +222,8 @@ def _rdb_rows(table):
 def _filter_unsupported_rows(rows, name_of):
     """SI44(source) — 압축(ARCHIVE_EXT)·처리 엔진 없는 확장자(registry.engines_for)는 받기 전에 걸러낸다(name_of
     계산 뒤 sample() 호출 전 — 다운로드 자체를 안 함). 사유 말은 prepare.py의 skipped.jsonl과 같다
-    (pipeline.extract.prepare._unsupported_reason 재사용 — 같은 규칙 한 곳). 반환: (남은 rows, 걸러진 rows 목록)."""
-    from pipeline.extract.prepare import _unsupported_reason
+    (pipeline.extract.filter_and_rotate._unsupported_reason 재사용 — 같은 규칙 한 곳). 반환: (남은 rows, 걸러진 rows 목록)."""
+    from pipeline.extract.filter_and_rotate import _unsupported_reason
 
     kept, skipped = [], []
     for r in rows:
@@ -236,7 +236,7 @@ def _filter_unsupported_rows(rows, name_of):
 
 
 def _record_source_skipped(state, skipped):
-    """건너뛴 행 기록(state/source_skipped.jsonl, {file,key,reason} — prepare.py skipped.jsonl과 같은 사유 말) +
+    """건너뛴 행 기록(state/source_skipped.jsonl, {file,key,reason} — filter_and_rotate.py skipped.jsonl과 같은 사유 말) +
     다시 받을 길이 없으므로(지원 안 하는 형식) 바로 처리 완료로 표시(watermark가 이 파일 때문에 영영 안 전진하는
     것을 막음 — finish()가 파싱 성공분을 기록하는 것과 같은 자리 `_processed_path`)."""
     with (state / "source_skipped.jsonl").open("a", encoding="utf-8") as f:
@@ -624,7 +624,7 @@ def _folder_tree(src, files, out, state):
 
 def _record_sha_before_delete(state, local, done, field="sha256"):
     """지우기 전에 sha256을 manifest.jsonl에 남겨 둠(SI39 요건⑧ — 원본을 즉시 지워도 publish_parse(`modules/load/
-    parsing_meta.py`)가 로컬 없이도 EDW 행을 쓸 수 있게). 못 읽으면(파일이 이미 없는 등) 그 문서만 건너뜀."""
+    silver_publish.py`)가 로컬 없이도 EDW 행을 쓸 수 있게). 못 읽으면(파일이 이미 없는 등) 그 문서만 건너뜀."""
     man_f = state / "manifest.jsonl"
     man = {r["file_name"]: r for r in jl(man_f)}
     changed = False
@@ -645,7 +645,7 @@ def finish(state, local, rep_index):
     (SI39 요건⑧, 2026-10-08 — publish_parse가 더는 원본을 올리지 않으므로 그걸 기다릴 이유가 없다. 옛
     PARSE_KEEP_ORIGINALS(publish 전까지 보존)는 폐지 · 디버그 보존 KEEP_LOCAL_ORIGINALS는 op-08에 지움).
     지우기 전에 항상 sha256을 manifest에 남긴다(`_record_sha_before_delete`) — publish_parse(modules/load/
-    parsing_meta.py `plan()`)가 로컬 원본 없이도 이 값으로 EDW 행을 쓸 수 있게."""
+    silver_publish.py `plan()`)가 로컬 원본 없이도 이 값으로 EDW 행을 쓸 수 있게."""
     man_f = state / "manifest.jsonl"
     if not man_f.exists():
         return

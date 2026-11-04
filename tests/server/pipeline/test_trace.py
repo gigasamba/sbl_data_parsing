@@ -1,8 +1,8 @@
-"""pipeline.transform.represent.trace 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.trace`."""
+"""pipeline.transform.represent.decision_log 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.decision_log`."""
 
 from pathlib import Path
 
-from pipeline.transform.represent.trace import attach, build_context, build_decisions
+from pipeline.transform.represent.decision_log import attach, build_context, build_decisions
 
 
 def selftest():

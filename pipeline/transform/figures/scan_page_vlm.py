@@ -3,7 +3,7 @@
 P0 열쇠(2026-10-03 수정 — "같은 문서 + 같은 기술 스택이면 다시 안 돎" 원칙): **렌더한 쪽 이미지 bytes의 sha가 아니라**
 (원본 파일 sha256 + 쪽 번호 + 렌더 매개변수(dpi·max_side) + 적용한 회전(도) + 모델 + prompt_id)의 결정적 열쇠를 쓴다 — PDF 렌더·이미지
 재인코딩이 실행마다 바이트까지 같다는 보장이 없어서(prepare.py를 두 번 돌리면 렌더 바이트가 달라질 수 있음), 렌더 바이트 열쇠는 "다시 준비"만
-해도 캐시가 깨진다. 원본 sha는 `prepare.py`가 회전 전 파일의 sha256을 `rotation.csv`(`orig_sha256` 열)에 남긴 것을 읽는다(없으면 —
+해도 캐시가 깨진다. 원본 sha는 `filter_and_rotate.py`가 회전 전 파일의 sha256을 `rotation.csv`(`orig_sha256` 열)에 남긴 것을 읽는다(없으면 —
 rotation.csv가 옛 버전이거나 이 문서가 거기 없으면 — 렌더 바이트 sha로 떨어진다, 아래 `vlm_page` 대체 경로).
 저장: `raw/vlm/<모델>/page-v1-<sha8>/det-<열쇠16>.json`(새 — 기본) · 읽기만: `raw/vlm/<모델>/page-v1-<sha8>/<렌더 바이트 sha12>.json`
 (프로토타입의 기존 캐시 — 맞으면 쓰고 결정적 열쇠로도 복사해 다음부터는 그쪽만 봄)."""
@@ -12,8 +12,8 @@ import json
 from pathlib import Path
 
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
-from pipeline.shared.exts import IMG_EXTS
-from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
+from pipeline.shared.ext_groups import IMG_EXTS
+from pipeline.shared.post_features import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
 from pipeline.shared.vlmcall import (  # 쪽 VLM 호출·캐시는 pipeline/shared/vlmcall.py로 옮김(엔진 qwen_vlm과 함께 씀)
     page_count,
     page_max,
@@ -21,7 +21,7 @@ from pipeline.shared.vlmcall import (  # 쪽 VLM 호출·캐시는 pipeline/shar
     sha,
     transcribe,
 )
-from pipeline.transform.figures.vector import vector_regions  # 쪽 벡터 도형 군집 수(page_signals)
+from pipeline.transform.figures.vector_regions import vector_regions  # 쪽 벡터 도형 군집 수(page_signals)
 
 # AD12·AD46(D2·D4·D6 공용 문서 검사 표) — 글자 PDF 안의 스캔 쪽 판정 기준값. 문서 단위 is_scan의 20자와 같은 값으로 보수적으로
 # 맞춤(AD31 — 글자 PDF 안의 스캔 쪽 신호는 늘 봄).
@@ -149,7 +149,7 @@ def page_signals(path):
         return json.loads(cache.read_text(encoding="utf-8"))
     import fitz
 
-    from pipeline.transform.represent.parse_qa import garbage_ratio
+    from pipeline.transform.represent.parse_scoring import garbage_ratio
 
     out = []
     for i, pg in enumerate(fitz.open(p), 1):
@@ -192,7 +192,7 @@ def scan_pages_detail(path):
                hidden_ratio·image_area_ratio가 똑같이 높아 여기 걸린다. 지금은 **일부러 보수적으로 스캔 후보에 넣음**
                (OCR 엔진이 대조 재료로 다시 읽어도 손해 없음 — AD12 `_ocr_fallback_needed`는 후보만 넓히고 대표 선택은
                안 바꿈) — 숨은 층이 기존 OCR과 '일치'하면 원래 글을 유지할지는 reason='hidden'을 읽는 다음 단계(대표
-               결과 선택, represent.py) 몫. 이 함수는 이유만 남기고 그 판단은 안 한다.
+               결과 선택, build_rep.py) 몫. 이 함수는 이유만 남기고 그 판단은 안 한다.
     'garbage' = 글자층 깨짐 비율 높음(>= PAGE_SCAN_GARBAGE) + 이미지 면적 큼(>= PAGE_SCAN_AREA)
     'hidden_overlap' = AD47 — 위 둘 다 쪽 전체 비율이라 못 잡는 국소 사례: 쪽 대부분은 정상 글자인데 숨은 글자
                상자 하나가 그림과 겹친다(hidden_over_image) — 쪽 VLM 후보로 넓힌다. 대표 결과의 스캔 쪽 채움(represent.fill_scan_pages)은
@@ -240,7 +240,7 @@ def scan_pages(path):
 
 def page_targets(doc_path):
     """독립 검토 반영(10-11, AD31/AD20 BLOCK) — 이 문서에서 **실제로** 쪽 VLM이 호출될 쪽 번호 집합 — 한 곳에서
-    계산해 page_text_pages()·figures.py 둘 다 이 함수만 본다(pptx_render.target_slides와 같은 패턴, 따로 추정 안 함).
+    계산해 page_text_pages()·figure_extract.py 둘 다 이 함수만 본다(pptx_render.target_slides와 같은 패턴, 따로 추정 안 함).
     접는 조건(먼저 맞는 것이 빈 집합):
       - PARSE_POST에 'vlm_page'가 없음(represent.apply_post가 쪽 VLM 자체를 안 부름 — active_features() 그대로 읽음.
         독립 검토가 지적한 원래 버그: figures.py가 scan_pages()만 보고 이 조건을 몰라, 쪽 VLM이 안 도는데도 그림을 건너뛰어 내용 손실)
@@ -250,7 +250,7 @@ def page_targets(doc_path):
     남는 경우: 문서 전체가 스캔(이미지 파일 또는 스캔 PDF)이면 전체 쪽, 아니면 scan_pages() 결과 — 거기에
     VLM_PAGE_MAX(cap) 절단까지 적용한 뒤 집합으로(독립 검토가 지적한 둘째 버그: cap으로 잘려 실제로 안 불릴
     쪽까지 figures.py가 건너뛰던 것 — 여기서 자른 뒤 돌려주므로 호출자가 또 자를 필요 없음)."""
-    from pipeline.shared.postprocess import active_features
+    from pipeline.shared.post_features import active_features
 
     if "vlm_page" not in active_features():
         return set()

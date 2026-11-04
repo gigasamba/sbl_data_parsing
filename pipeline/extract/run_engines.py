@@ -424,7 +424,7 @@ def run_procs(a, docs):
         NUMEXPR_NUM_THREADS=threads,
         TORCH_NUM_THREADS=threads,
     )
-    base, skip_next = [sys.executable, "-m", "pipeline.extract.run_all"], False
+    base, skip_next = [sys.executable, "-m", "pipeline.extract.run_engines"], False
     for x in sys.argv[1:]:  # --procs·--shard만 빼고 같은 인자
         if skip_next:
             skip_next = False
@@ -574,9 +574,9 @@ def _isolated_once(eng, doc, dst, profile, tmo, py, env=None, prov=None):
     from common.core.paths import child_env
 
     low = bool(pc.cfg().extract.low_priority)  # 10-29 — 일괄 파싱은 낮은 우선순위(parse MCP 서비스는 끔 — 요청이 CPU를 먼저)
-    # PADDLE_PYTHON은 별도 venv(.venv-paddle)라 cwd 상속에 의존하지 않고 child_env()의 PYTHONPATH(deploy/)로 `-m pipeline.extract.parse_one`을 찾게 함
+    # PADDLE_PYTHON은 별도 venv(.venv-paddle)라 cwd 상속에 의존하지 않고 child_env()의 PYTHONPATH(deploy/)로 `-m pipeline.extract.run_one_engine`을 찾게 함
     pr = RS.gated_popen(
-        [py, "-m", "pipeline.extract.parse_one", "--engine", eng, "--profile", profile]
+        [py, "-m", "pipeline.extract.run_one_engine", "--engine", eng, "--profile", profile]
         + (["--provenance", json.dumps(prov, ensure_ascii=False)] if prov else [])
         + [str(doc), str(dst)],
         env=env if env is not None else child_env(),

@@ -1,4 +1,4 @@
-"""EDW 조인 사슬 파일 읽기·검사(pl-29·pl-52 — 사용자 11-02·11-03) — 두 앱이 함께 쓴다: 적재(pipeline/load/edw_meta.py — 사슬을 따라 EDW를
+"""EDW 조인 사슬 파일 읽기·검사(pl-29·pl-52 — 사용자 11-02·11-03) — 두 앱이 함께 쓴다: 적재(pipeline/load/edw_doc_meta.py — 사슬을 따라 EDW를
 읽음)와 검색 MCP(거르기 이름 → attrs 키, 근거 키). 파일 꼴은 resources/config/edw_chain.yaml 머리 주석(모든 원천이 같은 꼴 — steps·fields·
 client_edw·created). 이름은 SQL 글자에 들어가므로 여기서 검사하고, 값은 늘 바인딩한다. 틀리면 ValueError(어디가 왜 틀렸는지 모두)."""
 

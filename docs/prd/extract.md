@@ -31,7 +31,7 @@
 2. 같은 해시 묶음에서 남길 파일은 `deduplication.py` `run_folder()` 순서로 고른다: 이름에 사본 표시(`(1)`·`사본` 등)가 없는 것 → 수정 시각이 늦은 것 → 큰 파일.
 3. 회전 바로잡기는 `pipeline.extract.prepare.rotate`(기본 `false`)가 켜졌을 때만 한다. 꺼져 있으면 회전용 OCR을 하지 않고 파일을 그대로 놓는다.
 4. 켜져 있으면 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) RapidOCR 점수를 스레드 4개로 동시에 재고 가장 높은 방향으로 돌린다 — 같으면 0도, 모두 0이면 그대로. 기록은 `output/prepared/rotation.csv`(파일·쪽·각도·네 방향 점수·회전 전 원본 sha256 `orig_sha256`).
-5. DRM·암호 파일은 감지해서 표시만 한다(상태 `skipped_drm`). 복호화는 흐름 안에서 하지 않고 수동 명령 `python -m pipeline.extract.secure_docs decrypt`로만 한다.
+5. DRM·암호 파일은 감지해서 표시만 한다(상태 `skipped_drm`). 복호화는 흐름 안에서 하지 않고 수동 명령 `python -m pipeline.extract.protected_docs decrypt`로만 한다.
 6. 압축 파일(zip)은 지원하지 않는다고 표시한다.
 
 ### QA

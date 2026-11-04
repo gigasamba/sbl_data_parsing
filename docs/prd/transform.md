@@ -92,11 +92,11 @@
 1. 엔진 `parser.py`의 `FORMATS`는 두고, 등록부 `pipeline/extract/engines/registry.py`의 `EXTRA_FORMATS`(엔진별 추가 확장자)에 더한다 — `formats(엔진)` = `FORMATS` + `EXTRA_FORMATS`, `engines_for()`·`parse_one --list`가 이것을 읽는다.
 2. 구성(우선순위 순): `.docm`·`.pptm`(kreuzberg, anydoc) · `.rtf`·`.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.csv`(markitdown, kreuzberg) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown) · `.xlsb`·`.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg) · `.json`·`.xml`·`.log`(plaintext 하나 — 글 그대로).
 3. `.docm`·`.pptm`은 `office` 엔진에 주지 않는다(`office_stdlib`는 `.docx`가 아니면 xlsx로 다룸).
-4. 파싱 서비스가 받는 확장자(`mcp_parse_service.allowed_exts()`) = 구성의 `parse` 키(`.pdf_*` → `.pdf`) − 이미지 확장자.
+4. 파싱 서비스가 받는 확장자(`pipeline.parse_service.allowed_exts()`) = 구성의 `parse` 키(`.pdf_*` → `.pdf`) − 이미지 확장자.
 
 ### 단계
 1. `.hwp` — kreuzberg로 실제 `.hwp` 문서를 읽어 글이 나오는지 시험한 뒤 `EXTRA_FORMATS["kreuzberg"]`와 구성에 더한다.
-2. 사람 결정 대기: ① 암호·DRM 사전 판정(`prepare.py` — `OOXML_EXTS`·OLE 목록)에 서식 파일·`.xlsb`·오픈문서가 없음 ② `.pptm`·`.ppsx`·`.potx`·`.docm`·`.dotx`·`.xltx`가 그림 추출·쪽 수·FAQ 행의 `.docx`·`.pptx`·`.xlsx` 정확 비교 분기를 못 탐 ③ `resources/config/criteria.json` `groups.native`에 새 형식이 없어 파싱 QA 판정이 빔 ④ `parse_document` 도구 설명(`mcp_server/routers/parse_tool.py` — MCP 계약)의 형식 목록이 옛것 ⑤ plaintext가 `.log`·`.json`의 `|`·탭 줄을 표로 볼 수 있음 ⑥ 옛 이진 4종(`.xlsb`·`.dot`·`.xlt`·`.pot`) 자동 파싱 시험 없음.
+2. 사람 결정 대기: ① 암호·DRM 사전 판정(`filter_and_rotate.py` — `OOXML_EXTS`·OLE 목록)에 서식 파일·`.xlsb`·오픈문서가 없음 ② `.pptm`·`.ppsx`·`.potx`·`.docm`·`.dotx`·`.xltx`가 그림 추출·쪽 수·FAQ 행의 `.docx`·`.pptx`·`.xlsx` 정확 비교 분기를 못 탐 ③ `resources/config/criteria.json` `groups.native`에 새 형식이 없어 파싱 QA 판정이 빔 ④ `parse_document` 도구 설명(`mcp_server/routers/parse_tool.py` — MCP 계약)의 형식 목록이 옛것 ⑤ plaintext가 `.log`·`.json`의 `|`·탭 줄을 표로 볼 수 있음 ⑥ 옛 이진 4종(`.xlsb`·`.dot`·`.xlt`·`.pot`) 자동 파싱 시험 없음.
 
 ### QA
 - `tests/server/pipeline/test_ext_formats.py` `EXT2` 표 — 형식마다 임시 견본을 구성의 엔진마다 파싱(옛 이진 4종은 구성·등록부만 확인).
@@ -110,10 +110,10 @@
 
 ### 규칙
 1. 대표 엔진은 정확도 + 풍부함으로 고른다(`pipeline.transform.represent.rep_select`, 기본 best).
-2. 줄 단위 투표로 합치고(`fuse.py`), 엔진 사이 라벨·값을 서로 확인한다(`crosscheck.py`).
+2. 줄 단위 투표로 합치고(`fragment_vote.py`), 엔진 사이 라벨·값을 서로 확인한다(`crosscheck.py`).
 3. 후보정 `PARSE_POST`(일괄 파싱 기본 `all` = `vlm_page,supsub,charts,figures,context,attachments`, 파싱 서비스 기본 `supsub`): 쪽 VLM 채우기([pl-22](#pl-22)), 윗첨자 `^`·아래첨자 `_`, 차트·그림([pl-05](#pl-05)), 그림 근처 맥락([pl-37](#pl-37)), 메일 첨부([pl-36](#pl-36)).
 4. 여러 엔진의 표를 본문 제자리에 넣고(`table_inline.py`), 표준 표(`tables_std`)를 만든다.
-5. 파싱 QA(`parse_qa.py`): 교차 정확도가 `resources/config/criteria.json` `run.cross_acc_full`(0.95) 미만이면 상태 `partial`, 아니면 `ok`.
+5. 파싱 QA(`parse_scoring.py`): 교차 정확도가 `resources/config/criteria.json` `run.cross_acc_full`(0.95) 미만이면 상태 `partial`, 아니면 `ok`.
 6. 대표 결과는 마스터(용어집·고객 명부)를 읽지 않는다.
 
 ### QA
@@ -142,7 +142,7 @@
 그림 설명을 본문과 함께 찾게 한다.
 
 ### 규칙
-1. 그림마다 캡션·본문 언급을 연결하고, 그림 기록의 값이 본문 값과 맞는지·부딪히는지 표시한다(`represent/context.py` `value_check` — 모델 호출 없음).
+1. 그림마다 캡션·본문 언급을 연결하고, 그림 기록의 값이 본문 값과 맞는지·부딪히는지 표시한다(`represent/figure_context.py` `value_check` — 모델 호출 없음).
 2. 그림 기록은 본문 청크 한 덩어리로 렌더한다.
 
 ### QA
@@ -160,7 +160,7 @@
 2. 후보에서 뺀다(기록은 남김): 쪽 면적 1% 미만, 짧은 변 `fig_min_px`(64 px) 미만, 같은 sha로 반복되는 이미지(로고).
 3. 원본 차트 XML·벡터 차트 값은 VLM 없이 읽는다(`chart_values.py`).
 4. 슬라이드·도형은 soffice로 그려 읽는다 — 문서당 `PARSE_PPTX_RENDER_MAX`(10)쪽, 변환 제한 `PARSE_PPTX_CONVERT_SEC`(60초).
-5. 지금 코드는 도식 연결선·겹친 개체 묶음(`figure_overlay`)·중첩 그림(`nested_figure`)·pptx 도형 연결·도형 감지·Mermaid 출력도 따로 만든다(`figures/figures.py`) — 아래 단계에서 줄인다.
+5. 지금 코드는 도식 연결선·겹친 개체 묶음(`figure_overlay`)·중첩 그림(`nested_figure`)·pptx 도형 연결·도형 감지·Mermaid 출력도 따로 만든다(`figures/figure_extract.py`) — 아래 단계에서 줄인다.
 
 ### 단계
 1. 부가 기능(도식 화살표·겹침 묶음·중첩 그림·pptx 도형 연결·도형 감지·Mermaid 따로 만들기)을 VLM 한 번의 종류별 출력으로 바꾼다 — 도표 → Mermaid, 표 → HTML 표, 차트 → 세부 값. 차트 XML·벡터 값과 쪽 VLM은 그대로. 대표 결과 지문(p1)이 바뀐다.

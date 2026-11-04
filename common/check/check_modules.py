@@ -136,7 +136,7 @@ CONTRACT_FUNCS = {
 }
 SAME_NAME_OK = {
     ("common/core/meaning.py", "tokens"),
-    ("etl/transform/represent/parse_qa.py", "norm"),
+    ("etl/transform/represent/parse_scoring.py", "norm"),
 }  # 이름만 같고 다른 규칙(파싱 채점의 유의미 토큰·공백 보존 정규화)
 # 단계 4 — 옛 ALLOW의 "tools"(tools/engines·tools/parse_agent_tools) 예외 전부 삭제: 그 코드가 parse/engines·
 # parse/agent/agent_tools.py로 옮겨 parse 영역 **안**이 되어 더 이상 경계 위반이 아님(ALLOW 자체가 필요 없어짐).

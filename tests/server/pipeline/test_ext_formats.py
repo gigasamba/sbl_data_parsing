@@ -10,8 +10,8 @@ from unittest import mock
 
 from common.core.paths import STACK_FILE
 from pipeline.extract.engines import registry
-from pipeline.extract.run_all import engines_for_doc
-from pipeline.shared.exts import IMG_EXTS
+from pipeline.extract.run_engines import engines_for_doc
+from pipeline.shared.ext_groups import IMG_EXTS
 
 IMAGES = (".jpeg", ".tif", ".tiff", ".bmp")
 NEW = (*IMAGES, ".mhtml", ".hwpx")
@@ -33,7 +33,7 @@ def test_stack_lists_new_formats():
         assert engines_for_doc(Path("x" + ext), sp, {}, set()) == ["qwen_vlm"], ext
     assert {
         k for k, v in sp.items() if v == ["qwen_vlm"] and not k.startswith(".pdf_")
-    } == IMG_EXTS  # 이미지 묶음 한 곳(exts.py)이 구성과 같게
+    } == IMG_EXTS  # 이미지 묶음 한 곳(ext_groups.py)이 구성과 같게
     assert sp[".mhtml"] == sp[".mht"]
     assert set(engines_for_doc(Path("x.mhtml"), sp, {}, set())) == {"mhtml", "kreuzberg"}
     assert engines_for_doc(Path("x.hwpx"), sp, {}, set()) == ["hwpx"]

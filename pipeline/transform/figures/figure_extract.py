@@ -23,22 +23,22 @@ from common.core.paths import (
 )
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared import vlmcall as V  # VLM 호출 한 길(ask)·렌더 해상도(dpi) — 11-04
-from pipeline.shared.exts import IMG_EXTS
+from pipeline.shared.ext_groups import IMG_EXTS
 from pipeline.shared.parse_run import prompt_id, raw_vlm_path
-from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
+from pipeline.shared.post_features import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
 from pipeline.transform.figures import chart_values as CV  # F14(a)·(c) 벡터 차트 결정적 값·추세
 from pipeline.transform.figures import diagram_edges as diag_edges  # F13, PDF 벡터·텍스트 글자 화살표 결정적 edges
 from pipeline.transform.figures.mermaid import to_mermaid
-from pipeline.transform.figures.nested import find_children  # F7, page_render 안의 자식 그림 찾기·자르기
-from pipeline.transform.figures.overlay import (  # F12 — 겹친 개체(그림+글상자/도형/화살표) 한 묶음 찾기
+from pipeline.transform.figures.nested_figures import find_children  # F7, page_render 안의 자식 그림 찾기·자르기
+from pipeline.transform.figures.overlay_groups import (  # F12 — 겹친 개체(그림+글상자/도형/화살표) 한 묶음 찾기
     cluster_overlaps,
     docx_float_objects,
     pdf_page_objects,
     pptx_slide_objects,
 )
 from pipeline.transform.figures.pptx_edges import PPTX_SHAPES_MIN, picture_arrow_edges, pptx_edges
-from pipeline.transform.figures.vector import vector_regions
-from pipeline.transform.represent import context as C
+from pipeline.transform.figures.vector_regions import vector_regions
+from pipeline.transform.represent import figure_context as C
 
 NOW = time.strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -279,7 +279,7 @@ def figures(p, page_covered=False):
         import fitz
 
         d = fitz.open(p)
-        from pipeline.transform.figures.vlm_page import page_targets  # 독립 검토 반영(10-11, AD31/AD20 BLOCK) — scan_pages()만 보던
+        from pipeline.transform.figures.scan_page_vlm import page_targets  # 독립 검토 반영(10-11, AD31/AD20 BLOCK) — scan_pages()만 보던
 
         # 10-29 C — page_covered(이미지·스캔 문서를 VLM 엔진이 이미 쪽마다 옮김)면 모든 쪽을 '옮긴 쪽'으로(쪽 전체 그림 VLM 생략)
         skip_pages = (
@@ -473,7 +473,7 @@ def figures(p, page_covered=False):
                 out.extend(_pptx_overlay_records(name, p, si, pr, s, pics, pic_recs, page_vlm))
     # BR56 — 단독 이미지 문서 자체(위 분기들과 달리 지금까지 아무 분기도 없어 기록이 0건이었음, AD31/AD20과 무관한 기존 공백)
     elif ext in IMG_EXTS:
-        from pipeline.transform.figures.vlm_page import (
+        from pipeline.transform.figures.scan_page_vlm import (
             page_targets,
         )  # 문서 전체가 쪽 VLM(page_text) 대상이면(기본 — is_scan) 그림 VLM은 생략(중복 방지)
 
@@ -569,7 +569,7 @@ VLM_FIG_OCR_MAX = int(_FV.fig_ocr_max if _FV.fig_ocr_max is not None else 8)  # 
 
 def classify_figure_kind(fig):
     """AD10 — 종류 가늠(모델 호출 없이, 레코드 필드만) → text_image|photo|chart|flow|other.
-    벡터 신호(loc.signals — vector.py vector_regions, PDF 벡터 군집 그림에만 있음)가 있으면 그걸로 먼저:
+    벡터 신호(loc.signals — vector_regions.py vector_regions, PDF 벡터 군집 그림에만 있음)가 있으면 그걸로 먼저:
     막대 신호 위주(bars>=3, bars>=curve_diag_arrow) → chart, 곡선·사선·화살표 위주(curve_diag_arrow>=3) → flow.
     래스터 그림(벡터 신호 없음)은 fig["ocr_chars"](crop OCR 글자 수, 호출부가 상한 안에서 미리 채움·없으면 None=
     모름)·area_ratio로 text_image(글자 많음)·photo(글자 거의 없음+어느 정도 면적) 가늠, 그 외(모름 포함)는 other

@@ -1,5 +1,5 @@
 """pipeline 전용 엔진 결과 정확도 정의(10-14 함수별 분리 — common/core/repfmt.py에서 이전, 로직 바이트 동일).
-parse_qa.py·represent.py·agent/agent_tools.py만 쓴다(AG11 2단계 착수 조건으로 pipeline.transform.represent.parse_qa에서
+parse_scoring.py·build_rep.py·agent/agent_tools.py만 쓴다(AG11 2단계 착수 조건으로 pipeline.transform.represent.parse_qa에서
 common/repfmt.py로 옮긴 뒤, 10-14에 다시 파싱 모듈 쪽으로(지금 pipeline/) — 결국 pipeline 바깥에서 부르는 곳이 없었음)."""
 
 # 표/이미지 인식 보너스 가중치 — cross_recall에 더해 통합 점수 산출

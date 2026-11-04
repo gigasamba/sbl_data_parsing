@@ -15,7 +15,7 @@ from common.core import jsonlog, paths, span
 from common.store import logsink
 from common.store.db import dbtool
 from pipeline.shared import runtrace
-from pipeline.tools import perf
+from pipeline.tools import perf_report as perf
 
 INPROCESS = True
 

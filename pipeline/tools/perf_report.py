@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """파이프라인 실행 1건의 성능·추적 분석(op-01) — applog.pipe_run/pipe_event를 읽어 사람이 보는 표로.
 
-    python -m pipeline.tools.perf <run_id>                 # 단계·엔진별 p50/p95/최대·비율, wait/작업, 느린 문서, 쪽당 시간, 캐시·재시도·실패
-    python -m pipeline.tools.perf                           # run_id를 빼면 가장 최근 실행
-    python -m pipeline.tools.perf --runs [N]                # 최근 실행 N개(기본 10) 목록
-    python -m pipeline.tools.perf <run_id> --compare <run_id> ...   # 실행 간 비교(code_fp·stack·settings_hash 차이 + 단계별 p50)
-    python -m pipeline.tools.perf <run_id> --file output/logs/2026-10-30_123.jsonl   # DB가 안 켜진 PC — logsink 대체 기록 파일에서
-    python -m pipeline.tools.perf <run_id> --top 20 --json  # 느린 문서 N개 · 표 대신 JSON
+    python -m pipeline.tools.perf_report <run_id>                 # 단계·엔진별 p50/p95/최대·비율, wait/작업, 느린 문서, 쪽당 시간, 캐시·재시도·실패
+    python -m pipeline.tools.perf_report                           # run_id를 빼면 가장 최근 실행
+    python -m pipeline.tools.perf_report --runs [N]                # 최근 실행 N개(기본 10) 목록
+    python -m pipeline.tools.perf_report <run_id> --compare <run_id> ...   # 실행 간 비교(code_fp·stack·settings_hash 차이 + 단계별 p50)
+    python -m pipeline.tools.perf_report <run_id> --file output/logs/2026-10-30_123.jsonl   # DB가 안 켜진 PC — logsink 대체 기록 파일에서
+    python -m pipeline.tools.perf_report <run_id> --top 20 --json  # 느린 문서 N개 · 표 대신 JSON
 
 읽기 전용 — DB에 쓰거나 DDL을 하지 않는다. 문서 본문은 기록에 없고 이 도구도 모른다(doc_id는 파일 이름).
 집계 함수(summarize·compare)는 행 사전 목록만 받으므로 DB 없이 시험할 수 있다.

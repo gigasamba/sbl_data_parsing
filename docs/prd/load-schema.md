@@ -85,5 +85,5 @@ SFDC·CRMS·LAS·FAQ·Other는 메타가 다르고 BM25 통계도 원천마다 �
 ### QA
   - 시험: `tests/server/common/test_dbtool.py`(0005 — 옮기는 칸 = 0002+0003, 뷰·되돌리기·GIN) · `tests/server/pipeline/test_edw_meta.py`(사슬 사례·틀린 설정 15개) · `tests/server/pipeline/test_classify.py`(EDW attrs → `doc.attrs` · 힌트) · `tests/server/mcp/test_search_svc.py`(attrs 거르기·오류·근거 attrs·`contract_no`·`search_attrs`) · `tests/server/mcp/test_call_log.py`(tools/list 바이트 — 지금 값은 시험 파일).
   - 서버 확인: [refactor.md C-89](../refactoring/refactor.md).
-- 파일: `common/store/db/models/search_tables.py` · `common/store/db/migrations/versions/0005_doc_attrs.py` · `common/store/edw_chain.py`(사슬 읽기·검사 — 두 앱) · `pipeline/load/edw_meta.py`(해석기) · `mcp_server/services/search/search_svc.py` · `mcp_server/services/edw_calls.py`.
+- 파일: `common/store/db/models/search_tables.py` · `common/store/db/migrations/versions/0005_doc_attrs.py` · `common/store/edw_chain.py`(사슬 읽기·검사 — 두 앱) · `pipeline/load/edw_doc_meta.py`(해석기) · `mcp_server/services/search/search_svc.py` · `mcp_server/services/edw_calls.py`.
 - Status: done

@@ -18,7 +18,7 @@
 
 ## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌)
 
-판: `common/store/db/migrations/versions/0001_search_base.py` … `0005_doc_attrs.py` · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_META`·`ATTRS`·`LOAD_ATTRS`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`·`deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인 `pipeline/load/edw_meta.py`.
+판: `common/store/db/migrations/versions/0001_search_base.py` … `0005_doc_attrs.py` · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_META`·`ATTRS`·`LOAD_ATTRS`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`·`deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인 `pipeline/load/edw_doc_meta.py`.
 
 - **스키마 배치:** 기준 스키마 `<PG_SCHEMA>`(예 `ai`)에는 판 표 `alembic_version`과 공용 시퀀스 `doc_id_seq`만. 원천 스키마 `<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`에 아래 표 다섯 개와 뷰 `v_chunk_source`가 같은 꼴로 있다(원천 전용 칸은 `faq.chunk.faq_group`뿐 — 그 밖의 원천 메타는 `doc.attrs` 키).
 - 검색 MCP는 실행 중에 묶음 파일(`meta.json`·`docs.jsonl`·`chunks.jsonl`)을 읽지 않는다 — 임베딩 모델·문서 날짜는 `doc` 칸, 차원은 `chunk.embedding`의 `vector(n)`에서 읽는다.
@@ -154,7 +154,7 @@ PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서�
 
 ### edw.ParsingMeta
 
-`AI.ParsingMeta` — 파싱 결과(silver) 게시 기록. 정의: `docs/operations/parsing_meta_mssql.sql`. 쓰는 곳: `pipeline/load/parsing_meta.py`(`plan`·`apply` — 행 만들기), `common/store/parsing_meta_db.py`(`insert_new` — INSERT, `set_loaded` — `loaded_at`·`gold_version` UPDATE). UPDATE는 이것뿐이다(`status` 바꾸기 없음). 무엇을 쓰는지는 [pl-25](../prd/load-schema.md#pl-25).
+`AI.ParsingMeta` — 파싱 결과(silver) 게시 기록. 정의: `docs/operations/parsing_meta_mssql.sql`. 쓰는 곳: `pipeline/load/silver_publish.py`(`plan`·`apply` — 행 만들기), `common/store/parsing_meta_db.py`(`insert_new` — INSERT, `set_loaded` — `loaded_at`·`gold_version` UPDATE). UPDATE는 이것뿐이다(`status` 바꾸기 없음). 무엇을 쓰는지는 [pl-25](../prd/load-schema.md#pl-25).
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
@@ -372,7 +372,7 @@ MCP 호출 1건당 1행. 인증 실패(`tool=http`)와 `initialize`도 행으로
 
 ### applog.pipe_run
 
-파이프라인 실행 1건당 1행. 기본 키 `run_id`. 색인: `started_at`. 시작할 때 `status=running`으로 쓰고 끝날 때 같은 `run_id`로 덮어쓴다(UPSERT — 이 표만). 강제 종료된 실행은 `running`으로 남는다. 쓰는 곳: `pipeline/shared/runtrace.py`. 읽는 곳: `pipeline/tools/perf.py`.
+파이프라인 실행 1건당 1행. 기본 키 `run_id`. 색인: `started_at`. 시작할 때 `status=running`으로 쓰고 끝날 때 같은 `run_id`로 덮어쓴다(UPSERT — 이 표만). 강제 종료된 실행은 `running`으로 남는다. 쓰는 곳: `pipeline/shared/runtrace.py`. 읽는 곳: `pipeline/tools/perf_report.py`.
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
@@ -400,7 +400,7 @@ MCP 호출 1건당 1행. 인증 실패(`tool=http`)와 `initialize`도 행으로
 
 ### applog.pipe_event
 
-문서×단계 1건당 1행. 60초마다 남는 진행 상황도 `stage=run.progress`로 들어온다. 기본 키 `(id, ts_start)`. 색인: `ts_start`(BRIN) · `run_id` · `(stage, ts_start)`. `doc_id` 색인은 없다(보통 `run_id`로 먼저 좁힌다). 쓰는 곳: `common/core/span.py`(진행 상황은 `pipeline/shared/runtrace.py`). 읽는 곳: `pipeline/tools/perf.py`.
+문서×단계 1건당 1행. 60초마다 남는 진행 상황도 `stage=run.progress`로 들어온다. 기본 키 `(id, ts_start)`. 색인: `ts_start`(BRIN) · `run_id` · `(stage, ts_start)`. `doc_id` 색인은 없다(보통 `run_id`로 먼저 좁힌다). 쓰는 곳: `common/core/span.py`(진행 상황은 `pipeline/shared/runtrace.py`). 읽는 곳: `pipeline/tools/perf_report.py`.
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|

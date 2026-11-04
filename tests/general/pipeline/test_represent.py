@@ -1,4 +1,4 @@
-"""pipeline.transform.represent.represent 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.represent --selftest`."""
+"""pipeline.transform.represent.build_rep 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.build_rep --selftest`."""
 
 import json
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 from common.config.settings import COMMON
 from common.core.contract import source_record
 from pipeline import config as pc
-from pipeline.transform.represent.represent import (
+from pipeline.transform.represent.build_rep import (
     apply_post,
     fill_scan_pages,
     fix_tables,
@@ -202,7 +202,7 @@ def selftest():
     import fitz as _fitz
 
     from pipeline.shared import vlmcall as _vc  # 쪽 VLM 호출·캐시(11-04 — 엔진과 같은 함수)
-    from pipeline.transform.figures import vlm_page as _vp
+    from pipeline.transform.figures import scan_page_vlm as _vp
 
     d4 = Path(_tf.mkdtemp())
     pd4 = d4 / "parse"
@@ -351,7 +351,7 @@ def selftest():
 
     from PIL import Image as _Image
 
-    from pipeline.transform.figures.figures import figures as _figures
+    from pipeline.transform.figures.figure_extract import figures as _figures
 
     d6 = Path(_tf.mkdtemp())
     pd6 = d6 / "parse"
@@ -380,7 +380,7 @@ def selftest():
             assert not any(f["loc"].get("page_vlm") for f in _figures(scan6) if f["loc"].get("page_render"))
             assert all(f["loc"].get("page_vlm") for f in _figures(scan6, page_covered=True) if f["loc"].get("page_render"))
         # run_docs light 레인처럼 vlm_page 없이 figures만 — VLM 엔진이 옮긴 문서의 쪽 전체 그림은 그림 VLM 0회
-        from pipeline.transform.figures import figures as _fig_mod
+        from pipeline.transform.figures import figure_extract as _fig_mod
 
         fig_calls = []
         orig_vlm_fig = _fig_mod.vlm_fig
@@ -394,7 +394,7 @@ def selftest():
     finally:
         _vc.vlm_page = orig_vlm_page
     # covered 판정 표 — 대표가 VLM 엔진·본문 있음·이미지/스캔 형식(run_all과 같은 형식 키)일 때만
-    from pipeline.transform.represent.represent import _vlm_transcribed as _vt
+    from pipeline.transform.represent.build_rep import _vlm_transcribed as _vt
 
     def _r(engine, text):
         return {"rep": {"engine": engine}, "text": text}

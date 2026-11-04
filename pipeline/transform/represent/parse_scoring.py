@@ -26,10 +26,10 @@ from common.core.paths import APP_ROOT, CRITERIA_FILE, doc_dir  # 폴더 재편 
 from common.core.text import supsub_mark  # W6: norm()이 score_gold.canon()과 같은 첨자 정규화를 쓰게(AD37·SI17, 각자 맵 금지)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.extract.engines import registry
-from pipeline.shared.exts import IMG_EXTS
-from pipeline.shared.summarize import FAMILY, nums  # 계열 합의 로직 재사용(중복 금지)
-from pipeline.transform.represent.repfmt import (
-    doc_accuracy,  # AG11 2단계 착수 조건(10-08), 10-14 함수별 분리로 pipeline/transform/represent/repfmt.py로
+from pipeline.shared.engine_family import FAMILY, nums  # 계열 합의 로직 재사용(중복 금지)
+from pipeline.shared.ext_groups import IMG_EXTS
+from pipeline.transform.represent.rep_accuracy import (
+    doc_accuracy,  # AG11 2단계 착수 조건(10-08), 10-14 함수별 분리로 pipeline/transform/represent/rep_accuracy.py로
 )
 
 try:
@@ -350,9 +350,9 @@ def build_token_consensus(per_doc_toks, eng_fam, min_fams=2):
     """문서별 '유의미 텍스트' = 서로 다른 계열 min_fams개 이상이 뽑은 토큰. 계열이 min_fams보다 적으면 없음(판정 불가).
     반환 = (cons, conflicts). cons는 이전과 완전히 같은 모양(doc → 토큰 집합) — 호출부 로직 불변.
     conflicts는 AD25(a) 추가: 같은 문서에서 숫자 표기가 갈리지만
-    같은 값일 수 있는 자리(pipeline.shared.canon.canon_num_key, 예 430.000↔430,000)를 엔진별 원문 표기와 함께 기록한다
+    같은 값일 수 있는 자리(pipeline.shared.text_normalize.canon_num_key, 예 430.000↔430,000)를 엔진별 원문 표기와 함께 기록한다
     (합치지 않고 표시만 — 판정은 AD26 이후 몫)."""
-    from pipeline.shared.canon import canon_num_key
+    from pipeline.shared.text_normalize import canon_num_key
 
     out, conflicts = {}, {}
     for doc, by_eng in per_doc_toks.items():
@@ -660,7 +660,7 @@ FULL = json.loads(CRITERIA_FILE.read_text(encoding="utf-8"))["run"][
     "cross_acc_full"
 ]  # 문서 "성공" 판정(0.95 — 사용자 2026-09-30, 0.999 → 0.95) · 정본 criteria.json run(RB3)
 LOW_N = 2  # 파싱 성공 엔진이 이 수 이하인 문서 = 모수 적음(교차 대조·정확도 판단이 약함) — 보고서 강조
-# doc_accuracy·GOLD는 pipeline/transform/represent/repfmt.py에 있음(AG11 2단계 착수 조건 10-08 → 10-14 함수별 분리) — 위 import로 재사용(로직 불변)
+# doc_accuracy·GOLD는 pipeline/transform/represent/rep_accuracy.py에 있음(AG11 2단계 착수 조건 10-08 → 10-14 함수별 분리) — 위 import로 재사용(로직 불변)
 
 
 def parse_summary(qa, src_dir=None):

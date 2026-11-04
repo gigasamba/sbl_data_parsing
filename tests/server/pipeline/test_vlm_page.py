@@ -1,15 +1,15 @@
-"""pipeline.transform.figures.vlm_page 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.vlm_page`."""
+"""pipeline.transform.figures.scan_page_vlm 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.scan_page_vlm`."""
 
 import contextlib
 import io
 import json
 from pathlib import Path
 
-import pipeline.transform.figures.vlm_page as M
+import pipeline.transform.figures.scan_page_vlm as M
 from common.config.settings import COMMON
 from pipeline import config as pc
 from pipeline.shared.parse_run import raw_vlm_path
-from pipeline.shared.postprocess import raw_root
+from pipeline.shared.post_features import raw_root
 from pipeline.shared.vlmcall import (
     MAX_SIDE,
     P_PAGE,
@@ -22,7 +22,7 @@ from pipeline.shared.vlmcall import (
     sha,
     vlm_page,
 )
-from pipeline.transform.figures.vlm_page import (
+from pipeline.transform.figures.scan_page_vlm import (
     PAGE_HIDDEN_AREA,
     PAGE_HIDDEN_RATIO,
     PAGE_SCAN_AREA,
@@ -231,7 +231,7 @@ def selftest():
 
         # 독립 검토 MAJOR(10-07) — '검색 가능 스캔 PDF'(이미지 위에 그 이미지와 같은 내용을 옮긴 양질의 render_mode=3
         # OCR 글자층)도 hidden_ratio·image_area_ratio가 똑같이 높아 조건②에 걸린다. 지금 동작은 **그대로 둠**(일부러
-        # 보수적 — OCR 후보가 다시 돌아도 손해 없음) 대신 reason='hidden'을 남겨 다음 단계(represent.py, b2 범위)가
+        # 보수적 — OCR 후보가 다시 돌아도 손해 없음) 대신 reason='hidden'을 남겨 다음 단계(build_rep.py, b2 범위)가
         # '숨은 층이 OCR과 일치하면 원래 글 유지'를 그 이유로 구분할 수 있게 한다.
         searchable = d / "searchable_scan.pdf"
         ssdoc = fitz.open()
@@ -245,7 +245,7 @@ def selftest():
         with pc.PIPE.env(PARSE_RAW_ROOT=str(d / "store4")):  # S7c — 설정 객체만 바꿔 끼움
             assert scan_pages_detail(searchable) == {1: "hidden"}, scan_pages_detail(
                 searchable
-            )  # 지금 동작 명시(한계, 후속은 represent.py)
+            )  # 지금 동작 명시(한계, 후속은 build_rep.py)
         print("[selftest] 독립 검토 MAJOR — 검색 가능 스캔 PDF(양질 OCR 숨은 층)도 reason='hidden'으로 잡힘(지금 동작) 통과")
 
         # AD47 — synth-mixedpdf textlayer_mismatch.pdf와 같은 모양: 쪽 대부분은 정상 글자(hidden_ratio·image_area_ratio
@@ -290,7 +290,7 @@ def selftest():
 
 def test_pick_pages():
     """10-29 — 쪽 VLM 대상 쪽(순수 함수): 전체 스캔이면 전부, 글자 PDF면 스캔 신호 쪽만, cap으로 앞에서 자름."""
-    from pipeline.transform.figures.vlm_page import pick_pages
+    from pipeline.transform.figures.scan_page_vlm import pick_pages
 
     assert pick_pages(3, True, [], None) == {1, 2, 3}
     assert pick_pages(3, True, [], 2) == {1, 2}

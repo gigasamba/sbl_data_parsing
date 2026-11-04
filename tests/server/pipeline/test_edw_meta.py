@@ -1,4 +1,4 @@
-"""pl-29·pl-52 — 적재 때 EDW 조인(pipeline/load/edw_meta.py): 사슬 파일(steps·fields)로 client_edw·등록 시각·attrs. 임시 SQLite EDW(가짜 데이터만,
+"""pl-29·pl-52 — 적재 때 EDW 조인(pipeline/load/edw_doc_meta.py): 사슬 파일(steps·fields)로 client_edw·등록 시각·attrs. 임시 SQLite EDW(가짜 데이터만,
 스키마 AI·SFDC·CRMS·LAS를 ATTACH — 질의 글자는 서버 T-SQL과 같음) · 외부 접속 없음."""
 
 import copy
@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from pipeline.load import edw_meta as M
+from pipeline.load import edw_doc_meta as M
 
 DDL = """
 CREATE TABLE AI.FileStorageMap (s3_key TEXT, source_system TEXT, content_version_id TEXT, created_at TEXT);

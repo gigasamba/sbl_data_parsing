@@ -11,7 +11,7 @@ from common.core.text import normalize_value
 
 def families():
     from pipeline.extract.engines import registry
-    from pipeline.shared.summarize import FAMILY
+    from pipeline.shared.engine_family import FAMILY
 
     return {e: FAMILY.get(e, st) for e, (st, _) in registry.engines().items()}
 

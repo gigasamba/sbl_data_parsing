@@ -202,7 +202,7 @@ def env_main():
     if _pc() is None:  # mcp-server 이미지 — pipeline 앱이 없음(설치·스택 점검은 data-pipeline 이미지에서)
         print("  pipeline 앱 없음 — env 점검은 data-pipeline 이미지에서(이 이미지는 services·ping)")
         return 0
-    py_env_problem = importlib.import_module("pipeline.tools.resources").py_env_problem  # 10-14 — common.core.resources에서 옮김
+    py_env_problem = importlib.import_module("pipeline.tools.resource_check").py_env_problem  # 10-14 — common.core.resources에서 옮김
 
     if bad := py_env_problem():  # SI29 — 시스템 python이면 아래 '누락'이 거짓 경보라 먼저 멈춤
         print(f"  [-- ] {bad}\n  → 멈춤: 다른 python으로는 패키지 점검 결과가 틀림(CHECK_ENV_ANY_PY=1이면 계속)")

@@ -1464,7 +1464,7 @@ class CommonPaths(Section):
         "EDW_CHAIN_FILE",
         "EDW 조인 사슬 파일 경로 — 적재(EDW 조인)와 검색 MCP(search attrs·edw_meta search_attrs)가 함께 읽음(pl-29·pl-52). 비우면 "
         "resources/config/edw_chain.yaml · 서버 사본은 컨테이너 안 /etc/rag/edw_chain.yaml(원본 <루트>/edw_chain.yaml — dc.sh init이 "
-        "없을 때만 복사, 적었을 때만 쓰임) · 점검: python -m pipeline.load.edw_meta --check",
+        "없을 때만 복사, 적었을 때만 쓰임) · 점검: python -m pipeline.load.edw_doc_meta --check",
     )
     source_manifest: str | None = F(None, "SOURCE_MANIFEST", "원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응)")
     stack_file: str | None = F(

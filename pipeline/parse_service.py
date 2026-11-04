@@ -30,7 +30,7 @@ from common.config.settings import reveal
 from common.core import exitclean
 from common.core.paths import APP_ROOT  # I4 — 컨테이너 경로(/app/…) 대신 런타임 루트 기준(이미지 안 값 같음)
 from pipeline import config as pc
-from pipeline.shared.exts import IMG_EXTS
+from pipeline.shared.ext_groups import IMG_EXTS
 
 SERVICE_DIR = APP_ROOT / "output" / "_mcp_parse"  # 이미지 안 /app/output/_mcp_parse(op-13 — 임시 자리는 _ 접두)
 _JOB_ENVS: dict = {}  # (PARSE_POST, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
@@ -135,7 +135,7 @@ def _run_group(cmd, timeout, env):
 def _is_scan(path):
     """스캔 PDF인지 — run_all과 같은 판정(parse_qa.pdf_kind: 전체 쪽 글자층이 쪽당 평균 20자 미만 → .pdf_image → qwen_vlm).
     서비스 안내(VLM 미설정·실패)가 실제로 돈 엔진과 어긋나지 않게 판정을 한 곳에서 빌려 쓴다(mc-18 리뷰)."""
-    from pipeline.transform.represent.parse_qa import pdf_kind
+    from pipeline.transform.represent.parse_scoring import pdf_kind
 
     return Path(path).suffix.lower() == ".pdf" and pdf_kind(path)[0] == "pdf_image"
 
@@ -286,9 +286,9 @@ def _worker():
 
                 # ① prepare → run_all
                 for cmd in (
-                    ["pipeline.extract.prepare", "--src", str(ws / "in"), "--out", str(ws / "prep"), "--only", str(only)],
+                    ["pipeline.extract.filter_and_rotate", "--src", str(ws / "in"), "--out", str(ws / "prep"), "--only", str(only)],
                     [
-                        "pipeline.extract.run_all",
+                        "pipeline.extract.run_engines",
                         "--src",
                         str(ws / "prep"),
                         "--out",
@@ -330,7 +330,7 @@ def _worker():
                     # ③ parse_qa → represent
                     for cmd in (
                         [
-                            "pipeline.transform.represent.parse_qa",
+                            "pipeline.transform.represent.parse_scoring",
                             "--src",
                             str(ws / "prep"),
                             "--parse",
@@ -339,7 +339,7 @@ def _worker():
                             str(ws / "truth.json"),
                         ],
                         [
-                            "pipeline.transform.represent.represent",
+                            "pipeline.transform.represent.build_rep",
                             "--src",
                             str(ws / "prep"),
                             "--parse-dir",
