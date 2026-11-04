@@ -145,6 +145,19 @@
 - QA: 정리 전후 같은 문서 묶음의 대표 결과·ParsingMeta 행·게시 파일이 같음 · selftest·pytest 기준선 유지 · `check_modules` 통과.
 - Status: todo
 
+<a id="rn-07"></a>
+## rn-07 · 다시 덜어내기 — 벌 이름 하나로 갈리는 여러 벌, 설정 칸 줄이기, 중복·이력 주석 정리
+- 이유(사용자 11-05 점검): rn-06 뒤에도 여러 벌이 EDW·게시·포트·스키마를 함께 쓰고, settings.yaml에 같은 값 칸·늘 같은 스위치·옛 칸 표가 남았으며, `run_docs.py`가 설정 값 약 15칸을 `--set`으로 덮고, 코드에 중복·한 곳만 쓰는 감싸기·이력 주석(약 700줄)이 남았다.
+- 정한 것(11-05 질의):
+  1. 여러 벌: `ops.host.instance` 한 칸만 적으면 갈린다 — 컨테이너 이름(이미 됨) · PG 스키마 `<db_schema>_<벌>`(따로 적으면 그 값) · EDW 기록 표 `<parsing_meta_table>_<벌>`(예 `AI.ParsingMeta_hong` — DB 담당이 미리 만듦, 실행 중 DDL 없음) · 게시 경로는 dev에서만 `<prefix>/<벌>/…` · 포트는 기본값 그대로면 시작 거부. 버전 칸에는 접미를 붙이지 않는다. `prd`에서 벌 이름을 쓰면 시작 거부.
+  2. 파싱 MCP 컨테이너·서비스·compose 파일 `data-pipeline-mcp` → `mcp-data-parsing`, 설정 칸 `parse_mcp` → `data_parsing`(env `PARSE_MCP_*` → `DATA_PARSING_*`). 파싱 포트와 프록시 주소는 한 칸. 토큰 `tokens.parse_mcp`·`parse_proxy`는 `tokens.mcp` 하나로.
+  3. `run_docs.py`의 `--set` 값은 `ops.run_docs.*` 칸 기본값으로 옮긴다(서버 결과 같음).
+  4. 늘 같은 스위치 칸 지움(`run_mode`·`bucket_skip_overlap_check`·`rdb.engine`·`prepare.link`·`pg_create_extension`·`check_env_any_py`·`warmup`·`edw_query.enabled`·draft_terms 칸 등), VLM 동시 수 칸 4 → 2. 옛 칸 표(`REMOVED`·`ALIASES`·`TO_REQUIRED`·`RETIRED`·`migrate.py`)도 지금 지움 — 옛 칸이 남은 settings.yaml은 시작 거부(서버 확인 refactor.md).
+  5. 스캔 PDF 판정은 `pdf_kind` 하나(그림 VLM의 `scan_page_vlm.is_scan`도) — 스캔 쪽이 섞인 PDF는 결과가 달라질 수 있음.
+  6. 중복·쓰지 않는 코드 지움, `pdf_kind`를 extract로, `cli.parse_module`의 extract 일은 `fetch_docs`로, 한 곳만 쓰는 감싸기·작은 파일 합침, 주석은 목적 한 줄(이력은 git·docs/history).
+- QA: selftest·pytest 기준선 유지(새 시험: 벌 이름 → 스키마·EDW 표·게시 경로·포트 거부, prd 거부) · `check_modules`·`keyscan --check`·`sample --check`·`gen_host_keys --check` 통과 · 저장소 전체 ruff·mypy 0 · 옛 이름(`data-pipeline-mcp`·`parse_mcp`·`PARSE_MCP_`) 0건(docs/history 제외).
+- Status: in-progress
+
 <a id="pl-27"></a>
 ## pl-27 · 프로세스 종료 정리 — 임시 설정 파일·PID 기록 지움, 자식 회수
 - 이유: 덮기 설정 파일(`settings-*.yaml`)이 임시 폴더에 쌓이고, 시간 초과로 끝낸 자식의 손자가 좀비로 남았다.
