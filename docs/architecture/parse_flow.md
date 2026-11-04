@@ -447,7 +447,7 @@ flowchart TD
 | JSON 로그 | `common/core/jsonlog.py` | run_id·span_id 문맥, 비밀값 가림 |
 | run_docs 진행 | `deploy.host.scripts.run_docs.log()`·`deploy.host.scripts.run_docs.mark()`·`deploy.host.scripts.run_docs.depth()` | `<작업 폴더>/batch_progress/progress.log`·`doc_<seq>.log`·`queue_depth.jsonl`·`warm.log` |
 | 문서별 로그 | `deploy.host.scripts.run_docs.struct_cmd()`·`deploy.host.scripts.run_docs.publish_cmd()` | `_docflow/<seq>/structure.log`·`publish.log`(문서 임시 폴더와 함께 지워짐) |
-| 분석 도구 | `deploy/host/scripts/analyze_docflow.py` · `pipeline/tools/perf_report.py` | 진행 기록·성능 행 요약 |
+| 분석 도구 | `pipeline/tools/perf_report.py` | 성능 행(applog.pipe_event) 요약 |
 
 요건: [ops.md#op-01](../prd/ops.md#op-01).
 

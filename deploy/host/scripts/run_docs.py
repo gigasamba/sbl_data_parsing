@@ -152,7 +152,7 @@ def read_settings(settings_file=None):
 
 
 def work_dir(doc):
-    """작업 폴더(진행 기록 batch_progress/·batches/) — settings.yaml ops.pipeline_host.run_docs_dir(모델 pipeline.host.run_docs_dir), 비우면 이 스크립트 옆 test_space/(옛 자리). analyze_docflow.py도 씀."""
+    """작업 폴더(진행 기록 batch_progress/·batches/) — settings.yaml ops.pipeline_host.run_docs_dir(모델 pipeline.host.run_docs_dir), 비우면 이 스크립트 옆 test_space/(옛 자리)."""
     work = _yget(doc, "pipeline.host.run_docs_dir")
     return Path(work) if work else ROOT / "test_space"
 
@@ -250,14 +250,6 @@ def warm_cmd(seq):
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && mkdir -p {o}/_warm && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
         f"python -m pipeline.extract.fetch_docs{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {_inside(seq, 'batch.csv')}'"
-    )
-
-
-def perf_cmd(hours, docker=None):
-    """DB 성능 기록(applog.pipe_event) 분석 — 상주 컨테이너 안 pipeline.tools.perf_report(읽기 전용). 호스트 python은 DB·common을 못 쓰므로 컨테이너가 읽는다."""
-    return (
-        f"{docker or DOCKER} exec {PIPE_C} bash -c 'cd {_app()} && "
-        f"PYTHONPATH={_img('code_root')} {LIB_ENV} python -m pipeline.tools.perf_report --since {float(hours):g}'"
     )
 
 

@@ -115,6 +115,17 @@
 - QA: `tests/general/deploy/test_docs_flow.py`(medium·vlm 레인, vlm 동시 상한, MCP 양보, `mcp_busy` 표) · 통과.
 - Status: done
 
+<a id="rn-05"></a>
+## rn-05 · run_docs는 지휘만 — 판단은 파이프라인 함수, PC도 run_docs로(0.2.0 다음)
+- 이유(사용자 11-04): run_docs.py(1천여 줄·함수 50여 개)가 레인·중복·게시 판단까지 직접 한다. 같은 판단이 파이프라인과 두 곳에 있고, PC E2E는 run_docs 없이 pipeline.cli를 단계별로 돌려 서버와 다른 길을 탄다.
+- 할 일:
+  1. run_docs 함수를 "파이프라인 함수로 옮김 / 지움 / 지휘로 남김"으로 나눈 표를 먼저 사람에게 보인다. 판단·처리(원천 목록, 중복, 레인, 게시 판단)는 extract·transform·load 함수로 옮기고, run_docs는 레인·워커·임시 폴더와 `docker exec` 호출만 남긴다.
+  2. PC(`RUN_ENV=local`)에서도 run_docs로 E2E를 돈다 — 가짜 대상만(EDW sqlite·`file://` 게시 폴더·상대 경로, op-14). PC만의 분기는 접속 대상을 고르는 한 곳. CLAUDE.md §4의 "run_docs는 PC에서 실행하지 않는다" 문구를 이 규칙으로 고친다(등급 A — 운영 접속 가드).
+  3. 커밋 전 점검 `deploy/release/lint_changed.sh`를 점검 도구 자리 `common/check/`로 옮긴다 — `.githooks/pre-commit`·CLAUDE.md §5-2·README 명령 줄을 같이 고친다.
+- 파일: `deploy/host/scripts/run_docs.py` · `pipeline/extract/*` · `pipeline/load/*` · `deploy/release/lint_changed.sh` · `.githooks/pre-commit` · `CLAUDE.md`.
+- QA: run_docs 정리 전후 같은 문서 묶음의 결과(대표 결과·ParsingMeta 행·게시 파일)가 같음 · PC에서 run_docs 한 번으로 가짜 EDW `ParsingMeta` 행과 `file://` 폴더 결과가 생김.
+- Status: todo
+
 <a id="pl-27"></a>
 ## pl-27 · 프로세스 종료 정리 — 임시 설정 파일·PID 기록 지움, 자식 회수
 - 이유: 덮기 설정 파일(`settings-*.yaml`)이 임시 폴더에 쌓이고, 시간 초과로 끝낸 자식의 손자가 좀비로 남았다.
@@ -181,7 +192,7 @@
   4. `run_id`가 없으면(MCP 검색·시험) span은 아무것도 하지 않는다. 계측 안의 예외는 삼키고 업무 결과를 바꾸지 않는다(프로세스당 stderr 경고 한 번).
   5. `cpu_ms`·`rss_peak_mb`는 Linux에서 프로세스에 하나만 도는 span만 채우고, 겹치거나 측정 못 하면 NULL.
   6. 분석: `python -m pipeline.tools.perf_report [<run_id>] [--since <시간>] [--top N] [--compare <run_id>…] [--runs] [--file output/logs/*.jsonl]` — 읽기 전용.
-     다운로드(`extract.download`)는 `--since` 요약에 ■ 다운로드 표(크기 구간별 순수 전송 mbps·head·잠금 대기)로 나온다. 서버 호스트에서는 `analyze_docflow.py --db [시간]`이 같은 표를 컨테이너의 perf_report로 불러 덧붙인다(호스트 기록 `doc_stats.jsonl`의 받기·분류 시간과 함께).
+     다운로드(`extract.download`)는 `--since` 요약에 ■ 다운로드 표(크기 구간별 순수 전송 mbps·head·잠금 대기)로 나온다. 서버에서는 `podman exec data-pipeline python -m pipeline.tools.perf_report --since <시간>`으로 본다.
 - 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf_report.py`, `pipeline/extract/{doc_parsing_group,fetch_docs}.py`.
 - QA: `tests/server/common/test_{jsonlog,logsink,span,span_soft,call_event}.py`·`tests/server/mcp/test_call_log.py`·`tests/server/pipeline/test_{runtrace,perf,span_stages,doc_group}.py`·`tests/general/common/test_applog_pg.py`(PC 임시 PG 스키마) · 통과. 서버 적용 refactor.md C-79·C-80.
 - Status: done
