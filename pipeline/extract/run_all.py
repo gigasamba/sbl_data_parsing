@@ -424,7 +424,6 @@ def run_procs(a, docs):
     # env 남김 — 하위 프로세스·엔진에 넘김(엔진 파일은 env를 직접 읽음)
     env = dict(
         os.environ,
-        RUNLOG_CHILD="1",
         OMP_NUM_THREADS=threads,
         MKL_NUM_THREADS=threads,
         OPENBLAS_NUM_THREADS=threads,

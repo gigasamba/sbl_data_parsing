@@ -5,7 +5,6 @@ S5(10-26)에 mcp_server/main.py에서 옮김 · 11-01(mc-16) 운영 계약으로
 
 import functools
 import json
-import time
 from datetime import date, datetime, timedelta, timezone
 
 from common.store import edw_chain as EC
@@ -14,7 +13,7 @@ from mcp_server import config as mc  # mcp 설정 객체(S7d)
 from mcp_server.config import CFG
 from mcp_server.schemas.evidence import EVIDENCE_KEYS, K_MAX, SEARCH_FILTERS
 from mcp_server.services.search.internal_docs import _manifest_by_name
-from mcp_server.services.search.server_state import _STATE, CALLER, _retriever
+from mcp_server.services.search.server_state import _retriever
 from mcp_server.services.search.shaping import _evidence, cap, evidence_status
 
 KST = timezone(timedelta(hours=9))  # 시간대 없는 등록 시각은 KST(운영 계약)
@@ -37,16 +36,6 @@ def chain():
 @functools.lru_cache(maxsize=4)
 def _chain_at(path, _mtime):
     return EC.load(path)
-
-
-def _log(question, evidence, ms):
-    """질의 기록 — qa_log.jsonl 파일만(mc-13, 사용자 10-30: PG qa_log 표는 만들지 않음 — 그 INSERT는 늘 실패해 삼켜졌음)."""
-    from mcp_server.services.search import qa_log
-
-    try:  # engine-qa BLOCK 1 — qa_log.append 안에서도 쓰기 실패를 잡지만, do_search를 절대 죽이지 않게 여기서도 한 번 더
-        qa_log.append(question, evidence, ms, CALLER.get(), stack_name=_STATE.get("stack", {}).get("name"))  # OP6
-    except Exception:
-        pass
 
 
 def _vals(v):
@@ -195,7 +184,6 @@ def do_search(question=None, k=8, **filters):
     모르는 인자는 무시 · 맞는 문서가 없으면 오류가 아니라 빈 결과(scope_docs 0, evidence_status none).
     source_system은 필수·값 하나(G20 — 그 원천 스키마만 찾음, 사용자 11-02 — 운영과 다름). R2-c — 같은 사건의 사본은 한 자리로 묶는다(응답 모양은 같음).
     본문 고객 라벨로 앞으로 올리던 길(AD38)·고객별 하위 검색(BR23)은 11-02에 지움 — 고객은 client_edw 거르기만(C6)."""
-    t0 = time.perf_counter()
     question = question.strip() if isinstance(question, str) else None
     if not question:
         return {"error": NO_QUESTION}
@@ -263,5 +251,4 @@ def do_search(question=None, k=8, **filters):
         e["attrs"] = {x: a.get(x) for x in ev_keys} if ev_keys else None  # 근거 키가 없는 원천(FAQ·Other)은 null
         e["contract_no"] = a.get(cno) if cno else None
     status, _ = evidence_status(question, evidence, mc.cfg().search.min_score)  # R3(AD42) — 표시만, 근거 목록은 안 줄임
-    _log(question, evidence, (time.perf_counter() - t0) * 1000)
     return _out(question, evidence, status, hard, scope_docs)

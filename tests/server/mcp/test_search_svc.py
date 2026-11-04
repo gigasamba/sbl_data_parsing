@@ -7,7 +7,7 @@ from unittest.mock import patch
 from mcp_server import config as mc
 from mcp_server.schemas.evidence import EVIDENCE_KEYS, SEARCH_TOP_KEYS
 from mcp_server.services.search import search_svc as M
-from mcp_server.services.search.server_state import _STATE, CALLER
+from mcp_server.services.search.server_state import _STATE
 from mcp_server.services.search.shaping import evidence_status
 from tests.server.mcp import pgfix  # mc-01(11-01) — 검색은 PG 하나: 묶음을 SQLite 대역에 적재(임시 폴더, 실 PG 안 닿음)
 
@@ -121,50 +121,6 @@ def _selftest_copy_group_rep_text():
         _env.close()
         _STATE.clear()
     print("[selftest] R2-c 사본 대표 텍스트 — 형식 우선(QA066 재발 방지) 통과")
-
-
-def _selftest_query_log():
-    """OP6 — do_search가 output/qa_log/qa_log.jsonl(여기선 임시 폴더)에 호출자·질문·근거 id·지연을 남기는지(PG 없는
-    로컬 묶음도) · MCP_QUERY_LOG=0이면 아무것도 안 남는지(바이트 동일 — 파일 자체가 생기지 않음)."""
-    import tempfile
-
-    from mcp_server.services.search import qa_log
-
-    d = pgfix.mk_bundle(
-        [{"file_path": "x.txt", "file_name": "x.txt", "file_sha256": "8" * 64, "doc_format": ".txt"}],
-        [
-            {
-                "doc": 0,
-                "seq": 0,
-                "page": 1,
-                "line_start": 1,
-                "line_end": 1,
-                "chunk_text": "단가는 100 USD",
-                "n_terms": 3,
-                "bbox": None,
-                "section": None,
-            }
-        ],
-    )
-    logdir = Path(tempfile.mkdtemp())
-    _STATE.clear()
-    _env = pgfix.use(d, MCP_QUERY_LOG_DIR=str(logdir))  # 설정 객체 덮기(S7d)
-    tok = CALLER.set("mcp:selftest")
-    try:
-        do_search("단가는?", k=3)
-        recs = [json.loads(x) for x in qa_log.log_path().read_text(encoding="utf-8").splitlines()]
-        assert len(recs) == 1 and recs[0]["question"] == "단가는?" and recs[0]["asked_by"] == "mcp:selftest", recs
-        assert recs[0]["hits"] and recs[0]["hits"][0]["via"] == "k", recs[0]["hits"]  # 근거 via(검색 방법) 남음
-
-        with mc.senv(MCP_QUERY_LOG="0"):
-            do_search("단가는?", k=3)
-            recs2 = qa_log.log_path().read_text(encoding="utf-8").splitlines()
-            assert len(recs2) == 1, recs2  # 끔 — 더 안 늘어남(새 줄 없음)
-    finally:
-        CALLER.reset(tok)
-        _env.close()
-        _STATE.clear()
-    print("[selftest] OP6 — 질의 기록(output/qa_log, 호출자·질문·근거 id·지연) · MCP_QUERY_LOG=0이면 기록 없음 통과")
 
 
 def _selftest_evidence_gate():
@@ -430,7 +386,6 @@ def _cases():
     _selftest_contract()
     _selftest_evidence_gate()
     _selftest_evidence_rdb_meta()
-    _selftest_query_log()
     _selftest_copy_group()
     _selftest_copy_group_rep_text()
     _selftest_search_attrs()

@@ -84,12 +84,7 @@ NOT_SETTINGS = {
     "PIPELINE_VERSION": ("env로 남김", "버전 표기 마지막 대체(VERSION·PATCH_VERSION이 없을 때 — D-036)"),
     "PYTHONPATH": ("env로 남김", "이미지·셸"),
     "RAG_MODULE": ("env로 남김", "이미지 신호(Dockerfile ENV)"),
-    "RUNLOG_CHILD": ("env로 남김", "부모 → 자식 프로세스 신호"),
     "RUN_ENV": ("env로 남김", "새 키(D-015) — local·dev·prd"),
-    "RUNLOG_FILE": (
-        "env로 남김",
-        "내부 신호 — 부모가 정한 실행 기록 로그 파일을 자식이 이어 씀(S7e2 — 설정 칸에서 내부 신호로, 사용자 10-28)",
-    ),
     "SCARF_NO_ANALYTICS": ("env로 남김", "외부 라이브러리 원격 측정 끄기 — Dockerfile ENV(U-1, S7a2) · settings·빈 틀에서만 뺌(S7e)"),
     "TESSDATA_PREFIX": ("env로 남김", "라이브러리(tesseract)가 읽음"),
     "TRANSFORMERS_OFFLINE": ("env로 남김", "라이브러리가 읽음"),

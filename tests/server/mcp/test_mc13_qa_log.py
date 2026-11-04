@@ -1,34 +1,15 @@
-"""mc-13 — 검색 질의 기록은 qa_log.jsonl 파일만(사용자 10-30). PG 저장소여도 PG에 아무것도 쓰지 않고(qa_log 표 없음),
-jsonl 한 줄은 그대로 남는다. 전에는 없는 표에 INSERT를 보내 오류를 삼켰다."""
+"""mc-13 · op-13 규칙 7(사용자 11-04) — 검색·EDW 질의는 파일 기록(qa_log.jsonl)을 남기지 않는다. 호출 기록은 DB applog.mcp_call(op-01)뿐.
+질의 기록 모듈과 설정 칸(search.query_log)이 없고, 옛 settings.yaml에 그 칸이 남아도 경고만 하고 무시한다(layout.REMOVED)."""
 
-import json
-import tempfile
-from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import patch
+import importlib.util
 
+from common.config import layout as L
 from mcp_server import config as mc
-from mcp_server.services.search import search_svc as S
-from mcp_server.services.search.server_state import _STATE
+from mcp_server.services import edw_query
+from mcp_server.services.search import search_svc
 
 
-class _PG:  # qa_log 표가 없는 PG — 어떤 질의든 받으면 기록(받으면 안 됨)
-    schema = "ai"
-
-    def __init__(self):
-        self.calls = []
-
-    def q(self, sql, params=None):
-        self.calls.append(sql)
-        return []
-
-
-def test_log_file_only():
-    d = Path(tempfile.mkdtemp())
-    R = SimpleNamespace(pg=_PG())
-    with mc.senv(MCP_QUERY_LOG_DIR=str(d)), patch.dict(_STATE, {"Rs": {"sfdc": R}, "stack": {"name": "dev-v1"}}):
-        S._log("배치 수는?", [{"chunk_id": 7, "rank": 1, "via": "bm25"}], 12.34)
-        recs = [json.loads(x) for x in (d / "qa_log.jsonl").read_text(encoding="utf-8").splitlines()]
-    assert R.pg.calls == [], R.pg.calls  # PG에 질의 기록을 보내지 않음
-    assert len(recs) == 1 and recs[0]["question"] == "배치 수는?" and recs[0]["stack_name"] == "dev-v1", recs
-    assert recs[0]["hits"] == [{"chunk_id": 7, "rank": 1, "via": "bm25"}] and recs[0]["search_ms"] == 12.3, recs
+def test_no_query_log_file():
+    assert importlib.util.find_spec("mcp_server.services.search.qa_log") is None
+    assert "query_log" not in mc.McpSettings.model_fields and "query_log" in L.REMOVED["McpSettings"]
+    assert not hasattr(search_svc, "_log") and not hasattr(edw_query, "_log")

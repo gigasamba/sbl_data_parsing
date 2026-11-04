@@ -5,7 +5,6 @@ S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/m
 from common.store import edw_chain as EC
 from common.store.db.models import search_tables as ST
 from mcp_server.schemas.evidence import SEARCH_FILTERS
-from mcp_server.services.search.server_state import CALLER
 
 
 def do_query_edw(sql, max_rows=1000):
@@ -13,7 +12,7 @@ def do_query_edw(sql, max_rows=1000):
     size-cap logic lives there, not here)."""
     from mcp_server.services import edw_query as EQ
 
-    return EQ.query(sql, max_rows, caller=CALLER.get())
+    return EQ.query(sql, max_rows)
 
 
 def do_edw_meta(schema=None, table=None, column_filter=None):

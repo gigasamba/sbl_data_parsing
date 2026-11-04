@@ -114,7 +114,7 @@ common:
       budget_usd: 0.1                     # 외부 모델 호출 하루(현지 날짜·PC 사용자마다) 지출 상한($), 넘으면 호출 안 함 · 기본 0.1 · 값: 0 이상
       internal_host_suffixes: []          # 내부망으로 인정할 호스트 이름 접미사 목록(쉼표 구분, 실제 주소가 사설일 때만) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
       internal_ip_ranges: []              # 사설(RFC1918) 밖의 사내 IP 대역 CIDR 목록(쉼표 구분) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
-      spend_file:                         # 지출 장부 파일 경로(이름 뒤에 날짜를 붙여 하루마다 새 파일, 비우면 <저장소>/output/llm_spend/<날짜>.txt) · 값: 경로
+      spend_file:                         # 지출 장부 파일 경로(이름 뒤에 날짜를 붙여 하루마다 새 파일, 비우면 <저장소>/output/_llm_spend/<날짜>.txt) · 값: 경로
   # ─── 검색 토큰 정규화 ───
   text:
     search_en_stem: true                  # 검색 토큰의 영어 복수→단수 정규화(G16, 가산만) · 기본 true · 값: true·false
@@ -269,15 +269,11 @@ search:
     max_output_bytes: 65536               # [파라미터] 감사 로그 출력 원문 UTF-8 바이트 상한 · 기본 65536 · 값: 0 이상 정수
   parse_proxy:
     url: http://127.0.0.1:8766            # parse_document가 부르는 작업 서비스 주소 · 기본 http://127.0.0.1:8766 · 값: URL
-  query_log:
-    dir:                                  # 질의 기록 폴더 · 값: 경로
-    enabled: true                         # 질의 기록(qa_log.jsonl) 스위치 · 기본 true · 값: true·false
 
 ops:
   # ─── 실행 자원 — 비우면 CPU·메모리로 자동 ───
   runtime:
     lib_env: {}                           # 라이브러리 env(이름: 글자 — TZ·OMP_NUM_THREADS·HF_HUB_OFFLINE 등 허용 목록만, 비밀 아님) · 기본 {} · 값: 사전(이름: 글자)
-    log_retention_days: 30                # output/logs/*.log 보존 일수 · 기본 30 · 값: 0 이상 정수 (0 = 삭제 안 함)
     parse_max_mb: 100.0                   # parse_document 파일 1건 크기 상한(MB = 1024×1024바이트) · 기본 100.0 · 값: 0 이상
     pipe_procs:                           # CPU 엔진 프로세스 수 · 값: 1 이상 정수 · auto 또는 비우면 자동 계산
     pipe_workers:                         # VLM API 동시 처리 문서 수(개) · 기본 4 · 값: 0 이상 · auto 또는 비우면 자동 계산
@@ -285,8 +281,8 @@ ops:
   log:
     level: INFO                           # JSON 사건 기록 최소 수준 · 기본 INFO · 값: 0 이상
     dir:                                  # JSON 로그 폴더 · 값: 경로
-    db_enabled: false                     # applog DB 비동기 기록(마이그레이션 적용 후 켬) · 기본 false · 값: true·false
-    fallback_dir: output/applog           # DB 실패 시 JSON Lines 대체 기록 폴더 · 기본 output/applog · 값: 경로
+    db_enabled:                           # applog DB 비동기 기록(서버 이미지 기본 켬, PC 기본 끔) · 기본 false · 값: true·false
+    fallback_dir: output/logs             # DB 실패 시 JSON Lines 대체 기록 폴더(op-13 — 파일은 이 예비 한 곳) · 기본 output/logs · 값: 경로
     retention_days: 90                    # 월 파티션 보존 일수(월 끝이 만료된 파티션만 DROP) · 기본 90 · 값: 1 이상 정수
     queue_size: 10000                     # DB 기록 대기 큐 상한 · 기본 10000 · 값: 1 이상 정수
     batch_size: 200                       # DB INSERT 배치 최대 행 수 · 기본 200 · 값: 1 이상 정수
@@ -300,7 +296,6 @@ ops:
     draft_terms_out:                      # 용어 자동 초안 CSV 경로 · 값: 경로
     edw_chain:                            # EDW 조인 사슬 파일 경로 · 값: 경로
     output_root:                          # 결과(output) 폴더 · 값: 경로
-    runlog_dir:                           # 실행 기록(output/logs) 루트 폴더 · 값: 경로
     source_manifest:                      # 원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응) · 값: 경로
     stack_file:                           # 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
   pipeline_paths:

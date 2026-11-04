@@ -8,7 +8,7 @@
   parse           파싱 모듈 1회(run_docs가 문서마다 부름) — 끝 표시 _rep/_DONE.json
   (night·run-stack·structure·load는 11-01에 지움 — 서버 입구는 run_docs 하나, 구조화·적재는 run_docs가 모듈을 직접 부름)
   (ask — 검색 명령은 S5(10-26, T-15)에 python -m mcp_server.cli.ask로 옮김: 파이프라인 CLI가 검색 코드를 import하지 않게)
-산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서) · output/stack_test.md · output/RUNLOG.md(명령 요약)
+산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서) · output/stack_test.md
 """
 
 import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서

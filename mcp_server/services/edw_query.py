@@ -651,24 +651,24 @@ def _row_budget(max_rows):
     return max(1, min(int(max_rows), int(mc.cfg().edw_query.max_rows)))
 
 
-def query(sql, max_rows=1000, caller="mcp:stdio"):
+def query(sql, max_rows=1000):
     """Run one read-only SELECT/WITH against EDW and return a JSON-safe result (see QueryResult).
-    Every call — accepted or rejected — is written to the MCP query log (mcp_server/services/search/qa_log.py)."""
+    The call (SQL in args, result) is recorded by the MCP audit log applog.mcp_call (op-01), not here."""
     t0 = time.monotonic()
     kind, conf = backend()
     if kind is None:
-        return _finish(None, "tsql", "none", "not_configured", "EDW query backend not configured", sql, caller, t0)
+        return _finish(None, "tsql", "none", "not_configured", "EDW query backend not configured", t0)
     dialect = dialect_of(kind)
     allowed = allowed_tables(kind)
     if allowed is not None and not allowed:
-        return _finish(None, dialect, kind, "not_configured_tables", "no tables are allowlisted for this backend", sql, caller, t0)
+        return _finish(None, dialect, kind, "not_configured_tables", "no tables are allowlisted for this backend", t0)
     cap_rows = _row_budget(max_rows)
     clean, err = validate(sql, allowed)
     if err:
-        return _finish(None, dialect, kind, f"rejected:{err}", "query rejected by the read-only SQL guard", sql, caller, t0)
+        return _finish(None, dialect, kind, f"rejected:{err}", "query rejected by the read-only SQL guard", t0)
     capped_sql, cap_err = _top_n(clean, cap_rows, dialect)
     if cap_err:
-        return _finish(None, dialect, kind, f"rejected:{cap_err}", "query rejected by the read-only SQL guard", sql, caller, t0)
+        return _finish(None, dialect, kind, f"rejected:{cap_err}", "query rejected by the read-only SQL guard", t0)
     q = mc.cfg().edw_query  # 한 번에 묶어 읽음(S7d)
     timeout = float(q.timeout_sec)
     max_bytes = int(q.max_bytes)
@@ -676,7 +676,7 @@ def query(sql, max_rows=1000, caller="mcp:stdio"):
         conn = _connect(kind, conf, timeout)
     except Exception as e:
         print(f"[mcp] edw_query connect failed ({kind}): {type(e).__name__}: {e}", flush=True)
-        return _finish(None, dialect, kind, "connect_failed", "could not connect to EDW", sql, caller, t0)
+        return _finish(None, dialect, kind, "connect_failed", "could not connect to EDW", t0)
     try:
         cur = conn.cursor()
         try:
@@ -686,15 +686,13 @@ def query(sql, max_rows=1000, caller="mcp:stdio"):
         except sqlite3.OperationalError as e:
             if "interrupted" in str(e).lower():
                 print(f"[mcp] edw_query timeout after {time.monotonic() - t0:.1f}s: {sql[:200]!r}", flush=True)
-                return _finish(None, dialect, kind, "timeout", "query exceeded the time limit", sql, caller, t0)
+                return _finish(None, dialect, kind, "timeout", "query exceeded the time limit", t0)
             raise
         except Exception as e:
             elapsed = time.monotonic() - t0
             code = "timeout" if elapsed >= timeout else "query_failed"
             print(f"[mcp] edw_query execute failed ({code}): {type(e).__name__}: {e} — sql={sql[:200]!r}", flush=True)
-            return _finish(
-                None, dialect, kind, code, "query failed" if code == "query_failed" else "query exceeded the time limit", sql, caller, t0
-            )
+            return _finish(None, dialect, kind, code, "query failed" if code == "query_failed" else "query exceeded the time limit", t0)
     finally:
         try:
             conn.close()
@@ -716,7 +714,6 @@ def query(sql, max_rows=1000, caller="mcp:stdio"):
         "source": kind,
         "error": None,
     }
-    _log(sql, True, len(rows), result["elapsed_ms"], None, caller)
     return result
 
 
@@ -733,9 +730,8 @@ def _cap_bytes(rows, max_bytes, columns):
     return rows, truncated
 
 
-def _finish(_unused, dialect, source, error_code, message, sql, caller, t0):
+def _finish(_unused, dialect, source, error_code, message, t0):
     elapsed = round((time.monotonic() - t0) * 1000, 1)
-    _log(sql, False, 0, elapsed, error_code, caller)
     return {
         "ok": False,
         "columns": [],
@@ -747,15 +743,6 @@ def _finish(_unused, dialect, source, error_code, message, sql, caller, t0):
         "source": source,
         "error": f"{error_code}: {message}",
     }
-
-
-def _log(sql, ok, row_count, elapsed_ms, error, caller):
-    from mcp_server.services.search import qa_log
-
-    try:
-        qa_log.append_edw(sql, ok, row_count, elapsed_ms, error, caller)
-    except Exception:
-        pass  # the audit log must never break the query path
 
 
 # ── describe_edw ─────────────────────────────────────────────────────────

@@ -42,7 +42,6 @@ CATALOG_VALUES = {
     "LLM_SPEND_FILE": "",
     "PARSE_POST": "all",
     "PIPE_EMBED": "",
-    "RUNLOG_FILE": "",
     "RUN_MODE": "prod",
     "SECURE_DOC_PASSWORDS_FILE": "",
     "SOFFICE_BIN": "",
@@ -109,7 +108,7 @@ CATEGORIES = {
         ("MCP 서버", ("search.server",)),
         ("검색 순위·방식", ("search.methods", "search.min_score", "search.weights", "search.pg")),
         ("EDW 도구", ("search.edw_meta", "search.edw_query")),
-        ("출력·기록·파싱 프록시", ("search.output", "search.query_log", "search.parse_proxy", "search.audit")),
+        ("출력·기록·파싱 프록시", ("search.output", "search.parse_proxy", "search.audit")),
     ),
     "ops": (
         ("실행 자원 — 비우면 CPU·메모리로 자동", ("ops.runtime",)),

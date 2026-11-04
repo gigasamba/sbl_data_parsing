@@ -28,7 +28,7 @@ def _stack():
 
 def ask(a):
     """질문 → 근거(파일·쪽·줄·절). AR10(구조 리뷰 10-12 round4 QA095) — MCP search의 do_search()에 그대로 위임.
-    질의 기록은 do_search() 안 _log()가 함(qa_log.append — 파일만, mc-13)."""
+    질의 파일 기록은 없다(op-13 — MCP 호출은 DB applog.mcp_call, 이 명령은 MCP를 거치지 않음)."""
     st = _stack()
     from mcp_server.services.search import search_svc as MCP
 

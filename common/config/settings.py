@@ -76,8 +76,13 @@ _IMAGE_DEFAULTS = {
         "PIPE_EMBED": "api",
         "PIPE_PROCS": "auto",
         "SOFFICE_BIN": "/usr/bin/soffice",
+        "APPLOG_DB_ENABLED": True,  # op-13 — 서버 로그는 Postgres(applog)
     },
-    "mcp": {"PIPE_EMBED": "api", "EMBED_QUERY_CACHE": "/tmp/mcp_query_cache.sqlite"},  # 질의 캐시 — 옛 compose 기본(S7e2·op-08)
+    "mcp": {
+        "PIPE_EMBED": "api",
+        "EMBED_QUERY_CACHE": "/tmp/mcp_query_cache.sqlite",  # 질의 캐시 — 옛 compose 기본(S7e2·op-08)
+        "APPLOG_DB_ENABLED": True,  # op-13 — 서버 로그는 Postgres(applog)
+    },
 }
 IMAGE_DEFAULTS = _IMAGE_DEFAULTS.get(os.environ.get("RAG_MODULE", ""), {}) if IN_IMAGE else {}  # env 남김 — 이미지 신호(5-3 H)
 
@@ -1458,7 +1463,6 @@ class CommonPaths(Section):
         "RAG_OUT",
         "결과(output) 폴더 — 코드가 이 아래를 읽고 씀(컨테이너 안 경로 — 서버는 /app/output, 비우면 코드 기본. 마운트 원본은 common.host.output_root — T-21)",
     )
-    runlog_dir: str | None = F(None, "RUNLOG_DIR", "실행 기록(output/logs) 루트 폴더")
     source_manifest: str | None = F(None, "SOURCE_MANIFEST", "원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응)")
     stack_file: str | None = F(
         None,
@@ -1477,7 +1481,6 @@ class CommonRuntime(Section):
         "LIB_ENV",
         "라이브러리 env(이름: 글자 — TZ·OMP_NUM_THREADS·HF_HUB_OFFLINE 등 허용 목록만, 비밀 아님) — 컨테이너 시작 때 entrypoint가 env로 냄(사용자 env는 안 덮고 이미지 ENV는 덮음 — C-45 ⑤, S7e2)",
     )
-    log_retention_days: int | None = F(30, "LOG_RETENTION_DAYS", "output/logs/*.log 보존 일수 — 지난 로그 삭제, 0 이하면 삭제 안 함")
     mem_max_pct: float | None = F(90.0, "MEM_MAX_PCT", "생산 파싱이 새 프로세스를 띄우는 메모리 사용률 상한(%)", unset=("auto",))
     mem_settle_margin: float | None = F(
         5.0, "MEM_SETTLE_MARGIN", "상한(MEM_MAX_PCT) 이만큼(%p) 아래부터 프로세스 띄운 뒤 잠깐 쉼", unset=("auto",)
@@ -1549,8 +1552,12 @@ class CommonModels(Section):
 class CommonLog(Section):
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = F("INFO", "LOG_LEVEL", "JSON 사건 기록 최소 수준")
     dir: str | None = F(None, "APPLOG_DIR", "JSON 로그 폴더 — 비우면 PC logs/, 서버 stdout")
-    db_enabled: bool = F(False, "APPLOG_DB_ENABLED", "applog DB 비동기 기록(마이그레이션 적용 후 켬)")
-    fallback_dir: str = F("output/applog", "APPLOG_FALLBACK_DIR", "DB 실패 시 JSON Lines 대체 기록 폴더")
+    db_enabled: bool = F(
+        image_default("APPLOG_DB_ENABLED", False),
+        "APPLOG_DB_ENABLED",
+        "applog DB 비동기 기록(서버 이미지 기본 켬, PC 기본 끔) — 서버 로그는 Postgres만, migrate up --target applog 먼저(op-13)",
+    )
+    fallback_dir: str = F("output/logs", "APPLOG_FALLBACK_DIR", "DB 실패 시 JSON Lines 대체 기록 폴더(op-13 — 파일은 이 예비 한 곳)")
     retention_days: int = F(90, "APPLOG_RETENTION_DAYS", "월 파티션 보존 일수(월 끝이 만료된 파티션만 DROP)", ge=1)
     queue_size: int = F(10000, "APPLOG_QUEUE_SIZE", "DB 기록 대기 큐 상한 — 넘으면 드롭 집계", ge=1)
     batch_size: int = F(200, "APPLOG_BATCH_SIZE", "DB INSERT 배치 최대 행 수", ge=1)
@@ -1647,7 +1654,7 @@ def given(name):
 
 def dropped(name):
     """옛 env 이름 값이 형식이 틀려 객체에서 버려졌나(경고 뒤 기본값) — 옛 코드가 그 값에서 실패해 일을 건너뛰던 자리가 같게
-    건너뛸 때(runlog 로그 지우기 등)."""
+    건너뛸 때."""
     return _COMMON_VIEW.dropped(name)
 
 

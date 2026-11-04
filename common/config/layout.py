@@ -115,7 +115,6 @@ ROLES = (
     ("mcp.edw_query.", "search.edw_query."),
     ("mcp.output.", "search.output."),
     ("mcp.parse_proxy.", "search.parse_proxy."),
-    ("mcp.query_log.", "search.query_log."),
     ("mcp.audit.", "search.audit."),
     ("mcp.host.", "ops.mcp_host."),
     ("mcp.dev.", "dev.mcp."),
@@ -371,11 +370,14 @@ REMOVED: dict[str, frozenset[str]] = {
             "index_root",
             "korean_font",
             "mcp_bundle",
+            "runlog_dir",
             "sources_file",
         }
-    ),  # client_roster·glossary_dir — pl-38(사용자 11-03): 용어집·고객 명부는 PG 마스터 표(<PG_SCHEMA>_master) · mcp_bundle — mc-19(사용자 11-03): 검색은 PG만
+    ),  # runlog_dir — op-13: 실행 기록 파일 없앰 · client_roster·glossary_dir — pl-38(사용자 11-03): 용어집·고객 명부는 PG 마스터 표(<PG_SCHEMA>_master) · mcp_bundle — mc-19(사용자 11-03): 검색은 PG만
     # CommonRuntime(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(남으면 경고만)
-    "CommonRuntime": frozenset({"exp_max_workers", "exp_proc_gb_answer", "exp_proc_gb_build", "exp_proc_gb_run", "exp_reserve_gb"}),
+    "CommonRuntime": frozenset(
+        {"exp_max_workers", "exp_proc_gb_answer", "exp_proc_gb_build", "exp_proc_gb_run", "exp_reserve_gb", "log_retention_days"}
+    ),  # log_retention_days — op-13: 콘솔 기록 파일(output/logs/*.log) 없앰
     # CommonStore(common/config/settings.py) — 사용자 10-30(pl-32 — 재시도 횟수 없음) · 10-31(pl-12 C10 — 문서 대장·숨김 통째로 지움 · pl-08 — 정형 저장소 통째로 지움) — 옛 파일에 남아도 경고만
     "CommonStore": frozenset(
         {"doc_registry", "registry_editions", "registry_etag_md5", "registry_retry_max", "struct_backend", "struct_db"}
@@ -428,6 +430,8 @@ REMOVED: dict[str, frozenset[str]] = {
     ),
     # McpServer(mcp_server/config.py) — store 11-01(mc-01 — 검색 저장소는 PG 하나) · 사용자 10-30(op-08) — common.models.embed.query_cache로 합침(mcp 이미지 기본은 그 칸에) — 옛 설정 파일에 남아도 경고만
     "McpServer": frozenset({"query_cache", "store"}),
+    # McpSettings(mcp_server/config.py) — op-13(사용자 11-04): 질의 기록 파일 qa_log 없앰(질의는 DB applog.mcp_call) — 남으면 경고만
+    "McpSettings": frozenset({"query_log"}),
     # PipelineConnections(pipeline/config.py) — 사용자 10-29 · graphiti 10-30(e2-18 — 외부 KG 어댑터 지움) — 지운 칸·절(남으면 경고만)
     "PipelineConnections": frozenset({"graphiti", "openviking"}),
     # PipelineConnectionsRdb(pipeline/config.py) — 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)

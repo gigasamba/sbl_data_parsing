@@ -84,11 +84,6 @@ class McpParseProxy(Section):
     url: str | None = F("http://127.0.0.1:8766", "PARSE_SERVICE_URL", "parse_document가 부르는 작업 서비스 주소")
 
 
-class McpQueryLog(Section):
-    dir: str | None = F(None, "MCP_QUERY_LOG_DIR", "질의 기록 폴더")
-    enabled: bool | None = F(True, "MCP_QUERY_LOG", "질의 기록(qa_log.jsonl) 스위치 — 0이면 기록 안 함", off=("0",))
-
-
 class McpSearch(Section):
     methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서)")
     min_score: float | None = F(None, "SEARCH_MIN_SCORE", "근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak")
@@ -129,7 +124,6 @@ class McpSettings(Section):
     host: McpHost = Field(default_factory=McpHost)
     output: McpOutput = Field(default_factory=McpOutput)
     parse_proxy: McpParseProxy = Field(default_factory=McpParseProxy)
-    query_log: McpQueryLog = Field(default_factory=McpQueryLog)
     search: McpSearch = Field(default_factory=McpSearch)
     server: McpServer = Field(default_factory=McpServer)
 

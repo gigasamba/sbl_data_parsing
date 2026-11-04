@@ -266,6 +266,14 @@ def selftest():
             IMAGE_DEFAULTS.clear()
             IMAGE_DEFAULTS.update(saved_img)
         check("이미지 기본값 칸(B-2): 빈 글자 = 정말 비움 — 글자 칸 '' · 숫자 칸 None(이미지 기본값 /data/docs·auto가 아님)", img_blank)
+        from common.config.settings import _IMAGE_DEFAULTS, CommonLog
+
+        check(
+            "op-13 — 서버(두 이미지) 로그는 DB 기본 켬, PC 기본 끔 · 대체 파일은 output/logs 한 곳",
+            all(_IMAGE_DEFAULTS[m]["APPLOG_DB_ENABLED"] is True for m in ("pipeline", "mcp"))
+            and CommonLog.model_fields["fallback_dir"].default == "output/logs"
+            and (CommonLog().db_enabled is True) == ("APPLOG_DB_ENABLED" in IMAGE_DEFAULTS),
+        )
         aw = {
             raw: load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"PIPE_PROCS": raw}).common.runtime.pipe_procs
             for raw in ("AUTO", "Auto", "auto ", " ", " 5")
@@ -462,8 +470,8 @@ def selftest():
         )
         check(
             "dropped(): 형식 틀려 버린 옛 env 이름을 알림",
-            load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"LOG_RETENTION_DAYS": "x"})._dropped
-            == {"LOG_RETENTION_DAYS"},
+            load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"APPLOG_RETENTION_DAYS": "x"})._dropped
+            == {"APPLOG_RETENTION_DAYS"},
         )
         with COMMON.env(LLM_BUDGET_USD="abc", LLM_TIMEOUT="5"):
             try:
