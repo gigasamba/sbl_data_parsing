@@ -5,11 +5,10 @@ EDW를 못 읽으면 서버(run_mode prod·RUN_ENV dev)는 종료 4, PC는 받�
 import json
 import tempfile
 from pathlib import Path
-from unittest import mock
 
 from common.config.settings import COMMON
 from common.store.parsing_meta_db import SqliteStore
-from pipeline import cli
+from pipeline.extract import fetch_docs
 
 # (이름, manifest 원본 키 | None, ParsingMeta parse_status | None, 고름?)
 DOCS = [
@@ -57,9 +56,9 @@ def test_c10_pick():
         out, edw = _fixture(tmp)
         for run_env, mode, has_edw, want in CASES:
             path = str(edw if has_edw else Path(tmp) / "none" / "edw.sqlite")
-            with COMMON.env(RUN_ENV=run_env, RUN_MODE=mode, RDB_SQLITE=path), mock.patch.object(cli, "OUT", out):
+            with COMMON.env(RUN_ENV=run_env, RUN_MODE=mode, RDB_SQLITE=path):
                 try:
-                    got = cli._unparsed(names)
+                    got = fetch_docs.unparsed(names, out)
                 except SystemExit as e:
                     got = e.code
             assert got == want, (run_env, mode, has_edw, got)

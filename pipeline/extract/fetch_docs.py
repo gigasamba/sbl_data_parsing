@@ -649,6 +649,35 @@ def finish(state, local, rep_index):
     )
 
 
+def unparsed(names, out):
+    """C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = EDW FileStorageMap ∖ ParsingMeta. FileStorageMap 쪽은 이미 받은 이름 목록
+    (`--source rdb:`가 FileStorageMap을 읽어 만든 것 — 이름 ↔ 원본 키 s3_key 대응은 fetch_docs.py가 쓴 manifest.jsonl), ParsingMeta 쪽은
+    여기서 **EDW를 한 번 읽는다**(파싱 입구의 EDW 읽기 — 읽기 계정, PC는 EDW 대역 sqlite `RDB_SQLITE`): parse_status가 ok·partial인
+    행의 source_key 집합(`done_source_keys`). 통째 실패는 ParsingMeta에 안 쓰므로(C3) 실패한 문서는 행이 없어 다음 실행이 다시 고른다.
+    out = 결과 루트(파싱 입구 pipeline.cli의 OUT). 키 = manifest의 "key"(없으면 이름 그대로 — publish의 source_key와 같은 규칙, parsing_meta.plan).
+    순서: 받은 이름 순서 그대로(문서 대장이 없어져 시도 이력이 없음 — 실패 문서를 뒤로 미루지 않는다).
+    EDW를 못 읽으면: 서버(run_mode prod 또는 RUN_ENV dev·prd·모르는 값)는 종료 4(전체 재파싱 안 함), PC는 받은 목록 그대로 + 로그 한 줄."""
+    from common.store import parsing_meta_db as PMDB
+
+    try:
+        db = PMDB.make_db("read")
+        try:
+            done = db.done_source_keys()
+        finally:
+            db.close()
+    except (Exception, SystemExit) as ex:  # make_db는 접속 정보가 없으면 SystemExit
+        if C.cfg().store.run_mode == "prod" or C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)
+            print(
+                f"[parse] EDW ParsingMeta를 읽지 못함 — 멈춤(종료 4, 전체 재파싱 안 함): {type(ex).__name__}", file=sys.stderr, flush=True
+            )
+            raise SystemExit(4) from None
+        print(f"[parse] EDW ParsingMeta 못 읽음({type(ex).__name__}) — 이력 없이 받은 목록 그대로 처리", flush=True)
+        return list(names)
+    man = Path(out) / "parse" / "_source" / "manifest.jsonl"
+    key_of = {r["file_name"]: r.get("key") for r in jl(man)} if man.exists() else {}
+    return [n for n in names if (key_of.get(n) or n) not in done]
+
+
 def _derive_source_from_key(key):
     """s3_key prefix로 출처 시스템 판별 — OS 경로의 폴더명(SFDC-test/CRMS-test/las_test)을 그대로 사용."""
     if not key:

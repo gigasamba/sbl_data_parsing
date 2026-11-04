@@ -119,7 +119,7 @@ flowchart TD
     S0["pipeline.cli.parse_module: _stack() → pipeline.extract.engine_stack.resolve() 엔진 구성 검사"]
     S1["pipeline.extract.fetch_docs.resolve: 폴더면 그대로, rdb:csv면 Object Storage에서 받기"]
     S2["pipeline.extract.deduplication.run_folder: 내용 SHA-256이 같은 파일은 하나만 keep"]
-    S3["pipeline.cli._unparsed: EDW ParsingMeta에 끝난 문서는 뺌"]
+    S3["pipeline.extract.fetch_docs.unparsed: EDW ParsingMeta에 끝난 문서는 뺌"]
     S4["pipeline.extract.filter_and_rotate.main: DRM·암호·미지원 거름, 회전(기본 꺼짐), prepared로 복사"]
     S5["pipeline.extract.run_engines.main: 문서 형식 키 → pipeline_stack.json 엔진 목록"]
     S6["pipeline.extract.run_one_engine.main (문서×엔진마다 자식 프로세스) → engines/이름/parser.py"]
@@ -132,7 +132,7 @@ flowchart TD
 | 엔진 구성 검사 | `pipeline.cli._stack()` → `pipeline.extract.engine_stack.resolve()` · `pipeline.extract.engines.registry.installed()` | `resources/config/pipeline_stack.json`을 읽고, 등록부에 없거나 설치 안 된 엔진이 있으면 종료 2 | 구성 파일 → 사전(`pipeline.config.stack()`) |
 | 원본 가져오기 | `pipeline.extract.fetch_docs.resolve()` | 폴더: 파일 목록 그대로. `rdb:csv:<경로>`: csv의 `AI.FileStorageMap` 다섯 칸(id·s3_key·original_filename·file_size·content_version_id)으로 Object Storage에서 받음(warm에 있으면 그걸 씀, `extract.source.fetch_workers` 병렬). 다른 원천의 같은 내용 파일도 따로 받는다(원천마다 독립) | csv → `<out>/_source_files/`, `parse/_source/manifest.jsonl`·`selected.txt` |
 | 중복 확인 | `pipeline.extract.deduplication.run_folder()` | 파일 내용 SHA-256이 같으면 대표 하나만 keep(지우지 않음, 대표 = 사본 표시 없는 이름 → 최신 → 큰 파일). 문서 1건이면 자식 없이 같은 함수를 바로 부르고, 여러 건이면 `python -m pipeline.extract.deduplication` 자식 | 원본 폴더 → `dedup/keep.txt`·`groups.csv`·`report.md`·`fingerprints.jsonl` |
-| 끝난 문서 빼기 | `pipeline.cli._unparsed()` → `common/store/parsing_meta_db.py` | ParsingMeta에서 `ok`·`partial` 문서 키를 한 번 읽어 뺌. 서버에서 못 읽으면 종료 4(전체 재파싱 방지) | EDW → `parse/_source/only.txt` |
+| 끝난 문서 빼기 | `pipeline.extract.fetch_docs.unparsed()` → `common/store/parsing_meta_db.py` | ParsingMeta에서 `ok`·`partial` 문서 키를 한 번 읽어 뺌. 서버에서 못 읽으면 종료 4(전체 재파싱 방지) | EDW → `parse/_source/only.txt` |
 | 준비 | `pipeline.extract.filter_and_rotate.main()` | 머리 바이트로 DRM·OLE 암호·압축 등 미지원·열기 암호 PDF를 거르고 기록, 회전은 `extract.prepare.rotate`(`PREPARE_ROTATE`, 기본 꺼짐)일 때만 RapidOCR 점수로 0·90·180·270도 중 고름(`pipeline.extract.filter_and_rotate.best_angle()`), 나머지는 복사(`pipeline.extract.filter_and_rotate.place()`). 형식 변환은 하지 않는다 | 원본 → `prepared/`, `prepared/rotation.csv`(회전 전 `orig_sha256`), `prepared/_records/skipped.{csv,jsonl}` |
 | 엔진 일괄 파싱 | `pipeline.extract.run_engines.main()` | 문서마다 형식 키(`.pdf_text`·`.pdf_image`·확장자 — `pipeline.shared.parse_run.doc_types()`)의 엔진 목록(`pipeline.extract.run_engines.engines_for_doc()`)을 **동시에** 돌림. OCR 엔진(`rapidocr_ko`)은 파싱 엔진으로 안 돎. 제한 시간 = 쪽 수 × 쪽당 초(글자 엔진 `tuning.extract.text_page_sec` 10 · VLM 엔진 `common.models.vlm.timeout` 180), 넘으면 두 배로 한 번 더. `--procs`면 문서를 조각내 프로세스 여럿. 같은 실행 안 같은 내용은 한 번만 파싱 후 복사 | `prepared/` → `parse/<엔진>/<문서>.json`, `parse/runs.jsonl` |
 | 엔진 1건 | `pipeline.extract.run_one_engine.main()` → `pipeline.extract.engines.registry.run()` | 문서 1건 × 엔진 1개를 별도 프로세스로(엔진이 죽어도 전체가 안 멈춤). 결과에 출처(`provenance` — 엔진 판·`p0_key`)를 찍음(`pipeline.extract.run_one_engine.stamp()`) | 문서 → 엔진 결과 json |
@@ -432,7 +432,7 @@ flowchart TD
 | 그림·첨부 P0 경로 | `pipeline.shared.parse_run.raw_vlm_path()`·`pipeline.shared.parse_run.raw_engine_path()` | 이미지 sha·모델·지시서 id · 첨부 sha·엔진@판 | 같으면 다시 안 부름 |
 | 임베딩 캐시 | `pipeline.transform.structure.build_bundle.embed_all()` | (모델, 본문) | 같으면 API를 다시 안 부름 |
 | LLM 응답 캐시 | `common.ai.llm.cache_key()` | (모델, 메시지, 온도, 최대 토큰, json 모드) | `common.models.llm.cache_dir`(기본 `output/eval/llm_cache`) |
-| 끝난 문서 | `common.store.parsing_meta_db.DONE_STATUSES` | ParsingMeta `parse_status`·`gold_version` | 문서 단위로 다시 파싱 안 함(`run_docs --skip-done`, `cli._unparsed`) |
+| 끝난 문서 | `common.store.parsing_meta_db.DONE_STATUSES` | ParsingMeta `parse_status`·`gold_version` | 문서 단위로 다시 파싱 안 함(`run_docs --skip-done`, `fetch_docs.unparsed`) |
 | 중간 캐시 정리 | `pipeline.shared.parse_run.purge_caches()` | `_reread_p3/_vlm_cache`·`_agent/_vlm_cache`·`signals` | 합계가 `tuning.extract.cache.parse_cache_max_gb`(5GB)를 넘으면 오래된 것부터 지움(run_engines 시작 때) |
 
 공용·레이어 파일을 고칠 때의 규칙과 지금 기준값은 [CLAUDE.md §4](../../CLAUDE.md)와 [test.md#e2-02](../prd/test.md#e2-02)에 있다.

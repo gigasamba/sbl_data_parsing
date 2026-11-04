@@ -150,36 +150,6 @@ def _left(a):
     return _until(a.deadline) if getattr(a, "deadline", None) else 10**7
 
 
-def _unparsed(names):
-    """C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = EDW FileStorageMap ∖ ParsingMeta. FileStorageMap 쪽은 이미 받은 이름 목록
-    (`--source rdb:`가 FileStorageMap을 읽어 만든 것 — 이름 ↔ 원본 키 s3_key 대응은 fetch_docs.py가 쓴 manifest.jsonl), ParsingMeta 쪽은
-    여기서 **EDW를 한 번 읽는다**(파싱 입구의 EDW 읽기 — 읽기 계정, PC는 EDW 대역 sqlite `RDB_SQLITE`): parse_status가 ok·partial인
-    행의 source_key 집합(`done_source_keys`). 통째 실패는 ParsingMeta에 안 쓰므로(C3) 실패한 문서는 행이 없어 다음 실행이 다시 고른다.
-    키 = manifest의 "key"(없으면 이름 그대로 — publish의 source_key와 같은 규칙, parsing_meta.plan).
-    순서: 받은 이름 순서 그대로(문서 대장이 없어져 시도 이력이 없음 — 실패 문서를 뒤로 미루지 않는다).
-    EDW를 못 읽으면: 서버(run_mode prod 또는 RUN_ENV dev·prd·모르는 값)는 종료 4(전체 재파싱 안 함), PC는 받은 목록 그대로 + 로그 한 줄."""
-    from common.core.contract import jl
-    from common.store import parsing_meta_db as PMDB
-
-    try:
-        db = PMDB.make_db("read")
-        try:
-            done = db.done_source_keys()
-        finally:
-            db.close()
-    except (Exception, SystemExit) as ex:  # make_db는 접속 정보가 없으면 SystemExit
-        if C.cfg().store.run_mode == "prod" or C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)
-            print(
-                f"[parse] EDW ParsingMeta를 읽지 못함 — 멈춤(종료 4, 전체 재파싱 안 함): {type(ex).__name__}", file=sys.stderr, flush=True
-            )
-            raise SystemExit(4) from None
-        print(f"[parse] EDW ParsingMeta 못 읽음({type(ex).__name__}) — 이력 없이 받은 목록 그대로 처리", flush=True)
-        return list(names)
-    man = OUT / "parse" / "_source" / "manifest.jsonl"
-    key_of = {r["file_name"]: r.get("key") for r in jl(man)} if man.exists() else {}
-    return [n for n in names if (key_of.get(n) or n) not in done]
-
-
 _T_STEP: dict = {}
 
 
@@ -221,6 +191,7 @@ def parse_module(a):
     """파싱 모듈: (--source면) 가져오기·시험 표본 → 중복 확인 → 방향 보정 → 파싱 → 채점 → 대표 결과 → 끝 표시 → (s3) 원본 정리.
     임베딩·DB 연결 없음 — 수집 서버에 이것만 보낼 수 있음. --source 없으면 --src(이미 준비된 폴더)를 그대로."""
     from common.core.paths import child_env
+    from pipeline.extract import fetch_docs as SRC
 
     _tstep("t_start")
     run_id = os.environ.get("PARSE_RUN_ID") or time.strftime(
@@ -237,8 +208,6 @@ def parse_module(a):
     # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) · 스트리밍 파싱은 op-08에 지움
     lim, src_info = [], None
     if a.source:  # 문서 위치: 같은 서버 폴더 → Object Storage 몇 건 → 전체(사용자 10-02)
-        from pipeline.extract import fetch_docs as SRC
-
         local, names, state = SRC.resolve(a.source, OUT, a.source_limit)
         src_info = (state, local)
         _tstep("t_resolve")
@@ -264,7 +233,7 @@ def parse_module(a):
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)
         keep = set((OUT / "dedup" / "keep.txt").read_text(encoding="utf-8").splitlines())
-        keep &= set(_unparsed(names))  # C10 — ParsingMeta에 성공 행이 있는 문서는 다시 파싱 안 함
+        keep &= set(SRC.unparsed(names, OUT))  # C10 — ParsingMeta에 성공 행이 있는 문서는 다시 파싱 안 함
         only = OUT / "parse" / "_source" / "only.txt"
         only.write_text("\n".join(n for n in names if n in keep) + "\n", encoding="utf-8")
         rc = _run_until(["pipeline.extract.filter_and_rotate", "--src", local, "--out", a.src, "--only", only], child_env(), _left(a) - 120)
@@ -274,7 +243,7 @@ def parse_module(a):
         lim = ["--docs-from", only]
     if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
         names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
-        new = _unparsed(names)  # C10 — ParsingMeta에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
+        new = SRC.unparsed(names, OUT)  # C10 — ParsingMeta에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
         pick = new[: a.max_new]
         f = OUT / "parse" / "_batch_docs.txt"
         f.parent.mkdir(parents=True, exist_ok=True)
@@ -356,8 +325,6 @@ def parse_module(a):
         run_id=run_id,
     )
     if src_info:
-        from pipeline.extract import fetch_docs as SRC
-
         if SRC.is_remote(a.source):
             SRC.finish(src_info[0], src_info[1], OUT / "parse" / "_rep" / "index.json")
 

@@ -150,7 +150,7 @@ def _rows_parsed(cur, table, ph, lo, hi, kc="source_key"):
 def _done_keys_rows(cur, table, kc="source_key", gold=False):
     """C10(pl-12, 사용자 10-31) — 끝난 원본 키(source_key) 집합 — parse_status가 DONE_STATUSES(ok·partial·skipped_dup — 사용자 11-01)인 행,
     gold=True(gold_version 칸이 있음)면 ok·partial은 gold_version도 있어야(사용자 11-02 — silver나 gold 결과가 없으면 다시 대상).
-    파싱 입구(pipeline.cli `_unparsed`)가 "FileStorageMap ∖ ParsingMeta"로 새 문서를 고를 때 쓴다(읽기만, SELECT).
+    파싱 입구(pipeline.extract.fetch_docs `unparsed`)가 "FileStorageMap ∖ ParsingMeta"로 새 문서를 고를 때 쓴다(읽기만, SELECT).
     상수 글자만 SQL에 끼우고(DONE_STATUSES는 코드 상수) 값 바인딩은 없음."""
     q = lambda xs: ", ".join(f"'{v}'" for v in xs)
     cond = f"parse_status IN ({q(DONE_STATUSES)})"
