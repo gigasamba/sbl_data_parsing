@@ -45,9 +45,16 @@ def test_warm_span_counts():
             mock.patch.object(source, "_rdb_bucket_and_key", lambda c, r: ("b", r["key"])),
             mock.patch.object(source, "_s3", Client),
         ):
-            assert source._warm_cmd(["--csv", str(batch), "--workers", "1"]) == 0
+            assert source._warm_cmd(["--csv", str(batch), "--workers", "2"]) == 0
     row = next(r for r in rows if r["stage"] == "extract.warm")
     assert row["layer"] == "extract" and row["total"] == 2 and row["metrics"] == {"done": 1, "failed": 1}
+    # 이슈 #117 — 파일(=문서)마다 extract.download 1행: 순수 전송 시간·속도, 실패는 external
+    dl = {r["doc_id"]: r for r in rows if r["stage"] == "extract.download"}
+    assert set(dl) == {"a", "b"}
+    assert dl["a"]["status"] == "ok" and dl["a"]["file_bytes"] == 1
+    assert {"head_ms", "download_ms", "lock_wait_ms"} <= set(dl["a"]["metrics"])
+    assert dl["b"]["status"] == "fail" and dl["b"]["err_kind"] == "external" and "mbps" not in (dl["b"]["metrics"] or {})
+    assert all(r["parent_id"] == row["span_id"] for r in dl.values())  # 풀 스레드(workers>1)에서도 부모 이어짐
 
 
 def test_parse_attempt_column():

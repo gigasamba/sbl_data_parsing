@@ -75,7 +75,7 @@ def summarize(run, events, top=10):
     wall_ms = _num(run.get("duration_ms")) or (int((max(ends) - min(starts)).total_seconds() * 1000) if starts and ends else 0)
     layer_total = defaultdict(float)
     for row in spans:
-        if row.get("layer") != "run":
+        if row.get("layer") not in ("run", "model"):  # model = 부모 span 안의 호출 행 — 층 합계에 이중 집계하지 않음
             layer_total[row.get("layer")] += _num(row.get("duration_ms"))
 
     stages = []
@@ -166,8 +166,47 @@ def summarize(run, events, top=10):
         "slow_docs": slow_docs,
         "ratios": {k: v for k, v in ratios.items() if v is not None},
         "model_calls": {role: int(count) for role, count in calls.items()},
+        "download": download_summary(events),
         "last_progress": None if last is None else {"seq": last.get("seq"), "total": last.get("total"), "metrics": _metrics(last)},
     }
+
+
+SIZE_BUCKETS = ((1e6, "<1MB"), (1e7, "1~10MB"), (1e8, "10~100MB"), (float("inf"), ">=100MB"))
+
+
+def _bucket(size):
+    return next(label for limit, label in SIZE_BUCKETS if size < limit)
+
+
+def download_summary(events):
+    """extract.download 행 → 파일 크기 구간별 순수 전송 속도(mbps)·head 지연·잠금 대기. 이슈 #117 — 느림이 네트워크 쪽인지 코드 쪽인지 가르는 표.
+    크기와 관계없이 mbps가 낮으면 네트워크·스토리지, mbps는 정상인데 전체 시간(duration)이 길면 head·잠금 같은 코드 쪽을 의심한다."""
+    rows = [r for r in events if r.get("stage") == "extract.download"]
+    if not rows:
+        return None
+    by_bucket = defaultdict(list)
+    for r in rows:
+        by_bucket[_bucket(_num(r.get("file_bytes")))].append(r)
+    buckets = []
+    for _, label in SIZE_BUCKETS:
+        group = by_bucket.get(label)
+        if not group:
+            continue
+        ok = [r for r in group if r.get("status") == "ok"]
+        mbps = [_metrics(r)["mbps"] for r in ok if _num(_metrics(r).get("mbps")) > 0]
+        buckets.append(
+            {
+                "size": label,
+                "n": len(group),
+                "fail": len(group) - len(ok),
+                "mbps_p50": percentile(mbps, 50),
+                "mbps_min": min(mbps, default=None),
+                "duration_p50_ms": percentile([_num(r.get("duration_ms")) for r in ok], 50),
+                "head_p50_ms": percentile([_num(_metrics(r).get("head_ms")) for r in ok], 50),
+                "lock_wait_p95_ms": percentile([_num(_metrics(r).get("lock_wait_ms")) for r in ok], 95),
+            }
+        )
+    return {"n": len(rows), "buckets": buckets}
 
 
 def _ratio(num, den):
@@ -368,6 +407,28 @@ def render(summary):
                         d["status"],
                     ]
                     for d in summary["slow_docs"]
+                ],
+            ),
+        ]
+    dl = summary.get("download")
+    if dl:
+        out += [
+            "",
+            f"■ 다운로드 {dl['n']}건 (mbps = 순수 전송 · 크기와 무관하게 낮으면 네트워크, 시간만 길면 head·잠금)",
+            _table(
+                ["크기", "건", "실패", "mbps p50", "mbps 최저", "전체 p50", "head p50", "잠금대기 p95"],
+                [
+                    [
+                        b["size"],
+                        b["n"],
+                        b["fail"],
+                        "-" if b["mbps_p50"] is None else f"{b['mbps_p50']:.1f}",
+                        "-" if b["mbps_min"] is None else f"{b['mbps_min']:.1f}",
+                        _ms(b["duration_p50_ms"]),
+                        _ms(b["head_p50_ms"]),
+                        _ms(b["lock_wait_p95_ms"]),
+                    ]
+                    for b in dl["buckets"]
                 ],
             ),
         ]

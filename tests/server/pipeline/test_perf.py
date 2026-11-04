@@ -149,3 +149,19 @@ def test_render_null_counts():
     assert "None" not in head and "문서 -(성공 - 실패 - 재사용 -)" in head
     zero_run = {**RUN, "docs_total": 3, "docs_ok": 3, "docs_fail": 0, "docs_reused": 0}
     assert "문서 3(성공 3 실패 0 재사용 0)" in perf.render(perf.summarize(zero_run, _events())).splitlines()[0]
+
+
+def test_download_summary_by_size():
+    """이슈 #117 — 크기 구간별 mbps·head·잠금 대기, 실패는 mbps 제외."""
+    dl = lambda size, ms, mbps, **kw: _ev(
+        "extract.download", ms, doc="x", file_bytes=size, metrics={"mbps": mbps, "head_ms": 20, "lock_wait_ms": 5}, **kw
+    )
+    events = [dl(500_000, 100, 40.0), dl(5_000_000, 1000, 40.0), dl(6_000_000, 2000, 24.0), dl(7_000_000, 50, 0, status="fail")]
+    summary = perf.summarize({}, events)
+    buckets = {b["size"]: b for b in summary["download"]["buckets"]}
+    assert summary["download"]["n"] == 4 and set(buckets) == {"<1MB", "1~10MB"}
+    mid = buckets["1~10MB"]
+    assert mid["n"] == 3 and mid["fail"] == 1 and mid["mbps_p50"] == 32.0 and mid["mbps_min"] == 24.0
+    assert mid["head_p50_ms"] == 20 and mid["lock_wait_p95_ms"] == 5
+    assert "■ 다운로드 4건" in perf.render(summary)
+    assert perf.summarize({}, [_ev("extract.parse", 10)])["download"] is None

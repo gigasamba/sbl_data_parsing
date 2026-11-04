@@ -633,13 +633,15 @@ def _traced(fn):
         t0 = time.monotonic()
         try:
             text, usage = fn(role, messages, **kwargs)
-        except Exception:
+        except Exception as ex:
             ms = (time.monotonic() - t0) * 1000
             sp.add(**{f"{role}_calls": 1, f"{role}_fail": 1}).observe(f"{role}_ms", ms).ext_call(ms)
+            _span.call_event(f"model.{role}", ms, ex)
             raise
         ms = (time.monotonic() - t0) * 1000
         sp.add(**{f"{role}_calls": 1}).observe(f"{role}_ms", ms).ext_call(ms)
         usage = usage or {}
+        _span.call_event(f"model.{role}", ms, None, tok_in=usage.get("prompt_tokens"), tok_out=usage.get("completion_tokens"))
         sp.add(**{f"{role}_tok_in": usage.get("prompt_tokens") or 0, f"{role}_tok_out": usage.get("completion_tokens") or 0})
         _span.debug_event(
             f"model.{role}", role=role, ms=round(ms), tokens_in=usage.get("prompt_tokens"), tokens_out=usage.get("completion_tokens")

@@ -1,5 +1,6 @@
 """pipeline.extract.doc_parsing_group — 문서 처리 그룹(light·medium·vlm) 규칙 표(PRD rn-01)."""
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -73,4 +74,35 @@ def test_doc_parsing_group_rules():
             "a b.docx",
             str(300 * KB),
         ]
-        assert subprocess.run(cli, capture_output=True, text=True, check=True).stdout.strip() == "medium"
+        # 코드 폴더 없이(PYTHONPATH 뺌 — 기록 import 실패, DB에 흔적 없음) 실행해도 마지막 줄이 그룹
+        env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}  # env 남김 — 하위 프로세스(코드 폴더 없는 실행 시험)
+        assert subprocess.run(cli, capture_output=True, text=True, check=True, env=env).stdout.strip() == "medium"
+
+
+def test_cli_traces_classify():
+    """op-01(이슈 #117): 원본 이름을 주면 extract.classify 한 행(group·크기·확장자), 파일이 없으면 fail — 그룹과 마지막 줄은 그대로."""
+    import io
+    import uuid
+    from unittest import mock
+
+    from common.core import jsonlog, span
+    from pipeline.extract import doc_parsing_group as dpg
+
+    rows, out = [], io.StringIO()
+    with (
+        tempfile.TemporaryDirectory(prefix="test_docgroup_") as td,
+        mock.patch.object(span, "_emit", lambda row, level=None: rows.append(row)),
+        mock.patch("sys.stdout", out),
+        jsonlog.context(run_id=str(uuid.uuid4())),  # 부모가 run_id를 줬으면 새 실행 없이 span만
+    ):
+        doc = Path(td, "a.zip")
+        _zip(doc, [10] * 8)
+        dpg.main([str(doc), "원본.docx", "2048"])
+        dpg.main([str(Path(td, "none")), "없음.docx", "1"])
+        dpg.main([str(doc)])  # 이름 없음 — 기록 없이 판별만
+        with mock.patch.object(span, "span", side_effect=RuntimeError("db")):
+            dpg.main([str(doc), "원본.docx", "2048"])  # 계측 실패 — 판별은 그대로
+    assert out.getvalue().splitlines() == ["vlm", "vlm", "vlm", "vlm"]
+    ok, bad = (r for r in rows if r["stage"] == "extract.classify")
+    assert ok["doc_id"] == "원본.docx" and ok["ext"] == ".docx" and ok["file_bytes"] == 2048 and ok["metrics"] == {"group": "vlm"}
+    assert ok["status"] == "ok" and bad["status"] == "fail" and bad["err"] == "file_missing"

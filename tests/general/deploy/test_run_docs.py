@@ -311,3 +311,11 @@ def test_classify_cache_skips_probe():
             assert sh.call_args[0][0].endswith(
                 f"doc_parsing_group.py {RD._img('output_root')}/_warm/{RD._warm_bin(row)} {shlex.quote(name)} 2048"
             ), name
+
+
+def test_perf_cmd_runs_in_container():
+    """analyze_docflow --db: 호스트는 DB를 못 읽으므로 상주 컨테이너 안 perf를 부른다(읽기 전용, 시간은 숫자만 끼움)."""
+    cmd = RD.perf_cmd(24, "podman")
+    assert cmd.startswith("podman exec data-pipeline bash -c 'cd /app && ")
+    assert cmd.endswith("python -m pipeline.tools.perf_report --since 24'")
+    assert RD.perf_cmd(0.5).endswith("--since 0.5'")

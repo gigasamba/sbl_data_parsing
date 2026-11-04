@@ -53,5 +53,30 @@ def doc_parsing_group(path, name=None, size=None):
     return "medium" if size // 1024 >= MEDIUM_KB.get(ext, 1 << 30) else "light"
 
 
+def main(argv):
+    """<파일> [<원본 이름> [<크기>]] → 그룹을 stdout 마지막 줄로(run_docs가 거꾸로 읽음).
+    원본 이름을 주면(run_docs) 판별 1건을 applog.pipe_event(stage=extract.classify, doc_id=원본 이름, metrics.group)에 남긴다(이슈 #117).
+    기록은 fail-soft — 코드 폴더가 PYTHONPATH에 없거나 DB가 꺼져도 그룹과 마지막 줄은 같다."""
+    path = argv[0]
+    name = argv[1] if len(argv) > 1 else None
+    size = int(argv[2]) if len(argv) > 2 else None
+    group = None
+    if name:
+        try:
+            from common.core import span as SP
+            from pipeline.shared import runtrace
+
+            with runtrace.run("doc_parsing_group", [name]):
+                ext = os.path.splitext(name)[1].lower()
+                with SP.span("extract.classify", "extract", doc_id=name, ext=ext, file_bytes=size) as sp:
+                    group = doc_parsing_group(path, name, size)
+                    sp.add(group=group)
+                    if not os.path.isfile(path):
+                        sp.result("fail", "doc", SP.safe("file_missing"))  # 그룹은 그대로(보수적 vlm 등)
+        except Exception:  # 계측 실패 — 기록 없이 판별만
+            pass
+    print(group or doc_parsing_group(path, name, size))
+
+
 if __name__ == "__main__":
-    print(doc_parsing_group(sys.argv[1], sys.argv[2], int(sys.argv[3])))
+    main(sys.argv[1:])

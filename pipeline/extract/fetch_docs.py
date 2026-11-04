@@ -218,7 +218,7 @@ def _record_source_skipped(state, skipped):
 
 
 # ── warm 저장소(2026-10-22, 프리페치) ──────────────────────────────────────────────
-# 다음 배치 원본을 미리 받아 두는 1회용 캐시. `python -m pipeline.extract.source warm --csv <배치csv>`(프리페치)가
+# 다음 배치 원본을 미리 받아 두는 1회용 캐시. `python -m pipeline.extract.fetch_docs warm --csv <배치csv>`(프리페치)가
 # 파일을 내려 warm에 심고, 실제 파싱의 fetch_one이 같은 (bucket,key)를 만나면 네트워크 다운로드를 건너뛰고
 # 곧바로 가져간다(warm에서 지움 — 사본 중복 저장 없음). SOURCE_WARM 미설정이면 전부 꺼진다(기존 동작 그대로).
 
@@ -311,13 +311,13 @@ def _warm_take(o, dest, name):
 
 
 def _warm_cmd(argv):
-    """`python -m pipeline.extract.source warm --csv <batch.csv> [--workers N]` — 다음 배치 원본을 미리 받아
+    """`python -m pipeline.extract.fetch_docs warm --csv <batch.csv> [--workers N]` — 다음 배치 원본을 미리 받아
     SOURCE_WARM에 심는 프리페치(배치 러너가 현재 배치 파싱 중에 백그라운드로 돌린다). watermark·처리 기록·
     manifest는 전혀 건드리지 않고 파일만 내려놓는다 — 실제 파싱(fetch_one)이 warm 적중으로 가져간다.
     한 건 실패는 그 배치가 늦어질 뿐(일반 다운로드로 폴백)이라 조용히 넘어간다."""
     import argparse
 
-    ap = argparse.ArgumentParser(prog="pipeline.extract.source warm")
+    ap = argparse.ArgumentParser(prog="pipeline.extract.fetch_docs warm")
     ap.add_argument("--csv", required=True, help="make_batch.py가 만든 다음 배치 csv(id·s3_key·original_filename·file_size)")
     ap.add_argument("--workers", type=int, default=max(1, int(pc.cfg().extract.source.fetch_workers)))  # 11-04 원본 받기와 같은 칸
     a = ap.parse_args(argv)
@@ -348,16 +348,38 @@ def _warm_cmd(argv):
     t0 = time.time()
 
     def _one(t):
+        """파일(=문서) 1건 = extract.download span 1행(op-01, 이슈 #117) — doc_id는 extract.parse와 같은 파일 이름."""
+        name = t["filename"] or t["key"]
+        with SP.span("extract.download", "extract", doc_id=name, ext=Path(name).suffix.lower(), file_bytes=t["size"]) as sp:
+            return _fetch(t, sp)
+
+    def _fetch(t, sp):
         p = _warm_key_path(wd, t["bucket"], t["key"])
         p.unlink(missing_ok=True)  # 인덱스엔 없는데 파일만 남은 잔여도 이번에 갈아치움
         tmp = wd / (p.name + ".part")
+        on_wire = False  # head·전송 중의 실패는 원인이 외부(스토리지·네트워크)라 err_kind=external — botocore 예외는 이름으로 못 가림
         try:
+            on_wire = True
+            t_head = time.monotonic()
             actual = cli.head_object(Bucket=t["bucket"], Key=t["key"]).get("ContentLength")
+            head_ms = (time.monotonic() - t_head) * 1000
             if t["size"] is not None and actual is not None and int(actual) != int(t["size"]):
                 print(f"[source] warm: 크기 불일치(참고) — RDB({t['size']}) ≠ OS({actual}): {t['bucket']}/{t['key']}", flush=True)
+            t_dl = time.monotonic()
             cli.download_file(t["bucket"], t["key"], str(tmp))
+            download_ms = (time.monotonic() - t_dl) * 1000
+            on_wire = False
             os.replace(tmp, p)  # 인덱스에 보이는 파일은 항상 완전한 내용
+            size = int(actual) if actual is not None else t["size"]
+            if size is not None:
+                sp.set(file_bytes=size)
+            # 순수 전송 속도(head·잠금 대기 제외) — 네트워크 문제인지 코드 문제인지 가르는 값
+            sp.add(head_ms=round(head_ms), download_ms=round(download_ms))
+            if size and download_ms > 0:
+                sp.add(mbps=round(size * 8 / 1e6 / (download_ms / 1000), 2))
+            t_lock = time.monotonic()
             with _warm_locked(wd):
+                sp.add(lock_wait_ms=round((time.monotonic() - t_lock) * 1000))
                 rs = _warm_read(wd)
                 rs.append(
                     {
@@ -375,6 +397,8 @@ def _warm_cmd(argv):
         except Exception as e:
             p.unlink(missing_ok=True)
             tmp.unlink(missing_ok=True)
+            code, kind = SP.classify(e)
+            sp.result(code, "external" if on_wire and code == "fail" else kind, e)
             print(f"[source] warm: 실패(무시·폴백) — {t['bucket']}/{t['key']}: {type(e).__name__}: {str(e)[:120]}", flush=True)
             return False
 
@@ -383,7 +407,7 @@ def _warm_cmd(argv):
             import concurrent.futures as _cf
 
             with _cf.ThreadPoolExecutor(max_workers=a.workers) as ex:
-                done = sum(1 for r in ex.map(_one, targets) if r)
+                done = sum(1 for r in ex.map(SP.carry(_one), targets) if r)  # 풀 스레드에 run_id·부모 span을 이어줌
         else:
             done = sum(1 for r in (_one(t) for t in targets) if r)
         sp.add(done=done, failed=len(targets) - done)
