@@ -2,9 +2,7 @@
 
 `valid_env/object_storage/`는 서버 Object Storage 버킷을 PC에서 흉내 낸 폴더다. 문서 1건 = `<원천>/<uuid>/<파일>` 객체 하나다(`CRMS/<uuid>/...`는 hard_cases 세트, `SFDC/<uuid>/...`는 rfp 세트, 이름이 `arg_`·`lmx_`로 시작하는 문서는 두 버킷 모두 한빛 업무 문서). `Parsing-Result/`는 파이프라인이 실행 중 쓰는 결과 폴더로 git에 없다. 이 파일(`test_doc_purpose.md`)은 시험 문서가 아니라 안내문이다 — `validation_catalog.py`·동기화 점검 둘 다 이 파일 이름을 예외로 둔다.
 
-정답·목록 세트(`valid_env/eval_sets/` — rfp·hard_cases 정답, `object_keys.csv`, `doc_catalog.jsonl`)는 10-30 지웠다(사용자 — e2-10). 필요하면 git 이력에서 되살린다.
-
-아래 표는 문서마다 "왜" 있는지 — 어떤 파싱 난도를 시험하는지 — 를 적는다. 자세한 요소 목록은 `docs/architecture.md` §10-3, 생성 배경은 `eval_sets/rfp/spec.json`·`eval_sets/hard_cases/spec.json`·`expected.json` 참고.
+아래 표는 문서마다 "왜" 있는지 — 어떤 파싱 난도를 시험하는지 — 를 적는다.
 
 예상 결과: `ok` = 정상 대조군(완전 재현 기대) · `partial` = 어려운 요소가 있어 완전 재현을 보장하지 않음(이미지 기준 criteria ≥ 0.9, 1.0 아님) · `expected failure` = 파싱을 시도조차 못 하거나 열다가 오류가 날 것으로 설계상 기대.
 

@@ -25,8 +25,7 @@ CREATE TABLE Opportunity (
     IsDeleted         INTEGER NOT NULL DEFAULT 0 CHECK (IsDeleted IN (0, 1))
 ) STRICT;
 
--- seed rows (Account links to CRMS via CRMS_Client_Code__c; one Opportunity per client-project, Project_Code__c = the
--- P-number in the valid_env/eval_sets/rfp folder name — DS2 dropped Merko, 4 client-projects remain)
+-- seed rows (Account links to CRMS via CRMS_Client_Code__c; one Opportunity per client-project, Project_Code__c = its P-number)
 INSERT INTO Account (Id, Name, Account_Nickname__c, CRMS_Client_Code__c, Type, BillingCountry, IsDeleted) VALUES
     ('001900100000000000', 'Pfizar Biopharma', 'Pfizar Biopharma Inc.;Pfizar Inc.;PFZ', 'C9001', 'Customer', 'KR', 0),
     ('001900200000000000', 'Pfizar Biopharma USA', 'Pfizar USA;PFZ-US', 'C9002', 'Customer', 'US', 0),
