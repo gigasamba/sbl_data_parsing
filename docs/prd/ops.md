@@ -156,7 +156,7 @@
   5. 스캔 PDF 판정은 `pdf_kind` 하나(그림 VLM의 `scan_page_vlm.is_scan`도) — 스캔 쪽이 섞인 PDF는 결과가 달라질 수 있음.
   6. 중복·쓰지 않는 코드 지움, `pdf_kind`를 extract로, `cli.parse_module`의 extract 일은 `fetch_docs`로, 한 곳만 쓰는 감싸기·작은 파일 합침, 주석은 목적 한 줄(이력은 git·docs/history).
 - QA: selftest·pytest 기준선 유지(새 시험: 벌 이름 → 스키마·EDW 표·게시 경로·포트 거부, prd 거부) · `check_modules`·`keyscan --check`·`sample --check`·`gen_host_keys --check` 통과 · 저장소 전체 ruff·mypy 0 · 옛 이름(`data-pipeline-mcp`·`parse_mcp`·`PARSE_MCP_`) 0건(docs/history 제외).
-- Status: in-progress
+- Status: done
 
 <a id="pl-27"></a>
 ## pl-27 · 프로세스 종료 정리 — 임시 설정 파일·PID 기록 지움, 자식 회수
