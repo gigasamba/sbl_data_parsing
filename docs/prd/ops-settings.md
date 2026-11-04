@@ -2,7 +2,7 @@
 
 [PRD.md](../PRD.md) 카테고리. [ops.md](ops.md)의 하위 문서. 실행 환경 `RUN_ENV`(op-02), settings.yaml 하나(op-05)·배치(op-08)·하드코딩 0(op-09), 지운 칸(pl-21·pl-30). 전체 칸과 기본값: `settings.sample.yaml`(생성: `python -m common.config.sample`).
 
-순서: op-02 · op-05 · op-08 · op-09 · pl-21 · pl-30.
+순서: op-02 · op-05 · op-08 · op-09 · op-14 · pl-21 · pl-30.
 
 <a id="op-02"></a>
 ## op-02 · RUN_ENV는 `local`·`dev`·`prd` 셋 · 가짜 LLM은 `local`에서만
@@ -59,6 +59,17 @@
   5. 앱은 env에서 설정을 읽지 않는다 — 남은 env 줄은 분류 주석 필수(`python -m common.check.check_modules` ⑩·⑪).
 - 파일: `common/config/settings.py`(`IMAGE_PATHS`), `common/config/keyscan.py`, `deploy/release/hostkeys.py`, `deploy/host/scripts/{settings_env.sh,host_env.py,host_keys.tsv}`.
 - QA: `python -m common.check.check_modules` · "모듈 경계 통과". `tests/general/deploy/test_host_env.py` · 통과. 서버 확인 refactor.md C-70.
+- Status: done
+
+<a id="op-14"></a>
+## op-14 · PC는 가짜 대상만 — 저장소 기준 상대 경로
+- 이유: 나중에 PC에서 전체 흐름을 가짜 대상(sqlite EDW, 폴더 Object Storage)으로만 돌린다. 저장소 위치가 PC마다 달라 절대 경로를 적기 번거롭다.
+- 규칙:
+  1. 경로 칸 — `required.edw.sqlite`(`common.connections.rdb.sqlite`), `required.publish.bucket`의 `file://` 꼴, `common.paths.doc_dir`·`doc_dir_prepared`, `pipeline.extract.input_source`(폴더·`rdb:csv:<경로>`), `common.connections.pg.standin_dir` — 는 상대 경로를 저장소 루트(`paths.PROJ_ROOT`) 기준으로 푼다. 푸는 곳은 설정 모델 한 곳(`settings.repo_path` — 칸 표시 `F(repo=…)`)이라 읽는 코드는 그대로다. 절대 경로·`s3://`·버킷 이름은 바꾸지 않는다.
+  2. 가짜/실제 판정은 `settings.pc_real_targets` 한 곳. `local`에서 `required.edw.host`, `required.object_storage.endpoint`, 원천 버킷(`pipeline.connections.rdb.bucket`), `file://`가 아닌 게시 버킷이 적혀 있으면 시작 관문(`require_run_env`)이 칸 이름과 예시를 찍고 종료 코드 2.
+  3. `dev`·`prd`는 바뀌지 않는다(작업 폴더 `/app` = `PROJ_ROOT`라 상대 경로 결과도 같다).
+- 파일: `common/config/settings.py`, `pipeline/config.py`, `common/config/sample.py`.
+- QA: `tests/server/common/test_pc_targets.py`(상대 sqlite · 상대 `file://` 버킷 · 절대 경로 · local 실제 호스트 거부 · dev 실제 호스트 허용) · 통과.
 - Status: done
 
 <a id="pl-21"></a>

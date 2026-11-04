@@ -3,6 +3,7 @@
 from unittest import mock
 
 from common.config.settings import COMMON
+from common.core.paths import PROJ_ROOT
 from common.store import mssql
 from common.store import parsing_meta_db as PM
 
@@ -48,7 +49,7 @@ def test_standin_refused_off_pc():
         except ValueError:
             pass
     with COMMON.env(RDB_SQLITE="x.sqlite", RUN_ENV="local"):
-        assert mssql.standin_path() == "x.sqlite"
+        assert mssql.standin_path() == (PROJ_ROOT / "x.sqlite").as_posix()  # 상대 경로는 저장소 루트 기준(op-14)
 
 
 def test_mcp_process_never_holds_write_account():
