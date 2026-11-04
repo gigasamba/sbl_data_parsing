@@ -95,7 +95,7 @@
 | `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 `required.tokens.mcp` 하나 — 검색 MCP·`parse_document` 작업 서비스가 함께 쓴다(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
 | `FULLTEXT_SIGN_SECRET`(`required.tokens.fulltext`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키(비밀). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 `sfid`가 모두 무효 |
 | `DATA_PARSING_PORT`(`ops.runtime.data_parsing_port`) | `8766` | `parse_document` 작업 서비스 포트(127.0.0.1) — 작업 서비스가 듣고 검색 MCP가 이 값으로 부름(칸 하나). 여러 벌이면 벌마다 다르게(기본값이면 시작 거부) |
-| `INSTANCE`(`ops.host.instance`) | 비움(한 벌) | 개발 서버 여러 벌 — 컨테이너 이름 끝 `-<벌>`, PG 스키마·EDW 기록 표 끝 `_<벌>`, dev 게시 경로 `<prefix>/<벌>`. prd면 시작 거부. settings.yaml에서만(셸 env로 덮지 않음) — server-guide §1-3 |
+| `INSTANCE`(`ops.host.instance`) | 비움(한 벌) | 개발 서버 여러 벌 — 컨테이너 이름 끝 `-<벌>`, PG 스키마·EDW 기록 표 끝 `_<벌>`(`-`는 `_`로 — `dbtool --schema`로 직접 준 이름에도), dev 게시 경로 `<prefix>/<벌>`. prd면 시작 거부. settings.yaml에서만(셸 env로 덮지 않음) — server-guide §1-3 |
 | `DATA_PARSING_MAX_MB`(`ops.runtime.parse_max_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |
 | `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음 |
 | `MCP_ALLOWED_HOSTS` | 비움 | 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |

@@ -34,6 +34,17 @@ def test_instance_names():
         assert (st.connections.pg.db_schema, st.connections.parsing_meta.table) == (want_schema, want_table), inst
 
 
+def test_dbtool_schema_suffix():
+    """dbtool --schema로 직접 준 이름에도 설정과 같은 벌 접미(이미 붙어 있으면 그대로)."""
+    from common.store.db import dbtool
+
+    for inst, given, want in ((None, "demo", "demo"), ("kim-2", "demo", "demo_kim_2"), ("kim-2", "demo_kim_2", "demo_kim_2")):
+        with settings.COMMON.override(
+            data={"common": {"run_env": "dev", "host": {"instance": inst}}}, use_file=False, strict=False, require_file=False
+        ):
+            assert dbtool.schema_of("search", given) == want, (inst, given)
+
+
 def test_publish_prefix():
     # (run_env, 벌, 접두, 기대)
     for run, inst, prefix, want in (
@@ -57,6 +68,8 @@ def test_instance_gate():
             ("dev", None, False, None),  # 한 벌은 기본 포트 그대로
             ("dev", "hong", False, "port"),
             ("prd", "hong", True, "ops.host.instance"),
+            ("dev", "Hong_1", True, "ops.host.instance"),  # 영소문자·숫자·-만(load_settings.sh와 같은 꼴)
+            ("dev", "-a", True, "ops.host.instance"),
         ):
             path.write_text(yaml.safe_dump(layout.to_file(_doc(run, inst, ports=ports))), encoding="utf-8")
             errors = io.StringIO()
