@@ -60,9 +60,9 @@ README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash 
 - **겹침 잠금:** run_docs는 `batch_progress/run_docs.lock`을 `flock`으로 잡는다 — 새벽 배치와 사람이 직접 돌린 run_docs가 함께 돌지 않는다(뒤에 온 쪽이 75). 죽으면 잠금은 저절로 풀린다. 작업 폴더(`ops.pipeline_host.run_docs_dir`)가 같아야 같은 잠금이다.
 - 파싱·게시만 따로:
 ```bash
-bash deploy/host/scripts/nightly_batch.sh parse [--source-limit N]   # 파싱 → <결과 폴더>/parse/_rep. 임베딩·DB 없음
-bash deploy/host/scripts/nightly_batch.sh publish --dry-run          # 무엇을 올리고 쓸지 표만(쓰기 0)
-bash deploy/host/scripts/nightly_batch.sh publish                    # 대표 결과 Object Storage 업로드 + EDW 메타 — 한 번만
+bash deploy/host/scripts/pipe_exec.sh parse [--source-limit N]   # 파싱 → <결과 폴더>/parse/_rep. 임베딩·DB 없음
+bash deploy/host/scripts/pipe_exec.sh publish --dry-run          # 무엇을 올리고 쓸지 표만(쓰기 0)
+bash deploy/host/scripts/pipe_exec.sh publish                    # 대표 결과 Object Storage 업로드 + EDW 메타 — 한 번만
 ```
 - 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock` 때문에 뒤쪽이 종료 75.
 - 도구만 따로: `bash deploy/host/scripts/pipe_exec.sh <rdb_discover|check_env|ping_models|migrate|show-stack|check> [인자]`.

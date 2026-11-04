@@ -84,7 +84,7 @@ for c in data-pipeline data-pipeline-mcp; do   # 여러 벌이면 이름 끝 -<o
 
 | 서비스(`host_ctl.sh`) | 컨테이너 | compose 파일(실행 이미지면 + 코드 폴더 파일) | 하는 일 |
 |---|---|---|---|
-| `data-pipeline` | `data-pipeline` | `compose.pipeline.yml`(+ `compose.code.yml`) | 일 없이 떠 있음(entrypoint `idle`) — `run_docs.py`·`nightly_batch.sh`·`pipe_exec.sh`가 `exec` |
+| `data-pipeline` | `data-pipeline` | `compose.pipeline.yml`(+ `compose.code.yml`) | 일 없이 떠 있음(entrypoint `idle`) — `run_docs.py`·`pipe_exec.sh`가 `exec` |
 | `data-pipeline-mcp` | `data-pipeline-mcp` | `compose.pipeline-mcp.yml`(+ `compose.code.pipeline-mcp.yml`) | `parse_document` 작업 서비스(entrypoint `parse-service`) |
 | `mcp` | `mcp-server` | `compose.mcp-server.yml`(+ `compose.code.mcp-server.yml`) | 검색 MCP |
 
@@ -284,9 +284,9 @@ bash deploy/host/scripts/host_ctl.sh check                                      
 
 **8. [dev] 게시 확인 — 미리보기 → 실제 한 번 → Object Storage·EDW 행**(운영 Object Storage·EDW에 쓰는 첫 실행이라 dev에서 몇 건으로 먼저 본다)
 ```bash
-bash deploy/host/scripts/nightly_batch.sh parse --source-limit 3                   # 원본 3건만 파싱 → <결과 폴더>/parse/_rep · 기대: 종료 코드 0
-bash deploy/host/scripts/nightly_batch.sh publish --dry-run                        # 쓰기 0 — 기대: JSON 한 줄("mode": "dry-run" · bucket · prefix · rows_planned · upload_plan · sample_rows[].rep_key) + "[dry-run] 쓰기 0 …"
-bash deploy/host/scripts/nightly_batch.sh publish                                  # 실제 한 번 — 기대: JSON 한 줄("mode": "apply" · "result") · 종료 코드 0
+bash deploy/host/scripts/pipe_exec.sh parse --source-limit 3                   # 원본 3건만 파싱 → <결과 폴더>/parse/_rep · 기대: 종료 코드 0
+bash deploy/host/scripts/pipe_exec.sh publish --dry-run                        # 쓰기 0 — 기대: JSON 한 줄("mode": "dry-run" · bucket · prefix · rows_planned · upload_plan · sample_rows[].rep_key) + "[dry-run] 쓰기 0 …"
+bash deploy/host/scripts/pipe_exec.sh publish                                  # 실제 한 번 — 기대: JSON 한 줄("mode": "apply" · "result") · 종료 코드 0
 ```
 - **실제 publish는 한 번만** 한다. 다시 돌리면 Object Storage에 같은 결과를 새 시각 이름으로 또 올린다(EDW는 이미 있는 행을 건너뜀).
 - 미리보기의 `bucket`·`prefix`·`rep_key`가 `required.publish` 칸(`bucket`·`prefix`)과 맞지 않으면 실제 publish를 하지 않고 settings.yaml을 고친다. DRM·실패로 빠진 문서는 `<결과 폴더>/publish/excluded_<날짜>.md`에 남는다.

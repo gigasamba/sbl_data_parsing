@@ -78,7 +78,7 @@ flowchart TD
 | 단계 | 파일·함수 | 하는 일 | 입력 → 출력 |
 |---|---|---|---|
 | 타이머 | `deploy/host/systemd/data-pipeline-nightly.{timer,service}` | 5분마다 `nightly_batch.sh scheduled` 실행(oneshot, 종료 코드 75는 성공으로 침) | — |
-| 시작 판정 | `deploy/host/scripts/nightly_batch.sh` | `NIGHTLY_TIME`·`NIGHTLY_MAX_DOCS`·`NIGHTLY_DEADLINE`(`ops.nightly.*`)이 다 있고 지금이 시작 5분 안일 때만 `run_docs.py`를 부름. `parse`·`publish`는 컨테이너 안에서 모듈 하나만 1회 실행 | 서버 `settings.yaml` → 셸 변수 |
+| 시작 판정 | `deploy/host/scripts/nightly_batch.sh` | `NIGHTLY_TIME`·`NIGHTLY_MAX_DOCS`·`NIGHTLY_DEADLINE`(`ops.nightly.*`)이 다 있고 지금이 시작 5분 안일 때만 `run_docs.py`를 부름. `parse`·`publish` 1회 실행은 `pipe_exec.sh`(rn-06) | 서버 `settings.yaml` → 셸 변수 |
 | 설정 읽기 | `deploy.host.scripts.run_docs.configure()`·`deploy.host.scripts.run_docs.read_settings()` | 필수 칸(`SETTINGS_REQUIRED`) 확인, `run_env`가 dev·prd가 아니면 거부, 작업 폴더·결과 폴더·컨테이너 명령을 정함 | `settings.yaml` → 전역 값 |
 | 엔진 구성 확인 | `deploy.host.scripts.run_docs.stack_check()` | 컨테이너 안 `python -m pipeline.cli show-stack` | — |
 | 대상 고르기 | `deploy.host.scripts.run_docs.edw_list()`·`deploy.host.scripts.run_docs.edw_done_keys()`·`deploy.host.scripts.run_docs.faq_first()` | `AI.FileStorageMap`에서 `--filter`(기본 `RFP,proposal`) 이름 조건으로 목록, ParsingMeta에 끝난 문서(`ok`·`partial`은 `gold_version`도 있어야, `skipped_dup`)를 뺌, FAQ 교체가 필요하면 FAQ를 앞에 | EDW → 문서 순서 |

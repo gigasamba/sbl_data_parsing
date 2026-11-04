@@ -1,5 +1,5 @@
 #!/bin/bash
-# 이미지 변수 확인(S6b, D-020 — nightly_batch.sh·pipe_exec.sh·mcp_keepalive.sh가 source). 서버 이미지 2개(사용자 10-27):
+# 이미지 변수 확인(S6b, D-020 — pipe_exec.sh·mcp_keepalive.sh·host_ctl.sh가 source). 서버 이미지 2개(사용자 10-27):
 #   DATA_PIPELINE_IMAGE = data-pipeline:<태그>(옛 data-parsing+data-structure) · MCP_SERVER_IMAGE = mcp-server:<태그>(옛 data-retrieval)
 #   없으면 compose가 `${…:?}` 필수 안내로 멈춘다. 값은 출력하지 않는다.
 #   S7e1 — 새 이름은 settings.yaml(required.deploy.pipeline_image·mcp_image)에서 load_settings.sh load_settings가 셸 env로 낸다. 부르기 전에 load_settings.

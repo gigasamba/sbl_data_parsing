@@ -65,7 +65,7 @@
 
 | 이미지 | 역할 | 상주 컨테이너 |
 |---|---|---|
-| `data-pipeline` | parse · publish · structure · load | 일괄 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`·`nightly_batch.sh`·`pipe_exec.sh`가 exec) · `parse_document` 전용 `data-pipeline-mcp` |
+| `data-pipeline` | parse · publish · structure · load | 일괄 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`·`pipe_exec.sh`가 exec) · `parse_document` 전용 `data-pipeline-mcp` |
 | `mcp-server` | 검색 MCP | `mcp-server` |
 
 버전은 저장소 루트 `VERSION` 하나이고 두 이미지가 함께 쓴다(태그 `data-pipeline:<버전>` — 규칙: [release-and-patch §4](docs/operations/release-and-patch.md#4-버전)).
@@ -509,7 +509,7 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline data-pipeline-mcp mcp  
 | `required.pg.host`·`port`·`db`·`user`·`password`·`db_schema` | 검색 DB(pgvector) | DB 담당 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · `ai` | PC·dev·prd | `host_ctl.sh check` ① check_env · ③ migrate check |
 | `required.embed.base_url`·`model`·`api_key` | 임베딩 모델(`model`은 적재·검색 때 같아야 함) | 모델 담당(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델>` · `<비밀>` | PC·dev·prd | `host_ctl.sh check` ② ping_models |
 | `required.models.llm_*`·`vlm_*` | LLM·VLM 모델 | 모델 담당 | `http://llm.example.local:8001/v1` · `<모델>` | dev·prd | `host_ctl.sh check` ② ping_models |
-| `required.edw.host`·`port`·`database`·`read_*`·`write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시) · `port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_docs` 시작(빠지면 칸 이름을 찍고 멈춤) · `nightly_batch.sh publish --dry-run`(④) |
+| `required.edw.host`·`port`·`database`·`read_*`·`write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시) · `port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_docs` 시작(빠지면 칸 이름을 찍고 멈춤) · `pipe_exec.sh publish --dry-run`(④) |
 | `required.edw.parsing_meta_table` | 게시 행을 쓸 EDW 표 — 비우면 `AI.ParsingMeta` | DB 담당 | (비움) | dev·prd | publish `--apply` |
 | `required.edw.sqlite` | PC 가짜 EDW 파일 — **서버는 비움**(적혀 있으면 EDW를 쓸 때 거부) | — | (비움) | PC만 | — |
 | `required.publish.bucket`·`prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두 | 운영 담당 | `rag-silver` · `parse` | PC·dev·prd | `run_docs` 시작 · publish 미리보기 |
@@ -550,8 +550,8 @@ bash deploy/host/scripts/pipe_exec.sh check_env       # PG·VLM·설정 요약(�
 bash deploy/host/scripts/pipe_exec.sh check           # 자원·쓰기 권한·디스크·PG·모델 요약(⚠️ 실패해도 종료 0 — 출력을 읽는다)
 ```
 
-- EDW 로그인과 Object Storage 버킷을 따로 확인하는 명령은 없다. 첫 파싱 뒤 publish 미리보기(`bash deploy/host/scripts/nightly_batch.sh publish --dry-run` — 쓰기 0)로 확인하고, 실제 publish 한 번 뒤 EDW 행과 Object Storage 파일을 본다 — 명령은 [release-and-patch §8-3 8](docs/operations/release-and-patch.md#8-3-실행-순서--복사해-붙이는-명령dev-먼저-그다음-prd).
-- ⚠️ 실제 publish(`nightly_batch.sh publish`)는 한 번만 한다. 다시 돌리면 Object Storage에 같은 결과를 새 시각 이름으로 또 올린다(EDW는 이미 있는 행을 건너뜀).
+- EDW 로그인과 Object Storage 버킷을 따로 확인하는 명령은 없다. 첫 파싱 뒤 publish 미리보기(`bash deploy/host/scripts/pipe_exec.sh publish --dry-run` — 쓰기 0)로 확인하고, 실제 publish 한 번 뒤 EDW 행과 Object Storage 파일을 본다 — 명령은 [release-and-patch §8-3 8](docs/operations/release-and-patch.md#8-3-실행-순서--복사해-붙이는-명령dev-먼저-그다음-prd).
+- ⚠️ 실제 publish(`pipe_exec.sh publish`)는 한 번만 한다. 다시 돌리면 Object Storage에 같은 결과를 새 시각 이름으로 또 올린다(EDW는 이미 있는 행을 건너뜀).
 
 **⑤ 이미지 점검**
 
@@ -571,7 +571,7 @@ selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다. 운영 �
 |---|---|---|---|
 | 문서별 흐름 | `python3 deploy/host/scripts/run_docs.py …`(코드 폴더에서, nohup) | 문서마다 파싱 → publish → 원본 삭제(게시 성공 뒤) → 구조화·적재 | 대량 처리 |
 | 새벽 배치 | systemd `data-pipeline-nightly.timer` → `nightly_batch.sh scheduled` | `ops.nightly.time`에 `run_docs.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>` | 정기 운영 |
-| 파싱·게시만 | `bash deploy/host/scripts/nightly_batch.sh parse` · `nightly_batch.sh publish [--dry-run]` | 상주 컨테이너 안에서 한 번 | 단계 확인 |
+| 파싱·게시만 | `bash deploy/host/scripts/pipe_exec.sh parse` · `pipe_exec.sh publish [--dry-run]` | 상주 컨테이너 안에서 한 번 | 단계 확인 |
 
 `run_docs.py` 자리·설정·종료 코드: [release-and-patch §5-4](docs/operations/release-and-patch.md#5-4-run_docspy-자리와-설정) · [server-guide §2](docs/operations/server-guide.md#2-일상-실행--run_docs문서별-흐름). **PC에서는 실행하지 않는다.**
 

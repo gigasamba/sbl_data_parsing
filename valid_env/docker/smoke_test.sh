@@ -5,7 +5,7 @@
 #   SMOKE_SYSTEM=<원천 — 예 SFDC> [SMOKE_LIMIT=10] [SMOKE_KEEP=1 — 끝나도 pg 남김] bash valid_env/docker/smoke_test.sh [질문]   (S6b — 옛 docker/server_sim/, PC 시험 Docker)
 #   [PY=호스트 python(PYTHONPATH=저장소 루트로 mcp_server.cli.mcp_smoke 등 -m 호출)]
 #   원본은 DOC_SRC 폴더 하나(/data/docs) — 11-01 사용자: 원천 s3://를 지워 SMOKE_SOURCE(s3:// — MinIO 대역·원본 삭제 확인·결과 게시 ⑥)와
-#   SMOKE_NIGHTLY(자정 배치 모양 — s3:// 원천 필요)도 지움. 게시(publish)는 서버 run_docs·nightly_batch.sh publish로 확인.
+#   SMOKE_NIGHTLY(자정 배치 모양 — s3:// 원천 필요)도 지움. 게시(publish)는 서버 run_docs·pipe_exec.sh publish로 확인.
 # 종료 코드: 0 통과 · 그 밖 = 실패 단계의 종료 코드. 비밀값은 설정 파일에만(이 스크립트는 출력하지 않음).
 # S7e1(사용자 10-27 Q1) — 컨테이너는 SMOKE_SETTINGS를 읽기 전용으로 붙여 읽는다(서버 compose와 같은 꼴 — 옛 SMOKE_ENV env 파일 대신). 이 스크립트가
 #   호스트에서 쓰는 값(MCP 토큰)은 그 파일에서 꺼낸다(PY에 PyYAML 필요 — BaseLoader로 쓴 글자 그대로, VS7e1 R-5).

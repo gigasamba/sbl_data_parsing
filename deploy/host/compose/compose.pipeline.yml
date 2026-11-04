@@ -1,7 +1,7 @@
 # 파이프라인 컨테이너(docs/operations/server-guide.md §0) — 수집 서버. S6b(10-27, D-020 — 옛 compose.modules.yml): 파이프라인 이미지를
 #   하나로 합쳐 서버 이미지는 2개 — data-pipeline(파싱·구조화·적재·게시, 옛 data-parsing+data-structure) · mcp-server(검색 MCP, 옛 data-retrieval).
 #   상주 컨테이너 둘(사용자 11-03): data-pipeline(일괄 —
-#   `idle` — 일 없이 떠 있음) · data-pipeline-mcp(MCP parse_document 작업 서비스 전용 — CPU 우선, PRD rn-03). run_docs.py·nightly_batch.sh(parse·publish)·pipe_exec.sh(도구·migrate·show-stack)가
+#   `idle` — 일 없이 떠 있음) · data-pipeline-mcp(MCP parse_document 작업 서비스 전용 — CPU 우선, PRD rn-03). run_docs.py·pipe_exec.sh(parse·publish·도구·migrate·show-stack)가
 #   그 안에서 docker exec로 돈다(in_container.sh in_pipeline). 컨테이너마다 compose 파일 하나(사용자 11-03): 이 파일 = data-pipeline ·
 #   compose.pipeline-mcp.yml = data-pipeline-mcp · compose.mcp-server.yml = 검색 MCP mcp-server(mcp_keepalive.sh). 개발 서버 코드 폴더 덧붙임은 짝 파일 compose.code*.yml.
 #   준비(저장소 루트에서): docker build -f deploy/docker/Dockerfile --target pipeline -t data-pipeline:<태그> .
