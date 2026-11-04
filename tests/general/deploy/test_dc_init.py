@@ -19,15 +19,22 @@ def _posix(p):
     return f"/{p[0].lower()}{p[2:]}" if p[1:2] == ":" else p  # Git Bash(Windows)가 절대 경로로 보는 꼴
 
 
-def _run(bash, args, extra):
-    env = {"PATH": os.environ.get("PATH", ""), "PY": Path(sys.executable).as_posix(), **extra}  # env 남김 — 하위 프로세스(시험 셸)
-    return subprocess.run([bash, str(SCRIPT), *args], env=env, capture_output=True, text=True, encoding="utf-8", timeout=120)
-
-
-def test_init():
+def _need_bash():
     bash = _bash()
     if not bash:
         print("[시험] bash 없음 — 건너뜀")
+    return bash
+
+
+def _run(bash, args, extra, script=SCRIPT):
+    env = {"PATH": os.environ.get("PATH", ""), "PY": Path(sys.executable).as_posix(), **extra}  # env 남김 — 하위 프로세스(시험 셸)
+    cmd = [bash, *args] if script is None else [bash, str(script), *args]
+    return subprocess.run(cmd, env=env, capture_output=True, text=True, encoding="utf-8", timeout=120)
+
+
+def test_init():
+    bash = _need_bash()
+    if not bash:
         return
     with tempfile.TemporaryDirectory() as d:
         root = Path(d) / "dev"
@@ -48,11 +55,12 @@ def test_init():
             assert oct((root / "output").stat().st_mode & 0o7777) == "0o2775"
         sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")  # 사람이 채운 설정 — 다시 불러도 그대로여야
         chain.write_text("files: {}\n", encoding="utf-8")  # 사람이 고친 사슬 사본 — 다시 불러도 그대로여야
-        r2 = _run(bash, ["init"], {**base, "RAG_OUT": _posix(root / "output")})
+        r2 = _run(bash, ["init"], base)  # 두 번째는 settings.yaml을 읽음 — 결과 폴더 기본도 DC_ROOT 아래(코드 폴더의 부모가 아님)
         assert r2.returncode == 0, r2.stderr + r2.stdout
         assert sf.read_text(encoding="utf-8") == "required:\n  env: {run_env: dev}\n", "init이 settings.yaml을 덮음"
         assert chain.read_text(encoding="utf-8") == "files: {}\n", "init이 사슬 사본을 덮음"
         assert "덮지 않음" in r2.stdout and "만듦" not in r2.stdout, r2.stdout  # 멱등 — 두 번째는 모두 "있음"
+        assert f"있음  {_posix(root)}/output\n" in r2.stdout, r2.stdout  # 결과 폴더가 시험 루트 밖으로 새지 않음
     r = _run(bash, ["init", "--bad"], {"DC_ROOT": "/nonexistent"})
     assert r.returncode == 2, r.stdout
 
@@ -60,9 +68,8 @@ def test_init():
 def test_root_is_code_parent():
     """op-13 규칙 1 — settings_env.sh는 자기 자리(코드 폴더/deploy/host/scripts)에서 루트(코드 폴더의 부모)를 구해 <루트>/settings.yaml을 읽고
     결과 폴더를 <루트>/output으로 둔다(env·고정 경로 없음). SETTINGS_LOADED로 host_env.py(PyYAML) 부르기는 건너뜀."""
-    bash = _bash()
+    bash = _need_bash()
     if not bash:
-        print("[시험] bash 없음 — 건너뜀")
         return
     with tempfile.TemporaryDirectory() as d:
         root = Path(d) / "dev"
@@ -72,17 +79,15 @@ def test_root_is_code_parent():
         (root / "settings.yaml").write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
         sf = _posix(root / "settings.yaml")
         cmd = f'. {_posix(scripts / "settings_env.sh")} && load_settings && echo "$SETTINGS_FILE|$RAG_ROOT|$RAG_OUT"'
-        env = {"PATH": os.environ.get("PATH", ""), "SETTINGS_LOADED": sf, "DOCKER": "echo"}  # env 남김 — 하위 프로세스(시험 셸)
-        r = subprocess.run([bash, "-c", cmd], env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
+        r = _run(bash, ["-c", cmd], {"SETTINGS_LOADED": sf, "DOCKER": "echo"}, script=None)
         assert r.returncode == 0, r.stderr
         assert r.stdout.strip() == f"{sf}|{_posix(root)}|{_posix(root)}/output", r.stdout
 
 
 def test_timers():
     """op-13 규칙 6 — dc.sh timers가 단위 파일 4개의 @CODE_DIR@를 이 코드 폴더로 채워 쓴다(DC_UNIT_DIR — systemctl 없음)."""
-    bash = _bash()
+    bash = _need_bash()
     if not bash:
-        print("[시험] bash 없음 — 건너뜀")
         return
     with tempfile.TemporaryDirectory() as d:
         r = _run(bash, ["timers"], {"DC_UNIT_DIR": _posix(d)})
@@ -119,9 +124,8 @@ CHECK_CASES = [
 
 
 def test_check():
-    bash = _bash()
+    bash = _need_bash()
     if not bash:
-        print("[시험] bash 없음 — 건너뜀")
         return
     with tempfile.TemporaryDirectory() as d:
         fake = Path(d) / "fake.sh"
@@ -146,9 +150,8 @@ def test_check():
 
 def test_init_refuses_chain_dir():
     """edw_chain.yaml 자리에 폴더(docker가 init 전에 띄운 마운트로 만든 것)가 있으면 지우지 않고 종료 4 — 그 안에 복사하지 않음(리뷰 #140)."""
-    bash = _bash()
+    bash = _need_bash()
     if not bash:
-        print("[시험] bash 없음 — 건너뜀")
         return
     with tempfile.TemporaryDirectory() as d:
         root = Path(d) / "dev"

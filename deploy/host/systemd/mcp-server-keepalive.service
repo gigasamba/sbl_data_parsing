@@ -1,8 +1,5 @@
-# 근거 MCP(컨테이너 mcp-server — S6b 사용자 10-27, 옛 data-retrieval·rag-mcp) 상주 확인(준비만 — 설치·활성화는 사람): 꺼졌거나
-# /health 응답이 없으면 다시 띄움(deploy/host/scripts/mcp_up.sh — S6b, 옛 docker/mcp_up.sh).
-# 설치(op-13 — 코드 폴더에서): sudo bash deploy/host/scripts/dc.sh timers — @CODE_DIR@를 그 코드 폴더로 채워 /etc/systemd/system에 쓰고 타이머를 켬.
-#   새 루트(새 판)에서 다시 부르면 그 루트로 바뀐다.
-#   S6b — unit 이름이 바뀜(옛 data-retrieval-keepalive.*): 옛 unit은 `sudo systemctl disable --now data-retrieval-keepalive.timer` 뒤 파일 삭제(refactor.md C-29)
+# 근거 MCP(컨테이너 mcp-server) 상주 확인: 꺼졌거나 /health 응답이 없으면 다시 띄움(deploy/host/scripts/mcp_up.sh).
+# 설치: 코드 폴더에서 `sudo bash deploy/host/scripts/dc.sh timers`(@CODE_DIR@를 채워 쓰고 타이머를 켬 — 이 파일을 그대로 복사하지 않는다).
 # 서버 컨테이너 도구 = root podman 하나(Environment=DOCKER=podman · User=root — 사용자 10-30 검토 B4). docker 서버면 DOCKER=docker, docker 그룹이 있으면 User=rag.
 [Unit]
 Description=근거 MCP 상주 확인·기동

@@ -12,8 +12,9 @@
 #   <루트>/settings.yaml — 루트 = 코드 폴더의 부모, op-13)이 있으면 ops.host.image_stage_dir·prune_keep을 거기서(settings_env.sh load_settings — 셸 env가 이김), 없으면 셸 env·기본값
 set -uo pipefail
 # 부른 자리 그대로(cd 안 함 — 상대 --stage-dir·SETTINGS_FILE은 부른 자리 기준, S7e1 리뷰). 설정 파일을 못 읽어도 멈추지 않는다(옛처럼 셸 env·기본값).
-if [ -n "${SETTINGS_FILE:-}" ] || [ -f "$(dirname "$0")/../../../../settings.yaml" ]; then
-  . "$(dirname "$0")/settings_env.sh" && load_settings || echo "[prune_old] 설정 파일을 읽지 못함 — 셸 env·기본값으로 계속" >&2
+. "$(dirname "$0")/settings_env.sh"   # 루트 RAG_ROOT(코드 폴더의 부모)·load_settings
+if [ -n "${SETTINGS_FILE:-}" ] || [ -f "$RAG_ROOT/settings.yaml" ]; then
+  load_settings || echo "[prune_old] 설정 파일을 읽지 못함 — 셸 env·기본값으로 계속" >&2
 fi
 DOCKER=${DOCKER:-docker}   # settings ops.host.docker — podman이면 podman(`sudo podman`처럼 두 낱말도 — 아래는 따옴표 없이 펼침, 다른 호스트 스크립트와 같음)
 
