@@ -1,4 +1,4 @@
-"""pipeline.transform.represent.table_inline 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.table_inline`."""
+"""pipeline.transform.represent.table_inline 시험."""
 
 from pipeline.transform.represent.table_inline import inline_tables
 

@@ -1,4 +1,4 @@
-"""pipeline.transform.represent.build_rep 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.build_rep --selftest`."""
+"""pipeline.transform.represent.build_rep 시험."""
 
 import json
 from pathlib import Path
@@ -210,9 +210,9 @@ def selftest():
     doc4 = "mixed.pdf"
     pdf4 = d4 / doc4
     mdoc4 = _fitz.open()
-    mdoc4.new_page(width=200, height=200).insert_text((10, 10), "1쪽 글자층 문서 본문이 충분히 길다")  # is_scan() = False(혼합)이 되게
+    mdoc4.new_page(width=200, height=200).insert_text((10, 10), "1쪽 글자층 문서 본문 text layer long enough")  # 혼합(평균 20자 넘음)
     mdoc4.new_page(width=200, height=200)  # 2쪽 — 글자층 없음(스캔)
-    mdoc4.new_page(width=200, height=200).insert_text((10, 10), "3쪽 글자층 문서 본문이 충분히 길다")
+    mdoc4.new_page(width=200, height=200).insert_text((10, 10), "3쪽 글자층 문서 본문 text layer long enough")
     mdoc4.save(pdf4)
     mdoc4.close()
     base_rep4 = {"text": "1쪽 글자\f\f3쪽 글자", "facts": [], "tables": []}  # 2쪽은 스캔이라 글자층이 비어 있음

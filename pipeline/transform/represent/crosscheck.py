@@ -11,7 +11,7 @@ from common.core.text import normalize_value
 
 def families():
     from pipeline.extract.engines import registry
-    from pipeline.shared.engine_family import FAMILY
+    from pipeline.transform.represent.parse_scoring import FAMILY
 
     return {e: FAMILY.get(e, st) for e, (st, _) in registry.engines().items()}
 
@@ -22,26 +22,6 @@ def load_doc(parse_dir, eng, doc):
         return None
     d = json.loads(f.read_text(encoding="utf-8"))
     return {"text": d.get("text") or "", "facts": d.get("facts") or []}
-
-
-def locate_value(text, value, hint=None):
-    """값(가능하면 hint와 같은 줄)이 있는 줄 → 근거 위치."""
-    vn, hn = normalize_value(value), normalize_value(hint or "")
-    lines = text.split("\n")
-    pos = 0
-    best = None
-    for ln in lines:
-        n = normalize_value(ln)
-        if vn and vn in n:
-            if not hn or hn in n:
-                best = (pos, ln)
-                break
-            best = best or (pos, ln)
-        pos += len(ln) + 1
-    if not best:
-        return None
-    m = locate(text, best[0], best[0] + len(best[1]))
-    return {"page": m["page"], "line": m["line"], "section": m["section"], "snippet": best[1].strip()[:200]}
 
 
 def build(parse_dir, src, min_fams=2):

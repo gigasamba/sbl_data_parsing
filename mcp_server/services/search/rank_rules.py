@@ -1,10 +1,8 @@
-"""검색 공용 도우미(pgsearch·retriever) — 질의 임베딩·가중치·동점 처리·ID 문턱.
-mc-01(사용자 10-31) — PC 전용 로컬 묶음 검색(numpy 코사인·BM25 — 옛 Local.search·bm25)은 지움: 검색은 PG 하나(PC는 SQLite 대역 pg_standin).
-mc-19(사용자 11-03) — 묶음 문서 목록(BundleDocs)도 지움: 검색은 실행 중에 묶음 파일을 읽지 않는다(색인 정보·문서 날짜는 PG)."""
+"""검색 공용 도우미(pgsearch·retriever) — 질의 임베딩·가중치·동점 처리·ID 문턱. 검색은 PG 하나(PC는 SQLite 대역 pg_standin)."""
 
 from common.ai.embed import embed_texts, query_model_mismatch
-from common.core.terms import load_id_patterns_typed, match_clients  # BR41 tie-break 엔티티(고객 명부·ID 모양)
-from mcp_server import config as mc  # 설정 객체(S7d)
+from common.core.terms import load_id_patterns_typed, match_clients  # 동점 처리 엔티티(고객 명부·ID 모양)
+from mcp_server import config as mc
 
 ID_MAX_DF = 5  # ID 우선 검색에 쓰는 ID: 이 수 이하의 "문서"에만 나오는 것(로컬·pgvector 같은 값).
 # BR32 — 청크 수가 아니라 문서 수로 센다(원래 의도 "여러 문서에 흔한 제품 코드는 문서를 특정 못 함"은 문서 단위
@@ -73,7 +71,7 @@ def tie_break(ordered, scores, docmeta, question, eps=None):
 
 def weights(question=None):
     """RRF 가중치(검색 방법별) — SEARCH_W_VECTOR·SEARCH_W_BM25·SEARCH_W_ID(기본 1·1·2, 드문 ID 정확 일치를 우선).
-    BR58(10-12)에서 SEARCH_W_BM25 기본 1.3을 시도했다가 되돌림 — 상위5 적중은 올랐지만(합본 terms-hard .70→.80)
+    SEARCH_W_BM25 기본 1.3은 시도했다가 되돌림 — 상위5 적중은 올랐지만(합본 terms-hard .70→.80)
     1위 정답이 여러 세트에서 떨어짐(hard64 .772→.719·r2 .85→.80·distractors 1.0→.944, 답변 단계 QA095 미스) —
     근접 중복 문서 구분은 재정렬(BR54) 쪽에서. 측정: dev_tools/perform_test/retrieval/measure.py --pooled·--hard-core-manifest.
     G14 — question이 주어지고 질문 유형 라우터(mcp_server.services.search.question_type.classify,
@@ -81,7 +79,7 @@ def weights(question=None):
     bm25 가중으로 쓴다 — 표 집계 질문은 같은 양식의 다른 고객·연도 표가 키워드로 같이 올라와 BM25가 벡터 1위 근거를
     끌어내리는 문제(dev/docs/backlog/search.md G14). rank_rules.py·pgsearch.py 둘 다 이 함수 하나만 써서 가중치가
     갈라지지 않는다(pgsearch.py가 이 함수를 import)."""
-    s = mc.cfg().search  # 한 번 묶음(S7d — 가중치 칸들이 같은 판 값)
+    s = mc.cfg().search  # 한 번 묶음(가중치 칸들이 같은 판 값)
     w = {"vector": s.weights.vector, "bm25": s.weights.bm25, "id": s.weights.id}
     if question is not None:
         from mcp_server.services.search.question_type import classify
@@ -92,7 +90,7 @@ def weights(question=None):
 
 
 class IndexMismatch(ValueError):
-    """AD41 — 질의 임베딩 모델이 색인(gold doc.embed_model — mc-19)과 다름. RuntimeError·OSError가 아니라서 '키워드·ID만'으로 조용히 떨어지지 않고 오류로 드러남."""
+    """질의 임베딩 모델이 색인(gold doc.embed_model)과 다름. RuntimeError·OSError가 아니라서 '키워드·ID만'으로 조용히 떨어지지 않고 오류로 드러남."""
 
 
 def embed_query(meta, text):

@@ -1,11 +1,10 @@
-"""검색(모듈 ④) — 같은 질의 → 저장소(PostgreSQL+pgvector 또는 로컬 묶음)에서 하이브리드(벡터 + BM25 + 드문 ID → RRF) + 그래프 이웃.
-pipeline.py(ask·test-stack)와 검색 MCP(modules/search/mcp_server.py)가 같이 씀. 오케스트레이터(pipeline.py)를 import하지 않음(모듈 분리)."""
+"""검색 — 질의 → PostgreSQL(pgvector)에서 하이브리드(벡터 + BM25 + 드문 ID → RRF). 검색 MCP와 search_ask CLI가 같이 씀."""
 
 import sys
 import time
 
 from common.core.contract import uri_from_path  # 원본 위치 규칙(모듈 계약)
-from mcp_server.services.search.query_expand import (  # 용어 사전(X3·X4, 구조화와 같은 규칙) · SI43⑤ 벡터 질의 별칭 덧붙이기(10-16 검색 전용으로 분리)
+from mcp_server.services.search.query_expand import (  # 용어 사전(구조화와 같은 규칙) · 벡터 질의 별칭 덧붙이기
     expand_query,
     vector_alias_text,
 )
@@ -14,10 +13,10 @@ from mcp_server.services.search.rank_rules import embed_query
 
 class Retriever:
     """같은 질의 → 원천 스키마 하나(PostgreSQL + pgvector)에서 하이브리드(벡터 + BM25 + 드문 ID → RRF).
-    벡터는 pgvector에만 둔다(사용자 10-29 — EDW 벡터 경로 삭제, docs/prd/ops.md#op-03). 묶음 파일은 읽지 않는다(mc-19 — 색인 정보·문서 날짜는 PG)."""
+    벡터는 pgvector에만 둔다(docs/prd/ops.md#op-03). 묶음 파일은 읽지 않는다(색인 정보·문서 날짜는 PG)."""
 
     def __init__(self, retrieve="cosine", *, pg):
-        # pg = 원천 스키마 하나의 연결(pl-28 — server_state가 connect_sources로 만들어 줌)
+        # pg = 원천 스키마 하나의 연결(server_state가 connect_sources로 만들어 줌)
         from mcp_server.services.search import pgsearch
 
         self.retrieve, self.pgmod, self.pg = retrieve, pgsearch, pg
@@ -26,16 +25,16 @@ class Retriever:
 
     def search(self, q, k, methods=None):
         """methods ⊂ {vector, bm25, id}(없으면 retrieve 설정대로) — 검색 MCP가 방법을 골라 씀(G3).
-        단일 스레드 호출부용 — note류를 self 속성에도 채운다. 공유 인스턴스를 여러 스레드가 쓰면(검색 MCP) search_ex를 쓴다(S12)."""
+        단일 스레드 호출부용 — note류를 self 속성에도 채운다. 공유 인스턴스를 여러 스레드가 쓰면(검색 MCP) search_ex를 쓴다."""
         hits, ms, notes = self.search_ex(q, k, methods)
         self.expand_notes, self.note = notes.get("expand_notes"), notes.get("note")
         return hits, ms
 
     def search_ex(self, q, k, methods=None, scope=None):
         """search()와 같은 동작이지만 note류(expand_notes·note)를 반환값 notes(dict)로 준다 — 검색 MCP처럼 같은 Retriever를
-        여러 스레드가 동시에 쓸 때 A 요청 응답에 B의 note가 섞이는 것을 막음(S12). (최신성 순위 recency_rerank는 pl-38에 지움.)
+        여러 스레드가 동시에 쓸 때 A 요청 응답에 B의 note가 섞이는 것을 막음.
         scope = 하드 거르기 범위 **안** 문서 file_path 집합 — 주어지면 저장소 질의 단계부터 그 문서의 청크만 후보로(pgsearch._scope_restrict).
-        고객은 거르기(client_edw 정확 일치 — search_svc 범위)로만 — 본문 고객 라벨로 앞으로 올리던 길(AD38·BR50)은 11-02에 지움(사용자 C6).
+        고객은 거르기(client_edw 정확 일치 — search_svc 범위)로만.
         반환: (hits, ms, notes)."""
         hits, ms, notes = self._search_ex(q, k, methods, scope=scope)
         if scope:  # 안전망 — 범위 밖 청크가 새지 않게
@@ -48,7 +47,7 @@ class Retriever:
         qv, note = None, None
         if not self.meta.get("dim"):  # 벡터가 없는 스키마(빈 원천)면 키워드·ID만
             note = "임베딩 없는 색인 — 키워드·ID 검색만"
-        elif methods and "vector" not in methods:  # 벡터를 안 쓰는 요청은 질의 임베딩도 안 함(S85 — 임베딩 없는 이미지·비용)
+        elif methods and "vector" not in methods:  # 벡터를 안 쓰는 요청은 질의 임베딩도 안 함(임베딩 없는 이미지·비용)
             pass
         else:
             try:
@@ -64,7 +63,7 @@ class Retriever:
             want = set(methods) if methods else ({"vector"} if self.retrieve == "cosine" else {"vector", "bm25", "id"})
             methods = sorted(want - {"vector"}) or ["bm25", "id"]
         t0 = time.perf_counter()
-        if True:  # PG 하나(mc-01)
+        if True:  # PG 하나
             rows = self.pgmod.search(
                 self.pg,
                 qv,
@@ -75,7 +74,7 @@ class Retriever:
                 question=q,
                 scope=scope,
             )
-            # URI는 file_path(Object Storage 원본 경로)에서 유도 · 고객은 client_edw(EDW 조인 — pl-29)
+            # URI는 file_path(Object Storage 원본 경로)에서 유도 · 고객은 client_edw(EDW 조인)
             hits = [
                 {
                     "rank": i + 1,
@@ -88,7 +87,7 @@ class Retriever:
                     "summary": r["summary"],
                     "text": r["chunk_text"],
                     "chunk_ref": r["chunk_id"],
-                    "chunk_key": f"{r['doc_id']}:{r['seq']}",  # 사용자 10-31 — <doc_id>:<seq>(5벌이 시퀀스 하나라 겹치지 않음, pl-28)
+                    "chunk_key": f"{r['doc_id']}:{r['seq']}",  # <doc_id>:<seq>(5벌이 시퀀스 하나라 겹치지 않음)
                     "doc_key": r["file_path"],
                     "doc_id": r["doc_id"],
                     "file_name": r["file_name"],

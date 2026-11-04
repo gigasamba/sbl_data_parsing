@@ -1,17 +1,15 @@
-"""EM1 — rule-based EDW table/column metadata lookup for the MCP tool `edw_meta`
-(mcp_server/main.py). Serves a *pre-built static dataset* (catalog.json + columns.jsonl,
+"""Rule-based EDW table/column metadata lookup for the MCP tool `edw_meta`. Serves a *pre-built static dataset* (catalog.json + columns.jsonl,
 built by table_meta/scripts/build_mcp_dataset.py from the 209 column-metadata CSVs + the 1021
 inventory, PII-sanitized at build time) — no live DB, no vector search, no embedding, no LLM call.
 
-User decisions (2026-10-22, docs/table_meta/docs/MCP_PLAN.md rev.3 §1·§4.2):
+Rules:
  - 3-level hierarchy only: no args → schema summary · `schema` only → ALL tables of that schema
    (column list excluded) · `schema`+`table` → table meta + FULL column list with Korean
    descriptions. `column_filter` (case-insensitive substring on the column name) narrows wide
-   tables (Account 182 cols). The single-column view and the `query` keyword search were removed
-   by the user the same day — do not add them back.
- - sample_values are NEVER sent in any response (§3.4 v1 미표시 방침) — the dataset keeps the
+   tables (Account 182 cols). No single-column view and no keyword search (decided — do not add).
+ - sample_values are NEVER sent in any response — the dataset keeps the
    sanitized values for future reuse, this tool just doesn't read them.
- - fail-soft (§8 R9): a missing module or dataset must never break the other three tools —
+ - fail-soft: a missing module or dataset must never break the other three tools —
    mcp_server imports this module lazily inside do_edw_meta and turns NotConfigured into a
    {"error": ...} dict, the query_edw `not_configured` pattern.
 
@@ -21,13 +19,11 @@ Operational notes:
    are re-checked at most once per MCP_RELOAD_CHECK_SEC (default 30) like _retriever(), so a
    rebuilt dataset propagates within 30s without a restart. A failed re-check keeps serving the
    stale copy and retries later — a mid-ship `docker cp` never 500s a live call.
- - tools run in _bg threads (S12) so the load/update path is lock-guarded (non-blocking check →
+ - tools run in _bg threads so the load/update path is lock-guarded (non-blocking check →
    single loader, same shape as mcp_server._retriever); lookups themselves are plain dict reads.
  - response budget: EDW_META_MAX_BYTES (default 200_000) tail-caps oversized responses the
    query_edw._cap_bytes way (tail drop + truncated:true + guidance) — the widest table
    (SFDC.Account, 182 columns) fits in ~30KB.
-
-English docstrings per 10-15 user rule (EQ1 precedent).
 """
 
 import difflib
@@ -38,10 +34,10 @@ import time
 from pathlib import Path
 
 from common.core.paths import APP_ROOT
-from mcp_server import config as mc  # 설정 객체(S7d)
+from mcp_server import config as mc
 
 _DIR_DEFAULT = str(APP_ROOT / "config" / "edw_meta")  # 이미지 안 /app/config/edw_meta(I4 — 런타임 루트 기준, C4: env로 덮음)
-_MAX_BYTES = int(mc.cfg().edw_meta.max_bytes)  # import 때 한 번(S7d — 설정 객체, 기본 200000)
+_MAX_BYTES = int(mc.cfg().edw_meta.max_bytes)  # import 때 한 번(기본 200000)
 _RELOAD_SEC = float(mc.cfg().server.reload_check_sec)  # _retriever()와 같은 값을 재사용 — 별도 env 안 만듦
 _STATE: dict = {}  # {"d": dataset, ...} — 첫 호출 때 적재, 이후 mtime 확인 재적재
 _LOCK = threading.Lock()
@@ -52,7 +48,7 @@ class NotConfigured(Exception):
 
 
 def _dir():
-    return Path(mc.cfg().edw_meta.dir or _DIR_DEFAULT)  # 호출마다(S7d — 설정 객체)
+    return Path(mc.cfg().edw_meta.dir or _DIR_DEFAULT)  # 호출마다
 
 
 def _norm(x):
@@ -117,7 +113,7 @@ def _data():
             return st
         try:
             fresh = _load()
-        except Exception as e:  # cp 도중 반쪽 파일 등 — 옛 데이터 그대로 두고 다음 확인에 재시도
+        except Exception as e:  # cp 도중 반쪽 파일 등 — 있던 데이터 그대로 두고 다음 확인에 재시도
             print(f"[mcp] edw_meta 재적재 실패(옛 데이터 유지): {type(e).__name__}: {str(e)[:100]}", file=sys.stderr, flush=True)
             st["checked"] = time.monotonic()
             return st

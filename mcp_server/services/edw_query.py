@@ -1,18 +1,17 @@
-"""EQ1 — read-only EDW SQL query engine for the two MCP tools `describe_edw`/`query_edw`
-(mcp_server/main.py). An LLM agent sends its own SELECT, this module runs it against EDW
+"""Read-only EDW SQL query engine for the MCP tool `query_edw`. An LLM agent sends its own SELECT, this module runs it against EDW
 (SQL Server in production, a SQLite stand-in on a dev PC) and returns raw rows for the agent to
 post-process — no summarization or calculation happens here.
 
-Security boundary (independent review follows the urgent overlay that adds this file):
+Security boundary:
  - read-only by construction: exactly one SELECT/WITH statement, no DML/DDL/exec keywords anywhere
    (see `validate()`), run through the EDW **read** account (common.connections.rdb.read — the search
-   MCP never gets the write account; user 10-29, docs/prd/ops.md#op-03).
- - tables: every schema the read account can see (user 10-21 — narrow it with DB grants); the sqlite
+   MCP never gets the write account; docs/prd/ops.md#op-03).
+ - tables: every schema the read account can see (narrow it with DB grants); the sqlite
    stand-in is limited to DEFAULT_TABLES. System catalogs are always rejected.
  - limits: row count (EDW_QUERY_MAX_ROWS), wall-clock timeout (EDW_QUERY_TIMEOUT_SEC), response size
    (EDW_QUERY_MAX_BYTES), per-cell text length (2000 chars).
 
-Known limitation (ponytail — flagged for the security review, not hidden): `validate()` is a regex-based
+Known limitation: `validate()` is a regex-based
 conservative parser, not a real SQL parser. It scans the *whole* statement text for FROM/JOIN targets
 (so it also catches subqueries and CTEs' inner tables), checks every item in a comma-separated FROM
 list (not just the first), and classifies table-valued function calls (`OPENJSON(...)`, `dbo.fn(...)`)
@@ -21,7 +20,7 @@ Server construct — dynamic pivoting or very unusual identifier quoting can be 
 determined" even when they would have been safe. That is the deliberate fail-closed side of a
 conservative allowlist checker; loosening it needs a real parser, not more regex.
 
-Security review round 2 (BLOCK, addressed below):
+Guards against:
  1. T-SQL does not need `;` between statements, so a single call could smuggle a second statement
     (`SELECT 1 DECLARE @x INT = 0 WHILE ... SET @x = ...`). Closed two ways: every T-SQL batch/control
     keyword (DECLARE/SET/WHILE/BEGIN/IF/ELSE/GOTO/PRINT/RETURN/THROW/RAISERROR/TRY/CATCH/USE/GO) is now
@@ -32,8 +31,8 @@ Security review round 2 (BLOCK, addressed below):
  2. The row cap (`EDW_QUERY_MAX_ROWS`/max_rows) needs to be enforced *in the SQL sent to the database*,
     not just in Python after the fact — otherwise a CTE building a cartesian product still fully
     computes server-side before fetchmany ever gets a chance to stop it. See `_top_n()`.
- 3. (Settings allowlist removed 11-04 — see allowed_tables(): mssql = all schemas the read account
-    can see, sqlite stand-in = DEFAULT_TABLES.)
+ 3. Table scope — see allowed_tables(): mssql = all schemas the read account can see, sqlite
+    stand-in = DEFAULT_TABLES.
  4. The sqlite stand-in connection is now opened with SQLite's own `file:...?mode=ro` URI read-only
     flag, so even a SQL-text guard bypass could not write to it at the OS/driver level (`ATTACH` and
     `PRAGMA` were already blocked keywords for user-supplied SQL; `LOAD_EXTENSION` is now blocked too).
@@ -47,8 +46,8 @@ from datetime import time as dt_time
 from decimal import Decimal
 
 from common.config import settings as C  # common 칸(connections.rdb — 접속·sqlite 대역)
-from mcp_server import config as mc  # 설정 객체(S7d — 호출마다 cfg())
-from mcp_server.schemas.edw_result import ColumnMeta, QueryResult  # noqa: F401 — S5: 출력 모양은 schemas/로(내용 그대로)
+from mcp_server import config as mc  # 호출마다 cfg()
+from mcp_server.schemas.edw_result import ColumnMeta, QueryResult  # noqa: F401 — 출력 모양은 schemas/
 
 DEFAULT_TABLES = "AI.FileStorageMap,AI.ParsingMeta,CRMS.RM_MAS_CLIENT,CRMS.RM_MAS_CLIENT_GENERAL,LAS.DIVISION_MAS,LAS.PROD_MAS,LAS.SERVICE_MAS,SFDC.Account,SFDC.Opportunity"  # PC stand-in tables (valid_env/edw — ops.md#op-03)
 _CELL_MAX = 2000
@@ -124,7 +123,7 @@ def enabled():
 
 
 def allowed_tables(kind=None):
-    """(2026-10-21 사용자: 전 스키마 허용) 제한 없음 — None을 돌려주면 validate가 허용 목록 검사를 건너뛴다.
+    """제한 없음(전 스키마 허용) — None을 돌려주면 validate가 허용 목록 검사를 건너뛴다.
     시스템 테이블 차단(sys·INFORMATION_SCHEMA 등)·읽기 전용 키워드 검사는 그대로 유지된다. sqlite 스탠드인은 실 EDW가
     아니므로 동봉 샘플 범위(DEFAULT_TABLES)로 둔다."""
     if kind == "sqlite":
@@ -269,7 +268,7 @@ def _scan_from_list(text, pos):
             items.append(("unknown", None))
             break
         if any(p.startswith("[") != p.endswith("]") for p in re.split(r"\s*\.\s*", m.group(0))):
-            # Security re-review (10-15) — "[AI.client]" is ONE table literally named "AI.client" in the default
+            # "[AI.client]" is ONE table literally named "AI.client" in the default
             # schema for SQL Server, not schema AI + table client; a '.' inside brackets is never accepted.
             items.append(("unknown", None))
             break
@@ -277,7 +276,7 @@ def _scan_from_list(text, pos):
         pos = m.end()
         fpos = _WS_RE.match(text, pos).end()
         if fpos < n and text[fpos] == ".":
-            # Security re-review (10-15) BLOCK — a 3/4-part name (db.schema.table, linked server) whose first two
+            # A 3/4-part name (db.schema.table, linked server) whose first two
             # parts match an allowlisted entry must not pass as that entry; only schema.table is ever allowed.
             items.append(("unknown", None))
             break
@@ -443,7 +442,7 @@ def validate(sql, allowed):
     if _at_outside_strings(core):
         return None, "keyword:@"
     if _at_outside_strings(core, '"'):
-        # Security re-review (10-15) — the scanners only know '...' and [...]; a "quoted" identifier holding a
+        # The scanners only know '...' and [...]; a "quoted" identifier holding a
         # single quote would make them treat the rest as a string. Use [brackets] for identifiers instead.
         return None, "double_quote"
     stmt_err = _check_single_top_level_statement(core)
@@ -463,9 +462,7 @@ def validate(sql, allowed):
                 return None, "table_system"
             if not schema and bare in cte_names:
                 continue  # a CTE's own name, not a real table
-            if (
-                allowed is not None and name not in allowed
-            ):  # 2026-10-21 사용자: 기본 전 스키마 허용(None) — 시스템 테이블 차단은 위에서 이미 끝남
+            if allowed is not None and name not in allowed:  # 기본 전 스키마 허용(None) — 시스템 테이블 차단은 위에서 이미 끝남
                 return None, f"table:{name}"
     return core, None
 
@@ -535,7 +532,7 @@ def _connect_sqlite(path, timeout):
 
 
 def _connect_mssql(conf, timeout):
-    """S8b(5-4) — SQLAlchemy가 연 DBAPI 연결(접속 인자 그대로). 질의 코드는 SQLite 대역과 같은 DBAPI 커서 꼴이라 그대로(도구 출력 같음)."""
+    """SQLAlchemy가 연 DBAPI 연결(접속 인자 그대로). 질의 코드는 SQLite 대역과 같은 DBAPI 커서 꼴이라 그대로(도구 출력 같음)."""
     from common.store import mssql
 
     # conf = mssql.login("read") — 포트 형식은 거기서 이미 검사(_mssql_conf) · 시간 상한·문자셋은 이 도구 값이 이김
@@ -566,13 +563,13 @@ def _cap_cte_tsql(sql, n):
     if len(selects) != 1:
         return sql, "cte_union_not_capped"
     start, end, _ = selects[0]
-    dm = re.match(r"\s+(?:DISTINCT|ALL)\b", sql[end:], re.IGNORECASE)  # TOP goes after DISTINCT/ALL (re-review 10-15)
+    dm = re.match(r"\s+(?:DISTINCT|ALL)\b", sql[end:], re.IGNORECASE)  # TOP goes after DISTINCT/ALL
     if dm:
         end += dm.end()
     after = sql[end:]
     m = _TOP_AFTER_SELECT_RE.match(after)
     if m:
-        pct = _top_percent_risk(after, m)  # 2026-10-22 — TOP n PERCENT: plain 경로와 같은 거부(양쪽 같은 규칙)
+        pct = _top_percent_risk(after, m)  # TOP n PERCENT: plain 경로와 같은 거부(양쪽 같은 규칙)
         if pct:
             return sql, pct
         return (sql, None) if int(m.group(1)) <= n else (sql, "cte_top_too_high")
@@ -580,23 +577,21 @@ def _cap_cte_tsql(sql, n):
 
 
 def _top_percent_risk(after, m):
-    """2026-10-22 — `TOP n PERCENT` (explicit TOP, CTE or plain): a percentage needs the *whole* input
-    counted/materialized server-side, which is exactly the compute this row cap exists to bound (security
-    review round 2, fix 2 — fetchmany only stops the reading). Rejected fail-closed in both T-SQL paths."""
+    """`TOP n PERCENT` (explicit TOP, CTE or plain): a percentage needs the *whole* input
+    counted/materialized server-side, which is exactly the compute this row cap exists to bound
+    (fetchmany only stops the reading). Rejected fail-closed in both T-SQL paths."""
     if re.match(r"\s*PERCENT\b", after[m.end() :], re.IGNORECASE):
         return "top_percent"
     return None
 
 
 def _cap_plain_tsql(sql, n):
-    """2026-10-22 (live-measured — every `SELECT TOP n …` died as query_failed): the plain-SELECT path used
-    to inject `TOP (n+1)` unconditionally, producing the invalid `SELECT TOP (n+1) TOP n …`. Now it mirrors
-    `_cap_cte_tsql`'s proven policy instead:
-      - explicit TOP <= n: left alone (already safely capped, no rewrite needed).
-      - explicit TOP > n: "plain_top_too_high" — we do not lower someone else's explicit TOP ourselves (the
-        CTE counterpart's rationale — a correctness question); the caller lowers the TOP or raises max_rows.
-      - `TOP n PERCENT`: rejected ("top_percent" — see `_top_percent_risk`).
-      - no TOP: inject `TOP (n+1)` after SELECT/DISTINCT/ALL, byte-identical to the old rewrite."""
+    """Plain-SELECT row cap, same policy as `_cap_cte_tsql` (never produce `SELECT TOP (n+1) TOP n …`):
+    - explicit TOP <= n: left alone (already safely capped, no rewrite needed).
+    - explicit TOP > n: "plain_top_too_high" — we do not lower someone else's explicit TOP ourselves (the
+      CTE counterpart's rationale — a correctness question); the caller lowers the TOP or raises max_rows.
+    - `TOP n PERCENT`: rejected ("top_percent" — see `_top_percent_risk`).
+    - no TOP: inject `TOP (n+1)` after SELECT/DISTINCT/ALL."""
     m = re.match(r"^\s*SELECT(\s+(?:DISTINCT|ALL)\b)?", sql, re.IGNORECASE)
     end = m.end()  # _top_n() prefilters the first keyword — this can't miss
     after = sql[end:]
@@ -618,7 +613,7 @@ def _top_n(sql, n, dialect):
     sqlite: wraps the whole statement uniformly (`SELECT * FROM (<q>) AS _q LIMIT n+1`) — this works for
     both plain SELECT and WITH alike, since SQLite (unlike SQL Server) allows a WITH clause inside a
     derived table and has no "ORDER BY needs TOP/OFFSET in a subquery" restriction.
-    tsql: a plain SELECT is delegated to `_cap_plain_tsql()` (explicit TOP/PERCENT aware since 2026-10-22);
+    tsql: a plain SELECT is delegated to `_cap_plain_tsql()` (explicit TOP/PERCENT aware);
     a WITH query is delegated to `_cap_cte_tsql()` (see its docstring for the union/explicit-TOP edge cases
     it rejects on).
     Returns (rewritten_sql, None) on success or (original_sql, error_code) when it can't be
@@ -636,14 +631,13 @@ def _top_n(sql, n, dialect):
 
 
 def _row_budget(max_rows):
-    """실효 상한 = max(1, min(max_rows, EDW_QUERY_MAX_ROWS)). 기본 1000행 — 사용자 11-03: 운영 서버와 같게 도구 기본(max_rows)과
-    설정 기본을 함께 1000으로(10-22에 둘 다 2000으로 올렸던 것을 되돌림). 설정 우선·0은 1행(max(1,…))은 그대로."""
+    """실효 상한 = max(1, min(max_rows, EDW_QUERY_MAX_ROWS)). 기본 1000행(운영 서버와 같게 도구 기본과 설정 기본이 같음). 0은 1행."""
     return max(1, min(int(max_rows), int(mc.cfg().edw_query.max_rows)))
 
 
 def query(sql, max_rows=1000):
     """Run one read-only SELECT/WITH against EDW and return a JSON-safe result (see QueryResult).
-    The call (SQL in args, result) is recorded by the MCP audit log applog.mcp_log (op-01), not here."""
+    The call (SQL in args, result) is recorded by the MCP audit log applog.mcp_log, not here."""
     t0 = time.monotonic()
     kind, conf = backend()
     if kind is None:
@@ -783,7 +777,7 @@ def describe(table=None):
     if kind is None:
         return {"ok": False, "dialect": "tsql", "error": "not_configured: EDW query backend not configured"}
     dialect = dialect_of(kind)
-    allowed = allowed_tables(kind)  # 2026-10-21 사용자: 기본 None=전 스키마 허용 — MIME expose 안 된 describe 도구도 깨지지 않게
+    allowed = allowed_tables(kind)  # 기본 None = 전 스키마 허용
     if allowed is None:
         return {
             "ok": False,

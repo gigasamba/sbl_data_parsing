@@ -1,4 +1,4 @@
-"""pipeline.load.pgvector_load 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.load.pgvector_load --selftest`."""
+"""pipeline.load.pgvector_load 시험."""
 
 import pipeline.load.pgvector_load as M
 from pipeline import config as pc

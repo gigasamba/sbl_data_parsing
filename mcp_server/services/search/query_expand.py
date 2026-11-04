@@ -37,16 +37,13 @@ def _exp_tokens(s):
 def _entry_hit(q, r):
     """사전 한 개념이 질문에 나왔는지 — 가장 긴 표기 우선. canonical·synonyms는 항상 대소문자 무시(경계는
     _name_pat의 `\\b`/한글 조사 lookaround가 맡아 "MSDS"·"words" 안의 "DS"처럼 단어 중간에서 안 걸림).
-    abbreviations는 case_sensitive=Y면 저장된 대소문자 그대로만, 그 외(기본값, 10-14 바이오/CDMO 용어 대소문자
-    무시 작업)는 대소문자 무시. weak_synonyms는 원래부터 대소문자 구분 칸이 없어 항상 대소문자 무시(예:
+    abbreviations는 case_sensitive=Y면 저장된 대소문자 그대로만, 그 외(기본값)는 대소문자 무시. weak_synonyms는 원래부터 대소문자 구분 칸이 없어 항상 대소문자 무시(예:
     BIZ.CDMO weak_synonyms의 "CMO"·"CDO" — 다른 개념의 약어를 관련어로 얹어둔 것).
 
     abbreviations·weak_synonyms 중 **3자 이하**(DS·DP·PM·CMO·CDO·CRO·DAR처럼 소문자·일반 단어와 겹쳐
-    동음이의 위험이 큰 짧은 표기, 독립 검토 10-14②에서 2자→3자로 확대 + weak_synonyms까지 포함: "cmo"
-    (BIZ.CDMO weak_synonym 경로로 새어나가던 것)·"cdo tranche"·"cro survey"·"dar window" 같은 소문자
-    잡음 실측)인데 대소문자가 다르게(예: 소문자) 맞은 경우는 `context_required`(행 공통, 길이·출처 칸
+    동음이의 위험이 큰 짧은 표기 — "cmo"·"cdo tranche"·"cro survey" 같은 소문자 잡음)인데 대소문자가 다르게(예: 소문자) 맞은 경우는 `context_required`(행 공통, 길이·출처 칸
     무관하게 적용되는 기존 조건)가 비어 있어도 **추가로** 문맥 단어가 있어야만 인정 — 저장된 대소문자
-    그대로(보통 대문자) 맞았을 때는 이 추가 조건이 안 걸림(기존 동작과 바이트 동일). canonical·synonyms
+    그대로(보통 대문자) 맞았을 때는 이 추가 조건이 안 걸림. canonical·synonyms
     (항상 뜻이 분명한 정식 표기)는 짧아도 이 가드 대상이 아님(이 사전엔 짧은 strong synonym이 없음).
     context_required가 채워진 행은 길이·대소문자·출처와 무관하게 이미 그 조건을 타므로 별도 처리 불필요.
     없으면 None."""
@@ -82,13 +79,13 @@ def expand_query(q, glossary=None, aliases=None, draft_glossary=None):
     """BM25 질의 확장(X3 용어 사전 + SI43 명부 별칭) — 벡터 질의는 바꾸지 않음(호출부가 원문 q를 따로 임베딩).
     {토큰: 가중치}, 적용 노트 목록.
     SI43(XL008): 용어집에 없는 순수 명부(roster — stack.json client_aliases·PG 마스터 client_roster) 전용 별칭도 — 질문에
-    한쪽 표기가 나오면(SI43⑦ 조사 규칙 포함, _name_hit) 같은 고객의 다른 표기를 가중치 1.0으로(용어집 쪽은 위
+    한쪽 표기가 나오면(조사 규칙 포함, _name_hit) 같은 고객의 다른 표기를 가중치 1.0으로(용어집 쪽은 위
     루프가 이미 처리, 겹치면 추가 토큰 없음 → 중복 note 없음) — ALIAS_EXPAND_MAX로 토큰 수 상한, 결정적 순서
     (길이 내림·이름 오름).
-    SI43④ draft_glossary(기본 None → load_draft_glossary(), 즉 output/ 자동 draft CSV의 status=draft 행 — GLOSSARY_DIR/
-    마스터 domain_terms가 아님, 독립 검토 BLOCK 1) — 사람 승인 없이 쌓인 새 이름 후보도 BM25에 weak(0.3)로만(승격
+    draft_glossary(기본 None → load_draft_glossary(), 즉 output/ 자동 draft CSV의 status=draft 행 — GLOSSARY_DIR/
+    마스터 domain_terms가 아님) — 사람 승인 없이 쌓인 새 이름 후보도 BM25에 weak(0.3)로만(승격
     전엔 approved 취급 안 함 — match_clients·하드 필터에는 안 들어간다, _aliases()는 마스터 domain_terms approved
-    org_client만 봄 — pl-38)."""
+    org_client만 봄)."""
     terms = {t: 1.0 for t in tokens(q)}
     notes = []
     glossary = load_glossary() if glossary is None else glossary
@@ -162,18 +159,11 @@ def _script(name):
 
 def vector_alias_text(q, aliases=None):
     """SI43⑤ — 벡터 질의 임베딩 입력에만 명부 별칭의 다른 표기를 덧붙인다(원문 q는 그대로 돌려주지 않고, 호출부가
-    표시·BM25에는 원문을 계속 쓰고 이 함수의 반환값은 임베딩 호출 한 곳에만 — retriever.py _search_ex). 설계 배경
-    (server.md SI43⑤): 한글 질문 '셀트리온' ↔ 영어 문서 'Celltrion'처럼 BM25는 expand_query가 토큰을 맞춰 주지만
+    표시·BM25에는 원문을 계속 쓰고 이 함수의 반환값은 임베딩 호출 한 곳에만 — retriever.py _search_ex). 배경: 한글 질문 '셀트리온' ↔ 영어 문서 'Celltrion'처럼 BM25는 expand_query가 토큰을 맞춰 주지만
     벡터는 원문 그대로라 표기가 다르면 각 언어 임베딩이 멀어질 수 있다 — 질문에 나온 표기(명부 쪽, _name_hit로
     조사 포함 탐지)를 찾으면 같은 고객의 '다른 문자 체계' 표기만(_script — 한글 [가-힣] vs 라틴 [A-Za-z], 둘 다
     아니면 비교 불가로 건너뜀) 결정적 순서(이름 오름차순)로 괄호에 덧붙인다(같은 문자 체계 별칭은 BM25
-    expand_query가 이미 커버해 여기선 뺀다). G17(10-14, 독립 검토 MAJOR 10-13 후속 실측, docs/backlog/search.md) —
-    이 교차언어 전용 제한을 넣고도 synth-4clients 115문항 noise5가 여전히 0.01 넘게 오른다(0.438→0.45):
-    고객 캐노니컬 표기 자체가 영문(Pfizer Inc. 등)이라 한글 별칭(화이자) 질문에서 그 캐노니컬이 이미 '교차
-    언어'로 걸려 덧붙는다 — 같은 체계 별칭(화이자 본사·미르하 등)만 빠지고 회귀의 주 원인은 그대로 남음.
-    synth-xling 이득(gold_top1 0.409→0.591)이 4clients 손실(doc_hit5 −0.009·gold_top1 −0.002·noise5 +0.012,
-    noise5만 문턱 0.01을 0.002 넘김)보다 커서 **사용자 결정(10-14)으로 기본 켬** — 규칙 예외, 10-16 서버 실문서로
-    켬/끔 재확인."""
+    expand_query가 이미 커버해 여기선 뺀다). 교차언어 질문 이득이 같은 언어 질문의 작은 잡음 증가보다 커서 기본 켬."""
     aliases = _aliases() if aliases is None else aliases
     extra = []
     for canon in sorted(aliases):  # 결정적 순서(이름 오름차순)

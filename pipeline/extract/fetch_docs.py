@@ -2,16 +2,14 @@
 """파싱 대상 문서 가져오기(파싱 모듈) — 폴더 또는 rdb:csv(문서 위치 표 csv → Object Storage에서 받음).
 
   --source <서버 폴더>               같은 서버 폴더(샘플 데이터) — 그대로 씀
-  --source rdb:csv:<경로>            문서 위치 표(csv — run_docs가 EDW FileStorageMap에서 만든 batch.csv)의 키만 Object Storage에서 받음(AD44)
-  (11-01 사용자 지움: s3://버킷/접두 폴더 가져오기 · rdb:*·rdb:<이름>(원천 목록 sources.json) · rdb:<표> 직접 질의(watermark 포함) ·
-   --mode test 표본 · 스트리밍용 plan())
+  --source rdb:csv:<경로>            문서 위치 표(csv — run_docs가 EDW FileStorageMap에서 만든 batch.csv)의 키만 Object Storage에서 받음
 
-Object Storage 원본 처리(백로그 O2 일부): 대표 결과가 나온 문서의 내려받은 원본은 parse 뒤 바로 지움.
+Object Storage 원본 처리: 대표 결과가 나온 문서의 내려받은 원본은 parse 뒤 바로 지움.
 처리한 객체(ETag 또는 (key, 증분값))는 output/parse/_source/processed.jsonl에 기록 → 다음 실행에서 다시 받지 않음. 실패한 문서는 남겨 다음 실행이 다시 시도.
-검색 결과의 원본 위치(source_uri) = s3://버킷/키(SOURCE_MANIFEST로 common/ids.source_uri가 읽음).
+검색 결과의 원본 위치(source_uri) = s3://버킷/키(SOURCE_MANIFEST로 common.core.ids.source_uri가 읽음).
 접속: OS_ENDPOINT · OS_ACCESS_KEY · OS_SECRET_KEY · OS_REGION(기본 us-east-1) · OS_VERIFY_TLS(기본 1, 사내 CA면 경로) — 비밀값은 settings.yaml에만.
 
-열(AD44): 실 EDW `AI.FileStorageMap`의 다섯 열만 읽는다 — doc_id=id · key=s3_key · size=file_size ·
+열: 실 EDW `AI.FileStorageMap`의 다섯 열만 읽는다 — doc_id=id · key=s3_key · size=file_size ·
 filename=original_filename · content_version=content_version_id(열 이름이 다른 csv는 extract.connections.rdb.columns로 — 식별자 화이트리스트만).
 버킷 — key가 `s3://버킷/…` 꼴이면 그 안의 버킷, 아니면 RDB_BUCKET.
 받기 전 대조 — size가 있으면 ContentLength와 비교(크기 불일치는 참고 기록만). 이미 처리됐는지는 (key, 증분값) 쌍으로(`_rdb_is_done` —
@@ -32,13 +30,13 @@ from collections import defaultdict
 from contextlib import contextmanager
 from pathlib import Path
 
-from common.config import settings as C  # S7c: 설정 객체(common 칸 SOURCE_MANIFEST·비밀 꺼내기)
-from common.core import span as SP  # op-01 성능 span
+from common.config import settings as C
+from common.core import span as SP  # 성능 span
 from common.core.console import utf8_stdout
 from common.core.contract import jl
-from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
+from pipeline import config as pc
 
-COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")  # csv 열 이름(RDB_COL_*) 화이트리스트(옛 common.core.sources와 같은 규칙)
+COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")  # csv 열 이름(RDB_COL_*) 화이트리스트
 
 
 def is_remote(source):
@@ -46,15 +44,13 @@ def is_remote(source):
     return str(source).startswith("rdb:")
 
 
-# _safe_name·_safe_join은 common/ids.py(safe_name·safe_join)로 옮김(독립 검토 MAJOR-1 — modules/load도 같이 씀,
-# modules/load가 modules/parse를 import하면 이미지 경계 위반이라 공용 위치는 common/). 동작은 바이트 동일(이름만 별칭).
+# 안전한 파일 이름·경로 잇기 — load 단계와 같이 쓰므로 common에 둔다.
 from common.core.contract import safe_filename as _safe_name  # noqa: E402
 from common.core.contract import safe_path_join as _safe_join  # noqa: E402
 
 
 def _s3():
-    """boto3 s3 클라이언트 — common/objectstore.py(OP21, modules/search/mcp_server.py 근거 이미지와 공용)로 승격,
-    동작은 바이트 동일(그 함수에 그대로 위임)."""
+    """boto3 s3 클라이언트 — common.store.objectstore.client에 위임."""
     from common.store.objectstore import client
 
     return client()
@@ -100,11 +96,11 @@ def _rdb_bucket_and_key(cols, r):
 
 
 def _load_done(state):
-    """DET1 — `_processed_path()`의 처리 기록을 key → 그 key로 지금까지 처리된 **모든** 레코드 목록으로 모은다
+    """`_processed_path()`의 처리 기록을 key → 그 key로 지금까지 처리된 **모든** 레코드 목록으로 모은다
     (key당 마지막 한 건만 남기면: `inc_col >= since` 경계 재조회에서 같은 s3_key에 새 판(새 id·content_version_id)이
-    들어온 표는 옛 판 행이 다시 조회될 때 "최신 판 기록"과 달라 매번 '미완료'로 오판해 since가 전진하지
-    못하고 그 자리를 영원히 다시 긁는다 — `_selftest_same_key_new_version`이 이 함정을 고정해 둠). 파일 하나를
-    한 번 읽을 뿐이라 비용은 그대로(기존 — key당 1건)와 같음, 같은 key가 아주 자주(수천 번) 재사용되는 표만
+    들어온 표는 이전 판 행이 다시 조회될 때 "최신 판 기록"과 달라 매번 '미완료'로 오판해 since가 전진하지
+    못하고 그 자리를 영원히 다시 긁는다). 파일 하나를
+    한 번 읽을 뿐이라 비용은 같음, 같은 key가 아주 자주(수천 번) 재사용되는 표만
     목록이 길어짐(지금 규모에선 문제 없음)."""
     done = defaultdict(list)
     p = _processed_path(state)
@@ -118,10 +114,9 @@ def _rdb_is_done(done, key, etag, ver):
     """이미 처리됐는지 — ETag가 있으면 그 key로 처리된 기록 중 하나라도 ETag가 일치하면(바뀌면 다시 받음). 없으면
     (FileStorageMap처럼 ETag 열이 없는 표) (key, 증분값) 쌍이 기록 중 하나와 같은지로 — 키만 보면 같은 s3_key에
     새 id/content_version_id가 들어온 새 판(같은 경로에 새 파일을 올리는 EDW 흐름)을 "이미 처리됨"으로 오판해
-    watermark까지 전진시켜 영영 못 받는다(독립 검토 BLOCK). etag·증분값 둘 다 없으면 식별할 수가 없으므로 늘
+    watermark까지 전진시켜 영영 못 받는다. etag·증분값 둘 다 없으면 식별할 수가 없으므로 늘
     '미완료'로 봐서 다시 시도(조용한 영구 누락보다 안전 — None과 None을 '같다'고 오판하는 함정은 이 단계에서도
-    막는다). done은 key → 레코드 목록(`_load_done()`, DET1 — key당 1건만 남기면 `>=` 경계 재조회의 옛 판이
-    오판된다)."""
+    막는다). done은 key → 레코드 목록(`_load_done()`)."""
     recs = done.get(key)
     if not recs:
         return False
@@ -144,25 +139,25 @@ def _rdb_names(rows):
 
 
 def _processed_path(state):
-    """처리 기록 파일(11-01 — 원천 이름별 processed__<이름>.jsonl은 rdb:*·rdb:<이름>과 함께 지움)."""
+    """처리 기록 파일."""
     return state / "processed.jsonl"
 
 
 def rdb_connect(extra_kwargs=True):
-    """RDB(mssql) 연결 — SQLAlchemy `mssql+pymssql`(S8b, 5-4 — common.store.mssql, 연결 풀 없음). 접속은 common.connections.rdb의
-    **읽기 계정**(사용자 10-29 — ops.md#op-03) + RDB_CONNECT_KWARGS(JSON — extra_kwargs=False면 안 넘김, gen_roster 옛 동작).
-    rdb_discover·gen_roster도 이것으로."""
+    """RDB(mssql) 연결 — SQLAlchemy `mssql+pymssql`(common.store.mssql, 연결 풀 없음). 접속은 common.connections.rdb의
+    **읽기 계정** + RDB_CONNECT_KWARGS(JSON — extra_kwargs=False면 안 넘김).
+    discover_columns·roster_from_edw도 이것으로."""
     from common.store import mssql
 
     kw, miss = mssql.login("read", extra=extra_kwargs)
-    if miss:  # 옛 os.environ[name] — 없으면 KeyError(parsing_meta_db와 같은 꼴)
+    if miss:  # 없으면 KeyError(parsing_meta_db와 같은 꼴)
         raise KeyError(miss[0])
     return mssql.connect(**kw)
 
 
 def _rdb_rows(table):
     """문서 위치 표(csv:<경로>)의 행을 공통 꼴로: doc_id·bucket·key·etag(늘 None — 표에 ETag 열 없음)·size·filename·content_version·
-    updated_at(증분값 — 처리 여부 판단)·created_at. (11-01 — 표 직접 질의(mssql·pg)·watermark·원천 목록 열 매핑은 지움 — csv만.)"""
+    updated_at(증분값 — 처리 여부 판단)·created_at. csv만 받는다."""
     if not table.startswith("csv:"):
         raise ValueError(f"[source] rdb:{table} — 원천은 rdb:csv:<경로>만(11-01 사용자: rdb:*·rdb:<이름>·표 직접 질의 지움)")
     cols = _rdb_cols()
@@ -182,15 +177,15 @@ def _rdb_rows(table):
                 "filename": r.get(cols["filename"]) or None,
                 "content_version": r.get(cols["content_version"]) or None,
                 "updated_at": _inc_value(r, inc_col),
-                "created_at": r.get("created_at") or None,  # 11-01(mc-16) 원천 등록 시각 — 표에 칸이 있을 때만
+                "created_at": r.get("created_at") or None,  # 원천 등록 시각 — 표에 칸이 있을 때만
             }
         )
     return mapped
 
 
 def _filter_unsupported_rows(rows, name_of):
-    """SI44(source) — 압축(ARCHIVE_EXT)·처리 엔진 없는 확장자(registry.engines_for)는 받기 전에 걸러낸다(name_of
-    계산 뒤 sample() 호출 전 — 다운로드 자체를 안 함). 사유 말은 prepare.py의 skipped.jsonl과 같다
+    """압축(ARCHIVE_EXT)·처리 엔진 없는 확장자(registry.engines_for)는 받기 전에 걸러낸다(name_of
+    계산 뒤 sample() 호출 전 — 다운로드 자체를 안 함). 사유 말은 filter_and_rotate의 skipped.jsonl과 같다
     (pipeline.extract.filter_and_rotate._unsupported_reason 재사용 — 같은 규칙 한 곳). 반환: (남은 rows, 걸러진 rows 목록)."""
     from pipeline.extract.filter_and_rotate import _unsupported_reason
 
@@ -199,7 +194,7 @@ def _filter_unsupported_rows(rows, name_of):
         name = name_of[r["key"]]
         reason = (
             _unsupported_reason(Path(name)) if Path(name).suffix else None
-        )  # 확장자 없는 이름(옛 synth 표처럼 filename 열이 없어 doc_id로 대체)은 판정 보류 — prepare 단계가 그대로 봄
+        )  # 확장자 없는 이름(filename 열이 없어 doc_id로 대체)은 판정 보류 — filter_and_rotate가 그대로 봄
         (skipped if reason else kept).append({"row": r, "file": name, "reason": reason} if reason else r)
     return kept, skipped
 
@@ -217,7 +212,7 @@ def _record_source_skipped(state, skipped):
             f.write(json.dumps({"key": r["key"], "etag": r.get("etag"), "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
 
 
-# ── warm 저장소(2026-10-22, 프리페치) ──────────────────────────────────────────────
+# ── warm 저장소(프리페치) ──────────────────────────────────────────────
 # 다음 배치 원본을 미리 받아 두는 1회용 캐시. `python -m pipeline.extract.fetch_docs warm --csv <배치csv>`(프리페치)가
 # 파일을 내려 warm에 심고, 실제 파싱의 fetch_one이 같은 (bucket,key)를 만나면 네트워크 다운로드를 건너뛰고
 # 곧바로 가져간다(warm에서 지움 — 사본 중복 저장 없음). SOURCE_WARM 미설정이면 전부 꺼진다(기존 동작 그대로).
@@ -348,7 +343,7 @@ def _warm_cmd(argv):
     t0 = time.time()
 
     def _one(t):
-        """파일(=문서) 1건 = extract.download span 1행(op-01, 이슈 #117) — doc_id는 extract.parse와 같은 파일 이름."""
+        """파일(=문서) 1건 = extract.download span 1행 — doc_id는 extract.parse와 같은 파일 이름."""
         name = t["filename"] or t["key"]
         with SP.span("extract.download", "extract", doc_id=name, ext=Path(name).suffix.lower(), file_bytes=t["size"]) as sp:
             return _fetch(t, sp)
@@ -402,7 +397,7 @@ def _warm_cmd(argv):
             print(f"[source] warm: 실패(무시·폴백) — {t['bucket']}/{t['key']}: {type(e).__name__}: {str(e)[:120]}", flush=True)
             return False
 
-    with SP.span("extract.warm", "extract", total=len(targets)) as sp:  # op-01 — 프리페치 1회 = 1행(받은 수·실패 수)
+    with SP.span("extract.warm", "extract", total=len(targets)) as sp:  # 프리페치 1회 = 1행(받은 수·실패 수)
         if a.workers > 1 and len(targets) > 1:
             import concurrent.futures as _cf
 
@@ -415,18 +410,13 @@ def _warm_cmd(argv):
     return 0
 
 
-def _rdb_resolve_spec(spec, state, limit):
-    """rdb:<spec> → (names, fetch_one(name,dest)→Path, state) — resolve()가 부름. 11-01부터 csv:<경로>만."""
-    return _rdb_plan(spec, state, limit)
-
-
 def _rdb_plan(table, state, limit=0):
-    """문서 위치 표(csv:)의 대상 행 → (names, fetch_one(name,dest)→Path, state). resolve()가 부르고 모든 이름을 즉시 받는다(AD44).
-    받기 전 대조는 크기(ContentLength — 불일치는 참고 기록만). 다른 원천의 같은 내용 파일도 따로 받는다(원천마다 독립, 사용자 11-04)."""
+    """문서 위치 표(csv:)의 대상 행 → (names, fetch_one(name,dest)→Path, state). resolve()가 부르고 모든 이름을 즉시 받는다.
+    받기 전 대조는 크기(ContentLength — 불일치는 참고 기록만). 다른 원천의 같은 내용 파일도 따로 받는다(원천마다 독립)."""
     done = _load_done(state)
     rows = [r for r in _rdb_rows(table) if not _rdb_is_done(done, r["key"], r["etag"], r["updated_at"])]
     name_of = _rdb_names(rows)  # original_filename(또는 doc_id) — 충돌하면 doc_id 접두로 구분
-    rows, skipped = _filter_unsupported_rows(rows, name_of)  # SI44(source) — 압축·엔진 없는 확장자는 받기 전에 걸러냄
+    rows, skipped = _filter_unsupported_rows(rows, name_of)  # 압축·엔진 없는 확장자는 받기 전에 걸러냄
     if skipped:
         _record_source_skipped(state, skipped)
     name_of = {r["key"]: name_of[r["key"]] for r in rows}
@@ -434,14 +424,14 @@ def _rdb_plan(table, state, limit=0):
     by_name = {name_of[r["key"]]: r for r in rows}
     names = sorted(by_name)
     cli = _s3()
-    book = threading.Lock()  # 2026-10-22 — 병렬 fetch(SOURCE_FETCH_WORKERS)에서 기록(manifest 재작성·append)을 잠금
+    book = threading.Lock()  # 병렬 fetch(SOURCE_FETCH_WORKERS)에서 기록(manifest 재작성·append)을 잠금
 
     def fetch_one(name, dest):
         o = by_name[name]
         if o["size"] is not None:
             actual = cli.head_object(Bucket=o["bucket"], Key=o["key"]).get("ContentLength")
             if actual != o["size"]:
-                # 2026-10-15(운영) — RDB file_size가 Object Storage와 어긋나 있어 필수 비교에서 제외:
+                # RDB file_size가 Object Storage와 어긋나 있어 필수 비교에서 제외:
                 # 문서 식별은 uuid(doc_id·key)·내용은 sha256(hash) 기준만 쓰고, 크기는 참고 로그로만 남긴다.
                 with book:
                     with (state / "size_mismatch.log").open("a", encoding="utf-8") as f:
@@ -466,7 +456,7 @@ def _rdb_plan(table, state, limit=0):
                 )
         # size가 없으면 받기 전 대조 생략(비교할 근거가 없음) — 그대로 받는다
         dest.mkdir(parents=True, exist_ok=True)
-        f = _warm_take(o, dest, name)  # warm 프리페치(2026-10-22) — 받아 둔 다음 배치 원본이면 즉시 이동
+        f = _warm_take(o, dest, name)  # warm 프리페치 — 받아 둔 다음 배치 원본이면 즉시 이동
         if f is not None:
             print(f"[source] warm 적중 — 다운로드 생략: {o['bucket']}/{o['key']}", flush=True)
         else:
@@ -484,10 +474,10 @@ def _rdb_plan(table, state, limit=0):
                 "doc_id": o["doc_id"],
                 "updated_at": o["updated_at"],
                 "original_filename": o.get("filename"),
-                "content_version_id": o.get("content_version"),  # AD44(c) FileStorageMap 고유 칸
-                "created_at": o.get("created_at"),  # 11-01(mc-16) 원천 등록 시각 → build_bundle → gold doc.created_at
+                "content_version_id": o.get("content_version"),  # FileStorageMap 고유 칸
+                "created_at": o.get("created_at"),  # 원천 등록 시각 → build_bundle → gold doc.created_at
                 "source_system": _derive_source_from_key(o["key"]),
-            }  # SI41 — publish_parse가 문서별로 이 값 사용(없으면 --source-system 폴백)
+            }  # publish_parse_result가 문서별로 이 값 사용(없으면 --source-system 폴백)
             man_f.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in man.values()), encoding="utf-8")
         return f
 
@@ -501,18 +491,16 @@ def _rdb_plan(table, state, limit=0):
 
 
 def resolve(source, out, limit=0):
-    """→ (로컬 원본 폴더, 대상 파일 이름 목록, 상태 폴더). 폴더면 그대로, rdb:csv면 표의 키를 Object Storage에서 받음(AD44)."""
+    """→ (로컬 원본 폴더, 대상 파일 이름 목록, 상태 폴더). 폴더면 그대로, rdb:csv면 표의 키를 Object Storage에서 받음."""
     state = Path(out) / "parse" / "_source"
     state.mkdir(parents=True, exist_ok=True)
     if str(source).startswith("s3://"):
         raise ValueError(f"[source] {source} — s3:// 폴더 가져오기는 11-01에 지움(사용자) — 폴더 또는 rdb:csv:<경로>")
     if str(source).startswith("rdb:"):
         local = Path(out) / "_source_files"
-        names, fetch_one, state = _rdb_resolve_spec(source[len("rdb:") :], state, limit)
+        names, fetch_one, state = _rdb_plan(source[len("rdb:") :], state, limit)
         ok = []
-        nw = max(
-            1, int(pc.cfg().extract.source.fetch_workers)
-        )  # S7c — 설정 객체(기본 1) · 2026-10-22 — 문서별 병렬 다운로드(기본 1=기존 순차)
+        nw = max(1, int(pc.cfg().extract.source.fetch_workers))  # 기본 1) · 2026-10-22 — 문서별 병렬 다운로드(기본 1=기존 순차
         if nw > 1 and len(names) > 1:
             # 병렬 — 다운로드·head_object(네트워크)를 워커에, 기록(manifest 재작성 등)은 fetch_one 안 잠금으로 안전.
             # 결과는 제출 순서(names 순)대로 회수해 manifest 행 순서를 기존과 같게. 원천 여러 개(rdb:*)면 이름 겹침
@@ -555,7 +543,7 @@ def _known_source(seg):
 def _tree_files(src):
     """폴더가 원천별 하위 폴더 모양(`<원천>/<id>/<파일>`)이면 그 아래 파일 목록, 아니면 None(평평한 폴더로).
     모양 = 맨 위에 파일이 없고(숨김 파일 빼고), 맨 위 폴더가 모두 원천 이름(_known_source)이며 그 아래 파일이 있음.
-    숨김(점으로 시작)·__MACOSX는 어디서나 뺀다 — 흘린 sub/.DS_Store 하나로 평평한 폴더가 바뀌지 않게(리뷰)."""
+    숨김(점으로 시작)·__MACOSX는 어디서나 뺀다 — 흘린 sub/.DS_Store 하나로 평평한 폴더가 바뀌지 않게."""
     top = [p for p in src.iterdir() if not _hidden(p) and p.name != ".gitkeep"]
     dirs = [p for p in top if p.is_dir()]
     if not dirs or len(dirs) != len(top) or not all(_known_source(d.name) for d in dirs):
@@ -570,7 +558,7 @@ def _tree_files(src):
 
 
 def _folder_tree(src, files, out, state):
-    """PC 폴더 원천이 원천별 하위 폴더(`SFDC/<uuid>/<파일>` — Object Storage 키 모양)면(F2, 11-03 PC 시험): rdb 배치와 같게
+    """PC 폴더 원천이 원천별 하위 폴더(`SFDC/<uuid>/<파일>` — Object Storage 키 모양)면: rdb 배치와 같게
     평평한 폴더(`<out>/_source_files`)에 복사하고 manifest.jsonl에 상대 키(`key`)·원본 주소(`uri`)·원천을 적는다 — 구조화가 키 첫 마디로
     원천을 고르고(build_bundle), 원본 주소가 원래 파일을 가리키게. 같은 이름은 rdb와 같은 규칙(`<상위 폴더>__<이름>`)."""
     local = out / "_source_files"
@@ -599,8 +587,7 @@ def _folder_tree(src, files, out, state):
 
 
 def _record_sha_before_delete(state, local, done, field="sha256"):
-    """지우기 전에 sha256을 manifest.jsonl에 남겨 둠(SI39 요건⑧ — 원본을 즉시 지워도 publish_parse(`modules/load/
-    publish_parse_result.py`)가 로컬 없이도 EDW 행을 쓸 수 있게). 못 읽으면(파일이 이미 없는 등) 그 문서만 건너뜀."""
+    """지우기 전에 sha256을 manifest.jsonl에 남겨 둠(원본을 즉시 지워도 publish_parse_result가 로컬 없이도 EDW 행을 쓸 수 있게). 못 읽으면(파일이 이미 없는 등) 그 문서만 건너뜀."""
     man_f = state / "manifest.jsonl"
     man = {r["file_name"]: r for r in jl(man_f)}
     changed = False
@@ -618,10 +605,8 @@ def _record_sha_before_delete(state, local, done, field="sha256"):
 
 def finish(state, local, rep_index):
     """Object Storage에서 받은 원본: 대표 결과가 나온 문서는 처리 완료로 기록하고 로컬 원본·사본을 **바로** 지움
-    (SI39 요건⑧, 2026-10-08 — publish_parse가 더는 원본을 올리지 않으므로 그걸 기다릴 이유가 없다. 옛
-    PARSE_KEEP_ORIGINALS(publish 전까지 보존)는 폐지 · 디버그 보존 KEEP_LOCAL_ORIGINALS는 op-08에 지움).
-    지우기 전에 항상 sha256을 manifest에 남긴다(`_record_sha_before_delete`) — publish_parse(modules/load/
-    publish_parse_result.py `plan()`)가 로컬 원본 없이도 이 값으로 EDW 행을 쓸 수 있게."""
+    (publish_parse_result가 원본을 올리지 않으므로 기다릴 이유가 없다).
+    지우기 전에 항상 sha256을 manifest에 남긴다(`_record_sha_before_delete`) — publish_parse_result `plan()`이 로컬 원본 없이도 이 값으로 EDW 행을 쓸 수 있게."""
     man_f = state / "manifest.jsonl"
     if not man_f.exists():
         return
@@ -649,11 +634,52 @@ def finish(state, local, rep_index):
     )
 
 
+def prepare_batch(source, out, limit, run_step):
+    """파싱 전 extract — 원본 가져오기 → 중복 확인 → 끝난 문서(ParsingMeta ok·partial) 빼기.
+    → (원본 폴더, 파싱할 이름 목록(받은 순서), 상태 폴더). run_step(args) → 종료 코드: 여러 건 중복 확인을 자식 프로세스로."""
+    out = Path(out)
+    local, names, state = resolve(source, out, limit)
+    if not is_remote(source):
+        C.put(DOC_DIR=str(Path(local).resolve()))  # 원본 위치 주소 = 이 폴더의 file:///
+    (state / "selected.txt").write_text("\n".join(names) + "\n", encoding="utf-8")
+    if sum(1 for f in Path(local).iterdir() if f.is_file() and f.name != ".gitkeep") <= 1:  # 1건은 자식 없이 같은 함수로
+        from pipeline.extract import deduplication as dedup
+
+        try:
+            dedup.run_folder(local, out / "dedup")
+            rc = 0
+        except Exception as e:  # 자식 실패와 같게 종료 코드로
+            print(f"[dedup] 실패: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+            rc = 1
+    else:
+        rc = run_step(["pipeline.extract.deduplication", "--src", local, "--out", out / "dedup"])
+    if rc != 0:
+        raise SystemExit(rc)
+    keep = set((out / "dedup" / "keep.txt").read_text(encoding="utf-8").splitlines())
+    keep &= set(unparsed(names, out))
+    return local, [n for n in names if n in keep], state
+
+
+def pick_new(src, out, max_new, only=None):
+    """이번 실행에서 처음 파싱할 문서(ParsingMeta에 성공 행이 없는 것)를 max_new개까지 → 목록 파일 경로. only(목록 파일)가 있으면 그 안에서만."""
+    names = sorted(p.name for p in Path(src).iterdir() if p.is_file())
+    new = unparsed(names, out)
+    pick = new[:max_new]
+    f = Path(out) / "parse" / "_batch_docs.txt"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    if only:
+        sel = set(Path(only).read_text(encoding="utf-8").splitlines())
+        pick = [n for n in pick if n in sel]
+    f.write_text("\n".join(pick) + "\n", encoding="utf-8")
+    print(f"[parse] 새·실패 문서 {min(len(new), max_new)}/{len(new)}개(PARSE_MAX_NEW {max_new}) — 나머지는 다음 실행", flush=True)
+    return f
+
+
 def unparsed(names, out):
-    """C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = EDW FileStorageMap ∖ ParsingMeta. FileStorageMap 쪽은 이미 받은 이름 목록
+    """새 문서 후보 = EDW FileStorageMap ∖ ParsingMeta. FileStorageMap 쪽은 이미 받은 이름 목록
     (`--source rdb:`가 FileStorageMap을 읽어 만든 것 — 이름 ↔ 원본 키 s3_key 대응은 fetch_docs.py가 쓴 manifest.jsonl), ParsingMeta 쪽은
     여기서 **EDW를 한 번 읽는다**(파싱 입구의 EDW 읽기 — 읽기 계정, PC는 EDW 대역 sqlite `RDB_SQLITE`): parse_status가 ok·partial인
-    행의 source_key 집합(`done_source_keys`). 통째 실패는 ParsingMeta에 안 쓰므로(C3) 실패한 문서는 행이 없어 다음 실행이 다시 고른다.
+    행의 source_key 집합(`done_source_keys`). 통째 실패는 ParsingMeta에 안 쓰므로 실패한 문서는 행이 없어 다음 실행이 다시 고른다.
     out = 결과 루트(파싱 입구 pipeline.cli의 OUT). 키 = manifest의 "key"(없으면 이름 그대로 — publish의 source_key와 같은 규칙, parsing_meta.plan).
     순서: 받은 이름 순서 그대로(문서 대장이 없어져 시도 이력이 없음 — 실패 문서를 뒤로 미루지 않는다).
     EDW를 못 읽으면: 서버(run_mode prod 또는 RUN_ENV dev·prd·모르는 값)는 종료 4(전체 재파싱 안 함), PC는 받은 목록 그대로 + 로그 한 줄."""
@@ -695,10 +721,10 @@ def _derive_source_from_key(key):
 if __name__ == "__main__":
     from common.config import setarg
 
-    setarg.apply()  # --set 이름=값(S9 Step A — 호스트 run_docs.py의 warm이 SOURCE_WARM을 넘김)
+    setarg.apply()  # --set 이름=값(호스트 run_docs.py의 warm이 SOURCE_WARM을 넘김)
     utf8_stdout()
     if len(sys.argv) > 1 and sys.argv[1] == "warm":
         from pipeline.shared import runtrace
 
-        with runtrace.run("source_warm", sys.argv[1:]):  # op-01 — run_docs가 부르는 자기 실행 1건
+        with runtrace.run("source_warm", sys.argv[1:]):  # run_docs가 부르는 자기 실행 1건
             raise SystemExit(_warm_cmd(sys.argv[2:]))  # 프리페치 — 다음 배치 원본을 SOURCE_WARM에 미리 받아 둠

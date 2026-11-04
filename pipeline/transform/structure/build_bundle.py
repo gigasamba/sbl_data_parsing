@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""저장소 묶음 만들기(로컬 output/edw/bundle → PostgreSQL 적재 원본, EDW에는 적재 안 함) — 파싱 선정 엔진 결과 → 청크(원본 위치) · 요약 · 메타 · 임베딩 → output/edw/bundle/
+"""저장소 묶음 만들기 — 파싱 선정 엔진 결과 → 청크(원본 위치)·요약·메타·임베딩 → output/edw/bundle/(PostgreSQL 적재 원본).
 
-기술 비교 없이 **파싱에서 선정된 엔진만** 쓴다(output/parse/selection.json `final` 형식별 주 엔진 → 실패면 예비 → route 순).
-  청크   : structure 청커(pipeline.transform.structure.chunking, AD32③ — evaluation.stages는 조합 실험용으로 같은 것을 가져다 씀) — 본문은 정제 텍스트(쪽 번호 줄 제외), 위치 = 파일 경로·쪽·줄·문자 범위·제목,
+**파싱에서 선정된 엔진만** 쓴다(output/parse/selection.json `final` 형식별 주 엔진 → 실패면 예비 → route 순).
+  청크   : structure 청커(chunking) — 본문은 정제 텍스트(쪽 번호 줄 제외), 위치 = 파일 경로·쪽·줄·문자 범위·제목,
            쪽 안 위치(bbox, pt) = OCR 엔진은 글자 상자 합집합, 텍스트 PDF는 원본 PDF에서 청크 첫·끝 줄을 찾아 합집합
-  요약   : 앞부분 발췌(LLM 요약은 op-08에 지움 · 같은 뜻 선택지 --summary auto|lead는 0.2.0에 지움 — pl-46)
+  요약   : 앞부분 발췌
   메타   : 고객사·계약 번호 — 파싱 모듈 교차 확인 값(_rep rep.meta)(서로 다른 계열 파서 2개+)만
-  임베딩 : --embed api(EMBED_BASE_URL·EMBED_MODEL — 서버 임베딩 전용 모델) · none(임베딩 없음 — 시험) (L2 정규화 저장, 차원은 첫 응답에서 · 로컬 모델은 0.2.0에 지움)
-  (지식 그래프 kg_nodes·kg_edges · 개념→청크 concept_chunk · 그림 행 images.jsonl · 집계 사실 facts.jsonl은 11-01에 지움 — PRD pl-06:
-   아무도 적재·조회하지 않음(facts.jsonl을 읽던 검색 쪽 집계는 mc-04에서 지움). 묶음 계약용 빈 kg 파일도 0.2.0에 지움 — pl-46)
+  임베딩 : --embed api(EMBED_BASE_URL·EMBED_MODEL — 서버 임베딩 전용 모델) · none(임베딩 없음 — 시험) (L2 정규화 저장, 차원은 첫 응답에서)
 산출: docs.jsonl · chunks.jsonl · vectors.npy(float32, chunks 순서) · meta.json
 사용: python -m pipeline.transform.structure.build_bundle [--parse-dir output/parse] [--src output/prepared] [--embed api|none] [--out output/edw/bundle]
 """
@@ -22,12 +20,12 @@ import time
 from pathlib import Path
 
 from common.ai.embed import embed_texts
-from common.config import settings as C  # S7c: 설정 객체(common 칸 EMBED_MODEL·EMBED_BASE_URL·LLM_ALLOW_EXTERNAL·GLOSSARY_DIR·OV_URL)
-from common.core import docmeta as DM  # 날짜·개정·구판·문서군(L3-1, structure·search 공용 규칙)
-from common.core import span as SP  # op-01 성능 span
+from common.config import settings as C
+from common.core import docmeta as DM  # 날짜·개정·구판·문서군(structure·search 공용 규칙)
+from common.core import span as SP  # 성능 span
 from common.core import terms as T  # 고객 명부·이름 정규화·ID 모양(검색과 같은 규칙)
 from common.core.console import utf8_stdout
-from common.core.contract import (  # 문서 ID(doc_key) 규칙(GH1-04: orig_sha256으로 parse와 같은 값)
+from common.core.contract import (  # 문서 ID(doc_key) 규칙(orig_sha256으로 parse와 같은 값)
     file_hash,
     original_file_hash,
 )
@@ -37,12 +35,13 @@ from common.core.text import (  # 색인 본문·토큰 규칙(모듈 계약)
     index_text,
     tokens,
 )
-from common.store import master  # pl-38 — 마스터 표 해시(묶음 meta.json master_hash)
-from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
-from pipeline.shared import runtrace  # op-01 run.progress
+from common.store import master  # 마스터 표 해시(묶음 meta.json master_hash)
+from pipeline import config as pc
+from pipeline.shared import runtrace  # run.progress
 from pipeline.transform.structure import chunking as S  # 청킹·개체 정규식(구조화 모듈)
-from pipeline.transform.structure import client_roster as ST  # name_hits·seed_roster(구조화 전용, 10-16 분리)
-from pipeline.transform.structure import product_codes as AG  # 제품 코드(PRODUCT_CODE_RE — 용어 draft)
+from pipeline.transform.structure import client_roster as ST  # name_hits·seed_roster(구조화 전용)
+
+PRODUCT_CODE_RE = re.compile(r"\b[A-Z]{2,5}-(ADC|MAB|BSA|BIS|BSP|VAC)-\d{1,3}\b")  # 제품 코드(용어 초안)
 
 
 def pick_engine(doc, dd, sel, route):
@@ -132,19 +131,17 @@ def embed_all(model, texts, batch=None, cache=None, out=None):
         if out:
             np.save(out, arr)
         return arr
-    st = (
-        pc.cfg().transform.structure
-    )  # S7c — 설정 객체(EMBED_MAX_CHARS 8000·EMBED_BATCH 32·EMBED_RETRY 2·EMBED_CONCURRENCY 4 — 빈 글자도 기본값)
-    cap = int(st.embed_max_chars)  # 안전망: 쪼개지 않은 청커가 너무 긴 본문을 내도 전체 빌드가 400으로 죽지 않게 자름(L3-3)
+    st = pc.cfg().transform.structure  # EMBED_MAX_CHARS 8000·EMBED_BATCH 32·EMBED_RETRY 2·EMBED_CONCURRENCY 4 — 빈 글자도 기본값
+    cap = int(st.embed_max_chars)  # 안전망: 쪼개지 않은 청커가 너무 긴 본문을 내도 전체 빌드가 400으로 죽지 않게 자름
     over = sum(1 for t in texts if len(t) > cap)
     if over:
         texts = [t[:cap] if len(t) > cap else t for t in texts]
         print(f"임베딩 입력 길이 상한 초과 {over}건 → {cap}자로 자름(EMBED_MAX_CHARS)", flush=True)
     batch = batch or int(st.embed_batch)
     retry = int(st.embed_retry)
-    if cache is None:  # 옛 `get("EMBED_CACHE", 기본)` — 비운 값('')은 그대로 두어 캐시 끔(기본값 None 글자 칸은 ''를 ''로 남김)
+    if cache is None:  # 비운 값('')은 그대로 두어 캐시 끔
         cache = st.embed_cache if st.embed_cache is not None else str(APP_ROOT / "output" / "edw" / "embed_cache.sqlite")
-    mid = f"{model}:{C.cfg().models.embed.model if model == 'api' else ''}"  # 모델이 바뀌면 다른 키 · S7c — 설정 객체
+    mid = f"{model}:{C.cfg().models.embed.model if model == 'api' else ''}"  # 모델이 바뀌면 다른 키
     keys = [_h.sha256((mid + "\n" + t).encode("utf-8")).hexdigest() for t in texts]
     arr, done, db = None, np.zeros(len(texts), dtype=bool), None
 
@@ -168,7 +165,7 @@ def embed_all(model, texts, batch=None, cache=None, out=None):
                 if keys[j] in got:
                     put(j, np.frombuffer(got[keys[j]], dtype=np.float32))
     todo = [i for i in range(len(texts)) if not done[i]]
-    conc = max(1, int(st.embed_concurrency))  # 2026-10-22 — 임베딩 호출 병렬(EMBED_BATCH 묶음씩 동시 전송, 기본 4)
+    conc = max(1, int(st.embed_concurrency))  # 임베딩 호출 병렬(EMBED_BATCH 묶음씩 동시 전송, 기본 4)
     t_embed0 = _t.time()
     slices = [todo[i : i + batch] for i in range(0, len(todo), batch)]
 
@@ -179,7 +176,7 @@ def embed_all(model, texts, batch=None, cache=None, out=None):
             except (OSError, TimeoutError):
                 if k == retry:
                     raise
-                SP.add_current(embed_retries=1)  # op-01 — 임베딩 서버 일시 오류로 다시 보낸 횟수
+                SP.add_current(embed_retries=1)  # 임베딩 서버 일시 오류로 다시 보낸 횟수
                 _t.sleep(2 * (k + 1))
 
     def _store(idx, v):  # 메인 스레드에서만 — put()의 arr 첫 할당·sqlite 쓰기가 스레드 경합 없게
@@ -189,13 +186,13 @@ def embed_all(model, texts, batch=None, cache=None, out=None):
             db.executemany("INSERT OR REPLACE INTO e(k, v) VALUES (?, ?)", [(keys[j], row.tobytes()) for j, row in zip(idx, v)])
             db.commit()
 
-    # op-01 — 호출이 있을 때만 run.progress(임베딩한 청크/전체). 구조화 반복의 진행 기록은 임베딩 전에 끝난다
+    # 호출이 있을 때만 run.progress(임베딩한 청크/전체). 구조화 반복의 진행 기록은 임베딩 전에 끝난다
     with runtrace.Progress(total=len(texts), done=lambda: int(done.sum()), unit="chunk") if slices else contextlib.nullcontext():
         if conc > 1 and len(slices) > 1:  # 병렬 — 워커는 HTTP 호출만, 저장(캐시·배열)은 메인 스레드가 완료 순서대로
             from concurrent.futures import ThreadPoolExecutor, as_completed
 
             with ThreadPoolExecutor(max_workers=conc) as ex:
-                futs = {ex.submit(SP.carry(_one), idx): idx for idx in slices}  # op-01 — 풀 스레드에 run/span ID를 실음
+                futs = {ex.submit(SP.carry(_one), idx): idx for idx in slices}  # 풀 스레드에 run/span ID를 실음
                 for fut in as_completed(futs):
                     _store(futs[fut], fut.result())
         else:
@@ -222,23 +219,22 @@ def embed_all(model, texts, batch=None, cache=None, out=None):
 
 
 def infer_clients(docs, head=400, roster=None):
-    """문서 고객 라벨(다중 가능, 10-14) — d['clients'](증거 강도 내림차순 목록) + 기존 호환용 d['client'](= clients[0],
-    단일 필드를 쓰는 옛 호출자·검색 경로용 1순위)를 채운다.
+    """문서 고객 라벨(다중 가능) — d['clients'](증거 강도 내림차순 목록) + d['client'](= clients[0],
+    단일 필드를 쓰는 호출자·검색 경로용 1순위)를 채운다.
 
-    (1) 전체 본문(머리 400자만이 아니라 — 이전 버그: 400자 뒤에만 나오는 고객 이름을 영영 못 봤다)에서 알려진
+    (1) 전체 본문(머리 400자만이 아니라)에서 알려진
     고객 이름·별칭이 — ⓐ 2회 이상 나오거나 ⓑ 제목/첫 head자 안에 한 번이라도 나오면(잡음 가드 — 본문 뒤쪽 1회
-    등장만으로는 "같이 언급된 제3자"와 구분 안 됨, review ①) '증거 있음'으로 본다. 등장 횟수는 단어 경계·한글
-    조사 인식 매칭(ST.name_hits·_name_pat, match_clients·expand_query와 같은 규칙)으로 센다 — 독립 검토
-    10-14: raw substring count("in")는 경계가 없어 짧은 별칭(예 "MSD")이 "MSDS" 안에서도 걸리는 잡음이 났다.
-    증거 있는 고객이 여럿이면
-    (이전 버그: 정확히 하나일 때만 채웠다 — 둘 이상이면 그대로 비워 둠) 전부 clients에, 증거 강한 순(제목/머리
+    등장만으로는 "같이 언급된 제3자"와 구분 안 됨) '증거 있음'으로 본다. 등장 횟수는 단어 경계·한글
+    조사 인식 매칭(ST.name_hits·_name_pat, match_clients·expand_query와 같은 규칙)으로 센다 —
+    경계 없는 substring count는 짧은 별칭(예 "MSD")이 "MSDS" 안에서도 걸린다.
+    증거 있는 고객이 여럿이면 전부 clients에, 증거 강한 순(제목/머리
     등장 먼저 · 그다음 등장 횟수 · 동점은 이름순, 결정적)으로 담는다. meta_confirmed 문서는 자기 확정 고객이
     항상 clients[0](1순위) — 본문에 다른 알려진 고객이 같이 나오면 뒤에 더한다(그 문서의 2번째 이하 라벨).
     (2) 그래도 clients가 비면 제품 코드 접두어(MRH-MAB-01 → MRH)를 다른 문서에서 그 고객과 함께 나온 것으로
     배워 채움(client_src='product') — 그대로, clients에도 반영.
     알려진 고객 = 교차 확인된 고객 + 고객 명부(roster, 기본 T._aliases() — stack.json client_aliases·CLIENT_ROSTER·
     GLOSSARY_DIR org_client) + 주요 바이오·제약사 공개 이름 seed(pipeline.transform.structure.client_roster.seed_roster())
-    합집합 — roster를 명시하면(옛 호출자·시험) seed는 안 더함(바이트 동일).
+    합집합 — roster를 명시하면(시험 등) seed는 안 더함.
     ponytail: 알려진 고객 수 × 문서 전체 길이 스캔(O(roster×len(text))) — 명부가 아주 커지면 아호코라식 등으로."""
     if roster is None:
         roster = dict(T._aliases())
@@ -254,9 +250,7 @@ def infer_clients(docs, head=400, roster=None):
             names = [n for n in [c] + al if n]
             if not names:
                 continue
-            cnt = sum(
-                ST.name_hits(n, text) for n in names
-            )  # 독립 검토 10-14 — 경계 인식 카운트(raw substring 아님, 원문 그대로 — 공백은 name_hits가 처리)
+            cnt = sum(ST.name_hits(n, text) for n in names)  # 경계 인식 카운트(raw substring 아님, 원문 그대로 — 공백은 name_hits가 처리)
             if cnt == 0:
                 continue
             in_head = any(ST.name_hits(n, head_text) for n in names)
@@ -272,7 +266,7 @@ def infer_clients(docs, head=400, roster=None):
             d["clients"] = ([primary] if primary else []) + [c for c in hits if c != primary]
     pre = {}
     for d in docs:
-        for code in set(AG.PRODUCT_CODE_RE.findall_codes(d.get("full_text") or "")) if d.get("client") else ():
+        for code in {m.group(0) for m in PRODUCT_CODE_RE.finditer(d.get("full_text") or "")} if d.get("client") else ():
             pre.setdefault(code.split("-")[0], set()).add(d["client"])
     for d in docs:
         code = (d.get("contract") or {}).get("product_code")
@@ -283,10 +277,9 @@ def infer_clients(docs, head=400, roster=None):
 
 
 def warn_if_no_client_roster(docs):
-    """BR57 — 명부(마스터 client_roster·용어 사전 org_client + stack.json client_aliases — pl-38)가 비어 있어 infer_clients가
+    """명부(마스터 client_roster·용어 사전 org_client + stack.json client_aliases)가 비어 있어 infer_clients가
     아무것도 못 채운 채(묶음에 문서가 있는데도 client가 전부 빈 채) 끝났으면 경고 한 줄만(동작은 안 바꿈 — 이
-    묶음을 쓰는 검색 쪽 clientscope·BR23 엔티티 분해가 조용히 무동작이 되는 원인을 빌드 시점에 알린다. 실측:
-    V11 풀 묶음이 GLOSSARY_DIR 없이 지어져 505건 전부 client 없음 → BR57에서 드러남)."""
+    묶음을 쓰는 검색 쪽 clientscope·엔티티 분해가 조용히 무동작이 되는 원인을 빌드 시점에 알린다)."""
     if not docs or any(d.get("client") for d in docs):
         return
     if T._aliases():
@@ -300,7 +293,7 @@ def warn_if_no_client_roster(docs):
 
 
 def load_figures(images_dir):
-    """output/parse/_images/index.jsonl(파싱 모듈 W1·W9·W11 그림 기록) → {문서 파일명: [기록, …]}. 없으면 빈 묶음(그림 0건 — 오류 아님)."""
+    """output/parse/_images/index.jsonl(파싱 모듈 그림 기록) → {문서 파일명: [기록, …]}. 없으면 빈 묶음(그림 0건 — 오류 아님)."""
     f = Path(images_dir) / "index.jsonl"
     by_doc = {}
     if f.exists():
@@ -312,7 +305,7 @@ def load_figures(images_dir):
 
 
 def figure_chunk_text(rec):
-    """그림 기록(설계 §3 계약 — vlm{model,summary,text,content}) → 청크 본문(L1, 자르지 않는 청크 1개): 캡션 + 요약 + 그림 글자 + 값/연결/표."""
+    """그림 기록(vlm{model,summary,text,content}) → 청크 본문(자르지 않는 청크 1개): 캡션 + 요약 + 그림 글자 + 값/연결/표."""
     vlm = rec.get("vlm") or {}
     content = vlm.get("content") or {}
     vals = ", ".join(f"{v.get('label')}={v.get('value')}{v.get('unit') or ''}" for v in content.get("values") or [] if v.get("label"))
@@ -331,9 +324,7 @@ def figure_chunk_text(rec):
         parts.append(f"연결: {edges}")
     if content.get("table_md"):
         parts.append(content["table_md"])
-    trend = rec.get(
-        "trend"
-    )  # F14(c) — parse 쪽(pipeline.transform.figures.chart_values)이 이미 계산해 기록에 넣어 둔 값을 그대로 읽기만(rag-core↔rag-parse import 경계 유지)
+    trend = rec.get("trend")  # parse 쪽(chart_values)이 이미 계산해 기록에 넣어 둔 값을 그대로 읽기만
     if trend and trend.get("direction"):
         parts.append(f"추세: {trend['direction']}({trend.get('period') or ''}, {trend.get('basis') or ''})")
     return "\n".join(parts)
@@ -350,7 +341,7 @@ def _vc_status(check):
 
 
 def figure_chunk(di, seq, rec, source_system=None):
-    """그림 기록(_images/index.jsonl, 설계 §3 계약) → 청크 1개(L1, nofig — 쪼개지 않음) — BM25·벡터 둘 다에 들어감(일반 청크와 같은 목록)."""
+    """그림 기록(_images/index.jsonl) → 청크 1개(nofig — 쪼개지 않음) — BM25·벡터 둘 다에 들어감(일반 청크와 같은 목록)."""
     text = figure_chunk_text(rec)
     # page는 PDF 쪽·pptx 슬라이드 번호 겸용(그림 기록 계약에 별도 slide 필드 없음 — image_id #p<n>과 같은 값)
     return {
@@ -375,7 +366,7 @@ def figure_chunk(di, seq, rec, source_system=None):
 
 
 def fig_empty(rec):
-    """AD21③ — 검색 청크로 만들 가치 없는 그림 기록: 상한·작은·반복으로 VLM이 안 돈 것(skipped) 또는 VLM이
+    """검색 청크로 만들 가치 없는 그림 기록: 상한·작은·반복으로 VLM이 안 돈 것(skipped) 또는 VLM이
     돌았지만 요약·글자·값·연결·표가 모두 빈 플레이스홀더. 캡션은 안 봄(본문에 이미 있어 캡션만으로는 그림 청크를 안 만들 근거가 안 됨)."""
     vlm = rec.get("vlm") or {}
     content = vlm.get("content") or {}
@@ -391,13 +382,13 @@ def fig_empty(rec):
 
 
 def fig_page_child(rec, page_vlm_ids):
-    """F11 — 쪽 VLM이 이미 쪽 전체를 옮겨 적은(부모 skipped=page_vlm) 하위 그림: 내용이 본문 청크와 겹쳐 합본 잡음·1위 하락
+    """쪽 VLM이 이미 쪽 전체를 옮겨 적은(부모 skipped=page_vlm) 하위 그림: 내용이 본문 청크와 겹쳐 합본 잡음·1위 하락
     → 검색 청크는 안 만들고 image_id만 본문 청크에 연결(get_image·images.jsonl엔 남음)."""
     return rec.get("parent_image_id") in page_vlm_ids
 
 
 def fig_host(doc_chunks, page):
-    """독립 검토 MINOR② — 빈 그림의 image_id를 붙일 텍스트 청크: 같은 쪽 우선(여러 개면 마지막, 즉 그 쪽 마지막 조각) ·
+    """빈 그림의 image_id를 붙일 텍스트 청크: 같은 쪽 우선(여러 개면 마지막, 즉 그 쪽 마지막 조각) ·
     없으면 쪽 번호가 가장 가까운 청크(동점은 앞선 것, 안정) · 쪽 번호 있는 청크가 전혀 없으면 문서 첫 청크."""
     if not doc_chunks:
         return None
@@ -430,7 +421,7 @@ def main(argv=None):
         default=pc.cfg().load.edw_path_prefix,
         help="저장소(doc.file_path)에 기록할 원본 경로 접두(서버의 실제 보관 위치) — 없으면 --src 절대 경로",
     )
-    ap.add_argument("--embed", default="api", choices=["api", "none"])  # S7c — 설정 객체 · 0.2.0 로컬 모델 기본값(bge-m3) 지움 — pl-46
+    ap.add_argument("--embed", default="api", choices=["api", "none"])
     ap.add_argument("--chunk", default=None, help="기본 = stack.json chunk(없으면 structure)")
     ap.add_argument("--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file)")
     ap.add_argument("--no-rep", action="store_true", help="대표 파싱(output/parse/_rep) 대신 선정 엔진을 문서마다 고름(단계 1 실험용)")
@@ -441,7 +432,7 @@ def main(argv=None):
     a.chunk = a.chunk or stack.get("chunk") or "structure"
     t0 = time.time()
     pd = Path(a.parse_dir)
-    fig_by_doc = load_figures(a.images_dir or (pd / "_images"))  # L1: 그림 기록(W1·W9·W11) → 문서별 그림 청크
+    fig_by_doc = load_figures(a.images_dir or (pd / "_images"))  # 그림 기록 → 문서별 그림 청크
     use_rep = not a.no_rep and (pd / "_rep" / "index.json").exists()  # 단계 2: 고정 스택의 대표 파싱 결과만
     reps = {}
     if use_rep:  # 파싱 모듈 인계 = _rep 폴더 하나(형식·쪽 수·교차 확인·원본 정보 포함, docs/architecture.md)
@@ -458,9 +449,9 @@ def main(argv=None):
         route = json.loads((pd / "route.json").read_text(encoding="utf-8")) if (pd / "route.json").exists() else {}
         sel = json.loads((pd / "selection.json").read_text(encoding="utf-8")) if (pd / "selection.json").exists() else {}
     src = Path(a.src)
-    n_fig_dropped = 0  # AD21③ — 빈 VLM 그림은 청크를 만들지 않음
+    n_fig_dropped = 0  # 빈 VLM 그림은 청크를 만들지 않음
 
-    # EDW 파일 메타(고객·원천 칸·등록 시각)는 적재가 EDW 조인으로 채운다(pl-29, 11-02 — 외부 file_meta 파일 지움)
+    # EDW 파일 메타(고객·원천 칸·등록 시각)는 적재가 EDW 조인으로 채운다(edw_doc_meta)
     # rdb:csv 배치 — prepared 파일명 → 원본 s3_key 매핑 (source.py가 남긴 manifest.jsonl)
     _manifest_keys = {}
     _mf = Path(a.parse_dir) / "_source" / "manifest.jsonl"
@@ -471,7 +462,7 @@ def main(argv=None):
                 if r.get("file_name") and r.get("key"):
                     _manifest_keys[r["file_name"]] = r["key"]
     docs, chunks, n_sum, seen_sha = [], [], {"llm": 0, "lead": 0}, {}
-    progress = contextlib.ExitStack()  # op-01 — 60초마다 run.progress(처리한 문서/전체)
+    progress = contextlib.ExitStack()  # 60초마다 run.progress(처리한 문서/전체)
     progress.enter_context(runtrace.Progress(total=len(items), done=lambda: len(docs), unit="doc"))
     for doc, dd in items:
         if use_rep:
@@ -497,7 +488,7 @@ def main(argv=None):
         path = (a.path_prefix.rstrip("/\\") + "/" + doc) if a.path_prefix else (str(orig.resolve()) if orig else so["path"])
         h = (
             (original_file_hash(orig) or file_hash(orig)) if orig else so["sha256"]
-        )  # GH1-04 — 원본이 로컬에 있어도 회전된 바이트 대신 원본 식별(rotation.csv) 먼저
+        )  # 원본이 로컬에 있어도 회전된 바이트 대신 원본 식별(rotation.csv) 먼저
         if h in seen_sha:  # 같은 내용 다른 이름(사본) — 한 번만, 다른 경로는 aliases에
             docs[seen_sha[h]].setdefault("aliases", []).append(path)
             continue
@@ -507,11 +498,11 @@ def main(argv=None):
         _s3_key = uri.split("/", 3)[-1] if uri.startswith("s3://") and uri.count("/") >= 3 else None
         if not _s3_key:  # rdb:csv 배치 — rep.source.uri가 file://이면 manifest에서 파일명으로 s3_key를 찾는다
             _s3_key = _manifest_keys.get(doc) or _manifest_keys.get(Path(path).name)
-        if not _s3_key:  # PC 폴더 원천(사용자 11-02 Q4) — 원천 폴더 기준 상대 경로(`SFDC/<uuid>/<이름>` — s3_key와 같은 모양)
+        if not _s3_key:  # PC 폴더 원천 — 원천 폴더 기준 상대 경로(`SFDC/<uuid>/<이름>` — s3_key와 같은 모양)
             _s3_key = _rel_to_source(path)
         _src_sys = None
         _seg = _s3_key.split("/", 1)[0].upper() if _s3_key else ""
-        if _seg in ("SFDC", "CRMS", "LAS", "FAQ"):  # 원본 키 첫 마디 = 원천(pl-28 스키마 고르기)
+        if _seg in ("SFDC", "CRMS", "LAS", "FAQ"):  # 원본 키 첫 마디 = 원천(스키마 고르기)
             _src_sys = _seg
         elif _s3_key:
             if _s3_key.startswith(("SFDC-", "SFDC_")):
@@ -520,12 +511,11 @@ def main(argv=None):
                 _src_sys = "CRMS"
             elif _s3_key.startswith(("las_", "LAS_")):
                 _src_sys = "LAS"
-        # 2026-10-20 축소 스키마 — pgvector doc에는 검색에 필요한 최소만(EDW 식별 + clients + summary).
-        # clients는 main의 infer_clients(docs)가 이후에 채움(기존 흐름 그대로). file_name은 file_path에서 유도.
+        # pgvector doc에는 검색에 필요한 최소만(EDW 식별 + clients + summary).
+        # clients는 main의 infer_clients(docs)가 이후에 채움. file_name은 file_path에서 유도.
         docs.append(
             {
-                "file_path": _s3_key
-                or path,  # 11-02(pl-28) Object Storage 원본 경로 = EDW s3_key(ParsingMeta와 잇는 키) — 개발 서버 로컬 경로는 안 씀
+                "file_path": _s3_key or path,  # Object Storage 원본 경로 = EDW s3_key(ParsingMeta와 잇는 키) — 개발 서버 로컬 경로는 안 씀
                 "doc_name": doc,  # doc_name은 번들 JSONL 로컬용(파일명) — db 적재 안 함
                 "summary": ab,
                 "full_text": text,  # full_text는 본문 매칭(client) 내부용 — db 적재 안 함
@@ -536,13 +526,11 @@ def main(argv=None):
         )
         first = len(chunks)
         seq = 0
-        with SP.span(
-            "transform.structure", doc_id=doc, ext=Path(doc).suffix.lower(), cpu=False
-        ) as sp:  # op-01 — 청킹+위치(bbox) 계산 1문서
+        with SP.span("transform.structure", doc_id=doc, ext=Path(doc).suffix.lower(), cpu=False) as sp:  # 청킹+위치(bbox) 계산 1문서
             rows = S.faq_rows(orig) if _src_sys == "FAQ" and orig else None
             if _src_sys == "FAQ" and not orig:
                 print(f"[bundle] 경고: FAQ 원본이 없어 행 단위로 못 자름 — 일반 청킹: {doc}", flush=True)
-            for r in rows or []:  # pl-39 — FAQ 엑셀 1행 = 청크 1개(질문+답), 시트 이름 = faq_group
+            for r in rows or []:  # FAQ 엑셀 1행 = 청크 1개(질문+답), 시트 이름 = faq_group
                 ct = f"Q: {r['question'] or ''}\nA: {r['answer'] or ''}"
                 chunks.append(
                     {
@@ -570,7 +558,7 @@ def main(argv=None):
                 if raw.get("boxes"):
                     bbox = ocr_bbox(raw["boxes"], text, m["span"])
                 elif dd["format"] == ".pdf_text" and orig and page:  # 글자 PDF 위치는 원본 그 쪽에서 — 쪽·원본을 모르면 비워 둠
-                    bbox = pdf_bbox(str(orig), page, c["text"])  # F6(11-03) — 전에는 쪽 모름을 1쪽으로 찾아 page=None·bbox만 남음
+                    bbox = pdf_bbox(str(orig), page, c["text"])
                 toks = tokens(c["text"])
                 chunks.append(
                     {
@@ -593,21 +581,21 @@ def main(argv=None):
             sp.add(chunks=seq, chunk_chars=sum(len(c["chunk_text"]) for c in chunks[first:]), text_chars=len(text))
         doc_text_chunks = chunks[first : len(chunks)]  # 이 문서의 텍스트 청크(그림 청크 추가 전) — 빈 그림의 image_id를 붙일 자리
         page_vlm_ids = {r["image_id"] for r in fig_by_doc.get(doc, []) if r.get("skipped") == "page_vlm"}
-        for rec in fig_by_doc.get(doc, []):  # L1: 그림 1개 = 청크 1개(자르지 않음) — 텍스트 청크 뒤 이어서
-            if fig_page_child(rec, page_vlm_ids) or fig_empty(rec):  # AD21③ 빈 VLM · F11 쪽 VLM과 중복
+        for rec in fig_by_doc.get(doc, []):  # 그림 1개 = 청크 1개(자르지 않음) — 텍스트 청크 뒤 이어서
+            if fig_page_child(rec, page_vlm_ids) or fig_empty(rec):  # 빈 VLM · 쪽 VLM과 중복
                 n_fig_dropped += 1
                 host = fig_host(doc_text_chunks, rec.get("page"))
                 if host is not None:  # 원본 이미지 조회(get_image)용 image_id 연결은 문서/쪽 청크에 남김
                     host.setdefault("image_ids", []).append(rec["image_id"])
-                seq += 1  # 독립 검토 MAJOR① — 빠진 그림도 seq를 소비(건너뛴 번호) → 남은 청크의
+                seq += 1  # 빠진 그림도 seq를 소비(건너뛴 번호) → 남은 청크의
                 continue  #   chunk_key(doc_sha:seq)가 어느 그림이 비었는지와 무관하게 항상 같음(결정성)
             chunks.append(figure_chunk(di, seq, rec, source_system=_src_sys))
             seq += 1
     progress.close()
-    runtrace.docs(total=len(docs))  # op-01 — pipe_run 문서 수(구조화에 들어간 문서)
+    runtrace.docs(total=len(docs))  # pipe_run 문서 수(구조화에 들어간 문서)
     infer_clients(docs)
     warn_if_no_client_roster(docs)
-    # 새 회사 이름 후보(용어 초안)는 묶음 밖 도구로(pl-38 D3): python -m pipeline.transform.structure.draft_terms --bundle <묶음>
+    # 새 회사 이름 후보(용어 초안)는 묶음 밖 도구로: python -m pipeline.transform.structure.draft_terms --bundle <묶음>
     for c in chunks:  # G9: 청크 머리말 [문서명 · 고객 · 절 제목] — 같은 양식 다른 고객·문서를 가름
         d = docs[c["doc"]]
         c["head"] = "[" + " · ".join(x for x in (Path(d["doc_name"]).stem, d.get("client"), c.get("section")) if x) + "]"
@@ -620,7 +608,7 @@ def main(argv=None):
 
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True, exist_ok=True)
-    with SP.span("embed.bundle", "embed", model=a.embed) as sp:  # op-01 — 임베딩 1회 = 1행(캐시 적중·배치 수·호출 지연은 metrics)
+    with SP.span("embed.bundle", "embed", model=a.embed) as sp:  # 임베딩 1회 = 1행(캐시 적중·배치 수·호출 지연은 metrics)
         vecs = embed_all(a.embed, [index_text(c) for c in chunks], out=str(out / "vectors.npy"))  # 머리말 포함(G9)
         sp.add(chunks=len(chunks))
     dim = int(vecs.shape[1]) if len(vecs) else 0
@@ -629,7 +617,7 @@ def main(argv=None):
         with open(out / f"{name}.jsonl", "w", encoding="utf-8") as f:
             for r in rows:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    # S7c — meta의 embed_model은 설정 객체(common 칸 EMBED_MODEL)에서(옛 env 읽기와 같은 값: 없음 → None)
+    # meta의 embed_model은 common 칸 설정 EMBED_MODEL(없음 → None)
     meta = {
         "created": time.strftime("%Y-%m-%d %H:%M:%S"),
         "stack": stack.get("name"),
@@ -644,17 +632,17 @@ def main(argv=None):
         "chunks": len(chunks),
         "engines": sorted({d.get("parse_engine") or "rep" for d in docs}),
         "bbox": sum(1 for c in chunks if c["bbox"]),
-        "fig_chunks": sum(1 for c in chunks if c.get("image_id")),  # L1
-        "figure_chunks_dropped": n_fig_dropped,  # AD21③
+        "fig_chunks": sum(1 for c in chunks if c.get("image_id")),
+        "figure_chunks_dropped": n_fig_dropped,
         "sec": round(time.time() - t0, 1),
-        "master_hash": master.get().hash,  # pl-38 — 고객 판별이 읽은 마스터 표 해시(적재가 gold_version `<VERSION>+m<앞 8자>`로)
+        "master_hash": master.get().hash,  # 고객 판별이 읽은 마스터 표 해시(적재가 gold_version `<VERSION>+m<앞 8자>`로)
     }
     (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
     old = final.with_name(final.name + ".old")
     shutil.rmtree(old, ignore_errors=True)
     if final.exists():
         final.rename(old)  # Linux: 검색 중인 MCP가 연 파일은 그대로 읽힘
-    for i in range(5):  # Windows: 백신·색인이 방금 쓴 파일을 잠깐 잡아 rename이 거부되는 일(10-03 실측 2/126) — 잠깐 쉬고 다시
+    for i in range(5):  # Windows: 백신·색인이 방금 쓴 파일을 잠깐 잡아 rename이 거부되는 일 — 잠깐 쉬고 다시
         try:
             out.rename(final)
             break
@@ -668,11 +656,9 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    import importlib  # 문자열 import — 층 s 파일이 setarg.py를 code_fp 의존으로 끌어오지 않게(리뷰 S9 — CLI 도우미를 고칠 때 서버 전체 재구조화 방지)
+    import importlib  # 문자열 import — 층 s 파일이 setarg.py를 code_fp 의존으로 끌어오지 않게(CLI 도우미를 고칠 때 서버 전체 재구조화 방지)
 
-    importlib.import_module(
-        "common.config.setarg"
-    ).apply()  # --set 이름=값(S9 Step A — 호스트 run_docs.py 구조화가 임베딩 동시 수 등을 넘김)
+    importlib.import_module("common.config.setarg").apply()  # --set 이름=값(호스트 run_docs.py 구조화가 임베딩 동시 수 등을 넘김)
     utf8_stdout()
-    with runtrace.run("build_bundle", sys.argv[1:]):  # op-01 — 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
+    with runtrace.run("build_bundle", sys.argv[1:]):  # 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
         main()

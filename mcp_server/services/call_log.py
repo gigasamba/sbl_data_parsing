@@ -1,4 +1,4 @@
-"""MCP 감사 기록(op-01): 요청 컨텍스트, 바이트 상한, 결과 키, 비차단 공통 sink.
+"""MCP 감사 기록: 요청 컨텍스트, 바이트 상한, 결과 키, 비차단 공통 sink.
 
 내부 행(tool, user_id, err, ts)은 sink로 보내기 직전 `_columns`가 applog.mcp_log 칸 이름으로 바꾼다.
 
@@ -191,7 +191,7 @@ def result_keys(tool, result):
     if tool == "search":
         hits = [x for x in result.get("evidence", []) if isinstance(x, dict)]
         return {
-            "chunk_keys": [x.get("chunk_key") for x in hits],  # 목록 순서 = 순위(mc-16 — rank·via 칸 없음)
+            "chunk_keys": [x.get("chunk_key") for x in hits],  # 목록 순서 = 순위(rank·via 칸 없음)
             **{k: result[k] for k in ("evidence_status", "filter", "scope_docs") if k in result},
         }
     if tool == "list_doc_fulltext":

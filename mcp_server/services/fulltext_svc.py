@@ -1,6 +1,6 @@
-"""원문 도구(mc-17, 11-01) — list_doc_fulltext(gold doc에서 거르기 → ParsingMeta에서 대표 결과 위치를 그때 읽음 → 폴더 목록 + sfid 발급) ·
+"""원문 도구 — list_doc_fulltext(gold doc에서 거르기 → ParsingMeta에서 대표 결과 위치를 그때 읽음 → 폴더 목록 + sfid 발급) ·
 get_doc_fulltext(sfid로 Object Storage에서 받기). pgvector에는 거르기 메타(원천 스키마 5벌 — doc_class·created_at·file_path 등)만, 대표 결과 위치·파싱 시각·원본 sha256은
-EDW ParsingMeta에만(사용자 11-01) — ParsingMeta를 못 읽으면 registry_unavailable. 연결 키는 source_system + 원본 키(= gold doc.file_path — Object Storage 원본 경로).
+EDW ParsingMeta에만 — ParsingMeta를 못 읽으면 registry_unavailable. 연결 키는 source_system + 원본 키(= gold doc.file_path — Object Storage 원본 경로).
 sfid = `sf1.<base64url("버킷/키")>.<HMAC-SHA256 서명>` — 서명 키는 search.server.fulltext_secret(바꾸면 발급된 sfid 전부 무효).
 응답 모양·한도는 mcp_server/schemas/fulltext.py.
 """
@@ -121,7 +121,7 @@ def _open_pm():
 
 class _pm:
     """ParsingMeta 읽기 연결(common.connections.rdb 읽기 계정) — 못 열면 예외(호출부가 registry_unavailable로).
-    조회가 실패하면(연결 끊김 등) 한 번 다시 연결해 다시 묻고, 또 실패하면 예외(운영 `_pm_retry`와 같음 — 사용자 11-02)."""
+    조회가 실패하면(연결 끊김 등) 한 번 다시 연결해 다시 묻고, 또 실패하면 예외(운영 `_pm_retry`와 같음)."""
 
     def __init__(self):
         self.db = _open_pm()
@@ -166,7 +166,7 @@ def do_list(
     cursor=None,
 ):
     """gold doc에서 거르기(분류·영업 기회·등록 시각·원천·이름/경로) → ParsingMeta에서 대표 결과 위치·파싱 시각·원본 sha256을 그때 읽음
-    (pgvector에는 거르기 메타만 — 사용자 11-01). 연결 키는 source_system + 원본 키(= gold doc.file_path — Object Storage 원본 경로)."""
+    (pgvector에는 거르기 메타만). 연결 키는 source_system + 원본 키(= gold doc.file_path — Object Storage 원본 경로)."""
     t0 = time.perf_counter()
     secret = _secret()
     if secret is None:
@@ -184,8 +184,8 @@ def do_list(
         p_hi = _utc_text(_when(until, True, "until")) if until else None
         if source_system and str(source_system).upper().removesuffix("-TEST") not in {s.upper() for s in ST.SOURCES}:
             raise BadRequest("source_system은 SFDC·CRMS·LAS·FAQ·Other 중 하나(-test 붙어도 됨)")
-        srcs = [ST.source_of(source_system)] if source_system else list(ST.SOURCES)  # 원천 스키마 고르기(pl-28) — 안 주면 5벌 모두
-        for col, v in (("doc_class", doc_class), ("sf_op_id", sf_op_id)):  # pl-52 — doc.attrs 키(없는 원천은 0건)
+        srcs = [ST.source_of(source_system)] if source_system else list(ST.SOURCES)  # 원천 스키마 고르기 — 안 주면 5벌 모두
+        for col, v in (("doc_class", doc_class), ("sf_op_id", sf_op_id)):  # doc.attrs 키(없는 원천은 0건)
             if v:
                 conds.append("attrs @> %s::jsonb")  # 담김 — GIN 색인을 탐
                 vals.append(json.dumps({col: str(v)}))
@@ -297,7 +297,7 @@ def do_list(
 
 def _parsed_keys(pm, lo, hi):
     """파싱 시각(since/until)에 맞는 원본 경로 — 범위 안 행이 있는 원본마다 쓸 행(pick_rep: active 중 최신)을 다시 골라
-    그 행의 parsed_at이 범위 안일 때만(옛 행만 범위 안이면 빼서, 출력 parse_date와 거르기가 어긋나지 않게)."""
+    그 행의 parsed_at이 범위 안일 때만(이전 행만 범위 안이면 빼서, 출력 parse_date와 거르기가 어긋나지 않게)."""
     from common.store import parsing_meta_db as PM
 
     cand = sorted({r["source_key"] for r in pm.rows_parsed(lo, hi) if r.get("source_key")})
@@ -326,8 +326,8 @@ _SYS_LABEL = {s: "Other" if s == "other" else s.upper() for s in ST.SOURCES}
 
 
 def _select(pg, src, conds, vals, has_cursor, lim):
-    """원천 스키마 하나 — (이 쪽 행 lim+1개, 쪽과 무관한 matched). cursor 조건·값은 늘 맨 끝. doc_class·sf_op_id는 doc.attrs 키(pl-52) —
-    그 키가 없는 원천은 거르면 0건, 출력은 NULL. source_system 출력 = 스키마의 원천 이름(저장값 — 사용자 11-01 승인)."""
+    """원천 스키마 하나 — (이 쪽 행 lim+1개, 쪽과 무관한 matched). cursor 조건·값은 늘 맨 끝. doc_class·sf_op_id는 doc.attrs 키 —
+    그 키가 없는 원천은 거르면 0건, 출력은 NULL. source_system 출력 = 스키마의 원천 이름(저장값)."""
     s = pg.schema
     where = (" WHERE " + " AND ".join(conds)) if conds else ""
     base = conds[:-1] if has_cursor else conds

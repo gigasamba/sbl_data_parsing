@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""SI43③ — EDW 고객·제품 마스터(추출본) → CLIENT_ROSTER CSV(고객)·용어집 draft(제품) 자동 생성. 열 매핑만 바꾸는
-식(SI41 pipeline/extract/fetch_docs.py와 같은 틀 — 표 이름·열 이름은 사람이 적는 매핑 파일 하나, 코드는 안 바뀜) — 실제
+"""EDW 고객·제품 마스터(추출본) → CLIENT_ROSTER CSV(고객)·용어집 draft(제품) 자동 생성. 열 매핑만 바꾸는
+식(fetch_docs와 같은 틀 — 표 이름·열 이름은 사람이 적는 매핑 파일 하나, 코드는 안 바뀜) — 실제
 EDW 접속 정보·열 이름(기밀)은 서버 settings.yaml에서만 채우고, 이 코드는 어떤 매핑이든 그대로 돈다.
 
-시험은 --source csv:<경로>로(합성 EDW 추출본, 실제 RDB·네트워크 없이 — pipeline/extract/fetch_docs.py의 csv:<경로>
-시험 모드와 같은 관례). --source rdb:<표>(RDB_ENGINE=mssql 기본·pg, 접속은 common.connections.rdb 읽기 계정 — fetch_docs.py와 같은 접속
-스위치)는 실제 EDW 접속이 있는 서버에서만 — 이 PC에는 접속 정보가 없어 시험 대상이 아니다(selftest는 csv:만).
+시험은 --source csv:<경로>로(합성 EDW 추출본, 실제 RDB·네트워크 없이). --source rdb:<표>(RDB_ENGINE=mssql 기본·pg,
+접속은 common.connections.rdb 읽기 계정 — fetch_docs.rdb_connect)는 실제 EDW 접속이 있는 서버에서만 — PC에는 접속 정보가
+없어 시험 대상이 아니다(selftest는 csv:만).
 
 mapping.json(필수 name, 선택 aliases·category): {"name": "<열 이름>", "aliases": "<열 이름>", "category": "<열 이름>"}
-  GL3(사용자 10-15) — --kind client는 새 명부 양식(ROSTER_COLS, server-guide §5-1)으로 쓴다. 매핑에 그 칸 이름을
+  --kind client는 명부 양식(ROSTER_COLS)으로 쓴다. 매핑에 그 칸 이름을
   키로 더 적으면(client_id·name_ko·client_type·segment·country·parent_client_id·status·description·updated) 마스터의
   그 열을 옮겨 적고, 안 적은 칸은 빈칸. source 칸은 --source 값. 예시 resources/vocab/glossary/client_master_map.example.json.
 
@@ -16,9 +16,9 @@ mapping.json(필수 name, 선택 aliases·category): {"name": "<열 이름>", "a
   python -m pipeline.transform.structure.roster_from_edw --kind client  --source csv:client_master.csv  --mapping map.json --out CLIENT_ROSTER.csv
   python -m pipeline.transform.structure.roster_from_edw --kind product --source csv:product_master.csv --mapping map.json --out output/glossary_draft/domain_terms_draft_product.csv
 
---kind product의 --out은 **GLOSSARY_DIR이 아니라 draft CSV 파일**(terms.write_draft_terms, 독립 검토 BLOCK 1,
-10-13 — GLOSSARY_DIR에 바로 쓰면 서버에서 이미지 밖 실 운영 사전 폴더라 권한 오류가 날 수 있다). 사람이 검토해
-domain_terms.csv로 옮겨야 검색에 반영된다(cli/glossary_suggest.py T6와 같은 관례)."""
+--kind product의 --out은 **GLOSSARY_DIR이 아니라 draft CSV 파일**(terms.write_draft_terms — GLOSSARY_DIR에 바로 쓰면
+서버에서 이미지 밖 실 운영 사전 폴더라 권한 오류가 날 수 있다). 사람이 검토해 domain_terms.csv로 옮겨야 검색에
+반영된다(glossary_suggest와 같은 관례)."""
 
 import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
 from common.core.console import utf8_stdout
@@ -31,7 +31,7 @@ import re
 from pathlib import Path
 
 from common.core import terms as T
-from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸 RDB_*)
+from pipeline import config as pc
 
 TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # fetch_docs.py·common/sources.py와 같은 화이트리스트
 COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -48,7 +48,7 @@ ROSTER_COLS = [
     "description",
     "source",
     "updated",
-]  # terms.py new roster format (10-15)
+]  # common.core.terms 명부 양식
 EXTRA_KEYS = [c for c in ROSTER_COLS if c not in ("canonical_name", "aliases", "source")]  # optional mapping keys
 
 
@@ -86,7 +86,7 @@ def rows_from_rdb(table, select_cols):
         ident = pgsql.SQL(".").join(pgsql.Identifier(p) for p in table.split("."))
         return db.q(pgsql.SQL("SELECT " + cols_sql + " FROM {}").format(ident))
     from common.store import mssql
-    from pipeline.extract.fetch_docs import rdb_connect  # S8b — SQLAlchemy 연결(접속 인자 옛 그대로 — RDB_CONNECT_KWARGS는 안 넘김)
+    from pipeline.extract.fetch_docs import rdb_connect  # SQLAlchemy 연결(RDB_CONNECT_KWARGS는 안 넘김)
 
     ident = ".".join(f"[{p}]" for p in table.split("."))
     with rdb_connect(extra_kwargs=False) as cn:

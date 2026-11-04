@@ -1,5 +1,5 @@
-"""파싱 실행 공용(0.2.0에 옛 pipeline/shared/artifacts.py·progress.py를 합침, pl-46): P0 원본 캐시 경로·지시문 id·엔진 버전·중간 캐시 정리 ·
-환경 실패 단서(is_env_error)·문서 → 형식 키(doc_types)."""
+"""파싱 실행 공용: P0 원본 캐시 경로·지시문 id·엔진 버전·중간 캐시 정리·환경 실패 단서(is_env_error)·
+PDF 종류(pdf_kind)·문서 → 형식 키(doc_types)."""
 
 import functools
 import importlib.metadata
@@ -8,10 +8,9 @@ import os
 from pathlib import Path
 
 from common.core.artifacts import sha8
-from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline import config as pc
 
 
-# ---- (옛 pipeline/shared/artifacts.py)
 def prompt_id(name, version, text):
     """지시문 id = name-version-sha8(지시문 글자) — 코드 이름이 같아도 버전·글자가 바뀌면 다른 id."""
     return f"{name}-{version}-{sha8(text)}"
@@ -55,20 +54,20 @@ def engine_version(engine):
     return "unknown"
 
 
-# RV3(10-09 리뷰 후속, engine-qa BLOCK 반영) — 순수 캐시만(재생성 경로가 있는 것만). server-runbook.md 'C7. 파싱 결과
+# 정리 대상은 순수 캐시만(재생성 경로가 있는 것만). server-runbook.md 'C7. 파싱 결과
 # 원본·그림 보관 위치' 표의 보관 결정을 그대로 따른다 — **raw/**(VLM 원본 응답 raw/vlm·엔진별 원본 raw/<엔진>@<버전>,
 # C7: "남음")와 **_images**(그림 조각 PNG + index.jsonl, C7: "남음" — get_image가 읽는
 # 정본 색인이라 파일만 지우면 참조가 깨짐)는 서버가 원본을 즉시 지워 재생성 경로가 없으므로 **정리 대상이 아니다**(안 지움).
 # 정리 대상은 재판독 중간 캐시 3종뿐 — 전부 "없으면 다시 OCR·VLM 호출만 더 들 뿐"이라 영구 보관 결정이 없는 것들:
-#   _reread_p3/_vlm_cache(옛 P3 재판독 캐시 — pl-34에 기능을 지웠지만 서버에 남은 폴더를 정리하려고 둠) · _agent/_vlm_cache(판단 세션 재판독 VLM 캐시) · signals(page_signals 쪽 신호).
+#   _reread_p3/_vlm_cache(지운 P3 재판독 캐시 — 서버에 남은 폴더를 정리하려고 둠) · _agent/_vlm_cache(판단 세션 재판독 VLM 캐시) · signals(page_signals 쪽 신호).
 # 엔진 원문 P0(output/parse/<엔진>/<문서>.json, p0_key)·대표 결과(_rep)·판단 세션 결정 기록(_agent/decisions)도 당연히 안 지움.
 PURGE_CACHE_DIRS = ("_reread_p3/_vlm_cache", "_agent/_vlm_cache", "signals")
 
 
 def _contained_dirs(root):
     """root(이미 resolve됨) 밑에 안전하게 들어갈 수 있는 디렉터리만 — 각 하위 디렉터리를 resolve()해서 여전히
-    root 밑인지 다시 확인하고서야 스택에 넣는다. os.walk(followlinks=False)만으론 부족하다(engine-qa BLOCK② 재검토
-    — os.walk은 심볼릭 링크는 걸러도 **Windows junction/mount point는 걸러내지 못함**, `os.path.islink()`가
+    root 밑인지 다시 확인하고서야 스택에 넣는다. os.walk(followlinks=False)만으론 부족하다
+    (os.walk은 심볼릭 링크는 걸러도 **Windows junction/mount point는 걸러내지 못함**, `os.path.islink()`가
     junction엔 False를 줘서 followlinks=False가 무력화되는 걸 실측으로 확인). 깊이 섞인 순서로 반환(정렬은 호출자)."""
     found = [root]
     stack = [root]
@@ -169,8 +168,7 @@ def purge_caches(parse_dir, max_gb=None, dirs=PURGE_CACHE_DIRS, log=print):
     return {"total_gb": round(total_gb, 3), "removed": removed, "removed_gb": round(removed_bytes / 1024**3, 3)}
 
 
-# ---- (옛 pipeline/shared/progress.py)
-# 환경(미설치·미설정) 실패 단서 — 한 곳(run_all RB3② env_failed·parse_qa·실행판 공용). SI45: 예전 "not found"·"NotFoundError"는
+# 환경(미설치·미설정) 실패 단서 — 한 곳(run_engines·parse_scoring·실행판 공용). "not found"·"NotFoundError"처럼 넓게 잡으면
 # 손상 PDF의 'PdfReadError: EOF marker not found'까지 env로 잡아 그 엔진을 실행 전체에서 건너뛰게 했음 → 구체적인 표현만.
 ENV_ERR = (
     "미설정",
@@ -191,10 +189,34 @@ def is_env_error(err):
     return bool(err) and any(k in err for k in ENV_ERR)
 
 
+def pdf_kind(path):
+    """스캔 PDF 판정 하나(엔진 고르기·그림 VLM·parse_document 공용) — 글자층이 쪽당 평균 20자 미만이면 pdf_image.
+    레인 고르기(run_docs 작업자 배분)는 목적이 달라 extract/doc_parsing_group(앞 3쪽 쪽당 300자)을 따로 쓴다."""
+    try:
+        import pypdfium2 as pdfium
+
+        doc = pdfium.PdfDocument(str(path))
+        try:
+            n = len(doc)
+            chars = sum(len(doc[i].get_textpage().get_text_range().strip()) for i in range(n))
+        finally:
+            doc.close()
+    except Exception:
+        try:
+            import fitz
+
+            with fitz.open(str(path)) as d:
+                n = d.page_count
+                chars = sum(len(d[i].get_text().strip()) for i in range(n))
+        except Exception:
+            return "pdf_text", None  # ponytail: 페이지 텍스트 레이어 확인 불가 — 텍스트형으로 보수적 가정
+    if n == 0:
+        return "pdf_image", 0
+    return ("pdf_image" if chars < 20 * n else "pdf_text"), n
+
+
 def doc_types(docs, out):
     """문서 → 타입(.pdf는 .pdf_text / .pdf_image — 쪽당 글자 레이어 20자 기준). 판정은 <out>/_types.json에 캐시(크기·수정 시각)."""
-    from pipeline.transform.represent.parse_scoring import pdf_kind
-
     cache_f = Path(out) / "_types.json"
     try:
         cache = json.loads(cache_f.read_text(encoding="utf-8"))

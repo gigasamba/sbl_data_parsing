@@ -1,4 +1,4 @@
-"""파이프라인 실행 1건의 추적 기록(op-01) — applog.pipe_run 시작·종료 + 60초 run.progress.
+"""파이프라인 실행 1건의 추적 기록 — applog.pipe_run 시작·종료 + 60초 run.progress.
 
     with run("parse", sys.argv[1:]):      # 최상위 진입점에서 한 번 — command는 하위 명령/모듈 이름(pipe_run.command)
         main()                              # 부모가 run_id를 이어줬으면(자식 프로세스) 새로 시작하지 않음

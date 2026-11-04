@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """문서 폴더 × 엔진 일괄 파싱 → output/parse/<engine>/<문서>.json + output/parse/runs.jsonl(시간·오류).
 
-사용: python modules/parse/run_all.py [--src <원본 문서 폴더>] [--out output/parse] [--engines pdfplumber,pymupdf] [--limit N]
-  --src 생략 시 DOC_DIR env 필수(없으면 SystemExit) — common/paths.py.doc_dir.
-  제한 시간(사용자 10-29 — phase 없앰): 문서×엔진 1건 = 쪽 수 × 쪽당 초 — 글자 엔진 text_page_sec(PARSE_TEXT_PAGE_SEC, 기본 10) ·
-    VLM 엔진은 VLM 호출 1건 제한 common.models.vlm.timeout(기본 180, 11-04 VLM 통일) + 엔진의 첫 문서는 warmup_sec 하한 + 별도 프로세스 시작 여유 isolate_overhead.
+사용: python -m pipeline.extract.run_engines [--src <원본 문서 폴더>] [--out output/parse] [--engines pdfplumber,pymupdf] [--limit N]
+  --src 생략 시 DOC_DIR 필수(없으면 SystemExit) — common.core.paths.doc_dir.
+  제한 시간: 문서×엔진 1건 = 쪽 수 × 쪽당 초 — 글자 엔진 text_page_sec(PARSE_TEXT_PAGE_SEC, 기본 10) ·
+    VLM 엔진은 VLM 호출 1건 제한 common.models.vlm.timeout(기본 180) + 엔진의 첫 문서는 warmup_sec 하한 + 별도 프로세스 시작 여유 isolate_overhead.
     넘으면 같은 실행에서 제한을 두 배로 한 번 더, 그래도 넘으면 실패로 기록.
-  문서마다 그 형식의 엔진(stack.json)을 **동시에**(엔진마다 별도 프로세스 parse/parse_one.py — 세그폴트가 전체를
+  문서마다 그 형식의 엔진(stack.json)을 **동시에**(엔진마다 별도 프로세스 run_one_engine — 세그폴트가 전체를
     멈추지 않음). --workers N: 문서 N개를 동시에. --procs N: 문서를 N조각으로 나눠 프로세스 N개가 동시에(스레드는 코어 ÷ N).
-  OCR 엔진(OCR_ENGINES — rapidocr_ko)은 파싱 엔진으로 돌지 않는다 — 이미지·스캔 문서는 VLM 엔진만(0.2.0 ocr_engine 스위치 지움 — pl-46).
-    글자 PDF 안의 스캔 쪽은 여기서 OCR 엔진을 더하지 않고 대표 결과(represent)의 쪽 VLM이 그 쪽만 채운다.
-  진행 현황: 콘솔 큐 줄만(PROGRESS.md 쓰기는 0.2.0에 지움 — pl-46)
-  엔진 범위는 stack 하나(pl-03, 사용자 10-30 — 옛 PARSE_ENGINE_SCOPE all·--engines all 길은 지움): 문서마다 형식 키
+  OCR 엔진(OCR_ENGINES — rapidocr_ko)은 파싱 엔진으로 돌지 않는다 — 이미지·스캔 문서는 VLM 엔진만.
+    글자 PDF 안의 스캔 쪽은 여기서 OCR 엔진을 더하지 않고 대표 결과(build_rep)의 쪽 VLM이 그 쪽만 채운다.
+  진행 현황: 콘솔 큐 줄만.
+  엔진 범위는 stack 하나: 문서마다 형식 키
     (.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록만 돈다. --engines는 그 안에서 더 좁힐 뿐(비교 실험은
     stack json을 고쳐서). stack.json에 그 키가 없으면 핵심 엔진 합집합으로 대체(누락 방지)+형식별 1회 로그.
-  앞 실행 결과를 다시 쓰지 않는다(pl-32 사용자 10-30 — 실행마다 새 작업 폴더): 요청한 문서×엔진은 늘 돈다. runs.jsonl은 이번 실행의
+  앞 실행 결과를 다시 쓰지 않는다(실행마다 새 작업 폴더): 요청한 문서×엔진은 늘 돈다. runs.jsonl은 이번 실행의
     시간·오류 기록(보고 도구가 읽음). 같은 실행 안의 같은 내용 사본(sha 같음)은 한 번만 파싱해 복사(runs에 reused_from).
-  RB3② — 미설치·미설정(환경) 엔진은 이번 실행(프로세스) 안에서 처음 실패한 문서 뒤로 같은 엔진은 나머지 문서를 시도하지 않고
+  미설치·미설정(환경) 엔진은 이번 실행(프로세스) 안에서 처음 실패한 문서 뒤로 같은 엔진은 나머지 문서를 시도하지 않고
     runs.jsonl에 '건너뜀(환경 — 첫 실패 <문서>)'로 기록(문서마다 프로세스 기동·import 비용 반복 방지). 시간 초과·그 밖의 예외는 문서 탓일 수 있어 그대로 매 문서 시도.
     --procs 자식 프로세스끼리는 공유하지 않음(프로세스마다 다시 한 번 확인).
 """
@@ -33,8 +33,8 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from common.config import settings as C  # S7c: 설정 객체(common 칸 — VLM_*·PIPE_THREADS·RUN_MODE)
-from common.core import span as SP  # op-01 — 문서×엔진 span(run_id 없으면 아무 일도 안 함)
+from common.config import settings as C
+from common.core import span as SP  # 문서×엔진 span(run_id 없으면 아무 일도 안 함)
 from common.core.console import utf8_stdout
 from common.core.paths import (  # 폴더 재편 뒤 이 두 상수만 바뀌면 됨
     APP_ROOT,
@@ -43,7 +43,7 @@ from common.core.paths import (  # 폴더 재편 뒤 이 두 상수만 바뀌면
     RES_ROOT,
     doc_dir,
 )
-from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
+from pipeline import config as pc
 from pipeline.extract.engines import registry
 from pipeline.shared import parse_run as P0  # P0 열쇠(엔진 버전·코드 지문) — 결과 출처 기록(실험 저장소 계약과 같은 규칙)
 from pipeline.shared import runtrace
@@ -52,13 +52,13 @@ from pipeline.shared.parse_run import doc_types  # 문서→형식 키(.pdf_text
 
 def redact(s):
     """오류 글자에 섞여 나올 수 있는 문서 내용(인용부호로 감싼 긴 조각)을 가림(백로그 X2 ⑤ — 로그·runs.jsonl에 본문 금지).
-    구현은 span.redact_text 한 곳. 성능 기록(pipe_event.err)은 이 함수가 아니라 span.safe_err(allowlist)를 쓴다(op-01)."""
+    구현은 span.redact_text 한 곳. 성능 기록(pipe_event.err)은 이 함수가 아니라 span.safe_err(allowlist)를 쓴다."""
     return SP.redact_text(s)
 
 
-VLM_ENGINES = {"qwen_vlm"}  # docling_vlm·marker_llm은 10-30 지움(pl-31)
-# 사용자 10-29 · 0.2.0(pl-46) — OCR 엔진은 파싱 엔진으로 안 돌림(스위치 지움). 엔진 코드는 남김(prepare 쪽 회전 판정·figures가 씀)
-OCR_ENGINES = {"rapidocr_ko"}  # rapidocr(1.x)는 10-30 지움(pl-31)
+VLM_ENGINES = {"qwen_vlm"}
+# OCR 엔진은 파싱 엔진으로 안 돌림. 엔진 코드는 남김(filter_and_rotate 회전 판정·figures가 씀)
+OCR_ENGINES = {"rapidocr_ko"}
 
 
 def n_pages(doc):
@@ -73,7 +73,7 @@ def n_pages(doc):
 
 
 def page_timeout(eng, pages, first=False):
-    """문서×엔진 1건 제한(초, 사용자 10-29) = 쪽 수 × 쪽당 초(VLM 엔진 common.models.vlm.timeout · 그 밖 text_page_sec) · 엔진의 첫 문서는
+    """문서×엔진 1건 제한(초) = 쪽 수 × 쪽당 초(VLM 엔진 common.models.vlm.timeout · 그 밖 text_page_sec) · 엔진의 첫 문서는
     warmup_sec 하한(import·모델 적재) · 별도 프로세스 시작 여유 isolate_overhead를 더함. 시간 초과면 호출자가 두 배로 한 번 더."""
     x = pc.cfg().extract
     tmo = max(1, pages) * float(C.cfg().models.vlm.timeout if eng in VLM_ENGINES else x.text_page_sec)
@@ -83,14 +83,14 @@ def page_timeout(eng, pages, first=False):
 
 
 IDLE_MARK = "[engine-scope] stack 목록 밖이라 안 돎"  # 명시 --engines 중 일부가 안 돎(알림 — 거의 매 실행)
-NO_JOB_MARK = "[engine-scope] 돌 엔진 없음"  # 명시 --engines가 하나도 못 돎 — parse_service가 이 줄로 스캔 PDF를 가름(pl-03)
+NO_JOB_MARK = "[engine-scope] 돌 엔진 없음"  # 명시 --engines가 하나도 못 돎 — parse_service가 이 줄로 스캔 PDF를 가름
 
 
 def engines_for_doc(doc, stack_parse, types, logged_missing):
-    """문서 하나에 돌릴 엔진 후보(이후 --engines want로 더 좁혀짐) — PE1(2026-10-07) · pl-03(10-30, stack 하나). doc은 Path.
+    """문서 하나에 돌릴 엔진 후보(이후 --engines want로 더 좁혀짐). doc은 Path.
     문서 형식 키(.pdf_text/.pdf_image/확장자, stack.json과 같은 키)의 stack.json parse 목록으로 좁힌다.
     그 키가 stack.json에 없으면 그대로(핵심 엔진 합집합으로 대체, 누락 방지) + 형식별 1회만 로그.
-    사용자 10-29 — .pdf_text 안 스캔 쪽 때문에 .pdf_image 엔진을 합치지 않음(대표 결과의 쪽 VLM이 그 쪽만 채움) ·
+    .pdf_text 안 스캔 쪽 때문에 .pdf_image 엔진을 합치지 않음(대표 결과의 쪽 VLM이 그 쪽만 채움) ·
     OCR 엔진은 돌리지 않음(형식 키가 구성에 없어 합집합으로 대체할 때도)."""
     suffix = doc.suffix
     cands = [e for e in registry.engines_for(suffix) if e not in OCR_ENGINES]
@@ -105,11 +105,11 @@ def engines_for_doc(doc, stack_parse, types, logged_missing):
 
 
 def _drop_uninstalled(want):
-    """L11 — `--engines`를 명시(예: compare-parse의 `candidates` = stack.json 선정 + 후보 목록)하면
+    """`--engines`를 명시하면
     registry.select()는 설치 여부를 안 거른다(의도적 — ImportError로 바로 알려줌, registry.py select() 설명).
-    배치 실행(run_all)에서는 문서마다·--isolate 서브프로세스마다 ImportError를 반복해 겪는 대신,
-    이번 실행 시작 시 한 번만 설치·등록 여부를 확인해 빼고 로그 1줄로 알린다(RB3②는 같은 걸 '처음 실패 뒤'
-    문서 단위로 하던 것 — 이 함수는 그 전에, 시도 자체를 0으로 줄인다). 등록 안 된 이름(예: 스택 후보 목록에
+    배치 실행에서는 문서마다·--isolate 서브프로세스마다 ImportError를 반복해 겪는 대신,
+    이번 실행 시작 시 한 번만 설치·등록 여부를 확인해 빼고 로그 1줄로 알린다(env_failed는 '처음 실패 뒤'
+    문서 단위 — 이 함수는 그 전에 시도 자체를 0으로 줄인다). 등록 안 된 이름(예: 스택 후보 목록에
     남은 archive 이동 엔진)도 여기서 같이 거름 — registry.installed()는 등록된 이름만 받는다."""
     known = registry.engines()
     bad = sorted(e for e in want if e not in known or not registry.installed(e))
@@ -150,8 +150,7 @@ class RunLog:
 
 def vlm_doc_concurrency(a, lim):
     """엔진 자식의 문서당 VLM 동시 수(파싱 입구 pipeline.cli parse가 이 모듈을 띄우기 전에 부름 — a = parse 인자, lim = --docs-from 인자) — common.models.vlm.concurrency를 동시 문서 수(= min(문서 수, 조각 × --workers))로
-    max_concurrency를 나눈 몫까지 줄인다(11-04 — 옛 night.vlm_concurrency·--vlm-concurrency는 지움: run_docs의 VLM_CONCURRENCY가
-    늘 max ÷ --workers(8 ÷ 4 = 2)로 잘려 문서 1건 실행에도 적용되지 않던 결함)."""
+    max_concurrency를 나눈 몫까지 줄인다(문서 1건 실행이면 max 그대로)."""
     from common.core import resources as RS
 
     src = Path(a.src)
@@ -167,8 +166,7 @@ def vlm_doc_concurrency(a, lim):
 
 
 def _default_procs():
-    """--procs 기본 — S7c1 설정 객체(옛 `os.environ.get("PIPE_PROCS") or "1"`: auto → "auto"(이미지 ENV), 없음·빈 값 → "1", 숫자는 그 글자 —
-    칸이 'auto'를 글자로 기억, 코디네이터 답 ①b)."""
+    """--procs 기본 — runtime.pipe_procs: auto → "auto", 없음·빈 값 → "1", 숫자는 그 글자."""
     procs = C.cfg().runtime.pipe_procs
     return C.render(procs) if procs is not None else "1"
 
@@ -202,23 +200,23 @@ def main():
     )
     a = ap.parse_args()
     from common.core import resources
-    from common.core import resources as presources  # 10-14 — resolve_procs·thread_env는 common.core.resources에서 옮김(P만 씀)
+    from common.core import resources as presources
 
     a.procs = 1 if a.shard else presources.resolve_procs(a.procs)  # --shard = run_procs가 띄운 하위 → 다시 나누지 않음
-    # OC2(사용자 10-15) — 실제 동시 수로 CPU를 나눔(thread_share). 조각은 이 값을 setdefault로 물려받음. OC1 rapidocr 스레드도 OMP_NUM_THREADS를 따름.
+    # 실제 동시 수로 CPU를 나눔(thread_share). 조각은 이 값을 setdefault로 물려받음. rapidocr 스레드도 OMP_NUM_THREADS를 따름.
     if a.src is None:
         a.src = str(doc_dir())
     src, out = Path(a.src), Path(a.out)
-    if not a.shard:  # RV3 — 배치 시작 1회(--shard로 포크된 자식은 건너뜀), p0_key·_rep·결정 기록은 안 지움(common/artifacts.py)
+    if not a.shard:  # 배치 시작 1회(--shard로 포크된 자식은 건너뜀), p0_key·_rep·결정 기록은 안 지움
         P0.purge_caches(out)
-    files = sorted(p for p in src.iterdir() if p.is_file() and p.name not in (".gitkeep", "rotation.csv"))  # 평면 · prepare 기록 제외
+    files = sorted(
+        p for p in src.iterdir() if p.is_file() and p.name not in (".gitkeep", "rotation.csv")
+    )  # 평면 · filter_and_rotate 기록 제외
     docs = [p for p in files if registry.engines_for(p.suffix)]
-    doc_set = set(docs)  # fp-perf B5 — 목록 안 찾기를 집합으로
+    doc_set = set(docs)  # 목록 안 찾기를 집합으로
     skipped = Counter(p.suffix.lower() or "(없음)" for p in files if p not in doc_set)
-    pc.checked("MAX_FILE_MB")  # 파일 크기 상한 — 형식 틀리면 옛 float()처럼 실패(조용히 '제한 없음'이 되지 않게 — S7c1 리뷰)
-    max_mb = float(
-        pc.cfg().extract.max_file_mb
-    )  # S7c — 설정 객체(기본 0) · 큰 파일(수백 MB 스캔 PDF 등)은 메모리·시간 폭주 원인 — 0이면 제한 없음
+    pc.checked("MAX_FILE_MB")  # 파일 크기 상한 — 형식 틀리면 실패(조용히 '제한 없음'이 되지 않게)
+    max_mb = float(pc.cfg().extract.max_file_mb)  # 기본 0 · 큰 파일(수백 MB 스캔 PDF 등)은 메모리·시간 폭주 원인 — 0이면 제한 없음
     if max_mb:
         big = [p for p in docs if p.stat().st_size > max_mb * 1024 * 1024]
         if big:
@@ -247,27 +245,21 @@ def main():
     if a.procs > 1 and len(docs) > 1:  # 문서 조각 — 문서 1건이면 이 프로세스에서 바로
         return run_procs(a, docs)
     unverified = {e for e, (_, m) in registry.engines().items() if e in m.UNVERIFIED}
-    run_id = (
-        os.environ.get("PARSE_RUN_ID") or None
-    )  # env 남김 — 내부 신호(5-3 H) · SI23 — pipeline.py가 넘기는 이번 실행 id(없으면 run_id 칸 없이 기록)
-    # pl-32(사용자 10-30) — 앞 실행의 runs.jsonl로 건너뛰거나 결과를 복사하지 않는다(실행마다 새 작업 폴더 — runs.jsonl은 이번 실행 기록만).
+    run_id = os.environ.get("PARSE_RUN_ID") or None  # env 남김 — 내부 신호 · pipeline.cli가 넘기는 이번 실행 id(없으면 run_id 칸 없이 기록)
+    # 앞 실행의 runs.jsonl로 건너뛰거나 결과를 복사하지 않는다(실행마다 새 작업 폴더 — runs.jsonl은 이번 실행 기록만).
     # 같은 실행 안의 같은 내용 사본은 한 번만 파싱 후 복사(planned·deferred).
     jobs, skip, planned, deferred = [], Counter(), {}, []
-    with SP.span(
-        "extract.plan", docs=len(docs)
-    ) as plan_sp:  # op-01 — 계획 단계 시간과 결정 요약을 span 1행으로(문서×엔진마다 행을 만들지 않음)
-        # pl-03(사용자 10-30) — 엔진 범위는 stack 하나: 문서 형식별 stack.json 목록만
+    with SP.span("extract.plan", docs=len(docs)) as plan_sp:  # 계획 단계 시간과 결정 요약을 span 1행으로(문서×엔진마다 행을 만들지 않음)
+        # 엔진 범위는 stack 하나: 문서 형식별 stack.json 목록만
         stack = (
             json.loads(Path(a.stack).read_text(encoding="utf-8")) if a.stack else pc.stack()
-        )  # 엔진 구성 파일(서버·PC 같음 — 사용자 11-01) · --stack은 시험·실험용 파일
+        )  # 엔진 구성 파일(서버·PC 같음) · --stack은 시험·실험용 파일
         stack_parse = stack.get("parse") or {}
-        # 10-29 — 동시 글자 엔진 자식 = 조각 × min(문서 workers × 문서당 엔진 수, 코어 ÷ 조각) — VLM 엔진(API 대기)은 이 상한 밖.
-        # 문서당 엔진 수 = 구성에서 형식당 가장 많은 엔진 수(0.2.0 — 형식당 상한 MAX_PER_TYPE을 지움, pl-46 · 지금 구성은 2라 전과 같음)
+        # 동시 글자 엔진 자식 = 조각 × min(문서 workers × 문서당 엔진 수, 코어 ÷ 조각) — VLM 엔진(API 대기)은 이 상한 밖.
+        # 문서당 엔진 수 = 구성에서 형식당 가장 많은 엔진 수
         per_doc = max((len(v) for v in stack_parse.values()), default=1)
         slots = min(max(1, a.workers) * per_doc, presources.text_slots(resources.cpus(), a.procs))
-        thr = (
-            C.cfg().runtime.pipe_threads
-        )  # S7c — 설정 객체(float, auto·빈 값 = None — 옛 `int(get or 계산)`: "0"은 0이라 None일 때만 계산)
+        thr = C.cfg().runtime.pipe_threads  # float, auto·빈 값 = None — "0"은 0이라 None일 때만 계산
         for k, v in presources.thread_env(
             int(thr) if thr is not None else presources.thread_share(resources.cpus(), a.procs, slots)
         ).items():
@@ -290,7 +282,7 @@ def main():
         if deferred:
             skip["같은 내용 사본(1번만 파싱 후 복사)"] += len(deferred)
         plan_sp.add(jobs=len(jobs), skipped=dict(skip), deferred=len(deferred))
-    # pl-03 — 범위는 stack 하나: 명시 --engines 중 stack 형식별 목록 밖(또는 이 문서들 형식에 없음)은 안 돎 — 조용히 빠지지 않게 1줄
+    # 범위는 stack 하나: 명시 --engines 중 stack 형식별 목록 밖(또는 이 문서들 형식에 없음)은 안 돎 — 조용히 빠지지 않게 1줄
     idle = sorted(set(want or ()) - {e for _, e, _, _ in jobs} - {e for _, e, _, _, _ in deferred})
     if idle:
         print(f"{IDLE_MARK}(비교하려면 stack json을 고침): {', '.join(idle)}", flush=True)
@@ -305,12 +297,12 @@ def main():
     done, tally = [0], Counter()
 
     warmed = set()
-    text_sem = threading.BoundedSemaphore(slots)  # 10-29 — 글자(CPU) 엔진 자식 동시 수 상한(VLM 엔진은 --workers만큼)
-    env_failed = {}  # RB3② — 엔진 → 첫 env 실패 문서 이름. 이 실행(프로세스) 안에서만 기억(--procs 자식마다 별도 프로세스라 공유 안 됨 —
+    text_sem = threading.BoundedSemaphore(slots)  # 글자(CPU) 엔진 자식 동시 수 상한(VLM 엔진은 --workers만큼)
+    env_failed = {}  # 엔진 → 첫 env 실패 문서 이름. 이 실행(프로세스) 안에서만 기억(--procs 자식마다 별도 프로세스라 공유 안 됨 —
     # ponytail: 프로세스 간 공유가 필요해지면(--procs가 같은 엔진을 여러 조각으로 쪼갤 때) 파일 기반 공유로 올림)
 
     def run_job(job):
-        """문서×엔진 1건 = extract.parse span 1행(op-01 — 대기·재시도·자식 자원 사용은 metrics/열로)."""
+        """문서×엔진 1건 = extract.parse span 1행(대기·재시도·자식 자원 사용은 metrics/열로)."""
         doc, eng = job[0], job[1]
         with SP.span(
             "extract.parse", doc_id=doc.name, engine=eng, ext=doc.suffix.lower(), file_bytes=doc.stat().st_size, total=len(jobs)
@@ -321,7 +313,7 @@ def main():
         doc, eng, dst, sha = job
         with lock:
             first_fail = env_failed.get(eng)
-        if first_fail is not None:  # RB3② — 이 엔진은 이번 실행에서 이미 env 실패 확인됨: 프로세스·import 비용 없이 바로 건너뜀
+        if first_fail is not None:  # 이 엔진은 이번 실행에서 이미 env 실패 확인됨: 프로세스·import 비용 없이 바로 건너뜀
             rec = _with_run_id(
                 {
                     "doc": doc.name,
@@ -368,13 +360,12 @@ def main():
                 err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, None, prov)
         if err:
             sp.result(
-                "timeout" if "Timeout" in err else "fail", "timeout" if "Timeout" in err else "env" if _env_error(err) else "doc", err
+                "timeout" if "Timeout" in err else "fail", "timeout" if "Timeout" in err else "env" if P0.is_env_error(err) else "doc", err
             )
         if err and dst.exists():
-            # 실패·시간 초과면 그 자리의 결과 파일은 이번 내용의 결과가 아님(내용이 바뀐 문서의 옛 결과 등) — 지움.
-            # 10-04 결함: 옛 결과 파일이 남아 '이미 결과 있음'으로 보여 재시도에서 빠지고 대표에 옛 결과가 쓰일 수 있었음
+            # 실패·시간 초과면 그 자리의 결과 파일은 이번 내용의 결과가 아님(내용이 바뀐 문서의 이전 결과 등) — 지움.
             dst.unlink(missing_ok=True)
-        if err and _env_error(err):  # RB3② — 미설치·미설정(env) 실패만 기억(시간 초과·그 밖의 예외는 문서 탓일 수 있어 제외)
+        if err and P0.is_env_error(err):  # 미설치·미설정(env) 실패만 기억(시간 초과·그 밖의 예외는 문서 탓일 수 있어 제외)
             with lock:
                 env_failed.setdefault(eng, doc.name)
         rec = _with_run_id(
@@ -400,7 +391,7 @@ def main():
             log.flush()
             done[0] += 1
             sp.set(seq=done[0])
-            tally["시간 초과" if err and "Timeout" in err else "환경" if err and _env_error(err) else "실패" if err else "성공"] += 1
+            tally["시간 초과" if err and "Timeout" in err else "환경" if err and P0.is_env_error(err) else "실패" if err else "성공"] += 1
             tag = "FAIL " if err else "ok   "
             print(tag + f"{eng:18s} {rec['sec']:>7}s  {doc.name}" + (f"  {err[:120]}" if err else ""), flush=True)
             print(
@@ -408,7 +399,7 @@ def main():
                 flush=True,
             )  # 큐 진행(콘솔)
 
-    with runtrace.Progress(total=len(jobs), done=lambda: done[0], unit="doc_engine"):  # op-01 — 60초마다 run.progress
+    with runtrace.Progress(total=len(jobs), done=lambda: done[0], unit="doc_engine"):  # 60초마다 run.progress
         _run_docs(jobs, run_job, a.workers)
     for doc, eng, dst, sha, first in deferred:  # 사본: 먼저 돈 결과가 성공이면 복사, 아니면 사본은 기록 안 함(다음 실행에서 다시 판단)
         if first.exists():
@@ -426,12 +417,12 @@ def main():
 
 
 def run_procs(a, docs):
-    """문서를 N조각(내용 sha 기준 — 같은 내용 사본은 같은 조각)으로 나눠 프로세스 N개가 동시에(사용자 10-29 — 엔진 묶음이 아니라 문서 조각).
+    """문서를 N조각(내용 sha 기준 — 같은 내용 사본은 같은 조각)으로 나눠 프로세스 N개가 동시에(엔진 묶음이 아니라 문서 조각).
     조각마다 문서 안 엔진들은 동시에·엔진마다 별도 프로세스(run_job)라 조각 프로세스 자체는 세그폴트로 죽지 않는다."""
     from common.core import resources
 
     k = max(1, min(a.procs, len(docs)))
-    thr = C.cfg().runtime.pipe_threads  # S7c — 설정 객체(auto·빈 값 = None, "0"은 0 — None일 때만 계산)
+    thr = C.cfg().runtime.pipe_threads  # auto·빈 값 = None, "0"은 0 — None일 때만 계산
     threads = str(int(thr) if thr is not None else max(1, resources.cpus() // k))  # cgroup 한도 기준(os.cpu_count()는 호스트 코어)
     # env 남김 — 하위 프로세스·엔진에 넘김(엔진 파일은 env를 직접 읽음)
     env = dict(
@@ -456,7 +447,7 @@ def run_procs(a, docs):
 
     def one(i):
         # 하위는 항상 --procs 1(PIPE_PROCS 설정으로 하위가 또 프로세스를 띄우는 연쇄 방지)
-        with SP.span("extract.shard", seq=i, total=k) as sp:  # op-01 — 조각 프로세스 1개(자식의 span이 이 밑에 붙음)
+        with SP.span("extract.shard", seq=i, total=k) as sp:  # 조각 프로세스 1개(자식의 span이 이 밑에 붙음)
             rc = resources.gated_popen(base + ["--shard", f"{i}/{k}", "--procs", "1"], env=env).wait()
             sp.add(rc=rc)
             if rc != 0:
@@ -468,11 +459,11 @@ def run_procs(a, docs):
 
 
 def _run_docs(jobs, run_job, workers):
-    """사용자 10-29 — 문서 workers개를 동시에, 한 문서의 엔진들도 모두 동시에(엔진마다 별도 프로세스 — run_job)."""
+    """문서 workers개를 동시에, 한 문서의 엔진들도 모두 동시에(엔진마다 별도 프로세스 — run_job)."""
     by_doc = {}
     for job in jobs:
         by_doc.setdefault(job[0], []).append(job)
-    run_job = SP.carry(run_job)  # op-01 — 풀 스레드는 contextvars를 안 물려받으므로 run/span ID를 실어 보냄
+    run_job = SP.carry(run_job)  # 풀 스레드는 contextvars를 안 물려받으므로 run/span ID를 실어 보냄
 
     def run_doc(doc_jobs):
         if len(doc_jobs) == 1:
@@ -485,11 +476,11 @@ def _run_docs(jobs, run_job, workers):
 
 
 def _run_with_retry(eng, doc, dst, profile, tmo, unset, env, prov=None):
-    """문서×엔진 1건 — 시간 초과면 같은 실행에서 제한 두 배로 한 번 더(사용자 10-29), 그래도 넘으면 실패. 반환: (오류 글자 또는 None, 마지막 제한)."""
+    """문서×엔진 1건 — 시간 초과면 같은 실행에서 제한 두 배로 한 번 더, 그래도 넘으면 실패. 반환: (오류 글자 또는 None, 마지막 제한)."""
     for attempt in range(2):
         err = None
         sp = SP.current()
-        if sp is not None:  # op-01 — 몇 번째 시도인지(시간 초과로 다시 돌면 2)
+        if sp is not None:  # 몇 번째 시도인지(시간 초과로 다시 돌면 2)
             sp.set(attempt=attempt + 1)
         try:
             if unset:
@@ -510,8 +501,8 @@ def _run_with_retry(eng, doc, dst, profile, tmo, unset, env, prov=None):
 
 
 def _with_run_id(rec, run_id):
-    """SI23 — runs.jsonl 줄에 이번 실행 run_id(env PARSE_RUN_ID)를 달아 run_board가 이번 실행만 거를 수 있게.
-    env 없으면 그대로(run_id 칸 없음 — 옛 형식과 호환, run_board는 그때 지금처럼 마지막 기록 기준으로 폴백)."""
+    """runs.jsonl 줄에 이번 실행 run_id(env PARSE_RUN_ID)를 달아 run_board가 이번 실행만 거를 수 있게.
+    env 없으면 그대로(run_id 칸 없음 — run_board는 그때 지금처럼 마지막 기록 기준으로 폴백)."""
     return {**rec, "run_id": run_id} if run_id else rec
 
 
@@ -528,21 +519,20 @@ def _sha(p):
     return file_hash(p)[:16]
 
 
-@functools.cache  # fp-perf B5 — 엔진 폴더 해시는 프로세스마다 엔진당 한 번(실행 중 코드는 안 바뀜)
+@functools.cache  # 엔진 폴더 해시는 프로세스마다 엔진당 한 번(실행 중 코드는 안 바뀜)
 def engine_code_fp(eng):
-    """원문 파싱 결과를 정하는 코드 = 그 엔진 폴더(parse/engines/<엔진>)만 — common·run_all(실행 관리)이 바뀌어도 결과는 같으므로 넣지 않음."""
+    """원문 파싱 결과를 정하는 코드 = 그 엔진 폴더(extract/engines/<엔진>)만 — common·run_engines(실행 관리)가 바뀌어도 결과는 같으므로 넣지 않음."""
     import hashlib
 
     h = hashlib.sha256()
-    # 엔진 폴더 + 엔진 공용 도우미(parse/engines/_common — 표·사실 추출을 엔진 31개 중 30개가 씀, 독립 검토 10-04)
-    # 엔진 이름 ≠ 폴더 이름인 엔진이 있음(office → office_stdlib · rapidocr_ko → rapidocr …) — 등록부의 스택 폴더로(10-05 결함: 이름 폴더가 없어
-    # _common만 해시 → 엔진 코드를 고쳐도 원문 결과가 낡음으로 안 잡혔음)
+    # 엔진 폴더 + 엔진 공용 도우미(engines/_common — 표·사실 추출)
+    # 엔진 이름 ≠ 폴더 이름인 엔진이 있음(office → office_stdlib · rapidocr_ko → rapidocr …) — 등록부의 스택 폴더로
     stack = registry.engines().get(eng, (eng, None))[0]
     files = sorted(set((PARSING_ROOT / "engines" / stack).glob("**/*.py")) | set((PARSING_ROOT / "engines" / "_common").glob("**/*.py")))
     for p in files:
         h.update(("parse/" + p.relative_to(PARSING_ROOT).as_posix()).encode("utf-8"))
-        h.update(p.read_bytes())  # 0.2.0 — 옛 import 이름 되돌리기(legacy_names) 지움(pl-46)
-    if eng in VLM_ENGINES:  # 11-04(pl-43) — VLM 엔진 결과는 공용 쪽 옮기기 코드·지시문(page_transcribe)에도 달림
+        h.update(p.read_bytes())
+    if eng in VLM_ENGINES:  # VLM 엔진 결과는 공용 쪽 옮기기 코드·지시문(page_transcribe)에도 달림
         for p in [
             DEPLOY_ROOT / "pipeline" / "shared" / "vlmcall.py",
             *sorted((RES_ROOT / "prompts" / "common" / "page_transcribe").glob("*")),
@@ -554,7 +544,7 @@ def engine_code_fp(eng):
 
 def p0_key(eng, sha, ver=None):
     """P0 열쇠 하나로(결과 출처 기록) = (원본 sha · 엔진 설치 버전 · 엔진 코드 지문).
-    (10-04 결함: 비교는 버전 포함·기록은 버전 없이 만들어 늘 '낡음' → 바뀌지 않은 문서도 전부 다시 파싱하던 일)"""
+    비교와 기록이 같은 열쇠를 써야 한다."""
     import hashlib
 
     parts = json.dumps(
@@ -565,17 +555,9 @@ def p0_key(eng, sha, ver=None):
     return hashlib.sha256(parts.encode("utf-8")).hexdigest()[:16]
 
 
-def _env_error(err):
-    from pipeline.shared.parse_run import is_env_error  # 환경 실패 단서 한 곳(SI45 — 손상 PDF 'EOF marker not found'를 env로 보던 것)
-
-    return is_env_error(err)
-
-
 def _isolated(eng, doc, dst, profile, tmo, py=None, env=None, prov=None):
     py = py or sys.executable
-    retries = int(
-        pc.cfg().extract.engine_retry
-    )  # S7c — 설정 객체(기본 1) · 비정상 종료만 바로 다시(10-14 rapidocr ResizeImgError 1회성 — 단독 재실행은 성공)
+    retries = int(pc.cfg().extract.engine_retry)  # 기본 1 · 비정상 종료만 바로 다시(1회성 오류 — 단독 재실행은 성공)
     for attempt in range(retries + 1):
         try:
             return _isolated_once(eng, doc, dst, profile, tmo, py, env, prov)
@@ -591,7 +573,7 @@ def _isolated_once(eng, doc, dst, profile, tmo, py, env=None, prov=None):
     from common.core import resources as RS  # 우선순위 OS 분기 한 곳
     from common.core.paths import child_env
 
-    low = bool(pc.cfg().extract.low_priority)  # 10-29 — 일괄 파싱은 낮은 우선순위(parse MCP 서비스는 끔 — 요청이 CPU를 먼저)
+    low = bool(pc.cfg().extract.low_priority)  # 일괄 파싱은 낮은 우선순위(parse MCP 서비스는 끔 — 요청이 CPU를 먼저)
     # PADDLE_PYTHON은 별도 venv(.venv-paddle)라 cwd 상속에 의존하지 않고 child_env()의 PYTHONPATH(deploy/)로 `-m pipeline.extract.run_one_engine`을 찾게 함
     pr = RS.gated_popen(
         [py, "-m", "pipeline.extract.run_one_engine", "--engine", eng, "--profile", profile]
@@ -613,7 +595,7 @@ def _isolated_once(eng, doc, dst, profile, tmo, py, env=None, prov=None):
         pr.communicate()
         dst.unlink(missing_ok=True)  # 쓰다 만 결과를 남기지 않음
         raise TimeoutError(f"문서×엔진 시간 제한 초과({tmo}초)") from tmo_err
-    sp = SP.current()  # op-01 — 자식(parse_one)이 stdout 끝에 남긴 자원 사용(cpu·최대 메모리)을 이 문서×엔진 span에
+    sp = SP.current()  # 자식(run_one_engine)이 stdout 끝에 남긴 자원 사용(cpu·최대 메모리)을 이 문서×엔진 span에
     if sp is not None:
         sp.set(**SP.read_usage(out))
     if pr.returncode != 0:
@@ -628,5 +610,5 @@ def _isolated_once(eng, doc, dst, profile, tmo, py, env=None, prov=None):
 
 if __name__ == "__main__":
     utf8_stdout()
-    with runtrace.run("run_all", sys.argv[1:]):  # op-01 — 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
+    with runtrace.run("run_all", sys.argv[1:]):  # 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
         main()

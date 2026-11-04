@@ -1,6 +1,4 @@
-"""EDW 도구 서비스 — query_edw(읽기 전용 SQL)·edw_meta(테이블·컬럼 메타 조회) 호출부.
-S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/main.py(옛 data_retrieval/mcp_server.py)에서 옮김 — 내용 그대로.
-"""
+"""EDW 도구 서비스 — query_edw(읽기 전용 SQL)·edw_meta(테이블·컬럼 메타 조회) 호출부."""
 
 from common.store import edw_chain as EC
 from common.store.db.models import search_tables as ST
@@ -8,7 +6,7 @@ from mcp_server.schemas.evidence import SEARCH_FILTERS
 
 
 def do_query_edw(sql, max_rows=1000):
-    """EQ1 — thin controller wrapper over mcp_server.services.edw_query.query() (all SQL-guard/backend/
+    """Thin controller wrapper over mcp_server.services.edw_query.query() (all SQL-guard/backend/
     size-cap logic lives there, not here)."""
     from mcp_server.services import edw_query as EQ
 
@@ -24,7 +22,7 @@ def do_edw_meta(schema=None, table=None, column_filter=None):
     except Exception as e:  # 모듈 없음 = 기능 꺼짐(부팅 계속)
         print(f"[mcp] edw_meta 모듈 없음(기능 꺼짐): {type(e).__name__}: {e}", flush=True)
         return {"error": "edw_meta 도구 파일 미적용(EM1) — 패치·마운트 적용 후 재시도"}
-    if schema is None and table is None and column_filter is None:  # 인자 없음 — 스키마 요약 + search attrs 키(pl-52)
+    if schema is None and table is None and column_filter is None:  # 인자 없음 — 스키마 요약 + search attrs 키
         out = _lookup(EM, schema, table, column_filter)
         return out if "error" in out else {**out, "search_attrs": search_attrs()}  # 오류 응답에는 붙이지 않음
     return _lookup(EM, schema, table, column_filter)

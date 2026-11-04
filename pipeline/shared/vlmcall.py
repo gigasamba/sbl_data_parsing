@@ -1,4 +1,4 @@
-"""VLM 호출 한 길(11-04 사용자 — VLM 처리 통일): 엔진 qwen_vlm·쪽 VLM 후보정(vlm_page)·pptx 슬라이드·그림 VLM(figures)·중첩 그림(nested)이
+"""VLM 호출 한 길: 엔진 qwen_vlm·쪽 VLM 후보정(vlm_page)·pptx 슬라이드·그림 VLM(figures)·중첩 그림(nested)이
 모두 `ask()` 하나로 부른다 — llm.complete('vlm')(내부망 가드·예산 장부·모델 다운 감지·`common.models.vlm.extra_body`·재시도
 `models.vlm.retry`·호출 1건 제한 시간 `models.vlm.timeout`) + 전역 동시 수 게이트(`models.vlm.max_concurrency` — 한 프로세스 안의
 모든 VLM 호출 합). 렌더 해상도는 `extract.ocr.dpi` 하나(`dpi()`).
@@ -16,12 +16,12 @@ import urllib.parse
 from contextlib import contextmanager
 from pathlib import Path
 
-from common.ai import llm as A  # 모델 호출(0.2.0 — 옛 common.ai.adk, pl-46)
+from common.ai import llm as A  # 모델 호출
 from common.ai.agent_prompts import load as _load_prompt
-from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
-from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from common.config.settings import cfg as ccfg
+from pipeline import config as pc
 from pipeline.shared.parse_run import prompt_id, raw_vlm_path
-from pipeline.shared.post_features import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
+from pipeline.shared.post_config import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
 
 _LOCK = threading.Lock()
 _SEM: dict = {}
@@ -49,7 +49,7 @@ def slot():
 
 NOW = time.strftime("%Y-%m-%dT%H:%M:%S")
 
-P_PAGE = _load_prompt("page_transcribe", "page")  # AD33 — 글자는 dev/agents/page_transcribe/prompts/page.md
+P_PAGE = _load_prompt("page_transcribe", "page")  # 쪽 옮기기 지시문
 PID_PAGE = prompt_id("page", "v1", P_PAGE)  # 프로토타입과 같은 글자 → 같은 id(기존 VLM 캐시 재사용)
 MAX_SIDE = 2000  # _png() 긴 변 상한 — 결정적 열쇠에 들어감(바뀌면 새 열쇠)
 PAGE_SLOW, PAGE_MIN_CONC = (
@@ -115,7 +115,7 @@ def render(p, idxs):
 
 
 def rotation_info(doc_path):
-    """`<doc_path 폴더>/rotation.csv`에서 이 문서의 {쪽 번호: {angle, orig_sha256}} — prepare.py가 남김. 없으면 빈 묶음(아래서 대체 경로)."""
+    """`<doc_path 폴더>/rotation.csv`에서 이 문서의 {쪽 번호: {angle, orig_sha256}} — filter_and_rotate가 남김. 없으면 빈 묶음(아래서 대체 경로)."""
     doc_path = Path(doc_path)
     f = doc_path.parent / "rotation.csv"
     out = {}
@@ -170,17 +170,10 @@ def _png(img, max_side=MAX_SIDE):
 
 
 def _log_failed_page_vlm(model, ms, reason):
-    """2026-10-22 — 실패(취소·타임아웃·빈 응답)한 페이지 VLM 호출의 대기 시간을 raw/vlm/<model>/_failures.jsonl에 append.
+    """실패(취소·타임아웃·빈 응답)한 페이지 VLM 호출의 대기 시간을 raw/vlm/<model>/_failures.jsonl에 append.
     성공 provenance는 원래 캐시 파일로 남지만 실패는 안 남아 집계에서 빠졌었다 — 이제 실패 ms도 집계 가능."""
     try:
-        from pipeline.shared.postprocess.rawstore import raw_vlm_path  # 있으면 사용, 없으면 아래 폴백
-    except ImportError:
-        raw_vlm_path = None
-    try:
-        _b = ccfg().models.vlm.base_url  # S7c — 설정 객체(옛 get(X, "") — 캐시 열쇠 글자 그대로)
-        base = raw_vlm_path(_b if _b is not None else "", model, "page", "fail") if raw_vlm_path else None
-        if base is None:
-            base = _rawdir_default(model)
+        base = _rawdir_default(model)
         base.parent.mkdir(parents=True, exist_ok=True)
         with (base.parent / "_failures.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps({"ms": ms, "error": reason, "at": time.strftime("%Y-%m-%dT%H:%M:%S")}, ensure_ascii=False) + "\n")
@@ -209,7 +202,7 @@ def vlm_page(img_bytes, det=None):
     바이트가 달라도 재사용) · 없으면(det None — 원본 sha를 못 구함) 렌더 바이트 sha로(예전 동작, 재준비하면 캐시가 깨질 수 있음).
     det가 있어도 결정적 캐시가 비었으면 렌더 sha(프로토타입 캐시) 경로를 읽기만 시도 — 맞으면 결정적 열쇠로도 복사해 다음부터 안 읽게.
     실패·빈 답은 저장 안 함. 출력 상한은 두지 않는다(max_tokens 없음) — 생각(추론) 끄기는 모든 VLM 호출 공통 `common.models.vlm.extra_body`."""
-    base, model = ccfg().models.vlm.base_url, ccfg().models.vlm.model  # S7c — 설정 객체
+    base, model = ccfg().models.vlm.base_url, ccfg().models.vlm.model
     model_dir = _model_dir(model)
     render_sha = sha(img_bytes)
     legacy = raw_vlm_path(raw_root(), model_dir, "page", "v1", P_PAGE, render_sha)
@@ -238,7 +231,7 @@ def vlm_page(img_bytes, det=None):
         _ms = round((time.perf_counter() - t0) * 1000)
         _log_failed_page_vlm(model, _ms, f"unavailable: {str(ex)[:120]}")
         return "", {"error": str(ex)[:200], "ms": _ms, "cached": False}
-    except Exception as ex:  # 2026-10-22 — 취소·타임아웃 등 기타 예외도 시간 기록
+    except Exception as ex:  # 취소·타임아웃 등 기타 예외도 시간 기록
         _ms = round((time.perf_counter() - t0) * 1000)
         _log_failed_page_vlm(model, _ms, f"{type(ex).__name__}: {str(ex)[:120]}")
         raise
@@ -268,7 +261,7 @@ def vlm_page(img_bytes, det=None):
 
 
 def _read(path):
-    """캐시 파일 → 기록 사전, 못 읽으면(깨진 JSON·권한) None = 캐시 없음으로(엔진·후보정·parse MCP가 같은 파일을 씀 — 11-04)."""
+    """캐시 파일 → 기록 사전, 못 읽으면(깨진 JSON·권한) None = 캐시 없음으로(엔진·후보정·parse MCP가 같은 파일을 씀)."""
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -295,7 +288,7 @@ def transcribe(path, idxs):
     from concurrent.futures import ThreadPoolExecutor
     from itertools import islice
 
-    from common.core import span as SP  # op-01 — 풀 스레드에 run/span ID를 실음
+    from common.core import span as SP  # 풀 스레드에 run/span ID를 실음
 
     p = Path(path)
     idxs = sorted(idxs)

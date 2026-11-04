@@ -1,9 +1,9 @@
-"""분류(pl-33, 사용자 11-02) — SFDC·LAS 문서에 종류 라벨 `doc_class`를 붙인다. 운영 분류와 같게: 지시문은 운영 글자 그대로
+"""분류 — SFDC·LAS 문서에 종류 라벨 `doc_class`를 붙인다. 운영 분류와 같게: 지시문은 운영 글자 그대로
 (resources/prompts/pipeline/classify_sfdc·classify_las), 사용자 쪽 글(문서 정보·LAS 키워드 근거·본문 8,000자)도 운영 코드와 같은 모양.
 흐름은 적재와 하나다 — 적재(pgvector_load)가 EDW 메타(edw_meta — 분류 힌트 칸 포함)를 붙인 직후, gold에 넣기 전. 힌트는 그 문서 행의
 gold 칸에서 읽는다. 고르는 규칙을 따로 두지 않는다(같은 내용은 묶음이 한 문서만 · 파싱 안 된 문서는 gold에 안 옴).
 · 모델은 `llm.chat`(역할 llm — 예산 장부, 서버는 내부 GLM, PC는 LLM_ALLOW_EXTERNAL=1이면 외부 모델·또는 가짜 LLM). effort는 설정 `common.models.llm.extra_body`.
-· 답은 JSON의 class만 읽는다(확신도는 쓰지 않음 — 사용자 11-02). 라벨 집합 밖이면 실패. 다시 묻지 않는다. 실패한 문서는 그 문서의
+· 답은 JSON의 class만 읽는다(확신도는 쓰지 않음). 라벨 집합 밖이면 실패. 다시 묻지 않는다. 실패한 문서는 그 문서의
   적재 실패 — gold에 넣지 않아 gold_version이 안 적히고 다음 정상 실행이 다시 고른다. 감사 한 줄.
 · 이미 라벨이 있는 문서는 덮지 않는다."""
 
@@ -34,7 +34,7 @@ MAX_TOKENS = 4096
 # ── 답 읽기 ─────────────────────────────────────────────────────────────────────
 def parse_answer(text, src):
     """응답 → 라벨 또는 None. 운영 parse_answer와 같은 찾기(코드 울타리를 벗기고 class(SFDC는 doc_class도)가 있는 첫 JSON 객체).
-    SFDC는 운영 별칭표(소문자·공백 뺌), LAS는 집합 안 글자(앞뒤 공백 정리 — 운영은 집합 확인이 없었지만 집합 밖은 실패, 사용자 11-02)."""
+    SFDC는 운영 별칭표(소문자·공백 뺌), LAS는 집합 안 글자(앞뒤 공백 정리 — 운영은 집합 확인이 없었지만 집합 밖은 실패)."""
     s = text.strip() if isinstance(text, str) else ""
     if s.startswith("```"):
         s = re.sub(r"^```[A-Za-z0-9_-]*\s*", "", s)
@@ -184,7 +184,7 @@ def _s(v):
 
 
 def sfdc_user(doc, rep):
-    """운영 build_user_prompt와 같은 글 — 힌트는 문서 attrs(pl-52 — EDW 사슬 키). 제목이 비면 원본 파일 이름. rep = {text, format, engine}."""
+    """운영 build_user_prompt와 같은 글 — 힌트는 문서 attrs(EDW 사슬 키). 제목이 비면 원본 파일 이름. rep = {text, format, engine}."""
     fn = Path(doc["file_path"]).name
     h = doc.get("attrs") or {}  # 힌트 키(title·entity_*·sent_received__c·subject·stagename·real_rfp__c·rfp_*)
     title = h.get("title") or fn
@@ -215,7 +215,7 @@ def las_user(doc, rep):
     """운영 LAS 사용자 쪽 글과 같은 모양 — 상대방은 gold client_edw(LAS.Contract.PartnerCorpName)."""
     fn = doc["file_path"].split("/")[-1]
     up = ["## Document metadata", f"- Original filename: {fn}", f"- File format: {_s(rep.get('format'))}"]
-    appr = (doc.get("attrs") or {}).get("approvalname")  # pl-52 — 힌트는 attrs
+    appr = (doc.get("attrs") or {}).get("approvalname")  # 힌트는 attrs
     if appr:
         up.append(f"- Approval title: {appr}")
     if doc.get("client_edw"):
