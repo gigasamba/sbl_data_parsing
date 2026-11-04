@@ -11,7 +11,7 @@
 모든 형식을 잘 읽는 파서는 없다. 형식마다 정해 둔 엔진을 모두 돌리고 represent가 고른다.
 
 ### 규칙
-1. 엔진 구성은 파일 하나 `resources/config/pipeline_stack.json`(설정 `common.paths.stack_file`)이다 — 서버·PC 같은 파일. 모양·읽기·바꾸기는 [pipeline_stack.md](../architecture/pipeline_stack.md).
+1. 엔진 구성은 파일 하나 `resources/config/pipeline_stack.json`(설정 `common.paths.stack_file`)이다 — 서버·PC 같은 파일. 모양·읽기·바꾸기는 [resources.md §1](../architecture/resources.md).
 2. 문서마다 그 형식 키의 `parse` 목록에 있는 엔진을 **모두** 돌린다(하나씩 차례로 시도하지 않음).
 3. 형식 키 = 확장자(소문자). 단 `.pdf`는 글자층이 쪽당 평균 20자 미만이면 `.pdf_image`(스캔), 아니면 `.pdf_text` — 판정은 `<out>/_types.json`에 크기·수정 시각과 함께 캐시한다. 판정 함수는 `pipeline.shared.parse_run.pdf_kind()` 하나 — 쪽 VLM의 문서 전체 스캔 판정(`scan_page_vlm.is_scan`)과 `parse_document`도 같은 함수를 쓴다(레인 분류 `doc_lane_group`의 앞 3쪽 규칙은 목적이 달라 따로).
 4. 만약 형식 키가 구성에 없으면 → 그 확장자를 읽는 등록 엔진 모두(OCR 엔진 제외)로 돌리고 형식마다 한 번 로그를 남긴다.

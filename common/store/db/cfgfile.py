@@ -110,9 +110,9 @@ def read_file(kind, path=None):
 
     try:
         name, body = stack_body(doc)
-    except ValidationError as e:  # 칸 이름·이유만(값은 안 찍음) — 메모 칸(storage·*_note)은 docs/architecture/pipeline_stack.md로
+    except ValidationError as e:  # 칸 이름·이유만(값은 안 찍음) — 메모 칸(storage·*_note)은 docs/architecture/resources.md로
         raise ValueError(
-            f"{p}: 엔진 구성 파일 모양이 틀림 — {_errors(e)} · 메모 칸(storage·*_note)은 이 파일에 두지 않음(docs/architecture/pipeline_stack.md)"
+            f"{p}: 엔진 구성 파일 모양이 틀림 — {_errors(e)} · 메모 칸(storage·*_note)은 이 파일에 두지 않음(docs/architecture/resources.md)"
         ) from None
     return Active(kind, name, body, sha(body), str(p))
 

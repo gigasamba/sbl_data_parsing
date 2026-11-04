@@ -7,7 +7,7 @@
 ③ 계약 함수(토큰·ID 토큰·색인 본문·정규화·임베딩 호출·내부망 확인·원본 위치·고객 명부)는 common/ 에만 정의 — 복사본이 갈라지는 것 방지
 ④ litellm import 금지, google.adk는 지시서 패키지 agent.py에서만 — 모델 호출은 common.ai.llm.complete(HTTP)
 ⑥ etl·search 아래 "openai/" 문자열 금지 — 모델 접두어는 common/ai/llm.py profile()에서만 만듦(캐시 열쇠 유지)
-⑦ 지시서 패키지 agent.py(prompts/<id>/agent.py — 코드가 읽지 않는 정의 파일, 바이트 그대로 둠 — docs/architecture/prompts.md)는
+⑦ 지시서 패키지 agent.py(prompts/<id>/agent.py — 코드가 읽지 않는 정의 파일, 바이트 그대로 둠 — docs/architecture/resources.md §2)는
    앱 코드를 import하지 않음(모델·ADK만)
 ⑧ etl·search·cli·evaluation의 L.chat()·A.complete() 호출은 agent= 키워드 필수(지시문마다 다른 패키지 — selftest류 함수 안과
    연결 확인은 업무 프롬프트가 없어 예외)

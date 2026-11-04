@@ -648,7 +648,7 @@ sudo systemctl enable --now podman-restart
 |---|---|
 | 설정 값 | settings.yaml을 직접 고치고 `host_ctl.sh up -d --force-recreate …`(서비스 이름 `mcp`, 컨테이너 이름 `mcp-server`) |
 | 이번 실행만 다른 값 | `--set 이름=값`(오버레이 설정 파일 도구는 PC 전용 — 서버에서는 종료 2) |
-| 엔진 구성 | 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 코드 폴더 바꾸기(§5-8) — 확인 `show-stack`([pipeline_stack.md](docs/architecture/pipeline_stack.md)) |
+| 엔진 구성 | 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 코드 폴더 바꾸기(§5-8) — 확인 `show-stack`([resources.md §1](docs/architecture/resources.md)) |
 
 ### 5-8. 새 판 올리기 — 새 루트
 

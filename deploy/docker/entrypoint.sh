@@ -11,7 +11,7 @@
 #   모듈(트리거 1회): parse(= 가져오기(폴더·rdb:csv, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타 — pipeline.load.publish_parse_result --apply)
 #   migrate up|stamp|current|check [--target search|all] [--schema S] [--dim N|--bundle B] = pgvector 우리 스키마 판 관리(Alembic,
 #     common.store.db.dbtool) — data-pipeline 이미지만, up·stamp는 load와 같은 잠금(current·check는 읽기만 — 잠금 없음). 서버 절차 docs/operations/release-and-patch.md §5-5
-#   show-stack = 지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 코드 폴더 바꾸기) — 두 이미지. docs/architecture/pipeline_stack.md
+#   show-stack = 지금 엔진 구성(파일 — 서버·PC 같음, 바꾸기 = 파일 고쳐 코드 폴더 바꾸기) — 두 이미지. docs/architecture/resources.md §1
 #   이미지 2개: RAG_MODULE마다 쓸 수 있는 명령이 다름(아래 case가 거름):
 #     pipeline(data-pipeline)=parse·publish·show-stack·idle·migrate·parse-service ·
 #     mcp(mcp-server)=mcp·ask·show-stack · 공통(모든 이미지) = help·check·resources·services·

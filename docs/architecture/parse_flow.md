@@ -1,10 +1,23 @@
 # 파싱 실행 흐름 — 단계별 코드 파일 역할
 
 문서 한 건이 실제로 처리될 때 **어떤 명령이 어떤 파일을 부르고, 결과가 어디에 쌓이는지**를 코드 기준으로 따라간다.
-요건(왜 이렇게 하는지)은 [PRD.md](../PRD.md)와 `docs/prd/*.md`에, 엔진 구성은 [pipeline_stack.md](pipeline_stack.md)에, DB 표는 [db_schema.md](db_schema.md)에, 지시서(프롬프트)는 [prompts.md](prompts.md)에 있다. 여기서는 되풀이하지 않고 링크만 건다.
+요건(왜 이렇게 하는지)은 [PRD.md](../PRD.md)와 `docs/prd/*.md`에, 엔진 구성은 [resources.md §1](resources.md#1-엔진-구성pipeline_stack)에, DB 표는 [db_schema.md](db_schema.md)에, 지시서(프롬프트)는 [resources.md §2](resources.md#2-ai-지시서지시서-패키지)에 있다. 여기서는 되풀이하지 않고 링크만 건다.
 
 - 설정 이름은 `settings.yaml` 안의 자리(예: `extract.ocr.dpi`, 드물게 바꾸는 칸은 `tuning.` 아래, PC 전용 칸은 `dev.` 아래)와 옛 이름(예: `OCR_DPI` — `--set`에 쓰는 이름)을 함께 적는다. 모든 칸의 자리와 기본값은 `settings.sample.yaml`에 있다.
 - VLM(이미지를 읽는 언어 모델)은 VLM 엔진·쪽 VLM·그림 VLM이 모두 한 함수(`pipeline.shared.vlmcall.ask()`)로 부른다(§4-2).
+
+- 러너 `run_docs.py` 요건(정본 PRD):
+  - 입구·대상 고르기·문서별 `--set` 값·기록: [ops.md#pl-10](../prd/ops.md#pl-10)
+  - 새 문서 판정·새벽 배치: [ops.md#pl-23](../prd/ops.md#pl-23)
+  - 문서별 순서(파싱 → 게시 → 원본 삭제 → gold): [ops.md#pl-24](../prd/ops.md#pl-24)
+  - 종료 코드·겹침 잠금·마감: [ops.md#pl-18](../prd/ops.md#pl-18)
+  - 레인 분류·워커: [ops.md#rn-01](../prd/ops.md#rn-01) · 대기열: [ops.md#rn-02](../prd/ops.md#rn-02) · MCP 양보: [ops.md#rn-03](../prd/ops.md#rn-03)·[ops.md#rn-04](../prd/ops.md#rn-04)
+
+실행 예(서버 호스트에서만 — PC에서는 실행하지 않는다):
+```bash
+nohup python3 run_docs.py --code <코드 폴더> --start-offset 0 --skip-done >> <작업 폴더>/batch_progress/runner.log 2>&1 &
+tail -f <작업 폴더>/batch_progress/progress.log
+```
 
 ---
 
@@ -124,7 +137,7 @@ flowchart TD
 | 정리 | `deploy.host.scripts.run_docs.drop_temp()`·`deploy.host.scripts.run_docs.sweep_cmd()` | 문서 임시 폴더 삭제. 파싱 실패·시간 초과면 그 문서 표지(`RUN_DOCS_DOC`)를 가진 컨테이너 안 프로세스를 끔 | — |
 | MCP 양보 | `deploy.host.scripts.run_docs._mcp_pause_monitor()`·`deploy.host.scripts.run_docs.mcp_busy()` | `_mcp_parse/jobs/`가 30초 안에 바뀌면 medium 전담 워커가 쉼 | — |
 
-종료 코드(정본 [ops.md#pl-18](../prd/ops.md#pl-18)): 0 = 끝남 또는 대상 0건 · 1 = 실패 문서 있음 · 75 = 마감 도달 또는 다른 `run_docs`가 도는 중 · 2 = 설정 문제. 레인·대기열 규칙: [ops.md#rn-01](../prd/ops.md#rn-01)~[rn-04](../prd/ops.md#rn-04). 설계 안내: [run_docs_design.md](run_docs_design.md).
+종료 코드(정본 [ops.md#pl-18](../prd/ops.md#pl-18)): 0 = 끝남 또는 대상 0건 · 1 = 실패 문서 있음 · 75 = 마감 도달 또는 다른 `run_docs`가 도는 중 · 2 = 설정 문제. 레인·대기열 규칙: [ops.md#rn-01](../prd/ops.md#rn-01)~[rn-04](../prd/ops.md#rn-04).
 
 ### 2-2. PC: 명령을 차례로 직접
 
@@ -173,7 +186,7 @@ flowchart TD
 | 엔진 공통 | `pipeline/extract/engines/_common/contract.py`·`fields.py` | 모든 엔진의 출력 계약(`text`·`tables`·`facts`·`fields`·`boxes`·`trace`), PDF 쪽 이미지 렌더(`extract.ocr.dpi`), 표 칸 → 업무 필드 정규화 | — |
 | VLM 엔진 | `pipeline/extract/engines/qwen_vlm/parser.py` | 이미지·스캔 PDF(`.pdf_image`)의 쪽을 쪽 VLM 후보정과 같은 함수 `pipeline.shared.vlmcall.transcribe()`로 옮김(→ `pipeline.shared.vlmcall.vlm_page()` → `pipeline.shared.vlmcall.ask()` → `common.ai.llm.complete("vlm")`). 쪽 수 상한 `transform.vlm.page_max`, 나머지 VLM 규칙(해상도·동시 수·제한 시간·생각 끄기·캐시)은 §4-2와 같음. 마크다운 코드펜스는 벗김. 빈 답은 빈 쪽, 그 밖의 호출 실패는 문서×엔진 실패 | 쪽 이미지 → 마크다운 |
 
-엔진 구성(형식 → 엔진 목록)과 바꾸는 법: [pipeline_stack.md](pipeline_stack.md). 요건: [extract.md#pl-01](../prd/extract.md#pl-01) · [extract.md#pl-02](../prd/extract.md#pl-02) · [transform.md#pl-03](../prd/transform.md#pl-03) · [transform.md#pl-22](../prd/transform.md#pl-22).
+엔진 구성(형식 → 엔진 목록)과 바꾸는 법: [resources.md §1](resources.md#1-엔진-구성pipeline_stack). 요건: [extract.md#pl-01](../prd/extract.md#pl-01) · [extract.md#pl-02](../prd/extract.md#pl-02) · [transform.md#pl-03](../prd/transform.md#pl-03) · [transform.md#pl-22](../prd/transform.md#pl-22).
 
 **흐름 밖 도구**(사람이 따로 돌림): `pipeline.extract.protected_docs.main()`(`scan`·`decrypt`·`purge` — 보안 문서 판별·복호화 사본, DRM PC용), `pipeline.extract.discover_columns.main()`(원천 표 열 이름 탐색).
 
@@ -271,7 +284,7 @@ VLM 설정(모든 호출 공통):
 
 쪽 캐시는 VLM 엔진과 쪽 VLM 후보정이 같은 지시서(`page_transcribe`)·렌더·열쇠(`det_key`)를 쓰므로, 한쪽이 옮긴 쪽은 다른 쪽이 다시 부르지 않는다.
 
-지시서 글자와 캐시 열쇠: [prompts.md](prompts.md). 요건: [transform.md#pl-04](../prd/transform.md#pl-04) · [transform.md#pl-05](../prd/transform.md#pl-05) · [transform.md#pl-36](../prd/transform.md#pl-36) · [transform.md#pl-37](../prd/transform.md#pl-37) · [transform.md#pl-43](../prd/transform.md#pl-43).
+지시서 글자와 캐시 열쇠: [resources.md §2](resources.md#2-ai-지시서지시서-패키지). 요건: [transform.md#pl-04](../prd/transform.md#pl-04) · [transform.md#pl-05](../prd/transform.md#pl-05) · [transform.md#pl-36](../prd/transform.md#pl-36) · [transform.md#pl-37](../prd/transform.md#pl-37) · [transform.md#pl-43](../prd/transform.md#pl-43).
 
 ### 4-3. 구조화 — 대표 결과 → 묶음(bundle)
 

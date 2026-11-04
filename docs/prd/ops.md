@@ -160,8 +160,9 @@
 
 <a id="rn-08"></a>
 ## rn-08 · 파이프라인 폴더는 ETL 뜻대로, 파일 이름은 하는 일로
-- 이유(사용자 11-05): 폴더만 보고 그 단계가 무엇을 하는지 알 수 있어야 한다. 엔진으로 글자를 뽑는 일은 정제(transform)다.
+- 이유(사용자 11-05): 폴더만 보고 그 단계가 무엇을 하는지 알 수 있어야 한다. 엔진으로 글자를 뽑는 일은 정제(transform)이고, 그 결과가 silver다.
 - 요건(되어야 할 모습):
+  0. 층 이름: **staging** = Object Storage 원본을 임시 폴더로 받아 둔 것(원본은 이미 Object Storage에 있어 따로 보관하지 않음 — extract의 결과) · **silver** = 엔진별 파싱 결과 `parse/<엔진>/<문서>.json`과 대표 결과(transform의 첫 결과 — 실제 엔진 추출은 모두 transform) · **gold** = 검색용 묶음과 pgvector 적재.
   1. `pipeline/extract` = 원본을 고르고 받아 파싱 입력으로 준비하는 일만 — 대상 고르기(목록 − 끝난 문서, 받기 전) `candidate_pick.py`, 미리 받기·받기 `candidate_ready.py`, 같은 파일 정리 `deduplication.py`, 형식 거르기·회전 `filter_and_rotate.py`, 레인 나누기 `doc_lane_group.py`(엔진을 돌리지 않음 — 형식·크기·앞 3쪽 글자 수), DRM 감지 `protected_docs.py`, 원천 열 찾기 `discover_columns.py`.
   2. `pipeline/transform/parse/` = 엔진 파싱 — 엔진 `engines/`(보호 파일), 엔진 준비 확인 `engine_check.py`, 엔진 실행은 한 파일(엔진마다 자식 프로세스로 분리), 엔진 버전·캐시 키(`engine_version`·`p0_key`·`engine_code_fp`)와 캐시 지우기. 그 뒤 `represent`(대표 결과) → `figures`(그림) → `structure`(gold 묶음 `gold_bundle.py`).
   3. `pipeline/shared`의 파일은 한 가지 일만 하고 이름이 그 일이다(원본 캐시·실패 단서·`pdf_kind` 각각). 한 단계만 쓰는 것은 그 단계 폴더에 둔다(후처리 스위치 → represent, 차트 글자 → figures).
