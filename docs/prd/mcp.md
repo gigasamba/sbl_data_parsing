@@ -160,7 +160,7 @@
 <a id="mc-18"></a>
 ## mc-18 · `parse_document` 스캔 PDF — 내부망 VLM
 - 규칙:
-  1. 스캔 판정 = `parse_qa.pdf_kind`(전체 쪽 글자층이 쪽당 평균 20자 미만) — 일괄 파싱과 같은 함수.
+  1. 스캔 판정 = `pipeline.transform.represent.parse_scoring.pdf_kind()`(전체 쪽 글자층이 쪽당 평균 20자 미만) — 일괄 파싱과 같은 함수.
   2. 스캔 PDF는 stack `.pdf_image`의 `qwen_vlm`으로 파싱한다(내부망 주소만 — `require_internal`).
   3. 시간 상한은 작업 제한 시간 `tuning.ops.services.parse_mcp.job_timeout_sec`(기본 600초) 하나, 단계마다 남은 시간을 나눠 준다. 쪽 수 상한 없음. 큐는 하나.
   4. VLM 설정(`required.models.vlm_base_url`·`vlm_model`)이 비면 파이프라인 없이 빈 결과 + note "스캔 PDF — VLM 미설정".

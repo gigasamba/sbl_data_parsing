@@ -17,7 +17,7 @@ flowchart TD
     C["transform 1: parse_scoring.py → build_rep.py (+ figures/*, 후보정)"]
     P["load 1 (silver): publish_parse_result.py → silver_publish.py → Object Storage + EDW ParsingMeta"]
     D["transform 2: build_bundle.py → chunking.py + common/ai/embed.py → 묶음(bundle)"]
-    E["load 2 (gold): pgvector_load.py → edw_meta.py + doc_classify.py → PostgreSQL pgvector"]
+    E["load 2 (gold): pgvector_load.py → edw_doc_meta.py + doc_classify.py → PostgreSQL pgvector"]
     F["검색: mcp_server/main.py → search_svc.py → retriever.py / pgsearch.py"]
     A --> B --> C --> P --> D --> E --> F
 ```
@@ -112,7 +112,7 @@ PC에서는 `run_docs.py`를 돌리지 않는다(운영 EDW·Object Storage에 �
 
 ## 3. extract — 원본 가져오기 → 준비 → 엔진 파싱
 
-`pipeline.cli.parse_module()`이 아래 단계를 차례로 부른다. 대부분 자식 프로세스(`pipeline.cli._run_until()` — 마감 시각이 있으면 넘을 때 프로세스 묶음을 끝냄)로 돈다. extract 폴더의 파일과 역할: `fetch_docs.py`(원본 받기) · `deduplication.py`(중복 문서 감지) · `filter_and_rotate.py`(준비) · `run_engines.py`(엔진 일괄) · `run_one_engine.py`(엔진 1건) · `engines/`(엔진) · `doc_parsing_group.py`(run_docs 레인 분류, §2-1) · `protected_docs.py`·`discover_columns.py`(흐름 밖 도구).
+`pipeline.cli.parse_module()`이 아래 단계를 차례로 부른다. 대부분 자식 프로세스(`pipeline.cli._run_until()` — 마감 시각이 있으면 넘을 때 프로세스 묶음을 끝냄)로 돈다. extract 폴더의 파일과 역할: `fetch_docs.py`(원본 받기) · `deduplication.py`(중복 문서 감지) · `filter_and_rotate.py`(준비 — 지원 안 되는·보호된 파일 거르기, 회전(기본 꺼짐), prepared로 복사 · 받기는 안 함) · `run_engines.py`(문서마다 구성된 엔진을 모두 동시에) · `run_one_engine.py`(문서 1건 × 엔진 1개 자식 프로세스) · `engines/`(엔진) · `doc_parsing_group.py`(run_docs 레인 분류, §2-1) · `protected_docs.py`·`discover_columns.py`(흐름 밖 도구).
 
 ```mermaid
 flowchart TD
@@ -171,7 +171,7 @@ flowchart TD
     R1["build_rep.py: 후보 = 구성 엔진 중 성공한 것"]
     R2["대표 고르기 (rep_select: first · acc · best)"]
     R3["standardize · 다른 엔진 facts 보충 · 쪽/문단 보정 · fragment_vote.py 투표"]
-    R4["vlm_page.page_text_pages → fill_scan_pages (스캔 쪽 채움)"]
+    R4["scan_page_vlm.page_text_pages → fill_scan_pages (스캔 쪽 채움)"]
     R5["apply_post: vlm_page · figures(+context) · charts · supsub · attachments"]
     R6["table_inline.py 표 제자리 넣기 · decision_log.py 맥락 기록"]
     O["_rep/문서.json · index.json · sources.jsonl · engines.csv · conflicts.jsonl"]
@@ -247,7 +247,7 @@ flowchart TD
     I["_rep/index.json + _rep/문서.json (+ parse/_source/manifest.jsonl)"]
     C["chunking.py chunk_all (구성 chunk: structure) · FAQ는 faq_rows"]
     F["_images/index.jsonl → 그림 청크"]
-    T["terms.py · common/core/terms.py · common/store/master.py (고객 명부)"]
+    T["client_roster.py · common/core/terms.py · common/store/master.py (고객 명부)"]
     D["common/core/docmeta.py (날짜·개정·문서군)"]
     E["embed_all → common/ai/embed.py embed_texts (임베딩 캐시)"]
     O["bundle: docs.jsonl · chunks.jsonl · vectors.npy · meta.json"]
@@ -294,9 +294,9 @@ run_docs 경로에서는 `PARSE_RAW_ROOT`가 문서 폴더(`_docflow/<seq>/parse
 ```mermaid
 flowchart TD
     A["publish_parse_result.py run (기본 dry-run, --apply일 때만 씀)"]
-    B["parsing_meta.plan: manifest · _rep · 채점 요약 · skipped → 게시 표"]
+    B["silver_publish.plan: manifest · _rep · 채점 요약 · skipped → 게시 표"]
     C["check_bucket_overlap: 게시 버킷 = 원천 버킷이면 거부"]
-    D["parsing_meta.apply: render_md(_rep) → rep.md + raw_artifacts"]
+    D["silver_publish.apply: render_md(_rep) → rep.md + raw_artifacts"]
     E["Object Storage: 접두/source_system/원본 키/parse_date/rep.md"]
     F["EDW AI.ParsingMeta INSERT (parsing_meta_db.py)"]
     G["publish/excluded_날짜.md (DRM·실패 문서)"]
@@ -333,7 +333,7 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     participant L as pgvector_load.py load
-    participant M as edw_meta.py
+    participant M as edw_doc_meta.py
     participant K as doc_classify.py
     participant P as PostgreSQL (원천별 스키마 5벌)
     participant E as EDW AI.ParsingMeta
@@ -400,7 +400,7 @@ flowchart TD
 
 - `search`: 거르기에 맞는 문서 범위 안에서만 하이브리드 검색, 결과를 근거 칸으로 다듬음.
 - `list_doc_fulltext`·`get_doc_fulltext`: 대표 결과 위치는 PG가 아니라 EDW ParsingMeta에서 그때 읽고, 서명된 `sfid`로 Object Storage에서 받음.
-- `parse_document`: 파일 하나를 `data-pipeline-mcp` 컨테이너의 작업 서비스(`127.0.0.1:8766`)에 넘김 → 같은 `prepare` → `run_all` → `parse_qa` → `represent`를 `output/_mcp_parse/`에서 돌림(구조화·적재 없음).
+- `parse_document`: 파일 하나를 `data-pipeline-mcp` 컨테이너의 작업 서비스(`127.0.0.1:8766`)에 넘김 → 같은 `filter_and_rotate` → `run_engines` → `parse_scoring` → `build_rep`를 (`pipeline.parse_service`가) `output/_mcp_parse/`에서 돌림(구조화·적재 없음).
 - `query_edw`·`edw_meta`: EDW 읽기 전용 질의·카탈로그(`services/edw_query.py`·`edw_meta.py`).
 - 호출마다 `applog.mcp_call` 한 행(`services/call_log.py`).
 
@@ -426,14 +426,14 @@ flowchart TD
 | 이름 | 파일·함수 | 계산 대상 | 지금 쓰는 곳 |
 |---|---|---|---|
 | `FINGERPRINT`·`CONTRACT` | `common/core/fingerprint.py` | 핸드오프 파일(`core/contract.py`·`repfmt.py`·`terms.py`·`text.py`) 내용 · 인계 형식 판(2) | `_rep/_DONE.json`에 기록. `CONTRACT`는 끝 표시를 새로 쓸지 판정에 씀 |
-| `code_fp(층)` | `common.core.artifacts.code_fp()`(`LAYER_CODE`) | 층(p0 엔진·run_all · p1 represent·figures · s 구조화 · r 검색) 파일 + 그 파일이 import하는 `common` 모듈 | `rep.post.code_fp`(p1), `applog.pipe_run.code_fp`(모든 층)에 기록 |
+| `code_fp(층)` | `common.core.artifacts.code_fp()`(`LAYER_CODE`) | 층(p0 엔진·run_engines · p1 represent·figures · s 구조화 · r 검색) 파일 + 그 파일이 import하는 `common` 모듈 | `rep.post.code_fp`(p1), `applog.pipe_run.code_fp`(모든 층)에 기록 |
 | `engine_code_fp`·`p0_key` | `pipeline.extract.run_engines.engine_code_fp()`·`pipeline.extract.run_engines.p0_key()` | 엔진 폴더 + `_common` · (원본 sha, 엔진 판, 엔진 코드 지문) | `runs.jsonl`·결과 출처에 기록(엔진 결과를 건너뛰지는 않음) |
 | 쪽 VLM 열쇠 `det_key` | `pipeline.shared.vlmcall.det_key()` | 원본 sha·쪽·DPI·긴 변·회전·모델·지시서 id | 같으면 VLM을 다시 안 부름(VLM 엔진·쪽 VLM 후보정·pptx 공통) |
 | 그림·첨부 P0 경로 | `pipeline.shared.parse_run.raw_vlm_path()`·`pipeline.shared.parse_run.raw_engine_path()` | 이미지 sha·모델·지시서 id · 첨부 sha·엔진@판 | 같으면 다시 안 부름 |
 | 임베딩 캐시 | `pipeline.transform.structure.build_bundle.embed_all()` | (모델, 본문) | 같으면 API를 다시 안 부름 |
 | LLM 응답 캐시 | `common.ai.llm.cache_key()` | (모델, 메시지, 온도, 최대 토큰, json 모드) | `common.models.llm.cache_dir`(기본 `output/eval/llm_cache`) |
 | 끝난 문서 | `common.store.parsing_meta_db.DONE_STATUSES` | ParsingMeta `parse_status`·`gold_version` | 문서 단위로 다시 파싱 안 함(`run_docs --skip-done`, `cli._unparsed`) |
-| 중간 캐시 정리 | `pipeline.shared.parse_run.purge_caches()` | `_reread_p3/_vlm_cache`·`_agent/_vlm_cache`·`signals` | 합계가 `tuning.extract.cache.parse_cache_max_gb`(5GB)를 넘으면 오래된 것부터 지움(run_all 시작 때) |
+| 중간 캐시 정리 | `pipeline.shared.parse_run.purge_caches()` | `_reread_p3/_vlm_cache`·`_agent/_vlm_cache`·`signals` | 합계가 `tuning.extract.cache.parse_cache_max_gb`(5GB)를 넘으면 오래된 것부터 지움(run_engines 시작 때) |
 
 공용·레이어 파일을 고칠 때의 규칙과 지금 기준값은 [CLAUDE.md §4](../../CLAUDE.md)와 [test.md#e2-02](../prd/test.md#e2-02)에 있다.
 
@@ -488,7 +488,7 @@ PC는 저장소 루트 `output/` 아래에 같은 이름(`output/parse`·`output
 flowchart TD
     V["vlmcall.ask (VLM 엔진 · 쪽 VLM · 그림)"]
     VC["llm.complete (역할 vlm)"]
-    CL["classify (llm.chat)"]
+    CL["doc_classify (llm.chat)"]
     EM["embed.py (임베딩)"]
     G["guard.py require_internal · precheck · urlopen"]
     B["guard.py 예산: spend_reserve · settle_tokens (dev.models.guard.budget_usd, output/_llm_spend)"]

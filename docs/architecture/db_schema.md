@@ -159,29 +159,29 @@ PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서�
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
 | parse_meta_id | BIGINT IDENTITY PK | 행 번호 | DB | 없음(기본 키) | 유지 |
-| source_system | NVARCHAR(64) | 원천 | parsing_meta `plan` | parsing_meta_db 겹침 확인·`pick_rep`(원문 도구·`set_loaded` 행 고르기) | 유지 |
-| source_key | NVARCHAR(1024) | 원본 전체 경로 = `AI.FileStorageMap.s3_key` 값 = gold `doc.file_path`. 원본과의 연결 키는 `source_system` + 이 칸. 이름을 `s3_key`로 바꾼다(아래 `s3_key` 줄 — DB 담당자 DDL, C-76) | parsing_meta `plan` | 〃, run_docs `edw_done_keys`, mcp `fulltext` | 유지 |
+| source_system | NVARCHAR(64) | 원천 | silver_publish `plan` | parsing_meta_db 겹침 확인·`pick_rep`(원문 도구·`set_loaded` 행 고르기) | 유지 |
+| source_key | NVARCHAR(1024) | 원본 전체 경로 = `AI.FileStorageMap.s3_key` 값 = gold `doc.file_path`. 원본과의 연결 키는 `source_system` + 이 칸. 이름을 `s3_key`로 바꾼다(아래 `s3_key` 줄 — DB 담당자 DDL, C-76) | silver_publish `plan` | 〃, run_docs `edw_done_keys`, mcp `fulltext` | 유지 |
 | s3_key | NVARCHAR(1024) | 위 `source_key`의 새 이름 — DB 담당자가 이름을 바꾸면 계산 칸 `source_key_hash`·유일 색인 `UQ_ParsingMeta_key`도 다시 만든다(C-76). 코드는 연결할 때 `s3_key`가 있으면 그것, 없으면 `source_key`를 쓴다(`parsing_meta_db` `key_col`·run_docs) | (DDL 뒤 같은 곳) | (같은 곳) | 새로 |
 | source_uri | NVARCHAR(2048) | 원본 주소 | 〃 | 없음 | 삭제 |
 | original_filename | NVARCHAR(512) | 원본 파일 이름 | 〃 | 없음 | 삭제 |
 | file_format | NVARCHAR(32) | 형식 | 〃 | 없음 | 삭제 |
 | file_size | BIGINT | 크기 | 〃 | 없음 | 삭제 |
-| sha256 | NVARCHAR(64) | 원본 sha256 — 원문 도구 `doc_key`(입력·출력) · 같은 내용 묶기에 씀("파싱 정보만"의 예외) | parsing_meta `plan` | mcp `fulltext`(`list_doc_fulltext` `doc_key` 입력·출력) | 유지 |
-| rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | parsing_meta `plan` | mcp `fulltext`(`parsing_meta_db.rows_where`·`pick_rep` — 원문 도구가 부를 때 읽음) | 유지 |
-| rep_key | NVARCHAR(2048) | 대표 결과 폴더 | parsing_meta `apply` | 〃(목록 `rep_uri`·sfid 발급, 등록 시각 가드의 폴더 → 원본 찾기) | 유지 |
+| sha256 | NVARCHAR(64) | 원본 sha256 — 원문 도구 `doc_key`(입력·출력) · 같은 내용 묶기에 씀("파싱 정보만"의 예외) | silver_publish `plan` | mcp `fulltext`(`list_doc_fulltext` `doc_key` 입력·출력) | 유지 |
+| rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | silver_publish `plan` | mcp `fulltext`(`parsing_meta_db.rows_where`·`pick_rep` — 원문 도구가 부를 때 읽음) | 유지 |
+| rep_key | NVARCHAR(2048) | 대표 결과 폴더 | silver_publish `apply` | 〃(목록 `rep_uri`·sfid 발급, 등록 시각 가드의 폴더 → 원본 찾기) | 유지 |
 | rep_etag | NVARCHAR(128) | 대표 결과 etag | 〃 | 없음 | 삭제 |
-| parse_status | NVARCHAR(32) | ok·partial | parsing_meta `plan` | run_docs `edw_done_keys` | 유지 |
+| parse_status | NVARCHAR(32) | ok·partial | silver_publish `plan` | run_docs `edw_done_keys` | 유지 |
 | status_reason | NVARCHAR(2000) | 상태 이유 | 〃 | 없음 | 삭제 |
-| rep_engine | NVARCHAR(128) | 대표 엔진(gold에도 두지 않음) | parsing_meta `plan` | 없음 | 삭제 |
+| rep_engine | NVARCHAR(128) | 대표 엔진(gold에도 두지 않음) | silver_publish `plan` | 없음 | 삭제 |
 | rep_acc | FLOAT | 대표 정확도 | 〃 | 없음 | 삭제 |
 | page_count | INT | 쪽 수 | 〃 | 없음 | 삭제 |
 | doc_key | NVARCHAR(64) | 원본 sha256(지금 유일한 필수 칸) | 〃 | 없음 | 삭제 |
-| parse_date | NVARCHAR(32) | 파싱 시각 글자(`YYYY-MM-DD_HHMMSS`) | parsing_meta `apply` | `pick_rep`(가장 늦은 행) | 유지 |
-| pipeline_version | NVARCHAR(64) | 이 행의 silver를 만든 코드 판(`VERSION` — `common.pipeline_version()`, 게시 때). 이름을 `silver_version`으로 바꾼다(아래 줄 — DB 담당자 DDL, C-76) | parsing_meta `plan` | (운영자·재처리 판정) | 유지 |
+| parse_date | NVARCHAR(32) | 파싱 시각 글자(`YYYY-MM-DD_HHMMSS`) | silver_publish `apply` | `pick_rep`(가장 늦은 행) | 유지 |
+| pipeline_version | NVARCHAR(64) | 이 행의 silver를 만든 코드 판(`VERSION` — `common.pipeline_version()`, 게시 때). 이름을 `silver_version`으로 바꾼다(아래 줄 — DB 담당자 DDL, C-76) | silver_publish `plan` | (운영자·재처리 판정) | 유지 |
 | silver_version | NVARCHAR(64) | 위 `pipeline_version`의 새 이름 — 이 행의 silver를 만든 코드 판. 코드는 연결할 때 `silver_version`이 있으면 그것, 없으면 `pipeline_version`에 쓴다(`parsing_meta_db.RENAMES`) | (DDL 뒤 같은 곳) | (같은 곳) | 새로 |
-| status | NVARCHAR(16) | 행 상태 — 게시는 늘 `active`로 쓴다(다른 값으로 바꾸는 코드는 없음, 운영이 바꾼 행은 읽음) | parsing_meta `plan` | `pick_rep`(`active` 중 `parse_date`가 가장 늦은 행, `active`가 없으면 전체 중 — `parse_status`는 안 봄) | 유지 |
-| status_at | NVARCHAR(32) | 상태 바뀐 때(UTC) — 게시는 비워 둔다 | parsing_meta `plan`(NULL) | 없음(SELECT 안 함 — 운영자가 봄) | 유지 |
-| engines_used | NVARCHAR(MAX) | 쓰인 엔진(JSON) — 목표: 성공한 엔진만(이름 + 판) | parsing_meta `plan` | 없음 | 유지 |
+| status | NVARCHAR(16) | 행 상태 — 게시는 늘 `active`로 쓴다(다른 값으로 바꾸는 코드는 없음, 운영이 바꾼 행은 읽음) | silver_publish `plan` | `pick_rep`(`active` 중 `parse_date`가 가장 늦은 행, `active`가 없으면 전체 중 — `parse_status`는 안 봄) | 유지 |
+| status_at | NVARCHAR(32) | 상태 바뀐 때(UTC) — 게시는 비워 둔다 | silver_publish `plan`(NULL) | 없음(SELECT 안 함 — 운영자가 봄) | 유지 |
+| engines_used | NVARCHAR(MAX) | 쓰인 엔진(JSON) — 목표: 성공한 엔진만(이름 + 판) | silver_publish `plan` | 없음 | 유지 |
 | engines_summary | NVARCHAR(512) | 엔진 한 줄 요약 | 〃 | 없음 | 삭제 |
 | parsed_at | DATETIME2(0) | 넣은 때(기본 SYSUTCDATETIME — UTC) | DB 기본값 | mcp `fulltext`(`list_doc_fulltext` `since`/`until`) | 유지 |
 | source_key_hash | BINARY(32) 계산 칸 | `source_key` sha256 — 유일 색인 키(1700바이트 상한 우회) | DB | 유일 색인 | 유지 |

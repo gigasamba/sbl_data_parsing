@@ -58,7 +58,7 @@
 
 ### 규칙
 1. 층 지문 p0 범위 = `pipeline/extract/engines/**/*.py` + `pipeline/extract/run_engines.py`(`common/core/artifacts.py` `LAYER_CODE`).
-2. 문서×엔진 결과 재사용 열쇠는 `run_all.engine_code_fp`(등록부의 엔진 폴더 + `_common`)다 — 층 지문이 아니다.
+2. 문서×엔진 결과 재사용 열쇠는 `pipeline.extract.run_engines.engine_code_fp()`(등록부의 엔진 폴더 + `_common`)다 — 층 지문이 아니다.
 
 ### QA
 - `tests/server/pipeline/test_run_all.py::test_p0_layer_covers_every_engine_folder`.

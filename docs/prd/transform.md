@@ -89,7 +89,7 @@
 회사 문서에 나오는 나머지 형식을 읽는다. 엔진 파일(엔진 지문)은 바꾸지 않는다.
 
 ### 규칙
-1. 엔진 `parser.py`의 `FORMATS`는 두고, 등록부 `pipeline/extract/engines/registry.py`의 `EXTRA_FORMATS`(엔진별 추가 확장자)에 더한다 — `formats(엔진)` = `FORMATS` + `EXTRA_FORMATS`, `engines_for()`·`parse_one --list`가 이것을 읽는다.
+1. 엔진 `parser.py`의 `FORMATS`는 두고, 등록부 `pipeline/extract/engines/registry.py`의 `EXTRA_FORMATS`(엔진별 추가 확장자)에 더한다 — `formats(엔진)` = `FORMATS` + `EXTRA_FORMATS`, `engines_for()`·`run_one_engine --list`가 이것을 읽는다.
 2. 구성(우선순위 순): `.docm`·`.pptm`(kreuzberg, anydoc) · `.rtf`·`.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.csv`(markitdown, kreuzberg) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown) · `.xlsb`·`.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg) · `.json`·`.xml`·`.log`(plaintext 하나 — 글 그대로).
 3. `.docm`·`.pptm`은 `office` 엔진에 주지 않는다(`office_stdlib`는 `.docx`가 아니면 xlsx로 다룸).
 4. 파싱 서비스가 받는 확장자(`pipeline.parse_service.allowed_exts()`) = 구성의 `parse` 키(`.pdf_*` → `.pdf`) − 이미지 확장자.
