@@ -36,7 +36,7 @@ def app_selftest(app_cls, top):
     with tempfile.TemporaryDirectory() as td:
         f = Path(td) / "s.yaml"
         host_leaf = next(p for p, fi, _ in rows if p.startswith(top + ".host.") and S.type_label(fi.annotation) == "str")
-        sec_leaf = next(p for p, fi, _ in rows if p.startswith(top + ".") and S.is_secret(fi))
+        sec_leaf = next(p for p, fi, _ in rows if S.is_secret(fi))  # 앱 절에 비밀 칸이 없으면 common 것
         doc = {}
         L.set_path(doc, host_leaf, "v1")
         L.set_path(doc, sec_leaf, secret)

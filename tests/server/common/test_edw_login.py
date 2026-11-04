@@ -78,25 +78,6 @@ def test_unknown_role_refused():
             pass
 
 
-def test_old_connection_fields_only_warn():
-    """옛 서버 설정 파일(접속 칸이 옛 자리)도 시작은 됨 — REMOVED(경고만, 한 판 동안)."""
-    import tempfile
-    from pathlib import Path
-
-    from common.config.settings import CommonAppSettings, load
-
-    with tempfile.TemporaryDirectory() as d:
-        y = Path(d) / "old.yaml"
-        y.write_text(
-            "required:\n  env: {run_env: dev}\ncommon:\n  connections:\n"
-            "    edw: {server: s, user: u, password: p, conn_file: f}\n"
-            "    parsing_meta: {host: h, user: u, password: p, database: d, port: 1433, sqlite: x, connect_kwargs: '{}', table: AI.ParsingMeta}\n",
-            encoding="utf-8",
-        )
-        st = load(CommonAppSettings, file=y, environ={})
-        assert st.common.connections.parsing_meta.table == "AI.ParsingMeta" and st.common.connections.rdb.host is None
-
-
 def test_mcp_paths_use_read_account_only():
     """query_edw 접속과 ParsingMeta 조회 — 둘 다 "read"만 부른다(쓰기 계정 비밀이 MCP 프로세스로 안 감). 근거 경로 조회(shaping)는 11-01에 지움(mc-15)."""
     from mcp_server.services import edw_query

@@ -4,9 +4,7 @@ publish는 EDW에 'deleted'를 쓰지 않는다(C10 10-31 — 문서 대장과 �
 
 import inspect
 
-from pydantic import ValidationError
-
-from common.config.settings import COMMON, CommonStore
+from common.config.settings import COMMON
 
 
 def test_pg_standin_refused_on_server():
@@ -18,16 +16,6 @@ def test_pg_standin_refused_on_server():
         except SystemExit:
             return
     raise AssertionError("dev에서 스탠드인이 거부되지 않음")
-
-
-def test_run_mode_values():
-    assert CommonStore(run_mode="prod").run_mode == "prod"
-    assert CommonStore(run_mode="").run_mode is None  # 빈 글자 = 설정 안 함
-    try:
-        CommonStore(run_mode="production")
-    except ValidationError:
-        return
-    raise AssertionError("run_mode='production'이 받아들여짐")
 
 
 def test_publish_never_updates():

@@ -13,7 +13,7 @@
 · up: 판 기록이 없는데 표가 있는 스키마(옛 코드가 만든 DB)는 먼저 비교 — 차이가 기준판이 고치는 것(표·색인·뷰 없음, 뷰 칸 다름)뿐이면 고치고
   판 기록(기준판이 IF NOT EXISTS·뷰는 DROP 뒤 다시 만듦), 칸 이름·형식·NULL·기본값·키가 다르거나 남는 표가 있으면 거부(Q3). 적재 앞 자동 길
   (pgvector_load deploy)은 판 기록 없는 기존 스키마면 비교·DDL 없이 경고만(코디네이터 10-28 a — Q5). 검색 스키마는 지금 deploy와 같은 확인을 먼저 —
-  vector 확장(없으면 멈춤, --create-extension = 옛 PG_CREATE_EXTENSION=1 옵트인)·남의 스키마 거부(판 표 alembic_version 없음)·차원(DB와 다르면 새 PG_SCHEMA).
+  vector 확장(없으면 멈춤, --create-extension이면 직접 생성 — PC·단독 시험만)·남의 스키마 거부(판 표 alembic_version 없음)·차원(DB와 다르면 새 PG_SCHEMA).
 · 차원은 --dim 또는 --bundle <묶음>/meta.json, 있는 스키마는 DB 차원(새 설정 칸 없음 — Q4).
 · 적재 전 판 확인(require_current — Q5): 판 기록 없음 = 경고 뒤 계속(기준판 = 지금 스키마), 끝보다 낮거나 모르는 판 = 거부. MCP(읽기)는 안 봄.
 · SQLite 대체(pg_standin)는 판 관리 밖 — 표 정의에서 바로 만든다(standin_script). 접속 값은 settings.yaml(common.store.pg.conf).
@@ -190,7 +190,7 @@ def precheck_search(q, schema, dim, create_extension=False):
                 raise SystemExit(f"vector 확장 설치 실패 — 관리자 설치 필요: {type(e).__name__}: {e}") from e
         if not q("SELECT 1 FROM pg_extension WHERE extname='vector'"):
             raise SystemExit(
-                f"vector 확장 없음 — 관리자 설치 필요(PG_CREATE_EXTENSION=1이면 직접 생성 시도 — 공유 PG에서는 켜지 말 것) · 스키마={schema}"
+                f"vector 확장 없음 — 관리자 설치 필요(dbtool up --create-extension이면 직접 생성 — 공유 PG에서는 쓰지 말 것) · 스키마={schema}"
             )
     if (
         q(f"SELECT 1 FROM information_schema.schemata WHERE schema_name='{schema}'")
@@ -388,9 +388,7 @@ def main(argv=None):
     ap.add_argument("--dim", type=int, help="임베딩 차원(새 검색 스키마 — 있는 스키마는 DB 차원)")
     ap.add_argument("--bundle", help="묶음 폴더 — meta.json의 dim")
     ap.add_argument("--dir", help="master load — CSV 폴더(기본 git resources/vocab/glossary · 서버 기밀 명부는 서버 폴더)")
-    ap.add_argument(
-        "--create-extension", action="store_true", help="vector 확장이 없으면 만들기(옛 PG_CREATE_EXTENSION=1 — PC·단독 시험만)"
-    )
+    ap.add_argument("--create-extension", action="store_true", help="vector 확장이 없으면 만들기(PC·단독 시험만)")
     ap.add_argument(
         "--pg-cases", metavar="DB", help="PC 전용 PG 시험 — 새 시험 DB(orca_…)를 만들어 기본 스키마·vector 확장 자리 사례(VS8a B-1·R-9)"
     )

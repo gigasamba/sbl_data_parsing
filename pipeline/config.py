@@ -9,7 +9,7 @@ SETTINGS(common + pipeline 절)는 확인 명령(python -m pipeline.config)·시
 
 import sys
 
-from pydantic import Field, SecretStr, field_validator  # 칸 형식
+from pydantic import Field, field_validator  # 칸 형식
 
 from common.config.settings import (
     AppSettings,
@@ -36,9 +36,6 @@ class PipelineConnectionsRdbColumns(Section):
 
 class PipelineConnectionsRdb(Section):
     bucket: str | None = F(None, "RDB_BUCKET", "RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값)")
-    engine: str | None = F(
-        "mssql", "RDB_ENGINE", "RDB 종류(mssql | pg) — mssql 접속은 common.connections.rdb(읽기 계정 · PC 시험은 그 sqlite)", blank="keep"
-    )
     increment_col: str | None = F(None, "RDB_INCREMENT_COL", "증분(since) 판정에 쓸 열 이름 — 비우면 문서 ID 열(columns.doc_id)")
     columns: PipelineConnectionsRdbColumns = Field(default_factory=PipelineConnectionsRdbColumns)
 
@@ -62,10 +59,6 @@ class PipelineExtractCache(Section):
     )
 
 
-class PipelineExtractDedup(Section):
-    """칸 없음 — 지운 칸만 남은 절(이름은 layout.REMOVED — 옛 파일이 경고만 받게)."""
-
-
 class PipelineExtractOcr(Section):
     dpi: int | None = F(150, "OCR_DPI", "쪽·그림 이미지 렌더링 해상도(DPI, OCR 엔진·VLM 엔진·쪽 VLM·그림 VLM·pptx 슬라이드·prepare 공용)")
     max_pages: int | None = F(
@@ -81,7 +74,6 @@ class PipelineExtractOcr(Section):
 
 
 class PipelineExtractPrepare(Section):
-    link: str | None = F("auto", "PREPARE_LINK", "회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy")
     rotate: bool | None = F(
         False,
         "PREPARE_ROTATE",
@@ -124,9 +116,6 @@ class PipelineLoadPublish(Section):
     bucket: str | None = F(
         None, "PM_BUCKET", "publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소)", repo="file://"
     )
-    bucket_skip_overlap_check: bool | None = F(
-        False, "PM_BUCKET_SKIP_OVERLAP_CHECK", "PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 — 1이면 생략", on=("1",)
-    )
     prefix: str | None = F(None, "PM_PREFIX", "버킷 안 업로드 경로 접두")
     upload_statuses: CsvList | None = F(
         ["ok", "partial"], "PM_UPLOAD_STATUSES", "원본을 업로드할 파싱 상태 목록(쉼표 — ok·partial·failed 등 parsing_meta.STATUSES 중에서)"
@@ -135,7 +124,6 @@ class PipelineLoadPublish(Section):
 
 class PipelineServiceDataParsing(Section):
     job_timeout_sec: float | None = F(600.0, "DATA_PARSING_JOB_TIMEOUT_SEC", "parse MCP 서비스 작업 1건 제한 시간(초)")
-    jobs_dir: str | None = F(None, "DATA_PARSING_JOBS_DIR", "parse MCP 서비스 작업 기록 폴더")
     procs: int | None = F(None, "DATA_PARSING_PROCS", "parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개)")
     queue_max: int | None = F(8, "DATA_PARSING_QUEUE_MAX", "parse MCP 서비스 대기 작업 상한(건)")
     roots: CsvList | None = F(
@@ -144,7 +132,6 @@ class PipelineServiceDataParsing(Section):
     text_page_sec: float | None = F(
         1.0, "DATA_PARSING_TEXT_PAGE_SEC", "parse MCP 서비스 작업의 글자 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
     )
-    token: SecretStr | None = F(None, "DATA_PARSING_TOKEN", "parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값)")
     warmup_sec: float | None = F(
         20.0,
         "DATA_PARSING_WARMUP_SEC",
@@ -203,16 +190,6 @@ class PipelineTransformVlm(Section):
     )
 
 
-class PipelineDev(Section):
-    check_env_any_py: bool | None = F(
-        False, "CHECK_ENV_ANY_PY", "check_env가 시스템 python에서도 멈추지 않고 계속할지(=1 계속 / 그 외 중단)", on=("1",)
-    )
-
-
-class PipelineEval(Section):
-    """칸 없음 — 지운 칸만 남은 절(이름은 layout.REMOVED — 옛 파일이 경고만 받게)."""
-
-
 class PipelineExtract(Section):
     doc_parallel: int | None = F(1, "PARSE_DOC_PARALLEL", "대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개)")
     engine_retry: int | None = F(1, "PARSE_ENGINE_RETRY", "엔진 별도 프로세스가 비정상 종료했을 때 바로 다시 시도할 횟수(회)")
@@ -246,7 +223,6 @@ class PipelineExtract(Section):
     warmup_sec: float | None = F(60.0, "PARSE_WARMUP_SEC", "엔진 첫 문서의 제한 시간 하한(초) — import·모델 적재 여유")
     attach: PipelineExtractAttach = Field(default_factory=PipelineExtractAttach)
     cache: PipelineExtractCache = Field(default_factory=PipelineExtractCache)
-    dedup: PipelineExtractDedup = Field(default_factory=PipelineExtractDedup)
     ocr: PipelineExtractOcr = Field(default_factory=PipelineExtractOcr)
     prepare: PipelineExtractPrepare = Field(default_factory=PipelineExtractPrepare)
     source: PipelineExtractSource = Field(default_factory=PipelineExtractSource)
@@ -271,6 +247,36 @@ class PipelineHostRunDocs(Section):
     medium_shared: int | None = F(1, "RUN_DOCS_MEDIUM_SHARED", "medium 레인 공유 워커 수(medium 먼저, 비면 다른 레인)")
     vlm_dedicated: int | None = F(1, "RUN_DOCS_VLM_DEDICATED", "vlm 레인 전담 워커 수(vlm 문서만)")
     vlm_shared: int | None = F(1, "RUN_DOCS_VLM_SHARED", "vlm 레인 공유 워커 수(vlm 먼저, 비면 다른 레인)")
+    # 컨테이너 안 파싱·구조화 명령에 --set으로 넘기는 값(문서 하나씩 도는 서버 배치 — 앱 기본값과 다름)
+    vlm_concurrency: int | None = F(
+        8, "RUN_DOCS_VLM_CONCURRENCY", "light·medium 문서 하나의 VLM 동시 요청 수(VLM_MAX_CONCURRENCY·VLM_CONCURRENCY로 넘김)"
+    )
+    vlm_lane_concurrency: int | None = F(
+        6, "RUN_DOCS_VLM_LANE_CONCURRENCY", "vlm 레인 문서 하나의 VLM 동시 요청 수(vlm_cap 문서가 GPU 서버를 나눔)"
+    )
+    figures_max: int | None = F(10, "RUN_DOCS_FIGURES_MAX", "문서당 그림 VLM 상한(VLM_FIGURES_MAX)")
+    parse_post: str | None = F(
+        "supsub,charts,figures,context,attachments", "RUN_DOCS_PARSE_POST", "light·medium 문서의 후처리 목록(PARSE_POST)"
+    )
+    vlm_lane_post: str | None = F(
+        "supsub,charts,figures,context,attachments,vlm_page",
+        "RUN_DOCS_VLM_LANE_POST",
+        "vlm 레인 문서의 후처리 목록(PARSE_POST — vlm_page는 스캔 쪽만 VLM 전사, 쪽 상한 없음)",
+    )
+    rapidocr_page_workers: int | None = F(2, "RUN_DOCS_RAPIDOCR_PAGE_WORKERS", "rapidocr 쪽 병렬 스레드 수(RAPIDOCR_PAGE_WORKERS)")
+    ocr_threads: int | None = F(1, "RUN_DOCS_OCR_THREADS", "rapidocr onnxruntime 스레드 수(OCR_THREADS)")
+    pipe_procs: int | None = F(4, "RUN_DOCS_PIPE_PROCS", "문서 하나의 엔진 묶음 병렬 프로세스 수(PIPE_PROCS)")
+    fetch_workers: int | None = F(2, "RUN_DOCS_FETCH_WORKERS", "원본 받기 스레드 수(SOURCE_FETCH_WORKERS)")
+    rep_select: str | None = F("first", "RUN_DOCS_REP_SELECT", "대표 엔진 선택 방식(PARSE_REP_SELECT — first·acc·best)")
+    qa_light: bool | None = F(True, "RUN_DOCS_QA_LIGHT", "풀문서 CER·순서 비교 생략(PARSE_QA_LIGHT)")
+    scan_rotate: bool | None = F(
+        False, "RUN_DOCS_SCAN_ROTATE", "스캔 PDF 쪽 방향 바로잡기 — false면 스캔 문서는 PREPARE_ROTATE=0으로 회전 OCR 생략"
+    )
+    cpu_gate: float | None = F(1.3, "RUN_DOCS_CPU_GATE", "light 밖 레인의 파싱 CPU 게이트(CPU_MAX_LOAD — 명령 인자 --cpu-gate가 덮음)")
+    light_cpu_gate: float | None = F(9.0, "RUN_DOCS_LIGHT_CPU_GATE", "light 레인 CPU 게이트(CPU_MAX_LOAD — 높게 두어 바로 소화)")
+    embed_concurrency: int | None = F(6, "RUN_DOCS_EMBED_CONCURRENCY", "구조화·적재 임베딩 호출 병렬 수(EMBED_CONCURRENCY)")
+    embed_batch: int | None = F(32, "RUN_DOCS_EMBED_BATCH", "임베딩 한 번에 보내는 청크 수(EMBED_BATCH)")
+    bm25_threads: int | None = F(3, "RUN_DOCS_BM25_THREADS", "BM25 계산 스레드 수(BM25_THREADS)")
 
 
 class PipelineHost(Section):
@@ -306,14 +312,7 @@ class PipelineHost(Section):
 class PipelineLoad(Section):
     bm25_threads: int | None = F(4, "BM25_THREADS", "BM25 항목(term,tf) 계산 병렬 스레드 수(개)")
     edw_path_prefix: str | None = F(None, "EDW_PATH_PREFIX", "저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치)")
-    pg_create_extension: bool | None = F(
-        False, "PG_CREATE_EXTENSION", "deploy 때 vector 확장 직접 생성 시도 — 1이면 켬(공유 PG에서는 금지)", on=("1",)
-    )
     publish: PipelineLoadPublish = Field(default_factory=PipelineLoadPublish)
-
-
-class PipelineNight(Section):
-    """칸 없음 — 옛 칸(workers·vlm_concurrency 등)이 남은 파일을 경고로 받으려고 절만 둔다(layout.REMOVED)."""
 
 
 class PipelinePaths(Section):
@@ -346,12 +345,9 @@ class PipelineTransform(Section):
 
 class PipelineSettings(Section):
     connections: PipelineConnections = Field(default_factory=PipelineConnections)
-    dev: PipelineDev = Field(default_factory=PipelineDev)
-    eval: PipelineEval = Field(default_factory=PipelineEval)
     extract: PipelineExtract = Field(default_factory=PipelineExtract)
     host: PipelineHost = Field(default_factory=PipelineHost)
     load: PipelineLoad = Field(default_factory=PipelineLoad)
-    night: PipelineNight = Field(default_factory=PipelineNight)
     paths: PipelinePaths = Field(default_factory=PipelinePaths)
     service: PipelineService = Field(default_factory=PipelineService)
     transform: PipelineTransform = Field(default_factory=PipelineTransform)

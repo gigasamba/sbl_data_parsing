@@ -54,7 +54,6 @@ EXCLUDED_FILES = (
     "config/keyscan.py",  # 설정 키 모으기(S7a) — 개발 점검 도구, 인계 내용과 무관
     "config/settings.py",  # settings.yaml 읽기·common 절 모델(S7a, D-015) — 운영 설정, 인계 내용과 무관
     "config/export.py",  # 설정 절 → KEY=VALUE(셸·compose 다리, S7a) — 운영 도구
-    "config/migrate.py",  # 옛 env 파일 → settings.yaml(S7a) — 운영 도구
     "config/sample.py",  # settings.sample.yaml 만들기·대조(S7a) — 개발 도구
     "config/show.py",  # 앱 설정 확인 명령(S7a) — 운영 도구
     "ai/agent_prompts.py",  # 지시문 글자 변경은 agent_platform.pipeline._package_digest가 이미 따로 추적(여기서 또 볼 필요 없음)

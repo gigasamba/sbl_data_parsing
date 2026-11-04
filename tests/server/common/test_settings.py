@@ -8,6 +8,7 @@ from unittest import mock
 
 from pydantic import ValidationError
 
+from common.config import settings as S
 from common.config.layout import to_file
 from common.config.settings import (
     COMMON,
@@ -57,14 +58,23 @@ from common.config.settings import (
 )
 
 
+def _raw(v):
+    """YAML 값을 쓴 글자·꼴 그대로 다시 쓰게(settings._Raw) — 글자는 글자로, 숫자·켜기·날짜는 쓴 표기 그대로."""
+    if isinstance(v, S.YamlScalar):
+        return str(v) if isinstance(v.value, str) else S._Raw.of(v)
+    if isinstance(v, dict):
+        return {str(k): _raw(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_raw(x) for x in v]
+    return v
+
+
 def _new(text):
-    """옛 배치(모델 경로) YAML 글자 → 새 배치(op-08 ② — layout.to_file) 글자. 쓴 글자·꼴(yes·0123·1.10)은 그대로(migrate._raw)."""
+    """모델 경로 YAML 글자 → 파일 배치(layout.to_file) 글자. 쓴 글자·꼴(yes·0123·1.10)은 그대로."""
     import yaml
 
-    from common.config import migrate
-
     doc = yaml.load(text, Loader=_yaml_loader())
-    return yaml.dump(to_file(migrate._raw(doc)), Dumper=_raw_dumper(), allow_unicode=True, sort_keys=False)
+    return yaml.dump(to_file(_raw(doc)), Dumper=_raw_dumper(), allow_unicode=True, sort_keys=False)
 
 
 def selftest():
@@ -619,9 +629,14 @@ def selftest():
             gate_u1b = False
         except SystemExit as e:
             gate_u1b = e.code == 2
+        try:
+            require_run_env("시험", {"RUN_ENV": "local", "SETTINGS_FILE": str(gb)})
+            gate_local = False
+        except SystemExit as e:
+            gate_local = e.code == 2
         check(
-            "시작 관문(U-1): 서버면 설정 파일을 못 읽거나(없음) 검증 실패면 종료 2 · local은 검증 안 함",
-            gate_u1 and gate_u1b and require_run_env("시험", {"RUN_ENV": "local", "SETTINGS_FILE": str(gb)}) == "local",
+            "시작 관문: 서버면 설정 파일을 못 읽거나(없음) 검증 실패면 종료 2 · local도 검증 실패면 종료 2",
+            gate_u1 and gate_u1b and gate_local,
         )
         if "mcp" in app_classes(("mcp",)):  # VS7d R-1 — import common 먼저여도 mcp CFG(시작 상수)가 settings.yaml 값을 봄(mcp 이미지·PC)
             cf = d / "cfg.yaml"
@@ -728,48 +743,21 @@ def selftest():
                 and rc3 == 2
                 and "dummy" not in o1 + o2 + e2 + e3,
             )
-            # 사용자 10-29 — 지운 칸 synthetic_truth(옛 migrate C-35가 서버 파일에 옮겨 둠)는 경고만 하고 무시 · 다른 모르는 칸은 그대로 거부
-            from common.config.settings import CommonModelsGuard
-
-            _g = CommonModelsGuard.model_validate({"synthetic_truth": "/t.json", "budget_usd": 0.1})
-            try:
-                CommonModelsGuard.model_validate({"synthetic_truthx": "/t.json"})
-                _typo_rejected = False
-            except ValueError:
-                _typo_rejected = True
-            check("지운 칸 synthetic_truth: 시작 거부 대신 무시 · 오타 칸은 거부", _g.budget_usd == 0.1 and _typo_rejected)
-            # 사용자 10-29 — 기능 삭제(OpenViking·재순위·질문 분해·graph 검색·파싱 판단 에이전트 등)로 지운 칸·절도 옛 파일에 남아 있으면 무시
+            # 지운 칸·절이 옛 설정 파일에 남으면 시작 거부(칸 자리만 알림)
             _old = {
-                "common": {"connections": {"openviking": {"url": "http://x:1933"}}, "models": {"rerank": {"model": "m"}}},
+                "common": {"connections": {"openviking": {"url": "http://x:1933"}}, "models": {"guard": {"synthetic_truth": "/t.json"}}},
             }
-            if "pipeline" in app_classes():
-                _old["pipeline"] = {
-                    "paths": {"mineru_bin": "mineru", "paddle_python": "/p", "soffice_candidates": ["a"]},
-                    "transform": {"agent": {"enabled": "shadow"}},
-                    "load": {"structure_target": "pg"},
-                    "eval": {"phase_report_legacy": False},
-                    "dev": {"parse_agent_fake": False},
-                    "connections": {"openviking": {"root": "r"}, "graphiti": {"neo4j_uri": "bolt://x"}},
-                }
-            if "mcp" in app_classes():
-                _old["mcp"] = {
-                    "output": {"list_docs_max": 200},
-                    "search": {
-                        "rerank": {"mode": "off"},
-                        "graph": {"concept_per": 1},
-                        "decompose": True,
-                        "decompose_llm": True,
-                        "ov_search_path": "/x",
-                    },
-                }
             _of = d / "old_removed.yaml"
             import yaml as _yaml
 
             from common.config import settings as _S
 
             _of.write_text(_yaml.safe_dump(to_file(_old), allow_unicode=True), encoding="utf-8")
-            _loaded = [_S.load(cls, file=_of, environ={}, strict=False) for cls in app_classes().values()]
-            check("10-29 지운 칸·절 17개: 옛 설정 파일에 남아도 앱마다 읽힘(경고만)", len(_loaded) == len(app_classes()))
+            _refused = [
+                raises(lambda c=cls: _S.load(c, file=_of, environ={}, strict=False), "openviking", "synthetic_truth")[0]
+                for cls in app_classes().values()
+            ]
+            check("지운 칸·절이 남은 파일: 앱마다 시작 거부(칸 이름만)", all(_refused))
             lb = d / "lib.yaml"
             lb.write_text(
                 _new("common:\n  runtime:\n    lib_env:\n      TZ: Asia/Seoul\n      HF_HUB_OFFLINE: 1\n      OMP_NUM_THREADS: 02\n"),

@@ -119,10 +119,6 @@ _TOP_AFTER_SELECT_RE = re.compile(r"\s*TOP\s*\(?\s*(\d+)\s*\)?", re.IGNORECASE)
 # ── env / backend selection ─────────────────────────────────────────────────
 
 
-def enabled():
-    return bool(mc.cfg().edw_query.enabled)  # off=("0",) — 옛 get(X,"1") != "0"과 같음(S7d)
-
-
 def allowed_tables(kind=None):
     """(2026-10-21 사용자: 전 스키마 허용) 제한 없음 — None을 돌려주면 validate가 허용 목록 검사를 건너뛴다.
     시스템 테이블 차단(sys·INFORMATION_SCHEMA 등)·읽기 전용 키워드 검사는 그대로 유지된다. sqlite 스탠드인은 실 EDW가
@@ -148,11 +144,9 @@ def _mssql_conf():
 
 
 def backend():
-    """Backend selection order (spec): EDW_QUERY=0 disables outright; then RDB_SQLITE (the one PC stand-in);
+    """Backend selection order (spec): RDB_SQLITE (the one PC stand-in);
     then the EDW read account (common.connections.rdb, pymssql); otherwise not configured.
     Returns ("sqlite", path) | ("mssql", conf_dict) | (None, None)."""
-    if not enabled():
-        return None, None
     from common.store import mssql
 
     sqlite_path = mssql.standin_path()

@@ -23,7 +23,7 @@ HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: pyt
 #   [PC·서버]·[서버만]·[PC만] = 그 카테고리를 채워야 하는 곳. 서버만 칸을 PC에서 비우면 그 기능(EDW·Object Storage·게시 등)만 꺼진다.
 #   [비밀] = settings.yaml에만 둠(출력·로그에 안 나옴). [파라미터] = 결과(파싱·청크·검색 순위)를 바꾸는 값.
 #   각 앱은 자기 칸만 읽는다(pipeline: required·common·extract·transform·load·ops·dev · mcp: required·common·search·ops·dev — tuning은 둘 다).
-#   같은 절·칸을 두 번 쓰면 시작 거부(앞 것이 조용히 사라지지 않게). 옛 배치(최상위 common·pipeline·mcp) → python -m common.config.migrate.
+#   같은 절·칸을 두 번 쓰면 시작 거부(앞 것이 조용히 사라지지 않게). 모르는 칸·자리가 다른 칸도 시작 거부(칸 이름만 알림).
 #   한 번만 몇 칸 바꿀 때: 덮기 파일(base·overrides — python -m common.config.overrides). 옛 env 이름·판정 꼴: docs/operations/env-guide.md.
 """
 # C-39(사용자 10-27 S7e1 Q6 a) — options.conf(옛 카탈로그 — S7e2에 지움)가 env에 채우던 값 중 설정 모델 기본값과 결과가 다른 칸(값에 비밀 없음).
@@ -40,7 +40,6 @@ CATALOG_VALUES = {
     "LLM_MODEL": "",
     "LLM_SPEND_FILE": "",
     "PARSE_POST": "all",
-    "RUN_MODE": "prod",
     "SECURE_DOC_PASSWORDS_FILE": "",
     "SOFFICE_BIN": "",
     "SOURCE_MANIFEST": "",
@@ -146,14 +145,12 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "common.models.transport.down_cooldown",
     "pipeline.extract.isolate_overhead",
     "mcp.server.allowed_hosts",
-    "common.models.transport.transport",
     "common.models.guard.internal_host_suffixes",
     "common.models.guard.internal_ip_ranges",
     "common.models.embed.query_cache_max",
     "common.models.transport.down_after",
     "pipeline.extract.max_file_mb",
     "pipeline.extract.input_source",
-    "pipeline.extract.prepare.link",
     "pipeline.load.publish.upload_statuses",
     "pipeline.transform.structure.embed_max_chars",
     "mcp.search.pg.filter_exact_max",
@@ -162,7 +159,7 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
 
 def blank_matters(field):
     """빈 글자 ''를 적어야 결과가 같은 칸인가(VS7e1 R-4) — 빈 글자 유지 칸(keep)이거나, 이미지 기본값이 있어 비우면 그 기본값이 걸리는 칸(DOC_DIR 등 —
-    B-2). 그 밖 칸의 ''는 비운 칸과 같은 결과라 sample 표시·migrate --compare에서 같게 본다."""
+    B-2). 그 밖 칸의 ''는 비운 칸과 같은 결과라 sample 표시에서 같게 본다."""
     return S.keeps_blank(field) or S.env_name(field) in _IMAGE_ENVS
 
 
@@ -213,7 +210,6 @@ BLANK = {
     "pipeline.paths.parse_tmp": "<루트>/output/_tmp_parse/stream",
     "pipeline.paths.raw_root": "원본 층 캐시 안 씀",
     "pipeline.paths.soffice_bin": "PATH에서 soffice를 찾음(pipeline 이미지 안 /usr/bin/soffice)",
-    "pipeline.service.data_parsing.jobs_dir": "<서비스 폴더>/jobs",
     "pipeline.service.data_parsing.procs": "min(3, CPU 수 − 1)",
     "pipeline.service.data_parsing.roots": "<서비스 폴더>/inbox",
     "pipeline.transform.represent.post": "파이프라인 all · parse MCP 서비스 supsub(빈 글자 ''를 쓰면 끔)",
@@ -224,7 +220,6 @@ BLANK = {
     "pipeline.transform.structure.page_chunk_max": "chunk_size × 4(chunk_size도 비우면 4000)",
     "pipeline.transform.vlm.page_max": "전부(0이면 쪽 VLM 끔 — VLM 엔진은 빈 결과)",
     "mcp.edw_meta.dir": "<런타임 루트>/config/edw_meta(이미지 안 /app/config/edw_meta — 서버 compose는 이 자리를 붙이지 않음) — 두 파일이 없으면 edw_meta 도구는 not_configured(query_edw는 그대로)",
-    "mcp.host.jobs_dir": "<결과 폴더>/_mcp_parse/jobs",
     "mcp.server.allowed_hosts": "바인드 주소만 허용",
     "mcp.server.manifest": "<루트>/output/parse/_source/manifest.jsonl",
     "mcp.server.max_queue": "동시 상한 × 4(0이면 무제한)",
@@ -290,22 +285,6 @@ def _fmt_default(p, f):
     return f" · 비우면 {d}"
 
 
-# 지운 칸(모델 REMOVED — 남으면 경고만)인데 layout 표에 자리를 남긴 것 — 옛 settings.yaml(sample 복사본)이 "모르는 칸"·"자리가 다른 칸"으로
-# 시작을 거부당하지 않게(11-01 pl-10 trigger 서버 — layout.py는 code_fp에 들어가 손대지 않음). 모델에 없는 칸 대조에서만 뺀다.
-LAYOUT_GONE = frozenset(
-    {
-        "pipeline.service.trigger.token",
-        "pipeline.service.trigger.client_timeout",
-        "pipeline.service.trigger.queue_max",
-        "pipeline.service.trigger.shutdown_timeout_sec",
-        "pipeline.service.trigger.socket_timeout_sec",
-        "pipeline.extract.dedup.fuzzy_max",  # 11-01(pl-02 — 유사 후보 지움)
-        "pipeline.load.index_lock_stale_sec",  # 11-01(mc-16 — 이름 있는 색인 AD41 지움)
-        "common.models.transport.ping_timeout",  # 11-04(op-05 — 점검 제한 시간은 코드 상수)
-    }
-)
-
-
 def build(classes=None):
     classes = classes or S.app_classes()
     rows = {}
@@ -316,7 +295,7 @@ def build(classes=None):
     for p, f in rows.items():
         L.set_path(tree, L.to_yaml(p), (p, f))
     if {"pipeline", "mcp"} <= set(classes):  # 시험이 앱 일부로 부를 때는 대조 안 함
-        unknown = (set(L.REQUIRED) | L.TUNING | set(VALUES)) - set(rows) - LAYOUT_GONE
+        unknown = (set(L.REQUIRED) | L.TUNING | set(VALUES)) - set(rows)
         if unknown:
             raise SystemExit(f"sample: layout·VALUES에 모델에 없는 칸 {sorted(unknown)}")
     lines = [HEAD]
@@ -447,7 +426,7 @@ def _note(p, f):
 
 
 _CHOICES = re.compile(r"(?<![\w/.<])([a-z][a-z0-9_]*(?: ?\| ?[a-z][a-z0-9_:]*)+)(?![\w/])")
-_PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|roster|catalog|images|conf|font|warm|jobs_dir|sqlite|db)$")
+_PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|roster|catalog|images|conf|font|warm|sqlite|db)$")
 
 
 # 설명 글자로는 선택지를 못 뽑는 칸 — 코드가 받는 값(읽는 코드·설명 기준).
@@ -456,10 +435,8 @@ VALUES = {
     "pipeline.load.publish.bucket": "버킷 이름·file://<폴더>(절대 경로 또는 저장소 루트 기준 상대 경로)",
     "pipeline.load.publish.prefix": "글자(버킷 안 경로 접두)",
     "common.dev.docker.pg_effective_cache": "PG 크기 글자(예 12GB)",
-    "common.store.run_mode": "prod 하나(비우면 설정 안 함 — test는 0.2.0에 지움)",
     "common.connections.object_storage.verify_tls": "1(검증)·0(끔)·CA 파일 경로",
     "common.runtime.pipe_procs": "1 이상 정수 · auto면 자동 계산",
-    "pipeline.connections.rdb.engine": "mssql·pg 중 하나",
     "pipeline.transform.represent.post": "all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments)",
     "pipeline.transform.represent.rep_select": "first·acc·best 중 하나(그 밖 값 = best)",
     "pipeline.transform.structure.chunk_table": "rows 또는 비움(표 통째로)",

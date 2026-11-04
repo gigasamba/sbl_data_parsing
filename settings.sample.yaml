@@ -5,7 +5,7 @@
 #   [PC·서버]·[서버만]·[PC만] = 그 카테고리를 채워야 하는 곳. 서버만 칸을 PC에서 비우면 그 기능(EDW·Object Storage·게시 등)만 꺼진다.
 #   [비밀] = settings.yaml에만 둠(출력·로그에 안 나옴). [파라미터] = 결과(파싱·청크·검색 순위)를 바꾸는 값.
 #   각 앱은 자기 칸만 읽는다(pipeline: required·common·extract·transform·load·ops·dev · mcp: required·common·search·ops·dev — tuning은 둘 다).
-#   같은 절·칸을 두 번 쓰면 시작 거부(앞 것이 조용히 사라지지 않게). 옛 배치(최상위 common·pipeline·mcp) → python -m common.config.migrate.
+#   같은 절·칸을 두 번 쓰면 시작 거부(앞 것이 조용히 사라지지 않게). 모르는 칸·자리가 다른 칸도 시작 거부(칸 이름만 알림).
 #   한 번만 몇 칸 바꿀 때: 덮기 파일(base·overrides — python -m common.config.overrides). 옛 env 이름·판정 꼴: docs/operations/env-guide.md.
 
 
@@ -13,7 +13,6 @@ required:
   # ─── 실행 환경 [PC·서버] ───
   env:
     run_env:                              # 실행 환경 · 값: local·dev·prd 중 하나
-    run_mode:                             # 실행 모드 prod · 값: prod 하나(비우면 설정 안 함 — test는 0.2.0에 지움)
   # ─── PostgreSQL(pgvector · gold) [PC·서버] ───
   pg:
     host:                                 # PostgreSQL 서버 호스트 · 값: 호스트 이름·IP
@@ -64,15 +63,13 @@ required:
     source_uri_prefix:                    # 원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///<폴더>) · 값: 경로
   # ─── 서비스 토큰 [서버만] ───
   tokens:
-    data_parsing:                         # parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값) · 값: 비밀 글자 [비밀]
-    mcp:                                  # MCP 서버 Bearer 토큰(비루프백 바인드면 필수) · 값: 비밀 글자 [비밀]
-    parse_proxy:                          # parse_document가 작업 서비스(parse_service)를 부를 때 쓰는 토큰 · 값: 비밀 글자 [비밀]
+    mcp:                                  # MCP 토큰 하나 · 값: 비밀 글자 [비밀]
     fulltext:                             # 원문 도구(list/get_doc_fulltext) 파일 손잡이 sfid 서명 키 · 값: 비밀 글자 [비밀]
   # ─── 서버 배포(이미지·호스트 폴더) [서버만] ───
   deploy:
     pipeline_image:                       # data-pipeline 이미지 이름:태그(compose 필수 변수) · 값: 글자
     mcp_image:                            # mcp-server 컨테이너 이미지 이름:태그 · 값: 글자
-    doc_src:                              # 원본 문서 폴더(DOC_DIR의 옛 별칭) · 값: 경로
+    doc_src:                              # 호스트 원본 문서 폴더 · 값: 경로
     output_root:                          # 호스트의 결과(output) 폴더(서버 경로) · 값: 경로
     pg_container:                         # 호스트에서 psql을 docker exec할 PostgreSQL(pgvector) 컨테이너 이름 · 값: 글자(컨테이너 이름)
 
@@ -102,11 +99,8 @@ common:
       internal_ip_ranges: []              # 사설(RFC1918) 밖의 사내 IP 대역 CIDR 목록(쉼표 구분) · 비우면 사설(RFC1918) 대역만 내부망 · 값: 쉼표 목록 또는 YAML 목록 · 예: 100.64.0.0/10
 
 extract:
-  # ─── 원천 목록 DB(EDW 표·열 이름) ───
+  # ─── 보안 문서 ───
   connections:
-    rdb:
-      engine: mssql                       # RDB 종류(mssql | pg) · 비우면 mssql · 값: mssql·pg 중 하나
-    # ─── 보안 문서 ───
     secure_doc:
       passwords_file:                     # 암호 걸린 문서용 암호 목록 파일 경로(한 줄에 암호 하나) · 비우면 암호 걸린 문서는 못 열고 건너뜀 · 값: 경로
   # ─── 원천 받기·처리 상한 ───
@@ -147,8 +141,6 @@ transform:
 load:
   # ─── 게시(publish) ───
   edw_path_prefix:                        # 저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치) · 비우면 원본 파일의 실제 경로 그대로 · 값: 경로 · 예: /data/edw_files
-  publish:
-    bucket_skip_overlap_check: false      # PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 · 비우면 false · 값: true·false
   # ─── 적재 ───
   bm25_threads: 4                         # BM25 항목(term,tf) 계산 병렬 스레드 수(개) · 비우면 4 · 값: 0 이상 정수
 
@@ -160,12 +152,10 @@ search:
     manifest:                             # 수집 manifest.jsonl 경로(문서 유형·버전·삭제 여부 출처) · 비우면 <루트>/output/parse/_source/manifest.jsonl · 값: 경로
     max_concurrency: 8                    # 도구 동시 실행 상한(개) · 비우면 8 · 값: 0 이상 정수
     port: 8765                            # MCP 서버 포트 · 비우면 8765 · 값: 1~65535
-    warmup: true                          # 기동 때 검색 1회로 예열 · 비우면 true · 값: true·false
   # ─── EDW 도구 ───
   edw_meta:
     dir:                                  # EDW 표 설명 자료 폴더(컨테이너 안 경로 — catalog.json·columns.jsonl, 개인정보 없는 자료만. 서버는 <루트>/output/edw_meta/에 복사하고 /app/output/edw_meta로 적음 — 결과 폴더가 검색 MCP에 읽기 전용으로 붙음) · 비우면 <런타임 루트>/config/edw_meta(이미지 안 /app/config/edw_meta — 서버 compose는 이 자리를 붙이지 않음) — 두 파일이 없으면 edw_meta 도구는 not_configured(query_edw는 그대로) · 값: 경로 · 예: /app/output/edw_meta
   edw_query:
-    enabled: true                         # query_edw 도구 스위치 · 비우면 true · 값: true·false
     max_rows: 1000                        # query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽) · 비우면 1000 · 값: 0 이상 정수
 
 ops:
@@ -213,12 +203,10 @@ ops:
     run_docs_dir:                         # 문서별 flow 러너(deploy/host/scripts/run_docs.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) · 비우면 run_docs.py 옆 test_space/ · 값: 경로
   mcp_host:
     cpus: 1.0                             # mcp-server 컨테이너 CPU 한도(compose cpus) · 비우면 1.0 · 값: 0 이상
-    jobs_dir:                             # MCP parse_document 업로드 작업 폴더(공유 볼륨) · 비우면 <결과 폴더>/_mcp_parse/jobs · 값: 경로
     mem_limit: 4g                         # mcp-server 컨테이너 메모리 한도(compose mem_limit) · 비우면 4g · 값: 글자
   # ─── 상주 서비스 — 트리거·parse MCP ───
   services:
     data_parsing:
-      jobs_dir:                           # parse MCP 서비스 작업 기록 폴더 · 비우면 <서비스 폴더>/jobs · 값: 경로
       roots:                              # parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) · 비우면 <서비스 폴더>/inbox · 값: 쉼표 목록 또는 YAML 목록 · 예: /app/output/_mcp_parse/inbox,/data/docs
   # ─── 새벽 배치 ───
   nightly:
@@ -238,6 +226,23 @@ ops:
     medium_shared: 1                      # medium 레인 공유 워커 수(medium 먼저, 비면 다른 레인) · 비우면 1 · 값: 0 이상 정수
     vlm_dedicated: 1                      # vlm 레인 전담 워커 수(vlm 문서만) · 비우면 1 · 값: 0 이상 정수
     vlm_shared: 1                         # vlm 레인 공유 워커 수(vlm 먼저, 비면 다른 레인) · 비우면 1 · 값: 0 이상 정수
+    vlm_concurrency: 8                    # light·medium 문서 하나의 VLM 동시 요청 수(VLM_MAX_CONCURRENCY·VLM_CONCURRENCY로 넘김) · 비우면 8 · 값: 0 이상 정수
+    vlm_lane_concurrency: 6               # vlm 레인 문서 하나의 VLM 동시 요청 수(vlm_cap 문서가 GPU 서버를 나눔) · 비우면 6 · 값: 0 이상 정수
+    figures_max: 10                       # 문서당 그림 VLM 상한(VLM_FIGURES_MAX) · 비우면 10 · 값: 0 이상 정수
+    parse_post: supsub,charts,figures,context,attachments  # light·medium 문서의 후처리 목록(PARSE_POST) · 비우면 supsub,charts,figures,context,attachments · 값: 글자
+    vlm_lane_post: supsub,charts,figures,context,attachments,vlm_page  # vlm 레인 문서의 후처리 목록(PARSE_POST — vlm_page는 스캔 쪽만 VLM 전사, 쪽 상한 없음) · 비우면 supsub,charts,figures,context,attachments,vlm_page · 값: 글자
+    rapidocr_page_workers: 2              # rapidocr 쪽 병렬 스레드 수(RAPIDOCR_PAGE_WORKERS) · 비우면 2 · 값: 0 이상 정수
+    ocr_threads: 1                        # rapidocr onnxruntime 스레드 수(OCR_THREADS) · 비우면 1 · 값: 0 이상 정수
+    pipe_procs: 4                         # 문서 하나의 엔진 묶음 병렬 프로세스 수(PIPE_PROCS) · 비우면 4 · 값: 0 이상 정수
+    fetch_workers: 2                      # 원본 받기 스레드 수(SOURCE_FETCH_WORKERS) · 비우면 2 · 값: 0 이상 정수
+    rep_select: first                     # 대표 엔진 선택 방식(PARSE_REP_SELECT — first·acc·best) · 비우면 first · 값: 글자
+    qa_light: true                        # 풀문서 CER·순서 비교 생략(PARSE_QA_LIGHT) · 비우면 true · 값: true·false
+    scan_rotate: false                    # 스캔 PDF 쪽 방향 바로잡기 · 비우면 false · 값: true·false
+    cpu_gate: 1.3                         # light 밖 레인의 파싱 CPU 게이트(CPU_MAX_LOAD — 명령 인자 --cpu-gate가 덮음) · 비우면 1.3 · 값: 0 이상
+    light_cpu_gate: 9.0                   # light 레인 CPU 게이트(CPU_MAX_LOAD — 높게 두어 바로 소화) · 비우면 9.0 · 값: 0 이상
+    embed_concurrency: 6                  # 구조화·적재 임베딩 호출 병렬 수(EMBED_CONCURRENCY) · 비우면 6 · 값: 0 이상 정수
+    embed_batch: 32                       # 임베딩 한 번에 보내는 청크 수(EMBED_BATCH) · 비우면 32 · 값: 0 이상 정수
+    bm25_threads: 3                       # BM25 계산 스레드 수(BM25_THREADS) · 비우면 3 · 값: 0 이상 정수
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 # tuning — 거의 바꾸지 않는 값(분류별 — 결과 파라미터·내부 상한·제한 시간·자원 세부값). 비우면 코드 기본값 — 보통 비워 둔다.
@@ -297,8 +302,6 @@ tuning:
       parse_cache_max_gb: 5.0             # 재판독 중간 캐시 3종 합계 용량 상한(GB, 넘으면 오래된 것부터 삭제, 0=끔) · 비우면 5.0 · 값: 0 이상 (0 = 끔)
     ocr:
       table_grid: true                    # OCR 박스 좌표로 표 격자를 추정할지(=0이면 끔) · 비우면 true · 값: true·false
-    prepare:
-      link: auto                          # 회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy · 비우면 auto · 값: auto·hardlink·symlink·copy 중 하나
   # ─── 변환 — 그림 고르기·그림 분류·청크·임베딩 ───
   transform:
     figures:
@@ -409,12 +412,8 @@ dev:
     pg:
       standin_dir:                        # PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더 · 비우면 <루트>/output/pg_standin · 값: 경로
       standin_schema: ai                  # 로컬 대체 DB(sqlite)의 스키마 이름 · 비우면 ai · 값: 글자
-  load:
-    pg_create_extension: false            # deploy 때 vector 확장 직접 생성 시도 · 비우면 false · 값: true·false
   # ─── 가짜 LLM·시험 하네스 ───
   llm_fake: false                         # 1이면 LLM 호출을 네트워크·캐시 없는 모의 응답으로 대체(시험·비용 추정용) · 비우면 false · 값: true·false
-  pipeline:
-    check_env_any_py: false               # check_env가 시스템 python에서도 멈추지 않고 계속할지(=1 계속 / 그 외 중단) · 비우면 false · 값: true·false
   # ─── 평가 ───
   mcp:
     mcp_url: http://127.0.0.1:8765/mcp    # 검증 페이지가 붙을 MCP 서버 URL · 비우면 http://127.0.0.1:8765/mcp · 값: URL

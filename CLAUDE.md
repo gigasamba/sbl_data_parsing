@@ -129,7 +129,7 @@ uv pip install --python .venv/bin/python -r deploy/docker/requirements-core.txt 
 export PYTHONPATH=$PWD            # 명령은 저장소 루트에서 실행(자식 프로세스가 다른 폴더에서 실행될 때도 찾도록 절대 경로)
 .venv/bin/python -m pipeline.config   # 어느 settings.yaml을 읽는지와 요약(비밀값은 가림)
 ```
-- 루트 `settings.yaml`에는 `required.env.run_env: local`·`required.env.run_mode: prod`, 전용 PG 접속 정보(`required.pg`), 임베딩·LLM·VLM 주소·모델·키(`required.embed`, `required.models`), (부하가 높은 PC라면) `tuning.ops.runtime.cpu_max_load`를 둔다. 예시는 README §4-2에 있다.
+- 루트 `settings.yaml`에는 `required.env.run_env: local`, 전용 PG 접속 정보(`required.pg`), 임베딩·LLM·VLM 주소·모델·키(`required.embed`, `required.models`), (부하가 높은 PC라면) `tuning.ops.runtime.cpu_max_load`를 둔다. 예시는 README §4-2에 있다.
 - 전용 pgvector 컨테이너(PG 16 + pgvector, 예: `127.0.0.1:55433`)를 쓴다. PG 접속 항목(`required.pg`)은 모두 채우거나 모두 비운다 — 일부만 채우면 시작을 거부한다(자동 탐색 없음). 다른 작업의 DB와 포트를 쓰지 않는다.
 - 백그라운드 프로세스는 PID를 파일에 남기고 **PID로만** 종료한다(`pkill -f` 패턴 금지).
 - 검색 스키마 테이블은 마이그레이션이 만든다(`dbtool up --target all --schema <이름> --bundle <묶음>` — README §4-4).

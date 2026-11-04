@@ -29,9 +29,6 @@ SI39 — 파싱 대표 결과(.md) → Object Storage 업로드 + EDW `AI.Parsin
    같은 문서를 다시 고르지 않는 것은 ParsingMeta 고르기가 맡음).
 ④ EDW = INSERT만(이름 아니라 KEY가 이미 있으면 건너뜀, 재파싱 행은 예외). UPDATE 없음
    (상태 열 UPDATE 길은 C10 10-31에 문서 대장과 함께 지움).
-⑤ `check_bucket_overlap()` — PM_BUCKET이 원천 원본이 실제로 있는 버킷과 같으면 거부. `file://`(로컬 가짜 Object
-   Storage, 시험 전용)는 이 검사를 건너뛴다. manifest에 s3 URI가 하나도 없으면(예: 폴더 전용 소스 등) 비교할
-   근거가 없어 **열려 있음(fail-open, 검사를 건너뜀)** — PM1이 버킷을 정할 때 이 경계도 함께 결정해야 한다.
 ⑥ DRM·파싱 실패(`EDW_EXCLUDED_STATUSES`)는 EDW에 넣지 않고 `render_excluded_report()`로 마크다운 보고서만.
 
 상태(parse_status) = ok · partial(교차 정확도 < criteria.json run.cross_acc_full, 지금 0.95) · failed · skipped_drm(DRM·암호 래핑) · skipped_dup(dedup
@@ -233,38 +230,6 @@ def load_reparse_keys(path):
     if not p.exists():
         raise SystemExit(f"[parsing_meta] --reparse 파일 없음 — {p}")
     return {ln.strip() for ln in p.read_text(encoding="utf-8").splitlines() if ln.strip() and not ln.strip().startswith("#")}
-
-
-def source_buckets(entries):
-    """원천 버킷들 — manifest 항목의 uri(s3://버킷/키)에서 모음. 이 실행이 실제로 읽은 원천이라 설정 env보다
-    믿을 수 있다(SI39⑤) — publish는 파싱과 다른 프로세스·다른 env로 돌 수 있어 PARSE_SOURCE가 안 보일 수 있다."""
-    out = set()
-    for e in entries:
-        uri = e.get("uri") or ""
-        if uri.startswith("s3://"):
-            out.add(uri[5:].split("/", 1)[0])
-    return out
-
-
-def check_bucket_overlap(pm_bucket, entries):
-    """PM_BUCKET이 원천 원본이 실제로 있는 버킷과 같으면 거부(SI39⑤) — 원본은 읽기만 해야 하는데 같은 버킷에
-    쓰면 실수로 원본 경로를 건드릴 위험이 있다. 1차로 manifest(entries의 uri, 늘 있음)를 보고, env(fetch_docs.py가
-    쓰는 RDB_BUCKET·오케스트레이터가 쓰는 PARSE_SOURCE)도 있으면 함께 본다(2중 확인). file://(로컬 가짜 Object
-    Storage, 시험)는 검사하지 않는다."""
-    if pm_bucket.startswith("file://"):
-        return
-    candidates = source_buckets(entries)
-    rdb_bucket = pc.cfg().connections.rdb.bucket
-    if rdb_bucket:
-        candidates.add(rdb_bucket)
-    parse_source = pc.cfg().extract.input_source or ""
-    if parse_source.startswith("s3://"):
-        candidates.add(parse_source[5:].partition("/")[0])
-    if pm_bucket in candidates:
-        raise SystemExit(
-            f"[parsing_meta] PM_BUCKET({pm_bucket})이 원천 원본 버킷과 같음(SI39⑤) — 원본을 실수로 "
-            "건드릴 위험이 있어 거부. 다른 버킷(PM_BUCKET)을 쓴다"
-        )
 
 
 def _figures_by_doc(parse_dir):
@@ -711,9 +676,6 @@ def run(a):
         if a.apply:
             raise SystemExit("[publish_parse] PM_BUCKET 필요(PM1 결정 뒤) — --apply에는 반드시 설정")
         bucket = "(PM_BUCKET 미설정 — dry-run 미리보기 값)"
-    else:
-        if not pub.bucket_skip_overlap_check:
-            check_bucket_overlap(bucket, entries)  # SI39⑤ — 원천 원본 버킷과 같으면 여기서 거부(dry-run도)
     prefix = C.publish_prefix(pub.prefix or "")  # 개발 서버 여러 벌이면 <접두>/<벌>
     upload_statuses = parse_upload_statuses(",".join(pub.upload_statuses))  # 목록 → 옛 쉼표 글자(빈 목록 = 안전 기본값)
     reparse_keys = load_reparse_keys(a.reparse)
@@ -814,7 +776,7 @@ def main(argv=None):
 if __name__ == "__main__":
     from common.config import setarg
 
-    setarg.apply()  # --set 이름=값(S9 Step A — 호스트 run_docs.py publish가 PM_BUCKET_SKIP_OVERLAP_CHECK를 넘김)
+    setarg.apply()  # --set 이름=값
     utf8_stdout()
     import sys
 

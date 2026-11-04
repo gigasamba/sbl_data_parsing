@@ -35,7 +35,7 @@
 2. 묶음 하나를 실 PG에서는 한 트랜잭션으로 적재한다(`python -m pipeline.load.pgvector_load load`) — 하나라도 실패하면 5벌 모두 되돌린다. 원천(`source_system`)이 스키마를 고른다.
 3. 이미 있는 문서(`doc.file_path` 같음)는 건너뛴다. 내용이 바뀌어도 경로가 같으면 `--replace` 없이는 건너뛴다(내용 지문 칸 없음).
 4. 적재 전 판 확인: 판 기록이 없는 기존 스키마면 경고 후 계속, 판이 낮거나 모르는 판이면 종료 2. 새 스키마면 판을 올린다. `--replace`·`faq-sync --reset`은 판 표(`alembic_version`)가 있는 우리 스키마에서만.
-5. `vector` 확장이 없으면 멈춘다 — 관리자가 한 번 `CREATE EXTENSION vector`. 직접 만들기(`dev.load.pg_create_extension`·`dbtool up --create-extension`, 기본 꺼짐)는 PC·단독 시험만.
+5. `vector` 확장이 없으면 멈춘다 — 관리자가 한 번 `CREATE EXTENSION vector`. 직접 만들기(`dbtool up --create-extension`)는 PC·단독 시험만.
 6. 본문 글자의 NUL(0x00)은 지운다. 원천 등록 시각에 시간대가 없으면 KST(+09:00)로 읽고, 형식이 틀리면 비운다.
 7. PG 접속은 필수다([ops-settings.md#op-09](ops-settings.md#op-09)).
 
@@ -102,7 +102,7 @@
 3. ParsingMeta에는 INSERT만 한다 — 키(`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뛴다. UPDATE 예외는 [pl-12](#pl-12) 규칙 3뿐.
 4. 상태 `parse_status` = `ok` · `partial`(교차 정확도 < 0.95 — [transform.md#pl-04](transform.md#pl-04)) · `failed` · `skipped_drm` · `skipped_dup` · `not_parsed` · `skipped_disk_cap`. 올리는 상태는 `tuning.load.publish.upload_statuses`(기본 `ok`·`partial`).
 5. `skipped_drm`·`failed`는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만.
-6. 게시 버킷이 원천 원본 버킷과 같으면 거부한다(`file://` 대역은 검사 안 함, 원본 위치가 s3 주소가 아니면 건너뜀). `load.publish.bucket_skip_overlap_check`가 켜지면 건너뛴다 — 지금 `run_docs`는 늘 켜서 넘긴다.
+6. 게시 버킷이 원천 원본 버킷과 같은지는 검사하지 않는다(rn-07 — `run_docs`가 늘 끄던 검사를 지움). `required.publish.bucket`을 원천 버킷과 다르게 두는 것은 운영자 몫.
 
 ### QA
 - `tests/server/pipeline/test_publish_parse.py` · `tests/server/common/test_no_deleted.py`.

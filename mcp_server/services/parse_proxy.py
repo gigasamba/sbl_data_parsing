@@ -10,10 +10,7 @@ from common.config.settings import cfg as common_cfg
 from mcp_server import config as mc
 from mcp_server.config import CFG
 
-_NO_TOKEN = (
-    "parse 서비스 토큰 없음 — settings.yaml required.tokens.parse_proxy 또는 MCP_TOKEN을 설정"
-    "(mcp-data-parsing의 DATA_PARSING_TOKEN과 같은 값, refactor.md C-44)"
-)
+_NO_TOKEN = "parse 서비스 토큰 없음 — settings.yaml required.tokens.mcp를 설정(두 컨테이너가 같은 칸을 읽음)"
 
 
 def max_bytes():
@@ -32,21 +29,18 @@ class NoToken(RuntimeError):
 
 
 def _token():
-    """PARSE_SERVICE_TOKEN, 없으면 MCP_TOKEN(서비스를 같은 값으로 띄움). 공백만인 값은 없음(S7d — DATA_PARSING_TOKEN·MCP_TOKEN과 같은 규칙).
-    둘 다 없으면 NoToken(S7d — 옛 코드 기본 토큰 삭제, D-028 ⑨). 요청마다 읽음(옛 env 읽기와 같은 시점)."""
-    c = mc.cfg()
-    tok = mc.token_text(c.parse_proxy.token) or mc.token_text(c.server.token)
+    """required.tokens.mcp(작업 서비스도 같은 칸). 없거나 공백만이면 NoToken. 요청마다 읽음."""
+    tok = mc.token_text(common_cfg().tokens.mcp)
     if not tok:
         raise NoToken(_NO_TOKEN)
     return tok
 
 
 # ── 텍스트 파싱 프록시(2026-10-21 사용자 요청) — mcp-data-parsing 컨테이너(11-03 — 옛 data-pipeline-parse)의 작업 서비스(parse_service,
-#    127.0.0.1:8766, 그 컨테이너의 주 프로세스 — 토큰은 그 컨테이너 settings.yaml
-#    settings.yaml required.tokens.data_parsing = MCP_TOKEN과 같은 값, S7e2부터 env DATA_PARSING_TOKEN은 안 읽음 — VS7e2 R-6)
+#    그 컨테이너의 주 프로세스 — 토큰은 두 컨테이너가 같은 칸 required.tokens.mcp)
 #    를 localhost HTTP로 호출 — 구조화·임베딩·EDW/OS 적재·그림[VLM] 파싱 없이 text 파싱 대표 결과만. ──
 def _parse_service(method, path, payload=None, timeout=10):
-    """parse 서비스 HTTP — 토큰은 PARSE_SERVICE_TOKEN, 없으면 MCP_TOKEN을 재사용(서비스를 같은 값으로 띄운다 — _token)."""
+    """parse 서비스 HTTP — 토큰은 _token()."""
     import urllib.request
 
     data = json.dumps(payload).encode() if payload is not None else None

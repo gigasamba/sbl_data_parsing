@@ -35,11 +35,11 @@
 1. 이미지 형식과 `.pdf_image`의 엔진은 `qwen_vlm` 하나다([transform.md#pl-03](transform.md#pl-03)).
 2. 모델 호출은 `common/ai/llm.py` `complete()`(OpenAI 호환 HTTP) 한 길이다. 앱 코드는 `litellm`·`google.adk`를 import하지 않는다(`check_modules` ④). PC 답변 점검의 여러 턴 도구 왕복만 `validation/e2e/tool_loop.py`.
 3. CPU 부하(`common/core/resources.py` `cpu_load`) = cgroup CPU 한도가 있으면 그 cgroup 사용량 증가 ÷ (한도 코어 × 지난 시간)(한도가 호스트 코어보다 크면 호스트 코어), 한도가 없거나 못 읽으면 1분 부하 평균 ÷ 호스트 코어.
-4. 지운 설정 칸은 `common/config/layout.py` `REMOVED` 표 하나에 둔다 — settings.yaml에 남아 있으면 경고만 한다.
+4. 지운 설정 칸은 표로 따로 두지 않는다 — settings.yaml에 남아 있으면 모르는 칸으로 시작 거부(`common/config/layout.py` `to_model`).
 5. 환경·서비스·모델 점검은 `common/check/checker.py` 하나다.
 
 ### QA
-- `tests/server/common/test_core_resources.py` · `tests/server/common/test_check_modules.py::test_main`(저장소 전체 ④) · `tests/server/common/test_removed_cols.py`.
+- `tests/server/common/test_core_resources.py` · `tests/server/common/test_check_modules.py::test_main`(저장소 전체 ④) · `tests/server/common/test_layout.py`.
 - Status: done
 
 <a id="pl-53"></a>

@@ -148,13 +148,13 @@ docker run -d --name sbl-mcp-pg -p 127.0.0.1:55433:5432 -v sbl_mcp_pgdata:/var/l
 
 ```yaml
 required:
-  env: {run_env: local, run_mode: prod}
+  env: {run_env: local}
   pg: {host: 127.0.0.1, port: 55433, db: rag, user: rag, password: <비밀번호>, db_schema: demo}   # 적재·검색할 스키마
   embed: {base_url: <OpenAI 호환 주소>, model: <임베딩 모델>, api_key: <키>}
 ops:
   pipeline_paths: {out_root: output/demo}        # 파이프라인 결과 폴더
 search:
-  server: {host: 127.0.0.1, port: 18769, warmup: false}
+  server: {host: 127.0.0.1, port: 18769}
 dev:                                             # PC 전용 칸(RUN_ENV=local) — 서버 settings.yaml에는 두지 않는다
   models:
     embed: {allow_external: false}               # 평소 false — 임베딩이 필요한 실행 동안만 true
@@ -166,8 +166,8 @@ tuning:
     runtime: {cpu_max_load: 5}                   # 부하가 높은 PC라면(기본 0.9에서는 계속 대기함)
 ```
 
-- 옛 배치(최상위 `common`·`pipeline`·`mcp`) 파일은 읽지 않는다 — `python -m common.config.migrate settings.yaml --out settings.new.yaml`로 바꿔 넣는다.
-- PC 전용 칸(외부 모델 허용·지출 상한·단가, 로컬 대체 DB, 시험 하네스)은 `dev` 절에 모여 있다(sample 맨 아래). 옛 자리(`common.models.guard.budget_usd` 등)에 둔 값도 읽지만 처음 읽을 때 옮길 자리를 한 번 알려 준다.
+- 옛 배치(최상위 `common`·`pipeline`·`mcp`)·옛 자리·지운 칸·모르는 칸이 있으면 시작하지 않고 그 칸 이름만 알린다 — `settings.sample.yaml`과 대조해 고친다(자리 찾기 `python -m common.config.sample --where <이름>`).
+- PC 전용 칸(외부 모델 허용·지출 상한·단가, 로컬 대체 DB, 시험 하네스)은 `dev` 절에 모여 있다(sample 맨 아래).
 - **외부 임베딩은 `allow_external: true`이고 `run_env: local`일 때만** 호출된다(서버 dev·prd는 늘 거부).
 - **LLM·VLM도 같다:** `required.models`의 `llm_*`·`vlm_*`(주소·모델·키)를 채우고 `dev.models.llm.allow_external`·`dev.models.vlm.allow_external`을 `true`로 두면 PC에서 분류(SFDC·LAS)와 그림·스캔 쪽 VLM이 외부 모델을 부른다(`run_env: local`일 때만). 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
 - **VLM 설정은 한 벌:** 스캔·이미지 문서의 VLM 엔진(`qwen_vlm`)·쪽 VLM·그림 VLM이 같은 호출과 같은 칸(`common.models.vlm.*` — 동시 수·제한 시간·재시도·`extra_body`, 해상도 `extract.ocr.dpi` 150, 쪽 상한 `transform.vlm.page_max`)을 쓴다. 생각(추론) 모델이면 `common.models.vlm.extra_body`에 생각 끄기를 넣는다(OpenRouter는 `{"reasoning": {"enabled": false}}`) — 칸 설명은 [env-guide §2](docs/operations/env-guide.md), 규칙은 PRD [pl-43](docs/prd/transform.md#pl-43).
@@ -216,7 +216,7 @@ cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본 — 파
 ```
 
 - `--source`는 원본 폴더, `--src`는 준비된 파일이 놓이는 곳(`--src`만 주면 준비된 폴더로 보고 가져오기·중복 제거를 건너뜀).
-- `run_mode: prod`면 EDW(`AI.ParsingMeta`)를 못 읽을 때 종료 4 — PC는 위처럼 `--set RDB_SQLITE=<사본>`을 준다.
+- EDW(`AI.ParsingMeta`)를 못 읽으면 서버는 종료 4, PC(local)는 받은 목록 그대로 — PC는 위처럼 `--set RDB_SQLITE=<사본>`을 준다.
 - 돌 문서가 없으면 `[parse] 이번 실행 0건 …` 한 줄을 남기고 종료 0.
 - 결과: `output/demo/parse/<엔진>/`, `output/demo/parse/_rep/`(문서마다 하나 + `_DONE.json`).
 
@@ -510,7 +510,6 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   
 | 칸 | 무엇 | 어디서 받나 | 형식 예(가짜) | 환경 | 틀리면 어디서 잡나 |
 |---|---|---|---|---|---|
 | `required.env.run_env` | 실행 환경 | 정해진 값 | `dev` · `prd` | PC·dev·prd | 모든 명령이 시작 거부 |
-| `required.env.run_mode` | 실행 모드 | 정해진 값 | `prod` | PC·dev·prd | (서버는 빠져도 EDW를 못 읽으면 종료 4) |
 | `required.pg.host`·`port`·`db`·`user`·`password`·`db_schema` | 검색 DB(pgvector) | DB 담당 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · `ai` | PC·dev·prd | `host_ctl.sh check` ① check_env · ③ migrate check |
 | `required.embed.base_url`·`model`·`api_key` | 임베딩 모델(`model`은 적재·검색 때 같아야 함) | 모델 담당(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델>` · `<비밀>` | PC·dev·prd | `host_ctl.sh check` ② ping_models |
 | `required.models.llm_*`·`vlm_*` | LLM·VLM 모델 | 모델 담당 | `http://llm.example.local:8001/v1` · `<모델>` | dev·prd | `host_ctl.sh check` ② ping_models |
@@ -520,8 +519,7 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   
 | `required.publish.bucket`·`prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두 | 운영 담당 | `rag-silver` · `parse` | PC·dev·prd | `run_docs` 시작 · publish 미리보기 |
 | `required.object_storage.endpoint`·`region`·`access_key`·`secret_key`·`verify_tls` | Object Storage(S3 호환) 접속 — `region`은 비우면 `us-east-1`, `verify_tls`는 비우면 `1`(사내 CA면 CA 파일 경로) | 스토리지 담당 | `https://os.example.local:9000` · (비움) · `<비밀>` · `<비밀>` · (비움) | dev·prd | `run_docs` 시작 · publish `--apply` |
 | `required.source.input_source`·`source_bucket`·`source_uri_prefix` | 원본 위치 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_docs` |
-| `required.tokens.mcp` | 검색 MCP 토큰 | `openssl rand -hex 24` | 48자 16진수 | dev·prd(밖에서 붙을 때 필수) | `host_ctl.sh check` ⑥ `/health` |
-| `required.tokens.data_parsing` · `parse_proxy` | `parse_document` 작업 서비스 토큰(두 칸 같은 값 — `parse_proxy`를 비우면 `mcp` 값을 씀) | 같은 명령 | 48자 16진수 | dev·prd | `parse_document` 호출이 토큰 오류 |
+| `required.tokens.mcp` | MCP 토큰 하나 — 검색 MCP와 `parse_document` 작업 서비스가 함께 씀 | `openssl rand -hex 24` | 48자 16진수 | dev·prd(밖에서 붙을 때 필수) | `host_ctl.sh check` ⑥ `/health` · `parse_document` 호출이 토큰 오류 |
 | `required.tokens.fulltext` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 48자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |
 | `required.deploy.pipeline_image` · `mcp_image` | 띄울 이미지 태그(같은 배포 묶음) | §5-0 2번 `load.sh` | dev: `data-pipeline-runtime:0.1.0` · prd: `data-pipeline:0.2.0` | dev·prd | `host_ctl.sh up`이 이미지 없음으로 멈춤 |
 | `required.deploy.doc_src` | 원본 문서 폴더 | 서버 관리자 | `/data/docs` | dev·prd | `host_ctl.sh up`이 `:?` 안내로 멈춤 |

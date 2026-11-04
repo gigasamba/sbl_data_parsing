@@ -317,20 +317,13 @@ def is_image_pdf(p):
 
 
 def place(p, dst):
-    """회전이 필요 없는 파일을 out으로 — PREPARE_LINK: auto(기본, 하드링크 → 안 되면 복사)·hardlink·symlink·copy.
-    하드링크는 디스크를 두 배로 쓰지 않음(수집 서버 원본이 많을 때). 같은 파일 시스템이 아니면 auto는 복사."""
-    mode = pc.cfg().extract.prepare.link or "auto"  # S7c — 설정 객체(기본 auto — 빈 글자도 auto)
+    """회전이 필요 없는 파일을 out으로 — 하드링크(디스크를 두 배로 쓰지 않음), 안 되면(다른 파일 시스템) 복사."""
     if dst.exists() or dst.is_symlink():
         dst.unlink()
-    if mode in ("auto", "hardlink"):
-        try:
-            return os.link(p, dst)
-        except OSError:
-            if mode == "hardlink":
-                raise
-    if mode == "symlink":
-        return dst.symlink_to(p.resolve())
-    shutil.copy2(p, dst)
+    try:
+        os.link(p, dst)
+    except OSError:
+        shutil.copy2(p, dst)
 
 
 def main():

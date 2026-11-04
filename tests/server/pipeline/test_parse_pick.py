@@ -1,6 +1,6 @@
 """C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = FileStorageMap ∖ ParsingMeta: ParsingMeta에 ok·partial(gold_version도 있음 — 사용자 11-02)·skipped_dup 행이(사용자 11-01) 있는 원본 키는 안 고르고,
 행이 없거나(새 문서·통째 실패) 다른 상태(not_parsed·skipped_disk_cap 등)면 고른다. 이름 ↔ 원본 키는 manifest.jsonl(없으면 이름 그대로). 받은 순서 그대로.
-EDW를 못 읽으면 서버(run_mode prod·RUN_ENV dev)는 종료 4, PC는 받은 목록 그대로. 임시 SQLite EDW 대역만 — 외부 접속 없음."""
+EDW를 못 읽으면 서버(RUN_ENV dev)는 종료 4, PC는 받은 목록 그대로. 임시 SQLite EDW 대역만 — 외부 접속 없음."""
 
 import json
 import tempfile
@@ -24,13 +24,11 @@ DOCS = [
 ]
 EXTRA_ROWS = [("SFDC/a/same.pdf", "ok")]
 NO_GOLD = {"SFDC/a/nogold.pdf"}  # 나머지 ok·partial 행은 gold_version을 채움
-# (RUN_ENV, RUN_MODE, EDW 대역 있음, 기대 — 이름 목록 또는 종료 코드)
+# (RUN_ENV, EDW 대역 있음, 기대 — 이름 목록 또는 종료 코드)
 CASES = [
-    ("local", None, True, [n for n, _, _, pick in DOCS if pick]),
-    ("local", "prod", True, [n for n, _, _, pick in DOCS if pick]),
-    ("local", None, False, [n for n, *_ in DOCS]),  # PC — EDW 못 읽음: 받은 목록 그대로
-    ("local", "prod", False, 4),  # run_mode prod — 멈춤
-    ("dev", None, True, 4),  # 서버 — 대역은 거부되고(RDB_SQLITE는 PC 전용) 멈춤
+    ("local", True, [n for n, _, _, pick in DOCS if pick]),
+    ("local", False, [n for n, *_ in DOCS]),  # PC — EDW 못 읽음: 받은 목록 그대로
+    ("dev", True, 4),  # 서버 — 대역은 거부되고(RDB_SQLITE는 PC 전용) 멈춤
 ]
 
 
@@ -54,11 +52,11 @@ def test_c10_pick():
     names = [n for n, *_ in DOCS]
     with tempfile.TemporaryDirectory() as tmp:
         out, edw = _fixture(tmp)
-        for run_env, mode, has_edw, want in CASES:
+        for run_env, has_edw, want in CASES:
             path = str(edw if has_edw else Path(tmp) / "none" / "edw.sqlite")
-            with COMMON.env(RUN_ENV=run_env, RUN_MODE=mode, RDB_SQLITE=path):
+            with COMMON.env(RUN_ENV=run_env, RDB_SQLITE=path):
                 try:
                     got = fetch_docs.unparsed(names, out)
                 except SystemExit as e:
                     got = e.code
-            assert got == want, (run_env, mode, has_edw, got)
+            assert got == want, (run_env, has_edw, got)
