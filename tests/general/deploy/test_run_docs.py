@@ -5,6 +5,7 @@ PC 일반 시험: `PYTHONPATH=$PWD .venv/bin/python -m pytest tests/general`."""
 import importlib.util
 import re
 import shlex
+from unittest import mock
 
 import yaml
 
@@ -342,3 +343,15 @@ def test_classify_cache_skips_probe():
             assert sh.call_args[0][0].endswith(
                 f"doc_lane_group.py {RD._img('output_root')}/_warm/{RD._warm_bin(row)} {shlex.quote(name)} 2048"
             ), name
+
+
+def test_pg_count_sums_source_schemas():
+    """문서·청크 수는 원천 스키마(<스키마>_<원천>) 5벌의 합 — 원천 목록은 검색 표 정의와 같다."""
+    from common.store.db.models.search_tables import SOURCES
+
+    assert RD.PG_SOURCES == SOURCES
+    seen = []
+    with mock.patch.object(RD, "sh", lambda cmd, timeout=0: seen.append(cmd) or (0, "3|7\n", "")):
+        with mock.patch.object(RD, "PG_SCHEMA", "rag"):
+            assert RD.pg_count() == (3, 7)
+    assert all(f"rag_{s}.doc" in seen[0] and f"rag_{s}.chunk" in seen[0] for s in SOURCES) and "rag.doc" not in seen[0], seen

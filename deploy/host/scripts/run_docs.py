@@ -895,10 +895,20 @@ def faq_first(rows, order):
     return want + [s for s in order if s not in keep]
 
 
+PG_SOURCES = (
+    "sfdc",
+    "crms",
+    "las",
+    "faq",
+    "other",
+)  # 원천 스키마 <스키마>_<원천>(search_tables.SOURCES와 같음 — 호스트 python은 common을 못 읽음)
+
+
 def pg_count():
+    """(문서 수, 청크 수) — 원천 스키마 5벌의 합. 못 세면 (0, 0)."""
+    doc, chunk = (" + ".join(f"(SELECT count(*) FROM {PG_SCHEMA}_{s}.{t})" for s in PG_SOURCES) for t in ("doc", "chunk"))
     rc, out, _ = sh(
-        f"{DOCKER} exec {PG_CONTAINER} psql -U {PG_USER} -d {PG_DB} -Atc "
-        f"'SELECT (SELECT count(*) FROM {PG_SCHEMA}.doc), (SELECT count(*) FROM {PG_SCHEMA}.chunk)'",
+        f"{DOCKER} exec {PG_CONTAINER} psql -U {PG_USER} -d {PG_DB} -Atc 'SELECT {doc}, {chunk}'",
         timeout=60,
     )  # 설정 칸(PG 컨테이너·DB·스키마)
     try:
