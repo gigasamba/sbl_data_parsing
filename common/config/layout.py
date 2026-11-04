@@ -452,7 +452,7 @@ REMOVED: dict[str, frozenset[str]] = {
             "max_image_px",
         }
     ),
-    # McpSearch(mcp_server/config.py) — 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) · agg_vocab_file 11-01(사전 파일이 코드 기본값과 같아 지움) · client 절 11-02(본문 고객 라벨 순위·하드 격리 지움 — 고객은 client_edw 거르기만, C6) · query_log 절 op-13(사용자 11-04 — 질의 기록 파일 qa_log 없앰, 질의는 DB applog.mcp_call — 옛 파일의 search.query_log가 역할 절 규칙으로 이 절에 옴) — 지운 칸·절(남으면 경고만)
+    # McpSearch(mcp_server/config.py) — 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) · agg_vocab_file 11-01(사전 파일이 코드 기본값과 같아 지움) · client 절 11-02(본문 고객 라벨 순위·하드 격리 지움 — 고객은 client_edw 거르기만, C6) · query_log 절 op-13(사용자 11-04 — 질의 기록 파일 qa_log 없앰, 질의는 DB applog.mcp_log — 옛 파일의 search.query_log가 역할 절 규칙으로 이 절에 옴) — 지운 칸·절(남으면 경고만)
     "McpSearch": frozenset(
         {
             "agg",

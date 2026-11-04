@@ -325,8 +325,8 @@ ID 모양 정규식(계약 번호·제품 코드 등). 읽는 곳: `common.core.
 | D-6 | 원천별 gold 스키마 5벌 + 기준 스키마의 공용 `doc_id_seq`(§2) — 기존 서버 데이터는 백업 뒤 다시 적재 | 첫 적재가 전체 e2e([pl-54](../prd/ops.md#pl-54))와 함께 · refactor.md C-74·C-76 |
 | D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 등록(run_docs는 `s3_key LIKE 'FAQ/%'`로 고름 — [pl-39](../prd/extract.md#pl-39)) | FAQ 행을 누가 어떻게 넣나 |
 | D-9 | 밀려난 `FileStorageMap` 행의 예외 이력 표(§3 `edw.SupersededRow` 안) — 표 이름·칸·누가 쓰나 | [pl-32](../prd/load-schema.md#pl-32) |
-| D-10 | `applog` 스키마 추가(§6) — `up`의 `CREATE SCHEMA`, `maintain`의 파티션 생성·DROP, 앱의 INSERT와 `pipe_run` UPDATE 권한. 호출량 기준 용량(`mcp_call` 행 본문 최대 약 80KB) | 새 스키마이고 로그 쓰기가 기존 PG 접속 정보를 함께 씀 |
-| D-11 | `applog.mcp_call`의 `args`·`result` 읽기 권한 분리 | 문서 본문·EDW 결과가 들어가는데(`get_doc_fulltext` 응답은 문서 원문 전체) 판에 GRANT가 없어 지금은 앱 계정이 읽을 수 있음 |
+| D-10 | `applog` 스키마 추가(§6) — `up`의 `CREATE SCHEMA`, `maintain`의 파티션 생성·DROP, 앱의 INSERT와 `pipe_run` UPDATE 권한. 호출량 기준 용량(`mcp_log` 행 본문 최대 약 80KB) | 새 스키마이고 로그 쓰기가 기존 PG 접속 정보를 함께 씀 |
+| D-11 | `applog.mcp_log`의 `args`·`result` 읽기 권한 분리 | 문서 본문·EDW 결과가 들어가는데(`get_doc_fulltext` 응답은 문서 원문 전체) 판에 GRANT가 없어 지금은 앱 계정이 읽을 수 있음 |
 | D-12 | 실제 보존 기간 약 90~120일(월 단위 DROP)이 감사·개인정보 기준에 맞는지, `dbtool maintain` 매일 예약 | 예약이 약 2개월 이상 멈추면 새 달 파티션이 없어 DB 쓰기가 실패하고 대체 파일로만 쌓임 |
 
 ## 6. applog — 로그 저장소 (pgvector PG, 스키마 `applog`, [op-01](../prd/ops.md#op-01))
@@ -335,40 +335,49 @@ gold·EDW와 별개인 로그 표다. 서버 적용 절차는 refactor.md C-79.
 
 판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/logs/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: 파일 자리 `ops.log.db_enabled`(모델 `common.log.db_enabled`, 서버 이미지 기본 켬·PC 기본 꺼짐 — op-13). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — 판과 실제 DB 대조는 `dbtool check --target applog`.
 
-- **파티션:** `mcp_call`(`ts`)·`pipe_event`(`ts_start`)는 월 단위(UTC). 이름은 `<표>_YYYYMM`. `dbtool up`과 `dbtool maintain`이 현재 달부터 3개월 치를 만든다.
+- **파티션:** `mcp_log`(`requested_at`)·`pipe_event`(`ts_start`)는 월 단위(UTC). 이름은 `<표>_YYYYMM`. `dbtool up`과 `dbtool maintain`이 현재 달부터 3개월 치를 만든다.
 - **보존:** `dbtool maintain --target applog`를 매일 실행한다. `ops.log.retention_days`(기본 90)가 지난 달의 파티션을 DROP하고 `pipe_run`은 DELETE한다. 달이 통째로 지나야 DROP되므로 파티션 표의 행은 약 90~120일 남는다.
 - **되돌리기:** `downgrade`는 막혀 있다. 지우려면 DB 담당자가 직접 한다.
 - **연결:** `pipe_event.run_id` → `pipe_run.run_id`는 외래 키가 없다(지우는 시점이 달라 짝 없는 행이 생길 수 있음). 파티션 표의 `id`는 기본 키가 시각과 묶여 있어 그것만으로는 고유하지 않다.
-- **기록하지 않는 값:** 접속 IP와 MCP `clientInfo`(`args`에서도 뺌).
+- **기록하지 않는 값:** MCP `clientInfo`(사용자 11-02, `args`에서도 뺌). 접속 IP는 11-04에 `mcp_log.client_ip`로 되살렸다(사용자 11-04).
 
-### applog.mcp_call
+### applog.mcp_log
 
-MCP 호출 1건당 1행. 인증 실패(`tool=http`)와 `initialize`도 행으로 남는다. 기본 키 `(id, ts)`. 색인: `ts`(BRIN) · `(user_id, ts)` · `(tool, ts)` · `request_id`. 쓰는 곳: `mcp_server/services/call_log.py`. 읽는 코드는 없다(감사 조회용). 질의 기록은 이 표뿐이다(`args`에 질문·SQL — 파일 기록 없음, op-13).
+MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. 기본 키 `(id, requested_at)`. 색인: `requested_at`(BRIN) · `(agent_id, requested_at)` · `(session_id, requested_at)` · `(knox_id, requested_at)` · `(tool_name, requested_at)` · `request_id`. 쓰는 곳: `mcp_server/services/call_log.py`(내부 행을 `_columns`가 이 칸 이름으로 바꿈). 읽는 코드는 없다(감사 조회용). 질의 기록은 이 표뿐이다(`args`에 질문·SQL — 파일 기록 없음, op-13). 이 표는 이전 이름 `mcp_call`에 인증·권한 설계안(DBML: `agent`·`agent_api_key`·`source`·`agent_source_mapping`)의 칸을 합친 것이다. 그 표들은 아직 없어서 `agent_id`·`api_key_id`는 FK 없이 자리만 있다.
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
 | id | BIGSERIAL | 일련번호(PK 일부) | DB | 없음 | 새로 |
-| ts | TIMESTAMPTZ NOT NULL | 호출 시각(기본 now, 파티션 키) | call_log | 없음 | 새로 |
-| request_id | UUID | 요청 ID(`X-Request-Id`, 없으면 서버가 만듦) | 〃 | 없음 | 새로 |
-| session_id | TEXT | `Mcp-Session-Id`. 없으면 NULL | 〃 | 없음 | 새로 |
-| tool | TEXT | 도구 이름 | 〃 | 없음 | 새로 |
-| agent | TEXT | `X-MCP-Client`(자기 신고 값) | 〃 | 없음 | 새로 |
-| user_id | TEXT | `X-MCP-User`, 없으면 `_meta.user`(자기 신고 값, 검증 안 함) | 〃 | 없음 | 새로 |
+| request_id | UUID | 요청 ID(`X-Request-Id`, 없으면 서버가 만듦) — `qa_log`와 연결 | call_log | 없음 | 새로 |
+| session_id | VARCHAR(128) | `Mcp-Session-Id`. 없으면 NULL | 〃 | 없음 | 새로 |
+| turn_id | VARCHAR(128) | 대화 턴 ID. 아직 채우는 코드 없음 | (없음) | 없음 | 새로 |
+| agent_id | SMALLINT | 인증된 Agent. `agent` 표가 생기면 FK 추가, 그 전까지 NULL | (없음) | 없음 | 새로 |
+| api_key_id | INTEGER | 요청에 쓴 API 키. `agent_api_key` 표가 생기면 `agent_api_key.id` FK 추가, 그 전까지 NULL. 키 문자열은 로그에 남기지 않음. 아직 채우는 코드 없음 | (없음) | 없음 | 새로 |
+| knox_id | VARCHAR(64) | `X-MCP-User`, 없으면 `_meta.user`(자기 신고 값, 검증 안 함) | call_log | 없음 | 새로 |
+| requested_at | TIMESTAMPTZ NOT NULL | 호출 시각(기본 now, 파티션 키) | 〃 | 없음 | 새로 |
+| finished_at | TIMESTAMPTZ | 끝난 시각 | 〃 | 없음 | 새로 |
+| duration_ms | INTEGER | 걸린 시간 | 〃 | 없음 | 새로 |
+| queue_wait_ms | INTEGER | 실행 전 대기 시간 | 〃 | 없음 | 새로 |
+| rpc_method | VARCHAR(32) CHECK | initialize·tools/list·tools/call. 인증 거부 행은 본문을 읽기 전이라 NULL. 지금 `tools/list`는 기록하지 않음 | 〃 | 없음 | 새로 |
+| tool_name | VARCHAR(64) | `tools/call`일 때만 도구 이름 | 〃 | 없음 | 새로 |
+| status | VARCHAR(16) CHECK | ok·error·denied·unauthorized·busy·timeout. `denied`는 권한 설계 전이라 아직 안 씀 | 〃 | 없음 | 새로 |
+| error_code | VARCHAR(64) | `tool_timeout`·`busy`·`invalid_key`·`tool_error`·`audit_queue_full` | 〃 | 없음 | 새로 |
+| error_message | TEXT | 오류 내용(비밀값 가림) | 〃 | 없음 | 새로 |
 | args | TEXT | 입력 JSON 앞부분(`search.audit.max_input_bytes`, 기본 16KB). 비밀값 가림. `content_b64`는 해시와 크기로 바꿈 | 〃 | 없음 | 새로 |
 | args_bytes | INTEGER | 입력 원본 크기 | 〃 | 없음 | 새로 |
 | args_truncated | BOOLEAN | 입력이 잘렸는지. 잘리면 JSON으로 안 읽힐 수 있음 | 〃 | 없음 | 새로 |
 | result | TEXT | 출력 JSON 앞부분(`search.audit.max_output_bytes`, 기본 64KB). 문서 본문·EDW 결과 포함 가능 | 〃 | 없음 | 새로 |
 | result_bytes | INTEGER | 출력 원본 크기 | 〃 | 없음 | 새로 |
 | result_truncated | BOOLEAN | 출력이 잘렸는지 | 〃 | 없음 | 새로 |
-| result_sha256 | TEXT | 출력 원본 전체의 해시 | 〃 | 없음 | 새로 |
+| result_sha256 | CHAR(64) | 출력 원본 전체의 해시 | 〃 | 없음 | 새로 |
 | result_keys | JSONB | 자르지 않는 응답 식별 정보(search `chunk_keys`, 원문 도구 `doc_keys`·파일 요약, `row_count` 등) | 〃 | 없음 | 새로 |
-| status | TEXT CHECK | ok·error·busy·timeout·unauthorized | 〃 | 없음 | 새로 |
-| err | TEXT | 오류 내용(비밀값 가림) | 〃 | 없음 | 새로 |
-| queue_wait_ms | INTEGER | 실행 전 대기 시간 | 〃 | 없음 | 새로 |
-| duration_ms | INTEGER | 걸린 시간 | 〃 | 없음 | 새로 |
-| app_version | TEXT | 앱 버전 | 〃 | 없음 | 새로 |
+| result_count | INTEGER | 돌려준 근거 수·행 수. 아직 채우는 코드 없음(`result_keys`에 있음) | (없음) | 없음 | 새로 |
+| client_ip | INET | 접속 소켓 주소(프록시 뒤면 프록시 IP). stdio는 NULL | call_log | 없음 | 새로 |
+| app_version | VARCHAR(32) | 앱 버전 | 〃 | 없음 | 새로 |
 
-과부하로 감사 대기열이 차면 `args`·`result` 없는 행이 남고, 기록기 큐까지 차면 행 없이 건수로만 집계된다(호출 1건 = 1행의 예외).
+`session_id`·`knox_id`·`tool_name`·`app_version`은 길이를 넘으면 `call_log._columns`가 자른다(넘으면 배치 INSERT가 통째로 실패해 파일 대체 기록으로 간다).
+
+과부하로 감사 대기열이 차면 `args`·`result` 없는 행이 남고(`error_code=audit_queue_full`), 기록기 큐까지 차면 행 없이 건수로만 집계된다(호출 1건 = 1행의 예외, 사용자 11-01).
 
 ### applog.pipe_run
 

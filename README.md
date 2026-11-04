@@ -518,7 +518,7 @@ tail -f <run_docs 작업 폴더>/batch_progress/progress.log              # 문�
 tail -n 50 <결과 폴더>/_docflow/<seq>/structure.log                    # 그 문서의 구조화·적재 출력 — 문서가 끝나면 지워짐(남기려면 run_docs --no-cleanup)
 ```
 
-**로그는 Postgres(`applog` 스키마 — [op-01](docs/prd/ops.md#op-01))에 남는다.** 서버(두 이미지)는 `ops.log.db_enabled` 기본 켬이라 `migrate up --target all`(applog 포함)이 먼저다. DB에 못 쓰면 그 행만 `<결과 폴더>/logs/`에 JSON Lines로 남는다. 사람이 보는 실행 출력은 컨테이너 로그(`podman logs <컨테이너>`·`dc.sh logs`), MCP 호출(질문·SQL 포함)은 `applog.mcp_call`이다.
+**로그는 Postgres(`applog` 스키마 — [op-01](docs/prd/ops.md#op-01))에 남는다.** 서버(두 이미지)는 `ops.log.db_enabled` 기본 켬이라 `migrate up --target all`(applog 포함)이 먼저다. DB에 못 쓰면 그 행만 `<결과 폴더>/logs/`에 JSON Lines로 남는다. 사람이 보는 실행 출력은 컨테이너 로그(`podman logs <컨테이너>`·`dc.sh logs`), MCP 호출(질문·SQL 포함)은 `applog.mcp_log`이다.
 
 **적재 거부 — 임베딩 모델이 다른 묶음(pl-51).** 묶음의 임베딩 모델이 검색 스키마에 이미 적재된 문서의 모델과 다르면 적재는 아무것도 쓰지 않고 종료 2(`[load] 임베딩 모델이 다름 — 적재 거부 …`). `applog.pipe_event`에 남는다:
 

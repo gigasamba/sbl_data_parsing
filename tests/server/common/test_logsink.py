@@ -24,11 +24,11 @@ def test_db_fallback():
 
     with tempfile.TemporaryDirectory() as directory:
         sink = logsink.Sink(writer=failed, fallback_dir=directory, flush_sec=60)
-        assert sink.emit("mcp_call", {"args": '{"token": "never-store-secret"}', "result_keys": {"password": "never-store-secret"}})
+        assert sink.emit("mcp_log", {"args": '{"token": "never-store-secret"}', "result_keys": {"password": "never-store-secret"}})
         sink.close()
         sink.close()
         rows = _rows(directory)
-        assert len(rows) == 1 and rows[0]["table"] == "mcp_call"
+        assert len(rows) == 1 and rows[0]["table"] == "mcp_log"
         assert "never-store-secret" not in json.dumps(rows)
         assert sink.stats()["fallback"] == 1 and sink.stats()["dropped"] == 0
 
@@ -114,7 +114,7 @@ def test_setting_rows():
             raise RuntimeError("offline")
 
         sink = logsink.Sink(writer=failed, fallback_dir=directory, flush_sec=60)
-        assert sink.emit("mcp_call", {"args": json.dumps({"nested": [secret]}), "result": secret, "err": secret})
+        assert sink.emit("mcp_log", {"args": json.dumps({"nested": [secret]}), "result": secret, "error_message": secret})
         sink.close()
         assert len(_rows(directory)) == 1 and secret not in json.dumps(_rows(directory))
 

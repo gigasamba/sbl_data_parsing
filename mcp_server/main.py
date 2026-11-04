@@ -32,7 +32,7 @@
   루프백이 아니면 DNS 리바인딩 보호도 기본 켬(L8 — SDK TransportSecuritySettings, MCP_HOST[+포트]만 자동 허용 · 어긋난
   Host는 421·Origin은 403 · MCP_ALLOWED_HOSTS(쉼표 목록)로 추가 호스트) ·
   호출자(X-MCP-Client 머리글)는 감사 기록의 agent로 · 결과 크기 상한 MCP_MAX_CHARS(기본 20000자).
-질의 기록: 파일 없음 — 호출마다 DB applog.mcp_call 한 행(입력 args에 질문·SQL, 결과 키 — op-01 · op-13).
+질의 기록: 파일 없음 — 호출마다 DB applog.mcp_log 한 행(입력 args에 질문·SQL, 결과 키 — op-01 · op-13).
 동시 접속(S12): 도구는 스레드로 돌림(MCP_MAX_CONCURRENCY 기본 8) · PG는 연결 풀(PG_POOL_MAX 기본 8) · GET /health(토큰 없이, 프로세스·준비 여부·적재 버전 ·
   MC1 — 기동 때 예열이 백그라운드로 도는 동안은 503 {"warming": true}, 끝나면 200 {"ready": true}, 예열 실패는 200 + {"warning": "warmup_failed"}(서버는 안 죽음),
   MCP_WARMUP=0으로 끔·기본 켬) ·
@@ -170,15 +170,16 @@ def build_guarded_app(host, port, token):
         if scope["type"] != "http" or scope.get("path") == "/health":
             return await inner(scope, receive, send)
         hdr = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
+        client_ip = (scope.get("client") or (None,))[0]  # 소켓 주소 — 프록시 뒤면 프록시 IP다
         if token and not hmac.compare_digest(
             (hdr.get("authorization") or "").encode(), f"Bearer {token}".encode()
         ):  # 인증 실패는 본문 수신을 기다리지 않고 바로 거부한다.
-            with call_log.request_context(hdr) as context:
+            with call_log.request_context(hdr, client_ip) as context:
                 await anyio.to_thread.run_sync(call_log.unauthorized)
                 return await JSONResponse({"error": "unauthorized"}, status_code=401, headers={"X-Request-Id": context["request_id"]})(
                     scope, receive, send
                 )
-        with call_log.request_context(hdr) as context:
+        with call_log.request_context(hdr, client_ip) as context:
             # SDK가 받는 ASGI 청크를 즉시 그대로 전달한다. 감사용 사본은 최대 1MiB.
             # 큰 요청은 _meta/initialize 추출만 생략하며 도구 입력/제한은 바꾸지 않는다.
             metadata_limit = 1024 * 1024

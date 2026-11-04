@@ -86,8 +86,8 @@
 - Status: done
 
 <a id="mc-13"></a>
-## mc-13 · 질의 기록은 DB `applog.mcp_call`만
-- 규칙: 질의 기록 파일은 없다(사용자 11-04 — op-13 규칙 7). MCP 호출마다 `applog.mcp_call` 한 행(op-01)이 질문·SQL(`args`)과 근거 키(`result_keys`)를 남긴다. `search.query_log` 칸은 지웠다(옛 설정 파일에 남으면 경고만). MCP를 거치지 않는 PC 명령 `mcp_server.cli.ask`는 기록하지 않는다.
+## mc-13 · 질의 기록은 DB `applog.mcp_log`만
+- 규칙: 질의 기록 파일은 없다(사용자 11-04 — op-13 규칙 7). MCP 호출마다 `applog.mcp_log` 한 행(op-01)이 질문·SQL(`args`)과 근거 키(`result_keys`)를 남긴다. `search.query_log` 칸은 지웠다(옛 설정 파일에 남으면 경고만). MCP를 거치지 않는 PC 명령 `mcp_server.cli.ask`는 기록하지 않는다.
 - 파일: `mcp_server/services/call_log.py` · `mcp_server/services/search/search_svc.py` · `mcp_server/services/edw_query.py`.
 - QA: `tests/server/common/test_removed_cols.py`(옛 `search.query_log` 칸은 경고만) · `tests/server/mcp/test_call_log.py` · 통과.
 - Status: done

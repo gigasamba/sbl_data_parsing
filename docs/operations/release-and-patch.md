@@ -322,7 +322,7 @@ tail -f <작업 폴더>/batch_progress/progress.log                             
 | 5 | `versions.md`에 한 줄 · 되돌리기가 필요 없어진 뒤 `prune_old.sh --apply` | 서버 운영·devops | §6 |
 | 6 | `query_edw` — 실제 업무 SELECT 몇 개(JOIN·`WITH`·대괄호 이름·한글 별칭·`TOP`)를 부른다. 기대: 행이 오거나 행·시간 상한 안내만. 정상 SELECT가 `rejected:*`로 거부되면 SQL과 오류 코드를 `issues.md`에 | 서버 운영 | — |
 | 7 | `edw_meta` — 서버 카탈로그(`search.edw_meta.dir`의 `catalog.json`)에서 이름 끝에 공백이 있는 표를, 그 이름 그대로와 공백을 뺀 이름으로 각각 부른다. 기대: 둘 다 같은 표의 칸 목록 | 서버 운영 | — |
-| 8 | 로그 DB — `search` 한 번 뒤 `applog.mcp_call`에 그 호출 한 행(`args`에 질문), `<루트>/output/logs/`가 비어 있음(있으면 DB 쓰기 실패 — 파일 안 오류 확인) | 서버 운영 | C-79 |
+| 8 | 로그 DB — `search` 한 번 뒤 `applog.mcp_log`에 그 호출 한 행(`args`에 질문), `<루트>/output/logs/`가 비어 있음(있으면 DB 쓰기 실패 — 파일 안 오류 확인) | 서버 운영 | C-79 |
 
 ### 8-5. 되돌리기(0.2.0 → 0.1.0)
 

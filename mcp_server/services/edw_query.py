@@ -643,7 +643,7 @@ def _row_budget(max_rows):
 
 def query(sql, max_rows=1000):
     """Run one read-only SELECT/WITH against EDW and return a JSON-safe result (see QueryResult).
-    The call (SQL in args, result) is recorded by the MCP audit log applog.mcp_call (op-01), not here."""
+    The call (SQL in args, result) is recorded by the MCP audit log applog.mcp_log (op-01), not here."""
     t0 = time.monotonic()
     kind, conf = backend()
     if kind is None:

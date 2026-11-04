@@ -3,37 +3,60 @@ pipe_run은 실행당 한 행으로 작아 일반 테이블(run_id PK)로 두고
 실행 중 DDL 금지: 생성/보존 관리는 Alembic과 dbtool maintain만 사용한다.
 """
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, DateTime, Float, Index, Integer, MetaData, Table, Text, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import (
+    CHAR,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    Index,
+    Integer,
+    MetaData,
+    SmallInteger,
+    String,
+    Table,
+    Text,
+    text,
+)
+from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
 
-PARTITION_KEYS = {"mcp_call": "ts", "pipe_event": "ts_start"}
+PARTITION_KEYS = {"mcp_log": "requested_at", "pipe_event": "ts_start"}
 JSON_COLUMNS = {"result_keys", "code_fp", "metrics"}
 
 
 def log_metadata(schema="applog"):
     md = MetaData(schema=schema)
     specs = {
-        "mcp_call": {
+        "mcp_log": {
             "id": BigInteger,
-            "ts": DateTime(timezone=True),
             "request_id": UUID,
-            "session_id": Text,
-            "tool": Text,
-            "agent": Text,
-            "user_id": Text,
+            "session_id": String(128),
+            "turn_id": String(128),
+            "agent_id": SmallInteger,
+            "api_key_id": Integer,
+            "knox_id": String(64),
+            "requested_at": DateTime(timezone=True),
+            "finished_at": DateTime(timezone=True),
+            "duration_ms": Integer,
+            "queue_wait_ms": Integer,
+            "rpc_method": String(32),
+            "tool_name": String(64),
+            "status": String(16),
+            "error_code": String(64),
+            "error_message": Text,
             "args": Text,
             "args_bytes": Integer,
             "args_truncated": Boolean,
             "result": Text,
             "result_bytes": Integer,
             "result_truncated": Boolean,
-            "result_sha256": Text,
+            "result_sha256": CHAR(64),
             "result_keys": JSONB,
-            "status": Text,
-            "err": Text,
-            "queue_wait_ms": Integer,
-            "duration_ms": Integer,
-            "app_version": Text,
+            "result_count": Integer,
+            "client_ip": INET,
+            "app_version": String(32),
         },
         "pipe_run": {
             "run_id": UUID,
@@ -100,16 +123,21 @@ def log_metadata(schema="applog"):
             kw = {"primary_key": key in pk}
             if key == "id":
                 kw["autoincrement"] = True
-            if key in ("ts", "ts_start", "started_at"):
+            if key in ("requested_at", "ts_start", "started_at"):
                 kw.update(nullable=False, server_default=text("now()"))
             cols.append(Column(key, type_, **kw))
         table = Table(name, md, *cols, **({"postgresql_partition_by": f"RANGE ({partition})"} if partition else {}))
-        if name == "mcp_call":
-            table.append_constraint(CheckConstraint("status IN ('ok','error','busy','timeout','unauthorized')", name="mcp_call_status"))
-            Index("ix_mcp_call_ts", table.c.ts, postgresql_using="brin")
-            Index("ix_mcp_call_user_ts", table.c.user_id, table.c.ts)
-            Index("ix_mcp_call_tool_ts", table.c.tool, table.c.ts)
-            Index("ix_mcp_call_request", table.c.request_id)
+        if name == "mcp_log":
+            table.append_constraint(
+                CheckConstraint("status IN ('ok','error','denied','unauthorized','busy','timeout')", name="mcp_log_status")
+            )
+            table.append_constraint(CheckConstraint("rpc_method IN ('initialize','tools/list','tools/call')", name="mcp_log_rpc_method"))
+            Index("ix_mcp_log_time", table.c.requested_at, postgresql_using="brin")
+            Index("ix_mcp_log_agent_time", table.c.agent_id, table.c.requested_at)
+            Index("ix_mcp_log_session_time", table.c.session_id, table.c.requested_at)
+            Index("ix_mcp_log_knox_time", table.c.knox_id, table.c.requested_at)
+            Index("ix_mcp_log_tool_time", table.c.tool_name, table.c.requested_at)
+            Index("ix_mcp_log_request", table.c.request_id)
         elif name == "pipe_event":
             table.append_constraint(CheckConstraint("status IN ('ok','fail','timeout','skip','reused')", name="pipe_event_status"))
             table.append_constraint(CheckConstraint("err_kind IN ('env','timeout','doc','external','db')", name="pipe_event_err_kind"))

@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
 
-PARENTS = {"mcp_call": "ts", "pipe_event": "ts_start"}
+PARENTS = {"mcp_log": "requested_at", "pipe_event": "ts_start"}
 _SCHEMA = re.compile(r"[a-z_][a-z0-9_]{0,62}")
 
 

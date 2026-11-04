@@ -1,6 +1,6 @@
 """비차단 applog sink: 메모리 큐 → 데몬 스레드 → 배치 INSERT, 장애 시 jsonl.
 
-    emit("mcp_call", {"ts": datetime.now(UTC), "request_id": uuid, ...})
+    emit("mcp_log", {"requested_at": datetime.now(UTC), "request_id": uuid, ...})
     emit("pipe_run", {"run_id": uuid, "started_at": ..., ...})
     emit("pipe_event", {"ts_start": ..., "run_id": uuid, ...})
 
@@ -30,7 +30,7 @@ from pathlib import Path
 from common.config.settings import cfg
 from common.core import exitclean, paths
 
-_TABLES = ("mcp_call", "pipe_run", "pipe_event")
+_TABLES = ("mcp_log", "pipe_run", "pipe_event")
 _SINGLETON = None
 _SINGLE_LOCK = threading.Lock()
 _WARN_LOCK = threading.Lock()
