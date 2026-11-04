@@ -11,7 +11,7 @@ set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트(S6b)
 . deploy/host/scripts/load_settings.sh && load_settings || exit $?   # S7e1 — compose 치환(MCP_SERVER_IMAGE·RAG_OUT)과 /health 주소 — 값은 출력하지 않음
 code0=${CODE_DIR:-}   # 사람·unit이 준 값(code_dir_default 전) — 파이프라인 컨테이너는 자기 이미지로 따로 정함(아래)
-. deploy/host/scripts/in_container.sh; need_image mcp || exit 2; code_dir_default MCP_SERVER_IMAGE   # op-06 — 실행 이미지면 코드 폴더 루트 · S6b — compose.mcp-server.yml은 MCP_SERVER_IMAGE만 봄(옛 DATA_RETRIEVAL_IMAGE·RAG_IMAGE만 있으면 종료 코드 2)
+. deploy/host/scripts/in_container.sh; code_dir_default MCP_SERVER_IMAGE   # op-06 — 실행 이미지면 코드 폴더 루트 · S6b — compose.mcp-server.yml은 MCP_SERVER_IMAGE만 봄
 files="-f deploy/host/compose/compose.mcp-server.yml"
 [ -n "${CODE_DIR:-}" ] && files="$files -f deploy/host/compose/compose.code.mcp-server.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 컨테이너 코드 자리에
 [ -d app ] && echo "[mcp_keepalive] 경고: 코드 폴더에 옛 오버레이 app/이 남아 있음 — 11-03부터 쓰지 않음(덧씌우기 compose 지움, 이미지·코드 폴더 코드로 뜸)" >&2
