@@ -592,45 +592,31 @@ def _class_save(cache):
 
 
 def classify_doc(seq, row, cache=None):
-    """OCR 필요도 사전 분류(2026-10-22 사용자 지정, 2026-10-23 확장) —
-    · 텍스트형(txt/html/eml 등): 즉시 light
-    · PDF: 첫 3쪽 텍스트 레이어 평균 300자 → 스캔 판정(heavy)
-    · 오피스 zip(docx/xlsx/xlsm/pptx 등): 내장 media ≥ 8개 또는 ≥ 800KB → heavy(이미지 많은 docx 사용자 지적)
-    · probe 결과 마지막 줄만 판독(fitz 경고 오염 방지) · 실패는 보수적 heavy · 캐시(s3_key) 우선 — 캐시에 있으면 probe(docker exec)를 안 부름.
-    캐시는 레인만 담는다: PDF의 vlm은 probe heavy일 때뿐이라 캐시의 PDF vlm = 스캔(_scan)으로 되살린다."""
+    """레인 분류(PRD rn-01) — 규칙은 컨테이너 안 pipeline/extract/doc_parsing_group.py의 doc_parsing_group() 하나.
+    캐시(s3_key) 우선 — 캐시에 있으면 docker exec를 안 부른다. 답(마지막 줄 — pymupdf 경고 섞임 방지)이 없으면 보수적으로 vlm.
+    PDF의 vlm은 내용 검사 heavy(스캔)일 때뿐이라 PDF vlm = 스캔(_scan) 표시(캐시에서 되살릴 때도 같음)."""
     import pathlib
+    import shlex
 
-    ext = pathlib.Path(row["original_filename"].rsplit("/", 1)[-1]).suffix.lower()
+    name = row["original_filename"].rsplit("/", 1)[-1]
+    is_pdf = pathlib.Path(name).suffix.lower() == ".pdf"
     if cache is not None:
         with _class_lock:
             hit = cache.get(row["s3_key"])
         if hit:
-            if ext == ".pdf" and hit == "vlm":
+            if is_pdf and hit == "vlm":
                 _scan.add(seq)
             _class[seq] = hit
             mark(seq, "classify", ocr=hit, cached=True)
             return hit
-    probe_ext = (".pdf", ".docx", ".doc", ".xlsx", ".xls", ".xlsm", ".pptx", ".ppt", ".docm")
-    # 2026-10-23 3클래스(사용자 지정) — vlm(GPU집중: 스캔/미디어/pptx) · medium(CPU집중: probe light + 크기 초과) · light
-    meta_heavy_kb = {".mht": 300, ".docx": 300, ".doc": 300, ".xlsx": 500, ".xlsm": 500, ".xls": 500, ".pdf": 1024}
-    size_kb = (row.get("file_size") or 0) // 1024
-    meta_heavy = ext in (".pptx", ".ppt") or size_kb >= meta_heavy_kb.get(ext, 1 << 30)
-    # pl-45 — 글자 형식(.tsv·.md·.json·.xml·.log·.rtf)도 light(그림 없음). 오픈문서·서식 파일은 아직 모르는 형식(vlm)
-    if ext in (".txt", ".hwpx", ".hwp", ".csv", ".eml", ".msg", ".html", ".htm", ".tsv", ".md", ".json", ".xml", ".log", ".rtf"):
-        cls = "light"
-    elif ext in probe_ext:
-        rc, out, _ = sh(
-            f"{DOCKER} exec {PIPE_C} python3 {_img('code_root')}/pipeline/extract/doc_parsing_group.py {_img('output_root')}/_warm/{_warm_bin(row)}",
-            timeout=60,
-        )
-        probe = next((ln.strip() for ln in reversed((out or "").splitlines()) if ln.strip() in ("heavy", "light")), "heavy")
-        if ext == ".pdf" and probe == "heavy":
-            _scan.add(seq)  # 2026-10-23 — OCR 대체가 필요한 스캔 PDF 표시
-        cls = "vlm" if (probe == "heavy" or ext in (".pptx", ".ppt")) else ("medium" if meta_heavy else "light")
-    else:
-        cls = (
-            "vlm"  # 모르는 형식 — 보수적으로 vlm(예산 캡 안에서 처리)                                     # 모르는 형식 — 보수적으로 heavy
-        )
+    rc, out, _ = sh(
+        f"{DOCKER} exec {PIPE_C} python3 {_img('code_root')}/pipeline/extract/doc_parsing_group.py "
+        f"{_img('output_root')}/_warm/{_warm_bin(row)} {shlex.quote(name)} {int(row.get('file_size') or 0)}",
+        timeout=60,
+    )
+    cls = next((ln.strip() for ln in reversed((out or "").splitlines()) if ln.strip() in LANES), "vlm")
+    if is_pdf and cls == "vlm":
+        _scan.add(seq)  # OCR 대체가 필요한 스캔 PDF 표시
     if cache is not None:
         with _class_lock:
             cls = cache.setdefault(row["s3_key"], cls)  # 다른 워커가 먼저 넣었으면 그 값(옛 동작과 같음)

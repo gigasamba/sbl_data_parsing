@@ -284,21 +284,30 @@ def test_faq_first(tmp_path):
 
 
 def test_classify_cache_skips_probe():
-    """A3 — 분류 캐시에 있으면 probe(docker exec)를 부르지 않는다. 캐시는 레인만 담으므로 PDF의 vlm은 스캔으로 되살린다(probe heavy일 때만 PDF가 vlm)."""
+    """A3 — 분류 캐시에 있으면 doc_parsing_group(docker exec)를 부르지 않는다. 캐시는 레인만 담으므로 PDF의 vlm은 스캔으로 되살린다.
+    캐시가 없으면 컨테이너 답의 마지막 줄(경고 줄 무시)을 쓰고, 답이 없으면 vlm(rn-01)."""
     from unittest import mock
 
-    cases = [  # (파일 이름, 캐시 값, 기대 레인, 스캔?)
-        ("a.pdf", "vlm", "vlm", True),
-        ("a.pdf", "medium", "medium", False),
-        ("a.pptx", "vlm", "vlm", False),
+    cases = [  # (파일 이름, 캐시 값, 컨테이너 답, 기대 레인, 스캔?)
+        ("a.pdf", "vlm", None, "vlm", True),
+        ("a.pdf", "medium", None, "medium", False),
+        ("a.pptx", "vlm", None, "vlm", False),
+        ("a b.pdf", "", "MuPDF warning\nvlm\n", "vlm", True),
+        ("a.docx", "", "medium\n", "medium", False),
+        ("a.txt", "", "", "vlm", False),  # 답 없음(컨테이너 실패) — 보수적으로 vlm
     ]
-    for name, cached, want, scan in cases:
+    for name, cached, out, want, scan in cases:
         RD._scan.clear()
-        row = {"s3_key": "k", "original_filename": name, "file_size": 1}
+        row = {"s3_key": "k", "original_filename": name, "file_size": 2048}
+        sh = mock.Mock(return_value=(0, out, "")) if out is not None else mock.Mock(side_effect=AssertionError("probe 불림"))
         with (
-            mock.patch.object(RD, "sh", side_effect=AssertionError("probe 불림")),
+            mock.patch.object(RD, "sh", sh),
             mock.patch.object(RD, "mark", lambda *a, **k: None),
             mock.patch.object(RD, "_class_save", lambda c: None),
         ):
-            assert RD.classify_doc(5, row, cache={"k": cached}) == want, name
+            assert RD.classify_doc(5, row, cache={"k": cached} if cached else {}) == want, name
         assert (5 in RD._scan) is scan, name
+        if out is not None:
+            assert sh.call_args[0][0].endswith(
+                f"doc_parsing_group.py {RD._img('output_root')}/_warm/{RD._warm_bin(row)} {shlex.quote(name)} 2048"
+            ), name

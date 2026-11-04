@@ -79,13 +79,13 @@
 ## rn-01 · 레인 정책 — 담당 레인 먼저, 공유 워커만 가져오기
 - 이유: 문서마다 자원 성격이 달라 레인으로 나누고, 남는 워커는 다른 레인을 돕는다.
 - 규칙:
-  1. 레인 분류(warm 때, 결과는 `s3_key`별로 저장해 다시 씀): 확장자가 `.txt .hwpx .hwp .csv .eml .msg .html .htm .tsv .md .json .xml .log .rtf`면 light. `.pdf .docx .doc .xlsx .xls .xlsm .pptx .ppt .docm`이면 컨테이너 안 `pipeline/extract/doc_parsing_group.py`(제한 60초, 답이 없으면 heavy)로 본다 — heavy이거나 `.pptx`·`.ppt`면 vlm(heavy PDF는 스캔 표시), 아니면 크기 기준(`.mht .docx .doc` 300KB · `.xlsx .xlsm .xls` 500KB · `.pdf` 1024KB 이상)을 넘으면 medium, 그 밖 light. 다른 확장자는 vlm.
+  1. 레인 분류(warm 때, 결과는 `s3_key`별로 저장해 다시 씀): `run_docs.classify_doc`이 컨테이너 안 `pipeline/extract/doc_parsing_group.py`(원본 파일·원본 이름·크기 — 제한 60초)를 부르고, 규칙은 그 파일의 `doc_parsing_group()` 하나에 있다. 답이 없으면 vlm. 규칙: 확장자가 `.txt .hwpx .hwp .csv .eml .msg .html .htm .tsv .md .json .xml .log .rtf`면 light. `.pptx .ppt`면 vlm. `.pdf .docx .doc .xlsx .xls .xlsm .docm`이면 내용을 본다 — PDF는 첫 3쪽 글자가 쪽당 평균 300자 미만, 오피스 zip은 내장 그림 8개 이상 또는 합계 800,000바이트 이상, 검사 실패도 heavy → vlm(vlm PDF는 스캔 표시). 아니면 크기 기준(`.docx .doc` 300KB · `.xlsx .xlsm .xls` 500KB · `.pdf` 1024KB 이상)이면 medium, 그 밖 light. 다른 확장자는 vlm.
   2. 워커 수: settings.yaml `ops.run_docs.<레인>_dedicated`(자기 레인만)·`<레인>_shared`(자기 레인 먼저, 비면 대기열이 가장 긴 다른 레인), 기본 각 1(모두 6개).
   3. `vlm_cap`(기본 2): 진행 중 vlm 문서가 이만큼이면 vlm 레인을 건너뛴다(전담 워커도).
   4. 고르기 = 순수 함수 `pick_lane(own, shared, queues, inflight, vlm_cap)`.
   5. 시작 때 거부(종료 2): 값이 0 이상 정수가 아님 · `warm`·`warm_workers`·`vlm_cap`이 1 미만 · 전담과 모든 공유 워커 합이 0인 레인.
-- 파일: `deploy/host/scripts/run_docs.py`(`RUN_DOCS_DEFAULTS` — 설정 모델 `pipeline.config.PipelineHostRunDocs`와 시험이 대조).
-- QA: `tests/general/deploy/test_run_docs.py`(`pick_lane` 표) · 통과.
+- 파일: `deploy/host/scripts/run_docs.py`(`classify_doc`·`RUN_DOCS_DEFAULTS` — 설정 모델 `pipeline.config.PipelineHostRunDocs`와 시험이 대조) · `pipeline/extract/doc_parsing_group.py`(`doc_parsing_group`).
+- QA: `tests/general/deploy/test_run_docs.py`(`pick_lane` 표·`test_classify_cache_skips_probe`) · `tests/server/pipeline/test_doc_group.py`(그룹 규칙 표) · 통과.
 - Status: done
 
 <a id="rn-02"></a>
