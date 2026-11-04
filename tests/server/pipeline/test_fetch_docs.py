@@ -1,4 +1,4 @@
-"""pipeline.extract.fetch_docs 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.fetch_docs --selftest`."""
+"""pipeline.extract.fetch_docs 시험."""
 
 import contextlib
 import json

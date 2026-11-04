@@ -1,4 +1,4 @@
-"""pipeline.load.publish_parse_result 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.load.publish_parse_result --selftest`.
+"""pipeline.load.publish_parse_result 시험.
 S9b(C-54 ②, 사용자 10-28 — 기록만): 기대값을 지금 서버 동작에 맞춤 — 업로드 폴더에 `<stem>_<date>_meta.json`·`source.json`이 없음
 (pre-refactor 서버 사본이 일부러 뺌 — `_meta.json`은 EDW에, `source.json`은 내부용). source.json에 기대던 방어선(재실행 업로드 건너뜀
 `skip_exists`·키 충돌 거부 `error_key_collision`)은 서버에서 늘 꺼져 있어 11-02에 코드째 지움(C-54 ② — test_publish_guard도 지움). 산출물 만들기는 `make_fixture()`로."""

@@ -1,4 +1,4 @@
-"""mcp_server.services.edw_meta 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.edw_meta`."""
+"""mcp_server.services.edw_meta 시험."""
 
 import tempfile
 

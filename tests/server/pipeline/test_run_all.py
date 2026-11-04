@@ -1,4 +1,4 @@
-"""pipeline.extract.run_engines 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.run_engines --selftest`."""
+"""pipeline.extract.run_engines 시험."""
 
 import json
 import sys

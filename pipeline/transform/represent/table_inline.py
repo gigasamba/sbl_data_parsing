@@ -1,60 +1,26 @@
-"""TA1 (user request 10-15) — assemble each table region from every engine that recognized it as a table,
-and place it *in the body text* where the table actually is, instead of letting the winning (most-accurate)
-engine's own, often table-structure-losing, text stand alone while a second, separate "tables_std" grid
-sits unused at the end of the document.
-
-Problem this fixes: represent() picks ONE best engine for a whole document by text accuracy. When the best
-engine's own table extraction is weak (e.g. pymupdf prints "one cell per line" instead of a grid), the table
-rows/columns are lost from rep["text"] — the thing that actually feeds chunks, search evidence and the
-published .md — even though some *other* engine (markitdown, office_stdlib, rapidocr_ko, ...) parsed that
-same table with a proper grid. table_std.build_tables() already turns a grid into a clean structure, but it
-only ever looked at the winning engine's own tables and render_md() appended it at the very end — so the
-table showed up twice (once broken, once correct) and never in place.
-
-What this module does, called from represent() once (see hook comment in build_rep.py for why there):
-  (a) candidates = every grid-bearing table from every engine the document was tried with (ok engines only,
-      winner + the already-loaded `other_docs`) — not just the winner's.
-  (b) group_tables() — tables that are "the same table region" (same page when both sides know the page,
-      else matched purely by cell-token overlap) are grouped together.
-  (c) choose_grid() — one grid per group wins by a simple, explainable score: non-empty cell ratio
-      (completeness — a table TB6 already filled merged/covered cells into is naturally more complete) +
-      average cell-token agreement with the other grids in its group. Ties favor engine stack order.
-  (d) find_span() — a conservative, order-preserving substring search for the chosen table's cells inside
-      the *winning engine's own* body text (that is what ships) — if (almost) all non-empty cell strings can
-      be found in order on the table's page, the span from the first to the last match is the table's text
-      region; otherwise nothing is touched (recorded as unmatched, never guessed).
-  (e) the matched span is replaced with a GitHub-markdown table rendered from the chosen grid
-      (table_std.to_markdown — reused, not reimplemented) — unmatched tables are left alone in the text.
-  (f) rep["tables_std"] is rebuilt from the *chosen* grids (table_std.build_tables, same shape as before,
-      "source_engine" = whichever engine's grid won) with an added "inline" flag so render_md() knows not to
-      append it again.
-
-Merged cells: engines already fill covered (rowspan/colspan) cells with the origin value before this module
-ever sees the grid (TB6, PARSE_FILL_MERGED, _common/contract._fill_merged) — some engines also carry an
-explicit `merges` list (office_stdlib/anydoc), others (pymupdf/pdfplumber) do not and only leave the filled
-duplicates behind. reading_order_cells() below works either way (see its docstring) by detecting fill
-duplicates positionally instead of depending on `merges` being present.
-"""
+"""표 인라인 — 표로 인식한 모든 엔진의 grid를 모아 표 자리마다 하나를 고르고, 대표 본문의 그 자리에 마크다운 표로 넣는다.
+대표 엔진이 표 구조를 잃은 글(예: pymupdf의 '한 칸 한 줄')을 내도 청크·검색 근거·.md에 표가 제자리에 한 번만 들어가게 한다.
+represent()가 한 번 부른다:
+  (a) 후보 = 시도한 ok 엔진 전부의 grid 있는 표.
+  (b) group_tables(): 같은 쪽(둘 다 쪽을 알 때) 또는 칸 글자 겹침으로 같은 표 자리끼리 묶음.
+  (c) choose_grid(): 묶음마다 비지 않은 칸 비율 + 다른 grid와 칸 글자 일치로 하나 고름(동점은 엔진 순서).
+  (d) find_span(): 대표 엔진 본문에서 칸 글자를 순서대로 찾아 (거의) 다 찾으면 그 구간이 표 자리 — 아니면 손대지 않음.
+  (e) 그 구간을 table_std.to_markdown 표로 바꾼다.
+  (f) rep["tables_std"]를 고른 grid로 다시 만들고 "inline" 표시 — render_md()가 끝에 또 붙이지 않게.
+병합 칸: 엔진이 덮인 칸을 원래 값으로 채워 넘긴다. merges 목록이 없는 엔진도 있어 reading_order_cells()는 위치로 채움 중복을 찾는다."""
 
 from collections import Counter
 
 from common.core.text import normalize_value
 from pipeline.transform.represent import table_standard as table_std
 
-GROUP_JACCARD_MIN = 0.5  # ponytail: simple fixed threshold for "same table region" by content overlap when
-# page can't settle it — revisit with a real mis-grouped example before tuning further.
-MATCH_MIN_CELLS = 3  # tables with fewer non-empty cells are too easy to "find" by accident anywhere in free text.
-MATCH_MIN_RATIO = 0.9  # "(almost) all" cells, per spec — conservative: leave text alone rather than guess.
-GAP_MAX_CHARS = 20  # real-world regression (synth-wmf wmf_two_figs.docx, TA1 measure pass) — a short, common
-# cell string (e.g. "장비") can also occur earlier in an unrelated sentence/title; without
-# a per-gap bound, find_span happily jumped from that decoy match all the way to the
-# table's real location and swallowed every paragraph in between. Cells inside one real
-# table are packed closely (one line, or a few words apart) — a gap this wide between two
-# consecutive *accepted* matches means the earlier one was a decoy, not part of this table.
-SPAN_SLACK_CHARS = 200  # fixed slack added to the cell-length budget below, so a short table (little total
-# cell text) with one or two skipped/out-of-order cells still passes the ratio check.
-SPAN_SLACK_RATIO = 4  # matched span must not be more than this many times the matched cells' own length —
-# guards against an accidental match swallowing unrelated surrounding paragraphs.
+GROUP_JACCARD_MIN = 0.5  # ponytail: 쪽으로 못 가를 때 '같은 표' 내용 겹침 고정 임계값 — 잘못 묶인 실례가 나오면 조정
+MATCH_MIN_CELLS = 3  # 칸이 이보다 적으면 본문 아무 데서나 우연히 '찾아진다'
+MATCH_MIN_RATIO = 0.9  # (거의) 모든 칸 — 추측하느니 본문을 그대로 둔다
+GAP_MAX_CHARS = 20  # 받아들인 두 칸 사이 최대 간격 — 짧은 칸 글자(예 "장비")가 앞 문장에도 나오면, 이 상한 없이는
+# 그 미끼에서 실제 표까지 사이 단락을 통째로 삼켰다. 실제 표의 칸은 붙어 있다.
+SPAN_SLACK_CHARS = 200  # 칸 길이 예산에 더하는 고정 여유 — 칸 한두 개를 건너뛴 짧은 표도 통과하게
+SPAN_SLACK_RATIO = 4  # 구간이 찾은 칸 글자 길이의 이 배수를 넘으면 거부 — 주변 단락을 삼키지 않게
 
 
 def _cell_str(c):
@@ -62,15 +28,9 @@ def _cell_str(c):
 
 
 def reading_order_cells(grid):
-    """Row-major non-empty cell strings, collapsing the duplicates TB6's merge-fill (_fill_merged) leaves
-    behind: a cell equal to its immediate left neighbor (colspan fill, copied left-to-right) or to the cell
-    directly above it (rowspan fill, copied top-to-bottom) is treated as a filled duplicate, not a second
-    real cell — this is exactly the fill order _fill_merged uses, so it reverses cleanly. Works whether or
-    not the table carries an explicit `merges` list (pymupdf/pdfplumber grids never do; office_stdlib/anydoc
-    grids do, but this function does not need it).
-    A real, independent cell that *happens* to repeat its neighbor's text (coincidence, not a merge) can be
-    under-counted here — that only drops one target from the span-matching list (find_span, below), it never
-    causes a wrong replacement; being lenient this way is intentionally conservative in the safe direction."""
+    """행 순서로 비지 않은 칸 글자 — 병합 채움(_fill_merged) 중복은 뺀다: 바로 왼쪽(colspan 채움)이나 바로 위
+    (rowspan 채움) 칸과 같으면 채움 중복으로 본다(merges 목록 없이도 동작).
+    우연히 이웃과 같은 실제 칸은 빠질 수 있으나 find_span 대상이 하나 줄 뿐, 잘못 바꾸지는 않는다."""
     out = []
     for r, row in enumerate(grid):
         for c, cell in enumerate(row):
@@ -98,13 +58,9 @@ def _jaccard(a, b):
 
 
 def group_tables(candidates):
-    """candidates: [{"engine", "table", "grid"(padded), "tokens", "page"}, ...] from every ok engine's own
-    `tables` (grid-bearing ones only — gridless tables, same as table_std, are left out entirely: there is
-    no structure to score or inline). Returns a list of groups (each a list of candidates) — two candidates
-    join the same group when either their page numbers agree (both known, same number) or at least one side
-    doesn't know its page, AND their normalized cell-token sets overlap by >= GROUP_JACCARD_MIN (Jaccard).
-    Simple greedy pass (compare against each group's first member) — good enough for the handful of tables
-    a real document has; not meant for documents with hundreds of near-identical tables."""
+    """candidates: [{"engine", "table", "grid"(채운 것), "tokens", "page"}, ...] → 묶음 목록.
+    쪽이 같거나(둘 다 알 때) 한쪽이 쪽을 모르고, 칸 글자 집합 Jaccard >= GROUP_JACCARD_MIN이면 같은 묶음.
+    ponytail: 묶음 첫 표와만 비교하는 단순 탐욕 — 거의 같은 표가 수백 개인 문서용은 아님."""
     groups = []
     for cand in candidates:
         placed = False
@@ -122,10 +78,8 @@ def group_tables(candidates):
 
 
 def choose_grid(group):
-    """One grid per group — score = 0.5*completeness (non-empty cell ratio; TB6 merge-fill already pushes
-    this up for tables with real merged cells) + 0.5*agreement (average cell-token Jaccard with the group's
-    other grids — how much the other engines that also saw this table "agree" with this one). Ties keep the
-    group's original (stack/engine-loop) order. Returns (chosen_candidate, score_record)."""
+    """묶음마다 grid 하나 — 점수 = 0.5×완결성(비지 않은 칸 비율) + 0.5×일치도(묶음 안 다른 grid와 칸 글자
+    Jaccard 평균). 동점은 묶음 원래 순서(엔진 순서). 반환: (고른 후보, 점수 기록)."""
     scored = []
     for cand in group:
         total = sum(len(row) for row in cand["grid"])
@@ -140,10 +94,8 @@ def choose_grid(group):
 
 
 def _page_slice(text, page):
-    """Narrow `text` to its 1-based `page` (split on \\f, same page-break convention as the rest of
-    build_rep.py) when the page number is known and in range — otherwise search the whole text (unknown page,
-    or a page count that doesn't line up with the \\f breaks; same "don't guess boundaries" posture as
-    represent._page_texts, just without needing boxes here). Returns (offset, slice)."""
+    """text를 1부터 세는 page 쪽으로 좁힌다(\\f로 나눔) — 쪽을 모르거나 범위 밖이면 전체(경계를 추측하지 않음).
+    반환: (offset, 조각)."""
     if page is None:
         return 0, text
     pages = text.split("\f")
@@ -153,16 +105,13 @@ def _page_slice(text, page):
     return offset, pages[page - 1]
 
 
-MAX_ANCHOR_TRIES = 50  # ponytail: cap on how many occurrences of the first cell we try as a start — plenty for
-# any real document, just a safety bound against a pathological one repeating it hundreds of times.
+MAX_ANCHOR_TRIES = 50  # ponytail: 첫 칸 출현 위치를 시작점으로 시도하는 상한 — 같은 글자가 수백 번 나오는 문서 대비
 
 
 def _walk(hay, cells, anchor):
-    """Starting from `cells[0]` already found at `anchor`, walk the rest of `cells` in order with the same
-    gap rule as find_span (below): a cell found more than GAP_MAX_CHARS past the last *accepted* one is
-    treated as not found this round (not counted, search position not advanced to it). Returns
-    (matched_count, matched_char_len, start, end, bounds) — bounds is the (start, end) pair for every
-    *accepted* cell in order, used by find_span to recover any real text sitting in the gaps between them."""
+    """anchor에서 찾은 cells[0]부터 나머지 칸을 순서대로 찾는다 — 마지막으로 받아들인 칸에서 GAP_MAX_CHARS를
+    넘게 떨어진 칸은 못 찾은 것으로 친다. 반환: (찾은 수, 찾은 글자 길이, start, end, bounds) — bounds는
+    받아들인 칸마다 (start, end)로, find_span이 칸 사이 실제 글을 되살리는 데 쓴다."""
     pos = anchor + len(cells[0])
     start, end, matched, matched_len = anchor, pos, 1, len(cells[0])
     bounds = [(anchor, pos)]
@@ -171,7 +120,7 @@ def _walk(hay, cells, anchor):
         if idx == -1:
             continue
         if idx - end > GAP_MAX_CHARS:
-            continue  # too far from the last accepted cell — likely a decoy match, not this table
+            continue  # 마지막 칸에서 너무 멂 — 이 표가 아니라 미끼일 가능성
         matched += 1
         matched_len += len(cell)
         end = idx + len(cell)
@@ -180,17 +129,12 @@ def _walk(hay, cells, anchor):
     return matched, matched_len, start, end, bounds
 
 
-_TABLE_PUNCT = set(" \t\r\n|-–—·•:")  # whitespace + common table/decorative separators ("|", dashes, middots,
-# ":") — ignored when judging whether text sitting between two matched
-# cells is real content (a footnote) or just layout glue.
+_TABLE_PUNCT = set(" \t\r\n|-–—·•:")  # 공백 + 표 장식 구분자 — 찾은 두 칸 사이 글이 실제 내용(각주)인지 볼 때 무시
 
 
 def _gap_residues(hay, bounds):
-    """Review item 5 (engine-qa, 10-21) — GAP_MAX_CHARS lets up to that many characters between two matched
-    cells ride along inside the replaced span; most of the time that is just whitespace/newlines, but it can
-    be a short caption or footnote that would otherwise be silently deleted. Returns the stripped text of
-    every gap between consecutive *accepted* cells (bounds, from _walk) that is not empty and is not made up
-    only of `_TABLE_PUNCT` — i.e. the residue text find_span's caller must keep, in original order."""
+    """바꿀 구간 안 칸 사이 간격(최대 GAP_MAX_CHARS)의 글 — 대개 공백이지만 짧은 캡션·각주면 지우면 안 된다.
+    _TABLE_PUNCT만으로 된 것이 아닌 간격 글을 원래 순서로 돌려준다(호출 쪽이 보존)."""
     out = []
     for (_, prev_end), (next_start, _) in zip(bounds, bounds[1:]):
         gap = hay[prev_end:next_start].strip()
@@ -200,18 +144,11 @@ def _gap_residues(hay, bounds):
 
 
 def find_span(text, page, cells):
-    """Conservative, order-preserving search for `cells` (reading_order_cells of the winning grid) inside
-    the (page-scoped, see _page_slice) text. The first cell can be a short, common string that also occurs
-    earlier in an unrelated sentence/title (real example: a doc titled "Equipment Checklist ..." whose table
-    also starts with the word "Equipment") — trying every occurrence of cells[0] as a start (_walk, capped at
-    MAX_ANCHOR_TRIES) and keeping whichever start matches the most cells is what tells the real table's start
-    from that kind of decoy, instead of latching onto the first (wrong) occurrence and then rejecting every
-    cell after it because they all look "too far" from that wrong anchor. Returns (start, end, residues) —
-    start/end are absolute offsets into `text` covering the first matched cell through the last for the
-    best-scoring start, residues is the list of non-trivial gap text (see _gap_residues) the caller must not
-    drop when it replaces that span — or None if too few cells matched there (ratio or absolute count) or the
-    span is still implausibly loose (secondary guard against a decoy start that still "wins" by having the
-    most, but still too few, matches)."""
+    """cells(reading_order_cells)를 (쪽으로 좁힌) text에서 순서대로 보수적으로 찾는다.
+    첫 칸이 앞 제목에도 나오는 흔한 글자일 수 있어(예: 제목 "Equipment Checklist"와 표 첫 칸 "Equipment"),
+    cells[0]의 모든 출현을 시작점으로 시도해(MAX_ANCHOR_TRIES까지) 가장 많이 맞는 곳을 고른다.
+    반환: (start, end, residues) — text 기준 절대 위치와 보존할 간격 글(_gap_residues).
+    찾은 칸이 너무 적거나(비율·개수) 구간이 지나치게 느슨하면 None."""
     if len(cells) < MATCH_MIN_CELLS:
         return None
     offset, hay = _page_slice(text, page)
@@ -241,22 +178,16 @@ def _build_candidates(rep, best_engine, other_docs):
         for t in doc.get("tables") or []:
             grid = t.get("grid")
             if not grid:
-                continue  # no structure to group/score/inline — same rule table_std already uses
+                continue  # 구조가 없어 묶기·채점·인라인 불가 — table_std와 같은 규칙
             padded = table_std._pad(grid)
             cands.append({"engine": engine, "table": t, "grid": padded, "tokens": _token_set(padded), "page": t.get("page")})
     return cands
 
 
 def inline_tables(rep, best_engine, other_docs):
-    """Entry point (represent() calls this — see the hook comment in build_rep.py for where/why).
-    Mutates rep["text"] in place (span replacements only — nothing else about the text changes) and sets
-    rep["tables_std"]. Returns the info block for rep["rep"]["table_inline"].
-    Review item 5 (engine-qa, 10-21) — a replaced span can contain a short caption/footnote squeezed between
-    two matched cells (within GAP_MAX_CHARS); that text is kept, not dropped. It is put as plain line(s)
-    right after the markdown table, in the order it appeared — appending (not e.g. dropping the whole table
-    to be safe) is the one deterministic place for it: the table's own cell order is already settled by the
-    chosen grid, so there is no ambiguous "where exactly inside the table" to reinsert free text into, but
-    "right after, in original order" needs no judgment call and never reorders anything else in the document."""
+    """진입점(represent()가 부름) — rep["text"]의 표 구간만 바꾸고 rep["tables_std"]를 채운다.
+    반환: rep["rep"]["table_inline"] 정보.
+    구간 안 칸 사이의 짧은 캡션·각주는 버리지 않고 마크다운 표 바로 뒤에 원래 순서로 붙인다(결정적인 유일한 자리)."""
     candidates = _build_candidates(rep, best_engine, other_docs)
     if not candidates:
         return {"on": True, "groups": 0, "inlined": 0, "unmatched": 0, "sources": {}, "residue": 0}
@@ -264,7 +195,7 @@ def inline_tables(rep, best_engine, other_docs):
     text = rep.get("text") or ""
     groups = group_tables(candidates)
     replacements, built, sources, unmatched, residue_n = [], [], Counter(), 0, 0
-    taken = []  # already-claimed (start, end) ranges — guards against two groups fighting over the same text
+    taken = []  # 이미 차지한 (start, end) — 두 묶음이 같은 글을 두고 겹치지 않게
     for group in groups:
         chosen, _score = choose_grid(group)
         sources[chosen["engine"]] += 1
@@ -272,22 +203,19 @@ def inline_tables(rep, best_engine, other_docs):
         cells = reading_order_cells(match_cand["grid"])
         span = find_span(text, match_cand["table"].get("page"), cells)
         if span and any(not (span[1] <= s or span[0] >= e) for s, e in taken):
-            span = None  # overlap with an already-placed table — conservative: don't touch it either
+            span = None  # 이미 넣은 표와 겹침 — 손대지 않음
         entry = table_std.build_tables([chosen["table"]], chosen["engine"])
         entry = entry[0] if entry else None
         inline_ok = bool(span and entry)
         if inline_ok:
             start, end, residues = span
             known = {normalize_value(c) for row in ([entry["header"]] + entry["rows"]) for c in row}
-            residues = [r for r in residues if normalize_value(r) not in known]  # real example (merged_table.pdf,
-            # synth-realpat): reading_order_cells' merge-dedup heuristic can under-count a genuinely repeated cell
-            # (e.g. a batch id that legitimately appears twice, not from a merge) and leave it unmatched in a gap —
-            # that text is still a duplicate of a cell already shown in the table, not lost information, so it is
-            # dropped here rather than appended as a confusing stray line; only residue text that matches none of
-            # the table's own cells is kept (a real caption/footnote would not match any cell).
+            # 병합 중복 제거가 실제로 반복된 칸(예: 두 번 나오는 배치 번호)을 빠뜨려 간격 글로 남길 수 있다 —
+            # 표에 이미 있는 칸이라 버리고, 표 칸과 안 맞는 글(실제 캡션·각주)만 남긴다.
+            residues = [r for r in residues if normalize_value(r) not in known]
             md = table_std.to_markdown(entry)
             if residues:
-                md = md + "\n\n" + "\n".join(residues)  # blank line required — GFM reads lines up to a blank line as table rows (fb review)
+                md = md + "\n\n" + "\n".join(residues)  # 빈 줄 필수 — GFM은 빈 줄 전까지를 표 행으로 읽는다
                 residue_n += len(residues)
             replacements.append((start, end, md))
             taken.append((start, end))

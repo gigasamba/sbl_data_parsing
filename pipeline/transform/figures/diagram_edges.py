@@ -1,13 +1,13 @@
-"""F13 — 흐름도 화살표 edges를 규칙으로(VLM 없음, 결정적) 찾는다. 서버 증상(사용자 10-14): ① 비슷한 도식인데
+"""흐름도 화살표 edges를 규칙으로(VLM 없음, 결정적) 찾는다. 겨냥한 증상: ① 비슷한 도식인데
 "->" 류 화살표가 때론 텍스트로 들어오고 때론 안 들어옴(비결정적) ② 세로(위·아래) 화살표 인식이 약함 ③ 글자
 작음·화살표 선 얇고 짧음·저해상도. 이 모듈은 두 가지 결정적 추출기를 둔다:
 
-  vector_edges_from_page(page, bbox) — PDF 벡터 도식(vector.py가 이미 "그림 영역"으로 고른 bbox) 안의
+  vector_edges_from_page(page, bbox) — PDF 벡터 도식(vector_regions가 이미 "그림 영역"으로 고른 bbox) 안의
     get_drawings()만 다시 훑어 상자(둥근 모서리 포함 — 닫힌 l/c 경로의 둘러싼 면적이 bbox 면적의 상당 비율이면
     상자, re 기본 상자도 그대로)를 노드로, 선분·폴리라인(엘보 연결선 포함) 양 끝을 가장 가까운 상자에 붙이고,
     끝점 가까이 화살촉(① 작은 채운 다각형 또는 ② 선 끝에서 만나는 두 짧은 선분 — 열린 쉐브론)이 있는 쪽을
     head로 삼는다(가로·세로·대각선 모두 같은 규칙, ② 대응). **화살촉이 전혀 없으면 그 edge는 버린다**(읽는
-    순서 대체 없음 — 독립 검토 CONCERN: 화살표 없는 상자+직선류를 edge로 내면 눈금 있는 표·축차트·폼에서
+    순서 대체 없음 — 화살표 없는 상자+직선류를 edge로 내면 눈금 있는 표·축차트·폼에서
     헛edge가 남는다). 또한 영역 안에 이름 붙은 상자가 2개 미만이거나 화살촉이 하나도 없으면 그 영역 전체에서
     deterministic edges를 내지 않는다(영역 보호장치 — 표·폼 오탐 방지). 상자 이름은 상자 안 글자가 비어 있으면
     테두리 아래·옆 가까운 글자줄로 대체(실제 도식 관례 — 라벨이 상자 밖에 있는 스타일). 문턱은 절대 pt가 아니라
@@ -15,8 +15,8 @@
   glyph_edges(text) — 문서 글자(복사-붙임 가능한 텍스트) 안의 화살표 글자(→ ← ↑ ↓ -> <- => ⇐)로 이어진 노드
     이름 → edges(① 대응 — 글자가 있으면 항상 같은 모양으로 뽑는다).
 
-merge_edges(sources) — figure_extract.py build_records가 pptx_xml > vector > glyph > vlm 순으로 모아 **정규화한
-무방향 (from,to) 짝**으로 중복을 제거해 하나로 합친다(독립 검토 CONCERN: 방향 키로만 중복 제거하면 역방향
+merge_edges(sources) — figure_extract.build_records가 pptx_xml > vector > glyph > vlm 순으로 모아 **정규화한
+무방향 (from,to) 짝**으로 중복을 제거해 하나로 합친다(방향 키로만 중복 제거하면 역방향
 VLM edge가 결정적 edge 옆에 살아남는다 — 이제 같은 짝이면 우선순위가 더 높은 소스가 방향까지 이긴다).
 순수 함수(파일·네트워크 없음) — vlm 쪽만 모델이 이미 부른 값을 받아 쓴다."""
 
@@ -88,7 +88,7 @@ def _box_scale(boxes):
 
 def _chevron_apex(d, max_diag):
     """열린 쉐브론(화살촉 — 두 짧은 선분이 한 점(꼭짓점)에서 만남, 채움 없음, 상자보다 훨씬 작음) 판정 →
-    꼭짓점(apex) 또는 None. 독립 검토 CONCERN ① 대응 — 채운 작은 다각형 화살촉만 보던 것을 넓힘."""
+    꼭짓점(apex) 또는 None. 채운 작은 다각형 화살촉만 보던 것을 넓힘."""
     items = [it for it in d["items"] if it[0] == "l"]
     if len(items) != 2 or d.get("fill") is not None:
         return None
@@ -103,7 +103,7 @@ def _chevron_apex(d, max_diag):
                 a, b = pts[1 - i], pts[5 - j]  # 두 팔의 끝(꼭짓점 반대쪽)
                 va, vb = (a.x - pts[i].x, a.y - pts[i].y), (b.x - pts[i].x, b.y - pts[i].y)
                 la, lb = math.hypot(*va), math.hypot(*vb)
-                if min(la, lb) < 1e-6 or max(la, lb) / min(la, lb) > 1.6:  # 재검 CONCERN③ — 팔 길이가 비슷해야(표 모서리·눈금 접합 배제)
+                if min(la, lb) < 1e-6 or max(la, lb) / min(la, lb) > 1.6:  # 팔 길이가 비슷해야(표 모서리·눈금 접합 배제)
                     return None
                 ang = math.degrees(math.acos(max(-1.0, min(1.0, (va[0] * vb[0] + va[1] * vb[1]) / (la * lb)))))
                 return pts[i] if 15 <= ang <= 100 else None
@@ -153,8 +153,8 @@ def _rect_dist(r, x, y):
 
 def _box_name(r, words, label_near, boxes=()):
     """상자 r의 이름 — 안의 글자 토큰을 읽는 순서(위→아래, 왼쪽→오른쪽)로 이어 붙인다. 안이 비어 있으면
-    테두리 아래·옆 label_near(pt) 안의 가장 가까운 글자줄로 대체(실제 도식 관례 — 라벨이 상자 밖에 있는 스타일,
-    독립 검토 CONCERN ① 대응). 재검 CONCERN② — 다른 상자에 더 가깝거나 다른 상자 안에 있는 글자는 이 상자 이름으로 안 씀."""
+    테두리 아래·옆 label_near(pt) 안의 가장 가까운 글자줄로 대체(실제 도식 관례 — 라벨이 상자 밖에 있는 스타일).
+    다른 상자에 더 가깝거나 다른 상자 안에 있는 글자는 이 상자 이름으로 안 씀."""
     toks = sorted((w for w in words if r.contains(((w[0] + w[2]) / 2, (w[1] + w[3]) / 2))), key=lambda w: (round(w[1], 1), w[0]))
     name = " ".join(w[4] for w in toks).strip()
     if name:
@@ -251,7 +251,7 @@ def vector_edges_from_page(page, bbox):
     """page(fitz.Page)·bbox(fitz.Rect 호환 4값 — 보통 vector_regions.py vector_regions()가 고른 그림 영역) 안의
     get_drawings()만 다시 훑어 edges[{from,to,label}]를 돌려준다(VLM 없음, 결정적). bbox 밖 상자·선은 안 봄.
     화살촉이 없는 연결선은 버리고(읽는 순서 대체 없음), 영역에 이름 붙은 상자가 2개 미만이거나 화살촉이 하나도
-    없으면 빈 목록([])을 돌려준다(표·폼·축차트 오탐 방지 — 독립 검토 CONCERN②)."""
+    없으면 빈 목록([])을 돌려준다(표·폼·축차트 오탐 방지)."""
     import fitz
 
     r_bbox = fitz.Rect(bbox)
@@ -289,7 +289,7 @@ def vector_edges_from_page(page, bbox):
             continue
         apex = _chevron_apex(d, chevron_max_diag)
         if apex is not None:
-            heads.append((apex.x, apex.y))  # 열린 쉐브론 화살촉(독립 검토 CONCERN① 대응)
+            heads.append((apex.x, apex.y))  # 열린 쉐브론 화살촉
             continue
         line_items = [it for it in d["items"] if it[0] == "l"]
         if line_items:
@@ -314,7 +314,7 @@ def vector_edges_from_page(page, bbox):
         d1, h1 = _best_head(p1, back1, heads, head_near)
         d2, h2 = _best_head(p2, fwd2, heads, head_near)
         if d1 is None and d2 is None:
-            continue  # 화살촉이 이 선분 어느 끝에도 안 붙어 있음 — 읽는 순서 대체 없이 버린다(독립 검토 CONCERN②)
+            continue  # 화살촉이 이 선분 어느 끝에도 안 붙어 있음 — 읽는 순서 대체 없이 버린다
         tail_pt, head_pt, head_xy = (p1, p2, h2) if (d2 is not None and (d1 is None or d2 <= d1)) else (p2, p1, h1)
         a = _nearest_box(tail_pt, boxes, box_pad)
         # head 쪽 상자는 먼저 선분 끝점으로 찾고(기존 동작 — 채운 삼각형은 선이 끝나는 자리가 이미 상자 턱밑),
@@ -383,7 +383,7 @@ def norm_node(s):
 def merge_edges(sources):
     """sources = [(이름, edges), ...] 우선순위 순(앞이 우선). 중복 제거는 **정규화한 무방향 (from,to) 짝**
     기준 — 같은 상자 짝이 여러 소스에 있으면(방향이 반대라도) 먼저 나온(우선순위 높은) 소스가 방향까지 이긴다
-    (독립 검토 CONCERN③ 대응 — 전엔 방향 키로만 걸러 역방향 VLM edge가 결정적 edge 옆에 살아남았다).
+    (방향 키로만 거르면 역방향 VLM edge가 결정적 edge 옆에 살아남는다).
     → (합친 edges, 실제로 기여한 소스 이름 목록 — 우선순위 순, 이미 다른 소스가 다 차지해 하나도 못 넣은 소스는
     빠진다)."""
     chosen, order, used = {}, [], []

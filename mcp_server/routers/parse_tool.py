@@ -1,6 +1,5 @@
 """parse_document 도구 등록 — 서비스(do_parse_document)를 자체 예산 창구(_bg_long)로 부르기만.
-S5(10-26, refactor_plan 5-1 routers/ — 코디네이터 답 Q5 a)에 mcp_server/main.py build() 안에서 옮김 — 함수 이름·독스트링·서명·
-반환 형식은 MCP 도구 계약(🔒 CLAUDE.md 3절 — tools/list 바이트가 같아야 함)이라 글자 그대로 둔다(들여쓰기까지).
+함수 이름·독스트링·서명·반환 형식은 MCP 도구 계약(tools/list 바이트)이라 글자 그대로 둔다(들여쓰기까지).
 """
 
 from mcp_server.services.parse_proxy import do_parse_document

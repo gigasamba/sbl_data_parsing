@@ -1,5 +1,5 @@
-"""엔진 구성 — 파일 → 검사(이미지에 없는 엔진 거부). 서버·PC 같은 파일(사용자 11-01: struct 판 표·판 번호 STACK_VERSION 없앰 — D-031·pl-08).
-진입점(pipeline.cli·pipeline.parse_service)이 resolve()로 시작 때 검사하고, 층(run_all·attachments·represent·build_bundle)은
+"""엔진 구성 — 파일 → 검사(이미지에 없는 엔진 거부). 서버·PC가 같은 파일을 쓴다.
+진입점(pipeline.cli·pipeline.parse_service)이 resolve()로 시작 때 검사하고, 층(run_engines·mail_attachments·build_rep·build_bundle)은
 pipeline.config.stack()으로 같은 파일을 읽는다. 파일은 오버레이 패치로만 바뀐다(실행 중에는 그대로)."""
 
 import sys

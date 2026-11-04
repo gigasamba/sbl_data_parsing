@@ -1,5 +1,4 @@
-"""W9·W11 — 그림 근처 본문 후보정(캡션 연결·본문 언급·값 일치/충돌 표시) + 그림 기록을 본문 청크 한 덩어리로 렌더.
-원본: eval_hard_parse.link_context·value_check·render(설정 F_context)."""
+"""그림 근처 본문 후보정(캡션 연결·본문 언급·값 일치/충돌 표시) + 그림 기록을 본문 청크 한 덩어리로 렌더."""
 
 import re
 
@@ -9,12 +8,12 @@ PAIR = re.compile(r"(?<![A-Za-z0-9])([A-Z]{1,3}-\d{1,4})(?!\d)[^0-9A-Z]{0,12}?(\
 
 
 def sentences(doc_text):
-    """문서 본문 → 문장 목록 — 부르는 쪽이 문서마다 한 번 만들어 link_context에 넘긴다(fp-perf B4: 그림마다 문서 전체를 다시 나누던 것)."""
+    """문서 본문 → 문장 목록 — 부르는 쪽이 문서마다 한 번 만들어 link_context에 넘긴다(그림마다 문서 전체를 다시 나누지 않게)."""
     return tuple(s.strip() for s in re.split(r"(?<=[.!?。])\s+|\n", doc_text) if s.strip())
 
 
 def link_context(f, doc_text, sents=None):
-    """캡션 1개 + 본문 언급 문장 → 그림 기록에 붙일 근처 맥락. 캡션 출처를 함께. f = figures.figures()가 낸 기록 하나.
+    """캡션 1개 + 본문 언급 문장 → 그림 기록에 붙일 근처 맥락. 캡션 출처를 함께. f = figure_extract가 낸 그림 기록 하나.
     sents — sentences(doc_text)(없으면 여기서 만듦)."""
     cand = [("아래 줄", x) for x in f["after"]] + [("위 줄", x) for x in f["before"]]
     cap = next(((src, x) for src, x in cand if CAP.match(x)), None)
@@ -59,7 +58,7 @@ def value_check(rec, ctx_lines):
 
 
 def render(f, rec, ctx=None, check=None):
-    """그림 기록 → 자르지 않는 청크 1개 본문(V8) — [그림 id](종류)·캡션·요약·글자·값·연결·표·본문 언급·값 확인/충돌."""
+    """그림 기록 → 자르지 않는 청크 1개 본문 — [그림 id](종류)·캡션·요약·글자·값·연결·표·본문 언급·값 확인/충돌."""
     vals = ", ".join(f"{v.get('label')}={v.get('value')}{v.get('unit') or ''}" for v in rec.get("values") or [] if v.get("label"))
     edges = ", ".join(
         f"{e.get('from')} → {e.get('to')}" + (f"({e['label']})" if e.get("label") else "") for e in rec.get("edges") or [] if e.get("from")

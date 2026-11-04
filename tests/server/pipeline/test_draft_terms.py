@@ -1,4 +1,4 @@
-"""pipeline.transform.structure.draft_terms 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.structure.draft_terms`."""
+"""pipeline.transform.structure.draft_terms 시험."""
 
 from pipeline.transform.structure.draft_terms import collect_candidate_org_names, extract_candidate_orgs
 

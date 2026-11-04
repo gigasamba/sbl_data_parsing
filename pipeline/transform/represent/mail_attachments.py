@@ -1,9 +1,7 @@
-"""W17 — 메일(.eml·.msg) 첨부 재귀 파싱 + 인용 스레드 단락화(post feature). docs/backlog.md W17 참고.
-원본 파서 층(P0)은 그대로 두고(W10 설계), represent.py가 --src 원본(doc_path)에서 첨부를 꺼내 형식별 엔진
-(stack.json "parse" 순서, 예: .xlsx → kreuzberg/office)으로 파싱한다. 결과는 P0 원본 층(pipeline.shared.parse_run.
-raw_engine_path, 첨부 sha256 + 엔진@버전 키)에 캐시해 다시 안 돎. 대표 본문에는 `[첨부 <파일명>]` 절로 덧붙인다
-(블록으로만 덧붙임 — base_text 자체는 안 건드려 PARSE_POST=none·이 기능 OFF 시 바이트 동일 보장).
-인라인 그림(cid)은 그림 기능(figure_extract.py)이 담당 — 여기서는 image/* 첨부를 건너뛴다.
+"""메일(.eml·.msg) 후보정 — 첨부 다시 파싱 + 인용 스레드 단락화.
+원본(doc_path)에서 첨부를 꺼내 형식별 구성 엔진 순서로 파싱하고, 결과는 P0 원본 층(parse_run.raw_engine_path —
+첨부 sha256 + 엔진@버전)에 캐시해 다시 안 돈다. 대표 본문에는 `[첨부 <파일명>]` 절로만 덧붙인다(base 본문은 그대로).
+인라인 그림(cid)은 figure_extract가 맡아 image/* 첨부는 건너뛴다.
 zip 첨부는 ATTACH_MAX_DEPTH(기본 1)만큼만 풀고, 크기(ATTACH_MAX_MB 기본 20)·개수(ATTACH_MAX_N 기본 10) 상한을 넘으면 건너뜀.
 """
 
@@ -17,16 +15,15 @@ from email import policy
 from pathlib import Path
 
 from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
-from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline import config as pc
 from pipeline.shared import parse_run as P0
 from pipeline.shared.post_config import raw_root
-from pipeline.shared.vlmcall import sha  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
+from pipeline.shared.vlmcall import sha
 
 
 def attach_dir():
     """첨부 임시 파일 폴더 — PARSE_TMP의 형제(기본 output/_tmp_parse/attach). 쓰는 쪽이 파일 하나 끝낼 때마다
-    finally로 직접 지운다. APP_ROOT/output 아래 2단 이상만 허용(독립 보안 검토 BLOCKER 1 — 지우는 대상이라 범위를 좁힘,
-    op-08에 지운 pipeline/stream.py에서 옮김)."""
+    finally로 직접 지운다. 지우는 대상이라 APP_ROOT/output 아래 2단 이상만 허용."""
     tmp = Path(pc.cfg().paths.parse_tmp or (APP_ROOT / "output" / "_tmp_parse" / "stream"))
     root_out = (APP_ROOT / "output").resolve()
     rp = (tmp.parent / "attach").resolve()
@@ -40,12 +37,12 @@ def attach_dir():
 
 
 def _max_n():
-    return pc.cfg().extract.attach.max_n  # S7c — 설정 객체
+    return pc.cfg().extract.attach.max_n
 
 
 # ── 첨부 꺼내기(형식별) ───────────────────────────────────────────────────
 def _eml_attachments(path):
-    """.eml — 이름이 있는 비-이미지 부분만(이미지는 인라인 그림, figures.py가 담당이라 제외)."""
+    """.eml — 이름이 있는 비-이미지 부분만(이미지는 인라인 그림 — figure_extract가 담당)."""
     msg = email.message_from_bytes(Path(path).read_bytes(), policy=policy.default)
     out = []
     for part in msg.walk():
@@ -83,7 +80,7 @@ def _expand_zip(entry, cap):
         return [entry]
     try:
         zf = zipfile.ZipFile(io.BytesIO(entry["bytes"]))
-        infos = [zi for zi in zf.infolist() if not zi.is_dir()][: _max_n()]  # 읽기 전에 개수·풀린 크기 확인(독립 검토 10-04 — zip 폭탄)
+        infos = [zi for zi in zf.infolist() if not zi.is_dir()][: _max_n()]  # 읽기 전에 개수·풀린 크기 확인(zip 폭탄)
         cap_b, total = pc.cfg().extract.attach.max_mb * 1024 * 1024, 0
         inner = []
         for zi in infos:
@@ -114,7 +111,7 @@ def extract(doc_path):
 
 # ── 첨부 1건 파싱(+ P0 캐시) ─────────────────────────────────────────────
 def _stack_parse():
-    return pc.stack().get("parse", {})  # 엔진 구성 파일(서버·PC 같음 — 사용자 11-01)
+    return pc.stack().get("parse", {})  # 엔진 구성 파일(서버·PC 같음)
 
 
 def parse_attachment(entry, store=None):
@@ -126,7 +123,7 @@ def parse_attachment(entry, store=None):
     ext = Path(entry["name"]).suffix.lower()
     content_sha = sha(entry["bytes"])
     stack = _stack_parse()
-    # stack.json은 PDF를 .pdf_text/.pdf_image로 나눠 둠(run_all과 같은 키) — 글자층 엔진 먼저, 15자 못 넘으면 OCR 엔진
+    # stack.json은 PDF를 .pdf_text/.pdf_image로 나눠 둠(run_engines와 같은 키) — 글자층 엔진 먼저, 15자 못 넘으면 OCR 엔진
     engines = stack.get(".pdf_text", []) + stack.get(".pdf_image", []) if ext == ".pdf" else stack.get(ext, [])
     for eng in engines:
         ver = P0.engine_version(eng)
@@ -137,15 +134,15 @@ def parse_attachment(entry, store=None):
             except (OSError, ValueError):
                 pass
         adir = attach_dir()  # 강제 종료돼도 남은 파일은 다음 실행이 같은 이름으로 덮음
-        adir.mkdir(parents=True, exist_ok=True)  # 검토 MINOR 5) · 스트리밍 시작 청소가 안 건드림(재검토 6번)
+        adir.mkdir(parents=True, exist_ok=True)
         tmp = adir / f"attach-{content_sha[:12]}{ext}"
         out_json = tmp.with_suffix(tmp.suffix + ".json")
         try:
             tmp.write_bytes(entry["bytes"])
-            # 별도 프로세스 + 시간 제한(독립 검토 10-04 — 같은 프로세스에서 멈추는 엔진이 represent 전체를 세우던 위험)
+            # 별도 프로세스 + 시간 제한 — 멈추는 엔진이 대표 결과 만들기 전체를 세우지 않게
             from pipeline.extract.run_engines import _isolated
 
-            _isolated(eng, tmp, out_json, "default", pc.cfg().extract.attach.timeout)  # S7c — 설정 객체
+            _isolated(eng, tmp, out_json, "default", pc.cfg().extract.attach.timeout)
             res = json.loads(out_json.read_text(encoding="utf-8"))
         except Exception:
             continue  # 미설치·파싱 실패·시간 초과 — 스택 순서대로 다음 엔진
@@ -209,7 +206,7 @@ def thread_paragraphs(text):
     return "\n\n".join(paras)
 
 
-# ── represent.py가 부르는 진입점 ─────────────────────────────────────────
+# ── build_rep.apply_post가 부르는 진입점 ─────────────────────────────────────────
 def mail_blocks(doc_path, base_text):
     """.eml·.msg만: 인용 스레드 단락 + 첨부별 `[첨부 <파일명>]` 절 → (덧붙일 블록 목록, 통계{n, parsed, cached, sources}).
     다른 형식·오류는 (빈 목록, 0 통계)."""

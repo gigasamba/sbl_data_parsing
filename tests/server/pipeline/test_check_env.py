@@ -1,4 +1,4 @@
-"""common.check.checker env(옛 pipeline.check_env — 0.2.0 합침) 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.check_env --selftest`."""
+"""common.check.checker env 시험."""
 
 import tempfile
 from pathlib import Path

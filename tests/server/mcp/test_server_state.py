@@ -1,4 +1,4 @@
-"""mcp_server.services.search.server_state 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.server_state`."""
+"""mcp_server.services.search.server_state 시험."""
 
 from mcp_server.services.search import server_state as M
 from mcp_server.services.search.server_state import _STATE, _retriever, _warmup_bg, health_body

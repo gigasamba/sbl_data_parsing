@@ -1,5 +1,4 @@
-"""청킹(구조화 모듈) — 대표 결과 본문 → 청크(구조·고정·문장·쪽 단위) + 위치(쪽·줄·문자 범위·절) · 그래프용 개체 정규식.
-eval/stages.py(조합 실험)도 이것을 가져다 씀."""
+"""청킹(구조화 모듈) — 대표 결과 본문 → 청크(구조·고정·문장·쪽 단위) + 위치(쪽·줄·문자 범위·절) · 그래프용 개체 정규식."""
 
 import json
 import re
@@ -7,7 +6,7 @@ from pathlib import Path
 
 from common.core.meaning import strip_page_numbers
 from common.core.repfmt import _SECTION, locate  # noqa: F401 — 쪽·줄 위치 규칙(파싱 결과 형식)
-from pipeline import config as pc  # S7c — 설정 객체(pipeline 칸 CHUNK_*·PAGE_CHUNK_MAX)
+from pipeline import config as pc  # pipeline 칸 CHUNK_*·PAGE_CHUNK_MAX
 
 RE_ID = re.compile(r"\b[A-Z]{1,4}-\d{2,}(?:-\d+)?\b")
 
@@ -31,9 +30,8 @@ def load_parse_doc(parse_dir, engine, doc):
 
 
 def chunk_fixed512(doc, text, step=None, overlap=None):
-    """step·overlap 기본값은 CHUNK_SIZE·CHUNK_OVERLAP(없으면 512·64) — 실험(cli/stack_matrix.py)이 청크 길이를 바꿔 볼 수 있게.
-    인자를 안 주고 env도 없으면 전과 동일(바이트 동일 출력, 2026-10-03)."""
-    st = pc.cfg().transform.structure  # S7c — 설정 객체(CHUNK_SIZE는 기본 None — 청커마다 기본이 다름, CHUNK_OVERLAP 기본 64)
+    """step·overlap 기본값은 CHUNK_SIZE·CHUNK_OVERLAP(없으면 512·64) — 인자로 청크 길이를 바꿔 볼 수 있게."""
+    st = pc.cfg().transform.structure  # CHUNK_SIZE는 기본 None — 청커마다 기본이 다름, CHUNK_OVERLAP 기본 64
     step = step if step is not None else int(st.chunk_size if st.chunk_size is not None else 512)
     overlap = overlap if overlap is not None else int(st.chunk_overlap)
     if not text:
@@ -56,7 +54,7 @@ def _sentences(text):
 def chunk_recursive(doc, text, target=None):
     """문단 → 줄 → 문장 순으로 쪼개 target자까지 합친다(retrieve_local.py 구조 청킹 아이디어 확장).
     target 기본값은 CHUNK_SIZE(없으면 800) — chunk_fixed512와 같은 규칙."""
-    cs = pc.cfg().transform.structure.chunk_size  # S7c — 설정 객체(기본 None → 800)
+    cs = pc.cfg().transform.structure.chunk_size  # 기본 None → 800
     target = target if target is not None else int(cs if cs is not None else 800)
     if not text:
         return []
@@ -100,7 +98,7 @@ _NUM_LINE = re.compile(r"\d")
 
 
 def _cells(line):
-    """표 줄 → 칸 목록('|' 표는 그걸로, 탭 표는 탭으로) — W14 행 쪼개기·이어붙이기용."""
+    """표 줄 → 칸 목록('|' 표는 그걸로, 탭 표는 탭으로) — 표 행 쪼개기·이어붙이기용."""
     return [c.strip() for c in (line.strip().strip("|").split("|") if "|" in line else line.split("\t"))]
 
 
@@ -116,7 +114,7 @@ def _table_header(tbl):
 
 
 def _row_kv(header_line, row_line):
-    """행 1개 → '머리글: 값' 쌍 한 줄(BM25·ID 검색용 — W14)."""
+    """행 1개 → '머리글: 값' 쌍 한 줄(BM25·ID 검색용)."""
     hs, rs = _cells(header_line), _cells(row_line)
     return " · ".join(f"{h}: {v}" for h, v in zip(hs, rs) if h and v)
 
@@ -136,22 +134,21 @@ def _fig_mask(lines):
 
 def chunk_structure(doc, text, target=None, split_tables=None):
     """제목(마크다운 heading) 경계 + 표 블록(연속된 '|'·탭 줄)은 통째로 한 청크.
-    target 기본값은 CHUNK_SIZE(없으면 800). env CHUNK_TABLE=rows(W14)면 표가 CHUNK_TABLE_ROWS(기본 25)행보다
+    target 기본값은 CHUNK_SIZE(없으면 800). CHUNK_TABLE=rows면 표가 CHUNK_TABLE_ROWS(기본 25)행보다
     크면 머리글(+구분 줄)을 반복하며 행 묶음으로 쪼개고 행마다 '머리글: 값' 쌍을 덧붙인다(BM25·ID 검색용) ·
     머리글 없이 이어지는 다음 조각(쪽 넘김 — 빈 줄 뒤 열 수가 같은 표)은 쪼개기 전에 앞 표 몸통에 합친다 ·
-    그림 블록은 절대 안 쪼갬. 표 청크의 meta(제목·시트·쪽)는 chunk_all의 locate()가 위치로 그대로 채움.
-    env 없으면 전과 바이트 동일(2026-10-04, W14/W19)."""
-    st = pc.cfg().transform.structure  # S7c — 설정 객체
+    그림 블록은 절대 안 쪼갬. 표 청크의 meta(제목·시트·쪽)는 chunk_all의 locate()가 위치로 그대로 채움."""
+    st = pc.cfg().transform.structure
     target = target if target is not None else int(st.chunk_size if st.chunk_size is not None else 800)
     if not text:
         return []
     lines = text.split("\n")
-    starts = [0] * (len(lines) + 1)  # starts[i] = lines[:i] 합친 글자 수(옛 cursor와 같은 값)
+    starts = [0] * (len(lines) + 1)  # starts[i] = lines[:i] 합친 글자 수
     for k, ln in enumerate(lines):
         starts[k + 1] = starts[k] + len(ln) + 1
     if split_tables is None:  # 인자 우선(스레드 안전) — 없으면 env CHUNK_TABLE=rows
-        split_tables = st.chunk_table == "rows"  # S7c — 설정 객체
-    rows_per = int(st.chunk_table_rows)  # S7c — 설정 객체(기본 25)
+        split_tables = st.chunk_table == "rows"
+    rows_per = int(st.chunk_table_rows)  # 기본 25
     fig = _fig_mask(lines) if split_tables else None
     out, n, buf, buf_start, i = [], 0, [], 0, 0
 
@@ -244,8 +241,8 @@ _PAGE_SPLIT = re.compile(r"\x0c|\n(?=(?:page|Page|PAGE|쪽)\s*\d)")
 
 def _page_chunk_cap():
     """PAGE_CHUNK_MAX(문자) — 없으면 CHUNK_SIZE×4(설정돼 있으면) 아니면 4000. 쪽 청크가 임베딩 API 입력 한도를
-    넘지 않게 쪼개는 기준(L3-3, 320쪽 밀집 PDF에서 HTTP 400 방지)."""
-    st = pc.cfg().transform.structure  # S7c — 설정 객체(둘 다 기본 None — 옛 글자 "0"도 '있음'이었으므로 is not None)
+    넘지 않게 쪼개는 기준(밀집 PDF의 큰 쪽에서 HTTP 400 방지)."""
+    st = pc.cfg().transform.structure  # 둘 다 기본 None — "0"도 '있음'이므로 is not None
     if st.page_chunk_max is not None:
         return int(st.page_chunk_max)
     return int(st.chunk_size) * 4 if st.chunk_size is not None else 4000
@@ -279,7 +276,7 @@ def _split_page(text, cap):
 
 def chunk_page(doc, text):
     """쪽마다 한 청크 — cap(=_page_chunk_cap())보다 크면 문단·줄 경계로 연속된 부분 청크(::part)로 쪼갠다.
-    cap 이하인(기존 대부분) 쪽은 전과 바이트 동일."""
+    cap 이하인(대부분) 쪽은 그대로 한 청크."""
     if not text:
         return []
     cap = _page_chunk_cap()
@@ -305,7 +302,7 @@ def chunk_page(doc, text):
 
 
 def chunk_structure_table(doc, text, target=None):
-    """structure + 큰 표 행 묶음(실험 축 전용, W14) — 인자로 넘김(env 토글은 스레드 안전하지 않아 바꿈, 독립 검토 10-04)."""
+    """structure + 큰 표 행 묶음(실험 축 전용) — 인자로 넘김(env 토글은 스레드 안전하지 않음)."""
     return chunk_structure(doc, text, target, split_tables=True)
 
 
@@ -341,8 +338,8 @@ FAQ_HEAD = {"type": "type", "client question": "question", "question": "question
 
 
 def faq_rows(path):
-    """FAQ 엑셀(pl-39) → 행마다 {group(시트 이름), type, question, answer, row(엑셀 행 번호)}.
-    시트의 첫 비지 않은 행이 머리글 — 질문·답 머리글이 없는 시트는 건너뛰고 경고. 빈 칸은 None(행은 남김, 사용자 11-03),
+    """FAQ 엑셀 → 행마다 {group(시트 이름), type, question, answer, row(엑셀 행 번호)}.
+    시트의 첫 비지 않은 행이 머리글 — 질문·답 머리글이 없는 시트는 건너뛰고 경고. 빈 칸은 None(행은 남김),
     질문·답이 모두 빈 행은 건너뜀. 엑셀이 아니거나 못 열거나 남는 행이 없으면 None(일반 문서처럼 청킹)."""
     if Path(path).suffix.lower() not in (".xlsx", ".xlsm"):
         return None

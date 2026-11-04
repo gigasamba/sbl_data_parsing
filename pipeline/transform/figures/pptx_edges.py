@@ -1,17 +1,15 @@
 """pptx 슬라이드 XML의 연결선(connector, p:cxnSp의 a:stCxn·a:endCxn) → edges[{from,to,label}], 슬라이드별.
-VLM이 읽은 edges보다 우선(실측: 다른 세션, git 이력 docs/plans/comparison-report-structure-2026-10-03.md(c4874dd0^) §6 — 연결 F1 1.0/1.0/1.0/0.83).
+VLM이 읽은 edges보다 우선한다(실측 연결 F1이 더 높음).
 
-AD20(남은 것, 10-08) — 슬라이드 렌더 쪽 VLM 대상 조건(규칙 신호만, VLM에 보일지 '가벼운 판단'은 AG11 몫):
-`candidate_slides()`가 연결선·네이티브 차트 XML로 안 잡히는 구조(상자·화살표 모양 도형이 연결선 없이 배치만 된
-도식·SmartArt)의 슬라이드 번호를 고른다. 실제 슬라이드 렌더(LibreOffice)·VLM 호출 연동은 범위 밖(다음 단계) —
-여기선 후보만 고른다."""
+`candidate_slides()`는 슬라이드 렌더 쪽 VLM 대상 후보 — 연결선·네이티브 차트 XML로 안 잡히는 구조(상자·화살표 모양
+도형이 연결선 없이 배치만 된 도식·SmartArt)의 슬라이드 번호를 고른다(렌더·VLM 호출은 pptx_render)."""
 
 from pathlib import Path
 
-from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline import config as pc
 
 NS = {"a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
-# AD20 — "도형이 많은데 연결선이 없다"의 "많다" 문턱(최상위 도형 수, 그룹은 1개로 셈). 상한은 문서당(이 경우 슬라이드당 아님 — 문서 전체 슬라이드 수) env(0=꺼짐).
+# "도형이 많은데 연결선이 없다"의 "많다" 문턱(최상위 도형 수, 그룹은 1개로 셈). 상한은 문서당 슬라이드 수(0=꺼짐).
 PPTX_SHAPES_MIN = 4
 PARSE_PPTX_SHAPES_MAX_DEFAULT = "20"
 PARSE_PPTX_SMARTART_MAX_DEFAULT = "20"
@@ -27,7 +25,7 @@ def _is_smartart(sh):
 
 
 def slide_signals(p):
-    """AD20 — 슬라이드마다 도형 신호: [{slide, shapes(최상위 도형 수), connectors(유효한 연결선 수, pptx_edges와
+    """슬라이드마다 도형 신호: [{slide, shapes(최상위 도형 수), connectors(유효한 연결선 수, pptx_edges와
     같은 판정), smartart(diagram graphicFrame 있나)}]."""
     from pptx import Presentation
 
@@ -48,10 +46,10 @@ def slide_signals(p):
 
 
 def candidate_slides(p):
-    """AD20 — 연결선·네이티브 차트로 못 잡는 슬라이드 구조 후보 {슬라이드 번호: 이유}(먼저 맞는 것 하나):
+    """연결선·네이티브 차트로 못 잡는 슬라이드 구조 후보 {슬라이드 번호: 이유}(먼저 맞는 것 하나):
     'smartart' = graphicFrame에 diagram 데이터 있음 · 'shapes_no_connector' = 도형이 PPTX_SHAPES_MIN(기본 4)개
-    이상인데 연결선(pptx_edges 기준)이 0개 — 상자·화살표가 연결선 없이 배치만 된 도식(사용자 2026-10-06 지적
-    사례). 상한 PARSE_PPTX_SMARTART_MAX·PARSE_PPTX_SHAPES_MAX(env, 기본 20, 0=꺼짐 — 그 이유 자체를 안 봄)."""
+    이상인데 연결선(pptx_edges 기준)이 0개 — 상자·화살표가 연결선 없이 배치만 된 도식.
+    상한 PARSE_PPTX_SMARTART_MAX·PARSE_PPTX_SHAPES_MAX(env, 기본 20, 0=꺼짐 — 그 이유 자체를 안 봄)."""
     sa_cap, sh_cap = (
         int(pc.by_env("PARSE_PPTX_SMARTART_MAX", PARSE_PPTX_SMARTART_MAX_DEFAULT)),
         int(pc.by_env("PARSE_PPTX_SHAPES_MAX", PARSE_PPTX_SHAPES_MAX_DEFAULT)),
@@ -68,15 +66,15 @@ def candidate_slides(p):
 
 
 def _in_rect(x, y, l, t, w, h):  # noqa: E741 — 좌·위·폭·높이(pptx 도형 좌표 관례)
-    """F10 — 점(x,y)이 사각형(l,t,w,h) 안(경계 포함)인가."""
+    """점(x,y)이 사각형(l,t,w,h) 안(경계 포함)인가."""
     return l <= x <= l + w and t <= y <= t + h
 
 
 def picture_arrow_edges(s, exclude_ids=()):
-    """F10 — stCxn/endCxn 앵커 없는 자유 배치 connector(화살표/선)가 그림(shape_type 13) 위 한 점을 가리키는
+    """stCxn/endCxn 앵커 없는 자유 배치 connector(화살표/선)가 그림(shape_type 13) 위 한 점을 가리키는
     경우만 뽑는다: 한쪽 끝이 그림 사각형 안, 반대쪽 끝은 밖 — 밖쪽 끝에 겹치는 글상자 글자가 있으면 "from"으로.
     pptx_edges()·figure_extract.py 공용(계산은 여기 한 곳에만 둔다). "to"는 그림 순번(그 슬라이드 내 picture shape
-    순서, figures.py의 pics 열거와 같은 기준) — 그림마다 image_id가 따로 있어 실제 image_id는 호출 쪽이 안다."""
+    순서, figure_extract의 pics 열거와 같은 기준) — 그림마다 image_id가 따로 있어 실제 image_id는 호출 쪽이 안다."""
     pics = [sh for sh in s.shapes if sh.shape_type == 13]  # MSO_SHAPE_TYPE.PICTURE
     if not pics:
         return []
@@ -105,7 +103,7 @@ def picture_arrow_edges(s, exclude_ids=()):
 
 def pptx_edges(p):
     """{슬라이드 번호(1부터): [{"from","to","label"}, ...]} — 연결선 없는 슬라이드는 빠짐. 보통 연결선(stCxn/
-    endCxn 앵커) 외에 F10: 그림 위에 겹친 자유 배치 화살표도 picture_arrow_edges()로 섞여 들어간다(추가
+    endCxn 앵커) 외에 그림 위에 겹친 자유 배치 화살표도 picture_arrow_edges()로 섞여 들어간다(추가
     키 "point"·"kind":"arrow", "to"는 "image#<순번>")."""
     from pptx import Presentation
 

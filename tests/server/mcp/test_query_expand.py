@@ -1,4 +1,4 @@
-"""mcp_server.services.search.query_expand 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.query_expand`."""
+"""mcp_server.services.search.query_expand 시험."""
 
 from common.core.terms import load_glossary
 from common.core.text import tokens

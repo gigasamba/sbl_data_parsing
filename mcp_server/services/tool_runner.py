@@ -1,12 +1,10 @@
-"""도구 실행 창구 — 스레드 실행·동시 상한(MCP_MAX_CONCURRENCY)·대기열 상한(MCP_MAX_QUEUE)·요청 시간 상한(MCP_TOOL_TIMEOUT_SEC).
-S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/main.py(옛 data_retrieval/mcp_server.py)에서 옮김 — 내용 그대로.
-"""
+"""도구 실행 창구 — 스레드 실행·동시 상한(MCP_MAX_CONCURRENCY)·대기열 상한(MCP_MAX_QUEUE)·요청 시간 상한(MCP_TOOL_TIMEOUT_SEC)·감사 1행."""
 
 from functools import partial
 
 import anyio
 
-from mcp_server import config as mc  # 설정 객체(S7d — 요청마다 읽는 값은 호출 때 cfg())
+from mcp_server import config as mc  # 요청마다 읽는 값은 호출 때 cfg()
 from mcp_server.services import call_log
 
 _LIMITER = None
@@ -26,7 +24,7 @@ def _queue_cap(limiter):
     return int(v) if v is not None else limiter.total_tokens * 4
 
 
-_INFLIGHT = 0  # MC2(RV2) — _bg가 받아들인(실행 중+대기 중) 요청 수. 체크→증가 사이에 await가 없어
+_INFLIGHT = 0  # _bg가 받아들인(실행 중+대기 중) 요청 수. 체크→증가 사이에 await가 없어
 
 
 async def _dispatch(fn, timeout, a, kw):
@@ -60,8 +58,8 @@ async def _dispatch(fn, timeout, a, kw):
 
 
 async def _bg(fn, *a, **kw):
-    """동기 도구 함수를 이벤트 루프 밖 스레드로 돌림(S12) — 느린 도구 하나가 /health·다른 요청을 막지 않게.
-    MC2(RV2) 과부하 보호, 기본 켬: 동시 상한(MCP_MAX_CONCURRENCY)만큼 돌고 있는 것 + 그 뒤로 밀린 대기가
+    """동기 도구 함수를 이벤트 루프 밖 스레드로 돌림 — 느린 도구 하나가 /health·다른 요청을 막지 않게.
+    과부하 보호: 동시 상한(MCP_MAX_CONCURRENCY)만큼 돌고 있는 것 + 그 뒤로 밀린 대기가
     대기열 상한(MCP_MAX_QUEUE, 기본 동시 상한×4, =0이면 무제한)까지 차 있으면 **기다리지 않고** 바로
     {"error": "busy"} — 꽉 찼을 때 요청이 무한정 쌓여 죽는 대신 호출자가 바로 알고 재시도하게.
     받아들여진 요청은 시간 상한(MCP_TOOL_TIMEOUT_SEC, 기본 30초, =0이면 무제한) 안에 끝나야 하며 넘으면
@@ -74,7 +72,7 @@ async def _bg(fn, *a, **kw):
 
 
 async def _bg_long(fn, budget, *a, **kw):
-    """parse_document 전용 _bg 변형(2026-10-21 단일화) — 도구 시간 상한을 MCP_TOOL_TIMEOUT_SEC(기본 30초) 대신
-    budget(+10초 여유)으로 기다린다. 대기열·동시 상한·busy 판정은 _bg와 같은 규칙(S12·MC2) — 파싱은 서버 부하에 따라
+    """parse_document 전용 _bg 변형 — 도구 시간 상한을 MCP_TOOL_TIMEOUT_SEC(기본 30초) 대신
+    budget(+10초 여유)으로 기다린다. 대기열·동시 상한·busy 판정은 _bg와 같은 규칙 — 파싱은 서버 부하에 따라
     60초를 넘길 수 있어서 사용자가 준 time_out_threshold 예산 안에서 한 자리에서 끝내는 게 이 도구의 계약."""
     return await _dispatch(fn, float(budget) + 10.0, a, kw)

@@ -1,7 +1,6 @@
-"""PA0 — 맥락 기록만(LLM 0회). 지금 규칙 기반 흐름이 이미 계산한 문서·쪽 신호와 규칙 결정(이유)을
-represent()가 만드는 rep에 `rep["context"]`(신호)·`rep["decisions"]`(결정 목록)로 남긴다 — 나중 파싱
-에이전트(PA2 그림자 모드)·보고서 표시의 바탕(docs/architecture.md §3·§7 PA0).
-새 엔진 실행·VLM 호출 없음 — 이미 계산·캐시된 값만 읽어 모은다(원문 전체는 안 담음, 신호·요약만)."""
+"""맥락 기록만(LLM 0회) — 규칙 흐름이 이미 계산한 문서·쪽 신호와 규칙 결정(이유)을
+rep["context"](신호)·rep["decisions"](결정 목록)로 남긴다(보고서 표시·나중 파싱 에이전트의 바탕).
+새 엔진 실행·VLM 호출 없음 — 이미 계산·캐시된 값만 모은다(원문 전체는 안 담음)."""
 
 from collections import Counter
 from pathlib import Path
@@ -10,8 +9,8 @@ MAX_PAGES = 200  # 쪽 신호 상한(쪽이 아주 많은 문서에서 rep 크�
 
 
 def _page_signals(doc_path):
-    """AD12·AD31·AD46 쪽 신호 재사용(pipeline.transform.figures.scan_page_vlm.page_signals — 원본 sha 캐시라 다시 불러도
-    cheap) + scan_pages_detail(AD12 스캔 판정 이유)·rotation_info(filter_and_rotate.py 회전 기록)를 쪽마다 합침.
+    """쪽 신호(scan_page_vlm.page_signals — 원본 sha 캐시라 다시 불러도 싸다) + scan_pages_detail(스캔 판정 이유)·
+    rotation_info(filter_and_rotate 회전 기록)를 쪽마다 합침.
     PDF가 아니거나 원본이 없으면 빈 목록."""
     if not doc_path or not Path(doc_path).exists():
         return [], False
@@ -36,7 +35,7 @@ def _page_signals(doc_path):
 
 
 def _engine_summary(dd, cands, tried):
-    """엔진별 요약 — qa.json(parse_qa.score_engine이 이미 계산한 값)·runs.jsonl(tried_of)에서만 모음(새로 계산 안 함).
+    """엔진별 요약 — qa.json(parse_scoring.score_engine이 이미 계산한 값)·runs.jsonl(tried_of)에서만 모음(새로 계산 안 함).
     ok·chars·acc(cross_recall 또는 value_recall을 doc_accuracy가 이미 고른 값)·sec."""
     out = {}
     for c in cands:
@@ -65,7 +64,7 @@ def build_context(doc_path, dd, cands, rep):
 
 
 def _ocr_fallback(doc_path, dd, stack):
-    """AD12 스캔 쪽 신호(10-29부터 run_all은 OCR 엔진을 안 합치고 대표 결과의 쪽 VLM이 그 쪽을 채움)(pipeline.transform.figures.scan_page_vlm.scan_pages, 캐시 재사용) —
+    """스캔 쪽 신호(scan_page_vlm.scan_pages, 캐시 재사용 — OCR 엔진은 안 합치고 쪽 VLM이 그 쪽을 채움) —
     .pdf_text 문서 안에 스캔 쪽이 있으면 True. registry(엔진 등록,
     무거운 임포트)는 건드리지 않고 stack.json에 이미 적힌 .pdf_image 목록만 본다."""
     if dd.get("format") != ".pdf_text" or not stack["parse"].get(".pdf_image") or not doc_path:
@@ -183,7 +182,7 @@ def build_decisions(rep, dd, stack, feats, doc_path):
                 "reason": "VLM_FIGURES_MAX 상한 걸림(AD21①)" if post.get("figures_capped") else "상한 안 걸림",
                 "inputs": {"skip_reasons": post.get("figures_skip_reasons") or {}},
             }
-        )  # SI30 unconvertible 등
+        )
 
     fused = rep.get("fused") or {}
     d.append(

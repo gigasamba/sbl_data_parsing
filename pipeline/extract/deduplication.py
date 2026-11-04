@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""중복 문서 감지 — 한 번에 받은 원본 폴더 안에서 파일 내용 해시(SHA-256)가 같은 문서(완전 중복)를 찾는다. 삭제·이동은 하지 않는다(PRD pl-02).
+"""중복 문서 감지 — 한 번에 받은 원본 폴더 안에서 파일 내용 해시(SHA-256)가 같은 문서(완전 중복)를 찾는다. 삭제·이동은 하지 않는다.
 
 - 폴더: run_folder() → <out>/keep.txt(대표만) · groups.csv · report.md · fingerprints.jsonl(다시 돌릴 때 캐시)
 

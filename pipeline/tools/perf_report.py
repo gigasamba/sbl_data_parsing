@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""파이프라인 실행 1건의 성능·추적 분석(op-01) — applog.pipe_run/pipe_event를 읽어 사람이 보는 표로.
+"""파이프라인 실행 1건의 성능·추적 분석 — applog.pipe_run/pipe_event를 읽어 사람이 보는 표로.
 
     python -m pipeline.tools.perf_report <run_id>                 # 단계·엔진별 p50/p95/최대·비율, wait/작업, 느린 문서, 쪽당 시간, 캐시·재시도·실패
     python -m pipeline.tools.perf_report                           # run_id를 빼면 가장 최근 실행

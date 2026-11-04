@@ -1,12 +1,11 @@
-"""F12(사용자 10-14) — 그림 위에 다른 그림·글상자·도형·화살표가 겹치면(겹침 또는 포함) 한 묶음으로 찾는다.
-이 모듈은 좌표만 다룬다(순수 함수 — 테스트하기 쉽게): 실제 렌더(soffice·fitz clip)·크롭·VLM 호출·레코드 조립은
-호출부(parse/postprocess/figures.py) 몫. cluster_overlaps()가 핵심(연결 요소, Union-Find) — 그림(kind="picture")
+"""그림 위에 다른 그림·글상자·도형·화살표가 겹치면(겹침 또는 포함) 한 묶음으로 찾는다.
+이 모듈은 좌표만 다룬다(순수 함수): 실제 렌더(soffice·fitz clip)·크롭·VLM 호출·레코드 조립은
+호출부(figure_extract) 몫. cluster_overlaps()가 핵심(연결 요소, Union-Find) — 그림(kind="picture")
 1개 이상 + 그 외(kind="other", 글상자·도형·화살표) 1개 이상을 포함하는 묶음만 돌려준다(그림끼리만 겹치거나
-글상자끼리만 겹치는 건 이 기능 대상이 아님). 독립 검토(10-14) — 전면 배경 사진·워터마크처럼 쪽 넓이의
-OVERLAY_BG_AREA_RATIO(40%, 사용자 결정 10-14)를 넘는 개체는 호출부가 page_area를 주면 묶음 후보에서 아예
+글상자끼리만 겹치는 건 이 기능 대상이 아님). 전면 배경 사진·워터마크처럼 쪽 넓이의
+OVERLAY_BG_AREA_RATIO(40%)를 넘는 개체는 호출부가 page_area를 주면 묶음 후보에서 아예
 빠진다(과다 결합 가드 — 안 빼면 쪽의 모든 개체가 그 배경을 통해 한 거대 묶음으로 뭉친다). 겹침 판정 자체는
-여유(tolerance) 없이 엄격한 겹침·포함만(사용자 결정 10-14 — 안 닿은 근처 콜아웃은 F10 near 목록 몫, 이 모듈
-대상 아님).
+여유(tolerance) 없이 엄격한 겹침·포함만(안 닿은 근처 콜아웃은 pptx_edges.picture_arrow_edges의 near 목록 몫).
 
 형식별 좌표 추출:
   - pdf_page_objects(pg, pic_objs) — fitz Page, 그림은 호출부가 이미 찾은 rect를 그대로 받고 글자 블록(get_text
@@ -14,10 +13,9 @@ OVERLAY_BG_AREA_RATIO(40%, 사용자 결정 10-14)를 넘는 개체는 호출부
   - pptx_slide_objects(s, pic_shapes, pic_ids) — python-pptx Slide, 그림은 호출부가 이미 찾은 shape·id 순서쌍을
     그대로 받고 글자 있는 도형·연결선(cxnSp)을 'other'로 더한다(EMU 절대좌표 — 슬라이드 안에서 그대로 비교 가능).
   - docx_float_objects(doc_path) — word/document.xml을 직접 읽어 플로팅(wp:anchor) 그림·글상자의 EMU bbox.
-    ponytail: relativeFrom="page"만 가정(margin·column 상대는 다음 버전) — 틀리면 그 좌표가 섞여 묶음을 못 찾을
+    ponytail: relativeFrom="page"만 가정(margin·column 상대는 미지원) — 틀리면 그 좌표가 섞여 묶음을 못 찾을
     뿐(거짓 양성 없음, 좌표 자체가 이상해 보이면 clusters가 그냥 비게 된다).
-  - xlsx(시트 도형)는 이번 버전 범위 밖(YAGNI) — openpyxl이 textbox shape의 신뢰할 bbox를 안 줌, 타겟 세트에도
-    xlsx 겹침 샘플이 없음. 실 사례가 나오면 drawing XML(xdr:sp) 직접 파싱으로 docx_float_objects와 같은 자리에 추가."""
+  - xlsx(시트 도형)는 지원 안 함 — openpyxl이 textbox shape의 신뢰할 bbox를 안 준다. 실 사례가 나오면 drawing XML(xdr:sp) 직접 파싱으로 docx_float_objects와 같은 자리에 추가."""
 
 
 def _overlaps(a, b):
@@ -26,19 +24,16 @@ def _overlaps(a, b):
     return ax0 < bx1 and bx0 < ax1 and ay0 < by1 and by0 < ay1
 
 
-OVERLAY_BG_AREA_RATIO = 0.4  # 사용자 결정(10-14) — 쪽/슬라이드 면적의 이 비율을 넘는 낱개(전면 배경 사진·
-# 워터마크 등)는 묶음 후보에서 아예 뺀다 — pdf_page_objects의 그리기 배경 제외(옛 0.3)와 이 새 과다 결합 가드를
-# 한 상수로 통일(단일 진입점, 집행: 이 모듈). 그런 개체는 쪽 위 사실상 전부와 bbox가 겹치므로, 빼지 않으면
-# 그걸 통해 쪽의 모든 개체(그림·글상자 가리지 않고)가 한 거대 묶음으로 뭉친다(실측: 전면 배경 그림 1장 + 서로
-# 안 겹치는 그림·글상자 여러 개 → 배경이 전부를 하나로 이어버림). 그림(kind="picture")에도 적용 — 배경 자체가
-# 그림이라 이전엔 벡터 도형 쪽만 보던 옛 규칙이 안 걸렸다.
+# 쪽/슬라이드 면적의 이 비율을 넘는 낱개(전면 배경 사진·워터마크 등)는 묶음 후보에서 뺀다 — 쪽 위 거의 모든 개체와
+# 겹쳐서, 빼지 않으면 그것을 통해 쪽 전체가 한 거대 묶음으로 뭉친다(그림·그리기 배경 모두 이 상수 하나).
+OVERLAY_BG_AREA_RATIO = 0.4
 
 
 def cluster_overlaps(objs, page_area=None, max_area_ratio=OVERLAY_BG_AREA_RATIO):
     """objs: [{"id","kind"("picture"|"other"),"bbox":(x0,y0,x1,y1)[,"text"]}] → 묶음(겹침·포함 연결 요소,
     그림 1개 이상 + 그 외 1개 이상인 것만) [{"members":[id,...],"picture_ids":[...],"other_ids":[...],
     "texts":[...],"bbox":(x0,y0,x1,y1)}], members 기준 id 오름차순 정렬(결정적). 겹침 판정은 여유(tolerance)
-    없이 엄격(경계가 실제로 겹치거나 한쪽이 다른 쪽을 포함할 때만 — 사용자 결정 10-14, _overlaps() 참고).
+    없이 엄격(경계가 실제로 겹치거나 한쪽이 다른 쪽을 포함할 때만 — _overlaps()).
     page_area(쪽/슬라이드 전체 넓이, bbox와 같은 단위) — 주면 넓이가 max_area_ratio(기본 OVERLAY_BG_AREA_RATIO=
     0.4)를 넘는 객체는 처음부터 묶음 후보에서 뺀다(위 상수 설명 — 과다 결합 가드). 안 주면(None) 필터 없음
     (좌표 단위를 모르는 순수 좌표 시험 등)."""
