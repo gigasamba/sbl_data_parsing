@@ -30,7 +30,7 @@
 |---|---|---|---|---|
 | 파일 형식마다 엔진 구성 파일(`resources/config/pipeline_stack.json`)에 적힌 엔진을 **모두** 돌린다(하나씩 차례로 시도하지 않음) | 모든 형식을 잘 읽는 파서는 없다. 서버·PC가 같은 파일을 쓰고, 바꿀 때는 그 파일을 고쳐 코드 폴더를 바꾼다. 파일을 못 읽거나 모양이 틀리면 시작하지 않는다(종료 2) | done | [pl-03](prd/transform.md#pl-03) |  |
 | PDF는 두 갈래 — 글자층이 쪽당 평균 20자 미만이면 스캔(`.pdf_image` → VLM 엔진만), 아니면 글자 PDF(`.pdf_text` → pymupdf·kreuzberg) | 스캔 PDF는 글자 엔진이 못 읽는다. 판정은 `_types.json`에 저장해 다시 쓴다 | done | [pl-03](prd/transform.md#pl-03) |  |
-| 지원 형식 = 구성의 형식 키 43개(목록은 앵커). `.hwp`·압축(zip)은 미지원 | 구성 파일이 정본 | done | [pl-03](prd/transform.md#pl-03) · [pl-42](prd/transform.md#pl-42) |  |
+| 지원 형식 = 구성 파일의 형식 키(목록은 앵커) | 구성 파일이 정본 | done | [pl-03](prd/transform.md#pl-03) · [pl-42](prd/transform.md#pl-42) |  |
 | 엔진은 문서마다 동시에, 엔진마다 따로 떨어진 자식 프로세스 | 엔진 하나가 죽어도 다른 엔진을 막지 않는다 | done | [pl-22](prd/transform.md#pl-22) |  |
 | 시간 제한 = 쪽 수 × 10초(글자 엔진)·× VLM 호출 제한 `common.models.vlm.timeout`(180초, VLM 엔진), 엔진 첫 문서는 최소 60초, 여기에 시작 여유 10초. 넘으면 두 배로 한 번 더, 그래도 넘으면 실패 기록 | 큰 문서도 쪽 수만큼 시간을 받는다 | done | [pl-22](prd/transform.md#pl-22) |  |
 | 그림 글자 인식 엔진(OCR, `rapidocr_ko`)은 파싱에 돌지 않는다 — 이미지·스캔은 VLM만. 일괄 실행 엔진은 낮은 우선순위(nice +10) | OCR은 VLM과 겹치고 느리다. 검색 서비스 자원을 덜 뺏는다 | done | [pl-22](prd/transform.md#pl-22) |  |
@@ -181,7 +181,7 @@
 | 분류 수용 보고서(개발 서버) — 사람 정답 CSV(`s3_key`·정답 분류)와 비교해 원천·라벨별 일치율·혼동표 | 회사 데이터라 git 밖. 통과 기준은 첫 결과를 본 뒤 정한다 | todo | [e2-20](prd/test.md#e2-20) |  |
 | 검색 점검 페이지 `validation/search_ui`(기본 포트 8790, MCP `127.0.0.1:8765/mcp`) | 사람이 브라우저로 근거를 본다 | done | [e2-07](prd/test.md#e2-07) |  |
 | PC 평가 도구는 검색 점검 페이지·답변 점검 둘뿐 | PC 전용 설정 약 50개의 관리 비용 | done | [e2-10](prd/test.md#e2-10) |  |
-| 요건에 닿지 않는 함수·코드(시험만 부르는 것 포함)는 없다 | 죽은 코드 비용. MCP 도구 이름·입출력은 그대로 | done | [e2-17](prd/test.md#e2-17) · [e2-18](prd/test.md#e2-18) | 남은 것은 [rn-08](prd/ops.md#rn-08) 비고 |
+| 요건에 닿지 않는 함수·코드(시험만 부르는 것 포함)는 없다 | 죽은 코드 비용. MCP 도구 이름·입출력은 그대로 | todo | [e2-17](prd/test.md#e2-17) · [e2-18](prd/test.md#e2-18) | 닿지 않는 코드가 남음 — 목록은 [rn-08](prd/ops.md#rn-08) 비고 |
 
 ## 문서·릴리스 (doc) — 문서 배치·버전·이미지·서버 설치
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
