@@ -8,7 +8,7 @@
 #   그 README §5-0을 따른다: load.sh → host_ctl.sh init → 설정 채우기 → host_ctl.sh up -d data-pipeline → migrate up --target all · master load → host_ctl.sh up -d data-pipeline-mcp mcp → host_ctl.sh check.
 #   이미지 판은 코드 판과 다를 수 있다 — 코드 deploy/docker/DEPS_HASH가 이 판 BUILD.txt의 DEPS_HASH와 같으면 그 이미지에서 돈다(예: 0.2.0 코드 → 0.1.0 실행 이미지).
 set -euo pipefail
-DOCKER=${DOCKER:-$(command -v podman >/dev/null 2>&1 && echo podman || echo docker)}
+DOCKER=${DOCKER:-$(command -v podman >/dev/null 2>&1 && echo podman || echo docker)}   # docker_default(load_settings.sh)를 쓰지 않음 — 이 파일은 이미지 저장소에 혼자 복사됨(stage_images.sh)
 ver=${1:?판 — 예: 0.1.0 (이 폴더 안의 판 폴더 이름)}
 cd "$(dirname "$0")/$ver"
 n=0

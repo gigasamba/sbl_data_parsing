@@ -16,7 +16,8 @@ RT_VER="$1"; shift
 if [ "$#" -gt 0 ]; then TARGETS=("$@"); else TARGETS=(pipeline mcp); fi
 OUT="${OUT:-/var/tmp/bake}"; mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)   # stage_images.sh가 cd하므로 절대 경로로
 CODE_DIR=$(cd "${CODE_DIR:-$(dirname "$0")/../..}" && pwd)
-DOCKER="${DOCKER:-$(command -v podman >/dev/null 2>&1 && echo podman || echo docker)}"
+. "$(dirname "$0")/../host/scripts/load_settings.sh"   # docker_default 한 곳(op-10 — podman, 없으면 docker) · 이 스크립트가 든 코드 폴더의 것(CODE_DIR가 옛 코드 폴더여도)
+DOCKER="${DOCKER:-$(docker_default)}"
 cd "$CODE_DIR"
 . deploy/release/image_names.sh
 TAG="${TAG:-$(app_version)}"

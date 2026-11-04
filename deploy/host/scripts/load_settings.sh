@@ -16,7 +16,7 @@
 # `PYTHONPATH=. python deploy/release/gen_host_keys.py`)와 common/config/layout.py로 읽는다(사용자 11-02 — 옛 이미지 안 export 길·SETTINGS_IMAGE 지움).
 # DOCKER로 docker·podman을 고른다(`DOCKER="sudo podman"`처럼 두 낱말도 — 따옴표 없이 펼침, VS7e1 R-1). 값은 출력하지 않는다(source 쪽 — 실행 쪽은 요청한 줄만 표준 출력에).
 #   op-10 — 셸 env와 settings.yaml(ops.host.docker)에 없으면 podman(서버 기본 컨테이너 도구), podman이 없으면 docker(docker_default).
-docker_default() { command -v podman >/dev/null 2>&1 && echo podman || echo docker; }   # op-10 — 서버(RHEL) 기본 podman, 없으면 docker(bake_prod_image.sh와 같음)
+docker_default() { command -v podman >/dev/null 2>&1 && echo podman || echo docker; }   # op-10 — 서버(RHEL) 기본 podman, 없으면 docker(bake_prod_image.sh·stage_images.sh도 이 함수를 씀)
 _SETTINGS_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)   # 코드 폴더(deploy/host가 바로 아래 — 서버 sbl_data_parsing-<판> · PC 저장소 루트)
 RAG_ROOT=${RAG_ROOT:-$(dirname "$_SETTINGS_ROOT")}   # 서버 루트(op-13) — 코드 폴더의 부모. settings.yaml·edw_chain.yaml·output/이 바로 아래
 

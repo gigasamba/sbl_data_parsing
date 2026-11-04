@@ -19,7 +19,8 @@ esac
 if [ "$#" -gt 0 ]; then TARGETS=("$@"); else TARGETS=(pipeline mcp); fi
 OUT="${OUT:-output/ship}"
 CHUNK="${CHUNK:-45m}"
-DOCKER="${DOCKER:-$(command -v podman >/dev/null 2>&1 && echo podman || echo docker)}"   # op-10 — podman 우선(bake_prod_image.sh와 같음)
+. deploy/host/scripts/load_settings.sh   # docker_default 한 곳(op-10 — podman 우선, bake_prod_image.sh와 같음)
+DOCKER="${DOCKER:-$(docker_default)}"
 REPO="${SHIP_REPO:-sbl_images}"
 
 repo_of() {    # 대상 검사만 — 이미지 저장소는 하나(사용자 10-14 mono repo)
