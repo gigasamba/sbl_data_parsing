@@ -42,10 +42,10 @@ _JOB_KEYS = (
 
 def _job_stack():
     """작업마다 엔진 구성 파일을 다시 읽어 검사(S8b — 사용자 10-28 Q3 a). 못 읽거나 없는 엔진이면(종료 2) 그 작업만 실패(서비스 스레드는 계속)."""
-    from pipeline import stackcfg
+    from pipeline import engine_stack
 
     try:
-        stackcfg.resolve(refresh=True)
+        engine_stack.resolve(refresh=True)
     except SystemExit as e:
         raise RuntimeError(f"엔진 구성 파일을 쓰지 못함 — 종료 코드 {e.code}") from None
 
@@ -473,9 +473,9 @@ if __name__ == "__main__":
         )
         raise SystemExit(2)
     SERVICE_DIR.mkdir(parents=True, exist_ok=True)  # service.json 자리 — ROOTS·JOBS_DIR를 env로 다른 곳에 둬도
-    from pipeline import stackcfg
+    from pipeline import engine_stack
 
-    stackcfg.resolve()  # S8b(Q7) — 엔진 구성 파일을 못 읽거나 없는 엔진이면 시작 거부(종료 2)
+    engine_stack.resolve()  # S8b(Q7) — 엔진 구성 파일을 못 읽거나 없는 엔진이면 시작 거부(종료 2)
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
     for r in ROOTS:
         Path(r).mkdir(parents=True, exist_ok=True)

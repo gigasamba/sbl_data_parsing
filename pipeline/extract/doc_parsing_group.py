@@ -4,7 +4,7 @@
 - 오피스 zip(docx/xlsx/xlsm/pptx/docm…): 내장 media 수 ≥ 8개 또는 media 용량 ≥ 800KB → 'heavy'
   (2026-10-23 사용자 지적 — 이미지 많은 docx는 light 오분류, 파일 크기로는 예측 불가라 zip 내부를 본다)
 - 판별 불가: 'unknown'
-사용: python3 pipeline/extract/docflow_probe.py <파일 경로(내용 기준으로 판별)>"""
+사용: python3 pipeline/extract/doc_parsing_group.py <파일 경로(내용 기준으로 판별)>"""
 
 import sys
 

@@ -44,7 +44,7 @@ COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")  # csv 열 이름(RDB_COL_*)
 class DuplicateContent(ValueError):
     """다른 원천(source_id)의 기존 지문(output/dedup/manifest.jsonl)과 완전히 같은 내용 — 받기 전(비멀티파트
     ETag+크기) 또는 받은 뒤(sha256)에 판단해 그 문서만 건너뜀(O3 재설계, 2026-10-14 — 근사 중복은 더 안
-    보고 완전 중복만, `pipeline.extract.dedup.find_duplicate` 사용). 그 문서 하나만 영향 — 경로 탈출(ValueError,
+    보고 완전 중복만, `pipeline.extract.deduplication.find_duplicate` 사용). 그 문서 하나만 영향 — 경로 탈출(ValueError,
     _safe_join)과는 안 섞임(fail-loud 유지)."""
 
 
@@ -59,13 +59,13 @@ def _sha_duplicate(state, source_id, path):
     """받은 뒤(또는 폴더 원본처럼 이미 로컬에 있는 파일) 완전 중복 확인 — sha256이 다른 원천의 기존 지문과
     일치하면 그 지문을, 아니면 None을 돌려준다."""
     from common.core.contract import file_hash
-    from pipeline.extract import dedup as DEDUP
+    from pipeline.extract import deduplication as DEDUP
 
     return DEDUP.find_duplicate(_dedup_manifest_path(state), source_id, sha=file_hash(path))
 
 
 def _record_duplicate(state, source_id, dup, etag=None, size=None, updated_at=None, sha=None):
-    from pipeline.extract import dedup as DEDUP
+    from pipeline.extract import deduplication as DEDUP
 
     DEDUP.record_duplicate(
         _dedup_manifest_path(state), source_id, dup.get("source_id"), etag=etag, size=size, updated_at=updated_at, sha=sha

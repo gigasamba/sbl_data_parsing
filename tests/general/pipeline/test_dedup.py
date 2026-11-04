@@ -1,9 +1,9 @@
-"""pipeline.extract.dedup — 완전 중복(sha256)만 묶음(11-01 — 이름·내용 유사 후보는 지움, PRD pl-02)."""
+"""pipeline.extract.deduplication — 완전 중복(sha256)만 묶음(11-01 — 이름·내용 유사 후보는 지움, PRD pl-02)."""
 
 import tempfile
 from pathlib import Path
 
-from pipeline.extract.dedup import run_folder
+from pipeline.extract.deduplication import run_folder
 
 
 def test_exact_duplicates_only():

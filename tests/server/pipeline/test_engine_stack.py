@@ -1,8 +1,8 @@
-"""pipeline.stackcfg 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.stackcfg --selftest`."""
+"""pipeline.engine_stack 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.engine_stack --selftest`."""
 
 from unittest import mock
 
-from pipeline.stackcfg import EXIT_BAD_ENGINE, engine_problems, engines_of, require_engines
+from pipeline.engine_stack import EXIT_BAD_ENGINE, engine_problems, engines_of, require_engines
 
 
 def selftest():
@@ -46,7 +46,7 @@ def selftest():
         cfgfile._CACHE.clear()
         cfgfile._CACHE.update(keep)
     print(
-        "[selftest] stackcfg — 엔진 집합(parse 합집합)·없는 엔진 거부(종료 2)·같은 body → 같은 sha·저장소 파일 모양·엔진·서버도 같은 파일 통과"
+        "[selftest] engine_stack — 엔진 집합(parse 합집합)·없는 엔진 거부(종료 2)·같은 body → 같은 sha·저장소 파일 모양·엔진·서버도 같은 파일 통과"
     )
     return 0
 

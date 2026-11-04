@@ -19,7 +19,7 @@
 6. 구성의 엔진이 등록부(`pipeline/extract/engines`)에 없거나 설치되지 않았으면 → 시작하지 않는다(종료 2).
 
 ### QA
-- `tests/server/pipeline/test_stackcfg.py` · `tests/server/pipeline/test_run_all.py`.
+- `tests/server/pipeline/test_engine_stack.py` · `tests/server/pipeline/test_run_all.py`.
 - Status: done
 
 <a id="pl-22"></a>

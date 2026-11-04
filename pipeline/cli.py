@@ -38,12 +38,12 @@ _STACK: dict = {}
 
 
 def _stack():
-    """엔진 구성(사전) — 프로세스마다 한 번(pipeline/stackcfg.py: 파일 → 이미지에 없는 엔진 거부 — 서버·PC 같은 파일, 사용자 11-01).
+    """엔진 구성(사전) — 프로세스마다 한 번(pipeline/engine_stack.py: 파일 → 이미지에 없는 엔진 거부 — 서버·PC 같은 파일, 사용자 11-01).
     파일을 못 읽거나 없는 엔진이면 종료 2."""
     if "v" not in _STACK:
-        from pipeline import stackcfg
+        from pipeline import engine_stack
 
-        stackcfg.resolve()
+        engine_stack.resolve()
         _STACK["v"] = pc.stack()
     return _STACK["v"]
 
@@ -98,8 +98,8 @@ def _run_until(args, env, sec):
 
 # ── 단계 2 ───────────────────────────────────────────────────
 def _engines_of(st):
-    """parse 엔진(정렬) — stackcfg.engines_of 하나로(VS8b R-8)."""
-    from pipeline.stackcfg import engines_of
+    """parse 엔진(정렬) — engine_stack.engines_of 하나로(VS8b R-8)."""
+    from pipeline.engine_stack import engines_of
 
     return engines_of(st)
 
@@ -250,7 +250,7 @@ def parse_module(a):
         sel.write_text("\n".join(names) + "\n", encoding="utf-8")
         # fp-perf B7 — 문서 1건(run_docs 문서별 흐름)은 자식 프로세스 없이 같은 함수로(결과 파일 같음)
         if sum(1 for f in Path(local).iterdir() if f.is_file() and f.name != ".gitkeep") <= 1:
-            from pipeline.extract import dedup
+            from pipeline.extract import deduplication as dedup
 
             try:
                 dedup.run_folder(local, OUT / "dedup")
@@ -259,7 +259,7 @@ def parse_module(a):
                 print(f"[dedup] 실패: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
                 rc = 1
         else:
-            rc = _run_until(["pipeline.extract.dedup", "--src", local, "--out", OUT / "dedup"], child_env(), _left(a) - 120)
+            rc = _run_until(["pipeline.extract.deduplication", "--src", local, "--out", OUT / "dedup"], child_env(), _left(a) - 120)
         _tstep("t_dedup")
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)

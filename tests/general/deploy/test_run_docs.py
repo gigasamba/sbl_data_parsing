@@ -162,7 +162,7 @@ def test_defaults_match_settings_model():
 def test_no_stack_version():
     """사용자 11-01 — 엔진 구성은 파일(판 번호 없음): 파싱·구조화 명령에 STACK_VERSION·--stack-version이 없다."""
     cmds = RD.parse_cmd(7, "light", False, "9") + RD.struct_cmd(9)
-    assert "STACK_VERSION" not in cmds and "--stack-version" not in cmds and "stackcfg" not in cmds
+    assert "STACK_VERSION" not in cmds and "--stack-version" not in cmds and "engine_stack" not in cmds
 
 
 def test_read_settings_new_layout(tmp_path):

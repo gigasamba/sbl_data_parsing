@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """파싱 전 준비 → output/prepared/ (모든 엔진이 같은 입력을 쓰게)
 
-1. 중복 제외: --only output/dedup/keep.txt 에 있는 파일만 (modules/parse/dedup.py 먼저)
+1. 중복 제외: --only output/dedup/keep.txt 에 있는 파일만 (pipeline/extract/deduplication.py 먼저)
 2. 방향 보정(설정 `extract.prepare.rotate` — 기본 꺼짐, 사용자 11-02): 켜면 이미지·이미지 PDF의 쪽마다 0·90·180·270도로 돌려
    RapidOCR 점수(가로 글상자의 신뢰도 × 글자 수)를 **동시에**(스레드 4개, 스레드마다 RapidOCR 하나) 재고 가장 높은 방향으로 돌린다
    (같으면 0도, 모두 0이면 그대로). 끄면 회전을 위한 OCR을 전혀 하지 않고 그대로 놓는다.

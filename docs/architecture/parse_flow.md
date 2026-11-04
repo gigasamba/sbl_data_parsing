@@ -13,7 +13,7 @@
 ```mermaid
 flowchart TD
     A["입구: systemd 타이머 → trigger.sh → run_docs.py (서버) / python -m pipeline.cli parse (PC)"]
-    B["extract: source.py → dedup.py → prepare.py → run_all.py → parse_one.py + engines/*"]
+    B["extract: source.py → deduplication.py → prepare.py → run_all.py → parse_one.py + engines/*"]
     C["transform 1: parse_qa.py → represent.py (+ figures/*, 후보정)"]
     P["load 1 (silver): publish_parse_result.py → parsing_meta.py → Object Storage + EDW ParsingMeta"]
     D["transform 2: build_bundle.py → chunking.py + common/ai/embed.py → 묶음(bundle)"]
@@ -46,7 +46,7 @@ sequenceDiagram
     R->>C: docker exec … python -m pipeline.cli show-stack (엔진 구성 확인)
     loop 문서마다 (스레드)
         R->>C: python -m pipeline.extract.source warm (미리 받기)
-        R->>C: python3 pipeline/extract/docflow_probe.py (레인 분류)
+        R->>C: python3 pipeline/extract/doc_parsing_group.py (레인 분류)
         R->>C: python -m pipeline.cli --set … parse --source rdb:csv:…/batch.csv
         R->>C: python -m pipeline.load.publish_parse_result --apply
         R->>C: build_bundle → pgvector_load load
@@ -80,7 +80,7 @@ flowchart TD
 | 설정 읽기 | `run_docs.py` `configure()`·`read_settings()` | 필수 칸(`SETTINGS_REQUIRED`) 확인, `run_env`가 dev·prd가 아니면 거부, 작업 폴더·결과 폴더·컨테이너 명령을 정함 | `settings.yaml` → 전역 값 |
 | 대상 고르기 | `edw_list()`·`edw_done_keys()`·`faq_first()` | `AI.FileStorageMap`에서 `--filter`(기본 `RFP,proposal`) 이름 조건으로 목록, ParsingMeta에 끝난 문서(`ok`·`partial`은 `gold_version`도 있어야, `skipped_dup`)를 뺌, FAQ 교체가 필요하면 FAQ를 앞에 | EDW → 문서 순서 |
 | 미리 받기 | `warm_one()` → `pipeline.extract.source warm` | 문서 위치 csv(`_docflow/<seq>/batch.csv`)를 쓰고 원본을 `<결과 폴더>/_warm/<sha1>.bin`으로 받음 | Object Storage → `_warm/` |
-| 레인 분류 | `classify_doc()` → `pipeline/extract/docflow_probe.py` | 글자 형식은 light, PDF는 첫 3쪽 글자 수로 스캔 판정, 오피스 zip은 내장 그림 수·용량으로 heavy → `vlm`/`medium`/`light`. 결과는 `batch_progress/docflow_class.json`에 캐시 | 원본 → 레인 |
+| 레인 분류 | `classify_doc()` → `pipeline/extract/doc_parsing_group.py` | 글자 형식은 light, PDF는 첫 3쪽 글자 수로 스캔 판정, 오피스 zip은 내장 그림 수·용량으로 heavy → `vlm`/`medium`/`light`. 결과는 `batch_progress/docflow_class.json`에 캐시 | 원본 → 레인 |
 | 파싱 | `parse_one()` → `parse_cmd()` | `pipeline.cli parse`를 문서 폴더 `_docflow/<seq>`로 실행. 문서 폴더 칸(`PIPE_OUT_ROOT`·`DOC_DIR_PREPARED`·`PARSE_IMAGES_ROOT`·`PARSE_RAW_ROOT`) 다음 공통 `--set`(`PARSE_SET`): `VLM_MAX_CONCURRENCY=8`, `VLM_CONCURRENCY=8`, `VLM_FIGURES_MAX=10`, `PARSE_POST=supsub,charts,figures,context,attachments`, `RAPIDOCR_PAGE_WORKERS=2`, `OCR_THREADS=1`, `PIPE_PROCS=4`, `SOURCE_WARM=<결과 폴더>/_warm`, `SOURCE_FETCH_WORKERS=2`, `PARSE_REP_SELECT=first`, `PARSE_QA_LIGHT=1`. vlm 레인은 `VLM_MAX_CONCURRENCY=6`·`VLM_CONCURRENCY=6`·`PARSE_POST`에 `vlm_page` 추가·`VLM_PAGE_MAX=`(빈 값 = 쪽 수 제한 없음), 스캔 PDF는 `PREPARE_ROTATE=0`, 끝에 `CPU_MAX_LOAD=<게이트>`(light 레인은 9). 쪽 해상도는 덮지 않음(`extract.ocr.dpi` 그대로) | 원본 → `_docflow/<seq>/parse/_rep/` |
 | 게시 | `publish_one()` → `publish_cmd()` | `pipeline.load.publish_parse_result --out <문서 폴더> --source-system FileStorageMap --apply` | `_rep` → Object Storage + ParsingMeta |
 | 원본 삭제 | `drop_original()` | 게시 성공 뒤에만 `_warm/<sha1>.bin`과 `_source_files/`를 지움 | — |
@@ -113,7 +113,7 @@ PC에서는 `run_docs.py`를 돌리지 않는다(운영 EDW·Object Storage에 �
 
 ```mermaid
 flowchart TD
-    S0["cli.py parse_module: _stack() — stackcfg.resolve() 엔진 구성 검사"]
+    S0["cli.py parse_module: _stack() — engine_stack.resolve() 엔진 구성 검사"]
     S1["source.resolve: 폴더면 그대로, rdb:csv면 Object Storage에서 받기"]
     S2["dedup: 내용 SHA-256이 같은 파일은 하나만 keep"]
     S3["_unparsed: EDW ParsingMeta에 끝난 문서는 뺌"]
@@ -126,9 +126,9 @@ flowchart TD
 
 | 단계 | 파일 | 하는 일 | 입력 → 출력 |
 |---|---|---|---|
-| 엔진 구성 검사 | `pipeline/stackcfg.py` · `pipeline/extract/engines/registry.py` | `resources/config/pipeline_stack.json`을 읽고, 등록부에 없거나 설치 안 된 엔진이 있으면 종료 2 | 구성 파일 → 사전(`pipeline.config.stack()`) |
+| 엔진 구성 검사 | `pipeline/engine_stack.py` · `pipeline/extract/engines/registry.py` | `resources/config/pipeline_stack.json`을 읽고, 등록부에 없거나 설치 안 된 엔진이 있으면 종료 2 | 구성 파일 → 사전(`pipeline.config.stack()`) |
 | 원본 가져오기 | `pipeline/extract/source.py` `resolve()` | 폴더: 파일 목록 그대로. `rdb:csv:<경로>`: csv의 `AI.FileStorageMap` 다섯 칸(id·s3_key·original_filename·file_size·content_version_id)으로 Object Storage에서 받음(warm에 있으면 그걸 씀, `extract.source.fetch_workers` 병렬) | csv → `<out>/_source_files/`, `parse/_source/manifest.jsonl`·`selected.txt` |
-| 중복 확인 | `pipeline/extract/dedup.py` | 파일 내용 SHA-256이 같으면 대표 하나만 keep(지우지 않음). 문서 1건이면 자식 없이 `run_folder()` | 원본 폴더 → `dedup/keep.txt`·`groups.csv`·`report.md` |
+| 중복 확인 | `pipeline/extract/deduplication.py` | 파일 내용 SHA-256이 같으면 대표 하나만 keep(지우지 않음). 문서 1건이면 자식 없이 `run_folder()` | 원본 폴더 → `dedup/keep.txt`·`groups.csv`·`report.md` |
 | 끝난 문서 빼기 | `cli.py` `_unparsed()` → `common/store/parsing_meta_db.py` | ParsingMeta에서 `ok`·`partial` 문서 키를 한 번 읽어 뺌. 서버에서 못 읽으면 종료 4(전체 재파싱 방지) | EDW → `parse/_source/only.txt` |
 | 준비 | `pipeline/extract/prepare.py` | 머리 바이트로 DRM·OLE 암호·압축 등 미지원·열기 암호 PDF를 거르고 기록, 회전은 `extract.prepare.rotate`(`PREPARE_ROTATE`, 기본 꺼짐)일 때만 RapidOCR 점수로 0·90·180·270도 중 고름, 나머지는 복사(`place`). 형식 변환은 하지 않는다 | 원본 → `prepared/`, `prepared/rotation.csv`(회전 전 `orig_sha256`), `prepared/_records/skipped.{csv,jsonl}` |
 | 엔진 일괄 파싱 | `pipeline/extract/run_all.py` | 문서마다 형식 키(`.pdf_text`·`.pdf_image`·확장자 — `parse_run.doc_types`)의 엔진 목록을 **동시에** 돌림. OCR 엔진(`rapidocr_ko`)은 파싱 엔진으로 안 돎. 제한 시간 = 쪽 수 × 쪽당 초(글자 엔진 `tuning.extract.text_page_sec` 10 · VLM 엔진 `common.models.vlm.timeout` 180), 넘으면 두 배로 한 번 더. `--procs`면 문서를 조각내 프로세스 여럿. 같은 실행 안 같은 내용은 한 번만 파싱 후 복사 | `prepared/` → `parse/<엔진>/<문서>.json`, `parse/runs.jsonl` |

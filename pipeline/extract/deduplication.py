@@ -5,7 +5,7 @@
 (11-01 — 이름·내용 유사 후보(파일명 유사도, 텍스트 5-gram Jaccard, 이미지 dHash)는 지움: 후보는 groups.csv 보고용일 뿐
 keep.txt를 줄이지 않았다 — keep은 늘 해시로만 정해짐. 사용자 10-31 범위 축소 grill, PRD pl-02.)
 
-사용: python -m pipeline.extract.dedup [--src <원본 문서 폴더>]   (--src 생략 시 DOC_DIR 필수)
+사용: python -m pipeline.extract.deduplication [--src <원본 문서 폴더>]   (--src 생략 시 DOC_DIR 필수)
 이후: python -m pipeline.extract.run_all --only output/dedup/keep.txt   (대표만 파싱)
 """
 

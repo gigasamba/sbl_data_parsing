@@ -470,7 +470,7 @@ def apply_policy(vals):
 
 def stack_check():
     """엔진 구성 파일 확인 — 시작 때 한 번(파싱 컨테이너 안 show-stack — 파일을 못 읽거나 모양이 틀리면 종료 2, 시작하지 않음).
-    없는 엔진은 파싱 입구가 거부한다(stackcfg.resolve)."""
+    없는 엔진은 파싱 입구가 거부한다(engine_stack.resolve)."""
     rc, _, err = sh(
         f"{DOCKER} exec {PIPE_C} bash -c 'cd {_app()} && PYTHONPATH={_img('code_root')} python -m pipeline.cli show-stack'", timeout=120
     )
@@ -620,7 +620,7 @@ def classify_doc(seq, row, cache=None):
         cls = "light"
     elif ext in probe_ext:
         rc, out, _ = sh(
-            f"{DOCKER} exec {PIPE_C} python3 {_img('code_root')}/pipeline/extract/docflow_probe.py {_img('output_root')}/_warm/{_warm_bin(row)}",
+            f"{DOCKER} exec {PIPE_C} python3 {_img('code_root')}/pipeline/extract/doc_parsing_group.py {_img('output_root')}/_warm/{_warm_bin(row)}",
             timeout=60,
         )
         probe = next((ln.strip() for ln in reversed((out or "").splitlines()) if ln.strip() in ("heavy", "light")), "heavy")

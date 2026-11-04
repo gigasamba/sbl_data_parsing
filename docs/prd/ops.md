@@ -79,7 +79,7 @@
 ## rn-01 · 레인 정책 — 담당 레인 먼저, 공유 워커만 가져오기
 - 이유: 문서마다 자원 성격이 달라 레인으로 나누고, 남는 워커는 다른 레인을 돕는다.
 - 규칙:
-  1. 레인 분류(warm 때, 결과는 `s3_key`별로 저장해 다시 씀): 확장자가 `.txt .hwpx .hwp .csv .eml .msg .html .htm .tsv .md .json .xml .log .rtf`면 light. `.pdf .docx .doc .xlsx .xls .xlsm .pptx .ppt .docm`이면 컨테이너 안 `pipeline/extract/docflow_probe.py`(제한 60초, 답이 없으면 heavy)로 본다 — heavy이거나 `.pptx`·`.ppt`면 vlm(heavy PDF는 스캔 표시), 아니면 크기 기준(`.mht .docx .doc` 300KB · `.xlsx .xlsm .xls` 500KB · `.pdf` 1024KB 이상)을 넘으면 medium, 그 밖 light. 다른 확장자는 vlm.
+  1. 레인 분류(warm 때, 결과는 `s3_key`별로 저장해 다시 씀): 확장자가 `.txt .hwpx .hwp .csv .eml .msg .html .htm .tsv .md .json .xml .log .rtf`면 light. `.pdf .docx .doc .xlsx .xls .xlsm .pptx .ppt .docm`이면 컨테이너 안 `pipeline/extract/doc_parsing_group.py`(제한 60초, 답이 없으면 heavy)로 본다 — heavy이거나 `.pptx`·`.ppt`면 vlm(heavy PDF는 스캔 표시), 아니면 크기 기준(`.mht .docx .doc` 300KB · `.xlsx .xlsm .xls` 500KB · `.pdf` 1024KB 이상)을 넘으면 medium, 그 밖 light. 다른 확장자는 vlm.
   2. 워커 수: settings.yaml `ops.run_docs.<레인>_dedicated`(자기 레인만)·`<레인>_shared`(자기 레인 먼저, 비면 대기열이 가장 긴 다른 레인), 기본 각 1(모두 6개).
   3. `vlm_cap`(기본 2): 진행 중 vlm 문서가 이만큼이면 vlm 레인을 건너뛴다(전담 워커도).
   4. 고르기 = 순수 함수 `pick_lane(own, shared, queues, inflight, vlm_cap)`.
