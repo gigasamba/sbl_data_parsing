@@ -17,6 +17,7 @@
 | [architecture/db_schema.md](architecture/db_schema.md) | DB 스키마 명세 — gold(원천별 5벌)·EDW(`AI.FileStorageMap`·`AI.ParsingMeta`)·마스터(`<스키마>_master`)·`applog`. 시험 `tests/server/common/test_db_schema.py`가 판·SQL과 대조 | DB 표·칸을 바꾸거나 DB 담당자와 협의할 때 |
 | [architecture/pipeline_stack.md](architecture/pipeline_stack.md) | 엔진 구성 파일(`resources/config/pipeline_stack.json`) — 모양 검사·바꾸기·되돌리기·엔진 거부 | 엔진 구성을 바꾸거나 되돌릴 때 |
 | [architecture/prompts.md](architecture/prompts.md) | AI 지시서 패키지(`resources/prompts/` + 답변 점검 `rag_qa`) — 찾는 순서·구성·캐시 열쇠·입출력·호출부 | 지시서를 고치거나 LLM·VLM 호출부를 볼 때 |
+| [architecture/parse_flow.md](architecture/parse_flow.md) | 파싱 실행 흐름 — 입구(`run_docs.py`·`pipeline.cli`) → extract → transform → load → 검색 MCP를 단계별 그림(mermaid)과 파일 역할 표로, 단계별 산출물·캐시 열쇠, 설정·로그·출력 폴더 | 코드가 실제로 어떤 순서로 도는지, 결과가 어디에 쌓이는지 볼 때 |
 | [architecture/run_docs_design.md](architecture/run_docs_design.md) | 문서별 flow 러너 안내 — 정본은 [prd/ops.md](prd/ops.md) pl-10·rn-01~04 | flow 러너를 찾을 때 |
 | [history/](history/) | 지난 기록(보관만 — 고치지 않음). [refactoring/refactor_plan.md](refactoring/refactor_plan.md)는 옮긴 곳 안내 | 옛 결정(`D-xxx`·`P-xx`)·이력을 찾을 때 |
 
