@@ -1551,13 +1551,15 @@ class CommonModels(Section):
 
 class CommonLog(Section):
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = F("INFO", "LOG_LEVEL", "JSON 사건 기록 최소 수준")
-    dir: str | None = F(None, "APPLOG_DIR", "JSON 로그 폴더 — 비우면 PC logs/, 서버 stdout")
+    dir: str | None = F(None, "APPLOG_DIR", "JSON 로그 폴더 — 비우면 PC output/logs/, 서버 stdout")
     db_enabled: bool = F(
         image_default("APPLOG_DB_ENABLED", False),
         "APPLOG_DB_ENABLED",
         "applog DB 비동기 기록(서버 이미지 기본 켬, PC 기본 끔) — 서버 로그는 Postgres만, migrate up --target applog 먼저(op-13)",
     )
-    fallback_dir: str = F("output/logs", "APPLOG_FALLBACK_DIR", "DB 실패 시 JSON Lines 대체 기록 폴더(op-13 — 파일은 이 예비 한 곳)")
+    fallback_dir: str | None = F(
+        None, "APPLOG_FALLBACK_DIR", "DB 실패 시 JSON Lines 대체 기록 폴더(비우면 <앱 루트>/output/logs — 파일은 이 예비 한 곳, op-13)"
+    )
     retention_days: int = F(90, "APPLOG_RETENTION_DAYS", "월 파티션 보존 일수(월 끝이 만료된 파티션만 DROP)", ge=1)
     queue_size: int = F(10000, "APPLOG_QUEUE_SIZE", "DB 기록 대기 큐 상한 — 넘으면 드롭 집계", ge=1)
     batch_size: int = F(200, "APPLOG_BATCH_SIZE", "DB INSERT 배치 최대 행 수", ge=1)

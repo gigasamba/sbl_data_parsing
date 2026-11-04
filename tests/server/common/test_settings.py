@@ -272,7 +272,7 @@ def selftest():
         check(
             "op-13 — 서버(두 이미지) 로그는 DB 기본 켬, PC 기본 끔 · 대체 파일은 output/logs 한 곳",
             all(_IMAGE_DEFAULTS[m]["APPLOG_DB_ENABLED"] is True for m in ("pipeline", "mcp"))
-            and CommonLog.model_fields["fallback_dir"].default == "output/logs"
+            and CommonLog.model_fields["fallback_dir"].default is None
             and (CommonLog().db_enabled is True) == ("APPLOG_DB_ENABLED" in IMAGE_DEFAULTS),
         )
         aw = {
