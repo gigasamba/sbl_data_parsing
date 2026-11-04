@@ -32,6 +32,10 @@ LAYER_CODE = {
     "p1": [
         "pipeline/config.py",
         "pipeline/extract/run_engines.py",  # 첨부 다시 파싱(_isolated)·VLM 엔진 목록
+        "pipeline/extract/engines/registry.py",  # p1 파일이 import하는 엔진 파일
+        "pipeline/extract/engines/mhtml/parser.py",
+        "pipeline/extract/engines/rapidocr/parser.py",
+        "pipeline/extract/engines/_common/*.py",
         "pipeline/shared/parse_run.py",
         "pipeline/shared/post_config.py",
         "pipeline/shared/ext_groups.py",
@@ -77,9 +81,13 @@ LAYER_CODE = {
         "pipeline/transform/structure/client_roster.py",
     ],
     "r": [
+        "mcp_server/config.py",
         "mcp_server/services/search/retriever.py",
         "mcp_server/services/search/rank_rules.py",
         "mcp_server/services/search/pgsearch.py",
+        "mcp_server/services/search/query_expand.py",
+        "mcp_server/services/search/question_type.py",
+        "mcp_server/services/search/bm25_weights.py",
     ],
 }
 

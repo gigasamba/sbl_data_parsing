@@ -24,8 +24,11 @@ def test_every_transform_file_in_a_layer():
 NOT_OUTPUT = {"pipeline/shared/runtrace.py"}
 
 
-def _pipeline_imports(f):
-    """파일이 import하는 pipeline 모듈 파일(deploy/ 기준 경로) — 점 이름을 뒤에서부터 줄여 .py나 패키지를 찾는다."""
+APPS = ("pipeline", "mcp_server")
+
+
+def _app_imports(f):
+    """파일이 import하는 앱(pipeline·mcp_server) 모듈 파일(deploy/ 기준 경로) — 점 이름을 뒤에서부터 줄여 .py나 패키지를 찾는다."""
     import ast
 
     def file_of(dotted):
@@ -39,27 +42,28 @@ def _pipeline_imports(f):
 
     names = set()
     for n in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
-        if isinstance(n, ast.ImportFrom) and n.module and n.module.split(".")[0] == "pipeline":
+        if isinstance(n, ast.ImportFrom) and n.module and n.module.split(".")[0] in APPS:
             names |= {f"{n.module}.{al.name}" for al in n.names}
         elif isinstance(n, ast.Import):
-            names |= {al.name for al in n.names if al.name.split(".")[0] == "pipeline"}
+            names |= {al.name for al in n.names if al.name.split(".")[0] in APPS}
     return {x for x in map(file_of, names) if x}
 
 
 def test_layer_imports_in_layer():
-    """층 파일이 import하는 pipeline 파일은 같은 층에 있다(엔진 코드는 p0) — 빠지면 그 파일을 고쳐도 지문이 안 바뀜."""
+    """층 파일이 import하는 앱 파일(pipeline·mcp_server — 엔진 파일 포함)은 같은 층에 있다 — 빠지면 그 파일을 고쳐도 지문이 안 바뀜."""
     if not (DEPLOY_ROOT / "pipeline" / "transform").is_dir():  # mcp-server 이미지
         return
-    p0 = {p.relative_to(DEPLOY_ROOT).as_posix() for g in a.LAYER_CODE["p0"] for p in DEPLOY_ROOT.glob(g)}
     for layer, globs in a.LAYER_CODE.items():
         own = {p.relative_to(DEPLOY_ROOT).as_posix() for g in globs for p in DEPLOY_ROOT.glob(g) if p.is_file()}
-        missing = sorted({m for f in own for m in _pipeline_imports(DEPLOY_ROOT / f)} - own - p0 - NOT_OUTPUT)
+        missing = sorted({m for f in own for m in _app_imports(DEPLOY_ROOT / f)} - own - NOT_OUTPUT)
         assert not missing, f"층 {layer} 목록(artifacts.LAYER_CODE)에 적을 것: {missing}"
 
 
 CASES = [  # (고칠 파일, 바뀌어야 하는 층)
     ("pipeline/transform/represent/text_normalize.py", {"p1"}),
     ("pipeline/shared/parse_run.py", {"p0", "p1"}),
+    ("pipeline/extract/engines/registry.py", {"p0", "p1"}),
+    ("mcp_server/services/search/query_expand.py", {"r"}),
     ("pipeline/transform/structure/client_roster.py", {"s"}),
     ("common/store/db/models/search_tables.py", set()),
     ("common/core/jsonlog.py", set()),
