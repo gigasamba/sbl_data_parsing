@@ -1,9 +1,9 @@
-"""pipeline.tools.resource_check 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.tools.resource_check`."""
+"""pipeline.tools.py_env_check 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.tools.py_env_check`."""
 
 import os
 import sys
 
-from pipeline.tools.resource_check import py_env_problem
+from pipeline.tools.py_env_check import py_env_problem
 
 
 def selftest():
