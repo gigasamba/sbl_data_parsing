@@ -80,29 +80,21 @@ def _run_until(args, env, sec):
     args[0] = 모듈 점 표기(예: pipeline.extract.run_engines)."""
     cmd = [PY, "-m", str(args[0]), *map(str, args[1:])]
     print("$ " + " ".join(cmd), flush=True)
-    from common.core import resources as PR  # 프로세스 묶음(OS 분기 한 곳)
-    from common.core import resources as RS
+    from common.core import resources as RS  # 프로세스 묶음(OS 분기 한 곳)
 
     def call():
         # cwd=APP_ROOT(런타임 루트) — ROOT(코드 루트)로 하면 --src 상대경로가 거기 기준으로 풀려 못 찾음(FS v4 회귀)
-        p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **PR.group_kw())
+        p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **RS.group_kw())
         try:
             return p.wait(timeout=max(1, sec))
         except subprocess.TimeoutExpired:
-            PR.kill_group(p)
+            RS.kill_group(p)
             return None
 
     return _traced(str(args[0]), call)
 
 
 # ── 단계 2 ───────────────────────────────────────────────────
-def _engines_of(st):
-    """parse 엔진(정렬) — engine_stack.engines_of 하나로(VS8b R-8)."""
-    from pipeline.extract.engine_stack import engines_of
-
-    return engines_of(st)
-
-
 def show_stack(a=None):
     """지금 엔진 구성(파일 — 서버·PC 같음). mcp-server 이미지에서도 됨(등록부 안 씀)."""
     from common.store.db import cfgfile
@@ -148,6 +140,7 @@ def parse_module(a):
     """파싱 모듈: (--source면) 가져오기·시험 표본 → 중복 확인 → 방향 보정 → 파싱 → 채점 → 대표 결과 → 끝 표시 → (s3) 원본 정리.
     임베딩·DB 연결 없음 — 수집 서버에 이것만 보낼 수 있음. --source 없으면 --src(이미 준비된 폴더)를 그대로."""
     from common.core.paths import child_env
+    from pipeline.extract import engine_stack
     from pipeline.extract import fetch_docs as SRC
     from pipeline.extract import run_engines as RE
 
@@ -162,7 +155,7 @@ def parse_module(a):
     from pipeline.shared import runtrace
 
     runtrace.info(stack=st.get("name"), workers=int(a.workers) if str(a.workers).isdigit() else None)
-    engines = a.engines or ",".join(_engines_of(st))
+    engines = a.engines or ",".join(engine_stack.engines_of(st))  # parse 엔진(정렬) — VS8b R-8
     # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) · 스트리밍 파싱은 op-08에 지움
     lim, src_info = [], None
     if a.source:  # 문서 위치: 같은 서버 폴더 → Object Storage 몇 건 → 전체(사용자 10-02)
