@@ -12,373 +12,373 @@
 required:
   # ─── 실행 환경 [PC·서버] ───
   env:
-    run_env:  # 실행 환경 · 값: local·dev·prd 중 하나
-    run_mode:  # 실행 모드 prod · 값: prod 하나(비우면 설정 안 함 — test는 0.2.0에 지움)
+    run_env:                              # 실행 환경 · 값: local·dev·prd 중 하나
+    run_mode:                             # 실행 모드 prod · 값: prod 하나(비우면 설정 안 함 — test는 0.2.0에 지움)
   # ─── PostgreSQL(pgvector · gold) [PC·서버] ───
   pg:
-    host:  # PostgreSQL 서버 호스트 · 값: 호스트 이름·IP
-    port:  # PostgreSQL 포트(필수 — op-09) · 값: 1~65535
-    db:  # PostgreSQL 데이터베이스 이름(필수 — op-09) · 값: 글자
-    user:  # PostgreSQL 접속 계정 이름(필수 — op-09) · 값: 글자
-    password:  # PostgreSQL 비밀번호 · 값: 비밀 글자 [비밀]
-    db_schema:  # pgvector 기본 스키마 이름(소문자·숫자·_ — 필수, op-09) · 값: 글자
+    host:                                 # PostgreSQL 서버 호스트 · 값: 호스트 이름·IP
+    port:                                 # PostgreSQL 포트(필수 — op-09) · 값: 1~65535
+    db:                                   # PostgreSQL 데이터베이스 이름(필수 — op-09) · 값: 글자
+    user:                                 # PostgreSQL 접속 계정 이름(필수 — op-09) · 값: 글자
+    password:                             # PostgreSQL 비밀번호 · 값: 비밀 글자 [비밀]
+    db_schema:                            # pgvector 기본 스키마 이름(소문자·숫자·_ — 필수, op-09) · 값: 글자
   # ─── 임베딩 모델 [PC·서버] ───
   embed:
-    base_url:  # 임베딩 엔드포인트 주소(OpenAI 호환 …/v1) · 값: URL
-    model:  # 임베딩 모델 이름(색인과 같아야 함 — 질의 임베딩·캐시 열쇠에도 씀) · 값: 글자
-    api_key:  # 임베딩 엔드포인트 API 키(있을 때만 Authorization 헤더로 보냄) · 값: 비밀 글자 [비밀]
+    base_url:                             # 임베딩 엔드포인트 주소(OpenAI 호환 …/v1) · 값: URL
+    model:                                # 임베딩 모델 이름(색인과 같아야 함 — 질의 임베딩·캐시 열쇠에도 씀) · 값: 글자
+    api_key:                              # 임베딩 엔드포인트 API 키(있을 때만 Authorization 헤더로 보냄) · 값: 비밀 글자 [비밀]
   # ─── EDW(회사 DB) [서버만] ───
   edw:
-    host:  # EDW 서버 주소(호스트) · 값: 호스트 이름·IP
-    database:  # EDW 데이터베이스 이름 · 값: 글자
-    read_user:  # EDW 읽기 계정 이름 · 값: 글자
-    read_password:  # EDW 읽기 계정 비밀번호 · 값: 비밀 글자 [비밀]
-    write_user:  # EDW 쓰기 계정 이름 · 값: 글자
-    write_password:  # EDW 쓰기 계정 비밀번호 · 값: 비밀 글자 [비밀]
+    host:                                 # EDW 서버 주소(호스트) · 값: 호스트 이름·IP
+    database:                             # EDW 데이터베이스 이름 · 값: 글자
+    read_user:                            # EDW 읽기 계정 이름 · 값: 글자
+    read_password:                        # EDW 읽기 계정 비밀번호 · 값: 비밀 글자 [비밀]
+    write_user:                           # EDW 쓰기 계정 이름 · 값: 글자
+    write_password:                       # EDW 쓰기 계정 비밀번호 · 값: 비밀 글자 [비밀]
   # ─── Object Storage [서버만] ───
   object_storage:
-    endpoint:  # Object Storage(S3 호환) 엔드포인트 URL · 값: URL
-    access_key:  # Object Storage(S3) 액세스 키 · 값: 비밀 글자 [비밀]
-    secret_key:  # Object Storage(S3) 시크릿 키 · 값: 비밀 글자 [비밀]
+    endpoint:                             # Object Storage(S3 호환) 엔드포인트 URL · 값: URL
+    access_key:                           # Object Storage(S3) 액세스 키 · 값: 비밀 글자 [비밀]
+    secret_key:                           # Object Storage(S3) 시크릿 키 · 값: 비밀 글자 [비밀]
   # ─── LLM·VLM 모델 [PC·서버] ───
   models:
-    llm_base_url:  # LLM 엔드포인트 주소(OpenAI 호환 …/v1) · 값: URL
-    llm_model:  # LLM 모델 이름 · 값: 글자
-    llm_api_key:  # LLM 엔드포인트 API 키(있을 때만 사용) · 값: 비밀 글자 [비밀]
-    vlm_base_url:  # VLM 엔드포인트 주소(OpenAI 호환 …/v1) · 값: URL
-    vlm_model:  # VLM 모델 이름 · 값: 글자
-    vlm_api_key:  # VLM 엔드포인트 API 키(있을 때만) · 값: 비밀 글자 [비밀]
+    llm_base_url:                         # LLM 엔드포인트 주소(OpenAI 호환 …/v1) · 값: URL
+    llm_model:                            # LLM 모델 이름 · 값: 글자
+    llm_api_key:                          # LLM 엔드포인트 API 키(있을 때만 사용) · 값: 비밀 글자 [비밀]
+    vlm_base_url:                         # VLM 엔드포인트 주소(OpenAI 호환 …/v1) · 값: URL
+    vlm_model:                            # VLM 모델 이름 · 값: 글자
+    vlm_api_key:                          # VLM 엔드포인트 API 키(있을 때만) · 값: 비밀 글자 [비밀]
   # ─── 원천·게시 위치 [서버만] ───
   source:
-    input_source:  # 파싱 원본 위치: 폴더·rdb:csv:경로(11-01 — s3://·rdb:*·rdb:<이름>·rdb:<표> 지움) · 값: 경로
-    source_bucket:  # RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값) · 값: 글자
-    source_uri_prefix:  # 원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///srv/rag/docs) · 값: 글자
-    publish_bucket:  # publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소) · 값: 경로
-    publish_prefix:  # 버킷 안 업로드 경로 접두 · 값: 경로
+    input_source:                         # 파싱 원본 위치: 폴더·rdb:csv:경로(11-01 — s3://·rdb:*·rdb:<이름>·rdb:<표> 지움) · 값: 경로
+    source_bucket:                        # RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값) · 값: 글자
+    source_uri_prefix:                    # 원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///srv/rag/docs) · 값: 글자
+    publish_bucket:                       # publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소) · 값: 버킷 이름 · PC는 file://<폴더>
+    publish_prefix:                       # 버킷 안 업로드 경로 접두 · 값: 글자(버킷 안 경로 접두)
   # ─── 서비스 토큰 [서버만] ───
   tokens:
-    parse_mcp:  # parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값) · 값: 비밀 글자 [비밀]
-    mcp:  # MCP 서버 Bearer 토큰(비루프백 바인드면 필수) · 값: 비밀 글자 [비밀]
-    parse_proxy:  # parse_document가 작업 서비스(mcp_parse_service)를 부를 때 쓰는 토큰 · 값: 비밀 글자 [비밀]
+    parse_mcp:                            # parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값) · 값: 비밀 글자 [비밀]
+    mcp:                                  # MCP 서버 Bearer 토큰(비루프백 바인드면 필수) · 값: 비밀 글자 [비밀]
+    parse_proxy:                          # parse_document가 작업 서비스(mcp_parse_service)를 부를 때 쓰는 토큰 · 값: 비밀 글자 [비밀]
   # ─── 서버 배포(이미지·호스트 폴더) [서버만] ───
   deploy:
-    pipeline_image:  # data-pipeline 이미지 이름:태그(compose 필수 변수) · 값: 글자
-    mcp_image:  # mcp-server 컨테이너 이미지 이름:태그 · 값: 글자
-    doc_src:  # 원본 문서 폴더(DOC_DIR의 옛 별칭) · 값: 경로
-    output_root:  # 호스트의 결과(output) 폴더(서버 경로) · 값: 경로
-    pg_container:  # 호스트에서 psql을 docker exec할 PostgreSQL(pgvector) 컨테이너 이름 · 값: 글자(컨테이너 이름)
+    pipeline_image:                       # data-pipeline 이미지 이름:태그(compose 필수 변수) · 값: 글자
+    mcp_image:                            # mcp-server 컨테이너 이미지 이름:태그 · 값: 글자
+    doc_src:                              # 원본 문서 폴더(DOC_DIR의 옛 별칭) · 값: 경로
+    output_root:                          # 호스트의 결과(output) 폴더(서버 경로) · 값: 경로
+    pg_container:                         # 호스트에서 psql을 docker exec할 PostgreSQL(pgvector) 컨테이너 이름 · 값: 글자(컨테이너 이름)
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 common:
   # ─── 접속 — PostgreSQL·EDW·Object Storage 세부 ───
   connections:
     object_storage:
-      region: us-east-1  # Object Storage 리전 이름 · 기본 us-east-1 · 값: 글자
-      verify_tls: '1'  # TLS 인증서 검증(1=검증, 0=끔, 그 밖 문자열=CA 파일 경로) · 기본 1 · 값: 1(검증)·0(끔)·CA 파일 경로
+      region: us-east-1                   # Object Storage 리전 이름 · 기본 us-east-1 · 값: 글자
+      verify_tls: '1'                     # TLS 인증서 검증(1=검증, 0=끔, 그 밖 문자열=CA 파일 경로) · 기본 1 · 값: 1(검증)·0(끔)·CA 파일 경로
     parsing_meta:
-      table: AI.ParsingMeta  # parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_) · 기본 AI.ParsingMeta · 값: 글자
+      table: AI.ParsingMeta               # parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_) · 기본 AI.ParsingMeta · 값: 글자
     pg:
-      conn_file:  # PostgreSQL 접속 정보를 KEY=VALUE로 담은 파일 경로(환경변수가 덮음) · 값: 경로
-      connect_timeout: 10  # PostgreSQL 연결 시도 제한 시간 · 기본 10 · 값: 0 이상 정수(초)
-      pool_max: 8  # 검색 MCP PostgreSQL 연결 풀 최대 연결 수 · 기본 8 · 값: 0 이상 정수
-      standin_dir:  # PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더 · 값: 경로
-      standin_schema: ai  # 로컬 대체 DB(sqlite)의 스키마 이름 · 기본 ai · 값: 글자
+      conn_file:                          # PostgreSQL 접속 정보를 KEY=VALUE로 담은 파일 경로(환경변수가 덮음) · 값: 경로
+      connect_timeout: 10                 # PostgreSQL 연결 시도 제한 시간 · 기본 10 · 값: 0 이상 정수(초)
+      pool_max: 8                         # 검색 MCP PostgreSQL 연결 풀 최대 연결 수 · 기본 8 · 값: 0 이상 정수
+      standin_dir:                        # PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더 · 값: 경로
+      standin_schema: ai                  # 로컬 대체 DB(sqlite)의 스키마 이름 · 기본 ai · 값: 글자
     rdb:
-      connect_kwargs:  # EDW pymssql 연결에 더할 추가 인자(JSON 객체 — TLS·로그인 시간 등) · 값: 비밀 글자 [비밀]
-      port: 1433  # EDW 포트 · 기본 1433 · 값: 1~65535
-      sqlite:  # 시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) · 값: 경로
+      connect_kwargs:                     # EDW pymssql 연결에 더할 추가 인자(JSON 객체 — TLS·로그인 시간 등) · 값: 비밀 글자 [비밀]
+      port: 1433                          # EDW 포트 · 기본 1433 · 값: 1~65535
+      sqlite:                             # 시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) · 값: 경로
   # ─── 모델 호출 — 임베딩·LLM·VLM·전송 ───
   models:
     embed:
-      allow_external:  # 임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만 — 내부망 서버 시험·운영은 0) · 기본 false · 값: true·false
-      est_usd: 0.001  # 임베딩 호출 1건당 예상 비용($) · 기본 0.001 · 값: 0 이상
-      query_cache:  # 질의 임베딩 캐시 sqlite 경로(0이면 캐시 끔 — mcp 이미지 안 기본 /tmp/mcp_query_cache.sqlite: 결과 폴더가 읽기 전용) · 값: 경로
-      query_prefix:  # [파라미터] 질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …\nQuery: ') · 값: 글자
+      allow_external:                     # 임베딩 외부 주소 허용(=1이면 열림, RUN_ENV=local일 때만 — 내부망 서버 시험·운영은 0) · 기본 false · 값: true·false
+      est_usd: 0.001                      # 임베딩 호출 1건당 예상 비용($) · 기본 0.001 · 값: 0 이상
+      query_cache:                        # 질의 임베딩 캐시 sqlite 경로(0이면 캐시 끔 — mcp 이미지 안 기본 /tmp/mcp_query_cache.sqlite: 결과 폴더가 읽기 전용) · 값: 경로
+      query_prefix:                       # [파라미터] 질의 임베딩 앞에 붙이는 지시 문구(예: 'Instruct: …\nQuery: ') · 값: 글자
     llm:
-      allow_external:  # LLM(분류 등) 외부 주소 허용(=1, RUN_ENV=local일 때만 — 내부망 서버 시험·운영은 0) · 기본 false · 값: true·false
-      cache_dir:  # LLM 응답 캐시 폴더(요청 해시별 json) · 값: 경로
-      est_usd: 0.01  # 외부 LLM 도구 왕복 한 턴(admit_turn)당 예상 비용($) · 기본 0.01 · 값: 0 이상
-      extra_body:  # [파라미터] LLM 요청 본문에 합칠 JSON 객체(예: 생각 끄기 {'reasoning':{'enabled':false}}) · 값: JSON 객체
-      price_in:  # LLM 입력 단가($/백만 토큰) · 값: 0 이상
-      price_out:  # LLM 출력 단가($/백만 토큰) · 값: 0 이상
-      rpm: 0  # LLM 분당 호출 상한(건) · 기본 0 · 값: 0 이상 정수 (0 = 무제한)
+      allow_external:                     # LLM(분류 등) 외부 주소 허용(=1, RUN_ENV=local일 때만 — 내부망 서버 시험·운영은 0) · 기본 false · 값: true·false
+      cache_dir:                          # LLM 응답 캐시 폴더(요청 해시별 json) · 값: 경로
+      est_usd: 0.01                       # 외부 LLM 도구 왕복 한 턴(admit_turn)당 예상 비용($) · 기본 0.01 · 값: 0 이상
+      extra_body:                         # [파라미터] LLM 요청 본문에 합칠 JSON 객체(예: 생각 끄기 {'reasoning':{'enabled':false}}) · 값: JSON 객체
+      price_in:                           # LLM 입력 단가($/백만 토큰) · 값: 0 이상
+      price_out:                          # LLM 출력 단가($/백만 토큰) · 값: 0 이상
+      rpm: 0                              # LLM 분당 호출 상한(건) · 기본 0 · 값: 0 이상 정수 (0 = 무제한)
     vlm:
-      allow_external:  # VLM(그림·스캔 쪽) 외부 주소 허용(=1, RUN_ENV=local일 때만 — 내부망 서버 시험·운영은 0) · 기본 false · 값: true·false
-      concurrency: 4  # 한 문서의 쪽(그림) VLM 동시 요청 수(개) · 기본 4 · 값: 0 이상 정수
-      est_usd: 0.02  # VLM 호출 1건당 예상 비용($) · 기본 0.02 · 값: 0 이상
-      extra_body:  # [파라미터] VLM 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기) · 값: JSON 객체
-      max_concurrency:  # 공유 VLM 서버 동시 요청 총량 상한(문서 동시 수 × 쪽 동시 수가 이 값을 못 넘게 줄임) · 기본 8 · 값: 0 이상 · auto 또는 비우면 자동 계산
-      timeout: 180  # VLM 쪽당 호출 제한 시간(초) · 기본 180 · 값: 0 이상 정수(초)
+      allow_external:                     # VLM(그림·스캔 쪽) 외부 주소 허용(=1, RUN_ENV=local일 때만 — 내부망 서버 시험·운영은 0) · 기본 false · 값: true·false
+      concurrency: 4                      # 한 문서의 쪽(그림) VLM 동시 요청 수(개) · 기본 4 · 값: 0 이상 정수
+      est_usd: 0.02                       # VLM 호출 1건당 예상 비용($) · 기본 0.02 · 값: 0 이상
+      extra_body:                         # [파라미터] VLM 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기) · 값: JSON 객체
+      max_concurrency:                    # 공유 VLM 서버 동시 요청 총량 상한(문서 동시 수 × 쪽 동시 수가 이 값을 못 넘게 줄임) · 기본 8 · 값: 0 이상 · auto 또는 비우면 자동 계산
+      timeout: 180                        # VLM 쪽당 호출 제한 시간(초) · 기본 180 · 값: 0 이상 정수(초)
     # ─── 비용·외부 가드 ───
     guard:
-      budget_usd: 0.1  # 외부 모델 호출 하루(현지 날짜·PC 사용자마다) 지출 상한($), 넘으면 호출 안 함 · 기본 0.1 · 값: 0 이상
-      internal_host_suffixes: []  # 내부망으로 인정할 호스트 이름 접미사 목록(쉼표 구분, 실제 주소가 사설일 때만) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
-      internal_ip_ranges: []  # 사설(RFC1918) 밖의 사내 IP 대역 CIDR 목록(쉼표 구분) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
-      spend_file:  # 지출 장부 파일 경로(이름 뒤에 날짜를 붙여 하루마다 새 파일, 비우면 <저장소>/output/llm_spend/<날짜>.txt) · 값: 경로
+      budget_usd: 0.1                     # 외부 모델 호출 하루(현지 날짜·PC 사용자마다) 지출 상한($), 넘으면 호출 안 함 · 기본 0.1 · 값: 0 이상
+      internal_host_suffixes: []          # 내부망으로 인정할 호스트 이름 접미사 목록(쉼표 구분, 실제 주소가 사설일 때만) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
+      internal_ip_ranges: []              # 사설(RFC1918) 밖의 사내 IP 대역 CIDR 목록(쉼표 구분) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
+      spend_file:                         # 지출 장부 파일 경로(이름 뒤에 날짜를 붙여 하루마다 새 파일, 비우면 <저장소>/output/llm_spend/<날짜>.txt) · 값: 경로
   # ─── 검색 토큰 정규화 ───
   text:
-    search_en_stem: true  # 검색 토큰의 영어 복수→단수 정규화(G16, 가산만) · 기본 true · 값: true·false
-    token_num_norm: true  # 검색 토큰의 숫자·단위 정규화(T1) · 기본 true · 값: true·false
+    search_en_stem: true                  # 검색 토큰의 영어 복수→단수 정규화(G16, 가산만) · 기본 true · 값: true·false
+    token_num_norm: true                  # 검색 토큰의 숫자·단위 정규화(T1) · 기본 true · 값: true·false
 
 extract:
   # ─── 원천 목록 DB(EDW 표·열 이름) ───
   connections:
     rdb:
-      company:  # RDB에서 가져올 회사 ID 필터(쉼표 목록, 비우면 필터 없음) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
-      doc_type:  # RDB에서 가져올 문서 유형 필터(쉼표 목록, 비우면 필터 없음) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
-      engine: mssql  # RDB 종류(mssql | pg) · 기본 mssql · 값: mssql·pg 중 하나
-      increment_col:  # 증분(since) 판정에 쓸 열 이름(updated 열이 없을 때 대체) · 값: 글자
+      company:                            # RDB에서 가져올 회사 ID 필터(쉼표 목록, 비우면 필터 없음) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
+      doc_type:                           # RDB에서 가져올 문서 유형 필터(쉼표 목록, 비우면 필터 없음) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
+      engine: mssql                       # RDB 종류(mssql | pg) · 기본 mssql · 값: mssql·pg 중 하나
+      increment_col:                      # 증분(since) 판정에 쓸 열 이름(updated 열이 없을 때 대체) · 값: 글자
       columns:
-        bucket:  # RDB 문서 위치 표에서 버킷 열의 이름(비우면 열 없음) · 값: 글자
-        company:  # RDB 문서 위치 표에서 회사 ID(필터용) 열의 이름(비우면 열 없음) · 값: 글자
-        content_type:  # RDB 문서 위치 표에서 콘텐츠 타입 열의 이름(비우면 열 없음) · 값: 글자
+        bucket:                           # RDB 문서 위치 표에서 버킷 열의 이름(비우면 열 없음) · 값: 글자
+        company:                          # RDB 문서 위치 표에서 회사 ID(필터용) 열의 이름(비우면 열 없음) · 값: 글자
+        content_type:                     # RDB 문서 위치 표에서 콘텐츠 타입 열의 이름(비우면 열 없음) · 값: 글자
         content_version: content_version_id  # RDB 문서 위치 표에서 문서 판(content version) ID 열의 이름 · 기본 content_version_id · 값: 글자
-        contract:  # RDB 문서 위치 표에서 계약 ID 열의 이름(비우면 열 없음) · 값: 글자
-        doc_id: id  # RDB 문서 위치 표에서 문서 ID 열의 이름 · 기본 id · 값: 글자
-        doc_type:  # RDB 문서 위치 표에서 문서 유형(필터용) 열의 이름(비우면 열 없음) · 값: 글자
-        etag:  # RDB 문서 위치 표에서 ETag 열의 이름(비우면 열 없음) · 값: 글자
-        filename: original_filename  # RDB 문서 위치 표에서 원본 파일 이름 열의 이름 · 기본 original_filename · 값: 글자
-        is_deleted:  # RDB 문서 위치 표에서 삭제 표시 열의 이름(비우면 열 없음) · 값: 글자
-        key: s3_key  # RDB 문서 위치 표에서 Object Storage 키(s3_key) 열의 이름 · 기본 s3_key · 값: 글자
-        size: file_size  # RDB 문서 위치 표에서 파일 크기 열의 이름 · 기본 file_size · 값: 글자
-        supersedes:  # RDB 문서 위치 표에서 대체 대상 문서 ID 열의 이름(비우면 열 없음) · 값: 글자
-        updated:  # RDB 문서 위치 표에서 갱신 시각(증분 기준) 열의 이름(비우면 열 없음) · 값: 글자
-        version:  # RDB 문서 위치 표에서 문서 버전 열의 이름(비우면 열 없음) · 값: 글자
+        contract:                         # RDB 문서 위치 표에서 계약 ID 열의 이름(비우면 열 없음) · 값: 글자
+        doc_id: id                        # RDB 문서 위치 표에서 문서 ID 열의 이름 · 기본 id · 값: 글자
+        doc_type:                         # RDB 문서 위치 표에서 문서 유형(필터용) 열의 이름(비우면 열 없음) · 값: 글자
+        etag:                             # RDB 문서 위치 표에서 ETag 열의 이름(비우면 열 없음) · 값: 글자
+        filename: original_filename       # RDB 문서 위치 표에서 원본 파일 이름 열의 이름 · 기본 original_filename · 값: 글자
+        is_deleted:                       # RDB 문서 위치 표에서 삭제 표시 열의 이름(비우면 열 없음) · 값: 글자
+        key: s3_key                       # RDB 문서 위치 표에서 Object Storage 키(s3_key) 열의 이름 · 기본 s3_key · 값: 글자
+        size: file_size                   # RDB 문서 위치 표에서 파일 크기 열의 이름 · 기본 file_size · 값: 글자
+        supersedes:                       # RDB 문서 위치 표에서 대체 대상 문서 ID 열의 이름(비우면 열 없음) · 값: 글자
+        updated:                          # RDB 문서 위치 표에서 갱신 시각(증분 기준) 열의 이름(비우면 열 없음) · 값: 글자
+        version:                          # RDB 문서 위치 표에서 문서 버전 열의 이름(비우면 열 없음) · 값: 글자
     # ─── 보안 문서 ───
     secure_doc:
-      password:  # 암호 걸린 문서를 여는 암호 1개(secure_docs decrypt에서 시도) · 값: 비밀 글자 [비밀]
-      passwords_file:  # 암호 걸린 문서용 암호 목록 파일 경로(한 줄에 암호 하나) · 값: 경로
+      password:                           # 암호 걸린 문서를 여는 암호 1개(secure_docs decrypt에서 시도) · 값: 비밀 글자 [비밀]
+      passwords_file:                     # 암호 걸린 문서용 암호 목록 파일 경로(한 줄에 암호 하나) · 값: 경로
   # ─── 원천 받기·처리 상한 ───
-  max_file_mb: 0.0  # 이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음) · 기본 0.0 · 값: 0 이상 (0 = 제한 없음)
-  max_new: 0  # 이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음)
-  prefetch_workers: 2  # 미리받기(warm) 명령의 동시 다운로드 스레드 수(개) · 기본 2 · 값: 0 이상 정수
-  skipped_log:  # 건너뛴 문서(암호 PDF 등) 기록 jsonl 경로 · 값: 경로
-  source_limit: 0  # 원본에서 처리할 문서 건수 상한(0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음)
+  max_file_mb: 0.0                        # 이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음) · 기본 0.0 · 값: 0 이상 (0 = 제한 없음)
+  max_new: 0                              # 이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음)
+  prefetch_workers: 2                     # 미리받기(warm) 명령의 동시 다운로드 스레드 수(개) · 기본 2 · 값: 0 이상 정수
+  skipped_log:                            # 건너뛴 문서(암호 PDF 등) 기록 jsonl 경로 · 값: 경로
+  source_limit: 0                         # 원본에서 처리할 문서 건수 상한(0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음)
   source:
-    fetch_workers: 1  # 원본 문서 병렬 다운로드 스레드 수(개) · 기본 1 · 값: 0 이상 정수
-    warm:  # 미리받기(warm) 저장 폴더 · 값: 경로
+    fetch_workers: 1                      # 원본 문서 병렬 다운로드 스레드 수(개) · 기본 1 · 값: 0 이상 정수
+    warm:                                 # 미리받기(warm) 저장 폴더 · 값: 경로
   # ─── 회전 준비(prepare) ───
   prepare:
-    link: auto  # 회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy · 기본 auto · 값: auto·hardlink·symlink·copy 중 하나
-    rotate: false  # 이미지·스캔 PDF 쪽 방향 바로잡기 켬/끔 · 기본 false · 값: true·false
+    link: auto                            # 회전 불필요 파일을 out으로 놓는 방식: auto|hardlink|symlink|copy · 기본 auto · 값: auto·hardlink·symlink·copy 중 하나
+    rotate: false                         # 이미지·스캔 PDF 쪽 방향 바로잡기 켬/끔 · 기본 false · 값: true·false
   # ─── 파싱 엔진·쪽 처리 ───
-  doc_parallel: 1  # 대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개) · 기본 1 · 값: 0 이상 정수
-  fill_merged: true  # 표에서 병합 셀이 덮은 빈 칸을 원본 칸 값으로 채울지 · 기본 true · 값: true·false
-  hidden_overlap_max: 20  # [파라미터] '숨은 글자-그림 겹침' 신호로 쪽 VLM 후보에 올릴 쪽 수 상한(쪽, 0=끔) · 기본 20 · 값: 0 이상 정수 (0 = 끔)
-  kreuzberg_prose_filter: true  # kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔) · 기본 true · 값: true·false
-  low_priority: true  # 엔진 자식 프로세스를 낮은 우선순위로(POSIX nice +10 · Windows BELOW_NORMAL) · 기본 true · 값: true·false
-  rotated_max: 20  # [파라미터] 쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) · 기본 20 · 값: 0 이상 정수 (0 = rotation.csv를 안 읽음)
-  text_page_sec: 10.0  # 글자 엔진(VLM 아님) 문서×엔진 1건의 쪽당 제한 시간(초) · 기본 10.0 · 값: 0 이상 초
-  vlm_page_sec: 120.0  # VLM 엔진 문서×엔진 1건의 쪽당 제한 시간(초) · 기본 120.0 · 값: 0 이상 초
-  warmup_sec: 60.0  # 엔진 첫 문서의 제한 시간 하한(초) · 기본 60.0 · 값: 0 이상 초
+  doc_parallel: 1                         # 대표 결과 만들기(represent)에서 문서 병렬 처리 스레드 수(개) · 기본 1 · 값: 0 이상 정수
+  fill_merged: true                       # 표에서 병합 셀이 덮은 빈 칸을 원본 칸 값으로 채울지 · 기본 true · 값: true·false
+  hidden_overlap_max: 20                  # [파라미터] '숨은 글자-그림 겹침' 신호로 쪽 VLM 후보에 올릴 쪽 수 상한(쪽, 0=끔) · 기본 20 · 값: 0 이상 정수 (0 = 끔)
+  kreuzberg_prose_filter: true            # kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔) · 기본 true · 값: true·false
+  low_priority: true                      # 엔진 자식 프로세스를 낮은 우선순위로(POSIX nice +10 · Windows BELOW_NORMAL) · 기본 true · 값: true·false
+  rotated_max: 20                         # [파라미터] 쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) · 기본 20 · 값: 0 이상 정수 (0 = rotation.csv를 안 읽음)
+  text_page_sec: 10.0                     # 글자 엔진(VLM 아님) 문서×엔진 1건의 쪽당 제한 시간(초) · 기본 10.0 · 값: 0 이상 초
+  vlm_page_sec: 120.0                     # VLM 엔진 문서×엔진 1건의 쪽당 제한 시간(초) · 기본 120.0 · 값: 0 이상 초
+  warmup_sec: 60.0                        # 엔진 첫 문서의 제한 시간 하한(초) · 기본 60.0 · 값: 0 이상 초
   # ─── OCR·표 ───
-  rapidocr_page_workers: 1  # rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개) · 기본 1 · 값: 0 이상 정수
-  table_grid_max_rows: 2000  # [파라미터] 표 grid JSON에 담는 최대 행 수(개) · 기본 2000 · 값: 0 이상 정수
+  rapidocr_page_workers: 1                # rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개) · 기본 1 · 값: 0 이상 정수
+  table_grid_max_rows: 2000               # [파라미터] 표 grid JSON에 담는 최대 행 수(개) · 기본 2000 · 값: 0 이상 정수
   ocr:
-    dpi: 200  # [파라미터] 쪽 이미지 렌더링 해상도(DPI) · 기본 200 · 값: 0 이상 정수
-    max_pages: 0  # [파라미터] 문서당 OCR·VLM 쪽 수 상한(쪽, 0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음)
-    table_grid: true  # OCR 박스 좌표로 표 격자를 추정할지(=0이면 끔) · 기본 true · 값: true·false
-    threads:  # rapidocr onnxruntime 스레드 수(0=onnxruntime 자동, 비우거나 숫자(0~9만) 아니면(auto 등) OMP_NUM_THREADS·CPU 몫) · 값: 0 이상 정수 (0 = onnxruntime 자동)
+    dpi: 200                              # [파라미터] 쪽 이미지 렌더링 해상도(DPI) · 기본 200 · 값: 0 이상 정수
+    max_pages: 0                          # [파라미터] 문서당 OCR·VLM 쪽 수 상한(쪽, 0=제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음)
+    table_grid: true                      # OCR 박스 좌표로 표 격자를 추정할지(=0이면 끔) · 기본 true · 값: true·false
+    threads:                              # rapidocr onnxruntime 스레드 수(0=onnxruntime 자동, 비우거나 숫자(0~9만) 아니면(auto 등) OMP_NUM_THREADS·CPU 몫) · 값: 0 이상 정수 (0 = onnxruntime 자동)
   # ─── 첨부·중복 ───
   attach:
-    max_depth: 1  # [파라미터] 메일 등 첨부 안의 첨부를 따라갈 최대 깊이(단계) · 기본 1 · 값: 0 이상 정수
-    max_n: 10  # [파라미터] 문서 하나에서 처리할 첨부 개수 상한(개) · 기본 10 · 값: 0 이상 정수
+    max_depth: 1                          # [파라미터] 메일 등 첨부 안의 첨부를 따라갈 최대 깊이(단계) · 기본 1 · 값: 0 이상 정수
+    max_n: 10                             # [파라미터] 문서 하나에서 처리할 첨부 개수 상한(개) · 기본 10 · 값: 0 이상 정수
 
 transform:
   # ─── 대표 결과 ───
   represent:
-    post:  # [파라미터] 후보정 기능 선택: all(전부)|none(끔)|콤마 목록(vlm_page,supsub,charts,figures,context,attachments) · 값: all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments)
-    qa_light: false  # =1이면 native 대비 풀문서 CER·순서 비교를 생략(경량화) · 기본 false · 값: true·false
-    rep_select:  # [파라미터] 대표 엔진 선택 방식: first(첫 성공 엔진)|acc(정확도만)|그 외 best(정확도+풍부도) · 값: first·acc·best 중 하나(그 밖 값 = best)
+    post:                                 # [파라미터] 후보정 기능 선택: all(전부)|none(끔)|콤마 목록(vlm_page,supsub,charts,figures,context,attachments) · 값: all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments)
+    qa_light: false                       # =1이면 native 대비 풀문서 CER·순서 비교를 생략(경량화) · 기본 false · 값: true·false
+    rep_select:                           # [파라미터] 대표 엔진 선택 방식: first(첫 성공 엔진)|acc(정확도만)|그 외 best(정확도+풍부도) · 값: first·acc·best 중 하나(그 밖 값 = best)
   # ─── 그림 ───
   figures:
-    ocr_fallback_min_chars: 10  # [파라미터] OCR 대체 사용 최소 의미 글자 수(미만이면 로고·워터마크로 보고 버림) · 기본 10 · 값: 0 이상 정수
-    pptx_render_max: 10  # [파라미터] 문서당 렌더·VLM 호출할 슬라이드·도형 쪽 수 상한 · 기본 10 · 값: 0 이상 정수
-    pptx_shapes_max: 20  # [파라미터] 연결선 없는 도형 배치 슬라이드 후보 수 상한(0이면 이 사유는 안 봄) · 기본 20 · 값: 0 이상 정수 (0 = 이 사유는 안 봄)
-    pptx_smartart_max: 20  # [파라미터] SmartArt 슬라이드 후보 수 상한(0이면 이 사유는 안 봄) · 기본 20 · 값: 0 이상 정수 (0 = 이 사유는 안 봄)
-    vectors_max: 20  # [파라미터] 쪽 VLM 후보로 볼 벡터 도형 많은 쪽 수 상한(0이면 이 사유는 안 봄) · 기본 20 · 값: 0 이상 정수 (0 = 이 사유는 안 봄)
+    ocr_fallback_min_chars: 10            # [파라미터] OCR 대체 사용 최소 의미 글자 수(미만이면 로고·워터마크로 보고 버림) · 기본 10 · 값: 0 이상 정수
+    pptx_render_max: 10                   # [파라미터] 문서당 렌더·VLM 호출할 슬라이드·도형 쪽 수 상한 · 기본 10 · 값: 0 이상 정수
+    pptx_shapes_max: 20                   # [파라미터] 연결선 없는 도형 배치 슬라이드 후보 수 상한(0이면 이 사유는 안 봄) · 기본 20 · 값: 0 이상 정수 (0 = 이 사유는 안 봄)
+    pptx_smartart_max: 20                 # [파라미터] SmartArt 슬라이드 후보 수 상한(0이면 이 사유는 안 봄) · 기본 20 · 값: 0 이상 정수 (0 = 이 사유는 안 봄)
+    vectors_max: 20                       # [파라미터] 쪽 VLM 후보로 볼 벡터 도형 많은 쪽 수 상한(0이면 이 사유는 안 봄) · 기본 20 · 값: 0 이상 정수 (0 = 이 사유는 안 봄)
   # ─── VLM 호출 ───
   vlm:
-    fig_min_px: 64  # [파라미터] 이 값보다 짧은 변의 그림은 VLM 대상에서 제외(픽셀) · 기본 64 · 값: 0 이상 정수
-    fig_ocr_max: 8  # [파라미터] 문서당 그림 crop OCR 횟수 상한(비용 가드) · 기본 8 · 값: 0 이상 정수
-    fig_photo_area_min: 0.03  # [파라미터] 사진류(photo)로 볼 그림의 최소 면적 비율(쪽 대비) · 기본 0.03 · 값: 0~1
-    fig_photo_max_tokens: 300  # [파라미터] 사진류 그림 VLM 응답 최대 토큰 수(한 줄 요약 유도) · 기본 300 · 값: 0 이상 정수
-    fig_photo_ocr_max: 5  # [파라미터] crop OCR 글자 수가 이 값 이하(+면적 충분)이면 사진류로 분류 · 기본 5 · 값: 0 이상 정수
-    fig_text_ocr_min: 200  # [파라미터] crop OCR 글자 수(공백 제외)가 이 값 이상이면 글자 이미지(text_image)로 분류 · 기본 200 · 값: 0 이상 정수
-    figures_max: 20  # [파라미터] 문서당 VLM에 보낼 그림 수 상한(0이면 VLM 안 부름) · 기본 20 · 값: 0 이상 정수 (0 = VLM 안 부름)
-    global_concurrency: 12  # 모든 VLM 호출의 전역 동시 실행 수 합 상한 · 기본 12 · 값: 0 이상 정수
-    page_max:  # [파라미터] 문서당 쪽 VLM으로 읽을 쪽 수 상한(빈 값=전부, 0=쪽 VLM 끔) · 값: 0 이상 정수 (0 = 쪽 VLM 끔)
-    page_slow: 60.0  # 쪽 VLM 호출이 이 시간(초) 넘으면 다음 배치 병렬 수를 줄임 · 기본 60.0 · 값: 0 이상 초
+    fig_min_px: 64                        # [파라미터] 이 값보다 짧은 변의 그림은 VLM 대상에서 제외(픽셀) · 기본 64 · 값: 0 이상 정수
+    fig_ocr_max: 8                        # [파라미터] 문서당 그림 crop OCR 횟수 상한(비용 가드) · 기본 8 · 값: 0 이상 정수
+    fig_photo_area_min: 0.03              # [파라미터] 사진류(photo)로 볼 그림의 최소 면적 비율(쪽 대비) · 기본 0.03 · 값: 0~1
+    fig_photo_max_tokens: 300             # [파라미터] 사진류 그림 VLM 응답 최대 토큰 수(한 줄 요약 유도) · 기본 300 · 값: 0 이상 정수
+    fig_photo_ocr_max: 5                  # [파라미터] crop OCR 글자 수가 이 값 이하(+면적 충분)이면 사진류로 분류 · 기본 5 · 값: 0 이상 정수
+    fig_text_ocr_min: 200                 # [파라미터] crop OCR 글자 수(공백 제외)가 이 값 이상이면 글자 이미지(text_image)로 분류 · 기본 200 · 값: 0 이상 정수
+    figures_max: 20                       # [파라미터] 문서당 VLM에 보낼 그림 수 상한(0이면 VLM 안 부름) · 기본 20 · 값: 0 이상 정수 (0 = VLM 안 부름)
+    global_concurrency: 12                # 모든 VLM 호출의 전역 동시 실행 수 합 상한 · 기본 12 · 값: 0 이상 정수
+    page_max:                             # [파라미터] 문서당 쪽 VLM으로 읽을 쪽 수 상한(빈 값=전부, 0=쪽 VLM 끔) · 값: 0 이상 정수 (0 = 쪽 VLM 끔)
+    page_slow: 60.0                       # 쪽 VLM 호출이 이 시간(초) 넘으면 다음 배치 병렬 수를 줄임 · 기본 60.0 · 값: 0 이상 초
   # ─── 청크·임베딩 ───
   structure:
-    chunk_overlap: 64  # [파라미터] 고정 길이 청커(chunk_fixed512)의 청크 간 겹침 글자 수 · 기본 64 · 값: 0 이상 정수
-    chunk_size:  # [파라미터] 청크 목표 길이(글자) · 값: 0 이상 정수
-    chunk_table:  # [파라미터] 'rows'이면 큰 표를 행 묶음 단위로 쪼갬(그 외 값·미설정은 표를 통째로 둠) · 값: rows 또는 비움(표 통째로)
-    chunk_table_rows: 25  # [파라미터] 표를 쪼갤 때 청크당 행 수(CHUNK_TABLE=rows일 때만) · 기본 25 · 값: 0 이상 정수
-    embed:  # [파라미터] 구조화·적재에 쓸 임베딩 방식(api 등, none이면 임베딩 없음 — 이미지 안 기본 api: 옛 Dockerfile ENV, B-2) · 값: api·none 중 하나
-    embed_cache:  # 임베딩 캐시 sqlite 경로(0 또는 빈 값이면 캐시 끔) · 값: 경로
-    embed_concurrency: 4  # 임베딩 호출 병렬 수(EMBED_BATCH 묶음을 동시에 전송) · 기본 4 · 값: 0 이상 정수
-    page_chunk_max:  # [파라미터] 쪽 청크 최대 글자 수(임베딩 입력 한도 초과 방지) · 값: 0 이상 정수
+    chunk_overlap: 64                     # [파라미터] 고정 길이 청커(chunk_fixed512)의 청크 간 겹침 글자 수 · 기본 64 · 값: 0 이상 정수
+    chunk_size:                           # [파라미터] 청크 목표 길이(글자) · 값: 0 이상 정수
+    chunk_table:                          # [파라미터] 'rows'이면 큰 표를 행 묶음 단위로 쪼갬(그 외 값·미설정은 표를 통째로 둠) · 값: rows 또는 비움(표 통째로)
+    chunk_table_rows: 25                  # [파라미터] 표를 쪼갤 때 청크당 행 수(CHUNK_TABLE=rows일 때만) · 기본 25 · 값: 0 이상 정수
+    embed:                                # [파라미터] 구조화·적재에 쓸 임베딩 방식(api 등, none이면 임베딩 없음 — 이미지 안 기본 api: 옛 Dockerfile ENV, B-2) · 값: api·none 중 하나
+    embed_cache:                          # 임베딩 캐시 sqlite 경로(0 또는 빈 값이면 캐시 끔) · 값: 경로
+    embed_concurrency: 4                  # 임베딩 호출 병렬 수(EMBED_BATCH 묶음을 동시에 전송) · 기본 4 · 값: 0 이상 정수
+    page_chunk_max:                       # [파라미터] 쪽 청크 최대 글자 수(임베딩 입력 한도 초과 방지) · 값: 0 이상 정수
 
 load:
   # ─── 게시(publish) ───
-  edw_path_prefix:  # 저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치) · 값: 경로
+  edw_path_prefix:                        # 저장소 doc.file_path에 기록할 원본 경로 접두(서버의 실제 보관 위치) · 값: 경로
   publish:
-    bucket_skip_overlap_check: false  # PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 · 기본 false · 값: true·false
-    parse_date:  # 업로드 키의 날짜 폴더(YYYY-MM-DD) · 값: YYYY-MM-DD
-    path_map: []  # 원본 키 앞부분 치환표 '이전=새' 쉼표 목록(결과 키 경로 구성용) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
-    upload_statuses: [ok, partial]  # 원본을 업로드할 파싱 상태 목록(콤마 — 비면 parsing_meta.DEFAULT_UPLOAD_STATUSES) · 기본 ok,partial · 값: 쉼표 목록 또는 YAML 목록
+    bucket_skip_overlap_check: false      # PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 · 기본 false · 값: true·false
+    parse_date:                           # 업로드 키의 날짜 폴더(YYYY-MM-DD) · 값: YYYY-MM-DD
+    path_map: []                          # 원본 키 앞부분 치환표 '이전=새' 쉼표 목록(결과 키 경로 구성용) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
+    upload_statuses: [ok, partial]        # 원본을 업로드할 파싱 상태 목록(콤마 — 비면 parsing_meta.DEFAULT_UPLOAD_STATUSES) · 기본 ok,partial · 값: 쉼표 목록 또는 YAML 목록
   # ─── 적재 ───
-  bm25_threads: 4  # BM25 항목(term,tf) 계산 병렬 스레드 수(개) · 기본 4 · 값: 0 이상 정수
-  pg_create_extension: false  # deploy 때 vector 확장 직접 생성 시도 · 기본 false · 값: true·false
+  bm25_threads: 4                         # BM25 항목(term,tf) 계산 병렬 스레드 수(개) · 기본 4 · 값: 0 이상 정수
+  pg_create_extension: false              # deploy 때 vector 확장 직접 생성 시도 · 기본 false · 값: true·false
 
 search:
   # ─── MCP 서버 ───
   server:
-    fulltext_secret:  # 원문 도구(list/get_doc_fulltext) 파일 손잡이 sfid 서명 키 · 값: 비밀 글자 [비밀]
-    allowed_hosts: []  # 비루프백 바인드 때 추가로 허용할 Host(쉼표 목록, 리버스 프록시 이름 등) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
-    host: 127.0.0.1  # MCP 서버 바인드 주소 · 기본 127.0.0.1 · 값: 127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부
-    instructions:  # MCP 서버 instructions 글자(도구 안내문) 교체 · 값: 글자
-    manifest:  # 수집 manifest.jsonl 경로(문서 유형·버전·삭제 여부 출처) · 값: 경로
-    max_concurrency: 8  # 도구 동시 실행 상한(개) · 기본 8 · 값: 0 이상 정수
-    max_queue:  # 도구 대기열 상한(개) · 값: 0 이상 정수 (0 = 무제한)
-    port: 8765  # MCP 서버 포트 · 기본 8765 · 값: 1~65535
-    warmup: true  # 기동 때 검색 1회로 예열 · 기본 true · 값: true·false
+    fulltext_secret:                      # 원문 도구(list/get_doc_fulltext) 파일 손잡이 sfid 서명 키 · 값: 비밀 글자 [비밀]
+    allowed_hosts: []                     # 비루프백 바인드 때 추가로 허용할 Host(쉼표 목록, 리버스 프록시 이름 등) · 기본 (빈 목록) · 값: 쉼표 목록 또는 YAML 목록
+    host: 127.0.0.1                       # MCP 서버 바인드 주소 · 기본 127.0.0.1 · 값: 127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부
+    instructions:                         # MCP 서버 instructions 글자(도구 안내문) 교체 · 값: 글자
+    manifest:                             # 수집 manifest.jsonl 경로(문서 유형·버전·삭제 여부 출처) · 값: 경로
+    max_concurrency: 8                    # 도구 동시 실행 상한(개) · 기본 8 · 값: 0 이상 정수
+    max_queue:                            # 도구 대기열 상한(개) · 값: 0 이상 정수 (0 = 무제한)
+    port: 8765                            # MCP 서버 포트 · 기본 8765 · 값: 1~65535
+    warmup: true                          # 기동 때 검색 1회로 예열 · 기본 true · 값: true·false
   # ─── 검색 순위·방식 ───
-  methods:  # [파라미터] search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서) · 기본 vector,bm25,id · 값: 쉼표 목록 또는 YAML 목록
-  min_score:  # [파라미터] 근거 점수 하한 · 값: 0 이상
+  methods:                                # [파라미터] search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서) · 기본 vector,bm25,id · 값: 쉼표 목록 또는 YAML 목록
+  min_score:                              # [파라미터] 근거 점수 하한 · 값: 0 이상
   pg:
-    vector_search:  # 벡터 검색 방식 · 값: exact 또는 비움(HNSW 근사)
+    vector_search:                        # 벡터 검색 방식 · 값: exact 또는 비움(HNSW 근사)
   weights:
-    bm25: 1.0  # [파라미터] RRF 융합에서 BM25 가중치 · 기본 1.0 · 값: 0 이상
-    bm25_table: 0.2  # [파라미터] 집계 질문일 때 BM25 가중치 · 기본 0.2 · 값: 0 이상
-    id: 2.0  # [파라미터] RRF 융합에서 ID(드문 식별자) 가중치 · 기본 2.0 · 값: 0 이상
-    vector: 1.0  # [파라미터] RRF 융합에서 벡터 가중치 · 기본 1.0 · 값: 0 이상
+    bm25: 1.0                             # [파라미터] RRF 융합에서 BM25 가중치 · 기본 1.0 · 값: 0 이상
+    bm25_table: 0.2                       # [파라미터] 집계 질문일 때 BM25 가중치 · 기본 0.2 · 값: 0 이상
+    id: 2.0                               # [파라미터] RRF 융합에서 ID(드문 식별자) 가중치 · 기본 2.0 · 값: 0 이상
+    vector: 1.0                           # [파라미터] RRF 융합에서 벡터 가중치 · 기본 1.0 · 값: 0 이상
   # ─── EDW 도구 ───
   edw_meta:
-    dir:  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · 값: 경로
+    dir:                                  # edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더 · 값: 경로
   edw_query:
-    enabled: true  # query_edw 도구 스위치 · 기본 true · 값: true·false
-    max_rows: 1000  # query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽) · 기본 1000 · 값: 0 이상 정수
-    tables:  # query_edw 허용 표 목록(쉼표) · 값: 쉼표 목록 또는 YAML 목록
-    tables_strict: false  # 1이면 허용 표 목록(EDW_QUERY_TABLES) 검사를 켬 · 기본 false · 값: true·false
+    enabled: true                         # query_edw 도구 스위치 · 기본 true · 값: true·false
+    max_rows: 1000                        # query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽) · 기본 1000 · 값: 0 이상 정수
+    tables:                               # query_edw 허용 표 목록(쉼표) · 값: 쉼표 목록 또는 YAML 목록
+    tables_strict: false                  # 1이면 허용 표 목록(EDW_QUERY_TABLES) 검사를 켬 · 기본 false · 값: true·false
   # ─── 출력·기록·파싱 프록시 ───
   audit:
-    max_queue_bytes: 268435456  # 감사 대기/처리 중 본문 추정 바이트 합계 상한(기본 256MiB) · 기본 268435456 · 값: 0 이상 정수
-    max_input_bytes: 16384  # [파라미터] 감사 로그 입력 원문 UTF-8 바이트 상한 · 기본 16384 · 값: 0 이상 정수
-    max_output_bytes: 65536  # [파라미터] 감사 로그 출력 원문 UTF-8 바이트 상한 · 기본 65536 · 값: 0 이상 정수
+    max_queue_bytes: 268435456            # 감사 대기/처리 중 본문 추정 바이트 합계 상한(기본 256MiB) · 기본 268435456 · 값: 0 이상 정수
+    max_input_bytes: 16384                # [파라미터] 감사 로그 입력 원문 UTF-8 바이트 상한 · 기본 16384 · 값: 0 이상 정수
+    max_output_bytes: 65536               # [파라미터] 감사 로그 출력 원문 UTF-8 바이트 상한 · 기본 65536 · 값: 0 이상 정수
   parse_proxy:
-    url: http://127.0.0.1:8766  # parse_document가 부르는 작업 서비스 주소 · 기본 http://127.0.0.1:8766 · 값: URL
+    url: http://127.0.0.1:8766            # parse_document가 부르는 작업 서비스 주소 · 기본 http://127.0.0.1:8766 · 값: URL
   query_log:
-    dir:  # 질의 기록 폴더 · 값: 경로
-    enabled: true  # 질의 기록(qa_log.jsonl) 스위치 · 기본 true · 값: true·false
+    dir:                                  # 질의 기록 폴더 · 값: 경로
+    enabled: true                         # 질의 기록(qa_log.jsonl) 스위치 · 기본 true · 값: true·false
 
 ops:
   # ─── 실행 자원 — 비우면 CPU·메모리로 자동 ───
   runtime:
-    lib_env: {}  # 라이브러리 env(이름: 글자 — TZ·OMP_NUM_THREADS·HF_HUB_OFFLINE 등 허용 목록만, 비밀 아님) · 기본 {} · 값: 사전(이름: 글자)
-    log_retention_days: 30  # output/logs/*.log 보존 일수 · 기본 30 · 값: 0 이상 정수 (0 = 삭제 안 함)
-    parse_max_mb: 100.0  # parse_document 파일 1건 크기 상한(MB = 1024×1024바이트) · 기본 100.0 · 값: 0 이상
-    pipe_procs:  # CPU 엔진 프로세스 수 · 값: 1 이상 정수 · auto 또는 비우면 자동 계산
-    pipe_workers:  # VLM API 동시 처리 문서 수(개) · 기본 4 · 값: 0 이상 · auto 또는 비우면 자동 계산
+    lib_env: {}                           # 라이브러리 env(이름: 글자 — TZ·OMP_NUM_THREADS·HF_HUB_OFFLINE 등 허용 목록만, 비밀 아님) · 기본 {} · 값: 사전(이름: 글자)
+    log_retention_days: 30                # output/logs/*.log 보존 일수 · 기본 30 · 값: 0 이상 정수 (0 = 삭제 안 함)
+    parse_max_mb: 100.0                   # parse_document 파일 1건 크기 상한(MB = 1024×1024바이트) · 기본 100.0 · 값: 0 이상
+    pipe_procs:                           # CPU 엔진 프로세스 수 · 값: 1 이상 정수 · auto 또는 비우면 자동 계산
+    pipe_workers:                         # VLM API 동시 처리 문서 수(개) · 기본 4 · 값: 0 이상 · auto 또는 비우면 자동 계산
   # ─── 로그 — JSON·DB 기록 ───
   log:
-    level: INFO  # JSON 사건 기록 최소 수준 · 기본 INFO · 값: 0 이상
-    dir:  # JSON 로그 폴더 · 값: 경로
-    db_enabled: false  # applog DB 비동기 기록(마이그레이션 적용 후 켬) · 기본 false · 값: true·false
-    fallback_dir: output/applog  # DB 실패 시 JSON Lines 대체 기록 폴더 · 기본 output/applog · 값: 경로
-    retention_days: 90  # 월 파티션 보존 일수(월 끝이 만료된 파티션만 DROP) · 기본 90 · 값: 1 이상 정수
-    queue_size: 10000  # DB 기록 대기 큐 상한 · 기본 10000 · 값: 1 이상 정수
-    batch_size: 200  # DB INSERT 배치 최대 행 수 · 기본 200 · 값: 1 이상 정수
-    flush_sec: 1.0  # DB 배치 기록 간격(초) · 기본 1.0 · 값: 0 이상 초
-    db_timeout_sec: 2  # 로그 DB 연결/문장 제한(초) · 기본 2 · 값: 0 이상 정수(초)
-    shutdown_sec: 5.0  # 종료 flush 전체 상한(초) · 기본 5.0 · 값: 0 이상 초
+    level: INFO                           # JSON 사건 기록 최소 수준 · 기본 INFO · 값: 0 이상
+    dir:                                  # JSON 로그 폴더 · 값: 경로
+    db_enabled: false                     # applog DB 비동기 기록(마이그레이션 적용 후 켬) · 기본 false · 값: true·false
+    fallback_dir: output/applog           # DB 실패 시 JSON Lines 대체 기록 폴더 · 기본 output/applog · 값: 경로
+    retention_days: 90                    # 월 파티션 보존 일수(월 끝이 만료된 파티션만 DROP) · 기본 90 · 값: 1 이상 정수
+    queue_size: 10000                     # DB 기록 대기 큐 상한 · 기본 10000 · 값: 1 이상 정수
+    batch_size: 200                       # DB INSERT 배치 최대 행 수 · 기본 200 · 값: 1 이상 정수
+    flush_sec: 1.0                        # DB 배치 기록 간격(초) · 기본 1.0 · 값: 0 이상 초
+    db_timeout_sec: 2                     # 로그 DB 연결/문장 제한(초) · 기본 2 · 값: 0 이상 정수(초)
+    shutdown_sec: 5.0                     # 종료 flush 전체 상한(초) · 기본 5.0 · 값: 0 이상 초
   # ─── 경로 ───
   paths:
-    doc_dir:  # 원본 문서 폴더 · 값: 경로
-    doc_dir_prepared:  # 준비(dedup·회전) 끝난 문서 폴더 · 값: 경로
-    draft_terms_out:  # 용어 자동 초안 CSV 경로 · 값: 경로
-    edw_chain:  # EDW 조인 사슬 파일 경로 · 값: 경로
-    output_root:  # 결과(output) 폴더 · 값: 경로
-    runlog_dir:  # 실행 기록(output/logs) 루트 폴더 · 값: 경로
-    source_manifest:  # 원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응) · 값: 경로
-    stack_file:  # 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
+    doc_dir:                              # 원본 문서 폴더 · 값: 경로
+    doc_dir_prepared:                     # 준비(dedup·회전) 끝난 문서 폴더 · 값: 경로
+    draft_terms_out:                      # 용어 자동 초안 CSV 경로 · 값: 경로
+    edw_chain:                            # EDW 조인 사슬 파일 경로 · 값: 경로
+    output_root:                          # 결과(output) 폴더 · 값: 경로
+    runlog_dir:                           # 실행 기록(output/logs) 루트 폴더 · 값: 경로
+    source_manifest:                      # 원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응) · 값: 경로
+    stack_file:                           # 엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰) · 값: 경로
   pipeline_paths:
-    gold_dir:  # 사람 정답(gold) 폴더 · 값: 경로
-    images_root:  # 그림 PNG·index.jsonl 저장 루트 · 값: 경로
-    out_root:  # 파이프라인 출력 루트(output) · 값: 경로
-    parse_tmp:  # 임시 폴더(첨부 임시 파일은 형제 attach/) · 값: 경로
-    raw_root:  # P0 원본 층(raw/VLM) 캐시 저장소 루트 · 값: 경로
-    soffice_bin:  # LibreOffice soffice 실행 파일 경로 · 값: 경로
+    gold_dir:                             # 사람 정답(gold) 폴더 · 값: 경로
+    images_root:                          # 그림 PNG·index.jsonl 저장 루트 · 값: 경로
+    out_root:                             # 파이프라인 출력 루트(output) · 값: 경로
+    parse_tmp:                            # 임시 폴더(첨부 임시 파일은 형제 attach/) · 값: 경로
+    raw_root:                             # P0 원본 층(raw/VLM) 캐시 저장소 루트 · 값: 경로
+    soffice_bin:                          # LibreOffice soffice 실행 파일 경로 · 값: 경로
   # ─── 호스트 — 컨테이너 도구·패치·정리 ───
   host:
-    docker:  # 호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — 비우면 podman, 없으면 docker — op-10) · 값: docker·podman 중 하나
-    image_stage_dir:  # prune_old.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값) · 값: 경로
-    prune_keep: 2  # prune_old.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값) · 기본 2 · 값: 0 이상 정수
+    docker:                               # 호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — 비우면 podman, 없으면 docker — op-10) · 값: docker·podman 중 하나
+    image_stage_dir:                      # prune_old.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값) · 값: 경로
+    prune_keep: 2                         # prune_old.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값) · 기본 2 · 값: 0 이상 정수
   # ─── 서버 컨테이너 — CPU·메모리 한도·폴더 ───
   pipeline_host:
-    gold_dir:  # 호스트의 사람 정답(gold) 폴더(서버 경로) · 값: 호스트 이름·IP
-    parse_cpus: 5.0  # 일괄 상주 컨테이너(data-pipeline — compose.pipeline.yml) CPU 개수 상한(개) · 기본 5.0 · 값: 0 이상
-    parse_mem_limit: 24g  # 일괄 상주 컨테이너(data-pipeline) 메모리·스왑 상한(docker 형식) · 기본 24g · 값: 글자
-    parse_mcp_cpus: 3.0  # parse_document 작업 컨테이너(data-pipeline-mcp — #107) CPU 개수 상한(개) · 기본 3.0 · 값: 0 이상
-    parse_mcp_mem_limit: 8g  # parse_document 작업 컨테이너(data-pipeline-mcp) 메모리·스왑 상한(docker 형식) · 기본 8g · 값: 글자
-    parse_mcp_cpu_shares: 4096  # parse_document 작업 컨테이너 CPU 나눔 비율(data-pipeline 1024의 4배 — CPU가 모자랄 때 먼저 받음, rn-03) · 기본 4096 · 값: 0~1
-    run_docs_dir:  # 문서별 flow 러너(deploy/host/scripts/run_docs.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) · 값: 호스트 이름·IP
+    gold_dir:                             # 호스트의 사람 정답(gold) 폴더(서버 경로) · 값: 경로
+    parse_cpus: 5.0                       # 일괄 상주 컨테이너(data-pipeline — compose.pipeline.yml) CPU 개수 상한(개) · 기본 5.0 · 값: 0 이상
+    parse_mem_limit: 24g                  # 일괄 상주 컨테이너(data-pipeline) 메모리·스왑 상한(docker 형식) · 기본 24g · 값: 글자
+    parse_mcp_cpus: 3.0                   # parse_document 작업 컨테이너(data-pipeline-mcp — #107) CPU 개수 상한(개) · 기본 3.0 · 값: 0 이상
+    parse_mcp_mem_limit: 8g               # parse_document 작업 컨테이너(data-pipeline-mcp) 메모리·스왑 상한(docker 형식) · 기본 8g · 값: 글자
+    parse_mcp_cpu_shares: 4096            # parse_document 작업 컨테이너 CPU 나눔 비율(data-pipeline 1024의 4배 — CPU가 모자랄 때 먼저 받음, rn-03) · 기본 4096 · 값: 0~1
+    run_docs_dir:                         # 문서별 flow 러너(deploy/host/scripts/run_docs.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) · 값: 경로
   mcp_host:
-    cpus: 1.0  # mcp-server 컨테이너 CPU 한도(compose cpus) · 기본 1.0 · 값: 0 이상
-    jobs_dir:  # MCP parse_document 업로드 작업 폴더(공유 볼륨) · 값: 경로
-    mem_limit: 4g  # mcp-server 컨테이너 메모리 한도(compose mem_limit) · 기본 4g · 값: 글자
+    cpus: 1.0                             # mcp-server 컨테이너 CPU 한도(compose cpus) · 기본 1.0 · 값: 0 이상
+    jobs_dir:                             # MCP parse_document 업로드 작업 폴더(공유 볼륨) · 값: 경로
+    mem_limit: 4g                         # mcp-server 컨테이너 메모리 한도(compose mem_limit) · 기본 4g · 값: 글자
   # ─── 상주 서비스 — 트리거·parse MCP ───
   services:
     parse_mcp:
-      jobs_dir:  # parse MCP 서비스 작업 기록 폴더 · 값: 경로
-      port: 8766  # parse MCP 서비스 포트 · 기본 8766 · 값: 1~65535
-      roots:  # parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) · 값: 쉼표 목록 또는 YAML 목록
+      jobs_dir:                           # parse MCP 서비스 작업 기록 폴더 · 값: 경로
+      port: 8766                          # parse MCP 서비스 포트 · 기본 8766 · 값: 1~65535
+      roots:                              # parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) · 값: 쉼표 목록 또는 YAML 목록
   # ─── 새벽 배치 ───
   nightly:
-    time:  # 새벽 배치 시작 시각(HH:MM, 서버 시간) · 값: HH:MM
-    max_docs:  # 새벽 배치 한 번에 처리할 새 문서 수 상한(이미 끝난 문서 뺀 뒤) · 값: 1 이상 정수
-    deadline:  # 새벽 배치 마감 시각(HH:MM, 서버 시간) · 값: HH:MM
+    time:                                 # 새벽 배치 시작 시각(HH:MM, 서버 시간) · 값: HH:MM
+    max_docs:                             # 새벽 배치 한 번에 처리할 새 문서 수 상한(이미 끝난 문서 뺀 뒤) · 값: 1 이상 정수
+    deadline:                             # 새벽 배치 마감 시각(HH:MM, 서버 시간) · 값: HH:MM
   # ─── run_docs 레인 ───
   run_docs:
-    warm: 20  # 진입 대기열 · 기본 20 · 값: 0 이상 정수
-    warm_workers: 2  # 미리 받기 동시 수 · 기본 2 · 값: 0 이상 정수
-    struct_workers: 2  # 구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음) · 기본 2 · 값: 0 이상 정수
-    struct_backlog:  # 중간 대기열 상한(파싱 끝·구조화 대기 문서 수) · 값: 0 이상 정수 (0 = 상한 없음)
-    vlm_cap: 2  # vlm 레인 문서 동시 파싱 상한(gpu 예산) · 기본 2 · 값: 0 이상 정수
-    light_dedicated: 1  # light 레인 전담 워커 수(light 문서만) · 기본 1 · 값: 0 이상 정수
-    light_shared: 1  # light 레인 공유 워커 수(light 먼저, 비면 가장 긴 다른 레인에서 가져옴) · 기본 1 · 값: 0 이상 정수
-    medium_dedicated: 1  # medium 레인 전담 워커 수(MCP 업로드 처리 중에는 쉼) · 기본 1 · 값: 0 이상 정수
-    medium_shared: 1  # medium 레인 공유 워커 수(medium 먼저, 비면 다른 레인) · 기본 1 · 값: 0 이상 정수
-    vlm_dedicated: 1  # vlm 레인 전담 워커 수(vlm 문서만) · 기본 1 · 값: 0 이상 정수
-    vlm_shared: 1  # vlm 레인 공유 워커 수(vlm 먼저, 비면 다른 레인) · 기본 1 · 값: 0 이상 정수
+    warm: 20                              # 진입 대기열 · 기본 20 · 값: 0 이상 정수
+    warm_workers: 2                       # 미리 받기 동시 수 · 기본 2 · 값: 0 이상 정수
+    struct_workers: 2                     # 구조화·적재 스레드 수(명령 인자 --struct-workers가 덮음) · 기본 2 · 값: 0 이상 정수
+    struct_backlog:                       # 중간 대기열 상한(파싱 끝·구조화 대기 문서 수) · 값: 0 이상 정수 (0 = 상한 없음)
+    vlm_cap: 2                            # vlm 레인 문서 동시 파싱 상한(gpu 예산) · 기본 2 · 값: 0 이상 정수
+    light_dedicated: 1                    # light 레인 전담 워커 수(light 문서만) · 기본 1 · 값: 0 이상 정수
+    light_shared: 1                       # light 레인 공유 워커 수(light 먼저, 비면 가장 긴 다른 레인에서 가져옴) · 기본 1 · 값: 0 이상 정수
+    medium_dedicated: 1                   # medium 레인 전담 워커 수(MCP 업로드 처리 중에는 쉼) · 기본 1 · 값: 0 이상 정수
+    medium_shared: 1                      # medium 레인 공유 워커 수(medium 먼저, 비면 다른 레인) · 기본 1 · 값: 0 이상 정수
+    vlm_dedicated: 1                      # vlm 레인 전담 워커 수(vlm 문서만) · 기본 1 · 값: 0 이상 정수
+    vlm_shared: 1                         # vlm 레인 공유 워커 수(vlm 먼저, 비면 다른 레인) · 기본 1 · 값: 0 이상 정수
 
 dev:
   # ─── 가짜 LLM·시험 하네스 ───
-  llm_fake: false  # 1이면 LLM 호출을 네트워크·캐시 없는 모의 응답으로 대체(시험·비용 추정용) · 기본 false · 값: true·false
+  llm_fake: false                         # 1이면 LLM 호출을 네트워크·캐시 없는 모의 응답으로 대체(시험·비용 추정용) · 기본 false · 값: true·false
   pipeline:
-    check_env_any_py: false  # check_env가 시스템 python에서도 멈추지 않고 계속할지(=1 계속 / 그 외 중단) · 기본 false · 값: true·false
+    check_env_any_py: false               # check_env가 시스템 python에서도 멈추지 않고 계속할지(=1 계속 / 그 외 중단) · 기본 false · 값: true·false
   # ─── 평가 ───
   mcp:
-    mcp_url: http://127.0.0.1:8765/mcp  # 검증 페이지가 붙을 MCP 서버 URL · 기본 http://127.0.0.1:8765/mcp · 값: URL
-    ui_port: 8790  # 검증 페이지(validation/search_ui) 서버 포트 · 기본 8790 · 값: 1~65535
+    mcp_url: http://127.0.0.1:8765/mcp    # 검증 페이지가 붙을 MCP 서버 URL · 기본 http://127.0.0.1:8765/mcp · 값: URL
+    ui_port: 8790                         # 검증 페이지(validation/search_ui) 서버 포트 · 기본 8790 · 값: 1~65535
   # ─── PC 시험 Docker ───
   docker:
-    mcp_publish_port: 18765  # 시험 compose에서 MCP를 호스트에 게시할 포트 · 기본 18765 · 값: 1~65535
-    pg_bind: 127.0.0.1  # 시험 PostgreSQL 컨테이너를 호스트에 게시할 바인드 주소 · 기본 127.0.0.1 · 값: 호스트 이름·IP
-    pg_effective_cache: 12GB  # 시험 PG effective_cache_size · 기본 12GB · 값: 경로
-    pg_image: pgvector/pgvector:pg16  # 시험 PostgreSQL(pgvector) 이미지 · 기본 pgvector/pgvector:pg16 · 값: 글자
-    pg_maint_mem: 2GB  # 시험 PG maintenance_work_mem(HNSW 생성) · 기본 2GB · 값: 글자
-    pg_max_conn: 50  # 시험 PG max_connections · 기본 50 · 값: 0 이상 정수
-    pg_mem_limit:  # 시험 PG 컨테이너 메모리 상한 · 값: 글자
-    pg_parallel: 2  # 시험 PG 병렬 작업자 수(maintenance·gather 둘 다) · 기본 2 · 값: 0 이상 정수
-    pg_shared_buffers: 4GB  # 시험 PG shared_buffers · 기본 4GB · 값: 글자
-    pg_shm: 3g  # 시험 PG 컨테이너 공유 메모리(shm_size) · 기본 3g · 값: 글자
-    pg_work_mem: 64MB  # 시험 PG work_mem · 기본 64MB · 값: 글자
-    smoke_settings:  # 스모크 시험 컨테이너가 붙여 읽는 설정 파일(settings.yaml) 경로 · 값: 경로
-    smoke_keep: false  # 1이면 시험 끝나도 pg 컨테이너를 남김 · 기본 false · 값: true·false
-    smoke_limit: 0  # 시험에서 파싱할 문서 수 상한(0이면 제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음)
-    smoke_pg_password:  # 시험 PostgreSQL 비밀번호(compose.test.yml이 컨테이너 PG_PASSWORD로 넘김 — S7e1) · 값: 비밀 글자 [비밀]
+    mcp_publish_port: 18765               # 시험 compose에서 MCP를 호스트에 게시할 포트 · 기본 18765 · 값: 1~65535
+    pg_bind: 127.0.0.1                    # 시험 PostgreSQL 컨테이너를 호스트에 게시할 바인드 주소 · 기본 127.0.0.1 · 값: 호스트 이름·IP
+    pg_effective_cache: 12GB              # 시험 PG effective_cache_size · 기본 12GB · 값: PG 크기 글자(예 12GB)
+    pg_image: pgvector/pgvector:pg16      # 시험 PostgreSQL(pgvector) 이미지 · 기본 pgvector/pgvector:pg16 · 값: 글자
+    pg_maint_mem: 2GB                     # 시험 PG maintenance_work_mem(HNSW 생성) · 기본 2GB · 값: 글자
+    pg_max_conn: 50                       # 시험 PG max_connections · 기본 50 · 값: 0 이상 정수
+    pg_mem_limit:                         # 시험 PG 컨테이너 메모리 상한 · 값: 글자
+    pg_parallel: 2                        # 시험 PG 병렬 작업자 수(maintenance·gather 둘 다) · 기본 2 · 값: 0 이상 정수
+    pg_shared_buffers: 4GB                # 시험 PG shared_buffers · 기본 4GB · 값: 글자
+    pg_shm: 3g                            # 시험 PG 컨테이너 공유 메모리(shm_size) · 기본 3g · 값: 글자
+    pg_work_mem: 64MB                     # 시험 PG work_mem · 기본 64MB · 값: 글자
+    smoke_settings:                       # 스모크 시험 컨테이너가 붙여 읽는 설정 파일(settings.yaml) 경로 · 값: 경로
+    smoke_keep: false                     # 1이면 시험 끝나도 pg 컨테이너를 남김 · 기본 false · 값: true·false
+    smoke_limit: 0                        # 시험에서 파싱할 문서 수 상한(0이면 제한 없음) · 기본 0 · 값: 0 이상 정수 (0 = 제한 없음)
+    smoke_pg_password:                    # 시험 PostgreSQL 비밀번호(compose.test.yml이 컨테이너 PG_PASSWORD로 넘김 — S7e1) · 값: 비밀 글자 [비밀]
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 # tuning — 코드 상수 후보(사용자 10-30 op-08): 기본값 말고 쓴 흔적이 없는 내부 조정값·자원 세부값. 보통 비워 둔다.
@@ -388,79 +388,79 @@ tuning:
   common:
     models:
       embed:
-        query_cache_max: 20000  # 질의 임베딩 캐시 최대 행 수(넘으면 오래된 것부터 삭제, 0이면 무제한) · 기본 20000 · 값: 0 이상 정수 (0 = 무제한)
-        timeout: 60  # (자원) 임베딩 API 호출 제한 시간(초) · 기본 60 · 값: 0 이상 정수(초)
+        query_cache_max: 20000            # 질의 임베딩 캐시 최대 행 수(넘으면 오래된 것부터 삭제, 0이면 무제한) · 기본 20000 · 값: 0 이상 정수 (0 = 무제한)
+        timeout: 60                       # (자원) 임베딩 API 호출 제한 시간(초) · 기본 60 · 값: 0 이상 정수(초)
       llm:
-        empty_retry_max: 8000  # 빈 응답 재요청 때 max_tokens 상한(토큰) · 기본 8000 · 값: 0 이상 정수
-        timeout: 120.0  # (자원) LLM 호출 제한 시간(초) · 기본 120.0 · 값: 0 이상 초
+        empty_retry_max: 8000             # 빈 응답 재요청 때 max_tokens 상한(토큰) · 기본 8000 · 값: 0 이상 정수
+        timeout: 120.0                    # (자원) LLM 호출 제한 시간(초) · 기본 120.0 · 값: 0 이상 초
       transport:
-        connect_timeout: 10.0  # 모델 서버 연결(connect) 전용 제한 시간(초) · 기본 10.0 · 값: 0 이상 초 (0 = 끔)
-        down_after: 3  # 연속 연결 실패 몇 번이면 그 주소를 '다운'으로 보는가(회) · 기본 3 · 값: 0 이상 정수
-        down_cooldown: 300.0  # '다운' 판정 뒤 네트워크를 보내지 않고 즉시 거부하는 시간(초) · 기본 300.0 · 값: 0 이상 초
-        ping_timeout: 60  # ping_models 점검의 호출 제한 시간(초) · 기본 60 · 값: 0 이상 정수(초)
+        connect_timeout: 10.0             # 모델 서버 연결(connect) 전용 제한 시간(초) · 기본 10.0 · 값: 0 이상 초 (0 = 끔)
+        down_after: 3                     # 연속 연결 실패 몇 번이면 그 주소를 '다운'으로 보는가(회) · 기본 3 · 값: 0 이상 정수
+        down_cooldown: 300.0              # '다운' 판정 뒤 네트워크를 보내지 않고 즉시 거부하는 시간(초) · 기본 300.0 · 값: 0 이상 초
+        ping_timeout: 60                  # ping_models 점검의 호출 제한 시간(초) · 기본 60 · 값: 0 이상 정수(초)
       vlm:
-        retry: 1  # VLM 쪽 호출 시간 초과·연결 오류 때 재시도 횟수(회) · 기본 1 · 값: 0 이상 정수
+        retry: 1                          # VLM 쪽 호출 시간 초과·연결 오류 때 재시도 횟수(회) · 기본 1 · 값: 0 이상 정수
     text:
-      draft_terms_max: 500  # 용어 자동 초안 파일 행 수 상한(개) · 기본 500 · 값: 0 이상 정수
+      draft_terms_max: 500                # 용어 자동 초안 파일 행 수 상한(개) · 기본 500 · 값: 0 이상 정수
   # ─── extract의 조정값 ───
   extract:
-    engine_retry: 1  # 엔진 별도 프로세스가 비정상 종료했을 때 바로 다시 시도할 횟수(회) · 기본 1 · 값: 0 이상 정수
-    isolate_overhead: 10.0  # 별도 프로세스 실행 시 쪽당 제한 시간에 더해 줄 시작 여유(초) · 기본 10.0 · 값: 0 이상 초
+    engine_retry: 1                       # 엔진 별도 프로세스가 비정상 종료했을 때 바로 다시 시도할 횟수(회) · 기본 1 · 값: 0 이상 정수
+    isolate_overhead: 10.0                # 별도 프로세스 실행 시 쪽당 제한 시간에 더해 줄 시작 여유(초) · 기본 10.0 · 값: 0 이상 초
     attach:
-      max_mb: 20.0  # 첨부 1개당 크기 상한(MB, 넘으면 건너뜀) · 기본 20.0 · 값: 0 이상
-      timeout: 120.0  # (자원) 첨부 1개를 별도 프로세스로 파싱할 때 제한 시간(초) · 기본 120.0 · 값: 0 이상 초
+      max_mb: 20.0                        # 첨부 1개당 크기 상한(MB, 넘으면 건너뜀) · 기본 20.0 · 값: 0 이상
+      timeout: 120.0                      # (자원) 첨부 1개를 별도 프로세스로 파싱할 때 제한 시간(초) · 기본 120.0 · 값: 0 이상 초
     cache:
-      parse_cache_max_gb: 5.0  # 재판독 중간 캐시 3종 합계 용량 상한(GB, 넘으면 오래된 것부터 삭제, 0=끔) · 기본 5.0 · 값: 0 이상 (0 = 끔)
+      parse_cache_max_gb: 5.0             # 재판독 중간 캐시 3종 합계 용량 상한(GB, 넘으면 오래된 것부터 삭제, 0=끔) · 기본 5.0 · 값: 0 이상 (0 = 끔)
   # ─── transform의 조정값 ───
   transform:
     figures:
-      ocr_parallel: 3  # 그림 crop OCR 병렬 워커 수(OCR 대상 수가 상한) · 기본 3 · 값: 0 이상 정수
-      pptx_convert_sec: 60  # soffice 문서→PDF 변환 시간 상한(초, 넘으면 해당 프로세스 종료) · 기본 60 · 값: 0 이상 정수(초)
-      vlm_parallel:  # (자원) 그림 VLM 호출 병렬 워커 수 · 값: 0 이상 정수
+      ocr_parallel: 3                     # 그림 crop OCR 병렬 워커 수(OCR 대상 수가 상한) · 기본 3 · 값: 0 이상 정수
+      pptx_convert_sec: 60                # soffice 문서→PDF 변환 시간 상한(초, 넘으면 해당 프로세스 종료) · 기본 60 · 값: 0 이상 정수(초)
+      vlm_parallel:                       # (자원) 그림 VLM 호출 병렬 워커 수 · 값: 0 이상 정수
     structure:
-      embed_batch: 32  # 임베딩 API 한 번에 보내는 청크 수 · 기본 32 · 값: 0 이상 정수
-      embed_max_chars: 8000  # 임베딩 입력 청크 최대 글자 수(넘으면 자름, 400 오류 방지 안전망) · 기본 8000 · 값: 0 이상 정수
-      embed_retry: 2  # 임베딩 API 실패 시 재시도 횟수 · 기본 2 · 값: 0 이상 정수
+      embed_batch: 32                     # 임베딩 API 한 번에 보내는 청크 수 · 기본 32 · 값: 0 이상 정수
+      embed_max_chars: 8000               # 임베딩 입력 청크 최대 글자 수(넘으면 자름, 400 오류 방지 안전망) · 기본 8000 · 값: 0 이상 정수
+      embed_retry: 2                      # 임베딩 API 실패 시 재시도 횟수 · 기본 2 · 값: 0 이상 정수
     vlm:
-      deadline: 360.0  # (자원) VLM 호출 1건 제한 시간(초) · 기본 360.0 · 값: 0 이상 초
-      page_concurrency:  # (자원) 쪽 VLM 병렬 워커 수 최대값 · 값: 0 이상 정수
-      page_min_concurrency: 2  # (자원) 쪽 VLM 적응형 병렬에서 느릴 때 줄일 수 있는 최소 워커 수 · 기본 2 · 값: 0 이상 정수
+      deadline: 360.0                     # (자원) VLM 호출 1건 제한 시간(초) · 기본 360.0 · 값: 0 이상 초
+      page_concurrency:                   # (자원) 쪽 VLM 병렬 워커 수 최대값 · 값: 0 이상 정수
+      page_min_concurrency: 2             # (자원) 쪽 VLM 적응형 병렬에서 느릴 때 줄일 수 있는 최소 워커 수 · 기본 2 · 값: 0 이상 정수
   # ─── search의 조정값 ───
   search:
     edw_meta:
-      max_bytes: 200000  # edw_meta 응답 크기 상한(바이트) · 기본 200000 · 값: 0 이상 정수
+      max_bytes: 200000                   # edw_meta 응답 크기 상한(바이트) · 기본 200000 · 값: 0 이상 정수
     edw_query:
-      max_bytes: 2000000  # query_edw 응답 크기 상한(바이트) · 기본 2000000 · 값: 0 이상 정수
-      timeout_sec: 20.0  # query_edw 질의 시간 상한(초) · 기본 20.0 · 값: 0 이상 초
+      max_bytes: 2000000                  # query_edw 응답 크기 상한(바이트) · 기본 2000000 · 값: 0 이상 정수
+      timeout_sec: 20.0                   # query_edw 질의 시간 상한(초) · 기본 20.0 · 값: 0 이상 초
     output:
-      max_chars: 20000  # search 응답 크기 상한(JSON UTF-8 바이트) · 기본 20000 · 값: 0 이상 정수
+      max_chars: 20000                    # search 응답 크기 상한(JSON UTF-8 바이트) · 기본 20000 · 값: 0 이상 정수
     pg:
-      filter_exact_max: 20000  # 고객 필터 허용 집합이 이 크기 이하면 벡터 정확 검색으로 전환(청크 수) · 기본 20000 · 값: 0 이상 정수
+      filter_exact_max: 20000             # 고객 필터 허용 집합이 이 크기 이하면 벡터 정확 검색으로 전환(청크 수) · 기본 20000 · 값: 0 이상 정수
     server:
-      reload_check_sec: 30.0  # 적재 버전 변경 확인 간격(초) · 기본 30.0 · 값: 0 이상 초
-      tool_timeout_sec: 30.0  # 도구 1회 실행 시간 상한(초) · 기본 30.0 · 값: 0 이상 초 (0 = 무제한)
+      reload_check_sec: 30.0              # 적재 버전 변경 확인 간격(초) · 기본 30.0 · 값: 0 이상 초
+      tool_timeout_sec: 30.0              # 도구 1회 실행 시간 상한(초) · 기본 30.0 · 값: 0 이상 초 (0 = 무제한)
   # ─── ops의 조정값 ───
   ops:
     runtime:
-      cpu_max_load:  # (자원) 새 하위 프로세스를 띄우는 CPU 부하 상한(1분 부하 평균 ÷ 코어 수) · 기본 0.9 · 값: 0 이상 · auto 또는 비우면 자동 계산
-      draft_terms_lock_timeout: 5.0  # 용어 초안 CSV 쓰기 잠금 대기 시간(초) · 기본 5.0 · 값: 0 이상 초
-      mem_max_pct:  # (자원) 생산 파싱이 새 프로세스를 띄우는 메모리 사용률 상한(%) · 기본 90.0 · 값: 0~100 · auto 또는 비우면 자동 계산
-      mem_settle_margin:  # (자원) 상한(MEM_MAX_PCT) 이만큼(%p) 아래부터 프로세스 띄운 뒤 잠깐 쉼 · 기본 5.0 · 값: 0~100 · auto 또는 비우면 자동 계산
-      mem_settle_sec:  # (자원) 메모리가 상한 근처일 때 프로세스 띄운 뒤 쉬는 시간(초) · 기본 2.0 · 값: 0 이상 초 · auto 또는 비우면 자동 계산
-      mem_start_pct:  # (자원) wait_mem 기본 상한 · 기본 90.0 · 값: 0~100 · auto 또는 비우면 자동 계산
-      pipe_max_procs:  # (자원) 파싱 엔진 프로세스 수 자동 결정의 상한(개) · 기본 8 · 값: 0 이상 · auto 또는 비우면 자동 계산
-      pipe_proc_gb:  # (자원) 엔진 프로세스 1개당 메모리 가정(GB) · 기본 3.0 · 값: 0 이상 · auto 또는 비우면 자동 계산
-      pipe_reserve_cpus:  # (자원) 자동 프로세스 수 계산 때 남겨 둘 CPU 코어 수(개) · 기본 1 · 값: 0 이상 · auto 또는 비우면 자동 계산
-      pipe_reserve_gb:  # (자원) 자동 프로세스 수 계산 때 남겨 둘 메모리(GB) · 기본 4.0 · 값: 0 이상 · auto 또는 비우면 자동 계산
-      pipe_threads:  # (자원) 프로세스 1개당 수치 라이브러리 스레드 수(OMP·MKL·onnx) · 값: 0 이상 · auto 또는 비우면 자동 계산
+      cpu_max_load:                       # (자원) 새 하위 프로세스를 띄우는 CPU 부하 상한(1분 부하 평균 ÷ 코어 수) · 기본 0.9 · 값: 0 이상 · auto 또는 비우면 자동 계산
+      draft_terms_lock_timeout: 5.0       # 용어 초안 CSV 쓰기 잠금 대기 시간(초) · 기본 5.0 · 값: 0 이상 초
+      mem_max_pct:                        # (자원) 생산 파싱이 새 프로세스를 띄우는 메모리 사용률 상한(%) · 기본 90.0 · 값: 0~100 · auto 또는 비우면 자동 계산
+      mem_settle_margin:                  # (자원) 상한(MEM_MAX_PCT) 이만큼(%p) 아래부터 프로세스 띄운 뒤 잠깐 쉼 · 기본 5.0 · 값: 0~100 · auto 또는 비우면 자동 계산
+      mem_settle_sec:                     # (자원) 메모리가 상한 근처일 때 프로세스 띄운 뒤 쉬는 시간(초) · 기본 2.0 · 값: 0 이상 초 · auto 또는 비우면 자동 계산
+      mem_start_pct:                      # (자원) wait_mem 기본 상한 · 기본 90.0 · 값: 0~100 · auto 또는 비우면 자동 계산
+      pipe_max_procs:                     # (자원) 파싱 엔진 프로세스 수 자동 결정의 상한(개) · 기본 8 · 값: 0 이상 · auto 또는 비우면 자동 계산
+      pipe_proc_gb:                       # (자원) 엔진 프로세스 1개당 메모리 가정(GB) · 기본 3.0 · 값: 0 이상 · auto 또는 비우면 자동 계산
+      pipe_reserve_cpus:                  # (자원) 자동 프로세스 수 계산 때 남겨 둘 CPU 코어 수(개) · 기본 1 · 값: 0 이상 · auto 또는 비우면 자동 계산
+      pipe_reserve_gb:                    # (자원) 자동 프로세스 수 계산 때 남겨 둘 메모리(GB) · 기본 4.0 · 값: 0 이상 · auto 또는 비우면 자동 계산
+      pipe_threads:                       # (자원) 프로세스 1개당 수치 라이브러리 스레드 수(OMP·MKL·onnx) · 값: 0 이상 · auto 또는 비우면 자동 계산
     nightly_run:
-      vlm_concurrency: 8  # (자원) 새벽 배치: 문서 하나의 쪽 VLM 동시 요청 수(개) · 기본 8 · 값: 0 이상 정수
-      workers:  # (자원) 새벽 배치: 동시 처리 문서 수(개) · 기본 4 · 값: 0 이상 정수
+      vlm_concurrency: 8                  # (자원) 새벽 배치: 문서 하나의 쪽 VLM 동시 요청 수(개) · 기본 8 · 값: 0 이상 정수
+      workers:                            # (자원) 새벽 배치: 동시 처리 문서 수(개) · 기본 4 · 값: 0 이상 정수
     services:
       parse_mcp:
-        job_timeout_sec: 600.0  # parse MCP 서비스 작업 1건 제한 시간(초) · 기본 600.0 · 값: 0 이상 초
-        procs:  # (자원) parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개) · 값: 0 이상 정수
-        queue_max: 8  # parse MCP 서비스 대기 작업 상한(건) · 기본 8 · 값: 0 이상 정수
-        text_page_sec: 1.0  # parse MCP 서비스 작업의 글자 엔진 쪽당 제한 시간(초) · 기본 1.0 · 값: 0 이상 초
-        warmup_sec: 20.0  # parse MCP 서비스 작업의 첫 시도 제한 하한(초) · 기본 20.0 · 값: 0 이상 초
-        vlm_page_sec: 60.0  # parse MCP 서비스 작업의 VLM 엔진 쪽당 제한 시간(초) · 기본 60.0 · 값: 0 이상 초
+        job_timeout_sec: 600.0            # parse MCP 서비스 작업 1건 제한 시간(초) · 기본 600.0 · 값: 0 이상 초
+        procs:                            # (자원) parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개) · 값: 0 이상 정수
+        queue_max: 8                      # parse MCP 서비스 대기 작업 상한(건) · 기본 8 · 값: 0 이상 정수
+        text_page_sec: 1.0                # parse MCP 서비스 작업의 글자 엔진 쪽당 제한 시간(초) · 기본 1.0 · 값: 0 이상 초
+        warmup_sec: 20.0                  # parse MCP 서비스 작업의 첫 시도 제한 하한(초) · 기본 20.0 · 값: 0 이상 초
+        vlm_page_sec: 60.0                # parse MCP 서비스 작업의 VLM 엔진 쪽당 제한 시간(초) · 기본 60.0 · 값: 0 이상 초

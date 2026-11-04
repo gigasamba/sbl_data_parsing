@@ -32,7 +32,7 @@ def _set_read_names():
 
 
 def test_copied_sample_starts_with_defaults():
-    text = sample.build().replace("\n    run_env:  #", "\n    run_env: dev  #", 1)
+    text = sample.build().replace("\n    run_env: ", "\n    run_env: dev", 1)  # 주석 열을 맞춘 공백 자리에 값을 넣음
     tree = yaml.safe_load(text)
     assert tree["required"]["env"]["run_env"] == "dev"
     names = _set_read_names()
