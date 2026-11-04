@@ -657,18 +657,18 @@ def query(sql, max_rows=1000):
     t0 = time.monotonic()
     kind, conf = backend()
     if kind is None:
-        return _finish(None, "tsql", "none", "not_configured", "EDW query backend not configured", t0)
+        return _finish("tsql", "none", "not_configured", "EDW query backend not configured", t0)
     dialect = dialect_of(kind)
     allowed = allowed_tables(kind)
     if allowed is not None and not allowed:
-        return _finish(None, dialect, kind, "not_configured_tables", "no tables are allowlisted for this backend", t0)
+        return _finish(dialect, kind, "not_configured_tables", "no tables are allowlisted for this backend", t0)
     cap_rows = _row_budget(max_rows)
     clean, err = validate(sql, allowed)
     if err:
-        return _finish(None, dialect, kind, f"rejected:{err}", "query rejected by the read-only SQL guard", t0)
+        return _finish(dialect, kind, f"rejected:{err}", "query rejected by the read-only SQL guard", t0)
     capped_sql, cap_err = _top_n(clean, cap_rows, dialect)
     if cap_err:
-        return _finish(None, dialect, kind, f"rejected:{cap_err}", "query rejected by the read-only SQL guard", t0)
+        return _finish(dialect, kind, f"rejected:{cap_err}", "query rejected by the read-only SQL guard", t0)
     q = mc.cfg().edw_query  # 한 번에 묶어 읽음(S7d)
     timeout = float(q.timeout_sec)
     max_bytes = int(q.max_bytes)
@@ -676,7 +676,7 @@ def query(sql, max_rows=1000):
         conn = _connect(kind, conf, timeout)
     except Exception as e:
         print(f"[mcp] edw_query connect failed ({kind}): {type(e).__name__}: {e}", flush=True)
-        return _finish(None, dialect, kind, "connect_failed", "could not connect to EDW", t0)
+        return _finish(dialect, kind, "connect_failed", "could not connect to EDW", t0)
     try:
         cur = conn.cursor()
         try:
@@ -686,13 +686,13 @@ def query(sql, max_rows=1000):
         except sqlite3.OperationalError as e:
             if "interrupted" in str(e).lower():
                 print(f"[mcp] edw_query timeout after {time.monotonic() - t0:.1f}s: {sql[:200]!r}", flush=True)
-                return _finish(None, dialect, kind, "timeout", "query exceeded the time limit", t0)
+                return _finish(dialect, kind, "timeout", "query exceeded the time limit", t0)
             raise
         except Exception as e:
             elapsed = time.monotonic() - t0
             code = "timeout" if elapsed >= timeout else "query_failed"
             print(f"[mcp] edw_query execute failed ({code}): {type(e).__name__}: {e} — sql={sql[:200]!r}", flush=True)
-            return _finish(None, dialect, kind, code, "query failed" if code == "query_failed" else "query exceeded the time limit", t0)
+            return _finish(dialect, kind, code, "query failed" if code == "query_failed" else "query exceeded the time limit", t0)
     finally:
         try:
             conn.close()
@@ -730,7 +730,7 @@ def _cap_bytes(rows, max_bytes, columns):
     return rows, truncated
 
 
-def _finish(_unused, dialect, source, error_code, message, t0):
+def _finish(dialect, source, error_code, message, t0):
     elapsed = round((time.monotonic() - t0) * 1000, 1)
     return {
         "ok": False,

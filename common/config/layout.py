@@ -404,7 +404,7 @@ REMOVED: dict[str, frozenset[str]] = {
             "max_image_px",
         }
     ),
-    # McpSearch(mcp_server/config.py) — 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) · agg_vocab_file 11-01(사전 파일이 코드 기본값과 같아 지움) · client 절 11-02(본문 고객 라벨 순위·하드 격리 지움 — 고객은 client_edw 거르기만, C6) — 지운 칸·절(남으면 경고만)
+    # McpSearch(mcp_server/config.py) — 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) · agg_vocab_file 11-01(사전 파일이 코드 기본값과 같아 지움) · client 절 11-02(본문 고객 라벨 순위·하드 격리 지움 — 고객은 client_edw 거르기만, C6) · query_log 절 op-13(사용자 11-04 — 질의 기록 파일 qa_log 없앰, 질의는 DB applog.mcp_call — 옛 파일의 search.query_log가 역할 절 규칙으로 이 절에 옴) — 지운 칸·절(남으면 경고만)
     "McpSearch": frozenset(
         {
             "agg",
@@ -421,6 +421,7 @@ REMOVED: dict[str, frozenset[str]] = {
             "ocr_dpi",
             "ov_search_path",
             "query_expand",
+            "query_log",
             "rerank",
             "struct_context_max",
             "tie_break",
@@ -430,8 +431,6 @@ REMOVED: dict[str, frozenset[str]] = {
     ),
     # McpServer(mcp_server/config.py) — store 11-01(mc-01 — 검색 저장소는 PG 하나) · 사용자 10-30(op-08) — common.models.embed.query_cache로 합침(mcp 이미지 기본은 그 칸에) — 옛 설정 파일에 남아도 경고만
     "McpServer": frozenset({"query_cache", "store"}),
-    # McpSettings(mcp_server/config.py) — op-13(사용자 11-04): 질의 기록 파일 qa_log 없앰(질의는 DB applog.mcp_call) — 남으면 경고만
-    "McpSettings": frozenset({"query_log"}),
     # PipelineConnections(pipeline/config.py) — 사용자 10-29 · graphiti 10-30(e2-18 — 외부 KG 어댑터 지움) — 지운 칸·절(남으면 경고만)
     "PipelineConnections": frozenset({"graphiti", "openviking"}),
     # PipelineConnectionsRdb(pipeline/config.py) — 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)

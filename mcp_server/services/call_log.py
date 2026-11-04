@@ -21,7 +21,6 @@ from uuid import UUID, uuid4
 from common.core import exitclean, jsonlog, span
 from common.store import logsink
 from mcp_server import config as mc
-from mcp_server.services.search.server_state import CALLER
 
 _REQUEST: contextvars.ContextVar[dict | None] = contextvars.ContextVar("mcp_audit", default=None)
 _LOG = None
@@ -215,12 +214,10 @@ def request_context(headers):
         "session_id": headers.get("mcp-session-id"),
     }
     token = _REQUEST.set(data)
-    caller_token = CALLER.set("mcp:" + data["agent"])
     try:
         with jsonlog.context(request_id=request_id):
             yield data
     finally:
-        CALLER.reset(caller_token)
         _REQUEST.reset(token)
 
 
@@ -255,7 +252,7 @@ class Call:
         if arguments is None:
             arguments = dict(inspect.signature(fn).bind(*args, **kwargs).arguments)
         request_id = context.get("request_id") or jsonlog.get_context().get("request_id") or str(uuid4())
-        self.row = _metadata({"request_id": request_id, "agent": CALLER.get().removeprefix("mcp:"), **context, "tool": tool})
+        self.row = _metadata({"request_id": request_id, "agent": "stdio", **context, "tool": tool})  # HTTP 요청이면 context의 agent가 덮음
         conf = mc.cfg().audit
         self.output_limit = conf.max_output_bytes
         self.input_limit = conf.max_input_bytes
