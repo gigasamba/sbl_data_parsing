@@ -600,7 +600,7 @@ def _folder_tree(src, files, out, state):
 
 def _record_sha_before_delete(state, local, done, field="sha256"):
     """지우기 전에 sha256을 manifest.jsonl에 남겨 둠(SI39 요건⑧ — 원본을 즉시 지워도 publish_parse(`modules/load/
-    silver_publish.py`)가 로컬 없이도 EDW 행을 쓸 수 있게). 못 읽으면(파일이 이미 없는 등) 그 문서만 건너뜀."""
+    publish_parse_result.py`)가 로컬 없이도 EDW 행을 쓸 수 있게). 못 읽으면(파일이 이미 없는 등) 그 문서만 건너뜀."""
     man_f = state / "manifest.jsonl"
     man = {r["file_name"]: r for r in jl(man_f)}
     changed = False
@@ -621,7 +621,7 @@ def finish(state, local, rep_index):
     (SI39 요건⑧, 2026-10-08 — publish_parse가 더는 원본을 올리지 않으므로 그걸 기다릴 이유가 없다. 옛
     PARSE_KEEP_ORIGINALS(publish 전까지 보존)는 폐지 · 디버그 보존 KEEP_LOCAL_ORIGINALS는 op-08에 지움).
     지우기 전에 항상 sha256을 manifest에 남긴다(`_record_sha_before_delete`) — publish_parse(modules/load/
-    silver_publish.py `plan()`)가 로컬 원본 없이도 이 값으로 EDW 행을 쓸 수 있게."""
+    publish_parse_result.py `plan()`)가 로컬 원본 없이도 이 값으로 EDW 행을 쓸 수 있게."""
     man_f = state / "manifest.jsonl"
     if not man_f.exists():
         return

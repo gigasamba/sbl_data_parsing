@@ -37,7 +37,7 @@ def selftest():
     print("[selftest] to_markdown 재사용 — 칸 안 '|' escape 통과")
 
     # (6) render_md does not duplicate an inline table but still appends an unmatched one — see
-    # pipeline/load/silver_publish.py render_md()'s own test (TA1 adds the `inline` skip there);
+    # pipeline/load/publish_parse_result.py render_md()'s own test (TA1 adds the `inline` skip there);
     # here we only check the flag table_inline sets is what render_md keys off of.
     assert rep["tables_std"][0]["inline"] is True and rep3["tables_std"][0]["inline"] is False
 

@@ -15,7 +15,7 @@ flowchart TD
     A["입구: systemd 타이머 → trigger.sh → run_docs.py (서버) / python -m pipeline.cli parse (PC)"]
     B["extract: fetch_docs.py → deduplication.py → filter_and_rotate.py → run_engines.py → run_one_engine.py + engines/*"]
     C["transform 1: parse_scoring.py → build_rep.py (+ figures/*, 후보정)"]
-    P["load 1 (silver): publish_parse_result.py → silver_publish.py → Object Storage + EDW ParsingMeta"]
+    P["load 1 (silver): publish_parse_result.py → Object Storage + EDW ParsingMeta"]
     D["transform 2: build_bundle.py → chunking.py + common/ai/embed.py → 묶음(bundle)"]
     E["load 2 (gold): pgvector_load.py → edw_doc_meta.py + doc_classify.py → PostgreSQL pgvector"]
     F["검색: mcp_server/main.py → search_svc.py → retriever.py / pgsearch.py"]
@@ -294,9 +294,9 @@ run_docs 경로에서는 `PARSE_RAW_ROOT`가 문서 폴더(`_docflow/<seq>/parse
 ```mermaid
 flowchart TD
     A["publish_parse_result.py run (기본 dry-run, --apply일 때만 씀)"]
-    B["silver_publish.plan: manifest · _rep · 채점 요약 · skipped → 게시 표"]
+    B["publish_parse_result.plan: manifest · _rep · 채점 요약 · skipped → 게시 표"]
     C["check_bucket_overlap: 게시 버킷 = 원천 버킷이면 거부"]
-    D["silver_publish.apply: render_md(_rep) → rep.md + raw_artifacts"]
+    D["publish_parse_result.apply: render_md(_rep) → rep.md + raw_artifacts"]
     E["Object Storage: 접두/source_system/원본 키/parse_date/rep.md"]
     F["EDW AI.ParsingMeta INSERT (parsing_meta_db.py)"]
     G["publish/excluded_날짜.md (DRM·실패 문서)"]
@@ -308,8 +308,8 @@ flowchart TD
 | 단계 | 파일·함수 | 하는 일 | 입력 → 출력 |
 |---|---|---|---|
 | 진입 | `pipeline.load.publish_parse_result.main()` → `pipeline.load.publish_parse_result.run()` | 입력 모으기, dry-run이면 표만, `--apply`면 업로드·EDW 쓰기 | `<out>/parse/…` → 결과 표 |
-| 계획 | `pipeline.load.silver_publish.plan()`·`pipeline.load.silver_publish.status_of()` | 문서마다 겹침 키(source_system, 원본 전체 키)·상태·올릴지 여부. 원본 sha는 지우기 전 manifest에 남긴 값 | → 게시 행 |
-| 올리기 | `pipeline.load.silver_publish.apply()`·`pipeline.load.silver_publish.render_md()`·`pipeline.load.silver_publish.raw_artifacts()`·`pipeline.load.silver_publish.rep_md_key()` (버킷 겹침 검사 `pipeline.load.silver_publish.check_bucket_overlap()`) | 대표 결과를 마크다운으로(본문 + 끝에 못 넣은 표), 같은 날짜 폴더에 엔진별 원결과·메타도 함께. 이미 있으면 덮지 않음(`--reparse` 목록만 새 날짜 폴더). 원본 파일은 올리지 않음 | → Object Storage |
+| 계획 | `pipeline.load.publish_parse_result.plan()`·`pipeline.load.publish_parse_result.status_of()` | 문서마다 겹침 키(source_system, 원본 전체 키)·상태·올릴지 여부. 원본 sha는 지우기 전 manifest에 남긴 값 | → 게시 행 |
+| 올리기 | `pipeline.load.publish_parse_result.apply()`·`pipeline.load.publish_parse_result.render_md()`·`pipeline.load.publish_parse_result.raw_artifacts()`·`pipeline.load.publish_parse_result.rep_md_key()` (버킷 겹침 검사 `pipeline.load.publish_parse_result.check_bucket_overlap()`) | 대표 결과를 마크다운으로(본문 + 끝에 못 넣은 표), 같은 날짜 폴더에 엔진별 원결과·메타도 함께. 이미 있으면 덮지 않음(`--reparse` 목록만 새 날짜 폴더). 원본 파일은 올리지 않음 | → Object Storage |
 | 기록 | `common/store/parsing_meta_db.py` | `AI.ParsingMeta` INSERT만(UPDATE 없음), 쓰기 계정. DDL은 실행하지 않음 | → EDW |
 | 접속 | `common/store/objectstore.py`·`common/store/mssql.py` | S3 호환 Object Storage(boto3)·SQL Server 접속, PC 가짜 EDW sqlite | — |
 

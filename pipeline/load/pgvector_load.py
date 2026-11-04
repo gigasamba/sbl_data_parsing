@@ -468,7 +468,7 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
 def gold_version(meta):
     """gold_version(pl-38, 사용자 11-03) = `<VERSION>+m<마스터 해시 앞 8자>` — 구조화가 읽은 마스터 표 해시(묶음 meta.json master_hash).
     master_hash가 없는 묶음(옛 묶음)은 `<VERSION>`만. 캐시 열쇠·code_fp에는 넣지 않는다(마스터가 바뀌어도 자동 재처리 없음)."""
-    from pipeline.load.silver_publish import pipeline_version  # 게시(silver_version)와 같은 자리
+    from pipeline.load.publish_parse_result import pipeline_version  # 게시(silver_version)와 같은 자리
 
     h = (meta or {}).get("master_hash")
     return f"{pipeline_version()}+m{h[:8]}" if h else pipeline_version()
