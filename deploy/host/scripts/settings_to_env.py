@@ -86,6 +86,26 @@ def load_model(path):
     return lay.to_model(doc, str(path))
 
 
+def load_or_error(path):
+    """(모델 배치 사전, None) 또는 ({}, 안내 글자) — 값·줄 글자는 안내에 넣지 않는다(YAML 오류는 문제 이름만)."""
+    try:
+        import yaml
+    except ImportError:
+        return {}, "호스트 python에 PyYAML이 없음 — pip install pyyaml(refactor.md C-09)"
+    lay = layout()
+    try:
+        return load_model(path), None
+    except OSError as e:
+        return {}, f"설정 파일을 읽지 못함: {path} ({e.strerror})"
+    except yaml.YAMLError as e:
+        dup = getattr(e, "problem", "") or ""
+        return {}, f"설정 파일 YAML 형식 오류: {path}" + (f" — {dup}" if dup.startswith(lay.DUP_KEY) else "")
+    except NotSections:
+        return {}, f"설정 파일 맨 위는 절(required·common·… tuning) 사전이어야 함: {path}"
+    except lay.LayoutError as e:
+        return {}, str(e)
+
+
 def lines(doc, sections, fmt="sh"):
     out = []
     for path, name, kind, *const in table_rows():
@@ -121,17 +141,13 @@ def main(argv=None):
     if not path:
         print("[settings_to_env] 설정 파일 없음 — --file 또는 SETTINGS_FILE", file=sys.stderr)
         return 2
+    doc, err = load_or_error(path)
     try:
-        import yaml
-    except ImportError:
-        print("[settings_to_env] 호스트 python에 PyYAML이 없음 — pip install pyyaml(refactor.md C-09)", file=sys.stderr)
-        return 2
-    lay = layout()
-    try:
-        out = lines(load_model(path), a.sections, a.format)
-    except (OSError, yaml.YAMLError, ValueError, lay.LayoutError) as e:
-        why = e.strerror if isinstance(e, OSError) else (getattr(e, "problem", "") or "") if isinstance(e, yaml.YAMLError) else str(e)
-        print(f"[settings_to_env] 설정 파일을 읽지 못함({path}): {why}", file=sys.stderr)  # YAML 오류는 문제 이름만(값·줄 글자는 안 찍음)
+        out = [] if err else lines(doc, a.sections, a.format)
+    except ValueError as e:
+        err = f"설정 파일 값 오류({path}): {e}"
+    if err:
+        print(f"[settings_to_env] {err}", file=sys.stderr)
         return 2
     for line in out:
         print(line)

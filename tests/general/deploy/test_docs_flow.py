@@ -23,11 +23,11 @@ def _load():
     return mod
 
 
-def _ok_pub(seq, row):
+def _ok_pub(seq):
     return True
 
 
-def _ok_gold(seq, row, enq_t=None):
+def _ok_gold(seq, enq_t=None):
     return True
 
 
@@ -95,9 +95,9 @@ def test_main_runs_lanes_to_end():
 
         def parse_one(seq, row):
             calls["parse"].append(seq)
-            return True, work / f"{seq}"
+            return True
 
-        def gold_one(seq, row, enq_t=None):
+        def gold_one(seq, enq_t=None):
             calls["struct"].append(seq)
             return True
 
@@ -117,9 +117,9 @@ def test_main_survives_errors_in_failure_path():
         work = Path(tmp)
 
         def parse_one(seq, row):  # 문서 0은 파싱 실패, 문서 1은 통과
-            return seq == 1, work / f"{seq}"
+            return seq == 1
 
-        def gold_one(seq, row, enq_t=None):
+        def gold_one(seq, enq_t=None):
             raise RuntimeError("구조화 실패(시험)")
 
         def setup(M):
@@ -131,7 +131,7 @@ def test_main_survives_errors_in_failure_path():
         M = _run_main(work, rows, parse_one, gold_one, setup=setup)
         assert M._lane_inflight == {"light": 0, "medium": 0, "vlm": 0}
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "문서별 flow 끝: 2건(완료 0 · 파싱실패 1 · 게시실패 0 · gold실패 1 · 스레드 예외 0)" in log, log
+        assert "문서별 flow 끝: 2건(완료 0 · 파싱실패 1 · 게시실패 0 · gold실패 0 · 스레드 예외 1)" in log, log
         assert M.rc == 1
 
 
@@ -151,7 +151,7 @@ def test_thread_error_fails_the_run():
 
             M.mark = mark
 
-        M = _run_main(work, rows, lambda seq, row: (True, work / f"{seq}"), setup=setup)
+        M = _run_main(work, rows, lambda seq, row: True, setup=setup)
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
         assert "완료 1 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
         assert M.rc == 1
@@ -171,7 +171,7 @@ def test_warm_error_does_not_hang():
 
             M.warm_one = warm_one
 
-        M = _run_main(work, rows, lambda seq, row: (True, work / f"{seq}"), setup=setup)
+        M = _run_main(work, rows, lambda seq, row: True, setup=setup)
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
         assert "완료 1 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 1" in log, log
         assert M.rc == 1 and not M._warming
@@ -186,7 +186,7 @@ def test_depth_write_error_does_not_hang():
         def setup(M):
             (M.PROG / "queue_depth.jsonl").mkdir(parents=True)  # 파일 자리에 폴더 — open("a")가 OSError
 
-        M = _run_main(work, rows, lambda seq, row: (True, work / f"{seq}"), setup=setup)
+        M = _run_main(work, rows, lambda seq, row: True, setup=setup)
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
         assert "완료 2 · 파싱실패 0 · 게시실패 0 · gold실패 0 · 스레드 예외 0" in log, log
         assert M.rc == 0
@@ -204,11 +204,11 @@ def test_struct_backlog_holds_new_parses():
         def setup(M):
             M._BACKLOG_SETTING, M.STRUCT_WORKERS = 1, 1  # 상한 1 · 구조화 1개(느림)
 
-        def gold_one(seq, row, enq_t=None):
+        def gold_one(seq, enq_t=None):
             time.sleep(0.3)
             return True
 
-        M = _run_main(work, rows, lambda seq, row: (True, work / f"{seq}"), gold_one, setup=setup)
+        M = _run_main(work, rows, lambda seq, row: True, gold_one, setup=setup)
         lines = [json.loads(x) for x in (M.PROG / "queue_depth.jsonl").read_text(encoding="utf-8").splitlines()]
         picks = [x for x in lines if x["event"] == "pick"]
         assert len(picks) == 8, len(picks)
@@ -244,7 +244,7 @@ def test_medium_vlm_lanes_and_vlm_cap():
             time.sleep(0.1)
             with lock:
                 live[lane] -= 1
-            return True, work / f"{seq}"
+            return True
 
         def setup(M):
             _lanes_by_name(M)
@@ -272,7 +272,7 @@ def test_mcp_busy_yields_medium_own_worker():
         def parse_one(seq, row):
             (job / "status").write_text("running", encoding="utf-8")  # 작업 파일이 계속 갱신됨 — 감시가 계속 '처리 중'으로 봄
             seen.append(threading.current_thread().name)
-            return True, work / f"{seq}"
+            return True
 
         def setup(M):
             _lanes_by_name(M)
@@ -329,9 +329,9 @@ def test_doc_order_and_exit_code():
             M = _run_main(
                 work,
                 rows,
-                lambda seq, row, ok=p_ok, ev=ev, w=work: (ev.append("parse"), (ok, w))[1],
-                lambda seq, row, enq_t=None, ok=g_ok, ev=ev: (ev.append("gold"), ok)[1],
-                lambda seq, row, ok=pub_ok, ev=ev: (ev.append("publish"), ok)[1],
+                lambda seq, row, ok=p_ok, ev=ev: (ev.append("parse"), ok)[1],
+                lambda seq, enq_t=None, ok=g_ok, ev=ev: (ev.append("gold"), ok)[1],
+                lambda seq, ok=pub_ok, ev=ev: (ev.append("publish"), ok)[1],
                 drops=_Rec(ev),
             )
         assert ev == want and M.rc == rc, ((p_ok, pub_ok, g_ok), ev, M.rc)
@@ -351,7 +351,7 @@ class _Rec(list):
 def test_exit_codes():
     """pl-18: 대상 0건 = 0 · 마감 도달(실패 없음) = 75 · 다른 run_docs가 도는 중 = 75."""
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"doc{i}.txt", "file_size": 10} for i in range(2)]
-    ok_parse = lambda seq, row: (True, Path("."))  # 시험 한 줄
+    ok_parse = lambda seq, row: True  # 시험 한 줄
 
     def past_deadline(M):
         M.deadline_at = lambda hhmm: time.time() - 1

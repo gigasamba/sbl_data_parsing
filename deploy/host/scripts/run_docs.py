@@ -20,6 +20,7 @@
 """
 
 import argparse
+import collections
 import csv
 import datetime
 import functools
@@ -44,6 +45,7 @@ ROOT = Path(__file__).resolve().parent
 #   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.pipeline_host.run_docs_dir(비우면 이 스크립트 옆 test_space/), 결과 공유 폴더는
 #   ops.host.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(load_settings.sh와 같음).
 TEST = PROG = DOCSPACE = DOCFLOW = WARM = None  # configure()가 채움
+PIPE_C = "data-pipeline"  # docker exec 대상 상주 컨테이너(warm·파싱·게시·구조화·정리) — configure()가 ops.host.instance를 붙임
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.docker(없으면 podman, 그것도 없으면 docker)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, 기본 배치 경로 없음)
 _EDW: dict = {}  # parsing-meta EDW 접속(호스트 pymssql — edw_list·edw_done_keys)
@@ -68,10 +70,6 @@ SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거
     ("common.connections.pg.db", "PostgreSQL DB — 문서 수 세기(psql)"),
     ("common.connections.pg.db_schema", "pgvector 스키마 — 문서 수 세기(psql)"),
 )
-
-
-def _yget(doc, path):
-    return _host().get(doc, path)
 
 
 def _code_root():
@@ -128,70 +126,54 @@ def _host():
     return mod
 
 
-def _layout():
-    """설정 배치 모듈(common/config/layout.py — 표준 라이브러리만)."""
-    return _host().layout()
-
-
 def read_settings(settings_file=None):
     """(사전, 문제) — 서버 settings.yaml을 쓴 글자 그대로 읽는다(BaseLoader — 스칼라는 모두 글자: `password: 0123`·`user: no`가 83·False로
     바뀌지 않게, 앱 설정 모델의 글자 칸 규칙과 같음). 파일: settings_file > SETTINGS_FILE > <루트>/settings.yaml. 값은 찍지 않는다.
     파일 배치(required·역할 절)를 모델 배치(common·pipeline·mcp)로 바꿔 돌려준다 — 이 모듈의 칸 경로는 모델 경로."""
     path = Path(settings_file or os.environ.get("SETTINGS_FILE") or _root() / "settings.yaml")  # env 남김 — 설정 파일 자리 신호
-    try:
-        import yaml
-    except ImportError:
-        return {}, "호스트 python에 PyYAML이 없음 — pip install pyyaml(refactor.md C-09)"
-    lay = _layout()
-    try:  # BaseLoader(글자만, 객체 생성 없음) + 같은 칸 두 번 거부(앱과 같게) — settings_to_env.load_model
-        return _host().load_model(path), None
-    except OSError as e:
-        return {}, f"설정 파일을 읽지 못함: {path} ({e.strerror}) — --settings 또는 SETTINGS_FILE·<루트>/settings.yaml"
-    except yaml.YAMLError as e:
-        dup = getattr(e, "problem", "") or ""
-        return {}, f"설정 파일 YAML 형식 오류: {path}" + (f" — {dup}" if dup.startswith(lay.DUP_KEY) else "")
-    except _host().NotSections:
-        return {}, f"설정 파일 맨 위는 절(required·common·… tuning) 사전이어야 함: {path}"
-    except lay.LayoutError as e:
-        return {}, str(e)
+    return _host().load_or_error(path)  # BaseLoader(글자만) + 같은 칸 두 번 거부 — 앱과 같은 규칙
 
 
 def work_dir(doc):
     """작업 폴더(진행 기록 batch_progress/·batches/) — settings.yaml ops.pipeline_host.run_docs_dir(모델 pipeline.host.run_docs_dir), 비우면 이 스크립트 옆 test_space/."""
-    work = _yget(doc, "pipeline.host.run_docs_dir")
+    work = _host().get(doc, "pipeline.host.run_docs_dir")
     return Path(work) if work else ROOT / "test_space"
 
 
 def configure(settings_file=None):
     """서버 settings.yaml을 한 번 읽어 모듈 값(경로·접속)을 채운다 — 문제 목록(빈 목록이면 통과). 값은 찍지 않는다."""
     global TEST, PROG, DOCSPACE, DOCFLOW, WARM, MCP_JOBS_DIR, WARM_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA, PM_TABLE
-    global DOCKER, PIPE_C
+    global DOCKER, PIPE_C, WARM_TARGET, WARM_WORKERS, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING
     doc, err = read_settings(settings_file)
     if err:
         return [err]
-    probs = [f"설정 필요: {_layout().to_yaml(p)} — {why}" for p, why in SETTINGS_REQUIRED if _yget(doc, p) in (None, "")]
-    run_env = _yget(doc, "common.run_env")
+    probs = [f"설정 필요: {_host().layout().to_yaml(p)} — {why}" for p, why in SETTINGS_REQUIRED if _host().get(doc, p) in (None, "")]
+    run_env = _host().get(doc, "common.run_env")
     if run_env not in (None, "") and run_env not in ("dev", "prd"):
         probs.append("required.env.run_env가 dev·prd가 아님 — 서버 전용 러너(로컬 실행 금지, CLAUDE.md 3절)")
     policy, bad = run_docs_policy(doc)
     probs += bad
     if probs:
         return probs
-    apply_policy(policy)
+    POLICY.update(policy)
+    WARM_TARGET, STRUCT_WORKERS, VLM_CAP = policy["warm"], policy["struct_workers"], policy["vlm_cap"]
+    WARM_WORKERS = policy["warm_workers"]
+    LANE_WORKERS = {c: (policy[f"{c}_dedicated"], policy[f"{c}_shared"]) for c in LANES}
+    _BACKLOG_SETTING = policy["struct_backlog"]
     TEST = work_dir(doc)
     PROG = TEST / "batch_progress"
     # 컨테이너 /app/output 공유 볼륨 — load_settings가 낸 RAG_OUT(셸 env > common.host.output_root > <루트>/output), 없으면 같은 규칙
     DOCSPACE = Path(
         os.environ.get("RAG_OUT")  # env 남김 — 호스트 도구(load_settings.sh load_settings가 냄)
-        or _yget(doc, "common.host.output_root")
+        or _host().get(doc, "common.host.output_root")
         or _root() / "output"
     )
     DOCFLOW = DOCSPACE / "_docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     WARM = DOCSPACE / "_warm"  # SOURCE_WARM 대기열 저장소
-    DOCKER = _yget(doc, "common.host.docker") or (
+    DOCKER = _host().get(doc, "common.host.docker") or (
         "podman" if shutil.which("podman") else "docker"
     )  # 셸 스크립트와 같은 순서(env 대신 설정)
-    inst = _yget(doc, "common.host.instance") or ""
+    inst = _host().get(doc, "common.host.instance") or ""
     if not re.fullmatch(r"([a-z0-9][a-z0-9-]*)?", str(inst)):
         return ["ops.host.instance는 영소문자·숫자·-만(앞은 글자·숫자)"]
     if inst and run_env == "prd":
@@ -199,17 +181,17 @@ def configure(settings_file=None):
     # 여러 벌 — host_ctl.sh가 띄운 이 루트의 컨테이너(load_settings.sh NAME_SUFFIX와 같은 규칙)
     PIPE_C = "data-pipeline" + (f"-{inst}" if inst else "")
     MCP_JOBS_DIR = DOCSPACE / "_mcp_parse" / "jobs"  # mcp-data-parsing의 작업 폴더(같은 결과 폴더 — parse_service.JOBS_DIR)
-    rdb = _yget(doc, "common.connections.rdb")  # 조회만 — 읽기 계정
+    rdb = _host().get(doc, "common.connections.rdb")  # 조회만 — 읽기 계정
     try:
         port = int(rdb.get("port") or 1433)
     except ValueError:
         return ["common.connections.rdb.port 형식 오류 — 정수만(값은 안 찍음)"]
     _EDW.update(host=rdb["host"], port=port, database=rdb["database"], user=rdb["read"]["user"], password=rdb["read"]["password"])
-    WARM_BUCKET = _yget(doc, "pipeline.connections.rdb.bucket")
-    PG_CONTAINER = _yget(doc, "common.host.pg_container")
-    PG_USER, PG_DB = _yget(doc, "common.connections.pg.user"), _yget(doc, "common.connections.pg.db")
-    PG_SCHEMA = _layout().per_instance(_yget(doc, "common.connections.pg.db_schema"), inst)  # 앱과 같은 규칙(settings 여러 벌)
-    PM_TABLE = _layout().per_instance(_yget(doc, "common.connections.parsing_meta.table") or "AI.ParsingMeta", inst)
+    WARM_BUCKET = _host().get(doc, "pipeline.connections.rdb.bucket")
+    PG_CONTAINER = _host().get(doc, "common.host.pg_container")
+    PG_USER, PG_DB = _host().get(doc, "common.connections.pg.user"), _host().get(doc, "common.connections.pg.db")
+    PG_SCHEMA = _host().layout().per_instance(_host().get(doc, "common.connections.pg.db_schema"), inst)  # 앱과 같은 규칙(settings 여러 벌)
+    PM_TABLE = _host().layout().per_instance(_host().get(doc, "common.connections.parsing_meta.table") or "AI.ParsingMeta", inst)
     if not re.fullmatch(
         r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?", PM_TABLE
     ):  # SQL에 넣는 이름 — parsing_meta_db.TABLE_ID_RE와 같은 꼴
@@ -223,10 +205,6 @@ def _edw_connect():
     return pymssql.connect(
         server=_EDW["host"], port=_EDW["port"], database=_EDW["database"], user=_EDW["user"], password=_EDW["password"], charset="utf8"
     )
-
-
-# 상주 컨테이너는 하나 — warm·파싱·게시·구조화·정리 모두 이 안에서 docker exec.
-PIPE_C = "data-pipeline"  # docker exec 대상(compose.pipeline.yml 상주 서비스) — configure()가 ops.host.instance를 붙임
 
 
 # 컨테이너 안 앱이 읽는 설정 칸은 명령 인자 `--set 이름=값`으로 준다(common.config.setarg — 그 python이 덮기 파일로 자기와 자식에게 넘김).
@@ -262,7 +240,7 @@ def _parse_set(chan, scan):
 
 def cpu_gate(chan):
     """파싱 CPU 게이트(CPU_MAX_LOAD) 글자 — light 레인은 따로(heavy가 CPU·VLM을 기다리는 틈에 바로 소화)."""
-    return f"{POLICY['light_cpu_gate'] if chan == 'light' else CPU_GATE:g}"
+    return f"{POLICY['light_cpu_gate' if chan == 'light' else 'cpu_gate']:g}"
 
 
 LIB_ENV = "PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache"  # env 남김 — 라이브러리(파이썬 자체 env, 설정 칸 아님)
@@ -390,11 +368,10 @@ LANE_WORKERS = {c: (RUN_DOCS_DEFAULTS[f"{c}_dedicated"], RUN_DOCS_DEFAULTS[f"{c}
 _BACKLOG_SETTING = RUN_DOCS_DEFAULTS["struct_backlog"]  # main()이 STRUCT_BACKLOG로 풂(구조화 워커 수 인자가 덮은 뒤)
 STRUCT_BACKLOG = 0
 NO_CLEANUP = False
-CPU_GATE = RUN_DOCS_DEFAULTS["cpu_gate"]  # main()이 --cpu-gate 또는 ops.run_docs.cpu_gate로
 _class: dict = {}  # seq → "light"/"medium"/"vlm"(warm 시점 분류)
 _scan: set = set()  # seq — 스캔 판정된 PDF(vlm_page 대상)만 담음
 
-LANEQ = {c: __import__("collections").deque() for c in LANES}  # 레인별 대기 문서(dispatched 순서)
+LANEQ: dict = {c: collections.deque() for c in LANES}  # 레인별 대기 문서(dispatched 순서)
 _struct_q: "queue.Queue" = queue.Queue()  # 중간 대기열 — 게시 끝·구조화(gold) 대기(main()이 씀)
 _pub_q: "queue.Queue" = queue.Queue()  # 파싱 끝·게시 대기(게시를 gold 앞에, 따로 한 스레드)
 _LOCK = None  # take_lock() 파일 — 프로세스 끝까지 쥠
@@ -407,8 +384,7 @@ def _waiting():
 
 MCP_JOBS_DIR = None  # MCP parse_document 작업 폴더 — configure()가 <결과 폴더>/_mcp_parse/jobs로
 _mcp_pause = False  # MCP 업로드 파싱 중 medium 레인 완보(사람 대기 응답 우선)
-_last_write: dict = dict()  # 방어용 마지막 활동 시각 저장
-_lane_inflight = {"light": 0, "medium": 0, "vlm": 0}
+_lane_inflight = {c: 0 for c in LANES}  # 레인 → 지금 파싱 중인 문서 수
 
 
 def _lane_total():
@@ -464,7 +440,7 @@ def pick_lane(own, shared, queues, inflight, vlm_cap):
 
 def run_docs_policy(doc):
     """settings.yaml ops.run_docs(모델 pipeline.host.run_docs) → (값, 문제 목록). 비운 칸은 RUN_DOCS_DEFAULTS. 글자 그대로 읽으므로(BaseLoader) 정수로 바꿈."""
-    sec = _yget(doc, "pipeline.host.run_docs")
+    sec = _host().get(doc, "pipeline.host.run_docs")
     sec = sec if isinstance(sec, dict) else {}
     vals, probs = {}, []
     for k, d in RUN_DOCS_DEFAULTS.items():
@@ -501,16 +477,6 @@ def run_docs_policy(doc):
         if vals[f"{c}_dedicated"] + shared < 1:
             probs.append(f"pipeline.host.run_docs — {c} 레인을 처리할 워커가 없음({c}_dedicated와 모든 *_shared가 0)")
     return vals, probs
-
-
-def apply_policy(vals):
-    """run_docs_policy() 값 → 모듈 값(configure()가 부름)."""
-    global WARM_TARGET, WARM_WORKERS, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING
-    POLICY.update(vals)
-    WARM_TARGET, STRUCT_WORKERS, VLM_CAP = vals["warm"], vals["struct_workers"], vals["vlm_cap"]
-    WARM_WORKERS = vals["warm_workers"]
-    LANE_WORKERS = {c: (vals[f"{c}_dedicated"], vals[f"{c}_shared"]) for c in LANES}
-    _BACKLOG_SETTING = vals["struct_backlog"]
 
 
 def stack_check():
@@ -644,11 +610,9 @@ def classify_doc(seq, row, cache=None):
     """레인 분류(규칙: PRD rn-01) — 규칙은 컨테이너 안 pipeline/extract/doc_parsing_group.py의 doc_parsing_group() 하나.
     캐시(s3_key) 우선 — 캐시에 있으면 docker exec를 안 부른다. 답(마지막 줄 — pymupdf 경고 섞임 방지)이 없으면 보수적으로 vlm.
     PDF의 vlm은 내용 검사 heavy(스캔)일 때뿐이라 PDF vlm = 스캔(_scan) 표시(캐시에서 되살릴 때도 같음)."""
-    import pathlib
-
     t_c = time.time()  # 소요 기록: 분류 전체 · probe_sec = 컨테이너 호출만
     name = _doc_name(row)
-    is_pdf = pathlib.Path(name).suffix.lower() == ".pdf"
+    is_pdf = Path(name).suffix.lower() == ".pdf"
     if cache is not None:
         with _class_lock:
             hit = cache.get(row["s3_key"])
@@ -767,9 +731,7 @@ def parse_one(seq, row):
     """문서 1개 파싱 — 공유 상주 컨테이너(PIPE_C) 안에서 워커별 분리(경로 격리).
     문서마다 출력 루트(PIPE_OUT_ROOT·DOC_DIR_PREPARED — --set으로 넘김)를 따로 둔다.
     VLM·OCR·후처리 값은 settings.yaml ops.run_docs, 쪽 해상도는 extract.ocr.dpi."""
-    d = DOCFLOW / f"{seq}"
-    d.mkdir(parents=True, exist_ok=True)
-    write_doc_csv(row, d / "batch.csv")
+    d = DOCFLOW / f"{seq}"  # warm_one이 만든 문서 폴더(batch.csv 포함)
     doc_log = PROG / f"doc_{seq}.log"
     t0 = time.time()
     mark(seq, "parse_start")
@@ -784,10 +746,10 @@ def parse_one(seq, row):
     ok = rc == 0 and n > 0
     mark(seq, "parse_end", ok=ok, rep=n, sec=round(time.time() - t0, 1))
     log(f"doc#{seq} 파싱 {'OK' if ok else 'FAIL'}({(time.time() - t0) / 60:.1f}분) · rep {n}건 — {row['original_filename'][:44]}")
-    return ok, d
+    return ok
 
 
-def publish_one(seq, row):
+def publish_one(seq):
     """silver 게시(OS + EDW — 파싱 바로 뒤, gold 전). 성공해야 원본을 지우고 gold로 넘어간다."""
     t1 = time.time()
     mark(seq, "pub_start")
@@ -800,7 +762,7 @@ def publish_one(seq, row):
     return ok
 
 
-def gold_one(seq, row, enq_t=None):
+def gold_one(seq, enq_t=None):
     """gold = 구조화+적재(문서 경계 없이 — 게시 성공 뒤). enq_t=게시 끝 시각(구조화 대기 계산)."""
     t0 = time.time()
     wait = round(t0 - enq_t, 1) if enq_t else 0
@@ -980,7 +942,7 @@ def _safe(fn, *args):
 
 
 def main():
-    global WARM_TARGET, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE, STRUCT_BACKLOG, CODE_DIR, DEADLINE_AT, _LOCK
+    global WARM_TARGET, STRUCT_WORKERS, NO_CLEANUP, STRUCT_BACKLOG, CODE_DIR, DEADLINE_AT, _LOCK
     ap = argparse.ArgumentParser()
     ap.add_argument("--start-offset", type=int, default=1072)
     ap.add_argument("--warm", type=int, default=None, help="진입 대기열(미리 받을 문서 수) — 기본 settings.yaml ops.run_docs.warm(20)")
@@ -991,7 +953,7 @@ def main():
     ap.add_argument("--deadline", default="", help="새벽 배치 마감(HH:MM) — 지나면 새 문서를 받기 시작하지 않음(사용자 11-02)")
     ap.add_argument("--seqs", default="", help="임의 문서 집합(쉼표 seq 목록) — 지정 시 연속 범위 대신 이 목록만 처리")
     ap.add_argument(
-        "--cpu-gate", type=float, default=None, help="파이프라인 CPU 게이트(CPU_MAX_LOAD) — 기본 settings.yaml ops.run_docs.cpu_gate(1.3)"
+        "--cpu-gate", type=float, default=None, help="파이프라인 CPU 게이트(CPU_MAX_LOAD) — 기본 settings.yaml ops.run_docs.cpu_gate"
     )
     ap.add_argument(
         "--skip-done",
@@ -1013,7 +975,8 @@ def main():
             print(f"[중단] {msg}", flush=True)
         raise SystemExit(2)
     NO_CLEANUP = a.no_cleanup
-    CPU_GATE = a.cpu_gate if a.cpu_gate is not None else POLICY["cpu_gate"]
+    if a.cpu_gate is not None:
+        POLICY["cpu_gate"] = a.cpu_gate
     DEADLINE_AT = deadline_at(a.deadline) if a.deadline else None
     if a.warm is not None:
         WARM_TARGET = a.warm
@@ -1070,7 +1033,6 @@ def main():
     # 문서별 순서: 파싱 → silver 게시(pub_q, 게시 스레드) → 원본 삭제 → gold(struct_q, 구조화 스레드) → 임시 삭제.
     # 게시를 따로 두어 구조화가 업로드·EDW 쓰기를 기다리지 않는다. 파싱 실패·게시 실패면 원본을 남기고 gold로 가지 않는다.
     cnt = {"ok": 0, "parse_fail": 0, "pub_fail": 0, "gold_fail": 0, "thread_err": 0}  # thread_err — 집계 전에 스레드 예외(종료 코드 1로)
-    struct_q, pub_q = _struct_q, _pub_q
 
     def _queue_loop(q, stage, work):
         """q에서 꺼내 work(*item)를 돌리는 스레드 — None이면 끝. 예외 처리·기록 중 예외(디스크 가득 등)도 스레드를 죽이지 않게 —
@@ -1093,26 +1055,18 @@ def main():
                 q.task_done()
 
     def _publish(seq, row):
-        try:
-            ok = publish_one(seq, row)
-        except Exception as ex:
-            log(f"doc#{seq} publish 예외 — 원본 남김 · {type(ex).__name__}: {str(ex)[:120]}")
-            ok = False
+        ok = publish_one(seq)
         if not ok:
             with _warm_lock:
                 cnt["pub_fail"] += 1
             _safe(drop_temp, seq)
             return
         _safe(drop_original, seq, row)  # 게시 성공 뒤에만
-        struct_q.put((seq, row, time.time()))
+        _struct_q.put((seq, row, time.time()))
         depth("struct_put")
 
     def _gold(seq, row, enq_t):
-        try:
-            ok = gold_one(seq, row, enq_t)
-        except Exception as ex:
-            log(f"doc#{seq} 구조화 예외 — silver는 남김 · {type(ex).__name__}: {str(ex)[:120]}")
-            ok = False
+        ok = gold_one(seq, enq_t)
         with _warm_lock:  # 집계를 기록(mark — 디스크 가득이면 예외)보다 먼저
             cnt["ok" if ok else "gold_fail"] += 1
             report = ok and cnt["ok"] % 5 == 0
@@ -1123,18 +1077,13 @@ def main():
             log(f"PG 누적: doc={nd} chunk={nc}")
 
     # ponytail: 게시 스레드 1개 — 업로드+EDW 한 줄은 파싱·구조화보다 훨씬 짧음, 밀리면 설정 칸(설정 모델 — 핑거프린트 파일)으로
-    threading.Thread(target=_queue_loop, args=(pub_q, "pub", _publish), daemon=True).start()
+    threading.Thread(target=_queue_loop, args=(_pub_q, "pub", _publish), daemon=True).start()
     for _ in range(max(1, STRUCT_WORKERS)):
-        threading.Thread(target=_queue_loop, args=(struct_q, "struct", _gold), daemon=True).start()
+        threading.Thread(target=_queue_loop, args=(_struct_q, "struct", _gold), daemon=True).start()
 
     def _one(doc_seq, row_doc):
-        try:
-            ok, _d = parse_one(doc_seq, row_doc)
-        except Exception as ex:
-            log(f"doc#{doc_seq} 파싱 예외 — {type(ex).__name__}: {str(ex)[:120]}")
-            ok = False
-        if ok:
-            pub_q.put((doc_seq, row_doc))
+        if parse_one(doc_seq, row_doc):
+            _pub_q.put((doc_seq, row_doc))
             depth("pub_put")
         else:
             with _warm_lock:
@@ -1193,11 +1142,11 @@ def main():
     for t in lane_threads:
         t.join(timeout=30)
 
-    pub_q.put(None)  # 파싱 전부 끝 → 게시 끝 → 구조화 끝(센티널 차례로)
-    pub_q.join()
+    _pub_q.put(None)  # 파싱 전부 끝 → 게시 끝 → 구조화 끝(센티널 차례로)
+    _pub_q.join()
     for _ in range(max(1, STRUCT_WORKERS)):
-        struct_q.put(None)
-    struct_q.join()
+        _struct_q.put(None)
+    _struct_q.join()
     _stop.set()
     with _warm_lock:
         _warm_lock.notify_all()

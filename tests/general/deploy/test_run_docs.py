@@ -196,12 +196,12 @@ def test_instance_names(tmp_path):
         rd = _load()  # 모듈 값을 바꾸므로 따로 읽음
         model = {}
         for p, v in {**req, "common.run_env": run, "common.connections.pg.db_schema": "rag", "common.connections.rdb.port": "1433"}.items():
-            rd._layout().set_path(model, p, v)
-        rd._layout().set_path(model, "common.host.instance", inst)
+            rd._host().layout().set_path(model, p, v)
+        rd._host().layout().set_path(model, "common.host.instance", inst)
         if table:
-            rd._layout().set_path(model, "common.connections.parsing_meta.table", table)
+            rd._host().layout().set_path(model, "common.connections.parsing_meta.table", table)
         f = tmp_path / "settings.yaml"
-        f.write_text(yaml.safe_dump(rd._layout().to_file(model)), encoding="utf-8")
+        f.write_text(yaml.safe_dump(rd._host().layout().to_file(model)), encoding="utf-8")
         probs = rd.configure(f)
         if want is None:
             assert probs, (run, inst, table)
