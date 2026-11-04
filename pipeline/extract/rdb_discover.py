@@ -90,41 +90,6 @@ def _mssql_tables(like):
         return drafts
 
 
-def table_columns(table):
-    """원천 표의 열 이름(값·행은 안 읽음 — S8b set-sources --check-columns, Q9). csv:<경로>면 머리글, RDB_ENGINE=pg면 information_schema,
-    mssql(기본)이면 INFORMATION_SCHEMA(SQLAlchemy — source.rdb_connect). 표가 없으면 []."""
-    if table.startswith("csv:"):
-        f = Path(table[4:])
-        if not f.is_file():
-            return []
-        with open(f, encoding="utf-8-sig", newline="") as fh:
-            return next(csv.reader(fh), [])
-    schema, _, bare = table.rpartition(".")
-    if pc.cfg().connections.rdb.engine == "pg":
-        from common.store.pg import PG, conf
-
-        return [
-            r["column_name"]
-            for r in PG(conf()).q(
-                "SELECT column_name FROM information_schema.columns WHERE lower(table_schema)=lower(%s) AND lower(table_name)=lower(%s) "
-                "ORDER BY ordinal_position",  # 따옴표 없이 만든 표는 소문자로 저장(_pg_tables의 ILIKE와 같게)
-                [schema or "public", bare],
-            )
-        ]
-    from common.store import mssql
-    from pipeline.extract.fetch_docs import rdb_connect
-
-    with rdb_connect() as cn:
-        if schema:
-            return [r["COLUMN_NAME"] for r in mssql.rows(cn, _COLS_SQL, (schema, bare))]
-        return [
-            r["COLUMN_NAME"]
-            for r in mssql.rows(
-                cn, "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=%s ORDER BY ORDINAL_POSITION", (bare,)
-            )
-        ]
-
-
 def _pg_tables(like):
     from common.store.pg import PG, conf
 

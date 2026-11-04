@@ -11,9 +11,18 @@ from pipeline.extract.fetch_docs import (
     _safe_join,
     _safe_name,
     finish,
-    mark_done,
     resolve,
 )
+
+
+def mark_done(state, done_names, is_s3):
+    """시험용 — 파싱이 끝난 것처럼 처리 기록(processed.jsonl)만 남긴다(운영은 finish()가 같은 줄을 쓰고 원본도 지움)."""
+    assert is_s3
+    man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")}
+    with (state / "processed.jsonl").open("a", encoding="utf-8") as f:
+        for n in done_names:
+            r = man[n]
+            f.write(json.dumps({"key": r["key"], "etag": r["etag"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
 
 
 def selftest():

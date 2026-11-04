@@ -83,24 +83,6 @@ from common.core.contract import safe_filename as _safe_name  # noqa: E402
 from common.core.contract import safe_path_join as _safe_join  # noqa: E402
 
 
-def _dedupe_names(name_of):
-    """GH1-02 — _safe_name이 서로 다른 키를 같은 평면 이름으로 뭉개면(예: 다른 하위 폴더의 같은 파일 이름) 겹치는
-    것만 전체 키의 짧은 해시(8자)를 이름에 붙여 갈라놓는다 — 이번 배치(목록 조회 1회) 안에서만 감지, 안 겹치면
-    이름은 그대로(기존 이름·처리 기록과 호환)."""
-    from collections import Counter
-
-    counts = Counter(name_of.values())
-    out = {}
-    for k, n in name_of.items():
-        if counts[n] <= 1:
-            out[k] = n
-            continue
-        h = hashlib.sha256(k.encode("utf-8")).hexdigest()[:8]
-        stem, dot, ext = n.rpartition(".")
-        out[k] = f"{stem}__{h}.{ext}" if dot else f"{n}__{h}"
-    return out
-
-
 def _s3():
     """boto3 s3 클라이언트 — common/objectstore.py(OP21, modules/search/mcp_server.py 근거 이미지와 공용)로 승격,
     동작은 바이트 동일(그 함수에 그대로 위임)."""
@@ -703,20 +685,6 @@ def _derive_source_from_key(key):
     if first.startswith(("las_", "LAS_")):
         return "las_test"
     return None
-
-
-def mark_done(state, done_names, is_s3):
-    """스트리밍 묶음이 끝난 뒤 처리 기록(ETag 또는 (key, 증분값) 쌍) 남김 — Object Storage 기원(s3://·rdb:)일 때만
-    (폴더는 추적할 상태가 없음, 받은 그대로 둠). is_s3 이름은 유지(호출부 호환) — 실제로는 is_remote(원격 기원이면
-    True, rdb도 포함)."""
-    if not is_s3 or not done_names:
-        return
-    man_f = state / "manifest.jsonl"
-    man = {r["file_name"]: r for r in jl(man_f)} if man_f.exists() else {}
-    rs = [man[n] for n in done_names if man.get(n)]
-    with _processed_path(state).open("a", encoding="utf-8") as f:
-        for r in rs:
-            f.write(json.dumps({"key": r["key"], "etag": r["etag"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
 
 
 if __name__ == "__main__":
