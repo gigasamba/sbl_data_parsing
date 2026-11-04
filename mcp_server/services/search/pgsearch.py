@@ -45,19 +45,16 @@ def _scope_restrict(db, scope):
     return {r["chunk_id"] for r in rows}
 
 
-def vector_top(db, q, n, exact=None, restrict=None):
-    """코사인 상위 n chunk_id. PG_VECTOR_SEARCH=exact(또는 exact=True)면 색인 없이 정확 검색(재현율 기준선).
+def vector_top(db, q, n, restrict=None):
+    """코사인 상위 n chunk_id — HNSW 근사(허용 집합이 작으면 정확 검색).
     restrict(AD38) = 허용 chunk_id 집합(없으면 제한 없음 — 전과 바이트 동일).
     GH1-14 — SET(인덱스 끔·ef_search)과 그 뒤 SELECT를 db.scope()로 한 연결·한 트랜잭션에 묶는다(SET LOCAL).
     PGPool(검색 MCP 상주 Retriever)은 q() 호출마다 풀에서 다른 연결을 꺼내 와, SET이 그 질의에 안 먹거나
     다음 요청(다른 연결 체크아웃)에 새는 문제가 있었다 — scope()는 끝나면(COMMIT) 자동 리셋."""
     s, d = db.schema, dim_of(db)
-    pgc = mc.cfg().search.pg  # 한 번 묶음(S7d — 두 칸이 같은 판 값)
-    exact = pgc.vector_search == "exact" if exact is None else exact
     # 10-15 urgent — HNSW reads ef_search candidates first and filters after, so a narrow client filter can return fewer
     # than n hits. A small allowed set is cheaper to scan exactly anyway (chunk_id primary key) and never loses hits.
-    if restrict is not None and len(restrict) <= pgc.filter_exact_max:
-        exact = True
+    exact = restrict is not None and len(restrict) <= mc.cfg().search.pg.filter_exact_max
     where, rparam = (" WHERE chunk_id = ANY(%s)", [sorted(restrict)]) if restrict is not None else ("", [])
     with db.scope() as c:
         if exact:

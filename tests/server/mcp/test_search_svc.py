@@ -124,15 +124,13 @@ def _selftest_copy_group_rep_text():
 
 
 def _selftest_evidence_gate():
-    """R3(AD42) — found/weak/none·근거별 low_score 계산·표시."""
+    """R3(AD42) — found/weak/none(핵심어가 근거 원문에 있는지)."""
     ev_found = [{"text": "계약 C-001 금액은 100 USD", "score": 0.9}]
-    assert evidence_status("C-001 계약 금액은?", ev_found, min_score=0.1) == ("found", [False])
+    assert evidence_status("C-001 계약 금액은?", ev_found) == "found"
     ev_off_topic = [{"text": "관련 없는 내용", "score": 0.9}]  # 핵심어(C-001) 없음 → weak
-    assert evidence_status("C-001 계약 금액은?", ev_off_topic, min_score=0.1) == ("weak", [False])
-    ev_low = [{"text": "계약 C-001 금액은 100 USD", "score": 0.01}]  # 점수 문턱 미달 → weak·low_score
-    assert evidence_status("C-001 계약 금액은?", ev_low, min_score=0.1) == ("weak", [True])
-    assert evidence_status("C-001 계약 금액은?", [], min_score=0.1) == ("none", [])
-    assert evidence_status("아무 질문", ev_found, min_score=None) == ("found", [None])  # 문턱 없으면 low_score 안 매김
+    assert evidence_status("C-001 계약 금액은?", ev_off_topic) == "weak"
+    assert evidence_status("C-001 계약 금액은?", []) == "none"
+    assert evidence_status("아무 질문", ev_found) == "found"  # 핵심어 없는 질문
 
     sha = "9" * 64
     d = pgfix.mk_bundle(
@@ -156,14 +154,10 @@ def _selftest_evidence_gate():
     try:
         none = do_search("색인에 없는 XYZ999-계약은?", k=3)  # BM25 0건
         assert none["evidence_status"] == "none", none
-
-        with mc.senv(SEARCH_MIN_SCORE="99999"):  # 무조건 문턱 미달
-            weak = do_search("단가는?", k=3)
-            assert weak["evidence_status"] == "weak", weak
     finally:
         _env.close()
         _STATE.clear()
-    print("[selftest] R3 근거 게이트 — found/weak/none·근거별 low_score 통과")
+    print("[selftest] R3 근거 게이트 — found/weak/none 통과")
 
 
 def _selftest_evidence_rdb_meta():

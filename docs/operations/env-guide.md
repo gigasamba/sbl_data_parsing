@@ -94,12 +94,11 @@
 |---|---|---|
 | `MCP_HOST`(`search.server.host`) | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부 |
 | `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 `required.tokens.mcp`(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
-| `FULLTEXT_SIGN_SECRET`(`search.server.fulltext_secret`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키(비밀). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 `sfid`가 모두 무효 |
+| `FULLTEXT_SIGN_SECRET`(`required.tokens.fulltext`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키(비밀). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 `sfid`가 모두 무효 |
 | `PARSE_SERVICE_TOKEN`(`required.tokens.parse_proxy`) | 비움(→ `MCP_TOKEN`) | `parse_document`가 작업 서비스를 부를 때 쓰는 토큰 — `required.tokens.parse_mcp`와 같은 값. 둘 다 없으면 "parse 서비스 토큰 없음" 오류 |
 | `PARSE_MCP_MAX_MB`(`ops.runtime.parse_max_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |
 | `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음 |
 | `MCP_ALLOWED_HOSTS` | 비움 | 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |
-| `MCP_INSTRUCTIONS`(`search.server.instructions`) | 비움 | MCP 안내 문구 교체 |
 
 ### EDW 쿼리 도구(`query_edw`·`edw_meta`)
 `required.edw`의 **읽기 계정**만 쓴다(파이프라인 원천 조회와 같은 계정 — 운영 준비는 [server-guide §4-1](server-guide.md#4-1-edw-쿼리-도구-설정--edw_metaquery_edw)).
@@ -109,12 +108,10 @@
 | `EDW_QUERY` | 켬 | `0`이면 `query_edw`가 `not_configured` |
 | `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_READ_USER`·`RDB_READ_PASSWORD` | 비움·`1433`·비움 | `required.edw`(포트는 `common.connections.rdb.port`) |
 | `RDB_SQLITE` | 비움 | PC 전용 EDW 대역 파일(`valid_env/edw/edw.sqlite`, 다시 만들기 `python -m validation.e2e.edw_standin`) — 서버 설정에 있으면 실패 |
-| `EDW_QUERY_TABLES_STRICT`(`search.edw_query.tables_strict`) | `false` | `true`면 `EDW_QUERY_TABLES` 목록만 허용 |
-| `EDW_QUERY_TABLES`(`search.edw_query.tables`) | 비움 | 허용 `schema.table` 쉼표 목록 — 비면 모두 거부 |
 | `EDW_QUERY_MAX_ROWS` | `1000` | 도구 `max_rows`의 상한 |
 | `EDW_QUERY_TIMEOUT_SEC` | `20` | 넘으면 `timeout` |
 | `EDW_QUERY_MAX_BYTES` | `2000000` | 응답 JSON 크기 상한 — 넘으면 끝 행부터 버리고 `truncated: true` |
-| `EDW_META_DIR`(`search.edw_meta.dir`) | 비움 | `edw_meta` 데이터셋(`catalog.json`·`columns.jsonl`) 폴더 |
+| `EDW_META_DIR`(`search.edw_meta.dir`) | 비움(`/app/config/edw_meta` — 서버 compose는 안 붙임) | `edw_meta` 자료(`catalog.json`·`columns.jsonl`, 개인정보 없는 자료) 폴더. 서버는 `<루트>/output/edw_meta/`에 복사하고 `/app/output/edw_meta`로 적는다. 없으면 `edw_meta`만 `not_configured` |
 
 ### 이미지 태그·호스트 경로 (compose 치환용)
 | 이름 | 메모 |
@@ -139,7 +136,6 @@
 | `RDB_CONNECT_KWARGS` | EDW 연결 추가 인자(JSON — 비밀) |
 | `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD` | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만 |
 | `PM_BUCKET`·`PM_PREFIX`(`required.source.publish_bucket`·`publish_prefix`) | 결과 게시 대상. 폴더 저장소로 먼저 시험: `PM_BUCKET=file://…`. ⚠ **첫 게시 전 EDW 표를 DBA가 한 번 만든다**: [`parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(코드는 표를 만들지 않음 — 없으면 첫 INSERT에서 실패) |
-| `PM_PATH_MAP` | 결과 키 앞부분 바꾸기 `이전=새`(쉼표 목록) — 문서 폴더 = `<PM_PREFIX>/<새 앞부분>/<나머지 폴더>/<원본파일명>/` · 예 `SFDC=Parsing-Result/SFDC`면 `.../SFDC/<UUID>/a.pdf` → `.../Parsing-Result/SFDC/<UUID>/a.pdf/` |
 | `PM_TABLE`(`common.connections.parsing_meta.table`) | 게시할 EDW 표(기본 `AI.ParsingMeta`) |
 | `EDW_CHAIN_FILE`(`ops.paths.edw_chain`) | EDW 조인 사슬 파일 — 적재와 검색 MCP가 같은 칸을 읽는다. 비우면 코드의 `resources/config/edw_chain.yaml`, 서버 사본을 쓰려면 `/etc/rag/edw_chain.yaml`. 쓰는 법: [release-and-patch §8-6](release-and-patch.md#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29) |
 
@@ -179,7 +175,7 @@ ls -l ../settings.yaml                # 서버(코드 폴더에서): 주인 1000
 | `required.pg` 여섯 칸 필수(자동 탐지 없음) | 모두 채운다. `db_schema`는 **새 이름**(판 0002가 옛 표를 지움) |
 | env로 준 값은 효과 없음(엔진·핸드오프 칸 포함) | 컨테이너에 `-e VLM_BASE_URL=…`·`OCR_DPI=…`처럼 주던 값은 settings.yaml 칸으로(`--where <이름>`으로 자리 확인) |
 | 이미지 칸 `required.deploy.pipeline_image`·`mcp_image` | dev `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0` · prd `data-pipeline:0.2.0`·`mcp-server:0.2.0` |
-| 새 칸 `required.deploy.pg_container`·`required.tokens.parse_mcp`·`parse_proxy`·`search.server.fulltext_secret` | 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)) |
+| 새 칸 `required.deploy.pg_container`·`required.tokens.parse_mcp`·`parse_proxy`·`fulltext` | 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)) |
 | 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline` — 셋 다 있어야 돎 | 배포 때는 비워 두고 배포 뒤 켠다(§8-4 3) |
 | `parse_document` 크기 상한 칸이 `ops.runtime.parse_max_mb`(기본 100) | 옛 `ops.services.parse_mcp.max_mb`가 있으면 지우고, 100이 아닌 값은 새 칸에. 리버스 프록시 본문 상한도 늘린다(C-85) |
 | `query_edw` 행 상한 기본 1000(`search.edw_query.max_rows`) | 다른 값을 쓰려면 적는다 |

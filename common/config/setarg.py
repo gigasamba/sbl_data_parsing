@@ -56,9 +56,7 @@ def _fields():
     for cls in (S.CommonAppSettings, *S.app_classes().values()):
         for path, field, _ in S.walk(cls):
             name = S.env_name(field)
-            if name and (
-                name not in out or S.is_host(out[name][0])
-            ):  # 같은 이름이 호스트 칸·앱 칸 둘 다면 앱 칸(GOLD_DIR·RAG_OUT — 리뷰 S9)
+            if name and (name not in out or S.is_host(out[name][0])):  # 같은 이름이 호스트 칸·앱 칸 둘 다면 앱 칸(RAG_OUT — 리뷰 S9)
                 out[name] = (path, S.is_secret(field))
     return out
 

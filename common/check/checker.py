@@ -30,7 +30,7 @@ from common.ai import guard
 from common.ai import llm as A  # 모델 호출(0.2.0 — 옛 common.ai.adk, pl-46)
 from common.ai.guard import external_allowed, is_internal
 from common.config import settings as C  # common 칸(S7c — 설정 객체 · cfg()·given()·reveal()·COMMON.env())
-from common.config.settings import by_env, cfg, reveal  # S7b — 설정 객체(이름을 글자로 짓는 칸은 by_env)
+from common.config.settings import by_env, reveal  # S7b — 설정 객체(이름을 글자로 짓는 칸은 by_env)
 from common.core.console import utf8_stdout
 from common.core.paths import APP_ROOT, doc_dir  # output/·requirements·문서 폴더 등 런타임 경로용(C2, 독립 검토 10-13)
 from common.store.pg import detect_pg
@@ -112,25 +112,22 @@ def _parse_source_path(v):
     return None if v.startswith("rdb:") else Path(v)  # rdb:csv는 형식만(파일 경로 아님) · s3://는 11-01에 지움(경로로 보고 없으면 경고)
 
 
+PING_TIMEOUT = 60  # ping_models 점검의 호출 제한 시간(초)
 PATH_BUNDLE = [
-    ("GOLD_DIR", Path),
     ("SOURCES_FILE", Path),
     ("PARSE_SOURCE", _parse_source_path),
 ]
 
 
 def _bundle_value(name):
-    """PATH_BUNDLE 이름의 준 값(없거나 빈 값이면 None) — 칸이 pipeline 절(GOLD_DIR 등)에 있거나 common 절에 있음(S7c — 설정 객체 · GLOSSARY_DIR은 pl-38에 지움 — 마스터 표)."""
-    if name == "GOLD_DIR":
-        return _pc().gold_dir() or None  # S7e2 — 이미지 안 /data/gold 마운트 기본(pc.gold_dir)
+    """PATH_BUNDLE 이름의 준 값(없거나 빈 값이면 None) — 칸이 pipeline 절(PARSE_SOURCE 등)에 있거나 common 절에 있음(S7c — 설정 객체 · GLOSSARY_DIR은 pl-38에 지움 — 마스터 표)."""
     v = _pc().given(name)
     return v if v is not None else C.given(name)
 
 
-def check_path_bundle(dump_dir=None):
+def check_path_bundle():
     """env-guide 1-2 경로 묶음이 실제로 있는지 보고 — 미설정은 '미설정(선택)', 있는데 경로가 없으면 경고만
-    (둘 다 check_env 종료 코드에 안 섞음, 정보성). GOLD_DIR은 추가로 문서 폴더(dump_dir)와 이름 짝(파일 이름
-    stem 일치)까지 — 사람 정답 폴더가 실제 문서를 가리키는지(OP15 c1)."""
+    (둘 다 check_env 종료 코드에 안 섞음, 정보성)."""
     print("\n== 경로 묶음 (env-guide 1-2 — 서버 LLM이 .env만 바꿔 맞추는 곳) ==")
     for name, resolve in PATH_BUNDLE:
         v = _bundle_value(name)
@@ -142,14 +139,6 @@ def check_path_bundle(dump_dir=None):
             line(True, name, v)
         else:
             line(p.exists(), name, str(p) if str(p) != v else v)
-
-    gold_dir = _bundle_value("GOLD_DIR")
-    if gold_dir and Path(gold_dir).exists() and dump_dir is not None:
-        golds = {f.stem.lower() for f in Path(gold_dir).iterdir() if f.is_file() and f.suffix.lower() in (".txt", ".md")}
-        docs = {p.stem.lower() for p in dump_dir.iterdir() if p.is_file() and p.name != ".gitkeep"} if dump_dir.exists() else set()
-        if docs:
-            matched = golds & docs
-            line(bool(matched), "GOLD_DIR 이름 짝", f"문서 {len(docs)}건 중 정답 짝 {len(matched)}건(정답 파일 {len(golds)}개)")
 
     try:  # pl-38 — 용어집·고객 명부는 PG 마스터 표(<PG_SCHEMA>_master)
         from common.store import master
@@ -173,9 +162,7 @@ def check_pg_schema():
     line(
         True,
         "AD41 모드",
-        "실 PG(연결 정보 있음)"
-        if PG.has_conn()
-        else "스탠드인(sqlite, output/pg_standin) — PG_PASSWORD·PG_CONN_FILE 채우면 코드 변경 없이 실 PG로",
+        "실 PG(연결 정보 있음)" if PG.has_conn() else "스탠드인(sqlite, output/pg_standin) — required.pg를 채우면 코드 변경 없이 실 PG로",
     )
     try:
         c = PG.conf()
@@ -262,7 +249,7 @@ def env_main():
         c = Counter(p.suffix.lower() or "(없음)" for p in (dump.iterdir() if dump.exists() else []) if p.is_file() and p.name != ".gitkeep")
         print("  " + (", ".join(f"{k} {v}" for k, v in c.most_common()) or "비어 있음"))
 
-    check_path_bundle(dump)
+    check_path_bundle()
     check_pg_schema()
 
     print("\n== 폐쇄망 캐시 (prefetch_models.py로 미리 받은 것) ==")
@@ -388,7 +375,7 @@ def _list_model_ids(prefix, base, timeout=None, internal_only=True):
     key = reveal(by_env(f"{prefix}_API_KEY"))
     if key:
         req.add_header("Authorization", f"Bearer {key}")
-    with guard.urlopen(req, timeout or cfg().models.transport.ping_timeout, prefix) as r:
+    with guard.urlopen(req, timeout or PING_TIMEOUT, prefix) as r:
         return [m.get("id") for m in json.load(r).get("data", []) if m.get("id")]
 
 
@@ -414,7 +401,7 @@ def ping(prefix):
         try:
             _, body = payload(prefix, model)
             t = time.perf_counter()
-            A.complete(prefix.lower(), body["messages"], max_tokens=1, timeout=cfg().models.transport.ping_timeout)
+            A.complete(prefix.lower(), body["messages"], max_tokens=1, timeout=PING_TIMEOUT)
             return True, int((time.perf_counter() - t) * 1000), model, ""
         except Exception as e:
             return False, 0, model or "", f"{type(e).__name__}: {str(e)[:120]}"
@@ -426,7 +413,7 @@ def ping(prefix):
         if key:
             req.add_header("Authorization", f"Bearer {key}")
         t = time.perf_counter()
-        with guard.urlopen(req, cfg().models.transport.ping_timeout, prefix) as r:
+        with guard.urlopen(req, PING_TIMEOUT, prefix) as r:
             d = json.load(r)
         ms = int((time.perf_counter() - t) * 1000)
         extra = ""

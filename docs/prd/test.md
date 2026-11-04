@@ -95,7 +95,7 @@
 
 <a id="e2-10"></a>
 ## e2-10 · PC 평가 도구 범위
-- 규칙: PC 검증 도구는 `validation/search_ui`(e2-07), `valid_env/answer_test`·`validation/e2e/answer_gen`(e2-05), `mcp_server/cli/mcp_smoke.py`(e2-04), 점검기 `common/check/checker.py`의 `GOLD_DIR` 점검만 둔다. 파싱 품질·검색 적중률·스택·모델 비교 도구는 없다.
+- 규칙: PC 검증 도구는 `validation/search_ui`(e2-07), `valid_env/answer_test`·`validation/e2e/answer_gen`(e2-05), `mcp_server/cli/mcp_smoke.py`(e2-04), 점검기 `common/check/checker.py`만 둔다. 파싱 품질·검색 적중률·스택·모델 비교 도구는 없다.
 - Status: done
 
 <a id="e2-17"></a>

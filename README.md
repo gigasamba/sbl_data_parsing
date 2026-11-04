@@ -151,16 +151,15 @@ required:
   env: {run_env: local, run_mode: prod}
   pg: {host: 127.0.0.1, port: 55433, db: rag, user: rag, password: <비밀번호>, db_schema: demo}   # 적재·검색할 스키마
   embed: {base_url: <OpenAI 호환 주소>, model: <임베딩 모델>, api_key: <키>}
-common:
-  models:
-    embed: {allow_external: false}               # 평소 false — 임베딩이 필요한 실행 동안만 true
-    guard:
-      budget_usd: 0.1                            # 외부 모델 하루 지출 상한($) — 비우면 0.1. 장부 output/_llm_spend/<날짜>.txt
 ops:
   pipeline_paths: {out_root: output/demo}        # 파이프라인 결과 폴더
 search:
   server: {host: 127.0.0.1, port: 18769, warmup: false}
-dev:
+dev:                                             # PC 전용 칸(RUN_ENV=local) — 서버 settings.yaml에는 두지 않는다
+  models:
+    embed: {allow_external: false}               # 평소 false — 임베딩이 필요한 실행 동안만 true
+    guard:
+      budget_usd: 0.1                            # 외부 모델 하루 지출 상한($) — 비우면 0.1. 장부 output/_llm_spend/<날짜>.txt
   mcp: {mcp_url: "http://127.0.0.1:18769/mcp", ui_port: 8791}   # 검증 페이지(§4-6)·점검 도구가 붙을 주소
 tuning:
   ops:
@@ -168,8 +167,9 @@ tuning:
 ```
 
 - 옛 배치(최상위 `common`·`pipeline`·`mcp`) 파일은 읽지 않는다 — `python -m common.config.migrate settings.yaml --out settings.new.yaml`로 바꿔 넣는다.
+- PC 전용 칸(외부 모델 허용·지출 상한·단가, 로컬 대체 DB, 시험 하네스)은 `dev` 절에 모여 있다(sample 맨 아래). 옛 자리(`common.models.guard.budget_usd` 등)에 둔 값도 읽지만 처음 읽을 때 옮길 자리를 한 번 알려 준다.
 - **외부 임베딩은 `allow_external: true`이고 `run_env: local`일 때만** 호출된다(서버 dev·prd는 늘 거부).
-- **LLM·VLM도 같다:** `required.models`의 `llm_*`·`vlm_*`(주소·모델·키)를 채우고 `common.models.llm.allow_external`·`common.models.vlm.allow_external`을 `true`로 두면 PC에서 분류(SFDC·LAS)와 그림·스캔 쪽 VLM이 외부 모델을 부른다(`run_env: local`일 때만). 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
+- **LLM·VLM도 같다:** `required.models`의 `llm_*`·`vlm_*`(주소·모델·키)를 채우고 `dev.models.llm.allow_external`·`dev.models.vlm.allow_external`을 `true`로 두면 PC에서 분류(SFDC·LAS)와 그림·스캔 쪽 VLM이 외부 모델을 부른다(`run_env: local`일 때만). 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
 - **내부망 서버(dev·prd)에서 시험·운영할 때는 세 `allow_external`을 모두 `false`(0)로 둔다.** 서버는 `run_env`가 dev·prd라 켜 두어도 외부 호출을 거부하지만, 서버 settings.yaml에는 외부 허용을 남기지 않는다.
 - PG 접속 칸(`required.pg`의 여섯 칸)은 **모두 채우거나 모두 비운다.** 일부만 채우면 채울 자리를 알려 주고 멈춘다. PC에서 host·password가 둘 다 비면 SQLite 대역(`output/pg_standin/`)으로 돌고 첫 줄에 `WARNING: PG 접속 정보 없음`을 찍는다(서버는 멈춤).
 
@@ -188,7 +188,7 @@ export PYTHONPATH=$PWD                                   # 명령은 저장소 �
 
 ### 4-4. 파이프라인 실행 — 문서 몇 건(①~⑥)
 
-먼저 `settings.yaml`의 `common.models.embed.allow_external`을 `true`로 바꾼다. 끝나면 ⑥에서 되돌린다.
+먼저 `settings.yaml`의 `dev.models.embed.allow_external`을 `true`로 바꾼다. 끝나면 ⑥에서 되돌린다.
 
 **① 테스트 문서 고르기**
 
@@ -365,6 +365,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 2. 이미지를 불러온다: `DOCKER=podman bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다 — 0.2.0 코드는 0.1.0 실행 이미지(`f0fcc30bd067bc2f`)를 쓴다: `load.sh 0.1.0`.
 3. 루트 채우기: `cd <루트>/<코드> && bash deploy/host/scripts/dc.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775)·`backup/`(700), 코드 폴더 a+rX, `settings.sample.yaml` → `<루트>/settings.yaml`, `resources/config/edw_chain.yaml` → `<루트>/edw_chain.yaml`(둘 다 없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
 4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값(§5-3 ② "꼭 채울 값"). 이미지 칸에는 2에서 불러온 실행 이미지 태그(`data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0`). 자원 상한도 본다(아래).
+   - EDW 표 설명 자료(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료, 받는 곳은 refactor.md C-91)를 루트 아래 결과 폴더에 복사하고(`<루트>/output/edw_meta/`, UID 10001이 읽을 수 있게) `search.edw_meta.dir: /app/output/edw_meta`를 적는다. 없으면 `edw_meta` 도구만 `not_configured`로 답한다(나머지 도구는 그대로).
 5. `bash deploy/host/scripts/dc.sh up -d data-pipeline`(코드 폴더에서 — DB 도구가 그 안에서 돈다).
 6. DB(§5-3 ③): `bash deploy/host/scripts/run_tool.sh migrate check --target all` → `… migrate up --target all --dim <임베딩 차원>`(차원 = 임베딩 모델 출력 크기, 모델 담당 확인) → `… migrate master load` → `… migrate check --target all`(기대: 차이 없음).
 7. `bash deploy/host/scripts/dc.sh up -d data-pipeline-mcp mcp`(검색 MCP는 시작할 때 마스터 표를 읽으므로 6 뒤).
@@ -451,6 +452,7 @@ bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp   # 서
 | `required.source.input_source`·`source_bucket`·`source_uri_prefix`·`publish_bucket`·`publish_prefix` | 원본 위치·게시 버킷 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_docs` · publish 미리보기 |
 | `required.tokens.mcp` | 검색 MCP 토큰 | `openssl rand -hex 24` | 48자 16진수 | dev·prd(밖에서 붙을 때 필수) | `dc.sh check` ⑥ `/health` |
 | `required.tokens.parse_mcp` · `parse_proxy` | `parse_document` 작업 서비스 토큰(두 칸 같은 값 — `parse_proxy`를 비우면 `mcp` 값을 씀) | 같은 명령 | 48자 16진수 | dev·prd | `parse_document` 호출이 토큰 오류 |
+| `required.tokens.fulltext` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 48자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |
 | `required.deploy.pipeline_image` · `mcp_image` | 띄울 이미지 태그(같은 배포 묶음) | §5-0 2번 `load.sh` | dev: `data-pipeline-runtime:0.1.0` · prd: `data-pipeline:0.2.0` | dev·prd | `dc.sh up`이 이미지 없음으로 멈춤 |
 | `required.deploy.doc_src` | 원본 문서 폴더 | 서버 관리자 | `/data/docs` | dev·prd | `dc.sh up`이 `:?` 안내로 멈춤 |
 | `required.deploy.output_root` | 결과 폴더 — 비우면 `<루트>/output` | 서버 관리자 | (비움) | dev·prd | — |

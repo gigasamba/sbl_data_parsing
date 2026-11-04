@@ -33,24 +33,8 @@ PREFIXES = ("LLM", "VLM", "EMBED")
 NAME_LIST = {
     "VLM_EXTRA_BODY": "common/ai/llm.py(_EXTRA_ENV_KEY 표)",
     **{
-        f"RDB_COL_{f}": 'pipeline/extract/source.py(f"RDB_COL_{k.upper()}")'
-        for f in (
-            "BUCKET",
-            "COMPANY",
-            "CONTENT_TYPE",
-            "CONTENT_VERSION",
-            "CONTRACT",
-            "DOC_ID",
-            "DOC_TYPE",
-            "ETAG",
-            "FILENAME",
-            "IS_DELETED",
-            "KEY",
-            "SIZE",
-            "SUPERSEDES",
-            "UPDATED",
-            "VERSION",
-        )
+        f"RDB_COL_{f}": "pipeline/extract/source.py(_rdb_cols — 설정 칸 extract.connections.rdb.columns)"
+        for f in ("CONTENT_VERSION", "DOC_ID", "FILENAME", "KEY", "SIZE")
     },
 }
 # YAML에 넣지 않는 이름(refactor_plan 부록 D "처리") — env로 남김(5-3 H·라이브러리가 읽음) · 인자(5-3 B 빌드·반입·시험 스크립트) ·

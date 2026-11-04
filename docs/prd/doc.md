@@ -71,10 +71,11 @@
 - Status: done
 
 <a id="op-11"></a>
-## op-11 · 사람 정답 폴더(`GOLD_DIR`) 마운트 — 붙일지 칸을 지울지
-- 이유: 상주 `data-pipeline`에 사람 정답 폴더(`GOLD_DIR` → 컨테이너 `/data/gold`)가 붙지 않아 점검기(`common/check/checker.py`)의 `GOLD_DIR` 이름 짝 점검이 건너뛰어진다.
-- 할 일: compose에 선택 마운트로 붙일지, 칸 `ops.pipeline_host.gold_dir`과 이미지 약속 경로(`IMAGE_PATHS.gold_mount`)를 지울지 사람이 정한다(`settings.py`는 code_fp 파일 — 지문 배치에).
-- Status: todo
+## op-11 · 사람 정답 폴더(`GOLD_DIR`) 칸 없음
+- 이유: 상주 `data-pipeline`에 사람 정답 폴더가 붙지 않아 점검기의 이름 짝 점검이 늘 건너뛰어졌다.
+- 결정(사용자 11-04): 칸 `GOLD_DIR`(`pipeline.paths.gold_dir`·`pipeline.host.gold_dir`)과 이미지 약속 경로 `gold_mount`를 지웠다. 점검기(`common/check/checker.py`)에 정답 폴더 점검이 없다. 옛 파일에 남은 칸은 경고 한 줄만 낸다(`layout.REMOVED`).
+- 파일: `common/config/settings.py`, `pipeline/config.py`, `common/check/checker.py`.
+- Status: done
 
 <a id="op-13"></a>
 ## op-13 · 서버 루트 폴더 하나 — 판마다 새 루트, `/srv/rag`·`env/`·`code/live` 없음

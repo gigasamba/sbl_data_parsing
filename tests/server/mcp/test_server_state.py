@@ -100,7 +100,7 @@ def test_check_store_server_guard():
     from mcp_server import config as mc
     from mcp_server.services.search.server_state import check_store
 
-    with mc.senv(PG_HOST=None, PG_PASSWORD=None, PG_CONN_FILE=None):
+    with mc.senv(PG_HOST=None, PG_PASSWORD=None):
         with mock.patch.object(paths, "LOCAL_RUN", False):
             try:
                 check_store()

@@ -236,7 +236,7 @@ EDW 읽기 전용 SQL. 요약 없이 원래 행만 돌려준다(집계는 SQL에
 - 돌려주는 모양(성공·실패 같은 9칸): `ok` · `columns`(`[{name, type}]`, type은 `int`·`float`·`decimal`·`str`·`date`·`datetime`·`time`·`bool`·`binary`·`unknown`) · `rows`(칸 순서대로 값 목록) · `row_count` · `truncated` · `elapsed_ms` · `dialect`(`tsql`) · `source`(`mssql`) · `error`(성공이면 null, 실패면 `"<코드>: <설명>"`).
 - 소수 있는 `decimal`은 정확한 글자(`"12.50"`) — 실수로 바꿔 반올림하지 않는다. 날짜는 ISO 글자.
 - 대표 오류 코드: `not_configured`(접속 설정 없음) · `rejected:<이유>`(읽기 전용 가드 — 예 `rejected:first_keyword`·`rejected:multi_statement`·`rejected:double_quote`·`rejected:top_percent`·`rejected:table:<표>`) · `query_failed`(실행 오류 — 문법·없는 표·칸) · `connect_failed` · `timeout`.
-- 허용 표 목록 검사(`EDW_QUERY_TABLES_STRICT`)는 기본 꺼짐이다(모든 스키마 허용).
+- 표는 읽기 계정이 볼 수 있는 모든 스키마를 읽는다(`sys.*`·`INFORMATION_SCHEMA.*`는 늘 거부). 좁히려면 DB에서 읽기 계정 권한을 줄인다 — 설정의 허용 목록은 없다.
 
 ```json
 {"name": "query_edw", "arguments": {"sql": "SELECT TOP 5 id, original_filename, file_size FROM AI.FileStorageMap ORDER BY file_size DESC", "max_rows": 5}}

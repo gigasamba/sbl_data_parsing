@@ -8,7 +8,7 @@ from common.ai.guard import require_internal
 from common.config.settings import isolated
 from common.store.pg import _pg_capable, conf, connect, detect_pg
 
-_FULL = dict(PG_HOST="h", PG_PORT="5432", PG_DB="d", PG_USER="u", PG_PASSWORD="x", PG_SCHEMA="ai", PG_CONN_FILE=None)
+_FULL = dict(PG_HOST="h", PG_PORT="5432", PG_DB="d", PG_USER="u", PG_PASSWORD="x", PG_SCHEMA="ai")
 
 
 def _refused(fn):

@@ -337,14 +337,15 @@ def _log_failed_page_vlm(model, ms, reason):
 
 
 def _rawdir_default(model):
-    """raw_vlm_path가 없을 때 — RAG_OUT(없으면 런타임 루트 output/ — 이미지 안 /app/output)/parse/raw/vlm/<model>/page/ 기본 경로."""
+    """raw_vlm_path가 없을 때 — PIPE_OUT_ROOT(없으면 런타임 루트 output/ — 이미지 안 /app/output)/parse/raw/vlm/<model>/page/ 기본 경로."""
     from pathlib import Path
 
     from common.core.paths import APP_ROOT
 
     m = (model or "unknown").replace("/", "_")
-    _o = ccfg().paths.output_root  # S7c — 설정 객체(옛 get("RAG_OUT", 기본) — 빈 글자도 그대로)
-    return Path(_o if _o is not None else str(APP_ROOT / "output")) / "parse" / "raw" / "vlm" / m / "page" / "fail"
+    from pipeline import config as pc
+
+    return Path(pc.cfg().paths.out_root or APP_ROOT / "output") / "parse" / "raw" / "vlm" / m / "page" / "fail"
 
 
 def _host(url):

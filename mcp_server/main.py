@@ -73,8 +73,8 @@ _DEFAULT_MCP_INSTRUCTIONS = (
 
 
 def _mcp_instructions():
-    """FastMCP instructions 글자(DT1 c1) — env MCP_INSTRUCTIONS(없으면 코드 기본값, CDMO)."""
-    return mc.cfg().server.instructions or _DEFAULT_MCP_INSTRUCTIONS  # S7d — 설정 객체, 호출마다
+    """FastMCP instructions 글자(DT1 c1) — 코드 기본값(CDMO)."""
+    return _DEFAULT_MCP_INSTRUCTIONS
 
 
 def _transport_security(host):

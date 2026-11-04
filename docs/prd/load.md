@@ -35,7 +35,7 @@
 2. 묶음 하나를 실 PG에서는 한 트랜잭션으로 적재한다(`python -m pipeline.load.pgvector_load load`) — 하나라도 실패하면 5벌 모두 되돌린다. 원천(`source_system`)이 스키마를 고른다.
 3. 이미 있는 문서(`doc.file_path` 같음)는 건너뛴다. 내용이 바뀌어도 경로가 같으면 `--replace` 없이는 건너뛴다(내용 지문 칸 없음).
 4. 적재 전 판 확인: 판 기록이 없는 기존 스키마면 경고 후 계속, 판이 낮거나 모르는 판이면 종료 2. 새 스키마면 판을 올린다. `--replace`·`faq-sync --reset`은 판 표(`alembic_version`)가 있는 우리 스키마에서만.
-5. `vector` 확장이 없으면 멈춘다 — 관리자가 한 번 `CREATE EXTENSION vector`. 직접 만들기(`load.pg_create_extension`·`dbtool up --create-extension`, 기본 꺼짐)는 PC·단독 시험만.
+5. `vector` 확장이 없으면 멈춘다 — 관리자가 한 번 `CREATE EXTENSION vector`. 직접 만들기(`dev.load.pg_create_extension`·`dbtool up --create-extension`, 기본 꺼짐)는 PC·단독 시험만.
 6. 본문 글자의 NUL(0x00)은 지운다. 원천 등록 시각에 시간대가 없으면 KST(+09:00)로 읽고, 형식이 틀리면 비운다.
 7. PG 접속은 필수다([ops-settings.md#op-09](ops-settings.md#op-09)).
 

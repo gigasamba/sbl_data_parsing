@@ -18,8 +18,8 @@ from common.core.console import utf8_stdout
 OUT = S.REPO_ROOT / "settings.sample.yaml"
 HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: python -m common.config.sample (손으로 고치지 않음)
 # 복사해 required 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: <루트>/settings.yaml(루트 = 코드 폴더의 부모 · UID 10001·권한 640).
-# 순서: required(운영자가 채울 값) → 역할 절 common·extract·transform·load·search·ops·dev → tuning(코드 상수 후보 — 보통 비워 둠).
-#   빈 칸 = 코드 기본값. 적힌 값은 코드 기본값보다 이긴다(나중에 코드 기본값이 바뀌어도 이 파일을 고치지 않으면 반영 안 됨).
+# 순서: required(운영자가 채울 값) → 역할 절 common·extract·transform·load·search·ops → tuning(코드 상수 후보 — 보통 비워 둠) → dev(PC 전용).
+#   빈 칸 = 코드 기본값(칸마다 "비우면 …"에 적음). 적힌 값은 코드 기본값보다 이긴다(나중에 코드 기본값이 바뀌어도 이 파일을 고치지 않으면 반영 안 됨).
 #   [PC·서버]·[서버만]·[PC만] = 그 카테고리를 채워야 하는 곳. 서버만 칸을 PC에서 비우면 그 기능(EDW·Object Storage·게시 등)만 꺼진다.
 #   [비밀] = settings.yaml에만 둠(출력·로그에 안 나옴). [파라미터] = 결과(파싱·청크·검색 순위)를 바꾸는 값.
 #   각 앱은 자기 칸만 읽는다(pipeline: required·common·extract·transform·load·ops·dev · mcp: required·common·search·ops·dev — tuning은 둘 다).
@@ -34,14 +34,12 @@ CATALOG_VALUES = {
     "DOC_DIR_PREPARED": "output/prepared",
     "EDW_PATH_PREFIX": "",
     "EDW_QUERY_MAX_ROWS": "1000",
-    "EDW_QUERY_TABLES": "",
     "EMBED_MODEL": "",
     "EMBED_QUERY_CACHE": "",
     "EMBED_QUERY_PREFIX": "",
     "LLM_MODEL": "",
     "LLM_SPEND_FILE": "",
     "PARSE_POST": "all",
-    "PIPE_EMBED": "",
     "RUN_MODE": "prod",
     "SECURE_DOC_PASSWORDS_FILE": "",
     "SOFFICE_BIN": "",
@@ -50,9 +48,9 @@ CATALOG_VALUES = {
     "VLM_MODEL": "",
 }  # 옛 CHAIN_STRUCTURE_URL 기본값은 11-01에 지움(pl-10 — trigger 서버)
 CATALOG_VALUES["MCP_STORE"] = "pg"
-# S7e2(VS7e1 B-2) — 옛 이미지 ENV로 굽던 칸(DOC_DIR·DOC_DIR_PREPARED·PIPE_EMBED·SOFFICE_BIN)은 컨테이너에서 options.conf 값이 걸린 적이 없음(이미지 ENV가
+# S7e2(VS7e1 B-2) — 옛 이미지 ENV로 굽던 칸(DOC_DIR·DOC_DIR_PREPARED·SOFFICE_BIN)은 컨테이너에서 options.conf 값이 걸린 적이 없음(이미지 ENV가
 # 먼저 있어 카탈로그 setdefault가 건너뜀) — 지금은 이미지 안 모델 기본값이 같은 값이라 표에서 뺀다(env 파일에 적은 값은 migrate가 옮김).
-for _k in ("DOC_DIR", "DOC_DIR_PREPARED", "PIPE_EMBED", "SOFFICE_BIN"):
+for _k in ("DOC_DIR", "DOC_DIR_PREPARED", "SOFFICE_BIN"):
     CATALOG_VALUES.pop(_k)
 
 
@@ -106,7 +104,7 @@ CATEGORIES = {
     "load": (("게시(publish)", ("load.publish", "load.edw_path_prefix")), ("적재", ("load",))),
     "search": (
         ("MCP 서버", ("search.server",)),
-        ("검색 순위·방식", ("search.methods", "search.min_score", "search.weights", "search.pg")),
+        ("검색 순위·방식", ("search.methods", "search.weights", "search.pg")),
         ("EDW 도구", ("search.edw_meta", "search.edw_query")),
         ("출력·기록·파싱 프록시", ("search.output", "search.parse_proxy", "search.audit")),
     ),
@@ -121,6 +119,8 @@ CATEGORIES = {
         ("run_docs 레인", ("ops.run_docs",)),
     ),
     "dev": (
+        ("외부 모델 — 허용·지출 상한·단가", ("dev.models",)),
+        ("로컬 대체 DB(PG·EDW 없이)", ("dev.connections", "dev.load")),
         ("가짜 LLM·시험 하네스", ("dev.llm_fake", "dev.pipeline")),
         ("평가", ("dev.eval", "dev.mcp")),
         ("PC 시험 Docker", ("dev.docker",)),
@@ -156,12 +156,10 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "pipeline.extract.max_file_mb",
     "pipeline.extract.input_source",
     "pipeline.extract.prepare.link",
-    "pipeline.load.publish.path_map",
     "pipeline.load.publish.upload_statuses",
     "pipeline.transform.structure.embed_max_chars",
     "pipeline.transform.vlm.page_min_concurrency",
     "mcp.search.pg.filter_exact_max",
-    "mcp.search.pg.vector_search",
 }
 
 
@@ -171,15 +169,104 @@ def blank_matters(field):
     return S.keeps_blank(field) or S.env_name(field) in _IMAGE_ENVS
 
 
-def _fmt_default(f):
-    d = f.default
-    if S.is_secret(f) or d is None:
-        return ""
+# 기본값이 없는(비운) 칸 — 비우면 무엇이 되는지(코드 기본값·동작, 사용자 11-04 op-05). 기본값이 있는 칸은 "비우면 <기본값>"을 sample이 만든다.
+BLANK = {
+    "common.connections.pg.standin_dir": "<루트>/output/pg_standin",
+    "common.connections.rdb.connect_kwargs": "추가 인자 없음",
+    "common.connections.rdb.sqlite": "실제 EDW(required.edw 칸)",
+    "common.dev.docker.pg_mem_limit": "compose 기본(시험 PG 4g)",
+    "common.dev.docker.smoke_settings": "스모크 시험이 시작하지 않음(필수)",
+    "common.dev.docker.smoke_pg_password": "스모크 시험이 시작하지 않음(필수)",
+    "common.host.docker": "podman, 없으면 docker",
+    "common.host.image_stage_dir": "조각·tar 정리 안 함(--stage-dir로 줄 때만)",
+    "common.models.embed.query_cache": "<루트>/output/query_cache.sqlite(mcp 이미지 안은 /tmp/mcp_query_cache.sqlite) · 0이면 캐시 끔",
+    "common.models.embed.query_prefix": "접두 없이 질의 그대로",
+    "common.models.guard.internal_host_suffixes": "사설 IP 주소만 내부망",
+    "common.models.guard.internal_ip_ranges": "사설(RFC1918) 대역만 내부망",
+    "common.models.guard.spend_file": "<루트>/output/_llm_spend/<날짜>.txt",
+    "common.models.llm.cache_dir": "<루트>/output/eval/llm_cache",
+    "common.models.llm.extra_body": "본문에 아무것도 안 더함",
+    "common.models.llm.price_in": "내장 가격표(모델 이름 기준) — 표에 없는 모델은 외부 호출 거부",
+    "common.models.llm.price_out": "내장 가격표(모델 이름 기준) — 표에 없는 모델은 외부 호출 거부",
+    "common.models.vlm.extra_body": "본문에 아무것도 안 더함",
+    "common.log.dir": "PC는 logs/, 서버는 stdout",
+    "common.paths.doc_dir": "PC는 없음(파싱 명령에 --src), pipeline 이미지 안은 /data/docs",
+    "common.paths.doc_dir_prepared": "output/prepared(pipeline 이미지 안은 /app/output/prepared)",
+    "common.paths.draft_terms_out": "<루트>/output/glossary_draft/domain_terms_draft_auto.csv",
+    "common.paths.edw_chain": "resources/config/edw_chain.yaml",
+    "common.paths.source_manifest": "원본 위치 주소를 doc_dir 기준 file://로 만듦(rdb 원천은 실행 중에 자동으로 채움)",
+    "common.paths.stack_file": "resources/config/pipeline_stack.json",
+    "common.runtime.lib_env": "더하는 env 없음",
+    "common.runtime.pipe_procs": "CPU·메모리로 자동 계산(pipeline 이미지 안 auto)",
+    "common.runtime.pipe_threads": "CPU ÷ 프로세스 수",
+    "pipeline.connections.rdb.increment_col": "문서 ID 열(columns.doc_id)",
+    "pipeline.connections.secure_doc.passwords_file": "암호 걸린 문서는 못 열고 건너뜀",
+    "pipeline.extract.skipped_log": "<결과 폴더>/…/skipped.jsonl(준비 기록 폴더)",
+    "pipeline.extract.ocr.threads": "OMP_NUM_THREADS 또는 CPU 몫",
+    "pipeline.extract.source.warm": "미리받기 꺼짐",
+    "pipeline.host.run_docs_dir": "run_docs.py 옆 test_space/",
+    "pipeline.host.nightly.time": "새벽 배치 없음",
+    "pipeline.host.nightly.max_docs": "새벽 배치 없음",
+    "pipeline.host.nightly.deadline": "새벽 배치 없음",
+    "pipeline.host.run_docs.struct_backlog": "구조화 스레드 × 2(0이면 상한 없음)",
+    "pipeline.load.edw_path_prefix": "원본 파일의 실제 경로 그대로",
+    "pipeline.paths.images_root": "<출력 루트>/parse/_images",
+    "pipeline.paths.out_root": "<루트>/output",
+    "pipeline.paths.parse_tmp": "<루트>/output/_tmp_parse/stream",
+    "pipeline.paths.raw_root": "원본 층 캐시 안 씀",
+    "pipeline.paths.soffice_bin": "PATH에서 soffice를 찾음(pipeline 이미지 안 /usr/bin/soffice)",
+    "pipeline.service.parse_mcp.jobs_dir": "<서비스 폴더>/jobs",
+    "pipeline.service.parse_mcp.procs": "min(3, CPU 수 − 1)",
+    "pipeline.service.parse_mcp.roots": "<서비스 폴더>/inbox",
+    "pipeline.transform.figures.vlm_parallel": "common.models.vlm.concurrency 값",
+    "pipeline.transform.represent.post": "파이프라인 all · parse MCP 서비스 supsub(빈 글자 ''를 쓰면 끔)",
+    "pipeline.transform.represent.rep_select": "best(정확도+풍부도)",
+    "pipeline.transform.structure.chunk_size": "청커별 기본(800 등)",
+    "pipeline.transform.structure.chunk_table": "표를 통째로 둠",
+    "pipeline.transform.structure.embed_cache": "<루트>/output/edw/embed_cache.sqlite · 0이면 캐시 끔",
+    "pipeline.transform.structure.page_chunk_max": "chunk_size × 4(chunk_size도 비우면 4000)",
+    "pipeline.transform.vlm.page_concurrency": "common.models.vlm.concurrency 값",
+    "pipeline.transform.vlm.page_max": "전부(0이면 쪽 VLM 끔)",
+    "mcp.edw_meta.dir": "<런타임 루트>/config/edw_meta(이미지 안 /app/config/edw_meta — 서버 compose는 이 자리를 붙이지 않음) — 두 파일이 없으면 edw_meta 도구는 not_configured(query_edw는 그대로)",
+    "mcp.host.jobs_dir": "<결과 폴더>/_mcp_parse/jobs",
+    "mcp.server.allowed_hosts": "바인드 주소만 허용",
+    "mcp.server.manifest": "<루트>/output/parse/_source/manifest.jsonl",
+    "mcp.server.max_queue": "동시 상한 × 4(0이면 무제한)",
+}
+# 뜻이 바로 안 보이는 칸의 입력 예(사용자 11-04 op-05).
+EXAMPLES = {
+    "common.connections.rdb.connect_kwargs": '{"login_timeout": 10, "tds_version": "7.4"}',
+    "common.connections.object_storage.verify_tls": "/etc/pki/ca-trust/source/anchors/corp-ca.pem",
+    "common.models.embed.query_prefix": "'Instruct: 질문에 맞는 문단을 찾음\\nQuery: '",
+    "common.models.llm.extra_body": '{"reasoning": {"enabled": false}}',
+    "common.models.vlm.extra_body": '{"chat_template_kwargs": {"enable_thinking": false}}',
+    "common.models.guard.internal_host_suffixes": ".corp.local,.intra",
+    "common.models.guard.internal_ip_ranges": "100.64.0.0/10",
+    "common.runtime.lib_env": "{TZ: Asia/Seoul, HF_HUB_OFFLINE: '1'}",
+    "pipeline.load.edw_path_prefix": "/data/edw_files",
+    "pipeline.service.parse_mcp.roots": "/app/output/_mcp_parse/inbox,/data/docs",
+    "pipeline.transform.represent.post": "supsub,charts",
+    "mcp.server.allowed_hosts": "rag.corp.local",
+    "mcp.edw_meta.dir": "/app/output/edw_meta",
+    "pipeline.host.nightly.time": "01:30",
+    "pipeline.host.nightly.deadline": "06:00",
+}
+
+
+def _fmt_default(p, f):
+    """비우면 무엇이 되는지 — BLANK 표가 먼저, 없으면 코드 기본값(사용자 11-04 — 칸마다 빈 칸 동작을 적음)."""
+    if p in BLANK:
+        return f" · 비우면 {BLANK[p]}"
+    d = f.get_default(call_default_factory=True)
+    if S.is_secret(f) or d is None or d == "":
+        raise SystemExit(f"sample: 기본값 없는 칸 {p} — BLANK에 비우면 무엇이 되는지 적음")
     if isinstance(d, bool):
         d = "true" if d else "false"
     elif isinstance(d, list):
         d = S.render(d, sep=S.list_sep(f)) if d else "(빈 목록)"
-    return f" · 기본 {d}"
+    elif isinstance(d, dict):
+        d = "(빈 사전)" if not d else d
+    return f" · 비우면 {d}"
 
 
 # 지운 칸(모델 REMOVED — 남으면 경고만)인데 layout 표에 자리를 남긴 것 — 옛 settings.yaml(sample 복사본)이 "모르는 칸"·"자리가 다른 칸"으로
@@ -193,6 +280,7 @@ LAYOUT_GONE = frozenset(
         "pipeline.service.trigger.socket_timeout_sec",
         "pipeline.extract.dedup.fuzzy_max",  # 11-01(pl-02 — 유사 후보 지움)
         "pipeline.load.index_lock_stale_sec",  # 11-01(mc-16 — 이름 있는 색인 AD41 지움)
+        "common.models.transport.ping_timeout",  # 11-04(op-05 — 점검 제한 시간은 코드 상수)
     }
 )
 
@@ -214,15 +302,19 @@ def build(classes=None):
     for sec in L.SECTIONS:
         if sec not in tree:
             continue
-        lines.append(f"\n# {'═' * 94}" if sec in ("common", "tuning") else "")
-        if sec == "tuning":
-            lines.append(
-                "# tuning — 코드 상수 후보(사용자 10-30 op-08): 기본값 말고 쓴 흔적이 없는 내부 조정값·자원 세부값. 보통 비워 둔다."
-            )
+        lines.append(f"\n# {'═' * 94}" if sec in ("common", "tuning", "dev") else "")
+        if sec in TITLES:
+            lines.append(f"# {TITLES[sec]}")
             lines.append(f"# {'═' * 94}")
         lines.append(f"{sec}:")
         _emit(tree[sec], 1, sec, lines, [None])
     return "\n".join(lines) + "\n"
+
+
+TITLES = {
+    "tuning": "tuning — 코드 상수 후보(사용자 10-30 op-08): 기본값 말고 쓴 흔적이 없는 내부 조정값·자원 세부값. 보통 비워 둔다.",
+    "dev": "dev — PC 전용(RUN_ENV=local): 외부 모델·지출 상한·로컬 대체 DB·PC 시험 도구. 서버(dev·prd)는 이 절을 비워 둔다(외부 모델·로컬 대체 DB는 서버에서 거부).",
+}
 
 
 def _cat(y):
@@ -315,8 +407,6 @@ SET_MATTERS = {
     "PIPE_WORKERS",
     "PM_BUCKET",
     "VLM_MAX_CONCURRENCY",
-    "RDB_COMPANY",
-    "RDB_DOC_TYPE",
     "EMBED_ALLOW_EXTERNAL",
     "LLM_ALLOW_EXTERNAL",
     "VLM_ALLOW_EXTERNAL",
@@ -330,7 +420,9 @@ def _note(p, f):
         desc = f"{desc} — {part}" if desc else part
         if desc.count("(") <= desc.count(")"):
             break
-    note = f"{desc}{_fmt_default(f)} · 값: {_values(p, f)}"
+    blank = "" if p in L.REQUIRED else _fmt_default(p, f)
+    ex = f" · 예: {EXAMPLES[p]}" if p in EXAMPLES else ""
+    note = f"{desc}{blank} · 값: {_values(p, f)}{ex}"
     return note + (" [비밀]" if S.is_secret(f) else "")
 
 
@@ -346,14 +438,12 @@ VALUES = {
     "common.dev.docker.pg_effective_cache": "PG 크기 글자(예 12GB)",
     "common.store.run_mode": "prod 하나(비우면 설정 안 함 — test는 0.2.0에 지움)",
     "common.connections.object_storage.verify_tls": "1(검증)·0(끔)·CA 파일 경로",
-    "common.runtime.pipe_procs": "1 이상 정수 · auto 또는 비우면 자동 계산",
+    "common.runtime.pipe_procs": "1 이상 정수 · auto면 자동 계산",
     "pipeline.connections.rdb.engine": "mssql·pg 중 하나",
     "pipeline.transform.represent.post": "all·none·쉼표 목록(vlm_page·supsub·charts·figures·context·attachments)",
     "pipeline.transform.represent.rep_select": "first·acc·best 중 하나(그 밖 값 = best)",
-    "pipeline.transform.structure.embed": "api·none 중 하나",
     "pipeline.transform.structure.chunk_table": "rows 또는 비움(표 통째로)",
     "mcp.server.host": "127.0.0.1·auto(컨테이너 사설 IP)·사설 IP — 0.0.0.0은 거부",
-    "mcp.search.pg.vector_search": "exact 또는 비움(HNSW 근사)",
     "common.connections.pg.db": "글자",
     "common.host.doc_src": "경로",
     "common.host.output_root": "경로",
@@ -411,8 +501,10 @@ def _values(p, f):
     z = re.search(r"0(?:이면| ?= ?| 이하면)\s*([^,·)—(]+)", desc)
     if z:
         rng += f" (0 = {z.group(1).strip()})"
-    if "auto" in lab or (f.json_schema_extra or {}).get("unset") == ["auto"]:
-        rng += " · auto 또는 비우면 자동 계산"
+    if "auto" in lab:
+        rng += " · auto면 자동 계산"
+    elif (f.json_schema_extra or {}).get("unset") == ["auto"]:
+        rng += " · auto = 비운 것과 같음"
     return rng
 
 

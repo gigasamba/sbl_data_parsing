@@ -6,7 +6,6 @@ common.host.image_stage_dir	IMAGE_STAGE_DIR	text
 common.host.output_root	RAG_OUT	text
 common.host.pg_container	PG_CONTAINER	text
 common.host.prune_keep	PRUNE_KEEP	num
-pipeline.host.gold_dir	GOLD_DIR	text
 pipeline.host.image	DATA_PIPELINE_IMAGE	text
 pipeline.host.parse_cpus	PARSE_CPUS	num
 pipeline.host.parse_mem_limit	PARSE_MEM_LIMIT	text
@@ -36,7 +35,6 @@ mcp.server.host	MCP_HOST	text
 mcp.server.port	MCP_PORT	num
 image.code_root	APP_CODE_ROOT	const	/app/deploy
 image.docs_mount	APP_DOCS_MOUNT	const	/data/docs
-image.gold_mount	APP_GOLD_MOUNT	const	/data/gold
 image.image_env	APP_IMAGE_ENV	const	/app/docker/image_env.txt
 image.output_root	APP_OUTPUT_ROOT	const	/app/output
 image.prepared_out	APP_PREPARED_OUT	const	/app/output/prepared

@@ -7,8 +7,8 @@ Security boundary (independent review follows the urgent overlay that adds this 
  - read-only by construction: exactly one SELECT/WITH statement, no DML/DDL/exec keywords anywhere
    (see `validate()`), run through the EDW **read** account (common.connections.rdb.read — the search
    MCP never gets the write account; user 10-29, docs/prd/ops.md#op-03).
- - table allowlist: only `schema.table` names in EDW_QUERY_TABLES (or DEFAULT_TABLES) may appear in a
-   FROM/JOIN; system catalogs are always rejected even if somehow listed.
+ - tables: every schema the read account can see (user 10-21 — narrow it with DB grants); the sqlite
+   stand-in is limited to DEFAULT_TABLES. System catalogs are always rejected.
  - limits: row count (EDW_QUERY_MAX_ROWS), wall-clock timeout (EDW_QUERY_TIMEOUT_SEC), response size
    (EDW_QUERY_MAX_BYTES), per-cell text length (2000 chars).
 
@@ -32,10 +32,8 @@ Security review round 2 (BLOCK, addressed below):
  2. The row cap (`EDW_QUERY_MAX_ROWS`/max_rows) needs to be enforced *in the SQL sent to the database*,
     not just in Python after the fact — otherwise a CTE building a cartesian product still fully
     computes server-side before fetchmany ever gets a chance to stop it. See `_top_n()`.
- 3. `EDW_QUERY_TABLES=""` (set but empty) now always means deny-all (`not_configured_tables`) — it no
-    longer silently falls back to the bundled PC sample. An unset variable still falls back to
-    DEFAULT_TABLES, but only for the sqlite stand-in; for the mssql backend an unset allowlist also
-    means deny-all (there is no sample default that could ever be safe against a real, unknown schema).
+ 3. (Settings allowlist removed 11-04 — see allowed_tables(): mssql = all schemas the read account
+    can see, sqlite stand-in = DEFAULT_TABLES.)
  4. The sqlite stand-in connection is now opened with SQLite's own `file:...?mode=ro` URI read-only
     flag, so even a SQL-text guard bypass could not write to it at the OS/driver level (`ATTACH` and
     `PRAGMA` were already blocked keywords for user-supplied SQL; `LOAD_EXTENSION` is now blocked too).
@@ -126,17 +124,9 @@ def enabled():
 
 
 def allowed_tables(kind=None):
-    """(2026-10-21 사용자: 전 스키마 허용) 기본은 제한 없음 — None을 돌려주면 validate가 허용 목록 검사를 건너뛴다.
-    시스템 테이블 차단(sys·INFORMATION_SCHEMA 등)·읽기 전용 키워드 검사는 그대로 유지된다.
-    옛 허용 목록 운영으로 되돌리려면 EDW_QUERY_TABLES_STRICT=1 — 이때만 EDW_QUERY_TABLES(쉼표 목록,
-    빈 문자열=전부 거부 — security round 2 규칙)를 적용한다. sqlite 스탠드인은 실 EDW가 아니므로
-    STRICT가 아니어도 동봉 샘플 범위(DEFAULT_TABLES)로 둔다."""
-    q = mc.cfg().edw_query  # S7d — 설정 객체(호출마다)
-    if q.tables_strict:  # on=("1",) — 옛 == "1"과 같음
-        raw = q.tables  # CsvList — 안 줬으면 None(빈 글자 "" 는 빈 목록 = 전부 거부 — 칸에 blank="keep" 필요, 요청)
-        if raw is None:
-            raw = DEFAULT_TABLES.split(",") if kind == "sqlite" else []
-        return {t.strip().lower() for t in raw if t.strip()}
+    """(2026-10-21 사용자: 전 스키마 허용) 제한 없음 — None을 돌려주면 validate가 허용 목록 검사를 건너뛴다.
+    시스템 테이블 차단(sys·INFORMATION_SCHEMA 등)·읽기 전용 키워드 검사는 그대로 유지된다. sqlite 스탠드인은 실 EDW가
+    아니므로 동봉 샘플 범위(DEFAULT_TABLES)로 둔다."""
     if kind == "sqlite":
         return {t.strip().lower() for t in DEFAULT_TABLES.split(",") if t.strip()}
     return None

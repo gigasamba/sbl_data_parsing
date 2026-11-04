@@ -9,7 +9,6 @@ from datetime import date, datetime, timedelta, timezone
 
 from common.store import edw_chain as EC
 from common.store.db.models import search_tables as ST
-from mcp_server import config as mc  # mcp 설정 객체(S7d)
 from mcp_server.config import CFG
 from mcp_server.schemas.evidence import EVIDENCE_KEYS, K_MAX, SEARCH_FILTERS
 from mcp_server.services.search.internal_docs import _manifest_by_name
@@ -250,5 +249,5 @@ def do_search(question=None, k=8, **filters):
         a = by_doc.get(e.get("file_path")) or {}
         e["attrs"] = {x: a.get(x) for x in ev_keys} if ev_keys else None  # 근거 키가 없는 원천(FAQ·Other)은 null
         e["contract_no"] = a.get(cno) if cno else None
-    status, _ = evidence_status(question, evidence, mc.cfg().search.min_score)  # R3(AD42) — 표시만, 근거 목록은 안 줄임
+    status = evidence_status(question, evidence)  # R3(AD42) — 표시만, 근거 목록은 안 줄임
     return _out(question, evidence, status, hard, scope_docs)

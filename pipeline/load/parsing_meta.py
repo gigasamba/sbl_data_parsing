@@ -114,7 +114,7 @@ def rep_md_key(prefix, source_system, source_key, parse_date):
     붙여 구분한다 — 정리가 필요 없는 흔한 경로(사용자가 읽는 대부분)는 그대로 둔다. 원본 키 자체가 이미 이
     해시 접미사 모양으로 끝나면(드물지만 가능) 그것도 해시를 붙여 "해시 붙은 키"와 "우연히 그렇게 생긴
     원본 키"가 서로 안 겹치게 한다. ponytail: 남는 이론상 충돌(sha1 10자 충돌)은 막지 않음 — 옛 source.json 대조는 서버에서 늘 꺼져 있어 11-02에 지움."""
-    mapped, key = _map_source_path(str(source_key))
+    key = str(source_key)
     raw_segs = [s for s in key.strip("/").split("/") if s not in ("", ".", "..")]
     segs = [safe_filename(s, "") for s in raw_segs] or [safe_filename(key, "")]
     # 정리된 경로를 원본 키 '문자열 전체'와 비교 — 세그먼트 치환뿐 아니라 빈 칸·'.'·'..'·앞뒤 '/' 걷어내기로 바뀐
@@ -122,22 +122,9 @@ def rep_md_key(prefix, source_system, source_key, parse_date):
     if "/".join(segs) != key or (segs and _HASH_SUFFIX_RE.search(segs[-1])):
         h = f"h{_hash10(source_key)}"
         segs[-1] = f"{segs[-1]}__{h}" if segs[-1] else h
-    # 사용자 10-14 — <PM_PATH_MAP 새 앞부분 또는 출처>/<나머지 폴더>/<파일명>_<날짜>.md (파일명 폴더 제거)
-    head = [safe_filename(x, "") for x in mapped.split("/") if x] if mapped else [safe_filename(source_system, "")]
-    base = "/".join([*head, *segs[:-1], f"{doc_stem(source_key)}_{parse_date}.md"])
+    # 사용자 10-14 — <출처>/<나머지 폴더>/<파일명>_<날짜>.md (파일명 폴더 제거)
+    base = "/".join([safe_filename(source_system, ""), *segs[:-1], f"{doc_stem(source_key)}_{parse_date}.md"])
     return f"{prefix.rstrip('/')}/{base}" if prefix else base
-
-
-def _map_source_path(key):
-    """PM_PATH_MAP(쉼표 목록 '이전 앞부분=새 앞부분', 사용자 10-14 — 예 'synth-meta-rdb/docs=SFDC') — 원본 키가 이전
-    앞부분으로 시작하면 그 부분을 새 앞부분으로 바꾼다 → (새 앞부분, 나머지 키). 맞는 짝이 없으면 (None, 원본 키) —
-    호출부가 출처(source_system)를 맨 앞에 둔다(옛 동작)."""
-    for pair in pc.cfg().load.publish.path_map:  # S7c — 설정 객체(쉼표 목록, 항목 strip·빈 것 버림)
-        old, sep, new = pair.partition("=")
-        old = old.strip().strip("/")
-        if sep and old and (key == old or key.startswith(old + "/")):
-            return new.strip().strip("/"), key[len(old) :].lstrip("/")
-    return None, key
 
 
 def doc_stem(source_key):

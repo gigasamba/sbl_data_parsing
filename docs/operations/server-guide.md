@@ -80,13 +80,15 @@ MCP 토큰은 settings.yaml `required.tokens.mcp`, 모델은 `required.models.ll
 ### 4-1. EDW 쿼리 도구 설정 — `edw_meta`·`query_edw`
 에이전트가 `edw_meta`(정적 자료, DB 접속 없음)로 표·칸을 보고 `query_edw`로 SELECT를 보낸다. 읽기 전용·시스템 표 차단·상한은 코드(`mcp_server/services/edw_query.py`)가 강제하지만, **운영자가 아래를 준비해야 안전하다.**
 
+0. **EDW 표 설명 자료**(`edw_meta`용) — `catalog.json`(표 목록·설명)·`columns.jsonl`(한 줄에 열 하나)을 `<루트>/output/edw_meta/`에 복사하고 `search.edw_meta.dir: /app/output/edw_meta`를 적는다. 개인정보가 없는 자료만 둔다. 없으면 `edw_meta`만 `not_configured`(`query_edw`는 그대로) — 파일 꼴은 PRD [mc-07](../prd/mcp.md#mc-07), 받기는 refactor.md C-91.
+
 1. **EDW 읽기 계정**(`required.edw.read_user`·`read_password` — 파이프라인 원천 조회와 같은 계정):
    - `SELECT` 권한만 준다(DDL·DML·`EXEC`·시스템 프로시저 없음).
    - DBA가 추가로: `DENY VIEW DEFINITION` · 다른 데이터베이스·연결 서버(linked server) 권한 없음 · 가능하면 Resource Governor 등으로 질의 시간·CPU 상한.
    - 검색 MCP는 시작할 때 쓰기 계정 칸을 설정 객체에서 비운다. 파일 자체는 컨테이너가 읽을 수 있으므로, 완전히 떼려면 mcp-server에 쓰기 칸이 없는 설정 파일을 따로 붙인다.
    - 같은 계정이라 `query_edw`도 `AI.FileStorageMap`·`AI.ParsingMeta`를 읽을 수 있다 — 막으려면 2.
-2. **표 허용 목록(기본 꺼짐)** — 기본은 읽기 계정이 볼 수 있는 모든 표(`sys.*`·`INFORMATION_SCHEMA.*`는 늘 거부). 좁히려면 `search.edw_query.tables_strict: true`와 `search.edw_query.tables`(`schema.table` 쉼표 목록). 켜면 목록 밖 표·뷰는 거부, `tables`가 비면 모두 거부.
-3. 확인: `query_edw({"sql": "DROP TABLE ..."})`·`sys.*`를 읽는 호출(허용 목록을 켰으면 목록 밖 표도)이 `rejected:*`로 막히는지 한 번 본다.
+2. **표 범위** — 읽기 계정이 볼 수 있는 모든 표(`sys.*`·`INFORMATION_SCHEMA.*`는 늘 거부). 좁히려면 DBA가 읽기 계정의 `SELECT` 권한을 줄인다(설정의 허용 목록은 없다).
+3. 확인: `query_edw({"sql": "DROP TABLE ..."})`·`sys.*`를 읽는 호출이 `rejected:*`로 막히는지 한 번 본다.
 
 ## 5. 회사 맞춤(도메인 튜닝)
 
@@ -97,7 +99,7 @@ MCP 토큰은 settings.yaml `required.tokens.mcp`, 모델은 `required.models.ll
 | 용어집 · 고객 명부 · ID 모양 · 단위 · 계약·고객 마스터 | PG 마스터 표 `<db_schema>_master`. 원본 CSV(`resources/vocab/glossary/` 또는 서버 폴더)를 고친 뒤 `run_tool.sh migrate master load [--dir <폴더>]`(5-1) |
 | 원천 표 열 이름 | settings.yaml `extract.connections.rdb.columns.*` |
 | 엔진 구성 | `resources/config/pipeline_stack.json`(확인 `show-stack`) |
-| MCP 안내 문구 | settings.yaml `search.server.instructions` |
+| MCP 안내 문구 | 코드 `mcp_server/main.py`의 `_DEFAULT_MCP_INSTRUCTIONS`(설정 칸 없음 — 바꾸면 코드 배포) |
 | EDW 조인 사슬(고객·원천 메타·검색 attrs 키) | 서버 사본 `<루트>/edw_chain.yaml`(5-2) |
 
 ### 5-1. 고객 명부·용어집 작성법

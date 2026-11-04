@@ -62,7 +62,6 @@ IMAGE_PATHS = {
     # 이 표로 만든 deploy/host/scripts/image_paths.json을 읽는다(호스트 python엔 pydantic이 없음 — settings_env.sh가 APP_* env로도 냄).
     "output_root": "/app/output",  # 결과 폴더를 붙이는 자리(compose RAG_OUT → 이 자리)
     "code_root": "/app/deploy",  # 코드 자리(PYTHONPATH — 실행 이미지는 서버 코드 폴더를 여기에 붙임)
-    "gold_mount": "/data/gold",  # 사람 정답 폴더가 붙는 자리(pipeline.config.gold_dir — 옛 run_tool.sh `-e GOLD_DIR=/data/gold`, 붙이는 방식은 결정 대기 — doc.md)
     "image_env": "/app/docker/image_env.txt",  # 빌드 때 이미지 ENV를 적어 둔 파일(common.config.boot — 라이브러리 env가 이미지 값만 덮게)
     "docs_mount": "/data/docs",  # 원본 폴더를 읽기 전용으로 붙이는 자리(compose DOC_SRC → 이 자리 · pipeline DOC_DIR 기본값)
 }
@@ -73,13 +72,11 @@ _IMAGE_DEFAULTS = {
     "pipeline": {
         "DOC_DIR": IMAGE_PATHS["docs_mount"],
         "DOC_DIR_PREPARED": IMAGE_PATHS["prepared_out"],
-        "PIPE_EMBED": "api",
         "PIPE_PROCS": "auto",
         "SOFFICE_BIN": "/usr/bin/soffice",
         "APPLOG_DB_ENABLED": True,  # op-13 — 서버 로그는 Postgres(applog)
     },
     "mcp": {
-        "PIPE_EMBED": "api",
         "EMBED_QUERY_CACHE": "/tmp/mcp_query_cache.sqlite",  # 질의 캐시 — 옛 compose 기본(S7e2·op-08)
         "APPLOG_DB_ENABLED": True,  # op-13 — 서버 로그는 Postgres(applog)
     },
@@ -299,7 +296,7 @@ def _yaml_loader():
         ("bool", C.construct_yaml_bool),
         ("int", C.construct_yaml_int),
         ("float", C.construct_yaml_float),
-        ("timestamp", C.construct_yaml_timestamp),  # 2026-10-27 같은 날짜도(PM_PARSE_DATE 등 글자 칸)
+        ("timestamp", C.construct_yaml_timestamp),  # 2026-10-27 같은 날짜도(날짜를 적는 글자 칸)
         ("str", C.construct_yaml_str),
     ):  # 글자도 — env 글자와 가름(S7b, judge)
         Loader.add_constructor("tag:yaml.org,2002:" + tag, keep(base))
@@ -1301,7 +1298,6 @@ class CommonConnectionsRdb(Section):
 
 
 class CommonConnectionsPg(Section):
-    conn_file: str | None = F(None, "PG_CONN_FILE", "PostgreSQL 접속 정보를 KEY=VALUE로 담은 파일 경로(환경변수가 덮음)")
     connect_timeout: int | None = F(10, "PG_CONNECT_TIMEOUT", "PostgreSQL 연결 시도 제한 시간")
     db: str | None = F(None, "PG_DB", "PostgreSQL 데이터베이스 이름(필수 — op-09)")
     host: str | None = F(None, "PG_HOST", "PostgreSQL 서버 호스트 — 필수(자동 탐지·코드 기본값 없음, op-09)")
@@ -1370,7 +1366,7 @@ class CommonModelsGuard(Section):
     spend_file: str | None = F(
         None,
         "LLM_SPEND_FILE",
-        "지출 장부 파일 경로(이름 뒤에 날짜를 붙여 하루마다 새 파일, 비우면 <저장소>/output/_llm_spend/<날짜>.txt) — 호출마다 금액 한 줄, 프로세스 전체가 공유",
+        "지출 장부 파일 경로(이름 뒤에 날짜를 붙여 하루마다 새 파일) — 호출마다 금액 한 줄, 프로세스 전체가 공유",
     )
 
 
@@ -1397,7 +1393,6 @@ class CommonModelsTransport(Section):
     connect_timeout: float | None = F(10.0, "MODEL_CONNECT_TIMEOUT", "모델 서버 연결(connect) 전용 제한 시간(초) — 0 이하면 끔")
     down_after: int | None = F(3, "MODEL_DOWN_AFTER", "연속 연결 실패 몇 번이면 그 주소를 '다운'으로 보는가(회)")
     down_cooldown: float | None = F(300.0, "MODEL_DOWN_COOLDOWN", "'다운' 판정 뒤 네트워크를 보내지 않고 즉시 거부하는 시간(초)")
-    ping_timeout: int | None = F(60, "PING_TIMEOUT", "ping_models 점검의 호출 제한 시간(초)")
 
 
 class CommonModelsVlm(Section):
@@ -1424,12 +1419,12 @@ class CommonDev(Section):
 
 class CommonHost(Section):
     doc_src: str | None = F(None, "DOC_SRC", "원본 문서 폴더(DOC_DIR의 옛 별칭) — compose에선 /data/docs로 마운트할 호스트 폴더")
-    docker: str | None = F(None, "DOCKER", "호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — 비우면 podman, 없으면 docker — op-10)")
+    docker: str | None = F(None, "DOCKER", "호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — op-10)")
     image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_old.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
     output_root: str | None = F(
         None,
         "RAG_OUT",
-        "호스트의 결과(output) 폴더(서버 경로) — compose가 컨테이너 /app/output으로 마운트하는 원본(T-21 — 코드가 읽는 칸은 common.paths.output_root)",
+        "호스트의 결과(output) 폴더(서버 경로) — compose가 컨테이너 /app/output으로 마운트하는 원본. 비우면 <루트>/output",
     )
     pg_container: str | None = F(
         None,
@@ -1458,16 +1453,11 @@ class CommonPaths(Section):
         "resources/config/edw_chain.yaml · 서버 사본은 컨테이너 안 /etc/rag/edw_chain.yaml(원본 <루트>/edw_chain.yaml — dc.sh init이 "
         "없을 때만 복사, 적었을 때만 쓰임) · 점검: python -m pipeline.load.edw_meta --check",
     )
-    output_root: str | None = F(
-        None,
-        "RAG_OUT",
-        "결과(output) 폴더 — 코드가 이 아래를 읽고 씀(컨테이너 안 경로 — 서버는 /app/output, 비우면 코드 기본. 마운트 원본은 common.host.output_root — T-21)",
-    )
     source_manifest: str | None = F(None, "SOURCE_MANIFEST", "원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응)")
     stack_file: str | None = F(
         None,
         "PIPELINE_STACK_FILE",
-        "엔진 구성 파일 경로(비우면 resources/config/pipeline_stack.json — 서버·PC 같음, 사용자 11-01: 판 표 없앰)",
+        "엔진 구성 파일 경로(서버·PC 같음 — 사용자 11-01: 판 표 없앰)",
     )
 
 

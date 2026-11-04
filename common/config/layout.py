@@ -1,7 +1,10 @@
 """settings.yaml 배치(op-08 ②) — 파일의 칸 자리(YAML 경로) ↔ 설정 모델의 칸 경로(common.* · pipeline.* · mcp.*).
-파일은 `required`(운영자가 꼭 채울 값) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops`·`dev` → `tuning`(코드 상수 후보) 순서다.
+파일은 `required`(운영자가 꼭 채울 값) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops` → `tuning`(코드 상수 후보) →
+`dev`(PC 전용 — 서버는 비워 둠) 순서다.
 코드는 모델 경로(`cfg().extract.ocr.dpi` 등)를 그대로 쓰고, read_settings()가 파일을 읽은 직후 to_model()로 모델 배치로 바꾼다.
   · required: 칸마다 자리를 적은 표(REQUIRED). tuning: 모델 경로 모음(TUNING) — 자리는 `tuning.` + 역할 자리.
+  · PC 전용 칸(LOCAL — 외부 모델 허용·지출 상한·로컬 대체 DB 등): 자리는 `dev.` + 역할 자리(앞 `common.` 뺌). 옛 자리(역할 자리)·
+    옛 required 밖 자리(MOVED)도 경고 한 번 뒤 읽는다 — 사용자 11-04(설정 줄이기).
   · 그 밖: 접두어 규칙(ROLES — 모델 접두 → 파일 접두, 1:1). 사전 값 칸(lib_env·extra_body 등)도 접두어로 그대로 옮겨진다.
   · 모델을 모르고도 바꾼다(표준 라이브러리만) — 이미지에 없는 앱의 칸도 자리만 옮기고, 검증은 그 앱 설정 객체가 한다(U-a).
 옛 배치(최상위 common·pipeline·mcp — op-08 전)는 거부하고 `python -m common.config.migrate <옛 settings.yaml>`로 바꾸게 안내한다.
@@ -10,7 +13,7 @@
 import sys
 
 # 파일 최상위 절 — 이 순서로 sample에 낸다.
-SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops", "dev", "tuning")
+SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops", "tuning", "dev")
 MIGRATE_HINT = "python -m common.config.migrate <옛 settings.yaml> --out <새 파일>"
 
 # required — (카테고리 열쇠, 제목, 쓰는 곳 표시, [(칸 이름, 모델 경로)]). 표시는 카테고리 제목에 한 번(사용자 10-30 op-08).
@@ -69,6 +72,7 @@ REQUIRED_GROUPS = (
             ("parse_mcp", "pipeline.service.parse_mcp.token"),
             ("mcp", "mcp.server.token"),
             ("parse_proxy", "mcp.parse_proxy.token"),
+            ("fulltext", "mcp.server.fulltext_secret"),
         ),
     ),
     (
@@ -183,6 +187,25 @@ TUNING_RESOURCE = (  # 자원·대기·병렬 세부값 — 자동 계산 내부
 )
 TUNING = frozenset(TUNING_INTERNAL + TUNING_RESOURCE)
 
+# PC 전용 칸(사용자 11-04) — 서버(dev·prd)는 외부 모델·로컬 대체 DB를 거부하므로 비워 둔다. 파일 자리 dev.<역할 자리>(sample 맨 아래 절).
+LOCAL = (
+    "common.models.embed.allow_external",
+    "common.models.llm.allow_external",
+    "common.models.vlm.allow_external",
+    "common.models.embed.est_usd",
+    "common.models.llm.est_usd",
+    "common.models.vlm.est_usd",
+    "common.models.llm.price_in",
+    "common.models.llm.price_out",
+    "common.models.guard.budget_usd",
+    "common.models.guard.spend_file",
+    "common.connections.pg.standin_dir",
+    "common.connections.pg.standin_schema",
+    "common.connections.rdb.sqlite",
+    "pipeline.load.pg_create_extension",
+)
+MOVED = frozenset(LOCAL) | {"mcp.server.fulltext_secret"}  # 자리를 옮긴 칸 — 옛 자리(역할 자리)도 경고 뒤 읽음
+
 
 class LayoutError(ValueError):
     """파일 배치 오류 — 메시지에는 칸 자리만(값 없음)."""
@@ -219,12 +242,16 @@ def to_yaml(model_path):
     """모델 경로 → 파일 자리."""
     if model_path in REQUIRED:
         return REQUIRED[model_path]
+    if model_path in LOCAL:
+        return "dev." + _role(model_path).removeprefix("common.")
     if model_path in TUNING:
         return "tuning." + _role(model_path)
     return _role(model_path)
 
 
-_REQ_BACK = {y: m for m, y in REQUIRED.items()}
+_REQ_BACK = {y: m for m, y in REQUIRED.items()} | {to_yaml(m): m for m in LOCAL}
+# PC 전용 칸이 든 절(dev.models.guard 등) — 그 안의 다른 이름(지운 칸·오타)은 모델 절로 넘겨 모델이 판정(지운 칸 경고·모르는 칸 거부)
+_LOCAL_PARENTS = {to_yaml(m).rpartition(".")[0]: m.rpartition(".")[0] for m in LOCAL}
 _ROLES_BACK = sorted(((y, m) for m, y in ROLES), key=lambda r: -len(r[0]))
 
 
@@ -233,6 +260,9 @@ def to_model_path(yaml_path):
     판정은 to_model이(to_yaml로 되돌려 견줌)."""
     if yaml_path in _REQ_BACK:
         return _REQ_BACK[yaml_path]
+    head, _, leaf = yaml_path.rpartition(".")
+    if head in _LOCAL_PARENTS:
+        return f"{_LOCAL_PARENTS[head]}.{leaf}"
     rest = yaml_path.removeprefix("tuning.")
     for y, m in _ROLES_BACK:
         if rest.startswith(y):
@@ -282,6 +312,13 @@ def warn_removed(name):
         sys.stderr.write(f"[settings] 지운 칸 무시: {name} — 설정 파일에서 지울 것(값은 출력 안 함)\n")
 
 
+def _gone_in_dev(y):
+    """dev 절 안(PC 전용 칸이 든 절)의 지운 칸인가 — 그 절 모델 클래스의 REMOVED에 있으면 모델로 넘겨 경고만."""
+    head, _, leaf = y.rpartition(".")
+    m = _LOCAL_PARENTS.get(head)
+    return m is not None and leaf in REMOVED.get("".join(p.title() for p in m.split(".")), ())
+
+
 def to_model(doc, source=""):
     """파일 사전(새 배치) → 모델 배치 사전. 옛 배치·모르는 절·자리가 바뀐 칸이면 LayoutError(칸 자리만, 값 없음)."""
     if not doc:
@@ -292,7 +329,7 @@ def to_model(doc, source=""):
     unknown = sorted(set(doc) - set(SECTIONS))
     if unknown:
         raise LayoutError(f"설정 파일에 모르는 최상위 절 {unknown} — {'·'.join(SECTIONS)}만(덮기 파일은 base·overrides){where}")
-    out, bad, moved = {}, [], []
+    out, bad, moved, seen = {}, [], [], {}
     for y, v in _leaves(doc):
         if y in RETIRED:
             warn_removed(y)
@@ -303,9 +340,15 @@ def to_model(doc, source=""):
                 bad.append(y)
             continue  # 빈 절 머리(`extract:`)
         want = to_yaml(m)
-        if want != y:
-            moved.append(f"{y} → {want}")
+        if want != y and m in MOVED and y == _role(m):
+            if y not in _WARNED:
+                _WARNED.add(y)
+                sys.stderr.write(f"[settings] 옛 자리 칸 읽음: {y} — {want}로 옮길 것(값은 출력 안 함)\n")
+        elif want != y and not _gone_in_dev(y):
+            moved.append(f"{y} → {want}")  # dev 절 안의 다른 칸도(지운 칸만 모델로 넘겨 경고)
             continue
+        if m in MOVED and seen.setdefault(m, y) != y:
+            raise LayoutError(f"같은 칸을 두 자리에 적음: {seen[m]} · {y} — {want} 하나만 남길 것{where}")
         set_path(out, m, v)
     if moved:
         raise LayoutError(f"자리가 다른 칸 {len(moved)}개: {', '.join(moved)} — 옛 배치면 {MIGRATE_HINT}{where}")
@@ -326,10 +369,12 @@ def to_file(model_doc):
 # 설정 파일에 남아 있으면 경고만 하고 무시(시작 거부 막기 — 0.1.0 settings.yaml도 시작됨) · migrate는 "삭제됨"으로 알림.
 REMOVED: dict[str, frozenset[str]] = {
     # CommonModelsTransport(common/config/settings.py) — 0.2.0(pl-46) 전송은 HTTP 한 길(ADK 장치 지움 — 남으면 경고만)
-    "CommonModelsTransport": frozenset({"transport"}),
+    "CommonModelsTransport": frozenset({"transport", "ping_timeout"}),  # ping_timeout — 11-04(op-05) 점검 제한 시간은 코드 상수
     # CommonConnections(common/config/settings.py) — 사용자 10-29 — 지운 칸·절(남으면 경고만) · edw = EDW 벡터 경로(ops.md#op-03)
     "CommonConnections": frozenset({"edw", "openviking"}),
     # CommonConnectionsParsingMeta(common/config/settings.py) — 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)
+    # CommonConnectionsPg(common/config/settings.py) — 사용자 11-04(설정 줄이기 op-05): 접속 정보 파일 — 접속은 required.pg 칸만
+    "CommonConnectionsPg": frozenset({"conn_file"}),
     "CommonConnectionsParsingMeta": frozenset({"connect_kwargs", "database", "host", "password", "port", "sqlite", "user"}),
     # CommonDev(common/config/settings.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치) — 지운 칸(남으면 경고만)
     "CommonDev": frozenset({"exp_store", "llm_est_in_tokens", "llm_est_out_tokens", "min_gold_coverage"}),
@@ -370,6 +415,7 @@ REMOVED: dict[str, frozenset[str]] = {
             "index_root",
             "korean_font",
             "mcp_bundle",
+            "output_root",
             "runlog_dir",
             "sources_file",
         }
@@ -387,7 +433,9 @@ REMOVED: dict[str, frozenset[str]] = {
     # McpDev(mcp_server/config.py) — 11-01(e2-10 — mcp_eval 지움) — 지운 칸(남으면 경고만)
     "McpDev": frozenset({"eval_s_parts"}),
     # McpEdwQuery(mcp_server/config.py) — 사용자 10-29 — 접속은 common.connections.rdb 읽기 계정(ops.md#op-03)
-    "McpEdwQuery": frozenset({"conn_file", "database", "password", "port", "server", "sqlite", "user"}),
+    "McpEdwQuery": frozenset(
+        {"conn_file", "database", "password", "port", "server", "sqlite", "tables", "tables_strict", "user"}
+    ),  # tables·tables_strict — 11-04(op-05): 허용 표 목록 없음(전 스키마)
     # McpHost(mcp_server/config.py) — 11-01(e2-10 — 검색 도구 컨테이너 retrieval·mcp_eval 지움) — 지운 칸(남으면 경고만)
     "McpHost": frozenset({"tool_cpus", "tool_mem_limit"}),
     # McpOutput(mcp_server/config.py) — 사용자 10-29·10-30(e2-18 — 근거 이미지·그림 조회 지움) — 지운 칸·절(남으면 경고만)
@@ -415,6 +463,7 @@ REMOVED: dict[str, frozenset[str]] = {
             "data_catalog",
             "decompose",
             "decompose_llm",
+            "min_score",
             "entity_split",
             "evidence_gate",
             "graph",
@@ -429,13 +478,23 @@ REMOVED: dict[str, frozenset[str]] = {
         }
     ),
     # McpServer(mcp_server/config.py) — store 11-01(mc-01 — 검색 저장소는 PG 하나) · 사용자 10-30(op-08) — common.models.embed.query_cache로 합침(mcp 이미지 기본은 그 칸에) — 옛 설정 파일에 남아도 경고만
-    "McpServer": frozenset({"query_cache", "store"}),
+    "McpServer": frozenset({"instructions", "query_cache", "store"}),  # instructions — 11-04(op-05): 안내문은 코드 기본값
+    # McpSearchPg(mcp_server/config.py) — 11-04(op-05): 벡터 검색은 HNSW 근사(허용 집합이 작을 때만 정확 검색)
+    "McpSearchPg": frozenset({"vector_search"}),
     # McpSettings(mcp_server/config.py) — op-13(사용자 11-04): 질의 기록 파일 qa_log 없앰(질의는 DB applog.mcp_call) — 남으면 경고만
     "McpSettings": frozenset({"query_log"}),
     # PipelineConnections(pipeline/config.py) — 사용자 10-29 · graphiti 10-30(e2-18 — 외부 KG 어댑터 지움) — 지운 칸·절(남으면 경고만)
     "PipelineConnections": frozenset({"graphiti", "openviking"}),
     # PipelineConnectionsRdb(pipeline/config.py) — 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)
-    "PipelineConnectionsRdb": frozenset({"connect_kwargs", "database", "host", "password", "port", "user"}),
+    "PipelineConnectionsRdb": frozenset(
+        {"company", "connect_kwargs", "database", "doc_type", "host", "password", "port", "user"}
+    ),  # company·doc_type — 11-04(op-05) 필터 없음
+    # PipelineConnectionsRdbColumns(pipeline/config.py) — 11-04(op-05): FileStorageMap에 없는 선택 열 — 다섯 열만 읽음
+    "PipelineConnectionsRdbColumns": frozenset(
+        {"bucket", "company", "content_type", "contract", "doc_type", "etag", "is_deleted", "supersedes", "updated", "version"}
+    ),
+    # PipelineConnectionsSecureDoc(pipeline/config.py) — 11-04(op-05): 암호는 passwords_file 하나로
+    "PipelineConnectionsSecureDoc": frozenset({"password"}),
     # PipelineDev(pipeline/config.py) — 사용자 10-29 · parallel_test_crash 10-30(pl-35) · allow_common_mismatch 11-01(structure·load 모듈의 끝 표시 확인 지움) · test_min_docs·test_per_type 11-01(--mode test 표본 모드 지움) — 지운 칸·절(남으면 경고만)
     "PipelineDev": frozenset(
         {"allow_common_mismatch", "parallel_test_crash", "parse_agent_fake", "stream_test_crash", "test_min_docs", "test_per_type"}
@@ -489,6 +548,7 @@ REMOVED: dict[str, frozenset[str]] = {
     "CommonHost": frozenset({"patch_code"}),
     "PipelineHost": frozenset(
         {
+            "gold_dir",
             "index_conf_dir",
             "load_cpus",
             "load_mem_limit",
@@ -505,7 +565,7 @@ REMOVED: dict[str, frozenset[str]] = {
         {"bm25_stat_rebuild", "edw_load", "index_lock_stale_sec", "prune_force", "prune_min_ratio", "structure_target"}
     ),
     # PipelineLoadPublish(pipeline/config.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
-    "PipelineLoadPublish": frozenset({"source_system", "upload_raw"}),
+    "PipelineLoadPublish": frozenset({"parse_date", "path_map", "source_system", "upload_raw"}),  # parse_date·path_map — 11-04(op-05)
     # PipelineNight(pipeline/config.py) — 11-01(night·trigger.sh night 지움) — 지운 칸(남으면 경고만)
     "PipelineNight": frozenset({"deadline", "parse_deadline"}),
     # PipelinePaths(pipeline/config.py) — 0.2.0 index_conf(pl-46 — 이름 있는 색인) · 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) · file_meta_path 11-02(pl-29 — 적재가 EDW 조인) · edw_chain 11-03(pl-52 — 적재·검색이 함께 쓰는 common.paths.edw_chain = ops.paths.edw_chain으로) — 지운 칸·절(남으면 경고만)
@@ -513,6 +573,7 @@ REMOVED: dict[str, frozenset[str]] = {
         {
             "edw_chain",
             "file_meta_path",
+            "gold_dir",
             "index_conf",
             "mineru_bin",
             "paddle_python",
@@ -566,7 +627,16 @@ REMOVED: dict[str, frozenset[str]] = {
     ),
     # PipelineTransformStructure(pipeline/config.py) — 사용자 10-30(pl-21 — 0.1.0 지문 배치: 읽는 코드가 지워짐 · op-08 edw_embed → embed로 합침) — 지운 칸(남으면 경고만)
     "PipelineTransformStructure": frozenset(
-        {"bundle_keep_empty_fig", "chunk_head", "client_roster_seed", "draft_terms", "edw_embed", "edw_summary_llm", "wiki_domain_phrase"}
+        {
+            "bundle_keep_empty_fig",
+            "chunk_head",
+            "client_roster_seed",
+            "draft_terms",
+            "edw_embed",
+            "edw_summary_llm",
+            "embed",
+            "wiki_domain_phrase",
+        }
     ),
     # PipelineTransformVlm(pipeline/config.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
     "PipelineTransformVlm": frozenset({"fig_kind", "fig_select", "fig_text_skip"}),

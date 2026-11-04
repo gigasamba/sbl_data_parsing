@@ -176,11 +176,13 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 1 | 판 전체 grill-me 검토 — 지문 전후(PRD [e2-02](../prd/test.md#e2-02))·DB 스키마(판 0002~0005·ParsingMeta DDL) | 사용자 | 등급 A |
 | 2 | ParsingMeta DDL 한 번 — 칸 이름 바꾸기·`loaded_at`·판 칸 등(운영 분류 스크립트가 멈추므로 운영 담당에게 알림) | DB 담당·EDW 담당 | C-76 |
 | 3 | PG — 새 `db_schema` 이름(50자 이하) · 권한(DB 수준 CREATE, 원천 스키마 5벌의 읽기·쓰기, `doc_id_seq`) | DB 담당 | C-74 |
-| 4 | 서버 settings.yaml 준비 — 필수 경로·접속([README 꼭 채울 값](../../README.md#꼭-채울-값)) · EDW 읽기·쓰기 계정 · `search.server.fulltext_secret` · 예전에 `-e`로 주던 값은 settings.yaml 칸으로([env-guide §5](env-guide.md#5-010--020에서-바꿀-설정)) · 새벽 배치 칸은 비워 둠 | 서버 운영 | C-70·C-73·C-75·C-76 |
+| 4 | 서버 settings.yaml 준비 — 필수 경로·접속([README 꼭 채울 값](../../README.md#꼭-채울-값)) · EDW 읽기·쓰기 계정 · `required.tokens.fulltext` · 예전에 `-e`로 주던 값은 settings.yaml 칸으로([env-guide §5](env-guide.md#5-010--020에서-바꿀-설정)) · 새벽 배치 칸은 비워 둠 | 서버 운영 | C-70·C-73·C-75·C-76 |
 | 5 | 노출됐던 운영 키 교체(아직 안 했으면) — 새 값은 settings.yaml에만 | 서버 운영 | C-10 |
 | 6 | 서버 `/tmp` 정리 주기·권한 600 점검(덮기 설정 임시 파일) | 사용자·서버 운영 | C-46 |
 | 7 | 폐쇄망 휠·`assets/` 채우고 빌드(§5-6 — `ALLOW_NO_ASSETS=1` 금지) | devops | — |
 | 8 | `server-changes.md`를 읽고 새 코드에 들어 있는지 대조(§2) | 서버 운영·개발자 | — |
+| 9 | EDW 표 설명 자료 폴더(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료)를 루트 아래 결과 폴더 `<루트>/output/edw_meta/`에 복사(UID 10001이 읽게)하고 settings.yaml에 `search.edw_meta.dir: /app/output/edw_meta`. 없으면 `edw_meta` 도구만 `not_configured`(README §5-0 4) | 서버 운영 | C-91 |
+| 10 | settings.yaml 칸 정리(op-05 11-04) — 지운 칸은 지우고(남아도 경고만), `search.server.fulltext_secret` 값은 `required.tokens.fulltext`로 옮긴다(옛 자리도 읽지만 안내 한 줄) | 서버 운영 | C-92 |
 
 ### 8-3. 실행 순서 — 복사해 붙이는 명령(dev 먼저, 그다음 prd)
 

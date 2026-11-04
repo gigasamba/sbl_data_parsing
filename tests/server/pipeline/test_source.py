@@ -1,14 +1,11 @@
 """pipeline.extract.source 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.source --selftest`."""
 
 import contextlib
-import csv
 import json
-from contextlib import contextmanager
 from pathlib import Path
 
 import pipeline.extract.source as M
 from common.core.contract import jl
-from common.core.paths import DEPLOY_ROOT
 from pipeline import config as pc
 from pipeline.extract.source import (
     _safe_join,
@@ -42,8 +39,7 @@ def selftest():
         pass
     print("[selftest] X2 — S3 키 이름 정리(\\·:·/ 제거)·받는 폴더 밖 쓰기 거부 통과")
 
-    _selftest_rdb()
-    _selftest_rdb_doc_location_fields()
+    _selftest_rdb_cols()
     _selftest_filestoragemap()
     _selftest_same_key_new_version()
     _selftest_finish_keep()
@@ -65,209 +61,32 @@ class _FakeS3:
         Path(path).write_bytes(content)
 
 
-@contextmanager
-def _legacy_rdb_cols():
-    """옛 synth 표(doc_location.csv: doc_id·bucket·object_key·etag·size_bytes·content_type·company_id·doc_type·
-    contract_id·updated_at·version·supersedes_doc_id·is_deleted) 열 이름 — 기본 매핑이 AI.FileStorageMap으로
-    바뀐 뒤에도 이 시험들은 RDB_COL_*로 옛 열에 맞춰서 돈다(요건 — 새 표 기본값은 그대로, 옛 표는 env로)."""
-    mapping = {
-        "RDB_COL_DOC_ID": "doc_id",
-        "RDB_COL_KEY": "object_key",
-        "RDB_COL_SIZE": "size_bytes",
-        "RDB_COL_BUCKET": "bucket",
-        "RDB_COL_ETAG": "etag",
-        "RDB_COL_CONTENT_TYPE": "content_type",
-        "RDB_COL_COMPANY": "company_id",
-        "RDB_COL_DOC_TYPE": "doc_type",
-        "RDB_COL_CONTRACT": "contract_id",
-        "RDB_COL_UPDATED": "updated_at",
-        "RDB_COL_VERSION": "version",
-        "RDB_COL_SUPERSEDES": "supersedes_doc_id",
-        "RDB_COL_IS_DELETED": "is_deleted",
-    }
-    with pc.PIPE.env(
-        **mapping
-    ):  # S7c — _rdb_cols가 설정 객체로 읽으므로 env 대신 객체를 덮어씀(os.environ은 안 바뀜 — 저장·복원 코드 불필요)
-        yield
-
-
-def _selftest_rdb():
-    """AD44 — RDB(csv:) 질의 → 가짜 버킷으로 받기. 임시 합성 표 10건(고객 필터 3건 + 나머지 7건)을 만들고
-    옛 열 이름(RDB_COL_*)으로 맞춘다(_legacy_rdb_cols — 기본값은 지금 AI.FileStorageMap)."""
+def _selftest_rdb_cols():
+    """AD44 — 열 이름이 다른 표(extract.connections.rdb.columns로 맞춤) · key가 s3://버킷/… 꼴이면 그 버킷 · 2회차 0건."""
     import tempfile
 
-    # S9 — 옛 `global _s3` → `M._s3`(모듈 전역 대입)
     real_s3 = M._s3
-    with _legacy_rdb_cols():
-        state_root = Path(tempfile.mkdtemp())
-        csv_path = state_root / "doc_location.csv"
-        fields = (
-            "doc_id",
-            "bucket",
-            "object_key",
-            "etag",
-            "size_bytes",
-            "content_type",
-            "company_id",
-            "doc_type",
-            "contract_id",
-            "updated_at",
-        )
-        with csv_path.open("w", encoding="utf-8", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=fields)
-            writer.writeheader()
-            for i in range(10):
-                doc_id = f"doc_{i:02d}"
-                writer.writerow(
-                    {
-                        "doc_id": doc_id,
-                        "bucket": "rag-docs",
-                        "object_key": f"clients/{doc_id}.pdf",
-                        "etag": f"{i + 1:032x}",
-                        "size_bytes": len(f"content:{doc_id}".encode()),
-                        "content_type": "application/pdf",
-                        "company_id": "CL-1001" if i < 3 else "CL-1002",
-                        "doc_type": "RFP",
-                        "contract_id": "",
-                        "updated_at": "2026-03-01T00:00:00Z",
-                    }
-                )
-        with open(csv_path, encoding="utf-8-sig", newline="") as f:
-            rows = list(csv.DictReader(f))
-        assert len(rows) == 10
-        objs = {(r["bucket"], r["object_key"]): (r["etag"].strip('"'), f"content:{r['doc_id']}".encode()) for r in rows}
-        M._s3 = lambda: _FakeS3(objs)  # 전역 _s3() 교체(try/finally로 복원), 실제 네트워크·boto3 없이 시험
-        env = contextlib.ExitStack()  # S7c — RDB_COMPANY 덮어쓰기(설정 객체) — 끝에서 한꺼번에 되돌림
-        try:
-            table = f"csv:{csv_path}"
-
-            # ① 고객 필터(CL-1001, 3건) — 목록 질의 → 받기
-            env.enter_context(pc.PIPE.env(RDB_COMPANY="CL-1001"))
-            local_dir, names1, state = resolve(f"rdb:{table}", state_root)
-            assert len(names1) == 3, names1
-            from common.core import contract as ids
-
-            man1 = {r["file_name"]: r for r in jl(state / "manifest.jsonl")}
-            for n in names1:
-                uri = ids.make_source_uri(n, local_dir / n)
-                assert uri == man1[n]["uri"] and uri.startswith("s3://rag-docs/"), uri
-            mark_done(state, names1, is_s3=True)
-
-            # ② 2회차 — 같은 필터는 이미 처리한 3건뿐이라 0건
-            local_dir2, names2, _ = resolve(f"rdb:{table}", state_root)
-            assert names2 == [], names2
-            print("[selftest] AD44 — RDB 고객 필터(CL-1001) 3건 → 2회차 0건 통과")
-
-            # ③ 필터 없이 전체 — 나머지 7건(이미 처리한 3건은 빠짐), 누적 10건 전부 source_uri = s3://rag-docs/<키>
-            env.enter_context(pc.PIPE.env(RDB_COMPANY=None))  # 필터 없음
-            local_dir3, names3, state3 = resolve(f"rdb:{table}", state_root)
-            assert len(names3) == 7, names3
-            mark_done(state3, names3, is_s3=True)
-            man = {r["file_name"]: r for r in jl(state3 / "manifest.jsonl")}
-            assert len(man) == 10
-            assert all(r["uri"].startswith("s3://rag-docs/") for r in man.values())
-            assert {r["key"] for r in man.values()} == {r["object_key"] for r in rows}  # RDB 키와 1:1
-            print("[selftest] AD44 — RDB 전체 10건, source_uri 10/10 s3://rag-docs/… 와 RDB 키 1:1 통과")
-
-            # ④ 묶음 중 ETag 불일치 1건 — resolve()를 그대로 불러(fetch_one을 직접 안 부름) 그 문서만 거부·기록, 나머지는 받음
-            # (독립 검토 BLOCK 1 — 전에는 ValueError가 resolve()의 fetch 루프에서 안 잡혀 전체가 크래시했음)
-            mixed_csv = state_root / "mixed.csv"
-            mixed_csv.write_text(
-                "doc_id,bucket,object_key,etag,size_bytes,content_type,company_id,doc_type,contract_id,updated_at\n"
-                "doc_good,rag-docs,clients/good.pdf,aa11aa11aa11aa11aa11aa11aa11aa11,5,application/pdf,CL-9999,RFP,,2026-03-01T00:00:00Z\n"
-                "doc_bad,rag-docs,clients/bad.pdf,ff00ff00ff00ff00ff00ff00ff00ff00,10,application/pdf,CL-9999,RFP,,2026-03-01T00:00:00Z\n",
-                encoding="utf-8",
-            )
-            M._s3 = lambda: _FakeS3(
-                {
-                    ("rag-docs", "clients/good.pdf"): ("aa11aa11aa11aa11aa11aa11aa11aa11", b"good"),
-                    ("rag-docs", "clients/bad.pdf"): ("00aa00aa00aa00aa00aa00aa00aa00aa", b"x"),
-                }
-            )
-            state4 = state_root / "run4"
-            state4.mkdir()
-            local4, names4, state4s = resolve(f"rdb:csv:{mixed_csv}", state4)
-            assert names4 == ["doc_good"], names4  # doc_bad는 거부돼 빠짐, 크래시 안 하고 doc_good은 받음
-            assert (local4 / "doc_good").exists() and not (local4 / "doc_bad").exists()
-            rej = jl(state4s / "rejected.jsonl")
-            assert len(rej) == 1 and rej[0]["doc_id"] == "doc_bad" and rej[0]["etag_rdb"] != rej[0]["etag_store"]
-            print("[selftest] AD44 — resolve(): 묶음 중 ETag 불일치 1건 거부해도 나머지 계속 받음(크래시 안 함) 통과")
-
-            # ⑤ watermark — 같은 updated_at 행 중 하나만 실패(ETag 불일치)해도 since가 그 행을 앞지르지 않음(독립 검토 BLOCK 2).
-            # 성공분이 watermark를 올려 버리면(예: 성공분의 updated_at을 바로 since로 쓰면) 실패분이 다음 질의의 since
-            # 필터(같은 updated_at이라 `>` 비교에 걸림)에 영영 안 보이게 된다 — 둘이 같은 updated_at일 때 재현.
-            wm_csv = state_root / "wm.csv"
-            wm_objs = {
-                ("rag-docs", "clients/wx.pdf"): ("e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1", b"x"),
-                ("rag-docs", "clients/wy.pdf"): ("WRONG00000000000000000000000000", b"y"),
-            }  # wy는 처음엔 불일치
-            wm_csv.write_text(
-                "doc_id,bucket,object_key,etag,size_bytes,content_type,company_id,doc_type,contract_id,updated_at\n"
-                "doc_wx,rag-docs,clients/wx.pdf,e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1,1,application/pdf,CL-1,RFP,,2026-05-01T00:00:00Z\n"
-                "doc_wy,rag-docs,clients/wy.pdf,e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2,1,application/pdf,CL-1,RFP,,2026-05-01T00:00:00Z\n",
-                encoding="utf-8",
-            )
-            M._s3 = lambda: _FakeS3(wm_objs)
-            state5 = state_root / "run5"
-            state5.mkdir()
-            local5, names5a, state5s = resolve(f"rdb:csv:{wm_csv}", state5)
-            assert names5a == ["doc_wx"], names5a  # wy 거부, wx만 받음 — 둘 다 updated_at 같음
-            mark_done(state5s, names5a, is_s3=True)
-
-            wm_objs[("rag-docs", "clients/wy.pdf")] = ("e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2", b"y")  # wy가 이제 고쳐짐(ETag 일치)
-            # 2회차 — BLOCK 2가 있었다면 wx의 updated_at으로 since가 전진해 "같은 updated_at"인 wy가 질의 후보에도 안 들어
-            # 0건이 됨(고쳐졌어도 영영 못 받음). 고친 지금은 since가 그대로(None)라 wy가 다시 후보로 나와 이번엔 받아진다.
-            local5b, names5b, state5b = resolve(f"rdb:csv:{wm_csv}", state5)
-            assert names5b == ["doc_wy"], names5b
-            mark_done(state5b, names5b, is_s3=True)
-
-            # 둘 다 끝났으니 이제 since가 전진 — 3회차는 0건
-            _, names5c, _ = resolve(f"rdb:csv:{wm_csv}", state5)
-            assert names5c == [], names5c
-            print("[selftest] AD44 — watermark: 같은 updated_at 중 실패분이 영영 안 가려짐(해결되면 전진) 통과")
-        finally:
-            M._s3 = real_s3
-            env.close()
-
-
-def _selftest_rdb_doc_location_fields():
-    """AD38 — doc_location의 version·supersedes_doc_id·is_deleted가 manifest에 그대로 실리는지(list_documents 출처).
-    실제 합성 표(valid_env/edw/meta_rdb/doc_location.csv)로 — 옛 열 이름이라 _legacy_rdb_cols로 맞춤."""
-    import tempfile
-
-    # S9 — 옛 `global _s3` → `M._s3`(모듈 전역 대입)
-    real_s3 = M._s3
-    with _legacy_rdb_cols():
-        csv_path = DEPLOY_ROOT / "valid_env" / "edw" / "meta_rdb" / "doc_location.csv"
-        if not csv_path.exists():  # 10-15 — valid_env는 이미지에 없음(PC 시험 전용) → 이 부분만 건너뜀
-            print(f"[selftest] RDB doc_location 실표 확인 건너뜀 — 합성 표 없음({csv_path.name}, 이미지)")
-            return
-        with open(csv_path, encoding="utf-8-sig", newline="") as f:
-            rows = list(csv.DictReader(f))
-        objs = {(r["bucket"], r["object_key"]): (r["etag"].strip('"'), f"content:{r['doc_id']}".encode()) for r in rows}
-        M._s3 = lambda: _FakeS3(objs)
-        try:
-            state_root = Path(tempfile.mkdtemp())
-            local_dir, names, state = resolve(f"rdb:csv:{csv_path}", state_root)
-            assert len(names) == len(rows), (len(names), len(rows))  # synth-meta-rdb는 전부 받아지는 ETag(가짜 저장소도 그대로 생성)
+    d = Path(tempfile.mkdtemp())
+    p = d / "loc.csv"
+    p.write_text("doc_id,object_key,size_bytes\n" + "".join(f"d{i},s3://rag-docs/clients/d{i}.pdf,4\n" for i in range(3)), encoding="utf-8")
+    M._s3 = lambda: _FakeS3({("rag-docs", f"clients/d{i}.pdf"): ("unused", b"docA") for i in range(3)})
+    try:
+        with pc.PIPE.env(RDB_COL_DOC_ID="doc_id", RDB_COL_KEY="object_key", RDB_COL_SIZE="size_bytes"):
+            _, names, state = resolve(f"rdb:csv:{p}", d)
+            assert names == ["d0", "d1", "d2"], names
             man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")}
-            v2 = man["rfi_answer_sjm_2023_v2"]
-            assert v2["version"] == "2" and v2["supersedes_doc_id"] == "rfi_answer_sjm_2023_v1", v2
-            assert man["rfi_answer_sjm_2023_v1"]["version"] == "1" and man["rfi_answer_sjm_2023_v1"]["supersedes_doc_id"] is None
-            deleted = man["rfi_answer_sjm_2025"]
-            assert deleted["is_deleted"] is True, deleted
-            kept = man["rfp_veridian_mab_2023"]
-            assert kept["is_deleted"] is False and kept["version"] == "1" and kept["supersedes_doc_id"] is None, kept
-            print("[selftest] AD38 — doc_location 버전·대체 문서·삭제 여부가 manifest에 실림(synth-meta-rdb) 통과")
-        finally:
-            M._s3 = real_s3
+            assert all(r["uri"] == f"s3://rag-docs/clients/{n}.pdf" for n, r in man.items()), man
+            mark_done(state, names, is_s3=True)
+            assert resolve(f"rdb:csv:{p}", d)[1] == []
+    finally:
+        M._s3 = real_s3
+    print("[selftest] AD44 — 열 이름 맞춤(columns)·s3:// 키의 버킷·2회차 0건 통과")
 
 
 def _selftest_filestoragemap():
     """AD44(c) — 실 EDW 표 AI.FileStorageMap 꼴(id·content_version_id·s3_key·original_filename·file_size, etag·
-    bucket 열 없음) 합성 csv로: 받기(이름 충돌 구분 포함) → 2회차 0건 → 크기 불일치 거부 → source_uri 형식 ·
-    company 열 없는 표에 RDB_COMPANY를 줘도 경고만 하고 필터 없이 진행 · TABLE_ID_RE가 AI.FileStorageMap(대소문자
-    섞인 스키마.표)을 통과하는지."""
+    bucket 열 없음) 합성 csv로: 받기(이름 충돌 구분 포함) → 2회차 0건 → 크기 불일치 참고 기록 → source_uri 형식 ·
+    TABLE_ID_RE가 AI.FileStorageMap(대소문자 섞인 스키마.표)을 통과하는지."""
     import tempfile
 
     # S9 — 옛 `global _s3` → `M._s3`(모듈 전역 대입)
@@ -289,13 +108,11 @@ def _selftest_filestoragemap():
     objs = {("fsm-bucket", f"docs/{c}.pdf"): (f"etag-unused-{c}", b"docA") for c in "abcde"}  # 4바이트 = file_size와 일치
     M._s3 = lambda: _FakeS3(objs)
     env = contextlib.ExitStack()
-    env.enter_context(
-        pc.PIPE.env(RDB_BUCKET="fsm-bucket", RDB_COMPANY="ignored-co")
-    )  # S7c — 설정 객체 덮어쓰기(os.environ은 안 바뀜) · 이 표엔 company 열이 없음 — 경고 후 필터 없이 진행돼야 함(요건 ⑦)
+    env.enter_context(pc.PIPE.env(RDB_BUCKET="fsm-bucket"))  # S7c — 설정 객체 덮어쓰기(os.environ은 안 바뀜)
     try:
         table = f"csv:{csv_path}"
         local_dir, names1, state = resolve(f"rdb:{table}", state_root)
-        assert len(names1) == 5, names1  # company 필터가 조용히 걸리지 않고 무시됨 — 전부 받음
+        assert len(names1) == 5, names1
         assert {"1__report.pdf", "4__report.pdf"} <= set(names1), names1  # 이름 충돌 — doc_id 접두로 구분
         assert "summary.pdf" in names1 and "contract.pdf" in names1 and "notes.pdf" in names1
         from common.core import contract as ids
@@ -310,7 +127,7 @@ def _selftest_filestoragemap():
         # 2회차 — 전부 처리 기록됐으니 0건(ETag 없는 표라도 _rdb_is_done이 키 존재만으로 판정)
         _, names2, _ = resolve(f"rdb:{table}", state_root)
         assert names2 == [], names2
-        print("[selftest] AD44(c) — FileStorageMap: company 열 없음 경고·전부 받기(이름 충돌 구분)·2회차 0건·source_uri 통과")
+        print("[selftest] AD44(c) — FileStorageMap: 전부 받기(이름 충돌 구분)·2회차 0건·source_uri 통과")
 
         # 크기 불일치 — 별도 소규모 표(etag 열도 없음 → 크기 대조 경로)
         state2 = state_root / "mismatch"
