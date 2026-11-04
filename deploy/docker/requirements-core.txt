@@ -8,7 +8,7 @@ pymupdf==1.28.2            # AGPL-3.0 — 글자 PDF 원본이 있으면 청크 
 pypdfium2==5.10.1          # 근거 그림 쪽 렌더
 psycopg[binary]==3.3.6     # PostgreSQL + pgvector
 psycopg-pool==3.3.3        # PG 연결 풀(PGPool, S12) — 검색 MCP 여러 스레드가 동시에 쓰는 연결(PG_POOL_MAX)
-pymssql==2.4.2             # RDB 문서 위치 메타(AD44, pipeline/extract/fetch_docs.py) — EDW=Azure SQL/SQL Server(파싱 단계가 rdb 받기를 함 — S6b부터 data-pipeline 이미지)
+pymssql==2.4.2             # RDB 문서 위치 메타(AD44, modules/parse/source.py) — EDW=Azure SQL/SQL Server(파싱 단계가 rdb 받기를 함 — S6b부터 data-pipeline 이미지)
 mcp==1.30.0               # 검색 MCP 서버(modules/search/mcp_server.py) — uvicorn·starlette·httpx·anyio 포함
 google-adk[mcp]==2.9.2    # 모델 호출(GA) — common/adk.py, 루트 pyproject와 같은 버전
 pydantic-settings==2.16.1  # 설정 읽기(S7a, D-015·D-028 ⑪) — 전에는 mcp·litellm 간접 의존으로 같은 판이 들어 있었음(직접 명시만)

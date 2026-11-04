@@ -48,7 +48,7 @@ pillow
 google-adk[mcp]==2.9.2
 litellm==1.101.0
 
-# RDB 문서 위치 메타(AD44, pipeline/extract/fetch_docs.py) — EDW = Azure SQL Database(PaaS)=SQL Server(2026-10-07 확정)
+# RDB 문서 위치 메타(AD44, modules/parse/source.py) — EDW = Azure SQL Database(PaaS)=SQL Server(2026-10-07 확정)
 pymssql==2.4.2              # 바이너리 wheel에 FreeTDS 포함 — 폐쇄망 서버에 시스템 ODBC 드라이버 설치 불필요
 mcp==1.30.0               # 검색 MCP 클라이언트·서버(cli/mcp_eval.py·mcp_smoke.py, modules/search/mcp_server.py) — 이미지와 같은 버전(SI28 대조)
-boto3                     # Object Storage(S3 호환) 받기 — pipeline/extract/fetch_docs.py s3:// · rdb: (이미지와 같이 버전 미고정)
+boto3                     # Object Storage(S3 호환) 받기 — modules/parse/source.py s3:// · rdb: (이미지와 같이 버전 미고정)
