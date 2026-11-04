@@ -11,7 +11,7 @@
   1. `tests/server/`(이미지 반입 관문 — `python -m pipeline.cli selftest`가 `tests/runner.py`로 실행, 외부 접속 없음) · `tests/general/`(PC 전용: PG, Docker, 느린 것 — pytest).
   2. 알려진 실패 목록: 반입 `deploy/release/known_fail.txt`, PC `tests/conftest.py` `GENERAL_KNOWN_FAIL`. 목록에 있는 시험이 통과하면 XPASS 경고(목록에서 지움).
   3. PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`(지금 빔).
-- 기준선(11-05, feature/readme-multi — rn-07 정리 뒤, PG 없는 PC): `selftest` 101개 모두 통과 · `pytest tests/` 158 통과 · 3 건너뜀 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `18142592accca442` · code_fp p0 `e17fbe019daf` · p1 `58734457d7a8` · r `a2f5174d3b38` · s `cd4c998b09dd`(rn-07 — 층 목록에 shared 의존 추가·주석 정리·decision_log 삭제, 리뷰 뒤 p1에 엔진 의존·r에 검색 의존 추가·settings.py 벌 이름 검사. 기록용 — 재처리 없음) · 엔진 지문 qwen_vlm(`engine_code_fp`, p0 열쇠) `0d194d4a5bab`(f068199) → `5644ba5811c5`(rn-07에서 `pipeline/shared/vlmcall.py`를 고침 — 기록용).
+- 기준선(11-05, feature/readme-multi — rn-07 정리 뒤, PG 없는 PC): `selftest` 101개 모두 통과 · `pytest tests/` 159 통과 · 3 건너뜀 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `18142592accca442` · code_fp p0 `e17fbe019daf` · p1 `58734457d7a8` · r `a2f5174d3b38` · s `cd4c998b09dd`(rn-07 — 층 목록에 shared 의존 추가·주석 정리·decision_log 삭제, 리뷰 뒤 p1에 엔진 의존·r에 검색 의존 추가·settings.py 벌 이름 검사. 기록용 — 재처리 없음) · 엔진 지문 qwen_vlm(`engine_code_fp`, p0 열쇠) `0d194d4a5bab`(f068199) → `5644ba5811c5`(rn-07에서 `pipeline/shared/vlmcall.py`를 고침 — 기록용).
 - 지문 확인 명령: [CLAUDE.md](../../CLAUDE.md) §4. 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다.
 - QA: `python -m pipeline.cli selftest` · `[판정]` 통과, 기준선보다 나빠지지 않음.
 - Status: done
