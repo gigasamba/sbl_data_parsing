@@ -20,7 +20,7 @@
 2. 서버: 새 루트를 만들고 코드 폴더로 풀기 — `mkdir -p <새 루트>/sbl_data_parsing-<버전> && tar -xzf code-….tar.gz --no-same-owner -C <새 루트>/sbl_data_parsing-<버전>`. 앞 루트의 `settings.yaml`·`edw_chain.yaml`을 `cp -p`로 새 루트에 복사한다.
 3. 바꾸기(새 코드 폴더에서): `bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>`(코드 폴더 a+rX · `output/` — 컨테이너 사용자 10001이 못 읽으면 "읽을 수 없음(권한)"으로 멈춤) → `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp` → `bash deploy/host/scripts/host_ctl.sh timers`(타이머를 새 루트로).
 4. 확인: 컨테이너 로그 첫 줄 `[image] 이미지 <이름 버전 커밋> · 코드 <커밋> · 의존성 <지문>` → `bash deploy/host/scripts/host_ctl.sh check`(마지막 줄 `[host_ctl check] 통과 — 6개`). `의존성 지문이 다름`으로 멈추면 그 코드는 새 실행 이미지가 필요하다.
-5. 되돌리기: 앞 루트를 지우지 않고 두었다가 그 코드 폴더에서 `host_ctl.sh up -d --force-recreate …` → `host_ctl.sh timers`. 스크립트 이름을 바꾸기 전(rn-06) 판의 루트는 옛 이름 그대로 — `dc.sh up -d --force-recreate …` → `dc.sh timers`. 루트는 최근 2개 이상 남긴다. 검색 DB는 두 루트가 같은 PG를 본다.
+5. 되돌리기: 앞 루트를 지우지 않고 두었다가 그 코드 폴더에서 `host_ctl.sh up -d --force-recreate …` → `host_ctl.sh timers`. `host_ctl.sh`가 없는 앞 판의 루트는 `dc.sh up -d --force-recreate …` → `dc.sh timers`. 루트는 최근 2개 이상 남긴다. 검색 DB는 두 루트가 같은 PG를 본다.
 
 ### 1-2. 개발 → 운영 — 시험한 그대로 굽기
 
@@ -167,8 +167,8 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 - 0.2.0은 **새 실행 이미지가 필요 없다** — 코드의 `deploy/docker/DEPS_HASH`가 0.1.0 실행 이미지와 같다(`f0fcc30bd067bc2f`). dev는 `*-runtime:0.1.0`에 0.2.0 코드 폴더, prd는 그것을 구운 `*:0.2.0`.
 - **prd는 반드시 새 `required.pg.db_schema`**(판 0002가 기준 스키마의 옛 표를 지움 — C-74). 옛 스키마·옛 `struct` 스키마는 2주 뒤 DB 담당이 백업하고 지운다.
 - 지문이 모두 바뀌므로(FINGERPRINT·레이어 code_fp·엔진 — 기준값 PRD [e2-02](../prd/test.md#e2-02)) 모든 문서가 다시 파싱·적재된다. **전체 문서 실행은 prd에서만**, dev는 settings.yaml이 가리키는 대상으로 e2e 한 번. 시간은 지난 `progress.log`의 문서당 시간 × 문서 수, 디스크는 `required.deploy.output_root`의 `parse/_rep`만큼 여유를 더 잡는다.
-- 0.2.0은 **새 루트**에 놓는다(PRD [op-13](../prd/doc.md#op-13)) — 0.1.0 자리(코드 폴더·설정 폴더)는 그대로 두고 되돌리기에 쓴다. 검색 DB는 같은 PG다.
-- prd 이미지에 settings.yaml을 굽는 것(PRD [op-07](../prd/doc.md#op-07))은 `bake_prod_image.sh`가 아직 하지 않는다 — 지금은 dev처럼 `<루트>/settings.yaml`을 붙인다.
+- 0.2.0은 **새 루트**에 놓는다 — 0.1.0 자리(코드 폴더·설정 폴더)는 그대로 두고 되돌리기에 쓴다. 검색 DB는 같은 PG다.
+- prd 이미지에는 settings.yaml을 굽지 않는다 — dev처럼 `<루트>/settings.yaml`을 붙인다.
 - 모델: dev·prd는 내부망 모델만(외부 모델 호출 거부).
 
 ### 8-2. 배포 전
@@ -184,7 +184,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 7 | 폐쇄망 휠·`assets/` 채우고 빌드(§5-6 — `ALLOW_NO_ASSETS=1` 금지) | devops | — |
 | 8 | `server-changes.md`를 읽고 새 코드에 들어 있는지 대조(§2) | 서버 운영·개발자 | — |
 | 9 | EDW 표 설명 자료 폴더(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료)를 루트 아래 결과 폴더 `<루트>/output/edw_meta/`에 복사(UID 10001이 읽게)하고 settings.yaml에 `search.edw_meta.dir: /app/output/edw_meta`. 없으면 `edw_meta` 도구만 `not_configured`(README §5-0 4) | 서버 운영 | C-91 |
-| 10 | settings.yaml 칸 정리(op-05 11-04 · rn-07 11-05) — 지운 칸은 지우고, `search.server.fulltext_secret` 값은 `required.tokens.fulltext`로, 토큰은 `required.tokens.mcp` 하나로 옮긴다(옛 자리·지운 칸이 남으면 시작 거부) | 서버 운영 | C-92·C-95 |
+| 10 | settings.yaml 칸 정리 — 지운 칸은 지우고, `search.server.fulltext_secret` 값은 `required.tokens.fulltext`로, 토큰은 `required.tokens.mcp` 하나로 옮긴다(옛 자리·지운 칸이 남으면 시작 거부) | 서버 운영 | C-92·C-95 |
 
 ### 8-3. 실행 순서 — 복사해 붙이는 명령(dev 먼저, 그다음 prd)
 
@@ -296,7 +296,7 @@ $DOCKER exec data-pipeline python -c "import sys; from common.store.objectstore 
 ```
 
 **9. 첫 실행 — FAQ 교체와 전체 재처리**
-- **FAQ:** 첫 `run_docs.py` 실행은 FAQ 교체 기록(`<작업 폴더>/batch_progress/faq_seen.txt`)이 없으므로 gold `faq`를 **한 번** 비운 뒤 FAQ 전체를 맨 앞에서 처리한다(pl-41). `progress.log` 기대 줄: `FAQ 교체: 새 FAQ <N>건 — gold faq 문서 <M>건을 지우고 지금 FAQ <K>건 전체를 맨 앞에서 다시 처리`(새 스키마라 M=0). `--seqs`·`--limit` 실행은 교체를 건너뛴다.
+- **FAQ:** 첫 `run_docs.py` 실행은 FAQ 교체 기록(`<작업 폴더>/batch_progress/faq_seen.txt`)이 없으므로 gold `faq`를 **한 번** 비운 뒤 FAQ 전체를 맨 앞에서 처리한다. `progress.log` 기대 줄: `FAQ 교체: 새 FAQ <N>건 — gold faq 문서 <M>건을 지우고 지금 FAQ <K>건 전체를 맨 앞에서 다시 처리`(새 스키마라 M=0). `--seqs`·`--limit` 실행은 교체를 건너뛴다.
 - **[dev]** settings.yaml이 가리키는 대상으로 e2e 한 번(`--limit <N>`). **[prd]** 전체 문서를 새 스키마로:
 ```bash
 cd "$ROOT/<코드>"
@@ -330,9 +330,9 @@ cd "$ROOT/<코드>" && bash deploy/host/scripts/host_ctl.sh down                
 - 옛 스키마를 0.2.0이 바꿨다면(새 이름을 안 썼을 때만) 백업으로: `$DOCKER exec -i "$PG_C" pg_restore -U "$PG_U" -d "$PG_D" --clean < "$BK/pg-0.1.0.dump"`(DB 담당과 같이 — downgrade 명령은 없다).
 - ParsingMeta에 0.2.0이 쓴 행·`gold_version`은 그대로 남는다(0.1.0은 그 칸을 읽지 않음).
 
-### 8-6. EDW 조인 사슬 파일 고쳐 쓰기(서버 — pl-29)
+### 8-6. EDW 조인 사슬 파일 고쳐 쓰기(서버)
 
-적재가 문서 메타(고객 `client_edw`·등록 시각 `created_at`·원천 메타 `doc.attrs`)를 EDW에서 채울 때 따라가는 표·칸 이름과, 검색 MCP가 쓰는 `attrs` 키의 거르기 이름·근거 표시는 파일 하나에 있다(PRD [pl-52](../prd/load-schema.md#pl-52)). 기본 파일은 코드 폴더의 `resources/config/edw_chain.yaml`이고 **꼴과 칸의 뜻은 그 파일의 머리 주석이 정본**이다. 서버 EDW 이름이 다르거나 메타 키를 더하려면 코드를 고치지 않고 사본을 고친다.
+적재가 문서 메타(고객 `client_edw`·등록 시각 `created_at`·원천 메타 `doc.attrs`)를 EDW에서 채울 때 따라가는 표·칸 이름과, 검색 MCP가 쓰는 `attrs` 키의 거르기 이름·근거 표시는 파일 하나에 있다. 기본 파일은 코드 폴더의 `resources/config/edw_chain.yaml`이고 **꼴과 칸의 뜻은 그 파일의 머리 주석이 정본**이다. 서버 EDW 이름이 다르거나 메타 키를 더하려면 코드를 고치지 않고 사본을 고친다.
 
 **① 사본 고치기 · 칸 적기** — 사본은 `<루트>/edw_chain.yaml`(`host_ctl.sh init`이 없을 때만 복사 — 10001, 640)이고, `data-pipeline`·`mcp-server`에 `/etc/rag/edw_chain.yaml`로 읽기 전용 붙는다. 설정 칸은 하나(`ops.paths.edw_chain` — 적재와 검색이 같은 칸)이고 **칸을 적었을 때만 사본이 쓰인다**(비우면 코드의 기본 파일).
 ```bash
