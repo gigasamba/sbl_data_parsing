@@ -53,13 +53,6 @@ from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared.ext_groups import IMG_EXTS
 
 
-def load_stack(path):
-    p = Path(path)
-    if not p.exists():
-        raise SystemExit(f"{p} 없음 — --stack에 엔진 구성 파일 경로(resources/config/pipeline_stack.json 모양)")
-    return json.loads(p.read_text(encoding="utf-8"))
-
-
 def _richness(rep_json):
     """엔진 결과의 구조 인식 풍부도 — (tables, facts, figures, boxes) 개수.
     대표 엔진 선택 시 acc 동점이면 이 값이 높은 엔진을 우선 (표·이미지를 더 많이 인식한 엔진)."""
@@ -495,6 +488,32 @@ from pipeline.transform.represent import fragment_vote as fuse_mod  # noqa: E402
 from pipeline.transform.represent import table_inline  # noqa: E402 — TA1(사용자 10-15) 엔진별 표 그리드를 본문 제자리에 GFM 표로
 
 
+def chart_text(p):
+    """오피스 내장 차트(charts/chart*.xml)의 제목·계열·값 캐시 → [차트] 줄."""
+    import re
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    p = Path(p)
+    if p.suffix.lower() not in (".xlsx", ".pptx", ".docx"):
+        return ""
+    z = zipfile.ZipFile(p)
+    lines = []
+    loc = lambda e: e.tag.rsplit("}", 1)[-1]
+    kids = lambda e, name: [x for x in e.iter() if loc(x) == name]
+    pts = lambda e: [v.text for pt in kids(e, "pt") for v in pt if loc(v) == "v"]
+    for n in sorted(x for x in z.namelist() if re.search(r"charts/chart\d+\.xml$", x)):
+        root = ET.fromstring(z.read(n))
+        for title in kids(root, "title")[:1]:
+            lines.append("[차트] " + " ".join(x.text or "" for x in kids(title, "t")))
+        for ser in kids(root, "ser"):
+            name = " ".join(v.text or "" for tx in kids(ser, "tx")[:1] for v in kids(tx, "v"))
+            cat = kids(ser, "cat")
+            val = kids(ser, "val")
+            lines.append(f"계열 {name}: " + ", ".join(f"{c}={v}" for c, v in zip(pts(cat[0]) if cat else [], pts(val[0]) if val else [])))
+    return "\n".join(lines)
+
+
 def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_pages=None, page_covered=False):
     """후보정 패키지 적용 — base 본문에 쪽 VLM 옮기기·차트·그림 기록 블록을 덧붙이고, 첨자(supsub)는 그 줄만 base 안에서
     바꿔 넣는다(AD37 — 전엔 문서 전체를 다시 옮긴 블록을 덧붙여 대표 본문이 ~2배였음·청크·BM25·임베딩 중복). rep.post{config,
@@ -532,7 +551,6 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     if not feats or not doc_path or not Path(doc_path).exists():
         return info
     from pipeline.transform.figures import figure_extract as fig_mod
-    from pipeline.transform.figures import office_charts as charts
     from pipeline.transform.figures import scan_page_vlm as vp_mod
     from pipeline.transform.represent import superscripts as supsub
 
@@ -594,7 +612,7 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
     _pt["figures"] = time.time() - _pt0
     _pt0 = time.time()
     if "charts" in feats:
-        ct = charts.chart_text(doc_path)
+        ct = chart_text(doc_path)
         if ct.strip():
             blocks.append(ct)
     _pt["attachments"] = time.time() - _pt0
@@ -648,8 +666,7 @@ def _old_source(out_dir, doc):
 
 
 def represent(stack, parse_dir, src=None):
-    from pipeline.transform.represent.parse_scoring import LOW_N
-    from pipeline.transform.represent.rep_accuracy import doc_accuracy
+    from pipeline.transform.represent.parse_scoring import LOW_N, doc_accuracy
 
     pd = Path(parse_dir)
     qa = json.loads((pd / "qa.json").read_text(encoding="utf-8"))
@@ -983,7 +1000,7 @@ def main(argv=None):
     ap.add_argument("--parse-dir", default="output/parse")
     ap.add_argument("--src", default=None, help="파싱한 문서 폴더(원본 경로·sha256을 대표 결과에 남김 — 구조화 모듈이 원본 없이 돌 때 씀)")
     a = ap.parse_args(argv)
-    idx = represent(load_stack(a.stack) if a.stack else pc.stack(), a.parse_dir, a.src)
+    idx = represent(json.loads(Path(a.stack).read_text(encoding="utf-8")) if a.stack else pc.stack(), a.parse_dir, a.src)
     done = [r for r in idx if r["engine"]]
     from collections import Counter
 

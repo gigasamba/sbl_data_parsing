@@ -42,7 +42,8 @@ from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
 from pipeline.shared import runtrace  # op-01 run.progress
 from pipeline.transform.structure import chunking as S  # 청킹·개체 정규식(구조화 모듈)
 from pipeline.transform.structure import client_roster as ST  # name_hits·seed_roster(구조화 전용, 10-16 분리)
-from pipeline.transform.structure import product_codes as AG  # 제품 코드(PRODUCT_CODE_RE — 용어 draft)
+
+PRODUCT_CODE_RE = re.compile(r"\b[A-Z]{2,5}-(ADC|MAB|BSA|BIS|BSP|VAC)-\d{1,3}\b")  # 제품 코드(용어 초안)
 
 
 def pick_engine(doc, dd, sel, route):
@@ -272,7 +273,7 @@ def infer_clients(docs, head=400, roster=None):
             d["clients"] = ([primary] if primary else []) + [c for c in hits if c != primary]
     pre = {}
     for d in docs:
-        for code in set(AG.PRODUCT_CODE_RE.findall_codes(d.get("full_text") or "")) if d.get("client") else ():
+        for code in {m.group(0) for m in PRODUCT_CODE_RE.finditer(d.get("full_text") or "")} if d.get("client") else ():
             pre.setdefault(code.split("-")[0], set()).add(d["client"])
     for d in docs:
         code = (d.get("contract") or {}).get("product_code")

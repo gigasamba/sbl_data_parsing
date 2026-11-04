@@ -41,7 +41,6 @@ LAYER_CODE = {
             "mail_attachments",
             "figure_context",
             "fragment_vote",
-            "rep_accuracy",  # 11-03 — 대표 결과 점수(doc_accuracy, build_rep.py:658 늦은 import)가 빠져 있었음(구조 검토)
             "superscripts",
             "table_inline",
             "table_standard",
@@ -53,10 +52,8 @@ LAYER_CODE = {
         f"pipeline/transform/figures/{n}.py"
         for n in (
             "chart_values",
-            "office_charts",
             "diagram_edges",
             "figure_extract",
-            "mermaid",
             "nested_figures",
             "overlay_groups",
             "pptx_edges",
@@ -72,7 +69,6 @@ LAYER_CODE = {
         "pipeline/transform/structure/build_bundle.py",
         "pipeline/transform/structure/chunking.py",
         "pipeline/transform/structure/draft_terms.py",
-        "pipeline/transform/structure/product_codes.py",
         "pipeline/transform/structure/client_roster.py",  # 11-03 — 고객 이름 찾기(build_bundle ST)가 빠져 있었음(구조 검토)
     ],
     "r": [

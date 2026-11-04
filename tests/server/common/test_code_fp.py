@@ -21,7 +21,7 @@ def test_every_transform_file_in_a_layer():
 
 
 CASES = [  # (고칠 파일, 바뀌어야 하는 층)
-    ("pipeline/transform/represent/rep_accuracy.py", {"p1"}),
+    ("pipeline/transform/represent/text_normalize.py", {"p1"}),
     ("pipeline/transform/structure/client_roster.py", {"s"}),
     ("common/store/db/models/search_tables.py", set()),
     ("common/core/jsonlog.py", set()),

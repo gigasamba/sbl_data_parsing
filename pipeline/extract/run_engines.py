@@ -368,13 +368,13 @@ def main():
                 err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, None, prov)
         if err:
             sp.result(
-                "timeout" if "Timeout" in err else "fail", "timeout" if "Timeout" in err else "env" if _env_error(err) else "doc", err
+                "timeout" if "Timeout" in err else "fail", "timeout" if "Timeout" in err else "env" if P0.is_env_error(err) else "doc", err
             )
         if err and dst.exists():
             # 실패·시간 초과면 그 자리의 결과 파일은 이번 내용의 결과가 아님(내용이 바뀐 문서의 옛 결과 등) — 지움.
             # 10-04 결함: 옛 결과 파일이 남아 '이미 결과 있음'으로 보여 재시도에서 빠지고 대표에 옛 결과가 쓰일 수 있었음
             dst.unlink(missing_ok=True)
-        if err and _env_error(err):  # RB3② — 미설치·미설정(env) 실패만 기억(시간 초과·그 밖의 예외는 문서 탓일 수 있어 제외)
+        if err and P0.is_env_error(err):  # RB3② — 미설치·미설정(env) 실패만 기억(시간 초과·그 밖의 예외는 문서 탓일 수 있어 제외)
             with lock:
                 env_failed.setdefault(eng, doc.name)
         rec = _with_run_id(
@@ -400,7 +400,7 @@ def main():
             log.flush()
             done[0] += 1
             sp.set(seq=done[0])
-            tally["시간 초과" if err and "Timeout" in err else "환경" if err and _env_error(err) else "실패" if err else "성공"] += 1
+            tally["시간 초과" if err and "Timeout" in err else "환경" if err and P0.is_env_error(err) else "실패" if err else "성공"] += 1
             tag = "FAIL " if err else "ok   "
             print(tag + f"{eng:18s} {rec['sec']:>7}s  {doc.name}" + (f"  {err[:120]}" if err else ""), flush=True)
             print(
@@ -563,12 +563,6 @@ def p0_key(eng, sha, ver=None):
         ensure_ascii=False,
     )
     return hashlib.sha256(parts.encode("utf-8")).hexdigest()[:16]
-
-
-def _env_error(err):
-    from pipeline.shared.parse_run import is_env_error  # 환경 실패 단서 한 곳(SI45 — 손상 PDF 'EOF marker not found'를 env로 보던 것)
-
-    return is_env_error(err)
 
 
 def _isolated(eng, doc, dst, profile, tmo, py=None, env=None, prov=None):

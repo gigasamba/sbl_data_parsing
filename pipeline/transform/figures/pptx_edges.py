@@ -17,12 +17,6 @@ PARSE_PPTX_SHAPES_MAX_DEFAULT = "20"
 PARSE_PPTX_SMARTART_MAX_DEFAULT = "20"
 
 
-def _cap(name, default):
-    return int(
-        pc.by_env(name, default)
-    )  # S7c — 설정 객체(옛 int(get(name, default)), ValueError면 int(default) — 객체는 ''·형식 틀림 = 칸 기본값)
-
-
 def _is_smartart(sh):
     """SmartArt graphicFrame — python-pptx의 shape_type 자동 판별이 최소 XML에서는 안 먹혀(관찰, relIds 없는 등)
     graphicData uri에 diagram 네임스페이스가 있는지 원본 XML에서 직접 찾는다(안전 쪽 — 오탐 없음, false 가능)."""
@@ -59,8 +53,8 @@ def candidate_slides(p):
     이상인데 연결선(pptx_edges 기준)이 0개 — 상자·화살표가 연결선 없이 배치만 된 도식(사용자 2026-10-06 지적
     사례). 상한 PARSE_PPTX_SMARTART_MAX·PARSE_PPTX_SHAPES_MAX(env, 기본 20, 0=꺼짐 — 그 이유 자체를 안 봄)."""
     sa_cap, sh_cap = (
-        _cap("PARSE_PPTX_SMARTART_MAX", PARSE_PPTX_SMARTART_MAX_DEFAULT),
-        _cap("PARSE_PPTX_SHAPES_MAX", PARSE_PPTX_SHAPES_MAX_DEFAULT),
+        int(pc.by_env("PARSE_PPTX_SMARTART_MAX", PARSE_PPTX_SMARTART_MAX_DEFAULT)),
+        int(pc.by_env("PARSE_PPTX_SHAPES_MAX", PARSE_PPTX_SHAPES_MAX_DEFAULT)),
     )
     out, n_sa, n_sh = {}, 0, 0
     for r in slide_signals(p):

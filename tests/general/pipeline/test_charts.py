@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pipeline.transform.figures.office_charts import chart_text
+from pipeline.transform.represent.build_rep import chart_text
 
 
 def selftest():

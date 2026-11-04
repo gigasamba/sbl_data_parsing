@@ -44,8 +44,7 @@ CONCERN 반영 10-08 2차):
 import re
 
 from common.core.text import normalize_value  # NFKC·소문자·제로폭 제거·숫자 사이 쉼표 제거·공백 제거(조각 맞추기 키)
-from pipeline.shared.engine_family import FAMILY  # 엔진 → 인식 계열(요약 모듈과 같은 매핑, 중복 정의 안 함)
-from pipeline.transform.represent.parse_scoring import garbage_ratio  # 깨짐률(형식 타당성 신호 재사용)
+from pipeline.transform.represent.parse_scoring import FAMILY, garbage_ratio
 
 # 출처 신뢰도(AD26 (a)) — 원문 추출(텍스트 레이어·오피스 XML) > VLM > OCR. FAMILY(engine_family.py)는 엔진 이름 →
 # 인식 계열(모델)이고, 여기 집합에 없는 계열(=텍스트 레이어·오피스 XML 추출기, pdfplumber·pymupdf·office 등)은

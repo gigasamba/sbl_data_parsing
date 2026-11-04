@@ -34,13 +34,6 @@ from pipeline.shared.vlmcall import dpi, sha, vlm_page
 from pipeline.transform.figures import shape_detect  # AD14
 from pipeline.transform.figures.pptx_edges import candidate_slides
 
-
-def _cap(name, default):
-    return int(
-        pc.by_env(name, default)
-    )  # S7c — 설정 객체(옛 int(get(name, default)), ValueError면 int(default) — 객체는 ''·형식 틀림 = 칸 기본값)
-
-
 _conversion_ok: dict = {}  # 독립 검토 반영(10-11, AD31/AD20 BLOCK) — ponytail: 프로세스 수명 동안의 dict(경로 문자열 키,
 # 영속화 안 함) — pptx_slide_vlm()이 실제 soffice 변환 성공/실패를 기록해 target_slides()가 예측(후보+soffice 유무)
 # 대신 실제 결과를 반영하게 한다. 한 배치 프로세스는 같은 경로를 보통 한 번만 처리하므로 경로 키만으로 충분 —
@@ -122,7 +115,7 @@ def target_slides(doc_path):
         return set()
     if _conversion_ok.get(str(p.resolve())) is False:
         return set()
-    cap = _cap("PARSE_PPTX_RENDER_MAX", 10)
+    cap = int(pc.by_env("PARSE_PPTX_RENDER_MAX", 10))
     return set(sorted(cands)[:cap])
 
 
@@ -135,7 +128,7 @@ def render_office_pages(doc_path, page_nums, timeout=None):
     p = Path(doc_path)
     if not page_nums or soffice_bin() is None:
         return {}
-    timeout = timeout or _cap("PARSE_PPTX_CONVERT_SEC", 60)
+    timeout = timeout or int(pc.by_env("PARSE_PPTX_CONVERT_SEC", 60))
     tmp_root = raw_root() / "tmp" / "pptx_render"
     tmp_root.mkdir(parents=True, exist_ok=True)
     out = {}
@@ -211,7 +204,7 @@ def shape_render_pages(doc_path, timeout=None):
     if soffice_bin() is None:
         print(f"[pptx_render] SOFFICE_BIN·PATH에 soffice 없음 — 도형 도식 렌더 건너뜀: {p.name}", file=sys.stderr)
         return {}
-    timeout = timeout or _cap("PARSE_PPTX_CONVERT_SEC", 60)
+    timeout = timeout or int(pc.by_env("PARSE_PPTX_CONVERT_SEC", 60))
     tmp_root = raw_root() / "tmp" / "pptx_render"
     tmp_root.mkdir(parents=True, exist_ok=True)
     out = {}
@@ -223,7 +216,7 @@ def shape_render_pages(doc_path, timeout=None):
 
         doc = fitz.open(pdf)
         try:
-            cap = _cap("PARSE_PPTX_RENDER_MAX", 10)
+            cap = int(pc.by_env("PARSE_PPTX_RENDER_MAX", 10))
             for i, pg in enumerate(doc, 1):
                 if len(out) >= cap:
                     break
@@ -247,7 +240,7 @@ def pptx_slide_vlm(doc_path):
     if soffice_bin() is None:  # 독립 검토(10-13) — 경고는 soffice_bin() 한 곳에서(1회), 여기서 또 찍지 않음(중복 제거)
         return []
     idxs = sorted(target_slides(doc_path))  # AD20 후속 — figure_extract.py 중복 방지와 같은 집합(한 곳에서 계산)
-    timeout = _cap("PARSE_PPTX_CONVERT_SEC", 60)
+    timeout = int(pc.by_env("PARSE_PPTX_CONVERT_SEC", 60))
     src_sha = sha(p.read_bytes())
     tmp_root = raw_root() / "tmp" / "pptx_render"
     tmp_root.mkdir(parents=True, exist_ok=True)

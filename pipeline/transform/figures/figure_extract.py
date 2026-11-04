@@ -4,7 +4,6 @@ VLM은 pipeline.shared.vlmcall.ask(내부망 가드·추론 끄기는 common.mod
 산출: output/parse/_images/index.jsonl(설계 git 이력 docs/plans/image-parsing-2026-10-01.md(c4874dd0^) §3 계약 + W11 필드) + <doc>/<image_id>.png."""
 
 import email
-import hashlib
 import html
 import io
 import json
@@ -26,9 +25,9 @@ from pipeline.shared import vlmcall as V  # VLM 호출 한 길(ask)·렌더 해�
 from pipeline.shared.ext_groups import IMG_EXTS
 from pipeline.shared.parse_run import prompt_id, raw_vlm_path
 from pipeline.shared.post_config import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
+from pipeline.shared.vlmcall import sha
 from pipeline.transform.figures import chart_values as CV  # F14(a)·(c) 벡터 차트 결정적 값·추세
 from pipeline.transform.figures import diagram_edges as diag_edges  # F13, PDF 벡터·텍스트 글자 화살표 결정적 edges
-from pipeline.transform.figures.mermaid import to_mermaid
 from pipeline.transform.figures.nested_figures import find_children  # F7, page_render 안의 자식 그림 찾기·자르기
 from pipeline.transform.figures.overlay_groups import (  # F12 — 겹친 개체(그림+글상자/도형/화살표) 한 묶음 찾기
     cluster_overlaps,
@@ -43,8 +42,30 @@ from pipeline.transform.represent import figure_context as C
 NOW = time.strftime("%Y-%m-%dT%H:%M:%S")
 
 
-def sha(b):
-    return hashlib.sha256(b).hexdigest()
+def _qlabel(s):
+    return '"' + str(s).replace('"', "'").replace("\n", " ") + '"'
+
+
+def to_mermaid(edges):
+    """edges[{from,to,label}] → "flowchart LR" 글자. edges 없거나 from·to 없는 것뿐이면 빈 문자열."""
+    if not edges:
+        return ""
+    ids, lines = {}, []
+
+    def nid(name):
+        if name not in ids:
+            ids[name] = f"n{len(ids)}"
+        return ids[name]
+
+    for e in edges:
+        frm, to = e.get("from"), e.get("to")
+        if not frm or not to:
+            continue
+        a, b = nid(frm), nid(to)
+        label = e.get("label")
+        arrow = f"-->|{_qlabel(label)}|" if label else "-->"
+        lines.append(f"    {a}[{_qlabel(frm)}] {arrow} {b}[{_qlabel(to)}]")
+    return "flowchart LR\n" + "\n".join(lines) if lines else ""
 
 
 def _lines(s):

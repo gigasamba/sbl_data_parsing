@@ -26,12 +26,72 @@ from common.core.paths import APP_ROOT, CRITERIA_FILE, doc_dir  # 폴더 재편 
 from common.core.text import supsub_mark  # W6: norm()이 score_gold.canon()과 같은 첨자 정규화를 쓰게(AD37·SI17, 각자 맵 금지)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.extract.engines import registry
-from pipeline.shared.engine_family import FAMILY, nums  # 계열 합의 로직 재사용(중복 금지)
 from pipeline.shared.ext_groups import IMG_EXTS
-from pipeline.shared.parse_run import pdf_kind
-from pipeline.transform.represent.rep_accuracy import (
-    doc_accuracy,  # AG11 2단계 착수 조건(10-08), 10-14 함수별 분리로 pipeline/transform/represent/rep_accuracy.py로
-)
+from pipeline.shared.parse_run import is_env_error, pdf_kind
+
+# 인식 계열: 같은 인식 모델(또는 같은 텍스트 레이어 추출기)을 쓰는 엔진 묶음. 목록에 없으면 스택 이름이 계열.
+FAMILY = {  # 11-01 — 지운 엔진 easyocr·docling_ocr·marker·marker_llm 줄은 뺌
+    # 이미지 인식 모델
+    "paddleocr": "paddle",
+    "rapidocr": "paddle",
+    "rapidocr_ko": "paddle",
+    "paddleocr_vl": "paddle-vl",
+    "ppstructure": "paddle",
+    "mineru": "paddle",  # RapidOCR = Paddle 모델 ONNX
+    "tesseract": "tesseract",
+    "unstructured_ocr": "tesseract",
+    "kreuzberg_ocr": "tesseract",
+    "tika": "tesseract",
+    "qwen_vlm": "qwen",
+    "docling_vlm": "qwen",
+    # 텍스트 레이어 추출기
+    "pdfplumber": "pdfminer",
+    "markitdown": "pdfminer",
+    "unstructured": "pdfminer",
+    "camelot": "pdfminer",
+    "dual_local": "pdfminer",
+    "pymupdf": "mupdf",
+    "pymupdf4llm": "mupdf",
+}
+
+_NUM = re.compile(r"(?<![\w.])-?\d[\d,]*(?:\.\d+)?")
+
+
+def nums(res):
+    """출력의 숫자 토큰(쉼표 제거, 1자리 정수·연도처럼 흔한 값도 포함 — 참고 지표라 단순하게)."""
+    text = res.get("text", "") + " " + " ".join(t.get("text", "") for t in res.get("tables") or [])
+    return {x.replace(",", "") for x in _NUM.findall(text)}
+
+
+# 표/이미지 인식 보너스 가중치 — cross_recall에 더해 통합 점수 산출
+# 표 1개당 0.01점, 이미지 1개당 0.02점 (이미지가 더 희귀·가치 있으므로)
+# 최대 0.2점까지 (20개 표 또는 10개 이미지) — cross_recall 범위(0~1)를 크게 벗어나지 않게
+TABLE_BONUS = 0.01
+FIGURE_BONUS = 0.02
+BONUS_CAP = 0.2
+
+
+def doc_accuracy(m, ref=None):
+    """엔진 결과 1건의 정확도(정의 한 곳 — 요약·선정·순위·도구 공용).
+    **교차 재현율 + 구조 인식 보너스**: 텍스트 토큰 교차 재현율(base)에 표·이미지 인식 개수만큼 보너스 가산.
+    — 표/이미지를 더 많이 인식한 엔진이 대표로 선택될 확률이 높아짐.
+    base = cross_recall → consensus_recall → value_recall 순.
+    보너스 = min(table_count * TABLE_BONUS + figure_count * FIGURE_BONUS, BONUS_CAP).
+    교차 재현율이 없으면(성공 계열 1개) 보너스 없이 base만."""
+    if not m.get("ok"):
+        return None
+    order = ("cross_recall", "consensus_recall", "value_recall")
+    base = next((m[k] for k in order if m.get(k) is not None), None)
+    if base is None:
+        return None
+    # 구조 인식 보너스 — cross_recall이 있을 때만 가산 (정답 기반 value_recall에는 가산 안 함)
+    if m.get("cross_recall") is not None:
+        n_tables = m.get("tables") or 0
+        n_figures = m.get("figures") or 0
+        bonus = min(n_tables * TABLE_BONUS + n_figures * FIGURE_BONUS, BONUS_CAP)
+        return round(base + bonus, 4)
+    return base
+
 
 try:
     from rapidfuzz.distance import Levenshtein as _RFLev
@@ -494,17 +554,11 @@ def flags(qa_docs):
     return hits
 
 
-def _unavailable(err):
-    from pipeline.shared.parse_run import is_env_error  # 환경 실패 단서 한 곳(SI45)
-
-    return is_env_error(err)
-
-
 def run(parse_dir, src_dir, truth_path, akey_dir, prev_docs=None):
     runs, unavailable = {}, {}
     for line in (parse_dir / "runs.jsonl").read_text(encoding="utf-8").splitlines():
         r = json.loads(line)
-        if _unavailable(r.get("error")):  # 미설치·미설정·외부 바이너리 없음 = 이 환경에서 미실행(실패와 구분)
+        if is_env_error(r.get("error")):  # 미설치·미설정·외부 바이너리 없음 = 이 환경에서 미실행(실패와 구분)
             unavailable[r["engine"]] = r["error"][:120]
             continue
         runs[(r["doc"], r["engine"])] = r
@@ -640,7 +694,6 @@ FULL = json.loads(CRITERIA_FILE.read_text(encoding="utf-8"))["run"][
     "cross_acc_full"
 ]  # 문서 "성공" 판정(0.95 — 사용자 2026-09-30, 0.999 → 0.95) · 정본 criteria.json run(RB3)
 LOW_N = 2  # 파싱 성공 엔진이 이 수 이하인 문서 = 모수 적음(교차 대조·정확도 판단이 약함) — 보고서 강조
-# doc_accuracy·GOLD는 pipeline/transform/represent/rep_accuracy.py에 있음(AG11 2단계 착수 조건 10-08 → 10-14 함수별 분리) — 위 import로 재사용(로직 불변)
 
 
 def parse_summary(qa, src_dir=None):

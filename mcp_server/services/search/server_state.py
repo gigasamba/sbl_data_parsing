@@ -139,7 +139,7 @@ def _warmup_bg():
         _STATE["warmup_ok"], _STATE["warmup_done"] = ok, True
 
 
-def _health():
+def health_body():
     """가벼운 상태만(권고 — bundle 내부 경로는 안 보여줌). MC1 — 예열 스레드가 아직 안 끝났으면
     warming=True(ready=False, 라우트가 503) · 끝났는데 실패했으면 ready=True + warning(서버는 계속 뜸).
     코디네이터 10-14 — store="pgvector"일 때 db: "standin"(sqlite, common/pg_standin.py) | "pg"(진짜 PG) —

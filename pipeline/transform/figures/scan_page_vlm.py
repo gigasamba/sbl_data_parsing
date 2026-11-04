@@ -45,16 +45,6 @@ PARSE_VECTORS_MAX_DEFAULT = "20"
 PARSE_ROTATED_MAX_DEFAULT = "20"  # prepare.py가 돌린(각도≠0) 쪽 — 회전 전 OCR 품질이 낮았을 수 있어 쪽 VLM 후보
 
 
-def _cap(name, default):
-    return int(
-        pc.by_env(name, default)
-    )  # S7c — 설정 객체(옛 int(get(name, default)), ValueError면 int(default) — 객체는 ''·형식 틀림 = 칸 기본값)
-
-
-def _hidden_overlap_cap():
-    return _cap("PARSE_HIDDEN_OVERLAP_MAX", PARSE_HIDDEN_OVERLAP_MAX_DEFAULT)
-
-
 def is_scan(p):
     """스캔·이미지 문서 판정(원본: eval_hard_parse.one_doc) — png·jpg류 또는 글자층 20자 미만 쪽만 있는 PDF."""
     p = Path(p)
@@ -205,10 +195,10 @@ def scan_pages_detail(path):
                (기본 3) 이상 — 도형·SmartArt류가 많아 글자층만으로는 구조를 못 담는 페이지. 상한
                PARSE_VECTORS_MAX(env, 기본 20, 0=꺼짐). (규칙 신호만 — VLM에 보일지 말지의 '가벼운 판단'은 AG11 몫)
     문서 전체가 스캔(is_scan)이면 page_text가 이 함수를 안 부른다(전체 쪽 경로 그대로)."""
-    cap = _hidden_overlap_cap()
+    cap = int(pc.by_env("PARSE_HIDDEN_OVERLAP_MAX", PARSE_HIDDEN_OVERLAP_MAX_DEFAULT))
     vec_cap, rot_cap = (
-        _cap("PARSE_VECTORS_MAX", PARSE_VECTORS_MAX_DEFAULT),
-        _cap("PARSE_ROTATED_MAX", PARSE_ROTATED_MAX_DEFAULT),
+        int(pc.by_env("PARSE_VECTORS_MAX", PARSE_VECTORS_MAX_DEFAULT)),
+        int(pc.by_env("PARSE_ROTATED_MAX", PARSE_ROTATED_MAX_DEFAULT)),
     )
     rot = rotation_info(path) if rot_cap else {}  # rot_cap==0이면 rotation.csv를 안 읽음(이전과 바이트 동일)
     n_overlap = n_rot = n_vec = 0

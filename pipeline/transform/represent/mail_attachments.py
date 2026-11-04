@@ -8,7 +8,6 @@ zip 첨부는 ATTACH_MAX_DEPTH(기본 1)만큼만 풀고, 크기(ATTACH_MAX_MB �
 """
 
 import email
-import hashlib
 import io
 import json
 import re
@@ -20,7 +19,8 @@ from pathlib import Path
 from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared import parse_run as P0
-from pipeline.shared.post_config import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
+from pipeline.shared.post_config import raw_root
+from pipeline.shared.vlmcall import sha  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
 
 
 def attach_dir():
@@ -39,20 +39,8 @@ def attach_dir():
     return rp
 
 
-def _max_depth():
-    return pc.cfg().extract.attach.max_depth  # S7c — 설정 객체
-
-
-def _max_mb():
-    return pc.cfg().extract.attach.max_mb  # S7c — 설정 객체
-
-
 def _max_n():
     return pc.cfg().extract.attach.max_n  # S7c — 설정 객체
-
-
-def sha(b):
-    return hashlib.sha256(b).hexdigest()
 
 
 # ── 첨부 꺼내기(형식별) ───────────────────────────────────────────────────
@@ -96,7 +84,7 @@ def _expand_zip(entry, cap):
     try:
         zf = zipfile.ZipFile(io.BytesIO(entry["bytes"]))
         infos = [zi for zi in zf.infolist() if not zi.is_dir()][: _max_n()]  # 읽기 전에 개수·풀린 크기 확인(독립 검토 10-04 — zip 폭탄)
-        cap_b, total = _max_mb() * 1024 * 1024, 0
+        cap_b, total = pc.cfg().extract.attach.max_mb * 1024 * 1024, 0
         inner = []
         for zi in infos:
             total += zi.file_size
@@ -117,7 +105,7 @@ def extract(doc_path):
         atts = _eml_attachments(doc_path) if ext == ".eml" else _msg_attachments(doc_path) if ext == ".msg" else []
     except Exception:
         return []
-    cap = _max_depth()
+    cap = pc.cfg().extract.attach.max_depth
     out = []
     for e in atts[: _max_n()]:
         out += _expand_zip(e, cap)
@@ -234,7 +222,7 @@ def mail_blocks(doc_path, base_text):
     if th:
         blocks.append(th)
     for entry in extract(doc_path):
-        if len(entry["bytes"]) > _max_mb() * 1024 * 1024:
+        if len(entry["bytes"]) > pc.cfg().extract.attach.max_mb * 1024 * 1024:
             continue  # 크기 상한 초과 — 건너뜀(통계 n에도 안 넣음, 시도 자체를 안 함)
         stats["n"] += 1
         text, cached, eng = parse_attachment(entry)
