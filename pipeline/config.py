@@ -122,7 +122,9 @@ class PipelineHostNightly(Section):
 
 
 class PipelineLoadPublish(Section):
-    bucket: str | None = F(None, "PM_BUCKET", "publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소)")
+    bucket: str | None = F(
+        None, "PM_BUCKET", "publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소)", repo="file://"
+    )
     bucket_skip_overlap_check: bool | None = F(
         False, "PM_BUCKET_SKIP_OVERLAP_CHECK", "PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 — 1이면 생략", on=("1",)
     )
@@ -220,7 +222,9 @@ class PipelineExtract(Section):
     hidden_overlap_max: int | None = F(
         20, "PARSE_HIDDEN_OVERLAP_MAX", "'숨은 글자-그림 겹침' 신호로 쪽 VLM 후보에 올릴 쪽 수 상한(쪽, 0=끔)"
     )
-    input_source: str | None = F(None, "PARSE_SOURCE", "파싱 원본 위치: 폴더·rdb:csv:경로(11-01 — s3://·rdb:*·rdb:<이름>·rdb:<표> 지움)")
+    input_source: str | None = F(
+        None, "PARSE_SOURCE", "파싱 원본 위치: 폴더·rdb:csv:경로(11-01 — s3://·rdb:*·rdb:<이름>·rdb:<표> 지움)", repo=True
+    )
     isolate_overhead: float | None = F(10.0, "PARSE_ISOLATE_OVERHEAD", "별도 프로세스 실행 시 쪽당 제한 시간에 더해 줄 시작 여유(초)")
     kreuzberg_prose_filter: bool | None = F(True, "KREUZBERG_PROSE_FILTER", "kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔)")
     low_priority: bool | None = F(

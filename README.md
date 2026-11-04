@@ -172,13 +172,14 @@ tuning:
 - **LLM·VLM도 같다:** `required.models`의 `llm_*`·`vlm_*`(주소·모델·키)를 채우고 `dev.models.llm.allow_external`·`dev.models.vlm.allow_external`을 `true`로 두면 PC에서 분류(SFDC·LAS)와 그림·스캔 쪽 VLM이 외부 모델을 부른다(`run_env: local`일 때만). 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
 - **VLM 설정은 한 벌:** 스캔·이미지 문서의 VLM 엔진(`qwen_vlm`)·쪽 VLM·그림 VLM이 같은 호출과 같은 칸(`common.models.vlm.*` — 동시 수·제한 시간·재시도·`extra_body`, 해상도 `extract.ocr.dpi` 150, 쪽 상한 `transform.vlm.page_max`)을 쓴다. 생각(추론) 모델이면 `common.models.vlm.extra_body`에 생각 끄기를 넣는다(OpenRouter는 `{"reasoning": {"enabled": false}}`) — 칸 설명은 [env-guide §2](docs/operations/env-guide.md), 규칙은 PRD [pl-43](docs/prd/transform.md#pl-43).
 - **내부망 서버(dev·prd)에서 시험·운영할 때는 세 `allow_external`을 모두 `false`(0)로 둔다.** 서버는 `run_env`가 dev·prd라 켜 두어도 외부 호출을 거부하지만, 서버 settings.yaml에는 외부 허용을 남기지 않는다.
-- **게시(silver)·EDW — PC는 로컬 대역만 적는다**(S3·EDW 접속 칸 `required.object_storage`·`required.edw.host` 등은 비움):
+- **게시(silver)·EDW·원본 — PC는 가짜 대상만 적는다.** 경로는 저장소 루트 기준 상대 경로로 써도 된다(절대 경로도 됨):
   ```yaml
   required:
-    publish: {bucket: "file:///<저장소 절대 경로>/output/object_storage/silver", prefix: parse}   # 가짜 Object Storage 폴더(절대 경로)
-    edw: {sqlite: <저장소 절대 경로>/output/edw.sqlite}   # 가짜 EDW(ParsingMeta 포함) — valid_env/edw/edw.sqlite 사본(파싱·게시가 씀)
+    publish: {bucket: "file://output/object_storage/silver", prefix: parse}   # 가짜 Object Storage 폴더
+    edw: {sqlite: output/edw.sqlite}   # 가짜 EDW(ParsingMeta 포함) — valid_env/edw/edw.sqlite 사본(파싱·게시가 씀)
   ```
-  `file://` 뒤 폴더에 `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓴다. 가짜 EDW는 `run_env: local`에서만 열린다.
+  `file://` 뒤 폴더에 `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓴다. 원본 폴더(`doc_dir`)·파싱 원본(`input_source` — 폴더 또는 `rdb:csv:<경로>`)·PG 대체 폴더(`standin_dir`)도 상대 경로를 받는다(예 `valid_env/object_storage`).
+  `run_env: local`에서 실제 대상(`required.edw.host`, `required.object_storage.endpoint`, 원천 버킷, `file://`가 아닌 게시 버킷)이 적혀 있으면 앱이 시작하지 않는다. 서버(dev·prd)는 실제 접속 칸을 쓴다.
 - PG 접속 칸(`required.pg`의 여섯 칸)은 **모두 채우거나 모두 비운다.** 일부만 채우면 채울 자리를 알려 주고 멈춘다. PC에서 host·password가 둘 다 비면 SQLite 대역(`output/pg_standin/`)으로 돌고 첫 줄에 `WARNING: PG 접속 정보 없음`을 찍는다(서버는 멈춤).
 
 ### 4-3. 점검

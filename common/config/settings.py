@@ -114,11 +114,24 @@ LIB_ENV_NAMES = (
 )
 
 
+def repo_path(v):
+    """경로 칸(F repo=True)의 상대 경로를 저장소 루트(paths.PROJ_ROOT) 기준 절대 경로로 — 한 곳(op-14). 앞머리 `file://`·`rdb:csv:`는
+    두고 뒤 경로만 푼다(`file://valid_env/x` → `file://<루트>/valid_env/x`). 절대 경로·다른 주소(s3:// 등)·sqlite `:memory:`·빈 값은 그대로 — 서버는 작업
+    폴더가 /app(= PROJ_ROOT)라 결과가 같다."""
+    pre = next((p for p in ("file://", "rdb:csv:") if v.startswith(p)), "")
+    rest = v[len(pre) :]
+    if not rest or "://" in rest or rest.startswith(("/", "\\", "rdb:", ":")) or Path(rest).is_absolute():
+        return v
+    from common.core.paths import PROJ_ROOT  # 늦게 — paths가 import 때 settings를 부름
+
+    return pre + (PROJ_ROOT / rest).as_posix()
+
+
 class SettingsError(RuntimeError):
     """설정 파일을 못 찾거나 형식이 틀림 — 메시지에 비밀 값은 넣지 않는다."""
 
 
-def F(default, env, desc, *, blank="", on=(), off=(), fold="", unset=(), **kw):
+def F(default, env, desc, *, blank="", on=(), off=(), fold="", unset=(), repo=False, **kw):
     """설정 칸 하나 — env: 옛 환경변수 이름(옮기기·전환 다리·keyscan 대조에 씀), desc: sample·문서에 나가는 설명,
     blank="keep": 기본값이 있어도 빈 값을 그대로 둠 — 옛 코드가 `os.environ.get(X, 기본값)`(or 없음)으로 읽어 `X=`이 ''였던
     글자 칸(S7a2 — 코디네이터 10-27 (b), 동작 불변)·목록 칸(빈 목록 — VS7a2 R-a).
@@ -127,8 +140,11 @@ def F(default, env, desc, *, blank="", on=(), off=(), fold="", unset=(), **kw):
     fold="strip" — strip()만(옛 `.strip() in (…)` — GOLD_DRAFT_MERMAID_CHECK, S7c2), fold="" — 글자 그대로(VS7c2 R-9 — 모드 이름으로).
     빈 글자 ''도 이 꼴로 판정한다(옛 코드가 `X=`을 읽던 대로). 판정 꼴이 없는 켜기 칸은 pydantic 기본 해석(아직 객체로 읽는 코드 없음).
     unset: 이 글자면 "설정 안 함"(모델 기본값 — 읽는 코드가 계산) — ("auto",)는 옛 `v not in (None, "", "auto")`(resources._f),
-    "nondigit"는 옛 `v.strip().isdigit()`가 아니면 무시(OCR_THREADS)."""
+    "nondigit"는 옛 `v.strip().isdigit()`가 아니면 무시(OCR_THREADS). repo=True: 저장소 루트 기준 상대 경로를 받는 칸(repo_path — op-14),
+    repo="file://": 그 앞머리로 시작할 때만 경로(게시 버킷 — 그 밖은 버킷 이름)."""
     extra = {"env": env}
+    if repo:
+        extra["repo"] = repo
     if blank:
         extra["blank"] = blank
     if fold not in ("", "lower", "strip"):
@@ -393,6 +409,15 @@ class Section(BaseModel):
                 continue  # 빈 글자 = 설정 안 함(R-4) — 기본값 None·blank="keep" 글자 칸만 ""로 남음
             out[k] = v
         return out
+
+    @model_validator(mode="after")
+    def _repo_paths(self):
+        for name, f in type(self).model_fields.items():
+            v = getattr(self, name)
+            want = _extra(f, "repo")
+            if want and isinstance(v, str) and (want is True or v.startswith(want)) and repo_path(v) != v:
+                object.__setattr__(self, name, repo_path(v))  # 값만 바꿈(설정한 칸 표시는 그대로)
+        return self
 
 
 class AppSettings(BaseSettings):
@@ -814,8 +839,21 @@ def require_run_env(app="", environ=None, sections=None):
             file=sys.stderr,
         )
         raise SystemExit(2)
+    names = image_sections(environ) if sections is None else ("common", *sections)
+    if value == "local":
+        try:
+            real = pc_real_targets(load(section_class(names)[0], environ=environ))
+        except SettingsError:
+            real = []  # 못 읽으면 설정 객체가 경고 뒤 기본값(실제 대상 없음) — 지금처럼
+        if real:
+            print(
+                f"{tag}PC(RUN_ENV=local)는 가짜 대상만 — 실제 접속 칸이 적혀 있어 시작하지 않음: {', '.join(map(L.to_yaml, real))}. "
+                f"PC는 저장소 루트 기준 상대 경로로 적는다 — {L.to_yaml('common.connections.rdb.sqlite')}: valid_env/edw/edw.sqlite 사본, "
+                f"{L.to_yaml('pipeline.load.publish.bucket')}: file://output/object_storage/silver",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
     if value in SERVER_ENVS:
-        names = image_sections(environ) if sections is None else ("common", *sections)
         try:
             st = load(section_class(names)[0], environ=environ, require_file=True)
             invalid = []
@@ -834,6 +872,19 @@ def require_run_env(app="", environ=None, sections=None):
             print(f"{tag}서버(RUN_ENV={value}) — {L.to_yaml('common.dev.llm_fake')}가 켜져 있어 시작하지 않음(local 전용)", file=sys.stderr)
             raise SystemExit(2)
     return value
+
+
+def pc_real_targets(st):
+    """PC(local)가 거부하는 실제 외부 대상 칸(점 경로 목록) — 가짜/실제 판정은 이 한 곳(op-14). 가짜 = EDW sqlite 파일
+    (connections.rdb.sqlite)·file:// 게시 폴더. 실제 = EDW 호스트·Object Storage 엔드포인트·원천 버킷·file://가 아닌 게시 버킷."""
+    c = st.common.connections
+    found = {"common.connections.rdb.host": c.rdb.host, "common.connections.object_storage.endpoint": c.object_storage.endpoint}
+    pipe = getattr(st, "pipeline", None)
+    if pipe is not None:
+        bucket = pipe.load.publish.bucket or ""
+        found["pipeline.connections.rdb.bucket"] = pipe.connections.rdb.bucket
+        found["pipeline.load.publish.bucket"] = "" if bucket.startswith("file://") else bucket
+    return [k for k, v in found.items() if v]
 
 
 def section_class(names):
@@ -1285,6 +1336,7 @@ class CommonConnectionsRdb(Section):
         None,
         "RDB_SQLITE",
         "시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) — 있으면 실제 EDW 대신 씀 · PC(RUN_ENV=local) 전용, 서버에서는 시작 거부",
+        repo=True,
     )
     read: CommonConnectionsRdbRead = Field(default_factory=CommonConnectionsRdbRead)
     write: CommonConnectionsRdbWrite = Field(default_factory=CommonConnectionsRdbWrite)
@@ -1305,7 +1357,7 @@ class CommonConnectionsPg(Section):
     pool_max: int | None = F(8, "PG_POOL_MAX", "검색 MCP PostgreSQL 연결 풀 최대 연결 수")
     port: Port | None = F(None, "PG_PORT", "PostgreSQL 포트(필수 — op-09)")
     db_schema: str | None = F(None, "PG_SCHEMA", "pgvector 기본 스키마 이름(소문자·숫자·_ — 필수, op-09)")
-    standin_dir: str | None = F(None, "PG_STANDIN_DIR", "PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더")
+    standin_dir: str | None = F(None, "PG_STANDIN_DIR", "PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더", repo=True)
     standin_schema: str | None = F("ai", "PG_STANDIN_SCHEMA", "로컬 대체 DB(sqlite)의 스키마 이름 — PG_SCHEMA가 비었을 때(PC 전용, op-09)")
     user: str | None = F(None, "PG_USER", "PostgreSQL 접속 계정 이름(필수 — op-09)")
 
@@ -1452,11 +1504,13 @@ class CommonPaths(Section):
         image_default("DOC_DIR"),
         "DOC_DIR",
         "원본 문서 폴더 — 원본 위치 주소·파싱 입력의 기준(pipeline 이미지 안 기본 /data/docs — 옛 Dockerfile ENV, B-2)",
+        repo=True,
     )
     doc_dir_prepared: str | None = F(
         image_default("DOC_DIR_PREPARED"),
         "DOC_DIR_PREPARED",
         "준비(dedup·회전) 끝난 문서 폴더 — 파싱의 --src 기본값(pipeline 이미지 안 기본 /app/output/prepared — 옛 Dockerfile ENV, B-2)",
+        repo=True,
     )
     draft_terms_out: str | None = F(None, "DRAFT_TERMS_OUT", "용어 자동 초안 CSV 경로")
     edw_chain: str | None = F(

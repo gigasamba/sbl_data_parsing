@@ -30,21 +30,21 @@ required:
   # ─── EDW(회사 DB) — ParsingMeta 표·접속 [서버: 접속 칸 · PC: sqlite 하나] ───
   edw:
     parsing_meta_table:                   # parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_) · 서버: 비우면 AI.ParsingMeta(다른 표면 <스키마.표>) · PC(local): 비움(가짜 EDW sqlite는 표 이름 ParsingMeta 고정) · 값: 글자 · 예: AI.ParsingMeta
-    host:                                 # EDW 서버 주소(호스트) · 서버: EDW(SQL Server) 주소 입력 · PC(local): 비움(아래 sqlite를 씀) · 값: 호스트 이름·IP · 예: edw.corp.local
+    host:                                 # EDW 서버 주소(호스트) · 서버: EDW(SQL Server) 주소 입력 · PC(local): 비움(적혀 있으면 시작 거부 — 아래 sqlite를 씀) · 값: 호스트 이름·IP · 예: edw.corp.local
     port:                                 # EDW 포트 · 서버: 비우면 1433 · PC(local): 비움 · 값: 1~65535
     database:                             # EDW 데이터베이스 이름 · 서버: 입력 · PC(local): 비움 · 값: 글자
     read_user:                            # EDW 읽기 계정 이름 · 서버: 입력(원천 목록·ParsingMeta 조회·query_edw) · PC(local): 비움 · 값: 글자
     read_password:                        # EDW 읽기 계정 비밀번호 · 서버: 입력 · PC(local): 비움 · 값: 비밀 글자 [비밀]
     write_user:                           # EDW 쓰기 계정 이름 · 서버: 입력(ParsingMeta 게시 INSERT만) · PC(local): 비움 · 값: 글자
     write_password:                       # EDW 쓰기 계정 비밀번호 · 서버: 입력 · PC(local): 비움 · 값: 비밀 글자 [비밀]
-    sqlite:                               # 시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) · PC(local): 가짜 EDW sqlite 파일 경로 입력(파싱·게시가 쓰므로 valid_env/edw/edw.sqlite 사본) · 서버: 비움(적혀 있으면 EDW를 쓸 때 거부) · 값: 경로 · 예: /home/me/sbl/output/edw.sqlite(valid_env/edw/edw.sqlite 사본)
+    sqlite:                               # 시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) · PC(local): 가짜 EDW sqlite 파일 경로 입력(저장소 루트 기준 상대 경로 가능 — 파싱·게시가 쓰므로 valid_env/edw/edw.sqlite 사본) · 서버: 비움(적혀 있으면 EDW를 쓸 때 거부) · 값: 경로 · 예: output/edw.sqlite(PC — 저장소 루트 기준, valid_env/edw/edw.sqlite 사본)
   # ─── 게시(silver 적재) 위치 [PC·서버] ───
   publish:
-    bucket:                               # publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소) · 서버: 게시용 Object Storage 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): file://<가짜 Object Storage 폴더 절대 경로>(그 폴더에 씀 — S3 접속 칸 불필요) · 값: 버킷 이름·file://<폴더 절대 경로> · 예: rag-silver(서버) · file:///home/me/sbl/output/object_storage/silver(PC)
+    bucket:                               # publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소) · 서버: 게시용 Object Storage 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): file://<가짜 Object Storage 폴더>(저장소 루트 기준 상대 경로 가능 — 버킷 이름이면 시작 거부) · 값: 버킷 이름·file://<폴더>(절대 경로 또는 저장소 루트 기준 상대 경로) · 예: rag-silver(서버) · file://output/object_storage/silver(PC — 저장소 루트 기준)
     prefix:                               # 버킷 안 업로드 경로 접두 · PC·서버: 버킷(폴더) 안 silver 결과 경로 접두(그 아래 <출처>/<원본 경로>/<파일명>_<날짜>.md) · 비우면 버킷 맨 위 · 값: 글자(버킷 안 경로 접두) · 예: parse
   # ─── Object Storage 접속(게시 업로드) [서버만] ───
   object_storage:
-    endpoint:                             # Object Storage(S3 호환) 엔드포인트 URL · 서버: S3 호환 엔드포인트 URL 입력 · PC(local): 비움(게시는 file:// 폴더) · 값: URL · 예: https://os.corp.local:9000
+    endpoint:                             # Object Storage(S3 호환) 엔드포인트 URL · 서버: S3 호환 엔드포인트 URL 입력 · PC(local): 비움(적혀 있으면 시작 거부 — 게시는 file:// 폴더) · 값: URL · 예: https://os.corp.local:9000
     region:                               # Object Storage 리전 이름 · 서버: 리전 이름 · 비우면 us-east-1 · PC(local): 비움 · 값: 글자
     access_key:                           # Object Storage(S3) 액세스 키 · 서버: 입력 · PC(local): 비움 · 값: 비밀 글자 [비밀]
     secret_key:                           # Object Storage(S3) 시크릿 키 · 서버: 입력 · PC(local): 비움 · 값: 비밀 글자 [비밀]
@@ -187,7 +187,7 @@ ops:
     retention_days: 90                    # 월 파티션 보존 일수(월 끝이 만료된 파티션만 DROP) · 비우면 90 · 값: 1 이상 정수
   # ─── 경로 ───
   paths:
-    doc_dir:                              # 원본 문서 폴더 · 비우면 PC는 없음(파싱 명령에 --src), pipeline 이미지 안은 /data/docs · 값: 경로
+    doc_dir:                              # 원본 문서 폴더 · 비우면 PC는 없음(파싱 명령에 --src), pipeline 이미지 안은 /data/docs · PC 상대 경로는 저장소 루트 기준(예 valid_env/object_storage) · 값: 경로
     doc_dir_prepared:                     # 준비(dedup·회전) 끝난 문서 폴더 · 비우면 output/prepared(pipeline 이미지 안은 /app/output/prepared) · 값: 경로
     draft_terms_out:                      # 용어 자동 초안 CSV 경로 · 비우면 <루트>/output/glossary_draft/domain_terms_draft_auto.csv · 값: 경로
     edw_chain:                            # EDW 조인 사슬 파일 경로 · 비우면 resources/config/edw_chain.yaml · 값: 경로

@@ -154,7 +154,7 @@ def selftest():
             _new(
                 "common:\n  run_env: local\n  connections:\n"
                 "    object_storage:\n      verify_tls: 1\n      region: yes\n    pg:\n      password: 1234\n      db: True\n      host: no\n"
-                "    rdb:\n      sqlite: 2026-10-27\n"
+                "    rdb:\n      database: 2026-10-27\n"
                 "  models:\n    embed:\n      allow_external: true\n    vlm:\n      allow_external: '1'\n"
                 "    guard:\n      internal_host_suffixes: [corp, 10]\n"
                 "      internal_ip_ranges: 10\n"
@@ -171,7 +171,7 @@ def selftest():
         )
         check(
             "YAML 스칼라(R-3): 비밀 칸 숫자 1234 → 글자 '1234' · 날짜 2026-10-27 → 글자 그대로",
-            c.pg.password.get_secret_value() == "1234" and c.rdb.sqlite == "2026-10-27",
+            c.pg.password.get_secret_value() == "1234" and c.rdb.database == "2026-10-27",
         )
         check(
             "목록 칸에 스칼라 하나(internal_ip_ranges: 10) → ['10'](옛 env 한 값과 같게)",
