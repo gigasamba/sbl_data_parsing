@@ -31,6 +31,7 @@ from common.core import exitclean
 from common.core.paths import APP_ROOT  # I4 — 컨테이너 경로(/app/…) 대신 런타임 루트 기준(이미지 안 값 같음)
 from pipeline import config as pc
 from pipeline.extract.engine_stack import allowed_exts
+from pipeline.parse_steps import run_group
 
 SERVICE_DIR = APP_ROOT / "output" / "_mcp_parse"  # 이미지 안 /app/output/_mcp_parse(op-13 — 임시 자리는 _ 접두)
 _JOB_ENVS: dict = {}  # (PARSE_POST, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
@@ -105,25 +106,6 @@ def _jail(path_str):
     if not p.is_file():
         raise ValueError(f"파일 없음: {path_str}")
     return p
-
-
-def _run_group(cmd, timeout, env):
-    """작업 단계 하나(python -m …) — 새 프로세스 묶음으로 띄우고 시간 초과면 묶음째 끝냄(run_all이 띄운 parse_one 손자가 남지 않게,
-    cli._run_until과 같은 규칙 — common.core.resources). 시간 초과는 subprocess.TimeoutExpired로 올림(옛 subprocess.run과 같음)."""
-    from common.core import resources as PR
-
-    p = exitclean.track(  # pl-27 — 서비스가 끝날 때 아직 돌면 묶음째 끝내고 회수
-        subprocess.Popen(
-            ["python", "-m", *cmd], cwd=APP_ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, **PR.group_kw()
-        ),
-        group=True,
-    )
-    try:
-        out, err = p.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        PR.kill_group(p)
-        raise
-    return subprocess.CompletedProcess(p.args, p.returncode, out, err)
 
 
 def _is_scan(path):
@@ -276,7 +258,16 @@ def _worker():
                 # 2026-10-22 병목 해소: post 기본 all→supsub — RapidOCR·figures·vlm_page·context·attachments를 끔
                 # 교차재현율(③)·table_inline(⑦)은 0.0초로 병목이 아니었으므로 그대로 유지 — 실측 47→~0.3초
                 # mc-18(11-03) — 작업 제한 시간 하나: 단계마다 남은 시간만(옛: 단계마다 전체 시간)
-                _run = lambda cmd: _run_group(cmd, max(1.0, left - (time.time() - t0)), job_env)  # noqa: B023 — 같은 반복 안에서만 부름
+                # 작업 단계 하나(python -m …) — 프로세스 묶음, 시간 초과면 묶음째 끝내고 subprocess.TimeoutExpired(run_all이 띄운 엔진 손자가 남지 않게)
+                _run = lambda cmd: run_group(  # 같은 반복 안에서만 부름(B023)
+                    ["python", "-m", *cmd],
+                    job_env,  # noqa: B023
+                    max(1.0, left - (time.time() - t0)),  # noqa: B023
+                    track=True,  # pl-27 — 서비스가 끝날 때 아직 돌면 묶음째 끝내고 회수
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
 
                 # ① prepare → run_all
                 for cmd in (

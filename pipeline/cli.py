@@ -47,32 +47,22 @@ def _stack():
     return _STACK["v"]
 
 
-def _traced(module, call):
-    """하위 프로세스 1개 = proc.run span(op-01) — 자식이 이어받는 parent span이 되고, 메모리·CPU 문 대기가 이 span에 쌓임.
-    call()은 종료 코드를 돌려준다."""
+def _run_step(args, env):
+    """단계 하나를 자식 프로세스 묶음(--procs 자식 포함)으로 실행하고 종료 코드를 돌려준다. args[0] = 모듈 점 표기(예: pipeline.extract.run_engines).
+    (마감 시각은 run_docs --deadline 하나 — 새 문서를 받지 않을 뿐 도는 단계는 끝까지 둔다)
+    하위 프로세스 1개 = proc.run span(op-01) — 자식이 이어받는 parent span이 되고, 메모리·CPU 문 대기가 이 span에 쌓임."""
+    from common.core import resources as RS
     from common.core.span import safe, span
+    from pipeline.parse_steps import run_group
 
-    with span("proc.run", "run", module=module) as sp:
-        rc = call()
+    cmd = [PY, "-m", *map(str, args)]
+    print("$ " + " ".join(cmd), flush=True)
+    with span("proc.run", "run", module=str(args[0])) as sp:
+        rc = run_group(cmd, env, launch=RS.gated_popen).returncode
         sp.add(rc=rc)
         if rc:
             sp.result("fail", None, safe(f"종료 코드 {rc}"))
         return rc
-
-
-def _run_step(args, env):
-    """단계 하나를 자식 프로세스 묶음(--procs 자식 포함)으로 실행하고 종료 코드를 돌려준다. args[0] = 모듈 점 표기(예: pipeline.extract.run_engines).
-    (마감 시각은 run_docs --deadline 하나 — 새 문서를 받지 않을 뿐 도는 단계는 끝까지 둔다)"""
-    cmd = [PY, "-m", str(args[0]), *map(str, args[1:])]
-    print("$ " + " ".join(cmd), flush=True)
-    from common.core import resources as RS  # 프로세스 묶음(OS 분기 한 곳)
-
-    def call():
-        # cwd=APP_ROOT(런타임 루트) — ROOT(코드 루트)로 하면 --src 상대경로가 거기 기준으로 풀려 못 찾음(FS v4 회귀)
-        p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **RS.group_kw())
-        return p.wait()
-
-    return _traced(str(args[0]), call)
 
 
 # ── 단계 2 ───────────────────────────────────────────────────
