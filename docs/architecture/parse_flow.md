@@ -162,7 +162,7 @@ flowchart TD
 
 ### 4-1. 채점과 대표 결과 (`pipeline.cli parse` 안)
 
-`pipeline.extract.run_engines`이 끝나면 `pipeline.cli.parse_module()`이 `pipeline.transform.represent.parse_scoring` → `pipeline.transform.represent.build_rep`를 자식 프로세스로 부르고, 대표 결과가 바뀌었을 때만 끝 표시 `_rep/_DONE.json`을 새로 쓴다.
+`pipeline.extract.run_engines`이 끝나면 단계 사슬 `pipeline.parse_steps.parse_chain()`(일괄 파싱 `pipeline.cli`와 작업 서비스 `pipeline.parse_service`가 함께 씀)이 `pipeline.transform.represent.parse_scoring` → `pipeline.transform.represent.build_rep`를 자식 프로세스로 부르고(runs.jsonl이 없으면 건너뜀), `pipeline.cli.parse_module()`은 대표 결과가 바뀌었을 때만 끝 표시 `_rep/_DONE.json`을 새로 쓴다.
 
 ```mermaid
 flowchart TD
@@ -175,7 +175,7 @@ flowchart TD
     R5["apply_post: vlm_page · figures(+context) · charts · supsub · attachments"]
     R6["table_inline.py 표 제자리 넣기 · decision_log.py 맥락 기록"]
     O["_rep/문서.json · index.json · sources.jsonl · engines.csv · conflicts.jsonl"]
-    M["cli.py: digest 비교 → _rep/_DONE.json"]
+    M["build_rep.py rep_digest·write_mark: digest 비교 → _rep/_DONE.json"]
     Q --> X --> R1 --> R2 --> R3 --> R4 --> R5 --> R6 --> O --> M
 ```
 
@@ -400,7 +400,7 @@ flowchart TD
 
 - `search`: 거르기에 맞는 문서 범위 안에서만 하이브리드 검색, 결과를 근거 칸으로 다듬음.
 - `list_doc_fulltext`·`get_doc_fulltext`: 대표 결과 위치는 PG가 아니라 EDW ParsingMeta에서 그때 읽고, 서명된 `sfid`로 Object Storage에서 받음.
-- `parse_document`: 파일 하나를 `data-pipeline-mcp` 컨테이너의 작업 서비스(`127.0.0.1:8766`)에 넘김 → 같은 `filter_and_rotate` → `run_engines` → `parse_scoring` → `build_rep`를 (`pipeline.parse_service`가) `output/_mcp_parse/`에서 돌림(구조화·적재 없음).
+- `parse_document`: 파일 하나를 `data-pipeline-mcp` 컨테이너의 작업 서비스(`127.0.0.1:8766`)에 넘김 → 같은 `filter_and_rotate` → `run_engines` → `parse_scoring` → `build_rep`(사슬 `pipeline.parse_steps`)를 (`pipeline.parse_service`가) `output/_mcp_parse/`에서 돌림(구조화·적재 없음).
 - `query_edw`·`edw_meta`: EDW 읽기 전용 질의·카탈로그(`services/edw_query.py`·`edw_meta.py`).
 - 호출마다 `applog.mcp_log` 한 행(`services/call_log.py`).
 

@@ -31,7 +31,7 @@ from common.core import exitclean
 from common.core.paths import APP_ROOT  # I4 — 컨테이너 경로(/app/…) 대신 런타임 루트 기준(이미지 안 값 같음)
 from pipeline import config as pc
 from pipeline.extract.engine_stack import allowed_exts
-from pipeline.parse_steps import run_group
+from pipeline.parse_steps import parse_chain, run_group
 
 SERVICE_DIR = APP_ROOT / "output" / "_mcp_parse"  # 이미지 안 /app/output/_mcp_parse(op-13 — 임시 자리는 _ 접두)
 _JOB_ENVS: dict = {}  # (PARSE_POST, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
@@ -255,45 +255,34 @@ def _worker():
                 post = pc.cfg().transform.represent.post  # S7c — 옛 get(X) or "supsub"(없음·빈 값 → supsub)
                 _job_stack()  # S8b — 작업마다 엔진 구성 파일 다시 검사
                 job_env = _job_env(post or "supsub")  # 하위 프로세스 — 덮기 파일(S7e2), 같은 값이면 한 번 만든 것 재사용(VS7e2 R-4)
+
                 # 2026-10-22 병목 해소: post 기본 all→supsub — RapidOCR·figures·vlm_page·context·attachments를 끔
                 # 교차재현율(③)·table_inline(⑦)은 0.0초로 병목이 아니었으므로 그대로 유지 — 실측 47→~0.3초
                 # mc-18(11-03) — 작업 제한 시간 하나: 단계마다 남은 시간만(옛: 단계마다 전체 시간)
-                # 작업 단계 하나(python -m …) — 프로세스 묶음, 시간 초과면 묶음째 끝내고 subprocess.TimeoutExpired(run_all이 띄운 엔진 손자가 남지 않게)
-                _run = lambda cmd: run_group(  # 같은 반복 안에서만 부름(B023)
-                    ["python", "-m", *cmd],
-                    job_env,  # noqa: B023
-                    max(1.0, left - (time.time() - t0)),  # noqa: B023
-                    track=True,  # pl-27 — 서비스가 끝날 때 아직 돌면 묶음째 끝내고 회수
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
-
-                # ① prepare → run_all
-                for cmd in (
-                    ["pipeline.extract.filter_and_rotate", "--src", str(ws / "in"), "--out", str(ws / "prep"), "--only", str(only)],
-                    [
-                        "pipeline.extract.run_engines",
-                        "--src",
-                        str(ws / "prep"),
-                        "--out",
-                        str(ws / "parse"),
-                        "--limit",
-                        "1",
-                        "--procs",
-                        PROCS,
-                    ],
-                ):
-                    p = _run(cmd)
-                    log.write(f"== {' '.join(cmd)}\n{p.stdout}\n{p.stderr}\n")
-                    log.flush()
+                def _step(args):
+                    """작업 단계 하나(python -m …) — 프로세스 묶음, 시간 초과면 묶음째 끝내고 subprocess.TimeoutExpired(run_all이 띄운 엔진 손자가
+                    남지 않게). 출력은 run.log에, 실패면 RuntimeError."""
+                    cmd = [str(x) for x in args]
+                    p = run_group(
+                        ["python", "-m", *cmd],
+                        job_env,  # noqa: B023 — 같은 반복 안에서만 부름
+                        max(1.0, left - (time.time() - t0)),  # noqa: B023
+                        track=True,  # pl-27 — 서비스가 끝날 때 아직 돌면 묶음째 끝내고 회수
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                    log.write(f"== {' '.join(cmd)}\n{p.stdout}\n{p.stderr}\n")  # noqa: B023
+                    log.flush()  # noqa: B023
                     if p.returncode != 0:
                         raise RuntimeError(f"단계 실패({cmd[0]}): {(p.stdout + p.stderr).strip().splitlines()[-1:] or ['?']}")
+                    return 0
 
-                # ② 결과 없음 → runs.jsonl 부재 → 빈 결과(스캔 PDF면 VLM 실패 안내, 아니면 DRM 추정)
-                runs_file = ws / "parse" / "runs.jsonl"
+                # ① prepare → ② run_all → ③ parse_qa → represent(pipeline.parse_steps — 일괄 파싱과 같은 사슬)
+                _step(["pipeline.extract.filter_and_rotate", "--src", ws / "in", "--out", ws / "prep", "--only", only])
                 scan = bool(j.get("scan"))
-                if not runs_file.exists():
+                if parse_chain(_step, ws / "prep", ws / "parse", ws / "truth.json", ["--limit", "1", "--procs", PROCS]) is not None:
+                    # ② 결과 없음 → runs.jsonl 부재 → 빈 결과(스캔 PDF면 VLM 실패 안내, 아니면 DRM 추정)
                     note = empty_note(scan)
                     _log(f"{job_id} · 결과 없음 → 빈 결과({'VLM 실패' if note == VLM_FAIL_NOTE else 'DRM 추정'})")
                     j["result"] = {
@@ -312,31 +301,6 @@ def _worker():
                         "ms": round((time.time() - t0) * 1000, 1),
                     }
                 else:
-                    # ③ parse_qa → represent
-                    for cmd in (
-                        [
-                            "pipeline.transform.represent.parse_scoring",
-                            "--src",
-                            str(ws / "prep"),
-                            "--parse",
-                            str(ws / "parse"),
-                            "--truth",
-                            str(ws / "truth.json"),
-                        ],
-                        [
-                            "pipeline.transform.represent.build_rep",
-                            "--src",
-                            str(ws / "prep"),
-                            "--parse-dir",
-                            str(ws / "parse"),
-                        ],
-                    ):
-                        p = _run(cmd)
-                        log.write(f"== {' '.join(cmd)}\n{p.stdout}\n{p.stderr}\n")
-                        log.flush()
-                        if p.returncode != 0:
-                            raise RuntimeError(f"단계 실패({cmd[0]}): {(p.stdout + p.stderr).strip().splitlines()[-1:] or ['?']}")
-
                     # ④ 대표 결과 파일 확인 → 정상 반환 or 빈 결과
                     rep_path = ws / "parse" / "_rep" / (fname + ".json")
                     if not rep_path.exists():

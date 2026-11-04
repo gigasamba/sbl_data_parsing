@@ -174,36 +174,22 @@ def parse_module(a):
     env = C.child_env(
         child_env(), VLM_CONCURRENCY=str(RE.vlm_doc_concurrency(a, lim)), LLM_BASE_URL=None
     )  # 파싱 모듈은 LLM을 부르지 않음(S7e3 B-1)
-    args = [
-        "pipeline.extract.run_engines",
-        "--src",
-        a.src,
-        "--out",
-        OUT / "parse",
-        "--procs",
-        a.procs,
-        "--workers",
-        a.workers,
-        "--engines",
-        engines,
-        *lim,
-    ]
-    rc = _run_step(args, env)
-    _tstep("t_parse")
-    if not (OUT / "parse" / "runs.jsonl").exists():  # F1(11-03 PC 시험) — runs.jsonl 없음: 채점·대표 결과로 넘어가 죽지 않게
+
+    def step(args):  # 단계마다 걸린 시간(docflow-step 로그 — run_engines는 parse)
+        rc = _run_step(args, env)
+        _tstep("t_parse" if args[0] == "pipeline.extract.run_engines" else "t_" + args[0].rsplit(".", 1)[-1])
+        return rc
+
+    from pipeline.parse_steps import parse_chain
+
+    engine_args = ["--procs", a.procs, "--workers", a.workers, "--engines", engines, *lim]
+    rc = parse_chain(step, a.src, OUT / "parse", OUT / "corpus" / "truth.json", engine_args)
+    if rc is not None:  # F1(11-03 PC 시험) — runs.jsonl 없음: 채점·대표 결과로 넘어가 죽지 않게
         if rc != 0:  # run_all이 죽어 못 씀 — 성공으로 덮지 않는다(리뷰)
             print(f"[parse] 파싱 실패 — run_all 종료 {rc}, runs.jsonl 없음", file=sys.stderr, flush=True)
             raise SystemExit(rc)
         print("[parse] 이번 실행 0건 — 파싱한 문서 없음(runs.jsonl 없음) · 채점·대표 결과·끝 표시 건너뜀", flush=True)
         return
-    for args in (
-        ["pipeline.transform.represent.parse_scoring", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
-        ["pipeline.transform.represent.build_rep", "--src", a.src, "--parse-dir", OUT / "parse"],
-    ):
-        rc = _run_step(args, env)
-        _tstep("t_" + args[0].rsplit(".", 1)[-1])  # 2026-10-22 — qa·represent 분리 계측(docflow 기타 분해)
-        if rc != 0:
-            raise SystemExit(rc)
     from pipeline.transform.represent import build_rep as BR
 
     print(f"[docflow-step] {_tdone()}", flush=True)  # 2026-10-22 — resolve~represent까지 docflow 기타 분해 로그
