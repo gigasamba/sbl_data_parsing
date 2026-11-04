@@ -423,3 +423,39 @@ def _selftest_search_attrs():
         assert edw_calls.do_edw_meta() == {"error": "x"}
     with patch.object(EM, "lookup", lambda *a: {"schemas": []}):
         assert edw_calls.do_edw_meta() == {"schemas": [], "search_attrs": sa}
+
+
+# rn-06(11-04) — 날짜 조건 한 벌(search_svc.kst_bound): 합치기 전 두 _when의 결과를 그대로 적은 표.
+# (입력, until?, 원문 도구 _when → (연산자, ISO) 또는 BadRequest 글, 검색 → (연산자, ISO) 또는 ValueError 글)
+_FMT = "YYYY-MM-DD 또는 YYYY-MM-DD HH:MM:SS(시간대 없이 — KST)"
+_WHEN_ROWS = [
+    ("2025-03-01", False, (">=", "2025-03-01T00:00:00+09:00"), (">=", "2025-03-01T00:00:00+09:00")),
+    ("2025-03-01", True, ("<", "2025-03-02T00:00:00+09:00"), ("<", "2025-03-02T00:00:00+09:00")),
+    (" 2025-03-01 ", True, ("<", "2025-03-02T00:00:00+09:00"), ("<", "2025-03-02T00:00:00+09:00")),
+    ("2025-03-01 10:20:30", False, (">=", "2025-03-01T10:20:30+09:00"), (">=", "2025-03-01T10:20:30+09:00")),
+    ("2025-03-01 10:20:30", True, ("<=", "2025-03-01T10:20:30+09:00"), ("<=", "2025-03-01T10:20:30+09:00")),
+    ("20250301", True, _FMT, ("<", "2025-03-02T00:00:00+09:00")),
+    ("2025-03-01T02:00:00Z", False, _FMT, (">=", "2025-03-01T11:00:00+09:00")),
+    ("2025-03-01T10:00:00+09:00", True, _FMT, ("<=", "2025-03-01T10:00:00+09:00")),
+    ("2025-13-01", False, "month must be in 1..12", "month must be in 1..12"),
+    ("2025-02-30", True, "day is out of range for month", "day is out of range for month"),
+    ("2025-03-01 25:00:00", False, "hour must be in 0..23", "hour must be in 0..23"),
+    ("2025/03/01", False, _FMT, "Invalid isoformat string: '2025/03/01'"),
+]
+
+
+def test_date_bound():
+    from mcp_server.services import fulltext_svc as F
+
+    for v, upper, want_ft, want_search in _WHEN_ROWS:
+        try:
+            op, t = F._when(v, upper, "since")
+            got_ft = (op, t.isoformat())
+        except F.BadRequest as e:
+            got_ft = str(e).removeprefix("since: ")
+        try:
+            op, t = M.kst_bound(v, upper)
+            got_search = (op, t.isoformat())
+        except ValueError as e:
+            got_search = str(e)
+        assert (got_ft, got_search) == (want_ft, want_search), (v, upper, got_ft, got_search)

@@ -42,9 +42,9 @@ def _vals(v):
     return [s for x in (v if isinstance(v, list | tuple) else [v]) if x is not None and (s := str(x).strip())]
 
 
-def _when(v, upper):
-    """created_since/created_until 글자 → (비교 연산자, 시각). 날짜만이면 since = 그날 00:00 KST, until = 다음 날 00:00 미만(그날 전체).
-    시간대 없는 시각은 KST. 형식이 틀리면 ValueError."""
+def kst_bound(v, upper):
+    """날짜 거르기 글자(search created_*·원문 도구 since/until·created_* 공용) → (비교 연산자, KST 시각). 날짜만이면 since = 그날 00:00 KST,
+    until = 다음 날 00:00 미만(그날 전체). 시간대 없는 시각은 KST. 형식이 틀리면 ValueError."""
     s = str(v).strip()
     try:
         day = date.fromisoformat(s)  # 날짜만(2025-03-01·20250301)
@@ -52,10 +52,9 @@ def _when(v, upper):
         day = None
     if day is not None:
         d = datetime.combine(day, datetime.min.time(), KST)
-        return ("<", (d + timedelta(days=1)).isoformat()) if upper else (">=", d.isoformat())
+        return ("<", d + timedelta(days=1)) if upper else (">=", d)
     t = datetime.fromisoformat(s)
-    # KST로 맞춰 글자로 — 적재 값(pgvector_load._kst)과 같은 시간대 표기라 SQLite 대역의 글자 비교도 맞음(PG는 시각으로 비교)
-    return ("<=" if upper else ">="), (t if t.tzinfo else t.replace(tzinfo=KST)).astimezone(KST).isoformat()
+    return ("<=" if upper else ">="), (t if t.tzinfo else t.replace(tzinfo=KST)).astimezone(KST)
 
 
 def _like(x):
@@ -126,9 +125,10 @@ def _scope_sql(hard, src, fmap):
         elif name == "FAQ_group":  # 청크 칸(faq만 — C4)
             any_of("faq_group = %s", vs, lambda x: [x]) if "faq_group" in have else conds.append("1 = 0")
         elif name in ("created_since", "created_until"):
-            op, t = _when(v, name == "created_until")
+            op, t = kst_bound(v, name == "created_until")
             conds.append(f"created_at {op} %s")  # created_at이 없는 문서는 빠짐
-            vals.append(t)
+            # KST 글자로 — 적재 값(pgvector_load._kst)과 같은 시간대 표기라 SQLite 대역의 글자 비교도 맞음(PG는 시각으로 비교)
+            vals.append(t.isoformat())
         elif name == "attrs":  # 담김(@>) — GIN(jsonb_ops) 색인을 탐(->> 비교는 못 탐). 값은 글자(attrs는 늘 글자 — P1-1)
             for key, xs in v.items():
                 any_of("attrs @> %s::jsonb", _vals(xs), lambda x, key=key: [json.dumps({key: str(x)})])
