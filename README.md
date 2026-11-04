@@ -424,10 +424,27 @@ cd sbl_data_parsing-<판>
 bash deploy/host/scripts/dc.sh init --group <운영 그룹>                    # <루트>/settings.yaml 생김 → 위 칸을 채움
 bash deploy/host/scripts/dc.sh up -d data-pipeline                         # → data-pipeline-hong
 bash deploy/host/scripts/run_tool.sh migrate up --target all --dim <차원>  # 새 스키마 sbl_hong에 표 만들기(설치 순서 6)
+bash deploy/host/scripts/run_tool.sh migrate master load                   # 기준 표(고객 명부·용어) 넣기 — 검색 MCP가 시작할 때 읽음
 bash deploy/host/scripts/dc.sh up -d data-pipeline-mcp mcp                 # → data-pipeline-mcp-hong · mcp-server-hong(포트 8776 · 8775)
 bash deploy/host/scripts/dc.sh check                                       # 마지막 줄 [dc check] 통과 — 6개
 bash deploy/host/scripts/dc.sh ps                                          # 이 벌의 컨테이너만 보임
 ```
+- 칸 값 찾기:
+
+| 칸 | 넣을 값 | 어디서 |
+|---|---|---|
+| `<코드 zip>` | 코드 저장소의 그 판 zip(예 태그 `v0.2.0` → 풀면 `sbl_data_parsing-0.2.0/`) | GitHub `gigasamba/sbl_data_parsing` 태그 — 같은 서버에 이미 한 벌이 있으면 zip 대신 그 코드 폴더를 `cp -a`로 복사해도 된다 |
+| `<운영 그룹>` | 컨테이너(UID 10001)와 사람 계정이 함께 쓰는 리눅스 그룹 | `id -gn <운영 계정>` — 모르면 서버 관리자. 첫 벌과 같은 그룹 |
+| `<차원>` | 임베딩 모델이 내는 벡터 길이(숫자, 예 1024) | `required.embed` 모델 담당 — 첫 벌과 같은 모델이면 같은 값. 표를 처음 만들 때만 씀(벡터 칸 길이가 그때 정해짐) |
+
+- `migrate up`이 필요한 때:
+
+| 상황 | `migrate up` |
+|---|---|
+| 새 벌이 새 스키마(`sbl_hong`)를 씀 | 처음 한 번 `--dim`과 함께, 이어서 `migrate master load` |
+| 새 벌이 다른 벌과 같은 스키마를 씀 | 필요 없음(`migrate check`만) — 두 벌이 같은 데이터에 적재·검색하므로 서로 덮는다. 개발자별 시험은 스키마를 나눈다 |
+| 새 판에 표 변경(마이그레이션)이 있음 | 적재 전에 한 번(`--dim` 없이 — 있는 표는 DB의 차원을 씀) |
+
 - `instance`를 비우면 한 벌(이름 그대로 `data-pipeline`·`data-pipeline-mcp`·`mcp-server`). 이름은 영소문자·숫자·`-`만(틀리면 `dc.sh`가 종료 2).
 - 확인: `bash deploy/host/scripts/dc.sh ps` — 그 벌의 컨테이너만 보인다. 자세한 것은 [server-guide §1-3](docs/operations/server-guide.md#1-3-한-서버에-여러-벌-띄우기개발자별).
 
