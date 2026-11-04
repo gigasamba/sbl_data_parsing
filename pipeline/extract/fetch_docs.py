@@ -41,37 +41,6 @@ from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
 COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")  # csv 열 이름(RDB_COL_*) 화이트리스트(옛 common.core.sources와 같은 규칙)
 
 
-class DuplicateContent(ValueError):
-    """다른 원천(source_id)의 기존 지문(output/dedup/manifest.jsonl)과 완전히 같은 내용 — 받기 전(비멀티파트
-    ETag+크기) 또는 받은 뒤(sha256)에 판단해 그 문서만 건너뜀(O3 재설계, 2026-10-14 — 근사 중복은 더 안
-    보고 완전 중복만, `pipeline.extract.deduplication.find_duplicate` 사용). 그 문서 하나만 영향 — 경로 탈출(ValueError,
-    _safe_join)과는 안 섞임(fail-loud 유지)."""
-
-
-def _dedup_manifest_path(state):
-    """state(관례상 `output/parse/_source`) → 중복 지문 매니페스트 `output/dedup/manifest.jsonl` 경로. state는
-    plan()·resolve() 둘 다 항상 `Path(out) / "parse" / "_source"`로 만들므로 이 상대 위치로 되짚는다
-    (out 자체를 모든 fetch_one 호출 경로에 새로 꿰지 않는다, ponytail)."""
-    return state.parent.parent / "dedup" / "manifest.jsonl"
-
-
-def _sha_duplicate(state, source_id, path):
-    """받은 뒤(또는 폴더 원본처럼 이미 로컬에 있는 파일) 완전 중복 확인 — sha256이 다른 원천의 기존 지문과
-    일치하면 그 지문을, 아니면 None을 돌려준다."""
-    from common.core.contract import file_hash
-    from pipeline.extract import deduplication as DEDUP
-
-    return DEDUP.find_duplicate(_dedup_manifest_path(state), source_id, sha=file_hash(path))
-
-
-def _record_duplicate(state, source_id, dup, etag=None, size=None, updated_at=None, sha=None):
-    from pipeline.extract import deduplication as DEDUP
-
-    DEDUP.record_duplicate(
-        _dedup_manifest_path(state), source_id, dup.get("source_id"), etag=etag, size=size, updated_at=updated_at, sha=sha
-    )
-
-
 def is_remote(source):
     """원본이 Object Storage에서 오는지 — rdb:csv(표가 키를 알려줌)면 True, 폴더면 False."""
     return str(source).startswith("rdb:")
@@ -429,8 +398,7 @@ def _rdb_resolve_spec(spec, state, limit):
 
 def _rdb_plan(table, state, limit=0):
     """문서 위치 표(csv:)의 대상 행 → (names, fetch_one(name,dest)→Path, state). resolve()가 부르고 모든 이름을 즉시 받는다(AD44).
-    받기 전 대조는 크기(ContentLength — 불일치는 참고 기록만). 받은 뒤 다른 원천의 기존 지문과 sha256이 같으면
-    `DuplicateContent`(그 문서만 건너뛰고 처리 완료로 기록 — 다시 안 받음, O3 재설계 2026-10-14)."""
+    받기 전 대조는 크기(ContentLength — 불일치는 참고 기록만). 다른 원천의 같은 내용 파일도 따로 받는다(원천마다 독립, 사용자 11-04)."""
     done = _load_done(state)
     rows = [r for r in _rdb_rows(table) if not _rdb_is_done(done, r["key"], r["etag"], r["updated_at"])]
     name_of = _rdb_names(rows)  # original_filename(또는 doc_id) — 충돌하면 doc_id 접두로 구분
@@ -446,7 +414,6 @@ def _rdb_plan(table, state, limit=0):
 
     def fetch_one(name, dest):
         o = by_name[name]
-        source_id = f"s3://{o['bucket']}/{o['key']}"
         if o["size"] is not None:
             actual = cli.head_object(Bucket=o["bucket"], Key=o["key"]).get("ContentLength")
             if actual != o["size"]:
@@ -481,15 +448,6 @@ def _rdb_plan(table, state, limit=0):
         else:
             f = _safe_join(dest, name)  # (기존 경로) 원격에서 내려받기
             cli.download_file(o["bucket"], o["key"], str(f))
-        # O3 재설계 — 받은 뒤 완전 중복 확인: sha256이 다른 원천 기록과 같으면 중복 — 파싱하지 않고 받은 사본은 지운다
-        dup = _sha_duplicate(state, source_id, f)
-        if dup:
-            with book:
-                _record_duplicate(state, source_id, dup, etag=o["etag"], size=o["size"], updated_at=o["updated_at"])
-                with _processed_path(state).open("a", encoding="utf-8") as fh:
-                    fh.write(json.dumps({"key": o["key"], "etag": o.get("etag"), "ver": o.get("updated_at")}, ensure_ascii=False) + "\n")
-            f.unlink(missing_ok=True)
-            raise DuplicateContent(f"[source] 받은 뒤 중복(sha256) — {source_id} ≡ {dup.get('source_id')} — 파싱하지 않음")
         with book:  # manifest.jsonl 재작성(전체 읽기→쓰기) — 병렬 fetch에서 반드시 잠금
             man_f = state / "manifest.jsonl"
             man = {r["file_name"]: r for r in jl(man_f)} if man_f.exists() else {}
@@ -540,19 +498,13 @@ def resolve(source, out, limit=0):
             with _cf.ThreadPoolExecutor(max_workers=min(nw, len(names))) as ex:
                 futs = {n: ex.submit(fetch_one, n, local) for n in names}
                 for n in names:
-                    try:
-                        futs[n].result()
-                        ok.append(n)
-                    except DuplicateContent as e:  # 완전 중복 — 그 문서만 건너뛰고 계속
-                        print(f"[source] {e}", flush=True)
+                    futs[n].result()
+                    ok.append(n)
             print(f"[source] 다운로드 병렬 {min(nw, len(names))}워커 완료 · {len(ok)}/{len(names)}건", flush=True)
         else:
             for n in names:
-                try:
-                    fetch_one(n, local)
-                    ok.append(n)
-                except DuplicateContent as e:  # 완전 중복 — 그 문서만 건너뛰고 나머지는 계속(독립 검토 BLOCK 1)
-                    print(f"[source] {e}", flush=True)
+                fetch_one(n, local)
+                ok.append(n)
         if not Path(C.cfg().paths.source_manifest or "").exists():  # S7c — 설정 객체(위 put 뒤 다시 읽어 같은 값)
             raise RuntimeError("[source] rdb 모드인데 SOURCE_MANIFEST 파일이 없음 — 원본 위치가 조용히 file://로 떨어질 수 있어 멈춤")
         return local, ok, state

@@ -3,7 +3,7 @@
 import tempfile
 from pathlib import Path
 
-from pipeline.extract.deduplication import find_duplicate, record_duplicate, run_folder
+from pipeline.extract.deduplication import run_folder
 
 
 def test_exact_duplicates_only():
@@ -24,17 +24,3 @@ def test_exact_duplicates_only():
         assert (out / "groups.csv").exists() and (out / "report.md").exists()
         keep2, _, _ = run_folder(src, out)  # 캐시(fingerprints.jsonl)로 다시 — 같은 결과
         assert sorted(keep2) == sorted(keep)
-
-
-def test_manifest_duplicates():
-    """받기 중 확인 — 다른 원천의 같은 sha만 중복(자기 원천·다른 sha·매니페스트 없음은 아님). 잠금 파일은 남지 않는다."""
-    with tempfile.TemporaryDirectory() as td:
-        m = Path(td) / "dedup" / "manifest.jsonl"
-        assert find_duplicate(m, "b", sha="s1") is None  # 매니페스트 없음
-        record_duplicate(m, "a", "z", etag="e", size=3, sha="s1")
-        assert not Path(str(m) + ".lock").exists()
-        cases = [("b", "s1", "a"), ("a", "s1", None), ("b", "s2", None)]  # (찾는 원천, sha, 찾은 원천)
-        for src, sha, want in cases:
-            hit = find_duplicate(m, src, sha=sha)
-            assert (hit and hit["source_id"]) == want, (src, sha, hit)
-        assert find_duplicate(m, "b", sha="s1")["duplicate_of"] == "z"
