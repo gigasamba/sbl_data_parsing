@@ -7,7 +7,7 @@
 # 하는 일: 코드 폴더 루트로 cd → settings.yaml을 셸 env로(load_settings.sh load_settings — 값은 출력 안 함) → 실행 이미지(*-runtime)면
 #   이 코드 폴더를 CODE_DIR로(in_container.sh code_dir_default — 파이프라인 이미지 기준, 개발 서버는 두 이미지가 함께 runtime) →
 #   $DOCKER compose -f compose.pipeline.yml -f compose.pipeline-mcp.yml -f compose.mcp-server.yml [+ CODE_DIR면 compose.code*.yml] "$@".
-# 프로젝트 이름은 compose 기본(첫 -f 파일의 폴더) — mcp_keepalive.sh가 따로 부를 때와 같다(mcp_keepalive.sh는 이 파일을 쓰지 않고 혼자 돎).
+# 프로젝트 이름은 compose-<instance>(한 벌은 compose) — mcp_keepalive.sh도 이 파일로 띄운다(rn-06).
 # 종료 코드: compose 그대로 · 설정을 못 읽으면 load_settings의 코드(2) · init/check는 아래 설명.
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트

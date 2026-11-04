@@ -10,17 +10,13 @@
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트(S6b)
 . deploy/host/scripts/load_settings.sh && load_settings || exit $?   # S7e1 — compose 치환(MCP_SERVER_IMAGE·RAG_OUT)과 /health 주소 — 값은 출력하지 않음
-code0=${CODE_DIR:-}   # 사람·unit이 준 값(code_dir_default 전) — 파이프라인 컨테이너는 자기 이미지로 따로 정함(아래)
-. deploy/host/scripts/in_container.sh; code_dir_default MCP_SERVER_IMAGE   # op-06 — 실행 이미지면 코드 폴더 루트 · S6b — compose.mcp-server.yml은 MCP_SERVER_IMAGE만 봄
-files="-f deploy/host/compose/compose.mcp-server.yml"
-[ -n "${CODE_DIR:-}" ] && files="$files -f deploy/host/compose/compose.code.mcp-server.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 컨테이너 코드 자리에
 [ -d app ] && echo "[mcp_keepalive] 경고: 코드 폴더에 옛 오버레이 app/이 남아 있음 — 11-03부터 쓰지 않음(덧씌우기 compose 지움, 이미지·코드 폴더 코드로 뜸)" >&2
-DC="$DOCKER compose -p compose$NAME_SUFFIX $files"   # 묶음 이름 — host_ctl.sh와 같게(여러 벌)
+# compose는 host_ctl.sh 한 곳(rn-06 — 같은 묶음 이름·compose 파일·실행 이미지면 코드 폴더 마운트). 코드 폴더 판단은 파이프라인 이미지 기준 —
+#   개발 서버(두 이미지 모두 *-runtime)·운영 서버(두 이미지 모두 구운 이미지)에서는 옛 이미지별 판단과 같다.
 # parse_document 작업 서비스 전용 컨테이너(data-pipeline-mcp — rn-03)도 여기서 살핀다(타이머 2분마다). 꺼졌으면 up -d만(응답 확인은 검색 MCP의 몫).
 if [ "$($DOCKER inspect -f '{{.State.Running}}' "data-pipeline-mcp$NAME_SUFFIX" 2>/dev/null)" != true ]; then
   echo "[mcp_keepalive] $(date '+%F %T') data-pipeline-mcp 꺼짐 — 띄움"
-  # shellcheck disable=SC2086 — 파일 인자(낱말 나눔)
-  (CODE_DIR=$code0 && code_dir_default DATA_PIPELINE_IMAGE && $DOCKER compose -p "compose$NAME_SUFFIX" -f deploy/host/compose/compose.pipeline-mcp.yml ${CODE_DIR:+-f deploy/host/compose/compose.code.pipeline-mcp.yml} up -d data-pipeline-mcp) ||
+  bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-mcp ||
     echo "[mcp_keepalive] data-pipeline-mcp 띄우기 실패 — parse_document는 '연결 실패'를 돌려줌(검색은 그대로)" >&2
 fi
 URL="http://${MCP_HOST:-127.0.0.1}:${MCP_PORT:-8765}/health"
@@ -35,7 +31,7 @@ echo "[mcp_keepalive] $(date '+%F %T') /health 응답 없음 — 컨테이너 �
 if [ "$state" = running ]; then
   $DOCKER restart "mcp-server$NAME_SUFFIX" >/dev/null
 else
-  $DC up -d mcp
+  bash deploy/host/scripts/host_ctl.sh up -d mcp
 fi
 for _ in $(seq 1 30); do alive && { echo "[mcp_keepalive] 다시 띄움 — $URL 응답"; exit 0; }; sleep 2; done
 echo "[mcp_keepalive] 다시 띄웠는데도 응답 없음 — 마지막 로그:"
