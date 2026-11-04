@@ -22,7 +22,7 @@ def _capture():
 
 
 def test_warm_span_counts():
-    from pipeline.extract import source
+    from pipeline.extract import fetch_docs as source
 
     class Client:
         def head_object(self, **kw):

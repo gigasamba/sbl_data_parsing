@@ -10,7 +10,7 @@ size_bytes·size → size · updated_at·mod_seq·id → increment)으로 맞춰
   python cli/rdb_discover.py --like "FileStorageMap%"        # RDB_ENGINE(기본 mssql) · 접속은 common.connections.rdb 읽기 계정
   python cli/rdb_discover.py --from-csv <경로> [--table <이름>]  # 시험용 — RDB 없이 csv 머리글만 열로(행 값은 안 읽음)
 
-접속(실제 질의일 때만): RDB_ENGINE(기본 mssql, common/sources.py와 무관 — modules/parse/source.py와 같은 env) ·
+접속(실제 질의일 때만): RDB_ENGINE(기본 mssql, common/sources.py와 무관 — pipeline/extract/fetch_docs.py와 같은 env) ·
 mssql(pymssql) common.connections.rdb(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_READ_USER·RDB_READ_PASSWORD·RDB_CONNECT_KWARGS) · pg는 common/pg.py 재사용.
 """
 
@@ -76,7 +76,7 @@ _COLS_SQL = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHE
 def _mssql_tables(like):
     """S8b — 연결·질의는 SQLAlchemy(source.rdb_connect·mssql.rows — SQL 글자 그대로)."""
     from common.store import mssql
-    from pipeline.extract.source import rdb_connect
+    from pipeline.extract.fetch_docs import rdb_connect
 
     with rdb_connect() as cn:
         drafts = []
@@ -112,7 +112,7 @@ def table_columns(table):
             )
         ]
     from common.store import mssql
-    from pipeline.extract.source import rdb_connect
+    from pipeline.extract.fetch_docs import rdb_connect
 
     with rdb_connect() as cn:
         if schema:

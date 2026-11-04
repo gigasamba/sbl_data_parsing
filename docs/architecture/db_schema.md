@@ -122,7 +122,7 @@
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
-| id | (EDW) | 행 번호 — 증분 수집 기준 | EDW | extract/source `_rdb_rows`, run_docs `edw_list` | 유지 |
+| id | (EDW) | 행 번호 — 증분 수집 기준 | EDW | extract/fetch_docs `_rdb_rows`, run_docs `edw_list` | 유지 |
 | s3_key | (EDW) | 원본 전체 키 = 문서 키 | EDW | source `_rdb_rows`(매니페스트 `key`), run_docs | 유지 |
 | original_filename | (EDW) | 원본 파일 이름 | EDW | source, run_docs | 유지 |
 | file_size | (EDW) | 크기 | EDW | source, run_docs | 유지 |

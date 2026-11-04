@@ -168,9 +168,9 @@ def record_duplicate(manifest_path, source_id, duplicate_of, etag=None, size=Non
 def find_duplicate(manifest_path, source_id, *, etag=None, size=None, sha=None):
     """다른 원천(source_id가 다른) 기존 지문 중 이 문서와 완전히 같은 내용으로 볼 수 있는 것 — 있으면 그
     지문(dict), 없으면 None. `sha`가 주어지면 sha256 일치(받은 뒤 확인, 가장 믿을 수 있음)만 본다 ·
-    아니면 `etag`+`size` 일치(받기 전 확인 — 비멀티파트 ETag 전제는 호출부 source.py가 보장)만 본다.
+    아니면 `etag`+`size` 일치(받기 전 확인 — 비멀티파트 ETag 전제는 호출부 fetch_docs.py가 보장)만 본다.
     load_manifest()가 이미 source_id별 최신 1개로 정리해 주므로 그 결과만 본다(2026-10-14 재설계 —
-    근사 중복은 더 안 봄, 완전 중복만 — parse/source.py의 받기 전·받은 뒤 확인이 쓴다)."""
+    근사 중복은 더 안 봄, 완전 중복만 — pipeline/extract/fetch_docs.py의 받기 전·받은 뒤 확인이 쓴다)."""
     for r in load_manifest(manifest_path):
         if r.get("source_id") == source_id:
             continue
@@ -222,7 +222,7 @@ def _rep_select(members, info):
 
 def decide(info):
     """같은 해시(완전 중복)끼리 묶고 keep 목록·groups.csv 행을 만든다 — 폴더 모드(run_folder) 전용. 스트리밍은
-    parse/source.py의 받기 전·받은 뒤 확인(find_duplicate)이 완전 중복만 본다."""
+    pipeline/extract/fetch_docs.py의 받기 전·받은 뒤 확인(find_duplicate)이 완전 중복만 본다."""
     groups = {}
     for i, r in enumerate(info):
         groups.setdefault(r["sha"], []).append(i)

@@ -152,7 +152,7 @@ def _left(a):
 
 def _unparsed(names):
     """C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = EDW FileStorageMap ∖ ParsingMeta. FileStorageMap 쪽은 이미 받은 이름 목록
-    (`--source rdb:`가 FileStorageMap을 읽어 만든 것 — 이름 ↔ 원본 키 s3_key 대응은 source.py가 쓴 manifest.jsonl), ParsingMeta 쪽은
+    (`--source rdb:`가 FileStorageMap을 읽어 만든 것 — 이름 ↔ 원본 키 s3_key 대응은 fetch_docs.py가 쓴 manifest.jsonl), ParsingMeta 쪽은
     여기서 **EDW를 한 번 읽는다**(파싱 입구의 EDW 읽기 — 읽기 계정, PC는 EDW 대역 sqlite `RDB_SQLITE`): parse_status가 ok·partial인
     행의 source_key 집합(`done_source_keys`). 통째 실패는 ParsingMeta에 안 쓰므로(C3) 실패한 문서는 행이 없어 다음 실행이 다시 고른다.
     키 = manifest의 "key"(없으면 이름 그대로 — publish의 source_key와 같은 규칙, parsing_meta.plan).
@@ -237,7 +237,7 @@ def parse_module(a):
     # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) · 스트리밍 파싱은 op-08에 지움
     lim, src_info = [], None
     if a.source:  # 문서 위치: 같은 서버 폴더 → Object Storage 몇 건 → 전체(사용자 10-02)
-        from pipeline.extract import source as SRC
+        from pipeline.extract import fetch_docs as SRC
 
         local, names, state = SRC.resolve(a.source, OUT, a.source_limit)
         src_info = (state, local)
@@ -356,7 +356,7 @@ def parse_module(a):
         run_id=run_id,
     )
     if src_info:
-        from pipeline.extract import source as SRC
+        from pipeline.extract import fetch_docs as SRC
 
         if SRC.is_remote(a.source):
             SRC.finish(src_info[0], src_info[1], OUT / "parse" / "_rep" / "index.json")

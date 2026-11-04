@@ -1,13 +1,13 @@
-"""pipeline.extract.source 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.source --selftest`."""
+"""pipeline.extract.fetch_docs 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.fetch_docs --selftest`."""
 
 import contextlib
 import json
 from pathlib import Path
 
-import pipeline.extract.source as M
+import pipeline.extract.fetch_docs as M
 from common.core.contract import jl
 from pipeline import config as pc
-from pipeline.extract.source import (
+from pipeline.extract.fetch_docs import (
     _safe_join,
     _safe_name,
     finish,

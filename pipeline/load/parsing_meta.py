@@ -27,7 +27,7 @@
 상태(parse_status) = ok · partial(교차 정확도 < criteria.json run.cross_acc_full, 지금 0.95) · failed · skipped_drm(DRM·암호 래핑) · skipped_dup(dedup
 keep.txt에서 빠짐) · not_parsed(이번 파싱 대상 아님) · skipped_disk_cap(PARSE_KEEP_MAX_GB 상한으로 원본이 먼저
 지워짐 — manifest의 disk_cap_sha256으로 행만 씀) — SI39⑧로 원본은 이제 **파싱이 끝나면 바로** 지워지므로(기본),
-보통의 ok·partial도 로컬 원본이 없을 수 있다 — 그때는 manifest의 일반 "sha256"(source.py가 지우기 전에 남김)로
+보통의 ok·partial도 로컬 원본이 없을 수 있다 — 그때는 manifest의 일반 "sha256"(fetch_docs.py가 지우기 전에 남김)로
 대체한다(skipped_disk_cap과 달리 parse_status를 바꾸지 않음).
 
 쓰기 대상(전부 PM1 결정 대기 — 사람):
@@ -35,7 +35,7 @@ keep.txt에서 빠짐) · not_parsed(이번 파싱 대상 아님) · skipped_dis
   PM_PREFIX(버킷 안 경로 접두, 선택) · common.connections.rdb 쓰기 계정(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_WRITE_USER·RDB_WRITE_PASSWORD
   — 사용자 10-29 ops.md#op-03) · RDB_SQLITE(설정하면 SQLite를 가짜 EDW로 — L2 시험, 접속 칸 안 봄).
 업로드 접속은 Object Storage 읽기와 같은 env(OS_ENDPOINT·OS_ACCESS_KEY·OS_SECRET_KEY·OS_REGION·OS_VERIFY_TLS —
-modules/parse/source.py·cli/os_put.py와 같음).
+pipeline/extract/fetch_docs.py·cli/os_put.py와 같음).
 
 업로드 대상 상태(안전 기본값, 독립 보안 검토 MAJOR 10-07 유지): PM1이 DRM·실패 원본 업로드 여부를 아직 결정하지
 않았으므로 기본은 **ok·partial만 업로드**(DEFAULT_UPLOAD_STATUSES) — env PM_UPLOAD_STATUSES(콤마 목록)로 넓힐 수
@@ -49,7 +49,7 @@ import re
 from pathlib import Path
 
 # safe_name·safe_join은 common/ids.py(독립 검토 MAJOR-1) — modules/load가 modules/parse를 import하면 이미지 경계
-# 위반이라 공용 위치는 common/(source.py도 같은 함수를 씀, dev/modules/parse/source.py 참고).
+# 위반이라 공용 위치는 common/(fetch_docs.py도 같은 함수를 씀, 옛 dev/modules/parse/source.py 참고).
 from common.config import settings as C  # common 칸(VLM_MODEL·OS_*) · 비밀 꺼내기(S7c)
 from common.core.console import utf8_stdout
 from common.core.contract import file_hash, safe_filename, safe_path_join
@@ -235,7 +235,7 @@ def source_buckets(entries):
 
 def check_bucket_overlap(pm_bucket, entries):
     """PM_BUCKET이 원천 원본이 실제로 있는 버킷과 같으면 거부(SI39⑤) — 원본은 읽기만 해야 하는데 같은 버킷에
-    쓰면 실수로 원본 경로를 건드릴 위험이 있다. 1차로 manifest(entries의 uri, 늘 있음)를 보고, env(source.py가
+    쓰면 실수로 원본 경로를 건드릴 위험이 있다. 1차로 manifest(entries의 uri, 늘 있음)를 보고, env(fetch_docs.py가
     쓰는 RDB_BUCKET·오케스트레이터가 쓰는 PARSE_SOURCE)도 있으면 함께 본다(2중 확인). file://(로컬 가짜 Object
     Storage, 시험)는 검사하지 않는다."""
     if pm_bucket.startswith("file://"):
@@ -414,7 +414,7 @@ def plan(
     reparse_keys=None,
 ):
     """로컬만 읽는다(네트워크·DB 접속 없음) — --dry-run이 그대로 쓸 수 있음.
-    entries: manifest.jsonl 행(source.py 형식 — file_name·key(원본 전체 키)·doc_id·uri·original_filename·
+    entries: manifest.jsonl 행(fetch_docs.py 형식 — file_name·key(원본 전체 키)·doc_id·uri·original_filename·
     source_system(SI41, rdb:*·rdb:<이름>일 때만 — 없으면 이 함수의 source_system 인자를 폴백으로 쓴다) 등).
     rep_dir: `output/parse/_rep`(대표 결과 폴더 — `<name>.json` 전체를 읽어 업로드할 .md를 미리 만든다).
     upload_statuses: 원본을 실제로 올릴 상태 집합(None = DEFAULT_UPLOAD_STATUSES = ok·partial만).
@@ -582,7 +582,7 @@ def apply(entries, storage, db, md_dir, prefix=""):
 class LocalFolderStore:
     """가짜 Object Storage(PM_BUCKET="file://<폴더>") — L2 시험·PC 확인용. KEY가 이미 있는 키는 덮어쓰지 않는다(apply()가 head()로 먼저 확인).
     head·put 둘 다 common.core.contract.safe_join으로 root 밖 경로를 거부한다(독립 검토 MAJOR-1 — rep_key는 safe_name으로
-    이미 정리되지만, source.py _safe_join과 같은 마지막 방어선을 여기도 둠)."""
+    이미 정리되지만, fetch_docs.py _safe_join과 같은 마지막 방어선을 여기도 둠)."""
 
     def __init__(self, root):
         self.root = Path(root)
@@ -606,7 +606,7 @@ class LocalFolderStore:
 
 
 class S3Store:
-    """실제 Object Storage(PM_BUCKET=버킷 이름) — boto3(modules/parse/source.py·cli/os_put.py와 같은 접속 env OS_*)."""
+    """실제 Object Storage(PM_BUCKET=버킷 이름) — boto3(pipeline/extract/fetch_docs.py·cli/os_put.py와 같은 접속 env OS_*)."""
 
     def __init__(self, bucket):
         import boto3

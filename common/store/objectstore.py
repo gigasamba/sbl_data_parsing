@@ -1,4 +1,4 @@
-"""Object Storage(S3 호환) 접속 — modules/parse/source.py(수집, rag-parse)·modules/search/mcp_server.py(근거 이미지
+"""Object Storage(S3 호환) 접속 — pipeline/extract/fetch_docs.py(수집, rag-parse)·modules/search/mcp_server.py(근거 이미지
 원천 재접근, rag-core, OP21) 공용. rag-core↔rag-parse 사이 직접 import가 금지라 여기(common/)로 승격(이미지에
 있는 boto3만 씀, 새 패키지 없음).
 
