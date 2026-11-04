@@ -139,30 +139,6 @@ def record_fake_call(prompt_chars):
         _stats["prompt_chars"] += prompt_chars
 
 
-def fake_reply(messages):
-    """LLM_FAKE=1 모의 응답 — chat()과 같은 모양(마지막 user 메시지 글자 앞 200자 + "[FAKE]", 네트워크·캐시 0). content가
-    [{type:text}, {type:image_url}] 목록(VLM)이어도 글자 부분만. complete(agent=) 단일 턴을 직접 부르는 도구(gold_draft·
-    qa_draft — c0 10-14: LLM_FAKE가 그 경로를 안 가로채 PC 연기 시험 불가)가 호출 전에 이걸로 갈음. → (글자, usage)."""
-
-    def text_of(c):
-        if isinstance(c, list):
-            return "".join(p.get("text") or "" for p in c if isinstance(p, dict) and p.get("type") == "text")
-        return c or ""
-
-    last_user = next((text_of(m.get("content")) for m in reversed(messages) if m.get("role") == "user"), "")
-    record_fake_call(sum(len(text_of(m.get("content"))) for m in messages))
-    return last_user[:200] + "[FAKE]", {"prompt_tokens": 0, "completion_tokens": 0, "fake": True}
-
-
-def settle_calls(extra):
-    """reserve_call() 1건 예약 뒤 실제로 더 쓴 통화 수만큼 장부에 더한다(run_agent 다중 턴 정산, AG4 후속 F3) —
-    extra<=0이면 아무것도 안 함(이미 예약한 1건으로 충분했던 경우)."""
-    if extra <= 0:
-        return
-    with _lock:
-        _stats["calls"] += extra
-
-
 def price(model):
     """($/M 입력, $/M 출력) — env LLM_PRICE_IN·LLM_PRICE_OUT이 있으면 그 값, 없으면 PRICES[모델 이름(접두어 'z-ai/' 등 뗌)].
     모르는 모델은 (None, None) — 10-05 결함: 'z-ai/glm-5.2'를 못 찾아 0으로 보고 추정 $0·예산 상한 무력. 예산이 켜져 있으면 호출 전 거부."""

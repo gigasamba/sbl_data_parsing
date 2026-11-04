@@ -157,12 +157,6 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
 }
 
 
-def blank_matters(field):
-    """빈 글자 ''를 적어야 결과가 같은 칸인가(VS7e1 R-4) — 빈 글자 유지 칸(keep)이거나, 이미지 기본값이 있어 비우면 그 기본값이 걸리는 칸(DOC_DIR 등 —
-    B-2). 그 밖 칸의 ''는 비운 칸과 같은 결과라 sample 표시에서 같게 본다."""
-    return S.keeps_blank(field) or S.env_name(field) in _IMAGE_ENVS
-
-
 # 기본값이 없는(비운) 칸 — 비우면 무엇이 되는지(코드 기본값·동작, 사용자 11-04 op-05). 기본값이 있는 칸은 "비우면 <기본값>"을 sample이 만든다.
 BLANK = {
     "common.connections.pg.standin_dir": "<루트>/output/pg_standin",

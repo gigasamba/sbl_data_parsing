@@ -986,12 +986,6 @@ def main():
     global WARM_TARGET, STRUCT_WORKERS, NO_CLEANUP, CPU_GATE, STRUCT_BACKLOG, CODE_DIR, DEADLINE_AT, _LOCK
     ap = argparse.ArgumentParser()
     ap.add_argument("--start-offset", type=int, default=1072)
-    ap.add_argument(
-        "--workers",
-        type=int,
-        default=4,
-        help="쓰지 않음(옛 인자 — 옛 호출이 깨지지 않게 받기만 함, rn-04) — 레인 워커 수는 settings.yaml ops.run_docs",
-    )
     ap.add_argument("--warm", type=int, default=None, help="진입 대기열(미리 받을 문서 수) — 기본 settings.yaml ops.run_docs.warm(20)")
     ap.add_argument("--struct-workers", type=int, default=None, help="구조화 스레드 수 — 기본 settings.yaml ops.run_docs.struct_workers(2)")
     ap.add_argument("--filter", default="RFP,proposal")

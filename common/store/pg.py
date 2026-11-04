@@ -84,7 +84,7 @@ class _ScopedConn:
         return []
 
 
-class PG:
+class PG(_ScopedConn):
     def __init__(self, c):
         import psycopg
 
@@ -98,14 +98,6 @@ class PG:
             autocommit=True,
             connect_timeout=cfg().connections.pg.connect_timeout,
         )
-
-    def q(self, sql, params=None):
-        with self.cn.cursor() as cur:
-            cur.execute(sql, params)
-            if cur.description:
-                cols = [d.name for d in cur.description]
-                return [dict(zip(cols, r)) for r in cur.fetchall()]
-        return []
 
     @contextmanager
     def scope(self):

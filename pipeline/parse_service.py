@@ -108,9 +108,8 @@ def _jail(path_str):
 
 
 def _is_scan(path):
-    """스캔 PDF인지 — run_all과 같은 판정(parse_qa.pdf_kind: 전체 쪽 글자층이 쪽당 평균 20자 미만 → .pdf_image → qwen_vlm).
-    서비스 안내(VLM 미설정·실패)가 실제로 돈 엔진과 어긋나지 않게 판정을 한 곳에서 빌려 쓴다(mc-18 리뷰)."""
-    from pipeline.transform.represent.parse_scoring import pdf_kind
+    """스캔 PDF인지 — 엔진 고르기와 같은 판정(pdf_kind)이라 안내가 실제로 돈 엔진과 어긋나지 않는다."""
+    from pipeline.shared.parse_run import pdf_kind
 
     return Path(path).suffix.lower() == ".pdf" and pdf_kind(path)[0] == "pdf_image"
 

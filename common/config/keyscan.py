@@ -230,19 +230,6 @@ def scan(root=ROOT):
     return {k: sorted(set(v)) for k, v in sorted(found.items())}
 
 
-def mentioned(keys, root=ROOT):
-    """keys 중 추적 코드 파일(파이썬·셸·compose 등)에 이름이 단어로 한 번이라도 나오는 것 — 규칙 밖으로 읽는 키 대조용."""
-    texts = []
-    for rel in _tracked():
-        if _kind(rel):
-            try:
-                texts.append((root / rel).read_text(encoding="utf-8"))
-            except (OSError, UnicodeDecodeError):
-                pass
-    blob = "\n".join(texts)
-    return {k for k in keys if re.search(r"(?<![A-Z0-9_])" + re.escape(k) + r"(?![A-Z0-9_])", blob)}
-
-
 def object_reads():
     """설정 객체로 읽는 칸의 옛 env 이름 — common 칸(S7b — common/·pipeline/ 코드가 cfg()·by_env·given으로 읽음)·pipeline 칸(S7c —
     pipeline/ 코드가 pipeline.config의 cfg()·given으로 읽음)·mcp 칸(S7d — mcp_server/ 코드가 mcp_server.config의 cfg()·given으로 읽음). 정적 근사(알리기용 — 빠진 키 판정에는 안 씀), 파일마다: `.<절>.<칸>`이

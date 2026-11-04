@@ -35,12 +35,6 @@ def remove_at_exit(path):
     return path
 
 
-def forget(path):
-    """remove_at_exit 취소 — 호출자가 이미 지웠을 때(settings.isolated)."""
-    with _LOCK:
-        _FILES.discard(str(path))
-
-
 def track(p, group=False):
     """띄운 자식 p를 기억 — 프로세스가 끝날 때 아직 돌면 stop(p, group). group=True는 p를 새 프로세스 묶음(세션)으로 띄웠을 때만.
     끝난 자식은 returncode로만 거른다(poll()로 남의 스레드 자식을 대신 회수하지 않음). 정리 중이면 바로 끝낸다. 반환: p."""

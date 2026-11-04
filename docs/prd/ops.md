@@ -110,7 +110,7 @@
 
 <a id="rn-04"></a>
 ## rn-04 · MCP 업로드 중 medium 전담 워커 쉬기
-- 규칙: 5초마다 `mcp_busy()` — 작업 폴더(`<결과 폴더>/_mcp_parse/jobs` — 고정) 아래 이름 날짜(`<YYYYMMDD>-…`)가 어제·오늘·내일인 폴더만 보고, 30초 안에 바뀐 파일이 있으면 바쁨. 바쁘면 medium **전담** 워커가 새 문서를 집지 않는다. 폴더가 없으면 감지를 끄고 안내 한 줄. `--workers`는 받기만 하고 쓰지 않는다.
+- 규칙: 5초마다 `mcp_busy()` — 작업 폴더(`<결과 폴더>/_mcp_parse/jobs` — 고정) 아래 이름 날짜(`<YYYYMMDD>-…`)가 어제·오늘·내일인 폴더만 보고, 30초 안에 바뀐 파일이 있으면 바쁨. 바쁘면 medium **전담** 워커가 새 문서를 집지 않는다. 폴더가 없으면 감지를 끄고 안내 한 줄. 레인 워커 수는 `ops.run_docs.*` 칸.
 - 파일: `deploy/host/scripts/run_docs.py`.
 - QA: `tests/general/deploy/test_docs_flow.py`(medium·vlm 레인, vlm 동시 상한, MCP 양보, `mcp_busy` 표) · 통과.
 - Status: done
@@ -134,7 +134,7 @@
   2. "ETL 폴더" = `pipeline/` 안 `extract`·`transform`·`load`. 최상위 폴더 이름 `pipeline/`은 그대로(이미지·명령 이름 그대로 — 코드 폴더만 교체).
   3. `run_docs.py`는 서버 호스트에서 `docker exec`로 지휘만 하고, 판단(원천 목록·중복·레인·게시)은 ETL 함수로 옮긴다 — rn-05를 이 행과 함께 한다.
   4. 서버 배치: 이미지 폴더(`sbl_images-main/`)는 루트 한 단계 위 공용 폴더에 하나(예 `/home/sbl/`), 벌마다 루트(`dev/`·`dev-hong/`) — 문서만(op-13 규칙 2, README §5-0).
-  5. (11-04 둘째 질의) 스캔 PDF 규칙 두 개(레인 분류 `doc_parsing_group` — 앞 3쪽 평균 300자 미만 · 엔진 선택 `parse_scoring.pdf_kind` — 쪽마다 20자 미만)는 목적이 달라 그대로 두고 역할만 주석으로 적는다(결과 변화 없음).
+  5. (11-04 둘째 질의) 스캔 PDF 규칙 두 개(레인 분류 `doc_parsing_group` — 앞 3쪽 평균 300자 미만 · 엔진 선택 `parse_run.pdf_kind` — 쪽마다 20자 미만)는 목적이 달라 그대로 두고 역할만 주석으로 적는다(결과 변화 없음).
   6. run_docs의 EDW 읽기(문서 목록·끝난 문서·FAQ)와 warm 파일 이름은 호스트 사본을 그대로 둔다 — 컨테이너 쪽과 같은지 견주는 시험만 더한다(운영 접속 변경 없음) — `tests/general/deploy/test_edw_copies.py`(끝난 문서 상태 목록·SQL 조건·키 칸 규칙·warm 이름).
   7. 서버·릴리스 스크립트 이름을 하는 일로 바꾼다(문서·systemd 단위 함께).
   8. 공용 모듈(`common/**`)과 `pipeline/shared/**`는 이름·자리를 바꾸지 않는다(레이어 코드 핑거프린트 값 유지 — 기록용이지만 이번엔 제외). 파이프라인 루트의 파싱 코드를 ETL 폴더로 옮기는 것은 한다.
