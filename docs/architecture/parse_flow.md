@@ -426,7 +426,7 @@ flowchart TD
 | 이름 | 파일·함수 | 계산 대상 | 지금 쓰는 곳 |
 |---|---|---|---|
 | `FINGERPRINT`·`CONTRACT` | `common/core/fingerprint.py` | 핸드오프 파일(`core/contract.py`·`repfmt.py`·`terms.py`·`text.py`) 내용 · 인계 형식 판(2) | `_rep/_DONE.json`에 기록. `CONTRACT`는 끝 표시를 새로 쓸지 판정에 씀 |
-| `code_fp(층)` | `common.core.artifacts.code_fp()`(`LAYER_CODE`) | 층(p0 엔진·run_engines · p1 represent·figures · s 구조화 · r 검색) 파일 + 그 파일이 import하는 `common` 모듈 | `rep.post.code_fp`(p1), `applog.pipe_run.code_fp`(모든 층)에 기록 |
+| `code_fp(층)` | `common.core.artifacts.code_fp()`(`LAYER_CODE`) | 층(p0 엔진·run_engines · p1 represent·figures · s 구조화 · r 검색) 파일 + 그 파일이 import하는 `common` 모듈. 층 파일이 import하는 pipeline 파일(`pipeline/config.py`·`shared/parse_run.py` 등)도 층 목록에 적는다(실행 기록 `runtrace.py`만 뺌 — `tests/server/common/test_code_fp.py`가 확인) | `rep.post.code_fp`(p1), `applog.pipe_run.code_fp`(모든 층)에 기록 |
 | `engine_code_fp`·`p0_key` | `pipeline.extract.run_engines.engine_code_fp()`·`pipeline.extract.run_engines.p0_key()` | 엔진 폴더 + `_common` · (원본 sha, 엔진 판, 엔진 코드 지문) | `runs.jsonl`·결과 출처에 기록(엔진 결과를 건너뛰지는 않음) |
 | 쪽 VLM 열쇠 `det_key` | `pipeline.shared.vlmcall.det_key()` | 원본 sha·쪽·DPI·긴 변·회전·모델·지시서 id | 같으면 VLM을 다시 안 부름(VLM 엔진·쪽 VLM 후보정·pptx 공통) |
 | 그림·첨부 P0 경로 | `pipeline.shared.parse_run.raw_vlm_path()`·`pipeline.shared.parse_run.raw_engine_path()` | 이미지 sha·모델·지시서 id · 첨부 sha·엔진@판 | 같으면 다시 안 부름 |
