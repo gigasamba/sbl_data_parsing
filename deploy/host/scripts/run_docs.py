@@ -941,6 +941,15 @@ def _safe(fn, *args):
         _thread_error("정리", args[0], ex)
 
 
+def _ran(stage, fn, seq, *args):
+    """단계(파싱·게시·구조화) 실행 — 예외는 그 단계 실패로(progress.log에 남기고 False). 집계·정리는 호출자가 함."""
+    try:
+        return fn(seq, *args)
+    except Exception as ex:
+        log(f"doc#{seq} {stage} 예외 — {type(ex).__name__}: {str(ex)[:120]}")
+        return False
+
+
 def main():
     global WARM_TARGET, STRUCT_WORKERS, NO_CLEANUP, STRUCT_BACKLOG, CODE_DIR, DEADLINE_AT, _LOCK
     ap = argparse.ArgumentParser()
@@ -1055,7 +1064,7 @@ def main():
                 q.task_done()
 
     def _publish(seq, row):
-        ok = publish_one(seq)
+        ok = _ran("publish", publish_one, seq)
         if not ok:
             with _warm_lock:
                 cnt["pub_fail"] += 1
@@ -1066,7 +1075,7 @@ def main():
         depth("struct_put")
 
     def _gold(seq, row, enq_t):
-        ok = gold_one(seq, enq_t)
+        ok = _ran("구조화", gold_one, seq, enq_t)
         with _warm_lock:  # 집계를 기록(mark — 디스크 가득이면 예외)보다 먼저
             cnt["ok" if ok else "gold_fail"] += 1
             report = ok and cnt["ok"] % 5 == 0
@@ -1082,7 +1091,7 @@ def main():
         threading.Thread(target=_queue_loop, args=(_struct_q, "struct", _gold), daemon=True).start()
 
     def _one(doc_seq, row_doc):
-        if parse_one(doc_seq, row_doc):
+        if _ran("파싱", parse_one, doc_seq, row_doc):
             _pub_q.put((doc_seq, row_doc))
             depth("pub_put")
         else:

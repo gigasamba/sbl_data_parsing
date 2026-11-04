@@ -131,7 +131,8 @@ def test_main_survives_errors_in_failure_path():
         M = _run_main(work, rows, parse_one, gold_one, setup=setup)
         assert M._lane_inflight == {"light": 0, "medium": 0, "vlm": 0}
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
-        assert "문서별 flow 끝: 2건(완료 0 · 파싱실패 1 · 게시실패 0 · gold실패 0 · 스레드 예외 1)" in log, log
+        assert "문서별 flow 끝: 2건(완료 0 · 파싱실패 1 · 게시실패 0 · gold실패 1 · 스레드 예외 0)" in log, log
+        assert "doc#1 구조화 예외 — RuntimeError" in log, log
         assert M.rc == 1
 
 
