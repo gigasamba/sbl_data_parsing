@@ -257,3 +257,34 @@ def test_folder_tree():
     (odd / "_archive" / "u").mkdir(parents=True)
     (odd / "_archive" / "u" / "d.txt").write_text("d", encoding="utf-8")
     assert resolve(str(odd), root / "out3")[:2] == (odd, [])
+
+
+def test_prepare_batch():
+    """파싱 전 extract — 같은 내용은 하나만, ParsingMeta에 끝난 문서(unparsed가 뺀 것)는 빠짐 · pick_new는 상한·목록 안에서만."""
+    import tempfile
+    from unittest import mock
+
+    from pipeline.extract import deduplication as dedup
+
+    root = Path(tempfile.mkdtemp())
+    src = root / "src"
+    src.mkdir()
+    for name, body in (("a.txt", "same"), ("b.txt", "same"), ("c.txt", "done")):
+        (src / name).write_text(body, encoding="utf-8")
+    steps = []
+
+    def run_step(args):  # 여러 건 중복 확인은 자식 대신 같은 함수로
+        steps.append(args[0])
+        dedup.run_folder(src, root / "out" / "dedup")
+        return 0
+
+    with mock.patch.object(M, "unparsed", lambda names, out: [n for n in names if n != "c.txt"]):
+        local, keep, state = M.prepare_batch(str(src), root / "out", 0, run_step)
+        assert steps == ["pipeline.extract.deduplication"] and Path(local) == src
+        assert len(keep) == 1 and keep[0] in ("a.txt", "b.txt"), keep
+        assert (state / "selected.txt").read_text(encoding="utf-8").split() == ["a.txt", "b.txt", "c.txt"]
+        only = root / "only.txt"
+        only.write_text("b.txt\n", encoding="utf-8")
+        for max_new, sel, want in ((1, None, ["a.txt"]), (5, only, ["b.txt"])):
+            f = M.pick_new(src, root / "out", max_new, sel)
+            assert f.read_text(encoding="utf-8").split() == want, (max_new, want)

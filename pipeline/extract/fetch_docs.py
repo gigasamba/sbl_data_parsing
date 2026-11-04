@@ -649,6 +649,47 @@ def finish(state, local, rep_index):
     )
 
 
+def prepare_batch(source, out, limit, run_step):
+    """파싱 전 extract — 원본 가져오기 → 중복 확인 → 끝난 문서(ParsingMeta ok·partial) 빼기.
+    → (원본 폴더, 파싱할 이름 목록(받은 순서), 상태 폴더). run_step(args) → 종료 코드: 여러 건 중복 확인을 자식 프로세스로."""
+    out = Path(out)
+    local, names, state = resolve(source, out, limit)
+    if not is_remote(source):
+        C.put(DOC_DIR=str(Path(local).resolve()))  # 원본 위치 주소 = 이 폴더의 file:///
+    (state / "selected.txt").write_text("\n".join(names) + "\n", encoding="utf-8")
+    if sum(1 for f in Path(local).iterdir() if f.is_file() and f.name != ".gitkeep") <= 1:  # 1건은 자식 없이 같은 함수로
+        from pipeline.extract import deduplication as dedup
+
+        try:
+            dedup.run_folder(local, out / "dedup")
+            rc = 0
+        except Exception as e:  # 자식 실패와 같게 종료 코드로
+            print(f"[dedup] 실패: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+            rc = 1
+    else:
+        rc = run_step(["pipeline.extract.deduplication", "--src", local, "--out", out / "dedup"])
+    if rc != 0:
+        raise SystemExit(rc)
+    keep = set((out / "dedup" / "keep.txt").read_text(encoding="utf-8").splitlines())
+    keep &= set(unparsed(names, out))
+    return local, [n for n in names if n in keep], state
+
+
+def pick_new(src, out, max_new, only=None):
+    """이번 실행에서 처음 파싱할 문서(ParsingMeta에 성공 행이 없는 것)를 max_new개까지 → 목록 파일 경로. only(목록 파일)가 있으면 그 안에서만."""
+    names = sorted(p.name for p in Path(src).iterdir() if p.is_file())
+    new = unparsed(names, out)
+    pick = new[:max_new]
+    f = Path(out) / "parse" / "_batch_docs.txt"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    if only:
+        sel = set(Path(only).read_text(encoding="utf-8").splitlines())
+        pick = [n for n in pick if n in sel]
+    f.write_text("\n".join(pick) + "\n", encoding="utf-8")
+    print(f"[parse] 새·실패 문서 {min(len(new), max_new)}/{len(new)}개(PARSE_MAX_NEW {max_new}) — 나머지는 다음 실행", flush=True)
+    return f
+
+
 def unparsed(names, out):
     """C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = EDW FileStorageMap ∖ ParsingMeta. FileStorageMap 쪽은 이미 받은 이름 목록
     (`--source rdb:`가 FileStorageMap을 읽어 만든 것 — 이름 ↔ 원본 키 s3_key 대응은 fetch_docs.py가 쓴 manifest.jsonl), ParsingMeta 쪽은

@@ -125,52 +125,19 @@ def parse_module(a):
     engines = a.engines or ",".join(engine_stack.engines_of(st))  # parse 엔진(정렬) — VS8b R-8
     # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) · 스트리밍 파싱은 op-08에 지움
     lim, src_info = [], None
-    if a.source:  # 문서 위치: 같은 서버 폴더 → Object Storage 몇 건 → 전체(사용자 10-02)
-        local, names, state = SRC.resolve(a.source, OUT, a.source_limit)
+    if a.source:
+        local, keep, state = SRC.prepare_batch(a.source, OUT, a.source_limit, lambda args: _run_step(args, child_env()))
         src_info = (state, local)
-        _tstep("t_resolve")
-        if not SRC.is_remote(a.source):
-            C.put(
-                DOC_DIR=str(Path(local).resolve())
-            )  # S7e2 — 덮기 파일 + 인계 키라 env에도(contract.py) · 원본 위치 주소 = 이 폴더의 file:///
-        sel = OUT / "parse" / "_source" / "selected.txt"
-        sel.write_text("\n".join(names) + "\n", encoding="utf-8")
-        # fp-perf B7 — 문서 1건(run_docs 문서별 흐름)은 자식 프로세스 없이 같은 함수로(결과 파일 같음)
-        if sum(1 for f in Path(local).iterdir() if f.is_file() and f.name != ".gitkeep") <= 1:
-            from pipeline.extract import deduplication as dedup
-
-            try:
-                dedup.run_folder(local, OUT / "dedup")
-                rc = 0
-            except Exception as e:  # 자식 실패와 같게 종료 코드로(아래 SystemExit)
-                print(f"[dedup] 실패: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
-                rc = 1
-        else:
-            rc = _run_step(["pipeline.extract.deduplication", "--src", local, "--out", OUT / "dedup"], child_env())
         _tstep("t_dedup")
-        if rc != 0:
-            raise SystemExit(rc)
-        keep = set((OUT / "dedup" / "keep.txt").read_text(encoding="utf-8").splitlines())
-        keep &= set(SRC.unparsed(names, OUT))  # C10 — ParsingMeta에 성공 행이 있는 문서는 다시 파싱 안 함
         only = OUT / "parse" / "_source" / "only.txt"
-        only.write_text("\n".join(n for n in names if n in keep) + "\n", encoding="utf-8")
+        only.write_text("\n".join(keep) + "\n", encoding="utf-8")
         rc = _run_step(["pipeline.extract.filter_and_rotate", "--src", local, "--out", a.src, "--only", only], child_env())
         _tstep("t_prepare")
         if rc != 0:
             raise SystemExit(rc)
         lim = ["--docs-from", only]
-    if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
-        names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
-        new = SRC.unparsed(names, OUT)  # C10 — ParsingMeta에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
-        pick = new[: a.max_new]
-        f = OUT / "parse" / "_batch_docs.txt"
-        f.parent.mkdir(parents=True, exist_ok=True)
-        if lim:  # --source 선택과 겹치는 것만
-            sel_names = set(Path(lim[1]).read_text(encoding="utf-8").splitlines())
-            pick = [n for n in pick if n in sel_names]
-        f.write_text("\n".join(pick) + "\n", encoding="utf-8")
-        lim = ["--docs-from", f]
-        print(f"[parse] 새·실패 문서 {min(len(new), a.max_new)}/{len(new)}개(PARSE_MAX_NEW {a.max_new}) — 나머지는 다음 실행", flush=True)
+    if a.max_new:
+        lim = ["--docs-from", SRC.pick_new(a.src, OUT, a.max_new, lim[1] if lim else None)]
     env = C.child_env(
         child_env(), VLM_CONCURRENCY=str(RE.vlm_doc_concurrency(a, lim)), LLM_BASE_URL=None
     )  # 파싱 모듈은 LLM을 부르지 않음(S7e3 B-1)
