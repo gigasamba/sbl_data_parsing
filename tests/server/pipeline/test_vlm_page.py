@@ -117,6 +117,17 @@ def selftest():
         img = d / "scan.png"
         Image.new("RGB", (80, 80), "white").save(img)
         assert is_scan(img)
+        import fitz
+
+        # 스캔 판정은 pdf_kind 하나(쪽당 평균 20자): 1쪽만 25자·나머지 빈 3쪽 PDF는 스캔
+        sparse = d / "sparse.pdf"
+        sd = fitz.open()
+        sd.new_page().insert_text((50, 50), "a" * 25)
+        sd.new_page()
+        sd.new_page()
+        sd.save(sparse)
+        sd.close()
+        assert is_scan(sparse)
         assert page_count(img) == 1 and render(img, [1]) == [img.read_bytes()]
         text, prov = vlm_page(img.read_bytes())
         assert text == "" and "미설정" in prov["error"]

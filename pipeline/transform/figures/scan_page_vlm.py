@@ -13,6 +13,7 @@ from pathlib import Path
 
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared.ext_groups import IMG_EXTS
+from pipeline.shared.parse_run import pdf_kind
 from pipeline.shared.post_config import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
 from pipeline.shared.vlmcall import (  # 쪽 VLM 호출·캐시는 pipeline/shared/vlmcall.py로 옮김(엔진 qwen_vlm과 함께 씀)
     page_count,
@@ -46,16 +47,12 @@ PARSE_ROTATED_MAX_DEFAULT = "20"  # prepare.py가 돌린(각도≠0) 쪽 — 회
 
 
 def is_scan(p):
-    """스캔·이미지 문서 판정(원본: eval_hard_parse.one_doc) — png·jpg류 또는 글자층 20자 미만 쪽만 있는 PDF."""
+    """스캔·이미지 문서인지 — 이미지 파일이거나 pdf_kind가 pdf_image인 PDF."""
     p = Path(p)
     ext = p.suffix.lower()
     if ext in IMG_EXTS:
         return True
-    if ext != ".pdf":
-        return False
-    import fitz
-
-    return all(len(pg.get_text().strip()) < 20 for pg in fitz.open(p))
+    return ext == ".pdf" and pdf_kind(p)[0] == "pdf_image"
 
 
 PAGE_SIGNALS_VERSION = "v3"  # 독립 검토 A — 알고리즘·상수(PAGE_SCAN_*·image_area_ratio 계산법 등) 바뀌면 올려 캐시 무효화
