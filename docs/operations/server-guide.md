@@ -52,7 +52,7 @@ README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash 
 - EDW 기록 표는 DB 담당자가 미리 만든다 — `docs/operations/parsing_meta_mssql.sql`을 복사해 표 이름만 바꿔 넘긴다(refactor.md C-94).
 
 - 컨테이너는 모두 호스트 네트워크라 포트가 겹치면 뒤에 띄운 쪽이 시작하지 못한다.
-- 명령은 그 루트의 코드 폴더에서 `host_ctl.sh`로만 한다 — `host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`·`run_docs.py`가 settings.yaml의 `ops.host.instance`를 읽어 자기 벌의 컨테이너만 다룬다(셸 변수 `INSTANCE`·`DOCKER`로는 덮지 않음). compose를 직접 부르면 이름·포트 값이 채워지지 않는다.
+- 명령은 그 루트의 코드 폴더에서 `host_ctl.sh`로만 한다 — `host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`·`run_docs.py`가 settings.yaml의 `ops.host.instance`를 읽어 자기 벌의 컨테이너만 다룬다(셸 변수 `INSTANCE`로는 덮지 않음 — 컨테이너 명령은 셸 `DOCKER`가 `ops.host.docker`를 이김). compose를 직접 부르면 이름·포트 값이 채워지지 않는다.
 - 자동 실행(`host_ctl.sh timers`)도 벌마다 따로 켜진다. 개발자 벌은 새벽 배치가 필요 없으면 `systemctl disable --now data-pipeline-nightly-<이름>.timer`.
 - CPU·메모리 상한(§README 5-0 "자원")은 서버 전체 합계를 보고 벌마다 줄인다.
 

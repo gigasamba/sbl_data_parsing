@@ -452,7 +452,7 @@ bash deploy/host/scripts/host_ctl.sh ps                                         
 | 새 벌이 새 스키마(`sbl_hong`)를 씀 | 처음 한 번 `--dim`과 함께, 이어서 `migrate master load` |
 | 새 판에 표 변경(마이그레이션)이 있음 | 적재 전에 한 번(`--dim` 없이 — 있는 표는 DB의 차원을 씀) |
 
-- `instance`를 비우면 한 벌(이름 그대로). 이름은 영소문자·숫자·`-`만(틀리면 `host_ctl.sh`가 종료 2). 벌 이름·컨테이너 명령(`ops.host.docker`)은 settings.yaml에서만 읽는다(셸 변수로 덮지 않음).
+- `instance`를 비우면 한 벌(이름 그대로). 이름은 영소문자·숫자·`-`만(틀리면 `host_ctl.sh`가 종료 2). 벌 이름은 settings.yaml에서만 읽는다(셸 변수로 덮지 않음). 컨테이너 명령은 셸 `DOCKER`가 있으면 그 값, 없으면 `ops.host.docker`.
 - 확인: `bash deploy/host/scripts/host_ctl.sh ps` — 그 벌의 컨테이너만 보인다. 자세한 것은 [server-guide §1-3](docs/operations/server-guide.md#1-3-한-서버에-여러-벌-띄우기개발자별).
 
 ### 5-1. 버전 올리기

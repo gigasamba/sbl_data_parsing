@@ -3,6 +3,7 @@ CODE_DIR를 주면 compose.code*.yml 셋을 더한 뒤 인자를 그대로 넘�
 
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -58,3 +59,37 @@ def test_dc_command():
             files = [w.rsplit("/", 1)[-1] for w in r.stdout.split() if w.endswith(".yml")]
             assert r.stdout.split()[:3] == ["compose", "-p", project] and r.stdout.split()[-3:] == ["up", "-d", "mcp"], r.stdout
             assert files == BASE + (CODE if overlay else []), (image, code, files)
+
+
+STUB = "from pathlib import Path\nprint(f\"export DATA_PIPELINE_IMAGE='{Path(__file__).parents[4].name}'\")\n"  # settings_to_env.py 대역 — 루트 이름을 냄
+
+
+def test_stale_shell_reads_own_root():
+    """루트 a에서 load_settings를 source한 셸(env를 물려받음)로 루트 b의 스크립트를 불러도 b의 루트·설정 파일·설정 값을 쓴다.
+    셸에서 사람이 준 값(DOCKER)은 그대로 이긴다."""
+    bash = _bash()
+    if not bash:
+        print("[시험] bash 없음 — 건너뜀")
+        return
+    with tempfile.TemporaryDirectory() as d:
+        ls = {}
+        for name in ("a", "b"):
+            root = Path(d) / name
+            scripts = root / "code" / "deploy" / "host" / "scripts"
+            scripts.mkdir(parents=True)
+            (scripts / "load_settings.sh").write_bytes((SCRIPT.parent / "load_settings.sh").read_bytes())
+            (scripts / "settings_to_env.py").write_text(STUB, encoding="utf-8")
+            (root / "settings.yaml").write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
+            p = (scripts / "load_settings.sh").resolve().as_posix()
+            ls[name] = f"/{p[0].lower()}{p[2:]}" if p[1:2] == ":" else p
+        inner = f'. {ls["b"]} && load_settings && echo "$RAG_ROOT|$SETTINGS_FILE|$DATA_PIPELINE_IMAGE|$RAG_OUT|$DOCKER"'
+        cmd = f". {ls['a']} && load_settings && export DATA_PIPELINE_IMAGE && bash -c '{inner}'"
+        env = {
+            "PATH": os.environ.get("PATH", ""),  # env 남김 — 하위 프로세스(시험 셸)
+            "PY": Path(sys.executable).as_posix(),
+            "DOCKER": "echo",
+        }
+        r = subprocess.run([bash, "-c", cmd], env=env, capture_output=True, text=True, encoding="utf-8", timeout=60)
+        assert r.returncode == 0, r.stderr
+        root_b = ls["b"].rsplit("/code/", 1)[0]
+        assert r.stdout.strip() == f"{root_b}|{root_b}/settings.yaml|b|{root_b}/output|echo", r.stdout

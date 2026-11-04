@@ -58,7 +58,7 @@ def _inner(cmd):
 
 
 def test_container_command_from_setting():
-    """컨테이너 명령은 DOCKER(설정 ops.host.docker, 없으면 podman·docker)에서 — 고정 docker 글자가 남지 않음."""
+    """컨테이너 명령은 DOCKER(셸 env > 설정 ops.host.docker > podman·docker)에서 — 고정 docker 글자가 남지 않음."""
     old = RD.DOCKER
     try:
         RD.DOCKER = "podman"

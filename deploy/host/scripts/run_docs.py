@@ -170,9 +170,11 @@ def configure(settings_file=None):
     )
     DOCFLOW = DOCSPACE / "_docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     WARM = DOCSPACE / "_warm"  # SOURCE_WARM 대기열 저장소
-    DOCKER = _host().get(doc, "common.host.docker") or (
-        "podman" if shutil.which("podman") else "docker"
-    )  # 셸 스크립트와 같은 순서(env 대신 설정)
+    DOCKER = (
+        os.environ.get("DOCKER")  # env 남김 — 호스트 도구(셸 env > ops.host.docker — load_settings.sh와 같은 순서)
+        or _host().get(doc, "common.host.docker")
+        or ("podman" if shutil.which("podman") else "docker")
+    )
     inst = _host().get(doc, "common.host.instance") or ""
     if not re.fullmatch(r"([a-z0-9][a-z0-9-]*)?", str(inst)):
         return ["ops.host.instance는 영소문자·숫자·-만(앞은 글자·숫자)"]
