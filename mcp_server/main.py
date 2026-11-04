@@ -171,15 +171,16 @@ def build_guarded_app(host, port, token):
         if scope["type"] != "http" or scope.get("path") == "/health":
             return await inner(scope, receive, send)
         hdr = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
+        client_ip = (scope.get("client") or (None,))[0]  # 소켓 주소 — 프록시 뒤면 프록시 IP다
         if token and not hmac.compare_digest(
             (hdr.get("authorization") or "").encode(), f"Bearer {token}".encode()
         ):  # 인증 실패는 본문 수신을 기다리지 않고 바로 거부한다.
-            with call_log.request_context(hdr) as context:
+            with call_log.request_context(hdr, client_ip) as context:
                 await anyio.to_thread.run_sync(call_log.unauthorized)
                 return await JSONResponse({"error": "unauthorized"}, status_code=401, headers={"X-Request-Id": context["request_id"]})(
                     scope, receive, send
                 )
-        with call_log.request_context(hdr) as context:
+        with call_log.request_context(hdr, client_ip) as context:
             # SDK가 받는 ASGI 청크를 즉시 그대로 전달한다. 감사용 사본은 최대 1MiB.
             # 큰 요청은 _meta/initialize 추출만 생략하며 도구 입력/제한은 바꾸지 않는다.
             metadata_limit = 1024 * 1024

@@ -100,7 +100,7 @@ def test_queue_metadata():
                 overflow.finish({"query": "zqz"})
                 assert not release.is_set()
                 assert len(rows) == 1 and rows[0]["args"] is None and rows[0]["result"] is None
-                assert rows[0]["err"] == "audit_queue_full"
+                assert rows[0]["error_code"] == "audit_queue_full" and rows[0]["error_message"] is None
                 assert rows[0]["result_keys"] == {"audit_body_omitted": "queue_full"}
                 assert worker.stats()["body_omitted"] == 1 and worker.stats()["queued"] == 1
             finally:
@@ -126,9 +126,9 @@ def test_overflow_sink_nonblocking():
         worker = audit.Worker(capacity=1)
         with settings.isolated(APPLOG_DB_ENABLED="1"), patch.object(logsink, "_SINGLETON", sink):
             try:
-                sink.emit("mcp_call", {"tool": "occupied"})
+                sink.emit("mcp_log", {"tool_name": "occupied"})
                 assert entered.wait(30)
-                sink.emit("mcp_call", {"tool": "queued"})
+                sink.emit("mcp_log", {"tool_name": "queued"})
                 # 닫힌 감사 큐도 같은 본문 생략 경로, sink 포화도 기다리지 않음.
                 worker.close()
                 worker.submit(audit.start(lambda: None), None, {"tool": "overflow", "status": "ok"})
@@ -282,7 +282,7 @@ def test_large_integer_byte_budget():
     for row in rows:
         assert row["args"] is None and row["result"] is None
         assert row["result_keys"] == {"audit_body_omitted": "queue_full"}
-        assert row["err"] == "audit_queue_full"
+        assert row["error_code"] == "audit_queue_full"
 
 
 def test_estimate_bound():
@@ -311,11 +311,10 @@ def test_large_metadata():
     huge = "x" * 1000000
 
     def observe(row):
-        if isinstance(row, dict) and "err" in row:
+        if isinstance(row, dict) and "error_message" in row:
             seen.append(row)
-            assert len(row["err"] or "") <= audit._META_TEXT_LIMIT
-            assert len(row.get("user_id") or "") <= audit._META_TEXT_LIMIT
-            assert len(row.get("agent") or "") <= audit._META_TEXT_LIMIT
+            assert len(row["error_message"] or "") <= audit._META_TEXT_LIMIT
+            assert len(row.get("knox_id") or "") <= audit._META_TEXT_LIMIT
         return original(row)
 
     assert len(audit._status({"error": huge})[1]) <= audit._META_TEXT_LIMIT
