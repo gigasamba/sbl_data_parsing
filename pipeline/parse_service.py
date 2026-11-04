@@ -136,6 +136,25 @@ def empty_note(scan):
     return VLM_FAIL_NOTE if scan else DRM_NOTE
 
 
+def _empty_result(job_id, fname, note, **ms):
+    """대표 결과가 없는 작업의 빈 결과(안내 note) — ms(걸린 시간)는 파이프라인을 돌았을 때만."""
+    return {
+        "job_id": job_id,
+        "filename": fname,
+        "status": "done",
+        "engine": None,
+        "text": "",
+        "tables_std": [],
+        "tables": [],
+        "facts": [],
+        "fields": {},
+        "rep_path": None,
+        "all_keys": [],
+        "note": note,
+        **ms,
+    }
+
+
 def _max_bytes():
     """파일 1건 크기 상한(바이트) — common.runtime.parse_max_mb(검색 MCP와 같은 칸 — 사용자 11-03, 기본 100MB), 요청마다 읽음."""
     return int(common_cfg().runtime.parse_max_mb * 1048576)
@@ -232,20 +251,7 @@ def _worker():
                 shutil.copy2(Path(j["path"]), ws / "in" / fname)
             note = skip_note(j.get("scan"))
             if note:  # mc-18(11-03): VLM 주소가 없는 스캔 PDF — 파이프라인 없이 빈 결과 즉시
-                j["result"] = {
-                    "job_id": job_id,
-                    "filename": fname,
-                    "status": "done",
-                    "engine": None,
-                    "text": "",
-                    "tables_std": [],
-                    "tables": [],
-                    "facts": [],
-                    "fields": {},
-                    "rep_path": None,
-                    "all_keys": [],
-                    "note": note,
-                }
+                j["result"] = _empty_result(job_id, fname, note)
                 j["status"] = "done"
             else:
                 only = ws / "only.txt"
@@ -285,40 +291,17 @@ def _worker():
                     # ② 결과 없음 → runs.jsonl 부재 → 빈 결과(스캔 PDF면 VLM 실패 안내, 아니면 DRM 추정)
                     note = empty_note(scan)
                     _log(f"{job_id} · 결과 없음 → 빈 결과({'VLM 실패' if note == VLM_FAIL_NOTE else 'DRM 추정'})")
-                    j["result"] = {
-                        "job_id": job_id,
-                        "filename": fname,
-                        "status": "done",
-                        "engine": None,
-                        "text": "",
-                        "tables_std": [],
-                        "tables": [],
-                        "facts": [],
-                        "fields": {},
-                        "rep_path": None,
-                        "all_keys": [],
-                        "note": note,
-                        "ms": round((time.time() - t0) * 1000, 1),
-                    }
+                    j["result"] = _empty_result(job_id, fname, note, ms=round((time.time() - t0) * 1000, 1))
                 else:
                     # ④ 대표 결과 파일 확인 → 정상 반환 or 빈 결과
                     rep_path = ws / "parse" / "_rep" / (fname + ".json")
                     if not rep_path.exists():
-                        j["result"] = {
-                            "job_id": job_id,
-                            "filename": fname,
-                            "status": "done",
-                            "engine": None,
-                            "text": "",
-                            "tables_std": [],
-                            "tables": [],
-                            "facts": [],
-                            "fields": {},
-                            "rep_path": None,
-                            "all_keys": [],
-                            "note": VLM_FAIL_NOTE if scan else "텍스트 추출 결과 없음 — DRM/암호화 문서일 가능성",
-                            "ms": round((time.time() - t0) * 1000, 1),
-                        }
+                        j["result"] = _empty_result(
+                            job_id,
+                            fname,
+                            VLM_FAIL_NOTE if scan else "텍스트 추출 결과 없음 — DRM/암호화 문서일 가능성",
+                            ms=round((time.time() - t0) * 1000, 1),
+                        )
                     else:
                         rep = json.loads(rep_path.read_text(encoding="utf-8"))
                         j["result"] = {
