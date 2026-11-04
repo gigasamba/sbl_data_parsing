@@ -35,6 +35,22 @@ bash deploy/host/scripts/dc.sh init --group <운영 그룹>   # 루트의 output
 ### 1-2. 기동 확인
 README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash deploy/host/scripts/dc.sh check`(기대 마지막 줄 `[dc check] 통과 — 6개`).
 
+### 1-3. 한 서버에 여러 벌 띄우기(개발자별)
+루트 하나가 한 벌이다. 개발자마다 루트를 따로 만들고(코드 zip을 풀고 `dc.sh init`), 그 루트의 `settings.yaml`에 아래를 **벌마다 다르게** 적는다.
+
+| 칸 | 하는 일 | 예(홍 개발자) |
+|---|---|---|
+| `ops.host.instance` | 컨테이너 이름·compose 묶음·systemd 타이머 이름 끝에 `-<이름>`을 붙인다(영소문자·숫자·`-`). 비우면 한 벌 — 이름 그대로 | `hong` → `data-pipeline-hong`·`data-pipeline-mcp-hong`·`mcp-server-hong`, 타이머 `data-pipeline-nightly-hong.timer` |
+| `search.server.port` | 검색 MCP 포트 | `8775` |
+| `ops.services.parse_mcp.port` | parse_document 작업 서비스 포트 | `8776` |
+| `search.parse_proxy.url` | 검색 MCP가 부르는 작업 서비스 주소 — 위 포트와 같게 | `http://127.0.0.1:8776` |
+| `required.pg.db_schema` | 검색 DB 스키마(벌마다 따로 적재) | `sbl_hong` |
+
+- 컨테이너는 모두 호스트 네트워크라 포트가 겹치면 뒤에 띄운 쪽이 시작하지 못한다.
+- 명령은 그 루트의 코드 폴더에서 `dc.sh`로만 한다 — `dc.sh`·`mcp_up.sh`·`trigger.sh`·`run_tool.sh`·`run_docs.py`가 `ops.host.instance`를 읽어 자기 벌의 컨테이너만 다룬다. compose를 직접 부르면 이름·포트 값이 채워지지 않는다.
+- 자동 실행(`dc.sh timers`)도 벌마다 따로 켜진다. 개발자 벌은 새벽 배치가 필요 없으면 `systemctl disable --now data-pipeline-nightly-<이름>.timer`.
+- CPU·메모리 상한(§README 5-0 "자원")은 서버 전체 합계를 보고 벌마다 줄인다.
+
 ## 2. 일상 실행 — run_docs(문서별 흐름)
 
 서버 입구는 `run_docs.py` 하나다 — 문서마다 파싱 → publish(Object Storage + EDW) → 원본 삭제 → 구조화·적재를 상주 컨테이너 안에서 `exec`로 돌린다(PRD [pl-24](../prd/ops.md#pl-24)). 자리·설정: [release-and-patch §5-4](release-and-patch.md#5-4-run_docspy-자리와-설정).

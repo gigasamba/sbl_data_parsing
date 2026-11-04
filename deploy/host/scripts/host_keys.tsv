@@ -2,6 +2,7 @@
 common.run_env	RUN_ENV	text
 common.host.doc_src	DOC_SRC	text
 common.host.docker	DOCKER	text
+common.host.instance	INSTANCE	text
 common.host.image_stage_dir	IMAGE_STAGE_DIR	text
 common.host.output_root	RAG_OUT	text
 common.host.pg_container	PG_CONTAINER	text

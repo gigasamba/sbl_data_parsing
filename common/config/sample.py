@@ -174,6 +174,7 @@ BLANK = {
     "common.dev.docker.smoke_settings": "스모크 시험이 시작하지 않음(필수)",
     "common.dev.docker.smoke_pg_password": "스모크 시험이 시작하지 않음(필수)",
     "common.host.docker": "podman, 없으면 docker",
+    "common.host.instance": "한 벌 — 컨테이너 이름 그대로(data-pipeline·data-pipeline-mcp·mcp-server)",
     "common.host.image_stage_dir": "조각·tar 정리 안 함(--stage-dir로 줄 때만)",
     "common.models.embed.query_cache": "<루트>/output/query_cache.sqlite(mcp 이미지 안은 /tmp/mcp_query_cache.sqlite) · 0이면 캐시 끔",
     "common.models.embed.query_prefix": "접두 없이 질의 그대로",

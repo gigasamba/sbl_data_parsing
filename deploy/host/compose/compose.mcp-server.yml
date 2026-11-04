@@ -15,7 +15,7 @@ x-settings: &settings "${SETTINGS_FILE:?SETTINGS_FILE=<settings.yaml 절대 경�
 services:
   mcp:
     image: ${MCP_SERVER_IMAGE:?MCP_SERVER_IMAGE=mcp-server:<태그> 필요 — 옛 DATA_RETRIEVAL_IMAGE·RAG_IMAGE는 S6b에 바뀜(refactor.md C-29)}
-    container_name: mcp-server             # S6b(사용자 10-27) — 옛 data-retrieval(그 전 rag-mcp)
+    container_name: mcp-server${NAME_SUFFIX:-}             # S6b(사용자 10-27) — 옛 data-retrieval(그 전 rag-mcp)
     command: ["mcp"]
     restart: unless-stopped
     network_mode: host

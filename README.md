@@ -397,6 +397,40 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 - 이때 `required.tokens.mcp`가 꼭 있어야 한다(없으면 시작 거부). 만들기: `openssl rand -hex 24`.
 - 방화벽에서 `search.server.port`(기본 8765)를 연다 — 예: `firewall-cmd --add-port=8765/tcp --permanent && firewall-cmd --reload`.
 
+**한 서버에 여러 벌 띄우기(개발자별 — 컨테이너 이름·포트 바꾸기)**
+- 루트 하나가 한 벌이다. 개발자마다 루트를 새로 만들어(예 `/home/dev-hong/`) 위 설치 순서 1~10을 따로 한다.
+- 그 루트의 `settings.yaml`에 아래 칸을 벌마다 다르게 적는다. compose를 직접 부르지 않는다 — `dc.sh`가 이 값으로 이름·포트를 채운다.
+
+```yaml
+ops:
+  host:
+    instance: hong                # 컨테이너 data-pipeline-hong · data-pipeline-mcp-hong · mcp-server-hong, 타이머 data-pipeline-nightly-hong.timer
+  services:
+    parse_mcp:
+      port: 8776                  # parse_document 작업 서비스 포트(기본 8766)
+search:
+  server:
+    port: 8775                    # 검색 MCP 포트(기본 8765)
+  parse_proxy:
+    url: http://127.0.0.1:8776    # 위 작업 서비스 포트와 같게
+required:
+  pg:
+    db_schema: sbl_hong           # 검색 DB 스키마도 벌마다
+```
+- 명령(root 셸 — 이미지는 서버에 한 번만 불러 두면 벌끼리 같이 쓴다):
+```bash
+mkdir -p /home/dev-hong && cd /home/dev-hong && unzip <코드 zip>          # 새 루트 + 코드 폴더
+cd sbl_data_parsing-<판>
+bash deploy/host/scripts/dc.sh init --group <운영 그룹>                    # <루트>/settings.yaml 생김 → 위 칸을 채움
+bash deploy/host/scripts/dc.sh up -d data-pipeline                         # → data-pipeline-hong
+bash deploy/host/scripts/run_tool.sh migrate up --target all --dim <차원>  # 새 스키마 sbl_hong에 표 만들기(설치 순서 6)
+bash deploy/host/scripts/dc.sh up -d data-pipeline-mcp mcp                 # → data-pipeline-mcp-hong · mcp-server-hong(포트 8776 · 8775)
+bash deploy/host/scripts/dc.sh check                                       # 마지막 줄 [dc check] 통과 — 6개
+bash deploy/host/scripts/dc.sh ps                                          # 이 벌의 컨테이너만 보임
+```
+- `instance`를 비우면 한 벌(이름 그대로 `data-pipeline`·`data-pipeline-mcp`·`mcp-server`). 이름은 영소문자·숫자·`-`만(틀리면 `dc.sh`가 종료 2).
+- 확인: `bash deploy/host/scripts/dc.sh ps` — 그 벌의 컨테이너만 보인다. 자세한 것은 [server-guide §1-3](docs/operations/server-guide.md#1-3-한-서버에-여러-벌-띄우기개발자별).
+
 ### 5-1. 버전 올리기
 
 규칙과 태그는 [release-and-patch §4](docs/operations/release-and-patch.md#4-버전).

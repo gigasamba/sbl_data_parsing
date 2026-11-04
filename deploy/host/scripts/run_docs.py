@@ -27,6 +27,7 @@ import hashlib
 import json
 import os
 import queue
+import re
 import shlex
 import shutil
 import subprocess
@@ -160,7 +161,7 @@ def work_dir(doc):
 def configure(settings_file=None):
     """서버 settings.yaml을 한 번 읽어 모듈 값(경로·접속)을 채운다 — 문제 목록(빈 목록이면 통과). 값은 찍지 않는다."""
     global TEST, PROG, DOCSPACE, DOCFLOW, WARM, MCP_JOBS_DIR, WARM_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA
-    global DOCKER
+    global DOCKER, PIPE_C
     doc, err = read_settings(settings_file)
     if err:
         return [err]
@@ -186,6 +187,11 @@ def configure(settings_file=None):
     DOCKER = _yget(doc, "common.host.docker") or (
         "podman" if shutil.which("podman") else "docker"
     )  # op-10 — 셸 스크립트와 같은 순서(env 대신 설정)
+    inst = _yget(doc, "common.host.instance") or ""
+    if not re.fullmatch(r"([a-z0-9][a-z0-9-]*)?", str(inst)):
+        return ["ops.host.instance는 영소문자·숫자·-만(앞은 글자·숫자)"]
+    # 여러 벌(op-15) — dc.sh가 띄운 이 루트의 컨테이너(settings_env.sh NAME_SUFFIX와 같은 규칙)
+    PIPE_C = "data-pipeline" + (f"-{inst}" if inst else "")
     jobs = _yget(doc, "mcp.host.jobs_dir")
     MCP_JOBS_DIR = Path(jobs) if jobs else DOCSPACE / "_mcp_parse" / "jobs"
     rdb = _yget(doc, "common.connections.rdb")  # 조회만 — 읽기 계정(사용자 10-29 ops.md#op-03)
@@ -212,7 +218,7 @@ def _edw_connect():
 # 11-02 — 시작 때 코드 배치 확인(code_layout_problems·CODE_MARKER·PATCH_CODE)은 운영 마지막 버전에 없어 지움(사용자 규칙).
 # S6b(D-020, 사용자 10-27) — 파이프라인 이미지가 하나(data-pipeline)로 합쳐지고 상주 컨테이너 이름이 바뀜(옛 data-parsing·data-structure).
 # 11-03(사용자) — 상주 컨테이너 둘(data-pipeline-parse·data-pipeline-structure)을 하나로 합침: warm·파싱·게시·구조화·정리 모두 이 안에서 docker exec.
-PIPE_C = "data-pipeline"  # docker exec 대상(compose.pipeline.yml 상주 서비스)
+PIPE_C = "data-pipeline"  # docker exec 대상(compose.pipeline.yml 상주 서비스) — configure()가 ops.host.instance를 붙임
 
 # S9 Step A(VS8b U-1, 사용자 10-28) — 컨테이너 안 앱이 읽는 설정 칸(옛 env 이름)은 명령 인자 `--set 이름=값`으로 준다(common.config.setarg —
 # 그 python이 덮기 파일로 자기와 자식에게 넘김). 전에는 `bash -c 'X=값 python …'` env로 줬는데 S7e2부터 앱이 env의 옛 이름을 읽지 않아

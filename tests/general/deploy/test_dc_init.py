@@ -85,18 +85,28 @@ def test_root_is_code_parent():
 
 
 def test_timers():
-    """op-13 규칙 6 — dc.sh timers가 단위 파일 4개의 @CODE_DIR@를 이 코드 폴더로 채워 쓴다(DC_UNIT_DIR — systemctl 없음)."""
+    """op-13 규칙 6 — dc.sh timers가 단위 파일 4개의 @CODE_DIR@를 이 코드 폴더로 채워 쓴다(DC_UNIT_DIR — systemctl 없음).
+    여러 벌(ops.host.instance)이면 단위 이름 끝에 -<instance>(타이머·서비스 짝이 같은 이름)."""
     bash = _need_bash()
     if not bash:
         return
-    with tempfile.TemporaryDirectory() as d:
-        r = _run(bash, ["timers"], {"DC_UNIT_DIR": _posix(d)})
-        assert r.returncode == 0, r.stderr + r.stdout
-        units = sorted(p.name for p in Path(d).iterdir())
-        assert units == sorted(p.name for p in (SCRIPT.parents[1] / "systemd").iterdir()) and len(units) == 4, units
-        for name in ("data-pipeline-nightly.service", "mcp-server-keepalive.service"):
-            text = (Path(d) / name).read_text(encoding="utf-8")
-            assert "@CODE_DIR@" not in text and f"WorkingDirectory={_posix(SCRIPT.parents[3])}\n" in text, (name, text)
+    src = sorted(p.name for p in (SCRIPT.parents[1] / "systemd").iterdir())
+    for inst in ("", "hong"):
+        with tempfile.TemporaryDirectory() as d:
+            sf = Path(d) / "settings.yaml"
+            sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
+            units_dir = Path(d) / "units"
+            units_dir.mkdir()
+            sp = _posix(sf)
+            env = {"DC_UNIT_DIR": _posix(units_dir), "SETTINGS_FILE": sp, "SETTINGS_LOADED": sp, "INSTANCE": inst}
+            r = _run(bash, ["timers"], env)
+            assert r.returncode == 0, r.stderr + r.stdout
+            suffix = f"-{inst}" if inst else ""
+            units = sorted(p.name for p in units_dir.iterdir())
+            assert units == sorted(n.replace(".", suffix + ".", 1) for n in src) and len(units) == 4, units
+            for name in ("data-pipeline-nightly.service", "mcp-server-keepalive.service"):
+                text = (units_dir / name.replace(".", suffix + ".", 1)).read_text(encoding="utf-8")
+                assert "@CODE_DIR@" not in text and f"WorkingDirectory={_posix(SCRIPT.parents[3])}\n" in text, (name, text)
 
 
 FAKE = """case "$1" in

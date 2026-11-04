@@ -1485,6 +1485,12 @@ class CommonDev(Section):
 class CommonHost(Section):
     doc_src: str | None = F(None, "DOC_SRC", "원본 문서 폴더(DOC_DIR의 옛 별칭) — compose에선 /data/docs로 마운트할 호스트 폴더")
     docker: str | None = F(None, "DOCKER", "호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — op-10)")
+    instance: str | None = F(
+        None,
+        "INSTANCE",
+        "한 서버에 여러 벌(개발자별 등) 띄울 때 이 루트의 이름(영소문자·숫자·-) — 컨테이너 이름·compose 묶음·systemd 타이머 이름 끝에 -<이름>으로 붙음."
+        " 비우면 이름 그대로(한 벌). 벌마다 포트(search.server.port · parse MCP 서비스 port와 parse_document 주소)와 PG 스키마도 달리 적는다",
+    )
     image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_old.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
     output_root: str | None = F(
         None,

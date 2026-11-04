@@ -72,6 +72,17 @@
 - QA: `tests/server/common/test_pc_targets.py`(상대 sqlite · 상대 `file://` 버킷 · 절대 경로 · local 실제 호스트 거부 · dev 실제 호스트 허용) · 통과.
 - Status: done
 
+<a id="op-15"></a>
+## op-15 · 한 서버에 여러 벌(개발자별) — 이름·포트를 설정으로
+- 이유(사용자 11-04): 개발 서버에 개발자마다 컨테이너를 따로 띄운다. 컨테이너 이름(`data-pipeline` 등)·compose 묶음 이름·systemd 타이머 이름이 고정이라 두 번째 벌이 첫 벌을 덮었다.
+- 규칙:
+  1. 루트 하나 = 한 벌. 새 칸 `ops.host.instance`(`common.host.instance`, 영소문자·숫자·`-`) — 적으면 컨테이너 3개·compose 묶음(`compose-<이름>`)·systemd 단위 4개 이름 끝에 `-<이름>`. 비우면 이름 그대로(한 벌 — 지금 서버와 같음).
+  2. 이름을 붙이는 곳은 `settings_env.sh load_settings`(`NAME_SUFFIX` — 틀린 꼴이면 종료 2) 한 곳, 호스트 스크립트(`dc.sh`·`mcp_up.sh`·`trigger.sh`·`run_tool.sh`)와 compose 파일은 그 값을 쓴다. `run_docs.py`는 같은 규칙으로 `configure()`에서.
+  3. 포트·스키마는 이미 있는 칸을 벌마다 다르게 적는다(`search.server.port` · `ops.services.parse_mcp.port` + `search.parse_proxy.url` · `required.pg.db_schema`) — server-guide §1-3.
+- 파일: `common/config/settings.py` · `deploy/host/scripts/{settings_env.sh,dc.sh,mcp_up.sh,trigger.sh,run_tool.sh,run_docs.py,host_keys.tsv}` · `deploy/host/compose/compose.{pipeline,pipeline-mcp,mcp-server}.yml`.
+- QA: `tests/general/deploy/test_dc.py`(묶음 이름 `compose`·`compose-hong` · 틀린 이름 종료 2) · `test_dc_init.py`(타이머 단위 이름 끝) · `test_compose.py`(컨테이너 이름 끝 `${NAME_SUFFIX:-}`) · 통과.
+- Status: done
+
 <a id="pl-21"></a>
 ## pl-21 · 은퇴한 설정 칸 지우기
 - 규칙: 아래 칸은 지운 칸 목록(`layout.REMOVED`)에 있어 남아 있으면 경고만 한다 — `common.paths.korean_font`·`eval_sets_dir`, `common.dev.exp_store`·`llm_est_in_tokens`·`llm_est_out_tokens`·`min_gold_coverage`, `common.runtime.exp_max_workers`·`exp_proc_gb_answer/build/run`·`exp_reserve_gb`, `common.models.llm.max_concurrency`, `pipeline.transform.structure.wiki_domain_phrase`, `pipeline.eval.diagram_raster_vlm`.

@@ -76,7 +76,8 @@ PC 명령은 [README §5-2](../../README.md#5-2-pc에서--이미지-만들기와
 - 이미지 이름은 settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`에 적는다.
 - 배포 뒤, 컨테이너 안 코드가 있는지 파일로 본다(bind 마운트 원본이 없으면 빈 폴더가 붙어 `test -d`는 통과하므로):
 ```bash
-for c in data-pipeline data-pipeline-mcp; do $DOCKER exec $c test -f /app/deploy/pipeline/extract/run_engines.py && echo "$c OK" || echo "$c 코드 없음(빈 마운트?)"; done
+for c in data-pipeline data-pipeline-mcp; do   # 여러 벌이면 이름 끝 -<ops.host.instance>(server-guide §1-3)
+ $DOCKER exec $c test -f /app/deploy/pipeline/extract/run_engines.py && echo "$c OK" || echo "$c 코드 없음(빈 마운트?)"; done
 ```
 
 ### 5-3. 상주 컨테이너

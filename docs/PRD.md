@@ -148,6 +148,7 @@
 | 실행 환경 `RUN_ENV`(`required.env.run_env`)는 `local`·`dev`·`prd`만, 어디서나 필수 — `stage`나 모르는 값이면 시작 거부 | `stage`는 `prd`와 똑같이 동작했다 | done | [op-02](prd/ops-settings.md#op-02) |
 | 서버(`dev`·`prd`)는 가짜 LLM(`dev.llm_fake`)이 켜져 있거나 설정 파일을 못 읽으면 시작 거부 | 서버에서 가짜 답이 도는 것을 막는다 | done | [op-02](prd/ops-settings.md#op-02) |
 | PC(`local`)는 가짜 대상만 — EDW sqlite·`file://` 게시 폴더·원본 폴더는 저장소 루트 기준 상대 경로를 받고, 실제 EDW·Object Storage 칸이 적혀 있으면 시작 거부 | 나중에 PC에서 전체 흐름을 가짜 대상으로 돌린다. 사용자 11-04 | done | [op-14](prd/ops-settings.md#op-14) |
+| 한 서버에 여러 벌(개발자별) — `ops.host.instance`가 컨테이너·compose 묶음·타이머 이름 끝에 붙고, 포트·스키마는 벌마다 설정으로 | 개발 서버에 개발자마다 컨테이너를 띄움. 사용자 11-04 | done | [op-15](prd/ops-settings.md#op-15) |
 | 설정은 settings.yaml 하나 — `settings.sample.yaml`에 모든 키가 기본값과 함께(`python -m common.config.sample`로 생성) | — | done | [op-05](prd/ops-settings.md#op-05) |
 | 배치 — 맨 위 `required`(필수·비밀) → 역할 절 7개(환경마다 정하는 값) → `tuning`(거의 안 바꾸는 값 — 분류 제목, 11-04). 옛 배치는 시작 거부, `python -m common.config.migrate`로 변환 | sample과 실제 파일의 차이를 줄였다 | done | [op-08](prd/ops-settings.md#op-08) |
 | 설정 이관은 옛 배치 settings.yaml → 새 배치만 | 운영 서버는 0.1.0(settings.yaml 하나). 사용자 11-02 | done | [op-08](prd/ops-settings.md#op-08) |
