@@ -4,7 +4,7 @@
 
 - **결정 칸:** `유지` = 지금 있고 남김 · `삭제` = 지금 있고 없앰 · `새로` = 지금 없고 만듦. 지금 상태 = `유지`+`삭제`, 목표 상태 = `유지`+`새로`. EDW 쪽 `새로`·`삭제`는 DB 담당자 DDL 대기(§5, refactor.md C-76).
 - **시험:** `tests/server/common/test_db_schema.py`가 gold 표(5벌 칸 합집합)를 Alembic 모델(`common/store/db/models/`)과, ParsingMeta를 [`docs/operations/parsing_meta_mssql.sql`](../operations/parsing_meta_mssql.sql)과, master 표를 모델과 비교한다. 지금 상태가 다르면 실패하고, 목표 상태와의 차이는 목록으로 찍기만 한다.
-- **쓰는 곳·읽는 곳**의 괄호 안은 아직 코드가 없는 계획이다.
+- **쓰는 곳·읽는 곳**의 괄호 안은 코드가 아니다 — `(운영자)`처럼 사람이 보는 곳이거나, 아직 코드가 없는 일이다. 코드가 없는 일은 PRD 행이 맡는다: 같은 `s3_key`의 기준 행 고르기·`SupersededRow`·`engines_failed`는 [pl-32](../prd/load-schema.md#pl-32), `gold_status`·`gold_reason`은 [pl-55](../prd/ops.md#pl-55).
 
 ## 1. 공통 규칙
 
@@ -148,7 +148,7 @@ PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서�
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
-| Id | (예시) | Quote id | (PC 대역 시드) | (사슬 파일에서 켤 때만) | 새로 |
+| Id | (예시) | Quote id | PC 대역 시드(`valid_env/edw/sfdc.sql`) | 적재 `edw_meta`(사슬 파일에서 quote 단계를 켤 때만) | 새로 |
 | OpportunityId | (예시) | 연결된 영업 기회 | 〃 | 〃 | 새로 |
 | AccountId | (예시) | 연결된 고객 계정 — 고객 이름은 `SFDC.Account` | 〃 | 〃 | 새로 |
 
@@ -161,7 +161,7 @@ PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서�
 | parse_meta_id | BIGINT IDENTITY PK | 행 번호 | DB | 없음(기본 키) | 유지 |
 | source_system | NVARCHAR(64) | 원천 | publish_parse_result `plan` | parsing_meta_db 겹침 확인·`pick_rep`(원문 도구·`set_loaded` 행 고르기) | 유지 |
 | source_key | NVARCHAR(1024) | 원본 전체 경로 = `AI.FileStorageMap.s3_key` 값 = gold `doc.file_path`. 원본과의 연결 키는 `source_system` + 이 칸. 이름을 `s3_key`로 바꾼다(아래 `s3_key` 줄 — DB 담당자 DDL, C-76) | publish_parse_result `plan` | 〃, run_docs `edw_done_keys`, mcp `fulltext_svc` | 유지 |
-| s3_key | NVARCHAR(1024) | 위 `source_key`의 새 이름 — DB 담당자가 이름을 바꾸면 계산 칸 `source_key_hash`·유일 색인 `UQ_ParsingMeta_key`도 다시 만든다(C-76). 코드는 연결할 때 `s3_key`가 있으면 그것, 없으면 `source_key`를 쓴다(`parsing_meta_db` `key_col`·run_docs) | (DDL 뒤 같은 곳) | (같은 곳) | 새로 |
+| s3_key | NVARCHAR(1024) | 위 `source_key`의 새 이름 — DB 담당자가 이름을 바꾸면 계산 칸 `source_key_hash`·유일 색인 `UQ_ParsingMeta_key`도 다시 만든다(C-76). 코드는 연결할 때 `s3_key`가 있으면 그것, 없으면 `source_key`를 쓴다(`parsing_meta_db` `key_col`·run_docs) | publish_parse_result `plan` → parsing_meta_db `insert_new`(칸이 생기면 이 이름으로 — `RENAMES`) | parsing_meta_db `key_col`(겹침 확인·`pick_rep`·`done_source_keys`), run_docs `_pm_key_col`(`edw_done_keys`), mcp `fulltext_svc` | 새로 |
 | source_uri | NVARCHAR(2048) | 원본 주소 | 〃 | 없음 | 삭제 |
 | original_filename | NVARCHAR(512) | 원본 파일 이름 | 〃 | 없음 | 삭제 |
 | file_format | NVARCHAR(32) | 형식 | 〃 | 없음 | 삭제 |
@@ -177,8 +177,8 @@ PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서�
 | page_count | INT | 쪽 수 | 〃 | 없음 | 삭제 |
 | doc_key | NVARCHAR(64) | 원본 sha256(지금 유일한 필수 칸) | 〃 | 없음 | 삭제 |
 | parse_date | NVARCHAR(32) | 파싱 시각 글자(`YYYY-MM-DD_HHMMSS`) | publish_parse_result `apply` | `pick_rep`(가장 늦은 행) | 유지 |
-| pipeline_version | NVARCHAR(64) | 이 행의 silver를 만든 코드 판(`VERSION` — `common.pipeline_version()`, 게시 때). 이름을 `silver_version`으로 바꾼다(아래 줄 — DB 담당자 DDL, C-76) | publish_parse_result `plan` | (운영자·재처리 판정) | 유지 |
-| silver_version | NVARCHAR(64) | 위 `pipeline_version`의 새 이름 — 이 행의 silver를 만든 코드 판. 코드는 연결할 때 `silver_version`이 있으면 그것, 없으면 `pipeline_version`에 쓴다(`parsing_meta_db.RENAMES`) | (DDL 뒤 같은 곳) | (같은 곳) | 새로 |
+| pipeline_version | NVARCHAR(64) | 이 행의 silver를 만든 코드 판(`VERSION` — `common.pipeline_version()`, 게시 때). 이름을 `silver_version`으로 바꾼다(아래 줄 — DB 담당자 DDL, C-76) | publish_parse_result `plan` | (운영자) | 유지 |
+| silver_version | NVARCHAR(64) | 위 `pipeline_version`의 새 이름 — 이 행의 silver를 만든 코드 판. 코드는 연결할 때 `silver_version`이 있으면 그것, 없으면 `pipeline_version`에 쓴다(`parsing_meta_db.RENAMES`) | publish_parse_result `plan` → parsing_meta_db `insert_new`(칸이 생기면 이 이름으로 — `RENAMES`) | (운영자) | 새로 |
 | status | NVARCHAR(16) | 행 상태 — 게시는 늘 `active`로 쓴다(다른 값으로 바꾸는 코드는 없음, 운영이 바꾼 행은 읽음) | publish_parse_result `plan` | `pick_rep`(`active` 중 `parse_date`가 가장 늦은 행, `active`가 없으면 전체 중 — `parse_status`는 안 봄) | 유지 |
 | status_at | NVARCHAR(32) | 상태 바뀐 때(UTC) — 게시는 비워 둔다 | publish_parse_result `plan`(NULL) | 없음(SELECT 안 함 — 운영자가 봄) | 유지 |
 | engines_used | NVARCHAR(MAX) | 쓰인 엔진(JSON) — 목표: 성공한 엔진만(이름 + 판) | publish_parse_result `plan` | 없음 | 유지 |
