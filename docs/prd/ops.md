@@ -103,7 +103,7 @@
 <a id="rn-03"></a>
 ## rn-03 · MCP `parse_document`에 CPU 먼저 주기
 - 이유: 일괄 파싱이 CPU를 다 쓰면 사람이 기다리는 `parse_document`가 느려진다. 컨테이너끼리는 cgroup CPU 가중치가 정한다(nice는 한 세션 안에서만).
-- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `mcp-data-parsing`(같은 이미지, entrypoint `parse-service` = `pipeline.parse_service`, 127.0.0.1:8766). 자원 = settings.yaml `ops.pipeline_host.parse_mcp_cpus`(기본 3)·`parse_mcp_mem_limit`(8g)·`parse_mcp_cpu_shares`(4096 — 일괄 `data-pipeline`은 1024). 결과 폴더만 붙인다. 죽으면 `restart`, 꺼지면 `mcp_keepalive.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
+- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `mcp-data-parsing`(같은 이미지, entrypoint `parse-service` = `pipeline.parse_service`, 127.0.0.1:8766). 자원 = settings.yaml `ops.pipeline_host.data_parsing_cpus`(기본 3)·`data_parsing_mem_limit`(8g)·`data_parsing_cpu_shares`(4096 — 일괄 `data-pipeline`은 1024). 결과 폴더만 붙인다. 죽으면 `restart`, 꺼지면 `mcp_keepalive.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
 - 파일: `deploy/host/compose/compose.data-parsing.yml`(개발 서버 짝 `compose.code.data-parsing.yml`), `pipeline/parse_service.py`, `common/core/resources.py`.
 - QA: `tests/general/deploy/test_compose.py` · 통과.
 - Status: dev — 서버에서 일괄 파싱 중 `parse_document` 응답 시간 확인(refactor.md C-83 ①)만 남음.
@@ -116,46 +116,44 @@
 - Status: done
 
 <a id="rn-05"></a>
-## rn-05 · run_docs는 지휘만 — 판단은 파이프라인 함수, PC도 run_docs로(0.2.0 다음)
-- 이유(사용자 11-04): run_docs.py(1천여 줄·함수 50여 개)가 레인·중복·게시 판단까지 직접 한다. 같은 판단이 파이프라인과 두 곳에 있고, PC E2E는 run_docs 없이 pipeline.cli를 단계별로 돌려 서버와 다른 길을 탄다.
-- 할 일:
-  1. run_docs 함수를 "파이프라인 함수로 옮김 / 지움 / 지휘로 남김"으로 나눈 표를 먼저 사람에게 보인다. 판단·처리(원천 목록, 중복, 레인, 게시 판단)는 extract·transform·load 함수로 옮기고, run_docs는 레인·워커·임시 폴더와 `docker exec` 호출만 남긴다.
-  2. PC(`RUN_ENV=local`)에서도 run_docs로 E2E를 돈다 — 가짜 대상만(EDW sqlite·`file://` 게시 폴더·상대 경로, op-14). PC만의 분기는 접속 대상을 고르는 한 곳. CLAUDE.md §4의 "run_docs는 PC에서 실행하지 않는다" 문구를 이 규칙으로 고친다(등급 A — 운영 접속 가드).
-  3. 커밋 전 점검 `deploy/release/lint_changed.sh`를 점검 도구 자리 `common/check/`로 옮긴다 — `.githooks/pre-commit`·CLAUDE.md §5-2·README 명령 줄을 같이 고친다.
-- 파일: `deploy/host/scripts/run_docs.py` · `pipeline/extract/*` · `pipeline/load/*` · `deploy/release/lint_changed.sh` · `.githooks/pre-commit` · `CLAUDE.md`.
-- QA: run_docs 정리 전후 같은 문서 묶음의 결과(대표 결과·ParsingMeta 행·게시 파일)가 같음 · PC에서 run_docs 한 번으로 가짜 EDW `ParsingMeta` 행과 `file://` 폴더 결과가 생김.
+## rn-05 · run_docs는 지휘만 — 판단은 파이프라인 함수, PC도 run_docs로
+- 이유(사용자 11-04): 같은 판단이 서버 러너와 파이프라인 두 곳에 있으면 어긋난다. PC E2E가 서버와 다른 길을 타면 PC 결과가 서버를 증명하지 못한다.
+- 요건(되어야 할 모습):
+  1. 서버 러너 `run_docs.py`는 지휘만 한다 — 레인·워커·임시 폴더 관리와 컨테이너 안 파이프라인 명령 호출(`docker exec`). 원천 목록 읽기, 끝난 문서 빼기, 중복, 레인 판정, FAQ 교체 판단, 게시 판단은 파이프라인(extract·transform·load) 함수가 한다.
+  2. PC(`RUN_ENV=local`)도 같은 `run_docs`로 E2E를 돈다 — 가짜 대상만(EDW sqlite·`file://` 게시 폴더·상대 경로, op-14). PC만의 분기는 접속 대상을 고르는 한 곳이다.
+  3. 커밋 전 점검 스크립트는 점검 도구 자리 `common/check/`에 있다(`.githooks/pre-commit`·CLAUDE.md §5-2·README가 그 경로를 부른다).
+- 비고(현재와 다른 점, 11-05 확인):
+  - `run_docs.py`가 EDW를 직접 읽는다 — 문서 목록 `edw_list`, 끝난 문서 `edw_done_keys`(`parsing_meta_db.DONE_STATUSES`의 호스트 사본), FAQ 목록 `edw_faq`. FAQ 교체 판단 `faq_first`도 run_docs 안에 있다. 사본이 같은지는 `tests/general/deploy/test_edw_copies.py`가 견준다.
+  - `configure()`가 `run_env`가 dev·prd가 아니면 거부하고, CLAUDE.md §4가 "run_docs는 PC에서 실행하지 않는다"고 적는다 — 바꾸는 것은 등급 A(운영 접속 가드).
+  - 점검 스크립트가 `deploy/release/lint_changed.sh`에 있다.
+- QA: 바꾸기 전후 같은 문서 묶음의 결과(대표 결과·ParsingMeta 행·게시 파일)가 같음 · PC에서 run_docs 한 번으로 가짜 EDW `ParsingMeta` 행과 `file://` 폴더 결과가 생김.
 - Status: todo
 
 <a id="rn-06"></a>
-## rn-06 · 저장소 전체 정리 — 중복 기능 하나로, 파싱 코드는 ETL 폴더로, 파일 이름은 하는 일로
-- 이유(사용자 11-04): 같은 일을 하는 코드가 여러 곳에 있고, 파싱 코드가 `pipeline/extract`·`transform`·`load` 밖(파이프라인 루트·`shared`·`run_docs.py`)에 흩어져 있으며, 이름만 보고 하는 일을 알기 어려운 파일이 남았다.
-- 정한 것(11-04 질의):
-  1. 범위는 저장소 전체(`pipeline`·`common`·`mcp_server`·`deploy/host`·`deploy/release`·`validation`). 보호 파일(`pipeline/extract/engines/**`, `common/core/{contract,repfmt,terms,text}.py`)은 손대지 않는다.
-  2. "ETL 폴더" = `pipeline/` 안 `extract`·`transform`·`load`. 최상위 폴더 이름 `pipeline/`은 그대로(이미지·명령 이름 그대로 — 코드 폴더만 교체).
-  3. `run_docs.py`는 서버 호스트에서 `docker exec`로 지휘만 하고, 판단(원천 목록·중복·레인·게시)은 ETL 함수로 옮긴다 — rn-05를 이 행과 함께 한다.
-  4. 서버 배치: 이미지 폴더(`sbl_images-main/`)는 루트 한 단계 위 공용 폴더에 하나(예 `/home/sbl/`), 벌마다 루트(`dev/`·`dev-hong/`) — 문서만(op-13 규칙 2, README §5-0).
-  5. (11-04 둘째 질의) 스캔 PDF 규칙 두 개(레인 분류 `doc_lane_group` — 앞 3쪽 평균 300자 미만 · 엔진 선택 `parse_run.pdf_kind` — 쪽당 평균 20자 미만)는 목적이 달라 그대로 두고 역할만 주석으로 적는다(결과 변화 없음).
-  6. run_docs의 EDW 읽기(문서 목록·끝난 문서·FAQ)와 warm 파일 이름은 호스트 사본을 그대로 둔다 — 컨테이너 쪽과 같은지 견주는 시험만 더한다(운영 접속 변경 없음) — `tests/general/deploy/test_edw_copies.py`(끝난 문서 상태 목록·SQL 조건·키 칸 규칙·warm 이름).
-  7. 서버·릴리스 스크립트 이름을 하는 일로 바꾼다(문서·systemd 단위 함께).
-  8. 공용 모듈(`common/**`)과 `pipeline/shared/**`는 이름·자리를 바꾸지 않는다(레이어 코드 핑거프린트 값 유지 — 기록용이지만 이번엔 제외). 파이프라인 루트의 파싱 코드를 ETL 폴더로 옮기는 것은 한다.
-- 할 일(조사 11-04 — 표는 커밋 메시지·PR 본문):
-  - 서버·릴리스 스크립트: `dc.sh`→`host_ctl.sh` · `trigger.sh`→`nightly_batch.sh`(새벽 배치만) · `run_tool.sh`→`pipe_exec.sh`(parse·publish도) · `mcp_up.sh`→`mcp_keepalive.sh`(compose 호출은 서비스마다 자기 파일만 — `host_ctl.sh`로 합치면 모든 이미지 칸이 필요해져 되돌림) · `image_vars.sh`→`in_container.sh`(쓰지 않는 `need_image` 지움) · `prune_old.sh`→`prune_images.sh` · `settings_env.sh`→`load_settings.sh` · `host_env.py`→`settings_to_env.py` · `host_keys.tsv`→`host_settings.tsv` · `deploy/release/{assets.py→offline_assets.py, bake.sh→bake_prod_image.sh, ship_stage.sh→stage_images.sh, hostkeys.py→gen_host_keys.py}`. `load.sh`는 이미지 저장소에 이미 같은 이름으로 있어 그대로.
-  - 파이프라인: 단계 사슬(`cli.parse_module`·`parse_service._worker`의 filter_and_rotate→run_engines→parse_scoring→build_rep)과 프로세스 묶음 실행(`cli._run_until`·`parse_service._run_group`)을 하나로. 파싱 코드를 ETL로: `cli._unparsed`→extract, 완료 표시(`read_mark`·`write_mark`)→transform/represent, `_vlm_doc_concurrency`→extract/run_engines, `engine_stack.py`→extract. 쓰지 않는 `cli parse --deadline`·전달만 하는 함수 지움.
-  - 검색 MCP: 같은 파일 이름 3건(`services/fulltext.py`·`search/text.py`·`search/terms.py`)과 뜻이 흐린 이름(`local.py`·`qtype.py`·`shaping.py`·`routers/dispatch.py`·`cli/ask.py`) 바꿈, 날짜 조건 `_when` 두 벌 하나로.
-- QA: 정리 전후 같은 문서 묶음의 대표 결과·ParsingMeta 행·게시 파일이 같음 · selftest·pytest 기준선 유지 · `check_modules` 통과.
-- Status: todo
+## rn-06 · 같은 일은 한 곳, 파일 이름은 하는 일로
+- 이유(사용자 11-04): 같은 일을 하는 코드가 여러 곳에 있으면 한쪽만 고쳐져 어긋난다. 이름만 보고 하는 일을 알 수 있어야 한다.
+- 요건(되어야 할 모습):
+  1. 범위는 저장소 전체(`pipeline`·`common`·`mcp_server`·`deploy/host`·`deploy/release`·`validation`). 보호 파일(엔진 폴더, `common/core/{contract,repfmt,terms,text}.py`)은 이 규칙으로 고치지 않는다.
+  2. 같은 일을 하는 코드는 한 벌이다 — 파싱 단계 사슬(준비 → 엔진 → 채점 → 대표 결과)과 프로세스 묶음 실행은 `pipeline/parse_steps.py` 하나를 `pipeline.cli parse`와 MCP 작업 서비스 `pipeline.parse_service`가 함께 쓴다. 검색 MCP의 날짜 조건 해석(`_when`)도 한 벌.
+  3. 서버·릴리스 스크립트 이름은 하는 일이다 — `host_ctl.sh`·`nightly_batch.sh`(새벽 배치만)·`pipe_exec.sh`(parse·publish 등 컨테이너 명령)·`mcp_keepalive.sh`·`in_container.sh`·`prune_images.sh`·`load_settings.sh`·`settings_to_env.py`·`host_settings.tsv`, `deploy/release/{bake_prod_image.sh,stage_images.sh,gen_host_keys.py}`. compose 호출은 서비스마다 자기 compose 파일만 쓴다. 예외: `load.sh`(이미지 저장소에 같은 이름), `assets.py`(Dockerfile이 복사 — 이름을 바꾸면 새 이미지), systemd 단위 이름.
+  4. 저장소 안에서 같은 파일 이름을 두 번 쓰지 않는다(엔진 파일·앱마다 `config.py`·지시서 `agent.py` 예외 — CLAUDE.md §1).
+  5. 공용 모듈(`common/**`)과 `pipeline/shared/**`는 이 규칙으로 이름·자리를 바꾸지 않는다(레이어 코드 핑거프린트 유지). 파이프라인 폴더 배치는 [rn-08](#rn-08).
+  6. 스캔 PDF 규칙 둘은 목적이 달라 따로 둔다 — 레인 분류 `doc_lane_group`(앞 3쪽 평균 300자 미만)·엔진 선택 `pdf_kind`(쪽당 평균 20자 미만). 각 자리에 역할 주석.
+  7. run_docs의 EDW 읽기(문서 목록·끝난 문서·FAQ)와 warm 파일 이름의 호스트 사본은 컨테이너 쪽과 같은지 시험으로 견준다(`tests/general/deploy/test_edw_copies.py`) — 사본을 없애는 것은 [rn-05](#rn-05).
+- QA: 바꾸기 전후 같은 문서 묶음의 대표 결과·ParsingMeta 행·게시 파일이 같음 · selftest·pytest 기준선 유지 · `check_modules` 통과.
+- Status: done
 
 <a id="rn-07"></a>
-## rn-07 · 다시 덜어내기 — 벌 이름 하나로 갈리는 여러 벌, 설정 칸 줄이기, 중복·이력 주석 정리
-- 이유(사용자 11-05 점검): rn-06 뒤에도 여러 벌이 EDW·게시·포트·스키마를 함께 쓰고, settings.yaml에 같은 값 칸·늘 같은 스위치·옛 칸 표가 남았으며, `run_docs.py`가 설정 값 약 15칸을 `--set`으로 덮고, 코드에 중복·한 곳만 쓰는 감싸기·이력 주석(약 700줄)이 남았다.
-- 정한 것(11-05 질의):
-  1. 여러 벌: `ops.host.instance` 한 칸만 적으면 갈린다 — 컨테이너 이름(이미 됨) · PG 스키마 `<db_schema>_<벌>`(따로 적으면 그 값) · EDW 기록 표 `<parsing_meta_table>_<벌>`(예 `AI.ParsingMeta_hong` — DB 담당이 미리 만듦, 실행 중 DDL 없음) · 게시 경로는 dev에서만 `<prefix>/<벌>/…` · 포트는 기본값 그대로면 시작 거부. 버전 칸에는 접미를 붙이지 않는다. `prd`에서 벌 이름을 쓰면 시작 거부.
-  2. 파싱 MCP 컨테이너·서비스·compose 파일 `data-pipeline-mcp` → `mcp-data-parsing`, 설정 칸 `parse_mcp` → `data_parsing`(env `PARSE_MCP_*` → `DATA_PARSING_*`). 파싱 포트와 프록시 주소는 한 칸. 토큰 `tokens.parse_mcp`·`parse_proxy`는 `tokens.mcp` 하나로.
-  3. `run_docs.py`의 `--set` 값은 `ops.run_docs.*` 칸 기본값으로 옮긴다(서버 결과 같음).
-  4. 늘 같은 스위치 칸 지움(`run_mode`·`bucket_skip_overlap_check`·`rdb.engine`·`prepare.link`·`pg_create_extension`·`check_env_any_py`·`warmup`·`edw_query.enabled`·draft_terms 칸 등), VLM 동시 수 칸 4 → 2. 옛 칸 표(`REMOVED`·`ALIASES`·`TO_REQUIRED`·`RETIRED`·`migrate.py`)도 지금 지움 — 옛 칸이 남은 settings.yaml은 시작 거부(서버 확인 refactor.md).
-  5. 스캔 PDF 판정은 `pdf_kind` 하나(그림 VLM의 `scan_page_vlm.is_scan`도) — 스캔 쪽이 섞인 PDF는 결과가 달라질 수 있음.
-  6. 중복·쓰지 않는 코드 지움, `pdf_kind`를 extract로, `cli.parse_module`의 extract 일은 `fetch_docs`로, 한 곳만 쓰는 감싸기·작은 파일 합침, 주석은 목적 한 줄(이력은 git·docs/history).
-- QA: selftest·pytest 기준선 유지(새 시험: 벌 이름 → 스키마·EDW 표·게시 경로·포트 거부, prd 거부) · `check_modules`·`keyscan --check`·`sample --check`·`gen_host_keys --check` 통과 · 저장소 전체 ruff·mypy 0 · 옛 이름(`data-pipeline-mcp`·`parse_mcp`·`PARSE_MCP_`) 0건(docs/history 제외).
+## rn-07 · 벌 이름 하나로 갈리는 여러 벌, 적은 설정 칸, 목적만 적은 주석
+- 이유(사용자 11-05 점검): 개발 서버에 여러 벌이 EDW·게시·포트·스키마를 함께 쓰면 서로 덮는다. 같은 값 칸·늘 같은 스위치·옛 칸 표는 설정을 읽기 어렵게 한다.
+- 요건(되어야 할 모습):
+  1. 여러 벌은 `ops.host.instance` 한 칸으로 갈린다 — 컨테이너 이름 · PG 스키마 `<db_schema>_<벌>`(따로 적으면 그 값) · EDW 기록 표 `<parsing_meta_table>_<벌>`(예 `AI.ParsingMeta_hong` — DB 담당이 미리 만듦, 실행 중 DDL 없음) · 게시 경로는 dev에서만 `<prefix>/<벌>/…` · 포트는 기본값 그대로면 시작 거부. 버전 칸에는 접미를 붙이지 않는다. `prd`에서 벌 이름을 쓰면 시작 거부.
+  2. 파싱 MCP는 컨테이너·서비스·compose 파일 `mcp-data-parsing`, 설정 칸 `data_parsing`(env `DATA_PARSING_*`). 파싱 포트와 프록시 주소는 한 칸, 토큰은 `tokens.mcp` 하나.
+  3. `run_docs.py`가 컨테이너 명령에 붙이는 `--set` 값(VLM 동시 수·워커 수 등, vlm 레인 값 포함)은 `ops.run_docs.*` 칸에서 온다(비우면 그 칸 기본값).
+  4. 늘 같은 값인 스위치 칸과 옛 칸 표는 없다. VLM 동시 수 칸은 둘(`concurrency`·`max_concurrency`). 옛 칸이 남은 settings.yaml은 시작 거부.
+  5. 스캔 PDF 판정은 `pdf_kind` 하나(그림 VLM의 스캔 쪽 판정도).
+  6. 쓰지 않는 코드·한 곳만 쓰는 감싸기는 없다. 주석은 목적 한 줄(이력은 git·`docs/history`).
+- QA: selftest·pytest 기준선 유지(벌 이름 → 스키마·EDW 표·게시 경로·포트 거부, prd 거부 시험) · `check_modules`·`keyscan --check`·`sample --check`·`gen_host_keys --check` 통과 · 저장소 전체 ruff·mypy 0 · 옛 이름(`data-pipeline-mcp`·`parse_mcp`·`PARSE_MCP_`) 0건(docs/history 제외).
 - Status: done
 
 <a id="rn-08"></a>
