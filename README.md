@@ -48,7 +48,7 @@
                           list_doc_fulltext · get_doc_fulltext
 ```
 
-서버에서는 `run_docs.py`가 문서마다 이 순서로 흘려 보낸다(PRD pl-24). DAG 엔진은 없다. MCP 도구 6개의 이름과 입출력은 외부 클라이언트와의 계약이다([mcp-guide](docs/operations/mcp-guide.md)).
+서버에서는 `run_docs.py`가 문서마다 이 순서로 흘려 보낸다. DAG 엔진은 없다. MCP 도구 6개의 이름과 입출력은 외부 클라이언트와의 계약이다([mcp-guide](docs/operations/mcp-guide.md)).
 
 ### 1-2. 실행 단위
 
@@ -250,7 +250,7 @@ cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본 — 파
 .venv/bin/python -m pipeline.load.pgvector_load load --bundle output/demo/bundle
 ```
 
-- 이미 적재한 문서를 다시 넣을 때는 `--replace`. 적재는 이번 묶음에 없는 문서를 지우지 않는다(pl-13).
+- 이미 적재한 문서를 다시 넣을 때는 `--replace`. 적재는 이번 묶음에 없는 문서를 지우지 않는다.
 
 **(선택) MCP 없이 검색만**
 
@@ -588,9 +588,9 @@ tail -f <run_docs 작업 폴더>/batch_progress/progress.log              # 문�
 tail -n 50 <결과 폴더>/_docflow/<seq>/structure.log                    # 그 문서의 구조화·적재 출력 — 문서가 끝나면 지워짐(남기려면 run_docs --no-cleanup)
 ```
 
-**로그는 Postgres(`applog` 스키마 — [op-01](docs/prd/ops.md#op-01))에 남는다.** 서버(두 이미지)는 `ops.log.db_enabled` 기본 켬이라 `migrate up --target all`(applog 포함)이 먼저다. DB에 못 쓰면 그 행만 `<결과 폴더>/logs/`에 JSON Lines로 남는다. 사람이 보는 실행 출력은 컨테이너 로그(`podman logs <컨테이너>`·`host_ctl.sh logs`), MCP 호출(질문·SQL 포함)은 `applog.mcp_log`이다.
+**로그는 Postgres(`applog` 스키마)에 남는다.** 서버(두 이미지)는 `ops.log.db_enabled` 기본 켬이라 `migrate up --target all`(applog 포함)이 먼저다. DB에 못 쓰면 그 행만 `<결과 폴더>/logs/`에 JSON Lines로 남는다. 사람이 보는 실행 출력은 컨테이너 로그(`podman logs <컨테이너>`·`host_ctl.sh logs`), MCP 호출(질문·SQL 포함)은 `applog.mcp_log`이다.
 
-**적재 거부 — 임베딩 모델이 다른 묶음(pl-51).** 묶음의 임베딩 모델이 검색 스키마에 이미 적재된 문서의 모델과 다르면 적재는 아무것도 쓰지 않고 종료 2(`[load] 임베딩 모델이 다름 — 적재 거부 …`). `applog.pipe_event`에 남는다:
+**적재 거부 — 임베딩 모델이 다른 묶음.** 묶음의 임베딩 모델이 검색 스키마에 이미 적재된 문서의 모델과 다르면 적재는 아무것도 쓰지 않고 종료 2(`[load] 임베딩 모델이 다름 — 적재 거부 …`). `applog.pipe_event`에 남는다:
 
 ```sql
 SELECT ts_start, run_id, model, err FROM applog.pipe_event
@@ -656,7 +656,7 @@ sudo systemctl enable --now podman-restart
 1. 새 루트(예 `/home/dev-0.3.0/`)를 만들고 새 코드 zip(이미지가 바뀌었으면 이미지 zip도)을 푼다.
 2. 앞 루트의 `settings.yaml`·`edw_chain.yaml`을 새 루트로 복사한다(`cp -p`).
 3. 새 코드 폴더에서 `host_ctl.sh init --group <운영 그룹>` → `host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp` → `host_ctl.sh check` → `host_ctl.sh timers`(타이머를 새 루트로 옮김).
-- 검색 DB는 같은 PG를 그대로 본다. 새 문서 판정은 EDW 기준(pl-23)이라 새 `output/`이 비어 있어도 이어서 돈다.
+- 검색 DB는 같은 PG를 그대로 본다. 새 문서 판정은 EDW 기준이라 새 `output/`이 비어 있어도 이어서 돈다.
 - 되돌리기: 앞 루트의 코드 폴더에서 `host_ctl.sh up -d --force-recreate …` → `host_ctl.sh timers`.
 - 코드만 바뀐 판(`DEPS_HASH` 같음)은 이미지를 다시 만들지 않는다 — 개발 서버 [release-and-patch §1-1](docs/operations/release-and-patch.md#1-1-개발-서버--새-루트로-코드-바꾸기) → 운영 서버 §1-2(굽기).
 

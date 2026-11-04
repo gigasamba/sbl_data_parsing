@@ -22,7 +22,7 @@
 | PC(개발) | 저장소 루트 `settings.yaml`(git 밖, 권한 600) | `RUN_ENV`가 없거나 `local`이면 코드가 이 파일을 찾음. 한 번만 몇 칸 바꿀 때는 오버레이 설정 파일 `SETTINGS_FILE=$(python -m common.config.overrides PIPE_OUT_ROOT=… EMBED_ALLOW_EXTERNAL=1 …)`(**PC 전용**) | 내부망 또는 OpenRouter(기능 시험만 — CLAUDE.md §7) |
 | 수집·개발 서버 | `<루트>/settings.yaml`(루트 = 코드 폴더의 부모 — 코드 폴더 밖, README §5). **주인 UID 10001·그룹 운영 그룹·권한 640**(운영 계정 UID가 10001이면 600) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다. **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/load_settings.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다 | 내부망만 |
 
-### 0-0. 실행 기록(JSON 로그·DB 감사·성능 — op-01)
+### 0-0. 실행 기록(JSON 로그·DB 감사·성능)
 
 | 칸 | 기본 | 뜻 |
 |---|---|---|
@@ -151,7 +151,7 @@
 
 `PIPE_PROCS`(기본 `auto`)·`PIPE_WORKERS`·`VLM_CONCURRENCY`·`OCR_DPI`·`OCR_MAX_PAGES`·`MAX_FILE_MB`·`MEM_MAX_PCT`(90)·`CPU_MAX_LOAD`(0.9)·`EMBED_BATCH`·`EMBED_TIMEOUT`·`VLM_TIMEOUT` — 설명·기본값은 `settings.sample.yaml`. 자동 계산 계수와 호출 제한 시간·병렬 세부값은 `tuning` 절. 컨테이너 CPU·메모리 상한은 README §5-0 "자원".
 
-**VLM(그림 읽는 모델) 설정은 한 벌이다**(11-04 — 엔진 `qwen_vlm`·쪽 VLM·그림 VLM 공통, PRD [pl-43](../prd/transform.md#pl-43)):
+**VLM(그림 읽는 모델) 설정은 한 벌이다**(엔진 `qwen_vlm`·쪽 VLM·그림 VLM 공통):
 
 | 칸 | 뜻 |
 |---|---|
@@ -190,7 +190,7 @@ ls -l ../settings.yaml                # 서버(코드 폴더에서): 주인 1000
 | 이미지 칸 `required.deploy.pipeline_image`·`mcp_image` | dev `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0` · prd `data-pipeline:0.2.0`·`mcp-server:0.2.0` |
 | 새 칸 `required.deploy.pg_container`·`required.tokens.fulltext` · 토큰은 `required.tokens.mcp` 하나(작업 서비스도 같은 값) | 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)) |
 | 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline` — 셋 다 있어야 돎 | 배포 때는 비워 두고 배포 뒤 켠다(§8-4 3) |
-| 거의 안 바꾸는 칸 53개가 `tuning` 절로(사용자 11-04 — 청크·순위 가중치·그림 고르기·로그 대기열·EDW 원천 열 이름 등) | 값을 적어 둔 칸만 `tuning.<옛 자리>`로 옮긴다(옛 자리는 시작 거부 — C-95) |
+| 거의 안 바꾸는 칸 53개가 `tuning` 절로(청크·순위 가중치·그림 고르기·로그 대기열·EDW 원천 열 이름 등) | 값을 적어 둔 칸만 `tuning.<옛 자리>`로 옮긴다(옛 자리는 시작 거부 — C-95) |
 | 합친 칸 `extract.prefetch_workers` → `extract.source.fetch_workers` · `tuning.ops.nightly_run.workers` → `ops.runtime.pipe_workers` | 옛 칸 값을 새 칸에 적고 옛 칸은 지운다(남으면 시작 거부) |
 | `parse_document` 크기 상한 칸이 `ops.runtime.parse_max_mb`(기본 100) | 옛 `ops.services.data_parsing.max_mb`가 있으면 지우고, 100이 아닌 값은 새 칸에. 리버스 프록시 본문 상한도 늘린다(C-85) |
 | `query_edw` 행 상한 기본 1000(`search.edw_query.max_rows`) | 다른 값을 쓰려면 적는다 |

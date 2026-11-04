@@ -1,4 +1,4 @@
-# DB 스키마 명세 (pl-25)
+# DB 스키마 명세
 
 이 프로젝트가 쓰는 DB 표와 칸 — 표마다 칸, 타입, 뜻, 쓰는 코드, 읽는 코드, 결정. 요건은 [prd/load-schema.md#pl-25](../prd/load-schema.md#pl-25).
 
@@ -14,7 +14,7 @@
 - **원천·스키마 배치·근거 키:** [pl-28](../prd/load-schema.md#pl-28). **ParsingMeta에 쓰는 것·판 칸:** [pl-25](../prd/load-schema.md#pl-25). **같은 `s3_key` 여러 행:** [pl-32](../prd/load-schema.md#pl-32).
 - **대표 결과 주소 `rep_uri`:** gold에는 거르기 메타만 둔다. 대표 결과 위치(`rep_bucket`·`rep_key`)·`parsed_at`·원본 sha256은 ParsingMeta에만 있고, 원문 도구가 부를 때 `source_key`(= gold `doc.file_path`)와 `source_system`으로 행을 고른다(`pick_rep` — `status='active'` 중 `parse_date`가 가장 늦은 행, `active`가 없으면 전체 중). EDW를 못 읽으면 `registry_unavailable`. `search` 근거에는 `rep_uri`가 없다.
 - **근거 `file_name`** = `doc.file_path`의 끝 조각.
-- **원천별 EDW 사슬:** 적재가 `client_edw`·`created_at`·`attrs`를 채우는 표·칸은 사슬 파일 [`resources/config/edw_chain.yaml`](../../resources/config/edw_chain.yaml)이 정한다([pl-29](../prd/load.md#pl-29)·[pl-52](../prd/load-schema.md#pl-52)). 칸 이름이 실제 EDW와 같은지는 D-1·D-2.
+- **원천별 EDW 사슬:** 적재가 `client_edw`·`created_at`·`attrs`를 채우는 표·칸은 사슬 파일 [`resources/config/edw_chain.yaml`](../../resources/config/edw_chain.yaml)이 정한다. 칸 이름이 실제 EDW와 같은지는 D-1·D-2.
 
 ## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌)
 
@@ -43,7 +43,7 @@
 
 | 키 | 값 | 뜻 | 원천 | 읽는 곳 |
 |---|---|---|---|---|
-| `doc_class` | 글자 | 문서 분류 라벨 하나(SFDC: RFI/RFP/RFI+RFP/Proposal/Other, LAS: MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other) — [pl-33](../prd/transform.md#pl-33) | sfdc·las | `search`·`list_doc_fulltext` 거르기 |
+| `doc_class` | 글자 | 문서 분류 라벨 하나(SFDC: RFI/RFP/RFI+RFP/Proposal/Other, LAS: MSA/PSA/QAG/LOI/Amendment/Assignment Letter/Other) | sfdc·las | `search`·`list_doc_fulltext` 거르기 |
 | `sf_op_id` | 글자 | 영업 기회 id(18자 `006…`) — 파일 → 영업 기회 사슬로 고른 것 | sfdc | `search`·`list_doc_fulltext` 거르기 |
 | `sf_op_name` | 글자 | 영업 기회 이름(`Opportunity.Name`) | sfdc | `search` 거르기 |
 | `project_code__c` | 글자 | 프로젝트 코드(`Opportunity.Project_Code__c`) | sfdc | `search` `project_id` |
@@ -52,17 +52,17 @@
 | `prod_name` | 글자 | 제품·계약 이름(`RM_CM_PJTLIST.RM_CONTRACT_NAME`) | crms | 없음(근거 메타) |
 | `contract_id` | 글자 | 계약 번호 — CRMS `rm_contract_code` · LAS `manage_no`(없으면 `Contract.ContractID`) | crms·las | `search` 거르기 |
 | `contract_date` | 날짜 글자(YYYY-MM-DD) | 계약일 — SFDC `Opportunity.X1st_Contract_Execution_Date__c` · CRMS `RM_CM_PJTLIST.INIT_DTTM` · LAS `Contract.ContractDate`(없으면 `FileStorageMap_LAS.signed_date`) | sfdc·crms·las | 없음(근거 메타) |
-| `title` | 글자 | 분류 힌트 — 파일 제목(`ContentVersion.Title`). 비면 분류 지시문은 원본 파일 이름 | sfdc | 분류(pl-33) |
-| `entity_type` | 글자 | 분류 힌트 — 첫 User 아닌 연결 개체 종류(`ContentDocumentLink.LinkedEntityId` 앞 3자 → `resources/mappings/sfdc_prefix.json`, 표에 없으면 `Unknown:<접두>`) | sfdc | 분류(pl-33) |
-| `entity_class` | 글자 | 분류 힌트 — 개체 갈래(운영 analyze_clues 그대로): 연결 없음 `unlinked` · 모두 User면 `user_only` · 아니면 개체 종류의 갈래(if_log·event_log·task·event·quote·opportunity·account·contract·dashboard·organization, 그 밖 other) | sfdc | 분류(pl-33) |
-| `entity_id` | 글자 | 분류 힌트 — 그 연결 개체 id(`LinkedEntityId`) | sfdc | 분류(pl-33) |
-| `sent_received__c` | 글자 | 분류 힌트 — 연결 개체가 Task/Event일 때 방향(`Sent_Received__c`) | sfdc | 분류(pl-33) |
-| `subject` | 글자 | 분류 힌트 — 연결 개체가 Task/Event일 때 제목(`Subject` 앞 120자) | sfdc | 분류(pl-33) |
-| `stagename` | 글자 | 분류 힌트 — 연결 개체가 영업 기회 자체일 때 단계(`Opportunity.StageName` — 사슬이 고른 기회가 아님) | sfdc | 분류(pl-33) |
-| `real_rfp__c` | 글자 | 분류 힌트 — 같은 기회의 `Real_RFP__c`(글자 '1'/'0') | sfdc | 분류(pl-33) |
-| `rfp_received_start_date__c` | 날짜 글자(YYYY-MM-DD) | 분류 힌트 — 같은 기회의 `RFP_Received_Start_Date__c` | sfdc | 분류(pl-33) |
-| `rfp_received_end_date__c` | 날짜 글자(YYYY-MM-DD) | 분류 힌트 — 같은 기회의 `RFP_Received_End_Date__c` | sfdc | 분류(pl-33) |
-| `approvalname` | 글자 | 분류 힌트 — 품의 제목(`LAS.Contract.ApprovalName`, 최신 판) | las | 분류(pl-33) |
+| `title` | 글자 | 분류 힌트 — 파일 제목(`ContentVersion.Title`). 비면 분류 지시문은 원본 파일 이름 | sfdc | 분류 |
+| `entity_type` | 글자 | 분류 힌트 — 첫 User 아닌 연결 개체 종류(`ContentDocumentLink.LinkedEntityId` 앞 3자 → `resources/mappings/sfdc_prefix.json`, 표에 없으면 `Unknown:<접두>`) | sfdc | 분류 |
+| `entity_class` | 글자 | 분류 힌트 — 개체 갈래(운영 analyze_clues 그대로): 연결 없음 `unlinked` · 모두 User면 `user_only` · 아니면 개체 종류의 갈래(if_log·event_log·task·event·quote·opportunity·account·contract·dashboard·organization, 그 밖 other) | sfdc | 분류 |
+| `entity_id` | 글자 | 분류 힌트 — 그 연결 개체 id(`LinkedEntityId`) | sfdc | 분류 |
+| `sent_received__c` | 글자 | 분류 힌트 — 연결 개체가 Task/Event일 때 방향(`Sent_Received__c`) | sfdc | 분류 |
+| `subject` | 글자 | 분류 힌트 — 연결 개체가 Task/Event일 때 제목(`Subject` 앞 120자) | sfdc | 분류 |
+| `stagename` | 글자 | 분류 힌트 — 연결 개체가 영업 기회 자체일 때 단계(`Opportunity.StageName` — 사슬이 고른 기회가 아님) | sfdc | 분류 |
+| `real_rfp__c` | 글자 | 분류 힌트 — 같은 기회의 `Real_RFP__c`(글자 '1'/'0') | sfdc | 분류 |
+| `rfp_received_start_date__c` | 날짜 글자(YYYY-MM-DD) | 분류 힌트 — 같은 기회의 `RFP_Received_Start_Date__c` | sfdc | 분류 |
+| `rfp_received_end_date__c` | 날짜 글자(YYYY-MM-DD) | 분류 힌트 — 같은 기회의 `RFP_Received_End_Date__c` | sfdc | 분류 |
+| `approvalname` | 글자 | 분류 힌트 — 품의 제목(`LAS.Contract.ApprovalName`, 최신 판) | las | 분류 |
 
 ### gold.chunk
 
@@ -79,7 +79,7 @@
 | chunk_text | TEXT NOT NULL | 청크 본문 | 모두 | pgvector_load | 뷰 → 근거 `text` | 유지 |
 | n_terms | INT NOT NULL | 토큰 수 — BM25 길이 정규화(dl) | 모두 | pgvector_load | pgsearch BM25, `corpus_stat` | 유지 |
 | embedding | vector(n) | L2 정규화 임베딩(HNSW 코사인 · 2,000차원 넘으면 이진 양자화 HNSW) | 모두 | pgvector_load | pgsearch `vector_top` | 유지 |
-| faq_group | TEXT | FAQ 시트 이름(`FAQ_group`) | faq | (FAQ 적재 — [pl-39](../prd/extract.md#pl-39)) | `search` `FAQ_group` 거르기 | 유지 |
+| faq_group | TEXT | FAQ 시트 이름(`FAQ_group`) | faq | FAQ 적재(`build_bundle`) | `search` `FAQ_group` 거르기 | 유지 |
 
 ### gold.chunk_term
 
@@ -128,11 +128,11 @@
 | file_size | (EDW) | 크기 | EDW | source, run_docs | 유지 |
 | content_version_id | (EDW) | 판 id | EDW | source `_rdb_rows` | 유지 |
 | source_system | (EDW) | 원천 — 코드는 읽지 않는다. 원천은 `s3_key` 첫 마디로 정한다(§1 원천) | EDW | 없음 | 유지 |
-| created_at | (EDW) | 원천 등록 시각 — 같은 `s3_key` 여러 행 중 기준 행 고르기([pl-32](../prd/load-schema.md#pl-32)), 원천 표에 등록 시각이 없을 때 gold `doc.created_at`의 대체값(KST). 실제 EDW에 있는지는 D-1 | EDW | 적재 `edw_meta`(사슬 `file.created_at`) · (기준 행 고르기 — [pl-32](../prd/load-schema.md#pl-32)) | 유지 |
+| created_at | (EDW) | 원천 등록 시각 — 같은 `s3_key` 여러 행 중 기준 행 고르기, 원천 표에 등록 시각이 없을 때 gold `doc.created_at`의 대체값(KST). 실제 EDW에 있는지는 D-1 | EDW | 적재 `edw_meta`(사슬 `file.created_at`) · (기준 행 고르기) | 유지 |
 
 ### edw.SupersededRow
 
-같은 `s3_key`의 더 새 `FileStorageMap` 행 때문에 밀려난 행의 예외 이력([pl-32](../prd/load-schema.md#pl-32)). 표 이름과 칸은 DB 담당자가 정한다(D-9) — 아래는 안이다. 시험 비교 대상이 아니다.
+같은 `s3_key`의 더 새 `FileStorageMap` 행 때문에 밀려난 행의 예외 이력. 표 이름과 칸은 DB 담당자가 정한다(D-9) — 아래는 안이다. 시험 비교 대상이 아니다.
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
@@ -185,12 +185,12 @@ PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서�
 | engines_summary | NVARCHAR(512) | 엔진 한 줄 요약 | 〃 | 없음 | 삭제 |
 | parsed_at | DATETIME2(0) | 넣은 때(기본 SYSUTCDATETIME — UTC) | DB 기본값 | mcp `fulltext_svc`(`list_doc_fulltext` `since`/`until`) | 유지 |
 | source_key_hash | BINARY(32) 계산 칸 | `source_key` sha256 — 유일 색인 키(1700바이트 상한 우회) | DB | 유일 색인 | 유지 |
-| gold_status | NVARCHAR(32) | gold(검색 DB) 적재 상태 | ([pl-55](../prd/ops.md#pl-55) — run_docs·적재) | (운영자) | 새로 |
-| gold_reason | NVARCHAR(2000) | gold 상태 이유(실패 원인 등) | ([pl-55](../prd/ops.md#pl-55)) | (운영자) | 새로 |
-| engines_failed | NVARCHAR(MAX) | 실패한 엔진(JSON — 이름·이유·걸린 시간), 없으면 NULL | (파싱 단계 — [pl-32](../prd/load-schema.md#pl-32)) | (운영자) | 새로 |
+| gold_status | NVARCHAR(32) | gold(검색 DB) 적재 상태 | (run_docs·적재) | (운영자) | 새로 |
+| gold_reason | NVARCHAR(2000) | gold 상태 이유(실패 원인 등) | (run_docs·적재) | (운영자) | 새로 |
+| engines_failed | NVARCHAR(MAX) | 실패한 엔진(JSON — 이름·이유·걸린 시간), 없으면 NULL | (파싱 단계) | (운영자) | 새로 |
 | loaded_at | DATETIME2(0) | gold에 적재한 시각(UTC) — 적재가 PG 커밋 뒤 쓸 행(active 중 최신)에 UPDATE. 칸이 없으면 그 칸만 빼고 쓰고, 쓰기 계정이 없거나 실패하면 경고와 건수만(적재는 그대로) | pgvector_load `_mark_loaded` → parsing_meta_db `mark_loaded`·`set_loaded` | (운영자 — 적재 확인) | 새로 |
-| gold_version | NVARCHAR(64) | 이 문서를 gold에 올린 코드 판 — `<VERSION>+m<마스터 해시 앞 8자>`([pl-38](../prd/load.md#pl-38)). `loaded_at`과 같은 UPDATE로 쓴다. 칸이 없으면 그 칸만 빼고 `loaded_at`만 | pgvector_load `_mark_loaded` → parsing_meta_db `set_loaded` | parsing_meta_db `done_source_keys`·run_docs `edw_done_keys`(비면 다시 대상 — ok·partial만) | 새로 |
-## 4. master — 마스터 표 (검색 PG, 스키마 `<PG_SCHEMA>_master`, [pl-38](../prd/load.md#pl-38))
+| gold_version | NVARCHAR(64) | 이 문서를 gold에 올린 코드 판 — `<VERSION>+m<마스터 해시 앞 8자>`. `loaded_at`과 같은 UPDATE로 쓴다. 칸이 없으면 그 칸만 빼고 `loaded_at`만 | pgvector_load `_mark_loaded` → parsing_meta_db `set_loaded` | parsing_meta_db `done_source_keys`·run_docs `edw_done_keys`(비면 다시 대상 — ok·partial만) | 새로 |
+## 4. master — 마스터 표 (검색 PG, 스키마 `<PG_SCHEMA>_master`)
 
 원본은 git CSV `resources/vocab/glossary/<표>.csv`(샘플 데이터). 실행 중에는 이 표만 읽는다 — `dbtool up --target master`로 표를 만들고 `dbtool master load`가 CSV로 내용을 한 트랜잭션에 통째로 바꾼다(초기화 순서: `dbtool up`(search·applog·master) → `dbtool master load`). CSV 하나 = 표 하나 — 칸은 CSV 머리글 그대로(모두 `TEXT`) + 파일 순서 `row_no`(`INTEGER`, 기본 키), 목록 칸은 지금처럼 `;`·`|` 글자. 머리글을 바꾸면 새 Alembic 판(갈래 `master`). 판: `common/store/db/migrations/versions/0001_master_base.py` · 모델: `common/store/db/models/master_tables.py` · 읽기·채우기: `common/store/master.py`(프로세스마다 한 번 — 서버(dev·prd)는 못 읽으면 멈춤, PC는 같은 CSV로 채운 SQLite 대역). `tests/server/common/test_db_schema.py`가 이 절의 칸을 모델과 대조한다.
 
@@ -319,17 +319,17 @@ ID 모양 정규식(계약 번호·제품 코드 등). 읽는 곳: `common.core.
 | # | 무엇 | 왜 |
 |---|---|---|
 | D-1 | `AI.FileStorageMap`의 실제 정의 — `created_at`이 있는지(같은 `s3_key` 중 가장 늦은 행을 이 칸으로 고름), 원천별 등록 시각(SFDC `ContentVersion.CreatedDate`, CRMS `RM_CM_DOCU.INIT_DTTM`, LAS `FileManager.CreateDate`)과 같은 값인지 · 원천 id 칸의 실제 이름 · SFDC Quote 표의 실제 이름·칸과 `OpportunityId` 연결 | 저장소에는 PC 대역(`valid_env/edw/ai.sql`)뿐 |
-| D-2 | `client_edw`·원천 메타를 얻는 사슬(`resources/config/edw_chain.yaml`)의 표·칸 이름이 실제 EDW와 같은지 | 적재가 EDW 읽기 계정으로 직접 조인한다([pl-29](../prd/load.md#pl-29)) — 칸 이름은 운영 노트 기준(refactor.md C-76) · LAS 고객은 상대사 출처가 정해질 때까지 비움 |
+| D-2 | `client_edw`·원천 메타를 얻는 사슬(`resources/config/edw_chain.yaml`)의 표·칸 이름이 실제 EDW와 같은지 | 적재가 EDW 읽기 계정으로 직접 조인한다 — 칸 이름은 운영 노트 기준(refactor.md C-76) · LAS 고객은 상대사 출처가 정해질 때까지 비움 |
 | D-3 | `AI.ParsingMeta` 칸 정리(ALTER) — §3 `삭제` 칸 지우기, `gold_status`·`gold_reason`·`engines_failed`·`loaded_at`·`gold_version` 더하기, `source_key` → `s3_key`·`pipeline_version` → `silver_version` 이름 바꾸기, `engines_used` 뜻 바꿈(성공한 엔진만), 운영이 더한 분류·고객 칸(`doc_class`·`doc_class_low_conf`·`doc_class_at`·`doc_class_model`·`sf_op_id`·`created_at`·`sf_acc_name` 등) 지우기 | 이 프로젝트 밖에서 그 칸을 읽는 곳이 있는지 모름 · 운영 분류 스크립트가 멈추므로 운영 담당자에게 알린다 |
 | D-4 | `ParsingMeta.doc_key` 삭제 때 `UQ_ParsingMeta_dockey`·`IX_ParsingMeta_doc_key` 색인 처리 · `source_key`를 필수(NOT NULL)로 | 지금 `source_key`가 비면 `doc_key`가 겹침 키 |
-| D-6 | 원천별 gold 스키마 5벌 + 기준 스키마의 공용 `doc_id_seq`(§2) — 기존 서버 데이터는 백업 뒤 다시 적재 | 첫 적재가 전체 e2e([pl-54](../prd/ops.md#pl-54))와 함께 · refactor.md C-74·C-76 |
-| D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 등록(run_docs는 `s3_key LIKE 'FAQ/%'`로 고름 — [pl-39](../prd/extract.md#pl-39)) | FAQ 행을 누가 어떻게 넣나 |
-| D-9 | 밀려난 `FileStorageMap` 행의 예외 이력 표(§3 `edw.SupersededRow` 안) — 표 이름·칸·누가 쓰나 | [pl-32](../prd/load-schema.md#pl-32) |
+| D-6 | 원천별 gold 스키마 5벌 + 기준 스키마의 공용 `doc_id_seq`(§2) — 기존 서버 데이터는 백업 뒤 다시 적재 | 첫 적재가 전체 e2e와 함께 · refactor.md C-74·C-76 |
+| D-8 | FAQ 원천 등록 — Object Storage `FAQ/<uuid>/<파일>`을 `AI.FileStorageMap`에 등록(run_docs는 `s3_key LIKE 'FAQ/%'`로 고름) | FAQ 행을 누가 어떻게 넣나 |
+| D-9 | 밀려난 `FileStorageMap` 행의 예외 이력 표(§3 `edw.SupersededRow` 안) — 표 이름·칸·누가 쓰나 | 요건 [pl-32](../prd/load-schema.md#pl-32) |
 | D-10 | `applog` 스키마 추가(§6) — `up`의 `CREATE SCHEMA`, `maintain`의 파티션 생성·DROP, 앱의 INSERT와 `pipe_run` UPDATE 권한. 호출량 기준 용량(`mcp_log` 행 본문 최대 약 80KB) | 새 스키마이고 로그 쓰기가 기존 PG 접속 정보를 함께 씀 |
 | D-11 | `applog.mcp_log`의 `args`·`result` 읽기 권한 분리 | 문서 본문·EDW 결과가 들어가는데(`get_doc_fulltext` 응답은 문서 원문 전체) 판에 GRANT가 없어 지금은 앱 계정이 읽을 수 있음 |
 | D-12 | 실제 보존 기간 약 90~120일(월 단위 DROP)이 감사·개인정보 기준에 맞는지, `dbtool maintain` 매일 예약 | 예약이 약 2개월 이상 멈추면 새 달 파티션이 없어 DB 쓰기가 실패하고 대체 파일로만 쌓임 |
 
-## 6. applog — 로그 저장소 (pgvector PG, 스키마 `applog`, [op-01](../prd/ops.md#op-01))
+## 6. applog — 로그 저장소 (pgvector PG, 스키마 `applog`)
 
 gold·EDW와 별개인 로그 표다. 서버 적용 절차는 refactor.md C-79.
 
@@ -339,7 +339,7 @@ gold·EDW와 별개인 로그 표다. 서버 적용 절차는 refactor.md C-79.
 - **보존:** `dbtool maintain --target applog`를 매일 실행한다. `ops.log.retention_days`(기본 90)가 지난 달의 파티션을 DROP하고 `pipe_run`은 DELETE한다. 달이 통째로 지나야 DROP되므로 파티션 표의 행은 약 90~120일 남는다.
 - **되돌리기:** `downgrade`는 막혀 있다. 지우려면 DB 담당자가 직접 한다.
 - **연결:** `pipe_event.run_id` → `pipe_run.run_id`는 외래 키가 없다(지우는 시점이 달라 짝 없는 행이 생길 수 있음). 파티션 표의 `id`는 기본 키가 시각과 묶여 있어 그것만으로는 고유하지 않다.
-- **기록하지 않는 값:** MCP `clientInfo`(사용자 11-02, `args`에서도 뺌). 접속 IP는 11-04에 `mcp_log.client_ip`로 되살렸다(사용자 11-04).
+- **기록하지 않는 값:** MCP `clientInfo`(`args`에서도 뺌). 접속 IP는 `mcp_log.client_ip`에 남긴다.
 
 ### applog.mcp_log
 
