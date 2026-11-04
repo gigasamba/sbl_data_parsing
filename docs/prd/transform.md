@@ -92,7 +92,7 @@
 1. 엔진 `parser.py`의 `FORMATS`는 두고, 등록부 `pipeline/extract/engines/registry.py`의 `EXTRA_FORMATS`(엔진별 추가 확장자)에 더한다 — `formats(엔진)` = `FORMATS` + `EXTRA_FORMATS`, `engines_for()`·`run_one_engine --list`가 이것을 읽는다.
 2. 구성(우선순위 순): `.docm`·`.pptm`(kreuzberg, anydoc) · `.rtf`·`.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.csv`(markitdown, kreuzberg) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown) · `.xlsb`·`.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg) · `.json`·`.xml`·`.log`(plaintext 하나 — 글 그대로).
 3. `.docm`·`.pptm`은 `office` 엔진에 주지 않는다(`office_stdlib`는 `.docx`가 아니면 xlsx로 다룸).
-4. 파싱 서비스가 받는 확장자(`pipeline.parse_service.allowed_exts()`) = 구성의 `parse` 키(`.pdf_*` → `.pdf`) − 이미지 확장자.
+4. 파싱 서비스가 받는 확장자(`pipeline.extract.engine_stack.allowed_exts()`) = 구성의 `parse` 키(`.pdf_*` → `.pdf`) − 이미지 확장자.
 
 ### 단계
 1. `.hwp` — kreuzberg로 실제 `.hwp` 문서를 읽어 글이 나오는지 시험한 뒤 `EXTRA_FORMATS["kreuzberg"]`와 구성에 더한다.
