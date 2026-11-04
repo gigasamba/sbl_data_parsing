@@ -1,23 +1,15 @@
 #!/usr/bin/env python3
-"""도구 실행 묶음(session)·핵심 결과 한 줄(note) — 파일은 쓰지 않는다(op-13 — 사용자 11-04: 로그는 Postgres applog만,
-사람이 보는 실행 출력은 컨테이너 로그 `podman logs`).
-도구 쪽 사용(그대로):
-    from common.core.runlog import session, note
-    with session("run_all"):
-        note("phase 1: 성공 23 · 다음 phase로 8")
-비밀 가림(_mask — jsonlog·settings가 씀)도 여기 있다."""
+"""로그 글자의 비밀 가림(_mask — jsonlog가 씀, _LABEL — settings가 씀). 실행 기록 파일·묶음(session·note)은 op-13에 지움
+(로그는 Postgres applog만, 사람이 보는 실행 출력은 컨테이너 로그 `podman logs`)."""
 
-import contextlib
 import re
-
-_state: dict = {"notes": []}
 
 # L8a — 로그에 비밀값이 그대로 남지 않게. 커넥션
 # 문자열의 UID= 같은 비식별 값은 안 가림 — 식별자(authorization·토큰·비밀번호·AWS 비밀키·DSN 비밀번호)만.
 # 트레이스백이 접속 문자열을 그대로 물고 나오는 경우(pyodbc 등)까지 커버. key=value·key:"value"·JSON
 # {"key": "value"}(앞뒤 따옴표 어느 쪽에도 가능) 세 모양 다 받음 — "토큰" 같은 일반 단어(completion_tokens=18,
 # max_tokens, tokens(), token_budget, ev_tokens5)는 라벨 뒤에 구분자(=·:)가 바로 안 오므로 안 걸림(독립 검토
-# 10-12, dev_tools/unit_test/pipeline/test_runlog_mask_and_retention.py의 no-over-masking 표로 고정).
+# 10-12, tests/server/common/test_jsonlog.py의 no-over-masking 표로 고정).
 _LABEL = (
     r"(?:aws[_-]?)?secret[_-]?access[_-]?key"  # AWS_SECRET_ACCESS_KEY · SecretAccessKey(언더스코어 없어도)
     r"|(?:aws[_-]?)?api[_-]?key"
@@ -51,15 +43,3 @@ def _mask_val(m):
     """매치 전체에서 val 그룹 구간만 '***'로 — 양옆 따옴표·구분자·스킴은 그대로 남김."""
     s0 = m.start()
     return m.group(0)[: m.start("val") - s0] + "***" + m.group(0)[m.end("val") - s0 :]
-
-
-def note(line):
-    """핵심 결과 1줄(실행 묶음 안에서 모음 — 출력·파일 없음)."""
-    _state["notes"].append(str(line))
-
-
-@contextlib.contextmanager
-def session(tool):
-    """도구 실행 한 번 — 묶음마다 note를 새로 모은다(파일 없음 — op-13)."""
-    _state.update(notes=[])
-    yield

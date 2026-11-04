@@ -232,12 +232,10 @@ def parse_module(a):
         sel.write_text("\n".join(names) + "\n", encoding="utf-8")
         # fp-perf B7 — 문서 1건(run_docs 문서별 흐름)은 자식 프로세스 없이 같은 함수로(결과 파일 같음)
         if sum(1 for f in Path(local).iterdir() if f.is_file() and f.name != ".gitkeep") <= 1:
-            from common.core.runlog import session
             from pipeline.extract import dedup
 
             try:
-                with session("dedup"):  # 자식이 남기던 실행 기록 그대로
-                    dedup.run_folder(local, OUT / "dedup")
+                dedup.run_folder(local, OUT / "dedup")
                 rc = 0
             except Exception as e:  # 자식 실패와 같게 종료 코드로(아래 SystemExit)
                 print(f"[dedup] 실패: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
@@ -557,8 +555,6 @@ if __name__ == "__main__":
 
     setarg.apply()  # --set 이름=값(S9 Step A — 한 번 실행 덮기, 서버 포함 · 호스트 run_docs.py 문서별 파싱이 결과 폴더 등을 넘김)
     utf8_stdout()
-    from common.core.runlog import session
-
     subcommand = next((x for x in sys.argv[1:] if not x.startswith("-")), "")
     trace: contextlib.AbstractContextManager = contextlib.nullcontext()
     if (
@@ -567,8 +563,5 @@ if __name__ == "__main__":
         from pipeline.shared import runtrace
 
         trace = runtrace.run(subcommand, sys.argv[1:])
-    with (
-        session("pipeline"),
-        trace,
-    ):  # op-01 — run_id 생성·pipe_run, 하위 프로세스가 이어받음
+    with trace:  # op-01 — run_id 생성·pipe_run, 하위 프로세스가 이어받음
         main()

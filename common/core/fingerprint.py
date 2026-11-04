@@ -77,11 +77,11 @@ EXCLUDED_FILES = (
     "core/jsonlog.py",  # op-01 JSON 사건 기록·상관 ID — 인계 내용과 무관
     "store/logsink.py",  # op-01 비동기 DB 기록 — 인계 내용과 무관
     "core/span.py",  # op-01 파이프라인 성능 span — 인계 내용과 무관
-    "core/runlog.py",  # 실행 로그(output/RUNLOG.md 등)
+    "core/runlog.py",  # 로그 글자 비밀 가림(jsonlog·settings) — 인계 내용과 무관
     "store/db/",  # S8a — pgvector 표 정의·행 모양·Alembic 판·migrate 명령(폴더째 — "/"로 끝나면 그 아래 전부). DB 표 모양만,
     # _rep/bundle 내용과 무관 · 판을 더할 때마다 이 파일을 고치지 않게(이 파일은 모든 층의 공용 의존 — code_fp)
 )
-# 10-14 모듈 소유 정리(MOD) — qa_log.py·synth_score.py는 data_retrieval 전용이라 그쪽으로 옮김(여기 두 목록에서 빠짐).
+# 10-14 모듈 소유 정리(MOD) — synth_score.py는 data_retrieval 전용이라 그쪽으로 옮김(여기 두 목록에서 빠짐).
 # numcheck.py는 git grep 기준 실사용자가 없어(research.py가 호출 안 함) 지움.
 # CT1(10-16) — common_tools 하위를 역할 묶음(model/·store/·contract/·runtime/)으로 재편, 경로만 바뀜(§_unclassified는
 # 최상위 *.py만 보므로 옮긴 파일은 더 이상 거기 잡히지 않음 — 위 목록은 fingerprint() 읽기 경로 용으로 계속 정확히 유지).

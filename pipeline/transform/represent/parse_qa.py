@@ -977,9 +977,6 @@ def main():
     (out_dir / "route.json").write_text(json.dumps(route, ensure_ascii=False, indent=1), encoding="utf-8")
     ps = write_summary(qa, Path(a.src), out_dir)
     print("\n" + "\n".join(summary_md(ps)))
-    from common.core.runlog import note
-
-    note(ps["total"]["line"])
     print_console(qa)
     print_flags(qa["docs"])
     print(f"\nqa.json · route.json → {out_dir}")
@@ -987,7 +984,4 @@ def main():
 
 if __name__ == "__main__":
     utf8_stdout()
-    from common.core.runlog import session
-
-    with session("parse_qa"):
-        main()
+    main()

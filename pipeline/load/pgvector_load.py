@@ -258,9 +258,6 @@ def load(db, bundle, replace=False, rep_dir=None):
                 kept += kp
     counts["sec"] = round(time.time() - t0, 1)
     counts["loaded_at_failed"] = _mark_loaded(loaded, kept, gold_version(meta))
-    from common.core import runlog
-
-    runlog.note(f"적재 {json.dumps({'bundle': str(B), 'meta': meta, 'counts': counts}, ensure_ascii=False, default=str)}")
     return counts
 
 

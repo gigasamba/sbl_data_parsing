@@ -667,9 +667,6 @@ def main(argv=None):
     shutil.rmtree(old, ignore_errors=True)
     out = final
     print(json.dumps(meta, ensure_ascii=False))
-    from common.core.runlog import note
-
-    note(f"EDW 묶음: 문서 {len(docs)} · 청크 {len(chunks)} · 차원 {meta['dim']} → {out}")
 
 
 if __name__ == "__main__":

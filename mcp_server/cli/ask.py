@@ -65,7 +65,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     utf8_stdout()
-    from common.core.runlog import session
-
-    with session("pipeline"):  # 옛 pipeline/cli.py와 같은 실행 기록 이름(output/logs/<시각>_pipeline.log)
-        main()
+    main()

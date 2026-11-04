@@ -402,13 +402,6 @@ def main():
                 log.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 log.flush()
                 print(f"copy {eng:18s}          {doc.name}  ← {first.name[:-5]}", flush=True)
-    from common.core.runlog import note
-
-    note(
-        f"문서 {len(docs)}개 · 문서×엔진 {len(jobs)}건 실행"
-        + (f" · {' · '.join(f'{k} {v}' for k, v in tally.items())}" if tally else "")
-        + (f" · 건너뜀 {sum(skip.values())}" if skip else "")
-    )
     if skipped:
         print("건너뜀(처리 엔진 없음):", ", ".join(f"{k} {v}" for k, v in skipped.most_common()))
 
@@ -620,7 +613,5 @@ def _isolated_once(eng, doc, dst, profile, tmo, py, env=None, prov=None):
 
 if __name__ == "__main__":
     utf8_stdout()
-    from common.core.runlog import session
-
-    with session("run_all"), runtrace.run("run_all", sys.argv[1:]):  # op-01 — 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
+    with runtrace.run("run_all", sys.argv[1:]):  # op-01 — 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
         main()
