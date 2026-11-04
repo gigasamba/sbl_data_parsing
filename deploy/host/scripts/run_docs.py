@@ -82,8 +82,14 @@ def _code_root():
 
 
 def _root():
-    """서버 루트(op-13) — 코드 폴더의 부모(settings.yaml·edw_chain.yaml·output/이 바로 아래). settings_env.sh RAG_ROOT와 같음."""
-    return _code_root()[0].resolve().parent
+    """서버 루트(op-13 — settings.yaml·edw_chain.yaml·output/이 바로 아래): settings_env.sh load_settings가 낸 RAG_ROOT, 없으면 같은 규칙(코드 폴더의 부모)."""
+    r = os.environ.get("RAG_ROOT")  # env 남김 — 호스트 도구(settings_env.sh load_settings가 냄)
+    return Path(r) if r else _code_root()[0].resolve().parent
+
+
+def _inside(seq, sub=""):
+    """컨테이너 쪽 문서 임시 폴더 <output_root>/_docflow/<seq>[/sub]."""
+    return f"{_img('output_root')}/_docflow/{seq}" + (f"/{sub}" if sub else "")
 
 
 @functools.cache
@@ -167,9 +173,12 @@ def configure(settings_file=None):
     apply_policy(policy)
     TEST = work_dir(doc)
     PROG = TEST / "batch_progress"
+    # 컨테이너 /app/output 공유 볼륨 — load_settings가 낸 RAG_OUT(셸 env > common.host.output_root > <루트>/output), 없으면 같은 규칙
     DOCSPACE = Path(
-        _yget(doc, "common.host.output_root") or _root() / "output"
-    )  # 컨테이너 /app/output 공유 볼륨(op-13 — 비우면 <루트>/output)
+        os.environ.get("RAG_OUT")  # env 남김 — 호스트 도구(settings_env.sh load_settings가 냄)
+        or _yget(doc, "common.host.output_root")
+        or _root() / "output"
+    )
     DOCFLOW = DOCSPACE / "_docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     WARM = DOCSPACE / "_warm"  # SOURCE_WARM 대기열 저장소
     DOCKER = _yget(doc, "common.host.docker") or (
@@ -240,13 +249,13 @@ def warm_cmd(seq):
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && mkdir -p {o}/_warm && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
-        f"python -m pipeline.extract.source{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {o}/_docflow/{seq}/batch.csv'"
+        f"python -m pipeline.extract.source{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {_inside(seq, 'batch.csv')}'"
     )
 
 
 def parse_cmd(seq, chan, scan, gate):
     """문서 1개 파싱 — chan(light·medium·vlm), scan(스캔 PDF), gate(CPU 게이트 글자)."""
-    inside = f"{_img('output_root')}/_docflow/{seq}"
+    inside = _inside(seq)
     # 2026-10-23 사용자 지정 — heavy(스캔·이미지 다수) 판정 문서만 vlm_page 켬(스캔 쪽만 VLM 전사,
     # 내부 스캔판정이 이중 필터) · light는 종전대로 off. 같은 이름은 뒤 --set이 이기므로 뒤에 붙여 덮어씀.
     # 2026-10-23 사용자 지정 — 채널별 파라미터: heavy는 VLM 6(3동시 × 6 = 글로벌 18으로 gpu02 쏠림 제한),
@@ -285,7 +294,7 @@ def parse_cmd(seq, chan, scan, gate):
 
 def struct_cmd(seq):
     """문서 1개 구조화 + 적재. 엔진 구성은 파싱과 같은 파일(코드 폴더 — 사용자 11-01: 판 번호 없음, 실행 중에는 안 바뀜)."""
-    inside = f"{_img('output_root')}/_docflow/{seq}"
+    inside = _inside(seq)
     st = sets(*EMBED_SET)  # 묶음·적재 python에(문서 메타는 적재가 EDW 조인으로 — pl-29 11-02, FILE_META_PATH 지움)
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
@@ -301,13 +310,13 @@ def faq_sync_cmd(reset):
     """pl-41 FAQ 교체 확인(파이프라인 컨테이너) — 결과는 _docflow/faq_sync.json(지운 수·남은 gold faq)."""
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && PYTHONPATH={_img('code_root')} {LIB_ENV} "
-        f"python -m pipeline.load.pgvector_load faq-sync{' --reset' if reset else ''} --out {_img('output_root')}/_docflow/faq_sync.json'"
+        f"python -m pipeline.load.pgvector_load faq-sync{' --reset' if reset else ''} --out {_inside('faq_sync.json')}'"
     )
 
 
 def publish_cmd(seq):
     """문서 1개 publish(OS + EDW)."""
-    inside = f"{_img('output_root')}/_docflow/{seq}"
+    inside = _inside(seq)
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} python -m pipeline.load.publish_parse_result"
@@ -320,7 +329,7 @@ def publish_cmd(seq):
 def sweep_cmd(seq):
     """고아 정리 — 이 문서 표지 env(DOC_MARK)를 가진 컨테이너 안 프로세스(bash·python·soffice까지 env 상속)를 모두 끔. environ 항목(NUL 구분)과
     통째로 같을 때만(-zx — 리뷰 S9: 앞부분만 맞추면 doc 1 정리가 doc 10~19·100…까지 끔, 옛 PIPE_OUT_ROOT 때부터)."""
-    inside = f"{_img('output_root')}/_docflow/{seq}"
+    inside = _inside(seq)
     return (
         f'{DOCKER} exec {PIPE_C} bash -c "for p in /proc/[0-9]*; do '
         f"grep -aqzx '{DOC_MARK}={inside}' \\$p/environ 2>/dev/null && kill \\${{p##*/}} 2>/dev/null; done\""
@@ -785,7 +794,7 @@ def drop_original(seq, row):
     if NO_CLEANUP:
         return
     o = _img("output_root")
-    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {o}/_docflow/{seq}/_source_files ; rm -f {o}/_warm/{_warm_bin(row)}'", timeout=60)
+    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {_inside(seq, '_source_files')} ; rm -f {o}/_warm/{_warm_bin(row)}'", timeout=60)
     shutil.rmtree(DOCFLOW / f"{seq}" / "_source_files", ignore_errors=True)
     (WARM / _warm_bin(row)).unlink(missing_ok=True)
 
@@ -794,7 +803,7 @@ def drop_temp(seq):
     """문서 끝 — docflow 임시 폴더만 지움(어느 길이든). 원본(warm)은 drop_original만 지운다 — 파싱·게시 실패면 남음(pl-24)."""
     if NO_CLEANUP:
         return
-    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {_img('output_root')}/_docflow/{seq}'", timeout=60)
+    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {_inside(seq)}'", timeout=60)
     shutil.rmtree(DOCFLOW / f"{seq}", ignore_errors=True)
 
 
