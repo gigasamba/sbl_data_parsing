@@ -16,12 +16,12 @@ files="-f deploy/host/compose/compose.mcp-server.yml"
 [ -n "${CODE_DIR:-}" ] && files="$files -f deploy/host/compose/compose.code.mcp-server.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 컨테이너 코드 자리에
 [ -d app ] && echo "[mcp_keepalive] 경고: 코드 폴더에 옛 오버레이 app/이 남아 있음 — 11-03부터 쓰지 않음(덧씌우기 compose 지움, 이미지·코드 폴더 코드로 뜸)" >&2
 DC="$DOCKER compose -p compose$NAME_SUFFIX $files"   # 묶음 이름 — host_ctl.sh와 같게(여러 벌)
-# parse_document 작업 서비스 전용 컨테이너(data-pipeline-mcp — rn-03)도 여기서 살핀다(타이머 2분마다). 꺼졌으면 up -d만(응답 확인은 검색 MCP의 몫).
-if [ "$($DOCKER inspect -f '{{.State.Running}}' "data-pipeline-mcp$NAME_SUFFIX" 2>/dev/null)" != true ]; then
-  echo "[mcp_keepalive] $(date '+%F %T') data-pipeline-mcp 꺼짐 — 띄움"
+# parse_document 작업 서비스 전용 컨테이너(mcp-data-parsing — rn-03)도 여기서 살핀다(타이머 2분마다). 꺼졌으면 up -d만(응답 확인은 검색 MCP의 몫).
+if [ "$($DOCKER inspect -f '{{.State.Running}}' "mcp-data-parsing$NAME_SUFFIX" 2>/dev/null)" != true ]; then
+  echo "[mcp_keepalive] $(date '+%F %T') mcp-data-parsing 꺼짐 — 띄움"
   # shellcheck disable=SC2086 — 파일 인자(낱말 나눔)
-  (CODE_DIR=$code0 && code_dir_default DATA_PIPELINE_IMAGE && $DOCKER compose -p "compose$NAME_SUFFIX" -f deploy/host/compose/compose.pipeline-mcp.yml ${CODE_DIR:+-f deploy/host/compose/compose.code.pipeline-mcp.yml} up -d data-pipeline-mcp) ||
-    echo "[mcp_keepalive] data-pipeline-mcp 띄우기 실패 — parse_document는 '연결 실패'를 돌려줌(검색은 그대로)" >&2
+  (CODE_DIR=$code0 && code_dir_default DATA_PIPELINE_IMAGE && $DOCKER compose -p "compose$NAME_SUFFIX" -f deploy/host/compose/compose.data-parsing.yml ${CODE_DIR:+-f deploy/host/compose/compose.code.data-parsing.yml} up -d mcp-data-parsing) ||
+    echo "[mcp_keepalive] mcp-data-parsing 띄우기 실패 — parse_document는 '연결 실패'를 돌려줌(검색은 그대로)" >&2
 fi
 URL="http://${MCP_HOST:-127.0.0.1}:${MCP_PORT:-8765}/health"
 

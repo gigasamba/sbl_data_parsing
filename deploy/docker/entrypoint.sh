@@ -131,8 +131,8 @@ case "$cmd" in
   show-stack|selftest)   # pipeline.cli 점검 명령 — 두 이미지 모두(mcp-server에도 pipeline/cli.py가 있음 — selftest_gate.sh가 이미지마다 부름)
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
   # 11-01(pl-10 — trigger 서버 serve-trigger 지움) — 상주 컨테이너 data-pipeline(11-03 — 옛 둘을 하나로)은 일을 하지 않고 떠 있기만 한다.
-  # run_docs.py가 그 안에서 docker exec로 문서별 작업을 돌린다. MCP parse_document 작업 서비스는 위 parse-service(전용 컨테이너 data-pipeline-mcp — 여기에 띄우지 않음, 8766 겹침).
-  parse-service)   # 11-03(사용자 — PRD rn-03) — MCP parse_document 작업 서비스(127.0.0.1:8766), 전용 상주 컨테이너 data-pipeline-mcp의 주 프로세스
+  # run_docs.py가 그 안에서 docker exec로 문서별 작업을 돌린다. MCP parse_document 작업 서비스는 위 parse-service(전용 컨테이너 mcp-data-parsing — 여기에 띄우지 않음, 8766 겹침).
+  parse-service)   # 11-03(사용자 — PRD rn-03) — MCP parse_document 작업 서비스(127.0.0.1:8766), 전용 상주 컨테이너 mcp-data-parsing의 주 프로세스
     preflight; exec python -u -m pipeline.parse_service;;
   idle)
     preflight

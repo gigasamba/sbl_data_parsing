@@ -162,7 +162,7 @@
 - 규칙:
   1. 스캔 판정 = `pipeline.transform.represent.parse_scoring.pdf_kind()`(전체 쪽 글자층이 쪽당 평균 20자 미만) — 일괄 파싱과 같은 함수.
   2. 스캔 PDF는 stack `.pdf_image`의 `qwen_vlm`으로 파싱한다(내부망 주소만 — `require_internal`).
-  3. 시간 상한은 작업 제한 시간 `tuning.ops.services.parse_mcp.job_timeout_sec`(기본 600초) 하나, 단계마다 남은 시간을 나눠 준다. 쪽 수 상한 없음. 큐는 하나.
+  3. 시간 상한은 작업 제한 시간 `tuning.ops.services.data_parsing.job_timeout_sec`(기본 600초) 하나, 단계마다 남은 시간을 나눠 준다. 쪽 수 상한 없음. 큐는 하나.
   4. VLM 설정(`required.models.vlm_base_url`·`vlm_model`)이 비면 파이프라인 없이 빈 결과 + note "스캔 PDF — VLM 미설정".
   5. VLM이 돌았는데 대표 결과가 없으면 note "스캔 PDF — VLM 파싱 실패".
   6. 글자층과 스캔 쪽이 섞인 PDF는 범위 밖.
@@ -188,5 +188,5 @@
 |---|---|
 | `query_edw` | `required.edw` 읽기 계정, 또는 PC sqlite 대역 |
 | `edw_meta` | `search.edw_meta.dir`의 자료 |
-| `parse_document` | `data-pipeline-mcp`(파싱 서비스) + `required.tokens.parse_proxy` |
+| `parse_document` | `mcp-data-parsing`(파싱 서비스) + `required.tokens.parse_proxy` |
 | 원문 도구 | `required.tokens.fulltext` · Object Storage 읽기 · EDW 읽기 계정 |

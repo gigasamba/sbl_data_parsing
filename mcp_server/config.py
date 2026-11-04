@@ -78,7 +78,7 @@ class McpOutput(Section):
 
 
 class McpParseProxy(Section):
-    token: SecretStr | None = F(None, "PARSE_SERVICE_TOKEN", "parse_document가 작업 서비스(mcp_parse_service)를 부를 때 쓰는 토큰")
+    token: SecretStr | None = F(None, "PARSE_SERVICE_TOKEN", "parse_document가 작업 서비스(parse_service)를 부를 때 쓰는 토큰")
     url: str | None = F("http://127.0.0.1:8766", "PARSE_SERVICE_URL", "parse_document가 부르는 작업 서비스 주소")
 
 

@@ -6,7 +6,7 @@
 
 | 이미지 | 역할 | `RAG_MODULE` | 상주 컨테이너(`deploy/host/compose/`) |
 |---|---|---|---|
-| `data-pipeline` | 파싱·게시·구조화·적재 | `pipeline` | `data-pipeline`(`compose.pipeline.yml` — 일 없이 떠 있음) · `data-pipeline-mcp`(`compose.pipeline-mcp.yml` — `parse_document` 작업 서비스) |
+| `data-pipeline` | 파싱·게시·구조화·적재 | `pipeline` | `data-pipeline`(`compose.pipeline.yml` — 일 없이 떠 있음) · `mcp-data-parsing`(`compose.data-parsing.yml` — `parse_document` 작업 서비스) |
 | `mcp-server` | 검색 MCP | `mcp` | `mcp-server`(서비스 이름 `mcp` — `compose.mcp-server.yml`) |
 
 - 이미지 시작 스크립트(`entrypoint.sh`)는 다른 이미지의 명령을 종료 64로 거부한다(맞는 이미지를 알려 줌). data-pipeline: `parse`·`publish`·`show-stack`·`idle`·`migrate`·`parse-service` · mcp-server: `mcp`·`ask`·`show-stack`.
@@ -40,9 +40,9 @@ README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash 
 
 | 칸 | 하는 일 | 예(홍 개발자) |
 |---|---|---|
-| `ops.host.instance` | 컨테이너 이름·compose 묶음·systemd 타이머 이름 끝에 `-<이름>`을 붙인다(영소문자·숫자·`-`). 비우면 한 벌 — 이름 그대로 | `hong` → `data-pipeline-hong`·`data-pipeline-mcp-hong`·`mcp-server-hong`, 타이머 `data-pipeline-nightly-hong.timer` |
+| `ops.host.instance` | 컨테이너 이름·compose 묶음·systemd 타이머 이름 끝에 `-<이름>`을 붙인다(영소문자·숫자·`-`). 비우면 한 벌 — 이름 그대로 | `hong` → `data-pipeline-hong`·`mcp-data-parsing-hong`·`mcp-server-hong`, 타이머 `data-pipeline-nightly-hong.timer` |
 | `search.server.port` | 검색 MCP 포트 | `8775` |
-| `ops.services.parse_mcp.port` | parse_document 작업 서비스 포트 | `8776` |
+| `ops.services.data_parsing.port` | parse_document 작업 서비스 포트 | `8776` |
 | `search.parse_proxy.url` | 검색 MCP가 부르는 작업 서비스 주소 — 위 포트와 같게 | `http://127.0.0.1:8776` |
 | `required.pg.db_schema` | 검색 DB 스키마(벌마다 따로 적재) | `sbl_hong` |
 
@@ -66,7 +66,7 @@ bash deploy/host/scripts/pipe_exec.sh publish                    # 대표 결과
 ```
 - 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock` 때문에 뒤쪽이 종료 75.
 - 도구만 따로: `bash deploy/host/scripts/pipe_exec.sh <rdb_discover|check_env|ping_models|migrate|show-stack|check> [인자]`.
-- 우선순위 낮추기(`tuning.extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 같은 세션·autogroup 안에서만 효과가 있다. 컨테이너끼리는 CPU 나눔 비율(`parse_mcp_cpu_shares` 4096 대 일괄 1024)이 정한다.
+- 우선순위 낮추기(`tuning.extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 같은 세션·autogroup 안에서만 효과가 있다. 컨테이너끼리는 CPU 나눔 비율(`data_parsing_cpu_shares` 4096 대 일괄 1024)이 정한다.
 
 ### 2-1. 검색 MCP는 늘 켜 둠
 `bash deploy/host/scripts/mcp_keepalive.sh` + keepalive 타이머 — README §5-5.

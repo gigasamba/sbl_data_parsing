@@ -10,9 +10,9 @@ common.host.prune_keep	PRUNE_KEEP	num
 pipeline.host.image	DATA_PIPELINE_IMAGE	text
 pipeline.host.parse_cpus	PARSE_CPUS	num
 pipeline.host.parse_mem_limit	PARSE_MEM_LIMIT	text
-pipeline.host.parse_mcp_cpus	PARSE_MCP_CPUS	num
-pipeline.host.parse_mcp_mem_limit	PARSE_MCP_MEM_LIMIT	text
-pipeline.host.parse_mcp_cpu_shares	PARSE_MCP_CPU_SHARES	num
+pipeline.host.data_parsing_cpus	DATA_PARSING_CPUS	num
+pipeline.host.data_parsing_mem_limit	DATA_PARSING_MEM_LIMIT	text
+pipeline.host.data_parsing_cpu_shares	DATA_PARSING_CPU_SHARES	num
 pipeline.host.run_docs_dir	RUN_DOCS_DIR	text
 pipeline.host.nightly.time	NIGHTLY_TIME	text
 pipeline.host.nightly.max_docs	NIGHTLY_MAX_DOCS	num

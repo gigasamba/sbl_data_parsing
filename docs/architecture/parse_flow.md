@@ -391,7 +391,7 @@ flowchart TD
     Q["common/ai/embed.py 질문 임베딩 (query_cache.sqlite)"]
     O["evidence_shape.py → schemas/evidence.py 근거 13칸"]
     FT["fulltext_tool.py → services/fulltext_svc.py: ParsingMeta 위치 → Object Storage"]
-    PD["parse_tool.py → parse_proxy.py → data-pipeline-mcp 의 pipeline/parse_service.py"]
+    PD["parse_tool.py → parse_proxy.py → mcp-data-parsing 의 pipeline/parse_service.py"]
     M --> S --> H --> R --> P --> O
     R --> Q
     M --> FT
@@ -400,7 +400,7 @@ flowchart TD
 
 - `search`: 거르기에 맞는 문서 범위 안에서만 하이브리드 검색, 결과를 근거 칸으로 다듬음.
 - `list_doc_fulltext`·`get_doc_fulltext`: 대표 결과 위치는 PG가 아니라 EDW ParsingMeta에서 그때 읽고, 서명된 `sfid`로 Object Storage에서 받음.
-- `parse_document`: 파일 하나를 `data-pipeline-mcp` 컨테이너의 작업 서비스(`127.0.0.1:8766`)에 넘김 → 같은 `filter_and_rotate` → `run_engines` → `parse_scoring` → `build_rep`(사슬 `pipeline.parse_steps`)를 (`pipeline.parse_service`가) `output/_mcp_parse/`에서 돌림(구조화·적재 없음).
+- `parse_document`: 파일 하나를 `mcp-data-parsing` 컨테이너의 작업 서비스(`127.0.0.1:8766`)에 넘김 → 같은 `filter_and_rotate` → `run_engines` → `parse_scoring` → `build_rep`(사슬 `pipeline.parse_steps`)를 (`pipeline.parse_service`가) `output/_mcp_parse/`에서 돌림(구조화·적재 없음).
 - `query_edw`·`edw_meta`: EDW 읽기 전용 질의·카탈로그(`services/edw_query.py`·`edw_meta.py`).
 - 호출마다 `applog.mcp_log` 한 행(`services/call_log.py`).
 

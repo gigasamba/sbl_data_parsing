@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""텍스트 파싱 작업 서비스 — data-pipeline-mcp 컨테이너(11-03 — 옛 data-pipeline-parse; 작업 서비스가 주 프로세스, compose.pipeline-mcp.yml) 안에서 상주하며 검색 MCP(mcp-server — 옛 data-retrieval)의 parse_document
+"""텍스트 파싱 작업 서비스 — mcp-data-parsing 컨테이너(11-03 — 옛 data-pipeline-parse; 작업 서비스가 주 프로세스, compose.data-parsing.yml) 안에서 상주하며 검색 MCP(mcp-server — 옛 data-retrieval)의 parse_document
 도구가 localhost HTTP로 호출한다(비정형 파일[base64] → text 파싱 대표 결과 반환).
 범위 — prepare → run_all(문서의 엔진들 동시에 · OCR 엔진은 run_all이 뺌) → parse_qa → represent까지.
 구조화·임베딩·적재 없음 · 표 인식 유지 · 이미지 파일은 받지 않음 · 스캔 PDF는 내부망 VLM(qwen_vlm — mc-18, 11-03).
 [패치 2026-10-22] ① 기본 time_out_threshold 300초 ② 큐 대기 순번을 제출 응답과 시작 시점에 표시(지연 원인 파악)
   ③ 서비스 PID 로그 파일 남김(docker exec -d 로그 없음 문제) ④ _purge_old에서 방금 만든 작업 보호(버그 수정)
-실행: data-pipeline-mcp 컨테이너의 주 프로세스(compose.pipeline-mcp.yml — 죽으면 restart가 다시 띄움 · 옛 손 기동 `docker exec -d …` 없음)
-  토큰은 설정 필수(컨테이너에 붙인 settings.yaml required.tokens.parse_mcp — 검색 MCP의 MCP_TOKEN과 같은 값, 없으면 시작 거부, D-028 ⑨ · S7c ·
-  S7e2부터 env PARSE_MCP_TOKEN은 읽지 않음 — `docker exec -e PARSE_MCP_TOKEN=…`은 효과 없음, VS7e2 R-6)
+실행: mcp-data-parsing 컨테이너의 주 프로세스(compose.data-parsing.yml — 죽으면 restart가 다시 띄움 · 옛 손 기동 `docker exec -d …` 없음)
+  토큰은 설정 필수(컨테이너에 붙인 settings.yaml required.tokens.data_parsing — 검색 MCP의 MCP_TOKEN과 같은 값, 없으면 시작 거부, D-028 ⑨ · S7c ·
+  S7e2부터 env DATA_PARSING_TOKEN은 읽지 않음 — `docker exec -e DATA_PARSING_TOKEN=…`은 효과 없음, VS7e2 R-6)
 API(127.0.0.1:8766 · Bearer):  POST /jobs {content_b64+filename} → 202 {job_id, queue_position}
   GET /health  → {ok, ready, running, queued} · GET /jobs/<id> → {status, result, elapsed_ms}"""
 
@@ -59,7 +59,7 @@ def _job_env(post):
     key = (post, os.environ.get("SETTINGS_FILE"))  # env 남김 — 설정 파일 자리 신호
     extra = _JOB_ENVS.get(key)
     if extra is None or not Path(extra["SETTINGS_FILE"]).is_file():
-        pm = pc.cfg().service.parse_mcp
+        pm = pc.cfg().service.data_parsing
         # 10-29 — 파이프라인과 같은 규칙(쪽당 제한 + 두 배로 한 번 더)을 서비스 값으로 · 첫 시도 하한은 서비스 칸 warmup_sec(작업마다 새 run_all이라
         # 늘 '첫 문서' — 파이프라인 warmup 60초면 쪽당 제한이 무의미, 콜드 시작 여유는 이 칸) · 엔진 자식은 보통 우선순위(일괄 파싱보다 CPU 먼저)
         made = settings_env(
@@ -74,8 +74,8 @@ def _job_env(post):
     return {**os.environ, **extra}  # env 남김 — 하위 프로세스
 
 
-_PM = pc.cfg().service.parse_mcp  # S7c — 설정 객체(모듈 상수 — 옛처럼 import 때 한 번)
-pc.checked("PARSE_MCP_PORT")  # 형식 틀린 포트는 옛처럼 import 때 실패(조용히 기본 포트로 뜨지 않게 — VS7c1 R-2, 사용자 10-27)
+_PM = pc.cfg().service.data_parsing  # S7c — 설정 객체(모듈 상수 — 옛처럼 import 때 한 번)
+pc.checked("DATA_PARSING_PORT")  # 형식 틀린 포트는 옛처럼 import 때 실패(조용히 기본 포트로 뜨지 않게 — VS7c1 R-2, 사용자 10-27)
 PORT = _PM.port
 _TOK = reveal(_PM.token) or ""
 TOKEN = _TOK if _TOK.strip() else None  # D-028 ⑨ — 코드 기본 토큰 삭제, 설정 필수(없거나 비거나 공백만이면 아래 __main__이 시작 거부 — R-2)
@@ -95,7 +95,7 @@ Q: queue.Queue = queue.Queue()
 
 
 def _log(msg):
-    print(f"[parse-mcp {time.strftime('%H:%M:%S')}] {msg}", flush=True)
+    print(f"[data-parsing {time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
 def _jail(path_str):
@@ -395,11 +395,11 @@ if __name__ == "__main__":
     from common.config.settings import require_run_env
 
     require_run_env(
-        "mcp_parse_service", sections=("pipeline",)
+        "parse_service", sections=("pipeline",)
     )  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
     if not TOKEN:  # D-028 ⑨(S7c) — 옛 코드 기본 토큰 없앰: 설정에 없으면 시작 거부(값은 찍지 않음)
         print(
-            "[설정] mcp_parse_service: 토큰 없음 — settings.yaml required.tokens.parse_mcp에 검색 MCP의 MCP_TOKEN과 "
+            "[설정] parse_service: 토큰 없음 — settings.yaml required.tokens.data_parsing에 검색 MCP의 MCP_TOKEN과 "
             "같은 값을 적음(env로 준 값은 읽지 않음 — S7e2 · 코드 기본 토큰은 없앰 — refactor.md C-42)",
             file=sys.stderr,
         )

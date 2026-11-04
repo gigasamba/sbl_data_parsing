@@ -1,13 +1,13 @@
 # 파이프라인 컨테이너(docs/operations/server-guide.md §0) — 수집 서버. S6b(10-27, D-020 — 옛 compose.modules.yml): 파이프라인 이미지를
 #   하나로 합쳐 서버 이미지는 2개 — data-pipeline(파싱·구조화·적재·게시, 옛 data-parsing+data-structure) · mcp-server(검색 MCP, 옛 data-retrieval).
 #   상주 컨테이너 둘(사용자 11-03): data-pipeline(일괄 —
-#   `idle` — 일 없이 떠 있음) · data-pipeline-mcp(MCP parse_document 작업 서비스 전용 — CPU 우선, PRD rn-03). run_docs.py·pipe_exec.sh(parse·publish·도구·migrate·show-stack)가
+#   `idle` — 일 없이 떠 있음) · mcp-data-parsing(MCP parse_document 작업 서비스 전용 — CPU 우선, PRD rn-03). run_docs.py·pipe_exec.sh(parse·publish·도구·migrate·show-stack)가
 #   그 안에서 docker exec로 돈다(in_container.sh in_pipeline). 컨테이너마다 compose 파일 하나(사용자 11-03): 이 파일 = data-pipeline ·
-#   compose.pipeline-mcp.yml = data-pipeline-mcp · compose.mcp-server.yml = 검색 MCP mcp-server(mcp_keepalive.sh). 개발 서버 코드 폴더 덧붙임은 짝 파일 compose.code*.yml.
+#   compose.data-parsing.yml = mcp-data-parsing · compose.mcp-server.yml = 검색 MCP mcp-server(mcp_keepalive.sh). 개발 서버 코드 폴더 덧붙임은 짝 파일 compose.code*.yml.
 #   준비(저장소 루트에서): docker build -f deploy/docker/Dockerfile --target pipeline -t data-pipeline:<태그> .
 #   띄우기(하위 셸로 — 대화형 셸에 export해 두면 그 뒤 settings.yaml을 고쳐도 그 셸에는 안 먹음, VS7e1 R-2):
 #     ( . deploy/host/scripts/load_settings.sh && load_settings && $DOCKER compose -f deploy/host/compose/compose.pipeline.yml up -d )
-#   상주 컨테이너 셋 함께(실행 이미지면 코드 폴더도): bash deploy/host/scripts/host_ctl.sh up -d data-pipeline data-pipeline-mcp mcp
+#   상주 컨테이너 셋 함께(실행 이미지면 코드 폴더도): bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp
 # 결과 폴더(RAG_OUT)를 모든 모듈이 같이 씀 — 모듈 사이 전달은 이 폴더의 파일(+ PostgreSQL)뿐, 서로 직접 부르지 않음.
 # 주의: `docker compose config`는 치환한 값을 그대로 출력함 — 확인은 `config --quiet`만(S7e1부터 비밀은 compose에 없지만 호스트 경로·이름이 나옴).
 # 이미지 변수: DATA_PIPELINE_IMAGE·MCP_SERVER_IMAGE — 비면 image 줄의 `:?` 메시지로 멈춘다.
@@ -22,7 +22,7 @@
 x-settings: &settings "${SETTINGS_FILE:?SETTINGS_FILE=<settings.yaml 절대 경로> 필요 — deploy/host/scripts/load_settings.sh load_settings가 export(refactor.md C-09)}:/etc/rag/settings.yaml:ro,z"
 services:
   # 일괄 상주 컨테이너(일 없이 떠 있음, entrypoint `idle`): run_docs.py가 docker exec로 문서별 warm·파싱·게시·구조화·적재를 돌린다.
-  # 11-03(사용자) — 옛 data-pipeline-parse·data-pipeline-structure를 하나로. MCP parse_document 작업 서비스는 아래 data-pipeline-mcp.
+  # 11-03(사용자) — 옛 data-pipeline-parse·data-pipeline-structure를 하나로. MCP parse_document 작업 서비스는 아래 mcp-data-parsing.
   # 자원 상한: 옛 파싱 칸 PARSE_CPUS·PARSE_MEM_LIMIT(settings.yaml ops.pipeline_host.parse_cpus·parse_mem_limit)을 이 컨테이너 상한으로 쓴다 —
   #   기본값은 옛 두 컨테이너의 합(CPU 3+2=5 · 메모리 16g+8g=24g — 설정 모델 기본값도 같음). 옛 칸 structure_cpus·structure_mem_limit은 지움(남으면 경고만).
   data-pipeline:
@@ -45,7 +45,7 @@ services:
     mem_limit: ${PARSE_MEM_LIMIT:-24g}
     memswap_limit: ${PARSE_MEM_LIMIT:-24g}
     cpus: ${PARSE_CPUS:-5}                  # docker는 호스트 CPU 수보다 큰 값을 거부 — CPU 4개 개발 서버는 settings.yaml ops.pipeline_host.parse_cpus를 3 이하로
-    cpu_shares: 1024                        # CPU가 모자랄 때 나눔 비율 — data-pipeline-mcp(4096)가 먼저(rn-03)
+    cpu_shares: 1024                        # CPU가 모자랄 때 나눔 비율 — mcp-data-parsing(4096)가 먼저(rn-03)
     pids_limit: 4096                        # 옛 두 컨테이너의 합(2048 × 2)
     logging:
       options: {max-size: "50m", max-file: "3"}

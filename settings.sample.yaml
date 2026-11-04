@@ -64,9 +64,9 @@ required:
     source_uri_prefix:                    # 원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///<폴더>) · 값: 경로
   # ─── 서비스 토큰 [서버만] ───
   tokens:
-    parse_mcp:                            # parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값) · 값: 비밀 글자 [비밀]
+    data_parsing:                         # parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값) · 값: 비밀 글자 [비밀]
     mcp:                                  # MCP 서버 Bearer 토큰(비루프백 바인드면 필수) · 값: 비밀 글자 [비밀]
-    parse_proxy:                          # parse_document가 작업 서비스(mcp_parse_service)를 부를 때 쓰는 토큰 · 값: 비밀 글자 [비밀]
+    parse_proxy:                          # parse_document가 작업 서비스(parse_service)를 부를 때 쓰는 토큰 · 값: 비밀 글자 [비밀]
     fulltext:                             # 원문 도구(list/get_doc_fulltext) 파일 손잡이 sfid 서명 키 · 값: 비밀 글자 [비밀]
   # ─── 서버 배포(이미지·호스트 폴더) [서버만] ───
   deploy:
@@ -202,16 +202,16 @@ ops:
   # ─── 호스트 — 컨테이너 도구·패치·정리 ───
   host:
     docker:                               # 호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — op-10) · 비우면 podman, 없으면 docker · 값: docker·podman 중 하나
-    instance:                             # 한 서버에 여러 벌(개발자별 등) 띄울 때 이 루트의 이름(영소문자·숫자·-) · 비우면 한 벌 — 컨테이너 이름 그대로(data-pipeline·data-pipeline-mcp·mcp-server) · 값: 글자
+    instance:                             # 한 서버에 여러 벌(개발자별 등) 띄울 때 이 루트의 이름(영소문자·숫자·-) · 비우면 한 벌 — 컨테이너 이름 그대로(data-pipeline·mcp-data-parsing·mcp-server) · 값: 글자
     image_stage_dir:                      # prune_images.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값) · 비우면 조각·tar 정리 안 함(--stage-dir로 줄 때만) · 값: 경로
     prune_keep: 2                         # prune_images.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값) · 비우면 2 · 값: 0 이상 정수
   # ─── 서버 컨테이너 — CPU·메모리 한도·폴더 ───
   pipeline_host:
     parse_cpus: 5.0                       # 일괄 상주 컨테이너(data-pipeline — compose.pipeline.yml) CPU 개수 상한(개) · 비우면 5.0 · 값: 0 이상
     parse_mem_limit: 24g                  # 일괄 상주 컨테이너(data-pipeline) 메모리·스왑 상한(docker 형식) · 비우면 24g · 값: 글자
-    parse_mcp_cpus: 3.0                   # parse_document 작업 컨테이너(data-pipeline-mcp — #107) CPU 개수 상한(개) · 비우면 3.0 · 값: 0 이상
-    parse_mcp_mem_limit: 8g               # parse_document 작업 컨테이너(data-pipeline-mcp) 메모리·스왑 상한(docker 형식) · 비우면 8g · 값: 글자
-    parse_mcp_cpu_shares: 4096            # parse_document 작업 컨테이너 CPU 나눔 비율(data-pipeline 1024의 4배 — CPU가 모자랄 때 먼저 받음, rn-03) · 비우면 4096 · 값: 0~1
+    data_parsing_cpus: 3.0                # parse_document 작업 컨테이너(mcp-data-parsing — #107) CPU 개수 상한(개) · 비우면 3.0 · 값: 0 이상
+    data_parsing_mem_limit: 8g            # parse_document 작업 컨테이너(mcp-data-parsing) 메모리·스왑 상한(docker 형식) · 비우면 8g · 값: 글자
+    data_parsing_cpu_shares: 4096         # parse_document 작업 컨테이너 CPU 나눔 비율(data-pipeline 1024의 4배 — CPU가 모자랄 때 먼저 받음, rn-03) · 비우면 4096 · 값: 0~1
     run_docs_dir:                         # 문서별 flow 러너(deploy/host/scripts/run_docs.py) 작업 폴더(호스트 — 진행 기록 batch_progress/·batches/) · 비우면 run_docs.py 옆 test_space/ · 값: 경로
   mcp_host:
     cpus: 1.0                             # mcp-server 컨테이너 CPU 한도(compose cpus) · 비우면 1.0 · 값: 0 이상
@@ -219,7 +219,7 @@ ops:
     mem_limit: 4g                         # mcp-server 컨테이너 메모리 한도(compose mem_limit) · 비우면 4g · 값: 글자
   # ─── 상주 서비스 — 트리거·parse MCP ───
   services:
-    parse_mcp:
+    data_parsing:
       jobs_dir:                           # parse MCP 서비스 작업 기록 폴더 · 비우면 <서비스 폴더>/jobs · 값: 경로
       port: 8766                          # parse MCP 서비스 포트 · 비우면 8766 · 값: 1~65535
       roots:                              # parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) · 비우면 <서비스 폴더>/inbox · 값: 쉼표 목록 또는 YAML 목록 · 예: /app/output/_mcp_parse/inbox,/data/docs
@@ -380,7 +380,7 @@ tuning:
       pipe_threads:                       # (자원) 프로세스 1개당 수치 라이브러리 스레드 수(OMP·MKL·onnx) · 비우면 CPU ÷ 프로세스 수 · 값: 0 이상 · auto = 비운 것과 같음
     # ─── 새벽 배치·상주 서비스 ───
     services:
-      parse_mcp:
+      data_parsing:
         job_timeout_sec: 600.0            # parse MCP 서비스 작업 1건 제한 시간(초) · 비우면 600.0 · 값: 0 이상 초
         procs:                            # (자원) parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개) · 비우면 min(3, CPU 수 − 1) · 값: 0 이상 정수
         queue_max: 8                      # parse MCP 서비스 대기 작업 상한(건) · 비우면 8 · 값: 0 이상 정수

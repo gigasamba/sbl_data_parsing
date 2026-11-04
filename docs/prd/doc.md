@@ -36,7 +36,7 @@
   1. Dockerfile 타깃 `pipeline-runtime`·`mcp-runtime`(이미지 `data-pipeline-runtime`·`mcp-server-runtime`) = OS 패키지·LibreOffice·휠·`assets/` 모델·사용자 10001·ENV만. 코드가 든 `pipeline`·`mcp`는 그 위에 코드 COPY만 얹는다.
   2. 실행 이미지 시작 `deploy/docker/runtime_entry.sh`: ① `/app/deploy`에 코드 폴더가 없으면 종료 2 ② 이미지 의존성 지문(`/app/docker/deps_hash`) ≠ 코드의 `deploy/docker/DEPS_HASH`(`deploy/release/deps_hash.sh` — requirements-core·image의 sha256)면 종료 2 ③ 이미지 판·코드 커밋(`CODE_COMMIT`)을 한 줄 남기고 코드 폴더의 `deploy/docker/entrypoint.sh`로 넘긴다.
   3. 코드 폴더 묶음 = 이 커밋의 git 추적 파일 + `CODE_COMMIT`, `valid_env/`·`validation/` 뺌 — `build_ship.sh`가 `output/ship/code-<버전>-<커밋>.tar.gz`로 만든다. `/app/deploy`에 읽기 전용(`:ro,z`)으로 붙인다.
-  4. compose는 컨테이너마다 파일 하나 — `compose.pipeline.yml`·`compose.pipeline-mcp.yml`·`compose.mcp-server.yml`, 개발 서버는 각각 `compose.code.yml`·`compose.code.pipeline-mcp.yml`·`compose.code.mcp-server.yml`을 덧붙인다(셸에 `CODE_DIR`가 있거나, 이미지가 `*-runtime`이고 `CODE_DIR`가 비면 자기 코드 폴더 — `in_container.sh` `code_dir_default`).
+  4. compose는 컨테이너마다 파일 하나 — `compose.pipeline.yml`·`compose.data-parsing.yml`·`compose.mcp-server.yml`, 개발 서버는 각각 `compose.code.yml`·`compose.code.data-parsing.yml`·`compose.code.mcp-server.yml`을 덧붙인다(셸에 `CODE_DIR`가 있거나, 이미지가 `*-runtime`이고 `CODE_DIR`가 비면 자기 코드 폴더 — `in_container.sh` `code_dir_default`).
   5. 반입: 이미지 git(`sbl_images` — 판 폴더마다 분할 조각 + `load.sh`)은 공용 폴더에, 코드 git은 루트에 zip으로 받아 푼다. README §5-0.
 - 파일: `deploy/docker/{Dockerfile,runtime_entry.sh,DEPS_HASH}`, `deploy/release/{build_ship.sh,deps_hash.sh}`, `deploy/host/compose/`, `deploy/host/scripts/in_container.sh`.
 - QA: `tests/server/common/test_deps_hash.py`(DEPS_HASH ↔ requirements) · 통과. 실행 이미지에 코드 트리를 붙여 `selftest` `[판정]` 통과 · 코드 없이 띄우면 종료 2.
@@ -62,10 +62,10 @@
 - 규칙:
   1. 설치 길은 README §5-0·§5-3에만 쓰고 다른 문서는 링크한다. 0.2.0 올리기·되돌리기는 [release-and-patch.md §8-3·§8-5](../operations/release-and-patch.md), 배포 사람 할 일은 §8.
   2. 컨테이너 도구 = 셸 `DOCKER` > settings.yaml `ops.host.docker` > podman > docker(`load_settings.sh` `docker_default`, 설정을 읽은 뒤 정함). `stage_images.sh`·`load.sh`도 podman 우선.
-  3. 서버 상주 컨테이너 셋: 일괄 `data-pipeline`(파싱·구조화·적재 — 문서 폴더 읽기 전용 + 결과 폴더, 자원 `ops.pipeline_host.parse_cpus` 5·`parse_mem_limit` 24g), `data-pipeline-mcp`([ops.md#rn-03](ops.md#rn-03)), `mcp-server`. pgvector·redis는 우리 것이 아니다.
+  3. 서버 상주 컨테이너 셋: 일괄 `data-pipeline`(파싱·구조화·적재 — 문서 폴더 읽기 전용 + 결과 폴더, 자원 `ops.pipeline_host.parse_cpus` 5·`parse_mem_limit` 24g), `mcp-data-parsing`([ops.md#rn-03](ops.md#rn-03)), `mcp-server`. pgvector·redis는 우리 것이 아니다.
   4. 운영 작업(`pipe_exec.sh parse|publish`, `pipe_exec.sh <도구>|migrate|show-stack|check`, `dbtool`)은 상주 `data-pipeline` 안에서 `docker exec`(`in_container.sh` `in_pipeline` — 안 떠 있으면 종료 2). 일회성 작업 컨테이너는 없다. 이미지 점검(`docker run --rm … selftest`)만 예외.
   5. `load_settings.sh`는 호스트 python(PyYAML만)의 `settings_to_env.py` + `host_settings.tsv`로 설정을 셸 env로 낸다.
-  6. 재부팅 대비 `systemctl enable --now podman-restart`, keepalive 타이머 `mcp-server-keepalive`가 `mcp_keepalive.sh`로 `mcp-server`·`data-pipeline-mcp`를 살핀다.
+  6. 재부팅 대비 `systemctl enable --now podman-restart`, keepalive 타이머 `mcp-server-keepalive`가 `mcp_keepalive.sh`로 `mcp-server`·`mcp-data-parsing`를 살핀다.
 - 파일: `README.md` §5, `deploy/host/{scripts,compose,systemd}/`, `deploy/release/{stage_images.sh,load.sh}`.
 - QA: `tests/general/deploy/test_compose.py`·`test_host_env.py`·`test_dc.py` · 통과. 서버 확인 refactor.md C-71·C-82·C-83.
 - Status: done

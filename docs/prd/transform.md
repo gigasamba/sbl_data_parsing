@@ -37,7 +37,7 @@
 6. 대표 결과가 이미지·스캔 형식(`.pdf_image`·png·jpg 등)의 VLM 엔진이고 글이 비어 있지 않으면 → 쪽 VLM을 건너뛰고 쪽 그림은 처리된 것으로 표시한다(그림 VLM 없음).
 7. VLM 엔진·쪽 VLM·그림 VLM의 호출 1건 제한은 모두 `common.models.vlm.timeout` 하나다([pl-43](#pl-43)).
 8. 일괄 엔진 자식은 낮은 우선순위로 돈다(`pipeline.extract.low_priority` — POSIX nice +10). 컨테이너끼리의 CPU 순위는 [ops.md#rn-03](ops.md#rn-03).
-9. 파싱 서비스(`parse_document`)는 우선순위를 낮추지 않고 자기 제한을 쓴다 — `pipeline.service.parse_mcp.text_page_sec` 1 · `warmup_sec` 20(VLM 엔진은 파이프라인과 같은 `common.models.vlm.timeout`), 작업 제한 `job_timeout_sec` 600. 작업 시간을 넘기면 프로세스 그룹 전체를 끝낸다.
+9. 파싱 서비스(`parse_document`)는 우선순위를 낮추지 않고 자기 제한을 쓴다 — `pipeline.service.data_parsing.text_page_sec` 1 · `warmup_sec` 20(VLM 엔진은 파이프라인과 같은 `common.models.vlm.timeout`), 작업 제한 `job_timeout_sec` 600. 작업 시간을 넘기면 프로세스 그룹 전체를 끝낸다.
 10. 알려진 한계: 숨은 글자가 그림과 겹친 쪽(`hidden_overlap`)은 쪽 VLM에 낱말 상자가 없어 숫자 표기 차이(예: 430.000 ↔ 430,000)를 고치지 않고 원래 글을 둔다. 글자 엔진은 쪽으로 나누지 않는다(쪽 병렬은 VLM 엔진 안에서만).
 
 ### 예시
@@ -63,7 +63,7 @@
 7. 일괄 파싱(`pipeline.cli parse`)은 엔진 자식에 `VLM_CONCURRENCY` = max(1, min(`concurrency`, `max_concurrency` ÷ 동시 문서 수))를 넘긴다. 동시 문서 수 = min(이번 문서 수, 조각 `--procs` × `--workers`).
 
 ### 현재 상태(11-04)
-- 지운 칸(남아 있으면 경고만): `extract.vlm_page_sec`·`tuning.ops.services.parse_mcp.vlm_page_sec` → `common.models.vlm.timeout` · `tuning.transform.vlm.deadline` → `timeout` · `transform.vlm.global_concurrency` → `max_concurrency` · `tuning.transform.vlm.page_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`(명령 인자 `--vlm-concurrency`) → `concurrency` · `transform.vlm.page_slow`·`tuning.transform.vlm.page_min_concurrency` → 코드 상수.
+- 지운 칸(남아 있으면 경고만): `extract.vlm_page_sec`·`tuning.ops.services.data_parsing.vlm_page_sec` → `common.models.vlm.timeout` · `tuning.transform.vlm.deadline` → `timeout` · `transform.vlm.global_concurrency` → `max_concurrency` · `tuning.transform.vlm.page_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`(명령 인자 `--vlm-concurrency`) → `concurrency` · `transform.vlm.page_slow`·`tuning.transform.vlm.page_min_concurrency` → 코드 상수.
 - 고친 결함: run_docs가 `--set VLM_CONCURRENCY=8`(vlm 레인 6)을 줘도 `--workers` 기본 4로 나눠 문서 1건 실행의 엔진 자식이 늘 2였다(`8 ÷ 4`). 이제 동시 문서 수(문서 1건이면 1)로 나눈다.
 - 결과가 바뀜: 엔진 `qwen_vlm` 지문이 바뀌어 스캔·이미지 문서는 다시 파싱된다(지시문이 쪽 VLM과 같은 `page_transcribe`로, 해상도 200 → 150). 그림 해상도 200 → 150이라 그림 캐시도 새로 만든다. 서버 확인은 [refactor.md C-93](../refactoring/refactor.md).
 

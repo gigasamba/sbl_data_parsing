@@ -77,7 +77,7 @@ REQUIRED_GROUPS = (
         "서버만",
         (
             ("trigger", "pipeline.service.trigger.token"),
-            ("parse_mcp", "pipeline.service.parse_mcp.token"),
+            ("data_parsing", "pipeline.service.data_parsing.token"),
             ("mcp", "mcp.server.token"),
             ("parse_proxy", "mcp.parse_proxy.token"),
             ("fulltext", "mcp.server.fulltext_secret"),
@@ -116,7 +116,7 @@ RETIRED = frozenset(
     {
         "required.deploy.mcp_store",
         # 11-04 VLM 통일 — tuning 자리에 있던 지운 칸(모델 REMOVED와 같은 칸 — tuning 자리라 여기서 경고)
-        "tuning.ops.services.parse_mcp.vlm_page_sec",
+        "tuning.ops.services.data_parsing.vlm_page_sec",
         "tuning.transform.figures.vlm_parallel",
         "tuning.transform.vlm.deadline",
         "tuning.transform.vlm.page_concurrency",
@@ -178,10 +178,10 @@ TUNING_INTERNAL = (  # 내부 조정값 — 재시도·내부 대기·묶음 크
     "pipeline.transform.structure.embed_max_chars",
     "pipeline.transform.structure.embed_retry",
     "pipeline.load.index_lock_stale_sec",
-    "pipeline.service.parse_mcp.job_timeout_sec",
-    "pipeline.service.parse_mcp.queue_max",
-    "pipeline.service.parse_mcp.text_page_sec",
-    "pipeline.service.parse_mcp.warmup_sec",
+    "pipeline.service.data_parsing.job_timeout_sec",
+    "pipeline.service.data_parsing.queue_max",
+    "pipeline.service.data_parsing.text_page_sec",
+    "pipeline.service.data_parsing.warmup_sec",
     "pipeline.service.trigger.client_timeout",
     "pipeline.service.trigger.queue_max",
     "pipeline.service.trigger.shutdown_timeout_sec",
@@ -208,7 +208,7 @@ TUNING_RESOURCE = (  # 자원·대기·병렬 세부값 — 자동 계산 내부
     "common.models.llm.timeout",
     "common.models.embed.timeout",
     "pipeline.extract.attach.timeout",
-    "pipeline.service.parse_mcp.procs",
+    "pipeline.service.data_parsing.procs",
 )
 TUNING_RARE = (  # 사용자 11-04 — 역할 절에서 옮긴 칸: 결과 파라미터(청크·순위·그림 고르기)·내부 상한·로그 대기열(운영자가 환경마다 정하지 않음)
     "common.connections.pg.connect_timeout",
@@ -670,9 +670,9 @@ REMOVED: dict[str, frozenset[str]] = {
     ),
     # PipelineService(pipeline/config.py) — 11-01(pl-10 — trigger 서버 지움) — 지운 절(남으면 경고만)
     "PipelineService": frozenset({"trigger"}),
-    # PipelineServiceParseMcp(pipeline/config.py) — 10-29 PARSE_MCP_OCR → extract.ocr_engine으로 합침(그 스위치도 0.2.0에 지움) · max_mb 11-03
+    # PipelineServiceDataParsing(pipeline/config.py) — 10-29 DATA_PARSING_OCR → extract.ocr_engine으로 합침(그 스위치도 0.2.0에 지움) · max_mb 11-03
     # (파일 크기 상한은 검색 MCP와 함께 쓰는 common.runtime.parse_max_mb = ops.runtime.parse_max_mb로 옮김, 기본 100) — 남으면 경고만
-    "PipelineServiceParseMcp": frozenset(
+    "PipelineServiceDataParsing": frozenset(
         {"max_mb", "ocr", "vlm_page_sec"}
     ),  # vlm_page_sec — 11-04 VLM 통일(쪽 수 × common.models.vlm.timeout)
     # PipelineTransform(pipeline/config.py) — 사용자 10-29 — 지운 칸·절(남으면 경고만)

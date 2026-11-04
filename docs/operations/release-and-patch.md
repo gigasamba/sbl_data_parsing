@@ -18,7 +18,7 @@
 
 1. PC: `IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh`(mcp는 `mcp-runtime`). 이미지 관문은 이 커밋의 코드 트리를 붙여 돌고, 코드 폴더 묶음 `output/ship/code-<버전>-<커밋>.tar.gz`(`CODE_OUT=`로 바꿈 — git 추적 파일 + `CODE_COMMIT`)을 만든다. 코드만 바뀐 판은 묶음만 보낸다. 이미지 저장소로 보낼 때: `CODE_BUNDLE=output/ship/code-<버전>-<커밋>.tar.gz bash deploy/release/stage_images.sh <판> pipeline-runtime mcp-runtime`. (코드 git zip을 그대로 받아도 된다 — README §5-0.)
 2. 서버: 새 루트를 만들고 코드 폴더로 풀기 — `mkdir -p <새 루트>/sbl_data_parsing-<버전> && tar -xzf code-….tar.gz --no-same-owner -C <새 루트>/sbl_data_parsing-<버전>`. 앞 루트의 `settings.yaml`·`edw_chain.yaml`을 `cp -p`로 새 루트에 복사한다.
-3. 바꾸기(새 코드 폴더에서): `bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>`(코드 폴더 a+rX · `output/` — 컨테이너 사용자 10001이 못 읽으면 "읽을 수 없음(권한)"으로 멈춤) → `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline data-pipeline-mcp mcp` → `bash deploy/host/scripts/host_ctl.sh timers`(타이머를 새 루트로).
+3. 바꾸기(새 코드 폴더에서): `bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>`(코드 폴더 a+rX · `output/` — 컨테이너 사용자 10001이 못 읽으면 "읽을 수 없음(권한)"으로 멈춤) → `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp` → `bash deploy/host/scripts/host_ctl.sh timers`(타이머를 새 루트로).
 4. 확인: 컨테이너 로그 첫 줄 `[image] 이미지 <이름 버전 커밋> · 코드 <커밋> · 의존성 <지문>` → `bash deploy/host/scripts/host_ctl.sh check`(마지막 줄 `[host_ctl check] 통과 — 6개`). `의존성 지문이 다름`으로 멈추면 그 코드는 새 실행 이미지가 필요하다.
 5. 되돌리기: 앞 루트를 지우지 않고 두었다가 그 코드 폴더에서 `host_ctl.sh up -d --force-recreate …` → `host_ctl.sh timers`. 스크립트 이름을 바꾸기 전(rn-06) 판의 루트는 옛 이름 그대로 — `dc.sh up -d --force-recreate …` → `dc.sh timers`. 루트는 최근 2개 이상 남긴다. 검색 DB는 두 루트가 같은 PG를 본다.
 
@@ -76,7 +76,7 @@ PC 명령은 [README §5-2](../../README.md#5-2-pc에서--이미지-만들기와
 - 이미지 이름은 settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`에 적는다.
 - 배포 뒤, 컨테이너 안 코드가 있는지 파일로 본다(bind 마운트 원본이 없으면 빈 폴더가 붙어 `test -d`는 통과하므로):
 ```bash
-for c in data-pipeline data-pipeline-mcp; do   # 여러 벌이면 이름 끝 -<ops.host.instance>(server-guide §1-3)
+for c in data-pipeline mcp-data-parsing; do   # 여러 벌이면 이름 끝 -<ops.host.instance>(server-guide §1-3)
  $DOCKER exec $c test -f /app/deploy/pipeline/extract/run_engines.py && echo "$c OK" || echo "$c 코드 없음(빈 마운트?)"; done
 ```
 
@@ -85,11 +85,11 @@ for c in data-pipeline data-pipeline-mcp; do   # 여러 벌이면 이름 끝 -<o
 | 서비스(`host_ctl.sh`) | 컨테이너 | compose 파일(실행 이미지면 + 코드 폴더 파일) | 하는 일 |
 |---|---|---|---|
 | `data-pipeline` | `data-pipeline` | `compose.pipeline.yml`(+ `compose.code.yml`) | 일 없이 떠 있음(entrypoint `idle`) — `run_docs.py`·`pipe_exec.sh`가 `exec` |
-| `data-pipeline-mcp` | `data-pipeline-mcp` | `compose.pipeline-mcp.yml`(+ `compose.code.pipeline-mcp.yml`) | `parse_document` 작업 서비스(entrypoint `parse-service`) |
+| `mcp-data-parsing` | `mcp-data-parsing` | `compose.data-parsing.yml`(+ `compose.code.data-parsing.yml`) | `parse_document` 작업 서비스(entrypoint `parse-service`) |
 | `mcp` | `mcp-server` | `compose.mcp-server.yml`(+ `compose.code.mcp-server.yml`) | 검색 MCP |
 
-- 모두 `bash deploy/host/scripts/host_ctl.sh …`로 다룬다(compose 직접 호출 금지 — README §5-3 ①). 죽으면 `restart: unless-stopped`, 꺼져 있으면 keepalive 타이머(`mcp_keepalive.sh`)가 `data-pipeline-mcp`·`mcp`를 다시 띄운다.
-- `parse_document` 작업 서비스 토큰은 settings.yaml `required.tokens.parse_mcp`.
+- 모두 `bash deploy/host/scripts/host_ctl.sh …`로 다룬다(compose 직접 호출 금지 — README §5-3 ①). 죽으면 `restart: unless-stopped`, 꺼져 있으면 keepalive 타이머(`mcp_keepalive.sh`)가 `mcp-data-parsing`·`mcp`를 다시 띄운다.
+- `parse_document` 작업 서비스 토큰은 settings.yaml `required.tokens.data_parsing`.
 
 ### 5-4. `run_docs.py` 자리와 설정
 
@@ -162,7 +162,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 
 ### 8-1. 꼭 알 것
 
-- 운영 서버는 지금 0.1.0(settings.yaml 하나, 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`)이다. 0.2.0은 상주 컨테이너가 `data-pipeline`·`data-pipeline-mcp`·`mcp-server`다.
+- 운영 서버는 지금 0.1.0(settings.yaml 하나, 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`)이다. 0.2.0은 상주 컨테이너가 `data-pipeline`·`mcp-data-parsing`·`mcp-server`다.
 - 0.2.0은 **새 실행 이미지가 필요 없다** — 코드의 `deploy/docker/DEPS_HASH`가 0.1.0 실행 이미지와 같다(`f0fcc30bd067bc2f`). dev는 `*-runtime:0.1.0`에 0.2.0 코드 폴더, prd는 그것을 구운 `*:0.2.0`.
 - **prd는 반드시 새 `required.pg.db_schema`**(판 0002가 기준 스키마의 옛 표를 지움 — C-74). 옛 스키마·옛 `struct` 스키마는 2주 뒤 DB 담당이 백업하고 지운다.
 - 지문이 모두 바뀌므로(FINGERPRINT·레이어 code_fp·엔진 — 기준값 PRD [e2-02](../prd/test.md#e2-02)) 모든 문서가 다시 파싱·적재된다. **전체 문서 실행은 prd에서만**, dev는 settings.yaml이 가리키는 대상으로 e2e 한 번. 시간은 지난 `progress.log`의 문서당 시간 × 문서 수, 디스크는 `required.deploy.output_root`의 `parse/_rep`만큼 여유를 더 잡는다.
@@ -269,8 +269,8 @@ bash deploy/host/scripts/pipe_exec.sh migrate check --target all              # 
 
 **6. 띄우기**
 ```bash
-bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-mcp mcp                   # 기대: 두 서비스 Started
-bash deploy/host/scripts/host_ctl.sh ps                                             # 기대: data-pipeline·data-pipeline-mcp·mcp-server 세 줄 Up
+bash deploy/host/scripts/host_ctl.sh up -d mcp-data-parsing mcp                   # 기대: 두 서비스 Started
+bash deploy/host/scripts/host_ctl.sh ps                                             # 기대: data-pipeline·mcp-data-parsing·mcp-server 세 줄 Up
 $DOCKER logs data-pipeline 2>&1 | grep -m1 '\[image\]'                        # 기대: "[image] 이미지 <이름 판 커밋> · 코드 <커밋> · 의존성 <지문>"
 ```
 

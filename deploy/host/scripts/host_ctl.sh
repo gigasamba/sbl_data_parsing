@@ -1,12 +1,12 @@
 #!/bin/bash
-# 상주 컨테이너 3개(data-pipeline·data-pipeline-mcp·mcp)를 부르는 compose 입구(사용자 11-03 — 옛 README `dc()` 셸 함수를 대신함).
-#   bash deploy/host/scripts/host_ctl.sh up -d data-pipeline data-pipeline-mcp mcp   (서비스 하나만도 됨 · ps·logs·down 등 compose 하위 명령 그대로)
+# 상주 컨테이너 3개(data-pipeline·mcp-data-parsing·mcp)를 부르는 compose 입구(사용자 11-03 — 옛 README `dc()` 셸 함수를 대신함).
+#   bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   (서비스 하나만도 됨 · ps·logs·down 등 compose 하위 명령 그대로)
 #   bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   서버 루트(이 코드 폴더의 부모 — op-13) 채우기(root — 여러 번 불러도 안전)
 #   bash deploy/host/scripts/host_ctl.sh timers                      systemd 타이머(새벽 배치·MCP 살리기)를 이 코드 폴더 기준으로 설치·켬(root — op-13)
 #   bash deploy/host/scripts/host_ctl.sh check                       배포 뒤 점검을 차례로 — 처음 실패에서 멈추고 마지막 한 줄로 판정(사용자 11-03)
 # 하는 일: 코드 폴더 루트로 cd → settings.yaml을 셸 env로(load_settings.sh load_settings — 값은 출력 안 함) → 실행 이미지(*-runtime)면
 #   이 코드 폴더를 CODE_DIR로(in_container.sh code_dir_default — 파이프라인 이미지 기준, 개발 서버는 두 이미지가 함께 runtime) →
-#   $DOCKER compose -f compose.pipeline.yml -f compose.pipeline-mcp.yml -f compose.mcp-server.yml [+ CODE_DIR면 compose.code*.yml] "$@".
+#   $DOCKER compose -f compose.pipeline.yml -f compose.data-parsing.yml -f compose.mcp-server.yml [+ CODE_DIR면 compose.code*.yml] "$@".
 # 프로젝트 이름은 compose 기본(첫 -f 파일의 폴더) — mcp_keepalive.sh가 따로 부를 때와 같다(mcp_keepalive.sh는 이 파일을 쓰지 않고 혼자 돎).
 # 종료 코드: compose 그대로 · 설정을 못 읽으면 load_settings의 코드(2) · init/check는 아래 설명.
 set -uo pipefail
@@ -147,7 +147,7 @@ case "${1:-}" in
 esac
 . deploy/host/scripts/in_container.sh && code_dir_default DATA_PIPELINE_IMAGE
 C=deploy/host/compose
-files="-f $C/compose.pipeline.yml -f $C/compose.pipeline-mcp.yml -f $C/compose.mcp-server.yml"
-[ -n "${CODE_DIR:-}" ] && files="$files -f $C/compose.code.yml -f $C/compose.code.pipeline-mcp.yml -f $C/compose.code.mcp-server.yml"
+files="-f $C/compose.pipeline.yml -f $C/compose.data-parsing.yml -f $C/compose.mcp-server.yml"
+[ -n "${CODE_DIR:-}" ] && files="$files -f $C/compose.code.yml -f $C/compose.code.data-parsing.yml -f $C/compose.code.mcp-server.yml"
 # shellcheck disable=SC2086 — DOCKER(sudo podman처럼 두 낱말)·파일 인자는 낱말 나눔
 exec $DOCKER compose -p "compose$NAME_SUFFIX" $files "$@"   # 묶음 이름 — 한 벌은 compose 기본(폴더 이름 compose) 그대로, 여러 벌은 compose-<instance>

@@ -134,22 +134,22 @@ class PipelineLoadPublish(Section):
     )
 
 
-class PipelineServiceParseMcp(Section):
-    job_timeout_sec: float | None = F(600.0, "PARSE_MCP_JOB_TIMEOUT_SEC", "parse MCP 서비스 작업 1건 제한 시간(초)")
-    jobs_dir: str | None = F(None, "PARSE_MCP_JOBS_DIR", "parse MCP 서비스 작업 기록 폴더")
-    port: Port | None = F(8766, "PARSE_MCP_PORT", "parse MCP 서비스 포트")
-    procs: int | None = F(None, "PARSE_MCP_PROCS", "parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개)")
-    queue_max: int | None = F(8, "PARSE_MCP_QUEUE_MAX", "parse MCP 서비스 대기 작업 상한(건)")
+class PipelineServiceDataParsing(Section):
+    job_timeout_sec: float | None = F(600.0, "DATA_PARSING_JOB_TIMEOUT_SEC", "parse MCP 서비스 작업 1건 제한 시간(초)")
+    jobs_dir: str | None = F(None, "DATA_PARSING_JOBS_DIR", "parse MCP 서비스 작업 기록 폴더")
+    port: Port | None = F(8766, "DATA_PARSING_PORT", "parse MCP 서비스 포트")
+    procs: int | None = F(None, "DATA_PARSING_PROCS", "parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개)")
+    queue_max: int | None = F(8, "DATA_PARSING_QUEUE_MAX", "parse MCP 서비스 대기 작업 상한(건)")
     roots: CsvList | None = F(
-        None, "PARSE_MCP_ROOTS", "parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) — 비면 코드가 정함(<서비스 폴더>/inbox)"
+        None, "DATA_PARSING_ROOTS", "parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) — 비면 코드가 정함(<서비스 폴더>/inbox)"
     )
     text_page_sec: float | None = F(
-        1.0, "PARSE_MCP_TEXT_PAGE_SEC", "parse MCP 서비스 작업의 글자 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
+        1.0, "DATA_PARSING_TEXT_PAGE_SEC", "parse MCP 서비스 작업의 글자 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
     )
-    token: SecretStr | None = F(None, "PARSE_MCP_TOKEN", "parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값)")
+    token: SecretStr | None = F(None, "DATA_PARSING_TOKEN", "parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값)")
     warmup_sec: float | None = F(
         20.0,
-        "PARSE_MCP_WARMUP_SEC",
+        "DATA_PARSING_WARMUP_SEC",
         "parse MCP 서비스 작업의 첫 시도 제한 하한(초) — 새 프로세스에서 엔진을 처음 띄울 때(import·모델 적재) 여유",
     )
 
@@ -283,17 +283,17 @@ class PipelineHost(Section):
         "일괄 상주 컨테이너(data-pipeline — compose.pipeline.yml) CPU 개수 상한(개) — docker는 호스트 CPU 수보다 큰 값을 거부(CPU 4개 개발 서버는 3 이하로)",
     )
     parse_mem_limit: str | None = F("24g", "PARSE_MEM_LIMIT", "일괄 상주 컨테이너(data-pipeline) 메모리·스왑 상한(docker 형식)")
-    parse_mcp_cpus: float | None = F(
+    data_parsing_cpus: float | None = F(
         3.0,
-        "PARSE_MCP_CPUS",
-        "parse_document 작업 컨테이너(data-pipeline-mcp — #107) CPU 개수 상한(개) — 줄이면 pipeline.service.parse_mcp.procs도 그 이하로",
+        "DATA_PARSING_CPUS",
+        "parse_document 작업 컨테이너(mcp-data-parsing — #107) CPU 개수 상한(개) — 줄이면 pipeline.service.data_parsing.procs도 그 이하로",
     )
-    parse_mcp_mem_limit: str | None = F(
-        "8g", "PARSE_MCP_MEM_LIMIT", "parse_document 작업 컨테이너(data-pipeline-mcp) 메모리·스왑 상한(docker 형식)"
+    data_parsing_mem_limit: str | None = F(
+        "8g", "DATA_PARSING_MEM_LIMIT", "parse_document 작업 컨테이너(mcp-data-parsing) 메모리·스왑 상한(docker 형식)"
     )
-    parse_mcp_cpu_shares: int | None = F(
+    data_parsing_cpu_shares: int | None = F(
         4096,
-        "PARSE_MCP_CPU_SHARES",
+        "DATA_PARSING_CPU_SHARES",
         "parse_document 작업 컨테이너 CPU 나눔 비율(data-pipeline 1024의 4배 — CPU가 모자랄 때 먼저 받음, rn-03)",
     )
     run_docs_dir: str | None = F(
@@ -336,7 +336,7 @@ class PipelineConnections(Section):
 
 
 class PipelineService(Section):
-    parse_mcp: PipelineServiceParseMcp = Field(default_factory=PipelineServiceParseMcp)
+    data_parsing: PipelineServiceDataParsing = Field(default_factory=PipelineServiceDataParsing)
 
 
 class PipelineTransform(Section):

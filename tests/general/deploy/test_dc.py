@@ -10,8 +10,8 @@ from common.core.paths import DEPLOY_ROOT
 from tests.general.deploy.test_trigger_gate import _bash
 
 SCRIPT = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "host_ctl.sh"
-BASE = ["compose.pipeline.yml", "compose.pipeline-mcp.yml", "compose.mcp-server.yml"]
-CODE = ["compose.code.yml", "compose.code.pipeline-mcp.yml", "compose.code.mcp-server.yml"]
+BASE = ["compose.pipeline.yml", "compose.data-parsing.yml", "compose.mcp-server.yml"]
+CODE = ["compose.code.yml", "compose.code.data-parsing.yml", "compose.code.mcp-server.yml"]
 CASES = [  # (DATA_PIPELINE_IMAGE, CODE_DIR, 코드 덧씌우기?, ops.host.instance, compose 묶음 이름 — 종료 코드 2면 None)
     ("data-pipeline:0.2.0", "", False, "", "compose"),  # 코드가 든 이미지(운영) · 한 벌 — 묶음 이름은 compose 기본 그대로
     ("data-pipeline-runtime:0.2.0", "", True, "", "compose"),  # 실행 이미지(개발) — 이 코드 폴더를 붙임

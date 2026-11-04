@@ -95,8 +95,8 @@
 | `MCP_HOST`(`search.server.host`) | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부 |
 | `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 `required.tokens.mcp`(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
 | `FULLTEXT_SIGN_SECRET`(`required.tokens.fulltext`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키(비밀). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 `sfid`가 모두 무효 |
-| `PARSE_SERVICE_TOKEN`(`required.tokens.parse_proxy`) | 비움(→ `MCP_TOKEN`) | `parse_document`가 작업 서비스를 부를 때 쓰는 토큰 — `required.tokens.parse_mcp`와 같은 값. 둘 다 없으면 "parse 서비스 토큰 없음" 오류 |
-| `PARSE_MCP_MAX_MB`(`ops.runtime.parse_max_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |
+| `PARSE_SERVICE_TOKEN`(`required.tokens.parse_proxy`) | 비움(→ `MCP_TOKEN`) | `parse_document`가 작업 서비스를 부를 때 쓰는 토큰 — `required.tokens.data_parsing`와 같은 값. 둘 다 없으면 "parse 서비스 토큰 없음" 오류 |
+| `DATA_PARSING_MAX_MB`(`ops.runtime.parse_max_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |
 | `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음 |
 | `MCP_ALLOWED_HOSTS` | 비움 | 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |
 
@@ -164,7 +164,7 @@
 | `extract.ocr.dpi`(`OCR_DPI`, 150) | 쪽·그림 렌더 해상도(OCR 엔진도 같은 값) |
 | `transform.vlm.page_max`(`VLM_PAGE_MAX`) | 문서당 VLM으로 옮길 쪽 수(비움 = 전부, 0 = 끔) · `extract.ocr.max_pages`는 OCR 엔진에만 |
 
-지운 칸(남아 있으면 경고만): `extract.vlm_page_sec`·`tuning.ops.services.parse_mcp.vlm_page_sec`·`tuning.transform.vlm.deadline`·`transform.vlm.global_concurrency`·`transform.vlm.page_slow`·`tuning.transform.vlm.page_concurrency`·`tuning.transform.vlm.page_min_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`. 이 이름(`VLM_DEADLINE`·`VLM_GLOBAL_CONCURRENCY`·`FIGURES_VLM_PARALLEL`·`VLM_PAGE_SLOW` 등)을 `--set`으로 주면 거부된다.
+지운 칸(남아 있으면 경고만): `extract.vlm_page_sec`·`tuning.ops.services.data_parsing.vlm_page_sec`·`tuning.transform.vlm.deadline`·`transform.vlm.global_concurrency`·`transform.vlm.page_slow`·`tuning.transform.vlm.page_concurrency`·`tuning.transform.vlm.page_min_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`. 이 이름(`VLM_DEADLINE`·`VLM_GLOBAL_CONCURRENCY`·`FIGURES_VLM_PARALLEL`·`VLM_PAGE_SLOW` 등)을 `--set`으로 주면 거부된다.
 
 ## 3. 전체 목록과 읽는 순서
 
@@ -189,11 +189,11 @@ ls -l ../settings.yaml                # 서버(코드 폴더에서): 주인 1000
 | `required.pg` 여섯 칸 필수(자동 탐지 없음) | 모두 채운다. `db_schema`는 **새 이름**(판 0002가 옛 표를 지움) |
 | env로 준 값은 효과 없음(엔진·핸드오프 칸 포함) | 컨테이너에 `-e VLM_BASE_URL=…`·`OCR_DPI=…`처럼 주던 값은 settings.yaml 칸으로(`--where <이름>`으로 자리 확인) |
 | 이미지 칸 `required.deploy.pipeline_image`·`mcp_image` | dev `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0` · prd `data-pipeline:0.2.0`·`mcp-server:0.2.0` |
-| 새 칸 `required.deploy.pg_container`·`required.tokens.parse_mcp`·`parse_proxy`·`fulltext` | 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)) |
+| 새 칸 `required.deploy.pg_container`·`required.tokens.data_parsing`·`parse_proxy`·`fulltext` | 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)) |
 | 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline` — 셋 다 있어야 돎 | 배포 때는 비워 두고 배포 뒤 켠다(§8-4 3) |
 | 거의 안 바꾸는 칸 53개가 `tuning` 절로(사용자 11-04 — 청크·순위 가중치·그림 고르기·로그 대기열·EDW 원천 열 이름 등) | 값을 적어 둔 칸만 `tuning.<옛 자리>`로 옮긴다(옛 자리도 읽고 안내 한 줄 — C-92) |
 | 합친 칸 `extract.prefetch_workers` → `extract.source.fetch_workers` · `tuning.ops.nightly_run.workers` → `ops.runtime.pipe_workers` | 옛 칸 값을 새 칸에 적고 옛 칸은 지운다(남아도 경고만) |
-| `parse_document` 크기 상한 칸이 `ops.runtime.parse_max_mb`(기본 100) | 옛 `ops.services.parse_mcp.max_mb`가 있으면 지우고, 100이 아닌 값은 새 칸에. 리버스 프록시 본문 상한도 늘린다(C-85) |
+| `parse_document` 크기 상한 칸이 `ops.runtime.parse_max_mb`(기본 100) | 옛 `ops.services.data_parsing.max_mb`가 있으면 지우고, 100이 아닌 값은 새 칸에. 리버스 프록시 본문 상한도 늘린다(C-85) |
 | `query_edw` 행 상한 기본 1000(`search.edw_query.max_rows`) | 다른 값을 쓰려면 적는다 |
 | 용어집·고객 명부는 PG 마스터 표 | `migrate master load`(§8-3 5) · CSV를 고치면 다시 하고 검색 MCP 재시작 |
 | 사슬 파일 칸 `ops.paths.edw_chain`(새 — 비우면 기본 파일) | 서버 EDW 이름이 다를 때만 §8-6 |

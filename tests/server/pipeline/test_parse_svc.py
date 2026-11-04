@@ -15,7 +15,7 @@ def test_job_env_overrides():
         return {"SETTINGS_FILE": "x"}
 
     S._JOB_ENVS.clear()
-    with pc.PIPE.env(PARSE_MCP_TEXT_PAGE_SEC="1", PARSE_MCP_WARMUP_SEC="20"):
+    with pc.PIPE.env(DATA_PARSING_TEXT_PAGE_SEC="1", DATA_PARSING_WARMUP_SEC="20"):
         with mock.patch.object(S, "settings_env", fake_env):
             S._job_env("supsub")
     S._JOB_ENVS.clear()
@@ -93,7 +93,7 @@ def test_size_limit():
 
         try:
             with (
-                COMMON.env(PARSE_MCP_MAX_MB="1"),
+                COMMON.env(DATA_PARSING_MAX_MB="1"),
                 mock.patch.multiple(S, TOKEN="t", ROOTS=[root.resolve()], JOBS_DIR=Path(td, "jobs")),
                 mock.patch.object(S, "_purge_old"),
             ):

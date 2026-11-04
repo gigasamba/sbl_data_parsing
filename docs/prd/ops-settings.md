@@ -78,8 +78,8 @@
 - 규칙:
   1. 루트 하나 = 한 벌. 새 칸 `ops.host.instance`(`common.host.instance`, 영소문자·숫자·`-`) — 적으면 컨테이너 3개·compose 묶음(`compose-<이름>`)·systemd 단위 4개 이름 끝에 `-<이름>`. 비우면 이름 그대로(한 벌 — 지금 서버와 같음).
   2. 이름을 붙이는 곳은 `load_settings.sh load_settings`(`NAME_SUFFIX` — 틀린 꼴이면 종료 2) 한 곳, 호스트 스크립트(`host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`)와 compose 파일은 그 값을 쓴다. `run_docs.py`는 같은 규칙으로 `configure()`에서.
-  3. 포트·스키마는 이미 있는 칸을 벌마다 다르게 적는다(`search.server.port` · `ops.services.parse_mcp.port` + `search.parse_proxy.url` · `required.pg.db_schema`) — server-guide §1-3.
-- 파일: `common/config/settings.py` · `deploy/host/scripts/{load_settings.sh,host_ctl.sh,mcp_keepalive.sh,nightly_batch.sh,pipe_exec.sh,run_docs.py,host_settings.tsv}` · `deploy/host/compose/compose.{pipeline,pipeline-mcp,mcp-server}.yml`.
+  3. 포트·스키마는 이미 있는 칸을 벌마다 다르게 적는다(`search.server.port` · `ops.services.data_parsing.port` + `search.parse_proxy.url` · `required.pg.db_schema`) — server-guide §1-3.
+- 파일: `common/config/settings.py` · `deploy/host/scripts/{load_settings.sh,host_ctl.sh,mcp_keepalive.sh,nightly_batch.sh,pipe_exec.sh,run_docs.py,host_settings.tsv}` · `deploy/host/compose/compose.{pipeline,data-parsing,mcp-server}.yml`.
 - QA: `tests/general/deploy/test_dc.py`(묶음 이름 `compose`·`compose-hong` · 틀린 이름 종료 2) · `test_dc_init.py`(타이머 단위 이름 끝) · `test_compose.py`(컨테이너 이름 끝 `${NAME_SUFFIX:-}`) · 통과.
 - Status: done
 

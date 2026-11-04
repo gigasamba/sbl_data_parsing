@@ -20,7 +20,7 @@ mcp_server/config.py(common + mcp 절). 이 파일은 common 절 모델과 두 �
     숫자·켜기·JSON 칸은 YAML이 푼 값 그대로.
 파일 찾기: SETTINGS_FILE(env) > RUN_ENV가 없거나 local이면 저장소 루트 settings.yaml(있을 때만 — settings.sample.yaml 옆).
 RUN_ENV: env RUN_ENV > YAML required.env.run_env. local·dev·prd. 없거나 dev·prd인데 파일이 없으면 거부(D-028 ②).
-앱 시작 관문 require_run_env() — pipeline.cli(selftest 빼고)·mcp_server.main·trigger_server·mcp_parse_service가 맨 먼저 부른다. 서버(dev·prd)면
+앱 시작 관문 require_run_env() — pipeline.cli(selftest 빼고)·mcp_server.main·trigger_server·parse_service가 맨 먼저 부른다. 서버(dev·prd)면
 설정 파일을 못 읽거나 그 앱 절 검증에 실패해도 이유(칸 경로·오류 종류만)를 찍고 종료 2(VS7e1 U-1 — 사용자 10-28). 틀린 파일은 import common 때도
 서버면 바로 실패(pin_env — STRICT, S7b c안), local이면 경고 뒤 기본값.
 비밀 칸은 SecretStr — 출력·로그·검증 오류에 값이 나오지 않는다.
@@ -1554,7 +1554,7 @@ class CommonRuntime(Section):
     )
     parse_max_mb: float = F(
         100.0,
-        "PARSE_MCP_MAX_MB",
+        "DATA_PARSING_MAX_MB",
         "parse_document 파일 1건 크기 상한(MB = 1024×1024바이트) — 검색 MCP(content_b64)와 parse 서비스(path·content_b64)가 같은 값으로 거름(사용자 11-03)",
         gt=0,
     )
@@ -1737,7 +1737,7 @@ def guard_run_env():
 
 
 def token_text(v):
-    """토큰 칸 값(SecretStr·글자·None) → 글자, 없거나 공백만이면 ""(토큰 없음 — 사용자 10-27, C-42·C-44: PARSE_MCP_TOKEN·TRIGGER_TOKEN·
+    """토큰 칸 값(SecretStr·글자·None) → 글자, 없거나 공백만이면 ""(토큰 없음 — 사용자 10-27, C-42·C-44: DATA_PARSING_TOKEN·TRIGGER_TOKEN·
     MCP_TOKEN·PARSE_SERVICE_TOKEN 같은 규칙). 공백이 섞인 토큰은 옛처럼 그대로 쓴다. 값은 출력하지 않는다."""
     t = reveal(v) or ""
     return t if t.strip() else ""
