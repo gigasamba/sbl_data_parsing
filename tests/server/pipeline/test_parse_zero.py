@@ -20,12 +20,12 @@ def test_zero_docs():
         out = Path(tempfile.mkdtemp())
         src = out / "prepared"
         src.mkdir()
-        a = argparse.Namespace(src=str(src), source=None, engines="plaintext", procs="1", workers="1", max_new=0, deadline=None)
+        a = argparse.Namespace(src=str(src), source=None, engines="plaintext", procs="1", workers="1", max_new=0)
         calls = []
         buf = io.StringIO()
         with (
             mock.patch.object(cli, "OUT", out),
-            mock.patch.object(cli, "_run_until", lambda args, *_, rc=rc, calls=calls: calls.append(args[0]) or rc),
+            mock.patch.object(cli, "_run_step", lambda args, *_, rc=rc, calls=calls: calls.append(args[0]) or rc),
         ):
             with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
                 try:

@@ -49,35 +49,20 @@ def _stack():
 
 def _traced(module, call):
     """하위 프로세스 1개 = proc.run span(op-01) — 자식이 이어받는 parent span이 되고, 메모리·CPU 문 대기가 이 span에 쌓임.
-    call()은 종료 코드(마감으로 끝냈으면 None)를 돌려준다."""
+    call()은 종료 코드를 돌려준다."""
     from common.core.span import safe, span
 
     with span("proc.run", "run", module=module) as sp:
         rc = call()
-        sp.add(rc=-1 if rc is None else rc)
-        if rc is None:
-            sp.result("timeout", "timeout", safe("마감 시각 도달"))
-        elif rc:
+        sp.add(rc=rc)
+        if rc:
             sp.result("fail", None, safe(f"종료 코드 {rc}"))
         return rc
 
 
-# ── 마감 시각(parse --deadline) ─────────
-def _until(deadline):
-    """'HH:MM'(오늘, 이미 지났으면 내일) → 남은 초."""
-    import datetime as dt
-
-    now = dt.datetime.now()
-    h, m = map(int, deadline.split(":"))
-    end = now.replace(hour=h, minute=m, second=0, microsecond=0)
-    if end <= now:
-        end += dt.timedelta(days=1)
-    return (end - now).total_seconds()
-
-
-def _run_until(args, env, sec):
-    """마감까지만 실행 — 넘으면 프로세스 묶음(--procs 자식 포함)을 끝냄. 다음 밤은 문서 대장에 파싱 성공 행이 없는 문서를 다시 고른다(pl-32 — 마감에 걸린 밤의 문서는 PR 4 전까지 반복될 수 있음).
-    args[0] = 모듈 점 표기(예: pipeline.extract.run_engines)."""
+def _run_step(args, env):
+    """단계 하나를 자식 프로세스 묶음(--procs 자식 포함)으로 실행하고 종료 코드를 돌려준다. args[0] = 모듈 점 표기(예: pipeline.extract.run_engines).
+    (마감 시각은 run_docs --deadline 하나 — 새 문서를 받지 않을 뿐 도는 단계는 끝까지 둔다)"""
     cmd = [PY, "-m", str(args[0]), *map(str, args[1:])]
     print("$ " + " ".join(cmd), flush=True)
     from common.core import resources as RS  # 프로세스 묶음(OS 분기 한 곳)
@@ -85,11 +70,7 @@ def _run_until(args, env, sec):
     def call():
         # cwd=APP_ROOT(런타임 루트) — ROOT(코드 루트)로 하면 --src 상대경로가 거기 기준으로 풀려 못 찾음(FS v4 회귀)
         p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **RS.group_kw())
-        try:
-            return p.wait(timeout=max(1, sec))
-        except subprocess.TimeoutExpired:
-            RS.kill_group(p)
-            return None
+        return p.wait()
 
     return _traced(str(args[0]), call)
 
@@ -111,10 +92,6 @@ def show_stack(a=None):
 # ── 파싱 모듈(run_docs가 문서마다 부름 — 서버 입구는 run_docs 하나, 사용자 10-31) ──────────
 # 11-01: 옛 배치 입구 night·run-stack·structure·load 모듈과 그 끝 표시 확인(need)은 지움 — 구조화·적재는 run_docs가 build_bundle·pgvector_load를 직접 부름.
 # 파싱 끝 표시(_rep/_DONE.json)는 남김 — 읽고 쓰기는 대표 결과 단계(pipeline.transform.represent.build_rep.write_mark).
-
-
-def _left(a):
-    return _until(a.deadline) if getattr(a, "deadline", None) else 10**7
 
 
 _T_STEP: dict = {}
@@ -179,18 +156,18 @@ def parse_module(a):
                 print(f"[dedup] 실패: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
                 rc = 1
         else:
-            rc = _run_until(["pipeline.extract.deduplication", "--src", local, "--out", OUT / "dedup"], child_env(), _left(a) - 120)
+            rc = _run_step(["pipeline.extract.deduplication", "--src", local, "--out", OUT / "dedup"], child_env())
         _tstep("t_dedup")
         if rc != 0:
-            raise SystemExit(75 if rc is None else rc)
+            raise SystemExit(rc)
         keep = set((OUT / "dedup" / "keep.txt").read_text(encoding="utf-8").splitlines())
         keep &= set(SRC.unparsed(names, OUT))  # C10 — ParsingMeta에 성공 행이 있는 문서는 다시 파싱 안 함
         only = OUT / "parse" / "_source" / "only.txt"
         only.write_text("\n".join(n for n in names if n in keep) + "\n", encoding="utf-8")
-        rc = _run_until(["pipeline.extract.filter_and_rotate", "--src", local, "--out", a.src, "--only", only], child_env(), _left(a) - 120)
+        rc = _run_step(["pipeline.extract.filter_and_rotate", "--src", local, "--out", a.src, "--only", only], child_env())
         _tstep("t_prepare")
         if rc != 0:
-            raise SystemExit(75 if rc is None else rc)
+            raise SystemExit(rc)
         lim = ["--docs-from", only]
     if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
         names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
@@ -221,9 +198,7 @@ def parse_module(a):
         engines,
         *lim,
     ]
-    rc = _run_until(args, env, _left(a) - 120)
-    if rc is None:
-        raise SystemExit(75)  # 마감 — 끝 표시 안 바꿈, 다음 실행이 이어 감
+    rc = _run_step(args, env)
     _tstep("t_parse")
     if not (OUT / "parse" / "runs.jsonl").exists():  # F1(11-03 PC 시험) — runs.jsonl 없음: 채점·대표 결과로 넘어가 죽지 않게
         if rc != 0:  # run_all이 죽어 못 씀 — 성공으로 덮지 않는다(리뷰)
@@ -235,10 +210,10 @@ def parse_module(a):
         ["pipeline.transform.represent.parse_scoring", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
         ["pipeline.transform.represent.build_rep", "--src", a.src, "--parse-dir", OUT / "parse"],
     ):
-        rc = _run_until(args, env, _left(a) - 60)
+        rc = _run_step(args, env)
         _tstep("t_" + args[0].rsplit(".", 1)[-1])  # 2026-10-22 — qa·represent 분리 계측(docflow 기타 분해)
         if rc != 0:
-            raise SystemExit(75 if rc is None else rc)
+            raise SystemExit(rc)
     from pipeline.transform.represent import build_rep as BR
 
     print(f"[docflow-step] {_tdone()}", flush=True)  # 2026-10-22 — resolve~represent까지 docflow 기타 분해 로그
@@ -427,7 +402,6 @@ def main(argv=None):
     p.add_argument(
         "--force", action="store_true", help=argparse.SUPPRESS
     )  # 11-01 — 옛 호출 호환으로 받기만(끝 표시 확인 need()는 structure·load와 함께 지움)
-    p.add_argument("--deadline", default=None, help="HH:MM — 넘으면 멈춤(종료 코드 75, 다음 실행이 이어 감). 새벽 배치용")
     p.add_argument(
         "--source",
         default=pc.cfg().extract.input_source or None,
