@@ -26,6 +26,7 @@ HOST_SKIP = (
     "common.host.pg_container",
 )  # run_docs.py가 settings.yaml에서 직접 읽음(셸 env로 안 냄)
 IMAGE_CONSTS = ("code_root", "docs_mount", "output_root")  # compose·run_docs.py가 쓰는 약속 경로만
+PORTS = ("common.runtime.data_parsing_port", "mcp.server.port")  # 여러 벌 포트 거부에 쓰는 기본값(load_settings.sh·run_docs.py가 읽음)
 HOST_TABLE = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "host_settings.tsv"
 
 
@@ -44,7 +45,7 @@ def _under(path, heads):
 
 def host_table():
     """host_settings.tsv 글자 — 줄마다 `모델 경로<TAB>옛 env 이름<TAB>종류`(text·num·bool·list·words·json), 이미지 약속 경로는 `…<TAB>const<TAB>값`. 비밀 칸은 넣지 않는다."""
-    rows, seen = [], set()
+    rows, seen, ports = [], set(), []
     for cls in S.app_classes().values():
         for path, f, _ in S.walk(cls):
             e = S.env_name(f)
@@ -52,9 +53,12 @@ def host_table():
                 continue
             seen.add(e)
             rows.append(f"{path}\t{e}\t{_kind(f)}")
+            if path in PORTS:  # 코드 기본 포트 — 고정값 줄 `default.<모델 경로><TAB><env 이름>_DEFAULT<TAB>const<TAB>값`
+                ports.append(f"default.{path}\t{e}_DEFAULT\tconst\t{f.default}")
     # 컨테이너 안 약속 경로(settings.IMAGE_PATHS 한 곳): 고정값 줄 `image.<이름><TAB>APP_<이름><TAB>const<TAB>값` — load_settings.sh가
     # APP_* env로 내 compose가 쓰고, run_docs.py가 읽는다.
     rows += [f"image.{k}\tAPP_{k.upper()}\tconst\t{S.IMAGE_PATHS[k]}" for k in IMAGE_CONSTS]
+    rows += ports
     return "# 자동 생성 — PYTHONPATH=. python deploy/release/gen_host_keys.py(고치지 말 것)\n" + "\n".join(rows) + "\n"
 
 

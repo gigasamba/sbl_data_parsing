@@ -92,9 +92,14 @@ def _inside(seq, sub=""):
     return f"{_img('output_root')}/_docflow/{seq}" + (f"/{sub}" if sub else "")
 
 
-@functools.cache
 def _img(name):
-    """컨테이너 안 약속 경로(settings.IMAGE_PATHS 한 곳): 코드 폴더 deploy/host/scripts/host_settings.tsv(없으면 이 스크립트 옆)의 const 줄(deploy/release/gen_host_keys.py가 만듦)."""
+    """컨테이너 안 약속 경로(settings.IMAGE_PATHS 한 곳)."""
+    return _const(f"image.{name}")
+
+
+@functools.cache
+def _const(key):
+    """고정값(약속 경로 image.*·코드 기본 포트 default.*): 코드 폴더 deploy/host/scripts/host_settings.tsv(없으면 이 스크립트 옆)의 const 줄(deploy/release/gen_host_keys.py가 만듦)."""
     f = next(
         (p for p in (_code_root()[0] / "deploy" / "host" / "scripts" / "host_settings.tsv", ROOT / "host_settings.tsv") if p.is_file()),
         None,
@@ -102,9 +107,9 @@ def _img(name):
     if f is None:
         sys.exit("run_docs: host_settings.tsv 없음 — 코드 폴더(deploy/host/scripts/) 또는 이 스크립트 옆에 둘 것(--code)")
     for row in _host().table_rows(f):
-        if len(row) >= 4 and row[2] == "const" and row[0] == f"image.{name}":  # 칸이 모자란 줄(손 편집·잘린 사본)은 건너뜀
+        if len(row) >= 4 and row[2] == "const" and row[0] == key:  # 칸이 모자란 줄(손 편집·잘린 사본)은 건너뜀
             return row[3]
-    sys.exit(f"run_docs: host_settings.tsv에 image.{name} 없음 — PYTHONPATH=. python deploy/release/gen_host_keys.py로 다시 만들 것")
+    sys.exit(f"run_docs: host_settings.tsv에 {key} 없음 — PYTHONPATH=. python deploy/release/gen_host_keys.py로 다시 만들 것")
 
 
 def _app():
@@ -180,6 +185,11 @@ def configure(settings_file=None):
         return ["ops.host.instance는 영소문자·숫자·-만(앞은 글자·숫자)"]
     if inst and run_env == "prd":
         return ["ops.host.instance는 개발 서버(dev)에서만 — 운영(prd)은 한 벌"]
+    if inst:  # 여러 벌 — 포트가 코드 기본값 그대로면 다른 벌과 겹침(load_settings.sh·앱과 같은 거부)
+        for p in ("mcp.server.port", "common.runtime.data_parsing_port"):
+            d = _const(f"default.{p}")
+            if str(_host().get(doc, p) or d) == d:
+                return [f"여러 벌 — {_host().layout().to_yaml(p)}가 기본값({d}) 그대로: 벌마다 다른 포트를 적음"]
     # 여러 벌 — host_ctl.sh가 띄운 이 루트의 컨테이너(load_settings.sh NAME_SUFFIX와 같은 규칙)
     PIPE_C = "data-pipeline" + (f"-{inst}" if inst else "")
     MCP_JOBS_DIR = DOCSPACE / "_mcp_parse" / "jobs"  # mcp-data-parsing의 작업 폴더(같은 결과 폴더 — parse_service.JOBS_DIR)

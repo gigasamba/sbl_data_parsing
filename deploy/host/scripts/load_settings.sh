@@ -75,8 +75,11 @@ EOF
   case "${INSTANCE:-}" in -*|*[!a-z0-9-]*) echo "[설정] ops.host.instance는 영소문자·숫자·-만(앞은 글자·숫자)" >&2; return 2 ;; esac
   if [ -n "${INSTANCE:-}" ]; then   # 여러 벌 — 운영(prd)은 한 벌, 포트는 벌마다 달라야 함
     [ "${RUN_ENV:-}" = prd ] && { echo "[설정] ops.host.instance는 개발 서버(dev)에서만 — 운영(prd)은 한 벌" >&2; return 2; }
-    [ "${MCP_PORT:-8765}" = 8765 ] && { echo "[설정] 여러 벌 — search.server.port가 기본값(8765) 그대로: 벌마다 다른 포트를 적음" >&2; return 2; }
-    [ "${DATA_PARSING_PORT:-8766}" = 8766 ] && { echo "[설정] 여러 벌 — ops.runtime.data_parsing_port가 기본값(8766) 그대로: 벌마다 다른 포트를 적음" >&2; return 2; }
+    local d   # 코드 기본 포트 — host_settings.tsv의 default.* 줄(gen_host_keys.py가 설정 모델에서 만듦)
+    d=$(awk -F'\t' '$1=="default.mcp.server.port"{print $4}' "$_SETTINGS_ROOT/deploy/host/scripts/host_settings.tsv")
+    [ "${MCP_PORT:-$d}" = "$d" ] && { echo "[설정] 여러 벌 — search.server.port가 기본값($d) 그대로: 벌마다 다른 포트를 적음" >&2; return 2; }
+    d=$(awk -F'\t' '$1=="default.common.runtime.data_parsing_port"{print $4}' "$_SETTINGS_ROOT/deploy/host/scripts/host_settings.tsv")
+    [ "${DATA_PARSING_PORT:-$d}" = "$d" ] && { echo "[설정] 여러 벌 — ops.runtime.data_parsing_port가 기본값($d) 그대로: 벌마다 다른 포트를 적음" >&2; return 2; }
   fi
   NAME_SUFFIX=${INSTANCE:+-$INSTANCE}; export NAME_SUFFIX   # 여러 벌 — 컨테이너·compose 묶음·타이머 이름 끝(비우면 한 벌, 이름 그대로)
   return 0

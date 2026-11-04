@@ -24,3 +24,5 @@ mcp.server.port	MCP_PORT	num
 image.code_root	APP_CODE_ROOT	const	/app/deploy
 image.docs_mount	APP_DOCS_MOUNT	const	/data/docs
 image.output_root	APP_OUTPUT_ROOT	const	/app/output
+default.common.runtime.data_parsing_port	DATA_PARSING_PORT_DEFAULT	const	8766
+default.mcp.server.port	MCP_PORT_DEFAULT	const	8765
