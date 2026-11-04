@@ -217,12 +217,10 @@ PIPE_C = "data-pipeline"  # docker exec 대상(compose.pipeline.yml 상주 서�
 # 문서별 결과 폴더(PIPE_OUT_ROOT 등)·동시 수·후보정·CPU 게이트가 효과가 없었다. 비밀 칸은 --set이 거부한다(명령 줄은 ps·로그에 남음).
 EMBED_SET = ("EMBED_CONCURRENCY=6", "EMBED_BATCH=32", "BM25_THREADS=3")
 PARSE_SET = (
-    "VLM_GLOBAL_CONCURRENCY=8",
+    "VLM_MAX_CONCURRENCY=8",  # 11-04 VLM 통일 — 옛 VLM_GLOBAL_CONCURRENCY(전역 합) · FIGURES_VLM_PARALLEL(그림)은 VLM_CONCURRENCY 하나로
     "VLM_CONCURRENCY=8",
-    "FIGURES_VLM_PARALLEL=8",
     "VLM_FIGURES_MAX=10",
     "PARSE_POST=supsub,charts,figures,context,attachments",
-    "OCR_DPI=120",
     "RAPIDOCR_PAGE_WORKERS=2",
     "OCR_THREADS=1",
     "PIPE_PROCS=4",
@@ -262,12 +260,10 @@ def parse_cmd(seq, chan, scan, gate):
     # light는 기본 8 유지(그림 거의 없음) · 스캔 PDF에만 vlm_page(40쪽 캡).
     heavy_on = (
         (
-            "VLM_GLOBAL_CONCURRENCY=6",
+            "VLM_MAX_CONCURRENCY=6",
             "VLM_CONCURRENCY=6",
-            "FIGURES_VLM_PARALLEL=6",
             "PARSE_POST=supsub,charts,figures,context,attachments,vlm_page",
             "VLM_PAGE_MAX=",
-            "VLM_PAGE_SLOW=45",
         )
         if chan == "vlm"
         else ()
@@ -729,7 +725,7 @@ def _sweep_orphan(seq):
 def parse_one(seq, row):
     """문서 1개 파싱 — 공유 상주 컨테이너(PIPE_C) 안에서 워커별 분리(경로 격리).
     PIPE_OUT_ROOT + DOC_DIR_PREPARED로 문서별 출력 루트 분리(pipeline이 두 env를 지원).
-    문서당 VLM 6·OCR 쪽 2(쓰레드 1)·vlm_page off·OCR_DPI=120."""
+    문서당 VLM 8(vlm 레인 6)·OCR 쪽 2(쓰레드 1)·vlm_page off(vlm 레인만 켬) · 쪽 해상도는 settings.yaml extract.ocr.dpi(11-04 — OCR_DPI=120 덮기 지움)."""
     d = DOCFLOW / f"{seq}"
     d.mkdir(parents=True, exist_ok=True)
     write_doc_csv(row, d / "batch.csv")

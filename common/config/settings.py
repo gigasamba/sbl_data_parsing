@@ -1401,15 +1401,28 @@ class CommonModelsVlm(Section):
     )
     api_key: SecretStr | None = F(None, "VLM_API_KEY", "VLM 엔드포인트 API 키(있을 때만)")
     base_url: str | None = F(None, "VLM_BASE_URL", "VLM 엔드포인트 주소(OpenAI 호환 …/v1)")
-    concurrency: int | None = F(4, "VLM_CONCURRENCY", "한 문서의 쪽(그림) VLM 동시 요청 수(개)")
+    concurrency: int | None = F(
+        4,
+        "VLM_CONCURRENCY",
+        "문서 하나 안의 VLM 동시 요청 수(개, VLM 엔진 쪽·쪽 VLM·그림 VLM 공통 — 일괄 파싱은 max_concurrency ÷ 동시 문서 수까지 줄임)",
+    )
     est_usd: float | None = F(0.02, "VLM_EST_USD", "VLM 호출 1건당 예상 비용($) — 예산 선차감용")
-    extra_body: JsonValue | None = F(None, "VLM_EXTRA_BODY", "VLM 요청 본문에 합칠 JSON 객체(예: chat_template_kwargs로 생각 끄기)")
+    extra_body: JsonValue | None = F(
+        None,
+        "VLM_EXTRA_BODY",
+        "모든 VLM 요청 본문에 합칠 JSON 객체(엔진·쪽·그림 공통 — 생각 모델이면 생각 끄기 권장: 그림 VLM이 출력 상한을 추론에 다 써 빈 답이 될 수 있음)",
+    )
     max_concurrency: float | None = F(
-        8, "VLM_MAX_CONCURRENCY", "공유 VLM 서버 동시 요청 총량 상한(문서 동시 수 × 쪽 동시 수가 이 값을 못 넘게 줄임)", unset=("auto",)
+        8,
+        "VLM_MAX_CONCURRENCY",
+        "공유 VLM 서버 동시 요청 총량 상한(한 프로세스 안 모든 VLM 호출의 합 — 일괄 파싱은 동시 문서 수 × 문서당 동시 수가 이 값을 못 넘게 줄임)",
+        unset=("auto",),
     )
     model: str | None = F(None, "VLM_MODEL", "VLM 모델 이름")
-    retry: int | None = F(1, "VLM_RETRY", "VLM 쪽 호출 시간 초과·연결 오류 때 재시도 횟수(회)")
-    timeout: int | None = F(180, "VLM_TIMEOUT", "VLM 쪽당 호출 제한 시간(초)")
+    retry: int | None = F(1, "VLM_RETRY", "VLM 호출 1건이 실패(시간 초과·연결 오류·429·5xx)할 때 재시도 횟수(회, 모든 VLM 호출 공통)")
+    timeout: int | None = F(
+        180, "VLM_TIMEOUT", "VLM 호출 1건 제한 시간(초, 모든 VLM 호출 공통 — VLM 엔진의 문서×엔진 제한 = 쪽 수 × 이 값)"
+    )
 
 
 class CommonDev(Section):

@@ -199,6 +199,24 @@ def _tdone():
     return " · ".join(parts)
 
 
+def _vlm_doc_concurrency(a, lim):
+    """엔진 자식의 문서당 VLM 동시 수 — common.models.vlm.concurrency를 동시 문서 수(= min(문서 수, 조각 × --workers))로
+    max_concurrency를 나눈 몫까지 줄인다(11-04 — 옛 night.vlm_concurrency·--vlm-concurrency는 지움: run_docs의 VLM_CONCURRENCY가
+    늘 max ÷ --workers(8 ÷ 4 = 2)로 잘려 문서 1건 실행에도 적용되지 않던 결함)."""
+    from common.core import resources as RS
+
+    src = Path(a.src)
+    docs = (
+        [n for n in Path(lim[1]).read_text(encoding="utf-8").splitlines() if n.strip()]
+        if lim
+        else [f for f in src.iterdir() if f.is_file()]
+        if src.is_dir()
+        else []
+    )
+    at_once = min(max(1, len(docs)), RS.resolve_procs(a.procs) * max(1, int(a.workers)))
+    return RS.vlm_page_concurrency(at_once, C.cfg().models.vlm.concurrency)
+
+
 def parse_module(a):
     """파싱 모듈: (--source면) 가져오기·시험 표본 → 중복 확인 → 방향 보정 → 파싱 → 채점 → 대표 결과 → 끝 표시 → (s3) 원본 정리.
     임베딩·DB 연결 없음 — 수집 서버에 이것만 보낼 수 있음. --source 없으면 --src(이미 준비된 폴더)를 그대로."""
@@ -254,12 +272,6 @@ def parse_module(a):
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)
         lim = ["--docs-from", only]
-    from common.core import resources as RS
-
-    vlm_conc = RS.vlm_page_concurrency(a.workers, a.vlm_concurrency)  # 문서 동시 수 × 쪽 동시 수가 VLM_MAX_CONCURRENCY를 넘지 않게
-    from common.core.paths import child_env
-
-    env = C.child_env(child_env(), VLM_CONCURRENCY=str(vlm_conc), LLM_BASE_URL=None)  # 파싱 모듈은 LLM을 부르지 않음 — 덮기 파일(S7e3 B-1)
     if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
         names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
         new = _unparsed(names)  # C10 — ParsingMeta에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
@@ -272,6 +284,9 @@ def parse_module(a):
         f.write_text("\n".join(pick) + "\n", encoding="utf-8")
         lim = ["--docs-from", f]
         print(f"[parse] 새·실패 문서 {min(len(new), a.max_new)}/{len(new)}개(PARSE_MAX_NEW {a.max_new}) — 나머지는 다음 실행", flush=True)
+    env = C.child_env(
+        child_env(), VLM_CONCURRENCY=str(_vlm_doc_concurrency(a, lim)), LLM_BASE_URL=None
+    )  # 파싱 모듈은 LLM을 부르지 않음(S7e3 B-1)
     args = [
         "pipeline.extract.run_all",
         "--src",
@@ -526,7 +541,6 @@ def main(argv=None):
     p.add_argument("--engines", default="")
     p.add_argument("--procs", default=_default_procs())
     p.add_argument("--workers", default=_default_workers())
-    p.add_argument("--vlm-concurrency", type=int, default=pc.cfg().night.vlm_concurrency)
     p.add_argument(
         "--max-new",
         type=lambda x: int(x or 0),

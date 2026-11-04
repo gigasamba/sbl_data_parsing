@@ -32,9 +32,9 @@
 | PDF는 두 갈래 — 글자층이 쪽당 평균 20자 미만이면 스캔(`.pdf_image` → VLM 엔진만), 아니면 글자 PDF(`.pdf_text` → pymupdf·kreuzberg) | 스캔 PDF는 글자 엔진이 못 읽는다. 판정은 `_types.json`에 저장해 다시 쓴다 | done | [pl-03](prd/transform.md#pl-03) |
 | 지원 형식 = 구성의 형식 키 43개(목록은 앵커). `.hwp`·압축(zip)은 미지원 | 구성 파일이 정본 | done | [pl-03](prd/transform.md#pl-03) · [pl-42](prd/transform.md#pl-42) |
 | 엔진은 문서마다 동시에, 엔진마다 따로 떨어진 자식 프로세스 | 엔진 하나가 죽어도 다른 엔진을 막지 않는다 | done | [pl-22](prd/transform.md#pl-22) |
-| 시간 제한 = 쪽 수 × 10초(글자 엔진)·× 120초(VLM 엔진), 엔진 첫 문서는 최소 60초, 여기에 시작 여유 10초. 넘으면 두 배로 한 번 더, 그래도 넘으면 실패 기록 | 큰 문서도 쪽 수만큼 시간을 받는다 | done | [pl-22](prd/transform.md#pl-22) |
+| 시간 제한 = 쪽 수 × 10초(글자 엔진)·× VLM 호출 제한 `common.models.vlm.timeout`(180초, VLM 엔진), 엔진 첫 문서는 최소 60초, 여기에 시작 여유 10초. 넘으면 두 배로 한 번 더, 그래도 넘으면 실패 기록 | 큰 문서도 쪽 수만큼 시간을 받는다 | done | [pl-22](prd/transform.md#pl-22) |
 | 그림 글자 인식 엔진(OCR, `rapidocr_ko`)은 파싱에 돌지 않는다 — 이미지·스캔은 VLM만. 일괄 실행 엔진은 낮은 우선순위(nice +10) | OCR은 VLM과 겹치고 느리다. 검색 서비스 자원을 덜 뺏는다 | done | [pl-22](prd/transform.md#pl-22) |
-| VLM 동시 호출 — 전체 합 상한 `pipeline.transform.vlm.global_concurrency`(12), 문서 하나 안 기본 `common.models.vlm.concurrency`(4) | 공유 VLM 서버를 넘치게 하지 않는다. 엔진마다 손잡이를 두지 않는다 | done | [pl-43](prd/transform.md#pl-43) |
+| VLM 처리 한 길 — 엔진 `qwen_vlm`·쪽 VLM·그림 VLM이 같은 호출(`pipeline/shared/vlmcall.py`)과 같은 설정: 동시 수 `common.models.vlm.concurrency`(문서 하나 안 4)·`max_concurrency`(전체 합 8), 호출 1건 제한 `timeout`(180초)·재시도 `retry`·`extra_body`(생각 끄기 등), 해상도 `extract.ocr.dpi`(150), 쪽 상한 `transform.vlm.page_max` | 공유 VLM 서버를 넘치게 하지 않는다. 경로마다 손잡이·요청 모양이 달라 같은 설정이 일부에만 먹던 것을 없앤다(사용자 11-04) | done | [pl-43](prd/transform.md#pl-43) |
 | 확장자 추가 1차: `.jpeg`·`.tif`·`.tiff`·`.bmp`(`.jpg`와 같은 엔진), `.mhtml`(`.mht`와 같음), `.hwpx` 시험 | 형식마다 임시 견본으로 파싱 시험(`test_ext_formats.py`) | done | [pl-42](prd/transform.md#pl-42) |
 | 확장자 추가 2차: `.docm`·`.pptm`·`.rtf`·`.csv`·`.tsv`·`.md`·오픈문서·서식 파일·`.json`·`.xml`·`.log`는 끝, `.hwp`만 남음(실제 `.hwp` 문서로 시험한 뒤 더함) | 엔진 파일은 그대로 두고 등록부(`registry.py`)의 "엔진별 추가 확장자" 표에 더해 엔진 지문을 지킨다. `.json`·`.xml`·`.log`는 글 그대로. 사람 검토(등급 A) | todo | [pl-45](prd/transform.md#pl-45) |
 | 대표 결과 고르기(represent): 엔진 결과 중 정확하고 풍부한 것을 대표로 고르고, 줄 단위 투표로 합치고, 엔진 사이 라벨·값을 서로 확인한다(`represent.py`·`fuse.py`·`crosscheck.py`) | 엔진마다 결과가 다르다. 다음 단계로 넘기는 글은 가장 정확해야 한다 | done | [pl-04](prd/transform.md#pl-04) |

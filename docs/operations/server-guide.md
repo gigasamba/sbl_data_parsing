@@ -170,7 +170,7 @@ PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load
 | 파싱이 종료 4 | 서버에서 EDW `AI.ParsingMeta`를 못 읽음(전체 재파싱을 막으려고 멈춤) | `required.edw`(주소·읽기 계정)·EDW 연결 확인 |
 | 구조화·적재가 "인계 형식(핑거프린트) 다름"으로 거부 | 핑거프린트가 바뀐 옛 파싱 결과 | 그 문서를 다시 파싱 |
 | 같은 결과 폴더에서 종료 75 | 다른 실행이 `.pipeline.lock`을 잡고 있음 | 끝날 때까지 기다리거나 다음 트리거에서 재시도 |
-| 메모리 터짐(OOM), 큰 스캔 PDF | 쪽 이미지를 한꺼번에 올림 | `extract.ocr.dpi` 낮추기(150)·`extract.ocr.max_pages`·`extract.max_file_mb`·컨테이너 메모리 상한 확인 |
+| 메모리 터짐(OOM), 큰 스캔 PDF | 쪽 이미지를 한꺼번에 올림 | `extract.ocr.dpi`(기본 150 — 더 낮추면 VLM 글 품질을 먼저 확인)·VLM 쪽 상한 `transform.vlm.page_max`·OCR 엔진 쪽 상한 `extract.ocr.max_pages`·`extract.max_file_mb`·컨테이너 메모리 상한 확인 |
 | CPU 폭주 | 컨테이너가 호스트 전체 코어로 스레드를 늘림 | `ops.runtime.pipe_procs`는 `auto`(cgroup 한도 기준), 컨테이너 CPU 상한 지정 |
 | MCP `/health` 503 | 기동 직후 예열 중 | 잠시 뒤 재시도 |
 | MCP 401 | 호출 쪽 토큰이 없거나 `required.tokens.mcp`와 다름 | 호출 쪽 `Authorization: Bearer <토큰>`을 서버 값과 같게 |

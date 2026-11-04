@@ -17,7 +17,8 @@ from pipeline.shared.vlmcall import (
     _model_dir,
     det_key,
     det_path,
-    pages_of,
+    page_count,
+    render,
     sha,
     vlm_page,
 )
@@ -103,12 +104,11 @@ def selftest():
 
     # 검토자 반영(10-08) — 이 selftest는 모델·네트워크를 안 써야 하는데(VLM_BASE_URL·VLM_MODEL을 지우는 것만으로
     # vlm_page()가 조용히 "미설정" 경로로 빠지게 짜여 있음), 혹시 이 프로세스에 그 두 값이 다시 생기는 경로가
-    # 있어도(다른 코드·환경 상속 등) 오래 붙잡히지 않게 짧은 VLM_DEADLINE(접속을 시도하면 몇 분이 아니라 몇 초 안에 실패)을 둔다
+    # 있어도(다른 코드·환경 상속 등) 오래 붙잡히지 않게 짧은 VLM_TIMEOUT(접속을 시도하면 몇 분이 아니라 몇 초 안에 실패)을 둔다
     # (옛 NO_PAID_CALLS 겹은 11-03에 스위치와 함께 지움) — 끝나면 원래 값으로 되돌린다.
-    # S7c — 설정 객체만 바꿔 끼움(os.environ 안 건드림): VLM_BASE_URL·VLM_MODEL은 common 칸, VLM_DEADLINE은 pipeline 칸
+    # S7c — 설정 객체만 바꿔 끼움(os.environ 안 건드림): VLM_BASE_URL·VLM_MODEL·VLM_TIMEOUT 모두 common 칸
     _top = contextlib.ExitStack()
-    _top.enter_context(COMMON.env(VLM_BASE_URL=None, VLM_MODEL=None))
-    _top.enter_context(pc.PIPE.env(VLM_DEADLINE="5"))
+    _top.enter_context(COMMON.env(VLM_BASE_URL=None, VLM_MODEL=None, VLM_TIMEOUT="5"))
     try:
         d = Path(tempfile.mkdtemp())
         assert not is_scan(d / "x.docx") and not is_scan(d / "x.xlsx")
@@ -117,7 +117,7 @@ def selftest():
         img = d / "scan.png"
         Image.new("RGB", (80, 80), "white").save(img)
         assert is_scan(img)
-        assert len(pages_of(img)) == 1 and pages_of(img)[0] == img.read_bytes()
+        assert page_count(img) == 1 and render(img, [1]) == [img.read_bytes()]
         text, prov = vlm_page(img.read_bytes())
         assert text == "" and "미설정" in prov["error"]
         with pc.PIPE.env(VLM_PAGE_MAX="0"):

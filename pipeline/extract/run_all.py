@@ -4,7 +4,7 @@
 사용: python modules/parse/run_all.py [--src <원본 문서 폴더>] [--out output/parse] [--engines pdfplumber,pymupdf] [--limit N]
   --src 생략 시 DOC_DIR env 필수(없으면 SystemExit) — common/paths.py.doc_dir.
   제한 시간(사용자 10-29 — phase 없앰): 문서×엔진 1건 = 쪽 수 × 쪽당 초 — 글자 엔진 text_page_sec(PARSE_TEXT_PAGE_SEC, 기본 10) ·
-    VLM 엔진 vlm_page_sec(PARSE_VLM_PAGE_SEC, 기본 120) + 엔진의 첫 문서는 warmup_sec 하한 + 별도 프로세스 시작 여유 isolate_overhead.
+    VLM 엔진은 VLM 호출 1건 제한 common.models.vlm.timeout(기본 180, 11-04 VLM 통일) + 엔진의 첫 문서는 warmup_sec 하한 + 별도 프로세스 시작 여유 isolate_overhead.
     넘으면 같은 실행에서 제한을 두 배로 한 번 더, 그래도 넘으면 실패로 기록.
   문서마다 그 형식의 엔진(stack.json)을 **동시에**(엔진마다 별도 프로세스 parse/parse_one.py — 세그폴트가 전체를
     멈추지 않음). --workers N: 문서 N개를 동시에. --procs N: 문서를 N조각으로 나눠 프로세스 N개가 동시에(스레드는 코어 ÷ N).
@@ -71,10 +71,10 @@ def n_pages(doc):
 
 
 def page_timeout(eng, pages, first=False):
-    """문서×엔진 1건 제한(초, 사용자 10-29) = 쪽 수 × 쪽당 초(VLM 엔진 vlm_page_sec · 그 밖 text_page_sec) · 엔진의 첫 문서는
+    """문서×엔진 1건 제한(초, 사용자 10-29) = 쪽 수 × 쪽당 초(VLM 엔진 common.models.vlm.timeout · 그 밖 text_page_sec) · 엔진의 첫 문서는
     warmup_sec 하한(import·모델 적재) · 별도 프로세스 시작 여유 isolate_overhead를 더함. 시간 초과면 호출자가 두 배로 한 번 더."""
     x = pc.cfg().extract
-    tmo = max(1, pages) * float(x.vlm_page_sec if eng in VLM_ENGINES else x.text_page_sec)
+    tmo = max(1, pages) * float(C.cfg().models.vlm.timeout if eng in VLM_ENGINES else x.text_page_sec)
     if first:
         tmo = max(tmo, float(x.warmup_sec))
     return round(tmo + float(x.isolate_overhead), 2)
@@ -286,7 +286,6 @@ def main():
 
     warmed = set()
     text_sem = threading.BoundedSemaphore(slots)  # 10-29 — 글자(CPU) 엔진 자식 동시 수 상한(VLM 엔진은 --workers만큼)
-    vlm_env = _vlm_child_env()  # M3 — VLM 엔진 자식의 VLM 호출 제한 = min(models.vlm.timeout, vlm_page_sec)
     env_failed = {}  # RB3② — 엔진 → 첫 env 실패 문서 이름. 이 실행(프로세스) 안에서만 기억(--procs 자식마다 별도 프로세스라 공유 안 됨 —
     # ponytail: 프로세스 간 공유가 필요해지면(--procs가 같은 엔진을 여러 조각으로 쪼갤 때) 파일 기반 공유로 올림)
 
@@ -341,7 +340,7 @@ def main():
         tmo = page_timeout(eng, pages, first)
         sp.add(pages=pages, limit_s=tmo, first_of_engine=first)
         if eng in VLM_ENGINES:
-            err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, vlm_env, prov)
+            err, tmo = _run_with_retry(eng, doc, dst, a.profile, tmo, unset, None, prov)
         else:
             t_slot = time.monotonic()
             with text_sem:
@@ -488,17 +487,6 @@ def _run_with_retry(eng, doc, dst, profile, tmo, unset, env, prov=None):
         SP.add_current(timeout_retries=1)
         print(f"RETRY {eng:18s} {doc.name}  시간 초과 — 제한 {tmo}초로 한 번 더", flush=True)
     return err, tmo
-
-
-def _vlm_child_env():
-    """VLM 엔진 자식 env — 엔진의 쪽당 VLM 호출 제한(VLM_TIMEOUT, 엔진이 env로 읽는 칸)을 min(models.vlm.timeout, vlm_page_sec)로(M3, 10-29 —
-    한 쪽 호출이 문서×엔진 쪽당 제한보다 길게 기다리지 않게. 엔진 코드는 그대로, 값만). 같으면 덮지 않음(None = child_env 기본)."""
-    from common.core.paths import child_env
-
-    cur, lim = C.cfg().models.vlm.timeout, pc.cfg().extract.vlm_page_sec
-    if cur is None or lim is None or float(lim) >= float(cur):
-        return None
-    return C.child_env(child_env(), VLM_TIMEOUT=str(max(1, int(lim))))
 
 
 def _with_run_id(rec, run_id):

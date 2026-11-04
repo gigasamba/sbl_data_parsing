@@ -1,10 +1,8 @@
-"""전역 VLM in-flight 게이트 — 2026-10-22 사용자 지정(모든 VLM 호출의 동시 합 = VLM_GLOBAL_CONCURRENCY, 기본 12).
-
-쪽 VLM(vlm_page — PDF 쪽·pptx 슬라이드 전사), 그림 VLM(vlm_fig·figoverlay), 엔진 qwen_vlm(_chat)이
-**같은 서버 예산**을 공유한다 — 문서 병렬(PARSE_DOC_PARALLEL)로 문서 2개가 동시에 figures 풀에 몰려도,
-또는 vlm_page 도중 다른 문서의 그림 VLM이 겹쳐도, 실제 서버에 날아가는 요청 수 합이 상한을 못 넘게 한다.
-게이트는 호출 단위(1건 = 1 slot) — 풀의 워커 수(FIGURES_VLM_PARALLEL·VLM_PAGE_CONCURRENCY 등)는 그대로
-각자의 상한으로 남고, 이 게이트가 그 위의 전역 합 상한이 된다.
+"""VLM 호출 한 길(11-04 사용자 — VLM 처리 통일): 엔진 qwen_vlm·쪽 VLM 후보정(vlm_page)·pptx 슬라이드·그림 VLM(figures)·중첩 그림(nested)이
+모두 `ask()` 하나로 부른다 — llm.complete('vlm')(내부망 가드·예산 장부·모델 다운 감지·`common.models.vlm.extra_body`·재시도
+`models.vlm.retry`·호출 1건 제한 시간 `models.vlm.timeout`) + 전역 동시 수 게이트(`models.vlm.max_concurrency` — 한 프로세스 안의
+모든 VLM 호출 합). 렌더 해상도는 `extract.ocr.dpi` 하나(`dpi()`).
+쪽 옮기기(`transcribe` → `vlm_page`)는 엔진과 후보정이 같은 지시문·렌더·캐시 열쇠를 써서, 한쪽이 옮긴 쪽은 다른 쪽이 다시 부르지 않는다.
 """
 
 import base64
@@ -30,10 +28,8 @@ _SEM: dict = {}
 
 
 def _sem():
-    v = (
-        pc.cfg().transform.vlm.global_concurrency
-    )  # S7c — 설정 객체(옛 int(get(X) or "12")) — 잠금 밖에서 읽음(객체를 다시 만들 때 다른 VLM 쓰레드가 기다리지 않게)
-    n = max(1, int(v if v is not None else 12))
+    v = ccfg().models.vlm.max_concurrency  # 잠금 밖에서 읽음(객체를 다시 만들 때 다른 VLM 쓰레드가 기다리지 않게) · 비움·auto = 8
+    n = max(1, int(v if v is not None else 8))
     with _LOCK:
         if n not in _SEM:
             _SEM[n] = threading.BoundedSemaphore(n)
@@ -55,21 +51,67 @@ NOW = time.strftime("%Y-%m-%dT%H:%M:%S")
 
 P_PAGE = _load_prompt("page_transcribe", "page")  # AD33 — 글자는 dev/agents/page_transcribe/prompts/page.md
 PID_PAGE = prompt_id("page", "v1", P_PAGE)  # 프로토타입과 같은 글자 → 같은 id(기존 VLM 캐시 재사용)
-DPI, MAX_SIDE = 150, 2000  # pages_of()·_png() 렌더 매개변수 — 결정적 열쇠에 들어감(바뀌면 새 열쇠)
+MAX_SIDE = 2000  # _png() 긴 변 상한 — 결정적 열쇠에 들어감(바뀌면 새 열쇠)
+PAGE_SLOW, PAGE_MIN_CONC = (
+    60.0,
+    2,
+)  # 쪽 옮기기 적응형 병렬 — 가장 느린 호출이 PAGE_SLOW초를 넘으면 다음 묶음 병렬 수를 절반(최소 PAGE_MIN_CONC)
+EMPTY = "빈 응답"  # vlm_page가 빈 답에 남기는 오류 글자(엔진은 빈 쪽으로 받음 — 실패 아님)
+
+
+def dpi():
+    """쪽·그림 렌더 해상도(DPI) — `extract.ocr.dpi` 하나(엔진·쪽 VLM·pptx·그림·prepare 공용, 기본 150). 결정적 열쇠에 들어감."""
+    return int(pc.cfg().extract.ocr.dpi)
+
+
+def page_max():
+    """문서당 VLM으로 옮길 쪽 수 상한 `transform.vlm.page_max` — None = 전부, 0 = 끔, N = 앞 N쪽(엔진 qwen_vlm·쪽 VLM 공통)."""
+    pc.checked("VLM_PAGE_MAX")  # 형식이 틀리면 여기서 실패(기본값이 '제한 없음'이라 조용히 넘기지 않음)
+    v = pc.cfg().transform.vlm.page_max
+    return None if v is None else int(v)
+
+
+def ask(prompt, png_bytes, *, agent, max_tokens=None):
+    """VLM 호출 1건 → (응답 글자, usage). 전역 게이트 안에서 llm.complete('vlm') — 위 모듈 설명의 공통 규칙. ModelUnavailable은 그대로 던짐."""
+    content = [
+        {"type": "text", "text": prompt},
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(png_bytes).decode()}},
+    ]
+    with slot():
+        return A.complete(
+            "vlm",
+            [{"role": "user", "content": content}],
+            temperature=0,
+            max_tokens=max_tokens,
+            timeout=float(ccfg().models.vlm.timeout),
+            agent=agent,
+        )
 
 
 def sha(b):
     return hashlib.sha256(b).hexdigest()
 
 
-def pages_of(p):
-    """쪽 이미지 bytes 목록 — PDF는 150dpi 렌더(프로토타입과 같은 dpi라 쪽 이미지 sha가 맞음), 그 외는 원본 파일 그대로."""
+def page_count(p):
+    """쪽 수 — PDF는 쪽 수, 그 밖(이미지 파일)은 1."""
     p = Path(p)
-    if p.suffix.lower() == ".pdf":
-        import fitz
+    if p.suffix.lower() != ".pdf":
+        return 1
+    import fitz
 
-        return [pg.get_pixmap(dpi=DPI).tobytes("png") for pg in fitz.open(p)]
-    return [p.read_bytes()]
+    with fitz.open(p) as d:
+        return len(d)
+
+
+def render(p, idxs):
+    """쪽 번호(1부터) 목록 → 쪽 이미지 PNG bytes 목록 — PDF는 dpi() 렌더, 그 밖(이미지 파일)은 원본 파일 그대로."""
+    p = Path(p)
+    if p.suffix.lower() != ".pdf":
+        return [p.read_bytes() for _ in idxs]
+    import fitz
+
+    with fitz.open(p) as d:
+        return [d[i - 1].get_pixmap(dpi=dpi()).tobytes("png") for i in idxs]
 
 
 def rotation_info(doc_path):
@@ -115,7 +157,7 @@ def _model_dir(model):
     return re.sub(r"[^\w.-]+", "_", model or "unset")
 
 
-def _png(img, max_side=2000):
+def _png(img, max_side=MAX_SIDE):
     from PIL import Image
 
     im = Image.open(io.BytesIO(img))
@@ -166,8 +208,7 @@ def vlm_page(img_bytes, det=None):
     """쪽 1장 → (마크다운 글자, provenance). P0 — det(= {"source_sha256","page","rotation_deg"})가 있으면 결정적 열쇠로 찾는다(렌더
     바이트가 달라도 재사용) · 없으면(det None — 원본 sha를 못 구함) 렌더 바이트 sha로(예전 동작, 재준비하면 캐시가 깨질 수 있음).
     det가 있어도 결정적 캐시가 비었으면 렌더 sha(프로토타입 캐시) 경로를 읽기만 시도 — 맞으면 결정적 열쇠로도 복사해 다음부터 안 읽게.
-    실패·빈 답은 저장 안 함. 프로토타입은 쪽 옮기기에서 추론을 끄지 않는다(그림 JSON과 달리 출력 상한을 넉넉히 써도 됨 — 실측 캐시에
-    reasoning 끈 흔적 없음) — 여기도 같게 둔다."""
+    실패·빈 답은 저장 안 함. 출력 상한은 두지 않는다(max_tokens 없음) — 생각(추론) 끄기는 모든 VLM 호출 공통 `common.models.vlm.extra_body`."""
     base, model = ccfg().models.vlm.base_url, ccfg().models.vlm.model  # S7c — 설정 객체
     model_dir = _model_dir(model)
     render_sha = sha(img_bytes)
@@ -175,7 +216,7 @@ def vlm_page(img_bytes, det=None):
     dpath = None
     if det and det.get("source_sha256"):
         k16 = det_key(
-            det["source_sha256"], det["page"], DPI if det.get("is_pdf") else None, MAX_SIDE, det.get("rotation_deg") or 0, model, PID_PAGE
+            det["source_sha256"], det["page"], dpi() if det.get("is_pdf") else None, MAX_SIDE, det.get("rotation_deg") or 0, model, PID_PAGE
         )
         dpath = det_path(raw_root(), model_dir, "page", "v1", P_PAGE, k16)
         if dpath.exists():
@@ -190,31 +231,9 @@ def vlm_page(img_bytes, det=None):
     if not (base and model):
         return "", {"error": "VLM_BASE_URL·VLM_MODEL 미설정 — 쪽 옮기기 없이 OCR만", "cached": False}
     data, px = _png(img_bytes)
-    _dl = pc.cfg().transform.vlm.deadline  # S7c — 설정 객체(옛 float(get(X) or 360))
-    deadline = float(_dl if _dl is not None else 360)
     t0 = time.perf_counter()
     try:
-        from pipeline.transform.figures.vgate import (
-            slot as _vgate_slot,
-        )  # 전역 VLM in-flight 게이트(합 VLM_GLOBAL_CONCURRENCY — 2026-10-22)
-
-        with _vgate_slot():
-            text, u = A.complete(
-                "vlm",
-                [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": P_PAGE},
-                            {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(data).decode()}},
-                        ],
-                    }
-                ],
-                temperature=0,
-                max_tokens=None,
-                timeout=deadline,
-                agent="page_transcribe",
-            )
+        text, u = ask(P_PAGE, data, agent="page_transcribe")
     except A.ModelUnavailable as ex:
         _ms = round((time.perf_counter() - t0) * 1000)
         _log_failed_page_vlm(model, _ms, f"unavailable: {str(ex)[:120]}")
@@ -225,8 +244,8 @@ def vlm_page(img_bytes, det=None):
         raise
     ms = round((time.perf_counter() - t0) * 1000)
     if not text.strip():
-        _log_failed_page_vlm(model, ms, "빈 응답")
-        return "", {"error": "빈 읭", "ms": ms, "cached": False}  # 실패·빈 답은 원본 층에 남기지 않음(다음 실행에서 다시)
+        _log_failed_page_vlm(model, ms, EMPTY)
+        return "", {"error": EMPTY, "ms": ms, "cached": False}  # 실패·빈 답은 원본 층에 남기지 않음(다음 실행에서 다시)
     prov = {
         "model": model,
         "endpoint_host": _host(base),
@@ -247,3 +266,43 @@ def vlm_page(img_bytes, det=None):
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
     return text, prov
+
+
+def transcribe(path, idxs):
+    """쪽 번호(1부터) 목록 → [(쪽, 글, provenance)](쪽 순서) — 엔진 qwen_vlm과 쪽 VLM 후보정(page_text_pages)이 함께 쓴다.
+    결정적 열쇠(det)는 rotation.csv의 orig_sha256·angle로(없으면 렌더 바이트 sha). 병렬 = `models.vlm.concurrency`(문서 하나 안),
+    묶음마다 그 쪽만 렌더(메모리에는 동시 수만큼의 쪽 이미지만). 느린 응답이면 병렬 수를 줄이고 빨라지면 되돌린다(GPU 부하 완화)."""
+    from concurrent.futures import ThreadPoolExecutor
+    from itertools import islice
+
+    from common.core import span as SP  # op-01 — 풀 스레드에 run/span ID를 실음
+
+    p = Path(path)
+    idxs = sorted(idxs)
+    rot = rotation_info(p)
+    is_pdf = p.suffix.lower() == ".pdf"
+
+    def _one(i, img):
+        info = rot.get(i) or {}
+        det = (
+            {"source_sha256": info.get("orig_sha256"), "page": i, "rotation_deg": info.get("angle") or 0, "is_pdf": is_pdf}
+            if info.get("orig_sha256")
+            else None
+        )
+        text, prov = vlm_page(img, det)
+        return (i, text, prov)
+
+    _c = ccfg().models.vlm.concurrency
+    n_max = max(1, int(_c if _c is not None else 4))
+    n, it, out = min(n_max, max(1, len(idxs))), iter(idxs), []
+    while batch := list(islice(it, n)):
+        with ThreadPoolExecutor(max_workers=len(batch)) as ex:
+            got = list(ex.map(SP.carry(_one), batch, render(p, batch)))
+        out.extend(got)
+        slowest = max((float(pv.get("ms") or 0) for _, _, pv in got if isinstance(pv, dict)), default=0.0)
+        if slowest > PAGE_SLOW * 1000 and n > PAGE_MIN_CONC:
+            n = max(PAGE_MIN_CONC, n // 2)
+            print(f"[vlm] VLM 응답 {slowest / 1000:.0f}초 > {PAGE_SLOW:.0f}초 → 병렬 수 {n * 2}→{n} 감소", flush=True)
+        elif slowest < PAGE_SLOW * 500 and n < n_max:
+            n = min(n_max, n * 2)
+    return out

@@ -80,7 +80,7 @@
 ### 규칙
 1. 대표 결과 점수 `pipeline/transform/represent/repfmt.py`는 p1, 고객 이름 찾기 `pipeline/transform/structure/terms.py`는 s 층 목록에 든다. 결과를 만들지 않는 오프라인 도구는 `NOT_LAYER`에 적는다.
 2. `CODE_FP_SKIP`에 적은 파일(기록·DB 연결·표 정의·설정 도구)은 지문 계산에서 import를 따라가지 않는다. 설정 모델 `common/config/settings.py`는 기본값이 결과를 바꿀 수 있어 따라간다.
-3. `common/check/check_modules.py` ⑫ — `pipeline` 안에서 뒤 단계를 import하면(함수 안 늦은 import 포함) 위반이다. 예외(`STAGE_ALLOW`) 한 곳: `qwen_vlm` 엔진 → `transform.figures.vgate`.
+3. `common/check/check_modules.py` ⑫ — `pipeline` 안에서 뒤 단계를 import하면(함수 안 늦은 import 포함) 위반이다. 예외(`STAGE_ALLOW`) 없음 — `qwen_vlm` 엔진이 쓰던 VLM 게이트는 `pipeline/shared/vlmcall.py`로 옮겼다(11-04, [pl-43](transform.md#pl-43)).
 
 ### QA
 - `tests/server/common/test_code_fp.py`(`pipeline/transform` 아래 빠진 파일 · 표 정의·기록 파일은 지문 그대로) · `tests/server/common/test_check_modules.py`.

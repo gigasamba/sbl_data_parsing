@@ -63,8 +63,10 @@ def selftest():
     assert not OCR_ENGINES & set(engines_for_doc(Path("x.png"), {}, {}, set()))  # stack에 키 없음(합집합 대체)에도 OCR 없음
     print("[selftest] 10-29 — OCR 엔진 안 돎 통과")
 
-    # 사용자 10-29 — 쪽당 제한: 글자 엔진 10초·VLM 120초(설정) · 첫 문서 warmup 하한 · 별도 프로세스 여유 더함
-    with pc.PIPE.env(PARSE_TEXT_PAGE_SEC="10", PARSE_VLM_PAGE_SEC="120", PARSE_WARMUP_SEC="60", PARSE_ISOLATE_OVERHEAD="10"):
+    # 사용자 10-29 — 쪽당 제한: 글자 엔진 10초·VLM은 호출 1건 제한 models.vlm.timeout(11-04 통일) · 첫 문서 warmup 하한 · 별도 프로세스 여유 더함
+    from common.config.settings import COMMON
+
+    with COMMON.env(VLM_TIMEOUT="120"), pc.PIPE.env(PARSE_TEXT_PAGE_SEC="10", PARSE_WARMUP_SEC="60", PARSE_ISOLATE_OVERHEAD="10"):
         assert page_timeout("pymupdf", 3) == 3 * 10 + 10
         assert page_timeout("pymupdf", 0) == 10 + 10  # 쪽 수 못 셈 → 1쪽
         assert page_timeout("pymupdf", 2, first=True) == 60 + 10  # 첫 문서는 warmup 하한
@@ -380,20 +382,6 @@ def test_kill_group_reaps_grandchild():
         time.sleep(0.1)
     else:
         raise AssertionError(f"손자 {gpid}가 남음")
-
-
-def test_vlm_child_env_caps_timeout():
-    """10-29 M3 — VLM 엔진 자식의 VLM_TIMEOUT = min(models.vlm.timeout, vlm_page_sec) · 쪽당 제한이 더 길면 덮지 않음(None)."""
-    from common.config.settings import COMMON, read_settings
-    from pipeline.extract.run_all import _vlm_child_env
-
-    with COMMON.env(VLM_TIMEOUT="180"), pc.PIPE.env(PARSE_VLM_PAGE_SEC="60"):
-        env = _vlm_child_env()
-        assert env is not None  # op-09 — 값은 env가 아니라 자식의 덮기 파일(SETTINGS_FILE overrides)로
-        over = read_settings(env["SETTINGS_FILE"])[1]
-        assert over.get("VLM_TIMEOUT") == "60", over
-    with COMMON.env(VLM_TIMEOUT="100"), pc.PIPE.env(PARSE_VLM_PAGE_SEC="120"):
-        assert _vlm_child_env() is None
 
 
 def test_p0_layer_covers_every_engine_folder():

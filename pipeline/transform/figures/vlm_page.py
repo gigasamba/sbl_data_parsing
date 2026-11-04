@@ -11,16 +11,15 @@ rotation.csv가 옛 버전이거나 이 문서가 거기 없으면 — 렌더 �
 import json
 from pathlib import Path
 
-from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
-from common.core import span as SP  # op-01 성능 span(풀 스레드 컨텍스트 전달)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared.exts import IMG_EXTS
 from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
 from pipeline.shared.vlmcall import (  # 쪽 VLM 호출·캐시는 pipeline/shared/vlmcall.py로 옮김(엔진 qwen_vlm과 함께 씀)
-    pages_of,
+    page_count,
+    page_max,
     rotation_info,
     sha,
-    vlm_page,
+    transcribe,
 )
 from pipeline.transform.figures.vector import vector_regions  # 쪽 벡터 도형 군집 수(page_signals)
 
@@ -239,15 +238,6 @@ def scan_pages(path):
     return list(scan_pages_detail(path).keys())
 
 
-def _max_pages():
-    """VLM_PAGE_MAX — 비었으면 전부, '0'이면 꺼짐(이 기능 호출 자체를 안 함), N이면 문서당 앞 N쪽만."""
-    pc.checked("VLM_PAGE_MAX")  # 형식이 틀리면 옛 int(v)처럼 여기서 실패(기본값이 '제한 없음'이라 조용히 넘기지 않음)
-    v = pc.cfg().transform.vlm.page_max  # S7c — 설정 객체(int 칸: 없음·빈 값 = None)
-    if v is None:
-        return None
-    return int(v)
-
-
 def page_targets(doc_path):
     """독립 검토 반영(10-11, AD31/AD20 BLOCK) — 이 문서에서 **실제로** 쪽 VLM이 호출될 쪽 번호 집합 — 한 곳에서
     계산해 page_text_pages()·figures.py 둘 다 이 함수만 본다(pptx_render.target_slides와 같은 패턴, 따로 추정 안 함).
@@ -264,12 +254,12 @@ def page_targets(doc_path):
 
     if "vlm_page" not in active_features():
         return set()
-    cap = _max_pages()
+    cap = page_max()
     if cap == 0:
         return set()
     p = Path(doc_path)
     if is_scan(p):
-        return pick_pages(len(pages_of(p)), True, [], cap)
+        return pick_pages(page_count(p), True, [], cap)
     if p.suffix.lower() != ".pdf":
         return set()
     # AD12·AD31 — 글자 PDF 안의 스캔 쪽만(쓰레기·숨은 글자층·OCR≫글자층·회전·벡터 도식 신호 — scan_pages_detail 참고)
@@ -288,63 +278,7 @@ def page_text_pages(doc_path):
     쪽 단위로 [(쪽 번호, 글, provenance), ...] (scan_fill이 그 쪽만 채우려면 page_text처럼
     합친 글이 아니라 쪽 번호가 필요). 대상 쪽 계산은 page_targets()(단일 진본, figures.py와 공유) — 여기선 그
     번호로 실제 렌더·VLM 호출만 한다."""
-    # 2026-10-22 — 쪽 전사를 순차→병렬로: 15쪽 × 26초 순차=390초 wall → 병렬(min(N,병렬)배치=wall 최소화), 품질 무변
-    idxs = sorted(page_targets(doc_path))
-    if not idxs:
-        return []
-    p = Path(doc_path)
-    pages = pages_of(p)
-    rot = rotation_info(p)
-    is_pdf = p.suffix.lower() == ".pdf"
-
-    def _one(i):
-        img = pages[i - 1]
-        info = rot.get(i) or {}
-        det = (
-            {"source_sha256": info.get("orig_sha256"), "page": i, "rotation_deg": info.get("angle") or 0, "is_pdf": is_pdf}
-            if info.get("orig_sha256")
-            else None
-        )
-        text, prov = vlm_page(img, det)
-        return (i, text, prov)
-
-    # 2026-10-22 — 적응적 병렬: 느린 VLM 응답 시 워커 수 절반으로, 빠르면 유지
-    # VLM_PAGE_SLOW(기본 60초) 이상 걸린 call이 있으면 다음 배치의 워커를 절반으로 → GPU 포화 자동 완화
-    _tv = pc.cfg().transform.vlm  # S7c — 설정 객체(옛 get(A) or get(B) or 4 — 0도 참 글자라 is None 사슬)
-    _n = _tv.page_concurrency if _tv.page_concurrency is not None else ccfg().models.vlm.concurrency
-    n_max = max(1, int(_n if _n is not None else 4))
-    n_min = int(_tv.page_min_concurrency if _tv.page_min_concurrency is not None else 2)
-    _slow = float(_tv.page_slow if _tv.page_slow is not None else 60)  # 콜이 이 시간(초) 초과면 병렬 수 축소
-    n = min(n_max, len(idxs))
-    if n <= 1 or len(idxs) <= 1:
-        return [_one(i) for i in idxs]
-
-    import concurrent.futures
-    from itertools import islice
-
-    it = iter(idxs)
-    out = []
-    while True:
-        batch = list(islice(it, n))
-        if not batch:
-            break
-        if len(batch) == 1:
-            out.append(_one(batch[0]))
-            continue
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(batch)) as ex:
-            batch_out = list(ex.map(SP.carry(_one), batch))  # ex.map은 입력 순서 보존 · op-01 — run/span ID를 풀 스레드에 실음
-        out.extend(batch_out)
-        # 적응적: 이 배치에서 가장 느린 call이 _slow를 넘었으면 워커 수 절반 (최소 n_min)
-        slowest = 0.0
-        for _, _, pv in batch_out:
-            if isinstance(pv, dict) and pv.get("ms"):
-                slowest = max(slowest, float(pv["ms"]))
-        if slowest > _slow * 1000 and n > n_min:
-            n = max(n_min, n // 2)
-            print(f"[vlm_page] VLM 응답 {slowest / 1000:.0f}초 > {_slow:.0f}초 → 병렬 수 {n * 2}→{n} 감소 (GPU02 부하 완화)", flush=True)
-        elif slowest < _slow * 1000 // 2 and n < n_max:
-            n = min(n_max, n * 2)  # 반대로 빠르면 회복
-    return out
+    return transcribe(doc_path, page_targets(doc_path))  # 렌더·호출·병렬은 pipeline/shared/vlmcall.py(엔진 qwen_vlm과 같은 함수)
 
 
 def page_text(doc_path):
