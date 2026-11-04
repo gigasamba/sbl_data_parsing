@@ -10,26 +10,28 @@ from common.config.settings import COMMON
 from pipeline import config as pc
 from pipeline.shared.parse_run import raw_vlm_path
 from pipeline.shared.postprocess import raw_root
-from pipeline.transform.figures.vlm_page import (
+from pipeline.shared.vlmcall import (
     MAX_SIDE,
     P_PAGE,
+    PID_PAGE,
+    _model_dir,
+    det_key,
+    det_path,
+    pages_of,
+    sha,
+    vlm_page,
+)
+from pipeline.transform.figures.vlm_page import (
     PAGE_HIDDEN_AREA,
     PAGE_HIDDEN_RATIO,
     PAGE_SCAN_AREA,
     PAGE_SCAN_CHARS,
     PAGE_SIGNALS_VERSION,
-    PID_PAGE,
-    _model_dir,
     _signals_path,
-    det_key,
-    det_path,
     is_scan,
     page_text,
-    pages_of,
     scan_pages,
     scan_pages_detail,
-    sha,
-    vlm_page,
 )
 
 

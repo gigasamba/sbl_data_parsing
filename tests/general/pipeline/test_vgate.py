@@ -1,10 +1,10 @@
-"""pipeline.transform.figures.vgate(층 p1 파일) 자기 점검 — S9b(VS9 B-1, D-018)에 모듈 `__main__`에서 옮김(줄 글자 그대로).
+"""pipeline.shared.vlmcall 게이트(옛 pipeline.transform.figures.vgate — 층 p1 파일) 자기 점검 — S9b(VS9 B-1, D-018)에 모듈 `__main__`에서 옮김(줄 글자 그대로).
 옛 명령 `python -m pipeline.transform.figures.vgate`(반입 판정 목록 밖 — 일반 시험)."""
 
 import threading
 
 from pipeline import config as pc
-from pipeline.transform.figures.vgate import _SEM, slot
+from pipeline.shared.vlmcall import _SEM, slot
 
 
 def test_main():  # 옛 `if __name__ == "__main__":   # 자기점검 — 상한만큼만 동시 진입, 해제하면 다음이 진입` 몸통

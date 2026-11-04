@@ -22,7 +22,7 @@ from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared.parse_run import prompt_id, raw_vlm_path
 from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
-from pipeline.transform.figures.vlm_page import _host, _model_dir, _png, sha  # 캐시 경로·PNG 축소 helper 재사용(중복 구현 금지)
+from pipeline.shared.vlmcall import _host, _model_dir, _png, sha  # 캐시 경로·PNG 축소 helper 재사용(중복 구현 금지)
 
 P_BBOX = _load_prompt("nested_figure", "bbox")  # 글자는 prompts/nested_figure/prompt.md
 PID_BBOX = prompt_id("bbox", "v1", P_BBOX)

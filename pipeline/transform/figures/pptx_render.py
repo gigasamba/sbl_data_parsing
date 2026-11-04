@@ -30,9 +30,9 @@ from pathlib import Path
 
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared.postprocess import raw_root
+from pipeline.shared.vlmcall import DPI, sha, vlm_page
 from pipeline.transform.figures import shape_detect  # AD14
 from pipeline.transform.figures.pptx_edges import candidate_slides
-from pipeline.transform.figures.vlm_page import DPI, sha, vlm_page
 
 
 def _cap(name, default):

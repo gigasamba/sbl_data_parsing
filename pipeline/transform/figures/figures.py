@@ -798,7 +798,7 @@ def vlm_fig(img_bytes, max_tokens=None, prompt_text=None, cache_name=None, agent
     deadline = float(_dl if _dl is not None else 360)
     t0 = time.perf_counter()
     try:
-        from pipeline.transform.figures.vgate import (
+        from pipeline.shared.vlmcall import (
             slot as _vgate_slot,
         )  # 전역 VLM in-flight 게이트(합 VLM_GLOBAL_CONCURRENCY — 2026-10-22)
 

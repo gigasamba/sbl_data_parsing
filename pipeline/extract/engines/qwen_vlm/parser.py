@@ -39,7 +39,7 @@ def _chat(img):
     if _reveal(v.api_key):
         req.add_header("Authorization", "Bearer " + _reveal(v.api_key))
     # 리다이렉트도 같은 내부망 가드로 재확인(L7) — raw urllib.request.urlopen은 리다이렉트 대상을 다시 검사하지 않음
-    from pipeline.transform.figures.vgate import slot as _vgate_slot   # 전역 VLM in-flight 게이트(합 VLM_GLOBAL_CONCURRENCY — 2026-10-22)
+    from pipeline.shared.vlmcall import slot as _vgate_slot   # 전역 VLM in-flight 게이트(합 VLM_GLOBAL_CONCURRENCY — 2026-10-22)
     with _vgate_slot(), _g_urlopen(req, int(v.timeout), "VLM") as r:
         return json.load(r)["choices"][0]["message"]["content"]
 
