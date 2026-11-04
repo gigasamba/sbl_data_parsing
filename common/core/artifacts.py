@@ -50,7 +50,6 @@ LAYER_CODE = {
             "table_inline",
             "table_standard",
             "text_normalize",
-            "decision_log",
         )
     ]
     + [

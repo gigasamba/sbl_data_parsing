@@ -451,11 +451,6 @@ def selftest():
     assert "reread" not in on5["fused"]  # 재판독 칸 없음(pl-34에 지움)
     print("[selftest] AD29 P1 — 라벨:값 조각 투표(신뢰도 높은 쪽 승, 본문·기존 facts 불변) 통과")
 
-    # PA0 — 맥락 기록: rep에 context·decisions가 생김
-    assert on5["context"]["format"] == ".txt" and set(on5["context"]["engines"]) == {"pdfplumber", "pymupdf", "rapidocr_ko"}
-    assert [x["step"] for x in on5["decisions"]][:2] == ["engine_scope", "representative"]
-    print("[selftest] PA0 — 문서·엔진 신호 + 규칙 결정 기록 통과")
-
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통
     selftest()

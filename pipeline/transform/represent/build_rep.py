@@ -6,7 +6,7 @@
   모두 실패하면 구성 밖 성공 엔진으로 대체(fallback) — 빠진 문서가 없게.
   표준화(기호·첨자 표기) → 다른 후보의 표 행·키-값 보충 → 쪽·문단 보정 → 조각 투표(fragment_vote).
   스캔 쪽 채움 — .pdf_text 대표 안의 스캔 쪽만 쪽 VLM 글로(쪽 번호를 확정할 수 없거나 글이 깨졌으면 건너뜀).
-  후보정(apply_post — vlm_page·figures·charts·supsub·attachments) → 표 제자리 넣기(table_inline) → 맥락 기록(decision_log).
+  후보정(apply_post — vlm_page·figures·charts·supsub·attachments) → 표 제자리 넣기(table_inline).
   표기가 갈린 엔진 충돌은 _rep/conflicts.jsonl에도 모은다.
 산출 = 엔진 공통 출력 계약(text·tables·facts·boxes) + "rep" — 구조화(build_bundle)는 이것만 읽는다.
 사용: python -m pipeline.transform.represent.build_rep [--stack stack.json] [--parse-dir output/parse]
@@ -443,7 +443,6 @@ from common.core.artifacts import code_fp  # noqa: E402
 from common.core.contract import source_record  # noqa: E402
 from pipeline.shared import post_config as post_cfg  # noqa: E402
 from pipeline.shared import runtrace  # noqa: E402
-from pipeline.transform.represent import decision_log as trace_mod  # noqa: E402
 from pipeline.transform.represent import fragment_vote as fuse_mod  # noqa: E402
 from pipeline.transform.represent import table_inline  # noqa: E402
 
@@ -788,7 +787,6 @@ def represent(stack, parse_dir, src=None):
         # table_inline이 찾는 표 자리(span)는 이 최종 본문 기준이어야 맞다(더 일찍 부르면 scan_fill이 쪽 전체를 OCR
         # 글로 갈아치울 수 있어 자리가 어긋날 수 있음 — 그때는 그냥 못 찾은 걸로 남고 본문은 안 바뀜, 안전).
         rep["rep"]["table_inline"] = table_inline.inline_tables(rep, best["engine"], other_docs)  # rep["text"]도 바꿈
-        trace_mod.attach(rep, dd, cands, stack, feats, doc_path)  # 맥락 기록(rep.context·rep.decisions)
         _t["table"] = time.time() - _t0
         _t0 = time.time()
         rep["rep"]["stage_times"] = {k: round(v, 2) for k, v in _t.items()}  # 단계별 소요(초)
