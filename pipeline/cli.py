@@ -17,7 +17,6 @@ from common.core.console import utf8_stdout
 # isort: split
 import argparse
 import contextlib
-import json
 import os
 import subprocess
 import sys
@@ -119,31 +118,7 @@ def show_stack(a=None):
 
 # ── 파싱 모듈(run_docs가 문서마다 부름 — 서버 입구는 run_docs 하나, 사용자 10-31) ──────────
 # 11-01: 옛 배치 입구 night·run-stack·structure·load 모듈과 그 끝 표시 확인(need)은 지움 — 구조화·적재는 run_docs가 build_bundle·pgvector_load를 직접 부름.
-# 파싱 끝 표시(_rep/_DONE.json)는 남김.
-from common import CONTRACT, FINGERPRINT  # noqa: E402 — 인계 형식 버전 · common 코드 지문(이미지 버전 어긋남 확인)
-
-MARK = {
-    "parse": OUT / "parse" / "_rep" / "_DONE.json",
-}
-
-
-def read_mark(name):
-    f = MARK[name]
-    return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
-
-
-def write_mark(name, **kw):
-    m = {
-        "module": name,
-        "contract": CONTRACT,
-        "common": FINGERPRINT,
-        "run_id": time.strftime("%Y%m%d-%H%M%S"),
-        "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        **kw,
-    }
-    MARK[name].parent.mkdir(parents=True, exist_ok=True)
-    MARK[name].write_text(json.dumps(m, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"[{name}] 끝 표시 → {MARK[name]} (run_id {m['run_id']})", flush=True)
+# 파싱 끝 표시(_rep/_DONE.json)는 남김 — 읽고 쓰기는 대표 결과 단계(pipeline.transform.represent.build_rep.write_mark).
 
 
 def _left(a):
@@ -288,42 +263,23 @@ def parse_module(a):
         _tstep("t_" + args[0].rsplit(".", 1)[-1])  # 2026-10-22 — qa·represent 분리 계측(docflow 기타 분해)
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)
-    import hashlib
+    from pipeline.transform.represent import build_rep as BR
 
     print(f"[docflow-step] {_tdone()}", flush=True)  # 2026-10-22 — resolve~represent까지 docflow 기타 분해 로그
-    idx = json.loads((OUT / "parse" / "_rep" / "index.json").read_text(encoding="utf-8"))["docs"]
+    idx, digest = BR.rep_digest(OUT / "parse")
     ok = sum(1 for r in idx if r.get("engine"))
     runtrace.docs(total=len(idx), ok=ok, fail=len(idx) - ok)  # 재사용 수는 없음 — 실행마다 새로 파싱(pl-32)
-    core = [{k: v for k, v in r.items() if k != "tried"} for r in idx]  # 시도 기록(시각)은 빼고 대표 결과만 비교
-    content = []  # GH1-05 — core는 chars·facts_added(길이·개수)만 있어 길이·개수가 같은 내용 교체를 못 잡음 → 본문·facts 자체의 sha256
-    for r in idx:
-        if not r.get("engine"):
-            continue
-        rep = json.loads((OUT / "parse" / "_rep" / f"{r['doc']}.json").read_text(encoding="utf-8"))
-        content.append(
-            {
-                "doc": r["doc"],
-                "text_sha": hashlib.sha256((rep.get("text") or "").encode("utf-8")).hexdigest(),
-                "facts_sha": hashlib.sha256(
-                    json.dumps(rep.get("facts") or [], sort_keys=True, ensure_ascii=False).encode("utf-8")
-                ).hexdigest(),
-            }
-        )
-    digest = hashlib.sha256(json.dumps({"core": core, "content": content}, sort_keys=True).encode()).hexdigest()[:16]
-    old = read_mark("parse") or {}
-    if old.get("digest") == digest and old.get("contract") == CONTRACT:
-        print(f"[parse] 대표 결과 변화 없음 — 끝 표시 그대로(run_id {old['run_id']}), 구조화는 건너뛰게 됨", flush=True)
-        return
-    write_mark(
-        "parse",
+    if not BR.write_mark(
+        OUT / "parse",
         src=str(a.src),
         source=str(a.source or a.src),
         engines=engines.split(","),
         docs=len(idx),
         digest=digest,
-        rep_ok=sum(1 for r in idx if r.get("engine")),
+        rep_ok=ok,
         run_id=run_id,
-    )
+    ):
+        return
     if src_info:
         if SRC.is_remote(a.source):
             SRC.finish(src_info[0], src_info[1], OUT / "parse" / "_rep" / "index.json")
