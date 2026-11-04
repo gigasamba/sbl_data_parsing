@@ -2,6 +2,7 @@
 
 from unittest import mock
 
+from common.core import parse_limit
 from pipeline import config as pc
 
 
@@ -97,7 +98,7 @@ def test_size_limit():
                 mock.patch.multiple(S, TOKEN="t", ROOTS=[root.resolve()], JOBS_DIR=Path(td, "jobs")),
                 mock.patch.object(S, "_purge_old"),
             ):
-                assert S._max_bytes() == mb
+                assert parse_limit.max_bytes() == mb
                 assert post(b64(int(0.9 * mb)))[0] == 202
                 assert post({"path": str(root / "ok.txt")})[0] == 202
                 # 1.1MB의 base64 본문(약 1.47MB)은 옛 본문 상한(파일 상한 + 64KB)이면 "본문 크기 상한 초과"였음 — 이제 크기를 알려 주는 거부
@@ -114,3 +115,30 @@ def test_size_limit():
                     S.JOBS.pop(j, None)
             while not S.Q.empty():
                 S.Q.get_nowait()
+
+
+def test_result_shape():
+    """작업 결과 사전 하나(_result) — 빈 결과와 대표 결과의 칸이 parse_document 응답 그대로."""
+    from pipeline import parse_service as S
+
+    empty = S._result("j", "a.pdf", note=S.DRM_NOTE, ms=1.0)
+    assert empty == {
+        "job_id": "j",
+        "filename": "a.pdf",
+        "status": "done",
+        "engine": None,
+        "text": "",
+        "tables_std": [],
+        "tables": [],
+        "facts": [],
+        "fields": {},
+        "rep_path": None,
+        "all_keys": [],
+        "note": S.DRM_NOTE,
+        "ms": 1.0,
+    }, empty
+    rep = {"text": "t", "rep": {"engine": "e"}, "tables": [1], "x": 0}
+    got = S._result("j", "a.pdf", rep, rep_path="r", workspace="w", ms=2.0)
+    assert got["engine"] == "e" and got["text"] == "t" and got["tables"] == [1] and got["facts"] is None, got
+    assert got["all_keys"] == ["rep", "tables", "text", "x"] and "status" not in got and "note" not in got, got
+    assert (got["rep_path"], got["workspace"], got["ms"]) == ("r", "w", 2.0), got

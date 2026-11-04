@@ -43,6 +43,7 @@ EXCLUDED_FILES = (
     "check/checker.py",  # 점검기(env·services·ping) — 운영 도구
     "core/exitclean.py",  # 종료 정리(임시 파일 지우기·자식 회수) — 프로세스 관리, 인계 내용과 무관
     "core/console.py",  # CLI 표준 출력을 UTF-8로(utf8_stdout) — 화면 출력만, 인계 내용과 무관
+    "core/parse_limit.py",  # parse_document 파일 크기 상한 — 서비스 입구만, 인계 내용과 무관
     "core/fingerprint.py",  # 이 파일 자신 — CONTRACT는 따로 버전으로 확인, pipeline_version()은 인계 내용과 무관
     "config/boot.py",  # 컨테이너 시작 설정(entrypoint의 RUN_ENV 관문·셸 칸·라이브러리 env) — 운영 도구
     "config/overrides.py",  # 덮기 파일 만들기(PC 한 번 실행) — 운영 도구

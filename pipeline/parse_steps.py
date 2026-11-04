@@ -1,11 +1,53 @@
 """파싱 단계 실행 — 파이프라인 입구(pipeline.cli parse)와 MCP 작업 서비스(pipeline.parse_service)가 함께 쓴다(rn-06)."""
 
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 from common.core import exitclean
 from common.core import resources as RS  # 프로세스 묶음(OS 분기 한 곳)
 from common.core.paths import APP_ROOT
+from pipeline import config as pc
+
+
+def stack(refresh=False):
+    """엔진 구성(사전) — 파일을 읽어 없는 엔진을 거부(종료 2)한 뒤. refresh=True면 파일을 다시 읽는다(작업 서비스는 작업마다)."""
+    from pipeline.extract import engine_stack
+
+    engine_stack.resolve(refresh=refresh)
+    return pc.stack()
+
+
+def run_id(env):
+    """이번 실행 id(PARSE_RUN_ID) — env에 있으면 그대로, 없으면 지금 시각을 넣는다. run_engines·끝 표시가 같은 id를 쓴다."""
+    return env.setdefault("PARSE_RUN_ID", time.strftime("%Y%m%d-%H%M%S"))  # env 남김 — 하위 프로세스
+
+
+def run_step(args, env, timeout=None, launch=subprocess.Popen, track=False, log=None):
+    """단계 하나(`python -m <모듈> 인자…`)를 프로세스 묶음으로 돌린다 — proc.run span 하나(자식이 이어받는 부모 span).
+    log(열린 글자 파일)를 주면 명령·출력을 거기에 남기고, 아니면 명령 줄만 화면에. 반환: CompletedProcess."""
+    from common.core.span import safe, span
+
+    cmd = [sys.executable, "-m", *map(str, args)]
+    kw = {"stdout": subprocess.PIPE, "stderr": subprocess.PIPE, "text": True} if log else {}
+    if log is None:
+        print("$ " + " ".join(cmd), flush=True)
+    with span("proc.run", "run", module=str(args[0])) as sp:
+        p = run_group(cmd, env, timeout, launch=launch, track=track, **kw)
+        sp.add(rc=p.returncode)
+        if p.returncode:
+            sp.result("fail", None, safe(f"종료 코드 {p.returncode}"))
+    if log:
+        log.write(f"== {' '.join(map(str, args))}\n{p.stdout}\n{p.stderr}\n")
+        log.flush()
+    return p
+
+
+def place_inputs(run, src, out, names, only):
+    """준비 단계 — 파일 이름 목록을 only 파일에 적고 filter_and_rotate(src → out, 그 이름만)를 돌린다. 반환: run의 종료 코드."""
+    Path(only).write_text("\n".join(names) + "\n", encoding="utf-8")
+    return run(["pipeline.extract.filter_and_rotate", "--src", src, "--out", out, "--only", only])
 
 
 def run_group(cmd, env, timeout=None, launch=subprocess.Popen, track=False, **kw):

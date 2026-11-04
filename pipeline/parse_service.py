@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
-"""텍스트 파싱 작업 서비스 — mcp-data-parsing 컨테이너(11-03 — 옛 data-pipeline-parse; 작업 서비스가 주 프로세스, compose.data-parsing.yml) 안에서 상주하며 검색 MCP(mcp-server — 옛 data-retrieval)의 parse_document
-도구가 localhost HTTP로 호출한다(비정형 파일[base64] → text 파싱 대표 결과 반환).
-범위 — prepare → run_all(문서의 엔진들 동시에 · OCR 엔진은 run_all이 뺌) → parse_qa → represent까지.
-구조화·임베딩·적재 없음 · 표 인식 유지 · 이미지 파일은 받지 않음 · 스캔 PDF는 내부망 VLM(qwen_vlm — mc-18, 11-03).
-[패치 2026-10-22] ① 기본 time_out_threshold 300초 ② 큐 대기 순번을 제출 응답과 시작 시점에 표시(지연 원인 파악)
-  ③ 서비스 PID 로그 파일 남김(docker exec -d 로그 없음 문제) ④ _purge_old에서 방금 만든 작업 보호(버그 수정)
-실행: mcp-data-parsing 컨테이너의 주 프로세스(compose.data-parsing.yml — 죽으면 restart가 다시 띄움 · 옛 손 기동 `docker exec -d …` 없음)
-  토큰은 설정 필수(settings.yaml required.tokens.mcp — 검색 MCP와 같은 칸, 없으면 시작 거부)
-API(127.0.0.1:8766 · Bearer):  POST /jobs {content_b64+filename} → 202 {job_id, queue_position}
+"""텍스트 파싱 작업 서비스 — mcp-data-parsing 컨테이너의 주 프로세스(compose.data-parsing.yml — 죽으면 restart가 다시 띄움).
+검색 MCP(mcp-server)의 parse_document 도구가 localhost HTTP로 부른다(비정형 파일 → 텍스트 파싱 대표 결과).
+범위 — 준비 → run_engines(문서의 엔진들 동시에) → 채점 → 대표 결과까지. 구조화·임베딩·적재 없음 · 이미지 파일은 받지 않음 ·
+스캔 PDF는 내부망 VLM(qwen_vlm). 토큰은 settings.yaml required.tokens.mcp(검색 MCP와 같은 칸, 없으면 시작 거부).
+API(127.0.0.1:8766 · Bearer):  POST /jobs {content_b64+filename | path} → 202 {job_id, queue_position}
   GET /health  → {ok, ready, running, queued} · GET /jobs/<id> → {status, result, elapsed_ms}"""
 
 import base64
@@ -15,7 +11,7 @@ import json
 import os
 import queue
 import re
-import subprocess
+import shutil
 import sys
 import threading
 import time
@@ -26,11 +22,11 @@ from pathlib import Path
 from common.config.settings import cfg as common_cfg
 from common.config.settings import checked, reveal
 from common.config.settings import child_env as settings_env
-from common.core import exitclean
-from common.core.paths import APP_ROOT  # I4 — 컨테이너 경로(/app/…) 대신 런타임 루트 기준(이미지 안 값 같음)
+from common.core import exitclean, parse_limit
+from common.core.paths import APP_ROOT
 from pipeline import config as pc
+from pipeline import parse_steps
 from pipeline.extract.engine_stack import allowed_exts
-from pipeline.parse_steps import parse_chain, run_group
 
 SERVICE_DIR = APP_ROOT / "output" / "_mcp_parse"  # 이미지 안 /app/output/_mcp_parse(op-13 — 임시 자리는 _ 접두)
 _JOB_ENVS: dict = {}  # (PARSE_POST, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
@@ -38,16 +34,6 @@ _JOB_KEYS = (
     "SETTINGS_FILE",
     "PARSE_POST",
 )  # 얹을 몫에 늘 넣는 이름(VS8a R-5)
-
-
-def _job_stack():
-    """작업마다 엔진 구성 파일을 다시 읽어 검사(S8b — 사용자 10-28 Q3 a). 못 읽거나 없는 엔진이면(종료 2) 그 작업만 실패(서비스 스레드는 계속)."""
-    from pipeline.extract import engine_stack
-
-    try:
-        engine_stack.resolve(refresh=True)
-    except SystemExit as e:
-        raise RuntimeError(f"엔진 구성 파일을 쓰지 못함 — 종료 코드 {e.code}") from None
 
 
 def _job_env(post):
@@ -134,36 +120,22 @@ def empty_note(scan):
     return VLM_FAIL_NOTE if scan else DRM_NOTE
 
 
-def _empty_result(job_id, fname, note, **ms):
-    """대표 결과가 없는 작업의 빈 결과(안내 note) — ms(걸린 시간)는 파이프라인을 돌았을 때만."""
-    return {
-        "job_id": job_id,
-        "filename": fname,
-        "status": "done",
-        "engine": None,
-        "text": "",
-        "tables_std": [],
-        "tables": [],
-        "facts": [],
-        "fields": {},
-        "rep_path": None,
-        "all_keys": [],
-        "note": note,
-        **ms,
-    }
+_EMPTY: dict = {"engine": None, "text": "", "tables_std": [], "tables": [], "facts": [], "fields": {}, "rep_path": None, "all_keys": []}
+_REP_KEYS = ("text", "tables_std", "tables", "facts", "fields", "rep", "provenance")
 
 
-def _max_bytes():
-    """파일 1건 크기 상한(바이트) — common.runtime.parse_max_mb(검색 MCP와 같은 칸 — 사용자 11-03, 기본 100MB), 요청마다 읽음."""
-    return int(common_cfg().runtime.parse_max_mb * 1048576)
+def _result(job_id, fname, rep=None, **extra):
+    """작업 결과 사전 — rep(대표 결과 JSON)가 없으면 빈 결과(extra에 안내 note). extra = 걸린 시간 ms·rep_path·workspace 등."""
+    head = {"job_id": job_id, "filename": fname}
+    if rep is None:
+        return {**head, "status": "done", **_EMPTY, **extra}
+    return {**head, "engine": (rep.get("rep") or {}).get("engine"), **{k: rep.get(k) for k in _REP_KEYS}, "all_keys": sorted(rep), **extra}
 
 
 def _check_size(n):
     """path·content_b64 두 길 모두 같은 상한 — 넘으면 ValueError(400, 크기와 상한을 MB로)."""
-    if n > _max_bytes():
-        raise ValueError(
-            f"파일이 크기 상한({common_cfg().runtime.parse_max_mb:g}MB)보다 큼({n / 1048576:.1f}MB) — ops.runtime.parse_max_mb"
-        )
+    if msg := parse_limit.too_big(n):
+        raise ValueError(msg)
 
 
 def _submit(source):
@@ -186,7 +158,7 @@ def _submit(source):
     else:
         p = _jail(path)
         fname = p.name
-        _check_size(p.stat().st_size)  # 11-03 — 경로로 준 파일도 같은 상한(전에는 content_b64만 봄)
+        _check_size(p.stat().st_size)
     if Path(fname).suffix.lower() not in (ok := allowed_exts()):
         raise ValueError(f"지원하지 않는 확장자({Path(fname).suffix or '없음'}) — {sorted(ok)}")
     job_id = time.strftime("%Y%m%d") + "-" + uuid.uuid4().hex[:12]
@@ -197,7 +169,7 @@ def _submit(source):
         meta = {"filename": fname, "mode": "base64", "bytes": len(raw)}
     else:
         meta = {"filename": fname, "mode": "path", "bytes": p.stat().st_size, "path": str(p)}
-    meta["scan"] = _is_scan(ws / "in" / fname if b64 else p)  # mc-18 — run_all과 같은 판정
+    meta["scan"] = _is_scan(ws / "in" / fname if b64 else p)
     open(ws / "job.json", "w", encoding="utf-8").write(json.dumps({"job_id": job_id, **meta}, ensure_ascii=False))
     with _lock:
         JOBS[job_id] = {"job_id": job_id, **meta, "status": "queued", "submitted": time.time()}
@@ -211,12 +183,8 @@ def _submit(source):
 
 
 def _purge_old(keep_job_id=None):
-    """오래된 작업 폴더 정리(최근 MAX_JOBS_KEPT개만 보관 — 디스크 방치 방지).
-    keep_job_id(2026-10-21 버그 수정): _submit이 방금 만든 작업은 이름(UUID) 정렬 위치에 무관하게
-    절대 지우지 않는다 — 원인: 이름 정렬이 무작위(UUID)라 새 작업이 done[:-N]에 걸려 현장에서 사라졌음."""
+    """오래된 작업 폴더 정리(최근 MAX_JOBS_KEPT개만 보관). keep_job_id(방금 만든 작업)는 이름(UUID) 정렬 위치와 상관없이 남긴다."""
     try:
-        import shutil
-
         done = sorted([p for p in JOBS_DIR.iterdir() if p.is_dir()], key=lambda p: p.name)
         victim = done[:-MAX_JOBS_KEPT] if len(done) > MAX_JOBS_KEPT else []
         for p in victim:
@@ -227,8 +195,7 @@ def _purge_old(keep_job_id=None):
 
 
 def _worker():
-    """작업자 스레드(서버당 1개 — 트리거 서버와 같은 패턴): 큐에서 꺼내 파싱 파이프라인 실행.
-    2026-10-22 패치: 픽업 시각·큐 대기시간을 기록(txt 3분 대기 이슈 — '파싱 자체는 1초, 접수→픽업이 3분' 원인 추적용)."""
+    """작업자 스레드(서비스당 1개) — 큐에서 꺼내 파싱 사슬을 돌린다. 큐 대기 시간을 남겨 지연 원인(대기·파싱)을 가른다."""
     while True:
         job_id = Q.get()
         j = JOBS.get(job_id)
@@ -243,88 +210,50 @@ def _worker():
         try:
             fname = j["filename"]
             (ws / "in").mkdir(parents=True, exist_ok=True)
-            if j.get("mode") == "path":  # 허용 루트의 원본을 작업 폴더로 복사(버그 수정 2026-10-21 — 복사가 없어 파싱 대상이 비어 실패)
-                import shutil
-
+            if j.get("mode") == "path":  # 허용 루트의 원본을 작업 폴더로 복사
                 shutil.copy2(Path(j["path"]), ws / "in" / fname)
             note = skip_note(j.get("scan"))
-            if note:  # mc-18(11-03): VLM 주소가 없는 스캔 PDF — 파이프라인 없이 빈 결과 즉시
-                j["result"] = _empty_result(job_id, fname, note)
-                j["status"] = "done"
+            if note:  # VLM 주소가 없는 스캔 PDF — 파이프라인 없이 빈 결과 즉시
+                j["result"] = _result(job_id, fname, note=note)
             else:
-                only = ws / "only.txt"
-                only.write_text(fname + "\n", encoding="utf-8")
-                log = open(ws / "run.log", "w", encoding="utf-8")
-                left = JOB_TIMEOUT
-                post = pc.cfg().transform.represent.post  # S7c — 옛 get(X) or "supsub"(없음·빈 값 → supsub)
-                _job_stack()  # S8b — 작업마다 엔진 구성 파일 다시 검사
-                job_env = _job_env(post or "supsub")  # 하위 프로세스 — 덮기 파일(S7e2), 같은 값이면 한 번 만든 것 재사용(VS7e2 R-4)
-
-                # 2026-10-22 병목 해소: post 기본 all→supsub — RapidOCR·figures·vlm_page·context·attachments를 끔
-                # 교차재현율(③)·table_inline(⑦)은 0.0초로 병목이 아니었으므로 그대로 유지 — 실측 47→~0.3초
-                # mc-18(11-03) — 작업 제한 시간 하나: 단계마다 남은 시간만(옛: 단계마다 전체 시간)
-                def _step(args):
-                    """작업 단계 하나(python -m …) — 프로세스 묶음, 시간 초과면 묶음째 끝내고 subprocess.TimeoutExpired(run_all이 띄운 엔진 손자가
-                    남지 않게). 출력은 run.log에, 실패면 RuntimeError."""
-                    cmd = [str(x) for x in args]
-                    p = run_group(
-                        ["python", "-m", *cmd],
-                        job_env,  # noqa: B023 — 같은 반복 안에서만 부름
-                        max(1.0, left - (time.time() - t0)),  # noqa: B023
-                        track=True,  # pl-27 — 서비스가 끝날 때 아직 돌면 묶음째 끝내고 회수
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True,
-                    )
-                    log.write(f"== {' '.join(cmd)}\n{p.stdout}\n{p.stderr}\n")  # noqa: B023
-                    log.flush()  # noqa: B023
-                    if p.returncode != 0:
-                        raise RuntimeError(f"단계 실패({cmd[0]}): {(p.stdout + p.stderr).strip().splitlines()[-1:] or ['?']}")
-                    return 0
-
-                # ① prepare → ② run_all → ③ parse_qa → represent(pipeline.parse_steps — 일괄 파싱과 같은 사슬)
-                _step(["pipeline.extract.filter_and_rotate", "--src", ws / "in", "--out", ws / "prep", "--only", only])
-                scan = bool(j.get("scan"))
-                if parse_chain(_step, ws / "prep", ws / "parse", ws / "truth.json", ["--limit", "1", "--procs", PROCS]) is not None:
-                    # ② 결과 없음 → runs.jsonl 부재 → 빈 결과(스캔 PDF면 VLM 실패 안내, 아니면 DRM 추정)
-                    note = empty_note(scan)
-                    _log(f"{job_id} · 결과 없음 → 빈 결과({'VLM 실패' if note == VLM_FAIL_NOTE else 'DRM 추정'})")
-                    j["result"] = _empty_result(job_id, fname, note, ms=round((time.time() - t0) * 1000, 1))
-                else:
-                    # ④ 대표 결과 파일 확인 → 정상 반환 or 빈 결과
-                    rep_path = ws / "parse" / "_rep" / (fname + ".json")
-                    if not rep_path.exists():
-                        j["result"] = _empty_result(
-                            job_id,
-                            fname,
-                            VLM_FAIL_NOTE if scan else "텍스트 추출 결과 없음 — DRM/암호화 문서일 가능성",
-                            ms=round((time.time() - t0) * 1000, 1),
-                        )
-                    else:
-                        rep = json.loads(rep_path.read_text(encoding="utf-8"))
-                        j["result"] = {
-                            "job_id": job_id,
-                            "filename": fname,
-                            "rep_path": str(rep_path),
-                            "workspace": str(ws),
-                            "engine": (rep.get("rep") or {}).get("engine"),
-                            "text": rep.get("text"),
-                            "tables_std": rep.get("tables_std"),
-                            "tables": rep.get("tables"),
-                            "facts": rep.get("facts"),
-                            "fields": rep.get("fields"),
-                            "rep": rep.get("rep"),
-                            "provenance": rep.get("provenance"),
-                            "all_keys": sorted(rep.keys()),
-                            "ms": round((time.time() - t0) * 1000, 1),
-                        }
-                j["status"] = "done"
+                j["result"] = _run_job(job_id, j, ws, fname, t0)
+            j["status"] = "done"
         except Exception as e:
             j["status"] = "failed"
             j["error"] = f"{type(e).__name__}: {e}"
         finally:
             j["elapsed_ms"] = round((time.time() - t0) * 1000, 1)
         _log(f"{job_id} → {j['status']} ({j.get('elapsed_ms')}ms)")
+
+
+def _run_job(job_id, j, ws, fname, t0):
+    """작업 하나의 파싱 사슬(준비 → 엔진 → 채점 → 대표 결과 — 일괄 파싱과 같은 parse_steps) → 결과 사전.
+    제한 시간은 작업 하나(JOB_TIMEOUT)에 걸고 단계마다 남은 시간만 준다. 단계가 실패하면 RuntimeError(작업 실패)."""
+    try:
+        parse_steps.stack(refresh=True)  # 작업마다 엔진 구성 파일을 다시 검사
+    except SystemExit as e:  # 그 작업만 실패(서비스 스레드는 계속)
+        raise RuntimeError(f"엔진 구성 파일을 쓰지 못함 — 종료 코드 {e.code}") from None
+    post = pc.cfg().transform.represent.post or "supsub"
+    job_env = _job_env(post)
+    parse_steps.run_id(job_env)
+    with open(ws / "run.log", "w", encoding="utf-8") as log:
+
+        def step(args):
+            p = parse_steps.run_step(args, job_env, max(1.0, JOB_TIMEOUT - (time.time() - t0)), track=True, log=log)
+            if p.returncode != 0:
+                raise RuntimeError(f"단계 실패({args[0]}): {(p.stdout + p.stderr).strip().splitlines()[-1:] or ['?']}")
+            return 0
+
+        parse_steps.place_inputs(step, ws / "in", ws / "prep", [fname], ws / "only.txt")
+        empty = parse_steps.parse_chain(step, ws / "prep", ws / "parse", ws / "truth.json", ["--limit", "1", "--procs", PROCS])
+    ms = round((time.time() - t0) * 1000, 1)
+    rep_path = ws / "parse" / "_rep" / (fname + ".json")
+    if empty is not None or not rep_path.exists():  # 대표 결과 없음 — 스캔 PDF면 VLM 실패, 아니면 DRM 추정
+        note = empty_note(bool(j.get("scan")))
+        _log(f"{job_id} · 결과 없음 → 빈 결과({'VLM 실패' if note == VLM_FAIL_NOTE else 'DRM 추정'})")
+        return _result(job_id, fname, note=note, ms=ms)
+    rep = json.loads(rep_path.read_text(encoding="utf-8"))
+    return _result(job_id, fname, rep, rep_path=str(rep_path), workspace=str(ws), ms=ms)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -369,9 +298,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(404, {"error": "not found"})
         try:
             n = int(self.headers.get("Content-Length") or 0)
-            # 본문 = JSON 속 base64(파일의 4/3배, 줄바꿈 이스케이프 여유 포함 1.5배 — 검색 MCP 본문 상한과 같은 식) + 1MiB — 11-03: 전에는
-            # 파일 상한 + 64KB라 base64 본문은 파일 상한의 3/4에서 막혔음. 상한 안 파일이면 크기 판정은 아래 _check_size가 함
-            if n > _max_bytes() * 3 // 2 + 1048576:
+            if n > parse_limit.body_cap():  # 상한 안 파일이면 크기 판정은 _submit의 _check_size가 함
                 raise ValueError(
                     f"요청 본문이 크기 상한보다 큼 — 파일 상한 {common_cfg().runtime.parse_max_mb:g}MB(ops.runtime.parse_max_mb)"
                 )
@@ -402,9 +329,7 @@ if __name__ == "__main__":
         )
         raise SystemExit(2)
     SERVICE_DIR.mkdir(parents=True, exist_ok=True)  # service.json 자리 — ROOTS·JOBS_DIR를 env로 다른 곳에 둬도
-    from pipeline.extract import engine_stack
-
-    engine_stack.resolve()  # S8b(Q7) — 엔진 구성 파일을 못 읽거나 없는 엔진이면 시작 거부(종료 2)
+    parse_steps.stack()  # 엔진 구성 파일을 못 읽거나 없는 엔진이면 시작 거부(종료 2)
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
     for r in ROOTS:
         Path(r).mkdir(parents=True, exist_ok=True)

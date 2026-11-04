@@ -153,7 +153,7 @@
   4. 서비스 등록 요청 대기 60초.
   5. 받는 확장자 = 엔진 구성의 parse 키(`pipeline/extract/engine_stack.py` `allowed_exts()`).
 - 운영과 다른 점: 파일 크기 상한 기본 100MB(운영 64MB) · 스캔 PDF를 내부망 VLM으로 파싱([mc-18](#mc-18)) · 받는 확장자가 더 많다.
-- 파일: `mcp_server/services/parse_proxy.py`, `pipeline/parse_service.py`, `mcp_server/main.py`.
+- 파일: `common/core/parse_limit.py`(크기 상한·본문 상한 — 두 쪽이 함께 씀), `mcp_server/services/parse_proxy.py`, `pipeline/parse_service.py`, `mcp_server/main.py`.
 - QA: `tests/server/mcp/test_parse_limit.py`·`tests/server/pipeline/test_parse_svc.py`(상한 1 MB로 덮고 0.9 MB 받음·1.1 MB 거부, 두 길) · 통과. 서버 확인 refactor.md C-85.
 - Status: done
 

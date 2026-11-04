@@ -29,36 +29,14 @@ from pipeline import config as pc  # pipeline 칸 설정(cfg()·given())
 ROOT = PKG_ROOT  # common/ — 하위 프로세스 cwd·저장소 문서 찾기용(ROOT.parent = deploy/)
 OUT = Path(pc.cfg().paths.out_root or (APP_ROOT / "output"))  # import 때 한 번
 PY = sys.executable
-_STACK: dict = {}
-
-
-def _stack():
-    """엔진 구성(사전) — 프로세스마다 한 번(pipeline/extract/engine_stack.py: 파일 → 이미지에 없는 엔진 거부 — 서버·PC 같은 파일).
-    파일을 못 읽거나 없는 엔진이면 종료 2."""
-    if "v" not in _STACK:
-        from pipeline.extract import engine_stack
-
-        engine_stack.resolve()
-        _STACK["v"] = pc.stack()
-    return _STACK["v"]
 
 
 def _run_step(args, env):
-    """단계 하나를 자식 프로세스 묶음(--procs 자식 포함)으로 실행하고 종료 코드를 돌려준다. args[0] = 모듈 점 표기(예: pipeline.extract.run_engines).
-    (마감 시각은 run_docs --deadline 하나 — 새 문서를 받지 않을 뿐 도는 단계는 끝까지 둔다)
-    하위 프로세스 1개 = proc.run span — 자식이 이어받는 parent span이 되고, 메모리·CPU 문 대기가 이 span에 쌓임."""
+    """단계 하나를 자식 프로세스 묶음(메모리·CPU 문을 거침)으로 돌리고 종료 코드를 돌려준다. args[0] = 모듈 점 표기."""
     from common.core import resources as RS
-    from common.core.span import safe, span
-    from pipeline.parse_steps import run_group
+    from pipeline.parse_steps import run_step
 
-    cmd = [PY, "-m", *map(str, args)]
-    print("$ " + " ".join(cmd), flush=True)
-    with span("proc.run", "run", module=str(args[0])) as sp:
-        rc = run_group(cmd, env, launch=RS.gated_popen).returncode
-        sp.add(rc=rc)
-        if rc:
-            sp.result("fail", None, safe(f"종료 코드 {rc}"))
-        return rc
+    return run_step(args, env, launch=RS.gated_popen).returncode
 
 
 # ── 단계 2 ───────────────────────────────────────────────────
@@ -107,13 +85,10 @@ def parse_module(a):
     from pipeline.extract import run_engines as RE
 
     _tstep("t_start")
-    run_id = os.environ.get("PARSE_RUN_ID") or time.strftime(
-        "%Y%m%d-%H%M%S"
-    )  # env 남김 — 내부 신호 · run_engines·_DONE.json이 같은 id를 쓰게(run_board가 이번 실행만 거르는 기준)
-    os.environ["PARSE_RUN_ID"] = (
-        run_id  # env 남김 — 하위 프로세스·엔진에 넘김 · 이후 모든 하위 호출(dedup·filter_and_rotate·run_engines)이 os.environ 상속으로 받음
-    )
-    st = _stack()
+    from pipeline import parse_steps
+
+    run_id = parse_steps.run_id(os.environ)  # env 남김 — 하위 프로세스(이후 하위 호출이 상속으로 받음)
+    st = parse_steps.stack()
     from pipeline.shared import runtrace
 
     runtrace.info(stack=st.get("name"), workers=int(a.workers) if str(a.workers).isdigit() else None)
@@ -124,8 +99,7 @@ def parse_module(a):
         src_info = (state, local)
         _tstep("t_dedup")
         only = OUT / "parse" / "_source" / "only.txt"
-        only.write_text("\n".join(keep) + "\n", encoding="utf-8")
-        rc = _run_step(["pipeline.extract.filter_and_rotate", "--src", local, "--out", a.src, "--only", only], child_env())
+        rc = parse_steps.place_inputs(lambda args: _run_step(args, child_env()), local, a.src, keep, only)
         _tstep("t_prepare")
         if rc != 0:
             raise SystemExit(rc)
@@ -139,10 +113,8 @@ def parse_module(a):
         _tstep("t_parse" if args[0] == "pipeline.extract.run_engines" else "t_" + args[0].rsplit(".", 1)[-1])
         return rc
 
-    from pipeline.parse_steps import parse_chain
-
     engine_args = ["--procs", a.procs, "--workers", a.workers, "--engines", engines, *lim]
-    rc = parse_chain(step, a.src, OUT / "parse", OUT / "corpus" / "truth.json", engine_args)
+    rc = parse_steps.parse_chain(step, a.src, OUT / "parse", OUT / "corpus" / "truth.json", engine_args)
     if rc is not None:  # runs.jsonl 없음: 채점·대표 결과로 넘어가 죽지 않게
         if rc != 0:  # run_engines가 죽어 못 씀 — 성공으로 덮지 않는다
             print(f"[parse] 파싱 실패 — run_all 종료 {rc}, runs.jsonl 없음", file=sys.stderr, flush=True)

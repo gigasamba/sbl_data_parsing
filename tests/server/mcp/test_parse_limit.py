@@ -9,6 +9,7 @@ from unittest.mock import patch
 import httpx
 
 from common.config.settings import COMMON
+from common.core import parse_limit
 from mcp_server import main
 from mcp_server.services import parse_proxy, tool_runner
 
@@ -29,7 +30,7 @@ def _stub(sent):
 
 def test_proxy_limit():
     with COMMON.env(DATA_PARSING_MAX_MB="1"):
-        assert parse_proxy.max_bytes() == MB and parse_proxy.body_cap() == MB * 3 // 2 + MB
+        assert parse_limit.max_bytes() == MB and parse_limit.body_cap() == MB * 3 // 2 + MB
         sent: list = []
         with patch.object(parse_proxy, "_parse_service", _stub(sent)):  # 완료까지 폴링 1회(1초)
             ok = parse_proxy.do_parse_document(content_b64=_b64(int(0.9 * MB)), filename="a.txt")
@@ -46,7 +47,7 @@ def test_proxy_limit():
 def test_http_body_cap():
     """HTTP 길 끝까지 — 본문 상한이 SDK 기본(4MiB)이 아니라 설정에서 오고, 1.1MB 파일은 413이 아니라 도구가 이유를 답한다.
     큰 본문은 동시 2개 자리 하나를 쥐고 처리된다(PR #110 — 기준을 1000바이트로 낮춰 봄)."""
-    assert main.build("127.0.0.1", 8765).settings.max_request_body_size == parse_proxy.body_cap() > 133 * MB  # 기본 100MB의 base64
+    assert main.build("127.0.0.1", 8765).settings.max_request_body_size == parse_limit.body_cap() > 133 * MB  # 기본 100MB의 base64
 
     async def call(client, n):
         args = {"content_b64": _b64(n), "filename": "a.txt", "time_out_threshold": 5}

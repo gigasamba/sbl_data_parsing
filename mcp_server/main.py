@@ -55,11 +55,11 @@ import threading
 
 import anyio
 
-from common.core import jsonlog
+from common.core import jsonlog, parse_limit
 from common.core.console import utf8_stdout
 from mcp_server import config as mc  # 설정 객체(S7d)
 from mcp_server.routers import edw_tools, fulltext_tool, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
-from mcp_server.services import call_log, parse_proxy
+from mcp_server.services import call_log
 from mcp_server.services.search.server_state import _warmup_bg
 
 _DEFAULT_MCP_INSTRUCTIONS = (
@@ -122,7 +122,7 @@ def build(host, port):
         stateless_http=True,
         json_response=True,
         transport_security=None if loop else _transport_security(host),
-        max_request_body_size=parse_proxy.body_cap(),  # 11-03 — SDK 기본 4MiB면 parse_document content_b64가 약 3MB에서 413
+        max_request_body_size=parse_limit.body_cap(),  # SDK 기본 4MiB면 parse_document content_b64가 약 3MB에서 막힘
     )
     _sdk_logging()  # FastMCP가 로깅을 설정한 뒤에 덮는다
 
