@@ -29,6 +29,9 @@ CASES = [  # (고칠 파일, 바뀌어야 하는 층)
 
 
 def test_code_fp_follows_output_code():
+    if not (DEPLOY_ROOT / "pipeline" / "transform").is_dir():  # mcp-server 이미지 — pipeline은 cli·config만(층 파일 없음)
+        print("[시험] pipeline 층 코드 없음(mcp-server 이미지) — 건너뜀")
+        return
     with tempfile.TemporaryDirectory(prefix="orca_codefp_") as tmp:
         root = Path(tmp)
         for d in ("pipeline", "common", "mcp_server"):
