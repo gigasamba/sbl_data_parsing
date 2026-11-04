@@ -32,7 +32,7 @@ import sys
 import threading
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from common.core import jsonlog
 
@@ -281,6 +281,36 @@ def debug_event(event, msg="", **fields):
     log = _logger() if jsonlog.get_context().get("run_id") else None
     if log is not None and log.isEnabledFor(logging.DEBUG):
         log.debug((msg or event) + (" " + json.dumps(fields, ensure_ascii=False, default=str) if fields else ""), extra={"event": event})
+
+
+@_soft_fn
+def call_event(stage, ms, exc=None, **metrics):
+    """모델 호출 1건 = pipe_event 1행(이슈 #117) — 성공·실패 모두. 열린 span의 metrics 합산(_traced)과 별개로 호출마다 남겨
+    어느 호출이 느리거나 실패했는지 본다. 부모 = 지금 열린 span(없으면 컨텍스트의 span_id), doc_id·ext는 그 span에서 이어받음. layer는 model — 층 합계에서 빠짐(부모와 이중 집계)."""
+    ids = jsonlog.get_context()
+    if not ids.get("run_id"):
+        return
+    parent = current()
+    status, kind = ("ok", None) if exc is None else classify(exc)
+    now = datetime.now(UTC)
+    row = {
+        "ts_start": now - timedelta(milliseconds=ms),
+        "ts_end": now,
+        "run_id": ids["run_id"],
+        "span_id": str(uuid.uuid4()),
+        "parent_id": parent.span_id if parent is not None else ids.get("span_id"),
+        "layer": "model",
+        "stage": stage,
+        "duration_ms": int(ms),
+        "metrics": jsonlog.masked(metrics) or None,
+        "status": status,
+        "err_kind": kind,
+        "err": jsonlog.masked(exc_label(exc)) if exc is not None else None,
+        "app_version": _try("app_version", app_version),
+    }
+    for key in COLUMNS:
+        row[key] = parent.cols.get(key) if parent is not None and key in ("doc_id", "ext") else None
+    _emit(row)
 
 
 class _Null:

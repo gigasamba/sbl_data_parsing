@@ -210,6 +210,8 @@ def test_model_call_hook():
                 wrapped("vlm", [], boom=True)
             except RuntimeError:
                 pass
-    m = rows[0]["metrics"]
+    parent = next(r for r in rows if r["stage"] == "transform.figures")  # 호출마다 model.vlm 행이 따로 생김
+    assert [r["status"] for r in rows if r["stage"] == "model.vlm"] == ["ok", "ok", "fail"]  # 호출마다 한 행(이슈 #117)
+    m = parent["metrics"]
     assert m["vlm_calls"] == 3 and m["vlm_fail"] == 1 and m["vlm_tok_in"] == 14 and m["vlm_tok_out"] == 6 and m["vlm_ms_n"] == 3
-    assert rows[0]["ext_call_ms"] >= 20
+    assert parent["ext_call_ms"] >= 20
