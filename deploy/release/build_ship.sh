@@ -82,7 +82,7 @@ if [ "$RUNTIME" = 1 ]; then
   # 맨 위 폴더 755 + 모든 항목 모두가 읽기(head로 자르지 않음 — pipefail에서 tar가 SIGPIPE로 실패함)
   bad=$(tar -tvzf - < "$CODE_OUT" | awk 'NR==1 && $1 != "drwxr-xr-x" {print "맨위폴더 " $1} $1 !~ /^.r..r..r/ {print $NF}')
   [ -z "$bad" ] || { echo "[오류] 코드 폴더 묶음 권한 — 컨테이너 사용자 10001이 못 읽음: $bad"; exit 1; }
-  echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버에서 새 판 폴더로 풀고 live 링크를 옮김(release-and-patch.md — op-06)"
+  echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버의 새 루트에 코드 폴더로 풂(release-and-patch.md §8 — op-13)"
   export MSYS_NO_PATHCONV=1   # Windows Git Bash가 -v 인자를 바꾸지 않게
   RUN_ARGS="-v $(cygpath -m "$CODE_DIR" 2>/dev/null || echo "$CODE_DIR"):/app/deploy:ro"
 fi
@@ -119,9 +119,8 @@ bash deploy/release/selftest_gate.sh ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_A
 cat <<EOF
 완료: $TAG
 다음(수집 서버):
-  1) /srv/rag/env/settings.yaml 작성(settings.sample.yaml 참고 — [서버 옛 값] 칸 포함, 주인 10001·chmod 640) — pg·embed·vlm 접속 등(옛 pipeline.env면 release-and-patch.md §5-4로 옮김)
-  2) 결과 폴더 소유자: sudo mkdir -p /srv/rag/output && sudo chown 10001 /srv/rag/output
-  3) 점검:  $REMOTE_DOCKER run --rm --init -v /srv/rag/env/settings.yaml:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -v <원본>:/data/docs:ro,z -v /srv/rag/output:/app/output:z $TAG check
-  4) 실행:  docs/operations/server-guide.md의 docker run 예(--cpus·--memory·--pids-limit·로그 크기 제한 포함)
+  1) 루트 폴더(아무 자리 — 예 /home/dev/)에 코드 zip을 풀고 코드 폴더에서 sudo bash deploy/host/scripts/dc.sh init --group <운영 그룹>(op-13)
+  2) <루트>/settings.yaml의 맨 위 required 빈 값을 채움(새 판이면 앞 루트의 settings.yaml·edw_chain.yaml을 복사해 옴)
+  3) 띄우기·점검: README §5(dc.sh up -d … → dc.sh check)
   압축본 $REMOTE_DIR/$(basename "$OUT") 은 적재 확인 뒤 지워도 됨
 EOF

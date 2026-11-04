@@ -4,8 +4,8 @@
 #   bash load.sh <판>            예: bash load.sh 0.1.0
 #   DOCKER(기본 podman, 없으면 docker). 서버는 root podman 하나 — 일반 사용자 셸이면 DOCKER="sudo podman" bash load.sh <판>
 #   (일반 사용자 podman(rootless)으로 load하면 root podman·systemd가 이미지를 못 봄)
-# 코드는 이 저장소에 없다 — 코드 저장소(sbl_data_parsing) zip을 같은 폴더에 풀고(폴더 이름 sbl_data_parsing-main 또는 sbl_data_parsing-<판> —
-#   이름은 상관없고 /srv/rag/code/live 링크가 중요) 그 README §5-0을 따른다: load.sh → dc.sh init → 설정 채우기 → dc.sh up -d data-pipeline → migrate up --target all · master load → dc.sh up -d data-pipeline-mcp mcp → dc.sh check.
+# 코드는 이 저장소에 없다 — 코드 저장소(sbl_data_parsing) zip을 같은 루트 폴더에 풀고(코드 폴더 sbl_data_parsing-<판> — 루트 = 그 부모, op-13)
+#   그 README §5-0을 따른다: load.sh → dc.sh init → 설정 채우기 → dc.sh up -d data-pipeline → migrate up --target all · master load → dc.sh up -d data-pipeline-mcp mcp → dc.sh check.
 #   이미지 판은 코드 판과 다를 수 있다 — 코드 deploy/docker/DEPS_HASH가 이 판 BUILD.txt의 DEPS_HASH와 같으면 그 이미지에서 돈다(예: 0.2.0 코드 → 0.1.0 실행 이미지).
 set -euo pipefail
 DOCKER=${DOCKER:-$(command -v podman >/dev/null 2>&1 && echo podman || echo docker)}

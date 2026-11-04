@@ -441,7 +441,7 @@ def selftest():
                 lambda: load(CommonAppSettings, file=d / "ovl.yaml", environ={"RUN_ENV": "production"}, lenient_run_env=True), "PG_HSOT"
             )[0],
         )  # 모르는 RUN_ENV 글자는 가드처럼 서버로(리뷰 S7e3)
-        envw = {"SETTINGS_FILE": str(tf), "SERVER_ENV_DIR": "/srv/rag/env", "PIPE_PROCS": "2"}
+        envw = {"SETTINGS_FILE": str(tf), "RAG_ROOT": "/home/dev", "PIPE_PROCS": "2"}
         _warned.clear()
         import io as _io
 
@@ -453,7 +453,7 @@ def selftest():
             sys.stderr = saved_err
         check(
             "env의 옛 설정 이름 알림 없음(0.2.0 — pl-46: 알림을 지움)",
-            "PIPE_PROCS" not in buf.getvalue() and "SERVER_ENV_DIR" not in buf.getvalue(),
+            "PIPE_PROCS" not in buf.getvalue() and "RAG_ROOT" not in buf.getvalue(),
         )
         check(
             "overridden()(R-11): 지금 덮기 파일의 overrides 이름만(공유 settings.yaml 값은 아님)",

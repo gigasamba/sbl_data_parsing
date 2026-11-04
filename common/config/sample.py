@@ -17,7 +17,7 @@ from common.core.console import utf8_stdout
 
 OUT = S.REPO_ROOT / "settings.sample.yaml"
 HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: python -m common.config.sample (손으로 고치지 않음)
-# 복사해 required 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: $SERVER_ENV_DIR/settings.yaml(UID 10001·권한 640, SETTINGS_FILE).
+# 복사해 required 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: <루트>/settings.yaml(루트 = 코드 폴더의 부모 · UID 10001·권한 640).
 # 순서: required(운영자가 채울 값) → 역할 절 common·extract·transform·load·search·ops·dev → tuning(코드 상수 후보 — 보통 비워 둠).
 #   빈 칸 = 코드 기본값. 적힌 값은 코드 기본값보다 이긴다(나중에 코드 기본값이 바뀌어도 이 파일을 고치지 않으면 반영 안 됨).
 #   [PC·서버]·[서버만]·[PC만] = 그 카테고리를 채워야 하는 곳. 서버만 칸을 PC에서 비우면 그 기능(EDW·Object Storage·게시 등)만 꺼진다.

@@ -1450,7 +1450,7 @@ class CommonPaths(Section):
         None,
         "EDW_CHAIN_FILE",
         "EDW 조인 사슬 파일 경로 — 적재(EDW 조인)와 검색 MCP(search attrs·edw_meta search_attrs)가 함께 읽음(pl-29·pl-52). 비우면 "
-        "resources/config/edw_chain.yaml · 서버 사본은 컨테이너 안 /etc/rag/edw_chain.yaml(원본 $SERVER_ENV_DIR/edw_chain.yaml — dc.sh init이 "
+        "resources/config/edw_chain.yaml · 서버 사본은 컨테이너 안 /etc/rag/edw_chain.yaml(원본 <루트>/edw_chain.yaml — dc.sh init이 "
         "없을 때만 복사, 적었을 때만 쓰임) · 점검: python -m pipeline.load.edw_meta --check",
     )
     output_root: str | None = F(
@@ -1521,7 +1521,7 @@ class CommonStore(Section):
 class CommonText(Section):
     draft_terms_max: int | None = F(500, "DRAFT_TERMS_MAX", "용어 자동 초안 파일 행 수 상한(개) — 넘으면 가장 빈번한 것만 유지")
     search_en_stem: bool | None = F(True, "SEARCH_EN_STEM", "검색 토큰의 영어 복수→단수 정규화(G16, 가산만) — =0이면 끔", off=("0",))
-    source_uri_prefix: str | None = F(None, "SOURCE_URI_PREFIX", "원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///srv/rag/docs)")
+    source_uri_prefix: str | None = F(None, "SOURCE_URI_PREFIX", "원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///<폴더>)")
     token_num_norm: bool | None = F(
         True,
         "TOKEN_NUM_NORM",

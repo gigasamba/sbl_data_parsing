@@ -1,5 +1,5 @@
 # settings.sample.yaml — 설정 파일 구조와 설명. 생성: python -m common.config.sample (손으로 고치지 않음)
-# 복사해 required 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: $SERVER_ENV_DIR/settings.yaml(UID 10001·권한 640, SETTINGS_FILE).
+# 복사해 required 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: <루트>/settings.yaml(루트 = 코드 폴더의 부모 · UID 10001·권한 640).
 # 순서: required(운영자가 채울 값) → 역할 절 common·extract·transform·load·search·ops·dev → tuning(코드 상수 후보 — 보통 비워 둠).
 #   빈 칸 = 코드 기본값. 적힌 값은 코드 기본값보다 이긴다(나중에 코드 기본값이 바뀌어도 이 파일을 고치지 않으면 반영 안 됨).
 #   [PC·서버]·[서버만]·[PC만] = 그 카테고리를 채워야 하는 곳. 서버만 칸을 PC에서 비우면 그 기능(EDW·Object Storage·게시 등)만 꺼진다.
@@ -52,7 +52,7 @@ required:
   source:
     input_source:                         # 파싱 원본 위치: 폴더·rdb:csv:경로(11-01 — s3://·rdb:*·rdb:<이름>·rdb:<표> 지움) · 값: 경로
     source_bucket:                        # RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값) · 값: 글자
-    source_uri_prefix:                    # 원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///srv/rag/docs) · 값: 글자
+    source_uri_prefix:                    # 원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///<폴더>) · 값: 경로
     publish_bucket:                       # publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소) · 값: 버킷 이름 · PC는 file://<폴더>
     publish_prefix:                       # 버킷 안 업로드 경로 접두 · 값: 글자(버킷 안 경로 접두)
   # ─── 서비스 토큰 [서버만] ───

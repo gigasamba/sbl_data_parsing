@@ -1,7 +1,8 @@
 #!/bin/bash
 # 상주 컨테이너 3개(data-pipeline·data-pipeline-mcp·mcp)를 부르는 compose 입구(사용자 11-03 — 옛 README `dc()` 셸 함수를 대신함).
 #   bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp   (서비스 하나만도 됨 · ps·logs·down 등 compose 하위 명령 그대로)
-#   bash deploy/host/scripts/dc.sh init --group <운영 그룹>   서버 폴더 처음 만들기(root — 여러 번 불러도 안전, 사용자 11-03)
+#   bash deploy/host/scripts/dc.sh init --group <운영 그룹>   서버 루트(이 코드 폴더의 부모 — op-13) 채우기(root — 여러 번 불러도 안전)
+#   bash deploy/host/scripts/dc.sh timers                      systemd 타이머(새벽 배치·MCP 살리기)를 이 코드 폴더 기준으로 설치·켬(root — op-13)
 #   bash deploy/host/scripts/dc.sh check                       배포 뒤 점검을 차례로 — 처음 실패에서 멈추고 마지막 한 줄로 판정(사용자 11-03)
 # 하는 일: 코드 폴더 루트로 cd → settings.yaml을 셸 env로(settings_env.sh load_settings — 값은 출력 안 함) → 실행 이미지(*-runtime)면
 #   이 코드 폴더를 CODE_DIR로(image_vars.sh code_dir_default — 파이프라인 이미지 기준, 개발 서버는 두 이미지가 함께 runtime) →
@@ -11,18 +12,18 @@
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
 
-# init — release-and-patch §8-3·server-guide §1-2가 손으로 만들던 서버 폴더를 한 번에(값·파일 내용은 찍지 않음).
-#   폴더: <ENV>(700) · <결과 폴더>(UID 10001:<그룹>, 2775 — setgid) · <결과 폴더>/mcp_parse/jobs(같음) · /srv/rag/code·/srv/rag/backup(700)
-#   코드 폴더(이 스크립트의 폴더): chmod -R a+rX · /srv/rag/code/live 링크 → 이 폴더(없을 때만 — 있으면 가리키는 곳만 찍고 그대로)
-#   settings.yaml: 코드 폴더의 settings.sample.yaml을 <ENV>/settings.yaml로 — **없을 때만**(있으면 절대 덮지 않음), 10001:<그룹> 640.
-#   edw_chain.yaml: resources/config/edw_chain.yaml을 <ENV>/edw_chain.yaml로 — 같은 규칙(없을 때만, 10001:<그룹> 640). data-pipeline·mcp-server가 이 파일을
+# init — 서버 루트(op-13 — 이 코드 폴더의 부모)를 한 번에 채운다(값·파일 내용은 찍지 않음). 여러 번 불러도 안전.
+#   폴더: <결과 폴더>(UID 10001:<그룹>, 2775 — setgid) · <결과 폴더>/_mcp_parse/jobs(같음) · <루트>/backup(700)
+#   코드 폴더(이 스크립트의 폴더 — zip을 푼 sbl_data_parsing-<판>): chmod -R a+rX(컨테이너 UID 10001이 읽게)
+#   settings.yaml: 코드 폴더의 settings.sample.yaml을 <루트>/settings.yaml로 — **없을 때만**(있으면 절대 덮지 않음), 10001:<그룹> 640.
+#   edw_chain.yaml: resources/config/edw_chain.yaml을 <루트>/edw_chain.yaml로 — 같은 규칙(없을 때만, 10001:<그룹> 640). data-pipeline·mcp-server가 이 파일을
 #     /etc/rag/edw_chain.yaml로 붙이므로(compose.pipeline.yml·compose.mcp-server.yml) 파일이 늘 있어야 함 — 앱은 ops.paths.edw_chain(적재·검색 같은 칸)을 적었을 때만 씀.
-#   경로: SERVER_ENV_DIR(기본 /srv/rag/env) · RAG_OUT(셸 env > settings.yaml common.host.output_root > /srv/rag/output) ·
-#         MCP_JOBS_DIR(셸 env > settings.yaml mcp.host.jobs_dir > <결과 폴더>/mcp_parse/jobs). DC_ROOT=<폴더>는 /srv/rag 대신 · DC_CODE=<폴더>는 live가 가리킬 코드 폴더(기본 이 코드 폴더) — 둘 다 시험용.
-#   root가 아니면 거부(종료 코드 3 — 주인을 10001로 못 바꿔 반쯤 만든 폴더가 남지 않게). 단 DC_ROOT 시험은 주인 바꾸기만 건너뜀.
+#   결과 폴더: RAG_OUT(셸 env > settings.yaml common.host.output_root > <루트>/output) · 작업 폴더: MCP_JOBS_DIR(셸 env > settings.yaml mcp.host.jobs_dir >
+#     <결과 폴더>/_mcp_parse/jobs). DC_ROOT=<폴더>는 루트 대신(시험용 — 주인 바꾸기·코드 폴더 a+rX를 건너뜀).
+#   root가 아니면 거부(종료 코드 3 — 주인을 10001로 못 바꿔 반쯤 만든 폴더가 남지 않게).
 #   끝에 settings.yaml `required:` 중 빈 칸 이름(값은 안 찍음). 종료 코드: 0 · 2 인자 틀림 · 3 root 아님 · 4 edw_chain.yaml 자리에 폴더(init 전에 컨테이너를 띄움).
 dc_init() {
-  local group="" root=${DC_ROOT:-/srv/rag} test=${DC_ROOT:+1} env out jobs sf src
+  local group="" root=${DC_ROOT:-$(dirname "$(pwd)")} test=${DC_ROOT:+1} out jobs sf chain
   while [ $# -gt 0 ]; do
     case "$1" in
       --group) group=${2:-}; shift 2 || true ;;
@@ -33,16 +34,15 @@ dc_init() {
     echo "[dc init] root로 실행할 것(sudo) — 폴더 주인을 UID 10001로 바꾼다" >&2; return 3
   fi
   [ -n "$group" ] || [ -n "$test" ] || { echo "[dc init] --group <운영 그룹> 필요(결과 폴더·settings.yaml 그룹 — 운영 계정이 고치고 지움)" >&2; return 2; }
-  env=${SERVER_ENV_DIR:-$root/env}
-  sf=$env/settings.yaml
+  sf=$root/settings.yaml
+  chain=$root/edw_chain.yaml
   if [ -f "$sf" ] && [ -z "${RAG_OUT:-}${MCP_JOBS_DIR:-}" ]; then
     . deploy/host/scripts/settings_env.sh
     SETTINGS_FILE=$sf load_settings 2>/dev/null || echo "[dc init] settings.yaml에서 경로를 못 읽음 — 기본 경로를 씀"
   fi
-  src="설정"; [ -n "${RAG_OUT:-}" ] || src="기본"
   out=${RAG_OUT:-$root/output}
-  jobs=${MCP_JOBS_DIR:-$out/mcp_parse/jobs}
-  echo "[dc init] 결과 폴더: $src 값 사용"
+  jobs=${MCP_JOBS_DIR:-$out/_mcp_parse/jobs}
+  echo "[dc init] 루트: $root"
   _mk() {   # _mk <폴더> <권한> <주인 바꿈?>
     if [ -d "$1" ]; then echo "  있음  $1"; else mkdir -p "$1" && echo "  만듦  $1"; fi
     chmod "$2" "$1"
@@ -50,31 +50,23 @@ dc_init() {
       if [ -z "$test" ]; then chown "10001:$group" "$1"; else echo "  (시험 — 주인 바꾸기 건너뜀)"; fi
     fi
   }
-  _mk "$env" 700 0
   _mk "$out" 2775 1
   _mk "$jobs" 2775 1
-  _mk "$root/code" 755 0
   _mk "$root/backup" 700 0
-  # 코드 폴더(이 스크립트가 든 폴더 — zip을 푼 sbl_data_parsing-main·sbl_data_parsing-<판>)를 컨테이너 UID 10001이 읽게 · live 링크는 없을 때만
   if [ -z "$test" ]; then chmod -R a+rX . && echo "  권한  $(pwd) (a+rX)"; else echo "  (시험 — 코드 폴더 a+rX 건너뜀)"; fi
-  if [ -e "$root/code/live" ] || [ -L "$root/code/live" ]; then
-    echo "  있음  $root/code/live → $(readlink "$root/code/live" 2>/dev/null || echo '(링크 아님)') (옮기지 않음 — 판을 바꿀 때는 ln -sfn을 손으로)"
-  else
-    ln -s "${DC_CODE:-$(pwd)}" "$root/code/live" && echo "  만듦  $root/code/live → ${DC_CODE:-$(pwd)}"
-  fi
   if [ -f "$sf" ]; then
     echo "  있음  $sf(덮지 않음)"
   else
     cp settings.sample.yaml "$sf" && chmod 640 "$sf" && echo "  만듦  $sf(settings.sample.yaml에서)"
     if [ -z "$test" ]; then chown "10001:$group" "$sf"; fi
   fi
-  if [ -d "$env/edw_chain.yaml" ]; then   # docker가 init 전에 띄운 마운트로 빈 폴더를 만든 경우 — 지우지 않고 멈춤(앱은 IsADirectoryError)
-    echo "[dc init] $env/edw_chain.yaml 자리에 폴더가 있음 — 컨테이너를 init 전에 띄운 흔적: 비어 있으면 rmdir 뒤 다시(종료 4 — 지우지 않음)" >&2; return 4
-  elif [ -e "$env/edw_chain.yaml" ]; then
-    echo "  있음  $env/edw_chain.yaml(덮지 않음)"
+  if [ -d "$chain" ]; then   # docker가 init 전에 띄운 마운트로 빈 폴더를 만든 경우 — 지우지 않고 멈춤(앱은 IsADirectoryError)
+    echo "[dc init] $chain 자리에 폴더가 있음 — 컨테이너를 init 전에 띄운 흔적: 비어 있으면 rmdir 뒤 다시(종료 4 — 지우지 않음)" >&2; return 4
+  elif [ -e "$chain" ]; then
+    echo "  있음  $chain(덮지 않음)"
   else
-    cp resources/config/edw_chain.yaml "$env/edw_chain.yaml" && chmod 640 "$env/edw_chain.yaml" && echo "  만듦  $env/edw_chain.yaml(resources/config/edw_chain.yaml에서 — 쓰려면 ops.paths.edw_chain)"
-    if [ -z "$test" ]; then chown "10001:$group" "$env/edw_chain.yaml"; fi
+    cp resources/config/edw_chain.yaml "$chain" && chmod 640 "$chain" && echo "  만듦  $chain(resources/config/edw_chain.yaml에서 — 쓰려면 ops.paths.edw_chain)"
+    if [ -z "$test" ]; then chown "10001:$group" "$chain"; fi
   fi
   echo "[dc init] settings.yaml에서 아직 비어 있는 필수 칸(값을 채울 것 — 이름만):"
   PYTHONIOENCODING=utf-8 "${PY:-python3}" - "$sf" <<'PY' || echo "  (확인 못 함 — 호스트 python3에 PyYAML 필요)"
@@ -132,8 +124,24 @@ dc_check() {
   echo "[dc check] 통과 — ${n}개"
 }
 
+# timers — systemd 단위 4개(deploy/host/systemd — 새벽 배치·MCP 살리기)의 코드 폴더 자리(@CODE_DIR@)를 이 코드 폴더로 채워
+#   /etc/systemd/system에 쓰고 두 타이머를 켠다(op-13). 새 루트에서 다시 부르면 그 루트로 바뀐다. root가 아니면 종료 3.
+#   DC_UNIT_DIR=<폴더>는 /etc/systemd/system 대신(시험용 — root 확인·systemctl을 건너뜀).
+dc_timers() {
+  local dest=${DC_UNIT_DIR:-/etc/systemd/system} u
+  if [ "$(id -u)" != 0 ] && [ -z "${DC_UNIT_DIR:-}" ]; then
+    echo "[dc timers] root로 실행할 것(sudo) — /etc/systemd/system에 쓴다" >&2; return 3
+  fi
+  for u in deploy/host/systemd/*.service deploy/host/systemd/*.timer; do
+    sed "s#@CODE_DIR@#$(pwd)#g" "$u" > "$dest/$(basename "$u")" && echo "  씀  $dest/$(basename "$u")" || return 1
+  done
+  [ -n "${DC_UNIT_DIR:-}" ] && return 0
+  systemctl daemon-reload && systemctl enable --now data-pipeline-nightly.timer mcp-server-keepalive.timer
+}
+
 case "${1:-}" in
   init) shift; dc_init "$@"; exit $? ;;
+  timers) dc_timers; exit $? ;;
 esac
 . deploy/host/scripts/settings_env.sh && load_settings || exit $?
 case "${1:-}" in

@@ -6,7 +6,7 @@
 #   need_image pipeline   — 파이프라인 이미지(compose.pipeline.yml의 상주 컨테이너)
 #   need_image mcp        — 검색 MCP 이미지(compose.mcp-server.yml의 mcp 서비스)
 # op-06(사용자 10-30) — 실행 이미지(*-runtime:태그)인데 CODE_DIR가 비면 이 코드 폴더 루트(부른 스크립트가 cd한 곳 —
-#   git zip을 푼 폴더 그대로)를 코드 폴더로 쓴다. 이미 CODE_DIR가 있으면 그 값(옛 live 링크 배치). 코드가 든 이미지는 손대지 않음.
+#   git zip을 푼 폴더 그대로)를 코드 폴더로 쓴다. 이미 CODE_DIR가 있으면 그 값. 코드가 든 이미지는 손대지 않음.
 code_dir_default() {   # code_dir_default <이미지 변수 이름>
   [ -n "${CODE_DIR:-}" ] && return 0
   case "${!1:-}" in *-runtime:*) CODE_DIR=$(pwd); export CODE_DIR ;; esac

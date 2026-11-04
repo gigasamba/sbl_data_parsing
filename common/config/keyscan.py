@@ -128,12 +128,23 @@ NOT_SETTINGS = {
         "인자",
         "호스트 스크립트 변수 — 개발 서버 코드 폴더(image_vars.sh가 실행 이미지일 때 pwd로 채움, compose.code*.yml 마운트 — op-09)",
     ),
-    "SERVER_ENV_DIR": ("env로 남김", "호스트 셸·systemd가 settings.yaml을 찾는 폴더(설정 칸 common.paths.config_dir는 op-08에 지움)"),
+    "RAG_ROOT": (
+        "인자",
+        "호스트 스크립트 변수 — 서버 루트(코드 폴더의 부모 — settings_env.sh가 구해 compose edw_chain.yaml 마운트에, op-13)",
+    ),
     "POSTGRES_DB": ("env로 남김", "PG 컨테이너 env — compose가 PG_DB로 채움(설정 칸은 op-08에 지움)"),
     "POSTGRES_USER": ("env로 남김", "PG 컨테이너 env — compose가 PG_USER로 채움(설정 칸은 op-08에 지움)"),
 }
 # 모은 키가 아닌 것(셸 문법·Dockerfile ARG·selftest 가짜 이름)
-IGNORE = {"BASE", "X_ALLOW_EXTERNAL", "NF", "PATH", "DC_ROOT", "DC_CODE", "DC_FAKE"}  # NF=awk `$NF`(op-09) · PATH·DC_*=dc.sh 시험용(#138)
+IGNORE = {
+    "BASE",
+    "X_ALLOW_EXTERNAL",
+    "NF",
+    "PATH",
+    "DC_ROOT",
+    "DC_UNIT_DIR",
+    "DC_FAKE",
+}  # NF=awk `$NF`(op-09) · PATH·DC_*=dc.sh 시험용(#138)
 
 _K = r"([A-Z][A-Z0-9_]{1,})"
 _PY = [

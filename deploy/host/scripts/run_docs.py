@@ -36,11 +36,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 # S7e1(사용자 10-27 Q8 · D-028 ⑨ · C-29 ⑨) — 운영 접속 값·비밀·운영 고정값을 코드에서 지우고 서버 settings.yaml에서 읽는다(configure() — 시작 때 한 번).
-#   파일: --settings 또는 SETTINGS_FILE, 없으면 $SERVER_ENV_DIR/settings.yaml(기본 배치 /srv/rag/env). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
+#   파일: --settings 또는 SETTINGS_FILE, 없으면 <루트>/settings.yaml(루트 = 코드 폴더의 부모 — op-13). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
 #   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). required.env.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
 #   docker exec로 부르는 상주 컨테이너(data-pipeline — 11-03 하나로)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
-#   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.pipeline_host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더(옛 test_space/rfp_all_output)는
-#   required.deploy.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로, C-29 ⓑ를 코드로 보장 — 사용자 Q8 ⑤).
+#   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.pipeline_host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더는
+#   ops.host.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(settings_env.sh와 같음 — op-13).
 TEST = PROG = DOCSPACE = DOCFLOW = WARM = None  # configure()가 채움
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.docker(없으면 podman, 그것도 없으면 docker — op-10)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, op-10 · 기본 배치 경로 없음 — 사용자 11-02)
@@ -48,7 +48,6 @@ _EDW: dict = {}  # parsing-meta EDW 접속(호스트 pymssql — edw_list·edw_d
 WARM_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # warm 파일 이름의 원천 버킷 · 문서 수 세기(psql)
 SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거부
     ("common.run_env", "실행 환경(dev·prd)"),
-    ("common.host.output_root", "결과 공유 폴더(RAG_OUT — 컨테이너 /app/output 원본)"),
     ("common.connections.rdb.host", "EDW 서버 — 호스트 조회(읽기 계정, 사용자 10-29 ops.md#op-03)"),
     ("common.connections.rdb.database", "EDW DB"),
     ("common.connections.rdb.read.user", "EDW 읽기 계정"),
@@ -80,6 +79,11 @@ def _code_root():
         if r is not None and (Path(r) / "common" / "config" / "layout.py").is_file():
             return Path(r), Path(r) / "common"
     sys.exit("run_docs: common/config/layout.py 없음 — 코드 폴더 안에서 부르거나 --code <코드 폴더>로 알려 줄 것")
+
+
+def _root():
+    """서버 루트(op-13) — 코드 폴더의 부모(settings.yaml·edw_chain.yaml·output/이 바로 아래). settings_env.sh RAG_ROOT와 같음."""
+    return _code_root()[0].resolve().parent
 
 
 @functools.cache
@@ -114,10 +118,9 @@ def _layout():
 
 def read_settings(settings_file=None):
     """(사전, 문제) — 서버 settings.yaml을 쓴 글자 그대로 읽는다(BaseLoader — 스칼라는 모두 글자: `password: 0123`·`user: no`가 83·False로
-    바뀌지 않게, 앱 설정 모델의 글자 칸 규칙과 같음 — S7e1 리뷰). 파일: settings_file > SETTINGS_FILE > $SERVER_ENV_DIR/settings.yaml. 값은 찍지 않는다.
+    바뀌지 않게, 앱 설정 모델의 글자 칸 규칙과 같음 — S7e1 리뷰). 파일: settings_file > SETTINGS_FILE > <루트>/settings.yaml. 값은 찍지 않는다.
     파일 배치(required·역할 절 — op-08 ②)를 모델 배치(common·pipeline·mcp)로 바꿔 돌려준다 — 이 모듈의 칸 경로는 모델 경로."""
-    env_dir = os.environ.get("SERVER_ENV_DIR") or "/srv/rag/env"  # env 남김 — 호스트 도구(settings_env.sh와 같음)
-    path = Path(settings_file or os.environ.get("SETTINGS_FILE") or Path(env_dir) / "settings.yaml")  # env 남김 — 설정 파일 자리 신호(5-2)
+    path = Path(settings_file or os.environ.get("SETTINGS_FILE") or _root() / "settings.yaml")  # env 남김 — 설정 파일 자리 신호(5-2)
     try:
         import yaml
     except ImportError:
@@ -128,7 +131,7 @@ def read_settings(settings_file=None):
         loader = lay.reject_dup_keys(type("Loader", (yaml.BaseLoader,), {}))
         doc = yaml.load(path.read_text(encoding="utf-8"), Loader=loader) or {}
     except OSError as e:
-        return {}, f"설정 파일을 읽지 못함: {path} ({e.strerror}) — --settings 또는 SETTINGS_FILE·$SERVER_ENV_DIR/settings.yaml"
+        return {}, f"설정 파일을 읽지 못함: {path} ({e.strerror}) — --settings 또는 SETTINGS_FILE·<루트>/settings.yaml"
     except yaml.YAMLError as e:
         dup = getattr(e, "problem", "") or ""
         return {}, f"설정 파일 YAML 형식 오류: {path}" + (f" — {dup}" if dup.startswith(lay.DUP_KEY) else "")
@@ -164,7 +167,9 @@ def configure(settings_file=None):
     apply_policy(policy)
     TEST = work_dir(doc)
     PROG = TEST / "batch_progress"
-    DOCSPACE = Path(_yget(doc, "common.host.output_root"))  # 컨테이너 /app/output 공유 볼륨
+    DOCSPACE = Path(
+        _yget(doc, "common.host.output_root") or _root() / "output"
+    )  # 컨테이너 /app/output 공유 볼륨(op-13 — 비우면 <루트>/output)
     DOCFLOW = DOCSPACE / "docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     WARM = DOCSPACE / "_warm"  # SOURCE_WARM 대기열 저장소
     DOCKER = _yget(doc, "common.host.docker") or (
@@ -950,7 +955,7 @@ def main():
         help="EDW ParsingMeta에 이미 끝난(ok·partial — gold_version도, skipped_dup) 문서는 건너뜀(재실행 시간 절약)",
     )
     ap.add_argument("--no-cleanup", action="store_true")
-    ap.add_argument("--settings", default=None, help="서버 settings.yaml(기본 SETTINGS_FILE 또는 $SERVER_ENV_DIR/settings.yaml — S7e1)")
+    ap.add_argument("--settings", default=None, help="서버 settings.yaml(기본 SETTINGS_FILE 또는 <루트>/settings.yaml — op-13)")
     ap.add_argument(
         "--code",
         default=None,

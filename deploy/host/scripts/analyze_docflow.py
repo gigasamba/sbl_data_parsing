@@ -2,7 +2,7 @@
 """docflow 단계별 소요·큐 대기 분석 — 2026-10-22 사용자 지정.
 
 원본: <run_docs 작업 폴더>/batch_progress/doc_stats.jsonl(단계 이벤트) + doc_<seq>.log(파싱 내부 상세) — 작업 폴더는 run_docs.py와 같게
-      settings.yaml ops.pipeline_host.run_docs_dir(SETTINGS_FILE 또는 $SERVER_ENV_DIR/settings.yaml — 호스트 PyYAML 있을 때), 없으면 이 스크립트 옆 test_space/(S7e1)
+      settings.yaml ops.pipeline_host.run_docs_dir(SETTINGS_FILE 또는 <루트>/settings.yaml — 호스트 PyYAML 있을 때), 없으면 이 스크립트 옆 test_space/(S7e1)
 출력: 문서별 — 파싱 wall · 엔진 Σ(엔진별 상세) · represent 내부(load/merge/fuse/scanfill/post/table/agent + post[figures·charts·dedup·supsub])
       · 나머지(prepare+qa+기동) · 구조화 대기(queue_wait) · 구조·pub 소요 · 대기열 여부
 사용: python3 analyze_docflow.py [세부표:--detail]

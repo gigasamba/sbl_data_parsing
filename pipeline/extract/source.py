@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """파싱 대상 문서 가져오기(파싱 모듈) — 폴더 또는 rdb:csv(문서 위치 표 csv → Object Storage에서 받음).
 
-  --source /srv/rag/docs            같은 서버 폴더(샘플 데이터) — 그대로 씀
+  --source <서버 폴더>               같은 서버 폴더(샘플 데이터) — 그대로 씀
   --source rdb:csv:<경로>            문서 위치 표(csv — run_docs가 EDW FileStorageMap에서 만든 batch.csv)의 키만 Object Storage에서 받음(AD44)
   (11-01 사용자 지움: s3://버킷/접두 폴더 가져오기 · rdb:*·rdb:<이름>(원천 목록 sources.json) · rdb:<표> 직접 질의(watermark 포함) ·
    --mode test 표본 · 스트리밍용 plan())
