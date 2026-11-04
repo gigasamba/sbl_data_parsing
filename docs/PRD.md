@@ -23,6 +23,7 @@
 | 회전 바로잡기 — 켜면(`pipeline.extract.prepare.rotate`, 기본 꺼짐) 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) OCR 점수를 스레드 4개로 동시에 재 가장 높은 방향으로 돌린다(같으면 0도). 기록 `rotation.csv` | 돌아간 스캔은 엔진이 읽지 못한다. 꺼져 있으면 회전용 OCR을 하지 않는다 | done | [pl-02](prd/extract.md#pl-02) |
 | DRM·암호 파일 감지 — 감지해서 표시만(`skipped_drm`) | 복호화는 흐름 안에서 하지 않고 수동 명령(`python -m pipeline.extract.protected_docs decrypt`)으로 | done | [pl-02](prd/extract.md#pl-02) |
 | 압축 파일은 지원하지 않는다고 표시 | — | done | [pl-02](prd/extract.md#pl-02) |
+| 원본 zip을 받은 뒤 풀어서 안의 문서를 파싱한다(`candidate_ready`) — 메일 첨부 zip은 이미 풂(pl-36) | 사용자 11-05. 키·ParsingMeta 행·상한은 설계 때 정함 | todo | [pl-57](prd/extract.md#pl-57) |
 | FAQ 원천 — 질의응답 엑셀을 행 단위로(시트 = FAQ 묶음, 행 하나 = 청크 하나). `FAQ/<uuid>/<파일>`을 FileStorageMap에 등록 | 질의응답을 문서 통째가 아니라 질문 하나 단위로 찾는다 | done | [pl-39](prd/extract.md#pl-39) |
 
 ## 변환 (transform) — 파싱·대표 결과 고르기·그림·구조화
@@ -125,6 +126,7 @@
 | run_docs는 지휘만 — 판단(원천 목록·중복·레인·게시)은 파이프라인 함수로 옮기고, PC도 가짜 대상으로 run_docs E2E. 점검 스크립트 `lint_changed.sh`는 `common/check/`로 | 같은 판단이 두 곳에 있고 PC E2E가 서버와 다른 길을 탄다(사용자 11-04). 0.2.0 다음 | todo | [rn-05](prd/ops.md#rn-05) |
 | 저장소 전체 정리 — 중복 기능 하나로, 파싱 코드는 `pipeline/{extract,transform,load}`로, 파일 이름은 하는 일로(보호 파일 제외) | 같은 일이 여러 곳, 파싱 코드가 ETL 밖에 흩어짐(사용자 11-04) | todo | [rn-06](prd/ops.md#rn-06) |
 | 다시 덜어내기 — `ops.host.instance` 하나로 스키마·EDW 표·게시 경로·포트가 갈림, 파싱 MCP `mcp-data-parsing`, 설정 칸 줄이기, 중복·이력 주석 정리 | 사용자 11-05 점검 | done | [rn-07](prd/ops.md#rn-07) |
+| 파싱은 transform으로 — 엔진 실행 한 파일(`transform/parse/`), `fetch_docs` → `candidate_pick`·`candidate_ready`, `build_bundle` → `gold_bundle`, 죽은 코드 지움 | 엔진 파싱은 정제, 같은 일이 두 파일(사용자 11-05) | todo | [rn-08](prd/ops.md#rn-08) |
 | run_docs 대상 고르기를 위 규칙에 맞춘다 — 파일 이름 키워드(`--filter RFP,proposal`)·`--start-offset` 뒤 `--skip-done`이 ParsingMeta 끝난 행(ok·partial — gold_version도, skipped_dup)을 뺀다 | 새벽 배치는 이름에 RFP·proposal이 든 문서만 처리한다(키워드가 정기 운영에 맞는지는 C-72 ③) | done | [pl-23](prd/ops.md#pl-23) |
 | 새벽 배치는 `ops.nightly.time`·`max_docs`·`deadline` 셋이 모두 있을 때만 돈다(하나라도 비면 안 돎 — 사용자 11-02) — systemd 타이머가 5분마다 `nightly_batch.sh scheduled` → `run_docs.py --start-offset 0 --skip-done --max-docs --deadline` | 지금 서버는 비워 둠(꺼짐) — 켜는 것은 사람(C-72) | done | [pl-23](prd/ops.md#pl-23) |
 | 전체 e2e는 local·dev·prd 셋에서 — 전체 문서 실행은 prd에서만 새 원천별 스키마 이름(새 `PG_SCHEMA`)으로, 옛 gold·`struct` 스키마는 2주 뒤 DB 담당자가 백업하고 지움 | 판 0002가 기준 스키마의 옛 표를 지운다. 사용자 11-02 | todo | [pl-54](prd/ops.md#pl-54) |

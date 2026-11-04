@@ -158,6 +158,19 @@
 - QA: selftest·pytest 기준선 유지(새 시험: 벌 이름 → 스키마·EDW 표·게시 경로·포트 거부, prd 거부) · `check_modules`·`keyscan --check`·`sample --check`·`gen_host_keys --check` 통과 · 저장소 전체 ruff·mypy 0 · 옛 이름(`data-pipeline-mcp`·`parse_mcp`·`PARSE_MCP_`) 0건(docs/history 제외).
 - Status: done
 
+<a id="rn-08"></a>
+## rn-08 · 파싱은 transform으로 — 엔진 실행 하나로, 대상 고르기·받기 나눔, 죽은 코드 지움
+- 이유(사용자 11-05): 엔진으로 글자를 뽑는 일은 정제(transform)인데 `pipeline/extract`에 있고, `run_engines`·`run_one_engine`이 같은 일을 두 파일로 나눠 하며, `fetch_docs`는 이름만으로 고르기인지 받기인지 알 수 없다. 레인 나누기(`doc_lane_group`)는 엔진을 돌리지 않는다(파일 형식·크기·앞 3쪽 글자 수만 봄).
+- 정한 것(11-05 질의):
+  1. 엔진 파싱을 `pipeline/transform/parse/`로 옮긴다 — `engines/`(보호 파일, 바이트 그대로 옮김), `engine_check.py`(옛 `extract/engine_stack.py` — 엔진 준비 확인), 엔진 실행 한 파일(`run_engines`+`run_one_engine` 합침 — 프로세스 분리는 자식 모드로 그대로), 엔진 버전·캐시 키(`engine_version`·`p0_key`·`engine_code_fp`)와 캐시 지우기. extract에 남는 것: `candidate_pick`·`candidate_ready`·`deduplication`·`filter_and_rotate`·`doc_lane_group`·`protected_docs`·`discover_columns`.
+  2. `fetch_docs` → `candidate_pick.py`(목록·끝난 문서 빼기 — 받기 전) + `candidate_ready.py`(미리 받기·받기·중복 정리).
+  3. `shared/parse_run.py`를 하는 일로 나눈다 — 원본 캐시·실패 단서·`pdf_kind`. 후처리 스위치는 represent로, 차트 글자는 figures로. `build_bundle` → `gold_bundle`.
+  4. 죽은 코드·중복 지움: 쓰지 않는 청커와 `chunk_overlap` 칸, `infer_clients`의 닿지 않는 갈래, `select_final`·`selection.json`·`--no-rep` 옛 길, `figure_extract`의 `vlmcall` 중복, `page_text`, `apply_post` 표시 오류, `draft_terms`를 레이어 s에서 뺌, 쓰지 않는 반환 칸. `rep.meta`와 `parse_document` 출력(MCP 계약)은 그대로.
+  5. 그림 후처리(pl-05)와 "글자 파싱 뒤 레인 나누기" 구조 변경은 이번에 하지 않는다.
+- 결과 영향: 엔진 핑거프린트(`engine_code_fp` — 상대 경로 포함)와 code_fp가 바뀐다 — 기록용(재처리는 ParsingMeta 끝난 상태로만 정함). 전후 값은 커밋·e2-02에. 사람 검토 필요(엔진 파일 이동).
+- QA: selftest·pytest 기준선 유지 · `check_modules`·`keyscan --check`·`sample --check` 통과 · 저장소 전체 ruff·mypy 0 · FINGERPRINT 그대로 · 옛 이름(`extract/engines`·`engine_stack`·`run_one_engine`·`fetch_docs`·`build_bundle`) 0건(docs/history 제외).
+- Status: todo
+
 <a id="pl-27"></a>
 ## pl-27 · 프로세스 종료 정리 — 임시 설정 파일·PID 기록 지움, 자식 회수
 - 이유: 덮기 설정 파일(`settings-*.yaml`)이 임시 폴더에 쌓이고, 시간 초과로 끝낸 자식의 손자가 좀비로 남았다.

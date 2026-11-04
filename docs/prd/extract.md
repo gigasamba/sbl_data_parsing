@@ -74,3 +74,10 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 ### QA
 - `tests/server/pipeline/test_faq_rows.py`.
 - Status: done
+
+<a id="pl-57"></a>
+## pl-57 · 원본 zip 풀어서 파싱
+- 이유(사용자 11-05): 지금 원본 zip은 "지원하지 않음"으로 표시만 한다(pl-02). 메일 첨부 zip은 이미 깊이 1까지 풀어 파싱한다(pl-36).
+- 정할 것(설계 때): 안의 파일 키(원본 키 + 안 경로), ParsingMeta 행을 파일마다 둘지, 깊이·크기·개수 상한(pl-36과 같게 할지), 암호 zip.
+- 자리: `pipeline/extract/candidate_ready.py`(받은 직후).
+- Status: todo
