@@ -2,7 +2,7 @@
 옛 `X=값 python -m …`·`docker exec … bash -c 'X=값 python …'`(S7e2부터 env의 옛 이름은 읽지 않아 효과 없음) 자리다. 덮기 파일 도구
 `common.config.overrides`는 그대로 PC 전용이다.
 
-  python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/docflow/7 --set PARSE_POST=supsub,charts parse --source …
+  python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/7 --set PARSE_POST=supsub,charts parse --source …
 
   · 이름은 설정 칸의 옛 env 이름(settings.sample.yaml의 env=), 값은 옛 env 글자 꼴(켜기 1·0). `X=`(빈 값)는 빈 글자(읽기 규칙대로 기본값).
     같은 이름이 여러 번 나오면 뒤 값이 이긴다(옛 bash `A=1 … A=2`와 같음). 인자 자리는 어디든 된다(하위 명령 앞뒤).
@@ -17,6 +17,7 @@ import os
 import subprocess
 import sys
 
+from common.config import layout as L
 from common.config import settings as S
 
 FLAG = "--set"
@@ -55,9 +56,7 @@ def _fields():
     for cls in (S.CommonAppSettings, *S.app_classes().values()):
         for path, field, _ in S.walk(cls):
             name = S.env_name(field)
-            if name and (
-                name not in out or S.is_host(out[name][0])
-            ):  # 같은 이름이 호스트 칸·앱 칸 둘 다면 앱 칸(GOLD_DIR·RAG_OUT — 리뷰 S9)
+            if name and (name not in out or S.is_host(out[name][0])):  # 같은 이름이 호스트 칸·앱 칸 둘 다면 앱 칸(RAG_OUT — 리뷰 S9)
                 out[name] = (path, S.is_secret(field))
     return out
 
@@ -71,7 +70,7 @@ def check(names):
             probs.append(
                 f"{name}: 설정 칸이 없는 이름(settings.sample.yaml의 env= 이름)"
                 if name != "RUN_ENV"
-                else "RUN_ENV: 실행 환경은 --set으로 바꾸지 않음(env RUN_ENV·settings.yaml common.run_env)"
+                else f"RUN_ENV: 실행 환경은 --set으로 바꾸지 않음(env RUN_ENV·settings.yaml {L.to_yaml('common.run_env')})"
             )
         elif S.is_host(path):
             probs.append(f"{name}: 호스트 칸({path}) — 컨테이너 안 앱이 읽지 않음(settings.yaml·셸 env)")

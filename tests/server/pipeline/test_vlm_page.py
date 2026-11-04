@@ -1,36 +1,38 @@
-"""pipeline.transform.figures.vlm_page 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.vlm_page`."""
+"""pipeline.transform.figures.scan_page_vlm 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.scan_page_vlm`."""
 
 import contextlib
 import io
 import json
 from pathlib import Path
 
-import pipeline.transform.figures.vlm_page as M
+import pipeline.transform.figures.scan_page_vlm as M
 from common.config.settings import COMMON
 from pipeline import config as pc
-from pipeline.shared.artifacts import raw_vlm_path
-from pipeline.shared.postprocess import raw_root
-from pipeline.transform.figures.vlm_page import (
+from pipeline.shared.parse_run import raw_vlm_path
+from pipeline.shared.post_features import raw_root
+from pipeline.shared.vlmcall import (
     MAX_SIDE,
     P_PAGE,
+    PID_PAGE,
+    _model_dir,
+    det_key,
+    det_path,
+    page_count,
+    render,
+    sha,
+    vlm_page,
+)
+from pipeline.transform.figures.scan_page_vlm import (
     PAGE_HIDDEN_AREA,
     PAGE_HIDDEN_RATIO,
     PAGE_SCAN_AREA,
     PAGE_SCAN_CHARS,
     PAGE_SIGNALS_VERSION,
-    PID_PAGE,
-    _model_dir,
     _signals_path,
-    det_key,
-    det_path,
-    hidden_overlap_spans,
     is_scan,
     page_text,
-    pages_of,
     scan_pages,
     scan_pages_detail,
-    sha,
-    vlm_page,
 )
 
 
@@ -102,13 +104,11 @@ def selftest():
 
     # 검토자 반영(10-08) — 이 selftest는 모델·네트워크를 안 써야 하는데(VLM_BASE_URL·VLM_MODEL을 지우는 것만으로
     # vlm_page()가 조용히 "미설정" 경로로 빠지게 짜여 있음), 혹시 이 프로세스에 그 두 값이 다시 생기는 경로가
-    # 있어도(다른 코드·환경 상속 등) 실제 접속을 시도하지 않도록 이중으로 막는다: NO_PAID_CALLS=1(외부 주소면
-    # common.ai.guard.precheck가 접속 전에 즉시 막음) + 짧은 VLM_DEADLINE(그래도 접속을 시도하면 몇 분이 아니라
-    # 몇 초 안에 실패) — 끝나면 원래 값으로 되돌린다(이 프로세스가 끝나면 사라질 값이라도 명시적으로).
-    # S7c — 설정 객체만 바꿔 끼움(os.environ 안 건드림): NO_PAID_CALLS·VLM_BASE_URL·VLM_MODEL은 common 칸, VLM_DEADLINE은 pipeline 칸
+    # 있어도(다른 코드·환경 상속 등) 오래 붙잡히지 않게 짧은 VLM_TIMEOUT(접속을 시도하면 몇 분이 아니라 몇 초 안에 실패)을 둔다
+    # (옛 NO_PAID_CALLS 겹은 11-03에 스위치와 함께 지움) — 끝나면 원래 값으로 되돌린다.
+    # S7c — 설정 객체만 바꿔 끼움(os.environ 안 건드림): VLM_BASE_URL·VLM_MODEL·VLM_TIMEOUT 모두 common 칸
     _top = contextlib.ExitStack()
-    _top.enter_context(COMMON.env(NO_PAID_CALLS="1", VLM_BASE_URL=None, VLM_MODEL=None))
-    _top.enter_context(pc.PIPE.env(VLM_DEADLINE="5"))
+    _top.enter_context(COMMON.env(VLM_BASE_URL=None, VLM_MODEL=None, VLM_TIMEOUT="5"))
     try:
         d = Path(tempfile.mkdtemp())
         assert not is_scan(d / "x.docx") and not is_scan(d / "x.xlsx")
@@ -117,7 +117,7 @@ def selftest():
         img = d / "scan.png"
         Image.new("RGB", (80, 80), "white").save(img)
         assert is_scan(img)
-        assert len(pages_of(img)) == 1 and pages_of(img)[0] == img.read_bytes()
+        assert page_count(img) == 1 and render(img, [1]) == [img.read_bytes()]
         text, prov = vlm_page(img.read_bytes())
         assert text == "" and "미설정" in prov["error"]
         with pc.PIPE.env(VLM_PAGE_MAX="0"):
@@ -198,11 +198,9 @@ def selftest():
 
             t2, provs2 = page_text(mixed)  # AD31 — 기본 켬: 2쪽(스캔 쪽)만 대상 — 1·3쪽은 안 부름
             assert t2 == "" and len(provs2) == 1 and provs2[0].get("error"), (t2, provs2)
-            with pc.PIPE.env(PARSE_PAGE_SCAN="0"):
-                assert page_text(mixed) == ("", [])  # 끄면(=0) 이전(기본 꺼짐 시절) 동작 — scan_pages 호출 0
         finally:
             _e1.__exit__(None, None, None)
-        print("[selftest] AD12·AD31 — page_signals·scan_pages·PARSE_PAGE_SCAN 기본 켬=스캔 쪽만 쪽 VLM 대상·0으로 끔=바이트 동일 통과")
+        print("[selftest] AD12·AD31 — page_signals·scan_pages·스캔 쪽만 쪽 VLM 대상 통과")
 
         # AD31 — 숨은 글자층(render_mode=3) 쪽: 시각은 정상 그림인데 그림과 무관한 보이지 않는 글자가 깔려 글자 수는
         # 차 있음(기존 ①chars<20 조건만으로는 스캔으로 못 잡음) → hidden_ratio 신호로 스캔 판정. 정상 글자 쪽은 그대로 아님.
@@ -233,7 +231,7 @@ def selftest():
 
         # 독립 검토 MAJOR(10-07) — '검색 가능 스캔 PDF'(이미지 위에 그 이미지와 같은 내용을 옮긴 양질의 render_mode=3
         # OCR 글자층)도 hidden_ratio·image_area_ratio가 똑같이 높아 조건②에 걸린다. 지금 동작은 **그대로 둠**(일부러
-        # 보수적 — OCR 후보가 다시 돌아도 손해 없음) 대신 reason='hidden'을 남겨 다음 단계(represent.py, b2 범위)가
+        # 보수적 — OCR 후보가 다시 돌아도 손해 없음) 대신 reason='hidden'을 남겨 다음 단계(build_rep.py, b2 범위)가
         # '숨은 층이 OCR과 일치하면 원래 글 유지'를 그 이유로 구분할 수 있게 한다.
         searchable = d / "searchable_scan.pdf"
         ssdoc = fitz.open()
@@ -247,7 +245,7 @@ def selftest():
         with pc.PIPE.env(PARSE_RAW_ROOT=str(d / "store4")):  # S7c — 설정 객체만 바꿔 끼움
             assert scan_pages_detail(searchable) == {1: "hidden"}, scan_pages_detail(
                 searchable
-            )  # 지금 동작 명시(한계, 후속은 represent.py)
+            )  # 지금 동작 명시(한계, 후속은 build_rep.py)
         print("[selftest] 독립 검토 MAJOR — 검색 가능 스캔 PDF(양질 OCR 숨은 층)도 reason='hidden'으로 잡힘(지금 동작) 통과")
 
         # AD47 — synth-mixedpdf textlayer_mismatch.pdf와 같은 모양: 쪽 대부분은 정상 글자(hidden_ratio·image_area_ratio
@@ -281,15 +279,6 @@ def selftest():
             "[selftest] AD47 — 쪽 전체 비율로는 못 잡는 국소 숨은 글자-그림 겹침 → scan_pages_detail reason='hidden_overlap' · PARSE_HIDDEN_OVERLAP_MAX=0으로 끔 통과"
         )
 
-        # AD47 검토자 반영 — hidden_overlap_spans()(reason='hidden_overlap' 쪽만 다시 열어 겹친 숨은 글자 상자의
-        # bbox·text를 돌려줌, represent.fill_scan_pages가 국소 일치도 확인에 씀) 자체 확인
-        spans = hidden_overlap_spans(mismatch_doc, 1)
-        assert len(spans) == 1, spans
-        bbox, span_text = spans[0]
-        assert len(bbox) == 4 and "430.000" in span_text, (bbox, span_text)
-        assert hidden_overlap_spans(mismatch_doc, 99) == []  # 없는 쪽 번호 — 빈 목록(죽지 않음)
-        print("[selftest] AD47 — hidden_overlap_spans(): 겹친 숨은 글자 상자의 bbox·text 재추출 통과")
-
         _selftest_scan_wide()
 
     finally:
@@ -301,7 +290,7 @@ def selftest():
 
 def test_pick_pages():
     """10-29 — 쪽 VLM 대상 쪽(순수 함수): 전체 스캔이면 전부, 글자 PDF면 스캔 신호 쪽만, cap으로 앞에서 자름."""
-    from pipeline.transform.figures.vlm_page import pick_pages
+    from pipeline.transform.figures.scan_page_vlm import pick_pages
 
     assert pick_pages(3, True, [], None) == {1, 2, 3}
     assert pick_pages(3, True, [], 2) == {1, 2}

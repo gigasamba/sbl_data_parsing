@@ -1,63 +1,55 @@
 """PostgreSQL(pgvector) 연결 — 적재(modules/load)·검색(modules/search)·서비스 탐색 공통. 비밀번호는 파일·환경변수에만.
-접속: PG_CONN_FILE=<KEY=VALUE 파일> 또는 PG_HOST(127.0.0.1) · PG_PORT(5432) · PG_DB(rag) · PG_USER(rag) · PG_PASSWORD · PG_SCHEMA(ai).
+접속: PG_HOST · PG_PORT · PG_DB · PG_USER · PG_PASSWORD · PG_SCHEMA — 모두 필수, 코드 기본값 없음(op-09).
 PG_CONNECT_TIMEOUT(기본 10초) — 공유 PG가 방화벽·주소 문제로 안 보일 때 수십 초씩 매달리지 않게(XS4).
 PG_POOL_MAX(기본 8, PGPool) — 공유 PG의 max_connections 여유 안에서 잡을 것(다른 팀 서비스도 같은 PG를 씀).
 10-14 함수별 분리(사용자) — connect()는 pipeline(load, 단일 연결)에서만, connect_pool()은 검색 MCP
-(상주 Retriever)에서만 써서 각각 pipeline/load/pg_load_connect.py·mcp_server/services/search/pg_mcp_connect.py(옛 data_retrieval/tools/pg.py)로 옮김(로직
-바이트 동일). has_conn·conf·_standin_schema·_warn_standin·PG·PGPool·vec은 두 전환점이 같이 쓰고 common/store/
-structdb.py·cli/server_checks.py 등 공통 쪽도 PG·conf를 직접 쓰므로 여기(공용)에 남는다."""
+(상주 Retriever)에서만 써서 각각 pipeline/load/pgvector_load.py(pg_connect)·mcp_server/services/search/server_state.py(옛 data_retrieval/tools/pg.py)로 옮김(로직
+바이트 동일). has_conn·conf·_standin_schema·_warn_standin·PG·PGPool·vec은 두 전환점이 같이 쓰고
+cli/server_checks.py 등 공통 쪽도 PG·conf를 직접 쓰므로 여기(공용)에 남는다."""
 
 import os
 import re
 import sys
 from contextlib import contextmanager
-from pathlib import Path
 
 from common.config.settings import cfg, checked, given, guard_run_env, reveal
 
+_PG_KEYS = {"PG_HOST": "host", "PG_PORT": "port", "PG_DB": "db", "PG_USER": "user", "PG_PASSWORD": "password", "PG_SCHEMA": "db_schema"}
 HNSW_MAX = 2000  # pgvector HNSW 차원 상한(vector) — 적재(색인 종류)와 검색(질의 방식)이 같은 기준
 
 
 def conf():
     c = {}
-    st = cfg().connections.pg  # S7b — 설정 객체(옛 os.environ.get)
-    f = st.conn_file
-    if f and Path(f).exists():
-        for ln in Path(f).read_text(encoding="utf-8").splitlines():
-            if "=" in ln and not ln.strip().startswith("#"):
-                k, v = ln.split("=", 1)
-                c[k.strip()] = v.strip()
-    # 옛 `if os.environ.get(k): c[k] = os.environ[k]` — env로 실제 준(비지 않은) 값만 파일 값을 덮음. 기본값 있는 칸(db·user)이
-    # 기본값으로 덮지 않게 given()(준 값만 — 빈 값·기본값은 None). 값은 옛처럼 글자(포트도 str)
+    # 준(비지 않은) 값만 — given()(빈 값·기본값은 None). 값은 옛처럼 글자(포트도 str)
     checked("PG_PORT")  # 형식 틀린 포트는 옛처럼 실패(VS7b R-7 — 파일·기본 포트로 조용히 붙지 않게)
-    for k in ("PG_HOST", "PG_PORT", "PG_DB", "PG_USER", "PG_PASSWORD", "PG_SCHEMA"):
+    for k in _PG_KEYS:
         v = given(k)
         if v is not None:
             c[k] = str(reveal(v))
-    c.setdefault("PG_HOST", "127.0.0.1")
-    c.setdefault("PG_PORT", "5432")
-    c.setdefault("PG_DB", "rag")
-    c.setdefault("PG_USER", "rag")
-    c.setdefault("PG_SCHEMA", "ai")
-    if not c.get("PG_PASSWORD"):
-        raise SystemExit("PG_PASSWORD 없음 — PG_CONN_FILE 또는 환경변수(modules/load/README.md 'PostgreSQL')")
+    missing = [k for k in _PG_KEYS if not c.get(k)]  # op-09 — 코드 기본값(127.0.0.1·5432·rag·ai) 없음, 빈 칸이면 거부
+    if missing:
+        from common.config.layout import to_yaml
+
+        where = ", ".join(to_yaml(f"common.connections.pg.{_PG_KEYS[k]}") for k in missing)
+        raise SystemExit(f"PG 접속 정보 없음 — settings.yaml {where}를 채움")
     if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", c["PG_SCHEMA"]):
         raise SystemExit("PG_SCHEMA는 소문자·숫자·_ 만")
     return c
 
 
 def has_conn():
-    """AD41 — 연결 정보가 실제로 있는지(기본값만 있는 상태는 '없음') — PG_PASSWORD 또는 PG_CONN_FILE 중 하나.
+    """AD41 — 연결 정보가 실제로 있는지(기본값만 있는 상태는 '없음') — PG_PASSWORD 또는 PG_HOST.
     connect()·connect_pool()의 단일 전환점: 있으면 진짜 PG, 없으면 스탠드인(sqlite, common/pg_standin.py)."""
     # PG_HOST·libpq 표준(PGPASSWORD·PGPASSFILE)도 '있음' — 비밀번호 없이 .pgpass·trust 인증 쓰는 서버가 스탠드인으로 빠지지 않게
     st = cfg().connections.pg
-    return any((reveal(st.password), st.conn_file, st.host)) or any(
+    return any((reveal(st.password), st.host)) or any(
         os.environ.get(k) for k in ("PGPASSWORD", "PGPASSFILE")
     )  # env 남김 — 내부 신호(5-3 H): libpq 표준 변수
 
 
 def _standin_schema(pg_schema=None):
-    s = pg_schema or cfg().connections.pg.db_schema or "ai"
+    st = cfg().connections.pg
+    s = pg_schema or st.db_schema or st.standin_schema  # op-09 — 기본값은 설정 모델
     if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", s):
         raise SystemExit("PG_SCHEMA는 소문자·숫자·_ 만")
     return s
@@ -69,7 +61,9 @@ def _warn_standin():
     if guard_run_env() not in (None, "local"):  # pl-12(사용자 10-30) — 서버(dev·prd·모르는 값)는 스탠드인으로 대체하지 않고 멈춤
         raise SystemExit(f"RUN_ENV={guard_run_env()} — PG 접속 정보 없음(common.connections.pg) · 서버는 로컬 대체 DB를 쓰지 않음(pl-12)")
     print(
-        "WARNING: PG 접속 정보 없음 → 로컬 대체 DB(output/pg_standin) 사용 — 서버면 pipeline.env의 PG_* 확인", file=sys.stderr, flush=True
+        "WARNING: PG 접속 정보 없음 → 로컬 대체 DB(output/pg_standin) 사용 — 서버면 settings.yaml required.pg 확인",
+        file=sys.stderr,
+        flush=True,
     )
 
 
@@ -124,7 +118,7 @@ class PG:
 class PGPool:
     """PG와 같은 인터페이스(schema·q) — 여러 스레드가 동시에 같은 객체를 쓸 때만(검색 MCP의 상주 Retriever.pg, S12).
     연결 1개를 공유하면 스레드끼리 같은 커서를 동시에 건드려 깨짐 — psycopg_pool로 호출마다 빈 연결을 꺼내 쓰고 돌려줌.
-    한 연결을 트랜잭션으로 묶어 쓰는 쪽(modules/load/pgstore.py·common/structdb.py)은 PG를 그대로 쓴다(단일 호출자·명시적 커밋)."""
+    한 연결을 트랜잭션으로 묶어 쓰는 쪽(modules/load/pgstore.py)은 PG를 그대로 쓴다(단일 호출자·명시적 커밋)."""
 
     def __init__(self, c, max_size=None):
         from psycopg_pool import ConnectionPool
@@ -159,3 +153,41 @@ class PGPool:
 
 def vec(v):
     return "[" + ",".join(f"{float(x):.6f}" for x in v) + "]"
+
+
+# 연결 고르기(0.2.0 — 옛 common/store/services.py에서 옮김, pl-46: 점검 표는 common.check.checker)
+def _pg_capable(c):
+    """이름이 아니라 붙어서 능력 확인(XS1): SELECT 1 + vector 확장 존재 + PG_SCHEMA 접근 가능(있음 또는 만들 권한).
+    → (ok, 설명). 비밀값은 반환·로그에 내지 않는다."""
+    db = PG(c)
+    db.q("SELECT 1")
+    if not db.q("SELECT 1 FROM pg_extension WHERE extname='vector'"):
+        return False, "vector 확장 없음"
+    if not db.q("SELECT 1 FROM information_schema.schemata WHERE schema_name=%s", (c["PG_SCHEMA"],)):
+        priv = db.q("SELECT has_database_privilege(current_user, current_database(), 'CREATE') p")
+        if not (priv and priv[0].get("p")):
+            return False, f"스키마 {c['PG_SCHEMA']} 없음·만들 권한 없음"
+    return True, "능력 확인됨"
+
+
+def detect_pg():
+    """설정의 PG에 붙어 능력 확인 → (ok, 설명). 접속 칸이 비면 pg.conf()가 거부(SystemExit — 채울 자리를 적음)."""
+    c = conf()
+    try:
+        ok, why = _pg_capable(c)  # 이름이 아니라 붙어서 확인(vector 확장·스키마) — XS1
+    except Exception as e:
+        return False, f"{c['PG_HOST']}:{c['PG_PORT']}: 접속 실패({type(e).__name__})"
+    return ok, f"{c['PG_HOST']}:{c['PG_PORT']}" + ("" if ok else f": {why}")
+
+
+def connect(a):
+    """명령 인자 a(--pg·--local): --local이면 로컬 묶음, 아니면 PostgreSQL 필수(op-09 — 못 붙으면 거부, 로컬로 조용히 빠지지 않음)."""
+    if getattr(a, "local", False):
+        a.pg = False
+        print("[연결] 저장소: 로컬 묶음(--local)", flush=True)
+        return
+    ok, why = detect_pg()
+    if not ok:
+        raise SystemExit(f"[연결] PostgreSQL에 붙지 못함: {why}")
+    a.pg = True
+    print(f"[연결] 저장소: pgvector({why})", flush=True)

@@ -1,5 +1,6 @@
-"""trigger.sh scheduled 시각 게이트(pl-32, 사용자 10-30) — settings.yaml pipeline.host.nightly.time(NIGHTLY_TIME)이 비면 조용히 끝, 그 시각부터
-5분 안이면 night, 꼴이 틀리면 종료 2. trigger.sh에서 게이트 블록만 떼어 bash로 돌린다(date는 셸 함수로 바꿔 끼움 — 설정·docker 없음, PC 전용)."""
+"""trigger.sh scheduled 시각 게이트(pl-32, 사용자 10-30 · 11-02) — settings.yaml ops.nightly.time·max_docs·deadline(NIGHTLY_TIME·
+NIGHTLY_MAX_DOCS·NIGHTLY_DEADLINE) 중 하나라도 비면 조용히 끝, 시작 시각부터 5분 안이면 run_docs.py(11-01 — 새벽 배치 = run_docs,
+사용자 10-31)에 상한·마감을 넘김, 꼴이 틀리면 종료 2. trigger.sh에서 게이트 블록만 떼어 bash로 돌린다(date·python3은 셸 함수로 바꿔 끼움 — run_docs는 돌지 않음, 설정·docker 없음, PC 전용)."""
 
 import os
 import re
@@ -7,9 +8,11 @@ import shutil
 import subprocess
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+from common.core.paths import DEPLOY_ROOT
 
-CASES = [  # (NIGHTLY_TIME, 지금, 종료 코드, night로 넘어감?)
+ROOT = DEPLOY_ROOT  # 저장소 루트(op-09 — paths 상수)
+
+CASES = [  # (NIGHTLY_TIME, 지금, 종료 코드, run_docs를 부름?) — 상한 50·마감 06:00
     ("", "01:00", 0, False),  # 비움 = 새벽 배치 없음
     ("  ", "01:00", 0, False),  # 공백만 = 비움
     ("01:00", "01:00", 0, True),
@@ -22,6 +25,17 @@ CASES = [  # (NIGHTLY_TIME, 지금, 종료 코드, night로 넘어감?)
     ("1:30", "01:30", 2, False),  # 꼴 오류
     ("24:00", "00:00", 2, False),
     ("01:30:00", "01:30", 2, False),
+]
+OTHER = [  # (NIGHTLY_MAX_DOCS, NIGHTLY_DEADLINE, 종료 코드, run_docs를 부름?) — 시작 01:00·지금 01:00(사용자 11-02 — 셋 다 있어야 돎)
+    ("", "06:00", 0, False),
+    ("50", "", 0, False),
+    ("  ", " ", 0, False),
+    ("0", "06:00", 2, False),
+    ("5x", "06:00", 2, False),
+    ("50", "6:00", 2, False),
+    ("50", "01:03", 2, False),  # 마감이 시작 창 안 — 늦게 깬 타이머면 마감이 다음 날로 밀림(리뷰 11-02)
+    ("50", "01:00", 2, False),
+    ("50", "01:05", 0, True),
 ]
 
 
@@ -45,16 +59,25 @@ def test_scheduled_gate():
         print("[시험] bash 없음 — 건너뜀")
         return
     gate = _gate()
-    for t, now, rc, runs in CASES:
-        script = f'date() {{ echo "{now}"; }}\nmod=scheduled\n{gate}echo "mod=$mod"\n'
+    cases = [(t, now, "50", "06:00", rc, runs) for t, now, rc, runs in CASES] + [
+        ("01:00", "01:00", n, dl, rc, runs) for n, dl, rc, runs in OTHER
+    ]
+    for t, now, n, dl, rc, runs in cases:
+        script = f'date() {{ echo "{now}"; }}\npython3() {{ echo "RUN_DOCS $*"; }}\nmod=scheduled\n{gate}echo "mod=$mod"\n'
         r = subprocess.run(
             [bash, "-c", script],
-            env={**os.environ, "NIGHTLY_TIME": t},  # env 남김 — 하위 프로세스(호스트 셸이 load_settings로 받는 이름 — 시험)
+            env={
+                **os.environ,
+                "NIGHTLY_TIME": t,
+                "NIGHTLY_MAX_DOCS": n,
+                "NIGHTLY_DEADLINE": dl,
+            },  # env 남김 — 하위 프로세스(호스트 셸이 load_settings로 받는 이름 — 시험)
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
             timeout=30,
         )
-        assert r.returncode == rc, (t, now, r.returncode, r.stderr)
-        assert ("mod=night" in r.stdout) is runs, (t, now, r.stdout)
+        assert r.returncode == rc, (t, now, n, dl, r.returncode, r.stderr)
+        want = f"RUN_DOCS deploy/host/scripts/run_docs.py --start-offset 0 --skip-done --max-docs {n.strip()} --deadline {dl.strip()}"
+        assert (want in r.stdout) is runs, (t, now, n, dl, r.stdout)

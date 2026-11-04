@@ -22,10 +22,8 @@ def selftest():
 
     from tests.server.pipeline.test_pptx_edges import _add_smartart
 
-    with pc.PIPE.env(PARSE_PPTX_SLIDE_VLM="0"):  # S7c — 설정 객체만 바꿔 끼움
-        assert pptx_slide_vlm("whatever.pptx") == []
     assert pptx_slide_vlm("x.docx") == []
-    print("[selftest] PARSE_PPTX_SLIDE_VLM=0·pptx 아님 — 둘 다 즉시 빈 목록 통과")
+    print("[selftest] pptx 아님 — 즉시 빈 목록 통과")
 
     prs = Presentation()
     s1 = prs.slides.add_slide(prs.slide_layouts[6])  # 1쪽 — 도형 5개, 연결선 없음(shapes_no_connector)
@@ -74,7 +72,7 @@ def selftest():
         assert target_slides(pptx_path) == {1, 2}  # AD20 후속 — pptx_slide_vlm이 실제로 부른 슬라이드와 같은 집합
 
         with pc.PIPE.env(PARSE_PPTX_RENDER_MAX="1"):
-            assert target_slides(pptx_path) == {1}  # 상한 1 — figures.py 중복 방지도 1쪽만 봄
+            assert target_slides(pptx_path) == {1}  # 상한 1 — figure_extract.py 중복 방지도 1쪽만 봄
             got2 = pptx_slide_vlm(pptx_path)
             assert [n for n, _, _pv in got2] == [1], got2  # 상한 1 — 2쪽은 안 부름
     finally:
@@ -129,11 +127,9 @@ def selftest():
         subprocess.Popen, M.soffice_bin = orig_popen, orig_soffice3
     print("[selftest] 변환 타임아웃 — 자식 프로세스만 종료(kill)하고 None(빈 결과), 고아 없음 통과")
 
-    # AD14 — shape_render_pages(): 꺼짐·확장자 아님·shape_detect 문턱 미달(soffice 호출 자체를 안 함)·soffice 없음
+    # AD14 — shape_render_pages(): 확장자 아님·shape_detect 문턱 미달(soffice 호출 자체를 안 함)·soffice 없음
     assert shape_render_pages("x.pptx") == {}  # pptx는 이 함수 대상 아님(render_slides가 따로 담당)
-    with pc.PIPE.env(PARSE_DOC_SHAPE_FIGURE="0"):  # S7c — 설정 객체만 바꿔 끼움
-        assert shape_render_pages("x.docx") == {}
-    print("[selftest] AD14 — pptx 대상 아님·PARSE_DOC_SHAPE_FIGURE=0 → 빈 묶음 통과")
+    print("[selftest] AD14 — pptx 대상 아님 → 빈 묶음 통과")
 
     def _boom_soffice():
         raise AssertionError("shape_detect가 False인데 soffice_bin()이 불렸다")
@@ -206,31 +202,29 @@ def selftest():
 
 
 def selftest_soffice_resolution():
-    """독립 검토(10-13) — PATH에 soffice가 없어도(이 PC가 실측 사례: LibreOffice가 깔려 있지만 PATH엔 없음)
-    흔한 설치 경로(가짜 목록으로 시험)에서 찾는지 · 다 없으면 None + 경고가 이 프로세스에서 1번만(반복 호출해도
-    추가 안 됨)인지."""
+    """op-09 — 설정 soffice_bin이 비면 PATH에서만 찾음(설치 경로 추측 없음) · 다 없으면 None + 경고가 이 프로세스에서 1번만
+    (반복 호출해도 추가 안 됨)."""
     import io
     import tempfile
 
-    orig_which, orig_common = shutil.which, M._common_soffice_paths
+    orig_which = shutil.which
 
-    # ① PATH에 없어도 흔한 설치 경로(가짜 목록)에서 찾음
+    # ① 설정이 비면 PATH(가짜 which)에서 찾음 · 설정 값이 있으면 그 파일
     d = Path(tempfile.mkdtemp())
-    fake_soffice = d / "fake_program_files" / "soffice.exe"
-    fake_soffice.parent.mkdir(parents=True, exist_ok=True)
+    fake_soffice = d / "soffice.exe"
     fake_soffice.write_text("fake", encoding="utf-8")
-    shutil.which = lambda name: None  # PATH에는 없는 척
-    M._common_soffice_paths = lambda: [str(d / "nope" / "soffice"), str(fake_soffice)]
+    shutil.which = lambda name: str(fake_soffice) if name == "soffice" else None
     try:
         with pc.PIPE.env(SOFFICE_BIN=""):  # S7c — 설정 객체에서만 비움(S7e2 — 빈 글자: 이미지 기본값 /usr/bin/soffice도 안 씀)
             assert M.soffice_bin() == str(fake_soffice)
+        with pc.PIPE.env(SOFFICE_BIN=str(fake_soffice)):
+            assert M.soffice_bin() == str(fake_soffice)
     finally:
-        shutil.which, M._common_soffice_paths = orig_which, orig_common
-    print("[selftest] soffice_bin() — PATH에 없어도 흔한 설치 경로(가짜 목록)에서 찾음 통과")
+        shutil.which = orig_which
+    print("[selftest] soffice_bin() — 설정·PATH에서만 찾음 통과")
 
     # ② 다 없으면 None + 경고 1번만(stderr) — 반복 호출해도 추가 안 됨
     shutil.which = lambda name: None
-    M._common_soffice_paths = lambda: []
     _soffice_warned[0] = False
     captured, orig_stderr = io.StringIO(), sys.stderr
     sys.stderr = captured
@@ -240,7 +234,7 @@ def selftest_soffice_resolution():
             assert M.soffice_bin() is None  # 두 번째 호출 — 경고 추가 안 됨
     finally:
         sys.stderr = orig_stderr
-        shutil.which, M._common_soffice_paths = orig_which, orig_common
+        shutil.which = orig_which
         _soffice_warned[0] = False
     msg = captured.getvalue()
     assert msg.count("[pptx_render] soffice를 못 찾음") == 1, msg

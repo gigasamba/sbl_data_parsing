@@ -1,7 +1,6 @@
-"""pipeline.transform.figures.overlay 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.overlay`."""
+"""pipeline.transform.figures.overlay_groups 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.overlay_groups`."""
 
-from pipeline import config as pc
-from pipeline.transform.figures.overlay import cluster_overlaps, on
+from pipeline.transform.figures.overlay_groups import cluster_overlaps
 
 
 def selftest():
@@ -56,11 +55,6 @@ def selftest():
         "배경(90%>40%)은 후보에서 빠지고 남은 둘은 서로 안 겹쳐 묶음 0개여야 함"
     )
     print("[selftest] cluster_overlaps — page_area 주면 전면 배경(>40%)이 빠져 과다 결합(모든 개체 한 묶음) 안 함 통과")
-
-    with pc.PIPE.env(FIG_OVERLAY_CLUSTER="0"):  # S7c — 설정 객체만 바꿔 끼움
-        assert on() is False
-    assert on() is True
-    print("[selftest] FIG_OVERLAY_CLUSTER=0 — 꺼짐, 기본은 켬 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

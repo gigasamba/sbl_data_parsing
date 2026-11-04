@@ -6,14 +6,14 @@
 """
 import importlib
 import importlib.util
-import os
 import shutil
 from functools import lru_cache
 from pathlib import Path
 
+from common.core.paths import PARSING_ROOT
 from pipeline.extract.engines._common.contract import _fields
 
-HERE = Path(__file__).resolve().parent
+HERE = PARSING_ROOT / "engines"
 
 
 @lru_cache(maxsize=1)
@@ -32,10 +32,11 @@ def engines():
 # 핵심 평가 엔진(기본 실행 대상, 2026-09-29 사용자 확정) — 타입별 담당·실측 성능·라이선스로 추림. 나머지는 --engines all이거나 이름을 명시할 때만.
 # 제외(사용자 10-07, 스택에서 뺌 — backlog DP6): paddleocr · docling_ocr(EasyOCR 내장).
 # openviking_import·cognee_import 엔진 어댑터는 삭제됨(SI33, 10-07) — OpenViking은 서버의 기존 컨테이너를 직접 쓰고(구조화 요약 fallback은 OV_DOC_ROOT), Cognee는 스택에서 제외(DP6).
-CORE = {"pdfplumber", "pymupdf", "kreuzberg",                                  # 텍스트 PDF(+ kreuzberg는 doc·html·eml 등 폭넓게)
+CORE = {"pymupdf", "kreuzberg",                                                # 텍스트 PDF(+ kreuzberg는 doc·html·eml 등 폭넓게)
         "rapidocr_ko", "qwen_vlm",                                              # 이미지·스캔(ocr_vlm은 10-30 지움 — pl-31)
-        "office", "calamine", "pptx", "plaintext", "mhtml", "html_stdlib", "msg_extract", "markitdown", "hwpx",   # 오피스·웹·메일
-        "anydoc", "pypdf"}   # 올인원 내부 파서 단독 — OpenViking 오피스(anydoc) · Cognee 기본 PDF(pypdf) — 올인원 결과가 파서 탓인지 요약·추출 탓인지 가르기
+        "office", "plaintext", "mhtml", "html_stdlib", "msg_extract", "markitdown", "hwpx",   # 오피스·웹·메일
+        "anydoc"}   # 올인원 내부 파서 단독 — OpenViking 오피스(anydoc)
+# 0.2.0(pl-46, 사용자 11-01) 엔진 지움: pdfplumber·pypdf·calamine·pptx(python_pptx)·pymupdf4llm — 한 번도 안 돈 엔진. docx2python은 비교용으로 남김.
 # 10-30(pl-31) 엔진 지움: docling·docling_ocr·docling_vlm·unstructured·unstructured_auto·unstructured_ocr·rapidocr(1.x)·kreuzberg_ocr·marker_llm(이름만 남아 있던 것).
 
 
@@ -46,7 +47,7 @@ def missing_deps(engine):
     REQUIRES_ENV(모델 서빙 주소 등 설정값)는 설치 여부와 다른 문제라 missing_env()가 따로 본다."""
     _, m = engines()[engine]
     req = getattr(m, "REQUIRES_ENGINE", {}).get(engine) or getattr(m, "REQUIRES", {"modules": [], "tools": []})
-    tools = [(os.environ.get("MINERU_BIN") or "mineru") if t == "$MINERU_BIN" else t for t in req.get("tools", [])]
+    tools = req.get("tools", [])
     return [x for x in req.get("modules", []) if importlib.util.find_spec(x) is None] + [t for t in tools if not shutil.which(t)]
 
 
@@ -66,15 +67,36 @@ def select(spec=""):
     return {e for e in engines() if e in CORE and installed(e)}
 
 
+# pl-45(사용자 11-01·11-03) 엔진별 추가 확장자 — 엔진 parser.py의 FORMATS를 고치면 엔진 지문(run_all.engine_code_fp)이 바뀌어
+# 서버의 모든 문서를 그 엔진으로 다시 파싱하므로 여기 둔다(이 파일은 엔진 지문에 안 들어감). 형식별 엔진 순서는 resources/config/pipeline_stack.json.
+# 견본으로 읽히는 것을 확인한 것만(tests/server/pipeline/test_ext_formats.py). .hwp는 kreuzberg에 판독기가 있으나 만든 견본에서 글이 안 나와 뺌(실제 문서 시험 뒤에).
+EXTRA_FORMATS = {
+    "kreuzberg": (".docm", ".pptm", ".rtf", ".csv", ".tsv", ".odt", ".ods", ".xlsb",
+                  ".dotx", ".xltx", ".potx", ".ppsx", ".dot", ".xlt", ".pot"),
+    "anydoc": (".docm", ".pptm", ".rtf", ".odt", ".ods", ".odp"),
+    "markitdown": (".csv", ".md"),
+    "plaintext": (".tsv", ".md", ".json", ".xml", ".log"),   # .json·.xml·.log는 글 그대로(사용자 11-03 — markitdown 아님)
+}
+
+
+def formats(engine):
+    """엔진이 읽는 확장자 = parser.py FORMATS + EXTRA_FORMATS."""
+    _, m = engines()[engine]
+    return tuple(m.FORMATS[engine]) + EXTRA_FORMATS.get(engine, ())
+
+
 def engines_for(ext):
     """확장자(.pdf 등)를 처리하는 엔진 이름 목록."""
-    return [e for e, (_, m) in engines().items() if ext.lower() in m.FORMATS[e]]
+    return [e for e in engines() if ext.lower() in formats(e)]
 
 
 def missing_env(engine):
-    """엔진이 요구하는 환경변수 중 비어 있는 것 (parser.py의 REQUIRES_ENV = {엔진: [변수]}, "A|B"는 둘 중 하나)."""
+    """엔진이 요구하는 설정 칸(옛 env 이름) 중 비어 있는 것 (parser.py의 REQUIRES_ENV = {엔진: [이름]}, "A|B"는 둘 중 하나).
+    op-09 — env가 아니라 설정 객체(common 칸 — by_env)로 본다."""
+    from common.config.settings import by_env
+
     _, m = engines()[engine]
-    return [v for v in getattr(m, "REQUIRES_ENV", {}).get(engine, []) if not any(os.environ.get(x) for x in v.split("|"))]
+    return [v for v in getattr(m, "REQUIRES_ENV", {}).get(engine, []) if not any(by_env(x) for x in v.split("|"))]
 
 
 def run(engine, path, profile="default", fields="normalized"):

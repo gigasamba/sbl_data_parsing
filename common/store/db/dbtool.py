@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """pgvector 우리 스키마 판 관리 명령(S8a — refactor_plan 5-4, 사용자 10-28 Step 0 답 Q1~Q10 a).
-  python -m common.store.db.dbtool up      --target search|struct|all [--schema S] [--dim N | --bundle B] [--create-extension]
+  python -m common.store.db.dbtool up      --target search|all [--schema S] [--dim N | --bundle B] [--create-extension]
   python -m common.store.db.dbtool stamp   --target …   — 이미 있는 DB에 실행 없이 판만 기록(비교 차이 0일 때만)
   python -m common.store.db.dbtool current --target …   — 지금 판·코드의 끝 판
   python -m common.store.db.dbtool check   --target …   — 표 정의 ↔ 실제 DB 비교(차이·판이 끝이 아니면 종료 코드 1)
   python -m common.store.db.dbtool --pg-cases orca_<이름>  — PC 전용 PG 시험(새 시험 DB — 기본 스키마·vector 확장 자리, VS8a B-1·R-9)
+  python -m common.store.db.dbtool maintain --target applog  — 현재+2개월 파티션 생성/만료 기록 정리(매일 예약)
+  python -m common.store.db.dbtool master load [--schema S] [--dir D]  — 마스터 표(`<S>_master`)를 CSV(기본 git resources/vocab/glossary)로 통째로 바꿈(pl-38 — up --target master 뒤)
   이미지: `migrate up --target all --bundle …`(entrypoint — pipeline 이미지, load와 같은 잠금).
-· 갈래 search = 검색 스키마(PG_SCHEMA — index --pg 스키마는 --schema), struct = 이름 고정. 판 기록 표는 스키마마다 <스키마>.alembic_version.
+· 갈래 search = 기준 스키마(PG_SCHEMA — --schema로 바꿈) 하나 + 원천 스키마 5벌 `<기준>_sfdc|crms|las|faq|other`(pl-28 — 판 0002가 만듦).
+  판 기록 표·공용 doc_id 시퀀스는 기준 스키마에(<기준>.alembic_version).
 · up: 판 기록이 없는데 표가 있는 스키마(옛 코드가 만든 DB)는 먼저 비교 — 차이가 기준판이 고치는 것(표·색인·뷰 없음, 뷰 칸 다름)뿐이면 고치고
   판 기록(기준판이 IF NOT EXISTS·뷰는 DROP 뒤 다시 만듦), 칸 이름·형식·NULL·기본값·키가 다르거나 남는 표가 있으면 거부(Q3). 적재 앞 자동 길
   (pgvector_load deploy)은 판 기록 없는 기존 스키마면 비교·DDL 없이 경고만(코디네이터 10-28 a — Q5). 검색 스키마는 지금 deploy와 같은 확인을 먼저 —
-  vector 확장(없으면 멈춤, --create-extension = 옛 PG_CREATE_EXTENSION=1 옵트인)·남의 스키마 거부(load_run 없음)·차원(DB와 다르면 새 PG_SCHEMA).
+  vector 확장(없으면 멈춤, --create-extension = 옛 PG_CREATE_EXTENSION=1 옵트인)·남의 스키마 거부(판 표 alembic_version 없음)·차원(DB와 다르면 새 PG_SCHEMA).
 · 차원은 --dim 또는 --bundle <묶음>/meta.json, 있는 스키마는 DB 차원(새 설정 칸 없음 — Q4).
 · 적재 전 판 확인(require_current — Q5): 판 기록 없음 = 경고 뒤 계속(기준판 = 지금 스키마), 끝보다 낮거나 모르는 판 = 거부. MCP(읽기)는 안 봄.
-· SQLite 대체(pg_standin·structdb SQLite)는 판 관리 밖 — 표 정의에서 바로 만든다(standin_script). 접속 값은 settings.yaml(common.store.pg.conf).
+· SQLite 대체(pg_standin)는 판 관리 밖 — 표 정의에서 바로 만든다(standin_script). 접속 값은 settings.yaml(common.store.pg.conf).
 · 비밀값·행 값은 찍지 않는다(카탈로그·판 번호만)."""
 
 import argparse
@@ -23,11 +26,14 @@ import sys
 from pathlib import Path
 
 from common.core.console import utf8_stdout
+from common.core.paths import PKG_ROOT
 
-HERE = Path(__file__).resolve().parent
-MIGRATIONS = HERE / "migrations"
-TARGETS = ("search", "struct")
-STRUCT = "struct"  # common/store/structdb.py STRUCT_SCHEMA와 같음(selftest가 확인 — structdb는 이 패키지를 import 안 함)
+MIGRATIONS = PKG_ROOT / "store" / "db" / "migrations"  # op-09 — paths 상수 기준
+TARGETS = (
+    "search",
+    "applog",
+    "master",
+)  # master = 용어집·고객 명부(pl-38, `<기준>_master`) · struct 갈래는 사용자 11-01에 없앰(서버에 남은 struct 스키마는 코드가 읽지 않음 — DB 담당자가 두거나 지움)
 _SCHEMA_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}")  # common/store/pg.conf()의 PG_SCHEMA 규칙(그 함수 안 정규식)과 같음
 _SCRIPTS: dict = {}
 
@@ -67,16 +73,26 @@ def known(target):
     return [r.revision for r in _script().iterate_revisions(f"{target}@head", "base")]
 
 
-# ── 판 상태 — q는 SQL 글자 → [dict] 함수(psycopg PG.q·structdb PgBackend.query·SQLAlchemy 연결 둘레) ───────────────────
+# ── 판 상태 — q는 SQL 글자 → [dict] 함수(psycopg PG.q·SQLAlchemy 연결 둘레) ───────────────────
 def schema_of(target, schema=None):
-    if target == STRUCT:
-        return STRUCT
+    """갈래의 스키마 — search는 기준 스키마 그대로, master는 `<기준>_master`(pl-38 — 개발자마다 기준이 다르니 이름도 따라감), applog는 고정 이름."""
+    if target == "master":
+        from common.store.master import schema_name
+
+        return schema_name(schema_of("search", schema))
+    if target == "applog":
+        schema = schema or "applog"
+        if not _SCHEMA_RE.fullmatch(schema) or schema == "public":
+            raise DbToolError("applog 스키마 이름이 틀림")
+        return schema
     if schema is None:
         from common.store.pg import conf
 
         schema = conf()["PG_SCHEMA"]
-    if not _SCHEMA_RE.fullmatch(schema) or schema == STRUCT:
-        raise DbToolError(f"검색 스키마 이름이 틀림: {schema!r} — 소문자·숫자·_ 만, struct는 안 됨")
+    if not _SCHEMA_RE.fullmatch(schema):
+        raise DbToolError(f"검색 스키마 이름이 틀림: {schema!r} — 소문자·숫자·_ 만")
+    if len(schema) > 50:  # 원천 스키마 `<기준>_other`·색인 `ix_<기준>_other_chunk_embq`가 PG 이름 63자를 넘지 않게(pl-28)
+        raise DbToolError(f"기준 스키마 이름이 김({len(schema)}자) — 50자 이하")
     return schema
 
 
@@ -98,9 +114,8 @@ def status(q, target, schema):
     return ("끝" if head(target) in have else "낮음"), have
 
 
-def require_current(q, target, schema, error=None):
-    """적재·쓰기 전 판 확인(Q5) — 판 기록 없음: 경고 뒤 계속 · 끝보다 낮거나 모르는 판: error(글자)를 던짐(기본 DbToolError — 종료 2).
-    struct 쓰기는 error=structdb.StructDBError(호출자의 지금 실패 처리 그대로 — publish는 문서 대장만 건너뜀)."""
+def require_current(q, target, schema):
+    """적재·쓰기 전 판 확인(Q5) — 판 기록 없음: 경고 뒤 계속 · 끝보다 낮거나 모르는 판: DbToolError(종료 2)."""
     st, have = status(q, target, schema)
     if st == "끝":
         return st
@@ -122,18 +137,7 @@ def require_current(q, target, schema, error=None):
             f"{schema} 판 {have} — 이 코드가 모르는 판(DB가 코드보다 새 판이거나 남의 판 표): 이미지·코드 판을 DB와 맞춘 뒤 다시"
             f"(코드의 끝 판 {head(target)})"
         )
-    if error is None:
-        raise DbToolError(msg)
-    raise error(msg)
-
-
-def require_struct(db):
-    """struct 쓰기 전 판 확인 — PostgreSQL 백엔드(structdb.PgBackend)만, SQLite 대체는 판 관리 밖. 거부는 StructDBError."""
-    from common.store import structdb as SDB
-
-    if isinstance(db, SDB.PgBackend):
-        require_current(db.query, STRUCT, STRUCT, SDB.StructDBError)
-    return db
+    raise DbToolError(msg)
 
 
 # ── 연결 ─────────────────────────────────────────────────────────────
@@ -191,22 +195,27 @@ def precheck_search(q, schema, dim, create_extension=False):
     if (
         q(f"SELECT 1 FROM information_schema.schemata WHERE schema_name='{schema}'")
         and q(f"SELECT 1 FROM information_schema.tables WHERE table_schema='{schema}' LIMIT 1")
-        and not q(f"SELECT 1 FROM information_schema.tables WHERE table_schema='{schema}' AND table_name='load_run'")
+        and not q(f"SELECT 1 FROM information_schema.tables WHERE table_schema='{schema}' AND table_name='alembic_version'")
     ):
         raise SystemExit(
-            f"deploy 거부: 스키마 {schema}에 표가 있지만 우리 표식(load_run)이 없음 — 남의 기존 스키마일 수 있음(다른 PG_SCHEMA 사용)"
+            f"deploy 거부: 스키마 {schema}에 표가 있지만 우리 표식(판 표 alembic_version)이 없음 — 남의 기존 스키마일 수 있음(다른 PG_SCHEMA 사용). "
+            "판 기록 전 옛 우리 스키마면 `migrate check` 뒤 `migrate stamp`"
         )
     check_dim(q, schema, dim)
 
 
 def check_dim(q, schema, dim):
-    """있는 chunk 표의 차원(없으면 None) — dim과 다르면 거부(옛 deploy 글자 그대로)."""
+    """있는 chunk 표의 차원(없으면 None) — 원천 스키마 5벌(pl-28)을 차례로 보고, 기준 스키마 자체(0001의 옛 한 벌)도 본다. dim과 다르면 거부."""
     from common.store.db.dbcompare import DIM_SQL
+    from common.store.db.models import search_tables as ST
 
-    have = q(DIM_SQL.format(schema=schema))
-    if dim is not None and have and have[0]["d"] not in (None, -1) and have[0]["d"] != int(dim):
-        raise SystemExit(f"{schema}.chunk.embedding 차원 {have[0]['d']} ≠ 묶음 {dim} — 임베딩 모델이 바뀜: 새 PG_SCHEMA로 배포")
-    return have[0]["d"] if have and have[0]["d"] not in (None, -1) else None
+    for s in (*(ST.src_schema(schema, src) for src in ST.SOURCES), schema):
+        have = q(DIM_SQL.format(schema=s))
+        if have and have[0]["d"] not in (None, -1):
+            if dim is not None and have[0]["d"] != int(dim):
+                raise SystemExit(f"{s}.chunk.embedding 차원 {have[0]['d']} ≠ 묶음 {dim} — 임베딩 모델이 바뀜: 새 PG_SCHEMA로 배포")
+            return have[0]["d"]
+    return None
 
 
 def index_kind(dim):
@@ -248,7 +257,29 @@ def upgrade(target, schema, dim=None, conn=None):
                 file=sys.stderr,
             )
     command.upgrade(_config(conn, target=target, schema=schema, dim=dim, create_schema=True), f"{target}@head")
+    if target == "applog":
+        maintain_applog(schema, conn=conn, prune=False)
     return before
+
+
+def maintain_applog(schema="applog", *, conn=None, prune=True, now=None):
+    """명시적 Alembic 유지 관리: 현재+2개월 생성, 만료 월 DROP/pipe_run DELETE. sink에서는 호출 금지."""
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    from common.config.settings import cfg
+    from common.store.db.migrations import applog_parts
+
+    schema = schema_of("applog", schema)
+    if conn is None:
+        with engine().begin() as c:
+            return maintain_applog(schema, conn=c, prune=prune, now=now)
+    if status(_q(conn), "applog", schema)[0] != "끝":
+        raise DbToolError("applog up --target applog 먼저 적용 필요")
+    with Operations.context(MigrationContext.configure(conn)) as op:
+        if prune:
+            return applog_parts.maintain(op, schema, cfg().log.retention_days, now)
+        return applog_parts.ensure_partitions(op, schema, now)
 
 
 def stamp(target, schema, dim=None, conn=None):
@@ -288,26 +319,27 @@ def check(target, schema, dim=None, conn=None):
     st, have = status(q, target, schema)
     if target == "search":
         dim = check_dim(q, schema, dim) or dim
-    rep = dbcompare.compare(conn, target, schema, dim) if has_tables(q, schema) else None
+    rep = dbcompare.compare(conn, target, schema, dim) if (has_tables(q, schema) or st != "없음") else None
     return st, have, rep
 
 
 # ── SQLite 대역(pg_standin) — 판 관리 밖, 표 정의에서 바로(5-4) ───────────────────────────────
 def standin_script(schema, dim):
-    """검색 스키마를 PostgreSQL 꼴 DDL 글자로(표 정의에서 컴파일 + 뷰) — pg_standin이 옛 schema.sql처럼 받아 SQLite로 번역한다
-    (첫 문장 CREATE SCHEMA로 DDL 묶음임을 알아봄). HNSW·GIN 색인은 대역이 흉내 내지 않아 넣지 않는다."""
+    """원천 스키마 하나(`<기준>_<원천>`)를 PostgreSQL 꼴 DDL 글자로(표 정의에서 컴파일 + 뷰) — pg_standin이 옛 schema.sql처럼 받아 SQLite로
+    번역한다(첫 문장 CREATE SCHEMA로 DDL 묶음임을 알아봄). 대역은 스키마마다 파일 하나라 공용 시퀀스를 흉내 내지 않고(자동 번호) HNSW 색인도 넣지 않는다."""
     from sqlalchemy.dialects import postgresql
     from sqlalchemy.schema import CreateIndex, CreateTable
 
     from common.store.db.models import search_tables as ST
 
-    md = ST.search_metadata(schema, dim)
+    md = ST.search_metadata(schema, dim, shared_seq=False)
+    _, src = ST.split_schema(schema)
     d = postgresql.dialect()
     parts = [f"CREATE SCHEMA IF NOT EXISTS {schema}"]
-    for t in md.tables.values():  # 정의 순서(옛 schema.sql 순서 — load_run·doc·chunk·…)
+    for t in md.tables.values():  # 정의 순서(doc·chunk·…)
         parts.append(str(CreateTable(t, if_not_exists=True).compile(dialect=d)).strip())
         parts += [str(CreateIndex(i, if_not_exists=True).compile(dialect=d)).strip() for i in sorted(t.indexes, key=lambda i: i.name)]
-    parts.append(ST.VIEW_SQL.replace("{S}", schema))
+    parts.append(ST.view_ddl(src).replace("{S}", schema))
     return ";\n".join(parts) + ";\n"
 
 
@@ -324,13 +356,38 @@ def _targets(a):
     return TARGETS if a.target == "all" else (a.target,)
 
 
+def _schema_arg(a, target):
+    """--schema는 검색 기준 스키마 — master는 그 기준에서 이름을 만듦(`<기준>_master`), applog는 --target applog로 따로 줄 때만(all이면 고정 이름 applog)."""
+    return a.schema if target in ("search", "master") or a.target == target else None
+
+
+def master_load(base=None, folder=None):
+    """pl-38 — 마스터 표를 CSV로 통째로 바꿈(한 트랜잭션) · 반환 (스키마, 해시). 판이 끝이 아니면 거부.
+    folder 기본 = git `resources/vocab/glossary` — 서버만의 기밀 명부는 서버 폴더를 --dir로(같은 파일 이름·머리글)."""
+    from common.store import master
+    from common.store.pg import PG, conf
+
+    c = conf()
+    schema = schema_of("master", base or c["PG_SCHEMA"])
+    db = PG({**c, "PG_SCHEMA": schema})
+    try:
+        st, have = status(db.q, "master", schema)
+        if st != "끝":
+            raise DbToolError(f"{schema} 판 {st} {have} — 먼저 `migrate up --target master`")
+        return schema, master.load(db, master.read_csvs(Path(folder)) if folder else None)
+    finally:
+        db.cn.close()
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    ap.add_argument("cmd", nargs="?", choices=["up", "stamp", "current", "check"])
+    ap.add_argument("cmd", nargs="?", choices=["up", "stamp", "current", "check", "maintain", "master"])
+    ap.add_argument("sub", nargs="?", choices=["load"], help="master load — 마스터 표를 git CSV로 채움(pl-38)")
     ap.add_argument("--target", choices=[*TARGETS, "all"], default="all")
-    ap.add_argument("--schema", help="검색 스키마(기본 settings PG_SCHEMA — index --pg 스키마는 <PG_SCHEMA>_<index_id>)")
+    ap.add_argument("--schema", help="기준 스키마(기본 settings PG_SCHEMA — 원천 스키마는 <기준>_<원천>)")
     ap.add_argument("--dim", type=int, help="임베딩 차원(새 검색 스키마 — 있는 스키마는 DB 차원)")
     ap.add_argument("--bundle", help="묶음 폴더 — meta.json의 dim")
+    ap.add_argument("--dir", help="master load — CSV 폴더(기본 git resources/vocab/glossary · 서버 기밀 명부는 서버 폴더)")
     ap.add_argument(
         "--create-extension", action="store_true", help="vector 확장이 없으면 만들기(옛 PG_CREATE_EXTENSION=1 — PC·단독 시험만)"
     )
@@ -340,16 +397,26 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.pg_cases:
         return 1 if pg_cases(a.pg_cases) else 0
+    if a.cmd == "maintain" and a.target != "applog":
+        ap.error("maintain은 --target applog만 지원")
+    if (a.cmd == "master") != (a.sub == "load"):
+        ap.error("master는 `master load`로만")
     if not a.cmd:
         ap.error("명령: up·stamp·current·check")
     from common.store.pg import has_conn
 
     if not has_conn():
-        raise DbToolError("PG 접속 정보 없음(settings.yaml common.connections.pg) — SQLite 대역은 판 관리 밖(표 정의에서 바로 만듦)")
+        raise DbToolError("PG 접속 정보 없음(settings.yaml required.pg) — SQLite 대역은 판 관리 밖(표 정의에서 바로 만듦)")
+    if a.cmd == "master":
+        schema, h = master_load(a.schema, a.dir)
+        print(f"[migrate] master {schema}: CSV로 채움 · 해시 {h[:8]}")
+        return 0
     dim, rc = _dim_arg(a), 0
     for target in _targets(a):
-        schema = schema_of(target, a.schema)
-        if a.cmd == "up":
+        schema = schema_of(target, _schema_arg(a, target))
+        if a.cmd == "maintain":
+            print(maintain_applog(schema))
+        elif a.cmd == "up":
             if target == "search":
                 with engine().begin() as conn:
                     precheck_search(_q(conn), schema, dim, a.create_extension)
@@ -388,7 +455,7 @@ def main(argv=None):
 def pg_cases(name):
     """새 시험 DB `<name>`·`<name>_e1`·`<name>_e2`를 만들어(이미 있으면 거부 — 아무것도 지우지 않음) 확인한다:
     ① 우리 스키마 = 연결의 기본 스키마(current_schema()) 세 꼴 — PG_SCHEMA=public · 역할 이름 = 스키마("$user") · search_path = 스키마
-       (+ struct를 search_path=struct로): up 뒤 check 차이 0, 판 표를 지우고 남는 칸·형식 다름을 넣으면 check가 그 둘을 보이고 up·stamp 거부(B-1)
+       : up 뒤 check 차이 0, 판 표를 지우고 남는 칸·형식 다름을 넣으면 check가 그 둘을 보이고 up·stamp 거부(B-1)
     ② vector 확장이 다른 스키마(e1 — 차원 8·4096)·우리 스키마(e2 — 4096)에 있을 때 up 뒤 check 차이 0(색인 글자 정규화 — R-9).
     PC(RUN_ENV=local)·이름 orca_… 만. 반환: 실패 수."""
     from common.core import paths
@@ -434,18 +501,11 @@ def pg_cases(name):
         return eng, cur
 
     def bad_case(target, schema, opts, label):
-        eng, cur = same(name, target, schema, 8 if target == "search" else None, opts, label)
+        eng, cur = same(name, target, schema, 8, opts, label)
         ok(cur == schema, f"{label}: 기본 스키마가 우리 스키마({cur})")
         bad = (
-            (
-                f"DROP TABLE {schema}.{VERSION_TABLE}; ALTER TABLE {schema}.doc ADD COLUMN file_sha256 CHAR(64); "
-                f"ALTER TABLE {schema}.chunk ALTER COLUMN n_terms TYPE BIGINT"
-            )
-            if target == "search"
-            else (
-                f"DROP TABLE {schema}.{VERSION_TABLE}; ALTER TABLE {schema}.doc_registry ADD COLUMN x_extra TEXT; "
-                f"ALTER TABLE {schema}.doc_registry ALTER COLUMN first_seen TYPE VARCHAR(40)"
-            )
+            f"DROP TABLE {schema}.{VERSION_TABLE}; ALTER TABLE {schema}_sfdc.doc ADD COLUMN file_sha256 CHAR(64); "
+            f"ALTER TABLE {schema}_sfdc.chunk ALTER COLUMN n_terms TYPE BIGINT"
         )
         run(name, bad, opts)
         with eng().connect() as c:
@@ -472,7 +532,6 @@ def pg_cases(name):
     run(name, f"CREATE SCHEMA {user}")  # 역할 이름 = 스키마 — "$user"가 고름
     guarded(bad_case, "search", user, None, "역할 이름 = 스키마")
     guarded(bad_case, "search", "orca_sp", "-c search_path=orca_sp,public", "search_path = 스키마(역할 설정 꼴)")
-    guarded(bad_case, "struct", STRUCT, f"-c search_path={STRUCT},public", "struct search_path")
     run(f"{name}_e1", "CREATE SCHEMA ext; CREATE EXTENSION vector SCHEMA ext")
     for dim in (8, 4096):
         guarded(

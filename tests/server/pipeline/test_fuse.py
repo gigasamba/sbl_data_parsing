@@ -1,7 +1,6 @@
-"""pipeline.transform.represent.fuse 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.fuse`."""
+"""pipeline.transform.represent.fragment_vote 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.fragment_vote`."""
 
-from pipeline import config as pc
-from pipeline.transform.represent.fuse import (
+from pipeline.transform.represent.fragment_vote import (
     _doc_locale_pref,
     _doc_value_graph,
     _graph_bonus,
@@ -10,9 +9,6 @@ from pipeline.transform.represent.fuse import (
     fuse,
     fuse_facts,
     norm_key,
-    on,
-    on_signals,
-    term_plausibility,
     trust_weight,
     vote_fragment,
 )
@@ -35,14 +31,6 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통
     assert format_plausibility("430,000", locale_pref=",") > format_plausibility("430,000", locale_pref=".")
     assert format_plausibility("430.000", locale_pref=".") > format_plausibility("430.000", locale_pref=",")
     print("[selftest] format_plausibility — 깨짐·자릿수 묶음·AD26 로캘 신호 통과")
-
-    # term_plausibility(AD29 ④) — 사전·명부 근접(오탈자)만 가산, 완전 일치·사전 없음·안 가까움은 0
-    gloss = {"c1": {"canonical": "Pfizer", "synonyms": ""}}
-    assert term_plausibility("Pfzer", glossary=gloss) > 0.0  # OCR 오탈자 근접
-    assert term_plausibility("Pfizer", glossary=gloss) == 0.0  # 이미 정식 표기 — 가산 의미 없음
-    assert term_plausibility("완전히 다른 문장", glossary=gloss) == 0.0
-    assert term_plausibility("Pfzer") == 0.0  # 사전·명부 없으면(선택 장치) 0
-    print("[selftest] term_plausibility — 근접 오탈자만 가산·정식 표기/사전 없음은 0 통과")
 
     # _doc_locale_pref(AD26 c) — 문서 다수 구분자, 동률·증거 없으면 None
     docs_comma = {"e": {"facts": [{"context": ["a"], "value": "1,000"}, {"context": ["b"], "value": "2,000"}]}}
@@ -84,15 +72,13 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통
     assert vote_fragment([{"engine": "a", "text": ""}, {"engine": "b", "text": "  "}]) is None
     print("[selftest] vote_fragment — 신뢰도 가중 투표·대표 엔진 동점 가산점·빈 후보 None·AD26 split·resolved_by 통과")
 
-    # vote_fragment + term_ctx(AD29 ④) — 신뢰도·형식(=기본 점수)은 동점인 두 후보, 사전 가산(=전체 점수)만으로
-    # 깨졌다 — engine-qa 10-08 (1)(2): 이건 "확인됨"이 아니라 "사전 가산으로만 고른 것" → split은 True로
-    # 유지하고 resolved_by="heuristic"만 남긴다(대표 텍스트는 그래도 전체 점수가 높은 Pfzer로 뽑음).
+    # 신뢰도·형식(=기본 점수) 동점 두 후보 — 용어 사전 가산은 지움(pl-38)
     cands_term = [{"engine": "pdfplumber", "text": "Pfzer"}, {"engine": "office", "text": "Contoso"}]
     r_term_off = vote_fragment(cands_term)
     assert r_term_off["split"] is True and r_term_off["resolved_by"] is None  # 사전 신호 없으면 기본·전체 둘 다 동점
-    r_term_on = vote_fragment(cands_term, term_ctx={"glossary": gloss, "aliases": {}})
-    assert r_term_on["text"] == "Pfzer" and r_term_on["split"] is True and r_term_on["resolved_by"] == "heuristic"
-    print("[selftest] vote_fragment + term_ctx — 대표는 사전 근접 후보로 뽑되 split=True·resolved_by=heuristic로 남음 통과")
+    print(
+        "[selftest] vote_fragment — 사전 가산 없음(pl-38 — 대표 결과는 마스터를 읽지 않음): 기본·전체 동점이면 split=True·resolved_by=None 통과"
+    )
 
     # vote_fragment + value_graph(AD29 ④ 그래프 대역) — 기본 점수는 동점, 교차 언급 가산(전체 점수)만 깬다 →
     # 같은 취지로 split=True·resolved_by="heuristic" 유지(대표 텍스트는 X1).
@@ -119,36 +105,18 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통
     assert conflicts[0]["split"] is False and conflicts[0]["resolved_by"] == "trust"  # 신뢰도만으로 확실히 갈렸다(기본 점수 동점 아님)
     print("[selftest] fuse_facts — 라벨 키 자리 맞추기·신뢰도 투표·갈린 자리만 conflicts 기록·split·resolved_by 통과")
 
-    # fuse_facts — AD29 ④ 그래프 대역(문서 내 교차 언급)이 PARSE_FUSE_SIGNALS 켬/끔에 따라 동점을 깨는지.
-    # engine-qa 10-08 (1)(2)(5): 교차 언급은 "신뢰도로 이긴 것"이 아니라 보조 신호라 켜져도 split=True(resolved_by
-    # ="heuristic")로 남는다(대표 텍스트만 X1로 뽑힘) · 꺼지면 conflicts.jsonl에 "split"·"resolved_by" 키 자체가
-    # 없다(스키마가 이 기능 이전과 바이트 동일).
+    # fuse_facts — AD29 ④ 그래프 대역(문서 내 교차 언급)이 동점을 깨는지.
+    # engine-qa 10-08 (1)(2)(5): 교차 언급은 "신뢰도로 이긴 것"이 아니라 보조 신호라 split=True(resolved_by
+    # ="heuristic")로 남는다(대표 텍스트만 X1로 뽑힘).
     docs3 = {
         "pdfplumber": {"facts": [{"context": ["금액1"], "value": "X1"}, {"context": ["금액2"], "value": "X1"}]},
         "office": {"facts": [{"context": ["금액1"], "value": "X2"}]},
     }
-    with pc.PIPE.env(PARSE_FUSE_SIGNALS="0"):  # S7c — 설정 객체만 바꿔 끼움
-        _, conf_off = fuse_facts(docs3, None)
-    assert "split" not in conf_off[0] and "resolved_by" not in conf_off[0]  # 꺼지면 키 자체가 없음(스키마 보존)
-    with pc.PIPE.env(PARSE_FUSE_SIGNALS="1"):
-        _, conf_on = fuse_facts(docs3, None)
+    _, conf_on = fuse_facts(docs3, None)
     assert conf_on[0]["winner"] == "X1" and conf_on[0]["split"] is True and conf_on[0]["resolved_by"] == "heuristic"
-    print(
-        "[selftest] fuse_facts — PARSE_FUSE_SIGNALS 켬/끔: 꺼지면 split·resolved_by 키 자체가 없음(스키마 동일) "
-        "· 켜져도 교차 언급만으로 깬 동점은 split=True·resolved_by=heuristic로 남음 통과"
-    )
+    print("[selftest] fuse_facts — 교차 언급만으로 깬 동점은 split=True·resolved_by=heuristic로 남음 통과")
 
     # fuse() 전체 — 결정적(두 번 불러도 같은 결과)
     out1, out2 = fuse(docs, "pdfplumber"), fuse(docs, "pdfplumber")
     assert out1 == out2 and out1["stats"] == {"fragments": 2, "conflicts": 1, "engines": ["pdfplumber", "pymupdf", "rapidocr_ko"]}
     print("[selftest] fuse — 결정적(같은 입력 → 같은 결과)·stats 통과")
-
-    # on() — PARSE_FUSE 기본 켬, =0으로 끔
-    with pc.PIPE.env(PARSE_FUSE=None):
-        assert on() is True and on("1") is True and on("0") is False
-    print("[selftest] PARSE_FUSE on() 기본 켬(=0으로 끔) 통과")
-
-    # on_signals() — PARSE_FUSE_SIGNALS 기본 켬, =0으로 끔
-    with pc.PIPE.env(PARSE_FUSE_SIGNALS=None):
-        assert on_signals() is True and on_signals("1") is True and on_signals("0") is False
-    print("[selftest] PARSE_FUSE_SIGNALS on_signals() 기본 켬(=0으로 끔) 통과")

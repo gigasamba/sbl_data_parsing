@@ -30,3 +30,25 @@ INSERT INTO RM_MAS_CLIENT_GENERAL (CLIENT_CD, CLIENT_KOR_NM, ABBR_NM, KOR_ABBR_N
     ('C9001', '파이자바이오', 'PFZ', '파이자'),
     ('C9004', '아스트라노바바이오', 'ANB', '아스트라노바'),
     ('C9005', '코벡사라이프사이언스', 'KVX', '코벡사');
+
+-- [SYNTHETIC] 11-02(pl-29) — 계약(프로젝트) 목록과 문서 표(운영 노트의 칸 이름, 값은 가짜). FileStorageMap_CRMS(ai.sql)로 이어짐.
+CREATE TABLE RM_CM_PJTLIST (
+    RM_CONTRACT_CODE TEXT PRIMARY KEY,
+    SF_ACC_ID        TEXT,
+    SF_ACC_NAME      TEXT,
+    DIVISION         TEXT,
+    RM_CONTRACT_NAME TEXT,
+    INIT_DTTM        TEXT
+) STRICT;
+INSERT INTO RM_CM_PJTLIST SELECT rm_contract_code, NULL, 'Hanbit Synthetic Client ' || (docu_seq % 3), CASE docu_seq % 3 WHEN 0 THEN 'DS' WHEN 1 THEN 'DP' ELSE 'CD' END,
+    'Synthetic Contract ' || rm_contract_code, '2025-01-15 09:00:00' FROM FileStorageMap_CRMS;
+CREATE TABLE RM_CM_DOCU (
+    RM_CONTRACT_CODE TEXT,
+    GATE_CODE        TEXT,
+    GATE_VERSION     TEXT,
+    DOCU_SEQ         INTEGER,
+    DOC_TYPE         TEXT,
+    DOCU_NAME        TEXT,
+    INIT_DTTM        TEXT
+) STRICT;
+INSERT INTO RM_CM_DOCU SELECT rm_contract_code, gate_code, gate_version, docu_seq, 'DOC', NULL, '2025-01-20 10:00:00' FROM FileStorageMap_CRMS;

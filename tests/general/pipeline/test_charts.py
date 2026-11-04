@@ -1,8 +1,8 @@
-"""pipeline.transform.figures.charts 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.charts`."""
+"""pipeline.transform.figures.office_charts 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.office_charts`."""
 
 from pathlib import Path
 
-from pipeline.transform.figures.charts import chart_text
+from pipeline.transform.figures.office_charts import chart_text
 
 
 def selftest():

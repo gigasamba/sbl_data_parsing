@@ -1,12 +1,11 @@
-"""pipeline.extract.prepare 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.prepare --selftest`."""
+"""pipeline.extract.filter_and_rotate 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.filter_and_rotate --selftest`."""
 
 import json
 import struct
 from pathlib import Path
 
-import pipeline.extract.prepare as M
-from pipeline import config as pc
-from pipeline.extract.prepare import (
+import pipeline.extract.filter_and_rotate as M
+from pipeline.extract.filter_and_rotate import (
     _ENCRYPTED_PACKAGE,
     CFB_SIG,
     ZIP_SIG,
@@ -127,65 +126,96 @@ def selftest():
         "selftest OK — DRM·암호 머리 바이트 판별(Fasoo·MarkAny·SoftCamp·OLE EncryptedPackage·PDF 머리 깨짐 → drm_unknown, "
         "정상 docx·pdf는 통과) + skipped.jsonl 누적 기록 + SI44 옛 OLE 암호(.doc·.xls·.ppt)·압축·미지원 확장자"
     )
-    _selftest_rotate_fast()
+    _selftest_rotate()
 
 
-def _selftest_rotate_fast():
-    """AD18 — best_angle 지름길의 제어 흐름만 확인(실 OCR·글꼴 불필요 — score()를 흉내 내 호출 횟수·결과를 본다).
-    핵심: hint 점수가 문턱(PREPARE_ROTATE_S0_MIN) 이상 **이고** 반대 각도(hint+180)보다 min_gain배 이상
-    앞설 때만 2번(hint·반대)으로 확정 — 둘 중 하나라도 모자라면 안전하게 기존과 같은 전체 4방향 계산으로
-    떨어져 정답을 그대로 찾는다(복원 정확도 불변, engine-qa CONCERN 10-08 반영: 문턱만 보고 반대와 안
-    비교하면 뒤집힌 글도 가로로 읽혀 점수가 높게 나오는 경우를 확정해버릴 위험이 있었다) — 실제 회전
-    복원율은 `vlm_page.py`·score_gold 쪽 실측(S17)이 맡는다."""
-    # S9 — `global score`(모듈 전역 대입)를 모듈 바깥으로 옮긴 코드에서는 M.score(함수가 읽는 모듈 전역)로 바꿈
+def _selftest_rotate():
+    """pl-02(사용자 11-02) — best_angle은 4방향 점수를 스레드 4개로 동시에 재고 가장 높은 각도를 고른다(같으면 0도, 모두 0이면 0도).
+    문턱·비율·기대 각도 없음. 실 OCR·글꼴 없이 — score()를 흉내 낸다: 흰 점 하나를 둔 이미지를 돌리면 점이 다른 모서리로 가므로
+    그 자리로 각도를 알아내 표의 점수를 돌려준다(병렬이라 부르는 순서는 상관없음)."""
+    import threading
+
     from PIL import Image
 
+    im = Image.new("L", (40, 40), 0)
+    im.putpixel((0, 0), 255)  # 0도: 왼쪽 위 → 90도(반시계): 왼쪽 아래 → 180도: 오른쪽 아래 → 270도: 오른쪽 위
+    corner = {(0, 0): 0, (0, 39): 90, (39, 39): 180, (39, 0): 270}
     orig_score = M.score
-    im = Image.new("RGB", (40, 40), "white")
-    calls = []
+    threads = set()
 
-    def fake(seq):
-        it = iter(seq)
-
-        def f(_im, _probe):
-            calls.append(1)
-            return next(it)
+    def fake(table):
+        def f(x, _probe):
+            threads.add(threading.current_thread().name)
+            xy = next(xy for xy in corner if x.getpixel(xy) == 255)
+            return table[corner[xy]]
 
         return f
 
     try:
-        calls.clear()  # 1) hint=0 충분히 높고(문턱 150↑) 반대(180)보다 압도적 → 2번(hint·반대)만, 나머지 생략
-        M.score = fake([200.0, 10.0])
-        ang, s = best_angle(im, 1280, 1.3, hint=0)
-        assert ang == 0 and len(calls) == 2 and s == {0: 200.0, 180: 10.0}, (ang, s, calls)
-
-        calls.clear()  # 2) hint=0 점수는 문턱을 넘지만 반대(180)도 거의 비슷(경쟁 비교 실패, CONCERN 사례)
-        M.score = fake([200.0, 190.0, 0.0, 3.0, 500.0, 2.0])  # → 안전하게 전체 4방향으로 떨어져 정답(180) 그대로 찾음
-        ang, s = best_angle(im, 1280, 1.3, hint=0)
-        assert ang == 180 and len(calls) == 6 and s == {0: 0.0, 90: 3.0, 180: 500.0, 270: 2.0}, (ang, s, calls)
-
-        calls.clear()  # 3) hint=0 문턱 미달(반대와 비교할 것도 없이 모자람) → 전체 4방향
-        M.score = fake([10.0, 190.0, 0.0, 3.0, 500.0, 2.0])
-        ang, s = best_angle(im, 1280, 1.3, hint=0)
-        assert ang == 180 and len(calls) == 6, (ang, s, calls)
-
-        calls.clear()  # 4) 꺼짐(PREPARE_ROTATE_FAST=0) — 지름길 자체를 안 써 기존처럼 곧바로 전체 4방향(빠른 1차 호출 없음)
-        M.score = fake([500.0, 0.0, 3.0, 2.0])
-        with pc.PIPE.env(PREPARE_ROTATE_FAST="0"):  # S7c — os.environ 대신 설정 객체를 덮어씀
-            ang, s = best_angle(im, 1280, 1.3, hint=0)
-        assert ang == 0 and len(calls) == 4, (ang, s, calls)
-
-        calls.clear()  # 5) 문서 앞쪽에서 선 공통 각도(0이 아님)도 지름길 대상 — 반대는 hint+180(=270)
-        M.score = fake([300.0, 5.0])
-        ang, s = best_angle(im, 1280, 1.3, hint=90)
-        assert ang == 90 and len(calls) == 2 and s == {90: 300.0, 270: 5.0}, (ang, s, calls)
+        for table, want in (
+            ({0: 10.0, 90: 3.0, 180: 500.0, 270: 2.0}, 180),  # 가장 높은 각도로 돌림 — 문턱·비율 없음
+            ({0: 300.0, 90: 0.0, 180: 290.0, 270: 0.0}, 0),  # 0도가 가장 높으면 그대로
+            ({0: 5.0, 90: 5.0, 180: 5.0, 270: 5.0}, 0),  # 모두 같으면 0도
+            ({0: 0.0, 90: 0.0, 180: 0.0, 270: 0.0}, 0),  # 글자가 없으면 0도
+            ({0: 1.0, 90: 2.0, 180: 0.0, 270: 0.0}, 90),  # 차이가 작아도 가장 높은 쪽(옛 1.3배 비교 없음)
+        ):
+            M.score = fake(table)
+            ang, s = best_angle(im, 1280)
+            assert ang == want and s == table, (table, ang, s)
+        assert len(threads) > 1 and all(t.startswith("rotate") for t in threads), threads  # 4방향을 풀 스레드에서 동시에
     finally:
         M.score = orig_score
-    print(
-        "[selftest] AD18 — 방향 보정 빠른 경로(hint·반대 2번 비교 — 문턱+경쟁 둘 다 통과해야 확정, 하나라도 모자라면 "
-        "기존과 같은 전체 4방향으로 안전하게 — 복원 정확도 불변) 통과"
-    )
+    print("[selftest] pl-02 — 회전 판정 4방향 동시(스레드 풀)·가장 높은 각도·같으면 0도 통과")
+
+
+def test_rotation_off_by_default():
+    """pl-02(사용자 11-02) — 회전은 기본 꺼짐: 이미지 문서도 회전용 OCR(score) 없이 그대로 놓고, rotation.csv는 머리 줄만."""
+    import sys
+    import tempfile
+    from unittest import mock
+
+    from PIL import Image
+
+    from pipeline import config as pc
+
+    assert pc.cfg().extract.prepare.rotate is False
+    with tempfile.TemporaryDirectory() as d:
+        src, out = Path(d) / "src", Path(d) / "prepared"
+        src.mkdir()
+        Image.new("RGB", (30, 20), "white").save(src / "scan.png")
+
+        def boom(*a, **k):
+            raise AssertionError("회전이 꺼졌는데 OCR 점수를 잼")
+
+        with mock.patch.object(M, "score", boom), mock.patch.object(sys, "argv", ["prepare", "--src", str(src), "--out", str(out)]):
+            M.main()
+        assert (out / "scan.png").exists()
+        assert (out / "rotation.csv").read_text(encoding="utf-8-sig").strip() == "file,page,angle,orig_sha256,s0,s90,s180,s270"
 
 
 def test_main():  # 옛 `if a.selftest:` 갈래(main() 안)
     selftest()
+
+
+def test_records_outside_scanned_folder():
+    """운영 고침 10(11-02) — 건너뛴 문서 기록(skipped.csv·skipped.jsonl)은 prepared/_records/에. 파싱(run_all)이 훑는 맨 위에는
+    문서와 rotation.csv만 남아, 기록 파일이 "건너뜀(처리 엔진 없음) .csv"로 세지지 않는다. 옛 자리의 누적 기록은 옮겨 이어 쓴다."""
+    import sys
+    import tempfile
+    from unittest import mock
+
+    with tempfile.TemporaryDirectory() as d:
+        src, out = Path(d) / "src", Path(d) / "prepared"
+        src.mkdir()
+        out.mkdir()
+        (src / "a.txt").write_text("hello", encoding="utf-8")
+        (src / "b.zip").write_bytes(b"PK\x03\x04" + b"\x00" * 20)  # 압축 — 건너뜀(unsupported_archive)
+        (out / "skipped.jsonl").write_text(json.dumps({"file": "old.pdf", "reason": "drm_fasoo"}) + "\n", encoding="utf-8")
+        (out / "skipped.csv").write_text("file,reason\n", encoding="utf-8")
+        with mock.patch.object(sys, "argv", ["prepare", "--src", str(src), "--out", str(out)]):
+            M.main()
+        top = sorted(p.name for p in out.iterdir() if p.is_file())
+        assert top == ["a.txt", "rotation.csv"], top
+        recs = [json.loads(ln) for ln in (out / "_records" / "skipped.jsonl").read_text(encoding="utf-8").splitlines()]
+        assert [r["file"] for r in recs] == ["old.pdf", "b.zip"], recs
+        assert "b.zip" in (out / "_records" / "skipped.csv").read_text(encoding="utf-8-sig")

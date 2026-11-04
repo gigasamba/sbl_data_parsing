@@ -16,19 +16,23 @@ def test_main():  # 옛 `if __name__ == "__main__":   # 자기점검: 긴 변 �
     assert max(arr2.shape[:2]) == MAX_SIDE and abs(back2 - 8500 / MAX_SIDE) < 1e-6, (arr2.shape, back2)
     import os  # OC1 — 스레드 수 결정 순서
 
-    keep = {k: os.environ.get(k) for k in ("OCR_THREADS", "OMP_NUM_THREADS")}
+    from pipeline import config as pc
+
+    keep = {k: os.environ.get(k) for k in ("OMP_NUM_THREADS",)}  # env 남김 — 시험: OMP_NUM_THREADS는 라이브러리 env
     try:
-        os.environ.update(OCR_THREADS="2", OMP_NUM_THREADS="5")
-        assert ocr_threads() == 2  # 명시값 우선
-        os.environ["OCR_THREADS"] = "auto"
-        assert ocr_threads() == 5  # 숫자가 아니면 무시(엔진이 죽지 않게)
-        os.environ["OCR_THREADS"] = "0"
-        assert ocr_threads() == -1  # 0 = 옛 동작(onnxruntime 자동)
-        os.environ.pop("OCR_THREADS")
-        assert ocr_threads() == 5  # run_all이 맞춘 OMP_NUM_THREADS
-        os.environ.pop("OMP_NUM_THREADS")
-        assert ocr_threads() >= 1  # resources.plan() 대체
+        os.environ["OMP_NUM_THREADS"] = "5"  # env 남김 — 시험: 라이브러리 env
+        with pc.PIPE.env(OCR_THREADS="2"):  # op-09 — 엔진 칸은 설정 객체
+            assert ocr_threads() == 2  # 명시값 우선
+        with pc.PIPE.env(OCR_THREADS="auto"):
+            assert ocr_threads() == 5  # 숫자가 아니면 무시(엔진이 죽지 않게)
+        with pc.PIPE.env(OCR_THREADS="0"):
+            assert ocr_threads() == -1  # 0 = 옛 동작(onnxruntime 자동)
+        with pc.PIPE.env(OCR_THREADS=None):
+            assert ocr_threads() == 5  # run_all이 맞춘 OMP_NUM_THREADS
+        os.environ.pop("OMP_NUM_THREADS")  # env 남김 — 시험: 라이브러리 env
+        with pc.PIPE.env(OCR_THREADS=None):
+            assert ocr_threads() >= 1  # resources.plan() 대체
     finally:
         for k, v in keep.items():
-            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)  # env 남김 — 시험: 복원
     print("rapidocr self-check OK")

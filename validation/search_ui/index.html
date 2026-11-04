@@ -73,7 +73,6 @@ main.chat { display: flex; flex-direction: column; min-width: 0; height: 100vh; 
 .summary b { color: var(--ink); font-weight: 600; }
 .badge { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--code); color: var(--muted); }
 .badge.found { background: var(--b-soft); color: var(--b); } .badge.weak { background: var(--i-soft); color: var(--i); } .badge.none { background: var(--warn-soft); color: var(--warn); }
-.via-v { background: var(--v-soft); color: var(--v); } .via-k { background: var(--b-soft); color: var(--b); } .via-i { background: var(--i-soft); color: var(--i); } .via-g { background: var(--g-soft); color: var(--g); }
 .err { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 10px 12px; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .typing { color: var(--muted); font-size: 14px; }
 .typing::after { content: "…"; animation: blink 1.2s infinite; }
@@ -165,6 +164,15 @@ svg.profile { width: 100%; height: 120px; display: block; }
 
     <div id="searchOpts">
       <div class="sec-title">검색 설정</div>
+      <div class="field" style="margin-bottom:8px"><span>원천</span>
+        <select id="source">
+          <option value="SFDC">SFDC</option>
+          <option value="CRMS">CRMS</option>
+          <option value="LAS">LAS</option>
+          <option value="FAQ">FAQ</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
       <div class="field" style="margin-bottom:8px"><span>top-k</span><input type="number" id="k" min="1" max="20" value="5"></div>
       <label class="opt"><input type="checkbox" name="m" value="vector" checked> vector (임베딩 코사인)</label>
       <label class="opt"><input type="checkbox" name="m" value="bm25" checked> bm25 (키워드)</label>
@@ -219,7 +227,6 @@ svg.profile { width: 100%; height: 120px; display: block; }
   "use strict";
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const VIA = { v: "vector", k: "bm25", i: "id", g: "graph", a: "aggregate" };   // search_backends.py의 via 글자
   const thread = $("thread"), scroll = $("scroll"), input = $("input"), send = $("send");
   const history = [];
   let busy = false, activeCard = null;
@@ -233,6 +240,7 @@ svg.profile { width: 100%; height: 120px; display: block; }
   $("closeDrawer").addEventListener("click", closeDrawer);
   $("tool").addEventListener("change", updateMode);
   $("k").addEventListener("input", updateMode);
+  $("source").addEventListener("change", updateMode);
   document.querySelectorAll("input[name=m]").forEach((c) => c.addEventListener("change", updateMode));
 
   function methods() { return [...document.querySelectorAll("input[name=m]:checked")].map((c) => c.value); }
@@ -240,7 +248,7 @@ svg.profile { width: 100%; height: 120px; display: block; }
     const tool = $("tool").value;
     $("searchOpts").style.display = tool === "search" ? "" : "none";
     input.placeholder = tool === "search" ? "질문을 입력하세요" : "SELECT id, s3_key FROM AI.FileStorageMap LIMIT 5  (읽기 전용 · PC 대역은 sqlite라 LIMIT)";
-    $("modeHint").textContent = tool === "search" ? `search · k=${$("k").value} · ${methods().join("+") || "기본"}` : "query_edw · SELECT만";
+    $("modeHint").textContent = tool === "search" ? `search · ${$("source").value} · k=${$("k").value} · ${methods().join("+") || "기본"}` : "query_edw · SELECT만";
   }
 
   async function api(path, body) {
@@ -295,7 +303,7 @@ svg.profile { width: 100%; height: 120px; display: block; }
     addUser(text);
     const body = addBot();
     const args = tool === "search"
-      ? { question: text, k: Math.max(1, Math.min(20, +$("k").value || 5)), ...(methods().length ? { methods: methods() } : {}) }
+      ? { question: text, source_system: $("source").value, k: Math.max(1, Math.min(20, +$("k").value || 5)), ...(methods().length ? { methods: methods() } : {}) }
       : { sql: text };
     try {
       const d = await api("api/call", { tool, args });
@@ -328,11 +336,9 @@ svg.profile { width: 100%; height: 120px; display: block; }
 
   function card(e) {
     const c = document.createElement("div"); c.className = "card";
-    const via = String(e.via || "");
-    const viaBadges = [...via].map((ch) => `<span class="badge via-${esc(ch)}">${esc(VIA[ch] || ch)}</span>`).join(" ");
     const loc = [e.page != null ? `p.${e.page}` : null, e.line ? `줄 ${e.line}` : null, e.section ? `§ ${e.section}` : null].filter(Boolean).join(" · ");
     c.innerHTML = `
-      <div class="card-head"><span class="rank">#${esc(e.rank)}</span><span class="fname">${esc(e.file_name || "(이름 없음)")}</span>${viaBadges}
+      <div class="card-head"><span class="rank">#${esc(e.rank)}</span><span class="fname">${esc(e.file_name || "(이름 없음)")}</span>
         <span class="score" title="RRF 순위 점수">score ${esc(e.score)}</span></div>
       <div class="meta">${esc(e.source_uri || "")}${loc ? " · " + esc(loc) : ""} · chunk_id ${esc(e.chunk_id)}</div>
       <div class="text">${esc(e.text || "")}</div>

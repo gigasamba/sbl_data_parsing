@@ -1,52 +1,28 @@
 #!/usr/bin/env python3
-"""SI39 — 파싱이 끝난 뒤 별도로: 대표 결과(.md)를 Object Storage에 올리고 EDW `AI.ParsingMeta`에 행을 기록한다.
-**맨 마지막 별도 단계**(설계 docs/architecture.md) — 앞 단계(파싱·구조화·적재·검색)는 Object
-Storage·EDW를 **읽기만** 한다. 공용 로직은 modules/load/parsing_meta.py(이 CLI는 그 모듈의 함수만 부른다).
+"""게시(publish — PRD pl-09): 파싱이 끝난 문서의 대표 결과(.md)와 엔진별 원결과를 Object Storage에 올리고 EDW `AI.ParsingMeta`에 행을 쓴다.
+공용 로직은 pipeline/load/silver_publish.py — 이 CLI는 그 함수만 부른다.
 
-요건(SI39, 사용자 10-08 — backlog/server.md SI39): ① 올리는 것은 **대표 결과(.md)**, 원본 파일은 올리지 않는다
-(원천 원본은 읽기만, 수정·삭제 금지) ② 겹침/건너뜀 키 = (source_system, 원본 전체 키) ③ Object Storage 키는
-항상 `<PM_PREFIX>/<source_system 또는 PM_PATH_MAP 새 앞부분>/<원본 폴더>/<파일명>/<파일명>_<parse_date>.md`(사용자 10-14) — 이미 있으면 건너뜀, `--reparse`로 명시한
-키만 새 날짜 폴더(옛 결과 안 덮음) ④ EDW는 INSERT만 + 상태 열(status·status_at)만 UPDATE 허용(`parsing_meta.
-update_status()`) ⑤ PM_BUCKET이 원천 원본 버킷과 같으면 거부 ⑥ DRM·파싱 실패는 EDW에 안 넣고
-`output/publish/excluded_<날짜>.md` 보고서로만.
+규칙: 원본 파일은 올리지 않는다 · 겹침 키 = (source_system, 원본 전체 키) — 있으면 건너뜀, `--reparse` 목록만 새 날짜 폴더 ·
+EDW는 INSERT만 · 게시 버킷이 원천 원본 버킷과 같으면 거부 · DRM·실패 문서는 EDW에 안 쓰고 `output/publish/excluded_<날짜>.md`에만.
 
-OP1/OP9(원천 변경·삭제 탐지, --apply일 때만) — 문서 대장(AD16, common/registry.py)을 같이 갱신해 changed·deleted·
-touched(AD17①, 원본 바이트는 같고 날짜만 바뀜) doc_key를 `parsing_meta.apply_registry_status()`로 EDW status
-UPDATE(changed·deleted는 status 값 자체를 바꿈 · touched는 status 값은 그대로 두고 status_at만 — active는 안
-건드림, 그 밖 UPDATE 없음). deleted는 문서 대장이 자동으로 검색에서 숨김(색인 행 삭제 아님, `cli/registry.py
-unhide`로 되돌릴 수 있음) · changed는 보고만(`output/registry/report.md` — 사람이 `--reparse`로 명시하기 전까지
-재파싱하지 않음, 옛 내용 그대로 검색됨) · touched는 재파싱·새 판·변경 보고 모두 제외(report.md엔 건수만, 목록
-없음 — 파싱 결과끼리 비교하는 '판' 단위 작업(AD17②·D10)은 범위 밖·다음 단계). 문서 대장을 못 열면
-(DOC_REGISTRY=0·DB 없음) 조용히 건너뜀 — 게시 자체는 그대로 진행(전과 동일).
-
-사용(기본 --out의 하위 경로를 그대로 — pipeline.py와 같은 레이아웃):
-  python cli/publish_parse.py [--out out] [--source-system FileStorageMap] [--version <판>] [--parse-date <날짜>]
-                              [--reparse <키 목록 파일>] [--apply]
-  기본은 **dry-run**(무엇을 올리고 쓸지 표만 출력, 실제 업로드·EDW 쓰기 0) — 실제로 쓰려면 --apply 명시.
-
-env(전부 PM1 결정 대기 — 사람, docs/operations/server-guide.md 단계 6):
-  PM_TABLE(기본 AI.ParsingMeta) · PM_BUCKET(업로드 버킷 — "file://<폴더>"면 로컬 폴더를 가짜 Object Storage로) ·
-  PM_PREFIX(버킷 안 경로 접두, 선택) · common.connections.rdb 쓰기 계정(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_WRITE_USER·RDB_WRITE_PASSWORD
-  — 사용자 10-29 ops.md#op-03) · RDB_SQLITE(설정하면 SQLite를 가짜 EDW로, 접속 칸 안 봄) ·
-  OS_ENDPOINT·OS_ACCESS_KEY·OS_SECRET_KEY·OS_REGION·OS_VERIFY_TLS(업로드 접속 — source.py·os_put.py와 같음) ·
-  PM_UPLOAD_STATUSES(콤마 목록, 기본 "ok,partial"만 올림) · PM_PARSE_DATE(--parse-date 대신 env로, 선택).
-원본 로컬 보존·즉시 삭제는 이제 modules/parse/source.py(SI39⑧ — 파싱이 끝나면 바로 지움, KEEP_LOCAL_ORIGINALS=1만
-디버그 보존)가 맡는다 — 이 CLI는 원본 삭제를 하지 않는다(올리지도 않으므로, SI37 때와 달리 X2 책임이 없음).
-DDL은 이 코드가 실행하지 않는다(설계 §2 초안 — 사람이 만듦). SQL은 식별자 화이트리스트·값 바인딩(AD44 관례),
-비밀값(RDB_WRITE_PASSWORD 등)은 어떤 모드에서도 출력하지 않는다.
+사용: python -m pipeline.load.publish_parse_result [--out output] [--parse-date YYYY-MM-DD] [--reparse <키 목록 파일>] [--apply]
+기본은 dry-run(표만 출력, 업로드·EDW 쓰기 0). 설정은 settings.yaml(게시 버킷·접두·표, EDW 쓰기 계정, Object Storage 접속 —
+settings.sample.yaml `load.publish`·`required`). PC는 버킷 `file://<폴더>`·`RDB_SQLITE`로 로컬 대역을 쓴다.
+DDL은 실행하지 않는다. SQL은 식별자 화이트리스트·값 바인딩, 비밀값은 출력하지 않는다.
 """
 
 import argparse
 import json
 from pathlib import Path
 
+from common.core import span as SP  # op-01 성능 span
 from common.core.console import utf8_stdout
 from common.core.paths import APP_ROOT
 
 ROOT = APP_ROOT  # output/ 등 런타임 경로용(옛 dev/)
 from common.core.contract import jl  # noqa: E402
 from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
-from pipeline.load import parsing_meta as PM  # noqa: E402
+from pipeline.load import silver_publish as PM  # noqa: E402
 
 
 def _load_inputs(out, manifest, source_dir, rep, summary, skipped, keep):
@@ -55,7 +31,10 @@ def _load_inputs(out, manifest, source_dir, rep, summary, skipped, keep):
     source_dir = Path(source_dir) if source_dir else out / "_source_files"
     rep = Path(rep) if rep else out / "parse" / "_rep" / "index.json"
     summary = Path(summary) if summary else out / "parse" / "parse_summary.json"
-    skipped = Path(skipped) if skipped else out / "prepared" / "skipped.jsonl"
+    if not skipped:  # 운영 고침 10(11-02) — prepare가 기록을 prepared/_records/에 씀(옛 자리 prepared/skipped.jsonl도 읽음)
+        new, old = out / "prepared" / "_records" / "skipped.jsonl", out / "prepared" / "skipped.jsonl"
+        skipped = new if new.exists() or not old.exists() else old
+    skipped = Path(skipped)
     keep = Path(keep) if keep else out / "dedup" / "keep.txt"
     if not manifest.exists():
         raise SystemExit(f"[publish_parse] manifest 없음 — {manifest}(Object Storage·RDB 기원 파싱만 대상, 폴더 직접 파싱은 PM3 범위 밖)")
@@ -83,7 +62,7 @@ def run(a):
         a.out, a.manifest, a.source_dir, a.rep, a.summary, a.skipped, a.keep
     )
     version = a.version or PM.pipeline_version()
-    parse_date = a.parse_date or pc.cfg().load.publish.parse_date or PM.today()
+    parse_date = a.parse_date or PM.today()
     pub = pc.cfg().load.publish  # S7c — 설정 객체
     bucket = pub.bucket
     if not bucket:
@@ -147,8 +126,11 @@ def run(a):
     storage, db = PM.make_storage(), PM.make_db("write")
     md_dir = Path(a.out) / "publish" / "_md_tmp"
     try:
-        result = PM.apply(rows, storage, db, md_dir, prefix)
-        out["registry_status_update"] = _apply_registry_status(a.out, db)  # OP1/OP9 — changed·deleted만 status UPDATE(아래)
+        with SP.span("load.publish", "load", cpu=True) as sp:  # op-01 — Object Storage 업로드 + EDW 쓰기 1행(대상 문서 수·결과 숫자)
+            result = PM.apply(rows, storage, db, md_dir, prefix)
+            sp.rows(len(rows)).add(
+                eligible=out["upload_plan"]["eligible"], **{k: v for k, v in (result or {}).items() if isinstance(v, (int, float))}
+            )
     finally:
         if hasattr(db, "close"):
             db.close()
@@ -158,65 +140,8 @@ def run(a):
     report_path = report_dir / f"excluded_{parse_date}.md"
     report_path.write_text(PM.render_excluded_report(rows), encoding="utf-8")  # SI39⑥ — DRM·실패는 여기로만
     out["excluded_report"] = str(report_path)
-    if out["registry_status_update"].get("changed_report"):
-        out["changed_report"] = out["registry_status_update"].pop("changed_report")
     print(json.dumps(out, ensure_ascii=False))
     return out
-
-
-def _apply_registry_status(out_dir, db):
-    """OP1/OP9 — publish --apply에서만: 문서 대장을 갱신(scan·diff·apply — 이번 관측에 없는 문서는 기록만, 숨기거나 deleted로 쓰지 않음, pl-12)하고
-    changed·touched(AD17①) doc_key의 EDW status UPDATE(PM.apply_registry_status, update_status()만 씀 —
-    touched는 status 값은 그대로, status_at만). changed는 report.md로만(재파싱 안 함, OP1) — output/registry/report.md에
-    이번 build의 new/touched/changed/deleted 요약(touched는 건수만, 목록 없음).
-    문서 대장을 못 열면(DOC_REGISTRY=0·DB 없음·그 밖 오류) 조용히 건너뜀(게시 자체는 막지 않음 — 전과 동일)."""
-    from common.store import registry as REG
-
-    reg_db = REG.try_open_db()
-    if reg_db is None:
-        return {"changed": 0, "deleted": 0, "skipped": 0, "note": "문서 대장 사용 안 함(DOC_REGISTRY=0 또는 연결 안 됨)"}
-    try:
-        from common.store.db import dbtool
-        from common.store.structdb import ensure_registry_schema
-
-        dbtool.require_struct(reg_db)  # S8a — 판 확인(낮거나 모르는 판은 StructDBError → 아래에서 문서 대장만 건너뜀, 게시는 계속)
-        ensure_registry_schema(reg_db)
-        diff, build_id = REG.build(out_dir, reg_db)
-        counts = PM.apply_registry_status(db, diff)
-        report_path = Path(out_dir) / "registry" / "report.md"
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(
-            f"# 문서 대장 build {build_id}\n\n"
-            f"- 새 문서 {len(diff['new'])}건 · **날짜만 바뀜(touched, 원본 바이트는 같음 — 재파싱·새 판·변경 보고 제외) "
-            f"{len(diff.get('touched') or [])}건** · **바뀜(보고만, 재파싱 안 함) {len(diff['changed'])}건** · "
-            f"이번 관측에 없음 {len(diff['deleted'])}건(기록만, 숨기지 않음) · 그대로 {len(diff['unchanged'])}건\n\n"
-            + (
-                "## 바뀜(changed) — 사람 조치 뒤 재파싱 전까지 옛 내용 그대로 서빙\n"
-                + "\n".join(f"- {k}" for k in diff["changed"])
-                + "\n\n"
-                if diff["changed"]
-                else ""
-            )
-            + (
-                "## 이번 관측에 없음 — 기록만(숨기지 않음·deleted로 쓰지 않음, pl-12)\n"
-                + "\n".join(f"- {k}" for k in diff["deleted"])
-                + "\n"
-                if diff["deleted"]
-                else ""
-            ),
-            encoding="utf-8",
-        )
-        counts["changed_report"] = str(report_path)
-        return counts
-    except Exception as ex:
-        return {
-            "changed": 0,
-            "deleted": 0,
-            "skipped": 0,
-            "note": f"문서 대장 갱신 실패 — EDW 상태 갱신 건너뜀: {type(ex).__name__}: {str(ex)[:160]}",
-        }
-    finally:
-        reg_db.close()
 
 
 def main(argv=None):
@@ -226,7 +151,9 @@ def main(argv=None):
     ap.add_argument("--source-dir", help="기본 <out>/_source_files")
     ap.add_argument("--rep", help="기본 <out>/parse/_rep/index.json")
     ap.add_argument("--summary", help="기본 <out>/parse/parse_summary.json")
-    ap.add_argument("--skipped", help="기본 <out>/prepared/skipped.jsonl(DRM·암호 — 없으면 무시)")
+    ap.add_argument(
+        "--skipped", help="기본 <out>/prepared/_records/skipped.jsonl(옛 자리 prepared/skipped.jsonl도 — DRM·암호, 없으면 무시)"
+    )
     ap.add_argument("--keep", help="기본 <out>/dedup/keep.txt(중복 제외 — 없으면 dedup 정보 없음으로 전부 포함)")
     ap.add_argument(
         "--source-system",
@@ -234,8 +161,8 @@ def main(argv=None):
         help="SI41 — manifest 행이 source_system을 들고 있으면(rdb:*·rdb:<이름>) 그 값을 쓰고, 이 값은 "
         "폴백(레거시 단일 표 소스)에만 쓰인다",
     )
-    ap.add_argument("--version", help="기본 저장소 루트 VERSION(오버레이 패치면 PATCH_VERSION — common.pipeline_version, D-036)")
-    ap.add_argument("--parse-date", help="기본 오늘(YYYY-MM-DD, 또는 env PM_PARSE_DATE) — Object Storage 키의 날짜 폴더(SI39③)")
+    ap.add_argument("--version", help="기본 저장소 루트 VERSION(옛 PATCH_VERSION이 더 높으면 그것 — common.pipeline_version, D-036)")
+    ap.add_argument("--parse-date", help="기본 오늘(YYYY-MM-DD) — Object Storage 키의 날짜 폴더(SI39③)")
     ap.add_argument("--reparse", help="사람 조치 뒤 재파싱 대상 원본 키 목록 파일(한 줄에 하나, SI39③) — 새 날짜 폴더로, 옛 결과는 안 지움")
     ap.add_argument("--apply", action="store_true", help="실제 업로드 + EDW 쓰기(기본은 dry-run — 표만 출력, 쓰기 0)")
     a = ap.parse_args(argv)
@@ -247,4 +174,9 @@ if __name__ == "__main__":
 
     setarg.apply()  # --set 이름=값(S9 Step A — 호스트 run_docs.py publish가 PM_BUCKET_SKIP_OVERLAP_CHECK를 넘김)
     utf8_stdout()
-    main()
+    import sys
+
+    from pipeline.shared import runtrace
+
+    with runtrace.run("publish_parse_result", sys.argv[1:]):  # op-01 — 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
+        main()

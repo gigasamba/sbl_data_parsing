@@ -1,0 +1,44 @@
+# 검색 MCP 서버(백로그 G1) — mcp-server 이미지(S6b), 명령 mcp. 결과 폴더는 읽기 전용(검색은 PG만 — 묶음 폴더는 안 읽음, mc-19).
+#   bash deploy/host/scripts/mcp_up.sh(상주 확인·기동) · 직접(하위 셸로 — VS7e1 R-2): ( . deploy/host/scripts/settings_env.sh && load_settings && docker compose -f deploy/host/compose/compose.mcp-server.yml up -d )
+# 네트워크: 호스트 네트워크(Linux) — PostgreSQL·임베딩 API에 서버 주소 그대로 붙고, MCP는 MCP_HOST(127.0.0.1 또는 사내 대역 IP)에만 열림.
+#   루프백이 아닌 주소면 MCP_TOKEN 필수(클라이언트 Authorization: Bearer). 0.0.0.0은 거부.
+# S6b(사용자 10-27): 이미지 mcp-server·이미지 변수 MCP_SERVER_IMAGE·컨테이너 이름 mcp-server.
+# S7e1(사용자 10-27 Q1·Q3, D-028 ⑭) — 옛 pipeline.env 통째 넘기기(비밀까지 컨테이너 env에)를 없앴다. 서비스마다 설정 파일 하나를 읽기 전용으로
+#   붙이고 env는 SETTINGS_FILE·RUN_ENV만 넘긴다(docker inspect에 비밀 없음). 앱이 붙인 파일에서 common + 자기 앱 절을 읽는다(전환 기간에는 다리가
+#   프로세스 env로 — U-a). compose 치환 값(이미지·자원·포트·호스트 경로)은 셸 env에서 — deploy/host/scripts/settings_env.sh의 load_settings가
+#   settings.yaml 호스트 칸을 export(trigger.sh·run_tool.sh·mcp_up.sh·systemd가 부름). YAML에 없는 칸은 아래 ${X:-기본값}이 그대로 걸린다.
+#   파일 권한: 컨테이너 사용자 UID 10001이 읽어야 함 — 주인 10001·그룹 운영 계정 그룹·640(운영 계정 UID가 10001이면 600 — refactor.md C-09, Q2).
+#   값 바꾸기(S7e3 — 사용자 10-28): 앱 설정 값은 settings.yaml을 직접 고친다(한 번만 다르게 돌릴 값도 — 고쳐 돌리고 되돌림). 셸·`-e`로 준 옛 env
+#   이름은 앱이 읽지 않고(S7e2), 덮기 파일 도구 `python -m common.config.overrides`는 PC 전용이라 서버에서는 종료 2(이 compose는 SETTINGS_FILE 한 파일만
+#   붙여 덮기 파일의 base가 컨테이너 안에 없음 — VS7e2 B-2). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지·자원·포트·호스트 경로)뿐.
+x-settings: &settings "${SETTINGS_FILE:?SETTINGS_FILE=<settings.yaml 절대 경로> 필요 — deploy/host/scripts/settings_env.sh load_settings가 export(refactor.md C-09)}:/etc/rag/settings.yaml:ro,z"
+services:
+  mcp:
+    image: ${MCP_SERVER_IMAGE:?MCP_SERVER_IMAGE=mcp-server:<태그> 필요 — 옛 DATA_RETRIEVAL_IMAGE·RAG_IMAGE는 S6b에 바뀜(refactor.md C-29)}
+    container_name: mcp-server${NAME_SUFFIX:-}             # S6b(사용자 10-27) — 옛 data-retrieval(그 전 rag-mcp)
+    command: ["mcp"]
+    restart: unless-stopped
+    network_mode: host
+    init: true
+    environment:
+      SETTINGS_FILE: /etc/rag/settings.yaml      # S7e1 — 붙인 설정 파일(x-settings)
+      RUN_ENV: "${RUN_ENV:?RUN_ENV=dev|prd 필요 — settings.yaml required.env.run_env(load_settings가 export — refactor.md C-34, D-028)}"   # S7a(D-028) — 실행 환경 필수(없으면 compose가 멈춤)
+      # S7e2(사용자 10-28) — 바인드·포트·질의 캐시는 settings.yaml search.server.host·port · common.models.embed.query_cache(op-08)(옛 env MCP_HOST·MCP_PORT·
+      #   EMBED_QUERY_CACHE — 질의 캐시는 이미지 안 기본 /tmp/mcp_query_cache.sqlite). 저장소는 PG 하나(mc-01 — 옛 store 칸·MCP_STORE 없음)
+    volumes:
+      - *settings
+      # EDW 조인 사슬 서버 사본(pl-52 — data-pipeline과 같은 파일): search attrs 거르기·근거 attrs 키. 앱은 ops.paths.edw_chain(적재와 같은 칸)에 이 경로를 적었을 때만 씀.
+      - ${RAG_ROOT:?RAG_ROOT=<서버 루트 — 코드 폴더의 부모> 필요 — settings_env.sh load_settings가 냄}/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z
+      - ${RAG_OUT:?RAG_OUT=<결과 폴더(파이프라인 /app/output)>}:${APP_OUTPUT_ROOT:?APP_OUTPUT_ROOT 필요 — settings_env.sh load_settings가 냄}:ro,z
+    mem_limit: ${MCP_MEM_LIMIT:-4g}
+    cpus: ${MCP_CPUS:-1}             # mcp(상주) + data-pipeline(PARSE_CPUS) — 4 vCPU 개발 서버는 parse_cpus 3 이하로(settings.yaml)
+    pids_limit: 512
+    healthcheck:                     # 이미지에 curl 없음 — python 한 줄(/health, 토큰 불필요)
+      test: ["CMD", "python", "-c",
+             "import urllib.request as u; u.urlopen('http://${MCP_HOST:-127.0.0.1}:${MCP_PORT:-8765}/health', timeout=3)"]   # S7e2 — 주소·포트는 compose 치환(load_settings)
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      options: {max-size: "20m", max-file: "3"}

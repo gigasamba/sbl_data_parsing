@@ -1,11 +1,11 @@
-"""pipeline.check_env 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.check_env --selftest`."""
+"""common.check.checker env(옛 pipeline.check_env — 0.2.0 합침) 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.check_env --selftest`."""
 
 import tempfile
 from pathlib import Path
 
+from common.check.checker import _parse_requirements, check_path_bundle, check_pg_schema, check_requirements
 from common.config import settings as C
 from pipeline import config as pc
-from pipeline.check_env import _parse_requirements, check_path_bundle, check_pg_schema, check_requirements
 
 
 def selftest():
@@ -26,33 +26,20 @@ def selftest():
         assert _parse_requirements(d / "없는파일.txt") == {}  # 파일 없으면 빈 dict(죽지 않음)
     print("[selftest] check_env requirements 대조 통과")
 
-    # OP15(c1) — 경로 묶음: 미설정(선택)·있는데 없음(경고)·있고 있음(정상)·GOLD_DIR 이름 짝을 출력만으로 확인(죽지 않음)
+    # OP15(c1) — 경로 묶음: 미설정(선택)·형식만 보는 값을 출력만으로 확인(죽지 않음)
     import contextlib
     import io
 
-    with tempfile.TemporaryDirectory() as d:
-        d = Path(d)
-        gold, docs = d / "gold", d / "docs"
-        gold.mkdir()
-        docs.mkdir()
-        (gold / "a.txt").write_text("정답", encoding="utf-8")
-        (docs / "a.pdf").write_text("원본", encoding="utf-8")  # 이름 짝(stem a) — 매칭돼야 함
-        (docs / "b.pdf").write_text("원본", encoding="utf-8")  # 짝 없음
-        # S7c — check_path_bundle이 설정 객체로 읽으므로 객체에 겹쳐 씀(os.environ 안 건드림 — pipeline 칸은 PIPE, common 칸은 COMMON)
-        with (
-            pc.PIPE.env(GOLD_DIR=str(gold), PARSE_SOURCE="rdb:*", E2E_QUESTIONS="auto"),
-            C.COMMON.env(CLIENT_ROSTER=None, GLOSSARY_DIR=str(d / "없는폴더")),
-        ):
-            # PARSE_SOURCE·E2E_QUESTIONS: 형식만(경로 존재 안 봄) · CLIENT_ROSTER: 미설정(선택) 경로 · GLOSSARY_DIR: 있는데 없음(경고만, 죽지 않음)
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                check_path_bundle(docs)
-            out = buf.getvalue()
-            assert "GOLD_DIR" in out and str(gold) in out
-            assert "미설정(선택)" in out  # CLIENT_ROSTER 등
-            assert "rdb:*" in out and "auto" in out
-            assert "이름 짝" in out and "짝 1건" in out  # a만 매칭, b는 안 됨
-    print("[selftest] check_env 경로 묶음(OP15 c1) — 미설정·경고·GOLD_DIR 이름 짝 통과")
+    # S7c — check_path_bundle이 설정 객체로 읽으므로 객체에 겹쳐 씀(os.environ 안 건드림)
+    with pc.PIPE.env(PARSE_SOURCE="rdb:*"):
+        # PARSE_SOURCE: 형식만(경로 존재 안 봄) · SOURCES_FILE 등: 미설정(선택)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            check_path_bundle()
+        out = buf.getvalue()
+        assert "미설정(선택)" in out  # SOURCES_FILE 등
+        assert "rdb:*" in out
+    print("[selftest] check_env 경로 묶음(OP15 c1) — 미설정·형식만 보는 값 통과")
 
     _selftest_pg_schema()
 
@@ -107,7 +94,7 @@ def _selftest_pg_schema():
     psycopg.connect = lambda **kw: FakeConn()
     try:
         # S7c — pg.conf()·has_conn()가 설정 객체(COMMON)로 읽으므로 객체에 겹쳐 씀(os.environ 안 건드림)
-        with C.COMMON.env(PG_HOST="x", PG_PORT="5432", PG_DB="x", PG_USER="x", PG_PASSWORD="x", PG_SCHEMA="ai_test", PG_CONN_FILE=None):
+        with C.COMMON.env(PG_HOST="x", PG_PORT="5432", PG_DB="x", PG_USER="x", PG_PASSWORD="x", PG_SCHEMA="ai_test"):
             script.update(schema_exists=True, usage_ok=True, create_ok=False, create_db=False)
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):

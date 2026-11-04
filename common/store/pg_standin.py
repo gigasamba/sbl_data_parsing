@@ -5,14 +5,17 @@ Docker·새 패키지 없이 sqlite3(표준 라이브러리)만으로 load/pgsto
 deploy·load를 따로 띄우는 subprocess들)가 같은 파일을 보게.
 
 ponytail: pgvector 전용(HNSW·이진 양자화·<~>)·BM25(unnest CTE)·그래프 중간 노드는 흉내 안 낸다(여기까지 하면 PG를
-새로 만드는 것) — vector(코사인, 전체 스캔으로 파이썬에서 계산)·순수 SQL(ANY→IN 번역)만 지원. 서버는 PG_PASSWORD
-또는 PG_CONN_FILE을 pipeline.env에 채우면 코드 변경 없이 이 파일을 거치지 않고 진짜 PG로 전환된다(common/pg.py
+새로 만드는 것) — vector(코사인, 전체 스캔으로 파이썬에서 계산)·순수 SQL(ANY→IN 번역)만 지원. 서버는 settings.yaml
+required.pg를 채우면 코드 변경 없이 이 파일을 거치지 않고 진짜 PG로 전환된다(common/pg.py
 has_conn() 단일 분기). bm25·그래프·집계가 필요한 검증은 실 PG에서(이 스탠드인의 한계 — 업그레이드 경로).
 """
 
 import datetime
+import json
+import math
 import re
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -20,6 +23,7 @@ from common.config.settings import cfg
 from common.core.paths import APP_ROOT
 
 _UNNEST_RE = re.compile(r"unnest\(%s::text\[\], %s::float8\[\]\) AS w\(term, weight\)")
+_CONTAINS_RE = re.compile(r"(\w+) @> %s::jsonb")  # jsonb 담김(attrs 거르기 — pl-52) → jsonb_contains(칸, %s)
 _CAST_RE = re.compile(r"%s::\w+(\[\])?(\(\d+\))?")
 _ANY_OR_PH = re.compile(r"(\S+)\s*=\s*ANY\(%s\)|%s")
 _SELECT_ONCONFLICT_RE = re.compile(r"(\bFROM\s+\w+)(\s+ON CONFLICT)")
@@ -57,6 +61,14 @@ def _cosine(a, b):
     return num / (da * db_) if da and db_ else 0.0
 
 
+def _contains(a, b):
+    """jsonb @> (한 단계 — 키마다 값이 같음). attrs 거르기만 씀."""
+    if a is None or b is None:
+        return None
+    a, b = json.loads(a), json.loads(b)
+    return int(isinstance(a, dict) and all(k in a and a[k] == v for k, v in b.items()))
+
+
 def _xlat(sql, params, schema):
     """%s→? · X = ANY(%s)→X IN (...) · %s::TYPE 캐스트 제거 · unnest(...) 2-배열 CTE→제거(한 곳, X4-BM25는 스탠드인
     미지원이라 호출 전에 걸러짐) — 한 번에(파라미터 위치가 꼬이지 않게, enforcement §2 — 번역은 이 함수 하나)."""
@@ -69,10 +81,13 @@ def _xlat(sql, params, schema):
     if um:
         terms, weights = params[0], params[1]
         vsql = ",".join("(?,?)" for _ in terms) or "(NULL,NULL)"
-        sql = sql[: um.start()] + f"(VALUES {vsql}) AS w(term, weight)" + sql[um.end() :]
+        sql = (
+            sql[: um.start()] + f"(SELECT column1 AS term, column2 AS weight FROM (VALUES {vsql})) AS w" + sql[um.end() :]
+        )  # SQLite는 AS w(칸 별칭) 꼴이 없음(mc-01)
         for t, w in zip(terms, weights):
             prefix += [t, w]
         params = params[2:]
+    sql = _CONTAINS_RE.sub(r"jsonb_contains(\1, %s)", sql)
     sql = _CAST_RE.sub("%s", sql)
     out, new_params, pi, i = [], [], 0, 0
     for m in _ANY_OR_PH.finditer(sql):
@@ -164,7 +179,13 @@ def _vector_top(con, sql, params):
 
 
 def _run(con, sql, params=None):
-    """단일 실행 지점 — .q()·커서 .execute() 둘 다 이걸 거침. 반환 (rows:list[tuple], cols:list[str]|None)."""
+    """단일 실행 지점 — .q()·커서 .execute() 둘 다 이걸 거침. 반환 (rows:list[tuple], cols:list[str]|None).
+    mc-01(11-01) — 검색 MCP는 작업 스레드에서 부르므로 연결 하나를 잠금(con.lock)으로 줄 세움."""
+    with con.lock:
+        return _run_locked(con, sql, params)
+
+
+def _run_locked(con, sql, params=None):
     sql = sql.replace(f"{con.schema}.", "")
     low = sql.lower()
     if "create schema" in low:  # schema.sql 전체(여러 문장) — 먼저 걸러야 함(그 안의 주석에 "create extension" 글자가 섞여 있음)
@@ -178,9 +199,8 @@ def _run(con, sql, params=None):
         return [], None
     if "information_schema.schemata" in low:
         return ([(1,)] if con.existed_before else []), ["x"]
-    if "information_schema.tables" in low and "load_run" in sql:
-        r = con.sqlite.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='load_run'").fetchall()
-        return r, ["x"]
+    if "information_schema.tables" in low and "alembic_version" in sql:  # 우리 표식(11-02 — load_run 대신) — 대역은 늘 우리 것(판 관리 밖)
+        return [(1,)], ["x"]
     if "information_schema.tables" in low:
         r = con.sqlite.execute("SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1").fetchall()
         return r, ["x"]
@@ -200,8 +220,8 @@ def _run(con, sql, params=None):
 class _Cp:
     """psycopg Cursor.copy() 자리 — COPY ... FROM STDIN을 행마다 INSERT로."""
 
-    def __init__(self, sqlite_cn, table, cols):
-        self.sqlite_cn, self.table, self.cols = sqlite_cn, table, cols
+    def __init__(self, pg, table, cols):
+        self.pg, self.table, self.cols = pg, table, cols
 
     def __enter__(self):
         return self
@@ -211,7 +231,8 @@ class _Cp:
 
     def write_row(self, values):
         ph = ",".join("?" for _ in values)
-        self.sqlite_cn.execute(f"INSERT INTO {self.table}({self.cols}) VALUES ({ph})", values)
+        with self.pg.lock:
+            self.pg.sqlite.execute(f"INSERT INTO {self.table}({self.cols}) VALUES ({ph})", values)
 
 
 class _Cur:
@@ -233,7 +254,8 @@ class _Cur:
 
     def executemany(self, sql, rows):
         sql = sql.replace(f"{self.pg.schema}.", "")
-        self.pg.sqlite.executemany(_sql_only(sql, self.pg.schema), rows)
+        with self.pg.lock:
+            self.pg.sqlite.executemany(_sql_only(sql, self.pg.schema), rows)
         return self
 
     def fetchone(self):
@@ -244,7 +266,7 @@ class _Cur:
 
     def copy(self, sql):
         m = _COPY_RE.search(sql.replace(f"{self.pg.schema}.", ""))
-        return _Cp(self.pg.sqlite, m.group(1), m.group(2))
+        return _Cp(self.pg, m.group(1), m.group(2))
 
 
 class _Conn:
@@ -256,14 +278,15 @@ class _Conn:
 
     @contextmanager
     def transaction(self):
-        self.pg.sqlite.execute("BEGIN")
-        try:
-            yield
-        except Exception:
-            self.pg.sqlite.execute("ROLLBACK")
-            raise
-        else:
-            self.pg.sqlite.execute("COMMIT")
+        with self.pg.lock:  # 거래 동안 다른 스레드가 끼어들지 않게(RLock — 같은 스레드의 _run은 그대로 들어감)
+            self.pg.sqlite.execute("BEGIN")
+            try:
+                yield
+            except Exception:
+                self.pg.sqlite.execute("ROLLBACK")
+                raise
+            else:
+                self.pg.sqlite.execute("COMMIT")
 
 
 class StandinPG:
@@ -278,9 +301,15 @@ class StandinPG:
         path = d / f"{schema}.sqlite"
         self.schema = schema
         self.existed_before = path.exists()
-        self.sqlite = sqlite3.connect(str(path), timeout=30, isolation_level=None)
+        # check_same_thread=False + lock(RLock) — 검색 MCP 작업 스레드에서도 쓰게(mc-01 11-01, 실 PG는 PGPool)
+        self.sqlite = sqlite3.connect(str(path), timeout=30, isolation_level=None, check_same_thread=False)
+        self.lock = threading.RLock()
         self.sqlite.execute("PRAGMA foreign_keys=ON")
         self.sqlite.create_function("now", 0, _now_iso)
+        # mc-01(11-01) — PG 검색 SQL을 대역에서 그대로 돌리게: v_chunk_source 뷰의 regexp_replace · BM25의 ln(이미지 sqlite에 수학 함수가 없을 수도)
+        self.sqlite.create_function("regexp_replace", 3, lambda s, p, r: None if s is None else re.sub(p, r, s))
+        self.sqlite.create_function("ln", 1, lambda x: None if x is None or x <= 0 else math.log(x))
+        self.sqlite.create_function("jsonb_contains", 2, _contains)
         self.cn = _Conn(self)
 
     def q(self, sql, params=None):

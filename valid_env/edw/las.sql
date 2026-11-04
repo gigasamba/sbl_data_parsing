@@ -49,3 +49,21 @@ INSERT INTO SERVICE_MAS (SVC_CD, SVC_NM, SVC_KOR_NM, SVC_TYPE, DIV_CD, STATUS, S
     ('S002', 'Drug Product Fill-Finish', '완제의약품 충전', 'process', 'D01', 'Y', 'DP Fill-Finish;DP'),
     ('S003', 'Process Development', '공정개발', 'process', 'D01', 'Y', 'CDO'),
     ('S004', 'Commercial Manufacturing', '상업생산', 'process', 'D01', 'Y', 'CMO');
+
+-- [SYNTHETIC] 11-02(pl-29) — 계약·파일 표(운영 노트의 칸 이름, 값은 가짜). 상대사(PartnerCorpName)는 운영처럼 비워 둠(G2).
+CREATE TABLE Contract (
+    ContractID      INTEGER PRIMARY KEY,
+    ManageNo        TEXT,
+    IsActive        INTEGER,
+    ContractDate    TEXT,
+    PartnerID       TEXT,
+    PartnerCorpName TEXT
+) STRICT;
+INSERT INTO Contract (ManageNo, IsActive, ContractDate, PartnerID, PartnerCorpName) SELECT manage_no, 1, '2025-03-01', NULL, NULL FROM FileStorageMap_LAS;
+CREATE TABLE FileManager (
+    FileID     TEXT PRIMARY KEY,
+    CreateDate TEXT
+) STRICT;
+INSERT INTO FileManager SELECT las_file_id, '2025-03-02 11:00:00' FROM FileStorageMap_LAS;
+-- [SYNTHETIC] 11-02(pl-33) — 분류 힌트 품의 제목(운영 노트의 칸 이름). 대역에는 LAS 문서가 아직 없어 행이 없다(갈래 시험은 tests/server/pipeline/test_edw_meta.py test_hints).
+ALTER TABLE Contract ADD COLUMN ApprovalName TEXT;

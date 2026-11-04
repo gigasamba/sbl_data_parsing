@@ -1,11 +1,11 @@
-"""pipeline.transform.represent.attachments 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.attachments`."""
+"""pipeline.transform.represent.mail_attachments 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.mail_attachments`."""
 
 import io
 import zipfile
 from pathlib import Path
 
 from pipeline import config as pc
-from pipeline.transform.represent.attachments import _expand_zip, _max_n, extract, mail_blocks, thread_paragraphs
+from pipeline.transform.represent.mail_attachments import _expand_zip, _max_n, extract, mail_blocks, thread_paragraphs
 
 
 def selftest():
@@ -65,7 +65,7 @@ def selftest():
         assert sp["parsed"] == 1 and any(b.startswith("[첨부 c.pdf]") and "1,234,567" in b for b in bp), (sp, bp)
         print("[selftest] eml → pdf 첨부(.pdf_text 엔진) 통과")
 
-        # 2) 이미지 첨부(인라인 아님)도 image/* — figures.py 담당, attachments는 건너뜀
+        # 2) 이미지 첨부(인라인 아님)도 image/* — figure_extract.py 담당, attachments는 건너뜀
         from email.mime.image import MIMEImage
 
         m2 = MIMEMultipart()
@@ -77,7 +77,7 @@ def selftest():
         eml2 = d / "mail2.eml"
         eml2.write_bytes(m2.as_bytes())
         assert extract(eml2) == []
-        print("[selftest] 이미지 첨부는 attachments가 건너뜀(figures.py 담당) 통과")
+        print("[selftest] 이미지 첨부는 attachments가 건너뜀(figure_extract.py 담당) 통과")
 
         # 3) 크기·개수 상한
         with pc.PIPE.env(ATTACH_MAX_MB="0.001"):  # 1KB — xlsx(수백 바이트 이상) 넘김 — S7c: 객체만 바꿔 끼움

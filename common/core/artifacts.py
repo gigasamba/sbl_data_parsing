@@ -3,7 +3,7 @@
 parse·structure·load·search(옛 modules/)는 import하지 않는다(계약 코드는 모듈 경계 밖 — 파싱 이식 쪽이 이 함수들만 가져다 씀).
 "같은 입력 + 같은 코드 지문 = 같은 열쇠" — 층 코드가 바뀌면 지문이 바뀌어 저장본이 자동으로 낡음이 된다.
 10-14 함수별 분리(사용자) — data-parsing 이미지에서만 쓰는 prompt_id·raw_engine_path·raw_vlm_path·engine_version·
-purge_caches는 pipeline/shared/artifacts.py로 옮김(로직 바이트 동일) — 여기는 2개 이상 이미지가 쓰는 계약만.
+purge_caches는 pipeline/shared/parse_run.py로 옮김(로직 바이트 동일) — 여기는 2개 이상 이미지가 쓰는 계약만.
 """
 
 import hashlib
@@ -12,53 +12,57 @@ import subprocess
 import time
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-DEV = HERE.parent.parent  # deploy/ — CT1(contract/ 한 단 더 깊음, HERE.parent=common_tools/ — S3부터 core/ 한 단, HERE.parent=common/) · 10-14 이미지별 폴더 분리 뒤
+from common.core.paths import DEPLOY_ROOT
+
+DEV = DEPLOY_ROOT  # deploy/(op-09 — paths 상수) · 10-14 이미지별 폴더 분리 뒤
 # 층 코드는 형제 패키지(engine-qa 10-14 BLOCKER 1: HERE로 두면 글롭이 빈 집합 = 늘 같은 빈 해시)
 
 # 층별 소스 파일 glob(deploy/ 기준) — common은 그 층 파일이 실제로 import하는 모듈만 더함(_common_deps, 10-05).
-# p0은 엔진마다 다름 — code_fp("p0:<engine>")로 호출(그 엔진 파서 폴더 + run_all.py만).
+# p0 = 엔진 폴더 전부(pipeline/extract/engines/** — 이름과 폴더가 다른 엔진 html_stdlib·msg_extract(mhtml/)·office(office_stdlib/)·
+# rapidocr_ko(rapidocr/)도 들어감, pl-47) + run_engines.py. 엔진 하나의 재사용 열쇠는 run_engines.engine_code_fp(등록부의 스택 폴더 + _common)가
+# 따로 맡는다 — 옛 code_fp("p0:<엔진>") 형태(엔진 이름을 폴더 이름으로 넣어 다른 이름 폴더를 놓침)는 쓰는 곳이 없어 지웠다.
 # 10-14 분리로 paths·structdb 등 공용 코드가 실제로 바뀌어 p1·s·r·a 지문은 한 번 바뀜(저장본 1회 재생성) — 인계 지문·엔진 지문은 legacy_names로 유지.
 LAYER_CODE = {
-    "p0": ["pipeline/extract/engines/{engine}/**/*.py", "pipeline/extract/run_all.py"],
+    "p0": ["pipeline/extract/engines/**/*.py", "pipeline/extract/run_engines.py"],
     # 후보정(represent)이 실제로 쓰는 코드만 — 원문 파싱 관리(run_all·prepare·dedup·source·보고·진행)는 빼서 그 코드를 고쳐도 P1 이상이 다시 지어지지 않게(10-04).
     # ponytail: postprocess/attachments가 run_all._isolated를 씀 — 그 함수가 바뀌면 PARSE_POST 첨부 결과가 달라질 수 있으나 드묾(바뀌면 P1_LAYOUT 올림)
     # I2(data_etl 단계 폴더 — S4부터 pipeline/, 접두어만 바뀜) — 옛 postprocess/ 패키지(26개)가 represent/·figures/·shared/로 나뉘어 글로브 대신 파일 목록(옮기기 전과 같은 집합)
     "p1": [
-        "pipeline/transform/represent/represent.py",
+        "pipeline/transform/represent/build_rep.py",
         "pipeline/transform/represent/crosscheck.py",
-        "pipeline/transform/represent/parse_qa.py",
-        "pipeline/shared/postprocess.py",
+        "pipeline/transform/represent/parse_scoring.py",
+        "pipeline/shared/post_features.py",
+        "pipeline/shared/ext_groups.py",  # 확장자 묶음(이미지 — parse_qa·represent·figures·vlm_page)
+        "pipeline/shared/vlmcall.py",  # VLM 호출·쪽 VLM 캐시·동시 수 게이트(옛 figures/vgate.py + vlm_page 호출부 — 엔진 qwen_vlm과 함께 씀)
     ]
     + [
         f"pipeline/transform/represent/{n}.py"
         for n in (
-            "attachments",
-            "context",
-            "fuse",
-            "shadow",
-            "supsub",
+            "mail_attachments",
+            "figure_context",
+            "fragment_vote",
+            "rep_accuracy",  # 11-03 — 대표 결과 점수(doc_accuracy, build_rep.py:658 늦은 import)가 빠져 있었음(구조 검토)
+            "superscripts",
             "table_inline",
-            "table_std",
-            "trace",
+            "table_standard",
+            "decision_log",
         )
     ]
     + [
         f"pipeline/transform/figures/{n}.py"
         for n in (
             "chart_values",
-            "charts",
+            "office_charts",
             "diagram_edges",
-            "figures",
+            "figure_extract",
             "mermaid",
-            "nested",
-            "overlay",
+            "nested_figures",
+            "overlay_groups",
             "pptx_edges",
             "pptx_render",
             "shape_detect",
-            "vector",
-            "vgate",
-            "vlm_page",
+            "vector_regions",
+            "scan_page_vlm",
         )
     ],
     # 옛 structure/ 파일만 — load/와 한 폴더로 합쳐져 **면 적재 코드까지 들어감(I2 뒤에도 transform/structure/ 글로브를 쓰지 않음). 새 구조화 파일은 여기 추가.
@@ -67,23 +71,51 @@ LAYER_CODE = {
         "pipeline/transform/structure/build_bundle.py",
         "pipeline/transform/structure/chunking.py",
         "pipeline/transform/structure/draft_terms.py",
-        "pipeline/transform/structure/facts.py",
+        "pipeline/transform/structure/product_codes.py",
+        "pipeline/transform/structure/client_roster.py",  # 11-03 — 고객 이름 찾기(build_bundle ST)가 빠져 있었음(구조 검토)
     ],
     "r": [
         "mcp_server/services/search/retriever.py",
         "mcp_server/services/search/local.py",
         "mcp_server/services/search/pgsearch.py",
     ],
-    "a": [],  # S5(10-26, C-25 ① — 코디네이터 답 Q1 a) 빈 층: research.py는 S5a에 지움(D-025). 옛 stack_matrix(10-30 지움) answer 캐시 열쇠·audit이 층 a를 써서
-    # 층 이름은 남김 — 빈 층 해시 e3b0c44298fc는 S5a 뒤 값 그대로라 answer 캐시 열쇠도 그대로
-}
+}  # 빈 층 a(research.py — S5a에 지움)는 0.2.0에 이름도 지움(pl-46)
+
+# 층에 넣지 않는 transform 파일 — 결과를 만들지 않는 오프라인 도구(사람이 따로 돌림). 새 transform 파일은 위 층 목록이나 여기 둘 중 하나에
+# 적는다(tests/server/common/test_code_fp.py가 빠진 파일을 잡음 — 11-03 구조 검토: 결과를 바꾸는 파일이 목록에서 빠져 옛 결과를 다시 씀).
+NOT_LAYER = (
+    "pipeline/transform/represent/__init__.py",
+    "pipeline/transform/structure/__init__.py",  # 빈 파일 — s는 따로 적어 둠(옛 판과 같은 집합)
+    "pipeline/transform/structure/roster_from_edw.py",
+    "pipeline/transform/structure/glossary_suggest.py",
+)
+# 지문 계산에서 따라가지 않는 common 파일·폴더(결과와 무관 — 기록·DB 연결·표 정의·설정 도구). 11-03 구조 검토: 로그 → DB 기록 → 표 정의로
+# 이어져 DB 표 칸 하나만 고쳐도 모든 층 지문이 바뀌었음. 설정 모델(config/settings.py)은 기본값이 결과를 바꿀 수 있어, store/pg.py는 검색(r)이 벡터 글자(vec)를 만들어 그대로 둔다.
+CODE_FP_SKIP = (
+    "core/artifacts.py",
+    "core/jsonlog.py",
+    "core/runlog.py",
+    "core/span.py",
+    "core/resources.py",
+    "store/logsink.py",
+    "store/pg_standin.py",
+    "store/mssql.py",
+    "store/objectstore.py",
+    "store/parsing_meta_db.py",
+    "store/db/",
+    "config/boot.py",
+    "config/export.py",
+    "config/keyscan.py",
+    "config/migrate.py",
+    "config/overrides.py",
+    "config/sample.py",
+    "config/setarg.py",
+    "config/show.py",
+)
 
 
-def _layer_globs(layer):
-    if layer.startswith("p0:"):
-        engine = layer.split(":", 1)[1]
-        return [g.format(engine=engine) for g in LAYER_CODE["p0"]]
-    return LAYER_CODE[layer]
+def _skipped(rel):
+    return any(rel == s or (s.endswith("/") and rel.startswith(s)) for s in CODE_FP_SKIP)
 
 
 def _common_deps(files, base):
@@ -154,7 +186,7 @@ def _common_deps(files, base):
                             candidates.add(tail)
         for dotted in candidates:
             p = _resolve(dotted)
-            if p and p not in seen:
+            if p and p not in seen and not _skipped(p.relative_to(root).as_posix()):
                 seen.add(p)
                 todo.append(p)
     return seen
@@ -164,7 +196,7 @@ def code_fp(layer, root=None):
     """그 층을 만드는 소스 파일(글로브) + 그 파일들이 실제로 import하는 common 모듈의 정렬된 내용 → sha256[:12].
     root(기본 DEV) — selftest가 임시 복사본으로 건드려 보게 받을 수 있다(실제 코드 수정 없이)."""
     base = Path(root) if root else DEV
-    own = {p for g in _layer_globs(layer) for p in base.glob(g) if p.is_file()}
+    own = {p for g in LAYER_CODE[layer] for p in base.glob(g) if p.is_file()}
     files = sorted(own | _common_deps(own, base))
     h = hashlib.sha256()
     for p in files:  # 경로도 해시에 넣음 — 파일 추가/삭제도 지문을 바꾸게

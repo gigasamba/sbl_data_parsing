@@ -5,12 +5,12 @@ CT1 — 둘 다 "모듈 사이 계약"이라 한 파일로 합침, docs/architec
 ID·위치 규칙: doc_key = 원본 내용 sha256(64자, 같은 내용 사본은 같은 ID) · chunk_key = doc_key:순번 ·
 source_uri = 원본 위치(file:/// · 나중 s3://). 파싱(만듦)·구조화(옮김)·적재(저장)·검색(돌려줌)이 같아야 함.
 
-인계 점검: 넘겨받은 폴더가 다음 모듈이 쓸 수 있는 모양인지 — 구조화는 시작 전에 파싱 인계(_rep)를, 적재는
-묶음을 점검하고 어긋나면 종료 코드 3으로 멈춘다(조용히 품질이 떨어지지 않게).
-사용: python -m common.core.contract parse output/parse/_rep ·
-      python -m common.core.contract structure output/edw/bundle ·
+인계 점검: 넘겨받은 파싱 인계 폴더(_rep)가 구조화가 쓸 수 있는 모양인지 — 어긋나면 종료 코드 3으로 멈춘다(조용히 품질이 떨어지지 않게).
+묶음 점검(DOC_KEYS·check_bundle)은 0.2.0에 지웠다(서버가 안 씀 — pl-15·pl-46).
+사용: python -m common.core.contract parse output/parse/_rep
 """
 import csv
+import functools
 import hashlib
 import json
 import os
@@ -23,13 +23,21 @@ from common import CONTRACT
 
 REP_KEYS = ("engine", "source", "format", "meta", "tried")                 # _rep/<문서>.json의 rep
 SOURCE_KEYS = ("doc_key", "uri", "sha256")                                  # rep.source — 문서 ID·원본 위치
-DOC_KEYS = ("file_path", "source_uri", "file_name", "file_sha256", "doc_format", "parse_engine")
-CHUNK_KEYS = ("doc", "seq", "chunk_text", "n_terms")
 
 WIN_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL"} | {f"COM{i}" for i in range(1, 10)} | {f"LPT{i}" for i in range(1, 10)}
 
 
 def file_hash(path):
+    """파일 sha256(16진 64자). 같은 프로세스에서 같은 파일(경로·크기·고친 시각 ns)은 한 번만 읽는다(fp-perf C2 — 원천 → 중복 확인 →
+    파싱 → 대표 결과 → 게시가 문서마다 5~6번 다시 해시하던 것). 파일이 바뀌면 크기·시각이 달라 다시 읽음.
+    알려진 한계: 한 프로세스 안에서 같은 경로의 파일을 크기·고친 시각까지 같게 덮어쓰면(cp -p·rsync -a로 다시 넣기 등) 옛 해시를 돌려준다 —
+    문서는 실행 중에 바꾸지 않는다는 전제(바꾸면 다음 실행에서 다시 해시)."""
+    st = os.stat(path)
+    return _file_hash(os.path.abspath(path), st.st_size, st.st_mtime_ns)
+
+
+@functools.lru_cache(maxsize=4096)  # ponytail: 프로세스당 파일 4096개까지 기억 — 더 큰 배치면 오래된 것부터 다시 읽음
+def _file_hash(path, size, mtime_ns):
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for b in iter(lambda: f.read(1 << 20), b""):
@@ -70,15 +78,17 @@ def safe_path_join(dest, name):
 def make_source_uri(doc, path):
     """원본 위치 주소 — SOURCE_URI_PREFIX(예: s3://버킷/접두 · file:///srv/rag/docs)가 있으면 그 아래 이름, 없으면 원본 폴더(DOC_DIR)의
     같은 이름 파일, 그것도 없으면 파싱한 파일의 file:// 주소. 검색(MCP)이 결과와 함께 돌려줌 — 나중에 Object Storage면 s3:// 그대로."""
-    man = os.environ.get("SOURCE_MANIFEST")                # Object Storage에서 받은 문서 → s3://버킷/키(modules/parse/source.py)
+    from common.config.settings import cfg   # op-09 — 설정 객체(옛 env 다리)
+    c = cfg()
+    man = c.paths.source_manifest                          # Object Storage에서 받은 문서 → s3://버킷/키(modules/parse/source.py)
     if man and Path(man).exists():
         for ln in Path(man).read_text(encoding="utf-8").splitlines():
             if ln.strip() and json.loads(ln)["file_name"] == doc:
                 return json.loads(ln)["uri"]
-    pre = os.environ.get("SOURCE_URI_PREFIX")
+    pre = c.text.source_uri_prefix
     if pre:
         return pre.rstrip("/") + "/" + doc
-    d = os.environ.get("DOC_DIR")
+    d = c.paths.doc_dir
     if d and (Path(d) / doc).is_file():
         return (Path(d) / doc).resolve().as_uri()
     return Path(path).resolve().as_uri()
@@ -170,36 +180,11 @@ def check_parse(rep_dir, sample=0):
     return bad
 
 
-def check_bundle(bundle_dir):
-    """구조화 → 적재·검색 인계(output/edw/bundle): 파일·필드·벡터 행 수·차원."""
-    import numpy as np
-    d, bad = Path(bundle_dir), []
-    for f in ("meta.json", "docs.jsonl", "chunks.jsonl", "vectors.npy", "kg_nodes.jsonl", "kg_edges.jsonl"):
-        if not (d / f).exists():
-            bad.append(f"{f} 없음")
-    if bad:
-        return bad
-    meta, docs, chunks = json.loads((d / "meta.json").read_text(encoding="utf-8")), jl(d / "docs.jsonl"), jl(d / "chunks.jsonl")
-    v = np.load(d / "vectors.npy", mmap_mode="r")
-    if v.shape[0] != len(chunks):
-        bad.append(f"벡터 {v.shape[0]}행 ≠ 청크 {len(chunks)}개")
-    if (v.shape[1] if v.ndim == 2 else 0) != meta.get("dim"):
-        bad.append(f"벡터 차원 {v.shape[1] if v.ndim == 2 else '?'} ≠ meta.dim {meta.get('dim')}")
-    for i, x in enumerate(docs):
-        miss = [k for k in DOC_KEYS if not x.get(k)]
-        if miss:
-            bad.append(f"docs[{i}] {x.get('file_name')}: {', '.join(miss)} 없음")
-            break
-    for i, c in enumerate(chunks):
-        if any(k not in c for k in CHUNK_KEYS) or not 0 <= c["doc"] < len(docs):
-            bad.append(f"chunks[{i}]: 필드 없음 또는 문서 번호 범위 밖")
-            break
-    return bad
-
-
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     kind, path = sys.argv[1], sys.argv[2]
-    errs = check_parse(path) if kind == "parse" else check_bundle(path)
+    if kind != "parse":
+        sys.exit(f"알 수 없는 점검 {kind!r} — parse만(묶음 점검은 0.2.0에 지움)")
+    errs = check_parse(path)
     print("계약 일치" if not errs else "계약 불일치:\n- " + "\n- ".join(errs[:50]))
     sys.exit(3 if errs else 0)

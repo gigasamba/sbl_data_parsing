@@ -2,10 +2,10 @@
 """답변 생성 점검(PC 전용) — 검색 MCP에 붙어 질문마다 rag_qa 에이전트(valid_env/answer_test/rag_qa/ — PC 전용 데이터는 valid_env에, 사용자 10-29)를 한 번씩 돌린다.
 S10(10-28 — D-021 T-14): 옛 루트 answer_gen_test.py(agent_platform — D-013에 삭제)를 common/ai 임시 구현(I6)으로 되살림.
 
-에이전트 루프 = common.ai.adk.run_agent("rag_qa", role="llm", per_turn_admit=True) — 턴마다 LLM_MAX_CALLS·LLM_BUDGET_USD 장부를
+에이전트 루프 = validation.e2e.tool_loop.run("rag_qa", …) — 턴마다 호출 수·LLM_BUDGET_USD 장부를
 거친다(CLAUDE.md 5절). 도구는 MCP tools/list의 search·edw_meta·query_edw를 이 파일의 함수로 감싸 넘기고(설명은 MCP 계약 그대로,
 parse_document는 QA와 무관해 뺌), 로컬 verify_citations는 이번 질문에 실제로 돌아온 근거(pool)로 인용을 검증한다 — 옛 agent.py
-콜백 대신(run_agent가 패키지 콜백을 자기 것으로 덮음), 질문마다 새 pool이라 옛 턴 경계 문제도 없다.
+콜백 대신, 질문마다 새 pool이라 옛 턴 경계 문제도 없다.
 답·상태·인용·인용 검증·모델/도구 호출 수·토큰·지연을 화면과 output/eval/answer_gen/<시각>.jsonl에 남기고 끝에 지연 p50/p95·상태
 분포를 낸다. 채점은 안 함(사람이 읽고 검토). query_edw로 답한 행은 verify가 실패하고 verify_note로 그 이유를 적는다(C-56 — 지금대로 둠).
 
@@ -32,8 +32,8 @@ from common.core.paths import APP_ROOT, resolve_agent_dir
 
 AGENT_ID = "rag_qa"
 MCP_TOOLS = ("search", "edw_meta", "query_edw")  # 지금 검색 MCP 도구 중 QA가 쓰는 것(옛 6개 — aggregate 등은 search 근거로 흡수)
-STOPS = {"예산 초과": "stopped_budget", "공유 호출 상한": "stopped_calls", "시간 상한": "stopped_time"}  # run_agent의 정상 멈춤 글자
-#   ("공유 호출 상한" = 턴마다 장부 admit 거부 — LLM_MAX_CALLS와 LLM_BUDGET_USD 둘 다 · "예산 초과" = 매니페스트 턴·토큰 예산, VS10 L-3)
+STOPS = {"예산 초과": "stopped_budget", "공유 호출 상한": "stopped_calls", "시간 상한": "stopped_time"}  # tool_loop.run의 정상 멈춤 글자
+#   ("공유 호출 상한" = 턴마다 장부 admit 거부 — LLM_BUDGET_USD · "예산 초과" = 매니페스트 턴·토큰 예산, VS10 L-3)
 EDW_NOTE = (
     "이 답은 query_edw를 씀 — EDW 값은 인용 검증 대상이 아니라(pool은 search 근거만, 모델이 쓴 SQL은 근거가 못 됨 — "
     "refactor.md C-56) 수치·인용 실패가 EDW 값 때문일 수 있음: problems를 보고 판단"
@@ -130,7 +130,7 @@ def verify(answer_json, pool):
 
 
 def make_tools(call, contracts, pool, k_default):
-    """run_agent에 넘길 도구 {이름: 함수}(패키지 local_tools와 같은 이름 집합). call(name, args) = MCP 부르기(코루틴)."""
+    """tool_loop.run에 넘길 도구 {이름: 함수}(패키지 local_tools와 같은 이름 집합). call(name, args) = MCP 부르기(코루틴)."""
     _verify = _verify_citations()
 
     async def search(question: str, k: int = k_default, client: str = "", source_system: str = "", project_id: str = "") -> dict:
@@ -149,7 +149,7 @@ def make_tools(call, contracts, pool, k_default):
     async def query_edw(sql: str, max_rows: int = 200) -> dict:
         return await call("query_edw", {"sql": sql, "max_rows": max_rows})
 
-    # 인자를 펼쳐 넘기면 ADK FunctionTool이 "answer_json 필수" 오류를 모델에 돌려줌(VS11b CR-7 뒷부분 — TypeError 아님)
+    # 인자를 펼쳐 넘기면 도구 왕복이 "answer_json 필수" 인자 오류를 모델에 돌려줌(VS11b CR-7 뒷부분 — TypeError 아님)
     def verify_citations(answer_json: str) -> dict:
         return verify(answer_json, pool)
 
@@ -206,24 +206,14 @@ def final_json(text):
 
 
 def ask_one(i, q, n, url, token, contracts, k, fake, timeout):
-    from google.genai import types
-
-    from common.ai import adk
+    from validation.e2e import tool_loop
 
     pool = []
     tools = make_tools(lambda name, args: _mcp_tool(url, token, name, args), contracts, pool, k)
     t0 = time.perf_counter()
     row = {"i": i, "question": q}
     try:
-        text, traj, usage = adk.run_agent(
-            AGENT_ID,
-            types.Content(role="user", parts=[types.Part.from_text(text=q)]),
-            role="llm",
-            tools=tools,
-            timeout=timeout,
-            per_turn_admit=True,
-            fake_policy=fake_policy(q) if fake else None,
-        )
+        text, traj, usage = tool_loop.run(AGENT_ID, q, tools, timeout=timeout, fake_policy=fake_policy(q) if fake else None)
         row.update(
             run_status=STOPS.get(text.strip(), "ok"),
             model_calls=usage.get("model_calls", 0),
@@ -282,7 +272,7 @@ def main(argv=None):
     ap.add_argument("--concurrency", type=int, default=2, help="동시에 돌릴 질문 수")
     ap.add_argument("--repeat", type=int, default=1, help="질문 목록 반복(부하 시험)")
     ap.add_argument("--k", type=int, default=5, help="search 기본 k(모델이 바꿀 수 있음)")
-    ap.add_argument("--timeout", type=float, default=180, help="질문 하나의 시간 상한(초 — run_agent)")
+    ap.add_argument("--timeout", type=float, default=180, help="질문 하나의 시간 상한(초 — tool_loop)")
     ap.add_argument("--fake", action="store_true", help="모델 없이 결정적 정책으로 도구·MCP 경로만(LLM_FAKE)")
     if not (argv if argv is not None else sys.argv[1:]):
         ap.print_help()
@@ -302,8 +292,7 @@ def main(argv=None):
     else:
         prof = profile("llm")
         if prof is None:
-            raise SystemExit("LLM 모델 설정 없음 — settings.yaml common.models.llm(base_url·model·api_key) 또는 --fake")
-        G.check_scope([prof.base_url], n_combos=1, n_questions=len(qs))  # 외부 모델 범위 가드(옛과 같음 — 예산 없으면 거부)
+            raise SystemExit("LLM 모델 설정 없음 — settings.yaml required.models.llm_base_url·llm_model·llm_api_key 또는 --fake")
     token = mc.token_text(mc.cfg().server.token)  # 공백만이면 토큰 없음(C-42·C-44) — 출력하지 않음
     contracts = asyncio.run(_mcp(a.url, token, None))
     missing = [n for n in MCP_TOOLS if n not in contracts]

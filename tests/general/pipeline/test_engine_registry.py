@@ -17,12 +17,13 @@ def test_main():  # 옛 `if __name__ == "__main__":   # 자기점검: 등록·�
         "kreuzberg_ocr",
         "marker_llm",
     }
-    assert len(stacks()) >= 15 and "office" in e and not gone & set(e), sorted(gone & set(e))  # pl-31(10-30) — 지운 엔진은 등록 안 됨
+    assert len(stacks()) >= 11 and "office" in e and not gone & set(e), sorted(gone & set(e))  # pl-31(10-30) — 지운 엔진은 등록 안 됨
     assert CORE <= set(e), sorted(CORE - set(e))  # 핵심 목록의 엔진은 모두 등록됨
     assert (
-        "pdfplumber" in engines_for(".pdf")
-        and "calamine" in engines_for(".xlsx")
-        and "pptx" in engines_for(".pptx")
+        "pymupdf" in engines_for(".pdf")
+        and "office" in engines_for(".xlsx")
+        and "anydoc" in engines_for(".pptx")
+        and not {"pdfplumber", "pypdf", "calamine", "pptx", "pymupdf4llm"} & set(e)  # pl-46(0.2.0) — 지운 엔진
         and {"kreuzberg", "anydoc"} <= set(engines_for(".ppt"))
         and "msg_extract" in engines_for(".msg")
     )

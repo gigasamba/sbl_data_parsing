@@ -4,9 +4,8 @@
 import os
 from pathlib import Path
 
-from common.core.paths import RES_ROOT
+from common.config.settings import COMMON
 from common.core.terms import (
-    MODALITIES,
     _aliases,
     _draft_count,
     draft_terms_path,
@@ -15,7 +14,6 @@ from common.core.terms import (
     load_id_patterns,
     load_id_patterns_typed,
     match_clients,
-    modalities,
     read_roster,
     related_concepts,
     write_draft_terms,
@@ -187,32 +185,7 @@ def selftest():
     assert read_roster(rp) == {"Old Format Bio": ["올드"]}, read_roster(rp)  # OFB(영문 3자)는 뺌 — 기존 규칙
     print("[selftest] 10-15 빈칸 허용 — 용어집(status·concept_id 빈칸·cp949)·고객 명부 새 형식(name_ko 대체·inactive 제외)·옛 형식 통과")
 
-    # 모달리티(DT1 c1) — 용어집 없음/modality_code 카테고리 없음이면 코드 기본값과 바이트 동일, 있으면 용어집에서
-    assert modalities({}) == MODALITIES
-    assert modalities(g) == MODALITIES  # g(위 A~C)엔 modality_code 카테고리가 없음(category=modality와는 다른 값)
-    mg = {
-        "X": {
-            "concept_id": "X",
-            "canonical": "fusion protein",
-            "category": "modality_code",
-            "synonyms": "융합단백질",
-            "abbreviations": "FP",
-        }
-    }
-    assert modalities(mg) == {"fusion protein": "fusion protein", "융합단백질": "fusion protein", "fp": "fusion protein"}
-    # 실제 기본 사전(dev/glossary/domain_terms.csv, 서버 기본 GLOSSARY_DIR=glossary)도 MODCODE.* 4행이 코드 기본값과
-    # 바이트 동일한 매핑을 내는지(데이터 파일을 바꿨을 때 실제로 반영되는지의 역검증 — 바꾸면 당연히 값이 달라짐을
-    # 가짜 회사 예시로 확인)
-    real_g = load_glossary(RES_ROOT / "vocab" / "glossary")
-    assert modalities(real_g) == MODALITIES, modalities(real_g)
-    fake_company_g = dict(real_g)
-    fake_company_g["MODCODE.ADC"] = {**real_g["MODCODE.ADC"], "canonical": "항체약물복합체코드"}  # 가짜 회사 예시(c1 반영 확인용)
-    assert modalities(fake_company_g)["항체약물복합체코드".lower()] == "항체약물복합체코드"
-    assert modalities(fake_company_g)["mab"] == "mAb"  # 다른 MODCODE 행은 그대로(데이터 파일 부분 교체가 바로 반영)
-    print(
-        "[selftest] modalities() — 용어집 modality_code 카테고리·빈 용어집 기본값·실제 기본 사전 바이트 동일·"
-        "가짜 회사 예시 반영 통과(DT1 c1)"
-    )
+    # modalities()·MODALITIES는 pl-38(사용자 11-03)에 지움(부르는 곳 없음)
 
     _selftest_si43()
     _selftest_si43_draft_blocker()
@@ -265,15 +238,19 @@ def _selftest_si43():
         w.writerows(rows)
 
     # ① 다중 태그 — org_client|org_cdmo는 고객 명부에 들어가고(기존 org_cdmo 한 칸은 안 들어감) ② 동의어(한·영) 병합
-    os.environ["GLOSSARY_DIR"] = str(d)
-    al = _aliases()
-    assert al.get("Celltrion") == ["셀트리온"], al  # org_client 태그 있음 — 명부에
-    assert "Lonza" not in al, al  # org_cdmo 한 칸만 — 명부에 안 들어감(기존 동작 호환)
-    assert match_clients("셀트리온 계약", ["Celltrion"]) == ["Celltrion"]
+    from unittest import mock
+
+    from common.store import master
+
+    fake = master.Master({"domain_terms": list(csv.DictReader((d / "domain_terms.csv").read_text(encoding="utf-8-sig").splitlines()))})
+    with mock.patch.object(master, "get", lambda: fake):  # pl-38 — 명부·용어 사전은 마스터 표에서(시험은 가짜 마스터)
+        al = _aliases()
+        assert al.get("Celltrion") == ["셀트리온"], al  # org_client 태그 있음 — 명부에
+        assert "Lonza" not in al, al  # org_cdmo 한 칸만 — 명부에 안 들어감(기존 동작 호환)
+        assert match_clients("셀트리온 계약", ["Celltrion"]) == ["Celltrion"]
 
     # 한글 고유명사 뒤 조사 — match_clients도 _name_hit 규칙 공유(실측: '셀트리온과'가 안 잡힘)
     assert match_clients("셀트리온과 계약", ["Celltrion"], {"Celltrion": ["셀트리온"]}) == ["Celltrion"]
-    del os.environ["GLOSSARY_DIR"]
     print("[selftest] SI43①② — category 다중 태그·명부 병합·match_clients 한글 조사(조사 뒤 오탐 금지) 통과")
 
 
@@ -301,44 +278,36 @@ def _selftest_si43_draft_blocker():
     cnt = {r["canonical"]: _draft_count(r["source"]) for r in draft2.values()}
     assert cnt["Alpha Biologics Inc."] == 2 and cnt["Beta Pharma Co."] == 1, cnt
 
-    # 캡 — DRAFT_TERMS_MAX(env로 낮춤 — 모듈을 __main__으로 돌릴 때의 모듈 중복 함정을 피함, _draft_terms_max
+    # 캡 — DRAFT_TERMS_MAX(설정 객체로 낮춤 — 모듈을 __main__으로 돌릴 때의 모듈 중복 함정을 피함, _draft_terms_max
     # 참고)를 낮춰서 가장 빈번한 것만 남는지(Beta는 카운트 1, 새로 들어오는 건 카운트 1이라 동률 — 결정적 순서
     # (이름 오름차순 tie-break)로 하나만 남아야 함)
-    os.environ["DRAFT_TERMS_MAX"] = "1"
-    try:
+    with COMMON.env(DRAFT_TERMS_MAX="1"):
         write_draft_terms(["Gamma Biologics Inc."], out, category="org_client")  # Alpha(count=2)가 가장 빈번 — 남아야 함
         draft3 = load_draft_glossary(out)
         assert len(draft3) == 1 and next(iter(draft3.values()))["canonical"] == "Alpha Biologics Inc.", draft3
-    finally:
-        del os.environ["DRAFT_TERMS_MAX"]
 
     # 경합 — 잠금을 미리 쥐고 있으면 예외 없이 빈 목록(구조화를 막지 않음). DRAFT_TERMS_LOCK_TIMEOUT로 짧게(시험 속도)
     lock_path = Path(str(out) + ".lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     os.close(fd)
-    os.environ["DRAFT_TERMS_LOCK_TIMEOUT"] = "0.2"
     try:
         import time as _time
 
         t0 = _time.time()
-        res = write_draft_terms(["Delta Biologics Inc."], out, category="org_client")
+        with COMMON.env(DRAFT_TERMS_LOCK_TIMEOUT="0.2"):
+            res = write_draft_terms(["Delta Biologics Inc."], out, category="org_client")
         assert res == []
         assert _time.time() - t0 < 10.0  # 금방 포기(짧은 타임아웃 0.2초) — 10-15 컨테이너 첫 실행 부하에서 2초 문턱을 넘어 넉넉히
     finally:
-        del os.environ["DRAFT_TERMS_LOCK_TIMEOUT"]
         lock_path.unlink(missing_ok=True)
 
-    # GLOSSARY_DIR이 아니라 output/ 기본 경로를 쓰는지(인자·env 둘 다 안 주면)
-    os.environ.pop("GLOSSARY_DIR", None)
+    # GLOSSARY_DIR이 아니라 output/ 기본 경로를 쓰는지(인자·설정 둘 다 안 주면)
     tmp_out = Path(tempfile.mkdtemp()) / "auto.csv"
-    os.environ["DRAFT_TERMS_OUT"] = str(tmp_out)
-    try:
+    with COMMON.env(DRAFT_TERMS_OUT=str(tmp_out)):
         assert draft_terms_path() == tmp_out
         write_draft_terms(["Epsilon Biologics Inc."], category="org_client")
         assert tmp_out.exists()
-    finally:
-        del os.environ["DRAFT_TERMS_OUT"]
     print(
         "[selftest] SI43③④ 독립 검토 BLOCK 1 — draft output/ 경로(GLOSSARY_DIR 아님)·반복 호출은 카운트만 증가·"
         "DRAFT_TERMS_MAX 캡(최빈값 유지)·원자적 쓰기·잠금 경합 시 예외 없이 빈 목록 통과"

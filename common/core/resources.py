@@ -13,22 +13,26 @@ CPU = min(호스트 코어, CPU 친화도(sched_getaffinity), cgroup 한도(cpu.
 
 메모리 문(새 하위 프로세스를 띄우기 전 — plan()의 처음 개수 결정과는 별개, 띄우는 시점만 늦춤):
   MEM_START_PCT  wait_mem() 기본 상한(90 — 사용자 10-07, 전에는 78) — 실험 도구가 씀, 여유를 넉넉히 두고 느리게
-  MEM_MAX_PCT    gated_popen() 상한(90 — 사용자 10-07, 전에는 85) — 생산 파싱(run_all·stream·pipeline)이 씀, 가능한 병렬로 돌리다 이 선만 넘지 않게
+  MEM_MAX_PCT    gated_popen() 상한(90 — 사용자 10-07, 전에는 85) — 생산 파싱(run_all·pipeline)이 씀, 가능한 병렬로 돌리다 이 선만 넘지 않게
   MEM_SETTLE_SEC gated_popen() 뒤 settle(기본 2초) — 사용률이 MEM_MAX_PCT−MEM_SETTLE_MARGIN(기본 5, 상한 90 − 5 = 85% 이상)보다 가까울 때만 쉼
                  (여유 있으면 매번 안 쉼 — 문서×엔진 수천 건 실행에서 매번 쉬면 전체가 크게 느려짐, 성능 회귀 10-04.
                   10-07: 평소 사용률 77%대 PC에서 margin 10(문턱 80%)이 자주 걸려 문서×엔진 평균 2초가 추가되던 걸 margin 5(문턱 85%)로 좁힘 — RB3①)
 
-CPU 문(gated_popen이 메모리 문 다음에 같이 거침 — os.getloadavg() 없는 Windows는 측정 못 해 바로 통과):
-  CPU_MAX_LOAD   wait_cpu() 상한(기본 0.9 = 90%, 사용자 10-07) — 1분 부하 평균 ÷ cpus() 가 이 값 이상이면 새 프로세스를 늦춤(실행 중인 건 안 건드림)
+CPU 문(gated_popen이 메모리 문 다음에 같이 거침 — 측정 못 하면(Windows 등) 바로 통과):
+  CPU_MAX_LOAD   wait_cpu() 상한(기본 0.9 = 90%, 사용자 10-07) — cpu_load()가 이 값 이상이면 새 프로세스를 늦춤(실행 중인 건 안 건드림)
+  cpu_load()     cgroup CPU 한도가 있으면(v2 cpu.max · v1 cfs_quota) 그 컨테이너 자신의 사용량(cgroup usage 증가 ÷ (한도 코어 × 시간)),
+                 없으면 1분 부하 평균 ÷ 호스트 코어(0.2.0 — pl-46: 컨테이너 안 loadavg는 호스트 전체라 한도 코어로 나누면 늘 막혔음)
 
 모델 서버 동시 요청 상한(실험 도구 stack_matrix의 병렬 수 plan_experiment·LLM_MAX_CONCURRENCY는 10-30 지움 — pl-21):
-  VLM_MAX_CONCURRENCY  VLM 서버 동시 요청 상한(기본 8) — cli/pipeline.py가 --workers(문서) 기준으로 쪽 동시 수를 줄여 지킴
+  VLM_MAX_CONCURRENCY  VLM 서버 동시 요청 상한(기본 8) — pipeline.cli parse가 동시 문서 수(min(문서 수, 조각 × --workers)) 기준으로 문서당 VLM 동시 수를 줄여 지킴
 사용: python common/resources.py           → 감지값·결정 표
       python common/resources.py --env     → export 줄(셸에서 eval)
 """
 
+import functools
 import math
 import os
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -46,19 +50,34 @@ def _read(p):
         return None
 
 
-def cpus(cg=CG):
-    """사용 가능한 CPU 수(정수, cgroup·친화도 반영)."""
+def _host_cpus():
+    """호스트 코어 수(CPU 친화도 반영, cgroup 한도는 안 봄)."""
     n = os.cpu_count() or 1
     if hasattr(os, "sched_getaffinity"):
         n = min(n, len(os.sched_getaffinity(0)))
-    q = _read(cg / "cpu.max")  # cgroup v2: "<quota> <period>" 또는 "max <period>"
-    if q and not q.startswith("max"):
-        quota, period = q.split()[:2]
-        n = min(n, max(1, math.ceil(int(quota) / int(period))))
-    quota, period = _read(cg / "cpu" / "cpu.cfs_quota_us"), _read(cg / "cpu" / "cpu.cfs_period_us")  # cgroup v1
-    if quota and period and int(quota) > 0:
-        n = min(n, max(1, math.ceil(int(quota) / int(period))))
     return max(1, n)
+
+
+def _quota_ratio(cg):
+    """cgroup CPU 한도(코어 수, 소수 가능) — v2 cpu.max "<quota> <period>"·v1 cpu.cfs_quota_us/cfs_period_us. 없거나("max", -1)
+    못 읽거나 period가 0이면 None(한도 없음 취급)."""
+    try:
+        q = _read(cg / "cpu.max")
+        if q and not q.startswith("max"):
+            quota, period = q.split()[:2]
+            return int(quota) / int(period)
+        quota, period = _read(cg / "cpu" / "cpu.cfs_quota_us"), _read(cg / "cpu" / "cpu.cfs_period_us")
+        if quota and period and int(quota) > 0:
+            return int(quota) / int(period)
+    except (ValueError, ZeroDivisionError):
+        pass
+    return None
+
+
+def cpus(cg=CG):
+    """사용 가능한 CPU 수(정수, cgroup·친화도 반영)."""
+    r = _quota_ratio(cg)
+    return min(_host_cpus(), max(1, math.ceil(r))) if r else _host_cpus()
 
 
 def mem_gb(cg=CG, meminfo="/proc/meminfo"):
@@ -160,6 +179,55 @@ def wait_mem(start_pct=None, poll=5, log=print):
     return mem_used_pct()
 
 
+@functools.lru_cache(maxsize=16)
+def cpu_limit(cg=CG):
+    """cgroup CPU 한도(코어 수) — _quota_ratio를 cg 경로마다 한 번만 읽음(컨테이너가 사는 동안 그대로)."""
+    return _quota_ratio(cg)
+
+
+def _cg_usage_usec(cg=CG):
+    """cgroup 누적 CPU 사용 시간(마이크로초) — v2 cpu.stat usage_usec · v1 cpuacct.usage(나노초). 못 읽으면 None."""
+    st = _read(cg / "cpu.stat")
+    for ln in (st or "").splitlines():
+        k, _, v = ln.partition(" ")
+        if k == "usage_usec" and v.strip().isdigit():
+            return int(v)
+    for rel in ("cpuacct/cpuacct.usage", "cpu,cpuacct/cpuacct.usage", "cpu/cpuacct.usage"):
+        v = _read(cg / rel)
+        if v and v.isdigit():
+            return int(v) / 1000
+    return None
+
+
+_LAST: dict[str, tuple] = {}  # cg 경로 → (시각, usage_usec) — 앞 측정을 재사용해 매번 기다리지 않게
+
+
+def cpu_load(cg=CG, sample=0.25, now=None, sleep=None, loadavg=None):
+    """지금 CPU 부하(비율 — 1.0 = 쓸 수 있는 코어를 다 씀) 또는 None(측정 못 함 — 바로 통과).
+    cgroup 한도가 있으면 그 cgroup의 사용량 증가 ÷ (한도 코어 × 지난 시간) — 앞 측정이 0.2~10초 전이면 그 사이로, 아니면 sample초 재서.
+    ponytail: 앞 측정 재사용은 근사(띄우는 간격이 길면 최근 평균) — 정밀하게 하려면 배경 표본 스레드로.
+    한도가 없거나 사용량을 못 읽으면 1분 부하 평균 ÷ 호스트 코어. now·sleep·loadavg는 시험용 바꿔 끼우기."""
+    import time
+
+    now, sleep, loadavg = now or time.monotonic, sleep or time.sleep, loadavg or _loadavg1
+    lim = cpu_limit(cg)
+    lim = min(lim, _host_cpus()) if lim else lim  # 한도가 실제 코어보다 크면(--cpus 8, 코어 4) 실제 코어로
+    if lim:
+        u1 = _cg_usage_usec(cg)
+        if u1 is not None:
+            t1 = now()
+            prev = _LAST.get(str(cg))
+            if not prev or prev[1] is None or not 0.2 <= t1 - prev[0] <= 10:
+                sleep(sample)
+                prev, (t1, u1) = (t1, u1), (now(), _cg_usage_usec(cg))
+            if u1 is not None:  # 다시 잰 값을 못 읽으면 남기지 않음(다음 호출이 None과 빼지 않게)
+                _LAST[str(cg)] = (t1, u1)
+            if u1 is not None and t1 > prev[0]:
+                return max(0.0, (u1 - prev[1]) / (lim * (t1 - prev[0]) * 1e6))
+    la = loadavg()
+    return None if la is None else la / _host_cpus()
+
+
 def _loadavg1():
     """1분 부하 평균(코어 환산 전) — Windows(getloadavg 없음)·못 읽으면 None."""
     try:
@@ -169,26 +237,26 @@ def _loadavg1():
 
 
 def wait_cpu(max_load=None, poll=5, log=print):
-    """새 작업을 띄우기 전 문 — 부하(1분 평균 ÷ cpus(), 컨테이너면 cgroup 코어 수)가 CPU_MAX_LOAD(기본 0.9 — 사용자 10-07: CPU 상한 90%) 아래로 내려올 때까지 기다림.
-    Windows는 getloadavg가 없어 측정 못 함 → 바로 통과. 실행 중인 프로세스는 절대 안 건드림 — 새로 띄우는 것만 늦춤."""
+    """새 작업을 띄우기 전 문 — cpu_load()(컨테이너면 자기 cgroup 사용량, 아니면 부하 평균 ÷ 호스트 코어)가 CPU_MAX_LOAD(기본 0.9 — 사용자 10-07:
+    CPU 상한 90%) 아래로 내려올 때까지 기다림. 측정 못 하면(Windows 등) 바로 통과. 실행 중인 프로세스는 절대 안 건드림 — 새로 띄우는 것만 늦춤.
+    반환: 마지막에 잰 부하(비율) 또는 None."""
     import time
 
     lim = max_load if max_load is not None else _f("CPU_MAX_LOAD", 0.9)
-    n = cpus()
     waited = False
-    while (la := _loadavg1()) is not None and n and (la / n) >= lim:
+    while (load := cpu_load()) is not None and load >= lim:
         if not waited:
-            log(f"[cpu] 부하 {la:.1f}/{n}코어 ≥ {lim:.1f} — 새 작업 대기")
+            log(f"[cpu] 부하 {load:.2f} ≥ {lim:.2f} — 새 작업 대기")
             waited = True
         time.sleep(poll)
-    return _loadavg1()
+    return load
 
 
 _LAUNCH = threading.Lock()
 
 
 def gated_popen(args, settle=None, log=print, **kwargs):
-    """생산 파싱 경로(run_all·stream·cli/pipeline)의 하위 프로세스 공용 launcher(옛 stack_matrix._sub 패턴을 공유 함수로).
+    """생산 파싱 경로(run_all·cli/pipeline)의 하위 프로세스 공용 launcher(옛 stack_matrix._sub 패턴을 공유 함수로).
     한 번에 하나씩: 메모리 문(사용률 < MEM_MAX_PCT, 기본 90 — 실험 도구 MEM_START_PCT와 같은 90) →
     CPU 문(부하 ÷ cpus() < CPU_MAX_LOAD, 기본 1.0 — Windows는 측정 못 해 바로 통과) 통과
     → subprocess.Popen(args, **kwargs) → (여유 있으면 바로 잠금 해제, 상한 가까이면만 settle초 쉬고 해제).
@@ -199,15 +267,33 @@ def gated_popen(args, settle=None, log=print, **kwargs):
     import subprocess
     import time
 
+    from common.core import span as SP
+
     lim = _f("MEM_MAX_PCT", 90)
+    # fp-perf C6 — 긴 기다림(메모리·CPU 문)은 잠금 밖에서: 한 launcher가 문 앞에서 기다리는 동안 다른 launcher의 Popen·span 기록이
+    # 막히지 않게. 잠금 안에서는 메모리만 한 번 더 본다("한 번에 하나씩" — 대개 바로 통과). CPU는 다시 재지 않는다 — 컨테이너 CPU 측정은
+    # 새 표본에 0.25초를 쉬어 잠금을 그만큼 잡게 되므로(리뷰 11-03).
+    t0 = time.monotonic()
+    wait_mem(start_pct=lim, log=log)
+    t1 = time.monotonic()
+    wait_cpu(log=log)
+    t2 = time.monotonic()
     with _LAUNCH:
+        t_locked = time.monotonic()
         u = wait_mem(start_pct=lim, log=log)
-        wait_cpu(log=log)
+        t_mem = time.monotonic()
         pr = exitclean.track(
-            subprocess.Popen(args, **kwargs), group=bool(kwargs.get("start_new_session"))
-        )  # pl-27 — 끝날 때 아직 돌면 끝내고 회수
+            subprocess.Popen(args, **SP.with_context(kwargs)), group=bool(kwargs.get("start_new_session"))
+        )  # pl-27 — 끝날 때 아직 돌면 끝내고 회수 · op-01 — 현재 run/span ID를 자식에 이어줌
+        settled = 0.0
         if u is not None and u >= lim - _f("MEM_SETTLE_MARGIN", 5):
-            time.sleep(settle if settle is not None else _f("MEM_SETTLE_SEC", 2))
+            settled = settle if settle is not None else _f("MEM_SETTLE_SEC", 2)
+            time.sleep(settled)
+    # op-01 — 대기를 작업 시간과 분리해 현재 span에: 메모리 문·CPU 문·다른 launcher 기다림(lock)·settle
+    sp = SP.current()
+    if sp is not None:
+        sp.add_wait(mem_ms=int((t1 - t0 + t_mem - t_locked) * 1000), cpu_ms=int((t2 - t1) * 1000))
+        sp.add(wait_launch_ms=int((t_locked - t2) * 1000), settle_ms=int(settled * 1000), launches=1)
     return pr
 
 
@@ -250,6 +336,62 @@ def vlm_page_concurrency(doc_workers, requested):
     VLM_MAX_CONCURRENCY(기본 8)를 넘지 않게 요청값을 줄인다(문서 동시 수는 그대로 — CPU·메모리로 이미 정해짐)."""
     cap = int(_f("VLM_MAX_CONCURRENCY", 8))
     return max(1, min(int(requested), cap // max(1, int(doc_workers))))
+
+
+# ---- 일괄 파싱 프로세스(0.2.0 — 옛 pipeline/extract/resources.py에서 옮김, pl-46: OS별 분기를 이 파일 한 곳에)
+LOW_NICE = 10  # POSIX nice 증가분 — 일괄 파싱 엔진 자식(parse MCP 서비스의 자식은 0)
+
+
+def resolve_procs(v):
+    """명령 인자 --procs 값('auto'·숫자) → 정수."""
+    return plan()["procs"] if str(v).strip().lower() in ("", "auto", "0") else max(1, int(v))
+
+
+def thread_share(cpus, procs, workers=1):
+    """동시 실행 단위 하나가 쓸 스레드 수(OC2, 사용자 10-15) — 실제 동시 수 = procs × workers로 CPU를 나눔.
+    run_all은 --procs만큼 조각(shard)을 띄우고 각 조각이 동시 자식(글자 엔진 상한 text_slots)을 돌린다 → 호출자가 그 수를 workers로. 최소 1."""
+    return max(1, int(cpus) // (max(1, int(procs)) * max(1, int(workers))))
+
+
+def text_slots(cpus, procs):
+    """조각 하나에서 동시에 돌릴 글자(CPU) 엔진 자식 수 상한(10-29) — 코어 ÷ 조각 수(최소 1). VLM 엔진(API 대기)은 이 상한 밖 —
+    --workers(문서 동시 수, VLM에 맞춘 값)를 글자 엔진이 그대로 물려받지 않게."""
+    return max(1, int(cpus) // max(1, int(procs)))
+
+
+def low_priority_kw(low=True):
+    """일괄 파싱 엔진 자식을 띄울 때 Popen 추가 인자 — Windows는 BELOW_NORMAL 우선순위 클래스, POSIX는 없음(띄운 뒤 renice_low)."""
+    if low and os.name == "nt":
+        return {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS}
+    return {}
+
+
+def renice_low(pid, low=True):
+    """POSIX — 띄운 자식의 nice를 LOW_NICE만큼 올림(preexec_fn은 스레드와 같이 쓰면 위험해 띄운 뒤에). Windows·실패는 아무것도 안 함."""
+    if low and os.name != "nt":
+        try:
+            os.setpriority(os.PRIO_PROCESS, pid, os.getpriority(os.PRIO_PROCESS, pid) + LOW_NICE)
+        except OSError:
+            pass  # 이미 끝난 자식 등 — 우선순위는 최선(실패해도 파싱은 계속)
+
+
+def group_kw():
+    """자식을 새 프로세스 묶음(세션)으로 — kill_group이 손자까지 끝낼 수 있게."""
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def kill_group(p):
+    """group_kw로 띄운 자식과 그 아래 프로세스 전부를 끝내고 기다림(시간 초과 처리) — 끝내기·회수는 common.core.exitclean.stop 한 곳(pl-27)."""
+    exitclean.stop(p, group=True)
+    p.communicate()
+
+
+def thread_env(threads):
+    """수치 라이브러리 스레드 수 고정 — 정하지 않으면 각 프로세스가 호스트 코어 수만큼 스레드를 띄움(프로세스 × 코어 = CPU 폭주)."""
+    t = str(threads)
+    return {k: t for k in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS", "TORCH_NUM_THREADS")}
 
 
 if __name__ == "__main__":

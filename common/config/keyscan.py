@@ -14,11 +14,11 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
-from pathlib import Path
 
 from common.core.console import utf8_stdout
+from common.core.paths import DEPLOY_ROOT
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = DEPLOY_ROOT  # 저장소 루트(PC) — git ls-files 기준
 _SKIP = (
     "valid_env/",
     ".claude/",
@@ -31,131 +31,99 @@ PREFIXES = ("LLM", "VLM", "EMBED")
 
 # 규칙(아래 정규식)으로 못 잡는 읽기 — 이름 목록·동적 이름(9-4 "이름 목록") · S7a에 다시 모으며 찾음
 NAME_LIST = {
-    "TRIGGER_SHUTDOWN_TIMEOUT_SEC": "pipeline/trigger_server.py(_serve 인자 기본값)",
-    "E2E_QA_SET": "pipeline/check_env.py(경로 점검 표)",
-    "E2E_QUESTIONS": "pipeline/check_env.py(경로 점검 표)",
-    "VLM_EXTRA_BODY": "common/ai/adk.py(_EXTRA_ENV_KEY 표)",
+    "VLM_EXTRA_BODY": "common/ai/llm.py(_EXTRA_ENV_KEY 표)",
     **{
-        f"RDB_COL_{f}": 'pipeline/extract/source.py(f"RDB_COL_{k.upper()}")'
-        for f in (
-            "BUCKET",
-            "COMPANY",
-            "CONTENT_TYPE",
-            "CONTENT_VERSION",
-            "CONTRACT",
-            "DOC_ID",
-            "DOC_TYPE",
-            "ETAG",
-            "FILENAME",
-            "IS_DELETED",
-            "KEY",
-            "SIZE",
-            "SUPERSEDES",
-            "UPDATED",
-            "VERSION",
-        )
+        f"RDB_COL_{f}": "pipeline/extract/fetch_docs.py(_rdb_cols — 설정 칸 extract.connections.rdb.columns)"
+        for f in ("CONTENT_VERSION", "DOC_ID", "FILENAME", "KEY", "SIZE")
     },
 }
 # YAML에 넣지 않는 이름(refactor_plan 부록 D "처리") — env로 남김(5-3 H·라이브러리가 읽음) · 인자(5-3 B 빌드·반입·시험 스크립트) ·
-# 삭제(코드가 안 읽거나 옛 이름 — D-028 ⑥, S7e에서 지움). migrate가 보고 분류에 씀.
+# (옛 이름 '삭제 후보' 목록은 0.2.0에 지움 — pl-46: 코드가 읽지 않는 이름은 대조하지 않음)
 NOT_SETTINGS = {
+    "APPLOG_CONTEXT": ("env로 남김", "내부 신호 — 부모 → 자식 request/run/span ID(JSON), 설정 아님"),
     "SETTINGS_FILE": ("env로 남김", "설정 파일 위치(새 — D-015)"),
     "SETTINGS_LENIENT": (
         "env로 남김",
         "내부 신호 — entrypoint가 점검 명령(check·selftest 등)에만 줌: 서버에서도 틀린 설정 파일을 경고만(원인을 볼 수 있게 — S7e2)",
     ),
+    **{
+        f"APP_{k.upper()}": (
+            "env로 남김",
+            "컨테이너 안 약속 경로 — settings.IMAGE_PATHS 고정값(settings_env.sh가 냄, compose 마운트 자리 — 사용자 11-02)",
+        )
+        for k in ("output_root", "code_root", "docs_mount")
+    },
     "SETTINGS_LOADED": (
         "env로 남김",
         "내부 신호 — settings_env.sh load_settings가 이미 낸 설정 파일(하위 스크립트가 다시 안 읽게, 새 — S7e1)",
     ),
-    "SETTINGS_IMAGE": ("env로 남김", "호스트 python에 pydantic이 없을 때 settings_env.sh가 설정 값을 꺼낼 이미지(새 — S7e1, C-36)"),
     "PYTHONUTF8": ("env로 남김", "파이썬 실행 옵션(이미지·셸)"),
     "DO_NOT_TRACK": ("env로 남김", "외부 라이브러리 원격 측정 끄기 — Dockerfile ENV(U-1, S7a2) · settings·빈 틀에서만 뺌(S7e)"),
     "HF_HOME": ("env로 남김", "라이브러리(huggingface)가 읽음"),
     "HF_HUB_OFFLINE": ("env로 남김", "라이브러리가 읽음"),
     "LITELLM_LOCAL_MODEL_COST_MAP": ("env로 남김", "라이브러리(litellm)가 읽음"),
-    "LOCAL_RUN": (
-        "삭제 후보",
-        "S7b에 RUN_ENV=local로 대체 — 코드가 더 읽지 않음(migrate는 옛 env 파일의 LOCAL_RUN=1을 common.run_env: local로)",
-    ),
-    "MINERU_BIN": (
-        "env로 남김",
-        "엔진 파일 registry.py가 env를 직접 읽음(기본 mineru — 엔진 지문 파일이라 그대로) · 설정 칸은 10-29에 지움(엔진 구성에서 뺀 엔진)",
-    ),
     "NETWORK_HOST": ("env로 남김", "entrypoint 신호(compose)"),
     "OMP_NUM_THREADS": ("env로 남김", "라이브러리(OpenMP)가 읽음"),
     "PARSE_RUN_ID": ("env로 남김", "부모 → 자식 프로세스 신호"),
     "PIPELINE_VERSION": ("env로 남김", "버전 표기 마지막 대체(VERSION·PATCH_VERSION이 없을 때 — D-036)"),
     "PYTHONPATH": ("env로 남김", "이미지·셸"),
     "RAG_MODULE": ("env로 남김", "이미지 신호(Dockerfile ENV)"),
-    "RUNLOG_CHILD": ("env로 남김", "부모 → 자식 프로세스 신호"),
     "RUN_ENV": ("env로 남김", "새 키(D-015) — local·dev·prd"),
-    "RUNLOG_FILE": (
-        "env로 남김",
-        "내부 신호 — 부모가 정한 실행 기록 로그 파일을 자식이 이어 씀(S7e2 — 설정 칸에서 내부 신호로, 사용자 10-28)",
-    ),
     "SCARF_NO_ANALYTICS": ("env로 남김", "외부 라이브러리 원격 측정 끄기 — Dockerfile ENV(U-1, S7a2) · settings·빈 틀에서만 뺌(S7e)"),
     "TESSDATA_PREFIX": ("env로 남김", "라이브러리(tesseract)가 읽음"),
     "TRANSFORMERS_OFFLINE": ("env로 남김", "라이브러리가 읽음"),
-    "TRIGGER_MODULE": ("env로 남김", "compose 서비스별 신호"),
     "TZ": ("env로 남김", "OS·이미지 ENV"),
     "USER": ("env로 남김", "OS 사용자 이름(OS가 줌)"),
     "USERNAME": ("env로 남김", "OS 사용자 이름(Windows)"),
     "ALLOW_NO_ASSETS": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
+    **{
+        n: ("인자", "빌드·굽기 스크립트 변수(build_ship.sh·bake.sh·ship_stage.sh — op-06·op-07)")
+        for n in ("APP_VERSION", "VCS_REF", "BAKE_TEST", "CODE_BUNDLE", "CODE_DIR", "CODE_OUT")
+    },
+    "NF": ("인자", "awk 내장 변수($NF — build_ship.sh tar 권한 점검), 설정 아님"),
     "SMOKE_OVERLAY_DIR": ("인자", "PC 시험 Docker 덮기 파일 폴더 — smoke_test.sh가 mktemp로 만들어 compose에 넘김(S7e2)"),
+    "SMOKE_SYSTEM": ("인자", "PC 시험 Docker 원천 이름 — smoke_test.sh 인자(search는 원천 하나 필수 — mc-16)"),
     "ASSET_SRC": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "BUILDKIT_SYNTAX": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "BUILD_ARGS": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "BUILD_ONLY": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "CHUNK": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "FORCE_TAG": ("인자", "build_ship.sh — 이미 있는 버전 태그를 다시 만들 때만 1(D-036)"),
-    "IMAGE_BASE": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
-    "IMAGE_BASE_FILE": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
-    "IMAGE_TAG": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "IMAGE_TARGET": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "KNOWN_FAIL": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
-    "NOTES_NAME": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
-    "NOTES_ONLY": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "OUT": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
-    "PATCH_BRANCH": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
-    "PATCH_COMMIT": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "PY": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "REMOTE_DIR": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "REMOTE_DOCKER": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "SHIP_REPO": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
-    "SINCE": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "TAG": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     "TARGET": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
-    "WHY": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
-    "COGNEE_EXPORT_DIR": ("삭제 후보", "빈 틀에만 — 코드가 안 읽음"),
-    "DATA_PARSING_IMAGE": ("삭제 후보", "S6b 옛 이름 — image_vars.sh가 거부 안내만"),
-    "ENV_AUTOLOAD": ("삭제 후보", "코드가 읽은 적 없음 — 명령 줄 흔적만(S7a2, VS7a R-8)"),
-    "DATA_RETRIEVAL_IMAGE": ("삭제 후보", "S6b 옛 이름"),
-    "DATA_STRUCTURE_IMAGE": ("삭제 후보", "S6b 옛 이름"),
-    "OV_TAGS": ("삭제 후보", "options.conf에만 — 코드가 안 읽음"),
-    "PLATFORM_CONFIG": ("삭제 후보", "agent_platform 삭제(D-013) — 옛 pipeline.env.example·answer_gen_test만(둘 다 없음 — S7e2·S10)"),
-    "PLATFORM_STATE_DIR": ("삭제 후보", "agent_platform 삭제(D-013)"),
-    "RAG_IMAGE": ("삭제 후보", "S6b 옛 이름"),
-    "RAG_PARSE_IMAGE": ("삭제 후보", "S6b 옛 이름"),
-    "RAG_RETRIEVAL_IMAGE": ("삭제 후보", "S6b 옛 이름"),
-    "RAG_STRUCTURE_IMAGE": ("삭제 후보", "S6b 옛 이름"),
-    "RESEARCH_ALWAYS_CHECK": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
-    "RESEARCH_CONTROLLER": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
-    "RESEARCH_ENRICH_QUEUE": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
-    "RESEARCH_EXPAND": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
-    "RESEARCH_MAX_LLM_CALLS": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
-    "RESEARCH_MAX_REQS": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
-    "RESEARCH_MAX_RETRIES": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
-    "RESEARCH_PLANNER": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
-    "RESEARCH_RETRY_PARTIAL": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
-    "RESEARCH_WORKERS": ("삭제 후보", "research 삭제(S5a D-025) — 코드에 없음"),
-    "SMOKE_PATCH": ("삭제 후보", "S6c 삭제(D-027) — 문서 글자만"),
-    "LLM_SYNTHETIC_TRUTH": ("삭제 후보", "합성 문서 선언 잠금 삭제(사용자 10-29) — 외부 허용은 *_ALLOW_EXTERNAL + RUN_ENV=local"),
-    "SYNTHETIC_TRUTH": ("삭제 후보", "LLM_SYNTHETIC_TRUTH의 옛 별칭 — 둘 다 삭제(사용자 10-29)"),
-    "ZZ_BASE_URL": ("삭제 후보", "ping_models selftest의 가짜 이름"),
+    "APP_VERSION": ("인자", "Dockerfile 빌드 인자 — 이미지에 버전을 새김(build_ship.sh가 VERSION 파일에서, op-09)"),
+    "VCS_REF": ("인자", "Dockerfile 빌드 인자 — 이미지에 커밋을 새김(build_ship.sh, op-09)"),
+    "CODE_OUT": ("인자", "build_ship.sh — 코드 묶음 출력 파일(op-09)"),
+    "CODE_BUNDLE": ("인자", "ship_stage.sh — 실행 이미지와 함께 옮길 코드 묶음 파일(bake.sh가 넘김, op-09)"),
+    "BAKE_TEST": ("인자", "bake.sh — PC 시험 태그면 1(태그가 VERSION과 달라도 멈추지 않음, op-09)"),
+    "CODE_DIR": (
+        "인자",
+        "호스트 스크립트 변수 — 개발 서버 코드 폴더(image_vars.sh가 실행 이미지일 때 pwd로 채움, compose.code*.yml 마운트 — op-09)",
+    ),
+    "RAG_ROOT": (
+        "인자",
+        "호스트 스크립트 변수 — 서버 루트(코드 폴더의 부모 — settings_env.sh가 구해 compose edw_chain.yaml 마운트에, op-13)",
+    ),
+    "POSTGRES_DB": ("env로 남김", "PG 컨테이너 env — compose가 PG_DB로 채움(설정 칸은 op-08에 지움)"),
+    "POSTGRES_USER": ("env로 남김", "PG 컨테이너 env — compose가 PG_USER로 채움(설정 칸은 op-08에 지움)"),
 }
 # 모은 키가 아닌 것(셸 문법·Dockerfile ARG·selftest 가짜 이름)
-IGNORE = {"BASE", "X_ALLOW_EXTERNAL"}
+IGNORE = {
+    "BASE",
+    "X_ALLOW_EXTERNAL",
+    "NF",
+    "PATH",
+    "DC_ROOT",
+    "DC_UNIT_DIR",
+    "DC_FAKE",
+}  # NF=awk `$NF`(op-09) · PATH·DC_*=dc.sh 시험용(#138)
 
 _K = r"([A-Z][A-Z0-9_]{1,})"
 _PY = [
@@ -278,7 +246,7 @@ def object_reads():
     역할 접두로 짓는 이름(`{prefix}_BASE_URL` 꼴 — PREFIXES)의 꼬리가 나오면 읽는 것으로 친다."""
     from common.config import settings as S
 
-    root = Path(__file__).resolve().parents[2]
+    root = ROOT
 
     def texts(folder, skip):
         return (

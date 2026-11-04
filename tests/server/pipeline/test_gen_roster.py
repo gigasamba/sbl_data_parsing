@@ -1,9 +1,9 @@
-"""pipeline.transform.structure.gen_roster 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.structure.gen_roster --selftest`."""
+"""pipeline.transform.structure.roster_from_edw 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.structure.roster_from_edw --selftest`."""
 
 from pathlib import Path
 
 from common.core import terms as T
-from pipeline.transform.structure.gen_roster import (
+from pipeline.transform.structure.roster_from_edw import (
     ROSTER_COLS,
     build_client_extra,
     build_roster,
@@ -41,14 +41,8 @@ def selftest():
     write_client_roster(build_roster(rows2, m2), out2, build_client_extra(rows2, m2), source="csv:master2.csv")
     assert "C-1,Acme Bio,에이크미,,,,,,active,,csv:master2.csv," in out2.read_text(encoding="utf-8")
     assert T.read_roster(out2) == {"Acme Bio": ["에이크미"]}, T.read_roster(out2)  # inactive dropped, name_ko → alias
-    import os as _os
-
-    _os.environ["CLIENT_ROSTER"] = str(out)  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음
-    try:
-        al = T._aliases()
-        assert al.get("Celltrion") and set(al["Celltrion"]) == {"CT Inc", "셀트리온"}, al  # 생성 파일을 terms.py가 그대로 읽음
-    finally:
-        del _os.environ["CLIENT_ROSTER"]  # env 남김 — 시험: 인계 파일(terms.py)이 env로 읽음(복원)
+    al = T.read_roster(out)  # pl-38 — 명부는 마스터 표(client_roster)로 들어감: 생성 파일을 같은 규칙(read_roster)으로 읽음
+    assert al.get("Celltrion") and set(al["Celltrion"]) == {"CT Inc", "셀트리온"}, al
 
     # E15 — --check: cp949(한국어 Excel) 읽힘·짧은 영문 별칭 무시·별칭 충돌·같은 이름 여러 줄 경고, 빈 명부는 오류
     chk = d / "sfdc_export.csv"

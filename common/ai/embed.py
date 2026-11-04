@@ -1,8 +1,8 @@
 """임베딩 호출 — 구조화(문서 청크 'passage')와 검색(질문 'query')이 같은 모델·접두·정규화를 써야 함.
-폐쇄망 전제: 로컬 모델은 미리 반입한 캐시에서만(HF_HUB_OFFLINE), API는 내부망 주소만."""
+API(OpenAI 호환 /embeddings, 내부망 주소만)만 쓴다 — 로컬 모델 길(sentence-transformers·bge-m3·e5)은 0.2.0에 지움(pl-46)."""
 
 import json
-import os
+import time
 from pathlib import Path
 
 import numpy as np
@@ -12,29 +12,10 @@ from common.ai.guard import settle_tokens as _g_settle_tokens
 from common.ai.guard import urlopen_metered as _g_urlopen_metered
 from common.ai.llm import profile as _profile
 from common.config.settings import by_env, cfg, reveal
+from common.core import span as _span
 from common.core.paths import APP_ROOT
 
 ROOT = APP_ROOT  # output/query_cache.sqlite 기준(옛 dev/)
-
-os.environ.setdefault("HF_HUB_OFFLINE", "1")  # env 남김 — 라이브러리(5-3 H)
-os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")  # env 남김 — 라이브러리(5-3 H)
-
-ST_MODELS = {"e5-small": "intfloat/multilingual-e5-small", "e5-base": "intfloat/multilingual-e5-base", "bge-m3": "BAAI/bge-m3"}
-_ST_CACHE: dict = {}
-
-
-def _load_st_model(name):
-    if name not in _ST_CACHE:
-        from sentence_transformers import SentenceTransformer
-
-        try:
-            _ST_CACHE[name] = SentenceTransformer(ST_MODELS[name], device="cpu")
-        except Exception as e:
-            raise RuntimeError(
-                f"임베딩 모델 '{name}'({ST_MODELS[name]}) 로드 실패 — 폐쇄망 로컬 캐시에 없음. "
-                f"HF_HUB_OFFLINE=1이며 미리 반입된 모델만 쓸 수 있다: {e}"
-            ) from e
-    return _ST_CACHE[name]
 
 
 def _embed_api(texts, kind="passage"):
@@ -65,6 +46,7 @@ def _embed_api(texts, kind="passage"):
         data = json.load(r)
     finally:
         r.close()
+    _span.add_current(embed_tokens=(data.get("usage") or {}).get("total_tokens") or 0)  # op-01 — 열린 span이 없으면(MCP 검색) no-op
     _g_settle_tokens(reserved, prof.model, data.get("usage"))  # BR45 — 응답에 토큰 수 있으면 실제 비용으로(없으면 flat 유지)
     v = np.asarray([d["embedding"] for d in sorted(data["data"], key=lambda d: d.get("index", 0))], dtype=np.float32)
     return v / np.maximum(np.linalg.norm(v, axis=1, keepdims=True), 1e-12)
@@ -108,13 +90,17 @@ def _evict_query_cache(db):
         db.commit()
 
 
+def model_key(name):
+    """비교용 모델 이름 — `openai/` 앞붙이를 뗀 것(같은 모델의 두 표기를 같게 봄)."""
+    return str(name).removeprefix("openai/")
+
+
 def query_model_mismatch(meta):
-    """AD41 — 색인(묶음 meta)이 api 임베딩이면 이 프로세스의 EMBED_MODEL과 같은지. 다르면 사람이 읽을 이유(문자열), 같거나 로컬 모델이면 None.
-    로컬 모델(bge-m3 등)은 meta['embed']를 그대로 질의에 쓰므로 어긋날 수 없음."""
+    """AD41 — 색인(묶음 meta)이 api 임베딩이면 이 프로세스의 EMBED_MODEL과 같은지. 다르면 사람이 읽을 이유(문자열), 같거나 api가 아니면 None."""
     if meta.get("embed") != "api" or not meta.get("embed_model"):
         return None
     cur = cfg().models.embed.model or ""
-    if cur.removeprefix("openai/") == str(meta["embed_model"]).removeprefix("openai/"):
+    if model_key(cur) == model_key(meta["embed_model"]):
         return None
     return (
         f"질의 임베딩 모델 {cur or '(EMBED_MODEL 없음)'} ≠ 색인 {meta['embed_model']} — "
@@ -123,7 +109,7 @@ def query_model_mismatch(meta):
 
 
 def embed_texts(embed, texts, kind):
-    """embed: e5-small·e5-base·bge-m3·api. e5는 query:/passage: 접두 필요."""
+    """embed: api(0.2.0 — 로컬 모델 이름은 지움). kind = query·passage."""
     if not texts:
         return np.zeros((0, 1), dtype=np.float32)
     if kind == "query":
@@ -160,9 +146,12 @@ def _embed_query_cached(embed, texts, kind):
 
 
 def _embed_uncached(embed, texts, kind):
-    if embed == "api":
-        return _embed_api(texts, kind)
-    model = _load_st_model(embed)
-    prefix = f"{kind}: " if embed.startswith("e5") else ""
-    vecs = model.encode([prefix + t for t in texts], normalize_embeddings=True, show_progress_bar=False)
-    return np.asarray(vecs, dtype=np.float32)
+    if embed != "api":
+        raise ValueError(f"임베딩 방식 {embed!r}는 지원하지 않음 — api만(로컬 모델 길은 0.2.0에 지움, pl-46)")
+    sp = _span.current()  # op-01 — 열린 span(구조화 임베딩)이 있을 때만 호출 수·지연을 쌓음. 없으면 이 한 줄만 비용
+    t0 = time.monotonic() if sp is not None else 0.0
+    out = _embed_api(texts, kind)
+    if sp is not None:
+        ms = (time.monotonic() - t0) * 1000
+        sp.add(embed_calls=1).observe("embed_call_ms", ms).ext_call(ms)
+    return out

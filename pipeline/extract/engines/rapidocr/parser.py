@@ -9,7 +9,6 @@
 PAGE_WORKERS>1이면 onnx intra 스레드(ko_params)와 곱해질 수 있으니 OCR_THREADS로 함께 조절한다.
 """
 
-import os
 import threading
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -35,8 +34,8 @@ def _resized(im):
 
 def _page_workers():
     """RAPIDOCR_PAGE_WORKERS — 문서 안 쪽별 OCR 병렬 수(기본 1=기존 순차). 숫자가 아니면 1로 침(엔진이 죽지 않게)."""
-    v = (os.environ.get("RAPIDOCR_PAGE_WORKERS") or "1").strip()
-    return max(1, int(v)) if v.isdigit() else 1
+    from pipeline import config as pc
+    return max(1, int(pc.cfg().extract.rapidocr_page_workers))
 
 
 def _ko_engine():
@@ -84,10 +83,11 @@ def ocr_threads():
     순서: OCR_THREADS(명시) → OMP_NUM_THREADS(run_all이 cgroup 한도 ÷ 프로세스 수로 이미 맞춤) → resources.plan()["threads"].
     OCR_THREADS=0이면 옛 동작(-1, onnxruntime 자동)."""
     import os
-    v = (os.environ.get("OCR_THREADS") or "").strip()
-    if v.isdigit():                       # 숫자가 아니면(예 "auto") 무시하고 아래 순서로 — 엔진 실행이 ValueError로 죽지 않게
-        return int(v) if int(v) > 0 else -1
-    v = os.environ.get("OMP_NUM_THREADS")
+    from pipeline import config as pc
+    t = pc.cfg().extract.ocr.threads      # 숫자가 아니면(예 "auto") 설정이 None으로 — 아래 순서로
+    if t is not None:
+        return t if t > 0 else -1
+    v = os.environ.get("OMP_NUM_THREADS")  # env 남김 — 라이브러리(onnxruntime·OpenMP 스레드 수 — run_all이 맞춤)
     if v and v.isdigit() and int(v) > 0:
         return int(v)
     from common.core import resources
@@ -95,7 +95,7 @@ def ocr_threads():
 
 
 def ko_params():
-    """rapidocr 3.x 한국어 모델 설정 + OC1 스레드 상한 — rapidocr_ko 엔진과 prepare.py 방향 보정이 같이 씀."""
+    """rapidocr 3.x 한국어 모델 설정 + OC1 스레드 상한 — rapidocr_ko 엔진과 filter_and_rotate.py 방향 보정이 같이 씀."""
     from rapidocr import LangRec, ModelType, OCRVersion
     params = {"Rec.lang_type": LangRec.KOREAN, "Rec.ocr_version": OCRVersion.PPOCRV5, "Rec.model_type": ModelType.MOBILE}
     n = ocr_threads()

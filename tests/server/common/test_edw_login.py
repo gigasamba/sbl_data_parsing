@@ -3,6 +3,7 @@
 from unittest import mock
 
 from common.config.settings import COMMON
+from common.core.paths import PROJ_ROOT
 from common.store import mssql
 from common.store import parsing_meta_db as PM
 
@@ -48,7 +49,7 @@ def test_standin_refused_off_pc():
         except ValueError:
             pass
     with COMMON.env(RDB_SQLITE="x.sqlite", RUN_ENV="local"):
-        assert mssql.standin_path() == "x.sqlite"
+        assert mssql.standin_path() == (PROJ_ROOT / "x.sqlite").as_posix()  # 상대 경로는 저장소 루트 기준(op-14)
 
 
 def test_mcp_process_never_holds_write_account():
@@ -87,7 +88,7 @@ def test_old_connection_fields_only_warn():
     with tempfile.TemporaryDirectory() as d:
         y = Path(d) / "old.yaml"
         y.write_text(
-            "common:\n  run_env: dev\n  connections:\n"
+            "required:\n  env: {run_env: dev}\ncommon:\n  connections:\n"
             "    edw: {server: s, user: u, password: p, conn_file: f}\n"
             "    parsing_meta: {host: h, user: u, password: p, database: d, port: 1433, sqlite: x, connect_kwargs: '{}', table: AI.ParsingMeta}\n",
             encoding="utf-8",
@@ -97,24 +98,14 @@ def test_old_connection_fields_only_warn():
 
 
 def test_mcp_paths_use_read_account_only():
-    """query_edw 접속과 근거 경로 조회(shaping) — 둘 다 "read"만 부른다(쓰기 계정 비밀이 MCP 프로세스로 안 감)."""
+    """query_edw 접속과 ParsingMeta 조회 — 둘 다 "read"만 부른다(쓰기 계정 비밀이 MCP 프로세스로 안 감). 근거 경로 조회(shaping)는 11-01에 지움(mc-15)."""
     from mcp_server.services import edw_query
-    from mcp_server.services.search import shaping
-    from mcp_server.services.search.server_state import _STATE
 
     roles = []
     real = mssql.login
     with COMMON.env(**FULL), mock.patch.object(mssql, "login", lambda role, extra=True: roles.append(role) or real(role, extra)):
         conf = edw_query._mssql_conf()
         assert conf["user"] == "ru" and conf["password"] == "rp", conf["user"]
-        with mock.patch.object(PM, "MssqlStore", lambda table, role: ("store", role)):
-            saved = dict(_STATE)
-            _STATE.pop("_pm_db_tried", None)
-            try:
-                assert shaping._pm_db() == ("store", "read")
-            finally:
-                _STATE.clear()
-                _STATE.update(saved)
     assert roles and set(roles) == {"read"}, roles
 
 

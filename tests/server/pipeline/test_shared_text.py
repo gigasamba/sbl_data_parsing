@@ -1,6 +1,6 @@
-"""pipeline.shared.text 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.shared.text`."""
+"""pipeline.shared.text_normalize 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.shared.text_normalize`."""
 
-from pipeline.shared.text import SYMBOL_PUA, canon_symbols, standardize_text
+from pipeline.shared.text_normalize import SYMBOL_PUA, canon_symbols, standardize_text
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통(인라인 점검)

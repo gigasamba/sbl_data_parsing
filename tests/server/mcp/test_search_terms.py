@@ -2,7 +2,6 @@
 
 from common.core.terms import load_glossary
 from common.core.text import tokens
-from mcp_server import config as mc
 from mcp_server.services.search.terms import _exp_tokens, expand_query, match_concepts, vector_alias_text
 
 
@@ -72,9 +71,6 @@ def selftest():
     assert t4.get("vi") == 0.8 and t4.get("viral") == 1.0, t4
     t5, n5 = expand_query("DSP 수율", g)  # context_required 없는 보통 약어는 바로 확장
     assert n5 and t5.get("downstream") == 1.0
-    with mc.senv(QUERY_EXPAND="0"):
-        t6, n6 = expand_query("VI 공정에서 pH 조건은?", g)
-        assert not n6 and set(t6) == set(tokens("VI 공정에서 pH 조건은?"))
 
     # 개념 조회
     assert match_concepts("바이러스 불활화", g) == ["A"]
@@ -89,8 +85,7 @@ def selftest():
 def _selftest_legal_suffix():
     """BR58 — _exp_tokens가 glossary 문자열을 토큰화한 뒤 숫자가 아닌 한 글자 토큰("미르하제약(주)"의 "주" 류)만
     빼는지 · "Inc."(2자 이상)는 그대로 남는지(실측: 통째로 지우면 pfizer_global_supply_2026.txt vs
-    화이자_한국지사_계약_2026.txt 쌍둥이 문서 분간 신호가 없어져 XL012·XL014가 새로 미스가 됐었다) ·
-    QUERY_EXPAND_SHORTTOK=0이면 바이트 동일(옛 동작)."""
+    화이자_한국지사_계약_2026.txt 쌍둥이 문서 분간 신호가 없어져 XL012·XL014가 새로 미스가 됐었다)."""
     assert "주" not in _exp_tokens("미르하제약(주)")
     assert "미르하제약" in _exp_tokens("미르하제약(주)")  # 긴 토큰은 그대로
     assert "inc." in _exp_tokens("Pfizer Inc.")  # 2자 이상 영문 접미는 안 건드림(분간 신호일 수 있음)
@@ -116,11 +111,7 @@ def _selftest_legal_suffix():
     t, notes = expand_query("미르하 견적서의 배치당 가격은?", g)
     assert "주" not in t and any("미르하" in n for n in notes), (t, notes)  # 법인 표기 괄호에서 나온 '주' 토큰 없음
     assert t.get("미르하제약") == 1.0 and t.get("mrh") == 0.8  # 그 외 토큰은 그대로
-
-    with mc.senv(QUERY_EXPAND_SHORTTOK="0"):
-        t_off, _ = expand_query("미르하 견적서의 배치당 가격은?", g)
-        assert t_off.get("주") == 1.0  # 끔 — 옛 동작(한 글자 토큰도 그대로)과 바이트 동일
-    print("[selftest] BR58 — _exp_tokens(글로서리 확장의 뜻 없는 한 글자 토큰만 거름, QUERY_EXPAND_SHORTTOK=0이면 바이트 동일) 통과")
+    print("[selftest] BR58 — _exp_tokens(글로서리 확장의 뜻 없는 한 글자 토큰만 거름) 통과")
 
 
 def _selftest_alias_roster():
@@ -156,11 +147,18 @@ def _selftest_alias_roster():
         w.writerows(rows)
     g = load_glossary(d)
 
-    f = Path(tempfile.mkdtemp()) / "roster.csv"
-    f.write_text("name,aliases\nCelltrion,CT Inc\n", encoding="utf-8")
-    _env = mc.senv(
-        GLOSSARY_DIR=str(d), CLIENT_ROSTER=str(f)
-    )  # 인계 파일(common.core.terms)이 env로 읽음 — senv가 os.environ에도 쓰고 되돌림(S7d)
+    from unittest import mock
+
+    from common.store import master
+
+    fake = master.Master(
+        {
+            "domain_terms": list(csv.DictReader((d / "domain_terms.csv").read_text(encoding="utf-8-sig").splitlines())),
+            "client_roster": [{"canonical_name": "Celltrion", "aliases": "CT Inc"}],
+        }
+    )  # pl-38 — 명부·용어 사전은 마스터 표(시험은 가짜 마스터)
+    _env = mock.patch.object(master, "get", lambda: fake)
+    _env.start()
     try:
         # ⑦ 한글 고유명사 뒤 조사 — '셀트리온과'(명부·용어집 둘 다)
         t, n = expand_query("셀트리온과 맺은 공급 계약", g)
@@ -172,7 +170,7 @@ def _selftest_alias_roster():
         t4, n4 = expand_query("CT Inc와 맺은 계약", g)
         assert t4.get("셀트리온") == 1.0 and any("alias" in x for x in n4), (t4, n4)
     finally:
-        _env.close()
+        _env.stop()
     print("[selftest] SI43⑦ — 한글 조사(조사 뒤 오탐 금지)·roster 전용 별칭(XL008) expand_query 통과")
 
 
@@ -239,16 +237,13 @@ def _selftest_case_insensitive_glossary():
 
 
 def _selftest_vector_alias_text():
-    """SI43⑤ G17 — 벡터 질의 임베딩 입력에만 교차 문자 체계(한글↔라틴) 별칭을 덧붙이는지, 끔 스위치(=0)는
-    바이트 동일인지."""
+    """SI43⑤ G17 — 벡터 질의 임베딩 입력에만 교차 문자 체계(한글↔라틴) 별칭을 덧붙이는지."""
     aliases = {"Celltrion": ["셀트리온"]}
     aliases_q = "셀트리온과 맺은 공급 계약 조건은?"
     out = vector_alias_text(aliases_q, aliases)
     assert out == f"{aliases_q} (Celltrion)", out  # 셀트리온(ko) ↔ Celltrion(lat) — 교차언어라 덧붙음
     assert vector_alias_text("관련 없는 질문", aliases) == "관련 없는 질문"  # 매칭 없으면 그대로
-    with mc.senv(SEARCH_VECTOR_ALIAS_EXPAND="0"):
-        assert vector_alias_text(aliases_q, aliases) == aliases_q  # =0이면 꺼짐 — 바이트 동일
-    print("[selftest] SI43⑤ G17 — vector_alias_text 교차 문자 체계 별칭 덧붙이기·끔 스위치 바이트 동일 통과")
+    print("[selftest] SI43⑤ G17 — vector_alias_text 교차 문자 체계 별칭 덧붙이기 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

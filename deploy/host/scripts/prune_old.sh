@@ -1,20 +1,22 @@
 #!/bin/bash
-# OP18 — 디스크·판 보관 기준(image-patch-process.md §7) 그대로: 이미지(S6b — data-pipeline·mcp-server)는
+# OP18 — 디스크·판 보관 기준(docs/operations/release-and-patch.md §6) 그대로: 이미지(S6b — data-pipeline·mcp-server)는
 #   지금 판 + 직전 판 1개만 남기고 나머지 rmi + `docker image prune -f`(이름 없는 층만) · 조각·tar 폴더가
 #   있으면 남은 것 정리(load.sh가 보통 성공 직후 지움 — 여긴 안전망). 남의 이미지·컨테이너는 안 건드림
-#   (이름 필터는 아래 REPOS 목록만, `docker system prune`·`-a` 금지 — §7 그대로).
+#   (이름 필터는 아래 REPOS 목록만, `docker system prune`·`-a` 금지 — §6 그대로).
 #   S6c(사용자 10-27, C-30 ③) — 옛 이름 이미지(옛 3분할 data-parsing·data-structure·data-retrieval, 그 전 rag-parse·rag-structure·
 #   rag-retrieval·rag-core·rag-all)는 하나도 남기지 않는다(남김 수 0). 옛 이미지는 S6b 전환의 되돌리기(refactor.md C-29)에 쓰므로
 #   --apply는 새 판 전환을 확인한 뒤에만 — dry-run은 지울 목록만 보여 준다.
 # 기본 dry-run(지울 목록만 출력) · --apply일 때만 실제로 지움.
 #   bash deploy/host/scripts/prune_old.sh [--apply] [--stage-dir <조각·tar 폴더>] [--keep N(기본 2 — 새 이름 이미지만)]
 # 환경: IMAGE_STAGE_DIR(= --stage-dir 기본값) · PRUNE_KEEP(= --keep 기본값, 기본 2 = 지금 판+직전 판) — S7e1: 설정 파일(SETTINGS_FILE 또는
-#   $SERVER_ENV_DIR/settings.yaml)이 있으면 common.host.image_stage_dir·prune_keep을 거기서(settings_env.sh load_settings — 셸 env가 이김), 없으면 셸 env·기본값
+#   <루트>/settings.yaml — 루트 = 코드 폴더의 부모, op-13)이 있으면 ops.host.image_stage_dir·prune_keep을 거기서(settings_env.sh load_settings — 셸 env가 이김), 없으면 셸 env·기본값
 set -uo pipefail
 # 부른 자리 그대로(cd 안 함 — 상대 --stage-dir·SETTINGS_FILE은 부른 자리 기준, S7e1 리뷰). 설정 파일을 못 읽어도 멈추지 않는다(옛처럼 셸 env·기본값).
-if [ -n "${SETTINGS_FILE:-}" ] || [ -f "${SERVER_ENV_DIR:-/srv/rag/env}/settings.yaml" ]; then
-  . "$(dirname "$0")/settings_env.sh" && load_settings || echo "[prune_old] 설정 파일을 읽지 못함 — 셸 env·기본값으로 계속" >&2
+. "$(dirname "$0")/settings_env.sh"   # 루트 RAG_ROOT(코드 폴더의 부모)·load_settings
+if [ -n "${SETTINGS_FILE:-}" ] || [ -f "$RAG_ROOT/settings.yaml" ]; then
+  load_settings || echo "[prune_old] 설정 파일을 읽지 못함 — 셸 env·기본값으로 계속" >&2
 fi
+DOCKER=${DOCKER:-docker}   # settings ops.host.docker — podman이면 podman(`sudo podman`처럼 두 낱말도 — 아래는 따옴표 없이 펼침, 다른 호스트 스크립트와 같음)
 
 APPLY=0
 STAGE_DIR=${IMAGE_STAGE_DIR:-}
@@ -35,7 +37,8 @@ OLD_REPOS="data-parsing data-structure data-retrieval rag-parse rag-structure ra
 prune_repos() {   # prune_repos <남길 수> <이름들> — 이름마다 최신부터 <남길 수>개 유지, 나머지 지움(--apply일 때만)
   local keep=$1 repo rows row tag i; shift
   for repo in "$@"; do
-    rows=$(docker images "$repo" --format '{{.CreatedAt}}|{{.Repository}}:{{.Tag}}' 2>/dev/null | sort -r)
+    # shellcheck disable=SC2086
+    rows=$($DOCKER images "$repo" --format '{{.CreatedAt}}|{{.Repository}}:{{.Tag}}' 2>/dev/null | sort -r)
     [ -z "$rows" ] && continue
     i=0
     while IFS= read -r row; do
@@ -45,7 +48,7 @@ prune_repos() {   # prune_repos <남길 수> <이름들> — 이름마다 최신
         echo "  유지: $tag"
       else
         echo "  지움: $tag"
-        [ "$APPLY" = 1 ] && docker rmi "$tag"
+        [ "$APPLY" = 1 ] && $DOCKER rmi "$tag"
       fi
     done <<< "$rows"
   done
@@ -69,8 +72,8 @@ if [ -n "$STAGE_DIR" ] && [ -d "$STAGE_DIR" ]; then
 fi
 
 if [ "$APPLY" = 1 ]; then
-  echo "== docker image prune -f (이름 없는 층만 — system prune·-a 아님) =="
-  docker image prune -f
+  echo "== $DOCKER image prune -f (이름 없는 층만 — system prune·-a 아님) =="
+  $DOCKER image prune -f
 else
   echo "(dry-run — 실제로 지우려면 --apply · 조각·tar 정리는 --stage-dir 또는 env IMAGE_STAGE_DIR)"
 fi

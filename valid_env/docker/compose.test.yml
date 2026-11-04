@@ -1,7 +1,7 @@
 # 모듈 컨테이너 연결 시험(개발 PC·개발 서버) — 브리지 네트워크 + 시험용 PostgreSQL(pgvector) + 검색 MCP(포트 게시).
 # 운영 구성(호스트 네트워크·기존 rag-postgres)은 deploy/host/compose/compose.pipeline.yml. 이 파일은 시험 전용(PostgreSQL 데이터는 컨테이너와 함께 지워짐).
-#   bash valid_env/docker/smoke_test.sh   ← 아래를 차례로: pg(·minio) 띄우기 → parse → structure → load → mcp 띄우기 → 밖에서 MCP 호출 → 정리
-#   문서 위치: SMOKE_SOURCE=/data/docs(같은 서버 폴더, 기본) | s3://버킷/접두(minio에 DOC_SRC를 올려 시험) · SMOKE_LIMIT=몇 건 · SMOKE_MODE=test(형식별 표본)
+#   bash valid_env/docker/smoke_test.sh   ← 아래를 차례로: pg 띄우기 → parse → structure → load → mcp 띄우기 → 밖에서 MCP 호출 → 정리
+#   문서 위치: DOC_SRC 폴더(/data/docs) 하나 — 11-01 원천 s3://를 지워 SMOKE_SOURCE·minio(모의 Object Storage)·게시(publish) 시험은 지움 · SMOKE_LIMIT=몇 건
 # 필요한 환경: DATA_PIPELINE_IMAGE(S6b — 옛 parse·structure 이미지 합침) · MCP_SERVER_IMAGE(옛 DATA_RETRIEVAL_IMAGE) · DOC_SRC(시험 문서) · RAG_OUT(결과)
 #   · SMOKE_SETTINGS(설정 파일 settings.yaml — 임베딩 주소·MCP 토큰·Object Storage 키 등, 비밀값은 여기에만 — S7e1, 옛 env 파일 대신)
 #   서버 compose와 같게 설정 파일을 읽기 전용으로 붙이고 SETTINGS_FILE·RUN_ENV만 넘긴다(env_file 없음 — 사용자 10-27 S7e1 Q1).
@@ -35,33 +35,18 @@ services:
   structure:
     <<: *job
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE}
-    command: ["structure"]
+    command: ["help"]  # 11-01 — structure 명령 지움(smoke_test.sh가 build_bundle을 직접 부름)
     volumes: [*settings, *overlay, "${RAG_OUT:?RAG_OUT}:/app/output"]
-    depends_on: {}
-
-  publish:                                 # SI39 결과 게시(맨 마지막 별도 단계 — 트리거만) · 시험: MinIO 버킷 + SQLite 가짜 EDW(output/pm_test)
-    <<: *job
-    image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE}
-    command: ["publish"]
-    volumes: [*settings, *overlay, "${RAG_OUT:?RAG_OUT}:/app/output"]   # OS_ENDPOINT·PM_BUCKET·PM_PREFIX·RDB_SQLITE — job.yaml
     depends_on: {}
 
   load:
     <<: *job
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE}
-    command: ["load"]
+    command: ["help"]  # 11-01 — load 명령 지움(smoke_test.sh가 pgvector_load·migrate를 직접 부름)
     # 이 pg는 매번 새로 뜨는 tmpfs 컨테이너(공유 PG 아님) — pgvector 이미지도 확장을 자동 생성 안 해서 PG_CREATE_EXTENSION=1 필요(XS3).
     # 공유 PG를 쓰는 서버 compose(deploy/host/compose/compose.pipeline.yml)·서버 settings.yaml에는 넣지 않는다.
     environment: {RUN_ENV: local, SETTINGS_FILE: /etc/rag/smoke/load.yaml}   # load.yaml = job.yaml + PG_CREATE_EXTENSION=1(S7e2) · 앵커 사전을 통째로 덮으므로 RUN_ENV도 다시(S7a2 — VS7a B-1)
     volumes: [*settings, *overlay, "${RAG_OUT:?RAG_OUT}:/app/output"]
-
-  minio:                                   # Object Storage(S3 호환) 모의 — --profile os(백로그 O6). 비밀값은 SMOKE_SETTINGS의 common.connections.object_storage 키와 같게(smoke_test.sh가 셸 env로)
-    image: ${MINIO_IMAGE:-bitnamilegacy/minio:latest}   # minio/minio는 Docker Hub에서 내려감(10-02 확인) — 사내 미러가 있으면 MINIO_IMAGE로
-    profiles: ["os"]
-    environment: {MINIO_ROOT_USER: "${OS_ACCESS_KEY:-smoke-minio}", MINIO_ROOT_PASSWORD: "${OS_SECRET_KEY:-smoke-minio-pw}"}   # smoke_test.sh가 설정 파일 값을 셸 env로(S7e1)
-    ports: ["127.0.0.1:${MINIO_PUBLISH_PORT:-19000}:9000"]
-    tmpfs: ["/bitnami/minio/data"]
-    healthcheck: {test: ["CMD", "curl", "-fs", "http://localhost:9000/minio/health/live"], interval: 2s, retries: 60}
 
   mcp:
     image: ${MCP_SERVER_IMAGE:?MCP_SERVER_IMAGE}

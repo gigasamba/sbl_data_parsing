@@ -1,6 +1,6 @@
-"""common.check.ping_models 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.check.ping_models --selftest`."""
+"""common.check.checker ping(옛 common.check.ping_models — 0.2.0 합침) 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.check.ping_models --selftest`."""
 
-from common.check.ping_models import candidates, model_not_found, payload, ping, png_1x1
+from common.check.checker import candidates, model_not_found, payload, ping, png_1x1
 
 
 def selftest():

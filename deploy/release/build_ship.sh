@@ -1,6 +1,6 @@
 #!/bin/bash
-# 개발 서버에서: 파이프라인 이미지 빌드 → 점검 → 압축 저장(sha256) → ssh로 수집 서버에 전송·적재 → 원격 점검.
-#   [IMAGE_TARGET=pipeline|mcp — S6b(D-020) 이미지 2개, 기본 pipeline]
+# PC에서: 이미지 빌드 → 점검 → 압축 저장(sha256) → ssh로 수집 서버에 전송·적재 → 원격 점검(운영 이미지는 개발 서버 bake.sh가 기본 — release-and-patch §1-2).
+#   [IMAGE_TARGET=pipeline|mcp|pipeline-runtime|mcp-runtime — S6b(D-020) 이미지 2개, *-runtime = 코드 없는 실행 이미지(op-06 — 코드 폴더 묶음도 만듦), 기본 pipeline]
 #   TARGET=user@수집서버 [TAG=data-pipeline:0.1.0] [REMOTE_DIR=/var/tmp] [DOCKER=docker|podman] [REMOTE_DOCKER=docker] \
 #   [BUILD_ARGS="--build-arg BASE=<사내 기반 이미지> --build-arg APT=0"] bash deploy/release/build_ship.sh
 #   BUILD_ONLY=1 — 빌드·로컬 점검(selftest 판정·resources·비밀값 흔적)까지만(TARGET·ssh 없음, 저장·전송 안 함 — PC 로컬 빌드, I3)
@@ -82,7 +82,7 @@ if [ "$RUNTIME" = 1 ]; then
   # 맨 위 폴더 755 + 모든 항목 모두가 읽기(head로 자르지 않음 — pipefail에서 tar가 SIGPIPE로 실패함)
   bad=$(tar -tvzf - < "$CODE_OUT" | awk 'NR==1 && $1 != "drwxr-xr-x" {print "맨위폴더 " $1} $1 !~ /^.r..r..r/ {print $NF}')
   [ -z "$bad" ] || { echo "[오류] 코드 폴더 묶음 권한 — 컨테이너 사용자 10001이 못 읽음: $bad"; exit 1; }
-  echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버에서 새 판 폴더로 풀고 live 링크를 옮김(release-and-patch.md — op-06)"
+  echo "[코드 폴더 묶음] $CODE_OUT ($(du -h "$CODE_OUT" | cut -f1)) — 서버의 새 루트에 코드 폴더로 풂(release-and-patch.md §8 — op-13)"
   export MSYS_NO_PATHCONV=1   # Windows Git Bash가 -v 인자를 바꾸지 않게
   RUN_ARGS="-v $(cygpath -m "$CODE_DIR" 2>/dev/null || echo "$CODE_DIR"):/app/deploy:ro"
 fi
@@ -119,9 +119,8 @@ bash deploy/release/selftest_gate.sh ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_A
 cat <<EOF
 완료: $TAG
 다음(수집 서버):
-  1) /srv/rag/env/settings.yaml 작성(settings.sample.yaml 참고 — [서버 옛 값] 칸 포함, 주인 10001·chmod 640) — pg·embed·vlm 접속 등(옛 pipeline.env면 release-and-patch.md §5-4로 옮김)
-  2) 결과 폴더 소유자: sudo mkdir -p /srv/rag/output && sudo chown 10001 /srv/rag/output
-  3) 점검:  $REMOTE_DOCKER run --rm --init -v /srv/rag/env/settings.yaml:/etc/rag/settings.yaml:ro,z -e SETTINGS_FILE=/etc/rag/settings.yaml -v <원본>:/data/docs:ro,z -v /srv/rag/output:/app/output:z $TAG check
-  4) 실행:  docs/operations/server-guide.md의 docker run 예(--cpus·--memory·--pids-limit·로그 크기 제한 포함)
+  1) 루트 폴더(아무 자리 — 예 /home/dev/)에 코드 zip을 풀고 코드 폴더에서 sudo bash deploy/host/scripts/dc.sh init --group <운영 그룹>(op-13)
+  2) <루트>/settings.yaml의 맨 위 required 빈 값을 채움(새 판이면 앞 루트의 settings.yaml·edw_chain.yaml을 복사해 옴)
+  3) 띄우기·점검: README §5(dc.sh up -d … → dc.sh check)
   압축본 $REMOTE_DIR/$(basename "$OUT") 은 적재 확인 뒤 지워도 됨
 EOF

@@ -2,41 +2,21 @@
 """검색 MCP — 질문 하나로 근거(원문·원본 경로·쪽·위치·그림)를 돌려주는 한 창구(백로그 G1~G5). 답변 생성은 클라이언트(GLM 등) 몫.
 
 도구(G2):
-  search(question, k=8, methods=[vector,bm25,id], decompose=false, client=None)  근거 목록 — BM25는 용어 사전으로 확장(X3, notes에 표시) ·
-    methods는 vector·bm25·id만(graph·image·openviking·concept·decompose는 10-29에 지움 — 입력은 받고 무시). client(AD38): 고객 명시(SEARCH_CLIENT_HARD=1이면 저장소 질의
-    단계에서 다른 고객 제외, 기본 꺼짐). 기본 켬(AD42, R3·R1 — =0으로 끔): SEARCH_EVIDENCE_GATE이면 응답에
-    evidence_status(found/weak/none)·근거별 low_score(SEARCH_MIN_SCORE 문턱) 표시만(근거는 안 줄임) · SEARCH_AGG_ROUTE이면
-    집계 질문을 aggregate.detect()로 가려 집계 결과(기존 정해진 함수만, 자유 SQL 없음)를 근거 맨 앞에 via="aggregate"로 —
-    detect()가 못 걸렀을 때 SEARCH_AGG_LLM(기본 끔, =1로 켬 — AR3 10-12)이면 LLM 1회로 경계 분류·인자 추출을 한 번 더 시도(R1, AD42·
-    AD45② — 기존 집계 틀에만 대입, 자유 SQL 없음), 잡히면 via="aggregate_llm". 집계 결과 통화가 2개 이상 섞이면(비교
-    질문 등) SEARCH_AGG_FX(기본 켬, =0으로 끔, BR43)가 고정 질의("환율 exchange rate USD KRW", bm25+id)로 1위 근거를
-    더 찾아 진짜 환율 패턴일 때만 집계 근거 text 끝에 붙인다(단일 통화면 영향 없음).
-    근거마다 doc_type·version·supersedes_doc_id·is_deleted·contract_id·updated_at·company는 RDB 문서 위치 메타(AD44
-    manifest)에 그 문서가 있을 때만(없으면 칸 자체가 없음).
-  (2026-10-20 사용자 결정·같은 날 통합 · 10-21 파싱 도구 추가) MCP 노출 도구는 search·query_edw·parse_document·edw_meta — 문서 목록(list_documents)·문서 단건
-    (get_document)·그림(get_image)·근거 이미지(get_evidence_image)·집계 질의(aggregate)·요건별 연구(research)·용어(lookup_term)·
-    개념(related)·describe_edw는 노출에서 뺐다. 내부 구현(do_*)은 search 안쪽 경로·셀프테스트만 남아 있고 MCP로는 호출 불가.
-  search(question, k=8, methods=[vector,bm25,id], decompose, client, index_id, source_system, project_id, division,
-    service_type, limit=100)  근거 검색 + 하드 필터 통합(2026-10-20) —
-    · question만: 기존 하이브리드 검색 그대로(근거 상위 k) ·
-    · 하드 필터만(question 없이 client·source_system·project_id·division·service_type): 조건에 정확히 맞는 문서 전부와
-      그 청크 전부를 점수·임베딩 없이 돌려줌(do_filter_documents 응답 모양 — 문서 수 상한 limit 기본 100, 0이면 무제한,
-      넘으면 truncated=true) ·
-    · question + 하드 필터: 조건에 정확히 맞는 문서(v_chunk_source) 범위 안에서만 검색 — 풀을 넉넉히 잡아(k×3,
-      상한 MAX_K) 파일 단위 후치 필터 뒤 근거 재순위·k로 자름(응답에 filter·scope_docs 표시) · 집계 근거는 전체 구조화
-      집계라 범위가 안 맞아 이 결합에서는 생략 · 조건은 모두 정확 일치(부분 문자열 불가) — client는 고객명 전체
-      (sf_acc_name·clients JSON 라벨) · source_system 'SFDC'/'CRMS'/'LAS' · project_id 프로젝트 코드(예: 'E54B') ·
-      division 'DS'/'DP'/'CD'/'CM'/'AD'/'AS' · service_type 'CMO DS'/'CMO DP'/'CDO'/'ADC' 등 · 범위 산정은 PG 적재
-      저장소만(로컬 묶음이면 필터 안내 후 전체 검색).
+  search(question, k=8, 거르기 13칸 + attrs — pl-52) — 11-01(mc-16, 등급 A) 운영 계약: question 필수(비면 {"error"}) · k 기본 8·상한 50 ·
+    거르기 source_system·client(+client_like)·project_id·division·service_type·FAQ_group·doc_class·sf_op_id·sf_op_name·contract_id·
+    created_since/created_until(모두 AND, 같은 거르기의 목록은 OR, 맞는 것이 없으면 빈 결과) · 거르기에 맞는 문서(v_chunk_source) 범위 안에서만
+    하이브리드 검색(vector·bm25·id — 서버 설정만) · 응답 {question, evidence[13칸 — attrs 포함], evidence_status, filter, scope_docs}
+    (mcp_server/schemas/evidence.py). 덤프 방식·이름 있는 색인(index_id)·옛 입력(methods·decompose·limit)·옛 출력(subs·store·images·notes·ms)은 지움.
+  MCP 노출 도구는 search·query_edw·parse_document·edw_meta·list_doc_fulltext·get_doc_fulltext(2026-10-20 사용자 결정 · 10-21 파싱 도구 · 11-01 원문 도구 mc-17).
   (EQ1, English docstrings per 10-15 user rule)
-  query_edw(sql, max_rows=2000) Read-only SQL against EDW: SELECT/WITH only, one statement, table allowlist
+  query_edw(sql, max_rows=1000) Read-only SQL against EDW: SELECT/WITH only, one statement, table allowlist
     (EDW_QUERY_TABLES), row/time/response-size caps. Returns raw rows only — no summarization, the
     calling agent does its own post-processing. See mcp_server/services/edw_query.py for the full guard.
   (2026-10-21 사용자 요청·같은 날 단일화) parse_document(path, content_b64, filename, time_out_threshold=300, max_chars=200000) —
-    비정형 파일 1건의 text 파싱 대표 결과: data-pipeline-parse 컨테이너(S6b — 옛 data-parsing)의 작업 서비스(PARSE_URL, 기본 http://127.0.0.1:8766 ·
-    docker exec -d data-pipeline-parse python -m pipeline.mcp_parse_service — 토큰은 그 컨테이너 settings.yaml pipeline.service.parse_mcp.token)가
+    비정형 파일 1건의 text 파싱 대표 결과: data-pipeline-mcp 컨테이너(11-03 — 옛 data-pipeline-parse)의 작업 서비스(PARSE_URL, 기본 http://127.0.0.1:8766 ·
+    그 컨테이너의 주 프로세스 — 토큰은 그 컨테이너 settings.yaml required.tokens.parse_mcp)가
     prepare → run_all( phase 1·2만 — 그림[VLM] 파싱은 phase 3이라 실행 안 됨, 표 인식 유지) → parse_qa → represent(대표 결과)만
-    수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/mcp_parse/inbox) 하위만(jail) · content_b64 상한 100MB ·
+    수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/_mcp_parse/inbox) 하위만(jail) · 파일 상한 100MB(path·content_b64 같음 — ops.runtime.parse_max_mb, 11-03) ·
     time_out_threshold(기본 300초) 안에 끝나야 결과를 돌려주고 못 끝내면 {"error": "시간 안에 수행 못했습니다", "job_id": …}만 반환 —
     노출 도구는 parse_document 하나뿐(사용자 결정: 결과 수령 도구 parse_result는 등록하지 않는다), 이 도구만 MCP_TOOL_TIMEOUT_SEC(기본 30초)
     대신 자체 예산으로 기다린다(_bg_long) · 응답 text는 max_chars(기본 20만자) 상한(초과 시 잘리고 text_truncated, 전체는 rep_path 파일에).
@@ -46,14 +26,13 @@
     벡터·임베딩·LLM·pgvector 불개입(rule-based — 비-RAG 원칙) · 데이터는 EDW_META_DIR(기본 /app/config/edw_meta)의
     catalog.json+columns.jsonl, mtime 재확인(기본 30초)으로 재빌드 반영 · sample_values는 어떤 응답에도 실리지 않음 ·
     도구 파일·데이터셋 부재 시 {"error": …} fail-soft(모듈 import는 do_edw_meta 안 lazy — 서버 부팅·기존 도구 계속).
-저장소: common/services.py 자동 연결(Docker PostgreSQL → 없으면 로컬 묶음), 임베딩·LLM은 .env 내부망 주소만.
+저장소: common/store/pg.py connect(설정의 PostgreSQL — 없으면 거부, --local이면 로컬 묶음), 임베딩·LLM은 .env 내부망 주소만.
 
 보안(G5): MCP_HOST(기본 127.0.0.1 · auto = 컨테이너 자기 사설 IP)는 내부망 주소만 · 루프백이 아니면 MCP_TOKEN 필수(Authorization: Bearer) ·
   루프백이 아니면 DNS 리바인딩 보호도 기본 켬(L8 — SDK TransportSecuritySettings, MCP_HOST[+포트]만 자동 허용 · 어긋난
   Host는 421·Origin은 403 · MCP_ALLOWED_HOSTS(쉼표 목록)로 추가 호스트) ·
-  호출자(X-MCP-Client 머리글)는 질의 기록(qa_log.jsonl)의 asked_by에 'mcp:<호출자>'로 · 결과 크기 상한 MCP_MAX_CHARS(기본 20000자).
-질의 기록(OP6): 호출자·질문·근거 chunk_id·rank·via·지연을 output/qa_log/qa_log.jsonl에 기록(PG 없는 로컬 묶음도, common/qa_log.py) —
-  기본 켬, MCP_QUERY_LOG=0으로 끔. 90일 지난 줄은 기동 때 또는 마지막 정리 이후 24시간 지나면 지운다. 토큰·원문은 안 남김.
+  호출자(X-MCP-Client 머리글)는 감사 기록의 agent로 · 결과 크기 상한 MCP_MAX_CHARS(기본 20000자).
+질의 기록: 파일 없음 — 호출마다 DB applog.mcp_log 한 행(입력 args에 질문·SQL, 결과 키 — op-01 · op-13).
 동시 접속(S12): 도구는 스레드로 돌림(MCP_MAX_CONCURRENCY 기본 8) · PG는 연결 풀(PG_POOL_MAX 기본 8) · GET /health(토큰 없이, 프로세스·준비 여부·적재 버전 ·
   MC1 — 기동 때 예열이 백그라운드로 도는 동안은 503 {"warming": true}, 끝나면 200 {"ready": true}, 예열 실패는 200 + {"warning": "warmup_failed"}(서버는 안 죽음),
   MCP_WARMUP=0으로 끔·기본 켬) ·
@@ -67,15 +46,22 @@
 (검색 services/search/search_svc.py) · 출력 모양 schemas/ · 시작 때 읽는 설정 config.py(CFG). 위 설명의 함수 이름은 그대로다.
 """
 
+import contextlib
 import hmac
 import ipaddress
+import json
+import logging
 import sys
 import threading
 
+import anyio
+
+from common.core import jsonlog
 from common.core.console import utf8_stdout
 from mcp_server import config as mc  # 설정 객체(S7d)
-from mcp_server.routers import edw_tools, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
-from mcp_server.services.search.server_state import CALLER, _warmup_bg
+from mcp_server.routers import edw_tools, fulltext_tool, health, parse_tool, search_tool  # 도구·/health 등록(5-1)
+from mcp_server.services import call_log, parse_proxy
+from mcp_server.services.search.server_state import _warmup_bg
 
 _DEFAULT_MCP_INSTRUCTIONS = (
     "CDMO 문서 검색 — search로 근거를 찾는다(하드 필터 조건을 함께 주면 그 범위 안에서 검색, "
@@ -87,8 +73,8 @@ _DEFAULT_MCP_INSTRUCTIONS = (
 
 
 def _mcp_instructions():
-    """FastMCP instructions 글자(DT1 c1) — env MCP_INSTRUCTIONS(없으면 코드 기본값, CDMO)."""
-    return mc.cfg().server.instructions or _DEFAULT_MCP_INSTRUCTIONS  # S7d — 설정 객체, 호출마다
+    """FastMCP instructions 글자(DT1 c1) — 코드 기본값(CDMO)."""
+    return _DEFAULT_MCP_INSTRUCTIONS
 
 
 def _transport_security(host):
@@ -102,8 +88,30 @@ def _transport_security(host):
     return TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=hosts, allowed_origins=origins)
 
 
+def _sdk_logging():
+    """FastMCP가 만들어질 때 root에 거는 기본 처리(INFO, 일반 글자, stderr)를 SDK(mcp.*) 줄에서 끊는다.
+    요청마다 나오는 INFO는 감사 행(mcp.call)과 겹치므로 common.log.level이 DEBUG일 때만 남기고, 그 밖의 줄(WARNING 이상,
+    예외)은 비밀값을 가린 JSON으로 stderr에 낸다 — stdio의 stdout은 JSON-RPC 전용이고 감사 로그(output/logs/mcp.jsonl)와도 섞지 않는다."""
+    from common.config.settings import cfg
+
+    level = cfg().log.level
+    sdk = logging.getLogger("mcp")
+    for handler in sdk.handlers[:]:
+        sdk.removeHandler(handler)
+        handler.close()
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(jsonlog.JsonFormatter("mcp"))
+    sdk.addHandler(handler)
+    sdk.setLevel(logging.DEBUG if level == "DEBUG" else max(logging.WARNING, logging.getLevelName(level)))
+    sdk.propagate = False  # root의 기본 핸들러로 예외 글이 가림 없이 나가는 길을 막는다
+
+
+_BIG_BODY = 4 * 1048576  # SDK 기본 본문 상한 — 이보다 큰(또는 길이를 안 밝힌) POST만 동시 수를 묶는다
+_BIG_SLOTS = 2  # ponytail: 고정 2개(4g 컨테이너에서 100MB 파일 base64·디코드 사본 기준) — 메모리를 바꾸면 설정 항목으로
+
+
 # ── MCP 서버 ─────────────────────────────────────────────────────
-def build(host="127.0.0.1", port=8765):
+def build(host, port):
     from mcp.server.fastmcp import FastMCP
 
     loop = host in ("127.0.0.1", "localhost", "::1")
@@ -115,12 +123,17 @@ def build(host="127.0.0.1", port=8765):
         stateless_http=True,
         json_response=True,
         transport_security=None if loop else _transport_security(host),
+        max_request_body_size=parse_proxy.body_cap(),  # 11-03 — SDK 기본 4MiB면 parse_document content_b64가 약 3MB에서 413
     )
+    _sdk_logging()  # FastMCP가 로깅을 설정한 뒤에 덮는다
 
-    search_tool.register(m)  # 등록 순서 = tools/list 순서(MCP 계약 바이트) — search · query_edw · parse_document · edw_meta
+    search_tool.register(
+        m
+    )  # 등록 순서 = tools/list 순서(MCP 계약 바이트) — search · query_edw · parse_document · edw_meta · list/get_doc_fulltext
     edw_tools.register_query_edw(m)
     parse_tool.register(m)
     edw_tools.register_edw_meta(m)
+    fulltext_tool.register(m)  # mc-17(11-01)
     return m
 
 
@@ -150,19 +163,73 @@ def build_guarded_app(host, port, token):
     health.register(app)
 
     inner = app
+    # 본문 상한(약 151MB)은 /mcp 하나라 모든 도구에 걸림 — 큰 요청은 본문을 읽기 전에 줄 세워 메모리를 묶는다(PR #110 리뷰)
+    big_slots = anyio.Semaphore(_BIG_SLOTS)
 
     async def guarded(scope, receive, send):
-        if scope["type"] == "http":
-            if scope.get("path") == "/health":
-                return await inner(scope, receive, send)
-            hdr = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
-            if token and not hmac.compare_digest(
-                (hdr.get("authorization") or "").encode(), f"Bearer {token}".encode()
-            ):  # 상수 시간 비교(보안 검토 10-02)
-                return await JSONResponse({"error": "unauthorized"}, status_code=401)(scope, receive, send)
-            CALLER.set("mcp:" + (hdr.get("x-mcp-client") or "http")[:60])
-        await inner(scope, receive, send)
+        if scope["type"] != "http" or scope.get("path") == "/health":
+            return await inner(scope, receive, send)
+        hdr = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
+        client_ip = (scope.get("client") or (None,))[0]  # 소켓 주소 — 프록시 뒤면 프록시 IP다
+        if token and not hmac.compare_digest(
+            (hdr.get("authorization") or "").encode(), f"Bearer {token}".encode()
+        ):  # 인증 실패는 본문 수신을 기다리지 않고 바로 거부한다.
+            with call_log.request_context(hdr, client_ip) as context:
+                await anyio.to_thread.run_sync(call_log.unauthorized)
+                return await JSONResponse({"error": "unauthorized"}, status_code=401, headers={"X-Request-Id": context["request_id"]})(
+                    scope, receive, send
+                )
+        with call_log.request_context(hdr, client_ip) as context:
+            # SDK가 받는 ASGI 청크를 즉시 그대로 전달한다. 감사용 사본은 최대 1MiB.
+            # 큰 요청은 _meta/initialize 추출만 생략하며 도구 입력/제한은 바꾸지 않는다.
+            metadata_limit = 1024 * 1024
+            body, body_size = bytearray(), 0
+            init_call = None
+            response_body, response_status = bytearray(), 200
 
+            async def observed_receive():
+                nonlocal body_size, init_call
+                message = await receive()
+                if scope.get("method") == "POST" and message["type"] == "http.request":
+                    chunk = message.get("body", b"")
+                    body_size += len(chunk)
+                    if body_size <= metadata_limit:
+                        body.extend(chunk)
+                        if not message.get("more_body", False):
+                            try:
+                                payload = await anyio.to_thread.run_sync(json.loads, body)
+                            except (ValueError, UnicodeError):
+                                payload = None  # 기존 MCP 오류는 SDK가 처리한다.
+                            call_log.update_request(context, payload)
+                            init_call = call_log.initialize_call(payload)
+                            body.clear()
+                    else:
+                        body.clear()
+                return message
+
+            async def correlated_send(message):
+                nonlocal response_status
+                if message["type"] == "http.response.start":
+                    response_status = message["status"]
+                    message = {**message, "headers": [*message.get("headers", []), (b"x-request-id", context["request_id"].encode())]}
+                elif init_call is not None and message["type"] == "http.response.body":
+                    response_body.extend(message.get("body", b"")[: max(0, metadata_limit - len(response_body))])
+                await send(message)
+
+            size = hdr.get("content-length", "")
+            big = scope.get("method") == "POST" and (not size.isdigit() or int(size) > _BIG_BODY)  # 길이 모름 = 큰 것
+            try:
+                async with big_slots if big else contextlib.nullcontext():
+                    await inner(scope, observed_receive, correlated_send)
+            except BaseException as exc:
+                if init_call is not None:
+                    init_call.finish(status="error", err=str(exc))
+                raise
+            finally:
+                if init_call is not None:
+                    await anyio.to_thread.run_sync(call_log.finish_initialize, init_call, response_body, response_status)
+
+    guarded.big_slots = big_slots  # 시험이 대기 수를 본다
     return guarded
 
 
@@ -176,27 +243,28 @@ def serve_http(host, port, token):
 
 if __name__ == "__main__":
     utf8_stdout()
+    if "--stdio" in sys.argv:
+        call_log.configure_stdio()
     from common.config.settings import edw_read_only, require_run_env
 
     edw_read_only()  # 검색 MCP는 EDW 읽기 계정만 — 공용 설정 파일의 쓰기 계정 칸은 이 프로세스에서 비움(사용자 10-29, ops.md#op-03)
     require_run_env("mcp_server.main", sections=("mcp",))  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
-    if mc.cfg().server.query_cache:  # S7e2 — 검색 MCP 전용 질의 임베딩 캐시(옛 compose EMBED_QUERY_CACHE 자리, 사용자 10-28)
-        from common.config import settings as _S
-
-        _S.put(EMBED_QUERY_CACHE=mc.cfg().server.query_cache)
-    from common.store.db import cfgtables
+    from common.store.db import cfgfile
 
     print(
-        f"[엔진 구성] {cfgtables.active('stack').label()}", file=sys.stderr, flush=True
-    )  # stderr — --stdio면 stdout은 JSON-RPC 채널   # S8b(Q3·Q7) — 시작 때 한 번(서버 = 판 표 — 못 읽으면 시작 거부, 종료 4)
+        f"[엔진 구성] {cfgfile.active('stack').label()}", file=sys.stderr, flush=True
+    )  # stderr — --stdio면 stdout은 JSON-RPC 채널 · 시작 때 한 번(파일 — 못 읽으면 시작 거부, 종료 2)
+    from mcp_server.services.search.server_state import check_store
+
+    check_store()  # op-09 — 서버면 PG 접속 칸이 비면 시작 거부
     if "--stdio" in sys.argv:
-        build().run(transport="stdio")
+        build("127.0.0.1", int(mc.cfg().server.port)).run(transport="stdio")  # stdio는 바인드 안 함 — 늘 루프백 규칙
     else:
         mc.checked("MCP_PORT")  # 접속 포트 — 형식 틀리면 옛처럼 시작 실패(S7d, 값은 안 찍음)
         _c = mc.cfg().server
         host, port, token = (
-            _c.host or "127.0.0.1",
-            int(_c.port if _c.port is not None else 8765),
+            _c.host,  # op-09 — 기본값은 설정 모델 한 곳
+            int(_c.port),
             mc.token_text(_c.token),
         )  # 공백뿐인 토큰 = 토큰 없음(사용자 결정 10-27)
         if host == "auto":  # 브리지 네트워크 컨테이너: 자기 사설 IP(포트 게시로 밖에서 부름) — 토큰 필수

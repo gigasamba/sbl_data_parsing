@@ -15,11 +15,21 @@
    "hwpx"
   ],
   ".png": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".jpg": [
-   "rapidocr_ko",
+   "qwen_vlm"
+  ],
+  ".jpeg": [
+   "qwen_vlm"
+  ],
+  ".tif": [
+   "qwen_vlm"
+  ],
+  ".tiff": [
+   "qwen_vlm"
+  ],
+  ".bmp": [
    "qwen_vlm"
   ],
   ".eml": [
@@ -27,6 +37,10 @@
    "kreuzberg"
   ],
   ".mht": [
+   "mhtml",
+   "kreuzberg"
+  ],
+  ".mhtml": [
    "mhtml",
    "kreuzberg"
   ],
@@ -43,7 +57,6 @@
    "markitdown"
   ],
   ".pdf_image": [
-   "rapidocr_ko",
    "qwen_vlm"
   ],
   ".pdf_text": [
@@ -69,22 +82,82 @@
   ".msg": [
    "msg_extract",
    "kreuzberg"
+  ],
+  ".docm": [
+   "kreuzberg",
+   "anydoc"
+  ],
+  ".pptm": [
+   "kreuzberg",
+   "anydoc"
+  ],
+  ".rtf": [
+   "anydoc",
+   "kreuzberg"
+  ],
+  ".csv": [
+   "markitdown",
+   "kreuzberg"
+  ],
+  ".tsv": [
+   "plaintext",
+   "kreuzberg"
+  ],
+  ".md": [
+   "plaintext",
+   "markitdown"
+  ],
+  ".odt": [
+   "anydoc",
+   "kreuzberg"
+  ],
+  ".ods": [
+   "anydoc",
+   "kreuzberg"
+  ],
+  ".odp": [
+   "anydoc"
+  ],
+  ".xlsb": [
+   "kreuzberg"
+  ],
+  ".dotx": [
+   "kreuzberg"
+  ],
+  ".xltx": [
+   "kreuzberg"
+  ],
+  ".potx": [
+   "kreuzberg"
+  ],
+  ".ppsx": [
+   "kreuzberg"
+  ],
+  ".dot": [
+   "kreuzberg"
+  ],
+  ".xlt": [
+   "kreuzberg"
+  ],
+  ".pot": [
+   "kreuzberg"
+  ],
+  ".json": [
+   "plaintext"
+  ],
+  ".xml": [
+   "plaintext"
+  ],
+  ".log": [
+   "plaintext"
   ]
  },
  "source": "selection.json(단계 1 최종 엔진 조합)",
  "name": "dev-v1",
- "embed": "bge-m3",
+ "embed": "api",
  "chunk": "structure",
  "graph": "table+entity",
  "retrieve": "hybrid",
  "k": 10,
- "updated": "2026-10-07 19:29",
- "candidates": [
-  "kreuzberg",
-  "qwen_vlm",
-  "anydoc",
-  "docx2python",
-  "pymupdf4llm",
-  "markitdown"
- ]
+ "updated": "2026-10-07 19:29"
 }

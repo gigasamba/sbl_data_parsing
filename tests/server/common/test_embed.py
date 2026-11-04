@@ -26,9 +26,9 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: RV
         with tempfile.TemporaryDirectory() as td:
             cache_path = str(Path(td) / "q.sqlite")
             with COMMON.env(EMBED_QUERY_CACHE=cache_path, EMBED_QUERY_CACHE_MAX=None):
-                v1 = embed_texts("e5-small", ["계약 금액은?"], "query")
+                v1 = embed_texts("api", ["계약 금액은?"], "query")
                 assert len(calls) == 1, "첫 호출은 미적중이라 _embed_uncached를 불러야 함"
-                v2 = embed_texts("e5-small", ["계약 금액은?"], "query")
+                v2 = embed_texts("api", ["계약 금액은?"], "query")
                 assert len(calls) == 1, "같은 질문 재질의는 캐시 적중 — 다시 부르면 안 됨"
                 assert np.array_equal(v1, v2), "캐시 적중 벡터가 미적중 결과와 바이트 동일해야 함(결정성)"
 
@@ -39,7 +39,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: RV
 
             with COMMON.env(EMBED_QUERY_CACHE=cache_path, EMBED_QUERY_CACHE_MAX="2"):
                 for i in range(5):
-                    embed_texts("e5-small", [f"질문{i}"], "query")
+                    embed_texts("api", [f"질문{i}"], "query")
                 db = sqlite3.connect(cache_path)
                 n = db.execute("SELECT COUNT(*) FROM q").fetchone()[0]
                 db.close()
@@ -49,20 +49,21 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: RV
             bad.write_bytes(b"not a sqlite file" * 100)
             with COMMON.env(EMBED_QUERY_CACHE=str(bad), EMBED_QUERY_CACHE_MAX=None):
                 calls.clear()
-                assert embed_texts("e5-small", ["손상"], "query").shape == (1, 2) and len(calls) == 1, (
+                assert embed_texts("api", ["손상"], "query").shape == (1, 2) and len(calls) == 1, (
                     "캐시 손상이면 캐시 없이 계산(질의 실패 금지)"
                 )
 
             with COMMON.env(EMBED_QUERY_CACHE="0", EMBED_QUERY_CACHE_MAX=None):
                 calls.clear()
-                embed_texts("e5-small", ["다시"], "query")
-                embed_texts("e5-small", ["다시"], "query")
+                embed_texts("api", ["다시"], "query")
+                embed_texts("api", ["다시"], "query")
                 assert len(calls) == 2, "EMBED_QUERY_CACHE=0이면 캐시 없이 매번 호출"
 
-        default_path = ROOT / "output" / "query_cache.sqlite"
         for label, val in (("미설정", None), ("빈 값", "")):  # D-028 ⑩ — 빈 값도 기본 경로(옛 코드는 sqlite3.connect('') 임시 DB)
-            default_path.unlink(missing_ok=True)
             with COMMON.env(EMBED_QUERY_CACHE=val):
+                # mcp 이미지는 이미지 기본값(/tmp/mcp_query_cache.sqlite)이 미설정을 채움 — 그 밖은 코드 기본 ROOT/output
+                default_path = Path(M.cfg().models.embed.query_cache or ROOT / "output" / "query_cache.sqlite")
+                default_path.unlink(missing_ok=True)
                 default_db = _query_cache()
                 assert default_db is not None
                 assert default_path.exists(), f"{label} 기본값은 {default_path}에 켬(RV1)"

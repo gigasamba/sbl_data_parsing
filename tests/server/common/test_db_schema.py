@@ -1,15 +1,15 @@
 """pl-25 — DB 스키마 명세(docs/architecture/db_schema.md)와 실제 정의가 같은지.
-지금 상태(결정 칸 유지+삭제)가 gold·struct는 Alembic 판(모델 common/store/db/models — 판과 같은지는 기존 dbcompare 시험이 봄)과,
+지금 상태(결정 칸 유지+삭제)가 gold(원천 스키마 5벌의 칸 합집합 — pl-28)는 Alembic 판(모델 common/store/db/models — 판과 같은지는 기존 dbcompare 시험이 봄)과,
 ParsingMeta는 docs/operations/parsing_meta_mssql.sql과 같아야 한다(다르면 실패). 목표 상태와의 차이(새로·삭제)는 일부러 다른 것이라
 목록으로 찍기만 한다. 문서가 없는 이미지(docs/ 미포함)에서는 건너뜀."""
 
 import re
-from pathlib import Path
 
+from common.core.paths import DEPLOY_ROOT
 from common.store import parsing_meta_db as PM
 from common.store.db import dbcompare
 
-ROOT = Path(__file__).resolve().parents[3]  # 저장소 루트(tests/server/common/ 위)
+ROOT = DEPLOY_ROOT  # 저장소 루트(PC) · 이미지 /app/deploy — op-09 paths 상수
 DOC = ROOT / "docs" / "architecture" / "db_schema.md"
 PM_SQL = ROOT / "docs" / "operations" / "parsing_meta_mssql.sql"
 DECISIONS = ("유지", "삭제", "새로")
@@ -40,12 +40,13 @@ def _pm_columns():
 
 
 def _actual():
-    """gold·struct = dbcompare.expected(판 비교 시험과 같은 모델 — 차원은 칸 이름과 무관) · ParsingMeta = DDL 파일."""
-    cols = {
-        f"{db}.{t.name}": {c.name for c in t.columns}
-        for db, tgt in (("gold", "search"), ("struct", "struct"))
-        for t in dbcompare.expected(tgt, "ai", 1024)[0].tables.values()
-    }
+    """gold = dbcompare.expected(판 비교 시험과 같은 모델 — 차원은 칸 이름과 무관) · ParsingMeta = DDL 파일."""
+    from common.store.db.models import search_tables as ST
+
+    cols = {}
+    for src in ST.SOURCES:  # pl-28 — 원천 스키마 5벌의 같은 표 이름은 칸을 합쳐서(원천 전용 칸은 문서의 "원천" 칸에 적음)
+        for t in dbcompare.expected("search", ST.src_schema("ai", src), 1024)[0].tables.values():
+            cols.setdefault(f"gold.{t.name}", set()).update(c.name for c in t.columns)
     cols["edw.ParsingMeta"] = _pm_columns()
     return cols
 
@@ -61,14 +62,20 @@ def test_schema_doc_matches():
     missing = sorted(set(actual) - set(doc))
     assert not missing, f"문서에 없는 표: {missing}"
     stale = sorted(
-        n
-        for n, cols in doc.items()
-        if n.split(".")[0] in ("gold", "struct") and n not in actual and any(d != "새로" for d in cols.values())
+        n for n, cols in doc.items() if n.split(".")[0] == "gold" and n not in actual and any(d != "새로" for d in cols.values())
     )
     assert not stale, f"문서에는 지금 있다는데 정의에 없는 표: {stale}"
     for name, real in sorted(actual.items()):
         now = {c for c, d in doc[name].items() if d != "새로"}
         assert now == real, f"{name} — 문서의 지금 칸과 실제가 다름: 문서에만 {sorted(now - real)} · 실제에만 {sorted(real - now)}"
+    from common.store.db.models.master_tables import master_metadata  # pl-38 — 마스터 표(§4, 결정 모두 새로)는 칸 전부를 모델과 대조
+
+    for tbl in master_metadata("m").tables.values():
+        name = f"master.{tbl.name}"
+        assert name in doc, f"문서에 없는 마스터 표: {name}"
+        assert set(doc[name]) == {c.name for c in tbl.columns}, (
+            f"{name} — 문서 칸 {sorted(doc[name])} · 모델 칸 {sorted(c.name for c in tbl.columns)}"
+        )
     targets = []
     for name, cols in sorted(doc.items()):
         new = sorted(c for c, d in cols.items() if d == "새로")

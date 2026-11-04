@@ -25,13 +25,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))  # 저장소 루트 — 설정 객체(common·mcp_server)를 읽으려고
-from common.config.settings import cfg, reveal  # noqa: E402 — S7e2: 설정 객체(옛 env)
+from common.config.settings import cfg  # noqa: E402 — S7e2: 설정 객체(옛 env)
 from mcp_server import config as mc  # noqa: E402
 
 _PG = cfg().connections.pg
-MCP_URL = mc.cfg().dev.mcp_url or "http://127.0.0.1:18765/mcp"
-UI_PORT = int(mc.cfg().dev.ui_port or 8790)
-SCHEMA = _PG.db_schema or "category"
+MCP_URL = mc.cfg().dev.mcp_url  # op-09 — 값은 설정에만(기본값은 설정 모델)
+UI_PORT = int(mc.cfg().dev.ui_port)
+SCHEMA = _PG.db_schema or sys.exit("PG_SCHEMA 없음 — settings.yaml required.pg.db_schema를 채움")
 if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", SCHEMA):
     sys.exit(f"PG_SCHEMA 이름이 이상함: {SCHEMA!r}")
 
@@ -44,7 +44,7 @@ async def _mcp(fn):
     from mcp import ClientSession
     from mcp.client.streamable_http import streamablehttp_client
 
-    hdr = {"X-MCP-Client": "validation-ui"}
+    hdr = {"X-MCP-Client": "test", "X-MCP-User": "test"}
     token = mc.token_text(mc.cfg().server.token)
     if token:
         hdr["Authorization"] = "Bearer " + token
@@ -79,13 +79,9 @@ def mcp_call(tool, args):
 
 
 def spend():
-    f = cfg().models.guard.spend_file
-    used = None
-    if f and Path(f).exists():
-        try:  # 장부 = 호출마다 금액 한 줄(공백 구분) — common.ai.guard._ledger_sum과 같은 방식으로 합산
-            used = sum(float(x) for x in Path(f).read_text(encoding="utf-8").split() if x)
-        except ValueError:
-            used = None
+    from common.ai import guard as G
+
+    used = G.spend_total()  # 오늘(현지 날짜) 장부 합계 — 상한은 하루 단위(11-03)
     budget = cfg().models.guard.budget_usd
     return {"used_usd": used, "budget_usd": float(budget) if budget is not None else None}
 
@@ -96,10 +92,10 @@ def health():
         "spend": spend(),
         "config": {
             "EMBED_MODEL": cfg().models.embed.model,
+            "EMBED_ALLOW_EXTERNAL": cfg().models.embed.allow_external,  # 꺼져 있으면 질의 임베딩 없음(키워드·ID만)
             "PG_HOST": _PG.host,
             "PG_PORT": _PG.port,
             "PG_SCHEMA": _PG.db_schema,
-            "NO_PAID_CALLS": "1" if cfg().models.guard.no_paid_calls else None,
         },
         "vlm_configured": bool(cfg().models.vlm.base_url),
         "llm_configured": bool(cfg().models.llm.base_url),
@@ -115,12 +111,18 @@ def health():
 def _pg():
     import psycopg
 
+    from common.store.pg import conf
+
+    try:
+        c = conf()  # op-09 — 본 코드와 같은 접속 값(빈 칸이면 채울 자리를 적고 거부)
+    except SystemExit as e:  # 요청 처리기는 Exception만 받아 502로 — 스레드가 조용히 죽지 않게
+        raise RuntimeError(str(e)) from None
     return psycopg.connect(
-        host=_PG.host or "127.0.0.1",
-        port=int(_PG.port or 5432),  # 빈 값 = 기본(VS7b R-9)
-        dbname=_PG.db or "rag",
-        user=_PG.user or "rag",  # 빈 값 = 기본 — 본 코드 common/store/pg.py와 같게(VS7a2 R-g)
-        password=reveal(_PG.password) or "",
+        host=c["PG_HOST"],
+        port=int(c["PG_PORT"]),
+        dbname=c["PG_DB"],
+        user=c["PG_USER"],
+        password=c["PG_PASSWORD"],
         connect_timeout=5,
     )
 

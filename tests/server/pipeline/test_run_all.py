@@ -1,26 +1,25 @@
-"""pipeline.extract.run_all 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.run_all --selftest`."""
+"""pipeline.extract.run_engines 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.run_engines --selftest`."""
 
 import json
 import sys
 from pathlib import Path
 
 from common.config import settings as C
-from common.core.paths import APP_ROOT
+from common.core.paths import APP_ROOT, STACK_FILE
 from pipeline import config as pc
 from pipeline.extract.engines import registry
-from pipeline.extract.run_all import (
+from pipeline.extract.run_engines import (
     OCR_ENGINES,
     VLM_ENGINES,
     _default_procs,
     _sha,
-    _stamp_provenance,
     engine_code_fp,
     engines_for_doc,
     p0_key,
     page_timeout,
     redact,
 )
-from pipeline.shared import artifacts as P0
+from pipeline.shared import parse_run as P0
 
 
 def selftest():
@@ -35,55 +34,39 @@ def selftest():
             got[raw] = _default_procs()
     assert got == want, got
     print("[selftest] S7c1 — --procs 기본(PIPE_PROCS: auto → auto · 없음·빈 값 → 1 · 숫자 그대로) 옛 판정과 같음 통과")
-    # PE1(2026-10-07) — PARSE_ENGINE_SCOPE: stack이면 문서 형식 키(stack.json과 같은 키)의 parse 목록으로만 좁힘
-    pdf_cands, doc_cands = ([e for e in registry.engines_for(x) if e not in OCR_ENGINES] for x in (".pdf", ".doc"))  # OCR 기본 끔(10-29)
+    # PE1(2026-10-07) · pl-03(10-30, stack 하나) — 문서 형식 키(stack.json과 같은 키)의 parse 목록으로만 좁힘
+    pdf_cands, doc_cands = ([e for e in registry.engines_for(x) if e not in OCR_ENGINES] for x in (".pdf", ".doc"))  # OCR 안 돎(10-29)
     assert "pymupdf" in pdf_cands and "kreuzberg" in pdf_cands and len(pdf_cands) > 2  # 좁혀짐을 보려면 전체가 2개보다 많아야
     stack_parse = {".pdf_text": ["pymupdf", "kreuzberg"]}
     missing = set()
     a_pdf = Path("a.pdf")
-    assert engines_for_doc(a_pdf, "stack", stack_parse, {"a.pdf": ".pdf_text"}, missing) == [
-        e for e in pdf_cands if e in stack_parse[".pdf_text"]
-    ]
+    assert engines_for_doc(a_pdf, stack_parse, {"a.pdf": ".pdf_text"}, missing) == [e for e in pdf_cands if e in stack_parse[".pdf_text"]]
     assert missing == set()  # 키 있음 — 로그 없음
     # 키 없는 형식(.doc 등) — 지금처럼 그대로(핵심 엔진 합집합 대체, 누락 방지) + 형식별 1회만 로그
-    assert engines_for_doc(Path("b.doc"), "stack", stack_parse, {"b.doc": ".doc"}, missing) == doc_cands
+    assert engines_for_doc(Path("b.doc"), stack_parse, {"b.doc": ".doc"}, missing) == doc_cands
     assert missing == {".doc"}
     assert (
-        engines_for_doc(Path("c.doc"), "stack", stack_parse, {"c.doc": ".doc"}, missing) == doc_cands
+        engines_for_doc(Path("c.doc"), stack_parse, {"c.doc": ".doc"}, missing) == doc_cands
     )  # 두 번째도 그대로(로그는 1회만, missing 그대로)
     assert missing == {".doc"}
-    # all(기본) — stack.json 내용과 무관하게 지금 동작 그대로(실험 경로·명시 --engines 호출이 이 env를 안 건드리므로 영향 없음)
-    assert engines_for_doc(a_pdf, "all", stack_parse, {"a.pdf": ".pdf_text"}, set()) == pdf_cands
-    print("[selftest] PE1 — PARSE_ENGINE_SCOPE=stack 형식별 좁히기(키 없으면 그대로+1회 로그) · all=이전과 동일 통과")
+    print("[selftest] PE1·pl-03 — stack 형식별 좁히기(키 없으면 핵심 엔진 합집합+1회 로그, all 길 없음) 통과")
 
     # 사용자 10-29 — .pdf_text 안 스캔 쪽 때문에 .pdf_image 엔진을 합치지 않음(대표 결과의 쪽 VLM이 그 쪽만 채움)
     stack_pi = {".pdf_text": ["pymupdf"], ".pdf_image": ["rapidocr_ko", "qwen_vlm"]}
-    assert engines_for_doc(Path("mixed.pdf"), "stack", stack_pi, {"mixed.pdf": ".pdf_text"}, set()) == ["pymupdf"]
+    assert engines_for_doc(Path("mixed.pdf"), stack_pi, {"mixed.pdf": ".pdf_text"}, set()) == ["pymupdf"]
     print("[selftest] 10-29 — .pdf_text 문서에 .pdf_image 엔진을 합치지 않음 통과")
 
-    # 사용자 10-29 — OCR 엔진은 ocr_engine(PARSE_OCR_ENGINE) 켤 때만 · 기본은 이미지·스캔 문서도 VLM 엔진만
+    # 사용자 10-29 · 0.2.0(pl-46) — OCR 엔진은 파싱 엔진으로 안 돎(스위치 지움) · 이미지·스캔 문서는 VLM 엔진만
     png_stack = {".png": ["rapidocr_ko", "qwen_vlm"]}
     assert OCR_ENGINES == {"rapidocr_ko"}  # rapidocr(1.x) 10-30 지움 — pl-31
-    assert engines_for_doc(Path("x.png"), "stack", png_stack, {"x.png": ".png"}, set()) == ["qwen_vlm"]
-    assert not OCR_ENGINES & set(engines_for_doc(Path("x.png"), "all", {}, {}, set()))
-    with pc.PIPE.env(PARSE_OCR_ENGINE="1"):
-        assert set(engines_for_doc(Path("x.png"), "stack", png_stack, {"x.png": ".png"}, set())) == {"rapidocr_ko", "qwen_vlm"}
-    print("[selftest] 10-29 — OCR 엔진 기본 끔(켜면 포함) 통과")
+    assert engines_for_doc(Path("x.png"), png_stack, {"x.png": ".png"}, set()) == ["qwen_vlm"]
+    assert not OCR_ENGINES & set(engines_for_doc(Path("x.png"), {}, {}, set()))  # stack에 키 없음(합집합 대체)에도 OCR 없음
+    print("[selftest] 10-29 — OCR 엔진 안 돎 통과")
 
-    # 사용자 10-29 — 형식당 엔진 2개 넘으면 설정 오류(진입점 resolve·run_all 같은 검사)
-    from pipeline.stackcfg import over_limit
+    # 사용자 10-29 — 쪽당 제한: 글자 엔진 10초·VLM은 호출 1건 제한 models.vlm.timeout(11-04 통일) · 첫 문서 warmup 하한 · 별도 프로세스 여유 더함
+    from common.config.settings import COMMON
 
-    assert over_limit({"parse": {".pdf_text": ["pymupdf", "kreuzberg"], ".png": ["qwen_vlm"]}}) == []
-    bad = over_limit({"parse": {".docx": ["office", "anydoc", "kreuzberg"]}})
-    assert len(bad) == 1 and ".docx" in bad[0], bad
-    from common.core.paths import STACK_FILE
-
-    stack_file = json.loads(STACK_FILE.read_text(encoding="utf-8"))
-    assert over_limit(stack_file) == [], "PC 기본 stack 표가 형식당 2개를 넘음"
-    print("[selftest] 10-29 — 형식당 엔진 2개 상한(over_limit) 통과")
-
-    # 사용자 10-29 — 쪽당 제한: 글자 엔진 10초·VLM 120초(설정) · 첫 문서 warmup 하한 · 별도 프로세스 여유 더함
-    with pc.PIPE.env(PARSE_TEXT_PAGE_SEC="10", PARSE_VLM_PAGE_SEC="120", PARSE_WARMUP_SEC="60", PARSE_ISOLATE_OVERHEAD="10"):
+    with COMMON.env(VLM_TIMEOUT="120"), pc.PIPE.env(PARSE_TEXT_PAGE_SEC="10", PARSE_WARMUP_SEC="60", PARSE_ISOLATE_OVERHEAD="10"):
         assert page_timeout("pymupdf", 3) == 3 * 10 + 10
         assert page_timeout("pymupdf", 0) == 10 + 10  # 쪽 수 못 셈 → 1쪽
         assert page_timeout("pymupdf", 2, first=True) == 60 + 10  # 첫 문서는 warmup 하한
@@ -101,12 +84,11 @@ def selftest():
     assert p0_key("pymupdf", sha, ver) == p0_key("pymupdf", sha, ver) and p0_key("pymupdf", sha, ver) != p0_key("pymupdf", "b" * 64, ver)
     print("[selftest] P0 열쇠(출처 기록 — 엔진 폴더 코드·sha·버전만) 통과")
 
-    import tempfile
+    from pipeline.extract import run_one_engine as parse_one
 
-    dst = Path(tempfile.mkdtemp()) / "x.json"
-    dst.write_text(json.dumps({"text": "본문"}), encoding="utf-8")
-    _stamp_provenance(dst, "pymupdf", "1.2.3", "deadbeef", "default")
-    d = json.loads(dst.read_text(encoding="utf-8"))
+    d = parse_one.stamp(
+        {"text": "본문"}, {"engine": "pymupdf", "engine_version": "1.2.3", "p0_key": "deadbeef", "params": {"profile": "default"}}
+    )  # fp-perf C4 — 자식(parse_one)이 쓰기 전에 넣음(옛 run_all._stamp_provenance 다시 쓰기 대신)
     assert d["text"] == "본문" and d["provenance"]["engine"] == "pymupdf" and d["provenance"]["engine_version"] == "1.2.3"
     assert d["provenance"]["p0_key"] == "deadbeef" and d["provenance"]["params"] == {"profile": "default"}
     print("[selftest] 엔진 결과 JSON에 provenance 블록 추가 통과")
@@ -129,7 +111,19 @@ def selftest():
     # '첫 실패' 기억을 서로 안 나눠 이 시험 전제가 깨짐(순차 동작만 확인)
     env = C.child_env(VLM_BASE_URL=None, VLM_MODEL=None, PIPE_PROCS="1")
     r = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir), "--out", str(odir), "--engines", "qwen_vlm"],
+        [
+            sys.executable,
+            "-m",
+            "pipeline.extract.run_engines",
+            "--src",
+            str(sdir),
+            "--out",
+            str(odir),
+            "--engines",
+            "qwen_vlm",
+            "--stack",
+            str(STACK_FILE),
+        ],
         capture_output=True,
         text=True,
         env=env,
@@ -152,7 +146,19 @@ def selftest():
     env3 = C.child_env(VLM_BASE_URL=None, VLM_MODEL=None)  # 하위 프로세스(시험) 설정 — 덮기 파일(S7e2)
     env3["PARSE_RUN_ID"] = "20261007-999999"  # env 남김 — 내부 신호(5-3 H)
     r3 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir3), "--out", str(odir3), "--engines", "qwen_vlm"],
+        [
+            sys.executable,
+            "-m",
+            "pipeline.extract.run_engines",
+            "--src",
+            str(sdir3),
+            "--out",
+            str(odir3),
+            "--engines",
+            "qwen_vlm",
+            "--stack",
+            str(STACK_FILE),
+        ],
         capture_output=True,
         text=True,
         env=env3,
@@ -164,7 +170,19 @@ def selftest():
     assert len(recs3) == 1 and recs3[0]["run_id"] == "20261007-999999", recs3
     env3.pop("PARSE_RUN_ID")
     r4 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir3), "--out", str(odir3), "--engines", "qwen_vlm"],
+        [
+            sys.executable,
+            "-m",
+            "pipeline.extract.run_engines",
+            "--src",
+            str(sdir3),
+            "--out",
+            str(odir3),
+            "--engines",
+            "qwen_vlm",
+            "--stack",
+            str(STACK_FILE),
+        ],
         capture_output=True,
         text=True,
         env=env3,
@@ -189,7 +207,7 @@ def selftest():
                 json.dumps({"doc": doc5.name, "engine": e, "sha": sha5, "sec": 1, "error": "ValueError: document is encrypted"}) + chr(10)
             )
     r5 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir5), "--out", str(odir5)],
+        [sys.executable, "-m", "pipeline.extract.run_engines", "--src", str(sdir5), "--out", str(odir5), "--stack", str(STACK_FILE)],
         capture_output=True,
         text=True,
         env=C.child_env(PIPE_PROCS="1"),
@@ -209,7 +227,19 @@ def selftest():
     seed6 = {"doc": doc6.name, "engine": "plaintext", "sha": _sha(doc6), "sec": 1, "error": None}
     (odir6 / "runs.jsonl").write_text(json.dumps(seed6) + chr(10), encoding="utf-8")
     r7 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir6), "--out", str(odir6), "--engines", "plaintext"],
+        [
+            sys.executable,
+            "-m",
+            "pipeline.extract.run_engines",
+            "--src",
+            str(sdir6),
+            "--out",
+            str(odir6),
+            "--engines",
+            "plaintext",
+            "--stack",
+            str(STACK_FILE),
+        ],
         capture_output=True,
         text=True,
         env=C.child_env(PIPE_PROCS="1"),
@@ -230,7 +260,7 @@ def test_retry_doubles_limit():
     """10-29 — 시간 초과면 같은 실행에서 제한을 두 배로 한 번 더(가짜 _isolated — 첫 번 TimeoutError, 둘째 성공 / 둘 다 실패)."""
     from unittest import mock
 
-    from pipeline.extract import run_all as RA
+    from pipeline.extract import run_engines as RA
 
     seen = []
 
@@ -259,7 +289,7 @@ def test_run_docs_engines_concurrent():
     """10-29 — 한 문서의 엔진 2개는 동시에(둘이 같이 기다려야 풀리는 장벽 — 차례로 돌면 시간 초과로 깨짐)."""
     import threading
 
-    from pipeline.extract.run_all import _run_docs
+    from pipeline.extract.run_engines import _run_docs
 
     barrier = threading.Barrier(2, timeout=10)
     ran = []
@@ -279,13 +309,13 @@ def test_run_procs_doc_shards():
     from unittest import mock
 
     from common.core import resources
-    from pipeline.extract import run_all as RA
+    from pipeline.extract import run_engines as RA
 
     cmds = []
     fake = mock.Mock(side_effect=lambda cmd, **kw: (cmds.append(cmd), mock.Mock(wait=lambda: 0))[1])
     a = argparse.Namespace(procs=4, src="s", out="o", engines="")
     argv = ["run_all", "--src", "s", "--procs", "4", "--engines", "pymupdf"]
-    with mock.patch.object(resources, "gated_popen", fake), mock.patch.object(RA, "write_progress"), mock.patch.object(sys, "argv", argv):
+    with mock.patch.object(resources, "gated_popen", fake), mock.patch.object(sys, "argv", argv):
         RA.run_procs(a, [Path("a.pdf"), Path("b.pdf"), Path("c.pdf")])
     shards = sorted(c[c.index("--shard") + 1] for c in cmds)
     assert shards == ["0/3", "1/3", "2/3"], shards
@@ -294,11 +324,11 @@ def test_run_procs_doc_shards():
 
 
 def test_low_priority_children():
-    """10-29 — 일괄 파싱 엔진 자식은 낮은 우선순위(OS 분기 한 곳 — pipeline.extract.resources), 끄면(parse MCP 서비스) 아무 인자 없음."""
+    """10-29 — 일괄 파싱 엔진 자식은 낮은 우선순위(OS 분기 한 곳 — common.core.resources), 끄면(parse MCP 서비스) 아무 인자 없음."""
     import os
     import subprocess
 
-    from pipeline.extract import resources as PR
+    from common.core import resources as PR
 
     assert PR.low_priority_kw(False) == {}
     if os.name == "nt":
@@ -324,7 +354,7 @@ def test_kill_group_reaps_grandchild():
     import subprocess
     import time
 
-    from pipeline.extract import resources as PR
+    from common.core import resources as PR
 
     if os.name == "nt":
         print("[selftest] kill_group — Windows는 건너뜀(taskkill /T)")
@@ -354,13 +384,13 @@ def test_kill_group_reaps_grandchild():
         raise AssertionError(f"손자 {gpid}가 남음")
 
 
-def test_vlm_child_env_caps_timeout():
-    """10-29 M3 — VLM 엔진 자식의 VLM_TIMEOUT = min(models.vlm.timeout, vlm_page_sec) · 쪽당 제한이 더 길면 덮지 않음(None)."""
-    from common.config.settings import COMMON
-    from pipeline.extract.run_all import _vlm_child_env
+def test_p0_layer_covers_every_engine_folder():
+    """pl-47 — p0 층 지문 범위에 등록부의 모든 엔진 파서 폴더가 든다(이름과 폴더가 다른 html_stdlib·msg_extract·office·rapidocr_ko 포함)."""
+    from common.core import artifacts as A
+    from common.core.paths import DEPLOY_ROOT, PARSING_ROOT
+    from pipeline.extract.engines import registry
 
-    with COMMON.env(VLM_TIMEOUT="180"), pc.PIPE.env(PARSE_VLM_PAGE_SEC="60"):
-        env = _vlm_child_env()
-        assert env is not None and env["VLM_TIMEOUT"] == "60", env and env.get("VLM_TIMEOUT")
-    with COMMON.env(VLM_TIMEOUT="100"), pc.PIPE.env(PARSE_VLM_PAGE_SEC="120"):
-        assert _vlm_child_env() is None
+    covered = {p for g in A.LAYER_CODE["p0"] for p in DEPLOY_ROOT.glob(g) if p.is_file()}
+    for eng, (stack, _) in registry.engines().items():
+        files = set((PARSING_ROOT / "engines" / stack).glob("**/*.py"))
+        assert files and files <= covered, (eng, stack, sorted(str(f) for f in files - covered)[:3])

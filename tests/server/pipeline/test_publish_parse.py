@@ -1,8 +1,7 @@
 """pipeline.load.publish_parse_result 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.load.publish_parse_result --selftest`.
 S9b(C-54 ②, 사용자 10-28 — 기록만): 기대값을 지금 서버 동작에 맞춤 — 업로드 폴더에 `<stem>_<date>_meta.json`·`source.json`이 없음
 (pre-refactor 서버 사본이 일부러 뺌 — `_meta.json`은 EDW에, `source.json`은 내부용). source.json에 기대던 방어선(재실행 업로드 건너뜀
-`skip_exists`·키 충돌 거부 `error_key_collision`)은 `test_publish_guard.py`(알려진 FAIL — 이유 C-54)로 뺌. 산출물 만들기는 `make_fixture()`로.
-S10(VS9b R-4): 문서 대장이 SQLite로 대체될 때(PG 없음 — 이미지·PG 꺼진 PC) 개발자 기본 대장이 아닌 시험 폴더 STRUCT_DB에 쓰게."""
+`skip_exists`·키 충돌 거부 `error_key_collision`)은 서버에서 늘 꺼져 있어 11-02에 코드째 지움(C-54 ② — test_publish_guard도 지움). 산출물 만들기는 `make_fixture()`로."""
 
 import json
 from pathlib import Path
@@ -17,7 +16,7 @@ class A:
 
 
 def make_fixture():
-    """publish 시험 산출물(문서 4개 — ok·failed·not_parsed·DRM)과 인자 a(dry-run) → (임시 폴더, out, a). test_publish_guard도 씀(S9b)."""
+    """publish 시험 산출물(문서 4개 — ok·failed·not_parsed·DRM)과 인자 a(dry-run) → (임시 폴더, out, a)."""
     import tempfile
 
     d = Path(tempfile.mkdtemp())
@@ -109,20 +108,17 @@ def selftest():
     os_dir, db_path = d / "os", d / "edw.sqlite"
     with (
         pc.PIPE.env(PM_BUCKET=f"file://{os_dir}"),
-        COMMON.env(RDB_SQLITE=str(db_path), STRUCT_DB=str(d / "struct.sqlite"), RUN_ENV="local"),
+        COMMON.env(RDB_SQLITE=str(db_path), RUN_ENV="local"),
     ):  # S7c — 시험하는 코드가 객체만 읽음(os.environ 안 건드림) · 가짜 EDW(RDB_SQLITE)는 local 전용 — 이미지(서버 RUN_ENV)에서도 시험 안에서만 local(이미지 관문 10-30)
         a.apply = True
         r1 = run(a)
         # SI39 — ok(a)만 .md 업로드 · EDW는 ok(a)+not_parsed(c) 2행(failed·skipped_drm은 ⑥로 EDW 제외, 보고서로만)
         assert r1["result"] == {
             "uploaded": 1,
-            "skip_exists": 0,
             "upload_excluded": 3,
             "inserted": 2,
             "edw_skip_existing": 0,
             "edw_excluded_drm_failed": 2,
-            "key_collision_errors": 0,
-            "key_collision_details": [],
             "rows": 4,
         }, r1["result"]
         md_files = [p for p in os_dir.rglob("*.md")]
@@ -148,7 +144,7 @@ def selftest():
 
         r2 = run(
             a
-        )  # 같은 걸 재실행 — a·c의 (source_system, 원본 키)가 이미 있음 → EDW 건너뜀(업로드 건너뜀 skip_exists는 source.json 방어선 — test_publish_guard, C-54 ②)
+        )  # 같은 걸 재실행 — a·c의 (source_system, 원본 키)가 이미 있음 → EDW 건너뜀(업로드는 시각 이름이라 새로 — source.json 방어선은 11-02에 지움, C-54 ②)
         assert r2["result"]["inserted"] == 0 and r2["result"]["edw_skip_existing"] == 2, (
             r2
         )  # SI39 — INSERT만, UPDATE 없음(a·c 둘 다 KEY 존재)
@@ -167,7 +163,7 @@ def selftest():
         old_content = old_md.read_text(encoding="utf-8")
         r4 = run(a)
         assert r4["result"]["uploaded"] == 1 and r4["result"]["inserted"] == 1, r4["result"]  # 재파싱 1건만 새로 올라감·새 행
-        # S9b(C-54 ②) — 옛 `len(md_files2) == 2`(r2·r3이 업로드를 건너뛴다는 전제 — test_publish_guard)·재파싱 새 날짜의 meta 단언 대신:
+        # S9b(C-54 ②) — 옛 `len(md_files2) == 2`(r2·r3이 업로드를 건너뛴다는 전제 — 11-02에 지운 source.json 방어선)·재파싱 새 날짜의 meta 단언 대신:
         import sqlite3
 
         dates = {r[0] for r in sqlite3.connect(db_path).execute("select parse_date from ParsingMeta where source_key='docs/a.pdf'")}
@@ -178,8 +174,6 @@ def selftest():
         assert old_md.read_text(encoding="utf-8") == old_content, "재파싱인데 옛 결과가 바뀜(덮어쓰기 금지 위반)"
         a.reparse = None
         a.apply = False
-        with pc.PIPE.env(PM_UPLOAD_RAW="0"):  # 되돌리기 — rep.md만(source.json은 서버가 안 올림 — C-54 ②)
-            assert run(a)["sample_rows"][0]["raw_files"] == []
         assert run(a)["sample_rows"][0]["raw_files"] == [
             "<stem>_<date>.json",
             "engine/pymupdf_1.28.2_<stem>.json",
@@ -214,7 +208,7 @@ def selftest():
     shutil.rmtree(d, ignore_errors=True)
     print(
         "[selftest] SI39 — dry-run 쓰기 0 · 대표 결과(.md)만 올라감(원본은 전혀 안 올라감) · KEY(출처+원본 전체 "
-        "키)가 이미 있으면 EDW는 건너뜀(UPDATE 없음 — 업로드 건너뜀은 source.json 방어선이라 test_publish_guard, C-54 ②) · "
+        "키)가 이미 있으면 EDW는 건너뜀(UPDATE 없음 — source.json 방어선은 11-02에 지움, C-54 ②) · "
         "--reparse만 새 날짜 이름·새 EDW 행(옛 결과 보존) · _meta.json·source.json 안 올림(서버 동작) · "
         "DRM·실패는 EDW 제외하고 보고서로만 · PM_BUCKET이 원천 버킷과 같으면 거부 통과"
     )

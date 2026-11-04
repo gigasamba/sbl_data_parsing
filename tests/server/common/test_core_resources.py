@@ -43,7 +43,7 @@ def selftest():
     p = plan(cpu=1, mem=None)
     assert (p["procs"], p["threads"]) == (1, 1), p
     with COMMON.env(PIPE_PROCS="5"):
-        assert plan(cpu=4, mem=32)["procs"] == 5  # resolve_procs("2")==2는 pipeline.extract.resources.selftest()로 옮김(10-14, P만 씀)
+        assert plan(cpu=4, mem=32)["procs"] == 5  # resolve_procs("2")==2는 common.core.resources.selftest()로 옮김(10-14, P만 씀)
     (d / "memory.current").write_text(str(6 * 1024**3) + "\n")  # cgroup 8 GB 중 6 GB = 75%
     (d / "memory.max").write_text(str(8 * 1024**3) + "\n")
     assert round(mem_used_pct(d, mi)) == 75
@@ -110,22 +110,20 @@ def selftest():
         mock.patch.stopall()
     print("[selftest] gated_popen — 여유 있으면 settle 건너뜀(10회) · 상한 가까우면 settle 적용 통과(호출 기록으로 판정, 시간 무관)")
 
-    # CPU 문(wait_cpu) — 가짜 부하 수열(부하/코어 1.0 → 1.0 → 0.25, 실제 cpus()에 맞춰 스케일) CPU_MAX_LOAD(기본 0.9 — 사용자 10-07: CPU 상한 90%) 이상인 동안 대기,
-    # 로그 1번만, 떨어지면 통과 · Windows(getloadavg 없음)는 실제 호출에선 None이라 바로 통과하지만 여기선 가짜로 수열을 강제
-    n_cpu = cpus()
-    cseq, ccalls, corig = [n_cpu * 1.0, n_cpu * 1.0, n_cpu * 0.25], [], M._loadavg1
+    # CPU 문(wait_cpu) — 가짜 부하 수열(1.0 → 1.0 → 0.25) CPU_MAX_LOAD 이상인 동안 대기, 로그 1번만, 떨어지면 통과
+    cseq, ccalls, corig = [1.0, 1.0, 0.25], [], M.cpu_load
 
     def fake_load():
         ccalls.append(1)
         return cseq[min(len(ccalls) - 1, len(cseq) - 1)]
 
-    M._loadavg1 = fake_load
+    M.cpu_load = fake_load
     try:
         clogs = []
         u = wait_cpu(max_load=1.0, poll=0, log=clogs.append)
-        assert u == n_cpu * 0.25 and len(clogs) == 1 and len(ccalls) >= 3, (u, clogs, ccalls)  # 부하 1.0 ≥ 1.0 두 번 대기 후 통과
+        assert u == 0.25 and len(clogs) == 1 and len(ccalls) == 3, (u, clogs, ccalls)  # 부하 1.0 ≥ 1.0 두 번 대기 후 통과
     finally:
-        M._loadavg1 = corig
+        M.cpu_load = corig
     print("[selftest] CPU 문(가짜 부하 수열) — 포화 중 새 작업 대기·로그 1번·하락 뒤 통과")
 
     _env.close()
@@ -133,3 +131,68 @@ def selftest():
 
 def test_main():  # 옛 `if __name__ == "__main__":` 의 --selftest 갈래
     selftest()
+
+
+def test_cpu_load_table():
+    """0.2.0(pl-46) — cpu_load(): cgroup 한도가 있으면 그 cgroup 사용량, 없거나 못 읽으면 부하 평균 ÷ 호스트 코어, 그것도 없으면 None."""
+    import tempfile
+
+    host = M._host_cpus()
+    cases = [  # (이름, {파일: 처음 내용}, {파일: sample 뒤 내용}, 부하 평균, 기대)
+        ("v2 한도 2코어", {"cpu.max": "200000 100000", "cpu.stat": "usage_usec 1000000\n"}, {"cpu.stat": "usage_usec 1500000\n"}, 9.0, 0.5),
+        (
+            "v1 한도 1코어",
+            {"cpu/cpu.cfs_quota_us": "100000", "cpu/cpu.cfs_period_us": "100000", "cpuacct/cpuacct.usage": "0"},
+            {"cpuacct/cpuacct.usage": "250000000"},
+            9.0,
+            0.5,
+        ),
+        ("한도 없음(max) — 부하 평균", {"cpu.max": "max 100000"}, {}, 2.0, 2.0 / host),
+        ("한도는 있는데 사용량 못 읽음 — 부하 평균", {"cpu.max": "200000 100000"}, {}, 4.0, 4.0 / host),
+        ("아무것도 못 읽음(Windows 등) — 통과", {}, {}, None, None),
+        ("v2 period 0 — 한도 없음 취급(부하 평균)", {"cpu.max": "200000 0", "cpu.stat": "usage_usec 1\n"}, {}, 3.0, 3.0 / host),
+        (
+            "v1 period 0 — 한도 없음 취급(부하 평균)",
+            {"cpu/cpu.cfs_quota_us": "100000", "cpu/cpu.cfs_period_us": "0", "cpuacct/cpuacct.usage": "0"},
+            {},
+            3.0,
+            3.0 / host,
+        ),
+        (
+            "sample 뒤 사용량 못 읽음 — 부하 평균",
+            {"cpu.max": "200000 100000", "cpu.stat": "usage_usec 1000000\n"},
+            {"cpu.stat": None},
+            5.0,
+            5.0 / host,
+        ),
+    ]
+    for name, before, after, la, want in cases:
+        d = Path(tempfile.mkdtemp())
+        for rel, txt in before.items():
+            (d / rel).parent.mkdir(parents=True, exist_ok=True)
+            (d / rel).write_text(txt)
+        clock = [100.0]
+
+        def fake_sleep(sec, d=d, after=after, clock=clock):
+            clock[0] += sec
+            for rel, txt in after.items():
+                if txt is None:
+                    (d / rel).unlink()
+                else:
+                    (d / rel).write_text(txt)
+
+        got = M.cpu_load(cg=d, sample=0.5, now=lambda clock=clock: clock[0], sleep=fake_sleep, loadavg=lambda la=la: la)
+        assert (got is None and want is None) or (got is not None and want is not None and abs(got - want) < 1e-9), (name, got, want)
+        if after.get("cpu.stat", "") is None:  # 허브 B — 못 읽은 값은 남기지 않음: 다음 호출(0.2~10초 안)이 None과 빼지 않고 다시 잰다
+            assert str(d) not in M._LAST, (name, M._LAST.get(str(d)))
+            (d / "cpu.stat").write_text("usage_usec 2000000\n")
+            M._LAST[str(d)] = (clock[0], None)  # 옛 코드가 남기던 꼴 — 무시돼야 함
+            clock[0] += 1.0
+            again = M.cpu_load(
+                cg=d,
+                sample=0.5,
+                now=lambda clock=clock: clock[0],
+                sleep=lambda s, clock=clock: clock.__setitem__(0, clock[0] + s),
+                loadavg=lambda: 5.0,
+            )
+            assert again == 0.0, (name, again)  # 같은 사용량 두 번 — 0, TypeError 없음

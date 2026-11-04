@@ -17,5 +17,5 @@ Data that imitates what the server reads from outside systems lives here, in one
 
 | Path | Content |
 | --- | --- |
-| `structured/sales.sqlite` | production master DB of the archived price·legal·deal·RFI pipeline — **never open or write it** (CLAUDE.md §4 production guard, `common/store/structdb.py` `PROD_DBS`). Review only on a copy after human approval. Not in git. |
+| `structured/sales.sqlite` | production master DB of the archived price·legal·deal·RFI pipeline — **never open or write it** (CLAUDE.md §4 production guard — no code opens it; the old `structdb.PROD_DBS` guard went with the struct store in pl-08). Review only on a copy after human approval. Not in git. |
 | `structured/input/` | its source CSVs and schema |

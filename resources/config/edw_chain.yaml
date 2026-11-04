@@ -1,0 +1,109 @@
+# EDW 조인 사슬(pl-29·pl-52) — 적재가 문서 메타(고객 client_edw·등록 시각 created_at·원천 메타 doc.attrs)를 채울 때 따라가는 EDW 표·칸,
+# 그리고 검색 MCP가 쓰는 attrs 키의 거르기 이름(filter)·근거 표시(evidence). 운영 쪽이 고칠 수 있는 파일(사용자 11-02·11-03).
+# 읽는 곳: common/store/edw_chain.py(검사 — 두 앱) · pipeline/load/edw_doc_meta.py(적재 때 EDW를 따라감) · 검색 MCP search·edw_meta 도구.
+# 점검(EDW·PG 안 붙음): python -m pipeline.load.edw_doc_meta --check [--file F]. 쓰는 법: docs/operations/release-and-patch.md §8-6.
+#
+# 꼴 — 다섯 원천(sfdc·crms·las·faq·other)이 모두 같다:
+#   <원천>:
+#     steps:                               위에서 아래로. 단계마다 표 하나를 열쇠 값으로 읽는다(값은 늘 바인딩).
+#       - name: <단계 이름>                영문·숫자·_ (열쇠 file과 달리 단계 이름 file은 file.<칸>으로 씀)
+#         table: <스키마.표>
+#         on: {<이 표 칸>: <열쇠>}         열쇠 = file(문서 원본 경로 = FileStorageMap.s3_key) 또는 <앞 단계>.<칸>.
+#                                          첫 단계는 file만(첫 단계에 행이 없는 문서는 메타 없음). 칸이 여럿이면 모두 한 단계의 칸.
+#                                          열쇠 목록 [a, b, [c, d]] = 앞 자리부터 — 후보가 있는 첫 자리에서 하나로 정함(서로 다른 값이
+#                                          둘 이상이면 비움). 안쪽 목록 [c, d]는 한 자리로 합침. 앞 자리가 목록으로 정하는 단계면 그 단계가
+#                                          정해졌을 때(행·값이 비었어도) 거기서 멈춤.
+#         when: {prefix: "006"}            열쇠 값이 이 3자로 시작할 때만(SFDC id 접두 갈래)
+#         where: {IsDeleted: 0}            고정 값 조건(선택)
+#         latest: [IsActive, ContractID]   열쇠 하나에 행이 여럿이면 이 칸들이 가장 큰 행 하나(선택)
+#         optional: true                   표를 못 읽으면 이 단계만 건너뜀(경고 — 선택)
+#         tz: UTC                          이 표의 시간대 없는 시각은 UTC(빼면 KST — created에만)
+#       - name: entity                     (SFDC 분류 힌트 전용) 표 대신 sfdc_entity: <앞 단계>.<칸> — 그 값 중 첫 User 아닌 연결 개체.
+#         sfdc_entity: link.LinkedEntityId 낼 칸 Id·Type(접두 표 resources/mappings/sfdc_prefix.json)·Class(연결 없음 unlinked, User만 user_only)
+#     fields:                              doc.attrs 키(고정 칸 이름·doc_class는 못 씀 — doc_class는 분류가 씀)
+#       <키>: {from: <단계>.<칸> 또는 목록(앞에서 첫 값), filter: <search 거르기 이름 — 원천 안에서 겹치지 않게>,
+#              evidence: true|false(근거 attrs에 냄), type: text|date|flag(기본 text — date = YYYY-MM-DD, flag = '1'/'0'), max: <앞 몇 자>}
+#     client_edw: <단계>.<칸>              고객(고정 칸 — search client 거르기)
+#     created: [<단계>.<칸>, …]            등록 시각(고정 칸 created_at — 앞에서 첫 값)
+# 표·칸 이름은 SQL에 그대로 들어가므로 영문·숫자·_만(검사 — 어긋나면 적재·검색이 이유를 말하고 멈춤). 실제 이름은 DB 담당자 확인(refactor.md C-76).
+# 한 단계의 칸을 서버 EDW에서 못 읽으면 그 칸만 비고 경고(표 자체를 못 읽으면 그 원천 메타 전체가 빔 — optional이면 그 단계만).
+
+sfdc:
+  steps:
+    - {name: file, table: AI.FileStorageMap, on: {s3_key: file}}
+    - {name: version, table: SFDC.ContentVersion, on: {Id: file.content_version_id}, tz: UTC}   # CreatedDate는 UTC
+    - {name: link, table: SFDC.ContentDocumentLink, on: {ContentDocumentId: version.ContentDocumentId}, where: {IsDeleted: 0}}
+    - {name: task, table: SFDC.Task, on: {Id: link.LinkedEntityId}, when: {prefix: "00T"}}     # 할 일 → WhatId
+    - {name: event, table: SFDC.Event, on: {Id: link.LinkedEntityId}, when: {prefix: "00U"}}   # 일정 → WhatId
+    # Quote 표가 EDW에 생기면(지금 없음 — 사용자 11-02) 아래 줄을 켜고 opportunity 열쇠 목록 끝에 quote.OpportunityId를 더한다.
+    # - {name: quote, table: SFDC.Quote, on: {Id: link.LinkedEntityId}, when: {prefix: "0Q0"}, optional: true}
+    - name: opportunity   # 영업 기회 — 연결 개체가 곧 기회 > Task.WhatId > Event.WhatId(같은 자리 후보 둘 이상이면 비움)
+      table: SFDC.Opportunity
+      on: {Id: [link.LinkedEntityId, task.WhatId, event.WhatId]}
+      when: {prefix: "006"}
+    - name: account       # 고객 — 기회의 계정, 기회 후보가 아예 없을 때만 Task/Event.WhatId 001 > 연결 개체 001
+      table: SFDC.Account
+      on: {Id: [opportunity.AccountId, [task.WhatId, event.WhatId], link.LinkedEntityId]}
+      when: {prefix: "001"}
+    # 분류 힌트(pl-33 — 운영 analyze_clues 규칙): 첫 User 아닌 연결 개체, 그 개체가 Task/Event면 방향·제목, 영업 기회면 단계·RFP 기간
+    - {name: entity, sfdc_entity: link.LinkedEntityId}
+    - {name: ent_task, table: SFDC.Task, on: {Id: entity.Id}, when: {prefix: "00T"}}
+    - {name: ent_event, table: SFDC.Event, on: {Id: entity.Id}, when: {prefix: "00U"}}
+    - {name: ent_opp, table: SFDC.Opportunity, on: {Id: entity.Id}, when: {prefix: "006"}}
+  fields:
+    sf_op_id: {from: opportunity.Id, filter: sf_op_id, evidence: true}
+    sf_op_name: {from: opportunity.Name, filter: sf_op_name, evidence: true}
+    project_code__c: {from: opportunity.Project_Code__c, filter: project_id, evidence: true}
+    service_type: {from: opportunity.Record_Type__c, filter: service_type, evidence: true}
+    contract_date: {from: opportunity.X1st_Contract_Execution_Date__c, type: date, evidence: true}
+    title: {from: version.Title}
+    entity_type: {from: entity.Type}
+    entity_class: {from: entity.Class}
+    entity_id: {from: entity.Id}
+    sent_received__c: {from: [ent_task.Sent_Received__c, ent_event.Sent_Received__c]}
+    subject: {from: [ent_task.Subject, ent_event.Subject], max: 120}
+    stagename: {from: ent_opp.StageName}
+    real_rfp__c: {from: ent_opp.Real_RFP__c, type: flag}
+    rfp_received_start_date__c: {from: ent_opp.RFP_Received_Start_Date__c, type: date}
+    rfp_received_end_date__c: {from: ent_opp.RFP_Received_End_Date__c, type: date}
+  client_edw: account.Name
+  created: [version.CreatedDate, file.created_at]
+
+crms:
+  steps:
+    - {name: map, table: AI.FileStorageMap_CRMS, on: {s3_key: file}}
+    - {name: file, table: AI.FileStorageMap, on: {s3_key: file}}
+    - {name: project, table: CRMS.RM_CM_PJTLIST, on: {RM_CONTRACT_CODE: map.rm_contract_code}}
+    - name: docu          # 등록 시각 — 문서 표(키 4개)
+      table: CRMS.RM_CM_DOCU
+      on: {RM_CONTRACT_CODE: map.rm_contract_code, GATE_CODE: map.gate_code, GATE_VERSION: map.gate_version, DOCU_SEQ: map.docu_seq}
+  fields:
+    contract_id: {from: map.rm_contract_code, filter: contract_id, evidence: true}
+    division: {from: project.DIVISION, filter: division, evidence: true}
+    prod_name: {from: project.RM_CONTRACT_NAME, evidence: true}
+    contract_date: {from: project.INIT_DTTM, type: date, evidence: true}
+  client_edw: project.SF_ACC_NAME
+  created: [docu.INIT_DTTM, file.created_at]
+
+las:
+  steps:
+    - {name: map, table: AI.FileStorageMap_LAS, on: {s3_key: file}}
+    - {name: file, table: AI.FileStorageMap, on: {s3_key: file}}
+    - {name: fm, table: LAS.FileManager, on: {FileID: map.las_file_id}}   # 등록 시각
+    - {name: contract, table: LAS.Contract, on: {ManageNo: map.manage_no}, latest: [IsActive, ContractID]}   # 최신 판
+  fields:
+    contract_id: {from: [map.manage_no, contract.ContractID], filter: contract_id, evidence: true}
+    contract_date: {from: [contract.ContractDate, map.signed_date], type: date, evidence: true}
+    approvalname: {from: contract.ApprovalName}   # 분류 힌트(pl-33) — 품의 제목
+  client_edw: contract.PartnerCorpName            # 지금 모두 비어 있음(상대사 출처 미정 — G2)
+  created: [fm.CreateDate, file.created_at]
+
+faq:
+  steps:
+    - {name: file, table: AI.FileStorageMap, on: {s3_key: file}}
+  created: file.created_at
+
+other:
+  steps:
+    - {name: file, table: AI.FileStorageMap, on: {s3_key: file}}
+  created: file.created_at

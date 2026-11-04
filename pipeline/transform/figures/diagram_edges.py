@@ -15,7 +15,7 @@
   glyph_edges(text) — 문서 글자(복사-붙임 가능한 텍스트) 안의 화살표 글자(→ ← ↑ ↓ -> <- => ⇐)로 이어진 노드
     이름 → edges(① 대응 — 글자가 있으면 항상 같은 모양으로 뽑는다).
 
-merge_edges(sources) — figures.py build_records가 pptx_xml > vector > glyph > vlm 순으로 모아 **정규화한
+merge_edges(sources) — figure_extract.py build_records가 pptx_xml > vector > glyph > vlm 순으로 모아 **정규화한
 무방향 (from,to) 짝**으로 중복을 제거해 하나로 합친다(독립 검토 CONCERN: 방향 키로만 중복 제거하면 역방향
 VLM edge가 결정적 edge 옆에 살아남는다 — 이제 같은 짝이면 우선순위가 더 높은 소스가 방향까지 이긴다).
 순수 함수(파일·네트워크 없음) — vlm 쪽만 모델이 이미 부른 값을 받아 쓴다."""
@@ -23,7 +23,7 @@ VLM edge가 결정적 edge 옆에 살아남는다 — 이제 같은 짝이면 �
 import math
 import re
 
-from pipeline.shared.text import canon_symbols
+from pipeline.shared.text_normalize import canon_symbols
 
 POINT_MERGE_TOL = 0.5  # 폴리라인 왕복(there-and-back)·닫힌 경로 끝점을 같은 점으로 볼 허용 오차(pt)
 BOX_AREA_RATIO = 0.75  # 닫힌 l/c 경로의 둘러싼 면적 ÷ bbox 면적이 이보다 크면 "상자"(둥근 모서리 포함),
@@ -248,7 +248,7 @@ def _path_outward_dirs(line_items):
 
 
 def vector_edges_from_page(page, bbox):
-    """page(fitz.Page)·bbox(fitz.Rect 호환 4값 — 보통 vector.py vector_regions()가 고른 그림 영역) 안의
+    """page(fitz.Page)·bbox(fitz.Rect 호환 4값 — 보통 vector_regions.py vector_regions()가 고른 그림 영역) 안의
     get_drawings()만 다시 훑어 edges[{from,to,label}]를 돌려준다(VLM 없음, 결정적). bbox 밖 상자·선은 안 봄.
     화살촉이 없는 연결선은 버리고(읽는 순서 대체 없음), 영역에 이름 붙은 상자가 2개 미만이거나 화살촉이 하나도
     없으면 빈 목록([])을 돌려준다(표·폼·축차트 오탐 방지 — 독립 검토 CONCERN②)."""
@@ -259,7 +259,7 @@ def vector_edges_from_page(page, bbox):
     boxes, others = [], []
     for d in page.get_drawings():
         r = fitz.Rect(d["rect"])
-        rr = r if not r.is_empty else r + (-1, -1, 1, 1)  # vector.py _near_groups와 같은 수(수평·수직 순수 직선은
+        rr = r if not r.is_empty else r + (-1, -1, 1, 1)  # vector_regions.py _near_groups와 같은 수(수평·수직 순수 직선은
         if not rr.intersects(r_bbox):  # 폭·높이가 정확히 0 → "빈 사각형"이라 intersects()가 늘 False)
             continue
         if _is_box(d, r):

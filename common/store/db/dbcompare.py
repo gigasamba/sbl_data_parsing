@@ -8,7 +8,6 @@ import re
 from dataclasses import dataclass, field
 
 from common.store.db.models import search_tables as ST
-from common.store.db.models import struct_tables as SS
 
 UP_FIXES = ("표 없음", "색인 없음", "뷰 없음", "뷰 칸 다름")  # up이 고치는 차이
 VERSION_TABLE = "alembic_version"
@@ -39,10 +38,17 @@ def db_dim(conn, schema):
 
 
 def expected(target, schema, dim=None):
-    """(표 정의 MetaData, 색인 {이름: 정의}, 뷰 {이름: (칸들, 정의 글자)}) — `{S}` 자리표시 그대로."""
-    if target == "search":
-        return ST.search_metadata(schema, dim), ST.index_defs(dim), ST.VIEWS_EXPECTED
-    return SS.struct_metadata(schema), {**SS.INDEX_DEFS, **SS.CONFIG_INDEX_DEFS}, {}
+    """원천 스키마 하나의 (표 정의 MetaData, 색인 {이름: 정의}, 뷰 {이름: (칸들, 정의 글자)}) — `{S}` 자리표시 그대로."""
+    if target == "applog":
+        from common.store.db.models.log_tables import index_defs, log_metadata
+
+        return log_metadata(schema), index_defs(), {}
+    if target == "master":
+        from common.store.db.models.master_tables import index_defs, master_metadata
+
+        return master_metadata(schema), index_defs(), {}
+    _, src = ST.split_schema(schema)
+    return ST.search_metadata(schema, dim), ST.index_defs(dim), ST.views_expected(src)
 
 
 def _norm(schema, s, ext=()):
@@ -67,7 +73,27 @@ def _register_types(ext):
 
 
 def compare(conn, target, schema, dim=None):
-    """conn = SQLAlchemy 연결(PostgreSQL). target search면 dim 없을 때 DB 차원을 쓴다. 정의 글자에 스키마 이름이 늘 붙게 search_path를
+    """기준 스키마 `schema`(PG_SCHEMA)와 원천 스키마 5벌(pl-28)을 표 정의와 비교해 보고 하나로 합친다. 기준 스키마에는 판 표와 공용 시퀀스만
+    있어야 한다(남는 표 = 옛 한 벌 표 — 0002가 지움). 원천 스키마 보고의 항목에는 스키마 이름을 앞에 붙인다. applog는 스키마 하나라 바로 비교한다."""
+    if target in ("applog", "master"):
+        return compare_one(conn, target, schema, dim)
+    rep = Report()
+    for t in _rows(
+        conn, f"SELECT table_name AS t FROM information_schema.tables WHERE table_schema = '{schema}' AND table_name <> '{VERSION_TABLE}'"
+    ):
+        rep.diffs.append(("남는 표", f"{schema}.{t['t']}"))
+    if not _rows(conn, f"SELECT 1 AS x WHERE to_regclass('{schema}.{ST.SEQ}') IS NOT NULL"):
+        rep.diffs.append(("표 없음", f"{schema}.{ST.SEQ}(공용 doc_id 시퀀스)"))
+    for src in ST.SOURCES:
+        s = ST.src_schema(schema, src)
+        sub = compare_one(conn, target, s, dim)
+        rep.diffs += [(k, f"{s}: {t}") for k, t in sub.diffs]
+        rep.info += [f"{s}: {t}" for t in sub.info]
+    return rep
+
+
+def compare_one(conn, target, schema, dim=None):
+    """원천 스키마 하나 — conn = SQLAlchemy 연결(PostgreSQL). target search면 dim 없을 때 DB 차원을 쓴다. 정의 글자에 스키마 이름이 늘 붙게 search_path를
     pg_catalog로 잠깐 바꾸고, 끝나면 되돌린다(같은 트랜잭션에서 뒤에 도는 판 DDL이 원래 search_path로 돌게). 비교가 실패하면 되돌리지 않고
     그 오류를 그대로 올린다(트랜잭션은 호출자가 되돌림 — 되돌리기 SQL이 원래 오류를 가리지 않게)."""
     old = _rows(conn, "SELECT current_setting('search_path') AS p")[0]["p"]
@@ -102,6 +128,17 @@ def _compare(conn, target, schema, dim, ext):
             dim = 0  # chunk 표가 없음 — 차원과 무관한 차이만 봄(표 없음으로 나옴)
     md, idx_want, view_want = expected(target, schema, dim or 1)
     rep = Report()
+    partitions = (
+        {
+            r["name"]
+            for r in _rows(
+                conn,
+                f"SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='{schema}' AND c.relispartition",
+            )
+        }
+        if target == "applog"
+        else set()
+    )
 
     def include_object(obj, name, type_, reflected, compare_to):
         if type_ == "table" and name == VERSION_TABLE:
@@ -114,7 +151,9 @@ def _compare(conn, target, schema, dim, ext):
             "compare_type": True,
             "compare_server_default": True,
             "include_schemas": True,
-            "include_name": lambda name, type_, parent: name == schema if type_ == "schema" else True,
+            "include_name": lambda name, type_, parent: (
+                name == schema if type_ == "schema" else name not in partitions if type_ == "table" else True
+            ),
             "include_object": include_object,
         },
     )
@@ -160,10 +199,12 @@ def _compare(conn, target, schema, dim, ext):
             f"""
         SELECT i.relname AS name, pg_get_indexdef(i.oid) AS def FROM pg_index x
         JOIN pg_class i ON i.oid = x.indexrelid JOIN pg_class t ON t.oid = x.indrelid JOIN pg_namespace n ON n.oid = t.relnamespace
-        WHERE n.nspname = '{schema}' AND NOT x.indisprimary AND t.relname <> '{VERSION_TABLE}'""",
+        WHERE n.nspname = '{schema}' {"AND NOT t.relispartition" if target == "applog" else ""} AND NOT x.indisprimary AND t.relname <> '{VERSION_TABLE}'""",
         )
     }
-    idx_have = {_norm(schema, k): _norm(schema, v, ext) for k, v in idx_have.items()}
+    idx_have = {
+        _norm(schema, k): _norm(schema, v.replace("ON ONLY ", "ON ") if target == "applog" else v, ext) for k, v in idx_have.items()
+    }
     for name, want in idx_want.items():
         if dim == 0 and "_chunk_emb" in name:
             continue  # chunk 표가 없으면 벡터 색인 종류를 모름(표 없음으로 이미 나옴)

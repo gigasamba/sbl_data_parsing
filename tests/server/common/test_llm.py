@@ -24,7 +24,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
     import shutil
     import tempfile
 
-    import common.ai.adk as _adk
+    import common.ai.llm as _adk  # 모델 호출(0.2.0 — 옛 common.ai.adk)
 
     _orig_complete = _adk.complete
     _tmp1 = tempfile.mkdtemp()
@@ -44,7 +44,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
             assert text == "실제 답", text
             assert _seen_mt == [500, 2000], _seen_mt  # 재요청 1회 · max_tokens 4배(상한 8000 안 걸림)
             after = dict(_stats)
-            assert after["calls"] - before["calls"] == 2, (before, after)  # 두 호출 다 공유 장부(LLM_MAX_CALLS)에
+            assert after["calls"] - before["calls"] == 2, (before, after)  # 두 호출 다 공유 장부(호출 수)에
             assert after["tokens_out"] - before["tokens_out"] == 110, after  # 50+60 — 재요청 비용도 집계
             _seen_mt.clear()
             text2 = chat([{"role": "user", "content": "질문"}], max_tokens=500, agent="x")  # 캐시 적중 — 재호출 없음
@@ -54,7 +54,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
         shutil.rmtree(_tmp1, ignore_errors=True)
     print("[selftest] RV12 — 빈 응답(생각이 토큰 다 씀) 재요청 1회(4배)·캐시는 성공 응답만(원래 키)·공유 장부 2건 집계 통과")
 
-    # LLM_EMPTY_RETRY=0 — 재요청 없이 빈 응답 그대로 · 빈 응답은 캐시에 안 씀(전에는 캐시에 고착돼 다음 호출도 계속 빈 응답 재생)
+    # 재요청 뒤에도 빈 응답이면 그대로 · 빈 응답은 캐시에 안 씀(전에는 캐시에 고착돼 다음 호출도 계속 빈 응답 재생)
     _tmp2 = tempfile.mkdtemp()
     _hits = []
 
@@ -68,16 +68,15 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
             LLM_BASE_URL="http://127.0.0.1:9/v1",
             LLM_MODEL="mock-reasoning2",
             LLM_CACHE_DIR=_tmp2,
-            LLM_EMPTY_RETRY="0",
         ):
             text = chat([{"role": "user", "content": "질문2"}], max_tokens=500, agent="x")
-            assert text == "" and len(_hits) == 1, (text, _hits)  # LLM_EMPTY_RETRY=0 — 재요청 안 함
+            assert text == "" and len(_hits) == 2, (text, _hits)  # 1회 재요청(4배) 뒤에도 빈 응답
             key = cache_key("mock-reasoning2", [{"role": "user", "content": "질문2"}], 0.0, 500, False)
             assert not _cache_path(key).exists(), "빈 응답을 캐시에 쓰면 안 됨"
     finally:
         _adk.complete = _orig_complete
         shutil.rmtree(_tmp2, ignore_errors=True)
-    print("[selftest] RV12 — LLM_EMPTY_RETRY=0(끔) 재요청 없음 · 빈 응답 캐시 안 씀 통과")
+    print("[selftest] RV12 — 재요청 뒤에도 빈 응답이면 그대로 · 빈 응답 캐시 안 씀 통과")
 
     _m = [{"role": "user", "content": "q"}]
     with COMMON.env(LLM_EXTRA_BODY=None):
@@ -98,7 +97,10 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
             LLM_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai",
             LLM_MODEL="x-ext",
             LLM_CACHE_DIR=str(Path(_tmp3) / "cache"),
-            LLM_BUDGET_USD=None,
+            LLM_BUDGET_USD=None,  # 기본 하루 상한 0.1(11-03) — 단가를 알아야 외부 호출이 됨
+            LLM_PRICE_IN="1",
+            LLM_PRICE_OUT="1",
+            LLM_SPEND_FILE=str(Path(_tmp3) / "spend.txt"),
         )
         for _env in (None, "dev", "stage", "prd", "prod", "Local"):  # 없음·모르는 글자도 서버로 보고 거부(allow_external=True여도)
             with COMMON.env(RUN_ENV=_env, **_ext):
@@ -109,6 +111,21 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
                     assert ("RUN_ENV 없음" if _env is None else f"RUN_ENV={_env}") in str(_e), str(_e)
         with COMMON.env(RUN_ENV="local", **_ext):
             assert chat([{"role": "user", "content": "q"}], allow_external=True, agent="x") == "외부 답"
+        # 11-04(사용자): 설정 LLM_ALLOW_EXTERNAL=1만으로도 허용(분류처럼 인자를 안 넘기는 호출) — local만, 서버는 거부 · 0이면 거부
+        for _env, _allow, _ok in (
+            ("local", "1", True),
+            ("local", None, False),
+            ("dev", "1", False),
+            ("prd", "1", False),
+            (None, "1", False),
+        ):
+            with COMMON.env(RUN_ENV=_env, LLM_ALLOW_EXTERNAL=_allow, **_ext):
+                try:
+                    _got = chat([{"role": "user", "content": "q"}], agent="x")
+                except LLMUnavailable as _e:
+                    assert "DONT 13" in str(_e), str(_e)  # 다른 이유(예산·단가)의 거부가 통과로 보이지 않게
+                    _got = None
+                assert (_got == "외부 답") is _ok, (_env, _allow, _got)
     finally:
         _adk.complete = _orig_complete
         shutil.rmtree(_tmp3, ignore_errors=True)

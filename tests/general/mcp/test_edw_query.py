@@ -71,7 +71,7 @@ def _demo():
     wrapped, cap_err = _top_n(cte_q, 5, "sqlite")
     assert cap_err is None
     assert len(_mem.execute(wrapped).fetchall()) == 6  # n+1, so query() can detect truncation
-    # 2026-10-22, live-measured (docs/mcp-retrieval-access-guide.md TOP queries) — plain SELECT explicit TOP
+    # 2026-10-22, live-measured (운영 접속 안내서(git 밖)의 TOP 질의) — plain SELECT explicit TOP
     ok_p, err_p = _top_n("SELECT TOP 3 * FROM AI.client", 5, "tsql")
     assert err_p is None and ok_p == "SELECT TOP 3 * FROM AI.client"  # already capped — left alone (was double-TOP death)
     ok_p, err_p = _top_n("SELECT TOP (3) * FROM AI.client", 5, "tsql")  # parenthesized form equally fine
@@ -81,11 +81,11 @@ def _demo():
     assert _top_n("SELECT TOP 99 * FROM AI.client", 5, "tsql")[1] == "plain_top_too_high"  # never lower someone else's TOP
     assert _top_n("SELECT TOP 50 PERCENT * FROM AI.client", 100, "tsql")[1] == "top_percent"  # rows unbounded — fail closed
     assert _cap_cte_tsql("WITH c AS (SELECT 1 x) SELECT TOP 50 PERCENT * FROM c", 5)[1] == "top_percent"  # CTE same rule
-    # 2026-10-22 사용자(기본 2000행) — 실효 상한: env 우선, 폴백 2000, 0은 무제한이 아니라 1행
+    # 사용자 11-03(기본 1000행 — 운영 서버와 같음) — 실효 상한: 설정 우선, 기본 1000, 0은 무제한이 아니라 1행
     with mc.senv(EDW_QUERY_MAX_ROWS="1500"):
         assert _row_budget(9999) == 1500  # env override wins
-    with mc.senv(EDW_QUERY_MAX_ROWS=None):  # 옛 시험은 env를 지운 채(del) 이어 감 — 기본값(2000) 확인
-        assert _row_budget(5000) == 2000 and _row_budget(2000) == 2000 and _row_budget(100) == 100
+    with mc.senv(EDW_QUERY_MAX_ROWS=None):  # 옛 시험은 env를 지운 채(del) 이어 감 — 기본값(1000) 확인
+        assert _row_budget(5000) == 1000 and _row_budget(1000) == 1000 and _row_budget(100) == 100
         assert _row_budget(0) == 1  # max(1, …) — 0은 무제한 아님
     ok_p, err_p = _top_n("SELECT * FROM AI.client", 5, "tsql")  # no TOP — old injection, byte-identical
     assert err_p is None and ok_p == "SELECT TOP (6) * FROM AI.client"
@@ -96,13 +96,9 @@ def _demo():
     assert _cap_cte_tsql("WITH c AS (SELECT 1 x) SELECT TOP (3) * FROM c", 5)[1] is None  # already capped tighter — left alone
     assert _cap_cte_tsql("WITH c AS (SELECT 1 x) SELECT TOP (3) * FROM c", 2)[1] == "cte_top_too_high"
     assert _cap_cte_tsql("WITH c AS (SELECT 1 x) SELECT * FROM c UNION SELECT * FROM c", 5)[1] == "cte_union_not_capped"
-    # security review round 2, fix 3 — empty allowlist is deny-all(이 규칙은 STRICT 조합으로 보존); 2026-10-21
-    # 사용자 결정(전 스키마 허용) 뒤 기본 동작이 바뀐 것을 이 데모 단언에도 반영 — 기본 unset의 mssql은 None=제한 없음.
+    # 2026-10-21 사용자 결정(전 스키마 허용) — mssql은 None=제한 없음, sqlite 스탠드인만 동봉 샘플 표.
     assert allowed_tables("sqlite") == set(t.lower() for t in DEFAULT_TABLES.split(","))  # unset -> sample default (sqlite only)
     assert allowed_tables("mssql") is None  # unset -> all schemas allowed (2026-10-21) — None is the "no allowlist check" sentinel
-    with mc.senv(EDW_QUERY_TABLES_STRICT="1", EDW_QUERY_TABLES=""):
-        assert allowed_tables("sqlite") == set()  # explicit empty string -> deny-all even for sqlite
-        assert allowed_tables("mssql") == set()  # ...and for mssql — round 2 rule lives on under STRICT
     from decimal import Decimal as D
 
     assert _json_safe_cell(D("10")) == 10

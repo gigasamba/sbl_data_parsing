@@ -1,5 +1,7 @@
-"""문서 최신성 메타데이터(백로그 L3-1·W15) — 날짜·개정·구판 표시·문서군(family)을 뽑는 규칙 한 곳.
-structure(modules/structure/build_bundle.py)가 docs.jsonl에 적고, search(modules/search/retriever.py)가 그 필드로 순위를 조정한다 — 둘이 같은 규칙.
+"""문서 최신성 메타데이터(백로그 L3-1·W15) — 날짜·개정·구판 표시를 뽑는 규칙 한 곳 + 같은 사건 사본 묶기(copy_key·copy_groups).
+structure(build_bundle.py)가 docs.jsonl에 적고, 검색 근거가 그 칸(doc_date·version·superseded)을 그대로 보여 준다.
+pl-38(사용자 11-03): 판 묶음(family — id_patterns로 같은 문서군을 묶던 것)과 그 묶음으로 옛 판을 뒤로 밀던 최신성 순위(recency_rerank)를 지움 —
+잠재 문제(같은 문서의 다른 판이 s3_key가 달라 '최신' 질문에서 옛 판이 위로 올 수 있음)는 PRD pl-38에 남김.
 
 날짜 우선순위는 **본문 먼저, 파일명은 다음**(파일명이 내용과 다를 수 있음 — holdout 실측: final_real.docx(본문 2025-06) vs
 final_v2.docx(본문 2025-09), 파일명에는 날짜가 아예 없어 속지는 않지만 버전 낱말도 내용이 아니라 이름이 우선이면 거꾸로 판단할 수 있음)."""
@@ -7,18 +9,10 @@ final_v2.docx(본문 2025-09), 파일명에는 날짜가 아예 없어 속지는
 import re
 from pathlib import Path
 
-from common.core.terms import load_id_patterns  # id_patterns.csv(L4-7, family가 계약 번호 등을 과병합하지 않게)
-
 SUPERSEDED_MARKERS = ("[구판]", "구판", "폐기", "이전 판")  # 본문 첫 300자에서(한글) — 영문은 아래 정규식
 RE_SUPERSEDED_EN = re.compile(r"\bsuperseded\b|\bobsolete\b", re.I)
 
 RE_LATEST_QUESTION = re.compile(r"최신|현재|최근|latest|current|most recent|newest", re.I)
-RE_VERSION_PIN = re.compile(r"\b(?:rev(?:ision)?|version|ver|amendment|개정판?|수정판?)\.?\s*([0-9]+(?:\.[0-9]+)?)", re.I)
-RE_YEAR = re.compile(r"(20\d{2})")
-# 연도 지목 닻말 — 연도 바로 뒤가 아니라 질문 어디든("2024년 단가표 기준") 있으면 됨(실제 family 멤버 날짜와 또 맞아야 지목 확정 — pin_from_question)
-RE_PIN_ANCHOR = re.compile(r"기준|현재|시점|당시|as of|as at", re.I)
-# 연도 + 문서 명사("2025년 목록에서"·"2024년 판의"·"2025 price list") — 닻말 없이도 특정 연도 판 지목(10-05 dev revisions-dev RD009)
-RE_YEAR_DOC = re.compile(r"(20\d{2})\s*년?\s*(?:판|버전|목록|리스트|자료|문서|표|단가표|가격표|edition|version|list|price list)", re.I)
 
 _MONTHS = {n: i + 1 for i, n in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"])}
 _MON_RE = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*"
@@ -31,6 +25,8 @@ _RE_YM = re.compile(r"(20\d{2})[-_./](\d{1,2})(?!\d)")
 _RE_KO_YM = re.compile(r"(20\d{2})\s*년\s*(\d{1,2})\s*월")
 _RE_MY_EN = re.compile(rf"\b({_MON_RE})\.?\s+(20\d{{2}})\b", re.I)
 _RE_Y = re.compile(r"(20\d{2})(?!\d)")
+# 본문의 연도만은 "2026년"처럼 날짜로 적은 것만(F6 — 본문 속 맨 연도 "planned for 2027"은 문서 날짜가 아님)
+_RE_KO_Y = re.compile(r"(20\d{2})\s*년")
 
 _VER_WORD = r"(?:rev(?:ision)?|version|ver|amendment|개정판?|수정판?)"
 _SEP = r"[.\s_-]*"  # 키워드·숫자 사이 구분자(파일명은 보통 밑줄·하이픈, 본문은 점·공백) — 0개도 허용(Version2026 류)
@@ -38,15 +34,6 @@ _RE_VER_KW = re.compile(
     rf"(?<![A-Za-z]){_VER_WORD}{_SEP}([0-9]+(?:\.[0-9]+)?)", re.I
 )  # 앞이 글자면 안 침(forever2026 오탐 방지) — 밑줄·숫자·문자열 시작은 허용
 _RE_VER_V = re.compile(r"(?<![A-Za-z0-9])v[.\s_-]?([0-9]+(?:\.[0-9]+)?)\b", re.I)
-
-# family 키에서 지울 토큰 — 날짜/연도, 개정·버전, 복사본 표시("_old"·"(1)") — 이 밖의 임의 낱말("_real"·"_final")은 안 지움(과잉 병합 방지, ponytail)
-_FAMILY_DROP = re.compile(
-    rf"(?<![A-Za-z]){_VER_WORD}{_SEP}\d+(?:\.\d+)?"
-    r"|(?<![A-Za-z0-9])v[.\s_-]?\d+(?:\.\d+)?"
-    r"|20\d{2}[-_. ]?\d{0,2}[-_. ]?\d{0,2}"
-    r"|_old\b|-old\b|\(\d+\)",
-    re.I,
-)
 
 
 def _mon(s):
@@ -80,11 +67,13 @@ _DATE_PATTERNS = (
 )
 
 
-def _date_in(s):
-    """가장 구체적인 패턴부터 — 문자열 안 어디든 먼저 맞는 것(연도만 있는 것보다 전체 날짜를 우선)."""
+def _date_in(s, bare_year=True):
+    """가장 구체적인 패턴부터 — 문자열 안 어디든 먼저 맞는 것(연도만 있는 것보다 전체 날짜를 우선).
+    bare_year=False(본문)면 맨 연도(_RE_Y) 대신 "2026년" 꼴만 연도로 본다 — 본문의 맨 연도는 계획·이력 글이 많아 문서 날짜가 아님."""
     if not s:
         return None
-    for rx, fn in _DATE_PATTERNS:
+    pats = _DATE_PATTERNS if bare_year else (*_DATE_PATTERNS[:-1], (_RE_KO_Y, lambda m: _fmt(m[1])))
+    for rx, fn in pats:
         m = rx.search(s)
         if m:
             r = fn(m)
@@ -95,7 +84,7 @@ def _date_in(s):
 
 def extract_date(filename, text):
     """문서 날짜(ISO YYYY-MM-DD·YYYY-MM·YYYY) — **본문 먼저, 파일명은 본문에 없을 때만**(파일명은 내용과 다를 수 있음)."""
-    return _date_in((text or "")[:2000]) or _date_in(filename or "")
+    return _date_in((text or "")[:2000], bare_year=False) or _date_in(filename or "")
 
 
 def extract_version(filename, text):
@@ -113,149 +102,13 @@ def is_superseded(text):
     return any(mk in head for mk in SUPERSEDED_MARKERS) or bool(RE_SUPERSEDED_EN.search(head))
 
 
-def _id_pattern_spans(stem):
-    """id_patterns.csv(GLOSSARY_DIR)에 맞는 구간(대소문자 무시, 겹치면 병합) — 계약 번호처럼 연도·숫자가 ID의 일부인 곳을
-    찾아 family_key의 날짜·개정 제거에서 뺀다(L4-7). 사전 없으면 빈 목록(오늘 동작 그대로)."""
-    spans = sorted(m.span() for pat in load_id_patterns() for m in pat.finditer(stem))
-    if not spans:
-        return []
-    merged = [spans[0]]
-    for s, e in spans[1:]:
-        ls, le = merged[-1]
-        if s <= le:
-            merged[-1] = (ls, max(le, e))
-        else:
-            merged.append((s, e))
-    return merged
-
-
-def family_key(filename):
-    """문서군 키 — 파일명 stem을 소문자화하고 날짜·개정·버전·복사본 토큰만 지움(그 밖의 낱말은 그대로 — 과잉 병합 방지).
-    단 그 토큰이 id_patterns.csv ID 모양(계약 번호 등)의 일부면 지우지 않는다 — 같은 ID의 다른 연도는 다른 문서(L4-7,
-    4clients C-PFE-2022-01 vs C-PFE-2024-03 과병합 수정)."""
-    stem = Path(filename or "").stem
-    spans = _id_pattern_spans(stem)
-    low = stem.lower()
-    if spans:
-        parts, last = [], 0
-        for s, e in spans:
-            parts.append(_FAMILY_DROP.sub(" ", low[last:s]))
-            parts.append(low[s:e])
-            last = e
-        parts.append(_FAMILY_DROP.sub(" ", low[last:]))
-        low = "".join(parts)
-    else:
-        low = _FAMILY_DROP.sub(" ", low)
-    low = re.sub(r"[\s_\-.]+", "_", low).strip("_")
-    return low or Path(filename or "").stem.lower()
-
-
 def doc_meta(filename, text):
-    """structure(build_bundle.py)가 docs.jsonl에 적는 한 벌 — doc_date·version·superseded·family."""
+    """structure(build_bundle.py)가 docs.jsonl에 적는 한 벌 — doc_date·version·superseded(family는 pl-38에 지움)."""
     return {
         "doc_date": extract_date(filename, text),
         "version": extract_version(filename, text),
         "superseded": is_superseded(text),
-        "family": family_key(filename),
     }
-
-
-def pin_from_question(question):
-    """질문이 특정 개정·연도를 콕 집었나("Rev.1 기준"·"2024년 단가표 기준") — 있으면 그 버전은 최신성 순위에서 밀지 않는다(holdout W15 — MTOP 실측).
-    연도는 "기준" 류 닻말이 질문 어디든 있어야(그래야 "2025년에 체결" 같은 평서문을 지목으로 안 봄) — 실제로 그 연도인 family 멤버가 있어야 최종 확정(recency_rerank)."""
-    if not question:
-        return None, None
-    mv = RE_VERSION_PIN.search(question)
-    my = (RE_YEAR.search(question) if RE_PIN_ANCHOR.search(question) else None) or RE_YEAR_DOC.search(question)
-    return (mv.group(1) if mv else None), (my.group(1) if my else None)
-
-
-def _recency_key(meta):
-    """정렬 키 — 구판 아님 > 날짜 최신 > 개정 번호 큼(튜플 자체가 최댓값 비교에 바로 씀)."""
-    ver = meta.get("version")
-    try:
-        vnum = float(ver) if ver not in (None, "") else -1.0
-    except (TypeError, ValueError):
-        vnum = -1.0
-    return (not meta.get("superseded"), meta.get("doc_date") or "", vnum)
-
-
-def recency_rerank(hits, doc_of, question=None, mode=None):
-    """같은 family(결과 안 ≥2건) 묶음 → 최신(doc_date·version·superseded)만 원래 자리에 두고 옛 것은 뒤로 — **지우지 않는다**
-    (holdout 실측: 개정 3이 지불조건만 바꾸고 MTOP 값은 개정 2에만 있음 — 지우면 그 값을 영영 못 찾음).
-    질문이 특정 개정·연도를 콕 집으면(pin_from_question) 그 버전도 밀지 않는다. 끄기: SEARCH_RECENCY=0.
-    mode 인자가 오면 그 질의 1건에만 그 모드를 쓴다(전역 env는 그대로 — AG1 engine-qa 보완, 동시 요청 사이 데이터 경쟁 방지).
-    인자가 없으면(None) env(SEARCH_RECENCY, 기본 "1")를 본다.
-    hits: [{"doc_key": ...}, ...] · doc_of: {doc_key: {doc_date, version, superseded, family}} → (새 hits, notes 메모|None)."""
-    from common.config.settings import cfg  # S7b — 설정 객체(옛 `get("SEARCH_RECENCY", "1")` — 빈 글자 유지)
-
-    mode = cfg().text.search_recency if mode is None else str(mode)  # 0 끔 · 1 최신을 묻는 질문에서만(기본) · 2 늘
-    if mode == "0" or not hits:
-        return hits, None
-    # 10-05 dev 실측: 늘 적용하면 4clients R@1 0.78→0.51 — family가 파일명에서 연도를 빼 같은 고객의 연도별 '다른 계약'(C-PFE-2022-01·2024-03)을
-    # 한 문서의 판으로 묶어 옛 계약을 밀었음. 최신을 묻는 질문에서만 순위를 바꾸고, 나머지는 날짜·판 표시(답변 프롬프트)로만 가리게.
-    if mode == "1" and not (question and RE_LATEST_QUESTION.search(question)):
-        return hits, None
-    fam = {}
-    for h in hits:
-        m = doc_of.get(h.get("doc_key"))
-        if m and m.get("family"):
-            fam.setdefault(m["family"], set()).add(h["doc_key"])
-    multi = {f: dks for f, dks in fam.items() if len(dks) >= 2}
-    if not multi:
-        return hits, None
-    # 최신 '열쇠값'만 비교 — 확실히 더 오래된(열쇠가 엄격히 작은) 것만 뒤로. 동률(날짜·개정 둘 다 없는 같은 이름 사본 등)은 안 건드림
-    # (10-05 결함: set에서 max로 '최신 1건'을 골라 동률이면 실행마다 다른 문서가 뽑히고, 근거 없이 나머지를 뒤로 밀었음 — 비결정·오강등)
-    newest = {f: max(_recency_key(doc_of[dk]) for dk in dks) for f, dks in multi.items()}
-    pin_v, pin_y = pin_from_question(question)
-    pinned = set()
-    if pin_v or pin_y:
-        for dks in multi.values():
-            for dk in dks:
-                m = doc_of[dk]
-                if (pin_v and m.get("version") == pin_v) or (pin_y and (m.get("doc_date") or "").startswith(pin_y)):
-                    pinned.add(dk)
-    kept, demoted = [], []
-    for h in hits:
-        dk = h.get("doc_key")
-        f = (doc_of.get(dk) or {}).get("family")
-        if f in multi and dk not in pinned and _recency_key(doc_of[dk]) < newest[f]:
-            demoted.append(h)
-        else:
-            kept.append(h)
-    if not demoted:
-        return hits, None
-    # L4-8 — 옛 판은 맨 뒤가 아니라 '같은 family에서 남은 문서 바로 뒤'로(최신 개정에 없는 항목은 옛 판에만
-    # 있음 — 근거 k 안에 남게). BR33: 삽입 지점은 family의 첫 kept occurrence가 아니라 **그 문서(doc_key)의
-    # 마지막 occurrence** 뒤 — 같은 문서가 여러 청크로 갈려 kept에 흩어져 있을 때(실측 QA095: 최신판 청크가
-    # 여러 개, 그중 가장 먼저 나온 청크가 하필 질문과 약하게만 맞음) 첫 청크 뒤에 바로 끼우면 옛 판 청크들이
-    # 그 문서의 '더 적합한(뒤에 나온)' 청크보다 위로 올라가 버렸다(최신판 MTOP 값 청크가 구판 청크들 뒤로 밀려
-    # 순위 밖). 같은 family에서 다른 문서가 섞여 있으면(예: 특정 개정 지목 — pin_from_question) 그 경계는
-    # 그대로 지킨다(옛 판을 앞선 문서 occurrence 뒤에 바로 붙임, 뒤에 나오는 다른 kept 문서를 건너뛰지 않음).
-    fam_of = lambda h: (doc_of.get(h.get("doc_key")) or {}).get("family")
-    anchor_doc, last_idx = {}, {}  # family -> (앵커 문서 doc_key, 그 문서의 kept 안 마지막 위치)
-    for i, h in enumerate(kept):
-        f = fam_of(h)
-        if not f:
-            continue
-        dk = h.get("doc_key")
-        anchor_doc.setdefault(f, dk)
-        if dk == anchor_doc[f]:
-            last_idx[f] = i
-    by_fam = {}
-    for h in demoted:
-        by_fam.setdefault(fam_of(h), []).append(h)
-    order = []
-    for i, h in enumerate(kept):
-        order.append(h)
-        f = fam_of(h)
-        if f in by_fam and last_idx.get(f) == i:
-            order += by_fam.pop(f)
-    order += [h for hs in by_fam.values() for h in hs]  # (이론상 없음) 남은 것은 뒤로
-    out = [{**h, "rank": i + 1} for i, h in enumerate(order)]
-    label = "최신 질문 — " if (question and RE_LATEST_QUESTION.search(question)) else ""
-    note = f"{label}구판 {len(demoted)}건 뒤로" + ("(지정 버전 유지)" if pinned else "")
-    return out, note
 
 
 _COPY_POOL_RE = re.compile(r"^synth-[\w-]+__[\w-]+__", re.I)  # 평가 풀 접두(같은 원본의 재명명 사본, synth-distractors-v2 등)

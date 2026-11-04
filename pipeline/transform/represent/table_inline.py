@@ -11,7 +11,7 @@ same table with a proper grid. table_std.build_tables() already turns a grid int
 only ever looked at the winning engine's own tables and render_md() appended it at the very end — so the
 table showed up twice (once broken, once correct) and never in place.
 
-What this module does, called from represent() once (see hook comment in represent.py for why there):
+What this module does, called from represent() once (see hook comment in build_rep.py for why there):
   (a) candidates = every grid-bearing table from every engine the document was tried with (ok engines only,
       winner + the already-loaded `other_docs`) — not just the winner's.
   (b) group_tables() — tables that are "the same table region" (same page when both sides know the page,
@@ -34,18 +34,12 @@ ever sees the grid (TB6, PARSE_FILL_MERGED, _common/contract._fill_merged) — s
 explicit `merges` list (office_stdlib/anydoc), others (pymupdf/pdfplumber) do not and only leave the filled
 duplicates behind. reading_order_cells() below works either way (see its docstring) by detecting fill
 duplicates positionally instead of depending on `merges` being present.
-
-PARSE_TABLE_INLINE (env, default on — project rule: new features default on, =0 only turns it off) — off
-means represent() does not call inline_tables() at all, so rep["text"] and rep["tables_std"] stay byte
-identical to the PARSE_TABLE_STD-only behavior (old: winner's own tables → table_std.build_tables(), text
-untouched, tables appended at the end of the published .md by render_md()).
 """
 
 from collections import Counter
 
 from common.core.text import normalize_value
-from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
-from pipeline.transform.represent import table_std
+from pipeline.transform.represent import table_standard as table_std
 
 GROUP_JACCARD_MIN = 0.5  # ponytail: simple fixed threshold for "same table region" by content overlap when
 # page can't settle it — revisit with a real mis-grouped example before tuning further.
@@ -61,15 +55,6 @@ SPAN_SLACK_CHARS = 200  # fixed slack added to the cell-length budget below, so 
 # cell text) with one or two skipped/out-of-order cells still passes the ratio check.
 SPAN_SLACK_RATIO = 4  # matched span must not be more than this many times the matched cells' own length —
 # guards against an accidental match swallowing unrelated surrounding paragraphs.
-
-
-def on(config=None):
-    """PARSE_TABLE_INLINE(env, default on). Off => represent() skips this module entirely (byte-identical to
-    before TA1: only the winning engine's own tables become tables_std, body text untouched)."""
-    config = (
-        pc.cfg().transform.represent.table_inline if config is None else config
-    )  # S7c — 설정 객체(bool 칸 → "true"/"false"로 아래 판정이 옛 글자 판정과 같음)
-    return str(config).strip().lower() not in ("", "0", "none", "false")
 
 
 def _cell_str(c):
@@ -156,7 +141,7 @@ def choose_grid(group):
 
 def _page_slice(text, page):
     """Narrow `text` to its 1-based `page` (split on \\f, same page-break convention as the rest of
-    represent.py) when the page number is known and in range — otherwise search the whole text (unknown page,
+    build_rep.py) when the page number is known and in range — otherwise search the whole text (unknown page,
     or a page count that doesn't line up with the \\f breaks; same "don't guess boundaries" posture as
     represent._page_texts, just without needing boxes here). Returns (offset, slice)."""
     if page is None:
@@ -262,8 +247,8 @@ def _build_candidates(rep, best_engine, other_docs):
     return cands
 
 
-def inline_tables(rep, best_engine, other_docs, std_on):
-    """Entry point (represent() calls this when on() — see the hook comment in represent.py for where/why).
+def inline_tables(rep, best_engine, other_docs):
+    """Entry point (represent() calls this — see the hook comment in build_rep.py for where/why).
     Mutates rep["text"] in place (span replacements only — nothing else about the text changes) and sets
     rep["tables_std"]. Returns the info block for rep["rep"]["table_inline"].
     Review item 5 (engine-qa, 10-21) — a replaced span can contain a short caption/footnote squeezed between
@@ -288,7 +273,7 @@ def inline_tables(rep, best_engine, other_docs, std_on):
         span = find_span(text, match_cand["table"].get("page"), cells)
         if span and any(not (span[1] <= s or span[0] >= e) for s, e in taken):
             span = None  # overlap with an already-placed table — conservative: don't touch it either
-        entry = table_std.build_tables([chosen["table"]], chosen["engine"], std_on)
+        entry = table_std.build_tables([chosen["table"]], chosen["engine"])
         entry = entry[0] if entry else None
         inline_ok = bool(span and entry)
         if inline_ok:

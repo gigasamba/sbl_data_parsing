@@ -1,20 +1,12 @@
 # 개발 서버(실행 이미지 data-pipeline-runtime — op-06, 사용자 10-30): 이미지에 코드가 없어 서버 코드 폴더(CODE_DIR — 저장소 트리 그대로,
-#   예 /srv/rag/code/live → 판 폴더를 가리키는 링크)를 모든 서비스의 /app/deploy에 읽기 전용으로 붙인다.
-#   docker compose -f compose.pipeline.yml -f compose.code.yml run --rm parse   (trigger.sh·run_tool.sh는 셸에 CODE_DIR가 있으면 이 파일을 덧붙임)
-#   이미지 변수는 실행 이미지로: DATA_PIPELINE_IMAGE=data-pipeline-runtime:<태그>(settings.yaml pipeline.host.image).
+#   dc.sh·mcp_up.sh가 부른 코드 폴더 — 루트 아래 sbl_data_parsing-<판>, op-13)를 모든 서비스의 /app/deploy에 읽기 전용으로 붙인다.
+#   docker compose -f compose.pipeline.yml -f compose.code.yml up -d   (일괄 상주 data-pipeline — 사용자 11-03 · trigger.sh·run_tool.sh는 그 안에서 docker exec ·
+#   parse_document 전용 data-pipeline-mcp는 짝 compose.code.pipeline-mcp.yml)
+#   이미지 변수는 실행 이미지로: DATA_PIPELINE_IMAGE=data-pipeline-runtime:<태그>(settings.yaml required.deploy.pipeline_image).
 #   이 파일 없이 실행 이미지를 띄우면 runtime_entry.sh가 바로 멈춘다(종료 2 — "코드 폴더가 마운트되지 않음") — 조용히 옛 코드로 돌 일은 없음.
 #   코드가 든 이미지(data-pipeline:<태그> — 수집 서버)는 이 파일을 쓰지 않는다.
 x-code: &code
-  - ${CODE_DIR:?CODE_DIR=<코드 폴더 — 저장소 트리 그대로> 필요(op-06)}:/app/deploy:ro,z
+  - ${CODE_DIR:?CODE_DIR=<코드 폴더 — 저장소 트리 그대로> 필요(op-06)}:${APP_CODE_ROOT:?APP_CODE_ROOT 필요 — settings_env.sh load_settings가 냄}:ro,z
 
 services:
-  parse: {volumes: *code}
-  structure: {volumes: *code}
-  load: {volumes: *code}
-  publish: {volumes: *code}
-  mcp: {volumes: *code}
-  retrieval: {volumes: *code}
-  index_a: {volumes: *code}
-  index_b: {volumes: *code}
-  data-pipeline-parse: {volumes: *code}
-  data-pipeline-structure: {volumes: *code}
+  data-pipeline: {volumes: *code}

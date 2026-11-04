@@ -5,14 +5,13 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-from common.core.repfmt import EMPTY, locate, nlabel, pairs_of, pick  # noqa: E402,F401
-from common.core.text import normalize_value  # noqa: E402
+from common.core.repfmt import EMPTY, locate, nlabel, pairs_of, pick  # noqa: F401
+from common.core.text import normalize_value
 
 
 def families():
     from pipeline.extract.engines import registry
-    from pipeline.shared.summarize import FAMILY
+    from pipeline.shared.engine_family import FAMILY
 
     return {e: FAMILY.get(e, st) for e, (st, _) in registry.engines().items()}
 
