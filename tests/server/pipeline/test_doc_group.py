@@ -1,4 +1,4 @@
-"""pipeline.extract.doc_parsing_group — 문서 처리 그룹(light·medium·vlm) 규칙 표(PRD rn-01)."""
+"""pipeline.extract.doc_lane_group — 문서 처리 그룹(light·medium·vlm) 규칙 표(PRD rn-01)."""
 
 import os
 import subprocess
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pymupdf
 
-from pipeline.extract.doc_parsing_group import doc_parsing_group
+from pipeline.extract.doc_lane_group import doc_lane_group
 
 KB = 1024
 
@@ -28,7 +28,7 @@ def _zip(p, media):
             z.writestr(f"word/media/i{i}.png", b"\0" * n)
 
 
-def test_doc_parsing_group_rules():
+def test_doc_lane_group_rules():
     with tempfile.TemporaryDirectory(prefix="test_docgroup_") as td:
         t = Path(td)
         (t / "plain.bin").write_bytes(b"hello")
@@ -65,11 +65,11 @@ def test_doc_parsing_group_rules():
             ("missing", "a.docx", 1, "vlm"),
         ]
         for f, name, size, want in rows:
-            assert doc_parsing_group(t / f, name, size) == want, (f, name, size)
-        assert doc_parsing_group(t / "text.pdf") == "light"  # 이름·크기를 빼면 파일 이름·실제 크기
+            assert doc_lane_group(t / f, name, size) == want, (f, name, size)
+        assert doc_lane_group(t / "text.pdf") == "light"  # 이름·크기를 빼면 파일 이름·실제 크기
         cli = [
             sys.executable,
-            str(Path(sys.modules[doc_parsing_group.__module__].__file__)),
+            str(Path(sys.modules[doc_lane_group.__module__].__file__)),
             str(t / "light.zip"),
             "a b.docx",
             str(300 * KB),
@@ -86,7 +86,7 @@ def test_cli_traces_classify():
     from unittest import mock
 
     from common.core import jsonlog, span
-    from pipeline.extract import doc_parsing_group as dpg
+    from pipeline.extract import doc_lane_group as dpg
 
     rows, out = [], io.StringIO()
     with (

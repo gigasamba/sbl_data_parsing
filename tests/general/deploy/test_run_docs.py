@@ -313,7 +313,7 @@ def test_faq_first(tmp_path):
 
 
 def test_classify_cache_skips_probe():
-    """분류 캐시에 있으면 doc_parsing_group(docker exec)를 부르지 않는다. 캐시는 레인만 담으므로 PDF의 vlm은 스캔으로 되살린다.
+    """분류 캐시에 있으면 doc_lane_group(docker exec)를 부르지 않는다. 캐시는 레인만 담으므로 PDF의 vlm은 스캔으로 되살린다.
     캐시가 없으면 컨테이너 답의 마지막 줄(경고 줄 무시)을 쓰고, 답이 없으면 vlm(rn-01)."""
     from unittest import mock
 
@@ -338,5 +338,5 @@ def test_classify_cache_skips_probe():
         assert (5 in RD._scan) is scan, name
         if out is not None:
             assert sh.call_args[0][0].endswith(
-                f"doc_parsing_group.py {RD._img('output_root')}/_warm/{RD._warm_bin(row)} {shlex.quote(name)} 2048"
+                f"doc_lane_group.py {RD._img('output_root')}/_warm/{RD._warm_bin(row)} {shlex.quote(name)} 2048"
             ), name

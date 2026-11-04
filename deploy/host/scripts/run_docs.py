@@ -607,7 +607,7 @@ def _class_save(cache):
 
 
 def classify_doc(seq, row, cache=None):
-    """레인 분류(규칙: PRD rn-01) — 규칙은 컨테이너 안 pipeline/extract/doc_parsing_group.py의 doc_parsing_group() 하나.
+    """레인 분류(규칙: PRD rn-01) — 규칙은 컨테이너 안 pipeline/extract/doc_lane_group.py의 doc_lane_group() 하나.
     캐시(s3_key) 우선 — 캐시에 있으면 docker exec를 안 부른다. 답(마지막 줄 — pymupdf 경고 섞임 방지)이 없으면 보수적으로 vlm.
     PDF의 vlm은 내용 검사 heavy(스캔)일 때뿐이라 PDF vlm = 스캔(_scan) 표시(캐시에서 되살릴 때도 같음)."""
     t_c = time.time()  # 소요 기록: 분류 전체 · probe_sec = 컨테이너 호출만
@@ -624,7 +624,7 @@ def classify_doc(seq, row, cache=None):
             return hit
     t_p = time.time()
     rc, out, _ = sh(  # PYTHONPATH = 코드 폴더 — 그러면 그룹 판별 1건이 extract.classify 행으로 남는다(doc_id = name)
-        f"{DOCKER} exec -e PYTHONPATH={_img('code_root')} {PIPE_C} python3 {_img('code_root')}/pipeline/extract/doc_parsing_group.py "
+        f"{DOCKER} exec -e PYTHONPATH={_img('code_root')} {PIPE_C} python3 {_img('code_root')}/pipeline/extract/doc_lane_group.py "
         f"{_img('output_root')}/_warm/{_warm_bin(row)} {shlex.quote(name)} {int(row.get('file_size') or 0)}",
         timeout=60,
     )

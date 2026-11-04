@@ -46,7 +46,7 @@ sequenceDiagram
     R->>C: docker exec … python -m pipeline.cli show-stack (엔진 구성 확인)
     loop 문서마다 (스레드)
         R->>C: python -m pipeline.extract.fetch_docs warm (미리 받기)
-        R->>C: python3 pipeline/extract/doc_parsing_group.py 파일 이름 크기 (레인 분류 — doc_parsing_group(), extract.classify 행)
+        R->>C: python3 pipeline/extract/doc_lane_group.py 파일 이름 크기 (레인 분류 — doc_lane_group(), extract.classify 행)
         R->>C: python -m pipeline.cli --set … parse --source rdb:csv:…/batch.csv
         R->>C: python -m pipeline.load.publish_parse_result --apply
         R->>C: build_bundle → pgvector_load load
@@ -59,7 +59,7 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     L["edw_list + skip-done + faq_first + max-docs → 처리 순서"]
-    W["run_docs.downloader 스레드: warm_one + classify_doc → doc_parsing_group (WARM_TARGET 기본 20)"]
+    W["run_docs.downloader 스레드: warm_one + classify_doc → doc_lane_group (WARM_TARGET 기본 20)"]
     Q["레인 대기열 light · medium · vlm"]
     LW["run_docs.lane_worker (레인마다 전담·공유) → run_docs.parse_one"]
     PUB["게시 스레드 1개 → publish_one"]
@@ -83,7 +83,7 @@ flowchart TD
 | 엔진 구성 확인 | `deploy.host.scripts.run_docs.stack_check()` | 컨테이너 안 `python -m pipeline.cli show-stack` | — |
 | 대상 고르기 | `deploy.host.scripts.run_docs.edw_list()`·`deploy.host.scripts.run_docs.edw_done_keys()`·`deploy.host.scripts.run_docs.faq_first()` | `AI.FileStorageMap`에서 `--filter`(기본 `RFP,proposal`) 이름 조건으로 목록, ParsingMeta에 끝난 문서(`ok`·`partial`은 `gold_version`도 있어야, `skipped_dup`)를 뺌, FAQ 교체가 필요하면 FAQ를 앞에 | EDW → 문서 순서 |
 | 미리 받기 | `deploy.host.scripts.run_docs.downloader()` → `deploy.host.scripts.run_docs.warm_one()` → 컨테이너 `python -m pipeline.extract.fetch_docs warm`(`pipeline.extract.fetch_docs._warm_cmd()`) | 문서 위치 csv(`_docflow/<seq>/batch.csv`)를 쓰고 원본을 `<결과 폴더>/_warm/<sha1>.bin`으로 받음. 파일 1건마다 `pipeline.extract.fetch_docs._warm_cmd()`가 `applog.pipe_event`에 `extract.download` 행(`head_ms`·`download_ms`·`mbps`·`lock_wait_ms`, 실패는 `external`)을 남긴다 | Object Storage → `_warm/` |
-| 레인 분류 | `deploy.host.scripts.run_docs.classify_doc()` → 컨테이너 `python3 pipeline/extract/doc_parsing_group.py <파일> <원본 이름> <크기>` → `pipeline.extract.doc_parsing_group.doc_parsing_group()` | 규칙은 `doc_parsing_group()` 하나에 있다: 글자 형식 light · pptx·ppt vlm · pdf·오피스는 내용 검사(PDF 첫 3쪽 글자 수로 스캔, 오피스 zip 내장 그림 수·용량, 검사 실패) → heavy면 vlm, 아니면 크기 기준으로 medium/light · 그 밖 형식 vlm([ops.md#rn-01](../prd/ops.md#rn-01)). `classify_doc()`은 답의 마지막 줄만 읽고(없으면 vlm), vlm PDF를 스캔으로 표시하며, 결과를 `batch_progress/docflow_class.json`(s3_key별)에 캐시. 원본 이름을 받은 `pipeline.extract.doc_parsing_group.main()`은 판별 1건을 `extract.classify` 행(`doc_id` = 원본 이름, `metrics.group`, 파일이 없으면 fail)으로 남기고(기록이 실패해도 그룹은 같음), `classify_doc()`은 `batch_progress`의 classify 기록에 `sec`(분류 전체)·`probe_sec`(컨테이너 호출)을 적는다 | 원본 → 레인 |
+| 레인 분류 | `deploy.host.scripts.run_docs.classify_doc()` → 컨테이너 `python3 pipeline/extract/doc_lane_group.py <파일> <원본 이름> <크기>` → `pipeline.extract.doc_lane_group.doc_lane_group()` | 규칙은 `doc_lane_group()` 하나에 있다: 글자 형식 light · pptx·ppt vlm · pdf·오피스는 내용 검사(PDF 첫 3쪽 글자 수로 스캔, 오피스 zip 내장 그림 수·용량, 검사 실패) → heavy면 vlm, 아니면 크기 기준으로 medium/light · 그 밖 형식 vlm([ops.md#rn-01](../prd/ops.md#rn-01)). `classify_doc()`은 답의 마지막 줄만 읽고(없으면 vlm), vlm PDF를 스캔으로 표시하며, 결과를 `batch_progress/docflow_class.json`(s3_key별)에 캐시. 원본 이름을 받은 `pipeline.extract.doc_lane_group.main()`은 판별 1건을 `extract.classify` 행(`doc_id` = 원본 이름, `metrics.group`, 파일이 없으면 fail)으로 남기고(기록이 실패해도 그룹은 같음), `classify_doc()`은 `batch_progress`의 classify 기록에 `sec`(분류 전체)·`probe_sec`(컨테이너 호출)을 적는다 | 원본 → 레인 |
 | 파싱 | `deploy.host.scripts.run_docs.lane_worker()` → `deploy.host.scripts.run_docs.parse_one()` → `deploy.host.scripts.run_docs.parse_cmd()` | `pipeline.cli parse`를 문서 폴더 `_docflow/<seq>`로 실행. 문서 폴더 칸(`PIPE_OUT_ROOT`·`DOC_DIR_PREPARED`·`PARSE_IMAGES_ROOT`·`PARSE_RAW_ROOT`) 다음 공통 `--set`(`PARSE_SET`): `VLM_MAX_CONCURRENCY=8`, `VLM_CONCURRENCY=8`, `VLM_FIGURES_MAX=10`, `PARSE_POST=supsub,charts,figures,context,attachments`, `RAPIDOCR_PAGE_WORKERS=2`, `OCR_THREADS=1`, `PIPE_PROCS=4`, `SOURCE_WARM=<결과 폴더>/_warm`, `SOURCE_FETCH_WORKERS=2`, `PARSE_REP_SELECT=first`, `PARSE_QA_LIGHT=1`. vlm 레인은 `VLM_MAX_CONCURRENCY=6`·`VLM_CONCURRENCY=6`·`PARSE_POST`에 `vlm_page` 추가·`VLM_PAGE_MAX=`(빈 값 = 쪽 수 제한 없음), 스캔 PDF는 `PREPARE_ROTATE=0`, 끝에 `CPU_MAX_LOAD=<게이트>`(light 레인은 9). 쪽 해상도는 덮지 않음(`extract.ocr.dpi` 그대로) | 원본 → `_docflow/<seq>/parse/_rep/` |
 | 게시 | `deploy.host.scripts.run_docs.publish_one()` → `deploy.host.scripts.run_docs.publish_cmd()` | `pipeline.load.publish_parse_result --out <문서 폴더> --source-system FileStorageMap --apply` | `_rep` → Object Storage + ParsingMeta |
 | 원본 삭제 | `deploy.host.scripts.run_docs.drop_original()` | 게시 성공 뒤에만 `_warm/<sha1>.bin`과 `_source_files/`를 지움 | — |
@@ -112,7 +112,7 @@ PC에서는 `run_docs.py`를 돌리지 않는다(운영 EDW·Object Storage에 �
 
 ## 3. extract — 원본 가져오기 → 준비 → 엔진 파싱
 
-`pipeline.cli.parse_module()`이 아래 단계를 차례로 부른다. 원본 가져오기·중복 확인·끝난 문서 빼기는 `pipeline.extract.fetch_docs.prepare_batch()` 하나, `--max-new` 고르기는 `pipeline.extract.fetch_docs.pick_new()`가 맡는다. 대부분 자식 프로세스 묶음(`pipeline.cli._run_step()`)으로 돈다. extract 폴더의 파일과 역할: `fetch_docs.py`(원본 받기) · `deduplication.py`(중복 문서 감지) · `filter_and_rotate.py`(준비 — 지원 안 되는·보호된 파일 거르기, 회전(기본 꺼짐), prepared로 복사 · 받기는 안 함) · `run_engines.py`(문서마다 구성된 엔진을 모두 동시에) · `run_one_engine.py`(문서 1건 × 엔진 1개 자식 프로세스) · `engines/`(엔진) · `doc_parsing_group.py`(run_docs 레인 분류, §2-1) · `protected_docs.py`·`discover_columns.py`(흐름 밖 도구).
+`pipeline.cli.parse_module()`이 아래 단계를 차례로 부른다. 원본 가져오기·중복 확인·끝난 문서 빼기는 `pipeline.extract.fetch_docs.prepare_batch()` 하나, `--max-new` 고르기는 `pipeline.extract.fetch_docs.pick_new()`가 맡는다. 대부분 자식 프로세스 묶음(`pipeline.cli._run_step()`)으로 돈다. extract 폴더의 파일과 역할: `fetch_docs.py`(원본 받기) · `deduplication.py`(중복 문서 감지) · `filter_and_rotate.py`(준비 — 지원 안 되는·보호된 파일 거르기, 회전(기본 꺼짐), prepared로 복사 · 받기는 안 함) · `run_engines.py`(문서마다 구성된 엔진을 모두 동시에) · `run_one_engine.py`(문서 1건 × 엔진 1개 자식 프로세스) · `engines/`(엔진) · `doc_lane_group.py`(run_docs 레인 분류, §2-1) · `protected_docs.py`·`discover_columns.py`(흐름 밖 도구).
 
 ```mermaid
 flowchart TD

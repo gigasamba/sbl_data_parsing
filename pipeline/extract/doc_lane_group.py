@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """문서 처리 그룹 판별 — 받은 원본 하나를 light·medium·vlm 중 하나로 가른다(run_docs 레인 배분, PRD rn-01).
 
-사용: python3 pipeline/extract/doc_parsing_group.py <파일> <원본 이름> <크기(바이트)>  → 그룹 한 줄
+사용: python3 pipeline/extract/doc_lane_group.py <파일> <원본 이름> <크기(바이트)>  → 그룹 한 줄
 표준 라이브러리 + pymupdf(PDF일 때만)만 쓴다 — run_docs가 컨테이너 안에서 파일 경로로 바로 실행한다."""
 
 import os
@@ -21,7 +21,7 @@ MEDIUM_KB = {
 PROBE_EXTS = {".docm", *VLM_EXTS, *MEDIUM_KB}  # 내용을 보는 형식 — 그 밖(mht·이미지 등)은 모르는 형식이라 vlm
 
 
-def doc_parsing_group(path, name=None, size=None):
+def doc_lane_group(path, name=None, size=None):
     """→ "light" | "medium" | "vlm". name = 원본 파일 이름(확장자 기준, 없으면 path), size = 바이트(없으면 파일 크기).
     내용 검사(heavy): PDF는 첫 3쪽 글자가 쪽당 평균 300자 미만(스캔), 오피스 zip은 내장 그림 8개 이상 또는 합계 800,000바이트 이상.
     검사 실패도 heavy로 본다(보수적으로 vlm)."""
@@ -67,16 +67,16 @@ def main(argv):
             from common.core import span as SP
             from pipeline.shared import runtrace
 
-            with runtrace.run("doc_parsing_group", [name]):
+            with runtrace.run("doc_lane_group", [name]):
                 ext = os.path.splitext(name)[1].lower()
                 with SP.span("extract.classify", "extract", doc_id=name, ext=ext, file_bytes=size) as sp:
-                    group = doc_parsing_group(path, name, size)
+                    group = doc_lane_group(path, name, size)
                     sp.add(group=group)
                     if not os.path.isfile(path):
                         sp.result("fail", "doc", SP.safe("file_missing"))  # 그룹은 그대로(보수적 vlm 등)
         except Exception:  # 계측 실패 — 기록 없이 판별만
             pass
-    print(group or doc_parsing_group(path, name, size))
+    print(group or doc_lane_group(path, name, size))
 
 
 if __name__ == "__main__":

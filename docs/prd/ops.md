@@ -79,12 +79,12 @@
 ## rn-01 · 레인 정책 — 담당 레인 먼저, 공유 워커만 가져오기
 - 이유: 문서마다 자원 성격이 달라 레인으로 나누고, 남는 워커는 다른 레인을 돕는다.
 - 규칙:
-  1. 레인 분류(warm 때, 결과는 `s3_key`별로 저장해 다시 씀): `run_docs.classify_doc`이 컨테이너 안 `pipeline/extract/doc_parsing_group.py`(원본 파일·원본 이름·크기 — 제한 60초)를 부르고, 규칙은 그 파일의 `doc_parsing_group()` 하나에 있다. 답이 없으면 vlm. 규칙: 확장자가 `.txt .hwpx .hwp .csv .eml .msg .html .htm .tsv .md .json .xml .log .rtf`면 light. `.pptx .ppt`면 vlm. `.pdf .docx .doc .xlsx .xls .xlsm .docm`이면 내용을 본다 — PDF는 첫 3쪽 글자가 쪽당 평균 300자 미만, 오피스 zip은 내장 그림 8개 이상 또는 합계 800,000바이트 이상, 검사 실패도 heavy → vlm(vlm PDF는 스캔 표시). 아니면 크기 기준(`.docx .doc` 300KB · `.xlsx .xlsm .xls` 500KB · `.pdf` 1024KB 이상)이면 medium, 그 밖 light. 다른 확장자는 vlm.
+  1. 레인 분류(warm 때, 결과는 `s3_key`별로 저장해 다시 씀): `run_docs.classify_doc`이 컨테이너 안 `pipeline/extract/doc_lane_group.py`(원본 파일·원본 이름·크기 — 제한 60초)를 부르고, 규칙은 그 파일의 `doc_lane_group()` 하나에 있다. 답이 없으면 vlm. 규칙: 확장자가 `.txt .hwpx .hwp .csv .eml .msg .html .htm .tsv .md .json .xml .log .rtf`면 light. `.pptx .ppt`면 vlm. `.pdf .docx .doc .xlsx .xls .xlsm .docm`이면 내용을 본다 — PDF는 첫 3쪽 글자가 쪽당 평균 300자 미만, 오피스 zip은 내장 그림 8개 이상 또는 합계 800,000바이트 이상, 검사 실패도 heavy → vlm(vlm PDF는 스캔 표시). 아니면 크기 기준(`.docx .doc` 300KB · `.xlsx .xlsm .xls` 500KB · `.pdf` 1024KB 이상)이면 medium, 그 밖 light. 다른 확장자는 vlm.
   2. 워커 수: settings.yaml `ops.run_docs.<레인>_dedicated`(자기 레인만)·`<레인>_shared`(자기 레인 먼저, 비면 대기열이 가장 긴 다른 레인), 기본 각 1(모두 6개).
   3. `vlm_cap`(기본 2): 진행 중 vlm 문서가 이만큼이면 vlm 레인을 건너뛴다(전담 워커도).
   4. 고르기 = 순수 함수 `pick_lane(own, shared, queues, inflight, vlm_cap)`.
   5. 시작 때 거부(종료 2): 값이 0 이상 정수가 아님 · `warm`·`warm_workers`·`vlm_cap`이 1 미만 · 전담과 모든 공유 워커 합이 0인 레인.
-- 파일: `deploy/host/scripts/run_docs.py`(`classify_doc`·`RUN_DOCS_DEFAULTS` — 설정 모델 `pipeline.config.PipelineHostRunDocs`와 시험이 대조) · `pipeline/extract/doc_parsing_group.py`(`doc_parsing_group`).
+- 파일: `deploy/host/scripts/run_docs.py`(`classify_doc`·`RUN_DOCS_DEFAULTS` — 설정 모델 `pipeline.config.PipelineHostRunDocs`와 시험이 대조) · `pipeline/extract/doc_lane_group.py`(`doc_lane_group`).
 - QA: `tests/general/deploy/test_run_docs.py`(`pick_lane` 표·`test_classify_cache_skips_probe`) · `tests/server/pipeline/test_doc_group.py`(그룹 규칙 표) · 통과.
 - Status: done
 
@@ -134,7 +134,7 @@
   2. "ETL 폴더" = `pipeline/` 안 `extract`·`transform`·`load`. 최상위 폴더 이름 `pipeline/`은 그대로(이미지·명령 이름 그대로 — 코드 폴더만 교체).
   3. `run_docs.py`는 서버 호스트에서 `docker exec`로 지휘만 하고, 판단(원천 목록·중복·레인·게시)은 ETL 함수로 옮긴다 — rn-05를 이 행과 함께 한다.
   4. 서버 배치: 이미지 폴더(`sbl_images-main/`)는 루트 한 단계 위 공용 폴더에 하나(예 `/home/sbl/`), 벌마다 루트(`dev/`·`dev-hong/`) — 문서만(op-13 규칙 2, README §5-0).
-  5. (11-04 둘째 질의) 스캔 PDF 규칙 두 개(레인 분류 `doc_parsing_group` — 앞 3쪽 평균 300자 미만 · 엔진 선택 `parse_run.pdf_kind` — 쪽마다 20자 미만)는 목적이 달라 그대로 두고 역할만 주석으로 적는다(결과 변화 없음).
+  5. (11-04 둘째 질의) 스캔 PDF 규칙 두 개(레인 분류 `doc_lane_group` — 앞 3쪽 평균 300자 미만 · 엔진 선택 `parse_run.pdf_kind` — 쪽당 평균 20자 미만)는 목적이 달라 그대로 두고 역할만 주석으로 적는다(결과 변화 없음).
   6. run_docs의 EDW 읽기(문서 목록·끝난 문서·FAQ)와 warm 파일 이름은 호스트 사본을 그대로 둔다 — 컨테이너 쪽과 같은지 견주는 시험만 더한다(운영 접속 변경 없음) — `tests/general/deploy/test_edw_copies.py`(끝난 문서 상태 목록·SQL 조건·키 칸 규칙·warm 이름).
   7. 서버·릴리스 스크립트 이름을 하는 일로 바꾼다(문서·systemd 단위 함께).
   8. 공용 모듈(`common/**`)과 `pipeline/shared/**`는 이름·자리를 바꾸지 않는다(레이어 코드 핑거프린트 값 유지 — 기록용이지만 이번엔 제외). 파이프라인 루트의 파싱 코드를 ETL 폴더로 옮기는 것은 한다.
@@ -219,12 +219,12 @@
   5. 감사는 전용 데몬 스레드 하나가 처리한다(도구는 기다리지 않음). 본문 대기 큐 64건 + 바이트 합계 `tuning.search.audit.max_queue_bytes`(기본 268435456) — 넘으면 본문 없는 메타 행(`result_keys.audit_body_omitted=queue_full`, `error_code=audit_queue_full`).
 - 규칙 — 파이프라인 추적:
   1. 실행 1건 = `pipe_run`(`pipeline/shared/runtrace.py` — code_fp·stack·settings_hash·문서 수·workers·cpu_max_load·mem_start_pct). 부모가 준 run_id가 있는 자식은 새로 시작하지 않는다. run_docs에서는 문서·단계마다 실행이 따로 생긴다.
-  2. 문서×단계 = `pipe_event`(`common/core/span.py` `with span("extract.parse", doc_id=…) as s`) — 단계 이름 `extract.plan`·`extract.parse`(`attempt` — 시간 초과 재시도면 2)·`extract.shard`·`extract.warm`(프리페치 1회)·`extract.classify`(run_docs 레인 분류 1건 — `pipeline.extract.doc_parsing_group.main()`, `metrics.group`, 파일이 없으면 fail)·`extract.download`(파일=문서 1건 — `metrics`에 `head_ms`·`download_ms`·`mbps`(순수 전송)·`lock_wait_ms`, 실패는 `external`)·`transform.represent`·`transform.figures`·`transform.structure`·`embed.bundle`·`load.pgvector`·`load.doc/chunk/chunk_term/stats`·`load.publish`·`proc.run`·`model.<role>`(모델 호출 1건당 1행 — `layer=model`, 부모는 호출한 단계 span, `doc_id`는 부모에서 이어받음, `metrics`에 토큰 수. 성공·실패 모두). 오류는 `status`·`err_kind`(env/timeout/doc/external/db).
+  2. 문서×단계 = `pipe_event`(`common/core/span.py` `with span("extract.parse", doc_id=…) as s`) — 단계 이름 `extract.plan`·`extract.parse`(`attempt` — 시간 초과 재시도면 2)·`extract.shard`·`extract.warm`(프리페치 1회)·`extract.classify`(run_docs 레인 분류 1건 — `pipeline.extract.doc_lane_group.main()`, `metrics.group`, 파일이 없으면 fail)·`extract.download`(파일=문서 1건 — `metrics`에 `head_ms`·`download_ms`·`mbps`(순수 전송)·`lock_wait_ms`, 실패는 `external`)·`transform.represent`·`transform.figures`·`transform.structure`·`embed.bundle`·`load.pgvector`·`load.doc/chunk/chunk_term/stats`·`load.publish`·`proc.run`·`model.<role>`(모델 호출 1건당 1행 — `layer=model`, 부모는 호출한 단계 span, `doc_id`는 부모에서 이어받음, `metrics`에 토큰 수. 성공·실패 모두). 오류는 `status`·`err_kind`(env/timeout/doc/external/db).
   3. 60초마다 `stage='run.progress'`(완료/전체·docs/min·남은 시간·부하·메모리, 임베딩 중에는 unit=chunk).
   4. `run_id`가 없으면(MCP 검색·시험) span은 아무것도 하지 않는다. 계측 안의 예외는 삼키고 업무 결과를 바꾸지 않는다(프로세스당 stderr 경고 한 번).
   5. `cpu_ms`·`rss_peak_mb`는 Linux에서 프로세스에 하나만 도는 span만 채우고, 겹치거나 측정 못 하면 NULL.
   6. 분석: `python -m pipeline.tools.perf_report [<run_id>] [--since <시간>] [--top N] [--compare <run_id>…] [--runs] [--file output/logs/*.jsonl]` — 읽기 전용.
      다운로드(`extract.download`)는 `--since` 요약에 ■ 다운로드 표(크기 구간별 순수 전송 mbps·head·잠금 대기)로 나온다. 서버에서는 `podman exec data-pipeline python -m pipeline.tools.perf_report --since <시간>`으로 본다.
-- 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf_report.py`, `pipeline/extract/{doc_parsing_group,fetch_docs}.py`.
+- 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf_report.py`, `pipeline/extract/{doc_lane_group,fetch_docs}.py`.
 - QA: `tests/server/common/test_{jsonlog,logsink,span,span_soft,call_event}.py`·`tests/server/mcp/test_call_log.py`·`tests/server/pipeline/test_{runtrace,perf,span_stages,doc_group}.py`·`tests/general/common/test_applog_pg.py`(PC 임시 PG 스키마) · 통과. 서버 적용 refactor.md C-79·C-80.
 - Status: done
