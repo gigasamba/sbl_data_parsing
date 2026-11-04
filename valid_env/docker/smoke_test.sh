@@ -38,9 +38,8 @@ import os, sys, yaml
 from pathlib import Path
 d, e = Path(sys.argv[1]), os.environ
 job = {"PG_HOST": "pg", "PG_PORT": "5432", "PG_PASSWORD": e["SMOKE_PG_PASSWORD"], "PARSE_SOURCE": "/data/docs",
-       "RUN_MODE": "prod", "PARSE_SOURCE_LIMIT": e.get("SMOKE_LIMIT") or "0"}
+       "PARSE_SOURCE_LIMIT": e.get("SMOKE_LIMIT") or "0"}
 files = {"job": {"base": "/etc/rag/base.yaml", "overrides": job},
-         "load": {"base": "/etc/rag/smoke/job.yaml", "overrides": {"PG_CREATE_EXTENSION": "1"}},
          "mcp": {"base": "/etc/rag/smoke/job.yaml", "overrides": {"MCP_HOST": "auto", "MCP_PORT": "8765",
                                                                    # S9(C-38) — 비루프백 바인드(auto)라 DNS 리바인딩 보호가 켜짐: 호스트 게시 주소로 부르는 ⑤를 허용(옛 421)
                                                                    "MCP_ALLOWED_HOSTS": "127.0.0.1:*,localhost:*"}}}

@@ -198,8 +198,7 @@ def configure(settings_file=None):
         return ["ops.host.instance는 개발 서버(dev)에서만 — 운영(prd)은 한 벌"]
     # 여러 벌(op-15) — host_ctl.sh가 띄운 이 루트의 컨테이너(load_settings.sh NAME_SUFFIX와 같은 규칙)
     PIPE_C = "data-pipeline" + (f"-{inst}" if inst else "")
-    jobs = _yget(doc, "mcp.host.jobs_dir")
-    MCP_JOBS_DIR = Path(jobs) if jobs else DOCSPACE / "_mcp_parse" / "jobs"
+    MCP_JOBS_DIR = DOCSPACE / "_mcp_parse" / "jobs"  # mcp-data-parsing의 작업 폴더(같은 결과 폴더 — parse_service.JOBS_DIR)
     rdb = _yget(doc, "common.connections.rdb")  # 조회만 — 읽기 계정(사용자 10-29 ops.md#op-03)
     try:
         port = int(rdb.get("port") or 1433)
@@ -231,23 +230,44 @@ def _edw_connect():
 # 11-03(사용자) — 상주 컨테이너 둘(data-pipeline-parse·data-pipeline-structure)을 하나로 합침: warm·파싱·게시·구조화·정리 모두 이 안에서 docker exec.
 PIPE_C = "data-pipeline"  # docker exec 대상(compose.pipeline.yml 상주 서비스) — configure()가 ops.host.instance를 붙임
 
+
 # S9 Step A(VS8b U-1, 사용자 10-28) — 컨테이너 안 앱이 읽는 설정 칸(옛 env 이름)은 명령 인자 `--set 이름=값`으로 준다(common.config.setarg —
 # 그 python이 덮기 파일로 자기와 자식에게 넘김). 전에는 `bash -c 'X=값 python …'` env로 줬는데 S7e2부터 앱이 env의 옛 이름을 읽지 않아
 # 문서별 결과 폴더(PIPE_OUT_ROOT 등)·동시 수·후보정·CPU 게이트가 효과가 없었다. 비밀 칸은 --set이 거부한다(명령 줄은 ps·로그에 남음).
-EMBED_SET = ("EMBED_CONCURRENCY=6", "EMBED_BATCH=32", "BM25_THREADS=3")
-PARSE_SET = (
-    "VLM_MAX_CONCURRENCY=8",  # 11-04 VLM 통일 — 옛 VLM_GLOBAL_CONCURRENCY(전역 합) · FIGURES_VLM_PARALLEL(그림)은 VLM_CONCURRENCY 하나로
-    "VLM_CONCURRENCY=8",
-    "VLM_FIGURES_MAX=10",
-    "PARSE_POST=supsub,charts,figures,context,attachments",
-    "RAPIDOCR_PAGE_WORKERS=2",
-    "OCR_THREADS=1",
-    "PIPE_PROCS=4",
-    "SOURCE_WARM={out}/_warm",  # {out} = 컨테이너 결과 자리(_img — parse_cmd가 채움)
-    "SOURCE_FETCH_WORKERS=2",
-    "PARSE_REP_SELECT=first",
-    "PARSE_QA_LIGHT=1",
-)
+def _embed_set():
+    p = POLICY
+    return (f"EMBED_CONCURRENCY={p['embed_concurrency']}", f"EMBED_BATCH={p['embed_batch']}", f"BM25_THREADS={p['bm25_threads']}")
+
+
+def _parse_set(chan, scan):
+    """파싱 명령의 --set 값 — settings.yaml ops.run_docs(비우면 RUN_DOCS_DEFAULTS). 같은 이름은 뒤 값이 이기므로 vlm 레인 값을 뒤에 붙인다."""
+    p = POLICY
+    out = [
+        f"VLM_MAX_CONCURRENCY={p['vlm_concurrency']}",
+        f"VLM_CONCURRENCY={p['vlm_concurrency']}",
+        f"VLM_FIGURES_MAX={p['figures_max']}",
+        f"PARSE_POST={p['parse_post']}",
+        f"RAPIDOCR_PAGE_WORKERS={p['rapidocr_page_workers']}",
+        f"OCR_THREADS={p['ocr_threads']}",
+        f"PIPE_PROCS={p['pipe_procs']}",
+        f"SOURCE_WARM={_img('output_root')}/_warm",
+        f"SOURCE_FETCH_WORKERS={p['fetch_workers']}",
+        f"PARSE_REP_SELECT={p['rep_select']}",
+        f"PARSE_QA_LIGHT={int(p['qa_light'])}",
+    ]
+    if chan == "vlm":  # vlm 레인 — VLM 동시 수를 낮추고(vlm_cap 문서가 GPU 서버를 나눔) 스캔 쪽 VLM 전사(vlm_page)를 켬, 쪽 상한 없음
+        n = p["vlm_lane_concurrency"]
+        out += [f"VLM_MAX_CONCURRENCY={n}", f"VLM_CONCURRENCY={n}", f"PARSE_POST={p['vlm_lane_post']}", "VLM_PAGE_MAX="]
+    if scan and not p["scan_rotate"]:
+        out.append("PREPARE_ROTATE=0")
+    return out
+
+
+def cpu_gate(chan):
+    """파싱 CPU 게이트(CPU_MAX_LOAD) 글자 — light 레인은 따로(heavy가 CPU·VLM을 기다리는 틈에 바로 소화)."""
+    return f"{POLICY['light_cpu_gate'] if chan == 'light' else CPU_GATE:g}"
+
+
 LIB_ENV = "PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache"  # env 남김 — 라이브러리(파이썬 자체 env, 설정 칸 아님)
 DOC_MARK = "RUN_DOCS_DOC"  # 문서 표지 env(설정 칸 아님) — 고아 정리(sweep_cmd)가 /proc/*/environ에서 찾음(옛 PIPE_OUT_ROOT env 자리)
 #   파싱 명령에만 붙인다(11-03 — 컨테이너 하나): 정리는 그 문서 파싱이 실패한 직후에만 돌고, 그 문서의 게시·구조화는 파싱 성공 뒤에만 시작하므로
@@ -273,30 +293,12 @@ def warm_cmd(seq):
 def parse_cmd(seq, chan, scan, gate):
     """문서 1개 파싱 — chan(light·medium·vlm), scan(스캔 PDF), gate(CPU 게이트 글자)."""
     inside = _inside(seq)
-    # 2026-10-23 사용자 지정 — heavy(스캔·이미지 다수) 판정 문서만 vlm_page 켬(스캔 쪽만 VLM 전사,
-    # 내부 스캔판정이 이중 필터) · light는 종전대로 off. 같은 이름은 뒤 --set이 이기므로 뒤에 붙여 덮어씀.
-    # 2026-10-23 사용자 지정 — 채널별 파라미터: heavy는 VLM 6(3동시 × 6 = 글로벌 18으로 gpu02 쏠림 제한),
-    # light는 기본 8 유지(그림 거의 없음) · 스캔 PDF에만 vlm_page(40쪽 캡).
-    heavy_on = (
-        (
-            "VLM_MAX_CONCURRENCY=6",
-            "VLM_CONCURRENCY=6",
-            "PARSE_POST=supsub,charts,figures,context,attachments,vlm_page",
-            "VLM_PAGE_MAX=",
-        )
-        if chan == "vlm"
-        else ()
-    )
-    scan_set = ("PREPARE_ROTATE=0",) if scan else ()  # 2026-10-23 B2 — 스캔 회전검토(OCR) 생략(스캔은 heavy → heavy_on과 병행)
-    # 11-01 — 스캔용 엔진 목록(scan_eng, rapidocr_ko 제외)은 지움: 스캔(.pdf_image)은 엔진 구성 파일이 qwen_vlm 하나만 줌(같은 동작)
     doc = sets(
         f"PIPE_OUT_ROOT={inside}",
         f"DOC_DIR_PREPARED={inside}/prepared",
         f"PARSE_IMAGES_ROOT={inside}/parse/_images",
         f"PARSE_RAW_ROOT={inside}/parse",
-        *(p.format(out=_img("output_root")) for p in PARSE_SET),
-        *heavy_on,
-        *scan_set,
+        *_parse_set(chan, scan),
         f"CPU_MAX_LOAD={gate}",
     )
     return (
@@ -310,7 +312,7 @@ def parse_cmd(seq, chan, scan, gate):
 def struct_cmd(seq):
     """문서 1개 구조화 + 적재. 엔진 구성은 파싱과 같은 파일(코드 폴더 — 사용자 11-01: 판 번호 없음, 실행 중에는 안 바뀜)."""
     inside = _inside(seq)
-    st = sets(*EMBED_SET)  # 묶음·적재 python에(문서 메타는 적재가 EDW 조인으로 — pl-29 11-02, FILE_META_PATH 지움)
+    st = sets(*_embed_set())  # 묶음·적재 python에
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
@@ -334,8 +336,7 @@ def publish_cmd(seq):
     inside = _inside(seq)
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
-        f"PYTHONPATH={_img('code_root')} {LIB_ENV} python -m pipeline.load.publish_parse_result"
-        f"{sets('PM_BUCKET_SKIP_OVERLAP_CHECK=1')} "  # 실행 방침(접속 값 아님) — 버킷·접두·표·EDW·Object Storage는 컨테이너가 설정 파일에서(S7e1 Q8)
+        f"PYTHONPATH={_img('code_root')} {LIB_ENV} python -m pipeline.load.publish_parse_result "
         f"--out {inside} --source-system FileStorageMap --apply "
         f">> {inside}/publish.log 2>&1'"
     )
@@ -365,7 +366,26 @@ RUN_DOCS_DEFAULTS = {
     "medium_shared": 1,
     "vlm_dedicated": 1,
     "vlm_shared": 1,
+    # 컨테이너 안 파싱·구조화 명령에 --set으로 넘기는 값(문서 하나씩 도는 서버 배치에 맞춘 값)
+    "vlm_concurrency": 8,
+    "vlm_lane_concurrency": 6,
+    "figures_max": 10,
+    "parse_post": "supsub,charts,figures,context,attachments",
+    "vlm_lane_post": "supsub,charts,figures,context,attachments,vlm_page",
+    "rapidocr_page_workers": 2,
+    "ocr_threads": 1,
+    "pipe_procs": 4,
+    "fetch_workers": 2,
+    "rep_select": "first",
+    "qa_light": True,
+    "scan_rotate": False,
+    "cpu_gate": 1.3,
+    "light_cpu_gate": 9.0,
+    "embed_concurrency": 6,
+    "embed_batch": 32,
+    "bm25_threads": 3,
 }
+POLICY = dict(RUN_DOCS_DEFAULTS)  # configure()가 settings.yaml 값으로 바꿈
 LANES = ("light", "medium", "vlm")
 WARM_TARGET, STRUCT_WORKERS, VLM_CAP = RUN_DOCS_DEFAULTS["warm"], RUN_DOCS_DEFAULTS["struct_workers"], RUN_DOCS_DEFAULTS["vlm_cap"]
 WARM_WORKERS = RUN_DOCS_DEFAULTS["warm_workers"]
@@ -373,7 +393,7 @@ LANE_WORKERS = {c: (RUN_DOCS_DEFAULTS[f"{c}_dedicated"], RUN_DOCS_DEFAULTS[f"{c}
 _BACKLOG_SETTING = RUN_DOCS_DEFAULTS["struct_backlog"]  # main()이 STRUCT_BACKLOG로 풂(구조화 워커 수 인자가 덮은 뒤)
 STRUCT_BACKLOG = 0
 NO_CLEANUP = False
-CPU_GATE = 1.3  # 2026-10-23 사용자 지정 — 파이프라인 게이트 기본 · 조정 시 --cpu-gate 1.1
+CPU_GATE = RUN_DOCS_DEFAULTS["cpu_gate"]  # main()이 --cpu-gate 또는 ops.run_docs.cpu_gate로
 _class: dict = {}  # seq → "light"/"medium"/"vlm"(warm 시점 분류)
 _scan: set = set()  # seq — 스캔 판정된 PDF(vlm_page 대상)만 담음(2026-10-23 사용자 지정)
 
@@ -388,7 +408,7 @@ def _waiting():
     return _pub_q.qsize() + _struct_q.qsize()
 
 
-MCP_JOBS_DIR = None  # MCP parse_document 업로드 작업 경로 — configure()(mcp.host.jobs_dir, 없으면 결과 폴더/_mcp_parse/jobs — mcp-data-parsing의 parse_service와 공유 볼륨, rn-03)
+MCP_JOBS_DIR = None  # MCP parse_document 작업 폴더 — configure()가 <결과 폴더>/_mcp_parse/jobs로
 _mcp_pause = False  # 2026-10-23 사용자 지정 — MCP 업로드 파싱 중 medium 레인 완보(사람 대기 응답 우선)
 _last_write: dict = dict()  # 방어용 마지막 활동 시각 저장
 _lane_inflight = {"light": 0, "medium": 0, "vlm": 0}
@@ -456,11 +476,20 @@ def run_docs_policy(doc):
             vals[k] = d
             continue
         try:
-            vals[k] = int(v)
+            if isinstance(d, bool):
+                b = str(v).strip().lower()
+                if b not in ("1", "true", "yes", "on", "0", "false", "no", "off"):
+                    raise ValueError
+                vals[k] = b in ("1", "true", "yes", "on")
+            elif isinstance(d, str):
+                vals[k] = str(v)
+            else:
+                vals[k] = (float if isinstance(d, float) else int)(v)
+                if vals[k] < 0:
+                    raise ValueError
         except ValueError:
-            vals[k] = -1
-        if vals[k] < 0:
-            probs.append(f"pipeline.host.run_docs.{k} 형식 오류 — 0 이상 정수만")
+            vals[k] = d
+            probs.append(f"pipeline.host.run_docs.{k} 형식 오류 — " + ("true·false만" if isinstance(d, bool) else "0 이상 수만"))
     if probs:
         return vals, probs
     for k in (
@@ -480,6 +509,7 @@ def run_docs_policy(doc):
 def apply_policy(vals):
     """run_docs_policy() 값 → 모듈 값(configure()가 부름)."""
     global WARM_TARGET, WARM_WORKERS, STRUCT_WORKERS, VLM_CAP, LANE_WORKERS, _BACKLOG_SETTING
+    POLICY.update(vals)
     WARM_TARGET, STRUCT_WORKERS, VLM_CAP = vals["warm"], vals["struct_workers"], vals["vlm_cap"]
     WARM_WORKERS = vals["warm_workers"]
     LANE_WORKERS = {c: (vals[f"{c}_dedicated"], vals[f"{c}_shared"]) for c in LANES}
@@ -747,11 +777,8 @@ def parse_one(seq, row):
     t0 = time.time()
     mark(seq, "parse_start")
     print(f"[{now():%H:%M:%S}] doc#{seq} 파싱 시작 — {row['original_filename'][:44]}", flush=True)
-    # 2026-10-23 — light PIPE_PROCS는 기본 4 유지(코어 4와 정합) · 별도 오버라이드 없음
-    gate = (
-        "9" if _class.get(seq) == "light" else str(CPU_GATE)
-    )  # 2026-10-23 사용자 지정 — light 전용채널은 게이트 bypass(heavy의 CPU/VLM 대기 틈 즉시 소화)
     chan = _class.get(seq) or "light"
+    gate = cpu_gate(chan)
     rc, _, _ = sh(parse_cmd(seq, chan, seq in _scan, gate), timeout=2700, log=doc_log)
     if rc != 0:  # docker exec 고아 방지(2026-10-22) — 타임아웃·실패면 이 문서 표지 env를 가진 컨테이너 안 프로세스를 끔
         sh(sweep_cmd(seq), timeout=30)
@@ -972,7 +999,9 @@ def main():
     ap.add_argument("--max-docs", type=int, default=0, help="새벽 배치 — 끝난 문서를 뺀 뒤 앞에서 이 개수만(0 = 상한 없음, 사용자 11-02)")
     ap.add_argument("--deadline", default="", help="새벽 배치 마감(HH:MM) — 지나면 새 문서를 받기 시작하지 않음(사용자 11-02)")
     ap.add_argument("--seqs", default="", help="임의 문서 집합(쉼표 seq 목록) — 지정 시 연속 범위 대신 이 목록만 처리")
-    ap.add_argument("--cpu-gate", type=float, default=1.3, help="파이프라인 CPU 게이트(CPU_MAX_LOAD) — 기본 1.3, 조정할 때 --cpu-gate 1.1")
+    ap.add_argument(
+        "--cpu-gate", type=float, default=None, help="파이프라인 CPU 게이트(CPU_MAX_LOAD) — 기본 settings.yaml ops.run_docs.cpu_gate(1.3)"
+    )
     ap.add_argument(
         "--skip-done",
         action="store_true",
@@ -992,7 +1021,8 @@ def main():
         for msg in bad:
             print(f"[중단] {msg}", flush=True)
         raise SystemExit(2)
-    NO_CLEANUP, CPU_GATE = a.no_cleanup, a.cpu_gate
+    NO_CLEANUP = a.no_cleanup
+    CPU_GATE = a.cpu_gate if a.cpu_gate is not None else POLICY["cpu_gate"]
     DEADLINE_AT = deadline_at(a.deadline) if a.deadline else None
     if a.warm is not None:
         WARM_TARGET = a.warm
@@ -1006,9 +1036,7 @@ def main():
         log(f"다른 run_docs가 도는 중({PROG / 'run_docs.lock'}) — 종료 코드 {EXIT_DEADLINE}, 다음 실행에서 다시")
         return EXIT_DEADLINE
     if not MCP_JOBS_DIR.is_dir():
-        log(
-            f"[안내] MCP 업로드 작업 폴더 {MCP_JOBS_DIR} 없음 — MCP 업로드 감지(medium 레인 양보) 꺼짐, 다른 자리면 settings.yaml ops.mcp_host.jobs_dir"
-        )
+        log(f"[안내] MCP 업로드 작업 폴더 {MCP_JOBS_DIR} 없음 — MCP 업로드 감지(medium 레인 양보) 꺼짐")
     os.umask(0)  # 컨테이너( uid 10001 rag )가 /app/output(=_docflow/<seq>)에 쓰려면 777 필요
     WARM.mkdir(mode=0o777, parents=True, exist_ok=True)
     DOCFLOW.mkdir(mode=0o777, parents=True, exist_ok=True)

@@ -15,7 +15,7 @@ mcp_server/config.py(common + mcp 절). 이 파일은 common 절 모델과 두 �
   · 비운 칸(YAML null·옛 env `X=`)은 "설정 안 함"(모델 기본값). 빈 글자 ""도 기본값이 있는 칸(숫자·켜기·목록, 기본값 있는 글자)에서는
     "설정 안 함"이다 — 옛 `os.environ.get(X) or 기본값`과 같음. 기본값이 None인 글자 칸, 그리고 옛 코드가 `os.environ.get(X, 기본값)`
     (or 없음)으로 읽어 `X=`이 ''였던 글자 칸(F(..., blank="keep") — 17칸, S7a2)에서만 ""이 빈 글자로 남는다.
-    이 규칙은 Section._normalize 한 곳에 있고 YAML·옛 env(전환 다리)·migrate·시험 data=가 모두 거친다(VS7a R-4).
+    이 규칙은 Section._normalize 한 곳에 있고 YAML·옛 env 이름(덮기 파일·시험)·시험 data=가 모두 거친다(VS7a R-4).
   · 글자 칸에 쓴 YAML 스칼라(yes·no·true·on·1·0·숫자)는 쓴 글자 그대로 글자로 받는다 — 옛 env 줄에 같은 글자를 쓴 것과 같게(VS7a R-3).
     숫자·켜기·JSON 칸은 YAML이 푼 값 그대로.
 파일 찾기: SETTINGS_FILE(env) > RUN_ENV가 없거나 local이면 저장소 루트 settings.yaml(있을 때만 — settings.sample.yaml 옆).
@@ -365,7 +365,6 @@ class Section(BaseModel):
     """설정 절 공통 — 모르는 칸은 거부(오타 잡기), 비운 칸은 기본값, YAML 스칼라는 칸 종류에 맞게(위 모듈 설명)."""
 
     model_config = ConfigDict(extra="forbid", validate_default=False)
-    # 지운 칸 — 표 하나 common.config.layout.REMOVED(절 클래스 이름 → 칸 이름, 0.2.0 pl-46): 설정 파일에 남으면 경고만 하고 무시
 
     @model_validator(mode="before")
     @classmethod
@@ -375,9 +374,6 @@ class Section(BaseModel):
         out = {}
         for k, v in data.items():
             if v is None:
-                continue
-            if k in L.REMOVED.get(cls.__name__, ()):
-                L.warn_removed(k)
                 continue
             f = cls.model_fields.get(k)
             if f is None or _section_type(f.annotation) is not None:
@@ -620,7 +616,7 @@ def read_yaml(path):
 
 def read_settings(path, _depth=0):
     """설정 파일 → (모델 배치 절 사전 {common·pipeline·mcp}, overrides {옛 env 이름: 글자|None}). 파일은 새 배치(op-08 ② — common.config.layout)
-    이고 여기서 모델 배치로 바꾼다(옛 배치는 migrate 안내와 함께 거부). 덮기 파일이면 base를 먼저 읽고 그 위에 이 파일의 절·overrides를
+    이고 여기서 모델 배치로 바꾼다(모르는 칸·자리가 다른 칸은 거부). 덮기 파일이면 base를 먼저 읽고 그 위에 이 파일의 절·overrides를
     겹친다(위 모듈 설명 — base는 상대 경로면 이 파일 폴더 기준, 5단까지)."""
     doc = read_yaml(path)
     base, over = doc.pop("base", None), doc.pop("overrides", None)
@@ -821,10 +817,9 @@ def resolve_run_env(environ=None, file=None):
 
 
 def require_run_env(app="", environ=None, sections=None):
-    """앱 시작 관문(D-028 ②) — RUN_ENV가 없거나 모르는 값이면 안내를 찍고 종료 코드 2. 값을 돌려준다.
-    서버(dev·prd)면 설정 파일을 읽고 sections(앱 절 — 없으면 이 이미지 절, image_sections)를 끝까지 검증한다 — 파일이 없거나 못 읽거나
-    검증에 실패하면 이유(칸 경로·오류 종류만, 값 없음)를 찍고 종료 2(VS7e1 U-1, 사용자 10-28 — 옛 env_file처럼 시작 거부). local은 검증하지
-    않는다(설정 객체가 경고 뒤 기본값 — 지금처럼)."""
+    """앱 시작 관문 — RUN_ENV가 없거나 모르는 값이면 안내를 찍고 종료 코드 2. 값을 돌려준다.
+    설정 파일을 읽고 sections(앱 절 — 없으면 이 이미지 절, image_sections)를 검증한다 — 모르는 칸·자리가 다른 칸·형식 오류면 이유(칸 경로·
+    오류 종류만, 값 없음)를 찍고 종료 2. 서버(dev·prd)는 파일이 없어도 거부하고 비밀 칸 길이·가짜 LLM·여러 벌도 본다, local은 실제 접속 칸을 거부."""
     environ = os.environ if environ is None else environ  # env 남김 — RUN_ENV 신호
     tag = f"[설정] {app + ': ' if app else ''}"
     try:
@@ -843,8 +838,9 @@ def require_run_env(app="", environ=None, sections=None):
     if value == "local":
         try:
             real = pc_real_targets(load(section_class(names)[0], environ=environ))
-        except SettingsError:
-            real = []  # 못 읽으면 설정 객체가 경고 뒤 기본값(실제 대상 없음) — 지금처럼
+        except SettingsError as e:  # 모르는 칸·자리가 다른 칸 등 — 칸 자리만 알림
+            print(f"{tag}설정을 읽지 못해 시작하지 않음: {e}", file=sys.stderr)
+            raise SystemExit(2) from None
         if real:
             print(
                 f"{tag}PC(RUN_ENV=local)는 가짜 대상만 — 실제 접속 칸이 적혀 있어 시작하지 않음: {', '.join(map(L.to_yaml, real))}. "
@@ -1005,7 +1001,7 @@ def _names_loading():
 
 
 def app_classes(names=("pipeline", "mcp")):
-    """앱 설정 뿌리 클래스 — 두 앱을 함께 보는 도구(export·migrate·keyscan 대조·덮기 파일)만 쓴다. common은 앱 코드를 정적으로
+    """앱 설정 뿌리 클래스 — 두 앱을 함께 보는 도구(export·keyscan 대조·덮기 파일)만 쓴다. common은 앱 코드를 정적으로
     import하지 않으므로(check_modules ②) 문자열로 부르고, 이 이미지에 없는 앱(mcp 이미지의 pipeline 등)은 건너뛴다."""
     import importlib
 
@@ -1514,7 +1510,7 @@ class CommonDev(Section):
 
 
 class CommonHost(Section):
-    doc_src: str | None = F(None, "DOC_SRC", "원본 문서 폴더(DOC_DIR의 옛 별칭) — compose에선 /data/docs로 마운트할 호스트 폴더")
+    doc_src: str | None = F(None, "DOC_SRC", "호스트 원본 문서 폴더 — compose가 컨테이너 /data/docs에 읽기 전용으로 붙임")
     docker: str | None = F(None, "DOCKER", "호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — op-10)")
     instance: str | None = F(
         None,
@@ -1613,14 +1609,6 @@ class CommonRuntime(Section):
     pipe_workers: float | None = F(4, "PIPE_WORKERS", "VLM API 동시 처리 문서 수(개) — GPU 서버 한도 기준", unset=("auto",))
 
 
-class CommonStore(Section):
-    run_mode: Annotated[Literal["prod"] | None, BeforeValidator(lambda v: v or None)] = F(  # "" = 설정 안 함(옛 str 칸과 같게)
-        None,
-        "RUN_MODE",
-        "실행 모드 prod — prod이면 EDW를 못 읽을 때 종료 4·VLM 시간 완화. dev·prd 서버는 prod(pl-12 · test 값은 0.2.0에 지움 — 11-01 표본 모드 없앰)",
-    )
-
-
 class CommonText(Section):
     draft_terms_max: int | None = F(500, "DRAFT_TERMS_MAX", "용어 자동 초안 파일 행 수 상한(개) — 넘으면 가장 빈번한 것만 유지")
     search_en_stem: bool | None = F(True, "SEARCH_EN_STEM", "검색 토큰의 영어 복수→단수 정규화(G16, 가산만) — =0이면 끔", off=("0",))
@@ -1668,6 +1656,14 @@ class CommonLog(Section):
     shutdown_sec: float = F(5.0, "APPLOG_SHUTDOWN_SEC", "종료 flush 전체 상한(초) — DB 대기+파일 기록, 초과 행은 dropped", ge=0)
 
 
+class CommonTokens(Section):
+    mcp: SecretStr | None = F(
+        None,
+        "MCP_TOKEN",
+        "MCP 토큰 하나 — 검색 MCP Bearer(비루프백 바인드면 필수)·parse_document 프록시 → 작업 서비스 호출·작업 서비스 확인에 같이 씀",
+    )
+
+
 class CommonSettings(Section):
     run_env: Literal["local", "dev", "prd"] | None = F(
         None, "RUN_ENV", "실행 환경 — local(PC·valid_env 기준)·dev·prd(서버, 외부 모델 거부). env RUN_ENV가 이 값을 이김"
@@ -1679,8 +1675,8 @@ class CommonSettings(Section):
     log: CommonLog = Field(default_factory=CommonLog)
     paths: CommonPaths = Field(default_factory=CommonPaths)
     runtime: CommonRuntime = Field(default_factory=CommonRuntime)
-    store: CommonStore = Field(default_factory=CommonStore)
     text: CommonText = Field(default_factory=CommonText)
+    tokens: CommonTokens = Field(default_factory=CommonTokens)
 
     @model_validator(mode="after")
     def _per_instance(self):
@@ -1784,8 +1780,7 @@ def guard_run_env():
 
 
 def token_text(v):
-    """토큰 칸 값(SecretStr·글자·None) → 글자, 없거나 공백만이면 ""(토큰 없음 — 사용자 10-27, C-42·C-44: DATA_PARSING_TOKEN·TRIGGER_TOKEN·
-    MCP_TOKEN·PARSE_SERVICE_TOKEN 같은 규칙). 공백이 섞인 토큰은 옛처럼 그대로 쓴다. 값은 출력하지 않는다."""
+    """토큰 칸 값(SecretStr·글자·None) → 글자, 없거나 공백만이면 ""(토큰 없음). 공백이 섞인 토큰은 그대로 쓴다. 값은 출력하지 않는다."""
     t = reveal(v) or ""
     return t if t.strip() else ""
 

@@ -79,12 +79,12 @@ def _upgrade(schema, dim):
 
 def deploy(db, dim):
     """표·색인·뷰는 migrate(Alembic 기준판)가 만든다.
-    확인(vector 확장 — PG_CREATE_EXTENSION 옵트인·남의 스키마 거부·차원)은 이 함수가. SQLite 대역(pg_standin)은 판 관리 밖 —
+    확인(vector 확장·남의 스키마 거부·차원)은 이 함수가. SQLite 대역(pg_standin)은 판 관리 밖 —
     표 정의에서 만든 DDL로(HNSW·GIN 색인은 대역이 흉내 내지 않음). 실측(30k×4096, 개발 PC): 정확 180~220 ms · 이진 양자화 HNSW+재정렬
     5~7 ms(색인 24 MB, 생성 6.6 s)."""
     from common.store.db import dbtool
 
-    dbtool.precheck_search(db.q, db.schema, dim, pc.cfg().load.pg_create_extension)  # S7c — 설정 객체 · 옵트인은 PC·단독 시험만
+    dbtool.precheck_search(db.q, db.schema, dim)  # 확장 직접 생성은 dbtool up --create-extension(PC·단독 시험)만
     standin = getattr(db, "is_standin", False)
     kind = dbtool.index_kind(dim)
     if standin:  # 원천 스키마마다 대역 파일 하나

@@ -205,9 +205,8 @@ def env_main():
     py_env_problem = importlib.import_module("pipeline.tools.py_env_check").py_env_problem  # 10-14 — common.core.resources에서 옮김
 
     if bad := py_env_problem():  # SI29 — 시스템 python이면 아래 '누락'이 거짓 경보라 먼저 멈춤
-        print(f"  [-- ] {bad}\n  → 멈춤: 다른 python으로는 패키지 점검 결과가 틀림(CHECK_ENV_ANY_PY=1이면 계속)")
-        if not _pc().cfg().dev.check_env_any_py:  # S7c — 설정 객체(=1 계속)
-            return 2
+        print(f"  [-- ] {bad}\n  → 멈춤: 다른 python으로는 패키지 점검 결과가 틀림")
+        return 2
     print("\n== 시스템 도구 ==")
     for tool, why in [
         ("java", "OpenDataLoader"),

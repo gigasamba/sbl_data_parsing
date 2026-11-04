@@ -194,23 +194,12 @@ def selftest():
                 r5
             )  # ok(a)만 — failed(b)는 업로드 허용해도 EDW_EXCLUDED라 render_md용 _rep/b.pdf.json이 없어 제외됨
 
-    # SI39⑤ — PM_BUCKET이 원천 원본 버킷과 같으면 거부(dry-run도)
-    a2 = A()
-    a2.out, a2.manifest, a2.source_dir, a2.rep, a2.summary, a2.skipped, a2.keep = str(out), None, None, None, None, None, None
-    a2.source_system, a2.version, a2.parse_date, a2.reparse, a2.apply = "FileStorageMap", "v1", "2026-10-08", None, False
-    with pc.PIPE.env(PM_BUCKET="bkt"):  # manifest의 uri가 s3://bkt/... — 원천과 같은 버킷
-        try:
-            run(a2)
-            raise AssertionError("PM_BUCKET이 원천 버킷과 겹치는데 거부되지 않음(SI39⑤ 위반)")
-        except SystemExit as e:
-            assert "SI39" in str(e) or "버킷" in str(e), e
-
     shutil.rmtree(d, ignore_errors=True)
     print(
         "[selftest] SI39 — dry-run 쓰기 0 · 대표 결과(.md)만 올라감(원본은 전혀 안 올라감) · KEY(출처+원본 전체 "
         "키)가 이미 있으면 EDW는 건너뜀(UPDATE 없음 — source.json 방어선은 11-02에 지움, C-54 ②) · "
         "--reparse만 새 날짜 이름·새 EDW 행(옛 결과 보존) · _meta.json·source.json 안 올림(서버 동작) · "
-        "DRM·실패는 EDW 제외하고 보고서로만 · PM_BUCKET이 원천 버킷과 같으면 거부 통과"
+        "DRM·실패는 EDW 제외하고 보고서로만 통과"
     )
 
 

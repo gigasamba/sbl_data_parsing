@@ -10,7 +10,7 @@
   GET  /api/chunk/<id>    pgvector에서 그 청크의 벡터(차원·L2 크기·값 분포)와 코사인으로 가까운 청크 — SQL만, 외부 호출 없음
 
 설정은 저장소 루트 settings.yaml 하나(사용자 10-29 — 옛 validation/search_ui/settings.yaml 덮기 파일·validation.env 없앰): mcp.dev.mcp_url·ui_port ·
-common.connections.pg · common.models.guard.spend_file·budget_usd · mcp.server.token.
+common.connections.pg · common.models.guard.spend_file·budget_usd · common.tokens.mcp.
 """
 
 import asyncio
@@ -45,7 +45,7 @@ async def _mcp(fn):
     from mcp.client.streamable_http import streamablehttp_client
 
     hdr = {"X-MCP-Client": "test", "X-MCP-User": "test"}
-    token = mc.token_text(mc.cfg().server.token)
+    token = mc.token_text(mc.common_cfg().tokens.mcp)
     if token:
         hdr["Authorization"] = "Bearer " + token
     async with streamablehttp_client(MCP_URL, headers=hdr) as (r, w, _):

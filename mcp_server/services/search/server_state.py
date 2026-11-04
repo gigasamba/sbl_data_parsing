@@ -106,10 +106,8 @@ def _retriever(src):
 
 
 def _warmup(R):
-    """기동 때 검색 1회로 검색기·질의 임베딩을 미리 로드(첫 요청 지연 방지). MCP_WARMUP=0이면 끔.
+    """첫 요청이 느리지 않게 기동 때 검색 1회로 검색기·질의 임베딩을 미리 로드한다.
     실패해도 기동은 계속(임베딩 API가 잠깐 안 될 때 서버가 안 뜨면 더 나쁨) — 경고 한 줄."""
-    if not mc.cfg().server.warmup:
-        return None
     t0 = time.time()
     try:
         R.search("예열 warmup", 1)

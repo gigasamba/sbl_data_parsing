@@ -3,7 +3,7 @@
 식(fetch_docs와 같은 틀 — 표 이름·열 이름은 사람이 적는 매핑 파일 하나, 코드는 안 바뀜) — 실제
 EDW 접속 정보·열 이름(기밀)은 서버 settings.yaml에서만 채우고, 이 코드는 어떤 매핑이든 그대로 돈다.
 
-시험은 --source csv:<경로>로(합성 EDW 추출본, 실제 RDB·네트워크 없이). --source rdb:<표>(RDB_ENGINE=mssql 기본·pg,
+시험은 --source csv:<경로>로(합성 EDW 추출본, 실제 RDB·네트워크 없이). --source rdb:<표>(mssql,
 접속은 common.connections.rdb 읽기 계정 — fetch_docs.rdb_connect)는 실제 EDW 접속이 있는 서버에서만 — PC에는 접속 정보가
 없어 시험 대상이 아니다(selftest는 csv:만).
 
@@ -31,7 +31,6 @@ import re
 from pathlib import Path
 
 from common.core import terms as T
-from pipeline import config as pc
 
 TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # fetch_docs.py·common/sources.py와 같은 화이트리스트
 COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -70,21 +69,11 @@ def rows_from_csv(path):
 
 
 def rows_from_rdb(table, select_cols):
-    """실제 EDW 표 — pipeline/extract/fetch_docs.py와 같은 엔진 스위치(RDB_ENGINE 기본 mssql·pg, 접속은 common.connections.rdb 읽기 계정).
+    """실제 EDW 표 — mssql — 접속은 common.connections.rdb 읽기 계정(fetch_docs.py와 같음).
     열 이름은 호출부(main)가 이미 COL_ID_RE로 검증한 것만 들어온다(SQL 삽입 방지, fetch_docs.py와 같은 원칙)."""
     if not TABLE_ID_RE.match(table):
         raise ValueError(f"[gen_roster] 표 이름이 올바르지 않음(영문·숫자·_, 스키마.표만): {table!r}")
-    rdb = pc.cfg().connections.rdb  # S7c — 설정 객체
-    engine = rdb.engine  # blank keep: 옛 `get("RDB_ENGINE", "mssql")` — `RDB_ENGINE=`은 '' 유지
-    cols_sql = ", ".join(f"[{c}]" if engine != "pg" else c for c in select_cols)
-    if engine == "pg":
-        from psycopg import sql as pgsql
-
-        from common.store.pg import PG, conf
-
-        db = PG(conf())
-        ident = pgsql.SQL(".").join(pgsql.Identifier(p) for p in table.split("."))
-        return db.q(pgsql.SQL("SELECT " + cols_sql + " FROM {}").format(ident))
+    cols_sql = ", ".join(f"[{c}]" for c in select_cols)
     from common.store import mssql
     from pipeline.extract.fetch_docs import rdb_connect  # SQLAlchemy 연결(RDB_CONNECT_KWARGS는 안 넘김)
 

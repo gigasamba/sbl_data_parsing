@@ -20,8 +20,8 @@ if [ -n "${DC_ROOT:-}" ]; then RAG_ROOT=$DC_ROOT; fi   # 시험 루트(init) —
 #   settings.yaml: 코드 폴더의 settings.sample.yaml을 <루트>/settings.yaml로 — **없을 때만**(있으면 절대 덮지 않음), 10001:<그룹> 640.
 #   edw_chain.yaml: resources/config/edw_chain.yaml을 <루트>/edw_chain.yaml로 — 같은 규칙(없을 때만, 10001:<그룹> 640). data-pipeline·mcp-server가 이 파일을
 #     /etc/rag/edw_chain.yaml로 붙이므로(compose.pipeline.yml·compose.mcp-server.yml) 파일이 늘 있어야 함 — 앱은 ops.paths.edw_chain(적재·검색 같은 칸)을 적었을 때만 씀.
-#   결과 폴더: RAG_OUT(셸 env > settings.yaml common.host.output_root > <루트>/output) · 작업 폴더: MCP_JOBS_DIR(셸 env > settings.yaml mcp.host.jobs_dir >
-#     <결과 폴더>/_mcp_parse/jobs). DC_ROOT=<폴더>는 루트 대신(시험용 — 주인 바꾸기·코드 폴더 a+rX를 건너뜀).
+#   결과 폴더: RAG_OUT(settings.yaml ops.host.output_root > <루트>/output) · 작업 폴더: <결과 폴더>/_mcp_parse/jobs.
+#     DC_ROOT=<폴더>는 루트 대신(시험용 — 주인 바꾸기·코드 폴더 a+rX를 건너뜀).
 #   root가 아니면 거부(종료 코드 3 — 주인을 10001로 못 바꿔 반쯤 만든 폴더가 남지 않게).
 #   끝에 settings.yaml `required:` 중 빈 칸 이름(값은 안 찍음). 종료 코드: 0 · 2 인자 틀림 · 3 root 아님 · 4 edw_chain.yaml 자리에 폴더(init 전에 컨테이너를 띄움).
 dc_init() {
@@ -42,7 +42,7 @@ dc_init() {
     SETTINGS_FILE=$sf load_settings 2>/dev/null || echo "[host_ctl init] settings.yaml에서 경로를 못 읽음 — 기본 경로를 씀"
   fi
   out=${RAG_OUT:-$root/output}
-  jobs=${MCP_JOBS_DIR:-$out/_mcp_parse/jobs}
+  jobs=$out/_mcp_parse/jobs
   echo "[host_ctl init] 루트: $root"
   _mk() {   # _mk <폴더> <권한> <주인 바꿈?>
     if [ -d "$1" ]; then echo "  있음  $1"; else mkdir -p "$1" && echo "  만듦  $1"; fi

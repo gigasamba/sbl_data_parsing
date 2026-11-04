@@ -12,7 +12,7 @@ parse_document는 QA와 무관해 뺌), 로컬 verify_citations는 이번 질문
   PYTHONPATH=$PWD SETTINGS_FILE=<덮기 파일> python -m validation.e2e.answer_gen --url http://127.0.0.1:18767/mcp \\
       [--q "질문" ...] [--file 질문.txt|.jsonl] [--repeat N] [--concurrency N] [--k 5] [--timeout 180] [--fake]
 질문을 안 주면 rag_qa/cases.json. 모델·키·상한은 settings.yaml common 절(LLM_* — 외부 모델이면 guard가 두 잠금·예산·범위를 그대로
-봄), MCP 토큰은 로컬 mcp.server.token(있으면 Bearer — --url이 토큰이 다른 MCP면 401, VS10 P-3). --fake: 모델 없이 결정적 정책
+봄), MCP 토큰은 로컬 common.tokens.mcp(있으면 Bearer — --url이 토큰이 다른 MCP면 401, VS10 P-3). --fake: 모델 없이 결정적 정책
 (search → verify_citations → 답)으로 도구·MCP 경로만 확인(LLM_FAKE를 이 프로세스에만 켬 — 이 프로세스의 네트워크는 MCP만. MCP 서버가
 외부 질의 임베딩을 부르면 그 비용은 MCP 쪽 장부에 남고 끝의 "장부 합계"에는 안 잡힘, VS10 P-1).
 """
@@ -293,7 +293,7 @@ def main(argv=None):
         prof = profile("llm")
         if prof is None:
             raise SystemExit("LLM 모델 설정 없음 — settings.yaml required.models.llm_base_url·llm_model·llm_api_key 또는 --fake")
-    token = mc.token_text(mc.cfg().server.token)  # 공백만이면 토큰 없음(C-42·C-44) — 출력하지 않음
+    token = mc.token_text(mc.common_cfg().tokens.mcp)  # 공백만이면 토큰 없음(C-42·C-44) — 출력하지 않음
     contracts = asyncio.run(_mcp(a.url, token, None))
     missing = [n for n in MCP_TOOLS if n not in contracts]
     if missing:

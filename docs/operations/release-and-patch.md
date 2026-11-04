@@ -89,7 +89,7 @@ for c in data-pipeline mcp-data-parsing; do   # 여러 벌이면 이름 끝 -<op
 | `mcp` | `mcp-server` | `compose.mcp-server.yml`(+ `compose.code.mcp-server.yml`) | 검색 MCP |
 
 - 모두 `bash deploy/host/scripts/host_ctl.sh …`로 다룬다(compose 직접 호출 금지 — README §5-3 ①). 죽으면 `restart: unless-stopped`, 꺼져 있으면 keepalive 타이머(`mcp_keepalive.sh`)가 `mcp-data-parsing`·`mcp`를 다시 띄운다.
-- `parse_document` 작업 서비스 토큰은 settings.yaml `required.tokens.data_parsing`.
+- `parse_document` 작업 서비스 토큰은 settings.yaml `required.tokens.mcp`(검색 MCP와 같은 칸).
 
 ### 5-4. `run_docs.py` 자리와 설정
 
@@ -97,7 +97,8 @@ for c in data-pipeline mcp-data-parsing; do   # 여러 벌이면 이름 끝 -<op
 - 설정은 서버 settings.yaml(`--settings` · `SETTINGS_FILE` · `<루트>/settings.yaml` 순)에서 읽는다 — 호스트 python에 PyYAML 필요. 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
   - 작업 폴더 `ops.pipeline_host.run_docs_dir`(비우면 스크립트 옆 `test_space/` — 진행 기록 `batch_progress/`)
   - 결과 폴더 `required.deploy.output_root`(컨테이너 `/app/output`의 원본 — 비우면 `<루트>/output`)
-  - MCP 업로드 작업 폴더 `ops.mcp_host.jobs_dir`(기본 `<결과 폴더>/_mcp_parse/jobs`)
+  - MCP 업로드 작업 폴더는 `<결과 폴더>/_mcp_parse/jobs`(고정)
+  - 레인·동시 수 값 `ops.run_docs.*`(비우면 코드 기본값)
   - `required.env.run_env`가 `dev`·`prd`가 아니면 시작하지 않는다.
 - **PC에서 실행하지 않는다**(운영 EDW·Object Storage에 접속).
 
@@ -183,7 +184,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 7 | 폐쇄망 휠·`assets/` 채우고 빌드(§5-6 — `ALLOW_NO_ASSETS=1` 금지) | devops | — |
 | 8 | `server-changes.md`를 읽고 새 코드에 들어 있는지 대조(§2) | 서버 운영·개발자 | — |
 | 9 | EDW 표 설명 자료 폴더(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료)를 루트 아래 결과 폴더 `<루트>/output/edw_meta/`에 복사(UID 10001이 읽게)하고 settings.yaml에 `search.edw_meta.dir: /app/output/edw_meta`. 없으면 `edw_meta` 도구만 `not_configured`(README §5-0 4) | 서버 운영 | C-91 |
-| 10 | settings.yaml 칸 정리(op-05 11-04) — 지운 칸은 지우고(남아도 경고만), `search.server.fulltext_secret` 값은 `required.tokens.fulltext`로 옮긴다(옛 자리도 읽지만 안내 한 줄) | 서버 운영 | C-92 |
+| 10 | settings.yaml 칸 정리(op-05 11-04 · rn-07 11-05) — 지운 칸은 지우고, `search.server.fulltext_secret` 값은 `required.tokens.fulltext`로, 토큰은 `required.tokens.mcp` 하나로 옮긴다(옛 자리·지운 칸이 남으면 시작 거부) | 서버 운영 | C-92·C-95 |
 
 ### 8-3. 실행 순서 — 복사해 붙이는 명령(dev 먼저, 그다음 prd)
 
@@ -232,22 +233,15 @@ unset CODE_DIR                                                # 운영은 코드
 ```
 - 0.1.0이 고친 EDW 사슬 사본을 쓰고 있었다면 `cp -p <0.1.0 edw_chain.yaml> "$ROOT/edw_chain.yaml"`.
 
-**4. 설정 옮기기** — 0.1.0 settings.yaml을 0.2.0 배치로(이미지 안에서 — 호스트 python 불필요). 이미지는 **[dev]** `data-pipeline-runtime:0.1.0` · **[prd]** `data-pipeline:0.2.0`, 둘 다 코드 폴더를 붙여 돌린다(`migrate`는 pipeline·mcp 설정 모델이 다 있는 코드에서만 돈다).
-```bash
-$DOCKER run --rm -i --network none --entrypoint bash -v "$PWD:/app/deploy:ro,z" -e PYTHONPATH=/app/deploy <이미지> \
-  -c 'umask 077 && cat > /tmp/old.yaml && cd /app/deploy && python -m common.config.migrate /tmp/old.yaml --out /tmp/new.yaml --summary >&2 && cat /tmp/new.yaml' \
-  < "$BK/settings.yaml.0.1.0" > "$ROOT/settings.yaml.new"
-# 기대(화면): [migrate] 옛 배치 → 새 배치: 옮긴 칸 N개 · 지운 칸 이름 줄 · [migrate] 씀: /tmp/new.yaml (권한 600)
-```
-그다음 `settings.yaml.new`를 편집기로 고친다(화면에 통째로 띄우지 않는다) — 고칠 칸 목록은 [env-guide §5](env-guide.md#5-010--020에서-바꿀-설정). 꼭:
+**4. 설정 옮기기** — 3단계 `init`이 놓은 새 `$ROOT/settings.yaml`(sample 사본)에 0.1.0 파일(`$BK/settings.yaml.0.1.0`)의 값을 칸마다 옮겨 적는다(옮기는 도구는 없다). 옛 자리·지운 칸·모르는 칸이 남으면 모든 명령이 시작을 거부하고 칸 이름만 알린다.
+편집기로 고친다(화면에 통째로 띄우지 않는다) — 고칠 칸 목록은 [env-guide §5](env-guide.md#5-010--020에서-바꿀-설정). 꼭:
 - 이미지 칸 `required.deploy.pipeline_image`·`mcp_image` → **[dev]** `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0` · **[prd]** `data-pipeline:0.2.0`·`mcp-server:0.2.0`.
 - `required.pg.db_schema` → `$NEW_SCHEMA`.
 - 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline`은 비워 둔다(8-4 3에서 켬).
-- 새 필수 칸 자리: `python -m common.config.sample --where <칸 이름>`(위 이미지 안에서 같은 방법).
+- 칸 자리 찾기: `python -m common.config.sample --where <옛 env 이름 또는 칸>`(코드 폴더에서).
 - 서버 EDW의 사슬 표·칸 이름이 기본값과 다를 때만 8-6.
 ```bash
-chown 10001:<운영 그룹> "$ROOT/settings.yaml.new" && chmod 640 "$ROOT/settings.yaml.new"
-mv "$ROOT/settings.yaml.new" "$ROOT/settings.yaml"                         # 3단계 init이 놓은 예시를 덮음
+chown 10001:<운영 그룹> "$ROOT/settings.yaml" && chmod 640 "$ROOT/settings.yaml"
 bash deploy/host/scripts/load_settings.sh common.host >/dev/null && echo 설정-읽힘   # 기대: 설정-읽힘("[설정] …"이면 그 안내대로 고침)
 ```
 

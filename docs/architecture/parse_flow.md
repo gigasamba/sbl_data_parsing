@@ -317,7 +317,7 @@ flowchart TD
 
 | 칸(옛 이름) | 서버 | PC(local) |
 |---|---|---|
-| `required.publish.bucket`(`PM_BUCKET`) | 게시용 Object Storage 버킷 이름(원천 버킷과 같으면 거부 — 검사 생략은 `load.publish.bucket_skip_overlap_check`) | `file://<절대 경로 폴더>` — 로컬 폴더를 가짜 Object Storage로 |
+| `required.publish.bucket`(`PM_BUCKET`) | 게시용 Object Storage 버킷 이름(원천 버킷과 다르게 — 검사는 없음) | `file://<절대 경로 폴더>` — 로컬 폴더를 가짜 Object Storage로 |
 | `required.publish.prefix`(`PM_PREFIX`) | 버킷 안 결과 경로 접두 | 같음 |
 | `required.object_storage.*`(`endpoint`·`region`·`access_key`·`secret_key`·`verify_tls`) | S3 호환 접속 | 비움 |
 | `required.edw.parsing_meta_table`(`PM_TABLE`) | 비우면 `AI.ParsingMeta` | 비움 |

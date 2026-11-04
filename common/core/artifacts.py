@@ -110,7 +110,6 @@ CODE_FP_SKIP = (
     "config/boot.py",
     "config/export.py",
     "config/keyscan.py",
-    "config/migrate.py",
     "config/overrides.py",
     "config/sample.py",
     "config/setarg.py",

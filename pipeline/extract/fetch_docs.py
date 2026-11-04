@@ -682,7 +682,7 @@ def unparsed(names, out):
     행의 source_key 집합(`done_source_keys`). 통째 실패는 ParsingMeta에 안 쓰므로 실패한 문서는 행이 없어 다음 실행이 다시 고른다.
     out = 결과 루트(파싱 입구 pipeline.cli의 OUT). 키 = manifest의 "key"(없으면 이름 그대로 — publish의 source_key와 같은 규칙, parsing_meta.plan).
     순서: 받은 이름 순서 그대로(문서 대장이 없어져 시도 이력이 없음 — 실패 문서를 뒤로 미루지 않는다).
-    EDW를 못 읽으면: 서버(run_mode prod 또는 RUN_ENV dev·prd·모르는 값)는 종료 4(전체 재파싱 안 함), PC는 받은 목록 그대로 + 로그 한 줄."""
+    EDW를 못 읽으면: 서버(RUN_ENV dev·prd·모르는 값)는 종료 4(전체 재파싱 안 함), PC는 받은 목록 그대로 + 로그 한 줄."""
     from common.store import parsing_meta_db as PMDB
 
     try:
@@ -692,7 +692,7 @@ def unparsed(names, out):
         finally:
             db.close()
     except (Exception, SystemExit) as ex:  # make_db는 접속 정보가 없으면 SystemExit
-        if C.cfg().store.run_mode == "prod" or C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)
+        if C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)
             print(
                 f"[parse] EDW ParsingMeta를 읽지 못함 — 멈춤(종료 4, 전체 재파싱 안 함): {type(ex).__name__}", file=sys.stderr, flush=True
             )

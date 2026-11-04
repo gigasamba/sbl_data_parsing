@@ -73,7 +73,7 @@
 <a id="op-11"></a>
 ## op-11 · 사람 정답 폴더(`GOLD_DIR`) 칸 없음
 - 이유: 상주 `data-pipeline`에 사람 정답 폴더가 붙지 않아 점검기의 이름 짝 점검이 늘 건너뛰어졌다.
-- 결정(사용자 11-04): 칸 `GOLD_DIR`(`pipeline.paths.gold_dir`·`pipeline.host.gold_dir`)과 이미지 약속 경로 `gold_mount`를 지웠다. 점검기(`common/check/checker.py`)에 정답 폴더 점검이 없다. 옛 파일에 남은 칸은 경고 한 줄만 낸다(`layout.REMOVED`).
+- 결정(사용자 11-04): 칸 `GOLD_DIR`(`pipeline.paths.gold_dir`·`pipeline.host.gold_dir`)과 이미지 약속 경로 `gold_mount`를 지웠다. 점검기(`common/check/checker.py`)에 정답 폴더 점검이 없다. 옛 파일에 남은 칸은 시작 거부.
 - 파일: `common/config/settings.py`, `pipeline/config.py`, `common/check/checker.py`.
 - Status: done
 
@@ -91,5 +91,5 @@
   8. `output/` 안의 임시 자리는 이름 앞에 `_`를 붙여 역할이 보이게 한다: `_docflow/<번호>/`(문서 하나의 파싱 → 구조화·적재 작업 — 구조화·적재는 로컬 파싱 결과를 읽고, 끝나면 지움), `_warm/`(미리 받기), `_mcp_parse/jobs/`(`parse_document` 작업 — 결과는 호출한 쪽에 돌려주고 최근 30개만 보관), `_llm_spend/`(규칙 7). `_`가 없는 것은 `logs/`(DB 예비)뿐.
   9. 게시는 늘 한다(pl-09). 실제 Object Storage·EDW 없이 시험할 때는 가짜 EDW(sqlite)·가짜 Object Storage(`file://<폴더>`)를 상대 경로로 넣는다.
 - 파일: `deploy/host/scripts/{load_settings.sh,host_ctl.sh,run_docs.py,prune_images.sh,…}`(루트 구하기·`host_ctl.sh init`·`host_ctl.sh timers`) · `deploy/host/compose/*.yml`(`${RAG_ROOT}` 마운트) · `deploy/host/systemd/*.service`(`@CODE_DIR@` 틀) · `deploy/release/{bake_prod_image.sh,build_ship.sh,load.sh}` · `common/config/{settings.py,layout.py,sample.py,keyscan.py,setarg.py}`(서버 이미지 기본 `APPLOG_DB_ENABLED`·`fallback_dir` `output/logs`·지운 칸 경고) · `common/core/{runlog.py,paths.py}` · `common/ai/guard.py` · `mcp_server/services/{edw_query.py,search/search_svc.py}`(`qa_log.py` 삭제) · `pipeline/parse_service.py` · README §5 · `docs/operations/{release-and-patch,server-guide,env-guide,mcp-guide}.md`.
-- QA: `tests/general/deploy/test_dc_init.py`(init 배치·루트 = 코드 폴더의 부모·`timers` 틀 채우기) · `test_compose.py`(루트 마운트) · `test_host_env.py` · `tests/server/common/test_removed_cols.py`(옛 `search.query_log` 칸은 경고만) · `tests/server/common/test_settings.py`(서버 이미지 DB 로그 기본 켬). 서버 확인: [refactor.md C-90](../refactoring/refactor.md).
+- QA: `tests/general/deploy/test_dc_init.py`(init 배치·루트 = 코드 폴더의 부모·`timers` 틀 채우기) · `test_compose.py`(루트 마운트) · `test_host_env.py` · `tests/server/common/test_layout.py`(지운 칸은 시작 거부) · `tests/server/common/test_settings.py`(서버 이미지 DB 로그 기본 켬). 서버 확인: [refactor.md C-90](../refactoring/refactor.md).
 - Status: done

@@ -5,14 +5,13 @@
 **원칙**
 - 서버에서 손대는 것은 **설정 파일 하나**(`settings.yaml`)뿐이다. 값은 문서·채팅·로그에 쓰지 않는다 — 이 문서는 **이름만** 적는다.
 - settings.yaml = `settings.sample.yaml`을 복사해 맨 위 `required`를 채운 것이다. 배치: `required`(꼭 채울 값, 묶음마다 `[PC·서버]`·`[서버만]`) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops`·`dev` → `tuning`(보통 비워 둠). 적힌 값은 코드 기본값보다 이긴다 — 코드 기본값이 나중에 바뀌어도 settings.yaml에 적힌 값은 그대로다.
-- 옛 배치(최상위 `common`·`pipeline`·`mcp`) 파일은 시작 거부다 — `python -m common.config.migrate <옛 settings.yaml> --out <새 파일>`로 바꾼다(지운 칸은 "삭제됨"으로 이름만 알림, pipeline·mcp 설정 모델이 다 있는 코드 폴더에서 실행). 자리가 바뀐 칸을 옛 자리에 쓰면 "자리가 다른 칸 … → 새 자리"로 거부한다.
+- 옛 배치(최상위 `common`·`pipeline`·`mcp`) 파일·지운 칸·모르는 칸은 시작 거부다(칸 이름만 알림 — 값은 안 찍음). 자리가 바뀐 칸을 옛 자리에 쓰면 "자리가 다른 칸 … → 새 자리"로 거부한다. 옮기는 도구는 없다 — `settings.sample.yaml`과 대조해 고친다.
 - 이 문서의 표는 **옛 env 이름**으로 적는다. 파일 자리는 `python -m common.config.sample --where <이름>…`(예 `PG_HOST` → `required.pg.host`).
 
 **서버 값으로 적는 칸** — 코드 기본값과 서버에서 쓰는 값이 다른 칸. 서버 settings.yaml에 적는다:
 
 | 옛 이름 | 파일 자리 | 서버 값 |
 |---|---|---|
-| `RUN_MODE` | `required.env.run_mode` | `prod`(EDW `AI.ParsingMeta`를 못 읽으면 종료 4 — 서버는 `run_env`만으로도 같게 멈춤) |
 | `PARSE_POST` | `transform.represent.post` | `all` |
 | `EMBED_QUERY_CACHE` | `common.models.embed.query_cache` | `''`(빈 글자 — 비운 칸과 결과가 다름) |
 
@@ -93,9 +92,8 @@
 | 이름 | 기본 | 메모 |
 |---|---|---|
 | `MCP_HOST`(`search.server.host`) | `127.0.0.1` | 사내 IP로 열면 `MCP_TOKEN` 필수, `0.0.0.0`은 거부 |
-| `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 `required.tokens.mcp`(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
+| `MCP_PORT`·`MCP_TOKEN` | `8765`·비움 | 토큰은 `required.tokens.mcp` 하나 — 검색 MCP·`parse_document` 작업 서비스가 함께 쓴다(호출 쪽은 같은 값을 `Authorization: Bearer`로) · 공백만인 토큰은 없음과 같음 |
 | `FULLTEXT_SIGN_SECRET`(`required.tokens.fulltext`) | 비움 | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키(비밀). 비면 두 도구가 `not_configured`. 바꾸면 이미 발급된 `sfid`가 모두 무효 |
-| `PARSE_SERVICE_TOKEN`(`required.tokens.parse_proxy`) | 비움(→ `MCP_TOKEN`) | `parse_document`가 작업 서비스를 부를 때 쓰는 토큰 — `required.tokens.data_parsing`와 같은 값. 둘 다 없으면 "parse 서비스 토큰 없음" 오류 |
 | `DATA_PARSING_PORT`(`ops.runtime.data_parsing_port`) | `8766` | `parse_document` 작업 서비스 포트(127.0.0.1) — 작업 서비스가 듣고 검색 MCP가 이 값으로 부름(칸 하나). 여러 벌이면 벌마다 다르게(기본값이면 시작 거부) |
 | `INSTANCE`(`ops.host.instance`) | 비움(한 벌) | 개발 서버 여러 벌 — 컨테이너 이름 끝 `-<벌>`, PG 스키마·EDW 기록 표 끝 `_<벌>`, dev 게시 경로 `<prefix>/<벌>`. prd면 시작 거부. settings.yaml에서만(셸 env로 덮지 않음) — server-guide §1-3 |
 | `DATA_PARSING_MAX_MB`(`ops.runtime.parse_max_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |
@@ -107,7 +105,6 @@
 
 | 이름 | 기본 | 메모 |
 |---|---|---|
-| `EDW_QUERY` | 켬 | `0`이면 `query_edw`가 `not_configured` |
 | `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_READ_USER`·`RDB_READ_PASSWORD` | 비움·`1433`·비움 | `required.edw`(`host`·`port`·`database`·`read_user`·`read_password`) — 서버만, PC는 비움 |
 | `RDB_SQLITE`(`required.edw.sqlite`) | 비움 | PC(local) 전용 가짜 EDW 파일 — `valid_env/edw/edw.sqlite`의 사본 경로(다시 만들기 `python -m validation.e2e.edw_standin`). 적으면 EDW 접속 칸은 안 봄 · 서버 설정에 있으면 EDW를 쓸 때 실패 |
 | `EDW_QUERY_MAX_ROWS` | `1000` | 도구 `max_rows`의 상한 |
@@ -166,7 +163,7 @@
 | `extract.ocr.dpi`(`OCR_DPI`, 150) | 쪽·그림 렌더 해상도(OCR 엔진도 같은 값) |
 | `transform.vlm.page_max`(`VLM_PAGE_MAX`) | 문서당 VLM으로 옮길 쪽 수(비움 = 전부, 0 = 끔) · `extract.ocr.max_pages`는 OCR 엔진에만 |
 
-지운 칸(남아 있으면 경고만): `extract.vlm_page_sec`·`tuning.ops.services.data_parsing.vlm_page_sec`·`tuning.transform.vlm.deadline`·`transform.vlm.global_concurrency`·`transform.vlm.page_slow`·`tuning.transform.vlm.page_concurrency`·`tuning.transform.vlm.page_min_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`. 이 이름(`VLM_DEADLINE`·`VLM_GLOBAL_CONCURRENCY`·`FIGURES_VLM_PARALLEL`·`VLM_PAGE_SLOW` 등)을 `--set`으로 주면 거부된다.
+지운 칸(남아 있으면 시작 거부): `extract.vlm_page_sec`·`tuning.ops.services.data_parsing.vlm_page_sec`·`tuning.transform.vlm.deadline`·`transform.vlm.global_concurrency`·`transform.vlm.page_slow`·`tuning.transform.vlm.page_concurrency`·`tuning.transform.vlm.page_min_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`. 이 이름(`VLM_DEADLINE`·`VLM_GLOBAL_CONCURRENCY`·`FIGURES_VLM_PARALLEL`·`VLM_PAGE_SLOW` 등)을 `--set`으로 주면 거부된다.
 
 ## 3. 전체 목록과 읽는 순서
 
@@ -187,16 +184,17 @@ ls -l ../settings.yaml                # 서버(코드 폴더에서): 주인 1000
 
 | 바뀐 것 | 할 일 |
 |---|---|
-| 칸 배치 — 맨 위 `required` → 역할 절 → `tuning`. 옛 배치는 시작 거부 | `python -m common.config.migrate`로 옮긴다(이미지 안에서 — §8-3 4) |
+| 칸 배치 — 맨 위 `required` → 역할 절 → `tuning`. 옛 배치·옛 자리·지운 칸·모르는 칸은 시작 거부(칸 이름만 알림) | `init`이 놓은 새 settings.yaml에 옛 값을 칸마다 옮겨 적는다(§8-3 4) |
 | `required.pg` 여섯 칸 필수(자동 탐지 없음) | 모두 채운다. `db_schema`는 **새 이름**(판 0002가 옛 표를 지움) |
 | env로 준 값은 효과 없음(엔진·핸드오프 칸 포함) | 컨테이너에 `-e VLM_BASE_URL=…`·`OCR_DPI=…`처럼 주던 값은 settings.yaml 칸으로(`--where <이름>`으로 자리 확인) |
 | 이미지 칸 `required.deploy.pipeline_image`·`mcp_image` | dev `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0` · prd `data-pipeline:0.2.0`·`mcp-server:0.2.0` |
-| 새 칸 `required.deploy.pg_container`·`required.tokens.data_parsing`·`parse_proxy`·`fulltext` | 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)) |
+| 새 칸 `required.deploy.pg_container`·`required.tokens.fulltext` · 토큰은 `required.tokens.mcp` 하나(작업 서비스도 같은 값) | 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)) |
 | 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline` — 셋 다 있어야 돎 | 배포 때는 비워 두고 배포 뒤 켠다(§8-4 3) |
-| 거의 안 바꾸는 칸 53개가 `tuning` 절로(사용자 11-04 — 청크·순위 가중치·그림 고르기·로그 대기열·EDW 원천 열 이름 등) | 값을 적어 둔 칸만 `tuning.<옛 자리>`로 옮긴다(옛 자리도 읽고 안내 한 줄 — C-92) |
-| 합친 칸 `extract.prefetch_workers` → `extract.source.fetch_workers` · `tuning.ops.nightly_run.workers` → `ops.runtime.pipe_workers` | 옛 칸 값을 새 칸에 적고 옛 칸은 지운다(남아도 경고만) |
+| 거의 안 바꾸는 칸 53개가 `tuning` 절로(사용자 11-04 — 청크·순위 가중치·그림 고르기·로그 대기열·EDW 원천 열 이름 등) | 값을 적어 둔 칸만 `tuning.<옛 자리>`로 옮긴다(옛 자리는 시작 거부 — C-95) |
+| 합친 칸 `extract.prefetch_workers` → `extract.source.fetch_workers` · `tuning.ops.nightly_run.workers` → `ops.runtime.pipe_workers` | 옛 칸 값을 새 칸에 적고 옛 칸은 지운다(남으면 시작 거부) |
 | `parse_document` 크기 상한 칸이 `ops.runtime.parse_max_mb`(기본 100) | 옛 `ops.services.data_parsing.max_mb`가 있으면 지우고, 100이 아닌 값은 새 칸에. 리버스 프록시 본문 상한도 늘린다(C-85) |
 | `query_edw` 행 상한 기본 1000(`search.edw_query.max_rows`) | 다른 값을 쓰려면 적는다 |
 | 용어집·고객 명부는 PG 마스터 표 | `migrate master load`(§8-3 5) · CSV를 고치면 다시 하고 검색 MCP 재시작 |
 | 사슬 파일 칸 `ops.paths.edw_chain`(새 — 비우면 기본 파일) | 서버 EDW 이름이 다를 때만 §8-6 |
-| 지운 칸(`common/config/layout.py` `REMOVED` — 예 `ops.paths.glossary_dir`·`client_roster`·`mcp_bundle`, `common.models.transport.transport`) | 남아 있어도 경고 한 줄 뒤 무시 — 지워도 되고 두어도 된다 |
+| 지운 칸(예 `ops.paths.glossary_dir`·`client_roster`·`mcp_bundle`, `common.models.transport.transport`, `required.env.run_mode`, `search.server.warmup`, `required.tokens.data_parsing`·`parse_proxy`, `ops.mcp_host.jobs_dir` — C-95) | 지운다 — 남으면 시작 거부(칸 이름만 알림) |
+| run_docs가 `--set`으로 넘기던 값(VLM 동시 수·후처리 목록·CPU 문턱·임베딩 동시 수 등) → `ops.run_docs.*` | 비우면 지금 값 그대로 — 바꿀 때만 적는다 |

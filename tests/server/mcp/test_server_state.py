@@ -7,7 +7,7 @@ from tests.server.mcp import pgfix
 
 def _selftest_warmup_health():
     """MC1 — 예열 끝나기 전 `/health`는 ready=False·warming=True(라우트 503) · 끝나면 ready=True ·
-    예열(또는 색인 로드)이 실패해도 ready=True + warning만(서버는 안 죽음, MCP_WARMUP=0으로 끈 건 경고 아님)."""
+    예열(또는 색인 로드)이 실패해도 ready=True + warning만(서버는 안 죽음)."""
     saved = dict(_STATE)
     _STATE.clear()
     try:
@@ -26,7 +26,7 @@ def _selftest_warmup_health():
         body = health_body()
         assert body["ready"] is True and body.get("warning") == "warmup_failed", body
 
-        _STATE["warmup_ok"] = None  # MCP_WARMUP=0(꺼짐) — 경고 아님
+        _STATE["warmup_ok"] = None  # 예열 결과 없음 — 경고 아님
         body = health_body()
         assert body["ready"] is True and "warning" not in body, body
     finally:

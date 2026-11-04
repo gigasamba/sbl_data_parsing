@@ -87,9 +87,9 @@
 
 <a id="mc-13"></a>
 ## mc-13 · 질의 기록은 DB `applog.mcp_log`만
-- 규칙: 질의 기록 파일은 없다(사용자 11-04 — op-13 규칙 7). MCP 호출마다 `applog.mcp_log` 한 행(op-01)이 질문·SQL(`args`)과 근거 키(`result_keys`)를 남긴다. `search.query_log` 칸은 지웠다(옛 설정 파일에 남으면 경고만). MCP를 거치지 않는 PC 명령 `mcp_server.cli.search_ask`는 기록하지 않는다.
+- 규칙: 질의 기록 파일은 없다(사용자 11-04 — op-13 규칙 7). MCP 호출마다 `applog.mcp_log` 한 행(op-01)이 질문·SQL(`args`)과 근거 키(`result_keys`)를 남긴다. `search.query_log` 칸은 지웠다(옛 설정 파일에 남으면 시작 거부). MCP를 거치지 않는 PC 명령 `mcp_server.cli.search_ask`는 기록하지 않는다.
 - 파일: `mcp_server/services/call_log.py` · `mcp_server/services/search/search_svc.py` · `mcp_server/services/edw_query.py`.
-- QA: `tests/server/common/test_removed_cols.py`(옛 `search.query_log` 칸은 경고만) · `tests/server/mcp/test_call_log.py` · 통과.
+- QA: `tests/server/mcp/test_call_log.py` · 통과.
 - Status: done
 
 <a id="mc-15"></a>
@@ -128,7 +128,7 @@
 <a id="mc-06"></a>
 ## mc-06 · `query_edw` 도구 — 읽기 전용 EDW SQL
 - 이유: 정형 질문은 회사 EDW에서 답한다.
-- 규칙: SELECT/WITH 문 하나만. 낮은 권한의 읽기 계정(`required.edw.read_*`)으로 연다. 상한 — 행 `search.edw_query.max_rows` 1000(도구 인자 `max_rows` 기본 1000과 작은 쪽) · 시간 20초 · 응답 2,000,000바이트. 표는 시스템 카탈로그를 뺀 모든 스키마를 허용한다(설정 허용 목록 없음 — 좁히기는 읽기 계정 권한). PC는 sqlite 대역(`valid_env/edw/edw.sqlite` — 대역 표 아홉 허용). `search.edw_query.enabled: false`면 끔(기본 켬).
+- 규칙: SELECT/WITH 문 하나만. 낮은 권한의 읽기 계정(`required.edw.read_*`)으로 연다. 상한 — 행 `search.edw_query.max_rows` 1000(도구 인자 `max_rows` 기본 1000과 작은 쪽) · 시간 20초 · 응답 2,000,000바이트. 표는 시스템 카탈로그를 뺀 모든 스키마를 허용한다(설정 허용 목록 없음 — 좁히기는 읽기 계정 권한). PC는 sqlite 대역(`valid_env/edw/edw.sqlite` — 대역 표 아홉 허용).
 - 파일: `mcp_server/services/edw_query.py`, `mcp_server/services/edw_calls.py`, `mcp_server/config.py`.
 - QA: `tests/server/mcp/test_call_log.py`(tools/list 바이트·SHA-256) · 통과.
 - Status: done
@@ -147,7 +147,7 @@
 ## mc-08 · `parse_document` 도구 — 파일 하나를 바로 파싱
 - 이유: 클라이언트가 아직 적재되지 않은 파일을 묻는다.
 - 규칙:
-  1. 경로(inbox 루트 아래) 또는 base64 내용을 파싱 서비스(`http://127.0.0.1:<ops.runtime.data_parsing_port>` — 기본 8766)에 Bearer 토큰(`required.tokens.parse_proxy`)으로 넘긴다. 글·표·사실·엔진·시간을 돌려주고, 시간 초과면 `job_id`.
+  1. 경로(inbox 루트 아래) 또는 base64 내용을 파싱 서비스(`http://127.0.0.1:<ops.runtime.data_parsing_port>` — 기본 8766)에 Bearer 토큰(`required.tokens.mcp` — 검색 MCP와 같은 값)으로 넘긴다. 글·표·사실·엔진·시간을 돌려주고, 시간 초과면 `job_id`.
   2. 파일 크기 상한 `ops.runtime.parse_max_mb`(기본 100, MB = 1024×1024바이트)를 검색 MCP와 파싱 서비스가 같이 읽는다. base64 크기는 줄바꿈·공백을 빼고 센다. 넘는 `content_b64`는 서비스로 보내지 않고 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — ops.runtime.parse_max_mb"}`. 경로로 준 파일도 같은 상한.
   3. HTTP 요청 본문 상한 = 파일 상한 × 1.5 + 1 MiB(검색 MCP·파싱 서비스 같음). 4 MiB보다 크거나 길이를 밝히지 않은 요청은 동시에 2개까지만 처리하고 나머지는 본문을 읽기 전에 기다린다(`mcp_server/main.py` `_BIG_SLOTS`).
   4. 서비스 등록 요청 대기 60초.
@@ -188,5 +188,5 @@
 |---|---|
 | `query_edw` | `required.edw` 읽기 계정, 또는 PC sqlite 대역 |
 | `edw_meta` | `search.edw_meta.dir`의 자료 |
-| `parse_document` | `mcp-data-parsing`(파싱 서비스) + `required.tokens.parse_proxy` |
+| `parse_document` | `mcp-data-parsing`(파싱 서비스) + `required.tokens.mcp` |
 | 원문 도구 | `required.tokens.fulltext` · Object Storage 읽기 · EDW 읽기 계정 |

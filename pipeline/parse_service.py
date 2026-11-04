@@ -6,8 +6,7 @@
 [패치 2026-10-22] ① 기본 time_out_threshold 300초 ② 큐 대기 순번을 제출 응답과 시작 시점에 표시(지연 원인 파악)
   ③ 서비스 PID 로그 파일 남김(docker exec -d 로그 없음 문제) ④ _purge_old에서 방금 만든 작업 보호(버그 수정)
 실행: mcp-data-parsing 컨테이너의 주 프로세스(compose.data-parsing.yml — 죽으면 restart가 다시 띄움 · 옛 손 기동 `docker exec -d …` 없음)
-  토큰은 설정 필수(컨테이너에 붙인 settings.yaml required.tokens.data_parsing — 검색 MCP의 MCP_TOKEN과 같은 값, 없으면 시작 거부, D-028 ⑨ · S7c ·
-  S7e2부터 env DATA_PARSING_TOKEN은 읽지 않음 — `docker exec -e DATA_PARSING_TOKEN=…`은 효과 없음, VS7e2 R-6)
+  토큰은 설정 필수(settings.yaml required.tokens.mcp — 검색 MCP와 같은 칸, 없으면 시작 거부)
 API(127.0.0.1:8766 · Bearer):  POST /jobs {content_b64+filename} → 202 {job_id, queue_position}
   GET /health  → {ok, ready, running, queued} · GET /jobs/<id> → {status, result, elapsed_ms}"""
 
@@ -77,7 +76,7 @@ def _job_env(post):
 _PM = pc.cfg().service.data_parsing  # S7c — 설정 객체(모듈 상수 — 옛처럼 import 때 한 번)
 checked("DATA_PARSING_PORT")  # 형식 틀린 포트는 import 때 실패(조용히 기본 포트로 뜨지 않게)
 PORT = common_cfg().runtime.data_parsing_port
-_TOK = reveal(_PM.token) or ""
+_TOK = reveal(common_cfg().tokens.mcp) or ""
 TOKEN = _TOK if _TOK.strip() else None  # D-028 ⑨ — 코드 기본 토큰 삭제, 설정 필수(없거나 비거나 공백만이면 아래 __main__이 시작 거부 — R-2)
 PROCS = str(
     max(1, _PM.procs if _PM.procs is not None else min(3, (os.cpu_count() or 2) - 1))
@@ -85,7 +84,7 @@ PROCS = str(
 ROOTS = [Path(p).resolve() for p in (_PM.roots or [str(SERVICE_DIR / "inbox")])]  # 쉼표 목록은 객체가 strip·빈 것 버림
 JOB_TIMEOUT = _PM.job_timeout_sec
 QUEUE_MAX = _PM.queue_max
-JOBS_DIR = Path(_PM.jobs_dir or SERVICE_DIR / "jobs")
+JOBS_DIR = SERVICE_DIR / "jobs"  # 호스트 <결과 폴더>/_mcp_parse/jobs — run_docs.py가 같은 자리를 봄
 
 
 MAX_JOBS_KEPT = 30
@@ -399,8 +398,7 @@ if __name__ == "__main__":
     )  # S7a(D-028 ②) — 실행 환경 없으면 시작 거부(서버면 설정 검증 실패도 — S7e2 U-1)
     if not TOKEN:  # D-028 ⑨(S7c) — 옛 코드 기본 토큰 없앰: 설정에 없으면 시작 거부(값은 찍지 않음)
         print(
-            "[설정] parse_service: 토큰 없음 — settings.yaml required.tokens.data_parsing에 검색 MCP의 MCP_TOKEN과 "
-            "같은 값을 적음(env로 준 값은 읽지 않음 — S7e2 · 코드 기본 토큰은 없앰 — refactor.md C-42)",
+            "[설정] parse_service: 토큰 없음 — settings.yaml required.tokens.mcp를 적음(검색 MCP와 같은 칸)",
             file=sys.stderr,
         )
         raise SystemExit(2)

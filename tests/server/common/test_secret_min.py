@@ -49,13 +49,14 @@ def test_start_secret_policy():
         # 앱 전용 비밀도 같은 시작 관문에서 검사한다.
         for run in ("dev", "prd"):
             path.write_text(
-                yaml.safe_dump(layout.to_file({"common": {"run_env": run}, "mcp": {"server": {"token": "seven77"}}})), encoding="utf-8"
+                yaml.safe_dump(layout.to_file({"common": {"run_env": run}, "mcp": {"server": {"fulltext_secret": "seven77"}}})),
+                encoding="utf-8",
             )
             errors = io.StringIO()
             with contextlib.redirect_stderr(errors):
                 try:
                     settings.require_run_env(environ={"SETTINGS_FILE": str(path)}, sections=("mcp",))
                 except SystemExit as exc:
-                    assert exc.code == 2 and "mcp.server.token" in errors.getvalue() and "seven77" not in errors.getvalue()
+                    assert exc.code == 2 and "mcp.server.fulltext_secret" in errors.getvalue() and "seven77" not in errors.getvalue()
                 else:
                     raise AssertionError("short app secret accepted")

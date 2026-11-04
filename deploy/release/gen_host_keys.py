@@ -20,6 +20,12 @@ HOST_SECTIONS = (
     "mcp.server.host",
     "mcp.server.port",
 )
+HOST_SKIP = (
+    "pipeline.host.run_docs",
+    "pipeline.host.run_docs_dir",
+    "common.host.pg_container",
+)  # run_docs.py가 settings.yaml에서 직접 읽음(셸 env로 안 냄)
+IMAGE_CONSTS = ("code_root", "docs_mount", "output_root")  # compose·run_docs.py가 쓰는 약속 경로만
 HOST_TABLE = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "host_settings.tsv"
 
 
@@ -32,19 +38,23 @@ def _kind(f):
     return k
 
 
+def _under(path, heads):
+    return any(path == h or path.startswith(h + ".") for h in heads)
+
+
 def host_table():
     """host_settings.tsv 글자 — 줄마다 `모델 경로<TAB>옛 env 이름<TAB>종류`(text·num·bool·list·words·json), 이미지 약속 경로는 `…<TAB>const<TAB>값`. 비밀 칸은 넣지 않는다."""
     rows, seen = [], set()
     for cls in S.app_classes().values():
         for path, f, _ in S.walk(cls):
             e = S.env_name(f)
-            if not e or e in seen or S.is_secret(f) or not any(path == h or path.startswith(h + ".") for h in HOST_SECTIONS):
+            if not e or e in seen or S.is_secret(f) or not _under(path, HOST_SECTIONS) or _under(path, HOST_SKIP):
                 continue
             seen.add(e)
             rows.append(f"{path}\t{e}\t{_kind(f)}")
     # 컨테이너 안 약속 경로(사용자 11-02 — settings.IMAGE_PATHS 한 곳): 고정값 줄 `image.<이름><TAB>APP_<이름><TAB>const<TAB>값` — load_settings.sh가
     # APP_* env로 내 compose가 쓰고, run_docs.py가 읽는다.
-    rows += [f"image.{k}\tAPP_{k.upper()}\tconst\t{v}" for k, v in sorted(S.IMAGE_PATHS.items())]
+    rows += [f"image.{k}\tAPP_{k.upper()}\tconst\t{S.IMAGE_PATHS[k]}" for k in IMAGE_CONSTS]
     return "# 자동 생성 — PYTHONPATH=. python deploy/release/gen_host_keys.py(고치지 말 것)\n" + "\n".join(rows) + "\n"
 
 
