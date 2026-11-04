@@ -81,7 +81,7 @@
 - 이유: 서버 아무 자리에 폴더 하나(예 `/home/dev/`)를 만들어 그 안에서 실행한다. 판(버전)마다 루트를 새로 만들어 판끼리 섞이지 않게 하고, 검색 DB(pgvector — 따로 떠 있는 PG 컨테이너)만 함께 본다(사용자 11-04).
 - 규칙:
   1. 루트 = 코드 zip을 푼 폴더의 부모. 호스트 스크립트는 자기 위치에서 루트를 구한다(env·고정 경로 없음).
-  2. 루트 바로 아래: `settings.yaml`(git의 `settings.sample.yaml`을 복사해 이름을 바꾸고, 맨 위 `required`의 빈 필수값을 직접 채움) · `edw_chain.yaml` · 코드 폴더(`sbl_data_parsing-<판>/`) · 이미지 폴더(`sbl_images-main/`) · `output/`(결과 — `output/mcp_parse/jobs` 포함) · `backup/`.
+  2. 루트 바로 아래: `settings.yaml`(git의 `settings.sample.yaml`을 복사해 이름을 바꾸고, 맨 위 `required`의 빈 필수값을 직접 채움) · `edw_chain.yaml` · 코드 폴더(`sbl_data_parsing-<판>/`) · 이미지 폴더(`sbl_images-main/`) · `output/`(결과 — `output/_mcp_parse/jobs` 포함) · `backup/`.
   3. `/srv/rag`, `env/`(`SERVER_ENV_DIR`), `code/live` 링크를 만들거나 쓰지 않는다.
   4. 새 판 = 새 루트: 앞 루트의 `settings.yaml`·`edw_chain.yaml`을 복사해 오고 새 코드·이미지를 푼다. 검색 DB는 같은 PG를 그대로 본다. 새 문서 판정은 EDW 기준(pl-23)이라 `output/`이 비어도 이어서 돈다. 되돌리기 = 앞 루트에서 다시 띄움.
   5. 컨테이너는 compose로 띄운다(`dc.sh up`). 상태 보기는 둘 다 안내 — 서버 전체는 `podman ps`·`docker ps`(root로 띄웠으면 `sudo`), 우리 묶음만은 `dc.sh ps`.
@@ -89,6 +89,6 @@
   7. 로그는 Postgres(applog — op-01)만 쓴다. 서버 기본값 `ops.log.db_enabled: true`. 파일은 DB에 못 쓸 때의 예비 한 곳 `output/logs/`뿐 — 콘솔 기록 파일(`logs/<시각>_<도구>.log`·`RUNLOG.md`·`runlog.jsonl`)과 `qa_log/` 파일은 없앤다(사람이 보는 실행 출력은 컨테이너 로그 `podman logs`, 질의는 DB `mcp_call`). 외부 모델 하루 지출 상한(`common.models.guard.budget_usd`)을 지키려면 여러 프로세스가 같은 합계를 봐야 해서 장부 기록이 필요하다 — 장부는 임시 자리 `output/_llm_spend/<날짜>.txt`(외부 호출은 PC만이라 서버에는 생기지 않음).
   8. `output/` 안의 임시 자리는 이름 앞에 `_`를 붙여 역할이 보이게 한다: `_docflow/<번호>/`(문서 하나의 파싱 → 구조화·적재 작업 — 구조화·적재는 로컬 파싱 결과를 읽고, 끝나면 지움), `_warm/`(미리 받기), `_mcp_parse/jobs/`(`parse_document` 작업 — 결과는 호출한 쪽에 돌려주고 최근 30개만 보관), `_llm_spend/`(규칙 7). `_`가 없는 것은 `logs/`(DB 예비)뿐.
   9. 게시는 늘 한다(pl-09). 실제 Object Storage·EDW 없이 시험할 때는 가짜 EDW(sqlite)·가짜 Object Storage(`file://<폴더>`)를 상대 경로로 넣는다.
-- 파일: `deploy/host/{scripts,compose,systemd}/`, `deploy/release/{bake.sh,build_ship.sh,load.sh}`, `common/config/settings.py`(설명 글자 — code_fp 파일), README §5, `docs/operations/*`.
-- QA: `tests/general/deploy/test_compose.py`·`test_dc_init.py`·`test_host_env.py` — 루트 아래 배치. 서버 확인은 refactor.md에 C 항목으로.
-- Status: todo
+- 파일: `deploy/host/scripts/{settings_env.sh,dc.sh,run_docs.py,prune_old.sh,…}`(루트 구하기·`dc.sh init`·`dc.sh timers`) · `deploy/host/compose/*.yml`(`${RAG_ROOT}` 마운트) · `deploy/host/systemd/*.service`(`@CODE_DIR@` 틀) · `deploy/release/{bake.sh,build_ship.sh,load.sh}` · `common/config/{settings.py,layout.py,sample.py,keyscan.py,setarg.py}`(서버 이미지 기본 `APPLOG_DB_ENABLED`·`fallback_dir` `output/logs`·지운 칸 경고) · `common/core/{runlog.py,paths.py}` · `common/ai/guard.py` · `mcp_server/services/{edw_query.py,search/search_svc.py}`(`qa_log.py` 삭제) · `pipeline/mcp_parse_service.py` · README §5 · `docs/operations/{release-and-patch,server-guide,env-guide,mcp-guide}.md`.
+- QA: `tests/general/deploy/test_dc_init.py`(init 배치·루트 = 코드 폴더의 부모·`timers` 틀 채우기) · `test_compose.py`(루트 마운트) · `test_host_env.py` · `tests/server/common/test_runlog.py` · `tests/server/mcp/test_mc13_qa_log.py`(질의 기록 파일 없음) · `tests/server/common/test_settings.py`(서버 이미지 DB 로그 기본 켬). 서버 확인: [refactor.md C-90](../refactoring/refactor.md).
+- Status: done

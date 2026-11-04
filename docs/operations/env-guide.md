@@ -21,24 +21,24 @@
 | 기계 | 파일 | 적용 | 모델 엔드포인트 |
 |---|---|---|---|
 | PC(개발) | 저장소 루트 `settings.yaml`(git 밖, 권한 600) | `RUN_ENV`가 없거나 `local`이면 코드가 이 파일을 찾음. 한 번만 몇 칸 바꿀 때는 오버레이 설정 파일 `SETTINGS_FILE=$(python -m common.config.overrides PIPE_OUT_ROOT=… EMBED_ALLOW_EXTERNAL=1 …)`(**PC 전용**) | 내부망 또는 OpenRouter(기능 시험만 — CLAUDE.md §7) |
-| 수집·개발 서버 | `$SERVER_ENV_DIR/settings.yaml` = `/srv/rag/env/settings.yaml`(코드 폴더 밖). **주인 UID 10001·그룹 운영 그룹·권한 640**(운영 계정 UID가 10001이면 600) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다. **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/settings_env.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다 | 내부망만 |
+| 수집·개발 서버 | `<루트>/settings.yaml`(루트 = 코드 폴더의 부모 — 코드 폴더 밖, README §5). **주인 UID 10001·그룹 운영 그룹·권한 640**(운영 계정 UID가 10001이면 600) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다. **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/settings_env.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다 | 내부망만 |
 
 ### 0-0. 실행 기록(JSON 로그·DB 감사·성능 — op-01)
 
 | 칸 | 기본 | 뜻 |
 |---|---|---|
 | `ops.log.level` | `INFO` | DEBUG·INFO·WARNING·ERROR·CRITICAL |
-| `ops.log.dir` | 비움 | 비우면 PC `logs/<앱>.jsonl`, 서버 stdout |
-| `ops.log.db_enabled` | `false` | DB(`applog` 스키마) 기록 — 먼저 `migrate up --target applog` |
+| `ops.log.dir` | 비움 | 비우면 PC `logs/<앱>.jsonl`, 서버 stdout(컨테이너 로그) |
+| `ops.log.db_enabled` | 서버(두 이미지) 켬 · PC 끔 | DB(`applog` 스키마) 기록 — 서버 로그는 이것뿐. 먼저 `migrate up --target all`(applog 포함) |
 | `ops.log.retention_days` | 90 | 월 파티션 보존 일수 |
-| `ops.log.fallback_dir` | `output/applog` | DB 장애·시간 초과 때 대체 JSON Lines(자동 재적재 없음) |
+| `ops.log.fallback_dir` | `output/logs` | DB 장애·시간 초과 때 대체 JSON Lines(자동 재적재 없음) — 파일은 이 한 곳 |
 | `ops.log.shutdown_sec` | 5 | 종료 때 남은 기록을 쓰는 상한(초) |
 | `search.audit.max_input_bytes` · `max_output_bytes` | 16384 · 65536 | MCP 감사 원문 저장 상한(바이트) |
 
-- DB 기록을 켜면 매일 `bash deploy/host/scripts/run_tool.sh migrate maintain --target applog`(PC: `python -m common.store.db.dbtool maintain --target applog`)를 예약한다 — 앞으로 2개월 파티션 준비, 보존 기한이 지난 파티션 삭제.
+- 서버는 매일 `bash deploy/host/scripts/run_tool.sh migrate maintain --target applog`(PC: `python -m common.store.db.dbtool maintain --target applog`)를 예약한다 — 앞으로 2개월 파티션 준비, 보존 기한이 지난 파티션 삭제.
 - ⚠️ MCP 감사 행(`applog.mcp_call`)과 대체 파일에는 문서 원문이 들어간다(`get_doc_fulltext` 결과는 파일당 `max_output_bytes`까지). `applog` DB·표와 `ops.log.fallback_dir`은 원본 문서와 같은 수준으로 접근을 제한한다(C-79). 대체 파일은 지우지 않으므로 디스크 회수도 운영에서 정한다.
 - 서버(dev·prd)는 값이 있는 비밀 칸이 8자 미만이면 시작을 거부한다(종료 2, 칸 경로만 찍음).
-- 파이프라인 성능 분석: `python -m pipeline.tools.perf [<run_id>]`(`--runs` 목록, `--compare` 비교, DB가 꺼져 있으면 `--file output/applog/*.jsonl`).
+- 파이프라인 성능 분석: `python -m pipeline.tools.perf [<run_id>]`(`--runs` 목록, `--compare` 비교, DB가 꺼져 있으면 `--file output/logs/*.jsonl`).
 
 ### 0-1. 읽는 규칙
 - **비밀값**(비밀번호·키·토큰)과 **접속 정보**(주소·포트·DB 이름)는 전부 이 파일 하나에만. 각 컨테이너는 common + 자기 앱 절만 읽는다.
@@ -99,7 +99,6 @@
 | `PARSE_MCP_MAX_MB`(`ops.runtime.parse_max_mb`) | `100` | `parse_document` 파일 1건 크기 상한(MB) — 검색 MCP와 파싱 서비스가 같은 칸을 읽음 |
 | `MCP_METHODS` | `vector,bm25,id` | 이 셋만 있음 |
 | `MCP_ALLOWED_HOSTS` | 비움 | 루프백이 아닐 때, 리버스 프록시 등 다른 Host로도 부르면 쉼표로 추가 |
-| `MCP_QUERY_LOG`·`MCP_QUERY_LOG_DIR`(`search.query_log.*`) | 켬 · 비움(이미지 안 `output/qa_log`) | 질의 기록 `qa_log.jsonl` |
 | `MCP_INSTRUCTIONS`(`search.server.instructions`) | 비움 | MCP 안내 문구 교체 |
 
 ### EDW 쿼리 도구(`query_edw`·`edw_meta`)
@@ -130,7 +129,6 @@
 | 이름 | 무엇 | 형식 |
 |---|---|---|
 | `PARSE_SOURCE`(`required.source.input_source`) | 이번에 읽을 원천 | 폴더 · `rdb:csv:<경로>` |
-| `SERVER_ENV_DIR` | 서버 설정 폴더(셸 env — 설정 칸 아님) | `/srv/rag/env` |
 | `PG_FILTER_EXACT_MAX` | 고객 필터 정확 검색 문턱 | 고객으로 좁힌 청크가 이 수(기본 20000) 이하면 정확 검색 |
 | 변경 뒤 확인 | — | `python -m common.check.checker env`(서버는 `run_tool.sh check_env`) |
 
@@ -168,7 +166,7 @@
 ```bash
 python -m common.check.checker env    # 빠진 필수 값·사내망 판정·경로 존재(값은 안 찍음) — 서버: run_tool.sh check_env
 python -m common.check.checker ping   # LLM·VLM·EMBED 실호출 — 실패 있으면 종료 1 — 서버: run_tool.sh ping_models
-ls -l /srv/rag/env/settings.yaml      # 서버: 주인 10001·권한 640
+ls -l ../settings.yaml                # 서버(코드 폴더에서): 주인 10001·권한 640
 ```
 
 ## 5. 0.1.0 → 0.2.0에서 바꿀 설정

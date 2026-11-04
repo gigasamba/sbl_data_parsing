@@ -86,9 +86,9 @@
 - Status: done
 
 <a id="mc-13"></a>
-## mc-13 · 질의 기록은 파일 하나
-- 규칙: 질의 기록은 `qa_log.jsonl`(`search.query_log.dir`, 비우면 `output/qa_log/`)만 — PG 표는 없다. 한 줄 = question·stack_name·k·hits(chunk_id·rank·via만)·answer·search_ms·asked_by. 90일 지난 줄은 시작 때와 24시간마다 지운다. 쓰기 실패는 검색을 막지 않고 경고 한 번. `search.query_log.enabled: false`면 끔.
-- 파일: `mcp_server/services/search/qa_log.py`.
+## mc-13 · 질의 기록은 DB `applog.mcp_call`만
+- 규칙: 질의 기록 파일은 없다(사용자 11-04 — op-13 규칙 7). MCP 호출마다 `applog.mcp_call` 한 행(op-01)이 질문·SQL(`args`)과 근거 키(`result_keys`)를 남긴다. `search.query_log` 칸은 지웠다(옛 설정 파일에 남으면 경고만). MCP를 거치지 않는 PC 명령 `mcp_server.cli.ask`는 기록하지 않는다.
+- 파일: `mcp_server/services/call_log.py` · `mcp_server/services/search/search_svc.py` · `mcp_server/services/edw_query.py`.
 - QA: `tests/server/mcp/test_mc13_qa_log.py` · 통과.
 - Status: done
 

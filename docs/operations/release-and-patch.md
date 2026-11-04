@@ -2,7 +2,7 @@
 
 ↑ [server-guide.md](server-guide.md) · [env-guide.md](env-guide.md) · 처음 설치: [README §5-0 서버 설치 순서](../../README.md#서버-설치-순서)
 
-**전제**: 개발 서버(dev)에는 코드 없는 실행 이미지 2개를 넣고, 코드 수정은 **코드 폴더를 통째로 바꿔** 전달한다(§1-1). 운영 서버(prd)는 개발 서버에서 시험한 코드를 구운 이미지를 쓴다(§1-2). 의존성이 바뀔 때만 새 실행 이미지 버전을 만든다(§5).
+**전제**: 개발 서버(dev)에는 코드 없는 실행 이미지 2개를 넣고, 코드 수정은 **새 루트에 새 코드 폴더를 풀어** 전달한다(§1-1). 운영 서버(prd)는 개발 서버에서 시험한 코드를 구운 이미지를 쓴다(§1-2). 의존성이 바뀔 때만 새 실행 이미지 버전을 만든다(§5).
 
 ## 1. 이미지와 코드 폴더
 
@@ -11,24 +11,24 @@
 | `data-pipeline` | `pipeline-runtime` → `data-pipeline-runtime:<판>` | `pipeline` | 의존성 + LibreOffice + `assets/`(OCR 모델) |
 | `mcp-server` | `mcp-runtime` → `mcp-server-runtime:<판>` | `mcp` | 의존성 |
 
-- **코드 폴더(`live`)** = 저장소 트리 그대로(코드 zip을 푼 폴더). 지금 쓰는 판은 링크 `/srv/rag/code/live`가 가리킨다. 사람·systemd는 `live`에서 `bash deploy/host/scripts/…`를 부른다.
+- **루트** = 서버 아무 자리의 폴더 하나(예 `/home/dev/`) — 판마다 새로 만든다. **코드 폴더** = 그 안에 코드 zip(또는 코드 묶음)을 푼 폴더(`sbl_data_parsing-<판>`, 저장소 트리 그대로). 호스트 스크립트는 자기 자리에서 루트(코드 폴더의 부모)를 구해 `<루트>/settings.yaml`·`<루트>/edw_chain.yaml`·`<루트>/output/`을 쓴다. 사람·systemd는 코드 폴더에서 `bash deploy/host/scripts/…`를 부른다.
 - **코드 폴더만으로 못 바꾸는 것**(바꾸면 새 실행 이미지 버전 — §5): `deploy/docker/requirements*.txt`·`Dockerfile`·`wheels/`·시스템 패키지·`assets/` 모델 파일. 시작할 때 코드의 `deploy/docker/DEPS_HASH`(requirements 두 파일의 지문)가 이미지 지문과 다르면 컨테이너가 멈춘다. 휠·Dockerfile·assets만 바뀐 경우는 자동으로 막지 않으니 사람이 판을 올려 새로 빌드한다.
 
-### 1-1. 개발 서버 — 코드 폴더 바꾸기
+### 1-1. 개발 서버 — 새 루트로 코드 바꾸기
 
 1. PC: `IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh`(mcp는 `mcp-runtime`). 이미지 관문은 이 커밋의 코드 트리를 붙여 돌고, 코드 폴더 묶음 `output/ship/code-<버전>-<커밋>.tar.gz`(`CODE_OUT=`로 바꿈 — git 추적 파일 + `CODE_COMMIT`)을 만든다. 코드만 바뀐 판은 묶음만 보낸다. 이미지 저장소로 보낼 때: `CODE_BUNDLE=output/ship/code-<버전>-<커밋>.tar.gz bash deploy/release/ship_stage.sh <판> pipeline-runtime mcp-runtime`. (코드 git zip을 그대로 받아도 된다 — README §5-0.)
-2. 서버: 새 판 폴더로 풀기 — `mkdir -p /srv/rag/code/<버전>-<커밋> && tar -xzf code-….tar.gz --no-same-owner -C /srv/rag/code/<버전>-<커밋> && chmod -R a+rX /srv/rag/code/<버전>-<커밋>`. 컨테이너 사용자 10001이 못 읽으면 "읽을 수 없음(권한)"으로 멈춘다(종료 2).
-3. 바꾸기: `ln -sfn /srv/rag/code/<버전>-<커밋> /srv/rag/code/live && cd /srv/rag/code/live && bash deploy/host/scripts/dc.sh up -d --force-recreate data-pipeline data-pipeline-mcp mcp`.
+2. 서버: 새 루트를 만들고 코드 폴더로 풀기 — `mkdir -p <새 루트>/sbl_data_parsing-<버전> && tar -xzf code-….tar.gz --no-same-owner -C <새 루트>/sbl_data_parsing-<버전>`. 앞 루트의 `settings.yaml`·`edw_chain.yaml`을 `cp -p`로 새 루트에 복사한다.
+3. 바꾸기(새 코드 폴더에서): `bash deploy/host/scripts/dc.sh init --group <운영 그룹>`(코드 폴더 a+rX · `output/` — 컨테이너 사용자 10001이 못 읽으면 "읽을 수 없음(권한)"으로 멈춤) → `bash deploy/host/scripts/dc.sh up -d --force-recreate data-pipeline data-pipeline-mcp mcp` → `bash deploy/host/scripts/dc.sh timers`(타이머를 새 루트로).
 4. 확인: 컨테이너 로그 첫 줄 `[image] 이미지 <이름 버전 커밋> · 코드 <커밋> · 의존성 <지문>` → `bash deploy/host/scripts/dc.sh check`(마지막 줄 `[dc check] 통과 — 6개`). `의존성 지문이 다름`으로 멈추면 그 코드는 새 실행 이미지가 필요하다.
-5. 되돌리기: 앞 판 폴더를 지우지 않고 두었다가 `ln -sfn /srv/rag/code/<앞 판> /srv/rag/code/live` → 3의 `dc.sh up -d --force-recreate …`. 판 폴더는 최근 2개 이상 남긴다.
+5. 되돌리기: 앞 루트를 지우지 않고 두었다가 그 코드 폴더에서 `dc.sh up -d --force-recreate …` → `dc.sh timers`. 루트는 최근 2개 이상 남긴다. 검색 DB는 두 루트가 같은 PG를 본다.
 
 ### 1-2. 개발 → 운영 — 시험한 그대로 굽기
 
 운영 이미지는 PC에서 빌드하지 않는다. 개발 서버의 **실행 이미지 그 판** 위에 **시험한 코드 폴더**를 COPY만 해서 코드가 든 이미지를 만든다(`deploy/docker/Dockerfile.bake` — 패키지 설치·네트워크 없음). 구운 이미지는 코드 폴더 없이 뜬다.
 
-1. 개발 서버: `bash /srv/rag/code/live/deploy/release/bake.sh <실행 이미지 판>`(예 `0.1.0`, 대상 하나만이면 뒤에 `pipeline` 또는 `mcp`). 코드 폴더는 스크립트가 든 폴더(다른 폴더면 `CODE_DIR=`), 새 태그는 코드 `VERSION`(다른 `TAG=`는 거부), 컨테이너 도구는 podman(없으면 docker — `DOCKER=`), 저장 폴더 `/var/tmp/bake`(`OUT=`).
+1. 개발 서버(시험한 코드 폴더에서): `bash deploy/release/bake.sh <실행 이미지 판>`(예 `0.1.0`, 대상 하나만이면 뒤에 `pipeline` 또는 `mcp`). 코드 폴더는 스크립트가 든 폴더(다른 폴더면 `CODE_DIR=`), 새 태그는 코드 `VERSION`(다른 `TAG=`는 거부), 컨테이너 도구는 podman(없으면 docker — `DOCKER=`), 저장 폴더 `/var/tmp/bake`(`OUT=`).
 2. 스크립트 순서: ① 코드 `DEPS_HASH` = 실행 이미지 지문인지(다르면 멈춤) ② 빌드 — 라벨 `org.opencontainers.image.revision`(코드 커밋)·`org.opencontainers.image.base.digest`(실행 이미지 ID) ③ `selftest_gate.sh` 판정(`[판정] 통과`가 아니면 멈춤) ④ 저장·45 MB 분할·sha256 → `/var/tmp/bake/sbl_images/`(`load.sh` · `<태그>/BUILD.txt` · `<태그>/<이미지>/` + 같은 태그 폴더에 코드 묶음 `code-<태그>-<커밋>.tar.gz`·sha256).
-3. 운영 서버: `sbl_images/`를 옮겨 `DOCKER=podman bash sbl_images/load.sh <태그>` → 코드 묶음을 `/srv/rag/code/<버전>-<커밋>`에 풀고 `live` 링크로(§1-1 2·3 — 호스트 스크립트만 씀). 셸·unit에 `CODE_DIR`을 두지 않는다(두면 compose가 코드 폴더를 덮어 붙임).
+3. 운영 서버: 새 루트에 `sbl_images/`를 옮겨 `DOCKER=podman bash sbl_images/load.sh <태그>` → 코드 묶음을 `<새 루트>/sbl_data_parsing-<버전>`에 풀고 §1-1 2·3(호스트 스크립트만 씀). 셸·unit에 `CODE_DIR`을 두지 않는다(두면 compose가 코드 폴더를 덮어 붙임).
 4. 어느 판인지: `podman image inspect <태그> --format '{{json .Config.Labels}}'`.
 
 ## 2. 서버에서 직접 고친 코드
@@ -49,7 +49,7 @@ bash deploy/release/selftest_gate.sh $DOCKER run --rm <코드 폴더 옵션> <�
 - 사례 하나만: `… selftest --only <이름 조각>`(사례 이름 = `tests/server/<common|pipeline|mcp>/test_*.py` 모듈 이름).
 - 이미지 안 목록으로 판정: `$DOCKER run --rm --entrypoint bash <태그> /app/docker/selftest_gate.sh /app/docker/entrypoint.sh selftest`.
 
-통과하면 `/srv/rag/reports/versions.md`에 한 줄: `날짜 · 서버 · 이미지 버전 · 코드 커밋 · 확인 결과`.
+통과하면 운영 기록 `versions.md`에 한 줄: `날짜 · 서버 · 이미지 버전 · 코드 커밋 · 확인 결과`.
 
 ## 4. 버전
 
@@ -72,7 +72,7 @@ PC 명령은 [README §5-2](../../README.md#5-2-pc에서--이미지-만들기와
 ### 5-2. 서버에서
 
 - 이미지 불러오기는 `load.sh` 하나다(개발: README §5-0 2번 · 운영: §1-2 3).
-- **이미지·코드 폴더·`run_docs.py`는 같은 때에 바꾼다**(서로 맞아야 함). 순서: 새벽 배치·상주 컨테이너 멈춤 → 이미지 적재 → 새 판 코드 폴더 + `live` 링크(§1-1) → `run_docs.py` 교체(§5-4) → 새 이미지로 다시 띄움.
+- **이미지·코드 폴더·`run_docs.py`는 같은 때에 바꾼다**(서로 맞아야 함). 순서: 새벽 배치·상주 컨테이너 멈춤 → 이미지 적재 → 새 루트에 새 코드 폴더(§1-1) → 새 이미지로 다시 띄움(`run_docs.py`는 새 코드 폴더 안의 것 — §5-4).
 - 이미지 이름은 settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`에 적는다.
 - 배포 뒤, 컨테이너 안 코드가 있는지 파일로 본다(bind 마운트 원본이 없으면 빈 폴더가 붙어 `test -d`는 통과하므로):
 ```bash
@@ -92,11 +92,11 @@ for c in data-pipeline data-pipeline-mcp; do $DOCKER exec $c test -f /app/deploy
 
 ### 5-4. `run_docs.py` 자리와 설정
 
-- 서버에서 `<운영자 작업 폴더>/run_docs.py`로 복사해 두고 실행한다(코드 폴더 안 사본이 아님): `cp /srv/rag/code/live/deploy/host/scripts/run_docs.py <운영자 작업 폴더>/`. 코드 폴더는 `--code /srv/rag/code/live`로 꼭 준다(기본값 없음).
-- 설정은 서버 settings.yaml(`--settings` · `SETTINGS_FILE` · `$SERVER_ENV_DIR/settings.yaml` 순)에서 읽는다 — 호스트 python에 PyYAML 필요. 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
+- 코드 폴더에서 `python3 deploy/host/scripts/run_docs.py …`로 실행한다(다른 자리에 복사해 돌리면 `--code <코드 폴더>`).
+- 설정은 서버 settings.yaml(`--settings` · `SETTINGS_FILE` · `<루트>/settings.yaml` 순)에서 읽는다 — 호스트 python에 PyYAML 필요. 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
   - 작업 폴더 `ops.pipeline_host.run_docs_dir`(비우면 스크립트 옆 `test_space/` — 진행 기록 `batch_progress/`)
-  - 결과 폴더 `required.deploy.output_root`(컨테이너 `/app/output`의 원본)
-  - MCP 업로드 작업 폴더 `ops.mcp_host.jobs_dir`(기본 `<결과 폴더>/mcp_parse/jobs`)
+  - 결과 폴더 `required.deploy.output_root`(컨테이너 `/app/output`의 원본 — 비우면 `<루트>/output`)
+  - MCP 업로드 작업 폴더 `ops.mcp_host.jobs_dir`(기본 `<결과 폴더>/_mcp_parse/jobs`)
   - `required.env.run_env`가 `dev`·`prd`가 아니면 시작하지 않는다.
 - **PC에서 실행하지 않는다**(운영 EDW·Object Storage에 접속).
 
@@ -105,7 +105,7 @@ for c in data-pipeline data-pipeline-mcp; do $DOCKER exec $c test -f /app/deploy
 pgvector의 우리 스키마(검색 `required.pg.db_schema`와 원천 스키마 5벌 `<스키마>_{sfdc,crms,las,faq,other}`, 로그 `applog`, 마스터 `<스키마>_master`)의 표·색인·뷰는 Alembic 리비전으로만 만든다(`common/store/db/migrations/versions/`). 버전 기록은 스키마마다 `<스키마>.alembic_version`. 명령은 상주 `data-pipeline` 안에서 돈다(먼저 `dc.sh up -d data-pipeline`).
 
 ```bash
-cd /srv/rag/code/live
+# 코드 폴더에서
 # ⓪ (DB마다 처음 한 번 — DB 관리자) vector 확장 — 없으면 "vector 확장 없음"으로 멈춤
 #    $DOCKER exec <pg 컨테이너> psql -U <관리자 계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
 bash deploy/host/scripts/run_tool.sh migrate current                    # 지금 판과 코드의 끝 판
@@ -143,7 +143,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 대상 | 남길 것 | 명령 |
 |---|---|---|
 | 이미지(`data-pipeline`·`mcp-server`, 실행 이미지 포함) | 지금 버전 + 직전 버전 | `bash deploy/host/scripts/prune_old.sh --apply`(기본 dry-run, `--keep N`) — `docker system prune`은 쓰지 않음(남의 이미지 보호) |
-| 코드 판 폴더 `/srv/rag/code/<버전>-<커밋>` | `live`가 가리키는 판 + 바로 앞 판 | 새 판 확인 뒤 오래된 판 폴더를 손으로 지움 |
+| 루트 폴더(판마다 하나) | 지금 쓰는 루트 + 바로 앞 루트 | 새 판 확인 뒤 오래된 루트를 손으로 지움(`settings.yaml`·`backup/`에 비밀값·DB 내용 — 지우기 전에 확인) |
 
 ## 7. 릴리스 체크리스트
 
@@ -165,7 +165,8 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 - 0.2.0은 **새 실행 이미지가 필요 없다** — 코드의 `deploy/docker/DEPS_HASH`가 0.1.0 실행 이미지와 같다(`f0fcc30bd067bc2f`). dev는 `*-runtime:0.1.0`에 0.2.0 코드 폴더, prd는 그것을 구운 `*:0.2.0`.
 - **prd는 반드시 새 `required.pg.db_schema`**(판 0002가 기준 스키마의 옛 표를 지움 — C-74). 옛 스키마·옛 `struct` 스키마는 2주 뒤 DB 담당이 백업하고 지운다.
 - 지문이 모두 바뀌므로(FINGERPRINT·레이어 code_fp·엔진 — 기준값 PRD [e2-02](../prd/test.md#e2-02)) 모든 문서가 다시 파싱·적재된다. **전체 문서 실행은 prd에서만**, dev는 settings.yaml이 가리키는 대상으로 e2e 한 번. 시간은 지난 `progress.log`의 문서당 시간 × 문서 수, 디스크는 `required.deploy.output_root`의 `parse/_rep`만큼 여유를 더 잡는다.
-- prd 이미지에 settings.yaml을 굽는 것(PRD [op-07](../prd/doc.md#op-07))은 `bake.sh`가 아직 하지 않는다 — 지금은 dev처럼 `$SERVER_ENV_DIR/settings.yaml`을 붙인다.
+- 0.2.0은 **새 루트**에 놓는다(PRD [op-13](../prd/doc.md#op-13)) — 0.1.0 자리(코드 폴더·설정 폴더)는 그대로 두고 되돌리기에 쓴다. 검색 DB는 같은 PG다.
+- prd 이미지에 settings.yaml을 굽는 것(PRD [op-07](../prd/doc.md#op-07))은 `bake.sh`가 아직 하지 않는다 — 지금은 dev처럼 `<루트>/settings.yaml`을 붙인다.
 - 모델: dev·prd는 내부망 모델만(외부 모델 호출 거부).
 
 ### 8-2. 배포 전
@@ -187,10 +188,11 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 
 **0. 셸 준비** — 셸 변수는 settings.yaml에서 옮겨 적는다(파일을 화면에 띄우지 않는다).
 ```bash
-export SERVER_ENV_DIR=/srv/rag/env DOCKER=podman          # ops.host.docker 값(비우면 podman)
+export DOCKER=podman                                       # ops.host.docker 값(비우면 podman)
+OLD_SF=<0.1.0이 쓰는 settings.yaml 경로>  OLD_CODE=<0.1.0 코드 폴더>  ROOT=<새 루트 — 예 /home/dev>
 PG_C=<required.deploy.pg_container 값>  PG_U=<required.pg.user 값>  PG_D=<required.pg.db 값>
 OLD_SCHEMA=<지금 required.pg.db_schema 값>  NEW_SCHEMA=<새 스키마 이름 — DB 담당과 정함(C-74)>
-TS=$(date +%Y%m%d-%H%M); BK=/srv/rag/backup/0.2.0-$TS; mkdir -p "$BK" && chmod 700 "$BK"
+mkdir -p "$ROOT" && TS=$(date +%Y%m%d-%H%M); BK=$ROOT/backup/0.2.0-$TS; mkdir -p "$BK" && chmod 700 "$ROOT/backup" "$BK"
 ```
 
 **1. 멈추기** — 타이머를 멈추고, 도는 `run_docs.py`가 끝나길 기다린 뒤(죽이지 않는다) 옛 상주 컨테이너를 멈춘다.
@@ -201,39 +203,37 @@ pgrep -af run_docs.py                                                         # 
 $DOCKER stop data-pipeline-parse data-pipeline-structure mcp-server          # 기대: 이름 세 줄
 ```
 
-**2. 백업** — 옛 코드 폴더·옛 이미지는 지우지 않는다.
+**2. 백업** — 0.1.0 코드 폴더·설정 파일·옛 이미지는 지우지 않는다(되돌리기 — 8-5).
 ```bash
-cp -p "$SERVER_ENV_DIR/settings.yaml" "$BK/settings.yaml.0.1.0"
-cp -p "$SERVER_ENV_DIR/settings.yaml" "$SERVER_ENV_DIR/settings.yaml.0.1.0"          # 4단계 입력 · 되돌릴 때 그대로
-readlink -f /srv/rag/code/live > "$BK/live.0.1.0"
+cp -p "$OLD_SF" "$BK/settings.yaml.0.1.0"                                    # 4단계 입력
 $DOCKER images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep -E 'data-pipeline|mcp-server' > "$BK/images.0.1.0"
 $DOCKER exec "$PG_C" pg_dump -U "$PG_U" -d "$PG_D" -Fc -n "$OLD_SCHEMA" -n "${OLD_SCHEMA}_*" > "$BK/pg-0.1.0.dump"   # 우리 스키마만(공유 DB)
 $DOCKER exec -i "$PG_C" pg_restore -l < "$BK/pg-0.1.0.dump" | head -5                 # 기대: ";" 머리 줄과 "TABLE" 목록 — 비면 덤프 실패
 ```
 - 옛 `struct` 스키마도 백업하려면 `-n <그 스키마 이름>`을 더한다(이름은 DB 담당 확인). `pg_dump`가 암호를 물으면 DB 담당과 함께 한다.
 
-**3. 새 판 놓기**
-- **[dev]** 0.1.0 실행 이미지 + 0.2.0 코드 zip(`<코드>` = zip을 푼 폴더):
+**3. 새 판 놓기** — 새 루트에 푼다(`<코드>` = 코드 폴더 `sbl_data_parsing-0.2.0`).
+- **[dev]** 0.1.0 실행 이미지 + 0.2.0 코드 zip:
 ```bash
-cd /srv/rag && unzip -q <코드 zip>                                         # 기대: /srv/rag/<코드>/
+cd "$ROOT" && unzip -q <코드 zip>                                         # 기대: $ROOT/<코드>/
 DOCKER=$DOCKER bash sbl_images-main/load.sh 0.1.0                        # 0.1.0 실행 이미지가 이미 있으면 건너뜀 — 기대: BUILD.txt(DEPS_HASH f0fcc30bd067bc2f)
-bash /srv/rag/<코드>/deploy/host/scripts/dc.sh init --group <운영 그룹>   # 기대: 폴더마다 "있음" · settings.yaml "있음(덮지 않음)" · edw_chain.yaml "만듦" · live "있음 … (옮기지 않음)"
-ln -sfn /srv/rag/<코드> /srv/rag/code/live && cd /srv/rag/code/live && cat CODE_COMMIT   # 기대: 그 커밋
+cd "$ROOT/<코드>" && bash deploy/host/scripts/dc.sh init --group <운영 그룹>   # 기대: "[dc init] 루트: $ROOT" · output·backup · settings.yaml·edw_chain.yaml "만듦"
+cat CODE_COMMIT                                                          # 기대: 그 커밋
 ```
-- **[prd]** 개발 서버에서 굽고(§1-2 — 기대: `[판정] 통과` 뒤 `/var/tmp/bake/sbl_images/`) 운영 서버로 옮겨:
+- **[prd]** 개발 서버에서 굽고(§1-2 — 기대: `[판정] 통과` 뒤 `/var/tmp/bake/sbl_images/`) 운영 서버의 새 루트로 옮겨:
 ```bash
-DOCKER=$DOCKER bash sbl_images/load.sh 0.2.0                 # 기대: 조각 sha256 확인 → load → BUILD.txt
-mkdir -p /srv/rag/code/0.2.0-<커밋> && tar -xzf sbl_images/0.2.0/code-0.2.0-<커밋>.tar.gz --no-same-owner -C /srv/rag/code/0.2.0-<커밋>
-bash /srv/rag/code/0.2.0-<커밋>/deploy/host/scripts/dc.sh init --group <운영 그룹>   # edw_chain.yaml 사본(없으면 컨테이너가 안 뜸)
-ln -sfn /srv/rag/code/0.2.0-<커밋> /srv/rag/code/live && cd /srv/rag/code/live
+cd "$ROOT" && DOCKER=$DOCKER bash sbl_images/load.sh 0.2.0     # 기대: 조각 sha256 확인 → load → BUILD.txt
+mkdir -p "$ROOT/<코드>" && tar -xzf sbl_images/0.2.0/code-0.2.0-<커밋>.tar.gz --no-same-owner -C "$ROOT/<코드>"
+cd "$ROOT/<코드>" && bash deploy/host/scripts/dc.sh init --group <운영 그룹>   # edw_chain.yaml 사본(없으면 컨테이너가 안 뜸)
 unset CODE_DIR                                                # 운영은 코드 폴더를 컨테이너에 붙이지 않는다
 ```
+- 0.1.0이 고친 EDW 사슬 사본을 쓰고 있었다면 `cp -p <0.1.0 edw_chain.yaml> "$ROOT/edw_chain.yaml"`.
 
 **4. 설정 옮기기** — 0.1.0 settings.yaml을 0.2.0 배치로(이미지 안에서 — 호스트 python 불필요). 이미지는 **[dev]** `data-pipeline-runtime:0.1.0` · **[prd]** `data-pipeline:0.2.0`, 둘 다 코드 폴더를 붙여 돌린다(`migrate`는 pipeline·mcp 설정 모델이 다 있는 코드에서만 돈다).
 ```bash
 $DOCKER run --rm -i --network none --entrypoint bash -v "$PWD:/app/deploy:ro,z" -e PYTHONPATH=/app/deploy <이미지> \
   -c 'umask 077 && cat > /tmp/old.yaml && cd /app/deploy && python -m common.config.migrate /tmp/old.yaml --out /tmp/new.yaml --summary >&2 && cat /tmp/new.yaml' \
-  < "$SERVER_ENV_DIR/settings.yaml.0.1.0" > "$SERVER_ENV_DIR/settings.yaml.new"
+  < "$BK/settings.yaml.0.1.0" > "$ROOT/settings.yaml.new"
 # 기대(화면): [migrate] 옛 배치 → 새 배치: 옮긴 칸 N개 · 지운 칸 이름 줄 · [migrate] 씀: /tmp/new.yaml (권한 600)
 ```
 그다음 `settings.yaml.new`를 편집기로 고친다(화면에 통째로 띄우지 않는다) — 고칠 칸 목록은 [env-guide §5](env-guide.md#5-010--020에서-바꿀-설정). 꼭:
@@ -243,8 +243,8 @@ $DOCKER run --rm -i --network none --entrypoint bash -v "$PWD:/app/deploy:ro,z" 
 - 새 필수 칸 자리: `python -m common.config.sample --where <칸 이름>`(위 이미지 안에서 같은 방법).
 - 서버 EDW의 사슬 표·칸 이름이 기본값과 다를 때만 8-6.
 ```bash
-chown 10001:<운영 그룹> "$SERVER_ENV_DIR/settings.yaml.new" && chmod 640 "$SERVER_ENV_DIR/settings.yaml.new"
-mv "$SERVER_ENV_DIR/settings.yaml.new" "$SERVER_ENV_DIR/settings.yaml"
+chown 10001:<운영 그룹> "$ROOT/settings.yaml.new" && chmod 640 "$ROOT/settings.yaml.new"
+mv "$ROOT/settings.yaml.new" "$ROOT/settings.yaml"                         # 3단계 init이 놓은 예시를 덮음
 bash deploy/host/scripts/settings_env.sh common.host >/dev/null && echo 설정-읽힘   # 기대: 설정-읽힘("[설정] …"이면 그 안내대로 고침)
 ```
 
@@ -277,6 +277,7 @@ bash deploy/host/scripts/dc.sh check                                          # 
 ```
 - 실패하면(`[dc check] 실패 — <단계>: <안내>`) 그 단계 출력을 읽고 고친 뒤 다시 부른다. check_env 출력은 PG 실패를 "건너뜀"으로 보일 수 있다.
 - 그다음 MCP 클라이언트로 `search` 한 번(`source_system` 필수), `list_doc_fulltext` 한 번, `parse_document`에 시험 파일 하나(C-75·C-83).
+- 타이머를 새 루트로: `bash deploy/host/scripts/dc.sh timers` 뒤 `systemctl stop mcp-server-keepalive.timer data-pipeline-nightly.timer`(첫 실행이 끝날 때까지 — 9).
 
 **8. [dev] 게시 확인 — 미리보기 → 실제 한 번 → Object Storage·EDW 행**(운영 Object Storage·EDW에 쓰는 첫 실행이라 dev에서 몇 건으로 먼저 본다)
 ```bash
@@ -301,8 +302,8 @@ $DOCKER exec data-pipeline python -c "import sys; from common.store.objectstore 
 - **FAQ:** 첫 `run_docs.py` 실행은 FAQ 교체 기록(`<작업 폴더>/batch_progress/faq_seen.txt`)이 없으므로 gold `faq`를 **한 번** 비운 뒤 FAQ 전체를 맨 앞에서 처리한다(pl-41). `progress.log` 기대 줄: `FAQ 교체: 새 FAQ <N>건 — gold faq 문서 <M>건을 지우고 지금 FAQ <K>건 전체를 맨 앞에서 다시 처리`(새 스키마라 M=0). `--seqs`·`--limit` 실행은 교체를 건너뛴다.
 - **[dev]** settings.yaml이 가리키는 대상으로 e2e 한 번(`--limit <N>`). **[prd]** 전체 문서를 새 스키마로:
 ```bash
-cp /srv/rag/code/live/deploy/host/scripts/run_docs.py <운영자 작업 폴더>/ && cd <운영자 작업 폴더>
-nohup python3 run_docs.py --code /srv/rag/code/live --start-offset 0 > run_docs.0.2.0.out 2>&1 &
+cd "$ROOT/<코드>"
+nohup python3 deploy/host/scripts/run_docs.py --start-offset 0 > "$ROOT/run_docs.0.2.0.out" 2>&1 &
 tail -f <작업 폴더>/batch_progress/progress.log                               # 기대: 처음에 FAQ 교체 줄, 그다음 문서마다 "doc#<seq> …" 줄
 ```
 - 이 전체 실행에는 `--skip-done`을 주지 않는다 — ParsingMeta에 `gold_version` 칸이 생기기 전(C-76)에는 0.1.0이 끝낸 문서를 "끝남"으로 보고 건너뛴다.
@@ -319,18 +320,16 @@ tail -f <작업 폴더>/batch_progress/progress.log                             
 | 5 | `versions.md`에 한 줄 · 되돌리기가 필요 없어진 뒤 `prune_old.sh --apply` | 서버 운영·devops | §6 |
 | 6 | `query_edw` — 실제 업무 SELECT 몇 개(JOIN·`WITH`·대괄호 이름·한글 별칭·`TOP`)를 부른다. 기대: 행이 오거나 행·시간 상한 안내만. 정상 SELECT가 `rejected:*`로 거부되면 SQL과 오류 코드를 `issues.md`에 | 서버 운영 | — |
 | 7 | `edw_meta` — 서버 카탈로그(`search.edw_meta.dir`의 `catalog.json`)에서 이름 끝에 공백이 있는 표를, 그 이름 그대로와 공백을 뺀 이름으로 각각 부른다. 기대: 둘 다 같은 표의 칸 목록 | 서버 운영 | — |
-| 8 | 질의 기록 — `search.query_log.dir`(비우면 이미지 안 `output/qa_log`)에 UID 10001이 쓰는지: `$DOCKER exec mcp-server sh -c 'id -u; touch <폴더>/.w && rm <폴더>/.w && echo ok'`(기대 `10001`·`ok`) → `search` 한 번 뒤 `qa_log.jsonl` 줄이 하나 늘어남 | 서버 운영 | — |
+| 8 | 로그 DB — `search` 한 번 뒤 `applog.mcp_call`에 그 호출 한 행(`args`에 질문), `<루트>/output/logs/`가 비어 있음(있으면 DB 쓰기 실패 — 파일 안 오류 확인) | 서버 운영 | C-79 |
 
 ### 8-5. 되돌리기(0.2.0 → 0.1.0)
 
 새 `db_schema`를 썼으므로 옛 스키마는 그대로 남아 있다 — 보통 DB는 되돌릴 것이 없다.
 ```bash
 systemctl stop data-pipeline-nightly.timer mcp-server-keepalive.timer
-bash deploy/host/scripts/dc.sh down                                           # 0.2.0 컨테이너 셋 내림
-ln -sfn "$(cat "$BK/live.0.1.0")" /srv/rag/code/live && cd /srv/rag/code/live
-cp -p "$BK/settings.yaml.0.1.0" "$SERVER_ENV_DIR/settings.yaml"               # 이미지 칸·옛 스키마 그대로
+cd "$ROOT/<코드>" && bash deploy/host/scripts/dc.sh down                     # 0.2.0 컨테이너 셋 내림
 ```
-- 0.1.0 컨테이너(`data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`)는 되돌린 0.1.0 코드 폴더의 README §5-3 방법으로 띄우고, 시작 로그 첫 줄로 0.1.0인지 본다.
+- 0.1.0 자리(`$OLD_CODE`·`$OLD_SF`)는 그대로 남아 있다. 0.1.0 컨테이너(`data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`)와 0.1.0 타이머는 `$OLD_CODE`의 README §5-3·§5-5 방법으로 다시 띄우고, 시작 로그 첫 줄로 0.1.0인지 본다.
 - 옛 스키마를 0.2.0이 바꿨다면(새 이름을 안 썼을 때만) 백업으로: `$DOCKER exec -i "$PG_C" pg_restore -U "$PG_U" -d "$PG_D" --clean < "$BK/pg-0.1.0.dump"`(DB 담당과 같이 — downgrade 명령은 없다).
 - ParsingMeta에 0.2.0이 쓴 행·`gold_version`은 그대로 남는다(0.1.0은 그 칸을 읽지 않음).
 
@@ -338,9 +337,9 @@ cp -p "$BK/settings.yaml.0.1.0" "$SERVER_ENV_DIR/settings.yaml"               # 
 
 적재가 문서 메타(고객 `client_edw`·등록 시각 `created_at`·원천 메타 `doc.attrs`)를 EDW에서 채울 때 따라가는 표·칸 이름과, 검색 MCP가 쓰는 `attrs` 키의 거르기 이름·근거 표시는 파일 하나에 있다(PRD [pl-52](../prd/load-schema.md#pl-52)). 기본 파일은 코드 폴더의 `resources/config/edw_chain.yaml`이고 **꼴과 칸의 뜻은 그 파일의 머리 주석이 정본**이다. 서버 EDW 이름이 다르거나 메타 키를 더하려면 코드를 고치지 않고 사본을 고친다.
 
-**① 사본 고치기 · 칸 적기** — 사본은 `$SERVER_ENV_DIR/edw_chain.yaml`(`dc.sh init`이 없을 때만 복사 — 10001, 640)이고, `data-pipeline`·`mcp-server`에 `/etc/rag/edw_chain.yaml`로 읽기 전용 붙는다. 설정 칸은 하나(`ops.paths.edw_chain` — 적재와 검색이 같은 칸)이고 **칸을 적었을 때만 사본이 쓰인다**(비우면 코드의 기본 파일).
+**① 사본 고치기 · 칸 적기** — 사본은 `<루트>/edw_chain.yaml`(`dc.sh init`이 없을 때만 복사 — 10001, 640)이고, `data-pipeline`·`mcp-server`에 `/etc/rag/edw_chain.yaml`로 읽기 전용 붙는다. 설정 칸은 하나(`ops.paths.edw_chain` — 적재와 검색이 같은 칸)이고 **칸을 적었을 때만 사본이 쓰인다**(비우면 코드의 기본 파일).
 ```bash
-vi "$SERVER_ENV_DIR/edw_chain.yaml"                                  # 주인·권한은 그대로 10001, 640
+vi <루트>/edw_chain.yaml                                             # 주인·권한은 그대로 10001, 640
 # settings.yaml(편집기로):  ops: { paths: { edw_chain: /etc/rag/edw_chain.yaml } }
 # 검색 MCP는 파일이 바뀌면 다음 호출부터 다시 읽음 · 적재는 다음 실행부터
 ```
@@ -390,13 +389,12 @@ $DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check --file /etc/
 
 ### 8-7. 서버에서 직접 만드는 파일
 
-서버마다 값이 다른 파일은 코드 폴더 밖 **설정 폴더 `$SERVER_ENV_DIR`(예 `/srv/rag/env`)** 에 둔다. `dc.sh init`이 **없을 때만** git의 예시를 복사한다(있으면 덮지 않음). 판을 올려도 그대로 남는다.
+서버마다 값이 다른 파일은 코드 폴더 밖 **루트 바로 아래**에 둔다. `dc.sh init`이 **없을 때만** git의 예시를 복사한다(있으면 덮지 않음). 새 판(새 루트)에는 앞 루트에서 `cp -p`로 복사해 온다.
 
 | 파일 | 자리(호스트 → 컨테이너) | 예시(복사 원본) | 읽는 곳 | 주인·권한 |
 |---|---|---|---|---|
-| `settings.yaml` | `$SERVER_ENV_DIR/settings.yaml` → `/etc/rag/settings.yaml`(읽기 전용 — 세 컨테이너) | `settings.sample.yaml` | 모든 앱·호스트 스크립트 | 10001:<운영 그룹> 640(운영 계정 UID가 10001이면 600) |
-| `edw_chain.yaml` | `$SERVER_ENV_DIR/edw_chain.yaml` → `/etc/rag/edw_chain.yaml`(읽기 전용 — `data-pipeline`·`mcp-server`) | `resources/config/edw_chain.yaml` | 적재·검색 MCP — `ops.paths.edw_chain: /etc/rag/edw_chain.yaml`을 적었을 때만 | 10001:<운영 그룹> 640 |
-| `settings.yaml.0.1.0` | `$SERVER_ENV_DIR/settings.yaml.0.1.0`(컨테이너에 안 붙음) | — (8-3 2) | 되돌리기(8-5)·설정 옮기기(8-3 4) | `cp -p` — 원본 그대로 |
+| `settings.yaml` | `<루트>/settings.yaml` → `/etc/rag/settings.yaml`(읽기 전용 — 세 컨테이너) | `settings.sample.yaml` | 모든 앱·호스트 스크립트 | 10001:<운영 그룹> 640(운영 계정 UID가 10001이면 600) |
+| `edw_chain.yaml` | `<루트>/edw_chain.yaml` → `/etc/rag/edw_chain.yaml`(읽기 전용 — `data-pipeline`·`mcp-server`) | `resources/config/edw_chain.yaml` | 적재·검색 MCP — `ops.paths.edw_chain: /etc/rag/edw_chain.yaml`을 적었을 때만 | 10001:<운영 그룹> 640 |
 
-- 백업 묶음 `/srv/rag/backup/0.2.0-<시각>/`(8-3 0·2 — 700)은 설정 폴더 밖이다.
+- 백업 묶음 `<루트>/backup/0.2.0-<시각>/`(8-3 0·2 — 700): 0.1.0 설정 사본 `settings.yaml.0.1.0`(8-3 4 입력)·이미지 목록·`pg_dump`.
 - 고객 명부·용어집은 서버 파일이 아니라 PG 마스터 표다(`migrate master load` — 8-3 5).
