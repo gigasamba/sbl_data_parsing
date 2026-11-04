@@ -13,7 +13,7 @@ from pathlib import Path
 
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared.ext_groups import IMG_EXTS
-from pipeline.shared.post_features import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
+from pipeline.shared.post_config import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
 from pipeline.shared.vlmcall import (  # 쪽 VLM 호출·캐시는 pipeline/shared/vlmcall.py로 옮김(엔진 qwen_vlm과 함께 씀)
     page_count,
     page_max,
@@ -250,7 +250,7 @@ def page_targets(doc_path):
     남는 경우: 문서 전체가 스캔(이미지 파일 또는 스캔 PDF)이면 전체 쪽, 아니면 scan_pages() 결과 — 거기에
     VLM_PAGE_MAX(cap) 절단까지 적용한 뒤 집합으로(독립 검토가 지적한 둘째 버그: cap으로 잘려 실제로 안 불릴
     쪽까지 figures.py가 건너뛰던 것 — 여기서 자른 뒤 돌려주므로 호출자가 또 자를 필요 없음)."""
-    from pipeline.shared.post_features import active_features
+    from pipeline.shared.post_config import active_features
 
     if "vlm_page" not in active_features():
         return set()

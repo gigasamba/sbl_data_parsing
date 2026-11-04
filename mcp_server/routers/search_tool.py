@@ -3,8 +3,8 @@
 question 필수, 거르기 13칸(운영 이름 그대로) + attrs(pl-52 11-03, 등급 A), 옛 입력 methods·decompose·limit·index_id 지움.
 """
 
-from mcp_server.routers.tool_runner import _bg
 from mcp_server.services.search.search_svc import do_search
+from mcp_server.services.tool_runner import _bg
 
 
 def register(m):

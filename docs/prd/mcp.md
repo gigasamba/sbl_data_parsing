@@ -160,7 +160,7 @@
 <a id="mc-18"></a>
 ## mc-18 · `parse_document` 스캔 PDF — 내부망 VLM
 - 규칙:
-  1. 스캔 판정 = `pipeline.transform.represent.parse_scoring.pdf_kind()`(전체 쪽 글자층이 쪽당 평균 20자 미만) — 일괄 파싱과 같은 함수.
+  1. 스캔 판정 = `pipeline.shared.parse_run.pdf_kind()`(전체 쪽 글자층이 쪽당 평균 20자 미만) — 일괄 파싱과 같은 함수.
   2. 스캔 PDF는 stack `.pdf_image`의 `qwen_vlm`으로 파싱한다(내부망 주소만 — `require_internal`).
   3. 시간 상한은 작업 제한 시간 `tuning.ops.services.parse_mcp.job_timeout_sec`(기본 600초) 하나, 단계마다 남은 시간을 나눠 준다. 쪽 수 상한 없음. 큐는 하나.
   4. VLM 설정(`required.models.vlm_base_url`·`vlm_model`)이 비면 파이프라인 없이 빈 결과 + note "스캔 PDF — VLM 미설정".
@@ -174,7 +174,7 @@
 ## mc-09 · 서버 실행과 안전
 - 이유: 공용 내부 서비스라 계속 떠 있어야 하고 위험한 노출은 거부해야 한다.
 - 규칙: FastMCP streamable HTTP(`/mcp`, 기본 `search.server.host` 127.0.0.1 · `port` 8765) 또는 `--stdio`. loopback이 아닌 주소는 `required.tokens.mcp` 필요(상수 시간 비교), 0.0.0.0 거부, DNS 리바인딩 가드(`search.server.allowed_hosts`). `/health`(준비 중이면 503). 도구 동시 8(`search.server.max_concurrency`) + 대기열, 도구 한 번 30초. 새 적재 판이면 다시 읽는다. 호출 감사 기록은 [ops.md#op-01](ops.md#op-01).
-- 파일: `mcp_server/main.py`, `mcp_server/routers/tool_runner.py`, `mcp_server/config.py`.
+- 파일: `mcp_server/main.py`, `mcp_server/services/tool_runner.py`, `mcp_server/config.py`.
 - Status: done
 
 ## 코드와 다른 점 · 지울 코드

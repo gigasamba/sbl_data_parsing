@@ -2,8 +2,8 @@
 함수 이름·독스트링·서명은 MCP 도구 계약(tools/list 바이트)이다.
 """
 
-from mcp_server.routers.tool_runner import _bg
 from mcp_server.services.fulltext_svc import do_get, do_list
+from mcp_server.services.tool_runner import _bg
 
 
 def register(m):

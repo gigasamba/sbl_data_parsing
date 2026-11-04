@@ -23,7 +23,7 @@ VLM edge가 결정적 edge 옆에 살아남는다 — 이제 같은 짝이면 �
 import math
 import re
 
-from pipeline.shared.text_normalize import canon_symbols
+from pipeline.transform.represent.text_normalize import canon_symbols
 
 POINT_MERGE_TOL = 0.5  # 폴리라인 왕복(there-and-back)·닫힌 경로 끝점을 같은 점으로 볼 허용 오차(pt)
 BOX_AREA_RATIO = 0.75  # 닫힌 l/c 경로의 둘러싼 면적 ÷ bbox 면적이 이보다 크면 "상자"(둥근 모서리 포함),

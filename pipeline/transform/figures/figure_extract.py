@@ -25,7 +25,7 @@ from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared import vlmcall as V  # VLM 호출 한 길(ask)·렌더 해상도(dpi) — 11-04
 from pipeline.shared.ext_groups import IMG_EXTS
 from pipeline.shared.parse_run import prompt_id, raw_vlm_path
-from pipeline.shared.post_features import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
+from pipeline.shared.post_config import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
 from pipeline.transform.figures import chart_values as CV  # F14(a)·(c) 벡터 차트 결정적 값·추세
 from pipeline.transform.figures import diagram_edges as diag_edges  # F13, PDF 벡터·텍스트 글자 화살표 결정적 edges
 from pipeline.transform.figures.mermaid import to_mermaid

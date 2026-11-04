@@ -29,7 +29,7 @@ import tempfile
 from pathlib import Path
 
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
-from pipeline.shared.post_features import raw_root
+from pipeline.shared.post_config import raw_root
 from pipeline.shared.vlmcall import dpi, sha, vlm_page
 from pipeline.transform.figures import shape_detect  # AD14
 from pipeline.transform.figures.pptx_edges import candidate_slides
@@ -108,7 +108,7 @@ def target_slides(doc_path):
     실패를 기록해 두었으면(_conversion_ok) 예측 대신 그 실제 결과로 빈 집합을 돌려준다 — 변환이 실패하면
     쪽 VLM도 비어서([]) 그 슬라이드의 삽입 그림을 figures()가 건너뛰면 안 되기 때문(원래 버그: 예측만 보고
     실제 변환 결과를 몰랐음)."""
-    from pipeline.shared.post_features import (
+    from pipeline.shared.post_config import (
         active_features,
     )  # 재검토(10-11): PARSE_POST에 vlm_page가 없으면 쪽 VLM이 안 도니 그림도 건너뛰면 안 됨(page_targets와 같은 규칙)
 

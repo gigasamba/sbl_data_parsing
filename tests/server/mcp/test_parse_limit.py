@@ -10,8 +10,7 @@ import httpx
 
 from common.config.settings import COMMON
 from mcp_server import main
-from mcp_server.routers import tool_runner
-from mcp_server.services import parse_proxy
+from mcp_server.services import parse_proxy, tool_runner
 
 MB = 1048576
 

@@ -31,7 +31,7 @@ LAYER_CODE = {
         "pipeline/transform/represent/build_rep.py",
         "pipeline/transform/represent/crosscheck.py",
         "pipeline/transform/represent/parse_scoring.py",
-        "pipeline/shared/post_features.py",
+        "pipeline/shared/post_config.py",
         "pipeline/shared/ext_groups.py",  # 확장자 묶음(이미지 — parse_qa·represent·figures·vlm_page)
         "pipeline/shared/vlmcall.py",  # VLM 호출·쪽 VLM 캐시·동시 수 게이트(옛 figures/vgate.py + vlm_page 호출부 — 엔진 qwen_vlm과 함께 씀)
     ]
@@ -45,6 +45,7 @@ LAYER_CODE = {
             "superscripts",
             "table_inline",
             "table_standard",
+            "text_normalize",
             "decision_log",
         )
     ]

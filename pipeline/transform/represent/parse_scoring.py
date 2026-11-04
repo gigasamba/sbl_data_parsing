@@ -28,6 +28,7 @@ from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.extract.engines import registry
 from pipeline.shared.engine_family import FAMILY, nums  # 계열 합의 로직 재사용(중복 금지)
 from pipeline.shared.ext_groups import IMG_EXTS
+from pipeline.shared.parse_run import pdf_kind
 from pipeline.transform.represent.rep_accuracy import (
     doc_accuracy,  # AG11 2단계 착수 조건(10-08), 10-14 함수별 분리로 pipeline/transform/represent/rep_accuracy.py로
 )
@@ -244,28 +245,6 @@ def garbage_ratio(text):
     return round(((repl + ctrl) / max(1, len(text)) + single / max(1, len(lines))) / 2, 4)
 
 
-# 엔진 고르기(.pdf_text·.pdf_image → stack 엔진)용 — 레인 고르기(run_docs 작업자 배분)는 extract/doc_parsing_group(앞 3쪽 쪽당 300자)
-def pdf_kind(path):
-    try:
-        import pypdfium2 as pdfium
-
-        doc = pdfium.PdfDocument(str(path))
-        n = len(doc)
-        chars = sum(len(doc[i].get_textpage().get_text_range().strip()) for i in range(n))
-    except Exception:
-        try:
-            import fitz
-
-            d = fitz.open(str(path))
-            n = d.page_count
-            chars = sum(len(d[i].get_text().strip()) for i in range(n))
-        except Exception:
-            return "pdf_text", None  # ponytail: 페이지 텍스트 레이어 확인 불가 — 텍스트형으로 보수적 가정
-    if n == 0:
-        return "pdf_image", 0
-    return ("pdf_image" if chars < 20 * n else "pdf_text"), n
-
-
 def doc_format(path):
     ext = path.suffix.lower()
     if ext == ".pdf":
@@ -351,9 +330,9 @@ def build_token_consensus(per_doc_toks, eng_fam, min_fams=2):
     """문서별 '유의미 텍스트' = 서로 다른 계열 min_fams개 이상이 뽑은 토큰. 계열이 min_fams보다 적으면 없음(판정 불가).
     반환 = (cons, conflicts). cons는 이전과 완전히 같은 모양(doc → 토큰 집합) — 호출부 로직 불변.
     conflicts는 AD25(a) 추가: 같은 문서에서 숫자 표기가 갈리지만
-    같은 값일 수 있는 자리(pipeline.shared.text_normalize.canon_num_key, 예 430.000↔430,000)를 엔진별 원문 표기와 함께 기록한다
+    같은 값일 수 있는 자리(pipeline.transform.represent.text_normalize.canon_num_key, 예 430.000↔430,000)를 엔진별 원문 표기와 함께 기록한다
     (합치지 않고 표시만 — 판정은 AD26 이후 몫)."""
-    from pipeline.shared.text_normalize import canon_num_key
+    from pipeline.transform.represent.text_normalize import canon_num_key
 
     out, conflicts = {}, {}
     for doc, by_eng in per_doc_toks.items():

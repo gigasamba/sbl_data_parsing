@@ -18,8 +18,8 @@ import httpx
 from common.core import jsonlog
 from mcp_server import config as mc
 from mcp_server import main
-from mcp_server.routers import tool_runner
 from mcp_server.services import call_log as audit
+from mcp_server.services import tool_runner
 
 
 def _encoded(value):

@@ -14,8 +14,8 @@ import anyio
 from common.config import settings
 from common.store import logsink
 from mcp_server import config as mc
-from mcp_server.routers import tool_runner
 from mcp_server.services import call_log as audit
+from mcp_server.services import tool_runner
 
 
 def test_response_deadlines():

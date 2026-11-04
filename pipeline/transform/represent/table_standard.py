@@ -22,7 +22,7 @@ BR36 — 쪽 경계 표 이어 붙이기: 머리행이 반복되는 여러 쪽 �
 완전히 같은 경우에만 하나로 합치고(뒤 표의 반복 머리행은 버림) build_tables()가 반환하기 직전에 적용한다.
 머리행·칸 수가 다르거나 쪽 번호가 없는(엔진이 page를 안 남김) 표는 안 합친다(오합 방지)."""
 
-from pipeline.shared.text_normalize import standardize_text
+from pipeline.transform.represent.text_normalize import standardize_text
 
 
 def _cell(c):

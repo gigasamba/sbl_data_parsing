@@ -20,7 +20,7 @@ from pathlib import Path
 from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared import parse_run as P0
-from pipeline.shared.post_features import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
+from pipeline.shared.post_config import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
 
 
 def attach_dir():

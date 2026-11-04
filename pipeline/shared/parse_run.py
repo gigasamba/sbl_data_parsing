@@ -191,10 +191,30 @@ def is_env_error(err):
     return bool(err) and any(k in err for k in ENV_ERR)
 
 
+# 엔진 고르기(.pdf_text·.pdf_image → stack 엔진)용 — 레인 고르기(run_docs 작업자 배분)는 extract/doc_parsing_group(앞 3쪽 쪽당 300자)
+def pdf_kind(path):
+    try:
+        import pypdfium2 as pdfium
+
+        doc = pdfium.PdfDocument(str(path))
+        n = len(doc)
+        chars = sum(len(doc[i].get_textpage().get_text_range().strip()) for i in range(n))
+    except Exception:
+        try:
+            import fitz
+
+            d = fitz.open(str(path))
+            n = d.page_count
+            chars = sum(len(d[i].get_text().strip()) for i in range(n))
+        except Exception:
+            return "pdf_text", None  # ponytail: 페이지 텍스트 레이어 확인 불가 — 텍스트형으로 보수적 가정
+    if n == 0:
+        return "pdf_image", 0
+    return ("pdf_image" if chars < 20 * n else "pdf_text"), n
+
+
 def doc_types(docs, out):
     """문서 → 타입(.pdf는 .pdf_text / .pdf_image — 쪽당 글자 레이어 20자 기준). 판정은 <out>/_types.json에 캐시(크기·수정 시각)."""
-    from pipeline.transform.represent.parse_scoring import pdf_kind
-
     cache_f = Path(out) / "_types.json"
     try:
         cache = json.loads(cache_f.read_text(encoding="utf-8"))

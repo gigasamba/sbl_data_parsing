@@ -273,7 +273,7 @@ def standardize_rep(d):
     """SI20·AD46⑤ — 표 칸 재현율 저하 원인(기호 정형화 부재)을 산출 쪽에서 메움: 엔진 묶음 직후·융합(facts 합치기) 전에
     본문·facts·표 칸에 common.core.text.standardize_text(기호 맵 + 첨자 표기 통일)을 적용. 원문(pd/<엔진>/<문서>.json)은
     여기서 손대지 않고 대표 결과(_rep)에만 적용 — 되돌릴 수 있게 바뀐 개수만 돌려준다(rep.rep.standardize)."""
-    from pipeline.shared.text_normalize import standardize_text as _std
+    from pipeline.transform.represent.text_normalize import standardize_text as _std
 
     n = 0
     if d.get("text"):
@@ -314,7 +314,7 @@ def _norm_agree(text):
     import re
 
     from common.core.text import normalize_value
-    from pipeline.shared.text_normalize import canon_symbols
+    from pipeline.transform.represent.text_normalize import canon_symbols
 
     return re.sub(r"(?<=\d)\.(?=\d)", "", normalize_value(canon_symbols(text or "")))
 
@@ -488,7 +488,7 @@ def tried_of(doc, last, pd):
 
 from common.core.artifacts import code_fp  # noqa: E402
 from common.core.contract import source_record  # noqa: E402 — 문서 ID·원본 위치 규칙(모듈 계약)
-from pipeline.shared import post_features as post_cfg  # noqa: E402 — PARSE_POST 해석(W1~W3·W9·W11 후보정 패키지)
+from pipeline.shared import post_config as post_cfg  # noqa: E402 — PARSE_POST 해석(W1~W3·W9·W11 후보정 패키지)
 from pipeline.shared import runtrace  # noqa: E402 — op-01 run.progress
 from pipeline.transform.represent import decision_log as trace_mod  # noqa: E402 — PA0 맥락 기록
 from pipeline.transform.represent import fragment_vote as fuse_mod  # noqa: E402 — AD29 P1 조각 단위 융합

@@ -1,10 +1,10 @@
-"""mcp_server.routers.tool_runner 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.routers.tool_runner`."""
+"""mcp_server.services.tool_runner 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.tool_runner`."""
 
 import time
 
 from mcp_server import config as mc
-from mcp_server.routers import tool_runner as M
-from mcp_server.routers.tool_runner import _bg
+from mcp_server.services import tool_runner as M
+from mcp_server.services.tool_runner import _bg
 
 
 def _selftest_concurrency():
