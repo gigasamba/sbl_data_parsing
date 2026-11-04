@@ -7,14 +7,14 @@
 #   rag-retrieval·rag-core·rag-all)는 하나도 남기지 않는다(남김 수 0). 옛 이미지는 S6b 전환의 되돌리기(refactor.md C-29)에 쓰므로
 #   --apply는 새 판 전환을 확인한 뒤에만 — dry-run은 지울 목록만 보여 준다.
 # 기본 dry-run(지울 목록만 출력) · --apply일 때만 실제로 지움.
-#   bash deploy/host/scripts/prune_old.sh [--apply] [--stage-dir <조각·tar 폴더>] [--keep N(기본 2 — 새 이름 이미지만)]
+#   bash deploy/host/scripts/prune_images.sh [--apply] [--stage-dir <조각·tar 폴더>] [--keep N(기본 2 — 새 이름 이미지만)]
 # 환경: IMAGE_STAGE_DIR(= --stage-dir 기본값) · PRUNE_KEEP(= --keep 기본값, 기본 2 = 지금 판+직전 판) — S7e1: 설정 파일(SETTINGS_FILE 또는
-#   <루트>/settings.yaml — 루트 = 코드 폴더의 부모, op-13)이 있으면 ops.host.image_stage_dir·prune_keep을 거기서(settings_env.sh load_settings — 셸 env가 이김), 없으면 셸 env·기본값
+#   <루트>/settings.yaml — 루트 = 코드 폴더의 부모, op-13)이 있으면 ops.host.image_stage_dir·prune_keep을 거기서(load_settings.sh load_settings — 셸 env가 이김), 없으면 셸 env·기본값
 set -uo pipefail
 # 부른 자리 그대로(cd 안 함 — 상대 --stage-dir·SETTINGS_FILE은 부른 자리 기준, S7e1 리뷰). 설정 파일을 못 읽어도 멈추지 않는다(옛처럼 셸 env·기본값).
-. "$(dirname "$0")/settings_env.sh"   # 루트 RAG_ROOT(코드 폴더의 부모)·load_settings
+. "$(dirname "$0")/load_settings.sh"   # 루트 RAG_ROOT(코드 폴더의 부모)·load_settings
 if [ -n "${SETTINGS_FILE:-}" ] || [ -f "$RAG_ROOT/settings.yaml" ]; then
-  load_settings || echo "[prune_old] 설정 파일을 읽지 못함 — 셸 env·기본값으로 계속" >&2
+  load_settings || echo "[prune_images] 설정 파일을 읽지 못함 — 셸 env·기본값으로 계속" >&2
 fi
 DOCKER=${DOCKER:-docker}   # settings ops.host.docker — podman이면 podman(`sudo podman`처럼 두 낱말도 — 아래는 따옴표 없이 펼침, 다른 호스트 스크립트와 같음)
 
@@ -26,11 +26,11 @@ while [ $# -gt 0 ]; do
     --apply) APPLY=1 ;;
     --stage-dir) STAGE_DIR=$2; shift ;;
     --keep) KEEP=$2; shift ;;
-    *) echo "[prune_old] 모르는 인자: $1 (--apply·--stage-dir·--keep만)" >&2; exit 2 ;;
+    *) echo "[prune_images] 모르는 인자: $1 (--apply·--stage-dir·--keep만)" >&2; exit 2 ;;
   esac
   shift
 done
-case "$KEEP" in ""|*[!0-9]*|0) echo "[prune_old] --keep은 1 이상 정수(지금 판은 항상 남김): $KEEP" >&2; exit 2 ;; esac
+case "$KEEP" in ""|*[!0-9]*|0) echo "[prune_images] --keep은 1 이상 정수(지금 판은 항상 남김): $KEEP" >&2; exit 2 ;; esac
 
 REPOS="data-pipeline mcp-server"
 OLD_REPOS="data-parsing data-structure data-retrieval rag-parse rag-structure rag-retrieval rag-core rag-all"   # S6c — 옛 이름은 모두 지움(남김 0)

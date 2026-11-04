@@ -12,31 +12,31 @@
 - 이미지 시작 스크립트(`entrypoint.sh`)는 다른 이미지의 명령을 종료 64로 거부한다(맞는 이미지를 알려 줌). data-pipeline: `parse`·`publish`·`show-stack`·`idle`·`migrate`·`parse-service` · mcp-server: `mcp`·`ask`·`show-stack`.
 - 어느 이미지에서나: `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`.
 - 서버 배치: 공용 폴더(예 `/home/sbl/`) 아래 이미지 폴더 `sbl_images-main/`(서버에 한 번 load — 모든 벌이 같이 씀)와 루트(한 벌 — 예 `dev/`·`dev-hong/`). 루트 아래 `settings.yaml`·`edw_chain.yaml`·코드 폴더 `sbl_data_parsing-<판>/`·결과 폴더 `output/`·`backup/`. 루트 = 코드 폴더의 부모 — 호스트 스크립트가 자기 자리에서 구한다(README §5). 판마다 새 루트를 만든다([release-and-patch §1-1](release-and-patch.md#1-1-개발-서버--새-루트로-코드-바꾸기)).
-- 개발 서버는 실행 이미지(`*-runtime`)에 코드 폴더를 `/app/deploy`에 읽기 전용으로 붙인다 — `dc.sh`·`mcp_up.sh`가 자기 코드 폴더를 `CODE_DIR`로 잡는다(셸에 `CODE_DIR`가 있으면 그 값). 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 운영 서버는 코드가 든 이미지(`bake.sh`)를 쓴다.
-- 서버로 옮기기: 처음 설치(PC → 개발 서버)는 [README §5-0 서버 설치 순서](../../README.md#서버-설치-순서), 코드만 바꿀 때는 [release-and-patch §1-1](release-and-patch.md#1-1-개발-서버--새-루트로-코드-바꾸기), 개발 서버 → 운영(수집) 서버는 [release-and-patch §1-2](release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)(`bake.sh` → `load.sh` → `dc.sh`). 컨테이너는 compose를 직접 부르지 않고 `dc.sh`로 다룬다.
+- 개발 서버는 실행 이미지(`*-runtime`)에 코드 폴더를 `/app/deploy`에 읽기 전용으로 붙인다 — `host_ctl.sh`가 자기 코드 폴더를 `CODE_DIR`로 잡는다(파이프라인 이미지 기준 · 셸에 `CODE_DIR`가 있으면 그 값 · `mcp_keepalive.sh`도 `host_ctl.sh`로 띄움). 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 운영 서버는 코드가 든 이미지(`bake_prod_image.sh`)를 쓴다.
+- 서버로 옮기기: 처음 설치(PC → 개발 서버)는 [README §5-0 서버 설치 순서](../../README.md#서버-설치-순서), 코드만 바꿀 때는 [release-and-patch §1-1](release-and-patch.md#1-1-개발-서버--새-루트로-코드-바꾸기), 개발 서버 → 운영(수집) 서버는 [release-and-patch §1-2](release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)(`bake_prod_image.sh` → `load.sh` → `host_ctl.sh`). 컨테이너는 compose를 직접 부르지 않고 `host_ctl.sh`로 다룬다.
 - 명령은 모두 코드 폴더(`cd <루트>/sbl_data_parsing-<판>`)에서, root 셸에서 실행한다.
-- 컨테이너 상태: 서버 전체는 `podman ps`·`docker ps`(root로 띄웠으면 `sudo podman ps`), 우리 묶음만은 `bash deploy/host/scripts/dc.sh ps`.
+- 컨테이너 상태: 서버 전체는 `podman ps`·`docker ps`(root로 띄웠으면 `sudo podman ps`), 우리 묶음만은 `bash deploy/host/scripts/host_ctl.sh ps`.
 
 ## 1. 설정
 
 ```bash
 export DOCKER=podman                                   # 운영 계정 ~/.bashrc에 두거나 명령 앞에 붙인다
-bash deploy/host/scripts/dc.sh init --group <운영 그룹>   # 루트의 output/·backup/·settings.yaml·edw_chain.yaml(없을 때만) — README §5-0 3번
+bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   # 루트의 output/·backup/·settings.yaml·edw_chain.yaml(없을 때만) — README §5-0 3번
 ```
-- 값은 `init`이 찍은 빈 필수 칸부터 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)). `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd unit은 `<루트>/settings.yaml`을 스스로 찾는다.
+- 값은 `init`이 찍은 빈 필수 칸부터 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)). `nightly_batch.sh`·`pipe_exec.sh`·`mcp_keepalive.sh`·systemd unit은 `<루트>/settings.yaml`을 스스로 찾는다.
 - **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` — 다른 파일이면 `ops.paths.stack_file`). 바꾸려면 코드 폴더째 바꾼다. 원천은 폴더·`rdb:csv`만.
 
 ### 1-1. 값 바꾸기
-- 앱 설정은 `settings.yaml`을 직접 고치고 `dc.sh up -d --force-recreate <서비스>`.
+- 앱 설정은 `settings.yaml`을 직접 고치고 `host_ctl.sh up -d --force-recreate <서비스>`.
 - **한 번만 다른 값은 `--set 이름=값`** — 받는 진입점: `pipeline.cli`·`pipeline.extract.fetch_docs`·`pipeline.engine_stack`·`build_bundle`·`pgvector_load`·`publish_parse_result`. 예: `$DOCKER exec data-pipeline python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 옛 env 이름(`python -m common.config.sample --where`). 모르는 이름·호스트 칸·비밀 칸은 종료 2.
 - 셸·compose·`docker exec -e`로 준 옛 env 이름은 효과가 없다(시작 때 이름만 경고). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지 태그·자원·포트·호스트 경로)뿐이다.
 - 오버레이 설정 파일 도구 `python -m common.config.overrides`는 PC 전용이다(서버는 종료 2).
 
 ### 1-2. 기동 확인
-README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash deploy/host/scripts/dc.sh check`(기대 마지막 줄 `[dc check] 통과 — 6개`).
+README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash deploy/host/scripts/host_ctl.sh check`(기대 마지막 줄 `[host_ctl check] 통과 — 6개`).
 
 ### 1-3. 한 서버에 여러 벌 띄우기(개발자별)
-루트 하나가 한 벌이다. 개발자마다 루트를 따로 만들고(코드 zip을 풀고 `dc.sh init`), 그 루트의 `settings.yaml`에 아래를 **벌마다 다르게** 적는다.
+루트 하나가 한 벌이다. 개발자마다 루트를 따로 만들고(코드 zip을 풀고 `host_ctl.sh init`), 그 루트의 `settings.yaml`에 아래를 **벌마다 다르게** 적는다.
 
 | 칸 | 하는 일 | 예(홍 개발자) |
 |---|---|---|
@@ -47,8 +47,8 @@ README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash 
 | `required.pg.db_schema` | 검색 DB 스키마(벌마다 따로 적재) | `sbl_hong` |
 
 - 컨테이너는 모두 호스트 네트워크라 포트가 겹치면 뒤에 띄운 쪽이 시작하지 못한다.
-- 명령은 그 루트의 코드 폴더에서 `dc.sh`로만 한다 — `dc.sh`·`mcp_up.sh`·`trigger.sh`·`run_tool.sh`·`run_docs.py`가 `ops.host.instance`를 읽어 자기 벌의 컨테이너만 다룬다. compose를 직접 부르면 이름·포트 값이 채워지지 않는다.
-- 자동 실행(`dc.sh timers`)도 벌마다 따로 켜진다. 개발자 벌은 새벽 배치가 필요 없으면 `systemctl disable --now data-pipeline-nightly-<이름>.timer`.
+- 명령은 그 루트의 코드 폴더에서 `host_ctl.sh`로만 한다 — `host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`·`run_docs.py`가 `ops.host.instance`를 읽어 자기 벌의 컨테이너만 다룬다. compose를 직접 부르면 이름·포트 값이 채워지지 않는다.
+- 자동 실행(`host_ctl.sh timers`)도 벌마다 따로 켜진다. 개발자 벌은 새벽 배치가 필요 없으면 `systemctl disable --now data-pipeline-nightly-<이름>.timer`.
 - CPU·메모리 상한(§README 5-0 "자원")은 서버 전체 합계를 보고 벌마다 줄인다.
 
 ## 2. 일상 실행 — run_docs(문서별 흐름)
@@ -60,19 +60,19 @@ README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash 
 - **겹침 잠금:** run_docs는 `batch_progress/run_docs.lock`을 `flock`으로 잡는다 — 새벽 배치와 사람이 직접 돌린 run_docs가 함께 돌지 않는다(뒤에 온 쪽이 75). 죽으면 잠금은 저절로 풀린다. 작업 폴더(`ops.pipeline_host.run_docs_dir`)가 같아야 같은 잠금이다.
 - 파싱·게시만 따로:
 ```bash
-bash deploy/host/scripts/trigger.sh parse [--source-limit N]   # 파싱 → <결과 폴더>/parse/_rep. 임베딩·DB 없음
-bash deploy/host/scripts/trigger.sh publish --dry-run          # 무엇을 올리고 쓸지 표만(쓰기 0)
-bash deploy/host/scripts/trigger.sh publish                    # 대표 결과 Object Storage 업로드 + EDW 메타 — 한 번만
+bash deploy/host/scripts/pipe_exec.sh parse [--source-limit N]   # 파싱 → <결과 폴더>/parse/_rep. 임베딩·DB 없음
+bash deploy/host/scripts/pipe_exec.sh publish --dry-run          # 무엇을 올리고 쓸지 표만(쓰기 0)
+bash deploy/host/scripts/pipe_exec.sh publish                    # 대표 결과 Object Storage 업로드 + EDW 메타 — 한 번만
 ```
 - 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock` 때문에 뒤쪽이 종료 75.
-- 도구만 따로: `bash deploy/host/scripts/run_tool.sh <rdb_discover|check_env|ping_models|migrate|show-stack|check> [인자]`.
+- 도구만 따로: `bash deploy/host/scripts/pipe_exec.sh <rdb_discover|check_env|ping_models|migrate|show-stack|check> [인자]`.
 - 우선순위 낮추기(`tuning.extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 같은 세션·autogroup 안에서만 효과가 있다. 컨테이너끼리는 CPU 나눔 비율(`parse_mcp_cpu_shares` 4096 대 일괄 1024)이 정한다.
 
 ### 2-1. 검색 MCP는 늘 켜 둠
-`bash deploy/host/scripts/mcp_up.sh` + keepalive 타이머 — README §5-5.
+`bash deploy/host/scripts/mcp_keepalive.sh` + keepalive 타이머 — README §5-5.
 
 ### 2-2. 새벽 배치
-`ops.nightly.time`·`max_docs`·`deadline` 세 칸 + `data-pipeline-nightly.timer` — README §5-5. 타이머는 5분마다 깨우고 `trigger.sh scheduled`가 시작 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받지 않고, 받은 문서는 끝까지). 형식이 틀리면(HH:MM 아님 · 상한이 1 이상 정수 아님 · 마감이 시작보다 5분 이내) 종료 2. 지금 바로 돌리려면 run_docs를 직접 부른다.
+`ops.nightly.time`·`max_docs`·`deadline` 세 칸 + `data-pipeline-nightly.timer` — README §5-5. 타이머는 5분마다 깨우고 `nightly_batch.sh scheduled`가 시작 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받지 않고, 받은 문서는 끝까지). 형식이 틀리면(HH:MM 아님 · 상한이 1 이상 정수 아님 · 마감이 시작보다 5분 이내) 종료 2. 지금 바로 돌리려면 run_docs를 직접 부른다.
 
 ### 2-3. 답변 생성 점검(코드 폴더에서, 이미지 밖)
 ```bash
@@ -114,7 +114,7 @@ MCP 토큰은 settings.yaml `required.tokens.mcp`, 모델은 `required.models.ll
 
 | 무엇 | 위치 |
 |---|---|
-| 용어집 · 고객 명부 · ID 모양 · 단위 · 계약·고객 마스터 | PG 마스터 표 `<db_schema>_master`. 원본 CSV(`resources/vocab/glossary/` 또는 서버 폴더)를 고친 뒤 `run_tool.sh migrate master load [--dir <폴더>]`(5-1) |
+| 용어집 · 고객 명부 · ID 모양 · 단위 · 계약·고객 마스터 | PG 마스터 표 `<db_schema>_master`. 원본 CSV(`resources/vocab/glossary/` 또는 서버 폴더)를 고친 뒤 `pipe_exec.sh migrate master load [--dir <폴더>]`(5-1) |
 | 원천 표 열 이름 | settings.yaml `extract.connections.rdb.columns.*` |
 | 엔진 구성 | `resources/config/pipeline_stack.json`(확인 `show-stack`) |
 | MCP 안내 문구 | 코드 `mcp_server/main.py`의 `_DEFAULT_MCP_INSTRUCTIONS`(설정 칸 없음 — 바꾸면 코드 배포) |
@@ -193,7 +193,7 @@ PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load
 | MCP `/health` 503 | 기동 직후 예열 중 | 잠시 뒤 재시도 |
 | MCP 401 | 호출 쪽 토큰이 없거나 `required.tokens.mcp`와 다름 | 호출 쪽 `Authorization: Bearer <토큰>`을 서버 값과 같게 |
 | MCP가 안 뜸 | `required.embed` 없음 · 컨테이너가 설정 파일을 못 읽음(권한) | 필수 값 채우기 · 주인 10001·권한 640 |
-| `data-pipeline`·`mcp-server`가 안 뜸("edw_chain.yaml" 자리에 폴더) | `dc.sh init` 전에 컨테이너를 띄워 빈 폴더가 생김 | 빈 폴더를 `rmdir` → `dc.sh init` |
+| `data-pipeline`·`mcp-server`가 안 뜸("edw_chain.yaml" 자리에 폴더) | `host_ctl.sh init` 전에 컨테이너를 띄워 빈 폴더가 생김 | 빈 폴더를 `rmdir` → `host_ctl.sh init` |
 | 포트 충돌 | 다른 서비스가 같은 포트 | `search.server.port` 등 포트 칸만 바꿈 |
 | SELinux `Permission denied` | 볼륨 라벨 안 맞음 | 볼륨에 `:z` |
 

@@ -1,4 +1,4 @@
-"""dc.sh(사용자 11-03 — 옛 README dc() 셸 함수를 대신함) — 상주 컨테이너 3개의 compose 파일을 늘 함께 붙이고, 실행 이미지(*-runtime)거나
+"""host_ctl.sh(사용자 11-03 — 옛 README dc() 셸 함수를 대신함) — 상주 컨테이너 3개의 compose 파일을 늘 함께 붙이고, 실행 이미지(*-runtime)거나
 CODE_DIR를 주면 compose.code*.yml 셋을 더한 뒤 인자를 그대로 넘기는지. DOCKER=echo로 명령 줄만 본다(docker·설정 읽기 없음 — PC 전용)."""
 
 import os
@@ -9,7 +9,7 @@ from pathlib import Path
 from common.core.paths import DEPLOY_ROOT
 from tests.general.deploy.test_trigger_gate import _bash
 
-SCRIPT = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "dc.sh"
+SCRIPT = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "host_ctl.sh"
 BASE = ["compose.pipeline.yml", "compose.pipeline-mcp.yml", "compose.mcp-server.yml"]
 CODE = ["compose.code.yml", "compose.code.pipeline-mcp.yml", "compose.code.mcp-server.yml"]
 CASES = [  # (DATA_PIPELINE_IMAGE, CODE_DIR, 코드 덧씌우기?, ops.host.instance, compose 묶음 이름 — 종료 코드 2면 None)
@@ -36,7 +36,7 @@ def test_dc_command():
             env = {  # env 남김 — 하위 프로세스(호스트 셸이 load_settings로 받는 이름 — 시험)
                 "PATH": os.environ.get("PATH", ""),
                 "SETTINGS_FILE": sp,
-                "SETTINGS_LOADED": sp,  # 이미 읽은 것으로 — host_env.py(PyYAML)를 부르지 않음
+                "SETTINGS_LOADED": sp,  # 이미 읽은 것으로 — settings_to_env.py(PyYAML)를 부르지 않음
                 "DOCKER": "echo",
                 "DATA_PIPELINE_IMAGE": image,
                 "INSTANCE": inst,

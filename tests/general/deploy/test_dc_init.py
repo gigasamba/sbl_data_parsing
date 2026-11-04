@@ -1,5 +1,5 @@
-"""dc.sh init·timers·check(사용자 11-03 · op-13) — init: DC_ROOT 임시 루트에 settings.yaml·edw_chain.yaml·output/·backup/을 만들고(두 번 불러도 같음)
-settings.yaml은 없을 때만 복사(덮지 않음), env/·code/·live는 만들지 않음. 루트는 코드 폴더의 부모(settings_env.sh). timers: 단위 파일의 @CODE_DIR@를
+"""host_ctl.sh init·timers·check(사용자 11-03 · op-13) — init: DC_ROOT 임시 루트에 settings.yaml·edw_chain.yaml·output/·backup/을 만들고(두 번 불러도 같음)
+settings.yaml은 없을 때만 복사(덮지 않음), env/·code/·live는 만들지 않음. 루트는 코드 폴더의 부모(load_settings.sh). timers: 단위 파일의 @CODE_DIR@를
 코드 폴더로 채움. check: DC_FAKE로 단계를 바꿔 끼워 처음 실패에서 멈추는지·selftest는 "[판정] 통과" 줄로 판정하는지. docker·root·systemctl 없음 — PC 전용."""
 
 import os
@@ -66,8 +66,8 @@ def test_init():
 
 
 def test_root_is_code_parent():
-    """op-13 규칙 1 — settings_env.sh는 자기 자리(코드 폴더/deploy/host/scripts)에서 루트(코드 폴더의 부모)를 구해 <루트>/settings.yaml을 읽고
-    결과 폴더를 <루트>/output으로 둔다(env·고정 경로 없음). SETTINGS_LOADED로 host_env.py(PyYAML) 부르기는 건너뜀."""
+    """op-13 규칙 1 — load_settings.sh는 자기 자리(코드 폴더/deploy/host/scripts)에서 루트(코드 폴더의 부모)를 구해 <루트>/settings.yaml을 읽고
+    결과 폴더를 <루트>/output으로 둔다(env·고정 경로 없음). SETTINGS_LOADED로 settings_to_env.py(PyYAML) 부르기는 건너뜀."""
     bash = _need_bash()
     if not bash:
         return
@@ -75,17 +75,17 @@ def test_root_is_code_parent():
         root = Path(d) / "dev"
         scripts = root / "sbl_data_parsing-0.3.0" / "deploy" / "host" / "scripts"
         scripts.mkdir(parents=True)
-        shutil.copy(SCRIPT.parent / "settings_env.sh", scripts / "settings_env.sh")
+        shutil.copy(SCRIPT.parent / "load_settings.sh", scripts / "load_settings.sh")
         (root / "settings.yaml").write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
         sf = _posix(root / "settings.yaml")
-        cmd = f'. {_posix(scripts / "settings_env.sh")} && load_settings && echo "$SETTINGS_FILE|$RAG_ROOT|$RAG_OUT"'
+        cmd = f'. {_posix(scripts / "load_settings.sh")} && load_settings && echo "$SETTINGS_FILE|$RAG_ROOT|$RAG_OUT"'
         r = _run(bash, ["-c", cmd], {"SETTINGS_LOADED": sf, "DOCKER": "echo"}, script=None)
         assert r.returncode == 0, r.stderr
         assert r.stdout.strip() == f"{sf}|{_posix(root)}|{_posix(root)}/output", r.stdout
 
 
 def test_timers():
-    """op-13 규칙 6 — dc.sh timers가 단위 파일 4개의 @CODE_DIR@를 이 코드 폴더로 채워 쓴다(DC_UNIT_DIR — systemctl 없음).
+    """op-13 규칙 6 — host_ctl.sh timers가 단위 파일 4개의 @CODE_DIR@를 이 코드 폴더로 채워 쓴다(DC_UNIT_DIR — systemctl 없음).
     여러 벌(ops.host.instance)이면 단위 이름 끝에 -<instance>(타이머·서비스 짝이 같은 이름)."""
     bash = _need_bash()
     if not bash:
@@ -118,16 +118,23 @@ esac
 """
 # (FAIL 단계, NOJUDGE, 컨테이너가 꺼진 단계, 기대 종료 코드, 마지막 줄 시작, 나오면 안 되는 단계)
 CHECK_CASES = [
-    ("", "", "", 0, "[dc check] 통과 — 6개", None),
-    ("migrate check", "", "", 1, "[dc check] 실패 — migrate check:", "── selftest data-pipeline"),
-    ("", "1", "", 1, "[dc check] 실패 — selftest data-pipeline:", "── selftest mcp-server"),  # [판정] 줄이 없으면 종료 코드 0이어도 실패
-    # run_tool.sh가 "상주 컨테이너가 떠 있지 않음"(종료 코드 2) — 띄우지 않고 안내로 멈춤
+    ("", "", "", 0, "[host_ctl check] 통과 — 6개", None),
+    ("migrate check", "", "", 1, "[host_ctl check] 실패 — migrate check:", "── selftest data-pipeline"),
+    (
+        "",
+        "1",
+        "",
+        1,
+        "[host_ctl check] 실패 — selftest data-pipeline:",
+        "── selftest mcp-server",
+    ),  # [판정] 줄이 없으면 종료 코드 0이어도 실패
+    # pipe_exec.sh가 "상주 컨테이너가 떠 있지 않음"(종료 코드 2) — 띄우지 않고 안내로 멈춤
     (
         "",
         "",
         "check_env",
         1,
-        "[dc check] 실패 — check_env: data-pipeline 컨테이너가 안 떠 있음 → dc.sh up -d data-pipeline",
+        "[host_ctl check] 실패 — check_env: data-pipeline 컨테이너가 안 떠 있음 → host_ctl.sh up -d data-pipeline",
         "── ping_models",
     ),
 ]
@@ -145,7 +152,7 @@ def test_check():
         for fail, nojudge, down, rc, last, absent in CHECK_CASES:
             env = {
                 "SETTINGS_FILE": _posix(sf),
-                "SETTINGS_LOADED": _posix(sf),  # 이미 읽은 것으로 — host_env.py를 부르지 않음
+                "SETTINGS_LOADED": _posix(sf),  # 이미 읽은 것으로 — settings_to_env.py를 부르지 않음
                 "DOCKER": "echo",
                 "DC_FAKE": f"bash {_posix(fake)}",
                 "FAIL": fail,

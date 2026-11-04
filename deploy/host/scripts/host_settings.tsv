@@ -1,4 +1,4 @@
-# 자동 생성 — PYTHONPATH=. python deploy/release/hostkeys.py(고치지 말 것)
+# 자동 생성 — PYTHONPATH=. python deploy/release/gen_host_keys.py(고치지 말 것)
 common.run_env	RUN_ENV	text
 common.host.doc_src	DOC_SRC	text
 common.host.docker	DOCKER	text

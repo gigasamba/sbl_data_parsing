@@ -1,15 +1,15 @@
 # 새벽 배치 — run_docs.py(문서별 flow — 서버 입구 하나)를 NIGHTLY_TIME 시각에.
-# 설치: 코드 폴더에서 `sudo bash deploy/host/scripts/dc.sh timers`(@CODE_DIR@를 채워 쓰고 타이머를 켬 — 이 파일을 그대로 복사하지 않는다).
+# 설치: 코드 폴더에서 `sudo bash deploy/host/scripts/host_ctl.sh timers`(@CODE_DIR@를 채워 쓰고 타이머를 켬 — 이 파일을 그대로 복사하지 않는다).
 #   스케줄 = NIGHTLY_TIME(settings.yaml ops.nightly.time, HH:MM — 비우면 새벽 배치 없음, pl-32) — 타이머가 5분마다 깨우고
-#   trigger.sh scheduled가 그 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done`을 부름(그 밖에는 말없이 끝).
+#   nightly_batch.sh scheduled가 그 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done`을 부름(그 밖에는 말없이 끝).
 #   상한: run_docs --max-docs·--deadline(ops.nightly.max_docs·deadline) + TimeoutStartSec(아래 — 마지막 안전판). 사람이 따로 돌린 run_docs와는
 #   run_docs 잠금(batch_progress/run_docs.lock — 도는 중이면 종료 코드 75)으로 겹치지 않는다(pl-18).
-# 서버 설정은 settings.yaml 한 파일(<루트>/settings.yaml — 루트 = 코드 폴더의 부모, env-guide.md §0). trigger.sh가 settings_env.sh load_settings로
+# 서버 설정은 settings.yaml 한 파일(<루트>/settings.yaml — 루트 = 코드 폴더의 부모, env-guide.md §0). nightly_batch.sh가 load_settings.sh load_settings로
 #   호스트 칸(NIGHTLY_TIME·DATA_PIPELINE_IMAGE·RAG_OUT·DOC_SRC·RUN_ENV 등)을 셸 env로 받는다(RUN_ENV는 settings.yaml required.env.run_env에만 — unit에 적지 않음).
 #   설정 파일이 없거나 틀리면 종료 코드 2. 설정 파일을 다른 자리에 두면 Environment=SETTINGS_FILE=<파일>을 더한다.
-#   호스트 python에는 PyYAML이 있어야 한다(settings_env.sh — host_env.py).
+#   호스트 python에는 PyYAML이 있어야 한다(load_settings.sh — settings_to_env.py).
 [Unit]
-Description=RAG 새벽 배치 — run_docs.py(문서별 flow)를 NIGHTLY_TIME 시각에만(trigger.sh scheduled)
+Description=RAG 새벽 배치 — run_docs.py(문서별 flow)를 NIGHTLY_TIME 시각에만(nightly_batch.sh scheduled)
 Wants=network-online.target
 After=network-online.target docker.service
 
@@ -18,12 +18,12 @@ Type=oneshot
 # 서버 컨테이너 도구 = root podman 하나(사용자 10-30 검토 B4 — 이미지를 sudo podman load로 넣은 저장소와 같게). docker 서버면 User=rag(docker 그룹)·DOCKER=docker.
 User=root
 Environment=DOCKER=podman
-# WorkingDirectory = 코드 폴더(dc.sh timers가 채움) — 설정 파일은 그 부모(루트)에서 settings_env.sh가 찾는다.
+# WorkingDirectory = 코드 폴더(host_ctl.sh timers가 채움) — 설정 파일은 그 부모(루트)에서 load_settings.sh가 찾는다.
 WorkingDirectory=@CODE_DIR@
-ExecStart=/bin/bash deploy/host/scripts/trigger.sh scheduled
+ExecStart=/bin/bash deploy/host/scripts/nightly_batch.sh scheduled
 TimeoutStartSec=6h
 # 75 = 마감 도달·다른 run_docs가 도는 중(pl-18) — 예정된 끝이라 unit 실패로 치지 않음. 1(실패 문서)·2(설정)는 실패.
 SuccessExitStatus=75
 # 실패 알림(선택): OnFailure=rag-notify@%n.service  — 사내 메일·웹훅 단위 파일을 따로 만들 때
 # cron을 쓰면(systemd 대신 — cron 시각이 곧 일정, NIGHTLY_TIME은 안 봄):
-#   0 1 * * * cd <코드 폴더> && . deploy/host/scripts/settings_env.sh && load_settings && python3 deploy/host/scripts/run_docs.py --start-offset 0 --skip-done
+#   0 1 * * * cd <코드 폴더> && . deploy/host/scripts/load_settings.sh && load_settings && python3 deploy/host/scripts/run_docs.py --start-offset 0 --skip-done

@@ -649,7 +649,7 @@ REMOVED: dict[str, frozenset[str]] = {
     ),
     # PipelineLoadPublish(pipeline/config.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
     "PipelineLoadPublish": frozenset({"parse_date", "path_map", "source_system", "upload_raw"}),  # parse_date·path_map — 11-04(op-05)
-    # PipelineNight(pipeline/config.py) — 11-01(night·trigger.sh night 지움) — 지운 칸(남으면 경고만)
+    # PipelineNight(pipeline/config.py) — 11-01(night·nightly_batch.sh night 지움) — 지운 칸(남으면 경고만)
     "PipelineNight": frozenset(
         {"deadline", "parse_deadline", "vlm_concurrency", "workers"}
     ),  # workers — 11-04: ops.runtime.pipe_workers 하나로 · vlm_concurrency — 11-04 VLM 통일(common.models.vlm.concurrency)

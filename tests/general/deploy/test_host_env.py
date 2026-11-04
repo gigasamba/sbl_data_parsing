@@ -1,5 +1,5 @@
-"""호스트 칸 → 셸 env(사용자 11-02 — 호스트 python은 PyYAML만): deploy/host/scripts/host_env.py가 설정 모델 export(common.config.export)와
-같은 줄을 내는지, host_keys.tsv가 설정 모델과 같은지. 임시 settings.yaml만 — 설정·docker 없음(PC 전용)."""
+"""호스트 칸 → 셸 env(사용자 11-02 — 호스트 python은 PyYAML만): deploy/host/scripts/settings_to_env.py가 설정 모델 export(common.config.export)와
+같은 줄을 내는지, host_settings.tsv가 설정 모델과 같은지. 임시 settings.yaml만 — 설정·docker 없음(PC 전용)."""
 
 import contextlib
 import importlib.util
@@ -23,12 +23,12 @@ def _load(name, rel):
     return mod
 
 
-K = _load("hostkeys", "deploy/release/hostkeys.py")
+K = _load("hostkeys", "deploy/release/gen_host_keys.py")
 SECTIONS = list(K.HOST_SECTIONS)
 
 
 def _host_env():
-    return _load("host_env", "deploy/host/scripts/host_env.py")
+    return _load("host_env", "deploy/host/scripts/settings_to_env.py")
 
 
 def _value(path, name, kind):
@@ -44,7 +44,7 @@ def _value(path, name, kind):
 
 
 def test_host_env_matches_export():
-    assert K.main(["--check"]) == 0, "host_keys.tsv가 설정 모델과 다름 — PYTHONPATH=. python deploy/release/hostkeys.py"
+    assert K.main(["--check"]) == 0, "host_settings.tsv가 설정 모델과 다름 — PYTHONPATH=. python deploy/release/gen_host_keys.py"
     table = [r.split("\t") for r in K.HOST_TABLE.read_text(encoding="utf-8").splitlines() if r and not r.startswith("#")]
     rows = [r for r in table if r[2] != "const"]
     consts = {r[1]: r[3] for r in table if r[2] == "const"}  # 컨테이너 안 약속 경로(settings.IMAGE_PATHS — 사용자 11-02)
@@ -55,7 +55,7 @@ def test_host_env_matches_export():
         f = Path(d) / "settings.yaml"
         f.write_text(yaml.safe_dump(L.to_file(model), allow_unicode=True), encoding="utf-8")
         out = io.StringIO()
-        # 부른 셸의 RUN_ENV 신호(PC export RUN_ENV=local)는 YAML을 이김 — host_env.py처럼 파일 값만 보게 뺀다
+        # 부른 셸의 RUN_ENV 신호(PC export RUN_ENV=local)는 YAML을 이김 — settings_to_env.py처럼 파일 값만 보게 뺀다
         with contextlib.redirect_stdout(out), mock.patch.dict(os.environ):  # env 남김 — 시험
             os.environ.pop("RUN_ENV", None)  # env 남김 — 시험
             rc = E.main(["--format", "sh", "--file", str(f), *[a for s in SECTIONS for a in ("--section", s)]])
@@ -65,7 +65,7 @@ def test_host_env_matches_export():
         doc = L.to_model(yaml.load(f.read_text(encoding="utf-8"), Loader=yaml.BaseLoader), str(f))
         got = sorted(H.lines(doc, SECTIONS, "sh"))
     assert got == want and len(got) == len(rows), (sorted(set(got) ^ set(want)), len(got), len(rows))
-    every = H.lines(doc, [], "sh")  # 절 없이(settings_env.sh load_settings) — 설정 칸 + 약속 경로 APP_*
+    every = H.lines(doc, [], "sh")  # 절 없이(load_settings.sh load_settings) — 설정 칸 + 약속 경로 APP_*
     assert sorted(every) == sorted(want + [f"export {k}='{v}'" for k, v in consts.items()]), sorted(set(every) ^ set(want))
     assert consts["APP_OUTPUT_ROOT"] == "/app/output" and consts["APP_CODE_ROOT"] == "/app/deploy", consts
     cases = [  # (값, 종류, 기대)
@@ -80,4 +80,6 @@ def test_host_env_matches_export():
     ]
     for v, kind, want_s in cases:
         assert H.render(v, kind) == want_s, (v, kind, H.render(v, kind))
-    print(f"[시험] 호스트 칸 → 셸 env — PyYAML만으로 export와 같은 줄 {len(got)}개 · host_keys.tsv = 설정 모델 · 값 꼴 {len(cases)}개 통과")
+    print(
+        f"[시험] 호스트 칸 → 셸 env — PyYAML만으로 export와 같은 줄 {len(got)}개 · host_settings.tsv = 설정 모델 · 값 꼴 {len(cases)}개 통과"
+    )

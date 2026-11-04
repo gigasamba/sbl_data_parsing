@@ -1,5 +1,5 @@
-# 근거 MCP(컨테이너 mcp-server) 상주 확인: 꺼졌거나 /health 응답이 없으면 다시 띄움(deploy/host/scripts/mcp_up.sh).
-# 설치: 코드 폴더에서 `sudo bash deploy/host/scripts/dc.sh timers`(@CODE_DIR@를 채워 쓰고 타이머를 켬 — 이 파일을 그대로 복사하지 않는다).
+# 근거 MCP(컨테이너 mcp-server) 상주 확인: 꺼졌거나 /health 응답이 없으면 다시 띄움(deploy/host/scripts/mcp_keepalive.sh).
+# 설치: 코드 폴더에서 `sudo bash deploy/host/scripts/host_ctl.sh timers`(@CODE_DIR@를 채워 쓰고 타이머를 켬 — 이 파일을 그대로 복사하지 않는다).
 # 서버 컨테이너 도구 = root podman 하나(Environment=DOCKER=podman · User=root — 사용자 10-30 검토 B4). docker 서버면 DOCKER=docker, docker 그룹이 있으면 User=rag.
 [Unit]
 Description=근거 MCP 상주 확인·기동
@@ -9,12 +9,12 @@ After=network-online.target docker.service
 [Service]
 Type=oneshot
 User=root
-# WorkingDirectory = 코드 폴더(dc.sh timers가 채움). 호스트 스크립트는 코드 폴더의 deploy/host/.
+# WorkingDirectory = 코드 폴더(host_ctl.sh timers가 채움). 호스트 스크립트는 코드 폴더의 deploy/host/.
 WorkingDirectory=@CODE_DIR@
-# 11-03(rn-03) — mcp_up.sh가 parse_document 작업 서비스 전용 컨테이너 data-pipeline-mcp도 살핀다(꺼졌으면 up -d).
-# 설정 파일은 적지 않음 — mcp_up.sh가 settings_env.sh load_settings로 <루트>/settings.yaml(루트 = 코드 폴더의 부모)을 읽는다.
+# 11-03(rn-03) — mcp_keepalive.sh가 parse_document 작업 서비스 전용 컨테이너 data-pipeline-mcp도 살핀다(꺼졌으면 up -d).
+# 설정 파일은 적지 않음 — mcp_keepalive.sh가 load_settings.sh load_settings로 <루트>/settings.yaml(루트 = 코드 폴더의 부모)을 읽는다.
 #   settings.yaml이 다른 자리에 따로 있을 때만 Environment=SETTINGS_FILE=<파일>을 더한다.
-#   RUN_ENV는 settings.yaml required.env.run_env에만 적는다. 호스트 python에는 PyYAML이 있어야 한다(settings_env.sh — host_env.py).
+#   RUN_ENV는 settings.yaml required.env.run_env에만 적는다. 호스트 python에는 PyYAML이 있어야 한다(load_settings.sh — settings_to_env.py).
 Environment=DOCKER=podman
-ExecStart=/bin/bash deploy/host/scripts/mcp_up.sh
+ExecStart=/bin/bash deploy/host/scripts/mcp_keepalive.sh
 TimeoutStartSec=5min

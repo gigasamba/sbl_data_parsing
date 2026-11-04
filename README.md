@@ -8,7 +8,7 @@
 >
 > **⚠️ 0.1.0 DB에 `migrate up`을 그냥 하지 않는다.** 마이그레이션 `0002_search`는 0.1.0이 만든 옛 검색 표를 **지운다**. 운영 DB는 새 `required.pg.db_schema`를 정하고 `pg_dump`로 백업한 뒤 올린다(release-and-patch §8-3).
 >
-> **⚠️ `docker compose`·`podman compose`를 직접 부르지 않는다.** 서버 컨테이너는 늘 `bash deploy/host/scripts/dc.sh …`로 다룬다(§5-3 ①).
+> **⚠️ `docker compose`·`podman compose`를 직접 부르지 않는다.** 서버 컨테이너는 늘 `bash deploy/host/scripts/host_ctl.sh …`로 다룬다(§5-3 ①).
 >
 > **⚠️ 실제 값(비밀번호·키·토큰·서버 주소)은 문서·채팅·커밋에 쓰지 않는다.** 이 README의 예시 값은 모두 가짜다.
 >
@@ -65,14 +65,14 @@
 
 | 이미지 | 역할 | 상주 컨테이너 |
 |---|---|---|
-| `data-pipeline` | parse · publish · structure · load | 일괄 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`·`trigger.sh`·`run_tool.sh`가 exec) · `parse_document` 전용 `data-pipeline-mcp` |
+| `data-pipeline` | parse · publish · structure · load | 일괄 `data-pipeline`(일 없이 떠 있음 — `run_docs.py`·`pipe_exec.sh`가 exec) · `parse_document` 전용 `data-pipeline-mcp` |
 | `mcp-server` | 검색 MCP | `mcp-server` |
 
 버전은 저장소 루트 `VERSION` 하나이고 두 이미지가 함께 쓴다(태그 `data-pipeline:<버전>` — 규칙: [release-and-patch §4](docs/operations/release-and-patch.md#4-버전)).
 
 ### 1-4. DB — Alembic 마이그레이션
 
-pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic 마이그레이션(`common/store/db/migrations/versions/`)으로 만들고, 명령은 `dbtool`(PC: `python -m common.store.db.dbtool`, 서버: `bash deploy/host/scripts/run_tool.sh migrate`) 하나다.
+pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic 마이그레이션(`common/store/db/migrations/versions/`)으로 만들고, 명령은 `dbtool`(PC: `python -m common.store.db.dbtool`, 서버: `bash deploy/host/scripts/pipe_exec.sh migrate`) 하나다.
 
 | 갈래(`--target`) | 스키마 | 끝 판 |
 |---|---|---|
@@ -336,7 +336,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | 단계 | 어디서 → 어디로 | run_env | 이미지 | 코드 |
 |---|---|---|---|---|
 | ① 개발 반입 | PC → 개발 서버 | `local` → `dev` | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`(PC가 빌드 — §5-2) | 코드 git zip을 푼 폴더를 `/app/deploy`에 읽기 전용 마운트(스크립트가 자기 코드 폴더를 붙임). 코드만 바꿀 때 = 새 루트에 새 코드 zip(§5-8) |
-| ② 운영 반입 | 개발 서버 → 운영 서버 | `dev` → `prd` | 코드가 든 이미지 `data-pipeline`·`mcp-server`(개발 서버에서 `bake.sh` — [release-and-patch §1-2](docs/operations/release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)) | 이미지 안(마운트 없음, `CODE_DIR` 두지 않음) |
+| ② 운영 반입 | 개발 서버 → 운영 서버 | `dev` → `prd` | 코드가 든 이미지 `data-pipeline`·`mcp-server`(개발 서버에서 `bake_prod_image.sh` — [release-and-patch §1-2](docs/operations/release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)) | 이미지 안(마운트 없음, `CODE_DIR` 두지 않음) |
 
 반입은 git 저장소 두 개를 **zip으로 받아** 이미지는 공용 폴더에, 코드는 루트에 푼다:
 - 코드: `gigasamba/sbl_data_parsing`의 받을 판(태그·커밋). zip을 푼 폴더(`sbl_data_parsing-<판>`)가 그대로 코드 폴더다. zip은 `CODE_COMMIT`을 채운다(git clone은 안 채움 — 시작 로그의 커밋이 틀 그대로).
@@ -346,9 +346,9 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 <공용 폴더>/                                  ← 예 /home/sbl/
 ├── sbl_images-main/                         ← 공용 — load.sh · <판>/BUILD.txt · <판>/<이미지>/*.tar.gz.part* + *.sha256(서버에 한 번 load)
 ├── <루트>/                                   ← 한 벌 — 예 dev/ (판마다 새 루트 — dev-0.2.0/처럼)
-│   ├── settings.yaml  edw_chain.yaml        ← settings.sample.yaml·기본 사슬을 dc.sh init이 없을 때만 복사(새 판이면 앞 루트에서 복사해 옴)
+│   ├── settings.yaml  edw_chain.yaml        ← settings.sample.yaml·기본 사슬을 host_ctl.sh init이 없을 때만 복사(새 판이면 앞 루트에서 복사해 옴)
 │   ├── sbl_data_parsing-<판>/               ← 코드 폴더(VERSION · CODE_COMMIT · deploy/docker/DEPS_HASH)
-│   ├── output/                              ← 결과 폴더(dc.sh init이 만듦 — 아래 _ 붙은 폴더는 임시 자리)
+│   ├── output/                              ← 결과 폴더(host_ctl.sh init이 만듦 — 아래 _ 붙은 폴더는 임시 자리)
 │   │   ├── _docflow/<번호>/  _warm/  _mcp_parse/jobs/  _llm_spend/
 │   │   └── logs/                            ← DB 로그를 못 쓸 때의 예비 파일만
 │   └── backup/                              ← pg_dump 백업·설정 사본(700)
@@ -374,15 +374,15 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 0. `export DOCKER=podman` — 위 "미리 있어야 하는 것"을 확인한다.
 1. 공용 폴더와 루트를 만들고(`mkdir -p /home/sbl/dev`처럼 아무 자리) 이미지 zip은 공용 폴더(`/home/sbl/`)에, 코드 zip은 루트(`/home/sbl/dev/`)에 푼다.
 2. 이미지를 불러온다(공용 폴더에서 — 서버에 한 번, 이미 불러온 판이면 건너뜀): `cd /home/sbl && DOCKER=podman bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다 — 0.2.0 코드는 0.1.0 실행 이미지(`f0fcc30bd067bc2f`)를 쓴다: `load.sh 0.1.0`.
-3. 루트 채우기: `cd <루트>/<코드> && bash deploy/host/scripts/dc.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775)·`backup/`(700), 코드 폴더 a+rX, `settings.sample.yaml` → `<루트>/settings.yaml`, `resources/config/edw_chain.yaml` → `<루트>/edw_chain.yaml`(둘 다 없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
+3. 루트 채우기: `cd <루트>/<코드> && bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775)·`backup/`(700), 코드 폴더 a+rX, `settings.sample.yaml` → `<루트>/settings.yaml`, `resources/config/edw_chain.yaml` → `<루트>/edw_chain.yaml`(둘 다 없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
 4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값(§5-3 ② "꼭 채울 값"). 이미지 칸에는 2에서 불러온 실행 이미지 태그(`data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0`). 자원 상한도 본다(아래).
    - EDW 표 설명 자료(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료, 받는 곳은 refactor.md C-91)를 루트 아래 결과 폴더에 복사하고(`<루트>/output/edw_meta/`, UID 10001이 읽을 수 있게) `search.edw_meta.dir: /app/output/edw_meta`를 적는다. 없으면 `edw_meta` 도구만 `not_configured`로 답한다(나머지 도구는 그대로).
-5. `bash deploy/host/scripts/dc.sh up -d data-pipeline`(코드 폴더에서 — DB 도구가 그 안에서 돈다).
-6. DB(§5-3 ③): `bash deploy/host/scripts/run_tool.sh migrate check --target all` → `… migrate up --target all --dim <임베딩 차원>`(차원 = 임베딩 모델 출력 크기, 모델 담당 확인) → `… migrate master load` → `… migrate check --target all`(기대: 차이 없음).
-7. `bash deploy/host/scripts/dc.sh up -d data-pipeline-mcp mcp`(검색 MCP는 시작할 때 마스터 표를 읽으므로 6 뒤).
-8. `bash deploy/host/scripts/dc.sh check` — check_env → ping_models → migrate check → 두 이미지 selftest → 검색 MCP `/health`, 처음 실패에서 멈춘다. 기대 마지막 줄: `[dc check] 통과 — 6개`. 실행 이미지(`*-runtime`)면 스크립트가 자기 코드 폴더를 `/app/deploy`에 붙인다(셸·systemd에 `CODE_DIR`가 있으면 그 값).
+5. `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline`(코드 폴더에서 — DB 도구가 그 안에서 돈다).
+6. DB(§5-3 ③): `bash deploy/host/scripts/pipe_exec.sh migrate check --target all` → `… migrate up --target all --dim <임베딩 차원>`(차원 = 임베딩 모델 출력 크기, 모델 담당 확인) → `… migrate master load` → `… migrate check --target all`(기대: 차이 없음).
+7. `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-mcp mcp`(검색 MCP는 시작할 때 마스터 표를 읽으므로 6 뒤).
+8. `bash deploy/host/scripts/host_ctl.sh check` — check_env → ping_models → migrate check → 두 이미지 selftest → 검색 MCP `/health`, 처음 실패에서 멈춘다. 기대 마지막 줄: `[host_ctl check] 통과 — 6개`. 실행 이미지(`*-runtime`)면 스크립트가 자기 코드 폴더를 `/app/deploy`에 붙인다(셸·systemd에 `CODE_DIR`가 있으면 그 값).
 9. 시작 로그 첫 줄 `[image] 이미지 … · 코드 <커밋> · 의존성 …`으로 판을 확인하고, 첫 게시는 §5-3 ④의 미리보기부터, 첫 문서를 넣은 뒤 `mcp_smoke --source <원천>`으로 검색 근거를 확인한다(§4-5).
-10. 자동 실행을 켠다 — `bash deploy/host/scripts/dc.sh timers`(§5-5). 다른 서버의 AI 클라이언트가 붙어야 하면 아래 "밖에서 붙기".
+10. 자동 실행을 켠다 — `bash deploy/host/scripts/host_ctl.sh timers`(§5-5). 다른 서버의 AI 클라이언트가 붙어야 하면 아래 "밖에서 붙기".
 
 **자원(기본 상한 — 합계 CPU 9 · 메모리 36g)**
 
@@ -392,7 +392,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | `data-pipeline-mcp` | 3 · 8g(CPU 나눔 비율 4096 — 일괄 1024보다 먼저) | `ops.pipeline_host.parse_mcp_cpus` · `parse_mcp_mem_limit` · `parse_mcp_cpu_shares` |
 | `mcp-server` | 1 · 4g | `ops.mcp_host.cpus` · `mem_limit` |
 
-서버 CPU 수보다 큰 값은 컨테이너 도구가 거부한다. CPU 4개 서버라면 예: `parse_cpus: 2`, `parse_mcp_cpus: 1`(그러면 `tuning.ops.services.parse_mcp.procs`도 1 이하), `ops.mcp_host.cpus: 1`. 바꾼 뒤 `dc.sh up -d --force-recreate …`.
+서버 CPU 수보다 큰 값은 컨테이너 도구가 거부한다. CPU 4개 서버라면 예: `parse_cpus: 2`, `parse_mcp_cpus: 1`(그러면 `tuning.ops.services.parse_mcp.procs`도 1 이하), `ops.mcp_host.cpus: 1`. 바꾼 뒤 `host_ctl.sh up -d --force-recreate …`.
 
 **밖에서 붙기(다른 서버의 AI 클라이언트)**
 - 기본 바인드는 `127.0.0.1`. 밖에서 붙게 하려면 `search.server.host`에 서버 IP를 적는다(`0.0.0.0`은 거부).
@@ -401,7 +401,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 **한 서버에 여러 벌 띄우기(개발자별 — 컨테이너 이름·포트 바꾸기)**
 - 루트 하나가 한 벌이다. 개발자마다 공용 폴더 아래 루트를 새로 만들어(예 `/home/sbl/dev-hong/`) 위 설치 순서를 따로 한다. 이미지는 공용 폴더에서 이미 불러왔으므로 2번은 건너뛴다.
-- 그 루트의 `settings.yaml`에 아래 칸을 벌마다 다르게 적는다. compose를 직접 부르지 않는다 — `dc.sh`가 이 값으로 이름·포트를 채운다.
+- 그 루트의 `settings.yaml`에 아래 칸을 벌마다 다르게 적는다. compose를 직접 부르지 않는다 — `host_ctl.sh`가 이 값으로 이름·포트를 채운다.
 
 ```yaml
 ops:
@@ -423,13 +423,13 @@ required:
 ```bash
 mkdir -p /home/sbl/dev-hong && cd /home/sbl/dev-hong && unzip <코드 zip>  # 공용 폴더 아래 새 루트 + 코드 폴더
 cd sbl_data_parsing-<판>
-bash deploy/host/scripts/dc.sh init --group <운영 그룹>                    # <루트>/settings.yaml 생김 → 위 칸을 채움
-bash deploy/host/scripts/dc.sh up -d data-pipeline                         # → data-pipeline-hong
-bash deploy/host/scripts/run_tool.sh migrate up --target all --dim <차원>  # 새 스키마 sbl_hong에 표 만들기(설치 순서 6)
-bash deploy/host/scripts/run_tool.sh migrate master load                   # 기준 표(고객 명부·용어) 넣기 — 검색 MCP가 시작할 때 읽음
-bash deploy/host/scripts/dc.sh up -d data-pipeline-mcp mcp                 # → data-pipeline-mcp-hong · mcp-server-hong(포트 8776 · 8775)
-bash deploy/host/scripts/dc.sh check                                       # 마지막 줄 [dc check] 통과 — 6개
-bash deploy/host/scripts/dc.sh ps                                          # 이 벌의 컨테이너만 보임
+bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>                    # <루트>/settings.yaml 생김 → 위 칸을 채움
+bash deploy/host/scripts/host_ctl.sh up -d data-pipeline                         # → data-pipeline-hong
+bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <차원>  # 새 스키마 sbl_hong에 표 만들기(설치 순서 6)
+bash deploy/host/scripts/pipe_exec.sh migrate master load                   # 기준 표(고객 명부·용어) 넣기 — 검색 MCP가 시작할 때 읽음
+bash deploy/host/scripts/host_ctl.sh up -d data-pipeline-mcp mcp                 # → data-pipeline-mcp-hong · mcp-server-hong(포트 8776 · 8775)
+bash deploy/host/scripts/host_ctl.sh check                                       # 마지막 줄 [host_ctl check] 통과 — 6개
+bash deploy/host/scripts/host_ctl.sh ps                                          # 이 벌의 컨테이너만 보임
 ```
 - 칸 값 찾기:
 
@@ -447,8 +447,8 @@ bash deploy/host/scripts/dc.sh ps                                          # 이
 | 새 벌이 다른 벌과 같은 스키마를 씀 | 필요 없음(`migrate check`만) — 두 벌이 같은 데이터에 적재·검색하므로 서로 덮는다. 개발자별 시험은 스키마를 나눈다 |
 | 새 판에 표 변경(마이그레이션)이 있음 | 적재 전에 한 번(`--dim` 없이 — 있는 표는 DB의 차원을 씀) |
 
-- `instance`를 비우면 한 벌(이름 그대로 `data-pipeline`·`data-pipeline-mcp`·`mcp-server`). 이름은 영소문자·숫자·`-`만(틀리면 `dc.sh`가 종료 2).
-- 확인: `bash deploy/host/scripts/dc.sh ps` — 그 벌의 컨테이너만 보인다. 자세한 것은 [server-guide §1-3](docs/operations/server-guide.md#1-3-한-서버에-여러-벌-띄우기개발자별).
+- `instance`를 비우면 한 벌(이름 그대로 `data-pipeline`·`data-pipeline-mcp`·`mcp-server`). 이름은 영소문자·숫자·`-`만(틀리면 `host_ctl.sh`가 종료 2).
+- 확인: `bash deploy/host/scripts/host_ctl.sh ps` — 그 벌의 컨테이너만 보인다. 자세한 것은 [server-guide §1-3](docs/operations/server-guide.md#1-3-한-서버에-여러-벌-띄우기개발자별).
 
 ### 5-1. 버전 올리기
 
@@ -462,7 +462,7 @@ PC가 하는 일은 실행 이미지 두 개를 만들어 이미지 git(`sbl_ima
 # 폐쇄망 빌드라면 먼저 deploy/docker/wheels/에 휠(linux/amd64, py3.12), assets/rapidocr/에 *.onnx(release-and-patch §5-6)
 BUILD_ONLY=1 IMAGE_TARGET=pipeline-runtime bash deploy/release/build_ship.sh   # data-pipeline-runtime:<VERSION> → 이 커밋 코드를 붙여 selftest 판정
 BUILD_ONLY=1 IMAGE_TARGET=mcp-runtime      bash deploy/release/build_ship.sh   # mcp-server-runtime:<VERSION>
-bash deploy/release/ship_stage.sh pipeline-runtime mcp-runtime                 # output/ship/sbl_images/ — load.sh · <판>/BUILD.txt · <판>/<이미지>/ 45MB 조각 + sha256
+bash deploy/release/stage_images.sh pipeline-runtime mcp-runtime                 # output/ship/sbl_images/ — load.sh · <판>/BUILD.txt · <판>/<이미지>/ 45MB 조각 + sha256
 ```
 
 `output/ship/sbl_images/`를 이미지 git에 그대로 올린다(push는 사람). 같은 태그의 이미지가 이미 있으면 `build_ship.sh`가 멈춘다(버전을 올리거나, 꼭 다시 만들 때만 `FORCE_TAG=1`). 운영 서버 이미지는 PC에서 만들지 않는다(개발 서버에서 굽는다).
@@ -483,21 +483,21 @@ bash deploy/release/ship_stage.sh pipeline-runtime mcp-runtime                 #
 
 `ops.services.parse_mcp.port`를 바꾸면 `search.parse_proxy.url`도 함께 바꾼다. 컨테이너는 host 네트워크라 포트가 서버에서 겹치지 않아야 한다.
 
-**① 컨테이너 — `dc.sh`**
+**① 컨테이너 — `host_ctl.sh`**
 
-상주 컨테이너 3개(서비스 이름 `data-pipeline`·`data-pipeline-mcp`·`mcp`)는 `deploy/host/scripts/dc.sh`로 다룬다 — settings.yaml을 읽어 셸 변수로 넘기고, 실행 이미지면 코드 폴더를 붙여(`compose.code*.yml`) compose 파일을 함께 부른다. compose 하위 명령을 그대로 넘긴다.
+상주 컨테이너 3개(서비스 이름 `data-pipeline`·`data-pipeline-mcp`·`mcp`)는 `deploy/host/scripts/host_ctl.sh`로 다룬다 — settings.yaml을 읽어 셸 변수로 넘기고, 실행 이미지면 코드 폴더를 붙여(`compose.code*.yml`) compose 파일을 함께 부른다. compose 하위 명령을 그대로 넘긴다.
 
 ```bash
-bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp   # 서비스 하나만도 됨 · ps·logs·stop·down도 같은 방법
+bash deploy/host/scripts/host_ctl.sh up -d data-pipeline data-pipeline-mcp mcp   # 서비스 하나만도 됨 · ps·logs·stop·down도 같은 방법
 ```
 
 <a id="compose-파일-읽는-법"></a>
 **compose 파일 읽는 법**(`deploy/host/compose/*.yml`)
 - 맨 위 `x-settings:`·`x-code:`는 서비스가 아니라 함께 쓰는 YAML 조각이다 — `x-settings`는 settings.yaml을 읽기 전용으로 붙이는 줄, `x-code`는 코드 폴더를 `/app/deploy`에 붙이는 줄.
-- `${PARSE_CPUS:-5}` 같은 값은 `dc.sh`가 settings.yaml에서 넘긴다(`settings_env.sh`). 비면 `:-` 뒤 기본값, `${…:?…}`는 꼭 있어야 하는 칸.
-- 그래서 compose를 직접 부르면 값을 못 받아 `:?`에서 멈추거나 기본값으로 뜬다. 바꿀 값은 settings.yaml에 적고 `dc.sh`로 다시 띄운다. `dc.sh`는 부를 때마다 settings.yaml을 다시 읽는다.
+- `${PARSE_CPUS:-5}` 같은 값은 `host_ctl.sh`가 settings.yaml에서 넘긴다(`load_settings.sh`). 비면 `:-` 뒤 기본값, `${…:?…}`는 꼭 있어야 하는 칸.
+- 그래서 compose를 직접 부르면 값을 못 받아 `:?`에서 멈추거나 기본값으로 뜬다. 바꿀 값은 settings.yaml에 적고 `host_ctl.sh`로 다시 띄운다. `host_ctl.sh`는 부를 때마다 settings.yaml을 다시 읽는다.
 
-**② 설정 파일과 결과 폴더** — `dc.sh init`(§5-0 3번). 결과 폴더는 `<루트>/output`이다(다른 곳에 둘 때만 `required.deploy.output_root`를 먼저 적는다). 서버에서 직접 만드는 파일(자리·예시·권한)은 [release-and-patch §8-7](docs/operations/release-and-patch.md#8-7-서버에서-직접-만드는-파일).
+**② 설정 파일과 결과 폴더** — `host_ctl.sh init`(§5-0 3번). 결과 폴더는 `<루트>/output`이다(다른 곳에 둘 때만 `required.deploy.output_root`를 먼저 적는다). 서버에서 직접 만드는 파일(자리·예시·권한)은 [release-and-patch §8-7](docs/operations/release-and-patch.md#8-7-서버에서-직접-만드는-파일).
 
 <a id="꼭-채울-값"></a>
 **꼭 채울 값 — 서버 settings.yaml.** "형식 예"는 모두 가짜 값이다. dev = 개발 서버, prd = 운영 서버.
@@ -506,38 +506,38 @@ bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp   # 서
 |---|---|---|---|---|---|
 | `required.env.run_env` | 실행 환경 | 정해진 값 | `dev` · `prd` | PC·dev·prd | 모든 명령이 시작 거부 |
 | `required.env.run_mode` | 실행 모드 | 정해진 값 | `prod` | PC·dev·prd | (서버는 빠져도 EDW를 못 읽으면 종료 4) |
-| `required.pg.host`·`port`·`db`·`user`·`password`·`db_schema` | 검색 DB(pgvector) | DB 담당 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · `ai` | PC·dev·prd | `dc.sh check` ① check_env · ③ migrate check |
-| `required.embed.base_url`·`model`·`api_key` | 임베딩 모델(`model`은 적재·검색 때 같아야 함) | 모델 담당(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델>` · `<비밀>` | PC·dev·prd | `dc.sh check` ② ping_models |
-| `required.models.llm_*`·`vlm_*` | LLM·VLM 모델 | 모델 담당 | `http://llm.example.local:8001/v1` · `<모델>` | dev·prd | `dc.sh check` ② ping_models |
-| `required.edw.host`·`port`·`database`·`read_*`·`write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시) · `port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_docs` 시작(빠지면 칸 이름을 찍고 멈춤) · `trigger.sh publish --dry-run`(④) |
+| `required.pg.host`·`port`·`db`·`user`·`password`·`db_schema` | 검색 DB(pgvector) | DB 담당 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · `ai` | PC·dev·prd | `host_ctl.sh check` ① check_env · ③ migrate check |
+| `required.embed.base_url`·`model`·`api_key` | 임베딩 모델(`model`은 적재·검색 때 같아야 함) | 모델 담당(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델>` · `<비밀>` | PC·dev·prd | `host_ctl.sh check` ② ping_models |
+| `required.models.llm_*`·`vlm_*` | LLM·VLM 모델 | 모델 담당 | `http://llm.example.local:8001/v1` · `<모델>` | dev·prd | `host_ctl.sh check` ② ping_models |
+| `required.edw.host`·`port`·`database`·`read_*`·`write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시) · `port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_docs` 시작(빠지면 칸 이름을 찍고 멈춤) · `pipe_exec.sh publish --dry-run`(④) |
 | `required.edw.parsing_meta_table` | 게시 행을 쓸 EDW 표 — 비우면 `AI.ParsingMeta` | DB 담당 | (비움) | dev·prd | publish `--apply` |
 | `required.edw.sqlite` | PC 가짜 EDW 파일 — **서버는 비움**(적혀 있으면 EDW를 쓸 때 거부) | — | (비움) | PC만 | — |
 | `required.publish.bucket`·`prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두 | 운영 담당 | `rag-silver` · `parse` | PC·dev·prd | `run_docs` 시작 · publish 미리보기 |
 | `required.object_storage.endpoint`·`region`·`access_key`·`secret_key`·`verify_tls` | Object Storage(S3 호환) 접속 — `region`은 비우면 `us-east-1`, `verify_tls`는 비우면 `1`(사내 CA면 CA 파일 경로) | 스토리지 담당 | `https://os.example.local:9000` · (비움) · `<비밀>` · `<비밀>` · (비움) | dev·prd | `run_docs` 시작 · publish `--apply` |
 | `required.source.input_source`·`source_bucket`·`source_uri_prefix` | 원본 위치 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_docs` |
-| `required.tokens.mcp` | 검색 MCP 토큰 | `openssl rand -hex 24` | 48자 16진수 | dev·prd(밖에서 붙을 때 필수) | `dc.sh check` ⑥ `/health` |
+| `required.tokens.mcp` | 검색 MCP 토큰 | `openssl rand -hex 24` | 48자 16진수 | dev·prd(밖에서 붙을 때 필수) | `host_ctl.sh check` ⑥ `/health` |
 | `required.tokens.parse_mcp` · `parse_proxy` | `parse_document` 작업 서비스 토큰(두 칸 같은 값 — `parse_proxy`를 비우면 `mcp` 값을 씀) | 같은 명령 | 48자 16진수 | dev·prd | `parse_document` 호출이 토큰 오류 |
 | `required.tokens.fulltext` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 48자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |
-| `required.deploy.pipeline_image` · `mcp_image` | 띄울 이미지 태그(같은 배포 묶음) | §5-0 2번 `load.sh` | dev: `data-pipeline-runtime:0.1.0` · prd: `data-pipeline:0.2.0` | dev·prd | `dc.sh up`이 이미지 없음으로 멈춤 |
-| `required.deploy.doc_src` | 원본 문서 폴더 | 서버 관리자 | `/data/docs` | dev·prd | `dc.sh up`이 `:?` 안내로 멈춤 |
+| `required.deploy.pipeline_image` · `mcp_image` | 띄울 이미지 태그(같은 배포 묶음) | §5-0 2번 `load.sh` | dev: `data-pipeline-runtime:0.1.0` · prd: `data-pipeline:0.2.0` | dev·prd | `host_ctl.sh up`이 이미지 없음으로 멈춤 |
+| `required.deploy.doc_src` | 원본 문서 폴더 | 서버 관리자 | `/data/docs` | dev·prd | `host_ctl.sh up`이 `:?` 안내로 멈춤 |
 | `required.deploy.output_root` | 결과 폴더 — 비우면 `<루트>/output` | 서버 관리자 | (비움) | dev·prd | — |
 | `required.deploy.pg_container` | `pg_dump`·`psql`을 exec할 PG 컨테이너 이름 | DB 담당 | `<컨테이너>` | dev·prd | 백업 명령(release-and-patch §8-3 2) |
 | `ops.host.docker` | 컨테이너 도구 | 정해진 값 | `podman` | dev·prd | 호스트 스크립트가 다른 도구를 부름 |
 
 그 밖 칸은 비워 두면 코드 기본값을 쓴다([env-guide "서버 값으로 적는 칸"](docs/operations/env-guide.md)도 본다). 모델 주소는 모두 내부망 주소여야 한다.
 
-**③ DB 마이그레이션** — 적재·검색 전에 끝낸다. `run_tool.sh`는 상주 `data-pipeline` 안에서 돌므로 먼저 `dc.sh up -d data-pipeline`.
+**③ DB 마이그레이션** — 적재·검색 전에 끝낸다. `pipe_exec.sh`는 상주 `data-pipeline` 안에서 돌므로 먼저 `host_ctl.sh up -d data-pipeline`.
 
 > ⚠️ 0.1.0이 쓰던 스키마에 `up`하면 옛 표가 지워진다(§0). 새 서버가 아니면 release-and-patch §8-3을 따른다.
 
 ```bash
 # 0. (DB마다 처음 한 번 — DB 관리자) vector 확장 — 없으면 migrate·적재가 "vector 확장 없음"으로 멈춘다
 #    $DOCKER exec <pg 컨테이너> psql -U <관리자 계정> -d <DB> -c 'CREATE EXTENSION IF NOT EXISTS vector'
-bash deploy/host/scripts/run_tool.sh migrate check --target all                # 지금 판과 차이(읽기만)
-bash deploy/host/scripts/run_tool.sh migrate up --target all --dim <임베딩 차원>   # 새 스키마는 차원 필요(이미 표가 있으면 DB 차원)
-bash deploy/host/scripts/run_tool.sh migrate master load
-bash deploy/host/scripts/run_tool.sh migrate check --target all                # 기대: 차이 없음
-bash deploy/host/scripts/run_tool.sh show-stack                                # 엔진 구성 파일(이름·sha·경로)이 보이면 정상
+bash deploy/host/scripts/pipe_exec.sh migrate check --target all                # 지금 판과 차이(읽기만)
+bash deploy/host/scripts/pipe_exec.sh migrate up --target all --dim <임베딩 차원>   # 새 스키마는 차원 필요(이미 표가 있으면 DB 차원)
+bash deploy/host/scripts/pipe_exec.sh migrate master load
+bash deploy/host/scripts/pipe_exec.sh migrate check --target all                # 기대: 차이 없음
+bash deploy/host/scripts/pipe_exec.sh show-stack                                # 엔진 구성 파일(이름·sha·경로)이 보이면 정상
 ```
 
 기존 스키마·오류 분기(`stamp`, 종료 2)는 [release-and-patch §5-5](docs/operations/release-and-patch.md#5-5-db-버전-관리--migrate).
@@ -545,13 +545,13 @@ bash deploy/host/scripts/run_tool.sh show-stack                                #
 **④ 연결 점검**
 
 ```bash
-bash deploy/host/scripts/run_tool.sh ping_models     # 모델 주소(LLM·VLM·임베딩) — 하나라도 실패면 종료 1
-bash deploy/host/scripts/run_tool.sh check_env       # PG·VLM·설정 요약(⚠️ PG 연결 실패를 "건너뜀"으로 보일 수 있음 — 출력을 읽는다)
-bash deploy/host/scripts/run_tool.sh check           # 자원·쓰기 권한·디스크·PG·모델 요약(⚠️ 실패해도 종료 0 — 출력을 읽는다)
+bash deploy/host/scripts/pipe_exec.sh ping_models     # 모델 주소(LLM·VLM·임베딩) — 하나라도 실패면 종료 1
+bash deploy/host/scripts/pipe_exec.sh check_env       # PG·VLM·설정 요약(⚠️ PG 연결 실패를 "건너뜀"으로 보일 수 있음 — 출력을 읽는다)
+bash deploy/host/scripts/pipe_exec.sh check           # 자원·쓰기 권한·디스크·PG·모델 요약(⚠️ 실패해도 종료 0 — 출력을 읽는다)
 ```
 
-- EDW 로그인과 Object Storage 버킷을 따로 확인하는 명령은 없다. 첫 파싱 뒤 publish 미리보기(`bash deploy/host/scripts/trigger.sh publish --dry-run` — 쓰기 0)로 확인하고, 실제 publish 한 번 뒤 EDW 행과 Object Storage 파일을 본다 — 명령은 [release-and-patch §8-3 8](docs/operations/release-and-patch.md#8-3-실행-순서--복사해-붙이는-명령dev-먼저-그다음-prd).
-- ⚠️ 실제 publish(`trigger.sh publish`)는 한 번만 한다. 다시 돌리면 Object Storage에 같은 결과를 새 시각 이름으로 또 올린다(EDW는 이미 있는 행을 건너뜀).
+- EDW 로그인과 Object Storage 버킷을 따로 확인하는 명령은 없다. 첫 파싱 뒤 publish 미리보기(`bash deploy/host/scripts/pipe_exec.sh publish --dry-run` — 쓰기 0)로 확인하고, 실제 publish 한 번 뒤 EDW 행과 Object Storage 파일을 본다 — 명령은 [release-and-patch §8-3 8](docs/operations/release-and-patch.md#8-3-실행-순서--복사해-붙이는-명령dev-먼저-그다음-prd).
+- ⚠️ 실제 publish(`pipe_exec.sh publish`)는 한 번만 한다. 다시 돌리면 Object Storage에 같은 결과를 새 시각 이름으로 또 올린다(EDW는 이미 있는 행을 건너뜀).
 
 **⑤ 이미지 점검**
 
@@ -563,27 +563,27 @@ bash deploy/release/selftest_gate.sh $DOCKER run --rm -v "$PWD:/app/deploy:ro,z"
 
 selftest는 종료 코드가 아니라 `[판정]` 줄로 판정한다. 운영 서버(구운 이미지)는 `-v …` 없이 `data-pipeline:<판>`·`mcp-server:<판>`.
 
-**⑥ 검색 MCP 띄우기** — `bash deploy/host/scripts/mcp_up.sh`(여러 번 실행해도 안전 — `/health`가 응답하면 그대로, 꺼져 있으면 띄우고, 응답이 없으면 재시작).
+**⑥ 검색 MCP 띄우기** — `bash deploy/host/scripts/mcp_keepalive.sh`(여러 번 실행해도 안전 — `/health`가 응답하면 그대로, 꺼져 있으면 띄우고, 응답이 없으면 재시작).
 
 ### 5-4. 서버 — 파이프라인 실행
 
 | 방법 | 명령 | 순서 | 언제 |
 |---|---|---|---|
 | 문서별 흐름 | `python3 deploy/host/scripts/run_docs.py …`(코드 폴더에서, nohup) | 문서마다 파싱 → publish → 원본 삭제(게시 성공 뒤) → 구조화·적재 | 대량 처리 |
-| 새벽 배치 | systemd `data-pipeline-nightly.timer` → `trigger.sh scheduled` | `ops.nightly.time`에 `run_docs.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>` | 정기 운영 |
-| 파싱·게시만 | `bash deploy/host/scripts/trigger.sh parse` · `trigger.sh publish [--dry-run]` | 상주 컨테이너 안에서 한 번 | 단계 확인 |
+| 새벽 배치 | systemd `data-pipeline-nightly.timer` → `nightly_batch.sh scheduled` | `ops.nightly.time`에 `run_docs.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>` | 정기 운영 |
+| 파싱·게시만 | `bash deploy/host/scripts/pipe_exec.sh parse` · `pipe_exec.sh publish [--dry-run]` | 상주 컨테이너 안에서 한 번 | 단계 확인 |
 
 `run_docs.py` 자리·설정·종료 코드: [release-and-patch §5-4](docs/operations/release-and-patch.md#5-4-run_docspy-자리와-설정) · [server-guide §2](docs/operations/server-guide.md#2-일상-실행--run_docs문서별-흐름). **PC에서는 실행하지 않는다.**
 
 #### 진행 보기
 
 ```bash
-bash deploy/host/scripts/dc.sh logs -f data-pipeline                  # 상주 컨테이너 로그(Ctrl+C로 멈춤 — 컨테이너는 그대로)
+bash deploy/host/scripts/host_ctl.sh logs -f data-pipeline                  # 상주 컨테이너 로그(Ctrl+C로 멈춤 — 컨테이너는 그대로)
 tail -f <run_docs 작업 폴더>/batch_progress/progress.log              # 문서별 줄("doc#<seq> 구조화+적재 OK|FAIL")
 tail -n 50 <결과 폴더>/_docflow/<seq>/structure.log                    # 그 문서의 구조화·적재 출력 — 문서가 끝나면 지워짐(남기려면 run_docs --no-cleanup)
 ```
 
-**로그는 Postgres(`applog` 스키마 — [op-01](docs/prd/ops.md#op-01))에 남는다.** 서버(두 이미지)는 `ops.log.db_enabled` 기본 켬이라 `migrate up --target all`(applog 포함)이 먼저다. DB에 못 쓰면 그 행만 `<결과 폴더>/logs/`에 JSON Lines로 남는다. 사람이 보는 실행 출력은 컨테이너 로그(`podman logs <컨테이너>`·`dc.sh logs`), MCP 호출(질문·SQL 포함)은 `applog.mcp_log`이다.
+**로그는 Postgres(`applog` 스키마 — [op-01](docs/prd/ops.md#op-01))에 남는다.** 서버(두 이미지)는 `ops.log.db_enabled` 기본 켬이라 `migrate up --target all`(applog 포함)이 먼저다. DB에 못 쓰면 그 행만 `<결과 폴더>/logs/`에 JSON Lines로 남는다. 사람이 보는 실행 출력은 컨테이너 로그(`podman logs <컨테이너>`·`host_ctl.sh logs`), MCP 호출(질문·SQL 포함)은 `applog.mcp_log`이다.
 
 **적재 거부 — 임베딩 모델이 다른 묶음(pl-51).** 묶음의 임베딩 모델이 검색 스키마에 이미 적재된 문서의 모델과 다르면 적재는 아무것도 쓰지 않고 종료 2(`[load] 임베딩 모델이 다름 — 적재 거부 …`). `applog.pipe_event`에 남는다:
 
@@ -598,14 +598,14 @@ WHERE stage = 'load.embed_guard' AND ts_start > now() - interval '7 days' ORDER 
 
 | 무엇 | 방법 |
 |---|---|
-| 검색 MCP·`data-pipeline-mcp` 상주 확인 | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_up.sh` |
+| 검색 MCP·`data-pipeline-mcp` 상주 확인 | systemd `mcp-server-keepalive.timer` — 부팅 1분 뒤 + 2분마다 `mcp_keepalive.sh` |
 | 새벽 배치 | systemd `data-pipeline-nightly.timer`(5분마다 깨움) + settings.yaml `ops.nightly.time: "HH:MM"`(그 시각부터 5분 안에 시작) · `max_docs`(새 문서 수 상한, 1 이상) · `deadline: "HH:MM"`(마감 — 시작보다 5분 넘게 뒤). **셋 중 하나라도 비면 돌지 않는다**(기본 비움) |
-| 재부팅 뒤 되살리기(podman) | `systemctl enable --now podman-restart` — `restart: unless-stopped` 컨테이너를 부팅 때 다시 띄운다. 일괄 `data-pipeline`은 keepalive가 보지 않으니 재부팅 뒤 `dc.sh ps`로 보고 없으면 `dc.sh up -d data-pipeline` |
+| 재부팅 뒤 되살리기(podman) | `systemctl enable --now podman-restart` — `restart: unless-stopped` 컨테이너를 부팅 때 다시 띄운다. 일괄 `data-pipeline`은 keepalive가 보지 않으니 재부팅 뒤 `host_ctl.sh ps`로 보고 없으면 `host_ctl.sh up -d data-pipeline` |
 
 systemd 설치(DB 판과 컨테이너를 확인한 뒤 — 새 루트로 옮길 때마다 그 루트의 코드 폴더에서 다시):
 
 ```bash
-bash deploy/host/scripts/dc.sh timers        # 단위 4개의 코드 폴더 자리를 이 코드 폴더로 채워 /etc/systemd/system에 쓰고 두 타이머를 켬
+bash deploy/host/scripts/host_ctl.sh timers        # 단위 4개의 코드 폴더 자리를 이 코드 폴더로 채워 /etc/systemd/system에 쓰고 두 타이머를 켬
 sudo systemctl enable --now podman-restart
 ```
 
@@ -616,13 +616,13 @@ sudo systemctl enable --now podman-restart
 | 하고 싶은 것 | 명령 |
 |---|---|
 | 서버의 모든 컨테이너 | `podman ps` 또는 `docker ps`(root로 띄웠으면 `sudo podman ps`) |
-| 우리 컨테이너만 | `bash deploy/host/scripts/dc.sh ps` |
-| 컨테이너 로그 | `bash deploy/host/scripts/dc.sh logs --tail 100 mcp`(서비스 이름 `data-pipeline` · `data-pipeline-mcp` · `mcp`) |
+| 우리 컨테이너만 | `bash deploy/host/scripts/host_ctl.sh ps` |
+| 컨테이너 로그 | `bash deploy/host/scripts/host_ctl.sh logs --tail 100 mcp`(서비스 이름 `data-pipeline` · `data-pipeline-mcp` · `mcp`) |
 | 검색 MCP가 응답하나 | `curl -s http://127.0.0.1:<search.server.port>/health` |
 | 타이머 상태 | `systemctl list-timers 'mcp-server-keepalive*' 'data-pipeline-nightly*'` · `journalctl -u mcp-server-keepalive.service -n 50` |
-| 끄기 | **타이머부터** — `systemctl stop mcp-server-keepalive.timer data-pipeline-nightly.timer` → `bash deploy/host/scripts/dc.sh stop` |
-| 켜기 | `bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp` → `systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer` |
-| 설정을 바꾼 뒤 | `bash deploy/host/scripts/dc.sh up -d --force-recreate data-pipeline data-pipeline-mcp mcp`(그냥 `up -d`로는 다시 만들지 않음) |
+| 끄기 | **타이머부터** — `systemctl stop mcp-server-keepalive.timer data-pipeline-nightly.timer` → `bash deploy/host/scripts/host_ctl.sh stop` |
+| 켜기 | `bash deploy/host/scripts/host_ctl.sh up -d data-pipeline data-pipeline-mcp mcp` → `systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer` |
+| 설정을 바꾼 뒤 | `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline data-pipeline-mcp mcp`(그냥 `up -d`로는 다시 만들지 않음) |
 
 ### 5-6. 서버 — 생기는 파일
 
@@ -641,7 +641,7 @@ sudo systemctl enable --now podman-restart
 
 | 바꿀 것 | 방법 |
 |---|---|
-| 설정 값 | settings.yaml을 직접 고치고 `dc.sh up -d --force-recreate …`(서비스 이름 `mcp`, 컨테이너 이름 `mcp-server`) |
+| 설정 값 | settings.yaml을 직접 고치고 `host_ctl.sh up -d --force-recreate …`(서비스 이름 `mcp`, 컨테이너 이름 `mcp-server`) |
 | 이번 실행만 다른 값 | `--set 이름=값`(오버레이 설정 파일 도구는 PC 전용 — 서버에서는 종료 2) |
 | 엔진 구성 | 코드 폴더의 `resources/config/pipeline_stack.json`을 고쳐 코드 폴더 바꾸기(§5-8) — 확인 `show-stack`([pipeline_stack.md](docs/architecture/pipeline_stack.md)) |
 
@@ -650,9 +650,9 @@ sudo systemctl enable --now podman-restart
 판(버전)마다 새 루트를 만든다. 판끼리 파일이 섞이지 않고, 앞 루트가 그대로 남아 되돌리기가 쉽다.
 1. 새 루트(예 `/home/dev-0.3.0/`)를 만들고 새 코드 zip(이미지가 바뀌었으면 이미지 zip도)을 푼다.
 2. 앞 루트의 `settings.yaml`·`edw_chain.yaml`을 새 루트로 복사한다(`cp -p`).
-3. 새 코드 폴더에서 `dc.sh init --group <운영 그룹>` → `dc.sh up -d --force-recreate data-pipeline data-pipeline-mcp mcp` → `dc.sh check` → `dc.sh timers`(타이머를 새 루트로 옮김).
+3. 새 코드 폴더에서 `host_ctl.sh init --group <운영 그룹>` → `host_ctl.sh up -d --force-recreate data-pipeline data-pipeline-mcp mcp` → `host_ctl.sh check` → `host_ctl.sh timers`(타이머를 새 루트로 옮김).
 - 검색 DB는 같은 PG를 그대로 본다. 새 문서 판정은 EDW 기준(pl-23)이라 새 `output/`이 비어 있어도 이어서 돈다.
-- 되돌리기: 앞 루트의 코드 폴더에서 `dc.sh up -d --force-recreate …` → `dc.sh timers`.
+- 되돌리기: 앞 루트의 코드 폴더에서 `host_ctl.sh up -d --force-recreate …` → `host_ctl.sh timers`.
 - 코드만 바뀐 판(`DEPS_HASH` 같음)은 이미지를 다시 만들지 않는다 — 개발 서버 [release-and-patch §1-1](docs/operations/release-and-patch.md#1-1-개발-서버--새-루트로-코드-바꾸기) → 운영 서버 §1-2(굽기).
 
 ---

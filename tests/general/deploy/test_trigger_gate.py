@@ -1,6 +1,6 @@
-"""trigger.sh scheduled 시각 게이트(pl-32, 사용자 10-30 · 11-02) — settings.yaml ops.nightly.time·max_docs·deadline(NIGHTLY_TIME·
+"""nightly_batch.sh scheduled 시각 게이트(pl-32, 사용자 10-30 · 11-02) — settings.yaml ops.nightly.time·max_docs·deadline(NIGHTLY_TIME·
 NIGHTLY_MAX_DOCS·NIGHTLY_DEADLINE) 중 하나라도 비면 조용히 끝, 시작 시각부터 5분 안이면 run_docs.py(11-01 — 새벽 배치 = run_docs,
-사용자 10-31)에 상한·마감을 넘김, 꼴이 틀리면 종료 2. trigger.sh에서 게이트 블록만 떼어 bash로 돌린다(date·python3은 셸 함수로 바꿔 끼움 — run_docs는 돌지 않음, 설정·docker 없음, PC 전용)."""
+사용자 10-31)에 상한·마감을 넘김, 꼴이 틀리면 종료 2. nightly_batch.sh에서 게이트 블록만 떼어 bash로 돌린다(date·python3은 셸 함수로 바꿔 끼움 — run_docs는 돌지 않음, 설정·docker 없음, PC 전용)."""
 
 import os
 import re
@@ -47,9 +47,9 @@ def _bash():
 
 
 def _gate():
-    text = (ROOT / "deploy" / "host" / "scripts" / "trigger.sh").read_text(encoding="utf-8")
+    text = (ROOT / "deploy" / "host" / "scripts" / "nightly_batch.sh").read_text(encoding="utf-8")
     m = re.search(r'^if \[ "\$mod" = "scheduled" \]; then\n.*?^fi\n', text, re.S | re.M)
-    assert m, "trigger.sh에 scheduled 게이트 블록이 없음"
+    assert m, "nightly_batch.sh에 scheduled 게이트 블록이 없음"
     return m.group(0)
 
 

@@ -12,7 +12,7 @@
 
 ```mermaid
 flowchart TD
-    A["입구: systemd 타이머 → trigger.sh → run_docs.py (서버) / python -m pipeline.cli parse (PC)"]
+    A["입구: systemd 타이머 → nightly_batch.sh → run_docs.py (서버) / python -m pipeline.cli parse (PC)"]
     B["extract: fetch_docs.py → deduplication.py → filter_and_rotate.py → run_engines.py → run_one_engine.py + engines/*"]
     C["transform 1: parse_scoring.py → build_rep.py (+ figures/*, 후보정)"]
     P["load 1 (silver): publish_parse_result.py → silver_publish.py → Object Storage + EDW ParsingMeta"]
@@ -28,17 +28,17 @@ flowchart TD
 
 ## 2. 입구 — 누가 무엇을 부르나
 
-### 2-1. 서버: 타이머 → `trigger.sh` → `run_docs.py`
+### 2-1. 서버: 타이머 → `nightly_batch.sh` → `run_docs.py`
 
 ```mermaid
 sequenceDiagram
     participant T as systemd 타이머 (5분마다)
-    participant S as trigger.sh scheduled
+    participant S as nightly_batch.sh scheduled
     participant R as run_docs.py (호스트 python)
     participant E as EDW (회사 DB)
     participant C as data-pipeline 컨테이너
     T->>S: data-pipeline-nightly.service
-    S->>S: settings_env.sh load_settings (NIGHTLY_TIME·MAX_DOCS·DEADLINE)
+    S->>S: load_settings.sh load_settings (NIGHTLY_TIME·MAX_DOCS·DEADLINE)
     S->>R: 시작 시각 5분 안일 때만 --start-offset 0 --skip-done --max-docs --deadline
     R->>R: configure() — settings.yaml 읽기, 잠금 batch_progress/run_docs.lock
     R->>E: edw_list() — AI.FileStorageMap 목록(파일 크기 순)
@@ -54,7 +54,7 @@ sequenceDiagram
     R-->>S: 종료 코드 0 · 1 · 2 · 75
 ```
 
-`run_docs.py`는 호스트 python으로 돈다(pydantic 없음 — `common/config/layout.py`만 파일로 읽는다). 컨테이너 안 명령은 모두 상주 컨테이너 `data-pipeline`에 `docker exec`(서버는 podman)로 보낸다. 문서별 값(결과 폴더, VLM 동시 수 등)은 환경변수가 아니라 `--set 이름=값`으로 넘기고, 받는 쪽 진입 모듈이 `common.config.setarg.apply()`로 읽는다.
+`run_docs.py`는 호스트 python으로 돈다(pydantic 없음 — 설정 읽기는 `deploy/host/scripts/settings_to_env.py`를 파일로 읽어 쓰고, 그 모듈이 `common/config/layout.py`를 파일로 읽는다). 컨테이너 안 명령은 모두 상주 컨테이너 `data-pipeline`에 `docker exec`(서버는 podman)로 보낸다. 문서별 값(결과 폴더, VLM 동시 수 등)은 환경변수가 아니라 `--set 이름=값`으로 넘기고, 받는 쪽 진입 모듈이 `common.config.setarg.apply()`로 읽는다.
 
 ```mermaid
 flowchart TD
@@ -77,8 +77,8 @@ flowchart TD
 
 | 단계 | 파일·함수 | 하는 일 | 입력 → 출력 |
 |---|---|---|---|
-| 타이머 | `deploy/host/systemd/data-pipeline-nightly.{timer,service}` | 5분마다 `trigger.sh scheduled` 실행(oneshot, 종료 코드 75는 성공으로 침) | — |
-| 시작 판정 | `deploy/host/scripts/trigger.sh` | `NIGHTLY_TIME`·`NIGHTLY_MAX_DOCS`·`NIGHTLY_DEADLINE`(`ops.nightly.*`)이 다 있고 지금이 시작 5분 안일 때만 `run_docs.py`를 부름. `parse`·`publish`는 컨테이너 안에서 모듈 하나만 1회 실행 | 서버 `settings.yaml` → 셸 변수 |
+| 타이머 | `deploy/host/systemd/data-pipeline-nightly.{timer,service}` | 5분마다 `nightly_batch.sh scheduled` 실행(oneshot, 종료 코드 75는 성공으로 침) | — |
+| 시작 판정 | `deploy/host/scripts/nightly_batch.sh` | `NIGHTLY_TIME`·`NIGHTLY_MAX_DOCS`·`NIGHTLY_DEADLINE`(`ops.nightly.*`)이 다 있고 지금이 시작 5분 안일 때만 `run_docs.py`를 부름. `parse`·`publish` 1회 실행은 `pipe_exec.sh`(rn-06) | 서버 `settings.yaml` → 셸 변수 |
 | 설정 읽기 | `deploy.host.scripts.run_docs.configure()`·`deploy.host.scripts.run_docs.read_settings()` | 필수 칸(`SETTINGS_REQUIRED`) 확인, `run_env`가 dev·prd가 아니면 거부, 작업 폴더·결과 폴더·컨테이너 명령을 정함 | `settings.yaml` → 전역 값 |
 | 엔진 구성 확인 | `deploy.host.scripts.run_docs.stack_check()` | 컨테이너 안 `python -m pipeline.cli show-stack` | — |
 | 대상 고르기 | `deploy.host.scripts.run_docs.edw_list()`·`deploy.host.scripts.run_docs.edw_done_keys()`·`deploy.host.scripts.run_docs.faq_first()` | `AI.FileStorageMap`에서 `--filter`(기본 `RFP,proposal`) 이름 조건으로 목록, ParsingMeta에 끝난 문서(`ok`·`partial`은 `gold_version`도 있어야, `skipped_dup`)를 뺌, FAQ 교체가 필요하면 FAQ를 앞에 | EDW → 문서 순서 |
@@ -416,8 +416,8 @@ flowchart TD
 | 시작 관문 | `common.config.settings.require_run_env()`·`common.config.settings.pin_env()` | `run_env`가 없거나 서버인데 설정이 틀리면 시작 거부 |
 | 한 번만 덮기 | `common.config.setarg.apply()` | `--set 이름=값`을 덮기 파일로 만들어 자기와 자식 프로세스에 넘김(비밀 칸은 거부) |
 | 자식에 넘기기 | `common.config.settings.child_env()`·`common.config.settings.put()` | 자식 프로세스에 설정 값을 덮기 파일로 넘김(`parse_module`이 `VLM_CONCURRENCY`·`DOC_DIR` 등에 씀) |
-| 이미지 약속 경로 | `common.config.settings.IMAGE_PATHS` → `deploy/host/scripts/host_keys.tsv` | `/app/output`·`/app/deploy`·`/data/docs`·`/app/output/prepared` — 호스트 쪽 `run_docs.py`는 `host_keys.tsv`로 읽음 |
-| 호스트 셸 | `deploy/host/scripts/settings_env.sh`·`host_env.py` | `load_settings`가 호스트 칸(이미지·`RAG_OUT`·`NIGHTLY_*`)을 셸 변수로 |
+| 이미지 약속 경로 | `common.config.settings.IMAGE_PATHS` → `deploy/host/scripts/host_settings.tsv` | `/app/output`·`/app/deploy`·`/data/docs`·`/app/output/prepared` — 호스트 쪽 `run_docs.py`는 `host_settings.tsv`로 읽음 |
+| 호스트 셸 | `deploy/host/scripts/load_settings.sh`·`settings_to_env.py` | `load_settings`가 호스트 칸(이미지·`RAG_OUT`·`NIGHTLY_*`)을 셸 변수로 |
 
 키 설명: [operations/env-guide.md](../operations/env-guide.md), 요건 [ops-settings.md](../prd/ops-settings.md).
 

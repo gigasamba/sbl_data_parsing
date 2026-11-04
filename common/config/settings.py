@@ -58,8 +58,8 @@ IN_IMAGE = REPO_ROOT.name == "deploy"  # 코드가 이미지 배치(/app/deploy/
 # ── 이미지 배치 약속 경로 — 코드에 둔 컨테이너 안 자리는 이 두 표에만(CLAUDE.md 3절 경로 규칙의 예외, 사용자 10-28 — VS7e2 R-12 · D-029) ──
 # 이미지(Dockerfile·compose 마운트·entrypoint)가 만드는 자리라 서버 설정 값이 아니라 이미지와 함께 바뀐다. 동작은 S7e2와 같음.
 IMAGE_PATHS = {
-    # 사용자 11-02 — 컨테이너 안 약속 경로는 이 표 하나(두 이미지 공통). 호스트 쪽(compose·run_docs·스크립트)은 deploy/release/hostkeys.py가
-    # 이 표로 만든 deploy/host/scripts/image_paths.json을 읽는다(호스트 python엔 pydantic이 없음 — settings_env.sh가 APP_* env로도 냄).
+    # 사용자 11-02 — 컨테이너 안 약속 경로는 이 표 하나(두 이미지 공통). 호스트 쪽(compose·run_docs·스크립트)은 deploy/release/gen_host_keys.py가
+    # 이 표로 만든 deploy/host/scripts/image_paths.json을 읽는다(호스트 python엔 pydantic이 없음 — load_settings.sh가 APP_* env로도 냄).
     "output_root": "/app/output",  # 결과 폴더를 붙이는 자리(compose RAG_OUT → 이 자리)
     "code_root": "/app/deploy",  # 코드 자리(PYTHONPATH — 실행 이미지는 서버 코드 폴더를 여기에 붙임)
     "image_env": "/app/docker/image_env.txt",  # 빌드 때 이미지 ENV를 적어 둔 파일(common.config.boot — 라이브러리 env가 이미지 값만 덮게)
@@ -1491,7 +1491,7 @@ class CommonHost(Section):
         "한 서버에 여러 벌(개발자별 등) 띄울 때 이 루트의 이름(영소문자·숫자·-) — 컨테이너 이름·compose 묶음·systemd 타이머 이름 끝에 -<이름>으로 붙음."
         " 비우면 이름 그대로(한 벌). 벌마다 포트(search.server.port · parse MCP 서비스 port와 parse_document 주소)와 PG 스키마도 달리 적는다",
     )
-    image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_old.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
+    image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_images.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
     output_root: str | None = F(
         None,
         "RAG_OUT",
@@ -1502,7 +1502,7 @@ class CommonHost(Section):
         "PG_CONTAINER",
         "호스트에서 psql을 docker exec할 PostgreSQL(pgvector) 컨테이너 이름 — run_docs.py 문서 수 세기(S7e1 — 옛 코드 고정값)",
     )
-    prune_keep: int | None = F(2, "PRUNE_KEEP", "prune_old.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값)")
+    prune_keep: int | None = F(2, "PRUNE_KEEP", "prune_images.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값)")
 
 
 class CommonPaths(Section):
@@ -1523,7 +1523,7 @@ class CommonPaths(Section):
         None,
         "EDW_CHAIN_FILE",
         "EDW 조인 사슬 파일 경로 — 적재(EDW 조인)와 검색 MCP(search attrs·edw_meta search_attrs)가 함께 읽음(pl-29·pl-52). 비우면 "
-        "resources/config/edw_chain.yaml · 서버 사본은 컨테이너 안 /etc/rag/edw_chain.yaml(원본 <루트>/edw_chain.yaml — dc.sh init이 "
+        "resources/config/edw_chain.yaml · 서버 사본은 컨테이너 안 /etc/rag/edw_chain.yaml(원본 <루트>/edw_chain.yaml — host_ctl.sh init이 "
         "없을 때만 복사, 적었을 때만 쓰임) · 점검: python -m pipeline.load.edw_doc_meta --check",
     )
     source_manifest: str | None = F(None, "SOURCE_MANIFEST", "원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응)")
