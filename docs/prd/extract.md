@@ -76,8 +76,8 @@ A: `, 절 `DS`. 5행 = `divider`만 → 건너뜀. 머리글 없는 시트 `memo
 - Status: done
 
 <a id="pl-57"></a>
-## pl-57 · 원본 zip 풀어서 파싱
-- 이유(사용자 11-05): 지금 원본 zip은 "지원하지 않음"으로 표시만 한다(pl-02). 메일 첨부 zip은 이미 깊이 1까지 풀어 파싱한다(pl-36).
-- 정할 것(설계 때): 안의 파일 키(원본 키 + 안 경로), ParsingMeta 행을 파일마다 둘지, 깊이·크기·개수 상한(pl-36과 같게 할지), 암호 zip.
-- 자리: `pipeline/extract/candidate_ready.py`(받은 직후).
+## pl-57 · 원본 zip은 풀어서 안의 문서를 파싱
+- 이유(사용자 11-05): zip으로 올라온 원본 안의 문서도 검색되어야 한다. 메일 첨부 zip은 이미 풀어 파싱한다(pl-36).
+- 요건(되어야 할 모습): 받은 원본이 zip이면 `candidate_ready`가 풀어 안의 문서를 각각 파싱 입력으로 둔다. 안 파일의 키·ParsingMeta 행·깊이·크기·개수 상한·암호 zip 처리는 설계 때 정해 여기 적는다.
+- 비고(현재와 다른 점): 원본 zip은 "지원하지 않음"(`skipped_unsupported`)으로 표시만 한다(`filter_and_rotate.ARCHIVE_EXT` — pl-02).
 - Status: todo
