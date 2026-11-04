@@ -38,10 +38,10 @@ _STACK: dict = {}
 
 
 def _stack():
-    """엔진 구성(사전) — 프로세스마다 한 번(pipeline/engine_stack.py: 파일 → 이미지에 없는 엔진 거부 — 서버·PC 같은 파일, 사용자 11-01).
+    """엔진 구성(사전) — 프로세스마다 한 번(pipeline/extract/engine_stack.py: 파일 → 이미지에 없는 엔진 거부 — 서버·PC 같은 파일, 사용자 11-01).
     파일을 못 읽거나 없는 엔진이면 종료 2."""
     if "v" not in _STACK:
-        from pipeline import engine_stack
+        from pipeline.extract import engine_stack
 
         engine_stack.resolve()
         _STACK["v"] = pc.stack()
@@ -99,7 +99,7 @@ def _run_until(args, env, sec):
 # ── 단계 2 ───────────────────────────────────────────────────
 def _engines_of(st):
     """parse 엔진(정렬) — engine_stack.engines_of 하나로(VS8b R-8)."""
-    from pipeline.engine_stack import engines_of
+    from pipeline.extract.engine_stack import engines_of
 
     return engines_of(st)
 
