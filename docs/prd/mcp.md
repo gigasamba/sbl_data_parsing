@@ -50,9 +50,9 @@
 <a id="mc-02"></a>
 ## mc-02 · 질문 이해 — 넓히기
 - 이유: 사용자는 동의어, 약어, 여러 고객을 한꺼번에 넣어 묻는다.
-- 규칙: BM25용 용어집 넓히기 — 가중치 동의어 1.0 · 약어 0.8 · 약한 것 0.3, 고객 명부 별칭은 질문 1건당 토큰 20개까지(가중치 1.0). 용어집·명부는 PG 마스터 표(`<PG_SCHEMA>_master` — [load.md#pl-38](load.md#pl-38)). vector 질의에는 별칭 글을 붙인다. 가중치를 고르는 질문 유형은 규칙 기반(`qtype.py`).
+- 규칙: BM25용 용어집 넓히기 — 가중치 동의어 1.0 · 약어 0.8 · 약한 것 0.3, 고객 명부 별칭은 질문 1건당 토큰 20개까지(가중치 1.0). 용어집·명부는 PG 마스터 표(`<PG_SCHEMA>_master` — [load.md#pl-38](load.md#pl-38)). vector 질의에는 별칭 글을 붙인다. 가중치를 고르는 질문 유형은 규칙 기반(`question_type.py`).
 - 파일: `mcp_server/services/search/{terms,qtype,search_svc}.py`.
-- QA: `tests/server/mcp/test_qtype.py` · 통과.
+- QA: `tests/server/mcp/test_question_type.py` · 통과.
 - Status: done
 
 <a id="mc-05"></a>
@@ -87,7 +87,7 @@
 
 <a id="mc-13"></a>
 ## mc-13 · 질의 기록은 DB `applog.mcp_log`만
-- 규칙: 질의 기록 파일은 없다(사용자 11-04 — op-13 규칙 7). MCP 호출마다 `applog.mcp_log` 한 행(op-01)이 질문·SQL(`args`)과 근거 키(`result_keys`)를 남긴다. `search.query_log` 칸은 지웠다(옛 설정 파일에 남으면 경고만). MCP를 거치지 않는 PC 명령 `mcp_server.cli.ask`는 기록하지 않는다.
+- 규칙: 질의 기록 파일은 없다(사용자 11-04 — op-13 규칙 7). MCP 호출마다 `applog.mcp_log` 한 행(op-01)이 질문·SQL(`args`)과 근거 키(`result_keys`)를 남긴다. `search.query_log` 칸은 지웠다(옛 설정 파일에 남으면 경고만). MCP를 거치지 않는 PC 명령 `mcp_server.cli.search_ask`는 기록하지 않는다.
 - 파일: `mcp_server/services/call_log.py` · `mcp_server/services/search/search_svc.py` · `mcp_server/services/edw_query.py`.
 - QA: `tests/server/common/test_removed_cols.py`(옛 `search.query_log` 칸은 경고만) · `tests/server/mcp/test_call_log.py` · 통과.
 - Status: done
@@ -121,7 +121,7 @@
   - `pick_rep`는 파싱 상태를 보지 않고, active가 없으면 active 아닌 최신 행으로 대체한다(운영은 active·성공·위치 있는 행만).
   - 등록 시각 가드는 검색 DB(gold `doc.created_at`)에서 읽는다.
   - `docs`에 원본 전체 경로도 받는다.
-- 파일: `mcp_server/routers/fulltext_tool.py`, `mcp_server/services/fulltext.py`, `mcp_server/schemas/fulltext.py`.
+- 파일: `mcp_server/routers/fulltext_tool.py`, `mcp_server/services/fulltext_svc.py`, `mcp_server/schemas/fulltext.py`.
 - QA: `tests/server/mcp/test_fulltext.py`(ParsingMeta는 SQLite 대역) · 통과. 서버 확인 refactor.md C-75.
 - Status: done
 
@@ -174,7 +174,7 @@
 ## mc-09 · 서버 실행과 안전
 - 이유: 공용 내부 서비스라 계속 떠 있어야 하고 위험한 노출은 거부해야 한다.
 - 규칙: FastMCP streamable HTTP(`/mcp`, 기본 `search.server.host` 127.0.0.1 · `port` 8765) 또는 `--stdio`. loopback이 아닌 주소는 `required.tokens.mcp` 필요(상수 시간 비교), 0.0.0.0 거부, DNS 리바인딩 가드(`search.server.allowed_hosts`). `/health`(준비 중이면 503). 도구 동시 8(`search.server.max_concurrency`) + 대기열, 도구 한 번 30초. 새 적재 판이면 다시 읽는다. 호출 감사 기록은 [ops.md#op-01](ops.md#op-01).
-- 파일: `mcp_server/main.py`, `mcp_server/routers/dispatch.py`, `mcp_server/config.py`.
+- 파일: `mcp_server/main.py`, `mcp_server/routers/tool_runner.py`, `mcp_server/config.py`.
 - Status: done
 
 ## 코드와 다른 점 · 지울 코드

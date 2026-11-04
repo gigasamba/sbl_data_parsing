@@ -10,7 +10,7 @@ import httpx
 
 from common.config.settings import COMMON
 from mcp_server import main
-from mcp_server.routers import dispatch
+from mcp_server.routers import tool_runner
 from mcp_server.services import parse_proxy
 
 MB = 1048576
@@ -82,7 +82,7 @@ def test_http_body_cap():
         try:
             asyncio.run(run())
         finally:
-            dispatch._LIMITER = None
+            tool_runner._LIMITER = None
     assert [m for m, _ in sent].count("POST") == 1, sent  # 1.1MB는 서비스로 안 감
     assert free and set(free) == {main._BIG_SLOTS - 1}, free  # 처리 중엔 자리 하나를 쥠
     assert holder[0].value == main._BIG_SLOTS  # 끝나면 돌려줌

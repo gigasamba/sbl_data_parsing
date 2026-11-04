@@ -11,9 +11,9 @@ from common.store import edw_chain as EC
 from common.store.db.models import search_tables as ST
 from mcp_server.config import CFG
 from mcp_server.schemas.evidence import EVIDENCE_KEYS, K_MAX, SEARCH_FILTERS
+from mcp_server.services.search.evidence_shape import _evidence, cap, evidence_status
 from mcp_server.services.search.internal_docs import _manifest_by_name
 from mcp_server.services.search.server_state import _retriever
-from mcp_server.services.search.shaping import _evidence, cap, evidence_status
 
 KST = timezone(timedelta(hours=9))  # 시간대 없는 등록 시각은 KST(운영 계약)
 _SYSTEMS = tuple(s.upper() for s in ST.SOURCES)

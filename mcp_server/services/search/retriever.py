@@ -5,11 +5,11 @@ import sys
 import time
 
 from common.core.contract import uri_from_path  # 원본 위치 규칙(모듈 계약)
-from mcp_server.services.search.local import embed_query
-from mcp_server.services.search.terms import (  # 용어 사전(X3·X4, 구조화와 같은 규칙) · SI43⑤ 벡터 질의 별칭 덧붙이기(10-16 검색 전용으로 분리)
+from mcp_server.services.search.query_expand import (  # 용어 사전(X3·X4, 구조화와 같은 규칙) · SI43⑤ 벡터 질의 별칭 덧붙이기(10-16 검색 전용으로 분리)
     expand_query,
     vector_alias_text,
 )
+from mcp_server.services.search.rank_rules import embed_query
 
 
 class Retriever:

@@ -1,6 +1,6 @@
 -- EDW(SQL Server) 파싱 결과 메타 표 AI.ParsingMeta — 사람·DBA가 실행(코드는 표를 만들지 않음). 다시 실행해도 안전(이미 있으면 건너뜀).
 -- 쓰는 곳: pipeline/load/publish_parse_result.py(INSERT만 — 쓰기 계정 settings.yaml required.edw.write_*) ·
---   pipeline/load/pgvector_load.py(적재 때 loaded_at·gold_version UPDATE) · mcp_server/services/fulltext.py(list_doc_fulltext — 읽기 계정)
+--   pipeline/load/pgvector_load.py(적재 때 loaded_at·gold_version UPDATE) · mcp_server/services/fulltext_svc.py(list_doc_fulltext — 읽기 계정)
 -- 열 이름·순서 = common/store/parsing_meta_db.py COLUMNS(tests/server/common/test_db_schema.py가 같은지 고정).
 -- ⚠ 0.2.0 칸 바꾸기(칸 이름·loaded_at·gold_version 등 — refactor.md C-76)는 이 파일에 없다 — DB 담당·EDW 담당과 정한다.
 -- rep_key = 문서 폴더 `.../Parsing-Result/<출처>/<UUID>/<원본파일명>/`(끝 '/'),

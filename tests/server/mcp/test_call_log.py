@@ -18,7 +18,7 @@ import httpx
 from common.core import jsonlog
 from mcp_server import config as mc
 from mcp_server import main
-from mcp_server.routers import dispatch
+from mcp_server.routers import tool_runner
 from mcp_server.services import call_log as audit
 
 
@@ -116,9 +116,9 @@ def test_dispatch_audit():
         return {"answer": 1}
 
     async def run():
-        dispatch._LIMITER, dispatch._INFLIGHT = None, 0
+        tool_runner._LIMITER, tool_runner._INFLIGHT = None, 0
         with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1", MCP_TOOL_TIMEOUT_SEC="0.02"):
-            out = await asyncio.gather(*[dispatch._bg(slow) for _ in range(4)])
+            out = await asyncio.gather(*[tool_runner._bg(slow) for _ in range(4)])
             assert out.count({"error": "busy"}) == 2
             assert out.count({"error": "timeout"}) == 2
             await asyncio.sleep(0.12)  # abandoned가 끝나도 감사 행은 늘지 않는다.
@@ -127,29 +127,29 @@ def test_dispatch_audit():
         assert len(rows) == 4
         assert any(e == "mcp.thread.finished" for e in events)
         assert all(r["queue_wait_ms"] >= 0 for r in rows)
-        dispatch._LIMITER = None
+        tool_runner._LIMITER = None
         with mc.senv(MCP_TOOL_TIMEOUT_SEC="0"):
-            assert await dispatch._bg(lambda: {"answer": 2}) == {"answer": 2}
+            assert await tool_runner._bg(lambda: {"answer": 2}) == {"answer": 2}
         assert audit.drain()
         assert rows[-1]["status"] == "ok"
-        assert await dispatch._bg_long(lambda: {"engine": "x"}, 1) == {"engine": "x"}
+        assert await tool_runner._bg_long(lambda: {"engine": "x"}, 1) == {"engine": "x"}
         assert audit.drain()
         assert rows[-1]["status"] == "ok"
-        dispatch._LIMITER = None
-        dispatch._INFLIGHT = 2
+        tool_runner._LIMITER = None
+        tool_runner._INFLIGHT = 2
         with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1"):
-            assert await dispatch._bg_long(lambda: None, 1) == {"error": "busy"}
-        dispatch._INFLIGHT = 0
-        assert await dispatch._bg_long(slow, -9.99) == {"error": "timeout"}
+            assert await tool_runner._bg_long(lambda: None, 1) == {"error": "busy"}
+        tool_runner._INFLIGHT = 0
+        assert await tool_runner._bg_long(slow, -9.99) == {"error": "timeout"}
         await asyncio.sleep(0.1)
         assert audit.drain()
         assert rows[-1]["status"] == "timeout"
         count = len(rows)
-        assert await dispatch._bg_long(slow, -10) == {"error": "timeout"}  # 상한 0.0초 = 바로 시간 초과, 무제한이 아님
+        assert await tool_runner._bg_long(slow, -10) == {"error": "timeout"}  # 상한 0.0초 = 바로 시간 초과, 무제한이 아님
         await asyncio.sleep(0.1)
         assert audit.drain()
         assert len(rows) == count + 1 and rows[-1]["status"] == "timeout"
-        assert await dispatch._dispatch(slow, None, (), {}) == {"answer": 1}  # None만 무제한
+        assert await tool_runner._dispatch(slow, None, (), {}) == {"answer": 1}  # None만 무제한
         assert audit.drain()
         assert rows[-1]["status"] == "ok"
 
@@ -157,7 +157,7 @@ def test_dispatch_audit():
             raise TimeoutError("tool says so")
 
         try:
-            await dispatch._dispatch(slow_error, None, (), {})  # 무제한 모드의 도구 TimeoutError는 그대로 올라온다
+            await tool_runner._dispatch(slow_error, None, (), {})  # 무제한 모드의 도구 TimeoutError는 그대로 올라온다
             raise AssertionError("TimeoutError expected")
         except TimeoutError:
             pass
@@ -168,7 +168,7 @@ def test_dispatch_audit():
             raise ValueError("api_key=do-not-store")
 
         try:
-            await dispatch._bg(broken)
+            await tool_runner._bg(broken)
         except ValueError:
             pass
         else:
@@ -176,11 +176,11 @@ def test_dispatch_audit():
         assert audit.drain()
         assert rows[-1]["status"] == "error" and "do-not-store" not in rows[-1]["error_message"]
         with patch.object(audit.logsink, "emit", side_effect=RuntimeError("sink failed")):
-            assert await dispatch._bg(lambda: 42) == 42
+            assert await tool_runner._bg(lambda: 42) == 42
             # 실패 sink 모의를 유지한 채 이 감사까지 비워 다음 HTTP 시험에 행을 넘기지 않는다.
             assert audit.drain()
         with patch.object(audit, "Call", side_effect=RuntimeError("serialization failed")):
-            assert await dispatch._bg(lambda: 43) == 43
+            assert await tool_runner._bg(lambda: 43) == 43
 
     with (
         patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)),
@@ -189,7 +189,7 @@ def test_dispatch_audit():
         try:
             asyncio.run(run())
         finally:
-            dispatch._LIMITER, dispatch._INFLIGHT = None, 0
+            tool_runner._LIMITER, tool_runner._INFLIGHT = None, 0
 
 
 def test_http_context():
@@ -205,7 +205,7 @@ def test_http_context():
             if not msg.get("more_body"):
                 break
         observations.append((json.loads(body), jsonlog.get_context()))
-        result = await dispatch._bg(lambda: {"row_count": 2, "columns": ["id"]})
+        result = await tool_runner._bg(lambda: {"row_count": 2, "columns": ["id"]})
         await send({"type": "http.response.start", "status": 200, "headers": []})
         await send({"type": "http.response.body", "body": _encoded(result)})
 
@@ -242,7 +242,7 @@ def test_http_context():
         try:
             asyncio.run(run())
         finally:
-            dispatch._LIMITER = None
+            tool_runner._LIMITER = None
 
 
 def test_sdk_logs_stay_out_of_audit_log():
@@ -359,7 +359,7 @@ def test_initialize_contract():
         try:
             asyncio.run(run())
         finally:
-            dispatch._LIMITER = None
+            tool_runner._LIMITER = None
 
 
 def test_stdio_channel():
@@ -464,7 +464,7 @@ def test_audit_off_loop():
 
     def observed_input(tool, args):
         assert threading.get_ident() != loop_thread
-        seen.append(dispatch._INFLIGHT)
+        seen.append(tool_runner._INFLIGHT)
         entered.set()
         assert input_release.wait(30)  # 감사 입력 처리가 막혀 있어도 health/도구 응답은 먼저 온다.
         return original_input(tool, args)
@@ -496,9 +496,9 @@ def test_audit_off_loop():
         with patch.object(main, "build", return_value=FakeMcp()), patch.object(main.health, "register"):
             app = main.build_guarded_app("127.0.0.1", 8765, "")
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            dispatch._LIMITER, dispatch._INFLIGHT = None, 2
+            tool_runner._LIMITER, tool_runner._INFLIGHT = None, 2
             with mc.senv(MCP_MAX_CONCURRENCY="1", MCP_MAX_QUEUE="1"):
-                task = asyncio.create_task(dispatch._bg_long(do_parse_document, 1, encoded))
+                task = asyncio.create_task(tool_runner._bg_long(do_parse_document, 1, encoded))
                 await ready(entered)
                 assert (await client.get("/health")).status_code == 200
                 assert not release.is_set()
@@ -508,8 +508,8 @@ def test_audit_off_loop():
                 assert seen == [2]  # busy 판정/거부 뒤에만 입력 처리, 업무 함수는 안 돌림.
             entered.clear()
             input_release.clear()
-            dispatch._INFLIGHT = 0
-            task = asyncio.create_task(dispatch._bg(do_parse_document, encoded))
+            tool_runner._INFLIGHT = 0
+            task = asyncio.create_task(tool_runner._bg(do_parse_document, encoded))
             for event in (entered, output_entered):
                 await ready(event)
                 assert (await client.get("/health")).status_code == 200
@@ -534,7 +534,7 @@ def test_audit_off_loop():
         finally:
             input_release.set()
             release.set()
-            dispatch._LIMITER, dispatch._INFLIGHT = None, 0
+            tool_runner._LIMITER, tool_runner._INFLIGHT = None, 0
 
 
 def test_bounded_receive():

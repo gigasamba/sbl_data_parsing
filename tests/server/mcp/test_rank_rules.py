@@ -1,11 +1,11 @@
-"""mcp_server.services.search.local 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.local`."""
+"""mcp_server.services.search.rank_rules 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.rank_rules`."""
 
 from mcp_server import config as mc
-from mcp_server.services.search.local import IndexMismatch, embed_query, entity_hints, tie_break, weights
+from mcp_server.services.search.rank_rules import IndexMismatch, embed_query, entity_hints, tie_break, weights
 
 
 def selftest():
-    """local.py의 남은 도우미(weights·tie_break·entity_hints·embed_query) — Local 검색 엔진은 mc-01(11-01)에 지움
+    """rank_rules.py의 남은 도우미(weights·tie_break·entity_hints·embed_query) — Local 검색 엔진은 mc-01(11-01)에 지움
     (그 BM25 가중·BR32 ID 문턱·OP1 숨김 시험은 PG 경로로 test_retriever에 옮김)."""
     # G14 — weights(question) 질문 유형별 가중치(SEARCH_W_BM25_TABLE)
     with mc.senv(SEARCH_W_BM25_TABLE=None, SEARCH_W_BM25=None):  # 설정 객체 덮기(S7d — 끝나면 되돌림)

@@ -104,7 +104,7 @@ PC에서는 `run_docs.py`를 돌리지 않는다(운영 EDW·Object Storage에 �
 | 구조화 | `python -m pipeline.transform.structure.build_bundle --parse-dir … --out …` | §4-3 |
 | 마이그레이션 | `python -m common.store.db.dbtool up --target all --schema … --bundle …` | §5-3 |
 | 적재 | `python -m pipeline.load.pgvector_load load --bundle …` | §5-2 |
-| 검색 | `python -m mcp_server.cli.ask ask --source CRMS --q "…"` 또는 `mcp_server.main` | §6 |
+| 검색 | `python -m mcp_server.cli.search_ask ask --source CRMS --q "…"` 또는 `mcp_server.main` | §6 |
 
 게시(`publish_parse_result`)는 PC에서 `required.publish.bucket`에 `file://<절대 경로 폴더>`(로컬 폴더를 가짜 Object Storage로)를, `required.edw.sqlite`(`RDB_SQLITE`)에 가짜 EDW sqlite 파일을 두고 시험한다(§5-1).
 
@@ -389,8 +389,8 @@ flowchart TD
     R["server_state.py _retriever → retriever.py Retriever"]
     P["pgsearch.py: 벡터(HNSW) + BM25 + 드문 ID → RRF"]
     Q["common/ai/embed.py 질문 임베딩 (query_cache.sqlite)"]
-    O["shaping.py → schemas/evidence.py 근거 13칸"]
-    FT["fulltext_tool.py → services/fulltext.py: ParsingMeta 위치 → Object Storage"]
+    O["evidence_shape.py → schemas/evidence.py 근거 13칸"]
+    FT["fulltext_tool.py → services/fulltext_svc.py: ParsingMeta 위치 → Object Storage"]
     PD["parse_tool.py → parse_proxy.py → data-pipeline-mcp 의 pipeline/parse_service.py"]
     M --> S --> H --> R --> P --> O
     R --> Q

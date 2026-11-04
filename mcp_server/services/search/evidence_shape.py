@@ -42,7 +42,7 @@ def _evidence(h, man=None):
 def _key_terms(question):
     """R3(AD42) — 질문의 핵심어(ID 모양·숫자·용어 사전 걸린 말, approved만) — evidence_status의 weak 판정용."""
     from common.core.terms import ID_LIKE, load_glossary, split_terms
-    from mcp_server.services.search.terms import match_concepts
+    from mcp_server.services.search.query_expand import match_concepts
 
     ids = ID_LIKE.findall(question)
     nums = re.findall(r"\d+(?:[.,]\d+)?", question)

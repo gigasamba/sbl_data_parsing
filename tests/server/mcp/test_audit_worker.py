@@ -14,7 +14,7 @@ import anyio
 from common.config import settings
 from common.store import logsink
 from mcp_server import config as mc
-from mcp_server.routers import dispatch
+from mcp_server.routers import tool_runner
 from mcp_server.services import call_log as audit
 
 
@@ -31,7 +31,7 @@ def test_response_deadlines():
         original(call)
 
     async def run():
-        dispatch._LIMITER, dispatch._INFLIGHT = None, 0
+        tool_runner._LIMITER, tool_runner._INFLIGHT = None, 0
         # 공용 anyio limiter가 포화돼도 전용 감사 워커는 진행한다.
         default = anyio.to_thread.current_default_thread_limiter()
         previous_tokens = default.total_tokens
@@ -45,15 +45,15 @@ def test_response_deadlines():
                         await asyncio.sleep(0.001)
 
                 # 업무도 감사도 release 전에는 끝나지 않는다. timeout 응답은 먼저 온다.
-                assert await dispatch._bg(lambda: release.wait(30)) == {"error": "timeout"}
+                assert await tool_runner._bg(lambda: release.wait(30)) == {"error": "timeout"}
                 await asyncio.wait_for(wait_until_entered(), 30)
                 assert not release.is_set() and not rows
-                dispatch._INFLIGHT = 2
-                for invoke in (lambda: dispatch._bg(lambda: None), lambda: dispatch._bg_long(lambda: None, 1)):
+                tool_runner._INFLIGHT = 2
+                for invoke in (lambda: tool_runner._bg(lambda: None), lambda: tool_runner._bg_long(lambda: None, 1)):
                     assert await invoke() == {"error": "busy"}
                     assert not release.is_set() and not rows
-                dispatch._INFLIGHT = 0
-                for invoke in (lambda: dispatch._bg(lambda: result), lambda: dispatch._bg_long(lambda: result, 1)):
+                tool_runner._INFLIGHT = 0
+                for invoke in (lambda: tool_runner._bg(lambda: result), lambda: tool_runner._bg_long(lambda: result, 1)):
                     reply = await invoke()
                     assert reply is result and not release.is_set() and not rows
                 release.set()
@@ -66,7 +66,7 @@ def test_response_deadlines():
             release.set()
             default.release()
             default.total_tokens = previous_tokens
-            dispatch._LIMITER, dispatch._INFLIGHT = None, 0
+            tool_runner._LIMITER, tool_runner._INFLIGHT = None, 0
 
     assert audit.drain()
     with patch.object(audit.Call, "_prepare", delayed), patch.object(logsink, "emit", side_effect=lambda _, row: rows.append(row)):

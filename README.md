@@ -117,7 +117,7 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 |---|---|---|
 | **A. settings.yaml에 적기** | 계속 쓸 값 | 모든 명령 |
 | **B. 명령 인자 `--set 이름=값`** | 이번 실행에만(이름은 옛 env 이름). 비밀·호스트 칸은 거부 | `pipeline.cli`·`build_bundle`·`pgvector_load`·`publish_parse_result` 등 파이프라인 진입점 |
-| **C. 오버레이 설정 파일**(PC 전용) | `--set`을 받지 않는 명령 | `mcp_server.main`·`mcp_server.cli.ask` — `SETTINGS_FILE=$(python -m common.config.overrides 이름=값 …)` |
+| **C. 오버레이 설정 파일**(PC 전용) | `--set`을 받지 않는 명령 | `mcp_server.main`·`mcp_server.cli.search_ask` — `SETTINGS_FILE=$(python -m common.config.overrides 이름=값 …)` |
 
 ---
 
@@ -255,7 +255,7 @@ cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본 — 파
 **(선택) MCP 없이 검색만**
 
 ```bash
-.venv/bin/python -m mcp_server.cli.ask ask --source CRMS --k 3 --q "<질문>"   # 원천 하나 필수(SFDC·CRMS·LAS·FAQ·Other)
+.venv/bin/python -m mcp_server.cli.search_ask ask --source CRMS --k 3 --q "<질문>"   # 원천 하나 필수(SFDC·CRMS·LAS·FAQ·Other)
 ```
 
 **⑥ 정리** — 4-5에서 MCP까지 확인한 뒤 `allow_external`을 `false`로 되돌린다.
@@ -280,7 +280,7 @@ cp valid_env/edw/edw.sqlite $O/edw.sqlite
 # ask·MCP는 --set을 받지 않으므로 오버레이 설정 파일(방법 C)로 같은 값을 넘긴다
 SF=$(.venv/bin/python -m common.config.overrides PG_SCHEMA=demo EMBED_ALLOW_EXTERNAL=1 \
      LLM_BUDGET_USD=0.10 LLM_SPEND_FILE=$O/spend.json MCP_PORT=18769)
-SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.ask ask --source CRMS --k 3 --q "<질문>"
+SETTINGS_FILE=$SF .venv/bin/python -m mcp_server.cli.search_ask ask --source CRMS --k 3 --q "<질문>"
 SETTINGS_FILE=$SF nohup .venv/bin/python -m mcp_server.main > $O/mcp.log 2>&1 & echo $! > $O/mcp.pid
 ```
 실제 임베딩 호출을 확인하려면 `--set EMBED_CACHE=<빈 sqlite 경로>`를 더한다.

@@ -5,7 +5,7 @@
   ask   질문 → 근거 청크 + 원본 경로·쪽·줄·절 — mcp_server.services.search.search_svc.do_search()에 위임(AR10) — MCP와 같은 결과.
         답변은 만들지 않음(답변은 서빙되는 Answer Agent rag_qa — valid_env/answer_test/rag_qa, 점검 validation/e2e/answer_gen.py).
 (11-01 지움 — 문항 세트 시험 test-stack, 예전 검색 경로 --retrieve cosine, 로컬 묶음 --local: 검색은 PG 하나, PRD mc-01·e2-10.)
-사용: python -m mcp_server.cli.ask ask --source CRMS --k 3 --q "<질문>"(원천 하나 필수 — search와 같음 · 검색은 settings.yaml의 PG 스키마 — mc-19부터 묶음 폴더를 읽지 않음)
+사용: python -m mcp_server.cli.search_ask ask --source CRMS --k 3 --q "<질문>"(원천 하나 필수 — search와 같음 · 검색은 settings.yaml의 PG 스키마 — mc-19부터 묶음 폴더를 읽지 않음)
 (이미지 안: 엔트리포인트 명령 ask가 이 모듈을 부름 — deploy/docker/entrypoint.sh)
 """
 

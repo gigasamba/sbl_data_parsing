@@ -126,8 +126,8 @@ case "$cmd" in
     # publish --dry-run = 무엇을 올리고 쓸지 표만(쓰기 0) — 첫 publish 전에(사용자 10-30 검토 S3). 그 밖은 늘 --apply.
     if [ "${1:-}" = --dry-run ]; then shift; preflight; exec python -m pipeline.load.publish_parse_result "$@"; fi
     preflight; locked python -m pipeline.load.publish_parse_result --apply "$@";;
-  ask)   # S5(T-15) — 검색 명령은 mcp_server/cli/ask.py(test-stack은 11-01에 지움)
-    preflight; exec python -m mcp_server.cli.ask ask "$@";;
+  ask)   # S5(T-15) — 검색 명령은 mcp_server/cli/search_ask.py(test-stack은 11-01에 지움)
+    preflight; exec python -m mcp_server.cli.search_ask ask "$@";;
   show-stack|selftest)   # pipeline.cli 점검 명령 — 두 이미지 모두(mcp-server에도 pipeline/cli.py가 있음 — selftest_gate.sh가 이미지마다 부름)
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
   # 11-01(pl-10 — trigger 서버 serve-trigger 지움) — 상주 컨테이너 data-pipeline(11-03 — 옛 둘을 하나로)은 일을 하지 않고 떠 있기만 한다.

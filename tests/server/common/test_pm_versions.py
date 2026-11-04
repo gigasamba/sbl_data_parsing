@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from common.store import parsing_meta_db as PM
-from mcp_server.services import fulltext as F
+from mcp_server.services import fulltext_svc as F
 
 
 def test_renames():

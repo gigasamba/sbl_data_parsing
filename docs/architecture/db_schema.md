@@ -160,14 +160,14 @@ PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서�
 |---|---|---|---|---|---|
 | parse_meta_id | BIGINT IDENTITY PK | 행 번호 | DB | 없음(기본 키) | 유지 |
 | source_system | NVARCHAR(64) | 원천 | silver_publish `plan` | parsing_meta_db 겹침 확인·`pick_rep`(원문 도구·`set_loaded` 행 고르기) | 유지 |
-| source_key | NVARCHAR(1024) | 원본 전체 경로 = `AI.FileStorageMap.s3_key` 값 = gold `doc.file_path`. 원본과의 연결 키는 `source_system` + 이 칸. 이름을 `s3_key`로 바꾼다(아래 `s3_key` 줄 — DB 담당자 DDL, C-76) | silver_publish `plan` | 〃, run_docs `edw_done_keys`, mcp `fulltext` | 유지 |
+| source_key | NVARCHAR(1024) | 원본 전체 경로 = `AI.FileStorageMap.s3_key` 값 = gold `doc.file_path`. 원본과의 연결 키는 `source_system` + 이 칸. 이름을 `s3_key`로 바꾼다(아래 `s3_key` 줄 — DB 담당자 DDL, C-76) | silver_publish `plan` | 〃, run_docs `edw_done_keys`, mcp `fulltext_svc` | 유지 |
 | s3_key | NVARCHAR(1024) | 위 `source_key`의 새 이름 — DB 담당자가 이름을 바꾸면 계산 칸 `source_key_hash`·유일 색인 `UQ_ParsingMeta_key`도 다시 만든다(C-76). 코드는 연결할 때 `s3_key`가 있으면 그것, 없으면 `source_key`를 쓴다(`parsing_meta_db` `key_col`·run_docs) | (DDL 뒤 같은 곳) | (같은 곳) | 새로 |
 | source_uri | NVARCHAR(2048) | 원본 주소 | 〃 | 없음 | 삭제 |
 | original_filename | NVARCHAR(512) | 원본 파일 이름 | 〃 | 없음 | 삭제 |
 | file_format | NVARCHAR(32) | 형식 | 〃 | 없음 | 삭제 |
 | file_size | BIGINT | 크기 | 〃 | 없음 | 삭제 |
-| sha256 | NVARCHAR(64) | 원본 sha256 — 원문 도구 `doc_key`(입력·출력) · 같은 내용 묶기에 씀("파싱 정보만"의 예외) | silver_publish `plan` | mcp `fulltext`(`list_doc_fulltext` `doc_key` 입력·출력) | 유지 |
-| rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | silver_publish `plan` | mcp `fulltext`(`parsing_meta_db.rows_where`·`pick_rep` — 원문 도구가 부를 때 읽음) | 유지 |
+| sha256 | NVARCHAR(64) | 원본 sha256 — 원문 도구 `doc_key`(입력·출력) · 같은 내용 묶기에 씀("파싱 정보만"의 예외) | silver_publish `plan` | mcp `fulltext_svc`(`list_doc_fulltext` `doc_key` 입력·출력) | 유지 |
+| rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | silver_publish `plan` | mcp `fulltext_svc`(`parsing_meta_db.rows_where`·`pick_rep` — 원문 도구가 부를 때 읽음) | 유지 |
 | rep_key | NVARCHAR(2048) | 대표 결과 폴더 | silver_publish `apply` | 〃(목록 `rep_uri`·sfid 발급, 등록 시각 가드의 폴더 → 원본 찾기) | 유지 |
 | rep_etag | NVARCHAR(128) | 대표 결과 etag | 〃 | 없음 | 삭제 |
 | parse_status | NVARCHAR(32) | ok·partial | silver_publish `plan` | run_docs `edw_done_keys` | 유지 |
@@ -183,7 +183,7 @@ PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서�
 | status_at | NVARCHAR(32) | 상태 바뀐 때(UTC) — 게시는 비워 둔다 | silver_publish `plan`(NULL) | 없음(SELECT 안 함 — 운영자가 봄) | 유지 |
 | engines_used | NVARCHAR(MAX) | 쓰인 엔진(JSON) — 목표: 성공한 엔진만(이름 + 판) | silver_publish `plan` | 없음 | 유지 |
 | engines_summary | NVARCHAR(512) | 엔진 한 줄 요약 | 〃 | 없음 | 삭제 |
-| parsed_at | DATETIME2(0) | 넣은 때(기본 SYSUTCDATETIME — UTC) | DB 기본값 | mcp `fulltext`(`list_doc_fulltext` `since`/`until`) | 유지 |
+| parsed_at | DATETIME2(0) | 넣은 때(기본 SYSUTCDATETIME — UTC) | DB 기본값 | mcp `fulltext_svc`(`list_doc_fulltext` `since`/`until`) | 유지 |
 | source_key_hash | BINARY(32) 계산 칸 | `source_key` sha256 — 유일 색인 키(1700바이트 상한 우회) | DB | 유일 색인 | 유지 |
 | gold_status | NVARCHAR(32) | gold(검색 DB) 적재 상태 | ([pl-55](../prd/ops.md#pl-55) — run_docs·적재) | (운영자) | 새로 |
 | gold_reason | NVARCHAR(2000) | gold 상태 이유(실패 원인 등) | ([pl-55](../prd/ops.md#pl-55)) | (운영자) | 새로 |

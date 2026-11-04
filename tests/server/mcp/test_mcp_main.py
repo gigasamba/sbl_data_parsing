@@ -5,7 +5,7 @@ import json
 
 from mcp_server import config as mc
 from mcp_server.main import _DEFAULT_MCP_INSTRUCTIONS, _mcp_instructions, build, check_bind
-from mcp_server.services.search.shaping import cap
+from mcp_server.services.search.evidence_shape import cap
 
 
 def _selftest_transport_security():

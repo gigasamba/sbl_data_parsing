@@ -1,8 +1,8 @@
-"""mcp_server.services.search.shaping 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.shaping`."""
+"""mcp_server.services.search.evidence_shape 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.evidence_shape`."""
 
 import json
 
-from mcp_server.services.search.shaping import cap
+from mcp_server.services.search.evidence_shape import cap
 
 
 def _cap_bytes(obj):
@@ -96,6 +96,6 @@ def _selftest_cap_fuzz():
     print("[selftest] cap() AR7 — 랜덤 모양 200개 fuzz(더 줄일 게 없을 때만 한도 초과 허용) 통과")
 
 
-def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) — shaping.py엔 __main__이 없었음
+def test_main():  # 옛 main.py selftest가 부르던 순서(이 모듈 몫만) — evidence_shape.py(옛 shaping)엔 __main__이 없었음
     _selftest_cap_ranked()
     _selftest_cap_fuzz()

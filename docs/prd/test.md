@@ -45,7 +45,7 @@
 <a id="e2-01"></a>
 ## e2-01 · PC 스모크 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
 - 이유: 릴리스 전에 문서 2~3건으로 사슬 전체를 증명한다.
-- 규칙: README §4-4 단계(`pipeline.cli parse` · `build_bundle` · `dbtool up` · `pgvector_load` · `mcp_server.cli.ask`). 실행마다 다른 값은 `--set`. 임베딩 캐시 `output/edw/embed_cache.sqlite`. 시험 문서 `valid_env/object_storage/`.
+- 규칙: README §4-4 단계(`pipeline.cli parse` · `build_bundle` · `dbtool up` · `pgvector_load` · `mcp_server.cli.search_ask`). 실행마다 다른 값은 `--set`. 임베딩 캐시 `output/edw/embed_cache.sqlite`. 시험 문서 `valid_env/object_storage/`.
 - QA: README §4-4 ①~⑥ · `ask`가 근거를 냄.
 - Status: done
 
