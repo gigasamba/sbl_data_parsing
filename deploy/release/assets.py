@@ -12,7 +12,7 @@
 
 사용:
   (개발 PC) PYTHONPATH=. python deploy/release/assets.py pack           → assets/ 채움(아래 SOURCES 경로에서) + MANIFEST.json
-  (서버)    python /app/docker/assets.py install [--python <venv python>]  → 합치기·해시 확인·제자리 복사·휠 설치, .env에 넣을 줄 출력
+  (서버)    python /app/docker/assets.py install [--python <venv python>]  → 합치기·해시 확인·제자리 복사·휠 설치
             PYTHONPATH=. python deploy/release/assets.py check → 설치 상태만 표로
 paddle·mineru·임베딩(bge-m3 등)은 크기·venv가 달라 여기 없음. 준비 가이드: docs/operations/release-and-patch.md §5-6.
 """
@@ -32,8 +32,6 @@ from common.core.paths import APP_ROOT  # assets/는 패키지 밖 저장소 루
 ROOT = APP_ROOT
 A = ROOT / "assets"
 PART = 90 * 1024 * 1024
-HOME = Path.home()
-HF = Path(os.environ.get("HF_HOME") or HOME / ".cache" / "huggingface") / "hub"  # env 남김 — 라이브러리
 
 
 def _py_path(python, code):
@@ -120,7 +118,6 @@ def targets(python):
     return {
         "tessdata": A / "tessdata",  # 제자리(TESSDATA_PREFIX로 가리킴)
         "rapidocr": rapid,
-        "hf": HF,
         "font": font,
     }  # easyocr 타깃 없음(EasyOCR 모델은 스택 밖 — sources()도 안 담음)
 
@@ -134,26 +131,6 @@ def install(python):
         if kind == "wheels":
             r = subprocess.run([python, "-m", "pip", "install", "--no-index", "--no-deps", str(A / rel)], capture_output=True, text=True)
             (done if r.returncode == 0 else skip).append(f"{rel} (pip {'ok' if r.returncode == 0 else r.stderr.strip()[-120:]})")
-            continue
-        if kind == "hf":  # tar → HF 캐시에 풀기(이미 풀려 있으면 건너뜀)
-            import tarfile
-
-            tmp = A / "hf" / "_restore.tar"
-            assemble(rel, meta, tmp)
-            with tarfile.open(tmp) as tf:
-                names = [m for m in tf.getmembers() if m.isfile()]
-                if all((HF / m.name).exists() and (HF / m.name).stat().st_size == m.size for m in names):
-                    done.append(f"{rel} (이미 있음)")
-                else:
-                    tf.extractall(HF, members=names, filter="data")  # 경로 탈출·링크 차단
-                    done.append(f"{rel} → {HF} ({len(names)}개)")
-            tmp.unlink()
-            continue
-        if kind == "docker":  # 이미지 tar.gz 복원만 — 띄우는 건 사람(docker load → compose up)
-            dst = A / rel
-            if not (dst.exists() and dst.stat().st_size == meta["size"]):
-                assemble(rel, meta, dst)
-            done.append(f"{rel} → {dst}  (다음: docker load -i {dst})")
             continue
         if kind == "fonts":
             dst = t["font"]
@@ -173,7 +150,6 @@ def install(python):
     print("설치:\n  " + "\n  ".join(done))
     if skip:
         print("건너뜀:\n  " + "\n  ".join(skip))
-    print(f"\n.env에 추가: TESSDATA_PREFIX={A / 'tessdata'}\n            HF_HUB_OFFLINE=1  (docling이 인터넷 대신 캐시를 읽게)")
 
 
 def check(python):
@@ -185,17 +161,6 @@ def check(python):
         if kind == "wheels":
             ok = _py_path(python, "import en_core_web_sm;print(en_core_web_sm.__file__)") is not None
             print(f"| {rel} | {python} | {'✓' if ok else '✗ install 필요'} |")
-            continue
-        if kind == "docker":
-            ok = (A / rel).exists() and (A / rel).stat().st_size == meta["size"]
-            print(f"| {rel} | {A / rel} | {'✓ 복원됨' if ok else '✗ install 필요'} |")
-            continue
-        if kind == "hf":
-            ok = all(
-                (HF / r).exists()
-                for r in ("models--docling-project--docling-models/refs/v2.3.0", "models--docling-project--docling-layout-heron/refs/main")
-            )
-            print(f"| {rel} | {HF} | {'✓' if ok else '✗ install 필요'} |")
             continue
         dst = {"fonts": t["font"], "tessdata": A / rel}.get(kind) or ((t.get(kind) / rest) if t.get(kind) else None)
         ok = bool(dst) and dst.exists() and dst.stat().st_size == meta["size"]

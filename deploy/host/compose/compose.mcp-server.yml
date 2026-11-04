@@ -3,13 +3,7 @@
 # 네트워크: 호스트 네트워크(Linux) — PostgreSQL·임베딩 API에 서버 주소 그대로 붙고, MCP는 MCP_HOST(127.0.0.1 또는 사내 대역 IP)에만 열림.
 #   루프백이 아닌 주소면 MCP_TOKEN 필수(클라이언트 Authorization: Bearer). 0.0.0.0은 거부.
 # 이미지 mcp-server·이미지 변수 MCP_SERVER_IMAGE·컨테이너 이름 mcp-server.
-# 설정: 서비스마다 설정 파일 하나를 읽기 전용으로 붙이고 env는 SETTINGS_FILE·RUN_ENV만 넘긴다(docker inspect에 비밀 없음).
-#   앱이 붙인 파일에서 common + 자기 앱 절을 읽는다. compose 치환 값(이미지·자원·포트·호스트 경로)은 셸 env에서 — deploy/host/scripts/load_settings.sh의 load_settings가
-#   settings.yaml 호스트 칸을 export(nightly_batch.sh·pipe_exec.sh·mcp_keepalive.sh·systemd가 부름). YAML에 없는 칸은 아래 ${X:-기본값}이 그대로 걸린다.
-#   파일 권한: 컨테이너 사용자 UID 10001이 읽어야 함 — 주인 10001·그룹 운영 계정 그룹·640(운영 계정 UID가 10001이면 600 — refactor.md C-09).
-#   값 바꾸기: 앱 설정 값은 settings.yaml을 직접 고친다(한 번만 다르게 돌릴 값도 — 고쳐 돌리고 되돌림). 셸·`-e`로 준 env
-#   이름은 앱이 읽지 않고, 덮기 파일 도구 `python -m common.config.overrides`는 PC 전용이라 서버에서는 종료 2(이 compose는 SETTINGS_FILE 한 파일만
-#   붙여 덮기 파일의 base가 컨테이너 안에 없음). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지·자원·포트·호스트 경로)뿐.
+# 설정 파일 붙이기·compose 치환 값·파일 권한·값 바꾸기 규칙은 compose.pipeline.yml 머리 주석과 같다(설정 파일 하나를 읽기 전용으로, env는 SETTINGS_FILE·RUN_ENV만).
 x-settings: &settings "${SETTINGS_FILE:?SETTINGS_FILE=<settings.yaml 절대 경로> 필요 — deploy/host/scripts/load_settings.sh load_settings가 export(refactor.md C-09)}:/etc/rag/settings.yaml:ro,z"
 services:
   mcp:

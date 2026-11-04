@@ -14,7 +14,6 @@ code0=${CODE_DIR:-}   # 사람·unit이 준 값(code_dir_default 전) — 파이
 . deploy/host/scripts/in_container.sh; code_dir_default MCP_SERVER_IMAGE   # 실행 이미지면 코드 폴더 루트 · compose.mcp-server.yml은 MCP_SERVER_IMAGE만 봄
 files="-f deploy/host/compose/compose.mcp-server.yml"
 [ -n "${CODE_DIR:-}" ] && files="$files -f deploy/host/compose/compose.code.mcp-server.yml"   # 개발 서버(실행 이미지): 코드 폴더를 컨테이너 코드 자리에
-[ -d app ] && echo "[mcp_keepalive] 경고: 코드 폴더에 옛 오버레이 app/이 남아 있음 — 11-03부터 쓰지 않음(덧씌우기 compose 지움, 이미지·코드 폴더 코드로 뜸)" >&2
 DC="$DOCKER compose -p compose$NAME_SUFFIX $files"   # 묶음 이름 — host_ctl.sh와 같게(여러 벌)
 # parse_document 작업 서비스 전용 컨테이너(mcp-data-parsing)도 여기서 살핀다(타이머 2분마다). 꺼졌으면 up -d만(응답 확인은 검색 MCP의 몫).
 if [ "$($DOCKER inspect -f '{{.State.Running}}' "mcp-data-parsing$NAME_SUFFIX" 2>/dev/null)" != true ]; then

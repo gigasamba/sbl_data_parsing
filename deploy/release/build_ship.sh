@@ -19,7 +19,6 @@ BUILD_ONLY=${BUILD_ONLY:-0}
 IMAGE_TARGET=${IMAGE_TARGET:-pipeline}
 case "$IMAGE_TARGET" in
   pipeline|mcp|pipeline-runtime|mcp-runtime) ;;   # *-runtime = 코드 없는 실행 이미지(개발 서버, 코드 폴더를 /app/deploy에 마운트)
-  parse|structure|retrieval) echo "[오류] IMAGE_TARGET=$IMAGE_TARGET 는 S6b에 없어졌다(D-020) — 파이프라인은 IMAGE_TARGET=pipeline, 검색 MCP는 IMAGE_TARGET=mcp" >&2; exit 2 ;;
   *) echo "[오류] 모르는 IMAGE_TARGET: $IMAGE_TARGET (pipeline·mcp·pipeline-runtime·mcp-runtime)" >&2; exit 2 ;;
 esac
 . deploy/release/image_names.sh   # image_name_of — 타깃 → 이미지 이름(stage_images.sh와 같은 파일)
