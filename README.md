@@ -170,7 +170,16 @@ tuning:
 - PC 전용 칸(외부 모델 허용·지출 상한·단가, 로컬 대체 DB, 시험 하네스)은 `dev` 절에 모여 있다(sample 맨 아래). 옛 자리(`common.models.guard.budget_usd` 등)에 둔 값도 읽지만 처음 읽을 때 옮길 자리를 한 번 알려 준다.
 - **외부 임베딩은 `allow_external: true`이고 `run_env: local`일 때만** 호출된다(서버 dev·prd는 늘 거부).
 - **LLM·VLM도 같다:** `required.models`의 `llm_*`·`vlm_*`(주소·모델·키)를 채우고 `dev.models.llm.allow_external`·`dev.models.vlm.allow_external`을 `true`로 두면 PC에서 분류(SFDC·LAS)와 그림·스캔 쪽 VLM이 외부 모델을 부른다(`run_env: local`일 때만). 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
+- **VLM 설정은 한 벌:** 스캔·이미지 문서의 VLM 엔진(`qwen_vlm`)·쪽 VLM·그림 VLM이 같은 호출과 같은 칸(`common.models.vlm.*` — 동시 수·제한 시간·재시도·`extra_body`, 해상도 `extract.ocr.dpi` 150, 쪽 상한 `transform.vlm.page_max`)을 쓴다. 생각(추론) 모델이면 `common.models.vlm.extra_body`에 생각 끄기를 넣는다(OpenRouter는 `{"reasoning": {"enabled": false}}`) — 칸 설명은 [env-guide §2](docs/operations/env-guide.md), 규칙은 PRD [pl-43](docs/prd/transform.md#pl-43).
 - **내부망 서버(dev·prd)에서 시험·운영할 때는 세 `allow_external`을 모두 `false`(0)로 둔다.** 서버는 `run_env`가 dev·prd라 켜 두어도 외부 호출을 거부하지만, 서버 settings.yaml에는 외부 허용을 남기지 않는다.
+- **게시(silver)·EDW·원본 — PC는 가짜 대상만 적는다.** 경로는 저장소 루트 기준 상대 경로로 써도 된다(절대 경로도 됨):
+  ```yaml
+  required:
+    publish: {bucket: "file://output/object_storage/silver", prefix: parse}   # 가짜 Object Storage 폴더
+    edw: {sqlite: output/edw.sqlite}   # 가짜 EDW(ParsingMeta 포함) — valid_env/edw/edw.sqlite 사본(파싱·게시가 씀)
+  ```
+  `file://` 뒤 폴더에 `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓴다. 원본 폴더(`doc_dir`)·파싱 원본(`input_source` — 폴더 또는 `rdb:csv:<경로>`)·PG 대체 폴더(`standin_dir`)도 상대 경로를 받는다(예 `valid_env/object_storage`).
+  `run_env: local`에서 실제 대상(`required.edw.host`, `required.object_storage.endpoint`, 원천 버킷, `file://`가 아닌 게시 버킷)이 적혀 있으면 앱이 시작하지 않는다. 서버(dev·prd)는 실제 접속 칸을 쓴다.
 - PG 접속 칸(`required.pg`의 여섯 칸)은 **모두 채우거나 모두 비운다.** 일부만 채우면 채울 자리를 알려 주고 멈춘다. PC에서 host·password가 둘 다 비면 SQLite 대역(`output/pg_standin/`)으로 돌고 첫 줄에 `WARNING: PG 접속 정보 없음`을 찍는다(서버는 멈춤).
 
 ### 4-3. 점검
@@ -388,6 +397,40 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 - 이때 `required.tokens.mcp`가 꼭 있어야 한다(없으면 시작 거부). 만들기: `openssl rand -hex 24`.
 - 방화벽에서 `search.server.port`(기본 8765)를 연다 — 예: `firewall-cmd --add-port=8765/tcp --permanent && firewall-cmd --reload`.
 
+**한 서버에 여러 벌 띄우기(개발자별 — 컨테이너 이름·포트 바꾸기)**
+- 루트 하나가 한 벌이다. 개발자마다 루트를 새로 만들어(예 `/home/dev-hong/`) 위 설치 순서 1~10을 따로 한다.
+- 그 루트의 `settings.yaml`에 아래 칸을 벌마다 다르게 적는다. compose를 직접 부르지 않는다 — `dc.sh`가 이 값으로 이름·포트를 채운다.
+
+```yaml
+ops:
+  host:
+    instance: hong                # 컨테이너 data-pipeline-hong · data-pipeline-mcp-hong · mcp-server-hong, 타이머 data-pipeline-nightly-hong.timer
+  services:
+    parse_mcp:
+      port: 8776                  # parse_document 작업 서비스 포트(기본 8766)
+search:
+  server:
+    port: 8775                    # 검색 MCP 포트(기본 8765)
+  parse_proxy:
+    url: http://127.0.0.1:8776    # 위 작업 서비스 포트와 같게
+required:
+  pg:
+    db_schema: sbl_hong           # 검색 DB 스키마도 벌마다
+```
+- 명령(root 셸 — 이미지는 서버에 한 번만 불러 두면 벌끼리 같이 쓴다):
+```bash
+mkdir -p /home/dev-hong && cd /home/dev-hong && unzip <코드 zip>          # 새 루트 + 코드 폴더
+cd sbl_data_parsing-<판>
+bash deploy/host/scripts/dc.sh init --group <운영 그룹>                    # <루트>/settings.yaml 생김 → 위 칸을 채움
+bash deploy/host/scripts/dc.sh up -d data-pipeline                         # → data-pipeline-hong
+bash deploy/host/scripts/run_tool.sh migrate up --target all --dim <차원>  # 새 스키마 sbl_hong에 표 만들기(설치 순서 6)
+bash deploy/host/scripts/dc.sh up -d data-pipeline-mcp mcp                 # → data-pipeline-mcp-hong · mcp-server-hong(포트 8776 · 8775)
+bash deploy/host/scripts/dc.sh check                                       # 마지막 줄 [dc check] 통과 — 6개
+bash deploy/host/scripts/dc.sh ps                                          # 이 벌의 컨테이너만 보임
+```
+- `instance`를 비우면 한 벌(이름 그대로 `data-pipeline`·`data-pipeline-mcp`·`mcp-server`). 이름은 영소문자·숫자·`-`만(틀리면 `dc.sh`가 종료 2).
+- 확인: `bash deploy/host/scripts/dc.sh ps` — 그 벌의 컨테이너만 보인다. 자세한 것은 [server-guide §1-3](docs/operations/server-guide.md#1-3-한-서버에-여러-벌-띄우기개발자별).
+
 ### 5-1. 버전 올리기
 
 규칙과 태그는 [release-and-patch §4](docs/operations/release-and-patch.md#4-버전).
@@ -416,7 +459,7 @@ bash deploy/release/ship_stage.sh pipeline-runtime mcp-runtime                 #
 | PostgreSQL(pgvector) | `required.pg.port` | 없음(필수) | 파이프라인·검색 MCP |
 | 검색 MCP 서버 | `search.server.port`(바인드 `search.server.host`) | 8765(127.0.0.1) | AI 클라이언트 |
 | MCP 파싱 작업 서비스 | `ops.services.parse_mcp.port` — 검색 MCP가 부르는 주소 `search.parse_proxy.url` | 8766 · `http://127.0.0.1:8766` | 검색 MCP의 `parse_document` |
-| EDW(SQL Server) | `common.connections.rdb.port`(주소·계정은 `required.edw`) | 1433 | 파이프라인·`query_edw` |
+| EDW(SQL Server) | `required.edw.port`(주소·계정도 `required.edw`) | 1433 | 파이프라인·`query_edw` |
 | 검증 페이지(PC만) | `dev.mcp.ui_port` | 8790 | 사람(브라우저) |
 
 `ops.services.parse_mcp.port`를 바꾸면 `search.parse_proxy.url`도 함께 바꾼다. 컨테이너는 host 네트워크라 포트가 서버에서 겹치지 않아야 한다.
@@ -447,9 +490,12 @@ bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp   # 서
 | `required.pg.host`·`port`·`db`·`user`·`password`·`db_schema` | 검색 DB(pgvector) | DB 담당 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · `ai` | PC·dev·prd | `dc.sh check` ① check_env · ③ migrate check |
 | `required.embed.base_url`·`model`·`api_key` | 임베딩 모델(`model`은 적재·검색 때 같아야 함) | 모델 담당(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델>` · `<비밀>` | PC·dev·prd | `dc.sh check` ② ping_models |
 | `required.models.llm_*`·`vlm_*` | LLM·VLM 모델 | 모델 담당 | `http://llm.example.local:8001/v1` · `<모델>` | dev·prd | `dc.sh check` ② ping_models |
-| `required.edw.host`·`database`·`read_*`·`write_*` | 회사 DB(EDW) 읽기·쓰기 계정 | DB 담당 | `edw.example.local` · `EDW` · `<계정>` · `<비밀>` | dev·prd | 첫 파싱 뒤 `trigger.sh publish --dry-run`(④) |
-| `required.object_storage.endpoint`·`access_key`·`secret_key` | Object Storage | 스토리지 담당 | `http://os.example.local:9000` · `<비밀>` | dev·prd | 위와 같음 |
-| `required.source.input_source`·`source_bucket`·`source_uri_prefix`·`publish_bucket`·`publish_prefix` | 원본 위치·게시 버킷 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_docs` · publish 미리보기 |
+| `required.edw.host`·`port`·`database`·`read_*`·`write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시) · `port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_docs` 시작(빠지면 칸 이름을 찍고 멈춤) · `trigger.sh publish --dry-run`(④) |
+| `required.edw.parsing_meta_table` | 게시 행을 쓸 EDW 표 — 비우면 `AI.ParsingMeta` | DB 담당 | (비움) | dev·prd | publish `--apply` |
+| `required.edw.sqlite` | PC 가짜 EDW 파일 — **서버는 비움**(적혀 있으면 EDW를 쓸 때 거부) | — | (비움) | PC만 | — |
+| `required.publish.bucket`·`prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두 | 운영 담당 | `rag-silver` · `parse` | PC·dev·prd | `run_docs` 시작 · publish 미리보기 |
+| `required.object_storage.endpoint`·`region`·`access_key`·`secret_key`·`verify_tls` | Object Storage(S3 호환) 접속 — `region`은 비우면 `us-east-1`, `verify_tls`는 비우면 `1`(사내 CA면 CA 파일 경로) | 스토리지 담당 | `https://os.example.local:9000` · (비움) · `<비밀>` · `<비밀>` · (비움) | dev·prd | `run_docs` 시작 · publish `--apply` |
+| `required.source.input_source`·`source_bucket`·`source_uri_prefix` | 원본 위치 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_docs` |
 | `required.tokens.mcp` | 검색 MCP 토큰 | `openssl rand -hex 24` | 48자 16진수 | dev·prd(밖에서 붙을 때 필수) | `dc.sh check` ⑥ `/health` |
 | `required.tokens.parse_mcp` · `parse_proxy` | `parse_document` 작업 서비스 토큰(두 칸 같은 값 — `parse_proxy`를 비우면 `mcp` 값을 씀) | 같은 명령 | 48자 16진수 | dev·prd | `parse_document` 호출이 토큰 오류 |
 | `required.tokens.fulltext` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 48자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |

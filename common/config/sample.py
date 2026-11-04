@@ -1,6 +1,6 @@
 """settings.sample.yaml 만들기·대조 — 앱 설정 모델의 모든 칸을 새 배치(op-08 ② — common.config.layout)로 코드 기본값과 함께 낸다.
-맨 위 required(운영자가 채울 값 — 카테고리마다 쓰는 곳 표시 한 번) → 역할 절(common·extract·transform·load·search·ops·dev — 세부 카테고리 제목) →
-tuning(코드 상수 후보). 칸마다 한 줄 주석: 설명 · 기본값 · 넣을 수 있는 값. 칸을 더하거나 바꾸면 다시 만든다.
+맨 위 required(운영자가 채울 값 — 카테고리마다 쓰는 곳 표시 한 번) → 역할 절(common·extract·transform·load·search·ops — 환경마다 운영자가 정하는 값,
+세부 카테고리 제목) → tuning(거의 안 바꾸는 값 — 분류별 제목, 사용자 11-04) → dev(PC 전용). 칸마다 한 줄 주석: 설명 · 기본값 · 넣을 수 있는 값. 칸을 더하거나 바꾸면 다시 만든다.
 사용: python -m common.config.sample            # 저장소 루트 settings.sample.yaml에 씀
       python -m common.config.sample --check    # 파일이 모델과 같은지(다르면 rc 1)
       python -m common.config.sample --where PG_HOST [이름…]   # 옛 env 이름 → 파일 자리·모델 경로·내부 표시(판정 꼴·지문 등 — sample에서 뺀 것)
@@ -18,7 +18,7 @@ from common.core.console import utf8_stdout
 OUT = S.REPO_ROOT / "settings.sample.yaml"
 HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: python -m common.config.sample (손으로 고치지 않음)
 # 복사해 required 칸을 채우면 시작된다 — PC: 저장소 루트 settings.yaml(권한 600) · 서버: <루트>/settings.yaml(루트 = 코드 폴더의 부모 · UID 10001·권한 640).
-# 순서: required(운영자가 채울 값) → 역할 절 common·extract·transform·load·search·ops → tuning(코드 상수 후보 — 보통 비워 둠) → dev(PC 전용).
+# 순서: required(운영자가 채울 값) → 역할 절 common·extract·transform·load·search·ops(환경마다 정하는 값) → tuning(거의 안 바꾸는 값 — 보통 비워 둠) → dev(PC 전용).
 #   빈 칸 = 코드 기본값(칸마다 "비우면 …"에 적음). 적힌 값은 코드 기본값보다 이긴다(나중에 코드 기본값이 바뀌어도 이 파일을 고치지 않으면 반영 안 됨).
 #   [PC·서버]·[서버만]·[PC만] = 그 카테고리를 채워야 하는 곳. 서버만 칸을 PC에서 비우면 그 기능(EDW·Object Storage·게시 등)만 꺼진다.
 #   [비밀] = settings.yaml에만 둠(출력·로그에 안 나옴). [파라미터] = 결과(파싱·청크·검색 순위)를 바꾸는 값.
@@ -70,7 +70,6 @@ CATEGORIES = {
             "원천 받기·처리 상한",
             (
                 "extract.source",
-                "extract.prefetch_workers",
                 "extract.source_limit",
                 "extract.max_new",
                 "extract.max_file_mb",
@@ -80,20 +79,9 @@ CATEGORIES = {
         ("회전 준비(prepare)", ("extract.prepare",)),
         (
             "파싱 엔진·쪽 처리",
-            (
-                "extract.fill_merged",
-                "extract.kreuzberg_prose_filter",
-                "extract.hidden_overlap_max",
-                "extract.low_priority",
-                "extract.doc_parallel",
-                "extract.rotated_max",
-                "extract.text_page_sec",
-                "extract.vlm_page_sec",
-                "extract.warmup_sec",
-            ),
+            ("extract.doc_parallel",),
         ),
-        ("OCR·표", ("extract.ocr", "extract.rapidocr_page_workers", "extract.table_grid_max_rows")),
-        ("첨부·중복", ("extract.attach", "extract.dedup")),
+        ("OCR", ("extract.ocr", "extract.rapidocr_page_workers")),
     ),
     "transform": (
         ("대표 결과", ("transform.represent",)),
@@ -104,7 +92,6 @@ CATEGORIES = {
     "load": (("게시(publish)", ("load.publish", "load.edw_path_prefix")), ("적재", ("load",))),
     "search": (
         ("MCP 서버", ("search.server",)),
-        ("검색 순위·방식", ("search.methods", "search.weights", "search.pg")),
         ("EDW 도구", ("search.edw_meta", "search.edw_query")),
         ("출력·기록·파싱 프록시", ("search.output", "search.parse_proxy", "search.audit")),
     ),
@@ -125,7 +112,17 @@ CATEGORIES = {
         ("평가", ("dev.eval", "dev.mcp")),
         ("PC 시험 Docker", ("dev.docker",)),
     ),
-    "tuning": tuple((f"{sec}의 조정값", (f"tuning.{sec}",)) for sec in ("common", "extract", "transform", "load", "search", "ops")),
+    "tuning": (  # 사용자 11-04 — 거의 안 바꾸는 값을 분류별로(자리는 tuning.<역할 자리>)
+        ("공통 — 접속·모델 호출(제한 시간·재시도·캐시)", ("tuning.common.connections", "tuning.common.models")),
+        ("공통 — 검색 글자 정규화·용어 초안", ("tuning.common.text",)),
+        ("추출 — 원천 목록 열·파싱 엔진·OCR·첨부", ("tuning.extract",)),
+        ("변환 — 그림 고르기·그림 분류·청크·임베딩", ("tuning.transform",)),
+        ("적재", ("tuning.load",)),
+        ("검색 — 순위·도구 상한·감사 기록", ("tuning.search",)),
+        ("로그 — DB 기록 대기열·묶음", ("tuning.ops.log",)),
+        ("실행 자원 — 자동 계산 계수", ("tuning.ops.runtime",)),
+        ("새벽 배치·상주 서비스", ("tuning.ops.nightly_run", "tuning.ops.services")),
+    ),
 }
 NOTE_COL = 42  # 칸 설명 주석이 시작하는 열(사용자 11-04 — 값 자리와 주석을 떼어 놓음)
 SPLIT = {"common", "extract", "transform", "load", "search"}  # [파라미터] 표시를 다는 절(결과를 바꾸는 값 — _kind 0)
@@ -145,6 +142,7 @@ HYPER = {  # 이름 규칙으로는 운영값이지만 결과(파싱·청크·�
 }
 OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "common.models.llm.empty_retry_max",
+    "common.text.draft_terms_max",  # 용어 초안 파일 행 상한 — 결과(검색) 아님
     "common.models.transport.down_cooldown",
     "pipeline.extract.isolate_overhead",
     "mcp.server.allowed_hosts",
@@ -158,7 +156,6 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "pipeline.extract.prepare.link",
     "pipeline.load.publish.upload_statuses",
     "pipeline.transform.structure.embed_max_chars",
-    "pipeline.transform.vlm.page_min_concurrency",
     "mcp.search.pg.filter_exact_max",
 }
 
@@ -173,11 +170,11 @@ def blank_matters(field):
 BLANK = {
     "common.connections.pg.standin_dir": "<루트>/output/pg_standin",
     "common.connections.rdb.connect_kwargs": "추가 인자 없음",
-    "common.connections.rdb.sqlite": "실제 EDW(required.edw 칸)",
     "common.dev.docker.pg_mem_limit": "compose 기본(시험 PG 4g)",
     "common.dev.docker.smoke_settings": "스모크 시험이 시작하지 않음(필수)",
     "common.dev.docker.smoke_pg_password": "스모크 시험이 시작하지 않음(필수)",
     "common.host.docker": "podman, 없으면 docker",
+    "common.host.instance": "한 벌 — 컨테이너 이름 그대로(data-pipeline·data-pipeline-mcp·mcp-server)",
     "common.host.image_stage_dir": "조각·tar 정리 안 함(--stage-dir로 줄 때만)",
     "common.models.embed.query_cache": "<루트>/output/query_cache.sqlite(mcp 이미지 안은 /tmp/mcp_query_cache.sqlite) · 0이면 캐시 끔",
     "common.models.embed.query_prefix": "접두 없이 질의 그대로",
@@ -191,7 +188,7 @@ BLANK = {
     "common.models.vlm.extra_body": "본문에 아무것도 안 더함",
     "common.log.dir": "PC는 output/logs/, 서버는 stdout",
     "common.log.fallback_dir": "output/logs/(DB 기록 실패 때만 씀)",
-    "common.paths.doc_dir": "PC는 없음(파싱 명령에 --src), pipeline 이미지 안은 /data/docs",
+    "common.paths.doc_dir": "PC는 없음(파싱 명령에 --src), pipeline 이미지 안은 /data/docs · PC 상대 경로는 저장소 루트 기준(예 valid_env/object_storage)",
     "common.paths.doc_dir_prepared": "output/prepared(pipeline 이미지 안은 /app/output/prepared)",
     "common.paths.draft_terms_out": "<루트>/output/glossary_draft/domain_terms_draft_auto.csv",
     "common.paths.edw_chain": "resources/config/edw_chain.yaml",
@@ -219,23 +216,46 @@ BLANK = {
     "pipeline.service.parse_mcp.jobs_dir": "<서비스 폴더>/jobs",
     "pipeline.service.parse_mcp.procs": "min(3, CPU 수 − 1)",
     "pipeline.service.parse_mcp.roots": "<서비스 폴더>/inbox",
-    "pipeline.transform.figures.vlm_parallel": "common.models.vlm.concurrency 값",
     "pipeline.transform.represent.post": "파이프라인 all · parse MCP 서비스 supsub(빈 글자 ''를 쓰면 끔)",
     "pipeline.transform.represent.rep_select": "best(정확도+풍부도)",
     "pipeline.transform.structure.chunk_size": "청커별 기본(800 등)",
     "pipeline.transform.structure.chunk_table": "표를 통째로 둠",
     "pipeline.transform.structure.embed_cache": "<루트>/output/edw/embed_cache.sqlite · 0이면 캐시 끔",
     "pipeline.transform.structure.page_chunk_max": "chunk_size × 4(chunk_size도 비우면 4000)",
-    "pipeline.transform.vlm.page_concurrency": "common.models.vlm.concurrency 값",
-    "pipeline.transform.vlm.page_max": "전부(0이면 쪽 VLM 끔)",
+    "pipeline.transform.vlm.page_max": "전부(0이면 쪽 VLM 끔 — VLM 엔진은 빈 결과)",
     "mcp.edw_meta.dir": "<런타임 루트>/config/edw_meta(이미지 안 /app/config/edw_meta — 서버 compose는 이 자리를 붙이지 않음) — 두 파일이 없으면 edw_meta 도구는 not_configured(query_edw는 그대로)",
     "mcp.host.jobs_dir": "<결과 폴더>/_mcp_parse/jobs",
     "mcp.server.allowed_hosts": "바인드 주소만 허용",
     "mcp.server.manifest": "<루트>/output/parse/_source/manifest.jsonl",
     "mcp.server.max_queue": "동시 상한 × 4(0이면 무제한)",
 }
+# required 게시·EDW 칸 — 환경마다 무엇을 넣는지(사용자 11-04: 서버는 접속 칸, PC는 로컬 폴더·sqlite만).
+REQ_NOTES = {
+    "pipeline.load.publish.bucket": "서버: 게시용 Object Storage 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): file://<가짜 Object Storage 폴더>(저장소 루트 기준 상대 경로 가능 — 버킷 이름이면 시작 거부)",
+    "pipeline.load.publish.prefix": "PC·서버: 버킷(폴더) 안 silver 결과 경로 접두(그 아래 <출처>/<원본 경로>/<파일명>_<날짜>.md) · 비우면 버킷 맨 위",
+    "common.connections.object_storage.endpoint": "서버: S3 호환 엔드포인트 URL 입력 · PC(local): 비움(적혀 있으면 시작 거부 — 게시는 file:// 폴더)",
+    "common.connections.object_storage.region": "서버: 리전 이름 · 비우면 us-east-1 · PC(local): 비움",
+    "common.connections.object_storage.access_key": "서버: 입력 · PC(local): 비움",
+    "common.connections.object_storage.secret_key": "서버: 입력 · PC(local): 비움",
+    "common.connections.object_storage.verify_tls": "서버: 비우면 1(검증) · 사내 CA면 CA 파일 경로 · PC(local): 비움",
+    "common.connections.parsing_meta.table": "서버: 비우면 AI.ParsingMeta(다른 표면 <스키마.표>) · PC(local): 비움(가짜 EDW sqlite는 표 이름 ParsingMeta 고정)",
+    "common.connections.rdb.host": "서버: EDW(SQL Server) 주소 입력 · PC(local): 비움(적혀 있으면 시작 거부 — 아래 sqlite를 씀)",
+    "common.connections.rdb.port": "서버: 비우면 1433 · PC(local): 비움",
+    "common.connections.rdb.database": "서버: 입력 · PC(local): 비움",
+    "common.connections.rdb.read.user": "서버: 입력(원천 목록·ParsingMeta 조회·query_edw) · PC(local): 비움",
+    "common.connections.rdb.read.password": "서버: 입력 · PC(local): 비움",
+    "common.connections.rdb.write.user": "서버: 입력(ParsingMeta 게시 INSERT만) · PC(local): 비움",
+    "common.connections.rdb.write.password": "서버: 입력 · PC(local): 비움",
+    "common.connections.rdb.sqlite": "PC(local): 가짜 EDW sqlite 파일 경로 입력(저장소 루트 기준 상대 경로 가능 — 파싱·게시가 쓰므로 valid_env/edw/edw.sqlite 사본) · 서버: 비움(적혀 있으면 EDW를 쓸 때 거부)",
+}
 # 뜻이 바로 안 보이는 칸의 입력 예(사용자 11-04 op-05).
 EXAMPLES = {
+    "pipeline.load.publish.bucket": "rag-silver(서버) · file://output/object_storage/silver(PC — 저장소 루트 기준)",
+    "pipeline.load.publish.prefix": "parse",
+    "common.connections.object_storage.endpoint": "https://os.corp.local:9000",
+    "common.connections.parsing_meta.table": "AI.ParsingMeta",
+    "common.connections.rdb.host": "edw.corp.local",
+    "common.connections.rdb.sqlite": "output/edw.sqlite(PC — 저장소 루트 기준, valid_env/edw/edw.sqlite 사본)",
     "common.connections.rdb.connect_kwargs": '{"login_timeout": 10, "tds_version": "7.4"}',
     "common.connections.object_storage.verify_tls": "/etc/pki/ca-trust/source/anchors/corp-ca.pem",
     "common.models.embed.query_prefix": "'Instruct: 질문에 맞는 문단을 찾음\\nQuery: '",
@@ -313,7 +333,7 @@ def build(classes=None):
 
 
 TITLES = {
-    "tuning": "tuning — 코드 상수 후보(사용자 10-30 op-08): 기본값 말고 쓴 흔적이 없는 내부 조정값·자원 세부값. 보통 비워 둔다.",
+    "tuning": "tuning — 거의 바꾸지 않는 값(분류별 — 결과 파라미터·내부 상한·제한 시간·자원 세부값). 비우면 코드 기본값 — 보통 비워 둔다.",
     "dev": "dev — PC 전용(RUN_ENV=local): 외부 모델·지출 상한·로컬 대체 DB·PC 시험 도구. 서버(dev·prd)는 이 절을 비워 둔다(외부 모델·로컬 대체 DB는 서버에서 거부).",
 }
 
@@ -353,7 +373,7 @@ def _emit(node, depth, path, lines, last):
             _emit(v, depth + 1, y, lines, last)
             continue
         p, f = v
-        sec = y.split(".", 1)[0]
+        sec = y.split(".", 2)[y.startswith("tuning.")]  # tuning 칸은 역할 자리로 판정
         tag = "[파라미터] " if sec in SPLIT and _kind(p, f) == 0 else "(자원) " if p in L.TUNING_RESOURCE else ""
         val = _value(p, f)
         head = f"{pad}{name}:{' ' + val if val else ''}"
@@ -398,7 +418,6 @@ SET_MATTERS = {
     "MEM_SETTLE_MARGIN",
     "MEM_SETTLE_SEC",
     "MEM_START_PCT",
-    "NIGHT_WORKERS",
     "PIPE_MAX_PROCS",
     "PIPE_PROC_GB",
     "PIPE_PROCS",
@@ -421,7 +440,7 @@ def _note(p, f):
         desc = f"{desc} — {part}" if desc else part
         if desc.count("(") <= desc.count(")"):
             break
-    blank = "" if p in L.REQUIRED else _fmt_default(p, f)
+    blank = f" · {REQ_NOTES[p]}" if p in REQ_NOTES else "" if p in L.REQUIRED else _fmt_default(p, f)
     ex = f" · 예: {EXAMPLES[p]}" if p in EXAMPLES else ""
     note = f"{desc}{blank} · 값: {_values(p, f)}{ex}"
     return note + (" [비밀]" if S.is_secret(f) else "")
@@ -434,7 +453,7 @@ _PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|
 # 설명 글자로는 선택지를 못 뽑는 칸 — 코드가 받는 값(읽는 코드·설명 기준).
 VALUES = {
     "common.run_env": "local·dev·prd 중 하나",
-    "pipeline.load.publish.bucket": "버킷 이름 · PC는 file://<폴더>",
+    "pipeline.load.publish.bucket": "버킷 이름·file://<폴더>(절대 경로 또는 저장소 루트 기준 상대 경로)",
     "pipeline.load.publish.prefix": "글자(버킷 안 경로 접두)",
     "common.dev.docker.pg_effective_cache": "PG 크기 글자(예 12GB)",
     "common.store.run_mode": "prod 하나(비우면 설정 안 함 — test는 0.2.0에 지움)",

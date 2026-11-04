@@ -1,5 +1,5 @@
 """pl-42(사용자 10-30) — 지원 형식 .jpeg·.tif·.tiff·.bmp·.mhtml(+ .hwpx 시험), pl-45(11-01·11-03) 2차 확장자(EXT2 표): 형식마다 임시 폴더에 견본을 만들어 파싱한다
-(valid_env에 그 형식 파일이 없음 — CLAUDE.md §6-4). 외부 접속 없음 — VLM 호출(_chat)만 가짜로 바꿔 끼워 이미지가 실제로 읽히는지 본다."""
+(valid_env에 그 형식 파일이 없음 — CLAUDE.md §6-4). 외부 접속 없음 — 쪽 VLM 호출(vlmcall.vlm_page)만 가짜로 바꿔 끼워 이미지가 실제로 읽히는지 본다."""
 
 import io
 import json
@@ -10,8 +10,8 @@ from unittest import mock
 
 from common.core.paths import STACK_FILE
 from pipeline.extract.engines import registry
-from pipeline.extract.run_all import engines_for_doc
-from pipeline.shared.exts import IMG_EXTS
+from pipeline.extract.run_engines import engines_for_doc
+from pipeline.shared.ext_groups import IMG_EXTS
 
 IMAGES = (".jpeg", ".tif", ".tiff", ".bmp")
 NEW = (*IMAGES, ".mhtml", ".hwpx")
@@ -33,7 +33,7 @@ def test_stack_lists_new_formats():
         assert engines_for_doc(Path("x" + ext), sp, {}, set()) == ["qwen_vlm"], ext
     assert {
         k for k, v in sp.items() if v == ["qwen_vlm"] and not k.startswith(".pdf_")
-    } == IMG_EXTS  # 이미지 묶음 한 곳(exts.py)이 구성과 같게
+    } == IMG_EXTS  # 이미지 묶음 한 곳(ext_groups.py)이 구성과 같게
     assert sp[".mhtml"] == sp[".mht"]
     assert set(engines_for_doc(Path("x.mhtml"), sp, {}, set())) == {"mhtml", "kreuzberg"}
     assert engines_for_doc(Path("x.hwpx"), sp, {}, set()) == ["hwpx"]
@@ -44,12 +44,14 @@ def test_images_parse():
     from PIL import Image
 
     from pipeline.extract.engines.qwen_vlm import parser as Q
+    from pipeline.shared import vlmcall as V
 
     with tempfile.TemporaryDirectory() as td:
         for ext in IMAGES:
             p = Path(td) / ("sample" + ext)
             Image.new("RGB", (64, 32), "white").save(p)
-            with mock.patch.object(Q, "_chat", lambda im: f"{TOKEN} {im.size[0]}x{im.size[1]}"):
+            fake = lambda b, det=None: (f"{TOKEN} {Image.open(io.BytesIO(b)).size}", {})  # 받은 쪽 그림 크기
+            with mock.patch.object(V, "vlm_page", fake):
                 out = Q.parse_qwen_vlm(str(p))
             assert TOKEN in out["text"] and out["trace"]["pages"] == 1, (ext, out["text"][:80])
 

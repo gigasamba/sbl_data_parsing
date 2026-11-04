@@ -1,6 +1,6 @@
-"""pipeline.transform.figures.overlay 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.overlay`."""
+"""pipeline.transform.figures.overlay_groups 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.figures.overlay_groups`."""
 
-from pipeline.transform.figures.overlay import cluster_overlaps
+from pipeline.transform.figures.overlay_groups import cluster_overlaps
 
 
 def selftest():

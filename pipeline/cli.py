@@ -38,12 +38,12 @@ _STACK: dict = {}
 
 
 def _stack():
-    """엔진 구성(사전) — 프로세스마다 한 번(pipeline/stackcfg.py: 파일 → 이미지에 없는 엔진 거부 — 서버·PC 같은 파일, 사용자 11-01).
+    """엔진 구성(사전) — 프로세스마다 한 번(pipeline/engine_stack.py: 파일 → 이미지에 없는 엔진 거부 — 서버·PC 같은 파일, 사용자 11-01).
     파일을 못 읽거나 없는 엔진이면 종료 2."""
     if "v" not in _STACK:
-        from pipeline import stackcfg
+        from pipeline import engine_stack
 
-        stackcfg.resolve()
+        engine_stack.resolve()
         _STACK["v"] = pc.stack()
     return _STACK["v"]
 
@@ -78,7 +78,7 @@ def _until(deadline):
 
 def _run_until(args, env, sec):
     """마감까지만 실행 — 넘으면 프로세스 묶음(--procs 자식 포함)을 끝냄. 다음 밤은 문서 대장에 파싱 성공 행이 없는 문서를 다시 고른다(pl-32 — 마감에 걸린 밤의 문서는 PR 4 전까지 반복될 수 있음).
-    args[0] = 모듈 점 표기(예: pipeline.extract.run_all)."""
+    args[0] = 모듈 점 표기(예: pipeline.extract.run_engines)."""
     cmd = [PY, "-m", str(args[0]), *map(str, args[1:])]
     print("$ " + " ".join(cmd), flush=True)
     from common.core import resources as PR  # 프로세스 묶음(OS 분기 한 곳)
@@ -98,8 +98,8 @@ def _run_until(args, env, sec):
 
 # ── 단계 2 ───────────────────────────────────────────────────
 def _engines_of(st):
-    """parse 엔진(정렬) — stackcfg.engines_of 하나로(VS8b R-8)."""
-    from pipeline.stackcfg import engines_of
+    """parse 엔진(정렬) — engine_stack.engines_of 하나로(VS8b R-8)."""
+    from pipeline.engine_stack import engines_of
 
     return engines_of(st)
 
@@ -152,7 +152,7 @@ def _left(a):
 
 def _unparsed(names):
     """C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = EDW FileStorageMap ∖ ParsingMeta. FileStorageMap 쪽은 이미 받은 이름 목록
-    (`--source rdb:`가 FileStorageMap을 읽어 만든 것 — 이름 ↔ 원본 키 s3_key 대응은 source.py가 쓴 manifest.jsonl), ParsingMeta 쪽은
+    (`--source rdb:`가 FileStorageMap을 읽어 만든 것 — 이름 ↔ 원본 키 s3_key 대응은 fetch_docs.py가 쓴 manifest.jsonl), ParsingMeta 쪽은
     여기서 **EDW를 한 번 읽는다**(파싱 입구의 EDW 읽기 — 읽기 계정, PC는 EDW 대역 sqlite `RDB_SQLITE`): parse_status가 ok·partial인
     행의 source_key 집합(`done_source_keys`). 통째 실패는 ParsingMeta에 안 쓰므로(C3) 실패한 문서는 행이 없어 다음 실행이 다시 고른다.
     키 = manifest의 "key"(없으면 이름 그대로 — publish의 source_key와 같은 규칙, parsing_meta.plan).
@@ -199,6 +199,24 @@ def _tdone():
     return " · ".join(parts)
 
 
+def _vlm_doc_concurrency(a, lim):
+    """엔진 자식의 문서당 VLM 동시 수 — common.models.vlm.concurrency를 동시 문서 수(= min(문서 수, 조각 × --workers))로
+    max_concurrency를 나눈 몫까지 줄인다(11-04 — 옛 night.vlm_concurrency·--vlm-concurrency는 지움: run_docs의 VLM_CONCURRENCY가
+    늘 max ÷ --workers(8 ÷ 4 = 2)로 잘려 문서 1건 실행에도 적용되지 않던 결함)."""
+    from common.core import resources as RS
+
+    src = Path(a.src)
+    docs = (
+        [n for n in Path(lim[1]).read_text(encoding="utf-8").splitlines() if n.strip()]
+        if lim
+        else [f for f in src.iterdir() if f.is_file()]
+        if src.is_dir()
+        else []
+    )
+    at_once = min(max(1, len(docs)), RS.resolve_procs(a.procs) * max(1, int(a.workers)))
+    return RS.vlm_page_concurrency(at_once, C.cfg().models.vlm.concurrency)
+
+
 def parse_module(a):
     """파싱 모듈: (--source면) 가져오기·시험 표본 → 중복 확인 → 방향 보정 → 파싱 → 채점 → 대표 결과 → 끝 표시 → (s3) 원본 정리.
     임베딩·DB 연결 없음 — 수집 서버에 이것만 보낼 수 있음. --source 없으면 --src(이미 준비된 폴더)를 그대로."""
@@ -219,7 +237,7 @@ def parse_module(a):
     # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) · 스트리밍 파싱은 op-08에 지움
     lim, src_info = [], None
     if a.source:  # 문서 위치: 같은 서버 폴더 → Object Storage 몇 건 → 전체(사용자 10-02)
-        from pipeline.extract import source as SRC
+        from pipeline.extract import fetch_docs as SRC
 
         local, names, state = SRC.resolve(a.source, OUT, a.source_limit)
         src_info = (state, local)
@@ -232,7 +250,7 @@ def parse_module(a):
         sel.write_text("\n".join(names) + "\n", encoding="utf-8")
         # fp-perf B7 — 문서 1건(run_docs 문서별 흐름)은 자식 프로세스 없이 같은 함수로(결과 파일 같음)
         if sum(1 for f in Path(local).iterdir() if f.is_file() and f.name != ".gitkeep") <= 1:
-            from pipeline.extract import dedup
+            from pipeline.extract import deduplication as dedup
 
             try:
                 dedup.run_folder(local, OUT / "dedup")
@@ -241,7 +259,7 @@ def parse_module(a):
                 print(f"[dedup] 실패: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
                 rc = 1
         else:
-            rc = _run_until(["pipeline.extract.dedup", "--src", local, "--out", OUT / "dedup"], child_env(), _left(a) - 120)
+            rc = _run_until(["pipeline.extract.deduplication", "--src", local, "--out", OUT / "dedup"], child_env(), _left(a) - 120)
         _tstep("t_dedup")
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)
@@ -249,17 +267,11 @@ def parse_module(a):
         keep &= set(_unparsed(names))  # C10 — ParsingMeta에 성공 행이 있는 문서는 다시 파싱 안 함
         only = OUT / "parse" / "_source" / "only.txt"
         only.write_text("\n".join(n for n in names if n in keep) + "\n", encoding="utf-8")
-        rc = _run_until(["pipeline.extract.prepare", "--src", local, "--out", a.src, "--only", only], child_env(), _left(a) - 120)
+        rc = _run_until(["pipeline.extract.filter_and_rotate", "--src", local, "--out", a.src, "--only", only], child_env(), _left(a) - 120)
         _tstep("t_prepare")
         if rc != 0:
             raise SystemExit(75 if rc is None else rc)
         lim = ["--docs-from", only]
-    from common.core import resources as RS
-
-    vlm_conc = RS.vlm_page_concurrency(a.workers, a.vlm_concurrency)  # 문서 동시 수 × 쪽 동시 수가 VLM_MAX_CONCURRENCY를 넘지 않게
-    from common.core.paths import child_env
-
-    env = C.child_env(child_env(), VLM_CONCURRENCY=str(vlm_conc), LLM_BASE_URL=None)  # 파싱 모듈은 LLM을 부르지 않음 — 덮기 파일(S7e3 B-1)
     if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
         names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
         new = _unparsed(names)  # C10 — ParsingMeta에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
@@ -272,8 +284,11 @@ def parse_module(a):
         f.write_text("\n".join(pick) + "\n", encoding="utf-8")
         lim = ["--docs-from", f]
         print(f"[parse] 새·실패 문서 {min(len(new), a.max_new)}/{len(new)}개(PARSE_MAX_NEW {a.max_new}) — 나머지는 다음 실행", flush=True)
+    env = C.child_env(
+        child_env(), VLM_CONCURRENCY=str(_vlm_doc_concurrency(a, lim)), LLM_BASE_URL=None
+    )  # 파싱 모듈은 LLM을 부르지 않음(S7e3 B-1)
     args = [
-        "pipeline.extract.run_all",
+        "pipeline.extract.run_engines",
         "--src",
         a.src,
         "--out",
@@ -297,8 +312,8 @@ def parse_module(a):
         print("[parse] 이번 실행 0건 — 파싱한 문서 없음(runs.jsonl 없음) · 채점·대표 결과·끝 표시 건너뜀", flush=True)
         return
     for args in (
-        ["pipeline.transform.represent.parse_qa", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
-        ["pipeline.transform.represent.represent", "--src", a.src, "--parse-dir", OUT / "parse"],
+        ["pipeline.transform.represent.parse_scoring", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
+        ["pipeline.transform.represent.build_rep", "--src", a.src, "--parse-dir", OUT / "parse"],
     ):
         rc = _run_until(args, env, _left(a) - 60)
         _tstep("t_" + args[0].rsplit(".", 1)[-1])  # 2026-10-22 — qa·represent 분리 계측(docflow 기타 분해)
@@ -341,7 +356,7 @@ def parse_module(a):
         run_id=run_id,
     )
     if src_info:
-        from pipeline.extract import source as SRC
+        from pipeline.extract import fetch_docs as SRC
 
         if SRC.is_remote(a.source):
             SRC.finish(src_info[0], src_info[1], OUT / "parse" / "_rep" / "index.json")
@@ -499,10 +514,8 @@ def _default_procs():
 
 
 def _default_workers():
-    """--workers 기본 — NIGHT_WORKERS → PIPE_WORKERS 중 준 값(설정 객체) 글자로, 없으면 "4"(S7c — 옛 `get(N) or get(P) or "4"`)."""
-    v = pc.given("NIGHT_WORKERS")
-    if v is None:
-        v = C.given("PIPE_WORKERS")
+    """--workers 기본 — PIPE_WORKERS(설정 객체 — 11-04 NIGHT_WORKERS를 합침) 글자로, 없으면 "4"."""
+    v = C.given("PIPE_WORKERS")
     return C.render(v) if v is not None else "4"
 
 
@@ -526,7 +539,6 @@ def main(argv=None):
     p.add_argument("--engines", default="")
     p.add_argument("--procs", default=_default_procs())
     p.add_argument("--workers", default=_default_workers())
-    p.add_argument("--vlm-concurrency", type=int, default=pc.cfg().night.vlm_concurrency)
     p.add_argument(
         "--max-new",
         type=lambda x: int(x or 0),

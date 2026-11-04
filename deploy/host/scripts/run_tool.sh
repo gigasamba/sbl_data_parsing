@@ -20,6 +20,6 @@ case "$tool" in
 esac
 
 echo "[run_tool] $(date '+%F %T') $tool 시작(data-pipeline 안에서)"
-in_pipeline data-pipeline "$@"; rc=$?
+in_pipeline "data-pipeline$NAME_SUFFIX" "$@"; rc=$?
 echo "[run_tool] $(date '+%F %T') $tool 끝 (종료 코드 $rc)"
 exit $rc

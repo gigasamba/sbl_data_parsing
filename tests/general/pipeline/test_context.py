@@ -1,6 +1,6 @@
-"""pipeline.transform.represent.context 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.context`."""
+"""pipeline.transform.represent.figure_context 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.figure_context`."""
 
-from pipeline.transform.represent.context import link_context, render, value_check
+from pipeline.transform.represent.figure_context import link_context, render, value_check
 
 
 def selftest():

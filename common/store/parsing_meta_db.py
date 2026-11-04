@@ -1,7 +1,7 @@
-"""EDW `AI.ParsingMeta` 저장소 클래스(읽기·쓰기) — modules/load/parsing_meta.py(SI39 publish, 쓰기 쪽 사람·설계는
+"""EDW `AI.ParsingMeta` 저장소 클래스(읽기·쓰기) — pipeline/load/silver_publish.py(SI39 publish, 쓰기 쪽 사람·설계는
 그 모듈 docstring)·modules/search/mcp_server.py(OP21 근거 '파싱 결과 경로' 조회, 읽기만) 공용. 모듈 경계 규칙①
 (cli/check_modules.py — modules/<x>는 다른 modules/<y>를 import 못 함, 함께 쓸 것은 common/만)이라 여기로
-승격했다 — modules/load/parsing_meta.py는 이 파일에서 그대로 다시 import해 쓴다(동작 바이트 동일, 이름만 공용
+승격했다 — pipeline/load/silver_publish.py는 이 파일에서 그대로 다시 import해 쓴다(동작 바이트 동일, 이름만 공용
 자리로 옮김). 표 DDL·열 순서 설계는 docs/architecture.md §2.
 """
 
@@ -14,7 +14,7 @@ from common.config import layout as L
 from common.config.settings import cfg
 
 DEFAULT_TABLE = "AI.ParsingMeta"
-TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # source.py TABLE_ID_RE와 같은 규칙(SQL 삽입 방지)
+TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # fetch_docs.py TABLE_ID_RE와 같은 규칙(SQL 삽입 방지)
 # C10(사용자 10-31 · skipped_dup 11-01 — 완전 중복은 매일 밤 다시 안 고름) — 이 parse_status 행이 있으면 "파싱 끝난 문서"
 # (not_parsed·skipped_disk_cap·실패는 다시 고름 · 통째 실패는 ParsingMeta에 안 씀 — C3)
 DONE_STATUSES = ("ok", "partial", "skipped_dup")
@@ -69,7 +69,7 @@ def renames(found):
 
 
 def _today_date():
-    """PM2 — parse_date 기본값(처리 시각) — pipeline.load.parsing_meta.today()와 같은 글자 형식
+    """PM2 — parse_date 기본값(처리 시각) — pipeline.load.silver_publish.today()와 같은 글자 형식
     ('YYYY-MM-DD_HHMMSS', 파일 이름에도 쓰여 콜론 없음). 그 모듈을 여기서 import하면 common→pipeline
     역방향 import가 돼 모듈 경계를 어기므로 같은 한 줄 형식을 이 안에 둔다(중복은 이 한 줄뿐)."""
     return datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")

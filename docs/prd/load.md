@@ -11,14 +11,14 @@
 문서마다 EDW 고객 하나(`client_edw` — MCP 고객 거르기의 유일한 키)와 원천 메타(`doc.attrs` 키)가 필요하다. 파싱·구조화는 이 값을 쓰지 않는다 — 매핑이 바뀌어도 다시 파싱하지 않는다.
 
 ### 규칙
-1. 적재(`pipeline/load/edw_meta.py`)가 PG 트랜잭션 밖에서 EDW 읽기 계정(`common.connections.rdb.read`)으로 원천별 사슬을 따라 `client_edw`·`attrs`·`created_at`을 채운다. 결과는 gold `doc`에만 쓴다.
+1. 적재(`pipeline/load/edw_doc_meta.py`)가 PG 트랜잭션 밖에서 EDW 읽기 계정(`common.connections.rdb.read`)으로 원천별 사슬을 따라 `client_edw`·`attrs`·`created_at`을 채운다. 결과는 gold `doc`에만 쓴다.
 2. 사슬(표·칸 이름·단계·`attrs` 키)은 사슬 파일 [`resources/config/edw_chain.yaml`](../../resources/config/edw_chain.yaml)이 정한다 — 꼴은 [load-schema.md#pl-52](load-schema.md#pl-52), 키 뜻은 [db_schema.md](../architecture/db_schema.md) gold.doc.attrs 키.
 3. SFDC 고객 순서: 영업 기회 직접(`006`) > `Task.WhatId`(`00T`) > `Event.WhatId`(`00U`) > (Quote — 사슬 파일에서 켤 때만), 기회가 없으면 계정 직접 연결. 같은 단계에 후보가 둘 이상이면 비운다.
 4. CRMS는 `FileStorageMap_CRMS.rm_contract_code → CRMS.RM_CM_PJTLIST`, LAS는 `FileStorageMap_LAS.manage_no → LAS.Contract`(최신 판). LAS `client_edw`(`PartnerCorpName`)는 지금 모두 비어 있다. FAQ는 고객 연결이 없다.
 5. 같은 sha256 묶음에도 고객은 전파하지 않는다.
 6. 만약 EDW를 못 읽으면 → 메타 없이 적재하고 경고·실행 기록 `meta_missing`을 남긴다. 적재 뒤 바뀐 연결은 자동으로 갱신하지 않는다 — `--replace`로 다시 적재해 채운다.
 7. 사슬 파일 자리 = 설정 `ops.paths.edw_chain`(적재·검색 MCP가 함께 읽음). 비우면 `resources/config/edw_chain.yaml`. 만약 파일이 없거나 틀리면 → 적재는 시작 때 멈추고 검색은 오류(기본 파일로 돌아가지 않음). 서버 사본을 고쳐 쓰는 법은 [release-and-patch §8-6](../operations/release-and-patch.md#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29).
-8. 파일만 점검: `python -m pipeline.load.edw_meta --check [--file F]`(EDW·PG에 붙지 않음).
+8. 파일만 점검: `python -m pipeline.load.edw_doc_meta --check [--file F]`(EDW·PG에 붙지 않음).
 
 ### QA
 - `tests/server/pipeline/test_edw_meta.py`(사슬 사례·틀린 설정·힌트 칸 — PC 대역 `valid_env/edw`).
@@ -98,9 +98,9 @@
 
 ### 규칙
 1. 올리는 것: 대표 결과 `.md`(`render_md` — 본문 + 표) + 같은 폴더에 대표 결과 JSON(`<이름>_<날짜>.json`)·엔진별 원결과(`engine/<엔진>_<판>_<이름>.json`)·그림 기록(`engine/vlm_<모델>_<이름>.jsonl`). 원본 파일은 올리지 않는다. `.md`를 마지막에 써서 완료 표시로 삼는다.
-2. 대표 결과 키 = `<load.publish.prefix>/<source_system>/<원본 키 폴더들>/<원본 파일 이름(확장자 뺌)>_<parse_date>.md`. 조각마다 파일 이름에 쓸 수 없는 글자를 정리하고, 정리로 원본 키와 달라지면 마지막 조각에 `__h<원본 키 sha1 앞 10자>`를 붙인다. `parse_date` = `YYYY-MM-DD_HHMMSS`. 같은 키가 이미 있으면 `<parse_date>-2`, `-3` …으로 새 폴더 — 덮어쓰지 않는다. ParsingMeta `rep_key`는 그 폴더(끝 `/`).
+2. 대표 결과 키 = `<required.publish.prefix>/<source_system>/<원본 키 폴더들>/<원본 파일 이름(확장자 뺌)>_<parse_date>.md`. 조각마다 파일 이름에 쓸 수 없는 글자를 정리하고, 정리로 원본 키와 달라지면 마지막 조각에 `__h<원본 키 sha1 앞 10자>`를 붙인다. `parse_date` = `YYYY-MM-DD_HHMMSS`. 같은 키가 이미 있으면 `<parse_date>-2`, `-3` …으로 새 폴더 — 덮어쓰지 않는다. ParsingMeta `rep_key`는 그 폴더(끝 `/`).
 3. ParsingMeta에는 INSERT만 한다 — 키(`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뛴다. UPDATE 예외는 [pl-12](#pl-12) 규칙 3뿐.
-4. 상태 `parse_status` = `ok` · `partial`(교차 정확도 < 0.95 — [transform.md#pl-04](transform.md#pl-04)) · `failed` · `skipped_drm` · `skipped_dup` · `not_parsed` · `skipped_disk_cap`. 올리는 상태는 `load.publish.upload_statuses`(기본 `ok`·`partial`).
+4. 상태 `parse_status` = `ok` · `partial`(교차 정확도 < 0.95 — [transform.md#pl-04](transform.md#pl-04)) · `failed` · `skipped_drm` · `skipped_dup` · `not_parsed` · `skipped_disk_cap`. 올리는 상태는 `tuning.load.publish.upload_statuses`(기본 `ok`·`partial`).
 5. `skipped_drm`·`failed`는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만.
 6. 게시 버킷이 원천 원본 버킷과 같으면 거부한다(`file://` 대역은 검사 안 함, 원본 위치가 s3 주소가 아니면 건너뜀). `load.publish.bucket_skip_overlap_check`가 켜지면 건너뛴다 — 지금 `run_docs`는 늘 켜서 넘긴다.
 
@@ -113,11 +113,12 @@
 
 ### 규칙
 1. 게시(silver → Object Storage + EDW)는 기본이자 유일한 방식이다 — 끄는 선택지가 없다. `run_docs`는 문서마다 늘 게시한다([ops.md#pl-24](ops.md#pl-24) — gold 전).
-2. 게시 버킷·접두(`required.source.publish_bucket`·`publish_prefix`)가 없으면 → 시작을 거부한다.
-3. `local`·`dev`는 로컬 대역(Object Storage는 폴더 `file://`, EDW는 SQLite) 또는 실제 접속, `prd`는 실제 접속만. PC에서는 운영 EDW·Object Storage에 접속하지 않는다(CLAUDE.md §4).
+2. 게시·EDW 칸은 settings.yaml `required` 한곳에 있다 — 게시 위치 `required.publish.bucket`·`prefix`, Object Storage 접속 `required.object_storage`(`endpoint`·`region`·`access_key`·`secret_key`·`verify_tls`), EDW `required.edw`(`parsing_meta_table`·`host`·`port`·`database`·`read_*`·`write_*`·`sqlite`). 칸마다 주석에 서버·PC에 넣을 값을 적는다. 옛 자리(`required.source.publish_*`·`dev.connections.rdb.sqlite`·`common.connections.…`)도 경고 한 번 뒤 읽는다.
+3. 서버(`run_docs`)는 게시 버킷·접두, Object Storage 주소·키, EDW 주소·읽기·쓰기 계정이 비면 칸 이름을 찍고 시작을 거부한다(종료 2). `region`·`verify_tls`·`port`·`parsing_meta_table`은 비우면 코드 기본값(`us-east-1`·`1`·1433·`AI.ParsingMeta`).
+4. PC(`local`)는 로컬 대역만 적는다 — 게시 버킷 `file://<가짜 Object Storage 폴더 절대 경로>`(S3 접속 칸 비움), EDW `required.edw.sqlite`(가짜 EDW 파일 — 접속 칸 비움). 가짜 EDW는 `local`에서만 열린다(서버 설정에 있으면 EDW를 쓸 때 거부). PC에서는 운영 EDW·Object Storage에 접속하지 않는다(CLAUDE.md §4).
 
 ### QA
-- 자동 시험 없음 — 확인 자리는 `run_docs.py` 시작 검사 `SETTINGS_REQUIRED`(`pipeline.load.publish.bucket`·`prefix`).
+- 칸 자리·옛 자리: `tests/server/common/test_layout.py::test_publish_edw_keys_in_required`. 서버 시작 검사는 `run_docs.py` `SETTINGS_REQUIRED`(자동 시험 없음).
 - Status: done
 
 <a id="pl-41"></a>

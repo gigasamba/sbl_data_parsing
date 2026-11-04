@@ -13,11 +13,11 @@
 ### 규칙
 1. 파싱 입력(`--source`, 설정 `pipeline.extract.input_source`)은 둘 중 하나여야 한다 — 폴더, 또는 `rdb:csv:<경로>`(문서 위치 표 CSV). 그 밖의 값이면 → 오류로 멈춘다.
 2. `rdb:csv`의 칸 이름은 설정 `pipeline.connections.rdb.columns`가 정한다 — 기본 `doc_id`=`id`, `key`=`s3_key`, `filename`=`original_filename`, `size`=`file_size`, `content_version`=`content_version_id`.
-3. 서버 러너 `run_docs.py`가 FileStorageMap에서 대상(파일 이름 키워드 `--filter`, 작은 파일부터)을 골라 `batch.csv`를 만들고 `rdb:csv`로 넘긴다(대상 고르기 규칙은 [ops.md#pl-23](ops.md#pl-23)).
-4. 미리 받기: `python -m pipeline.extract.source warm`이 표의 파일을 `pipeline.extract.source.warm` 폴더에 먼저 받는다(비면 미리 받기 꺼짐). 받기에 실패한 파일은 파싱 때 직접 받는다.
+2. 서버 러너 `run_docs.py`가 FileStorageMap에서 대상(파일 이름 키워드 `--filter`, 작은 파일부터)을 골라 `batch.csv`를 만들고 `rdb:csv`로 넘긴다(대상 고르기 규칙은 [ops.md#pl-23](ops.md#pl-23)).
+4. 미리 받기: `python -m pipeline.extract.fetch_docs warm`이 표의 파일을 `pipeline.extract.source.warm` 폴더에 먼저 받는다(비면 미리 받기 꺼짐). 받기에 실패한 파일은 파싱 때 직접 받는다.
 
 ### QA
-- `tests/server/pipeline/test_source.py` · `tests/server/pipeline/test_rdb_discover.py`.
+- `tests/server/pipeline/test_fetch_docs.py` · `tests/server/pipeline/test_rdb_discover.py`.
 - Status: done
 
 <a id="pl-02"></a>
@@ -27,15 +27,15 @@
 비싼 파싱 전에 같은 파일·읽을 수 없는 파일을 거르고, 돌아간 스캔을 바로잡는다.
 
 ### 규칙
-1. 완전히 같은 파일(sha256 같음)은 한 번만 파싱하고 결과를 재사용한다. 문서는 S3 키마다 따로 둔다(키마다 메타가 다름).
-2. 같은 해시 묶음에서 남길 파일은 `dedup.py` `_rep_select` 순서로 고른다: 이름에 사본 표시(`(1)`·`사본` 등)가 없는 것 → 수정 시각이 늦은 것 → 큰 파일.
+1. 한 번에 받은 원본 폴더 안에서 완전히 같은 파일(sha256 같음)은 한 번만 파싱하고 결과를 재사용한다. 문서는 S3 키마다 따로 둔다(키마다 메타가 다름). 다른 원천의 같은 내용 파일은 원천마다 따로 처리한다(원천 사이 중복 확인 없음).
+2. 같은 해시 묶음에서 남길 파일은 `deduplication.py` `run_folder()` 순서로 고른다: 이름에 사본 표시(`(1)`·`사본` 등)가 없는 것 → 수정 시각이 늦은 것 → 큰 파일.
 3. 회전 바로잡기는 `pipeline.extract.prepare.rotate`(기본 `false`)가 켜졌을 때만 한다. 꺼져 있으면 회전용 OCR을 하지 않고 파일을 그대로 놓는다.
 4. 켜져 있으면 이미지·스캔 PDF 쪽마다 4방향(0·90·180·270도) RapidOCR 점수를 스레드 4개로 동시에 재고 가장 높은 방향으로 돌린다 — 같으면 0도, 모두 0이면 그대로. 기록은 `output/prepared/rotation.csv`(파일·쪽·각도·네 방향 점수·회전 전 원본 sha256 `orig_sha256`).
-5. DRM·암호 파일은 감지해서 표시만 한다(상태 `skipped_drm`). 복호화는 흐름 안에서 하지 않고 수동 명령 `python -m pipeline.extract.secure_docs decrypt`로만 한다.
+5. DRM·암호 파일은 감지해서 표시만 한다(상태 `skipped_drm`). 복호화는 흐름 안에서 하지 않고 수동 명령 `python -m pipeline.extract.protected_docs decrypt`로만 한다.
 6. 압축 파일(zip)은 지원하지 않는다고 표시한다.
 
 ### QA
-- `tests/server/pipeline/test_prepare.py`(`test_rotation_off_by_default` 등) · `tests/general/pipeline/test_dedup.py`.
+- `tests/server/pipeline/test_prepare.py`(`test_rotation_off_by_default` 등) · `tests/general/pipeline/test_dedup.py`(`run_folder` 대표 고르기).
 - Status: done
 
 <a id="pl-48"></a>
@@ -45,9 +45,8 @@
 큰 목록을 빨리 받는다. 받기는 네트워크 대기라 CPU를 거의 쓰지 않는다.
 
 ### 규칙
-1. `source warm`은 `pipeline.extract.prefetch_workers`(기본 2)개 스레드로 동시에 받는다.
-2. `rdb:csv` 파싱 입력 받기는 `pipeline.extract.source.fetch_workers`(기본 1 = 차례대로)개 스레드로 받는다.
-3. 서버 러너 `run_docs.py`는 받기 워커 `ops.run_docs.warm_workers`(기본 2)개가 차례대로 집어 받는다. 실제 동시 받기 수 = min(받기 워커 수, 미리 받기 빈자리). 미리 받기 상한은 `ops.run_docs.warm`(기본 20, 받는 중 포함) — 빈자리가 없으면 워커가 있어도 받지 않는다.
+1. `source warm`과 `rdb:csv` 파싱 입력 받기는 같은 칸 `pipeline.extract.source.fetch_workers`(기본 1 = 차례대로)개 스레드로 받는다(11-04 — 미리받기 전용 칸을 합침, `source warm --workers N`이 그 위를 덮음).
+2. 서버 러너 `run_docs.py`는 받기 워커 `ops.run_docs.warm_workers`(기본 2)개가 차례대로 집어 받는다. 실제 동시 받기 수 = min(받기 워커 수, 미리 받기 빈자리). 미리 받기 상한은 `ops.run_docs.warm`(기본 20, 받는 중 포함) — 빈자리가 없으면 워커가 있어도 받지 않는다.
 
 ### QA
 - `tests/general/deploy/test_run_docs.py::test_parallel_warm_respects_free_slots`.

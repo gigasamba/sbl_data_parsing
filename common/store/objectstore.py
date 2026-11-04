@@ -1,4 +1,4 @@
-"""Object Storage(S3 호환) 접속 — modules/parse/source.py(수집, rag-parse)·modules/search/mcp_server.py(근거 이미지
+"""Object Storage(S3 호환) 접속 — pipeline/extract/fetch_docs.py(수집, rag-parse)·modules/search/mcp_server.py(근거 이미지
 원천 재접근, rag-core, OP21) 공용. rag-core↔rag-parse 사이 직접 import가 금지라 여기(common/)로 승격(이미지에
 있는 boto3만 씀, 새 패키지 없음).
 
@@ -14,7 +14,7 @@ _tls_warned = False  # L8b — 프로세스당 한 번만 경고
 
 def resolve_tls_verify():
     """OS_VERIFY_TLS(기본 1) → boto3 verify 인자. 끄면(0) 경고 1번(OS_ENDPOINT가 내부망이 아니면 더 크게) —
-    client()·modules/load/parsing_meta.py의 S3Store가 공용으로 부른다(가드는 한 곳)."""
+    client()·pipeline/load/silver_publish.py의 S3Store가 공용으로 부른다(가드는 한 곳)."""
     v = cfg().connections.object_storage.verify_tls  # S7b — 설정 객체(기본 '1', 빈 값 그대로 — blank=keep)
     verify = False if v == "0" else True if v == "1" else v
     if verify is False:

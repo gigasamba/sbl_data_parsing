@@ -29,10 +29,10 @@ import tempfile
 from pathlib import Path
 
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
-from pipeline.shared.postprocess import raw_root
+from pipeline.shared.post_features import raw_root
+from pipeline.shared.vlmcall import dpi, sha, vlm_page
 from pipeline.transform.figures import shape_detect  # AD14
 from pipeline.transform.figures.pptx_edges import candidate_slides
-from pipeline.transform.figures.vlm_page import DPI, sha, vlm_page
 
 
 def _cap(name, default):
@@ -100,7 +100,7 @@ def _convert_to_pdf(pptx_path, out_dir, timeout):
 def target_slides(doc_path):
     """AD20 후속(10-11) — 이 문서에서 **실제로** 쪽 VLM이 호출될 슬라이드 번호 집합(candidate_slides를
     PARSE_PPTX_RENDER_MAX 상한·soffice 유무까지 적용해 거른 것) — pptx_slide_vlm()이 렌더할 목록을 고르는
-    바로 그 계산이자, `figures.py`가 '이 슬라이드는 쪽 VLM이 이미 전체를 다루니 삽입 그림을 또 기록하지
+    바로 그 계산이자, `figure_extract.py`가 '이 슬라이드는 쪽 VLM이 이미 전체를 다루니 삽입 그림을 또 기록하지
     않는다'는 중복 방지 판단에 쓰는 한 곳(한 계산을 두 곳이 같이 봄 — 따로 추정 안 함). pptx 아님·
     후보 0건·soffice 없음이면 빈 집합(그 경우 쪽 VLM도 안 돌아 figures()가 평소처럼 그림을 기록해야 함).
     독립 검토 반영(10-11, AD31/AD20 BLOCK) — soffice가 PATH에 있다고 변환이 꼭 성공하는 건 아니다(타임아웃·
@@ -108,7 +108,7 @@ def target_slides(doc_path):
     실패를 기록해 두었으면(_conversion_ok) 예측 대신 그 실제 결과로 빈 집합을 돌려준다 — 변환이 실패하면
     쪽 VLM도 비어서([]) 그 슬라이드의 삽입 그림을 figures()가 건너뛰면 안 되기 때문(원래 버그: 예측만 보고
     실제 변환 결과를 몰랐음)."""
-    from pipeline.shared.postprocess import (
+    from pipeline.shared.post_features import (
         active_features,
     )  # 재검토(10-11): PARSE_POST에 vlm_page가 없으면 쪽 VLM이 안 도니 그림도 건너뛰면 안 됨(page_targets와 같은 규칙)
 
@@ -129,7 +129,7 @@ def target_slides(doc_path):
 def render_office_pages(doc_path, page_nums, timeout=None):
     """F12 — 임의 오피스 문서(pptx·docx·xlsx 등, 확장자 제약 없음)를 soffice로 PDF 변환해 쪽 번호만 렌더 →
     {쪽 번호: PNG bytes}(soffice 변환 1번만, 재사용) — render_slides()의 몸통(pptx 제약만 뺌). F12 겹침 묶음
-    크롭(figures.py _docx_overlay_records 등)이 이 함수를 직접 쓴다 — docx·xlsx는 원본 좌표계(XML anchor)와
+    크롭(figure_extract.py _docx_overlay_records 등)이 이 함수를 직접 쓴다 — docx·xlsx는 원본 좌표계(XML anchor)와
     soffice 렌더 쪽이 1:1 대응한다는 보장이 없어(레이아웃 엔진이 다름) 호출부가 쪽 1만 가정하는 등 범위를
     좁혀 쓴다(모듈 docstring 참고). soffice 없음·쪽 번호 없음이면 빈 묶음(조용히 건너뜀)."""
     p = Path(doc_path)
@@ -149,7 +149,7 @@ def render_office_pages(doc_path, page_nums, timeout=None):
         try:
             for i in page_nums:
                 if 1 <= i <= len(doc):
-                    out[i] = doc[i - 1].get_pixmap(dpi=DPI).tobytes("png")
+                    out[i] = doc[i - 1].get_pixmap(dpi=dpi()).tobytes("png")
         finally:
             doc.close()
     return out
@@ -228,7 +228,7 @@ def shape_render_pages(doc_path, timeout=None):
                 if len(out) >= cap:
                     break
                 if pg.get_drawings() and not pg.get_images(full=True) and not _is_table_like(pg):
-                    out[i] = pg.get_pixmap(dpi=DPI).tobytes("png")
+                    out[i] = pg.get_pixmap(dpi=dpi()).tobytes("png")
         finally:
             doc.close()
     return out
@@ -246,7 +246,7 @@ def pptx_slide_vlm(doc_path):
         return []
     if soffice_bin() is None:  # 독립 검토(10-13) — 경고는 soffice_bin() 한 곳에서(1회), 여기서 또 찍지 않음(중복 제거)
         return []
-    idxs = sorted(target_slides(doc_path))  # AD20 후속 — figures.py 중복 방지와 같은 집합(한 곳에서 계산)
+    idxs = sorted(target_slides(doc_path))  # AD20 후속 — figure_extract.py 중복 방지와 같은 집합(한 곳에서 계산)
     timeout = _cap("PARSE_PPTX_CONVERT_SEC", 60)
     src_sha = sha(p.read_bytes())
     tmp_root = raw_root() / "tmp" / "pptx_render"
@@ -265,7 +265,7 @@ def pptx_slide_vlm(doc_path):
             for i in idxs:
                 if i < 1 or i > len(doc):
                     continue
-                img = doc[i - 1].get_pixmap(dpi=DPI).tobytes("png")
+                img = doc[i - 1].get_pixmap(dpi=dpi()).tobytes("png")
                 det = {"source_sha256": src_sha, "page": i, "rotation_deg": 0, "is_pdf": True}
                 text, prov = vlm_page(img, det)
                 out.append((i, text, {**prov, "reason": cands[i]}))

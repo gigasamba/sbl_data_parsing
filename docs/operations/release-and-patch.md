@@ -76,7 +76,8 @@ PC 명령은 [README §5-2](../../README.md#5-2-pc에서--이미지-만들기와
 - 이미지 이름은 settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`에 적는다.
 - 배포 뒤, 컨테이너 안 코드가 있는지 파일로 본다(bind 마운트 원본이 없으면 빈 폴더가 붙어 `test -d`는 통과하므로):
 ```bash
-for c in data-pipeline data-pipeline-mcp; do $DOCKER exec $c test -f /app/deploy/pipeline/extract/run_all.py && echo "$c OK" || echo "$c 코드 없음(빈 마운트?)"; done
+for c in data-pipeline data-pipeline-mcp; do   # 여러 벌이면 이름 끝 -<ops.host.instance>(server-guide §1-3)
+ $DOCKER exec $c test -f /app/deploy/pipeline/extract/run_engines.py && echo "$c OK" || echo "$c 코드 없음(빈 마운트?)"; done
 ```
 
 ### 5-3. 상주 컨테이너
@@ -288,11 +289,11 @@ bash deploy/host/scripts/trigger.sh publish --dry-run                        # �
 bash deploy/host/scripts/trigger.sh publish                                  # 실제 한 번 — 기대: JSON 한 줄("mode": "apply" · "result") · 종료 코드 0
 ```
 - **실제 publish는 한 번만** 한다. 다시 돌리면 Object Storage에 같은 결과를 새 시각 이름으로 또 올린다(EDW는 이미 있는 행을 건너뜀).
-- 미리보기의 `bucket`·`prefix`·`rep_key`가 `required.source` 게시 칸과 맞지 않으면 실제 publish를 하지 않고 settings.yaml을 고친다. DRM·실패로 빠진 문서는 `<결과 폴더>/publish/excluded_<날짜>.md`에 남는다.
+- 미리보기의 `bucket`·`prefix`·`rep_key`가 `required.publish` 칸(`bucket`·`prefix`)과 맞지 않으면 실제 publish를 하지 않고 settings.yaml을 고친다. DRM·실패로 빠진 문서는 `<결과 폴더>/publish/excluded_<날짜>.md`에 남는다.
 - EDW 행 확인(읽기 계정 — 마지막에 쓴 행):
 ```bash
 $DOCKER exec data-pipeline python -c "from common.store import mssql as M; kw,_=M.login('read'); c=M.connect(**kw); [print(r) for r in M.rows(c, 'SELECT TOP 5 original_filename, parse_status, rep_bucket, rep_key, parse_date FROM AI.ParsingMeta ORDER BY parse_meta_id DESC')]"
-# 기대: 방금 게시한 문서 수만큼 행 · parse_status ok·partial · rep_key가 미리보기의 rep_key와 같음(표 이름이 다르면 common.connections.parsing_meta.table 값)
+# 기대: 방금 게시한 문서 수만큼 행 · parse_status ok·partial · rep_key가 미리보기의 rep_key와 같음(표 이름이 다르면 required.edw.parsing_meta_table 값)
 ```
 - Object Storage 확인(위 행의 `rep_bucket`·`rep_key` 하나로):
 ```bash
@@ -377,8 +378,8 @@ crms:
 
 **③ 실제 실행 전에 점검** — 파일만 읽고 검사한다(EDW·PG에 붙지 않음).
 ```bash
-$DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check                                   # 설정 칸이 가리키는 파일
-$DOCKER exec data-pipeline python -m pipeline.load.edw_meta --check --file /etc/rag/edw_chain.yaml   # 칸을 적기 전에 사본만
+$DOCKER exec data-pipeline python -m pipeline.load.edw_doc_meta --check                                   # 설정 칸이 가리키는 파일
+$DOCKER exec data-pipeline python -m pipeline.load.edw_doc_meta --check --file /etc/rag/edw_chain.yaml   # 칸을 적기 전에 사본만
 # 기대(기본 파일): [edw_meta] 사슬 설정 OK(…) — sfdc 단계 11·키 15(거르기 5) · crms 단계 4·키 4(거르기 2) · las 단계 4·키 3(거르기 2) · faq 단계 1·키 0(거르기 0) · other 단계 1·키 0(거르기 0)   (종료 코드 0)
 # 틀리면: [edw_meta] 사슬 설정 오류(…): <원천>.<자리>: … — 틀린 곳을 모두 적음   (종료 코드 1)
 ```

@@ -15,8 +15,8 @@
   5. 문서마다: warm(미리 받기) → 레인 분류 → 파싱 → 게시 → 원본 삭제 → gold(구조화+적재) → 임시 삭제([pl-24](#pl-24)). 배치 장벽 없이 끝나는 순서대로 흐른다.
   6. 레인·대기열은 [rn-01](#rn-01)·[rn-02](#rn-02), MCP 양보는 [rn-03](#rn-03)·[rn-04](#rn-04), 종료 코드는 [pl-18](#pl-18).
   7. 문서별 값은 컨테이너 명령에 `--set`으로 준다(같은 이름은 뒤 값이 이김):
-     - 파싱 공통: `VLM_GLOBAL_CONCURRENCY=8` · `VLM_CONCURRENCY=8` · `FIGURES_VLM_PARALLEL=8` · `VLM_FIGURES_MAX=10` · `PARSE_POST=supsub,charts,figures,context,attachments` · `OCR_DPI=120` · `RAPIDOCR_PAGE_WORKERS=2` · `OCR_THREADS=1` · `PIPE_PROCS=4` · `SOURCE_WARM=<결과 자리>/_warm` · `SOURCE_FETCH_WORKERS=2` · `PARSE_REP_SELECT=first` · `PARSE_QA_LIGHT=1`, 문서 출력 자리 `PIPE_OUT_ROOT`·`DOC_DIR_PREPARED`·`PARSE_IMAGES_ROOT`·`PARSE_RAW_ROOT` = `<결과 자리>/_docflow/<seq>/…`.
-     - vlm 레인이면 덧붙임: `VLM_GLOBAL_CONCURRENCY=6` · `VLM_CONCURRENCY=6` · `FIGURES_VLM_PARALLEL=6` · `PARSE_POST=…,attachments,vlm_page` · `VLM_PAGE_MAX=`(상한 없음) · `VLM_PAGE_SLOW=45`. 스캔 PDF면 `PREPARE_ROTATE=0`.
+     - 파싱 공통: `VLM_MAX_CONCURRENCY=8` · `VLM_CONCURRENCY=8` · `VLM_FIGURES_MAX=10` · `PARSE_POST=supsub,charts,figures,context,attachments` · `RAPIDOCR_PAGE_WORKERS=2` · `OCR_THREADS=1` · `PIPE_PROCS=4` · `SOURCE_WARM=<결과 자리>/_warm` · `SOURCE_FETCH_WORKERS=2` · `PARSE_REP_SELECT=first` · `PARSE_QA_LIGHT=1`, 문서 출력 자리 `PIPE_OUT_ROOT`·`DOC_DIR_PREPARED`·`PARSE_IMAGES_ROOT`·`PARSE_RAW_ROOT` = `<결과 자리>/_docflow/<seq>/…`.
+     - vlm 레인이면 덧붙임: `VLM_MAX_CONCURRENCY=6` · `VLM_CONCURRENCY=6` · `PARSE_POST=…,attachments,vlm_page` · `VLM_PAGE_MAX=`(상한 없음). 스캔 PDF면 `PREPARE_ROTATE=0`. 쪽 해상도는 settings.yaml `extract.ocr.dpi`(VLM 설정은 [pl-43](transform.md#pl-43)).
      - CPU 게이트 `CPU_MAX_LOAD` = light 레인 9(사실상 게이트 없음), 그 밖 `--cpu-gate`(기본 1.3).
      - 파싱 명령: `python -m pipeline.cli parse --source rdb:csv:<_docflow/seq>/batch.csv`, 제한 2700초.
      - 구조화·적재: `EMBED_CONCURRENCY=6` · `EMBED_BATCH=32` · `BM25_THREADS=3`으로 `pipeline.transform.structure.build_bundle` → `pipeline.load.pgvector_load load`.
@@ -79,13 +79,13 @@
 ## rn-01 · 레인 정책 — 담당 레인 먼저, 공유 워커만 가져오기
 - 이유: 문서마다 자원 성격이 달라 레인으로 나누고, 남는 워커는 다른 레인을 돕는다.
 - 규칙:
-  1. 레인 분류(warm 때, 결과는 `s3_key`별로 저장해 다시 씀): 확장자가 `.txt .hwpx .hwp .csv .eml .msg .html .htm .tsv .md .json .xml .log .rtf`면 light. `.pdf .docx .doc .xlsx .xls .xlsm .pptx .ppt .docm`이면 컨테이너 안 `pipeline/extract/docflow_probe.py`(제한 60초, 답이 없으면 heavy)로 본다 — heavy이거나 `.pptx`·`.ppt`면 vlm(heavy PDF는 스캔 표시), 아니면 크기 기준(`.mht .docx .doc` 300KB · `.xlsx .xlsm .xls` 500KB · `.pdf` 1024KB 이상)을 넘으면 medium, 그 밖 light. 다른 확장자는 vlm.
+  1. 레인 분류(warm 때, 결과는 `s3_key`별로 저장해 다시 씀): `run_docs.classify_doc`이 컨테이너 안 `pipeline/extract/doc_parsing_group.py`(원본 파일·원본 이름·크기 — 제한 60초)를 부르고, 규칙은 그 파일의 `doc_parsing_group()` 하나에 있다. 답이 없으면 vlm. 규칙: 확장자가 `.txt .hwpx .hwp .csv .eml .msg .html .htm .tsv .md .json .xml .log .rtf`면 light. `.pptx .ppt`면 vlm. `.pdf .docx .doc .xlsx .xls .xlsm .docm`이면 내용을 본다 — PDF는 첫 3쪽 글자가 쪽당 평균 300자 미만, 오피스 zip은 내장 그림 8개 이상 또는 합계 800,000바이트 이상, 검사 실패도 heavy → vlm(vlm PDF는 스캔 표시). 아니면 크기 기준(`.docx .doc` 300KB · `.xlsx .xlsm .xls` 500KB · `.pdf` 1024KB 이상)이면 medium, 그 밖 light. 다른 확장자는 vlm.
   2. 워커 수: settings.yaml `ops.run_docs.<레인>_dedicated`(자기 레인만)·`<레인>_shared`(자기 레인 먼저, 비면 대기열이 가장 긴 다른 레인), 기본 각 1(모두 6개).
   3. `vlm_cap`(기본 2): 진행 중 vlm 문서가 이만큼이면 vlm 레인을 건너뛴다(전담 워커도).
   4. 고르기 = 순수 함수 `pick_lane(own, shared, queues, inflight, vlm_cap)`.
   5. 시작 때 거부(종료 2): 값이 0 이상 정수가 아님 · `warm`·`warm_workers`·`vlm_cap`이 1 미만 · 전담과 모든 공유 워커 합이 0인 레인.
-- 파일: `deploy/host/scripts/run_docs.py`(`RUN_DOCS_DEFAULTS` — 설정 모델 `pipeline.config.PipelineHostRunDocs`와 시험이 대조).
-- QA: `tests/general/deploy/test_run_docs.py`(`pick_lane` 표) · 통과.
+- 파일: `deploy/host/scripts/run_docs.py`(`classify_doc`·`RUN_DOCS_DEFAULTS` — 설정 모델 `pipeline.config.PipelineHostRunDocs`와 시험이 대조) · `pipeline/extract/doc_parsing_group.py`(`doc_parsing_group`).
+- QA: `tests/general/deploy/test_run_docs.py`(`pick_lane` 표·`test_classify_cache_skips_probe`) · `tests/server/pipeline/test_doc_group.py`(그룹 규칙 표) · 통과.
 - Status: done
 
 <a id="rn-02"></a>
@@ -103,8 +103,8 @@
 <a id="rn-03"></a>
 ## rn-03 · MCP `parse_document`에 CPU 먼저 주기
 - 이유: 일괄 파싱이 CPU를 다 쓰면 사람이 기다리는 `parse_document`가 느려진다. 컨테이너끼리는 cgroup CPU 가중치가 정한다(nice는 한 세션 안에서만).
-- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `data-pipeline-mcp`(같은 이미지, entrypoint `parse-service` = `pipeline.mcp_parse_service`, 127.0.0.1:8766). 자원 = settings.yaml `ops.pipeline_host.parse_mcp_cpus`(기본 3)·`parse_mcp_mem_limit`(8g)·`parse_mcp_cpu_shares`(4096 — 일괄 `data-pipeline`은 1024). 결과 폴더만 붙인다. 죽으면 `restart`, 꺼지면 `mcp_up.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
-- 파일: `deploy/host/compose/compose.pipeline-mcp.yml`(개발 서버 짝 `compose.code.pipeline-mcp.yml`), `pipeline/mcp_parse_service.py`, `common/core/resources.py`.
+- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `data-pipeline-mcp`(같은 이미지, entrypoint `parse-service` = `pipeline.parse_service`, 127.0.0.1:8766). 자원 = settings.yaml `ops.pipeline_host.parse_mcp_cpus`(기본 3)·`parse_mcp_mem_limit`(8g)·`parse_mcp_cpu_shares`(4096 — 일괄 `data-pipeline`은 1024). 결과 폴더만 붙인다. 죽으면 `restart`, 꺼지면 `mcp_up.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
+- 파일: `deploy/host/compose/compose.pipeline-mcp.yml`(개발 서버 짝 `compose.code.pipeline-mcp.yml`), `pipeline/parse_service.py`, `common/core/resources.py`.
 - QA: `tests/general/deploy/test_compose.py` · 통과.
 - Status: dev — 서버에서 일괄 파싱 중 `parse_document` 응답 시간 확인(refactor.md C-83 ①)만 남음.
 
@@ -115,6 +115,17 @@
 - QA: `tests/general/deploy/test_docs_flow.py`(medium·vlm 레인, vlm 동시 상한, MCP 양보, `mcp_busy` 표) · 통과.
 - Status: done
 
+<a id="rn-05"></a>
+## rn-05 · run_docs는 지휘만 — 판단은 파이프라인 함수, PC도 run_docs로(0.2.0 다음)
+- 이유(사용자 11-04): run_docs.py(1천여 줄·함수 50여 개)가 레인·중복·게시 판단까지 직접 한다. 같은 판단이 파이프라인과 두 곳에 있고, PC E2E는 run_docs 없이 pipeline.cli를 단계별로 돌려 서버와 다른 길을 탄다.
+- 할 일:
+  1. run_docs 함수를 "파이프라인 함수로 옮김 / 지움 / 지휘로 남김"으로 나눈 표를 먼저 사람에게 보인다. 판단·처리(원천 목록, 중복, 레인, 게시 판단)는 extract·transform·load 함수로 옮기고, run_docs는 레인·워커·임시 폴더와 `docker exec` 호출만 남긴다.
+  2. PC(`RUN_ENV=local`)에서도 run_docs로 E2E를 돈다 — 가짜 대상만(EDW sqlite·`file://` 게시 폴더·상대 경로, op-14). PC만의 분기는 접속 대상을 고르는 한 곳. CLAUDE.md §4의 "run_docs는 PC에서 실행하지 않는다" 문구를 이 규칙으로 고친다(등급 A — 운영 접속 가드).
+  3. 커밋 전 점검 `deploy/release/lint_changed.sh`를 점검 도구 자리 `common/check/`로 옮긴다 — `.githooks/pre-commit`·CLAUDE.md §5-2·README 명령 줄을 같이 고친다.
+- 파일: `deploy/host/scripts/run_docs.py` · `pipeline/extract/*` · `pipeline/load/*` · `deploy/release/lint_changed.sh` · `.githooks/pre-commit` · `CLAUDE.md`.
+- QA: run_docs 정리 전후 같은 문서 묶음의 결과(대표 결과·ParsingMeta 행·게시 파일)가 같음 · PC에서 run_docs 한 번으로 가짜 EDW `ParsingMeta` 행과 `file://` 폴더 결과가 생김.
+- Status: todo
+
 <a id="pl-27"></a>
 ## pl-27 · 프로세스 종료 정리 — 임시 설정 파일·PID 기록 지움, 자식 회수
 - 이유: 덮기 설정 파일(`settings-*.yaml`)이 임시 폴더에 쌓이고, 시간 초과로 끝낸 자식의 손자가 좀비로 남았다.
@@ -122,9 +133,9 @@
   1. `remove_at_exit(경로)` — 이 프로세스가 끝날 때(정상·오류·SIGTERM) 지운다. `track(Popen, group)` — 끝날 때 아직 돌면 끝내고 `wait`로 회수. `stop(p, group)` — POSIX는 (묶음째) SIGTERM → 10초 → SIGKILL, Windows는 `taskkill /T`.
   2. import 때 SIGTERM 처리기를 단다(기본 처리기일 때만): 바로 정리한 뒤 `SystemExit(143)`. 정리 중 두 번째 SIGTERM은 무시. 순서: 자식 전부 SIGTERM → 10초 → 남은 것 SIGKILL·회수 → 파일 지움. 정리를 시작한 뒤 띄운 자식은 바로 끝낸다.
   3. 파일 주인: `settings.put`·`child_env`의 덮기 파일 = 만든 프로세스 · `settings.isolated` = 블록 끝 · `--set`(`setarg` — POSIX는 `execve`로 다시 뜸) = 다시 뜬 프로세스 · `python -m common.config.overrides` 출력 = 지우지 않음.
-  4. 연결: `resources.gated_popen`(파이프라인 자식 전부), `resources.kill_group`(→ `stop(group=True)`), `mcp_parse_service` 작업 자식과 PID 기록 `service.json`.
+  4. 연결: `resources.gated_popen`(파이프라인 자식 전부), `resources.kill_group`(→ `stop(group=True)`), `parse_service` 작업 자식과 PID 기록 `service.json`.
   5. 한계: `subprocess.run`의 짧은 자식은 추적 안 함 · 주 스레드가 아닌 곳에서 처음 import되면 SIGTERM 처리기 없음 · SIGKILL·OOM은 정리 못 함 · 컨테이너 PID 1 고아 회수는 compose `init: true`.
-- 파일: `common/core/exitclean.py`, `common/config/{settings,setarg}.py`, `common/core/resources.py`, `pipeline/mcp_parse_service.py`.
+- 파일: `common/core/exitclean.py`, `common/config/{settings,setarg}.py`, `common/core/resources.py`, `pipeline/parse_service.py`.
 - QA: `tests/server/common/test_exitclean.py`(SIGTERM·`--set` 사례는 POSIX만) · 통과. 서버 확인 refactor.md C-68.
 - Status: done
 
@@ -133,10 +144,10 @@
 - 이유: ParsingMeta·FileStorageMap·RDB 원천 표·`query_edw`가 같은 EDW 서버·DB에 있다.
 - 규칙:
   1. 벡터는 pgvector에만, EDW에는 넣지 않는다.
-  2. 접속 블록 하나 — settings.yaml `required.edw`(`host`·`database`·`read_user`·`read_password`·`write_user`·`write_password`, 모델 `common.connections.rdb`). 드라이버는 pymssql만(`common.store.mssql.login(role)`).
+  2. 접속 블록 하나 — settings.yaml `required.edw`(`host`·`port`·`database`·`read_user`·`read_password`·`write_user`·`write_password`, 모델 `common.connections.rdb` · 게시 표 `parsing_meta_table` — 비우면 `AI.ParsingMeta`). 서버는 접속 칸을, PC는 `sqlite` 하나만 채운다. 드라이버는 pymssql만(`common.store.mssql.login(role)`).
   3. 읽기 계정: RDB 원천 목록·discover·고객 목록·FileStorageMap·ParsingMeta 상태·`run_docs.py` 읽기·MCP 전부. 쓰기 계정: ParsingMeta 게시(INSERT/UPDATE)·`loaded_at` UPDATE.
   4. MCP 프로세스는 `settings.edw_read_only()`를 먼저 불러 설정 객체의 쓰기 계정을 비운다.
-  5. PC 대역: sqlite 파일 하나(`valid_env/edw/edw.sqlite` — 생성: `python -m validation.e2e.edw_standin`)를 `AI`·`CRMS`·`LAS`·`SFDC` 별칭으로 ATTACH(`mssql.standin`, 기본 읽기 전용). `query_edw`는 읽기 전용으로 연다.
+  5. PC 대역: `required.edw.sqlite`에 적은 sqlite 파일 하나(`valid_env/edw/edw.sqlite`의 사본 — 생성: `python -m validation.e2e.edw_standin`, `local`에서만 열림)를 `AI`·`CRMS`·`LAS`·`SFDC` 별칭으로 ATTACH(`mssql.standin`, 기본 읽기 전용). `query_edw`는 읽기 전용으로 연다.
 - 파일: `common/store/{mssql,parsing_meta_db}.py`, `common/config/settings.py`.
 - QA: `tests/server/common/test_edw_login.py`·`tests/general/common/test_edw_standin.py` · 통과.
 - Status: done
@@ -166,22 +177,22 @@
   5. MCP SDK 줄(`mcp.*`)은 stderr JSON으로만. 요청마다의 INFO는 `ops.log.level=DEBUG`일 때만. stdio 모드의 stdout은 JSON-RPC 전용.
 - 규칙 — DB(`applog` 스키마, Alembic 갈래 `applog` — `common/store/db/migrations/versions/0001_applog_base.py`):
   1. 표: `mcp_log`(월 파티션, 키 `requested_at`) · `pipe_event`(월 파티션, 키 `ts_start`) · `pipe_run`(`run_id` PK, 시작 running → 종료 UPSERT).
-  2. `common/store/logsink.py` `emit(table,row)` → 제한 큐(`ops.log.queue_size` 10000, 차면 즉시 버리고 `dropped`) → 배치 INSERT(`batch_size` 200 · `flush_sec` 1 · `db_timeout_sec` 2). DB 실패면 `ops.log.fallback_dir`(기본 `output/logs`) jsonl, 프로세스당 경고 한 번. 파일 로그는 이 예비 한 곳뿐이다 — 실행 출력은 컨테이너 로그(서버 stdout), 실행 기록 파일(`RUNLOG.md`·`runlog.jsonl`·`logs/<시각>_<도구>.log`)·질의 기록 파일은 없다(op-13). 종료 flush는 `shutdown_sec` 5초 안.
+  2. `common/store/logsink.py` `emit(table,row)` → 제한 큐(`tuning.ops.log.queue_size` 10000, 차면 즉시 버리고 `dropped`) → 배치 INSERT(`batch_size` 200 · `flush_sec` 1 · `db_timeout_sec` 2). DB 실패면 `ops.log.fallback_dir`(기본 `output/logs`) jsonl, 프로세스당 경고 한 번. 파일 로그는 이 예비 한 곳뿐이다 — 실행 출력은 컨테이너 로그(서버 stdout), 실행 기록 파일(`RUNLOG.md`·`runlog.jsonl`·`logs/<시각>_<도구>.log`)·질의 기록 파일은 없다(op-13). 종료 flush는 `shutdown_sec` 5초 안.
   3. 켜기 `ops.log.db_enabled` — 서버(두 이미지) 기본 true, PC 기본 false(op-13). 서버는 새 코드를 띄우기 전에 `migrate up --target all`(applog 포함). 보존 `retention_days` 90. `dbtool up --target applog`(현재 달 + 2개월 준비), 매일 `dbtool maintain --target applog`(다음 달 준비·만료 파티션 DROP·`pipe_run` DELETE). sink는 DDL을 하지 않는다.
 - 규칙 — MCP 감사(`mcp_server/services/call_log.py`):
   1. 도구 호출마다 `applog.mcp_log` 한 행 — 성공·도구 오류·busy·timeout·HTTP 인증 거부(rpc_method NULL), initialize(rpc_method=initialize, clientInfo 뺌). 칸은 [db_schema.md §6](../architecture/db_schema.md). sink 실패가 도구 응답을 바꾸지 않는다.
-  2. 본문: 마스킹 뒤 앞부분만 — 입력 `search.audit.max_input_bytes` 16384 · 출력 `max_output_bytes` 65536. `*_bytes`·`result_sha256`은 자르기 전 전체 기준. `parse_document`의 `content_b64`는 디코딩한 파일 sha256·바이트 수로 바꿈.
+  2. 본문: 마스킹 뒤 앞부분만 — 입력 `tuning.search.audit.max_input_bytes` 16384 · 출력 `max_output_bytes` 65536. `*_bytes`·`result_sha256`은 자르기 전 전체 기준. `parse_document`의 `content_b64`는 디코딩한 파일 sha256·바이트 수로 바꿈.
   3. `result_keys`: search = chunk_keys(순위 순)·evidence_status·filter·scope_docs · list_doc_fulltext = 건수·next_cursor·doc_keys · get_doc_fulltext = 건수와 파일별 name/kind/size/sha256/skip_reason · query_edw = row_count·columns · parse_document = job_id·engine·rep_path·text_chars · edw_meta = 단계·표·칸 수.
   4. 컨텍스트: `X-MCP-User`(없으면 `params._meta.user`) → knox_id, `X-MCP-Client`는 호출자 표시·콘솔 로그에만 쓰고 DB에는 남기지 않음(agent_id는 인증 체계가 생긴 뒤), Mcp-Session-Id(stateless라 도구 행은 대개 null). 유효한 UUID `X-Request-Id`는 그대로, 아니면 새 UUID를 응답 헤더로. 접속 소켓 주소는 client_ip에 남기고(사용자 11-04, 프록시 뒤면 프록시 IP) clientInfo는 남기지 않는다.
-  5. 감사는 전용 데몬 스레드 하나가 처리한다(도구는 기다리지 않음). 본문 대기 큐 64건 + 바이트 합계 `search.audit.max_queue_bytes`(기본 268435456) — 넘으면 본문 없는 메타 행(`result_keys.audit_body_omitted=queue_full`, `error_code=audit_queue_full`).
+  5. 감사는 전용 데몬 스레드 하나가 처리한다(도구는 기다리지 않음). 본문 대기 큐 64건 + 바이트 합계 `tuning.search.audit.max_queue_bytes`(기본 268435456) — 넘으면 본문 없는 메타 행(`result_keys.audit_body_omitted=queue_full`, `error_code=audit_queue_full`).
 - 규칙 — 파이프라인 추적:
   1. 실행 1건 = `pipe_run`(`pipeline/shared/runtrace.py` — code_fp·stack·settings_hash·문서 수·workers·cpu_max_load·mem_start_pct). 부모가 준 run_id가 있는 자식은 새로 시작하지 않는다. run_docs에서는 문서·단계마다 실행이 따로 생긴다.
-  2. 문서×단계 = `pipe_event`(`common/core/span.py` `with span("extract.parse", doc_id=…) as s`) — 단계 이름 `extract.plan`·`extract.parse`(`attempt` — 시간 초과 재시도면 2)·`extract.shard`·`extract.warm`(프리페치 1회)·`extract.download`(파일=문서 1건 — `metrics`에 `head_ms`·`download_ms`·`mbps`(순수 전송)·`lock_wait_ms`, 실패는 `external`)·`transform.represent`·`transform.figures`·`transform.structure`·`embed.bundle`·`load.pgvector`·`load.doc/chunk/chunk_term/stats`·`load.publish`·`proc.run`·`model.<role>`(모델 호출 1건당 1행 — `layer=model`, 부모는 호출한 단계 span, `doc_id`는 부모에서 이어받음, `metrics`에 토큰 수. 성공·실패 모두). 오류는 `status`·`err_kind`(env/timeout/doc/external/db).
+  2. 문서×단계 = `pipe_event`(`common/core/span.py` `with span("extract.parse", doc_id=…) as s`) — 단계 이름 `extract.plan`·`extract.parse`(`attempt` — 시간 초과 재시도면 2)·`extract.shard`·`extract.warm`(프리페치 1회)·`extract.classify`(run_docs 레인 분류 1건 — `pipeline.extract.doc_parsing_group.main()`, `metrics.group`, 파일이 없으면 fail)·`extract.download`(파일=문서 1건 — `metrics`에 `head_ms`·`download_ms`·`mbps`(순수 전송)·`lock_wait_ms`, 실패는 `external`)·`transform.represent`·`transform.figures`·`transform.structure`·`embed.bundle`·`load.pgvector`·`load.doc/chunk/chunk_term/stats`·`load.publish`·`proc.run`·`model.<role>`(모델 호출 1건당 1행 — `layer=model`, 부모는 호출한 단계 span, `doc_id`는 부모에서 이어받음, `metrics`에 토큰 수. 성공·실패 모두). 오류는 `status`·`err_kind`(env/timeout/doc/external/db).
   3. 60초마다 `stage='run.progress'`(완료/전체·docs/min·남은 시간·부하·메모리, 임베딩 중에는 unit=chunk).
   4. `run_id`가 없으면(MCP 검색·시험) span은 아무것도 하지 않는다. 계측 안의 예외는 삼키고 업무 결과를 바꾸지 않는다(프로세스당 stderr 경고 한 번).
   5. `cpu_ms`·`rss_peak_mb`는 Linux에서 프로세스에 하나만 도는 span만 채우고, 겹치거나 측정 못 하면 NULL.
-  6. 분석: `python -m pipeline.tools.perf [<run_id>] [--since <시간>] [--top N] [--compare <run_id>…] [--runs] [--file output/logs/*.jsonl]` — 읽기 전용.
-     다운로드(`extract.download`)는 `--since` 요약에 ■ 다운로드 표(크기 구간별 순수 전송 mbps·head·잠금 대기)로 나온다. 서버 호스트에서는 `analyze_docflow.py --db [시간]`이 같은 표를 컨테이너의 perf로 불러 덧붙인다(호스트 기록 `doc_stats.jsonl`의 받기·분류 시간과 함께).
-- 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf.py`.
-- QA: `tests/server/common/test_{jsonlog,logsink,span,span_soft}.py`·`tests/server/mcp/test_call_log.py`·`tests/server/pipeline/test_{runtrace,perf,span_stages}.py`·`tests/general/common/test_applog_pg.py`(PC 임시 PG 스키마) · 통과. 서버 적용 refactor.md C-79·C-80.
+  6. 분석: `python -m pipeline.tools.perf_report [<run_id>] [--since <시간>] [--top N] [--compare <run_id>…] [--runs] [--file output/logs/*.jsonl]` — 읽기 전용.
+     다운로드(`extract.download`)는 `--since` 요약에 ■ 다운로드 표(크기 구간별 순수 전송 mbps·head·잠금 대기)로 나온다. 서버에서는 `podman exec data-pipeline python -m pipeline.tools.perf_report --since <시간>`으로 본다.
+- 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf_report.py`, `pipeline/extract/{doc_parsing_group,fetch_docs}.py`.
+- QA: `tests/server/common/test_{jsonlog,logsink,span,span_soft,call_event}.py`·`tests/server/mcp/test_call_log.py`·`tests/server/pipeline/test_{runtrace,perf,span_stages,doc_group}.py`·`tests/general/common/test_applog_pg.py`(PC 임시 PG 스키마) · 통과. 서버 적용 refactor.md C-79·C-80.
 - Status: done

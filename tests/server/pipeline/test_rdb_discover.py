@@ -1,9 +1,9 @@
-"""pipeline.extract.rdb_discover 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.rdb_discover --selftest`."""
+"""pipeline.extract.discover_columns 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.discover_columns --selftest`."""
 
 from pathlib import Path
 
 from common.store.parsing_meta_db import TABLE_ID_RE
-from pipeline.extract.rdb_discover import REQUIRED_COLUMNS, _from_csv
+from pipeline.extract.discover_columns import REQUIRED_COLUMNS, _from_csv
 
 
 def selftest():

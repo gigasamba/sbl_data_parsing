@@ -1,7 +1,7 @@
 # EDW 조인 사슬(pl-29·pl-52) — 적재가 문서 메타(고객 client_edw·등록 시각 created_at·원천 메타 doc.attrs)를 채울 때 따라가는 EDW 표·칸,
 # 그리고 검색 MCP가 쓰는 attrs 키의 거르기 이름(filter)·근거 표시(evidence). 운영 쪽이 고칠 수 있는 파일(사용자 11-02·11-03).
-# 읽는 곳: common/store/edw_chain.py(검사 — 두 앱) · pipeline/load/edw_meta.py(적재 때 EDW를 따라감) · 검색 MCP search·edw_meta 도구.
-# 점검(EDW·PG 안 붙음): python -m pipeline.load.edw_meta --check [--file F]. 쓰는 법: docs/operations/release-and-patch.md §8-6.
+# 읽는 곳: common/store/edw_chain.py(검사 — 두 앱) · pipeline/load/edw_doc_meta.py(적재 때 EDW를 따라감) · 검색 MCP search·edw_meta 도구.
+# 점검(EDW·PG 안 붙음): python -m pipeline.load.edw_doc_meta --check [--file F]. 쓰는 법: docs/operations/release-and-patch.md §8-6.
 #
 # 꼴 — 다섯 원천(sfdc·crms·las·faq·other)이 모두 같다:
 #   <원천>:

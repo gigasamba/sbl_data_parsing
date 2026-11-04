@@ -23,9 +23,9 @@ def _load():
 RD = _load()
 
 GOLDEN = {
-    "warm": "docker exec data-pipeline bash -c 'umask 0002 && mkdir -p /app/output/_warm && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.extract.source --set SOURCE_WARM=/app/output/_warm warm --csv /app/output/_docflow/9/batch.csv'",
-    "parse_light": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && echo [envcheck] gate=9 채널=light; RUN_DOCS_DOC=/app/output/_docflow/7 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/7 --set DOC_DIR_PREPARED=/app/output/_docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/7/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --source rdb:csv:/app/output/_docflow/7/batch.csv'",
-    "parse_vlm_scan": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && echo [envcheck] gate=1.3 채널=vlm; RUN_DOCS_DOC=/app/output/_docflow/9 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/9 --set DOC_DIR_PREPARED=/app/output/_docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/9/parse --set VLM_GLOBAL_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set FIGURES_VLM_PARALLEL=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set OCR_DPI=120 --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set VLM_GLOBAL_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set FIGURES_VLM_PARALLEL=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set VLM_PAGE_SLOW=45 --set PREPARE_ROTATE=0 --set CPU_MAX_LOAD=1.3 parse --source rdb:csv:/app/output/_docflow/9/batch.csv'",
+    "warm": "docker exec data-pipeline bash -c 'umask 0002 && mkdir -p /app/output/_warm && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.extract.fetch_docs --set SOURCE_WARM=/app/output/_warm warm --csv /app/output/_docflow/9/batch.csv'",
+    "parse_light": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && echo [envcheck] gate=9 채널=light; RUN_DOCS_DOC=/app/output/_docflow/7 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/7 --set DOC_DIR_PREPARED=/app/output/_docflow/7/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/7/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/7/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set CPU_MAX_LOAD=9 parse --source rdb:csv:/app/output/_docflow/7/batch.csv'",
+    "parse_vlm_scan": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && echo [envcheck] gate=1.3 채널=vlm; RUN_DOCS_DOC=/app/output/_docflow/9 PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/9 --set DOC_DIR_PREPARED=/app/output/_docflow/9/prepared --set PARSE_IMAGES_ROOT=/app/output/_docflow/9/parse/_images --set PARSE_RAW_ROOT=/app/output/_docflow/9/parse --set VLM_MAX_CONCURRENCY=8 --set VLM_CONCURRENCY=8 --set VLM_FIGURES_MAX=10 --set PARSE_POST=supsub,charts,figures,context,attachments --set RAPIDOCR_PAGE_WORKERS=2 --set OCR_THREADS=1 --set PIPE_PROCS=4 --set SOURCE_WARM=/app/output/_warm --set SOURCE_FETCH_WORKERS=2 --set PARSE_REP_SELECT=first --set PARSE_QA_LIGHT=1 --set VLM_MAX_CONCURRENCY=6 --set VLM_CONCURRENCY=6 --set PARSE_POST=supsub,charts,figures,context,attachments,vlm_page --set VLM_PAGE_MAX= --set PREPARE_ROTATE=0 --set CPU_MAX_LOAD=1.3 parse --source rdb:csv:/app/output/_docflow/9/batch.csv'",
     "struct": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.transform.structure.build_bundle --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 --parse-dir /app/output/_docflow/9/parse --out /app/output/_docflow/9/bundle && PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.load.pgvector_load --set EMBED_CONCURRENCY=6 --set EMBED_BATCH=32 --set BM25_THREADS=3 load --bundle /app/output/_docflow/9/bundle --rep-dir /app/output/_docflow/9/parse/_rep >> /app/output/_docflow/9/structure.log 2>&1'",
     "publish": "docker exec data-pipeline bash -c 'umask 0002 && cd /app && PYTHONPATH=/app/deploy PYTHONDONTWRITEBYTECODE=0 PYTHONPYCACHEPREFIX=/tmp/pycache python -m pipeline.load.publish_parse_result --set PM_BUCKET_SKIP_OVERLAP_CHECK=1 --out /app/output/_docflow/9 --source-system FileStorageMap --apply >> /app/output/_docflow/9/publish.log 2>&1'",
     "sweep": "docker exec data-pipeline bash -c \"for p in /proc/[0-9]*; do grep -aqzx 'RUN_DOCS_DOC=/app/output/_docflow/9' \\$p/environ 2>/dev/null && kill \\${p##*/} 2>/dev/null; done\"",
@@ -162,7 +162,7 @@ def test_defaults_match_settings_model():
 def test_no_stack_version():
     """사용자 11-01 — 엔진 구성은 파일(판 번호 없음): 파싱·구조화 명령에 STACK_VERSION·--stack-version이 없다."""
     cmds = RD.parse_cmd(7, "light", False, "9") + RD.struct_cmd(9)
-    assert "STACK_VERSION" not in cmds and "--stack-version" not in cmds and "stackcfg" not in cmds
+    assert "STACK_VERSION" not in cmds and "--stack-version" not in cmds and "engine_stack" not in cmds
 
 
 def test_read_settings_new_layout(tmp_path):
@@ -284,29 +284,30 @@ def test_faq_first(tmp_path):
 
 
 def test_classify_cache_skips_probe():
-    """A3 — 분류 캐시에 있으면 probe(docker exec)를 부르지 않는다. 캐시는 레인만 담으므로 PDF의 vlm은 스캔으로 되살린다(probe heavy일 때만 PDF가 vlm)."""
+    """A3 — 분류 캐시에 있으면 doc_parsing_group(docker exec)를 부르지 않는다. 캐시는 레인만 담으므로 PDF의 vlm은 스캔으로 되살린다.
+    캐시가 없으면 컨테이너 답의 마지막 줄(경고 줄 무시)을 쓰고, 답이 없으면 vlm(rn-01)."""
     from unittest import mock
 
-    cases = [  # (파일 이름, 캐시 값, 기대 레인, 스캔?)
-        ("a.pdf", "vlm", "vlm", True),
-        ("a.pdf", "medium", "medium", False),
-        ("a.pptx", "vlm", "vlm", False),
+    cases = [  # (파일 이름, 캐시 값, 컨테이너 답, 기대 레인, 스캔?)
+        ("a.pdf", "vlm", None, "vlm", True),
+        ("a.pdf", "medium", None, "medium", False),
+        ("a.pptx", "vlm", None, "vlm", False),
+        ("a b.pdf", "", "MuPDF warning\nvlm\n", "vlm", True),
+        ("a.docx", "", "medium\n", "medium", False),
+        ("a.txt", "", "", "vlm", False),  # 답 없음(컨테이너 실패) — 보수적으로 vlm
     ]
-    for name, cached, want, scan in cases:
+    for name, cached, out, want, scan in cases:
         RD._scan.clear()
-        row = {"s3_key": "k", "original_filename": name, "file_size": 1}
+        row = {"s3_key": "k", "original_filename": name, "file_size": 2048}
+        sh = mock.Mock(return_value=(0, out, "")) if out is not None else mock.Mock(side_effect=AssertionError("probe 불림"))
         with (
-            mock.patch.object(RD, "sh", side_effect=AssertionError("probe 불림")),
+            mock.patch.object(RD, "sh", sh),
             mock.patch.object(RD, "mark", lambda *a, **k: None),
             mock.patch.object(RD, "_class_save", lambda c: None),
         ):
-            assert RD.classify_doc(5, row, cache={"k": cached}) == want, name
+            assert RD.classify_doc(5, row, cache={"k": cached} if cached else {}) == want, name
         assert (5 in RD._scan) is scan, name
-
-
-def test_perf_cmd_runs_in_container():
-    """analyze_docflow --db: 호스트는 DB를 못 읽으므로 상주 컨테이너 안 perf를 부른다(읽기 전용, 시간은 숫자만 끼움)."""
-    cmd = RD.perf_cmd(24, "podman")
-    assert cmd.startswith("podman exec data-pipeline bash -c 'cd /app && ")
-    assert cmd.endswith("python -m pipeline.tools.perf --since 24'")
-    assert RD.perf_cmd(0.5).endswith("--since 0.5'")
+        if out is not None:
+            assert sh.call_args[0][0].endswith(
+                f"doc_parsing_group.py {RD._img('output_root')}/_warm/{RD._warm_bin(row)} {shlex.quote(name)} 2048"
+            ), name

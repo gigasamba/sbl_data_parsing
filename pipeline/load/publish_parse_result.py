@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """게시(publish — PRD pl-09): 파싱이 끝난 문서의 대표 결과(.md)와 엔진별 원결과를 Object Storage에 올리고 EDW `AI.ParsingMeta`에 행을 쓴다.
-공용 로직은 pipeline/load/parsing_meta.py — 이 CLI는 그 함수만 부른다.
+공용 로직은 pipeline/load/silver_publish.py — 이 CLI는 그 함수만 부른다.
 
 규칙: 원본 파일은 올리지 않는다 · 겹침 키 = (source_system, 원본 전체 키) — 있으면 건너뜀, `--reparse` 목록만 새 날짜 폴더 ·
 EDW는 INSERT만 · 게시 버킷이 원천 원본 버킷과 같으면 거부 · DRM·실패 문서는 EDW에 안 쓰고 `output/publish/excluded_<날짜>.md`에만.
@@ -22,7 +22,7 @@ from common.core.paths import APP_ROOT
 ROOT = APP_ROOT  # output/ 등 런타임 경로용(옛 dev/)
 from common.core.contract import jl  # noqa: E402
 from pipeline import config as pc  # noqa: E402 — pipeline 칸 설정 객체(S7c)
-from pipeline.load import parsing_meta as PM  # noqa: E402
+from pipeline.load import silver_publish as PM  # noqa: E402
 
 
 def _load_inputs(out, manifest, source_dir, rep, summary, skipped, keep):

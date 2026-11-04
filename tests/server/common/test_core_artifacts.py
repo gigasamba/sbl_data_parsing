@@ -16,7 +16,7 @@ def selftest():
             failures.append(name)
 
     with tempfile.TemporaryDirectory() as td:  # 10-13 — 줄바꿈만 다르면 같은 지문, 내용이 다르면 다른 지문
-        f = Path(td) / "pipeline" / "transform" / "represent" / "represent.py"
+        f = Path(td) / "pipeline" / "transform" / "represent" / "build_rep.py"
         f.parent.mkdir(parents=True)
         f.write_bytes(b"a=1\nb=2\n")
         lf = code_fp("p1", root=td)

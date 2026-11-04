@@ -53,7 +53,7 @@ def _demo():
         assert lookup_run_dir(root, "no-such") is None
     fake_dir = Path("some") / "doc" / "dir"
     with COMMON.env(DOC_DIR=str(fake_dir)):
-        assert doc_dir() == fake_dir
+        assert doc_dir() == PROJ_ROOT / fake_dir  # 상대 경로는 저장소 루트 기준(op-14)
     with COMMON.env(DOC_DIR=""):  # 빈 글자 = 정말 비움(S7e2 — None은 기본값이라 pipeline 이미지에서는 /data/docs)
         assert doc_dir(required=False) is None
         try:

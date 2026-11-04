@@ -1,4 +1,4 @@
-"""pipeline.extract.run_all 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.run_all --selftest`."""
+"""pipeline.extract.run_engines 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.run_engines --selftest`."""
 
 import json
 import sys
@@ -8,7 +8,7 @@ from common.config import settings as C
 from common.core.paths import APP_ROOT, STACK_FILE
 from pipeline import config as pc
 from pipeline.extract.engines import registry
-from pipeline.extract.run_all import (
+from pipeline.extract.run_engines import (
     OCR_ENGINES,
     VLM_ENGINES,
     _default_procs,
@@ -63,8 +63,10 @@ def selftest():
     assert not OCR_ENGINES & set(engines_for_doc(Path("x.png"), {}, {}, set()))  # stack에 키 없음(합집합 대체)에도 OCR 없음
     print("[selftest] 10-29 — OCR 엔진 안 돎 통과")
 
-    # 사용자 10-29 — 쪽당 제한: 글자 엔진 10초·VLM 120초(설정) · 첫 문서 warmup 하한 · 별도 프로세스 여유 더함
-    with pc.PIPE.env(PARSE_TEXT_PAGE_SEC="10", PARSE_VLM_PAGE_SEC="120", PARSE_WARMUP_SEC="60", PARSE_ISOLATE_OVERHEAD="10"):
+    # 사용자 10-29 — 쪽당 제한: 글자 엔진 10초·VLM은 호출 1건 제한 models.vlm.timeout(11-04 통일) · 첫 문서 warmup 하한 · 별도 프로세스 여유 더함
+    from common.config.settings import COMMON
+
+    with COMMON.env(VLM_TIMEOUT="120"), pc.PIPE.env(PARSE_TEXT_PAGE_SEC="10", PARSE_WARMUP_SEC="60", PARSE_ISOLATE_OVERHEAD="10"):
         assert page_timeout("pymupdf", 3) == 3 * 10 + 10
         assert page_timeout("pymupdf", 0) == 10 + 10  # 쪽 수 못 셈 → 1쪽
         assert page_timeout("pymupdf", 2, first=True) == 60 + 10  # 첫 문서는 warmup 하한
@@ -82,7 +84,7 @@ def selftest():
     assert p0_key("pymupdf", sha, ver) == p0_key("pymupdf", sha, ver) and p0_key("pymupdf", sha, ver) != p0_key("pymupdf", "b" * 64, ver)
     print("[selftest] P0 열쇠(출처 기록 — 엔진 폴더 코드·sha·버전만) 통과")
 
-    from pipeline.extract import parse_one
+    from pipeline.extract import run_one_engine as parse_one
 
     d = parse_one.stamp(
         {"text": "본문"}, {"engine": "pymupdf", "engine_version": "1.2.3", "p0_key": "deadbeef", "params": {"profile": "default"}}
@@ -112,7 +114,7 @@ def selftest():
         [
             sys.executable,
             "-m",
-            "pipeline.extract.run_all",
+            "pipeline.extract.run_engines",
             "--src",
             str(sdir),
             "--out",
@@ -147,7 +149,7 @@ def selftest():
         [
             sys.executable,
             "-m",
-            "pipeline.extract.run_all",
+            "pipeline.extract.run_engines",
             "--src",
             str(sdir3),
             "--out",
@@ -171,7 +173,7 @@ def selftest():
         [
             sys.executable,
             "-m",
-            "pipeline.extract.run_all",
+            "pipeline.extract.run_engines",
             "--src",
             str(sdir3),
             "--out",
@@ -205,7 +207,7 @@ def selftest():
                 json.dumps({"doc": doc5.name, "engine": e, "sha": sha5, "sec": 1, "error": "ValueError: document is encrypted"}) + chr(10)
             )
     r5 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_all", "--src", str(sdir5), "--out", str(odir5), "--stack", str(STACK_FILE)],
+        [sys.executable, "-m", "pipeline.extract.run_engines", "--src", str(sdir5), "--out", str(odir5), "--stack", str(STACK_FILE)],
         capture_output=True,
         text=True,
         env=C.child_env(PIPE_PROCS="1"),
@@ -228,7 +230,7 @@ def selftest():
         [
             sys.executable,
             "-m",
-            "pipeline.extract.run_all",
+            "pipeline.extract.run_engines",
             "--src",
             str(sdir6),
             "--out",
@@ -258,7 +260,7 @@ def test_retry_doubles_limit():
     """10-29 — 시간 초과면 같은 실행에서 제한을 두 배로 한 번 더(가짜 _isolated — 첫 번 TimeoutError, 둘째 성공 / 둘 다 실패)."""
     from unittest import mock
 
-    from pipeline.extract import run_all as RA
+    from pipeline.extract import run_engines as RA
 
     seen = []
 
@@ -287,7 +289,7 @@ def test_run_docs_engines_concurrent():
     """10-29 — 한 문서의 엔진 2개는 동시에(둘이 같이 기다려야 풀리는 장벽 — 차례로 돌면 시간 초과로 깨짐)."""
     import threading
 
-    from pipeline.extract.run_all import _run_docs
+    from pipeline.extract.run_engines import _run_docs
 
     barrier = threading.Barrier(2, timeout=10)
     ran = []
@@ -307,7 +309,7 @@ def test_run_procs_doc_shards():
     from unittest import mock
 
     from common.core import resources
-    from pipeline.extract import run_all as RA
+    from pipeline.extract import run_engines as RA
 
     cmds = []
     fake = mock.Mock(side_effect=lambda cmd, **kw: (cmds.append(cmd), mock.Mock(wait=lambda: 0))[1])
@@ -380,20 +382,6 @@ def test_kill_group_reaps_grandchild():
         time.sleep(0.1)
     else:
         raise AssertionError(f"손자 {gpid}가 남음")
-
-
-def test_vlm_child_env_caps_timeout():
-    """10-29 M3 — VLM 엔진 자식의 VLM_TIMEOUT = min(models.vlm.timeout, vlm_page_sec) · 쪽당 제한이 더 길면 덮지 않음(None)."""
-    from common.config.settings import COMMON, read_settings
-    from pipeline.extract.run_all import _vlm_child_env
-
-    with COMMON.env(VLM_TIMEOUT="180"), pc.PIPE.env(PARSE_VLM_PAGE_SEC="60"):
-        env = _vlm_child_env()
-        assert env is not None  # op-09 — 값은 env가 아니라 자식의 덮기 파일(SETTINGS_FILE overrides)로
-        over = read_settings(env["SETTINGS_FILE"])[1]
-        assert over.get("VLM_TIMEOUT") == "60", over
-    with COMMON.env(VLM_TIMEOUT="100"), pc.PIPE.env(PARSE_VLM_PAGE_SEC="120"):
-        assert _vlm_child_env() is None
 
 
 def test_p0_layer_covers_every_engine_folder():

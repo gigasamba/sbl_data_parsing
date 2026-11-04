@@ -1,7 +1,7 @@
 """F6(11-03 PC 시험) — 문단 보정(represent._merge_paragraphs)이 다른 엔진 문단으로 바꿔도 대표 본문의 쪽 나눔(\f)을 남김
 (전에는 strip()으로 사라져 2쪽 PDF 청크 13/15가 page=None)."""
 
-from pipeline.transform.represent.represent import _merge_paragraphs
+from pipeline.transform.represent.build_rep import _merge_paragraphs
 
 
 def test_keeps_page_breaks():

@@ -17,7 +17,7 @@ SET CONCAT_NULL_YIELDS_NULL ON;
 SET ARITHABORT ON;
 SET NUMERIC_ROUNDABORT OFF;
 GO
--- 다른 스키마·표 이름이면 settings.yaml common.connections.parsing_meta.table(<스키마.표>)과 함께 아래 [AI].[ParsingMeta]를 바꿔 실행.
+-- 다른 스키마·표 이름이면 settings.yaml required.edw.parsing_meta_table(<스키마.표>)과 함께 아래 [AI].[ParsingMeta]를 바꿔 실행.
 IF SCHEMA_ID(N'AI') IS NULL EXEC(N'CREATE SCHEMA [AI]');
 GO
 -- 독립 검토 반영 — 다시 실행해도 안전(이미 있으면 건너뜀, DBA가 실수로 두 번 돌려도 안 깨짐).
@@ -48,7 +48,7 @@ CREATE TABLE [AI].[ParsingMeta] (
     -- PM2 요건(b) — 이 문서에 실제로 쓰인 엔진 전부(대표·후보·OCR·VLM 쪽 옮기기·그림·재판독·AG11 에이전트).
     -- engines_used = JSON 배열 [{"engine","role":"rep|candidate|ocr|vlm_page|vlm_figure|reread|agent","status","version_or_model","calls"}],
     -- engines_summary = 사람이 읽는 한 줄(예 "rep=rapidocr_ko; text=kreuzberg,markitdown,pymupdf; vlm=<모델> page×3 fig×3").
-    -- 만드는 곳: pipeline/load/parsing_meta.py의 engines_used() — _rep/<문서>.json만 읽는 순수 함수.
+    -- 만드는 곳: pipeline/load/silver_publish.py의 engines_used() — _rep/<문서>.json만 읽는 순수 함수.
     engines_used      NVARCHAR(MAX)  NULL,
     engines_summary   NVARCHAR(512)  NULL,
     parsed_at         DATETIME2(0)   NOT NULL CONSTRAINT DF_ParsingMeta_parsed_at DEFAULT SYSUTCDATETIME(),

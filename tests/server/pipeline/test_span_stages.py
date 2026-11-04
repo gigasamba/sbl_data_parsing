@@ -12,7 +12,8 @@ import numpy as np
 from common.ai import embed
 from common.config import settings
 from common.core import jsonlog, span
-from pipeline.load import edw_meta, pgvector_load
+from pipeline.load import edw_doc_meta as edw_meta
+from pipeline.load import pgvector_load
 from pipeline.transform.structure import build_bundle
 
 
@@ -22,7 +23,7 @@ def _capture():
 
 
 def test_warm_span_counts():
-    from pipeline.extract import source
+    from pipeline.extract import fetch_docs as source
 
     class Client:
         def head_object(self, **kw):
@@ -57,7 +58,7 @@ def test_warm_span_counts():
 
 
 def test_parse_attempt_column():
-    from pipeline.extract import run_all
+    from pipeline.extract import run_engines as run_all
 
     def run(side_effect):
         rows, patched = _capture()

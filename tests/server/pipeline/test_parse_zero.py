@@ -20,9 +20,7 @@ def test_zero_docs():
         out = Path(tempfile.mkdtemp())
         src = out / "prepared"
         src.mkdir()
-        a = argparse.Namespace(
-            src=str(src), source=None, engines="plaintext", procs="1", workers="1", vlm_concurrency=1, max_new=0, deadline=None
-        )
+        a = argparse.Namespace(src=str(src), source=None, engines="plaintext", procs="1", workers="1", max_new=0, deadline=None)
         calls = []
         buf = io.StringIO()
         with (
@@ -35,4 +33,4 @@ def test_zero_docs():
                 except SystemExit as e:
                     got = e.code
         assert got == want and says in buf.getvalue(), (rc, got, buf.getvalue())
-        assert calls == ["pipeline.extract.run_all"], calls  # 채점(parse_qa)·대표 결과(represent)는 부르지 않음
+        assert calls == ["pipeline.extract.run_engines"], calls  # 채점(parse_qa)·대표 결과(represent)는 부르지 않음

@@ -54,6 +54,6 @@ case "$mod" in
 esac
 . deploy/host/scripts/image_vars.sh   # in_pipeline — 상주 컨테이너 안에서(사용자 11-02 — 1회 job 컨테이너 없음)
 echo "[trigger] $(date '+%F %T') $mod 시작(data-pipeline 안에서)"
-in_pipeline data-pipeline "$mod" "$@"; rc=$?
+in_pipeline "data-pipeline$NAME_SUFFIX" "$mod" "$@"; rc=$?
 echo "[trigger] $(date '+%F %T') $mod 끝 (종료 코드 $rc)"
 exit $rc

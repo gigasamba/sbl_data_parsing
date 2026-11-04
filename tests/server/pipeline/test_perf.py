@@ -1,4 +1,4 @@
-"""op-01: pipeline.tools.perf — 임시 행으로 p50/p95·wait 비율·느린 문서·쪽당·캐시/재시도/실패율·run 비교(DB 없이)."""
+"""op-01: pipeline.tools.perf_report — 임시 행으로 p50/p95·wait 비율·느린 문서·쪽당·캐시/재시도/실패율·run 비교(DB 없이)."""
 
 import contextlib
 import io
@@ -7,7 +7,7 @@ import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from pipeline.tools import perf
+from pipeline.tools import perf_report as perf
 
 
 def _ev(stage, ms, engine=None, doc="a.pdf", status="ok", **kw):

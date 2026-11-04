@@ -11,7 +11,7 @@ same table with a proper grid. table_std.build_tables() already turns a grid int
 only ever looked at the winning engine's own tables and render_md() appended it at the very end — so the
 table showed up twice (once broken, once correct) and never in place.
 
-What this module does, called from represent() once (see hook comment in represent.py for why there):
+What this module does, called from represent() once (see hook comment in build_rep.py for why there):
   (a) candidates = every grid-bearing table from every engine the document was tried with (ok engines only,
       winner + the already-loaded `other_docs`) — not just the winner's.
   (b) group_tables() — tables that are "the same table region" (same page when both sides know the page,
@@ -39,7 +39,7 @@ duplicates positionally instead of depending on `merges` being present.
 from collections import Counter
 
 from common.core.text import normalize_value
-from pipeline.transform.represent import table_std
+from pipeline.transform.represent import table_standard as table_std
 
 GROUP_JACCARD_MIN = 0.5  # ponytail: simple fixed threshold for "same table region" by content overlap when
 # page can't settle it — revisit with a real mis-grouped example before tuning further.
@@ -141,7 +141,7 @@ def choose_grid(group):
 
 def _page_slice(text, page):
     """Narrow `text` to its 1-based `page` (split on \\f, same page-break convention as the rest of
-    represent.py) when the page number is known and in range — otherwise search the whole text (unknown page,
+    build_rep.py) when the page number is known and in range — otherwise search the whole text (unknown page,
     or a page count that doesn't line up with the \\f breaks; same "don't guess boundaries" posture as
     represent._page_texts, just without needing boxes here). Returns (offset, slice)."""
     if page is None:
@@ -248,7 +248,7 @@ def _build_candidates(rep, best_engine, other_docs):
 
 
 def inline_tables(rep, best_engine, other_docs):
-    """Entry point (represent() calls this — see the hook comment in represent.py for where/why).
+    """Entry point (represent() calls this — see the hook comment in build_rep.py for where/why).
     Mutates rep["text"] in place (span replacements only — nothing else about the text changes) and sets
     rep["tables_std"]. Returns the info block for rep["rep"]["table_inline"].
     Review item 5 (engine-qa, 10-21) — a replaced span can contain a short caption/footnote squeezed between

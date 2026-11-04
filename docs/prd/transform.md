@@ -19,7 +19,7 @@
 6. 구성의 엔진이 등록부(`pipeline/extract/engines`)에 없거나 설치되지 않았으면 → 시작하지 않는다(종료 2).
 
 ### QA
-- `tests/server/pipeline/test_stackcfg.py` · `tests/server/pipeline/test_run_all.py`.
+- `tests/server/pipeline/test_engine_stack.py` · `tests/server/pipeline/test_run_all.py`.
 - Status: done
 
 <a id="pl-22"></a>
@@ -30,14 +30,14 @@
 
 ### 규칙
 1. 문서마다 구성의 엔진을 동시에, 엔진마다 따로 떨어진 자식 프로세스 하나로 돌린다. 문서끼리는 `--workers`·`--procs`로 병렬.
-2. 문서×엔진 제한 시간(초) = round(max(max(1, 쪽 수) × 쪽당 초, 첫 문서면 `pipeline.extract.warmup_sec`(60)) + `isolate_overhead`(10), 2). 쪽당 초 = VLM 엔진 `vlm_page_sec`(120), 그 밖 `text_page_sec`(10).
+2. 문서×엔진 제한 시간(초) = round(max(max(1, 쪽 수) × 쪽당 초, 첫 문서면 `pipeline.extract.warmup_sec`(60)) + `isolate_overhead`(10), 2). 쪽당 초 = VLM 엔진은 VLM 호출 1건 제한 `common.models.vlm.timeout`(180), 그 밖 `text_page_sec`(10).
 3. 시간을 넘기면 제한을 두 배로 한 번 더 돌리고, 그래도 넘으면 실패로 기록한다.
 4. OCR 엔진 `rapidocr_ko`는 파싱 엔진으로 돌지 않는다 — 이미지·스캔 문서는 VLM 엔진 `qwen_vlm`만.
 5. 글자 PDF 속 스캔 쪽은 represent가 쪽 전체를 VLM으로 읽어 채운다(`vlm_page`) — 회전된 쪽(`pipeline.extract.rotated_max` 20)·숨은 글자가 그림과 겹친 쪽(`hidden_overlap_max` 20) 각각 최대 20쪽. 쪽 VLM은 `PARSE_POST`에 `vlm_page`가 있을 때만, 문서당 한 번(실패한 쪽은 다시 부르지 않음).
 6. 대표 결과가 이미지·스캔 형식(`.pdf_image`·png·jpg 등)의 VLM 엔진이고 글이 비어 있지 않으면 → 쪽 VLM을 건너뛰고 쪽 그림은 처리된 것으로 표시한다(그림 VLM 없음).
-7. VLM 엔진 자식의 `VLM_TIMEOUT` = min(`common.models.vlm.timeout`, `vlm_page_sec`).
+7. VLM 엔진·쪽 VLM·그림 VLM의 호출 1건 제한은 모두 `common.models.vlm.timeout` 하나다([pl-43](#pl-43)).
 8. 일괄 엔진 자식은 낮은 우선순위로 돈다(`pipeline.extract.low_priority` — POSIX nice +10). 컨테이너끼리의 CPU 순위는 [ops.md#rn-03](ops.md#rn-03).
-9. 파싱 서비스(`parse_document`)는 우선순위를 낮추지 않고 자기 제한을 쓴다 — `pipeline.service.parse_mcp.text_page_sec` 1 · `vlm_page_sec` 60 · `warmup_sec` 20, 작업 제한 `job_timeout_sec` 600. 작업 시간을 넘기면 프로세스 그룹 전체를 끝낸다.
+9. 파싱 서비스(`parse_document`)는 우선순위를 낮추지 않고 자기 제한을 쓴다 — `pipeline.service.parse_mcp.text_page_sec` 1 · `warmup_sec` 20(VLM 엔진은 파이프라인과 같은 `common.models.vlm.timeout`), 작업 제한 `job_timeout_sec` 600. 작업 시간을 넘기면 프로세스 그룹 전체를 끝낸다.
 10. 알려진 한계: 숨은 글자가 그림과 겹친 쪽(`hidden_overlap`)은 쪽 VLM에 낱말 상자가 없어 숫자 표기 차이(예: 430.000 ↔ 430,000)를 고치지 않고 원래 글을 둔다. 글자 엔진은 쪽으로 나누지 않는다(쪽 병렬은 VLM 엔진 안에서만).
 
 ### 예시
@@ -48,18 +48,28 @@
 - Status: done
 
 <a id="pl-43"></a>
-## pl-43 · VLM 동시 호출 수
+## pl-43 · VLM 처리 한 길 — 호출·동시 수·제한 시간·해상도
 
 ### 무엇·왜
-공유 VLM 서버의 동시 요청을 설정 몇 개로 묶어 조절한다(엔진마다 손잡이를 두지 않음).
+공유 VLM 서버의 동시 요청을 설정 몇 개로 묶어 조절한다(엔진마다 손잡이를 두지 않음). 11-04(사용자): 스캔 쪽이 엔진 `qwen_vlm`·쪽 VLM 후보정·그림 VLM 세 길로 각자 요청을 만들어 해상도(200·150·200)·생각 끄기·제한 시간·재시도·동시 수가 길마다 달랐다 — 한 함수·한 설정으로 합친다.
 
 ### 규칙
-1. 모든 VLM 호출(엔진 `qwen_vlm`·쪽 VLM·그림 VLM)의 동시 합 상한 = `pipeline.transform.vlm.global_concurrency`(기본 12). 호출 한 건이 자리 하나(`figures/vgate.py`).
-2. 문서 하나 안의 VLM 동시 수 기본값 = `common.models.vlm.concurrency`(`VLM_CONCURRENCY`, 기본 4). 그림 VLM은 `pipeline.transform.figures.vlm_parallel`, 쪽 VLM은 `pipeline.transform.vlm.page_concurrency`가 있으면 그 값.
-3. 일괄 파싱(`pipeline.cli parse`)은 엔진 자식에 `VLM_CONCURRENCY` = max(1, min(`--vlm-concurrency`(기본 `pipeline.night.vlm_concurrency` 8), `common.models.vlm.max_concurrency`(8) ÷ 문서 동시 수(정수 나눗셈)))를 넘긴다.
+1. 모든 VLM 호출(엔진 `qwen_vlm`·쪽 VLM·pptx 슬라이드·그림 VLM·중첩 그림)은 `pipeline/shared/vlmcall.py`의 `ask()` 하나로 `common.ai.llm.complete('vlm')`를 부른다 — 내부망 가드·예산 장부·모델 다운 감지가 같고, 요청 본문에 `common.models.vlm.extra_body`(생각 끄기 등)를 합친다. 코드에 고정한 생각 끄기는 없다.
+2. 호출 1건 제한 시간 = `common.models.vlm.timeout`(180초). 실패(시간 초과·연결 오류·429·5xx) 재시도 = `common.models.vlm.retry`(1 — 시도는 retry + 1번).
+3. 렌더 해상도 = `pipeline.extract.ocr.dpi`(150) 하나 — 엔진·쪽 VLM·pptx·그림·`prepare --dpi` 기본값. 긴 변은 2000 px로 줄인다.
+4. 쪽 수 상한 = `pipeline.transform.vlm.page_max`(비움 = 전부, 0 = 끔) — 엔진과 쪽 VLM 공통. `pipeline.extract.ocr.max_pages`는 OCR 엔진(VLM 아님)에만 남는다(엔진 공용 파일 `engines/_common`을 바꾸면 모든 엔진 지문이 바뀌어 두었다).
+5. 엔진과 쪽 VLM은 같은 쪽 옮기기 함수(`transcribe` — 같은 지시문 `page_transcribe`·렌더·캐시 열쇠)를 써서, 엔진이 옮긴 쪽은 후보정이 캐시로 다시 쓴다. 엔진은 쪽 하나라도 호출이 실패하면 문서×엔진 실패로 남긴다(빈 답은 빈 쪽).
+6. 동시 수: 한 프로세스 안 모든 VLM 호출의 합 상한 = `common.models.vlm.max_concurrency`(8, 호출 한 건이 자리 하나). 문서 하나 안 = `common.models.vlm.concurrency`(4 — 쪽·그림 공통). 쪽 옮기기는 가장 느린 호출이 60초를 넘으면 다음 묶음 병렬 수를 절반(최소 2)으로 줄였다가 빨라지면 되돌린다(코드 상수).
+7. 일괄 파싱(`pipeline.cli parse`)은 엔진 자식에 `VLM_CONCURRENCY` = max(1, min(`concurrency`, `max_concurrency` ÷ 동시 문서 수))를 넘긴다. 동시 문서 수 = min(이번 문서 수, 조각 `--procs` × `--workers`).
+
+### 현재 상태(11-04)
+- 지운 칸(남아 있으면 경고만): `extract.vlm_page_sec`·`tuning.ops.services.parse_mcp.vlm_page_sec` → `common.models.vlm.timeout` · `tuning.transform.vlm.deadline` → `timeout` · `transform.vlm.global_concurrency` → `max_concurrency` · `tuning.transform.vlm.page_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`(명령 인자 `--vlm-concurrency`) → `concurrency` · `transform.vlm.page_slow`·`tuning.transform.vlm.page_min_concurrency` → 코드 상수.
+- 고친 결함: run_docs가 `--set VLM_CONCURRENCY=8`(vlm 레인 6)을 줘도 `--workers` 기본 4로 나눠 문서 1건 실행의 엔진 자식이 늘 2였다(`8 ÷ 4`). 이제 동시 문서 수(문서 1건이면 1)로 나눈다.
+- 결과가 바뀜: 엔진 `qwen_vlm` 지문이 바뀌어 스캔·이미지 문서는 다시 파싱된다(지시문이 쪽 VLM과 같은 `page_transcribe`로, 해상도 200 → 150). 그림 해상도 200 → 150이라 그림 캐시도 새로 만든다. 서버 확인은 [refactor.md C-93](../refactoring/refactor.md).
 
 ### QA
-- `tests/general/pipeline/test_vgate.py`.
+- `tests/server/pipeline/test_vlmcall.py` — 가짜 로컬 VLM 서버로 표 한 줄 = 한 길(엔진·쪽 VLM 후보정·그림·중첩 그림): 같은 `extra_body`·제한 시간·해상도, 엔진이 옮긴 쪽은 후보정이 호출 0, 재시도 횟수·쪽 상한·실패 시 엔진 실패.
+- `tests/general/pipeline/test_vgate.py` — 합 상한만큼만 동시 진입.
 - Status: done
 
 <a id="pl-42"></a>
@@ -79,14 +89,14 @@
 회사 문서에 나오는 나머지 형식을 읽는다. 엔진 파일(엔진 지문)은 바꾸지 않는다.
 
 ### 규칙
-1. 엔진 `parser.py`의 `FORMATS`는 두고, 등록부 `pipeline/extract/engines/registry.py`의 `EXTRA_FORMATS`(엔진별 추가 확장자)에 더한다 — `formats(엔진)` = `FORMATS` + `EXTRA_FORMATS`, `engines_for()`·`parse_one --list`가 이것을 읽는다.
+1. 엔진 `parser.py`의 `FORMATS`는 두고, 등록부 `pipeline/extract/engines/registry.py`의 `EXTRA_FORMATS`(엔진별 추가 확장자)에 더한다 — `formats(엔진)` = `FORMATS` + `EXTRA_FORMATS`, `engines_for()`·`run_one_engine --list`가 이것을 읽는다.
 2. 구성(우선순위 순): `.docm`·`.pptm`(kreuzberg, anydoc) · `.rtf`·`.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.csv`(markitdown, kreuzberg) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown) · `.xlsb`·`.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg) · `.json`·`.xml`·`.log`(plaintext 하나 — 글 그대로).
 3. `.docm`·`.pptm`은 `office` 엔진에 주지 않는다(`office_stdlib`는 `.docx`가 아니면 xlsx로 다룸).
-4. 파싱 서비스가 받는 확장자(`mcp_parse_service.allowed_exts()`) = 구성의 `parse` 키(`.pdf_*` → `.pdf`) − 이미지 확장자.
+4. 파싱 서비스가 받는 확장자(`pipeline.parse_service.allowed_exts()`) = 구성의 `parse` 키(`.pdf_*` → `.pdf`) − 이미지 확장자.
 
 ### 단계
 1. `.hwp` — kreuzberg로 실제 `.hwp` 문서를 읽어 글이 나오는지 시험한 뒤 `EXTRA_FORMATS["kreuzberg"]`와 구성에 더한다.
-2. 사람 결정 대기: ① 암호·DRM 사전 판정(`prepare.py` — `OOXML_EXTS`·OLE 목록)에 서식 파일·`.xlsb`·오픈문서가 없음 ② `.pptm`·`.ppsx`·`.potx`·`.docm`·`.dotx`·`.xltx`가 그림 추출·쪽 수·FAQ 행의 `.docx`·`.pptx`·`.xlsx` 정확 비교 분기를 못 탐 ③ `resources/config/criteria.json` `groups.native`에 새 형식이 없어 파싱 QA 판정이 빔 ④ `parse_document` 도구 설명(`mcp_server/routers/parse_tool.py` — MCP 계약)의 형식 목록이 옛것 ⑤ plaintext가 `.log`·`.json`의 `|`·탭 줄을 표로 볼 수 있음 ⑥ 옛 이진 4종(`.xlsb`·`.dot`·`.xlt`·`.pot`) 자동 파싱 시험 없음.
+2. 사람 결정 대기: ① 암호·DRM 사전 판정(`filter_and_rotate.py` — `OOXML_EXTS`·OLE 목록)에 서식 파일·`.xlsb`·오픈문서가 없음 ② `.pptm`·`.ppsx`·`.potx`·`.docm`·`.dotx`·`.xltx`가 그림 추출·쪽 수·FAQ 행의 `.docx`·`.pptx`·`.xlsx` 정확 비교 분기를 못 탐 ③ `resources/config/criteria.json` `groups.native`에 새 형식이 없어 파싱 QA 판정이 빔 ④ `parse_document` 도구 설명(`mcp_server/routers/parse_tool.py` — MCP 계약)의 형식 목록이 옛것 ⑤ plaintext가 `.log`·`.json`의 `|`·탭 줄을 표로 볼 수 있음 ⑥ 옛 이진 4종(`.xlsb`·`.dot`·`.xlt`·`.pot`) 자동 파싱 시험 없음.
 
 ### QA
 - `tests/server/pipeline/test_ext_formats.py` `EXT2` 표 — 형식마다 임시 견본을 구성의 엔진마다 파싱(옛 이진 4종은 구성·등록부만 확인).
@@ -100,10 +110,10 @@
 
 ### 규칙
 1. 대표 엔진은 정확도 + 풍부함으로 고른다(`pipeline.transform.represent.rep_select`, 기본 best).
-2. 줄 단위 투표로 합치고(`fuse.py`), 엔진 사이 라벨·값을 서로 확인한다(`crosscheck.py`).
+2. 줄 단위 투표로 합치고(`fragment_vote.py`), 엔진 사이 라벨·값을 서로 확인한다(`crosscheck.py`).
 3. 후보정 `PARSE_POST`(일괄 파싱 기본 `all` = `vlm_page,supsub,charts,figures,context,attachments`, 파싱 서비스 기본 `supsub`): 쪽 VLM 채우기([pl-22](#pl-22)), 윗첨자 `^`·아래첨자 `_`, 차트·그림([pl-05](#pl-05)), 그림 근처 맥락([pl-37](#pl-37)), 메일 첨부([pl-36](#pl-36)).
 4. 여러 엔진의 표를 본문 제자리에 넣고(`table_inline.py`), 표준 표(`tables_std`)를 만든다.
-5. 파싱 QA(`parse_qa.py`): 교차 정확도가 `resources/config/criteria.json` `run.cross_acc_full`(0.95) 미만이면 상태 `partial`, 아니면 `ok`.
+5. 파싱 QA(`parse_scoring.py`): 교차 정확도가 `resources/config/criteria.json` `run.cross_acc_full`(0.95) 미만이면 상태 `partial`, 아니면 `ok`.
 6. 대표 결과는 마스터(용어집·고객 명부)를 읽지 않는다.
 
 ### QA
@@ -132,7 +142,7 @@
 그림 설명을 본문과 함께 찾게 한다.
 
 ### 규칙
-1. 그림마다 캡션·본문 언급을 연결하고, 그림 기록의 값이 본문 값과 맞는지·부딪히는지 표시한다(`represent/context.py` `value_check` — 모델 호출 없음).
+1. 그림마다 캡션·본문 언급을 연결하고, 그림 기록의 값이 본문 값과 맞는지·부딪히는지 표시한다(`represent/figure_context.py` `value_check` — 모델 호출 없음).
 2. 그림 기록은 본문 청크 한 덩어리로 렌더한다.
 
 ### QA
@@ -150,7 +160,7 @@
 2. 후보에서 뺀다(기록은 남김): 쪽 면적 1% 미만, 짧은 변 `fig_min_px`(64 px) 미만, 같은 sha로 반복되는 이미지(로고).
 3. 원본 차트 XML·벡터 차트 값은 VLM 없이 읽는다(`chart_values.py`).
 4. 슬라이드·도형은 soffice로 그려 읽는다 — 문서당 `PARSE_PPTX_RENDER_MAX`(10)쪽, 변환 제한 `PARSE_PPTX_CONVERT_SEC`(60초).
-5. 지금 코드는 도식 연결선·겹친 개체 묶음(`figure_overlay`)·중첩 그림(`nested_figure`)·pptx 도형 연결·도형 감지·Mermaid 출력도 따로 만든다(`figures/figures.py`) — 아래 단계에서 줄인다.
+5. 지금 코드는 도식 연결선·겹친 개체 묶음(`figure_overlay`)·중첩 그림(`nested_figure`)·pptx 도형 연결·도형 감지·Mermaid 출력도 따로 만든다(`figures/figure_extract.py`) — 아래 단계에서 줄인다.
 
 ### 단계
 1. 부가 기능(도식 화살표·겹침 묶음·중첩 그림·pptx 도형 연결·도형 감지·Mermaid 따로 만들기)을 VLM 한 번의 종류별 출력으로 바꾼다 — 도표 → Mermaid, 표 → HTML 표, 차트 → 세부 값. 차트 XML·벡터 값과 쪽 VLM은 그대로. 대표 결과 지문(p1)이 바뀐다.

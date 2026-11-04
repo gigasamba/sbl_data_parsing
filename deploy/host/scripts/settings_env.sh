@@ -57,6 +57,8 @@ EOF
   fi
   DOCKER=${DOCKER:-$(docker_default)}; export DOCKER   # op-10 — 셸 env > settings.yaml(ops.host.docker) > podman(없으면 docker)
   RAG_OUT=${RAG_OUT:-$RAG_ROOT/output}; export RAG_OUT   # op-13 — 적지 않으면 <루트>/output
+  case "${INSTANCE:-}" in -*|*[!a-z0-9-]*) echo "[설정] ops.host.instance는 영소문자·숫자·-만(앞은 글자·숫자)" >&2; return 2 ;; esac
+  NAME_SUFFIX=${INSTANCE:+-$INSTANCE}; export NAME_SUFFIX   # 여러 벌 — 컨테이너·compose 묶음·타이머 이름 끝(비우면 한 벌, 이름 그대로)
   return 0
 }
 

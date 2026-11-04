@@ -7,13 +7,13 @@
 x-settings: &settings "${SETTINGS_FILE:?SETTINGS_FILE=<settings.yaml 절대 경로> 필요 — deploy/host/scripts/settings_env.sh load_settings가 export(refactor.md C-09)}:/etc/rag/settings.yaml:ro,z"
 services:
   # MCP parse_document 작업 서비스 전용(사용자 11-03 — PRD rn-03): 사람이 기다리는 요청이라 일괄 컨테이너와 떼고 CPU 나눔 비율을 높게 준다.
-  #   작업 서비스(pipeline.mcp_parse_service — 127.0.0.1:8766, 토큰 settings.yaml)가 이 컨테이너의 주 프로세스라 죽으면 restart가 다시 띄운다
+  #   작업 서비스(pipeline.parse_service — 127.0.0.1:8766, 토큰 settings.yaml)가 이 컨테이너의 주 프로세스라 죽으면 restart가 다시 띄운다
   #   (옛 손 기동 `docker exec -d … mcp_parse_service` 없음). 작업 폴더는 결과 폴더 _mcp_parse/jobs(run_docs.py가 보고 medium 레인 양보).
   #   8766을 쓰므로 옛 컨테이너(data-pipeline-parse 안 손 기동 서비스)를 먼저 지운 뒤 띄운다(release-and-patch §8-3 7).
   #   자원 칸: settings.yaml ops.pipeline_host.parse_mcp_cpus·parse_mcp_mem_limit·parse_mcp_cpu_shares(PARSE_MCP_* — 비우면 아래 기본값과 같은 값).
   data-pipeline-mcp:
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE=data-pipeline:<태그> 필요 — 옛 DATA_PARSING_IMAGE·DATA_STRUCTURE_IMAGE는 S6b에 바뀜(refactor.md C-29)}
-    container_name: data-pipeline-mcp
+    container_name: data-pipeline-mcp${NAME_SUFFIX:-}
     command: ["parse-service"]
     restart: unless-stopped
     network_mode: host                      # 검색 MCP(mcp-server)가 127.0.0.1:8766으로 부름

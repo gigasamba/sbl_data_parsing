@@ -521,7 +521,7 @@ def complete(
     json_mode=False,
     timeout=None,
     extra=None,
-    retries=3,
+    retries=None,
     preguarded=False,
     agent=None,
     call_reserved=False,
@@ -531,7 +531,7 @@ def complete(
     preguarded=True는 chat()만(allow_external 인자·LLM_ALLOW_EXTERNAL 설정으로 이미 가드를 통과) — 그 밖은 매번 require_internal.
     agent=(지시문 패키지 id)면 model_role이 role과 같아야 하고, 아직 예약 안 됐으면(call_reserved=False — 직접 호출자) 1차 호출을
     재시도 루프 전에 딱 한 번 공유 장부에 예약한다(GH1-08d). call_reserved=True는 호출자가 이미 예약한 경우(chat()의 _do_call).
-    max_tokens=None이면 그 필드를 안 보냄."""
+    max_tokens=None이면 그 필드를 안 보냄. retries(시도 횟수) 기본 = vlm은 models.vlm.retry + 1(11-04), 그 밖 3."""
     # 실패 출구마다 자리·선차감을 돌려준다(한 곳 — try/finally): 성공(ok=True)이면 그대로 쓰고, 그 밖의 모든 출구(가드 거부·설정 없음·
     # 재시도 소진·_Retryable 아닌 예외)에서 call_reserved 자리(chat()의 _do_call이 예약했거나 아래 direct가 예약)와 flat 선차감(reserved)을 되돌림.
     ok, reserved = False, 0.0
@@ -559,6 +559,8 @@ def complete(
             raise GuardBlocked(str(ex)) from ex
         extra = _merged_extra(role, extra)
         deadline = float(timeout) if timeout else 120.0
+        if retries is None:
+            retries = int(cfg().models.vlm.retry) + 1 if role == "vlm" else 3
         direct = agent is not None and not call_reserved  # RV16·GH1-08d — chat()은 call_reserved=True(자기 안전망을 따로 가짐)
         if direct:
             reserve_call()

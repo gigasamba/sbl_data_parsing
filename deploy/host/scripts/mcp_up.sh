@@ -15,12 +15,12 @@ code0=${CODE_DIR:-}   # 사람·unit이 준 값(code_dir_default 전) — 파이
 files="-f deploy/host/compose/compose.mcp-server.yml"
 [ -n "${CODE_DIR:-}" ] && files="$files -f deploy/host/compose/compose.code.mcp-server.yml"   # op-06 — 개발 서버(실행 이미지): 코드 폴더를 컨테이너 코드 자리에
 [ -d app ] && echo "[mcp_up] 경고: 코드 폴더에 옛 오버레이 app/이 남아 있음 — 11-03부터 쓰지 않음(덧씌우기 compose 지움, 이미지·코드 폴더 코드로 뜸)" >&2
-DC="$DOCKER compose $files"
+DC="$DOCKER compose -p compose$NAME_SUFFIX $files"   # 묶음 이름 — dc.sh와 같게(여러 벌)
 # parse_document 작업 서비스 전용 컨테이너(data-pipeline-mcp — rn-03)도 여기서 살핀다(타이머 2분마다). 꺼졌으면 up -d만(응답 확인은 검색 MCP의 몫).
-if [ "$($DOCKER inspect -f '{{.State.Running}}' data-pipeline-mcp 2>/dev/null)" != true ]; then
+if [ "$($DOCKER inspect -f '{{.State.Running}}' "data-pipeline-mcp$NAME_SUFFIX" 2>/dev/null)" != true ]; then
   echo "[mcp_up] $(date '+%F %T') data-pipeline-mcp 꺼짐 — 띄움"
   # shellcheck disable=SC2086 — 파일 인자(낱말 나눔)
-  (CODE_DIR=$code0 && code_dir_default DATA_PIPELINE_IMAGE && $DOCKER compose -f deploy/host/compose/compose.pipeline-mcp.yml ${CODE_DIR:+-f deploy/host/compose/compose.code.pipeline-mcp.yml} up -d data-pipeline-mcp) ||
+  (CODE_DIR=$code0 && code_dir_default DATA_PIPELINE_IMAGE && $DOCKER compose -p "compose$NAME_SUFFIX" -f deploy/host/compose/compose.pipeline-mcp.yml ${CODE_DIR:+-f deploy/host/compose/compose.code.pipeline-mcp.yml} up -d data-pipeline-mcp) ||
     echo "[mcp_up] data-pipeline-mcp 띄우기 실패 — parse_document는 '연결 실패'를 돌려줌(검색은 그대로)" >&2
 fi
 URL="http://${MCP_HOST:-127.0.0.1}:${MCP_PORT:-8765}/health"
@@ -30,14 +30,14 @@ alive() { python3 -c "import urllib.request as u; u.urlopen('$URL', timeout=5)" 
 if alive; then
   exit 0
 fi
-state=$($DOCKER inspect -f '{{.State.Status}}' mcp-server 2>/dev/null || echo none)   # S6b — 옛 data-retrieval(그 전 rag-mcp)
+state=$($DOCKER inspect -f '{{.State.Status}}' "mcp-server$NAME_SUFFIX" 2>/dev/null || echo none)   # S6b — 옛 data-retrieval(그 전 rag-mcp)
 echo "[mcp_up] $(date '+%F %T') /health 응답 없음 — 컨테이너 상태 $state"
 if [ "$state" = running ]; then
-  $DOCKER restart mcp-server >/dev/null
+  $DOCKER restart "mcp-server$NAME_SUFFIX" >/dev/null
 else
   $DC up -d mcp
 fi
 for _ in $(seq 1 30); do alive && { echo "[mcp_up] 다시 띄움 — $URL 응답"; exit 0; }; sleep 2; done
 echo "[mcp_up] 다시 띄웠는데도 응답 없음 — 마지막 로그:"
-$DOCKER logs --tail 20 mcp-server 2>&1 | tail -20
+$DOCKER logs --tail 20 "mcp-server$NAME_SUFFIX" 2>&1 | tail -20
 exit 1

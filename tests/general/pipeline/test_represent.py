@@ -1,4 +1,4 @@
-"""pipeline.transform.represent.represent 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.represent --selftest`."""
+"""pipeline.transform.represent.build_rep 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.transform.represent.build_rep --selftest`."""
 
 import json
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 from common.config.settings import COMMON
 from common.core.contract import source_record
 from pipeline import config as pc
-from pipeline.transform.represent.represent import (
+from pipeline.transform.represent.build_rep import (
     apply_post,
     fill_scan_pages,
     fix_tables,
@@ -84,16 +84,16 @@ def selftest():
     print("[selftest] vlm_page — VLM 미설정 시 본문 불변·호출 집계 통과")
 
     # 쪽 VLM 전사는 OCR 본문 뒤에 덧붙임(AD39 PARSE_DEDUP_SCAN·scan_dedup은 pl-34 10-30에 지움).
-    from pipeline.transform.figures import vlm_page as _vp_mod
+    from pipeline.shared import vlmcall as _vc  # 쪽 VLM 호출·캐시(11-04 — 엔진과 같은 함수)
 
-    _orig_vlm_page = _vp_mod.vlm_page
+    _orig_vlm_page = _vc.vlm_page
     try:
-        _vp_mod.vlm_page = lambda img, det=None: ("쪽 VLM 전사 D-2024-999", {"cached": False})
+        _vc.vlm_page = lambda img, det=None: ("쪽 VLM 전사 D-2024-999", {"cached": False})
         rep3 = {"text": "OCR 본문 저품질", "rep": {"source": None}}
         info3 = apply_post(rep3, "scan.png", png, {"vlm_page"})  # 덧붙이기
         assert "page_alt" not in info3 and rep3["text"] == "OCR 본문 저품질\n\n쪽 VLM 전사 D-2024-999"
     finally:
-        _vp_mod.vlm_page = _orig_vlm_page
+        _vc.vlm_page = _orig_vlm_page
     print("[selftest] vlm_page — 쪽 VLM 전사를 OCR 본문 뒤에 덧붙임(page_alt 없음) 통과")
 
     # X2(원본 즉시 삭제 — 스트리밍) + 독립 보안 검토 MAJOR 3: 엔진별 중간 결과를 지운 뒤 다시 돌리면 sha가 같을 때만
@@ -201,7 +201,8 @@ def selftest():
 
     import fitz as _fitz
 
-    from pipeline.transform.figures import vlm_page as _vp
+    from pipeline.shared import vlmcall as _vc  # 쪽 VLM 호출·캐시(11-04 — 엔진과 같은 함수)
+    from pipeline.transform.figures import scan_page_vlm as _vp
 
     d4 = Path(_tf.mkdtemp())
     pd4 = d4 / "parse"
@@ -298,10 +299,10 @@ def selftest():
 
     # 독립 검토 보강 — 스캔 쪽 채움 × 쪽 VLM(vlm_page): 스캔 쪽을 채운 뒤 apply_post가 같은 쪽을 다시 봐도
     # 쪽 번호가 안 섞이고 값이 안 없어진다(옛 PARSE_DEDUP_SCAN 조합 시험 — dedup은 pl-34 10-30에 지움).
-    orig_vlm_page = _vp.vlm_page
+    orig_vlm_page = _vc.vlm_page
     try:
         _vp.scan_pages_detail = lambda p: {2: "chars"}
-        _vp.vlm_page = lambda img, det=None: ("정돈된 VLM 글 설명(OCR과 다른 표현)", {"cached": False})
+        _vc.vlm_page = lambda img, det=None: ("정돈된 VLM 글 설명(OCR과 다른 표현)", {"cached": False})
         # page_text_pages가 스캔 쪽(2쪽)만 VLM 호출 · PARSE_POST=vlm_page: vlm_page 기능만(supsub 등 다른 후보정이 \f를 흔드는 것과 분리)
         with pc.PIPE.env(PARSE_POST="vlm_page"):
             represent(stack4, pd4, src=d4)
@@ -313,13 +314,13 @@ def selftest():
         assert "page_alt" not in combo["post"]
     finally:
         _vp.scan_pages_detail = orig_scan_pages_detail
-        _vp.vlm_page = orig_vlm_page
+        _vc.vlm_page = orig_vlm_page
     print("[selftest] PE1 후속 — 스캔 쪽 채움 × 쪽 VLM: 쪽 번호 안 섞임·값 손실 없음 통과")
 
     # 10-29 — apply_post는 쪽 VLM으로 채운 쪽을 다시 안 덧붙임
     try:
         _vp.scan_pages_detail = lambda p: {2: "chars"}
-        _vp.vlm_page = lambda img, det=None: ("VLM 2쪽 스캔 글", {"cached": True})
+        _vc.vlm_page = lambda img, det=None: ("VLM 2쪽 스캔 글", {"cached": True})
         with pc.PIPE.env(PARSE_POST="vlm_page"):
             represent(stack4, pd4, src=d4)
         v_out = json.loads((pd4 / "_rep" / f"{doc4}.json").read_text(encoding="utf-8"))
@@ -327,14 +328,14 @@ def selftest():
         assert v_out["text"].count("VLM 2쪽 스캔 글") == 1, v_out["text"]  # 채운 쪽을 apply_post가 또 덧붙이지 않음
     finally:
         _vp.scan_pages_detail = orig_scan_pages_detail
-        _vp.vlm_page = orig_vlm_page
+        _vc.vlm_page = orig_vlm_page
     print("[selftest] 10-29 — 스캔 쪽 쪽 VLM 글로 채움·채운 쪽 중복 덧붙임 없음 통과")
 
     # 10-29 P1-1·M4 — 쪽 VLM은 PARSE_POST에 vlm_page가 있을 때만(supsub만이면 호출 0) · 실패한 쪽도 한 represent에서 한 번만 부름
     calls = []
     try:
         _vp.scan_pages_detail = lambda p: {2: "chars"}
-        _vp.vlm_page = lambda img, det=None: (calls.append(1), ("", {"error": "가짜 실패", "cached": False}))[1]
+        _vc.vlm_page = lambda img, det=None: (calls.append(1), ("", {"error": "가짜 실패", "cached": False}))[1]
         with pc.PIPE.env(PARSE_POST="supsub"):
             represent(stack4, pd4, src=d4)
         assert calls == [], "쪽 VLM이 꺼져 있는데(supsub만) VLM을 부름"
@@ -343,14 +344,14 @@ def selftest():
         assert len(calls) == 1, calls  # 스캔 쪽 1장 — scan_fill과 apply_post가 같은 결과를 씀(실패해도 다시 안 부름)
     finally:
         _vp.scan_pages_detail = orig_scan_pages_detail
-        _vp.vlm_page = orig_vlm_page
+        _vc.vlm_page = orig_vlm_page
     print("[selftest] 10-29 — 쪽 VLM 끔이면 호출 0 · 실패한 쪽 재호출 없음 통과")
 
     # 10-29 C — 이미지·스캔 문서를 VLM 엔진이 이미 옮겼으면 쪽 VLM 0회 · 쪽 전체 그림은 '쪽 VLM이 다룬 것'으로(그림 VLM 생략)
 
     from PIL import Image as _Image
 
-    from pipeline.transform.figures.figures import figures as _figures
+    from pipeline.transform.figures.figure_extract import figures as _figures
 
     d6 = Path(_tf.mkdtemp())
     pd6 = d6 / "parse"
@@ -369,7 +370,7 @@ def selftest():
     stack6 = {"parse": {".pdf_image": ["qwen_vlm"]}}
     calls.clear()
     try:
-        _vp.vlm_page = lambda img, det=None: (calls.append(1), ("쪽 VLM 글", {"cached": False}))[1]
+        _vc.vlm_page = lambda img, det=None: (calls.append(1), ("쪽 VLM 글", {"cached": False}))[1]
         with pc.PIPE.env(PARSE_POST="vlm_page"):
             represent(stack6, pd6, src=d6)
         assert calls == [], "VLM 엔진이 이미 옮긴 스캔 문서에 쪽 VLM을 또 부름"
@@ -379,7 +380,7 @@ def selftest():
             assert not any(f["loc"].get("page_vlm") for f in _figures(scan6) if f["loc"].get("page_render"))
             assert all(f["loc"].get("page_vlm") for f in _figures(scan6, page_covered=True) if f["loc"].get("page_render"))
         # run_docs light 레인처럼 vlm_page 없이 figures만 — VLM 엔진이 옮긴 문서의 쪽 전체 그림은 그림 VLM 0회
-        from pipeline.transform.figures import figures as _fig_mod
+        from pipeline.transform.figures import figure_extract as _fig_mod
 
         fig_calls = []
         orig_vlm_fig = _fig_mod.vlm_fig
@@ -391,9 +392,9 @@ def selftest():
             _fig_mod.vlm_fig = orig_vlm_fig
         assert fig_calls == [], "VLM 엔진이 옮긴 쪽 전체 그림에 그림 VLM을 또 부름"
     finally:
-        _vp.vlm_page = orig_vlm_page
+        _vc.vlm_page = orig_vlm_page
     # covered 판정 표 — 대표가 VLM 엔진·본문 있음·이미지/스캔 형식(run_all과 같은 형식 키)일 때만
-    from pipeline.transform.represent.represent import _vlm_transcribed as _vt
+    from pipeline.transform.represent.build_rep import _vlm_transcribed as _vt
 
     def _r(engine, text):
         return {"rep": {"engine": engine}, "text": text}

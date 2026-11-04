@@ -68,8 +68,10 @@ class PipelineExtractDedup(Section):
 
 
 class PipelineExtractOcr(Section):
-    dpi: int | None = F(200, "OCR_DPI", "쪽 이미지 렌더링 해상도(DPI) — OCR·근거 이미지 좌표 환산에 씀")
-    max_pages: int | None = F(0, "OCR_MAX_PAGES", "문서당 OCR·VLM 쪽 수 상한(쪽, 0=제한 없음)")
+    dpi: int | None = F(150, "OCR_DPI", "쪽·그림 이미지 렌더링 해상도(DPI, OCR 엔진·VLM 엔진·쪽 VLM·그림 VLM·pptx 슬라이드·prepare 공용)")
+    max_pages: int | None = F(
+        0, "OCR_MAX_PAGES", "문서당 OCR 엔진(rapidocr 등 — VLM 아님) 쪽 수 상한(쪽, 0=제한 없음 · VLM 쪽 수 상한은 transform.vlm.page_max)"
+    )
     table_grid: bool | None = F(True, "OCR_TABLE_GRID", "OCR 박스 좌표로 표 격자를 추정할지(=0이면 끔)")
     threads: int | None = F(
         None,
@@ -90,7 +92,7 @@ class PipelineExtractPrepare(Section):
 
 
 class PipelineExtractSource(Section):
-    fetch_workers: int | None = F(1, "SOURCE_FETCH_WORKERS", "원본 문서 병렬 다운로드 스레드 수(개)")
+    fetch_workers: int | None = F(1, "SOURCE_FETCH_WORKERS", "원본 문서 병렬 다운로드 스레드 수(개) — rdb:csv 받기·미리받기(warm) 공용")
     warm: str | None = F(None, "SOURCE_WARM", "미리받기(warm) 저장 폴더 — 비면 warm 기능 꺼짐")
 
 
@@ -120,7 +122,9 @@ class PipelineHostNightly(Section):
 
 
 class PipelineLoadPublish(Section):
-    bucket: str | None = F(None, "PM_BUCKET", "publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소)")
+    bucket: str | None = F(
+        None, "PM_BUCKET", "publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소)", repo="file://"
+    )
     bucket_skip_overlap_check: bool | None = F(
         False, "PM_BUCKET_SKIP_OVERLAP_CHECK", "PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 — 1이면 생략", on=("1",)
     )
@@ -148,9 +152,6 @@ class PipelineServiceParseMcp(Section):
         "PARSE_MCP_WARMUP_SEC",
         "parse MCP 서비스 작업의 첫 시도 제한 하한(초) — 새 프로세스에서 엔진을 처음 띄울 때(import·모델 적재) 여유",
     )
-    vlm_page_sec: float | None = F(
-        60.0, "PARSE_MCP_VLM_PAGE_SEC", "parse MCP 서비스 작업의 VLM 엔진 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더"
-    )
 
 
 class PipelineTransformFigures(Section):
@@ -163,7 +164,6 @@ class PipelineTransformFigures(Section):
     pptx_shapes_max: int | None = F(20, "PARSE_PPTX_SHAPES_MAX", "연결선 없는 도형 배치 슬라이드 후보 수 상한(0이면 이 사유는 안 봄)")
     pptx_smartart_max: int | None = F(20, "PARSE_PPTX_SMARTART_MAX", "SmartArt 슬라이드 후보 수 상한(0이면 이 사유는 안 봄)")
     vectors_max: int | None = F(20, "PARSE_VECTORS_MAX", "쪽 VLM 후보로 볼 벡터 도형 많은 쪽 수 상한(0이면 이 사유는 안 봄)")
-    vlm_parallel: int | None = F(None, "FIGURES_VLM_PARALLEL", "그림 VLM 호출 병렬 워커 수")
 
 
 class PipelineTransformRepresent(Section):
@@ -191,7 +191,6 @@ class PipelineTransformStructure(Section):
 
 
 class PipelineTransformVlm(Section):
-    deadline: float | None = F(360.0, "VLM_DEADLINE", "VLM 호출 1건 제한 시간(초)")
     fig_min_px: int | None = F(64, "VLM_FIG_MIN_PX", "이 값보다 짧은 변의 그림은 VLM 대상에서 제외(픽셀)")
     fig_ocr_max: int | None = F(8, "VLM_FIG_OCR_MAX", "문서당 그림 crop OCR 횟수 상한(비용 가드)")
     fig_photo_area_min: float | None = F(0.03, "VLM_FIG_PHOTO_AREA_MIN", "사진류(photo)로 볼 그림의 최소 면적 비율(쪽 대비)")
@@ -201,11 +200,9 @@ class PipelineTransformVlm(Section):
         200, "VLM_FIG_TEXT_OCR_MIN", "crop OCR 글자 수(공백 제외)가 이 값 이상이면 글자 이미지(text_image)로 분류"
     )
     figures_max: int | None = F(20, "VLM_FIGURES_MAX", "문서당 VLM에 보낼 그림 수 상한(0이면 VLM 안 부름)")
-    global_concurrency: int | None = F(12, "VLM_GLOBAL_CONCURRENCY", "모든 VLM 호출의 전역 동시 실행 수 합 상한")
-    page_concurrency: int | None = F(None, "VLM_PAGE_CONCURRENCY", "쪽 VLM 병렬 워커 수 최대값")
-    page_max: int | None = F(None, "VLM_PAGE_MAX", "문서당 쪽 VLM으로 읽을 쪽 수 상한(빈 값=전부, 0=쪽 VLM 끔)")
-    page_min_concurrency: int | None = F(2, "VLM_PAGE_MIN_CONCURRENCY", "쪽 VLM 적응형 병렬에서 느릴 때 줄일 수 있는 최소 워커 수")
-    page_slow: float | None = F(60.0, "VLM_PAGE_SLOW", "쪽 VLM 호출이 이 시간(초) 넘으면 다음 배치 병렬 수를 줄임")
+    page_max: int | None = F(
+        None, "VLM_PAGE_MAX", "문서당 VLM으로 옮길 쪽 수 상한(VLM 엔진 qwen_vlm·쪽 VLM 공통 — 빈 값=전부, 0=쪽 VLM 끔·VLM 엔진은 빈 결과)"
+    )
 
 
 class PipelineDev(Section):
@@ -225,7 +222,9 @@ class PipelineExtract(Section):
     hidden_overlap_max: int | None = F(
         20, "PARSE_HIDDEN_OVERLAP_MAX", "'숨은 글자-그림 겹침' 신호로 쪽 VLM 후보에 올릴 쪽 수 상한(쪽, 0=끔)"
     )
-    input_source: str | None = F(None, "PARSE_SOURCE", "파싱 원본 위치: 폴더·rdb:csv:경로(11-01 — s3://·rdb:*·rdb:<이름>·rdb:<표> 지움)")
+    input_source: str | None = F(
+        None, "PARSE_SOURCE", "파싱 원본 위치: 폴더·rdb:csv:경로(11-01 — s3://·rdb:*·rdb:<이름>·rdb:<표> 지움)", repo=True
+    )
     isolate_overhead: float | None = F(10.0, "PARSE_ISOLATE_OVERHEAD", "별도 프로세스 실행 시 쪽당 제한 시간에 더해 줄 시작 여유(초)")
     kreuzberg_prose_filter: bool | None = F(True, "KREUZBERG_PROSE_FILTER", "kreuzberg가 평문을 표로 오인한 것을 거를지(=0이면 끔)")
     low_priority: bool | None = F(
@@ -236,7 +235,6 @@ class PipelineExtract(Section):
     )
     max_file_mb: float | None = F(0.0, "MAX_FILE_MB", "이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음)")
     max_new: int | None = F(0, "PARSE_MAX_NEW", "이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음)")
-    prefetch_workers: int | None = F(2, "PREFETCH_WORKERS", "미리받기(warm) 명령의 동시 다운로드 스레드 수(개)")
     rapidocr_page_workers: int | None = F(1, "RAPIDOCR_PAGE_WORKERS", "rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개)")
     rotated_max: int | None = F(20, "PARSE_ROTATED_MAX", "쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) — 0이면 rotation.csv를 안 읽음")
     skipped_log: str | None = F(None, "PARSE_SKIPPED_LOG", "건너뛴 문서(암호 PDF 등) 기록 jsonl 경로")
@@ -247,7 +245,6 @@ class PipelineExtract(Section):
     table_grid_max_rows: int | None = F(
         2000, "TABLE_GRID_MAX_ROWS", "표 grid JSON에 담는 최대 행 수(개) — 넘으면 앞부분만 자르고 truncated 표시"
     )
-    vlm_page_sec: float | None = F(120.0, "PARSE_VLM_PAGE_SEC", "VLM 엔진 문서×엔진 1건의 쪽당 제한 시간(초) — 넘으면 두 배로 한 번 더")
     warmup_sec: float | None = F(60.0, "PARSE_WARMUP_SEC", "엔진 첫 문서의 제한 시간 하한(초) — import·모델 적재 여유")
     attach: PipelineExtractAttach = Field(default_factory=PipelineExtractAttach)
     cache: PipelineExtractCache = Field(default_factory=PipelineExtractCache)
@@ -318,8 +315,7 @@ class PipelineLoad(Section):
 
 
 class PipelineNight(Section):
-    vlm_concurrency: int | None = F(8, "NIGHT_VLM_CONCURRENCY", "새벽 배치: 문서 하나의 쪽 VLM 동시 요청 수(개)")
-    workers: int | None = F(4, "NIGHT_WORKERS", "새벽 배치: 동시 처리 문서 수(개)")
+    """칸 없음 — 옛 칸(workers·vlm_concurrency 등)이 남은 파일을 경고로 받으려고 절만 둔다(layout.REMOVED)."""
 
 
 class PipelinePaths(Section):

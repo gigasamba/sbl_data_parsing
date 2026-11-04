@@ -62,6 +62,7 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
     M.faq_first = lambda rows, order: order  # FAQ 교체(pl-41)는 test_run_docs.test_faq_first에서
     M.stack_check = lambda: None  # 엔진 구성 파일 확인(docker exec) 대신
     M.warm_one = lambda seq, row: True
+    M.classify_doc = lambda seq, row, cache=None: M._class.setdefault(seq, "light")  # 레인 분류(docker exec) 대신 — 규칙은 test_doc_group
     M.parse_one, M.publish_one, M.gold_one = parse_one, publish_one, gold_one
     M.drop_original = lambda seq, row: rec.append(("orig", seq))
     M.drop_temp = lambda seq: rec.append(("temp", seq))

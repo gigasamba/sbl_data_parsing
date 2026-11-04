@@ -27,6 +27,7 @@ import hashlib
 import json
 import os
 import queue
+import re
 import shlex
 import shutil
 import subprocess
@@ -53,8 +54,9 @@ SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거
     ("common.connections.rdb.database", "EDW DB"),
     ("common.connections.rdb.read.user", "EDW 읽기 계정"),
     ("common.connections.rdb.read.password", "EDW 읽기 계정 비밀번호"),
+    ("common.connections.rdb.write.user", "EDW 쓰기 계정 — publish의 ParsingMeta INSERT(컨테이너)"),
+    ("common.connections.rdb.write.password", "EDW 쓰기 계정 비밀번호(컨테이너)"),
     ("common.connections.object_storage.endpoint", "Object Storage 주소 — publish·warm(컨테이너)"),
-    ("common.connections.object_storage.region", "Object Storage 리전(컨테이너)"),
     ("common.connections.object_storage.access_key", "Object Storage 키(컨테이너)"),
     ("common.connections.object_storage.secret_key", "Object Storage 비밀 키(컨테이너)"),
     ("pipeline.load.publish.bucket", "publish 업로드 버킷(컨테이너)"),
@@ -151,7 +153,7 @@ def read_settings(settings_file=None):
 
 
 def work_dir(doc):
-    """작업 폴더(진행 기록 batch_progress/·batches/) — settings.yaml ops.pipeline_host.run_docs_dir(모델 pipeline.host.run_docs_dir), 비우면 이 스크립트 옆 test_space/(옛 자리). analyze_docflow.py도 씀."""
+    """작업 폴더(진행 기록 batch_progress/·batches/) — settings.yaml ops.pipeline_host.run_docs_dir(모델 pipeline.host.run_docs_dir), 비우면 이 스크립트 옆 test_space/(옛 자리)."""
     work = _yget(doc, "pipeline.host.run_docs_dir")
     return Path(work) if work else ROOT / "test_space"
 
@@ -159,7 +161,7 @@ def work_dir(doc):
 def configure(settings_file=None):
     """서버 settings.yaml을 한 번 읽어 모듈 값(경로·접속)을 채운다 — 문제 목록(빈 목록이면 통과). 값은 찍지 않는다."""
     global TEST, PROG, DOCSPACE, DOCFLOW, WARM, MCP_JOBS_DIR, WARM_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA
-    global DOCKER
+    global DOCKER, PIPE_C
     doc, err = read_settings(settings_file)
     if err:
         return [err]
@@ -185,6 +187,11 @@ def configure(settings_file=None):
     DOCKER = _yget(doc, "common.host.docker") or (
         "podman" if shutil.which("podman") else "docker"
     )  # op-10 — 셸 스크립트와 같은 순서(env 대신 설정)
+    inst = _yget(doc, "common.host.instance") or ""
+    if not re.fullmatch(r"([a-z0-9][a-z0-9-]*)?", str(inst)):
+        return ["ops.host.instance는 영소문자·숫자·-만(앞은 글자·숫자)"]
+    # 여러 벌(op-15) — dc.sh가 띄운 이 루트의 컨테이너(settings_env.sh NAME_SUFFIX와 같은 규칙)
+    PIPE_C = "data-pipeline" + (f"-{inst}" if inst else "")
     jobs = _yget(doc, "mcp.host.jobs_dir")
     MCP_JOBS_DIR = Path(jobs) if jobs else DOCSPACE / "_mcp_parse" / "jobs"
     rdb = _yget(doc, "common.connections.rdb")  # 조회만 — 읽기 계정(사용자 10-29 ops.md#op-03)
@@ -211,19 +218,17 @@ def _edw_connect():
 # 11-02 — 시작 때 코드 배치 확인(code_layout_problems·CODE_MARKER·PATCH_CODE)은 운영 마지막 버전에 없어 지움(사용자 규칙).
 # S6b(D-020, 사용자 10-27) — 파이프라인 이미지가 하나(data-pipeline)로 합쳐지고 상주 컨테이너 이름이 바뀜(옛 data-parsing·data-structure).
 # 11-03(사용자) — 상주 컨테이너 둘(data-pipeline-parse·data-pipeline-structure)을 하나로 합침: warm·파싱·게시·구조화·정리 모두 이 안에서 docker exec.
-PIPE_C = "data-pipeline"  # docker exec 대상(compose.pipeline.yml 상주 서비스)
+PIPE_C = "data-pipeline"  # docker exec 대상(compose.pipeline.yml 상주 서비스) — configure()가 ops.host.instance를 붙임
 
 # S9 Step A(VS8b U-1, 사용자 10-28) — 컨테이너 안 앱이 읽는 설정 칸(옛 env 이름)은 명령 인자 `--set 이름=값`으로 준다(common.config.setarg —
 # 그 python이 덮기 파일로 자기와 자식에게 넘김). 전에는 `bash -c 'X=값 python …'` env로 줬는데 S7e2부터 앱이 env의 옛 이름을 읽지 않아
 # 문서별 결과 폴더(PIPE_OUT_ROOT 등)·동시 수·후보정·CPU 게이트가 효과가 없었다. 비밀 칸은 --set이 거부한다(명령 줄은 ps·로그에 남음).
 EMBED_SET = ("EMBED_CONCURRENCY=6", "EMBED_BATCH=32", "BM25_THREADS=3")
 PARSE_SET = (
-    "VLM_GLOBAL_CONCURRENCY=8",
+    "VLM_MAX_CONCURRENCY=8",  # 11-04 VLM 통일 — 옛 VLM_GLOBAL_CONCURRENCY(전역 합) · FIGURES_VLM_PARALLEL(그림)은 VLM_CONCURRENCY 하나로
     "VLM_CONCURRENCY=8",
-    "FIGURES_VLM_PARALLEL=8",
     "VLM_FIGURES_MAX=10",
     "PARSE_POST=supsub,charts,figures,context,attachments",
-    "OCR_DPI=120",
     "RAPIDOCR_PAGE_WORKERS=2",
     "OCR_THREADS=1",
     "PIPE_PROCS=4",
@@ -250,15 +255,7 @@ def warm_cmd(seq):
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && mkdir -p {o}/_warm && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
-        f"python -m pipeline.extract.source{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {_inside(seq, 'batch.csv')}'"
-    )
-
-
-def perf_cmd(hours, docker=None):
-    """DB 성능 기록(applog.pipe_event) 분석 — 상주 컨테이너 안 pipeline.tools.perf(읽기 전용). 호스트 python은 DB·common을 못 쓰므로 컨테이너가 읽는다."""
-    return (
-        f"{docker or DOCKER} exec {PIPE_C} bash -c 'cd {_app()} && "
-        f"PYTHONPATH={_img('code_root')} {LIB_ENV} python -m pipeline.tools.perf --since {float(hours):g}'"
+        f"python -m pipeline.extract.fetch_docs{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {_inside(seq, 'batch.csv')}'"
     )
 
 
@@ -271,12 +268,10 @@ def parse_cmd(seq, chan, scan, gate):
     # light는 기본 8 유지(그림 거의 없음) · 스캔 PDF에만 vlm_page(40쪽 캡).
     heavy_on = (
         (
-            "VLM_GLOBAL_CONCURRENCY=6",
+            "VLM_MAX_CONCURRENCY=6",
             "VLM_CONCURRENCY=6",
-            "FIGURES_VLM_PARALLEL=6",
             "PARSE_POST=supsub,charts,figures,context,attachments,vlm_page",
             "VLM_PAGE_MAX=",
-            "VLM_PAGE_SLOW=45",
         )
         if chan == "vlm"
         else ()
@@ -482,7 +477,7 @@ def apply_policy(vals):
 
 def stack_check():
     """엔진 구성 파일 확인 — 시작 때 한 번(파싱 컨테이너 안 show-stack — 파일을 못 읽거나 모양이 틀리면 종료 2, 시작하지 않음).
-    없는 엔진은 파싱 입구가 거부한다(stackcfg.resolve)."""
+    없는 엔진은 파싱 입구가 거부한다(engine_stack.resolve)."""
     rc, _, err = sh(
         f"{DOCKER} exec {PIPE_C} bash -c 'cd {_app()} && PYTHONPATH={_img('code_root')} python -m pipeline.cli show-stack'", timeout=120
     )
@@ -608,50 +603,33 @@ def _class_save(cache):
 
 
 def classify_doc(seq, row, cache=None):
-    """OCR 필요도 사전 분류(2026-10-22 사용자 지정, 2026-10-23 확장) —
-    · 텍스트형(txt/html/eml 등): 즉시 light
-    · PDF: 첫 3쪽 텍스트 레이어 평균 300자 → 스캔 판정(heavy)
-    · 오피스 zip(docx/xlsx/xlsm/pptx 등): 내장 media ≥ 8개 또는 ≥ 800KB → heavy(이미지 많은 docx 사용자 지적)
-    · probe 결과 마지막 줄만 판독(fitz 경고 오염 방지) · 실패는 보수적 heavy · 캐시(s3_key) 우선 — 캐시에 있으면 probe(docker exec)를 안 부름.
-    캐시는 레인만 담는다: PDF의 vlm은 probe heavy일 때뿐이라 캐시의 PDF vlm = 스캔(_scan)으로 되살린다."""
+    """레인 분류(PRD rn-01) — 규칙은 컨테이너 안 pipeline/extract/doc_parsing_group.py의 doc_parsing_group() 하나.
+    캐시(s3_key) 우선 — 캐시에 있으면 docker exec를 안 부른다. 답(마지막 줄 — pymupdf 경고 섞임 방지)이 없으면 보수적으로 vlm.
+    PDF의 vlm은 내용 검사 heavy(스캔)일 때뿐이라 PDF vlm = 스캔(_scan) 표시(캐시에서 되살릴 때도 같음)."""
     import pathlib
 
-    t_c = time.time()  # 소요 기록(pl-op01 — 이슈 #117): 분류 전체 · probe(컨테이너 호출)만
-    probe_sec = 0.0
-    ext = pathlib.Path(row["original_filename"].rsplit("/", 1)[-1]).suffix.lower()
+    t_c = time.time()  # 소요 기록(pl-op01 — 이슈 #117): 분류 전체 · probe_sec = 컨테이너 호출만
+    name = _doc_name(row)
+    is_pdf = pathlib.Path(name).suffix.lower() == ".pdf"
     if cache is not None:
         with _class_lock:
             hit = cache.get(row["s3_key"])
         if hit:
-            if ext == ".pdf" and hit == "vlm":
+            if is_pdf and hit == "vlm":
                 _scan.add(seq)
             _class[seq] = hit
             mark(seq, "classify", doc=_doc_name(row), ocr=hit, cached=True, sec=round(time.time() - t_c, 2))
             return hit
-    probe_ext = (".pdf", ".docx", ".doc", ".xlsx", ".xls", ".xlsm", ".pptx", ".ppt", ".docm")
-    # 2026-10-23 3클래스(사용자 지정) — vlm(GPU집중: 스캔/미디어/pptx) · medium(CPU집중: probe light + 크기 초과) · light
-    meta_heavy_kb = {".mht": 300, ".docx": 300, ".doc": 300, ".xlsx": 500, ".xlsm": 500, ".xls": 500, ".pdf": 1024}
-    size_kb = (row.get("file_size") or 0) // 1024
-    meta_heavy = ext in (".pptx", ".ppt") or size_kb >= meta_heavy_kb.get(ext, 1 << 30)
-    # pl-45 — 글자 형식(.tsv·.md·.json·.xml·.log·.rtf)도 light(그림 없음). 오픈문서·서식 파일은 아직 모르는 형식(vlm)
-    if ext in (".txt", ".hwpx", ".hwp", ".csv", ".eml", ".msg", ".html", ".htm", ".tsv", ".md", ".json", ".xml", ".log", ".rtf"):
-        cls = "light"
-    elif ext in probe_ext:
-        t_p = time.time()
-        rc, out, _ = sh(
-            f"{DOCKER} exec -e PYTHONPATH={_img('code_root')} {PIPE_C} python3 {_img('code_root')}/pipeline/extract/docflow_probe.py "
-            f"{_img('output_root')}/_warm/{_warm_bin(row)} {shlex.quote(_doc_name(row))}",  # 문서 이름 = pipe_event.doc_id(이슈 #117)
-            timeout=60,
-        )
-        probe_sec = time.time() - t_p
-        probe = next((ln.strip() for ln in reversed((out or "").splitlines()) if ln.strip() in ("heavy", "light")), "heavy")
-        if ext == ".pdf" and probe == "heavy":
-            _scan.add(seq)  # 2026-10-23 — OCR 대체가 필요한 스캔 PDF 표시
-        cls = "vlm" if (probe == "heavy" or ext in (".pptx", ".ppt")) else ("medium" if meta_heavy else "light")
-    else:
-        cls = (
-            "vlm"  # 모르는 형식 — 보수적으로 vlm(예산 캡 안에서 처리)                                     # 모르는 형식 — 보수적으로 heavy
-        )
+    t_p = time.time()
+    rc, out, _ = sh(  # PYTHONPATH = 코드 폴더 — 그러면 그룹 판별 1건이 extract.classify 행으로 남는다(이슈 #117, doc_id = name)
+        f"{DOCKER} exec -e PYTHONPATH={_img('code_root')} {PIPE_C} python3 {_img('code_root')}/pipeline/extract/doc_parsing_group.py "
+        f"{_img('output_root')}/_warm/{_warm_bin(row)} {shlex.quote(name)} {int(row.get('file_size') or 0)}",
+        timeout=60,
+    )
+    probe_sec = time.time() - t_p
+    cls = next((ln.strip() for ln in reversed((out or "").splitlines()) if ln.strip() in LANES), "vlm")
+    if is_pdf and cls == "vlm":
+        _scan.add(seq)  # OCR 대체가 필요한 스캔 PDF 표시
     if cache is not None:
         with _class_lock:
             cls = cache.setdefault(row["s3_key"], cls)  # 다른 워커가 먼저 넣었으면 그 값(옛 동작과 같음)
@@ -756,7 +734,7 @@ def _sweep_orphan(seq):
 def parse_one(seq, row):
     """문서 1개 파싱 — 공유 상주 컨테이너(PIPE_C) 안에서 워커별 분리(경로 격리).
     PIPE_OUT_ROOT + DOC_DIR_PREPARED로 문서별 출력 루트 분리(pipeline이 두 env를 지원).
-    문서당 VLM 6·OCR 쪽 2(쓰레드 1)·vlm_page off·OCR_DPI=120."""
+    문서당 VLM 8(vlm 레인 6)·OCR 쪽 2(쓰레드 1)·vlm_page off(vlm 레인만 켬) · 쪽 해상도는 settings.yaml extract.ocr.dpi(11-04 — OCR_DPI=120 덮기 지움)."""
     d = DOCFLOW / f"{seq}"
     d.mkdir(parents=True, exist_ok=True)
     write_doc_csv(row, d / "batch.csv")

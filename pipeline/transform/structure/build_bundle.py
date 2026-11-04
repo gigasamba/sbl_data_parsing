@@ -41,8 +41,8 @@ from common.store import master  # pl-38 — 마스터 표 해시(묶음 meta.js
 from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
 from pipeline.shared import runtrace  # op-01 run.progress
 from pipeline.transform.structure import chunking as S  # 청킹·개체 정규식(구조화 모듈)
-from pipeline.transform.structure import facts as AG  # 제품 코드(PRODUCT_CODE_RE — 용어 draft)
-from pipeline.transform.structure import terms as ST  # name_hits·seed_roster(구조화 전용, 10-16 분리)
+from pipeline.transform.structure import client_roster as ST  # name_hits·seed_roster(구조화 전용, 10-16 분리)
+from pipeline.transform.structure import product_codes as AG  # 제품 코드(PRODUCT_CODE_RE — 용어 draft)
 
 
 def pick_engine(doc, dd, sel, route):
@@ -237,7 +237,7 @@ def infer_clients(docs, head=400, roster=None):
     (2) 그래도 clients가 비면 제품 코드 접두어(MRH-MAB-01 → MRH)를 다른 문서에서 그 고객과 함께 나온 것으로
     배워 채움(client_src='product') — 그대로, clients에도 반영.
     알려진 고객 = 교차 확인된 고객 + 고객 명부(roster, 기본 T._aliases() — stack.json client_aliases·CLIENT_ROSTER·
-    GLOSSARY_DIR org_client) + 주요 바이오·제약사 공개 이름 seed(pipeline.transform.structure.terms.seed_roster())
+    GLOSSARY_DIR org_client) + 주요 바이오·제약사 공개 이름 seed(pipeline.transform.structure.client_roster.seed_roster())
     합집합 — roster를 명시하면(옛 호출자·시험) seed는 안 더함(바이트 동일).
     ponytail: 알려진 고객 수 × 문서 전체 길이 스캔(O(roster×len(text))) — 명부가 아주 커지면 아호코라식 등으로."""
     if roster is None:

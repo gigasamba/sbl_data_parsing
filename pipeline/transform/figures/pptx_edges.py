@@ -81,7 +81,7 @@ def _in_rect(x, y, l, t, w, h):  # noqa: E741 — 좌·위·폭·높이(pptx 도
 def picture_arrow_edges(s, exclude_ids=()):
     """F10 — stCxn/endCxn 앵커 없는 자유 배치 connector(화살표/선)가 그림(shape_type 13) 위 한 점을 가리키는
     경우만 뽑는다: 한쪽 끝이 그림 사각형 안, 반대쪽 끝은 밖 — 밖쪽 끝에 겹치는 글상자 글자가 있으면 "from"으로.
-    pptx_edges()·figures.py 공용(계산은 여기 한 곳에만 둔다). "to"는 그림 순번(그 슬라이드 내 picture shape
+    pptx_edges()·figure_extract.py 공용(계산은 여기 한 곳에만 둔다). "to"는 그림 순번(그 슬라이드 내 picture shape
     순서, figures.py의 pics 열거와 같은 기준) — 그림마다 image_id가 따로 있어 실제 image_id는 호출 쪽이 안다."""
     pics = [sh for sh in s.shapes if sh.shape_type == 13]  # MSO_SHAPE_TYPE.PICTURE
     if not pics:

@@ -13,6 +13,7 @@
 - 어느 이미지에서나: `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`.
 - 서버 배치: 루트 폴더 하나(서버 아무 자리 — 예 `/home/dev/`) 아래 `settings.yaml`·`edw_chain.yaml`·코드 폴더 `sbl_data_parsing-<판>/`·이미지 폴더 `sbl_images-main/`·결과 폴더 `output/`·`backup/`. 루트 = 코드 폴더의 부모 — 호스트 스크립트가 자기 자리에서 구한다(README §5). 판마다 새 루트를 만든다([release-and-patch §1-1](release-and-patch.md#1-1-개발-서버--새-루트로-코드-바꾸기)).
 - 개발 서버는 실행 이미지(`*-runtime`)에 코드 폴더를 `/app/deploy`에 읽기 전용으로 붙인다 — `dc.sh`·`mcp_up.sh`가 자기 코드 폴더를 `CODE_DIR`로 잡는다(셸에 `CODE_DIR`가 있으면 그 값). 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 운영 서버는 코드가 든 이미지(`bake.sh`)를 쓴다.
+- 서버로 옮기기: 처음 설치(PC → 개발 서버)는 [README §5-0 서버 설치 순서](../../README.md#서버-설치-순서), 코드만 바꿀 때는 [release-and-patch §1-1](release-and-patch.md#1-1-개발-서버--새-루트로-코드-바꾸기), 개발 서버 → 운영(수집) 서버는 [release-and-patch §1-2](release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)(`bake.sh` → `load.sh` → `dc.sh`). 컨테이너는 compose를 직접 부르지 않고 `dc.sh`로 다룬다.
 - 명령은 모두 코드 폴더(`cd <루트>/sbl_data_parsing-<판>`)에서, root 셸에서 실행한다.
 - 컨테이너 상태: 서버 전체는 `podman ps`·`docker ps`(root로 띄웠으면 `sudo podman ps`), 우리 묶음만은 `bash deploy/host/scripts/dc.sh ps`.
 
@@ -27,17 +28,34 @@ bash deploy/host/scripts/dc.sh init --group <운영 그룹>   # 루트의 output
 
 ### 1-1. 값 바꾸기
 - 앱 설정은 `settings.yaml`을 직접 고치고 `dc.sh up -d --force-recreate <서비스>`.
-- **한 번만 다른 값은 `--set 이름=값`** — 받는 진입점: `pipeline.cli`·`pipeline.extract.source`·`pipeline.stackcfg`·`build_bundle`·`pgvector_load`·`publish_parse_result`. 예: `$DOCKER exec data-pipeline python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 옛 env 이름(`python -m common.config.sample --where`). 모르는 이름·호스트 칸·비밀 칸은 종료 2.
+- **한 번만 다른 값은 `--set 이름=값`** — 받는 진입점: `pipeline.cli`·`pipeline.extract.fetch_docs`·`pipeline.engine_stack`·`build_bundle`·`pgvector_load`·`publish_parse_result`. 예: `$DOCKER exec data-pipeline python -m pipeline.cli --set PIPE_PROCS=2 parse …`. 이름은 옛 env 이름(`python -m common.config.sample --where`). 모르는 이름·호스트 칸·비밀 칸은 종료 2.
 - 셸·compose·`docker exec -e`로 준 옛 env 이름은 효과가 없다(시작 때 이름만 경고). 셸 env로 덮을 수 있는 것은 compose 치환 값(이미지 태그·자원·포트·호스트 경로)뿐이다.
 - 오버레이 설정 파일 도구 `python -m common.config.overrides`는 PC 전용이다(서버는 종료 2).
 
 ### 1-2. 기동 확인
 README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash deploy/host/scripts/dc.sh check`(기대 마지막 줄 `[dc check] 통과 — 6개`).
 
+### 1-3. 한 서버에 여러 벌 띄우기(개발자별)
+루트 하나가 한 벌이다. 개발자마다 루트를 따로 만들고(코드 zip을 풀고 `dc.sh init`), 그 루트의 `settings.yaml`에 아래를 **벌마다 다르게** 적는다.
+
+| 칸 | 하는 일 | 예(홍 개발자) |
+|---|---|---|
+| `ops.host.instance` | 컨테이너 이름·compose 묶음·systemd 타이머 이름 끝에 `-<이름>`을 붙인다(영소문자·숫자·`-`). 비우면 한 벌 — 이름 그대로 | `hong` → `data-pipeline-hong`·`data-pipeline-mcp-hong`·`mcp-server-hong`, 타이머 `data-pipeline-nightly-hong.timer` |
+| `search.server.port` | 검색 MCP 포트 | `8775` |
+| `ops.services.parse_mcp.port` | parse_document 작업 서비스 포트 | `8776` |
+| `search.parse_proxy.url` | 검색 MCP가 부르는 작업 서비스 주소 — 위 포트와 같게 | `http://127.0.0.1:8776` |
+| `required.pg.db_schema` | 검색 DB 스키마(벌마다 따로 적재) | `sbl_hong` |
+
+- 컨테이너는 모두 호스트 네트워크라 포트가 겹치면 뒤에 띄운 쪽이 시작하지 못한다.
+- 명령은 그 루트의 코드 폴더에서 `dc.sh`로만 한다 — `dc.sh`·`mcp_up.sh`·`trigger.sh`·`run_tool.sh`·`run_docs.py`가 `ops.host.instance`를 읽어 자기 벌의 컨테이너만 다룬다. compose를 직접 부르면 이름·포트 값이 채워지지 않는다.
+- 자동 실행(`dc.sh timers`)도 벌마다 따로 켜진다. 개발자 벌은 새벽 배치가 필요 없으면 `systemctl disable --now data-pipeline-nightly-<이름>.timer`.
+- CPU·메모리 상한(§README 5-0 "자원")은 서버 전체 합계를 보고 벌마다 줄인다.
+
 ## 2. 일상 실행 — run_docs(문서별 흐름)
 
 서버 입구는 `run_docs.py` 하나다 — 문서마다 파싱 → publish(Object Storage + EDW) → 원본 삭제 → 구조화·적재를 상주 컨테이너 안에서 `exec`로 돌린다(PRD [pl-24](../prd/ops.md#pl-24)). 자리·설정: [release-and-patch §5-4](release-and-patch.md#5-4-run_docspy-자리와-설정).
 - 원본(`_warm/*.bin`·`_docflow/<seq>/_source_files`)은 **publish가 성공한 뒤에만** 지운다. 파싱·publish가 실패한 문서는 원본이 남고 `batch_progress/progress.log`에만 적힌다(EDW에 안 씀 — 다음 `--skip-done` 실행이 다시 고름). 구조화·적재가 실패하면 publish한 결과·EDW 행은 그대로이고 로그에만 적힌다.
+- **게시·EDW 설정**(settings.yaml `required` — 빠지면 run_docs가 칸 이름을 찍고 종료 2): 게시 위치 `required.publish.bucket`·`prefix`, Object Storage 접속 `required.object_storage.endpoint`·`access_key`·`secret_key`(`region` 비우면 `us-east-1`, `verify_tls` 비우면 검증 켬 — 사내 CA면 CA 파일 경로), EDW 접속 `required.edw.host`·`database`·`read_*`·`write_*`(`port` 비우면 1433), 게시 표 `required.edw.parsing_meta_table`(비우면 `AI.ParsingMeta`). `required.edw.sqlite`는 PC 전용이라 서버에서는 비운다.
 - **종료 코드**(PRD [pl-18](../prd/ops.md#pl-18)): `0` 대상 0건·모두 끝 · `1` 실패 문서가 하나라도 · `75` 마감(`--deadline`) 도달(실패 없음) 또는 다른 run_docs가 도는 중 · `2` 설정 문제. 실패와 마감이 함께면 `1`. 새벽 배치 unit은 `75`를 성공으로 친다.
 - **겹침 잠금:** run_docs는 `batch_progress/run_docs.lock`을 `flock`으로 잡는다 — 새벽 배치와 사람이 직접 돌린 run_docs가 함께 돌지 않는다(뒤에 온 쪽이 75). 죽으면 잠금은 저절로 풀린다. 작업 폴더(`ops.pipeline_host.run_docs_dir`)가 같아야 같은 잠금이다.
 - 파싱·게시만 따로:
@@ -48,7 +66,7 @@ bash deploy/host/scripts/trigger.sh publish                    # 대표 결과 O
 ```
 - 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock` 때문에 뒤쪽이 종료 75.
 - 도구만 따로: `bash deploy/host/scripts/run_tool.sh <rdb_discover|check_env|ping_models|migrate|show-stack|check> [인자]`.
-- 우선순위 낮추기(`extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 같은 세션·autogroup 안에서만 효과가 있다. 컨테이너끼리는 CPU 나눔 비율(`parse_mcp_cpu_shares` 4096 대 일괄 1024)이 정한다.
+- 우선순위 낮추기(`tuning.extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 같은 세션·autogroup 안에서만 효과가 있다. 컨테이너끼리는 CPU 나눔 비율(`parse_mcp_cpu_shares` 4096 대 일괄 1024)이 정한다.
 
 ### 2-1. 검색 MCP는 늘 켜 둠
 `bash deploy/host/scripts/mcp_up.sh` + keepalive 타이머 — README §5-5.
@@ -127,10 +145,10 @@ MCP 토큰은 settings.yaml `required.tokens.mcp`, 모델은 `required.models.ll
 #### 고객 마스터에서 명부 만들기
 SFDC·EDW 내보내기에서 명부를 만든다. 열 이름만 매핑 파일에 적는다(예제: `resources/vocab/glossary/client_master.example.csv` + `client_master_map.example.json`). 매핑 키 = 명부 칸: `name`(필수 → `canonical_name`) · `aliases`(`;`·`|`) · `client_id`·`name_ko`·`client_type`·`segment`·`country`·`parent_client_id`·`status`·`description`·`updated`(선택). 열 이름은 영문·숫자·`_`만. 같은 고객 여러 줄은 하나로 합친다(별칭은 합치고 다른 칸은 처음 값).
 ```bash
-PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --kind client \
+PYTHONPATH=. python -m pipeline.transform.structure.roster_from_edw --kind client \
   --source csv:<루트>/client_master.csv --mapping <루트>/client_master_map.json \
   --out <루트>/client_roster.csv          # EDW 표에서 바로: --source rdb:<스키마.표>(읽기 계정)
-PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --check <루트>/client_roster.csv   # 오류 0 확인 후 반영
+PYTHONPATH=. python -m pipeline.transform.structure.roster_from_edw --check <루트>/client_roster.csv   # 오류 0 확인 후 반영
 ```
 
 #### 용어집 `domain_terms.csv`
@@ -154,7 +172,7 @@ PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --check <루트>/
 
 #### 점검(반영 전)
 ```bash
-PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --check <명부 파일>      # 오류 0이어야 함
+PYTHONPATH=. python -m pipeline.transform.structure.roster_from_edw --check <명부 파일>      # 오류 0이어야 함
 PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load_glossary(sys.argv[1]); print(len(g), '개념 반영', sorted(g)[:5])" <용어집 폴더>   # 오류면 여기서 멈춤
 ```
 
@@ -170,7 +188,7 @@ PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load
 | 파싱이 종료 4 | 서버에서 EDW `AI.ParsingMeta`를 못 읽음(전체 재파싱을 막으려고 멈춤) | `required.edw`(주소·읽기 계정)·EDW 연결 확인 |
 | 구조화·적재가 "인계 형식(핑거프린트) 다름"으로 거부 | 핑거프린트가 바뀐 옛 파싱 결과 | 그 문서를 다시 파싱 |
 | 같은 결과 폴더에서 종료 75 | 다른 실행이 `.pipeline.lock`을 잡고 있음 | 끝날 때까지 기다리거나 다음 트리거에서 재시도 |
-| 메모리 터짐(OOM), 큰 스캔 PDF | 쪽 이미지를 한꺼번에 올림 | `extract.ocr.dpi` 낮추기(150)·`extract.ocr.max_pages`·`extract.max_file_mb`·컨테이너 메모리 상한 확인 |
+| 메모리 터짐(OOM), 큰 스캔 PDF | 쪽 이미지를 한꺼번에 올림 | `extract.ocr.dpi`(기본 150 — 더 낮추면 VLM 글 품질을 먼저 확인)·VLM 쪽 상한 `transform.vlm.page_max`·OCR 엔진 쪽 상한 `extract.ocr.max_pages`·`extract.max_file_mb`·컨테이너 메모리 상한 확인 |
 | CPU 폭주 | 컨테이너가 호스트 전체 코어로 스레드를 늘림 | `ops.runtime.pipe_procs`는 `auto`(cgroup 한도 기준), 컨테이너 CPU 상한 지정 |
 | MCP `/health` 503 | 기동 직후 예열 중 | 잠시 뒤 재시도 |
 | MCP 401 | 호출 쪽 토큰이 없거나 `required.tokens.mcp`와 다름 | 호출 쪽 `Authorization: Bearer <토큰>`을 서버 값과 같게 |

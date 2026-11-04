@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from common.config.settings import COMMON
-from pipeline.load import classify as CL
+from pipeline.load import doc_classify as CL
 
 ANSWERS = [  # (원천, 응답 글자, 기대 라벨)
     ("sfdc", '{"class": "Proposal", "confidence": 0.9}', "Proposal"),
@@ -206,7 +206,7 @@ def test_load_labels_and_skips_failed():
             with (
                 patch.object(CL, "_system", lambda src: "system"),
                 patch("common.ai.llm.chat", lambda m, **k: seen.append(m[-1]["content"]) or chat(m, **k)),
-                patch("pipeline.load.edw_meta.fetch", return_value=(edw, 1)),
+                patch("pipeline.load.edw_doc_meta.fetch", return_value=(edw, 1)),
             ):
                 counts = M.load(db, bundle(["SFDC/u/rfp.pdf", "SFDC/u/bad.pdf"]))
                 r0 = sf.q(f"SELECT client_edw, attrs FROM {S}_sfdc.doc")[0]

@@ -136,7 +136,7 @@ CONTRACT_FUNCS = {
 }
 SAME_NAME_OK = {
     ("common/core/meaning.py", "tokens"),
-    ("etl/transform/represent/parse_qa.py", "norm"),
+    ("etl/transform/represent/parse_scoring.py", "norm"),
 }  # 이름만 같고 다른 규칙(파싱 채점의 유의미 토큰·공백 보존 정규화)
 # 단계 4 — 옛 ALLOW의 "tools"(tools/engines·tools/parse_agent_tools) 예외 전부 삭제: 그 코드가 parse/engines·
 # parse/agent/agent_tools.py로 옮겨 parse 영역 **안**이 되어 더 이상 경계 위반이 아님(ALLOW 자체가 필요 없어짐).
@@ -145,9 +145,7 @@ ALLOW: set = set()
 # ⑫ 단계 방향(CLAUDE.md §1 — pipeline 안 extract → transform → load, 거꾸로 import 금지 · 11-03 사용자: 리뷰에만 맡기지 않고 자동 점검).
 #   함수 안 늦은 import도 셈. STAGE_ALLOW = 지금 있는 예외(파일, 가져오는 단계) — 엔진 파일은 바이트를 바꾸면 엔진 지문이 바뀌어(등급 A) 옮기지 않고 적어 둔다.
 STAGES = ("extract", "transform", "load")
-STAGE_ALLOW = {
-    ("etl/extract/engines/qwen_vlm/parser.py", "transform")
-}  # 쪽 VLM 문턱(vgate) — 옮기면 엔진 지문이 바뀜(0.3.0 지문 배치 때 pipeline/shared로)
+STAGE_ALLOW: set = set()  # 11-04 — 엔진 qwen_vlm의 VLM 게이트 import는 pipeline/shared/vlmcall.py로 옮겨 예외 없음
 AGENT_KWARG_EXEMPT = {"common/check/checker.py"}  # 연결 확인(ping) — 업무 프롬프트가 없음(GA2 ⑧)
 
 

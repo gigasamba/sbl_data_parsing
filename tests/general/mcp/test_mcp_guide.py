@@ -65,5 +65,5 @@ def test_extensions_match_code():
     want_search = sorted({".pdf" if k.startswith(".pdf_") else k for k in stack})
     assert _exts("**검색 대상") == want_search, (_exts("**검색 대상"), want_search)
     with patch("sys.argv", ["x"]):
-        from pipeline.mcp_parse_service import allowed_exts
+        from pipeline.parse_service import allowed_exts
     assert _exts("**`parse_document`가 받는 형식**") == sorted(allowed_exts())

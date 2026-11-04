@@ -72,7 +72,7 @@ def selftest():
         assert target_slides(pptx_path) == {1, 2}  # AD20 후속 — pptx_slide_vlm이 실제로 부른 슬라이드와 같은 집합
 
         with pc.PIPE.env(PARSE_PPTX_RENDER_MAX="1"):
-            assert target_slides(pptx_path) == {1}  # 상한 1 — figures.py 중복 방지도 1쪽만 봄
+            assert target_slides(pptx_path) == {1}  # 상한 1 — figure_extract.py 중복 방지도 1쪽만 봄
             got2 = pptx_slide_vlm(pptx_path)
             assert [n for n, _, _pv in got2] == [1], got2  # 상한 1 — 2쪽은 안 부름
     finally:

@@ -18,7 +18,7 @@
 
 ## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌)
 
-판: `common/store/db/migrations/versions/0001_search_base.py` … `0005_doc_attrs.py` · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_META`·`ATTRS`·`LOAD_ATTRS`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`·`deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인 `pipeline/load/edw_meta.py`.
+판: `common/store/db/migrations/versions/0001_search_base.py` … `0005_doc_attrs.py` · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_META`·`ATTRS`·`LOAD_ATTRS`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`·`deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인 `pipeline/load/edw_doc_meta.py`.
 
 - **스키마 배치:** 기준 스키마 `<PG_SCHEMA>`(예 `ai`)에는 판 표 `alembic_version`과 공용 시퀀스 `doc_id_seq`만. 원천 스키마 `<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`에 아래 표 다섯 개와 뷰 `v_chunk_source`가 같은 꼴로 있다(원천 전용 칸은 `faq.chunk.faq_group`뿐 — 그 밖의 원천 메타는 `doc.attrs` 키).
 - 검색 MCP는 실행 중에 묶음 파일(`meta.json`·`docs.jsonl`·`chunks.jsonl`)을 읽지 않는다 — 임베딩 모델·문서 날짜는 `doc` 칸, 차원은 `chunk.embedding`의 `vector(n)`에서 읽는다.
@@ -122,7 +122,7 @@
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
-| id | (EDW) | 행 번호 — 증분 수집 기준 | EDW | extract/source `_rdb_rows`, run_docs `edw_list` | 유지 |
+| id | (EDW) | 행 번호 — 증분 수집 기준 | EDW | extract/fetch_docs `_rdb_rows`, run_docs `edw_list` | 유지 |
 | s3_key | (EDW) | 원본 전체 키 = 문서 키 | EDW | source `_rdb_rows`(매니페스트 `key`), run_docs | 유지 |
 | original_filename | (EDW) | 원본 파일 이름 | EDW | source, run_docs | 유지 |
 | file_size | (EDW) | 크기 | EDW | source, run_docs | 유지 |
@@ -154,34 +154,34 @@ PC 대역 EDW(`valid_env/edw/sfdc.sql`)에만 있는 **예시 칸**이다. 서�
 
 ### edw.ParsingMeta
 
-`AI.ParsingMeta` — 파싱 결과(silver) 게시 기록. 정의: `docs/operations/parsing_meta_mssql.sql`. 쓰는 곳: `pipeline/load/parsing_meta.py`(`plan`·`apply` — 행 만들기), `common/store/parsing_meta_db.py`(`insert_new` — INSERT, `set_loaded` — `loaded_at`·`gold_version` UPDATE). UPDATE는 이것뿐이다(`status` 바꾸기 없음). 무엇을 쓰는지는 [pl-25](../prd/load-schema.md#pl-25).
+`AI.ParsingMeta` — 파싱 결과(silver) 게시 기록. 정의: `docs/operations/parsing_meta_mssql.sql`. 쓰는 곳: `pipeline/load/silver_publish.py`(`plan`·`apply` — 행 만들기), `common/store/parsing_meta_db.py`(`insert_new` — INSERT, `set_loaded` — `loaded_at`·`gold_version` UPDATE). UPDATE는 이것뿐이다(`status` 바꾸기 없음). 무엇을 쓰는지는 [pl-25](../prd/load-schema.md#pl-25).
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
 | parse_meta_id | BIGINT IDENTITY PK | 행 번호 | DB | 없음(기본 키) | 유지 |
-| source_system | NVARCHAR(64) | 원천 | parsing_meta `plan` | parsing_meta_db 겹침 확인·`pick_rep`(원문 도구·`set_loaded` 행 고르기) | 유지 |
-| source_key | NVARCHAR(1024) | 원본 전체 경로 = `AI.FileStorageMap.s3_key` 값 = gold `doc.file_path`. 원본과의 연결 키는 `source_system` + 이 칸. 이름을 `s3_key`로 바꾼다(아래 `s3_key` 줄 — DB 담당자 DDL, C-76) | parsing_meta `plan` | 〃, run_docs `edw_done_keys`, mcp `fulltext` | 유지 |
+| source_system | NVARCHAR(64) | 원천 | silver_publish `plan` | parsing_meta_db 겹침 확인·`pick_rep`(원문 도구·`set_loaded` 행 고르기) | 유지 |
+| source_key | NVARCHAR(1024) | 원본 전체 경로 = `AI.FileStorageMap.s3_key` 값 = gold `doc.file_path`. 원본과의 연결 키는 `source_system` + 이 칸. 이름을 `s3_key`로 바꾼다(아래 `s3_key` 줄 — DB 담당자 DDL, C-76) | silver_publish `plan` | 〃, run_docs `edw_done_keys`, mcp `fulltext` | 유지 |
 | s3_key | NVARCHAR(1024) | 위 `source_key`의 새 이름 — DB 담당자가 이름을 바꾸면 계산 칸 `source_key_hash`·유일 색인 `UQ_ParsingMeta_key`도 다시 만든다(C-76). 코드는 연결할 때 `s3_key`가 있으면 그것, 없으면 `source_key`를 쓴다(`parsing_meta_db` `key_col`·run_docs) | (DDL 뒤 같은 곳) | (같은 곳) | 새로 |
 | source_uri | NVARCHAR(2048) | 원본 주소 | 〃 | 없음 | 삭제 |
 | original_filename | NVARCHAR(512) | 원본 파일 이름 | 〃 | 없음 | 삭제 |
 | file_format | NVARCHAR(32) | 형식 | 〃 | 없음 | 삭제 |
 | file_size | BIGINT | 크기 | 〃 | 없음 | 삭제 |
-| sha256 | NVARCHAR(64) | 원본 sha256 — 원문 도구 `doc_key`(입력·출력) · 같은 내용 묶기에 씀("파싱 정보만"의 예외) | parsing_meta `plan` | mcp `fulltext`(`list_doc_fulltext` `doc_key` 입력·출력) | 유지 |
-| rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | parsing_meta `plan` | mcp `fulltext`(`parsing_meta_db.rows_where`·`pick_rep` — 원문 도구가 부를 때 읽음) | 유지 |
-| rep_key | NVARCHAR(2048) | 대표 결과 폴더 | parsing_meta `apply` | 〃(목록 `rep_uri`·sfid 발급, 등록 시각 가드의 폴더 → 원본 찾기) | 유지 |
+| sha256 | NVARCHAR(64) | 원본 sha256 — 원문 도구 `doc_key`(입력·출력) · 같은 내용 묶기에 씀("파싱 정보만"의 예외) | silver_publish `plan` | mcp `fulltext`(`list_doc_fulltext` `doc_key` 입력·출력) | 유지 |
+| rep_bucket | NVARCHAR(256) | 대표 결과 버킷 | silver_publish `plan` | mcp `fulltext`(`parsing_meta_db.rows_where`·`pick_rep` — 원문 도구가 부를 때 읽음) | 유지 |
+| rep_key | NVARCHAR(2048) | 대표 결과 폴더 | silver_publish `apply` | 〃(목록 `rep_uri`·sfid 발급, 등록 시각 가드의 폴더 → 원본 찾기) | 유지 |
 | rep_etag | NVARCHAR(128) | 대표 결과 etag | 〃 | 없음 | 삭제 |
-| parse_status | NVARCHAR(32) | ok·partial | parsing_meta `plan` | run_docs `edw_done_keys` | 유지 |
+| parse_status | NVARCHAR(32) | ok·partial | silver_publish `plan` | run_docs `edw_done_keys` | 유지 |
 | status_reason | NVARCHAR(2000) | 상태 이유 | 〃 | 없음 | 삭제 |
-| rep_engine | NVARCHAR(128) | 대표 엔진(gold에도 두지 않음) | parsing_meta `plan` | 없음 | 삭제 |
+| rep_engine | NVARCHAR(128) | 대표 엔진(gold에도 두지 않음) | silver_publish `plan` | 없음 | 삭제 |
 | rep_acc | FLOAT | 대표 정확도 | 〃 | 없음 | 삭제 |
 | page_count | INT | 쪽 수 | 〃 | 없음 | 삭제 |
 | doc_key | NVARCHAR(64) | 원본 sha256(지금 유일한 필수 칸) | 〃 | 없음 | 삭제 |
-| parse_date | NVARCHAR(32) | 파싱 시각 글자(`YYYY-MM-DD_HHMMSS`) | parsing_meta `apply` | `pick_rep`(가장 늦은 행) | 유지 |
-| pipeline_version | NVARCHAR(64) | 이 행의 silver를 만든 코드 판(`VERSION` — `common.pipeline_version()`, 게시 때). 이름을 `silver_version`으로 바꾼다(아래 줄 — DB 담당자 DDL, C-76) | parsing_meta `plan` | (운영자·재처리 판정) | 유지 |
+| parse_date | NVARCHAR(32) | 파싱 시각 글자(`YYYY-MM-DD_HHMMSS`) | silver_publish `apply` | `pick_rep`(가장 늦은 행) | 유지 |
+| pipeline_version | NVARCHAR(64) | 이 행의 silver를 만든 코드 판(`VERSION` — `common.pipeline_version()`, 게시 때). 이름을 `silver_version`으로 바꾼다(아래 줄 — DB 담당자 DDL, C-76) | silver_publish `plan` | (운영자·재처리 판정) | 유지 |
 | silver_version | NVARCHAR(64) | 위 `pipeline_version`의 새 이름 — 이 행의 silver를 만든 코드 판. 코드는 연결할 때 `silver_version`이 있으면 그것, 없으면 `pipeline_version`에 쓴다(`parsing_meta_db.RENAMES`) | (DDL 뒤 같은 곳) | (같은 곳) | 새로 |
-| status | NVARCHAR(16) | 행 상태 — 게시는 늘 `active`로 쓴다(다른 값으로 바꾸는 코드는 없음, 운영이 바꾼 행은 읽음) | parsing_meta `plan` | `pick_rep`(`active` 중 `parse_date`가 가장 늦은 행, `active`가 없으면 전체 중 — `parse_status`는 안 봄) | 유지 |
-| status_at | NVARCHAR(32) | 상태 바뀐 때(UTC) — 게시는 비워 둔다 | parsing_meta `plan`(NULL) | 없음(SELECT 안 함 — 운영자가 봄) | 유지 |
-| engines_used | NVARCHAR(MAX) | 쓰인 엔진(JSON) — 목표: 성공한 엔진만(이름 + 판) | parsing_meta `plan` | 없음 | 유지 |
+| status | NVARCHAR(16) | 행 상태 — 게시는 늘 `active`로 쓴다(다른 값으로 바꾸는 코드는 없음, 운영이 바꾼 행은 읽음) | silver_publish `plan` | `pick_rep`(`active` 중 `parse_date`가 가장 늦은 행, `active`가 없으면 전체 중 — `parse_status`는 안 봄) | 유지 |
+| status_at | NVARCHAR(32) | 상태 바뀐 때(UTC) — 게시는 비워 둔다 | silver_publish `plan`(NULL) | 없음(SELECT 안 함 — 운영자가 봄) | 유지 |
+| engines_used | NVARCHAR(MAX) | 쓰인 엔진(JSON) — 목표: 성공한 엔진만(이름 + 판) | silver_publish `plan` | 없음 | 유지 |
 | engines_summary | NVARCHAR(512) | 엔진 한 줄 요약 | 〃 | 없음 | 삭제 |
 | parsed_at | DATETIME2(0) | 넣은 때(기본 SYSUTCDATETIME — UTC) | DB 기본값 | mcp `fulltext`(`list_doc_fulltext` `since`/`until`) | 유지 |
 | source_key_hash | BINARY(32) 계산 칸 | `source_key` sha256 — 유일 색인 키(1700바이트 상한 우회) | DB | 유일 색인 | 유지 |
@@ -363,10 +363,10 @@ MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. �
 | status | VARCHAR(16) CHECK | ok·error·denied·unauthorized·busy·timeout. `denied`는 권한 설계 전이라 아직 안 씀 | 〃 | 없음 | 새로 |
 | error_code | VARCHAR(64) | `tool_timeout`·`busy`·`invalid_key`·`tool_error`·`audit_queue_full` | 〃 | 없음 | 새로 |
 | error_message | TEXT | 오류 내용(비밀값 가림) | 〃 | 없음 | 새로 |
-| args | TEXT | 입력 JSON 앞부분(`search.audit.max_input_bytes`, 기본 16KB). 비밀값 가림. `content_b64`는 해시와 크기로 바꿈 | 〃 | 없음 | 새로 |
+| args | TEXT | 입력 JSON 앞부분(`tuning.search.audit.max_input_bytes`, 기본 16KB). 비밀값 가림. `content_b64`는 해시와 크기로 바꿈 | 〃 | 없음 | 새로 |
 | args_bytes | INTEGER | 입력 원본 크기 | 〃 | 없음 | 새로 |
 | args_truncated | BOOLEAN | 입력이 잘렸는지. 잘리면 JSON으로 안 읽힐 수 있음 | 〃 | 없음 | 새로 |
-| result | TEXT | 출력 JSON 앞부분(`search.audit.max_output_bytes`, 기본 64KB). 문서 본문·EDW 결과 포함 가능 | 〃 | 없음 | 새로 |
+| result | TEXT | 출력 JSON 앞부분(`tuning.search.audit.max_output_bytes`, 기본 64KB). 문서 본문·EDW 결과 포함 가능 | 〃 | 없음 | 새로 |
 | result_bytes | INTEGER | 출력 원본 크기 | 〃 | 없음 | 새로 |
 | result_truncated | BOOLEAN | 출력이 잘렸는지 | 〃 | 없음 | 새로 |
 | result_sha256 | CHAR(64) | 출력 원본 전체의 해시 | 〃 | 없음 | 새로 |
@@ -381,7 +381,7 @@ MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. �
 
 ### applog.pipe_run
 
-파이프라인 실행 1건당 1행. 기본 키 `run_id`. 색인: `started_at`. 시작할 때 `status=running`으로 쓰고 끝날 때 같은 `run_id`로 덮어쓴다(UPSERT — 이 표만). 강제 종료된 실행은 `running`으로 남는다. 쓰는 곳: `pipeline/shared/runtrace.py`. 읽는 곳: `pipeline/tools/perf.py`.
+파이프라인 실행 1건당 1행. 기본 키 `run_id`. 색인: `started_at`. 시작할 때 `status=running`으로 쓰고 끝날 때 같은 `run_id`로 덮어쓴다(UPSERT — 이 표만). 강제 종료된 실행은 `running`으로 남는다. 쓰는 곳: `pipeline/shared/runtrace.py`. 읽는 곳: `pipeline/tools/perf_report.py`.
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|
@@ -409,7 +409,7 @@ MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. �
 
 ### applog.pipe_event
 
-문서×단계 1건당 1행. 60초마다 남는 진행 상황도 `stage=run.progress`로 들어온다. 기본 키 `(id, ts_start)`. 색인: `ts_start`(BRIN) · `run_id` · `(stage, ts_start)`. `doc_id` 색인은 없다(보통 `run_id`로 먼저 좁힌다). 쓰는 곳: `common/core/span.py`(진행 상황은 `pipeline/shared/runtrace.py`). 읽는 곳: `pipeline/tools/perf.py`.
+문서×단계 1건당 1행. 60초마다 남는 진행 상황도 `stage=run.progress`로 들어온다. 기본 키 `(id, ts_start)`. 색인: `ts_start`(BRIN) · `run_id` · `(stage, ts_start)`. `doc_id` 색인은 없다(보통 `run_id`로 먼저 좁힌다). 쓰는 곳: `common/core/span.py`(진행 상황은 `pipeline/shared/runtrace.py`). 읽는 곳: `pipeline/tools/perf_report.py`.
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|

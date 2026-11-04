@@ -95,7 +95,7 @@ def ocr_threads():
 
 
 def ko_params():
-    """rapidocr 3.x 한국어 모델 설정 + OC1 스레드 상한 — rapidocr_ko 엔진과 prepare.py 방향 보정이 같이 씀."""
+    """rapidocr 3.x 한국어 모델 설정 + OC1 스레드 상한 — rapidocr_ko 엔진과 filter_and_rotate.py 방향 보정이 같이 씀."""
     from rapidocr import LangRec, ModelType, OCRVersion
     params = {"Rec.lang_type": LangRec.KOREAN, "Rec.ocr_version": OCRVersion.PPOCRV5, "Rec.model_type": ModelType.MOBILE}
     n = ocr_threads()

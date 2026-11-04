@@ -12,10 +12,12 @@ from tests.general.deploy.test_trigger_gate import _bash
 SCRIPT = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "dc.sh"
 BASE = ["compose.pipeline.yml", "compose.pipeline-mcp.yml", "compose.mcp-server.yml"]
 CODE = ["compose.code.yml", "compose.code.pipeline-mcp.yml", "compose.code.mcp-server.yml"]
-CASES = [  # (DATA_PIPELINE_IMAGE, CODE_DIR, 코드 덧씌우기?)
-    ("data-pipeline:0.2.0", "", False),  # 코드가 든 이미지(운영)
-    ("data-pipeline-runtime:0.2.0", "", True),  # 실행 이미지(개발) — 이 코드 폴더를 붙임
-    ("data-pipeline:0.2.0", "/srv/x/code", True),  # CODE_DIR를 주면 그 값
+CASES = [  # (DATA_PIPELINE_IMAGE, CODE_DIR, 코드 덧씌우기?, ops.host.instance, compose 묶음 이름 — 종료 코드 2면 None)
+    ("data-pipeline:0.2.0", "", False, "", "compose"),  # 코드가 든 이미지(운영) · 한 벌 — 묶음 이름은 compose 기본 그대로
+    ("data-pipeline-runtime:0.2.0", "", True, "", "compose"),  # 실행 이미지(개발) — 이 코드 폴더를 붙임
+    ("data-pipeline:0.2.0", "/srv/x/code", True, "", "compose"),  # CODE_DIR를 주면 그 값
+    ("data-pipeline:0.2.0", "", False, "hong", "compose-hong"),  # 여러 벌 — 묶음 이름 끝 -<instance>
+    ("data-pipeline:0.2.0", "", False, "Hong_1", None),  # 영소문자·숫자·-만 — 시작 거부
 ]
 
 
@@ -30,20 +32,24 @@ def test_dc_command():
         sf.write_text("required:\n  env: {run_env: dev}\n", encoding="utf-8")
         p = sf.resolve().as_posix()
         sp = f"/{p[0].lower()}{p[2:]}" if p[1:2] == ":" else p  # Git Bash(Windows)가 절대 경로로 보는 꼴
-        for image, code, overlay in CASES:
+        for image, code, overlay, inst, project in CASES:
             env = {  # env 남김 — 하위 프로세스(호스트 셸이 load_settings로 받는 이름 — 시험)
                 "PATH": os.environ.get("PATH", ""),
                 "SETTINGS_FILE": sp,
                 "SETTINGS_LOADED": sp,  # 이미 읽은 것으로 — host_env.py(PyYAML)를 부르지 않음
                 "DOCKER": "echo",
                 "DATA_PIPELINE_IMAGE": image,
+                "INSTANCE": inst,
             }
             if code:
                 env["CODE_DIR"] = code
             r = subprocess.run(
                 [bash, str(SCRIPT), "up", "-d", "mcp"], env=env, capture_output=True, text=True, encoding="utf-8", timeout=30
             )
+            if project is None:
+                assert r.returncode == 2 and "ops.host.instance" in r.stderr, (inst, r.returncode, r.stderr)
+                continue
             assert r.returncode == 0, (image, code, r.stderr)
             files = [w.rsplit("/", 1)[-1] for w in r.stdout.split() if w.endswith(".yml")]
-            assert r.stdout.split()[0] == "compose" and r.stdout.split()[-3:] == ["up", "-d", "mcp"], r.stdout
+            assert r.stdout.split()[:3] == ["compose", "-p", project] and r.stdout.split()[-3:] == ["up", "-d", "mcp"], r.stdout
             assert files == BASE + (CODE if overlay else []), (image, code, files)

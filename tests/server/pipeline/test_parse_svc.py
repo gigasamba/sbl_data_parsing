@@ -1,4 +1,4 @@
-"""pipeline.mcp_parse_service — 작업 자식 설정(10-29): 서비스 쪽당 제한·첫 시도 하한·보통 우선순위."""
+"""pipeline.parse_service — 작업 자식 설정(10-29): 서비스 쪽당 제한·첫 시도 하한·보통 우선순위."""
 
 from unittest import mock
 
@@ -6,7 +6,7 @@ from pipeline import config as pc
 
 
 def test_job_env_overrides():
-    from pipeline import mcp_parse_service as S
+    from pipeline import parse_service as S
 
     seen = {}
 
@@ -15,12 +15,12 @@ def test_job_env_overrides():
         return {"SETTINGS_FILE": "x"}
 
     S._JOB_ENVS.clear()
-    with pc.PIPE.env(PARSE_MCP_TEXT_PAGE_SEC="1", PARSE_MCP_VLM_PAGE_SEC="60", PARSE_MCP_WARMUP_SEC="20"):
+    with pc.PIPE.env(PARSE_MCP_TEXT_PAGE_SEC="1", PARSE_MCP_WARMUP_SEC="20"):
         with mock.patch.object(S, "settings_env", fake_env):
             S._job_env("supsub")
     S._JOB_ENVS.clear()
     assert seen["PARSE_LOW_PRIORITY"] == "0", seen  # 서비스 엔진 자식은 보통 우선순위(일괄 파싱보다 먼저)
-    assert float(seen["PARSE_TEXT_PAGE_SEC"]) == 1 and float(seen["PARSE_VLM_PAGE_SEC"]) == 60, seen
+    assert float(seen["PARSE_TEXT_PAGE_SEC"]) == 1 and "PARSE_VLM_PAGE_SEC" not in seen, seen  # VLM은 models.vlm.timeout 하나(11-04)
     assert float(seen["PARSE_WARMUP_SEC"]) == 20 and seen["PARSE_POST"] == "supsub", seen
 
 
@@ -33,7 +33,7 @@ def test_scan_pdf_note():
     import fitz
 
     from common.config.settings import COMMON
-    from pipeline import mcp_parse_service as S
+    from pipeline import parse_service as S
 
     # pdf_kind는 pdfium 문서를 닫지 않음(GC가 닫음) — Windows에서는 임시 폴더 지우기가 막힐 수 있어 정리 오류는 무시
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
@@ -68,7 +68,7 @@ def test_size_limit():
     from pathlib import Path
 
     from common.config.settings import COMMON
-    from pipeline import mcp_parse_service as S
+    from pipeline import parse_service as S
 
     mb = 1048576
     with tempfile.TemporaryDirectory() as td:

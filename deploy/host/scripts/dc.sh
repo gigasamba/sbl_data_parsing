@@ -102,7 +102,7 @@ dc_check() {
     case "$name" in selftest*) printf '%s\n' "$out" | grep -q '^\[판정\] 통과' || rc=1 ;; esac
     # run_tool.sh(image_vars.sh in_pipeline)는 상주 컨테이너가 안 떠 있으면 종료 코드 2와 "떠 있지 않음" 안내 — 띄우지 않고 그 안내로 멈춤
     if [ $rc -eq 2 ] && printf '%s\n' "$out" | grep -q '떠 있지 않음'; then
-      echo "[dc check] 실패 — $name: data-pipeline 컨테이너가 안 떠 있음 → dc.sh up -d data-pipeline"; return 1
+      echo "[dc check] 실패 — $name: data-pipeline$NAME_SUFFIX 컨테이너가 안 떠 있음 → dc.sh up -d data-pipeline"; return 1
     fi
     if [ $rc -ne 0 ]; then echo "[dc check] 실패 — $name: $hint"; return 1; fi
     n=$((n + 1))
@@ -117,7 +117,7 @@ dc_check() {
   _step "selftest data-pipeline" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3-3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm ${vol[@]+"${vol[@]}"} "${DATA_PIPELINE_IMAGE:-}" selftest || return 1
   _vol "${MCP_SERVER_IMAGE:-}"
   _step "selftest mcp-server" "FAIL 줄의 시험 이름으로 원인 찾기(release-and-patch §3-3)" bash deploy/release/selftest_gate.sh $DOCKER run --rm ${vol[@]+"${vol[@]}"} "${MCP_SERVER_IMAGE:-}" selftest || return 1
-  _step "검색 MCP" "\`$DOCKER logs mcp-server\` 마지막 줄 — mcp_up.sh가 다시 띄웠는데도 /health 응답 없음" bash deploy/host/scripts/mcp_up.sh || return 1
+  _step "검색 MCP" "\`$DOCKER logs mcp-server$NAME_SUFFIX\` 마지막 줄 — mcp_up.sh가 다시 띄웠는데도 /health 응답 없음" bash deploy/host/scripts/mcp_up.sh || return 1
   echo "[dc check] 통과 — ${n}개"
 }
 
@@ -125,23 +125,24 @@ dc_check() {
 #   /etc/systemd/system에 쓰고 두 타이머를 켠다(op-13). 새 루트에서 다시 부르면 그 루트로 바뀐다. root가 아니면 종료 3.
 #   DC_UNIT_DIR=<폴더>는 /etc/systemd/system 대신(시험용 — root 확인·systemctl을 건너뜀).
 dc_timers() {
-  local dest=${DC_UNIT_DIR:-/etc/systemd/system} u
+  local dest=${DC_UNIT_DIR:-/etc/systemd/system} u n
   if [ "$(id -u)" != 0 ] && [ -z "${DC_UNIT_DIR:-}" ]; then
     echo "[dc timers] root로 실행할 것(sudo) — /etc/systemd/system에 쓴다" >&2; return 3
   fi
-  for u in deploy/host/systemd/*.service deploy/host/systemd/*.timer; do
-    sed "s#@CODE_DIR@#$(pwd)#g" "$u" > "$dest/$(basename "$u")" && echo "  씀  $dest/$(basename "$u")" || return 1
+  for u in deploy/host/systemd/*.service deploy/host/systemd/*.timer; do   # 여러 벌이면 단위 이름 끝에 -<instance>(타이머·서비스 짝이 같은 이름)
+    n=$(basename "$u"); n="${n%.*}$NAME_SUFFIX.${n##*.}"
+    sed "s#@CODE_DIR@#$(pwd)#g" "$u" > "$dest/$n" && echo "  씀  $dest/$n" || return 1
   done
   [ -n "${DC_UNIT_DIR:-}" ] && return 0
-  systemctl daemon-reload && systemctl enable --now data-pipeline-nightly.timer mcp-server-keepalive.timer
+  systemctl daemon-reload && systemctl enable --now "data-pipeline-nightly$NAME_SUFFIX.timer" "mcp-server-keepalive$NAME_SUFFIX.timer"
 }
 
 case "${1:-}" in
   init) shift; dc_init "$@"; exit $? ;;
-  timers) dc_timers; exit $? ;;
 esac
 load_settings || exit $?
 case "${1:-}" in
+  timers) dc_timers; exit $? ;;
   check) dc_check; exit $? ;;
 esac
 . deploy/host/scripts/image_vars.sh && code_dir_default DATA_PIPELINE_IMAGE
@@ -149,4 +150,4 @@ C=deploy/host/compose
 files="-f $C/compose.pipeline.yml -f $C/compose.pipeline-mcp.yml -f $C/compose.mcp-server.yml"
 [ -n "${CODE_DIR:-}" ] && files="$files -f $C/compose.code.yml -f $C/compose.code.pipeline-mcp.yml -f $C/compose.code.mcp-server.yml"
 # shellcheck disable=SC2086 — DOCKER(sudo podman처럼 두 낱말)·파일 인자는 낱말 나눔
-exec $DOCKER compose $files "$@"
+exec $DOCKER compose -p "compose$NAME_SUFFIX" $files "$@"   # 묶음 이름 — 한 벌은 compose 기본(폴더 이름 compose) 그대로, 여러 벌은 compose-<instance>

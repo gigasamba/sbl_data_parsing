@@ -213,7 +213,7 @@ def load(db, bundle, replace=False, rep_dir=None):
     docs, chunks = _nonul(jl(B / "docs.jsonl")), _nonul(jl(B / "chunks.jsonl"))
     vecs = np.load(B / "vectors.npy", mmap_mode="r")  # 필요한 청크만 읽음(전체를 메모리에 올리지 않음)
     t0 = time.time()
-    from pipeline.load import edw_meta
+    from pipeline.load import edw_doc_meta as edw_meta
 
     edw, meta_missing = edw_meta.fetch([(d.get("source_system"), d["file_path"]) for d in docs])  # pl-29 — EDW 조인(트랜잭션 밖, 읽기 계정)
     for d in docs:  # pl-52 — 고정 칸(created_at·client_edw)은 문서 행, 원천 메타는 attrs(분류 힌트 포함 — 분류가 attrs에서 읽음)
@@ -266,7 +266,7 @@ def _classify(db, bundle, docs, rep_dir, replace=False):
     이미 어느 원천 스키마에든 저장된 문서는 적재가 건너뛰므로 부르지 않는다(버릴 답에 LLM을 쓰지 않음). 본문은 게시가 올리는 .md와 같은
     글(rep_dir의 대표 결과 → render_md, 없으면 묶음 full_text). 반환: 분류에 실패한 file_path 집합(적재하지 않음)."""
     from common.store.db.models import search_tables as ST
-    from pipeline.load import classify as CL
+    from pipeline.load import doc_classify as CL
 
     targets = [d for d in docs if ST.source_of(d.get("source_system")) in CL.LABELS]
     if not targets:
@@ -468,7 +468,7 @@ def _load_src(cur, s, src, docs, idx, chunks, vecs, meta, replace, nxt=None):
 def gold_version(meta):
     """gold_version(pl-38, 사용자 11-03) = `<VERSION>+m<마스터 해시 앞 8자>` — 구조화가 읽은 마스터 표 해시(묶음 meta.json master_hash).
     master_hash가 없는 묶음(옛 묶음)은 `<VERSION>`만. 캐시 열쇠·code_fp에는 넣지 않는다(마스터가 바뀌어도 자동 재처리 없음)."""
-    from pipeline.load.parsing_meta import pipeline_version  # 게시(silver_version)와 같은 자리
+    from pipeline.load.silver_publish import pipeline_version  # 게시(silver_version)와 같은 자리
 
     h = (meta or {}).get("master_hash")
     return f"{pipeline_version()}+m{h[:8]}" if h else pipeline_version()

@@ -10,7 +10,7 @@
 - 규칙:
   1. `question`과 `source_system`(값 하나)은 필수다. 그 원천의 gold 스키마(`<PG_SCHEMA>_<원천>`)만 찾는다.
   2. 거르기가 있으면 먼저 범위(맞는 문서)를 구하고, 후보 `min(50, max(3k, 30))`개를 찾은 뒤 순위를 다시 매긴다(재순위 모델 없음).
-  3. 방법 `vector`·`bm25`·`id`(기본 셋 다 — `search.methods`)를 가중 RRF로 합친다. 가중치 `search.weights` — vector 1.0 · bm25 1.0 · id 2.0 · 집계 단서 질문의 bm25 0.2.
+  3. 방법 `vector`·`bm25`·`id`(기본 셋 다 — `tuning.search.methods`)를 가중 RRF로 합친다. 가중치 `tuning.search.weights` — vector 1.0 · bm25 1.0 · id 2.0 · 집계 단서 질문의 bm25 0.2.
   4. vector = pgvector 코사인, HNSW(거르기 범위가 `search.pg.filter_exact_max` 문서 이하면 정확 검색). 차원이 HNSW 한도를 넘으면 `binary_quantize`로 후보를 고른 뒤 상위 200을 원 벡터로 다시 점수.
   5. BM25 = `chunk_term`·`term_stat`·`corpus_stat`(전체 청크 수·평균 길이). id = 드문 ID 정규식.
   6. 맞는 문서가 없으면 오류가 아니라 빈 결과(`scope_docs` 0, `evidence_status` none).
@@ -151,22 +151,22 @@
   2. 파일 크기 상한 `ops.runtime.parse_max_mb`(기본 100, MB = 1024×1024바이트)를 검색 MCP와 파싱 서비스가 같이 읽는다. base64 크기는 줄바꿈·공백을 빼고 센다. 넘는 `content_b64`는 서비스로 보내지 않고 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — ops.runtime.parse_max_mb"}`. 경로로 준 파일도 같은 상한.
   3. HTTP 요청 본문 상한 = 파일 상한 × 1.5 + 1 MiB(검색 MCP·파싱 서비스 같음). 4 MiB보다 크거나 길이를 밝히지 않은 요청은 동시에 2개까지만 처리하고 나머지는 본문을 읽기 전에 기다린다(`mcp_server/main.py` `_BIG_SLOTS`).
   4. 서비스 등록 요청 대기 60초.
-  5. 받는 확장자 = 엔진 구성의 parse 키(`pipeline/mcp_parse_service.py` `allowed_exts()`).
+  5. 받는 확장자 = 엔진 구성의 parse 키(`pipeline/parse_service.py` `allowed_exts()`).
 - 운영과 다른 점: 파일 크기 상한 기본 100MB(운영 64MB) · 스캔 PDF를 내부망 VLM으로 파싱([mc-18](#mc-18)) · 받는 확장자가 더 많다.
-- 파일: `mcp_server/services/parse_proxy.py`, `pipeline/mcp_parse_service.py`, `mcp_server/main.py`.
+- 파일: `mcp_server/services/parse_proxy.py`, `pipeline/parse_service.py`, `mcp_server/main.py`.
 - QA: `tests/server/mcp/test_parse_limit.py`·`tests/server/pipeline/test_parse_svc.py`(상한 1 MB로 덮고 0.9 MB 받음·1.1 MB 거부, 두 길) · 통과. 서버 확인 refactor.md C-85.
 - Status: done
 
 <a id="mc-18"></a>
 ## mc-18 · `parse_document` 스캔 PDF — 내부망 VLM
 - 규칙:
-  1. 스캔 판정 = `parse_qa.pdf_kind`(전체 쪽 글자층이 쪽당 평균 20자 미만) — 일괄 파싱과 같은 함수.
+  1. 스캔 판정 = `pipeline.transform.represent.parse_scoring.pdf_kind()`(전체 쪽 글자층이 쪽당 평균 20자 미만) — 일괄 파싱과 같은 함수.
   2. 스캔 PDF는 stack `.pdf_image`의 `qwen_vlm`으로 파싱한다(내부망 주소만 — `require_internal`).
   3. 시간 상한은 작업 제한 시간 `tuning.ops.services.parse_mcp.job_timeout_sec`(기본 600초) 하나, 단계마다 남은 시간을 나눠 준다. 쪽 수 상한 없음. 큐는 하나.
   4. VLM 설정(`required.models.vlm_base_url`·`vlm_model`)이 비면 파이프라인 없이 빈 결과 + note "스캔 PDF — VLM 미설정".
   5. VLM이 돌았는데 대표 결과가 없으면 note "스캔 PDF — VLM 파싱 실패".
   6. 글자층과 스캔 쪽이 섞인 PDF는 범위 밖.
-- 파일: `pipeline/mcp_parse_service.py`.
+- 파일: `pipeline/parse_service.py`.
 - QA: `tests/server/pipeline/test_parse_svc.py` · 통과.
 - Status: done
 
