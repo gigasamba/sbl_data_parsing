@@ -13,7 +13,7 @@ import threading
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
-from pipeline.extract.engines._common.contract import _pages, _ocr_out, _quad
+from pipeline.transform.parse.engines._common.contract import _pages, _ocr_out, _quad
 
 
 _TL = threading.local()          # 스레드별 RapidOCR 인스턴스 캐시(모듈 전역보다 안전 — 풀 재활용 시 캐시 유지)

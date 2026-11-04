@@ -4,7 +4,7 @@
 단독 실행: python -m data_parsing.parse_one --engine docx2python <문서> <out.json>
 """
 
-from pipeline.extract.engines._common.contract import _with_tables
+from pipeline.transform.parse.engines._common.contract import _with_tables
 
 
 def parse_docx2python(path):

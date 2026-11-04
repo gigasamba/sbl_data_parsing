@@ -14,7 +14,7 @@ from common.config import settings
 from common.core import jsonlog, span
 from pipeline.load import edw_doc_meta as edw_meta
 from pipeline.load import pgvector_load
-from pipeline.transform.structure import build_bundle
+from pipeline.transform.structure import gold_bundle
 
 
 def _capture():
@@ -23,7 +23,7 @@ def _capture():
 
 
 def test_warm_span_counts():
-    from pipeline.extract import fetch_docs as source
+    from pipeline.extract import candidate_ready as source
 
     class Client:
         def head_object(self, **kw):
@@ -58,7 +58,7 @@ def test_warm_span_counts():
 
 
 def test_parse_attempt_column():
-    from pipeline.extract import run_engines as run_all
+    from pipeline.transform.parse import parse_engines as run_all
 
     def run(side_effect):
         rows, patched = _capture()
@@ -88,10 +88,10 @@ def test_embed_span_cache_batches_retries():
         with settings.isolated(EMBED_BASE_URL="http://127.0.0.1:9/v1", EMBED_MODEL="m"):
             with mock.patch.object(embed, "_embed_api", fake_api), mock.patch.object(time, "sleep", lambda s: None):
                 with span.span("embed.bundle", "embed", model="api") as sp:
-                    first = build_bundle.embed_all("api", texts, batch=2, cache=cache)
+                    first = gold_bundle.embed_all("api", texts, batch=2, cache=cache)
                     sp.add(chunks=len(texts))
                 with span.span("embed.bundle", "embed", model="api"):
-                    second = build_bundle.embed_all("api", texts, batch=2, cache=cache)
+                    second = gold_bundle.embed_all("api", texts, batch=2, cache=cache)
     assert first.shape == second.shape == (5, 4) and np.allclose(first, second)
     embeds = [r for r in rows if r["stage"] == "embed.bundle"]
     cold, warm = (r["metrics"] for r in embeds)

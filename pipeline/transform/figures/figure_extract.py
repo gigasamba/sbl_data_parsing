@@ -516,7 +516,9 @@ def figures(p, page_covered=False):
             w, h = Image.open(io.BytesIO(page_bytes)).size
             out.extend(_nested_children(parent_id, page_bytes, 1, (w, h)))
     elif ext == ".eml":
-        from pipeline.extract.engines.mhtml.parser import decode_mail_text  # get_content()(선언 charset 그대로)는 EUC-KR 본문이 깨짐
+        from pipeline.transform.parse.engines.mhtml.parser import (
+            decode_mail_text,  # get_content()(선언 charset 그대로)는 EUC-KR 본문이 깨짐
+        )
 
         m = email.message_from_bytes(p.read_bytes(), policy=policy.default)
         imgs = {
@@ -617,7 +619,7 @@ def _default_ocr(png_bytes):
     """크롭 PNG → 글자(공백 join) — tools/engines/rapidocr/parser.py의 운영 OCR 경로(parse_rapidocr_ko, 한국어
     PP-OCRv5 모델)를 그대로 재사용한다(모델 설정 중복 방지, 결정적 — 같은 PNG면 같은 모델·같은 글자). 그 함수가
     파일 경로를 전제하는 공용 계약이라 크롭을 output/ 밑 임시 PNG로 한 번 썼다 바로 지운다(C4 — output/ 밖에 안 씀)."""
-    from pipeline.extract.engines.rapidocr.parser import parse_rapidocr_ko
+    from pipeline.transform.parse.engines.rapidocr.parser import parse_rapidocr_ko
 
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
     tmp = _TMP_DIR / f"{uuid.uuid4().hex}.png"

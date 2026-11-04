@@ -7,7 +7,7 @@ from unittest import mock
 
 from common.core.paths import DEPLOY_ROOT
 from common.store import parsing_meta_db as PM
-from pipeline.extract import fetch_docs
+from pipeline.extract import candidate_ready
 
 INPROCESS = True  # 상태를 바꾸지 않는 시험(tests/conftest.py)
 
@@ -81,4 +81,4 @@ def test_done_keys_sql_same():
 def test_warm_name_same():
     for bucket, key in [("raw", "SFDC/a.pdf"), ("버킷", "CRMS/한글 이름.hwp"), ("", "x")]:
         with mock.patch.object(RD, "WARM_BUCKET", bucket):
-            assert RD._warm_bin({"s3_key": key}) == fetch_docs._warm_key_path(Path("w"), bucket, key).name, (bucket, key)
+            assert RD._warm_bin({"s3_key": key}) == candidate_ready._warm_key_path(Path("w"), bucket, key).name, (bucket, key)

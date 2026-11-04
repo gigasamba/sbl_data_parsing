@@ -45,7 +45,7 @@
 <a id="e2-01"></a>
 ## e2-01 · PC 스모크 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
 - 이유: 릴리스 전에 문서 2~3건으로 사슬 전체를 증명한다.
-- 규칙: README §4-4 단계(`pipeline.cli parse` · `build_bundle` · `dbtool up` · `pgvector_load` · `mcp_server.cli.search_ask`). 실행마다 다른 값은 `--set`. 임베딩 캐시 `output/edw/embed_cache.sqlite`. 시험 문서 `valid_env/object_storage/`.
+- 규칙: README §4-4 단계(`pipeline.cli parse` · `gold_bundle` · `dbtool up` · `pgvector_load` · `mcp_server.cli.search_ask`). 실행마다 다른 값은 `--set`. 임베딩 캐시 `output/edw/embed_cache.sqlite`. 시험 문서 `valid_env/object_storage/`.
 - QA: README §4-4 ①~⑥ · `ask`가 근거를 냄.
 - Status: done
 
@@ -58,7 +58,7 @@
 <a id="e2-09"></a>
 ## e2-09 · `valid_env`의 PC 시험 자료
 - 규칙: 외부 시스템 대역은 서버 배치 그대로 — 문서 `valid_env/object_storage/<시스템>/<uuid>/<파일>`(CRMS·SFDC, 문서 33건 — `object_keys.csv`와 sha256 일치), 합성 EDW `valid_env/edw/`(sql + `edw.sqlite`, `edw/meta_rdb/`), 답변 점검 `valid_env/answer_test/`. 서버 배포 시험은 `valid_env` 없이 돌게 자료를 임시 폴더에 만든다.
-- 파일: `valid_env/README.md`, `tests/server/mcp/test_search_svc.py`, `tests/server/pipeline/test_fetch_docs.py`.
+- 파일: `valid_env/README.md`, `tests/server/mcp/test_search_svc.py`, `tests/server/pipeline/test_candidate.py`.
 - Status: done
 
 <a id="e2-04"></a>

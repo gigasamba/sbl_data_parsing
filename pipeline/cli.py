@@ -80,9 +80,9 @@ def parse_module(a):
     """파싱 모듈: (--source면) 가져오기·시험 표본 → 중복 확인 → 방향 보정 → 파싱 → 채점 → 대표 결과 → 끝 표시 → (s3) 원본 정리.
     임베딩·DB 연결 없음 — 수집 서버에 이것만 보낼 수 있음. --source 없으면 --src(이미 준비된 폴더)를 그대로."""
     from common.core.paths import child_env
-    from pipeline.extract import engine_stack
-    from pipeline.extract import fetch_docs as SRC
-    from pipeline.extract import run_engines as RE
+    from pipeline.extract import candidate_ready as SRC
+    from pipeline.transform.parse import engine_check
+    from pipeline.transform.parse import parse_engines as RE
 
     _tstep("t_start")
     from pipeline import parse_steps
@@ -92,7 +92,7 @@ def parse_module(a):
     from pipeline.shared import runtrace
 
     runtrace.info(stack=st.get("name"), workers=int(a.workers) if str(a.workers).isdigit() else None)
-    engines = a.engines or ",".join(engine_stack.engines_of(st))  # parse 엔진(정렬)
+    engines = a.engines or ",".join(engine_check.engines_of(st))  # parse 엔진(정렬)
     lim, src_info = [], None
     if a.source:
         local, keep, state = SRC.prepare_batch(a.source, OUT, a.source_limit, lambda args: _run_step(args, child_env()))
@@ -108,15 +108,15 @@ def parse_module(a):
         lim = ["--docs-from", SRC.pick_new(a.src, OUT, a.max_new, lim[1] if lim else None)]
     env = C.child_env(child_env(), VLM_CONCURRENCY=str(RE.vlm_doc_concurrency(a, lim)), LLM_BASE_URL=None)  # 파싱 모듈은 LLM을 부르지 않음
 
-    def step(args):  # 단계마다 걸린 시간(docflow-step 로그 — run_engines는 parse)
+    def step(args):  # 단계마다 걸린 시간(docflow-step 로그 — parse_engines는 parse)
         rc = _run_step(args, env)
-        _tstep("t_parse" if args[0] == "pipeline.extract.run_engines" else "t_" + args[0].rsplit(".", 1)[-1])
+        _tstep("t_parse" if args[0] == "pipeline.transform.parse.parse_engines" else "t_" + args[0].rsplit(".", 1)[-1])
         return rc
 
     engine_args = ["--procs", a.procs, "--workers", a.workers, "--engines", engines, *lim]
     rc = parse_steps.parse_chain(step, a.src, OUT / "parse", OUT / "corpus" / "truth.json", engine_args)
     if rc is not None:  # runs.jsonl 없음: 채점·대표 결과로 넘어가 죽지 않게
-        if rc != 0:  # run_engines가 죽어 못 씀 — 성공으로 덮지 않는다
+        if rc != 0:  # parse_engines가 죽어 못 씀 — 성공으로 덮지 않는다
             print(f"[parse] 파싱 실패 — run_all 종료 {rc}, runs.jsonl 없음", file=sys.stderr, flush=True)
             raise SystemExit(rc)
         print("[parse] 이번 실행 0건 — 파싱한 문서 없음(runs.jsonl 없음) · 채점·대표 결과·끝 표시 건너뜀", flush=True)

@@ -12,7 +12,9 @@ from common.config import layout as L
 from common.config.settings import cfg
 
 DEFAULT_TABLE = "AI.ParsingMeta"
-TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # fetch_docs.py TABLE_ID_RE와 같은 규칙(SQL 삽입 방지)
+TABLE_ID_RE = re.compile(
+    r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$"
+)  # candidate_ready.py TABLE_ID_RE와 같은 규칙(SQL 삽입 방지)
 # 이 parse_status 행이 있으면 "파싱 끝난 문서" — skipped_dup(완전 중복)도 매일 밤 다시 고르지 않는다
 # (not_parsed·skipped_disk_cap·실패는 다시 고름 · 통째 실패는 ParsingMeta에 안 씀)
 DONE_STATUSES = ("ok", "partial", "skipped_dup")
@@ -146,7 +148,7 @@ def _rows_parsed(cur, table, ph, lo, hi, kc="source_key"):
 def _done_keys_rows(cur, table, kc="source_key", gold=False):
     """끝난 원본 키(source_key) 집합 — parse_status가 DONE_STATUSES(ok·partial·skipped_dup)인 행,
     gold=True(gold_version 칸이 있음)면 ok·partial은 gold_version도 있어야(silver나 gold 결과가 없으면 다시 대상).
-    파싱 입구(pipeline.extract.fetch_docs `unparsed`)가 "FileStorageMap ∖ ParsingMeta"로 새 문서를 고를 때 쓴다(읽기만, SELECT).
+    파싱 입구(pipeline.extract.candidate_ready `unparsed`)가 "FileStorageMap ∖ ParsingMeta"로 새 문서를 고를 때 쓴다(읽기만, SELECT).
     상수 글자만 SQL에 끼우고(DONE_STATUSES는 코드 상수) 값 바인딩은 없음."""
     q = lambda xs: ", ".join(f"'{v}'" for v in xs)
     cond = f"parse_status IN ({q(DONE_STATUSES)})"

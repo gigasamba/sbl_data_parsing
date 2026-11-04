@@ -52,7 +52,7 @@
 | 대표 결과 다시 읽기(P2·P3)·스캔 중복 제거·렌더 OCR 신호 지우기 | 대표 결과는 융합 결과를 그대로 쓴다. 등급 A | done | [pl-34](prd/transform-cleanup.md#pl-34) |  |
 | 지문에 영향 없는 잔재(문서 단위 병렬 실행기·자동 재파싱 스위치·그림 이어 하기) 지우기 | 처리는 새 문서만 고르는 증분 하나 | done | [pl-35](prd/transform-cleanup.md#pl-35) |  |
 | 0.2.0 지문 배치 정리 — 안 쓰는 엔진·묶음 계약·OCR 대체 길·로컬 임베딩·첫 이관 호환 코드·ADK 장치를 한 번에 지운다. 모델 호출은 `llm.complete` HTTP 한 길 | 지문이 바뀌는 정리를 서버 재처리 한 번에 모은다. 등급 A. 남은 것은 [pl-53](prd/transform-cleanup.md#pl-53) | done | [pl-46](prd/transform-cleanup.md#pl-46) |  |
-| 엔진 지문(p0) 범위 = 엔진 폴더 전부(`pipeline/extract/engines/**/*.py` + `run_engines.py`) | 이름과 폴더가 다른 엔진(html_stdlib·msg_extract·rapidocr_ko·office)을 고쳐도 지문이 바뀌게. 등급 A | done | [pl-47](prd/transform-cleanup.md#pl-47) |  |
+| 엔진 지문(p0) 범위 = 엔진 폴더 전부(`pipeline/transform/parse/engines/**/*.py` + `parse_engines.py`) | 이름과 폴더가 다른 엔진(html_stdlib·msg_extract·rapidocr_ko·office)을 고쳐도 지문이 바뀌게. 등급 A | done | [pl-47](prd/transform-cleanup.md#pl-47) |  |
 | 같은 결과로 덜 읽고 덜 띄우기 — 명부·사전·원본 해시·매니페스트·엔진 지문을 한 번만, 엔진 결과 한 번에 쓰기, 1건 중복 확인 자식 없이 | 결과는 바이트 그대로. 등급 A | done | [pl-49](prd/transform-cleanup.md#pl-49) |  |
 | 층 지문 범위 바로잡기 + 단계 방향 자동 점검 — 결과를 바꾸는 파일은 층 목록에, 기록·DB 표 정의는 지문 계산에서 뺌. extract → transform → load 방향을 자동 점검 | 빠지면 고쳐도 옛 결과를 다시 쓰고, 넘치면 상관없는 수정에도 재처리 경보가 남. 등급 A | done | [pl-50](prd/transform-cleanup.md#pl-50) |  |
 | pl-46 남은 정리 — 0.2.0 배포 뒤 `dbcompare`·`stamp` 지우기 · `google-adk`·`litellm` 패키지를 뺄지 정하기(지시서 `agent.py`만 import) | 첫 이관용 도구와 안 쓰는 패키지. 빼면 새 이미지 버전 | todo | [pl-53](prd/transform-cleanup.md#pl-53) |  |
@@ -88,7 +88,7 @@
 | ParsingMeta에는 파싱 정보만(원천 키·상태·silver 위치·엔진·`gold_status`·`silver_version`·`gold_version`·`sha256`), 고객·분류 라벨 같은 파일 메타는 검색 DB `doc`에만 | 중복 적재를 없앤다. 운영이 더한 칸은 DB 담당자가 지운다 | dev | [pl-25](prd/load-schema.md#pl-25) |  |
 | 문서 키는 원본 경로 하나 — 검색 DB `doc.file_path` = Object Storage 원본 경로 = EDW `s3_key`(청크는 `doc_id`만), ParsingMeta와 이 값으로 잇는다 | sha256 `doc_key`는 검색 DB에 안 둔다(ParsingMeta `sha256`만) | dev | [pl-25](prd/load-schema.md#pl-25) |  |
 | 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타가 다르고 BM25 점수를 섞지 않는다. MCP `source_system` 필수(등급 A) | done | [pl-28](prd/load-schema.md#pl-28) |  |
-| 원천 = 원본 경로(`s3_key`) 첫 마디 — `SFDC`·`CRMS`·`LAS`·`FAQ`(대소문자 무관)이거나 `SFDC-`·`SFDC_`·`CRMS-`·`CRMS_`·`las_`·`LAS_`로 시작하면 그 원천, 아니면 `other`(`build_bundle`). `faq` 스키마만 `chunk.faq_group` 칸 | `AI.FileStorageMap.source_system` 칸은 읽지 않는다 — 경로만으로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |  |
+| 원천 = 원본 경로(`s3_key`) 첫 마디 — `SFDC`·`CRMS`·`LAS`·`FAQ`(대소문자 무관)이거나 `SFDC-`·`SFDC_`·`CRMS-`·`CRMS_`·`las_`·`LAS_`로 시작하면 그 원천, 아니면 `other`(`gold_bundle`). `faq` 스키마만 `chunk.faq_group` 칸 | `AI.FileStorageMap.source_system` 칸은 읽지 않는다 — 경로만으로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |  |
 
 ## 검색 MCP (mcp) — AI 클라이언트가 부르는 도구 서버(이미지 `mcp-server`)
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |

@@ -7,7 +7,7 @@ import re
 import zipfile
 from xml.etree import ElementTree as ET
 
-from pipeline.extract.engines._common.contract import _table_facts, _mk_table, TABLE_GRID_MAX_ROWS
+from pipeline.transform.parse.engines._common.contract import _table_facts, _mk_table, TABLE_GRID_MAX_ROWS
 
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"

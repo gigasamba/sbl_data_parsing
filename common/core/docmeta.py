@@ -1,5 +1,5 @@
 """문서 최신성 메타데이터 — 날짜·개정·구판 표시를 뽑는 규칙 한 곳 + 같은 사건 사본 묶기(copy_key·copy_groups).
-structure(build_bundle.py)가 docs.jsonl에 적고, 검색 근거가 그 칸(doc_date·version·superseded)을 그대로 보여 준다.
+structure(gold_bundle.py)가 docs.jsonl에 적고, 검색 근거가 그 칸(doc_date·version·superseded)을 그대로 보여 준다.
 판 묶음·최신성 순위는 없다 — 같은 문서의 다른 판이 '최신' 질문에서 위로 올 수 있는 문제는 PRD pl-38.
 
 날짜 우선순위는 **본문 먼저, 파일명은 다음**(파일명이 내용과 다를 수 있음 — 예: final_real.docx(본문 2025-06) vs
@@ -102,7 +102,7 @@ def is_superseded(text):
 
 
 def doc_meta(filename, text):
-    """structure(build_bundle.py)가 docs.jsonl에 적는 한 벌 — doc_date·version·superseded."""
+    """structure(gold_bundle.py)가 docs.jsonl에 적는 한 벌 — doc_date·version·superseded."""
     return {
         "doc_date": extract_date(filename, text),
         "version": extract_version(filename, text),

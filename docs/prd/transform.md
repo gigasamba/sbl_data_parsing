@@ -16,10 +16,10 @@
 3. 형식 키 = 확장자(소문자). 단 `.pdf`는 글자층이 쪽당 평균 20자 미만이면 `.pdf_image`(스캔), 아니면 `.pdf_text` — 판정은 `<out>/_types.json`에 크기·수정 시각과 함께 캐시한다. 판정 함수는 `pipeline.shared.parse_run.pdf_kind()` 하나 — 쪽 VLM의 문서 전체 스캔 판정(`scan_page_vlm.is_scan`)과 `parse_document`도 같은 함수를 쓴다(레인 분류 `doc_lane_group`의 앞 3쪽 규칙은 목적이 달라 따로).
 4. 만약 형식 키가 구성에 없으면 → 그 확장자를 읽는 등록 엔진 모두(OCR 엔진 제외)로 돌리고 형식마다 한 번 로그를 남긴다.
 5. 지원 형식 = 구성의 `parse` 키 43개: `.pptx` `.doc` `.docx` `.hwpx` `.png` `.jpg` `.jpeg` `.tif` `.tiff` `.bmp` `.eml` `.mht` `.mhtml` `.txt` `.html` `.htm` `.pdf_image` `.pdf_text` `.xls` `.xlsm` `.xlsx` `.ppt` `.msg` `.docm` `.pptm` `.rtf` `.csv` `.tsv` `.md` `.odt` `.ods` `.odp` `.xlsb` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.json` `.xml` `.log`. `.hwp`는 아직 아니다([pl-45](#pl-45)), 압축 파일은 지원하지 않는다.
-6. 구성의 엔진이 등록부(`pipeline/extract/engines`)에 없거나 설치되지 않았으면 → 시작하지 않는다(종료 2).
+6. 구성의 엔진이 등록부(`pipeline/transform/parse/engines`)에 없거나 설치되지 않았으면 → 시작하지 않는다(종료 2).
 
 ### QA
-- `tests/server/pipeline/test_engine_stack.py` · `tests/server/pipeline/test_run_all.py`.
+- `tests/server/pipeline/test_engine_check.py` · `tests/server/pipeline/test_parse_engines.py`.
 - Status: done
 
 <a id="pl-22"></a>
@@ -44,7 +44,7 @@
 - 글자 엔진, 5쪽, 엔진의 첫 문서 아님 → 5 × 10 + 10 = 60초. 같은 문서가 엔진의 첫 문서 → max(50, 60) + 10 = 70초. 넘으면 140초로 한 번 더.
 
 ### QA
-- `tests/server/pipeline/test_run_all.py`(page_timeout·OCR 끔) · `tests/server/pipeline/test_vlm_page.py`(`pick_pages`) · `tests/general/pipeline/test_represent.py`(쪽 VLM 채우기).
+- `tests/server/pipeline/test_parse_engines.py`(page_timeout·OCR 끔) · `tests/server/pipeline/test_vlm_page.py`(`pick_pages`) · `tests/general/pipeline/test_represent.py`(쪽 VLM 채우기).
 - Status: done
 
 <a id="pl-43"></a>
@@ -89,10 +89,10 @@
 회사 문서에 나오는 나머지 형식을 읽는다. 엔진 파일(엔진 지문)은 바꾸지 않는다.
 
 ### 규칙
-1. 엔진 `parser.py`의 `FORMATS`는 두고, 등록부 `pipeline/extract/engines/registry.py`의 `EXTRA_FORMATS`(엔진별 추가 확장자)에 더한다 — `formats(엔진)` = `FORMATS` + `EXTRA_FORMATS`, `engines_for()`·`run_one_engine --list`가 이것을 읽는다.
+1. 엔진 `parser.py`의 `FORMATS`는 두고, 등록부 `pipeline/transform/parse/engines/registry.py`의 `EXTRA_FORMATS`(엔진별 추가 확장자)에 더한다 — `formats(엔진)` = `FORMATS` + `EXTRA_FORMATS`, `engines_for()`·`run_one_engine --list`가 이것을 읽는다.
 2. 구성(우선순위 순): `.docm`·`.pptm`(kreuzberg, anydoc) · `.rtf`·`.odt`·`.ods`(anydoc, kreuzberg) · `.odp`(anydoc) · `.csv`(markitdown, kreuzberg) · `.tsv`(plaintext, kreuzberg) · `.md`(plaintext, markitdown) · `.xlsb`·`.dotx`·`.xltx`·`.potx`·`.ppsx`·`.dot`·`.xlt`·`.pot`(kreuzberg) · `.json`·`.xml`·`.log`(plaintext 하나 — 글 그대로).
 3. `.docm`·`.pptm`은 `office` 엔진에 주지 않는다(`office_stdlib`는 `.docx`가 아니면 xlsx로 다룸).
-4. 파싱 서비스가 받는 확장자(`pipeline.extract.engine_stack.allowed_exts()`) = 구성의 `parse` 키(`.pdf_*` → `.pdf`) − 이미지 확장자.
+4. 파싱 서비스가 받는 확장자(`pipeline.transform.parse.engine_check.allowed_exts()`) = 구성의 `parse` 키(`.pdf_*` → `.pdf`) − 이미지 확장자.
 
 ### 단계
 1. `.hwp` — kreuzberg로 실제 `.hwp` 문서를 읽어 글이 나오는지 시험한 뒤 `EXTRA_FORMATS["kreuzberg"]`와 구성에 더한다.
@@ -178,14 +178,14 @@
 ### 규칙
 1. 청크 나누기 방식은 구성의 `chunk`(지금 `structure`): 목표 `CHUNK_SIZE`(기본 800자), 제목 기준으로 나누고 표는 통째로 둔다. `CHUNK_TABLE=rows`일 때만 큰 표를 `CHUNK_TABLE_ROWS`(25)행씩 나눈다. FAQ 원천은 [extract.md#pl-39](extract.md#pl-39).
 2. 그림 설명은 그림 청크 하나(캡션 + 요약 + 그림 글자 + 값·연결·표)가 된다.
-3. 문서 요약 = 앞부분 발췌: 쪽 번호 줄을 뺀 줄 중 `[가-힣A-Za-z0-9]{2,}`가 든 줄을 앞에서부터 공백으로 잇고, 합이 300자 이상이 되면 멈춰 300자로 자른다(`build_bundle.lead_summary`).
+3. 문서 요약 = 앞부분 발췌: 쪽 번호 줄을 뺀 줄 중 `[가-힣A-Za-z0-9]{2,}`가 든 줄을 앞에서부터 공백으로 잇고, 합이 300자 이상이 되면 멈춰 300자로 자른다(`gold_bundle.lead_summary`).
 4. 본문 고객(`clients_doc`, `infer_clients`): 알려진 고객(명부 + 별칭 + 공개 이름 seed `client_roster_seed.json`) 이름·별칭이 본문에 2번 이상 나오거나 제목·첫 400자에 나오면 고객으로 본다. 순서 = 제목·머리 등장 먼저 → 등장 횟수 → 이름순. 비면 다른 문서에서 그 고객과 함께 나온 제품 코드 접두로 채운다. 명부·별칭은 PG 마스터에서 읽는다([load.md#pl-38](load.md#pl-38)).
 5. 문서 날짜 `content_date` = 본문 앞 2,000자, 없으면 파일 이름에서 찾은 날짜(`common/core/docmeta.py` — 꼴은 [db_schema.md](../architecture/db_schema.md) gold.doc).
-6. 임베딩은 내부망 API(`required.embed`의 주소·모델)만 쓴다. `build_bundle --embed none`은 시험용(적재는 거부 — [load.md#pl-16](load.md#pl-16)). 한 번에 `EMBED_BATCH`(32)개, 입력은 `EMBED_MAX_CHARS`(8,000자)에서 자른다. 같은 청크는 캐시(`EMBED_CACHE` sqlite)에서 다시 쓴다.
+6. 임베딩은 내부망 API(`required.embed`의 주소·모델)만 쓴다. `gold_bundle --embed none`은 시험용(적재는 거부 — [load.md#pl-16](load.md#pl-16)). 한 번에 `EMBED_BATCH`(32)개, 입력은 `EMBED_MAX_CHARS`(8,000자)에서 자른다. 같은 청크는 캐시(`EMBED_CACHE` sqlite)에서 다시 쓴다.
 7. 묶음 `meta.json`에 구성(`stack_conf`)·임베딩 모델·차원·읽은 마스터 해시(`master_hash`)를 남긴다.
 
 ### QA
-- `tests/server/pipeline/test_build_bundle.py` · `tests/general/pipeline/test_chunking.py` · `tests/server/common/test_embed.py` · `tests/general/common/test_docmeta.py`.
+- `tests/server/pipeline/test_gold_bundle.py` · `tests/general/pipeline/test_chunking.py` · `tests/server/common/test_embed.py` · `tests/general/common/test_docmeta.py`.
 - Status: done
 
 <a id="pl-33"></a>

@@ -18,7 +18,7 @@
 
 ## 2. gold — 검색 스키마 (pgvector — 원천별 스키마 5벌)
 
-판: `common/store/db/migrations/versions/0001_search_base.py` … `0005_doc_attrs.py` · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_META`·`ATTRS`·`LOAD_ATTRS`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`·`deploy`) · 값 만드는 곳: `pipeline/transform/structure/build_bundle.py`(`main`)·EDW 조인 `pipeline/load/edw_doc_meta.py`.
+판: `common/store/db/migrations/versions/0001_search_base.py` … `0005_doc_attrs.py` · 모델: `common/store/db/models/search_tables.py`(`SOURCES`·`DOC_META`·`ATTRS`·`LOAD_ATTRS`·`CHUNK_EXTRA`) · 적재: `pipeline/load/pgvector_load.py`(`load`·`_load_src`·`deploy`) · 값 만드는 곳: `pipeline/transform/structure/gold_bundle.py`(`main`)·EDW 조인 `pipeline/load/edw_doc_meta.py`.
 
 - **스키마 배치:** 기준 스키마 `<PG_SCHEMA>`(예 `ai`)에는 판 표 `alembic_version`과 공용 시퀀스 `doc_id_seq`만. 원천 스키마 `<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`에 아래 표 다섯 개와 뷰 `v_chunk_source`가 같은 꼴로 있다(원천 전용 칸은 `faq.chunk.faq_group`뿐 — 그 밖의 원천 메타는 `doc.attrs` 키).
 - 검색 MCP는 실행 중에 묶음 파일(`meta.json`·`docs.jsonl`·`chunks.jsonl`)을 읽지 않는다 — 임베딩 모델·문서 날짜는 `doc` 칸, 차원은 `chunk.embedding`의 `vector(n)`에서 읽는다.
@@ -28,12 +28,12 @@
 | 칸 | 타입 | 뜻 | 원천 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|---|
 | doc_id | INT PK | 문서 행 번호 — 기본값 `nextval('<PG_SCHEMA>.doc_id_seq')`(5벌이 시퀀스 하나라 겹치지 않음). MCP `chunk_key` `<doc_id>:<seq>`의 앞부분 | 모두 | pgvector_load `_load_src` | 뷰, 원문 도구 쪽 넘김(`cursor`) | 유지 |
-| file_path | TEXT NOT NULL | Object Storage 원본 경로 = EDW `FileStorageMap.s3_key` = ParsingMeta 원본 키 — ParsingMeta와 잇는 키. PC 폴더 원천은 원천 폴더 기준 상대 경로(같은 꼴). 적재 건너뛰기 키 | 모두 | build_bundle `main` → 적재 | 뷰(`file_name` = 끝 조각), search_svc 범위, 원문 도구 | 유지 |
-| summary | TEXT | 문서 요약 | 모두 | build_bundle | 뷰 → 근거 | 유지 |
+| file_path | TEXT NOT NULL | Object Storage 원본 경로 = EDW `FileStorageMap.s3_key` = ParsingMeta 원본 키 — ParsingMeta와 잇는 키. PC 폴더 원천은 원천 폴더 기준 상대 경로(같은 꼴). 적재 건너뛰기 키 | 모두 | gold_bundle `main` → 적재 | 뷰(`file_name` = 끝 조각), search_svc 범위, 원문 도구 | 유지 |
+| summary | TEXT | 문서 요약 | 모두 | gold_bundle | 뷰 → 근거 | 유지 |
 | created_at | TIMESTAMPTZ | 원천 등록 시각(KST) — SFDC `ContentVersion.CreatedDate` 계열 · CRMS `RM_CM_DOCU.INIT_DTTM` · LAS `FileManager.CreateDate` · 그 밖 `FileStorageMap.created_at`(§1 원천별 사슬) | 모두 | 적재(EDW 조인 — pl-29) | `search` `created_since/until`, 원문 도구 거르기·출력·등록 시각 가드 | 유지 |
 | client_edw | TEXT | EDW 조인 사슬의 고객 하나 — MCP 고객 거르기는 이 칸 정확 일치만 | 모두(채워지는 곳: sfdc·crms) | 적재(EDW 조인) | search_svc 범위, 근거 `client` | 유지 |
-| clients_doc | TEXT | 본문에서 찾은 고객 라벨(JSON 글자) — 참고만, 거르기·순위에 안 씀 | 모두 | build_bundle `infer_clients` → 적재 | 없음(참고) | 유지 |
-| content_date | TEXT | 문서에 적힌 날짜(ISO 글자 `YYYY-MM-DD`·`YYYY-MM`·`YYYY` — 본문 앞 2000자 먼저, 없으면 파일 이름, `common/core/docmeta.py`. 연도만 있는 `YYYY`는 본문에서는 `2026년`처럼 날짜로 적힌 것만 — 맨 연도 숫자(예: "planned for 2027"·"2027 계획")는 안 셈, 파일 이름의 연도는 그대로 셈). `created_at`(원천 등록 시각)과 다르고, 파일 생성·수정 시각도 아니다 | 모두 | build_bundle(`docmeta.doc_meta`의 `doc_date`) → 적재(판 0004) | pgsearch → 근거 `doc_date`(출력 이름은 그대로) — 검색 뷰엔 없음 | 유지 |
+| clients_doc | TEXT | 본문에서 찾은 고객 라벨(JSON 글자) — 참고만, 거르기·순위에 안 씀 | 모두 | gold_bundle `infer_clients` → 적재 | 없음(참고) | 유지 |
+| content_date | TEXT | 문서에 적힌 날짜(ISO 글자 `YYYY-MM-DD`·`YYYY-MM`·`YYYY` — 본문 앞 2000자 먼저, 없으면 파일 이름, `common/core/docmeta.py`. 연도만 있는 `YYYY`는 본문에서는 `2026년`처럼 날짜로 적힌 것만 — 맨 연도 숫자(예: "planned for 2027"·"2027 계획")는 안 셈, 파일 이름의 연도는 그대로 셈). `created_at`(원천 등록 시각)과 다르고, 파일 생성·수정 시각도 아니다 | 모두 | gold_bundle(`docmeta.doc_meta`의 `doc_date`) → 적재(판 0004) | pgsearch → 근거 `doc_date`(출력 이름은 그대로) — 검색 뷰엔 없음 | 유지 |
 | embed_model | TEXT | 그 문서를 임베딩한 모델 이름(묶음 `meta.json` `embed_model`) | 모두 | 적재(판 0004) | pgsearch `index_meta` — 질의 모델 확인(섞이면 거부), 나중 guard(문서 단위) — 검색 뷰엔 없음 | 유지 |
 | attrs | JSONB | 원천마다 다른 문서 메타 `{키: 값}`(GIN 색인 `ix_<스키마>_doc_attrs`) — 키·EDW 칸·검색 거르기 이름·근거 표시는 사슬 파일 `edw_chain.yaml`(`fields`)이 정하고, `doc_class`는 분류가 쓴다(SFDC·LAS). 값 없는 키는 넣지 않는다. 지금 키는 아래 표(판 0005 — [pl-52](../prd/load-schema.md#pl-52)) | 모두(키는 원천마다) | 적재(EDW 조인 `edw_meta` + 분류 `doc_class`) — 판 0005 | 뷰 → `search` `attrs`·이름 있는 거르기(사슬 `filter:`)·근거 `attrs`(`evidence: true`), `list_doc_fulltext` `doc_class`·`sf_op_id`, 분류 힌트(pl-33) | 유지 |
 

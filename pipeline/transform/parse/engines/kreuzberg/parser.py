@@ -4,7 +4,7 @@
 단독 실행: python -m data_parsing.parse_one --engine kreuzberg <문서> <out.json>
 """
 
-from pipeline.extract.engines._common.contract import _md_tables, _with_split_tables, split_tables
+from pipeline.transform.parse.engines._common.contract import _md_tables, _with_split_tables, split_tables
 
 
 import re

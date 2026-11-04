@@ -399,7 +399,7 @@ def _quad(q):
     return [float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))]
 
 def _fields(facts, mode):
-    from pipeline.extract.engines._common import fields as F
+    from pipeline.transform.parse.engines._common import fields as F
     if mode == "normalized":
         return F.normalize_facts(facts)
     out = {}                                     # baseline: 라벨→키 매핑만 같고 값은 fact.number/unit 그대로

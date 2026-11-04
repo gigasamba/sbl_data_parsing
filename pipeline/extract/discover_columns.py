@@ -74,7 +74,7 @@ _COLS_SQL = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHE
 def _mssql_tables(like):
     """연결·질의는 SQLAlchemy(source.rdb_connect·mssql.rows — SQL 글자 그대로)."""
     from common.store import mssql
-    from pipeline.extract.fetch_docs import rdb_connect
+    from pipeline.extract.candidate_ready import rdb_connect
 
     with rdb_connect() as cn:
         drafts = []

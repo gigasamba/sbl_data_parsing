@@ -1,8 +1,8 @@
-"""pipeline.extract.engine_stack 시험."""
+"""pipeline.transform.parse.engine_check 시험."""
 
 from unittest import mock
 
-from pipeline.extract.engine_stack import EXIT_BAD_ENGINE, engine_problems, engines_of, require_engines
+from pipeline.transform.parse.engine_check import EXIT_BAD_ENGINE, engine_problems, engines_of, require_engines
 
 
 def selftest():
@@ -31,7 +31,7 @@ def selftest():
     from common.core import paths
     from common.core.paths import STACK_FILE
     from pipeline import config as pc
-    from pipeline.extract.engines import registry
+    from pipeline.transform.parse.engines import registry
 
     shipped = cfgfile.read_file("stack", STACK_FILE)
     unknown = [e for e in engines_of(shipped.body) if e not in registry.engines()]
@@ -46,7 +46,7 @@ def selftest():
         cfgfile._CACHE.clear()
         cfgfile._CACHE.update(keep)
     print(
-        "[selftest] engine_stack — 엔진 집합(parse 합집합)·없는 엔진 거부(종료 2)·같은 body → 같은 sha·저장소 파일 모양·엔진·서버도 같은 파일 통과"
+        "[selftest] engine_check — 엔진 집합(parse 합집합)·없는 엔진 거부(종료 2)·같은 body → 같은 sha·저장소 파일 모양·엔진·서버도 같은 파일 통과"
     )
     return 0
 

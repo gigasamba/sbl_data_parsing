@@ -4,7 +4,7 @@
 단독 실행: python -m data_parsing.parse_one --engine anydoc <문서> <out.json>
 """
 
-from pipeline.extract.engines._common.contract import _md_tables, _with_tables
+from pipeline.transform.parse.engines._common.contract import _md_tables, _with_tables
 
 
 def _pptx_slide_breaks(md, path):

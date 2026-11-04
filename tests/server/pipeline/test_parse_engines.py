@@ -1,4 +1,4 @@
-"""pipeline.extract.run_engines 시험."""
+"""pipeline.transform.parse.parse_engines 시험."""
 
 import json
 import sys
@@ -7,8 +7,9 @@ from pathlib import Path
 from common.config import settings as C
 from common.core.paths import APP_ROOT, STACK_FILE
 from pipeline import config as pc
-from pipeline.extract.engines import registry
-from pipeline.extract.run_engines import (
+from pipeline.shared import parse_run as P0
+from pipeline.transform.parse.engines import registry
+from pipeline.transform.parse.parse_engines import (
     OCR_ENGINES,
     VLM_ENGINES,
     _default_procs,
@@ -19,7 +20,6 @@ from pipeline.extract.run_engines import (
     page_timeout,
     redact,
 )
-from pipeline.shared import parse_run as P0
 
 
 def selftest():
@@ -84,7 +84,7 @@ def selftest():
     assert p0_key("pymupdf", sha, ver) == p0_key("pymupdf", sha, ver) and p0_key("pymupdf", sha, ver) != p0_key("pymupdf", "b" * 64, ver)
     print("[selftest] P0 열쇠(출처 기록 — 엔진 폴더 코드·sha·버전만) 통과")
 
-    from pipeline.extract import run_one_engine as parse_one
+    from pipeline.transform.parse import parse_engines as parse_one
 
     d = parse_one.stamp(
         {"text": "본문"}, {"engine": "pymupdf", "engine_version": "1.2.3", "p0_key": "deadbeef", "params": {"profile": "default"}}
@@ -114,7 +114,7 @@ def selftest():
         [
             sys.executable,
             "-m",
-            "pipeline.extract.run_engines",
+            "pipeline.transform.parse.parse_engines",
             "--src",
             str(sdir),
             "--out",
@@ -149,7 +149,7 @@ def selftest():
         [
             sys.executable,
             "-m",
-            "pipeline.extract.run_engines",
+            "pipeline.transform.parse.parse_engines",
             "--src",
             str(sdir3),
             "--out",
@@ -173,7 +173,7 @@ def selftest():
         [
             sys.executable,
             "-m",
-            "pipeline.extract.run_engines",
+            "pipeline.transform.parse.parse_engines",
             "--src",
             str(sdir3),
             "--out",
@@ -207,7 +207,17 @@ def selftest():
                 json.dumps({"doc": doc5.name, "engine": e, "sha": sha5, "sec": 1, "error": "ValueError: document is encrypted"}) + chr(10)
             )
     r5 = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.run_engines", "--src", str(sdir5), "--out", str(odir5), "--stack", str(STACK_FILE)],
+        [
+            sys.executable,
+            "-m",
+            "pipeline.transform.parse.parse_engines",
+            "--src",
+            str(sdir5),
+            "--out",
+            str(odir5),
+            "--stack",
+            str(STACK_FILE),
+        ],
         capture_output=True,
         text=True,
         env=C.child_env(PIPE_PROCS="1"),
@@ -230,7 +240,7 @@ def selftest():
         [
             sys.executable,
             "-m",
-            "pipeline.extract.run_engines",
+            "pipeline.transform.parse.parse_engines",
             "--src",
             str(sdir6),
             "--out",
@@ -260,7 +270,7 @@ def test_retry_doubles_limit():
     """10-29 — 시간 초과면 같은 실행에서 제한을 두 배로 한 번 더(가짜 _isolated — 첫 번 TimeoutError, 둘째 성공 / 둘 다 실패)."""
     from unittest import mock
 
-    from pipeline.extract import run_engines as RA
+    from pipeline.transform.parse import parse_engines as RA
 
     seen = []
 
@@ -289,7 +299,7 @@ def test_run_docs_engines_concurrent():
     """10-29 — 한 문서의 엔진 2개는 동시에(둘이 같이 기다려야 풀리는 장벽 — 차례로 돌면 시간 초과로 깨짐)."""
     import threading
 
-    from pipeline.extract.run_engines import _run_docs
+    from pipeline.transform.parse.parse_engines import _run_docs
 
     barrier = threading.Barrier(2, timeout=10)
     ran = []
@@ -309,7 +319,7 @@ def test_run_procs_doc_shards():
     from unittest import mock
 
     from common.core import resources
-    from pipeline.extract import run_engines as RA
+    from pipeline.transform.parse import parse_engines as RA
 
     cmds = []
     fake = mock.Mock(side_effect=lambda cmd, **kw: (cmds.append(cmd), mock.Mock(wait=lambda: 0))[1])
@@ -388,7 +398,7 @@ def test_p0_layer_covers_every_engine_folder():
     """pl-47 — p0 층 지문 범위에 등록부의 모든 엔진 파서 폴더가 든다(이름과 폴더가 다른 html_stdlib·msg_extract·office·rapidocr_ko 포함)."""
     from common.core import artifacts as A
     from common.core.paths import DEPLOY_ROOT, PARSING_ROOT
-    from pipeline.extract.engines import registry
+    from pipeline.transform.parse.engines import registry
 
     covered = {p for g in A.LAYER_CODE["p0"] for p in DEPLOY_ROOT.glob(g) if p.is_file()}
     for eng, (stack, _) in registry.engines().items():

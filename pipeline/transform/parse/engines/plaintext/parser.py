@@ -5,7 +5,7 @@
 """
 import re
 
-from pipeline.extract.engines._common.contract import _md_tables, _with_tables
+from pipeline.transform.parse.engines._common.contract import _md_tables, _with_tables
 
 ENCODINGS = ("utf-8-sig", "utf-16", "cp949")
 

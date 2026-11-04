@@ -19,7 +19,7 @@
      - vlm 레인이면 덧붙임: `VLM_MAX_CONCURRENCY=6` · `VLM_CONCURRENCY=6` · `PARSE_POST=…,attachments,vlm_page` · `VLM_PAGE_MAX=`(상한 없음). 스캔 PDF면 `PREPARE_ROTATE=0`. 쪽 해상도는 settings.yaml `extract.ocr.dpi`(VLM 설정은 [pl-43](transform.md#pl-43)).
      - CPU 게이트 `CPU_MAX_LOAD` = light 레인 9(사실상 게이트 없음), 그 밖 `--cpu-gate`(기본 1.3).
      - 파싱 명령: `python -m pipeline.cli parse --source rdb:csv:<_docflow/seq>/batch.csv`, 제한 2700초.
-     - 구조화·적재: `EMBED_CONCURRENCY=6` · `EMBED_BATCH=32` · `BM25_THREADS=3`으로 `pipeline.transform.structure.build_bundle` → `pipeline.load.pgvector_load load`.
+     - 구조화·적재: `EMBED_CONCURRENCY=6` · `EMBED_BATCH=32` · `BM25_THREADS=3`으로 `pipeline.transform.structure.gold_bundle` → `pipeline.load.pgvector_load load`.
   8. 기록: 작업 폴더(`ops.pipeline_host.run_docs_dir`, 비우면 스크립트 옆 `test_space/`)의 `batch_progress/` — `progress.log`(진행), `doc_<seq>.log`(문서별 파싱), `queue_depth.jsonl`([rn-02](#rn-02)), 잠금 `run_docs.lock`.
 - 파일: `deploy/host/scripts/run_docs.py`, `pipeline/cli.py`, `deploy/docker/entrypoint.sh`.
 - QA: `tests/general/deploy/test_run_docs.py`(명령 글자·설정 대조)·`test_docs_flow.py` · 통과.
@@ -50,7 +50,7 @@
 - 이유: 게시가 gold를 기다리지 않고, 원본은 게시가 성공했을 때만 지운다.
 - 규칙:
   1. 파싱 성공 → 게시 대기열(게시 스레드 1개 — Object Storage 업로드 + ParsingMeta INSERT).
-  2. 게시 성공 → 원본(warm `.bin`·`_docflow/<seq>/_source_files`) 삭제 → 구조화 대기열(`struct_workers` 스레드 — build_bundle·pgvector_load) → `_docflow/<seq>` 삭제(`--no-cleanup`이면 남김).
+  2. 게시 성공 → 원본(warm `.bin`·`_docflow/<seq>/_source_files`) 삭제 → 구조화 대기열(`struct_workers` 스레드 — gold_bundle·pgvector_load) → `_docflow/<seq>` 삭제(`--no-cleanup`이면 남김).
   3. 파싱 실패·게시 실패 → 원본을 남기고 로그에만(gold로 안 감, EDW에 안 씀). 파싱 실패면 그 문서 표지(`RUN_DOCS_DOC`)가 붙은 컨테이너 안 프로세스를 끈다.
   4. gold 실패 → 게시한 silver·ParsingMeta 행은 그대로, 로그에만. `gold_version`이 비어 다음 `--skip-done`이 다시 고른다(파싱·게시부터 다시).
 - 파일: `deploy/host/scripts/run_docs.py`(`doc_flow`, `cleanup_doc`).

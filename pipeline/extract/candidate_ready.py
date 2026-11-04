@@ -213,7 +213,7 @@ def _record_source_skipped(state, skipped):
 
 
 # ── warm 저장소(프리페치) ──────────────────────────────────────────────
-# 다음 배치 원본을 미리 받아 두는 1회용 캐시. `python -m pipeline.extract.fetch_docs warm --csv <배치csv>`(프리페치)가
+# 다음 배치 원본을 미리 받아 두는 1회용 캐시. `python -m pipeline.extract.candidate_ready warm --csv <배치csv>`(프리페치)가
 # 파일을 내려 warm에 심고, 실제 파싱의 fetch_one이 같은 (bucket,key)를 만나면 네트워크 다운로드를 건너뛰고
 # 곧바로 가져간다(warm에서 지움 — 사본 중복 저장 없음). SOURCE_WARM 미설정이면 전부 꺼진다(기존 동작 그대로).
 
@@ -306,13 +306,13 @@ def _warm_take(o, dest, name):
 
 
 def _warm_cmd(argv):
-    """`python -m pipeline.extract.fetch_docs warm --csv <batch.csv> [--workers N]` — 다음 배치 원본을 미리 받아
+    """`python -m pipeline.extract.candidate_ready warm --csv <batch.csv> [--workers N]` — 다음 배치 원본을 미리 받아
     SOURCE_WARM에 심는 프리페치(배치 러너가 현재 배치 파싱 중에 백그라운드로 돌린다). watermark·처리 기록·
     manifest는 전혀 건드리지 않고 파일만 내려놓는다 — 실제 파싱(fetch_one)이 warm 적중으로 가져간다.
     한 건 실패는 그 배치가 늦어질 뿐(일반 다운로드로 폴백)이라 조용히 넘어간다."""
     import argparse
 
-    ap = argparse.ArgumentParser(prog="pipeline.extract.fetch_docs warm")
+    ap = argparse.ArgumentParser(prog="pipeline.extract.candidate_ready warm")
     ap.add_argument("--csv", required=True, help="make_batch.py가 만든 다음 배치 csv(id·s3_key·original_filename·file_size)")
     ap.add_argument("--workers", type=int, default=max(1, int(pc.cfg().extract.source.fetch_workers)))  # 11-04 원본 받기와 같은 칸
     a = ap.parse_args(argv)
@@ -475,7 +475,7 @@ def _rdb_plan(table, state, limit=0):
                 "updated_at": o["updated_at"],
                 "original_filename": o.get("filename"),
                 "content_version_id": o.get("content_version"),  # FileStorageMap 고유 칸
-                "created_at": o.get("created_at"),  # 원천 등록 시각 → build_bundle → gold doc.created_at
+                "created_at": o.get("created_at"),  # 원천 등록 시각 → gold_bundle → gold doc.created_at
                 "source_system": _derive_source_from_key(o["key"]),
             }  # publish_parse_result가 문서별로 이 값 사용(없으면 --source-system 폴백)
             man_f.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in man.values()), encoding="utf-8")
@@ -560,7 +560,7 @@ def _tree_files(src):
 def _folder_tree(src, files, out, state):
     """PC 폴더 원천이 원천별 하위 폴더(`SFDC/<uuid>/<파일>` — Object Storage 키 모양)면: rdb 배치와 같게
     평평한 폴더(`<out>/_source_files`)에 복사하고 manifest.jsonl에 상대 키(`key`)·원본 주소(`uri`)·원천을 적는다 — 구조화가 키 첫 마디로
-    원천을 고르고(build_bundle), 원본 주소가 원래 파일을 가리키게. 같은 이름은 rdb와 같은 규칙(`<상위 폴더>__<이름>`)."""
+    원천을 고르고(gold_bundle), 원본 주소가 원래 파일을 가리키게. 같은 이름은 rdb와 같은 규칙(`<상위 폴더>__<이름>`)."""
     local = out / "_source_files"
     local.mkdir(parents=True, exist_ok=True)
     rows = [{"key": p.relative_to(src).as_posix(), "filename": p.name, "doc_id": p.parent.name, "path": p} for p in files]
@@ -677,7 +677,7 @@ def pick_new(src, out, max_new, only=None):
 
 def unparsed(names, out):
     """새 문서 후보 = EDW FileStorageMap ∖ ParsingMeta. FileStorageMap 쪽은 이미 받은 이름 목록
-    (`--source rdb:`가 FileStorageMap을 읽어 만든 것 — 이름 ↔ 원본 키 s3_key 대응은 fetch_docs.py가 쓴 manifest.jsonl), ParsingMeta 쪽은
+    (`--source rdb:`가 FileStorageMap을 읽어 만든 것 — 이름 ↔ 원본 키 s3_key 대응은 candidate_ready.py가 쓴 manifest.jsonl), ParsingMeta 쪽은
     여기서 **EDW를 한 번 읽는다**(파싱 입구의 EDW 읽기 — 읽기 계정, PC는 EDW 대역 sqlite `RDB_SQLITE`): parse_status가 ok·partial인
     행의 source_key 집합(`done_source_keys`). 통째 실패는 ParsingMeta에 안 쓰므로 실패한 문서는 행이 없어 다음 실행이 다시 고른다.
     out = 결과 루트(파싱 입구 pipeline.cli의 OUT). 키 = manifest의 "key"(없으면 이름 그대로 — publish의 source_key와 같은 규칙, parsing_meta.plan).

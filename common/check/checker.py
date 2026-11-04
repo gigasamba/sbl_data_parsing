@@ -44,7 +44,7 @@ def _pc():
         return None
 
 
-# pipeline.extract.engines는 함수 안에서 늦게 import(mcp-server 이미지엔 pipeline이 없어
+# pipeline.transform.parse.engines는 함수 안에서 늦게 import(mcp-server 이미지엔 pipeline이 없어
 # top-level import하면 점검기 자체가 크래시한다).
 
 ROOT = APP_ROOT
@@ -221,9 +221,9 @@ def env_main():
         langs = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True).stdout.split()
         line("kor" in langs, "tesseract kor 언어팩")
 
-    print("\n== 스택 (pipeline/extract/engines/<스택>) ==")
+    print("\n== 스택 (pipeline/transform/parse/engines/<스택>) ==")
     try:
-        registry = importlib.import_module("pipeline.extract.engines.registry")  # mcp-server 이미지엔 pipeline이 없음
+        registry = importlib.import_module("pipeline.transform.parse.engines.registry")  # mcp-server 이미지엔 pipeline이 없음
     except ImportError:
         line(True, "parse 없음(rag-core)", "이 이미지엔 parse/engines가 없음 — 스택 점검 건너뜀")
     else:

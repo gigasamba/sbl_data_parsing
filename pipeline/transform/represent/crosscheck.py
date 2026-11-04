@@ -10,7 +10,7 @@ from common.core.text import normalize_value
 
 
 def families():
-    from pipeline.extract.engines import registry
+    from pipeline.transform.parse.engines import registry
     from pipeline.transform.represent.parse_scoring import FAMILY
 
     return {e: FAMILY.get(e, st) for e, (st, _) in registry.engines().items()}

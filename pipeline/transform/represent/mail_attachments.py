@@ -123,7 +123,7 @@ def parse_attachment(entry, store=None):
     ext = Path(entry["name"]).suffix.lower()
     content_sha = sha(entry["bytes"])
     stack = _stack_parse()
-    # stack.json은 PDF를 .pdf_text/.pdf_image로 나눠 둠(run_engines와 같은 키) — 글자층 엔진 먼저, 15자 못 넘으면 OCR 엔진
+    # stack.json은 PDF를 .pdf_text/.pdf_image로 나눠 둠(parse_engines와 같은 키) — 글자층 엔진 먼저, 15자 못 넘으면 OCR 엔진
     engines = stack.get(".pdf_text", []) + stack.get(".pdf_image", []) if ext == ".pdf" else stack.get(ext, [])
     for eng in engines:
         ver = P0.engine_version(eng)
@@ -140,7 +140,7 @@ def parse_attachment(entry, store=None):
         try:
             tmp.write_bytes(entry["bytes"])
             # 별도 프로세스 + 시간 제한 — 멈추는 엔진이 대표 결과 만들기 전체를 세우지 않게
-            from pipeline.extract.run_engines import _isolated
+            from pipeline.transform.parse.parse_engines import _isolated
 
             _isolated(eng, tmp, out_json, "default", pc.cfg().extract.attach.timeout)
             res = json.loads(out_json.read_text(encoding="utf-8"))

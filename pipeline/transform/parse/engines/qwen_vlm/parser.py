@@ -8,7 +8,7 @@
 **외부 API 주소 금지 — 내부망 엔드포인트만**(llm.complete의 require_internal).
 """
 from common.config.settings import cfg as _cfg
-from pipeline.extract.engines._common.contract import _md_tables, _with_tables
+from pipeline.transform.parse.engines._common.contract import _md_tables, _with_tables
 from pipeline.shared import vlmcall as V
 
 # ponytail(TB6 천장): VLM이 돌려주는 건 마크다운 글자뿐 — rowspan·colspan 메타가 없어 covered 칸이 진짜

@@ -1,8 +1,8 @@
-"""pipeline.extract.engines.rapidocr.parser(엔진 파일 — 엔진 지문) 자기 점검 — S9b(VS9 B-1, D-018)에 모듈 `__main__`에서 옮김(줄 글자 그대로).
-옛 명령 `python -m pipeline.extract.engines.rapidocr.parser`(반입 판정 목록 밖 — 일반 시험).
+"""pipeline.transform.parse.engines.rapidocr.parser(엔진 파일 — 엔진 지문) 자기 점검 — S9b(VS9 B-1, D-018)에 모듈 `__main__`에서 옮김(줄 글자 그대로).
+옛 명령 `python -m pipeline.transform.parse.engines.rapidocr.parser`(반입 판정 목록 밖 — 일반 시험).
 ⚠️ 이 옮기기는 엔진 지문을 바꾼다(사용자 10-28 — 엔진 파일 옮기기 커밋 하나, 되돌리기는 그 커밋 revert · refactor.md C-52)."""
 
-from pipeline.extract.engines.rapidocr.parser import MAX_SIDE, _resized, ocr_threads
+from pipeline.transform.parse.engines.rapidocr.parser import MAX_SIDE, _resized, ocr_threads
 
 
 def test_main():  # 옛 `if __name__ == "__main__":   # 자기점검: 긴 변 상한 축소 + 되돌림 배율(모델 없이 _resized만)` 몸통

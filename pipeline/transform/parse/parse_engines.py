@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """문서 폴더 × 엔진 일괄 파싱 → output/parse/<engine>/<문서>.json + output/parse/runs.jsonl(시간·오류).
 
-사용: python -m pipeline.extract.run_engines [--src <원본 문서 폴더>] [--out output/parse] [--engines pdfplumber,pymupdf] [--limit N]
+사용: python -m pipeline.transform.parse.parse_engines [--src <원본 문서 폴더>] [--out output/parse] [--engines pdfplumber,pymupdf] [--limit N]
+자식(문서 1건 × 엔진 1개): python -m pipeline.transform.parse.parse_engines --one --engine <이름> [--profile tuned] [--fields baseline] <문서> <out.json>
+엔진 목록: python -m pipeline.transform.parse.parse_engines --one --list
   --src 생략 시 DOC_DIR 필수(없으면 SystemExit) — common.core.paths.doc_dir.
   제한 시간: 문서×엔진 1건 = 쪽 수 × 쪽당 초 — 글자 엔진 text_page_sec(PARSE_TEXT_PAGE_SEC, 기본 10) ·
     VLM 엔진은 VLM 호출 1건 제한 common.models.vlm.timeout(기본 180) + 엔진의 첫 문서는 warmup_sec 하한 + 별도 프로세스 시작 여유 isolate_overhead.
     넘으면 같은 실행에서 제한을 두 배로 한 번 더, 그래도 넘으면 실패로 기록.
-  문서마다 그 형식의 엔진(stack.json)을 **동시에**(엔진마다 별도 프로세스 run_one_engine — 세그폴트가 전체를
+  문서마다 그 형식의 엔진(stack.json)을 **동시에**(엔진마다 별도 자식 프로세스 `--one` — 세그폴트가 전체를
     멈추지 않음). --workers N: 문서 N개를 동시에. --procs N: 문서를 N조각으로 나눠 프로세스 N개가 동시에(스레드는 코어 ÷ N).
   OCR 엔진(OCR_ENGINES — rapidocr_ko)은 파싱 엔진으로 돌지 않는다 — 이미지·스캔 문서는 VLM 엔진만.
     글자 PDF 안의 스캔 쪽은 여기서 OCR 엔진을 더하지 않고 대표 결과(build_rep)의 쪽 VLM이 그 쪽만 채운다.
@@ -41,13 +43,14 @@ from common.core.paths import (  # 폴더 재편 뒤 이 두 상수만 바뀌면
     DEPLOY_ROOT,
     PARSING_ROOT,
     RES_ROOT,
+    atomic_write_text,
     doc_dir,
 )
 from pipeline import config as pc
-from pipeline.extract.engines import registry
 from pipeline.shared import parse_run as P0  # P0 열쇠(엔진 버전·코드 지문) — 결과 출처 기록(실험 저장소 계약과 같은 규칙)
 from pipeline.shared import runtrace
 from pipeline.shared.parse_run import doc_types  # 문서→형식 키(.pdf_text/.pdf_image, _types.json 캐시)
+from pipeline.transform.parse.engines import registry
 
 
 def redact(s):
@@ -196,7 +199,7 @@ def main():
     ap.add_argument(
         "--stack",
         default=None,
-        help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file · pl-03 represent·build_bundle과 같음)",
+        help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file · pl-03 represent·gold_bundle과 같음)",
     )
     a = ap.parse_args()
     from common.core import resources
@@ -433,7 +436,7 @@ def run_procs(a, docs):
         NUMEXPR_NUM_THREADS=threads,
         TORCH_NUM_THREADS=threads,
     )
-    base, skip_next = [sys.executable, "-m", "pipeline.extract.run_engines"], False
+    base, skip_next = [sys.executable, "-m", "pipeline.transform.parse.parse_engines"], False
     for x in sys.argv[1:]:  # --procs·--shard만 빼고 같은 인자
         if skip_next:
             skip_next = False
@@ -521,7 +524,7 @@ def _sha(p):
 
 @functools.cache  # 엔진 폴더 해시는 프로세스마다 엔진당 한 번(실행 중 코드는 안 바뀜)
 def engine_code_fp(eng):
-    """원문 파싱 결과를 정하는 코드 = 그 엔진 폴더(extract/engines/<엔진>)만 — common·run_engines(실행 관리)가 바뀌어도 결과는 같으므로 넣지 않음."""
+    """원문 파싱 결과를 정하는 코드 = 그 엔진 폴더(transform/parse/engines/<엔진>)만 — common·parse_engines(실행 관리)가 바뀌어도 결과는 같으므로 넣지 않음."""
     import hashlib
 
     h = hashlib.sha256()
@@ -574,9 +577,9 @@ def _isolated_once(eng, doc, dst, profile, tmo, py, env=None, prov=None):
     from common.core.paths import child_env
 
     low = bool(pc.cfg().extract.low_priority)  # 일괄 파싱은 낮은 우선순위(parse MCP 서비스는 끔 — 요청이 CPU를 먼저)
-    # PADDLE_PYTHON은 별도 venv(.venv-paddle)라 cwd 상속에 의존하지 않고 child_env()의 PYTHONPATH(deploy/)로 `-m pipeline.extract.run_one_engine`을 찾게 함
+    # cwd 상속에 기대지 않고 child_env()의 PYTHONPATH(deploy/)로 이 모듈을 찾게 함
     pr = RS.gated_popen(
-        [py, "-m", "pipeline.extract.run_one_engine", "--engine", eng, "--profile", profile]
+        [py, "-m", "pipeline.transform.parse.parse_engines", "--one", "--engine", eng, "--profile", profile]
         + (["--provenance", json.dumps(prov, ensure_ascii=False)] if prov else [])
         + [str(doc), str(dst)],
         env=env if env is not None else child_env(),
@@ -595,7 +598,7 @@ def _isolated_once(eng, doc, dst, profile, tmo, py, env=None, prov=None):
         pr.communicate()
         dst.unlink(missing_ok=True)  # 쓰다 만 결과를 남기지 않음
         raise TimeoutError(f"문서×엔진 시간 제한 초과({tmo}초)") from tmo_err
-    sp = SP.current()  # 자식(run_one_engine)이 stdout 끝에 남긴 자원 사용(cpu·최대 메모리)을 이 문서×엔진 span에
+    sp = SP.current()  # 자식(--one)이 stdout 끝에 남긴 자원 사용(cpu·최대 메모리)을 이 문서×엔진 span에
     if sp is not None:
         sp.set(**SP.read_usage(out))
     if pr.returncode != 0:
@@ -608,7 +611,45 @@ def _isolated_once(eng, doc, dst, profile, tmo, py, env=None, prov=None):
         )
 
 
+def one_main(argv):
+    """자식 모드 `--one` — 문서 1건 × 엔진 1개를 이 프로세스에서 파싱해 out.json으로(부모 _isolated_once가 띄움)."""
+    ap = argparse.ArgumentParser(prog="parse_engines --one")
+    ap.add_argument("--list", action="store_true")
+    ap.add_argument("--engine")
+    ap.add_argument("--profile", default="default", choices=["default", "tuned"])
+    ap.add_argument(
+        "--fields",
+        default="normalized",
+        choices=["normalized", "baseline"],
+        help="normalized=fields.py 정규화 · baseline=fact의 number/unit만",
+    )
+    ap.add_argument("--provenance", default=None, help="출처 블록 JSON(engine·engine_version·p0_key·params) — 결과에 넣어 한 번에 씀")
+    ap.add_argument("input", nargs="?")
+    ap.add_argument("output", nargs="?")
+    a = ap.parse_args(argv)
+    if a.list:
+        for e, (s, m) in registry.engines().items():
+            print(f"{e:18s} {s:15s} {' '.join(registry.formats(e))}" + ("  (미실측)" if e in m.UNVERIFIED else ""))
+        return
+    if not (a.engine and a.input and a.output):
+        ap.error("--engine, 입력, 출력 필요")
+    out = registry.run(a.engine, a.input, a.profile, a.fields)
+    if a.provenance:
+        stamp(out, json.loads(a.provenance))
+    atomic_write_text(Path(a.output), json.dumps(out, ensure_ascii=False))  # 끊겨도 반쪽 파일 없음
+    print(SP.usage_line(), flush=True)  # 이 프로세스의 cpu·최대 메모리 한 줄(부모의 extract.parse span이 읽음)
+
+
+def stamp(out, prov):
+    """엔진 결과에 provenance 블록 — engine·engine_version·p0_key·params·created_at(쓰기 전에 한 번에)."""
+    out["provenance"] = {**prov, "created_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    return out
+
+
 if __name__ == "__main__":
     utf8_stdout()
-    with runtrace.run("run_all", sys.argv[1:]):  # 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
-        main()
+    if sys.argv[1:2] == ["--one"]:
+        one_main(sys.argv[2:])
+    else:
+        with runtrace.run("run_all", sys.argv[1:]):  # 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
+            main()

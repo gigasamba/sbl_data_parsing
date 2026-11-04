@@ -1,5 +1,5 @@
 """엔진 구성 — 파일 → 검사(이미지에 없는 엔진 거부). 서버·PC가 같은 파일을 쓴다.
-진입점(pipeline.cli·pipeline.parse_service)이 resolve()로 시작 때 검사하고, 층(run_engines·mail_attachments·build_rep·build_bundle)은
+진입점(pipeline.cli·pipeline.parse_service)이 resolve()로 시작 때 검사하고, 층(parse_engines·mail_attachments·build_rep·gold_bundle)은
 pipeline.config.stack()으로 같은 파일을 읽는다. 파일은 오버레이 패치로만 바뀐다(실행 중에는 그대로)."""
 
 import sys
@@ -16,15 +16,15 @@ def engines_of(body):
 
 
 def engine_problems(body):
-    """이미지(또는 PC)가 돌릴 수 없는 엔진 — 등록부(pipeline/extract/engines)에 없거나 REQUIRES 모듈·도구가 없음. REQUIRES_ENV(모델 주소
+    """이미지(또는 PC)가 돌릴 수 없는 엔진 — 등록부(pipeline/transform/parse/engines)에 없거나 REQUIRES 모듈·도구가 없음. REQUIRES_ENV(모델 주소
     설정)는 설치 문제가 아니라 보지 않는다(Q8)."""
-    from pipeline.extract.engines import registry
+    from pipeline.transform.parse.engines import registry
 
     known = registry.engines()
     out = []
     for e in engines_of(body):
         if e not in known:
-            out.append(f"{e}: 등록 안 됨(pipeline/extract/engines에 없음)")
+            out.append(f"{e}: 등록 안 됨(pipeline/transform/parse/engines에 없음)")
         elif not registry.installed(e):
             out.append(f"{e}: 설치 안 됨({', '.join(registry.missing_deps(e))})")
     return out

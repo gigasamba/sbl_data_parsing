@@ -8,7 +8,7 @@
   메타   : 고객사·계약 번호 — 파싱 모듈 교차 확인 값(_rep rep.meta)(서로 다른 계열 파서 2개+)만
   임베딩 : --embed api(EMBED_BASE_URL·EMBED_MODEL — 서버 임베딩 전용 모델) · none(임베딩 없음 — 시험) (L2 정규화 저장, 차원은 첫 응답에서)
 산출: docs.jsonl · chunks.jsonl · vectors.npy(float32, chunks 순서) · meta.json
-사용: python -m pipeline.transform.structure.build_bundle [--parse-dir output/parse] [--src output/prepared] [--embed api|none] [--out output/edw/bundle]
+사용: python -m pipeline.transform.structure.gold_bundle [--parse-dir output/parse] [--src output/prepared] [--embed api|none] [--out output/edw/bundle]
 """
 
 import argparse
@@ -660,5 +660,5 @@ if __name__ == "__main__":
 
     importlib.import_module("common.config.setarg").apply()  # --set 이름=값(호스트 run_docs.py 구조화가 임베딩 동시 수 등을 넘김)
     utf8_stdout()
-    with runtrace.run("build_bundle", sys.argv[1:]):  # 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
+    with runtrace.run("gold_bundle", sys.argv[1:]):  # 직접 실행이면 자기 run_id(부모가 이어줬으면 그대로)
         main()

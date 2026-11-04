@@ -24,7 +24,7 @@ DDL은 실행하지 않는다(표는 사람이 만듦). SQL은 식별자 화이�
 상태(parse_status) = ok · partial(교차 정확도 < criteria.json run.cross_acc_full) · failed · skipped_drm(DRM·암호 래핑) ·
 skipped_dup(dedup keep.txt에서 빠짐) · not_parsed(이번 파싱 대상 아님) · skipped_disk_cap(원본이 먼저 지워짐 — manifest의
 disk_cap_sha256으로 행만 씀). 원본은 파싱이 끝나면 바로 지워지므로 ok·partial도 로컬 원본이 없을 수 있다 — 그때는
-manifest의 "sha256"(fetch_docs가 지우기 전에 남김)으로 대체한다(parse_status는 그대로).
+manifest의 "sha256"(candidate_ready가 지우기 전에 남김)으로 대체한다(parse_status는 그대로).
 
 쓰기 대상: PM_TABLE(기본 AI.ParsingMeta) · PM_BUCKET(업로드 버킷, "file://<폴더>"면 로컬 폴더를 가짜 Object Storage로) ·
 PM_PREFIX(버킷 안 경로 접두, 선택) · common.connections.rdb 쓰기 계정(RDB_HOST·RDB_PORT·RDB_DATABASE·RDB_WRITE_USER·
@@ -371,7 +371,7 @@ def plan(
     reparse_keys=None,
 ):
     """로컬만 읽는다(네트워크·DB 접속 없음) — --dry-run이 그대로 쓸 수 있음.
-    entries: manifest.jsonl 행(fetch_docs 형식 — file_name·key(원본 전체 키)·doc_id·uri·original_filename·
+    entries: manifest.jsonl 행(candidate_ready 형식 — file_name·key(원본 전체 키)·doc_id·uri·original_filename·
     source_system(있을 때만 — 없으면 이 함수의 source_system 인자를 폴백으로 쓴다) 등).
     rep_dir: `output/parse/_rep`(대표 결과 폴더 — `<name>.json` 전체를 읽어 업로드할 .md를 미리 만든다).
     upload_statuses: 원본을 실제로 올릴 상태 집합(None = DEFAULT_UPLOAD_STATUSES = ok·partial만).
@@ -559,7 +559,7 @@ class LocalFolderStore:
 
 
 class S3Store:
-    """실제 Object Storage(PM_BUCKET=버킷 이름) — boto3(pipeline/extract/fetch_docs.py·cli/os_put.py와 같은 접속 env OS_*)."""
+    """실제 Object Storage(PM_BUCKET=버킷 이름) — boto3(pipeline/extract/candidate_ready.py·cli/os_put.py와 같은 접속 env OS_*)."""
 
     def __init__(self, bucket):
         import boto3

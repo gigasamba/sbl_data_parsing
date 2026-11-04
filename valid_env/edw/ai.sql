@@ -2,7 +2,7 @@
 -- the connector ATTACHes that file AS AI, so AI.FileStorageMap resolves like T-SQL.
 -- STRICT tables + CHECK(length) mirror the NVARCHAR(n)/BIGINT/INT/FLOAT types, so a bad value fails here as on the server.
 
--- AI.FileStorageMap — one row per stored source file (s3_key 1:1). Columns read by pipeline/extract/fetch_docs.py
+-- AI.FileStorageMap — one row per stored source file (s3_key 1:1). Columns read by pipeline/extract/candidate_ready.py
 -- (id, content_version_id, s3_key, original_filename, file_size) and by doc_meta_map.json (source_system, sf_op_id, contract_id).
 CREATE TABLE FileStorageMap (
     id                 INTEGER PRIMARY KEY,                                                    -- BIGINT IDENTITY

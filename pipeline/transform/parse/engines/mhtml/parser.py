@@ -10,7 +10,7 @@ import re
 from email import policy
 from html.parser import HTMLParser
 
-from pipeline.extract.engines._common.contract import _html_rows, _with_tables
+from pipeline.transform.parse.engines._common.contract import _html_rows, _with_tables
 
 
 class _Text(HTMLParser):

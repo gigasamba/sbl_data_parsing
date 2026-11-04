@@ -24,9 +24,9 @@ from common.core.console import utf8_stdout
 from common.core.paths import APP_ROOT, CRITERIA_FILE, doc_dir
 from common.core.text import supsub_mark  # 첨자 정규화는 한 곳(각자 맵 금지)
 from pipeline import config as pc
-from pipeline.extract.engines import registry
 from pipeline.shared.ext_groups import IMG_EXTS
 from pipeline.shared.parse_run import is_env_error, pdf_kind
+from pipeline.transform.parse.engines import registry
 
 # 인식 계열 — 같은 모델·같은 텍스트 레이어 추출기를 쓰는 엔진은 같이 틀리므로 한 표로 센다. 목록에 없으면 스택 이름이 계열.
 FAMILY = {
@@ -589,7 +589,7 @@ def run(parse_dir, src_dir, truth_path, akey_dir, prev_docs=None):
         cur_engs = sorted({e for d_, e in runs if d_ == doc})
         prev_entry = (prev_docs or {}).get(doc)
         prev_fp = (prev_entry or {}).get("fp") or {}
-        # 이전 점수는 sha(원본 내용)·p0_code(엔진 코드 지문, run_engines.engine_code_fp)가 모두 그대로일 때만 들고 온다.
+        # 이전 점수는 sha(원본 내용)·p0_code(엔진 코드 지문, parse_engines.engine_code_fp)가 모두 그대로일 때만 들고 온다.
         fresh = bool(cur_engs) and all(
             prev_fp.get(e, {}).get("sha") == (runs.get((doc, e)) or {}).get("sha")
             and prev_fp.get(e, {}).get("p0_code") == (runs.get((doc, e)) or {}).get("p0_code")

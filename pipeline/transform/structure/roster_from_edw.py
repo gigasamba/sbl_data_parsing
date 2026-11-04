@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """EDW 고객·제품 마스터(추출본) → CLIENT_ROSTER CSV(고객)·용어집 draft(제품) 자동 생성. 열 매핑만 바꾸는
-식(fetch_docs와 같은 틀 — 표 이름·열 이름은 사람이 적는 매핑 파일 하나, 코드는 안 바뀜) — 실제
+식(candidate_ready와 같은 틀 — 표 이름·열 이름은 사람이 적는 매핑 파일 하나, 코드는 안 바뀜) — 실제
 EDW 접속 정보·열 이름(기밀)은 서버 settings.yaml에서만 채우고, 이 코드는 어떤 매핑이든 그대로 돈다.
 
 시험은 --source csv:<경로>로(합성 EDW 추출본, 실제 RDB·네트워크 없이). --source rdb:<표>(mssql,
-접속은 common.connections.rdb 읽기 계정 — fetch_docs.rdb_connect)는 실제 EDW 접속이 있는 서버에서만 — PC에는 접속 정보가
+접속은 common.connections.rdb 읽기 계정 — candidate_ready.rdb_connect)는 실제 EDW 접속이 있는 서버에서만 — PC에는 접속 정보가
 없어 시험 대상이 아니다(selftest는 csv:만).
 
 mapping.json(필수 name, 선택 aliases·category): {"name": "<열 이름>", "aliases": "<열 이름>", "category": "<열 이름>"}
@@ -32,7 +32,7 @@ from pathlib import Path
 
 from common.core import terms as T
 
-TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # fetch_docs.py·common/sources.py와 같은 화이트리스트
+TABLE_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")  # candidate_ready.py·common/sources.py와 같은 화이트리스트
 COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ROSTER_COLS = [
     "client_id",
@@ -69,13 +69,13 @@ def rows_from_csv(path):
 
 
 def rows_from_rdb(table, select_cols):
-    """실제 EDW 표 — mssql — 접속은 common.connections.rdb 읽기 계정(fetch_docs.py와 같음).
-    열 이름은 호출부(main)가 이미 COL_ID_RE로 검증한 것만 들어온다(SQL 삽입 방지, fetch_docs.py와 같은 원칙)."""
+    """실제 EDW 표 — mssql — 접속은 common.connections.rdb 읽기 계정(candidate_ready.py와 같음).
+    열 이름은 호출부(main)가 이미 COL_ID_RE로 검증한 것만 들어온다(SQL 삽입 방지, candidate_ready.py와 같은 원칙)."""
     if not TABLE_ID_RE.match(table):
         raise ValueError(f"[gen_roster] 표 이름이 올바르지 않음(영문·숫자·_, 스키마.표만): {table!r}")
     cols_sql = ", ".join(f"[{c}]" for c in select_cols)
     from common.store import mssql
-    from pipeline.extract.fetch_docs import rdb_connect  # SQLAlchemy 연결(RDB_CONNECT_KWARGS는 안 넘김)
+    from pipeline.extract.candidate_ready import rdb_connect  # SQLAlchemy 연결(RDB_CONNECT_KWARGS는 안 넘김)
 
     ident = ".".join(f"[{p}]" for p in table.split("."))
     with rdb_connect(extra_kwargs=False) as cn:

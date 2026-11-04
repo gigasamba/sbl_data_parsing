@@ -13,7 +13,7 @@
 
 작은 기울기(1~5도) 보정은 하지 않는다 — 필요하면 튜닝 항목.
 
-사용: python -m pipeline.extract.filter_and_rotate [--only output/dedup/keep.txt] → python -m pipeline.extract.run_engines --src output/prepared
+사용: python -m pipeline.extract.filter_and_rotate [--only output/dedup/keep.txt] → python -m pipeline.transform.parse.parse_engines --src output/prepared
 """
 
 import argparse
@@ -35,8 +35,8 @@ from common.core.paths import (  # 폴더 재편 뒤 이 상수만 바뀌면 됨
     tmp_path_for,  # tmp+os.replace · place()가 하드링크한 dst를 그 자리에서 save()하면 원본 inode까지 덮어씀
 )
 from pipeline import config as pc
-from pipeline.extract.engines import registry  # '처리 엔진 없는 확장자' 판정(engines_for)
 from pipeline.shared.ext_groups import IMG_EXTS, OOXML_EXTS
+from pipeline.transform.parse.engines import registry  # '처리 엔진 없는 확장자' 판정(engines_for)
 
 _OCR: list = []
 
@@ -230,7 +230,9 @@ def _ocr_lines(arr):
     if eng is None:
         from rapidocr import RapidOCR
 
-        from pipeline.extract.engines.rapidocr.parser import ko_params  # OC1 — 엔진과 같은 설정·스레드 상한(병렬 prepare도 코어 다툼 없게)
+        from pipeline.transform.parse.engines.rapidocr.parser import (
+            ko_params,  # OC1 — 엔진과 같은 설정·스레드 상한(병렬 prepare도 코어 다툼 없게)
+        )
 
         params = ko_params()
         n = params.get("EngineConfig.onnxruntime.intra_op_num_threads")
@@ -342,7 +344,7 @@ def main():
     if out.resolve() == src.resolve():  # out은 만들어 내는 폴더(지우고 다시 씀) — 원본 폴더면 원본이 지워짐
         raise SystemExit("--out이 원본 폴더와 같음 — 다른 폴더를 지정")
     out.mkdir(parents=True, exist_ok=True)
-    # 기록 파일은 하위 폴더 _records/에(run_engines는 이 폴더의 맨 위 파일만 문서로 훑는다 — 기록이 "건너뜀 .csv"로 세지지 않게)
+    # 기록 파일은 하위 폴더 _records/에(parse_engines는 이 폴더의 맨 위 파일만 문서로 훑는다 — 기록이 "건너뜀 .csv"로 세지지 않게)
     records = out / "_records"
     records.mkdir(exist_ok=True)
     if (out / "skipped.jsonl").exists() and not (records / "skipped.jsonl").exists():  # 예전 자리의 누적 기록은 옮겨 이어 씀

@@ -4,7 +4,7 @@
 단독 실행: python -m data_parsing.parse_one --engine pymupdf <문서> <out.json>
 """
 
-from pipeline.extract.engines._common.contract import _mk_table, _facts_with_review, _fill_merged, fill_merged_on
+from pipeline.transform.parse.engines._common.contract import _mk_table, _facts_with_review, _fill_merged, fill_merged_on
 
 
 def parse_pymupdf(path, profile="default"):

@@ -29,7 +29,7 @@ def selftest():
         root = Path(td)
         (root / "pipeline" / "transform" / "structure").mkdir(parents=True)
         (root / "common" / "core").mkdir(parents=True)
-        (root / "pipeline" / "transform" / "structure" / "build_bundle.py").write_text(
+        (root / "pipeline" / "transform" / "structure" / "gold_bundle.py").write_text(
             "from common.core import text\nx = 1\n", encoding="utf-8"
         )
         (root / "common" / "core" / "text.py").write_text("y = 1\n", encoding="utf-8")
@@ -37,7 +37,7 @@ def selftest():
 
         fp1 = code_fp("s", root=root)
         check("code_fp: 같은 내용 → 같은 지문", fp1 == code_fp("s", root=root))
-        (root / "pipeline" / "transform" / "structure" / "build_bundle.py").write_text(
+        (root / "pipeline" / "transform" / "structure" / "gold_bundle.py").write_text(
             "from common.core import text\nx = 2\n", encoding="utf-8"
         )
         fp2 = code_fp("s", root=root)
@@ -61,7 +61,7 @@ def selftest():
         stale, reason = is_stale(out, root=root)
         check("is_stale: 갓 만든 저장본은 안 낡음", stale is False and reason == "")
 
-        (root / "pipeline" / "transform" / "structure" / "build_bundle.py").write_text(
+        (root / "pipeline" / "transform" / "structure" / "gold_bundle.py").write_text(
             "from common.core import text\nx = 3\n", encoding="utf-8"
         )
         stale2, reason2 = is_stale(out, root=root)

@@ -1,7 +1,7 @@
 """스택 폴더 자동 등록 + 도구(tool) 진입점.
 
 스택 추가 = tools/engines/<스택>/parser.py 하나 추가 (ENGINES · FORMATS · REQUIRES · PROFILED · UNVERIFIED 정의, 필요 시 REQUIRES_ENV).
-사용: from pipeline.extract.engines import registry; registry.run("pymupdf", "x.pdf")
+사용: from pipeline.transform.parse.engines import registry; registry.run("pymupdf", "x.pdf")
 (LLM 도구 API TOOL_SPECS·call_tool은 10-30 지움 — pl-31, 부르는 곳 없음.)
 """
 import importlib
@@ -11,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from common.core.paths import PARSING_ROOT
-from pipeline.extract.engines._common.contract import _fields
+from pipeline.transform.parse.engines._common.contract import _fields
 
 HERE = PARSING_ROOT / "engines"
 
@@ -19,7 +19,7 @@ HERE = PARSING_ROOT / "engines"
 @lru_cache(maxsize=1)
 def stacks():
     """{스택 폴더: 모듈} — parser.py가 있는 폴더만."""
-    return {d.name: importlib.import_module(f"pipeline.extract.engines.{d.name}.parser")
+    return {d.name: importlib.import_module(f"pipeline.transform.parse.engines.{d.name}.parser")
             for d in sorted(HERE.iterdir()) if (d / "parser.py").exists() and not d.name.startswith("_")}
 
 

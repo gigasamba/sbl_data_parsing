@@ -1,14 +1,14 @@
-"""pipeline.transform.structure.build_bundle 시험."""
+"""pipeline.transform.structure.gold_bundle 시험."""
 
 import json
 from pathlib import Path
 
-import pipeline.transform.structure.build_bundle as M
+import pipeline.transform.structure.gold_bundle as M
 from common.core import docmeta as DM
 from common.core.paths import STACK_FILE
 from common.core.text import tokens
 from pipeline import config as pc
-from pipeline.transform.structure.build_bundle import (
+from pipeline.transform.structure.gold_bundle import (
     embed_all,
     fig_empty,
     fig_host,

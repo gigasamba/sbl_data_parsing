@@ -62,7 +62,7 @@ def test_layer_imports_in_layer():
 CASES = [  # (고칠 파일, 바뀌어야 하는 층)
     ("pipeline/transform/represent/text_normalize.py", {"p1"}),
     ("pipeline/shared/parse_run.py", {"p0", "p1"}),
-    ("pipeline/extract/engines/registry.py", {"p0", "p1"}),
+    ("pipeline/transform/parse/engines/registry.py", {"p0", "p1"}),
     ("mcp_server/services/search/query_expand.py", {"r"}),
     ("pipeline/transform/structure/client_roster.py", {"s"}),
     ("common/store/db/models/search_tables.py", set()),

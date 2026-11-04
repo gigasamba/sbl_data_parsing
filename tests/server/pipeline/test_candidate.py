@@ -1,13 +1,13 @@
-"""pipeline.extract.fetch_docs 시험."""
+"""pipeline.extract.candidate_ready 시험."""
 
 import contextlib
 import json
 from pathlib import Path
 
-import pipeline.extract.fetch_docs as M
+import pipeline.extract.candidate_ready as M
 from common.core.contract import jl
 from pipeline import config as pc
-from pipeline.extract.fetch_docs import (
+from pipeline.extract.candidate_ready import (
     _safe_join,
     _safe_name,
     finish,

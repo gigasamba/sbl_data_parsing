@@ -8,7 +8,7 @@
   스캔 쪽 채움 — .pdf_text 대표 안의 스캔 쪽만 쪽 VLM 글로(쪽 번호를 확정할 수 없거나 글이 깨졌으면 건너뜀).
   후보정(apply_post — vlm_page·figures·charts·supsub·attachments) → 표 제자리 넣기(table_inline).
   표기가 갈린 엔진 충돌은 _rep/conflicts.jsonl에도 모은다.
-산출 = 엔진 공통 출력 계약(text·tables·facts·boxes) + "rep" — 구조화(build_bundle)는 이것만 읽는다.
+산출 = 엔진 공통 출력 계약(text·tables·facts·boxes) + "rep" — 구조화(gold_bundle)는 이것만 읽는다.
 사용: python -m pipeline.transform.represent.build_rep [--stack stack.json] [--parse-dir output/parse]
 """
 
@@ -591,9 +591,9 @@ IMAGE_TYPES = IMG_EXTS | {".pdf_image"}  # 형식 키(qa.json format — parse_r
 
 
 def _vlm_transcribed(rep, dd):
-    """이미지·스캔 형식(.pdf_image 포함) 문서의 대표가 VLM 엔진(run_engines.VLM_ENGINES)이고
+    """이미지·스캔 형식(.pdf_image 포함) 문서의 대표가 VLM 엔진(parse_engines.VLM_ENGINES)이고
     본문이 비어 있지 않음 = 쪽을 이미 VLM으로 옮김. OCR 엔진이 대표거나 VLM 글이 비면 False(쪽 VLM을 막지 않음)."""
-    from pipeline.extract.run_engines import VLM_ENGINES
+    from pipeline.transform.parse.parse_engines import VLM_ENGINES
 
     return dd.get("format") in IMAGE_TYPES and (rep.get("rep") or {}).get("engine") in VLM_ENGINES and bool((rep.get("text") or "").strip())
 
@@ -915,7 +915,7 @@ def rep_digest(parse_dir):
 
 def write_mark(parse_dir, **kw):
     """파싱 끝 표시 _rep/_DONE.json — 앞 표시와 digest(kw — rep_digest 값)·인계 형식 버전(CONTRACT)이 같으면 그대로 두고 False(구조화는 건너뛰게 됨),
-    다르면 common 코드 지문(FINGERPRINT)과 함께 새로 쓰고 True. kw의 run_id가 있으면 그 값(같은 실행의 run_engines와 같은 id)."""
+    다르면 common 코드 지문(FINGERPRINT)과 함께 새로 쓰고 True. kw의 run_id가 있으면 그 값(같은 실행의 parse_engines와 같은 id)."""
     from common import CONTRACT, FINGERPRINT  # 인계 형식 버전 · common 코드 지문(이미지 버전 어긋남 확인)
 
     f = Path(parse_dir) / "_rep" / "_DONE.json"

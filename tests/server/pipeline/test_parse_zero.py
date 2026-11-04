@@ -33,4 +33,4 @@ def test_zero_docs():
                 except SystemExit as e:
                     got = e.code
         assert got == want and says in buf.getvalue(), (rc, got, buf.getvalue())
-        assert calls == ["pipeline.extract.run_engines"], calls  # 채점(parse_qa)·대표 결과(represent)는 부르지 않음
+        assert calls == ["pipeline.transform.parse.parse_engines"], calls  # 채점(parse_qa)·대표 결과(represent)는 부르지 않음
