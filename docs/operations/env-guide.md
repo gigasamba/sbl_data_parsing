@@ -106,8 +106,8 @@
 | 이름 | 기본 | 메모 |
 |---|---|---|
 | `EDW_QUERY` | 켬 | `0`이면 `query_edw`가 `not_configured` |
-| `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_READ_USER`·`RDB_READ_PASSWORD` | 비움·`1433`·비움 | `required.edw`(포트는 `common.connections.rdb.port`) |
-| `RDB_SQLITE` | 비움 | PC 전용 EDW 대역 파일(`valid_env/edw/edw.sqlite`, 다시 만들기 `python -m validation.e2e.edw_standin`) — 서버 설정에 있으면 실패 |
+| `RDB_HOST`·`RDB_PORT`·`RDB_DATABASE`·`RDB_READ_USER`·`RDB_READ_PASSWORD` | 비움·`1433`·비움 | `required.edw`(`host`·`port`·`database`·`read_user`·`read_password`) — 서버만, PC는 비움 |
+| `RDB_SQLITE`(`required.edw.sqlite`) | 비움 | PC(local) 전용 가짜 EDW 파일 — `valid_env/edw/edw.sqlite`의 사본 경로(다시 만들기 `python -m validation.e2e.edw_standin`). 적으면 EDW 접속 칸은 안 봄 · 서버 설정에 있으면 EDW를 쓸 때 실패 |
 | `EDW_QUERY_MAX_ROWS` | `1000` | 도구 `max_rows`의 상한 |
 | `EDW_QUERY_TIMEOUT_SEC` | `20` | 넘으면 `timeout` |
 | `EDW_QUERY_MAX_BYTES` | `2000000` | 응답 JSON 크기 상한 — 넘으면 끝 행부터 버리고 `truncated: true` |
@@ -132,11 +132,11 @@
 ### 원천 Object Storage·EDW·게시
 | 이름 | 메모 |
 |---|---|
-| `OS_ENDPOINT`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | `required.object_storage` · 사내 CA면 `OS_VERIFY_TLS=<CA 파일>`(`0`이면 검증 끔 — 경고) |
+| `OS_ENDPOINT`·`OS_REGION`·`OS_ACCESS_KEY`·`OS_SECRET_KEY`·`OS_VERIFY_TLS` | `required.object_storage`(`endpoint`·`region`·`access_key`·`secret_key`·`verify_tls`) — 서버만, PC는 비움(게시는 `file://` 폴더). `region` 비우면 `us-east-1` · `verify_tls` 비우면 `1`, 사내 CA면 CA 파일 경로(`0`이면 검증 끔 — 경고) |
 | `RDB_CONNECT_KWARGS` | EDW 연결 추가 인자(JSON — 비밀) |
-| `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD` | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만 |
-| `PM_BUCKET`·`PM_PREFIX`(`required.source.publish_bucket`·`publish_prefix`) | 결과 게시 대상. 폴더 저장소로 먼저 시험: `PM_BUCKET=file://…`. ⚠ **첫 게시 전 EDW 표를 DBA가 한 번 만든다**: [`parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(코드는 표를 만들지 않음 — 없으면 첫 INSERT에서 실패) |
-| `PM_TABLE`(`common.connections.parsing_meta.table`) | 게시할 EDW 표(기본 `AI.ParsingMeta`) |
+| `RDB_WRITE_USER`·`RDB_WRITE_PASSWORD`(`required.edw.write_user`·`write_password`) | 쓰기 계정 — ParsingMeta 게시(INSERT·UPDATE)만, 파이프라인 이미지에만. 서버는 `run_docs` 시작 때 빠지면 멈춤 · PC는 비움 |
+| `PM_BUCKET`·`PM_PREFIX`(`required.publish.bucket`·`prefix`) | silver 게시 위치 — 서버: 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): `file://<가짜 Object Storage 폴더 절대 경로>`(그 폴더에 씀 — S3 접속 칸 불필요). `prefix`는 버킷(폴더) 안 경로 접두(비우면 맨 위). ⚠ **첫 게시 전 EDW 표를 DBA가 한 번 만든다**: [`parsing_meta_mssql.sql`](parsing_meta_mssql.sql)(코드는 표를 만들지 않음 — 없으면 첫 INSERT에서 실패) |
+| `PM_TABLE`(`required.edw.parsing_meta_table`) | 게시할 EDW 표(비우면 `AI.ParsingMeta`) — PC 가짜 EDW는 표 이름 `ParsingMeta` 고정(이 칸 안 봄) |
 | `EDW_CHAIN_FILE`(`ops.paths.edw_chain`) | EDW 조인 사슬 파일 — 적재와 검색 MCP가 같은 칸을 읽는다. 비우면 코드의 `resources/config/edw_chain.yaml`, 서버 사본을 쓰려면 `/etc/rag/edw_chain.yaml`. 쓰는 법: [release-and-patch §8-6](release-and-patch.md#8-6-edw-조인-사슬-파일-고쳐-쓰기서버--pl-29) |
 
 ### 새벽 배치 (systemd `data-pipeline-nightly`)

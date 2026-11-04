@@ -29,22 +29,31 @@ REQUIRED_GROUPS = (
     ("embed", "임베딩 모델", "PC·서버", tuple((k, f"common.models.embed.{k}") for k in ("base_url", "model", "api_key"))),
     (
         "edw",
-        "EDW(회사 DB)",
-        "서버만",
+        "EDW(회사 DB) — ParsingMeta 표·접속",
+        "서버: 접속 칸 · PC: sqlite 하나",
         (
+            ("parsing_meta_table", "common.connections.parsing_meta.table"),
             ("host", "common.connections.rdb.host"),
+            ("port", "common.connections.rdb.port"),
             ("database", "common.connections.rdb.database"),
             ("read_user", "common.connections.rdb.read.user"),
             ("read_password", "common.connections.rdb.read.password"),
             ("write_user", "common.connections.rdb.write.user"),
             ("write_password", "common.connections.rdb.write.password"),
+            ("sqlite", "common.connections.rdb.sqlite"),
         ),
     ),
     (
+        "publish",
+        "게시(silver 적재) 위치",
+        "PC·서버",
+        (("bucket", "pipeline.load.publish.bucket"), ("prefix", "pipeline.load.publish.prefix")),
+    ),
+    (
         "object_storage",
-        "Object Storage",
+        "Object Storage 접속(게시 업로드)",
         "서버만",
-        tuple((k, f"common.connections.object_storage.{k}") for k in ("endpoint", "access_key", "secret_key")),
+        tuple((k, f"common.connections.object_storage.{k}") for k in ("endpoint", "region", "access_key", "secret_key", "verify_tls")),
     ),
     (
         "models",
@@ -54,14 +63,12 @@ REQUIRED_GROUPS = (
     ),
     (
         "source",
-        "원천·게시 위치",
+        "원천 위치",
         "서버만",
         (
             ("input_source", "pipeline.extract.input_source"),
             ("source_bucket", "pipeline.connections.rdb.bucket"),
             ("source_uri_prefix", "common.text.source_uri_prefix"),
-            ("publish_bucket", "pipeline.load.publish.bucket"),
-            ("publish_prefix", "pipeline.load.publish.prefix"),
         ),
     ),
     (
@@ -90,6 +97,21 @@ REQUIRED_GROUPS = (
     ),
 )
 REQUIRED = {m: f"required.{g}.{k}" for g, _t, _w, rows in REQUIRED_GROUPS for k, m in rows}
+# required로 옮긴 칸의 옛 자리(역할 자리 말고) — 경고 한 번 뒤 읽는다(사용자 11-04: 게시·EDW 칸을 required 한곳에).
+ALIASES = {
+    "required.source.publish_bucket": "pipeline.load.publish.bucket",
+    "required.source.publish_prefix": "pipeline.load.publish.prefix",
+    "dev.connections.rdb.sqlite": "common.connections.rdb.sqlite",
+}
+# required로 옮긴 칸(사용자 11-04) — 옛 역할 자리(common.connections.…)도 경고 한 번 뒤 읽는다.
+TO_REQUIRED = frozenset(
+    {
+        "common.connections.object_storage.region",
+        "common.connections.object_storage.verify_tls",
+        "common.connections.parsing_meta.table",
+        "common.connections.rdb.port",
+    }
+)
 RETIRED = frozenset(
     {"required.deploy.mcp_store"}
 )  # 지운 파일 자리 — 남아 있으면 경고만(mc-01 11-01: 검색 저장소는 PG 하나, op-09가 필수로 적게 했던 칸)
@@ -256,10 +278,11 @@ LOCAL = (
     "common.models.guard.spend_file",
     "common.connections.pg.standin_dir",
     "common.connections.pg.standin_schema",
-    "common.connections.rdb.sqlite",
     "pipeline.load.pg_create_extension",
 )
-MOVED = frozenset(LOCAL + TUNING_RARE) | {"mcp.server.fulltext_secret"}  # 자리를 옮긴 칸 — 옛 자리(역할 자리)도 경고 뒤 읽음
+MOVED = (
+    frozenset(LOCAL + TUNING_RARE) | {"mcp.server.fulltext_secret"} | TO_REQUIRED | set(ALIASES.values())
+)  # 자리를 옮긴 칸 — 옛 자리(역할 자리)도 경고 뒤 읽음
 
 
 class LayoutError(ValueError):
@@ -315,6 +338,8 @@ def to_model_path(yaml_path):
     판정은 to_model이(to_yaml로 되돌려 견줌)."""
     if yaml_path in _REQ_BACK:
         return _REQ_BACK[yaml_path]
+    if yaml_path in ALIASES:
+        return ALIASES[yaml_path]
     head, _, leaf = yaml_path.rpartition(".")
     if head in _LOCAL_PARENTS:
         return f"{_LOCAL_PARENTS[head]}.{leaf}"
@@ -394,7 +419,7 @@ def to_model(doc, source=""):
                 bad.append(y)
             continue  # 빈 절 머리(`extract:`)
         want = to_yaml(m)
-        if want != y and m in MOVED and y == _role(m):
+        if want != y and m in MOVED and (y == _role(m) or y in ALIASES):
             if y not in _WARNED:
                 _WARNED.add(y)
                 sys.stderr.write(f"[settings] 옛 자리 칸 읽음: {y} — {want}로 옮길 것(값은 출력 안 함)\n")

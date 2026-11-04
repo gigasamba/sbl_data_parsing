@@ -17,7 +17,7 @@ SET CONCAT_NULL_YIELDS_NULL ON;
 SET ARITHABORT ON;
 SET NUMERIC_ROUNDABORT OFF;
 GO
--- 다른 스키마·표 이름이면 settings.yaml common.connections.parsing_meta.table(<스키마.표>)과 함께 아래 [AI].[ParsingMeta]를 바꿔 실행.
+-- 다른 스키마·표 이름이면 settings.yaml required.edw.parsing_meta_table(<스키마.표>)과 함께 아래 [AI].[ParsingMeta]를 바꿔 실행.
 IF SCHEMA_ID(N'AI') IS NULL EXEC(N'CREATE SCHEMA [AI]');
 GO
 -- 독립 검토 반영 — 다시 실행해도 안전(이미 있으면 건너뜀, DBA가 실수로 두 번 돌려도 안 깨짐).

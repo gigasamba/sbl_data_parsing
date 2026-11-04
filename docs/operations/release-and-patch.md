@@ -288,11 +288,11 @@ bash deploy/host/scripts/trigger.sh publish --dry-run                        # �
 bash deploy/host/scripts/trigger.sh publish                                  # 실제 한 번 — 기대: JSON 한 줄("mode": "apply" · "result") · 종료 코드 0
 ```
 - **실제 publish는 한 번만** 한다. 다시 돌리면 Object Storage에 같은 결과를 새 시각 이름으로 또 올린다(EDW는 이미 있는 행을 건너뜀).
-- 미리보기의 `bucket`·`prefix`·`rep_key`가 `required.source` 게시 칸과 맞지 않으면 실제 publish를 하지 않고 settings.yaml을 고친다. DRM·실패로 빠진 문서는 `<결과 폴더>/publish/excluded_<날짜>.md`에 남는다.
+- 미리보기의 `bucket`·`prefix`·`rep_key`가 `required.publish` 칸(`bucket`·`prefix`)과 맞지 않으면 실제 publish를 하지 않고 settings.yaml을 고친다. DRM·실패로 빠진 문서는 `<결과 폴더>/publish/excluded_<날짜>.md`에 남는다.
 - EDW 행 확인(읽기 계정 — 마지막에 쓴 행):
 ```bash
 $DOCKER exec data-pipeline python -c "from common.store import mssql as M; kw,_=M.login('read'); c=M.connect(**kw); [print(r) for r in M.rows(c, 'SELECT TOP 5 original_filename, parse_status, rep_bucket, rep_key, parse_date FROM AI.ParsingMeta ORDER BY parse_meta_id DESC')]"
-# 기대: 방금 게시한 문서 수만큼 행 · parse_status ok·partial · rep_key가 미리보기의 rep_key와 같음(표 이름이 다르면 common.connections.parsing_meta.table 값)
+# 기대: 방금 게시한 문서 수만큼 행 · parse_status ok·partial · rep_key가 미리보기의 rep_key와 같음(표 이름이 다르면 required.edw.parsing_meta_table 값)
 ```
 - Object Storage 확인(위 행의 `rep_bucket`·`rep_key` 하나로):
 ```bash

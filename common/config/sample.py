@@ -171,7 +171,6 @@ def blank_matters(field):
 BLANK = {
     "common.connections.pg.standin_dir": "<루트>/output/pg_standin",
     "common.connections.rdb.connect_kwargs": "추가 인자 없음",
-    "common.connections.rdb.sqlite": "실제 EDW(required.edw 칸)",
     "common.dev.docker.pg_mem_limit": "compose 기본(시험 PG 4g)",
     "common.dev.docker.smoke_settings": "스모크 시험이 시작하지 않음(필수)",
     "common.dev.docker.smoke_pg_password": "스모크 시험이 시작하지 않음(필수)",
@@ -232,8 +231,33 @@ BLANK = {
     "mcp.server.manifest": "<루트>/output/parse/_source/manifest.jsonl",
     "mcp.server.max_queue": "동시 상한 × 4(0이면 무제한)",
 }
+# required 게시·EDW 칸 — 환경마다 무엇을 넣는지(사용자 11-04: 서버는 접속 칸, PC는 로컬 폴더·sqlite만).
+REQ_NOTES = {
+    "pipeline.load.publish.bucket": "서버: 게시용 Object Storage 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): file://<가짜 Object Storage 폴더 절대 경로>(그 폴더에 씀 — S3 접속 칸 불필요)",
+    "pipeline.load.publish.prefix": "PC·서버: 버킷(폴더) 안 silver 결과 경로 접두(그 아래 <출처>/<원본 경로>/<파일명>_<날짜>.md) · 비우면 버킷 맨 위",
+    "common.connections.object_storage.endpoint": "서버: S3 호환 엔드포인트 URL 입력 · PC(local): 비움(게시는 file:// 폴더)",
+    "common.connections.object_storage.region": "서버: 리전 이름 · 비우면 us-east-1 · PC(local): 비움",
+    "common.connections.object_storage.access_key": "서버: 입력 · PC(local): 비움",
+    "common.connections.object_storage.secret_key": "서버: 입력 · PC(local): 비움",
+    "common.connections.object_storage.verify_tls": "서버: 비우면 1(검증) · 사내 CA면 CA 파일 경로 · PC(local): 비움",
+    "common.connections.parsing_meta.table": "서버: 비우면 AI.ParsingMeta(다른 표면 <스키마.표>) · PC(local): 비움(가짜 EDW sqlite는 표 이름 ParsingMeta 고정)",
+    "common.connections.rdb.host": "서버: EDW(SQL Server) 주소 입력 · PC(local): 비움(아래 sqlite를 씀)",
+    "common.connections.rdb.port": "서버: 비우면 1433 · PC(local): 비움",
+    "common.connections.rdb.database": "서버: 입력 · PC(local): 비움",
+    "common.connections.rdb.read.user": "서버: 입력(원천 목록·ParsingMeta 조회·query_edw) · PC(local): 비움",
+    "common.connections.rdb.read.password": "서버: 입력 · PC(local): 비움",
+    "common.connections.rdb.write.user": "서버: 입력(ParsingMeta 게시 INSERT만) · PC(local): 비움",
+    "common.connections.rdb.write.password": "서버: 입력 · PC(local): 비움",
+    "common.connections.rdb.sqlite": "PC(local): 가짜 EDW sqlite 파일 경로 입력(파싱·게시가 쓰므로 valid_env/edw/edw.sqlite 사본) · 서버: 비움(적혀 있으면 EDW를 쓸 때 거부)",
+}
 # 뜻이 바로 안 보이는 칸의 입력 예(사용자 11-04 op-05).
 EXAMPLES = {
+    "pipeline.load.publish.bucket": "rag-silver(서버) · file:///home/me/sbl/output/object_storage/silver(PC)",
+    "pipeline.load.publish.prefix": "parse",
+    "common.connections.object_storage.endpoint": "https://os.corp.local:9000",
+    "common.connections.parsing_meta.table": "AI.ParsingMeta",
+    "common.connections.rdb.host": "edw.corp.local",
+    "common.connections.rdb.sqlite": "/home/me/sbl/output/edw.sqlite(valid_env/edw/edw.sqlite 사본)",
     "common.connections.rdb.connect_kwargs": '{"login_timeout": 10, "tds_version": "7.4"}',
     "common.connections.object_storage.verify_tls": "/etc/pki/ca-trust/source/anchors/corp-ca.pem",
     "common.models.embed.query_prefix": "'Instruct: 질문에 맞는 문단을 찾음\\nQuery: '",
@@ -418,7 +442,7 @@ def _note(p, f):
         desc = f"{desc} — {part}" if desc else part
         if desc.count("(") <= desc.count(")"):
             break
-    blank = "" if p in L.REQUIRED else _fmt_default(p, f)
+    blank = f" · {REQ_NOTES[p]}" if p in REQ_NOTES else "" if p in L.REQUIRED else _fmt_default(p, f)
     ex = f" · 예: {EXAMPLES[p]}" if p in EXAMPLES else ""
     note = f"{desc}{blank} · 값: {_values(p, f)}{ex}"
     return note + (" [비밀]" if S.is_secret(f) else "")
@@ -431,7 +455,7 @@ _PATHY = re.compile(r"(dir|root|path|file|_bin|_out|cache|log|manifest|snapshot|
 # 설명 글자로는 선택지를 못 뽑는 칸 — 코드가 받는 값(읽는 코드·설명 기준).
 VALUES = {
     "common.run_env": "local·dev·prd 중 하나",
-    "pipeline.load.publish.bucket": "버킷 이름 · PC는 file://<폴더>",
+    "pipeline.load.publish.bucket": "버킷 이름·file://<폴더 절대 경로>",
     "pipeline.load.publish.prefix": "글자(버킷 안 경로 접두)",
     "common.dev.docker.pg_effective_cache": "PG 크기 글자(예 12GB)",
     "common.store.run_mode": "prod 하나(비우면 설정 안 함 — test는 0.2.0에 지움)",

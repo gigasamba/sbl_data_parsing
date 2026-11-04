@@ -171,6 +171,13 @@ tuning:
 - **외부 임베딩은 `allow_external: true`이고 `run_env: local`일 때만** 호출된다(서버 dev·prd는 늘 거부).
 - **LLM·VLM도 같다:** `required.models`의 `llm_*`·`vlm_*`(주소·모델·키)를 채우고 `dev.models.llm.allow_external`·`dev.models.vlm.allow_external`을 `true`로 두면 PC에서 분류(SFDC·LAS)와 그림·스캔 쪽 VLM이 외부 모델을 부른다(`run_env: local`일 때만). 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
 - **내부망 서버(dev·prd)에서 시험·운영할 때는 세 `allow_external`을 모두 `false`(0)로 둔다.** 서버는 `run_env`가 dev·prd라 켜 두어도 외부 호출을 거부하지만, 서버 settings.yaml에는 외부 허용을 남기지 않는다.
+- **게시(silver)·EDW — PC는 로컬 대역만 적는다**(S3·EDW 접속 칸 `required.object_storage`·`required.edw.host` 등은 비움):
+  ```yaml
+  required:
+    publish: {bucket: "file:///<저장소 절대 경로>/output/object_storage/silver", prefix: parse}   # 가짜 Object Storage 폴더(절대 경로)
+    edw: {sqlite: <저장소 절대 경로>/output/edw.sqlite}   # 가짜 EDW(ParsingMeta 포함) — valid_env/edw/edw.sqlite 사본(파싱·게시가 씀)
+  ```
+  `file://` 뒤 폴더에 `<prefix>/<출처>/<원본 경로>/<파일명>_<날짜>.md`로 쓴다. 가짜 EDW는 `run_env: local`에서만 열린다.
 - PG 접속 칸(`required.pg`의 여섯 칸)은 **모두 채우거나 모두 비운다.** 일부만 채우면 채울 자리를 알려 주고 멈춘다. PC에서 host·password가 둘 다 비면 SQLite 대역(`output/pg_standin/`)으로 돌고 첫 줄에 `WARNING: PG 접속 정보 없음`을 찍는다(서버는 멈춤).
 
 ### 4-3. 점검
@@ -416,7 +423,7 @@ bash deploy/release/ship_stage.sh pipeline-runtime mcp-runtime                 #
 | PostgreSQL(pgvector) | `required.pg.port` | 없음(필수) | 파이프라인·검색 MCP |
 | 검색 MCP 서버 | `search.server.port`(바인드 `search.server.host`) | 8765(127.0.0.1) | AI 클라이언트 |
 | MCP 파싱 작업 서비스 | `ops.services.parse_mcp.port` — 검색 MCP가 부르는 주소 `search.parse_proxy.url` | 8766 · `http://127.0.0.1:8766` | 검색 MCP의 `parse_document` |
-| EDW(SQL Server) | `common.connections.rdb.port`(주소·계정은 `required.edw`) | 1433 | 파이프라인·`query_edw` |
+| EDW(SQL Server) | `required.edw.port`(주소·계정도 `required.edw`) | 1433 | 파이프라인·`query_edw` |
 | 검증 페이지(PC만) | `dev.mcp.ui_port` | 8790 | 사람(브라우저) |
 
 `ops.services.parse_mcp.port`를 바꾸면 `search.parse_proxy.url`도 함께 바꾼다. 컨테이너는 host 네트워크라 포트가 서버에서 겹치지 않아야 한다.
@@ -447,9 +454,12 @@ bash deploy/host/scripts/dc.sh up -d data-pipeline data-pipeline-mcp mcp   # 서
 | `required.pg.host`·`port`·`db`·`user`·`password`·`db_schema` | 검색 DB(pgvector) | DB 담당 | `pg.example.local` · `5432` · `rag` · `rag_app` · `<비밀>` · `ai` | PC·dev·prd | `dc.sh check` ① check_env · ③ migrate check |
 | `required.embed.base_url`·`model`·`api_key` | 임베딩 모델(`model`은 적재·검색 때 같아야 함) | 모델 담당(내부망 주소) | `http://llm.example.local:8000/v1` · `<모델>` · `<비밀>` | PC·dev·prd | `dc.sh check` ② ping_models |
 | `required.models.llm_*`·`vlm_*` | LLM·VLM 모델 | 모델 담당 | `http://llm.example.local:8001/v1` · `<모델>` | dev·prd | `dc.sh check` ② ping_models |
-| `required.edw.host`·`database`·`read_*`·`write_*` | 회사 DB(EDW) 읽기·쓰기 계정 | DB 담당 | `edw.example.local` · `EDW` · `<계정>` · `<비밀>` | dev·prd | 첫 파싱 뒤 `trigger.sh publish --dry-run`(④) |
-| `required.object_storage.endpoint`·`access_key`·`secret_key` | Object Storage | 스토리지 담당 | `http://os.example.local:9000` · `<비밀>` | dev·prd | 위와 같음 |
-| `required.source.input_source`·`source_bucket`·`source_uri_prefix`·`publish_bucket`·`publish_prefix` | 원본 위치·게시 버킷 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_docs` · publish 미리보기 |
+| `required.edw.host`·`port`·`database`·`read_*`·`write_*` | 회사 DB(EDW) 접속 — 읽기 계정(원천 목록·ParsingMeta 조회·`query_edw`), 쓰기 계정(ParsingMeta 게시) · `port`는 비우면 1433 | DB 담당 | `edw.example.local` · (비움) · `EDW` · `<계정>` · `<비밀>` | dev·prd | `run_docs` 시작(빠지면 칸 이름을 찍고 멈춤) · `trigger.sh publish --dry-run`(④) |
+| `required.edw.parsing_meta_table` | 게시 행을 쓸 EDW 표 — 비우면 `AI.ParsingMeta` | DB 담당 | (비움) | dev·prd | publish `--apply` |
+| `required.edw.sqlite` | PC 가짜 EDW 파일 — **서버는 비움**(적혀 있으면 EDW를 쓸 때 거부) | — | (비움) | PC만 | — |
+| `required.publish.bucket`·`prefix` | silver 게시 위치 — 버킷(원천 원본 버킷과 달라야 함)과 그 안 경로 접두 | 운영 담당 | `rag-silver` · `parse` | PC·dev·prd | `run_docs` 시작 · publish 미리보기 |
+| `required.object_storage.endpoint`·`region`·`access_key`·`secret_key`·`verify_tls` | Object Storage(S3 호환) 접속 — `region`은 비우면 `us-east-1`, `verify_tls`는 비우면 `1`(사내 CA면 CA 파일 경로) | 스토리지 담당 | `https://os.example.local:9000` · (비움) · `<비밀>` · `<비밀>` · (비움) | dev·prd | `run_docs` 시작 · publish `--apply` |
+| `required.source.input_source`·`source_bucket`·`source_uri_prefix` | 원본 위치 | 운영 담당 | `rdb:csv:<루트>/list.csv` · `<버킷>` · `s3://<버킷>/<접두>` | dev·prd | 첫 `run_docs` |
 | `required.tokens.mcp` | 검색 MCP 토큰 | `openssl rand -hex 24` | 48자 16진수 | dev·prd(밖에서 붙을 때 필수) | `dc.sh check` ⑥ `/health` |
 | `required.tokens.parse_mcp` · `parse_proxy` | `parse_document` 작업 서비스 토큰(두 칸 같은 값 — `parse_proxy`를 비우면 `mcp` 값을 씀) | 같은 명령 | 48자 16진수 | dev·prd | `parse_document` 호출이 토큰 오류 |
 | `required.tokens.fulltext` | 원문 도구(`list_doc_fulltext`·`get_doc_fulltext`)의 `sfid` 서명 키 — 비우면 두 도구가 `not_configured`, 바꾸면 이미 발급한 sfid가 모두 무효 | 같은 명령 | 48자 16진수 | dev·prd | 원문 도구 호출이 `not_configured` |

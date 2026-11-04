@@ -196,3 +196,37 @@ def test_removed_warned_once():
         for _ in range(3):
             layout.warn_removed("test.once.key")
     assert buf.getvalue().count("지운 칸 무시: test.once.key") == 1, buf.getvalue()
+
+
+# 11-04 — 게시·EDW 칸을 required 한곳에: (옛 자리, 새 자리, 모델 경로). 옛 자리는 경고 뒤 읽고, 둘 다 적으면 거부.
+TO_REQUIRED_CASES = (
+    ("required.source.publish_bucket", "required.publish.bucket", "pipeline.load.publish.bucket"),
+    ("required.source.publish_prefix", "required.publish.prefix", "pipeline.load.publish.prefix"),
+    ("dev.connections.rdb.sqlite", "required.edw.sqlite", "common.connections.rdb.sqlite"),
+    ("common.connections.rdb.port", "required.edw.port", "common.connections.rdb.port"),
+    ("common.connections.parsing_meta.table", "required.edw.parsing_meta_table", "common.connections.parsing_meta.table"),
+    ("common.connections.object_storage.region", "required.object_storage.region", "common.connections.object_storage.region"),
+    ("common.connections.object_storage.verify_tls", "required.object_storage.verify_tls", "common.connections.object_storage.verify_tls"),
+)
+
+
+def test_publish_edw_keys_in_required():
+    def doc(*spots):
+        out = {"required": {"env": {"run_env": "local"}}}
+        for i, y in enumerate(spots):
+            layout.set_path(out, y, f"v{i}")
+        return out
+
+    for old, new, model in TO_REQUIRED_CASES:
+        assert layout.to_yaml(model) == new, model
+        for spot in (new, old):
+            m = layout.to_model(doc(spot))
+            for k in model.split("."):
+                m = m[k]
+            assert m == "v0", (spot, m)
+        try:
+            layout.to_model(doc(old, new))
+        except layout.LayoutError as e:
+            assert "두 자리" in str(e) and new in str(e), e
+        else:
+            raise AssertionError(f"두 자리 거부 안 함: {old} · {new}")

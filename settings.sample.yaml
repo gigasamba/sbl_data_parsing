@@ -27,19 +27,28 @@ required:
     base_url:                             # 임베딩 엔드포인트 주소(OpenAI 호환 …/v1) · 값: URL
     model:                                # 임베딩 모델 이름(색인과 같아야 함 — 질의 임베딩·캐시 열쇠에도 씀) · 값: 글자
     api_key:                              # 임베딩 엔드포인트 API 키(있을 때만 Authorization 헤더로 보냄) · 값: 비밀 글자 [비밀]
-  # ─── EDW(회사 DB) [서버만] ───
+  # ─── EDW(회사 DB) — ParsingMeta 표·접속 [서버: 접속 칸 · PC: sqlite 하나] ───
   edw:
-    host:                                 # EDW 서버 주소(호스트) · 값: 호스트 이름·IP
-    database:                             # EDW 데이터베이스 이름 · 값: 글자
-    read_user:                            # EDW 읽기 계정 이름 · 값: 글자
-    read_password:                        # EDW 읽기 계정 비밀번호 · 값: 비밀 글자 [비밀]
-    write_user:                           # EDW 쓰기 계정 이름 · 값: 글자
-    write_password:                       # EDW 쓰기 계정 비밀번호 · 값: 비밀 글자 [비밀]
-  # ─── Object Storage [서버만] ───
+    parsing_meta_table:                   # parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_) · 서버: 비우면 AI.ParsingMeta(다른 표면 <스키마.표>) · PC(local): 비움(가짜 EDW sqlite는 표 이름 ParsingMeta 고정) · 값: 글자 · 예: AI.ParsingMeta
+    host:                                 # EDW 서버 주소(호스트) · 서버: EDW(SQL Server) 주소 입력 · PC(local): 비움(아래 sqlite를 씀) · 값: 호스트 이름·IP · 예: edw.corp.local
+    port:                                 # EDW 포트 · 서버: 비우면 1433 · PC(local): 비움 · 값: 1~65535
+    database:                             # EDW 데이터베이스 이름 · 서버: 입력 · PC(local): 비움 · 값: 글자
+    read_user:                            # EDW 읽기 계정 이름 · 서버: 입력(원천 목록·ParsingMeta 조회·query_edw) · PC(local): 비움 · 값: 글자
+    read_password:                        # EDW 읽기 계정 비밀번호 · 서버: 입력 · PC(local): 비움 · 값: 비밀 글자 [비밀]
+    write_user:                           # EDW 쓰기 계정 이름 · 서버: 입력(ParsingMeta 게시 INSERT만) · PC(local): 비움 · 값: 글자
+    write_password:                       # EDW 쓰기 계정 비밀번호 · 서버: 입력 · PC(local): 비움 · 값: 비밀 글자 [비밀]
+    sqlite:                               # 시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) · PC(local): 가짜 EDW sqlite 파일 경로 입력(파싱·게시가 쓰므로 valid_env/edw/edw.sqlite 사본) · 서버: 비움(적혀 있으면 EDW를 쓸 때 거부) · 값: 경로 · 예: /home/me/sbl/output/edw.sqlite(valid_env/edw/edw.sqlite 사본)
+  # ─── 게시(silver 적재) 위치 [PC·서버] ───
+  publish:
+    bucket:                               # publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소) · 서버: 게시용 Object Storage 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): file://<가짜 Object Storage 폴더 절대 경로>(그 폴더에 씀 — S3 접속 칸 불필요) · 값: 버킷 이름·file://<폴더 절대 경로> · 예: rag-silver(서버) · file:///home/me/sbl/output/object_storage/silver(PC)
+    prefix:                               # 버킷 안 업로드 경로 접두 · PC·서버: 버킷(폴더) 안 silver 결과 경로 접두(그 아래 <출처>/<원본 경로>/<파일명>_<날짜>.md) · 비우면 버킷 맨 위 · 값: 글자(버킷 안 경로 접두) · 예: parse
+  # ─── Object Storage 접속(게시 업로드) [서버만] ───
   object_storage:
-    endpoint:                             # Object Storage(S3 호환) 엔드포인트 URL · 값: URL
-    access_key:                           # Object Storage(S3) 액세스 키 · 값: 비밀 글자 [비밀]
-    secret_key:                           # Object Storage(S3) 시크릿 키 · 값: 비밀 글자 [비밀]
+    endpoint:                             # Object Storage(S3 호환) 엔드포인트 URL · 서버: S3 호환 엔드포인트 URL 입력 · PC(local): 비움(게시는 file:// 폴더) · 값: URL · 예: https://os.corp.local:9000
+    region:                               # Object Storage 리전 이름 · 서버: 리전 이름 · 비우면 us-east-1 · PC(local): 비움 · 값: 글자
+    access_key:                           # Object Storage(S3) 액세스 키 · 서버: 입력 · PC(local): 비움 · 값: 비밀 글자 [비밀]
+    secret_key:                           # Object Storage(S3) 시크릿 키 · 서버: 입력 · PC(local): 비움 · 값: 비밀 글자 [비밀]
+    verify_tls:                           # TLS 인증서 검증(1=검증, 0=끔, 그 밖 문자열=CA 파일 경로) · 서버: 비우면 1(검증) · 사내 CA면 CA 파일 경로 · PC(local): 비움 · 값: 1(검증)·0(끔)·CA 파일 경로 · 예: /etc/pki/ca-trust/source/anchors/corp-ca.pem
   # ─── LLM·VLM 모델 [PC·서버] ───
   models:
     llm_base_url:                         # LLM 엔드포인트 주소(OpenAI 호환 …/v1) · 값: URL
@@ -48,13 +57,11 @@ required:
     vlm_base_url:                         # VLM 엔드포인트 주소(OpenAI 호환 …/v1) · 값: URL
     vlm_model:                            # VLM 모델 이름 · 값: 글자
     vlm_api_key:                          # VLM 엔드포인트 API 키(있을 때만) · 값: 비밀 글자 [비밀]
-  # ─── 원천·게시 위치 [서버만] ───
+  # ─── 원천 위치 [서버만] ───
   source:
     input_source:                         # 파싱 원본 위치: 폴더·rdb:csv:경로(11-01 — s3://·rdb:*·rdb:<이름>·rdb:<표> 지움) · 값: 경로
     source_bucket:                        # RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값) · 값: 글자
     source_uri_prefix:                    # 원본 위치 주소의 접두어(예: s3://버킷/접두 · file:///<폴더>) · 값: 경로
-    publish_bucket:                       # publish 대표 결과 업로드 Object Storage 버킷 이름(file://<폴더>면 로컬 가짜 저장소) · 값: 버킷 이름 · PC는 file://<폴더>
-    publish_prefix:                       # 버킷 안 업로드 경로 접두 · 값: 글자(버킷 안 경로 접두)
   # ─── 서비스 토큰 [서버만] ───
   tokens:
     parse_mcp:                            # parse MCP 서비스 Bearer 토큰(MCP 서버 MCP_TOKEN과 같은 값) · 값: 비밀 글자 [비밀]
@@ -73,14 +80,8 @@ required:
 common:
   # ─── 접속 — PostgreSQL·EDW·Object Storage 세부 ───
   connections:
-    object_storage:
-      region: us-east-1                   # Object Storage 리전 이름 · 비우면 us-east-1 · 값: 글자
-      verify_tls: '1'                     # TLS 인증서 검증(1=검증, 0=끔, 그 밖 문자열=CA 파일 경로) · 비우면 1 · 값: 1(검증)·0(끔)·CA 파일 경로 · 예: /etc/pki/ca-trust/source/anchors/corp-ca.pem
-    parsing_meta:
-      table: AI.ParsingMeta               # parsing-meta를 쓸 EDW 표 이름(스키마.표, 영문·숫자·_) · 비우면 AI.ParsingMeta · 값: 글자
     rdb:
       connect_kwargs:                     # EDW pymssql 연결에 더할 추가 인자(JSON 객체 — TLS·로그인 시간 등) · 비우면 추가 인자 없음 · 값: 비밀 글자 · 예: {"login_timeout": 10, "tds_version": "7.4"} [비밀]
-      port: 1433                          # EDW 포트 · 비우면 1433 · 값: 1~65535
   # ─── 모델 호출 — 임베딩·LLM·VLM·전송 ───
   models:
     embed:
@@ -420,8 +421,6 @@ dev:
     pg:
       standin_dir:                        # PG 접속 정보가 없을 때 쓰는 로컬 대체 DB(sqlite) 폴더 · 비우면 <루트>/output/pg_standin · 값: 경로
       standin_schema: ai                  # 로컬 대체 DB(sqlite)의 스키마 이름 · 비우면 ai · 값: 글자
-    rdb:
-      sqlite:                             # 시험용 가짜 EDW(SQLite 파일 하나 — 모든 표) · 비우면 실제 EDW(required.edw 칸) · 값: 경로
   load:
     pg_create_extension: false            # deploy 때 vector 확장 직접 생성 시도 · 비우면 false · 값: true·false
   # ─── 가짜 LLM·시험 하네스 ───

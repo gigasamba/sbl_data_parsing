@@ -38,6 +38,7 @@ README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash 
 
 서버 입구는 `run_docs.py` 하나다 — 문서마다 파싱 → publish(Object Storage + EDW) → 원본 삭제 → 구조화·적재를 상주 컨테이너 안에서 `exec`로 돌린다(PRD [pl-24](../prd/ops.md#pl-24)). 자리·설정: [release-and-patch §5-4](release-and-patch.md#5-4-run_docspy-자리와-설정).
 - 원본(`_warm/*.bin`·`_docflow/<seq>/_source_files`)은 **publish가 성공한 뒤에만** 지운다. 파싱·publish가 실패한 문서는 원본이 남고 `batch_progress/progress.log`에만 적힌다(EDW에 안 씀 — 다음 `--skip-done` 실행이 다시 고름). 구조화·적재가 실패하면 publish한 결과·EDW 행은 그대로이고 로그에만 적힌다.
+- **게시·EDW 설정**(settings.yaml `required` — 빠지면 run_docs가 칸 이름을 찍고 종료 2): 게시 위치 `required.publish.bucket`·`prefix`, Object Storage 접속 `required.object_storage.endpoint`·`access_key`·`secret_key`(`region` 비우면 `us-east-1`, `verify_tls` 비우면 검증 켬 — 사내 CA면 CA 파일 경로), EDW 접속 `required.edw.host`·`database`·`read_*`·`write_*`(`port` 비우면 1433), 게시 표 `required.edw.parsing_meta_table`(비우면 `AI.ParsingMeta`). `required.edw.sqlite`는 PC 전용이라 서버에서는 비운다.
 - **종료 코드**(PRD [pl-18](../prd/ops.md#pl-18)): `0` 대상 0건·모두 끝 · `1` 실패 문서가 하나라도 · `75` 마감(`--deadline`) 도달(실패 없음) 또는 다른 run_docs가 도는 중 · `2` 설정 문제. 실패와 마감이 함께면 `1`. 새벽 배치 unit은 `75`를 성공으로 친다.
 - **겹침 잠금:** run_docs는 `batch_progress/run_docs.lock`을 `flock`으로 잡는다 — 새벽 배치와 사람이 직접 돌린 run_docs가 함께 돌지 않는다(뒤에 온 쪽이 75). 죽으면 잠금은 저절로 풀린다. 작업 폴더(`ops.pipeline_host.run_docs_dir`)가 같아야 같은 잠금이다.
 - 파싱·게시만 따로:

@@ -133,10 +133,10 @@
 - 이유: ParsingMeta·FileStorageMap·RDB 원천 표·`query_edw`가 같은 EDW 서버·DB에 있다.
 - 규칙:
   1. 벡터는 pgvector에만, EDW에는 넣지 않는다.
-  2. 접속 블록 하나 — settings.yaml `required.edw`(`host`·`database`·`read_user`·`read_password`·`write_user`·`write_password`, 모델 `common.connections.rdb`). 드라이버는 pymssql만(`common.store.mssql.login(role)`).
+  2. 접속 블록 하나 — settings.yaml `required.edw`(`host`·`port`·`database`·`read_user`·`read_password`·`write_user`·`write_password`, 모델 `common.connections.rdb` · 게시 표 `parsing_meta_table` — 비우면 `AI.ParsingMeta`). 서버는 접속 칸을, PC는 `sqlite` 하나만 채운다. 드라이버는 pymssql만(`common.store.mssql.login(role)`).
   3. 읽기 계정: RDB 원천 목록·discover·고객 목록·FileStorageMap·ParsingMeta 상태·`run_docs.py` 읽기·MCP 전부. 쓰기 계정: ParsingMeta 게시(INSERT/UPDATE)·`loaded_at` UPDATE.
   4. MCP 프로세스는 `settings.edw_read_only()`를 먼저 불러 설정 객체의 쓰기 계정을 비운다.
-  5. PC 대역: sqlite 파일 하나(`valid_env/edw/edw.sqlite` — 생성: `python -m validation.e2e.edw_standin`)를 `AI`·`CRMS`·`LAS`·`SFDC` 별칭으로 ATTACH(`mssql.standin`, 기본 읽기 전용). `query_edw`는 읽기 전용으로 연다.
+  5. PC 대역: `required.edw.sqlite`에 적은 sqlite 파일 하나(`valid_env/edw/edw.sqlite`의 사본 — 생성: `python -m validation.e2e.edw_standin`, `local`에서만 열림)를 `AI`·`CRMS`·`LAS`·`SFDC` 별칭으로 ATTACH(`mssql.standin`, 기본 읽기 전용). `query_edw`는 읽기 전용으로 연다.
 - 파일: `common/store/{mssql,parsing_meta_db}.py`, `common/config/settings.py`.
 - QA: `tests/server/common/test_edw_login.py`·`tests/general/common/test_edw_standin.py` · 통과.
 - Status: done

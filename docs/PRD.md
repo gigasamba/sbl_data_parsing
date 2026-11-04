@@ -76,7 +76,7 @@
 | ParsingMeta에는 INSERT만 — 키 (`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뜀. UPDATE는 적재 때 `loaded_at`·`gold_version`뿐 | — | done | [pl-09](prd/load.md#pl-09) |
 | DRM(`skipped_drm`)·실패(`failed`) 문서는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만. 업로드 대상 상태는 `tuning.load.publish.upload_statuses`(기본 ok·partial) | 깨진 결과가 다른 팀에 넘어가지 않게 | done | [pl-09](prd/load.md#pl-09) |
 | 게시 버킷이 원천 원본 버킷과 같으면 게시를 거부한다 — 단 `run_docs`는 이 검사를 끄고 넘긴다(`PM_BUCKET_SKIP_OVERLAP_CHECK=1`) | 원본 덮어쓰기를 막는다 | done | [pl-09](prd/load.md#pl-09) |
-| 게시는 늘 하고 게시 대상(버킷·접두)은 필수 — `local`·`dev`는 로컬 대역이나 실제 접속, `prd`는 실제 접속만 | `run_docs`는 문서마다 늘 게시하고 버킷·접두가 없으면 시작을 거부한다 | done | [pl-26](prd/load.md#pl-26) |
+| 게시는 늘 하고 게시·EDW 칸은 settings.yaml `required` 한곳(`publish`·`object_storage`·`edw`) — 서버는 접속 칸, PC(`local`)는 `file://<폴더 절대 경로>`와 가짜 EDW `sqlite`만 | `run_docs`는 문서마다 늘 게시하고 게시 위치·Object Storage·EDW 읽기·쓰기 칸이 비면 시작을 거부한다 | done | [pl-26](prd/load.md#pl-26) |
 | FAQ를 다시 올리면 gold faq의 문서·청크를 모두 지우고 지금 FAQ 파일 전체를 다시 적재(판을 잇지 않음) | pl-13 "지우지 않음"의 FAQ 예외(등급 A) | done | [pl-41](prd/load.md#pl-41) |
 | 정형 DB(`struct` 스키마 — 마스터·문서 대장·표·칸)를 두지 않는다. 엔진 구성은 파일만 | 쓰이지 않았다. 서버에 남은 표는 DB 담당자가 정리 | done | [pl-08](prd/load.md#pl-08) |
 | 문서 대장(`doc_registry`)·숨김(`doc_hidden`)·원천 삭제 처리를 두지 않는다. 서버는 PG가 없으면 로컬 대체 DB로 바꿔 타지 않고 멈춘다 | 빼야 할 문서는 원천에서 지우거나 사람이 SQL로 | done | [pl-12](prd/load.md#pl-12) |
