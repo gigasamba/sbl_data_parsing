@@ -76,7 +76,7 @@ LAYER_CODE = {
     ],
     "r": [
         "mcp_server/services/search/retriever.py",
-        "mcp_server/services/search/local.py",
+        "mcp_server/services/search/rank_rules.py",
         "mcp_server/services/search/pgsearch.py",
     ],
 }  # 빈 층 a(research.py — S5a에 지움)는 0.2.0에 이름도 지움(pl-46)

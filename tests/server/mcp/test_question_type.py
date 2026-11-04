@@ -1,13 +1,13 @@
-"""mcp_server.services.search.qtype 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.qtype`."""
+"""mcp_server.services.search.question_type 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.question_type`."""
 
 import json
 
 from common.core.paths import RES_ROOT
-from mcp_server.services.search.qtype import classify
+from mcp_server.services.search.question_type import classify
 
 
 def eval_labels():
-    """resources/vocab/qtype_labels.json(질문 글자만 보고 손으로 붙인 라벨) → (정확도, 혼동 행렬) — 10-30 앱 코드(qtype.py)에서 옮김(시험만 씀, e2-17)."""
+    """resources/vocab/qtype_labels.json(질문 글자만 보고 손으로 붙인 라벨) → (정확도, 혼동 행렬) — 10-30 앱 코드(question_type.py)에서 옮김(시험만 씀, e2-17)."""
     items = json.loads((RES_ROOT / "vocab" / "qtype_labels.json").read_text(encoding="utf-8"))
     confusion, correct = {}, 0
     for it in items:

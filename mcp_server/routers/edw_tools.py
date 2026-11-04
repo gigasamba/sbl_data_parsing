@@ -4,7 +4,7 @@ S5(10-26, refactor_plan 5-1 routers/ — 코디네이터 답 Q5 a)에 mcp_server
 반환 형식은 MCP 도구 계약(🔒 CLAUDE.md 3절 — tools/list 바이트가 같아야 함)이라 글자 그대로 둔다(들여쓰기까지).
 """
 
-from mcp_server.routers.dispatch import _bg
+from mcp_server.routers.tool_runner import _bg
 from mcp_server.schemas.edw_result import QueryResult as _EdwQueryResult  # module-level import so query_edw's
 
 # TypedDict return annotation resolves (FastMCP reads it from the function's module globals for outputSchema, EQ1).

@@ -48,7 +48,7 @@ def tie_break(ordered, scores, docmeta, question, eps=None):
     질문에 엔티티가 없거나 구간 안에 맞는 후보가 하나도 없으면 바이트 동일(그대로 반환).
     ordered: 현재 순위의 키 목록 · scores: {키: 융합 점수} · docmeta: {키: (file_name, client, contract_no, product_code)}
     (file_name은 entity_hints의 client 매칭엔 안 쓰지만 다른 호출자 호환을 위해 자리만 유지).
-    local.py·pgsearch.py 공용(같은 함수 — 저장소 갈라지지 않음, enforcement §2)."""
+    rank_rules.py·pgsearch.py 공용(같은 함수 — 저장소 갈라지지 않음, enforcement §2)."""
     eps = TIE_EPS_REL if eps is None else eps
     matched_clients, matched_ids = entity_hints(question, (docmeta.get(k, (None, None, None, None))[1] for k in ordered))
     if not matched_clients and not matched_ids:
@@ -76,15 +76,15 @@ def weights(question=None):
     BR58(10-12)에서 SEARCH_W_BM25 기본 1.3을 시도했다가 되돌림 — 상위5 적중은 올랐지만(합본 terms-hard .70→.80)
     1위 정답이 여러 세트에서 떨어짐(hard64 .772→.719·r2 .85→.80·distractors 1.0→.944, 답변 단계 QA095 미스) —
     근접 중복 문서 구분은 재정렬(BR54) 쪽에서. 측정: dev_tools/perform_test/retrieval/measure.py --pooled·--hard-core-manifest.
-    G14 — question이 주어지고 질문 유형 라우터(mcp_server.services.search.qtype.classify,
+    G14 — question이 주어지고 질문 유형 라우터(mcp_server.services.search.question_type.classify,
     새 분류기 안 만듦)가 "aggregate"(건수·합계·최대/최소·평균)로 보면 SEARCH_W_BM25 대신 SEARCH_W_BM25_TABLE을
     bm25 가중으로 쓴다 — 표 집계 질문은 같은 양식의 다른 고객·연도 표가 키워드로 같이 올라와 BM25가 벡터 1위 근거를
-    끌어내리는 문제(dev/docs/backlog/search.md G14). local.py·pgsearch.py 둘 다 이 함수 하나만 써서 가중치가
+    끌어내리는 문제(dev/docs/backlog/search.md G14). rank_rules.py·pgsearch.py 둘 다 이 함수 하나만 써서 가중치가
     갈라지지 않는다(pgsearch.py가 이 함수를 import)."""
     s = mc.cfg().search  # 한 번 묶음(S7d — 가중치 칸들이 같은 판 값)
     w = {"vector": s.weights.vector, "bm25": s.weights.bm25, "id": s.weights.id}
     if question is not None:
-        from mcp_server.services.search.qtype import classify
+        from mcp_server.services.search.question_type import classify
 
         if classify(question)[0] == "aggregate":
             w["bm25"] = s.weights.bm25_table

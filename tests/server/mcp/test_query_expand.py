@@ -1,8 +1,8 @@
-"""mcp_server.services.search.terms 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.terms`."""
+"""mcp_server.services.search.query_expand 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.query_expand`."""
 
 from common.core.terms import load_glossary
 from common.core.text import tokens
-from mcp_server.services.search.terms import _exp_tokens, expand_query, match_concepts, vector_alias_text
+from mcp_server.services.search.query_expand import _exp_tokens, expand_query, match_concepts, vector_alias_text
 
 
 def _selftest_glossary_rows():

@@ -1,6 +1,6 @@
-"""mcp_server.services.search.text 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.text`."""
+"""mcp_server.services.search.bm25_weights 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m mcp_server.services.search.bm25_weights`."""
 
-from mcp_server.services.search.text import term_weights
+from mcp_server.services.search.bm25_weights import term_weights
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

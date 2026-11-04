@@ -36,7 +36,7 @@ data_retrieval import 금지 — S5에서 mcp_server). 단, common_tools/cli·ev
 파일마다 옛 cli·evaluation 영역 규칙을 그대로 받는다(코디네이터 답 Q3 a — pipeline/cli.py의 ask·pipeline/eval/server_checks.py가
 data_retrieval을 함수 안에서 import, T-15) — S5(ask 쪼개기)·S6(평가 도구 정리)에서 etl로 정리.
 S5(10-26, refactor_plan 9-1·9-2) — data_retrieval/ → mcp_server/(앱 이름 mcp_server): 새 이름 mcp_server도 "search" 영역으로 읽는다
-(① pipeline ↔ mcp_server import 금지 — 옛·새 이름 둘 다). T-15(S5) — pipeline/cli.py의 ask·test-stack은 mcp_server/cli/ask.py로,
+(① pipeline ↔ mcp_server import 금지 — 옛·새 이름 둘 다). T-15(S5) — pipeline/cli.py의 ask·test-stack은 mcp_server/cli/search_ask.py로,
 server_checks.py의 검색 측정(br54·l8·gh114)은 mcp_server/cli/search_checks.py로 옮겨 단계 4 도구 16개 중 검색을 import하는 것이 없어졌다
 → 16개 모두 etl 규칙(S4의 옛 cli·evaluation 예외를 풂). LEGACY_TOOLS 표는 경계 판정에 더 쓰지 않고 pipeline/cli.py selftest의 이미지
 배정(옮긴 단계 4 도구를 옛처럼 "공용"으로 읽음)에만 남는다. common_tools에서 mcp_server/cli/로 옮긴 mcp_eval·qa_report도 search 규칙

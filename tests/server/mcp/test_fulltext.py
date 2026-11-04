@@ -7,7 +7,7 @@ from unittest.mock import patch
 from common.store import parsing_meta_db as PMDB
 from mcp_server import config as mc
 from mcp_server.schemas import fulltext as FT
-from mcp_server.services import fulltext as M
+from mcp_server.services import fulltext_svc as M
 from mcp_server.services.search.server_state import _STATE
 from tests.server.mcp import pgfix
 

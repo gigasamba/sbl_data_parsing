@@ -10,8 +10,8 @@ from common.core.console import utf8_stdout
 from common.core.text import id_terms, tokens  # 토큰 규칙(모듈 계약)
 from common.store.pg import HNSW_MAX, PG, conf, vec
 from mcp_server import config as mc  # 설정 객체(S7d)
-from mcp_server.services.search.local import ID_MAX_DF, embed_query, tie_break, weights  # BR41 동점 깨기(local과 공용)
-from mcp_server.services.search.text import term_weights  # X3(10-16 검색 전용으로 분리)
+from mcp_server.services.search.bm25_weights import term_weights  # X3(10-16 검색 전용으로 분리)
+from mcp_server.services.search.rank_rules import ID_MAX_DF, embed_query, tie_break, weights  # BR41 동점 깨기(rank_rules와 공용)
 
 RERANK = 200  # 이진 양자화 후보 수 → 원 벡터 코사인으로 재정렬
 
@@ -95,12 +95,12 @@ def search(
     """코사인(기본) 또는 하이브리드(코사인 + BM25 + 드문 ID → RRF). 결과 = v_chunk_source 행 + rrf·via.
     vr = 벡터 순위(chunk_id 목록)를 밖에서 줄 때(EDW 벡터 검색 결과) — 없으면 pgvector로 계산.
     methods = 쓸 방법 {vector, bm25, id}(없으면 retrieve대로) · 가중치 weights(question)(SEARCH_W_*, G14 —
-    local.py와 같은 함수를 import해 씀, 가중치가 두 저장소에서 갈라지지 않음).
+    rank_rules.py와 같은 함수를 import해 씀, 가중치가 두 저장소에서 갈라지지 않음).
     scope(2026-10-20 통합 search) = 하드 필터 범위 **안** 문서 file_path 집합 — _scope_restrict로 저장소 질의 단계부터
     그 문서의 청크만 후보로(vector·bm25·ID 전부). None이면 전과 바이트 동일.
     question(G14) = 원문 질문 글자(weights()에 그대로 건넴 — 안 주면 전과 바이트 동일, BR41 tie_break에도 그대로 건넴).
     BR41 — 최종 top-k 안에서(멤버십 불변, 추가 질의 없음) 동점(상대 오차 TIE_EPS_REL)이면 질문 엔티티(고객·계약번호·
-    제품코드)와 맞는 문서를 앞으로(local.py tie_break 공용)."""
+    제품코드)와 맞는 문서를 앞으로(rank_rules.py tie_break 공용)."""
     s = db.schema
     q = vec(qv) if qv is not None else None  # 질의 임베딩이 없으면(장애) 키워드·ID만 — 부르는 쪽이 methods에서 vector를 뺌
     m = set(methods) if methods else ({"vector"} if retrieve == "cosine" else {"vector", "bm25", "id"})
@@ -136,7 +136,7 @@ def search(
             else []
         )
         ids = id_terms(terms)
-        # BR32 — 문턱은 "문서" 수 기준(local.py doc_df와 같은 규칙). term_stat.df는 적재 때 쌓인 청크 기준 수라
+        # BR32 — 문턱은 "문서" 수 기준(rank_rules.py doc_df와 같은 규칙). term_stat.df는 적재 때 쌓인 청크 기준 수라
         # 안 쓴다 — 한 문서가 청크 여러 개로 쪼개지면(메일 스크린샷 OCR 등) 문서는 하나인데도 청크 기준은 문턱을
         # 넘어 걸렸다(실측 QA074). doc_id 중복 제거 집계는 질의 때 바로.
         ir = (
@@ -171,7 +171,7 @@ def search(
             (top,),
         )
     }
-    top = [c for c in top if c in rows]  # BR41 — rows를 이미 가져온 뒤 재배열(추가 질의 없음), local.py와 같은 tie_break
+    top = [c for c in top if c in rows]  # BR41 — rows를 이미 가져온 뒤 재배열(추가 질의 없음), rank_rules.py와 같은 tie_break
     # v_chunk_source에 product_code·contract_no 열이 없음 — rows[c].get()은 그대로 None(죽지 않음, 그 축은 안 씀)
     docmeta = {
         c: (rows[c].get("file_name"), rows[c].get("client_edw"), rows[c].get("contract_no"), rows[c].get("product_code")) for c in top

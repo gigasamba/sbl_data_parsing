@@ -11,16 +11,16 @@ import hmac
 import json
 import re
 import time
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 from common.config.settings import cfg as common_cfg
 from common.config.settings import reveal
 from common.store.db.models import search_tables as ST
 from mcp_server import config as mc
 from mcp_server.schemas import fulltext as FT
+from mcp_server.services.search.search_svc import KST, kst_bound
 from mcp_server.services.search.server_state import _retriever
 
-KST = timezone(timedelta(hours=9))  # 시간대 없는 시각은 KST
 _HEX64 = re.compile(r"[0-9a-f]{64}")
 _REP_FILE = re.compile(r"_(\d{4}-\d{2}-\d{2}_\d{6})\.(md|json)$")  # <stem>_<parse_date>.md|json — parsing_meta.rep_md_key
 _NAIVE = re.compile(r"\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?")
@@ -64,14 +64,10 @@ def read_sfid(secret, sfid):
 def _when(v, upper, name):
     """since/until·created_* — `YYYY-MM-DD` 또는 시간대 없는 `YYYY-MM-DD HH:MM:SS`(KST). 날짜만이면 until = 다음 날 00:00 미만(그날 전체).
     시간대가 붙었거나 형식이 틀리면 BadRequest. 반환 (연산자, aware datetime)."""
-    s = str(v).strip()
-    if not _NAIVE.fullmatch(s):
+    if not _NAIVE.fullmatch(str(v).strip()):
         raise BadRequest(f"{name}: YYYY-MM-DD 또는 YYYY-MM-DD HH:MM:SS(시간대 없이 — KST)")
     try:
-        if len(s) == 10:
-            d = datetime.combine(date.fromisoformat(s), datetime.min.time(), KST)
-            return ("<", d + timedelta(days=1)) if upper else (">=", d)
-        return ("<=" if upper else ">="), datetime.fromisoformat(s).replace(tzinfo=KST)
+        return kst_bound(v, upper)  # 검색 created_*와 같은 규칙 — 여기는 형식만 더 좁게(시간대 없이)
     except ValueError as e:
         raise BadRequest(f"{name}: {e}") from None
 
