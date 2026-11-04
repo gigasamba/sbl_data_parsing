@@ -70,9 +70,7 @@ SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거
 
 
 def _yget(doc, path):
-    for k in path.split("."):
-        doc = doc.get(k) if isinstance(doc, dict) else None
-    return doc
+    return _host().get(doc, path)
 
 
 def _code_root():
@@ -104,9 +102,7 @@ def _img(name):
     )
     if f is None:
         sys.exit("run_docs: host_settings.tsv 없음 — 코드 폴더(deploy/host/scripts/) 또는 이 스크립트 옆에 둘 것(--code)")
-    rows = f.read_text(encoding="utf-8").splitlines()
-    for row in rows:
-        path, _, kind, *val = row.split("\t") if "\t" in row else ("", "", "")
+    for path, _, kind, *val in _host().table_rows(f):
         if kind == "const" and path == f"image.{name}":
             return val[0]
     sys.exit(f"run_docs: host_settings.tsv에 image.{name} 없음 — PYTHONPATH=. python deploy/release/gen_host_keys.py로 다시 만들 것")
@@ -117,15 +113,23 @@ def _app():
 
 
 @functools.cache
-def _layout():
-    """설정 배치 모듈(common/config/layout.py — 표준 라이브러리만)을 파일로 읽음 — 호스트 python은 pydantic이 없어 common 패키지를 import하지 않는다."""
+def _host():
+    """호스트 설정 읽기 모듈(코드 폴더 deploy/host/scripts/settings_to_env.py — settings.yaml 읽기·호스트 칸 표 한 곳, rn-06)을 파일로 읽음 —
+    호스트 python은 pydantic이 없어 common 패키지를 import하지 않는다(그 모듈이 common/config/layout.py를 파일로 읽음)."""
     import importlib.util
 
-    path = _code_root()[1]
-    spec = importlib.util.spec_from_file_location("settings_layout", path / "config" / "layout.py")
+    f = _code_root()[0] / "deploy" / "host" / "scripts" / "settings_to_env.py"
+    if not f.is_file():
+        sys.exit("run_docs: deploy/host/scripts/settings_to_env.py 없음 — 코드 폴더 안에서 부르거나 --code <코드 폴더>로 알려 줄 것")
+    spec = importlib.util.spec_from_file_location("settings_to_env", f)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def _layout():
+    """설정 배치 모듈(common/config/layout.py — 표준 라이브러리만)."""
+    return _host().layout()
 
 
 def read_settings(settings_file=None):
@@ -138,19 +142,15 @@ def read_settings(settings_file=None):
     except ImportError:
         return {}, "호스트 python에 PyYAML이 없음 — pip install pyyaml(refactor.md C-09)"
     lay = _layout()
-    try:
-        # BaseLoader(글자만, 객체 생성 없음) + 같은 칸 두 번 거부(앱과 같게)
-        loader = lay.reject_dup_keys(type("Loader", (yaml.BaseLoader,), {}))
-        doc = yaml.load(path.read_text(encoding="utf-8"), Loader=loader) or {}
+    try:  # BaseLoader(글자만, 객체 생성 없음) + 같은 칸 두 번 거부(앱과 같게) — settings_to_env.load_model
+        return _host().load_model(path), None
     except OSError as e:
         return {}, f"설정 파일을 읽지 못함: {path} ({e.strerror}) — --settings 또는 SETTINGS_FILE·<루트>/settings.yaml"
     except yaml.YAMLError as e:
         dup = getattr(e, "problem", "") or ""
         return {}, f"설정 파일 YAML 형식 오류: {path}" + (f" — {dup}" if dup.startswith(lay.DUP_KEY) else "")
-    if not isinstance(doc, dict):
+    except _host().NotSections:
         return {}, f"설정 파일 맨 위는 절(required·common·… tuning) 사전이어야 함: {path}"
-    try:
-        return lay.to_model(doc, str(path)), None
     except lay.LayoutError as e:
         return {}, str(e)
 
@@ -728,12 +728,6 @@ def downloader(rows, order):
         t.join()
 
 
-def _sweep_orphan(seq):
-    """docker exec 고아 방지(2026-10-22) — 타임아웃·실패 시 이 문서 PIPE_OUT_ROOT env를 가진
-    컨테이너 내 프로세스(bash·python·soffice까지 환경 상속)를 전부 종료."""
-    sh(sweep_cmd(seq), timeout=30)
-
-
 def parse_one(seq, row):
     """문서 1개 파싱 — 공유 상주 컨테이너(PIPE_C) 안에서 워커별 분리(경로 격리).
     PIPE_OUT_ROOT + DOC_DIR_PREPARED로 문서별 출력 루트 분리(pipeline이 두 env를 지원).
@@ -751,8 +745,8 @@ def parse_one(seq, row):
     )  # 2026-10-23 사용자 지정 — light 전용채널은 게이트 bypass(heavy의 CPU/VLM 대기 틈 즉시 소화)
     chan = _class.get(seq) or "light"
     rc, _, _ = sh(parse_cmd(seq, chan, seq in _scan, gate), timeout=2700, log=doc_log)
-    if rc != 0:
-        _sweep_orphan(seq)
+    if rc != 0:  # docker exec 고아 방지(2026-10-22) — 타임아웃·실패면 이 문서 표지 env를 가진 컨테이너 안 프로세스를 끔
+        sh(sweep_cmd(seq), timeout=30)
     rep = d / "parse" / "_rep"
     n = len([p2 for p2 in rep.glob("*.json") if p2.name != "index.json"]) if rep.exists() else 0
     ok = rc == 0 and n > 0
