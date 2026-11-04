@@ -152,6 +152,20 @@
 
 `PIPE_PROCS`(기본 `auto`)·`PIPE_WORKERS`·`VLM_CONCURRENCY`·`OCR_DPI`·`OCR_MAX_PAGES`·`MAX_FILE_MB`·`MEM_MAX_PCT`(90)·`CPU_MAX_LOAD`(0.9)·`EMBED_BATCH`·`EMBED_TIMEOUT`·`VLM_TIMEOUT` — 설명·기본값은 `settings.sample.yaml`. 자동 계산 계수와 호출 제한 시간·병렬 세부값은 `tuning` 절. 컨테이너 CPU·메모리 상한은 README §5-0 "자원".
 
+**VLM(그림 읽는 모델) 설정은 한 벌이다**(11-04 — 엔진 `qwen_vlm`·쪽 VLM·그림 VLM 공통, PRD [pl-43](../prd/transform.md#pl-43)):
+
+| 칸 | 뜻 |
+|---|---|
+| `common.models.vlm.concurrency`(`VLM_CONCURRENCY`, 4) | 문서 하나 안의 동시 요청 수 |
+| `common.models.vlm.max_concurrency`(`VLM_MAX_CONCURRENCY`, 8) | 한 프로세스 안 모든 VLM 호출의 합 상한 · 일괄 파싱은 동시 문서 수로 나눠 문서당 수를 줄임 |
+| `common.models.vlm.timeout`(`VLM_TIMEOUT`, 180초) | 호출 1건 제한 · VLM 엔진의 문서 제한 = 쪽 수 × 이 값 |
+| `tuning.common.models.vlm.retry`(`VLM_RETRY`, 1) | 실패한 호출 재시도 횟수 |
+| `common.models.vlm.extra_body`(`VLM_EXTRA_BODY`) | 요청 본문에 합칠 JSON — 생각 모델이면 생각 끄기 권장(예 `{"chat_template_kwargs": {"enable_thinking": false}}` · OpenRouter `{"reasoning": {"enabled": false}}`). 비우면 아무것도 안 더함 |
+| `extract.ocr.dpi`(`OCR_DPI`, 150) | 쪽·그림 렌더 해상도(OCR 엔진도 같은 값) |
+| `transform.vlm.page_max`(`VLM_PAGE_MAX`) | 문서당 VLM으로 옮길 쪽 수(비움 = 전부, 0 = 끔) · `extract.ocr.max_pages`는 OCR 엔진에만 |
+
+지운 칸(남아 있으면 경고만): `extract.vlm_page_sec`·`tuning.ops.services.parse_mcp.vlm_page_sec`·`tuning.transform.vlm.deadline`·`transform.vlm.global_concurrency`·`transform.vlm.page_slow`·`tuning.transform.vlm.page_concurrency`·`tuning.transform.vlm.page_min_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`. 이 이름(`VLM_DEADLINE`·`VLM_GLOBAL_CONCURRENCY`·`FIGURES_VLM_PARALLEL`·`VLM_PAGE_SLOW` 등)을 `--set`으로 주면 거부된다.
+
 ## 3. 전체 목록과 읽는 순서
 
 - **전체 목록은 `settings.sample.yaml`**(생성 `python -m common.config.sample` — 칸마다 설명·기본값·값·`[파라미터]`·`[비밀]`). 옛 env 이름·켜기 판정 꼴은 `--where <이름>`.

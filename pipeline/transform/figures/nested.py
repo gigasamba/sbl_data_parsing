@@ -10,7 +10,6 @@ VLM 호출 수: bbox 찾기(쪽마다 1회, P0 캐시)+자식마다 vlm_fig(기�
 같은 구조화 내용을 뽑으려면 크롭마다 VLM이 한 번 더 필요해 호출 수는 늘어난다(F7 완료 기준이 요구하는 부분,
 "VLM 호출 수 불변" 원칙의 명시된 예외)."""
 
-import base64
 import io
 import json
 import re
@@ -19,10 +18,10 @@ import time
 from common.ai import llm as A  # 모델 호출(0.2.0 — 옛 common.ai.adk, pl-46)
 from common.ai.agent_prompts import load as _load_prompt
 from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
-from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.shared import vlmcall as V
 from pipeline.shared.parse_run import prompt_id, raw_vlm_path
 from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
-from pipeline.transform.figures.vlm_page import _host, _model_dir, _png, sha  # 캐시 경로·PNG 축소 helper 재사용(중복 구현 금지)
+from pipeline.shared.vlmcall import _host, _model_dir, _png, sha  # 캐시 경로·PNG 축소 helper 재사용(중복 구현 금지)
 
 P_BBOX = _load_prompt("nested_figure", "bbox")  # 글자는 prompts/nested_figure/prompt.md
 PID_BBOX = prompt_id("bbox", "v1", P_BBOX)
@@ -53,28 +52,9 @@ def bbox_regions(img_bytes):
     if not (base and model):
         return [], {"error": "VLM_BASE_URL·VLM_MODEL 미설정 — 중첩 그림 찾기 생략(부모 기록만 남음)"}
     data, px = _png(img_bytes)
-    extra = {"reasoning": {"enabled": False}} if "openrouter" in base else {"chat_template_kwargs": {"enable_thinking": False}}
-    _dl = pc.cfg().transform.vlm.deadline  # S7c — 설정 객체(옛 float(get(X) or 360))
-    deadline = float(_dl if _dl is not None else 360)
-    t0 = time.perf_counter()
+    t0 = time.perf_counter()  # 생각(추론) 끄기는 common.models.vlm.extra_body(모든 VLM 호출 공통 — 11-04 코드 고정값 지움)
     try:
-        text, u = A.complete(
-            "vlm",
-            [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": P_BBOX},
-                        {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(data).decode()}},
-                    ],
-                }
-            ],
-            temperature=0,
-            max_tokens=500,
-            extra=extra,
-            timeout=deadline,
-            agent="nested_figure",
-        )
+        text, u = V.ask(P_BBOX, data, max_tokens=500, agent="nested_figure")
     except A.ModelUnavailable as ex:
         return [], {"error": str(ex)[:200], "ms": round((time.perf_counter() - t0) * 1000)}
     ms = round((time.perf_counter() - t0) * 1000)

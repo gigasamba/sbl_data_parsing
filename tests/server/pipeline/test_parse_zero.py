@@ -20,9 +20,7 @@ def test_zero_docs():
         out = Path(tempfile.mkdtemp())
         src = out / "prepared"
         src.mkdir()
-        a = argparse.Namespace(
-            src=str(src), source=None, engines="plaintext", procs="1", workers="1", vlm_concurrency=1, max_new=0, deadline=None
-        )
+        a = argparse.Namespace(src=str(src), source=None, engines="plaintext", procs="1", workers="1", max_new=0, deadline=None)
         calls = []
         buf = io.StringIO()
         with (

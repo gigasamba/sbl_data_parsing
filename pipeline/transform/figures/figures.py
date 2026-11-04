@@ -1,9 +1,8 @@
 """W1·W9 — 내장 그림을 형식과 무관하게 모두 찾아 VLM 기록(+ 위치·근처 글자). 원본: eval_hard_parse.figures()·vlm_raw().
 PDF 래스터·벡터 군집(post.vector)·docx(본문·표 칸)·xlsx(모든 시트·셀 위)·pptx·eml 본문 이미지(cid) → 그림 1개 = 기록 1개.
-VLM은 common.ai.guard(내부망 가드)·추론 끔·P0 원본 층 캐시(pipeline.shared.parse_run.raw_vlm_path, PARSE_RAW_ROOT로 저장소 바꿀 수 있음).
+VLM은 pipeline.shared.vlmcall.ask(내부망 가드·추론 끄기는 common.models.vlm.extra_body)·P0 원본 층 캐시(pipeline.shared.parse_run.raw_vlm_path, PARSE_RAW_ROOT로 저장소 바꿀 수 있음).
 산출: output/parse/_images/index.jsonl(설계 git 이력 docs/plans/image-parsing-2026-10-01.md(c4874dd0^) §3 계약 + W11 필드) + <doc>/<image_id>.png."""
 
-import base64
 import email
 import hashlib
 import html
@@ -23,6 +22,7 @@ from common.core.paths import (
     APP_ROOT,  # 폴더 재편 뒤 이 상수만 바뀌면 됨
 )
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
+from pipeline.shared import vlmcall as V  # VLM 호출 한 길(ask)·렌더 해상도(dpi) — 11-04
 from pipeline.shared.exts import IMG_EXTS
 from pipeline.shared.parse_run import prompt_id, raw_vlm_path
 from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지, post/__init__.py)
@@ -149,7 +149,7 @@ def _pdf_overlay_records(name, pi, pg, pic_objs, page_vlm):
     for ci, cl in enumerate(clusters, 1):
         x0, y0, x1, y1 = cl["bbox"]
         clip = (fitz.Rect(x0, y0, x1, y1) + (-4, -4, 4, 4)) & pg.rect
-        crop_bytes = pg.get_pixmap(dpi=200, clip=clip).tobytes("png")
+        crop_bytes = pg.get_pixmap(dpi=V.dpi(), clip=clip).tobytes("png")
         cluster_id = f"{name}#p{pi}#overlay{ci}"
         texts = [t for t in cl["texts"] if t]
         out.append(
@@ -290,7 +290,7 @@ def figures(p, page_covered=False):
         # 기록을 통째로 지우던 옛 동작이 버그 — AD31/AD20은 "VLM 재호출 금지"였지 "기록 금지"가 아니었다).
         if all(len(pg.get_text().strip()) < 20 for pg in d):  # 스캔·이미지 PDF — 쪽 전체를 page_render 부모로 기록(F7, 중첩)
             for pi, pg in enumerate(d, 1):  # + VLM이 실제로 불릴 쪽(skip_pages — page_targets 재사용, 상한
-                page_bytes = pg.get_pixmap(dpi=200).tobytes("png")  # 그대로)만 안의 자식 그림도 찾는다(VLM 미설정·꺼짐이면 부모만)
+                page_bytes = pg.get_pixmap(dpi=V.dpi()).tobytes("png")  # 그대로)만 안의 자식 그림도 찾는다(VLM 미설정·꺼짐이면 부모만)
                 parent_id = f"{name}#p{pi}#page"
                 out.append(
                     {
@@ -338,7 +338,7 @@ def figures(p, page_covered=False):
                         "image_id": f"{name}#p{pi}#v{k}",
                         "loc": {"page": pi, "origin": "vector", "signals": vr["signals"], "page_vlm": page_vlm},
                         "bbox": vr["bbox"],
-                        "bytes": pg.get_pixmap(dpi=200, clip=r).tobytes("png"),
+                        "bytes": pg.get_pixmap(dpi=V.dpi(), clip=r).tobytes("png"),
                         "before": [b[2].strip() for b in above],
                         "after": [b[2].strip() for b in below],
                         "near": [],
@@ -792,34 +792,11 @@ def vlm_fig(img_bytes, max_tokens=None, prompt_text=None, cache_name=None, agent
     if not (base and model):
         return "", {"error": "VLM_BASE_URL·VLM_MODEL 미설정 — 그림 기록은 글자만(VLM 없음)"}
     data, px = _png(img_bytes)
-    # 생각(추론) 모델은 출력 상한을 추론에 다 써 빈 답 — 그림 기록은 추론 끔(W16 실측 2026-10-02)
-    extra = {"reasoning": {"enabled": False}} if "openrouter" in base else {"chat_template_kwargs": {"enable_thinking": False}}
-    _dl = pc.cfg().transform.vlm.deadline  # S7c — 설정 객체(옛 float(get(X) or 360))
-    deadline = float(_dl if _dl is not None else 360)
+    # 생각(추론) 모델은 출력 상한(max_tokens)을 추론에 다 써 빈 답이 될 수 있다(W16 실측 2026-10-02) — 끄기는 common.models.vlm.extra_body
+    # (예 {"chat_template_kwargs": {"enable_thinking": false}} · OpenRouter {"reasoning": {"enabled": false}}, 11-04 — 코드 고정값 지움)
     t0 = time.perf_counter()
     try:
-        from pipeline.transform.figures.vgate import (
-            slot as _vgate_slot,
-        )  # 전역 VLM in-flight 게이트(합 VLM_GLOBAL_CONCURRENCY — 2026-10-22)
-
-        with _vgate_slot():
-            text, u = A.complete(
-                "vlm",
-                [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt_text},
-                            {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(data).decode()}},
-                        ],
-                    }
-                ],
-                temperature=0,
-                max_tokens=mt,
-                extra=extra,
-                timeout=deadline,
-                agent=agent,
-            )
+        text, u = V.ask(prompt_text, data, max_tokens=mt, agent=agent)
     except A.ModelUnavailable as ex:
         return "", {"error": str(ex)[:200], "ms": round((time.perf_counter() - t0) * 1000)}
     ms = round((time.perf_counter() - t0) * 1000)
@@ -1021,9 +998,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, ocr_fn=Non
             pv = dict(pv, fig_kind=kind)
         return (fi, t, pv)
 
-    _vp = pc.cfg().transform.figures.vlm_parallel  # S7c — 설정 객체(옛 get(A) or get(B) or 4 — 0도 참 글자라 is None 사슬)
-    if _vp is None:
-        _vp = ccfg().models.vlm.concurrency
+    _vp = ccfg().models.vlm.concurrency  # 문서 하나 안 VLM 동시 수(쪽·그림 공통, 11-04)
     _vlm_par = max(1, min(int(_vp if _vp is not None else 4), max(len(_vlm_set), 1)))
     _vlm_dict = {}
     if _vlm_set:

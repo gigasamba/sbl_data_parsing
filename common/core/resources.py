@@ -24,7 +24,7 @@ CPU 문(gated_popen이 메모리 문 다음에 같이 거침 — 측정 못 하�
                  없으면 1분 부하 평균 ÷ 호스트 코어(0.2.0 — pl-46: 컨테이너 안 loadavg는 호스트 전체라 한도 코어로 나누면 늘 막혔음)
 
 모델 서버 동시 요청 상한(실험 도구 stack_matrix의 병렬 수 plan_experiment·LLM_MAX_CONCURRENCY는 10-30 지움 — pl-21):
-  VLM_MAX_CONCURRENCY  VLM 서버 동시 요청 상한(기본 8) — cli/pipeline.py가 --workers(문서) 기준으로 쪽 동시 수를 줄여 지킴
+  VLM_MAX_CONCURRENCY  VLM 서버 동시 요청 상한(기본 8) — pipeline.cli parse가 동시 문서 수(min(문서 수, 조각 × --workers)) 기준으로 문서당 VLM 동시 수를 줄여 지킴
 사용: python common/resources.py           → 감지값·결정 표
       python common/resources.py --env     → export 줄(셸에서 eval)
 """

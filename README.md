@@ -170,6 +170,7 @@ tuning:
 - PC 전용 칸(외부 모델 허용·지출 상한·단가, 로컬 대체 DB, 시험 하네스)은 `dev` 절에 모여 있다(sample 맨 아래). 옛 자리(`common.models.guard.budget_usd` 등)에 둔 값도 읽지만 처음 읽을 때 옮길 자리를 한 번 알려 준다.
 - **외부 임베딩은 `allow_external: true`이고 `run_env: local`일 때만** 호출된다(서버 dev·prd는 늘 거부).
 - **LLM·VLM도 같다:** `required.models`의 `llm_*`·`vlm_*`(주소·모델·키)를 채우고 `dev.models.llm.allow_external`·`dev.models.vlm.allow_external`을 `true`로 두면 PC에서 분류(SFDC·LAS)와 그림·스캔 쪽 VLM이 외부 모델을 부른다(`run_env: local`일 때만). 비우면 분류가 실패해 SFDC·LAS 문서는 적재되지 않는다. OpenRouter 하나로 임베딩·LLM·VLM을 모두 쓸 수 있다(같은 주소·키, 모델만 다름 — 단가표 `common/ai/llm.py` `PRICES`에 있는 모델이어야 예산 상한이 걸림).
+- **VLM 설정은 한 벌:** 스캔·이미지 문서의 VLM 엔진(`qwen_vlm`)·쪽 VLM·그림 VLM이 같은 호출과 같은 칸(`common.models.vlm.*` — 동시 수·제한 시간·재시도·`extra_body`, 해상도 `extract.ocr.dpi` 150, 쪽 상한 `transform.vlm.page_max`)을 쓴다. 생각(추론) 모델이면 `common.models.vlm.extra_body`에 생각 끄기를 넣는다(OpenRouter는 `{"reasoning": {"enabled": false}}`) — 칸 설명은 [env-guide §2](docs/operations/env-guide.md), 규칙은 PRD [pl-43](docs/prd/transform.md#pl-43).
 - **내부망 서버(dev·prd)에서 시험·운영할 때는 세 `allow_external`을 모두 `false`(0)로 둔다.** 서버는 `run_env`가 dev·prd라 켜 두어도 외부 호출을 거부하지만, 서버 settings.yaml에는 외부 허용을 남기지 않는다.
 - **게시(silver)·EDW — PC는 로컬 대역만 적는다**(S3·EDW 접속 칸 `required.object_storage`·`required.edw.host` 등은 비움):
   ```yaml

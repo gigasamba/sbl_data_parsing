@@ -8,30 +8,20 @@ rotation.csv가 옛 버전이거나 이 문서가 거기 없으면 — 렌더 �
 저장: `raw/vlm/<모델>/page-v1-<sha8>/det-<열쇠16>.json`(새 — 기본) · 읽기만: `raw/vlm/<모델>/page-v1-<sha8>/<렌더 바이트 sha12>.json`
 (프로토타입의 기존 캐시 — 맞으면 쓰고 결정적 열쇠로도 복사해 다음부터는 그쪽만 봄)."""
 
-import base64
-import hashlib
-import io
 import json
-import re
-import time
-import urllib.parse
 from pathlib import Path
 
-from common.ai import llm as A  # 모델 호출(0.2.0 — 옛 common.ai.adk, pl-46)
-from common.ai.agent_prompts import load as _load_prompt
-from common.config.settings import cfg as ccfg  # common 칸 설정 객체(S7c)
-from common.core import span as SP  # op-01 성능 span(풀 스레드 컨텍스트 전달)
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared.exts import IMG_EXTS
-from pipeline.shared.parse_run import prompt_id, raw_vlm_path
 from pipeline.shared.postprocess import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
+from pipeline.shared.vlmcall import (  # 쪽 VLM 호출·캐시는 pipeline/shared/vlmcall.py로 옮김(엔진 qwen_vlm과 함께 씀)
+    page_count,
+    page_max,
+    rotation_info,
+    sha,
+    transcribe,
+)
 from pipeline.transform.figures.vector import vector_regions  # 쪽 벡터 도형 군집 수(page_signals)
-
-NOW = time.strftime("%Y-%m-%dT%H:%M:%S")
-
-P_PAGE = _load_prompt("page_transcribe", "page")  # AD33 — 글자는 dev/agents/page_transcribe/prompts/page.md
-PID_PAGE = prompt_id("page", "v1", P_PAGE)  # 프로토타입과 같은 글자 → 같은 id(기존 VLM 캐시 재사용)
-DPI, MAX_SIDE = 150, 2000  # pages_of()·_png() 렌더 매개변수 — 결정적 열쇠에 들어감(바뀌면 새 열쇠)
 
 # AD12·AD46(D2·D4·D6 공용 문서 검사 표) — 글자 PDF 안의 스캔 쪽 판정 기준값. 문서 단위 is_scan의 20자와 같은 값으로 보수적으로
 # 맞춤(AD31 — 글자 PDF 안의 스캔 쪽 신호는 늘 봄).
@@ -63,10 +53,6 @@ def _cap(name, default):
 
 def _hidden_overlap_cap():
     return _cap("PARSE_HIDDEN_OVERLAP_MAX", PARSE_HIDDEN_OVERLAP_MAX_DEFAULT)
-
-
-def sha(b):
-    return hashlib.sha256(b).hexdigest()
 
 
 def is_scan(p):
@@ -252,202 +238,6 @@ def scan_pages(path):
     return list(scan_pages_detail(path).keys())
 
 
-def pages_of(p):
-    """쪽 이미지 bytes 목록 — PDF는 150dpi 렌더(프로토타입과 같은 dpi라 쪽 이미지 sha가 맞음), 그 외는 원본 파일 그대로."""
-    p = Path(p)
-    if p.suffix.lower() == ".pdf":
-        import fitz
-
-        return [pg.get_pixmap(dpi=DPI).tobytes("png") for pg in fitz.open(p)]
-    return [p.read_bytes()]
-
-
-def rotation_info(doc_path):
-    """`<doc_path 폴더>/rotation.csv`에서 이 문서의 {쪽 번호: {angle, orig_sha256}} — prepare.py가 남김. 없으면 빈 묶음(아래서 대체 경로)."""
-    doc_path = Path(doc_path)
-    f = doc_path.parent / "rotation.csv"
-    out = {}
-    if not f.exists():
-        return out
-    import csv
-
-    with f.open(encoding="utf-8-sig") as fh:
-        for row in csv.DictReader(fh):
-            if row.get("file") == doc_path.name:
-                try:
-                    out[int(row["page"])] = {"angle": int(row.get("angle") or 0), "orig_sha256": row.get("orig_sha256") or None}
-                except (TypeError, ValueError):
-                    pass
-    return out
-
-
-def det_key(source_sha256, page_idx, dpi, max_side, rotation_deg, model, prompt_id_):
-    """결정적 P0 열쇠(16자) — 렌더 바이트가 아니라 원본·쪽·매개변수·모델로. 부분이 하나라도 바뀌면 다른 열쇠."""
-    parts = {
-        "source_sha256": source_sha256,
-        "page": page_idx,
-        "dpi": dpi,
-        "max_side": max_side,
-        "rotation_deg": rotation_deg,
-        "model": model,
-        "prompt_id": prompt_id_,
-    }
-    return hashlib.sha256(json.dumps(parts, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
-
-
-def det_path(store, model_dir, name, version, prompt_text, key16):
-    """raw_vlm_path와 같은 폴더(raw/vlm/<모델>/<prompt_id>/)에 파일 이름만 'det-<열쇠>'로 — 렌더 sha(12자 hex)와 안 겹침."""
-    return Path(store) / "raw" / "vlm" / model_dir / prompt_id(name, version, prompt_text) / f"det-{key16}.json"
-
-
-def _model_dir(model):
-    """프로토타입(eval_hard_parse.vlm_raw)과 같은 폴더 이름 정리 규칙 — '/'가 든 모델 이름도 기존 캐시와 같은 폴더로."""
-    return re.sub(r"[^\w.-]+", "_", model or "unset")
-
-
-def _png(img, max_side=2000):
-    from PIL import Image
-
-    im = Image.open(io.BytesIO(img))
-    if im.mode not in ("RGB", "L"):
-        im = im.convert("RGB")
-    im.thumbnail((max_side, max_side))
-    buf = io.BytesIO()
-    im.save(buf, "PNG")
-    return buf.getvalue(), f"{im.width}x{im.height}"
-
-
-def _log_failed_page_vlm(model, ms, reason):
-    """2026-10-22 — 실패(취소·타임아웃·빈 응답)한 페이지 VLM 호출의 대기 시간을 raw/vlm/<model>/_failures.jsonl에 append.
-    성공 provenance는 원래 캐시 파일로 남지만 실패는 안 남아 집계에서 빠졌었다 — 이제 실패 ms도 집계 가능."""
-    try:
-        from pipeline.shared.postprocess.rawstore import raw_vlm_path  # 있으면 사용, 없으면 아래 폴백
-    except ImportError:
-        raw_vlm_path = None
-    try:
-        _b = ccfg().models.vlm.base_url  # S7c — 설정 객체(옛 get(X, "") — 캐시 열쇠 글자 그대로)
-        base = raw_vlm_path(_b if _b is not None else "", model, "page", "fail") if raw_vlm_path else None
-        if base is None:
-            base = _rawdir_default(model)
-        base.parent.mkdir(parents=True, exist_ok=True)
-        with (base.parent / "_failures.jsonl").open("a", encoding="utf-8") as f:
-            f.write(json.dumps({"ms": ms, "error": reason, "at": time.strftime("%Y-%m-%dT%H:%M:%S")}, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-def _rawdir_default(model):
-    """raw_vlm_path가 없을 때 — PIPE_OUT_ROOT(없으면 런타임 루트 output/ — 이미지 안 /app/output)/parse/raw/vlm/<model>/page/ 기본 경로."""
-    from pathlib import Path
-
-    from common.core.paths import APP_ROOT
-
-    m = (model or "unknown").replace("/", "_")
-    from pipeline import config as pc
-
-    return Path(pc.cfg().paths.out_root or APP_ROOT / "output") / "parse" / "raw" / "vlm" / m / "page" / "fail"
-
-
-def _host(url):
-    return urllib.parse.urlparse(url).hostname or url
-
-
-def vlm_page(img_bytes, det=None):
-    """쪽 1장 → (마크다운 글자, provenance). P0 — det(= {"source_sha256","page","rotation_deg"})가 있으면 결정적 열쇠로 찾는다(렌더
-    바이트가 달라도 재사용) · 없으면(det None — 원본 sha를 못 구함) 렌더 바이트 sha로(예전 동작, 재준비하면 캐시가 깨질 수 있음).
-    det가 있어도 결정적 캐시가 비었으면 렌더 sha(프로토타입 캐시) 경로를 읽기만 시도 — 맞으면 결정적 열쇠로도 복사해 다음부터 안 읽게.
-    실패·빈 답은 저장 안 함. 프로토타입은 쪽 옮기기에서 추론을 끄지 않는다(그림 JSON과 달리 출력 상한을 넉넉히 써도 됨 — 실측 캐시에
-    reasoning 끈 흔적 없음) — 여기도 같게 둔다."""
-    base, model = ccfg().models.vlm.base_url, ccfg().models.vlm.model  # S7c — 설정 객체
-    model_dir = _model_dir(model)
-    render_sha = sha(img_bytes)
-    legacy = raw_vlm_path(raw_root(), model_dir, "page", "v1", P_PAGE, render_sha)
-    dpath = None
-    if det and det.get("source_sha256"):
-        k16 = det_key(
-            det["source_sha256"], det["page"], DPI if det.get("is_pdf") else None, MAX_SIDE, det.get("rotation_deg") or 0, model, PID_PAGE
-        )
-        dpath = det_path(raw_root(), model_dir, "page", "v1", P_PAGE, k16)
-        if dpath.exists():
-            rec = json.loads(dpath.read_text(encoding="utf-8"))
-            return rec["text"], {**rec["provenance"], "cached": True, "via": "det"}
-    if legacy.exists():  # 읽기 대체 경로 — 프로토타입(또는 예전 운영) 캐시가 맞으면 그대로 쓰고 승격
-        rec = json.loads(legacy.read_text(encoding="utf-8"))
-        if dpath is not None:
-            dpath.parent.mkdir(parents=True, exist_ok=True)
-            dpath.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")  # 결정적 열쇠로 복사 — 다음부터 렌더 sha 안 봐도 됨
-        return rec["text"], {**rec["provenance"], "cached": True, "via": "legacy_image_sha"}
-    if not (base and model):
-        return "", {"error": "VLM_BASE_URL·VLM_MODEL 미설정 — 쪽 옮기기 없이 OCR만", "cached": False}
-    data, px = _png(img_bytes)
-    _dl = pc.cfg().transform.vlm.deadline  # S7c — 설정 객체(옛 float(get(X) or 360))
-    deadline = float(_dl if _dl is not None else 360)
-    t0 = time.perf_counter()
-    try:
-        from pipeline.transform.figures.vgate import (
-            slot as _vgate_slot,
-        )  # 전역 VLM in-flight 게이트(합 VLM_GLOBAL_CONCURRENCY — 2026-10-22)
-
-        with _vgate_slot():
-            text, u = A.complete(
-                "vlm",
-                [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": P_PAGE},
-                            {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(data).decode()}},
-                        ],
-                    }
-                ],
-                temperature=0,
-                max_tokens=None,
-                timeout=deadline,
-                agent="page_transcribe",
-            )
-    except A.ModelUnavailable as ex:
-        _ms = round((time.perf_counter() - t0) * 1000)
-        _log_failed_page_vlm(model, _ms, f"unavailable: {str(ex)[:120]}")
-        return "", {"error": str(ex)[:200], "ms": _ms, "cached": False}
-    except Exception as ex:  # 2026-10-22 — 취소·타임아웃 등 기타 예외도 시간 기록
-        _ms = round((time.perf_counter() - t0) * 1000)
-        _log_failed_page_vlm(model, _ms, f"{type(ex).__name__}: {str(ex)[:120]}")
-        raise
-    ms = round((time.perf_counter() - t0) * 1000)
-    if not text.strip():
-        _log_failed_page_vlm(model, ms, "빈 응답")
-        return "", {"error": "빈 읭", "ms": ms, "cached": False}  # 실패·빈 답은 원본 층에 남기지 않음(다음 실행에서 다시)
-    prov = {
-        "model": model,
-        "endpoint_host": _host(base),
-        "prompt_id": PID_PAGE,
-        "image_sha256": render_sha,
-        "px": px,
-        "params": {"temperature": 0, "max_side": MAX_SIDE},
-        "ms": ms,
-        "in": u.get("prompt_tokens"),
-        "out": u.get("completion_tokens"),
-        "cost": u.get("cost"),
-        "created_at": NOW,
-        "cached": False,
-    }  # image_sha256 = 렌더 바이트 sha(추적용, 열쇠 아님)
-    rec = {"text": text, "provenance": {k: v for k, v in prov.items() if k != "cached"}}
-    # 결정적 열쇠가 있으면 그쪽에 저장(앞으로 재사용), 없으면 예전처럼 렌더 sha 경로에(대체 경로)
-    dest = dpath if dpath is not None else legacy
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
-    return text, prov
-
-
-def _max_pages():
-    """VLM_PAGE_MAX — 비었으면 전부, '0'이면 꺼짐(이 기능 호출 자체를 안 함), N이면 문서당 앞 N쪽만."""
-    pc.checked("VLM_PAGE_MAX")  # 형식이 틀리면 옛 int(v)처럼 여기서 실패(기본값이 '제한 없음'이라 조용히 넘기지 않음)
-    v = pc.cfg().transform.vlm.page_max  # S7c — 설정 객체(int 칸: 없음·빈 값 = None)
-    if v is None:
-        return None
-    return int(v)
-
-
 def page_targets(doc_path):
     """독립 검토 반영(10-11, AD31/AD20 BLOCK) — 이 문서에서 **실제로** 쪽 VLM이 호출될 쪽 번호 집합 — 한 곳에서
     계산해 page_text_pages()·figures.py 둘 다 이 함수만 본다(pptx_render.target_slides와 같은 패턴, 따로 추정 안 함).
@@ -464,12 +254,12 @@ def page_targets(doc_path):
 
     if "vlm_page" not in active_features():
         return set()
-    cap = _max_pages()
+    cap = page_max()
     if cap == 0:
         return set()
     p = Path(doc_path)
     if is_scan(p):
-        return pick_pages(len(pages_of(p)), True, [], cap)
+        return pick_pages(page_count(p), True, [], cap)
     if p.suffix.lower() != ".pdf":
         return set()
     # AD12·AD31 — 글자 PDF 안의 스캔 쪽만(쓰레기·숨은 글자층·OCR≫글자층·회전·벡터 도식 신호 — scan_pages_detail 참고)
@@ -488,63 +278,7 @@ def page_text_pages(doc_path):
     쪽 단위로 [(쪽 번호, 글, provenance), ...] (scan_fill이 그 쪽만 채우려면 page_text처럼
     합친 글이 아니라 쪽 번호가 필요). 대상 쪽 계산은 page_targets()(단일 진본, figures.py와 공유) — 여기선 그
     번호로 실제 렌더·VLM 호출만 한다."""
-    # 2026-10-22 — 쪽 전사를 순차→병렬로: 15쪽 × 26초 순차=390초 wall → 병렬(min(N,병렬)배치=wall 최소화), 품질 무변
-    idxs = sorted(page_targets(doc_path))
-    if not idxs:
-        return []
-    p = Path(doc_path)
-    pages = pages_of(p)
-    rot = rotation_info(p)
-    is_pdf = p.suffix.lower() == ".pdf"
-
-    def _one(i):
-        img = pages[i - 1]
-        info = rot.get(i) or {}
-        det = (
-            {"source_sha256": info.get("orig_sha256"), "page": i, "rotation_deg": info.get("angle") or 0, "is_pdf": is_pdf}
-            if info.get("orig_sha256")
-            else None
-        )
-        text, prov = vlm_page(img, det)
-        return (i, text, prov)
-
-    # 2026-10-22 — 적응적 병렬: 느린 VLM 응답 시 워커 수 절반으로, 빠르면 유지
-    # VLM_PAGE_SLOW(기본 60초) 이상 걸린 call이 있으면 다음 배치의 워커를 절반으로 → GPU 포화 자동 완화
-    _tv = pc.cfg().transform.vlm  # S7c — 설정 객체(옛 get(A) or get(B) or 4 — 0도 참 글자라 is None 사슬)
-    _n = _tv.page_concurrency if _tv.page_concurrency is not None else ccfg().models.vlm.concurrency
-    n_max = max(1, int(_n if _n is not None else 4))
-    n_min = int(_tv.page_min_concurrency if _tv.page_min_concurrency is not None else 2)
-    _slow = float(_tv.page_slow if _tv.page_slow is not None else 60)  # 콜이 이 시간(초) 초과면 병렬 수 축소
-    n = min(n_max, len(idxs))
-    if n <= 1 or len(idxs) <= 1:
-        return [_one(i) for i in idxs]
-
-    import concurrent.futures
-    from itertools import islice
-
-    it = iter(idxs)
-    out = []
-    while True:
-        batch = list(islice(it, n))
-        if not batch:
-            break
-        if len(batch) == 1:
-            out.append(_one(batch[0]))
-            continue
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(batch)) as ex:
-            batch_out = list(ex.map(SP.carry(_one), batch))  # ex.map은 입력 순서 보존 · op-01 — run/span ID를 풀 스레드에 실음
-        out.extend(batch_out)
-        # 적응적: 이 배치에서 가장 느린 call이 _slow를 넘었으면 워커 수 절반 (최소 n_min)
-        slowest = 0.0
-        for _, _, pv in batch_out:
-            if isinstance(pv, dict) and pv.get("ms"):
-                slowest = max(slowest, float(pv["ms"]))
-        if slowest > _slow * 1000 and n > n_min:
-            n = max(n_min, n // 2)
-            print(f"[vlm_page] VLM 응답 {slowest / 1000:.0f}초 > {_slow:.0f}초 → 병렬 수 {n * 2}→{n} 감소 (GPU02 부하 완화)", flush=True)
-        elif slowest < _slow * 1000 // 2 and n < n_max:
-            n = min(n_max, n * 2)  # 반대로 빠르면 회복
-    return out
+    return transcribe(doc_path, page_targets(doc_path))  # 렌더·호출·병렬은 pipeline/shared/vlmcall.py(엔진 qwen_vlm과 같은 함수)
 
 
 def page_text(doc_path):

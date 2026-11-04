@@ -64,7 +64,6 @@ def _job_env(post):
         made = settings_env(
             PARSE_POST=post,
             PARSE_TEXT_PAGE_SEC=str(pm.text_page_sec),
-            PARSE_VLM_PAGE_SEC=str(pm.vlm_page_sec),
             PARSE_WARMUP_SEC=str(pm.warmup_sec),
             PARSE_LOW_PRIORITY="0",
         )

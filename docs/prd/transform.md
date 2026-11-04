@@ -30,14 +30,14 @@
 
 ### 규칙
 1. 문서마다 구성의 엔진을 동시에, 엔진마다 따로 떨어진 자식 프로세스 하나로 돌린다. 문서끼리는 `--workers`·`--procs`로 병렬.
-2. 문서×엔진 제한 시간(초) = round(max(max(1, 쪽 수) × 쪽당 초, 첫 문서면 `pipeline.extract.warmup_sec`(60)) + `isolate_overhead`(10), 2). 쪽당 초 = VLM 엔진 `vlm_page_sec`(120), 그 밖 `text_page_sec`(10).
+2. 문서×엔진 제한 시간(초) = round(max(max(1, 쪽 수) × 쪽당 초, 첫 문서면 `pipeline.extract.warmup_sec`(60)) + `isolate_overhead`(10), 2). 쪽당 초 = VLM 엔진은 VLM 호출 1건 제한 `common.models.vlm.timeout`(180), 그 밖 `text_page_sec`(10).
 3. 시간을 넘기면 제한을 두 배로 한 번 더 돌리고, 그래도 넘으면 실패로 기록한다.
 4. OCR 엔진 `rapidocr_ko`는 파싱 엔진으로 돌지 않는다 — 이미지·스캔 문서는 VLM 엔진 `qwen_vlm`만.
 5. 글자 PDF 속 스캔 쪽은 represent가 쪽 전체를 VLM으로 읽어 채운다(`vlm_page`) — 회전된 쪽(`pipeline.extract.rotated_max` 20)·숨은 글자가 그림과 겹친 쪽(`hidden_overlap_max` 20) 각각 최대 20쪽. 쪽 VLM은 `PARSE_POST`에 `vlm_page`가 있을 때만, 문서당 한 번(실패한 쪽은 다시 부르지 않음).
 6. 대표 결과가 이미지·스캔 형식(`.pdf_image`·png·jpg 등)의 VLM 엔진이고 글이 비어 있지 않으면 → 쪽 VLM을 건너뛰고 쪽 그림은 처리된 것으로 표시한다(그림 VLM 없음).
-7. VLM 엔진 자식의 `VLM_TIMEOUT` = min(`common.models.vlm.timeout`, `vlm_page_sec`).
+7. VLM 엔진·쪽 VLM·그림 VLM의 호출 1건 제한은 모두 `common.models.vlm.timeout` 하나다([pl-43](#pl-43)).
 8. 일괄 엔진 자식은 낮은 우선순위로 돈다(`pipeline.extract.low_priority` — POSIX nice +10). 컨테이너끼리의 CPU 순위는 [ops.md#rn-03](ops.md#rn-03).
-9. 파싱 서비스(`parse_document`)는 우선순위를 낮추지 않고 자기 제한을 쓴다 — `pipeline.service.parse_mcp.text_page_sec` 1 · `vlm_page_sec` 60 · `warmup_sec` 20, 작업 제한 `job_timeout_sec` 600. 작업 시간을 넘기면 프로세스 그룹 전체를 끝낸다.
+9. 파싱 서비스(`parse_document`)는 우선순위를 낮추지 않고 자기 제한을 쓴다 — `pipeline.service.parse_mcp.text_page_sec` 1 · `warmup_sec` 20(VLM 엔진은 파이프라인과 같은 `common.models.vlm.timeout`), 작업 제한 `job_timeout_sec` 600. 작업 시간을 넘기면 프로세스 그룹 전체를 끝낸다.
 10. 알려진 한계: 숨은 글자가 그림과 겹친 쪽(`hidden_overlap`)은 쪽 VLM에 낱말 상자가 없어 숫자 표기 차이(예: 430.000 ↔ 430,000)를 고치지 않고 원래 글을 둔다. 글자 엔진은 쪽으로 나누지 않는다(쪽 병렬은 VLM 엔진 안에서만).
 
 ### 예시
@@ -48,18 +48,28 @@
 - Status: done
 
 <a id="pl-43"></a>
-## pl-43 · VLM 동시 호출 수
+## pl-43 · VLM 처리 한 길 — 호출·동시 수·제한 시간·해상도
 
 ### 무엇·왜
-공유 VLM 서버의 동시 요청을 설정 몇 개로 묶어 조절한다(엔진마다 손잡이를 두지 않음).
+공유 VLM 서버의 동시 요청을 설정 몇 개로 묶어 조절한다(엔진마다 손잡이를 두지 않음). 11-04(사용자): 스캔 쪽이 엔진 `qwen_vlm`·쪽 VLM 후보정·그림 VLM 세 길로 각자 요청을 만들어 해상도(200·150·200)·생각 끄기·제한 시간·재시도·동시 수가 길마다 달랐다 — 한 함수·한 설정으로 합친다.
 
 ### 규칙
-1. 모든 VLM 호출(엔진 `qwen_vlm`·쪽 VLM·그림 VLM)의 동시 합 상한 = `pipeline.transform.vlm.global_concurrency`(기본 12). 호출 한 건이 자리 하나(`figures/vgate.py`).
-2. 문서 하나 안의 VLM 동시 수 기본값 = `common.models.vlm.concurrency`(`VLM_CONCURRENCY`, 기본 4). 그림 VLM은 `pipeline.transform.figures.vlm_parallel`, 쪽 VLM은 `pipeline.transform.vlm.page_concurrency`가 있으면 그 값.
-3. 일괄 파싱(`pipeline.cli parse`)은 엔진 자식에 `VLM_CONCURRENCY` = max(1, min(`--vlm-concurrency`(기본 `pipeline.night.vlm_concurrency` 8), `common.models.vlm.max_concurrency`(8) ÷ 문서 동시 수(정수 나눗셈)))를 넘긴다.
+1. 모든 VLM 호출(엔진 `qwen_vlm`·쪽 VLM·pptx 슬라이드·그림 VLM·중첩 그림)은 `pipeline/shared/vlmcall.py`의 `ask()` 하나로 `common.ai.llm.complete('vlm')`를 부른다 — 내부망 가드·예산 장부·모델 다운 감지가 같고, 요청 본문에 `common.models.vlm.extra_body`(생각 끄기 등)를 합친다. 코드에 고정한 생각 끄기는 없다.
+2. 호출 1건 제한 시간 = `common.models.vlm.timeout`(180초). 실패(시간 초과·연결 오류·429·5xx) 재시도 = `common.models.vlm.retry`(1 — 시도는 retry + 1번).
+3. 렌더 해상도 = `pipeline.extract.ocr.dpi`(150) 하나 — 엔진·쪽 VLM·pptx·그림·`prepare --dpi` 기본값. 긴 변은 2000 px로 줄인다.
+4. 쪽 수 상한 = `pipeline.transform.vlm.page_max`(비움 = 전부, 0 = 끔) — 엔진과 쪽 VLM 공통. `pipeline.extract.ocr.max_pages`는 OCR 엔진(VLM 아님)에만 남는다(엔진 공용 파일 `engines/_common`을 바꾸면 모든 엔진 지문이 바뀌어 두었다).
+5. 엔진과 쪽 VLM은 같은 쪽 옮기기 함수(`transcribe` — 같은 지시문 `page_transcribe`·렌더·캐시 열쇠)를 써서, 엔진이 옮긴 쪽은 후보정이 캐시로 다시 쓴다. 엔진은 쪽 하나라도 호출이 실패하면 문서×엔진 실패로 남긴다(빈 답은 빈 쪽).
+6. 동시 수: 한 프로세스 안 모든 VLM 호출의 합 상한 = `common.models.vlm.max_concurrency`(8, 호출 한 건이 자리 하나). 문서 하나 안 = `common.models.vlm.concurrency`(4 — 쪽·그림 공통). 쪽 옮기기는 가장 느린 호출이 60초를 넘으면 다음 묶음 병렬 수를 절반(최소 2)으로 줄였다가 빨라지면 되돌린다(코드 상수).
+7. 일괄 파싱(`pipeline.cli parse`)은 엔진 자식에 `VLM_CONCURRENCY` = max(1, min(`concurrency`, `max_concurrency` ÷ 동시 문서 수))를 넘긴다. 동시 문서 수 = min(이번 문서 수, 조각 `--procs` × `--workers`).
+
+### 현재 상태(11-04)
+- 지운 칸(남아 있으면 경고만): `extract.vlm_page_sec`·`tuning.ops.services.parse_mcp.vlm_page_sec` → `common.models.vlm.timeout` · `tuning.transform.vlm.deadline` → `timeout` · `transform.vlm.global_concurrency` → `max_concurrency` · `tuning.transform.vlm.page_concurrency`·`tuning.transform.figures.vlm_parallel`·`tuning.ops.nightly_run.vlm_concurrency`(명령 인자 `--vlm-concurrency`) → `concurrency` · `transform.vlm.page_slow`·`tuning.transform.vlm.page_min_concurrency` → 코드 상수.
+- 고친 결함: run_docs가 `--set VLM_CONCURRENCY=8`(vlm 레인 6)을 줘도 `--workers` 기본 4로 나눠 문서 1건 실행의 엔진 자식이 늘 2였다(`8 ÷ 4`). 이제 동시 문서 수(문서 1건이면 1)로 나눈다.
+- 결과가 바뀜: 엔진 `qwen_vlm` 지문이 바뀌어 스캔·이미지 문서는 다시 파싱된다(지시문이 쪽 VLM과 같은 `page_transcribe`로, 해상도 200 → 150). 그림 해상도 200 → 150이라 그림 캐시도 새로 만든다. 서버 확인은 [refactor.md C-93](../refactoring/refactor.md).
 
 ### QA
-- `tests/general/pipeline/test_vgate.py`.
+- `tests/server/pipeline/test_vlmcall.py` — 가짜 로컬 VLM 서버로 표 한 줄 = 한 길(엔진·쪽 VLM 후보정·그림·중첩 그림): 같은 `extra_body`·제한 시간·해상도, 엔진이 옮긴 쪽은 후보정이 호출 0, 재시도 횟수·쪽 상한·실패 시 엔진 실패.
+- `tests/general/pipeline/test_vgate.py` — 합 상한만큼만 동시 진입.
 - Status: done
 
 <a id="pl-42"></a>

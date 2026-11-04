@@ -79,7 +79,7 @@ CATEGORIES = {
         ("회전 준비(prepare)", ("extract.prepare",)),
         (
             "파싱 엔진·쪽 처리",
-            ("extract.doc_parallel", "extract.vlm_page_sec"),
+            ("extract.doc_parallel",),
         ),
         ("OCR", ("extract.ocr", "extract.rapidocr_page_workers")),
     ),
@@ -156,7 +156,6 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
     "pipeline.extract.prepare.link",
     "pipeline.load.publish.upload_statuses",
     "pipeline.transform.structure.embed_max_chars",
-    "pipeline.transform.vlm.page_min_concurrency",
     "mcp.search.pg.filter_exact_max",
 }
 
@@ -216,15 +215,13 @@ BLANK = {
     "pipeline.service.parse_mcp.jobs_dir": "<서비스 폴더>/jobs",
     "pipeline.service.parse_mcp.procs": "min(3, CPU 수 − 1)",
     "pipeline.service.parse_mcp.roots": "<서비스 폴더>/inbox",
-    "pipeline.transform.figures.vlm_parallel": "common.models.vlm.concurrency 값",
     "pipeline.transform.represent.post": "파이프라인 all · parse MCP 서비스 supsub(빈 글자 ''를 쓰면 끔)",
     "pipeline.transform.represent.rep_select": "best(정확도+풍부도)",
     "pipeline.transform.structure.chunk_size": "청커별 기본(800 등)",
     "pipeline.transform.structure.chunk_table": "표를 통째로 둠",
     "pipeline.transform.structure.embed_cache": "<루트>/output/edw/embed_cache.sqlite · 0이면 캐시 끔",
     "pipeline.transform.structure.page_chunk_max": "chunk_size × 4(chunk_size도 비우면 4000)",
-    "pipeline.transform.vlm.page_concurrency": "common.models.vlm.concurrency 값",
-    "pipeline.transform.vlm.page_max": "전부(0이면 쪽 VLM 끔)",
+    "pipeline.transform.vlm.page_max": "전부(0이면 쪽 VLM 끔 — VLM 엔진은 빈 결과)",
     "mcp.edw_meta.dir": "<런타임 루트>/config/edw_meta(이미지 안 /app/config/edw_meta — 서버 compose는 이 자리를 붙이지 않음) — 두 파일이 없으면 edw_meta 도구는 not_configured(query_edw는 그대로)",
     "mcp.host.jobs_dir": "<결과 폴더>/_mcp_parse/jobs",
     "mcp.server.allowed_hosts": "바인드 주소만 허용",

@@ -1,10 +1,9 @@
-"""pipeline.transform.figures.vgate(층 p1 파일) 자기 점검 — S9b(VS9 B-1, D-018)에 모듈 `__main__`에서 옮김(줄 글자 그대로).
-옛 명령 `python -m pipeline.transform.figures.vgate`(반입 판정 목록 밖 — 일반 시험)."""
+"""pipeline.shared.vlmcall 게이트(옛 figures/vgate.py — 층 p1 파일) — 합 상한 common.models.vlm.max_concurrency(11-04 VLM 통일)."""
 
 import threading
 
-from pipeline import config as pc
-from pipeline.transform.figures.vgate import _SEM, slot
+from common.config.settings import COMMON
+from pipeline.shared.vlmcall import _SEM, slot
 
 
 def test_main():  # 옛 `if __name__ == "__main__":   # 자기점검 — 상한만큼만 동시 진입, 해제하면 다음이 진입` 몸통
@@ -27,13 +26,13 @@ def test_main():  # 옛 `if __name__ == "__main__":   # 자기점검 — 상한�
                 active[0] -= 1
         return i
 
-    with pc.PIPE.env(VLM_GLOBAL_CONCURRENCY="3"):  # S7c — 설정 객체만 바꿔 끼움(os.environ 안 건드림)
+    with COMMON.env(VLM_MAX_CONCURRENCY="3"):  # S7c — 설정 객체만 바꿔 끼움(os.environ 안 건드림)
         _SEM.clear()
         with ThreadPoolExecutor(max_workers=10) as ex:
             got = list(ex.map(one, range(30)))
         assert got == list(range(30)), got
         assert peak[0] == 3, peak[0]  # 10워커·30작업이어도 동시 진입은 상한 3
-    with pc.PIPE.env(VLM_GLOBAL_CONCURRENCY="1"):
+    with COMMON.env(VLM_MAX_CONCURRENCY="1"):
         _SEM.clear()
         peak[0] = 0
         with ThreadPoolExecutor(max_workers=5) as ex:

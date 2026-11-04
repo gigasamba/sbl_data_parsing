@@ -30,9 +30,9 @@ from pathlib import Path
 
 from pipeline import config as pc  # pipeline 칸 설정 객체(S7c)
 from pipeline.shared.postprocess import raw_root
+from pipeline.shared.vlmcall import dpi, sha, vlm_page
 from pipeline.transform.figures import shape_detect  # AD14
 from pipeline.transform.figures.pptx_edges import candidate_slides
-from pipeline.transform.figures.vlm_page import DPI, sha, vlm_page
 
 
 def _cap(name, default):
@@ -149,7 +149,7 @@ def render_office_pages(doc_path, page_nums, timeout=None):
         try:
             for i in page_nums:
                 if 1 <= i <= len(doc):
-                    out[i] = doc[i - 1].get_pixmap(dpi=DPI).tobytes("png")
+                    out[i] = doc[i - 1].get_pixmap(dpi=dpi()).tobytes("png")
         finally:
             doc.close()
     return out
@@ -228,7 +228,7 @@ def shape_render_pages(doc_path, timeout=None):
                 if len(out) >= cap:
                     break
                 if pg.get_drawings() and not pg.get_images(full=True) and not _is_table_like(pg):
-                    out[i] = pg.get_pixmap(dpi=DPI).tobytes("png")
+                    out[i] = pg.get_pixmap(dpi=dpi()).tobytes("png")
         finally:
             doc.close()
     return out
@@ -265,7 +265,7 @@ def pptx_slide_vlm(doc_path):
             for i in idxs:
                 if i < 1 or i > len(doc):
                     continue
-                img = doc[i - 1].get_pixmap(dpi=DPI).tobytes("png")
+                img = doc[i - 1].get_pixmap(dpi=dpi()).tobytes("png")
                 det = {"source_sha256": src_sha, "page": i, "rotation_deg": 0, "is_pdf": True}
                 text, prov = vlm_page(img, det)
                 out.append((i, text, {**prov, "reason": cands[i]}))
