@@ -2,7 +2,7 @@
 #   compose.pipeline.yml, 검색 MCP는 compose.mcp-server.yml. 같은 이미지(DATA_PIPELINE_IMAGE)·같은 설정 파일·같은 결과 폴더.
 #   띄우기(하위 셸로 — 대화형 셸에 export해 두면 그 뒤 settings.yaml을 고쳐도 그 셸에는 안 먹음, VS7e1 R-2):
 #     ( . deploy/host/scripts/load_settings.sh && load_settings && $DOCKER compose -f deploy/host/compose/compose.pipeline-mcp.yml up -d )
-#   개발 서버(실행 이미지)는 -f deploy/host/compose/compose.code.pipeline-mcp.yml을 덧붙임 · mcp_keepalive.sh(타이머 2분마다)가 꺼져 있으면 host_ctl.sh로 띄움.
+#   개발 서버(실행 이미지)는 -f deploy/host/compose/compose.code.pipeline-mcp.yml을 덧붙임 · mcp_keepalive.sh(타이머 2분마다)가 꺼져 있으면 이 파일로 띄움.
 #   설정·env 규칙은 compose.pipeline.yml 머리말과 같다(설정 파일 읽기 전용 마운트 + SETTINGS_FILE·RUN_ENV만 — S7e1).
 x-settings: &settings "${SETTINGS_FILE:?SETTINGS_FILE=<settings.yaml 절대 경로> 필요 — deploy/host/scripts/load_settings.sh load_settings가 export(refactor.md C-09)}:/etc/rag/settings.yaml:ro,z"
 services:

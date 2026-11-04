@@ -38,11 +38,8 @@ def test_resident_containers():
         svc[name] = s[name]
     assert svc["data-pipeline"]["command"] == ["idle"] and svc["data-pipeline-mcp"]["command"] == ["parse-service"]
     assert _default(svc["data-pipeline-mcp"]["cpu_shares"]) > _default(svc["data-pipeline"]["cpu_shares"])
-    scripts = DEPLOY_ROOT / "deploy" / "host" / "scripts"
-    up = (scripts / "mcp_keepalive.sh").read_text(encoding="utf-8")
-    assert "host_ctl.sh up -d data-pipeline-mcp" in up and "host_ctl.sh up -d mcp" in up  # compose는 host_ctl.sh 한 곳(rn-06)
-    ctl = (scripts / "host_ctl.sh").read_text(encoding="utf-8")
-    assert "compose.pipeline-mcp.yml" in ctl and "compose.code.pipeline-mcp.yml" in ctl
+    up = (DEPLOY_ROOT / "deploy" / "host" / "scripts" / "mcp_keepalive.sh").read_text(encoding="utf-8")
+    assert "compose.pipeline-mcp.yml" in up and "compose.code.pipeline-mcp.yml" in up
 
 
 def test_no_patch_overlay():

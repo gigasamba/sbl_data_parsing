@@ -102,9 +102,9 @@ def _img(name):
     )
     if f is None:
         sys.exit("run_docs: host_settings.tsv 없음 — 코드 폴더(deploy/host/scripts/) 또는 이 스크립트 옆에 둘 것(--code)")
-    for path, _, kind, *val in _host().table_rows(f):
-        if kind == "const" and path == f"image.{name}":
-            return val[0]
+    for row in _host().table_rows(f):
+        if len(row) >= 4 and row[2] == "const" and row[0] == f"image.{name}":  # 칸이 모자란 줄(손 편집·잘린 사본)은 건너뜀
+            return row[3]
     sys.exit(f"run_docs: host_settings.tsv에 image.{name} 없음 — PYTHONPATH=. python deploy/release/gen_host_keys.py로 다시 만들 것")
 
 

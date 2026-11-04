@@ -18,6 +18,7 @@ OUT="${OUT:-/var/tmp/bake}"; mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)   # stage_
 CODE_DIR=$(cd "${CODE_DIR:-$(dirname "$0")/../..}" && pwd)
 . "$(dirname "$0")/../host/scripts/load_settings.sh"   # docker_default 한 곳(op-10 — podman, 없으면 docker) · 이 스크립트가 든 코드 폴더의 것(CODE_DIR가 옛 코드 폴더여도)
 DOCKER="${DOCKER:-$(docker_default)}"
+HERE=$(cd "$(dirname "$0")" && pwd)   # 이 스크립트 폴더 — stage_images.sh는 여기 것(CODE_DIR가 옛 이름 ship_stage.sh만 있는 옛 코드 폴더여도)
 cd "$CODE_DIR"
 . deploy/release/image_names.sh
 TAG="${TAG:-$(app_version)}"
@@ -44,7 +45,7 @@ for t in "${TARGETS[@]}"; do
   # 판정·저장이 실패하면 구운 태그를 지운다(다시 실행이 "이미 있는 태그"로 막히지 않게)
   bash deploy/release/selftest_gate.sh $DOCKER run --rm "$tag" selftest \
     || { echo "[bake_prod_image] 반입 판정 실패 — $tag 지움" >&2; $DOCKER rmi "$tag" >/dev/null || true; exit 1; }   # 코드 폴더 마운트 없이
-  OUT="$OUT" DOCKER="$DOCKER" CODE_BUNDLE="$BUNDLE" bash deploy/release/stage_images.sh "$TAG" "$t" \
+  OUT="$OUT" DOCKER="$DOCKER" CODE_BUNDLE="$BUNDLE" bash "$HERE/stage_images.sh" "$TAG" "$t" \
     || { echo "[bake_prod_image] 저장 실패 — $tag 지움" >&2; $DOCKER rmi "$tag" >/dev/null || true; exit 1; }
 done
 echo "[bake_prod_image] 끝 — $OUT 아래 조각·sha256을 운영 서버로 옮겨 재조립·load(release-and-patch.md §1-2)"

@@ -20,7 +20,7 @@
 2. 서버: 새 루트를 만들고 코드 폴더로 풀기 — `mkdir -p <새 루트>/sbl_data_parsing-<버전> && tar -xzf code-….tar.gz --no-same-owner -C <새 루트>/sbl_data_parsing-<버전>`. 앞 루트의 `settings.yaml`·`edw_chain.yaml`을 `cp -p`로 새 루트에 복사한다.
 3. 바꾸기(새 코드 폴더에서): `bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>`(코드 폴더 a+rX · `output/` — 컨테이너 사용자 10001이 못 읽으면 "읽을 수 없음(권한)"으로 멈춤) → `bash deploy/host/scripts/host_ctl.sh up -d --force-recreate data-pipeline data-pipeline-mcp mcp` → `bash deploy/host/scripts/host_ctl.sh timers`(타이머를 새 루트로).
 4. 확인: 컨테이너 로그 첫 줄 `[image] 이미지 <이름 버전 커밋> · 코드 <커밋> · 의존성 <지문>` → `bash deploy/host/scripts/host_ctl.sh check`(마지막 줄 `[host_ctl check] 통과 — 6개`). `의존성 지문이 다름`으로 멈추면 그 코드는 새 실행 이미지가 필요하다.
-5. 되돌리기: 앞 루트를 지우지 않고 두었다가 그 코드 폴더에서 `host_ctl.sh up -d --force-recreate …` → `host_ctl.sh timers`. 루트는 최근 2개 이상 남긴다. 검색 DB는 두 루트가 같은 PG를 본다.
+5. 되돌리기: 앞 루트를 지우지 않고 두었다가 그 코드 폴더에서 `host_ctl.sh up -d --force-recreate …` → `host_ctl.sh timers`. 스크립트 이름을 바꾸기 전(rn-06) 판의 루트는 옛 이름 그대로 — `dc.sh up -d --force-recreate …` → `dc.sh timers`. 루트는 최근 2개 이상 남긴다. 검색 DB는 두 루트가 같은 PG를 본다.
 
 ### 1-2. 개발 → 운영 — 시험한 그대로 굽기
 
