@@ -96,13 +96,9 @@ def _demo():
     assert _cap_cte_tsql("WITH c AS (SELECT 1 x) SELECT TOP (3) * FROM c", 5)[1] is None  # already capped tighter — left alone
     assert _cap_cte_tsql("WITH c AS (SELECT 1 x) SELECT TOP (3) * FROM c", 2)[1] == "cte_top_too_high"
     assert _cap_cte_tsql("WITH c AS (SELECT 1 x) SELECT * FROM c UNION SELECT * FROM c", 5)[1] == "cte_union_not_capped"
-    # security review round 2, fix 3 — empty allowlist is deny-all(이 규칙은 STRICT 조합으로 보존); 2026-10-21
-    # 사용자 결정(전 스키마 허용) 뒤 기본 동작이 바뀐 것을 이 데모 단언에도 반영 — 기본 unset의 mssql은 None=제한 없음.
+    # 2026-10-21 사용자 결정(전 스키마 허용) — mssql은 None=제한 없음, sqlite 스탠드인만 동봉 샘플 표.
     assert allowed_tables("sqlite") == set(t.lower() for t in DEFAULT_TABLES.split(","))  # unset -> sample default (sqlite only)
     assert allowed_tables("mssql") is None  # unset -> all schemas allowed (2026-10-21) — None is the "no allowlist check" sentinel
-    with mc.senv(EDW_QUERY_TABLES_STRICT="1", EDW_QUERY_TABLES=""):
-        assert allowed_tables("sqlite") == set()  # explicit empty string -> deny-all even for sqlite
-        assert allowed_tables("mssql") == set()  # ...and for mssql — round 2 rule lives on under STRICT
     from decimal import Decimal as D
 
     assert _json_safe_cell(D("10")) == 10

@@ -5,7 +5,7 @@
 
 ## 지금 진행 중
 - pl-25 DB 스키마 명세 — dev: 검색 DB(gold)·마스터·applog는 구현됨, EDW 쪽 DDL(ParsingMeta 칸 정리)은 DB 담당자 승인·실행 대기(refactor.md C-76).
-- 열린 요건(todo): 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · `gold_status` 칸 쓰기 [pl-55](prd/ops.md#pl-55) · pl-46 남은 정리 [pl-53](prd/transform-cleanup.md#pl-53) · `GOLD_DIR` 마운트 [op-11](prd/doc.md#op-11) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
+- 열린 요건(todo): 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · `gold_status` 칸 쓰기 [pl-55](prd/ops.md#pl-55) · pl-46 남은 정리 [pl-53](prd/transform-cleanup.md#pl-53) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
 - 서버 확인만 남음(dev): parse_document CPU 우선 [rn-03](prd/ops.md#rn-03).
 - 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-15](prd/test.md#e2-15) · [e2-20](prd/test.md#e2-20) · [e2-21](prd/test.md#e2-21).
 
@@ -94,7 +94,7 @@
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID |
 |---|---|---|---|
 | `search` — 질문으로 근거 찾기. 혼합 검색 = 뜻이 비슷한 글(벡터) + 낱말 점수(BM25) + 드문 ID 일치를 순위 합치기(RRF)로 묶음 | 클라이언트가 출처 달린 근거를 얻는 단 하나의 입구. 가중치 벡터 1·BM25 1·ID 2(`search.weights.*`) | done | [mc-01](prd/mcp.md#mc-01) |
-| `search` 입력 `k` 기본 8·상한 50, 근거 13칸 `text`·`file_name`·`file_path`·`page`·`line`·`section`·`client`·`contract_no`·`doc_date`·`version`·`superseded`·`chunk_key`·`attrs`(`mcp_server/schemas/evidence.py`), 근거 상태 `evidence_status` found·weak·none. 응답은 20,000바이트까지(낮은 순위부터 줄임) | 근거 상태는 표시만 하고 근거를 빼지 않는다. 최고 점수가 `search.min_score` 미만이면 weak | done | [mc-01](prd/mcp.md#mc-01) |
+| `search` 입력 `k` 기본 8·상한 50, 근거 13칸 `text`·`file_name`·`file_path`·`page`·`line`·`section`·`client`·`contract_no`·`doc_date`·`version`·`superseded`·`chunk_key`·`attrs`(`mcp_server/schemas/evidence.py`), 근거 상태 `evidence_status` found·weak·none. 응답은 20,000바이트까지(낮은 순위부터 줄임) | 근거 상태는 표시만 하고 근거를 빼지 않는다. 질문 핵심어가 근거에 없으면 weak | done | [mc-01](prd/mcp.md#mc-01) |
 | 검색 저장소는 검색 DB(gold — pgvector) 하나. PC는 SQLite 대역(`pg_standin`) | 서버·PC가 같은 SQL | done | [mc-01](prd/mcp.md#mc-01) |
 | 질문 + 하드 거르기(`client`·`client_like`·`source_system`·`project_id`·`division`·`service_type`) — 후보 `min(50, max(3k,30))`개에서 범위 안만 남김 | 조건 밖 문서가 근거에 섞이지 않게 | done | [mc-01](prd/mcp.md#mc-01) |
 | 질문 넓히기 — 용어집으로 BM25 낱말을 더함(동의어 1.0·약어 0.8·약한 것 0.3), 고객 별칭 최대 20토큰 | 동의어·약어로 물어도 찾게 | done | [mc-02](prd/mcp.md#mc-02) |
@@ -102,14 +102,14 @@
 | 고객 거르기는 EDW에서 붙인 고객(`client_edw`)만 본다(정확 일치, 목록은 OR, `client_like`는 부분 일치) | 답이 고객을 섞으면 안 된다(C6, 11-02). 별칭 그룹은 pl-38 | done | [mc-05](prd/mcp.md#mc-05) |
 | 이름만 다른 사본은 하나로(사본 묶음) | 같은 문서의 다른 판 문제는 pl-56 행 | done | [mc-05](prd/mcp.md#mc-05) |
 | 검색기가 지운 칸(`file_sha256` 등) 대신 문서 키 `doc_key`(= `file_path`)로 읽음 | 새 묶음으로 검색기를 만들면 실패하던 문제 | done | [mc-10](prd/mcp.md#mc-10) |
-| 질의 기록은 파일 `qa_log.jsonl`만(호출자·질문·근거·지연), 90일 보관·24시간마다 정리 | 토큰·원문은 남기지 않는다 | done | [mc-13](prd/mcp.md#mc-13) · [mc-09](prd/mcp.md#mc-09) |
+| 질의 기록은 DB `applog.mcp_call`만(질문·SQL은 `args`, 근거 키) — 파일 기록 없음 | 로그는 Postgres 한 곳(op-13) | done | [mc-13](prd/mcp.md#mc-13) · [mc-09](prd/mcp.md#mc-09) |
 | 대표 파싱 결과 주소 `rep_uri`(`s3://<bucket>/<key>`)는 원문 도구가 부를 때 ParsingMeta에서 읽는다(검색 근거 13칸에는 없음) | 사용자 11-01 — 검색 DB에는 거르기 메타만(C8 바뀜) | done | [mc-15](prd/mcp.md#mc-15) |
 | `search` 운영 계약 — `question` 필수, `source_system` 필수·값 하나(`SFDC`·`CRMS`·`LAS`·`FAQ`·`Other`, `-test` 별칭도) | 운영 명세와 같게. 계약 변경이라 사람 검토(등급 A), 0.2.0 | done | [mc-16](prd/mcp.md#mc-16) |
 | 거르기 추가 — `FAQ_group`·`doc_class`·`sf_op_id`·`sf_op_name`·`contract_id`·`created_since/until`(시간대 없으면 한국 시간) | 모두 AND, 목록은 OR. 맞는 값이 없으면 오류가 아니라 빈 결과 | done | [mc-16](prd/mcp.md#mc-16) |
 | 출력 줄이기 — 맨 위 `question`·`evidence[]`·`evidence_status`·`filter`·`scope_docs`, 근거 키 `chunk_key` = `<doc_id>:<seq>` | `index_id`·`subs`·`images`·`notes`·`ms` 등을 지운다(`file_path`는 남김 — 사용자 11-03) | done | [mc-16](prd/mcp.md#mc-16) |
 | 원문 도구 2개 — `list_doc_fulltext`(목록)·`get_doc_fulltext`(원문). 거르기는 원천 스키마 `doc`, 대표 결과 위치·`doc_key`는 부를 때 ParsingMeta에서 | 사용자 11-01 — 검색 DB에는 거르기 메타만(EDW를 못 읽으면 `registry_unavailable`). 새 도구라 등급 A, 0.2.0 | done | [mc-17](prd/mcp.md#mc-17) |
 | 검색이 실행 중에 묶음 파일(`docs.jsonl`·`chunks.jsonl`·`meta.json`)을 읽지 않고 문서 날짜·임베딩 모델·차원을 PG에서 읽는다(판 0004 — gold doc `content_date`(문서에 적힌 날짜)·`embed_model`, `corpus_stat.dim` 지움) | 서버에서 묶음 경로를 맞출 필요가 없어진다. 검색 동작이 바뀌는 일이라 자기 PR + 평가 | done | [mc-19](prd/mcp.md#mc-19) |
-| `query_edw` — EDW 읽기 전용 SQL(SELECT/WITH 한 문장, 읽기 계정), 1,000행(운영 서버와 같음 — 사용자 11-03)·20초·2 MB 상한 | 정형 숫자는 EDW에서 답한다. 표 허용 목록은 `tables_strict`를 켤 때만(기본 꺼짐) | done | [mc-06](prd/mcp.md#mc-06) |
+| `query_edw` — EDW 읽기 전용 SQL(SELECT/WITH 한 문장, 읽기 계정), 1,000행(운영 서버와 같음 — 사용자 11-03)·20초·2 MB 상한 | 정형 숫자는 EDW에서 답한다. 표는 읽기 계정이 볼 수 있는 모든 스키마(시스템 표 제외 — 좁히기는 DB 권한) | done | [mc-06](prd/mcp.md#mc-06) |
 | `edw_meta` — 정적 자료(`catalog.json`+`columns.jsonl`)로 스키마 → 표 → 칸 찾기, 모르는 이름은 비슷한 이름 제안, 응답 200 KB 상한 | SQL을 쓰기 전에 이름 확인. 표본 값은 내지 않는다 | done | [mc-07](prd/mcp.md#mc-07) |
 | `parse_document` — 파일 1건(inbox 경로 또는 base64, 100 MB까지 — 두 길 같은 칸 `ops.runtime.parse_max_mb`, 사용자 11-03)을 파싱 서비스(127.0.0.1:8766, 토큰)로 넘겨 대표 본문·표를 받음. 300초 넘으면 `job_id` | 아직 적재되지 않은 파일을 바로 물을 때 | done | [mc-08](prd/mcp.md#mc-08) |
 | 스캔 PDF(글자층 20자 미만) 파싱 다시 지원 — 내부망 VLM(`qwen_vlm`)으로 파싱. VLM 설정(주소·모델)이 없으면 빈 결과 + "스캔 PDF — VLM 미설정", 실패면 "스캔 PDF — VLM 파싱 실패" | 클라이언트가 스캔 문서도 글로 받는다. 시간 상한은 작업 제한 시간 하나(쪽 수 상한 없음, 사용자 11-03) | done | [mc-18](prd/mcp.md#mc-18) |
@@ -140,8 +140,8 @@
 | 프로세스가 끝날 때(정상·오류·SIGTERM) 임시 설정 덮기 파일·PID 기록을 지우고 자식을 끝내 회수(SIGTERM → 10초 → SIGKILL, 종료 143) — `common/core/exitclean.py` 한 곳 | 임시 파일이 쌓이고 soffice 좀비가 남던 문제 | done | [pl-27](prd/ops.md#pl-27) |
 | EDW 접속 설정은 `common.connections.rdb` 하나(settings `required.edw`)에 계정 둘 — 읽기(목록·FileStorageMap·ParsingMeta 조회·MCP), 쓰기(ParsingMeta 게시만). MCP 프로세스에서는 쓰기 계정을 비운다 | 같은 값이 설정 블록 넷에 반복되던 것을 없앰. 등급 A | done | [op-03](prd/ops.md#op-03) |
 | PC 대역 EDW는 sqlite 파일 하나(`valid_env/edw/edw.sqlite`)를 `AI`·`CRMS`·`LAS`·`SFDC`로 붙여 같은 SQL이 돌게 | PC에서 운영 EDW에 접속하지 않는다 | done | [op-03](prd/ops.md#op-03) |
-| 모델 역할 llm·vlm·embed(OpenAI 호환). 외부 주소는 `common.models.<역할>.allow_external`이 켜지고 `RUN_ENV=local`일 때만, 서버는 거부. 내부 판정 = 해석된 주소가 사설 IP(또는 `internal_ip_ranges`) + 호스트 접미(`internal_host_suffixes`) | 폐쇄망 밖으로 데이터를 보내지 않는다. 접미 목록에는 전체 호스트 이름이 아니라 상위 도메인을 적어야 맞는다(운영 고침 묶음) | done | [pl-11](prd/ops.md#pl-11) |
-| 비용 상한 — `common.models.guard.budget_usd`(외부 모델 하루 지출 $, 기본 0.1 — PC 사용자마다)·하루 장부(`spend_file` + 날짜, 비우면 `output/llm_spend/<날짜>.txt`) | PC 호출을 싸게 유지. 응답 캐시·가짜 LLM도 여기 | done | [pl-11](prd/ops.md#pl-11) |
+| 모델 역할 llm·vlm·embed(OpenAI 호환). 외부 주소는 `dev.models.<역할>.allow_external`이 켜지고 `RUN_ENV=local`일 때만, 서버는 거부. 내부 판정 = 해석된 주소가 사설 IP(또는 `internal_ip_ranges`) + 호스트 접미(`internal_host_suffixes`) | 폐쇄망 밖으로 데이터를 보내지 않는다. 접미 목록에는 전체 호스트 이름이 아니라 상위 도메인을 적어야 맞는다(운영 고침 묶음) | done | [pl-11](prd/ops.md#pl-11) |
+| 비용 상한 — `dev.models.guard.budget_usd`(외부 모델 하루 지출 $, 기본 0.1 — PC 사용자마다)·하루 장부(`spend_file` + 날짜, 비우면 `output/_llm_spend/<날짜>.txt`) | PC 호출을 싸게 유지. 응답 캐시·가짜 LLM도 여기 | done | [pl-11](prd/ops.md#pl-11) |
 | 모델 — 개발 서버부터 내부망 GLM, PC는 OpenRouter | 사용자 11-02 | done | [pl-11](prd/ops.md#pl-11) |
 | JSON Lines 사건 기록(공통 키·로그 수준·비밀 가림) + DB 감사·성능 로그 — 두 앱 `common.core.jsonlog`, MCP 도구 호출마다 `applog.mcp_log`, 파이프라인 실행·단계 `applog.pipe_run`·`pipe_event`(`dbtool up --target applog`) | 사건·감사·성능을 같은 형식으로 남긴다(코드 #87 병합 — 서버 적용은 C-79·C-80) | done | [op-01](prd/ops.md#op-01) |
 | 실행 환경 `RUN_ENV`(`required.env.run_env`)는 `local`·`dev`·`prd`만, 어디서나 필수 — `stage`나 모르는 값이면 시작 거부 | `stage`는 `prd`와 똑같이 동작했다 | done | [op-02](prd/ops-settings.md#op-02) |
@@ -149,7 +149,7 @@
 | 설정은 settings.yaml 하나 — `settings.sample.yaml`에 모든 키가 기본값과 함께(`python -m common.config.sample`로 생성) | — | done | [op-05](prd/ops-settings.md#op-05) |
 | 배치 — 맨 위 `required`(필수·비밀) → 역할 절 7개 → `tuning`(내부 조정값). 옛 배치는 시작 거부, `python -m common.config.migrate`로 변환 | sample과 실제 파일의 차이를 줄였다 | done | [op-08](prd/ops-settings.md#op-08) |
 | 설정 이관은 옛 배치 settings.yaml → 새 배치만 | 운영 서버는 0.1.0(settings.yaml 하나). 사용자 11-02 | done | [op-08](prd/ops-settings.md#op-08) |
-| 하드코딩 0 — 설정 값은 settings.yaml이나 이미지 기본값 표(`settings.py`)에서만, 호스트 셸은 `settings_env.sh`가 준 값만, PG 자동 찾기 없앰(PG 접속 필수) | 한 곳을 바꾸면 나머지가 어긋나던 문제. 남은 복사본 있음(`/srv/rag/code/live` 기본값 등) | done | [op-09](prd/ops-settings.md#op-09) |
+| 하드코딩 0 — 설정 값은 settings.yaml이나 이미지 기본값 표(`settings.py`)에서만, 호스트 셸은 `settings_env.sh`가 준 값만, PG 자동 찾기 없앰(PG 접속 필수) | 한 곳을 바꾸면 나머지가 어긋나던 문제. 남은 복사본 있음 | done | [op-09](prd/ops-settings.md#op-09) |
 | 환경마다 다른 경로·접속은 settings.yaml 필수(코드 기본값 없음) — 컨테이너 안 경로는 이미지 기본값 표 하나만, 호스트 `PATCH_CODE` 기본값 지움 | 사용자 11-02 | done | [op-09](prd/ops-settings.md#op-09) |
 | 은퇴한 설정 지우기 — `common.paths.korean_font`·`eval_sets_dir` 등(남아 있으면 경고만) | 지문이 바뀌어 0.1.0 묶음에 | done | [pl-21](prd/ops-settings.md#pl-21) |
 | 아무도 안 읽는 env 4개(`FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`)를 run_docs 명령에서 뺌 | C-51 | done | [pl-30](prd/ops-settings.md#pl-30) |
@@ -193,4 +193,5 @@
 | 서버 설치 길은 하나(README §5-0·§5-3). 컨테이너 도구는 셸 env > `ops.host.docker` > podman > docker. 이미지는 `load.sh`로(45 MB 조각) | 문서마다 절차가 달랐다. 서버 기본 도구는 podman | done | [op-10](prd/doc.md#op-10) |
 | 0.2.0 올리기·되돌리기(release-and-patch §8-3·§8-5) — DB 백업 → `migrate check` → `up`, 되돌릴 땐 `settings.yaml.0.1.0` 복원, 재처리 동안 밤 타이머 멈춤 | DB·EDW·전체 재처리가 함께 바뀐다 | done | [op-10](prd/doc.md#op-10) |
 | 일회성 작업 컨테이너 지움 — 운영 작업·`dbtool`·`migrate`는 상주 `data-pipeline`에 `exec`, 이미지 점검(`docker run --rm … selftest`)은 그대로 | 사용자 11-02 | done | [op-10](prd/doc.md#op-10) |
-| 사람 정답 폴더(`GOLD_DIR` → `/data/gold`)를 상주 컨테이너에 붙일지, 칸을 지울지 정하기 | 일회성 컨테이너를 지운 뒤 점검기의 GOLD_DIR 점검이 건너뛰어짐 | todo | [op-11](prd/doc.md#op-11) |
+| 사람 정답 폴더 칸(`GOLD_DIR`·이미지 `gold_mount`) 없음 — 점검기 정답 폴더 점검도 없음 | 사용자 11-04 — 상주 컨테이너에 붙지 않아 점검이 늘 건너뛰어짐 | done | [op-11](prd/doc.md#op-11) |
+| 서버 루트 폴더 하나(예 `/home/dev/`) — `settings.yaml`·`edw_chain.yaml`·코드·이미지·`output/`가 그 아래, 판마다 새 루트(검색 PG는 공유), `/srv/rag`·`env/`·`code/live` 없음 | 사용자 11-04 | done | [op-13](prd/doc.md#op-13) |

@@ -36,11 +36,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 # S7e1(사용자 10-27 Q8 · D-028 ⑨ · C-29 ⑨) — 운영 접속 값·비밀·운영 고정값을 코드에서 지우고 서버 settings.yaml에서 읽는다(configure() — 시작 때 한 번).
-#   파일: --settings 또는 SETTINGS_FILE, 없으면 $SERVER_ENV_DIR/settings.yaml(기본 배치 /srv/rag/env). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
+#   파일: --settings 또는 SETTINGS_FILE, 없으면 <루트>/settings.yaml(루트 = 코드 폴더의 부모 — op-13). 호스트 python에 PyYAML이 있어야 한다(pymssql처럼 —
 #   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). required.env.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
 #   docker exec로 부르는 상주 컨테이너(data-pipeline — 11-03 하나로)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
-#   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.pipeline_host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더(옛 test_space/rfp_all_output)는
-#   required.deploy.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로, C-29 ⓑ를 코드로 보장 — 사용자 Q8 ⑤).
+#   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.pipeline_host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더는
+#   ops.host.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(settings_env.sh와 같음 — op-13).
 TEST = PROG = DOCSPACE = DOCFLOW = WARM = None  # configure()가 채움
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.docker(없으면 podman, 그것도 없으면 docker — op-10)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, op-10 · 기본 배치 경로 없음 — 사용자 11-02)
@@ -48,7 +48,6 @@ _EDW: dict = {}  # parsing-meta EDW 접속(호스트 pymssql — edw_list·edw_d
 WARM_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # warm 파일 이름의 원천 버킷 · 문서 수 세기(psql)
 SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거부
     ("common.run_env", "실행 환경(dev·prd)"),
-    ("common.host.output_root", "결과 공유 폴더(RAG_OUT — 컨테이너 /app/output 원본)"),
     ("common.connections.rdb.host", "EDW 서버 — 호스트 조회(읽기 계정, 사용자 10-29 ops.md#op-03)"),
     ("common.connections.rdb.database", "EDW DB"),
     ("common.connections.rdb.read.user", "EDW 읽기 계정"),
@@ -80,6 +79,17 @@ def _code_root():
         if r is not None and (Path(r) / "common" / "config" / "layout.py").is_file():
             return Path(r), Path(r) / "common"
     sys.exit("run_docs: common/config/layout.py 없음 — 코드 폴더 안에서 부르거나 --code <코드 폴더>로 알려 줄 것")
+
+
+def _root():
+    """서버 루트(op-13 — settings.yaml·edw_chain.yaml·output/이 바로 아래): settings_env.sh load_settings가 낸 RAG_ROOT, 없으면 같은 규칙(코드 폴더의 부모)."""
+    r = os.environ.get("RAG_ROOT")  # env 남김 — 호스트 도구(settings_env.sh load_settings가 냄)
+    return Path(r) if r else _code_root()[0].resolve().parent
+
+
+def _inside(seq, sub=""):
+    """컨테이너 쪽 문서 임시 폴더 <output_root>/_docflow/<seq>[/sub]."""
+    return f"{_img('output_root')}/_docflow/{seq}" + (f"/{sub}" if sub else "")
 
 
 @functools.cache
@@ -114,10 +124,9 @@ def _layout():
 
 def read_settings(settings_file=None):
     """(사전, 문제) — 서버 settings.yaml을 쓴 글자 그대로 읽는다(BaseLoader — 스칼라는 모두 글자: `password: 0123`·`user: no`가 83·False로
-    바뀌지 않게, 앱 설정 모델의 글자 칸 규칙과 같음 — S7e1 리뷰). 파일: settings_file > SETTINGS_FILE > $SERVER_ENV_DIR/settings.yaml. 값은 찍지 않는다.
+    바뀌지 않게, 앱 설정 모델의 글자 칸 규칙과 같음 — S7e1 리뷰). 파일: settings_file > SETTINGS_FILE > <루트>/settings.yaml. 값은 찍지 않는다.
     파일 배치(required·역할 절 — op-08 ②)를 모델 배치(common·pipeline·mcp)로 바꿔 돌려준다 — 이 모듈의 칸 경로는 모델 경로."""
-    env_dir = os.environ.get("SERVER_ENV_DIR") or "/srv/rag/env"  # env 남김 — 호스트 도구(settings_env.sh와 같음)
-    path = Path(settings_file or os.environ.get("SETTINGS_FILE") or Path(env_dir) / "settings.yaml")  # env 남김 — 설정 파일 자리 신호(5-2)
+    path = Path(settings_file or os.environ.get("SETTINGS_FILE") or _root() / "settings.yaml")  # env 남김 — 설정 파일 자리 신호(5-2)
     try:
         import yaml
     except ImportError:
@@ -128,7 +137,7 @@ def read_settings(settings_file=None):
         loader = lay.reject_dup_keys(type("Loader", (yaml.BaseLoader,), {}))
         doc = yaml.load(path.read_text(encoding="utf-8"), Loader=loader) or {}
     except OSError as e:
-        return {}, f"설정 파일을 읽지 못함: {path} ({e.strerror}) — --settings 또는 SETTINGS_FILE·$SERVER_ENV_DIR/settings.yaml"
+        return {}, f"설정 파일을 읽지 못함: {path} ({e.strerror}) — --settings 또는 SETTINGS_FILE·<루트>/settings.yaml"
     except yaml.YAMLError as e:
         dup = getattr(e, "problem", "") or ""
         return {}, f"설정 파일 YAML 형식 오류: {path}" + (f" — {dup}" if dup.startswith(lay.DUP_KEY) else "")
@@ -164,14 +173,19 @@ def configure(settings_file=None):
     apply_policy(policy)
     TEST = work_dir(doc)
     PROG = TEST / "batch_progress"
-    DOCSPACE = Path(_yget(doc, "common.host.output_root"))  # 컨테이너 /app/output 공유 볼륨
-    DOCFLOW = DOCSPACE / "docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
+    # 컨테이너 /app/output 공유 볼륨 — load_settings가 낸 RAG_OUT(셸 env > common.host.output_root > <루트>/output), 없으면 같은 규칙
+    DOCSPACE = Path(
+        os.environ.get("RAG_OUT")  # env 남김 — 호스트 도구(settings_env.sh load_settings가 냄)
+        or _yget(doc, "common.host.output_root")
+        or _root() / "output"
+    )
+    DOCFLOW = DOCSPACE / "_docflow"  # 문서별 임시 디렉토리(종료 시 삭제)
     WARM = DOCSPACE / "_warm"  # SOURCE_WARM 대기열 저장소
     DOCKER = _yget(doc, "common.host.docker") or (
         "podman" if shutil.which("podman") else "docker"
     )  # op-10 — 셸 스크립트와 같은 순서(env 대신 설정)
     jobs = _yget(doc, "mcp.host.jobs_dir")
-    MCP_JOBS_DIR = Path(jobs) if jobs else DOCSPACE / "mcp_parse" / "jobs"
+    MCP_JOBS_DIR = Path(jobs) if jobs else DOCSPACE / "_mcp_parse" / "jobs"
     rdb = _yget(doc, "common.connections.rdb")  # 조회만 — 읽기 계정(사용자 10-29 ops.md#op-03)
     try:
         port = int(rdb.get("port") or 1433)
@@ -235,13 +249,13 @@ def warm_cmd(seq):
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && mkdir -p {o}/_warm && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
-        f"python -m pipeline.extract.source{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {o}/docflow/{seq}/batch.csv'"
+        f"python -m pipeline.extract.source{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {_inside(seq, 'batch.csv')}'"
     )
 
 
 def parse_cmd(seq, chan, scan, gate):
     """문서 1개 파싱 — chan(light·medium·vlm), scan(스캔 PDF), gate(CPU 게이트 글자)."""
-    inside = f"{_img('output_root')}/docflow/{seq}"
+    inside = _inside(seq)
     # 2026-10-23 사용자 지정 — heavy(스캔·이미지 다수) 판정 문서만 vlm_page 켬(스캔 쪽만 VLM 전사,
     # 내부 스캔판정이 이중 필터) · light는 종전대로 off. 같은 이름은 뒤 --set이 이기므로 뒤에 붙여 덮어씀.
     # 2026-10-23 사용자 지정 — 채널별 파라미터: heavy는 VLM 6(3동시 × 6 = 글로벌 18으로 gpu02 쏠림 제한),
@@ -280,7 +294,7 @@ def parse_cmd(seq, chan, scan, gate):
 
 def struct_cmd(seq):
     """문서 1개 구조화 + 적재. 엔진 구성은 파싱과 같은 파일(코드 폴더 — 사용자 11-01: 판 번호 없음, 실행 중에는 안 바뀜)."""
-    inside = f"{_img('output_root')}/docflow/{seq}"
+    inside = _inside(seq)
     st = sets(*EMBED_SET)  # 묶음·적재 python에(문서 메타는 적재가 EDW 조인으로 — pl-29 11-02, FILE_META_PATH 지움)
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
@@ -293,16 +307,16 @@ def struct_cmd(seq):
 
 
 def faq_sync_cmd(reset):
-    """pl-41 FAQ 교체 확인(파이프라인 컨테이너) — 결과는 docflow/faq_sync.json(지운 수·남은 gold faq)."""
+    """pl-41 FAQ 교체 확인(파이프라인 컨테이너) — 결과는 _docflow/faq_sync.json(지운 수·남은 gold faq)."""
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && PYTHONPATH={_img('code_root')} {LIB_ENV} "
-        f"python -m pipeline.load.pgvector_load faq-sync{' --reset' if reset else ''} --out {_img('output_root')}/docflow/faq_sync.json'"
+        f"python -m pipeline.load.pgvector_load faq-sync{' --reset' if reset else ''} --out {_inside('faq_sync.json')}'"
     )
 
 
 def publish_cmd(seq):
     """문서 1개 publish(OS + EDW)."""
-    inside = f"{_img('output_root')}/docflow/{seq}"
+    inside = _inside(seq)
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} python -m pipeline.load.publish_parse_result"
@@ -315,7 +329,7 @@ def publish_cmd(seq):
 def sweep_cmd(seq):
     """고아 정리 — 이 문서 표지 env(DOC_MARK)를 가진 컨테이너 안 프로세스(bash·python·soffice까지 env 상속)를 모두 끔. environ 항목(NUL 구분)과
     통째로 같을 때만(-zx — 리뷰 S9: 앞부분만 맞추면 doc 1 정리가 doc 10~19·100…까지 끔, 옛 PIPE_OUT_ROOT 때부터)."""
-    inside = f"{_img('output_root')}/docflow/{seq}"
+    inside = _inside(seq)
     return (
         f'{DOCKER} exec {PIPE_C} bash -c "for p in /proc/[0-9]*; do '
         f"grep -aqzx '{DOC_MARK}={inside}' \\$p/environ 2>/dev/null && kill \\${{p##*/}} 2>/dev/null; done\""
@@ -359,7 +373,7 @@ def _waiting():
     return _pub_q.qsize() + _struct_q.qsize()
 
 
-MCP_JOBS_DIR = None  # MCP parse_document 업로드 작업 경로 — configure()(mcp.host.jobs_dir, 없으면 결과 폴더/mcp_parse/jobs — data-pipeline-mcp의 mcp_parse_service와 공유 볼륨, rn-03)
+MCP_JOBS_DIR = None  # MCP parse_document 업로드 작업 경로 — configure()(mcp.host.jobs_dir, 없으면 결과 폴더/_mcp_parse/jobs — data-pipeline-mcp의 mcp_parse_service와 공유 볼륨, rn-03)
 _mcp_pause = False  # 2026-10-23 사용자 지정 — MCP 업로드 파싱 중 medium 레인 완보(사람 대기 응답 우선)
 _last_write: dict = dict()  # 방어용 마지막 활동 시각 저장
 _lane_inflight = {"light": 0, "medium": 0, "vlm": 0}
@@ -780,7 +794,7 @@ def drop_original(seq, row):
     if NO_CLEANUP:
         return
     o = _img("output_root")
-    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {o}/docflow/{seq}/_source_files ; rm -f {o}/_warm/{_warm_bin(row)}'", timeout=60)
+    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {_inside(seq, '_source_files')} ; rm -f {o}/_warm/{_warm_bin(row)}'", timeout=60)
     shutil.rmtree(DOCFLOW / f"{seq}" / "_source_files", ignore_errors=True)
     (WARM / _warm_bin(row)).unlink(missing_ok=True)
 
@@ -789,7 +803,7 @@ def drop_temp(seq):
     """문서 끝 — docflow 임시 폴더만 지움(어느 길이든). 원본(warm)은 drop_original만 지운다 — 파싱·게시 실패면 남음(pl-24)."""
     if NO_CLEANUP:
         return
-    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {_img('output_root')}/docflow/{seq}'", timeout=60)
+    sh(f"{DOCKER} exec {PIPE_C} bash -c 'rm -rf {_inside(seq)}'", timeout=60)
     shutil.rmtree(DOCFLOW / f"{seq}", ignore_errors=True)
 
 
@@ -882,7 +896,7 @@ def pg_count():
 
 
 def mcp_busy():
-    """MCP 업로드 처리 중이면 True(공유 볼륨 mcp_parse/jobs/<id>의 파일 mtime이 30초 내 갱신).
+    """MCP 업로드 처리 중이면 True(공유 볼륨 _mcp_parse/jobs/<id>의 파일 mtime이 30초 내 갱신).
     5초마다 불리므로 작업 폴더 전체가 아니라 이름 날짜(<YYYYMMDD>-…, mcp_parse_service)가 어제·오늘·내일인 폴더만 본다(rn-04 —
     지난 날의 끝난 작업 파일까지 stat하지 않게, 호스트·컨테이너 시간대가 달라도 걸리게 앞뒤 하루)."""
     # ponytail: 날짜 이름 거르기 — 하루 넘게 도는 MCP 작업은 놓침(작업은 분 단위), 필요하면 작업 서비스가 심장 박동 파일을 씀
@@ -950,7 +964,7 @@ def main():
         help="EDW ParsingMeta에 이미 끝난(ok·partial — gold_version도, skipped_dup) 문서는 건너뜀(재실행 시간 절약)",
     )
     ap.add_argument("--no-cleanup", action="store_true")
-    ap.add_argument("--settings", default=None, help="서버 settings.yaml(기본 SETTINGS_FILE 또는 $SERVER_ENV_DIR/settings.yaml — S7e1)")
+    ap.add_argument("--settings", default=None, help="서버 settings.yaml(기본 SETTINGS_FILE 또는 <루트>/settings.yaml — op-13)")
     ap.add_argument(
         "--code",
         default=None,
@@ -980,7 +994,7 @@ def main():
         log(
             f"[안내] MCP 업로드 작업 폴더 {MCP_JOBS_DIR} 없음 — MCP 업로드 감지(medium 레인 양보) 꺼짐, 다른 자리면 settings.yaml ops.mcp_host.jobs_dir"
         )
-    os.umask(0)  # 컨테이너( uid 10001 rag )가 /app/output(=docflow/<seq>)에 쓰려면 777 필요
+    os.umask(0)  # 컨테이너( uid 10001 rag )가 /app/output(=_docflow/<seq>)에 쓰려면 777 필요
     WARM.mkdir(mode=0o777, parents=True, exist_ok=True)
     DOCFLOW.mkdir(mode=0o777, parents=True, exist_ok=True)
     rows = edw_list([k.strip() for k in a.filter.split(",") if k.strip()])

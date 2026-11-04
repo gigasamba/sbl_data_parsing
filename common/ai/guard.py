@@ -186,7 +186,7 @@ def budget_usd():
 
 def ledger_file(day=None):
     """오늘(현지 날짜) 지출 장부 파일 — 상한은 하루 단위(사용자 11-03 — PC 사용자마다 하루 0.1달러 기본). spend_file이 있으면 그 이름 뒤에
-    날짜를 붙이고(`spend.json` → `spend-2026-11-03.json`), 없으면 <저장소>/output/llm_spend/<날짜>.txt — 그 작업 폴더의 모든 프로세스가 공유
+    날짜를 붙이고(`spend.json` → `spend-2026-11-03.json`), 없으면 <저장소>/output/_llm_spend/<날짜>.txt — 그 작업 폴더의 모든 프로세스가 공유
     (worktree·다른 체크아웃은 따로).
     외부 호출은 RUN_ENV=local(PC)에서만 되므로 "사람마다" = PC·OS 사용자마다(서버는 외부 모델을 거부)."""
     day = day or time.strftime("%Y-%m-%d")

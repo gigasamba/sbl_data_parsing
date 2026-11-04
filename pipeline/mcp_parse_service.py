@@ -32,7 +32,7 @@ from common.core.paths import APP_ROOT  # I4 — 컨테이너 경로(/app/…) �
 from pipeline import config as pc
 from pipeline.shared.exts import IMG_EXTS
 
-SERVICE_DIR = APP_ROOT / "output" / "mcp_parse"  # 이미지 안 /app/output/mcp_parse
+SERVICE_DIR = APP_ROOT / "output" / "_mcp_parse"  # 이미지 안 /app/output/_mcp_parse(op-13 — 임시 자리는 _ 접두)
 _JOB_ENVS: dict = {}  # (PARSE_POST, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
 _JOB_KEYS = (
     "SETTINGS_FILE",

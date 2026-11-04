@@ -16,7 +16,7 @@
     비정형 파일 1건의 text 파싱 대표 결과: data-pipeline-mcp 컨테이너(11-03 — 옛 data-pipeline-parse)의 작업 서비스(PARSE_URL, 기본 http://127.0.0.1:8766 ·
     그 컨테이너의 주 프로세스 — 토큰은 그 컨테이너 settings.yaml required.tokens.parse_mcp)가
     prepare → run_all( phase 1·2만 — 그림[VLM] 파싱은 phase 3이라 실행 안 됨, 표 인식 유지) → parse_qa → represent(대표 결과)만
-    수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/mcp_parse/inbox) 하위만(jail) · 파일 상한 100MB(path·content_b64 같음 — ops.runtime.parse_max_mb, 11-03) ·
+    수행(구조화·임베딩·EDW/OS 적재 없음). path는 허용 루트(/app/output/_mcp_parse/inbox) 하위만(jail) · 파일 상한 100MB(path·content_b64 같음 — ops.runtime.parse_max_mb, 11-03) ·
     time_out_threshold(기본 300초) 안에 끝나야 결과를 돌려주고 못 끝내면 {"error": "시간 안에 수행 못했습니다", "job_id": …}만 반환 —
     노출 도구는 parse_document 하나뿐(사용자 결정: 결과 수령 도구 parse_result는 등록하지 않는다), 이 도구만 MCP_TOOL_TIMEOUT_SEC(기본 30초)
     대신 자체 예산으로 기다린다(_bg_long) · 응답 text는 max_chars(기본 20만자) 상한(초과 시 잘리고 text_truncated, 전체는 rep_path 파일에).
@@ -31,9 +31,8 @@
 보안(G5): MCP_HOST(기본 127.0.0.1 · auto = 컨테이너 자기 사설 IP)는 내부망 주소만 · 루프백이 아니면 MCP_TOKEN 필수(Authorization: Bearer) ·
   루프백이 아니면 DNS 리바인딩 보호도 기본 켬(L8 — SDK TransportSecuritySettings, MCP_HOST[+포트]만 자동 허용 · 어긋난
   Host는 421·Origin은 403 · MCP_ALLOWED_HOSTS(쉼표 목록)로 추가 호스트) ·
-  호출자(X-MCP-Client 머리글)는 질의 기록(qa_log.jsonl)의 asked_by에 'mcp:<호출자>'로 · 결과 크기 상한 MCP_MAX_CHARS(기본 20000자).
-질의 기록(OP6): 호출자·질문·근거 chunk_id·rank·via·지연을 output/qa_log/qa_log.jsonl에 기록(PG 없는 로컬 묶음도, common/qa_log.py) —
-  기본 켬, MCP_QUERY_LOG=0으로 끔. 90일 지난 줄은 기동 때 또는 마지막 정리 이후 24시간 지나면 지운다. 토큰·원문은 안 남김.
+  호출자(X-MCP-Client 머리글)는 감사 기록의 agent로 · 결과 크기 상한 MCP_MAX_CHARS(기본 20000자).
+질의 기록: 파일 없음 — 호출마다 DB applog.mcp_log 한 행(입력 args에 질문·SQL, 결과 키 — op-01 · op-13).
 동시 접속(S12): 도구는 스레드로 돌림(MCP_MAX_CONCURRENCY 기본 8) · PG는 연결 풀(PG_POOL_MAX 기본 8) · GET /health(토큰 없이, 프로세스·준비 여부·적재 버전 ·
   MC1 — 기동 때 예열이 백그라운드로 도는 동안은 503 {"warming": true}, 끝나면 200 {"ready": true}, 예열 실패는 200 + {"warning": "warmup_failed"}(서버는 안 죽음),
   MCP_WARMUP=0으로 끔·기본 켬) ·
@@ -74,8 +73,8 @@ _DEFAULT_MCP_INSTRUCTIONS = (
 
 
 def _mcp_instructions():
-    """FastMCP instructions 글자(DT1 c1) — env MCP_INSTRUCTIONS(없으면 코드 기본값, CDMO)."""
-    return mc.cfg().server.instructions or _DEFAULT_MCP_INSTRUCTIONS  # S7d — 설정 객체, 호출마다
+    """FastMCP instructions 글자(DT1 c1) — 코드 기본값(CDMO)."""
+    return _DEFAULT_MCP_INSTRUCTIONS
 
 
 def _transport_security(host):
@@ -92,7 +91,7 @@ def _transport_security(host):
 def _sdk_logging():
     """FastMCP가 만들어질 때 root에 거는 기본 처리(INFO, 일반 글자, stderr)를 SDK(mcp.*) 줄에서 끊는다.
     요청마다 나오는 INFO는 감사 행(mcp.call)과 겹치므로 common.log.level이 DEBUG일 때만 남기고, 그 밖의 줄(WARNING 이상,
-    예외)은 비밀값을 가린 JSON으로 stderr에 낸다 — stdio의 stdout은 JSON-RPC 전용이고 감사 로그(logs/mcp.jsonl)와도 섞지 않는다."""
+    예외)은 비밀값을 가린 JSON으로 stderr에 낸다 — stdio의 stdout은 JSON-RPC 전용이고 감사 로그(output/logs/mcp.jsonl)와도 섞지 않는다."""
     from common.config.settings import cfg
 
     level = cfg().log.level

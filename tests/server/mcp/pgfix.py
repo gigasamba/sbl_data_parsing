@@ -140,9 +140,7 @@ def use(bundle, **names):
     st = contextlib.ExitStack()
     st.callback(shutil.rmtree, bundle, ignore_errors=True)  # runs last
     st.callback(lambda: [db.sqlite.close() for db in opened])
-    st.enter_context(
-        mc.senv(PG_STANDIN_DIR=str(standin_of(bundle)), PG_SCHEMA=SCHEMA, PG_PASSWORD=None, PG_CONN_FILE=None, PG_HOST=None, **names)
-    )
+    st.enter_context(mc.senv(PG_STANDIN_DIR=str(standin_of(bundle)), PG_SCHEMA=SCHEMA, PG_PASSWORD=None, PG_HOST=None, **names))
     st.enter_context(patch.object(PGM, "has_conn", return_value=False))
     st.enter_context(patch.object(PS, "StandinPG", _Tracked))  # connect_pool imports it at call time
     st.enter_context(patch.object(PGC, "connect", lambda a: None))

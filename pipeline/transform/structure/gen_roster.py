@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """SI43③ — EDW 고객·제품 마스터(추출본) → CLIENT_ROSTER CSV(고객)·용어집 draft(제품) 자동 생성. 열 매핑만 바꾸는
 식(SI41 modules/parse/source.py와 같은 틀 — 표 이름·열 이름은 사람이 적는 매핑 파일 하나, 코드는 안 바뀜) — 실제
-EDW 접속 정보·열 이름(기밀)은 서버 전용(/srv/rag/env/)에서만 채우고, 이 코드는 어떤 매핑이든 그대로 돈다.
+EDW 접속 정보·열 이름(기밀)은 서버 settings.yaml에서만 채우고, 이 코드는 어떤 매핑이든 그대로 돈다.
 
 시험은 --source csv:<경로>로(합성 EDW 추출본, 실제 RDB·네트워크 없이 — modules/parse/source.py의 csv:<경로>
 시험 모드와 같은 관례). --source rdb:<표>(RDB_ENGINE=mssql 기본·pg, 접속은 common.connections.rdb 읽기 계정 — source.py와 같은 접속

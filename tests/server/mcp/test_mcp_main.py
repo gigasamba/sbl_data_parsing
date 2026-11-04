@@ -43,10 +43,7 @@ def selftest():
     print("[selftest] 결과 크기 상한·바인딩·토큰 규칙 통과")
     _selftest_transport_security()
     assert _mcp_instructions() == _DEFAULT_MCP_INSTRUCTIONS  # DT1 c1 — 미설정이면 바이트 동일
-    with mc.senv(MCP_INSTRUCTIONS="가짜회사 반도체 설비 문서 검색"):  # 가짜 회사 예시
-        assert _mcp_instructions() == "가짜회사 반도체 설비 문서 검색"
-    assert _mcp_instructions() == _DEFAULT_MCP_INSTRUCTIONS
-    print("[selftest] MCP_INSTRUCTIONS — 미설정 바이트 동일·가짜 회사 예시 반영 통과(DT1 c1)")
+    print("[selftest] MCP instructions — 코드 기본값 통과(DT1 c1)")
 
 
 def test_main():  # 옛 `--selftest` 갈래(`selftest()` 뒤 `sys.exit(0)`)

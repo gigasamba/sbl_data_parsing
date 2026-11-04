@@ -55,7 +55,7 @@ def test_edw_chain_mount():
         chain = [v for v in vols if "edw_chain.yaml" in v]
         if name in ("data-pipeline", "mcp"):
             assert chain == [
-                "${SERVER_ENV_DIR:?SERVER_ENV_DIR 필요 — settings_env.sh load_settings가 냄}/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z"
+                "${RAG_ROOT:?RAG_ROOT=<서버 루트 — 코드 폴더의 부모> 필요 — settings_env.sh load_settings가 냄}/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z"
             ], chain
         else:
             assert not chain, (name, chain)

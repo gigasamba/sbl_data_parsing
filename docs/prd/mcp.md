@@ -11,10 +11,10 @@
   1. `question`과 `source_system`(값 하나)은 필수다. 그 원천의 gold 스키마(`<PG_SCHEMA>_<원천>`)만 찾는다.
   2. 거르기가 있으면 먼저 범위(맞는 문서)를 구하고, 후보 `min(50, max(3k, 30))`개를 찾은 뒤 순위를 다시 매긴다(재순위 모델 없음).
   3. 방법 `vector`·`bm25`·`id`(기본 셋 다 — `search.methods`)를 가중 RRF로 합친다. 가중치 `search.weights` — vector 1.0 · bm25 1.0 · id 2.0 · 집계 단서 질문의 bm25 0.2.
-  4. vector = pgvector 코사인, HNSW(`search.pg.vector_search`가 `exact`면 정확 검색). 차원이 HNSW 한도를 넘으면 `binary_quantize`로 후보를 고른 뒤 상위 200을 원 벡터로 다시 점수.
+  4. vector = pgvector 코사인, HNSW(거르기 범위가 `search.pg.filter_exact_max` 문서 이하면 정확 검색). 차원이 HNSW 한도를 넘으면 `binary_quantize`로 후보를 고른 뒤 상위 200을 원 벡터로 다시 점수.
   5. BM25 = `chunk_term`·`term_stat`·`corpus_stat`(전체 청크 수·평균 길이). id = 드문 ID 정규식.
   6. 맞는 문서가 없으면 오류가 아니라 빈 결과(`scope_docs` 0, `evidence_status` none).
-  7. `evidence_status`: 근거 없음 → `none`, 질문 핵심어가 근거에 없거나 최고 점수 < `search.min_score` → `weak`, 그 밖 `found`. 근거 목록은 줄이지 않는다(표시만).
+  7. `evidence_status`: 근거 없음 → `none`, 질문 핵심어가 근거에 없으면 `weak`, 그 밖 `found`. 근거 목록은 줄이지 않는다(표시만).
   8. 응답 JSON이 `tuning.search.output.max_chars`(기본 20000바이트, UTF-8)를 넘으면 가장 낮은 순위 근거부터 본문을 반으로(300자를 넘는 것만, 질문 낱말 주변을 남김), 더 줄일 게 없으면 가장 낮은 순위 근거를 통째로 뺀다. 1위 근거는 그것만 남을 때까지 지킨다. 줄였다는 표시 칸은 붙이지 않는다.
 - 데이터: 입력·출력 칸은 [mc-16](#mc-16). 질문 없이 문서 고르기는 `list_doc_fulltext`([mc-17](#mc-17)).
 - 파일: `mcp_server/routers/`, `mcp_server/services/search/{search_svc,retriever,pgsearch,shaping}.py`, `mcp_server/schemas/evidence.py`.
@@ -86,10 +86,10 @@
 - Status: done
 
 <a id="mc-13"></a>
-## mc-13 · 질의 기록은 파일 하나
-- 규칙: 질의 기록은 `qa_log.jsonl`(`search.query_log.dir`, 비우면 `output/qa_log/`)만 — PG 표는 없다. 한 줄 = question·stack_name·k·hits(chunk_id·rank·via만)·answer·search_ms·asked_by. 90일 지난 줄은 시작 때와 24시간마다 지운다. 쓰기 실패는 검색을 막지 않고 경고 한 번. `search.query_log.enabled: false`면 끔.
-- 파일: `mcp_server/services/search/qa_log.py`.
-- QA: `tests/server/mcp/test_mc13_qa_log.py` · 통과.
+## mc-13 · 질의 기록은 DB `applog.mcp_log`만
+- 규칙: 질의 기록 파일은 없다(사용자 11-04 — op-13 규칙 7). MCP 호출마다 `applog.mcp_log` 한 행(op-01)이 질문·SQL(`args`)과 근거 키(`result_keys`)를 남긴다. `search.query_log` 칸은 지웠다(옛 설정 파일에 남으면 경고만). MCP를 거치지 않는 PC 명령 `mcp_server.cli.ask`는 기록하지 않는다.
+- 파일: `mcp_server/services/call_log.py` · `mcp_server/services/search/search_svc.py` · `mcp_server/services/edw_query.py`.
+- QA: `tests/server/common/test_removed_cols.py`(옛 `search.query_log` 칸은 경고만) · `tests/server/mcp/test_call_log.py` · 통과.
 - Status: done
 
 <a id="mc-15"></a>
@@ -108,7 +108,7 @@
   3. 고른 문서의 `file_path`로 ParsingMeta를 한 번 읽어 `pick_rep`로 행 하나를 고른다 — active 중 최신, active가 없으면 전체 중 최신(파싱 상태는 보지 않음). 원천 표기가 다르면 한 원천일 때만 대체.
   4. 파일 = 결과 폴더 바로 아래 최신 `<이름>_<parse_date>.md`·`.json`만(`engine/`·`source.json` 제외). 출력 `doc_key` = ParsingMeta `sha256`, `source_system` = 스키마 원천 이름(`SFDC` 등).
   5. `since`/`until`(파싱 시각)은 ParsingMeta `parsed_at`(UTC)으로 먼저 원본 경로 집합을 구해 좁힌다(IN 목록은 500개씩).
-  6. sfid = `sf1.<base64url(버킷/키)>.<HMAC-SHA256>`, 서명 키 `search.server.fulltext_secret`.
+  6. sfid = `sf1.<base64url(버킷/키)>.<HMAC-SHA256>`, 서명 키 `required.tokens.fulltext`.
   7. `get_doc_fulltext`의 등록 시각 가드: sfid 폴더 → ParsingMeta 원본 경로 → gold `doc.created_at`.
   8. 한도: `docs` 200 · `limit` 기본 50, 상한 200 · get 한 번 20개 · 파일 16 MiB(`too_large`) · 합계 24 MiB(나머지 `batch_full`) · 파일 하나 60초.
   9. 오류: 서명 키가 비면 `not_configured` · 키를 바꾸면 옛 sfid는 `bad_sfid` · ParsingMeta를 못 읽으면 `registry_unavailable` · Object Storage를 못 읽으면 `source_storage_unavailable` · ParsingMeta 행이 없는 적재 문서는 `no_files`.
@@ -128,7 +128,7 @@
 <a id="mc-06"></a>
 ## mc-06 · `query_edw` 도구 — 읽기 전용 EDW SQL
 - 이유: 정형 질문은 회사 EDW에서 답한다.
-- 규칙: SELECT/WITH 문 하나만. 낮은 권한의 읽기 계정(`required.edw.read_*`)으로 연다. 상한 — 행 `search.edw_query.max_rows` 1000(도구 인자 `max_rows` 기본 1000과 작은 쪽) · 시간 20초 · 응답 2,000,000바이트. 표 허용 목록은 `search.edw_query.tables_strict: true`일 때만 검사(기본 false — 시스템 카탈로그를 뺀 모든 스키마 허용). PC는 sqlite 대역(`valid_env/edw/edw.sqlite` — 대역 표 아홉 허용). `search.edw_query.enabled: false`면 끔(기본 켬).
+- 규칙: SELECT/WITH 문 하나만. 낮은 권한의 읽기 계정(`required.edw.read_*`)으로 연다. 상한 — 행 `search.edw_query.max_rows` 1000(도구 인자 `max_rows` 기본 1000과 작은 쪽) · 시간 20초 · 응답 2,000,000바이트. 표는 시스템 카탈로그를 뺀 모든 스키마를 허용한다(설정 허용 목록 없음 — 좁히기는 읽기 계정 권한). PC는 sqlite 대역(`valid_env/edw/edw.sqlite` — 대역 표 아홉 허용). `search.edw_query.enabled: false`면 끔(기본 켬).
 - 파일: `mcp_server/services/edw_query.py`, `mcp_server/services/edw_calls.py`, `mcp_server/config.py`.
 - QA: `tests/server/mcp/test_call_log.py`(tools/list 바이트·SHA-256) · 통과.
 - Status: done
@@ -137,9 +137,11 @@
 ## mc-07 · `edw_meta` 도구 — EDW 카탈로그 찾기
 - 이유: 클라이언트는 SQL을 쓰기 전에 표·칸 이름이 필요하다.
 - 규칙: 개인정보를 뺀 정적 자료(`search.edw_meta.dir`의 `catalog.json` + `columns.jsonl`)에서 3단계(스키마 → 표 → 칸)로 찾는다. 모르는 이름은 difflib 제안. 응답 200,000바이트를 넘으면 목록 꼬리를 자른다. 인자 없이 부르면 원천마다 `search_attrs`(`filter` — `search` 인자 이름 → attrs 키, `attrs` — 거를 수 있는 키 전부, `evidence` — 근거 키)를 사슬 파일에서 만들어 붙인다(요약이 오류면 붙이지 않음). LLM·벡터 없음.
+- 자료 꼴(`mcp_server/services/edw_meta.py`가 읽는 칸): `catalog.json` = JSON 하나 — `tables[]`(표마다 `schema`·`table`·`qualified_name`·`table_desc_ko`·`row_count`·`data_period`·`column_count` 등) + `meta`(`as_of`·`schemas`). `columns.jsonl` = 한 줄에 열 하나 — `schema`·`table`·`column_name`·`data_type`·`nullable`·`description_ko`·`primary_key`·`foreign_key`·`fk_reference` 등. 개인정보가 없는 자료만 둔다(표본 값은 응답에 내지 않는다).
+- 서버 자리: 저장소에 자료와 만드는 스크립트가 없다. 운영자가 폴더를 `<루트>/output/edw_meta/`에 복사하고 `search.edw_meta.dir: /app/output/edw_meta`를 적는다(결과 폴더가 검색 MCP에 읽기 전용으로 붙음). 비우면 `/app/config/edw_meta`(서버 compose는 이 자리를 붙이지 않음). 두 파일이 없으면 `edw_meta`가 `not_configured`로 답해 에이전트가 EDW 표·열 설명을 못 찾는다 — `query_edw`는 그대로 동작. 자료 받기는 refactor.md C-91.
 - 운영과 다른 점: 인자 없는 호출에 `search_attrs`를 더 붙인다.
-- 파일: `mcp_server/services/edw_meta.py`.
-- Status: done
+- 파일: `mcp_server/services/edw_meta.py`, `mcp_server/config.py`(`search.edw_meta.dir` 설명).
+- Status: done — 서버 자료 폴더는 사람이 채움(C-91)
 
 <a id="mc-08"></a>
 ## mc-08 · `parse_document` 도구 — 파일 하나를 바로 파싱
@@ -187,4 +189,4 @@
 | `query_edw` | `required.edw` 읽기 계정, 또는 PC sqlite 대역 |
 | `edw_meta` | `search.edw_meta.dir`의 자료 |
 | `parse_document` | `data-pipeline-mcp`(파싱 서비스) + `required.tokens.parse_proxy` |
-| 원문 도구 | `search.server.fulltext_secret` · Object Storage 읽기 · EDW 읽기 계정 |
+| 원문 도구 | `required.tokens.fulltext` · Object Storage 읽기 · EDW 읽기 계정 |

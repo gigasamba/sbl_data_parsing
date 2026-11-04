@@ -75,7 +75,7 @@ def do_parse_document(path=None, content_b64=None, filename=None, time_out_thres
     """비정형 파일 1건 → text 파싱 대표 결과. path(컨테이너 허용 루트 하위) 또는 content_b64+filename 둘 중 하나.
     time_out_threshold(기본 300초) 안에 파싱이 끝나야 결과를 돌려주고, 못 끝내면
     {"error": "시간 안에 수행 못했습니다", "job_id": …}를 반환한다(작업 자체는 서버에서 계속 진행 — 결과는
-    수집 서버 mcp_parse/jobs/<job_id>/에 만들어진다). 노출 도구는 이것 하나뿐이다(결과 수령 도구는 미노출 — 사용자 결정 10-21)."""
+    수집 서버 _mcp_parse/jobs/<job_id>/에 만들어진다). 노출 도구는 이것 하나뿐이다(결과 수령 도구는 미노출 — 사용자 결정 10-21)."""
     import urllib.error
 
     payload = {"path": path, "content_b64": content_b64, "filename": filename}
@@ -120,5 +120,5 @@ def do_parse_document(path=None, content_b64=None, filename=None, time_out_thres
         "job_id": job_id,
         "elapsed_s": round(time.time() - t0, 1),
         "queue_position_at_submit": ahead,
-        "note": f"작업은 수집 서버에서 계속 진행(대기열 {ahead}건 뒤) — 결과는 mcp_parse/jobs/<job_id>/ 아래에 만들어진다(수집 서버 담당자 확인)",
+        "note": f"작업은 수집 서버에서 계속 진행(대기열 {ahead}건 뒤) — 결과는 _mcp_parse/jobs/<job_id>/ 아래에 만들어진다(수집 서버 담당자 확인)",
     }

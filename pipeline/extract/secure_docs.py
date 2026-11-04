@@ -17,7 +17,7 @@
 사용:
   python cli/secure_docs.py probe [--src …]                        → 실제 라이브러리로 열어 봄(openpyxl·xlrd·python-docx·python-pptx·pdfplumber) → output/secure/probe.csv
   python cli/secure_docs.py scan [--src output/prepared]               → 콘솔 표 + output/secure/scan.csv
-  SECURE_DOC_PASSWORD=… python cli/secure_docs.py decrypt [--src …]  → output/secure/decrypted/(보호 없는 문서는 그대로 복사 — 이 폴더를 run_all --src로)
+  python cli/secure_docs.py decrypt [--src …]   (암호 목록: extract.connections.secure_doc.passwords_file)  → output/secure/decrypted/(보호 없는 문서는 그대로 복사 — 이 폴더를 run_all --src로)
       여러 암호: SECURE_DOC_PASSWORDS_FILE=<한 줄에 하나> (차례로 시도). **암호는 인자·로그·결과 파일에 남기지 않는다.**
   python cli/secure_docs.py purge                                   → 복호화 사본 삭제(파싱이 끝나면)
 복호화 사본은 output/(git 제외)에만 두고, 외부로 옮기지 않는다.
@@ -202,8 +202,7 @@ def scan(src, out):
 
 
 def _passwords():
-    one = pc.given("SECURE_DOC_PASSWORD")  # S7c — 설정 객체(비밀 칸 — 준 값이 있을 때만, 옛 `if get(X)`)
-    pw = [C.reveal(one)] if one is not None else []
+    pw = []
     f = pc.cfg().connections.secure_doc.passwords_file
     if f and Path(f).exists():
         pw += [x.rstrip("\r\n") for x in Path(f).read_text(encoding="utf-8").splitlines() if x.strip()]
@@ -275,28 +274,16 @@ def main():
     ap.add_argument("--out", default=str(ROOT / "output" / "secure"))
     a = ap.parse_args()
     out = Path(a.out)
-    from common.core.runlog import note
-
     if a.cmd == "scan":
-        rows, c = scan(a.src, out)
-        note(f"문서 {len(rows)}개 · " + " · ".join(f"{k} {n}" for k, n in c.most_common()))
+        scan(a.src, out)
     elif a.cmd == "probe":
-        rows = probe(a.src, out)
-        note(
-            f"실제 열기 {len(rows)}개 · 읽힘 {sum(r['result'].startswith('읽힘') for r in rows)} · 실패 {sum(r['result'].startswith('실패') for r in rows)}"
-        )
+        probe(a.src, out)
     elif a.cmd == "decrypt":
-        res = decrypt(a.src, out)
-        note(
-            f"복호화 {sum(x[2].startswith('복호화') for x in res)}건 · 실패·건너뜀 {sum(not x[2].startswith(('그대로', '복호화')) for x in res)}건 → {out / 'decrypted'}"
-        )
+        decrypt(a.src, out)
     else:
         purge(out)
 
 
 if __name__ == "__main__":
     utf8_stdout()
-    from common.core.runlog import session
-
-    with session("secure_docs"):
-        main()
+    main()

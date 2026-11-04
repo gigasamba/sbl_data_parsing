@@ -54,20 +54,14 @@ def _key_terms(question):
     return sorted({t for t in (ids + nums + gloss) if t})
 
 
-def evidence_status(question, evidence, min_score=None):
-    """R3(AD42) — 근거가 있나? 0건 → none · 질문 핵심어(ID·숫자·용어 사전)가 근거 원문에 하나도 없거나 근거 중
-    최고 점수가 min_score 미달이면 weak · 그 외 found. 근거 목록은 바꾸지 않음(표시만) — do_search와
-    cli/mcp_eval.py(문턱 보정, 서버 호출 없이 같은 응답으로 재계산)가 같이 쓴다.
-    반환: (status, [근거마다 low_score(min_score 없거나 그 근거에 score가 없으면 None) ...])."""
+def evidence_status(question, evidence):
+    """R3(AD42) — 근거가 있나? 0건 → none · 질문 핵심어(ID·숫자·용어 사전)가 근거 원문에 하나도 없으면 weak · 그 외 found.
+    근거 목록은 바꾸지 않음(표시만)."""
     if not evidence:
-        return "none", []
-    low = [(e.get("score") < min_score) if (min_score is not None and e.get("score") is not None) else None for e in evidence]
+        return "none"
     kws = _key_terms(question)
     text = " ".join(e.get("text") or "" for e in evidence).lower()
-    has_kw = (not kws) or any(str(k).lower() in text for k in kws)
-    scores = [e.get("score") for e in evidence if e.get("score") is not None]
-    below_min = min_score is not None and bool(scores) and max(scores) < min_score
-    return ("weak" if (not has_kw or below_min) else "found"), low
+    return "found" if (not kws) or any(str(k).lower() in text for k in kws) else "weak"
 
 
 _CAP_FLOOR = 300  # AR5 — 랭크 인지 절삭의 글자 수 바닥(이 아래로는 더 줄이지 않고 다음 단계: 통째로 뺌)

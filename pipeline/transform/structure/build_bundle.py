@@ -430,9 +430,7 @@ def main(argv=None):
         default=pc.cfg().load.edw_path_prefix,
         help="저장소(doc.file_path)에 기록할 원본 경로 접두(서버의 실제 보관 위치) — 없으면 --src 절대 경로",
     )
-    ap.add_argument(
-        "--embed", default=pc.cfg().transform.structure.embed or "api", choices=["api", "none"]
-    )  # S7c — 설정 객체 · 0.2.0 로컬 모델 기본값(bge-m3) 지움 — pl-46
+    ap.add_argument("--embed", default="api", choices=["api", "none"])  # S7c — 설정 객체 · 0.2.0 로컬 모델 기본값(bge-m3) 지움 — pl-46
     ap.add_argument("--chunk", default=None, help="기본 = stack.json chunk(없으면 structure)")
     ap.add_argument("--stack", default=None, help="엔진 구성 파일(PC 실험·시험용 — 비우면 설정 common.paths.stack_file)")
     ap.add_argument("--no-rep", action="store_true", help="대표 파싱(output/parse/_rep) 대신 선정 엔진을 문서마다 고름(단계 1 실험용)")
@@ -667,9 +665,6 @@ def main(argv=None):
     shutil.rmtree(old, ignore_errors=True)
     out = final
     print(json.dumps(meta, ensure_ascii=False))
-    from common.core.runlog import note
-
-    note(f"EDW 묶음: 문서 {len(docs)} · 청크 {len(chunks)} · 차원 {meta['dim']} → {out}")
 
 
 if __name__ == "__main__":

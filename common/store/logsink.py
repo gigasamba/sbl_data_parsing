@@ -95,7 +95,7 @@ class Sink:
     def __init__(self, *, writer=None, fallback_dir=None, queue_size=None, batch_size=None, flush_sec=None, shutdown_sec=None):
         conf = cfg().log
         self.writer = writer or _write_db
-        directory = Path(fallback_dir or conf.fallback_dir)
+        directory = Path(fallback_dir or conf.fallback_dir or paths.LOG_DIR)
         self.directory = directory if directory.is_absolute() else paths.PROJ_ROOT / directory
         self.queue: queue.Queue = queue.Queue(maxsize=queue_size or conf.queue_size)
         self.batch_size = batch_size or conf.batch_size

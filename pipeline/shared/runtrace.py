@@ -6,7 +6,7 @@
     docs(total=40, ok=38, fail=2)           # 문서 수(여러 번 불러도 덮어씀)
     with Progress(total=len(jobs), done=lambda: n[0]) as pg: ...   # 오래 도는 반복문 옆에서 60초마다 run.progress
 
-기존 runs.jsonl·RUNLOG.md·PROGRESS.md는 그대로 — 이 모듈은 DB/JSON 로그에만 쓴다. 모든 행은 logsink가 비차단으로 보낸다.
+이 모듈은 DB/JSON 로그에만 쓴다. 모든 행은 logsink가 비차단으로 보낸다.
 """
 
 import contextlib

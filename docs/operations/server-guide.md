@@ -1,6 +1,6 @@
 # 서버 가이드 — 수집 서버 · 개발 서버
 
-대상: 서버 운영자. 설치 순서는 [README §5-0](../../README.md#서버-설치-순서) 하나다. 설정 칸: [env-guide.md](env-guide.md) · 코드 폴더 바꾸기·새 이미지·0.2.0 배포: [release-and-patch.md](release-and-patch.md).
+대상: 서버 운영자. 설치 순서는 [README §5-0](../../README.md#서버-설치-순서) 하나다. 설정 칸: [env-guide.md](env-guide.md) · 새 판(새 루트)·새 이미지·0.2.0 배포: [release-and-patch.md](release-and-patch.md).
 
 ## 0. 이미지 2개와 명령
 
@@ -11,18 +11,18 @@
 
 - 이미지 시작 스크립트(`entrypoint.sh`)는 다른 이미지의 명령을 종료 64로 거부한다(맞는 이미지를 알려 줌). data-pipeline: `parse`·`publish`·`show-stack`·`idle`·`migrate`·`parse-service` · mcp-server: `mcp`·`ask`·`show-stack`.
 - 어느 이미지에서나: `help`·`check`·`resources`·`services`·`check-modules`·`tool <이름> [인자]`·`selftest`.
-- 개발 서버는 실행 이미지(`*-runtime`)에 코드 폴더(`/srv/rag/code/live`)를 `/app/deploy`에 읽기 전용으로 붙인다 — `dc.sh`·`mcp_up.sh`가 자기 코드 폴더를 `CODE_DIR`로 잡는다(셸에 `CODE_DIR`가 있으면 그 값). 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 운영 서버는 코드가 든 이미지(`bake.sh`)를 쓴다.
-- 명령은 모두 코드 폴더 루트(`cd /srv/rag/code/live`)에서, root 셸에서 실행한다.
+- 서버 배치: 루트 폴더 하나(서버 아무 자리 — 예 `/home/dev/`) 아래 `settings.yaml`·`edw_chain.yaml`·코드 폴더 `sbl_data_parsing-<판>/`·이미지 폴더 `sbl_images-main/`·결과 폴더 `output/`·`backup/`. 루트 = 코드 폴더의 부모 — 호스트 스크립트가 자기 자리에서 구한다(README §5). 판마다 새 루트를 만든다([release-and-patch §1-1](release-and-patch.md#1-1-개발-서버--새-루트로-코드-바꾸기)).
+- 개발 서버는 실행 이미지(`*-runtime`)에 코드 폴더를 `/app/deploy`에 읽기 전용으로 붙인다 — `dc.sh`·`mcp_up.sh`가 자기 코드 폴더를 `CODE_DIR`로 잡는다(셸에 `CODE_DIR`가 있으면 그 값). 코드 없이·의존성 지문이 다른 코드로 띄우면 시작 거부(종료 2). 운영 서버는 코드가 든 이미지(`bake.sh`)를 쓴다.
+- 명령은 모두 코드 폴더(`cd <루트>/sbl_data_parsing-<판>`)에서, root 셸에서 실행한다.
+- 컨테이너 상태: 서버 전체는 `podman ps`·`docker ps`(root로 띄웠으면 `sudo podman ps`), 우리 묶음만은 `bash deploy/host/scripts/dc.sh ps`.
 
 ## 1. 설정
 
 ```bash
-export SERVER_ENV_DIR=/srv/rag/env DOCKER=podman     # 운영 계정 ~/.bashrc에 두거나 명령 앞에 붙인다
-bash deploy/host/scripts/dc.sh init --group <운영 그룹>   # 서버 폴더·settings.yaml·edw_chain.yaml(없을 때만) — README §5-0 3번
-# 이미 있는 결과 폴더(옛 판이 644·755로 쓴 것)는 한 번:
-#   chgrp -R <운영 그룹> /srv/rag/output && chmod -R g+w /srv/rag/output && find /srv/rag/output -type d -exec chmod g+s {} +
+export DOCKER=podman                                   # 운영 계정 ~/.bashrc에 두거나 명령 앞에 붙인다
+bash deploy/host/scripts/dc.sh init --group <운영 그룹>   # 루트의 output/·backup/·settings.yaml·edw_chain.yaml(없을 때만) — README §5-0 3번
 ```
-- 값은 `init`이 찍은 빈 필수 칸부터 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)). `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd unit은 `SERVER_ENV_DIR`을 스스로 넘긴다.
+- 값은 `init`이 찍은 빈 필수 칸부터 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)). `trigger.sh`·`run_tool.sh`·`mcp_up.sh`·systemd unit은 `<루트>/settings.yaml`을 스스로 찾는다.
 - **엔진 구성은 코드 폴더의 파일이다**(`resources/config/pipeline_stack.json` — 다른 파일이면 `ops.paths.stack_file`). 바꾸려면 코드 폴더째 바꾼다. 원천은 폴더·`rdb:csv`만.
 
 ### 1-1. 값 바꾸기
@@ -37,7 +37,7 @@ README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash 
 ## 2. 일상 실행 — run_docs(문서별 흐름)
 
 서버 입구는 `run_docs.py` 하나다 — 문서마다 파싱 → publish(Object Storage + EDW) → 원본 삭제 → 구조화·적재를 상주 컨테이너 안에서 `exec`로 돌린다(PRD [pl-24](../prd/ops.md#pl-24)). 자리·설정: [release-and-patch §5-4](release-and-patch.md#5-4-run_docspy-자리와-설정).
-- 원본(`_warm/*.bin`·`docflow/<seq>/_source_files`)은 **publish가 성공한 뒤에만** 지운다. 파싱·publish가 실패한 문서는 원본이 남고 `batch_progress/progress.log`에만 적힌다(EDW에 안 씀 — 다음 `--skip-done` 실행이 다시 고름). 구조화·적재가 실패하면 publish한 결과·EDW 행은 그대로이고 로그에만 적힌다.
+- 원본(`_warm/*.bin`·`_docflow/<seq>/_source_files`)은 **publish가 성공한 뒤에만** 지운다. 파싱·publish가 실패한 문서는 원본이 남고 `batch_progress/progress.log`에만 적힌다(EDW에 안 씀 — 다음 `--skip-done` 실행이 다시 고름). 구조화·적재가 실패하면 publish한 결과·EDW 행은 그대로이고 로그에만 적힌다.
 - **종료 코드**(PRD [pl-18](../prd/ops.md#pl-18)): `0` 대상 0건·모두 끝 · `1` 실패 문서가 하나라도 · `75` 마감(`--deadline`) 도달(실패 없음) 또는 다른 run_docs가 도는 중 · `2` 설정 문제. 실패와 마감이 함께면 `1`. 새벽 배치 unit은 `75`를 성공으로 친다.
 - **겹침 잠금:** run_docs는 `batch_progress/run_docs.lock`을 `flock`으로 잡는다 — 새벽 배치와 사람이 직접 돌린 run_docs가 함께 돌지 않는다(뒤에 온 쪽이 75). 죽으면 잠금은 저절로 풀린다. 작업 폴더(`ops.pipeline_host.run_docs_dir`)가 같아야 같은 잠금이다.
 - 파싱·게시만 따로:
@@ -80,13 +80,15 @@ MCP 토큰은 settings.yaml `required.tokens.mcp`, 모델은 `required.models.ll
 ### 4-1. EDW 쿼리 도구 설정 — `edw_meta`·`query_edw`
 에이전트가 `edw_meta`(정적 자료, DB 접속 없음)로 표·칸을 보고 `query_edw`로 SELECT를 보낸다. 읽기 전용·시스템 표 차단·상한은 코드(`mcp_server/services/edw_query.py`)가 강제하지만, **운영자가 아래를 준비해야 안전하다.**
 
+0. **EDW 표 설명 자료**(`edw_meta`용) — `catalog.json`(표 목록·설명)·`columns.jsonl`(한 줄에 열 하나)을 `<루트>/output/edw_meta/`에 복사하고 `search.edw_meta.dir: /app/output/edw_meta`를 적는다. 개인정보가 없는 자료만 둔다. 없으면 `edw_meta`만 `not_configured`(`query_edw`는 그대로) — 파일 꼴은 PRD [mc-07](../prd/mcp.md#mc-07), 받기는 refactor.md C-91.
+
 1. **EDW 읽기 계정**(`required.edw.read_user`·`read_password` — 파이프라인 원천 조회와 같은 계정):
    - `SELECT` 권한만 준다(DDL·DML·`EXEC`·시스템 프로시저 없음).
    - DBA가 추가로: `DENY VIEW DEFINITION` · 다른 데이터베이스·연결 서버(linked server) 권한 없음 · 가능하면 Resource Governor 등으로 질의 시간·CPU 상한.
    - 검색 MCP는 시작할 때 쓰기 계정 칸을 설정 객체에서 비운다. 파일 자체는 컨테이너가 읽을 수 있으므로, 완전히 떼려면 mcp-server에 쓰기 칸이 없는 설정 파일을 따로 붙인다.
    - 같은 계정이라 `query_edw`도 `AI.FileStorageMap`·`AI.ParsingMeta`를 읽을 수 있다 — 막으려면 2.
-2. **표 허용 목록(기본 꺼짐)** — 기본은 읽기 계정이 볼 수 있는 모든 표(`sys.*`·`INFORMATION_SCHEMA.*`는 늘 거부). 좁히려면 `search.edw_query.tables_strict: true`와 `search.edw_query.tables`(`schema.table` 쉼표 목록). 켜면 목록 밖 표·뷰는 거부, `tables`가 비면 모두 거부.
-3. 확인: `query_edw({"sql": "DROP TABLE ..."})`·`sys.*`를 읽는 호출(허용 목록을 켰으면 목록 밖 표도)이 `rejected:*`로 막히는지 한 번 본다.
+2. **표 범위** — 읽기 계정이 볼 수 있는 모든 표(`sys.*`·`INFORMATION_SCHEMA.*`는 늘 거부). 좁히려면 DBA가 읽기 계정의 `SELECT` 권한을 줄인다(설정의 허용 목록은 없다).
+3. 확인: `query_edw({"sql": "DROP TABLE ..."})`·`sys.*`를 읽는 호출이 `rejected:*`로 막히는지 한 번 본다.
 
 ## 5. 회사 맞춤(도메인 튜닝)
 
@@ -97,14 +99,14 @@ MCP 토큰은 settings.yaml `required.tokens.mcp`, 모델은 `required.models.ll
 | 용어집 · 고객 명부 · ID 모양 · 단위 · 계약·고객 마스터 | PG 마스터 표 `<db_schema>_master`. 원본 CSV(`resources/vocab/glossary/` 또는 서버 폴더)를 고친 뒤 `run_tool.sh migrate master load [--dir <폴더>]`(5-1) |
 | 원천 표 열 이름 | settings.yaml `extract.connections.rdb.columns.*` |
 | 엔진 구성 | `resources/config/pipeline_stack.json`(확인 `show-stack`) |
-| MCP 안내 문구 | settings.yaml `search.server.instructions` |
-| EDW 조인 사슬(고객·원천 메타·검색 attrs 키) | 서버 사본 `$SERVER_ENV_DIR/edw_chain.yaml`(5-2) |
+| MCP 안내 문구 | 코드 `mcp_server/main.py`의 `_DEFAULT_MCP_INSTRUCTIONS`(설정 칸 없음 — 바꾸면 코드 배포) |
+| EDW 조인 사슬(고객·원천 메타·검색 attrs 키) | 서버 사본 `<루트>/edw_chain.yaml`(5-2) |
 
 ### 5-1. 고객 명부·용어집 작성법
 
 구조화·검색은 파일이 아니라 PG 마스터 표만 읽는다. `migrate master load`가 CSV 여섯 개(`client_roster`·`client_master`·`contract_master`·`domain_terms`·`id_patterns`·`units` — 파일 이름·머리글 그대로)로 표를 통째로 바꾼다. 기본 폴더는 샘플(가상 회사·제품) `resources/vocab/glossary/`, 서버 실명 자료는 `--dir <폴더>`. 표가 비었으면 서버의 구조화·검색이 시작하지 않는다.
 - **`master load` 뒤에는 검색 MCP를 다시 시작한다**(`$DOCKER restart mcp-server` — 검색은 시작할 때와 새 적재 판이 들어올 때만 마스터를 읽음). 이미 적재한 문서는 자동으로 다시 처리하지 않는다(새로 적재하는 문서의 `gold_version` `<VERSION>+m<해시 8자>`만 바뀜).
-- ⚠️ compose는 서버 폴더(예 `/srv/rag/env/glossary/`)를 컨테이너에 붙이지 않는다. `--dir`에는 **컨테이너 안에서 보이는** 폴더를 적는다(그 전에는 코드 폴더 안 `resources/vocab/glossary/`를 고쳐 쓴다).
+- ⚠️ compose는 서버 폴더(예 `<루트>/glossary/`)를 컨테이너에 붙이지 않는다. `--dir`에는 **컨테이너 안에서 보이는** 폴더를 적는다(그 전에는 코드 폴더 안 `resources/vocab/glossary/`를 고쳐 쓴다).
 - 머리글은 `docs/architecture/db_schema.md` §4. UTF-8로 저장(Excel이면 "CSV UTF-8" — cp949도 읽힘). 머리글이 다르면 `master load`가 거부한다.
 
 #### 고객 명부 `client_roster.csv`
@@ -126,9 +128,9 @@ MCP 토큰은 settings.yaml `required.tokens.mcp`, 모델은 `required.models.ll
 SFDC·EDW 내보내기에서 명부를 만든다. 열 이름만 매핑 파일에 적는다(예제: `resources/vocab/glossary/client_master.example.csv` + `client_master_map.example.json`). 매핑 키 = 명부 칸: `name`(필수 → `canonical_name`) · `aliases`(`;`·`|`) · `client_id`·`name_ko`·`client_type`·`segment`·`country`·`parent_client_id`·`status`·`description`·`updated`(선택). 열 이름은 영문·숫자·`_`만. 같은 고객 여러 줄은 하나로 합친다(별칭은 합치고 다른 칸은 처음 값).
 ```bash
 PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --kind client \
-  --source csv:/srv/rag/env/client_master.csv --mapping /srv/rag/env/client_master_map.json \
-  --out /srv/rag/env/client_roster.csv          # EDW 표에서 바로: --source rdb:<스키마.표>(읽기 계정)
-PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --check /srv/rag/env/client_roster.csv   # 오류 0 확인 후 반영
+  --source csv:<루트>/client_master.csv --mapping <루트>/client_master_map.json \
+  --out <루트>/client_roster.csv          # EDW 표에서 바로: --source rdb:<스키마.표>(읽기 계정)
+PYTHONPATH=. python -m pipeline.transform.structure.gen_roster --check <루트>/client_roster.csv   # 오류 0 확인 후 반영
 ```
 
 #### 용어집 `domain_terms.csv`
@@ -180,21 +182,21 @@ PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load
 ## 7. 개발자에게 보고하는 법
 
 ### 서버 버전 기록
-적용·업데이트마다 `/srv/rag/reports/versions.md`에 한 줄: `날짜 · 서버 · 이미지 버전 · 코드 커밋 · 확인 결과`.
+적용·업데이트마다 운영 기록 폴더(루트 밖 — 판이 바뀌어도 이어 씀, 이하 `<기록>`)의 `versions.md`에 한 줄: `날짜 · 서버 · 이미지 버전 · 코드 커밋 · 확인 결과`.
 
 ### 서버 자체 개발 기록
-서버에서 코드를 직접 고치거나 새로 만들었거나 옵션 값을 바꿨으면 그때마다 `/srv/rag/reports/server-changes.md`에 한 행 + diff를 `/srv/rag/reports/server-changes/<ID>.diff`로(`diff -u <고치기 전> <고친 뒤>`, 새 파일이면 `diff -u /dev/null <파일>`). 새 판으로 바꿀 때 이 기록을 먼저 읽는다([release-and-patch §2](release-and-patch.md#2-서버에서-직접-고친-코드)).
+서버에서 코드를 직접 고치거나 새로 만들었거나 옵션 값을 바꿨으면 그때마다 `<기록>/server-changes.md`에 한 행 + diff를 `<기록>/server-changes/<ID>.diff`로(`diff -u <고치기 전> <고친 뒤>`, 새 파일이면 `diff -u /dev/null <파일>`). 새 판으로 바꿀 때 이 기록을 먼저 읽는다([release-and-patch §2](release-and-patch.md#2-서버에서-직접-고친-코드)).
 ```
 | ID(SC-<MMDD>-<n>) | 날짜·시각 | 서버(수집/개발) | 바뀐 파일(코드 폴더 기준 경로) | 무엇·왜 한 줄 | 기준 버전(이미지+코드 커밋) | 테스트(명령·결과) | 상태(서버에만/PC 보냄/다시 얹음 <커밋>/PC 반영됨 <커밋>/폐기) |
 ```
 지우지 않고 상태만 바꾼다. diff에는 코드만 — 비밀값·문서 본문·고객명은 넣지 않는다.
 
 ### 이슈 기록
-문제가 나면 `/srv/rag/reports/issues.md`에 한 행(지우지 않고 상태만 바꿈):
+문제가 나면 `<기록>/issues.md`에 한 행(지우지 않고 상태만 바꿈):
 ```
 | ID(SI-<MMDD>-<n>) | 버전(이미지+코드 커밋) | 서버(수집/개발) | 단계·명령 | 증상 한 줄 | 종료 코드 | 로그 위치 | 상태(열림/수정됨/재확인 통과) |
 ```
 반출 규칙: **오류 메시지·종료 코드·숫자·해시 이름만** — 문서 본문·고객명·원본 경로·키 값은 적지 않는다.
 
 ### 날짜별 요약
-파싱이 끝날 때마다 `/srv/rag/reports/<날짜>.md`에 버전(`versions.md` 줄)·단계·종료 코드·핵심 숫자(정답률·시간·건수)·막힌 곳·로그 마지막 20줄(비밀값 가림)을 적는다. 본문은 복사하지 않는다.
+파싱이 끝날 때마다 `<기록>/<날짜>.md`에 버전(`versions.md` 줄)·단계·종료 코드·핵심 숫자(정답률·시간·건수)·막힌 곳·로그 마지막 20줄(비밀값 가림)을 적는다. 본문은 복사하지 않는다.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """파싱 대상 문서 가져오기(파싱 모듈) — 폴더 또는 rdb:csv(문서 위치 표 csv → Object Storage에서 받음).
 
-  --source /srv/rag/docs            같은 서버 폴더(샘플 데이터) — 그대로 씀
+  --source <서버 폴더>               같은 서버 폴더(샘플 데이터) — 그대로 씀
   --source rdb:csv:<경로>            문서 위치 표(csv — run_docs가 EDW FileStorageMap에서 만든 batch.csv)의 키만 Object Storage에서 받음(AD44)
   (11-01 사용자 지움: s3://버킷/접두 폴더 가져오기 · rdb:*·rdb:<이름>(원천 목록 sources.json) · rdb:<표> 직접 질의(watermark 포함) ·
    --mode test 표본 · 스트리밍용 plan())
@@ -11,16 +11,12 @@ Object Storage 원본 처리(백로그 O2 일부): 대표 결과가 나온 문�
 검색 결과의 원본 위치(source_uri) = s3://버킷/키(SOURCE_MANIFEST로 common/ids.source_uri가 읽음).
 접속: OS_ENDPOINT · OS_ACCESS_KEY · OS_SECRET_KEY · OS_REGION(기본 us-east-1) · OS_VERIFY_TLS(기본 1, 사내 CA면 경로) — 비밀값은 settings.yaml에만.
 
-열 매핑(AD44): 기본은 실 EDW `AI.FileStorageMap`과 같음 — doc_id=id · key=s3_key · size=file_size ·
-filename=original_filename · content_version=content_version_id. 이 표에 없는 열(bucket·etag·content_type·company_id·doc_type·
-contract_id·updated_at·version·supersedes·is_deleted)은 선택(기본값 ""=미설정) — 열 이름이 다른 csv는 RDB_COL_<필드>로 맞춘다
-(열 이름은 식별자 화이트리스트만). 고객·문서 종류 필터(RDB_COMPANY·RDB_DOC_TYPE)는 그 열이 없으면 경고 뒤 필터 없이 진행.
-버킷 — bucket 열이 있으면 그 값, 없으면 key가 `s3://버킷/…` 꼴이면 그 안의 버킷, 둘 다 아니면 RDB_BUCKET.
-받기 전 대조 — etag 열이 있으면 ETag 대조(head_object), 없고 size가 있으면 ContentLength와 비교(크기 불일치는 참고 기록만),
-둘 다 없으면 대조 생략. 이미 처리됐는지는 ETag가 있으면 ETag로, 없으면 (key, 증분값) 쌍으로(`_rdb_is_done` — 같은 s3_key의
-새 판을 "이미 처리됨"으로 오판하지 않게). 증분값 = updated_at 열, 없으면 RDB_INCREMENT_COL(기본 id).
+열(AD44): 실 EDW `AI.FileStorageMap`의 다섯 열만 읽는다 — doc_id=id · key=s3_key · size=file_size ·
+filename=original_filename · content_version=content_version_id(열 이름이 다른 csv는 extract.connections.rdb.columns로 — 식별자 화이트리스트만).
+버킷 — key가 `s3://버킷/…` 꼴이면 그 안의 버킷, 아니면 RDB_BUCKET.
+받기 전 대조 — size가 있으면 ContentLength와 비교(크기 불일치는 참고 기록만). 이미 처리됐는지는 (key, 증분값) 쌍으로(`_rdb_is_done` —
+같은 s3_key의 새 판을 "이미 처리됨"으로 오판하지 않게). 증분값 = RDB_INCREMENT_COL 열(비우면 doc_id 열).
 문서 이름 — original_filename을 그대로(없으면 doc_id), 같은 이름이 여럿이면 doc_id 접두(`<doc_id>__<이름>`)로 구분.
-Object Storage의 실제 값이 표가 적은 값과 다르면 받지 않고 거부·기록(output/parse/_source/rejected.jsonl) — 그 문서만 건너뜀.
 """
 
 import csv
@@ -45,16 +41,11 @@ from pipeline import config as pc  # S7c: 설정 객체(pipeline 칸)
 COL_ID_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")  # csv 열 이름(RDB_COL_*) 화이트리스트(옛 common.core.sources와 같은 규칙)
 
 
-class EtagMismatch(ValueError):
-    """RDB가 적은 값(ETag 또는 크기) ≠ Object Storage — 그 문서만 건너뜀. 경로 탈출(_safe_join ValueError)은 이걸로
-    잡지 않고 그대로 크래시(독립 검토 AD44 재검)."""
-
-
 class DuplicateContent(ValueError):
     """다른 원천(source_id)의 기존 지문(output/dedup/manifest.jsonl)과 완전히 같은 내용 — 받기 전(비멀티파트
     ETag+크기) 또는 받은 뒤(sha256)에 판단해 그 문서만 건너뜀(O3 재설계, 2026-10-14 — 근사 중복은 더 안
-    보고 완전 중복만, `pipeline.extract.dedup.find_duplicate` 사용). EtagMismatch와 똑같이 그 문서
-    하나만 영향(호출부가 같이 묶어 처리) — 경로 탈출(ValueError, _safe_join)과는 안 섞임(fail-loud 유지)."""
+    보고 완전 중복만, `pipeline.extract.dedup.find_duplicate` 사용). 그 문서 하나만 영향 — 경로 탈출(ValueError,
+    _safe_join)과는 안 섞임(fail-loud 유지)."""
 
 
 def _dedup_manifest_path(state):
@@ -62,18 +53,6 @@ def _dedup_manifest_path(state):
     plan()·resolve() 둘 다 항상 `Path(out) / "parse" / "_source"`로 만들므로 이 상대 위치로 되짚는다
     (out 자체를 모든 fetch_one 호출 경로에 새로 꿰지 않는다, ponytail)."""
     return state.parent.parent / "dedup" / "manifest.jsonl"
-
-
-def _etag_duplicate(state, source_id, etag, size):
-    """받기 전 완전 중복 사전 확인(O3 재설계) — 비멀티파트 ETag(하이픈 없음 = 단일 파트 업로드의 MD5
-    그대로, 내용 해시와 같음)+크기가 다른 원천의 기존 지문과 일치하면 그 지문을, 아니면(멀티파트 ETag·
-    크기 없음 등) None을 돌려준다. 멀티파트 ETag는 파트별 해시를 다시 해시한 값이라 내용과 무관하므로
-    여기서 보지 않는다 — 그 경우는 받은 뒤 sha256로만 판단(`_sha_duplicate`)."""
-    if not (etag and "-" not in etag and size is not None):
-        return None
-    from pipeline.extract import dedup as DEDUP
-
-    return DEDUP.find_duplicate(_dedup_manifest_path(state), source_id, etag=etag, size=size)
 
 
 def _sha_duplicate(state, source_id, path):
@@ -131,32 +110,10 @@ def _s3():
 
 
 def _rdb_cols():
-    """RDB 표의 열 이름 — 기본값은 실 EDW `AI.FileStorageMap`(id·content_version_id·s3_key·original_filename·file_size)과
-    같음. bucket·etag·content_type·company·doc_type·contract·updated·version·supersedes·is_deleted는 이 표에
-    없다(기본값 ""=미설정) — 옛 synth 시험 표(doc_location.csv)처럼 다른 표를 쓸 땐 RDB_COL_<필드>로 전부 채운다.
-    열 이름도 SQL에 그대로 끼워 넣으므로(mssql은 대괄호·pg는 f-string, 표 이름만 각각 Identifier) 표 이름과 같은
+    """RDB 표의 열 이름(실 EDW `AI.FileStorageMap` 기본값 — 설정 extract.connections.rdb.columns). 열 이름도 식별자이므로
     화이트리스트로 확인(독립 검토 BLOCK 3 — SQL 삽입)."""
-    required = {
-        "doc_id": "id",
-        "key": "s3_key",
-        "size": "file_size",
-        "filename": "original_filename",
-        "content_version": "content_version_id",
-    }
-    optional = {
-        "bucket": "",
-        "etag": "",
-        "content_type": "",
-        "company": "",
-        "doc_type": "",
-        "contract": "",
-        "updated": "",
-        "version": "",
-        "supersedes": "",
-        "is_deleted": "",
-    }
-    # S7c — 설정 객체(이름을 글자로 지음: 칸 기본값 = 위 v와 같고, 비운 값은 필수 5칸만 ''로 유지(blank keep)·나머지는 기본값 ''라 같음)
-    cols = {k: pc.by_env(f"RDB_COL_{k.upper()}", v) for k, v in {**required, **optional}.items()}
+    c = pc.cfg().connections.rdb.columns
+    cols = {"doc_id": c.doc_id, "key": c.key, "size": c.size, "filename": c.filename, "content_version": c.content_version}
     bad = {k: v for k, v in cols.items() if v and not COL_ID_RE.match(v)}
     if bad:
         raise ValueError(f"[source] RDB_COL_* 값이 올바르지 않음(영문·숫자·_ 만) — {bad}")
@@ -164,10 +121,9 @@ def _rdb_cols():
 
 
 def _rdb_increment_col(cols):
-    """증분(since) 기준 열 — updated_at 열이 있으면 그 열, 없으면 env RDB_INCREMENT_COL(기본 id) — AI.FileStorageMap처럼
-    updated_at이 없는 표는 id(또는 content_version_id, env로 바꿈)로 전진 판정한다(같은 파일의 새 판이 새 행/새
-    content_version_id로 들어온다는 가정). 열 이름이므로 같은 화이트리스트(COL_ID_RE)."""
-    col = cols["updated"] or pc.cfg().connections.rdb.increment_col or cols["doc_id"]  # S7c — 설정 객체
+    """증분(since) 기준 열 — RDB_INCREMENT_COL(비우면 doc_id 열) — AI.FileStorageMap은 updated_at이 없어 id(또는
+    content_version_id)로 전진 판정한다(같은 파일의 새 판이 새 행/새 content_version_id로 들어온다는 가정). 열 이름이므로 같은 화이트리스트(COL_ID_RE)."""
+    col = pc.cfg().connections.rdb.increment_col or cols["doc_id"]
     if not COL_ID_RE.match(col):
         raise ValueError(f"[source] RDB_INCREMENT_COL 값이 올바르지 않음(영문·숫자·_ 만) — {col!r}")
     return col
@@ -181,16 +137,14 @@ def _inc_value(row, col):
 
 
 def _rdb_bucket_and_key(cols, r):
-    """버킷·키 — bucket 열이 있으면 그 값, 없으면 key가 `s3://버킷/…` 꼴이면 그 안의 버킷, 둘 다 아니면 RDB_BUCKET."""
+    """버킷·키 — key가 `s3://버킷/…` 꼴이면 그 안의 버킷, 아니면 RDB_BUCKET."""
     raw_key = r[cols["key"]]
-    if cols["bucket"] and r.get(cols["bucket"]):
-        return r[cols["bucket"]], raw_key
     if isinstance(raw_key, str) and raw_key.startswith("s3://"):
         bucket, _, key = raw_key[5:].partition("/")
         return bucket, key
     bucket = pc.cfg().connections.rdb.bucket  # S7c — 설정 객체
     if not bucket:
-        raise ValueError(f"[source] 버킷을 알 수 없음 — bucket 열 없음·key가 s3://버킷/… 꼴 아님, RDB_BUCKET 필요(key={raw_key!r})")
+        raise ValueError(f"[source] 버킷을 알 수 없음 — key가 s3://버킷/… 꼴 아님, RDB_BUCKET 필요(key={raw_key!r})")
     return bucket, raw_key
 
 
@@ -238,16 +192,6 @@ def _rdb_names(rows):
     return {k: (_safe_name(f"{by_key[k]['doc_id']}__{n}", "") if counts[n] > 1 else n) for k, n in base.items()}
 
 
-def _rdb_filters():
-    """env RDB_COMPANY·RDB_DOC_TYPE(콤마 목록, 선택) → 질의에 걸 값 목록(없으면 None = 필터 없음)."""
-
-    def _list(name):
-        v = pc.given(name)  # S7c — 설정 객체(목록 칸 RDB_COMPANY·RDB_DOC_TYPE — 준 값만: 없음·빈 글자 → None, 옛 `if v`)
-        return list(v) if v is not None else None
-
-    return _list("RDB_COMPANY"), _list("RDB_DOC_TYPE")
-
-
 def _processed_path(state):
     """처리 기록 파일(11-01 — 원천 이름별 processed__<이름>.jsonl은 rdb:*·rdb:<이름>과 함께 지움)."""
     return state / "processed.jsonl"
@@ -266,49 +210,27 @@ def rdb_connect(extra_kwargs=True):
 
 
 def _rdb_rows(table):
-    """문서 위치 표(csv:<경로>)의 행을 공통 꼴로: doc_id·bucket·key·etag·size·filename·content_version·content_type·
-    company_id·doc_type·contract_id·updated_at(증분값 — 처리 여부 판단)·version·supersedes_doc_id·is_deleted.
-    (11-01 — 표 직접 질의(mssql·pg)·watermark·원천 목록 열 매핑은 지움 — csv만.)"""
+    """문서 위치 표(csv:<경로>)의 행을 공통 꼴로: doc_id·bucket·key·etag(늘 None — 표에 ETag 열 없음)·size·filename·content_version·
+    updated_at(증분값 — 처리 여부 판단)·created_at. (11-01 — 표 직접 질의(mssql·pg)·watermark·원천 목록 열 매핑은 지움 — csv만.)"""
     if not table.startswith("csv:"):
         raise ValueError(f"[source] rdb:{table} — 원천은 rdb:csv:<경로>만(11-01 사용자: rdb:*·rdb:<이름>·표 직접 질의 지움)")
     cols = _rdb_cols()
-    company, doc_type = _rdb_filters()
-    if company and not cols["company"]:
-        print("[source] RDB_COMPANY 지정됐지만 이 표에 company 열이 없음(RDB_COL_COMPANY 미설정) — 경고, 필터 없이 진행", flush=True)
-        company = None
-    if doc_type and not cols["doc_type"]:
-        print("[source] RDB_DOC_TYPE 지정됐지만 이 표에 doc_type 열이 없음(RDB_COL_DOC_TYPE 미설정) — 경고, 필터 없이 진행", flush=True)
-        doc_type = None
     inc_col = _rdb_increment_col(cols)
     with open(table[4:], encoding="utf-8-sig", newline="") as f:
-        rows = [
-            r
-            for r in csv.DictReader(f)
-            if (not company or r.get(cols["company"]) in company) and (not doc_type or r.get(cols["doc_type"]) in doc_type)
-        ]
+        rows = list(csv.DictReader(f))
     mapped = []
     for r in rows:
         bucket, key = _rdb_bucket_and_key(cols, r)
-        etag = str(r[cols["etag"]]).strip('"') if cols["etag"] and r.get(cols["etag"]) not in (None, "") else None
-        size = int(r[cols["size"]]) if r.get(cols["size"]) not in (None, "") else None
         mapped.append(
             {
                 "doc_id": str(r[cols["doc_id"]]),
                 "bucket": bucket,
                 "key": key,
-                "etag": etag,
-                "size": size,
+                "etag": None,
+                "size": int(r[cols["size"]]) if r.get(cols["size"]) not in (None, "") else None,
                 "filename": r.get(cols["filename"]) or None,
                 "content_version": r.get(cols["content_version"]) or None,
-                "content_type": r.get(cols["content_type"]) or None,
-                "company_id": r.get(cols["company"]) or None,
-                "doc_type": r.get(cols["doc_type"]) or None,
-                "contract_id": r.get(cols["contract"]) or None,
                 "updated_at": _inc_value(r, inc_col),
-                "version": r.get(cols["version"]) or None,
-                "supersedes_doc_id": r.get(cols["supersedes"]) or None,  # AD38 list_documents 출처
-                "is_deleted": str(r.get(cols["is_deleted"]) if r.get(cols["is_deleted"]) is not None else "0").strip().lower()
-                in ("1", "true", "t"),
                 "created_at": r.get("created_at") or None,  # 11-01(mc-16) 원천 등록 시각 — 표에 칸이 있을 때만
             }
         )
@@ -525,12 +447,8 @@ def _rdb_resolve_spec(spec, state, limit):
 
 def _rdb_plan(table, state, limit=0):
     """문서 위치 표(csv:)의 대상 행 → (names, fetch_one(name,dest)→Path, state). resolve()가 부르고 모든 이름을 즉시 받는다(AD44).
-    받기 전 대조는 ETag가 있으면 ETag(head_object), 없으면 크기(ContentLength)로 — 불일치면 거부·기록하고 받지
-    않는다(그 문서만 건너뛰고 나머지는 계속, 독립 검토 BLOCK 1 — 호출부 resolve()가 fetch_one 전체를
-    try로 안 감싸면 크래시한다).
-    O3 재설계(2026-10-14) — ETag 대조가 통과해도(이 원천 안에서는 정상) 받기 전에 다른 원천의 기존 지문과
-    완전히 같은 내용인지(비멀티파트 ETag+크기) 한 번 더 보고, 일치하면 `DuplicateContent`를 던져 받지 않는다
-    (처리 완료로도 기록 — 다시 안 받음). 멀티파트 ETag는 받은 뒤 sha256으로 같은 확인을 한다."""
+    받기 전 대조는 크기(ContentLength — 불일치는 참고 기록만). 받은 뒤 다른 원천의 기존 지문과 sha256이 같으면
+    `DuplicateContent`(그 문서만 건너뛰고 처리 완료로 기록 — 다시 안 받음, O3 재설계 2026-10-14)."""
     done = _load_done(state)
     rows = [r for r in _rdb_rows(table) if not _rdb_is_done(done, r["key"], r["etag"], r["updated_at"])]
     name_of = _rdb_names(rows)  # original_filename(또는 doc_id) — 충돌하면 doc_id 접두로 구분
@@ -547,40 +465,7 @@ def _rdb_plan(table, state, limit=0):
     def fetch_one(name, dest):
         o = by_name[name]
         source_id = f"s3://{o['bucket']}/{o['key']}"
-        if o["etag"]:
-            actual = cli.head_object(Bucket=o["bucket"], Key=o["key"])["ETag"].strip('"')
-            if actual != o["etag"]:
-                with book:
-                    with (state / "rejected.jsonl").open("a", encoding="utf-8") as f:
-                        f.write(
-                            json.dumps(
-                                {
-                                    "table": table,
-                                    "doc_id": o["doc_id"],
-                                    "bucket": o["bucket"],
-                                    "key": o["key"],
-                                    "etag_rdb": o["etag"],
-                                    "etag_store": actual,
-                                    "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                                },
-                                ensure_ascii=False,
-                            )
-                            + "\n"
-                        )
-                raise EtagMismatch(
-                    f"[source] ETag 불일치 — RDB({o['etag']}) ≠ Object Storage({actual}): {o['bucket']}/{o['key']} — 거부·기록"
-                )
-            # O3 재설계(2026-10-14) — 받기 전 완전 중복 사전 확인: 비멀티파트 ETag+크기가 다른 원천의 기존
-            # 지문과 일치하면 받지 않고 건너뜀(캐비앗 — 멀티파트 ETag는 _etag_duplicate가 그대로 None을 줘
-            # 아래 받은 뒤 sha256 확인으로 넘어간다).
-            dup = _etag_duplicate(state, source_id, actual, o["size"])
-            if dup:
-                with book:
-                    _record_duplicate(state, source_id, dup, etag=actual, size=o["size"], updated_at=o["updated_at"])
-                    with _processed_path(state).open("a", encoding="utf-8") as f:
-                        f.write(json.dumps({"key": o["key"], "etag": o.get("etag"), "ver": o.get("updated_at")}, ensure_ascii=False) + "\n")
-                raise DuplicateContent(f"[source] 받기 전 중복(ETag+크기) — {source_id} ≡ {dup.get('source_id')} — 받지 않음")
-        elif o["size"] is not None:
+        if o["size"] is not None:
             actual = cli.head_object(Bucket=o["bucket"], Key=o["key"]).get("ContentLength")
             if actual != o["size"]:
                 # 2026-10-15(운영) — RDB file_size가 Object Storage와 어긋나 있어 필수 비교에서 제외:
@@ -606,7 +491,7 @@ def _rdb_plan(table, state, limit=0):
                     f"[source] 크기 불일치(참고만 — 다운로드 진행) — RDB({o['size']}) ≠ Object Storage({actual}): {o['bucket']}/{o['key']}",
                     flush=True,
                 )
-        # etag·size 둘 다 없으면 받기 전 대조 생략(비교할 근거가 없음) — 그대로 받는다
+        # size가 없으면 받기 전 대조 생략(비교할 근거가 없음) — 그대로 받는다
         dest.mkdir(parents=True, exist_ok=True)
         f = _warm_take(o, dest, name)  # warm 프리페치(2026-10-22) — 받아 둔 다음 배치 원본이면 즉시 이동
         if f is not None:
@@ -614,8 +499,7 @@ def _rdb_plan(table, state, limit=0):
         else:
             f = _safe_join(dest, name)  # (기존 경로) 원격에서 내려받기
             cli.download_file(o["bucket"], o["key"], str(f))
-        # O3 재설계 — 받은 뒤 완전 중복 확인(멀티파트 ETag 등 사전 확인 못한 경우의 공용 경로): sha256이
-        # 다른 원천 기록과 같으면 중복 — 파싱하지 않고 받은 사본은 지운다
+        # O3 재설계 — 받은 뒤 완전 중복 확인: sha256이 다른 원천 기록과 같으면 중복 — 파싱하지 않고 받은 사본은 지운다
         dup = _sha_duplicate(state, source_id, f)
         if dup:
             with book:
@@ -634,14 +518,7 @@ def _rdb_plan(table, state, limit=0):
                 "etag": o["etag"],
                 "size": o["size"],
                 "doc_id": o["doc_id"],
-                "company_id": o["company_id"],
-                "doc_type": o["doc_type"],  # AD38 고객 하드 필터·list_documents 출처
-                "contract_id": o["contract_id"],
                 "updated_at": o["updated_at"],
-                "content_type": o["content_type"],
-                "version": o.get("version"),
-                "supersedes_doc_id": o.get("supersedes_doc_id"),
-                "is_deleted": o.get("is_deleted", False),
                 "original_filename": o.get("filename"),
                 "content_version_id": o.get("content_version"),  # AD44(c) FileStorageMap 고유 칸
                 "created_at": o.get("created_at"),  # 11-01(mc-16) 원천 등록 시각 → build_bundle → gold doc.created_at
@@ -684,7 +561,7 @@ def resolve(source, out, limit=0):
                     try:
                         futs[n].result()
                         ok.append(n)
-                    except (EtagMismatch, DuplicateContent) as e:  # ETag·크기 불일치·완전 중복 — 그 문서만 건너뛰고 계속
+                    except DuplicateContent as e:  # 완전 중복 — 그 문서만 건너뛰고 계속
                         print(f"[source] {e}", flush=True)
             print(f"[source] 다운로드 병렬 {min(nw, len(names))}워커 완료 · {len(ok)}/{len(names)}건", flush=True)
         else:
@@ -692,10 +569,7 @@ def resolve(source, out, limit=0):
                 try:
                     fetch_one(n, local)
                     ok.append(n)
-                except (
-                    EtagMismatch,
-                    DuplicateContent,
-                ) as e:  # ETag·크기 불일치 또는 완전 중복 — 그 문서만 건너뛰고 나머지는 계속(독립 검토 BLOCK 1)
+                except DuplicateContent as e:  # 완전 중복 — 그 문서만 건너뛰고 나머지는 계속(독립 검토 BLOCK 1)
                     print(f"[source] {e}", flush=True)
         if not Path(C.cfg().paths.source_manifest or "").exists():  # S7c — 설정 객체(위 put 뒤 다시 읽어 같은 값)
             raise RuntimeError("[source] rdb 모드인데 SOURCE_MANIFEST 파일이 없음 — 원본 위치가 조용히 file://로 떨어질 수 있어 멈춤")

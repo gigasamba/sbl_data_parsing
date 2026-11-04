@@ -23,24 +23,20 @@ PC_NEW = """required:
     base_url: http://127.0.0.1:9/v1
     model: test-embed
     api_key: dummy-key
-common:
-  models:
-    guard:
-      budget_usd: 1.5
-transform:
-  structure:
-    embed: api
 search:
   server:
     host: 127.0.0.1
     port: 8765
-dev:
-  mcp:
-    mcp_url: http://127.0.0.1:8765/mcp
 tuning:
   ops:
     runtime:
       cpu_max_load: 4
+dev:
+  models:
+    guard:
+      budget_usd: 1.5
+  mcp:
+    mcp_url: http://127.0.0.1:8765/mcp
 """
 PC_OLD = """common:
   run_env: local
@@ -108,8 +104,6 @@ def test_pc_file_new_layout_and_migrate():
             assert c.connections.pg.password.get_secret_value() == "dummy-pg" and c.models.embed.model == "test-embed", name
             assert c.models.guard.budget_usd == 1.5 and c.runtime.cpu_max_load == 4.0, name
             assert not hasattr(c.paths, "mcp_bundle"), name  # mc-19 — 지운 칸: 남아 있어도 경고만(시작은 함)
-            if name == "pipeline":
-                assert st.pipeline.transform.structure.embed == "api"
             if name == "mcp":
                 assert st.mcp.server.port == 8765 and st.mcp.dev.mcp_url == "http://127.0.0.1:8765/mcp"
         gone = Path(d) / "gone.yaml"  # 11-03 지운 PC 비용 칸 5개 — 남아 있어도 경고만(시작은 함)
@@ -122,6 +116,13 @@ def test_pc_file_new_layout_and_migrate():
         )
         g = load(next(iter(classes.values())), file=gone, environ={}).common.models.guard
         assert g.budget_usd == 1.5 and not any(hasattr(g, k) for k in ("no_paid_calls", "max_calls", "external_scope")), g
+        moved = Path(d) / "moved.yaml"  # 11-04(op-05) — PC 전용 칸의 옛 자리(common.models.guard)도 경고 뒤 읽음
+        moved.write_text("required:\n  env: {run_env: local}\ncommon:\n  models:\n    guard: {budget_usd: 1.5}\n", encoding="utf-8")
+        assert load(next(iter(classes.values())), file=moved, environ={}).common.models.guard.budget_usd == 1.5
+        moved.write_text(PC_NEW + "common:\n  models:\n    guard: {budget_usd: 2}\n", encoding="utf-8")
+        assert _raises(lambda: load(next(iter(classes.values())), file=moved, environ={}), "두 자리", "dev.models.guard.budget_usd")
+        moved.write_text("required:\n  env: {run_env: local}\ndev:\n  connections:\n    pg: {host: h}\n", encoding="utf-8")
+        assert _raises(lambda: read_settings(moved), "dev.connections.pg.host → required.pg.host")  # dev 절은 PC 전용 칸만
         old = Path(d) / "old.yaml"
         old.write_text(PC_OLD, encoding="utf-8")
         assert _raises(lambda: load(next(iter(classes.values())), file=old, environ={}), "common.config.migrate")
@@ -131,7 +132,11 @@ def test_pc_file_new_layout_and_migrate():
             doc, report = migrate.convert_yaml(old, classes)
             out = Path(d) / "migrated.yaml"
             out.write_text(migrate.dump_yaml(doc), encoding="utf-8")
-            assert report["칸"] == 17 and report["삭제됨"] == ["common.paths.mcp_bundle"] and not report["모름"], report  # mc-19 지운 칸
+            assert (
+                report["칸"] == 16
+                and report["삭제됨"] == ["common.paths.mcp_bundle", "pipeline.transform.structure.embed"]
+                and not report["모름"]
+            ), report  # mc-19·op-05 지운 칸
             assert read_settings(out) == read_settings(new)
 
 

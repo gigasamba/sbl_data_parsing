@@ -333,7 +333,7 @@ ID 모양 정규식(계약 번호·제품 코드 등). 읽는 곳: `common.core.
 
 gold·EDW와 별개인 로그 표다. 서버 적용 절차는 refactor.md C-79.
 
-판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/applog/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: 파일 자리 `ops.log.db_enabled`(모델 `common.log.db_enabled`, 기본 꺼짐). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — 판과 실제 DB 대조는 `dbtool check --target applog`.
+판: `common/store/db/migrations/versions/0001_applog_base.py`(브랜치 `applog`) · 파티션 관리: `common/store/db/migrations/applog_parts.py` · 모델: `common/store/db/models/log_tables.py` · 쓰기: `common/store/logsink.py`(큐 → 배치 INSERT, 실패하면 `output/logs/*.jsonl`, 앱이 DDL을 실행하지 않음). 켜는 설정: 파일 자리 `ops.log.db_enabled`(모델 `common.log.db_enabled`, 서버 이미지 기본 켬·PC 기본 꺼짐 — op-13). `tests/server/common/test_db_schema.py`는 이 절을 대조하지 않는다 — 판과 실제 DB 대조는 `dbtool check --target applog`.
 
 - **파티션:** `mcp_log`(`requested_at`)·`pipe_event`(`ts_start`)는 월 단위(UTC). 이름은 `<표>_YYYYMM`. `dbtool up`과 `dbtool maintain`이 현재 달부터 3개월 치를 만든다.
 - **보존:** `dbtool maintain --target applog`를 매일 실행한다. `ops.log.retention_days`(기본 90)가 지난 달의 파티션을 DROP하고 `pipe_run`은 DELETE한다. 달이 통째로 지나야 DROP되므로 파티션 표의 행은 약 90~120일 남는다.
@@ -343,7 +343,7 @@ gold·EDW와 별개인 로그 표다. 서버 적용 절차는 refactor.md C-79.
 
 ### applog.mcp_log
 
-MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. 기본 키 `(id, requested_at)`. 색인: `requested_at`(BRIN) · `(agent_id, requested_at)` · `(session_id, requested_at)` · `(knox_id, requested_at)` · `(tool_name, requested_at)` · `request_id`. 쓰는 곳: `mcp_server/services/call_log.py`(내부 행을 `_columns`가 이 칸 이름으로 바꿈). 읽는 코드는 없다(감사 조회용). 질의 기록 `qa_log.jsonl`은 그대로 따로 있다. 이 표는 이전 이름 `mcp_call`에 인증·권한 설계안(DBML: `agent`·`agent_api_key`·`source`·`agent_source_mapping`)의 칸을 합친 것이다. 그 표들은 아직 없어서 `agent_id`·`api_key_id`는 FK 없이 자리만 있다.
+MCP 요청 1건당 1행. 인증 실패와 `initialize`도 행으로 남는다. 기본 키 `(id, requested_at)`. 색인: `requested_at`(BRIN) · `(agent_id, requested_at)` · `(session_id, requested_at)` · `(knox_id, requested_at)` · `(tool_name, requested_at)` · `request_id`. 쓰는 곳: `mcp_server/services/call_log.py`(내부 행을 `_columns`가 이 칸 이름으로 바꿈). 읽는 코드는 없다(감사 조회용). 질의 기록은 이 표뿐이다(`args`에 질문·SQL — 파일 기록 없음, op-13). 이 표는 이전 이름 `mcp_call`에 인증·권한 설계안(DBML: `agent`·`agent_api_key`·`source`·`agent_source_mapping`)의 칸을 합친 것이다. 그 표들은 아직 없어서 `agent_id`·`api_key_id`는 FK 없이 자리만 있다.
 
 | 칸 | 타입 | 뜻 | 쓰는 곳 | 읽는 곳 | 결정 |
 |---|---|---|---|---|---|

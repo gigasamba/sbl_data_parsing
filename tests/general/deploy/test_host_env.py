@@ -4,8 +4,10 @@
 import contextlib
 import importlib.util
 import io
+import os
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
@@ -53,7 +55,9 @@ def test_host_env_matches_export():
         f = Path(d) / "settings.yaml"
         f.write_text(yaml.safe_dump(L.to_file(model), allow_unicode=True), encoding="utf-8")
         out = io.StringIO()
-        with contextlib.redirect_stdout(out):
+        # 부른 셸의 RUN_ENV 신호(PC export RUN_ENV=local)는 YAML을 이김 — host_env.py처럼 파일 값만 보게 뺀다
+        with contextlib.redirect_stdout(out), mock.patch.dict(os.environ):  # env 남김 — 시험
+            os.environ.pop("RUN_ENV", None)  # env 남김 — 시험
             rc = E.main(["--format", "sh", "--file", str(f), *[a for s in SECTIONS for a in ("--section", s)]])
         assert rc == 0
         want = sorted(out.getvalue().splitlines())

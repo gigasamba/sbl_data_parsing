@@ -8,13 +8,10 @@ SETTINGS(common + pipeline 절)는 확인 명령(python -m pipeline.config)·시
 """
 
 import sys
-from pathlib import Path
 
 from pydantic import Field, SecretStr, field_validator  # 칸 형식
 
 from common.config.settings import (
-    IMAGE_PATHS,
-    IN_IMAGE,
     AppSettings,
     Cache,
     CommonSettings,
@@ -29,39 +26,28 @@ from common.config.settings import (
 
 
 class PipelineConnectionsRdbColumns(Section):
-    bucket: str | None = F(None, "RDB_COL_BUCKET", "RDB 문서 위치 표에서 버킷 열의 이름(비우면 열 없음)")
-    company: str | None = F(None, "RDB_COL_COMPANY", "RDB 문서 위치 표에서 회사 ID(필터용) 열의 이름(비우면 열 없음)")
-    content_type: str | None = F(None, "RDB_COL_CONTENT_TYPE", "RDB 문서 위치 표에서 콘텐츠 타입 열의 이름(비우면 열 없음)")
     content_version: str | None = F(
         "content_version_id", "RDB_COL_CONTENT_VERSION", "RDB 문서 위치 표에서 문서 판(content version) ID 열의 이름", blank="keep"
     )
-    contract: str | None = F(None, "RDB_COL_CONTRACT", "RDB 문서 위치 표에서 계약 ID 열의 이름(비우면 열 없음)")
     doc_id: str | None = F("id", "RDB_COL_DOC_ID", "RDB 문서 위치 표에서 문서 ID 열의 이름", blank="keep")
-    doc_type: str | None = F(None, "RDB_COL_DOC_TYPE", "RDB 문서 위치 표에서 문서 유형(필터용) 열의 이름(비우면 열 없음)")
-    etag: str | None = F(None, "RDB_COL_ETAG", "RDB 문서 위치 표에서 ETag 열의 이름(비우면 열 없음)")
     filename: str | None = F("original_filename", "RDB_COL_FILENAME", "RDB 문서 위치 표에서 원본 파일 이름 열의 이름", blank="keep")
-    is_deleted: str | None = F(None, "RDB_COL_IS_DELETED", "RDB 문서 위치 표에서 삭제 표시 열의 이름(비우면 열 없음)")
     key: str | None = F("s3_key", "RDB_COL_KEY", "RDB 문서 위치 표에서 Object Storage 키(s3_key) 열의 이름", blank="keep")
     size: str | None = F("file_size", "RDB_COL_SIZE", "RDB 문서 위치 표에서 파일 크기 열의 이름", blank="keep")
-    supersedes: str | None = F(None, "RDB_COL_SUPERSEDES", "RDB 문서 위치 표에서 대체 대상 문서 ID 열의 이름(비우면 열 없음)")
-    updated: str | None = F(None, "RDB_COL_UPDATED", "RDB 문서 위치 표에서 갱신 시각(증분 기준) 열의 이름(비우면 열 없음)")
-    version: str | None = F(None, "RDB_COL_VERSION", "RDB 문서 위치 표에서 문서 버전 열의 이름(비우면 열 없음)")
 
 
 class PipelineConnectionsRdb(Section):
     bucket: str | None = F(None, "RDB_BUCKET", "RDB 표에 버킷 정보가 없을 때 쓸 Object Storage 버킷 이름(레거시 대체값)")
-    company: CsvList | None = F([], "RDB_COMPANY", "RDB에서 가져올 회사 ID 필터(쉼표 목록, 비우면 필터 없음)")
-    doc_type: CsvList | None = F([], "RDB_DOC_TYPE", "RDB에서 가져올 문서 유형 필터(쉼표 목록, 비우면 필터 없음)")
     engine: str | None = F(
         "mssql", "RDB_ENGINE", "RDB 종류(mssql | pg) — mssql 접속은 common.connections.rdb(읽기 계정 · PC 시험은 그 sqlite)", blank="keep"
     )
-    increment_col: str | None = F(None, "RDB_INCREMENT_COL", "증분(since) 판정에 쓸 열 이름(updated 열이 없을 때 대체)")
+    increment_col: str | None = F(None, "RDB_INCREMENT_COL", "증분(since) 판정에 쓸 열 이름 — 비우면 문서 ID 열(columns.doc_id)")
     columns: PipelineConnectionsRdbColumns = Field(default_factory=PipelineConnectionsRdbColumns)
 
 
 class PipelineConnectionsSecureDoc(Section):
-    password: SecretStr | None = F(None, "SECURE_DOC_PASSWORD", "암호 걸린 문서를 여는 암호 1개(secure_docs decrypt에서 시도)")
-    passwords_file: str | None = F(None, "SECURE_DOC_PASSWORDS_FILE", "암호 걸린 문서용 암호 목록 파일 경로(한 줄에 암호 하나)")
+    passwords_file: str | None = F(
+        None, "SECURE_DOC_PASSWORDS_FILE", "암호 걸린 문서용 암호 목록 파일 경로(한 줄에 암호 하나) — 비우면 암호 문서는 못 열고 건너뜀"
+    )
 
 
 class PipelineExtractAttach(Section):
@@ -138,11 +124,9 @@ class PipelineLoadPublish(Section):
     bucket_skip_overlap_check: bool | None = F(
         False, "PM_BUCKET_SKIP_OVERLAP_CHECK", "PM_BUCKET이 원천 원본 버킷과 같은지 검사 생략 — 1이면 생략", on=("1",)
     )
-    parse_date: str | None = F(None, "PM_PARSE_DATE", "업로드 키의 날짜 폴더(YYYY-MM-DD) — 비면 오늘")
-    path_map: CsvList | None = F([], "PM_PATH_MAP", "원본 키 앞부분 치환표 '이전=새' 쉼표 목록(결과 키 경로 구성용)")
     prefix: str | None = F(None, "PM_PREFIX", "버킷 안 업로드 경로 접두")
     upload_statuses: CsvList | None = F(
-        ["ok", "partial"], "PM_UPLOAD_STATUSES", "원본을 업로드할 파싱 상태 목록(콤마 — 비면 parsing_meta.DEFAULT_UPLOAD_STATUSES)"
+        ["ok", "partial"], "PM_UPLOAD_STATUSES", "원본을 업로드할 파싱 상태 목록(쉼표 — ok·partial·failed 등 parsing_meta.STATUSES 중에서)"
     )
 
 
@@ -198,11 +182,6 @@ class PipelineTransformStructure(Section):
     chunk_size: int | None = F(None, "CHUNK_SIZE", "청크 목표 길이(글자) — 청커별 기본이 다름")
     chunk_table: str | None = F(None, "CHUNK_TABLE", "'rows'이면 큰 표를 행 묶음 단위로 쪼갬(그 외 값·미설정은 표를 통째로 둠)")
     chunk_table_rows: int | None = F(25, "CHUNK_TABLE_ROWS", "표를 쪼갤 때 청크당 행 수(CHUNK_TABLE=rows일 때만)")
-    embed: str | None = F(
-        image_default("PIPE_EMBED"),
-        "PIPE_EMBED",
-        "구조화·적재에 쓸 임베딩 방식(api 등, none이면 임베딩 없음 — 이미지 안 기본 api: 옛 Dockerfile ENV, B-2)",
-    )
     embed_batch: int | None = F(32, "EMBED_BATCH", "임베딩 API 한 번에 보내는 청크 수")
     embed_cache: str | None = F(None, "EMBED_CACHE", "임베딩 캐시 sqlite 경로(0 또는 빈 값이면 캐시 끔)")
     embed_concurrency: int | None = F(4, "EMBED_CONCURRENCY", "임베딩 호출 병렬 수(EMBED_BATCH 묶음을 동시에 전송)")
@@ -300,11 +279,6 @@ class PipelineHostRunDocs(Section):
 
 
 class PipelineHost(Section):
-    gold_dir: str | None = F(
-        None,
-        "GOLD_DIR",
-        "호스트의 사람 정답(gold) 폴더(서버 경로) — 컨테이너 /data/gold로 읽기 전용 마운트하는 원본(T-21 — 코드가 읽는 칸은 pipeline.paths.gold_dir · 붙이는 방식은 결정 대기 — doc.md)",
-    )
     image: str | None = F(None, "DATA_PIPELINE_IMAGE", "data-pipeline 이미지 이름:태그(compose 필수 변수)")
     parse_cpus: float | None = F(
         5.0,
@@ -349,11 +323,6 @@ class PipelineNight(Section):
 
 
 class PipelinePaths(Section):
-    gold_dir: str | None = F(
-        None,
-        "GOLD_DIR",
-        "사람 정답(gold) 폴더 — score_gold·점검 도구의 기본 입력(코드가 읽는 경로 — 컨테이너 안은 /data/gold, 원본은 pipeline.host.gold_dir — T-21)",
-    )
     images_root: str | None = F(None, "PARSE_IMAGES_ROOT", "그림 PNG·index.jsonl 저장 루트")
     out_root: str | None = F(None, "PIPE_OUT_ROOT", "파이프라인 출력 루트(output)")
     parse_tmp: str | None = F(None, "PARSE_TMP", "임시 폴더(첨부 임시 파일은 형제 attach/) — output 아래 2단 이상 하위만 허용")
@@ -418,17 +387,6 @@ def cfg():
 
 
 by_env, given, dropped, checked = _VIEW.by_env, _VIEW.given, _VIEW.dropped, _VIEW.checked  # common.config.settings의 같은 이름 설명
-
-GOLD_MOUNT = Path(IMAGE_PATHS["gold_mount"])  # 사람 정답 폴더가 붙는 컨테이너 자리(이미지 약속 — 표는 settings.IMAGE_PATHS 한 곳, R-12)
-
-
-def gold_dir():
-    """사람 정답 폴더 — pipeline.paths.gold_dir, 비었고 이미지 안이며 /data/gold가 붙어 있으면 그것(S7e2 — 옛 run_tool.sh `-e GOLD_DIR=/data/gold`
-    자리, 사용자 10-28)."""
-    v = cfg().paths.gold_dir
-    if not v and IN_IMAGE and GOLD_MOUNT.is_dir():
-        return str(GOLD_MOUNT)
-    return v
 
 
 def stack():

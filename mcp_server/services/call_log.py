@@ -2,7 +2,7 @@
 
 내부 행(tool, user_id, err, ts)은 sink로 보내기 직전 `_columns`가 applog.mcp_log 칸 이름으로 바꾼다.
 
-모든 공개 진입점은 fail-soft다. 도구 반환/예외와 qa_log는 바꾸지 않는다.
+모든 공개 진입점은 fail-soft다. 도구 반환/예외는 바꾸지 않는다.
 result_sha256/bytes는 마스킹 전 전체 JSON 기준, 저장 본문은 마스킹 후 UTF-8 앞부분이다.
 """
 
@@ -24,7 +24,6 @@ from uuid import UUID, uuid4
 from common.core import exitclean, jsonlog, span
 from common.store import logsink
 from mcp_server import config as mc
-from mcp_server.services.search.server_state import CALLER
 
 _REQUEST: contextvars.ContextVar[dict | None] = contextvars.ContextVar("mcp_audit", default=None)
 _LOG = None
@@ -93,7 +92,7 @@ _SIZES = {"session_id": 128, "knox_id": 64, "tool_name": 64, "app_version": 32} 
 def _columns(row):
     """내부 행 → mcp_log 칸. rpc_method: initialize·tools/call, 인증 거부(본문 수신 전)는 NULL."""
     row = dict(row)
-    row.pop("agent", None)  # X-MCP-Client는 CALLER·콘솔 로그에만 쓴다. DB는 agent_id로 구분(인증 체계가 생긴 뒤)
+    row.pop("agent", None)  # X-MCP-Client는 콘솔 로그에만 쓴다. DB는 agent_id로 구분(인증 체계가 생긴 뒤)
     tool, err = row.pop("tool", None), row.pop("err", None)
     method = "initialize" if tool == "initialize" else None if tool == "http" else "tools/call"
     out = {"rpc_method": method, "tool_name": tool if method == "tools/call" else None}
@@ -250,12 +249,10 @@ def request_context(headers, client_ip=None):
         "client_ip": _client_ip(client_ip),
     }
     token = _REQUEST.set(data)
-    caller_token = CALLER.set("mcp:" + data["agent"])
     try:
         with jsonlog.context(request_id=request_id):
             yield data
     finally:
-        CALLER.reset(caller_token)
         _REQUEST.reset(token)
 
 
@@ -290,7 +287,7 @@ class Call:
         if arguments is None:
             arguments = dict(inspect.signature(fn).bind(*args, **kwargs).arguments)
         request_id = context.get("request_id") or jsonlog.get_context().get("request_id") or str(uuid4())
-        self.row = _metadata({"request_id": request_id, "agent": CALLER.get().removeprefix("mcp:"), **context, "tool": tool})
+        self.row = _metadata({"request_id": request_id, "agent": "stdio", **context, "tool": tool})  # HTTP 요청이면 context의 agent가 덮음
         conf = mc.cfg().audit
         self.output_limit = conf.max_output_bytes
         self.input_limit = conf.max_input_bytes

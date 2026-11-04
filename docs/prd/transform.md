@@ -171,7 +171,7 @@
 3. 문서 요약 = 앞부분 발췌: 쪽 번호 줄을 뺀 줄 중 `[가-힣A-Za-z0-9]{2,}`가 든 줄을 앞에서부터 공백으로 잇고, 합이 300자 이상이 되면 멈춰 300자로 자른다(`build_bundle.lead_summary`).
 4. 본문 고객(`clients_doc`, `infer_clients`): 알려진 고객(명부 + 별칭 + 공개 이름 seed `client_roster_seed.json`) 이름·별칭이 본문에 2번 이상 나오거나 제목·첫 400자에 나오면 고객으로 본다. 순서 = 제목·머리 등장 먼저 → 등장 횟수 → 이름순. 비면 다른 문서에서 그 고객과 함께 나온 제품 코드 접두로 채운다. 명부·별칭은 PG 마스터에서 읽는다([load.md#pl-38](load.md#pl-38)).
 5. 문서 날짜 `content_date` = 본문 앞 2,000자, 없으면 파일 이름에서 찾은 날짜(`common/core/docmeta.py` — 꼴은 [db_schema.md](../architecture/db_schema.md) gold.doc).
-6. 임베딩은 내부망 API(`PIPE_EMBED=api` — 이미지 기본, `required.embed`의 주소·모델)만 쓴다. `none`은 시험용(적재는 거부 — [load.md#pl-16](load.md#pl-16)). 한 번에 `EMBED_BATCH`(32)개, 입력은 `EMBED_MAX_CHARS`(8,000자)에서 자른다. 같은 청크는 캐시(`EMBED_CACHE` sqlite)에서 다시 쓴다.
+6. 임베딩은 내부망 API(`required.embed`의 주소·모델)만 쓴다. `build_bundle --embed none`은 시험용(적재는 거부 — [load.md#pl-16](load.md#pl-16)). 한 번에 `EMBED_BATCH`(32)개, 입력은 `EMBED_MAX_CHARS`(8,000자)에서 자른다. 같은 청크는 캐시(`EMBED_CACHE` sqlite)에서 다시 쓴다.
 7. 묶음 `meta.json`에 구성(`stack_conf`)·임베딩 모델·차원·읽은 마스터 해시(`master_hash`)를 남긴다.
 
 ### QA

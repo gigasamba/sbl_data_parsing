@@ -6,7 +6,7 @@
 #     run_docs 인자: --start-offset 0 --skip-done(EDW ParsingMeta에 끝난 문서는 건너뜀) --max-docs NIGHTLY_MAX_DOCS --deadline NIGHTLY_DEADLINE
 #     (사용자 11-02 — 시작 시각·문서 수 상한·마감 시각 셋이 모두 있어야 돈다, 하나라도 비면 조용히 끝)
 #   구조화·적재는 run_docs가 문서마다 부른다.
-#   설정(S7e1 — 사용자 10-27 Q3·Q5): settings.yaml(SETTINGS_FILE, 기본 $SERVER_ENV_DIR/settings.yaml — SERVER_ENV_DIR 기본 배치 /srv/rag/env)의
+#   설정: settings.yaml(SETTINGS_FILE, 기본 <루트>/settings.yaml — 루트 = 코드 폴더의 부모, op-13)의
 #     호스트 칸(이미지·RAG_OUT·DOC_SRC·자원·NIGHTLY_*·PARSE_DEADLINE 등)을 settings_env.sh load_settings가 셸 env로 — 이미 셸에 있는 이름은 그대로.
 #     settings.yaml이 없으면 종료 코드 2.
 #   parse·publish는 상주 data-pipeline 컨테이너 안에서 돈다(docker exec — 사용자 11-02, 1회 job 컨테이너 없음 · 11-03 상주
@@ -15,7 +15,7 @@
 #   겹침 잠금은 run_docs.py 안(flock batch_progress/run_docs.lock) — 사람이 trigger 없이 run_docs를 돌려도 같은 잠금을 씀
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트(S6b)
-# 서버 설정은 코드 폴더 밖 $SERVER_ENV_DIR/settings.yaml(전체 덮어쓰기에 안 지워짐, env-guide.md) — compose 치환 값은 셸 env로(--env-file 없음)
+# 서버 설정은 코드 폴더 밖 <루트>/settings.yaml(env-guide.md) — compose 치환 값은 셸 env로(--env-file 없음)
 . deploy/host/scripts/settings_env.sh && load_settings || exit $?   # S7e1 — 컨테이너는 같은 파일을 붙여 읽음(compose x-settings)
 mod=${1:?parse|publish|scheduled}; shift || true
 # scheduled(pl-32, 사용자 10-30 · 11-02) = systemd 타이머가 5분마다 부름 — settings.yaml ops.nightly.time·max_docs·deadline

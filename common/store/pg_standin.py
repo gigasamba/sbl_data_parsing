@@ -5,8 +5,8 @@ Docker·새 패키지 없이 sqlite3(표준 라이브러리)만으로 load/pgsto
 deploy·load를 따로 띄우는 subprocess들)가 같은 파일을 보게.
 
 ponytail: pgvector 전용(HNSW·이진 양자화·<~>)·BM25(unnest CTE)·그래프 중간 노드는 흉내 안 낸다(여기까지 하면 PG를
-새로 만드는 것) — vector(코사인, 전체 스캔으로 파이썬에서 계산)·순수 SQL(ANY→IN 번역)만 지원. 서버는 PG_PASSWORD
-또는 PG_CONN_FILE을 pipeline.env에 채우면 코드 변경 없이 이 파일을 거치지 않고 진짜 PG로 전환된다(common/pg.py
+새로 만드는 것) — vector(코사인, 전체 스캔으로 파이썬에서 계산)·순수 SQL(ANY→IN 번역)만 지원. 서버는 settings.yaml
+required.pg를 채우면 코드 변경 없이 이 파일을 거치지 않고 진짜 PG로 전환된다(common/pg.py
 has_conn() 단일 분기). bm25·그래프·집계가 필요한 검증은 실 PG에서(이 스탠드인의 한계 — 업그레이드 경로).
 """
 

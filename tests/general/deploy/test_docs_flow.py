@@ -51,7 +51,7 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
     def configure(_settings):  # 설정 파일 대신 — 작업 폴더만 임시 폴더로
         M.TEST, M.PROG = work, work / "batch_progress"
         M.DOCSPACE = work / "out"
-        M.DOCFLOW, M.WARM = M.DOCSPACE / "docflow", M.DOCSPACE / "_warm"
+        M.DOCFLOW, M.WARM = M.DOCSPACE / "_docflow", M.DOCSPACE / "_warm"
         M.MCP_JOBS_DIR = work / "jobs"
         if setup:
             setup(M)

@@ -8,7 +8,7 @@
   parse           파싱 모듈 1회(run_docs가 문서마다 부름) — 끝 표시 _rep/_DONE.json
   (night·run-stack·structure·load는 11-01에 지움 — 서버 입구는 run_docs 하나, 구조화·적재는 run_docs가 모듈을 직접 부름)
   (ask — 검색 명령은 S5(10-26, T-15)에 python -m mcp_server.cli.ask로 옮김: 파이프라인 CLI가 검색 코드를 import하지 않게)
-산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서) · output/stack_test.md · output/RUNLOG.md(명령 요약)
+산출 위치: output/parse(파싱) · output/parse/_rep(대표) · output/edw/bundle(구조화) · output/report(보고서) · output/stack_test.md
 """
 
 import common  # noqa: F401 — 설정 파일 검사(settings.pin_env)를 첫 줄에서
@@ -232,12 +232,10 @@ def parse_module(a):
         sel.write_text("\n".join(names) + "\n", encoding="utf-8")
         # fp-perf B7 — 문서 1건(run_docs 문서별 흐름)은 자식 프로세스 없이 같은 함수로(결과 파일 같음)
         if sum(1 for f in Path(local).iterdir() if f.is_file() and f.name != ".gitkeep") <= 1:
-            from common.core.runlog import session
             from pipeline.extract import dedup
 
             try:
-                with session("dedup"):  # 자식이 남기던 실행 기록 그대로
-                    dedup.run_folder(local, OUT / "dedup")
+                dedup.run_folder(local, OUT / "dedup")
                 rc = 0
             except Exception as e:  # 자식 실패와 같게 종료 코드로(아래 SystemExit)
                 print(f"[dedup] 실패: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
@@ -389,7 +387,7 @@ def case_env(mod):
             **dict.fromkeys(
                 ("LLM_ALLOW_EXTERNAL", "VLM_ALLOW_EXTERNAL", "EMBED_ALLOW_EXTERNAL"), "0"
             ),  # 외부 전송 늘 끔(옛 NO_PAID_CALLS 대신 — 11-03)
-            # 하루 장부(11-03)를 시험마다 따로 — 개발자의 output/llm_spend 장부에 섞이지 않게
+            # 하루 장부(11-03)를 시험마다 따로 — 개발자의 output/_llm_spend 장부에 섞이지 않게
             "LLM_SPEND_FILE": str(Path(tempfile.mkdtemp(prefix="selftest_spend_")) / "spend.txt"),
         }
         base = child_env({"PYTHONUTF8": "1"})
@@ -557,8 +555,6 @@ if __name__ == "__main__":
 
     setarg.apply()  # --set 이름=값(S9 Step A — 한 번 실행 덮기, 서버 포함 · 호스트 run_docs.py 문서별 파싱이 결과 폴더 등을 넘김)
     utf8_stdout()
-    from common.core.runlog import session
-
     subcommand = next((x for x in sys.argv[1:] if not x.startswith("-")), "")
     trace: contextlib.AbstractContextManager = contextlib.nullcontext()
     if (
@@ -567,8 +563,5 @@ if __name__ == "__main__":
         from pipeline.shared import runtrace
 
         trace = runtrace.run(subcommand, sys.argv[1:])
-    with (
-        session("pipeline"),
-        trace,
-    ):  # op-01 — run_id 생성·pipe_run, 하위 프로세스가 이어받음
+    with trace:  # op-01 — run_id 생성·pipe_run, 하위 프로세스가 이어받음
         main()

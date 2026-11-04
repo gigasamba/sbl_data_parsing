@@ -1,7 +1,7 @@
 """검색 MCP 설정 — settings.yaml의 common + mcp 절(S7a 모델, refactor_plan 5-2 · D-015). 칸 표는 refactor_plan 부록 D.
 mcp_server 코드가 읽는 객체는 설정 파일 기반 캐시 MCP다(S7e2 — 전환 다리 없앰: env의 옛 이름은 읽지 않음, 신호 SETTINGS_FILE·RUN_ENV만):
   `from mcp_server import config as mc` → `mc.cfg().search.methods`(mcp 절) · `mc.given("MCP_METHODS")`(준 값만) · `mc.checked(X)` ·
-  시험 `with mc.senv(SEARCH_MIN_SCORE="0.5", MCP_METHODS=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
+  시험 `with mc.senv(MCP_TOOL_TIMEOUT_SEC="5", MCP_METHODS=None):`(칸 이름으로 COMMON·MCP에 나눠 덮음 — os.environ 안 건드림, 인계 파일이
   env로 읽는 칸만 env에 씀). common 칸은 `common.config.settings.cfg()`로(COMMON).
 요청마다 읽던 값(MCP_TOOL_TIMEOUT_SEC·SEARCH_* 등)은 쓰는 자리에서 요청마다 cfg()로 읽고, 시작 때 한 번 읽던 상수는 CFG(아래)에
 모은다(S5 — 이름·기본값은 옛 mcp_server.py 모듈 상수 그대로, 읽는 시점도 같음 — 이 모듈 import 때).
@@ -32,7 +32,6 @@ from common.config.settings import (  # noqa: F401 — token_text: 토큰 규칙
 
 class McpSearchPg(Section):
     filter_exact_max: int | None = F(20000, "PG_FILTER_EXACT_MAX", "고객 필터 허용 집합이 이 크기 이하면 벡터 정확 검색으로 전환(청크 수)")
-    vector_search: str | None = F(None, "PG_VECTOR_SEARCH", "벡터 검색 방식 — exact면 색인 없이 정확 검색, 비우면 근사(HNSW)")
 
 
 class McpSearchWeights(Section):
@@ -48,7 +47,15 @@ class McpDev(Section):
 
 
 class McpEdwMeta(Section):
-    dir: str | None = F(None, "EDW_META_DIR", "edw_meta 데이터셋(catalog.json·columns.jsonl) 폴더")
+    dir: str | None = F(
+        None,
+        "EDW_META_DIR",
+        "EDW 표 설명 자료 폴더(컨테이너 안 경로 — catalog.json·columns.jsonl, 개인정보 없는 자료만. 서버는 <루트>/output/edw_meta/에 복사하고 "
+        "/app/output/edw_meta로 적음 — 결과 폴더가 검색 MCP에 읽기 전용으로 붙음) — catalog.json(JSON 하나: tables[] 표마다 schema·table·"
+        "qualified_name·table_desc_ko·row_count·data_period·column_count 등 + meta{as_of·schemas}) · columns.jsonl(한 줄에 열 하나: schema·table·"
+        "column_name·data_type·nullable·description_ko·primary_key·foreign_key·fk_reference 등). 두 파일이 없으면 edw_meta 도구가 not_configured로 "
+        "답해 에이전트가 EDW 표·열 설명을 못 찾음(query_edw는 그대로 동작)",
+    )
     max_bytes: int | None = F(200000, "EDW_META_MAX_BYTES", "edw_meta 응답 크기 상한(바이트) — 넘으면 목록 꼬리를 자름")
 
 
@@ -56,15 +63,6 @@ class McpEdwQuery(Section):
     enabled: bool | None = F(True, "EDW_QUERY", "query_edw 도구 스위치 — 0이면 끔", off=("0",))
     max_bytes: int | None = F(2000000, "EDW_QUERY_MAX_BYTES", "query_edw 응답 크기 상한(바이트)")
     max_rows: int | None = F(1000, "EDW_QUERY_MAX_ROWS", "query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽)")
-    tables: CsvList | None = F(
-        None,
-        "EDW_QUERY_TABLES",
-        "query_edw 허용 표 목록(쉼표) — TABLES_STRICT=1일 때만 적용, 안 주면 코드가 정함(sqlite 기본 표 · mssql 없음), 빈 값은 전부 거부",
-        blank="keep",
-    )
-    tables_strict: bool | None = F(
-        False, "EDW_QUERY_TABLES_STRICT", "1이면 허용 표 목록(EDW_QUERY_TABLES) 검사를 켬 — 기본은 전 스키마 허용", on=("1",)
-    )
     timeout_sec: float | None = F(20.0, "EDW_QUERY_TIMEOUT_SEC", "query_edw 질의 시간 상한(초)")
 
 
@@ -84,14 +82,8 @@ class McpParseProxy(Section):
     url: str | None = F("http://127.0.0.1:8766", "PARSE_SERVICE_URL", "parse_document가 부르는 작업 서비스 주소")
 
 
-class McpQueryLog(Section):
-    dir: str | None = F(None, "MCP_QUERY_LOG_DIR", "질의 기록 폴더")
-    enabled: bool | None = F(True, "MCP_QUERY_LOG", "질의 기록(qa_log.jsonl) 스위치 — 0이면 기록 안 함", off=("0",))
-
-
 class McpSearch(Section):
     methods: CsvList | None = F(["vector", "bm25", "id"], "MCP_METHODS", "search 기본 검색 방법(쉼표 목록: vector·bm25·id 중에서)")
-    min_score: float | None = F(None, "SEARCH_MIN_SCORE", "근거 점수 하한 — 미달 근거에 low_score 표시·전부 미달이면 weak")
     pg: McpSearchPg = Field(default_factory=McpSearchPg)
     weights: McpSearchWeights = Field(default_factory=McpSearchWeights)
 
@@ -104,7 +96,6 @@ class McpServer(Section):
     )
     allowed_hosts: CsvList | None = F([], "MCP_ALLOWED_HOSTS", "비루프백 바인드 때 추가로 허용할 Host(쉼표 목록, 리버스 프록시 이름 등)")
     host: str | None = F("127.0.0.1", "MCP_HOST", "MCP 서버 바인드 주소 — auto면 컨테이너 자기 사설 IP")
-    instructions: str | None = F(None, "MCP_INSTRUCTIONS", "MCP 서버 instructions 글자(도구 안내문) 교체")
     manifest: str | None = F(None, "MCP_MANIFEST", "수집 manifest.jsonl 경로(문서 유형·버전·삭제 여부 출처)")
     max_concurrency: int | None = F(8, "MCP_MAX_CONCURRENCY", "도구 동시 실행 상한(개)")
     max_queue: int | None = F(None, "MCP_MAX_QUEUE", "도구 대기열 상한(개) — 넘으면 즉시 busy 응답, 0이면 무제한")
@@ -129,7 +120,6 @@ class McpSettings(Section):
     host: McpHost = Field(default_factory=McpHost)
     output: McpOutput = Field(default_factory=McpOutput)
     parse_proxy: McpParseProxy = Field(default_factory=McpParseProxy)
-    query_log: McpQueryLog = Field(default_factory=McpQueryLog)
     search: McpSearch = Field(default_factory=McpSearch)
     server: McpServer = Field(default_factory=McpServer)
 

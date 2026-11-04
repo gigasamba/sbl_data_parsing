@@ -9,7 +9,7 @@ import sys
 
 from common.config.settings import cfg, reveal
 
-_tls_warned = False  # L8b — 프로세스당 한 번만 경고(common/qa_log.py의 _warned와 같은 패턴)
+_tls_warned = False  # L8b — 프로세스당 한 번만 경고
 
 
 def resolve_tls_verify():

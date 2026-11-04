@@ -455,7 +455,4 @@ def main():
 
 if __name__ == "__main__":
     utf8_stdout()
-    from common.core.runlog import session
-
-    with session("prepare"):
-        main()
+    main()

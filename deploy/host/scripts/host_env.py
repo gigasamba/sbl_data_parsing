@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]  # 배치 루트(PC 저장소 · 서버 live/)
+ROOT = HERE.parents[2]  # 코드 폴더(PC 저장소 · 서버 sbl_data_parsing-<판>)
 
 
 def _layout():

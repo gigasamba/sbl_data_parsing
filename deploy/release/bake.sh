@@ -2,8 +2,8 @@
 # 개발 → 운영(op-07, 사용자 10-30) — 개발 서버(폐쇄망)에서 실행. 개발 서버에서 쓰던 실행 이미지(*-runtime) 그 판 + 시험한 코드 폴더를
 # 그대로 묶어 운영용 이미지(코드가 든 이미지 — 코드 폴더 마운트 없이 뜸)를 만들고, 반입 판정 뒤 저장·분할한다. 패키지 설치·네트워크 없음.
 #   bash deploy/release/bake.sh <실행 이미지 태그 판> [대상… 기본 pipeline mcp]
-#     예: bash /srv/rag/code/live/deploy/release/bake.sh 0.1.0   → data-pipeline-runtime:0.1.0 + 코드 폴더 → data-pipeline:<VERSION>
-#   CODE_DIR  코드 폴더(기본: 이 스크립트가 든 코드 폴더 — /srv/rag/code/live/deploy/release/bake.sh면 /srv/rag/code/live)
+#     예: bash <루트>/sbl_data_parsing-<판>/deploy/release/bake.sh 0.1.0   → data-pipeline-runtime:0.1.0 + 코드 폴더 → data-pipeline:<VERSION>
+#   CODE_DIR  코드 폴더(기본: 이 스크립트가 든 코드 폴더 — <루트>/sbl_data_parsing-<판>, op-13)
 #   TAG       새 이미지 태그 판 = 코드 폴더 VERSION(D-036 — 다르면 멈춤, PC 시험 태그만 BAKE_TEST=1)
 #   OUT       저장 폴더(기본 /var/tmp/bake — 코드 폴더 밖) · DOCKER(기본 podman, 없으면 docker)
 #   한 대상만 실패했으면 그 대상만 다시: bash bake.sh <판> mcp(이미 구운 대상은 "이미 있는 태그"로 멈춤)

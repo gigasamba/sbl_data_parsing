@@ -1,7 +1,5 @@
 """common.store.pg 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.store.pg`."""
 
-from pathlib import Path
-
 from common.config.settings import COMMON
 from common.store.pg import PG, PGPool, conf
 
@@ -110,19 +108,11 @@ def _selftest_connect_timeout():
 
 
 def _selftest_conf():
-    """conf() — 빈 PG_PASSWORD=(YAML password: ""도 다리가 빈 글자로 냄)는 접속 파일 비밀번호를 덮지 않음(VS7b BLOCK-1) ·
-    형식 틀린 PG_PORT는 옛처럼 실패(R-7). 가짜 값만, 실제 접속 없음."""
-    import tempfile
-
-    f = Path(tempfile.mkdtemp()) / "pg.conn"
-    f.write_text(
-        "PG_HOST=h\nPG_PORT=5432\nPG_DB=d\nPG_USER=u\nPG_SCHEMA=ai\nPG_PASSWORD=from-file\n", encoding="utf-8"
-    )  # op-09 — 접속 칸 모두 필수
-    with COMMON.env(PG_CONN_FILE=str(f), PG_PASSWORD="", PG_HOST=None, PG_PORT=None):
-        assert conf()["PG_PASSWORD"] == "from-file"
-    with COMMON.env(PG_CONN_FILE=str(f), PG_PASSWORD="x2", PG_HOST=None, PG_PORT=None):
-        assert conf()["PG_PASSWORD"] == "x2"  # 준 값은 파일을 덮음(옛과 같음)
-    with COMMON.env(PG_CONN_FILE=str(f), PG_PASSWORD=None, PG_PORT="abc"):
+    """conf() — 준 접속 칸을 글자로 · 형식 틀린 PG_PORT는 옛처럼 실패(R-7). 가짜 값만, 실제 접속 없음."""
+    full = dict(PG_HOST="h", PG_PORT="5432", PG_DB="d", PG_USER="u", PG_SCHEMA="ai")  # op-09 — 접속 칸 모두 필수
+    with COMMON.env(**full, PG_PASSWORD="x2"):
+        assert conf()["PG_PASSWORD"] == "x2" and conf()["PG_PORT"] == "5432"
+    with COMMON.env(**{**full, "PG_PORT": "abc"}, PG_PASSWORD=None):
         try:
             conf()
             raise AssertionError("형식 틀린 PG_PORT가 통과함")

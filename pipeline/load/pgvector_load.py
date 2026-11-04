@@ -2,8 +2,8 @@
 """개발 서버 PostgreSQL + pgvector 저장소 — 대표 파싱·청크·벡터·그래프를 EDW 대신 개발 서버에서 관리.
 
 PostgreSQL은 Docker로(이미지 = dev_server_pgvector 브랜치의 pgvector/pgvector:pg16 → docker load, 띄우기: valid_env/docker/compose.pg.yml — PC·단독 시험 전용, S6b).
-접속: PG_CONN_FILE=<KEY=VALUE 파일> 또는 환경변수 PG_HOST(127.0.0.1) · PG_PORT(5432) · PG_DB(rag) · PG_USER(rag) · PG_PASSWORD · PG_SCHEMA(ai)
-드라이버: psycopg 3(반입 휠 assets/wheels/psycopg*) — 비밀번호는 파일·환경변수에만.
+접속: settings.yaml required.pg(host·port·db·user·password·db_schema)
+드라이버: psycopg 3(반입 휠 assets/wheels/psycopg*) — 비밀번호는 settings.yaml에만.
 
 명령: check · deploy · load(묶음 → 한 트랜잭션, 같은 문서 건너뜀, --replace) · faq-sync(pl-41) — 검색은 modules/search/pgsearch.py
 load는 더하고 고치기만 한다 — 이번 묶음에 없는 문서를 지우지 않는다(pl-13, 사용자 10-29: 원천에서 지운 문서·파싱 실패는 로컬 기록만).
@@ -258,9 +258,6 @@ def load(db, bundle, replace=False, rep_dir=None):
                 kept += kp
     counts["sec"] = round(time.time() - t0, 1)
     counts["loaded_at_failed"] = _mark_loaded(loaded, kept, gold_version(meta))
-    from common.core import runlog
-
-    runlog.note(f"적재 {json.dumps({'bundle': str(B), 'meta': meta, 'counts': counts}, ensure_ascii=False, default=str)}")
     return counts
 
 
@@ -553,8 +550,8 @@ def main(argv=None):
 
 # ---- PG 단일 연결 전환점(0.2.0 — 옛 pipeline/load/pg_load_connect.py, pl-46)
 def pg_connect(c=None, pg_schema=None):
-    """AD41 단일 전환점 — PG_PASSWORD·PG_CONN_FILE이 있으면 진짜 PG(PG 클래스), 없으면 스탠드인(StandinPG, sqlite ·
-    PG_STANDIN_DIR, 기본 output/pg_standin). load/pgstore.py main()이 씀 — 서버는 pipeline.env에 연결 정보만 채우면
+    """AD41 단일 전환점 — required.pg 접속 정보가 있으면 진짜 PG(PG 클래스), 없으면 스탠드인(StandinPG, sqlite ·
+    PG_STANDIN_DIR, 기본 output/pg_standin). load/pgstore.py main()이 씀 — 서버는 settings.yaml에 연결 정보만 채우면
     코드 변경 없이 진짜 PG로 바뀐다. 한 줄 알림(모드)은 호출부(check_env.py·pgvector_load.py)가 찍는다 — 스탠드인을
     고를 때는 여기서도 WARNING 한 줄(_warn_standin, 서버에서 비밀번호를 빠뜨려도 조용히 안 넘어가게)."""
     if has_conn():

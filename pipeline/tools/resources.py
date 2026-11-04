@@ -19,5 +19,5 @@ def py_env_problem(want=(3, 12)):
         return None
     return (
         f"python {sys.version.split()[0]}({sys.executable}) · venv {'안' if in_venv else '밖'}"
-        f" — {want[0]}.{want[1]} venv(예: /srv/rag/venv/bin/python) 또는 이미지 안에서 돌려야 함"
+        f" — {want[0]}.{want[1]} venv 또는 이미지 안에서 돌려야 함"
     )

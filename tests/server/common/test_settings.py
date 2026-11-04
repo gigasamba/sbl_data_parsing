@@ -4,6 +4,7 @@ import contextlib
 import os
 import sys
 from pathlib import Path
+from unittest import mock
 
 from pydantic import ValidationError
 
@@ -266,6 +267,14 @@ def selftest():
             IMAGE_DEFAULTS.clear()
             IMAGE_DEFAULTS.update(saved_img)
         check("이미지 기본값 칸(B-2): 빈 글자 = 정말 비움 — 글자 칸 '' · 숫자 칸 None(이미지 기본값 /data/docs·auto가 아님)", img_blank)
+        from common.config.settings import _IMAGE_DEFAULTS, CommonLog
+
+        check(
+            "op-13 — 서버(두 이미지) 로그는 DB 기본 켬, PC 기본 끔 · 대체 파일은 output/logs 한 곳",
+            all(_IMAGE_DEFAULTS[m]["APPLOG_DB_ENABLED"] is True for m in ("pipeline", "mcp"))
+            and CommonLog.model_fields["fallback_dir"].default is None
+            and (CommonLog().db_enabled is True) == ("APPLOG_DB_ENABLED" in IMAGE_DEFAULTS),
+        )
         aw = {
             raw: load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"PIPE_PROCS": raw}).common.runtime.pipe_procs
             for raw in ("AUTO", "Auto", "auto ", " ", " 5")
@@ -441,7 +450,7 @@ def selftest():
                 lambda: load(CommonAppSettings, file=d / "ovl.yaml", environ={"RUN_ENV": "production"}, lenient_run_env=True), "PG_HSOT"
             )[0],
         )  # 모르는 RUN_ENV 글자는 가드처럼 서버로(리뷰 S7e3)
-        envw = {"SETTINGS_FILE": str(tf), "SERVER_ENV_DIR": "/srv/rag/env", "PIPE_PROCS": "2"}
+        envw = {"SETTINGS_FILE": str(tf), "RAG_ROOT": "/home/dev", "PIPE_PROCS": "2"}
         _warned.clear()
         import io as _io
 
@@ -453,7 +462,7 @@ def selftest():
             sys.stderr = saved_err
         check(
             "env의 옛 설정 이름 알림 없음(0.2.0 — pl-46: 알림을 지움)",
-            "PIPE_PROCS" not in buf.getvalue() and "SERVER_ENV_DIR" not in buf.getvalue(),
+            "PIPE_PROCS" not in buf.getvalue() and "RAG_ROOT" not in buf.getvalue(),
         )
         check(
             "overridden()(R-11): 지금 덮기 파일의 overrides 이름만(공유 settings.yaml 값은 아님)",
@@ -462,8 +471,8 @@ def selftest():
         )
         check(
             "dropped(): 형식 틀려 버린 옛 env 이름을 알림",
-            load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"LOG_RETENTION_DAYS": "x"})._dropped
-            == {"LOG_RETENTION_DAYS"},
+            load(_TApp, file=d / "empty.yaml", environ={"RUN_ENV": "local"}, names={"APPLOG_RETENTION_DAYS": "x"})._dropped
+            == {"APPLOG_RETENTION_DAYS"},
         )
         with COMMON.env(LLM_BUDGET_USD="abc", LLM_TIMEOUT="5"):
             try:
@@ -689,7 +698,9 @@ def selftest():
 
             def run(*argv):
                 out, err = io.StringIO(), io.StringIO()
-                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                # 부른 셸의 RUN_ENV 신호(PC export RUN_ENV=local)는 YAML을 이김 — 파일 값(dev)만 보게 뺀다
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), mock.patch.dict(os.environ):  # env 남김 — 시험
+                    os.environ.pop("RUN_ENV", None)  # env 남김 — 시험
                     rc = E.main(["--file", str(f), *argv])
                 return rc, out.getvalue(), err.getvalue()
 
