@@ -13,6 +13,8 @@ def test_run_id_keeps_given():
     assert parse_steps.run_id(env) == "r1" and env["PARSE_RUN_ID"] == "r1"
     env = {}
     assert parse_steps.run_id(env) == env["PARSE_RUN_ID"] and len(env["PARSE_RUN_ID"]) == 15  # YYYYmmdd-HHMMSS
+    env = {"PARSE_RUN_ID": ""}  # 빈 값은 없는 것과 같다
+    assert len(parse_steps.run_id(env)) == 15 and env["PARSE_RUN_ID"]
 
 
 def test_place_inputs_writes_only_and_runs_prepare():

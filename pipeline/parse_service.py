@@ -105,6 +105,7 @@ def _is_scan(path):
 VLM_UNSET_NOTE = "스캔 PDF — VLM 미설정"
 VLM_FAIL_NOTE = "스캔 PDF — VLM 파싱 실패"
 DRM_NOTE = "텍스트 추출 실패 — DRM/암호화 문서일 가능성(엔진 전부 파싱 실패)"
+NO_REP_NOTE = "텍스트 추출 결과 없음 — DRM/암호화 문서일 가능성"
 
 
 def skip_note(scan):
@@ -115,9 +116,10 @@ def skip_note(scan):
     return VLM_UNSET_NOTE if scan and registry.missing_env("qwen_vlm") else None
 
 
-def empty_note(scan):
-    """파이프라인이 대표 결과를 못 남겼을 때의 안내 — 스캔 PDF면 VLM 실패, 아니면 DRM 추정(엔진 전부 실패)."""
-    return VLM_FAIL_NOTE if scan else DRM_NOTE
+def empty_note(scan, ran=False):
+    """파이프라인이 대표 결과를 못 남겼을 때의 안내 — 스캔 PDF면 VLM 실패, 아니면 DRM 추정
+    (ran=True: 엔진은 돌았는데 대표 결과가 없음 · False: 엔진 전부 실패)."""
+    return VLM_FAIL_NOTE if scan else NO_REP_NOTE if ran else DRM_NOTE
 
 
 _EMPTY: dict = {"engine": None, "text": "", "tables_std": [], "tables": [], "facts": [], "fields": {}, "rep_path": None, "all_keys": []}
@@ -235,6 +237,7 @@ def _run_job(job_id, j, ws, fname, t0):
         raise RuntimeError(f"엔진 구성 파일을 쓰지 못함 — 종료 코드 {e.code}") from None
     post = pc.cfg().transform.represent.post or "supsub"
     job_env = _job_env(post)
+    job_env.pop("PARSE_RUN_ID", None)  # 작업마다 새 실행 id(서비스가 물려받은 값을 쓰지 않음)
     parse_steps.run_id(job_env)
     with open(ws / "run.log", "w", encoding="utf-8") as log:
 
@@ -249,7 +252,7 @@ def _run_job(job_id, j, ws, fname, t0):
     ms = round((time.time() - t0) * 1000, 1)
     rep_path = ws / "parse" / "_rep" / (fname + ".json")
     if empty is not None or not rep_path.exists():  # 대표 결과 없음 — 스캔 PDF면 VLM 실패, 아니면 DRM 추정
-        note = empty_note(bool(j.get("scan")))
+        note = empty_note(bool(j.get("scan")), ran=empty is None)
         _log(f"{job_id} · 결과 없음 → 빈 결과({'VLM 실패' if note == VLM_FAIL_NOTE else 'DRM 추정'})")
         return _result(job_id, fname, note=note, ms=ms)
     rep = json.loads(rep_path.read_text(encoding="utf-8"))

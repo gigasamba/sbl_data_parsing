@@ -20,8 +20,10 @@ def stack(refresh=False):
 
 
 def run_id(env):
-    """이번 실행 id(PARSE_RUN_ID) — env에 있으면 그대로, 없으면 지금 시각을 넣는다. run_engines·끝 표시가 같은 id를 쓴다."""
-    return env.setdefault("PARSE_RUN_ID", time.strftime("%Y%m%d-%H%M%S"))  # env 남김 — 하위 프로세스
+    """이번 실행 id(PARSE_RUN_ID) — env에 있으면 그대로, 없거나 비었으면 지금 시각을 넣는다. run_engines·끝 표시가 같은 id를 쓴다."""
+    if not env.get("PARSE_RUN_ID"):
+        env["PARSE_RUN_ID"] = time.strftime("%Y%m%d-%H%M%S")  # env 남김 — 하위 프로세스
+    return env["PARSE_RUN_ID"]
 
 
 def run_step(args, env, timeout=None, launch=subprocess.Popen, track=False, log=None):

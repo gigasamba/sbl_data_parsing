@@ -54,6 +54,8 @@ def test_scan_pdf_note():
     with COMMON.env(VLM_BASE_URL="http://10.0.0.5:8000/v1", VLM_MODEL="qwen-vl"):
         assert S.skip_note(True) is None  # VLM이 있으면 파이프라인으로
     assert S.empty_note(True) == S.VLM_FAIL_NOTE and S.empty_note(False) == S.DRM_NOTE
+    # 엔진은 돌았는데 대표 결과 없음
+    assert S.empty_note(False, ran=True) == S.NO_REP_NOTE and S.empty_note(True, ran=True) == S.VLM_FAIL_NOTE
 
 
 def test_size_limit():
