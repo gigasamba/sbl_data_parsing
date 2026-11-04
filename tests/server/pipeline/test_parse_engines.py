@@ -7,7 +7,6 @@ from pathlib import Path
 from common.config import settings as C
 from common.core.paths import APP_ROOT, STACK_FILE
 from pipeline import config as pc
-from pipeline.shared import parse_run as P0
 from pipeline.transform.parse.engines import registry
 from pipeline.transform.parse.parse_engines import (
     OCR_ENGINES,
@@ -15,6 +14,7 @@ from pipeline.transform.parse.parse_engines import (
     _default_procs,
     _sha,
     engine_code_fp,
+    engine_version,
     engines_for_doc,
     p0_key,
     page_timeout,
@@ -78,7 +78,7 @@ def selftest():
 
     # 이름≠폴더 엔진(office→office_stdlib)도 자기 엔진 코드가 지문에 들어가야 함(10-05 결함: _common만 해시돼 엔진 수정이 안 잡힘)
     assert engine_code_fp("office") != engine_code_fp("no-such-engine-xyz"), "office 지문에 office_stdlib 코드가 빠짐"
-    ver = P0.engine_version("pymupdf")
+    ver = engine_version("pymupdf")
     sha = "a" * 64
     # 열쇠는 common·run_all과 무관(검색 토크나이저만 바꿔도 원문 재파싱하던 일) — 엔진 폴더 코드·sha·버전만
     assert p0_key("pymupdf", sha, ver) == p0_key("pymupdf", sha, ver) and p0_key("pymupdf", sha, ver) != p0_key("pymupdf", "b" * 64, ver)

@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 
 from pipeline import config as pc
-from pipeline.shared.post_config import raw_root
+from pipeline.shared.raw_cache import raw_root
 from pipeline.shared.vlmcall import dpi, sha, vlm_page
 from pipeline.transform.figures import shape_detect
 from pipeline.transform.figures.pptx_edges import candidate_slides
@@ -77,7 +77,7 @@ def target_slides(doc_path):
     """이 문서에서 실제로 쪽 VLM이 호출될 슬라이드 번호 집합 — candidate_slides를 PARSE_PPTX_RENDER_MAX·soffice 유무·
     PARSE_POST(vlm_page)로 거른 것. pptx_slide_vlm()의 렌더 목록이자 figure_extract의 삽입 그림 중복 방지 기준(한 계산).
     이 프로세스에서 이미 변환이 실패했으면(_conversion_ok) 빈 집합 — 쪽 VLM이 비었는데 그림까지 건너뛰면 내용을 잃는다."""
-    from pipeline.shared.post_config import active_features
+    from pipeline.transform.represent.build_rep import active_features
 
     if "vlm_page" not in active_features():
         return set()

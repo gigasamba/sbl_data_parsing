@@ -13,7 +13,7 @@
 ### 규칙
 1. 엔진 구성은 파일 하나 `resources/config/pipeline_stack.json`(설정 `common.paths.stack_file`)이다 — 서버·PC 같은 파일. 모양·읽기·바꾸기는 [resources.md §1](../architecture/resources.md).
 2. 문서마다 그 형식 키의 `parse` 목록에 있는 엔진을 **모두** 돌린다(하나씩 차례로 시도하지 않음).
-3. 형식 키 = 확장자(소문자). 단 `.pdf`는 글자층이 쪽당 평균 20자 미만이면 `.pdf_image`(스캔), 아니면 `.pdf_text` — 판정은 `<out>/_types.json`에 크기·수정 시각과 함께 캐시한다. 판정 함수는 `pipeline.shared.parse_run.pdf_kind()` 하나 — 쪽 VLM의 문서 전체 스캔 판정(`scan_page_vlm.is_scan`)과 `parse_document`도 같은 함수를 쓴다(레인 분류 `doc_lane_group`의 앞 3쪽 규칙은 목적이 달라 따로).
+3. 형식 키 = 확장자(소문자). 단 `.pdf`는 글자층이 쪽당 평균 20자 미만이면 `.pdf_image`(스캔), 아니면 `.pdf_text` — 판정은 `<out>/_types.json`에 크기·수정 시각과 함께 캐시한다. 판정 함수는 `pipeline.shared.pdf_kind.pdf_kind()` 하나 — 쪽 VLM의 문서 전체 스캔 판정(`scan_page_vlm.is_scan`)과 `parse_document`도 같은 함수를 쓴다(레인 분류 `doc_lane_group`의 앞 3쪽 규칙은 목적이 달라 따로).
 4. 만약 형식 키가 구성에 없으면 → 그 확장자를 읽는 등록 엔진 모두(OCR 엔진 제외)로 돌리고 형식마다 한 번 로그를 남긴다.
 5. 지원 형식 = 구성의 `parse` 키 43개: `.pptx` `.doc` `.docx` `.hwpx` `.png` `.jpg` `.jpeg` `.tif` `.tiff` `.bmp` `.eml` `.mht` `.mhtml` `.txt` `.html` `.htm` `.pdf_image` `.pdf_text` `.xls` `.xlsm` `.xlsx` `.ppt` `.msg` `.docm` `.pptm` `.rtf` `.csv` `.tsv` `.md` `.odt` `.ods` `.odp` `.xlsb` `.dotx` `.xltx` `.potx` `.ppsx` `.dot` `.xlt` `.pot` `.json` `.xml` `.log`. `.hwp`는 아직 아니다([pl-45](#pl-45)), 압축 파일은 지원하지 않는다.
 6. 구성의 엔진이 등록부(`pipeline/transform/parse/engines`)에 없거나 설치되지 않았으면 → 시작하지 않는다(종료 2).

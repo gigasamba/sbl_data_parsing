@@ -8,8 +8,7 @@ from pathlib import Path
 import pipeline.transform.figures.scan_page_vlm as M
 from common.config.settings import COMMON
 from pipeline import config as pc
-from pipeline.shared.parse_run import raw_vlm_path
-from pipeline.shared.post_config import raw_root
+from pipeline.shared.raw_cache import raw_root, raw_vlm_path
 from pipeline.shared.vlmcall import (
     MAX_SIDE,
     P_PAGE,

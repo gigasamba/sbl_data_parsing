@@ -14,8 +14,7 @@ from common.ai import llm as A
 from common.ai.agent_prompts import load as _load_prompt
 from common.config.settings import cfg as ccfg
 from pipeline.shared import vlmcall as V
-from pipeline.shared.parse_run import prompt_id, raw_vlm_path
-from pipeline.shared.post_config import raw_root
+from pipeline.shared.raw_cache import prompt_id, raw_root, raw_vlm_path
 from pipeline.shared.vlmcall import _host, _model_dir, _png, sha  # 캐시 경로·PNG 축소
 
 P_BBOX = _load_prompt("nested_figure", "bbox")  # 글자는 prompts/nested_figure/prompt.md

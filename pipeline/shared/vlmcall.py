@@ -20,8 +20,7 @@ from common.ai import llm as A  # 모델 호출
 from common.ai.agent_prompts import load as _load_prompt
 from common.config.settings import cfg as ccfg
 from pipeline import config as pc
-from pipeline.shared.parse_run import prompt_id, raw_vlm_path
-from pipeline.shared.post_config import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지 포함, post/__init__.py)
+from pipeline.shared.raw_cache import prompt_id, raw_root, raw_vlm_path  # raw_root: PARSE_RAW_ROOT(이중 raw/ 방지 포함)
 
 _LOCK = threading.Lock()
 _SEM: dict = {}

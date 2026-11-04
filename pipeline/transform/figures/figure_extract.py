@@ -1,6 +1,6 @@
 """내장 그림을 형식과 무관하게 모두 찾아 VLM 기록(+ 위치·근처 글자).
 PDF 래스터·벡터 군집(vector_regions)·docx(본문·표 칸)·xlsx(모든 시트·셀 위)·pptx·eml 본문 이미지(cid) → 그림 1개 = 기록 1개.
-VLM은 pipeline.shared.vlmcall.ask(내부망 가드·추론 끄기는 common.models.vlm.extra_body)·P0 원본 층 캐시(pipeline.shared.parse_run.raw_vlm_path, PARSE_RAW_ROOT로 저장소 바꿀 수 있음).
+VLM은 pipeline.shared.vlmcall.ask(내부망 가드·추론 끄기는 common.models.vlm.extra_body)·P0 원본 층 캐시(pipeline.shared.raw_cache.raw_vlm_path, PARSE_RAW_ROOT로 저장소 바꿀 수 있음).
 산출: output/parse/_images/index.jsonl(그림 기록 계약) + <doc>/<image_id>.png."""
 
 import email
@@ -23,8 +23,7 @@ from common.core.paths import (
 from pipeline import config as pc
 from pipeline.shared import vlmcall as V  # VLM 호출 한 길(ask)·렌더 해상도(dpi)
 from pipeline.shared.ext_groups import IMG_EXTS
-from pipeline.shared.parse_run import prompt_id, raw_vlm_path
-from pipeline.shared.post_config import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지)
+from pipeline.shared.raw_cache import prompt_id, raw_root, raw_vlm_path  # raw_root: PARSE_RAW_ROOT(이중 raw/ 방지)
 from pipeline.shared.vlmcall import sha
 from pipeline.transform.figures import chart_values as CV  # 벡터 차트 결정적 값·추세
 from pipeline.transform.figures import diagram_edges as diag_edges  # PDF 벡터·텍스트 글자 화살표 결정적 edges

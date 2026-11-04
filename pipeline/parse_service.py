@@ -95,7 +95,7 @@ def _jail(path_str):
 
 def _is_scan(path):
     """스캔 PDF인지 — 엔진 고르기와 같은 판정(pdf_kind)이라 안내가 실제로 돈 엔진과 어긋나지 않는다."""
-    from pipeline.shared.parse_run import pdf_kind
+    from pipeline.shared.pdf_kind import pdf_kind
 
     return Path(path).suffix.lower() == ".pdf" and pdf_kind(path)[0] == "pdf_image"
 

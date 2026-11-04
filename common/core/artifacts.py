@@ -2,7 +2,7 @@
 """실험 저장소 공통 계약 — 층별 코드 지문·열쇠·`_manifest.json`·낡음 판정.
 parse·structure·load·search 코드는 import하지 않는다(계약 코드는 모듈 경계 밖 — 파이프라인 쪽이 이 함수들만 가져다 씀).
 "같은 입력 + 같은 코드 지문 = 같은 열쇠" — 층 코드가 바뀌면 지문이 바뀌어 저장본이 자동으로 낡음이 된다.
-여기는 2개 이상 이미지가 쓰는 계약만 둔다(파싱 전용 함수는 pipeline/shared/parse_run.py).
+여기는 2개 이상 이미지가 쓰는 계약만 둔다(파싱 전용 함수는 pipeline/shared·pipeline/transform/parse).
 """
 
 import hashlib
@@ -24,8 +24,9 @@ LAYER_CODE = {
         "pipeline/transform/parse/engines/**/*.py",
         "pipeline/transform/parse/parse_engines.py",
         "pipeline/config.py",
-        "pipeline/shared/parse_run.py",
-        "pipeline/shared/post_config.py",
+        "pipeline/shared/raw_cache.py",
+        "pipeline/shared/env_error.py",
+        "pipeline/shared/pdf_kind.py",
         "pipeline/shared/vlmcall.py",
     ],
     # 대표 결과(represent·figures)를 만드는 코드 — 원문 파싱 관리(받기·준비·중복)는 빼서 그 코드를 고쳐도 p1이 바뀌지 않게.
@@ -36,8 +37,9 @@ LAYER_CODE = {
         "pipeline/transform/parse/engines/mhtml/parser.py",
         "pipeline/transform/parse/engines/rapidocr/parser.py",
         "pipeline/transform/parse/engines/_common/*.py",
-        "pipeline/shared/parse_run.py",
-        "pipeline/shared/post_config.py",
+        "pipeline/shared/raw_cache.py",
+        "pipeline/shared/env_error.py",
+        "pipeline/shared/pdf_kind.py",
         "pipeline/shared/ext_groups.py",
         "pipeline/shared/vlmcall.py",
     ]

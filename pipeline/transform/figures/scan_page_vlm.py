@@ -7,8 +7,8 @@ from pathlib import Path
 
 from pipeline import config as pc
 from pipeline.shared.ext_groups import IMG_EXTS
-from pipeline.shared.parse_run import pdf_kind
-from pipeline.shared.post_config import raw_root
+from pipeline.shared.pdf_kind import pdf_kind
+from pipeline.shared.raw_cache import raw_root
 from pipeline.shared.vlmcall import (  # 쪽 VLM 호출·캐시(엔진 qwen_vlm과 같은 함수)
     page_count,
     page_max,
@@ -203,7 +203,7 @@ def page_targets(doc_path):
       - PDF도 아니고 문서 전체 스캔(is_scan)도 아님
       - 글자 PDF인데 스캔 신호 쪽이 없음
     그 밖: 문서 전체가 스캔이면 전체 쪽, 아니면 scan_pages() — VLM_PAGE_MAX로 자른 뒤 돌려준다(호출자가 또 자르지 않음)."""
-    from pipeline.shared.post_config import active_features
+    from pipeline.transform.represent.build_rep import active_features
 
     if "vlm_page" not in active_features():
         return set()

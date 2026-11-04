@@ -1,5 +1,5 @@
 """메일(.eml·.msg) 후보정 — 첨부 다시 파싱 + 인용 스레드 단락화.
-원본(doc_path)에서 첨부를 꺼내 형식별 구성 엔진 순서로 파싱하고, 결과는 P0 원본 층(parse_run.raw_engine_path —
+원본(doc_path)에서 첨부를 꺼내 형식별 구성 엔진 순서로 파싱하고, 결과는 P0 원본 층(raw_cache.raw_engine_path —
 첨부 sha256 + 엔진@버전)에 캐시해 다시 안 돈다. 대표 본문에는 `[첨부 <파일명>]` 절로만 덧붙인다(base 본문은 그대로).
 인라인 그림(cid)은 figure_extract가 맡아 image/* 첨부는 건너뛴다.
 zip 첨부는 ATTACH_MAX_DEPTH(기본 1)만큼만 풀고, 크기(ATTACH_MAX_MB 기본 20)·개수(ATTACH_MAX_N 기본 10) 상한을 넘으면 건너뜀.
@@ -16,9 +16,9 @@ from pathlib import Path
 
 from common.core.paths import APP_ROOT  # output/ 경계(attach_dir)
 from pipeline import config as pc
-from pipeline.shared import parse_run as P0
-from pipeline.shared.post_config import raw_root
+from pipeline.shared.raw_cache import raw_engine_path, raw_root
 from pipeline.shared.vlmcall import sha
+from pipeline.transform.parse.parse_engines import engine_version
 
 
 def attach_dir():
@@ -116,7 +116,7 @@ def _stack_parse():
 
 def parse_attachment(entry, store=None):
     """첨부 1건 → (텍스트, 캐시 적중?, 엔진) — stack.json이 그 형식에 지정한 엔진 순서로 시도해
-    15자 이상 나온 첫 결과를 씀. P0 원본 층 키 = 첨부 sha256 + 엔진@버전(pipeline.shared.parse_run.raw_engine_path) —
+    15자 이상 나온 첫 결과를 씀. P0 원본 층 키 = 첨부 sha256 + 엔진@버전(pipeline.shared.raw_cache.raw_engine_path) —
     같은 첨부를 같은 엔진으로 다시 안 돎."""
 
     store = store or raw_root()
@@ -126,8 +126,8 @@ def parse_attachment(entry, store=None):
     # stack.json은 PDF를 .pdf_text/.pdf_image로 나눠 둠(parse_engines와 같은 키) — 글자층 엔진 먼저, 15자 못 넘으면 OCR 엔진
     engines = stack.get(".pdf_text", []) + stack.get(".pdf_image", []) if ext == ".pdf" else stack.get(ext, [])
     for eng in engines:
-        ver = P0.engine_version(eng)
-        dst = P0.raw_engine_path(store, eng, ver, content_sha)
+        ver = engine_version(eng)
+        dst = raw_engine_path(store, eng, ver, content_sha)
         if dst.exists():
             try:
                 return json.loads(dst.read_text(encoding="utf-8")).get("text") or "", True, eng

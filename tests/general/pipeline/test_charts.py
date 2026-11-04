@@ -1,8 +1,8 @@
-"""pipeline.transform.represent.build_rep.chart_text 시험."""
+"""pipeline.transform.figures.chart_values.chart_text 시험."""
 
 from pathlib import Path
 
-from pipeline.transform.represent.build_rep import chart_text
+from pipeline.transform.figures.chart_values import chart_text
 
 
 def selftest():

@@ -1,9 +1,10 @@
-"""pipeline.shared.post_config 시험."""
+"""후보정 기능(build_rep.active_features)·raw_root 시험."""
 
 from pathlib import Path
 
 from pipeline import config as pc
-from pipeline.shared.post_config import FEATURES, active_features, raw_root
+from pipeline.shared.raw_cache import raw_root
+from pipeline.transform.represent.build_rep import FEATURES, active_features
 
 
 def selftest_raw_root():

@@ -24,8 +24,9 @@ from common.core.console import utf8_stdout
 from common.core.paths import APP_ROOT, CRITERIA_FILE, doc_dir
 from common.core.text import supsub_mark  # 첨자 정규화는 한 곳(각자 맵 금지)
 from pipeline import config as pc
+from pipeline.shared.env_error import is_env_error
 from pipeline.shared.ext_groups import IMG_EXTS
-from pipeline.shared.parse_run import is_env_error, pdf_kind
+from pipeline.shared.pdf_kind import pdf_kind
 from pipeline.transform.parse.engines import registry
 
 # 인식 계열 — 같은 모델·같은 텍스트 레이어 추출기를 쓰는 엔진은 같이 틀리므로 한 표로 센다. 목록에 없으면 스택 이름이 계열.

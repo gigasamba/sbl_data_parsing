@@ -57,7 +57,7 @@
 엔진 이름과 폴더 이름이 다른 엔진(`html_stdlib`·`msg_extract` → `mhtml/`, `office` → `office_stdlib/`, `rapidocr_ko` → `rapidocr/`)을 고쳐도 지문이 바뀌어야 한다.
 
 ### 규칙
-1. 층 지문 p0 범위 = `pipeline/transform/parse/engines/**/*.py` + `pipeline/transform/parse/parse_engines.py` + 엔진이 import하는 pipeline 파일(`config.py`·`shared/{parse_run,post_config,vlmcall}.py`)(`common/core/artifacts.py` `LAYER_CODE`).
+1. 층 지문 p0 범위 = `pipeline/transform/parse/engines/**/*.py` + `pipeline/transform/parse/parse_engines.py` + 엔진이 import하는 pipeline 파일(`config.py`·`shared/{raw_cache,env_error,pdf_kind,vlmcall}.py`)(`common/core/artifacts.py` `LAYER_CODE`).
 2. 문서×엔진 결과 재사용 열쇠는 `pipeline.transform.parse.parse_engines.engine_code_fp()`(등록부의 엔진 폴더 + `_common`)다 — 층 지문이 아니다.
 
 ### QA
