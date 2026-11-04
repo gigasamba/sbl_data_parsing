@@ -1,7 +1,7 @@
-"""EDW `AI.ParsingMeta` 저장소 클래스(읽기·쓰기) — pipeline/load/silver_publish.py(SI39 publish, 쓰기 쪽 사람·설계는
+"""EDW `AI.ParsingMeta` 저장소 클래스(읽기·쓰기) — pipeline/load/publish_parse_result.py(SI39 publish, 쓰기 쪽 사람·설계는
 그 모듈 docstring)·modules/search/mcp_server.py(OP21 근거 '파싱 결과 경로' 조회, 읽기만) 공용. 모듈 경계 규칙①
 (cli/check_modules.py — modules/<x>는 다른 modules/<y>를 import 못 함, 함께 쓸 것은 common/만)이라 여기로
-승격했다 — pipeline/load/silver_publish.py는 이 파일에서 그대로 다시 import해 쓴다(동작 바이트 동일, 이름만 공용
+승격했다 — pipeline/load/publish_parse_result.py는 이 파일에서 그대로 다시 import해 쓴다(동작 바이트 동일, 이름만 공용
 자리로 옮김). 표 DDL·열 순서 설계는 docs/architecture.md §2.
 """
 
@@ -69,7 +69,7 @@ def renames(found):
 
 
 def _today_date():
-    """PM2 — parse_date 기본값(처리 시각) — pipeline.load.silver_publish.today()와 같은 글자 형식
+    """PM2 — parse_date 기본값(처리 시각) — pipeline.load.publish_parse_result.today()와 같은 글자 형식
     ('YYYY-MM-DD_HHMMSS', 파일 이름에도 쓰여 콜론 없음). 그 모듈을 여기서 import하면 common→pipeline
     역방향 import가 돼 모듈 경계를 어기므로 같은 한 줄 형식을 이 안에 둔다(중복은 이 한 줄뿐)."""
     return datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
@@ -150,7 +150,7 @@ def _rows_parsed(cur, table, ph, lo, hi, kc="source_key"):
 def _done_keys_rows(cur, table, kc="source_key", gold=False):
     """C10(pl-12, 사용자 10-31) — 끝난 원본 키(source_key) 집합 — parse_status가 DONE_STATUSES(ok·partial·skipped_dup — 사용자 11-01)인 행,
     gold=True(gold_version 칸이 있음)면 ok·partial은 gold_version도 있어야(사용자 11-02 — silver나 gold 결과가 없으면 다시 대상).
-    파싱 입구(pipeline.cli `_unparsed`)가 "FileStorageMap ∖ ParsingMeta"로 새 문서를 고를 때 쓴다(읽기만, SELECT).
+    파싱 입구(pipeline.extract.fetch_docs `unparsed`)가 "FileStorageMap ∖ ParsingMeta"로 새 문서를 고를 때 쓴다(읽기만, SELECT).
     상수 글자만 SQL에 끼우고(DONE_STATUSES는 코드 상수) 값 바인딩은 없음."""
     q = lambda xs: ", ".join(f"'{v}'" for v in xs)
     cond = f"parse_status IN ({q(DONE_STATUSES)})"

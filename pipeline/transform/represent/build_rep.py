@@ -42,6 +42,7 @@ meta.json["token_conflicts"]은 문서 전체 기준 — 자리 없음, 그대�
 """
 
 import argparse
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -927,6 +928,53 @@ def represent(stack, parse_dir, src=None):
         flush=True,
     )
     return index
+
+
+def rep_digest(parse_dir):
+    """(index.json 문서 목록, 대표 결과 digest) — 파싱 끝 표시(_DONE.json)가 바뀌었는지 가르는 값(옛 pipeline.cli에서 옮김 — rn-06).
+    GH1-05 — core는 chars·facts_added(길이·개수)만 있어 길이·개수가 같은 내용 교체를 못 잡음 → 본문·facts 자체의 sha256도 넣음."""
+    rep_dir = Path(parse_dir) / "_rep"
+    idx = json.loads((rep_dir / "index.json").read_text(encoding="utf-8"))["docs"]
+    core = [{k: v for k, v in r.items() if k != "tried"} for r in idx]  # 시도 기록(시각)은 빼고 대표 결과만 비교
+    content = []
+    for r in idx:
+        if not r.get("engine"):
+            continue
+        rep = json.loads((rep_dir / f"{r['doc']}.json").read_text(encoding="utf-8"))
+        content.append(
+            {
+                "doc": r["doc"],
+                "text_sha": hashlib.sha256((rep.get("text") or "").encode("utf-8")).hexdigest(),
+                "facts_sha": hashlib.sha256(
+                    json.dumps(rep.get("facts") or [], sort_keys=True, ensure_ascii=False).encode("utf-8")
+                ).hexdigest(),
+            }
+        )
+    return idx, hashlib.sha256(json.dumps({"core": core, "content": content}, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def write_mark(parse_dir, **kw):
+    """파싱 끝 표시 _rep/_DONE.json — 앞 표시와 digest(kw — rep_digest 값)·인계 형식 버전(CONTRACT)이 같으면 그대로 두고 False(구조화는 건너뛰게 됨),
+    다르면 common 코드 지문(FINGERPRINT)과 함께 새로 쓰고 True. kw의 run_id가 있으면 그 값(같은 실행의 run_all과 같은 id)."""
+    from common import CONTRACT, FINGERPRINT  # 인계 형식 버전 · common 코드 지문(이미지 버전 어긋남 확인)
+
+    f = Path(parse_dir) / "_rep" / "_DONE.json"
+    old = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+    if old.get("digest") == kw.get("digest") and old.get("contract") == CONTRACT:
+        print(f"[parse] 대표 결과 변화 없음 — 끝 표시 그대로(run_id {old['run_id']}), 구조화는 건너뛰게 됨", flush=True)
+        return False
+    m = {
+        "module": "parse",
+        "contract": CONTRACT,
+        "common": FINGERPRINT,
+        "run_id": time.strftime("%Y%m%d-%H%M%S"),
+        "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        **kw,
+    }
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(m, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"[parse] 끝 표시 → {f} (run_id {m['run_id']})", flush=True)
+    return True
 
 
 def main(argv=None):

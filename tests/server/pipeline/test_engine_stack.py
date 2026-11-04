@@ -1,8 +1,8 @@
-"""pipeline.engine_stack 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.engine_stack --selftest`."""
+"""pipeline.extract.engine_stack 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m pipeline.extract.engine_stack --selftest`."""
 
 from unittest import mock
 
-from pipeline.engine_stack import EXIT_BAD_ENGINE, engine_problems, engines_of, require_engines
+from pipeline.extract.engine_stack import EXIT_BAD_ENGINE, engine_problems, engines_of, require_engines
 
 
 def selftest():

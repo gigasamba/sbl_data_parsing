@@ -14,7 +14,7 @@ _tls_warned = False  # L8b — 프로세스당 한 번만 경고
 
 def resolve_tls_verify():
     """OS_VERIFY_TLS(기본 1) → boto3 verify 인자. 끄면(0) 경고 1번(OS_ENDPOINT가 내부망이 아니면 더 크게) —
-    client()·pipeline/load/silver_publish.py의 S3Store가 공용으로 부른다(가드는 한 곳)."""
+    client()·pipeline/load/publish_parse_result.py의 S3Store가 공용으로 부른다(가드는 한 곳)."""
     v = cfg().connections.object_storage.verify_tls  # S7b — 설정 객체(기본 '1', 빈 값 그대로 — blank=keep)
     verify = False if v == "0" else True if v == "1" else v
     if verify is False:

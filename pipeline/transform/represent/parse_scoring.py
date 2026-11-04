@@ -244,6 +244,7 @@ def garbage_ratio(text):
     return round(((repl + ctrl) / max(1, len(text)) + single / max(1, len(lines))) / 2, 4)
 
 
+# 엔진 고르기(.pdf_text·.pdf_image → stack 엔진)용 — 레인 고르기(run_docs 작업자 배분)는 extract/doc_parsing_group(앞 3쪽 쪽당 300자)
 def pdf_kind(path):
     try:
         import pypdfium2 as pdfium

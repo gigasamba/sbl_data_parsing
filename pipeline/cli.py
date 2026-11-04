@@ -17,7 +17,6 @@ from common.core.console import utf8_stdout
 # isort: split
 import argparse
 import contextlib
-import json
 import os
 import subprocess
 import sys
@@ -38,72 +37,35 @@ _STACK: dict = {}
 
 
 def _stack():
-    """엔진 구성(사전) — 프로세스마다 한 번(pipeline/engine_stack.py: 파일 → 이미지에 없는 엔진 거부 — 서버·PC 같은 파일, 사용자 11-01).
+    """엔진 구성(사전) — 프로세스마다 한 번(pipeline/extract/engine_stack.py: 파일 → 이미지에 없는 엔진 거부 — 서버·PC 같은 파일, 사용자 11-01).
     파일을 못 읽거나 없는 엔진이면 종료 2."""
     if "v" not in _STACK:
-        from pipeline import engine_stack
+        from pipeline.extract import engine_stack
 
         engine_stack.resolve()
         _STACK["v"] = pc.stack()
     return _STACK["v"]
 
 
-def _traced(module, call):
-    """하위 프로세스 1개 = proc.run span(op-01) — 자식이 이어받는 parent span이 되고, 메모리·CPU 문 대기가 이 span에 쌓임.
-    call()은 종료 코드(마감으로 끝냈으면 None)를 돌려준다."""
+def _run_step(args, env):
+    """단계 하나를 자식 프로세스 묶음(--procs 자식 포함)으로 실행하고 종료 코드를 돌려준다. args[0] = 모듈 점 표기(예: pipeline.extract.run_engines).
+    (마감 시각은 run_docs --deadline 하나 — 새 문서를 받지 않을 뿐 도는 단계는 끝까지 둔다)
+    하위 프로세스 1개 = proc.run span(op-01) — 자식이 이어받는 parent span이 되고, 메모리·CPU 문 대기가 이 span에 쌓임."""
+    from common.core import resources as RS
     from common.core.span import safe, span
+    from pipeline.parse_steps import run_group
 
-    with span("proc.run", "run", module=module) as sp:
-        rc = call()
-        sp.add(rc=-1 if rc is None else rc)
-        if rc is None:
-            sp.result("timeout", "timeout", safe("마감 시각 도달"))
-        elif rc:
+    cmd = [PY, "-m", *map(str, args)]
+    print("$ " + " ".join(cmd), flush=True)
+    with span("proc.run", "run", module=str(args[0])) as sp:
+        rc = run_group(cmd, env, launch=RS.gated_popen).returncode
+        sp.add(rc=rc)
+        if rc:
             sp.result("fail", None, safe(f"종료 코드 {rc}"))
         return rc
 
 
-# ── 마감 시각(parse --deadline) ─────────
-def _until(deadline):
-    """'HH:MM'(오늘, 이미 지났으면 내일) → 남은 초."""
-    import datetime as dt
-
-    now = dt.datetime.now()
-    h, m = map(int, deadline.split(":"))
-    end = now.replace(hour=h, minute=m, second=0, microsecond=0)
-    if end <= now:
-        end += dt.timedelta(days=1)
-    return (end - now).total_seconds()
-
-
-def _run_until(args, env, sec):
-    """마감까지만 실행 — 넘으면 프로세스 묶음(--procs 자식 포함)을 끝냄. 다음 밤은 문서 대장에 파싱 성공 행이 없는 문서를 다시 고른다(pl-32 — 마감에 걸린 밤의 문서는 PR 4 전까지 반복될 수 있음).
-    args[0] = 모듈 점 표기(예: pipeline.extract.run_engines)."""
-    cmd = [PY, "-m", str(args[0]), *map(str, args[1:])]
-    print("$ " + " ".join(cmd), flush=True)
-    from common.core import resources as PR  # 프로세스 묶음(OS 분기 한 곳)
-    from common.core import resources as RS
-
-    def call():
-        # cwd=APP_ROOT(런타임 루트) — ROOT(코드 루트)로 하면 --src 상대경로가 거기 기준으로 풀려 못 찾음(FS v4 회귀)
-        p = RS.gated_popen(cmd, cwd=APP_ROOT, env=env, **PR.group_kw())
-        try:
-            return p.wait(timeout=max(1, sec))
-        except subprocess.TimeoutExpired:
-            PR.kill_group(p)
-            return None
-
-    return _traced(str(args[0]), call)
-
-
 # ── 단계 2 ───────────────────────────────────────────────────
-def _engines_of(st):
-    """parse 엔진(정렬) — engine_stack.engines_of 하나로(VS8b R-8)."""
-    from pipeline.engine_stack import engines_of
-
-    return engines_of(st)
-
-
 def show_stack(a=None):
     """지금 엔진 구성(파일 — 서버·PC 같음). mcp-server 이미지에서도 됨(등록부 안 씀)."""
     from common.store.db import cfgfile
@@ -119,65 +81,7 @@ def show_stack(a=None):
 
 # ── 파싱 모듈(run_docs가 문서마다 부름 — 서버 입구는 run_docs 하나, 사용자 10-31) ──────────
 # 11-01: 옛 배치 입구 night·run-stack·structure·load 모듈과 그 끝 표시 확인(need)은 지움 — 구조화·적재는 run_docs가 build_bundle·pgvector_load를 직접 부름.
-# 파싱 끝 표시(_rep/_DONE.json)는 남김.
-from common import CONTRACT, FINGERPRINT  # noqa: E402 — 인계 형식 버전 · common 코드 지문(이미지 버전 어긋남 확인)
-
-MARK = {
-    "parse": OUT / "parse" / "_rep" / "_DONE.json",
-}
-
-
-def read_mark(name):
-    f = MARK[name]
-    return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
-
-
-def write_mark(name, **kw):
-    m = {
-        "module": name,
-        "contract": CONTRACT,
-        "common": FINGERPRINT,
-        "run_id": time.strftime("%Y%m%d-%H%M%S"),
-        "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        **kw,
-    }
-    MARK[name].parent.mkdir(parents=True, exist_ok=True)
-    MARK[name].write_text(json.dumps(m, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"[{name}] 끝 표시 → {MARK[name]} (run_id {m['run_id']})", flush=True)
-
-
-def _left(a):
-    return _until(a.deadline) if getattr(a, "deadline", None) else 10**7
-
-
-def _unparsed(names):
-    """C10(pl-12 · pl-32, 사용자 10-31) — 새 문서 후보 = EDW FileStorageMap ∖ ParsingMeta. FileStorageMap 쪽은 이미 받은 이름 목록
-    (`--source rdb:`가 FileStorageMap을 읽어 만든 것 — 이름 ↔ 원본 키 s3_key 대응은 fetch_docs.py가 쓴 manifest.jsonl), ParsingMeta 쪽은
-    여기서 **EDW를 한 번 읽는다**(파싱 입구의 EDW 읽기 — 읽기 계정, PC는 EDW 대역 sqlite `RDB_SQLITE`): parse_status가 ok·partial인
-    행의 source_key 집합(`done_source_keys`). 통째 실패는 ParsingMeta에 안 쓰므로(C3) 실패한 문서는 행이 없어 다음 실행이 다시 고른다.
-    키 = manifest의 "key"(없으면 이름 그대로 — publish의 source_key와 같은 규칙, parsing_meta.plan).
-    순서: 받은 이름 순서 그대로(문서 대장이 없어져 시도 이력이 없음 — 실패 문서를 뒤로 미루지 않는다).
-    EDW를 못 읽으면: 서버(run_mode prod 또는 RUN_ENV dev·prd·모르는 값)는 종료 4(전체 재파싱 안 함), PC는 받은 목록 그대로 + 로그 한 줄."""
-    from common.core.contract import jl
-    from common.store import parsing_meta_db as PMDB
-
-    try:
-        db = PMDB.make_db("read")
-        try:
-            done = db.done_source_keys()
-        finally:
-            db.close()
-    except (Exception, SystemExit) as ex:  # make_db는 접속 정보가 없으면 SystemExit
-        if C.cfg().store.run_mode == "prod" or C.guard_run_env() not in (None, "local"):  # pl-12 — 서버(dev·prd·모르는 값)
-            print(
-                f"[parse] EDW ParsingMeta를 읽지 못함 — 멈춤(종료 4, 전체 재파싱 안 함): {type(ex).__name__}", file=sys.stderr, flush=True
-            )
-            raise SystemExit(4) from None
-        print(f"[parse] EDW ParsingMeta 못 읽음({type(ex).__name__}) — 이력 없이 받은 목록 그대로 처리", flush=True)
-        return list(names)
-    man = OUT / "parse" / "_source" / "manifest.jsonl"
-    key_of = {r["file_name"]: r.get("key") for r in jl(man)} if man.exists() else {}
-    return [n for n in names if (key_of.get(n) or n) not in done]
+# 파싱 끝 표시(_rep/_DONE.json)는 남김 — 읽고 쓰기는 대표 결과 단계(pipeline.transform.represent.build_rep.write_mark).
 
 
 _T_STEP: dict = {}
@@ -199,28 +103,13 @@ def _tdone():
     return " · ".join(parts)
 
 
-def _vlm_doc_concurrency(a, lim):
-    """엔진 자식의 문서당 VLM 동시 수 — common.models.vlm.concurrency를 동시 문서 수(= min(문서 수, 조각 × --workers))로
-    max_concurrency를 나눈 몫까지 줄인다(11-04 — 옛 night.vlm_concurrency·--vlm-concurrency는 지움: run_docs의 VLM_CONCURRENCY가
-    늘 max ÷ --workers(8 ÷ 4 = 2)로 잘려 문서 1건 실행에도 적용되지 않던 결함)."""
-    from common.core import resources as RS
-
-    src = Path(a.src)
-    docs = (
-        [n for n in Path(lim[1]).read_text(encoding="utf-8").splitlines() if n.strip()]
-        if lim
-        else [f for f in src.iterdir() if f.is_file()]
-        if src.is_dir()
-        else []
-    )
-    at_once = min(max(1, len(docs)), RS.resolve_procs(a.procs) * max(1, int(a.workers)))
-    return RS.vlm_page_concurrency(at_once, C.cfg().models.vlm.concurrency)
-
-
 def parse_module(a):
     """파싱 모듈: (--source면) 가져오기·시험 표본 → 중복 확인 → 방향 보정 → 파싱 → 채점 → 대표 결과 → 끝 표시 → (s3) 원본 정리.
     임베딩·DB 연결 없음 — 수집 서버에 이것만 보낼 수 있음. --source 없으면 --src(이미 준비된 폴더)를 그대로."""
     from common.core.paths import child_env
+    from pipeline.extract import engine_stack
+    from pipeline.extract import fetch_docs as SRC
+    from pipeline.extract import run_engines as RE
 
     _tstep("t_start")
     run_id = os.environ.get("PARSE_RUN_ID") or time.strftime(
@@ -233,12 +122,10 @@ def parse_module(a):
     from pipeline.shared import runtrace
 
     runtrace.info(stack=st.get("name"), workers=int(a.workers) if str(a.workers).isdigit() else None)
-    engines = a.engines or ",".join(_engines_of(st))
+    engines = a.engines or ",".join(engine_stack.engines_of(st))  # parse 엔진(정렬) — VS8b R-8
     # OP26 문서 단위 병렬(parse_parallel)은 10-30 지움(pl-35) · 스트리밍 파싱은 op-08에 지움
     lim, src_info = [], None
     if a.source:  # 문서 위치: 같은 서버 폴더 → Object Storage 몇 건 → 전체(사용자 10-02)
-        from pipeline.extract import fetch_docs as SRC
-
         local, names, state = SRC.resolve(a.source, OUT, a.source_limit)
         src_info = (state, local)
         _tstep("t_resolve")
@@ -259,22 +146,22 @@ def parse_module(a):
                 print(f"[dedup] 실패: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
                 rc = 1
         else:
-            rc = _run_until(["pipeline.extract.deduplication", "--src", local, "--out", OUT / "dedup"], child_env(), _left(a) - 120)
+            rc = _run_step(["pipeline.extract.deduplication", "--src", local, "--out", OUT / "dedup"], child_env())
         _tstep("t_dedup")
         if rc != 0:
-            raise SystemExit(75 if rc is None else rc)
+            raise SystemExit(rc)
         keep = set((OUT / "dedup" / "keep.txt").read_text(encoding="utf-8").splitlines())
-        keep &= set(_unparsed(names))  # C10 — ParsingMeta에 성공 행이 있는 문서는 다시 파싱 안 함
+        keep &= set(SRC.unparsed(names, OUT))  # C10 — ParsingMeta에 성공 행이 있는 문서는 다시 파싱 안 함
         only = OUT / "parse" / "_source" / "only.txt"
         only.write_text("\n".join(n for n in names if n in keep) + "\n", encoding="utf-8")
-        rc = _run_until(["pipeline.extract.filter_and_rotate", "--src", local, "--out", a.src, "--only", only], child_env(), _left(a) - 120)
+        rc = _run_step(["pipeline.extract.filter_and_rotate", "--src", local, "--out", a.src, "--only", only], child_env())
         _tstep("t_prepare")
         if rc != 0:
-            raise SystemExit(75 if rc is None else rc)
+            raise SystemExit(rc)
         lim = ["--docs-from", only]
     if a.max_new:  # 밤당 새 문서 상한(GH1-10: test 모드도 적용) — 밀린 문서가 많아도 매일 밤 대표 결과·구조화·적재까지 끝나게
         names = sorted(p.name for p in Path(a.src).iterdir() if p.is_file())
-        new = _unparsed(names)  # C10 — ParsingMeta에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
+        new = SRC.unparsed(names, OUT)  # C10 — ParsingMeta에 성공 행 없는 문서(새 + 실패)만 · 앞 실행 runs.jsonl은 안 봄
         pick = new[: a.max_new]
         f = OUT / "parse" / "_batch_docs.txt"
         f.parent.mkdir(parents=True, exist_ok=True)
@@ -285,79 +172,42 @@ def parse_module(a):
         lim = ["--docs-from", f]
         print(f"[parse] 새·실패 문서 {min(len(new), a.max_new)}/{len(new)}개(PARSE_MAX_NEW {a.max_new}) — 나머지는 다음 실행", flush=True)
     env = C.child_env(
-        child_env(), VLM_CONCURRENCY=str(_vlm_doc_concurrency(a, lim)), LLM_BASE_URL=None
+        child_env(), VLM_CONCURRENCY=str(RE.vlm_doc_concurrency(a, lim)), LLM_BASE_URL=None
     )  # 파싱 모듈은 LLM을 부르지 않음(S7e3 B-1)
-    args = [
-        "pipeline.extract.run_engines",
-        "--src",
-        a.src,
-        "--out",
-        OUT / "parse",
-        "--procs",
-        a.procs,
-        "--workers",
-        a.workers,
-        "--engines",
-        engines,
-        *lim,
-    ]
-    rc = _run_until(args, env, _left(a) - 120)
-    if rc is None:
-        raise SystemExit(75)  # 마감 — 끝 표시 안 바꿈, 다음 실행이 이어 감
-    _tstep("t_parse")
-    if not (OUT / "parse" / "runs.jsonl").exists():  # F1(11-03 PC 시험) — runs.jsonl 없음: 채점·대표 결과로 넘어가 죽지 않게
+
+    def step(args):  # 단계마다 걸린 시간(docflow-step 로그 — run_engines는 parse)
+        rc = _run_step(args, env)
+        _tstep("t_parse" if args[0] == "pipeline.extract.run_engines" else "t_" + args[0].rsplit(".", 1)[-1])
+        return rc
+
+    from pipeline.parse_steps import parse_chain
+
+    engine_args = ["--procs", a.procs, "--workers", a.workers, "--engines", engines, *lim]
+    rc = parse_chain(step, a.src, OUT / "parse", OUT / "corpus" / "truth.json", engine_args)
+    if rc is not None:  # F1(11-03 PC 시험) — runs.jsonl 없음: 채점·대표 결과로 넘어가 죽지 않게
         if rc != 0:  # run_all이 죽어 못 씀 — 성공으로 덮지 않는다(리뷰)
             print(f"[parse] 파싱 실패 — run_all 종료 {rc}, runs.jsonl 없음", file=sys.stderr, flush=True)
             raise SystemExit(rc)
         print("[parse] 이번 실행 0건 — 파싱한 문서 없음(runs.jsonl 없음) · 채점·대표 결과·끝 표시 건너뜀", flush=True)
         return
-    for args in (
-        ["pipeline.transform.represent.parse_scoring", "--src", a.src, "--parse", OUT / "parse", "--truth", OUT / "corpus" / "truth.json"],
-        ["pipeline.transform.represent.build_rep", "--src", a.src, "--parse-dir", OUT / "parse"],
-    ):
-        rc = _run_until(args, env, _left(a) - 60)
-        _tstep("t_" + args[0].rsplit(".", 1)[-1])  # 2026-10-22 — qa·represent 분리 계측(docflow 기타 분해)
-        if rc != 0:
-            raise SystemExit(75 if rc is None else rc)
-    import hashlib
+    from pipeline.transform.represent import build_rep as BR
 
     print(f"[docflow-step] {_tdone()}", flush=True)  # 2026-10-22 — resolve~represent까지 docflow 기타 분해 로그
-    idx = json.loads((OUT / "parse" / "_rep" / "index.json").read_text(encoding="utf-8"))["docs"]
+    idx, digest = BR.rep_digest(OUT / "parse")
     ok = sum(1 for r in idx if r.get("engine"))
     runtrace.docs(total=len(idx), ok=ok, fail=len(idx) - ok)  # 재사용 수는 없음 — 실행마다 새로 파싱(pl-32)
-    core = [{k: v for k, v in r.items() if k != "tried"} for r in idx]  # 시도 기록(시각)은 빼고 대표 결과만 비교
-    content = []  # GH1-05 — core는 chars·facts_added(길이·개수)만 있어 길이·개수가 같은 내용 교체를 못 잡음 → 본문·facts 자체의 sha256
-    for r in idx:
-        if not r.get("engine"):
-            continue
-        rep = json.loads((OUT / "parse" / "_rep" / f"{r['doc']}.json").read_text(encoding="utf-8"))
-        content.append(
-            {
-                "doc": r["doc"],
-                "text_sha": hashlib.sha256((rep.get("text") or "").encode("utf-8")).hexdigest(),
-                "facts_sha": hashlib.sha256(
-                    json.dumps(rep.get("facts") or [], sort_keys=True, ensure_ascii=False).encode("utf-8")
-                ).hexdigest(),
-            }
-        )
-    digest = hashlib.sha256(json.dumps({"core": core, "content": content}, sort_keys=True).encode()).hexdigest()[:16]
-    old = read_mark("parse") or {}
-    if old.get("digest") == digest and old.get("contract") == CONTRACT:
-        print(f"[parse] 대표 결과 변화 없음 — 끝 표시 그대로(run_id {old['run_id']}), 구조화는 건너뛰게 됨", flush=True)
-        return
-    write_mark(
-        "parse",
+    if not BR.write_mark(
+        OUT / "parse",
         src=str(a.src),
         source=str(a.source or a.src),
         engines=engines.split(","),
         docs=len(idx),
         digest=digest,
-        rep_ok=sum(1 for r in idx if r.get("engine")),
+        rep_ok=ok,
         run_id=run_id,
-    )
+    ):
+        return
     if src_info:
-        from pipeline.extract import fetch_docs as SRC
-
         if SRC.is_remote(a.source):
             SRC.finish(src_info[0], src_info[1], OUT / "parse" / "_rep" / "index.json")
 
@@ -528,7 +378,6 @@ def main(argv=None):
     p.add_argument(
         "--force", action="store_true", help=argparse.SUPPRESS
     )  # 11-01 — 옛 호출 호환으로 받기만(끝 표시 확인 need()는 structure·load와 함께 지움)
-    p.add_argument("--deadline", default=None, help="HH:MM — 넘으면 멈춤(종료 코드 75, 다음 실행이 이어 감). 새벽 배치용")
     p.add_argument(
         "--source",
         default=pc.cfg().extract.input_source or None,

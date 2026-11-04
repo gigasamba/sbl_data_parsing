@@ -148,6 +148,24 @@ class RunLog:
         pass
 
 
+def vlm_doc_concurrency(a, lim):
+    """엔진 자식의 문서당 VLM 동시 수(파싱 입구 pipeline.cli parse가 이 모듈을 띄우기 전에 부름 — a = parse 인자, lim = --docs-from 인자) — common.models.vlm.concurrency를 동시 문서 수(= min(문서 수, 조각 × --workers))로
+    max_concurrency를 나눈 몫까지 줄인다(11-04 — 옛 night.vlm_concurrency·--vlm-concurrency는 지움: run_docs의 VLM_CONCURRENCY가
+    늘 max ÷ --workers(8 ÷ 4 = 2)로 잘려 문서 1건 실행에도 적용되지 않던 결함)."""
+    from common.core import resources as RS
+
+    src = Path(a.src)
+    docs = (
+        [n for n in Path(lim[1]).read_text(encoding="utf-8").splitlines() if n.strip()]
+        if lim
+        else [f for f in src.iterdir() if f.is_file()]
+        if src.is_dir()
+        else []
+    )
+    at_once = min(max(1, len(docs)), RS.resolve_procs(a.procs) * max(1, int(a.workers)))
+    return RS.vlm_page_concurrency(at_once, C.cfg().models.vlm.concurrency)
+
+
 def _default_procs():
     """--procs 기본 — S7c1 설정 객체(옛 `os.environ.get("PIPE_PROCS") or "1"`: auto → "auto"(이미지 ENV), 없음·빈 값 → "1", 숫자는 그 글자 —
     칸이 'auto'를 글자로 기억, 코디네이터 답 ①b)."""
