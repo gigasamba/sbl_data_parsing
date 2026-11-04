@@ -134,8 +134,14 @@
   2. "ETL 폴더" = `pipeline/` 안 `extract`·`transform`·`load`. 최상위 폴더 이름 `pipeline/`은 그대로(이미지·명령 이름 그대로 — 코드 폴더만 교체).
   3. `run_docs.py`는 서버 호스트에서 `docker exec`로 지휘만 하고, 판단(원천 목록·중복·레인·게시)은 ETL 함수로 옮긴다 — rn-05를 이 행과 함께 한다.
   4. 서버 배치: 이미지 폴더(`sbl_images-main/`)는 루트 한 단계 위 공용 폴더에 하나(예 `/home/sbl/`), 벌마다 루트(`dev/`·`dev-hong/`) — 문서만(op-13 규칙 2, README §5-0).
-- 할 일: 중복·자리·이름 목록을 표로 먼저 사람에게 보이고(옮김 / 합침 / 이름 바꿈 / 그대로 + 이유) 승인 뒤 진행. 옮기는 커밋과 나누는 커밋은 따로(CLAUDE.md §1).
-- 열린 것: 목록 표 승인.
+  5. (11-04 둘째 질의) 스캔 PDF 규칙 두 개(레인 분류 `doc_parsing_group` — 앞 3쪽 평균 300자 미만 · 엔진 선택 `parse_scoring.pdf_kind` — 쪽마다 20자 미만)는 목적이 달라 그대로 두고 역할만 주석으로 적는다(결과 변화 없음).
+  6. run_docs의 EDW 읽기(문서 목록·끝난 문서·FAQ)와 warm 파일 이름은 호스트 사본을 그대로 둔다 — 컨테이너 쪽과 같은지 견주는 시험만 더한다(운영 접속 변경 없음).
+  7. 서버·릴리스 스크립트 이름을 하는 일로 바꾼다(문서·systemd 단위 함께).
+  8. 공용 모듈(`common/**`)과 `pipeline/shared/**`는 이름·자리를 바꾸지 않는다(레이어 코드 핑거프린트 값 유지 — 기록용이지만 이번엔 제외). 파이프라인 루트의 파싱 코드를 ETL 폴더로 옮기는 것은 한다.
+- 할 일(조사 11-04 — 표는 커밋 메시지·PR 본문):
+  - 서버·릴리스 스크립트: `dc.sh`→`host_ctl.sh` · `trigger.sh`→`nightly_batch.sh`(새벽 배치만) · `run_tool.sh`→`pipe_exec.sh`(parse·publish도) · `mcp_up.sh`→`mcp_keepalive.sh`(compose는 `host_ctl.sh`로) · `image_vars.sh`→`in_container.sh`(쓰지 않는 `need_image` 지움) · `prune_old.sh`→`prune_images.sh` · `settings_env.sh`→`load_settings.sh` · `host_env.py`→`settings_to_env.py` · `host_keys.tsv`→`host_settings.tsv` · `deploy/release/{assets.py→offline_assets.py, bake.sh→bake_prod_image.sh, ship_stage.sh→stage_images.sh, hostkeys.py→gen_host_keys.py}`. `load.sh`는 이미지 저장소에 이미 같은 이름으로 있어 그대로.
+  - 파이프라인: 단계 사슬(`cli.parse_module`·`parse_service._worker`의 filter_and_rotate→run_engines→parse_scoring→build_rep)과 프로세스 묶음 실행(`cli._run_until`·`parse_service._run_group`)을 하나로. 파싱 코드를 ETL로: `cli._unparsed`→extract, 완료 표시(`read_mark`·`write_mark`)→transform/represent, `_vlm_doc_concurrency`→extract/run_engines, `engine_stack.py`→extract. 쓰지 않는 `cli parse --deadline`·전달만 하는 함수 지움.
+  - 검색 MCP: 같은 파일 이름 3건(`services/fulltext.py`·`search/text.py`·`search/terms.py`)과 뜻이 흐린 이름(`local.py`·`qtype.py`·`shaping.py`·`routers/dispatch.py`·`cli/ask.py`) 바꿈, 날짜 조건 `_when` 두 벌 하나로.
 - QA: 정리 전후 같은 문서 묶음의 대표 결과·ParsingMeta 행·게시 파일이 같음 · selftest·pytest 기준선 유지 · `check_modules` 통과.
 - Status: todo
 
