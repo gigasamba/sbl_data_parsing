@@ -318,8 +318,9 @@ def test_initialize_contract():
         # 11-03 pl-52(사용자 결정, 등급 A): search에 attrs 인자·근거 attrs 칸, edw_meta 인자 없음에 search_attrs — 전 11894바이트·80ab2ace…
         # (검토 고침: 근거 attrs null·search_attrs의 attrs 목록·오류면 안 붙음 설명 — 12608바이트·f7845fd7… 다음)
         # 11-04(사용자 결정, 등급 A): search 설명을 실제 동작으로 — source_system 필수·Other 포함, filter·scope_docs 늘 있음 — 전 12725바이트·1f4d4a53…
-        assert len(wire.encode()) == 12810
-        assert hashlib.sha256(wire.encode()).hexdigest() == "c458eda7512a8e1dc330279ea7da4bf84686e3bceacb2ab59174f31967860b52"
+        # 11-04 op-13(사용자 결정, 등급 A): parse_document 허용 루트 `_mcp_parse/inbox`·호스트 `<루트>/output/` — 전 12810바이트·c458eda7…
+        assert len(wire.encode()) == 12802
+        assert hashlib.sha256(wire.encode()).hexdigest() == "92449c4504b0f305c3f6e4292b665ef89baaa49f999db96f7c86f0fc337fda8d"
         with patch.object(main, "build", return_value=m):
             app = main.build_guarded_app("127.0.0.1", 8765, "")
         headers = {"Accept": "application/json, text/event-stream", "X-MCP-Client": "test", "X-MCP-User": "test"}
