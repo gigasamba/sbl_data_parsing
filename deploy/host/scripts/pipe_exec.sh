@@ -1,5 +1,5 @@
 #!/bin/bash
-# OP18 — 서버에서 파이프라인 단계(parse·publish)·cli 도구·판 관리를 한 번 돌리는 얇은 래퍼(rn-06 — 옛 trigger.sh parse|publish도 여기로). 사용자 11-02 — 1회 job 컨테이너(compose run --rm)를 없애고 상주 컨테이너
+# OP18 — 서버에서 파이프라인 단계(parse·publish)·cli 도구·판 관리를 한 번 돌리는 얇은 래퍼(rn-06 — parse·publish도 여기로, 새벽 배치는 nightly_batch.sh). 사용자 11-02 — 1회 job 컨테이너(compose run --rm)를 없애고 상주 컨테이너
 #   data-pipeline 안에서 이미지 시작 스크립트로 돈다(docker exec — in_container.sh in_pipeline). 컨테이너가 안 떠 있으면 종료 코드 2.
 #   bash deploy/host/scripts/pipe_exec.sh <도구 이름(.py 생략 가능)> [도구 인자…]   (코드 폴더 루트에서)
 #     단계: parse(원천 → <결과 폴더>/parse/_rep) · publish(SI39 — 대표 결과(.md) Object Storage 업로드 + EDW 메타 · --dry-run은 쓰기 0)
