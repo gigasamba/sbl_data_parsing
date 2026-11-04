@@ -50,3 +50,7 @@ tessdata_best/
 
 # A tool run with an unexpanded %SystemDrive% cwd once wrote Windows cache files here (#136)
 /%SystemDrive%/
+
+# pr-reviewer scratch notes (never commit)
+/comment.md
+/findings.md

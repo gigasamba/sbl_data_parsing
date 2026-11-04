@@ -402,7 +402,7 @@ flowchart TD
 - `list_doc_fulltext`·`get_doc_fulltext`: 대표 결과 위치는 PG가 아니라 EDW ParsingMeta에서 그때 읽고, 서명된 `sfid`로 Object Storage에서 받음.
 - `parse_document`: 파일 하나를 `data-pipeline-mcp` 컨테이너의 작업 서비스(`127.0.0.1:8766`)에 넘김 → 같은 `filter_and_rotate` → `run_engines` → `parse_scoring` → `build_rep`를 (`pipeline.parse_service`가) `output/_mcp_parse/`에서 돌림(구조화·적재 없음).
 - `query_edw`·`edw_meta`: EDW 읽기 전용 질의·카탈로그(`services/edw_query.py`·`edw_meta.py`).
-- 호출마다 `applog.mcp_call` 한 행(`services/call_log.py`).
+- 호출마다 `applog.mcp_log` 한 행(`services/call_log.py`).
 
 ---
 

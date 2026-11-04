@@ -42,14 +42,14 @@ def test_applog_migration():
                 st, _, rep = dbtool.check("applog", schema, conn=conn)
                 assert st == "끝" and rep is not None and not rep.diffs, rep.lines() if rep else "no tables"
                 names = set(conn.exec_driver_sql(f"SELECT tablename FROM pg_tables WHERE schemaname='{schema}'").scalars())
-                assert {"mcp_call", "pipe_run", "pipe_event", "alembic_version"} <= names
-                assert len([n for n in names if n.startswith(("mcp_call_", "pipe_event_"))]) == 6
+                assert {"mcp_log", "pipe_run", "pipe_event", "alembic_version"} <= names
+                assert len([n for n in names if n.startswith(("mcp_log_", "pipe_event_"))]) == 6
                 constraints = set(
                     conn.exec_driver_sql(
                         f"SELECT conname FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname='{schema}' AND c.contype='c'"
                     ).scalars()
                 )
-                assert {"mcp_call_status", "pipe_event_status", "pipe_event_err_kind"} <= constraints
+                assert {"mcp_log_status", "mcp_log_rpc_method", "pipe_event_status", "pipe_event_err_kind"} <= constraints
             run_id = str(uuid.uuid4())
             now = datetime.now(UTC)
             sink = logsink.Sink(writer=partial(logsink._write_db, schema=schema), flush_sec=60)
@@ -60,9 +60,12 @@ def test_applog_migration():
             sink = logsink.Sink(writer=partial(logsink._write_db, schema=schema), flush_sec=60)
             sink.emit("pipe_run", {"run_id": run_id, "started_at": now, "ended_at": now, "status": "ok", "docs_total": 1})
             sink.emit(
-                "mcp_call",
+                "mcp_log",
                 {
-                    "ts": now,
+                    "requested_at": now,
+                    "rpc_method": "tools/call",
+                    "client_ip": "10.0.0.1",
+                    "agent_id": None,
                     "request_id": str(uuid.uuid4()),
                     "status": "ok",
                     "result_keys": {"password": "never-store", "chunks": [1, 2]},
@@ -77,12 +80,12 @@ def test_applog_migration():
             with eng.connect() as conn:
                 assert conn.exec_driver_sql(f"SELECT count(*) FROM {schema}.pipe_run").scalar() == 1
                 assert conn.exec_driver_sql(f"SELECT status FROM {schema}.pipe_run").scalar() == "ok"
-                assert conn.exec_driver_sql(f"SELECT result_keys FROM {schema}.mcp_call").scalar() == {"password": "***", "chunks": [1, 2]}
+                assert conn.exec_driver_sql(f"SELECT result_keys FROM {schema}.mcp_log").scalar() == {"password": "***", "chunks": [1, 2]}
                 assert conn.exec_driver_sql(f"SELECT metrics FROM {schema}.pipe_event").scalar() == {"count": 2}
             start = month_start(now - timedelta(days=400))
             end = next_month(start)
             with eng.begin() as conn, Operations.context(MigrationContext.configure(conn)) as op:
-                for parent in ("mcp_call", "pipe_event"):
+                for parent in ("mcp_log", "pipe_event"):
                     op.execute(
                         f"CREATE TABLE {schema}.{parent}_{start:%Y%m} PARTITION OF {schema}.{parent} FOR VALUES FROM ('{start.isoformat()}') TO ('{end.isoformat()}')"
                     )
@@ -92,7 +95,7 @@ def test_applog_migration():
                 )
             with eng.begin() as conn:
                 report = dbtool.maintain_applog(schema, conn=conn, now=now)
-                assert set(report["dropped"]) == {f"{t}_{start:%Y%m}" for t in ("mcp_call", "pipe_event")}
+                assert set(report["dropped"]) == {f"{t}_{start:%Y%m}" for t in ("mcp_log", "pipe_event")}
                 assert conn.exec_driver_sql(f"SELECT count(*) FROM {schema}.pipe_run").scalar() == 1
             with eng.connect() as conn:
                 assert not dbtool.check("applog", schema, conn=conn)[2].diffs
