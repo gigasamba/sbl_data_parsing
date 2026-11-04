@@ -16,7 +16,7 @@
 | 새 문서만 고른다 — 목록에서 EDW `AI.ParsingMeta`에 끝난 행(`ok`·`partial`·`skipped_dup`)이 있는 원본 키(`s3_key`)를 뺀다. 파싱 입구(`pipeline/cli.py` `_unparsed`)가 EDW를 읽기 계정으로 한 번 읽음 | 끝난 문서를 다시 파싱하지 않는다. `not_parsed`·`skipped_disk_cap`·실패·기록 없음은 다시 고른다(사용자 11-01). 서버에서 EDW를 못 읽으면 시작하지 않는다(종료 4) | done | [pl-23](prd/ops.md#pl-23) |
 | 파일은 Object Storage 버킷에서 `s3_key`로 받는다. 파싱 입력은 폴더 또는 목록 파일(`rdb:csv:<경로>`) 둘뿐 | 길을 하나로 | done | [pl-01](prd/extract.md#pl-01) |
 | 미리 받기(warm) — `run_docs`가 파싱보다 앞서 문서를 최대 20개(`ops.run_docs.warm`)까지 받아 임시 폴더(`_warm`)에 둔다 | 다운로드를 기다리느라 파싱 워커가 놀지 않게. 받기 실패면 파싱 때 직접 받는다 | done | [pl-01](prd/extract.md#pl-01) |
-| 병렬 다운로드 — 목록 파일의 여러 파일을 동시에 받는다(`source warm` 기본 2개 `pipeline.extract.prefetch_workers` · `rdb:csv` 받기 기본 1개 `pipeline.extract.source.fetch_workers`) | 큰 목록을 빨리 받는다. 받기는 네트워크 대기라 CPU를 거의 안 쓴다 | done | [pl-48](prd/extract.md#pl-48) |
+| 병렬 다운로드 — 목록 파일의 여러 파일을 동시에 받는다(`source warm`·`rdb:csv` 받기 모두 `pipeline.extract.source.fetch_workers` — 기본 1개, 11-04에 미리받기 칸을 합침) | 큰 목록을 빨리 받는다. 받기는 네트워크 대기라 CPU를 거의 안 쓴다 | done | [pl-48](prd/extract.md#pl-48) |
 | 서버 러너도 병렬로 받는다 — 받기 워커 `ops.run_docs.warm_workers`(기본 2)개. 실제 동시 받기 수 = min(받기 워커 수, 미리 받기 빈자리) | 미리 받기 상한 `ops.run_docs.warm`(받는 중 포함)과 함께 작동 — 빈자리가 없으면 워커가 있어도 받지 않는다 | done | [pl-48](prd/extract.md#pl-48) |
 | 레인 나누기 — 받은 직후 셋으로. **vlm**: 스캔 PDF(첫 3쪽 글자 평균 300자 미만)·그림 많은 오피스(내장 그림 8개 이상 또는 800 KB 이상)·pptx·ppt·검사 목록 밖 형식(mht·mhtml·이미지 등). **medium**: 검사한 pdf·오피스 중 가벼운데 큰 파일(docx·doc 300 KB, xlsx·xls·xlsm 500 KB, pdf 1 MB 이상). **light**: 글자형(txt·hwp·hwpx·csv·eml·msg·html)과 나머지 | 그림 읽는 모델(VLM)이 필요한 무거운 문서가 가벼운 문서를 막지 않게 — 레인마다 전담·공유 워커, vlm은 동시 2개(GPU), light는 CPU 부하 대기를 건너뜀(`run_docs.py` `classify_doc`, `docflow_probe.py`) | done | [rn-01](prd/ops.md#rn-01) |
 | 완전히 같은 파일(sha256 같음)은 한 번만 파싱하고 결과를 재사용한다. 문서는 S3 키마다 따로 둔다 | 비싼 파싱을 중복하지 않는다. 키마다 메타(고객 등)가 달라 문서는 따로. 남길 사본: 사본 표시 없는 이름 → 최신 → 큰 파일(`dedup.py` `_rep_select`) | done | [pl-02](prd/extract.md#pl-02) |
@@ -74,7 +74,7 @@
 | 이름 있는 색인 비교 예시(`index_a`·`index_b`)를 두지 않는다 | 검색 색인은 원천 스키마의 표 하나뿐 | done | [pl-19](prd/load.md#pl-19) |
 | 게시(publish — 파싱 결과를 Object Storage에 올리고 EDW `AI.ParsingMeta`에 기록) — 대표 `.md`와 엔진별 원결과를 올리고 원본 파일은 올리지 않는다 | 다른 팀은 결과를 Object Storage와 ParsingMeta에서 읽는다 | done | [pl-09](prd/load.md#pl-09) |
 | ParsingMeta에는 INSERT만 — 키 (`source_system`, `source_key` = 원본 전체 키)가 이미 있으면 건너뜀. UPDATE는 적재 때 `loaded_at`·`gold_version`뿐 | — | done | [pl-09](prd/load.md#pl-09) |
-| DRM(`skipped_drm`)·실패(`failed`) 문서는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만. 업로드 대상 상태는 `load.publish.upload_statuses`(기본 ok·partial) | 깨진 결과가 다른 팀에 넘어가지 않게 | done | [pl-09](prd/load.md#pl-09) |
+| DRM(`skipped_drm`)·실패(`failed`) 문서는 EDW에 쓰지 않고 `output/publish/excluded_<날짜>.md` 보고서에만. 업로드 대상 상태는 `tuning.load.publish.upload_statuses`(기본 ok·partial) | 깨진 결과가 다른 팀에 넘어가지 않게 | done | [pl-09](prd/load.md#pl-09) |
 | 게시 버킷이 원천 원본 버킷과 같으면 게시를 거부한다 — 단 `run_docs`는 이 검사를 끄고 넘긴다(`PM_BUCKET_SKIP_OVERLAP_CHECK=1`) | 원본 덮어쓰기를 막는다 | done | [pl-09](prd/load.md#pl-09) |
 | 게시는 늘 하고 게시 대상(버킷·접두)은 필수 — `local`·`dev`는 로컬 대역이나 실제 접속, `prd`는 실제 접속만 | `run_docs`는 문서마다 늘 게시하고 버킷·접두가 없으면 시작을 거부한다 | done | [pl-26](prd/load.md#pl-26) |
 | FAQ를 다시 올리면 gold faq의 문서·청크를 모두 지우고 지금 FAQ 파일 전체를 다시 적재(판을 잇지 않음) | pl-13 "지우지 않음"의 FAQ 예외(등급 A) | done | [pl-41](prd/load.md#pl-41) |
@@ -147,7 +147,7 @@
 | 실행 환경 `RUN_ENV`(`required.env.run_env`)는 `local`·`dev`·`prd`만, 어디서나 필수 — `stage`나 모르는 값이면 시작 거부 | `stage`는 `prd`와 똑같이 동작했다 | done | [op-02](prd/ops-settings.md#op-02) |
 | 서버(`dev`·`prd`)는 가짜 LLM(`dev.llm_fake`)이 켜져 있거나 설정 파일을 못 읽으면 시작 거부 | 서버에서 가짜 답이 도는 것을 막는다 | done | [op-02](prd/ops-settings.md#op-02) |
 | 설정은 settings.yaml 하나 — `settings.sample.yaml`에 모든 키가 기본값과 함께(`python -m common.config.sample`로 생성) | — | done | [op-05](prd/ops-settings.md#op-05) |
-| 배치 — 맨 위 `required`(필수·비밀) → 역할 절 7개 → `tuning`(내부 조정값). 옛 배치는 시작 거부, `python -m common.config.migrate`로 변환 | sample과 실제 파일의 차이를 줄였다 | done | [op-08](prd/ops-settings.md#op-08) |
+| 배치 — 맨 위 `required`(필수·비밀) → 역할 절 7개(환경마다 정하는 값) → `tuning`(거의 안 바꾸는 값 — 분류 제목, 11-04). 옛 배치는 시작 거부, `python -m common.config.migrate`로 변환 | sample과 실제 파일의 차이를 줄였다 | done | [op-08](prd/ops-settings.md#op-08) |
 | 설정 이관은 옛 배치 settings.yaml → 새 배치만 | 운영 서버는 0.1.0(settings.yaml 하나). 사용자 11-02 | done | [op-08](prd/ops-settings.md#op-08) |
 | 하드코딩 0 — 설정 값은 settings.yaml이나 이미지 기본값 표(`settings.py`)에서만, 호스트 셸은 `settings_env.sh`가 준 값만, PG 자동 찾기 없앰(PG 접속 필수) | 한 곳을 바꾸면 나머지가 어긋나던 문제. 남은 복사본 있음 | done | [op-09](prd/ops-settings.md#op-09) |
 | 환경마다 다른 경로·접속은 settings.yaml 필수(코드 기본값 없음) — 컨테이너 안 경로는 이미지 기본값 표 하나만, 호스트 `PATCH_CODE` 기본값 지움 | 사용자 11-02 | done | [op-09](prd/ops-settings.md#op-09) |

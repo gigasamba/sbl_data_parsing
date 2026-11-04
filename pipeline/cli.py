@@ -499,10 +499,8 @@ def _default_procs():
 
 
 def _default_workers():
-    """--workers 기본 — NIGHT_WORKERS → PIPE_WORKERS 중 준 값(설정 객체) 글자로, 없으면 "4"(S7c — 옛 `get(N) or get(P) or "4"`)."""
-    v = pc.given("NIGHT_WORKERS")
-    if v is None:
-        v = C.given("PIPE_WORKERS")
+    """--workers 기본 — PIPE_WORKERS(설정 객체 — 11-04 NIGHT_WORKERS를 합침) 글자로, 없으면 "4"."""
+    v = C.given("PIPE_WORKERS")
     return C.render(v) if v is not None else "4"
 
 

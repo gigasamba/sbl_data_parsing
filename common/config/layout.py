@@ -1,8 +1,9 @@
 """settings.yaml 배치(op-08 ②) — 파일의 칸 자리(YAML 경로) ↔ 설정 모델의 칸 경로(common.* · pipeline.* · mcp.*).
-파일은 `required`(운영자가 꼭 채울 값) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops` → `tuning`(코드 상수 후보) →
+파일은 `required`(운영자가 꼭 채울 값) → 역할 절 `common`·`extract`·`transform`·`load`·`search`·`ops`(환경마다 운영자가 정하는 값) → `tuning`(거의 안 바꾸는 값 — 분류별) →
 `dev`(PC 전용 — 서버는 비워 둠) 순서다.
 코드는 모델 경로(`cfg().extract.ocr.dpi` 등)를 그대로 쓰고, read_settings()가 파일을 읽은 직후 to_model()로 모델 배치로 바꾼다.
   · required: 칸마다 자리를 적은 표(REQUIRED). tuning: 모델 경로 모음(TUNING) — 자리는 `tuning.` + 역할 자리.
+    역할 절에서 tuning으로 옮긴 칸(TUNING_RARE — 사용자 11-04)은 옛 자리(역할 자리)도 경고 한 번 뒤 읽는다.
   · PC 전용 칸(LOCAL — 외부 모델 허용·지출 상한·로컬 대체 DB 등): 자리는 `dev.` + 역할 자리(앞 `common.` 뺌). 옛 자리(역할 자리)·
     옛 required 밖 자리(MOVED)도 경고 한 번 뒤 읽는다 — 사용자 11-04(설정 줄이기).
   · 그 밖: 접두어 규칙(ROLES — 모델 접두 → 파일 접두, 1:1). 사전 값 칸(lib_env·extra_body 등)도 접두어로 그대로 옮겨진다.
@@ -124,7 +125,7 @@ ROLES = (
     ("mcp.dev.", "dev.mcp."),
 )
 
-# tuning — 코드 상수 후보(사용자 10-30 op-08 4차): 기본값 말고 다른 값을 쓴 흔적이 없는 운영 값. 상수로 내릴지는 나중에 정한다.
+# tuning — 거의 안 바꾸는 값(사용자 10-30 op-08 4차 · 11-04: 코드로 내리지 않고 sample 아래쪽에 분류별로 모음 — 비우면 코드 기본값).
 TUNING_INTERNAL = (  # 내부 조정값 — 재시도·내부 대기·묶음 크기·출력 상한
     "common.models.embed.query_cache_max",
     "common.models.llm.empty_retry_max",
@@ -182,10 +183,64 @@ TUNING_RESOURCE = (  # 자원·대기·병렬 세부값 — 자동 계산 내부
     "pipeline.transform.vlm.page_min_concurrency",
     "pipeline.transform.figures.vlm_parallel",
     "pipeline.night.vlm_concurrency",
-    "pipeline.night.workers",
     "pipeline.service.parse_mcp.procs",
 )
-TUNING = frozenset(TUNING_INTERNAL + TUNING_RESOURCE)
+TUNING_RARE = (  # 사용자 11-04 — 역할 절에서 옮긴 칸: 결과 파라미터(청크·순위·그림 고르기)·내부 상한·로그 대기열(운영자가 환경마다 정하지 않음)
+    "common.connections.pg.connect_timeout",
+    "common.connections.pg.pool_max",
+    "common.text.search_en_stem",
+    "common.text.token_num_norm",
+    "common.log.queue_size",
+    "common.log.batch_size",
+    "common.log.flush_sec",
+    "common.log.db_timeout_sec",
+    "common.log.shutdown_sec",
+    "pipeline.connections.rdb.increment_col",
+    "pipeline.connections.rdb.columns.content_version",
+    "pipeline.connections.rdb.columns.doc_id",
+    "pipeline.connections.rdb.columns.filename",
+    "pipeline.connections.rdb.columns.key",
+    "pipeline.connections.rdb.columns.size",
+    "pipeline.extract.prepare.link",
+    "pipeline.extract.fill_merged",
+    "pipeline.extract.hidden_overlap_max",
+    "pipeline.extract.kreuzberg_prose_filter",
+    "pipeline.extract.low_priority",
+    "pipeline.extract.rotated_max",
+    "pipeline.extract.text_page_sec",
+    "pipeline.extract.warmup_sec",
+    "pipeline.extract.table_grid_max_rows",
+    "pipeline.extract.ocr.table_grid",
+    "pipeline.extract.attach.max_depth",
+    "pipeline.extract.attach.max_n",
+    "pipeline.transform.figures.ocr_fallback_min_chars",
+    "pipeline.transform.figures.pptx_render_max",
+    "pipeline.transform.figures.pptx_shapes_max",
+    "pipeline.transform.figures.pptx_smartart_max",
+    "pipeline.transform.figures.vectors_max",
+    "pipeline.transform.vlm.fig_min_px",
+    "pipeline.transform.vlm.fig_ocr_max",
+    "pipeline.transform.vlm.fig_photo_area_min",
+    "pipeline.transform.vlm.fig_photo_max_tokens",
+    "pipeline.transform.vlm.fig_photo_ocr_max",
+    "pipeline.transform.vlm.fig_text_ocr_min",
+    "pipeline.transform.structure.chunk_overlap",
+    "pipeline.transform.structure.chunk_size",
+    "pipeline.transform.structure.chunk_table",
+    "pipeline.transform.structure.chunk_table_rows",
+    "pipeline.transform.structure.page_chunk_max",
+    "pipeline.load.publish.upload_statuses",
+    "mcp.server.max_queue",
+    "mcp.search.methods",
+    "mcp.search.weights.bm25",
+    "mcp.search.weights.bm25_table",
+    "mcp.search.weights.id",
+    "mcp.search.weights.vector",
+    "mcp.audit.max_queue_bytes",
+    "mcp.audit.max_input_bytes",
+    "mcp.audit.max_output_bytes",
+)
+TUNING = frozenset(TUNING_INTERNAL + TUNING_RESOURCE + TUNING_RARE)
 
 # PC 전용 칸(사용자 11-04) — 서버(dev·prd)는 외부 모델·로컬 대체 DB를 거부하므로 비워 둔다. 파일 자리 dev.<역할 자리>(sample 맨 아래 절).
 LOCAL = (
@@ -204,7 +259,7 @@ LOCAL = (
     "common.connections.rdb.sqlite",
     "pipeline.load.pg_create_extension",
 )
-MOVED = frozenset(LOCAL) | {"mcp.server.fulltext_secret"}  # 자리를 옮긴 칸 — 옛 자리(역할 자리)도 경고 뒤 읽음
+MOVED = frozenset(LOCAL + TUNING_RARE) | {"mcp.server.fulltext_secret"}  # 자리를 옮긴 칸 — 옛 자리(역할 자리)도 경고 뒤 읽음
 
 
 class LayoutError(ValueError):
@@ -312,11 +367,10 @@ def warn_removed(name):
         sys.stderr.write(f"[settings] 지운 칸 무시: {name} — 설정 파일에서 지울 것(값은 출력 안 함)\n")
 
 
-def _gone_in_dev(y):
-    """dev 절 안(PC 전용 칸이 든 절)의 지운 칸인가 — 그 절 모델 클래스의 REMOVED에 있으면 모델로 넘겨 경고만."""
-    head, _, leaf = y.rpartition(".")
-    m = _LOCAL_PARENTS.get(head)
-    return m is not None and leaf in REMOVED.get("".join(p.title() for p in m.split(".")), ())
+def _gone(m):
+    """지운 칸인가 — 그 절 모델 클래스의 REMOVED에 있으면 자리(dev·tuning 안 옛 자리 포함)와 상관없이 모델로 넘겨 경고만."""
+    head, _, leaf = m.rpartition(".")
+    return leaf in REMOVED.get("".join(p.title() for p in head.split(".")), ())
 
 
 def to_model(doc, source=""):
@@ -344,8 +398,8 @@ def to_model(doc, source=""):
             if y not in _WARNED:
                 _WARNED.add(y)
                 sys.stderr.write(f"[settings] 옛 자리 칸 읽음: {y} — {want}로 옮길 것(값은 출력 안 함)\n")
-        elif want != y and not _gone_in_dev(y):
-            moved.append(f"{y} → {want}")  # dev 절 안의 다른 칸도(지운 칸만 모델로 넘겨 경고)
+        elif want != y and not _gone(m):
+            moved.append(f"{y} → {want}")  # dev·tuning 절 안의 다른 칸도(지운 칸만 모델로 넘겨 경고)
             continue
         if m in MOVED and seen.setdefault(m, y) != y:
             raise LayoutError(f"같은 칸을 두 자리에 적음: {seen[m]} · {y} — {want} 하나만 남길 것{where}")
@@ -529,6 +583,7 @@ REMOVED: dict[str, frozenset[str]] = {
             "parallel",
             "phase_sec",
             "phases",
+            "prefetch_workers",  # 11-04 — 미리받기 스레드는 원본 받기와 같은 extract.source.fetch_workers 하나로
             "scan_fill",
             "signal_ocr",
             "stream",
@@ -566,7 +621,7 @@ REMOVED: dict[str, frozenset[str]] = {
     # PipelineLoadPublish(pipeline/config.py) — 사용자 10-30(op-08) — 지운 칸(남으면 경고만)
     "PipelineLoadPublish": frozenset({"parse_date", "path_map", "source_system", "upload_raw"}),  # parse_date·path_map — 11-04(op-05)
     # PipelineNight(pipeline/config.py) — 11-01(night·trigger.sh night 지움) — 지운 칸(남으면 경고만)
-    "PipelineNight": frozenset({"deadline", "parse_deadline"}),
+    "PipelineNight": frozenset({"deadline", "parse_deadline", "workers"}),  # workers — 11-04: ops.runtime.pipe_workers 하나로
     # PipelinePaths(pipeline/config.py) — 0.2.0 index_conf(pl-46 — 이름 있는 색인) · 사용자 10-29 · stack_snapshot 10-30(pl-32) · stack_version 11-01(판 표 없앰 — 엔진 구성은 파일) · report_digest_dir 11-01(e2-10 — run_board 지움) · file_meta_path 11-02(pl-29 — 적재가 EDW 조인) · edw_chain 11-03(pl-52 — 적재·검색이 함께 쓰는 common.paths.edw_chain = ops.paths.edw_chain으로) — 지운 칸·절(남으면 경고만)
     "PipelinePaths": frozenset(
         {

@@ -32,8 +32,8 @@
 | `ops.log.db_enabled` | 서버(두 이미지) 켬 · PC 끔 | DB(`applog` 스키마) 기록 — 서버 로그는 이것뿐. 먼저 `migrate up --target all`(applog 포함) |
 | `ops.log.retention_days` | 90 | 월 파티션 보존 일수 |
 | `ops.log.fallback_dir` | `output/logs` | DB 장애·시간 초과 때 대체 JSON Lines(자동 재적재 없음) — 파일은 이 한 곳 |
-| `ops.log.shutdown_sec` | 5 | 종료 때 남은 기록을 쓰는 상한(초) |
-| `search.audit.max_input_bytes` · `max_output_bytes` | 16384 · 65536 | MCP 감사 원문 저장 상한(바이트) |
+| `tuning.ops.log.shutdown_sec` | 5 | 종료 때 남은 기록을 쓰는 상한(초) |
+| `tuning.search.audit.max_input_bytes` · `max_output_bytes` | 16384 · 65536 | MCP 감사 원문 저장 상한(바이트) |
 
 - 서버는 매일 `bash deploy/host/scripts/run_tool.sh migrate maintain --target applog`(PC: `python -m common.store.db.dbtool maintain --target applog`)를 예약한다 — 앞으로 2개월 파티션 준비, 보존 기한이 지난 파티션 삭제.
 - ⚠️ MCP 감사 행(`applog.mcp_call`)과 대체 파일에는 문서 원문이 들어간다(`get_doc_fulltext` 결과는 파일당 `max_output_bytes`까지). `applog` DB·표와 `ops.log.fallback_dir`은 원본 문서와 같은 수준으로 접근을 제한한다(C-79). 대체 파일은 지우지 않으므로 디스크 회수도 운영에서 정한다.
@@ -177,6 +177,8 @@ ls -l ../settings.yaml                # 서버(코드 폴더에서): 주인 1000
 | 이미지 칸 `required.deploy.pipeline_image`·`mcp_image` | dev `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0` · prd `data-pipeline:0.2.0`·`mcp-server:0.2.0` |
 | 새 칸 `required.deploy.pg_container`·`required.tokens.parse_mcp`·`parse_proxy`·`fulltext` | 채운다(README [꼭 채울 값](../../README.md#꼭-채울-값)) |
 | 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline` — 셋 다 있어야 돎 | 배포 때는 비워 두고 배포 뒤 켠다(§8-4 3) |
+| 거의 안 바꾸는 칸 53개가 `tuning` 절로(사용자 11-04 — 청크·순위 가중치·그림 고르기·로그 대기열·EDW 원천 열 이름 등) | 값을 적어 둔 칸만 `tuning.<옛 자리>`로 옮긴다(옛 자리도 읽고 안내 한 줄 — C-92) |
+| 합친 칸 `extract.prefetch_workers` → `extract.source.fetch_workers` · `tuning.ops.nightly_run.workers` → `ops.runtime.pipe_workers` | 옛 칸 값을 새 칸에 적고 옛 칸은 지운다(남아도 경고만) |
 | `parse_document` 크기 상한 칸이 `ops.runtime.parse_max_mb`(기본 100) | 옛 `ops.services.parse_mcp.max_mb`가 있으면 지우고, 100이 아닌 값은 새 칸에. 리버스 프록시 본문 상한도 늘린다(C-85) |
 | `query_edw` 행 상한 기본 1000(`search.edw_query.max_rows`) | 다른 값을 쓰려면 적는다 |
 | 용어집·고객 명부는 PG 마스터 표 | `migrate master load`(§8-3 5) · CSV를 고치면 다시 하고 검색 MCP 재시작 |

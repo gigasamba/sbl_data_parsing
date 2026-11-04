@@ -151,6 +151,24 @@ def test_misplaced_and_unknown_keys():
         assert read_settings(f)[0] == {"common": {"run_env": "local"}}  # 빈 절 머리는 괜찮음
         f.write_text("required:\n  env: {run_env: local}\n  deploy: {mcp_store: pg}\n", encoding="utf-8")
         assert read_settings(f)[0] == {"common": {"run_env": "local"}}  # 지운 자리(RETIRED — mc-01 11-01)는 경고만, 거부 안 함
+        # 11-04 — tuning으로 옮긴 칸(TUNING_RARE)의 옛 역할 자리도 읽음 · 새 자리와 둘 다 적으면 거부
+        f.write_text("required:\n  env: {run_env: local}\nsearch:\n  weights: {bm25: 3}\n", encoding="utf-8")
+        assert read_settings(f)[0]["mcp"]["search"]["weights"]["bm25"] == "3"
+        f.write_text(
+            "required:\n  env: {run_env: local}\nsearch:\n  weights: {bm25: 3}\ntuning:\n  search:\n    weights: {bm25: 4}\n",
+            encoding="utf-8",
+        )
+        assert _raises(lambda: read_settings(f), "두 자리", "tuning.search.weights.bm25")
+    classes = app_classes()
+    if "pipeline" in classes:  # 11-04 합친 칸 — 옛 자리(역할·tuning)에 남아도 경고만(시작은 함)
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "s.yaml"
+            f.write_text(
+                "required:\n  env: {run_env: local}\nextract:\n  prefetch_workers: 3\ntuning:\n  ops:\n    nightly_run: {workers: 5}\n",
+                encoding="utf-8",
+            )
+            st = load(classes["pipeline"], file=f, environ={})
+            assert not hasattr(st.pipeline.extract, "prefetch_workers") and not hasattr(st.pipeline.night, "workers")
 
 
 def test_duplicate_key_rejected():

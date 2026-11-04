@@ -37,11 +37,11 @@
 ## op-08 · 설정 배치 — 필수 묶음 + 역할별 파라미터 + tuning
 - 이유: 운영자가 꼭 넣을 값을 맨 위에 모으고 나머지를 역할별로 나눈다.
 - 규칙:
-  1. 최상위 절 순서: `required` → `common` · `extract` · `transform` · `load` · `search`(MCP 검색) · `ops`(실행 자원·스케줄·서비스·서버 컨테이너·경로) → `tuning`(내부 제한 시간·대기열·자원 세부값) → `dev`(PC 전용 — 외부 모델·로컬 대체 DB·시험 하네스, op-05 8).
+  1. 최상위 절 순서: `required` → `common` · `extract` · `transform` · `load` · `search`(MCP 검색) · `ops`(실행 자원·스케줄·서비스·서버 컨테이너·경로) — 역할 절에는 환경마다 운영자가 정하는 값(주소·TLS·포트·경로·상한·서버 크기에 맞춘 병렬 수·기능 스위치·호스트 스크립트와 `run_docs.py --set`이 쓰는 칸)만 → `tuning`(거의 안 바꾸는 값 — 결과 파라미터·내부 제한 시간·대기열·자원 세부값, 사용자 11-04: 코드로 내리지 않고 sample 아래쪽에 공통·추출·변환·적재·검색·로그·실행 자원·새벽 배치·상주 서비스 분류 제목으로, 비우면 코드 기본값) → `dev`(PC 전용 — 외부 모델·로컬 대체 DB·시험 하네스, op-05 8).
   2. `required` = 기본값을 쓸 수 없는 값(연결 주소·계정·비밀·이미지 태그) — `env`·`pg`·`embed`·`edw`·`object_storage`·`models`·`source`·`tokens`·`deploy`. 카테고리 제목에 `[PC·서버]`·`[서버만]`·`[PC만]`.
   3. 파일 자리 ↔ 설정 모델 경로(`common.*`·`pipeline.*`·`mcp.*`)의 표는 `common/config/layout.py` 하나. `read_settings`가 파일을 모델 배치로 바꿔 읽는다.
-  4. 옛 배치 파일은 시작 거부 + migrate 안내. 자리가 다른 칸은 "자리가 다른 칸 … → 새 자리"로 거부. 예외: 11-04에 옮긴 칸(PC 전용 칸의 역할 절 자리, `search.server.fulltext_secret`)은 옛 자리도 읽고 "옛 자리 칸 읽음 … 로 옮길 것" 한 줄을 낸다(`layout.MOVED`, 값은 출력 안 함).
-  5. 지운 칸(`layout.REMOVED`)이 남아 있으면 경고 한 줄만(시작은 함).
+  4. 옛 배치 파일은 시작 거부 + migrate 안내. 자리가 다른 칸은 "자리가 다른 칸 … → 새 자리"로 거부. 예외: 11-04에 옮긴 칸(PC 전용 칸의 역할 절 자리, `search.server.fulltext_secret`, 역할 절에서 `tuning`으로 옮긴 53칸 `layout.TUNING_RARE`)은 옛 자리도 읽고 "옛 자리 칸 읽음 … 로 옮길 것" 한 줄을 낸다(`layout.MOVED`, 값은 출력 안 함).
+  5. 지운 칸(`layout.REMOVED`)이 남아 있으면 경고 한 줄만(시작은 함) — `dev`·`tuning` 안 옛 자리에 있어도 같다. 11-04 합친 칸: `extract.prefetch_workers` → `extract.source.fetch_workers`, `tuning.ops.nightly_run.workers` → `ops.runtime.pipe_workers`.
   6. `python -m common.config.migrate <옛 settings.yaml> --out <새 파일>` = 옛 배치 → 새 배치(값은 글자 그대로, 지운 칸은 "삭제됨"). `.yaml`·`.yml` 파일 하나만 받는다(다르면 종료 2). 서버 절차 [release-and-patch.md §8](../operations/release-and-patch.md#8-020-배포--사람이-할-일).
 - 파일: `common/config/{layout,settings,sample,keyscan,migrate,export}.py`, `pipeline/config.py`, `mcp_server/config.py`.
 - QA: `python -m common.config.keyscan --check` · 빠진 키 0개. `tests/server/common/test_removed_cols.py` · 통과.

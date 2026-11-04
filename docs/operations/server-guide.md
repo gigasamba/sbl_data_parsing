@@ -48,7 +48,7 @@ bash deploy/host/scripts/trigger.sh publish                    # 대표 결과 O
 ```
 - 같은 결과 폴더에 두 작업이 겹치면 `/app/output/.pipeline.lock` 때문에 뒤쪽이 종료 75.
 - 도구만 따로: `bash deploy/host/scripts/run_tool.sh <rdb_discover|check_env|ping_models|migrate|show-stack|check> [인자]`.
-- 우선순위 낮추기(`extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 같은 세션·autogroup 안에서만 효과가 있다. 컨테이너끼리는 CPU 나눔 비율(`parse_mcp_cpu_shares` 4096 대 일괄 1024)이 정한다.
+- 우선순위 낮추기(`tuning.extract.low_priority` — 일괄 파싱 엔진 자식 nice +10)는 같은 세션·autogroup 안에서만 효과가 있다. 컨테이너끼리는 CPU 나눔 비율(`parse_mcp_cpu_shares` 4096 대 일괄 1024)이 정한다.
 
 ### 2-1. 검색 MCP는 늘 켜 둠
 `bash deploy/host/scripts/mcp_up.sh` + keepalive 타이머 — README §5-5.

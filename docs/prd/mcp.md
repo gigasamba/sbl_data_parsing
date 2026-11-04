@@ -10,7 +10,7 @@
 - 규칙:
   1. `question`과 `source_system`(값 하나)은 필수다. 그 원천의 gold 스키마(`<PG_SCHEMA>_<원천>`)만 찾는다.
   2. 거르기가 있으면 먼저 범위(맞는 문서)를 구하고, 후보 `min(50, max(3k, 30))`개를 찾은 뒤 순위를 다시 매긴다(재순위 모델 없음).
-  3. 방법 `vector`·`bm25`·`id`(기본 셋 다 — `search.methods`)를 가중 RRF로 합친다. 가중치 `search.weights` — vector 1.0 · bm25 1.0 · id 2.0 · 집계 단서 질문의 bm25 0.2.
+  3. 방법 `vector`·`bm25`·`id`(기본 셋 다 — `tuning.search.methods`)를 가중 RRF로 합친다. 가중치 `tuning.search.weights` — vector 1.0 · bm25 1.0 · id 2.0 · 집계 단서 질문의 bm25 0.2.
   4. vector = pgvector 코사인, HNSW(거르기 범위가 `search.pg.filter_exact_max` 문서 이하면 정확 검색). 차원이 HNSW 한도를 넘으면 `binary_quantize`로 후보를 고른 뒤 상위 200을 원 벡터로 다시 점수.
   5. BM25 = `chunk_term`·`term_stat`·`corpus_stat`(전체 청크 수·평균 길이). id = 드문 ID 정규식.
   6. 맞는 문서가 없으면 오류가 아니라 빈 결과(`scope_docs` 0, `evidence_status` none).

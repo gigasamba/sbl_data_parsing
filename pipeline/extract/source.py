@@ -368,7 +368,7 @@ def _warm_cmd(argv):
 
     ap = argparse.ArgumentParser(prog="pipeline.extract.source warm")
     ap.add_argument("--csv", required=True, help="make_batch.py가 만든 다음 배치 csv(id·s3_key·original_filename·file_size)")
-    ap.add_argument("--workers", type=int, default=max(1, int(pc.cfg().extract.prefetch_workers)))  # S7c — 설정 객체(기본 2)
+    ap.add_argument("--workers", type=int, default=max(1, int(pc.cfg().extract.source.fetch_workers)))  # 11-04 원본 받기와 같은 칸
     a = ap.parse_args(argv)
     wd = _warm_dir()
     if not wd:

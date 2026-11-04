@@ -354,10 +354,10 @@ MCP 호출 1건당 1행. 인증 실패(`tool=http`)와 `initialize`도 행으로
 | tool | TEXT | 도구 이름 | 〃 | 없음 | 새로 |
 | agent | TEXT | `X-MCP-Client`(자기 신고 값) | 〃 | 없음 | 새로 |
 | user_id | TEXT | `X-MCP-User`, 없으면 `_meta.user`(자기 신고 값, 검증 안 함) | 〃 | 없음 | 새로 |
-| args | TEXT | 입력 JSON 앞부분(`search.audit.max_input_bytes`, 기본 16KB). 비밀값 가림. `content_b64`는 해시와 크기로 바꿈 | 〃 | 없음 | 새로 |
+| args | TEXT | 입력 JSON 앞부분(`tuning.search.audit.max_input_bytes`, 기본 16KB). 비밀값 가림. `content_b64`는 해시와 크기로 바꿈 | 〃 | 없음 | 새로 |
 | args_bytes | INTEGER | 입력 원본 크기 | 〃 | 없음 | 새로 |
 | args_truncated | BOOLEAN | 입력이 잘렸는지. 잘리면 JSON으로 안 읽힐 수 있음 | 〃 | 없음 | 새로 |
-| result | TEXT | 출력 JSON 앞부분(`search.audit.max_output_bytes`, 기본 64KB). 문서 본문·EDW 결과 포함 가능 | 〃 | 없음 | 새로 |
+| result | TEXT | 출력 JSON 앞부분(`tuning.search.audit.max_output_bytes`, 기본 64KB). 문서 본문·EDW 결과 포함 가능 | 〃 | 없음 | 새로 |
 | result_bytes | INTEGER | 출력 원본 크기 | 〃 | 없음 | 새로 |
 | result_truncated | BOOLEAN | 출력이 잘렸는지 | 〃 | 없음 | 새로 |
 | result_sha256 | TEXT | 출력 원본 전체의 해시 | 〃 | 없음 | 새로 |

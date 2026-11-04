@@ -90,7 +90,7 @@ class PipelineExtractPrepare(Section):
 
 
 class PipelineExtractSource(Section):
-    fetch_workers: int | None = F(1, "SOURCE_FETCH_WORKERS", "원본 문서 병렬 다운로드 스레드 수(개)")
+    fetch_workers: int | None = F(1, "SOURCE_FETCH_WORKERS", "원본 문서 병렬 다운로드 스레드 수(개) — rdb:csv 받기·미리받기(warm) 공용")
     warm: str | None = F(None, "SOURCE_WARM", "미리받기(warm) 저장 폴더 — 비면 warm 기능 꺼짐")
 
 
@@ -236,7 +236,6 @@ class PipelineExtract(Section):
     )
     max_file_mb: float | None = F(0.0, "MAX_FILE_MB", "이 크기(MB)를 넘는 문서는 파싱에서 건너뜀(0=제한 없음)")
     max_new: int | None = F(0, "PARSE_MAX_NEW", "이번 실행에서 처음 파싱할 새 문서 수 상한(개, 0=제한 없음)")
-    prefetch_workers: int | None = F(2, "PREFETCH_WORKERS", "미리받기(warm) 명령의 동시 다운로드 스레드 수(개)")
     rapidocr_page_workers: int | None = F(1, "RAPIDOCR_PAGE_WORKERS", "rapidocr 엔진이 문서 안 쪽별 OCR을 병렬로 돌리는 스레드 수(개)")
     rotated_max: int | None = F(20, "PARSE_ROTATED_MAX", "쪽 VLM 후보로 올릴 '회전된 쪽' 상한(쪽 수) — 0이면 rotation.csv를 안 읽음")
     skipped_log: str | None = F(None, "PARSE_SKIPPED_LOG", "건너뛴 문서(암호 PDF 등) 기록 jsonl 경로")
@@ -319,7 +318,6 @@ class PipelineLoad(Section):
 
 class PipelineNight(Section):
     vlm_concurrency: int | None = F(8, "NIGHT_VLM_CONCURRENCY", "새벽 배치: 문서 하나의 쪽 VLM 동시 요청 수(개)")
-    workers: int | None = F(4, "NIGHT_WORKERS", "새벽 배치: 동시 처리 문서 수(개)")
 
 
 class PipelinePaths(Section):
