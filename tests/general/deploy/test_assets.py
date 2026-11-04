@@ -1,4 +1,4 @@
-"""deploy.release.assets 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m deploy.release.assets selftest`."""
+"""deploy.release.assets 자기 점검 — 조각 합치기·해시 확인."""
 
 import os
 from pathlib import Path
@@ -30,5 +30,5 @@ def selftest():
     print("[selftest] 조각 합치기·해시 확인 통과")
 
 
-def test_main():  # 옛 `selftest` 인자 갈래(`{...,"selftest": selftest}[a.cmd]()`)
+def test_main():
     selftest()

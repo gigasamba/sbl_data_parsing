@@ -1,18 +1,18 @@
 # 모듈 컨테이너 연결 시험(개발 PC·개발 서버) — 브리지 네트워크 + 시험용 PostgreSQL(pgvector) + 검색 MCP(포트 게시).
 # 운영 구성(호스트 네트워크·기존 rag-postgres)은 deploy/host/compose/compose.pipeline.yml. 이 파일은 시험 전용(PostgreSQL 데이터는 컨테이너와 함께 지워짐).
 #   bash valid_env/docker/smoke_test.sh   ← 아래를 차례로: pg 띄우기 → parse → structure → load → mcp 띄우기 → 밖에서 MCP 호출 → 정리
-#   문서 위치: DOC_SRC 폴더(/data/docs) 하나 — 11-01 원천 s3://를 지워 SMOKE_SOURCE·minio(모의 Object Storage)·게시(publish) 시험은 지움 · SMOKE_LIMIT=몇 건
-# 필요한 환경: DATA_PIPELINE_IMAGE(S6b — 옛 parse·structure 이미지 합침) · MCP_SERVER_IMAGE(옛 DATA_RETRIEVAL_IMAGE) · DOC_SRC(시험 문서) · RAG_OUT(결과)
-#   · SMOKE_SETTINGS(설정 파일 settings.yaml — 임베딩 주소·MCP 토큰·Object Storage 키 등, 비밀값은 여기에만 — S7e1, 옛 env 파일 대신)
-#   서버 compose와 같게 설정 파일을 읽기 전용으로 붙이고 SETTINGS_FILE·RUN_ENV만 넘긴다(env_file 없음 — 사용자 10-27 S7e1 Q1).
-#   S7e2(사용자 10-28 — 설정은 yaml로만): 시험망에 맞춘 덮기(PG_HOST: pg·PG_PASSWORD(SMOKE_PG_PASSWORD)·OS_ENDPOINT: minio·MCP_HOST: auto 등 — 옛 environment
-#   줄)는 smoke_test.sh가 덮기 파일(SMOKE_OVERLAY_DIR/{job,mcp}.yaml — base: /etc/rag/base.yaml + overrides)로 만들어 /etc/rag/smoke에 붙인다.
+#   문서 위치: DOC_SRC 폴더(/data/docs) 하나(Object Storage·게시 시험은 없음) · SMOKE_LIMIT=몇 건
+# 필요한 환경: DATA_PIPELINE_IMAGE · MCP_SERVER_IMAGE · DOC_SRC(시험 문서) · RAG_OUT(결과)
+#   · SMOKE_SETTINGS(설정 파일 settings.yaml — 임베딩 주소·MCP 토큰·Object Storage 키 등, 비밀값은 여기에만)
+#   서버 compose와 같게 설정 파일을 읽기 전용으로 붙이고 SETTINGS_FILE·RUN_ENV만 넘긴다(env_file 없음).
+#   설정은 yaml로만: 시험망에 맞춘 덮기(PG_HOST: pg·PG_PASSWORD(SMOKE_PG_PASSWORD)·OS_ENDPOINT: minio·MCP_HOST: auto 등)
+#   는 smoke_test.sh가 덮기 파일(SMOKE_OVERLAY_DIR/{job,mcp}.yaml — base: /etc/rag/base.yaml + overrides)로 만들어 /etc/rag/smoke에 붙인다.
 name: rag-smoke
 x-settings: &settings "${SMOKE_SETTINGS:?SMOKE_SETTINGS=<settings.yaml 절대 경로 — 임베딩·MCP 토큰 등>}:/etc/rag/base.yaml:ro,z"   # :z — RHEL 개발 서버(SELinux, CLAUDE.md §2) · 파일은 컨테이너 사용자 UID 10001이 읽을 수 있어야 함(서버 C-09와 같음)
 x-overlay: &overlay "${SMOKE_OVERLAY_DIR:?SMOKE_OVERLAY_DIR — smoke_test.sh가 만듦(S7e2)}:/etc/rag/smoke:ro,z"
 x-job: &job
   init: true
-  environment: {RUN_ENV: local, SETTINGS_FILE: /etc/rag/smoke/job.yaml}   # RUN_ENV — PC 시험(S7a D-028) · 시험망 덮기는 덮기 파일(S7e2)
+  environment: {RUN_ENV: local, SETTINGS_FILE: /etc/rag/smoke/job.yaml}   # RUN_ENV — PC 시험 · 시험망 덮기는 덮기 파일
   profiles: ["job"]
   extra_hosts: ["host.docker.internal:host-gateway"]
   depends_on: {pg: {condition: service_healthy}}
@@ -23,7 +23,7 @@ services:
     environment: {POSTGRES_USER: rag, POSTGRES_DB: rag, POSTGRES_PASSWORD: "${SMOKE_PG_PASSWORD:?SMOKE_PG_PASSWORD}"}
     healthcheck: {test: ["CMD", "pg_isready", "-U", "rag"], interval: 2s, retries: 30}
     tmpfs: ["/var/lib/postgresql/data"]
-    mem_limit: ${PG_MEM_LIMIT:-4g}                     # 한도 없으면(기본 compose) 호스트 메모리를 다 쓸 수 있음(D4) — 4 vCPU·32 GB 서버 기준
+    mem_limit: ${PG_MEM_LIMIT:-4g}                     # 한도 없으면(기본 compose) 호스트 메모리를 다 쓸 수 있음 — 4 vCPU·32 GB 서버 기준
 
   parse:
     <<: *job
@@ -35,21 +35,21 @@ services:
   structure:
     <<: *job
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE}
-    command: ["help"]  # 11-01 — structure 명령 지움(smoke_test.sh가 build_bundle을 직접 부름)
+    command: ["help"]  # structure 명령은 없음(smoke_test.sh가 build_bundle을 직접 부름)
     volumes: [*settings, *overlay, "${RAG_OUT:?RAG_OUT}:/app/output"]
     depends_on: {}
 
   load:
     <<: *job
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE}
-    command: ["help"]  # 11-01 — load 명령 지움(smoke_test.sh가 pgvector_load·migrate를 직접 부름)
+    command: ["help"]  # load 명령은 없음(smoke_test.sh가 pgvector_load·migrate를 직접 부름)
     volumes: [*settings, *overlay, "${RAG_OUT:?RAG_OUT}:/app/output"]
 
   mcp:
     image: ${MCP_SERVER_IMAGE:?MCP_SERVER_IMAGE}
     command: ["mcp"]
     init: true
-    environment: {RUN_ENV: local, SETTINGS_FILE: /etc/rag/smoke/mcp.yaml}   # mcp.yaml = job.yaml + MCP_STORE pg·MCP_HOST auto·MCP_PORT 8765(S7e2) · 앵커를 안 씀 — RUN_ENV 따로(S7a2 — VS7a B-1)
+    environment: {RUN_ENV: local, SETTINGS_FILE: /etc/rag/smoke/mcp.yaml}   # mcp.yaml = job.yaml + MCP_STORE pg·MCP_HOST auto·MCP_PORT 8765 · 앵커를 안 씀 — RUN_ENV 따로
     extra_hosts: ["host.docker.internal:host-gateway"]
     ports: ["127.0.0.1:${MCP_PUBLISH_PORT:-18765}:8765"]
     volumes: [*settings, *overlay, "${RAG_OUT:?RAG_OUT}:/app/output:ro"]

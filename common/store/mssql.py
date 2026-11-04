@@ -1,4 +1,4 @@
-"""회사 DB(SQL Server — EDW·RDB) 연결 — SQLAlchemy `mssql+pymssql`(S8b, refactor_plan 5-4 — 사용자 10-28 Q11 a). 우리 소유가 아니라 DDL·
+"""회사 DB(SQL Server — EDW·RDB) 연결 — SQLAlchemy `mssql+pymssql`. 우리 소유가 아니라 DDL·
 Alembic 없음(DDL은 EDW 담당 — docs/operations/parsing_meta_mssql.sql).
 · 연결 인자는 지금 pymssql.connect 그대로(creator) — 연결 풀 없음(NullPool — 지금처럼 쓰고 닫음). 비밀은 설정 객체에서 받아 넘기기만.
 · session_sql(parsing_meta의 세션 옵션 7개)은 그 엔진의 연결마다 **첫 실행문**(creator 안 — 방언의 첫 연결 카탈로그 질의보다 먼저, 지금처럼 commit).
@@ -60,9 +60,9 @@ def clear():
 
 def login(role, extra=True):
     """EDW 접속 인자(pymssql.connect 그대로)와 빠진 칸 이름 목록 — common.connections.rdb의 서버·DB + role 계정
-    ("read" | "write" — 사용자 10-29, docs/prd/ops.md#op-03). extra=False면 connect_kwargs를 안 넘김(gen_roster 옛 동작).
+    ("read" | "write" — docs/prd/ops.md#op-03). extra=False면 connect_kwargs를 안 넘김(gen_roster).
     형식 틀린 포트는 연결 전에 실패(checked — 1433으로 조용히 붙지 않게). 값은 출력하지 않는다.
-    role은 둘 중 하나만(오타가 쓰기 계정으로 새지 않게) · connect_kwargs는 계정·서버 칸을 덮지 못함(독립 검토 10-29)."""
+    role은 둘 중 하나만(오타가 쓰기 계정으로 새지 않게) · connect_kwargs는 계정·서버 칸을 덮지 못함."""
     import json
 
     from common.config.settings import cfg, checked, reveal
@@ -74,7 +74,7 @@ def login(role, extra=True):
     checked("RDB_PORT")
     kw = {
         "server": c.host,
-        "port": str(c.port),  # 포트는 옛처럼 글자로(pymssql)
+        "port": str(c.port),  # 포트는 글자로(pymssql)
         "user": acct.user,
         "password": reveal(acct.password),
         "database": c.database,
@@ -93,7 +93,7 @@ def login(role, extra=True):
 
 def standin_path():
     """PC 가짜 EDW 경로(common.connections.rdb.sqlite) — RUN_ENV=local 전용. 서버 설정에 남아 있으면 실패한다
-    (원천 조회·게시·query_edw가 한꺼번에 가짜 파일로 가지 않게 — 독립 검토 10-29). 없으면 None."""
+    (원천 조회·게시·query_edw가 한꺼번에 가짜 파일로 가지 않게). 없으면 None."""
     from common.config.settings import cfg, guard_run_env
 
     p = cfg().connections.rdb.sqlite
@@ -107,7 +107,7 @@ STANDIN_SCHEMAS = ("AI", "CRMS", "LAS", "SFDC")  # PC 가짜 EDW sqlite 하나�
 
 def standin(path, readonly=True, timeout=5.0):
     """PC 가짜 EDW(common.connections.rdb.sqlite — 파일 하나에 모든 표) 연결 — 같은 파일을 스키마 이름마다 ATTACH해
-    `AI.FileStorageMap`·`CRMS.RM_MAS_CLIENT` 같은 T-SQL 이름이 그대로 돈다(사용자 10-29, ops.md#op-03).
+    `AI.FileStorageMap`·`CRMS.RM_MAS_CLIENT` 같은 T-SQL 이름이 그대로 돈다(ops.md#op-03).
     readonly면 SQLite `?mode=ro`(드라이버 수준 — ATTACH도 같은 URI라 쓰기 불가)."""
     import sqlite3
     from pathlib import Path

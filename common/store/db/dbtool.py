@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""pgvector 우리 스키마 판 관리 명령(S8a — refactor_plan 5-4, 사용자 10-28 Step 0 답 Q1~Q10 a).
+"""pgvector 우리 스키마 판 관리 명령.
   python -m common.store.db.dbtool up      --target search|all [--schema S] [--dim N | --bundle B] [--create-extension]
   python -m common.store.db.dbtool stamp   --target …   — 이미 있는 DB에 실행 없이 판만 기록(비교 차이 0일 때만)
   python -m common.store.db.dbtool current --target …   — 지금 판·코드의 끝 판
   python -m common.store.db.dbtool check   --target …   — 표 정의 ↔ 실제 DB 비교(차이·판이 끝이 아니면 종료 코드 1)
-  python -m common.store.db.dbtool --pg-cases orca_<이름>  — PC 전용 PG 시험(새 시험 DB — 기본 스키마·vector 확장 자리, VS8a B-1·R-9)
+  python -m common.store.db.dbtool --pg-cases orca_<이름>  — PC 전용 PG 시험(새 시험 DB — 기본 스키마·vector 확장 자리)
   python -m common.store.db.dbtool maintain --target applog  — 현재+2개월 파티션 생성/만료 기록 정리(매일 예약)
-  python -m common.store.db.dbtool master load [--schema S] [--dir D]  — 마스터 표(`<S>_master`)를 CSV(기본 git resources/vocab/glossary)로 통째로 바꿈(pl-38 — up --target master 뒤)
+  python -m common.store.db.dbtool master load [--schema S] [--dir D]  — 마스터 표(`<S>_master`)를 CSV(기본 git resources/vocab/glossary)로 통째로 바꿈(up --target master 뒤)
   이미지: `migrate up --target all --bundle …`(entrypoint — pipeline 이미지, load와 같은 잠금).
-· 갈래 search = 기준 스키마(PG_SCHEMA — --schema로 바꿈) 하나 + 원천 스키마 5벌 `<기준>_sfdc|crms|las|faq|other`(pl-28 — 판 0002가 만듦).
+· 갈래 search = 기준 스키마(PG_SCHEMA — --schema로 바꿈) 하나 + 원천 스키마 5벌 `<기준>_sfdc|crms|las|faq|other`(판 0002가 만듦).
   판 기록 표·공용 doc_id 시퀀스는 기준 스키마에(<기준>.alembic_version).
-· up: 판 기록이 없는데 표가 있는 스키마(옛 코드가 만든 DB)는 먼저 비교 — 차이가 기준판이 고치는 것(표·색인·뷰 없음, 뷰 칸 다름)뿐이면 고치고
-  판 기록(기준판이 IF NOT EXISTS·뷰는 DROP 뒤 다시 만듦), 칸 이름·형식·NULL·기본값·키가 다르거나 남는 표가 있으면 거부(Q3). 적재 앞 자동 길
-  (pgvector_load deploy)은 판 기록 없는 기존 스키마면 비교·DDL 없이 경고만(코디네이터 10-28 a — Q5). 검색 스키마는 지금 deploy와 같은 확인을 먼저 —
+· up: 판 기록이 없는데 표가 있는 스키마(판 관리 전에 만든 DB)는 먼저 비교 — 차이가 기준판이 고치는 것(표·색인·뷰 없음, 뷰 칸 다름)뿐이면 고치고
+  판 기록(기준판이 IF NOT EXISTS·뷰는 DROP 뒤 다시 만듦), 칸 이름·형식·NULL·기본값·키가 다르거나 남는 표가 있으면 거부. 적재 앞 자동 길
+  (pgvector_load deploy)은 판 기록 없는 기존 스키마면 비교·DDL 없이 경고만. 검색 스키마는 지금 deploy와 같은 확인을 먼저 —
   vector 확장(없으면 멈춤, --create-extension이면 직접 생성 — PC·단독 시험만)·남의 스키마 거부(판 표 alembic_version 없음)·차원(DB와 다르면 새 PG_SCHEMA).
-· 차원은 --dim 또는 --bundle <묶음>/meta.json, 있는 스키마는 DB 차원(새 설정 칸 없음 — Q4).
-· 적재 전 판 확인(require_current — Q5): 판 기록 없음 = 경고 뒤 계속(기준판 = 지금 스키마), 끝보다 낮거나 모르는 판 = 거부. MCP(읽기)는 안 봄.
+· 차원은 --dim 또는 --bundle <묶음>/meta.json, 있는 스키마는 DB 차원(설정 칸 없음).
+· 적재 전 판 확인(require_current): 판 기록 없음 = 경고 뒤 계속(기준판 = 지금 스키마), 끝보다 낮거나 모르는 판 = 거부. MCP(읽기)는 안 봄.
 · SQLite 대체(pg_standin)는 판 관리 밖 — 표 정의에서 바로 만든다(standin_script). 접속 값은 settings.yaml(common.store.pg.conf).
 · 비밀값·행 값은 찍지 않는다(카탈로그·판 번호만)."""
 
@@ -28,12 +28,12 @@ from pathlib import Path
 from common.core.console import utf8_stdout
 from common.core.paths import PKG_ROOT
 
-MIGRATIONS = PKG_ROOT / "store" / "db" / "migrations"  # op-09 — paths 상수 기준
+MIGRATIONS = PKG_ROOT / "store" / "db" / "migrations"  # paths 상수 기준
 TARGETS = (
     "search",
     "applog",
     "master",
-)  # master = 용어집·고객 명부(pl-38, `<기준>_master`) · struct 갈래는 사용자 11-01에 없앰(서버에 남은 struct 스키마는 코드가 읽지 않음 — DB 담당자가 두거나 지움)
+)  # master = 용어집·고객 명부(`<기준>_master`) · 서버에 struct 스키마가 남아 있어도 코드는 읽지 않음(DB 담당자가 두거나 지움)
 _SCHEMA_RE = re.compile(r"[a-z_][a-z0-9_]{0,62}")  # common/store/pg.conf()의 PG_SCHEMA 규칙(그 함수 안 정규식)과 같음
 _SCRIPTS: dict = {}
 
@@ -104,8 +104,8 @@ def versions(q, schema):
 
 
 def status(q, target, schema):
-    """('없음'|'끝'|'낮음'|'모름', 판 번호들). 갈래 판 번호만 본다 — 코드가 모르는 판이 하나라도 섞이면 '모름'(새 이미지 → 옛 이미지로 되돌린
-    뒤 적재가 '끝'으로 통과하지 않게 — VS8a R-4)."""
+    """('없음'|'끝'|'낮음'|'모름', 판 번호들). 갈래 판 번호만 본다 — 코드가 모르는 판이 하나라도 섞이면 '모름'(새 이미지 → 이전 이미지로 되돌린
+    뒤 적재가 '끝'으로 통과하지 않게)."""
     have = versions(q, schema)
     if have is None or not have:
         return "없음", have or []
@@ -115,7 +115,7 @@ def status(q, target, schema):
 
 
 def require_current(q, target, schema):
-    """적재·쓰기 전 판 확인(Q5) — 판 기록 없음: 경고 뒤 계속 · 끝보다 낮거나 모르는 판: DbToolError(종료 2)."""
+    """적재·쓰기 전 판 확인 — 판 기록 없음: 경고 뒤 계속 · 끝보다 낮거나 모르는 판: DbToolError(종료 2)."""
     st, have = status(q, target, schema)
     if st == "끝":
         return st
@@ -179,9 +179,9 @@ def has_tables(q, schema):
     )
 
 
-# ── 검색 스키마 확인(옛 pgvector_load.deploy 그대로 — q 함수로) ──────────────────────────────
+# ── 검색 스키마 확인(적재 deploy가 쓰는 확인 — q 함수로) ──────────────────────────────
 def precheck_search(q, schema, dim, create_extension=False):
-    """vector 확장 · 남의 스키마 거부 · 차원(있는 chunk 표와 다르면 거부). 옛 deploy와 같은 글자·같은 종료(SystemExit)."""
+    """vector 확장 · 남의 스키마 거부 · 차원(있는 chunk 표와 다르면 거부). 거부는 SystemExit."""
     if not q("SELECT 1 FROM pg_extension WHERE extname='vector'"):
         if create_extension:  # 명시 옵트인(PC·단독 시험)만 — 공유 PG에서는 켜지 말 것
             try:
@@ -205,7 +205,7 @@ def precheck_search(q, schema, dim, create_extension=False):
 
 
 def check_dim(q, schema, dim):
-    """있는 chunk 표의 차원(없으면 None) — 원천 스키마 5벌(pl-28)을 차례로 보고, 기준 스키마 자체(0001의 옛 한 벌)도 본다. dim과 다르면 거부."""
+    """있는 chunk 표의 차원(없으면 None) — 원천 스키마 5벌을 차례로 보고, 기준 스키마 자체(판 0001의 한 벌)도 본다. dim과 다르면 거부."""
     from common.store.db.dbcompare import DIM_SQL
     from common.store.db.models import search_tables as ST
 
@@ -283,7 +283,7 @@ def maintain_applog(schema="applog", *, conn=None, prune=True, now=None):
 
 
 def stamp(target, schema, dim=None, conn=None):
-    """실행 없이 판만 기록 — 비교 차이 0일 때만(Q3). 모르는 판이 있으면 올리기와 같이 거부(VS8a R-3). conn = 호출자 트랜잭션(없으면 새로)."""
+    """실행 없이 판만 기록 — 비교 차이 0일 때만. 모르는 판이 있으면 올리기와 같이 거부. conn = 호출자 트랜잭션(없으면 새로)."""
     from alembic import command
 
     from common.store.db import dbcompare
@@ -323,9 +323,9 @@ def check(target, schema, dim=None, conn=None):
     return st, have, rep
 
 
-# ── SQLite 대역(pg_standin) — 판 관리 밖, 표 정의에서 바로(5-4) ───────────────────────────────
+# ── SQLite 대역(pg_standin) — 판 관리 밖, 표 정의에서 바로 ───────────────────────────────
 def standin_script(schema, dim):
-    """원천 스키마 하나(`<기준>_<원천>`)를 PostgreSQL 꼴 DDL 글자로(표 정의에서 컴파일 + 뷰) — pg_standin이 옛 schema.sql처럼 받아 SQLite로
+    """원천 스키마 하나(`<기준>_<원천>`)를 PostgreSQL 꼴 DDL 글자로(표 정의에서 컴파일 + 뷰) — pg_standin이 DDL 묶음으로 받아 SQLite로
     번역한다(첫 문장 CREATE SCHEMA로 DDL 묶음임을 알아봄). 대역은 스키마마다 파일 하나라 공용 시퀀스를 흉내 내지 않고(자동 번호) HNSW 색인도 넣지 않는다."""
     from sqlalchemy.dialects import postgresql
     from sqlalchemy.schema import CreateIndex, CreateTable
@@ -449,12 +449,12 @@ def main(argv=None):
     return rc
 
 
-# ── PC 전용 PG 시험(VS8a B-1·R-9) — 새 시험 DB를 만들어 비교·거부가 스키마 배치와 무관한지 ──────────────────────
+# ── PC 전용 PG 시험 — 새 시험 DB를 만들어 비교·거부가 스키마 배치와 무관한지 ──────────────────────
 def pg_cases(name):
     """새 시험 DB `<name>`·`<name>_e1`·`<name>_e2`를 만들어(이미 있으면 거부 — 아무것도 지우지 않음) 확인한다:
     ① 우리 스키마 = 연결의 기본 스키마(current_schema()) 세 꼴 — PG_SCHEMA=public · 역할 이름 = 스키마("$user") · search_path = 스키마
-       : up 뒤 check 차이 0, 판 표를 지우고 남는 칸·형식 다름을 넣으면 check가 그 둘을 보이고 up·stamp 거부(B-1)
-    ② vector 확장이 다른 스키마(e1 — 차원 8·4096)·우리 스키마(e2 — 4096)에 있을 때 up 뒤 check 차이 0(색인 글자 정규화 — R-9).
+       : up 뒤 check 차이 0, 판 표를 지우고 남는 칸·형식 다름을 넣으면 check가 그 둘을 보이고 up·stamp 거부
+    ② vector 확장이 다른 스키마(e1 — 차원 8·4096)·우리 스키마(e2 — 4096)에 있을 때 up 뒤 check 차이 0(색인 글자 정규화).
     PC(RUN_ENV=local)·이름 orca_… 만. 반환: 실패 수."""
     from common.core import paths
 

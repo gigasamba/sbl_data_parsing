@@ -1,59 +1,27 @@
 #!/usr/bin/env python3
 """모듈 경계 점검(docs/architecture.md) — 어기면 종료 코드 1.
-단계 4(10-13) — dev/{common,modules,cli,eval,agents,tools/engines}가 deploy/data_pipeline/
-{common,parse,structure,load,search,cli,evaluation,prompts,parse/agent,parse/engines}로 재편된 뒤의 규칙
-(대상·판정은 그대로, 경로·import 이름만 새 레이아웃으로):
-① parse/·structure/·load/·search/ 는 서로(다른 모듈 영역)·cli/·evaluation/ 을 import하지 않음 — 함께 쓰는 것은 common/ 만
-   (parse/engines·parse/postprocess·parse/review·parse/agent는 parse 영역 내부라 경계 위반 아님 — 이미지 경계는
-   10-16부터 4분할: rag-parse={parse,...}·rag-structure={structure,load,...}·rag-retrieval={search,...}·
-   rag-answer={agent_platform,answer_agent}(MODULE_AREAS 밖) — 이 규칙 자체는 영역 네 개가 서로 못 보게 하는
-   것이라 분할 전후로 안 바뀜(옛 rag-core={structure,load,search}는 별칭으로 남음, Dockerfile 참고)
-② common/ 은 parse/·structure/·load/·search/·cli/·evaluation/·(저장소 루트) tools/ 를 import하지 않음(표준 라이브러리·numpy·선택 드라이버만)
+규칙은 영역 이름(etl·search·common·cli·evaluation·prompts)으로 쓰고, 파일 경로·import 이름은 PKG_AREA·_canon으로
+영역 이름으로 바꿔 읽는다(pipeline → etl, mcp_server → search, validation/e2e → evaluation, resources/prompts → prompts).
+① etl과 search는 서로 import하지 않음 — 함께 쓰는 것은 common/ 만
+② common/ 은 etl·search·cli·evaluation·(저장소 루트) tools/ 를 import하지 않음(표준 라이브러리·numpy·선택 드라이버만)
 ③ 계약 함수(토큰·ID 토큰·색인 본문·정규화·임베딩 호출·내부망 확인·원본 위치·고객 명부)는 common/ 에만 정의 — 복사본이 갈라지는 것 방지
-④ (GA) litellm·google.adk 직접 import 금지 — 0.2.0에 common/ai/adk.py(ADK 장치)를 지움(pl-46, 모델 호출은 common.ai.llm.complete HTTP).
-   예외는 지시서 패키지의 옛 agent.py(prompts/<id>/agent.py — 바이트 그대로 두는 정의 파일, 코드가 읽지 않음)뿐
-⑤ (없음 — agent_platform은 I5·I6에 지움, 0.2.0에 남은 점검 주석도 지움)
-⑥ (GA) parse/·structure/·load/·search/ 아래 "openai/" 문자열 금지 — 모델 접두어는 common/ai/llm.py profile()(CT1 — 옛 models.py 병합)에서만 만듦(캐시 열쇠 불변 — I1)
-⑦ (GA2) prompts/<id>/agent.py·parse/agent/<id>/agent.py는 data_pipeline.* 를 import하지 않음(모델·ADK만 — 0.2.0부터 코드가
-   읽지 않는 옛 정의 파일, 바이트 그대로 둠 — docs/architecture/prompts.md)
-⑧ (GA2) parse/·structure/·load/·search/·cli/·evaluation/의 L.chat()·A.complete() 호출은 agent= 키워드 필수(지시문마다
-   다른 gamma 패키지 — selftest류 함수 안·cli/ping_models.py의 연결 확인은 업무 프롬프트가 없어 예외)
-⑨ (프리즈 전 감사 3b, 10-16 — 4분할 뒤 TOOL_IMAGE 갱신) cli/·evaluation/는 여러 이미지(rag-parse·rag-structure·
-   rag-retrieval, 지금도 rag-parse·rag-core 둘 다) 모두에 들어가므로: top-level(모듈 스코프) import에 parse와
-   structure/load/search가 같이 있으면 안 됨(어느 이미지에서 돌려도 한쪽이 깨짐) · README "도구별 실행 이미지"
-   (=TOOL_IMAGE, deploy/host/scripts/pipe_exec.sh 정본)에 있는 도구는 자기 이미지에 없는 영역을 top-level import하면 안 됨.
-   함수 안 늦은(lazy) import는 허용(check_env.py의 parse.engines처럼).
-I2(10-23) — 파싱·구조화 두 모듈 폴더가 data_etl/ 하나(extract·transform·load·shared·tools·eval_tools·agent 단계
-폴더)로 합쳐져 parse·structure·load 영역이 "etl" 영역 하나가 됨: ① 경계는 etl ↔ search(data_retrieval) 사이에만 남고,
-etl 안 단계 사이 방향(extract → transform → load)은 이 점검이 강제하지 않는다(사용자 10-23). ⑨의 "parse와
-structure/load/search 동시"는 "etl과 search 동시"로, TOOL_IMAGE의 parse·structure 이미지는 둘 다 data_etl 전체를 넣으므로
-같은 영역 집합 {etl}. ⑦의 agent.py 자리에 etl/agent/<id>/agent.py(옛 parse/agent·parse/prompts·structure/prompts)를 더함.
-S3(10-26, refactor_plan 9-1·2-1) — 공용 패키지 이름이 common(common/{core,ai,store,check})으로: 새 이름 common도 "common" 영역으로
-읽고, 단계 3 밖이라 아직 남은 common_tools/{cli,evaluation,prompts}는 옛 이름 그대로 cli·evaluation·prompts 영역(옛·새 둘 다 허용).
-옛 cli/ 중 check_modules·ping_models·os_put은 common/check/로 옮겨 common 영역이 됨(규칙 본문 불변). 아래 규칙의 옛 common/model/ 자리는 common/ai/.
-S4(10-26, refactor_plan 9-1·9-2) — data_etl/ → pipeline/(앱 이름 pipeline): 새 이름 pipeline도 "etl" 영역으로 읽는다(① pipeline ↔
-data_retrieval import 금지 — S5에서 mcp_server). 단, common_tools/cli·evaluation에서 pipeline/로 옮긴 단계 4 도구 16개(LEGACY_TOOLS)는
-파일마다 옛 cli·evaluation 영역 규칙을 그대로 받는다(코디네이터 답 Q3 a — pipeline/cli.py의 ask·pipeline/eval/server_checks.py가
-data_retrieval을 함수 안에서 import, T-15) — S5(ask 쪼개기)·S6(평가 도구 정리)에서 etl로 정리.
-S5(10-26, refactor_plan 9-1·9-2) — data_retrieval/ → mcp_server/(앱 이름 mcp_server): 새 이름 mcp_server도 "search" 영역으로 읽는다
-(① pipeline ↔ mcp_server import 금지 — 옛·새 이름 둘 다). T-15(S5) — pipeline/cli.py의 ask·test-stack은 mcp_server/cli/search_ask.py로,
-server_checks.py의 검색 측정(br54·l8·gh114)은 mcp_server/cli/search_checks.py로 옮겨 단계 4 도구 16개 중 검색을 import하는 것이 없어졌다
-→ 16개 모두 etl 규칙(S4의 옛 cli·evaluation 예외를 풂). LEGACY_TOOLS 표는 경계 판정에 더 쓰지 않고 pipeline/cli.py selftest의 이미지
-배정(옮긴 단계 4 도구를 옛처럼 "공용"으로 읽음)에만 남는다. common_tools에서 mcp_server/cli/로 옮긴 mcp_eval·qa_report도 search 규칙
-(mcp_eval이 쓰던 model_matrix의 문항 로더를 mcp_eval로 옮겨 의존을 끊음 — 코디네이터 답 Q4 c · stack_matrix는 10-30 지움).
-S6a(10-26) — common_tools/가 없어짐: 옛 영역 이름표(PKG_AREA·_canon)에서 common_tools 줄을 빼고, PC 전용 평가 도구 자리
-validation/e2e/를 옛 evaluation 영역으로 읽는다(⑧ agent= · ⑨ etl·search top-level 동시 금지 그대로 — triple_extract/agent.py는
-prompts 영역 ⑦). 옛 이름 import(`import common_tools…`)는 그 자체로 위반(남은 실행 코드 0 유지). LEGACY_TOOLS(옮긴 단계 4 도구 표)는
-경계 판정에 안 쓰여 pipeline/cli.py의 이미지 배정 표로 옮겼고, ⑨의 TOOL_IMAGE·IMAGE_AREAS 규칙은 S5부터 걸릴 도구가 없어 뺐다(VS5 R-4).
-맨 이름 import 판정표(MOVED_TOOLS — 11-02에 지움 · flat)에 S5 새 도구 ask·search_checks와 validation/e2e 도구를 더함(VS5 R-5 — 같은 앱 안은 허용).
-S7e2(10-28, D-028 ④⑤ — 전환 다리 제거): ⑩ "os.environ 0" — 코드가 os.environ·os.getenv·os.environb를 직접 쓰는 줄(토큰 기준 — 주석·문자열 빼고)은
-그 문장(또는 바로 위 주석 줄)에 분류 주석(op-09 — 예외 자리 없음: 엔진·인계 파일도 설정 객체로 읽음)
-`env 남김 — <분류>`(ENV_KINDS — 라이브러리·하위 프로세스·내부 신호·이미지 신호·설정 파일 자리 신호·RUN_ENV 신호·시험·OS 값·호스트 도구)가
-있어야 한다. 설정 값은 settings.yaml(설정 객체 cfg()·덮기 파일 put·child_env)로만 읽고 넘긴다. --env-report: 남은 줄을 분류별로 찍음.
-S7e3(10-28, VS7e2 B-1·R-10): ⑩이 os 별칭(`import os as _os`)·`from os import environ` 이름도 잡는다. ⑪ "자식 env의 설정 이름 0" — 자식 env
-(os.environ·그 사본·child_env 결과·subprocess 류 env= 값)에 설정 칸 이름(호스트 칸 빼고)을 넣거나 빼는 자리(AST —
-dict 리터럴·dict(…, X=)·env[X] =·del·pop·setdefault·update, for 상수 이름 포함)는 위반이다(자식은 env의 설정 이름을 안 읽음 — settings.child_env(
-base, X=…)·put). 같은 이름의 env를 읽는 라이브러리·시험·호스트 도구는 분류 주석(ENV_NAME_OK_KINDS)으로 둔다.
+④ litellm import 금지, google.adk는 지시서 패키지 agent.py에서만 — 모델 호출은 common.ai.llm.complete(HTTP)
+⑥ etl·search 아래 "openai/" 문자열 금지 — 모델 접두어는 common/ai/llm.py profile()에서만 만듦(캐시 열쇠 유지)
+⑦ 지시서 패키지 agent.py(prompts/<id>/agent.py — 코드가 읽지 않는 정의 파일, 바이트 그대로 둠 — docs/architecture/prompts.md)는
+   앱 코드를 import하지 않음(모델·ADK만)
+⑧ etl·search·cli·evaluation의 L.chat()·A.complete() 호출은 agent= 키워드 필수(지시문마다 다른 패키지 — selftest류 함수 안과
+   연결 확인은 업무 프롬프트가 없어 예외)
+⑨ cli·evaluation은 여러 이미지에 들어가므로 top-level(모듈 스코프) import에 etl과 search가 같이 있으면 안 됨(어느 이미지에서
+   돌려도 한쪽이 깨짐). 함수 안 늦은(lazy) import는 허용.
+⑩ "os.environ 0" — os.environ·os.getenv·os.environb를 직접 쓰는 줄(토큰 기준 — 주석·문자열 빼고, os 별칭·`from os import environ`
+   이름 포함)은 그 문장(또는 바로 위 주석 줄)에 분류 주석 `env 남김 — <분류>`(ENV_KINDS)가 있어야 한다. 설정 값은
+   settings.yaml(설정 객체 cfg()·덮기 파일 put·child_env)로만 읽고 넘긴다. --env-report: 남은 줄을 분류별로 찍음.
+⑪ "자식 env의 설정 이름 0" — 자식 env(os.environ·그 사본·child_env 결과·subprocess 류 env= 값)에 설정 칸 이름(호스트 칸 빼고)을
+   넣거나 빼는 자리(AST — dict 리터럴·dict(…, X=)·env[X] =·del·pop·setdefault·update, for 상수 이름 포함)는 위반이다(자식은 env의
+   설정 이름을 안 읽음 — settings.child_env(base, X=…)·put). 같은 이름의 env를 읽는 라이브러리·시험·호스트 도구는 분류 주석
+   (ENV_NAME_OK_KINDS)으로 둔다.
+⑫ pipeline 안 단계 방향 extract → transform → load — 거꾸로 import 금지(함수 안 늦은 import도 셈).
+앱·PC 도구는 tests/를 import하지 않는다.
 사용: python -m common.check.check_modules [--env-report]
 """
 
@@ -67,28 +35,26 @@ from pathlib import Path
 from common.core.console import utf8_stdout
 from common.core.paths import DEPLOY_ROOT
 
-# 10-14 이미지 단위 분리(사용자) — 코드가 deploy/{data_etl,data_retrieval,common_tools}로 나뉨(I2 전엔 data_etl 자리에 두 폴더 · S3부터 공용은 common/).
-# 아래 규칙은 옛 영역 이름(etl/search/common/cli/evaluation/prompts)으로 쓰여 있어, 파일 경로와
-# import 이름을 그 영역 이름으로 바꿔 읽는 변환만 둔다(규칙 본문 불변). 새 폴더 → 옛 영역:
+# 저장소 폴더 → 규칙 영역 이름. 규칙은 영역 이름으로 쓰여 있어 경로·import 이름만 바꿔 읽는다.
 PKG_AREA = (
     ("data_etl", "etl"),
     ("pipeline", "etl"),
     ("data_retrieval", "search"),
-    ("mcp_server", "search"),  # S4 — pipeline · S5 — mcp_server
-    ("resources/prompts", "prompts"),  # S2 — 지시서 패키지 자리
-    ("validation/e2e/triple_extract", "prompts/triple_extract"),  # S6a — PC 전용 지시서(⑦ agent.py 규칙)
+    ("mcp_server", "search"),
+    ("resources/prompts", "prompts"),  # 지시서 패키지 자리
+    ("validation/e2e/triple_extract", "prompts/triple_extract"),  # PC 전용 지시서(⑦ agent.py 규칙)
     (
         "valid_env/answer_test/rag_qa",
         "prompts/rag_qa",
-    ),  # S10 — PC 전용 답변 점검 agent(S10에 validation/e2e/rag_qa — 10-29 사용자: valid_env로 되돌림, 같은 규칙)
-    ("validation/e2e", "evaluation"),  # S6a — PC 전용 평가 도구(옛 common_tools/evaluation 자리의 규칙)
+    ),  # PC 전용 답변 점검 agent(⑦ agent.py 규칙)
+    ("validation/e2e", "evaluation"),  # PC 전용 평가 도구
     ("common", "common"),
-)  # S3 — 공용 패키지(S6a에 옛 common_tools 줄 뺌)
+)
 ROOT = DEPLOY_ROOT
 
 
 def _virtual_rel(f):
-    """deploy/<새 패키지>/x.py → 옛 영역 기준 상대 경로('parse/x.py' 등). 대상 밖이면 None."""
+    """저장소 안 x.py → 영역 기준 상대 경로('etl/x.py' 등). 대상 밖이면 None."""
     rel = f.resolve().relative_to(ROOT.resolve()).as_posix()
     for pkg, area in PKG_AREA:
         if rel == pkg or rel.startswith(pkg + "/"):
@@ -97,7 +63,7 @@ def _virtual_rel(f):
 
 
 def _canon(m):
-    """새 import 이름 → 옛 data_pipeline.<영역> 이름(규칙 판정용)."""
+    """import 이름 → data_pipeline.<영역> 이름(규칙 판정용)."""
     for new, old in (
         ("data_etl", "etl"),
         ("pipeline", "etl"),
@@ -105,13 +71,13 @@ def _canon(m):
         ("mcp_server", "search"),
         ("validation", "evaluation"),
         ("common", "common"),
-    ):  # S6a — validation.e2e.* = 옛 evaluation 영역
+    ):  # validation.e2e.* = evaluation 영역
         if m == new or m.startswith(new + "."):
             return "data_pipeline." + old + m[len(new) :]
     return m
 
 
-MODULE_AREAS = ("etl", "search")  # 옛 modules/<이름> — 서로 못 보는 "모듈 영역"(I2 — parse·structure·load가 etl 하나로)
+MODULE_AREAS = ("etl", "search")  # 서로 못 보는 "모듈 영역"
 CONTRACT_FUNCS = {
     "tokens",
     "id_terms",
@@ -138,19 +104,16 @@ SAME_NAME_OK = {
     ("common/core/meaning.py", "tokens"),
     ("etl/transform/represent/parse_scoring.py", "norm"),
 }  # 이름만 같고 다른 규칙(파싱 채점의 유의미 토큰·공백 보존 정규화)
-# 단계 4 — 옛 ALLOW의 "tools"(tools/engines·tools/parse_agent_tools) 예외 전부 삭제: 그 코드가 parse/engines·
-# parse/agent/agent_tools.py로 옮겨 parse 영역 **안**이 되어 더 이상 경계 위반이 아님(ALLOW 자체가 필요 없어짐).
-# I2 — 옛 예외 ("structure/build_bundle.py", "data_pipeline.parse")(--no-rep 실험 경로의 지연 import)는 두 영역이 etl 하나가 되어 필요 없어짐.
-ALLOW: set = set()
-# ⑫ 단계 방향(CLAUDE.md §1 — pipeline 안 extract → transform → load, 거꾸로 import 금지 · 11-03 사용자: 리뷰에만 맡기지 않고 자동 점검).
-#   함수 안 늦은 import도 셈. STAGE_ALLOW = 지금 있는 예외(파일, 가져오는 단계) — 엔진 파일은 바이트를 바꾸면 엔진 지문이 바뀌어(등급 A) 옮기지 않고 적어 둔다.
+ALLOW: set = set()  # 모듈 경계 예외(파일, import 키) — 지금은 없음
+# ⑫ 단계 방향(CLAUDE.md §1 — pipeline 안 extract → transform → load, 거꾸로 import 금지). 함수 안 늦은 import도 셈.
+#   STAGE_ALLOW = 예외(파일, 가져오는 단계) — 엔진 파일은 바이트를 바꾸면 엔진 지문이 바뀌어(등급 A) 옮기지 않고 여기 적는다.
 STAGES = ("extract", "transform", "load")
-STAGE_ALLOW: set = set()  # 11-04 — 엔진 qwen_vlm의 VLM 게이트 import는 pipeline/shared/vlmcall.py로 옮겨 예외 없음
-AGENT_KWARG_EXEMPT = {"common/check/checker.py"}  # 연결 확인(ping) — 업무 프롬프트가 없음(GA2 ⑧)
+STAGE_ALLOW: set = set()
+AGENT_KWARG_EXEMPT = {"common/check/checker.py"}  # 연결 확인(ping) — 업무 프롬프트가 없음(⑧)
 
 
 def _agent_kwarg_missing(tree):
-    """L.chat(/A.complete( 호출 중 agent= 키워드가 없는 줄 번호 — selftest류 함수(가짜 모델·연결 점검) 안은 제외(GA2 ⑧)."""
+    """L.chat(/A.complete( 호출 중 agent= 키워드가 없는 줄 번호 — selftest류 함수(가짜 모델·연결 점검) 안은 제외(⑧)."""
     missing = []
 
     class V(ast.NodeVisitor):
@@ -188,7 +151,7 @@ def imported(f):
         elif isinstance(n, ast.ImportFrom) and n.level == 0 and n.module:
             out.add(_canon(n.module))
         elif isinstance(n, ast.ImportFrom) and n.level > 0:
-            # 상대 import(from ..structure import x)도 절대 이름으로 풀어 같은 경계 규칙에 넣는다(10-13 재검토 C4).
+            # 상대 import(from ..structure import x)도 절대 이름으로 풀어 같은 경계 규칙에 넣는다.
             pkg = ["data_pipeline", *Path(_virtual_rel(f)).parent.parts]
             base = pkg[: len(pkg) - (n.level - 1)] if n.level > 1 else pkg
             out.add(".".join(base + ([n.module] if n.module else [])))
@@ -196,7 +159,7 @@ def imported(f):
 
 
 def _module_scope_imports(tree, f):
-    """모듈 스코프에서 실행되는 import만(함수·클래스·람다 본문은 안 내려감 — 그 안은 lazy import라 3b 대상 아님).
+    """모듈 스코프에서 실행되는 import만(함수·클래스·람다 본문은 안 내려감 — 그 안은 lazy import라 ⑨ 대상 아님).
     if/try/with 안은 포함(그래도 import 시점에 실행됨). 상대 import 풀이는 imported()와 같은 규칙."""
     out = set()
 
@@ -236,8 +199,7 @@ def _area_of_import(m):
 
 
 def _cli_eval_violations(rel, tree, f):
-    """3b — cli/·evaluation/(S6a부터 validation/e2e/) 모듈 규칙(위 docstring ⑨): top-level import의 etl ↔ search 동시 금지.
-    (⑨의 둘째 규칙 TOOL_IMAGE — 이미지별 도구의 top-level import — 은 S5부터 걸릴 도구가 없어 S6a에 뺌, VS5 R-4.)"""
+    """⑨ — cli·evaluation(validation/e2e) 모듈: top-level import의 etl ↔ search 동시 금지."""
     out = []
     areas = {a for a in (_area_of_import(m) for m in _module_scope_imports(tree, f)) if a}
     if "etl" in areas and "search" in areas:
@@ -246,8 +208,8 @@ def _cli_eval_violations(rel, tree, f):
 
 
 def _key_of(m):
-    """import 모듈 문자열 → ALLOW/판정에 쓰는 짧은 키. data_pipeline.<모듈 영역>(2단)이면 그대로, 그 밖엔 첫 세그먼트만
-    (data_pipeline.cli·data_pipeline.evaluation·tools·dev_tools·pipeline 등 — 단계 4 전 "modules.<모듈>"·"cli"·"tools"와 같은 역할)."""
+    """import 모듈 문자열 → ALLOW/판정에 쓰는 짧은 키. data_pipeline.<영역>(2단)이면 그대로, 그 밖엔 첫 세그먼트만
+    (tools·dev_tools·pipeline 등)."""
     top = m.split(".")
     if top[0] == "data_pipeline" and len(top) > 1:
         return "data_pipeline." + top[1]
@@ -275,7 +237,7 @@ def check():
     bad = []
     flat = {
         f.stem for f in (ROOT / "validation" / "e2e").glob("*.py") if f.stem != "__init__"
-    }  # PC 평가 도구를 이름만으로 import하는 것도 잡음(S6a — 옛 cli/·evaluation/ glob · 옛 단계 4 도구 이름표 MOVED_TOOLS는 11-02에 지움)
+    }  # PC 평가 도구를 맨 이름으로 import하는 것도 잡음
     for f in sorted(ROOT.rglob("*.py")):
         rel = _virtual_rel(f)
         if rel is None or "/output/" in f"/{rel}" or ".venv" in rel or "__pycache__" in rel:
@@ -299,10 +261,10 @@ def check():
                 bad.append(f"{rel}: 계약 함수 {sorted(dup)}를 따로 정의 — common/에서 import")
         mods = imported(f)
         tst = sorted(m for m in mods if m == "tests" or m.startswith("tests."))
-        if tst:  # S9(D-018) — 시험(tests/)은 앱을 import해도 되지만 앱·PC 도구는 시험을 import하지 않음(이미지에는 tests/server만 — 실행은 자식 프로세스 문자열로)
+        if tst:  # 앱·PC 도구는 시험을 import하지 않음(이미지에는 tests/server만 — 실행은 자식 프로세스 문자열로)
             bad.append(f"{rel}: {tst[0]} import — 앱은 tests/를 import하지 않음(S9 — 시험 실행은 pipeline.cli selftest·pytest)")
         old = sorted(m for m in mods if m == "common_tools" or m.startswith("common_tools."))
-        if old:  # S6a — 옛 공용 패키지 이름(없어진 폴더) — 지문용 옛 이름 대응표(common/core/fingerprint.py 바이트 글자)는 import가 아니라 대상 밖
+        if old:  # 없는 패키지 이름 — fingerprint.py의 이름 대응표 글자는 import가 아니라 대상 밖
             bad.append(f"{rel}: {old[0]} import — common_tools는 S6a에 없어짐(common·pipeline·mcp_server·validation/e2e로)")
         if area in MODULE_AREAS:
             for m in mods:
@@ -321,8 +283,8 @@ def check():
                     or m in flat
                 ):
                     bad.append(f"{rel}: {m} import — common은 모듈·도구 코드를 쓰지 않음")
-        # 10-14 — 한 모듈만 쓰는 prompts/<id>/ 묶음이 그 모듈 폴더로 옮겨가 가상 경로가 "parse/prompts/<id>/agent.py"
-        # 처럼 영역 접두어가 붙음(PKG_AREA) — "prompts/" 로 시작하지 않아도 어딘가에 "/prompts/" 조각이 있으면 같은 자리.
+        # 모듈 폴더 안 지시서 묶음은 가상 경로에 영역 접두어가 붙으므로("etl/prompts/<id>/agent.py")
+        # "prompts/"로 시작하지 않아도 "/prompts/" 조각이 있으면 같은 자리.
         is_agent_py = rel.endswith("/agent.py") and (rel.startswith("prompts/") or "/prompts/" in rel or rel.startswith("etl/agent/"))
         if is_agent_py:
             for m in mods:
@@ -344,7 +306,7 @@ def check():
     return bad
 
 
-# ⑩ "os.environ 0"(S7e2) — 줄마다 다는 분류 주석(op-09부터 예외 자리 없음)
+# ⑩ "os.environ 0" — 줄마다 다는 분류 주석(예외 자리 없음)
 ENV_KINDS = (
     "라이브러리",
     "하위 프로세스",
@@ -357,14 +319,14 @@ ENV_KINDS = (
     "호스트 도구",
 )
 _ENV_MARK = re.compile(r"env 남김 — (" + "|".join(ENV_KINDS) + ")")
-_ENV_SKIP = ("output/", ".venv/", "valid_env/", ".claude/", "docs/", "reference/")  # reference/ — git 밖 참고 자료(PC 전용, 사용자 10-30)
+_ENV_SKIP = ("output/", ".venv/", "valid_env/", ".claude/", "docs/", "reference/")  # reference/ — git 밖 참고 자료(PC 전용)
 
 
-_ENV_ATTRS = ("environ", "getenv", "environb", "putenv", "unsetenv")  # putenv·unsetenv — VS7e3 R-4(⑩·⑪ 둘 다)
+_ENV_ATTRS = ("environ", "getenv", "environb", "putenv", "unsetenv")  # ⑩·⑪ 둘 다
 
 
 def _os_aliases(text):
-    """(os 모듈 이름들, os에서 바로 가져온 environ·getenv·environb 이름들) — `import os as _os`·`from os import environ as E`도 잡는다(VS7e2 R-10)."""
+    """(os 모듈 이름들, os에서 바로 가져온 environ·getenv·environb 이름들) — `import os as _os`·`from os import environ as E`도 잡는다."""
     try:
         tree = ast.parse(text)
     except SyntaxError:
@@ -373,7 +335,7 @@ def _os_aliases(text):
 
 
 def _file_info(tree):
-    """파일 한 번 걷기 — aliases(os 이름들·os에서 가져온 environ 등·subprocess 이름들·subprocess에서 가져온 run·call — 리뷰 S7e3) ·
+    """파일 한 번 걷기 — aliases(os 이름들·os에서 가져온 environ 등·subprocess 이름들·subprocess에서 가져온 run·call) ·
     imports(`from m import a as b`의 (a, b)) · funcs(함수 정의들)."""
     os_mods, os_direct, sub_mods, sub_direct, imports, funcs = {"os"}, set(), {"subprocess"}, set(), [], []
     for n in ast.walk(tree):
@@ -386,7 +348,7 @@ def _file_info(tree):
                 os_direct |= {a.asname or a.name for a in n.names if a.name in _ENV_ATTRS}
             elif n.module == "subprocess" and n.level == 0:
                 sub_direct |= {a.asname or a.name for a in n.names if a.name in ("run", "call")}
-        elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):  # 람다 몸통도 scope(VS7e3 R-4 — 람다 안 spawn의 env=)
+        elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):  # 람다 몸통도 scope(람다 안 spawn의 env=)
             funcs.append(n)
     return {"aliases": (os_mods, os_direct, sub_mods, sub_direct), "imports": imports, "funcs": funcs}
 
@@ -419,7 +381,7 @@ def _comment_kinds(text, toks=None):
 
 
 def _env_lines(text):
-    """[(줄, 분류 또는 None)] — os.environ·os.getenv·os.environb 토큰이 있는 줄마다(os 별칭·`from os import environ` 이름 포함 — VS7e2 R-10),
+    """[(줄, 분류 또는 None)] — os.environ·os.getenv·os.environb 토큰이 있는 줄마다(os 별칭·`from os import environ` 이름 포함),
     그 문장(논리 줄) 안이나 바로 위 주석 줄의 분류 주석."""
     toks = list(tokenize.generate_tokens(io.StringIO(text).readline))
     kind = _comment_kinds(text, toks)
@@ -438,7 +400,7 @@ def _env_lines(text):
     return out
 
 
-# ⑪ 자식 env의 설정 이름(S7e3 — VS7e2 B-1·R-10): S7e2부터 자식은 env의 설정 이름(옛 env 이름)을 읽지 않는다(settings.yaml·덮기 파일만).
+# ⑪ 자식 env의 설정 이름: 자식은 env의 설정 이름을 읽지 않는다(settings.yaml·덮기 파일만).
 # 자식 env를 만드는 dict(os.environ 사본·paths.child_env·settings.child_env 결과, subprocess 류의 env= 값)에 설정 칸 이름(호스트 칸 이름
 # 빼고)을 넣거나(dict 리터럴·dict(…, X=)·env[X] = ·update·setdefault) 빼면(pop·del) 효과가 없다 — settings.child_env(base, X=…)
 # (비우기 X=None)·put(X=…)로. os.environ에 쓰는 것도 같다. 라이브러리가 같은 이름의 env를 읽는 자리·시험·호스트 도구(셸 자식)는 분류 주석으로 둔다.
@@ -513,9 +475,9 @@ class _EnvScope:
         (self.mods, self.direct, self.sub_mods, self.sub_direct), self.funcs = aliases, funcs
         self.nodes = _scope_nodes(scope)
         self.assigns = {}  # 이름 → [(줄, 값 노드)]
-        self.stores = {}  # 이름 → [값 노드] — `_C[k] = 값`(캐시 감싸개 — VS7e3 R-4: `return dict(_C[k])`)
+        self.stores = {}  # 이름 → [값 노드] — `_C[k] = 값`(캐시 감싸개: `return dict(_C[k])`)
         self.consts = {}  # for 변수 → 글자 상수들(for k in ("A", "B"): env.pop(k))
-        args = getattr(scope, "args", None)  # 함수·람다 매개변수 — `{**base, "X": …}`의 base(VS7e3 R-4)
+        args = getattr(scope, "args", None)  # 함수·람다 매개변수 — `{**base, "X": …}`의 base
         self.params = {a.arg for a in (args.posonlyargs + args.args + args.kwonlyargs)} if args is not None else set()
         for n in self.nodes:
             parts = _assign_parts(n)
@@ -582,11 +544,11 @@ class _EnvScope:
         return False
 
     def stored_env(self, c, line, depth):
-        """c가 자식 env를 담는 사전인가(`c[k] = <자식 env>`가 이 scope에 있음 — VS7e3 R-4)."""
+        """c가 자식 env를 담는 사전인가(`c[k] = <자식 env>`가 이 scope에 있음)."""
         return isinstance(c, ast.Name) and any(self.origin(v, line, depth + 1) for v in self.stores.get(c.id, ()))
 
     def bare_param(self, v):
-        """`{**base, "X": …}`의 base가 대입 없는 매개변수인가 — 이름을 넣는 사전은 자식 env로 본다(VS7e3 R-4 — 호출자가 os.environ을 넘김)."""
+        """`{**base, "X": …}`의 base가 대입 없는 매개변수인가 — 이름을 넣는 사전은 자식 env로 본다(호출자가 os.environ을 넘길 수 있음)."""
         return isinstance(v, ast.Name) and v.id in self.params and v.id not in self.assigns
 
     def env_target(self, n, line):
@@ -607,7 +569,7 @@ class _EnvScope:
             for k, v in zip(d.keys, d.values):
                 if isinstance(k, ast.Constant):
                     out.append((node, k.value, how))
-                elif k is None and isinstance(v, ast.Dict):  # {**os.environ, **{"X": …}}(VS7e3 R-4)
+                elif k is None and isinstance(v, ast.Dict):  # {**os.environ, **{"X": …}}
                     keys(v, node, how)
 
         def env_value(v, node):
@@ -648,7 +610,7 @@ class _EnvScope:
                     and f.attr in ("putenv", "unsetenv")
                     and isinstance(f.value, ast.Name)
                     and f.value.id in self.mods
-                ) or (isinstance(f, ast.Name) and f.id in self.direct and f.id in ("putenv", "unsetenv")):  # os.putenv·unsetenv(VS7e3 R-4)
+                ) or (isinstance(f, ast.Name) and f.id in self.direct and f.id in ("putenv", "unsetenv")):  # os.putenv·unsetenv
                     if n.args:
                         out.extend(
                             (n, k, "putenv" if (f.attr if isinstance(f, ast.Attribute) else f.id) == "putenv" else "del")
@@ -658,7 +620,7 @@ class _EnvScope:
                     for a in n.args:
                         if isinstance(a, ast.Dict):
                             keys(a, n, "child_env 위치 인자")
-                    for kw in n.keywords:  # paths.child_env(extra={…}) 키워드 꼴(VS7e3 R-4)
+                    for kw in n.keywords:  # paths.child_env(extra={…}) 키워드 꼴
                         if kw.arg == "extra" and isinstance(kw.value, ast.Dict):
                             keys(kw.value, n, "child_env extra=")
                 elif cn == "dict" and n.args and self.origin(n.args[0], line):

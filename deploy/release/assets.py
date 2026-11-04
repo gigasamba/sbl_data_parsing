@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """폐쇄망 반입 자산(모델·언어 팩·글꼴·휠)을 git에 담아 옮기고 서버에서 제자리에 설치한다 — 인터넷 없이.
 
-담는 것(서버에서 못 받던 것, 2026-09-30 사용자 목록 — 난이도 높은 Tika docker·Cognee는 제외):
+담는 것(서버에서 받을 수 없는 것):
   wheels/en_core_web_sm-3.8.0-…whl      spaCy 영어 모델 — unstructured 토큰화(unstructured/nlp/tokenize.py)
-  tessdata/{kor,eng,osd}.traineddata    Tesseract 한국어·영어(tessdata_best)·방향 — tesseract(kreuzberg_ocr 엔진은 10-30 지움 — pl-31, 지금 이 자산을 쓰는 엔진 없음) (TESSDATA_PREFIX)
+  tessdata/{kor,eng,osd}.traineddata    Tesseract 한국어·영어(tessdata_best)·방향 — tesseract(지금 이 자산을 쓰는 엔진 없음) (TESSDATA_PREFIX)
   fonts/GoNotoCurrent-Regular.ttf       marker 렌더링 글꼴(marker settings.FONT_PATH — 없으면 첫 실행 때 인터넷에서 받으려다 실패)
   rapidocr/*.onnx                       RapidOCR 한국어 PP-OCRv5 인식 + 검출·방향 — rapidocr_ko(최종 추천 엔진, 패키지 폴더 안)
-  (PostgreSQL 16 + pgvector Docker 이미지는 여기 없음 — 별도 브랜치 dev_server_pgvector를 ZIP으로 받아 docker load, 2026-10-01)
+  (PostgreSQL 16 + pgvector Docker 이미지는 여기 없음 — 별도 브랜치 dev_server_pgvector를 ZIP으로 받아 docker load)
   wheels/psycopg*·typing_extensions·tzdata  PostgreSQL 드라이버(psycopg 3, Linux x86_64 · Python 3.12)
-용량 때문에 뺀 것(2026-09-30, 브랜치 ZIP 축소): docling 모델(약 530 MB) · EasyOCR 모델(99 MB) · RapidOCR 중국어 인식(21 MB, 기본 rapidocr 엔진용) — 모두 최종 추천 10개 밖 — docling·docling_ocr 모델은 이 도구에 없음. GitHub 파일 한도(100 MB) 때문에 90 MB 넘는 파일은 .partNN으로 나눠 담고 설치할 때 합친다(sha256 확인). 목록·해시 = assets/MANIFEST.json.
+용량 때문에 뺀 것: docling 모델(약 530 MB) · EasyOCR 모델(99 MB) · RapidOCR 중국어 인식(21 MB, 기본 rapidocr 엔진용) — 모두 최종 추천 10개 밖 — docling·docling_ocr 모델은 이 도구에 없음. GitHub 파일 한도(100 MB) 때문에 90 MB 넘는 파일은 .partNN으로 나눠 담고 설치할 때 합친다(sha256 확인). 목록·해시 = assets/MANIFEST.json.
 
 사용:
   (개발 PC) PYTHONPATH=. python deploy/release/assets.py pack           → assets/ 채움(아래 SOURCES 경로에서) + MANIFEST.json
   (서버)    python /app/docker/assets.py install [--python <venv python>]  → 합치기·해시 확인·제자리 복사·휠 설치, .env에 넣을 줄 출력
-            PYTHONPATH=. python deploy/release/assets.py check → 설치 상태만 표로(저장소 자리 — S6b, 옛 docker/)
+            PYTHONPATH=. python deploy/release/assets.py check → 설치 상태만 표로
 paddle·mineru·임베딩(bge-m3 등)은 크기·venv가 달라 여기 없음. 준비 가이드: docs/operations/release-and-patch.md §5-6.
 """
 
@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 from common.core.console import utf8_stdout
-from common.core.paths import APP_ROOT  # assets/는 패키지 밖 저장소 루트(C1, 독립 검토 10-13)
+from common.core.paths import APP_ROOT  # assets/는 패키지 밖 저장소 루트
 
 ROOT = APP_ROOT
 A = ROOT / "assets"
@@ -59,7 +59,7 @@ def sources():
                 out[f"rapidocr/{f.name}"] = f
     for f in sorted((scratch / "dl" / "wheels_pg").glob("*.whl")):  # psycopg 드라이버
         out[f"wheels/{f.name}"] = f
-    # docling 모델(HF 캐시, 약 530 MB)은 용량 때문에 제외(사용자 2026-09-30)
+    # docling 모델(HF 캐시, 약 530 MB)은 용량 때문에 제외
     return out
 
 
@@ -122,7 +122,7 @@ def targets(python):
         "rapidocr": rapid,
         "hf": HF,
         "font": font,
-    }  # easyocr 타깃은 뺌(사용자 10-07, EasyOCR 모델은 스택 밖 — sources()도 안 담음)
+    }  # easyocr 타깃 없음(EasyOCR 모델은 스택 밖 — sources()도 안 담음)
 
 
 def install(python):

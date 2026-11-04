@@ -1,6 +1,6 @@
-"""호스트 flow 러너 run_docs.py가 만드는 컨테이너 명령 줄 고정(S9 Step A — VS8b U-1, 사용자 10-28 `--set`).
+"""호스트 flow 러너 run_docs.py가 만드는 컨테이너 명령 줄 고정(설정 값은 `--set`으로).
 run_docs.py는 로컬에서 실행하지 않는다(CLAUDE.md 3절) — 이 시험은 명령 줄을 만드는 함수만 부른다(설정 파일·docker·운영 접속 없음).
-PC 일반 시험: `PYTHONPATH=$PWD .venv/bin/python -m pytest tests/general`(S9 — tests/general/deploy로 옮김)."""
+PC 일반 시험: `PYTHONPATH=$PWD .venv/bin/python -m pytest tests/general`."""
 
 import importlib.util
 import re
@@ -11,7 +11,7 @@ import yaml
 from common.config import setarg
 from common.core.paths import DEPLOY_ROOT
 
-ROOT = DEPLOY_ROOT  # 저장소 루트(op-09 — paths 상수)
+ROOT = DEPLOY_ROOT  # 저장소 루트(paths 상수)
 INPROCESS = True  # 상태를 바꾸지 않는 시험 — pytest가 함수마다 그대로 모음(tests/conftest.py)
 
 
@@ -58,7 +58,7 @@ def _inner(cmd):
 
 
 def test_container_command_from_setting():
-    """op-10 — 컨테이너 명령은 DOCKER(설정 ops.host.docker, 없으면 podman·docker)에서 — 고정 docker 글자가 남지 않음."""
+    """컨테이너 명령은 DOCKER(설정 ops.host.docker, 없으면 podman·docker)에서 — 고정 docker 글자가 남지 않음."""
     old = RD.DOCKER
     try:
         RD.DOCKER = "podman"
@@ -68,8 +68,8 @@ def test_container_command_from_setting():
 
 
 def test_settings_only_via_set():
-    """컨테이너 안 python에 설정 칸 이름을 env(`X=값 python`·`X=값 … && python`)로 주지 않는다 — 모두 --set(VS8b U-1: S7e2부터 env의 옛 이름은
-    안 읽음). env로 남는 것은 라이브러리(PYTHON*)·문서 표지(RUN_DOCS_DOC)뿐."""
+    """컨테이너 안 python에 설정 칸 이름을 env(`X=값 python`·`X=값 … && python`)로 주지 않는다 — 모두 --set(앱은 env의 설정 이름을
+    읽지 않음). env로 남는 것은 라이브러리(PYTHON*)·문서 표지(RUN_DOCS_DOC)뿐."""
     known = setarg._fields()
     allowed = {
         "PYTHONPATH",
@@ -92,7 +92,7 @@ def test_set_names_accepted():
 
 
 def test_doc_folder_values():
-    """문서별 파싱은 결과·준비·이미지·원문 폴더를 그 문서 폴더로, 채널 값은 뒤 --set이 이긴다(옛 bash env 순서와 같음)."""
+    """문서별 파싱은 결과·준비·이미지·원문 폴더를 그 문서 폴더로, 채널 값은 뒤 --set이 이긴다."""
     names, rest = setarg.split(shlex.split(_inner(GOLDEN["parse_vlm_scan"])))
     inside = "/app/output/_docflow/9"
     assert names["PIPE_OUT_ROOT"] == inside and names["DOC_DIR_PREPARED"] == f"{inside}/prepared"
@@ -105,12 +105,12 @@ def test_doc_folder_values():
 
 
 def test_sweep_marker_matches_parse():
-    """고아 정리가 찾는 표지 env가 파싱 명령이 주는 표지와 같다(옛 PIPE_OUT_ROOT env 자리)."""
+    """고아 정리가 찾는 표지 env가 파싱 명령이 주는 표지와 같다."""
     mark = f"{RD.DOC_MARK}=/app/output/_docflow/9"
     assert mark in _inner(GOLDEN["parse_vlm_scan"]) and mark in GOLDEN["sweep"]
 
 
-# ── 레인·대기열 정책(사용자 10-29 — docs/prd/runner.md rn-01·rn-02) ──
+# ── 레인·대기열 정책(docs/prd/runner.md rn-01·rn-02) ──
 # (자기 레인, 공유 워커?, 대기 길이 light/medium/vlm, 진행 중 vlm, vlm 상한) → 꺼낼 레인
 PICK_CASES = [
     ("light", False, (2, 5, 5), 0, 2, "light"),  # 자기 레인 먼저
@@ -140,7 +140,7 @@ def test_policy_from_settings():
     _, probs = RD.run_docs_policy({"pipeline": {"host": {"run_docs": {"warm": "-1", "vlm_cap": "x"}}}})
     assert len(probs) == 2 and all("형식 오류" in p for p in probs), probs
     no_shared = {f"{c}_shared": "0" for c in RD.LANES}
-    # 배치가 끝나지 않는 설정(PR #7 리뷰) → 문제 있음 / 경계 바로 안쪽 → 문제 없음
+    # 배치가 끝나지 않는 설정 → 문제 있음 / 경계 바로 안쪽 → 문제 없음
     for sec, bad in [
         ({f"{c}_{k}": "0" for c in RD.LANES for k in ("dedicated", "shared")}, True),
         ({"vlm_cap": "0"}, True),
@@ -162,7 +162,7 @@ def test_defaults_match_settings_model():
 
 
 def test_no_stack_version():
-    """사용자 11-01 — 엔진 구성은 파일(판 번호 없음): 파싱·구조화 명령에 STACK_VERSION·--stack-version이 없다."""
+    """엔진 구성은 파일(판 번호 없음): 파싱·구조화 명령에 STACK_VERSION·--stack-version이 없다."""
     cmds = RD.parse_cmd(7, "light", False, "9") + RD.struct_cmd(9)
     assert "STACK_VERSION" not in cmds and "--stack-version" not in cmds and "engine_stack" not in cmds
 
@@ -210,14 +210,14 @@ def test_instance_names(tmp_path):
 
 
 def test_done_keys_match_parsing_meta():
-    """운영 고침 11b — 끝난 문서 상태는 ParsingMeta 쪽(DONE_STATUSES — ok·partial·skipped_dup, 사용자 11-01 C10)과 같다."""
+    """끝난 문서 상태는 ParsingMeta 쪽(DONE_STATUSES — ok·partial·skipped_dup)과 같다."""
     from common.store.parsing_meta_db import DONE_STATUSES, GOLD_STATUSES
 
-    assert RD.DONE_STATUSES == DONE_STATUSES and RD.GOLD_STATUSES == GOLD_STATUSES  # gold_version도 봄(사용자 11-02)
+    assert RD.DONE_STATUSES == DONE_STATUSES and RD.GOLD_STATUSES == GOLD_STATUSES  # gold_version도 봄
 
 
 def test_deadline_at():
-    """새벽 배치 마감(사용자 11-02) — 다음 그 시각, 지금보다 이르거나 같으면 다음 날(자정을 넘는 배치)."""
+    """새벽 배치 마감 — 다음 그 시각, 지금보다 이르거나 같으면 다음 날(자정을 넘는 배치)."""
     import datetime
 
     now = datetime.datetime(2026, 11, 2, 23, 30)
@@ -231,7 +231,7 @@ def test_deadline_at():
 
 
 def test_parallel_warm_respects_free_slots():
-    """pl-48(사용자 11-02) — 미리 받기 워커 여럿이 동시에 받되, 실제 동시 받기 = min(워커 수, 대기열 빈자리). 시험용 가짜 받기만(docker 없음)."""
+    """pl-48 — 미리 받기 워커 여럿이 동시에 받되, 실제 동시 받기 = min(워커 수, 대기열 빈자리). 시험용 가짜 받기만(docker 없음)."""
     import threading
     import time
     from unittest import mock
@@ -265,7 +265,7 @@ def test_parallel_warm_respects_free_slots():
 
     assert run(workers=3, target=20, n_docs=6) == (3, 6)  # 빈자리 넉넉 → 워커 수만큼 동시에
     assert run(workers=3, target=2, n_docs=2) == (2, 2)  # 빈자리 2 → 워커가 3이어도 2개만
-    assert run(workers=1, target=20, n_docs=3) == (1, 3)  # 워커 1 = 옛 동작(하나씩)
+    assert run(workers=1, target=20, n_docs=3) == (1, 3)  # 워커 1 = 하나씩
 
 
 def test_faq_first(tmp_path):
@@ -313,7 +313,7 @@ def test_faq_first(tmp_path):
 
 
 def test_classify_cache_skips_probe():
-    """A3 — 분류 캐시에 있으면 doc_parsing_group(docker exec)를 부르지 않는다. 캐시는 레인만 담으므로 PDF의 vlm은 스캔으로 되살린다.
+    """분류 캐시에 있으면 doc_parsing_group(docker exec)를 부르지 않는다. 캐시는 레인만 담으므로 PDF의 vlm은 스캔으로 되살린다.
     캐시가 없으면 컨테이너 답의 마지막 줄(경고 줄 무시)을 쓰고, 답이 없으면 vlm(rn-01)."""
     from unittest import mock
 

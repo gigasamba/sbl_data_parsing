@@ -1,11 +1,11 @@
-"""명령 인자 `--set 이름=값`(여러 번) — 한 번 실행에만 설정 칸 몇 개를 바꿔 돌린다. 서버에서도 쓴다(S9 Step A — VS8b U-1, 사용자 10-28).
-옛 `X=값 python -m …`·`docker exec … bash -c 'X=값 python …'`(S7e2부터 env의 옛 이름은 읽지 않아 효과 없음) 자리다. 덮기 파일 도구
+"""명령 인자 `--set 이름=값`(여러 번) — 한 번 실행에만 설정 칸 몇 개를 바꿔 돌린다. 서버에서도 쓴다.
+앱은 env에서 설정을 읽지 않으므로 `X=값 python …`은 효과가 없다 — 대신 이것을 쓴다. 덮기 파일 도구
 `common.config.overrides`는 그대로 PC 전용이다.
 
   python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/_docflow/7 --set PARSE_POST=supsub,charts parse --source …
 
   · 이름은 설정 칸의 옛 env 이름(settings.sample.yaml의 env=), 값은 옛 env 글자 꼴(켜기 1·0). `X=`(빈 값)는 빈 글자(읽기 규칙대로 기본값).
-    같은 이름이 여러 번 나오면 뒤 값이 이긴다(옛 bash `A=1 … A=2`와 같음). 인자 자리는 어디든 된다(하위 명령 앞뒤).
+    같은 이름이 여러 번 나오면 뒤 값이 이긴다. 인자 자리는 어디든 된다(하위 명령 앞뒤).
   · 모르는 이름·호스트 칸(compose·셸 값)·비밀 칸은 모든 환경에서 거부한다(이름만 찍고 종료 2). 비밀 칸을 막는 이유: 명령 줄은 ps·로그·
     진행 기록에 남는다 — 비밀은 settings.yaml에만.
   · 값 형식 오류는 덮기 파일과 같은 규칙: 서버(dev·prd)는 거부(종료 2 — 칸 이름만), local은 경고 뒤 그 칸만 기본값.
@@ -56,7 +56,7 @@ def _fields():
     for cls in (S.CommonAppSettings, *S.app_classes().values()):
         for path, field, _ in S.walk(cls):
             name = S.env_name(field)
-            if name and (name not in out or S.is_host(out[name][0])):  # 같은 이름이 호스트 칸·앱 칸 둘 다면 앱 칸(RAG_OUT — 리뷰 S9)
+            if name and (name not in out or S.is_host(out[name][0])):  # 같은 이름이 호스트 칸·앱 칸 둘 다면 앱 칸(예: RAG_OUT)
                 out[name] = (path, S.is_secret(field))
     return out
 
@@ -89,7 +89,7 @@ def child(names, environ=None):
         run0 = S.resolve_run_env(base)
     except S.SettingsError as e:
         raise SetError(str(e)) from None
-    if run0 in S.SERVER_ENVS and S.find_file(base, run0) is None:  # VS9 R-1 — base 없는 덮기 파일이 "설정 파일 필수" 관문을 지나가지 않게
+    if run0 in S.SERVER_ENVS and S.find_file(base, run0) is None:  # base 없는 덮기 파일이 "설정 파일 필수" 관문을 지나가지 않게
         raise SetError(f"서버(RUN_ENV={run0})는 설정 파일이 있어야 함(SETTINGS_FILE) — --set은 그 파일 위에 덮는다")
     env = S.child_env(environ, **names)
     try:
@@ -104,14 +104,14 @@ def child(names, environ=None):
     return env
 
 
-_OWNED = "SETARG_OWNS_SETTINGS"  # 내부 신호 env 이름(설정 칸 아님 — pl-27)
+_OWNED = "SETARG_OWNS_SETTINGS"  # 내부 신호 env 이름(설정 칸 아님)
 
 
 def apply(argv=None, module=None):
     """__main__ 첫 줄 — argv(기본 sys.argv[1:])에 --set이 있으면 덮기 파일 env로 같은 모듈을 다시 띄우고 그 종료 코드로 끝낸다.
     없으면 그대로 돌아온다. 틀리면 안내(이름만) 뒤 종료 2."""
     argv = sys.argv[1:] if argv is None else list(argv)
-    if os.environ.pop(_OWNED, None):  # env 남김 — 내부 신호: execve로 다시 뜬 이 프로세스가 --set 덮기 파일을 맡음(pl-27 — 끝날 때 지움)
+    if os.environ.pop(_OWNED, None):  # env 남김 — 내부 신호: execve로 다시 뜬 이 프로세스가 --set 덮기 파일을 맡음(끝날 때 지움)
         from common.core import exitclean
 
         exitclean.remove_at_exit(os.environ["SETTINGS_FILE"])  # env 남김 — 설정 파일 자리 신호
@@ -130,6 +130,6 @@ def apply(argv=None, module=None):
     sys.stdout.flush()
     sys.stderr.flush()
     if os.name == "posix":
-        env[_OWNED] = "1"  # env 남김 — 내부 신호: exec 뒤에는 atexit가 안 돌아 새 프로세스가 덮기 파일을 맡음(pl-27)
+        env[_OWNED] = "1"  # env 남김 — 내부 신호: exec 뒤에는 atexit가 안 돌아 새 프로세스가 덮기 파일을 맡음
         os.execve(sys.executable, cmd, env)  # 같은 PID — docker exec·고아 정리(run_docs)가 보는 프로세스 그대로
     raise SystemExit(subprocess.call(cmd, env=env))  # Windows(PC) — exec가 새 프로세스라 기다려 종료 코드를 넘김

@@ -1,4 +1,4 @@
-"""ParsingMeta 판·칸 이름(사용자 11-02 — PRD pl-25): pipeline_version → silver_version·source_key → s3_key 이름 바꾸기 전후 모두 쓰기,
+"""ParsingMeta 판·칸 이름(규칙: PRD pl-25): pipeline_version → silver_version·source_key → s3_key 이름 바꾸기 전후 모두 쓰기,
 적재 때 loaded_at과 gold_version, 원문 도구의 EDW 다시 연결(한 번). 임시 SQLite만 · 외부 접속 없음."""
 
 import sqlite3
@@ -37,7 +37,7 @@ def test_gold_version():
     got = st.cn.execute("SELECT pipeline_version, gold_version, loaded_at IS NOT NULL FROM ParsingMeta").fetchone()
     st.close()
     assert got == ("0.1.0", "0.2.0", 1), got  # silver 판은 그대로, gold 판·적재 시각만
-    # 이미 gold에 있어 건너뛴 문서(kept) — gold_version이 빈 행만 채움(안 채우면 매일 밤 다시 고름 — 리뷰 11-02), 있는 값·loaded_at은 그대로
+    # 이미 gold에 있어 건너뛴 문서(kept) — gold_version이 빈 행만 채움(안 채우면 매일 밤 다시 고름), 있는 값·loaded_at은 그대로
     st = PM.SqliteStore(str(d / "pm.sqlite"))
     st.insert_new([{"source_system": "SFDC", "source_key": "SFDC/a/y.pdf", "doc_key": "k2", "pipeline_version": "0.1.0"}])
     before = st.cn.execute("SELECT loaded_at FROM ParsingMeta WHERE source_key = 'SFDC/a/x.pdf'").fetchone()[0]
@@ -51,7 +51,7 @@ def test_gold_version():
 
 
 def test_done_keys():
-    """끝난 문서(사용자 11-02) — gold_version 칸이 있으면 ok·partial은 gold_version도 있어야 끝, skipped_dup은 그대로 끝. 칸이 없으면 parse_status만."""
+    """끝난 문서 — gold_version 칸이 있으면 ok·partial은 gold_version도 있어야 끝, skipped_dup은 그대로 끝. 칸이 없으면 parse_status만."""
     cn = sqlite3.connect(":memory:")
     cn.execute("CREATE TABLE T (source_key, parse_status, gold_version)")
     rows = [("a", "ok", "0.2.0"), ("b", "ok", None), ("c", "partial", None), ("d", "skipped_dup", None), ("e", "not_parsed", "0.2.0")]
@@ -61,7 +61,7 @@ def test_done_keys():
 
 
 def test_loaded_cols_alone():
-    """리뷰 #95 — DB 담당자가 두 칸 중 하나만 먼저 더해도 있는 칸은 쓴다(gold_version만 있을 때 UPDATE가 통째로 실패하지 않게)."""
+    """DB 담당자가 두 칸 중 하나만 먼저 더해도 있는 칸은 쓴다(gold_version만 있을 때 UPDATE가 통째로 실패하지 않게)."""
     cases = [  # (표의 칸, 기대 (loaded_at 채움?, gold_version))
         ({"gold_version"}, (None, "0.2.0")),
         ({"loaded_at"}, (1, None)),

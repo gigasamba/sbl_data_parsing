@@ -1,4 +1,4 @@
-"""common.ai.embed 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.ai.embed`."""
+"""common.ai.embed 자기 점검 — 질의 임베딩 캐시."""
 
 from pathlib import Path
 
@@ -8,11 +8,11 @@ import common.ai.embed as M
 from common.ai.embed import ROOT, _embed_uncached, _query_cache, embed_texts
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: RV1 — 질의 임베딩 캐시 기본 켬·해시 키만 저장·캐시 적중 바이트 동일·용량 상한·=0 끔
+def test_main():  # 질의 임베딩 캐시 기본 켬·해시 키만 저장·캐시 적중 바이트 동일·용량 상한·=0 끔
     import sqlite3
     import tempfile
 
-    from common.config.settings import COMMON  # S7b — 시험이 읽는 값은 설정 객체(COMMON.env — os.environ은 안 바뀜)
+    from common.config.settings import COMMON  # 시험이 읽는 값은 설정 객체(COMMON.env — os.environ은 안 바뀜)
 
     calls = []
 
@@ -59,7 +59,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: RV
                 embed_texts("api", ["다시"], "query")
                 assert len(calls) == 2, "EMBED_QUERY_CACHE=0이면 캐시 없이 매번 호출"
 
-        for label, val in (("미설정", None), ("빈 값", "")):  # D-028 ⑩ — 빈 값도 기본 경로(옛 코드는 sqlite3.connect('') 임시 DB)
+        for label, val in (("미설정", None), ("빈 값", "")):  # 빈 값도 기본 경로(sqlite3.connect('') 임시 DB가 아님)
             with COMMON.env(EMBED_QUERY_CACHE=val):
                 # mcp 이미지는 이미지 기본값(/tmp/mcp_query_cache.sqlite)이 미설정을 채움 — 그 밖은 코드 기본 ROOT/output
                 default_path = Path(M.cfg().models.embed.query_cache or ROOT / "output" / "query_cache.sqlite")

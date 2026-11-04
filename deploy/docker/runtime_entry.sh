@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 실행 이미지(*-runtime — op-06, 사용자 10-30)의 ENTRYPOINT. 이미지에는 코드가 없다 — 서버 코드 폴더(저장소 트리 그대로)를 /app/deploy에
+# 실행 이미지(*-runtime)의 ENTRYPOINT. 이미지에는 코드가 없다 — 서버 코드 폴더(저장소 트리 그대로)를 /app/deploy에
 # 읽기 전용으로 붙여 띄운다. 여기서 세 가지를 보고 코드 폴더의 entrypoint(deploy/docker/entrypoint.sh)로 넘긴다:
 #   ① 코드 폴더가 붙었나(없으면 종료 2) ② 이미지의 의존성 지문(/app/docker/deps_hash — 빌드 때 계산)과 코드가 선언한 지문
 #   (deploy/docker/DEPS_HASH — deploy/release/deps_hash.sh)이 같은가(다르면 종료 2 — 나중에 ImportError로 조용히 깨지지 않게)

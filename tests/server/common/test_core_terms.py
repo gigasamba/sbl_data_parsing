@@ -1,5 +1,4 @@
-"""common.core.terms(인계 파일 — FINGERPRINT) 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.core.terms`.
-⚠️ 이 옮기기는 인계 지문(FINGERPRINT)을 바꾼다(사용자 10-28 — 인계 파일 옮기기 커밋 하나, 되돌리기는 그 커밋 revert · refactor.md C-52)."""
+"""common.core.terms(인계 파일 — FINGERPRINT) 자기 점검."""
 
 import os
 from pathlib import Path
@@ -134,7 +133,7 @@ def selftest():
     (d / "id_patterns.csv").unlink()
     g = load_glossary(d)
 
-    # AD28② — load_id_patterns_typed(id_type 보존) vs load_id_patterns(정규식만, 기존 호출자 불변)
+    # load_id_patterns_typed(id_type 보존) vs load_id_patterns(정규식만, 기존 호출자 불변)
     (d / "id_patterns.csv").write_text(
         'id_type,regex,example,note,updated\ncontract_no,"C-[A-Z]{2,4}-\\d{4}-\\d{2}",C-PFE-2024-02,,\nlot_no,"LOT-\\d{4}-\\d{3,}",LOT-2025-324,,\n',
         encoding="utf-8",
@@ -151,7 +150,7 @@ def selftest():
     # selftest가 같은 표본으로 본다), related_concepts는 탐색·설명용으로 공용에 남아 여기서 본다.
     assert related_concepts("A", g) == [{"concept_id": "B", "canonical": "Downstream Process"}]
     print("[selftest] 용어 사전 로더·검증·related_concepts 통과")
-    # 10-15 긴급 — 빈칸 허용(외부에서 채운 100+ 고객·용어집): status 빈칸=approved · concept_id 빈칸=AUTO.<이름> · cp949
+    # 빈칸 허용(외부에서 채운 100+ 고객·용어집): status 빈칸=approved · concept_id 빈칸=AUTO.<이름> · cp949
     blank = [
         {"concept_id": "", "canonical": "Viral Inactivation", "synonyms": "바이러스 불활화"},
         {"concept_id": "", "canonical": "Viral Inactivation", "synonyms": "VI"},  # 같은 용어 ID 없이 두 번 — 뒤 줄 건너뜀(오류 아님)
@@ -185,16 +184,13 @@ def selftest():
     assert read_roster(rp) == {"Old Format Bio": ["올드"]}, read_roster(rp)  # OFB(영문 3자)는 뺌 — 기존 규칙
     print("[selftest] 10-15 빈칸 허용 — 용어집(status·concept_id 빈칸·cp949)·고객 명부 새 형식(name_ko 대체·inactive 제외)·옛 형식 통과")
 
-    # modalities()·MODALITIES는 pl-38(사용자 11-03)에 지움(부르는 곳 없음)
-
     _selftest_si43()
     _selftest_si43_draft_blocker()
 
 
 def _selftest_si43():
-    """SI43①② — category 다중 태그(org_client|org_cdmo)·명부 병합·match_clients 한글 조사(실측: '셀트리온과'가
-    안 잡힘). lookup_term(⑥)·expand_query(⑦)는 match_concepts·vector_alias_text와 함께 data_retrieval.tools.terms로
-    이동 — 그 쪽 selftest(_selftest_alias_roster)에서 같은 시나리오를 본다."""
+    """category 다중 태그(org_client|org_cdmo)·명부 병합·match_clients 한글 조사('셀트리온과'도 잡히는지).
+    lookup_term·expand_query는 검색 쪽 시험(tests/server/mcp/test_query_expand.py)이 본다."""
     import csv
     import tempfile
 
@@ -243,19 +239,19 @@ def _selftest_si43():
     from common.store import master
 
     fake = master.Master({"domain_terms": list(csv.DictReader((d / "domain_terms.csv").read_text(encoding="utf-8-sig").splitlines()))})
-    with mock.patch.object(master, "get", lambda: fake):  # pl-38 — 명부·용어 사전은 마스터 표에서(시험은 가짜 마스터)
+    with mock.patch.object(master, "get", lambda: fake):  # 명부·용어 사전은 마스터 표에서(시험은 가짜 마스터)
         al = _aliases()
         assert al.get("Celltrion") == ["셀트리온"], al  # org_client 태그 있음 — 명부에
         assert "Lonza" not in al, al  # org_cdmo 한 칸만 — 명부에 안 들어감(기존 동작 호환)
         assert match_clients("셀트리온 계약", ["Celltrion"]) == ["Celltrion"]
 
-    # 한글 고유명사 뒤 조사 — match_clients도 _name_hit 규칙 공유(실측: '셀트리온과'가 안 잡힘)
+    # 한글 고유명사 뒤 조사 — match_clients도 _name_hit 규칙 공유('셀트리온과'도 잡혀야 함)
     assert match_clients("셀트리온과 계약", ["Celltrion"], {"Celltrion": ["셀트리온"]}) == ["Celltrion"]
     print("[selftest] SI43①② — category 다중 태그·명부 병합·match_clients 한글 조사(조사 뒤 오탐 금지) 통과")
 
 
 def _selftest_si43_draft_blocker():
-    """SI43③④ 독립 검토 BLOCK 1(10-13) — draft 파일이 output/ 아래(GLOSSARY_DIR 아님) · 반복 호출은 새 행이 아니라
+    """draft 파일이 output/ 아래(GLOSSARY_DIR 아님) · 반복 호출은 새 행이 아니라
     카운트만 올림 · DRAFT_TERMS_MAX를 넘으면 카운트가 가장 낮은 것부터 쳐냄 · 원자적 쓰기(.tmp 안 남음) ·
     잠금을 못 잡으면(경합) 예외 없이 빈 목록."""
     import tempfile
@@ -298,7 +294,7 @@ def _selftest_si43_draft_blocker():
         with COMMON.env(DRAFT_TERMS_LOCK_TIMEOUT="0.2"):
             res = write_draft_terms(["Delta Biologics Inc."], out, category="org_client")
         assert res == []
-        assert _time.time() - t0 < 10.0  # 금방 포기(짧은 타임아웃 0.2초) — 10-15 컨테이너 첫 실행 부하에서 2초 문턱을 넘어 넉넉히
+        assert _time.time() - t0 < 10.0  # 금방 포기(짧은 타임아웃 0.2초) — 컨테이너 첫 실행 부하를 감안해 넉넉히
     finally:
         lock_path.unlink(missing_ok=True)
 
@@ -314,5 +310,5 @@ def _selftest_si43_draft_blocker():
     )
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 몸통
+def test_main():
     selftest()

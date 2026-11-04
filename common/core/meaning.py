@@ -3,14 +3,14 @@
 유의미(센다):
   - 수치: 숫자가 든 토큰(금액·수량·비율·날짜·ID — 12,000 · 7.8% · 2026-07-13 · LOT-2026-372 · D-2024-122)
   - 단어·문장: 한글·영문 글자로 된 2자 이상 토큰(문장은 이 토큰들의 합)
-  - 머리말·꼬리말의 작업자·작성일·문서 번호 등도 위 규칙대로 센다(지우지 않음 — 중요할 수 있음, 사용자 2026-09-30)
+  - 머리말·꼬리말의 작업자·작성일·문서 번호 등도 위 규칙대로 센다(지우지 않음 — 중요할 수 있음)
 유의미 아님(빼고 센다):
   - 구분선·장식 기호만 있는 것: ///, ---, ===, ***, ___, |, •, ▪, … (글자·숫자가 없는 토큰은 애초에 안 셈)
   - 쪽 번호: 쪽 경계(\\f 앞뒤 줄, 문서 첫·끝 줄)에 홀로 있는 "3", "- 3 -", "3 / 10", "Page 3", "p. 3 of 10", "3쪽", "3페이지"
-    — 쪽 번호는 원본 위치 매핑(청크 meta.page)에만 쓰고 정제 텍스트에서는 뺀다(사용자 2026-09-30)
+    — 쪽 번호는 원본 위치 매핑(청크 meta.page)에만 쓰고 정제 텍스트에서는 뺀다
   - 1자 토큰(단일 숫자·글자 — 목록 번호·잡음이 대부분)
 
-AD25(a)(e) 토큰 정규화(늘 켬 — 끄는 스위치는 op-08에 지움):
+AD25(a)(e) 토큰 정규화(늘 켬):
   (e) 글자(한글·영문) 사이에 낀 마침표만 분리: "무관.배치" → "무관"·"배치"(거짓 누락 제거). 숫자 쪽 마침표(7.8·430.000)·
       하이픈 자리(2026-07-13·D-2024-122·Q-77)·퍼센트는 글자 양쪽 조건이 아니라서 그대로 붙어 있다.
   (a) 숫자 정규화 한 곳: 공백·작은따옴표 천 단위(430 000·1'000)는 쉼표로 통일 → 유효 3자리 쉼표 묶음만 숫자로 합친다
@@ -18,10 +18,9 @@ AD25(a)(e) 토큰 정규화(늘 켬 — 끄는 스위치는 op-08에 지움):
       단위 토큰으로. 마침표 묶음(430.000)은 천 단위·소수점 구분이 안 돼 합치지 않는다(pipeline.transform.represent.text_normalize.
       canon_num_key가 충돌 탐지만).
 
-10-14 함수별 분리(사용자) — pipeline에서만 쓰는 canon_num_key는 pipeline/transform/represent/text_normalize.py로 옮김(로직
-바이트 동일). tokens·chars·strip_page_numbers는 계획과 달리 여기 남긴다: tokens는 check_modules.py
-CONTRACT_FUNCS(계약 함수는 common/에만 정의)에 걸리고, chars·strip_page_numbers는 pipeline/eval/stages.py(여러
-이미지 공용)가 그대로 부른다 — 재검증 결과 이 셋은 "공통에서 호출" 규칙으로 못 옮긴다(engine-dev 10-14).
+pipeline에서만 쓰는 canon_num_key는 pipeline/transform/represent/text_normalize.py에 있다.
+tokens·chars·strip_page_numbers는 여기 둔다: tokens는 check_modules.py CONTRACT_FUNCS(계약 함수는 common/에만 정의)에
+걸리고, chars·strip_page_numbers는 pipeline/eval/stages.py(여러 이미지 공용)가 부른다.
 """
 
 import re

@@ -1,6 +1,5 @@
-"""pl-12(사용자 10-30) — 서버(dev·prd·모르는 RUN_ENV)는 스탠드인으로 조용히 대체하지 않고,
-publish는 EDW에 'deleted'를 쓰지 않는다(C10 10-31 — 문서 대장과 상태 열 UPDATE 길을 통째로 지움).
-(정형 저장소 SQLite 대체 거부 사례는 저장소째 지워 없음 — pl-08, 사용자 10-31.)"""
+"""서버(dev·prd·모르는 RUN_ENV)는 스탠드인으로 조용히 대체하지 않고(규칙: PRD pl-12),
+publish는 EDW에 'deleted'를 쓰지 않는다(상태 열 UPDATE 길 없음)."""
 
 import inspect
 
@@ -22,7 +21,7 @@ def test_publish_never_updates():
     from common.store import parsing_meta_db
 
     src = inspect.getsource(parsing_meta_db)
-    # EDW는 INSERT만 — status를 deleted·changed로 바꾸는 길 없음. 예외는 적재 때 loaded_at·gold_version뿐(사용자 11-02, C10 예외)
+    # EDW는 INSERT만 — status를 deleted·changed로 바꾸는 길 없음. 예외는 적재 때 loaded_at·gold_version뿐
     ups = [ln for ln in src.splitlines() if "UPDATE {" in ln]
     assert ups and all("SET {', '.join(sets)}" in ln for ln in ups), ups
     assert parsing_meta_db.LOADED_COLS == ("loaded_at", "gold_version")

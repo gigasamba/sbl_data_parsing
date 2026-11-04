@@ -12,7 +12,7 @@
 # 파일 최상위 절 — 이 순서로 sample에 낸다.
 SECTIONS = ("required", "common", "extract", "transform", "load", "search", "ops", "tuning", "dev")
 
-# required — (카테고리 열쇠, 제목, 쓰는 곳 표시, [(칸 이름, 모델 경로)]). 표시는 카테고리 제목에 한 번(사용자 10-30 op-08).
+# required — (카테고리 열쇠, 제목, 쓰는 곳 표시, [(칸 이름, 모델 경로)]). 표시는 카테고리 제목에 한 번.
 REQUIRED_GROUPS = (
     ("env", "실행 환경", "PC·서버", (("run_env", "common.run_env"),)),
     (
@@ -116,7 +116,7 @@ ROLES = (
     ("mcp.dev.", "dev.mcp."),
 )
 
-# tuning — 거의 안 바꾸는 값(사용자 10-30 op-08 4차 · 11-04: 코드로 내리지 않고 sample 아래쪽에 분류별로 모음 — 비우면 코드 기본값).
+# tuning — 거의 안 바꾸는 값(sample 아래쪽에 분류별로 모음 — 비우면 코드 기본값).
 TUNING_INTERNAL = (  # 내부 조정값 — 재시도·내부 대기·묶음 크기·출력 상한
     "common.models.embed.query_cache_max",
     "common.models.llm.empty_retry_max",
@@ -163,7 +163,7 @@ TUNING_RESOURCE = (  # 자원·대기·병렬 세부값 — 자동 계산 내부
     "pipeline.extract.attach.timeout",
     "pipeline.service.data_parsing.procs",
 )
-TUNING_RARE = (  # 사용자 11-04 — 역할 절에서 옮긴 칸: 결과 파라미터(청크·순위·그림 고르기)·내부 상한·로그 대기열(운영자가 환경마다 정하지 않음)
+TUNING_RARE = (  # 결과 파라미터(청크·순위·그림 고르기)·내부 상한·로그 대기열(운영자가 환경마다 정하지 않음)
     "common.connections.pg.connect_timeout",
     "common.connections.pg.pool_max",
     "common.text.search_en_stem",
@@ -219,7 +219,7 @@ TUNING_RARE = (  # 사용자 11-04 — 역할 절에서 옮긴 칸: 결과 파�
 )
 TUNING = frozenset(TUNING_INTERNAL + TUNING_RESOURCE + TUNING_RARE)
 
-# PC 전용 칸(사용자 11-04) — 서버(dev·prd)는 외부 모델·로컬 대체 DB를 거부하므로 비워 둔다. 파일 자리 dev.<역할 자리>(sample 맨 아래 절).
+# PC 전용 칸 — 서버(dev·prd)는 외부 모델·로컬 대체 DB를 거부하므로 비워 둔다. 파일 자리 dev.<역할 자리>(sample 맨 아래 절).
 LOCAL = (
     "common.models.embed.allow_external",
     "common.models.llm.allow_external",

@@ -1,4 +1,4 @@
-"""common.store.db.dbtool 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.store.db.dbtool --selftest`."""
+"""common.store.db.dbtool 자기 점검."""
 
 from common.store.db.dbtool import MIGRATIONS, TARGETS, head, index_kind, known, standin_script, status
 
@@ -19,7 +19,7 @@ def selftest():
     )
     assert head("applog") == "0001_applog" and known("applog") == ["0001_applog"]
     assert head("master") == "0001_master" and known("master") == ["0001_master"]
-    assert not list((MIGRATIONS / "versions").glob("*struct*"))  # 사용자 11-01 — struct 갈래 없음(엔진 구성·원천 목록은 파일)
+    assert not list((MIGRATIONS / "versions").glob("*struct*"))  # struct 갈래 없음(엔진 구성·원천 목록은 파일)
     print("[selftest] dbtool — 판 폴더 갈래 search 하나·끝 판·HNSW 2000 같음 통과")
     # 판 0002가 굳혀 둔 원천별 칸 = 지금 표 정의(pl-28 — 판 파일은 모델을 import하지 않으므로 여기서 대조)
     sp = importlib.util.spec_from_file_location("s_0002", MIGRATIONS / "versions" / "0002_search_doc_meta.py")
@@ -100,16 +100,16 @@ def selftest():
 
     from common.store.db.dbcompare import _text
 
-    assert _text(DefaultClause(text("now()"))) == "now()" and _text("1") == "1" and _text(None) == "None"  # 기본값 다름 문구(VS8a R-2)
+    assert _text(DefaultClause(text("now()"))) == "now()" and _text("1") == "1" and _text(None) == "None"  # 기본값 다름 문구
     print("[selftest] dbtool — 색인 종류(차원 2,000 경계)·판 상태 판정(없음·끝·모름·끝+모름 섞임)·기본값 문구 통과")
     return 0
 
 
-def test_main():  # 옛 `--selftest` 갈래(`if a.selftest: return selftest()`)
+def test_main():
     selftest()
 
 
-def test_all_keeps_applog_schema():  # PR #87 리뷰 — up --target all --schema demo가 applog 표를 검색 스키마에 만들지 않게
+def test_all_keeps_applog_schema():  # up --target all --schema demo가 applog 표를 검색 스키마에 만들지 않게
     from argparse import Namespace
 
     from common.store.db.dbtool import _schema_arg

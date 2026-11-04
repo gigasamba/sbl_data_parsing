@@ -1,4 +1,4 @@
-"""common.ai.llm 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.ai.llm`."""
+"""common.ai.llm 자기 점검."""
 
 from pathlib import Path
 
@@ -6,7 +6,7 @@ from common.ai.guard import is_internal
 from common.ai.llm import LLMUnavailable, _cache_path, _stats, cache_key, chat
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: 내부 주소 판정 (S7b — 시험이 읽는 값은 설정 객체라 COMMON.env로 겹쳐 씀, os.environ은 안 바뀜)
+def test_main():  # 내부 주소 판정 — 시험이 읽는 값은 설정 객체라 COMMON.env로 겹쳐 씀(os.environ은 안 바뀜)
     from common.config.settings import COMMON
 
     assert is_internal("http://10.0.0.5:8000/v1") and is_internal("http://localhost:8765/v1") and is_internal("http://[::1]:8000/v1")
@@ -19,12 +19,12 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
             pass
     print("llm self-check OK")
 
-    # RV12 — 빈 응답 안전망: 1차가 빈 응답(토큰은 썼음 — 생각이 max_tokens를 다 먹은 신호) → max_tokens×4로 딱 한 번
+    # 빈 응답 안전망: 1차가 빈 응답(토큰은 썼음 — 생각이 max_tokens를 다 먹은 신호) → max_tokens×4로 딱 한 번
     # 재요청 · 성공한 응답만 원래 max_tokens 키로 캐시(다음 같은 호출은 재시도 없이 적중) · 두 호출 다 공유 장부(_stats)에.
     import shutil
     import tempfile
 
-    import common.ai.llm as _adk  # 모델 호출(0.2.0 — 옛 common.ai.adk)
+    import common.ai.llm as _adk  # 모델 호출
 
     _orig_complete = _adk.complete
     _tmp1 = tempfile.mkdtemp()
@@ -54,7 +54,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
         shutil.rmtree(_tmp1, ignore_errors=True)
     print("[selftest] RV12 — 빈 응답(생각이 토큰 다 씀) 재요청 1회(4배)·캐시는 성공 응답만(원래 키)·공유 장부 2건 집계 통과")
 
-    # 재요청 뒤에도 빈 응답이면 그대로 · 빈 응답은 캐시에 안 씀(전에는 캐시에 고착돼 다음 호출도 계속 빈 응답 재생)
+    # 재요청 뒤에도 빈 응답이면 그대로 · 빈 응답은 캐시에 안 씀(캐시에 고착되면 다음 호출도 계속 빈 응답)
     _tmp2 = tempfile.mkdtemp()
     _hits = []
 
@@ -84,12 +84,12 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
         with COMMON.env(LLM_EXTRA_BODY='{"reasoning": {"enabled": false}}'):
             _k1 = cache_key("x", _m)
         with COMMON.env(LLM_EXTRA_BODY="{}"):
-            _k2 = cache_key("x", _m)  # 옛 `if eb`는 글자 "{}"도 참 — 빈 객체도 열쇠에 들어감
+            _k2 = cache_key("x", _m)  # 빈 객체도 열쇠에 들어감(글자 "{}"는 참)
         assert _k0 != _k1 and _k0 == cache_key("x", _m), "LLM_EXTRA_BODY가 캐시 열쇠에 들어가야 함(미설정이면 기존 열쇠)"
         assert _k2 not in (_k0, _k1)
     print("[selftest] SEC-2 — LLM_EXTRA_BODY(생각 켬/끔)별 캐시 열쇠 분리 통과")
 
-    # D-028 ⑧(S7b) — RUN_ENV가 dev·prd면 외부 주소는 allow_external이 열려도 거부, local은 지금처럼 허용
+    # RUN_ENV가 dev·prd면 외부 주소는 allow_external이 열려도 거부, local은 허용
     _tmp3 = tempfile.mkdtemp()
     _adk.complete = lambda role, messages, **kw: ("외부 답", {"prompt_tokens": 1, "completion_tokens": 1})
     try:
@@ -97,7 +97,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
             LLM_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai",
             LLM_MODEL="x-ext",
             LLM_CACHE_DIR=str(Path(_tmp3) / "cache"),
-            LLM_BUDGET_USD=None,  # 기본 하루 상한 0.1(11-03) — 단가를 알아야 외부 호출이 됨
+            LLM_BUDGET_USD=None,  # 기본 하루 상한 0.1 — 단가를 알아야 외부 호출이 됨
             LLM_PRICE_IN="1",
             LLM_PRICE_OUT="1",
             LLM_SPEND_FILE=str(Path(_tmp3) / "spend.txt"),
@@ -111,7 +111,7 @@ def test_main():  # 옛 `if __name__ == "__main__":` 몸통 — 자기점검: �
                     assert ("RUN_ENV 없음" if _env is None else f"RUN_ENV={_env}") in str(_e), str(_e)
         with COMMON.env(RUN_ENV="local", **_ext):
             assert chat([{"role": "user", "content": "q"}], allow_external=True, agent="x") == "외부 답"
-        # 11-04(사용자): 설정 LLM_ALLOW_EXTERNAL=1만으로도 허용(분류처럼 인자를 안 넘기는 호출) — local만, 서버는 거부 · 0이면 거부
+        # 설정 LLM_ALLOW_EXTERNAL=1만으로도 허용(분류처럼 인자를 안 넘기는 호출) — local만, 서버는 거부 · 0이면 거부
         for _env, _allow, _ok in (
             ("local", "1", True),
             ("local", None, False),

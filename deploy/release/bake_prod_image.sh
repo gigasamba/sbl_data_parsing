@@ -1,14 +1,14 @@
 #!/bin/bash
-# 개발 → 운영(op-07, 사용자 10-30) — 개발 서버(폐쇄망)에서 실행. 개발 서버에서 쓰던 실행 이미지(*-runtime) 그 판 + 시험한 코드 폴더를
+# 개발 → 운영 — 개발 서버(폐쇄망)에서 실행. 개발 서버에서 쓰던 실행 이미지(*-runtime) 그 판 + 시험한 코드 폴더를
 # 그대로 묶어 운영용 이미지(코드가 든 이미지 — 코드 폴더 마운트 없이 뜸)를 만들고, 반입 판정 뒤 저장·분할한다. 패키지 설치·네트워크 없음.
 #   bash deploy/release/bake_prod_image.sh <실행 이미지 태그 판> [대상… 기본 pipeline mcp]
 #     예: bash <루트>/sbl_data_parsing-<판>/deploy/release/bake_prod_image.sh 0.1.0   → data-pipeline-runtime:0.1.0 + 코드 폴더 → data-pipeline:<VERSION>
-#   CODE_DIR  코드 폴더(기본: 이 스크립트가 든 코드 폴더 — <루트>/sbl_data_parsing-<판>, op-13)
-#   TAG       새 이미지 태그 판 = 코드 폴더 VERSION(D-036 — 다르면 멈춤, PC 시험 태그만 BAKE_TEST=1)
+#   CODE_DIR  코드 폴더(기본: 이 스크립트가 든 코드 폴더 — <루트>/sbl_data_parsing-<판>)
+#   TAG       새 이미지 태그 판 = 코드 폴더 VERSION(다르면 멈춤, PC 시험 태그만 BAKE_TEST=1)
 #   OUT       저장 폴더(기본 /var/tmp/bake — 코드 폴더 밖) · DOCKER(기본 podman, 없으면 docker)
 #   한 대상만 실패했으면 그 대상만 다시: bash bake_prod_image.sh <판> mcp(이미 구운 대상은 "이미 있는 태그"로 멈춤)
 # 순서(대상마다): ① 코드 DEPS_HASH = 실행 이미지 deps_hash ② Dockerfile.bake 빌드(문맥 = 코드 폴더) ③ selftest_gate [판정] 통과
-#   ④ stage_images.sh로 저장·gzip·분할·sha256 → $OUT/sbl_images/<TAG>/<이미지>/ + load.sh·BUILD.txt(op-10 — 개발 서버와 같은 배치, 서버에서 load.sh <TAG>)
+#   ④ stage_images.sh로 저장·gzip·분할·sha256 → $OUT/sbl_images/<TAG>/<이미지>/ + load.sh·BUILD.txt(개발 서버와 같은 배치, 서버에서 load.sh <TAG>)
 #   + 시험한 코드 폴더 묶음(code-<판>-<커밋>.tar.gz — 운영 서버 호스트 스크립트 deploy/host/·compose용, 이미지와 같은 커밋)
 set -euo pipefail
 [ $# -ge 1 ] || { echo "사용: bash bake_prod_image.sh <실행 이미지 태그 판> [pipeline mcp]" >&2; exit 2; }
@@ -16,9 +16,9 @@ RT_VER="$1"; shift
 if [ "$#" -gt 0 ]; then TARGETS=("$@"); else TARGETS=(pipeline mcp); fi
 OUT="${OUT:-/var/tmp/bake}"; mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)   # stage_images.sh가 cd하므로 절대 경로로
 CODE_DIR=$(cd "${CODE_DIR:-$(dirname "$0")/../..}" && pwd)
-. "$(dirname "$0")/../host/scripts/load_settings.sh"   # docker_default 한 곳(op-10 — podman, 없으면 docker) · 이 스크립트가 든 코드 폴더의 것(CODE_DIR가 옛 코드 폴더여도)
+. "$(dirname "$0")/../host/scripts/load_settings.sh"   # docker_default 한 곳(podman, 없으면 docker) · 이 스크립트가 든 코드 폴더의 것(CODE_DIR가 다른 판 코드 폴더여도)
 DOCKER="${DOCKER:-$(docker_default)}"
-HERE=$(cd "$(dirname "$0")" && pwd)   # 이 스크립트 폴더 — stage_images.sh는 여기 것(CODE_DIR가 옛 이름 ship_stage.sh만 있는 옛 코드 폴더여도)
+HERE=$(cd "$(dirname "$0")" && pwd)   # 이 스크립트 폴더 — stage_images.sh는 여기 것(CODE_DIR가 stage_images.sh 없는 다른 판 코드 폴더여도)
 cd "$CODE_DIR"
 . deploy/release/image_names.sh
 TAG="${TAG:-$(app_version)}"
@@ -28,7 +28,7 @@ want=$(tr -d '\r\n' < deploy/docker/DEPS_HASH)
 commit=$(cut -d' ' -f1 CODE_COMMIT 2>/dev/null); case "$commit" in ''|'$Format'*) commit=$(git rev-parse HEAD 2>/dev/null || echo unknown) ;; esac   # clone이면 틀 그대로
 # 운영 서버 호스트 스크립트(deploy/host/ — nightly_batch.sh·compose·systemd)도 이미지와 같은 코드로 — 시험한 코드 폴더 그대로 묶음
 BUNDLE="$OUT/code-$TAG-$(echo "$commit" | cut -c1-7).tar.gz"
-tar -czf - --exclude=./output --exclude=./settings.yaml --exclude="./settings.yaml.*" -C "$CODE_DIR" . > "$BUNDLE"   # settings.yaml(비밀값)·그 사본·백업은 운영으로 보내지 않음(운영 고침 — 사용자 11-02)
+tar -czf - --exclude=./output --exclude=./settings.yaml --exclude="./settings.yaml.*" -C "$CODE_DIR" . > "$BUNDLE"   # settings.yaml(비밀값)·그 사본·백업은 운영으로 보내지 않음
 
 for t in "${TARGETS[@]}"; do
   case "$t" in pipeline|mcp) ;; *) echo "[bake_prod_image] 모르는 대상: $t (pipeline·mcp)" >&2; exit 2 ;; esac

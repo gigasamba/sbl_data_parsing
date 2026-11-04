@@ -1,6 +1,5 @@
-"""호스트 flow 러너 run_docs.py의 main() 흐름 배선(S12, 사용자 10-29 — refactor.md C-59).
-10-23 "MCP 업로드 감시" 수정 때 mcp_busy·_mcp_pause_monitor가 main() 한가운데에 끼어들어 lane_worker와 그 뒤(레인 스레드 시작·끝 대기·
-구조화 센티널·마지막 로그)가 main() 밖으로 빠졌다 — main()이 파싱 스레드를 띄우지 않고 끝났다(pre-refactor부터). 이 시험이 그 배선을 고정한다.
+"""호스트 flow 러너 run_docs.py의 main() 흐름 배선 — main()이 레인 스레드를 띄우고 끝까지 기다리며 구조화 센티널·마지막 로그까지
+도는지 고정한다(refactor.md C-59).
 run_docs.py는 로컬에서 실행하지 않는다(CLAUDE.md §4) — 설정·docker·EDW·다운로드·파싱·구조화 함수를 가짜로 바꾸고 문서 2건으로 main()만 돌린다
 (운영 접속·docker·DB 없음). 끝 대기가 5초 간격이라 몇 초 걸린다. main()이 umask·모듈 상태를 바꾸므로 자식 프로세스로 돈다(INPROCESS 아님)."""
 
@@ -14,7 +13,7 @@ from unittest import mock
 
 from common.core.paths import DEPLOY_ROOT
 
-ROOT = DEPLOY_ROOT  # 저장소 루트(op-09 — paths 상수)
+ROOT = DEPLOY_ROOT  # 저장소 루트(paths 상수)
 
 
 def _load():
@@ -59,7 +58,7 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
 
     M.configure = configure
     M.edw_list = lambda keywords=(), where=None: rows
-    M.faq_first = lambda rows, order: order  # FAQ 교체(pl-41)는 test_run_docs.test_faq_first에서
+    M.faq_first = lambda rows, order: order  # FAQ 교체는 test_run_docs.test_faq_first에서
     M.stack_check = lambda: None  # 엔진 구성 파일 확인(docker exec) 대신
     M.warm_one = lambda seq, row: True
     M.classify_doc = lambda seq, row, cache=None: M._class.setdefault(seq, "light")  # 레인 분류(docker exec) 대신 — 규칙은 test_doc_group
@@ -71,7 +70,7 @@ def _run_main(work, rows, parse_one, gold_one=_ok_gold, publish_one=_ok_pub, dro
     M.rc = None
     argv = sys.argv
     sys.argv = ["run_docs.py", "--start-offset", "0", "--settings", str(work / "unused.yaml"), *args]
-    # 가짜로 바꾸지 않은 외부 명령(docker exec·셸)이 불리면 바로 실패 — main()에 새 부작용이 생겨도 운영 쪽으로 새지 않게(S12 /simplify)
+    # 가짜로 바꾸지 않은 외부 명령(docker exec·셸)이 불리면 바로 실패 — main()에 새 부작용이 생겨도 운영 쪽으로 새지 않게
     no_shell = AssertionError("시험 중 외부 명령 호출 — 가짜로 바꾸지 않은 부작용")
     try:
         with (
@@ -103,7 +102,7 @@ def test_main_runs_lanes_to_end():
             return True
 
         M = _run_main(work, rows, parse_one, gold_one)
-        assert sorted(calls["parse"]) == [0, 1], calls  # 레인 스레드가 _one → parse_one을 부름(결함 때는 0건)
+        assert sorted(calls["parse"]) == [0, 1], calls  # 레인 스레드가 _one → parse_one을 부름
         assert sorted(calls["struct"]) == [0, 1], calls  # 파싱 OK → 게시 → 구조화 대기열 → gold_one
         assert M._lane_inflight == {"light": 0, "medium": 0, "vlm": 0}
         log = (M.PROG / "progress.log").read_text(encoding="utf-8")
@@ -112,7 +111,7 @@ def test_main_runs_lanes_to_end():
 
 
 def test_main_survives_errors_in_failure_path():
-    """예외 처리 중 다시 예외(정리 함수 실패 — 디스크 가득 등)가 나도 작업 스레드가 죽지 않고 main()이 실패 수를 세고 끝난다(S12 리뷰 ①)."""
+    """예외 처리 중 다시 예외(정리 함수 실패 — 디스크 가득 등)가 나도 작업 스레드가 죽지 않고 main()이 실패 수를 세고 끝난다."""
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"doc{i}.txt", "file_size": 10} for i in range(2)]
     with tempfile.TemporaryDirectory(prefix="orca_s12_") as tmp:
         work = Path(tmp)
@@ -137,7 +136,7 @@ def test_main_survives_errors_in_failure_path():
 
 
 def test_thread_error_fails_the_run():
-    """gold 뒤 기록(mark — 디스크 가득 등)이 예외를 내도 집계는 먼저 되고, 스레드 예외는 실패로 세어 종료 코드 1(PR #107 리뷰 P1)."""
+    """gold 뒤 기록(mark — 디스크 가득 등)이 예외를 내도 집계는 먼저 되고, 스레드 예외는 실패로 세어 종료 코드 1."""
     rows = [{"id": 0, "s3_key": "k0", "original_filename": "doc0.txt", "file_size": 10}]
     with tempfile.TemporaryDirectory(prefix="orca_thr_") as tmp:
         work = Path(tmp)
@@ -159,7 +158,7 @@ def test_thread_error_fails_the_run():
 
 
 def test_warm_error_does_not_hang():
-    """받기 워커에서 예외가 나도 main()이 끝나고(_warming에 남지 않음) 실패로 세어 종료 코드 1(PR #107 재리뷰 P1)."""
+    """받기 워커에서 예외가 나도 main()이 끝나고(_warming에 남지 않음) 실패로 세어 종료 코드 1."""
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"doc{i}.txt", "file_size": 10} for i in range(2)]
     with tempfile.TemporaryDirectory(prefix="orca_warm_") as tmp:
         work = Path(tmp)
@@ -179,7 +178,7 @@ def test_warm_error_does_not_hang():
 
 
 def test_depth_write_error_does_not_hang():
-    """대기열 깊이 기록(depth)이 디스크 오류를 내도 main()이 멈추지 않고 정상 끝(관찰용 기록 — PR #107 재리뷰 P1)."""
+    """대기열 깊이 기록(depth)이 디스크 오류를 내도 main()이 멈추지 않고 정상 끝(관찰용 기록)."""
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"doc{i}.txt", "file_size": 10} for i in range(2)]
     with tempfile.TemporaryDirectory(prefix="orca_depth_") as tmp:
         work = Path(tmp)
@@ -229,7 +228,7 @@ def _lanes_by_name(M):  # 분류(docker probe)를 가짜로 — 파일 이름 �
 
 
 def test_medium_vlm_lanes_and_vlm_cap():
-    """medium·vlm 레인도 끝까지 돌고, vlm 문서 동시 파싱은 vlm_cap을 넘지 않는다(rn-04 — 전에는 light만 시험)."""
+    """medium·vlm 레인도 끝까지 돌고, vlm 문서 동시 파싱은 vlm_cap을 넘지 않는다(rn-04)."""
     lanes = ["light", "medium", "vlm"] * 3
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"{c}_{i}.bin", "file_size": 10} for i, c in enumerate(lanes)]
     seen, live, peak, lock = [], {"vlm": 0}, {"vlm": 0}, threading.Lock()
@@ -262,7 +261,7 @@ def test_medium_vlm_lanes_and_vlm_cap():
 
 
 def test_mcp_busy_yields_medium_own_worker():
-    """MCP 업로드 처리 중(_mcp_pause)이면 medium 전담 워커는 새 문서를 안 뽑고, medium 문서는 공유 워커가 처리한다(10-23 양보 길 — rn-04)."""
+    """MCP 업로드 처리 중(_mcp_pause)이면 medium 전담 워커는 새 문서를 안 뽑고, medium 문서는 공유 워커가 처리한다(rn-04)."""
     rows = [{"id": i, "s3_key": f"k{i}", "original_filename": f"medium_{i}.bin", "file_size": 10} for i in range(4)]
     seen = []
     with tempfile.TemporaryDirectory(prefix="orca_rn04_") as tmp:
@@ -287,7 +286,7 @@ def test_mcp_busy_yields_medium_own_worker():
 
 
 def test_mcp_busy_scans_recent_job_folders_only():
-    """mcp_busy는 이름 날짜가 어제·오늘·내일인 작업 폴더에서 30초 안에 바뀐 파일만 본다(rn-04 — 5초마다 jobs 전체 rglob 대신)."""
+    """mcp_busy는 이름 날짜가 어제·오늘·내일인 작업 폴더에서 30초 안에 바뀐 파일만 본다(rn-04 — 5초마다 jobs 전체를 훑지 않게)."""
     import os
 
     M = _load()

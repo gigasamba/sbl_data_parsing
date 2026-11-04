@@ -1,5 +1,5 @@
-"""pl-38(사용자 11-03) — 마스터 표 `<PG_SCHEMA>_master`: 판 0001_master ↔ 모델 칸 · 스키마 이름 · `master load`(한 트랜잭션·해시) ·
-읽는 값이 옛 파일 로더와 같음 · 서버는 못 읽으면 멈춤 · gold_version 꼴. 임시 SQLite 대역만 — 외부 접속 없음."""
+"""마스터 표 `<PG_SCHEMA>_master`: 판 0001_master ↔ 모델 칸 · 스키마 이름 · `master load`(한 트랜잭션·해시) ·
+읽는 값이 파일 로더와 같음 · 서버는 못 읽으면 멈춤 · gold_version 꼴. 임시 SQLite 대역만 — 외부 접속 없음."""
 
 import importlib.util
 import shutil
@@ -74,7 +74,7 @@ def test_load_hash_and_transaction():
         p.write_text(p.read_text(encoding="utf-8-sig") + "test_id,TST-\\d+,TST-1,,\n", encoding="utf-8")
         h2 = M.load(db, M.read_csvs(g))
         assert h2 != m1.hash and M.read(db).hash == h2 and len(M.read(db).rows("id_patterns")) == len(m1.rows("id_patterns")) + 1
-        # 한 트랜잭션 — 중간에 실패하면 옛 내용 그대로
+        # 한 트랜잭션 — 중간에 실패하면 이전 내용 그대로
         real = db.cn.cursor
         calls = {"n": 0}
 
@@ -110,7 +110,7 @@ def test_readers_same_as_files():
         assert [(t, p.pattern) for t, p in T.load_id_patterns_typed()] == [
             (t, p.pattern) for t, p in T.load_id_patterns_typed(GLOSSARY_ROOT)
         ]
-        old = {}  # 옛 _aliases: stack client_aliases + 명부 파일(read_roster) + 용어 사전 org_client
+        old = {}  # 파일 쪽 별칭: stack client_aliases + 명부 파일(read_roster) + 용어 사전 org_client
         for c, al in T.read_roster(GLOSSARY_ROOT / "client_roster.csv").items():
             old[c] = sorted(set(old.get(c, [])) | set(al))
         for r in T.load_glossary(GLOSSARY_ROOT).values():
@@ -156,7 +156,7 @@ def test_gold_version():
 
 
 def test_standin_follows_csv_and_mcp_preload():
-    """리뷰 — PC 대역은 git CSV가 바뀌면 다시 채움(옛 명부로 남지 않게) · 검색 MCP는 검색기를 만들 때 마스터를 미리 읽어, 못 읽으면 RuntimeError."""
+    """PC 대역은 git CSV가 바뀌면 다시 채움(낡은 명부로 남지 않게) · 검색 MCP는 검색기를 만들 때 마스터를 미리 읽어, 못 읽으면 RuntimeError."""
     d = Path(tempfile.mkdtemp())
     st = _standin(d)
     try:

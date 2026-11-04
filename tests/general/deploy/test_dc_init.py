@@ -1,4 +1,4 @@
-"""host_ctl.sh init·timers·check(사용자 11-03 · op-13) — init: DC_ROOT 임시 루트에 settings.yaml·edw_chain.yaml·output/·backup/을 만들고(두 번 불러도 같음)
+"""host_ctl.sh init·timers·check — init: DC_ROOT 임시 루트에 settings.yaml·edw_chain.yaml·output/·backup/을 만들고(두 번 불러도 같음)
 settings.yaml은 없을 때만 복사(덮지 않음), env/·code/·live는 만들지 않음. 루트는 코드 폴더의 부모(load_settings.sh). timers: 단위 파일의 @CODE_DIR@를
 코드 폴더로 채움. check: DC_FAKE로 단계를 바꿔 끼워 처음 실패에서 멈추는지·selftest는 "[판정] 통과" 줄로 판정하는지. docker·root·systemctl 없음 — PC 전용."""
 
@@ -46,7 +46,7 @@ def test_init():
         for gone in ("env", "code"):
             assert not (root / gone).exists(), (gone, r1.stdout)
         sf = root / "settings.yaml"
-        chain = root / "edw_chain.yaml"  # 사슬 서버 사본(사용자 11-03) — 없을 때만 기본 파일에서
+        chain = root / "edw_chain.yaml"  # 사슬 서버 사본 — 없을 때만 기본 파일에서
         assert chain.read_bytes() == (DEPLOY_ROOT / "resources" / "config" / "edw_chain.yaml").read_bytes(), "init이 사슬 사본을 안 만듦"
         assert sf.read_bytes() == (SCRIPT.parents[3] / "settings.sample.yaml").read_bytes()
         assert "만듦" in r1.stdout and "required.env.run_env" in r1.stdout, r1.stdout
@@ -66,7 +66,7 @@ def test_init():
 
 
 def test_root_is_code_parent():
-    """op-13 규칙 1 — load_settings.sh는 자기 자리(코드 폴더/deploy/host/scripts)에서 루트(코드 폴더의 부모)를 구해 <루트>/settings.yaml을 읽고
+    """load_settings.sh는 자기 자리(코드 폴더/deploy/host/scripts)에서 루트(코드 폴더의 부모)를 구해 <루트>/settings.yaml을 읽고
     결과 폴더를 <루트>/output으로 둔다(env·고정 경로 없음). SETTINGS_LOADED로 settings_to_env.py(PyYAML) 부르기는 건너뜀."""
     bash = _need_bash()
     if not bash:
@@ -85,7 +85,7 @@ def test_root_is_code_parent():
 
 
 def test_timers():
-    """op-13 규칙 6 — host_ctl.sh timers가 단위 파일 4개의 @CODE_DIR@를 이 코드 폴더로 채워 쓴다(DC_UNIT_DIR — systemctl 없음).
+    """host_ctl.sh timers가 단위 파일 4개의 @CODE_DIR@를 이 코드 폴더로 채워 쓴다(DC_UNIT_DIR — systemctl 없음).
     여러 벌(ops.host.instance)이면 단위 이름 끝에 -<instance>(타이머·서비스 짝이 같은 이름)."""
     bash = _need_bash()
     if not bash:
@@ -173,7 +173,7 @@ def test_check():
 
 
 def test_init_refuses_chain_dir():
-    """edw_chain.yaml 자리에 폴더(docker가 init 전에 띄운 마운트로 만든 것)가 있으면 지우지 않고 종료 4 — 그 안에 복사하지 않음(리뷰 #140)."""
+    """edw_chain.yaml 자리에 폴더(docker가 init 전에 띄운 마운트로 만든 것)가 있으면 지우지 않고 종료 4 — 그 안에 복사하지 않음."""
     bash = _need_bash()
     if not bash:
         return

@@ -1,6 +1,6 @@
-"""nightly_batch.sh scheduled 시각 게이트(pl-32, 사용자 10-30 · 11-02) — settings.yaml ops.nightly.time·max_docs·deadline(NIGHTLY_TIME·
-NIGHTLY_MAX_DOCS·NIGHTLY_DEADLINE) 중 하나라도 비면 조용히 끝, 시작 시각부터 5분 안이면 run_docs.py(11-01 — 새벽 배치 = run_docs,
-사용자 10-31)에 상한·마감을 넘김, 꼴이 틀리면 종료 2. nightly_batch.sh에서 게이트 블록만 떼어 bash로 돌린다(date·python3은 셸 함수로 바꿔 끼움 — run_docs는 돌지 않음, 설정·docker 없음, PC 전용)."""
+"""nightly_batch.sh scheduled 시각 게이트(pl-32) — settings.yaml ops.nightly.time·max_docs·deadline(NIGHTLY_TIME·
+NIGHTLY_MAX_DOCS·NIGHTLY_DEADLINE) 중 하나라도 비면 조용히 끝, 시작 시각부터 5분 안이면 run_docs.py(새벽 배치 = run_docs)에
+상한·마감을 넘김, 꼴이 틀리면 종료 2. nightly_batch.sh에서 게이트 블록만 떼어 bash로 돌린다(date·python3은 셸 함수로 바꿔 끼움 — run_docs는 돌지 않음, 설정·docker 없음, PC 전용)."""
 
 import os
 import re
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from common.core.paths import DEPLOY_ROOT
 
-ROOT = DEPLOY_ROOT  # 저장소 루트(op-09 — paths 상수)
+ROOT = DEPLOY_ROOT  # 저장소 루트(paths 상수)
 
 CASES = [  # (NIGHTLY_TIME, 지금, 종료 코드, run_docs를 부름?) — 상한 50·마감 06:00
     ("", "01:00", 0, False),  # 비움 = 새벽 배치 없음
@@ -26,14 +26,14 @@ CASES = [  # (NIGHTLY_TIME, 지금, 종료 코드, run_docs를 부름?) — 상�
     ("24:00", "00:00", 2, False),
     ("01:30:00", "01:30", 2, False),
 ]
-OTHER = [  # (NIGHTLY_MAX_DOCS, NIGHTLY_DEADLINE, 종료 코드, run_docs를 부름?) — 시작 01:00·지금 01:00(사용자 11-02 — 셋 다 있어야 돎)
+OTHER = [  # (NIGHTLY_MAX_DOCS, NIGHTLY_DEADLINE, 종료 코드, run_docs를 부름?) — 시작 01:00·지금 01:00(셋 다 있어야 돎)
     ("", "06:00", 0, False),
     ("50", "", 0, False),
     ("  ", " ", 0, False),
     ("0", "06:00", 2, False),
     ("5x", "06:00", 2, False),
     ("50", "6:00", 2, False),
-    ("50", "01:03", 2, False),  # 마감이 시작 창 안 — 늦게 깬 타이머면 마감이 다음 날로 밀림(리뷰 11-02)
+    ("50", "01:03", 2, False),  # 마감이 시작 창 안 — 늦게 깬 타이머면 마감이 다음 날로 밀림
     ("50", "01:00", 2, False),
     ("50", "01:05", 0, True),
 ]

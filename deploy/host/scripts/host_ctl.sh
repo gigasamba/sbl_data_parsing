@@ -1,9 +1,9 @@
 #!/bin/bash
-# 상주 컨테이너 3개(data-pipeline·mcp-data-parsing·mcp)를 부르는 compose 입구(사용자 11-03 — 옛 README `dc()` 셸 함수를 대신함).
+# 상주 컨테이너 3개(data-pipeline·mcp-data-parsing·mcp)를 부르는 compose 입구.
 #   bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   (서비스 하나만도 됨 · ps·logs·down 등 compose 하위 명령 그대로)
-#   bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   서버 루트(이 코드 폴더의 부모 — op-13) 채우기(root — 여러 번 불러도 안전)
-#   bash deploy/host/scripts/host_ctl.sh timers                      systemd 타이머(새벽 배치·MCP 살리기)를 이 코드 폴더 기준으로 설치·켬(root — op-13)
-#   bash deploy/host/scripts/host_ctl.sh check                       배포 뒤 점검을 차례로 — 처음 실패에서 멈추고 마지막 한 줄로 판정(사용자 11-03)
+#   bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   서버 루트(이 코드 폴더의 부모) 채우기(root — 여러 번 불러도 안전)
+#   bash deploy/host/scripts/host_ctl.sh timers                      systemd 타이머(새벽 배치·MCP 살리기)를 이 코드 폴더 기준으로 설치·켬(root)
+#   bash deploy/host/scripts/host_ctl.sh check                       배포 뒤 점검을 차례로 — 처음 실패에서 멈추고 마지막 한 줄로 판정
 # 하는 일: 코드 폴더 루트로 cd → settings.yaml을 셸 env로(load_settings.sh load_settings — 값은 출력 안 함) → 실행 이미지(*-runtime)면
 #   이 코드 폴더를 CODE_DIR로(in_container.sh code_dir_default — 파이프라인 이미지 기준, 개발 서버는 두 이미지가 함께 runtime) →
 #   $DOCKER compose -f compose.pipeline.yml -f compose.data-parsing.yml -f compose.mcp-server.yml [+ CODE_DIR면 compose.code*.yml] "$@".
@@ -14,7 +14,7 @@ cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
 if [ -n "${DC_ROOT:-}" ]; then RAG_ROOT=$DC_ROOT; fi   # 시험 루트(init) — load_settings.sh는 이미 있는 RAG_ROOT를 씀(결과 폴더 기본도 그 아래)
 . deploy/host/scripts/load_settings.sh   # 루트 RAG_ROOT·load_settings 한 곳(값은 아래 load_settings에서)
 
-# init — 서버 루트(op-13 — 이 코드 폴더의 부모)를 한 번에 채운다(값·파일 내용은 찍지 않음). 여러 번 불러도 안전.
+# init — 서버 루트(이 코드 폴더의 부모)를 한 번에 채운다(값·파일 내용은 찍지 않음). 여러 번 불러도 안전.
 #   폴더: <결과 폴더>(UID 10001:<그룹>, 2775 — setgid) · <결과 폴더>/_mcp_parse/jobs(같음) · <루트>/backup(700)
 #   코드 폴더(이 스크립트의 폴더 — zip을 푼 sbl_data_parsing-<판>): chmod -R a+rX(컨테이너 UID 10001이 읽게)
 #   settings.yaml: 코드 폴더의 settings.sample.yaml을 <루트>/settings.yaml로 — **없을 때만**(있으면 절대 덮지 않음), 10001:<그룹> 640.
@@ -122,7 +122,7 @@ dc_check() {
 }
 
 # timers — systemd 단위 4개(deploy/host/systemd — 새벽 배치·MCP 살리기)의 코드 폴더 자리(@CODE_DIR@)를 이 코드 폴더로 채워
-#   /etc/systemd/system에 쓰고 두 타이머를 켠다(op-13). 새 루트에서 다시 부르면 그 루트로 바뀐다. root가 아니면 종료 3.
+#   /etc/systemd/system에 쓰고 두 타이머를 켠다. 새 루트에서 다시 부르면 그 루트로 바뀐다. root가 아니면 종료 3.
 #   DC_UNIT_DIR=<폴더>는 /etc/systemd/system 대신(시험용 — root 확인·systemctl을 건너뜀).
 dc_timers() {
   local dest=${DC_UNIT_DIR:-/etc/systemd/system} u n

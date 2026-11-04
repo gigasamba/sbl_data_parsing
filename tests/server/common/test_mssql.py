@@ -1,4 +1,4 @@
-"""common.store.mssql 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.store.mssql --selftest`."""
+"""common.store.mssql 자기 점검."""
 
 from common.store.mssql import _ENGINES, clear, connect, raw, rows
 
@@ -101,5 +101,5 @@ def selftest():
     return 0
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 의 --selftest 갈래
+def test_main():
     raise SystemExit(selftest())

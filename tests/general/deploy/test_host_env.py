@@ -1,4 +1,4 @@
-"""호스트 칸 → 셸 env(사용자 11-02 — 호스트 python은 PyYAML만): deploy/host/scripts/settings_to_env.py가 설정 모델 export(common.config.export)와
+"""호스트 칸 → 셸 env(호스트 python은 PyYAML만): deploy/host/scripts/settings_to_env.py가 설정 모델 export(common.config.export)와
 같은 줄을 내는지, host_settings.tsv가 설정 모델과 같은지. 임시 settings.yaml만 — 설정·docker 없음(PC 전용)."""
 
 import contextlib
@@ -47,7 +47,7 @@ def test_host_env_matches_export():
     assert K.main(["--check"]) == 0, "host_settings.tsv가 설정 모델과 다름 — PYTHONPATH=. python deploy/release/gen_host_keys.py"
     table = [r.split("\t") for r in K.HOST_TABLE.read_text(encoding="utf-8").splitlines() if r and not r.startswith("#")]
     rows = [r for r in table if r[2] != "const"]
-    consts = {r[1]: r[3] for r in table if r[2] == "const"}  # 컨테이너 안 약속 경로(settings.IMAGE_PATHS — 사용자 11-02)
+    consts = {r[1]: r[3] for r in table if r[2] == "const"}  # 컨테이너 안 약속 경로(settings.IMAGE_PATHS)
     model = {}
     for path, name, kind in rows:
         L.set_path(model, path, _value(path, name, kind))

@@ -1,4 +1,4 @@
-"""EDW 접속 하나·계정 둘(사용자 10-29, docs/prd/ops.md#op-03) — 역할별 계정 선택과 "검색 MCP는 읽기 계정만"을 고정. 실제 접속 없음."""
+"""EDW 접속 하나·계정 둘(규칙: docs/prd/ops.md#op-03) — 역할별 계정 선택과 "검색 MCP는 읽기 계정만"을 고정. 실제 접속 없음."""
 
 from unittest import mock
 
@@ -49,7 +49,7 @@ def test_standin_refused_off_pc():
         except ValueError:
             pass
     with COMMON.env(RDB_SQLITE="x.sqlite", RUN_ENV="local"):
-        assert mssql.standin_path() == (PROJ_ROOT / "x.sqlite").as_posix()  # 상대 경로는 저장소 루트 기준(op-14)
+        assert mssql.standin_path() == (PROJ_ROOT / "x.sqlite").as_posix()  # 상대 경로는 저장소 루트 기준
 
 
 def test_mcp_process_never_holds_write_account():
@@ -79,7 +79,7 @@ def test_unknown_role_refused():
 
 
 def test_mcp_paths_use_read_account_only():
-    """query_edw 접속과 ParsingMeta 조회 — 둘 다 "read"만 부른다(쓰기 계정 비밀이 MCP 프로세스로 안 감). 근거 경로 조회(shaping)는 11-01에 지움(mc-15)."""
+    """query_edw 접속과 ParsingMeta 조회 — 둘 다 "read"만 부른다(쓰기 계정 비밀이 MCP 프로세스로 안 감)."""
     from mcp_server.services import edw_query
 
     roles = []
@@ -93,7 +93,7 @@ def test_mcp_paths_use_read_account_only():
 def test_publish_uses_write_and_sqlite_wins():
     with COMMON.env(**FULL), mock.patch.object(PM, "MssqlStore", lambda table, role: ("store", table, role)):
         assert PM.make_db("write") == ("store", "AI.ParsingMeta", "write")
-    with COMMON.env(RDB_SQLITE=":memory:", RUN_ENV="local"):  # 가짜 EDW는 local 전용 — 이미지에서도 시험 안에서만(이미지 관문 10-30)
+    with COMMON.env(RDB_SQLITE=":memory:", RUN_ENV="local"):  # 가짜 EDW는 local 전용 — 이미지에서도 시험 안에서만
         db = PM.make_db("write")
         assert isinstance(db, PM.SqliteStore)
         db.close()

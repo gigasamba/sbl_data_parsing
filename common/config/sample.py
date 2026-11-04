@@ -1,6 +1,6 @@
-"""settings.sample.yaml 만들기·대조 — 앱 설정 모델의 모든 칸을 새 배치(op-08 ② — common.config.layout)로 코드 기본값과 함께 낸다.
+"""settings.sample.yaml 만들기·대조 — 앱 설정 모델의 모든 칸을 배치(common.config.layout)대로 코드 기본값과 함께 낸다.
 맨 위 required(운영자가 채울 값 — 카테고리마다 쓰는 곳 표시 한 번) → 역할 절(common·extract·transform·load·search·ops — 환경마다 운영자가 정하는 값,
-세부 카테고리 제목) → tuning(거의 안 바꾸는 값 — 분류별 제목, 사용자 11-04) → dev(PC 전용). 칸마다 한 줄 주석: 설명 · 기본값 · 넣을 수 있는 값. 칸을 더하거나 바꾸면 다시 만든다.
+세부 카테고리 제목) → tuning(거의 안 바꾸는 값 — 분류별 제목) → dev(PC 전용). 칸마다 한 줄 주석: 설명 · 기본값 · 넣을 수 있는 값. 칸을 더하거나 바꾸면 다시 만든다.
 사용: python -m common.config.sample            # 저장소 루트 settings.sample.yaml에 씀
       python -m common.config.sample --check    # 파일이 모델과 같은지(다르면 rc 1)
       python -m common.config.sample --where PG_HOST [이름…]   # 옛 env 이름 → 파일 자리·모델 경로·내부 표시(판정 꼴·지문 등 — sample에서 뺀 것)
@@ -26,33 +26,6 @@ HEAD = """# settings.sample.yaml — 설정 파일 구조와 설명. 생성: pyt
 #   같은 절·칸을 두 번 쓰면 시작 거부(앞 것이 조용히 사라지지 않게). 모르는 칸·자리가 다른 칸도 시작 거부(칸 이름만 알림).
 #   한 번만 몇 칸 바꿀 때: 덮기 파일(base·overrides — python -m common.config.overrides). 옛 env 이름·판정 꼴: docs/operations/env-guide.md.
 """
-# C-39(사용자 10-27 S7e1 Q6 a) — options.conf(옛 카탈로그 — S7e2에 지움)가 env에 채우던 값 중 설정 모델 기본값과 결과가 다른 칸(값에 비밀 없음).
-# output/orca/S7e1/base_calc.py로 뽑음(예외 줄 빼고 · 표기만 다른 5.0/5 빼고 · 모델 칸 없는 env 이름 빼고). sample 주석으로만 낸다(모델 기본값은 코드 기본값 그대로).
-CATALOG_VALUES = {
-    "CHUNK_TABLE": "",
-    "DOC_DIR": "",
-    "DOC_DIR_PREPARED": "output/prepared",
-    "EDW_PATH_PREFIX": "",
-    "EDW_QUERY_MAX_ROWS": "1000",
-    "EMBED_MODEL": "",
-    "EMBED_QUERY_CACHE": "",
-    "EMBED_QUERY_PREFIX": "",
-    "LLM_MODEL": "",
-    "LLM_SPEND_FILE": "",
-    "PARSE_POST": "all",
-    "SECURE_DOC_PASSWORDS_FILE": "",
-    "SOFFICE_BIN": "",
-    "SOURCE_MANIFEST": "",
-    "SOURCE_URI_PREFIX": "",
-    "VLM_MODEL": "",
-}  # 옛 CHAIN_STRUCTURE_URL 기본값은 11-01에 지움(pl-10 — trigger 서버)
-CATALOG_VALUES["MCP_STORE"] = "pg"
-# S7e2(VS7e1 B-2) — 옛 이미지 ENV로 굽던 칸(DOC_DIR·DOC_DIR_PREPARED·SOFFICE_BIN)은 컨테이너에서 options.conf 값이 걸린 적이 없음(이미지 ENV가
-# 먼저 있어 카탈로그 setdefault가 건너뜀) — 지금은 이미지 안 모델 기본값이 같은 값이라 표에서 뺀다(env 파일에 적은 값은 migrate가 옮김).
-for _k in ("DOC_DIR", "DOC_DIR_PREPARED", "SOFFICE_BIN"):
-    CATALOG_VALUES.pop(_k)
-
-
 # 역할 절 안 세부 카테고리 — (제목, 파일 자리 접두어들). 앞에서부터 처음 맞는 것. 안 드는 칸이 있으면 build가 멈춘다(새 칸이면 여기도).
 CATEGORIES = {
     "common": (
@@ -111,7 +84,7 @@ CATEGORIES = {
         ("평가", ("dev.eval", "dev.mcp")),
         ("PC 시험 Docker", ("dev.docker",)),
     ),
-    "tuning": (  # 사용자 11-04 — 거의 안 바꾸는 값을 분류별로(자리는 tuning.<역할 자리>)
+    "tuning": (  # 거의 안 바꾸는 값을 분류별로(자리는 tuning.<역할 자리>)
         ("공통 — 접속·모델 호출(제한 시간·재시도·캐시)", ("tuning.common.connections", "tuning.common.models")),
         ("공통 — 검색 글자 정규화·용어 초안", ("tuning.common.text",)),
         ("추출 — 원천 목록 열·파싱 엔진·OCR·첨부", ("tuning.extract",)),
@@ -123,7 +96,7 @@ CATEGORIES = {
         ("새벽 배치·상주 서비스", ("tuning.ops.nightly_run", "tuning.ops.services")),
     ),
 }
-NOTE_COL = 42  # 칸 설명 주석이 시작하는 열(사용자 11-04 — 값 자리와 주석을 떼어 놓음)
+NOTE_COL = 42  # 칸 설명 주석이 시작하는 열(값 자리와 주석을 떼어 놓음)
 SPLIT = {"common", "extract", "transform", "load", "search"}  # [파라미터] 표시를 다는 절(결과를 바꾸는 값 — _kind 0)
 _OPS = re.compile(
     r"concurrency|parallel|workers|procs|threads|timeout|_sec$|^sec$|deadline|retry|batch$|cache|_gb$|warn|port$|dir$|root|path|"
@@ -157,7 +130,7 @@ OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
 }
 
 
-# 기본값이 없는(비운) 칸 — 비우면 무엇이 되는지(코드 기본값·동작, 사용자 11-04 op-05). 기본값이 있는 칸은 "비우면 <기본값>"을 sample이 만든다.
+# 기본값이 없는(비운) 칸 — 비우면 무엇이 되는지(코드 기본값·동작). 기본값이 있는 칸은 "비우면 <기본값>"을 sample이 만든다.
 BLANK = {
     "common.connections.pg.standin_dir": "<루트>/output/pg_standin",
     "common.connections.rdb.connect_kwargs": "추가 인자 없음",
@@ -218,7 +191,7 @@ BLANK = {
     "mcp.server.manifest": "<루트>/output/parse/_source/manifest.jsonl",
     "mcp.server.max_queue": "동시 상한 × 4(0이면 무제한)",
 }
-# required 게시·EDW 칸 — 환경마다 무엇을 넣는지(사용자 11-04: 서버는 접속 칸, PC는 로컬 폴더·sqlite만).
+# required 게시·EDW 칸 — 환경마다 무엇을 넣는지(서버는 접속 칸, PC는 로컬 폴더·sqlite만).
 REQ_NOTES = {
     "pipeline.load.publish.bucket": "서버: 게시용 Object Storage 버킷 이름(원천 원본 버킷과 달라야 함) · PC(local): file://<가짜 Object Storage 폴더>(저장소 루트 기준 상대 경로 가능 — 버킷 이름이면 시작 거부)",
     "pipeline.load.publish.prefix": "PC·서버: 버킷(폴더) 안 silver 결과 경로 접두(그 아래 <출처>/<원본 경로>/<파일명>_<날짜>.md) · 비우면 버킷 맨 위",
@@ -237,7 +210,7 @@ REQ_NOTES = {
     "common.connections.rdb.write.password": "서버: 입력 · PC(local): 비움",
     "common.connections.rdb.sqlite": "PC(local): 가짜 EDW sqlite 파일 경로 입력(저장소 루트 기준 상대 경로 가능 — 파싱·게시가 쓰므로 valid_env/edw/edw.sqlite 사본) · 서버: 비움(적혀 있으면 EDW를 쓸 때 거부)",
 }
-# 뜻이 바로 안 보이는 칸의 입력 예(사용자 11-04 op-05).
+# 뜻이 바로 안 보이는 칸의 입력 예.
 EXAMPLES = {
     "pipeline.load.publish.bucket": "rag-silver(서버) · file://output/object_storage/silver(PC — 저장소 루트 기준)",
     "pipeline.load.publish.prefix": "parse",
@@ -264,7 +237,7 @@ EXAMPLES = {
 
 
 def _fmt_default(p, f):
-    """비우면 무엇이 되는지 — BLANK 표가 먼저, 없으면 코드 기본값(사용자 11-04 — 칸마다 빈 칸 동작을 적음)."""
+    """비우면 무엇이 되는지 — BLANK 표가 먼저, 없으면 코드 기본값(칸마다 빈 칸 동작을 적음)."""
     if p in BLANK:
         return f" · 비우면 {BLANK[p]}"
     d = f.get_default(call_default_factory=True)
@@ -382,7 +355,7 @@ def _value(p, f):
 
 _IMAGE_ENVS = {k for d in S._IMAGE_DEFAULTS.values() for k in d}
 # 적었는지(기본값과 구별 — given()·resources._f·model_matrix.own)로 동작이 갈리는 칸 — 기본값을 적으면 기능이 켜지거나 읽는 쪽 기본값이 밀림
-# (op-05 리뷰: 모듈 포트 → 공통 포트 무시 · RDB 목록 [] → 빈 필터). 비워 둔다.
+# (예: 모듈 포트 → 공통 포트 무시 · RDB 목록 [] → 빈 필터). 비워 둔다.
 # 시험 test_sample_yaml이 코드의 given("X")·_f("X")·own("X") 이름이 여기(또는 비우는 칸)에 다 있는지 본다.
 SET_MATTERS = {
     "CPU_MAX_LOAD",
@@ -443,7 +416,7 @@ VALUES = {
 
 
 def _values(p, f):
-    """입력 가능한 값 — 형식(코드가 검증)과 설명에서 뽑은 선택지·범위(안내 — 숫자 범위는 코드가 막지 않음). 사용자 10-29."""
+    """입력 가능한 값 — 형식(코드가 검증)과 설명에서 뽑은 선택지·범위(안내 — 숫자 범위는 코드가 막지 않음)."""
     # ponytail: 설명 글자에서 뽑는 규칙 — 틀린 칸은 VALUES에 적거나 설명을 고친다
     if p in VALUES:
         return VALUES[p]

@@ -9,7 +9,7 @@
 run_id가 없으면(MCP 검색·시험) span()은 아무것도 하지 않는 가짜 span을 돌려준다(DB·스레드·로그 0).
 run_id/span_id는 common.core.jsonlog 컨텍스트를 그대로 쓴다. 자식 프로세스는 resources.gated_popen이
 APPLOG_CONTEXT 내부 신호로 현재 ID를 이어준다(with_context). 스레드 풀은 contextvars를 안 물려주므로
-carry(fn)로 감싼다. 행은 INFO 로그의 log_table/log_row extra로 내보내 T0 logsink가 DB에 쓴다.
+carry(fn)로 감싼다. 행은 INFO 로그의 log_table/log_row extra로 내보내 logsink가 DB에 쓴다.
 개별 호출은 DEBUG 로그만(debug_event) — span.metrics에 요약.
 cpu_ms·rss_peak_mb는 span(cpu=True)처럼 프로세스에서 하나만 도는 span만 잰다(스레드로 겹치면 섞이므로 기본 끔).
 cpu_ms 범위: 이 프로세스(RUSAGE_SELF) + 그 사이에 끝나 회수된(wait) 자식 프로세스(RUSAGE_CHILDREN)의 CPU 시간 합 —

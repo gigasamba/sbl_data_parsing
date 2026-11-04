@@ -1,4 +1,4 @@
-"""op-01 F2: 계측 fail-soft(P1-2) · err allowlist(P2-5) · cpu_ms 범위(P2-6) — 외부 접속 없음, 로그 쪽 장애는 patch.object로."""
+"""op-01 계측 fail-soft · err allowlist · cpu_ms 범위 — 외부 접속 없음, 로그 쪽 장애는 patch.object로."""
 
 import io
 import subprocess
@@ -27,7 +27,7 @@ def _reset_warn():
 
 
 def test_emit_oserror_keeps_ok_block_ok():
-    """P1-2 재현: _emit이 OSError를 내도 정상 블록은 정상 종료하고 결과를 바꾸지 않는다. 경고는 프로세스당 1회."""
+    """_emit이 OSError를 내도 정상 블록은 정상 종료하고 결과를 바꾸지 않는다. 경고는 프로세스당 1회."""
     _reset_warn()
     buf = io.StringIO()
     with mock.patch.object(span, "_emit", side_effect=OSError(13, "Permission denied")), redirect_stderr(buf):
@@ -41,7 +41,7 @@ def test_emit_oserror_keeps_ok_block_ok():
 
 
 def test_business_exception_not_masked_by_emit_failure():
-    """P1-2: 종료 기록이 실패해도 업무 예외는 원래 타입·메시지로 전파."""
+    """종료 기록이 실패해도 업무 예외는 원래 타입·메시지로 전파."""
     _reset_warn()
     with mock.patch.object(span, "_emit", side_effect=OSError("disk full")), redirect_stderr(io.StringIO()):
         with jsonlog.context(run_id=str(uuid.uuid4())):
@@ -62,7 +62,7 @@ def test_business_exception_not_masked_by_emit_failure():
 
 
 def test_start_measurement_failure_degrades_to_null_or_missing_cols():
-    """P1-2: 시작 측 자원 측정(proc_usage·load)이 OSError여도 업무는 그대로, 열은 NULL."""
+    """시작 측 자원 측정(proc_usage·load)이 OSError여도 업무는 그대로, 열은 NULL."""
     _reset_warn()
     rows, patched = _capture()
     boom = mock.Mock(side_effect=OSError("proc gone"))
@@ -85,7 +85,7 @@ def test_start_measurement_failure_degrades_to_null_or_missing_cols():
 
 
 def test_logger_setup_failure_is_soft_and_retried_later():
-    """P1-2: 로그 디렉터리 권한 오류로 FileHandler 생성이 실패(jsonlog.setup) — span·run.progress·debug_event 모두 조용히 지나감."""
+    """로그 디렉터리 권한 오류로 FileHandler 생성이 실패(jsonlog.setup) — span·run.progress·debug_event 모두 조용히 지나감."""
     _reset_warn()
     saved = dict(span._STATE)
     span._STATE.update(log=None, retry_at=0.0)
@@ -102,7 +102,7 @@ def test_logger_setup_failure_is_soft_and_retried_later():
 
 
 def test_handler_raising_does_not_leak():
-    """P1-2: sink handler.emit이 예외를 내도(logging은 custom handler 예외를 안 삼킴) span 종료가 전파하지 않는다."""
+    """sink handler.emit이 예외를 내도(logging은 custom handler 예외를 안 삼킴) span 종료가 전파하지 않는다."""
     import logging
 
     class Bad(logging.Handler):
@@ -135,7 +135,7 @@ def test_span_api_misuse_is_soft_but_result_validation_kept():
 
 
 def test_run_start_end_failures_are_soft():
-    """P1-2: pipe_run 시작·종료 기록이 실패해도 정상 종료, 업무 예외는 원래 그대로."""
+    """pipe_run 시작·종료 기록이 실패해도 정상 종료, 업무 예외는 원래 그대로."""
     _reset_warn()
     with mock.patch.object(runtrace, "_emit_run", side_effect=OSError("down")), redirect_stderr(io.StringIO()):
         with runtrace.run("parse", ["--x"]) as run_id:
@@ -151,7 +151,7 @@ def test_run_start_end_failures_are_soft():
 
 
 def test_run_progress_thread_survives_and_never_raises():
-    """P1-2: done()이 예외를 내도 run.progress 스레드가 죽지 않고 __exit__도 전파하지 않는다. 스레드 생성 실패도 무시."""
+    """done()이 예외를 내도 run.progress 스레드가 죽지 않고 __exit__도 전파하지 않는다. 스레드 생성 실패도 무시."""
     _reset_warn()
     calls = []
 
@@ -173,7 +173,7 @@ def test_run_progress_thread_survives_and_never_raises():
 
 
 def test_err_never_stores_exception_text():
-    """P2-5: 따옴표 없는 본문·짧은 인용을 담은 예외도 err에는 타입 이름만 — pipe_event.err와 JSON 로그 err 모두."""
+    """따옴표 없는 본문·짧은 인용을 담은 예외도 err에는 타입 이름만 — pipe_event.err와 JSON 로그 err 모두."""
     rows, patched = _capture()
     body = "환자 홍길동 혈압 120/80 그대로 에코된 문서 본문"
     with patched, jsonlog.context(run_id=str(uuid.uuid4())):
@@ -197,7 +197,7 @@ def test_err_never_stores_exception_text():
 
 
 def test_err_reaches_json_log_as_label_only():
-    """P2-5: _emit이 로거에 넘기는 extra.err도 같은 안전 글자(JSON 로그·DB 공통 경로)."""
+    """_emit이 로거에 넘기는 extra.err도 같은 안전 글자(JSON 로그·DB 공통 경로)."""
     seen = []
     log = mock.Mock()
     log.log.side_effect = lambda level, msg, extra=None: seen.append(extra)
@@ -218,7 +218,7 @@ def test_exc_label_and_safe_err_rules():
 
 
 def test_cpu_ms_includes_child_process_work():
-    """P2-6: 자식 프로세스(subprocess)가 CPU를 쓴 cpu=True span의 cpu_ms는 0이 아니다(또는 측정 불가면 NULL — 0으로 채우지 않음)."""
+    """자식 프로세스(subprocess)가 CPU를 쓴 cpu=True span의 cpu_ms는 0이 아니다(또는 측정 불가면 NULL — 0으로 채우지 않음)."""
     rows, patched = _capture()
     with patched, jsonlog.context(run_id=str(uuid.uuid4())):
         with span.span("load.pgvector", "load", cpu=True):
@@ -230,7 +230,7 @@ def test_cpu_ms_includes_child_process_work():
 
 
 def test_cpu_ms_via_gated_popen_child():
-    """P2-6: gated_popen으로 띄운 자식 작업도 포함(실제 프로덕션 경로)."""
+    """gated_popen으로 띄운 자식 작업도 포함(실제 프로덕션 경로)."""
     rows, patched = _capture()
     with (
         patched,
@@ -252,7 +252,7 @@ def test_cpu_ms_via_gated_popen_child():
 
 
 def test_cpu_ms_null_when_cpu_spans_overlap():
-    """P2-6: 서로 조상이 아닌 cpu=True span이 겹치면 둘 다 NULL(어느 쪽 CPU인지 가를 수 없음). 중첩(부모-자식)은 NULL이 아님."""
+    """서로 조상이 아닌 cpu=True span이 겹치면 둘 다 NULL(어느 쪽 CPU인지 가를 수 없음). 중첩(부모-자식)은 NULL이 아님."""
     rows, patched = _capture()
     gate_in, gate_out = threading.Event(), threading.Event()
     run_id = str(uuid.uuid4())

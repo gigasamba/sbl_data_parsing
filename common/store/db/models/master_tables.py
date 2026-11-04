@@ -1,4 +1,4 @@
-"""마스터 표 정본(pl-38, 사용자 11-03) — 스키마 `<PG_SCHEMA>_master`. 원본은 git `resources/vocab/glossary/*.csv`(CSV 하나 = 표 하나 —
+"""마스터 표 정본(pl-38) — 스키마 `<PG_SCHEMA>_master`. 원본은 git `resources/vocab/glossary/*.csv`(CSV 하나 = 표 하나 —
 칸은 CSV 머리글 그대로, 모두 글자 + 파일 순서 `row_no`). `dbtool master load`가 CSV로 내용을 통째로 바꾸고 내용 해시를 `master_meta`에 적는다.
 CSV 머리글을 바꾸면 새 Alembic 판으로 칸을 바꾼다(판 0001_master는 이 표를 import하지 않고 칸을 굳혀 둠 — 시험이 대조)."""
 
@@ -9,7 +9,7 @@ TABLES = {
         "client_id", "canonical_name", "name_ko", "aliases", "client_type", "segment",
         "country", "parent_client_id", "status", "description", "source", "updated",
     ),
-    # client_master·contract_master·units — 지금 앱에서 읽는 곳은 없다(사용자 11-03 "여섯 파일 모두 PG로" — 내용 해시·gold_version에는 들어감,
+    # client_master·contract_master·units — 지금 앱에서 읽는 곳은 없다(여섯 파일 모두 PG에 둠 — 내용 해시·gold_version에는 들어감,
     # 원본 CSV는 gen_roster 등 오프라인 도구가 그대로 읽음). 읽는 곳이 생기면 Master.rows(<표>)로.
     "client_master": ("company_id", "company", "aliases"),
     "contract_master": (

@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""답변 생성 점검(PC 전용) — 검색 MCP에 붙어 질문마다 rag_qa 에이전트(valid_env/answer_test/rag_qa/ — PC 전용 데이터는 valid_env에, 사용자 10-29)를 한 번씩 돌린다.
-S10(10-28 — D-021 T-14): 옛 루트 answer_gen_test.py(agent_platform — D-013에 삭제)를 common/ai 임시 구현(I6)으로 되살림.
+"""답변 생성 점검(PC 전용) — 검색 MCP에 붙어 질문마다 rag_qa 에이전트(valid_env/answer_test/rag_qa/)를 한 번씩 돌린다.
 
 에이전트 루프 = validation.e2e.tool_loop.run("rag_qa", …) — 턴마다 호출 수·LLM_BUDGET_USD 장부를
 거친다(CLAUDE.md 5절). 도구는 MCP tools/list의 search·edw_meta·query_edw를 이 파일의 함수로 감싸 넘기고(설명은 MCP 계약 그대로,
-parse_document는 QA와 무관해 뺌), 로컬 verify_citations는 이번 질문에 실제로 돌아온 근거(pool)로 인용을 검증한다 — 옛 agent.py
-콜백 대신, 질문마다 새 pool이라 옛 턴 경계 문제도 없다.
+parse_document는 QA와 무관해 뺌), 로컬 verify_citations는 이번 질문에 실제로 돌아온 근거(pool)로 인용을 검증한다 —
+질문마다 새 pool이라 턴 경계 문제가 없다.
 답·상태·인용·인용 검증·모델/도구 호출 수·토큰·지연을 화면과 output/eval/answer_gen/<시각>.jsonl에 남기고 끝에 지연 p50/p95·상태
-분포를 낸다. 채점은 안 함(사람이 읽고 검토). query_edw로 답한 행은 verify가 실패하고 verify_note로 그 이유를 적는다(C-56 — 지금대로 둠).
+분포를 낸다. 채점은 안 함(사람이 읽고 검토). query_edw로 답한 행은 verify가 실패하고 verify_note로 그 이유를 적는다(refactor.md C-56).
 
   PYTHONPATH=$PWD SETTINGS_FILE=<덮기 파일> python -m validation.e2e.answer_gen --url http://127.0.0.1:18767/mcp \\
       [--q "질문" ...] [--file 질문.txt|.jsonl] [--repeat N] [--concurrency N] [--k 5] [--timeout 180] [--fake]
@@ -31,9 +30,9 @@ from pathlib import Path
 from common.core.paths import APP_ROOT, resolve_agent_dir
 
 AGENT_ID = "rag_qa"
-MCP_TOOLS = ("search", "edw_meta", "query_edw")  # 지금 검색 MCP 도구 중 QA가 쓰는 것(옛 6개 — aggregate 등은 search 근거로 흡수)
+MCP_TOOLS = ("search", "edw_meta", "query_edw")  # 검색 MCP 도구 중 QA가 쓰는 것
 STOPS = {"예산 초과": "stopped_budget", "공유 호출 상한": "stopped_calls", "시간 상한": "stopped_time"}  # tool_loop.run의 정상 멈춤 글자
-#   ("공유 호출 상한" = 턴마다 장부 admit 거부 — LLM_BUDGET_USD · "예산 초과" = 매니페스트 턴·토큰 예산, VS10 L-3)
+#   ("공유 호출 상한" = 턴마다 장부 admit 거부 — LLM_BUDGET_USD · "예산 초과" = 매니페스트 턴·토큰 예산)
 EDW_NOTE = (
     "이 답은 query_edw를 씀 — EDW 값은 인용 검증 대상이 아니라(pool은 search 근거만, 모델이 쓴 SQL은 근거가 못 됨 — "
     "refactor.md C-56) 수치·인용 실패가 EDW 값 때문일 수 있음: problems를 보고 판단"
@@ -42,7 +41,7 @@ _EVIDENCE_KEYS = ("doc_key", "chunk_key", "file_name", "page", "via", "score", "
 
 
 def _verify_citations():
-    """rag_qa 패키지의 verify_citations 함수 — 패키지는 valid_env/answer_test/rag_qa(파이썬 패키지 아님 · 10-29)라 파일 경로로 읽는다."""
+    """rag_qa 패키지의 verify_citations 함수 — 패키지는 valid_env/answer_test/rag_qa(파이썬 패키지 아님)라 파일 경로로 읽는다."""
     import importlib.util
 
     path = resolve_agent_dir(AGENT_ID) / "verify_citations.py"
@@ -93,7 +92,7 @@ async def _mcp_tool(url, token, name, args):
 
 def record_evidence(pool, result):
     """search 결과의 근거("evidence" — text 있는 dict)를 pool에 쌓는다(verify_citations 대조용). 집계 근거도 search가 evidence 안에
-    via="aggregate"·text "[집계] …"로 넣으므로 같은 길(옛 agent.py는 따로 있던 aggregate 도구의 표 결과도 받았음 — 지금은 없음)."""
+    via="aggregate"·text "[집계] …"로 넣으므로 같은 길."""
     if isinstance(result, dict) and isinstance(result.get("evidence"), list):
         pool.extend(e for e in result["evidence"] if isinstance(e, dict) and e.get("text"))
 
@@ -107,19 +106,19 @@ def _for_model(result):
 
 
 def verify(answer_json, pool):
-    """rag_qa verify_citations + 인용 항목 형식 — 객체가 아닌 인용(글자 등)은 problems로(VS10 L-1 — 그냥 두면 숫자 없는 답이 ok.
-    패키지 파일은 지시서 지문을 지키려고 안 고침, S11). 모델 도구와 최종 행 검증이 같이 씀. answer_json = JSON 글자 또는 이미 읽은 객체.
-    format_error = 답 모양(객체·JSON 값·citations 목록·인용 항목) 문제 — found 답의 인용 0건은 EDW 답일 수 있어 넣지 않음 — 근거 대조 실패와 가름(VS11 CR-2)."""
+    """rag_qa verify_citations + 인용 항목 형식 — 객체가 아닌 인용(글자 등)은 problems로(그냥 두면 숫자 없는 답이 ok —
+    패키지 파일은 지시서 지문을 지키려고 안 고침). 모델 도구와 최종 행 검증이 같이 씀. answer_json = JSON 글자 또는 이미 읽은 객체.
+    format_error = 답 모양(객체·JSON 값·citations 목록·인용 항목) 문제 — found 답의 인용 0건은 EDW 답일 수 있어 넣지 않음 — 근거 대조 실패와 가름."""
     _verify = _verify_citations()
-    try:  # 객체로 넘긴 인자는 다시 직렬화·파싱하지 않음(VS11 CR-1·VS11b CR-7)
+    try:  # 객체로 넘긴 인자는 다시 직렬화·파싱하지 않음
         data = json.loads(answer_json) if isinstance(answer_json, (str, bytes, bytearray)) else answer_json
     except ValueError:
         data = None
-    if not isinstance(data, dict):  # 패키지는 assert로 가려 python -O에서 빠짐(VS11b CR-6) — 여기서 먼저
+    if not isinstance(data, dict):  # 패키지는 assert로 가려 python -O에서 빠짐 — 여기서 먼저
         return {"ok": False, "problems": ["answer_json must be a JSON object"], "format_error": True}
     try:
         text = json.dumps(data, ensure_ascii=False)
-    except (TypeError, ValueError):  # JSON으로 못 바꾸는 값(VS11b CR-5 — TypeError로 질문이 멈추지 않게)
+    except (TypeError, ValueError):  # JSON으로 못 바꾸는 값(TypeError로 질문이 멈추지 않게)
         return {"ok": False, "problems": ["answer_json must hold JSON values only"], "format_error": True}
     out = _verify(text, pool)
     cites = json.loads(text).get("citations")  # 패키지가 본 것과 같은 값(튜플 등도 목록으로)
@@ -149,7 +148,7 @@ def make_tools(call, contracts, pool, k_default):
     async def query_edw(sql: str, max_rows: int = 200) -> dict:
         return await call("query_edw", {"sql": sql, "max_rows": max_rows})
 
-    # 인자를 펼쳐 넘기면 도구 왕복이 "answer_json 필수" 인자 오류를 모델에 돌려줌(VS11b CR-7 뒷부분 — TypeError 아님)
+    # 인자를 펼쳐 넘기면 도구 왕복이 "answer_json 필수" 인자 오류를 모델에 돌려줌(TypeError 아님)
     def verify_citations(answer_json: str) -> dict:
         return verify(answer_json, pool)
 
@@ -191,7 +190,7 @@ def fake_policy(question):
 
 def final_json(text):
     """최종 답 JSON — 지시대로 객체 하나면 그대로, 모델이 설명문·코드펜스·여러 블록을 붙였으면 status 칸이 있는 마지막 객체
-    (llm.parse_json은 첫 "{"~마지막 "}"이라 블록이 둘이면 깨짐 — S10 실호출). 없으면 ValueError."""
+    (llm.parse_json은 첫 "{"~마지막 "}"이라 블록이 둘이면 깨짐). 없으면 ValueError."""
     dec, found = json.JSONDecoder(), None
     for pos in (n for n, ch in enumerate(text) if ch == "{"):
         try:
@@ -226,7 +225,7 @@ def ask_one(i, q, n, url, token, contracts, k, fake, timeout):
             row.update({k2: out.get(k2) for k2 in ("answer", "status", "citations")})
             row["verify"] = verify(out, pool)  # 최종 답을 이번 근거로 다시 검증(결정적)
             if "query_edw" in row["tools_used"] and not row["verify"]["ok"] and not row["verify"]["format_error"]:
-                row["verify_note"] = EDW_NOTE  # 모양 오류는 EDW와 무관(VS11 CR-2 — problems 글 머리가 아니라 format_error로 가름)
+                row["verify_note"] = EDW_NOTE  # 모양 오류는 EDW와 무관(problems 글 머리가 아니라 format_error로 가름)
         except ValueError:
             row["raw_output"] = text
             if row["run_status"] == "ok":
@@ -243,7 +242,7 @@ def ask_one(i, q, n, url, token, contracts, k, fake, timeout):
         flush=True,
     )
     cites = row.get("citations")
-    for c in cites if isinstance(cites, list) else [cites]:  # 모델이 형식을 어겨도(글자 목록 등) 출력에서 멈추지 않게(VS10 M-2)
+    for c in cites if isinstance(cites, list) else [cites]:  # 모델이 형식을 어겨도(글자 목록 등) 출력에서 멈추지 않게
         if isinstance(c, dict):
             print(f"  - 인용 {c.get('doc_key')} p{c.get('page')}: {str(c.get('quote'))[:120]}", flush=True)
         elif c is not None:

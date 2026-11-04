@@ -23,7 +23,7 @@ def _get(obj, path):
 
 def _set_read_names():
     """코드에서 '준 값만' 읽는 이름(given("X")·resources._f("X")·model_matrix.own("X") 등) — 이 이미지에 있는 폴더만.
-    코드 루트는 DEPLOY_ROOT(PC = 저장소 루트, 이미지 = /app/deploy — PROJ_ROOT는 이미지에서 /app이라 코드가 없음, 이미지 관문 10-30)."""
+    코드 루트는 DEPLOY_ROOT(PC = 저장소 루트, 이미지 = /app/deploy — PROJ_ROOT는 이미지에서 /app이라 코드가 없음)."""
     out = set()
     for top in ("common", "pipeline", "mcp_server", "validation"):
         for f in (DEPLOY_ROOT / top).rglob("*.py") if (DEPLOY_ROOT / top).is_dir() else ():

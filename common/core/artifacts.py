@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""실험 저장소 공통 계약(docs/testing.md) — 층별 코드 지문·열쇠·`_manifest.json`·낡음 판정.
-parse·structure·load·search(옛 modules/)는 import하지 않는다(계약 코드는 모듈 경계 밖 — 파싱 이식 쪽이 이 함수들만 가져다 씀).
+"""실험 저장소 공통 계약 — 층별 코드 지문·열쇠·`_manifest.json`·낡음 판정.
+parse·structure·load·search 코드는 import하지 않는다(계약 코드는 모듈 경계 밖 — 파이프라인 쪽이 이 함수들만 가져다 씀).
 "같은 입력 + 같은 코드 지문 = 같은 열쇠" — 층 코드가 바뀌면 지문이 바뀌어 저장본이 자동으로 낡음이 된다.
-10-14 함수별 분리(사용자) — data-parsing 이미지에서만 쓰는 prompt_id·raw_engine_path·raw_vlm_path·engine_version·
-purge_caches는 pipeline/shared/parse_run.py로 옮김(로직 바이트 동일) — 여기는 2개 이상 이미지가 쓰는 계약만.
+여기는 2개 이상 이미지가 쓰는 계약만 둔다(파싱 전용 함수는 pipeline/shared/parse_run.py).
 """
 
 import hashlib
@@ -14,8 +13,8 @@ from pathlib import Path
 
 from common.core.paths import DEPLOY_ROOT
 
-DEV = DEPLOY_ROOT  # deploy/(op-09 — paths 상수) · 10-14 이미지별 폴더 분리 뒤
-# 층 코드는 형제 패키지(engine-qa 10-14 BLOCKER 1: HERE로 두면 글롭이 빈 집합 = 늘 같은 빈 해시)
+DEV = DEPLOY_ROOT  # 층 글롭의 기준 — 패키지들이 놓인 폴더
+# 층 코드는 형제 패키지에 있다(기준을 이 파일 폴더로 두면 글롭이 빈 집합 = 늘 같은 빈 해시)
 
 # 층별 소스 파일(deploy/ 기준). common은 층 파일이 실제로 import하는 모듈만 더한다(_common_deps).
 # 층 파일이 import하는 pipeline 파일은 그 층 목록에 적는다(엔진 코드는 p0 — tests/server/common/test_code_fp.py가 확인).
@@ -86,15 +85,15 @@ LAYER_CODE = {
 }
 
 # 층에 넣지 않는 transform 파일 — 결과를 만들지 않는 오프라인 도구(사람이 따로 돌림). 새 transform 파일은 위 층 목록이나 여기 둘 중 하나에
-# 적는다(tests/server/common/test_code_fp.py가 빠진 파일을 잡음 — 11-03 구조 검토: 결과를 바꾸는 파일이 목록에서 빠져 옛 결과를 다시 씀).
+# 적는다(tests/server/common/test_code_fp.py가 빠진 파일을 잡음 — 결과를 바꾸는 파일이 빠지면 낡은 결과를 다시 쓴다).
 NOT_LAYER = (
     "pipeline/transform/represent/__init__.py",
-    "pipeline/transform/structure/__init__.py",  # 빈 파일 — s는 따로 적어 둠(옛 판과 같은 집합)
+    "pipeline/transform/structure/__init__.py",  # 빈 파일 — s 층 목록에는 따로 적어 둠
     "pipeline/transform/structure/roster_from_edw.py",
     "pipeline/transform/structure/glossary_suggest.py",
 )
-# 지문 계산에서 따라가지 않는 common 파일·폴더(결과와 무관 — 기록·DB 연결·표 정의·설정 도구). 11-03 구조 검토: 로그 → DB 기록 → 표 정의로
-# 이어져 DB 표 칸 하나만 고쳐도 모든 층 지문이 바뀌었음. 설정 모델(config/settings.py)은 기본값이 결과를 바꿀 수 있어, store/pg.py는 검색(r)이 벡터 글자(vec)를 만들어 그대로 둔다.
+# 지문 계산에서 따라가지 않는 common 파일·폴더(결과와 무관 — 기록·DB 연결·표 정의·설정 도구). 따라가면 로그 → DB 기록 → 표 정의로
+# 이어져 DB 표 칸 하나만 고쳐도 모든 층 지문이 바뀐다. 설정 모델(config/settings.py)은 기본값이 결과를 바꿀 수 있어, store/pg.py는 검색(r)이 벡터 글자(vec)를 만들어 그대로 둔다.
 CODE_FP_SKIP = (
     "core/artifacts.py",
     "core/jsonlog.py",
@@ -122,14 +121,11 @@ def _skipped(rel):
 
 
 def _common_deps(files, base):
-    """층 파일들이 (직접·간접) import하는 common 모듈 파일만 — ast로 `from common import x`·
-    `from common_tools.x import`·`import common_tools.x`(단계 4, 10-13 — 옛 `common`/`common.x`에서 옮김) ·
-    S3(10-26) — 다시 `common`/`common.x`(common/{core,ai,store,check}) — 이름 글자만 바뀌고 찾는 방법은 그대로 ·
-    CT1(10-16) — common_tools 하위가 역할 묶음(model/·store/·contract/·runtime/)으로 한 단 깊어져 `from
-    common.ai import llm`·`from common.ai.llm import profile`처럼 2단 이상도 와서, 점으로
+    """층 파일들이 (직접·간접) import하는 common 모듈 파일만 — ast로 `from common import x`·`from common.x import y`·
+    `import common.x`를 찾는다. `from common.ai.llm import profile`처럼 2단 이상도 오므로, 점으로
     이어진 이름을 뒤에서부터 줄여가며 실제 파일(.py)이나 패키지(__init__.py)를 찾는다(마지막 조각이 모듈이
     아니라 그 안의 심볼 이름일 수 있어서 — from pkg.mod import symbol).
-    10-05: common/*.py 전부를 모든 층에 넣어 docmeta(구조화·검색 전용) 한 줄 수정에도 P1(VLM 후보정)까지 다시 지어야 했음 → 실제 쓰는 것만."""
+    common 전체가 아니라 실제로 쓰는 것만 넣어, 한 층 전용 모듈을 고쳐도 다른 층 지문은 그대로다."""
     import ast
 
     PREFIX = "common"
@@ -204,7 +200,7 @@ def code_fp(layer, root=None):
     h = hashlib.sha256()
     for p in files:  # 경로도 해시에 넣음 — 파일 추가/삭제도 지문을 바꾸게
         h.update(p.relative_to(base).as_posix().encode("utf-8"))
-        # 10-13 — 줄바꿈 통일: 작업 사본이 CRLF/LF로 바뀌기만 해도(다른 세션 편집·git 체크아웃) 지문이 흔들려 P1을 못 찾았음
+        # 줄바꿈 통일 — 작업 사본의 CRLF/LF 차이(편집기·git 체크아웃)로 지문이 흔들리지 않게
         h.update(p.read_bytes().replace(b"\r\n", b"\n"))
     return h.hexdigest()[:12]
 

@@ -174,7 +174,7 @@ def test_gated_popen_wait_split_and_child_context():
             assert proc.returncode == 0
             outer_id = sp.span_id
     row = rows[0]
-    # 합계가 아니라 두 문의 대기가 따로 쌓임 · 메모리 문은 잠금 밖 + 잠금 안 재확인 두 번, CPU 문은 잠금 밖 한 번(fp-perf C6)
+    # 합계가 아니라 두 문의 대기가 따로 쌓임 · 메모리 문은 잠금 밖 + 잠금 안 재확인 두 번, CPU 문은 잠금 밖 한 번
     assert (row["wait_mem_ms"], row["wait_cpu_ms"]) == (250, 250), row
     assert row["metrics"]["launches"] == 1 and "wait_launch_ms" in row["metrics"] and "settle_ms" in row["metrics"]
     child = json.loads(out.strip().splitlines()[-1])
@@ -211,7 +211,7 @@ def test_model_call_hook():
             except RuntimeError:
                 pass
     parent = next(r for r in rows if r["stage"] == "transform.figures")  # 호출마다 model.vlm 행이 따로 생김
-    assert [r["status"] for r in rows if r["stage"] == "model.vlm"] == ["ok", "ok", "fail"]  # 호출마다 한 행(이슈 #117)
+    assert [r["status"] for r in rows if r["stage"] == "model.vlm"] == ["ok", "ok", "fail"]  # 호출마다 한 행
     m = parent["metrics"]
     assert m["vlm_calls"] == 3 and m["vlm_fail"] == 1 and m["vlm_tok_in"] == 14 and m["vlm_tok_out"] == 6 and m["vlm_ms_n"] == 3
     assert parent["ext_call_ms"] >= 20

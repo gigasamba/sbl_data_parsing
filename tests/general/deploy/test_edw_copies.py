@@ -1,4 +1,4 @@
-"""run_docs.py의 호스트 사본(사용자 11-04 — rn-06 결정 6)이 컨테이너 쪽과 같은지 — 끝난 문서 SQL 조건(DONE_STATUSES·GOLD_STATUSES·gold_version),
+"""run_docs.py의 호스트 사본(rn-06)이 컨테이너 쪽과 같은지 — 끝난 문서 SQL 조건(DONE_STATUSES·GOLD_STATUSES·gold_version),
 원본 키 칸 규칙(source_key ↔ s3_key), warm 파일 이름. 한쪽만 고치면 여기서 깨진다. 가짜 커서만 — EDW·docker·설정 파일 없음(PC 전용)."""
 
 import importlib.util

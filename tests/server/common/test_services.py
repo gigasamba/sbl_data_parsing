@@ -1,5 +1,5 @@
-"""PG 연결 고르기(common.store.pg — 0.2.0에 옛 common.store.services에서 옮김) 자기 점검 — S9(D-018)에 모듈에서 옮김.
-op-09 — docker ps·포트 자동 탐지를 지움: PG 접속 칸이 비면 거부(채울 자리를 적음), --local이 아니면 로컬로 빠지지 않음."""
+"""PG 연결 고르기(common.store.pg) 자기 점검.
+PG 접속 칸이 비면 거부(채울 자리를 적음 — 자동 탐지 없음), --local이 아니면 로컬로 빠지지 않음."""
 
 import types
 
@@ -22,7 +22,7 @@ def _refused(fn):
 def selftest():
     for u in ("http://10.0.0.5:8000/v1", "http://localhost:8765/v1", "http://127.0.0.1:8000/v1"):
         require_internal(u, "EMBED")
-    with isolated(EMBED_ALLOW_EXTERNAL=None):  # 기본(허용 없음) 고정 — PC 루트 settings.yaml에 허용이 있어도(D-035)
+    with isolated(EMBED_ALLOW_EXTERNAL=None):  # 기본(허용 없음) 고정 — PC 루트 settings.yaml에 허용이 있어도
         try:
             require_internal("https://api.openai.com/v1", "EMBED")
             raise AssertionError("외부 주소가 통과됨")
@@ -40,7 +40,7 @@ def selftest():
     connect(a)  # --local은 PG를 보지 않음
     assert a.pg is False
 
-    # XS1 — 능력 확인(이름이 아니라 붙어서 vector 확장·스키마 확인)
+    # 능력 확인(이름이 아니라 붙어서 vector 확장·스키마 확인)
     class _FakePG:
         """포트별로 다른 PG를 흉내(9999=확장 없는 다른 PostgreSQL, 9998=우리 pgvector)."""
 
@@ -71,5 +71,5 @@ def selftest():
     print("[selftest] PG 접속 칸 필수·자동 탐지 없음(op-09)·능력 확인(XS1)·내부망 가드 통과")
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 의 --selftest 갈래
+def test_main():
     selftest()

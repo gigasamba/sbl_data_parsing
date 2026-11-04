@@ -1,4 +1,4 @@
-"""common.core.artifacts 자기 점검 — S9(D-018)에 모듈에서 옮김(함수 몸통 글자 그대로). 옛 사례 `python -m common.core.artifacts --selftest`."""
+"""common.core.artifacts 자기 점검."""
 
 from pathlib import Path
 
@@ -15,7 +15,7 @@ def selftest():
         if not cond:
             failures.append(name)
 
-    with tempfile.TemporaryDirectory() as td:  # 10-13 — 줄바꿈만 다르면 같은 지문, 내용이 다르면 다른 지문
+    with tempfile.TemporaryDirectory() as td:  # 줄바꿈만 다르면 같은 지문, 내용이 다르면 다른 지문
         f = Path(td) / "pipeline" / "transform" / "represent" / "build_rep.py"
         f.parent.mkdir(parents=True)
         f.write_bytes(b"a=1\nb=2\n")
@@ -75,5 +75,5 @@ def selftest():
         raise SystemExit(1)
 
 
-def test_main():  # 옛 `if __name__ == "__main__":` 의 --selftest 갈래
+def test_main():
     selftest()

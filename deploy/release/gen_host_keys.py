@@ -1,4 +1,4 @@
-"""호스트 칸 표(deploy/host/scripts/host_settings.tsv) 만들기 — 호스트 python은 PyYAML만 있어 설정 모델을 못 읽으므로(사용자 11-02) 모델에서
+"""호스트 칸 표(deploy/host/scripts/host_settings.tsv) 만들기 — 호스트 python은 PyYAML만 있어 설정 모델을 못 읽으므로 모델에서
 표(모델 경로·옛 env 이름·종류)를 만들어 두고 deploy/host/scripts/settings_to_env.py(load_settings.sh load_settings가 부름)가 그 표로 셸 env 줄을 낸다.
 common 밖(deploy/release)에 둔다 — common.config.export는 층의 공용 의존이라 고치면 code_fp가 바뀌고, common의 새 파일은 지문 분류(fingerprint.py)가 필요해서.
 사용: PYTHONPATH=. python deploy/release/gen_host_keys.py [--check]   — 설정 모델의 호스트 칸을 고쳤으면 다시 만든다(--check는 같은지만 — 시험·커밋 전).
@@ -52,7 +52,7 @@ def host_table():
                 continue
             seen.add(e)
             rows.append(f"{path}\t{e}\t{_kind(f)}")
-    # 컨테이너 안 약속 경로(사용자 11-02 — settings.IMAGE_PATHS 한 곳): 고정값 줄 `image.<이름><TAB>APP_<이름><TAB>const<TAB>값` — load_settings.sh가
+    # 컨테이너 안 약속 경로(settings.IMAGE_PATHS 한 곳): 고정값 줄 `image.<이름><TAB>APP_<이름><TAB>const<TAB>값` — load_settings.sh가
     # APP_* env로 내 compose가 쓰고, run_docs.py가 읽는다.
     rows += [f"image.{k}\tAPP_{k.upper()}\tconst\t{S.IMAGE_PATHS[k]}" for k in IMAGE_CONSTS]
     return "# 자동 생성 — PYTHONPATH=. python deploy/release/gen_host_keys.py(고치지 말 것)\n" + "\n".join(rows) + "\n"

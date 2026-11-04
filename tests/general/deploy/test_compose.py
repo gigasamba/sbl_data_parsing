@@ -1,4 +1,4 @@
-"""상주 컨테이너 배치(사용자 11-03 — rn-03·op-10): 컨테이너마다 compose 파일 하나 — compose.pipeline.yml = 일괄 data-pipeline,
+"""상주 컨테이너 배치(규칙: rn-03·op-10): 컨테이너마다 compose 파일 하나 — compose.pipeline.yml = 일괄 data-pipeline,
 compose.data-parsing.yml = parse_document 전용 mcp-data-parsing, compose.mcp-server.yml = mcp-server(코드 폴더 덧붙임도 파일마다 짝 하나),
 전용 컨테이너가 CPU 나눔 비율이 더 높고 작업 서비스를 주 프로세스로 돌린다. 오버레이 패치 compose(compose.patch*.yml)는 없다."""
 
@@ -32,7 +32,7 @@ def test_resident_containers():
     svc = {}
     for f, (name, container, code) in FILES.items():
         s = _services(f)
-        # 여러 벌(op-15) — 이름 끝 -<instance>
+        # 여러 벌 — 이름 끝 -<instance>
         assert set(s) == {name} and s[name]["container_name"] == container + "${NAME_SUFFIX:-}", (f, set(s))
         assert set(_services(code)) == {name}, code  # 짝 파일은 그 컨테이너만 — 혼자 띄워도 됨
         svc[name] = s[name]
@@ -49,7 +49,7 @@ def test_no_patch_overlay():
 
 
 def test_edw_chain_mount():
-    """EDW 사슬 서버 사본(사용자 11-03) — 파일 하나를 data-pipeline(적재)·mcp-server(search attrs — pl-52)에 읽기 전용(:ro,z)으로
+    """EDW 사슬 서버 사본 — 파일 하나를 data-pipeline(적재)·mcp-server(search attrs)에 읽기 전용(:ro,z)으로
     /etc/rag/edw_chain.yaml(settings.yaml과 같은 방식). parse_document 전용 컨테이너는 안 씀."""
     for f, (name, _, _) in FILES.items():
         vols = [str(v) for v in _services(f)[name]["volumes"]]
