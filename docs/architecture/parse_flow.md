@@ -229,7 +229,7 @@ VLM 설정(모든 호출 공통):
 | 칸(옛 이름) | 기본값 | 뜻 |
 |---|---|---|
 | `extract.ocr.dpi`(`OCR_DPI`) | 150 | 쪽·그림 렌더 해상도 하나(VLM 엔진·쪽 VLM·그림·pptx·OCR 엔진·prepare 공용). 쪽 캐시 열쇠에 들어감 |
-| `common.models.vlm.concurrency`(`VLM_CONCURRENCY`) | 4 | 문서 하나 안 VLM 동시 요청 수(쪽·그림 공통). 일괄 파싱은 `pipeline.cli._vlm_doc_concurrency()`가 `max_concurrency ÷ 동시 문서 수`까지 줄여 자식에 넘김 |
+| `common.models.vlm.concurrency`(`VLM_CONCURRENCY`) | 4 | 문서 하나 안 VLM 동시 요청 수(쪽·그림 공통). 일괄 파싱은 `pipeline.extract.run_engines.vlm_doc_concurrency()`가 `max_concurrency ÷ 동시 문서 수`까지 줄여 자식에 넘김 |
 | `common.models.vlm.max_concurrency`(`VLM_MAX_CONCURRENCY`) | 8 | 한 프로세스 안 모든 VLM 호출의 합 상한(`vlmcall.slot()`) |
 | `common.models.vlm.timeout`(`VLM_TIMEOUT`) | 180 | 호출 1건 제한 시간(초). VLM 엔진의 문서×엔진 제한 = 쪽 수 × 이 값 |
 | `common.models.vlm.extra_body`(`VLM_EXTRA_BODY`) | 없음 | 모든 VLM 요청 본문에 합칠 JSON — 생각(추론) 끄기는 여기서만 |
