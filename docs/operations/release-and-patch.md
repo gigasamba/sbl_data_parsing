@@ -143,7 +143,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 
 | 대상 | 남길 것 | 명령 |
 |---|---|---|
-| 이미지(`data-pipeline`·`mcp-server`, 실행 이미지 포함) | 지금 버전 + 직전 버전 | `bash deploy/host/scripts/prune_images.sh --apply`(기본 dry-run, `--keep N`) — `docker system prune`은 쓰지 않음(남의 이미지 보호) |
+| 이미지(`data-pipeline`·`mcp-server`, 실행 이미지 포함) | 지금 버전 + 직전 버전(컨테이너가 쓰는 태그는 늘 남김) | `bash deploy/host/scripts/prune_images.sh --apply`(기본 dry-run, `--keep N`) — `docker system prune`은 쓰지 않음(남의 이미지 보호) |
 | 루트 폴더(판마다 하나) | 지금 쓰는 루트 + 바로 앞 루트 | 새 판 확인 뒤 오래된 루트를 손으로 지움(`settings.yaml`·`backup/`에 비밀값·DB 내용 — 지우기 전에 확인) |
 
 ## 7. 릴리스 체크리스트

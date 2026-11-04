@@ -7,6 +7,7 @@ common.host.image_stage_dir	IMAGE_STAGE_DIR	text
 common.host.output_root	RAG_OUT	text
 common.host.pg_container	PG_CONTAINER	text
 common.host.prune_keep	PRUNE_KEEP	num
+common.runtime.data_parsing_port	DATA_PARSING_PORT	num
 pipeline.host.image	DATA_PIPELINE_IMAGE	text
 pipeline.host.parse_cpus	PARSE_CPUS	num
 pipeline.host.parse_mem_limit	PARSE_MEM_LIMIT	text

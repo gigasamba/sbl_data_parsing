@@ -714,7 +714,7 @@ def run(a):
     else:
         if not pub.bucket_skip_overlap_check:
             check_bucket_overlap(bucket, entries)  # SI39⑤ — 원천 원본 버킷과 같으면 여기서 거부(dry-run도)
-    prefix = pub.prefix or ""
+    prefix = C.publish_prefix(pub.prefix or "")  # 개발 서버 여러 벌이면 <접두>/<벌>
     upload_statuses = parse_upload_statuses(",".join(pub.upload_statuses))  # 목록 → 옛 쉼표 글자(빈 목록 = 안전 기본값)
     reparse_keys = load_reparse_keys(a.reparse)
     rows, missing = plan(

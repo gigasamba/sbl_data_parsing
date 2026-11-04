@@ -167,15 +167,13 @@ search:
   edw_query:
     enabled: true                         # query_edw 도구 스위치 · 비우면 true · 값: true·false
     max_rows: 1000                        # query_edw 실효 행 수 상한(도구 요청 max_rows와 작은 쪽) · 비우면 1000 · 값: 0 이상 정수
-  # ─── 출력·기록·파싱 프록시 ───
-  parse_proxy:
-    url: http://127.0.0.1:8766            # parse_document가 부르는 작업 서비스 주소 · 비우면 http://127.0.0.1:8766 · 값: URL
 
 ops:
   # ─── 실행 자원 — 비우면 CPU·메모리로 자동 ───
   runtime:
     lib_env: {}                           # 라이브러리 env(이름: 글자 — TZ·OMP_NUM_THREADS·HF_HUB_OFFLINE 등 허용 목록만, 비밀 아님) · 비우면 더하는 env 없음 · 값: 사전(이름: 글자) · 예: {TZ: Asia/Seoul, HF_HUB_OFFLINE: '1'}
     parse_max_mb: 100.0                   # parse_document 파일 1건 크기 상한(MB = 1024×1024바이트) · 비우면 100.0 · 값: 0 이상
+    data_parsing_port: 8766               # parse_document 작업 서비스 포트(127.0.0.1) · 비우면 8766 · 값: 0 이상 정수
     pipe_procs:                           # CPU 엔진 프로세스 수 · 비우면 CPU·메모리로 자동 계산(pipeline 이미지 안 auto) · 값: 1 이상 정수 · auto면 자동 계산
     pipe_workers:                         # VLM API 동시 처리 문서 수(개) · 비우면 4 · 값: 0 이상 · auto = 비운 것과 같음
   # ─── 로그 — JSON·DB 기록 ───
@@ -202,7 +200,7 @@ ops:
   # ─── 호스트 — 컨테이너 도구·패치·정리 ───
   host:
     docker:                               # 호스트 스크립트가 쓸 컨테이너 명령(docker|podman 등 — op-10) · 비우면 podman, 없으면 docker · 값: docker·podman 중 하나
-    instance:                             # 한 서버에 여러 벌(개발자별 등) 띄울 때 이 루트의 이름(영소문자·숫자·-) · 비우면 한 벌 — 컨테이너 이름 그대로(data-pipeline·mcp-data-parsing·mcp-server) · 값: 글자
+    instance:                             # 한 서버에 여러 벌(개발자별 등) 띄울 때 이 루트의 이름(영소문자·숫자·-) · 비우면 한 벌 — 컨테이너 이름 그대로(data-pipeline·mcp-data-parsing·mcp-server) · 값: 경로
     image_stage_dir:                      # prune_images.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값) · 비우면 조각·tar 정리 안 함(--stage-dir로 줄 때만) · 값: 경로
     prune_keep: 2                         # prune_images.sh가 남길 이미지 판 수(지금 판 포함, --keep 기본값) · 비우면 2 · 값: 0 이상 정수
   # ─── 서버 컨테이너 — CPU·메모리 한도·폴더 ───
@@ -221,7 +219,6 @@ ops:
   services:
     data_parsing:
       jobs_dir:                           # parse MCP 서비스 작업 기록 폴더 · 비우면 <서비스 폴더>/jobs · 값: 경로
-      port: 8766                          # parse MCP 서비스 포트 · 비우면 8766 · 값: 1~65535
       roots:                              # parse MCP 서비스가 읽을 수 있는 허용 루트 폴더(쉼표 목록) · 비우면 <서비스 폴더>/inbox · 값: 쉼표 목록 또는 YAML 목록 · 예: /app/output/_mcp_parse/inbox,/data/docs
   # ─── 새벽 배치 ───
   nightly:

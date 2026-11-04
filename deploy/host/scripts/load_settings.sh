@@ -44,6 +44,7 @@ load_settings() {   # 위 설명(source) — 성공 0 · 설정 파일 없음·�
   if [ "${SETTINGS_LOADED:-}" != "$SETTINGS_FILE" ]; then   # 같으면 이 셸(또는 부른 부모 스크립트)이 같은 파일로 이미 냄
     local out line name
     out=$(settings_export sh) || { echo "[설정] 설정 파일에서 호스트 값을 읽지 못함($SETTINGS_FILE) — 위 안내 확인" >&2; return 2; }
+    unset INSTANCE DOCKER   # 벌 이름·컨테이너 명령은 settings.yaml 하나에서(run_docs.py와 같게 — 셸 env로 덮지 않음)
     while IFS= read -r line; do
       case "$line" in "export "*=*) ;; *) continue ;; esac
       name=${line#export }; name=${name%%=*}
@@ -55,9 +56,14 @@ $out
 EOF
     export SETTINGS_LOADED=$SETTINGS_FILE   # 내부 신호 — 하위 스크립트가 같은 파일을 다시 읽지 않게
   fi
-  DOCKER=${DOCKER:-$(docker_default)}; export DOCKER   # op-10 — 셸 env > settings.yaml(ops.host.docker) > podman(없으면 docker)
-  RAG_OUT=${RAG_OUT:-$RAG_ROOT/output}; export RAG_OUT   # op-13 — 적지 않으면 <루트>/output
+  DOCKER=${DOCKER:-$(docker_default)}; export DOCKER   # settings.yaml ops.host.docker, 없으면 podman(없으면 docker)
+  RAG_OUT=${RAG_OUT:-$RAG_ROOT/output}; export RAG_OUT   # 적지 않으면 <루트>/output
   case "${INSTANCE:-}" in -*|*[!a-z0-9-]*) echo "[설정] ops.host.instance는 영소문자·숫자·-만(앞은 글자·숫자)" >&2; return 2 ;; esac
+  if [ -n "${INSTANCE:-}" ]; then   # 여러 벌 — 운영(prd)은 한 벌, 포트는 벌마다 달라야 함
+    [ "${RUN_ENV:-}" = prd ] && { echo "[설정] ops.host.instance는 개발 서버(dev)에서만 — 운영(prd)은 한 벌" >&2; return 2; }
+    [ "${MCP_PORT:-8765}" = 8765 ] && { echo "[설정] 여러 벌 — search.server.port가 기본값(8765) 그대로: 벌마다 다른 포트를 적음" >&2; return 2; }
+    [ "${DATA_PARSING_PORT:-8766}" = 8766 ] && { echo "[설정] 여러 벌 — ops.runtime.data_parsing_port가 기본값(8766) 그대로: 벌마다 다른 포트를 적음" >&2; return 2; }
+  fi
   NAME_SUFFIX=${INSTANCE:+-$INSTANCE}; export NAME_SUFFIX   # 여러 벌 — 컨테이너·compose 묶음·타이머 이름 끝(비우면 한 벌, 이름 그대로)
   return 0
 }

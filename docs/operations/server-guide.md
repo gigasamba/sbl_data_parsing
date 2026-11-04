@@ -36,18 +36,23 @@ bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>   # 루트의 
 README §5-3 ④ 연결 점검과 ⑤ 이미지 점검, 또는 한 번에 `bash deploy/host/scripts/host_ctl.sh check`(기대 마지막 줄 `[host_ctl check] 통과 — 6개`).
 
 ### 1-3. 한 서버에 여러 벌 띄우기(개발자별)
-루트 하나가 한 벌이다. 개발자마다 루트를 따로 만들고(코드 zip을 풀고 `host_ctl.sh init`), 그 루트의 `settings.yaml`에 아래를 **벌마다 다르게** 적는다.
+개발 서버(dev)만. 루트 하나가 한 벌이다. 개발자마다 루트를 따로 만들고(코드 zip을 풀고 `host_ctl.sh init`), 그 루트의 `settings.yaml`에 아래 세 칸을 **벌마다 다르게** 적는다.
 
 | 칸 | 하는 일 | 예(홍 개발자) |
 |---|---|---|
-| `ops.host.instance` | 컨테이너 이름·compose 묶음·systemd 타이머 이름 끝에 `-<이름>`을 붙인다(영소문자·숫자·`-`). 비우면 한 벌 — 이름 그대로 | `hong` → `data-pipeline-hong`·`mcp-data-parsing-hong`·`mcp-server-hong`, 타이머 `data-pipeline-nightly-hong.timer` |
-| `search.server.port` | 검색 MCP 포트 | `8775` |
-| `ops.services.data_parsing.port` | parse_document 작업 서비스 포트 | `8776` |
-| `search.parse_proxy.url` | 검색 MCP가 부르는 작업 서비스 주소 — 위 포트와 같게 | `http://127.0.0.1:8776` |
-| `required.pg.db_schema` | 검색 DB 스키마(벌마다 따로 적재) | `sbl_hong` |
+| `ops.host.instance` | 벌 이름(영소문자·숫자·`-`) — 이것 하나로 아래가 갈린다. 비우면 한 벌 — 이름 그대로 | `hong` |
+| `search.server.port` | 검색 MCP 포트 — 벌 이름이 있는데 기본값(8765)이면 시작 거부 | `8775` |
+| `ops.runtime.data_parsing_port` | parse_document 작업 서비스 포트(검색 MCP도 이 값으로 부름) — 벌 이름이 있는데 기본값(8766)이면 시작 거부 | `8776` |
+
+벌 이름 `hong`이 있으면 저절로:
+- 컨테이너·compose 묶음·systemd 단위 이름 끝에 `-hong`(`data-pipeline-hong`·`mcp-data-parsing-hong`·`mcp-server-hong`, 타이머 `data-pipeline-nightly-hong.timer`).
+- PG 스키마 `<required.pg.db_schema>_hong`(원천 스키마 `<…>_hong_sfdc` 등도), EDW 기록 표 `<required.edw.parsing_meta_table>_hong`(기본 `AI.ParsingMeta_hong`). 이미 `_hong`으로 끝나게 적었으면 그대로. 이름의 `-`는 `_`가 된다.
+- 게시(Object Storage) 경로 `<prefix>/hong/…` — 개발 서버(dev)에서만.
+- 운영(prd)에서 벌 이름을 적으면 시작 거부(앱 시작 관문·`load_settings.sh`·`run_docs.py` 모두).
+- EDW 기록 표는 DB 담당자가 미리 만든다 — `docs/operations/parsing_meta_mssql.sql`을 복사해 표 이름만 바꿔 넘긴다(refactor.md C-94).
 
 - 컨테이너는 모두 호스트 네트워크라 포트가 겹치면 뒤에 띄운 쪽이 시작하지 못한다.
-- 명령은 그 루트의 코드 폴더에서 `host_ctl.sh`로만 한다 — `host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`·`run_docs.py`가 `ops.host.instance`를 읽어 자기 벌의 컨테이너만 다룬다. compose를 직접 부르면 이름·포트 값이 채워지지 않는다.
+- 명령은 그 루트의 코드 폴더에서 `host_ctl.sh`로만 한다 — `host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`·`run_docs.py`가 settings.yaml의 `ops.host.instance`를 읽어 자기 벌의 컨테이너만 다룬다(셸 변수 `INSTANCE`·`DOCKER`로는 덮지 않음). compose를 직접 부르면 이름·포트 값이 채워지지 않는다.
 - 자동 실행(`host_ctl.sh timers`)도 벌마다 따로 켜진다. 개발자 벌은 새벽 배치가 필요 없으면 `systemctl disable --now data-pipeline-nightly-<이름>.timer`.
 - CPU·메모리 상한(§README 5-0 "자원")은 서버 전체 합계를 보고 벌마다 줄인다.
 

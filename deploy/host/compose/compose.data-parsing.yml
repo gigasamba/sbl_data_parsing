@@ -30,5 +30,12 @@ services:
     cpus: ${DATA_PARSING_CPUS:-3}                 # 작업 서비스 기본 병렬 수(min(3, CPU-1)) — 줄이면 settings.yaml tuning.ops.services.data_parsing.procs도 그 이하로
     cpu_shares: ${DATA_PARSING_CPU_SHARES:-4096}   # data-pipeline(1024)의 4배 — CPU가 모자랄 때 먼저 받음(cgroup v2는 cpu.weight로 바뀜)
     pids_limit: 1024
+    healthcheck:                     # 작업 서비스 /health(토큰 불필요) — 포트는 ops.runtime.data_parsing_port(load_settings가 냄)
+      test: ["CMD", "python", "-c",
+             "import urllib.request as u; u.urlopen('http://127.0.0.1:${DATA_PARSING_PORT:-8766}/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     logging:
       options: {max-size: "50m", max-file: "3"}

@@ -25,8 +25,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from common.config.settings import cfg as common_cfg
+from common.config.settings import checked, reveal
 from common.config.settings import child_env as settings_env
-from common.config.settings import reveal
 from common.core import exitclean
 from common.core.paths import APP_ROOT  # I4 — 컨테이너 경로(/app/…) 대신 런타임 루트 기준(이미지 안 값 같음)
 from pipeline import config as pc
@@ -75,8 +75,8 @@ def _job_env(post):
 
 
 _PM = pc.cfg().service.data_parsing  # S7c — 설정 객체(모듈 상수 — 옛처럼 import 때 한 번)
-pc.checked("DATA_PARSING_PORT")  # 형식 틀린 포트는 옛처럼 import 때 실패(조용히 기본 포트로 뜨지 않게 — VS7c1 R-2, 사용자 10-27)
-PORT = _PM.port
+checked("DATA_PARSING_PORT")  # 형식 틀린 포트는 import 때 실패(조용히 기본 포트로 뜨지 않게)
+PORT = common_cfg().runtime.data_parsing_port
 _TOK = reveal(_PM.token) or ""
 TOKEN = _TOK if _TOK.strip() else None  # D-028 ⑨ — 코드 기본 토큰 삭제, 설정 필수(없거나 비거나 공백만이면 아래 __main__이 시작 거부 — R-2)
 PROCS = str(

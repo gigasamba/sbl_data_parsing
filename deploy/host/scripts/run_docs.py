@@ -48,6 +48,7 @@ DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.docker(없�
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, op-10 · 기본 배치 경로 없음 — 사용자 11-02)
 _EDW: dict = {}  # parsing-meta EDW 접속(호스트 pymssql — edw_list·edw_done_keys)
 WARM_BUCKET = PG_CONTAINER = PG_USER = PG_DB = PG_SCHEMA = None  # warm 파일 이름의 원천 버킷 · 문서 수 세기(psql)
+PM_TABLE = "AI.ParsingMeta"  # EDW 기록 표 — configure()가 required.edw.parsing_meta_table(+ 여러 벌 _<벌>)로
 SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거부
     ("common.run_env", "실행 환경(dev·prd)"),
     ("common.connections.rdb.host", "EDW 서버 — 호스트 조회(읽기 계정, 사용자 10-29 ops.md#op-03)"),
@@ -163,7 +164,7 @@ def work_dir(doc):
 
 def configure(settings_file=None):
     """서버 settings.yaml을 한 번 읽어 모듈 값(경로·접속)을 채운다 — 문제 목록(빈 목록이면 통과). 값은 찍지 않는다."""
-    global TEST, PROG, DOCSPACE, DOCFLOW, WARM, MCP_JOBS_DIR, WARM_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA
+    global TEST, PROG, DOCSPACE, DOCFLOW, WARM, MCP_JOBS_DIR, WARM_BUCKET, PG_CONTAINER, PG_USER, PG_DB, PG_SCHEMA, PM_TABLE
     global DOCKER, PIPE_C
     doc, err = read_settings(settings_file)
     if err:
@@ -193,6 +194,8 @@ def configure(settings_file=None):
     inst = _yget(doc, "common.host.instance") or ""
     if not re.fullmatch(r"([a-z0-9][a-z0-9-]*)?", str(inst)):
         return ["ops.host.instance는 영소문자·숫자·-만(앞은 글자·숫자)"]
+    if inst and run_env == "prd":
+        return ["ops.host.instance는 개발 서버(dev)에서만 — 운영(prd)은 한 벌"]
     # 여러 벌(op-15) — host_ctl.sh가 띄운 이 루트의 컨테이너(load_settings.sh NAME_SUFFIX와 같은 규칙)
     PIPE_C = "data-pipeline" + (f"-{inst}" if inst else "")
     jobs = _yget(doc, "mcp.host.jobs_dir")
@@ -206,7 +209,12 @@ def configure(settings_file=None):
     WARM_BUCKET = _yget(doc, "pipeline.connections.rdb.bucket")
     PG_CONTAINER = _yget(doc, "common.host.pg_container")
     PG_USER, PG_DB = _yget(doc, "common.connections.pg.user"), _yget(doc, "common.connections.pg.db")
-    PG_SCHEMA = _yget(doc, "common.connections.pg.db_schema")
+    PG_SCHEMA = _layout().per_instance(_yget(doc, "common.connections.pg.db_schema"), inst)  # 앱과 같은 규칙(settings 여러 벌)
+    PM_TABLE = _layout().per_instance(_yget(doc, "common.connections.parsing_meta.table") or "AI.ParsingMeta", inst)
+    if not re.fullmatch(
+        r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?", PM_TABLE
+    ):  # SQL에 넣는 이름 — parsing_meta_db.TABLE_ID_RE와 같은 꼴
+        return ["required.edw.parsing_meta_table 형식 오류 — 스키마.표(영문·숫자·_)만"]
     return []
 
 
@@ -548,14 +556,14 @@ def edw_done_keys():
     conn = _edw_connect()  # S7e1 — 설정 파일의 parsing-meta 접속(옛 코드 기본값 — 운영 접속 값·비밀 삭제, D-028 ⑨)
     cur = conn.cursor()
     kc = _pm_key_col(cur)
-    cur.execute("SELECT COL_LENGTH('AI.ParsingMeta', 'gold_version')")
+    cur.execute(f"SELECT COL_LENGTH('{PM_TABLE}', 'gold_version')")
     gold = cur.fetchone()[0] is not None
     q = lambda xs: ", ".join(f"'{s}'" for s in xs)  # 코드 상수만 SQL에 넣음(값 바인딩 없음)
     cond = f"parse_status IN ({q(DONE_STATUSES)})"
     if gold:  # 11-02 — ok·partial은 gold에도 올라가야 끝(gold_version) · 칸이 생기기 전(C-76 ③)에는 parse_status만
         rest = [s for s in DONE_STATUSES if s not in GOLD_STATUSES]
         cond = f"(parse_status IN ({q(rest)}) OR (parse_status IN ({q(GOLD_STATUSES)}) AND gold_version IS NOT NULL))"
-    cur.execute(f"SELECT {kc} FROM AI.ParsingMeta WHERE {cond}")
+    cur.execute(f"SELECT {kc} FROM {PM_TABLE} WHERE {cond}")
     keys = {r[0] for r in cur.fetchall()}
     conn.close()
     return keys
@@ -830,7 +838,7 @@ def take_lock(path):
 
 def _pm_key_col(cur):
     """ParsingMeta 원본 키 칸 이름 — 11-02 칸 이름 바꾸기(source_key → s3_key, C-76) 전후 모두(튜플 커서)."""
-    cur.execute("SELECT COL_LENGTH('AI.ParsingMeta', 'source_key')")
+    cur.execute(f"SELECT COL_LENGTH('{PM_TABLE}', 'source_key')")
     return "source_key" if cur.fetchone()[0] is not None else "s3_key"
 
 
@@ -840,7 +848,7 @@ def edw_faq():
     conn = _edw_connect()
     cur = conn.cursor()
     kc = _pm_key_col(cur)
-    cur.execute(f"SELECT {kc}, parse_status FROM AI.ParsingMeta WHERE {kc} LIKE 'FAQ/%'")
+    cur.execute(f"SELECT {kc}, parse_status FROM {PM_TABLE} WHERE {kc} LIKE 'FAQ/%'")
     status = {k: st for k, st in cur.fetchall()}
     conn.close()
     return rows, status

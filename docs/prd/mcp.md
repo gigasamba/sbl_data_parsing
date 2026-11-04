@@ -147,7 +147,7 @@
 ## mc-08 · `parse_document` 도구 — 파일 하나를 바로 파싱
 - 이유: 클라이언트가 아직 적재되지 않은 파일을 묻는다.
 - 규칙:
-  1. 경로(inbox 루트 아래) 또는 base64 내용을 파싱 서비스(`search.parse_proxy.url` 기본 `http://127.0.0.1:8766`)에 Bearer 토큰(`required.tokens.parse_proxy`)으로 넘긴다. 글·표·사실·엔진·시간을 돌려주고, 시간 초과면 `job_id`.
+  1. 경로(inbox 루트 아래) 또는 base64 내용을 파싱 서비스(`http://127.0.0.1:<ops.runtime.data_parsing_port>` — 기본 8766)에 Bearer 토큰(`required.tokens.parse_proxy`)으로 넘긴다. 글·표·사실·엔진·시간을 돌려주고, 시간 초과면 `job_id`.
   2. 파일 크기 상한 `ops.runtime.parse_max_mb`(기본 100, MB = 1024×1024바이트)를 검색 MCP와 파싱 서비스가 같이 읽는다. base64 크기는 줄바꿈·공백을 빼고 센다. 넘는 `content_b64`는 서비스로 보내지 않고 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — ops.runtime.parse_max_mb"}`. 경로로 준 파일도 같은 상한.
   3. HTTP 요청 본문 상한 = 파일 상한 × 1.5 + 1 MiB(검색 MCP·파싱 서비스 같음). 4 MiB보다 크거나 길이를 밝히지 않은 요청은 동시에 2개까지만 처리하고 나머지는 본문을 읽기 전에 기다린다(`mcp_server/main.py` `_BIG_SLOTS`).
   4. 서비스 등록 요청 대기 60초.

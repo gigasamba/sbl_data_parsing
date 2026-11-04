@@ -26,6 +26,7 @@ from common.config.settings import (  # noqa: F401 — token_text: 토큰 규칙
     image_default,
     token_text,
 )
+from common.config.settings import cfg as common_cfg
 
 # ── settings.yaml mcp 절 모델(S7a) — 칸 표는 refactor_plan 부록 D ─────────────────────────────
 
@@ -79,7 +80,6 @@ class McpOutput(Section):
 
 class McpParseProxy(Section):
     token: SecretStr | None = F(None, "PARSE_SERVICE_TOKEN", "parse_document가 작업 서비스(parse_service)를 부를 때 쓰는 토큰")
-    url: str | None = F("http://127.0.0.1:8766", "PARSE_SERVICE_URL", "parse_document가 부르는 작업 서비스 주소")
 
 
 class McpSearch(Section):
@@ -182,8 +182,8 @@ class MCPConfig:
         self.DEFAULT_METHODS = list(c.search.methods)  # 10-12 구조 검토: graph 기본에서 뺌 —
         # 그래프 단독 효과를 처음 따로 잼(9세트): 근거 지표 이득 0, 잡음 비율↑(4clients .366→.459), distractors-v2 정답 값 적중 .80→.72 ·
         # G10(10-02)의 비교형 6→12/12 개선은 분해(decompose) 몫 · 다시 켜기: MCP_METHODS=vector,bm25,id,graph
-        # parse_document 프록시가 부르는 작업 서비스 주소(services/parse_proxy.py)
-        self.PARSE_URL = c.parse_proxy.url
+        # parse_document 프록시가 부르는 작업 서비스 주소(services/parse_proxy.py) — 포트는 작업 서비스와 같은 칸 하나
+        self.PARSE_URL = f"http://127.0.0.1:{common_cfg().runtime.data_parsing_port}"
 
 
 CFG = MCPConfig()

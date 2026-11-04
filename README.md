@@ -399,25 +399,31 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 - 이때 `required.tokens.mcp`가 꼭 있어야 한다(없으면 시작 거부). 만들기: `openssl rand -hex 24`.
 - 방화벽에서 `search.server.port`(기본 8765)를 연다 — 예: `firewall-cmd --add-port=8765/tcp --permanent && firewall-cmd --reload`.
 
-**한 서버에 여러 벌 띄우기(개발자별 — 컨테이너 이름·포트 바꾸기)**
+**한 서버에 여러 벌 띄우기(개발자별 — 벌 이름 하나로 나뉨, 개발 서버만)**
 - 루트 하나가 한 벌이다. 개발자마다 공용 폴더 아래 루트를 새로 만들어(예 `/home/sbl/dev-hong/`) 위 설치 순서를 따로 한다. 이미지는 공용 폴더에서 이미 불러왔으므로 2번은 건너뛴다.
-- 그 루트의 `settings.yaml`에 아래 칸을 벌마다 다르게 적는다. compose를 직접 부르지 않는다 — `host_ctl.sh`가 이 값으로 이름·포트를 채운다.
+- 그 루트의 `settings.yaml`에 벌 이름(`ops.host.instance`)과 포트 두 칸만 벌마다 다르게 적는다. compose를 직접 부르지 않는다 — `host_ctl.sh`가 이 값으로 이름·포트를 채운다.
+- 벌 이름을 적으면 저절로 나뉘는 것:
+
+| 무엇 | 한 벌(이름 비움) | 벌 `hong` |
+|---|---|---|
+| 컨테이너·compose 묶음·타이머 | `data-pipeline` · `mcp-data-parsing` · `mcp-server` | 끝에 `-hong` |
+| PG 스키마 | `required.pg.db_schema`(예 `sbl`) | `sbl_hong`(원천 스키마 `sbl_hong_sfdc` …) |
+| EDW 기록 표 | `required.edw.parsing_meta_table`(기본 `AI.ParsingMeta`) | `AI.ParsingMeta_hong` |
+| 게시 경로(Object Storage) | `<prefix>/…` | 개발 서버(dev)에서만 `<prefix>/hong/…` |
+
+- 이미 `_hong`으로 끝나게 적은 스키마·표 이름은 그대로 쓴다. 이름의 `-`는 스키마·표에서 `_`가 된다.
+- 운영 서버(`prd`)에서 벌 이름을 적으면 시작 거부(운영은 한 벌). 벌 이름이 있는데 포트 두 칸이 기본값(8765·8766) 그대로면 시작 거부(다른 벌과 겹침).
+- EDW 기록 표는 DB 담당자가 미리 만든다(실행 중 DDL 없음): `docs/operations/parsing_meta_mssql.sql`을 복사해 표 이름만 `AI.ParsingMeta_<벌>`로 바꿔 넘긴다(refactor.md C-94).
 
 ```yaml
 ops:
   host:
     instance: hong                # 컨테이너 data-pipeline-hong · mcp-data-parsing-hong · mcp-server-hong, 타이머 data-pipeline-nightly-hong.timer
-  services:
-    data_parsing:
-      port: 8776                  # parse_document 작업 서비스 포트(기본 8766)
+  runtime:
+    data_parsing_port: 8776       # parse_document 작업 서비스 포트(기본 8766 — 검색 MCP도 이 값으로 부름)
 search:
   server:
     port: 8775                    # 검색 MCP 포트(기본 8765)
-  parse_proxy:
-    url: http://127.0.0.1:8776    # 위 작업 서비스 포트와 같게
-required:
-  pg:
-    db_schema: sbl_hong           # 검색 DB 스키마도 벌마다
 ```
 - 명령(root 셸 — 이미지는 서버에 한 번만 불러 두면 벌끼리 같이 쓴다):
 ```bash
@@ -444,10 +450,9 @@ bash deploy/host/scripts/host_ctl.sh ps                                         
 | 상황 | `migrate up` |
 |---|---|
 | 새 벌이 새 스키마(`sbl_hong`)를 씀 | 처음 한 번 `--dim`과 함께, 이어서 `migrate master load` |
-| 새 벌이 다른 벌과 같은 스키마를 씀 | 필요 없음(`migrate check`만) — 두 벌이 같은 데이터에 적재·검색하므로 서로 덮는다. 개발자별 시험은 스키마를 나눈다 |
 | 새 판에 표 변경(마이그레이션)이 있음 | 적재 전에 한 번(`--dim` 없이 — 있는 표는 DB의 차원을 씀) |
 
-- `instance`를 비우면 한 벌(이름 그대로 `data-pipeline`·`mcp-data-parsing`·`mcp-server`). 이름은 영소문자·숫자·`-`만(틀리면 `host_ctl.sh`가 종료 2).
+- `instance`를 비우면 한 벌(이름 그대로). 이름은 영소문자·숫자·`-`만(틀리면 `host_ctl.sh`가 종료 2). 벌 이름·컨테이너 명령(`ops.host.docker`)은 settings.yaml에서만 읽는다(셸 변수로 덮지 않음).
 - 확인: `bash deploy/host/scripts/host_ctl.sh ps` — 그 벌의 컨테이너만 보인다. 자세한 것은 [server-guide §1-3](docs/operations/server-guide.md#1-3-한-서버에-여러-벌-띄우기개발자별).
 
 ### 5-1. 버전 올리기
@@ -477,11 +482,11 @@ bash deploy/release/stage_images.sh pipeline-runtime mcp-runtime                
 |---|---|---|---|
 | PostgreSQL(pgvector) | `required.pg.port` | 없음(필수) | 파이프라인·검색 MCP |
 | 검색 MCP 서버 | `search.server.port`(바인드 `search.server.host`) | 8765(127.0.0.1) | AI 클라이언트 |
-| MCP 파싱 작업 서비스 | `ops.services.data_parsing.port` — 검색 MCP가 부르는 주소 `search.parse_proxy.url` | 8766 · `http://127.0.0.1:8766` | 검색 MCP의 `parse_document` |
+| MCP 파싱 작업 서비스 | `ops.runtime.data_parsing_port` — 검색 MCP도 이 값으로 `http://127.0.0.1:<포트>`를 부름 | 8766 | 검색 MCP의 `parse_document` |
 | EDW(SQL Server) | `required.edw.port`(주소·계정도 `required.edw`) | 1433 | 파이프라인·`query_edw` |
 | 검증 페이지(PC만) | `dev.mcp.ui_port` | 8790 | 사람(브라우저) |
 
-`ops.services.data_parsing.port`를 바꾸면 `search.parse_proxy.url`도 함께 바꾼다. 컨테이너는 host 네트워크라 포트가 서버에서 겹치지 않아야 한다.
+컨테이너는 host 네트워크라 포트가 서버에서 겹치지 않아야 한다.
 
 **① 컨테이너 — `host_ctl.sh`**
 

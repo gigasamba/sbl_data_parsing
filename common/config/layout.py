@@ -312,6 +312,14 @@ def reject_dup_keys(loader_cls):
     return loader_cls
 
 
+def per_instance(name, instance):
+    """여러 벌 — 이름 끝에 `_<벌>`(`-`는 `_`로). 벌 이름이 없거나 이미 붙어 있으면(따로 적은 값) 그대로. 앱(settings)·호스트(run_docs)가 같이 쓴다."""
+    if not name or not instance:
+        return name
+    tail = "_" + str(instance).replace("-", "_")
+    return name if name.endswith(tail) else name + tail
+
+
 def _role(model_path):
     for m, y in ROLES:
         if model_path.startswith(m):

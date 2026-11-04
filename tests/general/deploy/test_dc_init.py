@@ -98,7 +98,14 @@ def test_timers():
             units_dir = Path(d) / "units"
             units_dir.mkdir()
             sp = _posix(sf)
-            env = {"DC_UNIT_DIR": _posix(units_dir), "SETTINGS_FILE": sp, "SETTINGS_LOADED": sp, "INSTANCE": inst}
+            env = {
+                "DC_UNIT_DIR": _posix(units_dir),
+                "SETTINGS_FILE": sp,
+                "SETTINGS_LOADED": sp,
+                "INSTANCE": inst,
+                "MCP_PORT": "8775",
+                "DATA_PARSING_PORT": "8776",
+            }
             r = _run(bash, ["timers"], env)
             assert r.returncode == 0, r.stderr + r.stdout
             suffix = f"-{inst}" if inst else ""

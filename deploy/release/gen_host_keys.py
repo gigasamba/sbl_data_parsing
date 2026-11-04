@@ -11,7 +11,15 @@ from common.core.console import utf8_stdout
 from common.core.paths import DEPLOY_ROOT
 
 # load_settings.sh HOST_SECTIONS와 같은 절 — 이미지·자원·포트·호스트 경로·RUN_ENV, compose·mcp_keepalive.sh가 쓰는 앱 칸 MCP_HOST·MCP_PORT
-HOST_SECTIONS = ("common.run_env", "common.host", "pipeline.host", "mcp.host", "mcp.server.host", "mcp.server.port")
+HOST_SECTIONS = (
+    "common.run_env",
+    "common.host",
+    "common.runtime.data_parsing_port",
+    "pipeline.host",
+    "mcp.host",
+    "mcp.server.host",
+    "mcp.server.port",
+)
 HOST_TABLE = DEPLOY_ROOT / "deploy" / "host" / "scripts" / "host_settings.tsv"
 
 

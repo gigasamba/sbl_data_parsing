@@ -871,7 +871,38 @@ def require_run_env(app="", environ=None, sections=None):
         if st.common.dev.llm_fake:  # op-02(사용자 10-29) — 가짜 LLM 응답은 local에서만, 서버는 시작 거부
             print(f"{tag}서버(RUN_ENV={value}) — {L.to_yaml('common.dev.llm_fake')}가 켜져 있어 시작하지 않음(local 전용)", file=sys.stderr)
             raise SystemExit(2)
+        bad = instance_problems(st)
+        if bad:
+            print(f"{tag}서버(RUN_ENV={value}) — 여러 벌 설정이 맞지 않아 시작하지 않음: {'; '.join(bad)}", file=sys.stderr)
+            raise SystemExit(2)
     return value
+
+
+def instance_problems(st):
+    """여러 벌(ops.host.instance) 시작 거부 사유 — prd에 벌 이름, 벌 이름이 있는데 포트가 코드 기본값(다른 벌과 겹침)."""
+    c = st.common
+    if not c.host.instance:
+        return []
+    if c.run_env == "prd":
+        return [f"{L.to_yaml('common.host.instance')}는 개발 서버(dev)에서만 — 운영(prd)은 한 벌"]
+    ports = [("common.runtime.data_parsing_port", c.runtime, "data_parsing_port")]
+    mcp = getattr(st, "mcp", None)
+    if mcp is not None:
+        ports.append(("mcp.server.port", mcp.server, "port"))
+    return [
+        f"{L.to_yaml(p)}가 기본값 그대로 — 벌마다 다른 포트를 적음"
+        for p, sec, name in ports
+        if getattr(sec, name) == type(sec).model_fields[name].default
+    ]
+
+
+def publish_prefix(prefix):
+    """게시 경로 접두 — 개발 서버(dev)에 벌 이름이 있으면 `<접두>/<벌>`(벌마다 게시 자리가 갈림), 그 밖은 그대로."""
+    c = cfg()
+    inst = c.host.instance
+    if c.run_env != "dev" or not inst:
+        return prefix
+    return f"{prefix.rstrip('/')}/{inst}" if prefix else inst
 
 
 def pc_real_targets(st):
@@ -1489,7 +1520,8 @@ class CommonHost(Section):
         None,
         "INSTANCE",
         "한 서버에 여러 벌(개발자별 등) 띄울 때 이 루트의 이름(영소문자·숫자·-) — 컨테이너 이름·compose 묶음·systemd 타이머 이름 끝에 -<이름>으로 붙음."
-        " 비우면 이름 그대로(한 벌). 벌마다 포트(search.server.port · parse MCP 서비스 port와 parse_document 주소)와 PG 스키마도 달리 적는다",
+        " 비우면 이름 그대로(한 벌). 적으면 PG 스키마·EDW 기록 표 끝에 _<이름>, 개발 서버(dev) 게시 경로에 <접두>/<이름>."
+        " 포트(search.server.port · ops.runtime.data_parsing_port)는 벌마다 다르게(기본값 그대로면 시작 거부) · prd에서는 쓰지 않음(시작 거부)",
     )
     image_stage_dir: str | None = F(None, "IMAGE_STAGE_DIR", "prune_images.sh가 정리할 이미지 조각·tar 폴더(--stage-dir 기본값)")
     output_root: str | None = F(
@@ -1557,6 +1589,11 @@ class CommonRuntime(Section):
         "DATA_PARSING_MAX_MB",
         "parse_document 파일 1건 크기 상한(MB = 1024×1024바이트) — 검색 MCP(content_b64)와 parse 서비스(path·content_b64)가 같은 값으로 거름(사용자 11-03)",
         gt=0,
+    )
+    data_parsing_port: Port = F(
+        8766,
+        "DATA_PARSING_PORT",
+        "parse_document 작업 서비스 포트(127.0.0.1) — 작업 서비스가 듣고 검색 MCP가 부름. 여러 벌이면 벌마다 다르게(기본값이면 시작 거부)",
     )
     pipe_max_procs: float | None = F(8, "PIPE_MAX_PROCS", "파싱 엔진 프로세스 수 자동 결정의 상한(개)", unset=("auto",))
     pipe_proc_gb: float | None = F(3.0, "PIPE_PROC_GB", "엔진 프로세스 1개당 메모리 가정(GB) — 자동 프로세스 수 계산용", unset=("auto",))
@@ -1644,6 +1681,16 @@ class CommonSettings(Section):
     runtime: CommonRuntime = Field(default_factory=CommonRuntime)
     store: CommonStore = Field(default_factory=CommonStore)
     text: CommonText = Field(default_factory=CommonText)
+
+    @model_validator(mode="after")
+    def _per_instance(self):
+        """여러 벌 — 벌 이름이 있으면 PG 스키마·EDW 기록 표 끝에 `_<벌>`(읽는 곳 모두 이 값을 씀)."""
+        inst = self.host.instance
+        if inst:
+            pg, pm = self.connections.pg, self.connections.parsing_meta
+            pg.db_schema = L.per_instance(pg.db_schema, inst)
+            pm.table = L.per_instance(pm.table, inst)
+        return self
 
 
 class CommonAppSettings(AppSettings):

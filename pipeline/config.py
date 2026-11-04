@@ -19,7 +19,6 @@ from common.config.settings import (
     CsvText,
     EnvView,
     F,
-    Port,
     Section,
     image_default,
 )
@@ -137,7 +136,6 @@ class PipelineLoadPublish(Section):
 class PipelineServiceDataParsing(Section):
     job_timeout_sec: float | None = F(600.0, "DATA_PARSING_JOB_TIMEOUT_SEC", "parse MCP 서비스 작업 1건 제한 시간(초)")
     jobs_dir: str | None = F(None, "DATA_PARSING_JOBS_DIR", "parse MCP 서비스 작업 기록 폴더")
-    port: Port | None = F(8766, "DATA_PARSING_PORT", "parse MCP 서비스 포트")
     procs: int | None = F(None, "DATA_PARSING_PROCS", "parse MCP 서비스 엔진 묶음 병렬 프로세스 수(개)")
     queue_max: int | None = F(8, "DATA_PARSING_QUEUE_MAX", "parse MCP 서비스 대기 작업 상한(건)")
     roots: CsvList | None = F(

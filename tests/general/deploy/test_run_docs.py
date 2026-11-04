@@ -6,6 +6,8 @@ import importlib.util
 import re
 import shlex
 
+import yaml
+
 from common.config import setarg
 from common.core.paths import DEPLOY_ROOT
 
@@ -178,6 +180,33 @@ def test_read_settings_new_layout(tmp_path):
     f.write_text("required:\n  env: {run_env: dev}\nops:\n  host: {docker: podman}\nops:\n  nightly: {time: '01:00'}\n", encoding="utf-8")
     doc, err = RD.read_settings(f)
     assert doc == {} and "같은 칸 두 번: ops" in err  # 앱 settings와 같은 거부(layout.reject_dup_keys)
+
+
+def test_instance_names(tmp_path):
+    """여러 벌 — 러너도 앱과 같은 규칙으로 컨테이너·PG 스키마·EDW 기록 표가 갈리고, prd에서 벌 이름은 거부."""
+    req = {p: "x" for p, _ in RD.SETTINGS_REQUIRED}
+    # (run_env, 벌, 표, 기대 (컨테이너, 스키마, 표) — None이면 거부)
+    for run, inst, table, want in (
+        ("dev", "", None, ("data-pipeline", "rag", "AI.ParsingMeta")),
+        ("dev", "hong", None, ("data-pipeline-hong", "rag_hong", "AI.ParsingMeta_hong")),
+        ("dev", "hong", "AI.PM_hong", ("data-pipeline-hong", "rag_hong", "AI.PM_hong")),
+        ("prd", "hong", None, None),
+        ("dev", "", "AI.PM;x", None),  # SQL에 넣는 이름 — 형식 틀리면 거부
+    ):
+        rd = _load()  # 모듈 값을 바꾸므로 따로 읽음
+        model = {}
+        for p, v in {**req, "common.run_env": run, "common.connections.pg.db_schema": "rag", "common.connections.rdb.port": "1433"}.items():
+            rd._layout().set_path(model, p, v)
+        rd._layout().set_path(model, "common.host.instance", inst)
+        if table:
+            rd._layout().set_path(model, "common.connections.parsing_meta.table", table)
+        f = tmp_path / "settings.yaml"
+        f.write_text(yaml.safe_dump(rd._layout().to_file(model)), encoding="utf-8")
+        probs = rd.configure(f)
+        if want is None:
+            assert probs, (run, inst, table)
+            continue
+        assert probs == [] and (rd.PIPE_C, rd.PG_SCHEMA, rd.PM_TABLE) == want, (run, inst, probs)
 
 
 def test_done_keys_match_parsing_meta():
