@@ -415,11 +415,6 @@ def _warm_cmd(argv):
     return 0
 
 
-def _rdb_resolve_spec(spec, state, limit):
-    """rdb:<spec> → (names, fetch_one(name,dest)→Path, state) — resolve()가 부름. 11-01부터 csv:<경로>만."""
-    return _rdb_plan(spec, state, limit)
-
-
 def _rdb_plan(table, state, limit=0):
     """문서 위치 표(csv:)의 대상 행 → (names, fetch_one(name,dest)→Path, state). resolve()가 부르고 모든 이름을 즉시 받는다(AD44).
     받기 전 대조는 크기(ContentLength — 불일치는 참고 기록만). 다른 원천의 같은 내용 파일도 따로 받는다(원천마다 독립, 사용자 11-04)."""
@@ -508,7 +503,7 @@ def resolve(source, out, limit=0):
         raise ValueError(f"[source] {source} — s3:// 폴더 가져오기는 11-01에 지움(사용자) — 폴더 또는 rdb:csv:<경로>")
     if str(source).startswith("rdb:"):
         local = Path(out) / "_source_files"
-        names, fetch_one, state = _rdb_resolve_spec(source[len("rdb:") :], state, limit)
+        names, fetch_one, state = _rdb_plan(source[len("rdb:") :], state, limit)
         ok = []
         nw = max(
             1, int(pc.cfg().extract.source.fetch_workers)

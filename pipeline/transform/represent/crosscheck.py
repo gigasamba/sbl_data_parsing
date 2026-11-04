@@ -24,26 +24,6 @@ def load_doc(parse_dir, eng, doc):
     return {"text": d.get("text") or "", "facts": d.get("facts") or []}
 
 
-def locate_value(text, value, hint=None):
-    """값(가능하면 hint와 같은 줄)이 있는 줄 → 근거 위치."""
-    vn, hn = normalize_value(value), normalize_value(hint or "")
-    lines = text.split("\n")
-    pos = 0
-    best = None
-    for ln in lines:
-        n = normalize_value(ln)
-        if vn and vn in n:
-            if not hn or hn in n:
-                best = (pos, ln)
-                break
-            best = best or (pos, ln)
-        pos += len(ln) + 1
-    if not best:
-        return None
-    m = locate(text, best[0], best[0] + len(best[1]))
-    return {"page": m["page"], "line": m["line"], "section": m["section"], "snippet": best[1].strip()[:200]}
-
-
 def build(parse_dir, src, min_fams=2):
     """문서별 교차 확인 (라벨, 값) 사전 + 기준 엔진 텍스트(근거용)."""
     qa = json.loads((Path(parse_dir) / "qa.json").read_text(encoding="utf-8"))

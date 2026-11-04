@@ -343,9 +343,6 @@ def main(argv=None):
     p = sub.add_parser("parse", help="파싱 모듈 1회(run_docs가 문서마다 부름): 파싱 → 채점 → 대표 결과 → 끝 표시 · 임베딩·DB 없음")
     p.add_argument("--src", default=src)
     p.add_argument(
-        "--force", action="store_true", help=argparse.SUPPRESS
-    )  # 11-01 — 옛 호출 호환으로 받기만(끝 표시 확인 need()는 structure·load와 함께 지움)
-    p.add_argument(
         "--source",
         default=pc.cfg().extract.input_source or None,
         help="파싱할 원본 위치 — 폴더(같은 서버 샘플) · rdb:csv:<경로>(문서 위치 표 — run_docs가 만듦, AD44). "

@@ -173,14 +173,7 @@ def _log_failed_page_vlm(model, ms, reason):
     """2026-10-22 — 실패(취소·타임아웃·빈 응답)한 페이지 VLM 호출의 대기 시간을 raw/vlm/<model>/_failures.jsonl에 append.
     성공 provenance는 원래 캐시 파일로 남지만 실패는 안 남아 집계에서 빠졌었다 — 이제 실패 ms도 집계 가능."""
     try:
-        from pipeline.shared.postprocess.rawstore import raw_vlm_path  # 있으면 사용, 없으면 아래 폴백
-    except ImportError:
-        raw_vlm_path = None
-    try:
-        _b = ccfg().models.vlm.base_url  # S7c — 설정 객체(옛 get(X, "") — 캐시 열쇠 글자 그대로)
-        base = raw_vlm_path(_b if _b is not None else "", model, "page", "fail") if raw_vlm_path else None
-        if base is None:
-            base = _rawdir_default(model)
+        base = _rawdir_default(model)
         base.parent.mkdir(parents=True, exist_ok=True)
         with (base.parent / "_failures.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps({"ms": ms, "error": reason, "at": time.strftime("%Y-%m-%dT%H:%M:%S")}, ensure_ascii=False) + "\n")

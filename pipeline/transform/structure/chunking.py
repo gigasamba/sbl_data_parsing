@@ -16,25 +16,6 @@ RE_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 RE_DATE = re.compile(r"\b\d{4}[-./]\d{1,2}[-./]\d{1,2}\b")
 
 
-def doc_ext(doc, parse_dir):
-    """확장자(route.json 키). PDF는 qa.json의 format(.pdf_text/.pdf_image)을 우선 쓰고,
-    없으면(1차 조합 단계에서 qa.json 미실행) 텍스트형으로 가정한다 — ponytail: 이미지 PDF 분류는
-    qa.json 필요, 없으면 텍스트형 라우팅으로 폴백(과대평가 방향이 아니라 라우팅 실패로 드러남)."""
-    ext = Path(doc).suffix.lower()
-    if ext != ".pdf":
-        return ext
-    qa = Path(parse_dir) / "qa.json"
-    if qa.exists():
-        try:
-            info = json.loads(qa.read_text(encoding="utf-8"))["docs"].get(doc, {})
-            fmt = info.get("format")
-            if fmt in (".pdf_text", ".pdf_image"):
-                return fmt
-        except Exception:
-            pass
-    return ".pdf_text"
-
-
 def load_parse_doc(parse_dir, engine, doc):
     """output/parse/<engine>/<doc>.json → (text, facts). 파일 없음(실패) → ("", [])."""
     f = Path(parse_dir) / engine / f"{doc}.json"
