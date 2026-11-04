@@ -51,7 +51,7 @@
 ## mc-02 · 질문 이해 — 넓히기
 - 이유: 사용자는 동의어, 약어, 여러 고객을 한꺼번에 넣어 묻는다.
 - 규칙: BM25용 용어집 넓히기 — 가중치 동의어 1.0 · 약어 0.8 · 약한 것 0.3, 고객 명부 별칭은 질문 1건당 토큰 20개까지(가중치 1.0). 용어집·명부는 PG 마스터 표(`<PG_SCHEMA>_master` — [load.md#pl-38](load.md#pl-38)). vector 질의에는 별칭 글을 붙인다. 가중치를 고르는 질문 유형은 규칙 기반(`question_type.py`).
-- 파일: `mcp_server/services/search/{terms,qtype,search_svc}.py`.
+- 파일: `mcp_server/services/search/{query_expand,question_type,search_svc}.py`.
 - QA: `tests/server/mcp/test_question_type.py` · 통과.
 - Status: done
 
