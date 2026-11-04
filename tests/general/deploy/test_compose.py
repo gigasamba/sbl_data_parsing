@@ -38,7 +38,7 @@ def test_resident_containers():
         svc[name] = s[name]
     assert svc["data-pipeline"]["command"] == ["idle"] and svc["data-pipeline-mcp"]["command"] == ["parse-service"]
     assert _default(svc["data-pipeline-mcp"]["cpu_shares"]) > _default(svc["data-pipeline"]["cpu_shares"])
-    up = (DEPLOY_ROOT / "deploy" / "host" / "scripts" / "mcp_up.sh").read_text(encoding="utf-8")
+    up = (DEPLOY_ROOT / "deploy" / "host" / "scripts" / "mcp_keepalive.sh").read_text(encoding="utf-8")
     assert "compose.pipeline-mcp.yml" in up and "compose.code.pipeline-mcp.yml" in up
 
 
@@ -56,7 +56,7 @@ def test_edw_chain_mount():
         chain = [v for v in vols if "edw_chain.yaml" in v]
         if name in ("data-pipeline", "mcp"):
             assert chain == [
-                "${RAG_ROOT:?RAG_ROOT=<서버 루트 — 코드 폴더의 부모> 필요 — settings_env.sh load_settings가 냄}/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z"
+                "${RAG_ROOT:?RAG_ROOT=<서버 루트 — 코드 폴더의 부모> 필요 — load_settings.sh load_settings가 냄}/edw_chain.yaml:/etc/rag/edw_chain.yaml:ro,z"
             ], chain
         else:
             assert not chain, (name, chain)

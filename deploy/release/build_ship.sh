@@ -1,5 +1,5 @@
 #!/bin/bash
-# PC에서: 이미지 빌드 → 점검 → 압축 저장(sha256) → ssh로 수집 서버에 전송·적재 → 원격 점검(운영 이미지는 개발 서버 bake.sh가 기본 — release-and-patch §1-2).
+# PC에서: 이미지 빌드 → 점검 → 압축 저장(sha256) → ssh로 수집 서버에 전송·적재 → 원격 점검(운영 이미지는 개발 서버 bake_prod_image.sh가 기본 — release-and-patch §1-2).
 #   [IMAGE_TARGET=pipeline|mcp|pipeline-runtime|mcp-runtime — S6b(D-020) 이미지 2개, *-runtime = 코드 없는 실행 이미지(op-06 — 코드 폴더 묶음도 만듦), 기본 pipeline]
 #   TARGET=user@수집서버 [TAG=data-pipeline:0.1.0] [REMOTE_DIR=/var/tmp] [DOCKER=docker|podman] [REMOTE_DOCKER=docker] \
 #   [BUILD_ARGS="--build-arg BASE=<사내 기반 이미지> --build-arg APT=0"] bash deploy/release/build_ship.sh
@@ -23,7 +23,7 @@ case "$IMAGE_TARGET" in
   parse|structure|retrieval) echo "[오류] IMAGE_TARGET=$IMAGE_TARGET 는 S6b에 없어졌다(D-020) — 파이프라인은 IMAGE_TARGET=pipeline, 검색 MCP는 IMAGE_TARGET=mcp" >&2; exit 2 ;;
   *) echo "[오류] 모르는 IMAGE_TARGET: $IMAGE_TARGET (pipeline·mcp·pipeline-runtime·mcp-runtime)" >&2; exit 2 ;;
 esac
-. deploy/release/image_names.sh   # image_name_of — 타깃 → 이미지 이름(S6c, ship_stage.sh와 같은 파일)
+. deploy/release/image_names.sh   # image_name_of — 타깃 → 이미지 이름(S6c, stage_images.sh와 같은 파일)
 APP_VERSION=$(app_version) || exit 2
 VCS_REF=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 if [ "$VCS_REF" != unknown ] && ! git diff --quiet HEAD -- 2>/dev/null; then VCS_REF="$VCS_REF-dirty"; fi   # 커밋 안 한 변경이 섞인 빌드 표시
@@ -119,8 +119,8 @@ bash deploy/release/selftest_gate.sh ssh "$TARGET" "$REMOTE_DOCKER run --rm $R_A
 cat <<EOF
 완료: $TAG
 다음(수집 서버):
-  1) 루트 폴더(아무 자리 — 예 /home/dev/)에 코드 zip을 풀고 코드 폴더에서 sudo bash deploy/host/scripts/dc.sh init --group <운영 그룹>(op-13)
+  1) 루트 폴더(아무 자리 — 예 /home/dev/)에 코드 zip을 풀고 코드 폴더에서 sudo bash deploy/host/scripts/host_ctl.sh init --group <운영 그룹>(op-13)
   2) <루트>/settings.yaml의 맨 위 required 빈 값을 채움(새 판이면 앞 루트의 settings.yaml·edw_chain.yaml을 복사해 옴)
-  3) 띄우기·점검: README §5(dc.sh up -d … → dc.sh check)
+  3) 띄우기·점검: README §5(host_ctl.sh up -d … → host_ctl.sh check)
   압축본 $REMOTE_DIR/$(basename "$OUT") 은 적재 확인 뒤 지워도 됨
 EOF

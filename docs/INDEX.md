@@ -11,7 +11,7 @@
 | [operations/server-guide.md](operations/server-guide.md) | 서버 가이드 — 이미지 역할, 설치·첫 실행, 일상 실행, 결과 확인, 문제 해결 | 서버를 설치·운영할 때 |
 | [operations/mcp-guide.md](operations/mcp-guide.md) | 검색 MCP 도구 6개의 입력·출력·한도·오류·예(표는 `tests/general/mcp/test_mcp_guide.py`가 코드와 대조) | MCP 클라이언트를 붙이거나 도구 입출력을 바꿀 때 |
 | [operations/env-guide.md](operations/env-guide.md) | 설정 작성 가이드 — 서버·PC `settings.yaml`의 자리·권한·키·기본값 | 설정 값을 채우거나 바꿀 때 |
-| [operations/release-and-patch.md](operations/release-and-patch.md) | 릴리스 — 실행 이미지 + 코드 폴더(개발 서버)·운영 굽기(`bake.sh`)·selftest 반입 판정, 0.2.0 배포 사람 할 일(§8) | 새 판을 만들거나 서버에 넣을 때 |
+| [operations/release-and-patch.md](operations/release-and-patch.md) | 릴리스 — 실행 이미지 + 코드 폴더(개발 서버)·운영 굽기(`bake_prod_image.sh`)·selftest 반입 판정, 0.2.0 배포 사람 할 일(§8) | 새 판을 만들거나 서버에 넣을 때 |
 | [operations/gitea-guide.md](operations/gitea-guide.md) | 내부망 코드 관리(gitea) | 내부망 gitea를 쓰거나 서버 코드 변경을 합칠 때 |
 | [operations/parsing_meta_mssql.sql](operations/parsing_meta_mssql.sql) | 회사 DB `AI.ParsingMeta` DDL — DBA가 실행(코드는 표를 만들지 않음) | 첫 게시 전, DB 담당과 표를 맞출 때 |
 | [architecture/db_schema.md](architecture/db_schema.md) | DB 스키마 명세 — gold(원천별 5벌)·EDW(`AI.FileStorageMap`·`AI.ParsingMeta`)·마스터(`<스키마>_master`)·`applog`. 시험 `tests/server/common/test_db_schema.py`가 판·SQL과 대조 | DB 표·칸을 바꾸거나 DB 담당자와 협의할 때 |

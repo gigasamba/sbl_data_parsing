@@ -10,7 +10,7 @@
 - 규칙:
   1. CLI `pipeline.cli`는 `parse`·`show-stack`·`selftest`. 이미지 entrypoint(`deploy/docker/entrypoint.sh`)가 `publish`·`migrate`·`check`·`services`·`resources`·`tool`·`ask`·`mcp`·`parse-service`·`idle`을 더한다. `idle` = 상주 컨테이너가 떠 있기만 한다(run_docs가 `docker exec`).
   2. 서버 실행은 호스트 python의 `deploy/host/scripts/run_docs.py`(PyYAML·pymssql 필요)가 상주 컨테이너 `data-pipeline` 안에서 문서마다 명령을 `docker exec`로 돌린다. 컨테이너 명령은 settings.yaml `ops.host.docker`(없으면 podman). PC에서는 실행하지 않는다.
-  3. 시작: 설정 파일 = `--settings` → `SETTINGS_FILE` → `<루트>/settings.yaml`(루트 = 코드 폴더의 부모 — op-13). `required.env.run_env`가 dev·prd가 아니거나 필요한 칸이 없으면 칸 경로만 찍고 종료 2. 코드 폴더 = `--code`(없으면 스크립트가 든 코드 폴더) — 그 안의 `common/config/layout.py`·`deploy/host/scripts/host_keys.tsv`로 설정 배치와 컨테이너 안 경로를 읽는다.
+  3. 시작: 설정 파일 = `--settings` → `SETTINGS_FILE` → `<루트>/settings.yaml`(루트 = 코드 폴더의 부모 — op-13). `required.env.run_env`가 dev·prd가 아니거나 필요한 칸이 없으면 칸 경로만 찍고 종료 2. 코드 폴더 = `--code`(없으면 스크립트가 든 코드 폴더) — 그 안의 `common/config/layout.py`·`deploy/host/scripts/host_settings.tsv`로 설정 배치와 컨테이너 안 경로를 읽는다.
   4. 대상 목록: EDW `SELECT id, s3_key, original_filename, file_size FROM AI.FileStorageMap WHERE (<이름 조건>) AND file_size IS NOT NULL ORDER BY file_size ASC`. 이름 조건 = `--filter`(기본 `RFP,proposal`)의 낱말마다 `LOWER(original_filename) LIKE '%낱말%'`를 OR. 순번(seq)은 이 순서. `--start-offset N`(기본 1072 — 새벽 배치는 0)부터, `--seqs`면 그 순번만, `--skip-done`이면 끝난 문서([pl-23](#pl-23))를 빼고, `--max-docs`면 그 뒤 앞에서 N건, `--limit`은 시험용(그 전에 자름).
   5. 문서마다: warm(미리 받기) → 레인 분류 → 파싱 → 게시 → 원본 삭제 → gold(구조화+적재) → 임시 삭제([pl-24](#pl-24)). 배치 장벽 없이 끝나는 순서대로 흐른다.
   6. 레인·대기열은 [rn-01](#rn-01)·[rn-02](#rn-02), MCP 양보는 [rn-03](#rn-03)·[rn-04](#rn-04), 종료 코드는 [pl-18](#pl-18).
@@ -33,8 +33,8 @@
   2. "끝난 행" = `parse_status`가 `skipped_dup`, 또는 `ok`·`partial`이면서 `gold_version`이 있음(`gold_version` 칸이 없는 EDW에서는 `parse_status`만 봄). `not_parsed`·`skipped_disk_cap`·실패·행 없음은 다시 고른다. 코드 두 곳이 같은 목록을 쓴다 — `common/store/parsing_meta_db.DONE_STATUSES`·`run_docs.py DONE_STATUSES`.
   3. 파싱 입구(`pipeline.cli parse`의 `_unparsed`)는 EDW를 한 번 읽는다(읽기 계정, PC는 sqlite 대역). 못 읽으면 `run_mode: prod`이거나 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
   4. 전체 재파싱은 사람이 전체 e2e를 시작할 때만([pl-54](#pl-54)).
-  5. 새벽 배치: settings.yaml `ops.nightly.time`(시작 HH:MM)·`max_docs`(새 문서 수 상한, 1 이상)·`deadline`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `trigger.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 `run_docs.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.
-- 파일: `pipeline/cli.py`(`_unparsed`), `common/store/parsing_meta_db.py`, `deploy/host/scripts/{run_docs.py,trigger.sh}`, `deploy/host/systemd/data-pipeline-nightly.{timer,service}`.
+  5. 새벽 배치: settings.yaml `ops.nightly.time`(시작 HH:MM)·`max_docs`(새 문서 수 상한, 1 이상)·`deadline`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `nightly_batch.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 `run_docs.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.
+- 파일: `pipeline/cli.py`(`_unparsed`), `common/store/parsing_meta_db.py`, `deploy/host/scripts/{run_docs.py,nightly_batch.sh}`, `deploy/host/systemd/data-pipeline-nightly.{timer,service}`.
 - QA: `tests/general/deploy/test_trigger_gate.py`·`tests/server/pipeline/test_nightly_time.py`·`test_run_docs`(`deadline_at`, `test_done_keys_match_parsing_meta`) · 통과. 서버 확인 refactor.md C-72.
 - Status: done
 
@@ -71,7 +71,7 @@
   1. 종료 코드: 0 = 대상 0건·모두 끝 · 1 = 실패 문서(파싱·게시·gold) 하나라도 · 75 = 마감 도달(실패 없음) 또는 다른 run_docs가 도는 중 · 2 = 설정 문제. 실패와 마감이 함께면 1.
   2. 겹침 잠금: `flock batch_progress/run_docs.lock`(프로세스가 죽으면 커널이 풂). 사람이 직접 돌려도 같은 잠금.
   3. `--deadline HH:MM`: 그 시각(지금보다 이르거나 같으면 다음 날)이 지나면 새 문서를 받지 않는다.
-- 파일: `deploy/host/scripts/run_docs.py`, `deploy/host/scripts/trigger.sh`.
+- 파일: `deploy/host/scripts/run_docs.py`, `deploy/host/scripts/nightly_batch.sh`.
 - QA: `tests/general/deploy/test_docs_flow.py`(`test_exit_codes`·`test_lock_blocks_second_run` — Windows는 건너뜀) · 통과. 서버 확인 refactor.md C-72.
 - Status: done
 
@@ -103,7 +103,7 @@
 <a id="rn-03"></a>
 ## rn-03 · MCP `parse_document`에 CPU 먼저 주기
 - 이유: 일괄 파싱이 CPU를 다 쓰면 사람이 기다리는 `parse_document`가 느려진다. 컨테이너끼리는 cgroup CPU 가중치가 정한다(nice는 한 세션 안에서만).
-- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `data-pipeline-mcp`(같은 이미지, entrypoint `parse-service` = `pipeline.parse_service`, 127.0.0.1:8766). 자원 = settings.yaml `ops.pipeline_host.parse_mcp_cpus`(기본 3)·`parse_mcp_mem_limit`(8g)·`parse_mcp_cpu_shares`(4096 — 일괄 `data-pipeline`은 1024). 결과 폴더만 붙인다. 죽으면 `restart`, 꺼지면 `mcp_up.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
+- 규칙: `parse_document` 작업 서비스는 전용 컨테이너 `data-pipeline-mcp`(같은 이미지, entrypoint `parse-service` = `pipeline.parse_service`, 127.0.0.1:8766). 자원 = settings.yaml `ops.pipeline_host.parse_mcp_cpus`(기본 3)·`parse_mcp_mem_limit`(8g)·`parse_mcp_cpu_shares`(4096 — 일괄 `data-pipeline`은 1024). 결과 폴더만 붙인다. 죽으면 `restart`, 꺼지면 `mcp_keepalive.sh`(keepalive 타이머)가 띄운다. 일괄 엔진 자식은 nice +10.
 - 파일: `deploy/host/compose/compose.pipeline-mcp.yml`(개발 서버 짝 `compose.code.pipeline-mcp.yml`), `pipeline/parse_service.py`, `common/core/resources.py`.
 - QA: `tests/general/deploy/test_compose.py` · 통과.
 - Status: dev — 서버에서 일괄 파싱 중 `parse_document` 응답 시간 확인(refactor.md C-83 ①)만 남음.

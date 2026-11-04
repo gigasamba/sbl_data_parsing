@@ -42,7 +42,7 @@ ROOT = Path(__file__).resolve().parent
 #   refactor.md C-09). 필요한 칸이 없으면 칸 경로만 찍고 종료 코드 2(값은 찍지 않음). required.env.run_env가 dev·prd가 아니면 거부(로컬 실행 금지 — CLAUDE.md 3절).
 #   docker exec로 부르는 상주 컨테이너(data-pipeline — 11-03 하나로)는 같은 파일을 붙여 읽으므로(compose x-settings) 명령 줄에 접속 값·비밀을 넣지 않는다(ps·로그에 안 남음).
 #   작업 폴더(진행 기록 batch_progress/·batches/)는 settings.yaml ops.pipeline_host.run_docs_dir(비우면 이 스크립트 옆 test_space/ — 옛 자리), 결과 공유 폴더는
-#   ops.host.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(settings_env.sh와 같음 — op-13).
+#   ops.host.output_root(RAG_OUT — 컨테이너 /app/output의 원본 그대로), 비우면 <루트>/output(load_settings.sh와 같음 — op-13).
 TEST = PROG = DOCSPACE = DOCFLOW = WARM = None  # configure()가 채움
 DOCKER = "docker"  # 컨테이너 명령 — configure()가 ops.host.docker(없으면 podman, 그것도 없으면 docker — op-10)로 채움
 CODE_DIR = None  # --code(설정 배치 모듈 layout.py·이미지 경로 표를 찾을 코드 폴더 — 운영자 폴더에서 돌릴 때, op-10 · 기본 배치 경로 없음 — 사용자 11-02)
@@ -85,8 +85,8 @@ def _code_root():
 
 
 def _root():
-    """서버 루트(op-13 — settings.yaml·edw_chain.yaml·output/이 바로 아래): settings_env.sh load_settings가 낸 RAG_ROOT, 없으면 같은 규칙(코드 폴더의 부모)."""
-    r = os.environ.get("RAG_ROOT")  # env 남김 — 호스트 도구(settings_env.sh load_settings가 냄)
+    """서버 루트(op-13 — settings.yaml·edw_chain.yaml·output/이 바로 아래): load_settings.sh load_settings가 낸 RAG_ROOT, 없으면 같은 규칙(코드 폴더의 부모)."""
+    r = os.environ.get("RAG_ROOT")  # env 남김 — 호스트 도구(load_settings.sh load_settings가 냄)
     return Path(r) if r else _code_root()[0].resolve().parent
 
 
@@ -97,16 +97,19 @@ def _inside(seq, sub=""):
 
 @functools.cache
 def _img(name):
-    """컨테이너 안 약속 경로(사용자 11-02 — settings.IMAGE_PATHS 한 곳): 코드 폴더 deploy/host/scripts/host_keys.tsv(없으면 이 스크립트 옆)의 const 줄(deploy/release/hostkeys.py가 만듦)."""
-    f = next((p for p in (_code_root()[0] / "deploy" / "host" / "scripts" / "host_keys.tsv", ROOT / "host_keys.tsv") if p.is_file()), None)
+    """컨테이너 안 약속 경로(사용자 11-02 — settings.IMAGE_PATHS 한 곳): 코드 폴더 deploy/host/scripts/host_settings.tsv(없으면 이 스크립트 옆)의 const 줄(deploy/release/gen_host_keys.py가 만듦)."""
+    f = next(
+        (p for p in (_code_root()[0] / "deploy" / "host" / "scripts" / "host_settings.tsv", ROOT / "host_settings.tsv") if p.is_file()),
+        None,
+    )
     if f is None:
-        sys.exit("run_docs: host_keys.tsv 없음 — 코드 폴더(deploy/host/scripts/) 또는 이 스크립트 옆에 둘 것(--code)")
+        sys.exit("run_docs: host_settings.tsv 없음 — 코드 폴더(deploy/host/scripts/) 또는 이 스크립트 옆에 둘 것(--code)")
     rows = f.read_text(encoding="utf-8").splitlines()
     for row in rows:
         path, _, kind, *val = row.split("\t") if "\t" in row else ("", "", "")
         if kind == "const" and path == f"image.{name}":
             return val[0]
-    sys.exit(f"run_docs: host_keys.tsv에 image.{name} 없음 — PYTHONPATH=. python deploy/release/hostkeys.py로 다시 만들 것")
+    sys.exit(f"run_docs: host_settings.tsv에 image.{name} 없음 — PYTHONPATH=. python deploy/release/gen_host_keys.py로 다시 만들 것")
 
 
 def _app():
@@ -178,7 +181,7 @@ def configure(settings_file=None):
     PROG = TEST / "batch_progress"
     # 컨테이너 /app/output 공유 볼륨 — load_settings가 낸 RAG_OUT(셸 env > common.host.output_root > <루트>/output), 없으면 같은 규칙
     DOCSPACE = Path(
-        os.environ.get("RAG_OUT")  # env 남김 — 호스트 도구(settings_env.sh load_settings가 냄)
+        os.environ.get("RAG_OUT")  # env 남김 — 호스트 도구(load_settings.sh load_settings가 냄)
         or _yget(doc, "common.host.output_root")
         or _root() / "output"
     )
@@ -190,7 +193,7 @@ def configure(settings_file=None):
     inst = _yget(doc, "common.host.instance") or ""
     if not re.fullmatch(r"([a-z0-9][a-z0-9-]*)?", str(inst)):
         return ["ops.host.instance는 영소문자·숫자·-만(앞은 글자·숫자)"]
-    # 여러 벌(op-15) — dc.sh가 띄운 이 루트의 컨테이너(settings_env.sh NAME_SUFFIX와 같은 규칙)
+    # 여러 벌(op-15) — host_ctl.sh가 띄운 이 루트의 컨테이너(load_settings.sh NAME_SUFFIX와 같은 규칙)
     PIPE_C = "data-pipeline" + (f"-{inst}" if inst else "")
     jobs = _yget(doc, "mcp.host.jobs_dir")
     MCP_JOBS_DIR = Path(jobs) if jobs else DOCSPACE / "_mcp_parse" / "jobs"

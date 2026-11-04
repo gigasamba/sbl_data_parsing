@@ -1,7 +1,7 @@
 """settings.yaml의 절을 KEY=VALUE 줄로 내보내기 — YAML을 직접 못 읽는 셸·compose·systemd용 다리(S7a 시제품 → S7e1 정식, refactor_plan 5-2 · D-028 ⑭).
   · 옛 env 이름으로 낸다(셸·compose 파일이 지금 쓰는 ${X} 그대로).
   · 비밀 칸은 내보내지 않는다 — 컨테이너 안 앱이 붙인 설정 파일에서 직접 읽는다. YAML에 적은 값만 낸다(기본값은 스크립트·compose 쪽 기본값).
-  · --format sh(호스트 스크립트 — deploy/host/scripts/settings_env.sh의 load_settings): `export KEY='VALUE'`(bash 3.2·4·5 — eval)
+  · --format sh(호스트 스크립트 — deploy/host/scripts/load_settings.sh의 load_settings): `export KEY='VALUE'`(bash 3.2·4·5 — eval)
   · --format env(기본 — 사람이 compose `--env-file <(…)`로 줄 때): `KEY=VALUE` — compose가 env 파일 값의 `$`를 다시 치환하므로 값에 `$`가
     있으면 거부한다(이름만 — VS7a R-11, 사용자 10-27 S7e1 Q3). 셸 env로 넘기는 sh 꼴은 다시 치환되지 않는다.
 사용: python -m common.config.export --section pipeline.host [--section common.host] [--section mcp.server.port] [--file settings.yaml] [--format sh]
@@ -70,7 +70,7 @@ def run(cls, a, tag="export"):
 
 def _requested(file, sections):
     """설정 파일을 한 번 읽어 고른 절(칸)과 common.run_env만 남긴 사전 — 고르지 않은 칸은 검증하지 않는다(S7e1 리뷰: mcp 절의 오타가
-    pipeline 호스트 스크립트(trigger.sh·새벽 배치)를 멈추지 않게 — U-a와 같은 뜻). 파일 자리는 load()와 같은 규칙(SETTINGS_FILE·RUN_ENV)."""
+    pipeline 호스트 스크립트(nightly_batch.sh·새벽 배치)를 멈추지 않게 — U-a와 같은 뜻). 파일 자리는 load()와 같은 규칙(SETTINGS_FILE·RUN_ENV)."""
     import os
 
     run = os.environ.get("RUN_ENV") or None  # env 남김 — RUN_ENV 신호

@@ -8,7 +8,7 @@
 
 | 묶음 | 컨테이너 | 코드 |
 |---|---|---|
-| 개발자마다 하나 | `data-pipeline` · `data-pipeline-mcp` · `mcp-server`(`dc.sh`) | 자기 gitea 브랜치를 받은 자기 코드 폴더 |
+| 개발자마다 하나 | `data-pipeline` · `data-pipeline-mcp` · `mcp-server`(`host_ctl.sh`) | 자기 gitea 브랜치를 받은 자기 코드 폴더 |
 | 공용 main 묶음 하나 | 위와 같은 3개 | gitea `main` |
 
 - **한계 — 한 서버(한 컨테이너 엔진)에는 묶음 하나만 동시에 띄운다.** compose 파일이 컨테이너 이름을 고정한다(`container_name: data-pipeline`·`data-pipeline-mcp`·`mcp-server`). 사람마다 묶음을 따로 띄우려면 서버(또는 계정마다 따로 도는 rootless podman)를 나눈다.

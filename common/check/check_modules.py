@@ -21,7 +21,7 @@
 ⑨ (프리즈 전 감사 3b, 10-16 — 4분할 뒤 TOOL_IMAGE 갱신) cli/·evaluation/는 여러 이미지(rag-parse·rag-structure·
    rag-retrieval, 지금도 rag-parse·rag-core 둘 다) 모두에 들어가므로: top-level(모듈 스코프) import에 parse와
    structure/load/search가 같이 있으면 안 됨(어느 이미지에서 돌려도 한쪽이 깨짐) · README "도구별 실행 이미지"
-   (=TOOL_IMAGE, deploy/host/scripts/run_tool.sh 정본)에 있는 도구는 자기 이미지에 없는 영역을 top-level import하면 안 됨.
+   (=TOOL_IMAGE, deploy/host/scripts/pipe_exec.sh 정본)에 있는 도구는 자기 이미지에 없는 영역을 top-level import하면 안 됨.
    함수 안 늦은(lazy) import는 허용(check_env.py의 parse.engines처럼).
 I2(10-23) — 파싱·구조화 두 모듈 폴더가 data_etl/ 하나(extract·transform·load·shared·tools·eval_tools·agent 단계
 폴더)로 합쳐져 parse·structure·load 영역이 "etl" 영역 하나가 됨: ① 경계는 etl ↔ search(data_retrieval) 사이에만 남고,

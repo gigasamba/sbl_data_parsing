@@ -125,7 +125,7 @@
 | run_docs는 지휘만 — 판단(원천 목록·중복·레인·게시)은 파이프라인 함수로 옮기고, PC도 가짜 대상으로 run_docs E2E. 점검 스크립트 `lint_changed.sh`는 `common/check/`로 | 같은 판단이 두 곳에 있고 PC E2E가 서버와 다른 길을 탄다(사용자 11-04). 0.2.0 다음 | todo | [rn-05](prd/ops.md#rn-05) |
 | 저장소 전체 정리 — 중복 기능 하나로, 파싱 코드는 `pipeline/{extract,transform,load}`로, 파일 이름은 하는 일로(보호 파일 제외) | 같은 일이 여러 곳, 파싱 코드가 ETL 밖에 흩어짐(사용자 11-04) | todo | [rn-06](prd/ops.md#rn-06) |
 | run_docs 대상 고르기를 위 규칙에 맞춘다 — 파일 이름 키워드(`--filter RFP,proposal`)·`--start-offset` 뒤 `--skip-done`이 ParsingMeta 끝난 행(ok·partial — gold_version도, skipped_dup)을 뺀다 | 새벽 배치는 이름에 RFP·proposal이 든 문서만 처리한다(키워드가 정기 운영에 맞는지는 C-72 ③) | done | [pl-23](prd/ops.md#pl-23) |
-| 새벽 배치는 `ops.nightly.time`·`max_docs`·`deadline` 셋이 모두 있을 때만 돈다(하나라도 비면 안 돎 — 사용자 11-02) — systemd 타이머가 5분마다 `trigger.sh scheduled` → `run_docs.py --start-offset 0 --skip-done --max-docs --deadline` | 지금 서버는 비워 둠(꺼짐) — 켜는 것은 사람(C-72) | done | [pl-23](prd/ops.md#pl-23) |
+| 새벽 배치는 `ops.nightly.time`·`max_docs`·`deadline` 셋이 모두 있을 때만 돈다(하나라도 비면 안 돎 — 사용자 11-02) — systemd 타이머가 5분마다 `nightly_batch.sh scheduled` → `run_docs.py --start-offset 0 --skip-done --max-docs --deadline` | 지금 서버는 비워 둠(꺼짐) — 켜는 것은 사람(C-72) | done | [pl-23](prd/ops.md#pl-23) |
 | 전체 e2e는 local·dev·prd 셋에서 — 전체 문서 실행은 prd에서만 새 원천별 스키마 이름(새 `PG_SCHEMA`)으로, 옛 gold·`struct` 스키마는 2주 뒤 DB 담당자가 백업하고 지움 | 판 0002가 기준 스키마의 옛 표를 지운다. 사용자 11-02 | todo | [pl-54](prd/ops.md#pl-54) |
 | 새벽 배치 칸 — 시작 시각·문서 수 상한·마감 시각(비면 안 돎), 칸 이름 하나로(`pipeline.host.nightly.time` ↔ `ops.nightly.time` 어긋남 고침) | 사용자 11-02 | done | [pl-23](prd/ops.md#pl-23) |
 | 문서별 순서를 파싱 → silver 게시 → 원본 임시 파일 삭제 → gold로 | 게시가 gold를 기다리지 않고(게시 스레드 따로), 원본은 게시가 성공했을 때만 지운다(11-03) | done | [pl-24](prd/ops.md#pl-24) |
@@ -153,7 +153,7 @@
 | 설정은 settings.yaml 하나 — `settings.sample.yaml`에 모든 키가 기본값과 함께(`python -m common.config.sample`로 생성) | — | done | [op-05](prd/ops-settings.md#op-05) |
 | 배치 — 맨 위 `required`(필수·비밀) → 역할 절 7개(환경마다 정하는 값) → `tuning`(거의 안 바꾸는 값 — 분류 제목, 11-04). 옛 배치는 시작 거부, `python -m common.config.migrate`로 변환 | sample과 실제 파일의 차이를 줄였다 | done | [op-08](prd/ops-settings.md#op-08) |
 | 설정 이관은 옛 배치 settings.yaml → 새 배치만 | 운영 서버는 0.1.0(settings.yaml 하나). 사용자 11-02 | done | [op-08](prd/ops-settings.md#op-08) |
-| 하드코딩 0 — 설정 값은 settings.yaml이나 이미지 기본값 표(`settings.py`)에서만, 호스트 셸은 `settings_env.sh`가 준 값만, PG 자동 찾기 없앰(PG 접속 필수) | 한 곳을 바꾸면 나머지가 어긋나던 문제. 남은 복사본 있음 | done | [op-09](prd/ops-settings.md#op-09) |
+| 하드코딩 0 — 설정 값은 settings.yaml이나 이미지 기본값 표(`settings.py`)에서만, 호스트 셸은 `load_settings.sh`가 준 값만, PG 자동 찾기 없앰(PG 접속 필수) | 한 곳을 바꾸면 나머지가 어긋나던 문제. 남은 복사본 있음 | done | [op-09](prd/ops-settings.md#op-09) |
 | 환경마다 다른 경로·접속은 settings.yaml 필수(코드 기본값 없음) — 컨테이너 안 경로는 이미지 기본값 표 하나만, 호스트 `PATCH_CODE` 기본값 지움 | 사용자 11-02 | done | [op-09](prd/ops-settings.md#op-09) |
 | 은퇴한 설정 지우기 — `common.paths.korean_font`·`eval_sets_dir` 등(남아 있으면 경고만) | 지문이 바뀌어 0.1.0 묶음에 | done | [pl-21](prd/ops-settings.md#pl-21) |
 | 아무도 안 읽는 env 4개(`FIG_OCR_BUDGET`·`SERVICE_MASTER_CSV`·`DIVISION_MASTER_CSV`·`PROD_MASTER_CSV`)를 run_docs 명령에서 뺌 | C-51 | done | [pl-30](prd/ops-settings.md#pl-30) |
@@ -192,7 +192,7 @@
 | 버전은 루트 `VERSION` 하나(지금 0.1.0), 첫 태그 `v0.1.0` + 릴리스 노트 | 이미지 태그와 DB 버전 표기가 같은 값을 쓴다 | done | [op-04](prd/doc.md#op-04) |
 | 코드 없는 실행 이미지(`data-pipeline-runtime`·`mcp-server-runtime`)에 코드 폴더를 `/app/deploy`로 읽기 전용 마운트 | 개발 서버에서 이미지를 다시 만들지 않고 코드만 바꿔 시험 | done | [op-06](prd/doc.md#op-06) |
 | 시작 검사 `runtime_entry.sh` — 코드 폴더가 없거나 의존성 지문(`DEPS_HASH`)이 다르면 종료 2, 이미지 판·코드 커밋을 한 줄 기록 | 의존성 어긋남이 나중에 조용한 오류로 터지지 않게 | done | [op-06](prd/doc.md#op-06) |
-| 개발 → 운영 굽기 `bake.sh` — 개발에서 쓴 실행 이미지 + 시험한 코드 폴더로 `Dockerfile.bake`(네트워크 없이), 반입 판정 뒤 저장·분할 | 운영에는 개발에서 시험한 그대로 올라간다 | done | [op-07](prd/doc.md#op-07) |
+| 개발 → 운영 굽기 `bake_prod_image.sh` — 개발에서 쓴 실행 이미지 + 시험한 코드 폴더로 `Dockerfile.bake`(네트워크 없이), 반입 판정 뒤 저장·분할 | 운영에는 개발에서 시험한 그대로 올라간다 | done | [op-07](prd/doc.md#op-07) |
 | 운영(prd) 이미지에 settings.yaml(비밀 포함)도 굽는다 — 🔒 검토 등급 A(비밀 처리) | 이미지 파일 = 비밀(반입 경로만), 키를 바꿀 때마다 다시 굽기. 사용자 11-02 | todo | [op-12](prd/doc.md#op-12) |
 | 서버 설치 길은 하나(README §5-0·§5-3). 컨테이너 도구는 셸 env > `ops.host.docker` > podman > docker. 이미지는 `load.sh`로(45 MB 조각) | 문서마다 절차가 달랐다. 서버 기본 도구는 podman | done | [op-10](prd/doc.md#op-10) |
 | 0.2.0 올리기·되돌리기(release-and-patch §8-3·§8-5) — DB 백업 → `migrate check` → `up`, 되돌릴 땐 `settings.yaml.0.1.0` 복원, 재처리 동안 밤 타이머 멈춤 | DB·EDW·전체 재처리가 함께 바뀐다 | done | [op-10](prd/doc.md#op-10) |

@@ -6,7 +6,7 @@
 #     -v <원본>:/data/docs:ro -v <결과>:/app/output data-pipeline:<버전> <명령>   (S7e1·S7e2 — 옛 --env-file pipeline.env 대신 설정 파일 하나)
 # 명령: help · check · resources · services · check-modules · tool <이름> [인자] · mcp ·
 #       ask --q …  (서버 입구는 run_docs 하나, 사용자 10-31)
-#   tool <이름> = 고정 표의 도구 하나(check_env·ping_models·check_modules·cli·rdb_discover·gen_roster·glossary_suggest — run_tool.sh가 쓰는 자리)
+#   tool <이름> = 고정 표의 도구 하나(check_env·ping_models·check_modules·cli·rdb_discover·gen_roster·glossary_suggest — pipe_exec.sh가 쓰는 자리)
 #     이름만 받는다(다른 형태는 종료 64).
 #   모듈(트리거 1회): parse(= 가져오기(폴더·rdb:csv, PARSE_SOURCE) → dedup → prepare → 파싱·대표 결과) · structure(구조화·임베딩) · load(PostgreSQL) · publish(대표 결과 .md Object Storage 업로드 + EDW 메타, SI39 — cli/publish_parse.py --apply) — docs/architecture.md
 #   migrate up|stamp|current|check [--target search|all] [--schema S] [--dim N|--bundle B] = pgvector 우리 스키마 판 관리(S8a — Alembic,

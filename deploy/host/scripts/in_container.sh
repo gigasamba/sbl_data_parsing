@@ -1,8 +1,8 @@
 #!/bin/bash
-# 이미지 변수 확인(S6b, D-020 — trigger.sh·run_tool.sh·mcp_up.sh가 source). 서버 이미지 2개(사용자 10-27):
+# 이미지 변수 확인(S6b, D-020 — nightly_batch.sh·pipe_exec.sh·mcp_keepalive.sh가 source). 서버 이미지 2개(사용자 10-27):
 #   DATA_PIPELINE_IMAGE = data-pipeline:<태그>(옛 data-parsing+data-structure) · MCP_SERVER_IMAGE = mcp-server:<태그>(옛 data-retrieval)
 #   없으면 compose가 `${…:?}` 필수 안내로 멈춘다. 값은 출력하지 않는다.
-#   S7e1 — 새 이름은 settings.yaml(required.deploy.pipeline_image·mcp_image)에서 settings_env.sh load_settings가 셸 env로 낸다. 부르기 전에 load_settings.
+#   S7e1 — 새 이름은 settings.yaml(required.deploy.pipeline_image·mcp_image)에서 load_settings.sh load_settings가 셸 env로 낸다. 부르기 전에 load_settings.
 #   need_image pipeline   — 파이프라인 이미지(compose.pipeline.yml의 상주 컨테이너)
 #   need_image mcp        — 검색 MCP 이미지(compose.mcp-server.yml의 mcp 서비스)
 # op-06(사용자 10-30) — 실행 이미지(*-runtime:태그)인데 CODE_DIR가 비면 이 코드 폴더 루트(부른 스크립트가 cd한 곳 —
@@ -20,7 +20,7 @@ in_pipeline() {   # in_pipeline <상주 컨테이너> <명령> [인자…] — �
   shift
   # shellcheck disable=SC2086 — DOCKER는 낱말 나눔(sudo podman)
   if [ "$($DOCKER inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" != true ]; then
-    echo "[오류] 상주 컨테이너 $c가 떠 있지 않음 — 먼저 띄울 것: \`bash deploy/host/scripts/dc.sh up -d data-pipeline\`(실행 이미지면 compose.code.yml도 — dc.sh가 붙임)" >&2
+    echo "[오류] 상주 컨테이너 $c가 떠 있지 않음 — 먼저 띄울 것: \`bash deploy/host/scripts/host_ctl.sh up -d data-pipeline\`(실행 이미지면 compose.code.yml도 — host_ctl.sh가 붙임)" >&2
     return 2
   fi
   local tty=()
@@ -31,6 +31,6 @@ in_pipeline() {   # in_pipeline <상주 컨테이너> <명령> [인자…] — �
 need_image() {   # need_image pipeline|mcp — 0(이미지 이름 확인은 compose의 ${…:?}가 함), 모르는 이름이면 2
   case "$1" in
     pipeline | mcp) return 0 ;;
-    *) echo "[image_vars] need_image pipeline|mcp" >&2; return 2 ;;
+    *) echo "[in_container] need_image pipeline|mcp" >&2; return 2 ;;
   esac
 }

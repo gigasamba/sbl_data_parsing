@@ -49,13 +49,13 @@ NOT_SETTINGS = {
     **{
         f"APP_{k.upper()}": (
             "env로 남김",
-            "컨테이너 안 약속 경로 — settings.IMAGE_PATHS 고정값(settings_env.sh가 냄, compose 마운트 자리 — 사용자 11-02)",
+            "컨테이너 안 약속 경로 — settings.IMAGE_PATHS 고정값(load_settings.sh가 냄, compose 마운트 자리 — 사용자 11-02)",
         )
         for k in ("output_root", "code_root", "docs_mount")
     },
     "SETTINGS_LOADED": (
         "env로 남김",
-        "내부 신호 — settings_env.sh load_settings가 이미 낸 설정 파일(하위 스크립트가 다시 안 읽게, 새 — S7e1)",
+        "내부 신호 — load_settings.sh load_settings가 이미 낸 설정 파일(하위 스크립트가 다시 안 읽게, 새 — S7e1)",
     ),
     "PYTHONUTF8": ("env로 남김", "파이썬 실행 옵션(이미지·셸)"),
     "DO_NOT_TRACK": ("env로 남김", "외부 라이브러리 원격 측정 끄기 — Dockerfile ENV(U-1, S7a2) · settings·빈 틀에서만 뺌(S7e)"),
@@ -77,7 +77,7 @@ NOT_SETTINGS = {
     "USERNAME": ("env로 남김", "OS 사용자 이름(Windows)"),
     "ALLOW_NO_ASSETS": ("인자", "빌드·반입·시험 스크립트 인자(5-3 B)"),
     **{
-        n: ("인자", "빌드·굽기 스크립트 변수(build_ship.sh·bake.sh·ship_stage.sh — op-06·op-07)")
+        n: ("인자", "빌드·굽기 스크립트 변수(build_ship.sh·bake_prod_image.sh·stage_images.sh — op-06·op-07)")
         for n in ("APP_VERSION", "VCS_REF", "BAKE_TEST", "CODE_BUNDLE", "CODE_DIR", "CODE_OUT")
     },
     "NF": ("인자", "awk 내장 변수($NF — build_ship.sh tar 권한 점검), 설정 아님"),
@@ -101,15 +101,15 @@ NOT_SETTINGS = {
     "APP_VERSION": ("인자", "Dockerfile 빌드 인자 — 이미지에 버전을 새김(build_ship.sh가 VERSION 파일에서, op-09)"),
     "VCS_REF": ("인자", "Dockerfile 빌드 인자 — 이미지에 커밋을 새김(build_ship.sh, op-09)"),
     "CODE_OUT": ("인자", "build_ship.sh — 코드 묶음 출력 파일(op-09)"),
-    "CODE_BUNDLE": ("인자", "ship_stage.sh — 실행 이미지와 함께 옮길 코드 묶음 파일(bake.sh가 넘김, op-09)"),
-    "BAKE_TEST": ("인자", "bake.sh — PC 시험 태그면 1(태그가 VERSION과 달라도 멈추지 않음, op-09)"),
+    "CODE_BUNDLE": ("인자", "stage_images.sh — 실행 이미지와 함께 옮길 코드 묶음 파일(bake_prod_image.sh가 넘김, op-09)"),
+    "BAKE_TEST": ("인자", "bake_prod_image.sh — PC 시험 태그면 1(태그가 VERSION과 달라도 멈추지 않음, op-09)"),
     "CODE_DIR": (
         "인자",
-        "호스트 스크립트 변수 — 개발 서버 코드 폴더(image_vars.sh가 실행 이미지일 때 pwd로 채움, compose.code*.yml 마운트 — op-09)",
+        "호스트 스크립트 변수 — 개발 서버 코드 폴더(in_container.sh가 실행 이미지일 때 pwd로 채움, compose.code*.yml 마운트 — op-09)",
     ),
     "RAG_ROOT": (
         "인자",
-        "호스트 스크립트 변수 — 서버 루트(코드 폴더의 부모 — settings_env.sh가 구해 compose edw_chain.yaml 마운트에, op-13)",
+        "호스트 스크립트 변수 — 서버 루트(코드 폴더의 부모 — load_settings.sh가 구해 compose edw_chain.yaml 마운트에, op-13)",
     ),
     "POSTGRES_DB": ("env로 남김", "PG 컨테이너 env — compose가 PG_DB로 채움(설정 칸은 op-08에 지움)"),
     "POSTGRES_USER": ("env로 남김", "PG 컨테이너 env — compose가 PG_USER로 채움(설정 칸은 op-08에 지움)"),
@@ -123,7 +123,7 @@ IGNORE = {
     "DC_ROOT",
     "DC_UNIT_DIR",
     "DC_FAKE",
-}  # NF=awk `$NF`(op-09) · PATH·DC_*=dc.sh 시험용(#138)
+}  # NF=awk `$NF`(op-09) · PATH·DC_*=host_ctl.sh 시험용(#138)
 
 _K = r"([A-Z][A-Z0-9_]{1,})"
 _PY = [

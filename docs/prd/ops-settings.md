@@ -54,10 +54,10 @@
 - 규칙:
   1. 설정 값은 settings.yaml(코드 기본값은 설정 모델에 한 번) 또는 이미지 기본값 표 `common/config/settings.py` `IMAGE_PATHS` 하나에서만 온다. 저장소 안 경로는 `common/core/paths.py` 상수로만.
   2. 환경마다 다른 경로·접속(게시 대상·Object Storage·EDW·PG·호스트 경로)은 필수 — 코드 기본값이 없고 비면 시작 거부. PG 자동 찾기는 없다.
-  3. 컨테이너 안 경로(`output_root` `/app/output` · `code_root` `/app/deploy` 등)는 `IMAGE_PATHS`가 원본이다. `deploy/release/hostkeys.py`가 이 표를 `deploy/host/scripts/host_keys.tsv`(`image.<이름>`·`APP_<이름>` 줄)로 내고, `settings_env.sh`가 `APP_*` env로 내준다 — compose는 `${APP_OUTPUT_ROOT}`·`${APP_CODE_ROOT}`·`${APP_DOCS_MOUNT}`, `run_docs.py`는 코드 폴더의 표를 읽는다. 생성: `PYTHONPATH=. python deploy/release/hostkeys.py`.
-  4. 호스트 스크립트는 `settings_env.sh`(`host_env.py` — PyYAML만)가 내준 값만 쓴다. 컨테이너 명령 = 셸 env `DOCKER` > settings.yaml `ops.host.docker` > podman > docker.
+  3. 컨테이너 안 경로(`output_root` `/app/output` · `code_root` `/app/deploy` 등)는 `IMAGE_PATHS`가 원본이다. `deploy/release/gen_host_keys.py`가 이 표를 `deploy/host/scripts/host_settings.tsv`(`image.<이름>`·`APP_<이름>` 줄)로 내고, `load_settings.sh`가 `APP_*` env로 내준다 — compose는 `${APP_OUTPUT_ROOT}`·`${APP_CODE_ROOT}`·`${APP_DOCS_MOUNT}`, `run_docs.py`는 코드 폴더의 표를 읽는다. 생성: `PYTHONPATH=. python deploy/release/gen_host_keys.py`.
+  4. 호스트 스크립트는 `load_settings.sh`(`settings_to_env.py` — PyYAML만)가 내준 값만 쓴다. 컨테이너 명령 = 셸 env `DOCKER` > settings.yaml `ops.host.docker` > podman > docker.
   5. 앱은 env에서 설정을 읽지 않는다 — 남은 env 줄은 분류 주석 필수(`python -m common.check.check_modules` ⑩·⑪).
-- 파일: `common/config/settings.py`(`IMAGE_PATHS`), `common/config/keyscan.py`, `deploy/release/hostkeys.py`, `deploy/host/scripts/{settings_env.sh,host_env.py,host_keys.tsv}`.
+- 파일: `common/config/settings.py`(`IMAGE_PATHS`), `common/config/keyscan.py`, `deploy/release/gen_host_keys.py`, `deploy/host/scripts/{load_settings.sh,settings_to_env.py,host_settings.tsv}`.
 - QA: `python -m common.check.check_modules` · "모듈 경계 통과". `tests/general/deploy/test_host_env.py` · 통과. 서버 확인 refactor.md C-70.
 - Status: done
 
@@ -77,9 +77,9 @@
 - 이유(사용자 11-04): 개발 서버에 개발자마다 컨테이너를 따로 띄운다. 컨테이너 이름(`data-pipeline` 등)·compose 묶음 이름·systemd 타이머 이름이 고정이라 두 번째 벌이 첫 벌을 덮었다.
 - 규칙:
   1. 루트 하나 = 한 벌. 새 칸 `ops.host.instance`(`common.host.instance`, 영소문자·숫자·`-`) — 적으면 컨테이너 3개·compose 묶음(`compose-<이름>`)·systemd 단위 4개 이름 끝에 `-<이름>`. 비우면 이름 그대로(한 벌 — 지금 서버와 같음).
-  2. 이름을 붙이는 곳은 `settings_env.sh load_settings`(`NAME_SUFFIX` — 틀린 꼴이면 종료 2) 한 곳, 호스트 스크립트(`dc.sh`·`mcp_up.sh`·`trigger.sh`·`run_tool.sh`)와 compose 파일은 그 값을 쓴다. `run_docs.py`는 같은 규칙으로 `configure()`에서.
+  2. 이름을 붙이는 곳은 `load_settings.sh load_settings`(`NAME_SUFFIX` — 틀린 꼴이면 종료 2) 한 곳, 호스트 스크립트(`host_ctl.sh`·`mcp_keepalive.sh`·`nightly_batch.sh`·`pipe_exec.sh`)와 compose 파일은 그 값을 쓴다. `run_docs.py`는 같은 규칙으로 `configure()`에서.
   3. 포트·스키마는 이미 있는 칸을 벌마다 다르게 적는다(`search.server.port` · `ops.services.parse_mcp.port` + `search.parse_proxy.url` · `required.pg.db_schema`) — server-guide §1-3.
-- 파일: `common/config/settings.py` · `deploy/host/scripts/{settings_env.sh,dc.sh,mcp_up.sh,trigger.sh,run_tool.sh,run_docs.py,host_keys.tsv}` · `deploy/host/compose/compose.{pipeline,pipeline-mcp,mcp-server}.yml`.
+- 파일: `common/config/settings.py` · `deploy/host/scripts/{load_settings.sh,host_ctl.sh,mcp_keepalive.sh,nightly_batch.sh,pipe_exec.sh,run_docs.py,host_settings.tsv}` · `deploy/host/compose/compose.{pipeline,pipeline-mcp,mcp-server}.yml`.
 - QA: `tests/general/deploy/test_dc.py`(묶음 이름 `compose`·`compose-hong` · 틀린 이름 종료 2) · `test_dc_init.py`(타이머 단위 이름 끝) · `test_compose.py`(컨테이너 이름 끝 `${NAME_SUFFIX:-}`) · 통과.
 - Status: done
 

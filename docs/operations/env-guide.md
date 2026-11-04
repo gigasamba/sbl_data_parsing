@@ -21,7 +21,7 @@
 | 기계 | 파일 | 적용 | 모델 엔드포인트 |
 |---|---|---|---|
 | PC(개발) | 저장소 루트 `settings.yaml`(git 밖, 권한 600) | `RUN_ENV`가 없거나 `local`이면 코드가 이 파일을 찾음. 한 번만 몇 칸 바꿀 때는 오버레이 설정 파일 `SETTINGS_FILE=$(python -m common.config.overrides PIPE_OUT_ROOT=… EMBED_ALLOW_EXTERNAL=1 …)`(**PC 전용**) | 내부망 또는 OpenRouter(기능 시험만 — CLAUDE.md §7) |
-| 수집·개발 서버 | `<루트>/settings.yaml`(루트 = 코드 폴더의 부모 — 코드 폴더 밖, README §5). **주인 UID 10001·그룹 운영 그룹·권한 640**(운영 계정 UID가 10001이면 600) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다. **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/settings_env.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다 | 내부망만 |
+| 수집·개발 서버 | `<루트>/settings.yaml`(루트 = 코드 폴더의 부모 — 코드 폴더 밖, README §5). **주인 UID 10001·그룹 운영 그룹·권한 640**(운영 계정 UID가 10001이면 600) | 컨테이너: compose가 `/etc/rag/settings.yaml`에 읽기 전용(`:ro,z`)으로 붙이고 env는 `SETTINGS_FILE`·`RUN_ENV`만 준다. **값을 바꿀 때는 이 파일을 직접 고친다.** 셸·systemd: `deploy/host/scripts/load_settings.sh`의 `load_settings`가 호스트 칸(이미지·자원·포트·`RAG_OUT`·`DOC_SRC`·`NIGHTLY_*` 등)을 셸 env로 내보내 compose가 치환한다 | 내부망만 |
 
 ### 0-0. 실행 기록(JSON 로그·DB 감사·성능 — op-01)
 
@@ -35,7 +35,7 @@
 | `tuning.ops.log.shutdown_sec` | 5 | 종료 때 남은 기록을 쓰는 상한(초) |
 | `tuning.search.audit.max_input_bytes` · `max_output_bytes` | 16384 · 65536 | MCP 감사 원문 저장 상한(바이트) |
 
-- 서버는 매일 `bash deploy/host/scripts/run_tool.sh migrate maintain --target applog`(PC: `python -m common.store.db.dbtool maintain --target applog`)를 예약한다 — 앞으로 2개월 파티션 준비, 보존 기한이 지난 파티션 삭제.
+- 서버는 매일 `bash deploy/host/scripts/pipe_exec.sh migrate maintain --target applog`(PC: `python -m common.store.db.dbtool maintain --target applog`)를 예약한다 — 앞으로 2개월 파티션 준비, 보존 기한이 지난 파티션 삭제.
 - ⚠️ MCP 감사 행(`applog.mcp_log`)과 대체 파일에는 문서 원문이 들어간다(`get_doc_fulltext` 결과는 파일당 `max_output_bytes`까지). `applog` DB·표와 `ops.log.fallback_dir`은 원본 문서와 같은 수준으로 접근을 제한한다(C-79). 대체 파일은 지우지 않으므로 디스크 회수도 운영에서 정한다.
 - 서버(dev·prd)는 값이 있는 비밀 칸이 8자 미만이면 시작을 거부한다(종료 2, 칸 경로만 찍음).
 - 파이프라인 성능 분석: `python -m pipeline.tools.perf_report [<run_id>]`(`--runs` 목록, `--compare` 비교, DB가 꺼져 있으면 `--file output/logs/*.jsonl`).
@@ -45,7 +45,7 @@
 - **env로 준 값은 읽지 않는다** — 셸·compose·systemd·`docker exec -e`의 `X=값`은 효과가 없고 시작 때 이름만 경고한다.
 - 서버(dev·prd)는 바꿀 값이 있으면 `settings.yaml`을 직접 고치고 상주 컨테이너를 다시 띄운다(또는 0-2 `--set`). 오버레이 설정 파일 도구는 서버에서 종료 2.
 - 서버에서 설정 파일을 못 읽거나(권한) 그 이미지 절이 틀리면 컨테이너가 이유(칸 경로·오류 종류만)를 찍고 **시작하지 않는다**(종료 2).
-- 호스트 칸만 꺼내 보기(비밀 없음 — 인자는 모델 경로): `bash deploy/host/scripts/settings_env.sh pipeline.host common.host`. 호스트 python에는 PyYAML만 있으면 된다(칸 목록 `deploy/host/scripts/host_keys.tsv` — 설정 모델을 고치면 `PYTHONPATH=. python deploy/release/hostkeys.py`로 다시 만듦).
+- 호스트 칸만 꺼내 보기(비밀 없음 — 인자는 모델 경로): `bash deploy/host/scripts/load_settings.sh pipeline.host common.host`. 호스트 python에는 PyYAML만 있으면 된다(칸 목록 `deploy/host/scripts/host_settings.tsv` — 설정 모델을 고치면 `PYTHONPATH=. python deploy/release/gen_host_keys.py`로 다시 만듦).
 - `run_docs.py`(서버 전용)도 같은 파일을 읽는다 — 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
 - 라이브러리가 읽는 env(`TZ`·`OMP_NUM_THREADS`·`HF_HUB_OFFLINE`·`TESSDATA_PREFIX` 등 — 허용 목록 `common.config.settings.LIB_ENV_NAMES`)는 `ops.runtime.lib_env` 사전에 적는다. 목록 밖 이름은 검증 오류.
 
@@ -54,7 +54,7 @@
 - 모르는 이름·호스트 칸·**비밀 칸**은 모든 환경에서 종료 2. 값 형식 오류는 서버 종료 2·local 경고. 서버에서 `SETTINGS_FILE`이 없으면 종료 2.
 
 ### 0-3. 새 서버 설정
-`dc.sh init`이 `settings.sample.yaml`을 복사해 둔다(README [서버 설치 순서](../../README.md#서버-설치-순서) 3번). **PC의 settings.yaml을 복사하지 않는다.** `required`(`[서버만]` 포함)와 위 "서버 값으로 적는 칸"만 채우고 `bash deploy/host/scripts/run_tool.sh check_env`로 확인한다.
+`host_ctl.sh init`이 `settings.sample.yaml`을 복사해 둔다(README [서버 설치 순서](../../README.md#서버-설치-순서) 3번). **PC의 settings.yaml을 복사하지 않는다.** `required`(`[서버만]` 포함)와 위 "서버 값으로 적는 칸"만 채우고 `bash deploy/host/scripts/pipe_exec.sh check_env`로 확인한다.
 
 ## 1. 칸 (영역별)
 
@@ -127,7 +127,7 @@
 |---|---|---|
 | `PARSE_SOURCE`(`required.source.input_source`) | 이번에 읽을 원천 | 폴더 · `rdb:csv:<경로>` |
 | `PG_FILTER_EXACT_MAX` | 고객 필터 정확 검색 문턱 | 고객으로 좁힌 청크가 이 수(기본 20000) 이하면 정확 검색 |
-| 변경 뒤 확인 | — | `python -m common.check.checker env`(서버는 `run_tool.sh check_env`) |
+| 변경 뒤 확인 | — | `python -m common.check.checker env`(서버는 `pipe_exec.sh check_env`) |
 
 ### 원천 Object Storage·EDW·게시
 | 이름 | 메모 |
@@ -174,8 +174,8 @@
 ## 4. 확인
 
 ```bash
-python -m common.check.checker env    # 빠진 필수 값·사내망 판정·경로 존재(값은 안 찍음) — 서버: run_tool.sh check_env
-python -m common.check.checker ping   # LLM·VLM·EMBED 실호출 — 실패 있으면 종료 1 — 서버: run_tool.sh ping_models
+python -m common.check.checker env    # 빠진 필수 값·사내망 판정·경로 존재(값은 안 찍음) — 서버: pipe_exec.sh check_env
+python -m common.check.checker ping   # LLM·VLM·EMBED 실호출 — 실패 있으면 종료 1 — 서버: pipe_exec.sh ping_models
 ls -l ../settings.yaml                # 서버(코드 폴더에서): 주인 10001·권한 640
 ```
 
