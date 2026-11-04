@@ -126,6 +126,19 @@
 - QA: run_docs 정리 전후 같은 문서 묶음의 결과(대표 결과·ParsingMeta 행·게시 파일)가 같음 · PC에서 run_docs 한 번으로 가짜 EDW `ParsingMeta` 행과 `file://` 폴더 결과가 생김.
 - Status: todo
 
+<a id="rn-06"></a>
+## rn-06 · 저장소 전체 정리 — 중복 기능 하나로, 파싱 코드는 ETL 폴더로, 파일 이름은 하는 일로
+- 이유(사용자 11-04): 같은 일을 하는 코드가 여러 곳에 있고, 파싱 코드가 `pipeline/extract`·`transform`·`load` 밖(파이프라인 루트·`shared`·`run_docs.py`)에 흩어져 있으며, 이름만 보고 하는 일을 알기 어려운 파일이 남았다.
+- 정한 것(11-04 질의):
+  1. 범위는 저장소 전체(`pipeline`·`common`·`mcp_server`·`deploy/host`·`deploy/release`·`validation`). 보호 파일(`pipeline/extract/engines/**`, `common/core/{contract,repfmt,terms,text}.py`)은 손대지 않는다.
+  2. "ETL 폴더" = `pipeline/` 안 `extract`·`transform`·`load`. 최상위 폴더 이름 `pipeline/`은 그대로(이미지·명령 이름 그대로 — 코드 폴더만 교체).
+  3. `run_docs.py`는 서버 호스트에서 `docker exec`로 지휘만 하고, 판단(원천 목록·중복·레인·게시)은 ETL 함수로 옮긴다 — rn-05를 이 행과 함께 한다.
+  4. 서버 배치: 이미지 폴더(`sbl_images-main/`)는 루트 한 단계 위 공용 폴더에 하나(예 `/home/sbl/`), 벌마다 루트(`dev/`·`dev-hong/`) — 문서만(op-13 규칙 2, README §5-0).
+- 할 일: 중복·자리·이름 목록을 표로 먼저 사람에게 보이고(옮김 / 합침 / 이름 바꿈 / 그대로 + 이유) 승인 뒤 진행. 옮기는 커밋과 나누는 커밋은 따로(CLAUDE.md §1).
+- 열린 것: 목록 표 승인.
+- QA: 정리 전후 같은 문서 묶음의 대표 결과·ParsingMeta 행·게시 파일이 같음 · selftest·pytest 기준선 유지 · `check_modules` 통과.
+- Status: todo
+
 <a id="pl-27"></a>
 ## pl-27 · 프로세스 종료 정리 — 임시 설정 파일·PID 기록 지움, 자식 회수
 - 이유: 덮기 설정 파일(`settings-*.yaml`)이 임시 폴더에 쌓이고, 시간 초과로 끝낸 자식의 손자가 좀비로 남았다.

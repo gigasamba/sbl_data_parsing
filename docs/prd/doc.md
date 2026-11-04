@@ -37,7 +37,7 @@
   2. 실행 이미지 시작 `deploy/docker/runtime_entry.sh`: ① `/app/deploy`에 코드 폴더가 없으면 종료 2 ② 이미지 의존성 지문(`/app/docker/deps_hash`) ≠ 코드의 `deploy/docker/DEPS_HASH`(`deploy/release/deps_hash.sh` — requirements-core·image의 sha256)면 종료 2 ③ 이미지 판·코드 커밋(`CODE_COMMIT`)을 한 줄 남기고 코드 폴더의 `deploy/docker/entrypoint.sh`로 넘긴다.
   3. 코드 폴더 묶음 = 이 커밋의 git 추적 파일 + `CODE_COMMIT`, `valid_env/`·`validation/` 뺌 — `build_ship.sh`가 `output/ship/code-<버전>-<커밋>.tar.gz`로 만든다. `/app/deploy`에 읽기 전용(`:ro,z`)으로 붙인다.
   4. compose는 컨테이너마다 파일 하나 — `compose.pipeline.yml`·`compose.pipeline-mcp.yml`·`compose.mcp-server.yml`, 개발 서버는 각각 `compose.code.yml`·`compose.code.pipeline-mcp.yml`·`compose.code.mcp-server.yml`을 덧붙인다(셸에 `CODE_DIR`가 있거나, 이미지가 `*-runtime`이고 `CODE_DIR`가 비면 자기 코드 폴더 — `image_vars.sh` `code_dir_default`).
-  5. 반입: 코드 git과 이미지 git(`sbl_images` — 판 폴더마다 분할 조각 + `load.sh`)을 zip으로 받아 한 폴더에 푼다. README §5-0.
+  5. 반입: 이미지 git(`sbl_images` — 판 폴더마다 분할 조각 + `load.sh`)은 공용 폴더에, 코드 git은 루트에 zip으로 받아 푼다. README §5-0.
 - 파일: `deploy/docker/{Dockerfile,runtime_entry.sh,DEPS_HASH}`, `deploy/release/{build_ship.sh,deps_hash.sh}`, `deploy/host/compose/`, `deploy/host/scripts/image_vars.sh`.
 - QA: `tests/server/common/test_deps_hash.py`(DEPS_HASH ↔ requirements) · 통과. 실행 이미지에 코드 트리를 붙여 `selftest` `[판정]` 통과 · 코드 없이 띄우면 종료 2.
 - Status: done
@@ -82,7 +82,7 @@
 - 이유: 서버 아무 자리에 폴더 하나(예 `/home/dev/`)를 만들어 그 안에서 실행한다. 판(버전)마다 루트를 새로 만들어 판끼리 섞이지 않게 하고, 검색 DB(pgvector — 따로 떠 있는 PG 컨테이너)만 함께 본다(사용자 11-04).
 - 규칙:
   1. 루트 = 코드 zip을 푼 폴더의 부모. 호스트 스크립트는 자기 위치에서 루트를 구한다(env·고정 경로 없음).
-  2. 루트 바로 아래: `settings.yaml`(git의 `settings.sample.yaml`을 복사해 이름을 바꾸고, 맨 위 `required`의 빈 필수값을 직접 채움) · `edw_chain.yaml` · 코드 폴더(`sbl_data_parsing-<판>/`) · 이미지 폴더(`sbl_images-main/`) · `output/`(결과 — `output/_mcp_parse/jobs` 포함) · `backup/`.
+  2. 루트 바로 아래: `settings.yaml`(git의 `settings.sample.yaml`을 복사해 이름을 바꾸고, 맨 위 `required`의 빈 필수값을 직접 채움) · `edw_chain.yaml` · 코드 폴더(`sbl_data_parsing-<판>/`) · `output/`(결과 — `output/_mcp_parse/jobs` 포함) · `backup/`. 이미지 폴더(`sbl_images-main/`)는 한 단계 위 공용 폴더(예 `/home/sbl/`)에 하나 — 한 이미지를 여러 벌(op-15)이 같이 쓴다(사용자 11-04).
   3. `/srv/rag`, `env/`(`SERVER_ENV_DIR`), `code/live` 링크를 만들거나 쓰지 않는다.
   4. 새 판 = 새 루트: 앞 루트의 `settings.yaml`·`edw_chain.yaml`을 복사해 오고 새 코드·이미지를 푼다. 검색 DB는 같은 PG를 그대로 본다. 새 문서 판정은 EDW 기준(pl-23)이라 `output/`이 비어도 이어서 돈다. 되돌리기 = 앞 루트에서 다시 띄움.
   5. 컨테이너는 compose로 띄운다(`dc.sh up`). 상태 보기는 둘 다 안내 — 서버 전체는 `podman ps`·`docker ps`(root로 띄웠으면 `sudo`), 우리 묶음만은 `dc.sh ps`.

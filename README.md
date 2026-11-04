@@ -327,7 +327,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 ## 5. 서버(내부망)에 배포하고 실행하기
 
-서버는 **루트 폴더 하나**(서버 아무 자리 — 예 `/home/dev/`)에서 동작한다. 루트 = 코드 zip을 푼 폴더(코드 폴더)의 부모이고, 호스트 스크립트는 자기 자리에서 루트를 구한다. 루트 바로 아래에 **설정 파일**(`settings.yaml`·`edw_chain.yaml`) **· 코드 폴더**(`sbl_data_parsing-<판>/`) **· 이미지 폴더**(`sbl_images-main/`) **· 결과 폴더**(`output/`) **· 백업**(`backup/`)이 있다. 판(버전)마다 새 루트를 만든다(§5-8). 서버 명령은 모두 root 셸의 코드 폴더에서 실행한다.
+서버는 **공용 폴더 하나**(예 `/home/sbl/`) 아래에서 동작한다. 공용 폴더 바로 아래에 **이미지 폴더**(`sbl_images-main/` — 서버에 한 번 불러오면 모든 벌이 같이 씀)와 **루트**(한 벌 = 루트 하나 — 예 `dev/`, 개발자별 `dev-hong/`)가 있다. 루트 = 코드 zip을 푼 폴더(코드 폴더)의 부모이고, 호스트 스크립트는 자기 자리에서 루트를 구한다. 루트 바로 아래에 **설정 파일**(`settings.yaml`·`edw_chain.yaml`) **· 코드 폴더**(`sbl_data_parsing-<판>/`) **· 결과 폴더**(`output/`) **· 백업**(`backup/`)이 있다. 판(버전)마다 새 루트를 만든다(§5-8). 서버 명령은 모두 root 셸의 코드 폴더에서 실행한다.
 
 > 0.1.0 → 0.2.0 올리기는 [release-and-patch §8](docs/operations/release-and-patch.md#8-020-배포--사람이-할-일)(8-3 — 복사해 붙이는 명령과 기대 출력)을 따른다. 아래는 새 서버 설치다.
 
@@ -338,19 +338,21 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | ① 개발 반입 | PC → 개발 서버 | `local` → `dev` | 실행 이미지 `data-pipeline-runtime`·`mcp-server-runtime`(PC가 빌드 — §5-2) | 코드 git zip을 푼 폴더를 `/app/deploy`에 읽기 전용 마운트(스크립트가 자기 코드 폴더를 붙임). 코드만 바꿀 때 = 새 루트에 새 코드 zip(§5-8) |
 | ② 운영 반입 | 개발 서버 → 운영 서버 | `dev` → `prd` | 코드가 든 이미지 `data-pipeline`·`mcp-server`(개발 서버에서 `bake.sh` — [release-and-patch §1-2](docs/operations/release-and-patch.md#1-2-개발--운영--시험한-그대로-굽기)) | 이미지 안(마운트 없음, `CODE_DIR` 두지 않음) |
 
-반입은 git 저장소 두 개를 **zip으로 받아 루트 폴더에 푼다**:
+반입은 git 저장소 두 개를 **zip으로 받아** 이미지는 공용 폴더에, 코드는 루트에 푼다:
 - 코드: `gigasamba/sbl_data_parsing`의 받을 판(태그·커밋). zip을 푼 폴더(`sbl_data_parsing-<판>`)가 그대로 코드 폴더다. zip은 `CODE_COMMIT`을 채운다(git clone은 안 채움 — 시작 로그의 커밋이 틀 그대로).
 - 이미지: 비공개 `jehunlee302/sbl_images`. 판 폴더마다 실행 이미지를 분할한 조각과 `load.sh`가 있다.
 
 ```
-<루트>/                                       ← 예 /home/dev/ (판마다 새 루트)
-├── settings.yaml  edw_chain.yaml            ← settings.sample.yaml·기본 사슬을 dc.sh init이 없을 때만 복사(새 판이면 앞 루트에서 복사해 옴)
-├── sbl_data_parsing-<판>/                   ← 코드 폴더(VERSION · CODE_COMMIT · deploy/docker/DEPS_HASH)
-├── sbl_images-main/                         ← load.sh · <판>/BUILD.txt · <판>/<이미지>/*.tar.gz.part* + *.sha256
-├── output/                                  ← 결과 폴더(dc.sh init이 만듦 — 아래 _ 붙은 폴더는 임시 자리)
-│   ├── _docflow/<번호>/  _warm/  _mcp_parse/jobs/  _llm_spend/
-│   └── logs/                                ← DB 로그를 못 쓸 때의 예비 파일만
-└── backup/                                  ← pg_dump 백업·설정 사본(700)
+<공용 폴더>/                                  ← 예 /home/sbl/
+├── sbl_images-main/                         ← 공용 — load.sh · <판>/BUILD.txt · <판>/<이미지>/*.tar.gz.part* + *.sha256(서버에 한 번 load)
+├── <루트>/                                   ← 한 벌 — 예 dev/ (판마다 새 루트 — dev-0.2.0/처럼)
+│   ├── settings.yaml  edw_chain.yaml        ← settings.sample.yaml·기본 사슬을 dc.sh init이 없을 때만 복사(새 판이면 앞 루트에서 복사해 옴)
+│   ├── sbl_data_parsing-<판>/               ← 코드 폴더(VERSION · CODE_COMMIT · deploy/docker/DEPS_HASH)
+│   ├── output/                              ← 결과 폴더(dc.sh init이 만듦 — 아래 _ 붙은 폴더는 임시 자리)
+│   │   ├── _docflow/<번호>/  _warm/  _mcp_parse/jobs/  _llm_spend/
+│   │   └── logs/                            ← DB 로그를 못 쓸 때의 예비 파일만
+│   └── backup/                              ← pg_dump 백업·설정 사본(700)
+└── <다른 루트>/                              ← 개발자별 벌(예 dev-hong/ — 아래 "한 서버에 여러 벌")
 ```
 
 검색 DB(pgvector — 따로 떠 있는 PG 컨테이너)는 루트 밖이라 판이 바뀌어도 같은 DB를 본다.
@@ -370,8 +372,8 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 **서버 설치 순서**(처음 한 번 — root 셸, `<루트>` = 만든 루트 폴더, `<코드>` = 코드 zip을 푼 폴더)
 
 0. `export DOCKER=podman` — 위 "미리 있어야 하는 것"을 확인한다.
-1. 루트 폴더를 만들고(`mkdir -p /home/dev`처럼 아무 자리) 두 zip을 그 안에 푼다.
-2. 이미지를 불러온다: `DOCKER=podman bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다 — 0.2.0 코드는 0.1.0 실행 이미지(`f0fcc30bd067bc2f`)를 쓴다: `load.sh 0.1.0`.
+1. 공용 폴더와 루트를 만들고(`mkdir -p /home/sbl/dev`처럼 아무 자리) 이미지 zip은 공용 폴더(`/home/sbl/`)에, 코드 zip은 루트(`/home/sbl/dev/`)에 푼다.
+2. 이미지를 불러온다(공용 폴더에서 — 서버에 한 번, 이미 불러온 판이면 건너뜀): `cd /home/sbl && DOCKER=podman bash sbl_images-main/load.sh <이미지 판>` — 조각 sha256 확인 → 합치기 → load, 끝에 `<판>/BUILD.txt`(빌드 커밋·DEPS_HASH). **코드의 `deploy/docker/DEPS_HASH`가 `BUILD.txt`의 DEPS_HASH와 같은 판**을 고른다 — 0.2.0 코드는 0.1.0 실행 이미지(`f0fcc30bd067bc2f`)를 쓴다: `load.sh 0.1.0`.
 3. 루트 채우기: `cd <루트>/<코드> && bash deploy/host/scripts/dc.sh init --group <운영 그룹>` — `output/`·`output/_mcp_parse/jobs`(UID 10001, 2775)·`backup/`(700), 코드 폴더 a+rX, `settings.sample.yaml` → `<루트>/settings.yaml`, `resources/config/edw_chain.yaml` → `<루트>/edw_chain.yaml`(둘 다 없을 때만, 10001:<운영 그룹> 640). 끝에 빈 필수 칸 **이름**을 찍는다. 여러 번 불러도 안전하다.
 4. 설정을 채운다 — `<루트>/settings.yaml` 맨 위 `required`의 빈 값(§5-3 ② "꼭 채울 값"). 이미지 칸에는 2에서 불러온 실행 이미지 태그(`data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0`). 자원 상한도 본다(아래).
    - EDW 표 설명 자료(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료, 받는 곳은 refactor.md C-91)를 루트 아래 결과 폴더에 복사하고(`<루트>/output/edw_meta/`, UID 10001이 읽을 수 있게) `search.edw_meta.dir: /app/output/edw_meta`를 적는다. 없으면 `edw_meta` 도구만 `not_configured`로 답한다(나머지 도구는 그대로).
@@ -398,7 +400,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 - 방화벽에서 `search.server.port`(기본 8765)를 연다 — 예: `firewall-cmd --add-port=8765/tcp --permanent && firewall-cmd --reload`.
 
 **한 서버에 여러 벌 띄우기(개발자별 — 컨테이너 이름·포트 바꾸기)**
-- 루트 하나가 한 벌이다. 개발자마다 루트를 새로 만들어(예 `/home/dev-hong/`) 위 설치 순서 1~10을 따로 한다.
+- 루트 하나가 한 벌이다. 개발자마다 공용 폴더 아래 루트를 새로 만들어(예 `/home/sbl/dev-hong/`) 위 설치 순서를 따로 한다. 이미지는 공용 폴더에서 이미 불러왔으므로 2번은 건너뛴다.
 - 그 루트의 `settings.yaml`에 아래 칸을 벌마다 다르게 적는다. compose를 직접 부르지 않는다 — `dc.sh`가 이 값으로 이름·포트를 채운다.
 
 ```yaml
@@ -419,7 +421,7 @@ required:
 ```
 - 명령(root 셸 — 이미지는 서버에 한 번만 불러 두면 벌끼리 같이 쓴다):
 ```bash
-mkdir -p /home/dev-hong && cd /home/dev-hong && unzip <코드 zip>          # 새 루트 + 코드 폴더
+mkdir -p /home/sbl/dev-hong && cd /home/sbl/dev-hong && unzip <코드 zip>  # 공용 폴더 아래 새 루트 + 코드 폴더
 cd sbl_data_parsing-<판>
 bash deploy/host/scripts/dc.sh init --group <운영 그룹>                    # <루트>/settings.yaml 생김 → 위 칸을 채움
 bash deploy/host/scripts/dc.sh up -d data-pipeline                         # → data-pipeline-hong

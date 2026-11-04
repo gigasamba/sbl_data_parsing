@@ -192,7 +192,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 **0. 셸 준비** — 셸 변수는 settings.yaml에서 옮겨 적는다(파일을 화면에 띄우지 않는다).
 ```bash
 export DOCKER=podman                                       # ops.host.docker 값(비우면 podman)
-OLD_SF=<0.1.0이 쓰는 settings.yaml 경로>  OLD_CODE=<0.1.0 코드 폴더>  ROOT=<새 루트 — 예 /home/dev>
+OLD_SF=<0.1.0이 쓰는 settings.yaml 경로>  OLD_CODE=<0.1.0 코드 폴더>  ROOT=<새 루트 — 예 /home/sbl/dev>
 PG_C=<required.deploy.pg_container 값>  PG_U=<required.pg.user 값>  PG_D=<required.pg.db 값>
 OLD_SCHEMA=<지금 required.pg.db_schema 값>  NEW_SCHEMA=<새 스키마 이름 — DB 담당과 정함(C-74)>
 mkdir -p "$ROOT" && TS=$(date +%Y%m%d-%H%M); BK=$ROOT/backup/0.2.0-$TS; mkdir -p "$BK" && chmod 700 "$ROOT/backup" "$BK"
@@ -219,7 +219,7 @@ $DOCKER exec -i "$PG_C" pg_restore -l < "$BK/pg-0.1.0.dump" | head -5           
 - **[dev]** 0.1.0 실행 이미지 + 0.2.0 코드 zip:
 ```bash
 cd "$ROOT" && unzip -q <코드 zip>                                         # 기대: $ROOT/<코드>/
-DOCKER=$DOCKER bash sbl_images-main/load.sh 0.1.0                        # 0.1.0 실행 이미지가 이미 있으면 건너뜀 — 기대: BUILD.txt(DEPS_HASH f0fcc30bd067bc2f)
+(cd "$ROOT/.." && DOCKER=$DOCKER bash sbl_images-main/load.sh 0.1.0)    # 이미지 폴더는 루트 한 단계 위 공용 폴더 — 0.1.0 실행 이미지가 이미 있으면 건너뜀 — 기대: BUILD.txt(DEPS_HASH f0fcc30bd067bc2f)
 cd "$ROOT/<코드>" && bash deploy/host/scripts/dc.sh init --group <운영 그룹>   # 기대: "[dc init] 루트: $ROOT" · output·backup · settings.yaml·edw_chain.yaml "만듦"
 cat CODE_COMMIT                                                          # 기대: 그 커밋
 ```
