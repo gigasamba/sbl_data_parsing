@@ -1,16 +1,13 @@
-# 새벽 배치 — run_docs.py(문서별 flow — 서버 입구 하나, 사용자 10-31)를 NIGHTLY_TIME 시각에
-# 설치(op-13 — 코드 폴더에서): sudo bash deploy/host/scripts/dc.sh timers — @CODE_DIR@를 그 코드 폴더로 채워 /etc/systemd/system에 쓰고 타이머를 켬.
-#   새 루트(새 판)에서 다시 부르면 그 루트로 바뀐다. 이 파일을 그대로 복사하지 않는다(@CODE_DIR@가 남음).
-#   S6b(사용자 10-27) — unit 이름이 바뀜(옛 rag-nightly.*): 옛 unit은 `sudo systemctl disable --now rag-nightly.timer` 뒤 파일 삭제(refactor.md C-29)
-# 11-01 — 옛 모듈 순서 배치(NIGHTLY_MODULES·NIGHTLY_PUBLISH·NIGHTLY_MAX_NEW·PARSE_DEADLINE, trigger.sh night)는 지움.
+# 새벽 배치 — run_docs.py(문서별 flow — 서버 입구 하나)를 NIGHTLY_TIME 시각에.
+# 설치: 코드 폴더에서 `sudo bash deploy/host/scripts/dc.sh timers`(@CODE_DIR@를 채워 쓰고 타이머를 켬 — 이 파일을 그대로 복사하지 않는다).
 #   스케줄 = NIGHTLY_TIME(settings.yaml ops.nightly.time, HH:MM — 비우면 새벽 배치 없음, pl-32) — 타이머가 5분마다 깨우고
 #   trigger.sh scheduled가 그 시각부터 5분 안일 때만 `run_docs.py --start-offset 0 --skip-done`을 부름(그 밖에는 말없이 끝).
 #   상한: run_docs --max-docs·--deadline(ops.nightly.max_docs·deadline) + TimeoutStartSec(아래 — 마지막 안전판). 사람이 따로 돌린 run_docs와는
 #   run_docs 잠금(batch_progress/run_docs.lock — 도는 중이면 종료 코드 75)으로 겹치지 않는다(pl-18).
-# 서버 설정은 settings.yaml 한 파일(<루트>/settings.yaml — 루트 = 코드 폴더의 부모, env-guide.md §0). ExecStart가 settings_env.sh load_settings로 호스트 칸(NIGHTLY_TIME·DATA_PIPELINE_IMAGE·RAG_OUT·DOC_SRC·RUN_ENV 등)을
-#   셸 env로 받은 뒤 trigger.sh scheduled가 NIGHTLY_TIME을 본다(RUN_ENV는 settings.yaml required.env.run_env에만 — unit에 적지 않음). 설정 파일이 없거나 틀리면 종료 코드 2
-#   설정 파일을 다른 자리에 두면 Environment=SETTINGS_FILE=<파일>을 더한다.
-#   호스트 python에는 PyYAML이 있어야 한다(settings_env.sh — host_env.py, 사용자 11-02 — 이미지 안에서 꺼내던 길은 지움).
+# 서버 설정은 settings.yaml 한 파일(<루트>/settings.yaml — 루트 = 코드 폴더의 부모, env-guide.md §0). trigger.sh가 settings_env.sh load_settings로
+#   호스트 칸(NIGHTLY_TIME·DATA_PIPELINE_IMAGE·RAG_OUT·DOC_SRC·RUN_ENV 등)을 셸 env로 받는다(RUN_ENV는 settings.yaml required.env.run_env에만 — unit에 적지 않음).
+#   설정 파일이 없거나 틀리면 종료 코드 2. 설정 파일을 다른 자리에 두면 Environment=SETTINGS_FILE=<파일>을 더한다.
+#   호스트 python에는 PyYAML이 있어야 한다(settings_env.sh — host_env.py).
 [Unit]
 Description=RAG 새벽 배치 — run_docs.py(문서별 flow)를 NIGHTLY_TIME 시각에만(trigger.sh scheduled)
 Wants=network-online.target
@@ -21,10 +18,9 @@ Type=oneshot
 # 서버 컨테이너 도구 = root podman 하나(사용자 10-30 검토 B4 — 이미지를 sudo podman load로 넣은 저장소와 같게). docker 서버면 User=rag(docker 그룹)·DOCKER=docker.
 User=root
 Environment=DOCKER=podman
-# WorkingDirectory = 코드 폴더(dc.sh timers가 채움) — 설정 파일은 그 부모(루트)에서 settings_env.sh가 찾는다. trigger.sh는 bash로 부른다.
+# WorkingDirectory = 코드 폴더(dc.sh timers가 채움) — 설정 파일은 그 부모(루트)에서 settings_env.sh가 찾는다.
 WorkingDirectory=@CODE_DIR@
-# $$ = 셸에 넘기는 $ — systemd가 ExecStart의 $변수를 먼저 바꿔 버림. %% = 셸에 넘기는 %(date 형식 — systemd 지정자 %F 등으로 읽혀 unit이 안 올라가던 것, S7e1 systemd-analyze). 시각 게이트는 trigger.sh scheduled가 본다(옛 trigger.sh night는 11-01에 지움).
-ExecStart=/bin/bash -c '. deploy/host/scripts/settings_env.sh && load_settings || exit $$?; exec /bin/bash deploy/host/scripts/trigger.sh scheduled'
+ExecStart=/bin/bash deploy/host/scripts/trigger.sh scheduled
 TimeoutStartSec=6h
 # 75 = 마감 도달·다른 run_docs가 도는 중(pl-18) — 예정된 끝이라 unit 실패로 치지 않음. 1(실패 문서)·2(설정)는 실패.
 SuccessExitStatus=75

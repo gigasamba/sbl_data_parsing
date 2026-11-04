@@ -274,28 +274,16 @@ def main():
     ap.add_argument("--out", default=str(ROOT / "output" / "secure"))
     a = ap.parse_args()
     out = Path(a.out)
-    from common.core.runlog import note
-
     if a.cmd == "scan":
-        rows, c = scan(a.src, out)
-        note(f"문서 {len(rows)}개 · " + " · ".join(f"{k} {n}" for k, n in c.most_common()))
+        scan(a.src, out)
     elif a.cmd == "probe":
-        rows = probe(a.src, out)
-        note(
-            f"실제 열기 {len(rows)}개 · 읽힘 {sum(r['result'].startswith('읽힘') for r in rows)} · 실패 {sum(r['result'].startswith('실패') for r in rows)}"
-        )
+        probe(a.src, out)
     elif a.cmd == "decrypt":
-        res = decrypt(a.src, out)
-        note(
-            f"복호화 {sum(x[2].startswith('복호화') for x in res)}건 · 실패·건너뜀 {sum(not x[2].startswith(('그대로', '복호화')) for x in res)}건 → {out / 'decrypted'}"
-        )
+        decrypt(a.src, out)
     else:
         purge(out)
 
 
 if __name__ == "__main__":
     utf8_stdout()
-    from common.core.runlog import session
-
-    with session("secure_docs"):
-        main()
+    main()

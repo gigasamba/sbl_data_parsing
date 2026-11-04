@@ -11,6 +11,8 @@
 # 종료 코드: compose 그대로 · 설정을 못 읽으면 load_settings의 코드(2) · init/check는 아래 설명.
 set -uo pipefail
 cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
+if [ -n "${DC_ROOT:-}" ]; then RAG_ROOT=$DC_ROOT; fi   # 시험 루트(init) — settings_env.sh는 이미 있는 RAG_ROOT를 씀(결과 폴더 기본도 그 아래)
+. deploy/host/scripts/settings_env.sh   # 루트 RAG_ROOT·load_settings 한 곳(값은 아래 load_settings에서)
 
 # init — 서버 루트(op-13 — 이 코드 폴더의 부모)를 한 번에 채운다(값·파일 내용은 찍지 않음). 여러 번 불러도 안전.
 #   폴더: <결과 폴더>(UID 10001:<그룹>, 2775 — setgid) · <결과 폴더>/_mcp_parse/jobs(같음) · <루트>/backup(700)
@@ -23,7 +25,7 @@ cd "$(dirname "$0")/../../.."   # deploy/host/scripts/ → 코드 폴더 루트
 #   root가 아니면 거부(종료 코드 3 — 주인을 10001로 못 바꿔 반쯤 만든 폴더가 남지 않게).
 #   끝에 settings.yaml `required:` 중 빈 칸 이름(값은 안 찍음). 종료 코드: 0 · 2 인자 틀림 · 3 root 아님 · 4 edw_chain.yaml 자리에 폴더(init 전에 컨테이너를 띄움).
 dc_init() {
-  local group="" root=${DC_ROOT:-$(dirname "$(pwd)")} test=${DC_ROOT:+1} out jobs sf chain
+  local group="" root=$RAG_ROOT test=${DC_ROOT:+1} out jobs sf chain
   while [ $# -gt 0 ]; do
     case "$1" in
       --group) group=${2:-}; shift 2 || true ;;
@@ -36,8 +38,7 @@ dc_init() {
   [ -n "$group" ] || [ -n "$test" ] || { echo "[dc init] --group <운영 그룹> 필요(결과 폴더·settings.yaml 그룹 — 운영 계정이 고치고 지움)" >&2; return 2; }
   sf=$root/settings.yaml
   chain=$root/edw_chain.yaml
-  if [ -f "$sf" ] && [ -z "${RAG_OUT:-}${MCP_JOBS_DIR:-}" ]; then
-    . deploy/host/scripts/settings_env.sh
+  if [ -f "$sf" ]; then   # 셸 env에 이미 있는 이름은 load_settings가 덮지 않음
     SETTINGS_FILE=$sf load_settings 2>/dev/null || echo "[dc init] settings.yaml에서 경로를 못 읽음 — 기본 경로를 씀"
   fi
   out=${RAG_OUT:-$root/output}
@@ -50,24 +51,20 @@ dc_init() {
       if [ -z "$test" ]; then chown "10001:$group" "$1"; else echo "  (시험 — 주인 바꾸기 건너뜀)"; fi
     fi
   }
+  _cp() {   # _cp <원본> <대상> — 대상이 없을 때만 복사(있으면 절대 덮지 않음), 640 · 10001:<그룹>
+    if [ -e "$2" ]; then echo "  있음  $2(덮지 않음)"; return 0; fi
+    cp "$1" "$2" && chmod 640 "$2" && echo "  만듦  $2($1에서)" || return 1
+    if [ -z "$test" ]; then chown "10001:$group" "$2"; fi
+  }
   _mk "$out" 2775 1
   _mk "$jobs" 2775 1
   _mk "$root/backup" 700 0
   if [ -z "$test" ]; then chmod -R a+rX . && echo "  권한  $(pwd) (a+rX)"; else echo "  (시험 — 코드 폴더 a+rX 건너뜀)"; fi
-  if [ -f "$sf" ]; then
-    echo "  있음  $sf(덮지 않음)"
-  else
-    cp settings.sample.yaml "$sf" && chmod 640 "$sf" && echo "  만듦  $sf(settings.sample.yaml에서)"
-    if [ -z "$test" ]; then chown "10001:$group" "$sf"; fi
-  fi
+  _cp settings.sample.yaml "$sf"
   if [ -d "$chain" ]; then   # docker가 init 전에 띄운 마운트로 빈 폴더를 만든 경우 — 지우지 않고 멈춤(앱은 IsADirectoryError)
     echo "[dc init] $chain 자리에 폴더가 있음 — 컨테이너를 init 전에 띄운 흔적: 비어 있으면 rmdir 뒤 다시(종료 4 — 지우지 않음)" >&2; return 4
-  elif [ -e "$chain" ]; then
-    echo "  있음  $chain(덮지 않음)"
-  else
-    cp resources/config/edw_chain.yaml "$chain" && chmod 640 "$chain" && echo "  만듦  $chain(resources/config/edw_chain.yaml에서 — 쓰려면 ops.paths.edw_chain)"
-    if [ -z "$test" ]; then chown "10001:$group" "$chain"; fi
   fi
+  _cp resources/config/edw_chain.yaml "$chain"   # 앱은 ops.paths.edw_chain을 적었을 때만 씀
   echo "[dc init] settings.yaml에서 아직 비어 있는 필수 칸(값을 채울 것 — 이름만):"
   PYTHONIOENCODING=utf-8 "${PY:-python3}" - "$sf" <<'PY' || echo "  (확인 못 함 — 호스트 python3에 PyYAML 필요)"
 import sys
@@ -143,7 +140,7 @@ case "${1:-}" in
   init) shift; dc_init "$@"; exit $? ;;
   timers) dc_timers; exit $? ;;
 esac
-. deploy/host/scripts/settings_env.sh && load_settings || exit $?
+load_settings || exit $?
 case "${1:-}" in
   check) dc_check; exit $? ;;
 esac

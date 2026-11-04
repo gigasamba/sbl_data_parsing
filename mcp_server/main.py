@@ -91,7 +91,7 @@ def _transport_security(host):
 def _sdk_logging():
     """FastMCP가 만들어질 때 root에 거는 기본 처리(INFO, 일반 글자, stderr)를 SDK(mcp.*) 줄에서 끊는다.
     요청마다 나오는 INFO는 감사 행(mcp.call)과 겹치므로 common.log.level이 DEBUG일 때만 남기고, 그 밖의 줄(WARNING 이상,
-    예외)은 비밀값을 가린 JSON으로 stderr에 낸다 — stdio의 stdout은 JSON-RPC 전용이고 감사 로그(logs/mcp.jsonl)와도 섞지 않는다."""
+    예외)은 비밀값을 가린 JSON으로 stderr에 낸다 — stdio의 stdout은 JSON-RPC 전용이고 감사 로그(output/logs/mcp.jsonl)와도 섞지 않는다."""
     from common.config.settings import cfg
 
     level = cfg().log.level

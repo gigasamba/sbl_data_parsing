@@ -1,7 +1,8 @@
 #!/bin/bash
 # settings.yaml → 셸 env 다리(S7e1 정식 — refactor_plan 5-2 · D-028 ⑭, 사용자 10-27 Q3~Q5). 비밀 칸은 내보내지 않는다(컨테이너 안 앱이 붙인 설정 파일에서 읽음).
-#   source: . deploy/host/scripts/settings_env.sh && load_settings || exit $?   — trigger.sh·run_tool.sh·mcp_up.sh·systemd nightly가 씀
-#     루트(op-13): 코드 폴더(deploy/가 든 폴더)의 부모 — 스크립트 자리에서 구한다(env·고정 경로 없음). RAG_ROOT로 export(compose 마운트 원본).
+#   source: . deploy/host/scripts/settings_env.sh && load_settings || exit $?   — trigger.sh·run_tool.sh·mcp_up.sh·dc.sh·prune_old.sh가 씀
+#     루트(op-13): 코드 폴더(deploy/가 든 폴더)의 부모 — 스크립트 자리에서 구한다(고정 경로 없음 — 이미 셸에 RAG_ROOT가 있으면 그 값:
+#       부른 부모 스크립트·dc.sh의 시험 루트 DC_ROOT). RAG_ROOT로 export(compose 마운트 원본).
 #     설정 파일: SETTINGS_FILE(있으면) > <루트>/settings.yaml > (RUN_ENV=local) 저장소 루트 settings.yaml
 #     결과 폴더 RAG_OUT: settings.yaml common.host.output_root(적었을 때) > <루트>/output
 #     없으면 종료 코드 2
@@ -17,7 +18,7 @@
 #   op-10 — 셸 env와 settings.yaml(ops.host.docker)에 없으면 podman(서버 기본 컨테이너 도구), podman이 없으면 docker(docker_default).
 docker_default() { command -v podman >/dev/null 2>&1 && echo podman || echo docker; }   # op-10 — 서버(RHEL) 기본 podman, 없으면 docker(bake.sh와 같음)
 _SETTINGS_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)   # 코드 폴더(deploy/host가 바로 아래 — 서버 sbl_data_parsing-<판> · PC 저장소 루트)
-RAG_ROOT=$(dirname "$_SETTINGS_ROOT")   # 서버 루트(op-13) — 코드 폴더의 부모. settings.yaml·edw_chain.yaml·output/이 바로 아래
+RAG_ROOT=${RAG_ROOT:-$(dirname "$_SETTINGS_ROOT")}   # 서버 루트(op-13) — 코드 폴더의 부모. settings.yaml·edw_chain.yaml·output/이 바로 아래
 
 settings_export() {   # settings_export <env|sh> [<절>...] — 줄을 표준 출력에(절이 없으면 호스트 칸 전부), 실패면 0 아닌 종료 코드(안내는 표준 오류)
   local fmt=$1
@@ -40,23 +41,20 @@ load_settings() {   # 위 설명(source) — 성공 0 · 설정 파일 없음·�
   fi
   case "$SETTINGS_FILE" in /*) ;; *) SETTINGS_FILE=$PWD/$SETTINGS_FILE ;; esac
   export SETTINGS_FILE
-  if [ "${SETTINGS_LOADED:-}" = "$SETTINGS_FILE" ]; then   # 이 셸(또는 부른 부모 — systemd nightly → trigger.sh)이 같은 파일로 이미 냄
-    DOCKER=${DOCKER:-$(docker_default)}; export DOCKER
-    RAG_OUT=${RAG_OUT:-$RAG_ROOT/output}; export RAG_OUT
-    return 0
-  fi
-  local out line name
-  out=$(settings_export sh) || { echo "[설정] 설정 파일에서 호스트 값을 읽지 못함($SETTINGS_FILE) — 위 안내 확인" >&2; return 2; }
-  while IFS= read -r line; do
-    case "$line" in "export "*=*) ;; *) continue ;; esac
-    name=${line#export }; name=${name%%=*}
-    case "$name" in ''|*[!A-Za-z0-9_]*) continue ;; esac
-    eval "[ -n \"\${$name+x}\" ]" && continue          # 셸 env에 이미 있으면 그 값(사람이 한 번만 덮어 부를 때)
-    eval "$line"
-  done <<EOF
+  if [ "${SETTINGS_LOADED:-}" != "$SETTINGS_FILE" ]; then   # 같으면 이 셸(또는 부른 부모 스크립트)이 같은 파일로 이미 냄
+    local out line name
+    out=$(settings_export sh) || { echo "[설정] 설정 파일에서 호스트 값을 읽지 못함($SETTINGS_FILE) — 위 안내 확인" >&2; return 2; }
+    while IFS= read -r line; do
+      case "$line" in "export "*=*) ;; *) continue ;; esac
+      name=${line#export }; name=${name%%=*}
+      case "$name" in ''|*[!A-Za-z0-9_]*) continue ;; esac
+      eval "[ -n \"\${$name+x}\" ]" && continue          # 셸 env에 이미 있으면 그 값(사람이 한 번만 덮어 부를 때)
+      eval "$line"
+    done <<EOF
 $out
 EOF
-  export SETTINGS_LOADED=$SETTINGS_FILE   # 내부 신호 — 하위 스크립트가 같은 파일을 다시 읽지 않게
+    export SETTINGS_LOADED=$SETTINGS_FILE   # 내부 신호 — 하위 스크립트가 같은 파일을 다시 읽지 않게
+  fi
   DOCKER=${DOCKER:-$(docker_default)}; export DOCKER   # op-10 — 셸 env > settings.yaml(ops.host.docker) > podman(없으면 docker)
   RAG_OUT=${RAG_OUT:-$RAG_ROOT/output}; export RAG_OUT   # op-13 — 적지 않으면 <루트>/output
   return 0

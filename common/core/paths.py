@@ -71,6 +71,7 @@ CRITERIA_FILE = RES_ROOT / "config" / "criteria.json"  # 판정 문턱값 정본
 STACK_FILE = RES_ROOT / "config" / "pipeline_stack.json"  # 엔진 구성(D-017 — S8에 DB 판 표의 시드·PC 대체)
 GLOSSARY_ROOT = RES_ROOT / "vocab" / "glossary"  # 용어집·명부 예시·고객 seed(운영 사전은 env GLOSSARY_DIR — 이 값은 코드 기본·selftest용)
 APP_ROOT = PROJ_ROOT  # 런타임 루트(output/·assets/·docker/가 있는 곳) — PC=저장소 루트, 이미지=/app(둘 다 PROJ_ROOT와 같음, 위 설명)
+LOG_DIR = APP_ROOT / "output" / "logs"  # 파일 로그 한 곳(op-13) — PC JSON 로그·DB 실패 예비 기록의 기본 폴더
 SPEND_DIR = APP_ROOT / "output" / "_llm_spend"  # 하루 지출 장부 기본 폴더(spend_file 비었을 때 — common.ai.guard.ledger_file, 11-03)
 
 

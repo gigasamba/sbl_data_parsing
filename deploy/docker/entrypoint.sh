@@ -128,7 +128,7 @@ case "$cmd" in
     preflight; locked python -m pipeline.load.publish_parse_result --apply "$@";;
   ask)   # S5(T-15) — 검색 명령은 mcp_server/cli/ask.py(test-stack은 11-01에 지움)
     preflight; exec python -m mcp_server.cli.ask ask "$@";;
-  show-stack|selftest)   # 실행 기록을 /app/output/logs에 씀 — mcp-server(/app/output:ro)에서는 안 됨(VS8b R-9 — data-pipeline 컨테이너에서)
+  show-stack|selftest)   # pipeline.cli 점검 명령 — 두 이미지 모두(mcp-server에도 pipeline/cli.py가 있음 — selftest_gate.sh가 이미지마다 부름)
     preflight; exec python -m pipeline.cli "$cmd" "$@";;
   # 11-01(pl-10 — trigger 서버 serve-trigger 지움) — 상주 컨테이너 data-pipeline(11-03 — 옛 둘을 하나로)은 일을 하지 않고 떠 있기만 한다.
   # run_docs.py가 그 안에서 docker exec로 문서별 작업을 돌린다. MCP parse_document 작업 서비스는 위 parse-service(전용 컨테이너 data-pipeline-mcp — 여기에 띄우지 않음, 8766 겹침).

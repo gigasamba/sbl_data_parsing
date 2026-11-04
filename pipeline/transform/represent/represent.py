@@ -947,9 +947,6 @@ def main(argv=None):
         + f" · 그림 상한 걸린 문서 {sum(1 for r in idx if r.get('figures_capped'))}건"
     )  # AD21① — 이어서 VLM 대상(cli/figures_resume.py)
     print(line + f" → {Path(a.parse_dir) / '_rep'}")
-    from common.core.runlog import note
-
-    note(line)
 
 
 if __name__ == "__main__":

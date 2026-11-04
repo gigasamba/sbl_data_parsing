@@ -1,8 +1,7 @@
-"""검색 MCP 상태 — 리트리버(저장소 연결·재적재 확인·이름 있는 색인)·예열·/health 본문·호출자(CALLER) · 시험용 묶음 만들기.
+"""검색 MCP 상태 — 리트리버(저장소 연결·재적재 확인·이름 있는 색인)·예열·/health 본문 · 시험용 묶음 만들기.
 S5(10-26, refactor_plan 5-1·D-007 — 코디네이터 답 Q5 a)에 mcp_server/main.py(옛 data_retrieval/mcp_server.py)에서 옮김 — 내용 그대로
 """
 
-import contextvars
 import sys
 import threading
 import time
@@ -10,9 +9,6 @@ import types
 
 from common.store.pg import PGPool, _standin_schema, _warn_standin, conf, has_conn  # 옛 pg_mcp_connect — 시험이 has_conn을 바꿔 끼움
 from mcp_server import config as mc  # 설정 객체(S7d)
-
-CALLER = contextvars.ContextVar("caller", default="mcp:stdio")
-
 
 _STATE: dict = {}
 

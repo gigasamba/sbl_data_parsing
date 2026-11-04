@@ -29,6 +29,8 @@ dev:
 transform:
   structure: {wiki_domain_phrase: x}
   figures: {ocrvlm_prompt: p}
+search:
+  query_log: {enabled: true}  # op-13 — 질의 기록 파일(qa_log.jsonl) 없앰, 질의는 DB applog.mcp_call(mc-13)
 """
 OLD = """common:
   run_env: dev

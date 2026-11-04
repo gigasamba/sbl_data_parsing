@@ -452,7 +452,7 @@ REMOVED: dict[str, frozenset[str]] = {
             "max_image_px",
         }
     ),
-    # McpSearch(mcp_server/config.py) — 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) · agg_vocab_file 11-01(사전 파일이 코드 기본값과 같아 지움) · client 절 11-02(본문 고객 라벨 순위·하드 격리 지움 — 고객은 client_edw 거르기만, C6) — 지운 칸·절(남으면 경고만)
+    # McpSearch(mcp_server/config.py) — 사용자 10-29 · ocr_dpi 10-30(op-08) · agg 절·agg_today·data_catalog·struct_context_max 11-01(mc-04 집계 지움) · agg_vocab_file 11-01(사전 파일이 코드 기본값과 같아 지움) · client 절 11-02(본문 고객 라벨 순위·하드 격리 지움 — 고객은 client_edw 거르기만, C6) · query_log 절 op-13(사용자 11-04 — 질의 기록 파일 qa_log 없앰, 질의는 DB applog.mcp_call — 옛 파일의 search.query_log가 역할 절 규칙으로 이 절에 옴) — 지운 칸·절(남으면 경고만)
     "McpSearch": frozenset(
         {
             "agg",
@@ -470,6 +470,7 @@ REMOVED: dict[str, frozenset[str]] = {
             "ocr_dpi",
             "ov_search_path",
             "query_expand",
+            "query_log",
             "rerank",
             "struct_context_max",
             "tie_break",
@@ -481,8 +482,6 @@ REMOVED: dict[str, frozenset[str]] = {
     "McpServer": frozenset({"instructions", "query_cache", "store"}),  # instructions — 11-04(op-05): 안내문은 코드 기본값
     # McpSearchPg(mcp_server/config.py) — 11-04(op-05): 벡터 검색은 HNSW 근사(허용 집합이 작을 때만 정확 검색)
     "McpSearchPg": frozenset({"vector_search"}),
-    # McpSettings(mcp_server/config.py) — op-13(사용자 11-04): 질의 기록 파일 qa_log 없앰(질의는 DB applog.mcp_call) — 남으면 경고만
-    "McpSettings": frozenset({"query_log"}),
     # PipelineConnections(pipeline/config.py) — 사용자 10-29 · graphiti 10-30(e2-18 — 외부 KG 어댑터 지움) — 지운 칸·절(남으면 경고만)
     "PipelineConnections": frozenset({"graphiti", "openviking"}),
     # PipelineConnectionsRdb(pipeline/config.py) — 사용자 10-29 — 접속은 common.connections.rdb(ops.md#op-03)

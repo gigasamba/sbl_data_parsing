@@ -1,6 +1,6 @@
 """두 앱의 JSON Lines 기록(op-01), 표준 logging만 사용한다.
 
-    log = setup("mcp")  # PC logs/mcp.jsonl, 이미지 stdout; common.log.* 설정
+    log = setup("mcp")  # PC output/logs/mcp.jsonl, 이미지 stdout; common.log.* 설정
     with context(request_id="..."):  # pipeline: run_id=..., span_id=...
         log.info("done", extra={"event": "tool.done", "duration_ms": 12})
 
@@ -197,7 +197,7 @@ def setup(app, *, stream=None):
     log.setLevel(conf.level)
     log.propagate = False
     if conf.dir or paths.LOCAL_RUN:
-        directory = Path(conf.dir) if conf.dir else paths.PROJ_ROOT / "logs"
+        directory = Path(conf.dir) if conf.dir else paths.LOG_DIR
         if not directory.is_absolute():
             directory = paths.PROJ_ROOT / directory
         directory.mkdir(parents=True, exist_ok=True)

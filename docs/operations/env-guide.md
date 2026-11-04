@@ -28,7 +28,7 @@
 | 칸 | 기본 | 뜻 |
 |---|---|---|
 | `ops.log.level` | `INFO` | DEBUG·INFO·WARNING·ERROR·CRITICAL |
-| `ops.log.dir` | 비움 | 비우면 PC `logs/<앱>.jsonl`, 서버 stdout(컨테이너 로그) |
+| `ops.log.dir` | 비움 | 비우면 PC `output/logs/<앱>.jsonl`, 서버 stdout(컨테이너 로그) |
 | `ops.log.db_enabled` | 서버(두 이미지) 켬 · PC 끔 | DB(`applog` 스키마) 기록 — 서버 로그는 이것뿐. 먼저 `migrate up --target all`(applog 포함) |
 | `ops.log.retention_days` | 90 | 월 파티션 보존 일수 |
 | `ops.log.fallback_dir` | `output/logs` | DB 장애·시간 초과 때 대체 JSON Lines(자동 재적재 없음) — 파일은 이 한 곳 |

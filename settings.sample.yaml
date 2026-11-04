@@ -243,9 +243,9 @@ ops:
   # ─── 로그 — JSON·DB 기록 ───
   log:
     level: INFO                           # JSON 사건 기록 최소 수준 · 비우면 INFO · 값: 0 이상
-    dir:                                  # JSON 로그 폴더 · 비우면 PC는 logs/, 서버는 stdout · 값: 경로
+    dir:                                  # JSON 로그 폴더 · 비우면 PC는 output/logs/, 서버는 stdout · 값: 경로
     db_enabled:                           # applog DB 비동기 기록(서버 이미지 기본 켬, PC 기본 끔) · 비우면 false · 값: true·false
-    fallback_dir: output/logs             # DB 실패 시 JSON Lines 대체 기록 폴더(op-13 — 파일은 이 예비 한 곳) · 비우면 output/logs · 값: 경로
+    fallback_dir:                         # DB 실패 시 JSON Lines 대체 기록 폴더(비우면 <앱 루트>/output/logs — 파일은 이 예비 한 곳, op-13) · 비우면 output/logs/(DB 기록 실패 때만 씀) · 값: 경로
     retention_days: 90                    # 월 파티션 보존 일수(월 끝이 만료된 파티션만 DROP) · 비우면 90 · 값: 1 이상 정수
     queue_size: 10000                     # DB 기록 대기 큐 상한 · 비우면 10000 · 값: 1 이상 정수
     batch_size: 200                       # DB INSERT 배치 최대 행 수 · 비우면 200 · 값: 1 이상 정수

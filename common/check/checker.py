@@ -237,9 +237,6 @@ def env_main():
             ok_n += not miss
             line(not miss, f"{stack:15s} [{', '.join(m.ENGINES)}]", ("없음: " + ", ".join(miss)) if miss else "")
         print(f"  사용 가능 {ok_n}/{len(registry.stacks())} 스택")
-        from common.core.runlog import note
-
-        note(f"사용 가능 스택 {ok_n}/{len(registry.stacks())}")
 
     dump = doc_dir(required=False)
     print(f"\n== 문서 폴더 {dump or ''} ==")
@@ -461,10 +458,7 @@ def main(argv=None):
         raise SystemExit(f"사용: python -m common.check.checker [{'|'.join(CMDS)}] — 인자는 명령 하나만(기본 services)")
     if cmd != "env":
         return CMDS[cmd]() or 0
-    from common.core.runlog import session
-
-    with session("check_env"):
-        req_bad = env_main()
+    req_bad = env_main()
     return (
         2 if req_bad == 2 and req_bad is not True else 1 if req_bad else 0
     )  # 2 = 잘못된 python(SI29) · requirements 차이만 종료 코드에(SI28)

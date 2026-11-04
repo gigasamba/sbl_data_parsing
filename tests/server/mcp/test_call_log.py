@@ -20,7 +20,6 @@ from mcp_server import config as mc
 from mcp_server import main
 from mcp_server.routers import dispatch
 from mcp_server.services import call_log as audit
-from mcp_server.services.search.server_state import CALLER
 
 
 def _encoded(value):
@@ -196,7 +195,6 @@ def test_dispatch_audit():
 def test_http_context():
     rows, observations = [], []
     request_id = str(uuid4())
-    original = CALLER.get()
 
     async def inner(scope, receive, send):
         # 두 청크였던 본문도 그대로 재생되어야 한다.
@@ -206,7 +204,7 @@ def test_http_context():
             body += msg.get("body", b"")
             if not msg.get("more_body"):
                 break
-        observations.append((json.loads(body), jsonlog.get_context(), CALLER.get()))
+        observations.append((json.loads(body), jsonlog.get_context()))
         result = await dispatch._bg(lambda: {"row_count": 2, "columns": ["id"]})
         await send({"type": "http.response.start", "status": 200, "headers": []})
         await send({"type": "http.response.body", "body": _encoded(result)})
@@ -232,13 +230,12 @@ def test_http_context():
             assert rows[-1]["agent"] == "test" and rows[-1]["tool"] == "query_edw"
             assert json.loads(rows[-1]["args"]) == {"sql": "select 1"}
             assert observations[-1][1]["request_id"] == request_id
-            assert observations[-1][2] == "mcp:test"
             del hdr["X-MCP-User"]
             r = await client.post("/mcp", json=payload, headers=hdr)
             assert audit.drain()
             assert r.status_code == 200 and rows[-1]["user_id"] == "meta-user"
             assert "remote_addr" not in rows[-1]
-        assert CALLER.get() == original and audit._REQUEST.get() is None
+        assert audit._REQUEST.get() is None
         assert len(rows) == 3, (len(rows), [(row.get("tool"), row.get("status"), row.get("request_id")) for row in rows])
 
     with patch.object(audit.logsink, "emit", side_effect=lambda t, r: rows.append(r)):
