@@ -101,13 +101,13 @@ def parse_module(a):
         if not only.exists():
             raise SystemExit(f"[parse] 받아 둔 문서 목록 없음({only}) — candidate_ready stage를 먼저")
         C.put(SOURCE_MANIFEST=str(state / "manifest.jsonl"))  # 원본 위치 주소(s3://) — stage가 쓴 manifest
-        src_info, remote = (state, OUT / "_source_files"), True
+        src_info, remote = state, True
         lim = ["--docs-from", only]
     elif a.source:
-        local, _, state, only = SRC.stage_batch(
+        _, _, state, only = SRC.stage_batch(
             a.source, OUT, a.src, a.source_limit, lambda args: _run_step(args, child_env()), done=PICK.done_keys()
         )
-        src_info, remote = (state, local), PICK.is_remote(a.source)
+        src_info, remote = state, PICK.is_remote(a.source)
         _tstep("t_prepare")
         lim = ["--docs-from", only]
     if a.max_new:
@@ -145,7 +145,7 @@ def parse_module(a):
     ):
         return
     if src_info and remote:
-        SRC.finish(src_info[0], src_info[1], OUT / "parse" / "_rep" / "index.json")
+        SRC.finish(src_info, OUT / "parse" / "_rep" / "index.json")
 
 
 # ── 운영자 자기 점검(selftest) ──────────────────────────────────

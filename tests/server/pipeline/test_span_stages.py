@@ -39,7 +39,7 @@ def test_staging_span_counts():
         targets = [{"doc_id": n, "bucket": "b", "key": k, "size": 1, "filename": n} for n, k in (("a", "ok"), ("b", "bad"))]
         with (
             mock.patch.object(source, "_staging_dir", lambda: Path(tmp)),
-            mock.patch.object(source, "_s3", Client),
+            mock.patch.object(source.objectstore, "client", Client),
         ):
             assert source.download(targets, Path(tmp), workers=2) == 1  # 받지 못한 1건
     row = next(r for r in rows if r["stage"] == "extract.staging")

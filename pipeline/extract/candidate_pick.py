@@ -329,12 +329,14 @@ def faq_sync(reset, out):
     import subprocess
 
     from common.core.paths import child_env
+    from pipeline.parse_steps import run_step
 
     out = Path(out)
     out.unlink(missing_ok=True)
-    cmd = [sys.executable, "-m", "pipeline.load.pgvector_load", "faq-sync", *(["--reset"] if reset else []), "--out", str(out)]
     try:
-        rc = subprocess.run(cmd, env=child_env(), timeout=1800).returncode
+        rc = run_step(
+            ["pipeline.load.pgvector_load", "faq-sync", *(["--reset"] if reset else []), "--out", out], child_env(), timeout=1800
+        ).returncode
     except subprocess.TimeoutExpired:  # ponytail: 자식이 끝까지 돌았는지 모름 — 다음 실행의 채움이 메움
         rc = -1
     try:

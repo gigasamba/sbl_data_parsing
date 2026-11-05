@@ -75,11 +75,11 @@ def _selftest_rdb_cols():
     """AD44 — 열 이름이 다른 표(extract.connections.rdb.columns로 맞춤) · key가 s3://버킷/… 꼴이면 그 버킷 · 2회차 0건."""
     import tempfile
 
-    real_s3 = M._s3
+    real_s3 = M.objectstore.client
     d = Path(tempfile.mkdtemp())
     p = d / "loc.csv"
     p.write_text("doc_id,object_key,size_bytes\n" + "".join(f"d{i},s3://rag-docs/clients/d{i}.pdf,4\n" for i in range(3)), encoding="utf-8")
-    M._s3 = lambda: _FakeS3({("rag-docs", f"clients/d{i}.pdf"): ("unused", b"docA") for i in range(3)})
+    M.objectstore.client = lambda: _FakeS3({("rag-docs", f"clients/d{i}.pdf"): ("unused", b"docA") for i in range(3)})  # type: ignore[misc]  # 시험 — 가짜 클라이언트로 바꿔 끼움
     try:
         with pc.PIPE.env(RDB_COL_DOC_ID="doc_id", RDB_COL_KEY="object_key", RDB_COL_SIZE="size_bytes", SOURCE_STAGING=str(d / "staging")):
             # ParsingMeta에 끝난 키는 받기 전에 빠짐(다운로드·manifest 없음)
@@ -91,7 +91,7 @@ def _selftest_rdb_cols():
             mark_done(state, names, is_s3=True)
             assert resolve(f"rdb:csv:{p}", d)[1] == []
     finally:
-        M._s3 = real_s3
+        M.objectstore.client = real_s3
     print("[selftest] AD44 — 열 이름 맞춤(columns)·s3:// 키의 버킷·2회차 0건 통과")
 
 
@@ -101,8 +101,7 @@ def _selftest_filestoragemap():
     TABLE_ID_RE가 AI.FileStorageMap(대소문자 섞인 스키마.표)을 통과하는지."""
     import tempfile
 
-    # S9 — 옛 `global _s3` → `M._s3`(모듈 전역 대입)
-    real_s3 = M._s3
+    real_s3 = M.objectstore.client
 
     state_root = Path(tempfile.mkdtemp())
     csv_path = state_root / "file_storage_map.csv"
@@ -118,7 +117,7 @@ def _selftest_filestoragemap():
         "id,content_version_id,s3_key,original_filename,file_size\n" + "\n".join(",".join(r) for r in rows) + "\n", encoding="utf-8"
     )
     objs = {("fsm-bucket", f"docs/{c}.pdf"): (f"etag-unused-{c}", b"docA") for c in "abcde"}  # 4바이트 = file_size와 일치
-    M._s3 = lambda: _FakeS3(objs)
+    M.objectstore.client = lambda: _FakeS3(objs)  # type: ignore[misc]  # 시험 — 가짜 클라이언트
     env = contextlib.ExitStack()
     env.enter_context(pc.PIPE.env(RDB_BUCKET="fsm-bucket", SOURCE_STAGING=str(state_root / "staging")))  # S7c — 설정 객체 덮어쓰기
     try:
@@ -149,7 +148,7 @@ def _selftest_filestoragemap():
             "id,content_version_id,s3_key,original_filename,file_size\n10,201,docs/good.pdf,good.pdf,4\n11,202,docs/bad.pdf,bad.pdf,999\n",
             encoding="utf-8",
         )
-        M._s3 = lambda: _FakeS3(
+        M.objectstore.client = lambda: _FakeS3(  # type: ignore[misc]  # 시험 — 가짜 클라이언트
             {("fsm-bucket", "docs/good.pdf"): ("x", b"good"), ("fsm-bucket", "docs/bad.pdf"): ("x", b"bad!")}
         )  # 실제 길이 4 ≠ RDB 999
         local3, names3, state3 = resolve(f"rdb:csv:{bad_csv}", state2)
@@ -162,7 +161,7 @@ def _selftest_filestoragemap():
             "[selftest] AD44(c) — FileStorageMap: etag 열 없어 크기(ContentLength) 대조 → 불일치는 참고 기록(size_mismatch.log)·다운로드 진행 통과"
         )
     finally:
-        M._s3 = real_s3
+        M.objectstore.client = real_s3
         env.close()
 
 
@@ -172,15 +171,14 @@ def _selftest_same_key_new_version():
     key(새 판) 추가 → 2회차에 1건(id=2) 받음 → 3회차 0건(둘 다 처리 기록됐으니 since 전진)."""
     import tempfile
 
-    # S9 — 옛 `global _s3` → `M._s3`(모듈 전역 대입)
-    real_s3 = M._s3
+    real_s3 = M.objectstore.client
 
     state_root = Path(tempfile.mkdtemp())
     csv_path = state_root / "versions.csv"
     header = "id,content_version_id,s3_key,original_filename,file_size\n"
     csv_path.write_text(header + "1,101,docs/same.pdf,same.pdf,4\n", encoding="utf-8")
     objs = {("fsm-bucket", "docs/same.pdf"): ("etag-unused", b"docA")}  # 4바이트 = file_size
-    M._s3 = lambda: _FakeS3(objs)
+    M.objectstore.client = lambda: _FakeS3(objs)  # type: ignore[misc]  # 시험 — 가짜 클라이언트
     env = contextlib.ExitStack()
     env.enter_context(pc.PIPE.env(RDB_BUCKET="fsm-bucket", SOURCE_STAGING=str(state_root / "staging")))  # S7c — 설정 객체 덮어쓰기
     try:
@@ -199,14 +197,15 @@ def _selftest_same_key_new_version():
         assert names3 == [], names3  # 둘 다 처리 기록됐으니 since가 2까지 전진 — 3회차는 0건
         print("[selftest] AD44(c) — 같은 s3_key에 새 id(새 판): 키만으론 영구 누락됐을 것 → 2회차 1건 받음·3회차 0건 통과")
     finally:
-        M._s3 = real_s3
+        M.objectstore.client = real_s3
         env.close()
 
 
 def _selftest_finish_keep():
-    """pl-02 — finish는 처리 기록과 sha256만 남기고 원본은 지우지 않는다(삭제는 게시 뒤 run_pipeline drop_original 한 곳).
-    sha256을 manifest에 남겨 publish_parse가 로컬 원본 없이도 EDW 행을 쓸 수 있게 한다."""
+    """pl-02 — 중복 제외(_dedup)가 남긴 문서의 sha256을 manifest에 남기고(publish_parse가 로컬 원본 없이도 EDW 행을 쓸 수 있게),
+    finish는 처리 기록만 남기고 원본은 지우지 않는다(삭제는 게시 뒤 run_pipeline drop_original 한 곳)."""
     import tempfile
+    from unittest import mock
 
     d = Path(tempfile.mkdtemp())
     state, local = d / "state", d / "local"
@@ -218,11 +217,13 @@ def _selftest_finish_keep():
     )
     rep = d / "index.json"
     rep.write_text(json.dumps({"docs": [{"doc": "a.txt", "engine": "eng1"}]}), encoding="utf-8")
-    finish(state, local, rep)
+    with mock.patch.object(CP, "done_by_sha", lambda shas: {}):
+        assert M._dedup(local, ["a.txt"], d / "dedup", state) == ["a.txt"]
+    finish(state, rep)
     man = {r["file_name"]: r for r in jl(state / "manifest.jsonl")}
     assert (local / "a.txt").exists(), "finish가 원본을 지움 — 삭제는 drop_original 한 곳"
     assert [json.loads(x)["key"] for x in (state / "processed.jsonl").read_text(encoding="utf-8").splitlines()] == ["k1"]
-    assert man["a.txt"].get("sha256"), "지우기 전에 sha256을 manifest에 안 남김(publish_parse가 로컬 없이 EDW 행을 못 씀)"
+    assert man["a.txt"].get("sha256"), "중복 제외가 sha256을 manifest에 안 남김(publish_parse가 로컬 없이 EDW 행을 못 씀)"
     print("[selftest] finish — 처리 기록 + sha256 기록, 원본은 남김 통과")
 
 

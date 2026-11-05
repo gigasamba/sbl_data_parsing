@@ -10,6 +10,7 @@ import sys
 
 from common.config import layout as L
 from common.config.settings import cfg
+from common.store import mssql
 
 DEFAULT_TABLE = "AI.ParsingMeta"
 TABLE_ID_RE = re.compile(
@@ -115,7 +116,9 @@ def _insert_new_rows(cur, table, ph, rows, integrity_error, columns=None, ren=No
 
 
 REP_COLS = ("parse_meta_id", "source_system", "source_key", "parse_date", "status", "rep_bucket", "rep_key", "parsed_at", "sha256")
-IN_CHUNK = 500  # ponytail: IN 목록을 이만큼씩 나눠 묻는다 — 아주 넓은 범위(수만 건)는 느림, 필요하면 임시 표 조인으로
+IN_CHUNK = (
+    mssql.CHUNK
+)  # ponytail: IN 목록을 이만큼씩 나눠 묻는다(EDW 읽기와 같은 크기) — 아주 넓은 범위(수만 건)는 느림, 필요하면 임시 표 조인으로
 
 
 def _sel(kc):

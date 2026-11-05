@@ -72,18 +72,17 @@ SETTINGS_REQUIRED = (  # (칸 경로, 무엇에 쓰나) — 없으면 시작 거
 
 
 def _code_root():
-    """코드 폴더 — 찾는 순서: --code 폴더 > 이 스크립트가 든 코드 폴더(기본 배치 경로는 없음). 반환 (루트, common 폴더) —
-    common은 <루트>/common(코드 폴더 = 저장소 트리)."""
+    """코드 폴더(저장소 트리 — <루트>/common이 있음) — 찾는 순서: --code 폴더 > 이 스크립트가 든 코드 폴더(기본 배치 경로는 없음)."""
     for r in (CODE_DIR, ROOT.parents[2] if len(ROOT.parents) > 2 else None):
         if r is not None and (Path(r) / "common" / "config" / "layout.py").is_file():
-            return Path(r), Path(r) / "common"
+            return Path(r)
     sys.exit("run_pipeline: common/config/layout.py 없음 — 코드 폴더 안에서 부르거나 --code <코드 폴더>로 알려 줄 것")
 
 
 def _root():
     """서버 루트(settings.yaml·edw_chain.yaml·output/이 바로 아래): load_settings.sh load_settings가 낸 RAG_ROOT, 없으면 같은 규칙(코드 폴더의 부모)."""
     r = os.environ.get("RAG_ROOT")  # env 남김 — 호스트 도구(load_settings.sh load_settings가 냄)
-    return Path(r) if r else _code_root()[0].resolve().parent
+    return Path(r) if r else _code_root().resolve().parent
 
 
 def _inside(seq, sub=""):
@@ -100,7 +99,7 @@ def _img(name):
 def _const(key):
     """고정값(약속 경로 image.*·코드 기본 포트 default.*): 코드 폴더 deploy/host/scripts/host_settings.tsv(없으면 이 스크립트 옆)의 const 줄(deploy/release/gen_host_keys.py가 만듦)."""
     f = next(
-        (p for p in (_code_root()[0] / "deploy" / "host" / "scripts" / "host_settings.tsv", ROOT / "host_settings.tsv") if p.is_file()),
+        (p for p in (_code_root() / "deploy" / "host" / "scripts" / "host_settings.tsv", ROOT / "host_settings.tsv") if p.is_file()),
         None,
     )
     if f is None:
@@ -121,7 +120,7 @@ def _host():
     호스트 python은 pydantic이 없어 common 패키지를 import하지 않는다(그 모듈이 common/config/layout.py를 파일로 읽음)."""
     import importlib.util
 
-    f = _code_root()[0] / "deploy" / "host" / "scripts" / "settings_to_env.py"
+    f = _code_root() / "deploy" / "host" / "scripts" / "settings_to_env.py"
     if not f.is_file():
         sys.exit("run_pipeline: deploy/host/scripts/settings_to_env.py 없음 — 코드 폴더 안에서 부르거나 --code <코드 폴더>로 알려 줄 것")
     spec = importlib.util.spec_from_file_location("settings_to_env", f)
@@ -390,9 +389,8 @@ def _lane_total():
 
 
 _flow_lock = threading.Condition()
-_staged: list = []  # 다운로드 완료·미시작 문서 seq(대기열)
 _fetching: set = set()  # 지금 다운로드 진행 중인 seq(마지막 문서 조기 종료 방지)
-_next_stage = 0  # 다음에 받을 seq
+_picked_all = threading.Event()  # 받기 워커가 차례를 모두 집음(마감으로 남은 차례를 버린 경우 포함)
 _stop = threading.Event()
 _stats_lock = threading.Lock()
 
@@ -448,10 +446,10 @@ def run_pipeline_policy(doc):
             continue
         try:
             if isinstance(d, bool):
-                b = str(v).strip().lower()
-                if b not in ("1", "true", "yes", "on", "0", "false", "no", "off"):
+                b = _host().render(v, "bool")  # 켜기 칸 규칙 한 곳(settings_to_env) — 모르는 글자는 ValueError
+                if b is None:
                     raise ValueError
-                vals[k] = b in ("1", "true", "yes", "on")
+                vals[k] = b == "1"
             elif isinstance(d, str):
                 vals[k] = str(v)
             else:
@@ -637,31 +635,29 @@ def downloader(rows, order):
     """대기열 유지 — 지정 문서 순서대로 STAGING_TARGET개(받는 중 포함)까지 미리 받아 둔다(파싱 중 제외). 받기 워커 STAGING_WORKERS개가
     차례(order)를 하나씩 집어 동시에 받는다: 실제 동시 받기 = min(STAGING_WORKERS, 대기열 빈자리).
     빈자리가 없으면 워커가 있어도 받지 않는다. 다 집으면 워커가 끝나고, 모두 끝나면 이 함수도 끝난다."""
-    global _next_stage
     cache = _class_cache()
     pos = {"ptr": 0}
-    with _flow_lock:
-        _next_stage = order[0] if order else 10**12
+    if not order:
+        _picked_all.set()
 
     def worker():
-        global _next_stage
         while not _stop.is_set():
             with _flow_lock:
                 if pos["ptr"] >= len(order):
                     return
                 if DEADLINE_AT is not None and time.time() >= DEADLINE_AT:  # 마감 — 남은 차례는 다음 새벽 배치가 다시 고름
-                    if pos["ptr"] < len(order):
-                        _deadline_hit.set()  # 종료 코드 75
-                        log(f"마감 — 남은 {len(order) - pos['ptr']}건은 받지 않음(받은 문서는 끝까지)")
-                        pos["ptr"] = len(order)
-                        _next_stage = 10**12
+                    _deadline_hit.set()  # 종료 코드 75
+                    log(f"마감 — 남은 {len(order) - pos['ptr']}건은 받지 않음(받은 문서는 끝까지)")
+                    pos["ptr"] = len(order)
+                    _picked_all.set()
                     return
                 if _lane_total() + len(_fetching) >= STAGING_TARGET:  # 빈자리 없음 — 파싱이 하나 시작되면 notify
                     _flow_lock.wait(5)
                     continue
                 seq = order[pos["ptr"]]
                 pos["ptr"] += 1
-                _next_stage = order[pos["ptr"]] if pos["ptr"] < len(order) else 10**12
+                if pos["ptr"] >= len(order):
+                    _picked_all.set()
                 _fetching.add(seq)
             row = rows[seq]
             t_w = time.time()
@@ -1072,7 +1068,7 @@ def main():
     def _flow_done():
         with _flow_lock:
             return (
-                _next_stage >= 10**12
+                _picked_all.is_set()
                 and not _fetching
                 and all(not q for q in LANEQ.values())
                 and all(v == 0 for v in _lane_inflight.values())
@@ -1090,7 +1086,7 @@ def main():
                     _flow_lock.wait(5)
                     continue
                 seq = LANEQ[c].popleft()
-                _lane_inflight[_class.get(seq) or "light"] += 1
+                _lane_inflight[c] += 1
                 depth("pick")
                 _flow_lock.notify_all()  # 파싱 1개 시작 → 받기 보충 신호
             try:
@@ -1101,7 +1097,7 @@ def main():
                     cnt["thread_err"] += 1
             finally:
                 with _flow_lock:
-                    _lane_inflight[_class.get(seq) or "light"] -= 1
+                    _lane_inflight[c] -= 1
                     _flow_lock.notify_all()  # 슬롯 반납 → 받기 보충 신호
                 depth("parse_end")
 

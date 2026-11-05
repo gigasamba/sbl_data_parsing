@@ -5,7 +5,7 @@
   --source <서버 폴더>               같은 서버 폴더(샘플 데이터) — 그대로 씀
   --source rdb:csv:<경로>            문서 위치 표(csv — run_pipeline이 목록 파일에서 만든 batch.csv)의 키만 Object Storage에서 staging으로 받음
 
-Object Storage 원본 처리: 대표 결과가 나온 문서는 parse 뒤 처리 기록·sha256만 남김(finish). 원본 삭제는 게시가 끝난 뒤 run_pipeline drop_original 한 곳.
+Object Storage 원본 처리: 받은 파일의 sha256은 중복 제외가 manifest에, 대표 결과가 나온 문서는 parse 뒤 처리 기록만 남김(finish). 원본 삭제는 게시가 끝난 뒤 run_pipeline drop_original 한 곳.
 처리한 객체(ETag 또는 (key, 증분값))는 output/parse/_source/processed.jsonl에 기록 → 다음 실행에서 다시 받지 않음. 실패한 문서는 남겨 다음 실행이 다시 시도.
 검색 결과의 원본 위치(source_uri) = s3://버킷/키(SOURCE_MANIFEST로 common.core.ids.source_uri가 읽음).
 접속: OS_ENDPOINT · OS_ACCESS_KEY · OS_SECRET_KEY · OS_REGION(기본 us-east-1) · OS_VERIFY_TLS(기본 1, 사내 CA면 경로) — 비밀값은 settings.yaml에만.
@@ -26,16 +26,22 @@ from common.core import span as SP  # 성능 span
 from common.core.console import utf8_stdout
 from common.core.contract import jl
 from common.core.contract import safe_path_join as _safe_join  # 경로 잇기(load 단계와 같은 함수)
+from common.core.paths import atomic_write_text
+from common.store import objectstore
 from pipeline import config as pc
 from pipeline.extract import candidate_pick as CP
 from pipeline.shared.runtrace import skip_event
 
 
-def _s3():
-    """boto3 s3 클라이언트 — common.store.objectstore.client에 위임."""
-    from common.store.objectstore import client
+def _read_manifest(state):
+    """state/manifest.jsonl → {file_name: 행}(없으면 빈 사전)."""
+    man_f = state / "manifest.jsonl"
+    return {r["file_name"]: r for r in jl(man_f)} if man_f.exists() else {}
 
-    return client()
+
+def _write_manifest(state, rows):
+    """state/manifest.jsonl을 rows로 통째로(원자적으로) 다시 씀 → 파일 경로."""
+    return atomic_write_text(state / "manifest.jsonl", "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
 
 
 # ── staging(미리 받기) — 원본을 받는 유일한 자리 ─────────────────────────────
@@ -65,7 +71,7 @@ def download(rows, state, workers=1):
     todo = list(rows)
     if not todo:
         return 0
-    cli = _s3()
+    cli = objectstore.client()
     book = threading.Lock()  # 병렬 받기에서 size_mismatch.log 쓰기를 잠금
 
     def _one(o):
@@ -76,9 +82,8 @@ def download(rows, state, workers=1):
     def _fetch(o, sp):
         p = _staging_path(wd, o["bucket"], o["key"])
         tmp = wd / (p.name + ".part")
-        on_wire = False  # head·전송 중의 실패는 원인이 외부(스토리지·네트워크)라 err_kind=external — botocore 예외는 이름으로 못 가림
+        on_wire = True  # head·전송 중의 실패는 원인이 외부(스토리지·네트워크)라 err_kind=external — botocore 예외는 이름으로 못 가림
         try:
-            on_wire = True
             t_head = time.monotonic()
             actual = cli.head_object(Bucket=o["bucket"], Key=o["key"]).get("ContentLength")
             head_ms = (time.monotonic() - t_head) * 1000
@@ -130,7 +135,7 @@ def download(rows, state, workers=1):
 
 
 def _rdb_plan(table, state, limit=0, done=frozenset()):
-    """문서 위치 표(csv:)의 대상 행 → (names, fetch_one(name,dest)→Path, state). 고르고(rdb_pick) staging에 받은 뒤(download)
+    """문서 위치 표(csv:)의 대상 행 → (names, fetch_one(name, dest) → manifest 행). 고르고(rdb_pick) staging에 받은 뒤(download)
     fetch_one이 staging 파일을 dest/name으로 하드 링크한다(받지 못한 문서가 있으면 멈춤). 다른 원천의 같은 내용 파일도 따로 받는다."""
     by_name, n_seen = CP.rdb_pick(table, state, limit, done)
     names = sorted(by_name)
@@ -138,40 +143,29 @@ def _rdb_plan(table, state, limit=0, done=frozenset()):
     if failed:
         raise RuntimeError(f"[source] staging에 받지 못한 문서 {failed}건 — 멈춤(다음 실행이 다시 받음)")
     wd = _staging_dir()
-    book = threading.Lock()  # 병렬 fetch(SOURCE_FETCH_WORKERS)에서 manifest 재작성을 잠금
 
     def fetch_one(name, dest):
         o = by_name[name]
-        dest.mkdir(parents=True, exist_ok=True)
         f = _safe_join(dest, name)
         if f.exists() or f.is_symlink():
             f.unlink()
         os.link(_staging_path(wd, o["bucket"], o["key"]), f)  # staging과 같은 볼륨 — 사본 없음
-        with book:  # manifest.jsonl 재작성(전체 읽기→쓰기) — 병렬 fetch에서 반드시 잠금
-            man_f = state / "manifest.jsonl"
-            man = {r["file_name"]: r for r in jl(man_f)} if man_f.exists() else {}
-            man[name] = {
-                "file_name": name,
-                "uri": f"s3://{o['bucket']}/{o['key']}",
-                "key": o["key"],
-                "etag": o["etag"],
-                "size": o["size"],
-                "doc_id": o["doc_id"],
-                "updated_at": o["updated_at"],
-                "original_filename": o.get("filename"),
-                "content_version_id": o.get("content_version"),  # FileStorageMap 고유 칸
-                "created_at": o.get("created_at"),  # 원천 등록 시각 → gold_bundle → gold doc.created_at
-                "source_system": _derive_source_from_key(o["key"]),
-            }  # publish_parse_result가 문서별로 이 값 사용(없으면 --source-system 폴백)
-            man_f.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in man.values()), encoding="utf-8")
-        return f
+        return {
+            "file_name": name,
+            "uri": f"s3://{o['bucket']}/{o['key']}",
+            "key": o["key"],
+            "etag": o["etag"],
+            "size": o["size"],
+            "doc_id": o["doc_id"],
+            "updated_at": o["updated_at"],
+            "original_filename": o.get("filename"),
+            "content_version_id": o.get("content_version"),  # FileStorageMap 고유 칸
+            "created_at": o.get("created_at"),  # 원천 등록 시각 → gold_bundle → gold doc.created_at
+            "source_system": _derive_source_from_key(o["key"]),
+        }  # publish_parse_result가 문서별로 이 값 사용(없으면 --source-system 폴백)
 
-    man_f = state / "manifest.jsonl"
-    if not man_f.exists():  # fetch_one이 한 번도 안 불려도(대상 0건) 파일이 있어야 — 없으면 ids.source_uri가 조용히 file://로 떨어짐
-        man_f.touch()
-    C.put(SOURCE_MANIFEST=str(man_f))  # S7e2 — 덮기 파일(이 프로세스·하위 프로세스) + 인계 키라 env에도(contract.py)
     print(f"[source] rdb:{table} · 대상 {len(names)}개(끝난 문서·처리 기록·지원 안 함 {n_seen}개 제외)", flush=True)
-    return names, fetch_one, state
+    return names, fetch_one
 
 
 def resolve(source, out, limit=0, done=frozenset()):
@@ -184,32 +178,17 @@ def resolve(source, out, limit=0, done=frozenset()):
     if str(source).startswith("rdb:"):
         local = Path(out) / "_source_files"
         local.mkdir(parents=True, exist_ok=True)  # 대상 0건(모두 지원 안 함 등)이어도 중복 제외가 훑을 폴더
-        names, fetch_one, state = _rdb_plan(source[len("rdb:") :], state, limit, done)
-        ok = []
-        nw = max(1, int(pc.cfg().extract.source.fetch_workers))  # 기본 1) · 2026-10-22 — 문서별 병렬 다운로드(기본 1=기존 순차
-        if nw > 1 and len(names) > 1:
-            # 병렬 — 다운로드·head_object(네트워크)를 워커에, 기록(manifest 재작성 등)은 fetch_one 안 잠금으로 안전.
-            # 결과는 제출 순서(names 순)대로 회수해 manifest 행 순서를 기존과 같게. 원천 여러 개(rdb:*)면 이름 겹침
-            # rename이 잠금 밖(_rename_manifest_entry)이라 이 경로는 단일 원천(rdb:csv 등)에만 권장 — 여럿이면 1로.
-            import concurrent.futures as _cf
-
-            with _cf.ThreadPoolExecutor(max_workers=min(nw, len(names))) as ex:
-                futs = {n: ex.submit(fetch_one, n, local) for n in names}
-                for n in names:
-                    futs[n].result()
-                    ok.append(n)
-            print(f"[source] 다운로드 병렬 {min(nw, len(names))}워커 완료 · {len(ok)}/{len(names)}건", flush=True)
-        else:
-            for n in names:
-                fetch_one(n, local)
-                ok.append(n)
-        if not Path(C.cfg().paths.source_manifest or "").exists():  # S7c — 설정 객체(위 put 뒤 다시 읽어 같은 값)
-            raise RuntimeError("[source] rdb 모드인데 SOURCE_MANIFEST 파일이 없음 — 원본 위치가 조용히 file://로 떨어질 수 있어 멈춤")
-        return local, ok, state
+        names, fetch_one = _rdb_plan(source[len("rdb:") :], state, limit, done)
+        man = _read_manifest(state)
+        for n in names:  # 받기는 download가 끝냄 — 여기는 하드 링크만(차례로)
+            man[n] = fetch_one(n, local)
+        # 대상 0건이어도 파일을 씀 — 없으면 ids.source_uri가 조용히 file://로 떨어짐
+        C.put(SOURCE_MANIFEST=str(_write_manifest(state, man.values())))  # 덮기 파일(이 프로세스·하위 프로세스) + 인계 키(contract.py)
+        return local, names, state
     src = Path(source)
     files = CP._tree_files(src)
     if files is None:  # 평평한 폴더 — 그대로(키 = 파일 이름)
-        names = sorted(p.name for p in src.iterdir() if p.is_file() and p.name != ".gitkeep" and p.name not in done)[: limit or None]
+        names = sorted(p.name for p in src.iterdir() if p.is_file() and not CP._hidden(p) and p.name not in done)[: limit or None]
         print(f"[source] 폴더 {src} · 대상 {len(names)}개", flush=True)
         return src, names, state
     files = [p for p in files if p.relative_to(src).as_posix() not in done]
@@ -237,39 +216,19 @@ def _folder_tree(src, files, out, state):
                 "source_system": _derive_source_from_key(r["key"]) or CP._known_source(r["key"].split("/", 1)[0]),
             }
         )
-    man_f = state / "manifest.jsonl"
-    man_f.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in man), encoding="utf-8")
-    C.put(SOURCE_MANIFEST=str(man_f))  # rdb 배치와 같은 인계(원본 위치 주소 — contract.make_source_uri)
+    C.put(SOURCE_MANIFEST=str(_write_manifest(state, man)))  # rdb 배치와 같은 인계(원본 위치 주소 — contract.make_source_uri)
     names = [m["file_name"] for m in man]
     print(f"[source] 폴더 {src}(하위 폴더 {len(names)}개 파일 — 상대 키로 manifest) · 대상 {len(names)}개", flush=True)
     return local, names, state
 
 
-def _record_sha_before_delete(state, local, done, field="sha256"):
-    """sha256을 manifest.jsonl에 남겨 둠(원본이 지워진 뒤에도 publish_parse_result가 로컬 없이 EDW 행을 쓸 수 있게). 못 읽으면(파일이 이미 없는 등) 그 문서만 건너뜀."""
-    man_f = state / "manifest.jsonl"
-    man = {r["file_name"]: r for r in jl(man_f)}
-    changed = False
-    for r in done:
-        name = r["file_name"]
-        p = Path(local) / name
-        if name in man and p.exists():
-            from common.core.contract import file_hash
-
-            man[name] = {**man[name], field: file_hash(p)}
-            changed = True
-    if changed:
-        man_f.write_text("".join(json.dumps(v, ensure_ascii=False) + "\n" for v in man.values()), encoding="utf-8")
-
-
-def finish(state, local, rep_index):
-    """Object Storage에서 받은 원본: 대표 결과가 나온 문서는 처리 완료로 기록하고(processed.jsonl) sha256을 manifest에 남긴다
-    (`_record_sha_before_delete` — publish_parse_result `plan()`이 로컬 원본 없이도 이 값으로 EDW 행을 쓸 수 있게).
+def finish(state, rep_index):
+    """Object Storage에서 받은 원본: 대표 결과가 나온 문서를 처리 완료로 기록한다(processed.jsonl). sha256은 중복 제외(`_dedup`)가
+    manifest에 이미 남겼다(publish_parse_result `plan()`이 로컬 원본 없이도 그 값으로 EDW 행을 씀).
     파일은 지우지 않는다 — 원본 삭제는 게시가 끝난 뒤 run_pipeline `drop_original()` 한 곳."""
-    man_f = state / "manifest.jsonl"
-    if not man_f.exists():
+    man = _read_manifest(state)
+    if not man:
         return
-    man = {r["file_name"]: r for r in jl(man_f)}
     ok = (
         {r["doc"] for r in json.loads(Path(rep_index).read_text(encoding="utf-8"))["docs"] if r.get("engine")}
         if Path(rep_index).exists()
@@ -279,7 +238,6 @@ def finish(state, local, rep_index):
     with CP._processed_path(state).open("a", encoding="utf-8") as f:
         for r in done:
             f.write(json.dumps({"key": r["key"], "etag": r["etag"], "ver": r.get("updated_at")}, ensure_ascii=False) + "\n")
-    _record_sha_before_delete(state, local, done)
     print(f"[source] 처리 완료 {len(done)}개 기록(원본은 게시 뒤 drop_original이 지움)", flush=True)
 
 
@@ -319,15 +277,15 @@ def _dedup(local, names, dedup_dir, state):
     from pipeline.extract import deduplication as dedup
 
     batch = set(names)
-    keep, rows, _ = dedup.run_folder(local, dedup_dir, batch)
+    keep, rows, _ = dedup.run_folder(local, dedup_dir, batch, write_keep=False)  # keep.txt는 아래에서 한 번
     rep = {r["group"]: r["file"] for r in rows if r["representative"]}
     dropped = set()
     for r in rows:
         if not r["representative"]:
             skip_event(r["file"], "dup_batch", dup_of=rep[r["group"]])
             dropped.add(r["file"])
-    man_f = state / "manifest.jsonl"
-    key_of = {r["file_name"]: r.get("key") for r in jl(man_f)} if man_f.exists() else {}
+    man = _read_manifest(state)
+    key_of = {n: r.get("key") for n, r in man.items()}
     picked = [n for n in names if n in keep]
     seen = CP.done_by_sha({keep[n] for n in picked})
     left = []
@@ -338,6 +296,11 @@ def _dedup(local, names, dedup_dir, state):
             dropped.add(n)
         else:
             left.append(n)
+    if man:  # 남긴 문서의 sha256(방금 구함) — 원본이 지워진 뒤 게시가 이 값으로 EDW 행을 씀(finish·publish)
+        for n in left:
+            if n in man:
+                man[n] = {**man[n], "sha256": keep[n]}
+        _write_manifest(state, man.values())
     rest = sorted(f.name for f in Path(local).iterdir() if f.is_file() and f.name != ".gitkeep" and f.name not in dropped)
     (Path(dedup_dir) / "keep.txt").write_text("\n".join(rest) + "\n", encoding="utf-8")
     return left
@@ -355,9 +318,8 @@ def _record_filtered(prepared, state):
         return
     with f.open(encoding="utf-8-sig", newline="") as fh:
         rows = list(csv.DictReader(fh))
-    man_f = state / "manifest.jsonl"
-    key_of = {r["file_name"]: r.get("key") for r in jl(man_f)} if man_f.exists() else {}
-    keys = {r["file"]: key_of.get(r["file"]) or r["file"] for r in rows}
+    man = _read_manifest(state)
+    keys = {r["file"]: (man.get(r["file"]) or {}).get("key") or r["file"] for r in rows}
     skip_docs.record(
         [
             {"source_key": keys[r["file"]], "source_system": CP.source_of(keys[r["file"]]), "file_name": r["file"], "reason": r["reason"]}

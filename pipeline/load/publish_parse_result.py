@@ -317,8 +317,8 @@ def engines_used(rep_json, env_fallback=True):
     return out, (summary[:512] if summary else None)
 
 
-def raw_artifacts(parse_dir, name, figs, runs=None):
-    """rep.md와 같은 날짜 폴더에 함께 올릴 것
+def raw_artifacts(parse_dir, name, figs, runs=None, rep=None):
+    """rep.md와 같은 날짜 폴더에 함께 올릴 것(rep = 이미 읽은 `_rep/<문서>.json` 내용 — plan()이 넘김, 없으면 파일을 읽음)
     [(파일 이름, 로컬 Path 또는 텍스트)]: rep.json(후보정까지 끝난 대표 결과 원본 전체) · engines/<엔진>.json(엔진별
     파싱 원본 — provenance.engine_version 포함) · figures.jsonl(이 문서 그림 기록 — VLM 모델·prompt_id·캡션·본문
     언급). 큰 파일은 Path로 넘겨 apply()가 그대로 올린다(메모리에
@@ -326,7 +326,8 @@ def raw_artifacts(parse_dir, name, figs, runs=None):
     parse_dir = Path(parse_dir)
     out = []
     rep_p = parse_dir / "_rep" / f"{name}.json"
-    rep = json.loads(rep_p.read_text(encoding="utf-8")) if rep_p.exists() else {}
+    if rep is None:
+        rep = json.loads(rep_p.read_text(encoding="utf-8")) if rep_p.exists() else {}
     if rep:
         out.append(("<stem>_<date>.json", rep_p))
     for d in sorted(x for x in parse_dir.iterdir() if x.is_dir() and not x.name.startswith(("_", "."))):
@@ -394,7 +395,7 @@ def plan(
         gen_sha = e.get("sha256")
         st, reason, rep = status_of(name, rep_by_doc, summary, skipped, keep)
         if f.exists():
-            sha, file_size, local_path = sha256_of(f), f.stat().st_size, f
+            sha, file_size, local_path = gen_sha or sha256_of(f), f.stat().st_size, f  # 중복 제외가 남긴 값이 있으면 다시 읽지 않음
         elif gen_sha:  # 파싱이 끝나면 원본을 바로 지움(기본) — 상태는 그대로(ok/partial/failed/…), 로컬만 없음
             sha, file_size, local_path = gen_sha, e.get("size"), None
         else:
@@ -435,7 +436,7 @@ def plan(
         if upload:
             if full_rep is not None:
                 md_text = render_md(full_rep)
-                raw = raw_artifacts(Path(rep_dir).parent, name, figs_by_doc.get(name, []), runs)
+                raw = raw_artifacts(Path(rep_dir).parent, name, figs_by_doc.get(name, []), runs, full_rep)
             else:  # 대표 결과 파일이 없으면(있어선 안 되지만) 올릴 게 없음 — 안전 쪽으로 제외
                 upload = False
         out.append(
@@ -503,8 +504,10 @@ def apply(entries, storage, db, md_dir, prefix=""):
                 tmp.unlink()
         md_path = Path(md_dir) / _local_md_name(row)
         md_path.parent.mkdir(parents=True, exist_ok=True)
-        md_path.write_text(e["md_text"] or "", encoding="utf-8")
-        row["rep_etag"] = storage.put(md_path, fkey)
+        md = (e["md_text"] or "").encode("utf-8")
+        md_path.write_bytes(md)
+        storage.put(md_path, fkey)
+        row["rep_etag"] = hashlib.md5(md).hexdigest()  # 올린 바이트 = 메모리의 글자
         md_path.unlink()
         e["upload_result"] = "uploaded"
         uploaded += 1
@@ -551,29 +554,16 @@ class LocalFolderStore:
         import shutil
 
         shutil.copy2(local_path, dst)
-        return hashlib.md5(Path(local_path).read_bytes()).hexdigest()
 
 
 class S3Store:
-    """실제 Object Storage(PM_BUCKET=버킷 이름) — boto3(pipeline/extract/candidate_ready.py·cli/os_put.py와 같은 접속 env OS_*)."""
+    """실제 Object Storage(PM_BUCKET=버킷 이름) — 받기와 같은 클라이언트(common.store.objectstore.client — 접속 설정 required.object_storage)."""
 
     def __init__(self, bucket):
-        import boto3
-        from botocore.config import Config
-
-        from common.store.objectstore import resolve_tls_verify  # OS_VERIFY_TLS=0 경고는 objectstore 한 곳
+        from common.store import objectstore
 
         self.bucket = bucket
-        os_ = C.cfg().connections.object_storage  # S7c — 설정 객체(키는 SecretStr)
-        self.cli = boto3.client(
-            "s3",
-            endpoint_url=os_.endpoint or None,
-            region_name=os_.region or "us-east-1",
-            aws_access_key_id=C.reveal(os_.access_key),
-            aws_secret_access_key=C.reveal(os_.secret_key),
-            verify=resolve_tls_verify(),
-            config=Config(retries={"max_attempts": 3}),
-        )
+        self.cli = objectstore.client()
 
     def head(self, key):
         from botocore.exceptions import ClientError
@@ -591,7 +581,6 @@ class S3Store:
 
     def put(self, local_path, key):
         self.cli.upload_file(str(local_path), self.bucket, key)
-        return hashlib.md5(Path(local_path).read_bytes()).hexdigest()
 
 
 def make_storage():
