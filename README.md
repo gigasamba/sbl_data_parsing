@@ -4,13 +4,35 @@
 
 ### 0. 읽기 전에 — 꼭 알아 둘 것
 
-> **⚠️ 0.1.0 DB에 `migrate up`을 그냥 하지 않는다.** 마이그레이션 `0002_search`는 0.1.0이 만든 옛 검색 표를 **지운다**. 운영 DB는 새 `required.pg.pg_schema`를 정하고 `pg_dump`로 백업한 뒤 올린다(release-and-patch §8-3).
->
 > **⚠️ `docker compose`·`podman compose`를 직접 부르지 않는다.** 서버 컨테이너는 늘 `bash deploy/host/scripts/host_ctl.sh …`로 다룬다(§5-3 ①).
 >
 > **⚠️ 실제 값(비밀번호·키·토큰·서버 주소)은 문서·채팅·커밋에 쓰지 않는다.** 이 README의 예시 값은 모두 가짜다.
 >
 > **Windows PC는 WSL(리눅스)에서만 쓴다.** 명령은 모두 `.venv/bin/…` 꼴이다.
+
+**PC 첫 실행** — 처음 받은 사람이 PC에서 검색까지 한 번 돌려 보는 길이다(자세한 것은 각 절).
+
+1. 준비 — Python 3.12 가상환경·패키지·커밋 점검 hook·전용 pgvector 컨테이너([§4-1](#4-1-준비처음-한-번)).
+2. 저장소 루트에 `settings.yaml`(권한 600) — `run_env: local`과 모델 접속 칸만 채워도 된다([§4-2](#4-2-settingsyaml-작성)).
+3. 점검 — 모듈 경계·설정 키·selftest·pytest([§4-3](#4-3-점검)).
+4. 테스트 문서 몇 건을 골라 파싱([§4-4](#4-4-파이프라인-실행--문서-몇-건①⑥) ①·②).
+5. 구조화·DB 표·적재([§4-4](#4-4-파이프라인-실행--문서-몇-건①⑥) ③~⑤).
+6. 검색 MCP를 띄우고 `/health`·`mcp_smoke`로 확인([§4-5](#4-5-검색-mcp-서버)).
+7. 브라우저 검증 페이지로 검색해 보기([§4-6](#4-6-검증-페이지브라우저로-검색-확인)).
+8. 외부 모델 허용(`*_allow_external`)을 `false`로 되돌리기([§4-4](#4-4-파이프라인-실행--문서-몇-건①⑥) ⑥).
+
+**담당 연락처**(역할만 — 이름은 맡은 사람이 채운다. 연락처 값은 사내 기록에 둔다)
+
+| 역할 | 맡는 일 | 담당 |
+|---|---|---|
+| 지금 담당자("사용자" — [INDEX 용어집](docs/INDEX.md#glossary)) | 결정·사람 검토(등급 A) 승인·이미지 저장소·릴리스 | `<이름>` |
+| 서버 운영 | 개발·운영 서버 설치·판 올리기·타이머·로그 점검 | `<이름>` |
+| DB 담당(PostgreSQL) | pgvector DB·계정·스키마·마이그레이션 합의·백업·복원 | `<이름>` |
+| EDW 담당(회사 DB) | `AI.ParsingMeta`·`AI.FileStorageMap` 표와 읽기·쓰기 계정 | `<이름>` |
+| 모델 담당 | 내부망 LLM·VLM·임베딩 주소·모델·임베딩 차원 | `<이름>` |
+| 스토리지 담당 | Object Storage 버킷·접근 키 | `<이름>` |
+| MCP 클라이언트 담당 | 검색 MCP를 붙여 쓰는 쪽 — 도구 계약이 바뀌면 알림 받음 | `<이름>` |
+| devops(빌드·반입) | 이미지 빌드·폐쇄망 반입(휠·`assets/`) | `<이름>` |
 
 **용어**
 
@@ -22,7 +44,7 @@
 | 적재(gold) | 번들을 PostgreSQL(pgvector)에 넣는 일 |
 | 마스터 표 | 용어집·고객 명부 표(`<스키마>_master`) — 원본은 git의 `resources/vocab/glossary/*.csv` |
 | 실행 이미지(`*-runtime`) | 코드가 없는 이미지 — 개발 서버는 코드 폴더를 붙여 쓴다 |
-| 루트 · 코드 폴더 | 루트 = 서버 아무 자리의 폴더 하나(예 `/home/dev/` — 판마다 새로). 코드 폴더 = 그 안에 코드 zip을 푼 폴더(`sbl_data_parsing-<판>`) |
+| 루트 · 코드 폴더 | 루트 = 서버 아무 자리의 폴더 하나(예 `/home/sbl/dev/` — 판마다 새로). 코드 폴더 = 그 안에 코드 zip을 푼 폴더(`sbl_data_parsing-<판>`) |
 | 핑거프린트 | 결과를 다시 쓸지 정하는 값 — 바뀌면 서버가 문서를 다시 처리한다 |
 | `$DOCKER` | 컨테이너 명령 — 서버는 `podman`(root 셸). 셸에서 `export DOCKER=podman` |
 
@@ -363,7 +385,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 
 서버는 **공용 폴더 하나**(예 `/home/sbl/`) 아래에서 동작한다. 공용 폴더 바로 아래에 **이미지 폴더**(`sbl_images-main/` — 서버에 한 번 불러오면 모든 벌이 같이 씀)와 **루트**(한 벌 = 루트 하나 — 예 `dev/`, 개발자별 `dev-hong/`)가 있다. 루트 = 코드 zip을 푼 폴더(코드 폴더)의 부모이고, 호스트 스크립트는 자기 자리에서 루트를 구한다. 루트 바로 아래에 **설정 파일**(`settings.yaml`·`edw_chain.yaml`) **· 코드 폴더**(`sbl_data_parsing-<판>/`) **· 결과 폴더**(`output/`) **· 백업**(`backup/`)이 있다. 판(버전)마다 새 루트를 만든다(§5-8). 서버 명령은 모두 root 셸의 코드 폴더에서 실행한다.
 
-> 0.1.0 → 0.2.0 올리기는 [release-and-patch §8](docs/operations/release-and-patch.md#8-020-배포--사람이-할-일)(8-3 — 복사해 붙이는 명령과 기대 출력)을 따른다. 아래는 새 서버 설치다.
+> 이미 돌고 있는 서버를 새 판으로 올리는 법(판 확인·백업·새 이미지·DB 판·되돌리기 — 복사해 붙이는 명령과 기대 출력)은 [upgrade-guide.md](docs/operations/upgrade-guide.md)다. **0.1.0이 만든 DB에 `migrate up`을 그냥 하지 않는다**(검색 판 `0002_search`가 옛 표를 지움 — 그 문서 §0). 아래는 새 서버 설치다.
 
 ### 5-0. 배포 단계와 개발 서버 설치
 
@@ -429,7 +451,7 @@ kill $(cat output/validation/mcp.pid) $(cat output/validation/ui.pid)
 | `mcp-data-parsing` | 3 · 8g(CPU 나눔 비율 4096 — 일괄 1024보다 먼저) | `ops.containers.data_parsing.data_parsing_cpus` · `data_parsing_mem_limit` · `data_parsing_cpu_shares` |
 | `mcp-server` | 1 · 4g | `ops.containers.mcp.mcp_cpus` · `mcp_mem_limit` |
 
-서버 CPU 수보다 큰 값은 컨테이너 도구가 거부한다. CPU 4개 서버라면 예: `parse_cpus: 2`, `data_parsing_cpus: 1`(그러면 `tuning.ops.services.data_parsing.mcp_parse_engine_processes`도 1 이하), `ops.containers.mcp.mcp_cpus: 1`. 바꾼 뒤 `host_ctl.sh up -d --force-recreate …`.
+서버 CPU 수보다 큰 값은 컨테이너 도구가 거부한다. CPU 4개 서버라면 예: `ops.containers.pipeline.pipeline_cpus: 2`, `data_parsing_cpus: 1`(그러면 `tuning.ops.services.data_parsing.mcp_parse_engine_processes`도 1 이하), `ops.containers.mcp.mcp_cpus: 1`. 바꾼 뒤 `host_ctl.sh up -d --force-recreate …`.
 
 **밖에서 붙기(다른 서버의 AI 클라이언트)**
 - 기본 바인드는 `127.0.0.1`. 밖에서 붙게 하려면 `search.server.mcp_bind_host`에 서버 IP를 적는다(`0.0.0.0`은 거부).
@@ -560,7 +582,7 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   
 - `${PARSE_CPUS:-5}` 같은 값은 `host_ctl.sh`가 settings.yaml에서 넘긴다(`load_settings.sh`). 비면 `:-` 뒤 기본값, `${…:?…}`는 꼭 있어야 하는 칸.
 - 그래서 compose를 직접 부르면 값을 못 받아 `:?`에서 멈추거나 기본값으로 뜬다. 바꿀 값은 settings.yaml에 적고 `host_ctl.sh`로 다시 띄운다. `host_ctl.sh`는 부를 때마다 settings.yaml을 다시 읽는다.
 
-**② 설정 파일과 결과 폴더** — `host_ctl.sh init`(§5-0 3번). 결과 폴더는 `<루트>/output`이다(다른 곳에 둘 때만 `ops.host.host_output_dir`를 먼저 적는다). 서버에서 직접 만드는 파일(자리·예시·권한)은 [release-and-patch §8-7](docs/operations/release-and-patch.md#8-7-서버에서-직접-만드는-파일).
+**② 설정 파일과 결과 폴더** — `host_ctl.sh init`(§5-0 3번). 결과 폴더는 `<루트>/output`이다(다른 곳에 둘 때만 `ops.host.host_output_dir`를 먼저 적는다). 서버에서 직접 만드는 파일(자리·예시·권한)은 [release-and-patch §9](docs/operations/release-and-patch.md#9-서버에서-직접-만드는-파일).
 
 <a id="꼭-채울-값"></a>
 **꼭 채울 값 — 서버 settings.yaml.** "형식 예"는 모두 가짜 값이다. dev = 개발 서버, prd = 운영 서버.
@@ -582,14 +604,14 @@ bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp   
 | `required.deploy.pipeline_image` · `mcp_image` | 띄울 이미지 태그(같은 배포 묶음) | §5-0 2번 `load.sh` | dev: `data-pipeline-runtime:<이미지 판>` · prd: `data-pipeline:<VERSION>` | dev·prd | `host_ctl.sh up`이 이미지 없음으로 멈춤 |
 | `required.deploy.host_docs_dir` | 원본 문서 폴더 | 서버 관리자 | `/data/docs` | dev·prd | `host_ctl.sh up`이 `:?` 안내로 멈춤 |
 | `ops.host.host_output_dir` | 결과 폴더 — 비우면 `<루트>/output` | 서버 관리자 | (비움) | dev·prd | — |
-| `required.deploy.pg_container_name` | `pg_dump`·`psql`을 exec할 PG 컨테이너 이름 | DB 담당 | `<컨테이너>` | dev·prd | 백업 명령(release-and-patch §8-3 2) |
+| `required.deploy.pg_container_name` | `pg_dump`·`psql`을 exec할 PG 컨테이너 이름 | DB 담당 | `<컨테이너>` | dev·prd | 백업 명령([upgrade-guide §2](docs/operations/upgrade-guide.md#2-백업)) |
 | `ops.host.container_cli` | 컨테이너 도구 | 정해진 값 | `podman` | dev·prd | 호스트 스크립트가 다른 도구를 부름 |
 
 그 밖 칸은 비워 두면 코드 기본값을 쓴다([env-guide "서버 값으로 적는 칸"](docs/operations/env-guide.md)도 본다). 모델 주소는 모두 내부망 주소여야 한다.
 
 **③ DB 마이그레이션** — 적재·검색 전에 끝낸다. `pipe_exec.sh`는 상주 `data-pipeline` 안에서 돌므로 먼저 `host_ctl.sh up -d data-pipeline`.
 
-> ⚠️ 0.1.0이 쓰던 스키마에 `up`하면 옛 표가 지워진다(§0). 새 서버가 아니면 release-and-patch §8-3을 따른다.
+> ⚠️ 0.1.0이 쓰던 스키마에 `up`하면 옛 표가 지워진다. 새 서버가 아니면 [upgrade-guide.md](docs/operations/upgrade-guide.md)를 따른다.
 
 ```bash
 # 0. (DB마다 처음 한 번 — DB 관리자) vector 확장 — 없으면 migrate·적재가 "vector 확장 없음"으로 멈춘다
@@ -611,7 +633,7 @@ bash deploy/host/scripts/pipe_exec.sh check_env       # PG·VLM·설정 요약(�
 bash deploy/host/scripts/pipe_exec.sh check           # 자원·쓰기 권한·디스크·PG·모델 요약(⚠️ 실패해도 종료 0 — 출력을 읽는다)
 ```
 
-- EDW 로그인과 Object Storage 버킷을 따로 확인하는 명령은 없다. 첫 파싱 뒤 publish 미리보기(`bash deploy/host/scripts/pipe_exec.sh publish --dry-run` — 쓰기 0)로 확인하고, 실제 publish 한 번 뒤 EDW 행과 Object Storage 파일을 본다 — 명령은 [release-and-patch §8-3 8](docs/operations/release-and-patch.md#8-3-실행-순서--복사해-붙이는-명령dev-먼저-그다음-prd).
+- EDW 로그인과 Object Storage 버킷을 따로 확인하는 명령은 없다. 첫 파싱 뒤 publish 미리보기(`bash deploy/host/scripts/pipe_exec.sh publish --dry-run` — 쓰기 0)로 확인하고, 실제 publish 한 번 뒤 EDW 행과 Object Storage 파일을 본다 — 명령은 [upgrade-guide §10](docs/operations/upgrade-guide.md#10-올린-뒤-점검).
 - ⚠️ 실제 publish(`pipe_exec.sh publish`)는 한 번만 한다. 다시 돌리면 Object Storage에 같은 결과를 새 시각 이름으로 또 올린다(EDW는 이미 있는 행을 건너뜀).
 
 **⑤ 이미지 점검**
@@ -709,11 +731,11 @@ sudo systemctl enable --now podman-restart
 
 ### 5-8. 새 판 올리기 — 새 루트
 
-판(버전)마다 새 루트를 만든다. 판끼리 파일이 섞이지 않고, 앞 루트가 그대로 남아 되돌리기가 쉽다.
-1. 새 루트(예 `/home/dev-0.3.0/`)를 만들고 새 코드 zip(이미지가 바뀌었으면 이미지 zip도)을 푼다.
+판(버전)마다 새 루트를 만든다. 판끼리 파일이 섞이지 않고, 앞 루트가 그대로 남아 되돌리기가 쉽다. 백업·새 이미지·DB 판·결과 폴더에서 옮길 파일·되돌리기까지 전체 순서는 [upgrade-guide.md](docs/operations/upgrade-guide.md) — 아래는 줄인 것이다.
+1. 새 루트(예 `/home/sbl/dev-0.3.0/`)를 만들고 새 코드 zip(이미지가 바뀌었으면 이미지 zip도)을 푼다.
 2. 앞 루트의 `settings.yaml`·`edw_chain.yaml`을 새 루트로 복사한다(`cp -p`).
 3. 새 코드 폴더에서 `host_ctl.sh init --group <운영 그룹>` → `host_ctl.sh up -d --force-recreate data-pipeline mcp-data-parsing mcp` → `host_ctl.sh check` → `host_ctl.sh timers`(타이머를 새 루트로 옮김).
-- 검색 DB는 같은 PG를 그대로 본다. 새 문서 판정은 EDW 기준이라 새 `output/`이 비어 있어도 이어서 돈다.
+- 검색 DB는 같은 PG를 그대로 본다. 새 문서 판정은 EDW 기준이라 새 `output/`에서도 이어서 돈다 — 단 FAQ 교체 기록 `_faq_seen.txt`·임베딩 캐시 `edw/embed_cache.sqlite`는 앞 루트 `output/`에서 복사한다(없으면 FAQ 통째 교체·임베딩 다시 부름 — [upgrade-guide §4](docs/operations/upgrade-guide.md#4-새-루트에-새-코드-폴더)).
 - 되돌리기: 앞 루트의 코드 폴더에서 `host_ctl.sh up -d --force-recreate …` → `host_ctl.sh timers`.
 - 코드만 바뀐 판(`DEPS_HASH` 같음)은 이미지를 다시 만들지 않는다 — 개발 서버 [release-and-patch §1-1](docs/operations/release-and-patch.md#1-1-개발-서버--새-루트로-코드-바꾸기) → 운영 서버 §1-2(굽기).
 

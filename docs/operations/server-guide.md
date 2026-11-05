@@ -1,6 +1,6 @@
 # 서버 가이드 — 수집 서버 · 개발 서버
 
-대상: 서버 운영자. 설치 순서는 [README §5-0](../../README.md#서버-설치-순서) 하나다. 설정 칸: [env-guide.md](env-guide.md) · 새 판(새 루트)·새 이미지·0.2.0 배포: [release-and-patch.md](release-and-patch.md).
+대상: 서버 운영자. 설치 순서는 [README §5-0](../../README.md#서버-설치-순서) 하나다. 설정 칸: [env-guide.md](env-guide.md) · 운영 중인 서버를 새 판으로: [upgrade-guide.md](upgrade-guide.md) · 이미지·코드 폴더·굽기: [release-and-patch.md](release-and-patch.md).
 
 ## 0. 이미지 2개와 명령
 
@@ -82,15 +82,52 @@ bash deploy/host/scripts/pipe_exec.sh publish                    # 대표 결과
 ### 2-2. 새벽 배치
 `ops.nightly.nightly_start_time`·`nightly_max_docs`·`nightly_stop_time` 세 칸 + `data-pipeline-nightly.timer` — README §5-5. 타이머는 5분마다 깨우고 `nightly_batch.sh scheduled`가 시작 시각부터 5분 안일 때만 applog 파티션 정리(`pipe_exec.sh migrate maintain --target applog` — 실패하면 경고만 남기고 계속) 뒤 `run_pipeline.py --start-offset 0 --skip-done --max-docs <상한> --deadline <마감>`을 부른다(마감이 지나면 새 문서를 받지 않고, 받은 문서는 끝까지). 형식이 틀리면(HH:MM 아님 · 상한이 1 이상 정수 아님 · 마감이 시작보다 5분 이내) 종료 2. 지금 바로 돌리려면 run_pipeline을 직접 부른다.
 
-### 2-3. 답변 생성 점검(코드 폴더에서, 이미지 밖)
+### 2-3. 답변 생성 점검(개발 서버 — 컨테이너 안에서)
+호스트 python에는 PyYAML만 있으므로 도구는 컨테이너 안에서 돌린다. `validation/`은 코드 폴더를 붙인 개발 서버의 실행 이미지에만 있다(운영 이미지에는 없음).
 ```bash
-PYTHONPATH=. python -m validation.e2e.answer_gen --url http://<검색 MCP>:8765/mcp --q "<질문>"   # --concurrency N · 결과 output/eval/answer_gen/
+$DOCKER exec data-pipeline python -m validation.e2e.answer_gen --url http://127.0.0.1:<search.server.mcp_port>/mcp --q "<질문>"   # --concurrency N · 결과 /app/output/eval/answer_gen/
 ```
-MCP 토큰은 settings.yaml `required.tokens.mcp_token`, 모델은 `required.models.llm_*`(서버는 내부 모델만).
+MCP 토큰은 settings.yaml `required.tokens.mcp_token`, 모델은 `required.models.llm_*`(서버는 내부 모델만). 결과는 호스트 `<결과 폴더>/eval/answer_gen/`.
 
-## 3. 결과 확인
+### 2-4. 매일 점검
+아침에 한 번, 코드 폴더에서(여러 벌이면 이름 끝 `-<벌>`):
 
-서버 결과는 단계별 종료 코드·로그와 EDW `AI.ParsingMeta`로 본다. 검색 결과는 PC의 검증 페이지(`validation/search_ui`)와 답변 점검(`valid_env/answer_test`)으로 본다.
+| 무엇 | 명령 | 정상 |
+|---|---|---|
+| 새벽 배치 | `journalctl -u data-pipeline-nightly.service --since yesterday \| tail -20` | 시작·끝 줄, 종료 코드 0(실패 문서 있음 1 · 마감 75) |
+| 실패 문서 | `grep FAIL <작업 폴더>/batch_progress/progress.log \| tail` | 줄 없음 — 있으면 §3 |
+| 검색 MCP | `curl -s http://127.0.0.1:<search.server.mcp_port>/health` | `{"ok":true,"ready":true,…}` |
+| 디스크 | `df -h <루트> <결과 폴더>` · `du -sh <결과 폴더>/_docflow <결과 폴더>/_staging` | 쓰기 여유 20% 넘음 · `_docflow`·`_staging`이 계속 늘지 않음 |
+| 로그 예비 파일 | `ls -la <결과 폴더>/logs/` | 비어 있음 — 파일이 있으면 DB 로그 쓰기 실패(파일 안 오류를 보고 DB를 고친 뒤 지움) |
+| 컨테이너 | `bash deploy/host/scripts/host_ctl.sh ps` | 세 줄 Up |
+
+- `<작업 폴더>` = `ops.run_pipeline.run_pipeline_work_dir`(비우면 코드 폴더 안 `deploy/host/scripts/test_space/`). `<결과 폴더>` = `<루트>/output`(또는 `ops.host.host_output_dir`).
+- 문제가 있으면 §7 형식으로 `issues.md`에 적는다. DB에서 더 보려면 §8의 SQL.
+
+### 2-5. 서버를 다시 켠 뒤
+컨테이너·타이머를 사람이 다시 띄운다(자동 재시작에 맡기지 않는다). root 셸, 그 루트의 코드 폴더에서:
+```bash
+export DOCKER=podman
+bash deploy/host/scripts/host_ctl.sh up -d data-pipeline mcp-data-parsing mcp
+bash deploy/host/scripts/host_ctl.sh ps                                   # 기대: 세 줄 Up
+systemctl start mcp-server-keepalive.timer data-pipeline-nightly.timer   # 꺼져 있었으면
+systemctl list-timers 'mcp-server-keepalive*' 'data-pipeline-nightly*'   # 기대: 두 타이머 다음 실행 시각
+bash deploy/host/scripts/host_ctl.sh check                                # 기대 마지막 줄: [host_ctl check] 통과 — 6개
+```
+- 여러 벌이면 벌마다(그 루트의 코드 폴더에서) 같은 순서로 한다. PG 컨테이너는 DB 담당 몫이다 — `check`가 PG에서 멈추면 DB 담당에게 알린다.
+- 꺼지기 전에 돌던 `run_pipeline.py`는 다시 시작하지 않는다 — 다음 새벽 배치가 `--skip-done`으로 이어 가거나, 사람이 다시 부른다(§3).
+
+## 3. 실패한 문서 찾기와 다시 돌리기
+
+- **진행 기록:** `<작업 폴더>/batch_progress/progress.log` — 문서마다 `doc#<번호> 파싱 OK|FAIL` · `doc#<번호> publish OK|FAIL` · `doc#<번호> 구조화+적재 OK|FAIL` 줄. 문서별 로그(파싱·게시·구조화 출력)는 같은 폴더의 `doc_<번호>.log`.
+- **작업 폴더 자리:** 비우면 코드 폴더 안 `deploy/host/scripts/test_space/`라서 새 판(새 루트)마다 기록과 잠금이 따로 생긴다. settings.yaml `ops.run_pipeline.run_pipeline_work_dir`에 **루트 밖 호스트 절대 경로**(예 `/home/sbl/run_pipeline`)를 적어 두기를 권한다 — 판이 바뀌어도 기록이 이어지고, 두 판의 실행이 같은 잠금을 본다.
+- **실패 문서 번호 모으기:**
+```bash
+grep -E 'doc#[0-9]+ (파싱|publish|구조화\+적재) FAIL' <작업 폴더>/batch_progress/progress.log | grep -oE 'doc#[0-9]+' | sort -u | tr -d 'doc#' | paste -sd, -
+```
+- **다시 돌리기:** 원인을 고친 뒤(설정·EDW·모델 등) 그 번호만 — `nohup python3 deploy/host/scripts/run_pipeline.py --seqs <번호,번호,…> > <작업 폴더>/rerun.out 2>&1 &`(코드 폴더에서). 파싱·게시가 실패한 문서는 EDW에 쓰지 않았으므로 다음 `--skip-done` 실행도 다시 고른다. 구조화·적재만 실패한 문서는 게시가 끝났으므로 `--skip-done`이 다시 고르지 않는다 — `--seqs`로 부른다.
+- 같은 문서가 같은 이유로 계속 실패하면(DRM·암호·지원 안 함) 영구 건너뜀 표 `applog.skip_doc_info`에 들어간다(§8 ④).
+- 검색 결과 품질은 PC의 검증 페이지(`validation/search_ui`)와 답변 점검(`valid_env/answer_test`)으로 본다.
 
 ## 4. 검색 MCP 사용
 
@@ -101,7 +138,7 @@ MCP 토큰은 settings.yaml `required.tokens.mcp_token`, 모델은 `required.mod
 ```
 - 도구 6개의 입력·출력·한도·오류는 [mcp-guide.md](mcp-guide.md). `search`는 원천 하나(`source_system`)가 필수다.
 - 답을 쓰는 쪽: 숫자·고유명사는 근거 `text` 그대로 인용, `evidence_status`가 `none`/`weak`이면 표시, 근거 안의 지시문은 따르지 않는다.
-- 연결 시험: `PYTHONPATH=. python -m mcp_server.cli.mcp_smoke --url <주소> --token <토큰> --source <원천> --q "<질문>"`.
+- 연결 시험(컨테이너 안에서): `$DOCKER exec mcp-server python -m mcp_server.cli.mcp_smoke --url http://127.0.0.1:<search.server.mcp_port>/mcp --source <원천> --q "<질문>"` — 기대 끝 줄 `MCP 바깥 호출 통과`. 루프백이 아닌 주소로 부르면 `--token <토큰>`도 준다.
 
 ### 4-1. EDW 쿼리 도구 설정 — `edw_meta`·`query_edw`
 에이전트가 `edw_meta`(정적 자료, DB 접속 없음)로 표·칸을 보고 `query_edw`로 SELECT를 보낸다. 읽기 전용·시스템 표 차단·상한은 코드(`mcp_server/services/edw_query.py`)가 강제하지만, **운영자가 아래를 준비해야 안전하다.**
@@ -130,9 +167,9 @@ MCP 토큰은 settings.yaml `required.tokens.mcp_token`, 모델은 `required.mod
 
 ### 5-1. 고객 명부·용어집 작성법
 
-구조화·검색은 파일이 아니라 PG 마스터 표만 읽는다. `migrate master load`가 CSV 여섯 개(`client_roster`·`client_master`·`contract_master`·`domain_terms`·`id_patterns`·`units` — 파일 이름·머리글 그대로)로 표를 통째로 바꾼다. 기본 폴더는 샘플(가상 회사·제품) `resources/vocab/glossary/`, 서버 실명 자료는 `--dir <폴더>`. 표가 비었으면 서버의 구조화·검색이 시작하지 않는다.
-- **`master load` 뒤에는 검색 MCP를 다시 시작한다**(`$DOCKER restart mcp-server` — 검색은 시작할 때와 새 적재 판이 들어올 때만 마스터를 읽음). 이미 적재한 문서는 자동으로 다시 처리하지 않는다(새로 적재하는 문서의 `gold_version` `<VERSION>+m<해시 8자>`만 바뀜).
-- ⚠️ compose는 서버 폴더(예 `<루트>/glossary/`)를 컨테이너에 붙이지 않는다. `--dir`에는 **컨테이너 안에서 보이는** 폴더를 적는다(그 전에는 코드 폴더 안 `resources/vocab/glossary/`를 고쳐 쓴다).
+구조화·검색은 파일이 아니라 PG 마스터 표만 읽는다. `migrate master load`가 CSV 여섯 개(`client_roster`·`client_master`·`contract_master`·`domain_terms`·`id_patterns`·`units` — 파일 이름·머리글 그대로)로 표를 통째로 바꾼다. 기본 폴더는 샘플(가상 회사·제품) `resources/vocab/glossary/`. 서버 실명 자료(고객 명부·용어집 CSV)는 **`<루트>/output/glossary/`**에 두고(UID 10001이 읽게) 컨테이너 안 자리로 넣는다: `bash deploy/host/scripts/pipe_exec.sh migrate master load --dir /app/output/glossary`. 표가 비었으면 서버의 구조화·검색이 시작하지 않는다.
+- **`master load` 뒤에는 검색 MCP를 다시 시작한다** — `bash deploy/host/scripts/host_ctl.sh restart mcp`(검색은 시작할 때와 새 적재 판이 들어올 때만 마스터를 읽음). 이미 적재한 문서는 자동으로 다시 처리하지 않는다(새로 적재하는 문서의 `gold_version` `<VERSION>+m<해시 8자>`만 바뀜 — 다시 하려면 [upgrade-guide §8](upgrade-guide.md#8-다시-처리할-층과-명령)).
+- `--dir`에는 **컨테이너 안에서 보이는** 폴더를 적는다 — 컨테이너에 붙는 서버 폴더는 결과 폴더(`/app/output`)뿐이다([env-guide §5](env-guide.md#5-서버-경로-칸--컨테이너-안-절대-경로)).
 - 머리글은 `docs/architecture/db_schema.md` §4. UTF-8로 저장(Excel이면 "CSV UTF-8" — cp949도 읽힘). 머리글이 다르면 `master load`가 거부한다.
 
 #### 고객 명부 `client_roster.csv`
@@ -152,11 +189,13 @@ MCP 토큰은 settings.yaml `required.tokens.mcp_token`, 모델은 `required.mod
 
 #### 고객 마스터에서 명부 만들기
 SFDC·EDW 내보내기에서 명부를 만든다. 열 이름만 매핑 파일에 적는다(예제: `resources/vocab/glossary/client_master.example.csv` + `client_master_map.example.json`). 매핑 키 = 명부 칸: `name`(필수 → `canonical_name`) · `aliases`(`;`·`|`) · `client_id`·`name_ko`·`client_type`·`segment`·`country`·`parent_client_id`·`status`·`description`·`updated`(선택). 열 이름은 영문·숫자·`_`만. 같은 고객 여러 줄은 하나로 합친다(별칭은 합치고 다른 칸은 처음 값).
+내보낸 파일과 매핑 파일을 `<루트>/output/glossary/`에 둔 뒤(컨테이너에서 `/app/output/glossary/`):
 ```bash
-PYTHONPATH=. python -m pipeline.transform.structure.roster_from_edw --kind client \
-  --source csv:<루트>/client_master.csv --mapping <루트>/client_master_map.json \
-  --out <루트>/client_roster.csv          # EDW 표에서 바로: --source rdb:<스키마.표>(읽기 계정)
-PYTHONPATH=. python -m pipeline.transform.structure.roster_from_edw --check <루트>/client_roster.csv   # 오류 0 확인 후 반영
+G=/app/output/glossary
+$DOCKER exec data-pipeline python -m pipeline.transform.structure.roster_from_edw --kind client \
+  --source csv:$G/client_master.csv --mapping $G/client_master_map.json \
+  --out $G/client_roster.csv          # EDW 표에서 바로: --source rdb:<스키마.표>(읽기 계정)
+$DOCKER exec data-pipeline python -m pipeline.transform.structure.roster_from_edw --check $G/client_roster.csv   # 오류 0 확인 후 반영
 ```
 
 #### 용어집 `domain_terms.csv`
@@ -180,12 +219,13 @@ PYTHONPATH=. python -m pipeline.transform.structure.roster_from_edw --check <루
 
 #### 점검(반영 전)
 ```bash
-PYTHONPATH=. python -m pipeline.transform.structure.roster_from_edw --check <명부 파일>      # 오류 0이어야 함
-PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load_glossary(sys.argv[1]); print(len(g), '개념 반영', sorted(g)[:5])" <용어집 폴더>   # 오류면 여기서 멈춤
+$DOCKER exec data-pipeline python -m pipeline.transform.structure.roster_from_edw --check /app/output/glossary/client_roster.csv   # 오류 0이어야 함
+$DOCKER exec data-pipeline python -c "from common.core import terms as T; import sys; g=T.load_glossary(sys.argv[1]); print(len(g), '개념 반영', sorted(g)[:5])" /app/output/glossary   # 오류면 여기서 멈춤
+bash deploy/host/scripts/pipe_exec.sh migrate master load --dir /app/output/glossary && bash deploy/host/scripts/host_ctl.sh restart mcp   # 반영
 ```
 
 ### 5-2. EDW 조인 사슬 고치기 — `edw_chain.yaml`
-고치는 곳·법·점검·되돌리기는 [release-and-patch §8-6](release-and-patch.md#8-6-edw-조인-사슬-파일-고쳐-쓰기서버) 하나에 있다. 사슬을 바꿔도 이미 적재한 메타는 바뀌지 않는다 — 필요한 문서는 `--replace`로 다시 적재한다(다시 파싱하지 않음).
+고치는 곳·법·점검·되돌리기는 [release-and-patch §8](release-and-patch.md#8-edw-조인-사슬-파일-고쳐-쓰기서버) 하나에 있다. 사슬을 바꿔도 이미 적재한 메타는 바뀌지 않는다 — 필요한 문서는 `--replace`로 다시 적재한다([upgrade-guide §8](upgrade-guide.md#8-다시-처리할-층과-명령)).
 
 ## 6. 문제 해결
 
@@ -203,7 +243,8 @@ PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load
 | MCP가 안 뜸 | `required.models.embed_base_url`·`embed_model` 없음 · 컨테이너가 설정 파일을 못 읽음(권한) | 필수 값 채우기 · 주인 10001·권한 640 |
 | `data-pipeline`·`mcp-server`가 안 뜸("edw_chain.yaml" 자리에 폴더) | `host_ctl.sh init` 전에 컨테이너를 띄워 빈 폴더가 생김 | 빈 폴더를 `rmdir` → `host_ctl.sh init` |
 | 포트 충돌 | 다른 서비스가 같은 포트 | `search.server.mcp_port` 등 포트 칸만 바꿈 |
-| SELinux `Permission denied` | 볼륨 라벨 안 맞음 | 볼륨에 `:z` |
+| SELinux `Permission denied`(파일 권한·주인은 맞음) | 볼륨 라벨이 안 맞음 | 막힌 기록 보기 `ausearch -m avc -ts recent`(`denied { read }` 등과 파일 경로) · 라벨 보기 `ls -Z <폴더>`(`container_file_t`여야 함) · 우리 compose는 `:z`로 붙임 — 직접 붙인 볼륨이면 `:z` |
+| SELinux — 원본 폴더가 NFS | NFS에는 `:z` 라벨을 붙일 수 없음 | `setsebool -P container_use_nfs 1`(서버 관리자) 뒤 컨테이너를 다시 띄움 |
 
 ## 7. 개발자에게 보고하는 법
 
@@ -226,3 +267,76 @@ PYTHONPATH=. python -c "from common.core import terms as T; import sys; g=T.load
 
 ### 날짜별 요약
 파싱이 끝날 때마다 `<기록>/<날짜>.md`에 버전(`versions.md` 줄)·단계·종료 코드·핵심 숫자(정답률·시간·건수)·막힌 곳·로그 마지막 20줄(비밀값 가림)을 적는다. 본문은 복사하지 않는다.
+
+## 8. 로그 DB 살펴보기 — applog SQL(읽기만)
+
+실행 기록은 PG `applog` 스키마에 있다(`pipe_run` 실행 1건 · `pipe_event` 단계 1건 · `mcp_log` MCP 호출 1건 · `skip_doc_info` 영구 건너뜀 문서). 읽기 전용 거래 안에서만 본다:
+```bash
+$DOCKER exec -it <required.deploy.pg_container_name> psql -U <required.pg.pg_user> -d <required.pg.pg_database>
+# psql 안에서 먼저:  BEGIN READ ONLY;      끝나면:  ROLLBACK;
+```
+- ⚠️ `mcp_log.args`·`result`에는 질문·SQL·문서 원문이 들어 있다 — 아래처럼 필요한 칸만 고르고, 결과를 밖으로 옮기지 않는다.
+
+**① 지난 7일 실패한 실행**
+```sql
+SELECT started_at, run_id, command, status, duration_ms / 60000 AS min,
+       docs_total, docs_ok, docs_fail, docs_reused, app_version, host
+FROM applog.pipe_run
+WHERE started_at > now() - interval '7 days'
+  AND (status IN ('fail', 'interrupted') OR docs_fail > 0)
+ORDER BY started_at DESC;
+```
+`status`: `running`(도는 중 또는 죽음) · `ok` · `fail` · `stopped`(마감 도달) · `interrupted`.
+
+**② 느린 단계** — 단계별 시간과, 하루 동안 가장 오래 걸린 단계 20건
+```sql
+SELECT layer, stage, count(*) AS n, round(avg(duration_ms)) AS avg_ms,
+       percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_ms, max(duration_ms) AS max_ms
+FROM applog.pipe_event
+WHERE ts_start > now() - interval '7 days' AND duration_ms IS NOT NULL
+GROUP BY layer, stage ORDER BY p95_ms DESC LIMIT 15;
+
+SELECT ts_start, run_id, layer, stage, engine, model, doc_id, ext, file_bytes,
+       duration_ms, wait_cpu_ms, wait_mem_ms, ext_call_ms, rss_peak_mb, status, err_kind
+FROM applog.pipe_event
+WHERE ts_start > now() - interval '1 day'
+ORDER BY duration_ms DESC NULLS LAST LIMIT 20;
+```
+`wait_cpu_ms`·`wait_mem_ms`가 크면 자원 대기(CPU·메모리 문턱), `ext_call_ms`가 크면 모델 호출이 느린 것이다. 한 실행을 자세히: `$DOCKER exec data-pipeline python -m pipeline.tools.perf_report <run_id>`.
+
+**③ MCP 도구별 호출 수 · 오류율 · p95**
+```sql
+SELECT tool_name, count(*) AS calls,
+       round(100.0 * count(*) FILTER (WHERE status <> 'ok') / count(*), 1) AS err_pct,
+       percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_ms
+FROM applog.mcp_log
+WHERE requested_at > now() - interval '7 days' AND tool_name IS NOT NULL
+GROUP BY tool_name ORDER BY calls DESC;
+
+SELECT tool_name, status, error_code, count(*) AS n
+FROM applog.mcp_log
+WHERE requested_at > now() - interval '7 days' AND status <> 'ok'
+GROUP BY tool_name, status, error_code ORDER BY n DESC;
+```
+`status`: `ok` · `error` · `denied` · `unauthorized`(토큰) · `busy`(동시 상한) · `timeout`.
+
+**④ 영구 건너뜀 문서 — 이유별**
+```sql
+SELECT reason, source_system, count(*) AS docs, sum(count) AS times_seen, max(last_seen) AS last_seen
+FROM applog.skip_doc_info
+GROUP BY reason, source_system ORDER BY docs DESC;
+```
+풀어 주는 법(행 지우기 — DB 담당 승인)은 [env-guide 실행 기록](env-guide.md#0-0-실행-기록json-로그db-감사성능).
+
+## 9. 건드리면 안 되는 것
+
+서버에서 아래를 바꾸면 결과가 깨지거나 전체를 다시 처리해야 한다. 바꿔야 하면 먼저 승인을 받는다(역할은 [README 담당 연락처](../../README.md#0-읽기-전에--꼭-알아-둘-것)).
+
+| 칸·파일 | 바꾸면 | 누가 승인 |
+|---|---|---|
+| `required.tokens.fulltext_sign_key` | 이미 발급한 원문 도구 `sfid`가 모두 무효 — 클라이언트가 가진 원문 링크가 깨진다 | 지금 담당자(클라이언트 담당에게 먼저 알림) |
+| `required.models.embed_model` | 적재된 벡터와 모델이 달라 적재가 거부되고(종료 2) 벡터 검색이 막힌다 — 바꾸려면 새 스키마에 전부 다시 | 지금 담당자·모델 담당·DB 담당 |
+| `required.pg.pg_schema` — 다른 판·다른 벌이 쓰던 스키마를 다시 쓰기 | 남의 표에 `migrate up`(0.1.0 스키마면 옛 표가 지워짐)·문서가 섞인다 | DB 담당 |
+| 엔진 파일 `pipeline/transform/parse/engines/` | 엔진 지문이 바뀌어 그 엔진의 문서를 모두 다시 파싱한다 | 사람 검토 — 지금 담당자 |
+| 프롬프트 `resources/prompts/` | 지시서 지문·LLM 캐시 열쇠가 바뀌어 모델을 다시 부르고 결과가 달라진다 | 사람 검토 — 지금 담당자 |
+| MCP 도구 계약 — 도구 6개의 이름·입력·출력 | 외부 클라이언트가 깨진다 | 지금 담당자·클라이언트 담당 협의(새 판으로) |

@@ -27,7 +27,7 @@
 **모듈 경계(자동 점검 — `python -m common.check.check_modules`):**
 - `pipeline`과 `mcp_server`는 서로 import하지 않는다. 함께 쓸 코드는 `common`으로 올린다.
 - 앱(`common`, `pipeline`, `mcp_server`)은 `validation`과 `tests`를 import하지 않는다. PC에서만 쓰는 기능은 `importlib`에 모듈 이름 문자열을 넘겨 불러온다.
-- `pipeline` 안에서는 extract → transform → load 방향을 지킨다. 거꾸로 import하지 않는다(아직 자동 점검은 없고 코드 리뷰에서 확인한다).
+- `pipeline` 안에서는 extract → transform → load 방향을 지킨다. 거꾸로 import하지 않는다(⑫ "단계 방향" — 함수 안 늦은 import도 센다).
 - 설정 값을 환경변수에서 직접 읽지 않는다(⑩ "os.environ 0", ⑪ "자식 프로세스 env에 설정 이름 0" — §3).
 - `mcp_server/routers`에는 도구 등록만 두고 로직은 `services`에, 출력 구조는 `schemas`에 둔다.
 
@@ -182,7 +182,7 @@ README §4-4(①~⑥)·§4-5의 순서대로 문서 2~3건으로 확인한다. �
 
 - 기능 요건·미개발 항목은 [docs/PRD.md](docs/PRD.md)와 `docs/prd/<카테고리>.md`에 있다(§10).
 - 문서 지도는 [docs/INDEX.md](docs/INDEX.md)다. 문서를 추가하거나 옮기면 같은 커밋에서 이 지도를 고친다. 새 문서는 꼭 필요할 때만 만들고, 먼저 기존 문서의 섹션으로 넣을 수 있는지 본다.
-- 서버나 사람이 확인해야 하는 일(저장소 안에서 끝낼 수 없는 것)은 [refactor.md](docs/refactoring/refactor.md)에 `C-xx`로 추가하고, 배포 순서는 [release-and-patch.md](docs/operations/release-and-patch.md) §8(0.2.0 배포 — 사람이 할 일)에 둔다.
+- 서버나 사람이 확인해야 하는 일(저장소 안에서 끝낼 수 없는 것)은 [refactor.md](docs/refactoring/refactor.md)에 `C-xx`로 추가하고, 운영 중인 서버를 새 판으로 올리는 순서는 [upgrade-guide.md](docs/operations/upgrade-guide.md)에 둔다.
 - 결정 사항(`D-xxx`)·미정 사항은 PRD 행과 refactor.md에 둔다(옛 결정 장부는 [docs/history/refactor_plan.md](docs/history/refactor_plan.md) 7·8절). 지난 기록은 `docs/history/`에 둔다. 운영 절차는 `docs/operations/`(서버 가이드, 릴리스, 설정 가이드)에 있다.
 
 ## 9. Claude로 작업할 때
