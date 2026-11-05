@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """텍스트 파싱 작업 서비스 — mcp-data-parsing 컨테이너의 주 프로세스(compose.data-parsing.yml — 죽으면 restart가 다시 띄움).
 검색 MCP(mcp-server)의 parse_document 도구가 localhost HTTP로 부른다(비정형 파일 → 텍스트 파싱 대표 결과).
-범위 — 준비 → run_engines(문서의 엔진들 동시에) → 채점 → 대표 결과까지. 구조화·임베딩·적재 없음 · 이미지 파일은 받지 않음 ·
+범위 — 준비 → parse_engines(문서의 엔진들 동시에) → 채점 → 대표 결과까지. 구조화·임베딩·적재 없음 · 이미지 파일은 받지 않음 ·
 스캔 PDF는 내부망 VLM(qwen_vlm). 토큰은 settings.yaml required.tokens.mcp(검색 MCP와 같은 칸, 없으면 시작 거부).
 API(127.0.0.1:8766 · Bearer):  POST /jobs {content_b64+filename | path} → 202 {job_id, queue_position}
   GET /health  → {ok, ready, running, queued} · GET /jobs/<id> → {status, result, elapsed_ms}"""
@@ -26,7 +26,7 @@ from common.core import exitclean, parse_limit
 from common.core.paths import APP_ROOT
 from pipeline import config as pc
 from pipeline import parse_steps
-from pipeline.extract.engine_stack import allowed_exts
+from pipeline.transform.parse.engine_check import allowed_exts
 
 SERVICE_DIR = APP_ROOT / "output" / "_mcp_parse"  # 이미지 안 /app/output/_mcp_parse(op-13 — 임시 자리는 _ 접두)
 _JOB_ENVS: dict = {}  # (PARSE_POST, SETTINGS_FILE) → 작업 자식 env에 얹을 몫(덮기 파일 SETTINGS_FILE + 엔진·인계 칸 — VS7e2 R-4)
@@ -95,7 +95,7 @@ def _jail(path_str):
 
 def _is_scan(path):
     """스캔 PDF인지 — 엔진 고르기와 같은 판정(pdf_kind)이라 안내가 실제로 돈 엔진과 어긋나지 않는다."""
-    from pipeline.shared.parse_run import pdf_kind
+    from pipeline.shared.pdf_kind import pdf_kind
 
     return Path(path).suffix.lower() == ".pdf" and pdf_kind(path)[0] == "pdf_image"
 
@@ -111,7 +111,7 @@ NO_REP_NOTE = "텍스트 추출 결과 없음 — DRM/암호화 문서일 가능
 def skip_note(scan):
     """파이프라인 없이 바로 빈 결과로 끝낼 문서면 그 안내(VLM 설정 — qwen_vlm REQUIRES_ENV — 이 빈 스캔 PDF), 아니면 None.
     (이미지 확장자는 allowed_exts()에 없어 여기 오지 않음 — 11-01에 도달 불가 갈래 _IMAGE_EXTS·IMAGE_NOTE 지움.)"""
-    from pipeline.extract.engines import registry
+    from pipeline.transform.parse.engines import registry
 
     return VLM_UNSET_NOTE if scan and registry.missing_env("qwen_vlm") else None
 

@@ -8,7 +8,7 @@
   스캔 쪽 채움 — .pdf_text 대표 안의 스캔 쪽만 쪽 VLM 글로(쪽 번호를 확정할 수 없거나 글이 깨졌으면 건너뜀).
   후보정(apply_post — vlm_page·figures·charts·supsub·attachments) → 표 제자리 넣기(table_inline).
   표기가 갈린 엔진 충돌은 _rep/conflicts.jsonl에도 모은다.
-산출 = 엔진 공통 출력 계약(text·tables·facts·boxes) + "rep" — 구조화(build_bundle)는 이것만 읽는다.
+산출 = 엔진 공통 출력 계약(text·tables·facts·boxes) + "rep" — 구조화(gold_bundle)는 이것만 읽는다.
 사용: python -m pipeline.transform.represent.build_rep [--stack stack.json] [--parse-dir output/parse]
 """
 
@@ -22,6 +22,7 @@ from common.core import span as SP
 from common.core.console import utf8_stdout
 from pipeline import config as pc
 from pipeline.shared.ext_groups import IMG_EXTS
+from pipeline.shared.pdf_kind import doc_pages
 
 
 def _richness(rep_json):
@@ -296,20 +297,6 @@ def _page_agreement(text_a, text_b, min_len=HIDDEN_AGREE_MIN_LEN):
     return round(len(ga & gb) / len(ga | gb), 4)
 
 
-def _doc_page_count(doc_path):
-    """문서의 실제 쪽 수 — \\f(쪽 경계) 개수가 이것과 다르면 중간에 글자 0개(빈) 쪽이 있어 \\f로 나눈 쪽 번호를
-    못 믿는다(빈 쪽이 있으면 뒤 쪽 번호가 밀림). 이미지 파일은 항상 1쪽. 못 세면(손상 등) None — 호출부가 쪽 번호 확정 불가로 처리."""
-    p = Path(doc_path)
-    if p.suffix.lower() != ".pdf":
-        return 1
-    try:
-        import pypdfium2 as pdfium
-
-        return len(pdfium.PdfDocument(str(p)))
-    except Exception:
-        return None
-
-
 def _page_texts(base, doc_path, boxes):
     """base를 실제 쪽 번호별 글로 나눈다:
     1) boxes(엔진 출력의 rep["boxes"] — OCR 엔진만, 박스마다 실제 "page" 번호) 있으면 그걸로 그룹화한다.
@@ -330,7 +317,7 @@ def _page_texts(base, doc_path, boxes):
     parts = base.split("\f")
     if len(parts) == 1:
         return {1: base}
-    n_pages = _doc_page_count(doc_path)
+    n_pages = doc_pages(doc_path)  # 실제 쪽 수 — \f 개수와 다르면 빈 쪽이 있어 쪽 번호를 못 믿음
     if n_pages is not None and len(parts) != n_pages:
         return None  # 쪽 번호 확정 불가 — 건너뜀
     return {i + 1: p for i, p in enumerate(parts)}
@@ -441,36 +428,27 @@ def tried_of(doc, last, pd):
 
 from common.core.artifacts import code_fp  # noqa: E402
 from common.core.contract import source_record  # noqa: E402
-from pipeline.shared import post_config as post_cfg  # noqa: E402
 from pipeline.shared import runtrace  # noqa: E402
+from pipeline.transform.figures.chart_values import chart_text  # noqa: E402
 from pipeline.transform.represent import fragment_vote as fuse_mod  # noqa: E402
 from pipeline.transform.represent import table_inline  # noqa: E402
 
+# 후보정 기능 — transform.represent.post: 없음/"all" = 전부 · "none" = 꺼짐 · 콤마 목록("supsub,charts") = 그것만.
+# "context"는 "figures" 없이는 효과 없음(그림 기록이 있어야 캡션·값 확인을 붙임).
+FEATURES = ("vlm_page", "supsub", "charts", "figures", "context", "attachments")
 
-def chart_text(p):
-    """오피스 내장 차트(charts/chart*.xml)의 제목·계열·값 캐시 → [차트] 줄."""
-    import re
-    import xml.etree.ElementTree as ET
-    import zipfile
 
-    p = Path(p)
-    if p.suffix.lower() not in (".xlsx", ".pptx", ".docx"):
-        return ""
-    z = zipfile.ZipFile(p)
-    lines = []
-    loc = lambda e: e.tag.rsplit("}", 1)[-1]
-    kids = lambda e, name: [x for x in e.iter() if loc(x) == name]
-    pts = lambda e: [v.text for pt in kids(e, "pt") for v in pt if loc(v) == "v"]
-    for n in sorted(x for x in z.namelist() if re.search(r"charts/chart\d+\.xml$", x)):
-        root = ET.fromstring(z.read(n))
-        for title in kids(root, "title")[:1]:
-            lines.append("[차트] " + " ".join(x.text or "" for x in kids(title, "t")))
-        for ser in kids(root, "ser"):
-            name = " ".join(v.text or "" for tx in kids(ser, "tx")[:1] for v in kids(tx, "v"))
-            cat = kids(ser, "cat")
-            val = kids(ser, "val")
-            lines.append(f"계열 {name}: " + ", ".join(f"{c}={v}" for c, v in zip(pts(cat[0]) if cat else [], pts(val[0]) if val else [])))
-    return "\n".join(lines)
+def active_features(config=None):
+    """PARSE_POST 글자 → 켠 기능 집합(결정적 — 순서 섞이지 않게 set 아닌 frozenset도 괜찮지만 멤버십만 씀)."""
+    if config is None:  # 없음 = "all", 빈 글자 = 끔
+        v = pc.cfg().transform.represent.post
+        config = "all" if v is None else v
+    config = (config or "").strip()
+    if config in ("", "none"):
+        return frozenset()
+    if config == "all":
+        return frozenset(FEATURES)
+    return frozenset(f.strip() for f in config.split(",") if f.strip())
 
 
 def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_pages=None, page_covered=False):
@@ -566,13 +544,14 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
         ct = chart_text(doc_path)
         if ct.strip():
             blocks.append(ct)
-    _pt["attachments"] = time.time() - _pt0
+    _pt["charts"] = time.time() - _pt0
+    _pt0 = time.time()
     if "supsub" in feats:
         base, sup_full, n_unmatched = supsub.merge_supsub(base, doc_path)  # 줄만 바꿔 넣고 전체는 rep.post에 따로
         if sup_full.strip():
             info["supsub"] = sup_full
             info["supsub_unmatched"] = n_unmatched
-    _pt["charts"] = time.time() - _pt0
+    _pt["supsub"] = time.time() - _pt0
     _pt0 = time.time()
     if "attachments" in feats:
         from pipeline.transform.represent import mail_attachments as att_mod
@@ -581,19 +560,19 @@ def apply_post(rep, doc, doc_path, feats, out_images=None, figures_max=None, vp_
         blocks += att_blocks
         info["attachments_parsed"] = att_stats["parsed"]
         info["attachments_cached"] = att_stats["cached"]
-    _pt["supsub"] = time.time() - _pt0
+    _pt["attachments"] = time.time() - _pt0
     info["post_times"] = {k: round(v, 2) for k, v in _pt.items()}
     rep["text"] = base + "\n\n" + "\n\n".join(blocks) if blocks else base
     return info
 
 
-IMAGE_TYPES = IMG_EXTS | {".pdf_image"}  # 형식 키(qa.json format — parse_run.doc_types)
+IMAGE_TYPES = IMG_EXTS | {".pdf_image"}  # 형식 키(qa.json format — parse_engines.doc_types)
 
 
 def _vlm_transcribed(rep, dd):
-    """이미지·스캔 형식(.pdf_image 포함) 문서의 대표가 VLM 엔진(run_engines.VLM_ENGINES)이고
+    """이미지·스캔 형식(.pdf_image 포함) 문서의 대표가 VLM 엔진(parse_engines.VLM_ENGINES)이고
     본문이 비어 있지 않음 = 쪽을 이미 VLM으로 옮김. OCR 엔진이 대표거나 VLM 글이 비면 False(쪽 VLM을 막지 않음)."""
-    from pipeline.extract.run_engines import VLM_ENGINES
+    from pipeline.transform.parse.parse_engines import VLM_ENGINES
 
     return dd.get("format") in IMAGE_TYPES and (rep.get("rep") or {}).get("engine") in VLM_ENGINES and bool((rep.get("text") or "").strip())
 
@@ -627,7 +606,7 @@ def represent(stack, parse_dir, src=None):
     from pipeline.transform.represent.crosscheck import build
 
     meta = build(parse_dir, src) if src else {}  # 교차 확인 (라벨, 값) — 엔진별 결과가 있는 파싱 모듈에서 미리 → 구조화는 _rep만 읽음
-    feats = post_cfg.active_features()  # PARSE_POST(기본 all)
+    feats = active_features()  # PARSE_POST(기본 all)
 
     def _doc_one(_pair):
         """문서 1개 → index 행(정상 대표·이전 결과 재사용·성공 엔진 없음)."""
@@ -915,7 +894,7 @@ def rep_digest(parse_dir):
 
 def write_mark(parse_dir, **kw):
     """파싱 끝 표시 _rep/_DONE.json — 앞 표시와 digest(kw — rep_digest 값)·인계 형식 버전(CONTRACT)이 같으면 그대로 두고 False(구조화는 건너뛰게 됨),
-    다르면 common 코드 지문(FINGERPRINT)과 함께 새로 쓰고 True. kw의 run_id가 있으면 그 값(같은 실행의 run_engines와 같은 id)."""
+    다르면 common 코드 지문(FINGERPRINT)과 함께 새로 쓰고 True. kw의 run_id가 있으면 그 값(같은 실행의 parse_engines와 같은 id)."""
     from common import CONTRACT, FINGERPRINT  # 인계 형식 버전 · common 코드 지문(이미지 버전 어긋남 확인)
 
     f = Path(parse_dir) / "_rep" / "_DONE.json"

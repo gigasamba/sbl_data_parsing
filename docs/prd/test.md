@@ -11,7 +11,7 @@
   1. `tests/server/`(이미지 반입 관문 — `python -m pipeline.cli selftest`가 `tests/runner.py`로 실행, 외부 접속 없음) · `tests/general/`(PC 전용: PG, Docker, 느린 것 — pytest).
   2. 알려진 실패 목록: 반입 `deploy/release/known_fail.txt`, PC `tests/conftest.py` `GENERAL_KNOWN_FAIL`. 목록에 있는 시험이 통과하면 XPASS 경고(목록에서 지움).
   3. PC 시험 사례(자식 프로세스)는 개발자 루트 `settings.yaml`을 읽지 않는다 — `pipeline/cli.py` `case_env`가 시험 전용 바탕(`run_env: local`만, 접속·키 없음)을 준다. 실 PG가 있어야 판정되는 사례만 `_PC_SETTINGS_CASES`(지금 빔).
-- 기준선(11-05, feature/readme-multi — rn-07 정리 뒤, PG 없는 PC): `selftest` 101개 모두 통과 · `pytest tests/` 159 통과 · 3 건너뜀 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `18142592accca442` · code_fp p0 `e17fbe019daf` · p1 `58734457d7a8` · r `a2f5174d3b38` · s `cd4c998b09dd`(rn-07 — 층 목록에 shared 의존 추가·주석 정리·decision_log 삭제, 리뷰 뒤 p1에 엔진 의존·r에 검색 의존 추가·settings.py 벌 이름 검사. 기록용 — 재처리 없음) · 엔진 지문 qwen_vlm(`engine_code_fp`, p0 열쇠) `0d194d4a5bab`(f068199) → `5644ba5811c5`(rn-07에서 `pipeline/shared/vlmcall.py`를 고침 — 기록용).
+- 기준선(11-05, feature/rn08-work — rn-08 폴더 정리 뒤, PG 없는 PC): `selftest` 101개 모두 통과 · `pytest tests/` 159 통과 · 3 건너뜀 · 알려진 실패 0(두 목록 모두 빔) · FINGERPRINT `18142592accca442`(그대로) · code_fp p0 `e17fbe019daf` → `d001479bb6dd` · p1 `58734457d7a8` → `30a189c590e9` · r `a2f5174d3b38` → `ef3002f928b6` · s `cd4c998b09dd` → `abb3a5c93335`(rn-08 — 엔진·실행 파일을 `pipeline/transform/parse/`로, shared 파일을 일마다 나눔, 닿지 않는 코드 지움, `draft_terms`를 층 밖으로. 기록용 — 재처리 없음) · 엔진 지문(`engine_code_fp`, p0 열쇠 — 엔진 폴더 경로가 바뀌고 import 줄만 고침, 기록용): anydoc `9d98dd253cee` → `01d0d7813c77` · docx2python `3f50c8a9d24d` → `9ba622227470` · html_stdlib·mhtml·msg_extract `64bdd541f075` → `6b86d3b876c3` · hwpx `3025cea0697b` → `1ce4058a3a0a` · kreuzberg `6570633dc767` → `f8cf85542789` · markitdown `3e7311ce0a0c` → `00fa7c1d36fc` · office `7c8c58c00dc4` → `c18d228eb2e6` · plaintext `0072c18a491f` → `e61fe9d86b40` · pymupdf `ad46c268e872` → `8611e97ce9ec` · qwen_vlm `5644ba5811c5` → `dfc11ddbca73` · rapidocr_ko `c559639a3395` → `1e08f27b5ddd`.
 - 지문 확인 명령: [CLAUDE.md](../../CLAUDE.md) §4. 공용·레이어 파일을 고친 커밋은 전후 값을 커밋 메시지에 적는다.
 - QA: `python -m pipeline.cli selftest` · `[판정]` 통과, 기준선보다 나빠지지 않음.
 - Status: done
@@ -45,7 +45,7 @@
 <a id="e2-01"></a>
 ## e2-01 · PC 스모크 — 파싱 → 임베딩 → 마이그레이션 → 적재 → 검색
 - 이유: 릴리스 전에 문서 2~3건으로 사슬 전체를 증명한다.
-- 규칙: README §4-4 단계(`pipeline.cli parse` · `build_bundle` · `dbtool up` · `pgvector_load` · `mcp_server.cli.search_ask`). 실행마다 다른 값은 `--set`. 임베딩 캐시 `output/edw/embed_cache.sqlite`. 시험 문서 `valid_env/object_storage/`.
+- 규칙: README §4-4 단계(`pipeline.cli parse` · `gold_bundle` · `dbtool up` · `pgvector_load` · `mcp_server.cli.search_ask`). 실행마다 다른 값은 `--set`. 임베딩 캐시 `output/edw/embed_cache.sqlite`. 시험 문서 `valid_env/object_storage/`.
 - QA: README §4-4 ①~⑥ · `ask`가 근거를 냄.
 - Status: done
 
@@ -58,7 +58,7 @@
 <a id="e2-09"></a>
 ## e2-09 · `valid_env`의 PC 시험 자료
 - 규칙: 외부 시스템 대역은 서버 배치 그대로 — 문서 `valid_env/object_storage/<시스템>/<uuid>/<파일>`(CRMS·SFDC, 문서 33건 — `object_keys.csv`와 sha256 일치), 합성 EDW `valid_env/edw/`(sql + `edw.sqlite`, `edw/meta_rdb/`), 답변 점검 `valid_env/answer_test/`. 서버 배포 시험은 `valid_env` 없이 돌게 자료를 임시 폴더에 만든다.
-- 파일: `valid_env/README.md`, `tests/server/mcp/test_search_svc.py`, `tests/server/pipeline/test_fetch_docs.py`.
+- 파일: `valid_env/README.md`, `tests/server/mcp/test_search_svc.py`, `tests/server/pipeline/test_candidate.py`.
 - Status: done
 
 <a id="e2-04"></a>

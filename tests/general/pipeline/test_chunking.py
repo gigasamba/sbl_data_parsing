@@ -3,7 +3,7 @@
 import re
 
 from pipeline import config as pc
-from pipeline.transform.structure.chunking import CHUNKERS, _page_chunk_cap, chunk_page, chunk_structure, chunk_structure_table
+from pipeline.transform.structure.chunking import chunk_structure
 
 
 def selftest():
@@ -11,7 +11,7 @@ def selftest():
 
     # S7c — 설정 객체(env 안 건드림): 겹쳐 쓴 값은 with가 끝나면 모두 풀림(옛 pop·복원 코드 대신)
     with contextlib.ExitStack() as env:
-        env.enter_context(pc.PIPE.env(CHUNK_TABLE=None, CHUNK_TABLE_ROWS=None, PAGE_CHUNK_MAX=None, CHUNK_SIZE=None))
+        env.enter_context(pc.PIPE.env(CHUNK_TABLE=None, CHUNK_TABLE_ROWS=None, CHUNK_SIZE=None))
         # 기본 경로(CHUNK_TABLE 없음) — 표는 통째로 한 청크(전과 바이트 동일)
         text = "# 제목\n본문 한 줄\n\n코드 | 수량\n" + "\n".join(f"A-{i:03d} | {i}" for i in range(1, 6))
         out = chunk_structure("d", text)
@@ -43,31 +43,7 @@ def selftest():
         assert len(out) == 1 and out[0]["text"].startswith("코드 | 수량")
         assert all(f"P-{i} | {i}" in out[0]["text"] for i in range(1, 9))
 
-        assert CHUNKERS["structure_table"] is chunk_structure_table
-
-        # page: cap(기본 4000, PAGE_CHUNK_MAX 없고 CHUNK_SIZE 없음) 이하 쪽은 전과 바이트 동일
-        small = "\f".join(["1쪽 " + "본문 줄\n" * 5, "2쪽 " + "본문 줄\n" * 5])
-        before = [c["text"] for c in chunk_page("d", small)]
-        assert before == [p.strip() for p in small.split("\f")]
-
-        # 20,000자 쪽(문단 경계 있음) → cap 이하 조각들로 쪼개짐, 이어붙이면 원문 유지, 쪽 번호(id)는 모든 조각에
-        big_page = "\n\n".join(f"문단 {i}: " + "x" * 190 for i in range(100))  # 약 20,000자, 1쪽
-        huge = big_page + "\f" + "2쪽 짧은 본문"
-        out = chunk_page("d", huge)
-        parts0 = [c for c in out if c["id"].startswith("d::page::0")]
-        assert len(parts0) > 1 and all(len(c["text"]) <= _page_chunk_cap() for c in parts0)
-        assert all(c["id"].startswith("d::page::0::") for c in parts0)
-        assert "".join(c["text"] for c in parts0).replace("\n\n", "") == big_page.replace("\n\n", "")
-        parts1 = [c for c in out if c["id"] == "d::page::1"]
-        assert len(parts1) == 1 and parts1[0]["text"] == "2쪽 짧은 본문"
-
-        # 그림 블록은 cap을 넘어도 안 쪼갬
-        env.enter_context(pc.PIPE.env(PAGE_CHUNK_MAX="200"))
-        fig_big = "[그림 d#p1#i1] (표)\n" + "\n".join(f"코드{i} | 값{i}" for i in range(1, 30))
-        out = chunk_page("d", f"짧은 머리말\n\n{fig_big}")
-        fig_out = next(c for c in out if c["text"].startswith("[그림 "))
-        assert all(f"코드{i} | 값{i}" in fig_out["text"] for i in range(1, 30))
-    print("[selftest] 표 행 쪼개기(W14)·그림 보호·쪽 넘김 이어붙이기·쪽 청크 상한(L3-3)·기본 경로 불변 통과")
+    print("[selftest] 표 행 쪼개기(W14)·그림 보호·쪽 넘김 이어붙이기·기본 경로 불변 통과")
 
 
 def test_main():  # 옛 `if __name__ == "__main__":` 몸통

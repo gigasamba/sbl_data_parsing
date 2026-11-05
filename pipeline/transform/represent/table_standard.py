@@ -1,7 +1,7 @@
 """산출 쪽 표 표준 형식: 대표 결과(_rep)의 표를 엔진과 무관하게 한 형식(id·page·source_engine·
 header·rows·merged)으로 정규화해 rep["tables_std"]에 둔다(기존 tables·facts는 그대로 — 새 칸 추가뿐).
 
-입력은 rep["tables"][i]가 이미 들고 있는 grid(2D 칸, pipeline.extract.engines._common.contract._mk_table이 모든 엔진
+입력은 rep["tables"][i]가 이미 들고 있는 grid(2D 칸, pipeline.transform.parse.engines._common.contract._mk_table이 모든 엔진
 공통으로 채움) — 그리드가 없는(과거 캐시) 표는 건너뛴다. 병합 칸 펼침(같은 값 채우기)·범위 기록(merges)은
 엔진이 미리 해 둔다(office_stdlib — docx gridSpan·vMerge, xlsx mergeCells); table_std는 그 결과를
 header(첫 행)·rows(나머지)·merged로 그대로 옮기고, 칸 글자에 standardize_text(기호 맵·첨자 표기)를 적용한다.

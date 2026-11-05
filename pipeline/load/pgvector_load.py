@@ -143,7 +143,7 @@ def require_vectors(meta):
     vector(0) 표는 PG 오류). 종료 코드 2 + 무엇을 하라는 한 줄."""
     if meta.get("embed") == "none" or (not meta.get("dim") and meta.get("chunks")):  # 청크 0건 문서(빈·스캔만)는 dim 0이어도 문서 행은 적재
         print(
-            f"[load] 임베딩 없는 묶음(embed={meta.get('embed')!r}, dim={meta.get('dim')!r}) — 적재 거부: build_bundle을 --embed api로 다시 만든다(pl-16)",
+            f"[load] 임베딩 없는 묶음(embed={meta.get('embed')!r}, dim={meta.get('dim')!r}) — 적재 거부: gold_bundle을 --embed api로 다시 만든다(pl-16)",
             file=sys.stderr,
             flush=True,
         )

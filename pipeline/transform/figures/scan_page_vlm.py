@@ -7,8 +7,8 @@ from pathlib import Path
 
 from pipeline import config as pc
 from pipeline.shared.ext_groups import IMG_EXTS
-from pipeline.shared.parse_run import pdf_kind
-from pipeline.shared.post_config import raw_root
+from pipeline.shared.pdf_kind import pdf_kind
+from pipeline.shared.raw_cache import raw_root
 from pipeline.shared.vlmcall import (  # 쪽 VLM 호출·캐시(엔진 qwen_vlm과 같은 함수)
     page_count,
     page_max,
@@ -203,7 +203,7 @@ def page_targets(doc_path):
       - PDF도 아니고 문서 전체 스캔(is_scan)도 아님
       - 글자 PDF인데 스캔 신호 쪽이 없음
     그 밖: 문서 전체가 스캔이면 전체 쪽, 아니면 scan_pages() — VLM_PAGE_MAX로 자른 뒤 돌려준다(호출자가 또 자르지 않음)."""
-    from pipeline.shared.post_config import active_features
+    from pipeline.transform.represent.build_rep import active_features
 
     if "vlm_page" not in active_features():
         return set()
@@ -229,9 +229,3 @@ def pick_pages(n_pages, whole_scan, scan, cap):
 def page_text_pages(doc_path):
     """page_targets() 쪽을 쪽 VLM으로 옮김 → [(쪽 번호, 글, provenance), ...](scan_fill이 그 쪽만 채우게 쪽 번호와 함께)."""
     return transcribe(doc_path, page_targets(doc_path))
-
-
-def page_text(doc_path):
-    """page_text_pages()의 글을 합친 것과 [쪽별 provenance]. 대상 쪽이 없으면 빈 문자열(호출 0)."""
-    pages = page_text_pages(doc_path)
-    return "\n".join(t for _, t, _ in pages if t), [pv for _, _, pv in pages]

@@ -10,6 +10,7 @@
 
 import math
 import re
+from pathlib import Path
 
 POW10_RE = re.compile(r"^10\s*\^\s*(-?\d+)$")  # "^" 글자가 꼭 있어야(없으면 "100"을 10^0=1로 잘못 읽음)
 _CURRENCY_CHARS = "₩$€£¥"
@@ -564,3 +565,29 @@ def merge_values(det_values, vlm_values):
         if _match_key(v) not in seen:
             out.append(v)
     return out
+
+
+def chart_text(p):
+    """오피스 내장 차트(charts/chart*.xml)의 제목·계열·값 캐시 → [차트] 줄."""
+    import re
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    p = Path(p)
+    if p.suffix.lower() not in (".xlsx", ".pptx", ".docx"):
+        return ""
+    z = zipfile.ZipFile(p)
+    lines = []
+    loc = lambda e: e.tag.rsplit("}", 1)[-1]
+    kids = lambda e, name: [x for x in e.iter() if loc(x) == name]
+    pts = lambda e: [v.text for pt in kids(e, "pt") for v in pt if loc(v) == "v"]
+    for n in sorted(x for x in z.namelist() if re.search(r"charts/chart\d+\.xml$", x)):
+        root = ET.fromstring(z.read(n))
+        for title in kids(root, "title")[:1]:
+            lines.append("[차트] " + " ".join(x.text or "" for x in kids(title, "t")))
+        for ser in kids(root, "ser"):
+            name = " ".join(v.text or "" for tx in kids(ser, "tx")[:1] for v in kids(tx, "v"))
+            cat = kids(ser, "cat")
+            val = kids(ser, "val")
+            lines.append(f"계열 {name}: " + ", ".join(f"{c}={v}" for c, v in zip(pts(cat[0]) if cat else [], pts(val[0]) if val else [])))
+    return "\n".join(lines)

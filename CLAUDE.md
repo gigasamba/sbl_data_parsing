@@ -13,7 +13,7 @@
 | 폴더 | 두는 것 | 두지 않는 것 | 서버 이미지 |
 |---|---|---|---|
 | `common/` | 두 앱이 **함께** 쓰는 것만 — `core/`(경로, 핑거프린트, 계약, 문자열 처리, 실행 기록), `ai/`(모델 호출, 예산, 외부 전송 가드), `store/`(PG, 회사 DB, Object Storage — `db/`는 SQLAlchemy·pydantic·Alembic), `config/`(설정 모델과 도구), `check/`(점검) | 한 앱만 쓰는 코드, 앱 import | 둘 다 |
-| `pipeline/` | 파이프라인 앱 — `extract/`(원천 읽기·파싱, `engines/`는 엔진) → `transform/`(represent, figures, structure) → `load/`(적재·퍼블리시), `shared/`, `tools/`, `eval/`, 실행기 `cli.py`, 설정 `config.py` | `mcp_server` import, 검색 서빙 코드 | data-pipeline |
+| `pipeline/` | 파이프라인 앱 — `extract/`(원본 고르기·받기·준비) → `transform/`(`parse/` 엔진 파싱 — `engines/`는 엔진, represent, figures, structure) → `load/`(적재·퍼블리시), `shared/`, `tools/`, `eval/`, 실행기 `cli.py`, 설정 `config.py` | `mcp_server` import, 검색 서빙 코드 | data-pipeline |
 | `mcp_server/` | 검색 MCP 앱 — `main.py`(앱 조립), `routers/`(도구 등록 — 이름·시그니처 고정), `schemas/`(출력 구조), `services/`(업무 로직, `search/`), `cli/`(MCP 도구 명령), 설정 `config.py` | `pipeline` import, 파싱 코드 | mcp-server |
 | `resources/` | 코드가 **읽는 데이터** — 프롬프트 `prompts/{common,pipeline,mcp}`, `config/`, `mappings/`, `vocab/` | 코드(.py 로직), 비밀값, 서버마다 다른 값 | 둘 다 |
 | `deploy/docker/` | Dockerfile, requirements, entrypoint, `wheels/` | 앱 로직 | (빌드 원본) |
@@ -69,7 +69,7 @@
 
 | 대상 | 이유 | 지킬 것 |
 |---|---|---|
-| **엔진 파일** `pipeline/extract/engines/`의 바이트 | 결과 재사용 키(엔진 핑거프린트) — 바뀌면 서버의 모든 문서를 그 엔진으로 다시 파싱한다 | 포매터·린트 자동 수정 대상에서 뺀다(pyproject 제외 목록). 고치려면 사람 검토를 받는다 |
+| **엔진 파일** `pipeline/transform/parse/engines/`의 바이트 | 결과 재사용 키(엔진 핑거프린트) — 바뀌면 서버의 모든 문서를 그 엔진으로 다시 파싱한다 | 포매터·린트 자동 수정 대상에서 뺀다(pyproject 제외 목록). 고치려면 사람 검토를 받는다 |
 | **핸드오프 파일** `common/core/{contract,repfmt,terms,text}.py` | 핸드오프 핑거프린트 `FINGERPRINT` — 값이 다르면 structure·load가 이전 결과를 거부한다 | 위와 같다 |
 | **레이어 코드 핑거프린트(code_fp)** — 레이어 파일과 그 파일이 import하는 `common` 모듈(`settings.py`, `paths.py` 등 모든 레이어의 공용 의존 포함) | 레이어 캐시 키 — 공용 의존 파일을 한 줄만 바꿔도 서버 문서 전체가 다시 처리된다 | 공용 의존 파일을 고칠 때는 사람에게 먼저 알리고, 커밋 메시지에 변경 전후 값을 적는다 |
 | **프롬프트** `resources/prompts/**`(+ `valid_env/answer_test/rag_qa`) | 프롬프트 핑거프린트와 LLM 캐시 키 | 바이트 그대로 두고 줄바꿈은 LF |

@@ -14,10 +14,10 @@
 1. 파싱 입력(`--source`, 설정 `pipeline.extract.input_source`)은 둘 중 하나여야 한다 — 폴더, 또는 `rdb:csv:<경로>`(문서 위치 표 CSV). 그 밖의 값이면 → 오류로 멈춘다.
 2. `rdb:csv`의 칸 이름은 설정 `pipeline.connections.rdb.columns`가 정한다 — 기본 `doc_id`=`id`, `key`=`s3_key`, `filename`=`original_filename`, `size`=`file_size`, `content_version`=`content_version_id`.
 2. 서버 러너 `run_docs.py`가 FileStorageMap에서 대상(파일 이름 키워드 `--filter`, 작은 파일부터)을 골라 `batch.csv`를 만들고 `rdb:csv`로 넘긴다(대상 고르기 규칙은 [ops.md#pl-23](ops.md#pl-23)).
-4. 미리 받기: `python -m pipeline.extract.fetch_docs warm`이 표의 파일을 `pipeline.extract.source.warm` 폴더에 먼저 받는다(비면 미리 받기 꺼짐). 받기에 실패한 파일은 파싱 때 직접 받는다.
+4. 미리 받기: `python -m pipeline.extract.candidate_ready warm`이 표의 파일을 `pipeline.extract.source.warm` 폴더에 먼저 받는다(비면 미리 받기 꺼짐). 받기에 실패한 파일은 파싱 때 직접 받는다.
 
 ### QA
-- `tests/server/pipeline/test_fetch_docs.py` · `tests/server/pipeline/test_rdb_discover.py`.
+- `tests/server/pipeline/test_candidate.py` · `tests/server/pipeline/test_rdb_discover.py`.
 - Status: done
 
 <a id="pl-02"></a>
@@ -59,7 +59,7 @@
 질의응답을 문서 통째가 아니라 질문 하나 단위로 찾는다. FAQ 파일은 Object Storage `FAQ/<uuid>/<파일>`에 올리고 `AI.FileStorageMap`에 등록한다 — 다른 원천과 같은 길로 파싱·적재. 분류·고객 연결은 하지 않는다. 다시 올렸을 때 교체는 [load.md#pl-41](load.md#pl-41).
 
 ### 규칙
-1. 원천이 FAQ이고 원본이 `.xlsx`·`.xlsm`이면 묶음 단계(`build_bundle` → `chunking.faq_rows`)가 엑셀 행 하나를 청크 하나로 만든다.
+1. 원천이 FAQ이고 원본이 `.xlsx`·`.xlsm`이면 묶음 단계(`gold_bundle` → `chunking.faq_rows`)가 엑셀 행 하나를 청크 하나로 만든다.
 2. 시트마다 첫 비지 않은 행이 머리글이다. 머리글 이름은 소문자로 바꾸고 공백·`_`를 공백 하나로 모은 뒤 대응한다: `type` → 유형, `client question`·`question` → 질문, `answer` → 답. 같은 머리글이 둘이면 앞의 것.
 3. 질문·답 머리글이 없는 시트는 건너뛰고 경고한다. 질문·답이 모두 빈 행은 건너뛴다. 빈 칸은 그 값만 빈다.
 4. 청크 본문 = `Q: <질문>` 줄 + `A: <답>` 줄(빈 값은 빈 글자). 절(section) = `<시트 이름> / <유형>`(유형이 없으면 시트 이름만). `faq_group` = 시트 이름. `line_start`·`line_end` = 엑셀 행 번호, 쪽·bbox는 비운다.

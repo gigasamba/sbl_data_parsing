@@ -28,11 +28,11 @@
 | 되돌리기 | git으로 이전 파일로 되돌려 다시 코드 폴더를 바꾼다 |
 | 보기 | `show-stack`(PC `python -m pipeline.cli show-stack` · 이미지 `data-pipeline` 컨테이너) — 이름·sha·파일 경로와 내용 요약 |
 
-- **이미지에 없는 엔진 거부:** `parse` 목록의 엔진마다 등록부(`pipeline/extract/engines`)에 있고 설치(REQUIRES 모듈·도구)됐는지 — 파이프라인 진입점(`pipeline.cli`·`pipeline.parse_service`)이 시작 때 `pipeline.extract.engine_stack.resolve()`로 검사한다(어긋나면 종료 2). 모델 주소 설정(REQUIRES_ENV)은 보지 않는다. 검색은 `retrieve`·`k`만 쓴다.
+- **이미지에 없는 엔진 거부:** `parse` 목록의 엔진마다 등록부(`pipeline/transform/parse/engines`)에 있고 설치(REQUIRES 모듈·도구)됐는지 — 파이프라인 진입점(`pipeline.cli`·`pipeline.parse_service`)이 시작 때 `pipeline.transform.parse.engine_check.resolve()`로 검사한다(어긋나면 종료 2). 모델 주소 설정(REQUIRES_ENV)은 보지 않는다. 검색은 `retrieve`·`k`만 쓴다.
 - `show-stack`은 실행 기록을 `/app/output/logs`에 쓰므로 `/app/output`이 읽기 전용인 `mcp-server` 컨테이너에서는 종료 2다 — `data-pipeline` 컨테이너에서 본다.
 - **파싱과 구조화가 같은 구성:** 호스트 `run_docs.py`는 시작 때 `data-pipeline` 컨테이너 안에서 `show-stack`을 한 번 돌려 파일이 읽히는지 확인한다(못 읽으면 멈춤).
-- **층과 code_fp:** 층 파일 `run_engines`·`mail_attachments`·`build_rep`·`build_bundle`은 `pipeline.config.stack()`으로 같은 파일을 읽는다. 파일 읽기 코드(`cfgfile`)는 층의 의존이 아니라 구성을 바꿔도 code_fp가 그대로다. `--stack <파일>`(`represent`·`build_bundle`)은 PC 실험·시험 전용이다. 묶음 `meta.json`의 `stack_conf`에 구성이 남는다.
-- **형식 더하기:** 엔진 `parser.py`의 `FORMATS`는 두고 등록부 `pipeline/extract/engines/registry.py`의 `EXTRA_FORMATS`에 더한 뒤 구성 파일에 형식 키를 넣는다([prd/transform.md#pl-45](../prd/transform.md#pl-45)).
+- **층과 code_fp:** 층 파일 `parse_engines`·`mail_attachments`·`build_rep`·`gold_bundle`은 `pipeline.config.stack()`으로 같은 파일을 읽는다. 파일 읽기 코드(`cfgfile`)는 층의 의존이 아니라 구성을 바꿔도 code_fp가 그대로다. `--stack <파일>`(`represent`·`gold_bundle`)은 PC 실험·시험 전용이다. 묶음 `meta.json`의 `stack_conf`에 구성이 남는다.
+- **형식 더하기:** 엔진 `parser.py`의 `FORMATS`는 두고 등록부 `pipeline/transform/parse/engines/registry.py`의 `EXTRA_FORMATS`에 더한 뒤 구성 파일에 형식 키를 넣는다([prd/transform.md#pl-45](../prd/transform.md#pl-45)).
 
 ## 2. AI 지시서(지시서 패키지)
 
@@ -45,7 +45,7 @@ LLM·VLM을 **부르는** 단계의 지시서 패키지 7개 — `resources/prom
 | `resources/prompts/common/<패키지>/` | 여러 단계·이미지가 함께 쓰는 지시서, 공용 꼬리 `_common/` | 모든 이미지(`resources/` 폴더째) |
 | `resources/prompts/pipeline/<패키지>/` | 파싱·구조화·평가 지시서 | 모든 이미지 |
 
-- 찾는 자리는 `common/core/paths.py` `resolve_agent_dir()` 한 곳이다. 순서는 ① `resources/prompts/common` ② `resources/prompts/pipeline` ③ `valid_env/answer_test`(`rag_qa` — PC 전용 데이터 · 이미지에 없음). 코드에는 폴더가 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`·`dev_tools/unit_test/fixtures`)이 더 있어 늘 건너뛴다 — 지우기는 PRD [e2-15](../prd/test.md#e2-15)(`paths.py`라 다음 지문 배치). 패키지 이름은 겹치지 않아 순서가 결과를 바꾸지는 않지만, 결정적이어야 캐시·로그가 재현된다.
+- 찾는 자리는 `common/core/paths.py` `resolve_agent_dir()` 한 곳이다. 순서는 ① `resources/prompts/common` ② `resources/prompts/pipeline` ③ `valid_env/answer_test`(`rag_qa` — PC 전용 데이터 · 이미지에 없음). 코드에는 폴더가 없는 갈래 셋(`resources/prompts/mcp`·`validation/e2e`·`dev_tools/unit_test/fixtures`)이 더 있어 늘 건너뛴다(요건: [test.md#e2-15](../prd/test.md#e2-15)). 패키지 이름은 겹치지 않아 순서가 결과를 바꾸지는 않지만, 결정적이어야 캐시·로그가 재현된다.
 - `resources/`는 저장소 루트 바로 아래이고, 이미지 안에서는 `/app/deploy/resources`다(`paths.RES_ROOT` = 코드 패키지들이 import되는 자리의 `resources/`).
 
 ### 2-2. 패키지 구성
@@ -68,7 +68,7 @@ LLM·VLM을 **부르는** 단계의 지시서 패키지 7개 — `resources/prom
 | `rag_qa` | (`valid_env/answer_test/` — PC 전용) | llm | 검색 MCP 도구(`search`·`edw_meta`·`query_edw`)를 스스로 골라 근거를 찾고 숫자마다 인용을 붙여 답함(agentic — `max_turns` 12, 로컬 도구 `verify_citations`: 답의 숫자가 인용 `quote`에 있고 그 quote가 이번 질문의 검색 근거에 있는지) | 질문(사용자) → `{answer, status: found\|partial\|not_found, citations}` | `validation/e2e/answer_gen.py`(`validation.e2e.tool_loop.run("rag_qa", …)` — 턴마다 예산 확인 `llm.admit_turn()` · 도구 함수·근거 pool은 호출자, 지시문 `instructions.md` + 출력 스키마) | 없음(instruction에 지시문) · 있음 |
 | `figure_overlay` | `pipeline/` | vlm | 겹친 개체 묶음(그림 + 글상자·화살표·도형) 1장 → 검색용 기록 | 묶음 union bbox 크롭 + 지시문(생각 끔) → figure-v1 JSON | `pipeline/transform/figures/figure_extract.py` `vlm_fig_overlay()`(`P_FIGOVERLAY`) | 기본 · 있음 |
 | `nested_figure` | `pipeline/` | vlm | 쪽 전체 그림 안의 자식 그림 bbox 찾기 | 쪽 그림 + 지시문 → `{"regions": [{bbox, kind, …}]}` | `pipeline/transform/figures/nested_figures.py` `bbox_regions()`(`P_BBOX`) | 기본 · 있음 |
-| `classify_sfdc` · `classify_las` | `pipeline/` | llm | SFDC·LAS 문서 하나 → 종류 라벨 하나(`doc_class` — pl-33, 운영 지시문 그대로) | 문서 정보 + 본문 앞 8,000자(LAS는 키워드 근거 더함) → JSON `class` | `pipeline/load/doc_classify.py` `classify_one()`(적재 중 — `llm.chat`) | 없음 · 없음 |
+| `classify_sfdc` · `classify_las` | `pipeline/` | llm | SFDC·LAS 문서 하나 → 종류 라벨 하나(`doc_class` — 운영 지시문 그대로) | 문서 정보 + 본문 앞 8,000자(LAS는 키워드 근거 더함) → JSON `class` | `pipeline/load/doc_classify.py` `classify_one()`(적재 중 — `llm.chat`) | 없음 · 없음 |
 
 모델 호출 시험은 `tests/server/common/test_llm_call.py`, 도구 왕복은 `tests/general/e2e/test_answer_gen.py`.
 

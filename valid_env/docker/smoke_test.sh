@@ -1,5 +1,5 @@
 #!/bin/bash
-# 모듈 컨테이너 연결 시험 — 시험용 pg → 마스터 표 → parse → structure(build_bundle) → migrate·load(pgvector_load) → mcp 상주 → 밖(호스트)에서 MCP HTTP 호출 → 정리.
+# 모듈 컨테이너 연결 시험 — 시험용 pg → 마스터 표 → parse → structure(gold_bundle) → migrate·load(pgvector_load) → mcp 상주 → 밖(호스트)에서 MCP HTTP 호출 → 정리.
 #   DATA_PIPELINE_IMAGE=data-pipeline:<태그> MCP_SERVER_IMAGE=mcp-server:<태그> DOC_SRC=<시험 문서 폴더> RAG_OUT=<빈 결과 폴더> \
 #   SMOKE_SETTINGS=<settings.yaml: mcp.server.token · common.models.embed(base_url·model — 내부망)> SMOKE_PG_PASSWORD=<시험용> \
 #   SMOKE_SYSTEM=<원천 — 예 SFDC> [SMOKE_LIMIT=10] [SMOKE_KEEP=1 — 끝나도 pg 남김] bash valid_env/docker/smoke_test.sh [질문]   (PC 시험 Docker)
@@ -54,7 +54,7 @@ step "시험용 PostgreSQL" $DC up -d --wait pg               # 적재(load)·�
 step "⓪ 마스터 판(migrate up --target master)" $DC run --rm load migrate up --target master
 step "⓪ 마스터 표 채우기(migrate master load)" $DC run --rm load migrate master load
 step "① 파싱(data-pipeline)" $DC run --rm parse parse
-step "② 구조화(data-pipeline — run_docs와 같은 build_bundle)" $DC run --rm --entrypoint python structure -m pipeline.transform.structure.build_bundle --parse-dir /app/output/parse --out /app/output/edw/bundle
+step "② 구조화(data-pipeline — run_docs와 같은 gold_bundle)" $DC run --rm --entrypoint python structure -m pipeline.transform.structure.gold_bundle --parse-dir /app/output/parse --out /app/output/edw/bundle
 # 적재는 서버 실제 길(run_docs.py와 같은 `python -m pipeline.load.pgvector_load load` — README §4-4).
 #   표·vector 확장은 migrate가 먼저(실행 중 DDL 없음, 차원은 묶음 meta.json). 마스터 표는 맨 앞(⓪ — 구조화가 읽음).
 step "③-0 판(migrate up --target all — 묶음 차원·vector 확장)" $DC run --rm load migrate up --target all --bundle /app/output/edw/bundle --create-extension

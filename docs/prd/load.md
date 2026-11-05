@@ -62,7 +62,7 @@
 ## pl-16 · 임베딩 없는 묶음은 적재 거부
 
 ### 규칙
-1. 묶음 `meta.json`의 `embed`가 `none`이거나, 청크가 있는데 `dim`이 0·없음이면 → 판 확인·배포·적재 전에 한 줄 안내(`build_bundle`을 `--embed api`로 다시)와 함께 종료 2(`require_vectors`).
+1. 묶음 `meta.json`의 `embed`가 `none`이거나, 청크가 있는데 `dim`이 0·없음이면 → 판 확인·배포·적재 전에 한 줄 안내(`gold_bundle`을 `--embed api`로 다시)와 함께 종료 2(`require_vectors`).
 
 ### QA
 - `tests/server/pipeline/test_pgvector_load.py::test_require_vectors`.

@@ -42,7 +42,7 @@ def doc_lane_group(path, name=None, size=None):
 
             d = pymupdf.Document(path)
             n = min(3, max(len(d), 1))
-            # 레인 고르기(run_docs 작업자 배분)용 — 엔진 고르기(.pdf_text·.pdf_image)는 pipeline.shared.parse_run.pdf_kind(쪽당 20자)
+            # 레인 고르기(run_docs 작업자 배분)용 — 엔진 고르기(.pdf_text·.pdf_image)는 pipeline.shared.pdf_kind.pdf_kind(쪽당 20자)
             heavy = sum(len(p.get_text() or "") for p in d[:n]) < 300 * n
         else:
             heavy = False

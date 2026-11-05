@@ -5,7 +5,7 @@
 
 ## 지금 진행 중
 - pl-25 DB 스키마 명세 — dev: 검색 DB(gold)·마스터·applog는 구현됨, EDW 쪽 DDL(ParsingMeta 칸 정리)은 DB 담당자 승인·실행 대기(refactor.md C-76).
-- 열린 요건(todo): run_docs 지휘만 [rn-05](prd/ops.md#rn-05) · 파이프라인 폴더 [rn-08](prd/ops.md#rn-08) · 원본 zip [pl-57](prd/extract.md#pl-57) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · `gold_status` 칸 쓰기 [pl-55](prd/ops.md#pl-55) · 첫 이관 도구·안 쓰는 패키지 [pl-53](prd/transform-cleanup.md#pl-53) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
+- 열린 요건(todo): run_docs 지휘만 [rn-05](prd/ops.md#rn-05) · 원본 zip [pl-57](prd/extract.md#pl-57) · 저장 구조 [pl-32](prd/load-schema.md#pl-32) · 확장자 `.hwp` [pl-45](prd/transform.md#pl-45) · 그림 부가 기능 줄이기 [pl-05](prd/transform.md#pl-05) · 전체 e2e [pl-54](prd/ops.md#pl-54) · `gold_status` 칸 쓰기 [pl-55](prd/ops.md#pl-55) · 첫 이관 도구·안 쓰는 패키지 [pl-53](prd/transform-cleanup.md#pl-53) · prd 이미지에 settings.yaml 굽기 [op-12](prd/doc.md#op-12) · 판 묶기(잠재 문제) [pl-56](prd/load.md#pl-56).
 - 서버 확인만 남음(dev): parse_document CPU 우선 [rn-03](prd/ops.md#rn-03).
 - 시험 정리(todo): [e2-13](prd/test.md#e2-13) · [e2-15](prd/test.md#e2-15) · [e2-20](prd/test.md#e2-20) · [e2-21](prd/test.md#e2-21).
 
@@ -13,7 +13,7 @@
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
 |---|---|---|---|---|
 | 문서 목록은 EDW 표 `AI.FileStorageMap`에서 읽는다(`id`·`s3_key`·`original_filename`·`file_size`) — 서버 러너 `run_docs.py`가 파일 이름 키워드(`--filter`)로 거르고 작은 파일부터 | 목록의 기준은 EDW다. Object Storage를 직접 훑지 않는다 | done | [pl-01](prd/extract.md#pl-01) |  |
-| 새 문서만 고른다 — 목록에서 EDW `AI.ParsingMeta`에 끝난 행(`ok`·`partial`·`skipped_dup`)이 있는 원본 키(`s3_key`)를 뺀다. 파싱 입구(`pipeline/extract/fetch_docs.py` `unparsed`)가 EDW를 읽기 계정으로 한 번 읽음 | 끝난 문서를 다시 파싱하지 않는다. `not_parsed`·`skipped_disk_cap`·실패·기록 없음은 다시 고른다(사용자 11-01). 서버에서 EDW를 못 읽으면 시작하지 않는다(종료 4) | done | [pl-23](prd/ops.md#pl-23) |  |
+| 새 문서만 고른다 — 목록에서 EDW `AI.ParsingMeta`에 끝난 행(`ok`·`partial`·`skipped_dup`)이 있는 원본 키(`s3_key`)를 뺀다. 파싱 입구(`pipeline/extract/candidate_pick.py` `unparsed`·`done_keys`)가 EDW를 읽기 계정으로 한 번 읽음 | 끝난 문서를 다시 파싱하지 않는다. `not_parsed`·`skipped_disk_cap`·실패·기록 없음은 다시 고른다(사용자 11-01). 서버에서 EDW를 못 읽으면 시작하지 않는다(종료 4) | done | [pl-23](prd/ops.md#pl-23) |  |
 | 파일은 Object Storage 버킷에서 `s3_key`로 받는다. 파싱 입력은 폴더 또는 목록 파일(`rdb:csv:<경로>`) 둘뿐 | 길을 하나로 | done | [pl-01](prd/extract.md#pl-01) |  |
 | 미리 받기(warm) — `run_docs`가 파싱보다 앞서 문서를 최대 20개(`ops.run_docs.warm`)까지 받아 임시 폴더(`_warm`)에 둔다 | 다운로드를 기다리느라 파싱 워커가 놀지 않게. 받기 실패면 파싱 때 직접 받는다 | done | [pl-01](prd/extract.md#pl-01) |  |
 | 병렬 다운로드 — 목록 파일의 여러 파일을 동시에 받는다(`source warm`·`rdb:csv` 받기 모두 `pipeline.extract.source.fetch_workers` — 기본 1개, 11-04에 미리받기 칸을 합침) | 큰 목록을 빨리 받는다. 받기는 네트워크 대기라 CPU를 거의 안 쓴다 | done | [pl-48](prd/extract.md#pl-48) |  |
@@ -88,7 +88,7 @@
 | ParsingMeta에는 파싱 정보만(원천 키·상태·silver 위치·엔진·`gold_status`·`silver_version`·`gold_version`·`sha256`), 고객·분류 라벨 같은 파일 메타는 검색 DB `doc`에만 | 중복 적재를 없앤다. 운영이 더한 칸은 DB 담당자가 지운다 | dev | [pl-25](prd/load-schema.md#pl-25) |  |
 | 문서 키는 원본 경로 하나 — 검색 DB `doc.file_path` = Object Storage 원본 경로 = EDW `s3_key`(청크는 `doc_id`만), ParsingMeta와 이 값으로 잇는다 | sha256 `doc_key`는 검색 DB에 안 둔다(ParsingMeta `sha256`만) | dev | [pl-25](prd/load-schema.md#pl-25) |  |
 | 원천 시스템별 PG 스키마 5벌(`<PG_SCHEMA>_sfdc`·`_crms`·`_las`·`_faq`·`_other`), 각자 `doc`·`chunk`·BM25 표, `doc_id` 시퀀스는 기준 스키마 하나를 함께 | 원천마다 메타가 다르고 BM25 점수를 섞지 않는다. MCP `source_system` 필수(등급 A) | done | [pl-28](prd/load-schema.md#pl-28) |  |
-| 원천 = 원본 경로(`s3_key`) 첫 마디 — `SFDC`·`CRMS`·`LAS`·`FAQ`(대소문자 무관)이거나 `SFDC-`·`SFDC_`·`CRMS-`·`CRMS_`·`las_`·`LAS_`로 시작하면 그 원천, 아니면 `other`(`build_bundle`). `faq` 스키마만 `chunk.faq_group` 칸 | `AI.FileStorageMap.source_system` 칸은 읽지 않는다 — 경로만으로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |  |
+| 원천 = 원본 경로(`s3_key`) 첫 마디 — `SFDC`·`CRMS`·`LAS`·`FAQ`(대소문자 무관)이거나 `SFDC-`·`SFDC_`·`CRMS-`·`CRMS_`·`las_`·`LAS_`로 시작하면 그 원천, 아니면 `other`(`gold_bundle`). `faq` 스키마만 `chunk.faq_group` 칸 | `AI.FileStorageMap.source_system` 칸은 읽지 않는다 — 경로만으로 정함 | done | [pl-28](prd/load-schema.md#pl-28) |  |
 
 ## 검색 MCP (mcp) — AI 클라이언트가 부르는 도구 서버(이미지 `mcp-server`)
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |
@@ -125,7 +125,7 @@
 | run_docs는 지휘만(레인·워커·임시 폴더·`docker exec`) — 원천 목록·끝난 문서·중복·레인·FAQ 교체·게시 판단은 파이프라인 함수, PC도 가짜 대상으로 같은 run_docs E2E, 커밋 전 점검 스크립트는 `common/check/` | 같은 판단이 두 곳이면 어긋나고 PC E2E가 서버를 증명하지 못한다(사용자 11-04) | todo | [rn-05](prd/ops.md#rn-05) | run_docs가 EDW를 직접 읽고(`edw_list`·`edw_done_keys`·`edw_faq`) FAQ 교체(`faq_first`)를 판단, PC 실행 거부, 점검은 `deploy/release/lint_changed.sh` |
 | 같은 일은 한 곳(파싱 단계 사슬·프로세스 묶음 실행 = `parse_steps.py`, 날짜 조건 `_when` 한 벌), 서버·릴리스 스크립트 이름은 하는 일로, 같은 파일 이름 두 번 없음(보호 파일·공용 모듈 제외) | 같은 일이 여러 곳이면 한쪽만 고쳐진다(사용자 11-04) | done | [rn-06](prd/ops.md#rn-06) |  |
 | `ops.host.instance` 하나로 스키마·EDW 표·게시 경로·포트가 갈림, 파싱 MCP `mcp-data-parsing`·칸 `data_parsing`, 늘 같은 스위치·옛 칸 표 없음, 주석은 목적 한 줄 | 여러 벌이 서로 덮지 않고 설정을 읽기 쉽게(사용자 11-05) | done | [rn-07](prd/ops.md#rn-07) |  |
-| 파이프라인 폴더는 ETL 뜻대로 — extract는 고르기·받기·준비만, 엔진 파싱은 `transform/parse/`(엔진 실행 한 파일), 파일 이름은 하는 일로, 요건에 닿지 않는 코드·두 번째 같은 코드는 없음 | 폴더만 보고 단계의 일을 안다(사용자 11-05) | todo | [rn-08](prd/ops.md#rn-08) | 엔진 파싱이 extract에 있고 실행이 두 파일, `fetch_docs`가 고르기·받기를 함께, 닿지 않는 코드 남음(앵커 비고) |
+| 파이프라인 폴더는 ETL 뜻대로 — extract는 고르기·받기·준비만, 엔진 파싱은 `transform/parse/`(엔진 실행 한 파일), 파일 이름은 하는 일로, 요건에 닿지 않는 코드·두 번째 같은 코드는 없음 | 폴더만 보고 단계의 일을 안다(사용자 11-05) | done | [rn-08](prd/ops.md#rn-08) |  |
 | run_docs 대상 고르기 — 파일 이름 키워드(`--filter RFP,proposal`)·`--start-offset` 뒤 `--skip-done`이 ParsingMeta 끝난 행(ok·partial — gold_version도, skipped_dup)을 뺀다 | 새벽 배치는 이름에 RFP·proposal이 든 문서만 처리한다(키워드가 정기 운영에 맞는지는 C-72 ③) | done | [pl-23](prd/ops.md#pl-23) |  |
 | 새벽 배치는 `ops.nightly.time`·`max_docs`·`deadline` 셋이 모두 있을 때만 돈다(하나라도 비면 안 돎 — 사용자 11-02) — systemd 타이머가 5분마다 `nightly_batch.sh scheduled` → `run_docs.py --start-offset 0 --skip-done --max-docs --deadline` | 지금 서버는 비워 둠(꺼짐) — 켜는 것은 사람(C-72) | done | [pl-23](prd/ops.md#pl-23) |  |
 | 전체 e2e는 local·dev·prd 셋에서 — 전체 문서 실행은 prd에서만 새 원천별 스키마 이름(새 `PG_SCHEMA`)으로, 옛 gold·`struct` 스키마는 2주 뒤 DB 담당자가 백업하고 지움 | 판 0002가 기준 스키마의 옛 표를 지운다. 사용자 11-02 | todo | [pl-54](prd/ops.md#pl-54) |  |
@@ -181,7 +181,7 @@
 | 분류 수용 보고서(개발 서버) — 사람 정답 CSV(`s3_key`·정답 분류)와 비교해 원천·라벨별 일치율·혼동표 | 회사 데이터라 git 밖. 통과 기준은 첫 결과를 본 뒤 정한다 | todo | [e2-20](prd/test.md#e2-20) |  |
 | 검색 점검 페이지 `validation/search_ui`(기본 포트 8790, MCP `127.0.0.1:8765/mcp`) | 사람이 브라우저로 근거를 본다 | done | [e2-07](prd/test.md#e2-07) |  |
 | PC 평가 도구는 검색 점검 페이지·답변 점검 둘뿐 | PC 전용 설정 약 50개의 관리 비용 | done | [e2-10](prd/test.md#e2-10) |  |
-| 요건에 닿지 않는 함수·코드(시험만 부르는 것 포함)는 없다 | 죽은 코드 비용. MCP 도구 이름·입출력은 그대로 | todo | [e2-17](prd/test.md#e2-17) · [e2-18](prd/test.md#e2-18) | 닿지 않는 코드가 남음 — 목록은 [rn-08](prd/ops.md#rn-08) 비고 |
+| 요건에 닿지 않는 함수·코드(시험만 부르는 것 포함)는 없다 | 죽은 코드 비용. MCP 도구 이름·입출력은 그대로 | done | [e2-17](prd/test.md#e2-17) · [e2-18](prd/test.md#e2-18) |  |
 
 ## 문서·릴리스 (doc) — 문서 배치·버전·이미지·서버 설치
 | 요건(무엇을, 어디서) | 기준·이유 | 상태 | ID | 비고 |

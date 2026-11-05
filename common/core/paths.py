@@ -42,8 +42,8 @@ DEPLOY_ROOT = Path(__file__).resolve().parents[2]  # deploy/ — 모든 패키�
 PKG_ROOT = DEPLOY_ROOT / "common"  # 공용 패키지 루트 — 하위 프로세스 cwd·표시 기준(데이터 파일은 RES_ROOT)
 # 모듈 패키지 루트 — 이미지마다 들어 있는 패키지가 달라 없는 폴더일 수 있다.
 PARSING_ROOT = (
-    DEPLOY_ROOT / "pipeline" / "extract"
-)  # 엔진 폴더(engines/)의 부모 — run_engines.engine_code_fp가 이 기준 상대 경로('engines/…')로 해시(바꾸면 엔진 지문이 바뀜)
+    DEPLOY_ROOT / "pipeline" / "transform" / "parse"
+)  # 엔진 폴더(engines/)의 부모 — parse_engines.engine_code_fp가 이 기준 상대 경로('engines/…')로 해시(바꾸면 엔진 지문이 바뀜)
 E2E_ROOT = DEPLOY_ROOT / "validation" / "e2e"  # PC 전용 평가 도구·triple_extract 지시서(이미지에는 없음)
 # 코드가 읽는 데이터(지시서·설정 기본값·원천 표·어휘) — 패키지들과 같은 자리(PC=저장소 루트/resources,
 # 이미지=/app/deploy/resources), 모든 이미지에 폴더째 들어간다.

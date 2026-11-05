@@ -35,7 +35,7 @@ services:
   structure:
     <<: *job
     image: ${DATA_PIPELINE_IMAGE:?DATA_PIPELINE_IMAGE}
-    command: ["help"]  # structure 명령은 없음(smoke_test.sh가 build_bundle을 직접 부름)
+    command: ["help"]  # structure 명령은 없음(smoke_test.sh가 gold_bundle을 직접 부름)
     volumes: [*settings, *overlay, "${RAG_OUT:?RAG_OUT}:/app/output"]
     depends_on: {}
 

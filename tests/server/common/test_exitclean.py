@@ -89,7 +89,7 @@ def _setarg_exec():
     """POSIX — `--set`은 덮기 파일을 만든 뒤 os.execve로 자기를 다시 띄운다(atexit가 안 돎) → 새 프로세스가 그 파일을 맡아 끝날 때 지움."""
     d = tempfile.mkdtemp()
     r = subprocess.run(
-        [sys.executable, "-m", "pipeline.extract.engine_stack", "--set", "PIPE_PROCS=1"],
+        [sys.executable, "-m", "pipeline.transform.parse.engine_check", "--set", "PIPE_PROCS=1"],
         env={**child_env(), "TMPDIR": d},
         capture_output=True,
         timeout=60,

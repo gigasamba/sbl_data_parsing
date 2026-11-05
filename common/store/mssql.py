@@ -91,6 +91,16 @@ def login(role, extra=True):
     return kw, miss
 
 
+def rdb_connect(extra_kwargs=True):
+    """RDB(mssql) 연결 — SQLAlchemy `mssql+pymssql`(연결 풀 없음). 접속은 common.connections.rdb의
+    **읽기 계정** + RDB_CONNECT_KWARGS(JSON — extra_kwargs=False면 안 넘김).
+    discover_columns·roster_from_edw가 쓴다."""
+    kw, miss = login("read", extra=extra_kwargs)
+    if miss:  # 없으면 KeyError(parsing_meta_db와 같은 꼴)
+        raise KeyError(miss[0])
+    return connect(**kw)
+
+
 def standin_path():
     """PC 가짜 EDW 경로(common.connections.rdb.sqlite) — RUN_ENV=local 전용. 서버 설정에 남아 있으면 실패한다
     (원천 조회·게시·query_edw가 한꺼번에 가짜 파일로 가지 않게). 없으면 None."""

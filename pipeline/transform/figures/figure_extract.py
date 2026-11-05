@@ -1,6 +1,6 @@
 """내장 그림을 형식과 무관하게 모두 찾아 VLM 기록(+ 위치·근처 글자).
 PDF 래스터·벡터 군집(vector_regions)·docx(본문·표 칸)·xlsx(모든 시트·셀 위)·pptx·eml 본문 이미지(cid) → 그림 1개 = 기록 1개.
-VLM은 pipeline.shared.vlmcall.ask(내부망 가드·추론 끄기는 common.models.vlm.extra_body)·P0 원본 층 캐시(pipeline.shared.parse_run.raw_vlm_path, PARSE_RAW_ROOT로 저장소 바꿀 수 있음).
+VLM은 pipeline.shared.vlmcall.ask(내부망 가드·추론 끄기는 common.models.vlm.extra_body)·P0 원본 층 캐시(pipeline.shared.raw_cache.raw_vlm_path, PARSE_RAW_ROOT로 저장소 바꿀 수 있음).
 산출: output/parse/_images/index.jsonl(그림 기록 계약) + <doc>/<image_id>.png."""
 
 import email
@@ -23,9 +23,8 @@ from common.core.paths import (
 from pipeline import config as pc
 from pipeline.shared import vlmcall as V  # VLM 호출 한 길(ask)·렌더 해상도(dpi)
 from pipeline.shared.ext_groups import IMG_EXTS
-from pipeline.shared.parse_run import prompt_id, raw_vlm_path
-from pipeline.shared.post_config import raw_root  # PARSE_RAW_ROOT(이중 raw/ 방지)
-from pipeline.shared.vlmcall import sha
+from pipeline.shared.raw_cache import prompt_id, raw_root, raw_vlm_path  # raw_root: PARSE_RAW_ROOT(이중 raw/ 방지)
+from pipeline.shared.vlmcall import _host, _model_dir, _png, sha  # 캐시 경로·PNG 축소(nested_figures와 같은 함수)
 from pipeline.transform.figures import chart_values as CV  # 벡터 차트 결정적 값·추세
 from pipeline.transform.figures import diagram_edges as diag_edges  # PDF 벡터·텍스트 글자 화살표 결정적 edges
 from pipeline.transform.figures.nested_figures import find_children  # page_render 안의 자식 그림 찾기·자르기
@@ -516,7 +515,9 @@ def figures(p, page_covered=False):
             w, h = Image.open(io.BytesIO(page_bytes)).size
             out.extend(_nested_children(parent_id, page_bytes, 1, (w, h)))
     elif ext == ".eml":
-        from pipeline.extract.engines.mhtml.parser import decode_mail_text  # get_content()(선언 charset 그대로)는 EUC-KR 본문이 깨짐
+        from pipeline.transform.parse.engines.mhtml.parser import (
+            decode_mail_text,  # get_content()(선언 charset 그대로)는 EUC-KR 본문이 깨짐
+        )
 
         m = email.message_from_bytes(p.read_bytes(), policy=policy.default)
         imgs = {
@@ -617,7 +618,7 @@ def _default_ocr(png_bytes):
     """크롭 PNG → 글자(공백 join) — tools/engines/rapidocr/parser.py의 운영 OCR 경로(parse_rapidocr_ko, 한국어
     PP-OCRv5 모델)를 그대로 재사용한다(모델 설정 중복 방지, 결정적 — 같은 PNG면 같은 모델·같은 글자). 그 함수가
     파일 경로를 전제하는 공용 계약이라 크롭을 output/ 밑 임시 PNG로 한 번 썼다 바로 지운다(C4 — output/ 밖에 안 씀)."""
-    from pipeline.extract.engines.rapidocr.parser import parse_rapidocr_ko
+    from pipeline.transform.parse.engines.rapidocr.parser import parse_rapidocr_ko
 
     _TMP_DIR.mkdir(parents=True, exist_ok=True)
     tmp = _TMP_DIR / f"{uuid.uuid4().hex}.png"
@@ -684,23 +685,6 @@ def _ocr_fallback(f, prov, ocr_fn, ocr_budget):
     if ms is not None:
         new_prov["ocr_ms"] = ms
     return json.dumps(rec, ensure_ascii=False), new_prov
-
-
-def _png(img, max_side=2000):
-    from PIL import Image
-
-    im = Image.open(io.BytesIO(img))
-    if im.mode not in ("RGB", "L"):
-        im = im.convert("RGB")
-    im.thumbnail((max_side, max_side))
-    buf = io.BytesIO()
-    im.save(buf, "PNG")
-    return buf.getvalue(), f"{im.width}x{im.height}"
-
-
-def _model_dir(model):
-    """P0 폴더 이름 — 기존 캐시와 같은 정리 규칙(모델 이름의 '/' 등은 '_')이라야 기존 캐시를 그대로 재사용한다."""
-    return re.sub(r"[^\w.-]+", "_", model or "unset")
 
 
 def _open_image(data):
@@ -842,12 +826,6 @@ def vlm_fig_overlay(img_bytes):
     return vlm_fig(img_bytes, prompt_text=P_FIGOVERLAY, cache_name="figoverlay", agent="figure_overlay")
 
 
-def _host(url):
-    import urllib.parse
-
-    return urllib.parse.urlparse(url).hostname or url
-
-
 def parse_json(t):
     t = re.sub(r"^```(?:json)?|```$", "", t.strip(), flags=re.M).strip()
     m = re.search(r"\{.*\}", t, re.S)
@@ -929,7 +907,7 @@ def build_records(doc_name, doc_path, doc_text, doc_sha256, run_id=0, ocr_fn=Non
     재사용한다. ocr_fn — crop OCR 재사용 지점(없으면 _crop_ocr, 테스트는 가짜 OCR 주입).
     VLM 응답이 빈 경우(미설정·오류·빈 응답)만 같은 crop의 OCR 글자로 채운다(_ocr_fallback). VLM 응답이
     있으면(비어 있지 않으면) 그대로.
-    figures_max — 그림 상한을 이번 호출만 바꿈(None이면 설정 VLM_FIGURES_MAX — figures_resume이 상한을 올려 다시 돌 때)."""
+    figures_max — 그림 상한을 이번 호출만 바꿈(None이면 설정 VLM_FIGURES_MAX)."""
     ext = Path(doc_path).suffix.lower()
     is_pdf = ext == ".pdf"
     px_edges = pptx_edges(doc_path) if ext == ".pptx" else {}  # 슬라이드 XML 연결선 — VLM edges보다 우선(있으면)

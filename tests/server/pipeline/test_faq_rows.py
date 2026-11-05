@@ -7,8 +7,8 @@ from pathlib import Path
 from openpyxl import Workbook
 
 from common.core.paths import STACK_FILE
-from pipeline.transform.structure.build_bundle import main
 from pipeline.transform.structure.chunking import faq_rows
+from pipeline.transform.structure.gold_bundle import main
 
 
 def _book(path, sheets):

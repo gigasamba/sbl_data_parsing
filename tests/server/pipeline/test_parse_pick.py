@@ -8,7 +8,7 @@ from pathlib import Path
 
 from common.config.settings import COMMON
 from common.store.parsing_meta_db import SqliteStore
-from pipeline.extract import fetch_docs
+from pipeline.extract import candidate_pick
 
 # (이름, manifest 원본 키 | None, ParsingMeta parse_status | None, 고름?)
 DOCS = [
@@ -56,7 +56,7 @@ def test_c10_pick():
             path = str(edw if has_edw else Path(tmp) / "none" / "edw.sqlite")
             with COMMON.env(RUN_ENV=run_env, RDB_SQLITE=path):
                 try:
-                    got = fetch_docs.unparsed(names, out)
+                    got = candidate_pick.unparsed(names, out)
                 except SystemExit as e:
                     got = e.code
             assert got == want, (run_env, has_edw, got)

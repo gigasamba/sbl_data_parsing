@@ -19,7 +19,7 @@
      - vlm 레인이면 덧붙임: `VLM_MAX_CONCURRENCY=6` · `VLM_CONCURRENCY=6` · `PARSE_POST=…,attachments,vlm_page` · `VLM_PAGE_MAX=`(상한 없음). 스캔 PDF면 `PREPARE_ROTATE=0`. 쪽 해상도는 settings.yaml `extract.ocr.dpi`(VLM 설정은 [pl-43](transform.md#pl-43)).
      - CPU 게이트 `CPU_MAX_LOAD` = light 레인 9(사실상 게이트 없음), 그 밖 `--cpu-gate`(기본 1.3).
      - 파싱 명령: `python -m pipeline.cli parse --source rdb:csv:<_docflow/seq>/batch.csv`, 제한 2700초.
-     - 구조화·적재: `EMBED_CONCURRENCY=6` · `EMBED_BATCH=32` · `BM25_THREADS=3`으로 `pipeline.transform.structure.build_bundle` → `pipeline.load.pgvector_load load`.
+     - 구조화·적재: `EMBED_CONCURRENCY=6` · `EMBED_BATCH=32` · `BM25_THREADS=3`으로 `pipeline.transform.structure.gold_bundle` → `pipeline.load.pgvector_load load`.
   8. 기록: 작업 폴더(`ops.pipeline_host.run_docs_dir`, 비우면 스크립트 옆 `test_space/`)의 `batch_progress/` — `progress.log`(진행), `doc_<seq>.log`(문서별 파싱), `queue_depth.jsonl`([rn-02](#rn-02)), 잠금 `run_docs.lock`.
 - 파일: `deploy/host/scripts/run_docs.py`, `pipeline/cli.py`, `deploy/docker/entrypoint.sh`.
 - QA: `tests/general/deploy/test_run_docs.py`(명령 글자·설정 대조)·`test_docs_flow.py` · 통과.
@@ -31,10 +31,10 @@
 - 규칙:
   1. "새 문서" = `AI.FileStorageMap`에 있고 `AI.ParsingMeta`에 끝난 행이 없는 것. 키 = `s3_key`(갱신 시각은 보지 않음).
   2. "끝난 행" = `parse_status`가 `skipped_dup`, 또는 `ok`·`partial`이면서 `gold_version`이 있음(`gold_version` 칸이 없는 EDW에서는 `parse_status`만 봄). `not_parsed`·`skipped_disk_cap`·실패·행 없음은 다시 고른다. 코드 두 곳이 같은 목록을 쓴다 — `common/store/parsing_meta_db.DONE_STATUSES`·`run_docs.py DONE_STATUSES`.
-  3. 파싱 입구(`pipeline.cli parse` → `pipeline/extract/fetch_docs.py` `unparsed`)는 EDW를 한 번 읽는다(읽기 계정, PC는 sqlite 대역). 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
+  3. 파싱 입구(`pipeline.cli parse` → `pipeline/extract/candidate_pick.py` `unparsed`·`done_keys`)는 EDW를 한 번 읽는다(읽기 계정, PC는 sqlite 대역). 못 읽으면 RUN_ENV가 local이 아니면 종료 4, 그 밖은 받은 목록 그대로 + 로그 한 줄. 키 = 수집 manifest의 `key`(없으면 이름).
   4. 전체 재파싱은 사람이 전체 e2e를 시작할 때만([pl-54](#pl-54)).
   5. 새벽 배치: settings.yaml `ops.nightly.time`(시작 HH:MM)·`max_docs`(새 문서 수 상한, 1 이상)·`deadline`(마감 HH:MM, 시작보다 5분 넘게 뒤) — 하나라도 비면 돌지 않는다. systemd `data-pipeline-nightly.timer`(`OnCalendar=*:0/5`)가 `nightly_batch.sh scheduled`를 부르고, 시작 시각부터 5분 안이면 `run_docs.py --start-offset 0 --skip-done --max-docs <n> --deadline <hh:mm>`. 형식 오류면 종료 2. 서비스 `TimeoutStartSec=6h`.
-- 파일: `pipeline/extract/fetch_docs.py`(`unparsed`), `common/store/parsing_meta_db.py`, `deploy/host/scripts/{run_docs.py,nightly_batch.sh}`, `deploy/host/systemd/data-pipeline-nightly.{timer,service}`.
+- 파일: `pipeline/extract/candidate_pick.py`(`done_keys`·`unparsed`), `common/store/parsing_meta_db.py`, `deploy/host/scripts/{run_docs.py,nightly_batch.sh}`, `deploy/host/systemd/data-pipeline-nightly.{timer,service}`.
 - QA: `tests/general/deploy/test_trigger_gate.py`·`tests/server/pipeline/test_nightly_time.py`·`test_run_docs`(`deadline_at`, `test_done_keys_match_parsing_meta`) · 통과. 서버 확인 refactor.md C-72.
 - Status: done
 
@@ -50,7 +50,7 @@
 - 이유: 게시가 gold를 기다리지 않고, 원본은 게시가 성공했을 때만 지운다.
 - 규칙:
   1. 파싱 성공 → 게시 대기열(게시 스레드 1개 — Object Storage 업로드 + ParsingMeta INSERT).
-  2. 게시 성공 → 원본(warm `.bin`·`_docflow/<seq>/_source_files`) 삭제 → 구조화 대기열(`struct_workers` 스레드 — build_bundle·pgvector_load) → `_docflow/<seq>` 삭제(`--no-cleanup`이면 남김).
+  2. 게시 성공 → 원본(warm `.bin`·`_docflow/<seq>/_source_files`) 삭제 → 구조화 대기열(`struct_workers` 스레드 — gold_bundle·pgvector_load) → `_docflow/<seq>` 삭제(`--no-cleanup`이면 남김).
   3. 파싱 실패·게시 실패 → 원본을 남기고 로그에만(gold로 안 감, EDW에 안 씀). 파싱 실패면 그 문서 표지(`RUN_DOCS_DOC`)가 붙은 컨테이너 안 프로세스를 끈다.
   4. gold 실패 → 게시한 silver·ParsingMeta 행은 그대로, 로그에만. `gold_version`이 비어 다음 `--skip-done`이 다시 고른다(파싱·게시부터 다시).
 - 파일: `deploy/host/scripts/run_docs.py`(`doc_flow`, `cleanup_doc`).
@@ -165,15 +165,12 @@
   2. `pipeline/transform/parse/` = 엔진 파싱 — 엔진 `engines/`(보호 파일), 엔진 준비 확인 `engine_check.py`, 엔진 실행은 한 파일(엔진마다 자식 프로세스로 분리), 엔진 버전·캐시 키(`engine_version`·`p0_key`·`engine_code_fp`)와 캐시 지우기. 그 뒤 `represent`(대표 결과) → `figures`(그림) → `structure`(gold 묶음 `gold_bundle.py`).
   3. `pipeline/shared`의 파일은 한 가지 일만 하고 이름이 그 일이다(원본 캐시·실패 단서·`pdf_kind` 각각). 한 단계만 쓰는 것은 그 단계 폴더에 둔다(후처리 스위치 → represent, 차트 글자 → figures).
   4. 요건 행에 닿지 않는 코드(부르는 곳이 없거나 시험만 부르는 함수, 쓰지 않는 설정 칸·반환 칸)와 같은 일을 하는 두 번째 코드는 두지 않는다. `rep.meta`와 `parse_document` 출력(MCP 계약)은 그대로.
-- 비고(현재와 다른 점, 11-05 조사):
-  - 엔진·엔진 실행이 `pipeline/extract/{engines,run_engines.py,run_one_engine.py,engine_stack.py}`에 있고, 엔진 실행이 두 파일로 나뉨.
-  - `extract/fetch_docs.py` 하나가 고르기·받기·중복 정리를 함께 하고, 끝난 문서 빼기가 받은 뒤에 한 번 더 돈다.
-  - `shared/parse_run.py`가 원본 캐시·엔진 버전·캐시 지우기·실패 단서·`pdf_kind`를 함께 가짐. 묶음 파일 이름 `build_bundle.py`.
-  - 닿지 않는 코드: 쓰지 않는 청커 5개와 `chunk_overlap` 칸, `infer_clients`의 닿지 않는 갈래, `select_final`·`selection.json`·`--no-rep` 옛 길, `page_text`(시험만), `crosscheck`·`meta.engines`·`n_sum["llm"]`의 읽지 않는 칸. 중복: `figure_extract`의 `_png`·`_model_dir`·`_host`(= `vlmcall`), 쪽 수 세기 두 벌. 오류: `apply_post` 표시 이름. `draft_terms`가 레이어 s 코드 지문에 들어감.
-  - 엔진 폴더를 옮기면 엔진 핑거프린트(상대 경로 포함)와 code_fp가 바뀐다 — 기록용(재처리는 ParsingMeta 끝난 상태로만). 사람 검토 필요.
+- 비고(남은 것, 11-05):
+  - 보호 파일 `common/core/contract.py`의 설명 글에 옛 이름 `build_bundle`이 남음(핸드오프 지문 때문에 그대로).
+  - 엔진 폴더를 옮겨 엔진 핑거프린트(상대 경로 포함)와 code_fp가 바뀜 — 기록용([test.md#e2-02](test.md#e2-02), 재처리는 ParsingMeta 끝난 상태로만). 사람 검토 필요.
   - 이번에 하지 않음: 그림 부가 기능(pl-05), 글자 파싱 뒤 레인 나누기.
 - QA: selftest·pytest 기준선 유지 · `check_modules`·`keyscan --check`·`sample --check` 통과 · 저장소 전체 ruff·mypy 0 · FINGERPRINT 그대로 · 비고의 옛 이름(`extract/engines`·`engine_stack`·`run_one_engine`·`fetch_docs`·`build_bundle`) 0건(docs/history 제외).
-- Status: todo
+- Status: done
 
 <a id="pl-27"></a>
 ## pl-27 · 프로세스 종료 정리 — 임시 설정 파일·PID 기록 지움, 자식 회수
@@ -242,6 +239,6 @@
   5. `cpu_ms`·`rss_peak_mb`는 Linux에서 프로세스에 하나만 도는 span만 채우고, 겹치거나 측정 못 하면 NULL.
   6. 분석: `python -m pipeline.tools.perf_report [<run_id>] [--since <시간>] [--top N] [--compare <run_id>…] [--runs] [--file output/logs/*.jsonl]` — 읽기 전용.
      다운로드(`extract.download`)는 `--since` 요약에 ■ 다운로드 표(크기 구간별 순수 전송 mbps·head·잠금 대기)로 나온다. 서버에서는 `podman exec data-pipeline python -m pipeline.tools.perf_report --since <시간>`으로 본다.
-- 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf_report.py`, `pipeline/extract/{doc_lane_group,fetch_docs}.py`.
+- 파일: `common/core/{jsonlog,span,exitclean}.py`, `common/store/logsink.py`, `mcp_server/services/call_log.py`, `pipeline/shared/runtrace.py`, `pipeline/tools/perf_report.py`, `pipeline/extract/{doc_lane_group,candidate_ready}.py`.
 - QA: `tests/server/common/test_{jsonlog,logsink,span,span_soft,call_event}.py`·`tests/server/mcp/test_call_log.py`·`tests/server/pipeline/test_{runtrace,perf,span_stages,doc_group}.py`·`tests/general/common/test_applog_pg.py`(PC 임시 PG 스키마) · 통과. 서버 적용 refactor.md C-79·C-80.
 - Status: done

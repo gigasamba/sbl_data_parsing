@@ -8,7 +8,7 @@
 ## pl-31 · 엔진은 쓰는 것만
 - 이유: 쓰이지 않는 엔진과 설정은 지문·설정·이미지만 무겁게 한다.
 - 요건(되어야 할 모습):
-  1. 엔진 목록의 정본은 엔진 등록부(`registry.py`)다. 엔진 구성 파일에 없는 엔진은 두지 않는다 — 예외는 비교용 `docx2python`.
+  1. 엔진 목록의 정본은 엔진 등록부(`pipeline/transform/parse/engines/registry.py`)다. 엔진 구성 파일에 없는 엔진은 두지 않는다 — 예외는 비교용 `docx2python`.
   2. OCR 전용 소형 VLM 엔진(`ocr_vlm`)과 대체 VLM 모델 칸(`vlm.model_alt`)은 없다 — VLM은 `qwen_vlm` 하나.
 - Status: done
 
@@ -51,9 +51,9 @@
 ## pl-47 · 엔진 지문(p0) 범위 — 모든 엔진 폴더
 - 이유: 엔진 이름과 폴더 이름이 다른 엔진(`html_stdlib`·`msg_extract` → `mhtml/`, `office` → `office_stdlib/`, `rapidocr_ko` → `rapidocr/`)을 고쳐도 지문이 바뀌어야 한다.
 - 요건(되어야 할 모습):
-  1. 층 지문 p0 범위 = 엔진 폴더의 모든 `.py` + 엔진 실행 파일 + 엔진이 import하는 pipeline 파일(`config.py`·`post_config.py`·`vlmcall.py` 등)(`common/core/artifacts.py` `LAYER_CODE`).
-  2. 문서×엔진 결과 재사용 열쇠는 `engine_code_fp()`(등록부의 엔진 폴더 + `_common`)다 — 층 지문이 아니다.
-- QA: `tests/server/pipeline/test_run_all.py::test_p0_layer_covers_every_engine_folder`.
+  1. 층 지문 p0 범위 = 엔진 폴더(`pipeline/transform/parse/engines/`)의 모든 `.py` + 엔진 실행 파일 `parse_engines.py` + 엔진이 import하는 pipeline 파일(`config.py`·`shared/{raw_cache,env_error,pdf_kind,vlmcall}.py`)(`common/core/artifacts.py` `LAYER_CODE`).
+  2. 문서×엔진 결과 재사용 열쇠는 `parse_engines.engine_code_fp()`(등록부의 엔진 폴더 + `_common`)다 — 층 지문이 아니다.
+- QA: `tests/server/pipeline/test_parse_engines.py::test_p0_layer_covers_every_engine_folder`.
 - Status: done
 
 <a id="pl-49"></a>

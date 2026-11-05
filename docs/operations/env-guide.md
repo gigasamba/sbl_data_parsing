@@ -49,7 +49,7 @@
 - 라이브러리가 읽는 env(`TZ`·`OMP_NUM_THREADS`·`HF_HUB_OFFLINE`·`TESSDATA_PREFIX` 등 — 허용 목록 `common.config.settings.LIB_ENV_NAMES`)는 `ops.runtime.lib_env` 사전에 적는다. 목록 밖 이름은 검증 오류.
 
 ### 0-2. 한 번 실행에만 다른 값 — `--set 이름=값`(서버 포함)
-- `python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/x --set PARSE_POST=supsub parse …`처럼 진입 모듈(`pipeline.cli`·`pipeline.extract.fetch_docs`·`pipeline.extract.engine_stack`·`pipeline.transform.structure.build_bundle`·`pipeline.load.pgvector_load`·`pipeline.load.publish_parse_result`)에 여러 번 준다(같은 이름은 뒤 값).
+- `python -m pipeline.cli --set PIPE_OUT_ROOT=/app/output/x --set PARSE_POST=supsub parse …`처럼 진입 모듈(`pipeline.cli`·`pipeline.extract.candidate_ready`·`pipeline.transform.structure.gold_bundle`·`pipeline.load.pgvector_load`·`pipeline.load.publish_parse_result`)에 여러 번 준다(같은 이름은 뒤 값).
 - 모르는 이름·호스트 칸·**비밀 칸**은 모든 환경에서 종료 2. 값 형식 오류는 서버 종료 2·local 경고. 서버에서 `SETTINGS_FILE`이 없으면 종료 2.
 
 ### 0-3. 새 서버 설정

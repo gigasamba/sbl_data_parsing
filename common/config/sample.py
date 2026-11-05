@@ -109,7 +109,6 @@ HYPER = {  # 이름 규칙으로는 운영값이지만 결과(파싱·청크·�
     "common.models.vlm.extra_body",
     "pipeline.extract.table_grid_max_rows",
     "pipeline.extract.ocr.dpi",
-    "pipeline.transform.structure.page_chunk_max",
     "pipeline.transform.vlm.fig_photo_max_tokens",
 }
 OPS = {  # 이름 규칙으로는 결과값이지만 운영값인 칸
@@ -184,7 +183,6 @@ BLANK = {
     "pipeline.transform.structure.chunk_size": "청커별 기본(800 등)",
     "pipeline.transform.structure.chunk_table": "표를 통째로 둠",
     "pipeline.transform.structure.embed_cache": "<루트>/output/edw/embed_cache.sqlite · 0이면 캐시 끔",
-    "pipeline.transform.structure.page_chunk_max": "chunk_size × 4(chunk_size도 비우면 4000)",
     "pipeline.transform.vlm.page_max": "전부(0이면 쪽 VLM 끔 — VLM 엔진은 빈 결과)",
     "mcp.edw_meta.dir": "<런타임 루트>/config/edw_meta(이미지 안 /app/config/edw_meta — 서버 compose는 이 자리를 붙이지 않음) — 두 파일이 없으면 edw_meta 도구는 not_configured(query_edw는 그대로)",
     "mcp.server.allowed_hosts": "바인드 주소만 허용",

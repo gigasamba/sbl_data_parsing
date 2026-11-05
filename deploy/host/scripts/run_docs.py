@@ -9,7 +9,7 @@
    레인·대기 길이는 상태가 바뀔 때마다 batch_progress/queue_depth.jsonl에 한 줄(rn-02).
    값은 settings.yaml ops.run_docs(비우면 아래 RUN_DOCS_DEFAULTS) — --warm·--struct-workers 인자가 그 위를 덮음.
 3) 문서별 순서(pl-24): 파싱 → silver 게시(publish — OS+EDW, 게시 스레드 1개) → 원본 삭제(게시 성공 뒤에만) →
-   gold(build_bundle → pgvector_load, STRUCT_WORKERS(기본 2)개 스레드) → 임시 삭제. 배치 장벽 없이 끝나는 순서대로 흐름.
+   gold(gold_bundle → pgvector_load, STRUCT_WORKERS(기본 2)개 스레드) → 임시 삭제. 배치 장벽 없이 끝나는 순서대로 흐름.
    파싱·게시 실패 = 원본(warm)을 남기고 로그에만, gold로 안 감 · gold 실패 = silver는 그대로(로그 — gold_status 칸은 DB 담당 C-81).
 4) 종료 코드(pl-18): 0 = 대상 0건·모두 끝 · 1 = 실패 문서 있음 · 75 = 마감 도달(실패 없음) 또는 다른 run_docs가 도는 중
    (잠금 batch_progress/run_docs.lock — 사람이 돌린 실행과 새벽 배치가 겹치지 않게) · 2 = 설정 문제.
@@ -273,7 +273,7 @@ def warm_cmd(seq):
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && mkdir -p {o}/_warm && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
-        f"python -m pipeline.extract.fetch_docs{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {_inside(seq, 'batch.csv')}'"
+        f"python -m pipeline.extract.candidate_ready{sets(f'SOURCE_WARM={o}/_warm')} warm --csv {_inside(seq, 'batch.csv')}'"
     )
 
 
@@ -303,7 +303,7 @@ def struct_cmd(seq):
     return (
         f"{DOCKER} exec {PIPE_C} bash -c 'umask 0002 && cd {_app()} && "
         f"PYTHONPATH={_img('code_root')} {LIB_ENV} "
-        f"python -m pipeline.transform.structure.build_bundle{st} --parse-dir {inside}/parse"
+        f"python -m pipeline.transform.structure.gold_bundle{st} --parse-dir {inside}/parse"
         f" --out {inside}/bundle && "
         f"{LIB_ENV} python -m pipeline.load.pgvector_load{st} load --bundle {inside}/bundle --rep-dir {inside}/parse/_rep "
         f">> {inside}/structure.log 2>&1'"
@@ -493,7 +493,7 @@ def run_docs_policy(doc):
 
 def stack_check():
     """엔진 구성 파일 확인 — 시작 때 한 번(파싱 컨테이너 안 show-stack — 파일을 못 읽거나 모양이 틀리면 종료 2, 시작하지 않음).
-    없는 엔진은 파싱 입구가 거부한다(engine_stack.resolve)."""
+    없는 엔진은 파싱 입구가 거부한다(engine_check.resolve)."""
     rc, _, err = sh(
         f"{DOCKER} exec {PIPE_C} bash -c 'cd {_app()} && PYTHONPATH={_img('code_root')} python -m pipeline.cli show-stack'", timeout=120
     )

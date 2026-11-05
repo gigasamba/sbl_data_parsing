@@ -36,7 +36,7 @@ def extract_candidate_orgs(text):
 
 
 def collect_candidate_org_names(docs, known_norm, norm):
-    """docs(build_bundle.py main()의 doc dict 목록, full_text 키) 전체에서 candidate 회사 이름 → known_norm(이미 아는
+    """docs(gold_bundle.py main()의 doc dict 목록, full_text 키) 전체에서 candidate 회사 이름 → known_norm(이미 아는
     이름의 norm() 집합, 명부·용어집 전 카테고리) 밖인 것만, 등장 횟수 많은 순 · 동률은 이름순(결정적)."""
     counts = {}
     for d in docs:

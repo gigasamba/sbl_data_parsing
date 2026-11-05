@@ -56,7 +56,7 @@
 |---|---|---|---|
 | **parse** | 원천 읽기 · 중복 제거 · 준비 · 엔진별 파싱 + 대표 결과 | `python -m pipeline.cli parse` | `<결과 폴더>/parse/_rep/`(끝나면 `_DONE.json`) |
 | **publish** | Object Storage 업로드 + EDW 메타데이터 | `python -m pipeline.load.publish_parse_result` | (운영 시스템에 기록) |
-| **structure** | 청킹 · 임베딩 → 번들 | `python -m pipeline.transform.structure.build_bundle` | 번들 폴더 |
+| **structure** | 청킹 · 임베딩 → 번들 | `python -m pipeline.transform.structure.gold_bundle` | 번들 폴더 |
 | **load** | 번들 → pgvector | `python -m pipeline.load.pgvector_load` | (PostgreSQL 안) |
 
 `run_docs` 종료 코드: 0 끝 · 1 실패 문서 있음 · 2 설정 문제 · 75 마감 도달·다른 run_docs 실행 중.
@@ -116,7 +116,7 @@ pgvector의 표는 코드가 실행 중에 만들지 않는다. 모두 Alembic �
 | 방법 | 언제 | 받는 명령 |
 |---|---|---|
 | **A. settings.yaml에 적기** | 계속 쓸 값 | 모든 명령 |
-| **B. 명령 인자 `--set 이름=값`** | 이번 실행에만(이름은 옛 env 이름). 비밀·호스트 칸은 거부 | `pipeline.cli`·`build_bundle`·`pgvector_load`·`publish_parse_result` 등 파이프라인 진입점 |
+| **B. 명령 인자 `--set 이름=값`** | 이번 실행에만(이름은 옛 env 이름). 비밀·호스트 칸은 거부 | `pipeline.cli`·`gold_bundle`·`pgvector_load`·`publish_parse_result` 등 파이프라인 진입점 |
 | **C. 오버레이 설정 파일**(PC 전용) | `--set`을 받지 않는 명령 | `mcp_server.main`·`mcp_server.cli.search_ask` — `SETTINGS_FILE=$(python -m common.config.overrides 이름=값 …)` |
 
 ---
@@ -226,7 +226,7 @@ cp valid_env/edw/edw.sqlite output/demo/edw.sqlite   # EDW 대역 사본 — 파
 ```bash
 .venv/bin/python -m common.store.db.dbtool up --target master --schema demo
 .venv/bin/python -m common.store.db.dbtool master load --schema demo
-.venv/bin/python -m pipeline.transform.structure.build_bundle \
+.venv/bin/python -m pipeline.transform.structure.gold_bundle \
   --parse-dir output/demo/parse --src output/demo/prepared --embed api --out output/demo/bundle
 ```
 
@@ -272,7 +272,7 @@ cp valid_env/edw/edw.sqlite $O/edw.sqlite
 .venv/bin/python -m pipeline.cli "${SETS[@]}" --set RDB_SQLITE=$O/edw.sqlite parse --source $SRC --src $O/prepared
 .venv/bin/python -m common.store.db.dbtool up --target master --schema demo
 .venv/bin/python -m common.store.db.dbtool master load --schema demo
-.venv/bin/python -m pipeline.transform.structure.build_bundle "${SETS[@]}" \
+.venv/bin/python -m pipeline.transform.structure.gold_bundle "${SETS[@]}" \
     --parse-dir $O/parse --src $O/prepared --embed api --out $O/bundle
 .venv/bin/python -m common.store.db.dbtool up --target all --schema demo --bundle $O/bundle --create-extension
 .venv/bin/python -m pipeline.load.pgvector_load "${SETS[@]}" load --bundle $O/bundle

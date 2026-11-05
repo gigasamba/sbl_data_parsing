@@ -108,7 +108,12 @@ ALLOW: set = set()  # 모듈 경계 예외(파일, import 키) — 지금은 없
 # ⑫ 단계 방향(CLAUDE.md §1 — pipeline 안 extract → transform → load, 거꾸로 import 금지). 함수 안 늦은 import도 셈.
 #   STAGE_ALLOW = 예외(파일, 가져오는 단계) — 엔진 파일은 바이트를 바꾸면 엔진 지문이 바뀌어(등급 A) 옮기지 않고 여기 적는다.
 STAGES = ("extract", "transform", "load")
-STAGE_ALLOW: set = set()
+STAGE_ALLOW = {
+    (
+        "etl/extract/filter_and_rotate.py",
+        "transform",
+    ),  # 형식 거르기(registry.engines_for)·회전 OCR(rapidocr ko_params) — 엔진은 transform/parse에
+}
 AGENT_KWARG_EXEMPT = {"common/check/checker.py"}  # 연결 확인(ping) — 업무 프롬프트가 없음(⑧)
 
 

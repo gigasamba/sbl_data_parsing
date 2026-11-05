@@ -17,7 +17,7 @@
 사용:
   python -m pipeline.extract.protected_docs probe [--src …]                        → 실제 라이브러리로 열어 봄(openpyxl·xlrd·python-docx·python-pptx·pdfplumber) → output/secure/probe.csv
   python -m pipeline.extract.protected_docs scan [--src output/prepared]               → 콘솔 표 + output/secure/scan.csv
-  python -m pipeline.extract.protected_docs decrypt [--src …]   (암호 목록: extract.connections.secure_doc.passwords_file)  → output/secure/decrypted/(보호 없는 문서는 그대로 복사 — 이 폴더를 run_engines --src로)
+  python -m pipeline.extract.protected_docs decrypt [--src …]   (암호 목록: extract.connections.secure_doc.passwords_file)  → output/secure/decrypted/(보호 없는 문서는 그대로 복사 — 이 폴더를 parse_engines --src로)
       여러 암호: SECURE_DOC_PASSWORDS_FILE=<한 줄에 하나> (차례로 시도). **암호는 인자·로그·결과 파일에 남기지 않는다.**
   python -m pipeline.extract.protected_docs purge                                   → 복호화 사본 삭제(파싱이 끝나면)
 복호화 사본은 output/(git 제외)에만 두고, 외부로 옮기지 않는다.

@@ -151,7 +151,7 @@
   2. 파일 크기 상한 `ops.runtime.parse_max_mb`(기본 100, MB = 1024×1024바이트)를 검색 MCP와 파싱 서비스가 같이 읽는다. base64 크기는 줄바꿈·공백을 빼고 센다. 넘는 `content_b64`는 서비스로 보내지 않고 `{"error": "파일이 크기 상한(100MB)보다 큼(…MB) — ops.runtime.parse_max_mb"}`. 경로로 준 파일도 같은 상한.
   3. HTTP 요청 본문 상한 = 파일 상한 × 1.5 + 1 MiB(검색 MCP·파싱 서비스 같음). 4 MiB보다 크거나 길이를 밝히지 않은 요청은 동시에 2개까지만 처리하고 나머지는 본문을 읽기 전에 기다린다(`mcp_server/main.py` `_BIG_SLOTS`).
   4. 서비스 등록 요청 대기 60초.
-  5. 받는 확장자 = 엔진 구성의 parse 키(`pipeline/extract/engine_stack.py` `allowed_exts()`).
+  5. 받는 확장자 = 엔진 구성의 parse 키(`pipeline/transform/parse/engine_check.py` `allowed_exts()`).
 - 운영과 다른 점: 파일 크기 상한 기본 100MB(운영 64MB) · 스캔 PDF를 내부망 VLM으로 파싱([mc-18](#mc-18)) · 받는 확장자가 더 많다.
 - 파일: `common/core/parse_limit.py`(크기 상한·본문 상한 — 두 쪽이 함께 씀), `mcp_server/services/parse_proxy.py`, `pipeline/parse_service.py`, `mcp_server/main.py`.
 - QA: `tests/server/mcp/test_parse_limit.py`·`tests/server/pipeline/test_parse_svc.py`(상한 1 MB로 덮고 0.9 MB 받음·1.1 MB 거부, 두 길) · 통과. 서버 확인 refactor.md C-85.
@@ -160,7 +160,7 @@
 <a id="mc-18"></a>
 ## mc-18 · `parse_document` 스캔 PDF — 내부망 VLM
 - 규칙:
-  1. 스캔 판정 = `pipeline.shared.parse_run.pdf_kind()`(전체 쪽 글자층이 쪽당 평균 20자 미만) — 일괄 파싱과 같은 함수.
+  1. 스캔 판정 = `pipeline.shared.pdf_kind.pdf_kind()`(전체 쪽 글자층이 쪽당 평균 20자 미만) — 일괄 파싱과 같은 함수.
   2. 스캔 PDF는 stack `.pdf_image`의 `qwen_vlm`으로 파싱한다(내부망 주소만 — `require_internal`).
   3. 시간 상한은 작업 제한 시간 `tuning.ops.services.data_parsing.job_timeout_sec`(기본 600초) 하나, 단계마다 남은 시간을 나눠 준다. 쪽 수 상한 없음. 큐는 하나.
   4. VLM 설정(`required.models.vlm_base_url`·`vlm_model`)이 비면 파이프라인 없이 빈 결과 + note "스캔 PDF — VLM 미설정".

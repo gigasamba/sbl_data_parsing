@@ -37,7 +37,7 @@ def name_hits(name, text):
 
 def seed_roster(path=None):
     """구조화 기본 고객 명부 seed — 사람이 아는 주요 바이오·제약사 공개 한/영 표기만(지어낸 이름 없음),
-    CLIENT_ROSTER(서버 SFDC 내보내기)·GLOSSARY_DIR org_client가 비어 있어도 build_bundle.infer_clients()가 바닥값으로
+    CLIENT_ROSTER(서버 SFDC 내보내기)·GLOSSARY_DIR org_client가 비어 있어도 gold_bundle.infer_clients()가 바닥값으로
     씀(문서 라벨링에만 — BM25 질의 확장·expand_query는 common.core.terms._aliases()). read_roster()와 같은 형식(JSON {이름: [별칭…]}) 재사용. 파일 없으면 빈 사전."""
     p = Path(path) if path else SEED_ROSTER_PATH
     if not p.exists():
