@@ -318,7 +318,7 @@ def main(argv=None):
         action="store_true",
         help="extract(받기·중복·거르기)는 candidate_ready stage가 이 결과 폴더에 끝냄 — parse/_source/only.txt의 문서만 파싱(run_pipeline)",
     )
-    p.add_argument("--source-limit", type=int, default=pc.cfg().extract.source_limit, help="원본 몇 건만(Object Storage 시험)")
+    p.add_argument("--source-limit", type=int, default=0, help="원본 몇 건만(Object Storage 시험 — 0 = 제한 없음)")
     p.add_argument("--engines", default="")
     p.add_argument("--procs", default=_default_procs())
     p.add_argument("--workers", default=_default_workers())

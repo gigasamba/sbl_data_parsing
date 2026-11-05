@@ -106,7 +106,6 @@ extract:
   max_file_mb: 0.0                            # 이 크기(MB)를 넘는 문서는 건너뜀 · 0 = 제한 없음
   max_new_docs_per_run: 0                     # 이번 실행에서 새로 파싱할 문서 수 상한 · 0 = 제한 없음
   skipped_docs_log: null                      # 건너뛴 문서 기록 jsonl (null = 준비 기록 폴더/skipped.jsonl)
-  source_limit: 0                             # 원본에서 처리할 문서 수 · 0 = 제한 없음
   # ─── 보안 문서 ───
   secure_doc:
     passwords_file: null                      # 암호 문서용 암호 목록(한 줄에 하나) (null = 암호 문서 건너뜀)
@@ -176,7 +175,6 @@ ops:
     glossary_draft_file: null                 # 용어 초안 CSV (null = output/glossary_draft/domain_terms_draft_auto.csv)
     edw_chain_file: null                      # EDW 사슬 파일 · 서버 예 /etc/rag/edw_chain.yaml (null = resources/config/edw_chain.yaml)
     source_manifest_file: null                # 원본 manifest.jsonl (null = docs_dir 기준 file://)
-    stack_file: null                          # 엔진 구성 파일 (null = resources/config/pipeline_stack.json)
     figure_images_dir: null                   # 그림 PNG 폴더 (null = output/parse/_images)
     output_dir: null                          # 파이프라인 결과 폴더(컨테이너 안) (null = <루트>/output)
     parse_temp_dir: null                      # 파싱 임시 폴더(output 아래 2단 이상) (null = output/_tmp_parse/stream)
@@ -373,7 +371,6 @@ tuning:
       mem_max_pct: 90.0                       # 새 프로세스를 띄울 메모리 상한(%)
       mem_settle_margin_pct: 5.0              # 상한 아래 이만큼(%p) 내려올 때까지 쉼
       mem_settle_sec: 2.0                     # 메모리 확인 사이 쉬는 시간(초)
-      mem_start_pct: 90.0                     # 메모리 대기 기본 상한(%)
       max_engine_processes: 8                 # 자동 계산 엔진 프로세스 상한
       gb_per_engine_process: 3.0              # 엔진 프로세스 하나가 쓴다고 볼 메모리(GB)
       reserved_cpus: 1                        # 자동 계산 때 남길 코어 수
@@ -421,16 +418,7 @@ dev:
   # ─── PC 시험 Docker ───
   docker:
     mcp_publish_port: 18765                   # 시험 검색 MCP를 호스트에 게시할 포트
-    pg_bind: 127.0.0.1                        # 시험 PG 바인드 주소
-    pg_effective_cache: 12GB                  # 시험 PG effective_cache_size
     pg_image: pgvector/pgvector:pg16          # 시험 PG 이미지
-    pg_maint_mem: 2GB                         # 시험 PG maintenance_work_mem
-    pg_max_conn: 50                           # 시험 PG max_connections
-    pg_mem_limit: null                        # 시험 PG 메모리 상한 (null = compose 기본)
-    pg_parallel: 2                            # 시험 PG 병렬 작업자 수
-    pg_shared_buffers: 4GB                    # 시험 PG shared_buffers
-    pg_shm: 3g                                # 시험 PG 공유 메모리
-    pg_work_mem: 64MB                         # 시험 PG work_mem
     smoke_settings_file: null                 # 스모크 시험용 settings.yaml — 스모크 시험 때 필수 (null = 스모크 시작 안 함)
     smoke_keep_pg: false                      # 스모크 시험이 끝나도 PG를 남김
     smoke_max_docs: 0                         # 스모크 시험 문서 수 · 0 = 제한 없음

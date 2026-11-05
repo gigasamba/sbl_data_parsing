@@ -367,7 +367,6 @@ TUNING_RESOURCE = (  # 자원·대기·병렬 세부값 — 자동 계산 내부
     "common.runtime.mem_max_pct",
     "common.runtime.mem_settle_margin",
     "common.runtime.mem_settle_sec",
-    "common.runtime.mem_start_pct",
     "common.runtime.pipe_max_procs",
     "common.runtime.pipe_proc_gb",
     "common.runtime.pipe_reserve_gb",

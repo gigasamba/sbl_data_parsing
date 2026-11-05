@@ -1382,16 +1382,7 @@ class CommonConnectionsPg(Section):
 
 class CommonDevDocker(Section):
     mcp_publish_port: Port | None = F(18765, "MCP_PUBLISH_PORT", "시험 compose에서 MCP를 호스트에 게시할 포트")
-    pg_bind: str | None = F("127.0.0.1", "PG_BIND", "시험 PostgreSQL 컨테이너를 호스트에 게시할 바인드 주소")
-    pg_effective_cache: str | None = F("12GB", "PG_EFFECTIVE_CACHE", "시험 PG effective_cache_size")
     pg_image: str | None = F("pgvector/pgvector:pg16", "PG_IMAGE", "시험 PostgreSQL(pgvector) 이미지")
-    pg_maint_mem: str | None = F("2GB", "PG_MAINT_MEM", "시험 PG maintenance_work_mem(HNSW 생성)")
-    pg_max_conn: int | None = F(50, "PG_MAX_CONN", "시험 PG max_connections")
-    pg_mem_limit: str | None = F(None, "PG_MEM_LIMIT", "시험 PG 컨테이너 메모리 상한")
-    pg_parallel: int | None = F(2, "PG_PARALLEL", "시험 PG 병렬 작업자 수(maintenance·gather 둘 다)")
-    pg_shared_buffers: str | None = F("4GB", "PG_SHARED_BUFFERS", "시험 PG shared_buffers")
-    pg_shm: str | None = F("3g", "PG_SHM", "시험 PG 컨테이너 공유 메모리(shm_size)")
-    pg_work_mem: str | None = F("64MB", "PG_WORK_MEM", "시험 PG work_mem")
     smoke_settings: str | None = F(
         None,
         "SMOKE_SETTINGS",
@@ -1546,11 +1537,6 @@ class CommonPaths(Section):
         "없을 때만 복사, 적었을 때만 쓰임) · 점검: python -m pipeline.load.edw_doc_meta --check",
     )
     source_manifest: str | None = F(None, "SOURCE_MANIFEST", "원본 manifest.jsonl 경로(Object Storage/rdb에서 받은 문서 → s3:// 주소 대응)")
-    stack_file: str | None = F(
-        None,
-        "PIPELINE_STACK_FILE",
-        "엔진 구성 파일 경로(서버·PC 같음 — 사용자 11-01: 판 표 없앰)",
-    )
 
 
 class CommonRuntime(Section):
@@ -1568,9 +1554,6 @@ class CommonRuntime(Section):
         5.0, "MEM_SETTLE_MARGIN", "상한(MEM_MAX_PCT) 이만큼(%p) 아래부터 프로세스 띄운 뒤 잠깐 쉼", unset=("auto",)
     )
     mem_settle_sec: float | None = F(2.0, "MEM_SETTLE_SEC", "메모리가 상한 근처일 때 프로세스 띄운 뒤 쉬는 시간(초)", unset=("auto",))
-    mem_start_pct: float | None = F(
-        90.0, "MEM_START_PCT", "wait_mem 기본 상한 — 실험 도구가 새 프로세스를 띄우는 메모리 사용률(%)", unset=("auto",)
-    )
     parse_max_mb: float = F(
         100.0,
         "DATA_PARSING_MAX_MB",

@@ -1,5 +1,5 @@
 """엔진 구성 파일 읽기 — 서버·PC 같은 길(DB 표 없이 파일만).
-· 파일 자리: 설정 common.paths.stack_file — 비우면 resources/config/pipeline_stack.json(두 이미지에 다 있음).
+· 파일 자리: resources/config/pipeline_stack.json 하나(두 이미지에 다 있음 — 코드 폴더째 바꿈).
   (원천은 폴더·rdb:csv로만 정한다.) 바꾸기 = 파일을 고쳐 오버레이 패치(코드 폴더) — 되돌리기는 git.
 · 읽을 때 모양 검사(pydantic — 아래 StackFile). 못 읽거나 모양이 틀리면 한 줄 안내 + 종료 2(시작하지 않음).
 · body_sha = 정규 JSON(키 정렬·공백 없음·UTF-8)의 sha256 — 같은 구성이면 서버·PC 같은 값.
@@ -96,10 +96,9 @@ def _errors(e):
 
 
 def file_of(kind="stack"):
-    from common.config.settings import cfg
     from common.core.paths import STACK_FILE
 
-    return Path(cfg().paths.stack_file or STACK_FILE)
+    return Path(STACK_FILE)
 
 
 def read_file(kind, path=None):
