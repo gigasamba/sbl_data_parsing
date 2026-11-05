@@ -76,7 +76,7 @@ PC 명령은 [README §5-2](../../README.md#5-2-pc에서--이미지-만들기와
 - 이미지 이름은 settings.yaml `required.deploy.pipeline_image`·`required.deploy.mcp_image`에 적는다.
 - 배포 뒤, 컨테이너 안 코드가 있는지 파일로 본다(bind 마운트 원본이 없으면 빈 폴더가 붙어 `test -d`는 통과하므로):
 ```bash
-for c in data-pipeline mcp-data-parsing; do   # 여러 벌이면 이름 끝 -<ops.host.instance>(server-guide §1-3)
+for c in data-pipeline mcp-data-parsing; do   # 여러 벌이면 이름 끝 -<ops.host.instance_name>(server-guide §1-3)
  $DOCKER exec $c test -f /app/deploy/pipeline/transform/parse/parse_engines.py && echo "$c OK" || echo "$c 코드 없음(빈 마운트?)"; done
 ```
 
@@ -95,8 +95,8 @@ for c in data-pipeline mcp-data-parsing; do   # 여러 벌이면 이름 끝 -<op
 
 - 코드 폴더에서 `python3 deploy/host/scripts/run_pipeline.py …`로 실행한다(다른 자리에 복사해 돌리면 `--code <코드 폴더>`).
 - 설정은 서버 settings.yaml(`--settings` · `SETTINGS_FILE` · `<루트>/settings.yaml` 순)에서 읽는다 — 호스트 python에 PyYAML 필요. 필요한 칸이 없으면 칸 경로만 찍고 종료 2.
-  - 작업 폴더 `ops.pipeline_host.run_pipeline_dir`(비우면 스크립트 옆 `test_space/` — 진행 기록 `batch_progress/`)
-  - 결과 폴더 `required.deploy.output_root`(컨테이너 `/app/output`의 원본 — 비우면 `<루트>/output`)
+  - 작업 폴더 `ops.run_pipeline.work_dir`(비우면 스크립트 옆 `test_space/` — 진행 기록 `batch_progress/`)
+  - 결과 폴더 `ops.host.output_dir`(컨테이너 `/app/output`의 원본 — 비우면 `<루트>/output`)
   - MCP 업로드 작업 폴더는 `<결과 폴더>/_mcp_parse/jobs`(고정)
   - 레인·동시 수 값 `ops.run_pipeline.*`(비우면 코드 기본값)
   - `required.env.run_env`가 `dev`·`prd`가 아니면 시작하지 않는다.
@@ -166,7 +166,7 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 - 운영 서버는 지금 0.1.0(settings.yaml 하나, 상주 컨테이너 `data-pipeline-parse`·`data-pipeline-structure`·`mcp-server`)이다. 0.2.0은 상주 컨테이너가 `data-pipeline`·`mcp-data-parsing`·`mcp-server`다.
 - 0.2.0은 **새 실행 이미지가 필요 없다** — 코드의 `deploy/docker/DEPS_HASH`가 0.1.0 실행 이미지와 같다(`f0fcc30bd067bc2f`). dev는 `*-runtime:0.1.0`에 0.2.0 코드 폴더, prd는 그것을 구운 `*:0.2.0`.
 - **prd는 반드시 새 `required.pg.db_schema`**(판 0002가 기준 스키마의 옛 표를 지움 — C-74). 옛 스키마·옛 `struct` 스키마는 2주 뒤 DB 담당이 백업하고 지운다.
-- 지문이 모두 바뀌므로(FINGERPRINT·레이어 code_fp·엔진 — 기준값 PRD [e2-02](../prd/test.md#e2-02)) 모든 문서가 다시 파싱·적재된다. **전체 문서 실행은 prd에서만**, dev는 settings.yaml이 가리키는 대상으로 e2e 한 번. 시간은 지난 `progress.log`의 문서당 시간 × 문서 수, 디스크는 `required.deploy.output_root`의 `parse/_rep`만큼 여유를 더 잡는다.
+- 지문이 모두 바뀌므로(FINGERPRINT·레이어 code_fp·엔진 — 기준값 PRD [e2-02](../prd/test.md#e2-02)) 모든 문서가 다시 파싱·적재된다. **전체 문서 실행은 prd에서만**, dev는 settings.yaml이 가리키는 대상으로 e2e 한 번. 시간은 지난 `progress.log`의 문서당 시간 × 문서 수, 디스크는 `ops.host.output_dir`의 `parse/_rep`만큼 여유를 더 잡는다.
 - 0.2.0은 **새 루트**에 놓는다 — 0.1.0 자리(코드 폴더·설정 폴더)는 그대로 두고 되돌리기에 쓴다. 검색 DB는 같은 PG다.
 - prd 이미지에는 settings.yaml을 굽지 않는다 — dev처럼 `<루트>/settings.yaml`을 붙인다.
 - 모델: dev·prd는 내부망 모델만(외부 모델 호출 거부).
@@ -178,13 +178,13 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 | 1 | 판 전체 grill-me 검토 — 지문 전후(PRD [e2-02](../prd/test.md#e2-02))·DB 스키마(판 0002~0005·ParsingMeta DDL) | 사용자 | 등급 A |
 | 2 | ParsingMeta DDL 한 번 — 칸 이름 바꾸기·`loaded_at`·판 칸 등(운영 분류 스크립트가 멈추므로 운영 담당에게 알림) | DB 담당·EDW 담당 | C-76 |
 | 3 | PG — 새 `db_schema` 이름(50자 이하) · 권한(DB 수준 CREATE, 원천 스키마 5벌의 읽기·쓰기, `doc_id_seq`) | DB 담당 | C-74 |
-| 4 | 서버 settings.yaml 준비 — 필수 경로·접속([README 꼭 채울 값](../../README.md#꼭-채울-값)) · EDW 읽기·쓰기 계정 · `required.tokens.fulltext` · 예전에 `-e`로 주던 값은 settings.yaml 칸으로([env-guide §5](env-guide.md#5-010--020에서-바꿀-설정)) · 새벽 배치 칸은 비워 둠 | 서버 운영 | C-70·C-73·C-75·C-76 |
+| 4 | 서버 settings.yaml 준비 — 필수 경로·접속([README 꼭 채울 값](../../README.md#꼭-채울-값)) · EDW 읽기·쓰기 계정 · `required.tokens.fulltext_sign_key` · 예전에 `-e`로 주던 값은 settings.yaml 칸으로([env-guide §5](env-guide.md#5-010--020에서-바꿀-설정)) · 새벽 배치 칸은 비워 둠 | 서버 운영 | C-70·C-73·C-75·C-76 |
 | 5 | 노출됐던 운영 키 교체(아직 안 했으면) — 새 값은 settings.yaml에만 | 서버 운영 | C-10 |
 | 6 | 서버 `/tmp` 정리 주기·권한 600 점검(덮기 설정 임시 파일) | 사용자·서버 운영 | C-46 |
 | 7 | 폐쇄망 휠·`assets/` 채우고 빌드(§5-6 — `ALLOW_NO_ASSETS=1` 금지) | devops | — |
 | 8 | `server-changes.md`를 읽고 새 코드에 들어 있는지 대조(§2) | 서버 운영·개발자 | — |
-| 9 | EDW 표 설명 자료 폴더(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료)를 루트 아래 결과 폴더 `<루트>/output/edw_meta/`에 복사(UID 10001이 읽게)하고 settings.yaml에 `search.edw_meta.dir: /app/output/edw_meta`. 없으면 `edw_meta` 도구만 `not_configured`(README §5-0 4) | 서버 운영 | C-91 |
-| 10 | settings.yaml 칸 정리 — 지운 칸은 지우고, `search.server.fulltext_secret` 값은 `required.tokens.fulltext`로, 토큰은 `required.tokens.mcp` 하나로 옮긴다(옛 자리·지운 칸이 남으면 시작 거부) | 서버 운영 | C-92·C-95 |
+| 9 | EDW 표 설명 자료 폴더(`catalog.json`·`columns.jsonl` — 개인정보 없는 자료)를 루트 아래 결과 폴더 `<루트>/output/edw_meta/`에 복사(UID 10001이 읽게)하고 settings.yaml에 `search.edw_meta.catalog_dir: /app/output/edw_meta`. 없으면 `edw_meta` 도구만 `not_configured`(README §5-0 4) | 서버 운영 | C-91 |
+| 10 | settings.yaml 칸 정리 — 지운 칸은 지우고, `search.server.fulltext_secret` 값은 `required.tokens.fulltext_sign_key`로, 토큰은 `required.tokens.mcp` 하나로 옮기고, 칸 이름을 새 이름으로 바꾼다(대응표 refactor.md C-95 — 옛 이름·지운 칸이 남으면 시작 거부) | 서버 운영 | C-92·C-95 |
 
 ### 8-3. 실행 순서 — 복사해 붙이는 명령(dev 먼저, 그다음 prd)
 
@@ -192,9 +192,9 @@ ls assets/rapidocr/*.onnx                              # build_ship.sh가 보는
 
 **0. 셸 준비** — 셸 변수는 settings.yaml에서 옮겨 적는다(파일을 화면에 띄우지 않는다).
 ```bash
-export DOCKER=podman                                       # ops.host.docker 값(비우면 podman)
+export DOCKER=podman                                       # ops.host.container_cli 값(비우면 podman)
 OLD_SF=<0.1.0이 쓰는 settings.yaml 경로>  OLD_CODE=<0.1.0 코드 폴더>  ROOT=<새 루트 — 예 /home/sbl/dev>
-PG_C=<required.deploy.pg_container 값>  PG_U=<required.pg.user 값>  PG_D=<required.pg.db 값>
+PG_C=<required.deploy.pg_container_name 값>  PG_U=<required.pg.user 값>  PG_D=<required.pg.database 값>
 OLD_SCHEMA=<지금 required.pg.db_schema 값>  NEW_SCHEMA=<새 스키마 이름 — DB 담당과 정함(C-74)>
 mkdir -p "$ROOT" && TS=$(date +%Y%m%d-%H%M); BK=$ROOT/backup/0.2.0-$TS; mkdir -p "$BK" && chmod 700 "$ROOT/backup" "$BK"
 ```
@@ -237,7 +237,7 @@ unset CODE_DIR                                                # 운영은 코드
 편집기로 고친다(화면에 통째로 띄우지 않는다) — 고칠 칸 목록은 [env-guide §5](env-guide.md#5-010--020에서-바꿀-설정). 꼭:
 - 이미지 칸 `required.deploy.pipeline_image`·`mcp_image` → **[dev]** `data-pipeline-runtime:0.1.0`·`mcp-server-runtime:0.1.0` · **[prd]** `data-pipeline:0.2.0`·`mcp-server:0.2.0`.
 - `required.pg.db_schema` → `$NEW_SCHEMA`.
-- 새벽 배치 `ops.nightly.time`·`max_docs`·`deadline`은 비워 둔다(8-4 3에서 켬).
+- 새벽 배치 `ops.nightly.start_time`·`max_docs`·`stop_time`은 비워 둔다(8-4 3에서 켬).
 - 칸 자리 찾기: `python -m common.config.sample --where <옛 env 이름 또는 칸>`(코드 폴더에서).
 - 서버 EDW의 사슬 표·칸 이름이 기본값과 다를 때만 8-6.
 ```bash
@@ -312,11 +312,11 @@ tail -f <작업 폴더>/batch_progress/progress.log                             
 |---|---|---|---|
 | 1 | 적재 기록 — 실행 기록의 `meta_missing`·`loaded_at_failed`가 0인지, ParsingMeta에 판·적재 시각이 채워지는지 | 서버 운영 | C-76 |
 | 2 | 적재가 지우지 않는지 · 상주 컨테이너 `/tmp` · 좀비 프로세스 | 서버 운영 | C-68 |
-| 3 | 새벽 배치 — `ops.nightly.time`·`max_docs`·`deadline`을 모두 채울 때만 켬(마감은 시작보다 5분 넘게 뒤) → `systemctl start data-pipeline-nightly.timer` → `journalctl -u data-pipeline-nightly` | 서버 운영 | C-72 |
+| 3 | 새벽 배치 — `ops.nightly.start_time`·`max_docs`·`stop_time`을 모두 채울 때만 켬(마감은 시작보다 5분 넘게 뒤) → `systemctl start data-pipeline-nightly.timer` → `journalctl -u data-pipeline-nightly` | 서버 운영 | C-72 |
 | 4 | 2주 뒤 옛 검색 스키마·옛 `struct` 스키마를 백업한 뒤 지움 | DB 담당 | C-74 |
 | 5 | `versions.md`에 한 줄 · 되돌리기가 필요 없어진 뒤 `prune_images.sh --apply` | 서버 운영·devops | §6 |
 | 6 | `query_edw` — 실제 업무 SELECT 몇 개(JOIN·`WITH`·대괄호 이름·한글 별칭·`TOP`)를 부른다. 기대: 행이 오거나 행·시간 상한 안내만. 정상 SELECT가 `rejected:*`로 거부되면 SQL과 오류 코드를 `issues.md`에 | 서버 운영 | — |
-| 7 | `edw_meta` — 서버 카탈로그(`search.edw_meta.dir`의 `catalog.json`)에서 이름 끝에 공백이 있는 표를, 그 이름 그대로와 공백을 뺀 이름으로 각각 부른다. 기대: 둘 다 같은 표의 칸 목록 | 서버 운영 | — |
+| 7 | `edw_meta` — 서버 카탈로그(`search.edw_meta.catalog_dir`의 `catalog.json`)에서 이름 끝에 공백이 있는 표를, 그 이름 그대로와 공백을 뺀 이름으로 각각 부른다. 기대: 둘 다 같은 표의 칸 목록 | 서버 운영 | — |
 | 8 | 로그 DB — `search` 한 번 뒤 `applog.mcp_log`에 그 호출 한 행(`args`에 질문), `<루트>/output/logs/`가 비어 있음(있으면 DB 쓰기 실패 — 파일 안 오류 확인) | 서버 운영 | C-79 |
 
 ### 8-5. 되돌리기(0.2.0 → 0.1.0)
@@ -334,7 +334,7 @@ cd "$ROOT/<코드>" && bash deploy/host/scripts/host_ctl.sh down                
 
 적재가 문서 메타(고객 `client_edw`·등록 시각 `created_at`·원천 메타 `doc.attrs`)를 EDW에서 채울 때 따라가는 표·칸 이름과, 검색 MCP가 쓰는 `attrs` 키의 거르기 이름·근거 표시는 파일 하나에 있다. 기본 파일은 코드 폴더의 `resources/config/edw_chain.yaml`이고 **꼴과 칸의 뜻은 그 파일의 머리 주석이 정본**이다. 서버 EDW 이름이 다르거나 메타 키를 더하려면 코드를 고치지 않고 사본을 고친다.
 
-**① 사본 고치기 · 칸 적기** — 사본은 `<루트>/edw_chain.yaml`(`host_ctl.sh init`이 없을 때만 복사 — 10001, 640)이고, `data-pipeline`·`mcp-server`에 `/etc/rag/edw_chain.yaml`로 읽기 전용 붙는다. 설정 칸은 하나(`ops.paths.edw_chain` — 적재와 검색이 같은 칸)이고 **칸을 적었을 때만 사본이 쓰인다**(비우면 코드의 기본 파일).
+**① 사본 고치기 · 칸 적기** — 사본은 `<루트>/edw_chain.yaml`(`host_ctl.sh init`이 없을 때만 복사 — 10001, 640)이고, `data-pipeline`·`mcp-server`에 `/etc/rag/edw_chain.yaml`로 읽기 전용 붙는다. 설정 칸은 하나(`ops.paths.edw_chain_file` — 적재와 검색이 같은 칸)이고 **칸을 적었을 때만 사본이 쓰인다**(비우면 코드의 기본 파일).
 ```bash
 vi <루트>/edw_chain.yaml                                             # 주인·권한은 그대로 10001, 640
 # settings.yaml(편집기로):  ops: { paths: { edw_chain: /etc/rag/edw_chain.yaml } }
@@ -382,7 +382,7 @@ $DOCKER exec data-pipeline python -m pipeline.load.edw_doc_meta --check --file /
 **④ 오류가 나면 · 되돌리기**
 - 적재 시작 때 `[edw_meta] 사슬 설정 파일을 못 읽음(…)`·`사슬 설정 오류(…)`·`사슬 설정 YAML 오류(…)`로 멈춘다(기본 파일로 돌아가지 않음). 검색은 같은 글을 `search`의 `{"error"}`로 돌려준다. ③으로 고친 뒤 다시 돌린다.
 - 칸 이름이 EDW에 없으면 적재는 계속되고 그 칸 메타만 비며(표를 못 읽으면 그 원천 메타 전체 — `optional` 단계면 그 단계만) 경고와 실행 기록 `meta_missing`이 남는다 — 고친 뒤 `--replace`로 다시 적재한다(다시 파싱하지 않음).
-- 되돌리기: settings.yaml의 `ops.paths.edw_chain`을 **비우면** 기본 파일로 돌아간다. 사본 파일은 지우지 않는다(마운트 원본 — 없으면 `data-pipeline`·`mcp-server`가 안 뜸).
+- 되돌리기: settings.yaml의 `ops.paths.edw_chain_file`을 **비우면** 기본 파일로 돌아간다. 사본 파일은 지우지 않는다(마운트 원본 — 없으면 `data-pipeline`·`mcp-server`가 안 뜸).
 
 ### 8-7. 서버에서 직접 만드는 파일
 
@@ -391,7 +391,7 @@ $DOCKER exec data-pipeline python -m pipeline.load.edw_doc_meta --check --file /
 | 파일 | 자리(호스트 → 컨테이너) | 예시(복사 원본) | 읽는 곳 | 주인·권한 |
 |---|---|---|---|---|
 | `settings.yaml` | `<루트>/settings.yaml` → `/etc/rag/settings.yaml`(읽기 전용 — 세 컨테이너) | `settings.sample.yaml` | 모든 앱·호스트 스크립트 | 10001:<운영 그룹> 640(운영 계정 UID가 10001이면 600) |
-| `edw_chain.yaml` | `<루트>/edw_chain.yaml` → `/etc/rag/edw_chain.yaml`(읽기 전용 — `data-pipeline`·`mcp-server`) | `resources/config/edw_chain.yaml` | 적재·검색 MCP — `ops.paths.edw_chain: /etc/rag/edw_chain.yaml`을 적었을 때만 | 10001:<운영 그룹> 640 |
+| `edw_chain.yaml` | `<루트>/edw_chain.yaml` → `/etc/rag/edw_chain.yaml`(읽기 전용 — `data-pipeline`·`mcp-server`) | `resources/config/edw_chain.yaml` | 적재·검색 MCP — `ops.paths.edw_chain_file: /etc/rag/edw_chain.yaml`을 적었을 때만 | 10001:<운영 그룹> 640 |
 
 - 백업 묶음 `<루트>/backup/0.2.0-<시각>/`(8-3 0·2 — 700): 0.1.0 설정 사본 `settings.yaml.0.1.0`(8-3 4 입력)·이미지 목록·`pg_dump`.
 - 고객 명부·용어집은 서버 파일이 아니라 PG 마스터 표다(`migrate master load` — 8-3 5).

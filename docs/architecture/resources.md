@@ -8,7 +8,7 @@
 
 | | 파일(서버·PC 같음 — 두 이미지에 다 들어 있음) | 다른 파일을 쓰려면(설정) |
 |---|---|---|
-| 엔진 구성 | [`resources/config/pipeline_stack.json`](../../resources/config/pipeline_stack.json) | `common.paths.stack_file` |
+| 엔진 구성 | [`resources/config/pipeline_stack.json`](../../resources/config/pipeline_stack.json) | (설정 칸 없음) |
 | 못 읽을 때 | **시작 거부 — 종료 코드 2**(파일 없음·JSON 오류·모양이 틀림 — 한 줄 안내, 값은 찍지 않음) | |
 
 - 읽는 곳은 `common/store/db/cfgfile.py` 한 곳이다. 읽을 때 pydantic `StackFile`로 모양을 검사한다. `body_sha` = 정규 JSON(키 정렬·공백 없음·UTF-8)의 sha256 — 같은 구성이면 서버·PC가 같은 값이다.
