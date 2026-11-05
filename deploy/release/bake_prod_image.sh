@@ -28,7 +28,12 @@ want=$(tr -d '\r\n' < deploy/docker/DEPS_HASH)
 commit=$(cut -d' ' -f1 CODE_COMMIT 2>/dev/null); case "$commit" in ''|'$Format'*) commit=$(git rev-parse HEAD 2>/dev/null || echo unknown) ;; esac   # clone이면 틀 그대로
 # 운영 서버 호스트 스크립트(deploy/host/ — nightly_batch.sh·compose·systemd)도 이미지와 같은 코드로 — 시험한 코드 폴더 그대로 묶음
 BUNDLE="$OUT/code-$TAG-$(echo "$commit" | cut -c1-7).tar.gz"
-tar -czf - --exclude=./output --exclude=./settings.yaml --exclude="./settings.yaml.*" -C "$CODE_DIR" . > "$BUNDLE"   # settings.yaml(비밀값)·그 사본·백업은 운영으로 보내지 않음
+ex=()   # 루트의 settings*.yaml·그 사본·백업(비밀값 — `settings copy.yaml` 포함)은 운영으로 보내지 않음, 추적하는 sample만 묶음
+for f in "$CODE_DIR"/settings*.yaml*; do
+  [ -e "$f" ] || continue
+  case "${f##*/}" in settings.sample.yaml) ;; *) ex+=("--exclude=./${f##*/}") ;; esac
+done
+tar -czf - --exclude=./output ${ex[@]+"${ex[@]}"} -C "$CODE_DIR" . > "$BUNDLE"
 
 for t in "${TARGETS[@]}"; do
   case "$t" in pipeline|mcp) ;; *) echo "[bake_prod_image] 모르는 대상: $t (pipeline·mcp)" >&2; exit 2 ;; esac
